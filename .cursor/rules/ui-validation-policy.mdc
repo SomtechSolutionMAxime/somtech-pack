@@ -1,0 +1,41 @@
+---
+alwaysApply: true
+description: Politique de validation UI — Navigateur intégré (MCP) obligatoire; tests Playwright réservés à l’automatisation
+globs: *.ts,*.tsx
+---
+
+# Politique de validation UI et tests
+
+## Principe
+- La validation d’interface se fait exclusivement avec le **navigateur intégré Cursor (MCP Playwright)**.
+- Le **débogage** (erreurs console, réseau, DOM) se fait dans ce même navigateur intégré.
+- **Playwright Tests** (npx @playwright/test) sont réservés aux **tests automatisés** (e2e/non‑régression), jamais pour la validation manuelle.
+
+## Règles obligatoires
+1) Après toute modification UI (composant/page/style) :
+   - Ouvrir le navigateur MCP (`mcp_playwright_*`).
+   - Naviguer vers la page modifiée, interagir avec les éléments.
+   - Capturer les logs console (`playwright_console_logs` type: "error").
+   - Objectif: **0 erreur console** avant de considérer la tâche “validée”.
+
+2) Débogage UI :
+   - Utiliser le navigateur MCP pour reproduire, puis **lire/capturer** les erreurs console et réseau.
+   - Corriger, recharger, **re‑capturer** pour confirmer **0 erreur**.
+
+3) Tests automatisés (facultatifs sauf parcours critiques) :
+   - Stocker uniquement dans `tests/ui/**/*.spec.ts`.
+   - Exécution via Playwright Test (CI ou local) — **ne pas** l’utiliser pour la validation manuelle.
+
+## Checklist de validation (à respecter)
+- [ ] App lancé localement
+- [ ] Navigation vers la page modifiée via MCP
+- [ ] Interactions principales testées
+- [ ] **Logs console = 0 erreur**
+- [ ] Capture(s) d’écran effectuée(s) si pertinent
+
+## Références
+- Stratégie navigateur & tests: [browser-validation-strategy.mdc](mdc:.cursor/rules/browser-validation-strategy.mdc)
+- Navigateur MCP (interactif): [ui-browser-interactive.mdc](mdc:.cursor/rules/ui-browser-interactive.mdc)
+- Validation & exploration UI: [ui-interface-playwright.mdc](mdc:.cursor/rules/ui-interface-playwright.mdc)
+- Tests automatisés UI: [ui-testing-automated.mdc](mdc:.cursor/rules/ui-testing-automated.mdc)
+

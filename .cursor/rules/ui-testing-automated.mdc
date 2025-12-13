@@ -1,0 +1,275 @@
+---
+alwaysApply: false
+description: Tests automatisés Playwright pour parcours critiques et non-régression
+---
+
+# Tests automatisés Playwright
+
+Cette règle concerne les **tests automatisés e2e** à créer/maintenir dans `tests/ui/**/*.spec.ts`.
+
+**Note** : Pour la **validation interactive** après modification UI, voir [browser-validation-strategy.mdc](mdc:browser-validation-strategy.mdc) et [ui-browser-interactive.mdc](mdc:ui-browser-interactive.mdc).
+
+## Quand créer des tests automatisés
+
+Les tests automatisés sont **optionnels par défaut**, sauf dans ces cas :
+
+### Obligatoires pour :
+- ✅ Parcours critiques métier (authentification, création, CRUD principal)
+- ✅ Features stables nécessitant une non-régression
+- ✅ Workflows multi-étapes critiques (soumissions, planification, facturation)
+- ✅ Requis explicitement par la DoD ou le QA
+
+### Optionnels pour :
+- ⚙️ Features en cours de développement (instables)
+- ⚙️ Interfaces simples avec peu de logique
+- ⚙️ Prototypes ou POCs
+
+## Structure des tests
+
+### Organisation
+```
+tests/
+  ui/
+    auth.spec.ts                    # Authentification
+    clients.e2e.ts                  # CRUD Clients
+    projects.e2e.ts                 # CRUD Projets
+    submissions.e2e.ts              # Parcours Soumissions
+    ...
+  fixtures/
+    base-fixtures.ts                # Fixtures partagées
+page-objects/
+  BasePage.ts                       # Page Object de base
+  ClientsPage.ts                    # Page Objects spécifiques
+  ...
+playwright.config.ts                # Configuration Playwright
+```
+
+### Principes
+- **Deux interfaces séparées** : `desktop` et `mobile` (voir ARCHITECTURE.md)
+  - Desktop : routes `/desktop` ou `/`
+  - Mobile : routes `/mobile`
+- **Ne pas mélanger** les scénarios desktop et mobile dans un même test
+- **Page Objects** : encapsuler la logique d'interaction
+- **Fixtures** : partager les états et contextes (auth, données de test)
+- **Sélecteurs stables** : utiliser `data-testid`, `data-cy`, ou rôles ARIA
+
+## Conventions de sélecteurs
+
+Le projet utilise des sélecteurs stables via attributs `data-testid` :
+
+### Nomenclature
+- Boutons : `btn-<action>` (ex: `btn-save`, `btn-delete`)
+- Inputs : `input-<field>` (ex: `input-name`, `input-email`)
+- Lignes de table : `<entity>-row-<id|slug>` (ex: `client-row-123`)
+- Filtres/onglets : `filter-<name>`, `tab-<name>` (ex: `filter-active`, `tab-projets`)
+- Feedback : `toast-success`, `toast-error`, `loader`
+
+### Configuration Playwright
+```typescript
+// playwright.config.ts
+use: {
+  testIdAttribute: 'data-testid', // ou 'data-cy'
+}
+```
+
+## Recettes de tests
+
+### Test de base (CRUD)
+```typescript
+import { test, expect } from '@playwright/test';
+import { ClientsPage } from '../page-objects/ClientsPage';
+
+test.describe('Clients E2E', () => {
+  let clientsPage: ClientsPage;
+
+  test.beforeEach(async ({ page }) => {
+    clientsPage = new ClientsPage(page);
+    await clientsPage.navigate();
+  });
+
+  test('Création, modification, archivage, restauration', async () => {
+    // Création
+    const clientName = `Test Client ${Date.now()}`;
+    await clientsPage.createClient(clientName, 'test@example.com');
+    await expect(clientsPage.getClientRow(clientName)).toBeVisible();
+
+    // Modification
+    await clientsPage.editClient(clientName, 'Nouveau Nom');
+    await expect(clientsPage.getClientRow('Nouveau Nom')).toBeVisible();
+
+    // Archivage
+    await clientsPage.archiveClient('Nouveau Nom');
+    await expect(clientsPage.getClientRow('Nouveau Nom')).not.toBeVisible();
+
+    // Restauration
+    await clientsPage.showArchived();
+    await clientsPage.restoreClient('Nouveau Nom');
+    await expect(clientsPage.getClientRow('Nouveau Nom')).toBeVisible();
+  });
+});
+```
+
+### Test avec authentification (fixture)
+```typescript
+// tests/fixtures/base-fixtures.ts
+import { test as base } from '@playwright/test';
+
+export const test = base.extend({
+  authenticatedPage: async ({ page }, use) => {
+    // Authentification via localStorage
+    await page.goto('http://localhost:5173');
+    await page.evaluate(() => {
+      localStorage.setItem('app_role', 'admin');
+      localStorage.setItem('auth_token', 'test-token');
+    });
+    await page.reload();
+    await use(page);
+  },
+});
+
+// Dans le test
+import { test } from './fixtures/base-fixtures';
+
+test('Test avec auth', async ({ authenticatedPage }) => {
+  await authenticatedPage.goto('http://localhost:5173/clients');
+  // ...
+});
+```
+
+### Test mobile
+```typescript
+test.use({
+  viewport: { width: 430, height: 900 },
+  isMobile: true,
+});
+
+test('Navigation mobile', async ({ page }) => {
+  await page.goto('http://localhost:5173/mobile/reports');
+  // ...
+});
+```
+
+### Assertions réseau
+```typescript
+test('API call on submit', async ({ page }) => {
+  const responsePromise = page.waitForResponse(
+    response => response.url().includes('/api/clients') && response.status() === 201
+  );
+  
+  await page.getByTestId('btn-save').click();
+  
+  const response = await responsePromise;
+  expect(response.ok()).toBeTruthy();
+});
+```
+
+## Exécution des tests
+
+### Local
+```bash
+# Tous les tests
+npx playwright test
+
+# Un fichier spécifique
+npx playwright test tests/ui/clients.e2e.ts
+
+# Mode debug
+npx playwright test --debug
+
+# Mode UI
+npx playwright test --ui
+
+# Rapport HTML
+npx playwright show-report
+```
+
+### CI/CD
+```yaml
+# .github/workflows/playwright.yml
+- name: Run Playwright tests
+  run: npx playwright test
+- name: Upload report
+  if: always()
+  uses: actions/upload-artifact@v3
+  with:
+    name: playwright-report
+    path: playwright-report/
+```
+
+## Bonnes pratiques
+
+### 1. Tests indépendants
+Chaque test doit pouvoir s'exécuter seul sans dépendre d'un autre.
+
+### 2. Cleanup
+Nettoyer les données créées après chaque test (ou utiliser des IDs uniques).
+
+### 3. Attentes explicites
+```typescript
+// ✅ Bon
+await expect(page.getByTestId('btn-save')).toBeVisible();
+
+// ❌ Éviter
+await page.waitForTimeout(1000);
+```
+
+### 4. Sélecteurs robustes
+```typescript
+// ✅ Bon (sélecteurs stables)
+page.getByTestId('btn-save')
+page.getByRole('button', { name: 'Enregistrer' })
+
+// ❌ Éviter (sélecteurs fragiles)
+page.locator('button.primary')
+page.locator('div > button:nth-child(2)')
+```
+
+### 5. Page Objects
+Encapsuler la logique d'interaction dans des Page Objects pour faciliter la maintenance.
+
+## Génération de tests (codegen)
+
+Playwright offre un outil de génération de code :
+
+### Via MCP Playwright (dans Cursor)
+```typescript
+// 1. Démarrer la session
+mcp_playwright_start_codegen_session({
+  options: {
+    outputPath: '/absolute/path/to/tests',
+    testNamePrefix: 'GeneratedTest',
+    includeComments: true,
+  }
+});
+
+// 2. Interagir avec l'interface (actions enregistrées automatiquement)
+
+// 3. Terminer et générer
+mcp_playwright_end_codegen_session({ sessionId: 'xxx' });
+```
+
+### Via CLI
+```bash
+npx playwright codegen http://localhost:5173
+```
+
+## Maintenance
+
+### Quand mettre à jour les tests
+- Changement de comportement d'une feature
+- Modification de structure UI (sélecteurs cassés)
+- Refactoring de Page Objects
+- Ajout de nouveaux parcours critiques
+
+### Débogage de tests échoués
+1. Lire le rapport HTML : `npx playwright show-report`
+2. Consulter les traces/screenshots dans `test-results/`
+3. Exécuter en mode debug : `npx playwright test --debug`
+4. Valider manuellement via le navigateur MCP (voir [ui-browser-interactive.mdc](mdc:ui-browser-interactive.mdc))
+
+## Références
+- Stratégie globale : [browser-validation-strategy.mdc](mdc:browser-validation-strategy.mdc)
+- Validation interactive : [ui-browser-interactive.mdc](mdc:ui-browser-interactive.mdc)
+- Configuration : `playwright.config.ts`
+- Page Objects : `page-objects/`
+- Documentation Playwright : https://playwright.dev

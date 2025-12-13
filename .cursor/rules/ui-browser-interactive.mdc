@@ -1,0 +1,383 @@
+---
+description: Outils du navigateur intégré (MCP Playwright) pour validation interactive et débogage
+alwaysApply: false
+---
+
+# Navigateur intégré — Outils MCP Playwright
+
+Ce document liste tous les outils disponibles via le **navigateur intégré MCP Playwright** pour la validation interactive, l'exploration et le débogage d'interface.
+
+**Usage** : Validation manuelle, débogage, exploration. Pour les tests automatisés, voir [ui-testing-automated.mdc](mdc:ui-testing-automated.mdc).
+
+## 🌐 Navigation et contrôle
+
+### `mcp_playwright_playwright_navigate`
+Naviguer vers une URL (démarre le navigateur si nécessaire).
+
+```typescript
+{
+  url: string,                    // URL cible
+  browserType?: 'chromium' | 'firefox' | 'webkit',  // Défaut: chromium
+  headless?: boolean,             // Défaut: false (navigateur visible)
+  width?: number,                 // Largeur viewport (défaut: 1280)
+  height?: number,                // Hauteur viewport (défaut: 720)
+  timeout?: number,               // Timeout navigation (ms)
+  waitUntil?: string              // Condition d'attente (load, domcontentloaded, networkidle)
+}
+```
+
+**Exemples** :
+```typescript
+// Desktop
+navigate({ url: 'http://localhost:5173/desktop' })
+
+// Mobile
+navigate({ url: 'http://localhost:5173/mobile', width: 430, height: 900 })
+```
+
+### `mcp_playwright_playwright_go_back` / `mcp_playwright_playwright_go_forward`
+Navigation dans l'historique du navigateur.
+
+### `mcp_playwright_playwright_close`
+Fermer le navigateur et libérer les ressources.
+
+### `mcp_playwright_playwright_custom_user_agent`
+Définir un User Agent personnalisé.
+
+```typescript
+{ userAgent: string }
+```
+
+## 🖱️ Interaction
+
+### `mcp_playwright_playwright_click`
+Cliquer sur un élément.
+
+```typescript
+{ selector: string }  // CSS selector, data-testid, ou rôle ARIA
+```
+
+**Exemples** :
+```typescript
+click({ selector: '[data-testid="btn-save"]' })
+click({ selector: 'button:has-text("Enregistrer")' })
+```
+
+### `mcp_playwright_playwright_fill`
+Remplir un champ de formulaire.
+
+```typescript
+{ 
+  selector: string,
+  value: string 
+}
+```
+
+**Exemple** :
+```typescript
+fill({ selector: '[data-testid="input-name"]', value: 'John Doe' })
+```
+
+### `mcp_playwright_playwright_select`
+Sélectionner une option dans un `<select>`.
+
+```typescript
+{ 
+  selector: string,
+  value: string 
+}
+```
+
+### `mcp_playwright_playwright_hover`
+Survoler un élément (pour tester les tooltips, menus déroulants).
+
+```typescript
+{ selector: string }
+```
+
+### `mcp_playwright_playwright_press_key`
+Appuyer sur une touche du clavier.
+
+```typescript
+{ 
+  key: string,           // 'Enter', 'ArrowDown', 'Escape', 'a', etc.
+  selector?: string      // Focus sur un élément avant de presser
+}
+```
+
+**Exemples** :
+```typescript
+press_key({ key: 'Enter', selector: '[data-testid="input-search"]' })
+press_key({ key: 'Escape' })  // Sans sélecteur (action globale)
+```
+
+### `mcp_playwright_playwright_drag`
+Glisser-déposer un élément.
+
+```typescript
+{ 
+  sourceSelector: string,
+  targetSelector: string 
+}
+```
+
+### `mcp_playwright_playwright_upload_file`
+Uploader un fichier dans un `<input type="file">`.
+
+```typescript
+{ 
+  selector: string,
+  filePath: string      // Chemin absolu vers le fichier
+}
+```
+
+## 📸 Inspection et capture
+
+### `mcp_playwright_playwright_screenshot`
+Prendre une capture d'écran.
+
+```typescript
+{ 
+  name: string,                   // Nom du fichier (obligatoire)
+  fullPage?: boolean,             // Capture pleine page (défaut: false)
+  selector?: string,              // Capturer un élément spécifique
+  savePng?: boolean,              // Sauvegarder en PNG (défaut: false)
+  storeBase64?: boolean,          // Stocker en base64 (défaut: true)
+  downloadsDir?: string,          // Répertoire de téléchargement
+  width?: number,                 // Largeur (défaut: 800)
+  height?: number                 // Hauteur (défaut: 600)
+}
+```
+
+**Exemples** :
+```typescript
+// Capture pleine page
+screenshot({ name: 'clients-page', fullPage: true })
+
+// Capture d'un élément
+screenshot({ name: 'form-client', selector: '[data-testid="form-client"]' })
+```
+
+### `mcp_playwright_playwright_console_logs`
+**🔴 ESSENTIEL pour débogage** — Récupérer les logs de la console navigateur.
+
+```typescript
+{ 
+  type?: 'all' | 'error' | 'warning' | 'log' | 'info' | 'debug' | 'exception',
+  search?: string,          // Filtrer par texte
+  limit?: number,           // Limiter le nombre de logs
+  clear?: boolean           // Effacer les logs après récupération (défaut: false)
+}
+```
+
+**Exemples** :
+```typescript
+// Tous les logs d'erreur
+console_logs({ type: 'error' })
+
+// Recherche spécifique
+console_logs({ type: 'all', search: 'useQuery' })
+
+// Limiter à 50 logs
+console_logs({ type: 'all', limit: 50 })
+```
+
+**Usage critique** : Toujours capturer les logs après chaque modification UI pour confirmer **0 erreur console**.
+
+### `mcp_playwright_playwright_get_visible_html`
+Récupérer le HTML visible de la page.
+
+```typescript
+{ 
+  selector?: string,          // Limiter à un conteneur
+  removeScripts?: boolean,    // Supprimer les <script> (défaut: true)
+  removeStyles?: boolean,     // Supprimer les <style> (défaut: false)
+  removeComments?: boolean,   // Supprimer les commentaires (défaut: false)
+  removeMeta?: boolean,       // Supprimer les <meta> (défaut: false)
+  cleanHtml?: boolean,        // Nettoyage complet (défaut: false)
+  minify?: boolean,           // Minifier le HTML (défaut: false)
+  maxLength?: number          // Limite de caractères (défaut: 20000)
+}
+```
+
+### `mcp_playwright_playwright_get_visible_text`
+Récupérer le texte visible de la page.
+
+### `mcp_playwright_playwright_evaluate`
+Exécuter du JavaScript dans le contexte de la page.
+
+```typescript
+{ script: string }
+```
+
+**Exemples** :
+```typescript
+// Définir une variable localStorage
+evaluate({ script: 'localStorage.setItem("app_role", "admin")' })
+
+// Lire l'état d'un composant
+evaluate({ script: 'document.querySelector("[data-testid=btn-save]").disabled' })
+
+// Scroll
+evaluate({ script: 'window.scrollTo(0, document.body.scrollHeight)' })
+```
+
+## 🌍 Réseau et HTTP
+
+### `mcp_playwright_playwright_expect_response`
+Commencer à attendre une réponse HTTP (non bloquant).
+
+```typescript
+{ 
+  id: string,           // Identifiant unique pour retrouver la réponse
+  url: string           // Pattern d'URL à matcher
+}
+```
+
+### `mcp_playwright_playwright_assert_response`
+Attendre et valider une réponse HTTP précédemment initiée.
+
+```typescript
+{ 
+  id: string,           // ID défini dans expect_response
+  value?: string        // Contenu attendu dans le body
+}
+```
+
+**Exemple** :
+```typescript
+// 1. Initier l'attente
+expect_response({ id: 'create-client', url: '/api/clients' })
+
+// 2. Déclencher l'action
+click({ selector: '[data-testid="btn-save"]' })
+
+// 3. Valider la réponse
+assert_response({ id: 'create-client', value: '"success":true' })
+```
+
+### Requêtes HTTP directes
+
+- `mcp_playwright_playwright_get` : GET request
+- `mcp_playwright_playwright_post` : POST request (avec body, headers, token)
+- `mcp_playwright_playwright_put` : PUT request
+- `mcp_playwright_playwright_patch` : PATCH request
+- `mcp_playwright_playwright_delete` : DELETE request
+
+```typescript
+get({ url: 'https://api.example.com/data' })
+post({ url: 'https://api.example.com/create', value: '{"name":"test"}', token: 'Bearer xxx' })
+```
+
+## 📄 Export et sauvegarde
+
+### `mcp_playwright_playwright_save_as_pdf`
+Sauvegarder la page en PDF.
+
+```typescript
+{ 
+  outputPath: string,           // Répertoire de sortie (obligatoire)
+  filename?: string,            // Nom du fichier (défaut: page.pdf)
+  format?: string,              // Format page ('A4', 'Letter', etc.)
+  printBackground?: boolean,    // Imprimer l'arrière-plan
+  margin?: {
+    top?: string,
+    right?: string,
+    bottom?: string,
+    left?: string
+  }
+}
+```
+
+## 🪟 Gestion des onglets
+
+### `mcp_playwright_playwright_click_and_switch_tab`
+Cliquer sur un lien et basculer vers le nouvel onglet ouvert.
+
+```typescript
+{ selector: string }
+```
+
+## 🎭 Iframes
+
+### `mcp_playwright_playwright_iframe_click`
+Cliquer sur un élément dans un iframe.
+
+```typescript
+{ 
+  iframeSelector: string,
+  selector: string 
+}
+```
+
+### `mcp_playwright_playwright_iframe_fill`
+Remplir un champ dans un iframe.
+
+```typescript
+{ 
+  iframeSelector: string,
+  selector: string,
+  value: string 
+}
+```
+
+## 🔧 Workflows types
+
+### Validation UI après modification
+**🔴 OBLIGATOIRE : Vérifier la console après chaque modification UI**
+
+```
+1. navigate({ url: 'http://localhost:5173/clients' })
+2. click({ selector: '[data-testid="btn-add-client"]' })
+3. fill({ selector: '[data-testid="input-name"]', value: 'Test Client' })
+4. click({ selector: '[data-testid="btn-save"]' })
+5. 🔴 OBLIGATOIRE : console_logs({ type: 'error' })  → Confirmer 0 erreur
+6. Si erreurs détectées → Corriger → Recharger → RE-CAPTURER console → Confirmer 0 erreur
+7. screenshot({ name: 'client-created', fullPage: true })
+
+⚠️ NE PAS TERMINER SANS AVOIR VÉRIFIÉ LA CONSOLE ET CONFIRMÉ 0 ERREUR
+```
+
+### Débogage d'erreur console
+
+#### Cas 1 : Erreur copiée-collée par l'utilisateur (pendant ses tests)
+**⚠️ RÈGLE OBLIGATOIRE** : Après correction, revalider automatiquement avec les tests UI.
+
+```
+1. Utilisateur copie-colle une erreur console (ex: "POST /api/clients 500", erreur réseau, etc.)
+2. Analyser l'erreur et identifier la cause
+3. Corriger le code
+4. **OBLIGATOIRE** : Revalider automatiquement :
+   a. navigate({ url: 'http://localhost:5173/page-concernée' })
+   b. Reproduire le scénario qui déclenchait l'erreur :
+      - click({ selector: '[data-testid="btn-submit"]' })
+      - fill({ selector: '[data-testid="input-name"]', value: 'Test' })
+      - (toutes les interactions nécessaires pour reproduire l'erreur)
+   c. console_logs({ type: 'error' })  → Confirmer 0 erreur ✅
+5. Si l'erreur persiste → itérer jusqu'à résolution
+6. Documenter la correction et la validation
+```
+
+#### Cas 2 : Erreur détectée proactivement
+```
+1. navigate({ url: 'http://localhost:5173/problematic-page' })
+2. console_logs({ type: 'error' })  → Identifier les erreurs
+3. get_visible_html({ selector: '[data-testid="error-component"]' })
+4. → Corriger le code
+5. navigate({ url: 'http://localhost:5173/problematic-page' })  # Recharger
+6. console_logs({ type: 'error' })  → Confirmer 0 erreur ✅
+```
+
+### Exploration d'une nouvelle page web
+```
+1. navigate({ url: 'https://example.com' })
+2. screenshot({ name: 'example-homepage', fullPage: true })
+3. get_visible_text()  → Analyser le contenu
+4. click({ selector: 'nav a:has-text("About")' })
+5. get_visible_html({ selector: 'main' })
+```
+
+## Références
+- Stratégie globale : [browser-validation-strategy.mdc](mdc:browser-validation-strategy.mdc)
+- Validation après modif UI : [ui-changes-require-playwright-tests.mdc](mdc:ui-changes-require-playwright-tests.mdc)
+- Tests automatisés : [ui-testing-automated.mdc](mdc:ui-testing-automated.mdc)

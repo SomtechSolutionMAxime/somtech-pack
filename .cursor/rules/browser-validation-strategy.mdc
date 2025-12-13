@@ -1,0 +1,144 @@
+---
+alwaysApply: true
+description: Stratégie d'utilisation du navigateur intégré MCP Playwright vs tests automatisés
+---
+
+# Stratégie de validation navigateur et tests
+
+Ce projet utilise deux approches complémentaires pour la validation d'interface :
+
+## 1. Navigateur intégré (MCP Playwright) — Usage interactif
+
+**Utilisations recommandées** :
+- ✅ Validation manuelle après modification d'interface
+- ✅ Débogage d'erreurs console et réseau
+- ✅ Exploration et interaction avec l'interface
+- ✅ Vérification visuelle (captures d'écran)
+- ✅ Recherche et interaction web (pages externes, veille)
+- ✅ Validation de comportements UI en temps réel
+- ✅ Audit d'accessibilité interactif
+
+**Outils MCP Playwright à utiliser** :
+- `mcp_playwright_playwright_navigate` — Naviguer vers une page
+- `mcp_playwright_playwright_screenshot` — Capture d'écran
+- `mcp_playwright_playwright_click`, `mcp_playwright_playwright_fill` — Interactions
+- `mcp_playwright_playwright_console_logs` — **Capture des erreurs console** (essentiel pour débogage)
+- `mcp_playwright_playwright_get_visible_html` — Inspecter le DOM
+- `mcp_playwright_playwright_evaluate` — Exécuter du JavaScript
+- `mcp_playwright_playwright_close` — Fermer le navigateur
+
+**Quand utiliser** :
+- Après toute modification de code UI (composants, pages, styles)
+- Pour diagnostiquer un bug rapporté
+- Pour explorer une nouvelle fonctionnalité
+- Pour valider visuellement un comportement
+- Pour vérifier l'absence d'erreurs console
+
+## 2. Tests automatisés Playwright — Usage CI/CD
+
+**Utilisations recommandées** :
+- ✅ Tests de non-régression (suite e2e)
+- ✅ Validation automatique dans la CI/CD
+- ✅ Tests de parcours critiques (authentification, création, suppression)
+- ✅ Tests de bout en bout multi-étapes
+
+**Fichiers de test** :
+- `tests/ui/**/*.spec.ts` — Tests UI automatisés
+- `playwright.config.ts` — Configuration Playwright
+- `page-objects/**/*.ts` — Page Objects pour structurer les tests
+
+**Quand créer/maintenir** :
+- Pour les parcours critiques métier
+- Pour les fonctionnalités stables nécessitant une non-régression
+- Lors de la phase de stabilisation d'une feature
+- Sur demande explicite de tests automatisés
+
+## Règles de priorisation
+
+### ⚠️ TOUJOURS FAIRE (OBLIGATOIRE - aucune exception) :
+1. **Après chaque modification UI** → Utiliser le navigateur MCP Playwright
+2. **🔴 OBLIGATOIRE : Capturer les logs console** (`playwright_console_logs` type: "error") après chaque modification UI
+3. **🔴 OBLIGATOIRE : Confirmer 0 erreur console** avant de considérer la tâche terminée
+4. **Si erreurs détectées** → Corriger → RE-CAPTURER console → Confirmer 0 erreur
+5. **En cas de bug** → Capturer d'abord les logs console (`playwright_console_logs`)
+6. **Avant de valider une PR** → Vérifier visuellement les changements via MCP + confirmer 0 erreur console
+
+### Optionnel mais recommandé (tests automatisés) :
+1. Tests e2e pour parcours critiques (auth, CRUD principal)
+2. Tests de non-régression sur features stables
+3. Tests automatisés si requis par la DoD ou le QA
+
+## Workflow type
+
+### Modification UI (Frontend, UX/UI)
+```
+1. Modifier le code (composant, page, style)
+2. Lancer `npm run dev` (Vite sur http://localhost:5173)
+3. Utiliser MCP Playwright :
+   - Naviguer vers la page modifiée
+   - Interagir avec les éléments
+   - 🔴 OBLIGATOIRE : Capturer les logs console (console_logs type: "error")
+   - 🔴 OBLIGATOIRE : Confirmer 0 erreur console
+   - Capturer des screenshots
+4. Si erreurs détectées → Corriger le code IMMÉDIATEMENT
+5. 🔴 OBLIGATOIRE : Recharger la page et RE-CAPTURER les logs console
+6. 🔴 OBLIGATOIRE : Confirmer 0 erreur avant de continuer
+7. Répéter 4-6 jusqu'à validation complète (0 erreur console)
+8. (Optionnel) Ajouter/mettre à jour un test automatisé si parcours critique
+
+⚠️ NE PAS TERMINER LA TÂCHE SANS AVOIR VÉRIFIÉ LA CONSOLE ET CONFIRMÉ 0 ERREUR
+```
+
+### Débogage d'erreur console
+
+#### Cas 1 : Erreur détectée pendant les tests (copie-collée par l'utilisateur)
+**⚠️ RÈGLE OBLIGATOIRE** : Quand l'utilisateur copie-colle une erreur console détectée pendant ses tests, après correction, vous **DEVEZ** automatiquement revalider avec les tests UI pour confirmer que l'erreur ne se reproduit plus.
+
+```
+1. Utilisateur copie-colle une erreur console (ex: erreur POST, erreur réseau, erreur JS)
+2. Analyser l'erreur (stack trace, messages, contexte)
+3. Identifier la cause et corriger le code
+4. **OBLIGATOIRE** : Revalider automatiquement avec les tests UI :
+   a. Naviguer vers la page concernée : `playwright_navigate`
+   b. Reproduire le scénario qui déclenchait l'erreur (clics, formulaires, interactions)
+   c. Capturer les logs console : `playwright_console_logs` (type: "error")
+   d. **Confirmer que l'erreur ne se reproduit plus** (0 erreur attendue)
+5. Si l'erreur persiste → itérer (corriger → revalider) jusqu'à résolution
+6. Documenter la correction et la validation dans la PR/commit
+```
+
+**Objectif** : Éviter que l'utilisateur doive copier-coller la même erreur plusieurs fois. La correction doit être validée immédiatement.
+
+#### Cas 2 : Erreur détectée proactivement par l'agent
+```
+1. Utiliser MCP Playwright : `playwright_navigate` vers la page concernée
+2. Capturer les logs : `playwright_console_logs` (type: "error")
+3. Analyser les erreurs (stack trace, messages)
+4. Corriger le code
+5. Recharger la page et RE-CAPTURER les logs pour confirmer 0 erreur
+6. Documenter la correction dans la PR/commit
+```
+
+### Recherche/interaction web
+```
+1. Utiliser MCP Playwright pour naviguer vers des sites externes
+2. Interagir, capturer, analyser
+3. Utiliser `mcp_pure_md_unblock-url` si besoin de contenu Markdown propre
+4. Ne PAS utiliser les tests automatisés pour cela
+```
+
+## Références
+- Guide MCP Playwright : `docs/mcp/MDC_Serveur_MCP_Somtech_Cursor_Fly_Supabase.md`
+- Tests automatisés : `tests/ui/README.md` (si existe)
+- Configuration : `playwright.config.ts`
+
+## Résumé
+
+| Besoin | Outil | Commande |
+|--------|-------|----------|
+| Validation UI après modif | MCP Playwright | `mcp_playwright_playwright_*` |
+| Capture erreurs console | MCP Playwright | `playwright_console_logs` |
+| Interaction/exploration | MCP Playwright | `navigate`, `click`, `screenshot` |
+| Recherche web | MCP Playwright + pure.md | `navigate` ou `mcp_pure_md_*` |
+| Tests automatisés e2e | Playwright local | `npx playwright test` |
+| CI/CD non-régression | Playwright local | Suite dans `tests/ui/` |

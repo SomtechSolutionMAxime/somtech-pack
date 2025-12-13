@@ -1,0 +1,148 @@
+---
+alwaysApply: true
+---
+# Architecture Modulaire du Projet Orbit
+
+## Structure par module
+
+**Principe fondamental** : Le projet Orbit est organisé en **modules métier indépendants**, chacun contenant son code MCP, sa documentation PRD et ses tests dans une structure unifiée.
+
+```
+modules/
+  {nom-module}/
+    mcp/              ← Serveur MCP Railway (si applicable)
+      src/
+      package.json
+      Dockerfile
+      railway.toml
+      deploy.sh
+      README.md
+    prd/              ← Product Requirements Documents
+      {module}.md     ← PRD principal du module
+    tests/            ← Tests spécifiques au module
+      unit/
+      e2e/
+```
+
+## Modules existants
+
+### Avec serveur MCP (déployés sur Railway)
+- **clients** : Gestion des clients (CRUD complet)
+- **opportunites** : Gestion des opportunités
+- **projets** : Gestion des projets
+- **taches** : Gestion des tâches
+- **applications** : Gestion des applications
+- **interactions** : Gestion des interactions
+- **publications** : Gestion des publications
+- **tickets** : Gestion du support
+- **livrables** : Gestion des livrables
+
+### Sans serveur MCP (pour l'instant)
+- **administration** : Configuration système
+- **auth** : Authentification/autorisation
+- **offres** : Offres commerciales
+- **outils** : Outils et utilitaires (SaaS/logiciels)
+- **planification** : Calendrier et planning
+- **portfolio** : Gestion portfolio
+- **soumissions** : Gestion des soumissions
+- **temps** : Timetracking
+
+### Modules spéciaux
+- **_shared/** : Code partagé entre modules (mcp-core, utils)
+- **_template/** : Templates pour nouveaux modules
+
+## Règles de gestion de la documentation
+
+### 1. PRD par module
+- **Emplacement obligatoire** : `modules/{module}/prd/{module}.md`
+- **Sections requises** :
+  - Contexte & Objectifs
+  - Portée (inclus/exclus)
+  - User Stories
+  - Règles Métier
+  - Flux & États
+  - Critères d'Acceptation (G/W/T)
+  - Contraintes & Risques
+  - Métriques de Succès
+  - Mapping Code ↔ Produit ↔ Tests
+  - Changelog (module)
+
+### 2. Tests par module
+- **Emplacement** : `modules/{module}/tests/`
+- **Structure** :
+  - `unit/` : Tests unitaires spécifiques au module
+  - `e2e/` : Tests end-to-end du module
+- **Tests UI globaux** : `tests/ui/` (à la racine, pour parcours cross-modules)
+
+### 3. Serveur MCP par module
+- **Emplacement** : `modules/{module}/mcp/`
+- **Déploiement** : Railway (un service par module)
+- **Documentation** : `modules/{module}/mcp/README.md`
+- **Template** : `modules/_template/mcp/`
+
+## Principes de développement
+
+### Règle obligatoire : Mise à jour du PRD module
+
+**⚠️ OBLIGATOIRE** : Pour toute modification qui justifie la mise à jour du PRD du module, **vous devez effectuer cette mise à jour**.
+
+#### Quand mettre à jour le PRD du module
+
+Le PRD du module (`modules/{module}/prd/{module}.md`) **doit être mis à jour** lorsque la modification impacte :
+- ✅ **Fonctionnalités** : Ajout/modification/suppression de fonctionnalités métier
+- ✅ **Règles métier** : Changement des règles de gestion, validations, workflows
+- ✅ **User Stories** : Nouvelle story ou modification d'une story existante
+- ✅ **Critères d'acceptation** : Ajout/modification de critères G/W/T
+- ✅ **Flux & États** : Modification des flux utilisateur ou des états de données
+- ✅ **Contraintes & Risques** : Nouveaux risques identifiés ou contraintes modifiées
+- ✅ **Métriques** : Ajout/modification de métriques de succès
+- ✅ **Modèle de données** : Changement de schéma DB, migrations, RLS
+- ✅ **API/Contrats** : Modification d'endpoints, contrats API, Edge Functions
+- ✅ **Mapping Code ↔ Tests** : Nouveau code ou tests nécessitant une traçabilité
+
+#### Sections du PRD à mettre à jour
+
+Selon le type de modification, mettre à jour les sections pertinentes :
+- **Contexte & Objectifs** : Si changement de vision ou objectifs
+- **Portée** : Si ajout/suppression de fonctionnalités
+- **User Stories** : Si nouvelle story ou modification
+- **Règles Métier** : Si changement de règles
+- **Flux & États** : Si modification de workflows
+- **Critères d'Acceptation** : Si ajout/modification de G/W/T
+- **Contraintes & Risques** : Si nouveaux risques ou contraintes
+- **Métriques de Succès** : Si changement de KPIs
+- **Mapping Code ↔ Produit ↔ Tests** : Toujours mettre à jour pour traçabilité
+- **Changelog** : **Toujours** ajouter une entrée avec date et description
+
+### Quand modifier un module
+1. **Identifier le module impacté** (ex: clients, opportunites)
+2. **⚠️ OBLIGATOIRE** : **Mettre à jour le PRD du module** (`modules/{module}/prd/{module}.md`) si la modification justifie une mise à jour (voir règles ci-dessus)
+3. **Modifier le code** (frontend, backend, MCP selon besoin)
+4. **Ajouter/mettre à jour les tests** (`modules/{module}/tests/`)
+5. **Mettre à jour le changelog** du module (section Changelog du PRD)
+6. **Si MCP modifié** : Redéployer via `modules/{module}/mcp/deploy.sh`
+
+### Documentation transverse
+- **PRD maître** : `docs/PRD.md` (vision globale, liens vers modules)
+- **Architecture MCP** : `docs/deployment/railway-mcp-modulaire.md`
+- **Structure modules** : `modules/README.md`
+
+### Agents impactés
+Tous les agents doivent respecter cette structure :
+- **Product Owner** : Met à jour PRD dans `modules/{module}/prd/`
+- **Analyste Fonctionnel** : Référence PRD module pour specs
+- **UX/UI Designer** : Documente wireframes/interfaces dans PRD module
+- **Dev Frontend** : Code UI, référence PRD module, tests dans `modules/{module}/tests/`
+- **Dev Backend** : Migrations, API, référence PRD module
+- **QA Testeur** : Tests dans `modules/{module}/tests/`, valide critères PRD module
+- **DevOps** : Déploie MCP depuis `modules/{module}/mcp/` vers Railway
+- **Gouvernance Produit** : Valide cohérence PRD module ↔ code ↔ tests
+- **Docs Maintainer** : Vérifie structure modules/, PRD modules, changelogs
+- **RLS/DB Auditor** : RLS et index documentés dans PRD module (section data_model)
+- **Observabilité** : Events documentés dans PRD module (section analytics)
+- **Design Librarian** : Composants référencés dans PRD modules concernés
+
+## Références
+- [Structure complète](mdc:modules/README.md)
+- [Déploiement MCP Railway](mdc:docs/deployment/railway-mcp-modulaire.md)
+- [Template module](mdc:modules/_template/)

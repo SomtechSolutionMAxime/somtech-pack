@@ -1,0 +1,18 @@
+---
+alwaysApply: true
+description: Ne jamais pousser/déployer en production sans une demande explicite de l'utilisateur
+---
+
+# Politique de déploiement/production
+
+- Ne jamais déclencher un déploiement de production sans demande explicite de l'utilisateur.
+- Ne jamais exécuter des commandes de déploiement production (ex. `netlify deploy --prod`, publication sur l'environnement live, création de tag/release) sans confirmation explicite.
+- Si la branche `main` déclenche un déploiement auto en production, demander confirmation avant tout merge/push vers `main`.
+- Par défaut, utiliser des branches de travail (ex. `cursor`, `feature/*`) et ouvrir un PR au lieu de pousser sur `main`.
+- En cas d'ambiguïté (ex. « pousser » sans préciser l'environnement), demander: « Souhaitez‑vous un déploiement en production, en préproduction, ou simplement un push Git sans déploiement ? »
+
+Checklist obligatoire avant production
+- L'utilisateur a demandé clairement un déploiement PROD.
+- Les variables d'environnement/secret PROD sont en place.
+- Les migrations sensibles ont été validées.
+- Les tests/lint/build sont verts.

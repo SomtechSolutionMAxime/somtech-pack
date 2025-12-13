@@ -1,0 +1,36 @@
+# devolo-project-orbit Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2025-11-27
+
+## Active Technologies
+- TypeScript/Deno (Supabase Edge Functions) + Supabase JS Client, fetch API (native Deno) (004-magic-patterns-integration)
+- PostgreSQL (Supabase) - nouvelle table `mockups`, relation avec table `documents` existante (004-magic-patterns-integration)
+- TypeScript 5.x, React 18.x + React, React Router, shadcn/ui, Tailwind CSS, lucide-react (005-manual-mockup-generation)
+- N/A (pas de stockage de données pour cette feature) (005-manual-mockup-generation)
+- TypeScript 5.5+, React 18.3+, Node.js 20+ (010-presentation-maquette-client)
+
+- TypeScript 5.x (Frontend), Deno 1.x (Edge Functions) (003-generate-from-transcript)
+
+## Project Structure
+
+```text
+src/
+tests/
+```
+
+## Commands
+
+npm test && npm run lint
+
+## Code Style
+
+TypeScript 5.x (Frontend), Deno 1.x (Edge Functions): Follow standard conventions
+
+## Recent Changes
+- 010-presentation-maquette-client: Added TypeScript 5.5+, React 18.3+, Node.js 20+
+- 005-manual-mockup-generation: Added TypeScript 5.x, React 18.x + React, React Router, shadcn/ui, Tailwind CSS, lucide-react
+- 004-magic-patterns-integration: Added TypeScript/Deno (Supabase Edge Functions) + Supabase JS Client, fetch API (native Deno)
+
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

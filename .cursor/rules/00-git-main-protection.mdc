@@ -1,0 +1,31 @@
+---
+alwaysApply: true
+---
+# Protection de la branche main
+
+## Règle: ne jamais pousser sur `main`, toujours passer par une PR
+
+- **Interdit**: tout push direct sur `main` (local ou distant), y compris `git push`, `git push origin main`, `gh pr merge`, `gh release create` sans PR.
+- **Obligatoire**: travailler sur une branche dédiée (ex. `feat/*`, `fix/*`, `chore/*`), ouvrir une Pull Request vers `main`, laisser la CI et la revue valider avant merge.
+
+## Bonnes pratiques
+- **Créer une branche** descriptive avant de commencer.
+- **Ouvrir une PR** tôt pour bénéficier des retours et de la CI.
+- **Résumé clair** des changements dans la PR et checklist de validation.
+- **Préférer le merge via PR** (squash ou rebase selon conventions) après approbation.
+
+## Interactions Git et PR via CLI
+- Les agents utilisent le CLI (`git`, `gh` ou scripts) pour créer branches, ouvrir/mettre à jour PR, commenter et suivre les statuts.
+- Les outils MCP GitHub peuvent être employés en secours (pannes CLI, automatisation spécifique) mais ne sont plus obligatoires.
+- Tenir un log clair des actions distantes (branche créée, PR ouverte, review soumise) dans le résumé de tâche.
+
+## Commandes locales à proscrire
+- `git push origin main`
+- `gh pr merge` sans revue ni CI verte
+- Toute commande destructive (`git push --force`, suppression de branche distante) sans validation explicite
+
+## Commandes à éviter
+- `git push origin main`
+- `gh pr merge` sans revue ni CI verte
+
+Cette règle est globale et s’applique à tous les workflows du dépôt.

@@ -1,0 +1,113 @@
+---
+description: Utiliser le navigateur intégré (MCP Playwright) pour validation interactive et exploration d'interface
+alwaysApply: false
+---
+
+# Règle : Navigateur intégré pour validation et exploration d'interface
+
+Quand vous modifiez ou explorez une interface, utilisez le **navigateur intégré MCP Playwright** pour :
+- ✅ Valider visuellement les changements
+- ✅ Détecter les erreurs console
+- ✅ Interagir et tester manuellement
+- ✅ Explorer l'état actuel de l'UI
+- ✅ Capturer des preuves (screenshots, logs)
+
+**Note** : Cette règle concerne la **validation interactive**, pas les tests automatisés. Voir [ui-testing-automated.mdc](mdc:ui-testing-automated.mdc) pour les tests automatisés.
+
+## Outils MCP Playwright disponibles
+
+### Navigation et contrôle
+- `mcp_playwright_playwright_navigate` — Aller vers une URL
+- `mcp_playwright_playwright_go_back` / `go_forward` — Navigation historique
+- `mcp_playwright_playwright_close` — Fermer le navigateur
+
+### Interaction
+- `mcp_playwright_playwright_click` — Cliquer sur un élément
+- `mcp_playwright_playwright_fill` — Remplir un champ
+- `mcp_playwright_playwright_select` — Sélectionner une option
+- `mcp_playwright_playwright_hover` — Survoler un élément
+- `mcp_playwright_playwright_press_key` — Appuyer sur une touche
+- `mcp_playwright_playwright_drag` — Glisser-déposer
+
+### Inspection et capture
+- `mcp_playwright_playwright_screenshot` — Capture d'écran
+- `mcp_playwright_playwright_console_logs` — **Logs console** (erreurs, warnings)
+- `mcp_playwright_playwright_get_visible_html` — HTML visible
+- `mcp_playwright_playwright_get_visible_text` — Texte visible
+- `mcp_playwright_playwright_evaluate` — Exécuter du JavaScript
+
+### Réseau
+- `mcp_playwright_playwright_expect_response` — Attendre une réponse HTTP
+- `mcp_playwright_playwright_assert_response` — Valider une réponse
+
+## Workflow de validation UI
+
+### 1. Démarrage
+```bash
+npm run dev  # ou bun dev
+# Vite démarre sur http://localhost:5173
+```
+
+### 2. Navigation et exploration
+- Naviguer vers la page modifiée
+- Mode desktop : `http://localhost:5173/` ou `/desktop`
+- Mode mobile : `http://localhost:5173/mobile` (width: 430, height: 900)
+
+### 3. Interaction et validation
+- Cliquer, remplir, naviguer selon le scénario
+- **Capturer les logs console** (objectif : 0 erreur)
+- Prendre des screenshots des états clés
+- Vérifier le comportement attendu
+
+### 4. Débogage si nécessaire
+- Inspecter le DOM visible
+- Exécuter du JavaScript pour diagnostiquer
+- Corriger le code
+- **Re-valider** après correction
+
+## Cas d'usage spécifiques
+
+### Modification mobile
+```
+1. Naviguer : http://localhost:5173/mobile/reports
+2. Définir auth si nécessaire : evaluate('localStorage.setItem("app_role", "worker")')
+3. Interagir avec les éléments modifiés
+4. Capturer logs console + screenshots
+5. Valider le comportement
+```
+
+### Modification desktop
+```
+1. Naviguer : http://localhost:5173/desktop
+2. Authentification via UI si nécessaire
+3. Tester les interactions
+4. Vérifier 0 erreur console
+```
+
+### Débogage d'erreur console
+```
+1. Navigate vers la page problématique
+2. console_logs(type: "error") → identifier les erreurs
+3. Analyser les stack traces
+4. Corriger le code
+5. Recharger et RE-CAPTURER les logs (confirmer 0 erreur)
+```
+
+## Architecture du projet
+
+### Deux interfaces séparées
+- **Mobile** : `src/pages/mobile/**`, `src/components/mobile/**`
+- **Desktop** : `src/pages/desktop/**`, `src/components/layout/**`
+- **Commun** : `src/components/ui/**` (primitives uniquement)
+
+### Bonnes pratiques
+- Ne jamais mélanger mobile et desktop dans un même changement
+- Toujours capturer au moins un screenshot avant/après
+- Documenter la validation dans le commit/PR
+- Utiliser des sélecteurs stables (`data-testid`, rôles ARIA)
+
+## Références
+- Stratégie globale : [browser-validation-strategy.mdc](mdc:browser-validation-strategy.mdc)
+- Tests automatisés : [ui-testing-automated.mdc](mdc:ui-testing-automated.mdc)
+- Routage : [src/App.tsx](mdc:src/App.tsx)
+

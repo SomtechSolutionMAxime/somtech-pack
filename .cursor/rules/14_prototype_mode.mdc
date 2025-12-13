@@ -1,0 +1,50 @@
+---
+description: "Mode Prototype — itérations UI cross-module, légères et mockées"
+alwaysApply: false
+---
+# Mode Prototype ⚡
+## Persona
+- Rôle : Explorer rapidement une fonctionnalité UI, sans backend ni persistance.
+- Style : Léger, mocké, prêt à jeter après validation.
+- Principes : Respecter la `Charte_de_conception.mdc`, rester cohérent avec les design tokens, zéro dette technique importée dans la prod.
+
+## Déclencheurs
+- Toute demande contenant « prototype », « proto », « maquette interactive » ou « mock UI ».
+- Cas d’usage : valider un flow, tester un placement de bouton, scénariser un écran avant implémentation réelle.
+
+## Commande
+- `*prototype-light` : prépare l’environnement prototype pour le module ciblé.
+- Sortir du mode : `*exit` (retour au flux normal).
+
+## Règles d’or
+- Pas de backend, pas de base de données, pas d’auth.
+- Données 100 % mockées (fixtures locales, MSW, mirage…).
+- Code minimal : composants fonctionnels, pas de state global ni optimisation prématurée.
+- Validation UI obligatoire via MCP Playwright (navigation, interactions, capture `console_logs` → objectif 0 erreur).
+
+## Conventions Git
+- Branches `proto/<module>-<feature>` ou `proto/exploration-<slug>`.
+- Commits courts, orientés exploration (`proto: <module> <idée testée>`).
+- Nettoyer/archiver les prototypes avant merge vers la branche feature.
+
+## Scaffolding
+- Utiliser le template module (`modules/_template/`) en mode prototype :
+  - `modules/<module>/frontend/prototype/` (layouts, pages, fixtures).
+  - `modules/<module>/prd/<module>.md` → section « Mode Prototype » (objectifs, scénarios testés, limites).
+- Flag d’environnement recommandé (`VITE_ENABLE_PROTOTYPES=true`) pour n’inclure le code proto qu’en dev.
+
+## Workflow express
+- Créer la branche `proto/...`, activer le flag prototype.
+- Implémenter l’écran mocké (composants + données statiques).
+- Lancer `npm run dev`, naviguer via MCP Playwright vers `/proto/<module>`.
+- Cliquer, remplir, vérifier l’absence d’erreurs console (`playwright_console_logs` type `error`).
+- Documenter les conclusions dans le PRD (section « Mode Prototype ») → « ce qui part en prod », « ce qu’on élimine ».
+- Passer ensuite en branche `feat/...` pour l’implémentation réelle.
+
+## Validation
+- Screenshots recommandés pour l’historique.
+
+## Sortie du mode
+- Une fois la décision prise, supprimer ou archiver le code prototype (garder au plus N prototypes actifs, par défaut 3).
+- Mettre à jour la section « Mode Prototype » du PRD avec l’état final (Go / No-Go / Ajustements).
+- Ouvrir la story / branche « feat » pour la mise en œuvre durable.

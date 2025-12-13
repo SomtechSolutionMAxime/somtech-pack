@@ -1,0 +1,85 @@
+---
+alwaysApply: false
+description: Agent Nettoyage/Normalisation — rendre génériques règles & guides pour nouveau projet
+---
+
+# Agent: Nettoyage & Normalisation (générique)
+
+**Rôle**: Agent de nettoyage/normalisation.
+**Objectif**: rendre génériques les règles et guides importés de `Browse/` et `.cursor/rules/`, sans traîner de configuration spécifique au projet d’origine.
+
+## Contexte attendu (déjà copié dans le nouveau workspace)
+- `.cursor/rules/` (règles Cursor)
+- `Browse/` (Templates + Guides)
+- Le but est d’obtenir un “kit” portable pour démarrer un nouveau projet, sans liens cassés ni identifiants projet.
+
+## Tâches (à exécuter dans l’ordre)
+
+### 1) Audit des liens dans `.cursor/rules/**/*.mdc`
+- Lister tous les liens `mdc:` et chemins docs (ex: `docs/...`, `modules/README.md`, `src/...`).
+- Si un lien pointe hors de `.cursor/rules/` ou `Browse/`, le remplacer par l’un de ces Guides:
+  - `docs/PRD.md` → `Browse/Guides/PRD.md`
+  - `modules/README.md` → `Browse/Guides/modules-architecture.md`
+  - `docs/deployment/railway-mcp-modulaire.md` → `Browse/Guides/railway-mcp-modulaire.md`
+  - `docs/deployment/railway-github-deployment.md` → `Browse/Guides/railway-github-deployment.md`
+  - `docs/mcp-api.md` → `Browse/Guides/mcp-api.md`
+  - `docs/guide-navigateur-tests.md` → `Browse/Guides/guide-navigateur-tests.md`
+  - `docs/refonte-strategie-navigateur-tests.md` → `Browse/Guides/refonte-strategie-navigateur-tests.md`
+- Supprimer/neutraliser toute référence code local (ex: `mdc:src/App.tsx`). Remplacer par: “Adapter au point d’entrée de votre app (ex: `src/App.tsx`).”
+
+### 2) Rendre la règle Supabase totalement générique
+- Fichier: `.cursor/rules/supabase-mcp.mdc`
+- Remplacer toute mention d’identifiant projet (ex: `mcp_supabase-<nom-projet>_*`) par un schéma générique:
+  - `mcp_supabase-<service>_search_docs`
+  - `mcp_supabase-<service>_list_tables` / `_list_extensions`
+  - `mcp_supabase-<service>_list_migrations` / `_apply_migration`
+  - `mcp_supabase-<service>_execute_sql`
+  - `mcp_supabase-<service>_get_logs`
+  - `mcp_supabase-<service>_get_advisors`
+- Mettre la description à: “MCP Supabase — migrations déclaratives, RLS, outils DB (générique)”.
+- Conserver ces références internes:
+  - [create-rls-policies.mdc](mdc:.cursor/rules/create-rls-policies.mdc)
+  - [declarative-database-schema.mdc](mdc:.cursor/rules/declarative-database-schema.mdc)
+  - [writing-supabase-edge-functions.mdc](mdc:.cursor/rules/writing-supabase-edge-functions.mdc)
+
+### 3) Orchestrateur: ne référencer que des ressources portables
+- Fichier: `.cursor/rules/00_orchestrator.mdc`
+- Pointer exclusivement vers `Browse/Guides/*` ou des règles `.cursor/rules/*`.
+- Enlever tout lien vers des fichiers docs non présents dans `Browse/` ou hors du pack copié.
+- Vérifier que le lien DevOps cible `08_devOps.mdc`.
+
+### 4) Règles UI/Playwright (validation interactive vs tests)
+- Fichiers: `browser-validation-strategy.mdc`, `ui-interface-playwright.mdc`, `ui-browser-interactive.mdc`, `ui-testing-automated.mdc`, `ui-validation-policy.mdc`
+- Supprimer/lisser toute référence à des chemins de code du projet source (ex: `mdc:src/App.tsx`) ou remplacer par un texte générique.
+- Conserver les prescriptions:
+  - Navigateur MCP Playwright obligatoire pour validation interactive (0 erreur console)
+  - Tests automatisés Playwright optionnels (sauf parcours critiques)
+
+### 5) Nettoyage sémantique
+- Supprimer dans les `.mdc` toute mention d’anciens noms internes (ex: noms d’équipes, produit, entreprise).
+- Garder des formulations génériques (“votre projet”, “votre service MCP”, “vos modules”).
+
+### 6) Vérifications finales
+- Tous les liens `mdc:` dans `.cursor/rules` doivent résoudre vers:
+  - une autre règle `/.cursor/rules/*.mdc`, ou
+  - un guide `Browse/Guides/*`, ou
+  - un template `Browse/Templates/*`.
+- `Browse/INDEX.md` liste tout le nécessaire (PRD/Charte/Templates/Guides).
+- La règle `ui-validation-policy.mdc` garde `globs: *.ts,*.tsx` et reste valide en contexte générique.
+
+## Definition of Done
+- 0 lien cassé hors de `.cursor/rules/` et `Browse/`.
+- Aucune mention d’identifiants/env du projet source.
+- Règles Supabase et Orchestrateur génériques, autoportantes.
+- Tous les agents (01→13) ont leurs règles, et les références pointent vers `Browse/`/règles locales uniquement.
+- `Browse/INDEX.md` permet de démarrer un nouveau projet (PRD/Charte/Templates/Guides).
+
+## Livrables attendus
+- Liste des fichiers modifiés.
+- Tableau des remplacements (avant → après).
+- Liste finale des liens `mdc:` (fichier → liens).
+- Mini‑guide “premiers pas” pour initier un nouveau projet avec ce pack.
+
+## Aide mémo (optionnelle)
+- Grep rapide des mots sensibles après refonte pour confirmer qu’aucune fuite ne subsiste (ex: noms d’entreprise/produit, `docs/`, `src/App.tsx`, `modules/README.md`).
+

@@ -1,0 +1,134 @@
+---
+alwaysApply: false
+description: MCP Supabase (projet courant) — migrations déclaratives, RLS, outils DB via MCP
+---
+
+# MCP Supabase — Règles d’usage (Projet Orbit)
+
+Cette règle décrit comment utiliser les outils MCP Supabase du projet pour gérer le schéma, les migrations, la RLS et le diagnostic.
+
+## Principes fondamentaux
+
+- **Toutes** les actions liées à Supabase (DDL, DML, diagnostics, logs) doivent impérativement passer par les outils MCP Supabase dédiés — pas d’accès direct via CLI/API hors MCP.
+- Schéma base de données géré de façon **déclarative** (pas de drift manuel).
+- **DDL** uniquement via migrations avec l’outil MCP (voir ci‑dessous).
+- **Ne pas** coder d’IDs générés dans des migrations de données.
+- **RLS** obligatoire sur les tables exposées — écrire des politiques explicites et testables.
+
+## Outils MCP disponibles (Supabase — projet courant)
+
+- Recherche documentation Supabase: `mcp_supabase-develo-project-orbit_search_docs`
+- Inventaire: `mcp_supabase-develo-project-orbit_list_tables`, `mcp_supabase-develo-project-orbit_list_extensions`
+- Migrations: `mcp_supabase-develo-project-orbit_list_migrations`, `mcp_supabase-develo-project-orbit_apply_migration`
+- Exécution SQL (DML/lecture uniquement): `mcp_supabase-develo-project-orbit_execute_sql`
+- Logs des services: `mcp_supabase-develo-project-orbit_get_logs`
+- Conseils sécurité/performance: `mcp_supabase-develo-project-orbit_get_advisors`
+- **Déploiement Edge Functions**: `mcp_devolo-project-orbit-supabase-devolo-project-orbit_de9b73545` (⚠️ **TOUJOURS utiliser cet outil MCP pour déployer les Edge Functions, jamais la CLI directement**)
+
+### Règles d’utilisation
+
+1) Préférer `apply_migration` pour toute modification DDL (tables, colonnes, index, contraintes, extensions).
+2) Utiliser `execute_sql` uniquement pour DML ou requêtes d’inspection ponctuelles.
+3) Après une migration impactant la sécurité ou les performances, exécuter `get_advisors` (types: security, performance) et appliquer les recommandations.
+4) En cas de comportement inattendu, consulter `get_logs` (services: api, postgres, auth, storage, realtime, edge-function).
+5) **⚠️ OBLIGATOIRE** : **TOUJOURS utiliser l'outil MCP `deploy_edge_function` pour déployer les Edge Functions Supabase** — ne jamais utiliser la CLI Supabase directement (`supabase functions deploy`). L'outil MCP est configuré et fonctionnel.
+
+## RLS (Row Level Security)
+
+- Activer RLS sur les tables sensibles et définir des politiques par rôle.
+- Tester les cas Allow/Deny. Documenter les invariants.
+
+Références:
+- [create-rls-policies.mdc](mdc:.cursor/rules/create-rls-policies.mdc)
+- [11_rls_db_auditor.mdc](mdc:.cursor/rules/11_rls_db_auditor.mdc)
+
+## Migrations déclaratives
+
+- Rédiger des migrations idempotentes, nommées en `snake_case` décrivant l’intention.
+- Regrouper DDL par domaine fonctionnel quand pertinent.
+
+Références:
+- [declarative-database-schema.mdc](mdc:.cursor/rules/declarative-database-schema.mdc)
+- [supabaseprojetct.mdc](mdc:.cursor/rules/supabaseprojetct.mdc)
+
+## Edge Functions Supabase
+
+- Pour la logique côté Edge, suivre les conventions et contraintes détaillées ici:
+- [writing-supabase-edge-functions.mdc](mdc:.cursor/rules/writing-supabase-edge-functions.mdc)
+
+### Déploiement des Edge Functions
+
+**⚠️ OBLIGATOIRE** : **TOUJOURS utiliser l'outil MCP Supabase pour déployer les Edge Functions** :
+
+- **Outil MCP** : `mcp_devolo-project-orbit-supabase-devolo-project-orbit_de9b73545` (nom: `deploy_edge_function`)
+- **Paramètres** :
+  - `name` : Nom de la fonction (ex: `docs-reader`, `documents-mcp`)
+  - `files` : Tableau des fichiers à déployer (inclure `index.ts` et dépendances)
+  - `entrypoint_path` : Chemin de l'entrypoint (par défaut: `index.ts`)
+- **Ne jamais utiliser** : `supabase functions deploy` directement (nécessite authentification manuelle)
+
+**Exemple d'utilisation** :
+```typescript
+// Lire le fichier index.ts
+const indexContent = await readFile('supabase/functions/docs-reader/index.ts');
+
+// Déployer via MCP
+await mcp_devolo-project-orbit-supabase-devolo-project-orbit_de9b73545({
+  name: "docs-reader",
+  files: [
+    { name: "index.ts", content: indexContent }
+  ],
+  entrypoint_path: "index.ts"
+});
+```
+
+## Organisation du dépôt
+
+- SQL migrations: `supabase/migrations/`
+- Fonctions Edge: `supabase/functions/`
+- Configuration Supabase: `supabase/config.toml`
+
+## Configuration OpenAI Agent Builder
+
+Pour exposer un serveur MCP Supabase Edge Function à **OpenAI Agent Builder**, suivre **obligatoirement** :
+
+### ⚠️ Règle obligatoire
+
+**Lorsqu'un serveur MCP doit être "prêt pour Agent Builder" ou "compatible Agent Builder", il DOIT respecter toutes les spécifications de conformité.**
+
+### Référence principale
+
+- **[Règle de conformité Agent Builder](mdc:.cursor/rules/mcp-agent-builder-compliance.mdc)** : **CONSULTER EN PRIORITÉ**
+  - Spécifications complètes du format SSE
+  - Handlers JSON-RPC obligatoires
+  - Checklist de conformité
+  - Exemples de code TypeScript/Deno
+  - Tests de validation
+
+### Points essentiels
+
+1. **Endpoint `/sse`** : URL doit se terminer par `/sse` (pas `/mcp`)
+2. **Format SSE GET `/sse`** : `event: endpoint`, `retry: 1000`, `event: open` avec `notifications/initialized`
+3. **Handlers JSON-RPC** : `initialize`, `notifications/initialized`, `tools/list`, `tools/call`
+4. **Authentification** : Header `Authorization: Bearer <anon_key>` (l'`anon_key` fonctionne comme JWT valide)
+5. **CORS** : Headers complets incluant `openai-conversation-id`, `openai-ephemeral-user-id`
+
+### Documentation complète
+
+- **Règle de conformité** : `.cursor/rules/mcp-agent-builder-compliance.mdc` ⭐ **À CONSULTER EN PRIORITÉ**
+- Guide complet : `docs/mcp/AGENT_BUILDER_CONFIGURATION.md`
+- Index documentation MCP : `docs/mcp/README.md`
+- Diagnostic : `docs/mcp/AGENT_BUILDER_DIAGNOSTIC.md`
+- Solution : `docs/mcp/AGENT_BUILDER_SOLUTION.md`
+- Exemples de référence :
+  - `supabase/functions/documents-mcp/index.ts` (serveur conforme)
+  - `supabase/functions/docs-reader/index.ts` (serveur conforme)
+
+## Bonnes pratiques
+
+- Toujours écrire des migrations **réversibles** si possible.
+- Ajouter des index en cohérence avec les requêtes réelles.
+- Valider l'impact sur la RLS après chaque DDL.
+- Documenter les changements dans le PRD module concerné (section Data Model et Changelog).
+- Pour les Edge Functions MCP : implémenter l'endpoint `/sse` pour compatibilité Agent Builder.
+

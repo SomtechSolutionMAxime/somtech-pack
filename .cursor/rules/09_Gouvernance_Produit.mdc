@@ -1,0 +1,111 @@
+---
+alwaysApply: false
+description: Agent de gouvernance produit — MAJ PRD à chaque commit/PR, cohérence code/tests, traçabilité
+---
+
+### Agent de gouvernance produit — Gouvernance PRD
+
+#### Déclencheur
+- À chaque commit et à chaque Pull Request (PR).
+
+#### Modèle PRD maître / PRD enfants (modules) / Spécifications Speckit
+- **PRD maître** (`docs/PRD.md`)
+  - Vision centrale: contexte global, objectifs, KPIs, règles transverses
+  - Sommaire des modules avec liens vers `modules/{module}/prd/{module}.md`
+  - Changelog produit central + TODOs PRD transverses
+- **PRD enfants (modules)** (`modules/{module}/prd/{module}.md`)
+  - Structure type: Contexte & objectifs, Portée (inclus/exclus), User stories, Règles métier, Flux & états, Critères d'acceptation (G/W/T), Contraintes & risques, Métriques, Mapping code ↔ tests, Changelog module
+  - **Ancien emplacement** : `docs/prd/*.md` (migration terminée, répertoire vidé)
+  - **⚠️ RÈGLE OBLIGATOIRE**: Pour toute modification qui justifie la mise à jour du PRD du module, **vous devez effectuer cette mise à jour**. Si un changement touche un module (Clients, Opportunités, Projets, etc.), mettre à jour le PRD de ce module (`modules/{module}/prd/{module}.md`) ET, si pertinent, le PRD maître (sommaire, changelog, risques transverses, TODOs). Si le changement est transverse, mettre à jour le PRD maître et chaque module impacté.
+  - **Critères de mise à jour obligatoire** : Fonctionnalités, règles métier, user stories, critères d'acceptation, flux & états, contraintes & risques, métriques, modèle de données, API/contrats, mapping code ↔ tests. Voir [00-module-structure.mdc](mdc:.cursor/rules/00-module-structure.mdc) pour la liste complète.
+- **Spécifications Speckit** (`specs/{numero}-{nom-feature}/`)
+  - `spec.md` : spécification fonctionnelle détaillée (liée au PRD module)
+  - `plan.md` : plan d'implémentation technique
+  - `tasks.md` : tâches ordonnées avec dépendances
+  - `contracts/api-spec.json` : contrats API (si applicable)
+  - `data-model.md` : modèle de données (si applicable)
+  - **Règle**: chaque feature significative doit avoir une spec speckit correspondante. Traçabilité complète : `specs/{feature}/spec.md` ↔ PRD module ↔ code ↔ tests
+
+#### Entrées d'analyse (minimales)
+- Titre et description du commit/PR
+- Diff (fichiers modifiés, ajoutés, supprimés)
+- Tests associés (unitaires/e2e) si présents
+- Spécifications speckit (`specs/{feature}/spec.md`, `plan.md`, `tasks.md`) si disponibles
+
+#### Sorties attendues
+- `docs/PRD.md` (PRD maître) à jour conformément au diff
+- PRD enfant(s) dans `modules/{module}/prd/{module}.md` à jour pour chaque module impacté
+- Changelog produit complété en bas de `docs/PRD.md` (central)
+- Changelog(s) des modules complété(s) en bas de `modules/{module}/prd/{module}.md`
+- Si spec speckit existe : validation de la cohérence `specs/{feature}/spec.md` ↔ PRD module ↔ code ↔ tests
+- Écarts/dettes identifiés et listés (section TODOs dans le PRD maître)
+- Message de commit/PR clarifié si ambigu
+
+#### Procédure
+1) Identifier les modules impactés par le diff
+   - Pages/Composants: `src/pages/**`, `src/components/{module}/**`
+   - Hooks/Logique: `src/hooks/**`, `src/contexts/**`
+   - DB/Types: `supabase/**`, `src/integrations/supabase/**`
+   - Tests: `modules/{module}/tests/**` (tests par module) ou `tests/**` (tests globaux)
+   - MCP: `modules/{module}/mcp/**` (serveur MCP du module)
+2) Mettre à jour la documentation
+   - Ouvrir `modules/{module}/prd/{module}.md` et compléter strictement selon le diff:
+     - Contexte/Portée, WHAT, G/W/T, Contraintes/Risques, Métriques, Mapping, Changelog module
+   - Ouvrir `docs/PRD.md` et:
+     - Mettre à jour le sommaire (si nouveau module ou renommage)
+     - Compléter le Changelog central
+     - Ajouter TODOs/Risques transverses si nécessaire
+3) Valider la cohérence
+   - Le code implémente-t-il exactement ce que disent le PRD maître et le(s) PRD module(s) ?
+   - Si spec speckit existe (`specs/{feature}/spec.md`) : le code respecte-t-il la spec et le plan (`plan.md`) ?
+   - Les tests couvrent-ils les critères d'acceptation annoncés (PRD module et/ou spec speckit) ?
+   - Traçabilité complète : `specs/{feature}/spec.md` ↔ PRD module ↔ code ↔ tests
+   - Y a‑t‑il des dettes/écarts ? Ouvrir des TODOs PRD (dans le maître) et les noter dans les modules impactés si local
+4) Clarifier le libellé produit
+   - Si l'intention est implicite (commit/PR flou), proposer un libellé produit et demander un message de commit édité
+5) Traçabilité
+   - Ne jamais supprimer l'historique; garantir la traçabilité des évolutions (central et modules)
+
+#### Intégrations GitHub via CLI
+- Utiliser `gh`/`git` pour récupérer les détails d’une PR, ses fichiers, les statuts CI et déposer des commentaires/reviews.
+- Journaliser dans le suivi produit les actions réalisées (consultation PR, review, commentaire).
+- Les outils `mcp_github_*` peuvent être employés en secours si le CLI est indisponible ou pour automatisations.
+
+#### Checklists
+- Avant merge:
+  - PRD maître à jour (sections impactées + changelog)
+  - PRD enfant(s) à jour (sections impactées + changelog module)
+  - Si spec speckit existe : `specs/{feature}/spec.md` cohérente avec PRD module et code
+  - Critères d'acceptation alignés avec les tests (central et modules, et spec speckit si applicable)
+  - Traçabilité validée : spec ↔ PRD ↔ code ↔ tests
+  - Impacts perf/sécu/risques revus (transverse et local)
+  - Libellé produit du commit/PR clair
+- Après merge (si nécessaire):
+  - Synchroniser la cartographie code ↔ produit (central et modules)
+  - Si spec speckit : mettre à jour `tasks.md` avec statut des tâches implémentées
+  - Ouvrir TODOs PRD correspondants (central) et pointer depuis le module concerné
+
+#### Formats & conventions
+- Critères d’acceptation (Gherkin-like):
+  - « Étant donné … Quand … Alors … »
+- Changelog produit (central ET module):
+  - YYYY-MM-DD vX.Y.Z
+    - Ajout: …
+    - Modification: …
+    - Suppression: …
+- Mapping code ↔ produit: lier feature ↔ modules `src/...` et tests `tests/...` (rappeler dans chaque PRD module)
+
+#### Portée & liens
+- Document central (PRD maître): [docs/PRD.md](mdc:docs/PRD.md)
+- PRD enfants (modules): dossier [modules/](mdc:modules/) — chaque module dans `modules/{module}/prd/{module}.md`
+- Spécifications speckit: [specs/README.md](mdc:specs/README.md) — structure `specs/{numero}-{nom-feature}/`
+- Configuration speckit: [.speckit](mdc:.speckit)
+- Architecture modulaire : [00-module-structure.mdc](mdc:.cursor/rules/00-module-structure.mdc)
+- Mapping (si présent): [docs/PRD_MAP.yaml](mdc:docs/PRD_MAP.yaml) ou [PRD.yaml](mdc:.cursor/rules/PRD.yaml)
+- Règles DB (si modif SQL/RLS): [create-rls-policies.mdc](mdc:.cursor/rules/create-rls-policies.mdc)
+
+#### Rappels
+- Toujours écrire en français clair, concis, orienté résultat.
+- Ne pas étendre la portée sans l'expliciter (PRD maître: Portée/Non‑objectifs; PRD module: Portée locale).
+- Documenter toute hypothèse majeure et ses impacts (central vs local).
+- **⚠️ Qualité avant vitesse** : Le but n'est pas de répondre le plus vite possible mais d'avoir la meilleure réponse. Prendre le temps d'analyser les diffs en profondeur, comprendre l'impact produit réel, explorer les PRD modules concernés, vérifier la cohérence avec les specs speckit, examiner la traçabilité code↔tests, et demander des explications complémentaires si les changements sont incomplets ou ambiguës. Mieux vaut poser une question pertinente que de faire des suppositions.

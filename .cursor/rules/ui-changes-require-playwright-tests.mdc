@@ -1,0 +1,100 @@
+---
+description: Validation obligatoire via navigateur intégré (MCP Playwright) après toute modification d'interface
+alwaysApply: true
+---
+
+# Règle — Validation navigateur obligatoire après chaque changement UI
+
+Dès qu'un changement touche l'interface (ajout/modif de bouton, champ, formulaire, composant, page, style), vous **devez immédiatement valider** le comportement via le **navigateur intégré MCP Playwright**.
+
+## ⚠️ RÈGLE ABSOLUE : Vérification console OBLIGATOIRE
+
+**TOUTE modification UI DOIT être suivie d'une vérification de la console navigateur.**
+- ❌ **INTERDIT** : Terminer une modification UI sans vérifier la console
+- ❌ **INTERDIT** : Considérer une tâche "terminée" si la console n'a pas été vérifiée
+- ✅ **OBLIGATOIRE** : Capturer les logs console (`console_logs` type: "error") après chaque modification
+- ✅ **OBLIGATOIRE** : Confirmer **0 erreur console** avant de considérer la tâche terminée
+- ✅ **OBLIGATOIRE** : Si erreurs détectées → corriger → RE-VÉRIFIER jusqu'à 0 erreur
+
+**Cette vérification n'est PAS optionnelle. C'est une étape obligatoire du workflow.**
+
+## Distinction importante
+
+- ✅ **Navigateur intégré (MCP Playwright)** : **OBLIGATOIRE** pour validation interactive
+- ⚙️ **Tests automatisés Playwright** : **OPTIONNELS** (sauf parcours critiques ou demande explicite)
+
+Voir [browser-validation-strategy.mdc](mdc:browser-validation-strategy.mdc) pour la stratégie complète.
+
+## Procédure de validation (obligatoire)
+
+### 1. Démarrer l'application
+- `npm run dev` ou `bun dev` (Vite sur `http://localhost:5173`)
+- Confirmer que l'app est accessible
+
+### 2. Utiliser le navigateur intégré (MCP Playwright)
+- Naviguer vers la page modifiée : `mcp_playwright_playwright_navigate`
+- Interagir avec les éléments modifiés : `click`, `fill`, `select`, etc.
+- **🔴 ÉTAPE OBLIGATOIRE** : Capturer les logs console : `mcp_playwright_playwright_console_logs` (type: "error")
+  - **⚠️ Objectif : 0 erreur console**
+  - **⚠️ Si erreurs présentes → CORRIGER immédiatement → RE-VÉRIFIER**
+- Prendre des captures d'écran : `mcp_playwright_playwright_screenshot`
+
+### 3. Vérifier
+- ✅ Élément visible et fonctionnel
+- ✅ Interaction produit l'effet attendu (toast, navigation, état DOM, etc.)
+- ✅ **🔴 Aucune erreur dans la console navigateur (OBLIGATOIRE)**
+- ✅ Accessibilité de base (focus clavier atteignable)
+
+### 4. Corriger si nécessaire
+- Si des erreurs console sont présentes → corriger le code **IMMÉDIATEMENT**
+- **OBLIGATOIRE** : Recharger la page et **RE-CAPTURER** les logs console : `console_logs` (type: "error")
+- **OBLIGATOIRE** : Confirmer **0 erreur** avant de continuer
+- Itérer jusqu'à validation complète (corriger → vérifier → corriger → vérifier)
+
+### 4bis. Cas spécial : Erreur console copiée-collée par l'utilisateur
+**⚠️ RÈGLE OBLIGATOIRE** : Quand l'utilisateur copie-colle une erreur console détectée pendant ses tests, après correction, vous **DEVEZ** automatiquement :
+1. Naviguer vers la page concernée avec MCP Playwright
+2. Reproduire le scénario qui déclenchait l'erreur (même interactions utilisateur)
+3. Capturer les logs console (`console_logs` type: "error")
+4. **Confirmer que l'erreur ne se reproduit plus** (0 erreur attendue)
+5. Si l'erreur persiste → itérer jusqu'à résolution complète
+
+**Objectif** : Éviter que l'utilisateur doive copier-coller la même erreur plusieurs fois. La correction doit être validée immédiatement via les tests UI.
+
+### 5. Documenter
+- Mentionner dans le commit/PR que la validation MCP a été effectuée
+- Joindre des captures si pertinent
+- Si des erreurs ont été corrigées, documenter le correctif
+
+## Checklist de validation (à respecter OBLIGATOIREMENT)
+
+**⚠️ Cette checklist DOIT être complétée pour chaque modification UI. Aucune exception.**
+
+- [ ] Application lancée localement (`npm run dev` ou `bun dev`)
+- [ ] Navigation vers la page/composant modifié via MCP Playwright (`playwright_navigate`)
+- [ ] Interaction avec les éléments ajoutés/modifiés (`click`, `fill`, etc.)
+- [ ] **🔴 OBLIGATOIRE : Capture des logs console** (`console_logs` type: "error")
+- [ ] **🔴 OBLIGATOIRE : Confirmation 0 erreur console** (si erreurs → corriger → RE-VÉRIFIER)
+- [ ] Captures d'écran des états clés (`screenshot`)
+- [ ] Effet attendu vérifié (toast, navigation, données, etc.)
+- [ ] Accessibilité de base vérifiée (focus, labels)
+- [ ] **Si erreurs détectées** : Corrections appliquées → **RE-CAPTURE console** → Confirmation 0 erreur
+- [ ] Re-validation après correction (si applicable)
+
+**Rappel** : La vérification console n'est PAS optionnelle. Une modification UI n'est pas terminée tant que la console n'a pas été vérifiée et confirmée à 0 erreur.
+
+## Tests automatisés (optionnels)
+
+Les tests automatisés Playwright (`tests/ui/**/*.spec.ts`) sont **optionnels** sauf si :
+- Parcours critique métier (auth, CRUD principal)
+- Feature stable nécessitant une non-régression
+- Requis explicitement par la DoD ou le QA
+- Demande explicite de l'équipe
+
+Voir [ui-testing-automated.mdc](mdc:ui-testing-automated.mdc) pour les tests automatisés.
+
+## Références
+- Stratégie globale : [browser-validation-strategy.mdc](mdc:browser-validation-strategy.mdc)
+- Outils MCP disponibles : [ui-browser-interactive.mdc](mdc:ui-browser-interactive.mdc)
+- Tests automatisés : [ui-testing-automated.mdc](mdc:ui-testing-automated.mdc)
+
