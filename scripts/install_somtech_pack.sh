@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-install_somtech_pack.sh — Installe rules Cursor + commandes depuis le repo somtech-pack (source) vers un repo cible.
+install_somtech_pack.sh — Installe rules Cursor + commandes + skills + docs (optionnel) depuis le repo somtech-pack (source) vers un repo cible.
 
 Usage:
   ./scripts/install_somtech_pack.sh --target /path/to/target_repo [options]
@@ -15,6 +15,8 @@ Options:
   --dry-run        Affiche ce qui serait fait, sans écrire.
   --no-rules       N'installe pas .cursor/rules.
   --no-commands    N'installe pas .cursor/commands.
+  --no-skills      N'installe pas .cursor/skills.
+  --no-docs        N'installe pas docs/chatwindow.
   --somtech-only   Installe uniquement les commandes somtech.*.md (par défaut: installe toutes les commandes).
 
 Comportement:
@@ -23,6 +25,8 @@ Comportement:
   - .cursor/commands :
       - par défaut: copie toutes les commandes
       - si --somtech-only: copie seulement somtech.*.md
+  - .cursor/skills : copie tout (backup + overwrite si existant)
+  - docs/chatwindow : copie le dossier de doc générique ChatWindow (backup si existant)
   - .cursor/generic/PLACEHOLDERS.md : copié depuis la source si présent, sinon généré.
 
 Backups:
@@ -38,6 +42,8 @@ TARGET=""
 DRY_RUN=0
 DO_RULES=1
 DO_COMMANDS=1
+DO_SKILLS=1
+DO_DOCS=1
 SOMTECH_ONLY=0
 
 while [[ $# -gt 0 ]]; do
@@ -47,6 +53,8 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift ;;
     --no-rules) DO_RULES=0; shift ;;
     --no-commands) DO_COMMANDS=0; shift ;;
+    --no-skills) DO_SKILLS=0; shift ;;
+    --no-docs) DO_DOCS=0; shift ;;
     --somtech-only) SOMTECH_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Argument inconnu: $1" >&2; usage; exit 2 ;;
@@ -66,6 +74,14 @@ fi
 if [[ ! -d "${SOURCE}/.cursor/commands" ]]; then
   echo "Erreur: source invalide: ${SOURCE}/.cursor/commands introuvable" >&2
   exit 2
+fi
+
+# Skills/docs sont optionnels: on avertit seulement si absents.
+if [[ "${DO_SKILLS}" == "1" ]] && [[ ! -d "${SOURCE}/.cursor/skills" ]]; then
+  echo "Avertissement: ${SOURCE}/.cursor/skills introuvable (skills ignorés)" >&2
+fi
+if [[ "${DO_DOCS}" == "1" ]] && [[ ! -d "${SOURCE}/docs/chatwindow" ]]; then
+  echo "Avertissement: ${SOURCE}/docs/chatwindow introuvable (docs ignorés)" >&2
 fi
 
 _ts() { date +"%Y%m%d%H%M%S"; }
@@ -172,16 +188,59 @@ install_commands() {
   done < <(find "${SOURCE}/.cursor/commands" -maxdepth 1 -type f -name "*.md" | sort)
 }
 
+install_skills() {
+  if [[ ! -d "${SOURCE}/.cursor/skills" ]]; then
+    log "Avertissement: .cursor/skills absent côté source -> ignoré"
+    return 0
+  fi
+
+  ensure_dir "${TARGET}/.cursor/skills"
+  log "Installation .cursor/skills (backup + overwrite)"
+
+  # Copier chaque skill (répertoire complet)
+  while IFS= read -r skill_dir; do
+    skill_name="$(basename "${skill_dir}")"
+    if [[ -d "${TARGET}/.cursor/skills/${skill_name}" ]]; then
+      run "mv \"${TARGET}/.cursor/skills/${skill_name}\" \"${TARGET}/.cursor/skills/${skill_name}.bak-$(_ts)\""
+    fi
+    run "cp -R \"${skill_dir}\" \"${TARGET}/.cursor/skills/\""
+  done < <(find "${SOURCE}/.cursor/skills" -maxdepth 1 -type d ! -path "${SOURCE}/.cursor/skills" | sort)
+
+  # Copier README.md à la racine des skills si présent
+  if [[ -f "${SOURCE}/.cursor/skills/README.md" ]]; then
+    copy_with_backup "${SOURCE}/.cursor/skills/README.md" "${TARGET}/.cursor/skills/README.md"
+  fi
+}
+
+install_docs() {
+  if [[ ! -d "${SOURCE}/docs/chatwindow" ]]; then
+    log "Avertissement: docs/chatwindow absent côté source -> ignoré"
+    return 0
+  fi
+
+  ensure_dir "${TARGET}/docs"
+  log "Installation docs/chatwindow (backup + overwrite)"
+
+  if [[ -d "${TARGET}/docs/chatwindow" ]]; then
+    run "mv \"${TARGET}/docs/chatwindow\" \"${TARGET}/docs/chatwindow.bak-$(_ts)\""
+  fi
+  run "cp -R \"${SOURCE}/docs/chatwindow\" \"${TARGET}/docs/\""
+}
+
 main() {
   create_min_module_structure_if_missing
 
   ensure_dir "${TARGET}/.cursor/rules"
   ensure_dir "${TARGET}/.cursor/commands"
+  ensure_dir "${TARGET}/.cursor/skills"
+  ensure_dir "${TARGET}/docs"
   ensure_dir "${TARGET}/.cursor/generic"
 
   install_placeholders
   if [[ "${DO_RULES}" == "1" ]]; then install_rules; fi
   if [[ "${DO_COMMANDS}" == "1" ]]; then install_commands; fi
+  if [[ "${DO_SKILLS}" == "1" ]]; then install_skills; fi
+  if [[ "${DO_DOCS}" == "1" ]]; then install_docs; fi
 
   log "Terminé."
 }
