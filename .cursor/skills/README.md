@@ -13,6 +13,7 @@ Ce dossier contient des **Agent Skills** (format `SKILL.md`) utilisables par Cur
 
 - Objectif : aider à configurer un serveur MCP dans Cursor via `~/.cursor/mcp.json`.
 - Templates : `references/SERVEURS_MCP.md` (à compléter par projet)
+- Exemple (optionnel) : `references/SERVEURS_ORBIT.md` (liste de serveurs type — URLs à adapter)
 
 ## Structure (rappel)
 

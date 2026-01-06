@@ -274,6 +274,8 @@ Après modification de `mcp.json` :
 
 ## Références
 
+- Exemple Orbit (optionnel) : `references/SERVEURS_ORBIT.md`
+
 - [Documentation MCP officielle](https://modelcontextprotocol.io)
 - [Documentation Cursor Skills](https://cursor.com/docs/context/skills)
 - [Documentation Supabase Edge Functions](https://supabase.com/docs/guides/functions)
