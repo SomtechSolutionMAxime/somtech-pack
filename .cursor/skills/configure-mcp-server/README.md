@@ -18,6 +18,7 @@ configure-mcp-server/
 ├── README.md                   # Ce fichier
 ├── references/                # Documentation de référence
 │   ├── SERVEURS_MCP.md        # Template pour documenter vos serveurs MCP
+│   ├── SERVEURS_ORBIT.md      # Exemple réel (Orbit) : liste de serveurs + URLs
 │   └── TYPES_CONFIGURATION.md # Types de configuration supportés
 └── scripts/                   # Scripts utilitaires
     └── validate-mcp-config.sh # Script de validation du fichier mcp.json
@@ -32,6 +33,7 @@ L'agent peut utiliser ce skill automatiquement lorsqu'il détecte une demande de
 - Exemples de configuration
 - Guide de dépannage
 - Template de documentation des serveurs MCP (à adapter)
+- Exemple Orbit (optionnel) : `references/SERVEURS_ORBIT.md`
 
 ### Pour l'utilisateur
 
