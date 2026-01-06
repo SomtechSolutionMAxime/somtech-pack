@@ -9,6 +9,27 @@ Pack de démarrage Somtech pour projets modulaires.
 - `docs/chatwindow/` : documentation générique “ChatWindow + widgets” (réutilisable)
 - `scripts/install_somtech_pack.sh` : script d’installation (backup + overwrite)
 
+## Synchronisation (pull/push)
+
+### Pull — mettre à jour un projet depuis le pack
+
+```bash
+./scripts/somtech_pack_pull.sh --target . --dry-run
+./scripts/somtech_pack_pull.sh --target .
+```
+
+### Push — publier des changements depuis un projet vers le pack
+
+Pré-requis : GitHub CLI authentifié (`gh auth login`).
+
+```bash
+./scripts/somtech_pack_push.sh --message "chore(pack): sync rules/skills"
+```
+
+Notes :
+- Template release notes : `.specify/templates/releasenote-template.md`
+- PRD du pack : `.cursor/prd/somtech-pack.md`
+
 ## Installer dans un nouveau projet
 
 Depuis le projet cible (repo vide ou existant) :
