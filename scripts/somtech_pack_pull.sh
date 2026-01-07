@@ -80,6 +80,6 @@ INSTALL_SCRIPT="${PACK_CLONE}/scripts/install_somtech_pack.sh"
 [[ -x "$INSTALL_SCRIPT" ]] || die "Script install introuvable: $INSTALL_SCRIPT"
 
 log "Installation pack -> target (full-pack par défaut)"
-"$INSTALL_SCRIPT" --source "$PACK_CLONE" --target "$TARGET_ABS" "${INSTALL_ARGS[@]}"
+"$INSTALL_SCRIPT" --target "$TARGET_ABS" "${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}"
 
 log "OK (pull)"
