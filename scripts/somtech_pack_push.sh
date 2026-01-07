@@ -116,7 +116,10 @@ log "Scope: $SCOPE"
 log "Dry-run: $DRY_RUN"
 
 # Collect changed files (name-status with renames)
-mapfile -t DIFF_LINES < <(git diff --name-status -M "$BASE_REF...HEAD")
+DIFF_LINES=()
+while IFS= read -r _line; do
+  DIFF_LINES+=("$_line")
+done < <(git diff --name-status -M "$BASE_REF...HEAD")
 
 if [[ ${#DIFF_LINES[@]} -eq 0 ]]; then
   die "Aucun changement détecté entre $BASE_REF et HEAD."
