@@ -25,4 +25,21 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Référence workflow
 Voir `.mockmig/templates/commands/audit.md`.
 
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts
+- `${MIGRATION_DIR}/03_existing_audit.md`
+
+### NEXT
+
+```text
+/mockmig.gap --module <slug> --mockupPath <path> [--component <component>]
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO):
+  - ex: “02_validation_packet.md non validé → exécuter /mockmig.validate …”
+
 

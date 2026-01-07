@@ -22,9 +22,26 @@ You **MUST** consider the user input before proceeding (if not empty).
    - conformité `auth.users` (pas de duplication d’identité)
    - tests pour fonctions SECURITY DEFINER / ABAC si utilisées
    - mise à jour PRD module si impact schéma/RLS/API
-5. Stop & report (compter tâches P0/P1/P2).
+5. Stop & report (compter tâches P0/P1/P2) + NEXT/READY (voir section ci-dessous).
 
 ## Référence workflow
 Voir `.mockmig/templates/commands/backend_tasks.md`.
+
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts
+- `${MIGRATION_DIR}/05_backend_tasks.md`
+
+### NEXT
+
+```text
+/mockmig.ui.tasks --module <slug> --mockupPath <path> [--component <component>]
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO):
+  - ex: “04_gap_analysis.md manquant → exécuter /mockmig.gap …”
 
 

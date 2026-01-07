@@ -52,9 +52,13 @@ $ARGUMENTS
 Ce workflow **doit s’arrêter** après `/mockmig.validate` tant que l’utilisateur n’a pas explicitement validé (oui/non).
 
 ## Outline
-1. Démarrer par `/mockmig.inventory` en fournissant `--component`.
-2. Exécuter `/mockmig.validate` et attendre le sign-off.
+1. (Recommandé) Vérifier le contexte avec `/mockmig.start --module <slug> --mockupPath <path>` si ce n’est pas déjà fait.
+2. Démarrer par `/mockmig.inventory` en fournissant `--component`.
+3. Exécuter `/mockmig.validate` et attendre le sign-off.
 3. Si validé: `/mockmig.audit` → `/mockmig.gap` → `/mockmig.backend.tasks` → `/mockmig.ui.tasks` → `/mockmig.plan`.
 4. Implémenter uniquement avec confirmation explicite: `/mockmig.implementation --plan <path> --confirm` (recommandé) ou avec `--module/--mockupPath/--component` (rétro-compat).
+
+## Astuce (guidage)
+- À tout moment, utiliser `/mockmig.status --module <slug> --mockupPath <path> --component <component>` (ou `--plan ...`) pour savoir **NEXT/READY**.
 
 

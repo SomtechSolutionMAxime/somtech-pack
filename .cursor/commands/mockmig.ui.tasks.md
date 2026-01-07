@@ -21,9 +21,26 @@ You **MUST** consider the user input before proceeding (if not empty).
    - validations client et erreurs claires
    - guards (`ProtectedRoute`, `ModuleAccessGuard`, `PermissionGuard`) si requis
    - validation UI obligatoire avec objectif 0 erreur console (Playwright)
-5. Stop & report (compter tâches P0/P1/P2).
+5. Stop & report (compter tâches P0/P1/P2) + NEXT/READY (voir section ci-dessous).
 
 ## Référence workflow
 Voir `.mockmig/templates/commands/ui_tasks.md`.
+
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts
+- `${MIGRATION_DIR}/06_ui_tasks.md`
+
+### NEXT
+
+```text
+/mockmig.plan --module <slug> --mockupPath <path> [--component <component>]
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO):
+  - ex: “05_backend_tasks.md manquant → exécuter /mockmig.backend.tasks …”
 
 

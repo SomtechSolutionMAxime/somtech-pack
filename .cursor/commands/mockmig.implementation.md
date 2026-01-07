@@ -20,6 +20,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - si `--plan` est fourni: exécuter `.mockmig/scripts/bash/setup-migration.sh --json --plan <path>` et parser `MIGRATION_DIR`, `MODULE`, `MOCKUP_DIR`, `COMPONENT`.
    - sinon: exécuter `.mockmig/scripts/bash/setup-migration.sh --json --module ... --mockupPath ... [--component ...]`.
 2. **Gate check (runbook)**: lire `${MIGRATION_DIR}/07_implementation_plan.md` et vérifier que **Sign-off** est rempli (sinon STOP).
+   - si scope module ET la maquette contient des composants, vérifier que l’inventaire composant a été fait (sinon STOP pour éviter toute perte de règles métier).
 3. **Load**:
    - `${MIGRATION_DIR}/07_implementation_plan.md` (source de vérité)
    - `${MIGRATION_DIR}/04_gap_analysis.md`
@@ -40,5 +41,24 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Référence workflow
 Voir `.mockmig/templates/commands/implementation.md`.
+
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts (attendus / mis à jour)
+- `${MIGRATION_DIR}/07_implementation_plan.md` (cases cochées + journal)
+- PRD module/composant (si applicable) mis à jour (ou via `/mockmig.prd.sync`)
+
+### NEXT
+
+```text
+/mockmig.prd.sync --plan migration/<module>/[components/<component>/]07_implementation_plan.md
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO):
+  - ex: “--confirm absent → relancer avec --confirm”
+  - ex: “Sign-off runbook non rempli → compléter `07_implementation_plan.md` puis relancer”
 
 

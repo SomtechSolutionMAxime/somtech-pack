@@ -49,12 +49,16 @@ $ARGUMENTS
 Ce workflow **doit s’arrêter** après `/mockmig.validate` tant que l’utilisateur n’a pas explicitement validé (oui/non).
 
 ## Outline
-1. Démarrer par `/mockmig.inventory`.
-2. Exécuter `/mockmig.validate` et attendre le sign-off.
+1. (Recommandé) Démarrer par `/mockmig.start --module <slug> --mockupPath <path>` pour valider le chemin et comprendre “simple vs composants”.
+2. Exécuter `/mockmig.inventory`.
+3. Exécuter `/mockmig.validate` et attendre le sign-off.
 3. Si validé:
    - exécuter `/mockmig.components.init` (scaffold des dossiers composants)
    - puis migrer **par composant** via `/mockmig.component.run --component <x>` (pipeline complet).
 4. Si tu modifies des artefacts après coup (03–06), régénérer le runbook sans perdre l’avancement:
    - `/mockmig.plan.regen --plan migration/<module>/components/<component>/07_implementation_plan.md`
+
+## Astuce (guidage)
+- À tout moment, utiliser `/mockmig.status ...` pour savoir **NEXT/READY**.
 
 

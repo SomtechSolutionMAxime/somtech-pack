@@ -22,5 +22,21 @@ You **MUST** consider the user input before proceeding (if not empty).
    - afficher le nombre de composants détectés
    - lister les dossiers créés sous `migration/{module}/components/`
 
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts
+- `migration/{module}/components/<component>/` (scaffold `00_context.md` + `01–07`)
+
+### NEXT
+
+```text
+/mockmig.component.run --module <slug> --mockupPath <path> --component <component>
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO): <raisons actionnables>
+
 
 
