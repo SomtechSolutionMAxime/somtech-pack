@@ -39,6 +39,7 @@ USAGE
 }
 
 REPO_URL="https://github.com/SomtechSolutionMAxime/somtech-pack.git"
+REPO_GH="SomtechSolutionMAxime/somtech-pack"
 PACK_REF="main"
 BASE_REF="origin/main"
 WORKBASE="${HOME}/.cache"
@@ -70,6 +71,15 @@ done
 
 [[ -n "$MESSAGE" ]] || die "--message est requis"
 [[ -n "$TITLE" ]] || TITLE="$MESSAGE"
+
+# Derive gh repo slug from URL/SSH (gh expects OWNER/REPO)
+# Supports:
+# - https://github.com/OWNER/REPO.git
+# - git@github.com:OWNER/REPO.git
+REPO_GH="$REPO_URL"
+REPO_GH="${REPO_GH#https://github.com/}"
+REPO_GH="${REPO_GH#git@github.com:}"
+REPO_GH="${REPO_GH%.git}"
 
 require_cmd git
 require_cmd gh
@@ -116,7 +126,10 @@ log "Scope: $SCOPE"
 log "Dry-run: $DRY_RUN"
 
 # Collect changed files (name-status with renames)
-mapfile -t DIFF_LINES < <(git diff --name-status -M "$BASE_REF...HEAD")
+DIFF_LINES=()
+while IFS= read -r _line; do
+  DIFF_LINES+=("$_line")
+done < <(git diff --name-status -M "$BASE_REF...HEAD")
 
 if [[ ${#DIFF_LINES[@]} -eq 0 ]]; then
   die "Aucun changement détecté entre $BASE_REF et HEAD."
@@ -133,8 +146,8 @@ for line in "${DIFF_LINES[@]}"; do
   if [[ "$st" == R* ]]; then
     # rename old->new
     [[ -n "$p1" && -n "$p2" ]] || continue
-    in_scope "$p1" && OPS+=("D\t$p1\t")
-    in_scope "$p2" && OPS+=("A\t$p2\t")
+    in_scope "$p1" && OPS+=("D"$'\t'"$p1"$'\t'"")
+    in_scope "$p2" && OPS+=("A"$'\t'"$p2"$'\t'"")
     continue
   fi
 
@@ -142,7 +155,7 @@ for line in "${DIFF_LINES[@]}"; do
   in_scope "$p1" || continue
 
   case "$st" in
-    A|M) OPS+=("$st\t$p1\t") ;;
+    A|M) OPS+=("$st"$'\t'"$p1"$'\t'"") ;;
     D) OPS+=("D\t$p1\t") ;;
     *)
       # ignore others
@@ -219,9 +232,10 @@ if [[ ${#CHANGED_DEST_FILES[@]} -gt 0 ]]; then
 fi
 
 # Additional project-specific ID deny list (example)
-if [[ "$ALLOW_PROJECT_EXAMPLE" != "1" ]]; then
+# NOTE: ne scanner que les fichiers copiés, sinon le script s'auto-bloque (la valeur est présente dans ce script).
+if [[ "$ALLOW_PROJECT_EXAMPLE" != "1" && ${#CHANGED_DEST_FILES[@]} -gt 0 ]]; then
   # deny common supabase project-ref patterns (non-placeholder)
-  if grep -RIn --exclude-dir .git -E 'kedosjwbfzpfqchvgpny' "$PACK_CLONE" >/dev/null 2>&1; then
+  if grep -nE 'kedosjwbfzpfqchvgpny' "${CHANGED_DEST_FILES[@]}" >/dev/null 2>&1; then
     die "Détection d’un ID projet connu (kedosjwbfzpfqchvgpny). Remplace par des placeholders."
   fi
 fi
@@ -243,14 +257,14 @@ fi
   log "Création PR…"
   PR_URL=""
   if [[ -n "$BODY_FILE" ]]; then
-    PR_URL=$(gh pr create --repo "$REPO_URL" --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE")
+    PR_URL=$(gh pr create --repo "$REPO_GH" --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE")
   else
-    PR_URL=$(gh pr create --repo "$REPO_URL" --base main --head "$BRANCH" --title "$TITLE" --body "")
+    PR_URL=$(gh pr create --repo "$REPO_GH" --base main --head "$BRANCH" --title "$TITLE" --body "")
   fi
 
   log "PR: $PR_URL"
 
-  PR_NUMBER=$(gh pr view --repo "$REPO_URL" "$BRANCH" --json number --jq .number)
+  PR_NUMBER=$(gh pr view --repo "$REPO_GH" "$BRANCH" --json number --jq .number)
   [[ -n "$PR_NUMBER" ]] || die "Impossible de récupérer le numéro de PR"
 
   # Release note path (module = .cursor)

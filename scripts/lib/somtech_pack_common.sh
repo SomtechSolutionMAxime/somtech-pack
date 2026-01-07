@@ -18,14 +18,13 @@ require_cmd() {
 _ts() { date +"%Y%m%d%H%M%S"; }
 
 slugify() {
+  # macOS ships bash 3.2 -> avoid bash 4+ expansions like ${var,,}
   # Lowercase, replace non-alnum by '-', squeeze, trim.
   local s="${1:-}"
-  s="${s,,}"
-  s="${s//[^a-z0-9]/-}"
-  s="${s//--/-}"
-  s="${s##-}"
-  s="${s%%-}"
-  echo "$s"
+  s="$(printf '%s' "$s" | tr '[:upper:]' '[:lower:]')"
+  # Replace any run of non [a-z0-9] with '-', then trim '-' and squeeze.
+  s="$(printf '%s' "$s" | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
+  printf '%s\n' "$s"
 }
 
 # Resolve an absolute path (best-effort, macOS compatible)
