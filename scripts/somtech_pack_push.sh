@@ -232,9 +232,10 @@ if [[ ${#CHANGED_DEST_FILES[@]} -gt 0 ]]; then
 fi
 
 # Additional project-specific ID deny list (example)
-if [[ "$ALLOW_PROJECT_EXAMPLE" != "1" ]]; then
+# NOTE: ne scanner que les fichiers copiés, sinon le script s'auto-bloque (la valeur est présente dans ce script).
+if [[ "$ALLOW_PROJECT_EXAMPLE" != "1" && ${#CHANGED_DEST_FILES[@]} -gt 0 ]]; then
   # deny common supabase project-ref patterns (non-placeholder)
-  if grep -RIn --exclude-dir .git -E 'kedosjwbfzpfqchvgpny' "$PACK_CLONE" >/dev/null 2>&1; then
+  if grep -nE 'kedosjwbfzpfqchvgpny' "${CHANGED_DEST_FILES[@]}" >/dev/null 2>&1; then
     die "Détection d’un ID projet connu (kedosjwbfzpfqchvgpny). Remplace par des placeholders."
   fi
 fi
