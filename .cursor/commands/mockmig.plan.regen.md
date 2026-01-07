@@ -36,5 +36,22 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Référence workflow
 Voir `.mockmig/templates/commands/plan.regen.md`.
 
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts
+- `${MIGRATION_DIR}/07_implementation_plan.md` (mis à jour, avancement conservé)
+
+### NEXT
+
+```text
+/mockmig.implementation --plan <path> --confirm
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO):
+  - ex: “--plan manquant → relancer /mockmig.plan.regen --plan …”
+
 
 

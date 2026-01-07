@@ -32,4 +32,21 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Référence workflow
 Voir `.mockmig/templates/commands/plan.md`.
 
+## Fin de commande (obligatoire) — NEXT/READY
+
+### Artefacts
+- `${MIGRATION_DIR}/07_implementation_plan.md`
+
+### NEXT
+
+```text
+/mockmig.implementation --plan migration/<module>/[components/<component>/]07_implementation_plan.md --confirm
+```
+
+### READY
+
+- READY: YES|NO
+- BLOCKERS (si NO):
+  - ex: “03–06 incomplets → exécuter audit/gap/tasks manquants puis relancer /mockmig.plan”
+
 
