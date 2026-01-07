@@ -75,8 +75,27 @@ ensure_dir() {
 backup_if_exists() {
   local f="$1"
   if [[ -f "$f" ]]; then
-    local b="${f}.bak-$(ts)"
-    run "cp \"${f}\" \"${b}\""
+    # By default, backups are created next to the file. For Cursor rules/commands,
+    # store backups under `.cursor/_backups/{rules,commands}` to reduce noise.
+    # NOTE: We never delete backups (keep all).
+    local rel="${f#${TARGET}/}"
+    local category=""
+
+    if [[ "$rel" == ".cursor/rules/"* ]]; then
+      category="rules"
+    elif [[ "$rel" == ".cursor/commands/"* ]]; then
+      category="commands"
+    fi
+
+    if [[ -n "$category" ]]; then
+      local backup_dir="${TARGET}/.cursor/_backups/${category}"
+      ensure_dir "$backup_dir"
+      local b="${backup_dir}/$(basename "$f").bak-$(ts)"
+      run "cp \"${f}\" \"${b}\""
+    else
+      local b="${f}.bak-$(ts)"
+      run "cp \"${f}\" \"${b}\""
+    fi
   fi
 }
 
