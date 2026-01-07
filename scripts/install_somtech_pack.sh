@@ -3,42 +3,55 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-install_somtech_pack.sh — Pack autonome: installe rules Cursor + commandes Somtech dans un repo cible.
+install_somtech_pack.sh — Installe le contenu du repo somtech-pack dans un repo cible (sync non-destructive).
 
 Usage:
   ./scripts/install_somtech_pack.sh --target /path/to/target_repo [options]
 
 Options:
+  --source       Répertoire source (racine somtech-pack). Défaut: racine du repo contenant ce script.
   --dry-run      Affiche ce qui serait fait, sans écrire.
-  --no-rules     N'installe pas les fichiers .cursor/rules.
-  --no-somtech   N'installe pas les commandes somtech.* dans .cursor/commands.
+
+  --no-rules     N'installe pas `.cursor/rules`.
+  --no-commands  N'installe pas `.cursor/commands`.
+  --no-skills    N'installe pas `.cursor/skills`.
+  --no-docs      N'installe pas `docs/`.
+  --somtech-only Installe uniquement les commandes `somtech.*` dans `.cursor/commands`.
+
+Compat:
+  --no-somtech   Alias de `--no-commands` (compat ancien pack autonome).
 
 Comportement:
-  - modules/: crée uniquement le minimum si absent (structure modulaire via template)
-  - .cursor/rules + .cursor/commands/somtech.* : installe toujours
-    - si fichier existe -> backup en *.bak-YYYYMMDDHHMMSS puis overwrite
-  - ajoute/écrase .cursor/generic/PLACEHOLDERS.md (backup si existant)
+  - Sync **non destructive**: ajoute/écrase depuis la source, ne supprime rien dans le repo cible.
+  - Backups avant overwrite:
+    - `.cursor/rules/*` → `.cursor/_backups/rules/...`
+    - `.cursor/commands/*` → `.cursor/_backups/commands/...`
 
 Exemples:
-  # Test sans écrire
   ./scripts/install_somtech_pack.sh --target . --dry-run
-
-  # Installation réelle dans le repo courant
-  ./scripts/install_somtech_pack.sh --target .
+  ./scripts/install_somtech_pack.sh --target . --no-docs --somtech-only
 EOF
 }
 
 TARGET=""
+SOURCE=""
 DRY_RUN=0
 DO_RULES=1
-DO_SOMTECH=1
+DO_COMMANDS=1
+DO_SKILLS=1
+DO_DOCS=1
+SOMTECH_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --source) SOURCE="${2:-}"; shift 2 ;;
     --target) TARGET="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --no-rules) DO_RULES=0; shift ;;
-    --no-somtech) DO_SOMTECH=0; shift ;;
+    --no-commands|--no-somtech) DO_COMMANDS=0; shift ;;
+    --no-skills) DO_SKILLS=0; shift ;;
+    --no-docs) DO_DOCS=0; shift ;;
+    --somtech-only) SOMTECH_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Argument inconnu: $1" >&2; usage; exit 2 ;;
   esac
@@ -83,7 +96,9 @@ backup_if_exists() {
     fi
 
     if [[ -n "$category" ]]; then
-      local backup_dir="${TARGET}/.cursor/_backups/${category}"
+      # Preserve relative path under rules/commands to avoid collisions if subdirs appear later.
+      local rel_under="${rel#".cursor/${category}/"}"
+      local backup_dir="${TARGET}/.cursor/_backups/${category}/$(dirname "$rel_under")"
       ensure_dir "$backup_dir"
       local b="${backup_dir}/$(basename "$f").bak-$(ts)"
       run "cp \"${f}\" \"${b}\""
@@ -105,6 +120,93 @@ write_file() {
     printf "%s" "$content" > "$dst"
   fi
 }
+#
+# Sync depuis une source (racine somtech-pack) — 100% du contenu pack (non destructive).
+#
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SOURCE="${SOURCE:-$DEFAULT_SOURCE}"
+
+copy_file_with_backup() {
+  local src="$1"
+  local dst="$2"
+
+  ensure_dir "$(dirname "$dst")"
+  backup_if_exists "$dst"
+
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    log "DRY-RUN: cp \"${src}\" \"${dst}\""
+  else
+    cp "$src" "$dst"
+  fi
+}
+
+copy_tree() {
+  # copy_tree <relative_source_dir> <absolute_target_dir> [optional_rel_filter_regex]
+  local from_rel="$1"
+  local to_abs="$2"
+  local filter_re="${3:-}"
+
+  local src_root="${SOURCE}/${from_rel}"
+  [[ -d "$src_root" ]] || return 0
+
+  while IFS= read -r f; do
+    local rel="${f#${src_root}/}"
+    if [[ -n "$filter_re" ]]; then
+      echo "$rel" | grep -Eq "$filter_re" || continue
+    fi
+    copy_file_with_backup "$f" "${to_abs}/${rel}"
+  done < <(find "$src_root" -type f ! -name '*.bak-*' ! -name '* 2.md' -print)
+}
+
+sync_from_source() {
+  log "Source: ${SOURCE}"
+
+  # Structure modulaire minimale si absente
+  if [[ -d "${TARGET}/modules/_template" ]]; then
+    log "modules/_template existe déjà -> pas de création de structure modulaire."
+  else
+    log "Création structure modulaire minimale (template)…"
+    ensure_dir "${TARGET}/modules/_template/prd"
+    ensure_dir "${TARGET}/modules/_template/tests"
+    ensure_dir "${TARGET}/modules/_shared"
+  fi
+
+  # Toujours préparer .cursor + backups
+  ensure_dir "${TARGET}/.cursor"
+  ensure_dir "${TARGET}/.cursor/_backups"
+
+  if [[ "${DO_RULES}" == "1" ]]; then
+    copy_tree ".cursor/rules" "${TARGET}/.cursor/rules"
+  fi
+
+  if [[ "${DO_COMMANDS}" == "1" ]]; then
+    if [[ "${SOMTECH_ONLY}" == "1" ]]; then
+      copy_tree ".cursor/commands" "${TARGET}/.cursor/commands" '^somtech\..*\.md$'
+    else
+      copy_tree ".cursor/commands" "${TARGET}/.cursor/commands"
+    fi
+  fi
+
+  if [[ "${DO_SKILLS}" == "1" ]]; then
+    copy_tree ".cursor/skills" "${TARGET}/.cursor/skills"
+  fi
+
+  # Toujours copier generic (placeholders, etc.) si présent
+  copy_tree ".cursor/generic" "${TARGET}/.cursor/generic"
+
+  if [[ "${DO_DOCS}" == "1" ]]; then
+    copy_tree "docs" "${TARGET}/docs"
+  fi
+
+  # Toujours: scripts + .specify + README.md (si présents)
+  copy_tree "scripts" "${TARGET}/scripts"
+  copy_tree ".specify" "${TARGET}/.specify"
+  if [[ -f "${SOURCE}/README.md" ]]; then
+    copy_file_with_backup "${SOURCE}/README.md" "${TARGET}/README.md"
+  fi
+}
+
 
 #
 # Pack autonome
@@ -591,6 +693,12 @@ install_somtech_commands() {
 }
 
 main() {
+  # Nouveau comportement: sync depuis SOURCE (pack repo) pour installer 100% du contenu.
+  # Le mode "pack autonome" (heredocs) est conservé plus bas pour compat, mais n'est plus utilisé.
+  sync_from_source
+  log "Terminé."
+  return 0
+
   # 1) modules/ : ne fait rien si le template existe déjà, sinon crée le minimum.
   if [[ -d "${TARGET}/modules/_template" ]]; then
     log "modules/_template existe déjà -> pas de création de structure modulaire."
