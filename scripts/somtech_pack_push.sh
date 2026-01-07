@@ -146,8 +146,8 @@ for line in "${DIFF_LINES[@]}"; do
   if [[ "$st" == R* ]]; then
     # rename old->new
     [[ -n "$p1" && -n "$p2" ]] || continue
-    in_scope "$p1" && OPS+=("D\t$p1\t")
-    in_scope "$p2" && OPS+=("A\t$p2\t")
+    in_scope "$p1" && OPS+=("D"$'\t'"$p1"$'\t'"")
+    in_scope "$p2" && OPS+=("A"$'\t'"$p2"$'\t'"")
     continue
   fi
 
@@ -155,7 +155,7 @@ for line in "${DIFF_LINES[@]}"; do
   in_scope "$p1" || continue
 
   case "$st" in
-    A|M) OPS+=("$st\t$p1\t") ;;
+    A|M) OPS+=("$st"$'\t'"$p1"$'\t'"") ;;
     D) OPS+=("D\t$p1\t") ;;
     *)
       # ignore others
