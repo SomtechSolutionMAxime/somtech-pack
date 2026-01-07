@@ -39,6 +39,7 @@ USAGE
 }
 
 REPO_URL="https://github.com/SomtechSolutionMAxime/somtech-pack.git"
+REPO_GH="SomtechSolutionMAxime/somtech-pack"
 PACK_REF="main"
 BASE_REF="origin/main"
 WORKBASE="${HOME}/.cache"
@@ -70,6 +71,15 @@ done
 
 [[ -n "$MESSAGE" ]] || die "--message est requis"
 [[ -n "$TITLE" ]] || TITLE="$MESSAGE"
+
+# Derive gh repo slug from URL/SSH (gh expects OWNER/REPO)
+# Supports:
+# - https://github.com/OWNER/REPO.git
+# - git@github.com:OWNER/REPO.git
+REPO_GH="$REPO_URL"
+REPO_GH="${REPO_GH#https://github.com/}"
+REPO_GH="${REPO_GH#git@github.com:}"
+REPO_GH="${REPO_GH%.git}"
 
 require_cmd git
 require_cmd gh
@@ -246,14 +256,14 @@ fi
   log "Création PR…"
   PR_URL=""
   if [[ -n "$BODY_FILE" ]]; then
-    PR_URL=$(gh pr create --repo "$REPO_URL" --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE")
+    PR_URL=$(gh pr create --repo "$REPO_GH" --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE")
   else
-    PR_URL=$(gh pr create --repo "$REPO_URL" --base main --head "$BRANCH" --title "$TITLE" --body "")
+    PR_URL=$(gh pr create --repo "$REPO_GH" --base main --head "$BRANCH" --title "$TITLE" --body "")
   fi
 
   log "PR: $PR_URL"
 
-  PR_NUMBER=$(gh pr view --repo "$REPO_URL" "$BRANCH" --json number --jq .number)
+  PR_NUMBER=$(gh pr view --repo "$REPO_GH" "$BRANCH" --json number --jq .number)
   [[ -n "$PR_NUMBER" ]] || die "Impossible de récupérer le numéro de PR"
 
   # Release note path (module = .cursor)
