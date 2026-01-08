@@ -23,6 +23,8 @@ Permettre à l’utilisateur de dire seulement :
 - si c’est un **module simple** ou un **module complexe** (composants)
 - **la prochaine commande** à exécuter (**NEXT**) + si on est **prêt** (**READY**) + raisons si non
 
+> Recommandé (pré-vol) : exécuter d’abord `/mockmig.doctor` pour vérifier que le runtime `.mockmig/` et les sources de vérité sont présents.
+
 ## Chemins `mockupPath` acceptés (important)
 
 - **Par défaut** : `modules/maquette/<module>/...`

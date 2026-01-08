@@ -1,31 +1,84 @@
-# Migration de maquettes — Workflow `mockmig.*`
+---
+title: "Migration de maquettes — Workflow mockmig.*"
+---
+
+## Migration de maquettes — Workflow `mockmig.*`
+
+### Sommaire
+- [Objectif](#objectif)
+- [TL;DR (à retenir)](#tldr-à-retenir)
+- [Décision rapide (graphique)](#décision-rapide-graphique)
+- [Paramètres](#paramètres)
+- [Chemins mockupPath acceptés (table)](#chemins-mockuppath-acceptés-table)
+- [Démarrage rapide (3 minutes)](#démarrage-rapide-3-minutes)
+- [Pipeline complet (graphique + gates)](#pipeline-complet-graphique--gates)
+- [Gates (ce qui bloque réellement)](#gates-ce-qui-bloque-réellement)
+- [Étapes détaillées (par phase)](#étapes-détaillées-par-phase)
+- [Structure des artefacts (graphique)](#structure-des-artefacts-graphique)
+- [Artefacts générés (table)](#artefacts-générés-table)
+- [Dépannage rapide](#dépannage-rapide)
 
 ## Objectif
-Standardiser la migration d’une maquette (stockée sous `modules/maquette/**`) vers un module produit, en générant des artefacts dans `migration/{module}/` :
+Standardiser la migration d’une maquette vers un module produit, **sans perdre de règles métier**, en générant des artefacts dans `migration/{module}/` :
 
-- inventaire des règles métier (depuis la maquette)
-- paquet de validation (**gate obligatoire**)
-- audit de l’existant (read-only)
-- gap analysis
-- tâches backend
-- tâches UI (reconstruction “à l’identique”)
+- **Inventaire** des règles métier (module + composants)
+- **Gate de validation** (STOP obligatoire)
+- **Audit** read-only de l’existant
+- **Gap analysis**
+- **Tâches** backend + UI
+- **Runbook** d’implémentation + sign-off
 
-## TL;DR (ce qui change pour l’utilisateur)
+## TL;DR (à retenir)
+- **Commencer** : `/mockmig.start ...`
+- **Savoir quoi faire ensuite** : `/mockmig.status ...` (affiche **NEXT** + **READY**)
+- **Modules complexes** : si `<mockupPath>/src/components/*` existe → inventaire **par composant obligatoire**
 
-- **Point d’entrée unique** : commence par `/mockmig.start` (au lieu de deviner “par quoi partir”).\n
-- **Guidage** : à tout moment, `/mockmig.status` te dit **NEXT** (commande suivante) et **READY** (prêt/pas prêt).\n
-- **Zéro perte de règles métier** : si la maquette contient des composants, l’inventaire **par composant** est requis (l’inventaire module seul est insuffisant).
+> Règle d’or : si tu hésites, lance `/mockmig.status` — il te donne **la prochaine commande** + si tu es **READY** ou **bloqué** (avec les raisons).
 
-## Deux cas d’usage (important)
+> Pré-vol (recommandé) : lance `/mockmig.doctor` pour vérifier que le runtime `.mockmig/` (scripts/templates) et les sources de vérité (constitution / sécurité / ontologie) sont présents.
 
-### Cas 1 — Module simple
-Règles métier plutôt centralisées, peu (ou pas) de composants sous `src/components/`.
+## Décision rapide (graphique)
 
-### Cas 2 — Module complexe (multi-composants)
-Règles métier dispersées au travers de composants sous `<mockupPath>/src/components/*`.\n
-Dans ce cas, on fait **2 couches** :
-- couche **module** (vue d’ensemble, cartographie, gate)\n
-- couche **composant** (pipeline complet par composant)
+```mermaid
+flowchart TD
+  start[/mockmig.start/]
+  detect{src/components existe ?}
+  simple[Cas module simple]
+  complex[Cas module complexe]
+  start --> detect
+  detect -->|non| simple
+  detect -->|oui| complex
+  simple --> invM[/mockmig.inventory (module)/]
+  complex --> invM
+  invM --> valM[/mockmig.validate (module)/]
+  valM --> initC[/mockmig.components.init/]
+  initC --> loopC[Pour chaque composant]
+  loopC --> runC[/mockmig.component.run --component X/]
+  runC --> loopC
+```
+
+### Pipeline comparatif (graphique)
+
+```mermaid
+flowchart LR
+  subgraph simplePath [Cas_module_simple]
+    s0[/start/] --> s1[/inventory/] --> s2[/validate/]
+    s2 --> s3[/audit/] --> s4[/gap/] --> s5[/backend.tasks/]
+    s5 --> s6[/ui.tasks/] --> s7[/plan/] --> s8[/implementation --confirm/]
+    s8 --> s9[/prd.sync/]
+  end
+  subgraph complexPath [Cas_module_complexe]
+    c0[/start/] --> c1[/inventory(module)/] --> c2[/validate(module)/]
+    c2 --> c3[/components.init/]
+    c3 --> c4["Boucle_par_composant"]
+    c4 --> c5[/inventory(component)/] --> c6[/validate(component)/]
+    c6 --> c7[/audit/] --> c8[/gap/]
+    c8 --> c9[/backend.tasks/] --> c10[/ui.tasks/]
+    c10 --> c11[/plan/] --> c12[/implementation --confirm/]
+    c12 --> c13[/prd.sync/]
+    c6 --> c4
+  end
+```
 
 ## Sources de vérité (NON négociables)
 - `memory/constitution.md`
@@ -33,193 +86,197 @@ Dans ce cas, on fait **2 couches** :
 - `ontologie/01_ontologie.md` + `ontologie/02_ontologie.yaml`
 - (si impact utilisateurs) `RAPPORT_ANALYSE_STRUCTURE_UTILISATEURS.md`
 
-## Paramètres (très important)
-Chaque commande prend **les mêmes paramètres** :
-- `--module <slug>` : **nom du module cible** (sert aussi au dossier de sortie `migration/{module}/`)
-  - format: minuscules, chiffres, tirets (ex: `devis`, `ma-place-rh`, `gestion-chantier`)
-- `--mockupPath <chemin>` : chemin **relatif repo** vers la maquette
-  - **par défaut** : `modules/maquette/<module>/...` (ex: `modules/maquette/devis/v1`)
-  - **alternative (maquette dans le module)** : `modules/<module>/maquette/...` (ex: `modules/ma-place-rh/maquette/v1` ou `modules/ma-place-rh/maquette`)
-- `--component <slug>` *(optionnel)* : exécute le workflow **scopé** à un composant de maquette
-  - définition par défaut: 1 composant = 1 dossier sous `<mockup>/src/components/<component>/`
-  - sortie: `migration/{module}/components/{component}/`
+## Paramètres
 
-Optionnel (pour réinitialiser les fichiers de sortie) :
-- `--force`
+### Paramètres communs
+- **`--module <slug>`** : nom du module cible (sert aussi au dossier `migration/{module}/`)
+  - format: minuscules, chiffres, tirets (ex: `devis`, `ma-place-rh`)
+- **`--mockupPath <path>`** : chemin **relatif au repo** vers la maquette
+- **`--component <slug>`** *(optionnel)* : scoper à un composant
+- **`--force`** *(optionnel)* : réinitialiser les sorties
 
-## Démarrage rapide (recommandé)
-### 1) Démarrer (recommandé)
+### Chemins `mockupPath` acceptés (table)
+
+| Cas | Pattern | Exemple |
+|---|---|---|
+| **Défaut** | `modules/maquette/<module>/...` | `modules/maquette/devis/v1` |
+| **Maquette dans le module** | `modules/<module>/maquette/...` | `modules/ma-place-rh/maquette/v1` |
+
+## Démarrage rapide (3 minutes)
+
+### 1) Démarrer (point d’entrée)
 
 ```text
 /mockmig.start --module devis --mockupPath modules/maquette/devis/v1
 ```
 
-> Cette commande te dit immédiatement si tu es dans le cas **module simple** ou **module complexe** (composants), et t’affiche la **NEXT** commande à exécuter.
+### 2) Inventaire (exhaustif)
 
-### 2) Inventaire des règles métier (exhaustif)
-
-Commence par l’inventaire **module** :
+Inventaire **module** :
 
 ```text
 /mockmig.inventory --module devis --mockupPath modules/maquette/devis/v1
 ```
 
-Si des composants sont détectés sous `<mockupPath>/src/components/*`, fais ensuite l’inventaire **par composant** (obligatoire pour éviter toute perte de règles métier) :
+Si le module est **complexe** (composants détectés), inventaire **par composant** :
 
 ```text
 /mockmig.inventory --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
 ```
 
-### 3) Gate de validation (STOP obligatoire)
+### 3) Gate de validation (STOP)
 
 ```text
 /mockmig.validate --module devis --mockupPath modules/maquette/devis/v1
 ```
 
-### 4) À tout moment : savoir quoi faire ensuite
+### À tout moment : NEXT/READY
 
 ```text
 /mockmig.status --module devis --mockupPath modules/maquette/devis/v1
 ```
 
-Cette commande affiche :
-- ce qui manque (artefacts + gates)\n
-- **NEXT** : la commande suivante recommandée\n
-- **READY** : prêt/pas prêt (et pourquoi)
+## Pipeline complet (graphique + gates)
 
-### 5) (Optionnel mais recommandé) Générer le plan d’implémentation
+```mermaid
+flowchart TD
+  inv[01_business_rules]
+  gateA[GateA: validation_packet]
+  audit[03_existing_audit]
+  gap[04_gap_analysis]
+  bt[05_backend_tasks]
+  ut[06_ui_tasks]
+  plan[07_implementation_plan]
+  gateB[GateB: sign-off runbook]
+  impl[/mockmig.implementation --confirm/]
+  gateC[GateC: --confirm]
+  prd[/mockmig.prd.sync/]
 
-```text
-/mockmig.plan --module devis --mockupPath modules/maquette/devis/v1
+  inv --> gateA --> audit --> gap --> bt --> ut --> plan --> gateB --> gateC --> impl --> prd
 ```
 
-## Ce que fait `/mockmig.run` (et ce qu’il ne fait PAS)
-Tu peux lancer l’orchestrateur :
+### Gates (state machine)
 
-```text
-/mockmig.run --module devis --mockupPath modules/maquette/devis/v1
+```mermaid
+stateDiagram-v2
+  [*] --> Inventory
+  Inventory --> GateA_Validate : "02_validation_packet ok"
+  Inventory --> Inventory : "inventaire incomplet"
+
+  GateA_Validate --> Analyse : "READY"
+  GateA_Validate --> Inventory : "bloqué: corrections requises"
+
+  Analyse --> Tasks
+  Tasks --> Runbook
+
+  Runbook --> GateB_Signoff : "sign-off rempli"
+  Runbook --> Runbook : "sign-off manquant"
+
+  GateB_Signoff --> GateC_Confirm : "plan prêt"
+  GateC_Confirm --> Implementation : "--confirm"
+  GateC_Confirm --> GateC_Confirm : "sans --confirm"
+
+  Implementation --> PRDSync
+  PRDSync --> [*]
 ```
 
-Mais **ça ne doit pas tout exécuter jusqu’au bout automatiquement** :
-- `/mockmig.run` sert à te proposer les étapes via **handoffs** (boutons / actions Cursor).
-- Le workflow **doit s’arrêter après** `/mockmig.validate` jusqu’à un **OK explicite** de ta part.
+### Gates (ce qui bloque réellement)
+- **Gate A — `validate`** : sans `02_validation_packet.md` validé → pas d’audit/gap/tasks/plan/implémentation.
+- **Gate B — sign-off runbook** : sans sign-off rempli dans `07_implementation_plan.md` → pas d’implémentation.
+- **Gate C — `--confirm`** : l’implémentation ne doit jamais tourner sans `--confirm`.
 
-> Recommandé : utilise `/mockmig.start` au tout début et `/mockmig.status` pour savoir **NEXT/READY** au lieu de “deviner”.
-
-## Workflow complet (pas-à-pas)
-### Mode module (1ère passe) — cartographie + gate + scaffold composants
-0) (Recommandé) Démarrer et valider le contexte (path + cas simple/complexe) :
+### Exemple de sortie attendue (NEXT/READY)
 
 ```text
-/mockmig.start --module devis --mockupPath modules/maquette/devis/v1
+NEXT: /mockmig.validate --module devis --mockupPath modules/maquette/devis/v1
+READY: false
+BLOCKERS:
+- 01_business_rules.md manquant
+- module complexe: inventaires composant manquants (components/*/01_business_rules.md)
 ```
 
-1) Inventaire règles métier + cartographie composants :
+## Étapes détaillées (par phase)
+
+### Phase 0 — Orchestrateurs (facultatif)
+- `/mockmig.run --module <slug> --mockupPath <path>` : propose des handoffs
+- `/mockmig.component.run --module <slug> --mockupPath <path> --component <c>` : pipeline complet composant
+
+> Recommandé: commence par `/mockmig.start`, puis utilise `/mockmig.status` pour suivre.
+
+### Phase 1 — Inventaire (zéro perte)
+- Module: `/mockmig.inventory --module <slug> --mockupPath <path>`
+- Composant (si complexe): `/mockmig.inventory ... --component <c>`
+
+Checklist inventaire (module + composants) :
+- [ ] Règles de validation par champ (formats, min/max, dépendances)
+- [ ] États & transitions (draft/published, etc.)
+- [ ] Règles de visibilité (roles, conditions)
+- [ ] Calculs / agrégations / montants
+- [ ] Erreurs / messages / cas limites
+- [ ] Contrainte “source de vérité” (références, IDs, nomenclatures)
+
+### Phase 2 — Validation (STOP)
+- `/mockmig.validate --module <slug> --mockupPath <path>`
+
+### Phase 3 — Si complexe : scaffold composants
+- `/mockmig.components.init --module <slug> --mockupPath <path>`
+
+### Phase 4 — Analyse
+- `/mockmig.audit --module <slug> --mockupPath <path> [--component <c>]`
+- `/mockmig.gap --module <slug> --mockupPath <path> [--component <c>]`
+
+### Phase 5 — Tâches
+- `/mockmig.backend.tasks --module <slug> --mockupPath <path> [--component <c>]`
+- `/mockmig.ui.tasks --module <slug> --mockupPath <path> [--component <c>]`
+
+### Phase 6 — Runbook
+- `/mockmig.plan --module <slug> --mockupPath <path> [--component <c>]`
+- `/mockmig.plan.regen --plan migration/<module>/[components/<c>/]07_implementation_plan.md`
+
+### Phase 7 — Implémentation (dangereux)
+- `/mockmig.implementation --plan migration/<module>/[components/<c>/]07_implementation_plan.md --confirm`
+- puis (recommandé): `/mockmig.prd.sync --plan ...`
+
+## Structure des artefacts (graphique)
 
 ```text
-/mockmig.inventory --module devis --mockupPath modules/maquette/devis/v1
+migration/<module>/
+  00_context.md
+  00_component_map.md          (si complexe)
+  01_business_rules.md
+  02_validation_packet.md
+  03_existing_audit.md
+  04_gap_analysis.md
+  05_backend_tasks.md
+  06_ui_tasks.md
+  07_implementation_plan.md
+  components/                  (si complexe)
+    <component>/
+      00_context.md
+      01_business_rules.md
+      02_validation_packet.md
+      03_existing_audit.md
+      04_gap_analysis.md
+      05_backend_tasks.md
+      06_ui_tasks.md
+      07_implementation_plan.md
 ```
 
-2) Gate de validation (STOP après génération du paquet) :
+## Artefacts générés (table)
 
-```text
-/mockmig.validate --module devis --mockupPath modules/maquette/devis/v1
-```
-
-3) Tu ouvres `migration/devis/02_validation_packet.md`, tu complètes la section **Sign-off** et tu donnes un **OK** (oui/non).
-
-4) Après OK seulement : initialiser les dossiers composants (scaffold)
-
-```text
-/mockmig.components.init --module devis --mockupPath modules/maquette/devis/v1
-```
-
-> Si la maquette contient des composants : l’inventaire **par composant** est obligatoire avant de passer à l’implémentation, afin de ne perdre aucune règle métier.
-
-### PRD (module + composant) — nouveau standard
-- **PRD module** : `modules/{module}/prd/{module}.md`
-- **PRD composant** (obligatoire quand le travail est scopé composant) : `modules/{module}/prd/components/{component}.md`
-- Le scaffold du PRD composant est créé automatiquement lors des runs **scopés composant** (ex: `components.init` + `--component`).
-- Synchroniser le contenu (module + composant) via :
-
-```text
-/mockmig.prd.sync --plan migration/<module>/components/<component>/07_implementation_plan.md
-```
-
-### Mode composant (itératif) — pipeline complet par composant
-> Pour chaque composant (ex: `evaluations`, `leave`, `surveys`), exécuter le pipeline complet dans `migration/{module}/components/{component}/`.
-
-5) Pour un composant donné (orchestrateur recommandé) :
-
-```text
-/mockmig.component.run --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
-```
-
-6) Ou, si tu veux le faire “à la main”, après OK seulement :
-
-```text
-/mockmig.audit --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
-/mockmig.gap --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
-/mockmig.backend.tasks --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
-/mockmig.ui.tasks --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
-/mockmig.plan --module devis --mockupPath modules/maquette/devis/v1 --component evaluations
-```
-
-7) (Recommandé) Régénérer le runbook si tu as modifié des artefacts (préserve l’avancement) :
-
-```text
-/mockmig.plan.regen --plan migration/devis/components/evaluations/07_implementation_plan.md
-```
-
-8) Implémenter réellement (code + migrations Supabase) — **requiert `--confirm`** et un **Sign-off** dans le runbook :
-
-```text
-/mockmig.implementation --plan migration/devis/components/evaluations/07_implementation_plan.md --confirm
-```
-
-> Recommandé après implémentation :
->
-> ```text
-> /mockmig.prd.sync --plan migration/devis/components/evaluations/07_implementation_plan.md
-> ```
-
-> Rétro-compat: l’ancien mode reste possible:
->
-> ```text
-> /mockmig.implementation --module devis --mockupPath modules/maquette/devis/v1 --component evaluations --confirm
-> ```
-## Où sont les fichiers générés ?
-### Mode module
-Tout est dans `migration/{module}/` :
-- `00_context.md`
-- `00_component_map.md` (cartographie composants)
-- `01_business_rules.md`
-- `02_validation_packet.md` (décisions / validation amont, optionnel)
-- `03_existing_audit.md`
-- `04_gap_analysis.md`
-- `05_backend_tasks.md`
-- `06_ui_tasks.md`
-- `07_implementation_plan.md` (**runbook + gate**)
-
-### Mode composant
-Tout est dans `migration/{module}/components/{component}/` :
-- `00_context.md`
-- `01_business_rules.md`
-- `02_validation_packet.md` (décisions / validation amont, optionnel)
-- `03_existing_audit.md`
-- `04_gap_analysis.md`
-- `05_backend_tasks.md`
-- `06_ui_tasks.md`
-- `07_implementation_plan.md` (**runbook + gate**)
+| Phase | Fichier | Rôle |
+|---|---|---|
+| Context | `00_context.md` | Contexte module/maquette/scope |
+| Map (si complexe) | `00_component_map.md` | Cartographie des composants |
+| Inventaire | `01_business_rules.md` | Catalogue règles métier + mapping |
+| Gate | `02_validation_packet.md` | Décisions + validation amont |
+| Audit | `03_existing_audit.md` | Existant (DB/RLS/API/UI/docs) |
+| Gap | `04_gap_analysis.md` | Écarts priorisés P0/P1/P2 |
+| Tasks | `05_backend_tasks.md` | DB/RLS/API/tests/docs |
+| Tasks | `06_ui_tasks.md` | UI/validations/guards/tests UI |
+| Runbook | `07_implementation_plan.md` | Checklist + sign-off + journal |
 
 ## Dépannage rapide
-- **Erreur “mockupPath doit commencer par …”** : corrige le chemin (voir section Paramètres). Certains modules stockent la maquette dans `modules/<module>/maquette` (submodule Git).
-- **Erreur “Dossier maquette introuvable”** : le dossier n’existe pas dans le repo (typo / mauvais niveau).
-- **Tu veux repartir de zéro** : relance la commande avec `--force` (ça réécrit les templates dans `migration/{module}/`).
-- **Je ne sais pas quoi faire ensuite** : exécute `/mockmig.status --module <slug> --mockupPath <path>` et suis **NEXT/READY**.
-
-## Notes d’exécution (interne)
-- Les scripts d’initialisation sont dans `.mockmig/scripts/bash/`.
-- Ils créent `migration/{module}/` et initialisent les fichiers si absents (ou avec `--force`).
-
-
+- **Je suis perdu** : `/mockmig.status --module <slug> --mockupPath <path>` → suis **NEXT/READY**.
+- **mockupPath invalide** : vérifie la table des patterns plus haut.
+- **Je veux repartir de zéro** : relance avec `--force`.
