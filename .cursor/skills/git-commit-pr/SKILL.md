@@ -251,7 +251,88 @@ git push -u origin branch-name
 #### Pré-requis
 
 1. **Installer gh CLI** (si pas déjà fait)
-2. **Vérifier l'authentification** : `gh auth status`
+2. **Authentification GitHub**
+
+#### Authentification gh CLI
+
+Avant de créer une PR, vous devez être authentifié avec GitHub.
+
+##### Vérifier l'authentification
+
+```bash
+gh auth status
+```
+
+**Sortie attendue si authentifié** :
+```
+github.com
+  ✓ Logged in to github.com as username (/root/.config/gh/hosts.yml)
+  ✓ Git operations for github.com configured to use https protocol.
+  ✓ Token: *******************
+```
+
+**Si non authentifié ou token invalide** :
+```
+X Failed to log in to github.com
+- The token in /root/.config/gh/hosts.yml is invalid.
+```
+
+##### S'authentifier avec gh CLI
+
+Si vous n'êtes pas authentifié, lancez :
+
+```bash
+gh auth login -h github.com --web
+```
+
+**Processus d'authentification** :
+
+1. La commande affiche un **code à 6 caractères** (format : `XXXX-XXXX`)
+   ```
+   ! First copy your one-time code: 523C-8D88
+   Open this URL to continue in your web browser: https://github.com/login/device
+   ```
+
+2. **Ouvrez** : https://github.com/login/device
+
+3. **Entrez le code** affiché (ex: `523C-8D88`)
+
+4. **Autorisez GitHub CLI** dans votre navigateur
+
+5. **Attendez la confirmation** dans le terminal :
+   ```
+   ✓ Authentication complete.
+   ✓ Logged in as username
+   ```
+
+⏱️ **Important** : Le code expire après quelques minutes. Si vous tardez :
+```bash
+# Le processus échouera, relancez simplement :
+gh auth logout -h github.com  # Optionnel : nettoyer
+gh auth login -h github.com --web
+```
+
+##### Troubleshooting Authentification
+
+**Problème : "HTTP 401: Bad credentials"**
+```bash
+# Solution : Ré-authentifier
+gh auth logout -h github.com
+gh auth login -h github.com --web
+```
+
+**Problème : "none of the git remotes configured"**
+```bash
+# Solution : Spécifier le repo explicitement
+gh pr create --repo owner/repo --head branch --base main --title "..." --body "..."
+```
+
+**Problème : "HTTP 503: Service Unavailable"**
+```bash
+# Solution : Attendre quelques secondes et réessayer
+sleep 3
+gh pr create --repo owner/repo --head branch --base main --title "..." --body "..."
+```
 
 #### Analyse des changements
 
@@ -343,6 +424,9 @@ EOF
 #### Options supplémentaires
 
 ```bash
+# Spécifier le repo explicitement (recommandé si remote non reconnu)
+gh pr create --repo owner/repo --head branch-name --base main --title "..." --body "..."
+
 # Créer PR en draft
 gh pr create --draft --title "..." --body "..."
 
@@ -355,6 +439,8 @@ gh pr create --reviewer user1,user2 --title "..." --body "..."
 # Ajouter des labels
 gh pr create --label bug,urgent --title "..." --body "..."
 ```
+
+⚠️ **Important** : Si vous utilisez un proxy Git local ou si `gh` ne reconnaît pas votre remote, utilisez toujours l'option `--repo owner/repo --head branch-name --base main` pour spécifier explicitement le repository.
 
 ## Workflow Complet (Exemple)
 

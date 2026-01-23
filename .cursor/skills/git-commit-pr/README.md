@@ -20,7 +20,9 @@ Le skill `git-commit-pr` fournit un workflow complet pour :
 
 ### GitHub CLI (pour PRs)
 - **gh CLI** : Latest version
-- Authentification GitHub configurée (`gh auth login`)
+- Authentification GitHub configurée (`gh auth login -h github.com --web`)
+  - Utilise le device flow avec code à 6 caractères
+  - Ouvrir https://github.com/login/device pour autoriser
 
 ### Optionnel
 - **Pre-commit hooks** : Pour validation automatique
@@ -227,9 +229,45 @@ EOF
 ### Push échoue (réseau)
 - Retry automatique : 4 tentatives avec backoff (2s, 4s, 8s, 16s)
 
-### gh CLI non authentifié
+### gh CLI non authentifié ou token invalide
+
+**Symptômes** :
+- `HTTP 401: Bad credentials`
+- `Failed to log in to github.com`
+- `The token in /root/.config/gh/hosts.yml is invalid`
+
+**Solution** :
 ```bash
-gh auth login
+# Vérifier le statut
+gh auth status
+
+# Ré-authentifier avec device flow
+gh auth login -h github.com --web
+
+# Le CLI affichera un code à 6 caractères (ex: 523C-8D88)
+# Ouvrir https://github.com/login/device
+# Entrer le code et autoriser
+```
+
+### Remote Git non reconnu par gh
+
+**Symptôme** :
+- `none of the git remotes configured for this repository point to a known GitHub host`
+
+**Solution** : Utiliser `--repo` explicitement
+```bash
+gh pr create --repo owner/repo --head branch --base main --title "..." --body "..."
+```
+
+### API GitHub temporairement indisponible
+
+**Symptôme** :
+- `HTTP 503: Service Unavailable`
+
+**Solution** : Attendre et réessayer
+```bash
+sleep 3
+gh pr create --repo owner/repo --head branch --base main --title "..." --body "..."
 ```
 
 ### Branche de base incorrecte

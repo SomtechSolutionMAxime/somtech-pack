@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Complete gh CLI authentication guide with device flow (6-character code)
+- Troubleshooting section for authentication issues (401, 503 errors)
+- Explicit --repo option documentation for proxy Git environments
+
 ### Planned
 - Script automatique pour valider les messages de commit
 - Support pour d'autres plateformes Git (GitLab, Bitbucket)
