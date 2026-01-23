@@ -11,6 +11,30 @@ Le skill `build-chatwindow` guide la création et l'intégration de widgets Chat
 - La validation via le Playground et ChatWindow
 - Les bonnes pratiques et conventions
 
+## Requirements
+
+### Dependencies
+- **React** : 18.x ou supérieur
+- **Supabase** : Latest (pour Edge Functions et stockage)
+- **TypeScript** : 5.x ou supérieur (recommandé)
+
+### Infrastructure
+- **Supabase Project** avec :
+  - Edge Functions activées
+  - Base de données Postgres (pour threads et messages)
+- **Workflow Engine** (au choix) :
+  - OpenAI Agent Builder, ou
+  - n8n (self-hosted ou cloud)
+
+### Frontend
+- Support SSE (Server-Sent Events)
+- Hook de gestion de chat (ex: `useChatKit` ou équivalent)
+- Composants React pour ChatWindow et ChatWidget
+
+### Compatibilité
+- Navigateurs modernes avec support SSE
+- Node.js 18.x ou supérieur (pour développement)
+
 ## Structure
 
 ```
@@ -104,4 +128,4 @@ somtech-pack
 
 ## Version
 
-1.0.0
+1.1.0 — Voir [CHANGELOG.md](./CHANGELOG.md) pour l'historique des versions

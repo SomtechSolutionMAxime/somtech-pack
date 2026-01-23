@@ -24,6 +24,36 @@ configure-mcp-server/
     └── validate-mcp-config.sh # Script de validation du fichier mcp.json
 ```
 
+## Requirements
+
+### Cursor IDE
+- **Cursor** : Version récente avec support MCP
+- Fichier de configuration : `~/.cursor/mcp.json` (Linux/Mac) ou `%APPDATA%\Cursor\mcp.json` (Windows)
+
+### Pour Supabase Edge Functions (recommandé)
+- **Supabase Project** avec Edge Functions activées
+- Accès aux URLs Edge Functions (format : `https://PROJECT_ID.supabase.co/functions/v1/`)
+- Serveurs MCP déployés comme Edge Functions
+
+### Pour n8n MCP
+- **n8n instance** (self-hosted ou cloud)
+- MCP Access activé dans les paramètres n8n
+- MCP Access Token généré
+- Workflows activés pour MCP
+
+### Pour serveurs locaux (développement)
+- **Node.js** : 18.x ou supérieur
+- **npx** disponible dans le PATH
+- Packages MCP installables via npm
+
+### Outils
+- **jq** (optionnel) : Pour validation JSON
+- Bash (pour script de validation)
+
+### Compatibilité
+- Linux, macOS, Windows (avec adaptations de chemins)
+- Gitpod (support expérimental avec `.cursor/mcp.json.gitpod`)
+
 ## Utilisation
 
 ### Pour l'agent
@@ -69,4 +99,4 @@ somtech-pack
 
 ## Version
 
-1.2.0
+1.2.0 — Voir [CHANGELOG.md](./CHANGELOG.md) pour l'historique des versions

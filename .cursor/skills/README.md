@@ -27,7 +27,18 @@ Ce dossier contient des **Agent Skills** (format `SKILL.md`) utilisables par Cur
     assets/
 ```
 
+## Versioning
+
+Tous les skills suivent [Semantic Versioning 2.0.0](https://semver.org/) et maintiennent un CHANGELOG.
+
+Voir [VERSIONING.md](./VERSIONING.md) pour la politique complète de versioning.
+
+### Versions actuelles
+- **build-chatwindow** : v1.1.0 ([CHANGELOG](./build-chatwindow/CHANGELOG.md))
+- **configure-mcp-server** : v1.2.0 ([CHANGELOG](./configure-mcp-server/CHANGELOG.md))
+
 ## Notes
 
-- Chaque skill doit être **générique** : pas d’IDs, URLs ou secrets réels dans le pack.
+- Chaque skill doit être **générique** : pas d'IDs, URLs ou secrets réels dans le pack.
 - Utilisez des placeholders (`votre-project-id`, `YOUR_TOKEN`) et documentez où les remplacer.
+- Chaque skill maintient son propre **CHANGELOG.md** et suit **Semantic Versioning**.
