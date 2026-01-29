@@ -67,6 +67,39 @@ Le workflow de migration maquette → production est disponible via le skill `/m
 
 ---
 
+## Skill Git-Module
+
+Gestion des maquettes via git submodules. **À utiliser avant `/mockmig init`** pour ajouter ou synchroniser les maquettes.
+
+### Commandes disponibles
+
+| Commande | Description |
+|----------|-------------|
+| `/git-module add <url> [path]` | Ajouter un nouveau submodule |
+| `/git-module sync` | Synchroniser les submodules |
+| `/git-module list` | Lister les submodules |
+| `/git-module status` | État de synchronisation |
+| `/git-module remove <path>` | Retirer un submodule |
+
+### Workflow typique
+
+```bash
+# 1. Ajouter une maquette
+/git-module add git@github.com:somtech/maquette-devis.git modules/maquette/devis/v1
+
+# 2. Vérifier la sync
+/git-module status
+
+# 3. Migrer avec mockmig
+/mockmig init --module devis --mockupPath modules/maquette/devis/v1
+```
+
+### Convention de chemins
+
+Les maquettes sont stockées dans: `modules/maquette/<module>/<version>/`
+
+---
+
 ## Conventions de code
 
 ### Nommage
