@@ -298,27 +298,392 @@ SI success = total:
     - gates.confirm.date: <now>
 ```
 
-### Étape 10 : Actions post-exécution
+### Étape 10 : Tests automatisés (E2E)
+
+> **OBLIGATOIRE**: Claude doit tester l'implémentation avant de conclure.
 
 ```
 SI success = total:
+  AFFICHER: ""
+  AFFICHER: "═══════════════════════════════════════"
+  AFFICHER: "🧪 TESTS AUTOMATISÉS"
+  AFFICHER: "═══════════════════════════════════════"
+```
+
+#### 10.1 - Créer un utilisateur de test
+
+```
+AFFICHER: ""
+AFFICHER: "👤 Création utilisateur de test..."
+
+# Générer credentials de test
+test_email = "test-<module>-<timestamp>@test.local"
+test_password = "Test123!<random>"
+
+# Créer l'utilisateur via Supabase MCP ou SQL
+→ Supabase MCP: créer utilisateur auth
+  OU
+→ SQL: INSERT INTO auth.users (...)
+
+# Si l'app a des rôles, assigner un rôle de test
+SI roles détectés dans l'ontologie:
+  → Assigner le rôle approprié pour tester toutes les fonctionnalités
+
+# Créer des données de test si nécessaire
+SI module a besoin de données existantes:
+  → Insérer données de test minimales
+  → Respecter les contraintes FK
+
+AFFICHER: "   ✅ Utilisateur créé: <test_email>"
+AFFICHER: "   ✅ Données de test: <n> enregistrements"
+
+# Sauvegarder les credentials pour cleanup
+→ test_credentials = { email, password, user_id, data_ids }
+```
+
+#### 10.2 - Lancer le serveur de développement
+
+```
+AFFICHER: ""
+AFFICHER: "🚀 Démarrage serveur de dev..."
+
+→ Bash (background): npm run dev
+→ Attendre que le serveur soit prêt (port 3000)
+→ Vérifier: curl http://localhost:3000 → 200 OK
+
+SI serveur ne démarre pas:
+  → AFFICHER: "❌ Échec démarrage serveur"
+  → AFFICHER: "   Erreur: <error>"
+  → GOTO cleanup
+
+AFFICHER: "   ✅ Serveur démarré: http://localhost:3000"
+```
+
+#### 10.3 - Navigation et tests UI (Claude in Chrome)
+
+```
+AFFICHER: ""
+AFFICHER: "🌐 Tests d'interface..."
+
+# Ouvrir le navigateur
+→ Chrome MCP: tabs_create_mcp
+→ Chrome MCP: navigate → http://localhost:3000
+
+# Se connecter avec l'utilisateur de test
+AFFICHER: "   🔐 Connexion..."
+→ Chrome MCP: find → "login" ou "connexion"
+→ Chrome MCP: form_input → email, password
+→ Chrome MCP: computer → click submit
+→ Attendre navigation
+
+SI login échoue:
+  → AFFICHER: "   ❌ Échec connexion"
+  → Capturer screenshot
+  → AJOUTER erreur
+
+# Naviguer vers le module
+AFFICHER: "   📍 Navigation vers /<module>..."
+→ Chrome MCP: navigate → http://localhost:3000/<module>
+
+# Vérifier erreurs console
+→ Chrome MCP: read_console_messages → pattern: "error|Error|ERROR"
+SI erreurs console:
+  → AFFICHER: "   ⚠️  Erreurs console détectées: <n>"
+  POUR CHAQUE erreur:
+    → AFFICHER: "      • <error>"
+  → AJOUTER warning
+SINON:
+  → AFFICHER: "   ✅ Console: aucune erreur"
+```
+
+#### 10.4 - Test des boutons
+
+```
+AFFICHER: ""
+AFFICHER: "🔘 Test des boutons..."
+
+# Identifier tous les boutons
+→ Chrome MCP: find → "button"
+→ Chrome MCP: read_page → filter: "interactive"
+
+buttons_tested = 0
+buttons_failed = 0
+
+POUR CHAQUE bouton interactif:
+  → AFFICHER: "   Testing: <button_text>..."
+
+  # Capturer état avant
+  → Chrome MCP: computer → screenshot
+
+  # Cliquer
+  → Chrome MCP: computer → click sur bouton
+
+  # Attendre réaction (animation, navigation, modal)
+  → Attendre 500ms
+
+  # Vérifier erreurs console après clic
+  → Chrome MCP: read_console_messages → onlyErrors: true
+  SI nouvelles erreurs:
+    → AFFICHER: "      ❌ Erreur après clic: <error>"
+    → buttons_failed++
+    → Capturer screenshot
+  SINON:
+    → AFFICHER: "      ✅ OK"
+    → buttons_tested++
+
+  # Revenir à l'état initial si navigation
+  SI URL a changé ET pas attendu:
+    → Chrome MCP: navigate → back
+
+AFFICHER: "   Résultat: <buttons_tested>/<total> boutons OK"
+SI buttons_failed > 0:
+  → AFFICHER: "   ⚠️  <buttons_failed> boutons avec erreurs"
+```
+
+#### 10.5 - Test des formulaires
+
+```
+AFFICHER: ""
+AFFICHER: "📝 Test des formulaires..."
+
+# Identifier tous les formulaires
+→ Chrome MCP: find → "form"
+
+forms_tested = 0
+forms_failed = 0
+
+POUR CHAQUE formulaire:
+  → AFFICHER: "   Testing: <form_name>..."
+
+  # Identifier les champs
+  → Chrome MCP: read_page → ref_id: form_ref, depth: 3
+
+  # Remplir avec des données de test valides
+  POUR CHAQUE champ:
+    → Générer valeur de test selon le type:
+      - text → "Test value"
+      - email → "test@test.com"
+      - number → 123
+      - date → today
+      - select → première option
+      - checkbox → toggle
+    → Chrome MCP: form_input → ref, value
+
+  # Soumettre le formulaire
+  → Chrome MCP: find → "submit" ou "button[type=submit]"
+  → Chrome MCP: computer → click
+
+  # Attendre réponse
+  → Attendre 1000ms
+
+  # Vérifier le résultat
+  → Chrome MCP: read_console_messages → onlyErrors: true
+  → Chrome MCP: read_page → chercher message succès/erreur
+
+  SI erreur console OU message d'erreur inattendu:
+    → AFFICHER: "      ❌ Échec soumission"
+    → forms_failed++
+    → Capturer screenshot
+  SINON:
+    → AFFICHER: "      ✅ Soumission OK"
+    → forms_tested++
+
+  # Reset pour prochain test
+  → Rafraîchir la page ou naviguer back
+
+AFFICHER: "   Résultat: <forms_tested>/<total> formulaires OK"
+SI forms_failed > 0:
+  → AFFICHER: "   ⚠️  <forms_failed> formulaires avec erreurs"
+```
+
+#### 10.6 - Test des validations
+
+```
+AFFICHER: ""
+AFFICHER: "🔒 Test des validations..."
+
+# Tester les cas d'erreur (validation côté client)
+POUR CHAQUE formulaire:
+  # Soumettre vide
+  → Chrome MCP: computer → click submit sans remplir
+  → Vérifier que validation bloque
+  → AFFICHER: "   ✅ Validation champs requis: OK"
+
+  # Soumettre avec données invalides
+  SI champ email existe:
+    → form_input → "invalid-email"
+    → click submit
+    → Vérifier message d'erreur
+    → AFFICHER: "   ✅ Validation email: OK"
+
+  SI champ nombre existe:
+    → form_input → "abc" (texte dans nombre)
+    → Vérifier comportement
+    → AFFICHER: "   ✅ Validation nombre: OK"
+```
+
+#### 10.7 - Vérification RLS (sécurité)
+
+```
+AFFICHER: ""
+AFFICHER: "🛡️  Test sécurité RLS..."
+
+# Créer un 2ème utilisateur de test
+test_user_2 = créer_utilisateur_test()
+
+# Créer une donnée avec user 1
+→ Se connecter user 1
+→ Créer un enregistrement
+
+# Tenter d'accéder avec user 2
+→ Se déconnecter
+→ Se connecter user 2
+→ Tenter d'accéder à l'enregistrement de user 1
+
+SI accès refusé (comme attendu):
+  → AFFICHER: "   ✅ RLS Owner pattern: OK"
+SINON:
+  → AFFICHER: "   ❌ RLS VIOLATION: user 2 voit données user 1!"
+  → AJOUTER erreur critique
+```
+
+#### 10.8 - Générer rapport de test
+
+```
+AFFICHER: ""
+AFFICHER: "📊 Génération rapport de test..."
+
+→ Créer migration/<module>/08_test_report.md
+
+CONTENU:
+---
+# Rapport de Tests: <module>
+
+## Informations
+| Clé | Valeur |
+|-----|--------|
+| Date | <now> |
+| Environnement | localhost:3000 |
+| Utilisateur test | <test_email> |
+
+## Résumé
+| Catégorie | Passés | Échecs | Total |
+|-----------|--------|--------|-------|
+| Console | <n> | <n> | <n> |
+| Boutons | <n> | <n> | <n> |
+| Formulaires | <n> | <n> | <n> |
+| Validations | <n> | <n> | <n> |
+| Sécurité RLS | <n> | <n> | <n> |
+| **Total** | <n> | <n> | <n> |
+
+## Résultat global
+<✅ PASS | ⚠️ PASS AVEC WARNINGS | ❌ FAIL>
+
+## Erreurs console détectées
+<liste des erreurs>
+
+## Boutons en échec
+<liste avec screenshots>
+
+## Formulaires en échec
+<liste avec détails>
+
+## Violations de sécurité
+<liste critique>
+
+## Screenshots
+<liens vers captures d'écran>
+
+---
+
+AFFICHER: "✅ Créé: migration/<module>/08_test_report.md"
+```
+
+#### 10.9 - Cleanup
+
+```
+:cleanup
+
+AFFICHER: ""
+AFFICHER: "🧹 Nettoyage..."
+
+# Supprimer l'utilisateur de test
+→ Supabase MCP: DELETE FROM auth.users WHERE email = test_email
+
+# Supprimer les données de test
+POUR CHAQUE table avec données de test:
+  → DELETE FROM <table> WHERE id IN (test_data_ids)
+
+# Arrêter le serveur de dev
+→ Bash: kill server process
+
+AFFICHER: "   ✅ Utilisateur de test supprimé"
+AFFICHER: "   ✅ Données de test nettoyées"
+AFFICHER: "   ✅ Serveur arrêté"
+```
+
+#### 10.10 - Résultat des tests
+
+```
+AFFICHER: ""
+AFFICHER: "═══════════════════════════════════════"
+
+SI tous tests passés:
+  AFFICHER: "🎉 TESTS PASSÉS"
+  AFFICHER: ""
+  AFFICHER: "   Console: ✅"
+  AFFICHER: "   Boutons: ✅"
+  AFFICHER: "   Formulaires: ✅"
+  AFFICHER: "   Sécurité: ✅"
+
+  → tests_passed = true
+
+SINON SI erreurs critiques (sécurité):
+  AFFICHER: "❌ TESTS ÉCHOUÉS - ERREURS CRITIQUES"
+  AFFICHER: ""
+  AFFICHER: "⚠️  Des violations de sécurité ont été détectées!"
+  AFFICHER: "→ Corriger AVANT de merger"
+
+  → tests_passed = false
+
+SINON:
+  AFFICHER: "⚠️  TESTS AVEC WARNINGS"
+  AFFICHER: ""
+  AFFICHER: "   Erreurs non-bloquantes détectées."
+  AFFICHER: "   Voir 08_test_report.md pour détails."
+
+  → tests_passed = true (avec warnings)
+```
+
+---
+
+### Étape 11 : Actions post-exécution
+
+```
+SI success = total ET tests_passed:
   AFFICHER: ""
   AFFICHER: "📋 Actions recommandées:"
   AFFICHER: ""
   AFFICHER: "1. Vérifier les migrations:"
   AFFICHER: "   supabase db diff"
   AFFICHER: ""
-  AFFICHER: "2. Tester localement:"
-  AFFICHER: "   npm run dev"
+  AFFICHER: "2. Revoir le rapport de test:"
+  AFFICHER: "   migration/<module>/08_test_report.md"
   AFFICHER: ""
   AFFICHER: "3. Créer une PR:"
   AFFICHER: "   gh pr create --title 'feat(<module>): migration from mockup'"
   AFFICHER: ""
   AFFICHER: "4. Déployer sur preview:"
   AFFICHER: "   (automatique via Netlify)"
+
+SINON:
+  AFFICHER: ""
+  AFFICHER: "⚠️  Corriger les erreurs avant de continuer:"
+  AFFICHER: "   → Voir 08_test_report.md"
+  AFFICHER: "   → Relancer: /mockmig execute --confirm"
 ```
 
-### Étape 11 : Mettre à jour session
+### Étape 13 : Mettre à jour session
 
 ```
 → Mettre à jour .mockmig/session.json:
@@ -336,13 +701,33 @@ SI success = total:
         ...
       ]
     }
+  - tests: {
+      ran: true,
+      passed: <tests_passed>,
+      console_errors: <n>,
+      buttons: { passed: <n>, failed: <n> },
+      forms: { passed: <n>, failed: <n> },
+      rls: { passed: <n>, failed: <n> },
+      report: "migration/<module>/08_test_report.md"
+    }
 
-SI tous succès ET phase = EXECUTE:
+SI tous succès ET tests_passed:
   AFFICHER: ""
   AFFICHER: "═══════════════════════════════════════"
-  AFFICHER: "🎉 Migration terminée!"
+  AFFICHER: "🎉 Migration terminée et testée!"
+  AFFICHER: ""
+  AFFICHER: "   ✅ Implémentation: <n>/<n> tâches"
+  AFFICHER: "   ✅ Tests: passés"
   AFFICHER: ""
   AFFICHER: "→ Voir le statut final: /mockmig status"
+  AFFICHER: "→ Créer la PR: gh pr create"
+
+SINON:
+  AFFICHER: ""
+  AFFICHER: "═══════════════════════════════════════"
+  AFFICHER: "⚠️  Migration incomplète"
+  AFFICHER: ""
+  AFFICHER: "→ Corriger les erreurs puis relancer"
 ```
 
 ---
@@ -365,6 +750,12 @@ Lors de l'exécution, les fichiers suivants peuvent être créés:
 | Hooks | `app/src/modules/<module>/hooks/*.ts` |
 | Types | `app/src/modules/<module>/types/index.ts` |
 | Guards | `app/src/components/guards/*.tsx` |
+
+### Tests
+| Type | Emplacement |
+|------|-------------|
+| Rapport de test | `migration/<module>/08_test_report.md` |
+| Screenshots | `migration/<module>/screenshots/*.png` |
 
 ---
 
