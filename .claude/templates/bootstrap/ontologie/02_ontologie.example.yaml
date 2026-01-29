@@ -1,0 +1,311 @@
+meta:
+  domaine: "ConstructionGauthier"
+  version: "2.2"
+  description: "Ontologie système unifiée pour Construction Gauthier - Architecture Modulaire"
+  date_generation: "2026-01-19"
+
+hierarchy:
+  Actor:
+    subclasses: ["AppUser", "Employee", "Manager", "Director"]
+  WorkItem:
+    subclasses: ["MeetingAction", "OnboardingTask", "Feature", "Task"]
+  Event:
+    subclasses: ["OneOnOneMeeting", "LeaveRequest", "TrainingSession", "Evaluation", "ModuleAccessGrant"]
+  Asset:
+    subclasses: ["TechTool", "Module", "AccessModule", "Document"]
+  KnowledgeConfig:
+    subclasses: ["Cartography", "PowerfulQuestion", "RaciMatrix", "EvaluationVersion", "EvaluationQuestionBank", "EvaluationQuestion", "EvaluationQuestionVariant"]
+
+concepts:
+  Employee:
+    description: "Un membre du personnel de l'entreprise."
+    role: "Agent opérationnel principal"
+    keys_metier: ["email", "matricule"]
+    attributes:
+      - name: "full_name"
+        type: "string"
+      - name: "position"
+        type: "string"
+      - name: "hire_date"
+        type: "date"
+    lifecycle:
+      states: ["Active", "Inactive", "Onboarding", "Offboarding"]
+  
+  Module:
+    description: "Une unité fonctionnelle logicielle de la plateforme."
+    role: "Unité de valeur produit"
+    attributes:
+      - name: "status"
+        type: "enum"
+        domain: "ModuleStatus"
+    lifecycle:
+      states: ["undefined-scope", "scope-defined", "development-started", "implementation", "fully-implemented"]
+
+  AccessModule:
+    description: "Unité d’accès applicatif identifiée par une clé stable (ex: ma-place-rh) utilisée pour l’autorisation N1."
+    role: "Point d’entrée d’autorisation (accès module) vers l’autorisation fine RBAC/ABAC du module"
+    attributes:
+      - name: "module_id"
+        type: "string"
+      - name: "name"
+        type: "string"
+      - name: "is_active"
+        type: "boolean"
+      - name: "default_role_key"
+        type: "string"
+
+  ModuleAccessGrant:
+    description: "Événement d’accord/retrait d’accès à un AccessModule pour un AppUser, avec audit."
+    role: "Traçabilité de la gouvernance d’accès (qui a accordé/révoqué, quand, pour quel module)"
+    attributes:
+      - name: "user_id"
+        type: "uuid"
+      - name: "module_id"
+        type: "string"
+      - name: "granted_at"
+        type: "datetime"
+      - name: "granted_by"
+        type: "uuid"
+      - name: "revoked_at"
+        type: "datetime"
+      - name: "revoked_by"
+        type: "uuid"
+
+  OneOnOneMeeting:
+    description: "Rencontre de suivi managérial."
+    role: "Point de synchronisation et de coaching"
+    attributes:
+      - name: "scheduled_date"
+        type: "datetime"
+      - name: "recurrence"
+        type: "enum"
+    lifecycle:
+      states: ["planned", "in-progress", "completed", "cancelled", "rescheduled"]
+
+  Cartography:
+    description: "Modélisation visuelle des flux de données entre systèmes."
+    role: "Documentation d'architecture"
+    attributes:
+      - name: "nodes"
+        type: "list<Node>"
+
+  Evaluation:
+    description: "Bilan formel périodique de la performance, créé à partir d’une version d’évaluation."
+    role: "Instance d’évaluation (application d’un modèle versionné)"
+    attributes:
+      - name: "employee_id"
+        type: "uuid"
+      - name: "period"
+        type: "string"
+      - name: "evaluation_version_id"
+        type: "uuid"
+  EvaluationVersion:
+    description: "Modèle versionné décrivant le contenu et les règles d’une évaluation (questions, ordre, paramètres)."
+    role: "Gouvernance du contenu d’évaluation (versioning, publication)"
+    attributes:
+      - name: "name"
+        type: "string"
+      - name: "status"
+        type: "enum"
+        domain: "EvaluationVersionStatus"
+      - name: "version_number"
+        type: "integer"
+      - name: "is_current"
+        type: "boolean"
+    lifecycle:
+      states: ["draft", "active", "archived"]
+
+  EvaluationQuestionBank:
+    description: "Inventaire de questions réutilisables pour composer des versions d’évaluation."
+    role: "Catalogue partagé (source de sélection)"
+    attributes:
+      - name: "scope"
+        type: "enum"
+        domain: "ConfigScope"
+
+  EvaluationQuestion:
+    description: "Question réutilisable (libellé + type) pouvant être sélectionnée dans une version d’évaluation."
+    role: "Brique de contenu gouvernée"
+    attributes:
+      - name: "prompt"
+        type: "string"
+      - name: "question_type"
+        type: "string"
+
+  EvaluationQuestionVariant:
+    description: "Révision immuable (snapshot) d’une question, utilisée par une version d’évaluation pour éviter la rétroaction."
+    role: "Stabilité sémantique des versions actives"
+    attributes:
+      - name: "prompt"
+        type: "string"
+      - name: "question_type"
+        type: "string"
+      - name: "source_question_id"
+        type: "uuid"
+
+relations:
+  - name: "ReportsTo"
+    from: "Employee"
+    to: "Manager"
+    type: "dependency"
+    cardinality: "N:1"
+    description: "Lien hiérarchique définissant le management."
+    semantic_hint: "Définit les permissions de lecture (Manager voit les données de Employee)"
+
+  - name: "AssignedTo"
+    from: "WorkItem"
+    to: "Employee"
+    type: "association"
+    cardinality: "N:1"
+    description: "Responsabilité d'exécution."
+
+  - name: "AuthenticatesAs"
+    from: "Employee"
+    to: "AppUser"
+    type: "association"
+    cardinality: "1:1"
+    description: "Lien entre la réalité métier (RH) et l'identité technique (Auth)."
+
+  - name: "ComposedOf"
+    from: "Module"
+    to: "Function"
+    type: "composition"
+    cardinality: "1:N"
+
+  - name: "HasAccessTo"
+    from: "AppUser"
+    to: "AccessModule"
+    type: "association"
+    cardinality: "N:N"
+    description: "Un utilisateur peut avoir accès à plusieurs modules d’accès; l’accès est gouverné et audité."
+    semantic_hint: "Détermine l’accès N1; l’accès actif déclenche l’attribution d’un rôle RBAC par défaut."
+
+  - name: "AccessGrantedBy"
+    from: "ModuleAccessGrant"
+    to: "AppUser"
+    type: "dependency"
+    cardinality: "N:1"
+    description: "Acteur qui accorde/révoque l’accès (admin global ou service)."
+
+  - name: "UsesEvaluationVersion"
+    from: "Evaluation"
+    to: "EvaluationVersion"
+    type: "association"
+    cardinality: "N:1"
+    description: "Chaque évaluation est créée à partir d’une version (modèle) et conserve cette association."
+    semantic_hint: "Assure la comparabilité dans le temps; changement de version courante n’affecte pas l’existant."
+
+  - name: "EvaluationVersionComposedOfQuestionVariants"
+    from: "EvaluationVersion"
+    to: "EvaluationQuestionVariant"
+    type: "composition"
+    cardinality: "1:N"
+    description: "Une version d’évaluation référence une liste ordonnée de variantes de questions."
+
+  - name: "QuestionHasVariants"
+    from: "EvaluationQuestion"
+    to: "EvaluationQuestionVariant"
+    type: "composition"
+    cardinality: "1:N"
+    description: "Une question peut avoir plusieurs variantes (révisions immuables)."
+
+patterns:
+  RLS_Scope:
+    description: "Sécurité au niveau de la ligne"
+    applies_to: ["All Business Entities"]
+    implementation:
+      fields: ["user_id", "manager_id", "department_id"]
+    agent_usage: "Un agent doit toujours vérifier le contexte de l'utilisateur (qui suis-je ?) avant de requêter."
+
+  SoftDelete:
+    description: "Suppression logique"
+    applies_to: ["AppUser", "TechTool"]
+    implementation:
+      fields: ["is_active", "deleted_at"]
+
+domains:
+  ModuleStatus:
+    type: "enum"
+    values: ['undefined-scope', 'scope-defined', 'development-started', 'implementation', 'fully-implemented']
+  
+  MeetingStatus:
+    type: "enum"
+    values: ['planned', 'in-progress', 'completed', 'cancelled', 'rescheduled']
+
+  EvaluationVersionStatus:
+    type: "enum"
+    values: ['draft', 'active', 'archived']
+
+  ConfigScope:
+    type: "enum"
+    values: ['company']
+
+invariants_ontologiques:
+  - id: "INV-001"
+    description: "Un employé ne peut pas être son propre manager."
+    scope: ["Employee"]
+    type: "metier"
+  
+  - id: "INV-002"
+    description: "Une note de meeting privée n'est jamais visible par l'autre partie."
+    scope: ["MeetingNote"]
+    type: "securite"
+
+  - id: "INV-003"
+    description: "Tout module doit avoir un statut défini dans le cycle de vie."
+    scope: ["Module"]
+    type: "structurel"
+
+  - id: "INV-004"
+    description: "Une version d’évaluation en statut active est immuable; toute évolution implique une nouvelle version."
+    scope: ["EvaluationVersion"]
+    type: "metier"
+
+  - id: "INV-005"
+    description: "Changer la version courante ne modifie jamais rétroactivement les évaluations déjà créées."
+    scope: ["Evaluation", "EvaluationVersion"]
+    type: "metier"
+
+  - id: "INV-006"
+    description: "Une seule version d’évaluation est courante (active) à un instant T pour la portée entreprise."
+    scope: ["EvaluationVersion"]
+    type: "structurel"
+
+  - id: "INV-007"
+    description: "Si une version est utilisée par une évaluation en cours, l’édition directe est interdite; l’évolution passe par duplication en nouvelle version."
+    scope: ["EvaluationVersion", "Evaluation"]
+    type: "metier"
+
+  - id: "INV-008"
+    description: "Une modification de question ne doit pas modifier rétroactivement une version active; les versions actives référencent des variantes immuables."
+    scope: ["EvaluationQuestion", "EvaluationQuestionVariant", "EvaluationVersion"]
+    type: "metier"
+
+  - id: "INV-AC-001"
+    description: "Tout AccessModule actif déclare un default_role_key."
+    scope: ["AccessModule"]
+    type: "structurel"
+
+  - id: "INV-AC-002"
+    description: "Un accès actif à un AccessModule implique au minimum un rôle applicatif RBAC actif pour ce module (rôle par défaut)."
+    scope: ["AccessModule", "AppUser"]
+    type: "securite"
+
+  - id: "INV-AC-003"
+    description: "Révoquer l’accès à un AccessModule révoque tous les rôles applicatifs RBAC associés à ce module."
+    scope: ["AccessModule", "AppUser"]
+    type: "securite"
+
+events:
+  - name: "MeetingCompleted"
+    triggers:
+      - entity: "OneOnOneMeeting"
+        when: "status changed to completed"
+    effects:
+      - type: "create"
+        target: "MeetingHistorySummary"
+        description: "Génère un résumé automatique de la rencontre."
+
+reasoning_hints:
+  - "Si un employé a un manager_id NULL, c'est probablement un administrateur ou le CEO, ou une erreur de données."
+  - "Pour trouver les tâches d'une personne, chercher dans MeetingAction (assigned_to) ET OnboardingTask (assigned_to)."

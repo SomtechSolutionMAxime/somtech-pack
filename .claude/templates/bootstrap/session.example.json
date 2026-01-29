@@ -1,0 +1,45 @@
+{
+  "module": "core",
+  "mockupPath": "modules/maquette/core/v1",
+  "migrationDir": "migration/core",
+  "type": "simple",
+  "components": [],
+  "phase": "INIT",
+  "gates": {
+    "validate": { "passed": false },
+    "signoff": { "passed": false },
+    "confirm": { "passed": false }
+  },
+  "artifacts": {
+    "00_context": { "status": "pending" },
+    "01_business_rules": { "status": "pending" },
+    "02_validation_packet": { "status": "pending" },
+    "03_existing_audit": { "status": "pending" },
+    "04_gap_analysis": { "status": "pending" },
+    "05_backend_tasks": { "status": "pending" },
+    "06_ui_tasks": { "status": "pending" },
+    "07_implementation_plan": { "status": "pending" }
+  },
+  "mcps": {
+    "supabase": {
+      "connected": false,
+      "projectId": null,
+      "role": null
+    },
+    "netlify": {
+      "connected": false,
+      "siteId": null,
+      "linked": false
+    },
+    "github": {
+      "connected": false,
+      "repo": null,
+      "branch": null,
+      "permissions": []
+    }
+  },
+  "createdAt": "2026-01-28T00:00:00Z",
+  "updatedAt": "2026-01-28T00:00:00Z",
+  "lastCommand": null,
+  "lastError": null
+}

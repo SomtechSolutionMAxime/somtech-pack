@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Mockmig Session",
+  "description": "Schema pour le fichier de session mockmig (.mockmig/session.json)",
+  "type": "object",
+  "required": ["module", "mockupPath", "migrationDir", "phase", "createdAt"],
+  "properties": {
+    "module": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Slug du module (kebab-case). Ex: 'devis', 'core', 'ma-place-rh'"
+    },
+    "mockupPath": {
+      "type": "string",
+      "description": "Chemin relatif vers la maquette. Ex: 'modules/maquette/devis/v1'"
+    },
+    "migrationDir": {
+      "type": "string",
+      "description": "Chemin vers le dossier de migration. Ex: 'migration/devis'"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["simple", "complex"],
+      "description": "simple = pas de composants, complex = avec composants"
+    },
+    "components": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Liste des composants détectés (si type=complex)"
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["INIT", "DISCOVER", "ANALYZE", "PLAN", "EXECUTE", "DONE"],
+      "description": "Phase actuelle du workflow"
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "validate": {
+          "type": "object",
+          "properties": {
+            "passed": { "type": "boolean" },
+            "date": { "type": "string", "format": "date" }
+          }
+        },
+        "signoff": {
+          "type": "object",
+          "properties": {
+            "passed": { "type": "boolean" },
+            "date": { "type": "string", "format": "date" },
+            "by": { "type": "string" }
+          }
+        },
+        "confirm": {
+          "type": "object",
+          "properties": {
+            "passed": { "type": "boolean" },
+            "date": { "type": "string", "format": "date" }
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "done", "skipped"]
+          },
+          "path": { "type": "string" },
+          "hash": { "type": "string" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "description": "État de chaque artefact (00_context, 01_business_rules, etc.)"
+    },
+    "mcps": {
+      "type": "object",
+      "properties": {
+        "supabase": {
+          "type": "object",
+          "properties": {
+            "connected": { "type": "boolean" },
+            "projectId": { "type": "string" },
+            "role": { "type": "string" }
+          }
+        },
+        "netlify": {
+          "type": "object",
+          "properties": {
+            "connected": { "type": "boolean" },
+            "siteId": { "type": "string" },
+            "linked": { "type": "boolean" }
+          }
+        },
+        "github": {
+          "type": "object",
+          "properties": {
+            "connected": { "type": "boolean" },
+            "repo": { "type": "string" },
+            "branch": { "type": "string" },
+            "permissions": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastCommand": {
+      "type": "string",
+      "description": "Dernière commande exécutée"
+    },
+    "lastError": {
+      "type": ["string", "null"],
+      "description": "Dernière erreur rencontrée"
+    }
+  }
+}
