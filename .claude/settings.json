@@ -1,0 +1,30 @@
+{
+  "enabledPlugins": [
+    "supabase@claude-plugins-official",
+    "spec-kit@github-spec-kit"
+  ],
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(ls *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '⚠️  Fichier modifié - Pensez à /validate-ui si UI concernée'"
+          }
+        ]
+      }
+    ]
+  }
+}
