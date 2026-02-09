@@ -32,22 +32,29 @@ Déployer un silo préalablement généré par `/generate-silo`.
    ```
    Vérifier que chaque container démarre correctement.
 
-5. **Provisionner le dev-env Fly.io** (6 services) :
+5. **Créer l'organisation Fly.io** (une seule fois par app) :
+   ```
+   flyctl orgs create {client}-{app}
+   ```
+   - Si l'org existe déjà, skip cette étape
+   - L'org isole la facturation et les accès par client/app
+
+6. **Provisionner le dev-env Fly.io** (6 services) :
    Pour chaque service (pg, rest, auth, kong, storage, studio) :
    ```
-   flyctl apps create devenv-{client}-{app}-{service} --org {fly_org}
+   flyctl apps create devenv-{client}-{app}-{service} --org {client}-{app}
    flyctl deploy --config fly/{service}.toml --app devenv-{client}-{app}-{service}
    ```
    Appliquer les migrations sur Postgres.
    Récupérer les connection_info (URLs, anon_key, service_role_key).
 
-6. **Créer la branche Git silo** :
+7. **Créer la branche Git silo** :
    ```
    git branch silo/{client}-{app} main
    git push origin silo/{client}-{app}
    ```
 
-7. **Configurer Netlify (UNE SEULE FOIS)** via MCP Netlify :
+8. **Configurer Netlify (UNE SEULE FOIS)** via MCP Netlify :
    - `netlify-project-services` → activer le branch deploy sur `silo/{client}-{app}`
    - `netlify-project-services` → set env vars du deploy context de la branche silo :
      - `VITE_SUPABASE_URL` = `https://devenv-{client}-{app}-kong.fly.dev`
@@ -57,12 +64,12 @@ Déployer un silo préalablement généré par `/generate-silo`.
    - Attendre et confirmer que le deploy réussit
    - Récupérer le `silo_preview_url`
 
-8. **Mettre à jour le Service Desk** via MCP Desk :
+9. **Mettre à jour le Service Desk** via MCP Desk :
    - `update_silo_status(client, app, "active", { containers })` → marquer le silo actif
    - `log_silo_event(client, app, "provisioned", "silo-manager", { configs, urls })` → logger l'événement
    - `applications.update(client, app, { metadata.silo.silo_preview_url, metadata.silo.silo_deployed_at })` → sauvegarder l'URL de preview et la date
 
-9. **Rapport final** — Afficher un résumé complet :
+10. **Rapport final** — Afficher un résumé complet :
    - URL de preview silo : `https://silo-{client}-{app}--{site-name}.netlify.app`
    - URL Studio devenv : `https://devenv-{client}-{app}-studio.fly.dev`
    - URL Kong (API) : `https://devenv-{client}-{app}-kong.fly.dev`

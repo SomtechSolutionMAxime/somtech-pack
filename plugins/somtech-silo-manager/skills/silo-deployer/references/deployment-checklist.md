@@ -30,33 +30,46 @@ docker compose -f config/silos/{client}-{app}/docker-compose.silo-{client}-{app}
 # - silo-{c}-{a}-devops
 ```
 
-## Step 2: Fly.io Dev-Env
+## Step 2: Fly.io Organization
+
+```bash
+# Create the Fly.io organization for this app (one-time)
+flyctl orgs create {client}-{app}
+
+# Verify org exists
+flyctl orgs list | grep {client}-{app}
+```
+
+- If org already exists, skip creation
+- Org name follows nomenclature: `{client}-{app}` (ex: `acme-erp`)
+
+## Step 3: Fly.io Dev-Env
 
 Order matters! Postgres first, then dependent services:
 
 ```bash
 # 1. Postgres (must be first)
-flyctl apps create devenv-{c}-{a}-pg --org {fly_org}
+flyctl apps create devenv-{c}-{a}-pg --org {client}-{app}
 flyctl deploy --config config/silos/{c}-{a}/fly/fly.pg.toml --app devenv-{c}-{a}-pg
 
 # 2. PostgREST (depends on Postgres)
-flyctl apps create devenv-{c}-{a}-rest --org {fly_org}
+flyctl apps create devenv-{c}-{a}-rest --org {client}-{app}
 flyctl deploy --config config/silos/{c}-{a}/fly/fly.rest.toml --app devenv-{c}-{a}-rest
 
 # 3. GoTrue (depends on Postgres)
-flyctl apps create devenv-{c}-{a}-auth --org {fly_org}
+flyctl apps create devenv-{c}-{a}-auth --org {client}-{app}
 flyctl deploy --config config/silos/{c}-{a}/fly/fly.auth.toml --app devenv-{c}-{a}-auth
 
 # 4. Kong (depends on PostgREST, GoTrue)
-flyctl apps create devenv-{c}-{a}-kong --org {fly_org}
+flyctl apps create devenv-{c}-{a}-kong --org {client}-{app}
 flyctl deploy --config config/silos/{c}-{a}/fly/fly.kong.toml --app devenv-{c}-{a}-kong
 
 # 5. Storage (depends on Postgres, Kong)
-flyctl apps create devenv-{c}-{a}-storage --org {fly_org}
+flyctl apps create devenv-{c}-{a}-storage --org {client}-{app}
 flyctl deploy --config config/silos/{c}-{a}/fly/fly.storage.toml --app devenv-{c}-{a}-storage
 
 # 6. Studio (depends on all — optional)
-flyctl apps create devenv-{c}-{a}-studio --org {fly_org}
+flyctl apps create devenv-{c}-{a}-studio --org {client}-{app}
 flyctl deploy --config config/silos/{c}-{a}/fly/fly.studio.toml --app devenv-{c}-{a}-studio
 ```
 
@@ -65,7 +78,7 @@ After deployment:
 - Generate JWT keys (anon_key, service_role_key)
 - Verify Kong is accessible: curl https://devenv-{c}-{a}-kong.fly.dev/rest/v1/
 
-## Step 3: Git Branch
+## Step 4: Git Branch
 
 ```bash
 git checkout main
@@ -82,7 +95,7 @@ git reset --hard main
 git push origin silo/{client}-{app} --force
 ```
 
-## Step 4: Netlify Configuration (ONE-TIME)
+## Step 5: Netlify Configuration (ONE-TIME)
 
 Via MCP netlify-project-services:
 1. Get site info by site_id from metadata.frontend.site_id
@@ -97,7 +110,7 @@ Via MCP netlify-deploy-services:
 5. Wait for build to complete (poll status)
 6. Verify deploy is live: curl the silo preview URL
 
-## Step 5: Update Service Desk
+## Step 6: Update Service Desk
 
 Via MCP somtech-desk:
 

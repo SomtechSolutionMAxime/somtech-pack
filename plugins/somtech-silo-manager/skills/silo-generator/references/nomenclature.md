@@ -27,6 +27,15 @@
 - **Types**: `feature`, `fix`, `hotfix`, `chore`
   - NEVER use `silo` as a type — the `silo/` prefix is RESERVED for silo branches only
 
+## Fly.io Organization
+
+- **Pattern**: `{client}-{app}` (une org par application)
+- **Examples**:
+  - `acme-erp`
+  - `globex-crm`
+- **Création**: `flyctl orgs create {client}-{app}` (une seule fois lors du `/deploy-silo`)
+- **Isolation**: Chaque org isole la facturation, les accès et les ressources par client/app
+
 ## Fly.io Dev-Env
 
 - **Pattern**: `devenv-{client}-{app}-{service}`
