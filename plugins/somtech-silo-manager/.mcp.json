@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "somtech-desk": {
+      "type": "sse",
+      "url": "https://vdpuktsqrecdxbmweate.supabase.co/functions/v1/servicedesk-mcp/sse",
+      "headers": {
+        "Authorization": "Bearer ${SOMTECH_DESK_API_KEY}"
+      }
+    },
+    "netlify": {
+      "type": "remote",
+      "url": "https://netlify-mcp.netlify.app/mcp",
+      "headers": {
+        "Authorization": "Bearer ${NETLIFY_AUTH_TOKEN}"
+      }
+    }
+  }
+}

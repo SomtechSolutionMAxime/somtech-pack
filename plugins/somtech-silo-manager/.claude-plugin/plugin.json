@@ -1,0 +1,8 @@
+{
+  "name": "somtech-silo-manager",
+  "version": "1.0.0",
+  "description": "Plugin Claude Code pour générer et déployer les silos d'agents IA SomTech. Transforme une fiche Application du Service Desk en silo opérationnel complet : containers Docker, dev-env Fly.io, branche Git silo, configuration Netlify, et constitutions d'agents.",
+  "author": {
+    "name": "Somtech"
+  }
+}
