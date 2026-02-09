@@ -62,12 +62,21 @@ docker compose -f docker-compose.silo-{client}-{app}.yml up -d
 - ⚠️ **Échec partiel** : logger l'erreur, proposer de continuer sans le conteneur défaillant
   - Exemple : "rest-api failed to start → continue avec auth + db + worker"
 
-### Étape 3 : FLY.IO DEV-ENV (6 services)
+### Étape 3 : FLY.IO ORGANIZATION + DEV-ENV (6 services)
 
-Pour chaque service (pg, rest, auth, kong, storage, studio) :
+**Créer l'organisation Fly.io** (une seule fois par app) :
 
 ```bash
-flyctl apps create devenv-{client}-{app}-{service} --org {fly_org}
+flyctl orgs create {client}-{app}
+```
+
+- Si l'org existe déjà, skip cette sous-étape
+- L'org isole la facturation et les accès par client/app
+
+**Déployer les 6 services** dans l'org :
+
+```bash
+flyctl apps create devenv-{client}-{app}-{service} --org {client}-{app}
 flyctl deploy --config fly/{service}.toml
 ```
 

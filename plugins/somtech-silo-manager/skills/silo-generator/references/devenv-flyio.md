@@ -583,7 +583,7 @@ Before deploying dev-envs:
 ```json
 {
   "devenv": {
-    "fly_org": "somtech-dev",
+    "fly_org": "acme-erp",
     "fly_region": "yul",
     "devenv_enabled": true
   }

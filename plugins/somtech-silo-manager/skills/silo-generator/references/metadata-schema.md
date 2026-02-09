@@ -383,7 +383,7 @@ This document defines the complete schema of the `metadata` JSONB field in the `
 |-------|------|----------|---------|-------|
 | `devenv_enabled` | boolean | YES | true | Enable/disable dev-env feature |
 | `devenv_status` | enum | AUTO | "running" | Current runtime status |
-| `fly_org` | string | CONDITIONAL | "somtech-dev" | Fly.io organization; required if enabled |
+| `fly_org` | string | AUTO | "{client_slug}-{app_slug}" | Fly.io organization (1 org par app, auto-générée) |
 | `fly_region` | string | CONDITIONAL | "yul" | Fly.io region; required if enabled |
 | `fly_app_prefix` | string | AUTO | "devenv-acme-erp" | Auto-generated prefix for service apps |
 | `auto_stop_minutes` | integer | NO | 30 | Minutes of inactivity before auto-stop |

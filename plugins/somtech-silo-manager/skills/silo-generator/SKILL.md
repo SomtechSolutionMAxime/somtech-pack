@@ -109,7 +109,7 @@ networks:
 
 **Configuration** :
 - Region : `metadata.devenv.fly_region` (défaut : `yul`)
-- Org : `metadata.devenv.fly_org` (défaut : `somtech-dev`)
+- Org : `metadata.devenv.fly_org` (auto-généré : `{client}-{app}`, ex: `acme-erp`)
 - Auto-stop : `metadata.devenv.auto_stop_minutes` (défaut : 30 min)
 
 ### .env.template
