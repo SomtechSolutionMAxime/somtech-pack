@@ -1,7 +1,7 @@
 {
   "name": "somtech-proposals",
-  "version": "0.1.0",
-  "description": "Complétion de cahiers des charges et offres de services selon des gabarits Word, avec vérification de cohérence des clauses juridiques contre le contrat cadre du client.",
+  "version": "0.2.0",
+  "description": "Complétion de contrats cadres, cahiers des charges et offres de services selon des gabarits Word, avec vérification de cohérence des clauses juridiques et intégration MCP orbit-entreprise.",
   "author": {
     "name": "Somtech"
   },

@@ -15,10 +15,27 @@ Guider l'utilisateur dans la complétion de cahiers des charges et d'offres de s
 
 ## Prérequis
 
-L'utilisateur doit fournir :
-1. Le **gabarit Word** (.docx) à utiliser comme base
+1. Le **gabarit Word** (.docx) — inclus dans le plugin sous `templates/`
 2. Les **informations du projet** — soit via un brief, soit interactivement
 3. (Optionnel) Le **contrat cadre** du client pour la vérification de cohérence
+
+## Détection Automatique du Contrat Cadre
+
+**IMPORTANT** — Avant de commencer la collecte d'informations, toujours scanner le répertoire de travail (workspace) pour détecter un contrat cadre existant. Les conventions de nommage sont :
+
+- `CONTRAT-CADRE_ET_OFFRE_DE_SERVICES_(CCS)*` (ancien format)
+- `CONTRAT_CADRE*` (nouveau format)
+
+Patterns de recherche :
+```
+Glob: **/CONTRAT-CADRE_ET_OFFRE_DE_SERVICES_(CCS)*
+Glob: **/CONTRAT_CADRE*
+```
+
+Si un contrat cadre est détecté, il **doit** être utilisé comme référence pour :
+- Informer la rédaction du contenu (périmètre, conditions, terminologie du client)
+- Pré-remplir les sections juridiques et conditions générales
+- Déclencher automatiquement une vérification de cohérence à la fin de la génération
 
 ## Processus de Complétion
 
@@ -52,6 +69,24 @@ Poser des questions à l'utilisateur section par section en utilisant AskUserQue
    - Styles de titres et paragraphes
 3. Remplir chaque section avec le contenu collecté
 4. Sauvegarder le document complété dans le dossier workspace
+
+**CRITIQUE — Préservation des espaces dans les en-têtes et pieds de page** :
+Lors de la manipulation des fichiers .docx (unpack/edit/repack), les en-têtes (`word/header*.xml`) et pieds de page (`word/footer*.xml`) sont particulièrement sensibles aux problèmes d'espacement :
+- Les textes sont souvent fragmentés en plusieurs éléments `<w:t>` avec l'attribut `xml:space="preserve"` — cet attribut est **essentiel** pour conserver les espaces
+- **NE JAMAIS** fusionner ou réassembler les éléments `<w:t>` dans les headers/footers
+- **NE JAMAIS** supprimer `xml:space="preserve"` des éléments `<w:t>`
+- Lors du remplacement de placeholders dans les headers/footers, s'assurer que les espaces adjacents ne sont pas supprimés
+- Si un outil comme docx-js regénère le XML, vérifier explicitement que chaque `<w:t>` contenant un espace en début ou fin conserve `xml:space="preserve"`
+- **Vérification obligatoire** : Après chaque génération de document, extraire le texte brut des headers et footers du fichier produit et le comparer au gabarit original pour détecter tout mot collé ou espace manquant
+
+**CRITIQUE — Énumérations autonomes par section** :
+Les listes numérotées (1, 2, 3... ou a, b, c...) dans un document Word utilisent des définitions de numérotation dans `word/numbering.xml`. Un problème fréquent est que les énumérations de différentes sections partagent le même `<w:numId>`, ce qui fait que la numérotation **continue** d'une section à l'autre au lieu de recommencer.
+- Chaque énumération appartenant à une clause ou section différente doit avoir son propre `<w:numId>` dans `word/numbering.xml`, ou utiliser `<w:lvlOverride>` avec `<w:startOverride w:val="1"/>` pour forcer le redémarrage
+- **NE JAMAIS** réutiliser le même identifiant de numérotation pour des listes de sections/clauses différentes
+- Exemple concret : si la clause 6.1 a une énumération (a, b, c, d, e) et la clause 8 a sa propre énumération, elles doivent être indépendantes — la clause 8 doit recommencer à (a) et non continuer à (f)
+- Si tu utilises docx-js : créer une nouvelle instance de numérotation avec `restart` pour chaque liste dans une nouvelle section
+- Si tu fais du unpack/edit/repack : inspecter `word/numbering.xml` et s'assurer que chaque liste a son propre `<w:num w:numId="...">` séparé
+- **Vérification obligatoire** : Après génération, parcourir le document et vérifier que chaque énumération recommence à 1 (ou a) dans sa section respective
 
 ### Étape 4 : Revue et Ajustements
 

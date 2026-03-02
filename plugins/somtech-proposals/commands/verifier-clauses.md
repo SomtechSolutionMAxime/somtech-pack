@@ -15,7 +15,15 @@ Comparer les clauses juridiques d'une offre de services avec le contrat cadre du
 2. **Identifier les documents** :
    - Premier argument ($1) : L'offre de services .docx à vérifier
    - Deuxième argument ($2) : Le contrat cadre PDF du client
-   - Si les arguments ne sont pas fournis, demander les fichiers à l'utilisateur
+
+   **Recherche automatique du contrat cadre** — Si le contrat cadre n'est pas fourni en argument :
+   ```
+   Glob: **/CONTRAT-CADRE_ET_OFFRE_DE_SERVICES_(CCS)*
+   Glob: **/CONTRAT_CADRE*
+   ```
+   - Si un fichier correspondant est trouvé, l'utiliser automatiquement
+   - Si plusieurs fichiers correspondent, demander à l'utilisateur lequel utiliser
+   - Si aucun fichier trouvé, demander à l'utilisateur de fournir le contrat cadre
 
 3. **Extraire les clauses du contrat cadre** :
    - Lire le PDF du contrat cadre

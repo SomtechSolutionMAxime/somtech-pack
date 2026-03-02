@@ -17,8 +17,17 @@ Compléter un cahier des charges (CDC) à partir du gabarit Word intégré au pl
    - Lire et analyser sa structure (sections, placeholders, mise en forme)
    - Identifier tous les champs à compléter
 
-3. **Analyser le contrat cadre (si fourni)** :
-   Si l'utilisateur fournit un contrat cadre en argument ($ARGUMENTS) ou en pièce jointe :
+3. **Détecter et analyser le contrat cadre** :
+   **Recherche automatique** — Avant toute collecte d'information, scanner le répertoire de travail (workspace) pour un contrat cadre existant :
+   ```
+   Glob: **/CONTRAT-CADRE_ET_OFFRE_DE_SERVICES_(CCS)*
+   Glob: **/CONTRAT_CADRE*
+   ```
+   - Si un fichier correspondant est trouvé, l'utiliser automatiquement comme référence
+   - Si plusieurs fichiers correspondent, demander à l'utilisateur lequel utiliser
+   - Si aucun fichier trouvé ET que l'utilisateur n'en fournit pas en argument ($ARGUMENTS) ou en pièce jointe, continuer sans contrat cadre mais **informer l'utilisateur** qu'aucun contrat cadre n'a été détecté
+
+   **Analyse du contrat cadre (si disponible)** :
    - Lire `${CLAUDE_PLUGIN_ROOT}/skills/analyse-juridique/SKILL.md`
    - Extraire les clauses et conditions pour informer la rédaction du CDC
    - S'assurer que le périmètre et les conditions du CDC sont cohérents avec le contrat cadre
@@ -32,6 +41,20 @@ Compléter un cahier des charges (CDC) à partir du gabarit Word intégré au pl
    - En mode brief : Analyser le brief fourni, extraire les informations, et ne poser que les questions pour les lacunes identifiées
 
 6. **Générer le document** : Créer le cahier des charges .docx en respectant fidèlement la mise en forme du gabarit Somtech. Utiliser le skill docx (unpack/edit/repack du gabarit original ou docx-js) pour la génération.
+
+   **CRITIQUE — Préservation des espaces dans les en-têtes et pieds de page** :
+   - Lors du unpack/edit/repack, les fichiers `word/header*.xml` et `word/footer*.xml` contiennent des `<w:t>` fragmentés avec `xml:space="preserve"`
+   - **NE JAMAIS** fusionner les éléments `<w:t>` dans les headers/footers — les espaces entre les runs sont significatifs
+   - **NE JAMAIS** supprimer `xml:space="preserve"` des éléments `<w:t>`
+   - Si tu utilises docx-js, vérifier que les espaces entre mots dans les en-têtes/pieds de page sont préservés
+   - **Vérification obligatoire** : Après génération, extraire le texte des headers/footers et comparer avec le gabarit original pour détecter tout mot collé
+
+   **CRITIQUE — Énumérations autonomes par section** :
+   Chaque liste numérotée dans le document doit être **autonome** — la numérotation ne doit PAS continuer d'une section à l'autre.
+   - Chaque énumération doit avoir son propre `<w:numId>` distinct dans `word/numbering.xml` ou un `<w:lvlOverride>` avec `<w:startOverride w:val="1"/>` pour redémarrer à 1
+   - **NE JAMAIS** réutiliser le même `<w:numId>` pour des listes de sections différentes
+   - Si tu utilises docx-js : chaque nouvelle liste dans une nouvelle section doit créer une nouvelle instance de numérotation avec restart
+   - **Vérification obligatoire** : Après génération, vérifier que les énumérations de chaque section recommencent correctement
 
 7. **Présenter le résultat** : Sauvegarder le document complété dans le dossier workspace et fournir un lien au format computer:// à l'utilisateur.
 

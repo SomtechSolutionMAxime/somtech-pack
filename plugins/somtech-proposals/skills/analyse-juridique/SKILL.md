@@ -13,11 +13,26 @@ version: 0.1.0
 
 Extraire les clauses d'un contrat cadre PDF fourni par le client, puis les comparer aux clauses mentionnées dans l'offre de services pour détecter les incohérences.
 
+## Détection Automatique du Contrat Cadre
+
+**IMPORTANT** — Toujours scanner le répertoire de travail (workspace) pour détecter un contrat cadre existant avant de demander à l'utilisateur. Les conventions de nommage sont :
+
+- `CONTRAT-CADRE_ET_OFFRE_DE_SERVICES_(CCS)*` (ancien format)
+- `CONTRAT_CADRE*` (nouveau format)
+
+Patterns de recherche :
+```
+Glob: **/CONTRAT-CADRE_ET_OFFRE_DE_SERVICES_(CCS)*
+Glob: **/CONTRAT_CADRE*
+```
+
+Si un fichier est trouvé, l'utiliser automatiquement. Si plusieurs correspondent, demander à l'utilisateur lequel utiliser.
+
 ## Processus d'Analyse
 
 ### Étape 1 : Extraction du Contrat Cadre
 
-1. Lire le PDF du contrat cadre fourni par l'utilisateur (via l'outil Read ou le skill PDF)
+1. Localiser le contrat cadre (détection automatique ou fourni par l'utilisateur via l'outil Read ou le skill PDF)
 2. Identifier et extraire chaque clause juridique significative
 3. Classifier chaque clause par catégorie (voir référence `references/clauses-types.md`)
 4. Produire un résumé structuré des clauses extraites
