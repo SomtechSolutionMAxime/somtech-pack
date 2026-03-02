@@ -1,0 +1,9 @@
+{
+  "name": "somtech-proposals",
+  "version": "0.1.0",
+  "description": "Complétion de cahiers des charges et offres de services selon des gabarits Word, avec vérification de cohérence des clauses juridiques contre le contrat cadre du client.",
+  "author": {
+    "name": "Somtech"
+  },
+  "keywords": ["cahier-des-charges", "offre-de-services", "contrat-cadre", "clauses", "juridique", "gabarit", "docx"]
+}
