@@ -1,0 +1,14 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+          "type": "prompt",
+          "prompt": "Analyser le contenu qui est sur le point d'être écrit ou modifié. Vérifier si le code touche à des données personnelles (PII) au sens de la Loi P-39.1 du Québec.\n\nSignaux de risque à détecter :\n1. Affichage direct de PII sans masquage (art. 10, 20) : {employee.phone}, {profile.address}, {data.birth_date}, {user.personal_email}, {employee.allergies}\n2. PII dans localStorage ou sessionStorage (art. 10)\n3. PII dans des URL params ou query strings (art. 10)\n4. PII dans console.log ou logger (art. 10) — email, phone, name combiné avec d'autres PII\n5. select('*') sur des tables contenant des PII (art. 4, 20) — employees, users, employee_profiles\n6. PII envoyées dans un prompt LLM (art. 4, 10, 17)\n7. Création de colonnes de type TEXT pour stocker des données sensibles (art. 10, 12 al. 2) — allergies, salary, NAS — sans chiffrement\n8. CREATE TABLE ou ALTER TABLE sans ENABLE ROW LEVEL SECURITY (art. 20) quand la table contiendra des PII\n9. Paramètres de partage/visibilité activés par défaut (art. 9.1 — confidentialité par défaut)\n10. Décision automatisée sans mécanisme d'information/recours (art. 12.1)\n\nSi AUCUN signal de risque n'est détecté, approuver silencieusement.\n\nSi un signal de risque EST détecté, afficher un avertissement concis indiquant :\n- Quel type de PII est concerné\n- Quelle protection est manquante (masquage, chiffrement, RLS, etc.)\n- La catégorie Loi 25 (1-Sensible, 2-Personnel, 3-Professionnel)\n- L'article P-39.1 applicable\nPuis demander à l'utilisateur s'il veut continuer.",
+          "timeout": 15
+        }
+      ]
+    }
+  ]
+}

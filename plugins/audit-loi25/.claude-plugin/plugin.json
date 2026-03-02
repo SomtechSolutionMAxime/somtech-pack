@@ -1,0 +1,9 @@
+{
+  "name": "audit-loi25",
+  "version": "0.3.0",
+  "description": "Audit de conformité Loi 25 / P-39.1 (Québec) pour projets Supabase/React/TypeScript — détection des PII, vérification RLS, chiffrement, masquage frontend, logs, gouvernance, incidents, consentement, confidentialité par défaut, décisions automatisées et transferts internationaux. Génération de rapports PDF professionnels livrables au client. Références exactes aux articles P-39.1.",
+  "author": {
+    "name": "Somtech"
+  },
+  "keywords": ["loi-25", "P-39.1", "privacy", "pii", "audit", "quebec", "supabase", "compliance", "renseignements-personnels", "pdf", "rapport"]
+}

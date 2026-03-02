@@ -20,6 +20,7 @@ Ce document est la **source de vérité** sécurité utilisée par le workflow `
 - **Données sensibles** : identifier (PII, finance, credentials, tokens, documents privés).
 - **Scopes** : définir les frontières (ex: tenant / organisation / projet / dossier).
 - **RLS / policies** : toute table exposée doit avoir des politiques claires (select/insert/update/delete).
+- **Renseignements personnels (Loi 25)** : tout traitement de RP doit respecter les règles définies dans [`PROTECTION_DONNEES_LOI25.md`](./PROTECTION_DONNEES_LOI25.md) — classification PII, chiffrement, masquage UI, audit, EFVP et conformité P-39.1.
 
 ## AuthN / AuthZ
 
@@ -42,6 +43,21 @@ Ce document est la **source de vérité** sécurité utilisée par le workflow `
 - Données : ne jamais afficher des champs non autorisés.
 - **Après modif UI** : validation navigateur + console sans erreurs.
 
+## Protection des renseignements personnels (Loi 25)
+
+La conformité à la Loi 25 du Québec (P-39.1) est une obligation légale pour tout projet traitant des renseignements personnels. Le document **[`PROTECTION_DONNEES_LOI25.md`](./PROTECTION_DONNEES_LOI25.md)** détaille les exigences complètes et constitue la source de vérité pour :
+
+- La classification et l’identification des PII dans l’ontologie
+- Le chiffrement des données sensibles (pgcrypto / Supabase Vault)
+- Le masquage obligatoire dans l’interface utilisateur
+- L’audit de toutes les opérations sur les RP
+- La gestion du consentement et des droits des personnes (portabilité, effacement)
+- La réalisation d’une EFVP (Évaluation des facteurs relatifs à la vie privée)
+- La gestion des incidents de confidentialité
+- Les sanctions en cas de non-conformité (jusqu’à 25M$ ou 4% du CA mondial)
+
+Les documents de référence officiels (Loi P-39.1, Guide EFVP de la CAI) sont disponibles dans `security/references/`.
+
 ## Checklist mockmig (à copier dans `02_validation_packet.md`)
 
 - [ ] Rôles identifiés + matrice d’accès (CRUD) par entité
@@ -49,4 +65,8 @@ Ce document est la **source de vérité** sécurité utilisée par le workflow `
 - [ ] Validation entrées (client + serveur)
 - [ ] RLS/policies (si DB exposée) + tests minimaux
 - [ ] Pas de secrets dans les artefacts / logs
+- [ ] PII identifiées et annotées dans l’ontologie (voir `PROTECTION_DONNEES_LOI25.md`)
+- [ ] Chiffrement des colonnes PII critiques
+- [ ] Masquage UI des données sensibles (composant `MaskedField`)
+- [ ] EFVP réalisée si nouveau projet ou refonte majeure
 
