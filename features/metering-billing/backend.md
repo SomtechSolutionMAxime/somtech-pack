@@ -194,4 +194,4 @@ Deux actions disponibles :
 
 Job `pg_cron` qui appelle `collect-usage-metrics` tous les jours à 2h UTC via `pg_net`.
 
-Les secrets (`supabase_url`, `service_role_key`) sont stockés dans le Vault Supabase pour éviter de les hardcoder dans le SQL du cron.
+Les secrets (`supabase_url`, `anon_key`) sont stockés dans le Vault Supabase pour éviter de les hardcoder dans le SQL du cron. On utilise l'`anon_key` (publishable key) plutôt que le `service_role_key` car l'Edge Function crée son propre client interne avec `SUPABASE_SERVICE_ROLE_KEY` (auto-injecté) — le JWT du header `Authorization` sert uniquement à passer la validation d'accès.

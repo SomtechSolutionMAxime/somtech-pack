@@ -54,8 +54,8 @@ Système de métriques de consommation déployé sur chaque application cliente 
 
 - **Base de données** : PostgreSQL (Supabase) — tables, RPC, enum, indexes
 - **Edge Functions** : Deno (Supabase Edge Functions)
-- **Cron** : `pg_cron` + `pg_net` (appel HTTP interne)
-- **Sécurité** : RLS (service_role only), clé API custom (`X-Metering-API-Key`), Vault Supabase
+- **Cron** : `pg_cron` + `pg_net` (appel HTTP interne via `anon_key`)
+- **Sécurité** : RLS (service_role only pour les tables), clé API custom (`X-Metering-API-Key`), Vault Supabase (URL + anon_key)
 - **Helper** : TypeScript (variantes Deno et Node.js)
 
 ## Décisions techniques

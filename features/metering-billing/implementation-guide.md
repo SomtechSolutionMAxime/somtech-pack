@@ -397,8 +397,10 @@ supabase functions deploy get-metering-data
 
 ```sql
 SELECT vault.create_secret('<SUPABASE_URL>', 'supabase_url');
-SELECT vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key');
+SELECT vault.create_secret('<ANON_KEY>', 'anon_key');
 ```
+
+> **Note** : On utilise l'`anon_key` (publishable key) et non le `service_role_key` pour le cron. L'Edge Function crée son propre client interne avec `SUPABASE_SERVICE_ROLE_KEY` (auto-injecté). Le JWT dans le header `Authorization` sert uniquement à passer la validation d'accès — l'`anon_key` suffit.
 
 ### 4.2 Créer le cron job
 
@@ -412,7 +414,7 @@ SELECT cron.schedule(
            || '/functions/v1/collect-usage-metrics',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' ||
-        (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key'),
+        (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'anon_key'),
       'Content-Type', 'application/json'
     ),
     body := '{}'::jsonb
@@ -443,7 +445,7 @@ WHERE jobname = 'collect-usage-metrics-daily';
 - [ ] Edge Functions déployées et fonctionnelles
 - [ ] Clé API `mtr_*` générée
 - [ ] Cron `collect-usage-metrics-daily` actif à 2h UTC
-- [ ] Vault configuré avec `supabase_url` et `service_role_key`
+- [ ] Vault configuré avec `supabase_url` et `anon_key`
 - [ ] Test API `get-metering-data` retourne 200 avec données
 - [ ] Test avec mauvaise clé retourne 401
 
