@@ -32,6 +32,11 @@ Compléter un cahier des charges (CDC) à partir du gabarit Word intégré au pl
    - Extraire les clauses et conditions pour informer la rédaction du CDC
    - S'assurer que le périmètre et les conditions du CDC sont cohérents avec le contrat cadre
 
+   **Référencement du contrat cadre dans le document généré** :
+   - Extraire le titre officiel du contrat cadre depuis le document détecté (page de titre ou en-tête)
+   - Si le titre n'est pas extractible, utiliser le nom du fichier détecté (sans extension)
+   - Dans toutes les sections du cahier des charges qui font référence au contrat cadre, utiliser ce titre exact — NE JAMAIS référencer le nom du gabarit template
+
 4. **Déterminer le mode de travail** : Demander à l'utilisateur s'il souhaite :
    - **Mode interactif** : Répondre aux questions section par section
    - **Mode brief** : Fournir un document ou texte de brief que Claude analysera
