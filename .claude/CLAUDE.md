@@ -242,18 +242,60 @@ Configuration dans `.mcp.json` du projet:
 | `/validate-ui` | Valider console (0 erreur) |
 | `/deploy-metering` | Déployer le système de métriques et facturation (tables, helper, Edge Functions, cron) |
 | `/somtech-pack-maj` | Mettre à jour le projet depuis le somtech-pack (pull avec preview des changements) |
-| `/pousse` | Commit, PR et push migrations Supabase en production |
 | `/end-session` | Documenter automatiquement le travail de la session (CLAUDE.md + CHANGELOG.md) |
 | `/feature-doc-generator` | Générer une documentation technique réutilisable à partir d'une feature existante |
+| `/mcp-builder` | Guide pour créer des serveurs MCP (TypeScript, Python, Supabase Edge) |
+| `/prototype` | Créer un prototype React + Tailwind hébergé sur GitHub Pages |
+| `/webapp-testing` | Toolkit Playwright pour tester des apps web locales |
+| `/playwright-tests` | Générer des tests e2e Playwright (page objects, workflows) |
+| `/speckit` | Générateur de spécifications techniques (constitution, ontologie, architecture) |
+
+### Commandes slash
+
+| Commande | Description |
+|----------|-------------|
+| `/pousse` | Commit, PR et push migrations Supabase en production |
+| `/mockmig` | Workflow de migration maquette (alias commande) |
 
 ---
 
-## Plugins activés
+## Plugins MCP activés
 
 | Plugin | Commandes |
 |--------|-----------|
 | **Supabase** | `/supabase:*` — Opérations DB, migrations, Edge Functions |
 | **Spec-Kit** | `/spec-kit:constitution`, `/spec-kit:specify`, `/spec-kit:plan`, `/spec-kit:tasks`, `/spec-kit:implement`, etc. |
+
+---
+
+## Plugins Cowork disponibles
+
+Plugins installables via le module `plugins` du somtech-pack :
+
+| Plugin | Version | Description |
+|--------|---------|-------------|
+| **audit-loi25** | Voir plugin.json | Audit de conformité Loi 25 / P-39.1 (Québec) pour projets Supabase/React/TypeScript |
+| **somtech-proposals** | Voir plugin.json | Complétion de cahiers des charges et offres de services à partir de gabarits Word |
+| **somtech-silo-manager** | Voir plugin.json | Génération et déploiement de silos applicatifs (architecture multi-tenant) |
+
+---
+
+## Versioning — somtech-pack
+
+Le pack installe un fichier `.somtech-pack/version.json` dans chaque projet :
+
+```json
+{
+  "pack": {
+    "version": "1.0.0",
+    "installedAt": "2026-03-03T...",
+    "modules": ["core", "features"],
+    "source": "https://github.com/SomtechSolutionMAxime/somtech-pack.git"
+  }
+}
+```
+
+Pour mettre à jour : `./scripts/somtech_pack_pull.sh --target .` ou `/somtech-pack-maj`
 
 ---
 
