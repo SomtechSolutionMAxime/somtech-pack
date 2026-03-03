@@ -49,19 +49,41 @@ Configuration réutilisable installée dans chaque projet client via les scripts
 | `.mockmig/` | Scripts et templates du workflow mockmig |
 | `.specify/` | Templates pour spécifications (release notes, etc.) |
 
-## Synchronisation avec les projets clients
+## Installation et synchronisation
 
-### Installer dans un nouveau projet
+### Modules disponibles
+
+Le pack est modulaire. Chaque module est défini dans `pack.json` :
+
+| Module | Par défaut | Contenu |
+|--------|:----------:|---------|
+| **core** | ✓ | `.claude/`, `.cursor/`, `scripts/`, `docs/`, `security/` |
+| **features** | ✓ | `features/` — Blueprints de features réutilisables |
+| **mockmig** | ○ | `.mockmig/`, `.specify/` — Workflow migration maquette → production |
+| **plugins** | ○ | `plugins/` — Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager) |
+
+### Méthode 1 — Installation one-liner (recommandée)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/main/scripts/remote-install.sh | bash -s -- --target .
+curl -fsSL .../remote-install.sh | bash -s -- --target . --modules core,features,mockmig
+```
+
+### Méthode 2 — Installation locale (pack cloné)
 
 ```bash
 ./scripts/install_somtech_pack.sh --target /path/to/project --dry-run
 ./scripts/install_somtech_pack.sh --target /path/to/project
+./scripts/install_somtech_pack.sh --target /path/to/project --modules core,features,plugins
+./scripts/install_somtech_pack.sh --list-modules
 ```
 
-### Pull — mettre à jour un projet depuis le pack
+### Méthode 3 — Mise à jour (pull avec diff)
 
 ```bash
 ./scripts/somtech_pack_pull.sh --target .
+./scripts/somtech_pack_pull.sh --target . --force
+./scripts/somtech_pack_pull.sh --target . --modules core,features
 ```
 
 ### Push — publier des changements depuis un projet vers le pack
@@ -69,6 +91,10 @@ Configuration réutilisable installée dans chaque projet client via les scripts
 ```bash
 ./scripts/somtech_pack_push.sh --message "chore(pack): sync rules/skills"
 ```
+
+### Versioning
+
+Chaque installation crée `.somtech-pack/version.json` dans le projet cible, permettant de détecter la version installée et les mises à jour disponibles. La version du pack est dans `VERSION` à la racine.
 
 ## Conventions
 

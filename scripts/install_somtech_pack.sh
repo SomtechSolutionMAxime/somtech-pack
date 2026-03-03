@@ -1,73 +1,84 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ============================================================
+# install_somtech_pack.sh — v1.0.0
+# Installe le somtech-pack (modulaire) dans un projet cible.
+# ============================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# shellcheck source=lib/somtech_pack_common.sh
+source "${SCRIPT_DIR}/lib/somtech_pack_common.sh"
+
 usage() {
   cat <<'EOF'
-install_somtech_pack.sh — Installe le contenu du repo somtech-pack dans un repo cible (sync non-destructive).
+install_somtech_pack.sh — Installe le somtech-pack dans un projet cible.
 
 Usage:
-  ./scripts/install_somtech_pack.sh --target /path/to/target_repo [options]
+  ./scripts/install_somtech_pack.sh --target /path/to/project [options]
 
 Options:
-  --source       Répertoire source (racine somtech-pack). Défaut: racine du repo contenant ce script.
+  --source       Répertoire source (racine somtech-pack). Défaut: racine du repo.
+  --target       Chemin du projet cible (obligatoire).
+  --modules      Modules à installer, séparés par virgule. Défaut: modules par défaut.
+                 Ex: --modules core,features,mockmig
+  --list-modules Affiche les modules disponibles et quitte.
   --dry-run      Affiche ce qui serait fait, sans écrire.
 
-  --no-rules     N'installe pas `.cursor/rules`.
-  --no-commands  N'installe pas `.cursor/commands`.
-  --no-skills    N'installe pas `.cursor/skills`.
-  --no-docs      N'installe pas `docs/`.
-  --somtech-only Installe uniquement les commandes `somtech.*` dans `.cursor/commands`.
-
-Compat:
-  --no-somtech   Alias de `--no-commands` (compat ancien pack autonome).
-
-Comportement:
-  - Sync **non destructive**: ajoute/écrase depuis la source, ne supprime rien dans le repo cible.
-  - Backups avant overwrite:
-    - `.cursor/rules/*` → `.cursor/_backups/rules/...`
-    - `.cursor/commands/*` → `.cursor/_backups/commands/...`
+Modules disponibles:
+  core       Config Claude Code + Cursor + scripts + docs + sécurité (défaut)
+  features   Blueprints de features réutilisables (défaut)
+  mockmig    Workflow migration maquette → production
+  plugins    Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager)
 
 Exemples:
   ./scripts/install_somtech_pack.sh --target . --dry-run
-  ./scripts/install_somtech_pack.sh --target . --no-docs --somtech-only
+  ./scripts/install_somtech_pack.sh --target . --modules core,features,mockmig
+  ./scripts/install_somtech_pack.sh --list-modules
 EOF
 }
 
+# ── Arguments ─────────────────────────────────────────────────
+
 TARGET=""
 SOURCE=""
+MODULES_CSV=""
 DRY_RUN=0
-DO_RULES=1
-DO_COMMANDS=1
-DO_SKILLS=1
-DO_DOCS=1
-SOMTECH_ONLY=0
+LIST_MODULES=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --source) SOURCE="${2:-}"; shift 2 ;;
-    --target) TARGET="${2:-}"; shift 2 ;;
-    --dry-run) DRY_RUN=1; shift ;;
-    --no-rules) DO_RULES=0; shift ;;
-    --no-commands|--no-somtech) DO_COMMANDS=0; shift ;;
-    --no-skills) DO_SKILLS=0; shift ;;
-    --no-docs) DO_DOCS=0; shift ;;
-    --somtech-only) SOMTECH_ONLY=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --source)       SOURCE="${2:-}"; shift 2 ;;
+    --target)       TARGET="${2:-}"; shift 2 ;;
+    --modules)      MODULES_CSV="${2:-}"; shift 2 ;;
+    --list-modules) LIST_MODULES=1; shift ;;
+    --dry-run)      DRY_RUN=1; shift ;;
+    -h|--help)      usage; exit 0 ;;
     *) echo "Argument inconnu: $1" >&2; usage; exit 2 ;;
   esac
 done
 
-if [[ -z "${TARGET}" ]]; then
+SOURCE="${SOURCE:-$DEFAULT_SOURCE}"
+
+if [[ "$LIST_MODULES" == "1" ]]; then
+  list_modules "$SOURCE"
+  exit 0
+fi
+
+if [[ -z "$TARGET" ]]; then
   echo "Erreur: --target est requis." >&2
   usage
   exit 2
 fi
 
+# ── Fonctions utilitaires ─────────────────────────────────────
+
 ts() { date +"%Y%m%d%H%M%S"; }
-log() { echo "[install_somtech_pack] $*"; }
 
 run() {
-  if [[ "${DRY_RUN}" == "1" ]]; then
+  if [[ "$DRY_RUN" == "1" ]]; then
     log "DRY-RUN: $*"
   else
     eval "$@"
@@ -82,59 +93,35 @@ ensure_dir() {
 
 backup_if_exists() {
   local f="$1"
-  if [[ -f "$f" ]]; then
-    # By default, backups are created next to the file. For Cursor rules/commands,
-    # store backups under `.cursor/_backups/{rules,commands}` to reduce noise.
-    # NOTE: We never delete backups (keep all).
-    local rel="${f#${TARGET}/}"
-    local category=""
+  [[ -f "$f" ]] || return 0
 
-    if [[ "$rel" == ".cursor/rules/"* ]]; then
-      category="rules"
-    elif [[ "$rel" == ".cursor/commands/"* ]]; then
-      category="commands"
-    fi
+  local rel="${f#${TARGET}/}"
+  local category=""
 
-    if [[ -n "$category" ]]; then
-      # Preserve relative path under rules/commands to avoid collisions if subdirs appear later.
-      local rel_under="${rel#".cursor/${category}/"}"
-      local backup_dir="${TARGET}/.cursor/_backups/${category}/$(dirname "$rel_under")"
-      ensure_dir "$backup_dir"
-      local b="${backup_dir}/$(basename "$f").bak-$(ts)"
-      run "cp \"${f}\" \"${b}\""
-    else
-      local b="${f}.bak-$(ts)"
-      run "cp \"${f}\" \"${b}\""
-    fi
+  if [[ "$rel" == ".cursor/rules/"* ]]; then
+    category="rules"
+  elif [[ "$rel" == ".cursor/commands/"* ]]; then
+    category="commands"
   fi
-}
 
-write_file() {
-  local dst="$1"
-  local content="$2"
-  ensure_dir "$(dirname "$dst")"
-  backup_if_exists "$dst"
-  if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY-RUN: write ${dst} (len=${#content})"
+  if [[ -n "$category" ]]; then
+    local rel_under="${rel#".cursor/${category}/"}"
+    local backup_dir="${TARGET}/.cursor/_backups/${category}/$(dirname "$rel_under")"
+    ensure_dir "$backup_dir"
+    local b="${backup_dir}/$(basename "$f").bak-$(ts)"
+    run "cp \"${f}\" \"${b}\""
   else
-    printf "%s" "$content" > "$dst"
+    local b="${f}.bak-$(ts)"
+    run "cp \"${f}\" \"${b}\""
   fi
 }
-#
-# Sync depuis une source (racine somtech-pack) — 100% du contenu pack (non destructive).
-#
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SOURCE="${SOURCE:-$DEFAULT_SOURCE}"
 
 copy_file_with_backup() {
   local src="$1"
   local dst="$2"
-
   ensure_dir "$(dirname "$dst")"
   backup_if_exists "$dst"
-
-  if [[ "${DRY_RUN}" == "1" ]]; then
+  if [[ "$DRY_RUN" == "1" ]]; then
     log "DRY-RUN: cp \"${src}\" \"${dst}\""
   else
     cp "$src" "$dst"
@@ -142,590 +129,130 @@ copy_file_with_backup() {
 }
 
 copy_tree() {
-  # copy_tree <relative_source_dir> <absolute_target_dir> [optional_rel_filter_regex]
+  # copy_tree <relative_source_dir> <absolute_target_dir>
   local from_rel="$1"
   local to_abs="$2"
-  local filter_re="${3:-}"
 
   local src_root="${SOURCE}/${from_rel}"
   [[ -d "$src_root" ]] || return 0
 
   while IFS= read -r f; do
     local rel="${f#${src_root}/}"
-    if [[ -n "$filter_re" ]]; then
-      echo "$rel" | grep -Eq "$filter_re" || continue
-    fi
     copy_file_with_backup "$f" "${to_abs}/${rel}"
-  done < <(find "$src_root" -type f ! -name '*.bak-*' ! -name '* 2.md' -print)
+  done < <(find "$src_root" -type f \
+    ! -name '*.bak-*' \
+    ! -name '* 2.md' \
+    ! -name '.DS_Store' \
+    ! -name '*.zip' \
+    -print)
 }
 
-sync_from_source() {
-  log "Source: ${SOURCE}"
+# ── Résolution des modules ────────────────────────────────────
+
+resolve_modules() {
+  if [[ -n "$MODULES_CSV" ]]; then
+    echo "$MODULES_CSV"
+  else
+    # Modules par défaut depuis pack.json (ou fallback hardcodé)
+    local defaults
+    defaults="$(get_default_modules "$SOURCE" | tr '\n' ',' | sed 's/,$//')"
+    echo "${defaults:-core,features}"
+  fi
+}
+
+path_in_modules() {
+  # Vérifie si un chemin relatif fait partie des modules sélectionnés
+  local path="$1"
+  local modules="$2"
+
+  local IFS=','
+  for mod in $modules; do
+    mod="$(echo "$mod" | tr -d '[:space:]')"
+    while IFS= read -r mod_path; do
+      [[ -z "$mod_path" ]] && continue
+      # Match si le chemin commence par le path du module
+      if [[ "$path/" == "$mod_path"* ]] || [[ "$path" == "$mod_path"* ]]; then
+        return 0
+      fi
+    done < <(get_module_paths "$SOURCE" "$mod")
+  done
+  return 1
+}
+
+# ── Installation ──────────────────────────────────────────────
+
+install_pack() {
+  local modules
+  modules="$(resolve_modules)"
+  local version
+  version="$(get_pack_version "$SOURCE")"
+
+  log "somtech-pack v${version}"
+  log "Source  : ${SOURCE}"
+  log "Cible   : ${TARGET}"
+  log "Modules : ${modules}"
+  [[ "$DRY_RUN" == "1" ]] && log "Mode DRY-RUN activé"
+  echo ""
 
   # Structure modulaire minimale si absente
-  if [[ -d "${TARGET}/modules/_template" ]]; then
-    log "modules/_template existe déjà -> pas de création de structure modulaire."
-  else
-    log "Création structure modulaire minimale (template)…"
+  if ! [[ -d "${TARGET}/modules/_template" ]]; then
+    log "Création structure modulaire minimale…"
     ensure_dir "${TARGET}/modules/_template/prd"
     ensure_dir "${TARGET}/modules/_template/tests"
     ensure_dir "${TARGET}/modules/_shared"
   fi
 
-  # Toujours préparer .cursor + backups
-  ensure_dir "${TARGET}/.cursor"
+  # Copier chaque path de chaque module sélectionné
+  local IFS=','
+  for mod in $modules; do
+    mod="$(echo "$mod" | tr -d '[:space:]')"
+    log "── Module: ${mod} ──"
+
+    while IFS= read -r mod_path; do
+      [[ -z "$mod_path" ]] && continue
+
+      # Retirer le trailing slash pour uniformiser
+      mod_path="${mod_path%/}"
+
+      if [[ -d "${SOURCE}/${mod_path}" ]]; then
+        # C'est un dossier → copier l'arbre
+        log "  📁 ${mod_path}/"
+        copy_tree "$mod_path" "${TARGET}/${mod_path}"
+      elif [[ -f "${SOURCE}/${mod_path}" ]]; then
+        # C'est un fichier unique
+        log "  📄 ${mod_path}"
+        copy_file_with_backup "${SOURCE}/${mod_path}" "${TARGET}/${mod_path}"
+      else
+        log "  ⚠️  ${mod_path} introuvable dans la source"
+      fi
+    done < <(get_module_paths "$SOURCE" "$mod")
+  done
+
+  # Préparer le dossier backups Cursor
   ensure_dir "${TARGET}/.cursor/_backups"
 
-  if [[ "${DO_RULES}" == "1" ]]; then
-    copy_tree ".cursor/rules" "${TARGET}/.cursor/rules"
-  fi
-
-  if [[ "${DO_COMMANDS}" == "1" ]]; then
-    if [[ "${SOMTECH_ONLY}" == "1" ]]; then
-      copy_tree ".cursor/commands" "${TARGET}/.cursor/commands" '^somtech\..*\.md$'
-    else
-      copy_tree ".cursor/commands" "${TARGET}/.cursor/commands"
-    fi
-  fi
-
-  if [[ "${DO_SKILLS}" == "1" ]]; then
-    copy_tree ".cursor/skills" "${TARGET}/.cursor/skills"
-  fi
-
-  # Toujours copier generic (placeholders, etc.) si présent
-  copy_tree ".cursor/generic" "${TARGET}/.cursor/generic"
-
-  if [[ "${DO_DOCS}" == "1" ]]; then
-    copy_tree "docs" "${TARGET}/docs"
-  fi
-
-  # .claude/ — skills, agents, templates, CLAUDE.md (Claude Code)
-  copy_tree ".claude" "${TARGET}/.claude"
-
-  # features/ — blueprints réutilisables de features
-  copy_tree "features" "${TARGET}/features"
-
-  # Toujours: scripts + .specify + README.md (si présents)
-  copy_tree "scripts" "${TARGET}/scripts"
-  copy_tree ".specify" "${TARGET}/.specify"
-  if [[ -f "${SOURCE}/README.md" ]]; then
-    copy_file_with_backup "${SOURCE}/README.md" "${TARGET}/README.md"
-  fi
-}
-
-
-#
-# Pack autonome
-#  - Les contenus sont embarqués ci-dessous (heredocs).
-#  - Les placeholders ({{...}}) sont documentés dans .cursor/generic/PLACEHOLDERS.md
-#
-
-# -----------------------
-# Structure minimale module
-# -----------------------
-create_min_module_structure_if_missing() {
-  # Ne crée que le minimum demandé (template).
-  ensure_dir "${TARGET}/modules/_template"
-  ensure_dir "${TARGET}/modules/_template/prd"
-  ensure_dir "${TARGET}/modules/_template/tests"
-  ensure_dir "${TARGET}/modules/_shared"
-}
-
-write_placeholders_doc() {
-  local dst="${TARGET}/.cursor/generic/PLACEHOLDERS.md"
-  local content
-  content=$(
-    cat <<'EOF'
-# Placeholders — Somtech pack
-
-Ces placeholders peuvent apparaître dans les règles/commandes installées.
-
-- `{{PROJECT_NAME}}` : nom du projet
-- `{{DEV_SERVER_URL}}` : URL de dev (ex: `http://localhost:5173`)
-- `{{MCP_SUPABASE_TOOL_PREFIX}}` : préfixe des outils MCP Supabase du projet (si utilisés)
-- `{{MCP_SUPABASE_DEPLOY_EDGE_FUNCTION_TOOL}}` : nom complet de l’outil MCP pour déployer les Edge Functions (si utilisées)
-- `{{MCP_RAILWAY_TOOL_PREFIX}}` : préfixe des outils MCP Railway (si utilisés)
-
-À faire dans le projet cible:
-- Remplacer ces valeurs (ou documenter où trouver les noms exacts des outils MCP).
-EOF
-  )
-  write_file "$dst" "$content"
-}
-
-content_rule_00_orchestrator() {
-  cat <<'EOF'
----
-alwaysApply: true
----
-# Agent : Orchestrateur
-
-## Mission
-Analyser chaque demande utilisateur, identifier l'intention, choisir **un seul agent** et la **commande** appropriée.
-Toujours appliquer `Charte_de_conception.mdc` si elle existe.
-
-## Règles d'or
-1) Lire et appliquer `Charte_de_conception.mdc` si présente.  
-2) Sélectionner **un seul** agent + commande.  
-3) Si ambiguïté forte → poser 1 question max.  
-4) Respecter `00-git-main-protection.mdc` (jamais de push direct sur `main`).  
-5) Après modif impactant UI/Back/DB/Docs → exécuter (si applicable) :
-   - `Docs Maintainer :: *lint-docs`
-   - `Gouvernance Produit :: *validate-prd`
-
-## Validation UI (obligatoire)
-Après toute modification UI :
-- Utiliser le navigateur intégré MCP Playwright (`mcp_playwright_*`)
-- Interagir avec la page modifiée
-- Capturer les logs console (`mcp_playwright_playwright_console_logs` type: "error")
-- Objectif : **0 erreur console**
-
-## Base de données (si Supabase)
-- Adopter une stratégie cohérente (ce pack est orienté **déclaratif** via `supabase/schemas/`).
-- Les outils MCP (si disponibles) sont référencés via placeholders :
-  - `{{MCP_SUPABASE_TOOL_PREFIX}}...`
-  - `{{MCP_SUPABASE_DEPLOY_EDGE_FUNCTION_TOOL}}`
-
-## Structure modulaire
-Référence : `.cursor/rules/00-module-structure.mdc`
-EOF
-}
-
-content_rule_00_git_main_protection() {
-  cat <<'EOF'
----
-alwaysApply: true
----
-# Protection de la branche main
-
-## Règle: ne jamais pousser sur `main`, toujours passer par une PR
-
-- **Interdit**: tout push direct sur `main` (local ou distant), y compris `git push`, `git push origin main`, `gh pr merge`, `gh release create` sans PR.
-- **Obligatoire**: travailler sur une branche dédiée (ex. `feat/*`, `fix/*`, `chore/*`), ouvrir une Pull Request vers `main`, laisser la CI et la revue valider avant merge.
-
-## Bonnes pratiques
-- Créer une branche descriptive avant de commencer.
-- Ouvrir une PR tôt pour bénéficier des retours et de la CI.
-- Préférer le merge via PR (squash ou rebase selon conventions) après approbation.
-EOF
-}
-
-content_rule_00_module_structure() {
-  cat <<'EOF'
----
-alwaysApply: true
----
-# Architecture modulaire du projet (générique)
-
-## Principe
-Le projet est organisé en **modules métier indépendants**, chacun avec son code, sa doc PRD et ses tests.
-
-## Structure recommandée
-```
-modules/
-  {module}/
-    mcp/              ← Serveur MCP (si applicable)
-    prd/
-      {module}.md
-    tests/
-      unit/
-      e2e/
-  _template/
-    mcp/
-    prd/
-    tests/
-  _shared/
-```
-
-## Documentation & traçabilité
-- PRD module : `modules/{module}/prd/{module}.md`
-- Tests module : `modules/{module}/tests/`
-- Tests UI globaux (si UI) : `tests/ui/`
-- Mapping obligatoire : PRD ↔ code ↔ tests
-- Changelog : dans le PRD module (date + résumé)
-EOF
-}
-
-content_rule_04_dev_frontend() {
-  cat <<'EOF'
----
-description: "Agent Dev Frontend — UI, validations client, tests, performance"
-alwaysApply: false
----
-# Agent : Développeur Frontend
-
-## Persona
-- UI fiable, accessible, maintenable
-- Gère états: loading/vide/erreur/succès
-- Respecte `Charte_de_conception.mdc` (i18n, tokens, formats)
-
-## Structure
-- UI : `src/pages/`, `src/components/`
-- Tests UI globaux : `tests/ui/`
-- Tests module : `modules/{module}/tests/`
-
-## DoD (Front)
-- Accessibilité OK, responsive, erreurs gérées proprement
-- Après modif UI : validation navigateur MCP Playwright + console = 0 erreur
-EOF
-}
-
-content_rule_05_dev_backend() {
-  cat <<'EOF'
----
-description: "Agent Dev Backend — API, logique métier, migrations, sécurité"
-alwaysApply: false
----
-# Agent : Développeur Backend
-
-## Persona
-- Contract-first, idempotent, traçable
-- Validation stricte des entrées; erreurs explicites
-- Aucun secret en logs
-
-## Structure
-- DB (Supabase) : `supabase/schemas/` (déclaratif) + `supabase/migrations/` (générées)
-- Tests module : `modules/{module}/tests/`
-- PRD module : `modules/{module}/prd/{module}.md` (RLS, index, data model)
-
-## Règles DB (si Supabase)
-- Cette base est orientée **déclaratif** : on modifie `supabase/schemas/` puis on génère les migrations.
-- RLS obligatoire sur les tables exposées.
-- Si outils MCP disponibles : utiliser `{{MCP_SUPABASE_TOOL_PREFIX}}...` et `{{MCP_SUPABASE_DEPLOY_EDGE_FUNCTION_TOOL}}`.
-EOF
-}
-
-content_rule_08_devops() {
-  cat <<'EOF'
----
-description: "Agent DevOps — Docker, CI/CD, déploiement, secrets, observabilité"
-alwaysApply: false
----
-# Agent : DevOps
-
-## Persona
-- Build & déploiement sûrs, reproductibles
-- Images minimalistes, non-root; secrets externalisés; rollback documenté
-
-## Structure modulaire
-- Template module : `modules/_template/`
-- MCP (si applicable) : `supabase/functions/*-mcp/`
-
-## Déploiement (placeholders)
-- Railway (si utilisé) : outils `{{MCP_RAILWAY_TOOL_PREFIX}}...`
-- Supabase Edge Functions (si utilisées) : `{{MCP_SUPABASE_DEPLOY_EDGE_FUNCTION_TOOL}}`
-EOF
-}
-
-content_rule_09_gouvernance_produit() {
-  cat <<'EOF'
----
-alwaysApply: false
-description: Agent de gouvernance produit — MAJ PRD, cohérence code/tests, traçabilité
----
-### Gouvernance PRD (générique)
-
-#### Règle
-- Toute modification produit doit être reflétée dans la doc :
-  - PRD module : `modules/{module}/prd/{module}.md`
-  - PRD maître (si présent) : `docs/PRD.md`
-- Mettre à jour : user stories, règles métier, G/W/T, flux, data model, API/contrats, mapping code↔tests, changelog.
-
-#### Formats
-- Critères d’acceptation : « Étant donné … Quand … Alors … »
-- Changelog : `YYYY-MM-DD` puis listes Ajout/Modification/Suppression
-EOF
-}
-
-content_rule_10_docs_maintainer() {
-  cat <<'EOF'
----
-description: "Agent Docs Maintainer — lint docs, mapping PRD↔code↔tests, changelogs"
-alwaysApply: false
----
-# Agent : Docs Maintainer
-
-## Mission
-- Garantir la cohérence doc (PRD maître + modules)
-- Maintenir mapping PRD↔code↔tests
-
-## DoD
-- Lint docs OK (si script présent)
-- Changelogs à jour
-- PRD module à jour pour chaque module impacté
-EOF
-}
-
-content_rule_browser_validation_strategy() {
-  cat <<'EOF'
----
-alwaysApply: true
-description: Stratégie de validation UI (navigateur MCP) vs tests automatisés
----
-# Stratégie de validation navigateur et tests
-
-## Obligatoire après toute modif UI
-- Naviguer vers la page modifiée via MCP Playwright
-- Interagir (clics/champs)
-- Capturer la console : `mcp_playwright_playwright_console_logs` type `error`
-- Objectif : **0 erreur console**
-
-## Tests automatisés (optionnel)
-- Réservés aux parcours critiques / non-régression (ex: `tests/ui/`)
-EOF
-}
-
-content_rule_ui_browser_interactive() {
-  cat <<'EOF'
----
-description: Outils du navigateur intégré (MCP Playwright) — mémo d’usage
-alwaysApply: false
----
-# Navigateur intégré — mémo MCP Playwright
-
-Outils courants :
-- `mcp_playwright_playwright_navigate`
-- `mcp_playwright_playwright_click`
-- `mcp_playwright_playwright_fill`
-- `mcp_playwright_playwright_screenshot`
-- `mcp_playwright_playwright_console_logs` (type: `error`)
-
-Workflow recommandé :
-1) navigate → 2) interactions → 3) console_logs(type:error) → 4) screenshot
-EOF
-}
-
-content_rule_declarative_database_schema() {
-  cat <<'EOF'
----
-description: Gestion DB Supabase — approche déclarative
-alwaysApply: false
----
-# Database — Schema déclaratif (Supabase)
-
-## Principe
-- Les changements de schéma se font dans `supabase/schemas/*.sql` (état final)
-- Les migrations (`supabase/migrations/`) sont générées à partir du diff
-
-## Règles
-- Éviter le drift : pas de modifications manuelles non tracées
-- Conserver les fichiers schemas lisibles (ordre stable, noms explicites)
-- RLS et index documentés dans le PRD du module concerné
-EOF
-}
-
-content_rule_create_rls_policies() {
-  cat <<'EOF'
----
-description: RLS — règles de base (Supabase/Postgres)
-alwaysApply: false
----
-# Database — Create RLS policies (résumé)
-
-## Principes
-- Activer RLS sur les tables exposées
-- Politiques explicites par action (select/insert/update/delete)
-- Utiliser `auth.uid()` pour l’utilisateur courant
-- Documenter les invariants dans le PRD du module
-EOF
-}
-
-content_rule_supabase_sql_style() {
-  cat <<'EOF'
----
-description: Guide de style SQL Postgres (résumé)
-alwaysApply: false
----
-# Postgres SQL Style Guide (résumé)
-
-- Keywords SQL en minuscules (`select`, `from`, `where`)
-- Nommage en `snake_case`
-- Tables au pluriel, colonnes au singulier
-- Ajouter des index cohérents avec les requêtes
-EOF
-}
-
-content_rule_supabase_mcp() {
-  cat <<'EOF'
----
-description: MCP Supabase (générique) — placeholders
-alwaysApply: false
----
-# MCP Supabase — règles d’usage (générique)
-
-Si des outils MCP Supabase sont configurés dans le projet :
-- Préfixe : `{{MCP_SUPABASE_TOOL_PREFIX}}...`
-- Déploiement Edge Functions : `{{MCP_SUPABASE_DEPLOY_EDGE_FUNCTION_TOOL}}`
-
-Règles :
-- DDL via migrations (générées) / outillage contrôlé
-- DML/inspection via outil dédié
-- Revue security/perf après changements sensibles
-EOF
-}
-
-content_command_somtech_deploy() {
-  cat <<'EOF'
-# Livraison Somtech (générique)
-
-Objectif : commit → push branche → PR vers `main` (jamais de push direct sur main), PRD module à jour, release notes.
-
-## Pré-vol
-- `git status`, `git diff`, `git diff --staged`
-- Vérifier absence de secrets
-
-## Qualité (recommandé)
-- `npm run lint` / `npm run typecheck` / `npm run build` (si applicable)
-- `npm run lint:docs` (si applicable)
-- (si UI) validation navigateur MCP Playwright + console=0 erreur
-
-## PR
-- Ouvrir une PR vers `main`
-- Mentionner les modules impactés + liens vers `modules/<module>/prd/<module>.md`
-
-## Release notes
-- Créer : `<numero_pr>.<nom_pr>.releasenotes.md`
-- Déposer dans : `modules/<module>/releasenotes/` (si structure modulaire)
-EOF
-}
-
-content_command_somtech_diagnostic() {
-  cat <<'EOF'
-# Assistant Diagnostic d'Erreurs (générique)
-
-But : analyser méthodiquement une erreur console/log pour identifier la cause racine.
-
-Format de sortie attendu :
-## CAUSE RACINE PROBABLE
-- Hypothèse principale
-- Niveau de confiance
-- Preuves
-- Points à vérifier
-- Facteurs de confusion possibles
-EOF
-}
-
-content_command_somtech_polish() {
-  cat <<'EOF'
-# Polish UI/UX (générique)
-
-Objectif : améliorer cohérence visuelle, accessibilité, états UI.
-
-Checklist rapide :
-- Hiérarchie typographique
-- Espacements (4/8px)
-- Contraste WCAG AA
-- États hover/focus/disabled
-- Navigation clavier
-
-Validation obligatoire :
-- Navigateur MCP Playwright
-- `console_logs` type `error` → 0 erreur
-EOF
-}
-
-content_command_somtech_ontologie() {
-  cat <<'EOF'
-# Reconstruction ontologique orientée agents (générique)
-
-But : analyser un système existant (code, DB, PRD) et produire une ontologie reconstruite, orientée agents.
-
-Livrables attendus (fichiers) :
-1) `/ontologie/01_ontologie.md`
-2) `/ontologie/02_ontologie.yaml`
-3) `/ontologie/03_incoherences.md`
-4) `/ontologie/04_diagnostic.md`
-
-Règle : se baser sur ce que le système fait réellement; proposer améliorations dans le diagnostic final.
-EOF
-}
-
-install_rules() {
-  log "Install rule: 00_orchestrator.mdc"
-  write_file "${TARGET}/.cursor/rules/00_orchestrator.mdc" "$(content_rule_00_orchestrator)"
-
-  log "Install rule: 00-git-main-protection.mdc"
-  write_file "${TARGET}/.cursor/rules/00-git-main-protection.mdc" "$(content_rule_00_git_main_protection)"
-
-  log "Install rule: 00-module-structure.mdc"
-  write_file "${TARGET}/.cursor/rules/00-module-structure.mdc" "$(content_rule_00_module_structure)"
-
-  log "Install rule: 04_dev_frontend.mdc"
-  write_file "${TARGET}/.cursor/rules/04_dev_frontend.mdc" "$(content_rule_04_dev_frontend)"
-
-  log "Install rule: 05_dev_backend.mdc"
-  write_file "${TARGET}/.cursor/rules/05_dev_backend.mdc" "$(content_rule_05_dev_backend)"
-
-  log "Install rule: 08_devOps.mdc"
-  write_file "${TARGET}/.cursor/rules/08_devOps.mdc" "$(content_rule_08_devops)"
-
-  log "Install rule: 09_Gouvernance_Produit.mdc"
-  write_file "${TARGET}/.cursor/rules/09_Gouvernance_Produit.mdc" "$(content_rule_09_gouvernance_produit)"
-
-  log "Install rule: 10_docs_maintainer.mdc"
-  write_file "${TARGET}/.cursor/rules/10_docs_maintainer.mdc" "$(content_rule_10_docs_maintainer)"
-
-  log "Install rule: browser-validation-strategy.mdc"
-  write_file "${TARGET}/.cursor/rules/browser-validation-strategy.mdc" "$(content_rule_browser_validation_strategy)"
-
-  log "Install rule: ui-browser-interactive.mdc"
-  write_file "${TARGET}/.cursor/rules/ui-browser-interactive.mdc" "$(content_rule_ui_browser_interactive)"
-
-  log "Install rule: declarative-database-schema.mdc"
-  write_file "${TARGET}/.cursor/rules/declarative-database-schema.mdc" "$(content_rule_declarative_database_schema)"
-
-  log "Install rule: create-rls-policies.mdc"
-  write_file "${TARGET}/.cursor/rules/create-rls-policies.mdc" "$(content_rule_create_rls_policies)"
-
-  log "Install rule: supabaseprojetct.mdc"
-  write_file "${TARGET}/.cursor/rules/supabaseprojetct.mdc" "$(content_rule_supabase_sql_style)"
-
-  log "Install rule: supabase-mcp.mdc"
-  write_file "${TARGET}/.cursor/rules/supabase-mcp.mdc" "$(content_rule_supabase_mcp)"
-}
-
-install_somtech_commands() {
-  log "Install command: somtech.deploy.md"
-  write_file "${TARGET}/.cursor/commands/somtech.deploy.md" "$(content_command_somtech_deploy)"
-
-  log "Install command: somtech.diagnostic.md"
-  write_file "${TARGET}/.cursor/commands/somtech.diagnostic.md" "$(content_command_somtech_diagnostic)"
-
-  log "Install command: somtech.polish.md"
-  write_file "${TARGET}/.cursor/commands/somtech.polish.md" "$(content_command_somtech_polish)"
-
-  log "Install command: somtech.ontologie.créer.md"
-  write_file "${TARGET}/.cursor/commands/somtech.ontologie.créer.md" "$(content_command_somtech_ontologie)"
-}
-
-main() {
-  # Nouveau comportement: sync depuis SOURCE (pack repo) pour installer 100% du contenu.
-  # Le mode "pack autonome" (heredocs) est conservé plus bas pour compat, mais n'est plus utilisé.
-  sync_from_source
-  log "Terminé."
-  return 0
-
-  # 1) modules/ : ne fait rien si le template existe déjà, sinon crée le minimum.
-  if [[ -d "${TARGET}/modules/_template" ]]; then
-    log "modules/_template existe déjà -> pas de création de structure modulaire."
+  # Écrire la version installée
+  if [[ "$DRY_RUN" == "0" ]]; then
+    write_version_json "$TARGET" "$version" "$modules" "$(
+      if command -v jq &>/dev/null && [[ -f "$SOURCE/pack.json" ]]; then
+        jq -r '.repository // "unknown"' "$SOURCE/pack.json"
+      else
+        echo "https://github.com/SomtechSolutionMAxime/somtech-pack.git"
+      fi
+    )"
   else
-    log "Création structure modulaire minimale (template)…"
-    create_min_module_structure_if_missing
+    log "DRY-RUN: écriture .somtech-pack/version.json (v${version})"
   fi
 
-  # 2) .cursor/ : dossiers nécessaires
-  ensure_dir "${TARGET}/.cursor/rules"
-  ensure_dir "${TARGET}/.cursor/commands"
-  ensure_dir "${TARGET}/.cursor/generic"
+  echo ""
+  log "Installation terminée."
 
-  # 3) Cursor : backup + overwrite si existant
-  write_placeholders_doc
-  if [[ "${DO_RULES}" == "1" ]]; then install_rules; fi
-  if [[ "${DO_SOMTECH}" == "1" ]]; then install_somtech_commands; fi
-
-  log "Terminé."
+  # Rappel post-install
+  echo ""
+  echo "  📝 Prochaines étapes :"
+  echo "     1. Personnaliser .claude/CLAUDE.md (sources de vérité, stack)"
+  echo "     2. Remplacer les placeholders {{...}} dans .cursor/rules/"
+  echo "     3. git add .claude/ .cursor/ features/ scripts/ && git commit -m 'chore: bootstrap somtech-pack'"
 }
 
-main
-
-
+install_pack
