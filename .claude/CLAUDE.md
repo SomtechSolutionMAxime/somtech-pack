@@ -35,6 +35,35 @@ Avant toute modification de code, consulte **obligatoirement** :
 - Branches : `feat/*`, `fix/*`, `chore/*`, `proto/*`
 - Commits : `type(scope): description`
 
+### Git Worktrees
+
+Quand on demande un nouveau worktree :
+
+1. **Nommage** : `{nom-du-repo}-{nom-de-la-feature}`
+   - Exemple : si le repo est `maquettev4` et la feature est `auth-flow`, le worktree sera `maquettev4-auth-flow`
+
+2. **Emplacement** : Au même niveau que le repo (dans le répertoire parent)
+   - Si le repo est dans `/path/to/maquettev4`, le worktree sera dans `/path/to/maquettev4-auth-flow`
+
+3. **Commande** :
+```bash
+# Depuis le repo principal
+git worktree add ../$(basename $(pwd))-<feature-name> -b feat/<feature-name>
+
+# Exemple concret
+git worktree add ../maquettev4-auth-flow -b feat/auth-flow
+```
+
+4. **Lister les worktrees** :
+```bash
+git worktree list
+```
+
+5. **Supprimer un worktree** :
+```bash
+git worktree remove ../nom-du-worktree
+```
+
 ### Validation UI (OBLIGATOIRE)
 Après toute modification UI :
 1. Vérifier visuellement l'interface
@@ -213,6 +242,9 @@ Configuration dans `.mcp.json` du projet:
 | `/validate-ui` | Valider console (0 erreur) |
 | `/deploy-metering` | Déployer le système de métriques et facturation (tables, helper, Edge Functions, cron) |
 | `/somtech-pack-maj` | Mettre à jour le projet depuis le somtech-pack (pull avec preview des changements) |
+| `/pousse` | Commit, PR et push migrations Supabase en production |
+| `/end-session` | Documenter automatiquement le travail de la session (CLAUDE.md + CHANGELOG.md) |
+| `/feature-doc-generator` | Générer une documentation technique réutilisable à partir d'une feature existante |
 
 ---
 
