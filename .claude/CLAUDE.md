@@ -211,6 +211,8 @@ Configuration dans `.mcp.json` du projet:
 | `/create-migration` | Créer une migration Supabase avec RLS |
 | `/audit-rls` | Auditer les policies RLS |
 | `/validate-ui` | Valider console (0 erreur) |
+| `/deploy-metering` | Déployer le système de métriques et facturation (tables, helper, Edge Functions, cron) |
+| `/somtech-pack-maj` | Mettre à jour le projet depuis le somtech-pack (pull avec preview des changements) |
 
 ---
 
