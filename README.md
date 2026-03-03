@@ -1,80 +1,121 @@
 # somtech-pack
 
-Pack de démarrage Somtech pour projets modulaires.
+> v1.0.0
 
-## Contenu
-- `.cursor/rules/` : règles Cursor
-- `.cursor/commands/` : commandes Cursor (Somtech + autres si présentes)
-- `.cursor/skills/` : Agent Skills Cursor (réutilisables dans différents projets)
-- `docs/chatwindow/` : documentation générique “ChatWindow + widgets” (réutilisable)
-- `scripts/install_somtech_pack.sh` : script d’installation (backup + overwrite)
+Pack de configuration et marketplace de plugins Somtech pour **Claude Code** et **Cursor**. Fournit skills, agents, commandes, plugins Cowork et blueprints de features réutilisables dans tous les projets clients.
 
-## Synchronisation (pull/push)
+## Installation rapide
+
+```bash
+# Installation one-liner (depuis n'importe quel projet)
+curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/main/scripts/remote-install.sh | bash -s -- --target .
+
+# Installation locale (si le pack est cloné)
+./scripts/install_somtech_pack.sh --target /path/to/project
+```
+
+## Contenu du pack
+
+### 1. Plugins Cowork (`plugins/`)
+
+| Plugin | Version | Description |
+|--------|---------|-------------|
+| **audit-loi25** | v0.4.0 | Audit de conformité Loi 25 / P-39.1 (Québec) avec génération de rapports PDF |
+| **somtech-proposals** | v0.2.0 | Complétion de contrats cadres, cahiers des charges et offres de services |
+| **somtech-silo-manager** | v1.0.0 | Génération et déploiement de silos applicatifs (architecture multi-tenant) |
+
+Chaque plugin inclut un `.zip` versionné prêt à installer dans Claude Cowork.
+
+### 2. Configuration Claude Code (`.claude/`)
+
+| Composant | Contenu |
+|-----------|---------|
+| **Skills** (15) | audit-rls, create-migration, deploy-metering, end-session, feature-doc-generator, git-module, mcp-builder, mockmig, playwright-tests, prototype, scaffold-component, somtech-pack-maj, speckit, validate-ui, webapp-testing |
+| **Agents** (7) | backend, database, design, devops, frontend, product, qa |
+| **Commandes** | mockmig, pousse |
+| **Templates** | Bootstrap pour ontologie, constitution, architecture sécurité |
+
+### 3. Configuration Cursor (`.cursor/`)
+
+| Composant | Contenu |
+|-----------|---------|
+| **Commandes** | mockmig, speckit, somtech-pack (sync/deploy/diagnostic), polish, refactoring |
+| **Skills** | git-commit-pr, build-chatwindow, configure-mcp-server |
+| **Rules** | Règles et contexte projet |
+
+### 4. Features (blueprints réutilisables) (`features/`)
+
+| Feature | Description |
+|---------|-------------|
+| **metering-billing** | Système de métriques et facturation (tables, Edge Functions, cron) |
+| **audio-transcription-analysis** | Transcription et analyse audio |
+
+### 5. Documentation (`docs/`)
+
+| Doc | Description |
+|-----|-------------|
+| **chatwindow** | ChatWindow + widgets (composant réutilisable) |
+| **migrations** | Guide des migrations Supabase |
+
+### 6. Sécurité (`security/`)
+
+| Document | Description |
+|----------|-------------|
+| `ARCHITECTURE_DE_SECURITÉ.md` | RLS, guards, patterns de sécurité |
+| `PROTECTION_DONNEES_LOI25.md` | Conformité Loi 25 / P-39.1 (Québec) |
+| `references/` | Documents officiels (P-39.1, Guide EFVP CAI) |
+
+### 7. Scripts (`scripts/`)
+
+| Script | Description |
+|--------|-------------|
+| `install_somtech_pack.sh` | Installation du pack dans un projet |
+| `remote-install.sh` | Installation one-liner via curl |
+| `somtech_pack_pull.sh` | Mise à jour d'un projet depuis le pack (diff + versioning) |
+| `somtech_pack_push.sh` | Publier des changements depuis un projet vers le pack |
+| `somtech_pack_add.sh` | Ajouter un composant au pack |
+
+## Système modulaire (`pack.json`)
+
+Le pack est organisé en modules activables :
+
+| Module | Par défaut | Contenu |
+|--------|------------|---------|
+| **core** | oui | `.claude/`, `.cursor/`, `scripts/`, `docs/`, `security/` |
+| **features** | oui | `features/` (blueprints réutilisables) |
+| **mockmig** | non | `.mockmig/`, `.specify/` (workflow migration maquette) |
+| **plugins** | non | `plugins/` (marketplace Cowork) |
+
+## Synchronisation avec les projets clients
 
 ### Pull — mettre à jour un projet depuis le pack
 
 ```bash
-./scripts/somtech_pack_pull.sh --target . --dry-run
 ./scripts/somtech_pack_pull.sh --target .
 ```
 
 ### Push — publier des changements depuis un projet vers le pack
 
-Pré-requis : GitHub CLI authentifié (`gh auth login`).
-
 ```bash
 ./scripts/somtech_pack_push.sh --message "chore(pack): sync rules/skills"
 ```
 
-Notes :
-- Template release notes : `.specify/templates/releasenote-template.md`
-- PRD du pack : `.cursor/prd/somtech-pack.md`
+## Conventions
 
-## Installer dans un nouveau projet
+### Commits
 
-Depuis le projet cible (repo vide ou existant) :
+Format conventionnel : `type(scope): description`
 
-```bash
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --dry-run
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target .
+Types : `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
+
+### Structure des plugins
+
 ```
-
-### Installer sans skills et/ou sans docs
-
-```bash
-# Installer uniquement rules + commands (sans skills ni doc)
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --no-skills --no-docs
-
-# Installer sans docs
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --no-docs
-
-# Installer sans skills
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --no-skills
+plugins/nom-du-plugin/
+├── .claude-plugin/plugin.json    # Manifeste (obligatoire)
+├── commands/                     # Commandes slash
+├── skills/                       # Skills avec SKILL.md
+├── templates/                    # Gabarits et fichiers de référence
+├── nom-du-plugin-vX.Y.Z.zip     # Archive versionnée pour Cowork
+└── README.md
 ```
-
-### Installer sans skills et/ou sans docs
-
-```bash
-# Installer uniquement rules + commands (sans skills ni doc)
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --no-skills --no-docs
-
-# Installer sans docs
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --no-docs
-
-# Installer sans skills
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --no-skills
-```
-
-### Installer uniquement les commandes Somtech
-
-```bash
-/path/to/somtech-pack/scripts/install_somtech_pack.sh --target . --somtech-only
-```
-
-## Comportement
-- Si un fichier `.cursor/*` existe déjà dans le projet cible :
-  - backup automatique en `*.bak-YYYYMMDDHHMMSS`
-  - puis copie du fichier pack
-- La structure modulaire minimale est créée uniquement si absente :
-  - `modules/_template/{mcp,prd,tests}`
-  - `modules/_shared/`
