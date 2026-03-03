@@ -199,6 +199,12 @@ sync_from_source() {
     copy_tree "docs" "${TARGET}/docs"
   fi
 
+  # .claude/ — skills, agents, templates, CLAUDE.md (Claude Code)
+  copy_tree ".claude" "${TARGET}/.claude"
+
+  # features/ — blueprints réutilisables de features
+  copy_tree "features" "${TARGET}/features"
+
   # Toujours: scripts + .specify + README.md (si présents)
   copy_tree "scripts" "${TARGET}/scripts"
   copy_tree ".specify" "${TARGET}/.specify"
