@@ -7,12 +7,46 @@ description: >
   "chiffrement des données sensibles", "droit à l'effacement", "portabilité des données",
   "EFVP", "évaluation des facteurs relatifs à la vie privée", ou toute question sur la conformité
   d'un projet aux lois québécoises de protection de la vie privée.
-version: 0.2.0
+version: 0.3.0
 ---
 
 # Loi 25 — Conformité pour projets logiciels
 
 Ce skill fournit les connaissances nécessaires pour auditer un projet Supabase/React/TypeScript selon les exigences de la Loi 25 du Québec. Toutes les références d'articles renvoient à la **Loi sur la protection des renseignements personnels dans le secteur privé (RLRQ, c. P-39.1)**, mise à jour au 11 décembre 2025.
+
+## Structure du rapport — Deux volets
+
+Le rapport d'audit est structuré en **deux volets** avec des scores séparés :
+
+### Volet A — Technique (pondération 60 %)
+Couvre tout ce qui touche au code et à l'infrastructure :
+- **A1.** Inventaire des données personnelles (PII dans DB)
+- **A2.** Constats — Base de données (chiffrement, RLS, audit trail, rétention)
+- **A3.** Constats — API et Backend (exposition, logs, LLM, transfert international)
+- **A4.** Constats — Frontend (masquage, localStorage, URL, confidentialité par défaut)
+
+### Volet B — Gouvernance (pondération 40 %)
+Couvre les processus organisationnels et la conformité administrative :
+- **B1.** Responsable de la protection des données (art. 3.1)
+- **B2.** Politiques et pratiques de gouvernance (art. 3.2)
+- **B3.** EFVP — Évaluation des facteurs relatifs à la vie privée (art. 3.3, 17)
+- **B4.** Consentement (art. 14)
+- **B5.** Registre des incidents (art. 3.5 à 3.8)
+- **B6.** Procédure de gestion des incidents (art. 3.5)
+- **B7.** Formation des employés
+- **B8.** Politique de confidentialité publiée (art. 3.2)
+- **B9.** Droit d'accès et de rectification (art. 27, 28)
+
+### Calcul des scores
+
+Chaque volet démarre à 100 et décrémente selon les constats :
+- -15 par constat CRITIQUE
+- -8 par constat MAJEUR
+- -3 par constat MODÉRÉ
+- -1 par constat MINEUR
+- Minimum 0
+
+**Score global** = (Score Technique × 0.60) + (Score Gouvernance × 0.40)
 
 ## Contexte légal
 
@@ -204,8 +238,6 @@ Art. 18.3 : Le mandataire ou la personne à qui des renseignements sont communiq
 **Destruction/Anonymisation (art. 23) :**
 
 Art. 23 al. 1 : Lorsque les fins auxquelles un renseignement personnel a été recueilli sont accomplies, l'entreprise doit le **détruire** ou l'**anonymiser**. Al. 3 : L'anonymisation doit se faire selon les **meilleures pratiques généralement reconnues** et selon les critères et modalités déterminés par règlement. L'anonymisation doit être **irréversible** — il ne doit plus être raisonnablement possible d'identifier directement ou indirectement la personne.
-
-Art. 23 al. 4 : Il est **interdit d'identifier ou de tenter d'identifier** une personne à partir de renseignements anonymisés sans le consentement de la personne ou l'autorisation de la loi.
 
 **Portabilité (art. 27 al. 3) :**
 
