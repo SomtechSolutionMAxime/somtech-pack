@@ -245,6 +245,10 @@ Configuration dans `.mcp.json` du projet:
 | `/pousse` | Commit, PR et push migrations Supabase en production |
 | `/end-session` | Documenter automatiquement le travail de la session (CLAUDE.md + CHANGELOG.md) |
 | `/feature-doc-generator` | Générer une documentation technique réutilisable à partir d'une feature existante |
+| `/mcp-builder` | Guide pour créer des serveurs MCP (TypeScript, Python, Supabase Edge) |
+| `/prototype` | Créer un prototype React + Tailwind hébergé sur GitHub Pages |
+| `/webapp-testing` | Toolkit Playwright pour tester des apps web locales |
+| `/playwright-tests` | Générer des tests e2e Playwright (page objects, workflows) |
 
 ---
 
