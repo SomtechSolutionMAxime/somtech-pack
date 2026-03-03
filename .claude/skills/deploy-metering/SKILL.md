@@ -183,8 +183,10 @@ Exécuter via MCP Supabase ou SQL Editor :
 
 ```sql
 SELECT vault.create_secret('<SUPABASE_URL>', 'supabase_url');
-SELECT vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key');
+SELECT vault.create_secret('<ANON_KEY>', 'anon_key');
 ```
+
+> On utilise l'`anon_key` (publishable key) — pas le `service_role_key`. L'Edge Function crée son propre client interne avec `SUPABASE_SERVICE_ROLE_KEY` (auto-injecté). Le JWT sert uniquement à passer la validation d'accès.
 
 ### 4.2 Créer le cron job
 
@@ -198,7 +200,7 @@ SELECT cron.schedule(
            || '/functions/v1/collect-usage-metrics',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' ||
-        (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key'),
+        (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'anon_key'),
       'Content-Type', 'application/json'
     ),
     body := '{}'::jsonb
