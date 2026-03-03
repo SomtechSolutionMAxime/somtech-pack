@@ -36,6 +36,7 @@ Si un contrat cadre est détecté, il **doit** être utilisé comme référence 
 - Informer la rédaction du contenu (périmètre, conditions, terminologie du client)
 - Pré-remplir les sections juridiques et conditions générales
 - Déclencher automatiquement une vérification de cohérence à la fin de la génération
+- **Référencement** : Extraire le titre officiel du contrat cadre détecté (page de titre ou nom de fichier sans extension). Toute mention du contrat cadre dans les documents générés doit utiliser ce titre exact, jamais le nom du gabarit template.
 
 ## Processus de Complétion
 

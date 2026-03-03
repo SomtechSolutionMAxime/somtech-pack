@@ -33,6 +33,11 @@ Compléter une offre de services à partir du gabarit Word intégré au plugin, 
    - Utiliser ces informations pour pré-remplir les sections pertinentes de l'offre
    - Marquer les sections qui doivent être cohérentes avec le contrat cadre
 
+   **Référencement du contrat cadre dans le document généré** :
+   - Extraire le titre officiel du contrat cadre depuis le document détecté (page de titre ou en-tête)
+   - Si le titre n'est pas extractible, utiliser le nom du fichier détecté (sans extension)
+   - Dans toutes les sections de l'offre qui font référence au contrat cadre, utiliser ce titre exact — NE JAMAIS référencer le nom du gabarit template ("V4.0")
+
 4. **Déterminer le mode de travail** : Demander à l'utilisateur s'il souhaite :
    - **Mode interactif** : Répondre aux questions section par section
    - **Mode brief** : Fournir un document ou texte de brief
