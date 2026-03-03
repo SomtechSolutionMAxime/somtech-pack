@@ -1,6 +1,6 @@
 ---
 description: Générer le rapport PDF professionnel à partir d'un audit Loi 25
-allowed-tools: Read, Bash(python3:*, pip:*, find:*, ls:*)
+allowed-tools: Read, Bash(python3:*, pip:*, find:*, ls:*, sort:*, tail:*, head:*)
 argument-hint: [rapport-audit.md] [--client NomClient] [--projet NomProjet]
 ---
 
@@ -14,10 +14,14 @@ Générer un rapport PDF professionnel et livrable au client à partir d'un rapp
    ```
 
 2. **Localiser le rapport Markdown** :
-   - Si un argument fichier est fourni, utiliser ce fichier
-   - Sinon, chercher le fichier `audit-loi25-rapport-*.md` le plus récent dans le projet
+   - Si un argument fichier est fourni en paramètre, utiliser ce fichier
+   - Sinon, chercher le rapport le plus récent dans `security/audit/` :
+     ```bash
+     ls -t security/audit/audit-loi25_*.md 2>/dev/null | head -1
+     ```
+   - En dernier recours, chercher `audit-loi25-rapport-*.md` ou `audit-loi25_*.md` dans le projet
 
-3. **Valider que le rapport existe** et contient les sections attendues (Score de conformité, Sommaire exécutif, Constats, Plan d'action)
+3. **Valider que le rapport existe** et contient les sections attendues (Volet A, Volet B, Score, Plan d'action)
 
 ## Génération du PDF
 
@@ -34,11 +38,19 @@ python3 <chemin-plugin>/scripts/generate_pdf_report.py <rapport.md> \
 
 | Paramètre | Source | Défaut |
 |-----------|--------|--------|
+| `rapport` | Argument CLI ou auto-détection du plus récent dans `security/audit/` | — |
 | `--client` | Argument CLI ou demander à l'utilisateur | « Client » |
-| `--projet` | Argument CLI, ou extraire du champ **Projet** dans le rapport | « Projet » |
+| `--projet` | Argument CLI, ou extraire du champ **Projet** / **Client** dans le rapport | « Projet » |
 | `--output` | Argument CLI | Même nom que le .md avec extension .pdf |
 
-### Extraction automatique
+### Auto-détection du rapport
+
+Si aucun fichier n'est spécifié en argument, le script cherche automatiquement :
+
+1. `security/audit/audit-loi25_*.md` — trié par nom (le plus récent en dernier grâce à la nomenclature date-heure)
+2. `audit-loi25-rapport-*.md` dans le dossier courant (ancien format, rétrocompatibilité)
+
+### Extraction automatique des métadonnées
 
 Si `--client` ou `--projet` ne sont pas fournis en argument :
 1. Lire les premières lignes du rapport Markdown
@@ -48,7 +60,7 @@ Si `--client` ou `--projet` ne sont pas fournis en argument :
 ## Processus
 
 1. Vérifier que `reportlab` est installé, l'installer sinon
-2. Localiser le rapport Markdown (argument ou recherche automatique)
+2. Localiser le rapport Markdown (argument ou auto-détection dans `security/audit/`)
 3. Déterminer les paramètres (client, projet, output)
 4. Exécuter le script `generate_pdf_report.py`
 5. Vérifier que le PDF a été généré avec succès
@@ -58,11 +70,12 @@ Si `--client` ou `--projet` ne sont pas fournis en argument :
 
 Le PDF généré contient :
 
-- **Page couverture** — Logo Somtech, titre, client, projet, date, score de conformité avec indicateur visuel
+- **Page couverture** — Logo Somtech, titre, client, projet, date, score global + sous-scores Technique/Gouvernance
 - **Table des matières** — Sections numérotées avec pages
-- **Sommaire exécutif** — Tableau des constats par catégorie et niveau, score, exposition aux sanctions
-- **Sections détaillées** — Chaque constat avec niveau de sévérité, description, recommandations, articles P-39.1
-- **Plan d'action** — Tableau des corrections priorisées avec effort et échéance
+- **Sommaire exécutif** — Scores par volet, constats par catégorie et niveau, exposition aux sanctions
+- **Volet A — Technique** — Inventaire PII, constats DB/API/Frontend avec sévérité, description, recommandations
+- **Volet B — Gouvernance** — Constats organisationnels avec sévérité, description, recommandations
+- **Plan d'action** — Deux tableaux séparés (Technique / Gouvernance) avec corrections priorisées
 - **Annexes** — Fichiers analysés, méthodologie, références légales, barème des sanctions
 
-Le fichier est sauvegardé à côté du rapport Markdown original.
+Le fichier PDF est sauvegardé à côté du rapport Markdown original (dans `security/audit/`).
