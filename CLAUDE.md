@@ -13,6 +13,7 @@ Répertoire des plugins Claude Cowork développés par Somtech. Chaque plugin es
 | **somtech-silo-manager** | Génération et déploiement de silos applicatifs (architecture multi-tenant) |
 | **somtech-proposals** | Complétion de cahiers des charges et offres de services à partir de gabarits Word, avec vérification de cohérence des clauses juridiques contre le contrat cadre client |
 | **audit-loi25** | Audit de conformité Loi 25 / P-39.1 (Québec) pour projets Supabase/React/TypeScript — détection PII, vérification RLS, chiffrement, masquage frontend, gouvernance et incidents |
+| **somtech-estimator** | Estimation de projets forfaitaires — comparaison traditionnelle vs IA-assistée avec analyse de risque |
 
 ### 2. Configuration Claude Code (`.claude/`)
 

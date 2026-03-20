@@ -1,0 +1,9 @@
+{
+  "name": "somtech-estimator",
+  "version": "0.3.0",
+  "description": "Estimation de projets forfaitaires — qualification de projet, proposition d'équipe, facteur de reproduction, infrastructure initiale, comparaison traditionnelle vs IA-assistée avec analyse de risque par bloc et sous-décomposition en tâches",
+  "author": {
+    "name": "Somtech"
+  },
+  "keywords": ["estimation", "coûts", "forfait", "CDC", "risque", "IA", "excel", "xlsx"]
+}
