@@ -1,7 +1,12 @@
 ---
-description: Estimer les coûts d'un projet forfaitaire à partir d'un cahier des charges
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
-argument-hint: [chemin-vers-cdc.docx]
+name: estimer
+description: >
+  Estimer les coûts d'un projet forfaitaire à partir d'un cahier des charges (.docx).
+  Ce skill doit être utilisé quand l'utilisateur demande à "estimer un projet",
+  "faire une estimation", "calculer les coûts d'un CDC", "produire une offre forfaitaire",
+  "comparer traditionnel vs IA", ou fournit un fichier CDC .docx pour estimation.
+  Aussi déclenché par "estimation", "forfait", "coûts projet", "estimer", "/estimer".
+version: 0.2.0
 ---
 
 # /estimer — Estimation de projet forfaitaire
