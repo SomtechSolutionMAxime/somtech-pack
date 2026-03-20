@@ -1,9 +1,9 @@
 {
   "name": "somtech-estimator",
-  "version": "0.1.0",
-  "description": "Estimation de projets forfaitaires — comparaison traditionnelle vs IA-assistée avec analyse de risque",
+  "version": "0.2.0",
+  "description": "Estimation de projets forfaitaires — comparaison traditionnelle vs IA-assistée avec analyse de risque par bloc et sous-décomposition en tâches",
   "author": {
     "name": "Somtech"
   },
-  "keywords": ["estimation", "coûts", "forfait", "CDC", "risque", "IA"]
+  "keywords": ["estimation", "coûts", "forfait", "CDC", "risque", "IA", "excel", "xlsx"]
 }
