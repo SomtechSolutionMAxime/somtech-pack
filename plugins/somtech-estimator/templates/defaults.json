@@ -1,0 +1,72 @@
+{
+  "version": "0.1.0",
+  "currency": "CAD",
+  "taxesIncluses": false,
+  "formatMontant": "espace_milliers_dollar_suffix",
+
+  "tauxJournaliers": {
+    "dev_senior": 1200,
+    "dev_junior": 750,
+    "designer": 1000,
+    "pm": 1100,
+    "qa": 850,
+    "architecte": 1400
+  },
+
+  "architectePourcentageGlobal": 5,
+
+  "typesDesTaches": [
+    "crud",
+    "pages_statiques",
+    "ui_complexe",
+    "logique_metier",
+    "integration_api",
+    "auth_securite",
+    "infrastructure",
+    "reporting"
+  ],
+
+  "reductionIA": {
+    "crud": 0.70,
+    "pages_statiques": 0.80,
+    "ui_complexe": 0.50,
+    "logique_metier": 0.40,
+    "integration_api": 0.30,
+    "auth_securite": 0.25,
+    "infrastructure": 0.35,
+    "reporting": 0.60
+  },
+
+  "reductionIA_rolesNonDev": 0.15,
+
+  "allocationRoles": {
+    "crud":            { "dev_senior": 0.20, "dev_junior": 0.40, "designer": 0.15, "pm": 0.10, "qa": 0.15 },
+    "pages_statiques": { "dev_senior": 0.10, "dev_junior": 0.30, "designer": 0.35, "pm": 0.10, "qa": 0.15 },
+    "ui_complexe":     { "dev_senior": 0.30, "dev_junior": 0.20, "designer": 0.25, "pm": 0.10, "qa": 0.15 },
+    "logique_metier":  { "dev_senior": 0.50, "dev_junior": 0.20, "designer": 0.00, "pm": 0.15, "qa": 0.15 },
+    "integration_api": { "dev_senior": 0.55, "dev_junior": 0.15, "designer": 0.00, "pm": 0.15, "qa": 0.15 },
+    "auth_securite":   { "dev_senior": 0.60, "dev_junior": 0.10, "designer": 0.00, "pm": 0.10, "qa": 0.20 },
+    "infrastructure":  { "dev_senior": 0.60, "dev_junior": 0.15, "designer": 0.00, "pm": 0.15, "qa": 0.10 },
+    "reporting":       { "dev_senior": 0.30, "dev_junior": 0.25, "designer": 0.20, "pm": 0.10, "qa": 0.15 }
+  },
+
+  "effortBaseJours": {
+    "crud":            { "simple": [2, 4],  "moyen": [5, 8],   "complexe": [9, 15] },
+    "pages_statiques": { "simple": [1, 2],  "moyen": [3, 5],   "complexe": [6, 8] },
+    "ui_complexe":     { "simple": [5, 8],  "moyen": [9, 15],  "complexe": [16, 25] },
+    "logique_metier":  { "simple": [5, 10], "moyen": [11, 20], "complexe": [21, 35] },
+    "integration_api": { "simple": [3, 6],  "moyen": [7, 12],  "complexe": [13, 20] },
+    "auth_securite":   { "simple": [5, 8],  "moyen": [9, 15],  "complexe": [16, 25] },
+    "infrastructure":  { "simple": [3, 5],  "moyen": [6, 10],  "complexe": [11, 18] },
+    "reporting":       { "simple": [2, 4],  "moyen": [5, 8],   "complexe": [9, 14] }
+  },
+
+  "grilleRisque": {
+    "facteurParScoreMoyen": [
+      { "min": 1.0, "max": 1.99, "facteur": 1.00 },
+      { "min": 2.0, "max": 2.99, "facteur": 1.15 },
+      { "min": 3.0, "max": 3.99, "facteur": 1.30 },
+      { "min": 4.0, "max": 5.0,  "facteur": 1.50 }
+    ]
+  }
+}
