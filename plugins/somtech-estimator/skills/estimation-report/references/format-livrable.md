@@ -77,6 +77,7 @@ Source: [nom-du-cdc.docx]
 | Coût brut | X XXX $ | X XXX $ |
 | Architecte (5%) | X XXX $ | X XXX $ |
 | Marge de risque (×X.XX) | X XXX $ | X XXX $ |
+| Infrastructure (XX%) | X $ | X $ |
 | **Total avec risque** | **X XXX $** | **X XXX $** |
 | **Économie** | | **XX% (X XXX $)** |
 
@@ -115,13 +116,19 @@ Source: [nom-du-cdc.docx]
 | autre | -XX% | -15% |
 
 *Note : si des paramètres ont été modifiés par l'utilisateur pendant la Phase 3, indiquer les valeurs modifiées.*
+
+## Paramètres de l'estimation
+- Nature du projet : [custom / data-BI / config / migration / hybride]
+- Équipe : [rôles retenus et volumes]
+- Facteur de reproduction : [X.XX sur blocs: ...]
+- Infrastructure : [premier module / additionnel à XX%]
 ~~~
 
 ---
 
 ## Structure Excel (.xlsx)
 
-Le rapport Excel est généré automatiquement via Python (openpyxl). Il contient 4 feuilles :
+Le rapport Excel est généré automatiquement via Python (openpyxl). Il contient 5 feuilles :
 
 ### Feuille "Traditionnel"
 - En-tête : nom projet, date, source CDC
@@ -145,6 +152,15 @@ Le rapport Excel est généré automatiquement via Python (openpyxl). Il contien
 - Par bloc : Score complexité | Score dépendances | Score moyen | Facteur | Coût brut | Impact risque ($) | Coût avec risque
 - Facteur global pondéré
 - Impact total du risque en $
+
+### Feuille "Paramètres"
+- Nature du projet (custom / data-BI / config / migration / hybride)
+- Équipe retenue : rôles, volumes, rôles exclus
+- Facteur de reproduction : valeur, blocs concernés, justification
+- Infrastructure : premier module ou additionnel (% appliqué, coût infra référence)
+- Taux journaliers utilisés
+- Facteurs IA appliqués par type
+- Modifications manuelles faites en Phase 3
 
 ### Formatage
 - En-têtes : fond #1F4E79, texte blanc, gras

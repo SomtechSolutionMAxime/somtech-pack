@@ -41,6 +41,17 @@ Le rapport Excel est généré automatiquement par le plugin via Python (openpyx
 - Ligne facteur global pondéré (moyenne pondérée par les coûts bruts)
 - Impact total du risque en $
 
+### Feuille "Paramètres"
+
+Documente toutes les décisions prises pendant l'estimation :
+- **Nature du projet** : custom / data-BI / config / migration / hybride
+- **Équipe retenue** : liste des rôles avec volumes (jours), et rôles exclus avec justification
+- **Facteur de reproduction** : valeur appliquée (ex : 0.65), blocs concernés, justification extraite du CDC
+- **Infrastructure** : premier module ou additionnel (% appliqué, coût infra de référence)
+- **Taux journaliers utilisés** : tableau rôle → taux/jour
+- **Facteurs IA appliqués** : tableau type de tâche → facteur Dev → facteur non-Dev
+- **Modifications manuelles faites en Phase 3** : liste des ajustements effectués par l'utilisateur
+
 ## Formatage
 
 | Élément | Style |
@@ -105,8 +116,12 @@ ws_comp = wb.create_sheet("Comparatif")
 ws_risk = wb.create_sheet("Risque")
 # ...
 
+# Feuille Paramètres
+ws_params = wb.create_sheet("Paramètres")
+# ... documenter nature projet, équipe, facteur reproduction, infrastructure, taux, facteurs IA, modifications ...
+
 # Auto-ajuster les largeurs
-for ws in [ws_trad, ws_ia, ws_comp, ws_risk]:
+for ws in [ws_trad, ws_ia, ws_comp, ws_risk, ws_params]:
     for col in ws.columns:
         max_len = max((len(str(c.value or "")) for c in col), default=0)
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max(max_len + 2, 12), 40)
@@ -116,8 +131,9 @@ wb.save("estimations/YYYY-MM-DD-nom-projet-estimation.xlsx")
 
 ## Fallback CSV
 
-Si `openpyxl` ne peut pas être installé, générer 4 fichiers CSV séparés :
+Si `openpyxl` ne peut pas être installé, générer 5 fichiers CSV séparés :
 - `estimations/YYYY-MM-DD-nom-projet-traditionnel.csv`
 - `estimations/YYYY-MM-DD-nom-projet-accelere-ia.csv`
 - `estimations/YYYY-MM-DD-nom-projet-comparatif.csv`
 - `estimations/YYYY-MM-DD-nom-projet-risque.csv`
+- `estimations/YYYY-MM-DD-nom-projet-parametres.csv`

@@ -6,7 +6,7 @@ description: >
   "évaluer le risque d'un projet", ou a besoin d'extraire les features d'un CDC
   et de produire une estimation en jours-personne. Aussi déclenché par
   "estimation", "forfait", "coûts", "jours-personne", "facteur de risque".
-version: 0.2.0
+version: 0.3.0
 ---
 
 # Skill: estimation-engine
@@ -21,6 +21,42 @@ Moteur d'extraction et de calcul pour l'estimation de projets forfaitaires.
 4. Estimer l'effort en jours par tâche (traditionnel + IA-assisté)
 5. Évaluer les risques par feature/bloc et calculer le facteur global
 6. Présenter le tableau récapitulatif avec coûts bruts et avec risque par bloc
+
+## Phase 0 — Qualification du projet
+
+Avant d'extraire les blocs du CDC, identifier :
+
+### 0a. Nature dominante du projet
+
+| Nature | Indicateurs CDC | Types privilégiés |
+|--------|----------------|-------------------|
+| Développement custom | App web, API, UI, composants React, formulaires | crud, ui_complexe, logique_metier, auth_securite |
+| Data / BI | ETL, entrepôt, dashboards, rapports, KPI, Superset, PowerBI | etl_data, dashboard_config |
+| Configuration | Paramétrage outil existant, intégration API | dashboard_config, integration_api |
+| Migration | Remplacement système, import données, scripts | migration_donnees, etl_data |
+| Hybride | Mix des précédents | Par bloc selon sa nature |
+
+Présenter la nature identifiée à l'utilisateur pour validation.
+
+### 0b. Premier module ou additionnel
+
+Demander : "Ce module fait-il partie d'un système existant ou est-ce le premier module ?"
+
+- Si premier module → un bloc "Infrastructure initiale" sera ajouté avec les tâches de setup (auth, CI/CD, design system, architecture, domaine). Voir `${CLAUDE_PLUGIN_ROOT}/templates/defaults.json` section `infrastructureInitiale`.
+- Si module additionnel → demander le pourcentage d'infrastructure (0% à 50%) :
+  - 0% = aucune modification
+  - 10% = ajustements mineurs (permissions, routes)
+  - 20% = modifications modérées (nouveau rôle, ajustements layout)
+  - 30% = modifications significatives (nouveau service, refonte partielle)
+
+### 0c. Facteur de reproduction
+
+Chercher dans le CDC les indicateurs de reproduction : "remplacer", "reproduire", "migrer depuis", "équivalent à", "mêmes fonctionnalités", "remplacement de [outil]".
+
+Si détecté :
+- Signaler à l'utilisateur
+- Proposer un facteur de reproduction (défaut 0.65, range 0.50-1.00)
+- Le facteur s'applique aux blocs identifiés comme reproduction : `effort_ajusté = effort_base × facteur_reproduction`
 
 ## Phase 1 — Extraction du CDC
 
@@ -54,6 +90,9 @@ Un fichier .docx de cahier des charges. Seul le format .docx est accepté.
 | `infrastructure` | Déploiement, CI/CD, monitoring, performance, cache, CDN |
 | `reporting` | Rapport, export PDF/Excel, statistiques, métriques, analytics |
 | `gestion_projet` | Gestion de projet, suivi, points de contrôle, accompagnement, coordination |
+| `etl_data` | ETL, pipeline, transformation SQL, vues matérialisées, entrepôt de données, data warehouse |
+| `dashboard_config` | Dashboard, tableau de bord BI, Superset, PowerBI, Metabase, KPI, chart, rapport analytique |
+| `migration_donnees` | Migration de données, import depuis [système], scripts de migration, réconciliation, conversion |
 
 ### Sous-décomposition en tâches
 
@@ -106,6 +145,28 @@ Bloc 2: [Nom du module/feature principal]
 - **Document non-.docx** : Informer l'utilisateur que seul .docx est supporté
 - **CDC non structuré** : Lister ce qui a été extrait, demander à l'utilisateur de compléter
 - **Aucune feature trouvée** : Signaler et demander un autre fichier ou une saisie manuelle
+
+## Phase 1.5 — Proposition d'équipe projet
+
+Après la sous-décomposition, analyser les types de tâches identifiés et proposer une composition d'équipe :
+
+### Logique de recommandation
+
+1. Pour chaque rôle, sommer les jours alloués sur toutes les tâches
+2. Si un rôle a moins de 2 jours total → recommander ❌ (non requis)
+3. Si un rôle a 2-5 jours → recommander à temps partiel
+4. Si un rôle a 5+ jours → recommander plein temps
+
+### Format de présentation
+
+Présenter à l'utilisateur :
+- ✅ Rôles recommandés avec volume estimé (jours)
+- ❌ Rôles non requis avec justification
+- L'utilisateur peut ajouter/retirer des rôles
+
+### Impact sur le calcul
+
+Les rôles marqués ❌ par l'utilisateur sont mis à 0% d'allocation pour toutes les tâches du projet. Leurs jours sont redistribués proportionnellement aux rôles restants.
 
 ## Phase 2 — Calcul automatique
 

@@ -6,7 +6,7 @@ description: >
   plusieurs feuilles). Déclenché après la validation utilisateur en Phase 3
   du pipeline d'estimation. Inclut le risque par bloc et la sous-décomposition
   en tâches.
-version: 0.2.0
+version: 0.3.0
 ---
 
 # Skill: estimation-report
@@ -75,7 +75,7 @@ Génération des livrables d'estimation (markdown + .xlsx).
 
 ### Structure du fichier Excel
 
-Le fichier contient 4 feuilles :
+Le fichier contient 5 feuilles :
 
 #### Feuille 1 : "Traditionnel"
 
@@ -109,6 +109,17 @@ Le fichier contient 4 feuilles :
 - Tableau par bloc : Bloc | Score complexité | Score dépendances | Score moyen | Facteur ×X.XX | Coût brut | Impact risque ($) | Coût avec risque
 - Ligne de facteur global pondéré (pondéré par les coûts bruts)
 - Impact total du risque en $
+
+#### Feuille 5 : "Paramètres"
+
+Documente toutes les décisions prises pendant l'estimation :
+- Nature du projet (custom / data-BI / config / migration / hybride)
+- Équipe retenue (rôles, volumes, rôles exclus)
+- Facteur de reproduction (valeur, blocs concernés, justification)
+- Infrastructure : premier module ou additionnel (% appliqué, coût infra référence)
+- Taux journaliers utilisés
+- Facteurs IA appliqués par type
+- Modifications manuelles faites en Phase 3
 
 ### Formatage Excel
 
@@ -153,5 +164,5 @@ PYEOF
 ### Gestion d'erreurs
 
 - **Si `openpyxl` n'est pas disponible** : tenter `pip install openpyxl --quiet` puis réessayer
-- **Si l'installation échoue** : générer un fallback CSV par feuille (`-traditionnel.csv`, `-accelere-ia.csv`, `-comparatif.csv`, `-risque.csv`) et informer l'utilisateur
+- **Si l'installation échoue** : générer un fallback CSV par feuille (`-traditionnel.csv`, `-accelere-ia.csv`, `-comparatif.csv`, `-risque.csv`, `-parametres.csv`) et informer l'utilisateur
 - **Si le dossier `estimations/` n'existe pas** dans le projet courant, le créer avec `mkdir -p estimations`

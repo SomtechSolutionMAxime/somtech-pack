@@ -44,6 +44,9 @@ Les facteurs IA sont **spécifiques à chaque rôle**. Les rôles Dev utilisent 
 | Infrastructure / DevOps | `infrastructure` | 35% | 65% |
 | Reporting / exports | `reporting` | 60% | 40% |
 | Gestion de projet | `gestion_projet` | 20% | 80% |
+| ETL / pipelines de données | `etl_data` | 35% | 65% |
+| Configuration dashboard | `dashboard_config` | 30% | 70% |
+| Migration de données | `migration_donnees` | 30% | 70% |
 
 ## Grille de risque
 
@@ -95,6 +98,9 @@ Chaque ligne totalise 100%. L'architecte (5%) est en surplus.
 | `infrastructure` | 60% | 15% | 0% | 15% | 10% |
 | `reporting` | 30% | 25% | 20% | 10% | 15% |
 | `gestion_projet` | 5% | 5% | 0% | 80% | 10% |
+| `etl_data` | 70% | 10% | 0% | 10% | 10% |
+| `dashboard_config` | 50% | 10% | 20% | 10% | 10% |
+| `migration_donnees` | 45% | 15% | 0% | 10% | 30% |
 
 ## Effort de base par type et complexité (jours)
 
@@ -111,3 +117,34 @@ Claude estime au **milieu de la fourchette** (arrondi au 0.5 le plus proche). L'
 | `infrastructure` | 3 – 5 | 6 – 10 | 11 – 18 |
 | `reporting` | 2 – 4 | 5 – 8 | 9 – 14 |
 | `gestion_projet` | 5 – 8 | 9 – 15 | 16 – 25 |
+| `etl_data` | 2 – 4 | 5 – 10 | 11 – 18 |
+| `dashboard_config` | 1 – 3 | 4 – 7 | 8 – 12 |
+| `migration_donnees` | 2 – 5 | 6 – 10 | 11 – 16 |
+
+## Facteur de reproduction
+
+Applicable lorsqu'un projet s'appuie sur un silo ou une base de code existante (reproduction partielle plutôt que greenfield).
+
+**Formule** : `effort_ajusté = effort_base × facteur`
+
+| Paramètre | Valeur |
+|-----------|--------|
+| Valeur par défaut | 0.65 |
+| Minimum | 0.50 |
+| Maximum | 1.00 |
+
+- **0.50** : reproduction très fidèle d'un silo existant, changements mineurs
+- **0.65** : reproduction standard avec adaptations modérées (valeur par défaut)
+- **1.00** : projet greenfield, aucune réutilisation
+
+## Infrastructure initiale
+
+Tâches d'infrastructure standard à inclure pour tout nouveau silo applicatif. Ces tâches sont listées dans `infrastructureInitiale.taches` et peuvent être ajoutées automatiquement en phase d'estimation.
+
+| Tâche | Type | Complexité |
+|-------|------|-----------|
+| Auth SSO + gestion des rôles | `auth_securite` | moyen |
+| CI/CD pipeline | `infrastructure` | simple |
+| Design system + layout de base | `ui_complexe` | moyen |
+| Architecture API + conventions | `logique_metier` | simple |
+| Configuration domaine + SSL | `infrastructure` | simple |
