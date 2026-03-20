@@ -126,6 +126,16 @@ Le plugin demande si le module est le premier du système ou un module additionn
   - 20% = modifications modérées
   - 30% = modifications significatives
 
+## Stack Somtech
+
+Le plugin détecte si le projet utilise la **stack standard Somtech** (React + Supabase + Tailwind + shadcn/ui + Netlify). Si oui :
+
+- **Bonus IA** : +10% Dev, +5% Designer, +5% QA (en plus des facteurs de base)
+- **Réduction infrastructure** : ×0.60 (Auth, CI/CD, composants UI sont du built-in)
+- **Fonctionnalités gratuites** : API REST auto-générée, types TS, auth, realtime, storage, CI/CD — ne sont pas estimées comme features complètes
+
+La définition de la stack est dans `templates/stack.json`.
+
 ## Version
 
 0.3.0

@@ -30,16 +30,23 @@ Inclut une analyse de risque par bloc (complexité technique + dépendances hors
 ### Phase 1.0 — Qualification du projet
 
 1. **Analyser le CDC** pour identifier la nature du projet (custom / data-BI / config / migration / hybride)
-2. **Présenter la qualification** :
+2. **Demander** : "Ce projet utilise-t-il la stack standard Somtech (React + Supabase + Tailwind + shadcn/ui + Netlify) ?"
+   - Si oui → charger `${CLAUDE_PLUGIN_ROOT}/templates/stack.json` et appliquer :
+     - **Bonus IA** : +10% réduction Dev, +5% Designer, +5% QA (en plus des facteurs de base)
+     - **Réduction infrastructure** : coût infra × 0.60 (Supabase Auth, Netlify CI/CD, shadcn/ui sont du built-in)
+     - **Fonctionnalités gratuites** : identifier les tâches couvertes par la stack (API REST auto-générée, auth, types TS, realtime) et les exclure ou réduire drastiquement
+   - Si non → estimation standard sans bonus
+3. **Présenter la qualification** :
    ```
    Nature : [identifiée]
+   Stack : Somtech standard (bonus IA appliqué) / Autre
    Impact : [types privilégiés, équipe probable]
    ```
-3. **Demander** : "Ce module fait-il partie d'un système existant ou est-ce le premier module ?"
-   - Si premier module → noter qu'un bloc infra sera ajouté
+4. **Demander** : "Ce module fait-il partie d'un système existant ou est-ce le premier module ?"
+   - Si premier module → noter qu'un bloc infra sera ajouté (avec réduction stack si applicable)
    - Si additionnel → demander le pourcentage d'infrastructure (0-50%)
-4. **Détecter facteur de reproduction** : si le CDC mentionne un remplacement d'outil existant, proposer facteur (défaut 0.65)
-5. Attendre validation de la qualification
+5. **Détecter facteur de reproduction** : si le CDC mentionne un remplacement d'outil existant, proposer facteur (défaut 0.65)
+6. Attendre validation de la qualification
 
 ### Phase 1.1 — Extraction et sous-décomposition
 

@@ -26,6 +26,31 @@ Moteur d'extraction et de calcul pour l'estimation de projets forfaitaires.
 
 Avant d'extraire les blocs du CDC, identifier :
 
+### 0z. Stack technologique
+
+Demander si le projet utilise la **stack standard Somtech**. Si oui, charger `${CLAUDE_PLUGIN_ROOT}/templates/stack.json`.
+
+**Impact de la stack Somtech sur l'estimation :**
+
+1. **Bonus IA supplémentaire** (s'ajoute aux facteurs de base) :
+   - Dev (dev_senior, dev_junior) : +10% de réduction (Claude Code connaît très bien React + Supabase + Tailwind)
+   - Designer : +5% (shadcn/ui = composants prêts)
+   - QA : +5% (Playwright codegen)
+   - Formule : `reduction_finale = reduction_base + bonus_stack` (plafonné à 0.85 max)
+
+2. **Fonctionnalités gratuites** à exclure ou réduire :
+   - Auth (Supabase Auth) → ne pas estimer comme feature complète, seulement config RLS + rôles
+   - API REST → auto-générée par PostgREST, effort = 0 pour les endpoints CRUD
+   - Types TypeScript → auto-générés par `supabase gen types`, effort = 0
+   - Realtime → configuration channels seulement, pas de dev
+   - Storage → configuration buckets + policies seulement
+   - CI/CD → Netlify auto, pas de pipeline custom
+   - Composants UI de base → shadcn/ui, effort = assemblage seulement
+
+3. **Réduction infrastructure initiale** :
+   - Coût infra × 0.60 (Supabase Auth remplace auth custom, Netlify remplace CI/CD custom, shadcn/ui remplace design system from scratch)
+
+
 ### 0a. Nature dominante du projet
 
 | Nature | Indicateurs CDC | Types privilégiés |

@@ -1,6 +1,31 @@
 # Données de référence — somtech-estimator
 
 Source : `${CLAUDE_PLUGIN_ROOT}/templates/defaults.json`
+Stack : `${CLAUDE_PLUGIN_ROOT}/templates/stack.json`
+
+## Bonus stack Somtech
+
+Quand le projet utilise la stack standard Somtech (React + Supabase + Tailwind + shadcn/ui + Netlify), un bonus IA s'ajoute aux facteurs de base :
+
+| Rôle | Bonus IA | Justification |
+|------|---------|---------------|
+| Dev (senior + junior) | +10% | Claude Code excelle sur React + Supabase + Tailwind |
+| Designer | +5% | shadcn/ui = composants pré-fabriqués |
+| QA | +5% | Playwright codegen |
+| PM | +0% | Pas d'impact |
+
+**Formule** : `reduction_finale = min(reduction_base + bonus_stack, 0.85)`
+
+**Réduction infrastructure** : coût infra × 0.60 (Auth Supabase, CI/CD Netlify, shadcn/ui = built-in)
+
+**Fonctionnalités gratuites** (ne pas estimer ou réduire drastiquement) :
+- API REST auto-générée (PostgREST)
+- Types TypeScript (`supabase gen types`)
+- Auth (Supabase Auth) → config RLS seulement
+- Realtime → config channels seulement
+- Storage → config buckets seulement
+- CI/CD → Netlify auto
+- Composants UI de base → shadcn/ui assemblage
 
 ## Taux journaliers (marché québécois)
 
