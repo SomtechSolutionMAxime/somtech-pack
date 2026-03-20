@@ -277,6 +277,7 @@ Plugins installables via le module `plugins` du somtech-pack :
 | **audit-loi25** | Voir plugin.json | Audit de conformité Loi 25 / P-39.1 (Québec) pour projets Supabase/React/TypeScript |
 | **somtech-proposals** | Voir plugin.json | Complétion de cahiers des charges et offres de services à partir de gabarits Word |
 | **somtech-silo-manager** | Voir plugin.json | Génération et déploiement de silos applicatifs (architecture multi-tenant) |
+| **somtech-estimator** | Voir plugin.json | Estimation de projets forfaitaires — comparaison traditionnelle vs IA-assistée avec analyse de risque |
 
 ---
 
