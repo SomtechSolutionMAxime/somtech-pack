@@ -6,7 +6,7 @@ description: >
   "évaluer le risque d'un projet", ou a besoin d'extraire les features d'un CDC
   et de produire une estimation en jours-personne. Aussi déclenché par
   "estimation", "forfait", "coûts", "jours-personne", "facteur de risque".
-version: 0.3.0
+version: 0.4.0
 ---
 
 # Skill: estimation-engine
@@ -191,9 +191,57 @@ Présenter à l'utilisateur :
 
 ### Impact sur le calcul
 
-Les rôles marqués ❌ par l'utilisateur sont mis à 0% d'allocation pour toutes les tâches du projet. Leurs jours sont redistribués proportionnellement aux rôles restants.
+**En mode formule** : Les rôles marqués ❌ par l'utilisateur sont mis à 0% d'allocation pour toutes les tâches du projet. Leurs jours sont redistribués proportionnellement aux rôles restants.
 
-## Phase 2 — Calcul automatique
+**En mode direct** : Les rôles marqués ❌ sont mis à 0 jours dans l'overhead fixe. L'effort dev n'est pas affecté.
+
+## Phase 1.8 — Sélection du mode d'estimation
+
+Après la validation de l'équipe et la connaissance des blocs extraits, déterminer le mode d'estimation approprié.
+
+### Modes disponibles
+
+| Mode | Phase | Quand l'utiliser |
+|------|-------|------------------|
+| **Formule** | Phase 2A | Gros projets multi-équipes, équipe > 2 devs, 6+ blocs fonctionnels |
+| **Direct** | Phase 2B | Petits projets, équipe ≤ 2 devs, projets IA-first |
+
+### Critères de suggestion du mode direct
+
+Proposer le mode direct si **au moins deux** des critères suivants sont vrais :
+
+- Équipe projet ≤ 2 devs
+- Nombre de blocs fonctionnels < 6
+- Projet IA-first (RAG, chatbot, automatisation LLM, assistant IA)
+- Stack Somtech avec bonus IA activé
+
+Si un seul critère est vrai, mentionner la possibilité du mode direct mais recommander le mode formule par défaut.
+
+### Présentation à l'utilisateur
+
+```
+Mode d'estimation recommandé : [Direct / Formule]
+Raison : [critère(s) déclencheur(s)]
+
+Mode Direct — L'agent estime directement les jours dev par tâche (trad + IA).
+  L'overhead (PM, QA, Designer, Architecte) est estimé en bloc fixe pour le projet.
+  Adapté aux petits projets et équipes réduites.
+
+Mode Formule — Calcul automatique via fourchettes de référence et allocation par rôle.
+  Adapté aux gros projets avec équipe complète.
+
+Quel mode veux-tu utiliser ?
+```
+
+L'utilisateur peut toujours choisir l'autre mode, quelle que soit la recommandation.
+
+## Phase 2 — Calcul
+
+Deux modes de calcul sont disponibles. Le mode est sélectionné en Phase 0d.
+
+---
+
+## Phase 2A — Mode formule (calcul automatique)
 
 Charger les données de référence depuis `${CLAUDE_PLUGIN_ROOT}/templates/defaults.json`.
 Consulter `${CLAUDE_PLUGIN_ROOT}/skills/estimation-engine/references/defaults.md` pour les tableaux lisibles.
@@ -264,6 +312,94 @@ Le rapport doit afficher **pour chaque bloc** :
 - Coût traditionnel avec risque (et le facteur appliqué)
 - Coût IA brut
 - Coût IA avec risque
+
+---
+
+## Phase 2B — Mode direct (estimation par expertise)
+
+Ce mode est conçu pour les projets portés par 1-2 devs seniors, les projets IA-first, et les petites équipes. L'agent estime directement les jours dev par tâche sans passer par les fourchettes `effortBaseJours` ni l'allocation par rôle.
+
+### Principe
+
+- **Pas d'allocation par rôle** : l'effort est estimé en jours dev (combiné senior + junior)
+- **Pas de fourchettes** : l'agent utilise son expertise pour estimer directement
+- **Overhead en bloc fixe** : PM, QA, Designer et Architecte sont estimés globalement pour le projet, pas distribués par tâche
+- **Le risque par bloc s'applique** normalement (identique à la Phase 2A)
+
+### 2B-a. Estimation des jours dev par tâche
+
+Pour chaque tâche, l'agent estime directement deux valeurs :
+
+1. **Jours dev traditionnel** : estimation réaliste pour un dev senior sans assistance IA
+2. **Jours dev IA-assisté** : estimation pour un dev senior avec Claude Code / Cursor sur la stack du projet
+
+La grille `effortBaseJours_ia` dans `defaults.json` sert de **référence indicative** (pas de calcul automatique). L'agent peut s'en écarter selon le contexte du projet.
+
+**Calcul du coût dev par tâche** :
+- `cout_trad = jours_trad × tauxJournaliers.dev_senior`
+- `cout_ia = jours_ia × tauxJournaliers.dev_senior`
+
+(Simplification : en mode direct, tout l'effort dev est facturé au taux senior car l'équipe est réduite)
+
+### 2B-b. Évaluation des risques par bloc
+
+Identique à la Phase 2A (section 2b). Le risque reste évalué par bloc avec les scores de complexité et dépendances.
+
+### 2B-c. Overhead fixe du projet
+
+Charger la grille `overheadFixe` depuis `defaults.json`. Sélectionner la taille du projet selon le total des jours dev (traditionnel) :
+
+| Total jours dev trad | Taille |
+|---------------------|--------|
+| < 20j | petit |
+| 20-60j | moyen |
+| 60-120j | grand |
+| > 120j | tres_grand |
+
+La grille fournit des **valeurs de référence** pour chaque rôle d'overhead. L'agent peut les ajuster selon le contexte :
+
+- **PM** : coordination, suivi, points de contrôle
+- **QA** : tests fonctionnels, recette, validation
+- **Designer** : maquettes, design system, UX (0 si pas de UI)
+- **Architecte** : revue technique, décisions d'architecture
+
+Pour chaque rôle d'overhead, estimer deux valeurs :
+- **Jours traditionnel** : valeur de référence de la grille (ou ajustée)
+- **Jours IA-assisté** : `jours_trad × (1 - reductionIA_parRole[role])`
+
+**Coût overhead** :
+- `cout_overhead_role = jours × tauxJournaliers[role]`
+- `cout_overhead_total = somme(cout_overhead_role pour chaque role)`
+
+### 2B-d. Totaux
+
+Le risque s'applique **uniquement à l'effort dev**, pas à l'overhead. L'overhead (PM, QA, Designer, Architecte) représente des coûts fixes de coordination et qualité qui ne varient pas avec la complexité technique.
+
+```
+total_dev_trad_brut = somme(cout_trad de chaque tâche)
+total_dev_ia_brut = somme(cout_ia de chaque tâche)
+
+total_dev_trad_risque = total_dev_trad_brut × risque_global
+total_dev_ia_risque = total_dev_ia_brut × risque_global
+
+total_overhead_trad = somme(cout_overhead_trad de chaque rôle)
+total_overhead_ia = somme(cout_overhead_ia de chaque rôle)
+
+total_projet_trad = total_dev_trad_risque + total_overhead_trad
+total_projet_ia = total_dev_ia_risque + total_overhead_ia
+```
+
+Note : en mode direct, l'architecte est inclus dans l'overhead fixe (pas de surplus 5%).
+
+### 2B-e. Sous-totaux par bloc (affichage rapport)
+
+Identique à la Phase 2A (section 2f) pour la partie dev. L'overhead est présenté séparément comme un bloc à part.
+
+### Sortie Phase 2B
+
+Le format de sortie est compatible avec le rapport standard (Phase 3 et Phase 4). Le rapport mentionne le mode utilisé dans la section Paramètres.
+
+---
 
 ## Phase 3 — Review utilisateur
 

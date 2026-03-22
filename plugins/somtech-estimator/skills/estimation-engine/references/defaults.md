@@ -146,6 +146,38 @@ Claude estime au **milieu de la fourchette** (arrondi au 0.5 le plus proche). L'
 | `dashboard_config` | 1 – 3 | 4 – 7 | 8 – 12 |
 | `migration_donnees` | 2 – 5 | 6 – 10 | 11 – 16 |
 
+## Effort de base IA-assisté par type et complexité (jours) — Mode direct
+
+Fourchettes calibrées pour du dev IA-assisté sur stack moderne (Claude Code + Supabase + shadcn/ui). Utilisées comme **référence indicative** en mode direct (Phase 2B) — l'agent peut s'en écarter selon le contexte.
+
+| Type | Simple | Moyen | Complexe |
+|------|--------|-------|----------|
+| `crud` | 0.5 – 1 | 1 – 2 | 2 – 4 |
+| `pages_statiques` | 0.25 – 0.5 | 0.5 – 1 | 1 – 2 |
+| `ui_complexe` | 1 – 2 | 2 – 4 | 4 – 8 |
+| `logique_metier` | 1 – 3 | 3 – 6 | 6 – 12 |
+| `integration_api` | 1 – 2 | 2 – 5 | 5 – 10 |
+| `auth_securite` | 1 – 3 | 3 – 6 | 6 – 12 |
+| `infrastructure` | 0.5 – 1 | 1 – 3 | 3 – 6 |
+| `reporting` | 0.5 – 1 | 1 – 3 | 3 – 5 |
+| `gestion_projet` | 3 – 5 | 5 – 10 | 10 – 18 |
+| `etl_data` | 1 – 2 | 2 – 5 | 5 – 10 |
+| `dashboard_config` | 0.5 – 1 | 1 – 3 | 3 – 6 |
+| `migration_donnees` | 1 – 2 | 2 – 5 | 5 – 10 |
+
+## Overhead fixe par taille de projet — Mode direct
+
+Jours fixes d'overhead estimés en bloc pour le projet entier (pas distribués par tâche). L'architecte est inclus dans l'overhead (pas de surplus 5% séparé).
+
+| Taille | Total jours dev trad | PM | QA | Designer | Architecte |
+|--------|---------------------|-----|-----|----------|------------|
+| Petit | < 20j | 3j | 2j | 2j | 1j |
+| Moyen | 20 – 60j | 5j | 4j | 3j | 2j |
+| Grand | 60 – 120j | 8j | 6j | 5j | 3j |
+| Très grand | > 120j | 12j | 10j | 8j | 5j |
+
+Ces valeurs sont des références — l'agent les ajuste selon le contexte (ex: 0j Designer si pas d'UI, plus de QA si domaine critique).
+
 ## Facteur de reproduction
 
 Applicable lorsqu'un projet s'appuie sur un silo ou une base de code existante (reproduction partielle plutôt que greenfield).

@@ -6,7 +6,7 @@ description: >
   "faire une estimation", "calculer les coûts d'un CDC", "produire une offre forfaitaire",
   "comparer traditionnel vs IA", ou fournit un fichier CDC .docx pour estimation.
   Aussi déclenché par "estimation", "forfait", "coûts projet", "estimer", "/estimer".
-version: 0.3.0
+version: 0.4.0
 ---
 
 # /estimer — Estimation de projet forfaitaire
@@ -87,10 +87,30 @@ Inclut une analyse de risque par bloc (complexité technique + dépendances hors
    ```
 3. Attendre validation
 
-### Phase 2.0 — Calcul automatique
+### Phase 1.8 — Sélection du mode d'estimation
+
+1. **Évaluer les critères** de mode direct (voir estimation-engine Phase 1.8) :
+   - Compter les blocs fonctionnels extraits, la taille de l'équipe validée, la nature du projet
+2. **Proposer le mode recommandé** :
+   ```
+   Mode recommandé : [Direct / Formule]
+   Raison : [critère(s)]
+
+   Direct — Estimation directe des jours dev + overhead fixe en bloc.
+   Formule — Calcul automatique via fourchettes et allocation par rôle.
+
+   Quel mode ?
+   ```
+3. L'utilisateur choisit le mode → conditionne Phase 2A ou 2B
+
+### Phase 2.0 — Calcul
+
+Le calcul suit le mode choisi en Phase 1.0 (étape 6).
+
+#### Phase 2A — Mode formule (calcul automatique)
 
 1. **Charger les données de référence** : `${CLAUDE_PLUGIN_ROOT}/templates/defaults.json`
-2. **Consulter le skill** : `${CLAUDE_PLUGIN_ROOT}/skills/estimation-engine/SKILL.md` (section Phase 2)
+2. **Consulter le skill** : `${CLAUDE_PLUGIN_ROOT}/skills/estimation-engine/SKILL.md` (section Phase 2A)
 3. **Appliquer le facteur de reproduction** sur les blocs identifiés comme reproduction, avant toute allocation : `effort_ajusté = effort_base × facteur_reproduction`
 4. **Appliquer la composition d'équipe validée** : mettre à 0% l'allocation des rôles exclus, redistribuer proportionnellement aux rôles restants
 5. **Pour chaque bloc** :
@@ -102,12 +122,31 @@ Inclut une analyse de risque par bloc (complexité technique + dépendances hors
 7. **Si module additionnel** : appliquer le pourcentage d'infrastructure validé sur le coût de référence infrastructure
 8. **Calculer les totaux** : architecte (5% sur le brut global), facteur de risque global pondéré, totaux avec risque
 
+#### Phase 2B — Mode direct (estimation par expertise)
+
+1. **Charger les données de référence** : `${CLAUDE_PLUGIN_ROOT}/templates/defaults.json`
+2. **Consulter le skill** : `${CLAUDE_PLUGIN_ROOT}/skills/estimation-engine/SKILL.md` (section Phase 2B)
+3. **Appliquer le facteur de reproduction** si applicable : `jours_ajustés = jours_estimés × facteur_reproduction`
+4. **Pour chaque tâche** : estimer directement les jours dev (trad + IA) sans passer par les fourchettes ni l'allocation par rôle
+   - Utiliser `effortBaseJours_ia` comme référence indicative (pas de calcul automatique)
+   - Coût calculé au taux `dev_senior` (équipe réduite)
+5. **Évaluer les risques par bloc** (identique au mode formule)
+6. **Estimer l'overhead fixe** en bloc pour le projet entier :
+   - Charger la grille `overheadFixe` selon le total des jours dev
+   - Estimer PM, QA, Designer, Architecte en jours fixes (trad + IA)
+   - L'architecte est dans l'overhead (pas de surplus 5% séparé)
+7. **Si premier module** : calculer le bloc infrastructure initiale (même logique, mais jours estimés directement)
+8. **Si module additionnel** : appliquer le pourcentage d'infrastructure validé
+9. **Calculer les totaux** : dev avec risque + overhead + infrastructure
+
 ### Phase 3.0 — Review utilisateur
 
 1. **Présenter le tableau récapitulatif par bloc avec tâches** :
 
+   #### Format Mode Formule (Phase 2A)
+
    ```
-   ## Résumé de l'estimation
+   ## Résumé de l'estimation (Mode Formule)
 
    ### Bloc 1 : [Nom du bloc]
    Tâches : [Tâche 1], [Tâche 2], [Tâche 3]
@@ -119,17 +158,6 @@ Inclut une analyse de risque par bloc (complexité technique + dépendances hors
    | **Sous-total brut** | | | | **X** | | | **X** | **X XXX $** | **X XXX $** |
    | **Sous-total avec risque (×1.XX)** | | | | | | | | **X XXX $** | **X XXX $** |
 
-   ### Bloc 2 : [Nom du bloc]
-   Tâches : [Tâche 1], ...
-
-   | # | Bloc | Tâche | Type | Trad. (j) | Risque | IA factor | IA (j) | Trad. ($) | IA ($) |
-   |---|------|-------|------|-----------|--------|-----------|--------|-----------|--------|
-   | 2 | [Bloc 2] | [Tâche 1] | integration_api | X | ×1.XX | -XX% | X | X XXX $ | X XXX $ |
-   | **Sous-total brut** | | | | **X** | | | **X** | **X XXX $** | **X XXX $** |
-   | **Sous-total avec risque (×1.XX)** | | | | | | | | **X XXX $** | **X XXX $** |
-
-   ---
-
    ### Totaux
 
    | | Traditionnel | IA-assisté |
@@ -140,8 +168,48 @@ Inclut une analyse de risque par bloc (complexité technique + dépendances hors
    | Infrastructure (XX% du coût initial) | X XXX $ | X XXX $ |
    | **Total projet** | **XX XXX $** | **XX XXX $** |
    | **Économie projetée** | | **XX% (XX XXX $)** |
+   ```
 
-   Tu veux ajuster quelque chose (jours, risques, facteurs IA) ou on génère le rapport ?
+   #### Format Mode Direct (Phase 2B)
+
+   ```
+   ## Résumé de l'estimation (Mode Direct)
+
+   ### Bloc 1 : [Nom du bloc]
+
+   | # | Tâche | Type | Jours Trad | Jours IA | Coût Trad | Coût IA |
+   |---|-------|------|-----------|----------|-----------|---------|
+   | 1 | [Tâche 1] | crud | X | X | X XXX $ | X XXX $ |
+   | 2 | [Tâche 2] | logique_metier | X | X | X XXX $ | X XXX $ |
+   | **Sous-total bloc** | | | **X** | **X** | **X XXX $** | **X XXX $** |
+   | **Avec risque (×1.XX)** | | | | | **X XXX $** | **X XXX $** |
+
+   ...
+
+   ### Overhead projet (bloc fixe)
+
+   | Rôle | Jours Trad | Jours IA | Coût Trad | Coût IA |
+   |------|-----------|----------|-----------|---------|
+   | PM | X | X | X XXX $ | X XXX $ |
+   | QA | X | X | X XXX $ | X XXX $ |
+   | Designer | X | X | X XXX $ | X XXX $ |
+   | Architecte | X | X | X XXX $ | X XXX $ |
+   | **Total overhead** | **X** | **X** | **X XXX $** | **X XXX $** |
+
+   ### Totaux
+
+   | | Traditionnel | IA-assisté |
+   |---|---|---|
+   | Total dev (brut) | XX XXX $ | XX XXX $ |
+   | Marge de risque dev (×X.XX) | X XXX $ | X XXX $ |
+   | Overhead projet (hors risque) | X XXX $ | X XXX $ |
+   | Infrastructure | X XXX $ | X XXX $ |
+   | **Total projet** | **XX XXX $** | **XX XXX $** |
+   | **Économie projetée** | | **XX% (XX XXX $)** |
+   ```
+
+   ```
+   Tu veux ajuster quelque chose (jours, risques, overhead) ou on génère le rapport ?
    ```
 
 2. **Si ajustements demandés** : modifier les valeurs, recalculer, re-présenter le tableau
@@ -157,7 +225,7 @@ Inclut une analyse de risque par bloc (complexité technique + dépendances hors
    - Si absent : `pip install openpyxl --quiet`
    - Écrire et exécuter le script Python inline pour générer `estimations/YYYY-MM-DD-<nom-projet>-estimation.xlsx`
    - Le fichier Excel contient 5 feuilles : Traditionnel, Accéléré IA, Comparatif, Risque, Paramètres
-   - La feuille "Paramètres" documente : nature du projet, équipe retenue, facteur de reproduction, infrastructure %, taux utilisés, facteurs IA, modifications manuelles
+   - La feuille "Paramètres" documente : nature du projet, **mode d'estimation** (formule/direct), équipe retenue, facteur de reproduction, infrastructure %, taux utilisés, facteurs IA (mode formule) ou jours overhead (mode direct), modifications manuelles
 5. **Confirmer** :
    ```
    Rapport d'estimation généré :

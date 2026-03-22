@@ -6,7 +6,7 @@ description: >
   plusieurs feuilles). Déclenché après la validation utilisateur en Phase 3
   du pipeline d'estimation. Inclut le risque par bloc et la sous-décomposition
   en tâches.
-version: 0.3.0
+version: 0.4.0
 ---
 
 # Skill: estimation-report
@@ -41,7 +41,7 @@ Génération des livrables d'estimation (markdown + .xlsx).
 4. **Hypothèses et exclusions** : lister les hypothèses posées pendant l'estimation et ce qui n'est pas inclus
 5. **Paramètres utilisés** : taux journaliers, facteurs IA utilisés (surtout si modifiés par l'utilisateur)
 
-**Structure du détail par bloc** :
+**Structure du détail par bloc — Mode Formule** :
 
 ```markdown
 ### 1. [Nom du bloc]
@@ -65,6 +65,30 @@ Génération des livrables d'estimation (markdown + .xlsx).
 | **Sous-total avec risque (×X.XX)** | | **X $** | | **X $** |
 ```
 
+**Structure du détail par bloc — Mode Direct** :
+
+```markdown
+### 1. [Nom du bloc]
+- **Risque** : Complexité X/5 | Dépendances X/5 → Facteur ×X.XX
+
+| Tâche | Type | Jours Trad | Jours IA | Coût Trad | Coût IA |
+|-------|------|-----------|----------|-----------|---------|
+| [Tâche 1] | crud | X | X | X $ | X $ |
+| [Tâche 2] | logique_metier | X | X | X $ | X $ |
+| **Sous-total brut** | | **X** | **X** | **X $** | **X $** |
+| **Avec risque (×X.XX)** | | | | **X $** | **X $** |
+
+### Overhead projet (bloc fixe, hors risque)
+
+| Rôle | Jours Trad | Jours IA | Coût Trad | Coût IA |
+|------|-----------|----------|-----------|---------|
+| PM | X | X | X $ | X $ |
+| QA | X | X | X $ | X $ |
+| Designer | X | X | X $ | X $ |
+| Architecte | X | X | X $ | X $ |
+| **Total overhead** | **X** | **X** | **X $** | **X $** |
+```
+
 ---
 
 ## Phase 4b — Rapport Excel (.xlsx)
@@ -84,14 +108,15 @@ Le fichier contient 5 feuilles :
 - Regroupement par bloc fonctionnel (une ligne par tâche × rôle)
 - Sous-total brut par bloc (somme des coûts des tâches/rôles du bloc)
 - Sous-total avec risque par bloc (sous-total brut × facteur du bloc)
-- Ligne architecte (5% sur le total brut global)
+- **Mode formule** : Ligne architecte (5% sur le total brut global)
+- **Mode direct** : Bloc "Overhead projet" séparé (PM, QA, Designer, Architecte en jours fixes, hors risque)
 - Total général brut et total avec risque
 
 #### Feuille 2 : "Accéléré IA"
 
 - Même structure que "Traditionnel"
-- Jours et coûts calculés avec les facteurs IA appliqués par rôle/type
-- Facteur IA affiché par rôle dans une colonne dédiée
+- **Mode formule** : Jours et coûts calculés avec les facteurs IA appliqués par rôle/type, facteur IA affiché par rôle dans une colonne dédiée
+- **Mode direct** : Jours IA estimés directement par tâche, overhead IA = overhead trad × (1 - réduction par rôle)
 - Sous-totaux bruts et avec risque par bloc
 
 #### Feuille 3 : "Comparatif"
@@ -113,12 +138,14 @@ Le fichier contient 5 feuilles :
 #### Feuille 5 : "Paramètres"
 
 Documente toutes les décisions prises pendant l'estimation :
+- **Mode d'estimation** : Formule (Phase 2A) ou Direct (Phase 2B) — avec justification
 - Nature du projet (custom / data-BI / config / migration / hybride)
 - Équipe retenue (rôles, volumes, rôles exclus)
 - Facteur de reproduction (valeur, blocs concernés, justification)
 - Infrastructure : premier module ou additionnel (% appliqué, coût infra référence)
 - Taux journaliers utilisés
-- Facteurs IA appliqués par type
+- **Mode formule** : Facteurs IA appliqués par type, allocation par rôle
+- **Mode direct** : Jours overhead par rôle (référence grille + ajustements)
 - Modifications manuelles faites en Phase 3
 
 ### Formatage Excel
