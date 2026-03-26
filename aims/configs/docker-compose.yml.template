@@ -1,0 +1,18 @@
+services:
+  dev-orchestrator:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.agent
+      args:
+        AGENT_ID: dev-orchestrator
+        SILO_NAME: "{{PROJECT_NAME}}"
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - orchestrator-workspace:/silo/workspace
+    restart: unless-stopped
+
+volumes:
+  orchestrator-workspace:

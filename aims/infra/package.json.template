@@ -1,0 +1,21 @@
+{
+  "name": "{{PROJECT_NAME}}-aims-orchestrator",
+  "version": "5.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AIMS v5 orchestrator for {{PROJECT_NAME}}",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/orchestrator.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.71",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@slack/web-api": "^7.0.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^20.0.0"
+  }
+}

@@ -15,6 +15,9 @@ Compléter un contrat cadre de services (CCS) à partir du gabarit Word intégr�
 
 2. **Charger le gabarit intégré** :
    Le gabarit officiel est inclus dans le plugin : `${CLAUDE_PLUGIN_ROOT}/templates/CONTRAT-CADRE DE SERVICES (CCS) - Somtech inc. V4.0.docx`
+
+   > **NOTE** : Le gabarit V4.0 est utilisé **ICI uniquement** pour **CRÉER un nouveau contrat cadre**. Dans toutes les autres commandes (`/complete-offre`, `/complete-cahier`, `/verifier-clauses`), c'est le contrat cadre **signé du client** qui fait référence — pas ce gabarit.
+
    - Lire et analyser sa structure (sections, placeholders, mise en forme)
    - Identifier tous les champs à compléter :
      - `[NOM DU CLIENT]` — Nom légal de l'entreprise cliente

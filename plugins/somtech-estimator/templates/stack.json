@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "nom": "Stack standard Somtech",
+  "description": "Stack utilisée sur tous les projets de développement sur mesure pour les clients de Somtech.",
+
+  "composants": {
+    "frontend": {
+      "technologies": ["React 18.x", "TypeScript 5.x", "Tailwind CSS 3.x", "shadcn/ui", "React Router 6.x", "Zustand", "React Query"],
+      "impact_estimation": "Composants UI pré-fabriqués (shadcn/ui), design system interne, routing SPA. Réduit significativement l'effort frontend."
+    },
+    "backend": {
+      "technologies": ["Supabase (PostgreSQL 16.x)", "Supabase Auth", "Supabase Storage", "Supabase Realtime", "Edge Functions (Deno/TypeScript)"],
+      "impact_estimation": "Auth, DB, Storage, Realtime intégrés. RLS natif. Types auto-générés. Réduit le setup backend d'environ 70%."
+    },
+    "hosting": {
+      "technologies": ["Netlify (frontend)", "Fly.io (conteneurs AIMS)"],
+      "impact_estimation": "CI/CD automatique, preview deploys. Zéro config serveur."
+    },
+    "tests": {
+      "technologies": ["Playwright (E2E)", "Vitest (unitaires)"],
+      "impact_estimation": "Tests E2E générables par IA (Playwright codegen)."
+    },
+    "outils_dev": {
+      "technologies": ["Claude Code", "Cursor", "VS Code", "Figma"],
+      "impact_estimation": "Développement AI-first. Claude Code connaît très bien Supabase + React + Tailwind."
+    }
+  },
+
+  "fonctionnalites_gratuites": {
+    "description": "Ce que la stack fournit sans effort de développement significatif",
+    "liste": [
+      { "fonctionnalite": "Authentification (email, OAuth, SSO)", "fournisseur": "Supabase Auth", "effort_residuel": "Configuration RLS + rôles seulement" },
+      { "fonctionnalite": "Row Level Security (RLS)", "fournisseur": "Supabase PostgreSQL", "effort_residuel": "Écriture des policies SQL" },
+      { "fonctionnalite": "API REST auto-générée", "fournisseur": "Supabase PostgREST", "effort_residuel": "Aucun — auto-généré depuis le schéma" },
+      { "fonctionnalite": "Types TypeScript", "fournisseur": "supabase gen types", "effort_residuel": "Commande CLI, aucun effort manuel" },
+      { "fonctionnalite": "Realtime (subscriptions)", "fournisseur": "Supabase Realtime", "effort_residuel": "Configuration channels seulement" },
+      { "fonctionnalite": "Storage fichiers", "fournisseur": "Supabase Storage", "effort_residuel": "Configuration buckets + policies" },
+      { "fonctionnalite": "CI/CD + preview deploys", "fournisseur": "Netlify", "effort_residuel": "Configuration initiale seulement" },
+      { "fonctionnalite": "Composants UI (boutons, modals, tables, forms)", "fournisseur": "shadcn/ui", "effort_residuel": "Assemblage + personnalisation" },
+      { "fonctionnalite": "MCP server", "fournisseur": "Edge Functions Supabase", "effort_residuel": "Développement endpoints MCP" }
+    ]
+  },
+
+  "bonus_ia_stack": {
+    "description": "Bonus de réduction IA supplémentaire quand le projet utilise la stack Somtech. S'ajoute aux facteurs IA de base.",
+    "bonus_dev": 0.10,
+    "bonus_designer": 0.05,
+    "bonus_qa": 0.05,
+    "bonus_pm": 0.00,
+    "justification": "Claude Code / Cursor connaissent très bien React + Supabase + Tailwind. shadcn/ui réduit le travail designer. Playwright codegen aide le QA."
+  },
+
+  "infrastructure_stack": {
+    "description": "Quand le projet utilise la stack Somtech, les tâches d'infrastructure initiale sont simplifiées.",
+    "facteur_reduction_infra": 0.60,
+    "justification": "Supabase Auth (pas d'auth custom), Netlify CI/CD (pas de pipeline custom), shadcn/ui (pas de design system from scratch). L'infra initiale prend ~60% de ce qu'elle prendrait avec une stack inconnue."
+  }
+}

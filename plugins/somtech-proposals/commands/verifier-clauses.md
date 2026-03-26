@@ -26,7 +26,8 @@ Comparer les clauses juridiques d'une offre de services avec le contrat cadre du
    - Si aucun fichier trouvé, demander à l'utilisateur de fournir le contrat cadre
 
 3. **Extraire les clauses du contrat cadre** :
-   - Lire le PDF du contrat cadre
+   > **IMPORTANT** : Extraire les clauses du contrat cadre **SIGNÉ DU CLIENT** détecté dans le workspace. NE PAS utiliser le gabarit template `CONTRAT-CADRE DE SERVICES (CCS) - Somtech inc. V4.0.docx` — les conditions signées par le client peuvent différer du gabarit V4.0.
+   - Lire le PDF du contrat cadre signé du client
    - Identifier et extraire chaque clause juridique
    - Classifier par catégorie selon la taxonomie (PI, confidentialité, responsabilité, financier, portée, résiliation, litiges, assurances)
 

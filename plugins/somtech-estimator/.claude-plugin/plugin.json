@@ -1,0 +1,9 @@
+{
+  "name": "somtech-estimator",
+  "version": "0.4.0",
+  "description": "Estimation de projets forfaitaires — mode formule (gros projets) et mode direct (petits projets / IA-first), qualification de projet, proposition d'équipe, facteur de reproduction, infrastructure initiale, comparaison traditionnelle vs IA-assistée avec analyse de risque par bloc et sous-décomposition en tâches",
+  "author": {
+    "name": "Somtech"
+  },
+  "keywords": ["estimation", "coûts", "forfait", "CDC", "risque", "IA", "excel", "xlsx"]
+}

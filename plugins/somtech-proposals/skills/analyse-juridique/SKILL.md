@@ -28,6 +28,8 @@ Glob: **/CONTRAT_CADRE*
 
 Si un fichier est trouvé, l'utiliser automatiquement. Si plusieurs correspondent, demander à l'utilisateur lequel utiliser.
 
+> **IMPORTANT** : Le contrat cadre **signé du client** (détecté dans le workspace) est la **SEULE source de vérité contractuelle**. NE PAS utiliser le gabarit template `CONTRAT-CADRE DE SERVICES (CCS) - Somtech inc. V4.0.docx` comme référence juridique — ce gabarit sert uniquement à la création de nouveaux contrats via `/complete-contrat`. Les conditions signées par le client peuvent différer du gabarit V4.0.
+
 ## Processus d'Analyse
 
 ### Étape 1 : Extraction du Contrat Cadre
@@ -39,7 +41,7 @@ Si un fichier est trouvé, l'utiliser automatiquement. Si plusieurs corresponden
 
 ### Étape 2 : Extraction des Clauses de l'Offre
 
-1. Lire le document d'offre de services (.docx) — soit le gabarit complété, soit un brouillon
+1. Lire le document d'offre de services (.docx) — soit le gabarit complété, soit un brouillon. La comparaison se fait avec le contrat **signé du client** (étape 1), pas avec le gabarit V4.0.
 2. Identifier toutes les mentions de clauses, conditions et engagements
 3. Classifier par catégorie correspondante
 
