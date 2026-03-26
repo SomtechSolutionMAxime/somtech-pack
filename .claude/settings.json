@@ -1,8 +1,8 @@
 {
-  "enabledPlugins": [
-    "supabase@claude-plugins-official",
-    "spec-kit@github-spec-kit"
-  ],
+  "enabledPlugins": {
+    "supabase@claude-plugins-official": true,
+    "spec-kit@github-spec-kit": true
+  },
   "permissions": {
     "allow": [
       "Read",

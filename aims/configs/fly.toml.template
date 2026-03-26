@@ -1,0 +1,41 @@
+app = "{{FLY_APP_NAME}}"
+org = "{{FLY_ORG}}"
+primary_region = "{{FLY_REGION}}"
+
+[build]
+  dockerfile = "infra/Dockerfile.agent"
+
+[build.args]
+  AGENT_ID = "dev-orchestrator"
+  SILO_NAME = "{{PROJECT_NAME}}"
+
+[env]
+  POLL_INTERVAL = "30"
+  MAX_CONCURRENT_RUNS = "2"
+  MAX_RETRIES = "2"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+    force_https = true
+
+  [[services.http_checks]]
+    interval = 30000
+    timeout = 5000
+    path = "/health"
+    method = "GET"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[mounts]
+  source = "workspace"
+  destination = "/silo/workspace"

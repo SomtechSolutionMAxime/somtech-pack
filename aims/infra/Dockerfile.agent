@@ -1,0 +1,85 @@
+# ============================================================
+# AIMS v5 — Dockerfile unifie pour orchestrator TypeScript
+# Usage: docker build --build-arg AGENT_ID=dev-orchestrator -t aims-orchestrator .
+#
+# v5: Single orchestrator with 5 SDK-native subagents
+# ============================================================
+
+FROM node:20-slim AS base
+
+# Args de build
+ARG AGENT_ID
+ARG SILO_NAME=aims-silo
+
+# Labels
+LABEL maintainer="Somtech <maxime.leboeuf@somtech.ca>"
+LABEL aims.agent="${AGENT_ID}"
+LABEL aims.version="5.0"
+
+# Env de base
+ENV AGENT_ID=${AGENT_ID}
+ENV SILO_NAME=${SILO_NAME}
+ENV NODE_ENV=production
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Dependances systeme
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# GitHub CLI (requis pour gh pr create)
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Repertoire de travail
+WORKDIR /silo
+
+# --- Build TypeScript ---
+
+# Install dependencies (cached layer)
+COPY infra/package.json /silo/package.json
+COPY infra/tsconfig.json /silo/tsconfig.json
+RUN npm install --include=dev
+
+# Copy source and compile
+COPY src/ /silo/src/
+RUN npx tsc -p tsconfig.json && rm -rf src/
+
+# --- Runtime files ---
+
+# YAML parser (for workflow config)
+COPY infra/parse-yaml.js /silo/parse-yaml.js
+
+# Agent definitions
+COPY agents/${AGENT_ID}/ /silo/agent/
+COPY agents/ /silo/agents/
+
+# Skills
+COPY skills/ /silo/skills/
+
+# Entrypoint script (v5)
+COPY infra/entrypoint-v5.sh /silo/entrypoint-v5.sh
+RUN chmod +x /silo/entrypoint-v5.sh
+
+# User non-root
+RUN groupadd -r aims && useradd -r -g aims -d /silo -s /bin/bash aims \
+    && mkdir -p /silo/workspace /home/aims/.claude \
+    && chown -R aims:aims /silo /home/aims
+ENV HOME=/home/aims
+USER aims
+
+# Healthcheck
+HEALTHCHECK --interval=90s --timeout=5s --retries=3 \
+  CMD pgrep -f "orchestrator.js\|entrypoint" > /dev/null || exit 1
+
+ENTRYPOINT ["/silo/entrypoint-v5.sh"]
