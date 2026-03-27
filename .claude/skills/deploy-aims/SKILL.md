@@ -67,9 +67,11 @@ Si echec → afficher les logs (`docker compose logs dev-orchestrator`) et arret
 
 ## Etape 4 : Fly.io setup
 
+Lire `fly.toml` pour extraire `FLY_ORG` (champ `org`). Si absent, demander a l'utilisateur.
+
 ```bash
-# Creer l'app (idempotent — ignore si elle existe deja)
-fly apps create FLY_APP_NAME 2>/dev/null || true
+# Creer l'app dans l'organisation du client (idempotent — ignore si elle existe deja)
+fly apps create FLY_APP_NAME --org FLY_ORG 2>/dev/null || true
 
 # Creer le volume pour le workspace git (10GB)
 fly volumes create workspace --size 10 --region FLY_REGION -a FLY_APP_NAME

@@ -1,4 +1,5 @@
 app = "{{FLY_APP_NAME}}"
+org = "{{FLY_ORG}}"
 primary_region = "{{FLY_REGION}}"
 
 [build]
