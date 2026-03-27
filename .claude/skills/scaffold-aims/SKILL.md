@@ -56,6 +56,7 @@ Demander a l'utilisateur :
 | `APPLICATION_ID` | "Quel est l'UUID de l'application dans le ServiceDesk ?" | Format UUID |
 | `SERVICEDESK_API_KEY` | "Quelle est la cle API ServiceDesk (sk_live_...) ?" | Commence par `sk_live_` |
 | `SLACK_CHANNEL` | "Quel canal Slack pour l'agent ? (optionnel, entrer pour skip)" | Commence par `#` ou vide |
+| `FLY_ORG` | "Quelle organisation Fly.io pour ce client ?" | Nom d'org Fly.io valide |
 | `FLY_REGION` | "Region Fly.io ? (defaut: yyz)" | Code region Fly.io |
 
 Proposer les valeurs auto-detectees :
@@ -121,7 +122,7 @@ Pour chaque fichier `.template.*`, lire le contenu et remplacer les placeholders
 | `orchestrator.template.ts` | `orbit/silo/aims/src/orchestrator.ts` | Aucun (copie directe) |
 | `agents/dev-orchestrator/agent.template.md` | `orbit/silo/aims/agents/dev-orchestrator/agent.md` | `{{FLY_APP_NAME}}` |
 | `agents/dev-orchestrator/brief.template.yaml` | `orbit/silo/aims/agents/dev-orchestrator/brief.yaml` | Aucun (deja generique) |
-| `configs/fly.toml.template` | `orbit/silo/aims/fly.toml` | `{{FLY_APP_NAME}}`, `{{FLY_REGION}}`, `{{PROJECT_NAME}}` |
+| `configs/fly.toml.template` | `orbit/silo/aims/fly.toml` | `{{FLY_APP_NAME}}`, `{{FLY_ORG}}`, `{{FLY_REGION}}`, `{{PROJECT_NAME}}` |
 | `configs/docker-compose.yml.template` | `orbit/silo/aims/docker-compose.yml` | `{{PROJECT_NAME}}` |
 | `infra/package.json.template` | `orbit/silo/aims/infra/package.json` | `{{PROJECT_NAME}}` |
 | `configs/.env.example` | `orbit/silo/aims/.env.example` | Aucun (copie directe) |
