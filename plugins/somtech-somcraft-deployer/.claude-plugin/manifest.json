@@ -1,0 +1,8 @@
+{
+  "name": "somtech-somcraft-deployer",
+  "version": "1.0.0",
+  "somcraftVersion": "0.4.0",
+  "description": "Deploy SomCraft (DMS Markdown-first) instances on client infrastructure (Supabase + Fly.io)",
+  "author": "Somtech Solutions",
+  "license": "MIT"
+}

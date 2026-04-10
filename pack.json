@@ -32,7 +32,7 @@
       ]
     },
     "plugins": {
-      "description": "Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager)",
+      "description": "Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager, somtech-somcraft-deployer)",
       "default": false,
       "paths": [
         "plugins/"
