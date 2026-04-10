@@ -72,6 +72,7 @@ Une instance Fly.io par client × environnement, connectée au Supabase du clien
 
 ## Version
 
+- **v0.2.0** (2026-04-10) — `/deploy-rag` utilise l'image GHCR (`ghcr.io/somtech-solutions/ragservice`) au lieu de builder localement. Support du flag `--version` pour pinner une version spécifique. Ajout de commandes de diagnostic d'image dans `troubleshooting.md`.
 - **v0.1.0** (2026-04-10) — Version initiale. `/deploy-rag` + skill `rag` avec références.
 
 ## Liens
