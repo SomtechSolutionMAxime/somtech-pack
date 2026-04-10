@@ -1,7 +1,7 @@
 ---
 description: Déployer le Somtech RAG Service pour un client × environnement donné. Provisionne Fly.io, applique la migration Supabase via MCP, set les secrets, déploie, vérifie le health check, et génère/met à jour RAG.md dans le projet client.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
-argument-hint: "[client] [env]"
+argument-hint: "[client] [env] [--version X.Y.Z]"
 ---
 
 # /deploy-rag — Déploiement RAG Service par client
@@ -39,12 +39,19 @@ Ce slash command provisionne une instance complète du Somtech RAG Service pour 
 | `openai_api_key` | non | fichier ou question | clé Somtech partagée |
 | `anthropic_api_key` | non | fichier ou question | clé Somtech partagée |
 | `client_project_path` | non | question | `~/GitRepo.nosync/<client>` |
+| `version` | non | argument `--version X.Y.Z` | `latest` en dev/staging ; demandé pour prod |
 
 ### Logique
 
 **Si l'utilisateur a passé des arguments** (ex: `/deploy-rag acme dev`), utiliser :
-- Premier argument = `client`
-- Deuxième argument = `env`
+- Premier argument positionnel = `client`
+- Deuxième argument positionnel = `env`
+- Flag `--version <X.Y.Z>` = version de l'image à déployer (optionnel)
+
+**Détermination de la version** :
+- Si `--version` est passé → utiliser cette version (ex: `0.1.0`)
+- Sinon si `env` = `dev` ou `staging` → utiliser `latest`
+- Sinon si `env` = `prod` → demander à l'utilisateur : "Version à déployer (défaut: latest, recommandé: pinner une version précise comme 0.1.0)"
 
 **Sinon**, demander interactivement avec `AskUserQuestion` :
 
@@ -151,12 +158,20 @@ fly secrets set \
 
 **Important** : Ne jamais logger les valeurs des clés. Afficher seulement `"Secrets set for rag-<client>-<env>"`.
 
-### Deploy depuis le repo
+### Deploy depuis l'image GHCR
 
 ```bash
-cd ~/GitRepo.nosync/ragservice
-fly deploy --app rag-<client>-<env>
+fly deploy --app rag-<client>-<env> \
+  --image ghcr.io/somtech-solutions/ragservice:<version>
 ```
+
+Où `<version>` est `latest` par défaut ou la version spécifiée par `--version`.
+
+**Pas de build local** : Fly.io pull l'image publique depuis GitHub Container Registry. Le déploiement prend ~10-30 secondes au lieu de ~2 minutes (vs l'ancien flux avec build).
+
+Si Fly.io retourne une erreur de pull (image introuvable), vérifier :
+- Que le package `ragservice` est bien public sur GHCR (`github.com/orgs/Somtech-Solutions/packages`)
+- Que le tag existe (`docker pull ghcr.io/somtech-solutions/ragservice:<version>`)
 
 Attendre la fin du déploiement. Si échec, afficher `fly logs -a rag-<client>-<env>` et escalader.
 
