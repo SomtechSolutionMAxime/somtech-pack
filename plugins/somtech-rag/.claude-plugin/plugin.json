@@ -1,0 +1,18 @@
+{
+  "name": "somtech-rag",
+  "version": "0.1.0",
+  "description": "Déploiement et documentation du Somtech RAG Service. Provisionne une instance par client × environnement (dev/staging/prod) sur Fly.io + Supabase, et fournit la connaissance d'architecture et d'usage.",
+  "author": {
+    "name": "Somtech"
+  },
+  "keywords": [
+    "rag",
+    "retrieval",
+    "embeddings",
+    "documents",
+    "pgvector",
+    "fly.io",
+    "supabase",
+    "somtech"
+  ]
+}
