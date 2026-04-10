@@ -17,6 +17,36 @@ fly logs -a rag-<client>-<env>
 fly apps restart rag-<client>-<env>
 ```
 
+### Vérifier quelle image tourne
+
+```bash
+fly image show -a rag-<client>-<env>
+```
+
+Retourne le digest et le tag de l'image Docker actuellement déployée. Utile pour :
+- Vérifier qu'un deploy a bien pris effet
+- Identifier la version en cas de bug (ex: `ghcr.io/somtech-solutions/ragservice:0.1.0`)
+- Comparer entre environnements (dev/staging/prod tournent-ils la même image ?)
+
+Pour voir les versions disponibles sur GHCR :
+
+```bash
+# Via curl (liste publique)
+curl -s https://ghcr.io/v2/somtech-solutions/ragservice/tags/list
+
+# Ou via docker
+docker pull ghcr.io/somtech-solutions/ragservice:0.1.0
+```
+
+Pour rollback vers une version précédente :
+
+```bash
+fly deploy --app rag-<client>-<env> \
+  --image ghcr.io/somtech-solutions/ragservice:0.0.9
+```
+
+Aucun rebuild nécessaire — juste un pull de l'ancienne image.
+
 ### Health check
 
 ```bash
