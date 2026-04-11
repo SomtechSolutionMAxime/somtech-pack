@@ -235,9 +235,10 @@ Attendu : 200 OK avec `{"status":"ok"}`
 3. Test 2 — MCP server :
 
 ```bash
-curl -X POST "https://$APP_URL/api/mcp/http" \
+curl -X POST "https://$APP_URL/api/mcp/mcp" \
   -H "Authorization: Bearer $SOMCRAFT_MCP_API_KEY" \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
@@ -338,8 +339,8 @@ Prochaines étapes :
      {
        "somcraft-{client-slug}": {
          "type": "http",
-         "url": "https://{app-url}/api/mcp/http",
-         "headers": { "Authorization": "Bearer <from-1password>" }
+         "url": "https://{app-url}/api/mcp/mcp",
+         "headers": { "Authorization": "Bearer <from-1password>", "Accept": "application/json, text/event-stream" }
        }
      }
 

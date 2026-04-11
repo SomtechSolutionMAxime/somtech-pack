@@ -97,7 +97,7 @@ Endpoints principaux (tous sous `/api/sc/`) :
 
 Pour le détail, voir `references/api-reference.md`.
 
-Endpoint : `POST /api/mcp/http` avec `Authorization: Bearer {api_key}`.
+Endpoint : `POST /api/mcp/mcp` avec `Authorization: Bearer {api_key}` et `Accept: application/json, text/event-stream`.
 
 9 tools disponibles :
 

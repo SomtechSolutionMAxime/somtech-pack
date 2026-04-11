@@ -26,9 +26,10 @@ HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" "https://$APP_URL/")
 ## Test 2 — MCP server
 
 ```bash
-MCP_RESPONSE=$(curl -sf -X POST "https://$APP_URL/api/mcp/http" \
+MCP_RESPONSE=$(curl -sf -X POST "https://$APP_URL/api/mcp/mcp" \
   -H "Authorization: Bearer $SOMCRAFT_MCP_API_KEY" \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' || echo "FAILED")
 
 if echo "$MCP_RESPONSE" | grep -q "list_workspaces"; then

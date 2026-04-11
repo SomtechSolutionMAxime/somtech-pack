@@ -97,9 +97,10 @@
      "mcpServers": {
        "somcraft-client": {
          "type": "http",
-         "url": "https://{instance}.fly.dev/api/mcp/http",
+         "url": "https://{instance}.fly.dev/api/mcp/mcp",
          "headers": {
-           "Authorization": "Bearer sk_live_..."
+           "Authorization": "Bearer sk_live_...",
+           "Accept": "application/json, text/event-stream"
          }
        }
      }
@@ -107,7 +108,7 @@
    ```
 
 2. **Endpoint incorrect**
-   - Doit être `/api/mcp/http` (pas `/api/mcp/sse` ou `/api/mcp`)
+   - Doit être `/api/mcp/mcp` (pas `/api/mcp/http`, `/api/mcp/sse` ou `/api/mcp`)
 
 3. **Restart du client MCP**
    - Claude Code doit redémarrer pour charger `.mcp.json`

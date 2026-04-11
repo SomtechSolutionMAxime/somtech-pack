@@ -52,9 +52,10 @@ Configuration MCP client :
   "mcpServers": {
     "somcraft-{{CLIENT_SLUG}}": {
       "type": "http",
-      "url": "{{PROD_URL}}/api/mcp/http",
+      "url": "{{PROD_URL}}/api/mcp/mcp",
       "headers": {
-        "Authorization": "Bearer <from-1password>"
+        "Authorization": "Bearer <from-1password>",
+        "Accept": "application/json, text/event-stream"
       }
     }
   }
