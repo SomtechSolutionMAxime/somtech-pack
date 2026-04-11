@@ -1,6 +1,6 @@
 {
   "name": "somtech-somcraft-deployer",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "somcraftVersion": "0.4.2",
   "description": "Plugin Claude Code pour déployer SomCraft (DMS Markdown-first) en instance dédiée sur des clients existants. Applique les migrations Supabase, déploie l'image Docker sur Fly.io, seed le workspace initial, et installe des skills de documentation (global + projet).",
   "author": {
