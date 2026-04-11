@@ -59,7 +59,7 @@ Si l'une de ces étapes échoue, arrête et affiche l'erreur clairement.
 | Supabase project  | {project-ref}                            |
 | Fly app           | somcraft-{client-slug}-{env}             |
 | Fly org           | {fly-org}                                |
-| Image Docker      | ghcr.io/somtech-solutions/somcraft:0.4.1 |
+| Image Docker      | ghcr.io/somtech-solutions/somcraft:0.4.2 |
 | Workspace initial | {client-name} - Docs                     |
 | Admin email       | (demandé à la prochaine étape)           |
 | Migrations        | (détecté après clone)                    |
