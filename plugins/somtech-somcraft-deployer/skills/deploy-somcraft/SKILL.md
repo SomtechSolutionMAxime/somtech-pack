@@ -25,7 +25,7 @@ Détecter le mode en lisant le prompt de l'utilisateur.
 
 **Référence détaillée :** `references/preflight-checks.md`
 
-1. Lis `CLAUDE.md` du projet courant. Extrais le nom du client (chercher "Client:", "Projet:", ou le titre H1).
+1. Lis le fichier CLAUDE.md du projet courant. Chercher dans l'ordre : `.claude/CLAUDE.md` (emplacement standard Somtech), puis `CLAUDE.md` à la racine en fallback. Extrais le nom du client (chercher "Client:", "Projet:", ou le titre H1).
 2. Lis `.mcp.json`. Vérifie qu'il contient une entrée pour Supabase MCP avec un `project_ref` valide.
 3. Lis `fly.toml`. Extrais :
    - `app` (nom de l'app Fly.io actuelle)
