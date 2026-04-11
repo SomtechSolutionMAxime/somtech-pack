@@ -204,7 +204,12 @@ data: {"type":"complete","documentId":"...","path":"/_studio/..."}
 
 ## MCP Tools
 
-Endpoint : `POST /api/mcp/http` avec `Authorization: Bearer {api_key}`.
+Endpoint : `POST /api/mcp/mcp` avec `Authorization: Bearer {api_key}`.
+
+Headers requis :
+- `Authorization: Bearer {api_key}`
+- `Content-Type: application/json`
+- `Accept: application/json, text/event-stream`
 
 Protocole : JSON-RPC 2.0 (MCP standard).
 

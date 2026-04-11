@@ -69,9 +69,11 @@ Panneau de génération de documents via **pipelines AI multi-étapes**.
 
 Endpoint HTTP qui expose les fonctionnalités de SomCraft via le protocole MCP (Model Context Protocol). Permet aux agents externes (Claude Code, Copilot, etc.) d'interagir avec une instance SomCraft.
 
-**Endpoint :** `POST {instance-url}/api/mcp/http`
+**Endpoint :** `POST {instance-url}/api/mcp/mcp`
 
 **Authentification :** Header `Authorization: Bearer {api_key}` où `api_key` est la valeur de `sc_workspaces.api_key`.
+
+**Header Accept obligatoire :** `Accept: application/json, text/event-stream`
 
 **Note :** Une API key est scopée à UN workspace. Pour accéder à plusieurs workspaces, il faut une API key par workspace.
 
