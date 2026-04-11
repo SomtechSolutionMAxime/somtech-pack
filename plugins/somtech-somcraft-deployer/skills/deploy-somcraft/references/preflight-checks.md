@@ -4,7 +4,23 @@ Checklist détaillée de la Phase 0 du déploiement SomCraft.
 
 ## 1. Détection du client (CLAUDE.md)
 
-Lire `CLAUDE.md` à la racine du projet. Patterns à chercher dans l'ordre :
+Chercher le fichier CLAUDE.md dans l'ordre suivant (le premier trouvé gagne) :
+
+1. **`.claude/CLAUDE.md`** — Emplacement standard Somtech (le pack `somtech-pack` installe le CLAUDE.md ici)
+2. **`CLAUDE.md`** — Fallback à la racine du projet pour les projets non-Somtech
+
+```bash
+if [ -f .claude/CLAUDE.md ]; then
+  CLAUDE_MD_PATH=".claude/CLAUDE.md"
+elif [ -f CLAUDE.md ]; then
+  CLAUDE_MD_PATH="CLAUDE.md"
+else
+  echo "Erreur: aucun CLAUDE.md trouvé (ni .claude/CLAUDE.md, ni CLAUDE.md à la racine)"
+  exit 1
+fi
+```
+
+Une fois le fichier trouvé, chercher le nom du client via les patterns suivants dans l'ordre :
 
 1. Une ligne `# Client: {name}` ou `## Client — {name}`
 2. Le premier titre H1 du document
