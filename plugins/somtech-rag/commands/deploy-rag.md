@@ -22,7 +22,7 @@ Ce slash command provisionne une instance complète du Somtech RAG Service pour 
 - Le repo `ragservice` doit être cloné localement (par défaut : `~/GitRepo.nosync/ragservice`)
 - `fly` CLI installé et authentifié (`fly auth whoami`)
 - MCP Supabase configuré avec accès au project_ref du client
-- Clés OpenAI et Anthropic (soit partagées Somtech dans `~/.claude/memory/somtech-api-keys.env`, soit fournies à la demande)
+- Clé Cohere et clé Anthropic (soit partagées Somtech dans `~/.claude/memory/somtech-api-keys.env`, soit fournies à la demande)
 
 ---
 
@@ -36,7 +36,7 @@ Ce slash command provisionne une instance complète du Somtech RAG Service pour 
 | `env` | oui | argument ou question | — (dev/staging/prod) |
 | `supabase_project_ref` | oui | question | — |
 | `fly_org` | non | question | `somtech` |
-| `openai_api_key` | non | fichier ou question | clé Somtech partagée |
+| `cohere_api_key` | non | fichier ou question | clé Somtech partagée |
 | `anthropic_api_key` | non | fichier ou question | clé Somtech partagée |
 | `client_project_path` | non | question | `~/GitRepo.nosync/<client>` |
 | `version` | non | argument `--version X.Y.Z` | `latest` en dev/staging ; demandé pour prod |
@@ -63,13 +63,13 @@ Ce slash command provisionne une instance complète du Somtech RAG Service pour 
 **Pour les clés API** :
 
 - Lire `~/.claude/memory/somtech-api-keys.env` s'il existe
-- Si le fichier n'existe pas, demander à l'utilisateur OpenAI et Anthropic
+- Si le fichier n'existe pas, demander à l'utilisateur Cohere et Anthropic
 - Offrir d'override les clés Somtech si le client a ses propres clés
 
 **Format du fichier `somtech-api-keys.env`** :
 
 ```env
-OPENAI_API_KEY=sk-...
+COHERE_API_KEY=...
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -86,31 +86,39 @@ Si une validation échoue, afficher l'erreur et demander à nouveau.
 
 ---
 
-## Étape 2 — Appliquer la migration RAG
+## Étape 2 — Appliquer les migrations RAG (incrémental)
 
-### Vérifier si la table existe déjà
+Le RAG Service utilise 3 migrations cumulatives. Cette étape applique **uniquement les migrations manquantes** sur l'instance cible — idempotent et sans risque sur les instances déjà à jour.
 
-Utiliser `mcp__supabase__list_tables` avec le `project_ref` du client :
+### Migrations du repo ragservice
+
+| Fichier | Nom | Rôle |
+|---------|-----|------|
+| `00001_document_chunks.sql` | `rag_document_chunks` | Table, index vector/fulltext, RLS, function `search_documents` |
+| `00002_fix_hybrid_search_and_rls_docs.sql` | `rag_hybrid_search_fix` | FULL OUTER JOIN dans `search_documents` + commentaire RLS |
+| `00003_access_groups.sql` | `rag_access_groups` | Colonne `access_groups TEXT[]`, index GIN, paramètre `allowed_groups` dans `search_documents` |
+
+### Vérifier quelles migrations sont déjà appliquées
 
 ```
-mcp__supabase__list_tables(
+mcp__supabase__execute_sql(
   project_id: "<supabase_project_ref>",
-  schemas: ["public"]
+  query: "SELECT name FROM supabase_migrations.schema_migrations WHERE name LIKE 'rag_%' ORDER BY version"
 )
 ```
 
-Si `document_chunks` est dans la liste → **skip** cette étape, afficher "Migration RAG déjà appliquée".
+Comparer la liste retournée avec les 3 migrations attendues. Appliquer uniquement les manquantes.
 
-### Lire le contenu de la migration
+**Cas spécial — nouvelle instance** : si la table `document_chunks` n'existe pas (vérifier via `mcp__supabase__list_tables`), appliquer les 3 migrations dans l'ordre.
 
-Lire le fichier `supabase/migrations/00001_document_chunks.sql` depuis le repo `ragservice` (par défaut `~/GitRepo.nosync/ragservice/supabase/migrations/00001_document_chunks.sql`).
+### Pour chaque migration manquante
 
-### Appliquer via MCP
-
+1. Lire le fichier SQL depuis le repo `ragservice` (`~/GitRepo.nosync/ragservice/supabase/migrations/<fichier>`)
+2. Appliquer via MCP :
 ```
 mcp__supabase__apply_migration(
   project_id: "<supabase_project_ref>",
-  name: "rag_document_chunks",
+  name: "<nom_migration>",
   query: "<contenu du fichier SQL>"
 )
 ```
@@ -120,6 +128,15 @@ mcp__supabase__apply_migration(
 - Si l'erreur contient "already exists" → c'est OK, continuer
 - Si l'erreur contient "permission denied" → escalader : le project_ref est mauvais ou le MCP Supabase n'a pas les droits
 - Toute autre erreur → afficher l'erreur complète et demander confirmation avant de continuer
+
+### Note sur la mise à jour vers Cohere Embed v4
+
+Si une instance existante passe de la v0.1.x (text-embedding-3-small) à la v0.2+ (Cohere Embed v4), les embeddings existants sont **incompatibles** (espace vectoriel différent). Après le déploiement :
+
+1. **Informer l'utilisateur** : "Les documents indexés avec l'ancien embedder doivent être ré-indexés. Les anciens embeddings ne sont pas compatibles avec Cohere Embed v4."
+2. **Proposer** : "Voulez-vous truncate `document_chunks` maintenant ? Les documents devront être re-pushés via l'API."
+3. Si oui : `mcp__supabase__execute_sql(query: "TRUNCATE TABLE document_chunks")`
+4. Si non : prévenir que les résultats de recherche seront incohérents tant que les docs ne sont pas ré-indexés
 
 ---
 
@@ -151,10 +168,12 @@ fly apps create rag-<client>-<env> --org <fly_org>
 fly secrets set \
   SUPABASE_URL="https://<supabase_project_ref>.supabase.co" \
   SUPABASE_ANON_KEY="<anon_key>" \
-  OPENAI_API_KEY="<openai_key>" \
+  COHERE_API_KEY="<cohere_key>" \
   ANTHROPIC_API_KEY="<anthropic_key>" \
   --app rag-<client>-<env>
 ```
+
+**Note** : `COHERE_API_KEY` est utilisée à la fois pour l'embedding (Cohere Embed v4) et le reranking (Cohere Rerank v3). Une seule clé couvre les deux endpoints. `OPENAI_API_KEY` n'est plus nécessaire depuis la v0.2.
 
 **Important** : Ne jamais logger les valeurs des clés. Afficher seulement `"Secrets set for rag-<client>-<env>"`.
 
@@ -294,7 +313,7 @@ Ne **jamais** :
 
 ## Sécurité
 
-- Les clés API (OpenAI, Anthropic) ne sont jamais loggées ni affichées
+- Les clés API (Cohere, Anthropic) ne sont jamais loggées ni affichées
 - Le fichier `~/.claude/memory/somtech-api-keys.env` doit avoir permissions `600`
 - Le `RAG.md` généré ne contient pas de secrets
 - Les secrets Fly.io sont set via `fly secrets set` (pas visibles dans `fly.toml`)
