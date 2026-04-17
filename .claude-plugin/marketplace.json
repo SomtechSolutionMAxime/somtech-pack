@@ -1,0 +1,13 @@
+{
+  "name": "somtech-pack",
+  "owner": { "name": "Somtech" },
+  "plugins": [
+    { "name": "audit-loi25",             "source": "./plugins/audit-loi25",             "description": "Audit Loi 25 / P-39.1" },
+    { "name": "mcp-expose",              "source": "./plugins/mcp-expose",              "description": "Exposer un module Somtech via MCP (Edge Function wrapper)" },
+    { "name": "somtech-estimator",       "source": "./plugins/somtech-estimator",       "description": "Estimation Somtech" },
+    { "name": "somtech-proposals",       "source": "./plugins/somtech-proposals",       "description": "Offres et contrats" },
+    { "name": "somtech-rag",             "source": "./plugins/somtech-rag",             "description": "RAG Somtech" },
+    { "name": "somtech-silo-manager",    "source": "./plugins/somtech-silo-manager",    "description": "Gestion silos" },
+    { "name": "somtech-somcraft-deployer","source": "./plugins/somtech-somcraft-deployer","description": "Déploiement Somcraft" }
+  ]
+}
