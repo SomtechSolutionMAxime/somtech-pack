@@ -1,0 +1,9 @@
+{
+  "name": "mcp-expose",
+  "version": "1.0.0",
+  "description": "Plugin hybride (script + skill) pour exposer un module Somtech existant via MCP. Génère automatiquement un MCP server Edge Function wrapper avec auth dual (OAuth + API key).",
+  "author": {
+    "name": "Somtech"
+  },
+  "keywords": ["mcp", "edge-function", "supabase", "oauth", "api-key", "wrapper", "somtech"]
+}
