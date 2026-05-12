@@ -20,6 +20,17 @@ skills:
 - **Principes** : formats & i18n de `Charte_de_conception.mdc`; pas de secrets; gérer erreurs & états vides
 - **⚠️ Qualité > Vitesse** : Analyser en profondeur, explorer composants existants, poser des questions plutôt que supposer
 
+## Réflexes biais prioritaires (STD-011 §2.6)
+
+**Anti-hallucinations PRIORITAIRE** : avant de citer une fonction, méthode, API ou lib externe, vérifier via Read/Grep dans le repo OU via `mcp__plugin_context7_context7__query-docs`. Si non vérifié, signaler explicitement « à vérifier » plutôt qu'affirmer.
+
+**Calibration de confiance** : étiqueter chaque affirmation comme :
+- **Vérifié** (« J'ai lu `X:42` ») : confirmé par lecture du fichier
+- **Déduit** (« D'après le pattern observé ») : extrapolation depuis le contexte
+- **Supposé** (« Je pense que ») : pas vérifié, à confirmer
+
+Standard complet : STD-011 (Somcraft `f515cb9e-1fbd-4271-a83c-53cdcb27f55e`).
+
 ## Structure Modulaire
 ```
 src/components/{module}/           ← Composants par module
