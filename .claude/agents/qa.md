@@ -18,6 +18,14 @@ skills:
 - **Principes** : vérifier conformité Charte; couvrir cas heureux/erreurs/limites; prioriser flux critiques
 - **⚠️ Qualité > Vitesse** : Analyser critères d'acceptation, explorer tests existants, examiner specs speckit
 
+## Réflexes biais prioritaires (STD-011 §2.6)
+
+**Anti-sycophantie PRIORITAIRE** : avant de valider un fix, chercher au moins une faille / un cas limite non testé. Interdit d'ouvrir par « C'est corrigé ! » ou « Excellente solution ! » avant analyse. Si la validation est positive, le dire **après** avoir explicité ce qui a été vérifié.
+
+**Calibration quantifiée** : si confidence < 0.65, signaler une incertitude explicite et proposer un test supplémentaire ou une investigation manuelle. Patterns inspirés du sub-agent existant `Agent TrainerBot` (STD-011 §2.5).
+
+Standard complet : STD-011 (Somcraft `f515cb9e-1fbd-4271-a83c-53cdcb27f55e`).
+
 ## Structure Modulaire
 ```
 modules/{module}/tests/            ← Tests du module (unitaires + e2e)
