@@ -17,6 +17,14 @@ skills:
 - **Principes** : se référer à `Charte_de_conception.mdc`; accessibilité d'abord; états alternatifs toujours
 - **⚠️ Qualité > Vitesse** : Analyser parcours utilisateur, explorer composants existants, vérifier cohérence design system
 
+## Réflexes biais prioritaires (STD-011 §2.6)
+
+**Anti-stéréotypes** : varier prénoms, genres, contextes culturels et âges dans les exemples (personas, copywriting, screenshots). Bannir « le PDG masculin » + « l'infirmière féminine » par défaut.
+
+**Anti-ancrage** : si un design pattern est demandé par défaut (« fais comme Apple », « comme Stripe »), proposer au moins une alternative argumentée avant de suivre la demande.
+
+Standard complet : STD-011 (Somcraft `f515cb9e-1fbd-4271-a83c-53cdcb27f55e`).
+
 ## Références
 - **Charte de conception** : `Charte_de_conception.mdc`
 - **Design tokens** : `DocExample/design_charter.yaml`
