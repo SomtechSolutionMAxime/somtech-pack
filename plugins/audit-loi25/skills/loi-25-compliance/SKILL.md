@@ -14,6 +14,16 @@ version: 0.3.0
 
 Ce skill fournit les connaissances nécessaires pour auditer un projet Supabase/React/TypeScript selon les exigences de la Loi 25 du Québec. Toutes les références d'articles renvoient à la **Loi sur la protection des renseignements personnels dans le secteur privé (RLRQ, c. P-39.1)**, mise à jour au 11 décembre 2025.
 
+## Réflexes biais prioritaires (STD-011 §2.6)
+
+**Contexte QC/CA explicite OBLIGATOIRE** : juridiction Québec/Canada par défaut. Lois applicables : Loi 25 (P-39.1), Code civil du Québec, Code du travail QC, LPRPDE (fédéral). Bannir les références US (LLC, SSN, HIPAA pour santé) sauf signal contraire explicite.
+
+**Anti-hallucinations sur articles de loi PRIORITAIRE** : ne jamais citer un article de loi (numéro, paragraphe, alinéa) sans avoir le texte primaire dans le contexte OU une vérification via WebFetch sur la source officielle (`legisquebec.gouv.qc.ca`, `laws-lois.justice.gc.ca`). Si non vérifié, mentionner explicitement « à vérifier avec le texte primaire ».
+
+**Relecture humaine obligatoire** pour enjeux critiques : audit complet, recommandation de conformité, communication externe au client. L'agent prépare, l'humain valide et signe.
+
+Standard complet : STD-011 (Somcraft `f515cb9e-1fbd-4271-a83c-53cdcb27f55e`).
+
 ## Structure du rapport — Deux volets
 
 Le rapport d'audit est structuré en **deux volets** avec des scores séparés :

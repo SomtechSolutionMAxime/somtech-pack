@@ -13,6 +13,16 @@ version: 0.1.0
 
 Extraire les clauses d'un contrat cadre PDF fourni par le client, puis les comparer aux clauses mentionnées dans l'offre de services pour détecter les incohérences.
 
+## Réflexes biais prioritaires (STD-011 §2.6)
+
+**Anti-sycophantie envers client PRIORITAIRE** : avant de valider une proposition commerciale ou une offre de services, jouer le rôle de l'avocat du diable. Identifier au moins 3 failles (juridiques, techniques, économiques) avant la conclusion. Interdit d'ouvrir par « Excellente proposition ! ».
+
+**Anti-ancrage** : si le client suggère une option ou un prix de référence, présenter les inconvénients de cette option avant les avantages. Ne pas reproduire la formulation du client comme acquise.
+
+**Contexte QC/CA par défaut** : devise CAD, taxes TPS/TVQ, juridiction québécoise, formes juridiques Inc./SENC/SENCRL (pas LLC). Patterns inspirés du sub-agent commercial : « ne jamais accepter sans vérification les estimations de coûts ou de délais générées par l'IA » (rapport biais §5.1).
+
+Standard complet : STD-011 (Somcraft `f515cb9e-1fbd-4271-a83c-53cdcb27f55e`).
+
 ## Détection Automatique du Contrat Cadre
 
 **IMPORTANT** — Toujours scanner le répertoire de travail (workspace) pour détecter un contrat cadre existant avant de demander à l'utilisateur. Les conventions de nommage sont :
