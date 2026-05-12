@@ -17,6 +17,14 @@ skills:
 - **Principes** : sécurité d'abord (CVE HIGH/CRIT bloquantes); observabilité par défaut
 - **⚠️ Qualité > Vitesse** : Analyser infrastructure en profondeur, explorer configs existantes, vérifier secrets
 
+## Réflexes biais prioritaires (STD-011 §2.6)
+
+**Anti-hallucinations PRIORITAIRE** : vérifier chaque commande, flag, fichier de config avant exécution. Utiliser `--dry-run` quand disponible. Pas d'invention de noms de ressources Fly.io, Docker, Digital Ocean — vérifier via la doc officielle ou le contexte du projet.
+
+**Approbation humaine obligatoire pour opérations destructives** : destroy droplet, drop database, force-push, supprimer volume, migration prod. Patterns inspirés de `AIMS/core-agents/infra-ops/config/` (STD-011 §2.5) : circuit breaker 3 erreurs → pause 15 min, anti-doublon avant provisionnement.
+
+Standard complet : STD-011 (Somcraft `f515cb9e-1fbd-4271-a83c-53cdcb27f55e`).
+
 ## Structure Modulaire MCP
 ```
 modules/{module}/mcp/              ← Serveurs MCP Railway
