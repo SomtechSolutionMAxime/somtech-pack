@@ -161,7 +161,53 @@ mcp__claude_ai_Somcraft__read_document
 
 Écrire le contenu dans `.somtech/app-state.md` (cache initial). Le hook `SessionStart` lira ce cache au prochain boot.
 
-### 10. Résumé final
+### 10. Activer le hook SessionStart dans `.claude/settings.json` local (merge JSON)
+
+> Le pack n'écrase **pas** le `.claude/settings.json` projet (cf. T-20260513-0034). Pour activer la lecture automatique au boot, il faut ajouter le hook au settings.json local par merge JSON (sans toucher aux autres clés : permissions custom, plugins activés, hooks existants).
+
+Logique :
+
+```python
+import json
+from pathlib import Path
+
+settings_path = Path(".claude/settings.json")
+settings = {}
+if settings_path.exists():
+    settings = json.loads(settings_path.read_text())
+
+# Garantir la structure hooks.SessionStart
+hooks = settings.setdefault("hooks", {})
+session_start = hooks.setdefault("SessionStart", [])
+
+# Vérifier si notre hook est déjà présent
+hook_cmd = ".claude/hooks/session-start-app-state.sh"
+already_present = any(
+    any(h.get("command") == hook_cmd for h in entry.get("hooks", []))
+    for entry in session_start
+)
+
+if not already_present:
+    session_start.append({
+        "hooks": [{"type": "command", "command": hook_cmd}]
+    })
+    # Garantir un fichier formaté lisible
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2, ensure_ascii=False) + "\n")
+    print(f"✅ Hook SessionStart ajouté à {settings_path}")
+else:
+    print(f"ℹ️  Hook SessionStart déjà présent dans {settings_path}, aucune modification")
+```
+
+Exécution via `python3 -c '...'` ou via un fichier temporaire. **Ne jamais** écraser brutalement le settings.json — toujours merger.
+
+Vérifier que le hook bash existe au chemin référencé :
+
+```bash
+test -x .claude/hooks/session-start-app-state.sh || echo "⚠️  Hook non trouvé. Lance /somtech-pack-maj pour récupérer le fichier."
+```
+
+### 11. Résumé final
 
 Afficher à l'utilisateur :
 
@@ -177,9 +223,10 @@ Fichiers créés/modifiés :
 - .somtech/app.yaml (versionné)
 - .somtech/app-state.md (cache local, gitignored)
 - .gitignore (ajout)
+- .claude/settings.json (merge : hook SessionStart ajouté si absent)
 
 Prochaines étapes :
-1. git add .somtech/app.yaml .gitignore
+1. git add .somtech/app.yaml .gitignore .claude/settings.json
 2. git commit -m "chore: lier app à la mémoire externe d'état (STD-027)"
 3. Lance /end-session à la fin de cette session pour la première écriture réelle de l'état d'app
 4. Au prochain boot, le hook SessionStart injectera automatiquement le doc dans le contexte
