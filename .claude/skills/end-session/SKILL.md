@@ -3,11 +3,7 @@ name: end-session
 description: |
   Skill de fin de session Claude Code pour documenter automatiquement le travail accompli.
   DÉCLENCHEURS: /end-session, fin de session, clôturer session, terminer session, sync docs
-  Met à jour CLAUDE.md (mémoire projet) et CHANGELOG.md avec:
-  - Décisions techniques prises pendant la session
-  - Problèmes résolus et solutions appliquées
-  - Contexte important pour les futures sessions
-  - Fichiers créés ou modifiés
+  Met à jour CHANGELOG.md du projet (Ajouté/Modifié/Corrigé/Technique).
   ET si .somtech/app.yaml présent (STD-027) : met aussi à jour le doc Somcraft
   /operations/<app-slug>/etat-app.md (source de vérité de la mémoire externe d'état
   d'app) + le cache local .somtech/app-state.md (gitignored).
@@ -15,7 +11,9 @@ description: |
 
 # End Session - Documentation Automatique
 
-Ce skill analyse la session Claude Code en cours et met à jour la documentation du projet.
+Ce skill analyse la session Claude Code en cours et met à jour la documentation du projet (CHANGELOG.md + mémoire externe d'état d'app STD-027 si applicable).
+
+> **Note** : ce skill ne touche pas à `.claude/CLAUDE.md` du projet — depuis 2026-05-13, le pack ne pousse plus de template CLAUDE.md projet (cf. D-20260513-0009). Le CLAUDE.md global utilisateur (`~/.claude/CLAUDE.md`) couvre toutes les règles transversales. Les projets qui ont un `.claude/CLAUDE.md` local l'ont créé eux-mêmes, et `/end-session` n'y touche pas.
 
 ## Workflow
 
@@ -28,28 +26,7 @@ Parcourir l'historique de la conversation pour identifier:
 - **Fichiers modifiés**: liste des fichiers créés/modifiés avec résumé des changements
 - **Contexte important**: informations utiles pour les futures sessions
 
-### 2. Mettre à jour CLAUDE.md
-
-CLAUDE.md est le fichier de mémoire projet. Ajouter ou mettre à jour les sections:
-
-```markdown
-## Décisions Techniques
-<!-- Choix d'architecture et leurs justifications -->
-
-## Patterns Utilisés
-<!-- Patterns de code, conventions adoptées -->
-
-## Notes de Session [DATE]
-<!-- Contexte spécifique à cette session -->
-```
-
-**Règles importantes:**
-- Ne pas dupliquer l'information existante
-- Fusionner avec le contenu existant si pertinent
-- Garder le fichier concis et organisé
-- Utiliser des bullet points pour la lisibilité
-
-### 3. Mettre à jour CHANGELOG.md
+### 2. Mettre à jour CHANGELOG.md
 
 Format standard pour les entrées:
 
@@ -75,9 +52,9 @@ Format standard pour les entrées:
 - Catégoriser les changements (Ajouté/Modifié/Corrigé/Technique)
 - Être spécifique mais concis
 
-### 4. Mettre à jour la mémoire externe d'état d'app (STD-027)
+### 3. Mettre à jour la mémoire externe d'état d'app (STD-027)
 
-**Cette étape s'applique uniquement si `.somtech/app.yaml` existe dans le repo courant** (app liée à la mémoire externe selon STD-027). Sinon, sauter directement à l'étape 5.
+**Cette étape s'applique uniquement si `.somtech/app.yaml` existe dans le repo courant** (app liée à la mémoire externe selon STD-027). Sinon, sauter directement à l'étape 4.
 
 #### Pré-requis MCP
 
@@ -86,14 +63,14 @@ Format standard pour les entrées:
 
 #### Workflow
 
-**4a. Lire le mapping local**
+**3a. Lire le mapping local**
 
 Parser `.somtech/app.yaml` pour récupérer :
 - `somcraft.workspace_id` (workspace du **client**)
 - `somcraft.app_state_doc_path` (par défaut `/operations/<app-slug>/etat-app.md`)
 - `servicedesk.app_slug`, `app_name`, `client_name`
 
-**4b. Lire le doc Somcraft actuel**
+**3b. Lire le doc Somcraft actuel**
 
 ```
 mcp__claude_ai_Somcraft__read_document
@@ -103,7 +80,7 @@ mcp__claude_ai_Somcraft__read_document
 
 Conserver le contenu actuel comme base de comparaison.
 
-**4c. Analyser les changements opérationnels de la session**
+**3c. Analyser les changements opérationnels de la session**
 
 Identifier ce qui a changé pendant la session et qui mérite d'être enregistré dans l'état d'app. Distinguer ce qui va dans quelle section :
 
@@ -117,7 +94,7 @@ Identifier ce qui a changé pendant la session et qui mérite d'être enregistr�
 | **Dernière session** | **Toujours réécrite (overwrite)** — 2-4 bullets max sur ce qui n'est pas évident depuis git/SD/code |
 | **Pièges & avertissements** | Si un nouveau piège a été identifié ou un ancien levé |
 
-**4d. Composer le draft du nouveau doc**
+**3d. Composer le draft du nouveau doc**
 
 Construire le contenu cible en gardant les sections inchangées et en mettant à jour celles impactées. Mettre à jour le frontmatter :
 - `last_updated` : timestamp ISO 8601 UTC du moment courant
@@ -125,7 +102,7 @@ Construire le contenu cible en gardant les sections inchangées et en mettant à
 - `current_branch` : résultat de `git rev-parse --abbrev-ref HEAD`
 - `current_phase` : conserver sauf si la session a fait basculer la phase
 
-**4e. Discipline anti-bloat (STD-027)**
+**3e. Discipline anti-bloat (STD-027)**
 
 Avant d'écrire, vérifier :
 - TL;DR ≤ 3 phrases
@@ -135,16 +112,16 @@ Avant d'écrire, vérifier :
 
 Si dépassement : afficher un warning et proposer une troncature (Décisions récentes ou Pièges anciens à archiver). Ne PAS écrire silencieusement un doc qui dépasse.
 
-**4f. Présenter le draft + validation utilisateur**
+**3f. Présenter le draft + validation utilisateur**
 
 Afficher à l'utilisateur :
 - Un résumé des sections modifiées (ex: « TL;DR mis à jour, Environnements: staging passé à ✅, Dernière session: 3 bullets »)
 - Optionnel : un diff visible des changements
 - Demander : « Appliquer ces changements à Somcraft + cache local ? (oui/non/ajuster) »
 
-Si **oui** → étape 4g. Si **non** → skip étape Somcraft (l'étape 5 résumé restera). Si **ajuster** → proposer un nouveau draft basé sur les retours.
+Si **oui** → étape 3g. Si **non** → skip étape Somcraft (l'étape 4 résumé restera). Si **ajuster** → proposer un nouveau draft basé sur les retours.
 
-**4g. Écrire dans Somcraft**
+**3g. Écrire dans Somcraft**
 
 ```
 mcp__claude_ai_Somcraft__update_document
@@ -153,7 +130,7 @@ mcp__claude_ai_Somcraft__update_document
   content=<doc complet mis à jour>
 ```
 
-**4h. Rafraîchir le cache local**
+**3h. Rafraîchir le cache local**
 
 Écrire le même contenu dans `.somtech/app-state.md` (overwrite local). Le hook `SessionStart` lira ce cache au prochain boot.
 
@@ -161,22 +138,18 @@ mcp__claude_ai_Somcraft__update_document
 
 | Cas | Comportement |
 |---|---|
-| `.somtech/app.yaml` absent | Skip cette étape, passer à 5 (comportement actuel inchangé) |
+| `.somtech/app.yaml` absent | Skip cette étape, passer à 4 (comportement actuel inchangé) |
 | MCP Somcraft indisponible | Afficher erreur explicite, ne PAS modifier le cache local, suggérer de relancer plus tard |
 | Doc Somcraft corrompu/manquant | Suggérer `/lier-app` pour recréer le doc, ne pas écrire |
 | Dépassement 1500 tokens | Warning + proposition de troncature, refuser l'écriture silencieuse |
 | Permissions Somcraft insuffisantes | Erreur explicite, vérifier permissions du workspace client |
 
-### 5. Résumé de fin de session
+### 4. Résumé de fin de session
 
 Afficher un résumé à l'utilisateur:
 
 ```
 📋 Session terminée - Documentation mise à jour
-
-📝 CLAUDE.md:
-   - X décisions techniques ajoutées
-   - X notes de contexte ajoutées
 
 📜 CHANGELOG.md:
    - X entrées ajoutées pour [DATE]
@@ -197,13 +170,13 @@ Utilisateur tape `/end-session` à la fin d'une session de travail.
 Claude:
 1. Analyse la conversation
 2. Identifie les éléments à documenter
-3. Met à jour CLAUDE.md et CHANGELOG.md à la racine du projet
+3. Met à jour CHANGELOG.md à la racine du projet
 4. Si `.somtech/app.yaml` présent : propose un draft de MAJ du doc Somcraft + cache local, demande validation, écrit après approbation (STD-027)
 5. Affiche le résumé
 
 ## Notes
 
-- Si CLAUDE.md n'existe pas, le créer avec une structure de base
 - Si CHANGELOG.md n'existe pas, le créer avec le format Keep a Changelog
 - Toujours demander confirmation avant d'écrire si des changements majeurs sont détectés
 - Adapter le niveau de détail selon l'ampleur de la session
+- **Ne pas toucher à `.claude/CLAUDE.md` projet** — cf. D-20260513-0009 (le pack ne gère plus ce fichier)

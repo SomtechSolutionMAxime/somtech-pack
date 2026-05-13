@@ -62,12 +62,12 @@ Documentation:
 
 Avant d'exécuter une phase, charge toujours:
 
-1. **CLAUDE.md** - Contexte projet (`.claude/CLAUDE.md`)
-2. **Session** - État actuel si existe (`.mockmig/session.json`)
-3. **Sources de vérité** - Si elles existent:
+1. **Session mockmig** - État actuel si existe (`.mockmig/session.json`)
+2. **Sources de vérité** - Si elles existent:
    - `memory/constitution.md`
    - `ontologie/01_ontologie.md` + `02_ontologie.yaml`
-   - `ARCHITECTURE_DE_SECURITÉ.md`
+   - `security/ARCHITECTURE_DE_SECURITE.md`
+3. **CLAUDE.md projet local** - uniquement si présent dans le repo (le pack ne le pousse plus depuis 2026-05-13, mais un projet peut en avoir un local)
 
 ## MCPs requis
 

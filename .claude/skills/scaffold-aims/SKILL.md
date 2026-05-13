@@ -272,9 +272,11 @@ SCAFFOLDED_AT={date ISO courante}
 PACK_COMMIT={hash du dernier commit du repo}
 ```
 
-## Etape 11 : Mettre a jour CLAUDE.md
+## Etape 11 : Documentation projet (optionnel)
 
-Si le projet a un `.claude/CLAUDE.md`, y ajouter cette section :
+> Le pack ne pousse plus de `.claude/CLAUDE.md` projet (cf. D-20260513-0009). Cette etape ne s'applique que si le projet a deja un `.claude/CLAUDE.md` local cree par ses mainteneurs.
+
+Si le projet a un `.claude/CLAUDE.md` local, **proposer** (sans imposer) d'y ajouter cette section :
 
 ```markdown
 ## Architecture AIMS v5
@@ -293,6 +295,8 @@ Si le projet a un `.claude/CLAUDE.md`, y ajouter cette section :
 ### Variables d'environnement requises
 Voir `orbit/silo/aims/.env.example`
 ```
+
+Si pas de CLAUDE.md projet local : skipper cette etape, l'information reste accessible via le README du dossier `orbit/silo/aims/`.
 
 ## Etape 12 : npm install + TypeScript build
 
