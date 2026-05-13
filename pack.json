@@ -1,16 +1,15 @@
 {
   "name": "somtech-pack",
   "version": "1.0.0",
-  "description": "Pack de configuration réutilisable pour projets Somtech (Claude Code, Cursor, features, scripts)",
+  "description": "Pack de configuration réutilisable pour projets Somtech (Claude Code, features, plugins Cowork, scripts)",
   "author": "Somtech",
   "repository": "https://github.com/SomtechSolutionMAxime/somtech-pack.git",
   "modules": {
     "core": {
-      "description": "Config Claude Code + Cursor + scripts + docs + sécurité",
+      "description": "Config Claude Code (skills/agents/commands/hooks) + scripts + docs + sécurité",
       "default": true,
       "paths": [
         ".claude/",
-        ".cursor/",
         "scripts/",
         "docs/",
         "security/"

@@ -22,7 +22,7 @@ Options:
   --ref         Ref du pack à cibler (default: main)
   --workdir     Dossier de travail (default: ~/.cache)
   --project     Slug projet (default: basename du repo courant)
-  --scope       Scope sync (default: .cursor,docs,scripts,README.md)
+  --scope       Scope sync (default: .claude,docs,scripts,README.md)
   --message     Message commit (obligatoire)
   --title       Titre PR (default: <message>)
   --body-file   Fichier markdown pour body PR (optionnel)
@@ -44,7 +44,7 @@ PACK_REF="main"
 BASE_REF="origin/main"
 WORKBASE="${HOME}/.cache"
 PROJECT_SLUG=""
-SCOPE=".cursor,docs,scripts,README.md"
+SCOPE=".claude,docs,scripts,README.md"
 MESSAGE=""
 TITLE=""
 BODY_FILE=""
@@ -106,7 +106,7 @@ in_scope() {
 
   for s in "${SCOPES[@]}"; do
     case "$s" in
-      .cursor) [[ "$path" == .cursor/* ]] && return 0 ;;
+      .claude) [[ "$path" == .claude/* ]] && return 0 ;;
       docs) [[ "$path" == docs/* ]] && return 0 ;;
       scripts) [[ "$path" == scripts/* ]] && return 0 ;;
       README.md) [[ "$path" == README.md ]] && return 0 ;;
@@ -267,10 +267,10 @@ fi
   PR_NUMBER=$(gh pr view --repo "$REPO_GH" "$BRANCH" --json number --jq .number)
   [[ -n "$PR_NUMBER" ]] || die "Impossible de récupérer le numéro de PR"
 
-  # Release note path (module = .cursor)
-  mkdir -p .cursor/releasenotes
+  # Release note path (module = .claude)
+  mkdir -p .claude/releasenotes
   RN_SLUG=$(slugify "$SHORT_SLUG")
-  RN_FILE=".cursor/releasenotes/${PR_NUMBER}.${RN_SLUG}.releasenotes.md"
+  RN_FILE=".claude/releasenotes/${PR_NUMBER}.${RN_SLUG}.releasenotes.md"
 
   if [[ -f "$RN_FILE" ]]; then
     die "Release note existe déjà: $RN_FILE"
@@ -282,7 +282,7 @@ fi
 **Version** : Pack  
 **Date** : $(date +"%Y-%m-%d")  
 **PR** : #${PR_NUMBER} — ${TITLE}  
-**Module** : .cursor
+**Module** : .claude
 
 ---
 

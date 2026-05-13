@@ -2,7 +2,7 @@
 
 > v1.0.0
 
-Pack de configuration et marketplace de plugins Somtech pour **Claude Code** et **Cursor**. Fournit skills, agents, commandes, plugins Cowork et blueprints de features réutilisables dans tous les projets clients.
+Pack de configuration et marketplace de plugins Somtech pour **Claude Code**. Fournit skills, agents, commandes, hooks, plugins Cowork et blueprints de features réutilisables dans tous les projets clients.
 
 ## Installation rapide
 
@@ -11,7 +11,7 @@ Pack de configuration et marketplace de plugins Somtech pour **Claude Code** et 
 curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/main/scripts/remote-install.sh | bash -s -- --target .
 
 # Installation locale (si le pack est cloné)
-./scripts/install_somtech_pack.sh --target /path/to/project
+./scripts/somtech_pack_pull.sh --target /path/to/project
 ```
 
 ## Contenu du pack
@@ -23,41 +23,40 @@ curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/
 | **audit-loi25** | v0.4.0 | Audit de conformité Loi 25 / P-39.1 (Québec) avec génération de rapports PDF |
 | **somtech-proposals** | v0.2.0 | Complétion de contrats cadres, cahiers des charges et offres de services |
 | **somtech-silo-manager** | v1.0.0 | Génération et déploiement de silos applicatifs (architecture multi-tenant) |
+| **somtech-somcraft-deployer** | v1.0.0 | Déploiement de SomCraft sur les clients (migrations + Fly.io) |
+| **somtech-rag** | v1.0.0 | Déploiement du Somtech RAG Service par client |
+| **somtech-estimator** | v0.1.0 | Estimation de coûts/temps de projets |
+| **mcp-expose** | v0.1.0 | Exposition de capacités locales en MCP |
 
-Chaque plugin inclut un `.zip` versionné prêt à installer dans Claude Cowork.
+Chaque plugin inclut un `.zip` versionné prêt à installer dans Claude Cowork. La marketplace est exposée via `.claude-plugin/marketplace.json` à la racine du repo.
 
 ### 2. Configuration Claude Code (`.claude/`)
 
 | Composant | Contenu |
 |-----------|---------|
-| **Skills** (15) | audit-rls, create-migration, deploy-metering, end-session, feature-doc-generator, git-module, mcp-builder, mockmig, playwright-tests, prototype, scaffold-component, somtech-pack-maj, speckit, validate-ui, webapp-testing |
+| **Skills** (20) | audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, mockmig, playwright-tests, prototype, scaffold-aims, scaffold-component, somtech-pack-maj, speckit, sync-app-state, validate-ui, webapp-testing |
 | **Agents** (7) | backend, database, design, devops, frontend, product, qa |
-| **Commandes** | mockmig, pousse |
-| **Templates** | Bootstrap pour ontologie, constitution, architecture sécurité |
+| **Commandes** | `/pousse` |
+| **Hooks** | `SessionStart` → mémoire externe d'état d'app (STD-027) |
+| **Templates** | Bootstrap pour ontologie, constitution, architecture sécurité, USER_CLAUDE_MD.md |
+| **User-skills** | `somtech-pack-install` (skill global utilisateur pour bootstrap d'un projet) |
 
-### 3. Configuration Cursor (`.cursor/`)
-
-| Composant | Contenu |
-|-----------|---------|
-| **Commandes** | mockmig, speckit, somtech-pack (sync/deploy/diagnostic), polish, refactoring |
-| **Skills** | git-commit-pr, build-chatwindow, configure-mcp-server |
-| **Rules** | Règles et contexte projet |
-
-### 4. Features (blueprints réutilisables) (`features/`)
+### 3. Features (blueprints réutilisables) (`features/`)
 
 | Feature | Description |
 |---------|-------------|
 | **metering-billing** | Système de métriques et facturation (tables, Edge Functions, cron) |
 | **audio-transcription-analysis** | Transcription et analyse audio |
 
-### 5. Documentation (`docs/`)
+### 4. Documentation (`docs/`)
 
 | Doc | Description |
 |-----|-------------|
 | **chatwindow** | ChatWindow + widgets (composant réutilisable) |
 | **migrations** | Guide des migrations Supabase |
+| **superpowers** | Specs et plans d'implémentation (workflow brainstorming → writing-plans → executing-plans) |
 
-### 6. Sécurité (`security/`)
+### 5. Sécurité (`security/`)
 
 | Document | Description |
 |----------|-------------|
@@ -65,15 +64,16 @@ Chaque plugin inclut un `.zip` versionné prêt à installer dans Claude Cowork.
 | `PROTECTION_DONNEES_LOI25.md` | Conformité Loi 25 / P-39.1 (Québec) |
 | `references/` | Documents officiels (P-39.1, Guide EFVP CAI) |
 
-### 7. Scripts (`scripts/`)
+### 6. Scripts (`scripts/`)
 
 | Script | Description |
 |--------|-------------|
-| `install_somtech_pack.sh` | Installation du pack dans un projet |
-| `remote-install.sh` | Installation one-liner via curl |
-| `somtech_pack_pull.sh` | Mise à jour d'un projet depuis le pack (diff + versioning) |
-| `somtech_pack_push.sh` | Publier des changements depuis un projet vers le pack |
+| `remote-install.sh` | Installation / mise à jour one-liner via curl (délègue à `somtech_pack_pull.sh`) |
+| `somtech_pack_pull.sh` | Mise à jour d'un projet depuis le pack (détection de version, diff, modules sélectionnables) |
+| `somtech_pack_push.sh` | Publier des changements depuis un projet vers le pack (scope par défaut : `.claude,docs,scripts,README.md`) |
 | `somtech_pack_add.sh` | Ajouter un composant au pack |
+| `install_user_skills.sh` | Installer le user-skill `somtech-pack-install` dans `~/.claude/` |
+| `update_speckit_assets.sh` | Mettre à jour les assets Speckit |
 
 ## Système modulaire (`pack.json`)
 
@@ -81,7 +81,7 @@ Le pack est organisé en modules activables :
 
 | Module | Par défaut | Contenu |
 |--------|------------|---------|
-| **core** | oui | `.claude/`, `.cursor/`, `scripts/`, `docs/`, `security/` |
+| **core** | oui | `.claude/`, `scripts/`, `docs/`, `security/` |
 | **features** | oui | `features/` (blueprints réutilisables) |
 | **mockmig** | non | `.mockmig/`, `.specify/` (workflow migration maquette) |
 | **plugins** | non | `plugins/` (marketplace Cowork) |
@@ -94,10 +94,12 @@ Le pack est organisé en modules activables :
 ./scripts/somtech_pack_pull.sh --target .
 ```
 
+Skill équivalent disponible dans Claude Code : `/somtech-pack-maj`.
+
 ### Push — publier des changements depuis un projet vers le pack
 
 ```bash
-./scripts/somtech_pack_push.sh --message "chore(pack): sync rules/skills"
+./scripts/somtech_pack_push.sh --message "chore(pack): sync skills/agents"
 ```
 
 ## Conventions
