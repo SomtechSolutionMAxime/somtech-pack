@@ -21,10 +21,10 @@ Mettre à jour les fichiers de configuration, skills, rules et commandes du proj
 git rev-parse --show-toplevel
 
 # Vérifier qu'il y a déjà une config Somtech
-ls .claude/ .cursor/ 2>/dev/null
+ls .claude/ 2>/dev/null
 ```
 
-Si `.claude/` ou `.cursor/` n'existent pas, avertir l'utilisateur qu'il s'agit peut-être d'une première installation (utiliser `install_somtech_pack.sh` plutôt).
+Si `.claude/` n'existe pas, avertir l'utilisateur qu'il s'agit peut-être d'une première installation (utiliser `/somtech-pack-install` plutôt).
 
 ### 0.2 Vérifier les prérequis
 
@@ -42,7 +42,7 @@ Si le réseau n'est pas accessible, proposer une mise à jour depuis un clone lo
 
 ```bash
 # Vérifier s'il y a des changements non commités dans les dossiers pack
-git status --short .claude/ .cursor/ docs/ scripts/
+git status --short .claude/ docs/ scripts/ features/
 ```
 
 Si des fichiers modifiés sont détectés dans ces dossiers :
@@ -67,9 +67,6 @@ Pour chaque dossier synchronisé, comparer le contenu local avec le pack :
 ```bash
 # .claude/ — skills, agents, templates, settings
 diff -rq .claude/ "$WORKDIR/somtech-pack/.claude/" 2>/dev/null | grep -v ".DS_Store"
-
-# .cursor/ — commands, rules, skills
-diff -rq .cursor/ "$WORKDIR/somtech-pack/.cursor/" 2>/dev/null | grep -v ".DS_Store"
 
 # features/ — blueprints de features
 diff -rq features/ "$WORKDIR/somtech-pack/features/" 2>/dev/null | grep -v ".DS_Store"
@@ -209,14 +206,15 @@ L'utilisateur peut demander une mise à jour partielle :
 | "dry-run" | Ajouter `--dry-run` pour preview sans écriture |
 | "maj + push mes changements" | Faire un push d'abord, puis un pull |
 
-Pour les mises à jour partielles, utiliser les flags du script :
+Pour les mises à jour partielles, utiliser les flags réels du script (modules définis dans `pack.json`) :
 
 ```bash
-./scripts/somtech_pack_pull.sh --target . --no-rules    # Sans rules Cursor
-./scripts/somtech_pack_pull.sh --target . --no-commands  # Sans commandes
-./scripts/somtech_pack_pull.sh --target . --no-skills    # Sans skills
-./scripts/somtech_pack_pull.sh --target . --no-docs      # Sans docs
-./scripts/somtech_pack_pull.sh --target . --somtech-only  # Somtech config uniquement
+./scripts/somtech_pack_pull.sh --target . --modules core              # Config Claude Code + scripts + docs + sécurité
+./scripts/somtech_pack_pull.sh --target . --modules core,features     # Core + blueprints de features (défaut)
+./scripts/somtech_pack_pull.sh --target . --modules plugins           # Plugins Cowork uniquement
+./scripts/somtech_pack_pull.sh --target . --modules mockmig           # Workflow migration maquette → production
+./scripts/somtech_pack_pull.sh --target . --ref staging               # Pull depuis une autre branche
+./scripts/somtech_pack_pull.sh --target . --dry-run                   # Preview sans écriture
 ```
 
 ## Règles critiques

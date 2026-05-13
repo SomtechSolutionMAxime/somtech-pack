@@ -1,6 +1,6 @@
 ---
 name: scaffold-aims
-description: Generer la structure AIMS v5 (agents autonomes) dans un projet. Copie les templates depuis .claude/aims-template/, remplace les placeholders, installe les deps, compile TypeScript. Prerequis - install_somtech_pack.sh deja execute.
+description: Generer la structure AIMS v5 (agents autonomes) dans un projet. Copie les templates depuis .claude/aims-template/, remplace les placeholders, installe les deps, compile TypeScript. Prerequis - somtech-pack deja installe via /somtech-pack-install (ou /somtech-pack-maj sur projet existant).
 license: MIT
 metadata:
   author: somtech-pack
@@ -14,7 +14,7 @@ Ce skill genere la structure complete pour deployer un orchestrator AIMS v5 (age
 
 ## Prerequis
 
-- Le somtech-pack a ete installe (`install_somtech_pack.sh`) — le dossier `.claude/aims-template/` doit exister
+- Le somtech-pack a ete installe (via `/somtech-pack-install` ou `/somtech-pack-maj`) — le dossier `.claude/aims-template/` doit exister
 - Le projet est un repo Git
 - L'humain a prepare : application dans ServiceDesk, cle API, bot Slack (optionnel)
 
@@ -26,7 +26,7 @@ git rev-parse --show-toplevel
 
 # Verifier que les templates sont installes
 ls .claude/aims-template/infra/Dockerfile.agent
-# Si absent → "Lancer install_somtech_pack.sh d'abord"
+# Si absent → "Lancer /somtech-pack-install d'abord"
 
 # Verifier si AIMS est deja scaffold
 ls orbit/silo/aims/src/orchestrator.ts 2>/dev/null
