@@ -9,12 +9,12 @@ Usage:
   ./scripts/somtech_pack_add.sh <paths-or-globs...>
 
 Exemples:
-  ./scripts/somtech_pack_add.sh .cursor/commands/mockmig*.md
-  ./scripts/somtech_pack_add.sh .cursor/commands/foo.md scripts/bar.sh
+  ./scripts/somtech_pack_add.sh .claude/skills/mon-skill/SKILL.md
+  ./scripts/somtech_pack_add.sh .claude/commands/foo.md scripts/bar.sh
 
 Env:
   SOMTECH_PACK_DIR   Chemin vers le repo somtech-pack (sinon auto-détection: ../somtech-pack)
-  SOMTECH_PACK_SCOPE Scope par défaut (sinon: .cursor,docs,scripts,README.md,.specify)
+  SOMTECH_PACK_SCOPE Scope par défaut (sinon: .claude,docs,scripts,README.md,.specify)
 EOF
 }
 
@@ -40,7 +40,7 @@ require_cmd git
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "[somtech.pack.add][ERROR] exécute ce script dans un repo git (projet)." >&2; exit 1; }
 cd "$PROJECT_ROOT"
 
-DEFAULT_SCOPE=".cursor,docs,scripts,README.md,.specify"
+DEFAULT_SCOPE=".claude,docs,scripts,README.md,.specify"
 SCOPE="${SOMTECH_PACK_SCOPE:-$DEFAULT_SCOPE}"
 
 # Detect pack dir (sibling ../somtech-pack) unless overridden
