@@ -173,16 +173,96 @@ if [[ "$FORCE" == "0" ]] && [[ "$DRY_RUN" == "0" ]]; then
 fi
 
 # ── Installation ──────────────────────────────────────────────
+#
+# Copie module par module avec exclusions explicites :
+#   - .DS_Store, *.bak-*, *.zip      : bruit / artefacts
+#   - .claude/CLAUDE.md              : ne plus pousser (D-20260513-0009)
+#   - .claude/settings.json          : projet-spécifique (permissions, plugins,
+#                                       hooks projet — jamais écraser ; /lier-app
+#                                       merge le hook SessionStart côté projet)
+# Backup automatique des fichiers existants modifiés (.bak-YYYYMMDDHHMMSS).
 
-INSTALL_SCRIPT="${PACK_CLONE}/scripts/install_somtech_pack.sh"
-[[ -x "$INSTALL_SCRIPT" ]] || chmod +x "$INSTALL_SCRIPT"
+BACKUP_TS="$(date +%Y%m%d%H%M%S)"
+applied_new=0
+applied_modified=0
+applied_skipped=0
 
-INSTALL_ARGS=("--target" "$TARGET_ABS")
-[[ -n "$MODULES_CSV" ]] && INSTALL_ARGS+=("--modules" "$MODULES_CSV")
-[[ "$DRY_RUN" == "1" ]] && INSTALL_ARGS+=("--dry-run")
+for mod in "${mod_array[@]}"; do
+  mod="$(echo "$mod" | tr -d '[:space:]')"
+  while IFS= read -r mod_path; do
+    [[ -z "$mod_path" ]] && continue
+    mod_path="${mod_path%/}"
 
-"$INSTALL_SCRIPT" "${INSTALL_ARGS[@]}"
+    src_dir="${PACK_CLONE}/${mod_path}"
+    [[ -d "$src_dir" ]] || continue
+
+    while IFS= read -r src_file; do
+      local_rel="${src_file#${PACK_CLONE}/}"
+      tgt_file="${TARGET_ABS}/${local_rel}"
+
+      # Exclusions projet-spécifiques
+      case "$local_rel" in
+        .claude/CLAUDE.md|.claude/settings.json)
+          applied_skipped=$((applied_skipped + 1))
+          continue
+          ;;
+      esac
+
+      tgt_dir_for_file="$(dirname "$tgt_file")"
+
+      if [[ "$DRY_RUN" == "1" ]]; then
+        if [[ ! -f "$tgt_file" ]]; then
+          applied_new=$((applied_new + 1))
+        elif ! diff -q "$src_file" "$tgt_file" >/dev/null 2>&1; then
+          applied_modified=$((applied_modified + 1))
+        fi
+        continue
+      fi
+
+      mkdir -p "$tgt_dir_for_file"
+
+      if [[ ! -f "$tgt_file" ]]; then
+        cp "$src_file" "$tgt_file"
+        [[ -x "$src_file" ]] && chmod +x "$tgt_file"
+        applied_new=$((applied_new + 1))
+      elif ! diff -q "$src_file" "$tgt_file" >/dev/null 2>&1; then
+        cp "$tgt_file" "${tgt_file}.bak-${BACKUP_TS}"
+        cp "$src_file" "$tgt_file"
+        [[ -x "$src_file" ]] && chmod +x "$tgt_file"
+        applied_modified=$((applied_modified + 1))
+      fi
+    done < <(find "$src_dir" -type f \
+      ! -name '*.bak-*' \
+      ! -name '.DS_Store' \
+      ! -name '*.zip' \
+      -print 2>/dev/null)
+  done < <(get_module_paths "$PACK_CLONE" "$mod")
+done
+
+# Marqueur de version
+if [[ "$DRY_RUN" != "1" ]]; then
+  mkdir -p "${TARGET_ABS}/.somtech-pack"
+  cat > "${TARGET_ABS}/.somtech-pack/version.json" <<EOF
+{
+  "pack": {
+    "version": "${pack_version}",
+    "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "modules": "${modules_to_check}",
+    "source": "${REPO_URL}",
+    "ref": "${REF}"
+  }
+}
+EOF
+fi
 
 echo ""
-log "Mise à jour terminée (v${pack_version})."
-log "Pense à commiter : git add -A && git commit -m 'chore: update somtech-pack v${pack_version}'"
+if [[ "$DRY_RUN" == "1" ]]; then
+  log "Dry-run : ${applied_new} nouveau(x), ${applied_modified} modifié(s) seraient appliqués (${applied_skipped} exclu(s) — .claude/CLAUDE.md, .claude/settings.json)."
+else
+  log "Mise à jour terminée (v${pack_version}) : ${applied_new} ajouté(s), ${applied_modified} modifié(s) avec .bak-${BACKUP_TS}, ${applied_skipped} exclu(s) (projet-spécifiques)."
+  log ""
+  log "⚠️  Si .claude/settings.json local n'a pas encore le hook SessionStart STD-027,"
+  log "    exécute /lier-app pour l'ajouter par merge JSON intelligent."
+  log ""
+  log "Pense à commiter : git add -A && git commit -m 'chore: update somtech-pack v${pack_version}'"
+fi
