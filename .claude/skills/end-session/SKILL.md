@@ -8,6 +8,9 @@ description: |
   - Problèmes résolus et solutions appliquées
   - Contexte important pour les futures sessions
   - Fichiers créés ou modifiés
+  ET si .somtech/app.yaml présent (STD-027) : met aussi à jour le doc Somcraft
+  /operations/<app-slug>/etat-app.md (source de vérité de la mémoire externe d'état
+  d'app) + le cache local .somtech/app-state.md (gitignored).
 ---
 
 # End Session - Documentation Automatique
@@ -72,7 +75,99 @@ Format standard pour les entrées:
 - Catégoriser les changements (Ajouté/Modifié/Corrigé/Technique)
 - Être spécifique mais concis
 
-### 4. Résumé de fin de session
+### 4. Mettre à jour la mémoire externe d'état d'app (STD-027)
+
+**Cette étape s'applique uniquement si `.somtech/app.yaml` existe dans le repo courant** (app liée à la mémoire externe selon STD-027). Sinon, sauter directement à l'étape 5.
+
+#### Pré-requis MCP
+
+- `mcp__claude_ai_Somcraft__read_document`
+- `mcp__claude_ai_Somcraft__write_document` (ou `update_document`)
+
+#### Workflow
+
+**4a. Lire le mapping local**
+
+Parser `.somtech/app.yaml` pour récupérer :
+- `somcraft.workspace_id` (workspace du **client**)
+- `somcraft.app_state_doc_path` (par défaut `/operations/<app-slug>/etat-app.md`)
+- `servicedesk.app_slug`, `app_name`, `client_name`
+
+**4b. Lire le doc Somcraft actuel**
+
+```
+mcp__claude_ai_Somcraft__read_document
+  workspace_id=<workspace_id>
+  path=<app_state_doc_path>
+```
+
+Conserver le contenu actuel comme base de comparaison.
+
+**4c. Analyser les changements opérationnels de la session**
+
+Identifier ce qui a changé pendant la session et qui mérite d'être enregistré dans l'état d'app. Distinguer ce qui va dans quelle section :
+
+| Section | Quand la mettre à jour |
+|---|---|
+| **TL;DR** | Si la session a déplacé l'état global (passage en staging, blocker résolu, etc.) — sinon laisser |
+| **Cycle de vie** | Si la phase a changé (build → acceptation, etc.) ou si les prochaines étapes ont évolué |
+| **Environnements** | Si un env a changé d'état (déploiement, drift, panne) |
+| **Tests** | Si le statut L1-L5 a évolué (passage vert/rouge, nouveau rapport QA) |
+| **Décisions récentes & contraintes** | Si une décision opérationnelle nouvelle a été prise (freeze, contrainte temporaire) — pas les ADR/STD (ils vivent dans Architecture/) |
+| **Dernière session** | **Toujours réécrite (overwrite)** — 2-4 bullets max sur ce qui n'est pas évident depuis git/SD/code |
+| **Pièges & avertissements** | Si un nouveau piège a été identifié ou un ancien levé |
+
+**4d. Composer le draft du nouveau doc**
+
+Construire le contenu cible en gardant les sections inchangées et en mettant à jour celles impactées. Mettre à jour le frontmatter :
+- `last_updated` : timestamp ISO 8601 UTC du moment courant
+- `updated_by` : `claude-session-<short_id>` (ou `claude-end-session`)
+- `current_branch` : résultat de `git rev-parse --abbrev-ref HEAD`
+- `current_phase` : conserver sauf si la session a fait basculer la phase
+
+**4e. Discipline anti-bloat (STD-027)**
+
+Avant d'écrire, vérifier :
+- TL;DR ≤ 3 phrases
+- Dernière session ≤ 4 bullets, **overwrite obligatoire** (pas un journal)
+- Pièges ≤ 3 items
+- **Total du doc ≤ 1500 tokens**
+
+Si dépassement : afficher un warning et proposer une troncature (Décisions récentes ou Pièges anciens à archiver). Ne PAS écrire silencieusement un doc qui dépasse.
+
+**4f. Présenter le draft + validation utilisateur**
+
+Afficher à l'utilisateur :
+- Un résumé des sections modifiées (ex: « TL;DR mis à jour, Environnements: staging passé à ✅, Dernière session: 3 bullets »)
+- Optionnel : un diff visible des changements
+- Demander : « Appliquer ces changements à Somcraft + cache local ? (oui/non/ajuster) »
+
+Si **oui** → étape 4g. Si **non** → skip étape Somcraft (l'étape 5 résumé restera). Si **ajuster** → proposer un nouveau draft basé sur les retours.
+
+**4g. Écrire dans Somcraft**
+
+```
+mcp__claude_ai_Somcraft__update_document
+  workspace_id=<workspace_id>
+  path=<app_state_doc_path>
+  content=<doc complet mis à jour>
+```
+
+**4h. Rafraîchir le cache local**
+
+Écrire le même contenu dans `.somtech/app-state.md` (overwrite local). Le hook `SessionStart` lira ce cache au prochain boot.
+
+#### Erreurs gérées
+
+| Cas | Comportement |
+|---|---|
+| `.somtech/app.yaml` absent | Skip cette étape, passer à 5 (comportement actuel inchangé) |
+| MCP Somcraft indisponible | Afficher erreur explicite, ne PAS modifier le cache local, suggérer de relancer plus tard |
+| Doc Somcraft corrompu/manquant | Suggérer `/lier-app` pour recréer le doc, ne pas écrire |
+| Dépassement 1500 tokens | Warning + proposition de troncature, refuser l'écriture silencieuse |
+| Permissions Somcraft insuffisantes | Erreur explicite, vérifier permissions du workspace client |
+
+### 5. Résumé de fin de session
 
 Afficher un résumé à l'utilisateur:
 
@@ -86,6 +181,11 @@ Afficher un résumé à l'utilisateur:
 📜 CHANGELOG.md:
    - X entrées ajoutées pour [DATE]
 
+🧠 Mémoire externe d'état d'app (si applicable, STD-027):
+   - Sections mises à jour: [liste]
+   - Doc Somcraft: /operations/<app-slug>/etat-app.md (workspace client)
+   - Cache local: .somtech/app-state.md rafraîchi
+
 🔍 Résumé des changements:
    - [Liste des points clés]
 ```
@@ -98,7 +198,8 @@ Claude:
 1. Analyse la conversation
 2. Identifie les éléments à documenter
 3. Met à jour CLAUDE.md et CHANGELOG.md à la racine du projet
-4. Affiche le résumé
+4. Si `.somtech/app.yaml` présent : propose un draft de MAJ du doc Somcraft + cache local, demande validation, écrit après approbation (STD-027)
+5. Affiche le résumé
 
 ## Notes
 
