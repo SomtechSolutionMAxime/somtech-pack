@@ -102,8 +102,8 @@ Présenter un résumé clair :
    ...
 
 📝 Modifiés (Y fichiers):
-   .claude/CLAUDE.md
-   .cursor/rules/somtech.md
+   .claude/skills/end-session/SKILL.md
+   .claude/hooks/session-start-app-state.sh
    ...
 
 ⚠️  Fichiers locaux uniquement (Z fichiers):
@@ -139,13 +139,12 @@ Si le script n'est pas disponible ou échoue, copier manuellement :
 ```bash
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 
-# .claude/
-rsync -av --exclude='.DS_Store' "$WORKDIR/somtech-pack/.claude/" "$PROJECT_ROOT/.claude/"
+# .claude/ (skills, agents, commands, hooks, settings, etc.)
+# NB: le pack ne pousse PAS .claude/CLAUDE.md (cf. D-20260513-0009) — si le projet
+# en a un local, il reste intact. On l'exclut explicitement par prudence.
+rsync -av --exclude='.DS_Store' --exclude='CLAUDE.md' "$WORKDIR/somtech-pack/.claude/" "$PROJECT_ROOT/.claude/"
 
-# .cursor/
-rsync -av --exclude='.DS_Store' "$WORKDIR/somtech-pack/.cursor/" "$PROJECT_ROOT/.cursor/"
-
-# features/
+# features/ (blueprints réutilisables)
 rsync -av --exclude='.DS_Store' "$WORKDIR/somtech-pack/features/" "$PROJECT_ROOT/features/"
 
 # scripts/
@@ -166,8 +165,8 @@ rm -rf "$WORKDIR"
 # Lister les skills disponibles
 ls .claude/skills/
 
-# Vérifier le CLAUDE.md
-head -5 .claude/CLAUDE.md
+# Vérifier la présence du hook SessionStart (STD-027)
+ls -la .claude/hooks/session-start-app-state.sh
 ```
 
 ### 3.2 Résumé final
@@ -184,8 +183,8 @@ Version pack      : main@<commit-sha>
    ...
 
 ⚠️  Actions recommandées :
-   - Vérifier que .claude/CLAUDE.md contient les bonnes sources de vérité pour ce projet
-   - Commiter les changements : git add .claude/ .cursor/ features/ scripts/ && git commit -m "chore(pack): sync somtech-pack"
+   - Si l'app n'est pas encore liée (.somtech/app.yaml absent) : /lier-app
+   - Commiter les changements : git add .claude/ features/ scripts/ && git commit -m "chore(pack): sync somtech-pack"
 ```
 
 ### 3.3 Proposer le commit
@@ -193,7 +192,7 @@ Version pack      : main@<commit-sha>
 Proposer à l'utilisateur de commiter les changements avec un message conventionnel :
 
 ```bash
-git add .claude/ .cursor/ features/ scripts/
+git add .claude/ features/ scripts/
 git commit -m "chore(pack): sync somtech-pack $(date +%Y-%m-%d)"
 ```
 
@@ -206,7 +205,6 @@ L'utilisateur peut demander une mise à jour partielle :
 | Demande | Comportement |
 |---------|-------------|
 | "maj skills seulement" | Synchroniser uniquement `.claude/skills/` |
-| "maj sans écraser mon CLAUDE.md" | Exclure `.claude/CLAUDE.md` de la sync |
 | "maj depuis une branche" | Utiliser `--ref <branche>` pour le pull |
 | "dry-run" | Ajouter `--dry-run` pour preview sans écriture |
 | "maj + push mes changements" | Faire un push d'abord, puis un pull |
