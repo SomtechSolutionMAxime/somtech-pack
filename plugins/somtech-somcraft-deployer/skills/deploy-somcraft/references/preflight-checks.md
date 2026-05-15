@@ -2,36 +2,55 @@
 
 Checklist détaillée de la Phase 0 du déploiement SomCraft.
 
-## 1. Détection du client (CLAUDE.md)
+## 1. Détection du client (`.somtech/app.yaml`)
 
-Chercher le fichier CLAUDE.md dans l'ordre suivant (le premier trouvé gagne) :
-
-1. **`.claude/CLAUDE.md`** — Emplacement standard Somtech (le pack `somtech-pack` installe le CLAUDE.md ici)
-2. **`CLAUDE.md`** — Fallback à la racine du projet pour les projets non-Somtech
+**Source unique de vérité** : `.somtech/app.yaml` à la racine du projet, créé par le skill `/lier-app` (STD-027).
 
 ```bash
-if [ -f .claude/CLAUDE.md ]; then
-  CLAUDE_MD_PATH=".claude/CLAUDE.md"
-elif [ -f CLAUDE.md ]; then
-  CLAUDE_MD_PATH="CLAUDE.md"
-else
-  echo "Erreur: aucun CLAUDE.md trouvé (ni .claude/CLAUDE.md, ni CLAUDE.md à la racine)"
+if [ ! -f .somtech/app.yaml ]; then
+  echo "Erreur : .somtech/app.yaml absent. Ce repo n'est pas lié à une application Somtech."
+  echo "Lancez /lier-app pour créer .somtech/app.yaml avant de relancer /deploy-somcraft."
   exit 1
 fi
 ```
 
-Une fois le fichier trouvé, chercher le nom du client via les patterns suivants dans l'ordre :
+**Aucun fallback** : ne JAMAIS deviner le nom client depuis `CLAUDE.md`, un H1, ou en demandant à l'utilisateur. Si `.somtech/app.yaml` est absent, le seul chemin de récupération est d'exécuter `/lier-app`.
 
-1. Une ligne `# Client: {name}` ou `## Client — {name}`
-2. Le premier titre H1 du document
-3. Un champ YAML frontmatter `client: {name}`
-4. Si rien trouvé, demander à l'utilisateur via `AskUserQuestion`
+### Format attendu
 
-Générer le `client-slug` à partir du nom :
+```yaml
+servicedesk:
+  app_id: <APP_ID>
+  app_name: <APP_NAME>
+  app_slug: <APP_SLUG>
+  client_id: <CLIENT_ID>
+  client_name: <CLIENT_NAME>
+somcraft:
+  workspace_id: <WORKSPACE_ID_CLIENT>
+  app_state_doc_id: <DOC_ID>
+  app_state_doc_path: /operations/<APP_SLUG>/etat-app.md
+```
+
+### Extraction des valeurs
 
 ```bash
-client_slug=$(echo "$client_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+# Avec yq (recommandé) :
+client_name=$(yq -r '.servicedesk.client_name' .somtech/app.yaml)
+app_slug=$(yq -r '.servicedesk.app_slug' .somtech/app.yaml)
+client_id=$(yq -r '.servicedesk.client_id' .somtech/app.yaml)
+
+# Fallback grep si yq absent :
+client_name=$(grep -E "^\s+client_name:" .somtech/app.yaml | head -1 | sed 's/.*client_name:\s*//' | tr -d '"')
+app_slug=$(grep -E "^\s+app_slug:" .somtech/app.yaml | head -1 | sed 's/.*app_slug:\s*//' | tr -d '"')
 ```
+
+Le `client-slug` utilisé dans les noms d'app Fly.io (`somcraft-{client-slug}-{env}`) et de bucket storage (`sc-{client-slug}`) est dérivé de `servicedesk.app_slug` :
+
+```bash
+client_slug="$app_slug"   # déjà en kebab-case et stable (cf. STD-027)
+```
+
+**Note** : `app_slug` est garanti stable dans le temps par `/lier-app` (même si `app_name` change). C'est précisément la raison d'être de STD-027 — pas de dérive du slug quand on renomme une app dans ServiceDesk.
 
 ## 2. Validation .mcp.json
 

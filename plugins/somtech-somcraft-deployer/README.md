@@ -15,7 +15,7 @@ Claude Code plugin pour déployer SomCraft sur des clients existants.
 
 ## Prérequis
 
-- Projet client avec `CLAUDE.md`, `.mcp.json` (avec MCP Supabase), `fly.toml`
+- Projet client lié via `/lier-app` (présence de `.somtech/app.yaml`), `.mcp.json` (avec MCP Supabase), `fly.toml`
 - Fly CLI authentifié (`fly auth whoami`)
 - Image Docker SomCraft publiée (`ghcr.io/somtech-solutions/somcraft:X.Y.Z`)
 - Accès Supabase du client via MCP

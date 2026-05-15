@@ -8,7 +8,7 @@ Déployer une instance SomCraft pour un client existant, avec son propre Supabas
 
 ## Ce que fait cette commande
 
-1. **Pré-flight** : Détecte la config du projet courant (CLAUDE.md, .mcp.json, fly.toml) et demande l'environnement cible (staging ou production)
+1. **Pré-flight** : Détecte la config du projet courant (`.somtech/app.yaml` via /lier-app, .mcp.json, fly.toml) et demande l'environnement cible (staging ou production)
 2. **Plan** : Affiche un résumé complet et demande confirmation
 3. **Migrations Supabase** : Applique les migrations SomCraft via MCP Supabase
 4. **Seed initial** : Crée le workspace initial, un admin, et une API key MCP
@@ -19,7 +19,7 @@ Déployer une instance SomCraft pour un client existant, avec son propre Supabas
 
 ## Prérequis
 
-- Le projet courant doit contenir : `CLAUDE.md`, `.mcp.json`, `fly.toml`
+- Le projet courant doit être lié via `/lier-app` (présence de `.somtech/app.yaml`), et contenir : `.mcp.json`, `fly.toml`
 - Fly CLI authentifié sur la bonne organisation
 - MCP Supabase configuré pour le project_ref du client
 - Image Docker publiée à la version dans `plugin.json`

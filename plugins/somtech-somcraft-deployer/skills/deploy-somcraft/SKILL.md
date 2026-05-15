@@ -25,7 +25,18 @@ Détecter le mode en lisant le prompt de l'utilisateur.
 
 **Référence détaillée :** `references/preflight-checks.md`
 
-1. Lis le fichier CLAUDE.md du projet courant. Chercher dans l'ordre : `.claude/CLAUDE.md` (emplacement standard Somtech), puis `CLAUDE.md` à la racine en fallback. Extrais le nom du client (chercher "Client:", "Projet:", ou le titre H1).
+1. Lis `.somtech/app.yaml` du projet courant (créé par `/lier-app`, voir STD-027). Extrais :
+   - `servicedesk.client_name` → `{client-name}`
+   - `servicedesk.app_slug` → utilisé pour dériver `{client-slug}` (généralement `{client-slug} = servicedesk.app_slug` ou un slug stable du client)
+   - `servicedesk.client_id` (UUID) — pour traçabilité et vérification
+
+   **Si `.somtech/app.yaml` n'existe pas** : arrêter avec le message exact suivant et ne PAS deviner le nom client depuis CLAUDE.md ou autre source :
+
+   ```
+   Erreur : .somtech/app.yaml absent. Ce repo n'est pas lié à une application Somtech.
+   Lancez /lier-app pour créer .somtech/app.yaml avant de relancer /deploy-somcraft.
+   ```
+
 2. Lis `.mcp.json`. Vérifie qu'il contient une entrée pour Supabase MCP avec un `project_ref` valide.
 3. Lis `fly.toml`. Extrais :
    - `app` (nom de l'app Fly.io actuelle)
