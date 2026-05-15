@@ -81,8 +81,9 @@ Le pack est organisé en modules activables :
 
 | Module | Par défaut | Contenu |
 |--------|------------|---------|
-| **core** | oui | `.claude/`, `scripts/`, `docs/`, `security/` |
+| **core** | oui | `.claude/`, `scripts/`, `docs/` |
 | **features** | oui | `features/` (blueprints réutilisables) |
+| **security** | non | `security/` (doc sécurité Somtech — Loi 25, CAI). **Opt-in** : ne pas écraser l'architecture sécurité projet-spécifique. |
 | **mockmig** | non | `.mockmig/`, `.specify/` (workflow migration maquette) |
 | **plugins** | non | `plugins/` (marketplace Cowork) |
 
