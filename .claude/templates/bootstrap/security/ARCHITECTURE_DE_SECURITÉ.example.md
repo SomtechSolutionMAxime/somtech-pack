@@ -1538,7 +1538,7 @@ Pour plus de détails sur la structure, le contenu et les mécanismes de synchro
 
 - **Référence (structure utilisateurs)** : `RAPPORT_ANALYSE_STRUCTURE_UTILISATEURS.md` — Analyse complète de la structure utilisateurs et recommandations
 - **Plan de Documentation** : `security/PLAN_DOCUMENTATION_SECURITY.md` — Plan de documentation de sécurité organisé en plusieurs niveaux
-- **Guidelines RLS** : `.cursor/rules/create-rls-policies.mdc` — Guidelines pour création de politiques RLS
+- **Guidelines RLS** : skill `.claude/skills/audit-rls/` — Audit et création de politiques RLS Supabase
 - **Documentation Supabase** : [Supabase Auth](https://supabase.com/docs/guides/auth) — Documentation officielle Supabase Auth
 - **Documentation PostgreSQL RLS** : [PostgreSQL Row Level Security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) — Documentation officielle PostgreSQL RLS
 

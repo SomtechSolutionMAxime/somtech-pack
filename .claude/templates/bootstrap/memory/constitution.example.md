@@ -73,7 +73,7 @@ modules/
 
 **Modules existants** :
 - La liste complète des modules métier et leur statut est documentée dans `Browse/Guides/modules-architecture.md`
-- La règle `.cursor/rules/00-module-structure.mdc` définit la structure générique des modules
+- La convention pack `.claude/` (sub-agents + skills) définit la structure générique des modules
 
 *Pour les détails d'implémentation, voir : `Browse/Guides/modules-architecture.md`*
 
@@ -117,7 +117,7 @@ modules/
 - Le Design Librarian maintient la cohérence design ↔ PRD modules
 - Les formats, i18n et conventions de la Charte sont appliqués dans tous les modules
 
-*Pour les détails, voir : `Charte_de_conception.mdc` (si présente) et `.cursor/rules/13_design_librarian.mdc`*
+*Pour les détails, voir : le sub-agent `.claude/agents/design.md` et la charte de conception du projet (si présente).*
 
 ### Validation UI
 
@@ -129,7 +129,7 @@ modules/
 - Tests automatisés optionnels sauf pour parcours critiques métier
 - Les tests sont organisés par module et pour parcours cross-modules
 
-*Pour les procédures détaillées, voir : `.cursor/rules/browser-validation-strategy.mdc`*
+*Pour les procédures détaillées, voir les skills `.claude/skills/webapp-testing/` et `.claude/skills/validate-ui/`.*
 
 ### Gestion Git et Branches
 
@@ -147,7 +147,7 @@ modules/
 - Documenter toutes les actions distantes (branche créée, PR ouverte, commentaires) dans le suivi de tâche
 - Éviter les opérations destructives sans confirmation explicite (push forcé, suppression de branche distante, merge sans revue)
 
-*Pour les procédures détaillées, voir : `.cursor/rules/00-git-main-protection.mdc`, `.cursor/rules/no-production-push.mdc`*
+*Pour les procédures détaillées, voir les règles d'or Somtech dans `~/.claude/CLAUDE.md` global (jamais push direct sur main, jamais de production push opportuniste).*
 
 ### Documentation
 
@@ -188,7 +188,7 @@ modules/
 
 **Routage** : L'orchestrateur analyse chaque demande et route vers l'agent approprié selon l'intention détectée.
 
-*Pour la matrice de routage et les commandes, voir : `.cursor/rules/00_orchestrator.mdc`*
+*Pour la matrice de routage et les commandes, voir le dossier `.claude/agents/` (sub-agents Claude Code) et les commandes `.claude/commands/`.*
 
 ### Base de Données Supabase
 
@@ -216,7 +216,7 @@ modules/
 - MCP pure.md pour contenu web bloqué/JS lourd ou veille/actu
 - MCP Railway pour déploiement automatisé des modules MCP
 
-*Pour les procédures détaillées, voir : `.cursor/rules/supabase-mcp.mdc`, `.cursor/rules/declarative-database-schema.mdc`, `.cursor/rules/mcp-context7.mdc`*
+*Pour les procédures détaillées, voir les MCPs configurés dans `.mcp.json` (Supabase, Context7) et le skill `.claude/skills/create-migration/`.*
 
 ### Ontologie
 
@@ -372,7 +372,7 @@ modules/
 - Budget d'erreurs visibles : < 1% sessions
 - Métriques de performance suivies et alertées
 
-*Pour les métriques détaillées, voir : `.cursor/rules/12_observability_analytics.mdc`*
+*Pour les métriques détaillées, voir les conventions Somtech d'observabilité (Grafana Cloud, OpenTelemetry, métriques de coûts via skill `deploy-metering`).*
 
 ## Gouvernance
 
@@ -402,7 +402,7 @@ Cette constitution définit les principes fondamentaux du projet Construction Ga
 
 ## Conformité
 
-Tous les développements doivent respecter cette constitution. En cas de doute, consulter les guides dans `Browse/Guides/` ou les règles dans `.cursor/rules/`.
+Tous les développements doivent respecter cette constitution. En cas de doute, consulter les guides du projet (si présents), les sub-agents `.claude/agents/` et les skills `.claude/skills/`.
 
 ## Références
 
@@ -417,31 +417,25 @@ Tous les développements doivent respecter cette constitution. En cas de doute, 
 - **Gestion des utilisateurs** : `RAPPORT_ANALYSE_STRUCTURE_UTILISATEURS.md` ⚠️ **RÉFÉRENCE DE VÉRITÉ**
 - **Architecture de sécurité** : `security/ARCHITECTURE_DE_SECURITÉ.md` ⚠️ **SOURCE DE VÉRITÉ UNIQUE**
 
-### Règles spécialisées
+### Sub-agents et skills Somtech
 
-**Orchestration et structure** :
-- Orchestrateur : `.cursor/rules/00_orchestrator.mdc`
-- Structure modulaire : `.cursor/rules/00-module-structure.mdc`
-- Protection branche main : `.cursor/rules/00-git-main-protection.mdc` / `.cursor/rules/no-production-push.mdc`
+**Sub-agents spécialisés** (dans `.claude/agents/`) :
+- Frontend, Backend, QA, Product, Database, DevOps, Design — un par persona, voir `.claude/agents/*.md`
 
-**Validation UI et tests** :
-- Stratégie navigateur/tests : `.cursor/rules/browser-validation-strategy.mdc`
-- Validation UI obligatoire : `.cursor/rules/ui-changes-require-playwright-tests.mdc`
-- Navigateur interactif : `.cursor/rules/ui-browser-interactive.mdc`
-- Validation & exploration UI : `.cursor/rules/ui-interface-playwright.mdc`
-- Tests automatisés : `.cursor/rules/ui-testing-automated.mdc`
-- Politique validation UI : `.cursor/rules/ui-validation-policy.mdc`
-- Index navigateur/tests : `.cursor/rules/INDEX_NAVIGATEUR_TESTS.md`
+**Skills Claude Code clés** (dans `.claude/skills/`) :
+- `audit-rls` — audit/création des politiques RLS Supabase
+- `create-migration` — création de migrations Supabase
+- `webapp-testing` — toolkit Playwright pour tests de web apps
+- `validate-ui` — validation UI obligatoire (0 erreur console)
+- `scaffold-component`, `scaffold-aims` — scaffolding de composants/AIMS
+- `lier-app`, `sync-app-state` — mémoire externe d'état d'app (STD-027)
+- `end-session`, `somtech-pack-maj` — méta-skills du pack
 
-**Base de données** :
-- MCP Supabase : `.cursor/rules/supabase-mcp.mdc`
-- Schéma déclaratif : `.cursor/rules/declarative-database-schema.mdc`
-- RLS : `.cursor/rules/create-rls-policies.mdc`
-- SQL Postgres : `.cursor/rules/supabaseprojetct.mdc`
-- Edge Functions : `.cursor/rules/writing-supabase-edge-functions.mdc`
+**Règles transversales** (CLAUDE.md global `~/.claude/CLAUDE.md`) :
+- Règles d'or Somtech (jamais push sur main, jamais toucher autre repo, code review obligatoire, etc.)
+- Protection des branches `main` et `staging`
 
-**Outils MCP** :
-- MCP Context7 : `.cursor/rules/mcp-context7.mdc`
-
-**Design System** :
-- Design Librarian : `.cursor/rules/13_design_librarian.mdc`
+**MCPs** (configurés dans `.mcp.json`) :
+- MCP Supabase (CRUD DB + migrations + Edge Functions)
+- MCP Context7 (documentation à jour des libs)
+- MCP ServiceDesk (tickets, demandes, epics, projets)
