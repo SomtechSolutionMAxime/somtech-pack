@@ -6,13 +6,12 @@
   "repository": "https://github.com/SomtechSolutionMAxime/somtech-pack.git",
   "modules": {
     "core": {
-      "description": "Config Claude Code (skills/agents/commands/hooks) + scripts + docs + sécurité",
+      "description": "Config Claude Code (skills/agents/commands/hooks) + scripts + docs",
       "default": true,
       "paths": [
         ".claude/",
         "scripts/",
-        "docs/",
-        "security/"
+        "docs/"
       ]
     },
     "features": {
@@ -20,6 +19,13 @@
       "default": true,
       "paths": [
         "features/"
+      ]
+    },
+    "security": {
+      "description": "Documentation sécurité Somtech (architecture, Loi 25, références CAI). Disponible en consultation dans le pack cloné mais NON poussé par défaut aux projets clients pour éviter d'écraser leur architecture sécurité projet-spécifique. Opt-in via --modules security.",
+      "default": false,
+      "paths": [
+        "security/"
       ]
     },
     "mockmig": {

@@ -40,7 +40,7 @@ Configuration réutilisable installée dans chaque projet client via les scripts
 | `docs/` | Documentation générique réutilisable (ChatWindow, migrations, specs/plans superpowers) |
 | `features/` | Documentation technique de features implémentées (blueprints réutilisables entre projets) |
 | `scripts/` | Scripts d'installation, synchronisation pull/push, utilitaires |
-| `security/` | Documentation sur l'architecture de sécurité |
+| `security/` | Documentation sécurité Somtech (architecture, Loi 25, références CAI) — **module `security`, opt-in, non poussé par défaut** |
 | `aims/` | Configs et docs AIMS (agents, infra, skills) |
 | `.mockmig/` | Scripts et templates du workflow mockmig |
 | `.specify/` | Templates pour spécifications (release notes, etc.) |
@@ -53,8 +53,9 @@ Le pack est modulaire. Chaque module est défini dans `pack.json` :
 
 | Module | Par défaut | Contenu |
 |--------|:----------:|---------|
-| **core** | ✓ | `.claude/`, `scripts/`, `docs/`, `security/` |
+| **core** | ✓ | `.claude/`, `scripts/`, `docs/` |
 | **features** | ✓ | `features/` — Blueprints de features réutilisables |
+| **security** | ○ | `security/` — Doc sécurité Somtech (architecture, Loi 25, références CAI). **Opt-in** pour ne pas écraser l'architecture sécurité projet-spécifique. |
 | **mockmig** | ○ | `.mockmig/`, `.specify/` — Workflow migration maquette → production |
 | **plugins** | ○ | `plugins/` — Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager, somtech-somcraft-deployer, somtech-rag, somtech-estimator, mcp-expose) |
 
