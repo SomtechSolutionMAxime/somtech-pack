@@ -77,29 +77,33 @@ WHERE schemaname = 'public' AND tablename LIKE 'sc_%';
 
 ## API Keys MCP
 
-Format : `sk_live_<64-hex-chars>` (générées par `openssl rand -hex 32`).
+3 types de clés (`apps/web/lib/mcp-auth.ts`), dispatchées par préfixe :
 
-Stockées dans `sc_workspaces.api_key`.
+| Préfixe | Type | Portée | Stockage |
+|---|---|---|---|
+| `sk_…` (legacy) | Workspace | UN workspace | `sc_workspaces.api_key` (clair, colonne UNIQUE) |
+| `sk_agent_…` | Agent (**recommandé**) | Agent du registre, scope workspace optionnel | `sc_agent_api_keys` (haché) + `sc_agent_workspace_access` |
+| `sk_admin_…` | Admin | Cross-workspace, opérateur | clés admin dédiées |
 
-**Résolution côté serveur :**
+Format canonique d'une clé **workspace** : `sk_` + 32 caractères `[a-z0-9]` (généré par `generateWorkspaceApiKey()` — `apps/web/lib/mcp-tools/generate-workspace-key.ts`).
+
+**Résolution côté serveur (clé workspace legacy) :**
 
 ```typescript
-// apps/web/lib/api-helpers.ts (pattern)
-async function resolveApiKey(apiKey: string): Promise<{ workspace: ScWorkspace | null }> {
-  const { data } = await serviceSupabase
-    .from('sc_workspaces')
-    .select('*')
-    .eq('api_key', apiKey)
-    .single()
-
-  return { workspace: data }
-}
+// apps/web/lib/mcp-auth.ts — branche if (key.startsWith('sk_'))
+const { data } = await serviceSupabase
+  .from('sc_workspaces')
+  .select('*')
+  .eq('api_key', key)
+  .single()
+// → { type: 'workspace', workspace: data }
 ```
 
 **Important :**
-- Une API key est scopée à **UN workspace**
-- Pour régénérer : `UPDATE sc_workspaces SET api_key = 'sk_live_...' WHERE id = ?`
+- Une clé workspace est scopée à **UN workspace**
+- Pour régénérer : `UPDATE sc_workspaces SET api_key = 'sk_' || <32 chars [a-z0-9]> WHERE id = ?` (ou via le tool MCP `regenerate_workspace_api_key`)
 - Pour révoquer : `UPDATE sc_workspaces SET api_key = NULL WHERE id = ?`
+- Pour les agents IA, préférer une clé `sk_agent_…` créée depuis `/settings/agents`
 
 ## Storage Policies
 

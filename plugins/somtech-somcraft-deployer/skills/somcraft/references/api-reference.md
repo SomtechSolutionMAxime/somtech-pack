@@ -213,6 +213,8 @@ Headers requis :
 
 Protocole : JSON-RPC 2.0 (MCP standard).
 
+> SomCraft ≥ v0.21 expose **25 tools** (`apps/web/lib/mcp-server.ts`). Les principaux sont détaillés ci-dessous ; voir le skill `somcraft` (`SKILL.md`) pour la liste complète, incluant les tools de liens (`read_backlinks`, `resolve_links`, `rewrite_links`, `preview_link_rename`, `audit_broken_links`), de commentaires (`create_comment_thread`, `reply_to_thread`, `find_open_threads`, …), `update_document`, `update_block`, `autocomplete_documents`, `create_workspace`, `run_custom_command` et `regenerate_workspace_api_key`.
+
 ### `list_workspaces`
 
 Liste les workspaces accessibles à cette API key.
@@ -255,12 +257,7 @@ Crée ou met à jour un fichier Markdown. Crée les dossiers parents si nécessa
 - `workspace_id`
 - `path` — Chemin du dossier (crée les parents si besoin)
 
-### `move_document`
-
-**Params :**
-- `workspace_id`
-- `document_id`
-- `new_path`
+> **Note :** il n'existe **pas** de tool `move_document`. Pour déplacer/renommer, utiliser `update_document` (changement de chemin) ou les tools de liens (`rewrite_links`, `preview_link_rename`).
 
 ### `export_document`
 

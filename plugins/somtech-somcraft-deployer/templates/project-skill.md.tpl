@@ -103,11 +103,14 @@ Puis créer le bucket storage (ou réutiliser `{{STORAGE_BUCKET}}`) et ajouter l
 ### Régénérer l'API key MCP
 
 ```sql
+-- Format canonique : 'sk_' + 32 caractères [a-z0-9]
 UPDATE sc_workspaces
-SET api_key = 'sk_live_' || encode(gen_random_bytes(32), 'hex')
+SET api_key = 'sk_' || substr(translate(encode(gen_random_bytes(32), 'base64'), '+/=', ''), 1, 32)
 WHERE id = '{{WORKSPACE_ID}}'
 RETURNING api_key;
 ```
+
+> Préférable : le tool MCP `regenerate_workspace_api_key`, ou une clé agent `sk_agent_…` depuis `/settings/agents`.
 
 Stocker la nouvelle clé dans 1Password et mettre à jour les `.mcp.json` qui l'utilisent.
 
