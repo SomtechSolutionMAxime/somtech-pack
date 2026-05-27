@@ -58,7 +58,7 @@ Pour le détail, voir `references/concepts.md`.
 - **Document** — Fichier ou dossier dans un workspace. Stocké en DB (métadonnées) + Supabase Storage (contenu).
 - **Version** — Snapshot historique d'un document (table `sc_document_versions`).
 - **Studio** — Panneau de génération de documents via pipelines AI multi-étapes (résumé exécutif, présentation, rapport, compte-rendu, proposition d'amélioration).
-- **MCP Server** — Endpoint HTTP qui expose 9 tools pour agents externes (liste workspaces, lit/écrit documents, génère via Studio, etc.).
+- **MCP Server** — Endpoint HTTP qui expose 25 tools pour agents externes (workspaces, lecture/écriture/édition de documents, liens & backlinks, commentaires, génération via Studio, etc.).
 
 ## Data Model
 
@@ -99,24 +99,32 @@ Pour le détail, voir `references/api-reference.md`.
 
 Endpoint : `POST /api/mcp/mcp` avec `Authorization: Bearer {api_key}` et `Accept: application/json, text/event-stream`.
 
-9 tools disponibles :
+25 tools disponibles (SomCraft ≥ v0.21, source : `apps/web/lib/mcp-server.ts`). Il n'existe **pas** de `move_document`.
 
-1. `list_workspaces` — Lister les workspaces accessibles
-2. `list_documents` — Lister documents dans un workspace (filtrable par parent, status)
-3. `read_document` — Lire contenu + métadonnées
-4. `write_document` — Créer/mettre à jour un .md (crée les dossiers parents si besoin)
-5. `search_documents` — Recherche full-text
-6. `create_folder` — Créer un dossier (récursif)
-7. `move_document` — Déplacer un fichier/dossier
-8. `export_document` — Export vers PDF/DOCX, retourne URL signée
-9. `generate_document` — Pipeline Studio pour génération structurée
+**Documents**
+- `list_workspaces`, `create_workspace`
+- `list_documents`, `read_document`, `write_document`, `update_document`, `update_block`
+- `search_documents`, `autocomplete_documents`
+- `create_folder`
+- `export_document` — PDF/DOCX, retourne URL signée
+- `generate_document` — pipeline Studio
+- `run_custom_command` — exécute une commande AI custom
+
+**Liens & graphe**
+- `read_backlinks`, `resolve_links`, `rewrite_links`, `preview_link_rename`, `audit_broken_links`
+
+**Commentaires / collaboration**
+- `create_comment_thread`, `read_comment_thread`, `list_comment_threads`, `reply_to_thread`, `set_thread_resolved`, `find_open_threads`
+
+**Administration de clé**
+- `regenerate_workspace_api_key`
 
 ## Sécurité
 
 Pour le détail, voir `references/security.md`.
 
 - **RLS par workspace_id** sur toutes les tables `sc_*`
-- **API keys MCP** stockées dans `sc_workspaces.api_key` (format `sk_live_<64-hex>`)
+- **API keys MCP** — 4 types (`apps/web/lib/mcp-auth.ts`) : clé **workspace** legacy `sk_…` (stockée dans `sc_workspaces.api_key`, format canonique `sk_` + 32 `[a-z0-9]`), clé **agent** `sk_agent_…` (registre `sc_agents` / `sc_agent_api_keys`, **recommandée** pour les agents IA), clé **utilisateur** `sk_user_…` (`sc_user_api_keys`), clé **admin** `sk_admin_…` (cross-workspace, réservée à l'opérateur)
 - **Storage policies** : chaque bucket est privé, accessible uniquement aux membres du workspace correspondant
 - **Service role key** : uniquement utilisée côté serveur (Edge Functions, export PDF)
 - **Anon key** : pour les clients (sessions auth)
@@ -136,7 +144,7 @@ Problèmes communs :
 ## Opérations courantes
 
 - **Créer un nouveau workspace** : INSERT dans `sc_workspaces` + créer bucket storage + INSERT membre admin
-- **Régénérer une API key** : `UPDATE sc_workspaces SET api_key = 'sk_live_...' WHERE id = ...`
+- **Régénérer une API key** : tool MCP `regenerate_workspace_api_key`, ou `UPDATE sc_workspaces SET api_key = 'sk_...' WHERE id = ...` (format `sk_` + 32 `[a-z0-9]`)
 - **Voir les documents d'un workspace** : `SELECT * FROM sc_documents WHERE workspace_id = ? ORDER BY created_at DESC`
 - **Restaurer un document de la corbeille** : `UPDATE sc_documents SET status = 'active' WHERE id = ? AND status = 'trashed'`
 

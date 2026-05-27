@@ -4,46 +4,44 @@ Comment créer le workspace initial, l'admin, et l'API key lors d'un nouveau dé
 
 ## 1. Admin user
 
-Via MCP Supabase, créer un user dans `auth.users` :
+**Méthode recommandée — API Auth Admin (GoTrue).** Crée l'utilisateur ET la ligne `auth.identities` associée, indispensable au login email/password sur les versions récentes de GoTrue :
+
+```bash
+ADMIN_PW=$(openssl rand -base64 18)
+curl -fsS -X POST "https://${PROJECT_REF}.supabase.co/auth/v1/admin/users" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PW}\",\"email_confirm\":true,\"user_metadata\":{\"role\":\"admin\",\"name\":\"Admin\"}}"
+```
+
+Stocker l'`id` retourné comme `ADMIN_USER_ID`.
+
+**Fallback SQL** (uniquement si l'endpoint Auth est inatteignable). ⚠️ Un INSERT dans `auth.users` **seul** ne suffit pas : il faut aussi une ligne `auth.identities`, sinon le login échoue.
 
 ```sql
--- Générer un mot de passe aléatoire
--- (utiliser openssl rand -base64 16 côté skill, passer comme param)
-
 WITH new_user AS (
   INSERT INTO auth.users (
-    instance_id,
-    id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_user_meta_data,
-    created_at,
-    updated_at,
-    confirmation_token,
-    email_change,
-    email_change_token_new,
-    recovery_token
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
   )
   VALUES (
-    '00000000-0000-0000-0000-000000000000',
-    gen_random_uuid(),
-    'authenticated',
-    'authenticated',
-    '{admin-email}',
-    crypt('{random-password}', gen_salt('bf')),
-    now(),
-    '{"role": "admin", "name": "Admin"}'::jsonb,
-    now(),
-    now(),
-    '',
-    '',
-    '',
-    ''
+    '00000000-0000-0000-0000-000000000000', gen_random_uuid(),
+    'authenticated', 'authenticated', '{admin-email}',
+    crypt('{random-password}', gen_salt('bf')), now(),
+    '{"role": "admin", "name": "Admin"}'::jsonb, now(), now(), '', '', '', ''
   )
   RETURNING id
+), new_identity AS (
+  INSERT INTO auth.identities (
+    provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  )
+  SELECT id::text, id,
+         jsonb_build_object('sub', id::text, 'email', '{admin-email}'),
+         'email', now(), now(), now()
+  FROM new_user
+  RETURNING user_id
 )
 SELECT id FROM new_user;
 ```
@@ -67,10 +65,10 @@ Stocker le `id` retourné comme `WORKSPACE_ID`.
 
 ## 3. API key MCP
 
-Générer côté skill :
+Générer côté skill (format **canonique** `sk_` + 32 caractères `[a-z0-9]`, identique à `generateWorkspaceApiKey()` côté SomCraft) :
 
 ```bash
-API_KEY="sk_live_$(openssl rand -hex 32)"
+API_KEY="sk_$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 32)"
 ```
 
 Puis :

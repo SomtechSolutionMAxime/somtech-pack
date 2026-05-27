@@ -70,7 +70,7 @@ Si l'une de ces étapes échoue, arrête et affiche l'erreur clairement.
 | Supabase project  | {project-ref}                            |
 | Fly app           | somcraft-{client-slug}-{env}             |
 | Fly org           | {fly-org}                                |
-| Image Docker      | ghcr.io/somtech-solutions/somcraft:0.4.2 |
+| Image Docker      | ghcr.io/somtech-solutions/somcraft:{somcraft-version} |
 | Workspace initial | {client-name} - Docs                     |
 | Admin email       | (demandé à la prochaine étape)           |
 | Migrations        | (détecté après clone)                    |
@@ -92,10 +92,23 @@ Options:
 1. Clone le repo SomCraft dans un dossier temp à la version spécifiée dans `plugin.json` :
 
 ```bash
-SOMCRAFT_VERSION=$(cat $PLUGIN_ROOT/.claude-plugin/plugin.json | jq -r .somcraftVersion)
+# Résout la version. Si plugin.json contient "latest" (valeur par défaut),
+# on récupère le dernier tag vX.Y.Z publié sur le repo SomCraft.
+SOMCRAFT_VERSION_RAW=$(jq -r .somcraftVersion "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+if [ "$SOMCRAFT_VERSION_RAW" = "latest" ]; then
+  SOMCRAFT_VERSION=$(git ls-remote --tags --refs https://github.com/Somtech-Solutions/somcraft.git \
+    | awk -F/ '{print $NF}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 | sed 's/^v//')
+else
+  SOMCRAFT_VERSION="$SOMCRAFT_VERSION_RAW"
+fi
+[ -z "$SOMCRAFT_VERSION" ] && { echo "Erreur : impossible de résoudre la version SomCraft."; exit 1; }
+echo "Version SomCraft cible : v$SOMCRAFT_VERSION"
+
 TMP_DIR=$(mktemp -d)
-git clone --depth 1 --branch v$SOMCRAFT_VERSION https://github.com/somtech-solutions/somcraft.git $TMP_DIR
+git clone --depth 1 --branch "v$SOMCRAFT_VERSION" https://github.com/Somtech-Solutions/somcraft.git "$TMP_DIR"
 ```
+
+**Note :** `--branch vlatest` n'existe pas — le bloc ci-dessus résout `"latest"` en tag réel avant le clone.
 
 2. Liste les migrations disponibles : `ls $TMP_DIR/supabase/migrations/*.sql | sort`
 3. Via MCP Supabase (`mcp__supabase__execute_sql`), lis `supabase_migrations.schema_migrations` pour détecter les migrations déjà appliquées.
@@ -136,16 +149,19 @@ Options:
   - Autre email             : Saisir un email personnalisé
 ```
 
-2. Crée le user admin via MCP Supabase (en utilisant l'API auth) :
+2. Crée le user admin. **Méthode recommandée — API Auth Admin de GoTrue** (gère automatiquement la ligne `auth.identities` requise pour le login email/password, contrairement à un INSERT SQL brut) :
 
-```sql
--- Via la table auth.users directement
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data)
-VALUES (gen_random_uuid(), '{admin-email}', crypt('{random-password}', gen_salt('bf')), now(), '{"role": "admin"}')
-RETURNING id;
+```bash
+ADMIN_PW=$(openssl rand -base64 18)
+curl -fsS -X POST "https://${PROJECT_REF}.supabase.co/auth/v1/admin/users" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PW}\",\"email_confirm\":true,\"user_metadata\":{\"role\":\"admin\",\"name\":\"Admin\"}}"
+# Récupérer l'`id` retourné comme ADMIN_USER_ID.
 ```
 
-(Alternative : utiliser `supabase.auth.admin.createUser()` via un appel SDK si disponible.)
+**Fallback SQL** (si le réseau ne permet pas d'atteindre l'endpoint Auth) : voir `references/seed-workflow.md` — l'INSERT dans `auth.users` **doit** être accompagné d'un INSERT dans `auth.identities`, sinon le login email/password échoue sur les versions récentes de GoTrue.
 
 3. Crée le workspace initial :
 
@@ -155,11 +171,13 @@ VALUES ('{client-name} - Docs', '{client-slug}-docs', 'sc-{client-slug}', '{admi
 RETURNING id;
 ```
 
-4. Génère une API key MCP (format `sk_live_<64-hex-chars>`) :
+4. Génère une API key MCP de workspace (format **canonique** `sk_` + 32 caractères `[a-z0-9]`, identique à `generateWorkspaceApiKey()` côté code SomCraft) :
 
 ```bash
-API_KEY="sk_live_$(openssl rand -hex 32)"
+API_KEY="sk_$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 32)"
 ```
+
+> **Note auth (SomCraft ≥ v0.20)** : la clé de workspace (`sk_…`) reste supportée et résolue contre `sc_workspaces.api_key`. Le modèle **recommandé** pour faire opérer un agent IA est désormais la **clé agent** `sk_agent_…` (registre `sc_agents` + `sc_agent_api_keys`, accès workspace via `sc_agent_workspace_access`). Pour un seed initial mono-workspace, la clé de workspace suffit ; bascule vers une clé agent depuis `/settings/agents` quand plusieurs agents/clés scopées sont nécessaires.
 
 5. Stocke l'API key dans la table `sc_workspaces` :
 

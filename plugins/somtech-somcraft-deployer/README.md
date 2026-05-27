@@ -40,7 +40,7 @@ Le CLI détecte la config, demande l'environnement cible (staging/production), p
 
 ## Version
 
-Ce plugin déploie SomCraft v0.4.2 (voir plugin.json → somcraftVersion).
+Ce plugin déploie la **dernière version** de SomCraft (`plugin.json` → `somcraftVersion: "latest"`, résolue au dernier tag `vX.Y.Z` au moment du déploiement ; ≥ v0.21 à ce jour).
 
 Pour mettre à jour un client vers une nouvelle version :
 

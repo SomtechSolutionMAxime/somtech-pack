@@ -54,12 +54,12 @@
 
 1. **API key non trouvée dans la DB**
    ```sql
-   SELECT id, name, api_key FROM sc_workspaces WHERE api_key = 'sk_live_...';
+   SELECT id, name, api_key FROM sc_workspaces WHERE api_key = 'sk_...';
    ```
-   Si vide, la clé est invalide. Régénérer avec `UPDATE sc_workspaces SET api_key = 'sk_live_...'`.
+   Si vide, la clé est invalide. Régénérer avec `UPDATE sc_workspaces SET api_key = 'sk_...'`.
 
 2. **Header mal formaté**
-   - Doit être : `Authorization: Bearer sk_live_...`
+   - Doit être : `Authorization: Bearer sk_...`
    - Erreur commune : oublier `Bearer ` ou utiliser `X-API-Key`
 
 3. **API key expirée ou révoquée**
@@ -99,7 +99,7 @@
          "type": "http",
          "url": "https://{instance}.fly.dev/api/mcp/mcp",
          "headers": {
-           "Authorization": "Bearer sk_live_...",
+           "Authorization": "Bearer sk_...",
            "Accept": "application/json, text/event-stream"
          }
        }

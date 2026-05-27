@@ -10,7 +10,7 @@ Le plugin déploie l'image publiée sur GitHub Container Registry :
 ghcr.io/somtech-solutions/somcraft:X.Y.Z
 ```
 
-où `X.Y.Z` est la `somcraftVersion` du plugin.
+où `X.Y.Z` est la `somcraftVersion` **résolue** (voir Phase 2 — `"latest"` est traduit en dernier tag `vX.Y.Z` avant usage ; le tag d'image ne porte pas le préfixe `v`).
 
 **Prérequis (externe au plugin)** : un pipeline CI dans le repo SomCraft qui publie cette image à chaque release tag `vX.Y.Z`. Si l'image n'existe pas, la commande échoue en Phase 4.
 

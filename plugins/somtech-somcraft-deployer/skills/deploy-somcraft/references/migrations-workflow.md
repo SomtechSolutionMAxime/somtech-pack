@@ -7,9 +7,17 @@ Comment appliquer les migrations SomCraft sur le Supabase d'un client via MCP.
 Le plugin ne contient PAS les migrations. Elles sont clonées depuis le repo SomCraft à la version spécifiée dans `plugin.json` → `somcraftVersion`.
 
 ```bash
-SOMCRAFT_VERSION=$(jq -r .somcraftVersion $PLUGIN_ROOT/.claude-plugin/plugin.json)
+# "latest" (défaut) → dernier tag vX.Y.Z. Sinon, version pinnée telle quelle.
+SOMCRAFT_VERSION_RAW=$(jq -r .somcraftVersion "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+if [ "$SOMCRAFT_VERSION_RAW" = "latest" ]; then
+  SOMCRAFT_VERSION=$(git ls-remote --tags --refs https://github.com/Somtech-Solutions/somcraft.git \
+    | awk -F/ '{print $NF}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 | sed 's/^v//')
+else
+  SOMCRAFT_VERSION="$SOMCRAFT_VERSION_RAW"
+fi
+[ -z "$SOMCRAFT_VERSION" ] && { echo "Erreur : version SomCraft non résolue."; exit 1; }
 TMP_DIR=$(mktemp -d /tmp/somcraft-migrations-XXXXXX)
-git clone --depth 1 --branch "v$SOMCRAFT_VERSION" https://github.com/somtech-solutions/somcraft.git "$TMP_DIR"
+git clone --depth 1 --branch "v$SOMCRAFT_VERSION" https://github.com/Somtech-Solutions/somcraft.git "$TMP_DIR"
 MIGRATIONS_DIR="$TMP_DIR/supabase/migrations"
 ```
 
