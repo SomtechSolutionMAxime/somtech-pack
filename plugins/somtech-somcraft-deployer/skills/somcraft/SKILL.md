@@ -124,7 +124,7 @@ Endpoint : `POST /api/mcp/mcp` avec `Authorization: Bearer {api_key}` et `Accept
 Pour le détail, voir `references/security.md`.
 
 - **RLS par workspace_id** sur toutes les tables `sc_*`
-- **API keys MCP** — 3 types (`apps/web/lib/mcp-auth.ts`) : clé **workspace** legacy `sk_…` (stockée dans `sc_workspaces.api_key`, format canonique `sk_` + 32 `[a-z0-9]`), clé **agent** `sk_agent_…` (registre `sc_agents` / `sc_agent_api_keys`, **recommandée** pour les agents IA), clé **admin** `sk_admin_…` (cross-workspace, réservée à l'opérateur)
+- **API keys MCP** — 4 types (`apps/web/lib/mcp-auth.ts`) : clé **workspace** legacy `sk_…` (stockée dans `sc_workspaces.api_key`, format canonique `sk_` + 32 `[a-z0-9]`), clé **agent** `sk_agent_…` (registre `sc_agents` / `sc_agent_api_keys`, **recommandée** pour les agents IA), clé **utilisateur** `sk_user_…` (`sc_user_api_keys`), clé **admin** `sk_admin_…` (cross-workspace, réservée à l'opérateur)
 - **Storage policies** : chaque bucket est privé, accessible uniquement aux membres du workspace correspondant
 - **Service role key** : uniquement utilisée côté serveur (Edge Functions, export PDF)
 - **Anon key** : pour les clients (sessions auth)

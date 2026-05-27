@@ -77,12 +77,13 @@ WHERE schemaname = 'public' AND tablename LIKE 'sc_%';
 
 ## API Keys MCP
 
-3 types de clés (`apps/web/lib/mcp-auth.ts`), dispatchées par préfixe :
+4 types de clés (`apps/web/lib/mcp-auth.ts`), dispatchées par préfixe :
 
 | Préfixe | Type | Portée | Stockage |
 |---|---|---|---|
 | `sk_…` (legacy) | Workspace | UN workspace | `sc_workspaces.api_key` (clair, colonne UNIQUE) |
 | `sk_agent_…` | Agent (**recommandé**) | Agent du registre, scope workspace optionnel | `sc_agent_api_keys` (haché) + `sc_agent_workspace_access` |
+| `sk_user_…` | Utilisateur | Clés MCP d'un utilisateur humain | `sc_user_api_keys` (haché) |
 | `sk_admin_…` | Admin | Cross-workspace, opérateur | clés admin dédiées |
 
 Format canonique d'une clé **workspace** : `sk_` + 32 caractères `[a-z0-9]` (généré par `generateWorkspaceApiKey()` — `apps/web/lib/mcp-tools/generate-workspace-key.ts`).
@@ -101,7 +102,7 @@ const { data } = await serviceSupabase
 
 **Important :**
 - Une clé workspace est scopée à **UN workspace**
-- Pour régénérer : `UPDATE sc_workspaces SET api_key = 'sk_' || <32 chars [a-z0-9]> WHERE id = ?` (ou via le tool MCP `regenerate_workspace_api_key`)
+- Pour régénérer : `UPDATE sc_workspaces SET api_key = 'sk_' || <32 chars [a-z0-9]> WHERE id = ?` (le tool MCP `regenerate_workspace_api_key` fait l'équivalent mais **exige une clé admin** `sk_admin_…`)
 - Pour révoquer : `UPDATE sc_workspaces SET api_key = NULL WHERE id = ?`
 - Pour les agents IA, préférer une clé `sk_agent_…` créée depuis `/settings/agents`
 
