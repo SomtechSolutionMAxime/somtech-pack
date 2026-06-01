@@ -1,177 +1,165 @@
 # /brd — Gestion des Business Requirements Documents (BRD)
 
-Tu es un assistant qui pilote le cycle de vie d'un **BRD** (Business Requirements Document), source de vérité supérieure du « pourquoi » et du « quoi » côté client, cadré par **STD-033** (`Architecture/standards/STD-033-gestion-des-brd.md`). Réponds toujours en français.
+Tu es un assistant qui pilote le cycle de vie d'un **BRD** (Business Requirements Document) — source de vérité supérieure du « pourquoi » et du « quoi » côté client, cadré par **STD-033**. Réponds toujours en français.
 
-## Contexte opérationnel
+## Architecture (à connaître AVANT d'agir)
 
-- **Source de vérité du gabarit** : Somcraft document `7d96c99e-66f3-4dda-846e-7d504fd5b7af` (`/interne/gabarits/BRD-gabarit.md` v2.0.0+)
-- **Lieu canonique des BRD** : `Architecture/business-requirements/<app-slug>/BRD.md`
-- **Scripts** : `Architecture/scripts/extract-brd-yaml.py` (MD → YAML) et `Architecture/scripts/validate-brd.py` (cohérence sémantique)
-- **Règle d'or n°10** (`~/.claude/CLAUDE.md`) : avant d'analyser une demande / décomposer un epic / rédiger une PRD, **lire le BRD courant**. Toute story doit pointer vers une EF (`Réalisé par`).
-- **Format strict** : 7 sections obligatoires (Sommaire, Contexte, Problème, Enjeux d'Affaires, Exigences Fonctionnelles / Règles d'Affaires par domaine, Hors-scope, Changelog) + tableaux MD opposables au parser. Voir STD-033 §2.3.
-
-## Découverte de l'environnement
-
-Le skill a besoin du dossier racine **Architecture** (où vivent les scripts et les BRD).
-
-1. La variable d'env **`SOMTECH_ARCHITECTURE_DIR`** doit être définie et pointer vers ce dossier (à exporter dans `~/.zshrc` ou équivalent).
-2. Le skill vérifie que `<root>/scripts/extract-brd-yaml.py` et `<root>/scripts/validate-brd.py` existent.
-3. Si la variable est absente ou les scripts introuvables : stopper avec un message clair, ne pas deviner de chemin.
-
-```bash
-if [ -z "$SOMTECH_ARCHITECTURE_DIR" ]; then
-  echo "Variable SOMTECH_ARCHITECTURE_DIR non définie."
-  echo "Exporter le chemin du dossier Architecture (ex: dans ~/.zshrc) :"
-  echo "  export SOMTECH_ARCHITECTURE_DIR=\"/path/to/Architecture\""
-  exit 1
-fi
-ARCH_ROOT="$SOMTECH_ARCHITECTURE_DIR"
-if [ ! -f "$ARCH_ROOT/scripts/extract-brd-yaml.py" ] || [ ! -f "$ARCH_ROOT/scripts/validate-brd.py" ]; then
-  echo "Scripts BRD absents dans $ARCH_ROOT/scripts/."
-  echo "STD-033 et ses outils ne sont probablement pas installés (ou SOMTECH_ARCHITECTURE_DIR pointe au mauvais endroit)."
-  echo "Voir Architecture/standards/STD-033-gestion-des-brd.md."
-  exit 1
-fi
-```
-
-## Rapport à la règle d'or n°7 (cwd vs repo Architecture)
-
-La règle d'or n°7 interdit d'écrire dans un repo qui n'est pas le cwd. Les sous-actions ont des rapports différents à cette règle :
-
-| Sous-action | Opération | Doit être lancée depuis |
+| Élément | Source canonique | Accès |
 |---|---|---|
-| `new` | **Écrit** `BRD.md` dans `Architecture/business-requirements/<slug>/` | Le repo `Architecture` |
-| `extract` | **Écrit** `brd.yaml` dans `Architecture/business-requirements/<slug>/` | Le repo `Architecture` |
-| `validate` | **Lit** `brd.yaml` (lecture pure) | N'importe quel cwd |
-| `sync` | **Lit** `BRD.md` + push MCP Somcraft (gouvernance) | N'importe quel cwd |
-| `list` | **Lit** `business-requirements/` (lecture pure) | N'importe quel cwd |
+| **BRD.md** (markdown, source) | **Somcraft** path `/business-requirements/<slug>/BRD.md` | MCP `mcp__claude_ai_Somcraft__*` |
+| **brd.yaml** (projection technique, dérivée) | **Somcraft** path `/business-requirements/<slug>/brd.yaml` (publication intermédiaire) puis **ServiceDesk** `applications.brd_manifest` (publication finale via CI) | MCP Somcraft + MCP `mcp__servicedesk__applications` |
+| **Gabarit BRD** | **Somcraft** doc id `7d96c99e-66f3-4dda-846e-7d504fd5b7af` (`/interne/gabarits/BRD-gabarit.md` v2.0.0+) | idem Somcraft |
+| **App ServiceDesk** (host du brd.yaml) | Table `applications` (champ `name`) | MCP `mcp__servicedesk__applications` action `list` / `create` |
 
-Si `new`/`extract` sont invoquées depuis un autre cwd que `Architecture`, le skill doit **refuser** et demander d'ouvrir Claude Code dans le repo `Architecture` (cohérent avec la règle 7).
+**Aucune dépendance filesystem. Aucune variable d'env.** Le skill fonctionne dans n'importe quel cwd sur n'importe quel poste, dès lors que les MCP Somcraft et ServiceDesk sont chargés. Si l'un manque, le signaler et stopper.
 
-## Sous-actions
+## Modèle de publication brd.yaml — IMPORTANT
 
-L'argument `$ARGUMENTS` doit être l'une de : `new`, `extract`, `validate`, `sync`, `list`. Si `$ARGUMENTS` est vide, afficher l'aide ci-dessous et stopper.
+L'action MCP `mcp__servicedesk__applications` `set_brd_yaml` est **CI-only** (gated SYSTEM_API_KEY, comme `set_architecture_manifest`). **Aucun appel direct depuis une session interactive ne fonctionnera.**
+
+Workflow effectif :
 
 ```
-Usage : /brd <action> [params]
-
-  new <app-slug>           Instancie un BRD vierge depuis le gabarit Somcraft
-  extract <app-slug>       Parse BRD.md → brd.yaml déterministe
-  validate <app-slug>      Valide cohérence sémantique du brd.yaml
-  sync <app-slug>          Push BRD.md vers Somcraft (/architecture/business-requirements/<slug>/)
-  list                     Liste les BRD existants dans Architecture/business-requirements/
+1. Édition BRD.md       → Somcraft (interactif, humain ou agent)
+2. /brd extract <slug>  → produit brd.yaml + l'écrit dans Somcraft (interactif)
+3. Pickup CI (à venir)  → un publisher CI lit Somcraft et appelle set_brd_yaml
+4. /brd validate <slug> → vérifie le YAML publié côté ServiceDesk (interactif)
 ```
+
+En attendant que le publisher CI soit déployé, l'étape 3 est **manuelle** : un opérateur avec SYSTEM_API_KEY pousse vers ServiceDesk. Le skill `/brd` ne fait pas cette étape.
+
+## Résolution `<app-slug>` → `application_id` (déterministe)
+
+1. Lister les apps : `mcp__servicedesk__applications` action `list`.
+2. Normaliser chaque `name` retourné : lowercase, supprimer espaces/tirets/underscores.
+3. Comparer au slug fourni (aussi normalisé). Exemples observés :
+   - slug `actionprogex` → name `ActionProgex` (normalisé `actionprogex`) ✅
+   - slug `somtech-pack` → name `Somtech Pack` (normalisé `somtechpack`) ✅
+   - slug `servicedesk` → name `ServiceDesk` ✅
+4. Décision :
+   - **0 match** : informer l'utilisateur, lui proposer (a) de corriger le slug, (b) de créer l'app via `mcp__servicedesk__applications` action `create` avant de réessayer. **Ne jamais inventer un application_id.**
+   - **1 match** : utiliser cet `application_id`.
+   - **N matches** : afficher la liste avec UUID + name, demander à l'utilisateur de trancher.
+
+## Usage
+
+```
+/brd <action> [params]
+
+  new <app-slug>           Instancie un BRD vierge dans Somcraft depuis le gabarit
+  read <app-slug>          Lit et affiche le BRD courant (Somcraft)
+  extract <app-slug>       Parse BRD.md → produit brd.yaml → écrit dans Somcraft
+  validate <app-slug>      Vérifie cohérence du brd.yaml publié côté ServiceDesk
+  list                     Liste les apps avec/sans BRD (brd_coverage + list_brd_yaml)
+```
+
+Si `$ARGUMENTS` est vide, afficher cette aide et stopper.
 
 ---
 
 ### Action `new <app-slug>`
 
-Instancie un BRD vierge pour une nouvelle app.
-
 1. **Pré-checks** :
-   - **cwd doit être le repo `Architecture`** (sinon refuser — règle d'or n°7, voir tableau ci-dessus).
    - `<app-slug>` doit matcher `^[a-z][a-z0-9-]*$` (kebab-case).
-   - Si `Architecture/business-requirements/<slug>/BRD.md` existe → STOP, informer l'utilisateur (utiliser `/brd extract` ou éditer en place).
-2. **Récupérer le gabarit** depuis Somcraft via MCP `mcp__servicedesk__feed` ou `mcp__claude_ai_Somcraft__read_document` (id `7d96c99e-66f3-4dda-846e-7d504fd5b7af`). Si le MCP Somcraft n'est pas dispo, demander à l'utilisateur de fournir le gabarit ou pointer vers le fichier local s'il existe.
-3. **Créer le squelette** dans `Architecture/business-requirements/<slug>/BRD.md` :
-   - Remplacer le titre par `# BRD — <Nom Lisible>` (demander à l'utilisateur le nom lisible).
-   - Initialiser le Sommaire avec les 7 sections vides.
-   - Section §1.4 Identification : `app_id: <slug>`, `version: 0.1.0`, `status: draft`, `owner_business: <à compléter>`, `owner_technique: <à compléter>`.
-   - Section §7 Changelog : 1 entrée initiale `| 0.1.0 | <date YYYY-MM-DD> | Maxime Leboeuf | Création initiale | — |`.
-4. **Annoncer** : « BRD `<slug>` v0.1.0 créé. Prochaine étape : compléter les Enjeux d'Affaires (§4) puis les EF/RA par domaine (§5). »
+   - Résoudre `application_id` (voir section ci-dessus). Si l'app n'existe pas côté ServiceDesk → STOP, proposer de la créer d'abord (sinon `/brd extract` cassera plus tard).
+   - Vérifier que le doc Somcraft `/business-requirements/<slug>/BRD.md` n'existe pas déjà.
+2. **Lire le gabarit** via `mcp__claude_ai_Somcraft__read_document` (id `7d96c99e-66f3-4dda-846e-7d504fd5b7af`).
+3. **Personnaliser** :
+   - Titre `# BRD — <Nom Lisible>` (demander à l'utilisateur le nom lisible).
+   - §1.4 Identification : `app_id: <slug>`, `application_id: <UUID résolu>`, `version: 0.1.0`, `status: draft`, `owner_business: Maxime Leboeuf` (par défaut, à confirmer), `owner_technique: <à compléter>`.
+   - §7 Changelog : 1 entrée `| 0.1.0 | <YYYY-MM-DD> | Maxime Leboeuf | Création initiale | — |`.
+4. **Écrire** via `mcp__claude_ai_Somcraft__write_document`.
+5. **Annoncer** : « BRD `<slug>` v0.1.0 créé. Prochaine étape : compléter §4 et §5, puis `/brd extract <slug>`. »
 
 ---
 
-### Action `extract <app-slug>`
+### Action `read <app-slug>`
 
-Parse le `BRD.md` vers `brd.yaml` déterministe (STD-033 §2.4). **cwd doit être le repo `Architecture`** (l'action écrit `brd.yaml`).
+1. `mcp__claude_ai_Somcraft__read_document` sur le path `/business-requirements/<slug>/BRD.md`.
+2. Si absent : informer + suggérer `/brd new <slug>`.
+3. Afficher un résumé structuré (§1 identification + nombre EA/EF/RA/HS par domaine + version courante du changelog) plus le contenu sur demande.
 
-```bash
-ARCH_ROOT="$SOMTECH_ARCHITECTURE_DIR"
-BRD_DIR="$ARCH_ROOT/business-requirements/<slug>"
-python3 "$ARCH_ROOT/scripts/extract-brd-yaml.py" "$BRD_DIR/BRD.md" "$BRD_DIR/brd.yaml"
-```
+---
 
-En cas d'erreur de parse :
-- Affiche le numéro de ligne + le contexte (le script `extract-brd-yaml.py` lève `BRDParseError` avec line_no).
-- Ne pas tenter de corriger automatiquement — laisser l'utilisateur arbitrer (un BRD malformé peut cacher une ambiguïté sémantique).
+### Action `extract <app-slug>` — point de convergence du skill
+
+Claude joue le rôle de parser MD → YAML. **Risque réel d'erreur de parsing.** Garde-fous obligatoires ci-dessous.
+
+1. **Lire** le BRD via `mcp__claude_ai_Somcraft__read_document`.
+2. **Lire la dernière version du Changelog** (§7 du BRD). Cette valeur devient `version:` du YAML. **Vérifier que c'est ≥ à la version actuellement publiée** (via `get_brd_yaml` si présent). Sinon refuser et demander un bump SemVer dans le BRD.
+3. **Parser** en suivant strictement les conventions de tableaux du gabarit v2.0.0 :
+   - **Tableau EA** (5 cols) : `| ID | Énoncé | Justification | Statut | Priorité | Owner |`
+   - **Tableau EF** (7 cols) : `| ID | Description | Statut | Priorité | Couvre | Réalisé par | Owner |`
+   - **Tableau RA** (6 cols) : `| ID | Énoncé | Justification | Statut | Encadre | Owner |`
+   - **Tableau HS** (5 cols) : `| ID | Description | Justification | Statut | Owner |`
+4. **Conventions strictes** (STD-033 §2.3-2.4) :
+   - IDs : `^(EA|EF|RA|HS)-[A-Z]{3}-\d{3}$` (ex: `EA-GBL-001`, `EF-CTC-014`)
+   - Statut : enum `draft|proposed|accepted|in_force|superseded|deprecated`
+   - Priorité : enum `M|S|C|W` (MoSCoW)
+   - Listes (`Couvre`, `Encadre`, `Réalisé par`) : séparées par `, `. `—` = vide. `\|` = pipe littéral.
+   - Domaine = les 3 lettres du milieu de l'ID — doit matcher la section qui contient le tableau.
+5. **Vérifier la cohérence côté agent** avant publication :
+   - IDs uniques cross-types
+   - `couvre` / `encadre` symétriques (EF.couvre → EA ; RA.encadre → EF)
+   - Statuts/priorités dans les enums
+   - Changelog SemVer croissant, dates ISO
+6. **Dry-run obligatoire** : afficher un diff résumé à l'utilisateur **avant** d'écrire :
+   - `<n>` EA, `<n>` EF, `<n>` RA, `<n>` HS extraits
+   - Liste des IDs (compactée si beaucoup)
+   - Version courante du BRD vs version publiée précédente
+   - Demander **GO explicite** (« ok », « oui », « publie »). Pas de publication sans confirmation, sauf mode `--yes` explicite dans `$ARGUMENTS`.
+7. **Écrire le YAML dans Somcraft** via `mcp__claude_ai_Somcraft__write_document` au path `/business-requirements/<slug>/brd.yaml`. **Pas d'appel à `set_brd_yaml` ServiceDesk depuis le skill** (CI-only).
+8. **Annoncer** : « brd.yaml de `<slug>` v`<X.Y.Z>` écrit dans Somcraft. La publication finale vers ServiceDesk se fait par le publisher CI (à venir, sinon manuel par opérateur avec SYSTEM_API_KEY). »
 
 ---
 
 ### Action `validate <app-slug>`
 
-Valide la cohérence sémantique du `brd.yaml` (STD-033 §2.4).
-
-```bash
-ARCH_ROOT="$SOMTECH_ARCHITECTURE_DIR"
-BRD_DIR="$ARCH_ROOT/business-requirements/<slug>"
-python3 "$ARCH_ROOT/scripts/validate-brd.py" "$BRD_DIR/brd.yaml"
-```
-
-Vérifications :
-- IDs uniques cross-types
-- `couvre` / `encadre` symétriques (EF ↔ EA, RA ↔ EF)
-- Statuts et priorités dans les enums
-- Owners présents (warnings)
-- EA orphelines (warnings)
-- Changelog SemVer ordonné, dates ISO
-
-En cas d'erreurs : afficher la liste complète, ne pas masquer. Les warnings sont informatifs.
-
----
-
-### Action `sync <app-slug>`
-
-Synchronise `BRD.md` vers Somcraft.
-
-1. Vérifier que `Architecture/business-requirements/<slug>/BRD.md` existe.
-2. Récupérer le contenu (Read tool).
-3. Push vers Somcraft via `mcp__claude_ai_Somcraft__write_document` :
-   - **Path Somcraft** : `/architecture/business-requirements/<slug>/BRD.md` (lowercase, voir CLAUDE.md global §« Somcraft = source de vérité »)
-   - **Contenu** : copie fidèle du MD local
-4. Confirmer l'URL Somcraft retournée à l'utilisateur.
-5. **Ne PAS** lancer un sync automatique des PRDs/stories — c'est un acte explicite à part.
+1. Résoudre `application_id` (voir section dédiée).
+2. Lire le YAML publié via `mcp__servicedesk__applications` action `get_brd_yaml`.
+3. Si vide ou absent : informer (« aucun brd.yaml publié pour `<slug>` côté ServiceDesk »).
+4. **Comparer** avec le YAML Somcraft `/business-requirements/<slug>/brd.yaml` si présent (détecte un drift entre Somcraft et ServiceDesk → signal que le publisher CI n'a pas tourné, ou que le BRD a été ré-extrait sans push).
+5. **Vérifications côté agent** :
+   - IDs uniques cross-types
+   - `couvre` / `encadre` symétriques
+   - Owners présents (warning si vide)
+   - EA orphelines (warning si aucune EF ne les couvre)
+   - Changelog : SemVer croissant, dates ISO
+6. Afficher la liste complète des findings (erreurs + warnings).
 
 ---
 
 ### Action `list`
 
-Liste les BRD existants.
-
-```bash
-find "$ARCH_ROOT/business-requirements" -name "BRD.md" -type f 2>/dev/null | sed "s|$ARCH_ROOT/business-requirements/||;s|/BRD.md||" | sort
-```
-
-Affiche aussi la version courante de chaque BRD (extraite via `grep -m1 '^version:' brd.yaml` si le YAML existe, sinon « non extrait »).
+1. `mcp__servicedesk__applications` action `brd_coverage` → résumé (`with_brd` / `without_brd`).
+2. `mcp__servicedesk__applications` action `list_brd_yaml` → détail des manifestes publiés (app_id, version, source_commit, published_at).
+3. Affichage tableau lisible : nom app, version BRD publiée (ou « — » si aucune), source_commit, date.
 
 ---
 
-## Phase 1 universelle (STD-033 §2.7)
+## Phase 1 universelle (STD-033 §2.7) — rappel
 
-Pour rappel : avant de décomposer une demande/epic en stories, exécuter le protocole de pré-décomposition :
+Avant de décomposer une demande/epic en stories :
 
-1. **Lire le BRD courant** (`Architecture/business-requirements/<app>/BRD.md`)
-2. **Identifier les EF/RA touchées** par la demande
-3. **Si la demande crée une nouvelle EF ou modifie une EF existante** :
-   - Amender le BRD **avant** la décomposition (nouvelle version mineure ou patch SemVer)
-   - Lancer `/brd extract <slug>` + `/brd validate <slug>` pour vérifier
-   - `/brd sync <slug>` pour publier sur Somcraft
-4. **Toute story décomposée** doit citer l'EF qu'elle réalise (`Réalisé par: T-...` dans la table EF — colonne 7)
-
-Le skill `/brd` ne fait **pas** cette orchestration automatiquement — c'est l'agent qui décompose (humain ou autonome) qui doit invoquer `/brd` aux moments opportuns. Le skill fournit les outils, pas la discipline.
+1. `/brd read <app-slug>` (ou directement `mcp__claude_ai_Somcraft__read_document`)
+2. Identifier les EF/RA touchées
+3. Si la demande crée/modifie une EF : amender le BRD dans Somcraft (nouvelle version SemVer) **avant** la décomposition
+4. `/brd extract <slug>` pour propager
+5. Toute story décomposée cite l'EF qu'elle réalise (`Réalisé par`)
 
 ## Anti-patterns à refuser
 
-- Créer un BRD **après** avoir écrit les stories (renversement de la chaîne de causalité)
-- Modifier le `brd.yaml` directement (le YAML est dérivé du MD — toujours éditer le MD puis re-extract)
-- Sync vers Somcraft sans avoir lancé `validate` (publier du contenu invalide)
-- Inventer des EF qui ne sont pas dans le BRD juste pour faire passer une story (briser la traçabilité)
+- Créer un BRD **après** avoir écrit les stories (chaîne de causalité inversée)
+- **Stocker / éditer un BRD en filesystem local** (même temporairement) — toute édition passe par Somcraft via MCP. Le filesystem n'est jamais une source acceptable, même synchronisée.
+- Éditer le `brd.yaml` directement côté ServiceDesk ou côté Somcraft (le YAML est dérivé du BRD.md — toute édition directe sera écrasée au prochain `/brd extract`)
+- Appeler `set_brd_yaml` depuis une session interactive (CI-only, sera rejeté par le serveur)
+- Inventer un `application_id` quand la résolution échoue (interdit par CLAUDE.md global)
+- Inventer des EF qui ne sont pas dans le BRD pour faire passer une story
 
 ## Références opposables
 
-- **STD-033** : `Architecture/standards/STD-033-gestion-des-brd.md` (gestion des BRD)
-- **STD-001** : méta-standard pour la rédaction de STD/ADR
-- **STD-030** : hiérarchie ServiceDesk (Demande/Projet → Epic → Story → Ticket)
-- **STD-031** : modèle d'architecture vivant (anti-doublon I9/I10 — référencer plutôt que dupliquer)
-- **Gabarit Somcraft** : `7d96c99e-66f3-4dda-846e-7d504fd5b7af`
-- **Pilote** : `Architecture/business-requirements/action-progex/BRD.md` (v2.1.0+, 13 EA / 81 EF / 93 RA)
+- **STD-033** : Somcraft `/architecture/standards/STD-033-gestion-des-brd` (sera publié à la livraison du projet P-20260529-0001)
+- **STD-030** : hiérarchie ServiceDesk
+- **STD-031** : pattern manifeste vivant (architecture.yaml — modèle dont brd.yaml hérite)
+- **Gabarit BRD** : Somcraft doc id `7d96c99e-66f3-4dda-846e-7d504fd5b7af`
+- **Pilote** : Action Progex (Somcraft `/business-requirements/actionprogex/BRD.md`)

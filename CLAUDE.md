@@ -150,4 +150,15 @@ Le pack expose la commande slash **`/brd`** pour piloter le cycle de vie des BRD
 
 **Règle d'or n°10** (héritée du `~/.claude/CLAUDE.md` global) : avant d'analyser une demande, de décomposer un epic en stories, de rédiger une PRD ou de proposer une feature pour une app dotée d'un BRD, **lire le BRD courant**. Toute story doit pouvoir être tracée à une Exigence Fonctionnelle (`Réalisé par`) ; si l'EF n'existe pas, l'ajouter ou amender le BRD **avant** d'écrire la story (Phase 1 universelle, STD-033 §2.7).
 
-**Dépendance** : la commande `/brd` invoque des scripts qui vivent dans le repo `Architecture` (`Architecture/scripts/extract-brd-yaml.py` et `validate-brd.py`). Le chemin canonique est résolu via la variable d'environnement `SOMTECH_ARCHITECTURE_DIR` ou, par défaut, le chemin Google Drive du poste de Maxime. Voir `.claude/commands/brd.md` pour les détails.
+**Architecture MCP-only** (zéro dépendance filesystem locale, zéro variable d'env) :
+
+| Élément | Source canonique | MCP |
+|---|---|---|
+| BRD.md (markdown source) | Somcraft `/business-requirements/<slug>/BRD.md` | `mcp__claude_ai_Somcraft__*` |
+| brd.yaml (intermédiaire) | Somcraft `/business-requirements/<slug>/brd.yaml` | `mcp__claude_ai_Somcraft__*` |
+| brd.yaml (publication finale) | ServiceDesk table `applications` (champ `brd_manifest`) | `mcp__servicedesk__applications` actions `get_brd_yaml` / `list_brd_yaml` / `brd_coverage` |
+| Gabarit BRD | Somcraft doc `7d96c99e-66f3-4dda-846e-7d504fd5b7af` | idem Somcraft |
+
+Le parsing MD → YAML est fait par Claude lui-même en suivant les conventions strictes documentées dans `.claude/commands/brd.md`, avec dry-run + confirmation utilisateur obligatoires avant écriture.
+
+**Important** : `set_brd_yaml` côté ServiceDesk est gated CI-only (SYSTEM_API_KEY). Le skill ne pousse pas directement vers ServiceDesk — il dépose le brd.yaml dans Somcraft, et un publisher CI (à venir) fait la publication finale. Pattern identique à `architecture.yaml` (STD-031).
