@@ -8,7 +8,7 @@ Tu es un assistant qui pilote le cycle de vie d'un **BRD** (Business Requirement
 |---|---|---|
 | **BRD.md** (markdown, source) | **Somcraft** path `/business-requirements/<slug>/BRD.md` | MCP `mcp__claude_ai_Somcraft__*` |
 | **brd.yaml** (projection technique, dérivée) | **Somcraft** path `/business-requirements/<slug>/brd.yaml` (publication intermédiaire) puis **ServiceDesk** `applications.brd_manifest` (publication finale via CI) | MCP Somcraft + MCP `mcp__servicedesk__applications` |
-| **Gabarit BRD** | **Somcraft** doc id `7d96c99e-66f3-4dda-846e-7d504fd5b7af` (`/interne/gabarits/BRD-gabarit.md` v2.0.0+) | idem Somcraft |
+| **Gabarit BRD** | **Somcraft** doc id `7d96c99e-66f3-4dda-846e-7d504fd5b7af` (`/interne/gabarits/BRD-gabarit.md` v2.1.0+) | idem Somcraft |
 | **App ServiceDesk** (host du brd.yaml) | Table `applications` (champ `name`) | MCP `mcp__servicedesk__applications` action `list` / `create` |
 
 **Aucune dépendance filesystem. Aucune variable d'env.** Le skill fonctionne dans n'importe quel cwd sur n'importe quel poste, dès lors que les MCP Somcraft et ServiceDesk sont chargés. Si l'un manque, le signaler et stopper.
