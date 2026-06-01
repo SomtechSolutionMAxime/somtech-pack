@@ -87,22 +87,24 @@ Claude joue le rôle de parser MD → YAML. **Risque réel d'erreur de parsing.*
 
 1. **Lire** le BRD via `mcp__claude_ai_Somcraft__read_document`.
 2. **Lire la dernière version du Changelog** (§7 du BRD). Cette valeur devient `version:` du YAML. **Vérifier que c'est ≥ à la version actuellement publiée** (via `get_brd_yaml` si présent). Sinon refuser et demander un bump SemVer dans le BRD.
-3. **Parser** en suivant strictement les conventions de tableaux du gabarit v2.0.0 :
-   - **Tableau EA** (5 cols) : `| ID | Énoncé | Justification | Statut | Priorité | Owner |`
-   - **Tableau EF** (7 cols) : `| ID | Description | Statut | Priorité | Couvre | Réalisé par | Owner |`
-   - **Tableau RA** (6 cols) : `| ID | Énoncé | Justification | Statut | Encadre | Owner |`
-   - **Tableau HS** (5 cols) : `| ID | Description | Justification | Statut | Owner |`
+3. **Parser** en suivant strictement les conventions de tableaux du gabarit v2.1.0 :
+   - **Tableau EA** (5 cols) : `| ID | Énoncé | Statut | Priorité | Owner |`
+   - **Tableau EF** (8 cols) : `| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |`
+   - **Tableau RA** (7 cols) : `| ID | Énoncé | Justification | Statut | Encadre | Testé par | Owner |`
+   - **Tableau HS** (5 cols) : `| ID | Énoncé | Justification | Statut | Re-considéré quand |`
 4. **Conventions strictes** (STD-033 §2.3-2.4) :
    - IDs : `^(EA|EF|RA|HS)-[A-Z]{3}-\d{3}$` (ex: `EA-GBL-001`, `EF-CTC-014`)
    - Statut : enum `draft|proposed|accepted|in_force|superseded|deprecated`
-   - Priorité : enum `M|S|C|W` (MoSCoW)
-   - Listes (`Couvre`, `Encadre`, `Réalisé par`) : séparées par `, `. `—` = vide. `\|` = pipe littéral.
+   - Priorité : enum `M|S|C|W` (MoSCoW) — EF uniquement (RA n'ont pas de priorité)
+   - Listes (`Couvre`, `Encadre`, `Réalisé par`, `Testé par`) : séparées par `, `. Vide = `—` ou cellule vide. `\|` = pipe littéral.
+   - **Colonne `Testé par`** (STD-033 §2.6.bis) : chemins relatifs de fichiers de test (pas de regex stricte de format). Cellule vide pour les exigences non encore couvertes. La promotion `accepted → in_force` exige au moins un test dans cette colonne (« si testé, alors opposable »).
    - Domaine = les 3 lettres du milieu de l'ID — doit matcher la section qui contient le tableau.
 5. **Vérifier la cohérence côté agent** avant publication :
    - IDs uniques cross-types
    - `couvre` / `encadre` symétriques (EF.couvre → EA ; RA.encadre → EF)
    - Statuts/priorités dans les enums
    - Changelog SemVer croissant, dates ISO
+   - **Warning** (pas erreur) si EF/RA en `in_force` avec `teste_par` vide — dette de couverture (STD-033 §2.6.bis)
 6. **Dry-run obligatoire** : afficher un diff résumé à l'utilisateur **avant** d'écrire :
    - `<n>` EA, `<n>` EF, `<n>` RA, `<n>` HS extraits
    - Liste des IDs (compactée si beaucoup)
@@ -124,6 +126,7 @@ Claude joue le rôle de parser MD → YAML. **Risque réel d'erreur de parsing.*
    - `couvre` / `encadre` symétriques
    - Owners présents (warning si vide)
    - EA orphelines (warning si aucune EF ne les couvre)
+   - **Couverture de tests** : EF/RA en `in_force` avec `teste_par` vide → warning « dette de couverture » (STD-033 §2.6.bis)
    - Changelog : SemVer croissant, dates ISO
 6. Afficher la liste complète des findings (erreurs + warnings).
 
