@@ -26,7 +26,7 @@ Configuration réutilisable installée dans chaque projet client via les scripts
 |-----------|------|
 | `.claude/agents/` | Sub-agents spécialisés (frontend, backend, qa, product, database, devops, design) |
 | `.claude/skills/` | Skills Claude Code : audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, mockmig, prototype, scaffold-aims, scaffold-component, somtech-pack-maj, speckit, sync-app-state, validate-ui, webapp-testing |
-| `.claude/commands/` | Commandes slash Claude Code (`/pousse`) |
+| `.claude/commands/` | Commandes slash Claude Code (`/pousse`, `/brd`) |
 | `.claude/hooks/` | Hooks Claude Code (`SessionStart` → mémoire externe d'état d'app, STD-027) |
 | `.claude/templates/` | Templates de bootstrap pour les sources de vérité (ontologie, constitution, architecture sécurité) + USER_CLAUDE_MD.md |
 | `.claude/user-skills/` | Skills utilisateur globaux (`somtech-pack-install`) |
@@ -143,3 +143,22 @@ plugins/
 ### Fichiers à ignorer
 
 `.DS_Store` est ignoré via `.gitignore`
+
+## BRD — Business Requirements Documents (STD-033)
+
+Le pack expose la commande slash **`/brd`** pour piloter le cycle de vie des BRD (source de vérité supérieure du « pourquoi » et du « quoi » côté client). Cadre opposable : **STD-033** (`Architecture/standards/STD-033-gestion-des-brd.md`).
+
+**Règle d'or n°10** (héritée du `~/.claude/CLAUDE.md` global) : avant d'analyser une demande, de décomposer un epic en stories, de rédiger une PRD ou de proposer une feature pour une app dotée d'un BRD, **lire le BRD courant**. Toute story doit pouvoir être tracée à une Exigence Fonctionnelle (`Réalisé par`) ; si l'EF n'existe pas, l'ajouter ou amender le BRD **avant** d'écrire la story (Phase 1 universelle, STD-033 §2.7).
+
+**Architecture MCP-only** (zéro dépendance filesystem locale, zéro variable d'env) :
+
+| Élément | Source canonique | MCP |
+|---|---|---|
+| BRD.md (markdown source) | Somcraft `/business-requirements/<slug>/BRD.md` | `mcp__claude_ai_Somcraft__*` |
+| brd.yaml (intermédiaire) | Somcraft `/business-requirements/<slug>/brd.yaml` | `mcp__claude_ai_Somcraft__*` |
+| brd.yaml (publication finale) | ServiceDesk table `applications` (champ `brd_manifest`) | `mcp__servicedesk__applications` actions `get_brd_yaml` / `list_brd_yaml` / `brd_coverage` |
+| Gabarit BRD | Somcraft doc `7d96c99e-66f3-4dda-846e-7d504fd5b7af` | idem Somcraft |
+
+Le parsing MD → YAML est fait par Claude lui-même en suivant les conventions strictes documentées dans `.claude/commands/brd.md`, avec dry-run + confirmation utilisateur obligatoires avant écriture.
+
+**Important** : `set_brd_yaml` côté ServiceDesk est gated CI-only (SYSTEM_API_KEY). Le skill ne pousse pas directement vers ServiceDesk — il dépose le brd.yaml dans Somcraft, et un publisher CI (à venir) fait la publication finale. Pattern identique à `architecture.yaml` (STD-031).
