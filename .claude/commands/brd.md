@@ -288,6 +288,8 @@ Avant de décomposer une demande/epic en stories :
 5. `/brd extract <app>[/<module>]` pour propager (Somcraft + pointer SD)
 6. Toute story décomposée cite l'EF qu'elle réalise (`Réalisé par`) avec son grain — une story rattachée au module WBS ne peut pas citer une EF du BRD WBS d'une autre app.
 
+**Workflow d'analyse automatisée** : le workflow `analyse-decoupage-demande` (`~/.claude/workflows/analyse-decoupage-demande.js`) implémente cette résolution automatiquement — il détecte `module_id` de la demande source, résout le BRD au bon grain avec fallback opt-in, et expose `brd_grain` + `brd_resolved_from` dans sa sortie pour traçabilité. Recommandé pour toute décomposition non-triviale.
+
 ---
 
 ## Voir aussi — pattern pointer Somcraft transverse
