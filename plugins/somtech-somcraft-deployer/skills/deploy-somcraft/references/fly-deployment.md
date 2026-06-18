@@ -55,6 +55,7 @@ Les secrets nécessaires :
 | `SUPABASE_SERVICE_ROLE_KEY`   | Demandé à l'utilisateur (sensible)                |
 | `NEXTAUTH_SECRET`             | Généré : `openssl rand -base64 32`                |
 | `SOMCRAFT_MCP_API_KEY`        | La clé générée en Phase 3                         |
+| `GOTENBERG_URL`               | **Ne pas poser ici** — staged par `provision-gotenberg-sidecar.sh` (Phase 4, étape 5) pour SomCraft ≥ v0.31.0 |
 
 ```bash
 fly secrets set \
