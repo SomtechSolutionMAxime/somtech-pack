@@ -71,6 +71,24 @@ cp "$SRC_FILE" "$DEST_FILE"
 
 # 2. Mettre à jour le rc shell de façon idempotente.
 touch "$RC_FILE"
+
+# Garde anti-perte de données : un bloc déséquilibré (BEGIN sans END, ou
+# l'inverse) ferait manger des lignes légitimes par l'awk de strip. On refuse
+# plutôt que de tronquer.
+n_begin="$(grep -cF "$MARKER_BEGIN" "$RC_FILE" 2>/dev/null || true)"; n_begin="${n_begin:-0}"
+n_end="$(grep -cF "$MARKER_END" "$RC_FILE" 2>/dev/null || true)"; n_end="${n_end:-0}"
+if [[ "$n_begin" != "$n_end" ]]; then
+  echo "⚠️  Bloc claude-swt déséquilibré dans $RC_FILE (BEGIN=$n_begin, END=$n_end)." >&2
+  echo "    Édition automatique refusée pour éviter une perte de données." >&2
+  echo "    Corrige/supprime le bloc à la main puis relance l'install." >&2
+  exit 1
+fi
+
+# Backup du rc avant toute réécriture (fichier sensible).
+if [[ -s "$RC_FILE" ]]; then
+  cp "$RC_FILE" "${RC_FILE}.somtech.bak"
+fi
+
 if grep -qF "$MARKER_BEGIN" "$RC_FILE"; then
   # Remplacer le bloc existant (entre marqueurs) — évite tout doublon.
   tmp="$(mktemp)"

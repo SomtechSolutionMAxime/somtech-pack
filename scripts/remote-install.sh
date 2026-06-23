@@ -85,7 +85,9 @@ if [[ -n "$TARGET" ]]; then
   [[ -n "$DRY_RUN" ]] && ARGS+=("$DRY_RUN")
   [[ -n "$FORCE" ]]   && ARGS+=("$FORCE")
 
-  bash "$PULL_SCRIPT" "${ARGS[@]}"
+  # Expansion gardée : "${ARR[@]}" sur tableau vide casse sous bash 3.2 + set -u
+  # (bash système macOS). ARGS est toujours non-vide ici, mais on reste défensif.
+  bash "$PULL_SCRIPT" ${ARGS[@]+"${ARGS[@]}"}
 fi
 
 # --- Installation shell claude-swt — si --with-claude-swt ---
@@ -98,5 +100,7 @@ if [[ -n "$WITH_SWT" ]]; then
   echo "[somtech-pack] Installation du lanceur shell claude-swt…"
   SWT_ARGS=()
   [[ -n "$DRY_RUN" ]] && SWT_ARGS+=("--dry-run")
-  bash "$SWT_SCRIPT" "${SWT_ARGS[@]}"
+  # Expansion gardée : sans --dry-run, SWT_ARGS est VIDE, et "${SWT_ARGS[@]}"
+  # plante sous bash 3.2 + set -u (le cas nominal `curl | bash -- --with-claude-swt`).
+  bash "$SWT_SCRIPT" ${SWT_ARGS[@]+"${SWT_ARGS[@]}"}
 fi

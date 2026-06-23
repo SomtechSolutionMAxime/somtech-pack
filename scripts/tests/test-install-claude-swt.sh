@@ -63,6 +63,37 @@ echo "== Scénario E — sourcing définit les fonctions =="
 defined="$(bash -c 'source "$1" >/dev/null 2>&1; declare -F claude-swt claude-swt-ls claude-swt-done claude-swt-gc | wc -l' _ "${DEST}/claude-swt.sh" | tr -d ' ')"
 [ "$defined" = "4" ] && ok "les 4 fonctions claude-swt* sont définies" || ko "attendu 4 fonctions, obtenu $defined"
 
+echo "== Scénario H — bloc déséquilibré (BEGIN sans END) → refus, pas de troncature =="
+RC3="${WORK}/zshrc-corrupt"
+printf '# >>> somtech claude-swt >>>\n[ -f x ] && source x\n# (END manquant — corruption)\nexport KEEP_AFTER=2\n' > "$RC3"
+if bash "$INSTALLER" --rc "$RC3" --dest "${WORK}/dh" --src "$SRC" >/dev/null 2>&1; then
+  ko "l'installateur aurait dû REFUSER un bloc déséquilibré"
+else
+  ok "installateur refuse le bloc déséquilibré (exit ≠ 0)"
+fi
+grep -qF "export KEEP_AFTER=2" "$RC3" && ok "ligne après le bloc corrompu préservée (pas de troncature)" \
+  || ko "PERTE DE DONNÉES : ligne après bloc corrompu mangée"
+
+echo "== Scénario G — remote-install.sh --with-claude-swt SANS --dry-run sous /bin/bash (régression #1) =="
+# Reproduit le one-liner nominal : tableau SWT_ARGS vide + set -u sous bash système (3.2 macOS).
+FAKE_HOME="${WORK}/home"; mkdir -p "$FAKE_HOME"
+PACK="${WORK}/fakepack"; mkdir -p "$PACK/scripts/shell"
+cp "${SCRIPTS_DIR}/remote-install.sh" "$PACK/scripts/"
+cp "$INSTALLER"                        "$PACK/scripts/"
+cp "$SRC"                              "$PACK/scripts/shell/"
+(
+  cd "$PACK" && git init -q && git config user.email t@t.io && git config user.name t \
+    && git config commit.gpgsign false && git add -A && git commit -qm pack && git branch -M main
+) >/dev/null 2>&1
+if HOME="$FAKE_HOME" /bin/bash "${SCRIPTS_DIR}/remote-install.sh" \
+      --with-claude-swt --repo "file://$PACK" --ref main >/dev/null 2>&1; then
+  [ "$(marker_count "$FAKE_HOME/.zshrc")" = "1" ] \
+    && ok "remote-install --with-claude-swt (sans --dry-run) installe le bloc sous /bin/bash" \
+    || ko "bloc non installé via remote-install (HOME=$FAKE_HOME)"
+else
+  ko "remote-install --with-claude-swt a échoué sous /bin/bash (régression array vide bash 3.2 ?)"
+fi
+
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"
 FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
