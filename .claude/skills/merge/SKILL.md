@@ -33,8 +33,8 @@ Tu es un assistant de deploiement. Execute les etapes suivantes dans l'ordre, en
 
 ```bash
 HEAD_BRANCH=$(gh pr view <numero> --json headRefName -q '.headRefName')
-PLAN=$(bash .claude/skills/merge/lib/worktree-aware-delete.sh 2>/dev/null; \
-       source .claude/skills/merge/lib/worktree-aware-delete.sh; mwt_plan_delete "$HEAD_BRANCH")
+source .claude/skills/merge/lib/worktree-aware-delete.sh
+PLAN=$(mwt_plan_delete "$HEAD_BRANCH")
 ```
 
 > Le helper `lib/worktree-aware-delete.sh` calcule le plan **sans rien supprimer**. Il renvoie une des 3 valeurs :

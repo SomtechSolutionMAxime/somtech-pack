@@ -22,7 +22,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/worktree-aware-delete.sh"
 
 PASS_FILE="$(mktemp)"; FAIL_FILE="$(mktemp)"
-trap 'rm -f "$PASS_FILE" "$FAIL_FILE"' EXIT
+cleanup() {
+  if [ -n "${ROOT:-}" ] && [ -d "${ROOT:-}" ]; then
+    git -C "${REPO:-/nonexistent}" worktree remove --force "${WT_LINKED:-}" 2>/dev/null || true
+    rm -rf "$ROOT"
+  fi
+  rm -f "$PASS_FILE" "$FAIL_FILE"
+}
+trap cleanup EXIT
 ok() { echo "  ✅ $1"; echo x >> "$PASS_FILE"; }
 ko() { echo "  ❌ $1"; echo x >> "$FAIL_FILE"; }
 
@@ -66,13 +73,17 @@ echo "== Scénario D — branche dans worktree PRINCIPAL → DELETE =="
 plan="$(cd "$REPO" && mwt_plan_delete feat-primary)"
 [ "$plan" = "DELETE" ] && ok "branche du principal → flux gh classique" || ko "attendu DELETE, obtenu '$plan'"
 
-echo "== Scénario E — détection worktree lié =="
+echo "== Scénario E — détection worktree lié (depuis la racine) =="
 ( cd "$REPO" && ! mwt_in_linked_worktree ) && ok "principal: non-lié" || ko "le principal ne devrait PAS être détecté comme lié"
 ( cd "$WT_LINKED" && mwt_in_linked_worktree ) && ok "lié: détecté" || ko "le worktree lié devrait être détecté comme lié"
 
-# --- Cleanup ---
-( cd "$REPO" && git worktree remove --force "$WT_LINKED" 2>/dev/null || true )
-rm -rf "$ROOT"
+echo "== Scénario E' — détection depuis un SOUS-RÉPERTOIRE (régression B1) =="
+( cd "$REPO" && mkdir -p sub/deep && cd sub/deep && ! mwt_in_linked_worktree ) \
+  && ok "principal/sous-dossier: non-lié" \
+  || ko "B1: un sous-dossier du principal ne doit PAS être détecté comme lié"
+( cd "$WT_LINKED" && mkdir -p sub/deep && cd sub/deep && mwt_in_linked_worktree ) \
+  && ok "lié/sous-dossier: détecté" \
+  || ko "un sous-dossier du worktree lié devrait être détecté comme lié"
 
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"
 FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"

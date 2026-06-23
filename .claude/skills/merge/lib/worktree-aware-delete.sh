@@ -20,20 +20,25 @@
 #   DEFER <path> <ts>    branche attachée à un worktree LIÉ (claude-swt) :
 #                        différer la suppression locale ; teardown via
 #                        `claude-swt-done <ts>` après fermeture de session.
+#                        Note : <ts> = basename(path). La ligne DEFER suppose un
+#                        <path> sans espace (convention claude-swt :
+#                        ~/worktrees/<repo>/<YYYYMMDD-HHMMSS>). Le <ts> reste
+#                        le champ fiable (toujours le dernier).
 # ============================================================
 
 # Echoe le chemin du worktree attaché à <branch>, vide si aucun.
+# substr() (et pas $2) pour préserver un chemin contenant des espaces.
 mwt_branch_worktree() {
   local branch="$1"
   git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${branch}" '
-    /^worktree /  { wt = $2 }
-    /^branch /    { if ($2 == b) { print wt; exit } }
+    /^worktree /  { wt = substr($0, 10) }
+    /^branch /    { if (substr($0, 8) == b) { print wt; exit } }
   '
 }
 
 # Echoe le chemin du worktree PRINCIPAL (premier de la liste).
 mwt_primary_worktree() {
-  git worktree list --porcelain 2>/dev/null | awk '/^worktree /{ print $2; exit }'
+  git worktree list --porcelain 2>/dev/null | awk '/^worktree /{ print substr($0, 10); exit }'
 }
 
 # Echoe l'identifiant de teardown claude-swt (basename du worktree = timestamp).
@@ -42,10 +47,15 @@ mwt_timestamp() {
 }
 
 # Vrai (0) si la session courante tourne dans un worktree LIÉ (pas le principal).
+# IMPORTANT : comparer des chemins ABSOLUS canoniques. `--git-dir` peut être
+# relatif/absolu selon le cwd (absolu depuis un sous-dossier du principal,
+# relatif depuis la racine), et `--git-common-dir` est souvent relatif — une
+# comparaison de chaînes brute donne un faux positif depuis un sous-répertoire.
 mwt_in_linked_worktree() {
   local gd cd
-  gd="$(git rev-parse --git-dir 2>/dev/null)"
-  cd="$(git rev-parse --git-common-dir 2>/dev/null)"
+  gd="$(git rev-parse --absolute-git-dir 2>/dev/null)" || return 1
+  gd="$(cd "$gd" 2>/dev/null && pwd -P)" || return 1
+  cd="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P)" || return 1
   [ -n "$gd" ] && [ "$gd" != "$cd" ]
 }
 
