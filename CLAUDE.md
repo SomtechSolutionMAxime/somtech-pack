@@ -25,7 +25,7 @@ Configuration réutilisable installée dans chaque projet client via les scripts
 | Composant | Rôle |
 |-----------|------|
 | `.claude/agents/` | Sub-agents spécialisés (frontend, backend, qa, product, database, devops, design) |
-| `.claude/skills/` | Skills Claude Code : audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, mockmig, pousse-staging, prototype, scaffold-aims, scaffold-component, somtech-pack-maj, speckit, sync-app-state, validate-ui, webapp-testing |
+| `.claude/skills/` | Skills Claude Code : audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, merge, mockmig, pousse-staging, prototype, scaffold-aims, scaffold-component, somtech-pack-maj, speckit, sync-app-state, validate-ui, webapp-testing |
 | `.claude/commands/` | Commandes slash Claude Code (`/pousse`, `/brd`) |
 | `.claude/hooks/` | Hooks Claude Code (`SessionStart` → mémoire externe d'état d'app, STD-027) |
 | `.claude/templates/` | Templates de bootstrap pour les sources de vérité (ontologie, constitution, architecture sécurité) + USER_CLAUDE_MD.md |
