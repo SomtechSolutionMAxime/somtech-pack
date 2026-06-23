@@ -232,7 +232,44 @@ fly secrets set \
 
 **Note :** Les secrets `ANTHROPIC_API_KEY`, les clés Supabase, etc., doivent être lus depuis le `.env.local` du projet client OU demandés interactivement via `AskUserQuestion`.
 
-5. Déploie l'image Docker :
+5. **Provisioning du sidecar Gotenberg (export PDF) — requis pour SomCraft ≥ v0.31.0.**
+
+   Depuis v0.31.0, l'export PDF n'embarque plus Puppeteer/Chromium dans l'image SomCraft : il délègue à un **sidecar Gotenberg** (app Fly.io séparée) appelé en HTTP. Si ce sidecar n'est pas provisionné et que le secret `GOTENBERG_URL` n'est pas posé sur l'app SomCraft, **l'export PDF échoue en runtime** (l'app démarre quand même, le reste fonctionne).
+
+   **Ne pas réimplémenter la logique ici** : le repo SomCraft cloné en Phase 2 (`$TMP_DIR`) porte le script idempotent versionné, source de vérité. On le délègue + on lit le runbook de la version cible.
+
+   ```bash
+   # Gate de version : sidecar requis seulement pour >= 0.31.0.
+   NEEDS_GOTENBERG=$(printf '%s\n%s\n' "0.31.0" "$SOMCRAFT_VERSION" \
+     | sort -V | head -1)
+   if [ "$NEEDS_GOTENBERG" = "0.31.0" ]; then
+     echo "SomCraft v$SOMCRAFT_VERSION >= 0.31.0 → provisioning sidecar Gotenberg requis."
+
+     # Lire les pré-requis spécifiques à la version cible (runbook versionné).
+     # Contient la section « À LIRE AVANT TOUT UPGRADE >= v0.31.0 » + détails.
+     [ -f "$TMP_DIR/docs/operations/upgrade.md" ] && \
+       echo "→ Voir $TMP_DIR/docs/operations/upgrade.md pour le contexte."
+
+     # Déléguer au script versionné du repo SomCraft cloné. Idempotent :
+     # crée l'app gotenberg-<slug> always-on (auto_stop=off), la garde 6PN-only,
+     # release les IP publiques, et STAGE le secret GOTENBERG_URL=...flycast
+     # sur l'app SomCraft (repris au fly deploy de l'étape suivante).
+     if [ -x "$TMP_DIR/tools/provision-gotenberg-sidecar.sh" ]; then
+       (cd "$TMP_DIR" && ./tools/provision-gotenberg-sidecar.sh \
+         --target-app "$FLY_APP" \
+         --fly-org "{fly-org}")
+     else
+       echo "⚠️  $TMP_DIR/tools/provision-gotenberg-sidecar.sh introuvable ou non exécutable." >&2
+       echo "    Provisionner le sidecar manuellement avant de poursuivre (cf. upgrade.md)." >&2
+     fi
+   else
+     echo "SomCraft v$SOMCRAFT_VERSION < 0.31.0 → pas de sidecar Gotenberg (export PDF in-process)."
+   fi
+   ```
+
+   **Important** : cette étape STAGE `GOTENBERG_URL` (`fly secrets set --stage`) sans redéployer. Le secret est pris en compte au `fly deploy` de l'étape 6.
+
+6. Déploie l'image Docker :
 
 ```bash
 fly deploy -a "$FLY_APP" \
@@ -240,7 +277,7 @@ fly deploy -a "$FLY_APP" \
   --config /tmp/fly-somcraft-{client-slug}.toml
 ```
 
-6. Attends que l'app soit healthy :
+7. Attends que l'app soit healthy :
 
 ```bash
 fly status -a "$FLY_APP"
@@ -284,7 +321,24 @@ curl -X POST "https://$APP_URL/api/sc/documents" \
 
 Attendu : 201 Created.
 
-5. Si un test échoue, afficher l'erreur mais continuer (warning non bloquant).
+5. **Test 4 — Export PDF (sidecar Gotenberg) — seulement si SomCraft ≥ v0.31.0.**
+
+   Valide que le sidecar provisionné en Phase 4 répond bien. Exporter un document existant en PDF via MCP et vérifier qu'on obtient un PDF (et non une erreur `PDF generation failed`).
+
+   ```bash
+   # Récupérer un document_id (ex : le welcome.md créé au Test 3, ou via list_documents),
+   # puis appeler le tool MCP export_document. Vérifier la présence d'un download_url
+   # et l'absence de "PDF generation failed" dans la réponse.
+   curl -sS -X POST "https://$APP_URL/api/mcp/mcp" \
+     -H "Authorization: Bearer $SOMCRAFT_MCP_API_KEY" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json, text/event-stream" \
+     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"export_document\",\"arguments\":{\"document_id\":\"$DOC_ID\",\"format\":\"pdf\"}}}"
+   ```
+
+   Attendu : réponse contenant un `download_url` signé. Si `PDF generation failed` → le sidecar n'est pas joignable : vérifier `fly status -a gotenberg-{client-slug}-{env}` (1 machine `started`) et le secret `GOTENBERG_URL` sur l'app SomCraft.
+
+6. Si un test échoue, afficher l'erreur mais continuer (warning non bloquant).
 
 ## Phase 6 — Installation des skills
 
@@ -386,6 +440,8 @@ Si le mode est `upgrade` :
 - Saute Phase 1 (plan) — affiche juste un diff de versions
 - Saute Phase 3 (seed) — l'instance est déjà seedée
 - Exécute Phase 2 (migrations — seulement les nouvelles), Phase 4 (redéploiement), Phase 5 (smoke tests), Phase 6 (met à jour le skill projet avec la nouvelle version et l'historique)
+
+**⚠️ Sidecar Gotenberg lors d'un upgrade ≥ v0.31.0** : la Phase 4 inclut l'étape 5 (provisioning du sidecar Gotenberg). Elle est **idempotente** — sur une instance déjà provisionnée, elle réconcilie la config (sidecar always-on, IP publiques release, secret `GOTENBERG_URL` re-staged) sans perte de données. C'est **obligatoire** : un upgrade vers ≥ v0.31.0 qui saute cette étape laisse l'export PDF cassé (ancienne config Puppeteer in-process retirée de l'image). Ne jamais court-circuiter la Phase 4 étape 5 en mode upgrade.
 
 ## Mode status
 
