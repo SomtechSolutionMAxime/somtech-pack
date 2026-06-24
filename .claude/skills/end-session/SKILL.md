@@ -7,6 +7,8 @@ description: |
   ET si .somtech/app.yaml présent (STD-027) : met aussi à jour le doc Somcraft
   /operations/<app-slug>/etat-app.md (source de vérité de la mémoire externe d'état
   d'app) + le cache local .somtech/app-state.md (gitignored).
+  ET ferme les branches mergées (local + distant, squash-merges inclus) en laissant
+  ouvertes celles avec du travail non mergé (protège main/staging/wt-*/courante).
 ---
 
 # End Session - Documentation Automatique
@@ -144,7 +146,31 @@ mcp__claude_ai_Somcraft__update_document
 | Dépassement 1500 tokens | Warning + proposition de troncature, refuser l'écriture silencieuse |
 | Permissions Somcraft insuffisantes | Erreur explicite, vérifier permissions du workspace client |
 
-### 4. Résumé de fin de session
+### 4. Fermeture des branches mergées
+
+`/end-session` est le signal « on a fini de travailler ». À ce moment, **fermer les branches déjà mergées** (locales + distantes) et **laisser ouvertes** celles qui portent encore du travail non mergé.
+
+> Détecte les **squash-merges** (que `git branch --merged` rate, car le squash ne rend pas la branche ancêtre de main). Helper : `lib/close-merged-branches.sh` (`git merge-tree --write-tree <base> <branche>` == arbre de base ⇒ mergée). **Protège toujours** `main`/`master`/`staging`/`wt/*` et la branche courante.
+
+1. Mettre à jour les refs distantes :
+   ```bash
+   git fetch origin --prune
+   ```
+2. (Si `gh` disponible) lister les branches dont la PR est mergée — signal faisant autorité, à croiser avec le helper :
+   ```bash
+   gh pr list --state merged --base main --json headRefName -q '.[].headRefName'
+   ```
+3. Aperçu puis fermeture via le helper (base = `origin/main`) :
+   ```bash
+   source .claude/skills/end-session/lib/close-merged-branches.sh
+   CMB_DRY_RUN=1 cmb_close origin/main   # aperçu (ne supprime rien)
+   cmb_close origin/main                  # supprime les mergées (local + distant)
+   ```
+4. **Invariants** : ne JAMAIS supprimer `main`/`staging`/`wt-*`/branche courante ; les branches non mergées sont **conservées** et listées (« conservée (travail non mergé) »).
+
+> **Worktree** : si la branche courante est elle-même mergée, elle est conservée (impossible de supprimer une branche checked-out) → la retirer après bascule, ou via `claude-swt-done <timestamp>` au teardown de session.
+
+### 5. Résumé de fin de session
 
 Afficher un résumé à l'utilisateur:
 
@@ -159,6 +185,10 @@ Afficher un résumé à l'utilisateur:
    - Doc Somcraft: /operations/<app-slug>/etat-app.md (workspace client)
    - Cache local: .somtech/app-state.md rafraîchi
 
+🌿 Branches:
+   - Mergées fermées (local + distant): [liste]
+   - Conservées (travail non mergé): [liste]
+
 🔍 Résumé des changements:
    - [Liste des points clés]
 ```
@@ -172,7 +202,8 @@ Claude:
 2. Identifie les éléments à documenter
 3. Met à jour CHANGELOG.md à la racine du projet
 4. Si `.somtech/app.yaml` présent : propose un draft de MAJ du doc Somcraft + cache local, demande validation, écrit après approbation (STD-027)
-5. Affiche le résumé
+5. Ferme les branches mergées (local + distant), conserve celles avec du travail non mergé (helper `lib/close-merged-branches.sh`, protège main/staging/wt-*/courante)
+6. Affiche le résumé
 
 ## Notes
 
