@@ -1,2 +1,5 @@
 .DS_Store
 .serena/
+
+# Artefact de build du CLI (payload bundlé, reconstruit au publish)
+cli/payload/
