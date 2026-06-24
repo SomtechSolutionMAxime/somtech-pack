@@ -7,6 +7,11 @@ import { join, dirname } from 'node:path';
 const HOOK_REL = '.claude/hooks/session-start-pack-version.sh';
 const HOOK_NAME = 'session-start-pack-version.sh';
 
+/** Vrai si `v` est un objet JSON « plain » (ni null, ni array, ni scalaire). */
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
 /**
  * Ajoute (idempotent) un hook SessionStart `command` à l'objet settings.
  * Renvoie true si ajouté, false si déjà présent. Ne touche à rien d'autre.
@@ -35,7 +40,8 @@ export function installGlobalVersionHook({ payloadRoot, hooksDir, settingsFile, 
 
   const dest = join(hooksDir, HOOK_NAME);
 
-  // Anti-perte : si settings.json existe mais est du JSON invalide, on refuse AVANT toute écriture.
+  // Anti-perte : valider settings.json AVANT toute copie/écriture (JSON invalide
+  // OU structure atypique → refus, fichier intact, rien copié).
   let settings = {};
   const settingsExisted = existsSync(settingsFile);
   if (settingsExisted) {
@@ -43,6 +49,15 @@ export function installGlobalVersionHook({ payloadRoot, hooksDir, settingsFile, 
       settings = JSON.parse(readFileSync(settingsFile, 'utf8'));
     } catch {
       return { ok: false, dest, reason: `${settingsFile} contient du JSON invalide — édition refusée (corrige-le à la main)` };
+    }
+    if (!isPlainObject(settings)) {
+      return { ok: false, dest, reason: `${settingsFile} n'est pas un objet JSON (settings) — édition refusée` };
+    }
+    if ('hooks' in settings && !isPlainObject(settings.hooks)) {
+      return { ok: false, dest, reason: `${settingsFile} : la clé "hooks" n'est pas un objet — édition refusée` };
+    }
+    if (isPlainObject(settings.hooks) && 'SessionStart' in settings.hooks && !Array.isArray(settings.hooks.SessionStart)) {
+      return { ok: false, dest, reason: `${settingsFile} : "hooks.SessionStart" n'est pas une liste — édition refusée` };
     }
   }
 

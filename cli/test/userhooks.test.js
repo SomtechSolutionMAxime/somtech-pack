@@ -1,7 +1,7 @@
 // Tests de l'installation GLOBALE du hook de version (userhooks.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +71,35 @@ test('install global : settings.json JSON invalide → REFUS (pas de clobber)', 
   assert.match(r.reason, /invalide/);
   assert.equal(readFileSync(settingsFile, 'utf8'), before, 'fichier NON modifié');
   assert.ok(!existsSync(join(hooksDir, 'session-start-pack-version.sh')), 'rien copié non plus');
+});
+
+test('install global : settings valide mais structure ATYPIQUE → REFUS gracieux (pas de throw, pas d’effet de bord)', () => {
+  const atypiques = [
+    JSON.stringify('je suis une string'),
+    JSON.stringify(['array', 'top', 'level']),
+    JSON.stringify({ hooks: 'pas-un-objet' }),
+    JSON.stringify({ hooks: ['array'] }),
+    JSON.stringify({ hooks: { SessionStart: { pas: 'un array' } } }),
+  ];
+  for (const content of atypiques) {
+    const w = tmp('smtk-uh-');
+    const hooksDir = join(w, 'hooks'); const settingsFile = join(w, 'settings.json');
+    writeFileSync(settingsFile, content);
+    const before = readFileSync(settingsFile, 'utf8');
+    let r;
+    assert.doesNotThrow(() => { r = installGlobalVersionHook({ payloadRoot: REPO_ROOT, hooksDir, settingsFile }); }, `ne doit pas throw : ${content}`);
+    assert.equal(r.ok, false, `refusé : ${content}`);
+    assert.equal(readFileSync(settingsFile, 'utf8'), before, `fichier intact : ${content}`);
+    assert.ok(!existsSync(join(hooksDir, 'session-start-pack-version.sh')), `rien copié : ${content}`);
+  }
+});
+
+test('install global : le hook copié reste exécutable', () => {
+  const w = tmp('smtk-uh-');
+  const hooksDir = join(w, 'hooks'); const settingsFile = join(w, 'settings.json');
+  const r = installGlobalVersionHook({ payloadRoot: REPO_ROOT, hooksDir, settingsFile });
+  assert.ok(r.ok);
+  assert.ok((statSync(r.dest).mode & 0o111) !== 0, 'le hook copié doit être exécutable');
 });
 
 test('install global : dry-run n’écrit rien', () => {
