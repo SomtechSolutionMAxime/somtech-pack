@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================
-# test-pack-version-check.sh — v1.0.0
+# test-pack-version-check.sh — v1.1.0
 # Teste le hook SessionStart de nudge de version du pack.
-# Aucun réseau (SOMTECH_PACK_NPM=0, cache pré-seedé frais).
+# Aucun réseau (SOMTECH_PACK_NPM=0 ou SOMTECH_PACK_FETCH stub).
 # ============================================================
 set -uo pipefail
 
@@ -14,45 +14,67 @@ trap 'rm -f "$PASS_FILE" "$FAIL_FILE"' EXIT
 ok() { echo "  ✅ $1"; echo x >> "$PASS_FILE"; }
 ko() { echo "  ❌ $1"; echo x >> "$FAIL_FILE"; }
 
-# Émet la sortie du hook pour un projet (installed) + cache (latest | NOCACHE | NOMARKER).
-hook_out() {
-  local installed="$1" latest="$2" d cache
+# Crée un projet jetable. $3 = NEW (nouveau format) | OLD (ancien format) | NOMARKER.
+mkproj() {
+  local installed="$1" latest="$2" fmt="${3:-NEW}" d cache
   d="$(mktemp -d)"; cache="$d/cache.json"
-  if [ "$latest" != "NOMARKER" ]; then
+  if [ "$fmt" = "OLD" ]; then
+    mkdir -p "$d/.somtech-pack"
+    printf '{"pack":{"version":"%s","modules":"core"}}\n' "$installed" > "$d/.somtech-pack/version.json"
+  elif [ "$fmt" != "NOMARKER" ]; then
     mkdir -p "$d/.somtech-pack"
     printf '{"name":"@somtech-solutions/pack","version":"%s"}\n' "$installed" > "$d/.somtech-pack/version.json"
   fi
-  if [ "$latest" != "NOCACHE" ] && [ "$latest" != "NOMARKER" ]; then
-    printf '{"checkedAt":%s,"latest":"%s"}\n' "$(date +%s)" "$latest" > "$cache"
-  fi
-  ( cd "$d" && SOMTECH_PACK_CACHE="$cache" SOMTECH_PACK_NPM=0 bash "$HOOK" )
-  rm -rf "$d"
+  [ "$latest" != "NOCACHE" ] && [ "$fmt" != "NOMARKER" ] \
+    && printf '{"checkedAt":%s,"latest":"%s"}\n' "$(date +%s)" "$latest" > "$cache"
+  echo "$d|$cache"
+}
+
+run_hook() {  # run_hook <installed> <latest|NOCACHE> [fmt] → stdout du hook
+  local spec d cache; spec="$(mkproj "$1" "$2" "${3:-NEW}")"; d="${spec%%|*}"; cache="${spec##*|}"
+  ( cd "$d" && SOMTECH_PACK_CACHE="$cache" SOMTECH_PACK_NPM=0 bash "$HOOK" ); rm -rf "$d"
+}
+run_hook_err() {  # → stderr seulement (doit être vide)
+  local spec d cache; spec="$(mkproj "$1" "$2" "${3:-NEW}")"; d="${spec%%|*}"; cache="${spec##*|}"
+  ( cd "$d" && SOMTECH_PACK_CACHE="$cache" SOMTECH_PACK_NPM=0 bash "$HOOK" 2>&1 1>/dev/null ); rm -rf "$d"
 }
 
 echo "== A. Pas de marqueur → no-op silencieux =="
-out="$(hook_out 0 NOMARKER)"
-[ -z "$out" ] && ok "aucune sortie sans .somtech-pack/version.json" || ko "devrait être silencieux : $out"
+[ -z "$(run_hook 0 x NOMARKER)" ] && ok "silence sans .somtech-pack/version.json" || ko "devrait être silencieux"
 
 echo "== B. Installé < dernière → nudge avec la commande =="
-out="$(hook_out 1.3.0 1.3.1)"
+out="$(run_hook 1.3.0 1.3.1)"
 echo "$out" | grep -q "disponible" && echo "$out" | grep -q "npx @somtech-solutions/pack@latest update" \
-  && ok "nudge affiché avec la commande de MAJ" || ko "nudge attendu : $out"
+  && ok "nudge + commande" || ko "nudge attendu : $out"
 
 echo "== C. À jour → silence =="
-out="$(hook_out 1.3.1 1.3.1)"
-[ -z "$out" ] && ok "aucune sortie quand à jour" || ko "devrait être silencieux : $out"
+[ -z "$(run_hook 1.3.1 1.3.1)" ] && ok "silence quand à jour" || ko "devrait être silencieux"
 
 echo "== D. Installé > dernière → pas de nudge arrière =="
-out="$(hook_out 1.3.1 1.3.0)"
-[ -z "$out" ] && ok "pas de nudge si installé plus récent" || ko "ne devrait pas nudger : $out"
+[ -z "$(run_hook 1.3.1 1.3.0)" ] && ok "pas de nudge si plus récent" || ko "ne devrait pas nudger"
 
-echo "== E. Comparaison NUMÉRIQUE (pas lexicale) : 1.9.0 < 1.10.0 → nudge =="
-out="$(hook_out 1.9.0 1.10.0)"
-echo "$out" | grep -q "disponible" && ok "1.10.0 > 1.9.0 détecté (numérique)" || ko "comparaison numérique ratée : $out"
+echo "== E. Comparaison NUMÉRIQUE : 1.9.0 < 1.10.0 → nudge =="
+echo "$(run_hook 1.9.0 1.10.0)" | grep -q "disponible" && ok "1.10.0 > 1.9.0 (numérique)" || ko "comparaison numérique ratée"
 
-echo "== F. Pas de cache (latest inconnu) → silence (rien à comparer) =="
-out="$(hook_out 1.3.0 NOCACHE)"
-[ -z "$out" ] && ok "silence sans cache (pas de faux nudge)" || ko "devrait être silencieux : $out"
+echo "== F. Pas de cache → silence (rien à comparer) =="
+[ -z "$(run_hook 1.3.0 NOCACHE)" ] && ok "silence sans cache" || ko "devrait être silencieux"
+
+echo "== G. ANCIEN format {\"pack\":{\"version\"}} lu correctement → nudge =="
+echo "$(run_hook 1.0.0 1.3.1 OLD)" | grep -q "disponible" && ok "ancien format lu (1.0.0 < 1.3.1)" || ko "ancien format mal lu"
+
+echo "== H. Versions malformées → pas de crash ET stderr VIDE (pas de bruit) =="
+[ -z "$(run_hook_err abc 1.3.1)" ] && ok "installed='abc' : stderr vide" || ko "bruit stderr sur installed malformé"
+[ -z "$(run_hook_err 1.3.0 abc)" ] && ok "latest='abc' : stderr vide" || ko "bruit stderr sur latest malformé"
+[ -z "$(run_hook_err 1.2.3.4 1.3.1)" ] && ok "version 4-part : stderr vide" || ko "bruit stderr sur version 4-part"
+[ -z "$(run_hook 1.3.0 abc)" ] && ok "latest='abc' → pas de faux nudge" || ko "faux nudge sur latest malformé"
+
+echo "== I. refresh_cache : pas de clobber si npm échoue (sourcing) =="
+C="$(mktemp -d)/cache.json"; printf '{"checkedAt":1,"latest":"1.3.1"}\n' > "$C"
+( export SOMTECH_PACK_CACHE="$C" SOMTECH_PACK_FETCH='printf ""'; source "$HOOK"; refresh_cache )
+grep -q '"latest":"1.3.1"' "$C" && ok "npm vide → cache NON écrasé (latest 1.3.1 conservé)" || ko "DANGER: cache clobberé à vide"
+( export SOMTECH_PACK_CACHE="$C" SOMTECH_PACK_FETCH='printf "1.4.0\n"'; source "$HOOK"; refresh_cache )
+grep -q '"latest":"1.4.0"' "$C" && ok "npm OK → cache mis à jour (1.4.0)" || ko "cache non mis à jour sur succès"
+rm -rf "$(dirname "$C")"
 
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
