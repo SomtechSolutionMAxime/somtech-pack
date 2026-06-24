@@ -89,10 +89,15 @@ function copyPreservingMode(src, dest, dryRun) {
  * - différent sans force → conflicts (diff, JAMAIS écrasé)
  * - hors target/payload → rejected (défense en profondeur, JAMAIS écrit)
  *
- * Renvoie { created, unchanged, updated, conflicts, rejected }.
+ * `preserve` : chemins (relatifs) appartenant au projet — créés s'ils sont
+ * ABSENTS (starter), mais JAMAIS écrasés s'ils existent, même avec `force`
+ * (ex. `.claude/settings.json` : permissions/plugins/hooks propres au projet).
+ *
+ * Renvoie { created, unchanged, updated, conflicts, rejected, preserved }.
  */
-export function applyFiles({ payloadRoot, target, files, force = false, dryRun = false }) {
-  const report = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [] };
+export function applyFiles({ payloadRoot, target, files, force = false, dryRun = false, preserve = [] }) {
+  const preserveSet = new Set(preserve);
+  const report = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [] };
   for (const rel of files) {
     // Défense en profondeur : refuser tout chemin qui s'évade de la cible OU du payload.
     if (!within(target, rel) || !within(payloadRoot, rel)) {
@@ -104,6 +109,8 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
     if (!existsSync(dest)) {
       copyPreservingMode(src, dest, dryRun);
       report.created.push(rel);
+    } else if (preserveSet.has(rel)) {
+      report.preserved.push(rel); // appartient au projet : jamais écrasé (même --force)
     } else if (filesEqual(src, dest)) {
       report.unchanged.push(rel);
     } else if (force) {
