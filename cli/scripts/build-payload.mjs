@@ -6,7 +6,7 @@
 // soit auto-contenu. Construit toujours depuis les sources réelles → anti-drift.
 //
 // Lancé par `npm run build:payload` et par `prepublishOnly`.
-import { rmSync, mkdirSync, cpSync, copyFileSync, existsSync, readFileSync } from 'node:fs';
+import { rmSync, mkdirSync, cpSync, copyFileSync, existsSync, readFileSync, lstatSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,8 +43,14 @@ for (const p of [...paths].sort()) {
   if (!existsSync(src)) { skipped.push(p); continue; }
   cpSync(src, join(OUT, p), {
     recursive: true,
-    dereference: false, // ne pas suivre les symlinks
-    filter: (s) => !s.endsWith('.DS_Store'),
+    dereference: false,
+    // Exclure .DS_Store ET les symlinks (alignement avec l'engine d'install,
+    // qui ignore les liens — évite qu'un lien voyage dans le tarball).
+    filter: (s) => {
+      if (s.endsWith('.DS_Store')) return false;
+      try { if (lstatSync(s).isSymbolicLink()) return false; } catch { /* noop */ }
+      return true;
+    },
   });
   copied++;
 }

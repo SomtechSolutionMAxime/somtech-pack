@@ -20,6 +20,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Préflight — cohérence scope / owner / token
+        env:
+          SCOPE: '@somtech-solutions'
+          OWNER: ${{ github.repository_owner }}
+          HAS_PAT: ${{ secrets.PACKAGES_TOKEN != '' }}
+        run: |
+          # GitHub Packages exige scope == login du owner, sauf PAT cross-org.
+          scope_name="${SCOPE#@}"
+          owner_lc="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          if [ "$scope_name" != "$owner_lc" ] && [ "$HAS_PAT" != "true" ]; then
+            echo "✗ Scope $SCOPE ≠ owner @$owner_lc et aucun secret PACKAGES_TOKEN."
+            echo "  Publish GitHub Packages impossible. Choisis :"
+            echo "   (a) créer/utiliser l'org GitHub '$scope_name' + ajouter le secret PACKAGES_TOKEN (write:packages), ou"
+            echo "   (b) aligner le scope du package sur @$owner_lc."
+            exit 1
+          fi
+          echo "✓ Préflight OK (scope=$SCOPE, owner=@$owner_lc, PAT=$HAS_PAT)"
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
