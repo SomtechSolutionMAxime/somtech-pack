@@ -6,13 +6,50 @@ Pack de configuration et marketplace de plugins Somtech pour **Claude Code**. Fo
 
 ## Installation rapide
 
+**Méthode canonique — CLI npm (`@somtech-solutions/pack`)** :
+
+```bash
+# Dans un projet : installe les modules du pack (interactif)
+npx @somtech-solutions/pack init
+
+# Modules explicites / mode CI
+npx @somtech-solutions/pack init --modules core,features,mockmig --yes
+
+# Mettre à jour un projet (présente un diff, n'écrase pas sans --force)
+npx @somtech-solutions/pack update
+
+# Configurer le poste : skills globaux (~/.claude/skills) + claude-swt (~/.zshrc)
+npx @somtech-solutions/pack setup --yes
+```
+
+> **Prérequis registre (une fois par poste)** — le package est privé sur **GitHub Packages**.
+> Ajoute à ton `~/.npmrc` :
+> ```
+> @somtech-solutions:registry=https://npm.pkg.github.com
+> //npm.pkg.github.com/:_authToken=<ton_PAT_avec_read:packages>
+> ```
+> Pourquoi `npx` plutôt que `npm i -g` : on lance l'outil ponctuellement, toujours
+> à la bonne version (`@latest` ou `@1.2.0`), sans install globale à maintenir.
+
+> ⚠️ `npx @somtech-solutions/pack` n'est disponible **qu'après la première publication**
+> du package (voir `cli/README.md`). En attendant, utilise la méthode transitoire ci-dessous.
+
+<details>
+<summary>Méthode transitoire (legacy) — <code>curl | bash</code></summary>
+
 ```bash
 # Installation one-liner (depuis n'importe quel projet)
 curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/main/scripts/remote-install.sh | bash -s -- --target .
 
+# Setup poste (claude-swt) en attendant le CLI
+curl -fsSL .../scripts/remote-install.sh | bash -s -- --with-claude-swt
+
 # Installation locale (si le pack est cloné)
 ./scripts/somtech_pack_pull.sh --target /path/to/project
 ```
+
+Cette méthode reste fonctionnelle mais sera dépréciée une fois le CLI publié.
+</details>
 
 ## Contenu du pack
 

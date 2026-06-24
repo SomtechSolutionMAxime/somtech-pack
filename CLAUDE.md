@@ -59,24 +59,34 @@ Le pack est modulaire. Chaque module est défini dans `pack.json` :
 | **mockmig** | ○ | `.mockmig/`, `.specify/` — Workflow migration maquette → production |
 | **plugins** | ○ | `plugins/` — Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager, somtech-somcraft-deployer, somtech-rag, somtech-estimator, mcp-expose) |
 
-### Méthode 1 — Installation one-liner (recommandée)
+### Méthode 1 — CLI npm `@somtech-solutions/pack` (canonique)
+
+```bash
+npx @somtech-solutions/pack init                              # install projet (interactif)
+npx @somtech-solutions/pack init --modules core,features --yes # explicite / CI
+npx @somtech-solutions/pack update                            # MAJ (diff, n'écrase pas sans --force)
+npx @somtech-solutions/pack setup --yes                       # poste : skills globaux + claude-swt
+```
+
+Prérequis (une fois par poste) — package privé sur **GitHub Packages** ; ajouter à `~/.npmrc` :
+```
+@somtech-solutions:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=<PAT read:packages>
+```
+
+> Le CLI vit dans `cli/` (`@somtech-solutions/pack`), avec le contenu du pack **bundlé** au publish (anti-drift). Publication via tag `v*` (workflow `.github/workflows/publish.yml`). **Disponible après la première publication** — d'ici là, utiliser la Méthode 2 (legacy).
+
+### Méthode 2 — `curl | bash` / pull local (transitoire, legacy)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/main/scripts/remote-install.sh | bash -s -- --target .
 curl -fsSL .../remote-install.sh | bash -s -- --target . --modules core,features,mockmig
+curl -fsSL .../remote-install.sh | bash -s -- --with-claude-swt        # setup poste claude-swt
+
+./scripts/somtech_pack_pull.sh --target . [--force] [--modules core,features]   # pull local avec diff
 ```
 
-Le one-liner `remote-install.sh` clone le pack et délègue à `somtech_pack_pull.sh` (avec gestion de versioning et diff).
-
-### Méthode 2 — Mise à jour locale (pull avec diff)
-
-```bash
-./scripts/somtech_pack_pull.sh --target .
-./scripts/somtech_pack_pull.sh --target . --force
-./scripts/somtech_pack_pull.sh --target . --modules core,features
-```
-
-Skill équivalent disponible dans Claude Code : `/somtech-pack-maj`.
+Le one-liner `remote-install.sh` clone le pack et délègue à `somtech_pack_pull.sh`. Reste fonctionnel mais sera déprécié une fois le CLI publié. Skill Claude Code : `/somtech-pack-maj`.
 
 ### Push — publier des changements depuis un projet vers le pack
 
