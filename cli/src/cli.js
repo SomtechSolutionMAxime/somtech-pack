@@ -21,6 +21,7 @@ export function parseArgs(argv) {
   const flags = {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
     rc: null, skillsDir: null, dest: null, noClaudeSwt: false, noSkills: false,
+    settings: null, hooksDir: null, noVersionHook: false,
     help: false, version: false,
   };
   const positionals = [];
@@ -38,8 +39,11 @@ export function parseArgs(argv) {
       case '--rc': flags.rc = value('--rc', ++i); break;
       case '--skills-dir': flags.skillsDir = value('--skills-dir', ++i); break;
       case '--dest': flags.dest = value('--dest', ++i); break;
+      case '--settings': flags.settings = value('--settings', ++i); break;
+      case '--hooks-dir': flags.hooksDir = value('--hooks-dir', ++i); break;
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
+      case '--no-version-hook': flags.noVersionHook = true; break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
       case '--dry-run': flags.dryRun = true; break;
@@ -64,7 +68,7 @@ Usage :
 Commandes :
   init     Installe le pack dans le projet courant (modules core,features par défaut)
   update   Met à jour le projet (présente un diff, n'écrase pas sans --force)
-  setup    Configure le poste : skills globaux (~/.claude/skills) + claude-swt (~/.zshrc)
+  setup    Configure le poste : skills globaux + claude-swt + hook de version (global)
 
 Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
@@ -76,8 +80,11 @@ Options (setup) :
   --rc <fichier>    Fichier rc shell (défaut: ~/.zshrc)
   --skills-dir <d>  Dossier des skills globaux (défaut: ~/.claude/skills)
   --dest <dir>      Dossier d'install de claude-swt (défaut: ~/.somtech)
+  --settings <f>    Fichier settings global (défaut: ~/.claude/settings.json)
+  --hooks-dir <d>   Dossier des hooks globaux (défaut: ~/.claude/hooks)
   --no-skills       Ne pas installer les skills globaux
   --no-claude-swt   Ne pas installer claude-swt
+  --no-version-hook Ne pas installer le hook de version global
 
 Options communes :
   --dry-run         N'écrit rien, affiche le plan
