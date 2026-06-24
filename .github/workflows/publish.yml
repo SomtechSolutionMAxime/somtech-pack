@@ -1,0 +1,72 @@
+name: Publier @somtech-solutions/pack (GitHub Packages)
+
+# Publie le CLI sur GitHub Packages à chaque tag vX.Y.Z.
+# Prérequis (action Maxime, une fois) :
+#   - Le scope @somtech-solutions doit pointer vers une org GitHub où ce repo
+#     peut publier. Si l'org diffère du owner du repo, fournir un PAT
+#     `PACKAGES_TOKEN` (write:packages) dans les secrets du repo.
+#   - Sinon, GITHUB_TOKEN suffit (package owned par le owner du repo).
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préflight — cohérence scope / owner / token
+        env:
+          SCOPE: '@somtech-solutions'
+          OWNER: ${{ github.repository_owner }}
+          HAS_PAT: ${{ secrets.PACKAGES_TOKEN != '' }}
+        run: |
+          # GitHub Packages exige scope == login du owner, sauf PAT cross-org.
+          scope_name="${SCOPE#@}"
+          owner_lc="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          if [ "$scope_name" != "$owner_lc" ] && [ "$HAS_PAT" != "true" ]; then
+            echo "✗ Scope $SCOPE ≠ owner @$owner_lc et aucun secret PACKAGES_TOKEN."
+            echo "  Publish GitHub Packages impossible. Choisis :"
+            echo "   (a) créer/utiliser l'org GitHub '$scope_name' + ajouter le secret PACKAGES_TOKEN (write:packages), ou"
+            echo "   (b) aligner le scope du package sur @$owner_lc."
+            exit 1
+          fi
+          echo "✓ Préflight OK (scope=$SCOPE, owner=@$owner_lc, PAT=$HAS_PAT)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@somtech-solutions'
+
+      - name: Construire le payload (depuis le repo, anti-drift)
+        run: node scripts/build-payload.mjs
+        working-directory: cli
+
+      - name: Aligner la version sur le tag
+        working-directory: cli
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VER="${TAG#v}"
+          # Valider le format semver AVANT usage (anti-injection : TAG est un nom de tag).
+          if ! printf '%s' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'; then
+            echo "✗ Tag non semver : $TAG"; exit 1
+          fi
+          npm version "$VER" --no-git-tag-version --allow-same-version
+
+      - name: Tests
+        run: node --test
+        working-directory: cli
+
+      - name: Publier
+        working-directory: cli
+        run: npm publish
+        env:
+          # PAT prioritaire (publish cross-org) ; sinon GITHUB_TOKEN du repo.
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}

@@ -1,5 +1,5 @@
 {
-  "name": "@somtech/pack",
+  "name": "@somtech-solutions/pack",
   "version": "0.1.0",
   "description": "CLI d'installation du somtech-pack — point d'entrée unique (init / update / setup)",
   "type": "module",
@@ -11,11 +11,22 @@
   },
   "files": [
     "bin",
-    "src"
+    "src",
+    "payload"
   ],
-  "scripts": {
-    "test": "node --test"
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
   },
-  "license": "UNLICENSED",
-  "private": true
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SomtechSolutionMAxime/somtech-pack.git",
+    "directory": "cli"
+  },
+  "scripts": {
+    "test": "node --test",
+    "build:payload": "node scripts/build-payload.mjs",
+    "prepublishOnly": "node scripts/build-payload.mjs"
+  },
+  "license": "UNLICENSED"
 }
