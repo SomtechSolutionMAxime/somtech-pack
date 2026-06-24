@@ -81,7 +81,7 @@ Options (setup) :
 
 Options communes :
   --dry-run         N'écrit rien, affiche le plan
-  --yes, -y         Non-interactif (CI) : pas de prompt
+  --yes, -y         Non-interactif (CI) / consentement explicite (setup écrit le rc)
   --version, -v     Affiche la version
   --help, -h        Affiche cette aide
 `;

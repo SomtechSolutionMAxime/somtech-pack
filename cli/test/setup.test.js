@@ -68,6 +68,28 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   assert.equal(markerCount(rc), 1, 'toujours 1 bloc après re-run');
 });
 
+test('SÉCURITÉ : setup sans --yes en non-TTY → refus (exit 1), rc intact', async () => {
+  // En test, process.stdin.isTTY est falsy → chemin non-interactif sans consentement.
+  const w = tmp('smtk-setup-');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const dd = join(w, 'somtech');
+  writeFileSync(rc, '# rc utilisateur\nexport KEEP=1\n');
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--dest', dd]);
+  assert.equal(code, 1, 'doit refuser sans --yes ni TTY');
+  assert.equal(markerCount(rc), 0, 'le rc ne doit PAS être touché sans consentement');
+  assert.ok(!existsSync(sd), 'aucun skill installé sans consentement');
+});
+
+test('shellrc : contenu après le bloc préservé après ré-install (invariant)', () => {
+  const w = tmp('smtk-rc-'); const rc = join(w, 'zshrc'); const dest = join(w, 'dest');
+  installRcBlock({ rcFile: rc, destDir: dest, snippetSrc: SNIPPET });
+  // ajoute du contenu APRÈS le bloc
+  writeFileSync(rc, readFileSync(rc, 'utf8') + 'export AFTER=1\n');
+  installRcBlock({ rcFile: rc, destDir: dest, snippetSrc: SNIPPET });
+  const out = readFileSync(rc, 'utf8');
+  assert.ok(out.includes('export AFTER=1'), 'le contenu post-bloc ne doit pas être perdu');
+  assert.equal(markerCount(rc), 1, 'toujours un seul bloc');
+});
+
 test('run setup --dry-run : rien écrit', async () => {
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const dd = join(w, 'somtech');
