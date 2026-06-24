@@ -11,6 +11,7 @@ import { readManifest, defaultModules, resolveModules, resolvePayloadRoot } from
 import { collectFiles, applyFiles } from '../src/engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI_DIR = resolve(HERE, '..');
 const REPO_ROOT = resolve(HERE, '..', '..');
 
 function tmp(prefix) { return mkdtempSync(join(tmpdir(), prefix)); }
@@ -125,8 +126,40 @@ test('run init : installe + écrit version.json, exit 0', async () => {
   assert.ok(existsSync(join(target, '.claude/skills/x/SKILL.md')));
   assert.ok(existsSync(join(target, 'features/blueprint.md')));
   const ver = JSON.parse(readFileSync(join(target, '.somtech-pack/version.json'), 'utf8'));
-  assert.equal(ver.version, '9.9.9');
+  // version.json reflète la version du PACKAGE CLI (= version npm/tag), pas le pack.json bundlé
+  const cliVer = JSON.parse(readFileSync(join(CLI_DIR, 'package.json'), 'utf8')).version;
+  assert.equal(ver.version, cliVer, 'version = version du package CLI');
+  assert.equal(ver.name, '@somtech-solutions/pack');
+  assert.equal(ver.installedBy, '@somtech-solutions/pack (cli)');
+  assert.equal(ver.packContentVersion, '9.9.9', 'version du contenu du pack (pack.json) tracée à part');
   assert.deepEqual(ver.modules, ['core', 'features']);
+});
+
+test('preserve : créé si absent, JAMAIS écrasé si présent (même --force)', () => {
+  const payload = tmp('smtk-preserve-payload-');
+  writeFileSync(join(payload, 'pack.json'), JSON.stringify({
+    name: 'fx', version: '9.9.9',
+    preserve: ['.claude/settings.json'],
+    modules: { core: { default: true, paths: ['.claude/'] } },
+  }));
+  mkdirSync(join(payload, '.claude'), { recursive: true });
+  writeFileSync(join(payload, '.claude/settings.json'), '{"pack":"default"}\n');
+  writeFileSync(join(payload, '.claude/agents.md'), 'agents\n');
+
+  const m = readManifest(payload);
+  const { files } = collectFiles(payload, m.modules.core.paths);
+  const target = tmp('smtk-preserve-target-');
+
+  // 1) absent → créé (starter)
+  let r = applyFiles({ payloadRoot: payload, target, files, preserve: m.preserve });
+  assert.ok(r.created.includes('.claude/settings.json'), 'settings.json créé si absent');
+
+  // 2) modifié côté projet + --force → PRÉSERVÉ (pas écrasé)
+  writeFileSync(join(target, '.claude/settings.json'), '{"projet":"custom"}\n');
+  r = applyFiles({ payloadRoot: payload, target, files, preserve: m.preserve, force: true });
+  assert.ok(r.preserved.includes('.claude/settings.json'), 'settings.json en statut preserved');
+  assert.ok(!r.updated.includes('.claude/settings.json'), 'settings.json NON écrasé malgré --force');
+  assert.equal(readFileSync(join(target, '.claude/settings.json'), 'utf8'), '{"projet":"custom"}\n', 'config projet intacte');
 });
 
 test('run init : module inconnu → exit 1', async () => {

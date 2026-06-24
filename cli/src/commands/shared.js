@@ -1,8 +1,20 @@
 // shared.js — pipeline commun init/update : résolution, application, rapport.
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { resolve, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resolvePayloadRoot, readManifest, defaultModules, resolveModules, allModuleNames } from '../modules.js';
 import { collectFiles, applyFiles } from '../engine.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url)); // cli/src/commands
+
+/** Version du package CLI (= version npm publiée, alignée sur le tag au publish). */
+function cliVersion() {
+  try {
+    return JSON.parse(readFileSync(resolve(HERE, '..', '..', 'package.json'), 'utf8')).version;
+  } catch {
+    return '0.0.0';
+  }
+}
 
 /** Détermine les modules à installer (flag explicite > défauts ; prompt si TTY interactif). */
 export async function selectModules(manifest, flags) {
@@ -30,10 +42,11 @@ export function writeVersionFile(target, manifest, modules) {
   const dir = join(target, '.somtech-pack');
   mkdirSync(dir, { recursive: true });
   const data = {
-    name: manifest.name ?? 'somtech-pack',
-    version: manifest.version ?? '0.0.0',
+    name: '@somtech-solutions/pack',
+    version: cliVersion(), // version du package npm installé (= tag), pas celle du pack.json bundlé
+    packContentVersion: manifest.version ?? null, // version du contenu du pack (traçabilité)
     modules,
-    installedBy: '@somtech/pack (cli)',
+    installedBy: '@somtech-solutions/pack (cli)',
   };
   writeFileSync(join(dir, 'version.json'), JSON.stringify(data, null, 2) + '\n');
 }
@@ -53,12 +66,19 @@ export async function runApply(flags, { mode }) {
   const { files, missing, rejected, links } = collectFiles(payloadRoot, paths);
   const target = resolve(flags.target || process.cwd());
 
-  const report = applyFiles({ payloadRoot, target, files, force: flags.force, dryRun: flags.dryRun });
+  const report = applyFiles({
+    payloadRoot, target, files,
+    force: flags.force, dryRun: flags.dryRun,
+    preserve: manifest.preserve || [],
+  });
 
   console.log(`${mode === 'update' ? 'Mise à jour' : 'Installation'} (${modules.join(', ')}) → ${target}${flags.dryRun ? ' [dry-run]' : ''}`);
   summarize('créés', report.created);
   summarize('mis à jour', report.updated);
   summarize('inchangés', report.unchanged);
+  if (report.preserved.length) {
+    console.log(`  🔒 préservés (config projet, jamais écrasés) : ${report.preserved.join(', ')}`);
+  }
   if (report.conflicts.length) {
     console.log(`  ⚠️  divergents (NON écrasés) : ${report.conflicts.length}`);
     for (const f of report.conflicts) console.log(`     - ${f}`);
