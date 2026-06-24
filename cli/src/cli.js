@@ -18,7 +18,11 @@ function pkgVersion() {
 
 /** Parse argv (sans node/bin) → { command, flags, positionals }. */
 export function parseArgs(argv) {
-  const flags = { modules: null, yes: false, force: false, dryRun: false, source: null, target: null, help: false, version: false };
+  const flags = {
+    modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
+    rc: null, skillsDir: null, dest: null, noClaudeSwt: false, noSkills: false,
+    help: false, version: false,
+  };
   const positionals = [];
   const value = (name, i) => {
     const v = argv[i];
@@ -31,6 +35,11 @@ export function parseArgs(argv) {
       case '--modules': flags.modules = value('--modules', ++i); break;
       case '--source': flags.source = value('--source', ++i); break;
       case '--target': flags.target = value('--target', ++i); break;
+      case '--rc': flags.rc = value('--rc', ++i); break;
+      case '--skills-dir': flags.skillsDir = value('--skills-dir', ++i); break;
+      case '--dest': flags.dest = value('--dest', ++i); break;
+      case '--no-claude-swt': flags.noClaudeSwt = true; break;
+      case '--no-skills': flags.noSkills = true; break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
       case '--dry-run': flags.dryRun = true; break;
@@ -55,13 +64,22 @@ Usage :
 Commandes :
   init     Installe le pack dans le projet courant (modules core,features par défaut)
   update   Met à jour le projet (présente un diff, n'écrase pas sans --force)
-  setup    Configure le poste (skills globaux + claude-swt) — à venir (E-20260623-0020)
+  setup    Configure le poste : skills globaux (~/.claude/skills) + claude-swt (~/.zshrc)
 
-Options :
+Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
   --target <dir>    Projet cible (défaut: répertoire courant)
   --source <dir>    Racine du payload du pack (défaut: auto)
   --force           Écrase les fichiers divergents (update)
+
+Options (setup) :
+  --rc <fichier>    Fichier rc shell (défaut: ~/.zshrc)
+  --skills-dir <d>  Dossier des skills globaux (défaut: ~/.claude/skills)
+  --dest <dir>      Dossier d'install de claude-swt (défaut: ~/.somtech)
+  --no-skills       Ne pas installer les skills globaux
+  --no-claude-swt   Ne pas installer claude-swt
+
+Options communes :
   --dry-run         N'écrit rien, affiche le plan
   --yes, -y         Non-interactif (CI) : pas de prompt
   --version, -v     Affiche la version
