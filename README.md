@@ -1,6 +1,6 @@
 # somtech-pack
 
-> v1.0.0
+> v1.2.0
 
 Pack de configuration et marketplace de plugins Somtech pour **Claude Code**. Fournit skills, agents, commandes, hooks, plugins Cowork et blueprints de features réutilisables dans tous les projets clients.
 
@@ -29,7 +29,7 @@ npx @somtech-solutions/pack setup --yes
 > //npm.pkg.github.com/:_authToken=<ton_PAT_avec_read:packages>
 > ```
 > Pourquoi `npx` plutôt que `npm i -g` : on lance l'outil ponctuellement, toujours
-> à la bonne version (`@latest` ou `@1.2.0`), sans install globale à maintenir.
+> à la bonne version (`@latest` ou une version épinglée), sans install globale à maintenir.
 
 > ⚠️ `npx @somtech-solutions/pack` n'est disponible **qu'après la première publication**
 > du package (voir `cli/README.md`). En attendant, utilise la méthode transitoire ci-dessous.
