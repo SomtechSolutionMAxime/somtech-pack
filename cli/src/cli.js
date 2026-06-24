@@ -20,12 +20,17 @@ function pkgVersion() {
 export function parseArgs(argv) {
   const flags = { modules: null, yes: false, force: false, dryRun: false, source: null, target: null, help: false, version: false };
   const positionals = [];
+  const value = (name, i) => {
+    const v = argv[i];
+    if (v === undefined || v.startsWith('-')) throw new Error(`L'option ${name} attend une valeur`);
+    return v;
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
-      case '--modules': flags.modules = argv[++i] ?? ''; break;
-      case '--source': flags.source = argv[++i] ?? ''; break;
-      case '--target': flags.target = argv[++i] ?? ''; break;
+      case '--modules': flags.modules = value('--modules', ++i); break;
+      case '--source': flags.source = value('--source', ++i); break;
+      case '--target': flags.target = value('--target', ++i); break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
       case '--dry-run': flags.dryRun = true; break;

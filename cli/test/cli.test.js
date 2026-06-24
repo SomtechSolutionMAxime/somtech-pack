@@ -1,7 +1,7 @@
 // Tests du CLI @somtech/pack (node:test, zéro dépendance).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync, chmodSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -136,15 +136,58 @@ test('run init : module inconnu → exit 1', async () => {
   assert.equal(code, 1);
 });
 
-test('run update : sans --force ne touche pas un fichier modifié, exit 0', async () => {
+test('run update : sans --force ne touche pas un fichier modifié, exit 2 (drift)', async () => {
   const payload = makeFixture();
   const target = tmp('smtk-target-');
   await run(['init', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
   const f = join(target, '.claude/agents.md');
   writeFileSync(f, 'LOCAL\n');
   const code = await run(['update', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
-  assert.equal(code, 0);
+  assert.equal(code, 2, 'conflits en attente → exit 2 (drift détectable en CI)');
   assert.equal(readFileSync(f, 'utf8'), 'LOCAL\n', 'update sans --force ne doit pas écraser');
+});
+
+test('SÉCURITÉ : un path de module avec ../ est rejeté, rien écrit hors target', async () => {
+  const root = tmp('smtk-evil-payload-');
+  writeFileSync(join(root, 'pack.json'), JSON.stringify({
+    name: 'evil', version: '0.0.0',
+    modules: { evil: { default: true, paths: ['../escape/'] } },
+  }));
+  mkdirSync(join(root, '../escape'), { recursive: true });
+  writeFileSync(resolve(root, '../escape/secret.txt'), 'pwn\n');
+
+  // collectFiles rejette le chemin évadé
+  const m = readManifest(root);
+  const c = collectFiles(root, m.modules.evil.paths);
+  assert.equal(c.files.length, 0, 'aucun fichier collecté depuis un chemin évadé');
+  assert.deepEqual(c.rejected, ['../escape/']);
+
+  // run() ne doit RIEN écrire hors de la cible
+  const target = tmp('smtk-evil-target-');
+  const outside = resolve(target, '../escape/secret.txt');
+  const before = existsSync(outside);
+  await run(['init', '--modules', 'evil', '--yes', '--source', root, '--target', target]);
+  // la cible ne contient pas le fichier évadé, et rien n'a été (ré)écrit dehors
+  assert.ok(!existsSync(join(target, 'escape/secret.txt')));
+  assert.equal(existsSync(outside), before, 'aucun fichier touché hors de la cible');
+});
+
+test('SÉCURITÉ : les symlinks du payload sont ignorés (jamais copiés)', () => {
+  const root = makeFixture();
+  // place un symlink dans le module core
+  const linkPath = join(root, '.claude/link-to-secret');
+  writeFileSync(join(root, 'outside-secret.txt'), 'secret\n');
+  symlinkSync(resolve(root, 'outside-secret.txt'), linkPath);
+
+  const m = readManifest(root);
+  const c = collectFiles(root, m.modules.core.paths);
+  assert.ok(!c.files.some((f) => f.endsWith('link-to-secret')), 'le symlink ne doit pas être collecté');
+  assert.ok(c.links.some((l) => l.endsWith('link-to-secret')), 'le symlink doit être listé dans links');
+});
+
+test('parseArgs : --modules sans valeur → erreur', () => {
+  assert.throws(() => parseArgs(['init', '--modules']), /attend une valeur/);
+  assert.throws(() => parseArgs(['init', '--target', '--yes']), /attend une valeur/);
 });
 
 test('run --version → exit 0', async () => {

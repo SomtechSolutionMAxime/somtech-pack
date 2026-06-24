@@ -50,7 +50,7 @@ export async function runApply(flags, { mode }) {
   resolveModules(manifest, modules); // lève sur module inconnu
   const paths = modules.flatMap((name) => manifest.modules[name].paths || []);
 
-  const { files, missing } = collectFiles(payloadRoot, paths);
+  const { files, missing, rejected, links } = collectFiles(payloadRoot, paths);
   const target = resolve(flags.target || process.cwd());
 
   const report = applyFiles({ payloadRoot, target, files, force: flags.force, dryRun: flags.dryRun });
@@ -65,8 +65,14 @@ export async function runApply(flags, { mode }) {
     console.log(`  → relance avec --force pour écraser ces fichiers.`);
   }
   if (missing.length) console.log(`  (chemins de module absents du payload : ${missing.join(', ')})`);
+  // Sécurité : chemins qui s'évadent du payload/de la cible — jamais écrits.
+  const escaped = [...(rejected || []), ...report.rejected];
+  if (escaped.length) console.log(`  ⛔ chemins refusés (évasion hors cible) : ${escaped.join(', ')}`);
+  if (links && links.length) console.log(`  (symlinks ignorés : ${links.join(', ')})`);
 
   if (!flags.dryRun) writeVersionFile(target, manifest, modules);
 
-  return { code: 0, report, modules };
+  // Exit 2 si des divergences restent non appliquées (utile en CI pour détecter le drift).
+  const code = report.conflicts.length && !flags.force ? 2 : 0;
+  return { code, report, modules };
 }
