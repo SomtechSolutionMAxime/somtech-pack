@@ -1,0 +1,21 @@
+{
+  "name": "@somtech/pack",
+  "version": "0.1.0",
+  "description": "CLI d'installation du somtech-pack — point d'entrée unique (init / update / setup)",
+  "type": "module",
+  "bin": {
+    "somtech-pack": "bin/somtech-pack.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
