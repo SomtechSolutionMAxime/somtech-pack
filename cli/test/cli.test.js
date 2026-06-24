@@ -162,6 +162,28 @@ test('preserve : créé si absent, JAMAIS écrasé si présent (même --force)',
   assert.equal(readFileSync(join(target, '.claude/settings.json'), 'utf8'), '{"projet":"custom"}\n', 'config projet intacte');
 });
 
+test('run update --force : settings.json projet préservé bout-en-bout (câblage manifest.preserve)', async () => {
+  // Couvre le chemin complet run() → runApply → applyFiles avec preserve.
+  const payload = tmp('smtk-preserve-e2e-');
+  writeFileSync(join(payload, 'pack.json'), JSON.stringify({
+    name: 'fx', version: '9.9.9',
+    preserve: ['.claude/settings.json'],
+    modules: { core: { default: true, paths: ['.claude/'] } },
+  }));
+  mkdirSync(join(payload, '.claude'), { recursive: true });
+  writeFileSync(join(payload, '.claude/settings.json'), '{"pack":"default"}\n');
+  writeFileSync(join(payload, '.claude/agents.md'), 'agents\n');
+  const target = tmp('smtk-preserve-e2e-target-');
+
+  await run(['init', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
+  const f = join(target, '.claude/settings.json');
+  writeFileSync(f, '{"projet":"custom"}\n');                 // l'utilisateur personnalise
+
+  const code = await run(['update', '--modules', 'core', '--yes', '--force', '--source', payload, '--target', target]);
+  assert.equal(code, 0, 'preserve → pas de conflit → exit 0 même sans rien forcer');
+  assert.equal(readFileSync(f, 'utf8'), '{"projet":"custom"}\n', 'settings.json projet NON écrasé même via run --force');
+});
+
 test('run init : module inconnu → exit 1', async () => {
   const payload = makeFixture();
   const target = tmp('smtk-target-');
