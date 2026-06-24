@@ -33,7 +33,7 @@ npx @somtech-solutions/pack@latest update --dry-run
 # npx @somtech-solutions/pack@latest update --modules core,features,mockmig --dry-run
 ```
 
-**Afficher le rapport à l'utilisateur** : créés / mis à jour / inchangés / **divergents (non écrasés)** / 🔒 préservés (config projet comme `.claude/settings.json`). **Attendre sa confirmation** avant d'appliquer.
+**Afficher le rapport à l'utilisateur** : créés / mis à jour / inchangés / **divergents (non écrasés)** / 🔒 préservés *(s'il y en a — ex. `.claude/settings.json` modifié localement)*. **Attendre sa confirmation** avant d'appliquer.
 
 ## Phase 2 — Appliquer
 
@@ -71,7 +71,7 @@ git commit -m "chore(pack): maj somtech-pack"
 | dry-run seul | `npx @somtech-solutions/pack@latest update --dry-run` |
 | modules précis | `… update --modules core,features,mockmig` |
 | forcer l'écrasement des divergents | `… update --force` |
-| version épinglée | `npx @somtech-solutions/pack@1.3.3 update` |
+| version épinglée | `npx @somtech-solutions/pack@<version> update` (sinon `@latest`) |
 
 ## Fallback legacy (si npx indisponible / auth absente)
 
