@@ -1,226 +1,91 @@
 ---
 name: somtech-pack-maj
 description: |
-  Mettre à jour le projet courant depuis le somtech-pack (pull).
+  Mettre à jour le projet courant depuis le somtech-pack (via npx).
   TRIGGERS : somtech-pack-maj, mise à jour pack, update pack, sync pack, pull pack, maj somtech, mettre à jour le pack
-  Détecte les changements disponibles, affiche un résumé, et applique la mise à jour.
+  Lance `npx @somtech-solutions/pack update`, montre le diff, applique après confirmation.
 disable-model-invocation: false
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
-# Somtech Pack — Mise à jour projet
+# Somtech Pack — Mise à jour projet (npx)
 
-Mettre à jour les fichiers de configuration, skills, rules et commandes du projet courant depuis la dernière version du somtech-pack.
+Mettre à jour la config Claude Code (skills, agents, hooks, commandes), les features et scripts du projet courant depuis la dernière version publiée du pack — via le CLI **`@somtech-solutions/pack`** (npx). Plus besoin de cloner ni de comparer à la main : le CLI fait la copie idempotente avec diff.
 
 ## Phase 0 — Pré-vérifications
 
-### 0.1 Vérifier qu'on est dans un projet client
+```bash
+git rev-parse --show-toplevel >/dev/null 2>&1 || { echo "❌ Pas un repo git."; exit 1; }
+[ -f .somtech-pack/version.json ] || echo "ℹ️ Pas de marqueur .somtech-pack/version.json — peut-être une première install → utilise /somtech-pack-install."
+cat .somtech-pack/version.json 2>/dev/null   # version installée + modules
+command -v npx >/dev/null 2>&1 || { echo "❌ npx (Node) requis."; exit 1; }
+```
+
+> **Prérequis registre (une fois par poste)** : package privé sur GitHub Packages. Le `~/.npmrc` doit contenir `@somtech-solutions:registry=https://npm.pkg.github.com` + un token `read:packages`. Si l'auth manque, `npx` échouera — le signaler.
+
+## Phase 1 — Aperçu (dry-run, OBLIGATOIRE)
+
+Déterminer les modules installés (depuis `.somtech-pack/version.json`, champ `modules` ; défaut `core,features`) et lancer l'aperçu **sans rien écrire** :
 
 ```bash
-# Vérifier qu'on est dans un repo git
-git rev-parse --show-toplevel
-
-# Vérifier qu'il y a déjà une config Somtech
-ls .claude/ 2>/dev/null
+npx @somtech-solutions/pack@latest update --dry-run
+# si le projet a des modules supplémentaires (ex. mockmig) :
+# npx @somtech-solutions/pack@latest update --modules core,features,mockmig --dry-run
 ```
 
-Si `.claude/` n'existe pas, avertir l'utilisateur qu'il s'agit peut-être d'une première installation (utiliser `/somtech-pack-install` plutôt).
+**Afficher le rapport à l'utilisateur** : créés / mis à jour / inchangés / **divergents (non écrasés)** / 🔒 préservés *(s'il y en a — ex. `.claude/settings.json` modifié localement)*. **Attendre sa confirmation** avant d'appliquer.
 
-### 0.2 Vérifier les prérequis
+## Phase 2 — Appliquer
+
+Après confirmation :
 
 ```bash
-# Git dispo
-git --version
-
-# Réseau accessible (test rapide)
-git ls-remote https://github.com/SomtechSolutionMAxime/somtech-pack.git HEAD 2>/dev/null | head -1
+npx @somtech-solutions/pack@latest update
 ```
 
-Si le réseau n'est pas accessible, proposer une mise à jour depuis un clone local si l'utilisateur en a un.
+- Les fichiers **divergents** (que tu as modifiés localement) ne sont **pas écrasés** ; ils sont listés. Pour chacun, décider avec l'utilisateur :
+  - garder la version locale → ne rien faire ;
+  - prendre la version du pack → soit `npx @somtech-solutions/pack@latest update --force` (écrase **tous** les divergents), soit, plus chirurgical, `rm <fichier> && npx … update` (le fichier supprimé est recréé depuis le pack).
+- `.claude/settings.json` est **préservé** (config projet) — jamais écrasé même avec `--force`.
 
-### 0.3 Vérifier l'état git du projet
+## Phase 3 — Post-MAJ + commit
 
 ```bash
-# Vérifier s'il y a des changements non commités dans les dossiers pack
-git status --short .claude/ docs/ scripts/ features/
+cat .somtech-pack/version.json        # confirme la nouvelle version
+git status --short
 ```
 
-Si des fichiers modifiés sont détectés dans ces dossiers :
-- **Avertir** l'utilisateur que la MAJ va écraser ses modifications locales
-- **Lister** les fichiers en conflit potentiel
-- **Demander confirmation** avant de continuer
-- **Suggérer** de faire un `somtech_pack_push.sh` d'abord si les changements doivent être publiés vers le pack
-
-## Phase 1 — Analyser les changements disponibles
-
-### 1.1 Cloner le pack pour comparaison
+Proposer le commit (sur la branche courante, **jamais** sur main) — **après confirmation** :
 
 ```bash
-WORKDIR=$(mktemp -d)
-git clone --depth 1 --branch main https://github.com/SomtechSolutionMAxime/somtech-pack.git "$WORKDIR/somtech-pack" 2>/dev/null
+git add .claude/ features/ scripts/ docs/ .somtech-pack/
+git commit -m "chore(pack): maj somtech-pack"
 ```
 
-### 1.2 Comparer les fichiers
+> Rappel worktree : la MAJ se fait **une fois par projet** (fichiers versionnés) ; les worktrees la récupèrent par git, pas en relançant npx.
 
-Pour chaque dossier synchronisé, comparer le contenu local avec le pack :
+## Options
+
+| Demande | Commande |
+|---------|----------|
+| dry-run seul | `npx @somtech-solutions/pack@latest update --dry-run` |
+| modules précis | `… update --modules core,features,mockmig` |
+| forcer l'écrasement des divergents | `… update --force` |
+| version épinglée | `npx @somtech-solutions/pack@<version> update` (sinon `@latest`) |
+
+## Fallback legacy (si npx indisponible / auth absente)
+
+Ancien mécanisme `curl|bash` / pull (déprécié, conservé en transition) :
 
 ```bash
-# .claude/ — skills, agents, templates, settings
-diff -rq .claude/ "$WORKDIR/somtech-pack/.claude/" 2>/dev/null | grep -v ".DS_Store"
-
-# features/ — blueprints de features
-diff -rq features/ "$WORKDIR/somtech-pack/features/" 2>/dev/null | grep -v ".DS_Store"
-
-# scripts/
-diff -rq scripts/ "$WORKDIR/somtech-pack/scripts/" 2>/dev/null | grep -v ".DS_Store"
-```
-
-### 1.3 Catégoriser les changements
-
-Classer les fichiers en 3 catégories et présenter à l'utilisateur :
-
-| Catégorie | Description | Action |
-|-----------|-------------|--------|
-| **Nouveaux** | Fichiers dans le pack mais pas dans le projet | Seront ajoutés |
-| **Modifiés** | Fichiers différents entre pack et projet | Seront mis à jour |
-| **Supprimés** | Fichiers dans le projet mais plus dans le pack | Seront signalés (pas supprimés automatiquement) |
-
-### 1.4 Afficher le résumé
-
-Présenter un résumé clair :
-
-```
-📦 SOMTECH-PACK — Changements disponibles
-──────────────────────────────────────────
-
-🆕 Nouveaux (X fichiers):
-   .claude/skills/deploy-metering/SKILL.md
-   features/metering-billing/overview.md
-   ...
-
-📝 Modifiés (Y fichiers):
-   .claude/skills/end-session/SKILL.md
-   .claude/hooks/session-start-app-state.sh
-   ...
-
-⚠️  Fichiers locaux uniquement (Z fichiers):
-   .claude/skills/custom-local/SKILL.md  ← pas dans le pack
-   ...
-
-Appliquer la mise à jour ? (les fichiers locaux uniquement ne seront PAS supprimés)
-```
-
-**Attendre la confirmation de l'utilisateur avant de continuer.**
-
-## Phase 2 — Appliquer la mise à jour
-
-### 2.1 Option A — Via le script officiel (recommandé)
-
-Si le script `somtech_pack_pull.sh` est accessible :
-
-```bash
-# Depuis le projet courant
-./scripts/somtech_pack_pull.sh --target .
-```
-
-Ou si le script n'est pas encore dans le projet :
-
-```bash
-"$WORKDIR/somtech-pack/scripts/somtech_pack_pull.sh" --target .
-```
-
-### 2.2 Option B — Copie manuelle (fallback)
-
-Si le script n'est pas disponible ou échoue, copier manuellement :
-
-```bash
-PROJECT_ROOT=$(git rev-parse --show-toplevel)
-
-# .claude/ (skills, agents, commands, hooks, settings, etc.)
-# NB: le pack ne pousse PAS .claude/CLAUDE.md (cf. D-20260513-0009) — si le projet
-# en a un local, il reste intact. On l'exclut explicitement par prudence.
-rsync -av --exclude='.DS_Store' --exclude='CLAUDE.md' "$WORKDIR/somtech-pack/.claude/" "$PROJECT_ROOT/.claude/"
-
-# features/ (blueprints réutilisables)
-rsync -av --exclude='.DS_Store' "$WORKDIR/somtech-pack/features/" "$PROJECT_ROOT/features/"
-
-# scripts/
-rsync -av --exclude='.DS_Store' "$WORKDIR/somtech-pack/scripts/" "$PROJECT_ROOT/scripts/"
-```
-
-### 2.3 Nettoyage
-
-```bash
-rm -rf "$WORKDIR"
-```
-
-## Phase 3 — Post-mise à jour
-
-### 3.1 Vérifier l'installation
-
-```bash
-# Lister les skills disponibles
-ls .claude/skills/
-
-# Vérifier la présence du hook SessionStart (STD-027)
-ls -la .claude/hooks/session-start-app-state.sh
-```
-
-### 3.2 Résumé final
-
-```
-✅ SOMTECH-PACK MIS À JOUR
-──────────────────────────
-Fichiers ajoutés  : X
-Fichiers modifiés : Y
-Version pack      : main@<commit-sha>
-
-📋 Nouveaux skills disponibles :
-   /deploy-metering — Déployer métriques et facturation
-   ...
-
-⚠️  Actions recommandées :
-   - Si l'app n'est pas encore liée (.somtech/app.yaml absent) : /lier-app
-   - Commiter les changements : git add .claude/ features/ scripts/ && git commit -m "chore(pack): sync somtech-pack"
-```
-
-### 3.3 Proposer le commit
-
-Proposer à l'utilisateur de commiter les changements avec un message conventionnel :
-
-```bash
-git add .claude/ features/ scripts/
-git commit -m "chore(pack): sync somtech-pack $(date +%Y-%m-%d)"
-```
-
-**Ne PAS commiter sans confirmation explicite de l'utilisateur.**
-
-## Options avancées
-
-L'utilisateur peut demander une mise à jour partielle :
-
-| Demande | Comportement |
-|---------|-------------|
-| "maj skills seulement" | Synchroniser uniquement `.claude/skills/` |
-| "maj depuis une branche" | Utiliser `--ref <branche>` pour le pull |
-| "dry-run" | Ajouter `--dry-run` pour preview sans écriture |
-| "maj + push mes changements" | Faire un push d'abord, puis un pull |
-
-Pour les mises à jour partielles, utiliser les flags réels du script (modules définis dans `pack.json`) :
-
-```bash
-./scripts/somtech_pack_pull.sh --target . --modules core              # Config Claude Code + scripts + docs + sécurité
-./scripts/somtech_pack_pull.sh --target . --modules core,features     # Core + blueprints de features (défaut)
-./scripts/somtech_pack_pull.sh --target . --modules plugins           # Plugins Cowork uniquement
-./scripts/somtech_pack_pull.sh --target . --modules mockmig           # Workflow migration maquette → production
-./scripts/somtech_pack_pull.sh --target . --ref staging               # Pull depuis une autre branche
-./scripts/somtech_pack_pull.sh --target . --dry-run                   # Preview sans écriture
+curl -fsSL https://raw.githubusercontent.com/SomtechSolutionMAxime/somtech-pack/main/scripts/remote-install.sh | bash -s -- --target .
+# ou, depuis un clone : ./scripts/somtech_pack_pull.sh --target . [--dry-run] [--modules core,features]
 ```
 
 ## Règles critiques
 
-1. **Ne JAMAIS écraser sans confirmation** — toujours montrer le diff d'abord
-2. **Ne JAMAIS push sur main** — si un commit est nécessaire, le faire sur la branche courante
-3. **Ne JAMAIS supprimer** des fichiers locaux qui ne sont pas dans le pack (l'utilisateur peut avoir des skills custom)
-4. **Toujours nettoyer** le dossier temporaire de travail après l'opération
-5. **Proposer le push** si des changements locaux pertinents sont détectés avant le pull
+1. **Toujours** le dry-run d'abord + confirmation avant d'appliquer.
+2. **Ne jamais** `--force` sans accord explicite (écrase tes modifs locales).
+3. **Ne jamais** commiter sans confirmation ; jamais sur `main`.
+4. **Ne jamais** supprimer des fichiers locaux hors pack (skills custom) — le CLI ne les touche pas.
+5. `.claude/settings.json` est **préservé** : si tu veux la version du pack, c'est un choix manuel explicite.
