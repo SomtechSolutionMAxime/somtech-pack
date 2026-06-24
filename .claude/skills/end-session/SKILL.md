@@ -7,6 +7,8 @@ description: |
   ET si .somtech/app.yaml présent (STD-027) : met aussi à jour le doc Somcraft
   /operations/<app-slug>/etat-app.md (source de vérité de la mémoire externe d'état
   d'app) + le cache local .somtech/app-state.md (gitignored).
+  ET ferme les branches mergées (local + distant, squash-merges inclus) en laissant
+  ouvertes celles avec du travail non mergé (protège main/staging/wt-*/courante).
 ---
 
 # End Session - Documentation Automatique
@@ -144,7 +146,36 @@ mcp__claude_ai_Somcraft__update_document
 | Dépassement 1500 tokens | Warning + proposition de troncature, refuser l'écriture silencieuse |
 | Permissions Somcraft insuffisantes | Erreur explicite, vérifier permissions du workspace client |
 
-### 4. Résumé de fin de session
+### 4. Fermeture des branches mergées
+
+`/end-session` est le signal « on a fini de travailler ». À ce moment, **fermer les branches déjà mergées** et **laisser ouvertes** celles qui portent encore du travail non mergé.
+
+> Helper : `lib/close-merged-branches.sh`. Détecte les **squash-merges** (que `git branch --merged` rate). **Protège toujours** `main`/`master`/`staging`/`develop`/`wt/*` et la branche courante.
+
+**Deux niveaux de certitude (sûreté anti-perte de données)** :
+- **MERGED** = contenu déjà dans la base **ET** merge corroboré (vraie ancêtre git, **OU** PR mergée via `gh`, **OU** liste `CMB_CONFIRMED`) → supprimable local + distant.
+- **REVIEW** = contenu dans la base mais merge **non corroboré** (risque de faux positif : branche net-zéro `add+revert`, backup, sous-ensemble jamais mergé) → **jamais supprimée automatiquement**, signalée pour revue manuelle.
+
+**Procédure (le dry-run et le GO sont OBLIGATOIRES — la suppression distante est une action visible à des tiers, cf. mode autonome §4)** :
+
+1. Mettre à jour les refs distantes : `git fetch origin --prune`.
+2. **Aperçu obligatoire** (ne supprime rien) :
+   ```bash
+   source .claude/skills/end-session/lib/close-merged-branches.sh
+   CMB_DRY_RUN=1 cmb_close origin/main
+   ```
+3. **Afficher le plan** à l'utilisateur (branches MERGED à supprimer, REVIEW conservées, KEEP conservées) et **demander un GO explicite** avant la passe destructive.
+4. Après GO, exécuter :
+   ```bash
+   cmb_close origin/main          # supprime les MERGED (local + distant)
+   # CMB_NO_REMOTE=1 cmb_close origin/main   # variante : local seulement (pas de push --delete)
+   ```
+   La corroboration `gh` est automatique si `gh` est installé. Sinon, ne seront supprimées que les **vraies ancêtres** (true merges) ; les squash-merges non confirmés tomberont en **REVIEW** (conservés) — les confirmer via `CMB_CONFIRMED="brancheA brancheB"` si besoin.
+5. **Invariants** : ne JAMAIS supprimer `main`/`staging`/`wt-*`/branche courante ; les branches non mergées et REVIEW sont **conservées** et listées.
+
+> **Worktree** : si la branche courante est elle-même mergée, elle est conservée (impossible de supprimer une branche checked-out) → la retirer après bascule, ou via `claude-swt-done <timestamp>` au teardown de session.
+
+### 5. Résumé de fin de session
 
 Afficher un résumé à l'utilisateur:
 
@@ -159,6 +190,11 @@ Afficher un résumé à l'utilisateur:
    - Doc Somcraft: /operations/<app-slug>/etat-app.md (workspace client)
    - Cache local: .somtech/app-state.md rafraîchi
 
+🌿 Branches:
+   - Mergées fermées (local + distant): [liste]
+   - À vérifier (contenu dans base, merge non confirmé): [liste]
+   - Conservées (travail non mergé): [liste]
+
 🔍 Résumé des changements:
    - [Liste des points clés]
 ```
@@ -172,7 +208,8 @@ Claude:
 2. Identifie les éléments à documenter
 3. Met à jour CHANGELOG.md à la racine du projet
 4. Si `.somtech/app.yaml` présent : propose un draft de MAJ du doc Somcraft + cache local, demande validation, écrit après approbation (STD-027)
-5. Affiche le résumé
+5. Ferme les branches mergées (local + distant), conserve celles avec du travail non mergé (helper `lib/close-merged-branches.sh`, protège main/staging/wt-*/courante)
+6. Affiche le résumé
 
 ## Notes
 
