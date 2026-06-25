@@ -8,8 +8,13 @@ description: |
   TRIGGERS : plan-servicedesk, planifier vers servicedesk, documenter le besoin, brainstorm vers servicedesk, décomposer un besoin, créer la demande et les epics
 disable-model-invocation: true
 argument-hint: "[brainstorming] [<besoin libre> | D-AAAAMMJJ-NNNN]"
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Skill, Task
 ---
+
+<!-- Pas de `allowed-tools` volontairement : comme les autres skills MCP du pack (merge, pousse-staging,
+     /brd), on laisse tous les outils disponibles. Ce skill a besoin des MCP `mcp__servicedesk__*` (demands,
+     epics, tickets, applications) ET de l'outil natif `Workflow` — une liste `allowed-tools` restrictive les
+     bloquerait. -->
+<!-- fin note outils -->
 
 # /plan-servicedesk — du brainstorm à la structure ServiceDesk
 
@@ -70,10 +75,14 @@ Si `brainstorming` est demandé :
 3. À la sortie, on dispose d'un **besoin défini** : problème, résultat attendu (outcome), périmètre, hors-scope.
 
 Si `brainstorming` n'est **pas** demandé : le besoin est l'énoncé fourni en argument (ou demandé à l'utilisateur).
-On considère le besoin « défini » dès qu'on peut en écrire un titre + une description claire.
+On considère le besoin « défini » dès qu'on peut en écrire un titre + une description claire. **Attention** : sans
+brainstorming il n'y a **aucun gate de design** — la qualité du « pourquoi/quoi » repose entièrement sur l'énoncé
+de l'utilisateur. Si l'énoncé est vague ou ambigu, **proposer d'activer `brainstorming`** plutôt que de créer une
+Demande bancale.
 
 > Le **plan d'implémentation technique** (`superpowers:writing-plans`) n'est **pas** dans cette chaîne : il se
-> rédige plus tard, par story, au moment d'exécuter (voir §6). Ici on s'arrête au **quoi/pourquoi**, pas au comment.
+> rédige plus tard, par story, au moment d'exécuter (voir la section « Articulation » plus bas). Ici on s'arrête au
+> **quoi/pourquoi**, pas au comment.
 
 ## Phase B — Créer la Demande ServiceDesk
 
@@ -83,11 +92,20 @@ Le workflow de découpage prend une **Demande** (`D-…`) en entrée. On la cré
 
 1. **Résoudre l'app** (et le module si pertinent) : `mcp__servicedesk__applications` action `list` → `application_id`
    (matcher le nom normalisé, comme `/brd`). 0 match → proposer de corriger ou créer l'app ; **jamais inventer un id**.
-2. **Proposer la Demande** (titre, description = énoncé du besoin + outcome + hors-scope issus de la Phase A,
-   `source` = `client` ou `admin`, `application_id`, `module_id` si module). **Afficher la proposition et attendre le GO.**
-3. Après confirmation : créer via `mcp__servicedesk__demands` action `create`. Récupérer le **code `D-AAAAMMJJ-NNNN`**.
+2. **Proposer la Demande** puis **afficher la proposition et attendre le GO**. `mcp__servicedesk__demands` action
+   `create` exige **tous** ces champs (sinon l'appel échoue) :
+   - `title` (requis)
+   - `description` (requis) = énoncé du besoin + outcome + hors-scope issus de la Phase A
+   - `application_id` (requis)
+   - `source` (requis) ∈ **`{client, admin}`** — `client` si le besoin vient du client, `admin` si interne
+   - `created_by_label` (requis) — libellé humain de l'auteur (ex. `"Maxime (plan-servicedesk)"`)
+   - `module_id` (optionnel) si la demande est au grain module — doit appartenir à `application_id`
+3. Après confirmation : créer la Demande. Elle naît en statut **`received`** (forcé par le serveur). Récupérer
+   le **code `D-AAAAMMJJ-NNNN`** retourné.
 
-> Statuts de la Demande **dérivés automatiquement** (triggers DB) depuis les enfants — ne **jamais** les fixer à la main (STD-030).
+> **Cycle de statut de la Demande, géré par triggers DB — ne jamais le forcer à la main** (STD-030, règle d'or n°5) :
+> `received → in_analysis` se déclenche tout seul à la création du **premier epic/ticket enfant** (Phase D),
+> puis `in_analysis → in_progress → delivered` suit les enfants. Aucune transition manuelle à faire ici.
 
 ## Phase C — Découpage tracé au BRD (Workflow, lecture seule)
 
@@ -100,28 +118,43 @@ Lancer le workflow Somtech **`analyse-decoupage-demande`** avec le code de la De
   **propose un découpage Epic → Story avec G/W/T**, chaque story **tracée à une EF** du BRD, puis passe une
   **critique adversariale** et rend un verdict `pret_a_creer`.
 
-À la sortie, présenter à l'utilisateur : les **EF manquantes/à amender** signalées, les **défauts** de la critique,
-et le découpage proposé. **Ne rien créer encore.**
+À la sortie, présenter à l'utilisateur : le **grain BRD résolu** (`brd_grain`) et son **origine** (`brd_resolved_from`),
+les **EF manquantes/à amender**, les **défauts** de la critique, le verdict `pret_a_creer`, et le découpage proposé.
+**Ne rien créer encore.**
 
-> Si le workflow signale des **EF manquantes** : les ajouter / amender le **BRD d'abord** (via `/brd`), **avant**
-> d'écrire les stories. Une story sans EF tracée est une violation de traçabilité (règle d'or n°10).
+Deux cas du workflow à relayer fidèlement (ne pas les écraser en Phase D) :
+
+> **EF manquantes** : les ajouter / amender le **BRD d'abord** via `/brd <action> <app>[/<module>]` **au grain
+> résolu** (`brd_grain`), **avant** d'écrire les stories. Une story sans EF tracée est une violation de
+> traçabilité (règle d'or n°10).
+
+> **Fallback module → app** (`brd_resolved_from = "application"` alors que la demande a un `module_id`) : le
+> workflow ajoute une **story de gouvernance** « Initialiser le BRD du module » (ou un déclassement explicite au
+> grain app). **Conserver cette story** dans la Phase D — ne pas la supprimer du découpage.
 
 ## Phase D — Créer la hiérarchie après validation
 
 Le workflow ne crée rien : c'est ici qu'on matérialise la proposition **validée par l'utilisateur**.
 
-1. **Confirmer le découpage** (ou l'amender avec l'utilisateur). Si la critique du workflow rend `pret_a_creer: false`
-   ou s'il reste des défauts **bloquants**, les régler **avant** création.
-2. Après GO explicite, créer dans l'ordre :
-   - **Epic(s)** : `mcp__servicedesk__epics` action `create` (rattachés à la Demande), avec `problem` / `outcome` / `out_of_scope`.
-   - **Story(ies)** : `mcp__servicedesk__tickets` action `create`, `type: "story"`, rattachées à leur epic, **avec
-     `acceptance_criteria` G/W/T** (given/when/then) et l'**EF tracée** citée dans la description (`Réalisé par : <EF-id>`).
-3. **Récap** : Demande + Epics + Stories créés (codes + URLs), EF tracées, ordre recommandé. Rappeler le cycle de
-   traitement par ticket : **COMPRENDRE → CORRIGER → VALIDER → FERMER** (STD-030).
+1. **GATE DUR — ne créer aucun epic/story tant que `pret_a_creer !== true`.** Si le workflow rend
+   `pret_a_creer: false` ou laisse des défauts **bloquants/majeurs**, **STOP** : les régler (amender le découpage,
+   le BRD, relancer la Phase C) **avant** toute création. Seule exception : un humain valide explicitement le
+   dépassement (le tracer dans le récap). Pas de création « optimiste ».
+2. **Confirmer le découpage** avec l'utilisateur (GO explicite), puis créer dans l'ordre :
+   - **Epic(s)** : `mcp__servicedesk__epics` action `create`. Champs **requis** :
+     `title`, `problem`, `outcome`, `application_id`, `source` ∈ **`{human, agent}`** (≠ enum des demandes !),
+     `created_by_label`. Optionnels utiles : `out_of_scope`, `demand_id` (**= rattachement à la Demande**, indispensable
+     pour que les triggers DB fassent avancer la demande), `sequence_order` (pour l'ordre recommandé du workflow).
+   - **Story(ies)** : `mcp__servicedesk__tickets` action `create`, `type: "story"`, `epic_id` = l'epic parent
+     (`epic_id` force `type=story`), **avec `acceptance_criteria` G/W/T** (given/when/then) et l'**EF tracée** citée
+     dans la description (`Réalisé par : <EF-id>`).
+3. **Récap** : Demande + Epics + Stories créés (codes + URLs), EF tracées, ordre recommandé, et — le cas échéant —
+   le dépassement de gate validé par l'humain. Rappeler le cycle de traitement par ticket :
+   **COMPRENDRE → CORRIGER → VALIDER → FERMER** (STD-030).
 
 ---
 
-## 6. Articulation avec `superpowers:writing-plans`
+## Articulation avec `superpowers:writing-plans`
 
 Ce skill s'arrête au **quoi/pourquoi** (Demande/Epic/Story tracées au BRD). Le **comment** (plan d'implémentation
 bite-sized, TDD) relève de `superpowers:writing-plans`, **par story, au moment de l'exécuter** — pas à la
@@ -136,9 +169,13 @@ planification. Garder les deux séparés évite de figer des détails techniques
 3. **Traçabilité BRD obligatoire** : toute story cite une **EF du BRD au bon grain** (STD-033). EF absente →
    amender le BRD **avant** (via `/brd`). App sans BRD → N/A explicitement signalé.
 4. **G/W/T obligatoire pour les `story`** (STD-030). Pas de story sans `acceptance_criteria`.
-5. **Statuts dérivés** (Demande/Epic) **jamais fixés à la main** — triggers DB (STD-030).
-6. **Ne jamais inventer un `application_id`** — toujours le résoudre via `mcp__servicedesk__applications`.
-7. **Un bug isolé ≠ cette chaîne** : créer un `incident` direct (STD-030).
+5. **Gate dur `pret_a_creer`** : aucune création d'epic/story tant que la critique du workflow ne rend pas
+   `pret_a_creer: true` (sauf dépassement validé explicitement par un humain et tracé).
+6. **Statuts dérivés** (Demande/Epic) **jamais fixés à la main** — triggers DB (STD-030).
+7. **Attention aux enums `source`** : `demands.source` ∈ `{client, admin}` mais `epics.source` ∈ `{human, agent}`
+   — ne pas réutiliser la valeur de la demande pour l'epic. `created_by_label` est requis aux deux niveaux.
+8. **Ne jamais inventer un `application_id`** — toujours le résoudre via `mcp__servicedesk__applications`.
+9. **Un bug isolé ≠ cette chaîne** : créer un `incident` direct (STD-030).
 
 ## Cadre opposable
 
