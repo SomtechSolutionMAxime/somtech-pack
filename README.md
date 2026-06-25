@@ -71,7 +71,7 @@ Chaque plugin inclut un `.zip` versionné prêt à installer dans Claude Cowork.
 
 | Composant | Contenu |
 |-----------|---------|
-| **Skills** (20) | audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, mockmig, playwright-tests, prototype, scaffold-aims, scaffold-component, somtech-pack-maj, speckit, sync-app-state, validate-ui, webapp-testing |
+| **Skills** (21) | audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, merge, mockmig, plan-servicedesk, pousse-staging, prototype, scaffold-aims, scaffold-component, somtech-pack-maj, speckit, sync-app-state, validate-ui, webapp-testing |
 | **Agents** (7) | backend, database, design, devops, frontend, product, qa |
 | **Commandes** | `/pousse` |
 | **Hooks** | `SessionStart` → mémoire externe d'état d'app (STD-027) |
