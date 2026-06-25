@@ -621,7 +621,7 @@ Add to `.mcp.json`:
       "type": "http",
       "url": "https://<project-ref>.supabase.co/functions/v1/mcp-service/mcp",
       "headers": {
-        "Authorization": "Bearer sk_live_your_api_key"
+        "Authorization": "Bearer ${MCP_API_KEY}"
       }
     }
   }
