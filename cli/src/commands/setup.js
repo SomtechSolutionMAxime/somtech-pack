@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { resolvePayloadRoot } from '../modules.js';
 import { installRcBlock } from '../shellrc.js';
 import { installUserSkills } from '../userskills.js';
+import { installGlobalSkills } from '../globalskills.js';
 import { installGlobalVersionHook } from '../userhooks.js';
 
 /**
@@ -56,13 +57,33 @@ export async function cmdSetup(flags) {
   console.log(`Setup poste${flags.dryRun ? ' [dry-run]' : ''} :`);
 
   if (doSkills) {
+    // 1) User-skills (skills pensés pour le poste : somtech-pack-install…).
     const r = installUserSkills({ payloadRoot, skillsDir, dryRun: flags.dryRun, force: flags.force });
     console.log(
-      `  skills globaux → ${skillsDir} : ${r.skills.join(', ') || '(aucun)'}` +
+      `  user-skills → ${skillsDir} : ${r.skills.join(', ') || '(aucun)'}` +
         ` (créés ${r.created.length}, maj ${r.updated.length}, inchangés ${r.unchanged.length})`
     );
     if (r.conflicts.length) {
       console.log(`    ⚠️  divergents non écrasés : ${r.conflicts.length} → relance avec --force`);
+    }
+
+    // 2) Miroir GLOBAL de tous les skills du pack (anti-drift des copies ~/.claude/skills).
+    //    Ne touche jamais les skills perso hors-pack ; backup .somtech.bak avant tout
+    //    écrasement --force (filet anti-perte).
+    const g = installGlobalSkills({ payloadRoot, skillsDir, dryRun: flags.dryRun, force: flags.force });
+    console.log(
+      `  skills du pack (global) → ${skillsDir} : ${g.skills.length} skills` +
+        ` (créés ${g.created.length}, maj ${g.updated.length}, inchangés ${g.unchanged.length})` +
+        (g.backedUp.length ? `, backups ${g.backedUp.length}` : '')
+    );
+    if (g.conflicts.length) {
+      console.log(
+        `    ⚠️  ${g.conflicts.length} skill(s) du pack divergent(s)/symlinkés en global, NON écrasés.` +
+          ` Relance avec --force pour prendre la version du pack (backup .somtech.bak auto).`
+      );
+    }
+    if (g.payloadLinks?.length) {
+      console.log(`    ℹ️  ${g.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
     }
   }
 

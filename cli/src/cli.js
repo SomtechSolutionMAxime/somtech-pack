@@ -68,7 +68,10 @@ Usage :
 Commandes :
   init     Installe le pack dans le projet courant (modules core,features par défaut)
   update   Met à jour le projet (présente un diff, n'écrase pas sans --force)
-  setup    Configure le poste : skills globaux + claude-swt + hook de version (global)
+  setup    Configure le poste : skills globaux (user-skills + miroir des skills du
+           pack dans ~/.claude/skills) + claude-swt + hook de version. Re-jouable =
+           mise à jour. Préserve les skills perso hors-pack ; un skill du pack
+           divergent n'est pris qu'avec --force (backup .somtech.bak auto)
 
 Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
