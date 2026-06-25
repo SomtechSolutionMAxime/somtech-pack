@@ -65,5 +65,10 @@ eq "C conservé (wt/C)" "$(_claude-swt-pending "$MAIN" "$TMP/C" C)" "wt/C"
 echo "→ Cas 4 : HEAD sur une feat déjà mergée → retirable"
 eq "D retirable (pending vide)" "$(_claude-swt-pending "$MAIN" "$TMP/D" D)" ""
 
+echo "→ Cas 5 : socle wt/E non mergée ET HEAD feat/z non mergée → les DEUX listées"
+mkwt E; commit_on "$TMP/E" "wip socle E"          # commits directs sur la socle
+( cd "$TMP/E" && git checkout -q -b feat/z ); commit_on "$TMP/E" "wip z"
+eq "E conservé (feat/z + wt/E, triées)" "$(_claude-swt-pending "$MAIN" "$TMP/E" E)" "$(printf 'feat/z\nwt/E')"
+
 echo
 [ "$fail" -eq 0 ] && { echo "✅ TOUS LES TESTS PASSENT"; exit 0; } || { echo "❌ ÉCHEC"; exit 1; }
