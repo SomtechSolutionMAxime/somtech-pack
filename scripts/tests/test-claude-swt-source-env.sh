@@ -6,10 +6,10 @@
 #
 # Pourquoi : Claude Code expanse ${VAR} dans .mcp.json depuis
 # l'environnement du PROCESS, pas depuis un fichier. Sans source,
-# les MCP référençant ${SOMCRAFT_API_KEY} sont cassés en worktree.
+# les MCP référençant ${SOMCRAFT_MCP_API_KEY} sont cassés en worktree.
 #
 # Stratégie : faux binaire `claude` placé en tête de PATH qui écrit
-# la valeur de SOMCRAFT_API_KEY dans un fichier témoin. Vrai harnais
+# la valeur de SOMCRAFT_MCP_API_KEY dans un fichier témoin. Vrai harnais
 # git (origin bare + worktree). Le .env vit dans $main (non commité),
 # donc absent du worktree → seul le `source` peut peupler la variable.
 #
@@ -31,12 +31,12 @@ trap 'rm -rf "$PASS_FILE" "$FAIL_FILE" "$WORK"' EXIT
 ok() { echo "  ✅ $1"; echo x >> "$PASS_FILE"; }
 ko() { echo "  ❌ $1"; echo x >> "$FAIL_FILE"; }
 
-# --- faux `claude` : capture la valeur de SOMCRAFT_API_KEY ---
+# --- faux `claude` : capture la valeur de SOMCRAFT_MCP_API_KEY ---
 FAKEBIN="${WORK}/bin"; mkdir -p "$FAKEBIN"
 WITNESS="${WORK}/witness"
 cat > "${FAKEBIN}/claude" <<EOF
 #!/usr/bin/env bash
-printf '%s' "\${SOMCRAFT_API_KEY:-__UNSET__}" > "${WITNESS}"
+printf '%s' "\${SOMCRAFT_MCP_API_KEY:-__UNSET__}" > "${WITNESS}"
 exit 0
 EOF
 chmod +x "${FAKEBIN}/claude"
@@ -60,7 +60,7 @@ make_repo() {  # $1 = chemin du repo principal
 run_swt() {  # lance claude-swt dans un sous-shell isolé ; $1=repo $2=session $3=wtpath
   ( cd "$1" \
     && PATH="${FAKEBIN}:${PATH}" \
-    && export SOMCRAFT_API_KEY \
+    && export SOMCRAFT_MCP_API_KEY \
     && source "$SRC" \
     && claude-swt "$2" "$3" ) >/dev/null 2>&1
 }
@@ -70,12 +70,12 @@ bash -n "$SRC" && ok "claude-swt.sh : bash -n OK" || ko "claude-swt.sh : erreur 
 
 echo "== Scénario 1 — .env présent au \$main est sourcé avant claude =="
 R1="${WORK}/repo1"; make_repo "$R1"
-printf 'SOMCRAFT_API_KEY=secret-from-env\n' > "${R1}/.env"
+printf 'SOMCRAFT_MCP_API_KEY=secret-from-env\n' > "${R1}/.env"
 : > "$WITNESS"
 run_swt "$R1" "sess1" "${WORK}/wt1"
 GOT="$(cat "$WITNESS" 2>/dev/null || true)"
 [ "$GOT" = "secret-from-env" ] \
-  && ok "claude voit SOMCRAFT_API_KEY=secret-from-env (provenant du .env)" \
+  && ok "claude voit SOMCRAFT_MCP_API_KEY=secret-from-env (provenant du .env)" \
   || ko "attendu 'secret-from-env', obtenu '${GOT}' (le .env n'a pas été sourcé)"
 
 echo "== Scénario 2 — .env absent → la session démarre quand même =="

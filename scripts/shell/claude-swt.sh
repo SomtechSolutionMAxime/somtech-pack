@@ -46,8 +46,12 @@ claude-swt() {  # usage : claude-swt [session-timestamp] [path]
     # Secrets hors .mcp.json (T-20260625-0013) : Claude expanse ${VAR} depuis
     # l'environnement du process, pas depuis un fichier. On source le .env du
     # repo PRINCIPAL (jamais commité, donc absent du worktree) pour que les MCP
-    # référençant ${SOMCRAFT_API_KEY} & co fonctionnent. Source depuis $main →
-    # pas de duplication du secret sur disque dans le worktree.
+    # référençant ${SOMCRAFT_MCP_API_KEY} & co fonctionnent. Source depuis $main
+    # → pas de duplication du secret sur disque dans le worktree.
+    # NB : `.` interprète le fichier comme du shell — les valeurs contenant des
+    # espaces/caractères spéciaux doivent être quotées (KEY="a b"). Pour des
+    # clés API (sans espaces) c'est sans risque ; le sous-shell ( … ) isole
+    # `set -a` du shell appelant même si le source échoue.
     if [ -f "$main/.env" ]; then set -a; . "$main/.env"; set +a; fi
     claude )
 
