@@ -78,9 +78,12 @@ export async function cmdSetup(flags) {
     );
     if (g.conflicts.length) {
       console.log(
-        `    ⚠️  ${g.conflicts.length} skill(s) du pack divergent(s) en global, NON écrasés.` +
+        `    ⚠️  ${g.conflicts.length} skill(s) du pack divergent(s)/symlinkés en global, NON écrasés.` +
           ` Relance avec --force pour prendre la version du pack (backup .somtech.bak auto).`
       );
+    }
+    if (g.payloadLinks?.length) {
+      console.log(`    ℹ️  ${g.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
     }
   }
 

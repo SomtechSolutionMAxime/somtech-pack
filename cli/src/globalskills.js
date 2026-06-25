@@ -21,11 +21,13 @@ export function installGlobalSkills({ payloadRoot, skillsDir, dryRun = false, fo
   const empty = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [], backedUp: [], skills: [] };
   if (!existsSync(base)) return empty;
 
-  const { files } = collectFiles(base, ['']);
+  const { files, links, rejected } = collectFiles(base, ['']);
   const report = applyFiles({ payloadRoot: base, target: skillsDir, files, force, dryRun, backup: true });
 
   // Liste des skills réellement pris en charge (1er segment du chemin relatif).
   const handled = [...report.created, ...report.unchanged, ...report.updated];
   const skills = [...new Set(handled.map((rel) => rel.split('/')[0]).filter(Boolean))].sort();
-  return { ...report, skills };
+  // `payloadLinks`/`payloadRejected` : symlinks ou chemins évadés rencontrés DANS le pack
+  // (ignorés par le moteur). Vides aujourd'hui ; remontés pour visibilité si ça change.
+  return { ...report, skills, payloadLinks: links, payloadRejected: rejected };
 }

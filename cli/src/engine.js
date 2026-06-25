@@ -1,6 +1,8 @@
 // engine.js — moteur de copie idempotente avec rapport de diff.
 // Sécurité : aucun fichier n'est lu/écrit hors du payload / de la cible
-// (containment strict), les symlinks sont ignorés (jamais suivis).
+// (containment strict) ; les symlinks du payload SOURCE sont ignorés (jamais suivis) ;
+// un symlink en CIBLE n'est jamais écrit à travers (traité comme divergent) ;
+// le moteur ne supprime JAMAIS rien.
 import {
   readdirSync, lstatSync, statSync, existsSync, readFileSync,
   mkdirSync, copyFileSync, chmodSync,
@@ -82,12 +84,19 @@ function copyPreservingMode(src, dest, dryRun) {
 }
 
 /**
- * Sauvegarde `dest` vers `dest + .somtech.bak` AVANT de l'écraser (filet anti-perte).
- * Best-effort, préserve le mode. Renvoie le chemin du backup, ou null si dryRun/échec.
+ * Sauvegarde `dest` AVANT de l'écraser (filet anti-perte). Best-effort, préserve le mode.
+ * N'écrase JAMAIS un backup existant : si `<dest>.somtech.bak` est pris, suffixe numéroté
+ * `.somtech.bak.1`, `.2`… → aucune version sauvegardée n'est jamais perdue.
+ * Renvoie le chemin du backup, ou null si dryRun/échec.
  */
 function backupFile(dest, dryRun) {
   if (dryRun) return null;
-  const bak = `${dest}.somtech.bak`;
+  let bak = `${dest}.somtech.bak`;
+  if (existsSync(bak)) {
+    let n = 1;
+    while (existsSync(`${dest}.somtech.bak.${n}`)) n++;
+    bak = `${dest}.somtech.bak.${n}`;
+  }
   try {
     copyFileSync(dest, bak);
     try { chmodSync(bak, statSync(dest).mode & 0o777); } catch { /* best-effort */ }
@@ -125,6 +134,15 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
     }
     const src = join(payloadRoot, rel);
     const dest = join(target, rel);
+    // Ne JAMAIS écrire à travers un symlink en cible : `copyFileSync` suivrait le lien
+    // et écraserait la donnée pointée (potentiellement un fichier perso hors-cible).
+    // Un dest symlinké est traité comme divergent (conflict) : jamais touché.
+    let destLink = null;
+    try { destLink = lstatSync(dest); } catch { /* n'existe pas */ }
+    if (destLink && destLink.isSymbolicLink()) {
+      report.conflicts.push(rel);
+      continue;
+    }
     if (!existsSync(dest)) {
       copyPreservingMode(src, dest, dryRun);
       report.created.push(rel);

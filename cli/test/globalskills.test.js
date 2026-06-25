@@ -2,7 +2,7 @@
 // TOUT se passe dans des dossiers temporaires — jamais le vrai ~/.claude.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +45,35 @@ test('engine backup : dry-run n’écrit ni le fichier ni le backup', () => {
   applyFiles({ payloadRoot: payload, target, files: ['a.txt'], force: true, backup: true, dryRun: true });
   assert.equal(readFileSync(join(target, 'a.txt'), 'utf8'), 'ANCIEN', 'cible intacte');
   assert.ok(!existsSync(join(target, 'a.txt.somtech.bak')), 'pas de backup en dry-run');
+});
+
+test('engine backup : un .somtech.bak existant n’est JAMAIS écrasé (suffixe numéroté)', () => {
+  const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-');
+  writeFileSync(join(payload, 'a.txt'), 'PACK v1');
+  writeFileSync(join(target, 'a.txt'), 'LOCAL v0');
+  // un backup antérieur existe déjà (ex. d'un --force précédent)
+  writeFileSync(join(target, 'a.txt.somtech.bak'), 'BACKUP ANTERIEUR — précieux');
+  const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'], force: true, backup: true });
+  assert.deepEqual(r.backedUp, ['a.txt']);
+  // l'ancien backup est intact, le nouveau va dans .bak.1
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak'), 'utf8'), 'BACKUP ANTERIEUR — précieux', 'backup antérieur préservé');
+  assert.ok(existsSync(join(target, 'a.txt.somtech.bak.1')), 'nouveau backup numéroté');
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak.1'), 'utf8'), 'LOCAL v0', 'le nouveau backup = version écrasée');
+  assert.equal(readFileSync(join(target, 'a.txt'), 'utf8'), 'PACK v1', 'fichier mis à jour');
+});
+
+test('engine : refuse d’écrire à travers un symlink cible (donnée pointée préservée)', () => {
+  const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-'); const outside = tmp('smtk-out-');
+  writeFileSync(join(payload, 'a.txt'), 'PACK');
+  // donnée perso réelle, hors cible, pointée par un symlink dans la cible
+  const perso = join(outside, 'perso.txt');
+  writeFileSync(perso, 'DONNÉE PERSO — ne pas écraser');
+  symlinkSync(perso, join(target, 'a.txt'));
+  const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'], force: true, backup: true });
+  assert.deepEqual(r.conflicts, ['a.txt'], 'symlink cible → divergent, jamais écrit');
+  assert.deepEqual(r.updated, [], 'rien mis à jour');
+  assert.equal(readFileSync(perso, 'utf8'), 'DONNÉE PERSO — ne pas écraser', 'donnée pointée intacte');
+  assert.ok(lstatSync(join(target, 'a.txt')).isSymbolicLink(), 'le lien lui-même est préservé');
 });
 
 // ---------- installGlobalSkills ----------

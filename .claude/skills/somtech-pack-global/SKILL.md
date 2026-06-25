@@ -28,8 +28,10 @@ publiée du pack, via `npx @somtech-solutions/pack setup` :
 1. **Skills perso hors-pack préservés** : `assemblyai`, `brand`, `graphify`, `slides`, etc. ne sont **jamais**
    dans le pack → jamais écrits ni supprimés. Le moteur ne supprime **rien**.
 2. **Skill du pack que tu as modifié à la main** en global = **divergent** → **NON écrasé** sans `--force`.
-3. **Backup anti-perte** : avec `--force`, chaque fichier écrasé est d'abord sauvegardé en `<fichier>.somtech.bak`.
-   La perte est donc impossible.
+3. **Backup anti-perte** : avec `--force`, chaque fichier écrasé est d'abord sauvegardé. Les backups sont
+   **numérotés et jamais écrasés** (`<fichier>.somtech.bak`, puis `.somtech.bak.1`, `.2`…) → **aucune version
+   écrasée n'est jamais perdue**. Et le moteur **refuse d'écrire à travers un symlink** en cible (il le traite
+   comme divergent), donc une donnée perso pointée par un lien n'est jamais écrasée.
 
 ## Prérequis
 
