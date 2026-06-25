@@ -99,7 +99,7 @@
          "type": "http",
          "url": "https://{instance}.fly.dev/api/mcp/mcp",
          "headers": {
-           "Authorization": "Bearer ${SOMCRAFT_API_KEY}",
+           "Authorization": "Bearer ${SOMCRAFT_MCP_API_KEY}",
            "Accept": "application/json, text/event-stream"
          }
        }

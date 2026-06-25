@@ -12,7 +12,7 @@
 # Pourquoi : Claude Code expanse ${VAR} dans les headers HTTP
 # (doc officielle). Coller la clé en clair dans un .mcp.json versionné
 # = fuite de secret (incident T-20260625-0012). Le bon pattern est
-# `Bearer ${SOMCRAFT_API_KEY}` + la valeur dans .env (gitignored),
+# `Bearer ${SOMCRAFT_MCP_API_KEY}` + la valeur dans .env (gitignored),
 # sourcé par claude-swt (T-20260625-0013).
 #
 # Ce qui n'est PAS visé : les `curl -H "Authorization: Bearer $VAR"`
@@ -32,14 +32,18 @@ ko() { echo "  ❌ $1"; echo x >> "$FAIL_FILE"; }
 
 echo "== Lint — clés Bearer en clair dans les snippets .mcp.json (.md) =="
 
-# Toutes les lignes JSON "Authorization": "Bearer ..." du pack,
-# hors node_modules et hors ce répertoire de tests.
-hits="$(grep -rIn --include='*.md' -E '"Authorization"[[:space:]]*:[[:space:]]*"Bearer ' "$ROOT" 2>/dev/null \
+# Toutes les lignes JSON "Authorization": "Bearer ..." du pack — snippets .md,
+# templates .tpl ET fichiers .mcp.json/.json réels (committés = risque max).
+# Hors node_modules et hors ce répertoire de tests.
+hits="$(grep -rIn --include='*.md' --include='*.tpl' --include='*.json' \
+  -E '"Authorization"[[:space:]]*:[[:space:]]*"Bearer ' "$ROOT" 2>/dev/null \
   | grep -v '/node_modules/' \
   | grep -v '/scripts/tests/' || true)"
 
-# Violation = la valeur après "Bearer " n'est PAS une référence ${...}
-violations="$(printf '%s\n' "$hits" | grep -vE '"Bearer \$\{[A-Z_][A-Z0-9_]*(:-[^}]*)?\}' | grep -E '"Authorization"' || true)"
+# Conforme = "Bearer ${VAR}" PUR (pas de défaut `:-…` qui pourrait masquer un
+# secret ni produire un Bearer vide → 401 silencieux). Tout le reste est une
+# violation (clé littérale sk_…, placeholder <from-1password>, $VAR non accolé).
+violations="$(printf '%s\n' "$hits" | grep -E '"Authorization"' | grep -vE '"Bearer \$\{[A-Z_][A-Z0-9_]*\}"' || true)"
 
 if [ -z "$violations" ]; then
   ok "aucun secret Bearer en clair dans les snippets .mcp.json"

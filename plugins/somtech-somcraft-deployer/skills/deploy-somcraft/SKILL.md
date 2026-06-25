@@ -423,17 +423,19 @@ Prochaines étapes :
        "somcraft-{client-slug}": {
          "type": "http",
          "url": "https://{app-url}/api/mcp/mcp",
-         "headers": { "Authorization": "Bearer ${SOMCRAFT_API_KEY}", "Accept": "application/json, text/event-stream" }
+         "headers": { "Authorization": "Bearer ${SOMCRAFT_MCP_API_KEY}", "Accept": "application/json, text/event-stream" }
        }
      }
 
      ⚠ NE JAMAIS coller la clé en clair dans .mcp.json (fichier versionné →
        fuite dans git, cf. incident T-20260625-0012). Mettre la valeur dans
-       .env (gitignored) :  SOMCRAFT_API_KEY=<from-1password>
-       Claude Code expanse ${SOMCRAFT_API_KEY} depuis l'environnement du
-       process — la variable doit y être présente. claude-swt source le .env
-       du repo automatiquement ; en `claude` direct, exporter la variable
-       (ou sourcer le .env) avant de lancer la session.
+       .env (gitignored) :  SOMCRAFT_MCP_API_KEY=<from-1password>
+       (même nom de variable que le secret Fly, cf. env-secrets.tpl)
+       Claude Code expanse ${SOMCRAFT_MCP_API_KEY} depuis l'environnement du
+       process et ne lit PAS le .env tout seul — la variable doit y être
+       présente. Avec claude-swt (T-20260625-0013), le .env du repo est sourcé
+       automatiquement ; en `claude` direct, exporter la variable ou sourcer
+       le .env avant de lancer la session.
 
   3. Tester l'instance en ouvrant https://{app-url} dans un navigateur
   4. Invoquer le skill 'somcraft-{client-slug}' pour toute opération future
