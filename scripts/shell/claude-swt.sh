@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.0.0
+# claude-swt.sh — v1.1.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
 #
 # Snippet shell VERSIONNÉ et distribué par somtech-pack. À SOURCER depuis le
@@ -42,7 +42,14 @@ claude-swt() {  # usage : claude-swt [session-timestamp] [path]
     git -C "$main" worktree add "$wt" -b "wt/$sess" origin/main || return 1
   fi
 
-  ( cd "$wt" && claude )                        # la session vit dans le worktree
+  ( cd "$wt"                                    # la session vit dans le worktree
+    # Secrets hors .mcp.json (T-20260625-0013) : Claude expanse ${VAR} depuis
+    # l'environnement du process, pas depuis un fichier. On source le .env du
+    # repo PRINCIPAL (jamais commité, donc absent du worktree) pour que les MCP
+    # référençant ${SOMCRAFT_API_KEY} & co fonctionnent. Source depuis $main →
+    # pas de duplication du secret sur disque dans le worktree.
+    if [ -f "$main/.env" ]; then set -a; . "$main/.env"; set +a; fi
+    claude )
 
   # --- au quit : retire seulement si rien en suspens (sinon garde pour reprise) ---
   git -C "$main" fetch origin -q
