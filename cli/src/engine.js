@@ -82,6 +82,22 @@ function copyPreservingMode(src, dest, dryRun) {
 }
 
 /**
+ * Sauvegarde `dest` vers `dest + .somtech.bak` AVANT de l'écraser (filet anti-perte).
+ * Best-effort, préserve le mode. Renvoie le chemin du backup, ou null si dryRun/échec.
+ */
+function backupFile(dest, dryRun) {
+  if (dryRun) return null;
+  const bak = `${dest}.somtech.bak`;
+  try {
+    copyFileSync(dest, bak);
+    try { chmodSync(bak, statSync(dest).mode & 0o777); } catch { /* best-effort */ }
+    return bak;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Applique les fichiers du payload vers `target`. Idempotent.
  * - fichier absent      → created (copié sauf dryRun)
  * - identique           → unchanged (no-op)
@@ -93,11 +109,14 @@ function copyPreservingMode(src, dest, dryRun) {
  * ABSENTS (starter), mais JAMAIS écrasés s'ils existent, même avec `force`
  * (ex. `.claude/settings.json` : permissions/plugins/hooks propres au projet).
  *
- * Renvoie { created, unchanged, updated, conflicts, rejected, preserved }.
+ * `backup` : si vrai, sauvegarde la cible vers `<dest>.somtech.bak` AVANT chaque
+ * écrasement `force` (filet anti-perte). Sans effet sur created/unchanged/preserved.
+ *
+ * Renvoie { created, unchanged, updated, conflicts, rejected, preserved, backedUp }.
  */
-export function applyFiles({ payloadRoot, target, files, force = false, dryRun = false, preserve = [] }) {
+export function applyFiles({ payloadRoot, target, files, force = false, dryRun = false, preserve = [], backup = false }) {
   const preserveSet = new Set(preserve);
-  const report = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [] };
+  const report = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [], backedUp: [] };
   for (const rel of files) {
     // Défense en profondeur : refuser tout chemin qui s'évade de la cible OU du payload.
     if (!within(target, rel) || !within(payloadRoot, rel)) {
@@ -114,6 +133,10 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
     } else if (filesEqual(src, dest)) {
       report.unchanged.push(rel);
     } else if (force) {
+      if (backup) {
+        const bak = backupFile(dest, dryRun);
+        if (bak) report.backedUp.push(rel);
+      }
       copyPreservingMode(src, dest, dryRun);
       report.updated.push(rel);
     } else {
