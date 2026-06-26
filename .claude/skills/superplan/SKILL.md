@@ -17,12 +17,16 @@ toute évolution du comportement se fait dans `plan-servicedesk`, l'alias en hé
 
 ## Action
 
-Invoquer **immédiatement** le skill `plan-servicedesk` via l'outil `Skill`, en lui transmettant `$ARGUMENTS`
-**tels quels** (sans rien retirer ni reformuler) :
+Déléguer **immédiatement** à `plan-servicedesk`, en lui transmettant `$ARGUMENTS` **tels quels** (sans rien retirer
+ni reformuler — le mot-clé `brainstorming`/`brain`, le code `D-…` et le texte libre éventuels passent à l'identique) :
 
-- `skill` = `plan-servicedesk`
-- `args` = le `$ARGUMENTS` reçu par `/superplan` (le mot-clé `brainstorming`/`brain`, le code `D-…` et le texte
-  libre éventuels passent à l'identique).
+1. **Voie normale — outil `Skill`** : invoquer `Skill` avec `skill = "plan-servicedesk"` et `args = $ARGUMENTS`.
+2. **Fallback** si `plan-servicedesk` n'est **pas** disponible via l'outil `Skill` (sa directive
+   `disable-model-invocation: true` peut le retirer du contexte appelable par le modèle — cf. doc Claude Code) :
+   localiser puis **`Read`** son `SKILL.md` — d'abord `.claude/skills/plan-servicedesk/SKILL.md` (installation
+   projet), sinon `~/.claude/skills/plan-servicedesk/SKILL.md` (installation globale) — et **exécuter ces
+   instructions** avec `$ARGUMENTS`. Ce fallback existe uniquement parce que la voie normale est verrouillée ; il ne
+   **duplique** aucune logique (la source reste l'unique `plan-servicedesk/SKILL.md`).
 
-Ne pose **aucune** question avant cette invocation : `plan-servicedesk` gère lui-même son dialogue, ses confirmations
-et ses pré-requis. Réponds toujours en **français**.
+Ne pose **aucune** question avant de déléguer : `plan-servicedesk` gère lui-même son dialogue, ses confirmations et
+ses pré-requis. Réponds toujours en **français**.
