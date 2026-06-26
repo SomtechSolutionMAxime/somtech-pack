@@ -54,7 +54,7 @@ Configuration MCP client :
       "type": "http",
       "url": "{{PROD_URL}}/api/mcp/mcp",
       "headers": {
-        "Authorization": "Bearer <from-1password>",
+        "Authorization": "Bearer ${SOMCRAFT_MCP_API_KEY}",
         "Accept": "application/json, text/event-stream"
       }
     }

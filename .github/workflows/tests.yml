@@ -1,0 +1,33 @@
+name: tests
+
+# Exécute la suite de tests shell du pack (scripts/tests/*.sh) sur chaque PR
+# et push vers main. Comble le gap relevé en code review (T-20260625-0013 /
+# -0014) : les lints de garde (secrets en clair, installateur claude-swt) ne
+# tournaient nulle part → garde-fous inertes.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  shell-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Exécuter scripts/tests/*.sh
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          tests=(scripts/tests/*.sh)
+          if [ ${#tests[@]} -eq 0 ]; then
+            echo "Aucun test shell trouvé sous scripts/tests/"; exit 1
+          fi
+          for t in "${tests[@]}"; do
+            echo "::group::$t"
+            if bash "$t"; then echo "✓ $t"; else echo "✗ $t"; fail=1; fi
+            echo "::endgroup::"
+          done
+          exit "$fail"
