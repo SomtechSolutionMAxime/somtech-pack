@@ -2,12 +2,12 @@
 name: plan-servicedesk
 description: |
   Pont entre le brainstorm/planification superpowers et la documentation ServiceDesk Somtech.
-  Définit le besoin (brainstorming superpowers), crée la Demande, lance le workflow
+  Définit le besoin (brainstorming OU systematic-debugging superpowers), crée la Demande, lance le workflow
   analyse-decoupage-demande (validation BRD + découpage Epic/Story G/W/T tracé aux EF), puis
   crée la hiérarchie dans ServiceDesk après validation.
-  TRIGGERS : plan-servicedesk, planifier vers servicedesk, documenter le besoin, brainstorm vers servicedesk, décomposer un besoin, créer la demande et les epics
+  TRIGGERS : plan-servicedesk, planifier vers servicedesk, documenter le besoin, brainstorm vers servicedesk, debug vers servicedesk, décomposer un besoin, créer la demande et les epics
 disable-model-invocation: true
-argument-hint: "[brainstorming|brain] [<besoin libre> | D-AAAAMMJJ-NNNN]"
+argument-hint: "[brainstorming|brain | debug] [<besoin libre> | D-AAAAMMJJ-NNNN]"
 ---
 
 <!-- Pas de `allowed-tools` volontairement : comme les autres skills MCP du pack (merge, pousse-staging,
@@ -25,24 +25,30 @@ le skill de brainstorming de **superpowers** et le workflow Somtech **`analyse-d
 les deux seuls maillons qu' aucun des deux ne couvre : **créer la Demande** (le workflow en a besoin en entrée) et
 **créer la hiérarchie Epic/Story** une fois la proposition validée (le workflow est en lecture seule).
 
-> **Pourquoi un pont et pas un fork** : `brainstorming` vient du plugin externe `superpowers` (mis à jour
-> indépendamment) ; `analyse-decoupage-demande` est un **Workflow** Somtech (`~/.claude/workflows/analyse-decoupage-demande.js`).
-> On les **compose**, on ne les copie pas → ce skill survit à leurs évolutions.
+> **Pourquoi un pont et pas un fork** : `brainstorming` et `systematic-debugging` viennent du plugin externe
+> `superpowers` (mis à jour indépendamment) ; `analyse-decoupage-demande` est un **Workflow** Somtech
+> (`~/.claude/workflows/analyse-decoupage-demande.js`). On les **compose**, on ne les copie pas → ce skill
+> survit à leurs évolutions.
 
 ## Chaîne complète
 
 ```
-/plan-servicedesk [brainstorming|brain] [<besoin> | D-xxxx]
+/plan-servicedesk [brainstorming|brain | debug] [<besoin> | D-xxxx]
    │
-   ├─ A. Besoin    — (param `brainstorming`/`brain`) Skill superpowers:brainstorming → besoin/spec clair
+   ├─ A. Besoin    — param `brainstorming`/`brain` → superpowers:brainstorming  (cadrer un besoin)
+   │                 OU param `debug` → superpowers:systematic-debugging  (comprendre un bug) → besoin/spec clair
    ├─ B. Demande   — créer (ou METTRE À JOUR si D-xxxx passé) la Demande   ← ÉCRITURE (confirmée)
    ├─ C. Découpage — Workflow analyse-decoupage-demande <D-xxxx>          ← LECTURE SEULE (valide BRD + propose)
    └─ D. Hiérarchie— après validation, créer Epics + Stories G/W/T        ← ÉCRITURE (confirmée)
 ```
 
-> **`brainstorming`/`brain` et `D-xxxx` sont indépendants.** Une Demande passée veut dire « ne recrée pas, pars
-> de celle-ci » (Phase B = *mise à jour*) — **pas** « saute le brainstorm ». Si tu passes les deux
-> (`/plan-servicedesk brain D-xxxx`), on brainstorme **en amorçant sur le contenu de la Demande**, puis on la met à jour.
+> **Le mode de cadrage (`brainstorming`/`brain` _ou_ `debug`) et `D-xxxx` sont indépendants.** Une Demande passée
+> veut dire « ne recrée pas, pars de celle-ci » (Phase B = *mise à jour*) — **pas** « saute la Phase A ». Si tu
+> passes un mode + une Demande (`/plan-servicedesk brain D-xxxx` ou `debug D-xxxx`), on lance la Phase A **en
+> amorçant sur le contenu de la Demande**, puis on la met à jour.
+>
+> **`brainstorming`/`brain` et `debug` sont mutuellement exclusifs** : on cadre un besoin **ou** on débogue un
+> dysfonctionnement, pas les deux. Si les deux sont passés → **stopper et demander de choisir** (ne pas en deviner un).
 
 ## Quand l'utiliser / quand ne pas l'utiliser
 
@@ -50,29 +56,35 @@ les deux seuls maillons qu' aucun des deux ne couvre : **créer la Demande** (le
 - ✅ Besoin déjà clair en tête → sauter le brainstorm (`/plan-servicedesk <besoin>` sans `brainstorming`/`brain`).
 - ✅ Demande déjà créée, contenu suffisant → repartir d'elle (`/plan-servicedesk D-AAAAMMJJ-NNNN`) : on saute A et B, direct au découpage.
 - ✅ Demande déjà créée **mais à challenger/affiner** → `/plan-servicedesk brain D-AAAAMMJJ-NNNN` : brainstorm **amorcé sur le contenu de la Demande**, puis **mise à jour** de la Demande avec le besoin affiné.
-- ❌ Simple bug isolé → créer directement un ticket `incident` (cf. STD-030), pas besoin de tout l'appareil.
+- ✅ Le besoin part d'un **dysfonctionnement à comprendre** (pas juste une idée) → `/plan-servicedesk debug <symptôme>` : `superpowers:systematic-debugging` établit la **cause racine**, qui devient le besoin tracé (Demande → découpage). Combinable avec `D-xxxx` (debug amorcé sur la Demande, puis mise à jour).
+- ❌ Simple bug isolé **avec fix évident** → créer directement un ticket `incident` (cf. STD-030), pas besoin de tout l'appareil (ni de `debug`). Le mode `debug` sert quand la **cause est incomprise** *et* que le résultat mérite d'être planifié (Demande → découpage).
 - ❌ Écrire le plan d'implémentation technique détaillé → c'est `superpowers:writing-plans` (orthogonal ; voir §6).
 
 ## Pré-requis (vérifier, sinon stopper et le signaler)
 
 1. **MCP ServiceDesk** chargé (`mcp__servicedesk__*`). Sinon : signaler, stopper.
-2. **Plugin superpowers** présent (si le param `brainstorming`/`brain` est demandé) — sinon proposer de continuer sans (besoin fourni en texte, ou contenu de la Demande si `D-xxxx`). **Cas `brain D-xxxx` sans superpowers** : ne **pas** retomber silencieusement en « `D-xxxx` sans brainstorm » (qui sauterait la mise à jour) — l'intention reste d'affiner la Demande. Proposer explicitement : (a) éditer le `title`/`description` à la main via la Phase B.2 (update), ou (b) poursuivre en lecture seule sans toucher la Demande. Laisser l'utilisateur choisir.
+2. **Plugin superpowers** présent (si un mode `brainstorming`/`brain` **ou** `debug` est demandé) — sinon proposer de continuer sans (besoin fourni en texte, ou contenu de la Demande si `D-xxxx`). **Cas `brain D-xxxx` / `debug D-xxxx` sans superpowers** : ne **pas** retomber silencieusement en « `D-xxxx` sans Phase A » (qui sauterait la mise à jour) — l'intention reste d'affiner la Demande. Proposer explicitement : (a) éditer le `title`/`description` à la main via la Phase B.2 (update), ou (b) poursuivre en lecture seule sans toucher la Demande. Laisser l'utilisateur choisir.
 3. **App cible connue** dans ServiceDesk (`mcp__servicedesk__applications` action `list`). Ne **jamais** inventer un `application_id`.
 4. Idéalement un **BRD** pour l'app/module (le workflow le valide). App sans BRD → la traçabilité EF est N/A (règle d'or n°10), le signaler.
 
 ## Parsing des arguments
 
-Les deux signaux sont **orthogonaux** — les détecter séparément, ne pas laisser l'un annuler l'autre :
+Les signaux sont **orthogonaux** — les détecter séparément, ne pas laisser l'un annuler l'autre :
 
-- **`brainstorming` _ou_ `brain`** (n'importe où dans `$ARGUMENTS`) **active la Phase A**. `brain` est un simple
-  alias de `brainstorming` — même comportement.
+- **Mode de cadrage (Phase A)** — deux variantes **mutuellement exclusives** :
+  - **`brainstorming` _ou_ `brain`** (n'importe où dans `$ARGUMENTS`) → Phase A via `superpowers:brainstorming`
+    (cadrer un besoin). `brain` est un alias de `brainstorming` — même comportement.
+  - **`debug`** (n'importe où dans `$ARGUMENTS`) → Phase A via `superpowers:systematic-debugging` (comprendre un
+    dysfonctionnement et en établir la cause racine).
+  - **Si `debug` ET `brainstorming`/`brain` sont présents → STOP** : signaler l'incompatibilité et demander à
+    l'utilisateur lequel garder. **Ne pas en choisir un arbitrairement.**
 - **Un token `D-AAAAMMJJ-NNNN`** → **Demande existante**. Ça signifie « ne recrée pas la Demande » : la **Phase B
-  devient une mise à jour** (et non une création). Ça **n'annule jamais la Phase A** — c'est le mot-clé brainstorm
-  (ou son absence) qui décide de la Phase A.
-- **Le reste de `$ARGUMENTS`** (texte libre) = **énoncé initial du besoin** (amorce du brainstorm, ou base directe
-  de la Demande si pas de brainstorm). Si un `D-xxxx` est passé, l'**amorce du besoin = le contenu de la Demande**
+  devient une mise à jour** (et non une création). Ça **n'annule jamais la Phase A** — c'est le mode (ou son
+  absence) qui décide de la Phase A.
+- **Le reste de `$ARGUMENTS`** (texte libre) = **énoncé initial du besoin** (amorce de la Phase A, ou base directe
+  de la Demande si pas de mode). Si un `D-xxxx` est passé, l'**amorce du besoin = le contenu de la Demande**
   (lu en Phase A/B) ; le texte libre éventuel s'ajoute comme précision.
-- `$ARGUMENTS` vide et ni `brainstorming`/`brain` ni `D-xxxx` → demander l'énoncé du besoin avant de continuer.
+- `$ARGUMENTS` vide et ni mode de cadrage (`brainstorming`/`brain`/`debug`) ni `D-xxxx` → demander l'énoncé du besoin avant de continuer.
 
 > **Résoudre le code `D-xxxx` → UUID (requis dès qu'on appelle `get`/`update`).** Les actions `get` et `update` de
 > `mcp__servicedesk__demands` exigent l'**`id` UUID**, et `list` **ne filtre pas par code**. Étape obligatoire avant
@@ -83,37 +95,52 @@ Les deux signaux sont **orthogonaux** — les détecter séparément, ne pas lai
 
 ### Matrice de comportement
 
-| Invocation | Phase A (brainstorm) | Phase B (Demande) |
+| Invocation | Phase A (brainstorm / debug) | Phase B (Demande) |
 |---|---|---|
 | _(vide)_ | sautée | demander l'énoncé d'abord, puis **create** |
 | `<besoin>` | sautée | **create** |
-| `brain <besoin>` (ou `brainstorming`) | sur le **texte libre** | create |
+| `brain <besoin>` (ou `brainstorming`) | brainstorming sur le **texte libre** | create |
+| `debug <symptôme>` | systematic-debugging sur le **texte libre** | create |
 | `D-xxxx` | sautée | sautée (existe, contenu suffisant) → direct Phase C |
-| **`brain D-xxxx`** | sur le **contenu de la Demande** | **update** |
+| **`brain D-xxxx`** | brainstorming sur le **contenu de la Demande** | **update** |
+| **`debug D-xxxx`** | systematic-debugging sur le **contenu de la Demande** | **update** |
+| `brain` + `debug` | **STOP** — modes exclusifs, demander de choisir | — |
 
 ---
 
-## Phase A — Définir le besoin (conditionnelle : param `brainstorming`/`brain`)
+## Phase A — Définir le besoin (conditionnelle : mode `brainstorming`/`brain` _ou_ `debug`)
 
-Si `brainstorming` ou `brain` est demandé :
+Si un mode de cadrage est demandé (`brainstorming`/`brain` **ou** `debug` — **jamais les deux**, cf. parsing) :
 
-1. **Déterminer l'amorce du brainstorm** :
+1. **Déterminer l'amorce de la Phase A** :
    - **Avec un `D-xxxx`** : lire la Demande (`mcp__servicedesk__demands` action `get`, `id` = l'UUID résolu depuis
      le code) et utiliser son **titre + description** comme amorce. Le texte libre éventuel de `$ARGUMENTS` s'ajoute
      comme précision. *(Si la Demande est en statut terminal `delivered`/`declined`, le signaler : on pourra
      brainstormer mais pas la mettre à jour — voir Phase B.)*
    - **Sans `D-xxxx`** : l'amorce = le texte libre de `$ARGUMENTS`.
-2. **Invoquer le skill superpowers** via l'outil `Skill` : `superpowers:brainstorming`, en lui transmettant cette amorce.
-3. Laisser le dialogue de brainstorming se dérouler **jusqu'à son approbation** (le skill superpowers présente un
-   design et obtient le GO de l'utilisateur). **Ne pas court-circuiter** ce gate.
+2. **Invoquer le skill superpowers** via l'outil `Skill`, en lui transmettant cette amorce :
+   - mode `brainstorming`/`brain` → `superpowers:brainstorming` (explorer le besoin / la solution) ;
+   - mode `debug` → `superpowers:systematic-debugging` (reproduire, isoler, établir la cause racine du dysfonctionnement).
+3. Laisser le skill superpowers se dérouler **jusqu'à son terme** (brainstorming : design approuvé par l'utilisateur ;
+   systematic-debugging : cause racine établie et confirmée). **Ne pas court-circuiter** ce gate.
 4. À la sortie, on dispose d'un **besoin affiné** : problème, résultat attendu (outcome), périmètre, hors-scope.
+   En mode `debug`, le **problème = la cause racine établie** et l'**outcome = le comportement correct attendu**
+   (le « fix » au niveau besoin — pas le plan d'implémentation, qui relève de `writing-plans`, par story).
 
-Si `brainstorming`/`brain` n'est **pas** demandé : le besoin est l'énoncé fourni en argument (ou, si un `D-xxxx` est
-passé sans brainstorm, le contenu existant de la Demande tel quel ; ou demandé à l'utilisateur si rien).
+> **Mode `debug` — deux garde-fous pratiques** :
+> - **Repro requise** : `systematic-debugging` a besoin de **reproduire/investiguer dans un vrai repo**. Si la repro
+>   n'est **pas possible** dans le contexte courant (pas d'accès au code/env), le mode ne peut pas conclure →
+>   **retomber sur `brainstorming`** (cadrer le besoin de fix) **ou** créer un **`incident` direct** (STD-030).
+> - **Pas de court-circuit** : une fois la cause racine établie, `debug` suit le **flux complet**, identique à
+>   `brainstorming` — Demande (Phase B) → **découpage `analyse-decoupage-demande` (Phase C, tracé au BRD)** →
+>   Epic/Story (Phase D). Il ne **shortcut jamais** l'analyse ni n'aiguille vers un incident une fois engagé.
+
+Si **aucun mode** (`brainstorming`/`brain`/`debug`) n'est demandé : le besoin est l'énoncé fourni en argument (ou,
+si un `D-xxxx` est passé sans mode, le contenu existant de la Demande tel quel ; ou demandé à l'utilisateur si rien).
 On considère le besoin « défini » dès qu'on peut en écrire un titre + une description claire. **Attention** : sans
-brainstorming il n'y a **aucun gate de design** — la qualité du « pourquoi/quoi » repose entièrement sur l'énoncé
-de l'utilisateur. Si l'énoncé est vague ou ambigu, **proposer d'activer `brainstorming`** plutôt que de créer une
-Demande bancale.
+Phase A il n'y a **aucun gate de design** — la qualité du « pourquoi/quoi » repose entièrement sur l'énoncé de
+l'utilisateur. Si l'énoncé est vague, **proposer `brainstorming`** ; s'il décrit un dysfonctionnement mal compris,
+**proposer `debug`** — plutôt que de créer une Demande bancale.
 
 > Le **plan d'implémentation technique** (`superpowers:writing-plans`) n'est **pas** dans cette chaîne : il se
 > rédige plus tard, par story, au moment d'exécuter (voir la section « Articulation » plus bas). Ici on s'arrête au
@@ -125,8 +152,8 @@ Le workflow de découpage prend une **Demande** (`D-…`) en entrée. Trois cas 
 
 ### B.0 — Aiguillage
 - **Pas de `D-xxxx`** → **créer** la Demande (B.1) à partir du besoin défini.
-- **`D-xxxx` + brainstorm** → **mettre à jour** la Demande existante avec le besoin affiné par la Phase A (B.2).
-- **`D-xxxx` sans brainstorm** → **ne rien écrire** : on garde la Demande telle quelle, on passe direct en Phase C.
+- **`D-xxxx` + mode Phase A (brainstorm _ou_ debug)** → **mettre à jour** la Demande existante avec le besoin affiné par la Phase A (B.2).
+- **`D-xxxx` sans mode** → **ne rien écrire** : on garde la Demande telle quelle, on passe direct en Phase C.
 
 ### B.1 — Créer (cas sans `D-xxxx`)
 1. **Résoudre l'app** (et le module si pertinent) : `mcp__servicedesk__applications` action `list` → `application_id`
@@ -142,9 +169,9 @@ Le workflow de découpage prend une **Demande** (`D-…`) en entrée. Trois cas 
 3. Après confirmation : créer la Demande. Elle naît en statut **`received`** (forcé par le serveur). Récupérer
    le **code `D-AAAAMMJJ-NNNN`** retourné.
 
-### B.2 — Mettre à jour (cas `D-xxxx` + brainstorm)
-1. La Demande a déjà été lue en Phase A (`get`). **Proposer le nouveau `title`/`description`** (besoin affiné par le
-   brainstorm), en **diff lisible** vs l'existant, et **attendre le GO**.
+### B.2 — Mettre à jour (cas `D-xxxx` + mode Phase A)
+1. La Demande a déjà été lue en Phase A (`get`). **Proposer le nouveau `title`/`description`** (besoin affiné par la
+   Phase A — brainstorm ou cause racine du debug), en **diff lisible** vs l'existant, et **attendre le GO**.
 2. Après confirmation : `mcp__servicedesk__demands` action `update` avec `id` (UUID) + `title?`/`description?`
    (au moins un). On **ne touche pas** au statut ni à `source` (immuables ici).
 3. ⚠️ **Statut terminal** : `update` est **refusé** si la Demande est `delivered`/`declined`. Si c'est le cas, **ne
@@ -210,8 +237,8 @@ planification. Garder les deux séparés évite de figer des détails techniques
 
 ## Règles critiques
 
-1. **Composer, jamais forker** : invoquer `superpowers:brainstorming` (Skill) et `analyse-decoupage-demande`
-   (Workflow) tels quels. Ne pas réimplémenter leur logique ici.
+1. **Composer, jamais forker** : invoquer `superpowers:brainstorming` / `superpowers:systematic-debugging` (Skill)
+   et `analyse-decoupage-demande` (Workflow) tels quels. Ne pas réimplémenter leur logique ici.
 2. **Aucune écriture ServiceDesk sans GO** : Phases B et D demandent une confirmation explicite. Le workflow
    (Phase C) est en lecture seule par construction.
 3. **Traçabilité BRD obligatoire** : toute story cite une **EF du BRD au bon grain** (STD-033). EF absente →
@@ -223,7 +250,10 @@ planification. Garder les deux séparés évite de figer des détails techniques
 7. **Attention aux enums `source`** : `demands.source` ∈ `{client, admin}` mais `epics.source` ∈ `{human, agent}`
    — ne pas réutiliser la valeur de la demande pour l'epic. `created_by_label` est requis aux deux niveaux.
 8. **Ne jamais inventer un `application_id`** — toujours le résoudre via `mcp__servicedesk__applications`.
-9. **Un bug isolé ≠ cette chaîne** : créer un `incident` direct (STD-030).
+9. **Un bug isolé ≠ cette chaîne** : créer un `incident` direct (STD-030). Le mode `debug` ne s'utilise que si la
+   **cause est incomprise** *et* que le résultat mérite d'être planifié (Demande → découpage).
+10. **Modes de Phase A exclusifs** : `brainstorming`/`brain` et `debug` ne se combinent pas — si les deux sont
+    passés, **stopper et demander de choisir** (ne pas en deviner un).
 
 ## Cadre opposable
 
@@ -231,4 +261,4 @@ planification. Garder les deux séparés évite de figer des détails techniques
 - **STD-033** — gestion des BRD (traçabilité EF, résolution de grain app/module §2.8 / §2.11).
 - **ADR-031** — 1 produit = 1 app portail, sous-domaines = modules, 1 BRD par module.
 - Workflow réutilisé : `~/.claude/workflows/analyse-decoupage-demande.js` (lecture seule, propose le découpage).
-- Skill réutilisé : `superpowers:brainstorming` (plugin externe claude-plugins-official).
+- Skills réutilisés : `superpowers:brainstorming` et `superpowers:systematic-debugging` (plugin externe claude-plugins-official).
