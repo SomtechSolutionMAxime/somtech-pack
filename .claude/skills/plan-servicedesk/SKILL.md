@@ -127,6 +127,14 @@ Si un mode de cadrage est demandé (`brainstorming`/`brain` **ou** `debug` — *
    En mode `debug`, le **problème = la cause racine établie** et l'**outcome = le comportement correct attendu**
    (le « fix » au niveau besoin — pas le plan d'implémentation, qui relève de `writing-plans`, par story).
 
+> **Mode `debug` — deux garde-fous pratiques** :
+> - **Repro requise** : `systematic-debugging` a besoin de **reproduire/investiguer dans un vrai repo**. Si la repro
+>   n'est **pas possible** dans le contexte courant (pas d'accès au code/env), le mode ne peut pas conclure →
+>   **retomber sur `brainstorming`** (cadrer le besoin de fix) **ou** créer un **`incident` direct** (STD-030).
+> - **Pas de court-circuit** : une fois la cause racine établie, `debug` suit le **flux complet**, identique à
+>   `brainstorming` — Demande (Phase B) → **découpage `analyse-decoupage-demande` (Phase C, tracé au BRD)** →
+>   Epic/Story (Phase D). Il ne **shortcut jamais** l'analyse ni n'aiguille vers un incident une fois engagé.
+
 Si **aucun mode** (`brainstorming`/`brain`/`debug`) n'est demandé : le besoin est l'énoncé fourni en argument (ou,
 si un `D-xxxx` est passé sans mode, le contenu existant de la Demande tel quel ; ou demandé à l'utilisateur si rien).
 On considère le besoin « défini » dès qu'on peut en écrire un titre + une description claire. **Attention** : sans

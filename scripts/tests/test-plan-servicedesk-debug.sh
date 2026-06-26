@@ -31,8 +31,10 @@ if [ -f "$SKILL" ]; then
   grep -q 'superpowers:systematic-debugging' "$SKILL" \
     && ok "invoque superpowers:systematic-debugging" || ko "systematic-debugging jamais invoqué (param non câblé)"
 
-  grep -qiE 'mutuellement exclusif' "$SKILL" && grep -q 'STOP' "$SKILL" \
-    && ok "exclusivité brainstorming/debug documentée (+ STOP)" || ko "exclusivité brainstorming/debug non documentée"
+  # STOP doit être ANCRÉ à l'exclusivité (la matrice porte « brain + debug → STOP »).
+  # Un grep STOP non scopé serait un faux négatif : STOP existe déjà ailleurs (gate Phase D).
+  grep -qiE 'mutuellement exclusif' "$SKILL" && grep -qE 'brain.*\+.*debug.*STOP' "$SKILL" \
+    && ok "exclusivité brainstorming/debug documentée + STOP ancré à la matrice" || ko "exclusivité brainstorming/debug non documentée (ou STOP non ancré)"
 
   grep -qE '\bdebug D-xxxx\b' "$SKILL" \
     && ok "matrice de comportement couvre 'debug D-xxxx'" || ko "matrice ne couvre pas 'debug D-xxxx'"
