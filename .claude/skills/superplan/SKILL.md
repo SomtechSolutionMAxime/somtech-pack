@@ -17,16 +17,20 @@ toute évolution du comportement se fait dans `plan-servicedesk`, l'alias en hé
 
 ## Action
 
-Déléguer **immédiatement** à `plan-servicedesk`, en lui transmettant `$ARGUMENTS` **tels quels** (sans rien retirer
-ni reformuler — le mot-clé `brainstorming`/`brain`, le code `D-…` et le texte libre éventuels passent à l'identique) :
+Déléguer **immédiatement** à `plan-servicedesk` en **lisant puis exécutant** sa source, avec `$ARGUMENTS` **tels
+quels** (sans rien retirer ni reformuler — le mot-clé `brainstorming`/`brain`, le code `D-…` et le texte libre
+éventuels passent à l'identique) :
 
-1. **Voie normale — outil `Skill`** : invoquer `Skill` avec `skill = "plan-servicedesk"` et `args = $ARGUMENTS`.
-2. **Fallback** si `plan-servicedesk` n'est **pas** disponible via l'outil `Skill` (sa directive
-   `disable-model-invocation: true` peut le retirer du contexte appelable par le modèle — cf. doc Claude Code) :
-   localiser puis **`Read`** son `SKILL.md` — d'abord `.claude/skills/plan-servicedesk/SKILL.md` (installation
-   projet), sinon `~/.claude/skills/plan-servicedesk/SKILL.md` (installation globale) — et **exécuter ces
-   instructions** avec `$ARGUMENTS`. Ce fallback existe uniquement parce que la voie normale est verrouillée ; il ne
-   **duplique** aucune logique (la source reste l'unique `plan-servicedesk/SKILL.md`).
+1. **`Read`** le `SKILL.md` de `plan-servicedesk`, en essayant dans l'ordre :
+   - `.claude/skills/plan-servicedesk/SKILL.md` (installation projet)
+   - `~/.claude/skills/plan-servicedesk/SKILL.md` (installation globale)
+2. **Exécuter ces instructions** en traitant le `$ARGUMENTS` reçu par `/superplan` comme le `$ARGUMENTS` de
+   `plan-servicedesk`.
+
+> **Ne PAS passer par l'outil `Skill`.** `plan-servicedesk` porte `disable-model-invocation: true` (volontaire — c'est
+> un workflow lourd à écritures ServiceDesk qu'on ne veut pas voir auto-déclenché). Ce flag **interdit aussi son
+> appel via l'outil `Skill`** (« cannot be used with Skill tool due to disable-model-invocation »). La délégation se
+> fait donc par **lecture directe de la source** — qui reste l'**unique** `plan-servicedesk/SKILL.md` (zéro duplication).
 
 Ne pose **aucune** question avant de déléguer : `plan-servicedesk` gère lui-même son dialogue, ses confirmations et
 ses pré-requis. Réponds toujours en **français**.
