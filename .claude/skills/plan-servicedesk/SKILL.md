@@ -56,7 +56,7 @@ les deux seuls maillons qu' aucun des deux ne couvre : **créer la Demande** (le
 ## Pré-requis (vérifier, sinon stopper et le signaler)
 
 1. **MCP ServiceDesk** chargé (`mcp__servicedesk__*`). Sinon : signaler, stopper.
-2. **Plugin superpowers** présent (si le param `brainstorming`/`brain` est demandé) — sinon proposer de continuer sans (besoin fourni en texte, ou contenu de la Demande si `D-xxxx`).
+2. **Plugin superpowers** présent (si le param `brainstorming`/`brain` est demandé) — sinon proposer de continuer sans (besoin fourni en texte, ou contenu de la Demande si `D-xxxx`). **Cas `brain D-xxxx` sans superpowers** : ne **pas** retomber silencieusement en « `D-xxxx` sans brainstorm » (qui sauterait la mise à jour) — l'intention reste d'affiner la Demande. Proposer explicitement : (a) éditer le `title`/`description` à la main via la Phase B.2 (update), ou (b) poursuivre en lecture seule sans toucher la Demande. Laisser l'utilisateur choisir.
 3. **App cible connue** dans ServiceDesk (`mcp__servicedesk__applications` action `list`). Ne **jamais** inventer un `application_id`.
 4. Idéalement un **BRD** pour l'app/module (le workflow le valide). App sans BRD → la traçabilité EF est N/A (règle d'or n°10), le signaler.
 
@@ -74,10 +74,18 @@ Les deux signaux sont **orthogonaux** — les détecter séparément, ne pas lai
   (lu en Phase A/B) ; le texte libre éventuel s'ajoute comme précision.
 - `$ARGUMENTS` vide et ni `brainstorming`/`brain` ni `D-xxxx` → demander l'énoncé du besoin avant de continuer.
 
+> **Résoudre le code `D-xxxx` → UUID (requis dès qu'on appelle `get`/`update`).** Les actions `get` et `update` de
+> `mcp__servicedesk__demands` exigent l'**`id` UUID**, et `list` **ne filtre pas par code**. Étape obligatoire avant
+> tout `get`/`update` : `mcp__servicedesk__demands` action `list` (filtrer sur `application_id` si l'app est connue,
+> sinon paginer `limit`/`offset`), **matcher le `code` `D-AAAAMMJJ-NNNN`** dans les résultats → en extraire l'`id`.
+> **Ne jamais passer le code à `get`/`update`**, et **ne pas inventer d'action « get by code »**. (La Phase C, elle,
+> passe le **code** directement au Workflow, qui le résout en interne — pas de résolution nécessaire là.)
+
 ### Matrice de comportement
 
 | Invocation | Phase A (brainstorm) | Phase B (Demande) |
 |---|---|---|
+| _(vide)_ | sautée | demander l'énoncé d'abord, puis **create** |
 | `<besoin>` | sautée | **create** |
 | `brain <besoin>` (ou `brainstorming`) | sur le **texte libre** | create |
 | `D-xxxx` | sautée | sautée (existe, contenu suffisant) → direct Phase C |
