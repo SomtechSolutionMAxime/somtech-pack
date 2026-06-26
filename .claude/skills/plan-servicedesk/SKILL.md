@@ -7,7 +7,7 @@ description: |
   crée la hiérarchie dans ServiceDesk après validation.
   TRIGGERS : plan-servicedesk, planifier vers servicedesk, documenter le besoin, brainstorm vers servicedesk, décomposer un besoin, créer la demande et les epics
 disable-model-invocation: true
-argument-hint: "[brainstorming] [<besoin libre> | D-AAAAMMJJ-NNNN]"
+argument-hint: "[brainstorming|brain] [<besoin libre> | D-AAAAMMJJ-NNNN]"
 ---
 
 <!-- Pas de `allowed-tools` volontairement : comme les autres skills MCP du pack (merge, pousse-staging,
@@ -32,49 +32,76 @@ les deux seuls maillons qu' aucun des deux ne couvre : **créer la Demande** (le
 ## Chaîne complète
 
 ```
-/plan-servicedesk [brainstorming] [<besoin> | D-xxxx]
+/plan-servicedesk [brainstorming|brain] [<besoin> | D-xxxx]
    │
-   ├─ A. Besoin    — (param `brainstorming`) Skill superpowers:brainstorming → besoin/spec clair
-   ├─ B. Demande   — créer la Demande D-xxxx dans ServiceDesk            ← ÉCRITURE (confirmée)
+   ├─ A. Besoin    — (param `brainstorming`/`brain`) Skill superpowers:brainstorming → besoin/spec clair
+   ├─ B. Demande   — créer (ou METTRE À JOUR si D-xxxx passé) la Demande   ← ÉCRITURE (confirmée)
    ├─ C. Découpage — Workflow analyse-decoupage-demande <D-xxxx>          ← LECTURE SEULE (valide BRD + propose)
    └─ D. Hiérarchie— après validation, créer Epics + Stories G/W/T        ← ÉCRITURE (confirmée)
 ```
 
+> **`brainstorming`/`brain` et `D-xxxx` sont indépendants.** Une Demande passée veut dire « ne recrée pas, pars
+> de celle-ci » (Phase B = *mise à jour*) — **pas** « saute le brainstorm ». Si tu passes les deux
+> (`/plan-servicedesk brain D-xxxx`), on brainstorme **en amorçant sur le contenu de la Demande**, puis on la met à jour.
+
 ## Quand l'utiliser / quand ne pas l'utiliser
 
 - ✅ Nouveau besoin client/produit à transformer en travail tracé (Demande → Epic → Story G/W/T tracées au BRD).
-- ✅ Besoin déjà clair en tête → sauter le brainstorm (`/plan-servicedesk <besoin>` sans `brainstorming`).
-- ✅ Demande déjà créée → repartir d'elle (`/plan-servicedesk D-AAAAMMJJ-NNNN`) : on saute A et B.
+- ✅ Besoin déjà clair en tête → sauter le brainstorm (`/plan-servicedesk <besoin>` sans `brainstorming`/`brain`).
+- ✅ Demande déjà créée, contenu suffisant → repartir d'elle (`/plan-servicedesk D-AAAAMMJJ-NNNN`) : on saute A et B, direct au découpage.
+- ✅ Demande déjà créée **mais à challenger/affiner** → `/plan-servicedesk brain D-AAAAMMJJ-NNNN` : brainstorm **amorcé sur le contenu de la Demande**, puis **mise à jour** de la Demande avec le besoin affiné.
 - ❌ Simple bug isolé → créer directement un ticket `incident` (cf. STD-030), pas besoin de tout l'appareil.
 - ❌ Écrire le plan d'implémentation technique détaillé → c'est `superpowers:writing-plans` (orthogonal ; voir §6).
 
 ## Pré-requis (vérifier, sinon stopper et le signaler)
 
 1. **MCP ServiceDesk** chargé (`mcp__servicedesk__*`). Sinon : signaler, stopper.
-2. **Plugin superpowers** présent (si le param `brainstorming` est demandé) — sinon proposer de continuer sans (besoin fourni en texte).
+2. **Plugin superpowers** présent (si le param `brainstorming`/`brain` est demandé) — sinon proposer de continuer sans (besoin fourni en texte, ou contenu de la Demande si `D-xxxx`).
 3. **App cible connue** dans ServiceDesk (`mcp__servicedesk__applications` action `list`). Ne **jamais** inventer un `application_id`.
 4. Idéalement un **BRD** pour l'app/module (le workflow le valide). App sans BRD → la traçabilité EF est N/A (règle d'or n°10), le signaler.
 
 ## Parsing des arguments
 
-- Le mot-clé `brainstorming` (n'importe où dans `$ARGUMENTS`) **active la Phase A**.
-- Un token de la forme `D-AAAAMMJJ-NNNN` → **Demande existante** : sauter A + B, aller directement en Phase C avec ce code.
-- Le reste de `$ARGUMENTS` (texte libre) = **énoncé initial du besoin** (sert d'amorce au brainstorm, ou de base directe à la Demande si pas de brainstorm).
-- `$ARGUMENTS` vide et pas de `brainstorming` → demander à l'utilisateur l'énoncé du besoin avant de continuer.
+Les deux signaux sont **orthogonaux** — les détecter séparément, ne pas laisser l'un annuler l'autre :
+
+- **`brainstorming` _ou_ `brain`** (n'importe où dans `$ARGUMENTS`) **active la Phase A**. `brain` est un simple
+  alias de `brainstorming` — même comportement.
+- **Un token `D-AAAAMMJJ-NNNN`** → **Demande existante**. Ça signifie « ne recrée pas la Demande » : la **Phase B
+  devient une mise à jour** (et non une création). Ça **n'annule jamais la Phase A** — c'est le mot-clé brainstorm
+  (ou son absence) qui décide de la Phase A.
+- **Le reste de `$ARGUMENTS`** (texte libre) = **énoncé initial du besoin** (amorce du brainstorm, ou base directe
+  de la Demande si pas de brainstorm). Si un `D-xxxx` est passé, l'**amorce du besoin = le contenu de la Demande**
+  (lu en Phase A/B) ; le texte libre éventuel s'ajoute comme précision.
+- `$ARGUMENTS` vide et ni `brainstorming`/`brain` ni `D-xxxx` → demander l'énoncé du besoin avant de continuer.
+
+### Matrice de comportement
+
+| Invocation | Phase A (brainstorm) | Phase B (Demande) |
+|---|---|---|
+| `<besoin>` | sautée | **create** |
+| `brain <besoin>` (ou `brainstorming`) | sur le **texte libre** | create |
+| `D-xxxx` | sautée | sautée (existe, contenu suffisant) → direct Phase C |
+| **`brain D-xxxx`** | sur le **contenu de la Demande** | **update** |
 
 ---
 
-## Phase A — Définir le besoin (conditionnelle : param `brainstorming`)
+## Phase A — Définir le besoin (conditionnelle : param `brainstorming`/`brain`)
 
-Si `brainstorming` est demandé :
+Si `brainstorming` ou `brain` est demandé :
 
-1. **Invoquer le skill superpowers** via l'outil `Skill` : `superpowers:brainstorming`. Lui transmettre l'énoncé
-   initial (le texte libre de `$ARGUMENTS`) comme amorce.
-2. Laisser le dialogue de brainstorming se dérouler **jusqu'à son approbation** (le skill superpowers présente un
+1. **Déterminer l'amorce du brainstorm** :
+   - **Avec un `D-xxxx`** : lire la Demande (`mcp__servicedesk__demands` action `get`, `id` = l'UUID résolu depuis
+     le code) et utiliser son **titre + description** comme amorce. Le texte libre éventuel de `$ARGUMENTS` s'ajoute
+     comme précision. *(Si la Demande est en statut terminal `delivered`/`declined`, le signaler : on pourra
+     brainstormer mais pas la mettre à jour — voir Phase B.)*
+   - **Sans `D-xxxx`** : l'amorce = le texte libre de `$ARGUMENTS`.
+2. **Invoquer le skill superpowers** via l'outil `Skill` : `superpowers:brainstorming`, en lui transmettant cette amorce.
+3. Laisser le dialogue de brainstorming se dérouler **jusqu'à son approbation** (le skill superpowers présente un
    design et obtient le GO de l'utilisateur). **Ne pas court-circuiter** ce gate.
-3. À la sortie, on dispose d'un **besoin défini** : problème, résultat attendu (outcome), périmètre, hors-scope.
+4. À la sortie, on dispose d'un **besoin affiné** : problème, résultat attendu (outcome), périmètre, hors-scope.
 
-Si `brainstorming` n'est **pas** demandé : le besoin est l'énoncé fourni en argument (ou demandé à l'utilisateur).
+Si `brainstorming`/`brain` n'est **pas** demandé : le besoin est l'énoncé fourni en argument (ou, si un `D-xxxx` est
+passé sans brainstorm, le contenu existant de la Demande tel quel ; ou demandé à l'utilisateur si rien).
 On considère le besoin « défini » dès qu'on peut en écrire un titre + une description claire. **Attention** : sans
 brainstorming il n'y a **aucun gate de design** — la qualité du « pourquoi/quoi » repose entièrement sur l'énoncé
 de l'utilisateur. Si l'énoncé est vague ou ambigu, **proposer d'activer `brainstorming`** plutôt que de créer une
@@ -84,12 +111,16 @@ Demande bancale.
 > rédige plus tard, par story, au moment d'exécuter (voir la section « Articulation » plus bas). Ici on s'arrête au
 > **quoi/pourquoi**, pas au comment.
 
-## Phase B — Créer la Demande ServiceDesk
+## Phase B — Créer ou mettre à jour la Demande ServiceDesk
 
-> Sauter cette phase si l'utilisateur a fourni un `D-AAAAMMJJ-NNNN` existant.
+Le workflow de découpage prend une **Demande** (`D-…`) en entrée. Trois cas selon les arguments :
 
-Le workflow de découpage prend une **Demande** (`D-…`) en entrée. On la crée donc à partir du besoin défini.
+### B.0 — Aiguillage
+- **Pas de `D-xxxx`** → **créer** la Demande (B.1) à partir du besoin défini.
+- **`D-xxxx` + brainstorm** → **mettre à jour** la Demande existante avec le besoin affiné par la Phase A (B.2).
+- **`D-xxxx` sans brainstorm** → **ne rien écrire** : on garde la Demande telle quelle, on passe direct en Phase C.
 
+### B.1 — Créer (cas sans `D-xxxx`)
 1. **Résoudre l'app** (et le module si pertinent) : `mcp__servicedesk__applications` action `list` → `application_id`
    (matcher le nom normalisé, comme `/brd`). 0 match → proposer de corriger ou créer l'app ; **jamais inventer un id**.
 2. **Proposer la Demande** puis **afficher la proposition et attendre le GO**. `mcp__servicedesk__demands` action
@@ -102,6 +133,15 @@ Le workflow de découpage prend une **Demande** (`D-…`) en entrée. On la cré
    - `module_id` (optionnel) si la demande est au grain module — doit appartenir à `application_id`
 3. Après confirmation : créer la Demande. Elle naît en statut **`received`** (forcé par le serveur). Récupérer
    le **code `D-AAAAMMJJ-NNNN`** retourné.
+
+### B.2 — Mettre à jour (cas `D-xxxx` + brainstorm)
+1. La Demande a déjà été lue en Phase A (`get`). **Proposer le nouveau `title`/`description`** (besoin affiné par le
+   brainstorm), en **diff lisible** vs l'existant, et **attendre le GO**.
+2. Après confirmation : `mcp__servicedesk__demands` action `update` avec `id` (UUID) + `title?`/`description?`
+   (au moins un). On **ne touche pas** au statut ni à `source` (immuables ici).
+3. ⚠️ **Statut terminal** : `update` est **refusé** si la Demande est `delivered`/`declined`. Si c'est le cas, **ne
+   pas forcer** : signaler à l'utilisateur et proposer soit de poursuivre sans réécrire la Demande (le besoin affiné
+   sert quand même au découpage), soit de créer une **nouvelle** Demande.
 
 > **Cycle de statut de la Demande, géré par triggers DB — ne jamais le forcer à la main** (STD-030, règle d'or n°5) :
 > `received → in_analysis` se déclenche tout seul à la création du **premier epic/ticket enfant** (Phase D),
