@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.1.0
+# claude-swt.sh — v1.2.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
 #
 # Snippet shell VERSIONNÉ et distribué par somtech-pack. À SOURCER depuis le
