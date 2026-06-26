@@ -84,6 +84,7 @@ test('global skills : mirror des skills du pack dans un skillsDir vierge', () =>
   // des skills connus du pack doivent être présents
   assert.ok(existsSync(join(sd, 'end-session', 'SKILL.md')), 'end-session copié');
   assert.ok(existsSync(join(sd, 'plan-servicedesk', 'SKILL.md')), 'plan-servicedesk copié');
+  assert.ok(existsSync(join(sd, 'superplan', 'SKILL.md')), 'superplan (alias) copié');
   assert.ok(r.skills.includes('merge'), 'merge détecté');
   assert.ok(r.created.length > 0 && r.conflicts.length === 0);
 });
