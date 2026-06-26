@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.1.0
+# claude-swt.sh — v1.2.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
 #
 # Snippet shell VERSIONNÉ et distribué par somtech-pack. À SOURCER depuis le
@@ -18,7 +18,28 @@
 #   claude-swt-ls                  liste les sessions (= git worktree list)
 #   claude-swt-done <timestamp>    retire le worktree + branche d'une session
 #   claude-swt-gc                  liste les sessions terminées (clean + mergées)
+#   _claude-swt-pending <m> <wt> <s>  (interne) branches de session non mergées
 # ============================================================
+
+# _claude-swt-pending — branches NON mergées qui bloquent le retrait d'un worktree.
+# Echo une branche par ligne ; sortie vide = rien en suspens (worktree retirable).
+#
+# On ne valide QUE les branches de CETTE session — jamais l'ensemble du repo :
+#   1. la branche actuellement checked out dans le worktree (le travail en cours) ;
+#   2. la branche socle wt/<sess> (seule branche que le teardown supprime → on ne
+#      doit jamais la perdre si elle porte des commits non mergés).
+# Les branches feat/fix des AUTRES worktrees sont ignorées : elles ont leur propre
+# session. Une feat/fix créée puis quittée (plus checked out) survit au teardown —
+# le teardown ne supprime jamais une branche feat/fix —, donc rien n'est perdu.
+_claude-swt-pending() {  # usage : _claude-swt-pending <main> <wt> <sess>
+  local main="$1" wt="$2" sess="$3" head b
+  head=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null)
+  for b in "$head" "wt/$sess"; do
+    [ -n "$b" ] || continue
+    git -C "$main" show-ref --verify --quiet "refs/heads/$b" || continue
+    git -C "$main" merge-base --is-ancestor "$b" origin/main 2>/dev/null || printf '%s\n' "$b"
+  done | sort -u
+}
 
 claude-swt() {  # usage : claude-swt [session-timestamp] [path]
                 #   sans arg     → nouvelle session, timestamp auto
@@ -61,10 +82,9 @@ claude-swt() {  # usage : claude-swt [session-timestamp] [path]
     echo "📌 session $sess conservée : modifications non commitées."
   else
     local pending
-    pending=$(git -C "$wt" for-each-ref --format='%(refname:short)' refs/heads/feat refs/heads/fix 2>/dev/null \
-      | while read -r b; do git -C "$main" merge-base --is-ancestor "$b" origin/main 2>/dev/null || echo "$b"; done)
+    pending=$(_claude-swt-pending "$main" "$wt" "$sess")
     if [ -n "$pending" ]; then
-      echo "📌 session $sess conservée : branches non mergées → $pending"
+      echo "📌 session $sess conservée : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
     else
       git -C "$main" worktree remove "$wt" && git -C "$main" branch -D "wt/$sess" 2>/dev/null
       echo "🧹 session $sess terminée (tout mergé, rien en suspens) → worktree retiré"
@@ -83,12 +103,11 @@ claude-swt-done() {  # usage : claude-swt-done <timestamp> — depuis le repo pr
 
 claude-swt-gc() {  # depuis le repo principal : liste les sessions terminées (clean + mergées)
   git fetch origin -q
+  local main="$PWD"
   git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt; do
-    [ "$wt" = "$PWD" ] && continue
+    [ "$wt" = "$main" ] && continue
     [ -n "$(git -C "$wt" status --porcelain)" ] && continue
-    local pending
-    pending=$(git -C "$wt" for-each-ref --format='%(refname:short)' refs/heads/feat refs/heads/fix 2>/dev/null \
-      | while read -r b; do git merge-base --is-ancestor "$b" origin/main 2>/dev/null || echo "$b"; done)
-    [ -z "$pending" ] && echo "🧹 session terminée → claude-swt-done $(basename "$wt")"
+    [ -z "$(_claude-swt-pending "$main" "$wt" "$(basename "$wt")")" ] && \
+      echo "🧹 session terminée → claude-swt-done $(basename "$wt")"
   done
 }
