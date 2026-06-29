@@ -26,10 +26,12 @@ npx @somtech-solutions/pack init --modules core,features,mockmig --yes
 npx @somtech-solutions/pack update
 npx @somtech-solutions/pack update --force
 
-# Configurer le poste : skills globaux (~/.claude/skills) + claude-swt (~/.zshrc)
+# Configurer le poste : skills globaux (~/.claude/skills) + workflows globaux
+# (~/.claude/workflows) + claude-swt (~/.zshrc)
 npx @somtech-solutions/pack setup --yes
 npx @somtech-solutions/pack setup --dry-run      # aperçu sans écrire
 npx @somtech-solutions/pack setup --no-skills    # claude-swt seul
+npx @somtech-solutions/pack setup --no-workflows # ne pas mirrorer les workflows
 ```
 
 ### Options
@@ -41,8 +43,8 @@ npx @somtech-solutions/pack setup --no-skills    # claude-swt seul
 | `--force` | `update` : écrase les fichiers divergents |
 | `--dry-run` | N'écrit rien, affiche le plan |
 | `--yes`, `-y` | Non-interactif (CI) / consentement explicite (`setup` écrit le rc) |
-| `--rc` / `--skills-dir` / `--dest` | `setup` : cibles personnalisées |
-| `--no-skills` / `--no-claude-swt` | `setup` : restreindre la portée |
+| `--rc` / `--skills-dir` / `--workflows-dir` / `--dest` | `setup` : cibles personnalisées |
+| `--no-skills` / `--no-workflows` / `--no-claude-swt` | `setup` : restreindre la portée |
 
 `npx` plutôt que `npm i -g` : l'outil se lance ponctuellement, toujours à la bonne
 version (`@latest` ou une version épinglée), sans installation globale à maintenir.

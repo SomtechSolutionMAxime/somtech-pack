@@ -54,13 +54,15 @@ test('shellrc : dry-run n’écrit rien', () => {
 
 test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => {
   const w = tmp('smtk-setup-');
-  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const dd = join(w, 'somtech');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  const args = ['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--dest', dd, '--yes', '--no-version-hook'];
+  const args = ['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--no-version-hook'];
   let code = await run(args);
   assert.equal(code, 0);
   // un skill global connu du repo
   assert.ok(existsSync(join(sd, 'somtech-pack-install', 'SKILL.md')), 'skill global copié');
+  // un workflow global connu du repo
+  assert.ok(existsSync(join(wd, 'analyse-decoupage-demande.js')), 'workflow global copié');
   assert.equal(markerCount(rc), 1, 'bloc claude-swt ajouté');
   // idempotent
   code = await run(args);
@@ -71,12 +73,13 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
 test('SÉCURITÉ : setup sans --yes en non-TTY → refus (exit 1), rc intact', async () => {
   // En test, process.stdin.isTTY est falsy → chemin non-interactif sans consentement.
   const w = tmp('smtk-setup-');
-  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const dd = join(w, 'somtech');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc utilisateur\nexport KEEP=1\n');
-  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--dest', dd, '--no-version-hook']);
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--no-version-hook']);
   assert.equal(code, 1, 'doit refuser sans --yes ni TTY');
   assert.equal(markerCount(rc), 0, 'le rc ne doit PAS être touché sans consentement');
   assert.ok(!existsSync(sd), 'aucun skill installé sans consentement');
+  assert.ok(!existsSync(wd), 'aucun workflow installé sans consentement');
 });
 
 test('shellrc : contenu après le bloc préservé après ré-install (invariant)', () => {
@@ -92,26 +95,36 @@ test('shellrc : contenu après le bloc préservé après ré-install (invariant)
 
 test('run setup --dry-run : rien écrit', async () => {
   const w = tmp('smtk-setup-');
-  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const dd = join(w, 'somtech');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--dest', dd, '--yes', '--dry-run', '--no-version-hook']);
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--dry-run', '--no-version-hook']);
   assert.equal(code, 0);
   assert.equal(markerCount(rc), 0, 'dry-run ne touche pas le rc');
   assert.ok(!existsSync(sd), 'dry-run ne copie pas les skills');
+  assert.ok(!existsSync(wd), 'dry-run ne copie pas les workflows');
 });
 
 test('run setup --no-skills / --no-claude-swt : portée respectée', async () => {
   const w = tmp('smtk-setup-');
-  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const dd = join(w, 'somtech');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--dest', dd, '--yes', '--no-skills', '--no-version-hook']);
+  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--no-skills', '--no-workflows', '--no-version-hook']);
   assert.ok(!existsSync(sd), '--no-skills : pas de skills');
   assert.equal(markerCount(rc), 1, '--no-skills : claude-swt quand même installé');
 
   const w2 = tmp('smtk-setup-');
-  const rc2 = join(w2, 'zshrc'); const sd2 = join(w2, 'skills'); const dd2 = join(w2, 'somtech');
+  const rc2 = join(w2, 'zshrc'); const sd2 = join(w2, 'skills'); const wd2 = join(w2, 'workflows'); const dd2 = join(w2, 'somtech');
   writeFileSync(rc2, '# rc\n');
-  await run(['setup', '--source', REPO, '--rc', rc2, '--skills-dir', sd2, '--dest', dd2, '--yes', '--no-claude-swt', '--no-version-hook']);
+  await run(['setup', '--source', REPO, '--rc', rc2, '--skills-dir', sd2, '--workflows-dir', wd2, '--dest', dd2, '--yes', '--no-claude-swt', '--no-version-hook']);
   assert.ok(existsSync(join(sd2, 'somtech-pack-install', 'SKILL.md')), '--no-claude-swt : skills installés');
   assert.equal(markerCount(rc2), 0, '--no-claude-swt : pas de bloc rc');
+});
+
+test('run setup --no-workflows : skills installés mais aucun workflow', async () => {
+  const w = tmp('smtk-setup-');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
+  writeFileSync(rc, '# rc\n');
+  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--no-workflows', '--no-claude-swt', '--no-version-hook']);
+  assert.ok(existsSync(join(sd, 'somtech-pack-install', 'SKILL.md')), '--no-workflows : skills quand même installés');
+  assert.ok(!existsSync(wd), '--no-workflows : aucun workflow installé');
 });

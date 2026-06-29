@@ -20,7 +20,8 @@ function pkgVersion() {
 export function parseArgs(argv) {
   const flags = {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
-    rc: null, skillsDir: null, dest: null, noClaudeSwt: false, noSkills: false,
+    rc: null, skillsDir: null, workflowsDir: null, dest: null, noClaudeSwt: false,
+    noSkills: false, noWorkflows: false,
     settings: null, hooksDir: null, noVersionHook: false,
     help: false, version: false,
   };
@@ -38,11 +39,13 @@ export function parseArgs(argv) {
       case '--target': flags.target = value('--target', ++i); break;
       case '--rc': flags.rc = value('--rc', ++i); break;
       case '--skills-dir': flags.skillsDir = value('--skills-dir', ++i); break;
+      case '--workflows-dir': flags.workflowsDir = value('--workflows-dir', ++i); break;
       case '--dest': flags.dest = value('--dest', ++i); break;
       case '--settings': flags.settings = value('--settings', ++i); break;
       case '--hooks-dir': flags.hooksDir = value('--hooks-dir', ++i); break;
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
+      case '--no-workflows': flags.noWorkflows = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
@@ -69,9 +72,10 @@ Commandes :
   init     Installe le pack dans le projet courant (modules core,features par défaut)
   update   Met à jour le projet (présente un diff, n'écrase pas sans --force)
   setup    Configure le poste : skills globaux (user-skills + miroir des skills du
-           pack dans ~/.claude/skills) + claude-swt + hook de version. Re-jouable =
-           mise à jour. Préserve les skills perso hors-pack ; un skill du pack
-           divergent n'est pris qu'avec --force (backup .somtech.bak auto)
+           pack dans ~/.claude/skills) + workflows globaux (~/.claude/workflows) +
+           claude-swt + hook de version. Re-jouable = mise à jour. Préserve skills et
+           workflows perso hors-pack ; une version du pack divergente n'est prise
+           qu'avec --force (backup .somtech.bak auto)
 
 Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
@@ -82,10 +86,12 @@ Options (init / update) :
 Options (setup) :
   --rc <fichier>    Fichier rc shell (défaut: ~/.zshrc)
   --skills-dir <d>  Dossier des skills globaux (défaut: ~/.claude/skills)
+  --workflows-dir <d> Dossier des workflows globaux (défaut: ~/.claude/workflows)
   --dest <dir>      Dossier d'install de claude-swt (défaut: ~/.somtech)
   --settings <f>    Fichier settings global (défaut: ~/.claude/settings.json)
   --hooks-dir <d>   Dossier des hooks globaux (défaut: ~/.claude/hooks)
   --no-skills       Ne pas installer les skills globaux
+  --no-workflows    Ne pas installer les workflows globaux
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
 
