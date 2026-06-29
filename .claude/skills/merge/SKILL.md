@@ -89,6 +89,8 @@ Apres tout deploiement de migrations (Etape 3) et **avant le merge**, verifier q
 ## Etape 5 : Deploiement des Edge Functions en prod via MCP (AVANT le merge)
 
 > ⚠️ **Cette etape s'execute AVANT le merge** (cf. note d'ordre de deploiement en tete). Les Edge Functions sont du backend dont le frontend depend : si le nouveau frontend appelle une nouvelle Edge Function, elle doit exister avant que le frontend ne soit deploye. On les deploie donc avec les migrations, avant le merge.
+>
+> ⚠️ **Pas de gate de coherence automatique pour les Edge Functions** (contrairement aux migrations, Etape 4). Avant ce deploiement prod, s'assurer que la fonction a deja ete deployee et validee sur **staging** (via `/pousse-staging`). Ne pas deployer en prod une Edge Function jamais passee par staging.
 
 1. Verifie si la PR contient des modifications de Edge Functions :
    ```
