@@ -5,6 +5,7 @@ import { resolvePayloadRoot } from '../modules.js';
 import { installRcBlock } from '../shellrc.js';
 import { installUserSkills } from '../userskills.js';
 import { installGlobalSkills } from '../globalskills.js';
+import { installGlobalWorkflows } from '../globalworkflows.js';
 import { installGlobalVersionHook } from '../userhooks.js';
 
 /**
@@ -36,20 +37,23 @@ export async function cmdSetup(flags) {
   const home = homedir();
   const rcFile = flags.rc || join(home, '.zshrc');
   const skillsDir = flags.skillsDir || join(home, '.claude', 'skills');
+  const workflowsDir = flags.workflowsDir || join(home, '.claude', 'workflows');
   const destDir = flags.dest || join(home, '.somtech');
   const settingsFile = flags.settings || join(home, '.claude', 'settings.json');
   const hooksDir = flags.hooksDir || join(home, '.claude', 'hooks');
   const doSkills = !flags.noSkills;
+  const doWorkflows = !flags.noWorkflows;
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
 
-  if (!doSkills && !doSwt && !doVersionHook) {
-    console.log('Rien à faire (--no-skills, --no-claude-swt et --no-version-hook).');
+  if (!doSkills && !doWorkflows && !doSwt && !doVersionHook) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-claude-swt et --no-version-hook).');
     return 0;
   }
 
   const consentTargets = [];
   if (doSkills) consentTargets.push(skillsDir);
+  if (doWorkflows) consentTargets.push(workflowsDir);
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
   if (!(await consent(flags, consentTargets))) return 1;
@@ -84,6 +88,29 @@ export async function cmdSetup(flags) {
     }
     if (g.payloadLinks?.length) {
       console.log(`    ℹ️  ${g.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
+    }
+  }
+
+  if (doWorkflows) {
+    // Miroir GLOBAL des workflows du pack (~/.claude/workflows). Dépendance des skills
+    // déjà globaux (ex. plan-servicedesk/superplan → workflow analyse-decoupage-demande) :
+    // sans ça, le skill voyage mais casse à l'invocation du workflow sur un poste neuf.
+    // Mêmes garanties que les skills : perso hors-pack jamais touché, divergent non
+    // écrasé sans --force, backup .somtech.bak avant tout écrasement --force.
+    const w = installGlobalWorkflows({ payloadRoot, workflowsDir, dryRun: flags.dryRun, force: flags.force });
+    console.log(
+      `  workflows du pack (global) → ${workflowsDir} : ${w.workflows.length} workflow(s)` +
+        ` (créés ${w.created.length}, maj ${w.updated.length}, inchangés ${w.unchanged.length})` +
+        (w.backedUp.length ? `, backups ${w.backedUp.length}` : '')
+    );
+    if (w.conflicts.length) {
+      console.log(
+        `    ⚠️  ${w.conflicts.length} workflow(s) du pack divergent(s)/symlinkés en global, NON écrasés.` +
+          ` Relance avec --force pour prendre la version du pack (backup .somtech.bak auto).`
+      );
+    }
+    if (w.payloadLinks?.length) {
+      console.log(`    ℹ️  ${w.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
     }
   }
 
