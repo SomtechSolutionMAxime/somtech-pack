@@ -2,7 +2,8 @@
 name: audit-rls
 description: |
   Auditer les policies RLS d'une table ou du projet.
-  TRIGGERS : audit-rls, vérifier RLS, sécurité DB, check policies, audit sécurité
+  TRIGGERS : audit-rls, vérifier RLS, sécurité DB, check policies, audit RLS d'une table
+  (pour un audit de sécurité COMPLET multi-couches d'une app → utiliser /audit-securite)
 disable-model-invocation: false
 allowed-tools: Read, Bash, Grep
 ---
