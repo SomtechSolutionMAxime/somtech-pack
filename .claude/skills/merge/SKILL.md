@@ -1,11 +1,13 @@
 ---
 name: merge
-description: /merge — Merge PR, rebase local, deploy migrations + Edge Functions via MCP, tag release Docker/Package, et cleanup. Worktree-aware (claude-swt) : diffère la suppression de branche quand un worktree lié est attaché. Utiliser quand l'utilisateur dit "merge", "merger la PR", "fusionner", ou "/merge". Protege automatiquement la branche staging (jamais de --delete-branch sur staging).
+description: /merge — Merge PR, rebase local, deploy migrations + Edge Functions via MCP, tag release Docker/Package, et cleanup. Deploie les migrations AVANT le merge (le merge declenche le deploiement frontend) pour que la BD soit toujours prete avant le frontend. Worktree-aware (claude-swt) : diffère la suppression de branche quand un worktree lié est attaché. Utiliser quand l'utilisateur dit "merge", "merger la PR", "fusionner", ou "/merge". Protege automatiquement la branche staging (jamais de --delete-branch sur staging).
 ---
 
 # /merge — Merge PR, rebase local et cleanup
 
 Tu es un assistant de deploiement. Execute les etapes suivantes dans l'ordre, en t'arretant a la premiere erreur critique. Reponds toujours en francais.
+
+> **Ordre de deploiement — regle critique** : les migrations BD sont deployees **AVANT** le merge sur `main`. Pourquoi : le merge sur `main` declenche le redeploiement du frontend (Netlify auto-publish, stack standard Somtech). Si on migrait apres le merge, le nouveau frontend tournerait contre l'ancienne BD pendant la fenetre de migration → erreurs en prod (colonnes/tables manquantes). En migrant d'abord, la BD est toujours prete avant que le frontend ne change. Bonus : si la migration echoue, on n'a pas encore merge → le frontend n'est pas deploye, on s'arrete proprement.
 
 ## Etape 1 : Identifier la PR a merger
 
@@ -27,7 +29,66 @@ Tu es un assistant de deploiement. Execute les etapes suivantes dans l'ordre, en
 3. Si des checks echouent, affiche les details et demande a l'utilisateur s'il veut continuer malgre tout.
 4. Affiche un recapitulatif clair et demande confirmation : "Pret a merger la PR #X — <titre>. On proceed ?"
 
-## Etape 3 : Merge de la PR (worktree-aware)
+## Etape 3 : Deploiement des migrations en prod via MCP (AVANT le merge)
+
+> ⚠️ **Cette etape s'execute AVANT le merge** (cf. note d'ordre de deploiement en tete). On applique les migrations en prod pendant que l'**ancien** frontend est encore en ligne, puis on merge (ce qui deploie le nouveau frontend contre la BD deja migree).
+>
+> **Pre-requis de compatibilite (expand/contract)** : comme l'ancien frontend tourne un court instant contre la nouvelle BD, les migrations doivent etre **backward-compatible** (phase « expand » : ajouts de colonnes/tables nullable, pas de DROP ni de renommage cassant). Les suppressions destructives (« contract ») se font dans une livraison ulterieure, une fois l'ancien frontend retire. Si une migration n'est pas backward-compatible, **le signaler a l'utilisateur** avant de continuer.
+
+1. Verifie si la PR contient des migrations SQL :
+   ```
+   gh pr diff <numero> --name-only | grep "supabase/migrations/"
+   ```
+2. **Si aucune migration** : Informe et passe directement a l'Etape 5 (merge) — la gate de coherence (Etape 4) est inutile s'il n'y a rien a deployer.
+3. **Si des migrations sont detectees** :
+   - Affiche le contenu de chaque fichier de migration. Le contenu est lisible depuis les fichiers de la branche source (deja checked-out si on est sur la branche feature) ou via `gh pr diff <numero>`.
+   - **DEMANDE OBLIGATOIREMENT CONFIRMATION** avant toute action.
+   - **Si l'utilisateur confirme** : Pour chaque migration (dans l'ordre chronologique) :
+     - Extraire le timestamp du nom de fichier (les 14 premiers caracteres)
+     - Extraire la description (le reste du nom sans `.sql`)
+     ```
+     mcp__supabase__apply_migration(name="<description>", query="<contenu SQL>")
+     ```
+     - **IMPORTANT** : `apply_migration` genere son propre timestamp. Corriger immediatement :
+     ```sql
+     -- Via mcp__supabase__execute_sql
+     UPDATE supabase_migrations.schema_migrations
+     SET version = '<TIMESTAMP_DU_FICHIER>'
+     WHERE name = '<description>'
+     AND version != '<TIMESTAMP_DU_FICHIER>';
+     ```
+   - Verifier le resultat :
+     ```sql
+     -- Via mcp__supabase__execute_sql
+     SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 5;
+     ```
+   - **Si l'utilisateur refuse** : ne pas merger non plus (le frontend ne doit pas partir sans sa BD). Informer que la livraison est suspendue : ni migration, ni merge.
+
+## Etape 4 : Gate de coherence migrations (staging vs prod)
+
+Apres tout deploiement de migrations (Etape 3) et **avant le merge**, verifier que staging et prod sont synchronises :
+
+1. Recuperer les 10 dernieres migrations sur les deux environnements :
+   ```sql
+   -- Via mcp__supabase__execute_sql (prod)
+   SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;
+
+   -- Via mcp__supabase-staging__execute_sql (staging)
+   SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;
+   ```
+2. **Comparer les versions** : les listes doivent etre identiques (memes timestamps, memes noms).
+3. **Si divergence detectee** :
+   - **BLOQUER** (ne pas merger) et afficher les differences dans un tableau clair.
+   - Identifier la cause : timestamp genere par MCP non corrige, migration manquante, ou nom different.
+   - Corriger via `UPDATE supabase_migrations.schema_migrations` sur l'environnement divergent.
+   - Re-verifier apres correction.
+4. **Si coherent** : afficher "Migrations prod/staging synchronisees" et passer au merge (Etape 5).
+
+> Cette gate est **obligatoire** apres chaque deploiement de migrations. Ne pas la sauter.
+
+## Etape 5 : Merge de la PR (worktree-aware)
+
+> Les migrations sont deja en prod (Etapes 3-4). Ce merge declenche le redeploiement du frontend, qui tournera donc contre la BD deja migree.
 
 ### Plan de suppression de branche
 
@@ -65,7 +126,7 @@ PLAN=$(mwt_plan_delete "$HEAD_BRANCH")
      (retire le worktree ET la branche locale en une fois)
      ```
 
-## Etape 4 : Resynchronisation locale (worktree-aware)
+## Etape 6 : Resynchronisation locale (worktree-aware)
 
 > **Garde-fou worktree** : si la session tourne dans un worktree **lié** (`claude-swt`), `main` est checked-out dans le worktree principal et `git checkout main` ÉCHOUERA ici. Détecter le contexte d'abord :
 > ```bash
@@ -76,8 +137,8 @@ PLAN=$(mwt_plan_delete "$HEAD_BRANCH")
 ### Cas worktree lié (`IN_LINKED=1`)
 - **NE PAS** faire `git checkout main` (impossible — main est dans le principal).
 - Mettre a jour la ref distante seulement : `git fetch origin main`.
-- La branche feature locale est conservee (teardown via `claude-swt-done` — cf. Etape 3 `DEFER`).
-- Sauter la suite de l'Etape 4 (le rebase staging et le cleanup local se font depuis le worktree principal). Passer a l'Etape 5.
+- La branche feature locale est conservee (teardown via `claude-swt-done` — cf. Etape 5 `DEFER`).
+- Sauter la suite de l'Etape 6 (le rebase staging et le cleanup local se font depuis le worktree principal). Passer a l'Etape 7.
 
 ### Cas standard (`IN_LINKED=0`)
 
@@ -88,18 +149,18 @@ PLAN=$(mwt_plan_delete "$HEAD_BRANCH")
 - **NE PAS proposer de supprimer** la branche locale staging.
 - Resynchroniser staging sur main : `git checkout staging && git rebase origin/main && git push origin staging`
 - Revenir sur main : `git checkout main`
-- **Cleanup des branches feature mergees via staging** : passer a l'etape 4.5.
+- **Cleanup des branches feature mergees via staging** : passer a l'Etape 6.5.
 
 #### Si la branche mergee est une branche feature :
-- Si le plan de l'Etape 3 etait `DELETE`, `gh --delete-branch` a deja supprime la branche distante. Demander a l'utilisateur s'il veut supprimer la branche locale.
+- Si le plan de l'Etape 5 etait `DELETE`, `gh --delete-branch` a deja supprime la branche distante. Demander a l'utilisateur s'il veut supprimer la branche locale.
   - **Si oui** : `git branch -d <nom-branche>`
   - **Si non** : Informe que la branche locale est conservee.
 
 3. Confirmer que tout est propre avec `git status` et `git log --oneline -3`.
 
-## Etape 4.5 : Cleanup des branches feature mergees via staging
+## Etape 6.5 : Cleanup des branches feature mergees via staging
 
-**Uniquement si la branche mergee a l'etape 3 etait `staging`.** (Sinon sauter a l'etape 5.)
+**Uniquement si la branche mergee a l'Etape 5 etait `staging`.** (Sinon sauter a l'Etape 7.)
 
 Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. dans `staging` localement. Apres un merge `staging → main` reussi, ces branches sont generalement obsoletes et peuvent etre supprimees.
 
@@ -152,7 +213,7 @@ Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. 
      git push origin --delete "$branch" 2>/dev/null || true
      ```
      (le `-D` force car squash-merge ne laisse pas trace dans `git branch --merged`)
-   - **`non`** : skipper et passer a l'etape 5.
+   - **`non`** : skipper et passer a l'Etape 7.
    - **`une par une`** : pour chaque branche `merged`, demander individuellement.
 
 7. **Pour les branches `unmerged`** : ne jamais les supprimer automatiquement. Informer l'utilisateur qu'elles contiennent des changements pas encore sur main.
@@ -165,38 +226,9 @@ Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. 
    Branches conservees : feat/work-in-progress (changements non merges), feat/session-en-cours (worktree lié)
    ```
 
-## Etape 5 : Deploiement des migrations en prod via MCP
+## Etape 7 : Deploiement des Edge Functions en prod via MCP
 
-1. Verifie si le merge contenait des migrations SQL :
-   ```
-   gh pr diff <numero> --name-only | grep "supabase/migrations/"
-   ```
-2. **Si aucune migration** : Informe et passe a l'etape 6.
-3. **Si des migrations sont detectees** :
-   - Affiche le contenu de chaque fichier de migration.
-   - **DEMANDE OBLIGATOIREMENT CONFIRMATION** avant toute action.
-   - **Si l'utilisateur confirme** : Pour chaque migration (dans l'ordre chronologique) :
-     - Extraire le timestamp du nom de fichier (les 14 premiers caracteres)
-     - Extraire la description (le reste du nom sans `.sql`)
-     ```
-     mcp__supabase__apply_migration(name="<description>", query="<contenu SQL>")
-     ```
-     - **IMPORTANT** : `apply_migration` genere son propre timestamp. Corriger immediatement :
-     ```sql
-     -- Via mcp__supabase__execute_sql
-     UPDATE supabase_migrations.schema_migrations
-     SET version = '<TIMESTAMP_DU_FICHIER>'
-     WHERE name = '<description>'
-     AND version != '<TIMESTAMP_DU_FICHIER>';
-     ```
-   - Verifier le resultat :
-     ```sql
-     -- Via mcp__supabase__execute_sql
-     SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 5;
-     ```
-   - **Si l'utilisateur refuse** : Informe que les migrations pourront etre appliquees ulterieurement.
-
-## Etape 6 : Deploiement des Edge Functions en prod via MCP
+> Les Edge Functions sont du backend dont le frontend peut dependre. Si une nouvelle Edge Function est appelee par le nouveau frontend, envisager de la deployer **avant le merge** (meme logique que les migrations, Etape 3) plutot qu'ici. Par defaut on les deploie apres le merge ; remonter avant le merge si le frontend en depend immediatement.
 
 1. Verifie si le merge contenait des modifications de Edge Functions :
    ```
@@ -214,28 +246,6 @@ Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. 
      ```
      mcp__supabase__list_edge_functions
      ```
-
-## Etape 7 : Gate de coherence migrations (staging vs prod)
-
-Apres tout deploiement de migrations (etape 5), verifier que staging et prod sont synchronises :
-
-1. Recuperer les 10 dernieres migrations sur les deux environnements :
-   ```sql
-   -- Via mcp__supabase__execute_sql (prod)
-   SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;
-
-   -- Via mcp__supabase-staging__execute_sql (staging)
-   SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;
-   ```
-2. **Comparer les versions** : les listes doivent etre identiques (memes timestamps, memes noms).
-3. **Si divergence detectee** :
-   - **BLOQUER** et afficher les differences dans un tableau clair.
-   - Identifier la cause : timestamp genere par MCP non corrige, migration manquante, ou nom different.
-   - Corriger via `UPDATE supabase_migrations.schema_migrations` sur l'environnement divergent.
-   - Re-verifier apres correction.
-4. **Si coherent** : afficher "Migrations prod/staging synchronisees" et continuer.
-
-> Cette gate est **obligatoire** apres chaque deploiement de migrations. Ne pas la sauter.
 
 ## Etape 8 : Tag de version pour deploiement Docker/Package
 
@@ -305,6 +315,7 @@ Proposer a l'utilisateur de monitorer jusqu'a completion des workflows via le to
 
 ## Regles de securite
 
+- **Toujours deployer les migrations AVANT le merge** : le merge sur `main` declenche le deploiement frontend ; la BD doit etre prete avant. Ne jamais merger une PR contenant des migrations sans les avoir appliquees (ou explicitement decide de suspendre la livraison).
 - Ne jamais faire de `git push --force`.
 - Ne jamais merger sans confirmation explicite de l'utilisateur.
 - Ne jamais utiliser `supabase db push --linked`.
@@ -320,3 +331,4 @@ Proposer a l'utilisateur de monitorer jusqu'a completion des workflows via le to
 
 - `lib/worktree-aware-delete.sh` — plan de suppression de branche worktree-aware (`mwt_plan_delete` → PROTECTED / DELETE / DEFER ; `mwt_in_linked_worktree`). Sourçable, pur, testable.
 - `tests/test-worktree-aware-delete.sh` — test (repo jetable + worktrees réels) couvrant les 4 plans + la détection de worktree lié. Lancer : `bash .claude/skills/merge/tests/test-worktree-aware-delete.sh`.
+- `tests/test-migration-before-merge.sh` — garde-fou anti-régression : verifie que la section « Deploiement des migrations » apparait AVANT la section « Merge de la PR » dans ce SKILL.md. Lancer : `bash .claude/skills/merge/tests/test-migration-before-merge.sh`.
