@@ -9,7 +9,11 @@ description: |
   pentest staging, audit de sécurité de l'app.
   NE PAS confondre avec audit-rls (RLS d'une table seule) ni audit-loi25 (conformité Loi 25).
 disable-model-invocation: false
-allowed-tools: Read, Grep, Glob, Bash, Task, WebFetch
+# Pas de `allowed-tools` restrictif : cet orchestrateur a besoin de Task (sub-agents),
+# Bash/Read/Grep/Glob/WebFetch (couches statiques) ET des MCP servicedesk + somcraft +
+# supabase (Phase 4 livrable) + claude-in-chrome (pentest). Les noms MCP varient selon
+# la session — une whitelist bloquerait la livraison. La garantie « lecture seule » est
+# portée par les garde-fous ci-dessous (instructions), pas par un sandbox d'outils.
 ---
 
 # Audit de sécurité technique — `/audit-securite`
@@ -38,8 +42,9 @@ STD-038), vérifie chaque finding de façon adversariale, et livre un rapport co
 4. **Secrets** : ne jamais lire, copier ni exfiltrer un secret à droits élevés. On
    **détecte sa présence indue** (STD-038) sans **jamais** recopier sa valeur dans le
    rapport ou un ticket (masquer : `sb_secret_••••`).
-5. **Aucun ticket sans verdict `confirme`** (après la phase 3). Pas de ticket sur un
-   finding `refute` ou non vérifié.
+5. **Tickets uniquement sur verdict `confirme` ou `incertain`** (après la phase 3) :
+   `confirme` → ticket `incident` ; `incertain` → ticket `improvement` à valider.
+   **Jamais** de ticket sur un finding `refute` (annexe du rapport seulement) ni non vérifié.
 6. **Accès Supabase via MCP** : introspection / `SELECT` uniquement. Jamais de write.
 
 Si une étape exige de violer un garde-fou → **arrêter la couche concernée** et le
@@ -101,6 +106,7 @@ Puis dérouler les 4 phases ci-dessous, dans l'ordre.
 carte_surface:
   app_slug: string
   url_staging: string|null        # depuis .somtech/app.yaml ; null si absent
+  url_prod: string|null           # prod connue (app.yaml + ServiceDesk production_url) — pour REFUS DUR du pentest
   supabase_ref: string|null
   somcraft_workspace_id: string|null
   routes_pages: [string]          # app/**/page.tsx (ou pattern du projet)
@@ -112,6 +118,9 @@ carte_surface:
 
 Procédure :
 1. Lire `.somtech/app.yaml` → `url_staging`, `supabase_ref`, `app_slug`, `workspace_id`.
+   Récupérer aussi **`url_prod`** : champ prod de `app.yaml` **et** `production_url` de
+   l'app dans ServiceDesk (`mcp__servicedesk__applications` action `list`). Réunir les
+   deux dans `url_prod` — c'est la liste d'exclusion dure du pentest (garde-fou couche 6).
 2. Lire l'ontologie → entités marquées données personnelles → `tables_sensibles`.
    Si pas d'ontologie : déduire des migrations (`supabase/migrations/*`) les tables
    avec une colonne `user_id` ou contenant des champs personnels évidents.

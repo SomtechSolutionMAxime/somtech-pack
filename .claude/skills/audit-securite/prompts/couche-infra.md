@@ -39,7 +39,9 @@ faible/absent → `high`.
 - Clé `anon`/`publishable` mal scopée, endpoints PostgREST publics non protégés par RLS
   (recoupe la couche `rls`), bucket Storage public contenant des données privées.
 - Vérifier la config de déploiement (`fly.toml`, `netlify.toml`) : secrets en clair,
-  ports ouverts inutiles.
+  ports ouverts inutiles. **Si un secret en clair est trouvé, MASQUE sa valeur** dans la
+  `preuve` (`sb_secret_••••` / `••••`), n'indique que `fichier:ligne` (STD-038) — ne
+  recopie jamais la valeur.
 
 ## Sortie (schéma de finding commun)
 
