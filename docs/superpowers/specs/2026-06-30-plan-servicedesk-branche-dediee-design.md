@@ -56,7 +56,19 @@ Le skill est un prompt markdown. Test garde-fou anti-régression (type « ordre/
 
 Rouge sur la version actuelle (aucune gestion git), vert après. Le test doit être prouvé discriminant.
 
+## Résolution des défauts de la critique (workflow `analyse-decoupage-demande`, `pret_a_creer: false`)
+
+La critique adversariale a relevé 1 bloquant + 3 majeurs + 2 mineurs. Résolutions retenues :
+
+- **R1 (bloquant) — rollback brainstorm échoué après B.1** : le skill **laisse en l'état** (Demande `received` à compléter + branche conservée) et affiche un **message clair** (« Demande D-xxxx créée mais brainstorm interrompu — reprendre via `/plan-servicedesk D-xxxx` »). **Aucune suppression automatique** (la Demande est une entité tracée ; comportement réentrant). À documenter dans le SKILL.md + couvert par le test de contrat.
+- **R2 (majeur) — préfixe `plan/`** : **garder `plan/D-xxxx`** (sémantique claire). Tracer une note pour **formaliser le préfixe dans la convention de nommage côté repo Architecture** (CLAUDE.md global, règle d'or n°7) — dette de gouvernance séparée, non bloquante à l'usage.
+- **R3 (majeur) — non-régression `superplan`** : retirer toute affirmation « ZÉRO travail ». Le test de contrat **ajoute une assertion `superplan`** : vérifier qu'il lit bien `.claude/skills/plan-servicedesk/SKILL.md` et **ne réimplémente pas** la logique git.
+- **R4 (majeur) — sûreté du garde-fou git** : la **validation e2e manuelle** (run réel sur une Demande jetable, working tree propre ET sale, prouvant le STOP + 3 options + absence de commit/checkout non consenti) devient un **critère de fermeture (DoD) explicite** de la story garde-fou — le grep ne prouve que la documentation, pas l'exécution.
+- **R5 (mineur) — règle de slug** : avec Phase A → slug du design doc ; **sans Phase A → slug dérivé du titre de la Demande** (à défaut, du code `D-xxxx`). Documenté dans le SKILL.md.
+- **R6 (mineur) — déclencheur de la PR** : **figé** — commit + push + ouverture de PR **après la Phase D** (hiérarchie ServiceDesk créée, une fois `pret_a_creer` confirmé).
+
 ## Hors-scope
 - Modifier `superpowers` (plugin externe).
 - L'interaction brainstorm → `writing-plans` (tension préexistante du skill, non introduite ici).
-- Le comportement de `superplan` (alias) : hérite automatiquement puisqu'il délègue à `plan-servicedesk`.
+- Le comportement de `superplan` (alias) : hérite automatiquement puisqu'il délègue à `plan-servicedesk` (vérifié par assertion de non-régression, R3 — pas réimplémenté).
+- Formalisation du préfixe `plan/` dans le CLAUDE.md global (repo Architecture, R2).
