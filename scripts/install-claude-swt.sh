@@ -108,3 +108,4 @@ else
 fi
 
 echo "→ Ouvre un nouveau terminal (ou \`source $RC_FILE\`) puis : claude-swt"
+echo "   (variante : claude-swt-danger → claude --dangerously-skip-permissions, environnement de confiance uniquement)"

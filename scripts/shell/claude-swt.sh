@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.2.0
+# claude-swt.sh — v1.3.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
 #
 # Snippet shell VERSIONNÉ et distribué par somtech-pack. À SOURCER depuis le
@@ -15,9 +15,11 @@
 #
 # Fonctions :
 #   claude-swt [timestamp] [path]  ouvre/reprend une session worktree isolée
+#   claude-swt-danger [ts] [path]  IDEM mais lance `claude --dangerously-skip-permissions`
 #   claude-swt-ls                  liste les sessions (= git worktree list)
 #   claude-swt-done <timestamp>    retire le worktree + branche d'une session
 #   claude-swt-gc                  liste les sessions terminées (clean + mergées)
+#   _claude-swt-launch <...>       (interne) cœur partagé par claude-swt[-danger]
 #   _claude-swt-pending <m> <wt> <s>  (interne) branches de session non mergées
 # ============================================================
 
@@ -41,9 +43,9 @@ _claude-swt-pending() {  # usage : _claude-swt-pending <main> <wt> <sess>
   done | sort -u
 }
 
-claude-swt() {  # usage : claude-swt [session-timestamp] [path]
-                #   sans arg     → nouvelle session, timestamp auto
-                #   <timestamp>  → REPREND une session existante (réentrant)
+_claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-swt-danger.
+                        #   arg1 = session-timestamp (défaut: auto) ; arg2 = path worktree
+                        #   $_CLAUDE_SWT_DANGER=1 → lance `claude --dangerously-skip-permissions`
   local main wt repo sess
   main="$PWD"; repo=$(basename "$main")
   if ! git -C "$main" rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -74,7 +76,15 @@ claude-swt() {  # usage : claude-swt [session-timestamp] [path]
     # clés API (sans espaces) c'est sans risque ; le sous-shell ( … ) isole
     # `set -a` du shell appelant même si le source échoue.
     if [ -f "$main/.env" ]; then set -a; . "$main/.env"; set +a; fi
-    claude )
+    if [ -n "${_CLAUDE_SWT_DANGER:-}" ]; then
+      echo "⚠️  Mode DANGER : claude --dangerously-skip-permissions — toutes les"
+      echo "    autorisations d'outils sont sautées pour cette session. À réserver à"
+      echo "    un environnement de confiance (jamais sur du code non revu)."
+      echo "    NB : le flag refuse de démarrer en root/sudo (garde-fou de Claude Code)."
+      claude --dangerously-skip-permissions
+    else
+      claude
+    fi )
 
   # --- au quit : retire seulement si rien en suspens (sinon garde pour reprise) ---
   git -C "$main" fetch origin -q
@@ -91,6 +101,15 @@ claude-swt() {  # usage : claude-swt [session-timestamp] [path]
     fi
   fi
 }
+
+# claude-swt — session worktree isolée, permissions normales de Claude Code.
+claude-swt() { _claude-swt-launch "$@"; }        # usage : claude-swt [timestamp] [path]
+
+# claude-swt-danger — IDENTIQUE à claude-swt, mais lance Claude avec
+# --dangerously-skip-permissions (aucun prompt d'autorisation d'outil). Réutilise
+# tout le cœur (_claude-swt-launch) — zéro duplication. ⚠️ environnement de confiance
+# uniquement ; un avertissement est affiché au lancement.
+claude-swt-danger() { _CLAUDE_SWT_DANGER=1 _claude-swt-launch "$@"; }
 
 claude-swt-ls() { git worktree list; }          # sessions + branche courante de chacune
 
