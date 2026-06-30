@@ -6,7 +6,6 @@ description: |
   analyse-decoupage-demande (validation BRD + découpage Epic/Story G/W/T tracé aux EF), puis
   crée la hiérarchie dans ServiceDesk après validation.
   TRIGGERS : plan-servicedesk, planifier vers servicedesk, documenter le besoin, brainstorm vers servicedesk, debug vers servicedesk, décomposer un besoin, créer la demande et les epics
-disable-model-invocation: true
 argument-hint: "[brainstorming|brain | debug] [<besoin libre> | D-AAAAMMJJ-NNNN]"
 ---
 
