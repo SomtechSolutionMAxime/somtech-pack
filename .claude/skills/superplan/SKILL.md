@@ -5,7 +5,7 @@ description: |
   (Demande → découpage Epic/Story G/W/T tracé au BRD). Comportement et arguments identiques à /plan-servicedesk.
   TRIGGERS : superplan, plan vers servicedesk, planifier le besoin, brainstorm vers servicedesk, décomposer un besoin
 disable-model-invocation: true
-argument-hint: "[brainstorming|brain] [<besoin libre> | D-AAAAMMJJ-NNNN]"
+argument-hint: "[brainstorming|brain | debug] [<besoin libre> | D-AAAAMMJJ-NNNN]"
 ---
 
 # /superplan — alias de /plan-servicedesk

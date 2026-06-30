@@ -248,7 +248,7 @@ Une fois la hiérarchie ServiceDesk créée (et `pret_a_creer` confirmé) :
 > **Cas garde-fou option 2** (consigner sur la branche courante) → les artefacts vont sur la branche courante,
 > **aucune PR de planification distincte**. **Re-planification** (branche/PR déjà existante) → réutiliser la PR existante.
 
-3. **Récap** : Demande + Epics + Stories créés (codes + URLs), EF tracées, ordre recommandé, branche/PR de consignation,
+4. **Récap** : Demande + Epics + Stories créés (codes + URLs), EF tracées, ordre recommandé, branche/PR de consignation,
    et — le cas échéant — le dépassement de gate validé par l'humain. Rappeler le cycle par ticket :
    **COMPRENDRE → CORRIGER → VALIDER → FERMER** (STD-030).
 
