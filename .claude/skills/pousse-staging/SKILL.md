@@ -32,6 +32,35 @@ Le skill detecte le mode automatiquement a l'etape 1.
    ```
    Si plus de 10 commits d'ecart, avertir l'utilisateur (sa branche est possiblement perimee).
 
+## Etape 1.5 : Gate slot unique staging
+
+> **Objectif** : faire de `staging` un **sas a une seule livraison**. Tant que ce qui est sur staging n'est pas rendu sur `main` (= deploye en prod), on refuse une AUTRE livraison. Traduit techniquement la regle d'or n°4 (un ticket a la fois jusqu'en prod, jamais de bundle). **Granularite : slot PAR LIVRAISON** — la branche qui occupe deja staging peut continuer ses iterations QA ; toute autre livraison est bloquee.
+
+**Quand l'executer** : en mode **Feature → staging**, juste apres l'Etape 1. En mode **Direct staging** (deja sur `staging`, legacy), **sauter ce gate**.
+
+Lancer le helper depuis la racine du repo :
+
+```bash
+bash .claude/skills/pousse-staging/lib/staging-slot-gate.sh "$CURRENT_BRANCH"
+```
+
+Ce que fait le gate (voir `lib/staging-slot-gate.sh`) :
+
+1. `git fetch origin main staging` (best-effort ; pas de remote => gate ignore).
+2. **Slot LIBRE** si `git diff --quiet origin/main origin/staging` (meme contenu) : rien en attente de prod → on pousse. Robuste que `/merge` fasse un squash ou un merge-commit (compare le *tree*, pas l'historique).
+3. **Slot OCCUPE** sinon : lit le trailer `Staging-Source:` du HEAD de `origin/staging` (pose par le squash-merge a l'Etape 3).
+   - Si l'occupant == `$CURRENT_BRANCH` → **iteration QA de MA propre livraison, autorisee**.
+   - Sinon (autre branche, ou occupant inconnu/legacy sans trailer) → **BLOQUE**.
+
+Interpreter le **code de retour** du helper :
+
+| Code | Signification | Action |
+|------|---------------|--------|
+| `0` | Slot libre, **ou** iteration de ma propre livraison | Continuer a l'Etape 2 |
+| `4` | Slot OCCUPE par une AUTRE livraison (ou occupant inconnu) | **STOP** — terminer la livraison en cours : `/merge` la PR staging→main (la deployer en prod), puis relancer `/pousse-staging`. Le slot sera alors libre. |
+
+**Fail-safe** : un commit de tete sans trailer `Staging-Source:` (legacy / push manuel) est traite comme un occupant **inconnu** → le gate bloque (conservateur). Apres le premier `/merge` qui passe par ce skill, le trailer est present et le comportement redevient nominal.
+
 ## Etape 2 : Commit des changements (sur la branche courante)
 
 1. `git status` pour voir l'etat du repo.
@@ -121,8 +150,15 @@ Interpreter le **code de retour** du helper :
 
 4. **Commit du squash** sur staging :
    - Generer un message au format `type(scope): description` base sur les commits de `$FEATURE_BRANCH` (utiliser `git log main..$FEATURE_BRANCH --oneline` pour resumer).
+   - **Ajouter le trailer `Staging-Source: $FEATURE_BRANCH`** (sur sa propre ligne, dans le bloc de trailers en fin de message). **Obligatoire** : c'est ce qui permet au gate slot (Etape 1.5) de savoir quelle livraison occupe staging et d'autoriser les iterations QA de la meme branche.
    - Le message doit se terminer par : `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
-   - `git commit -m "<message>"`.
+   - Exemple :
+     ```
+     git commit -m "feat(devis): export PDF
+
+     Staging-Source: feat/export-pdf-devis
+     Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+     ```
 
 5. **Push staging** :
    ```bash
@@ -223,6 +259,7 @@ Afficher un recap final :
 ```
 Deploye sur staging depuis la branche `<FEATURE_BRANCH>` :
 - Push : <FEATURE_BRANCH> + staging
+- Gate slot unique : <slot libre | iteration de ma livraison>
 - Gate migrations multi-contributeur : <no-op | staging mergé, db reset OK>
 - Migrations staging : <N> appliquees
 - Edge Functions staging : <N> deployees
@@ -249,5 +286,7 @@ Prochaines etapes :
 
 ## Annexes du skill
 
+- `lib/staging-slot-gate.sh` — implementation du gate **slot unique** (Etape 1.5). Sourçable et testable. Points d'injection en en-tete du fichier.
+- `tests/test-staging-slot-gate.sh` — test reproductible (repo jetable) prouvant que staging se comporte en sas a une seule livraison : 2e livraison bloquee (rc=4), iteration de la meme autorisee (rc=0), robuste au squash-merge en prod. Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-slot-gate.sh`.
 - `lib/staging-migration-gate.sh` — implementation du gate migrations multi-contributeur (Etape 2.6). Sourçable et testable. Points d'injection en en-tete du fichier.
 - `tests/test-staging-migration-gate.sh` — test reproductible (repo jetable + simulation `db reset` via sqlite) prouvant que la collision est attrapee en local. Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-migration-gate.sh`.
