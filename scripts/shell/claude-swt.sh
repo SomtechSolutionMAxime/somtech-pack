@@ -80,6 +80,7 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       echo "⚠️  Mode DANGER : claude --dangerously-skip-permissions — toutes les"
       echo "    autorisations d'outils sont sautées pour cette session. À réserver à"
       echo "    un environnement de confiance (jamais sur du code non revu)."
+      echo "    NB : le flag refuse de démarrer en root/sudo (garde-fou de Claude Code)."
       claude --dangerously-skip-permissions
     else
       claude

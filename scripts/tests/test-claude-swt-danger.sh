@@ -64,10 +64,9 @@ if [ -f "$SNIPPET" ]; then
     && ok "avertissement de mode danger présent" || ko "aucun avertissement de mode danger"
 
   # (3) la commande normale ne force pas le mode danger inconditionnellement :
-  # --dangerously ne doit apparaître que dans une branche conditionnelle, pas
-  # comme invocation par défaut. On vérifie qu'une invocation `claude` nue existe
-  # encore (le chemin normal).
-  grep -qE '(^|[^-])\bclaude\b *\)?$|then claude$|else *$' "$SNIPPET" \
+  # le chemin `else` doit lancer `claude` NU (sans flag). On cible la ligne
+  # `claude` seule — pas n'importe quel `else` (qui donnerait une fausse assurance).
+  grep -qE '^[[:space:]]*claude[[:space:]]*$' "$SNIPPET" \
     && ok "chemin normal (claude sans flag) préservé" || ko "chemin normal sans flag introuvable"
 fi
 
