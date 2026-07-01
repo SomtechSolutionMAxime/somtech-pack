@@ -140,10 +140,21 @@ Puis dérouler les 5 phases ci-dessous, dans l'ordre.
 **But** : figer le périmètre déployé et préparer les entrées des sous-agents (qui n'ont
 ni MCP ni Somcraft — c'est ici qu'on résout leurs deux frictions).
 
-1. **Prendre une branche sur `origin/main`** (état prod) : `git fetch origin && git worktree`
-   déjà en place — vérifier que le code lu correspond bien à `origin/main`, pas à une
-   branche de feature locale. Identifier les **fichiers, migrations et le périmètre
-   déployé** de la fonction (routes, composants, tables, RPC, Edge Functions, workflows CI).
+1. **Matérialiser l'état déployé** (garde-fou n°2 — c'est ici qu'on le rend mécanique, pas
+   déclaratif). L'arbre de travail courant porte une branche de feature locale, **pas**
+   `origin/main` — lire les fichiers du disque contournerait silencieusement l'invariant.
+   L'orchestrateur **extrait donc l'état d'`origin/main` dans un répertoire scratch**, en
+   lecture seule, et c'est **ce chemin** que liront les sous-agents :
+   ```bash
+   git fetch origin
+   mkdir -p "$SCRATCH/etat-deploye"
+   git archive origin/main | tar -x -C "$SCRATCH/etat-deploye"
+   ```
+   `$SCRATCH` = répertoire scratch de session. Noter le commit audité :
+   `git rev-parse origin/main` → `ref_git`. Puis identifier, **sous `etat-deploye/`**, les
+   **fichiers, migrations et le périmètre déployé** de la fonction (routes, composants,
+   tables, RPC, Edge Functions, workflows CI). Les chemins de `cadrage.fichiers` sont
+   relatifs à `racine_etat_deploye`.
 2. **Projection BRD éphémère** (RETEX §3.2, option A — la retenue) : l'orchestrateur
    récupère le `brd.yaml` via `get_brd_pointer` (ServiceDesk, cf. STD-033 / STD-031 §2.7.8)
    au **bon grain** (module si `module_id` non-NULL, sinon app) et l'écrit dans un
@@ -161,7 +172,8 @@ ni MCP ni Somcraft — c'est ici qu'on résout leurs deux frictions).
 cadrage:
   fonction: string                 # nom lisible de la fonction/module auditée
   app_slug: string
-  ref_git: string                  # commit d'origin/main audité
+  ref_git: string                  # commit d'origin/main audité (git rev-parse origin/main)
+  racine_etat_deploye: string      # chemin scratch où origin/main a été extrait — les sous-agents lisent ICI
   supabase_ref_prod: string|null
   supabase_ref_staging: string|null
   somcraft_workspace_id: string|null
@@ -186,7 +198,14 @@ cadrage:
 Pour **chaque axe demandé** (défaut = tous), dispatcher **un sub-agent** (Task) avec le
 prompt d'axe + la carte de cadrage. Les axes sont indépendants → les lancer **en
 parallèle** (un seul message, plusieurs Task). **Agent frais, jamais l'auteur du code ;
-posture adversariale (« trouve les trous, pas valider »).**
+posture adversariale (« trouve les trous, pas valider »).** Les sous-agents **lisent le
+code sous `racine_etat_deploye`** (l'état `origin/main` extrait en phase 1), jamais l'arbre
+de travail courant.
+
+> **Matérialiser le garde-fou n°4** : dispatcher ces Task avec un `subagent_type`
+> **dépourvu de MCP** (ex. `Explore`, ou un agent générique sans serveurs MCP) plutôt que
+> de compter sur la seule consigne texte « pas de MCP ». Un agent qui *ne peut pas* sonder
+> ne sondera pas — le sondage live reste ainsi structurellement à l'orchestrateur.
 
 | Axe | Prompt | Question centrale |
 |---|---|---|
@@ -213,6 +232,13 @@ finding dont `a_sonder_en_live` est non-null :
    `list_tables`, `get_logs`) : grants réels (`information_schema.role_routine_grants`,
    `has_function_privilege('anon', …)`), policies (`pg_policies`), présence/état d'objets.
    Remplir `live_prod` et `live_staging` avec **la requête + son résultat**.
+   - ⚠️ **Deux environnements = deux `project_ref`.** Prod et staging sont des projets
+     Supabase distincts (`supabase_ref_prod` ≠ `supabase_ref_staging` de la carte de
+     cadrage). Passer explicitement le bon `project_id` à **chaque** appel `execute_sql`,
+     et faire **la même requête sur les deux**. Ne pas supposer que le MCP par défaut couvre
+     les deux : un audit qui ne sonde qu'un seul ref rate le drift (l'un des findings clés
+     du RETEX). Si un ref est indisponible, marquer le `live_*` correspondant « non sondé —
+     raison » plutôt que de le laisser vide.
 2. **Corroborer avec les outils natifs** : `get_advisors` (filtré par objet audité — c'est
    énorme, ne pas tout charger). Noter dans `corroboration` si l'advisor confirme ou reste
    muet. Rappel RETEX §2.3 : « le code fait REVOKE donc c'est OK » est faux — Supabase peut

@@ -10,6 +10,10 @@ Trouver les défauts du **code réellement déployé** : bugs, régressions, **c
 incomplètes**, états limites non gérés. Focus particulier sur ce qu'une revue de diff
 phase-par-phase laisse passer.
 
+> **Lis les fichiers sous `racine_etat_deploye`** (l'état `origin/main` extrait par
+> l'orchestrateur), **jamais l'arbre de travail courant** — c'est le cœur de l'audit :
+> on juge ce qui est en prod, pas une branche locale.
+
 ## Où chercher (RETEX — les défauts « transverses » échappent aux revues de diff)
 
 1. **Corrections incomplètes / incohérentes** : quand un correctif établit une règle,

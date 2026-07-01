@@ -16,7 +16,8 @@ traçabilité (règle d'or n°10) au même titre qu'un manifeste périmé.
 ## Méthode
 
 1. **Inventaire du livré** : à partir des `fichiers`/`routes`/`tables_rpc` de la carte de
-   cadrage, liste les **comportements observables** de la fonction (écrans, actions,
+   cadrage (lus **sous `racine_etat_deploye`**, l'état `origin/main` extrait — pas l'arbre
+   de travail), liste les **comportements observables** de la fonction (écrans, actions,
    règles métier encodées, calculs, indicateurs).
 2. **Rapprochement EF/RA** : pour chaque comportement, cherche l'EF/RA correspondante dans
    la projection BRD. Trois cas de finding :

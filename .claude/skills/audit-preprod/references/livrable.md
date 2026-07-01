@@ -73,9 +73,10 @@ epic isolé), pour porter la suite des correctifs avec traçabilité.
 2. **Projet** (`mcp__servicedesk__projects` action create) :
    - Titre : `[AUDIT] Pré-prod <fonction> <YYYY-MM-DD>`.
    - Description : verdict global + lien vers le rapport Somcraft (PoW) + compteurs.
-3. **Epics** = regroupement par **plan de priorité** (P1 bloquant / P2 / P3) ou par axe,
-   selon le volume. Rattachés au projet.
-4. **1 story par finding `confirme`** (`type=story`, rattachée à l'epic) :
+3. **Epics** (`mcp__servicedesk__epics` action create) = regroupement par **plan de
+   priorité** (P1 bloquant / P2 / P3) ou par axe, selon le volume. Rattachés au projet.
+4. **1 story par finding `confirme`** (`mcp__servicedesk__tickets` action create,
+   `type=story`, rattachée à l'epic) :
    - **Titre** : `[FIX] <titre>` (ou `[DEBT] <titre>` si P3).
    - **Priorité** : mapping sévérité → `critique→high`, `high→high`, `medium→medium`,
      `low→low`.
@@ -89,8 +90,9 @@ epic isolé), pour porter la suite des correctifs avec traçabilité.
      ```
    - **PoW** : lien vers le rapport Somcraft + la ligne du tableau des écarts.
    - **Secrets** : jamais la valeur, seulement `fichier:ligne` + masque.
-5. **1 story par finding `incertain`** : `type=improvement`, titre `[À VALIDER] <titre>`,
-   tag de revue, **jamais fermée automatiquement** — attend une validation humaine.
+5. **1 story par finding `incertain`** (`mcp__servicedesk__tickets` action create,
+   `type=improvement`) : titre `[À VALIDER] <titre>`, tag de revue, **jamais fermée
+   automatiquement** — attend une validation humaine.
 6. **Zéro story** pour les findings `refute`.
 
 ---

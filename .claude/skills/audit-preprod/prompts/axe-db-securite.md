@@ -5,6 +5,9 @@ crucial ici : tu **analyses le code SQL/les migrations** et tu **listes ce qu'il
 prouver en live**, mais tu **ne sondes pas** la base. L'orchestrateur (qui a le MCP) fera le
 sondage réel sur prod ET staging en phase 3. Ne suppose jamais que tu as accès à la base.
 
+> **Lis les migrations/SQL sous `racine_etat_deploye`** (l'état `origin/main` extrait),
+> jamais l'arbre de travail courant.
+
 > **Pourquoi cette séparation** (RETEX §2.3 & §3.1) : « le code fait `REVOKE` donc c'est OK »
 > est une **déduction fausse** — Supabase peut accorder `EXECUTE` à `anon` par un chemin
 > que `REVOKE FROM PUBLIC` ne couvre pas. Seule une requête sur l'environnement réel tranche.
