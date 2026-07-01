@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "somcraft": {
+      "type": "http",
+      "url": "https://docs.somtechsolutions.ca/api/mcp/mcp?key=${SOMCRAFT_MCP_API_KEY}"
+    },
+    "servicedesk": {
+      "type": "http",
+      "url": "https://vdpuktsqrecdxbmweate.supabase.co/functions/v1/servicedesk-mcp",
+      "headers": {
+        "Authorization": "Bearer ${SOMTECH_DESK_API_KEY}"
+      }
+    }
+  }
+}
