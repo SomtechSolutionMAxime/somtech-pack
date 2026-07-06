@@ -113,16 +113,32 @@ claude-swt-danger() { _CLAUDE_SWT_DANGER=1 _claude-swt-launch "$@"; }
 
 claude-swt-ls() { git worktree list; }          # sessions + branche courante de chacune
 
-claude-swt-done() {  # usage : claude-swt-done <timestamp> — depuis le repo principal
+claude-swt-done() {  # usage : claude-swt-done <timestamp> — depuis le repo OU un worktree
   [ -z "$1" ] && { echo "usage: claude-swt-done <timestamp>"; return 1; }
-  local repo wt; repo=$(basename "$PWD"); wt="$HOME/worktrees/$repo/$1"
-  git worktree remove "$wt" && git branch -D "wt/$1" 2>/dev/null
-  echo "✅ session $1 nettoyée"
+  # Résoudre le worktree via git (partagé entre tous les worktrees du repo) plutôt
+  # que de reconstruire le chemin depuis $PWD : `basename "$PWD"` donne le
+  # timestamp (pas le nom du repo) quand on lance la commande DEPUIS un worktree,
+  # d'où un chemin faux et un « nettoyée » mensonger qui ne supprime rien.
+  local wt
+  wt=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}' \
+         | grep -E "/${1}/?$" | head -1)
+  [ -z "$wt" ] && { echo "⛔ worktree pour la session $1 introuvable (git worktree list)."; return 1; }
+  if ! git worktree remove "$wt"; then
+    echo "⛔ retrait refusé (voir l'erreur git ci-dessus) — souvent : modifications ou fichiers non suivis dans $wt."
+    echo "   Inspecte-le (git -C \"$wt\" status), nettoie, puis relance — ou force : git worktree remove --force \"$wt\"."
+    return 1
+  fi
+  git branch -D "wt/$1" 2>/dev/null
+  echo "✅ session $1 nettoyée ($wt)"
 }
 
-claude-swt-gc() {  # depuis le repo principal : liste les sessions terminées (clean + mergées)
+claude-swt-gc() {  # liste les sessions terminées (clean + mergées) — depuis le repo OU un worktree
   git fetch origin -q
-  local main="$PWD"
+  # Le repo principal est TOUJOURS le premier worktree listé — le dériver ainsi
+  # rend gc correct peu importe d'où on l'invoque (et non « $PWD » qui peut être
+  # un worktree lié).
+  local main
+  main=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
   git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt; do
     [ "$wt" = "$main" ] && continue
     [ -n "$(git -C "$wt" status --porcelain)" ] && continue
