@@ -175,7 +175,43 @@ mcp__claude_ai_Somcraft__update_document
 
 > **Worktree** : si la branche courante est elle-même mergée, elle est conservée (impossible de supprimer une branche checked-out) → la retirer après bascule, ou via `claude-swt-done <timestamp>` au teardown de session.
 
-### 5. Résumé de fin de session
+### 5. Préparer le worktree au teardown propre
+
+> **Ne s'applique que si la session tourne dans un worktree `claude-swt`** (branche `wt/*`, cwd sous `~/worktrees/`). Sinon, sauter à l'étape 6.
+
+**Pourquoi cette étape existe** : le teardown automatique de `claude-swt` (au quit) ne retire le worktree **que si les deux conditions suivantes sont vraies** — sinon il le conserve, souvent sans que l'utilisateur comprenne quoi le bloque :
+1. `git status --porcelain` **vide** (aucun fichier suivi modifié ni fichier non suivi) ;
+2. la branche courante **et** la socle `wt/<sess>` sont **ancêtres de `origin/main`** (aucun commit non mergé).
+
+Or les étapes 2-3 de ce skill **écrivent** `CHANGELOG.md` (et `.somtech/app-state.md`) : laisser ces fichiers non commités **crée soi-même** la saleté qui bloque le teardown. Cette étape ferme cette boucle.
+
+**5a. Diagnostiquer** (lecture pure — n'écrit rien) :
+
+```bash
+source .claude/skills/end-session/lib/worktree-teardown-check.sh
+wtc_report origin/main
+```
+
+Le rapport classe ce qui bloque :
+- **fichiers non commités** → `TRACKED` (suivis, à committer — dont les docs de fin de session), `ARTIFACT` (jetables : `.DS_Store`, `*.log`, `*.tmp`… → `.gitignore` ou suppression), `ORPHAN` (non suivis inconnus → **décision requise**) ;
+- **commits non mergés** → branche (courante et/ou socle `wt/<sess>`) + nombre de commits absents de `origin/main`.
+
+**5b. Remédier, avec validation** (jamais de suppression en silence — cf. règles d'or) :
+
+| Catégorie | Action |
+|---|---|
+| `TRACKED` (docs de session) | **Committer** sur la branche de travail : `git add CHANGELOG.md && git commit -m "docs(session): fin de session <date>"`. (`.somtech/app-state.md` est gitignoré — il n'apparaît jamais comme bloqueur ; ne pas tenter de l'ajouter.) ⚠️ si la branche courante est la **socle `wt/*`**, committer dessus la rend non mergée → le worktree restera conservé jusqu'à ce que ce commit soit mergé dans `main` (via `/pousse-staging` → `/merge`). Le dire explicitement. |
+| `ARTIFACT` | Proposer : ajouter au `.gitignore` (si récurrent) **ou** `rm` après confirmation. |
+| `ORPHAN` | **Lister nommément** et demander à l'utilisateur : committer, ignorer, ou supprimer. **Ne jamais supprimer sans GO explicite.** |
+| Commits non mergés | Afficher `git log origin/main..<branche>`. Orienter : soit **finir + merger** (`/pousse-staging` → `/merge`), soit **abandonner** (branche à supprimer manuellement). Un worktree portant du travail non mergé **doit** rester — c'est voulu (on ne perd rien). |
+
+**5c. Re-diagnostiquer et informer honnêtement** : relancer `wtc_report`. Le verdict final va dans le résumé (étape 6) :
+- ✅ **teardown-ready** → « ce worktree s'auto-nettoiera au quit, ou `claude-swt-done <sess>` depuis le repo principal » ;
+- 🚧 **conservé** → lister ce qui reste et pourquoi (ex : « 2 commits non mergés sur `feat/x` → à merger avant retrait »). **Ne jamais laisser croire qu'un worktree sera supprimé s'il porte du travail non mergé.**
+
+> Le retrait manuel se fait avec `claude-swt-done <sess>` (résout le worktree via `git worktree list`, fonctionne depuis le repo principal ou un autre worktree ; refuse proprement si le worktree est sale plutôt que d'annoncer un faux succès).
+
+### 6. Résumé de fin de session
 
 Afficher un résumé à l'utilisateur:
 
@@ -195,6 +231,10 @@ Afficher un résumé à l'utilisateur:
    - À vérifier (contenu dans base, merge non confirmé): [liste]
    - Conservées (travail non mergé): [liste]
 
+🧭 Worktree (si session claude-swt):
+   - Verdict: ✅ teardown-ready → `claude-swt-done <sess>`
+     OU 🚧 conservé — bloqueurs: [fichiers à traiter / commits à merger]
+
 🔍 Résumé des changements:
    - [Liste des points clés]
 ```
@@ -209,7 +249,8 @@ Claude:
 3. Met à jour CHANGELOG.md à la racine du projet
 4. Si `.somtech/app.yaml` présent : propose un draft de MAJ du doc Somcraft + cache local, demande validation, écrit après approbation (STD-027)
 5. Ferme les branches mergées (local + distant), conserve celles avec du travail non mergé (helper `lib/close-merged-branches.sh`, protège main/staging/wt-*/courante)
-6. Affiche le résumé
+6. Si session dans un worktree `claude-swt` : diagnostique les bloqueurs de teardown (helper `lib/worktree-teardown-check.sh`), commit les docs de session, gère artefacts/orphelins avec validation, informe honnêtement de ce qui reste
+7. Affiche le résumé
 
 ## Notes
 
@@ -217,3 +258,4 @@ Claude:
 - Toujours demander confirmation avant d'écrire si des changements majeurs sont détectés
 - Adapter le niveau de détail selon l'ampleur de la session
 - **Ne pas toucher à `.claude/CLAUDE.md` projet** — cf. D-20260513-0009 (le pack ne gère plus ce fichier)
+- **Ne jamais annoncer qu'un worktree sera supprimé s'il porte du travail non mergé ou des fichiers non résolus** — le teardown claude-swt le conservera (par sûreté), et l'annoncer « propre » serait mensonger (cf. règle réalité-miroir)
