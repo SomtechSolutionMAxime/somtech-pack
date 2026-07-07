@@ -83,6 +83,16 @@ mkdir -p "$TMP/multi/.somtech"
 } > "$TMP/multi/.somtech/app.yaml"
 eq  "app_id correctement extrait" "$(sla_read_app_id "$TMP/multi/.somtech/app.yaml")" "$APP_ID"
 
+echo "→ Cas 5b : robustesse parsing — valeur quotée + commentaire inline nettoyés"
+mkdir -p "$TMP/robuste/.somtech"
+{
+  echo "servicedesk:"
+  echo "  app_id: \"$APP_ID\"  # prod uniquement"
+  echo "somcraft:"
+  echo "  workspace_id: WS"
+} > "$TMP/robuste/.somtech/app.yaml"
+eq  "app_id sans quotes ni commentaire" "$(sla_read_app_id "$TMP/robuste/.somtech/app.yaml")" "$APP_ID"
+
 echo "→ Cas 6 : SLA_ENV override respecté (env par défaut = staging)"
 mk_yaml "$TMP/env" "$APP_ID"
 out="$( SLA_APP_YAML="$TMP/env/.somtech/app.yaml" SLA_HOLDER_PR="1" sla_resolve feat/A )"

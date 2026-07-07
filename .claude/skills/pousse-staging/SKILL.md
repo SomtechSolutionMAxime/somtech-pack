@@ -36,7 +36,7 @@ Le skill detecte le mode automatiquement a l'etape 1.
 
 > **Objectif** : rendre le sas staging **réellement opposable** (règle d'or n°14) par un verrou **atomique** hébergé dans ServiceDesk, au lieu de reposer sur la discipline. Le premier agent qui pousse acquiert le verrou ; tout autre est bloqué **avant** d'avoir rien poussé. C'est l'implémentation de la story T-20260706-0007 (epic E-20260706-0001). **C'est le gate fort ; l'Étape 1.5 ci-dessous reste un filet best-effort pour les repos non liés.**
 
-**Quand l'exécuter** : en mode **Feature → staging**, en **toute première action avant tout push** (donc avant l'Étape 1.5). En mode **Direct staging** (déjà sur `staging`, legacy), **sauter ce gate** (pas de PR de livraison à identifier).
+**Quand l'exécuter** : en mode **Feature → staging**, en **toute première action avant tout push** (donc avant l'Étape 1.5). En mode **Direct staging** (déjà sur `staging`, legacy), **sauter ce gate** (pas de PR de livraison à identifier). ⚠️ Un push direct depuis `staging` contourne donc l'opposabilité du verrou — raison de plus de privilégier le mode Feature → staging.
 
 **1. Résoudre le contexte** (partie scriptable, testée) :
 

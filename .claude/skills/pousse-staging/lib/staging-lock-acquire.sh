@@ -44,6 +44,7 @@ sla_read_app_id() {
     /^[^[:space:]#]/ { in_sd = ($0 ~ /^servicedesk:/) ? 1 : 0 }   # section top-level
     in_sd && /^[[:space:]]+app_id:[[:space:]]*/ {
       sub(/^[[:space:]]+app_id:[[:space:]]*/, "")
+      sub(/[[:space:]]*#.*$/, "")                                  # strip commentaire inline
       gsub(/^["'"'"']|["'"'"']$/, "")                              # trim quotes
       gsub(/[[:space:]]+$/, "")                                    # trim trailing ws
       print; exit
@@ -66,9 +67,17 @@ sla_holder_pr() {
 # Émet des lignes KEY=VALUE + DECISION sur stdout. Code retour = voir en-tête.
 sla_resolve() {
   local current_branch="$1"
-  local yaml="${SLA_APP_YAML:-.somtech/app.yaml}"
   local env="${SLA_ENV:-staging}"
-  local app_id holder_pr
+  local app_id holder_pr yaml
+  # Chemin du mapping : override explicite (tests/CI) sinon ancré à la RACINE git
+  # (découple du CWD — un helper invoqué depuis un sous-dossier trouve quand même
+  # le fichier, pas de SKIP fail-OPEN par erreur de cwd).
+  if [ -n "${SLA_APP_YAML:-}" ]; then
+    yaml="$SLA_APP_YAML"
+  else
+    local root; root="$(git rev-parse --show-toplevel 2>/dev/null)"
+    yaml="${root:-.}/.somtech/app.yaml"
+  fi
 
   if [ ! -f "$yaml" ]; then
     echo "DECISION=SKIP"
