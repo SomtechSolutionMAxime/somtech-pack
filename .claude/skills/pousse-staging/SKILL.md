@@ -32,9 +32,55 @@ Le skill detecte le mode automatiquement a l'etape 1.
    ```
    Si plus de 10 commits d'ecart, avertir l'utilisateur (sa branche est possiblement perimee).
 
+## Etape 1.4 : Acquisition atomique du verrou de sas (gate fort)
+
+> **Objectif** : rendre le sas staging **réellement opposable** (règle d'or n°14) par un verrou **atomique** hébergé dans ServiceDesk, au lieu de reposer sur la discipline. Le premier agent qui pousse acquiert le verrou ; tout autre est bloqué **avant** d'avoir rien poussé. C'est l'implémentation de la story T-20260706-0007 (epic E-20260706-0001). **C'est le gate fort ; l'Étape 1.5 ci-dessous reste un filet best-effort pour les repos non liés.**
+
+**Quand l'exécuter** : en mode **Feature → staging**, en **toute première action avant tout push** (donc avant l'Étape 1.5). En mode **Direct staging** (déjà sur `staging`, legacy), **sauter ce gate** (pas de PR de livraison à identifier).
+
+**1. Résoudre le contexte** (partie scriptable, testée) :
+
+```bash
+bash .claude/skills/pousse-staging/lib/staging-lock-acquire.sh "$CURRENT_BRANCH"
+```
+
+Le helper lit `servicedesk.app_id` dans `.somtech/app.yaml`, détermine le détenteur (n° de PR courante via `gh`, branche courante), et **tranche**. Interpréter sa sortie (`DECISION=…`) et son **code de retour** :
+
+| `DECISION` / code | Signification | Action |
+|---|---|---|
+| `SKIP` (rc 0) | `.somtech/app.yaml` absent → **repo non lié, pas opté au verrou** (opt-in) | **Continuer** à l'Étape 1.5 **sans verrou**. Ne bloque pas les repos non liés. |
+| `FAIL` (rc 5) | `app.yaml` présent mais `servicedesk.app_id` manquant/vide | **STOP fail-CLOSED** — rien poussé. Corriger l'app.yaml (`/lier-app`). |
+| `FAIL` (rc 6) | Aucune PR ouverte pour la branche courante | **STOP fail-CLOSED** — ouvrir la PR d'abord (règle PR-tôt), puis relancer. |
+| `READY` (rc 0) | App liée + PR détentrice → params émis (`application_id`, `env`, `holder_pr`, `holder_label`) | **Acquérir le verrou via MCP** (étape 2 ci-dessous). |
+
+**2. Acquérir le verrou (MCP, uniquement si `DECISION=READY`)** — l'agent appelle, avec les params émis par le helper :
+
+```
+mcp__servicedesk__applications(
+  action="lock_acquire",
+  application_id=<application_id>,
+  env=<env>,                 # "staging"
+  holder_pr=<holder_pr>,     # n° de PR = détenteur (stable au rebase)
+  holder_label=<holder_label>,
+  agent="claude-code /pousse-staging"
+)
+```
+
+Interpréter la réponse :
+
+| Réponse | Signification | Action |
+|---|---|---|
+| `{ acquired: true }` | Verrou pris (frais **ou** idempotent : même `holder_pr` qui re-pousse) | **Continuer** à l'Étape 1.5 puis au workflow normal. Couvre les allers-retours QA de la même livraison. |
+| `{ acquired: false, blocked_by_holder_pr, blocked_since }` | Staging **occupé par une autre livraison** | **STOP immédiat — rien n'est poussé.** Afficher : `staging occupé par la PR #<blocked_by_holder_pr> depuis <blocked_since>`. Terminer/merger la livraison en cours avant de réessayer. |
+| **Erreur MCP** (SD injoignable, clé KO, exception) | Le verrou est actif mais l'infra flanche | **STOP fail-CLOSED — rien poussé.** Ne jamais pousser sans verrou quand une app est liée. |
+
+> **Auth** : le MCP `servicedesk` utilise `SERVICEDESK_MCP_API_KEY` (déjà dans l'environnement). **Libération** : automatique au merge réussi sur `main` via la GitHub Action du repo client (story T-20260706-0008) ; filet TTL côté ServiceDesk si la livraison est abandonnée.
+
 ## Etape 1.5 : Gate slot unique staging
 
 > **Objectif** : faire de `staging` un **sas a une seule livraison**. Tant que ce qui est sur staging n'est pas rendu sur `main` (= deploye en prod), on refuse une AUTRE livraison. Traduit techniquement la regle d'or n°4 (un ticket a la fois jusqu'en prod, jamais de bundle). **Granularite : slot PAR LIVRAISON** — la branche qui occupe deja staging peut continuer ses iterations QA ; toute autre livraison est bloquee.
+>
+> **Relation avec l'Étape 1.4** : ce gate git-trailer est un **filet best-effort** (non atomique, sans dépendance MCP). Pour une app **liée** (`.somtech/app.yaml`), le verrou atomique de l'Étape 1.4 est déjà passé et fait autorité — ce gate-ci ne fait que confirmer. Pour un repo **non lié** (l'Étape 1.4 a renvoyé `SKIP`), ce gate reste **la seule protection**. Les deux sont cohérents : même livraison → autorisée ; autre → bloquée.
 
 **Quand l'executer** : en mode **Feature → staging**, juste apres l'Etape 1. En mode **Direct staging** (deja sur `staging`, legacy), **sauter ce gate**.
 
@@ -259,6 +305,7 @@ Afficher un recap final :
 ```
 Deploye sur staging depuis la branche `<FEATURE_BRANCH>` :
 - Push : <FEATURE_BRANCH> + staging
+- Verrou de sas (atomique) : <acquis PR #<n> | non applicable (repo non lié)>
 - Gate slot unique : <slot libre | iteration de ma livraison>
 - Gate migrations multi-contributeur : <no-op | staging mergé, db reset OK>
 - Migrations staging : <N> appliquees
@@ -286,6 +333,8 @@ Prochaines etapes :
 
 ## Annexes du skill
 
+- `lib/staging-lock-acquire.sh` — résolution du contexte du **verrou de sas atomique** (Etape 1.4) : lit `servicedesk.app_id` de `.somtech/app.yaml`, détermine le détenteur (n° de PR), et tranche `SKIP` (repo non lié, opt-in) / `FAIL` (fail-CLOSED) / `READY` (params pour l'appel MCP `lock_acquire`). Sourçable et testable ; l'appel MCP lui-même est fait par l'agent. Points d'injection en en-tete (`SLA_APP_YAML`, `SLA_ENV`, `SLA_HOLDER_PR`).
+- `tests/test-staging-lock-acquire.sh` — test reproductible (fixtures app.yaml) prouvant les 4 décisions : opt-in `SKIP` si app.yaml absent (ne casse pas les repos non liés), `FAIL` fail-CLOSED si `app_id` vide ou PR absente, `READY` avec params complets si app liée + PR. Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-lock-acquire.sh`.
 - `lib/staging-slot-gate.sh` — implementation du gate **slot unique** (Etape 1.5). Sourçable et testable. Points d'injection en en-tete du fichier.
 - `tests/test-staging-slot-gate.sh` — test reproductible (repo jetable) prouvant que staging se comporte en sas a une seule livraison : 2e livraison bloquee (rc=4), iteration de la meme autorisee (rc=0), robuste au squash-merge en prod. Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-slot-gate.sh`.
 - `lib/staging-migration-gate.sh` — implementation du gate migrations multi-contributeur (Etape 2.6). Sourçable et testable. Points d'injection en en-tete du fichier.
