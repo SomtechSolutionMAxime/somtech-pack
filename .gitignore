@@ -5,5 +5,9 @@
 # Le gabarit .env.example et la config .mcp.json (placeholders ${...}) sont trackés.
 .env
 
+# Secret d'infra Graphiti (clé X-API-Key du rappel épisodique, STD-038) — jamais commité.
+graphiti*.env
+**/graphiti*.env
+
 # Artefact de build du CLI (payload bundlé, reconstruit au publish)
 cli/payload/
