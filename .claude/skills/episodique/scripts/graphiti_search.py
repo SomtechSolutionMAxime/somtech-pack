@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Capacité de LECTURE de la mémoire épisodique Graphiti (D-20260708-0002, EF-EPI-005).
 
-Client que le skill `/rappel` appelle pour interroger EN DIRECT l'instance
-Graphiti de Somtech (`graphiti.somtech.solutions`) — recherche par similarité
-(`POST /search`) et santé (`GET /healthcheck`), toujours bornée par `group_id`.
+Moteur POSSÉDÉ par le geste de fonction `/episodique` (STD-039 I2 : la fonction
+possède son moteur, lecture et écriture au même endroit nommé). L'orchestrateur
+`/rappel` ne le possède pas — il y DÉLÈGUE pour la partie épisodique d'un rappel.
+
+Interroge EN DIRECT l'instance Graphiti de Somtech (`graphiti.somtech.solutions`) —
+recherche par similarité (`POST /search`) et santé (`GET /healthcheck`), toujours
+bornée par `group_id`.
 
 Frontière D5 (RA-ROU-001 / RA-EPI-005) : l'agent interroge Graphiti directement,
 JAMAIS via le SD-Graph. Ce fichier est ce pont ; il ne parle qu'à Graphiti.

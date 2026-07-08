@@ -2,9 +2,9 @@
 name: episodique
 description: |
   Geste de la mémoire ÉPISODIQUE (le vécu conversationnel : rencontres, transcripts,
-  sessions). Interface de fonction qui POSSÈDE ses deux gestes — lecture/rappel ET
-  écriture/encodage — au même endroit nommé (symétrie, STD-039 I2). Interroge la
-  mémoire épisodique Graphiti EN DIRECT, bornée par group_id.
+  sessions). Interface de fonction destinée à porter ses deux gestes au même endroit
+  nommé (symétrie, STD-039 I2) : lecture/rappel LIVRÉE ; écriture/encodage PLANIFIÉE
+  (ED12). Interroge la mémoire épisodique Graphiti EN DIRECT, bornée par group_id.
   DÉCLENCHEURS : /episodique, mémoire épisodique, rappeler le vécu d'un projet,
   interroger l'épisodique, chercher dans les rencontres/transcripts, faits d'un group_id,
   qu'a-t-on dit/décidé en séance sur X.
