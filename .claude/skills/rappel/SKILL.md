@@ -68,7 +68,8 @@ python3 .claude/skills/rappel/scripts/graphiti_search.py \
     --max-facts 10
 # → {"group_id": "...", "count": N, "facts": [ {"fact": "..."}, ... ]}
 
-# Vérifier la santé de l'instance (sans clé) :
+# Vérifier la santé de l'instance (utilise la clé si présente pour sonder le backend ;
+# sinon retombe sur /caddy-health, la liveness keyless du reverse proxy) :
 python3 .claude/skills/rappel/scripts/graphiti_search.py --health
 ```
 

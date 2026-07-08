@@ -55,6 +55,14 @@ class GraphitiHTTPError(GraphitiError):
         super().__init__(f"HTTP {status}: {message}")
 
 
+def _dequote(val: str) -> str:
+    """Retire une paire de guillemets englobants (les .env quotés sont courants)."""
+    val = val.strip()
+    if len(val) >= 2 and val[0] == val[-1] and val[0] in ("\"", "'"):
+        return val[1:-1]
+    return val
+
+
 def _load_env_file(path: str) -> None:
     """Charge un fichier KEY=VALUE non versionné dans os.environ (l'env shell a priorité)."""
     try:
@@ -64,19 +72,27 @@ def _load_env_file(path: str) -> None:
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, _, val = line.partition("=")
-                os.environ.setdefault(key.strip(), val.strip())
+                os.environ.setdefault(key.strip(), _dequote(val))
     except OSError as exc:
         raise GraphitiConfigError(
             f"GRAPHITI_ENV_FILE illisible ({path})"
         ) from exc
 
 
-def _resolve_api_key() -> str:
-    """Récupère la clé d'infra depuis l'environnement (ou GRAPHITI_ENV_FILE). Jamais en dur."""
+def _maybe_api_key() -> str | None:
+    """Clé d'infra si disponible (env ou GRAPHITI_ENV_FILE), sinon None. Ne lève pas."""
     env_file = os.environ.get(ENV_FILE_ENV)
     if env_file:
-        _load_env_file(env_file)
-    key = (os.environ.get(API_KEY_ENV) or "").strip()
+        try:
+            _load_env_file(env_file)
+        except GraphitiConfigError:
+            pass
+    return (os.environ.get(API_KEY_ENV) or "").strip() or None
+
+
+def _resolve_api_key() -> str:
+    """Récupère la clé d'infra ; lève GraphitiConfigError si absente. Jamais en dur."""
+    key = _maybe_api_key()
     if not key:
         raise GraphitiConfigError(
             f"Secret d'infra absent : définir {API_KEY_ENV} (ou {ENV_FILE_ENV}). "
@@ -138,12 +154,26 @@ class GraphitiClient:
             "/search",
             {"query": query, "group_ids": [group_id], "max_facts": int(max_facts)},
         )
+        if not isinstance(data, dict):
+            raise GraphitiError("réponse Graphiti inattendue (objet JSON attendu).")
         facts = data.get("facts", [])
         return facts if isinstance(facts, list) else []
 
     def healthcheck(self) -> bool:
-        """Ping /healthcheck (sans clé). True si 2xx."""
-        req = urllib.request.Request(f"{self.base_url}/healthcheck", method="GET")
+        """Vérifie la santé de l'instance. True si 2xx.
+
+        Via la passerelle publique (`graphiti.somtech.solutions`), le SEUL endpoint
+        keyless est `/caddy-health` (liveness du reverse proxy) ; `/healthcheck` (santé
+        du backend Graphiti) exige la clé — sinon 401. On envoie donc la clé sur
+        `/healthcheck` quand elle est disponible (vrai signal backend), et on retombe
+        sur `/caddy-health` sans clé (liveness proxy seulement) sinon.
+        """
+        key = _maybe_api_key()
+        if key:
+            path, headers = "/healthcheck", {"X-API-Key": key}
+        else:
+            path, headers = "/caddy-health", {}
+        req = urllib.request.Request(f"{self.base_url}{path}", method="GET", headers=headers)
         try:
             _do_request(req, self.timeout)
             return True
