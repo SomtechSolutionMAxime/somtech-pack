@@ -9,11 +9,11 @@ et **ADR-033** (architecture de la mémoire, taxonomie par fonction).
 
 ## Les cinq fonctions et leurs porteurs
 
-### Épisodique — Graphiti (le vécu conversationnel)
-- **Porteur** : instance Graphiti de Somtech (`graphiti.somtech.solutions`), Neo4j Community (ADR-034).
+### Épisodique — le geste `/episodique` (le vécu conversationnel)
+- **Geste de fonction** : **`/episodique`** possède le moteur épisodique (Graphiti / Neo4j Community, ADR-034). `/rappel` **délègue ici** ; il ne porte pas le moteur (STD-039 I2).
 - **Contient** : faits extraits des rencontres/transcripts/sessions encodées — entités, relations, qui a dit/décidé quoi, bi-temporel.
 - **Partition** : `group_id` = projet/sujet **interne** (RA-EPI-002). Ce n'est PAS l'isolation client (celle-ci = séparation d'instance par Département IA, ADR-034).
-- **Accès rappel** : `scripts/graphiti_search.py` → `POST /search {query, group_ids:[gid], max_facts}` (header `X-API-Key`).
+- **Accès rappel** : déléguer à `/episodique` → `.claude/skills/episodique/scripts/graphiti_search.py` (`POST /search {query, group_ids:[gid], max_facts}`, header `X-API-Key` hors bande, scopé `group_id`).
 - **Autorité** : ❌ **ne fait pas foi** (RA-EPI-001) — rappelle, oriente, ne tranche pas.
 - **Quand** : « qu'est-ce qui s'est dit/passé en rencontre sur X », « le contexte vécu d'un projet ».
 

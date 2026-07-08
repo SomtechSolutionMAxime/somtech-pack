@@ -1,108 +1,90 @@
 ---
 name: rappel
 description: |
-  Discipline de RAPPEL de la mémoire Somtech : quelle mémoire consulter pour quoi,
-  comment combiner les substrats, et où passe la frontière avec l'opposable.
-  Interroge la mémoire épisodique (Graphiti) EN DIRECT par group_id, la sémantique
-  (Somcraft), et l'exécutif (ServiceDesk). Complète /episodique (écriture) par le
-  côté lecture/rappel.
-  DÉCLENCHEURS : /rappel, /memoire, se rappeler, retrouver le vécu d'un projet,
-  qu'est-ce qu'on a décidé/dit sur X, rappel épisodique, interroger Graphiti,
-  chercher dans la mémoire, contexte d'une rencontre passée.
-  NE PAS confondre avec /episodique (encoder une session en épisode = écriture) ni
-  avec une recherche RAG (similarité documentaire pure, hors connectome).
-  Cadre : BRD Mémoire EF-EPI-005 + EF-PRO-002, ADR-033 (fonctions de mémoire),
-  RA-EPI-005 (rappel direct, frontière D5).
+  Orchestrateur de RAPPEL cross-fonction : fan-out d'une question de mémoire à travers
+  les substrats et DÉLÈGUE à chaque geste de fonction (épisodique → /episodique,
+  sémantique → Somcraft, exécutif → ServiceDesk, travail → session). Ne possède aucun
+  moteur : il compose, il recoupe. Convenance de découvrabilité — pas load-bearing.
+  DÉCLENCHEURS : /rappel, se rappeler d'un contexte, retrouver ce qu'on sait sur X à
+  travers plusieurs mémoires, recouper épisodique + sémantique + exécutif, rappel large.
+  Pour un rappel PUREMENT épisodique, aller directement à /episodique.
+  NE PAS confondre avec /episodique (le geste de fonction qui POSSÈDE le moteur épisodique)
+  ni avec /memoire (hub informatif). Un rappel NE FAIT PAS FOI (I3) — promotion via le gate.
+  Cadre : STD-039 §2.5 (orchestrateur mince), BRD Mémoire EA-MEM-006, EF-PRO-002.
 disable-model-invocation: false
 ---
 
-# /rappel — se rappeler depuis la mémoire Somtech
+# /rappel — orchestrateur de rappel cross-fonction
 
-Ce skill encode **la discipline de rappel** : un agent qui a besoin de contexte ne
-« cherche pas au hasard » — il sait **quelle mémoire porte quoi**, l'interroge au bon
-endroit, combine les résultats, et sait **ce qui fait foi** vs **ce qui ne fait que
-rappeler**.
+`/rappel` **compose** un rappel à travers plusieurs mémoires en **déléguant** à chaque
+**geste de fonction** — il ne possède **aucun moteur** (STD-039 §2.5, invariant **I2** :
+le moteur épisodique appartient à `/episodique`, pas ici). Il **fan-out** la question,
+recoupe les résultats, et qualifie ce qui fait foi vs ce qui rappelle.
 
-> Source de vérité : **BRD Mémoire — Département IA de Somtech** (in_force). Ce skill
-> opérationnalise **EF-EPI-005** (rappel épisodique direct) et **EF-PRO-002** (un STD/
-> une discipline opérationnalisé·e par un skill). Cadre conceptuel : **ADR-033**.
+> C'est une **convenance de fan-out**, pas un point de contrôle : avec le socle
+> always-on (invariants dans le CLAUDE.md + STD-039), un agent route déjà correctement
+> seul. Pour un rappel **mono-substrat**, invoquer directement le geste de fonction
+> (`/episodique`, Somcraft, ServiceDesk) est parfaitement légitime.
 
-## 1. La carte des substrats — quelle mémoire pour quoi
+## 1. La carte des substrats — vers quel geste déléguer
 
-| Fonction | Substrat | Ce qu'on y rappelle | Comment | Fait foi ? |
-|---|---|---|---|---|
-| **Épisodique** | Graphiti (`graphiti.somtech.solutions`) | Le **vécu** conversationnel : rencontres, transcripts, qui a dit/décidé quoi, quand | `scripts/graphiti_search.py` — `/search` borné par `group_id` | ❌ rappelle seulement (RA-EPI-001) |
-| **Sémantique** | Somcraft | Les **concepts métier finalisés**, la connaissance durable, câblée par backlinks `[[…]]` | MCP Somcraft (`search_documents`, `read_document`, `read_backlinks`) | ✅ opposable une fois finalisé (RA-SEM-006) |
-| **Exécutif** | ServiceDesk | L'**état du travail** : demandes/epics/stories/tickets, décisions, risques, hypothèses, santé | MCP ServiceDesk (`tickets`, `epics`, `demands`, `project_decisions`, `graph`) | ✅ opposable (RA-EXE-001) |
-| **Travail** | session + graphify | Le **contexte volatil** de la tâche courante, graphes jetables | contexte de session / `/graphify` | ❌ jamais foi (RA-TRA-001) |
+| Fonction | Geste de fonction (où déléguer) | Ce qu'on y rappelle | Fait foi ? |
+|---|---|---|---|
+| **Épisodique** | **`/episodique`** (possède le moteur Graphiti, scopé `group_id`) | Le **vécu** : rencontres, transcripts, qui a dit/décidé quoi | ❌ rappelle seulement (I3) |
+| **Sémantique** | **Somcraft MCP** (`search_documents`, `read_document`, `read_backlinks`) | Concepts métier **finalisés**, connaissance durable câblée `[[…]]` | ✅ opposable une fois finalisé |
+| **Exécutif** | **ServiceDesk MCP** (`tickets`, `epics`, `demands`, `project_decisions`, `graph`) | État du travail, décisions, risques, santé | ✅ opposable |
+| **Travail** | Session + `graphify` | Contexte volatil de la tâche courante | ❌ jamais foi |
 
-**Règle d'aiguillage** — pose-toi « de quelle nature est ce dont je me rappelle ? » :
-- « **Qu'est-ce qui s'est dit / passé** en rencontre / session ? » → **épisodique (Graphiti)**.
-- « **C'est quoi le concept / la définition / la connaissance** durable ? » → **sémantique (Somcraft)**.
-- « **Où on en est / qu'a-t-on décidé** officiellement ? » → **exécutif (ServiceDesk)**.
-- « De quoi je parlais **il y a 5 minutes** ? » → **travail** (déjà dans le contexte).
+**Règle d'aiguillage** — « de quelle nature est ce dont je me rappelle ? » :
+- vécu / ce qui s'est dit en séance → **`/episodique`** ;
+- concept / définition durable → **Somcraft** ;
+- état / décision officielle → **ServiceDesk** ;
+- contexte immédiat → **travail** (déjà là).
 
-## 2. Frontière D5 — l'agent fait le pont, jamais un substrat
+## 2. Frontière D5 (I4) — l'agent fait le pont, jamais un substrat
 
-**RA-ROU-001 / RA-EPI-005 (opposable)** : il n'y a **aucun pont direct entre substrats**.
-Tu interroges **chaque mémoire directement** et tu **combines toi-même** les résultats.
+Aucun pont direct entre substrats. `/rappel` **n'agrège pas via un super-substrat** : il
+fait **N appels explicites** (délégations) et recoupe lui-même. En particulier, la lecture
+épisodique passe **toujours** par le geste `/episodique` (qui interroge Graphiti en
+direct), **jamais** via le SD-Graph (câblage de l'exécutif, pas un accès à l'épisodique).
 
-- Pour l'épisodique → **appelle Graphiti EN DIRECT** via le client fourni. **JAMAIS** via
-  le SD-Graph, jamais en passant par un autre service. Le SD-Graph est le câblage de
-  l'**exécutif** (EF-EXE-005), pas un accès à l'épisodique.
-- Combiner = faire N appels explicites (Graphiti + Somcraft + ServiceDesk) et recouper
-  les résultats dans ton raisonnement — pas déléguer à un « super-substrat ».
+## 3. Rappel épisodique — déléguer à /episodique
 
-## 3. Rappel épisodique — utiliser le client Graphiti
-
-Le client de lecture vit dans `scripts/graphiti_search.py` (stdlib pure, aucune dépendance).
+`/rappel` **ne porte pas** le moteur épisodique. Pour la partie épisodique d'un rappel, il
+**délègue au geste de fonction `/episodique`**, qui possède le moteur
+(`.claude/skills/episodique/scripts/graphiti_search.py`, scopé `group_id`, clé hors bande).
 
 ```bash
-# La clé est un SECRET D'INFRA (règle d'or 12 / STD-038) : jamais dans le pack.
-# Elle est fournie au runtime par l'environnement (ou un fichier local non versionné).
-export GRAPHITI_AGENT_API_KEY=<clé fournie hors bande>      # OU : export GRAPHITI_ENV_FILE=~/.config/somtech/graphiti.env
-
-python3 .claude/skills/rappel/scripts/graphiti_search.py \
-    --group-id "<projet-ou-sujet>" \
-    --query "qu'a-t-on décidé sur l'architecture X ?" \
-    --max-facts 10
-# → {"group_id": "...", "count": N, "facts": [ {"fact": "..."}, ... ]}
-
-# Vérifier la santé de l'instance (utilise la clé si présente pour sonder le backend ;
-# sinon retombe sur /caddy-health, la liveness keyless du reverse proxy) :
-python3 .claude/skills/rappel/scripts/graphiti_search.py --health
+# Délégation à /episodique (voir son SKILL.md) — clé fournie hors bande (I6) :
+python3 .claude/skills/episodique/scripts/graphiti_search.py \
+    --group-id "<projet-ou-sujet>" --query "…" --max-facts 10
 ```
 
-**Toujours borné par `group_id`** (RA-EPI-002) : une requête interroge **un seul**
-périmètre projet/sujet — c'est le cantonnement. Pas de `group_id`, pas de rappel.
+Voir **`/episodique`** pour le détail du geste (bornage `group_id` I5, secret I6, santé).
 
-**Le secret ne se devine pas** : sans clé, le client échoue proprement **avant tout
-appel réseau**. Si la clé n'est pas fournie, ne l'invente pas et ne la cherche pas dans
-le code — demande qu'on te la fournisse hors bande (env / fichier local).
+## 4. Ce qui rappelle ≠ ce qui fait foi (I3)
 
-## 4. Ce qui rappelle ≠ ce qui fait foi
-
-Un fait revenu de l'**épisodique ne fait PAS foi** (RA-EPI-001) : il rappelle, il oriente.
-Pour t'en servir comme **vérité opposable** (décision, concept), il faut le **promouvoir**
-via le **flux de promotion / gate (domaine CON)** vers l'opposable — ServiceDesk (exécutif)
-ou Somcraft (sémantique). Le rappel **lit** ; il n'écrit jamais dans l'opposable en direct.
+Un fait revenu de l'épisodique **ne fait pas foi** : il rappelle, il oriente. Pour t'en
+servir comme **vérité opposable**, il faut le **promouvoir** via le **gate de promotion**
+(domaine CON) vers l'opposable — ServiceDesk (exécutif) ou Somcraft (sémantique). Le rappel
+**lit** partout ; il **n'écrit jamais** dans l'opposable en direct.
 
 - Rappel épisodique → **hypothèse / piste** à corroborer.
-- Corroboré + conforme au gate → **promu** dans ServiceDesk ou Somcraft (là ça fait foi).
-- Écriture directe dans l'opposable sans gate = interdit (RA-EXE-004 / RA-CON-001).
+- Corroboré + conforme au gate → **promu** (là ça fait foi).
+- Écriture directe dans l'opposable sans gate = interdit.
 
-## 5. Recette de rappel (combiner les substrats)
+## 5. Recette de fan-out (composer les délégations)
 
 1. **Cadrer** : de quoi je me rappelle, et de quelle **nature** (vécu / concept / état / contexte) ?
-2. **Interroger le bon substrat en premier** (cf. §1), borné (`group_id` pour l'épisodique).
-3. **Recouper** avec les autres substrats si besoin (ex. un fait épisodique → vérifier la
-   décision opposable correspondante dans ServiceDesk, ou le concept dans Somcraft).
-4. **Qualifier** : marquer ce qui fait foi (SD/Somcraft) vs ce qui n'est qu'un rappel (Graphiti).
-5. **Si un rappel doit devenir opposable** → passer par le **gate de promotion**, jamais en direct.
+2. **Déléguer au(x) bon(s) geste(s)** : `/episodique` (borné `group_id`), Somcraft, ServiceDesk — un appel explicite chacun.
+3. **Recouper** les retours (ex. un fait épisodique → vérifier la décision opposable dans ServiceDesk, ou le concept dans Somcraft).
+4. **Qualifier** : ce qui fait foi (SD / Somcraft finalisé) vs ce qui n'est qu'un rappel (épisodique / travail).
+5. **Si un rappel doit devenir opposable** → **gate de promotion**, jamais en direct.
 
 ## Références
 
 - `references/memoire-substrats.md` — carte détaillée des substrats et exemples d'aiguillage.
-- BRD Mémoire (Somcraft `/architecture/business-requirements/BRD-memoire-somtech.md`) — EF-EPI-005, EF-PRO-002, RA-EPI-001/002/005, RA-ROU-001.
-- ADR-033 (architecture de la mémoire), ADR-034 (backend Graphiti / Neo4j Community).
-- Complémentaire : `/episodique` (côté **écriture** : encoder une session en épisode, EF-EPI-004).
+- **STD-039** §2.5 (rôle d'orchestrateur mince), §2.3 (carte fonction → interface), invariants I1-I8.
+- **`/episodique`** — geste de fonction qui **possède** le moteur épisodique (délégation).
+- **`/memoire`** — hub informatif « quelle mémoire pour quoi ».
+- BRD Mémoire — EA-MEM-006, EF-PRO-002, RA-EPI-001 (l'épisodique ne fait pas foi).

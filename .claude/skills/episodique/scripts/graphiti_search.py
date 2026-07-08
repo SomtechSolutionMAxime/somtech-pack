@@ -203,10 +203,10 @@ def _main(argv: list[str]) -> int:
     try:
         facts = client.search(args.query, args.group_id, args.max_facts)
     except GraphitiConfigError as exc:
-        print(f"[rappel] configuration: {exc}", file=sys.stderr)
+        print(f"[episodique] configuration: {exc}", file=sys.stderr)
         return 2
     except GraphitiError as exc:
-        print(f"[rappel] erreur: {exc}", file=sys.stderr)
+        print(f"[episodique] erreur: {exc}", file=sys.stderr)
         return 1
     print(json.dumps({"group_id": args.group_id, "count": len(facts), "facts": facts}, ensure_ascii=False, indent=2))
     return 0
