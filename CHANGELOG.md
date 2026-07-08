@@ -5,6 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.12.0] - 2026-07-08
+
+### Ajouté
+
+- **Interface d'usage de la mémoire — skills `/episodique`, `/rappel`, `/memoire` + socle always-on** (PR #114, demande D-20260708-0007, epic E-20260708-0010 ; cadre STD-039 `accepted`). Déploiement étape 2 de STD-039 : `/episodique` (geste de fonction qui **possède** le moteur de lecture épisodique Graphiti — symétrie I2), `/rappel` **aminci** en orchestrateur de fan-out cross-fonction qui délègue aux gestes (ne possède plus aucun moteur), `/memoire` (hub informatif couche 3 « quelle mémoire pour quoi », n'exécute rien). Nouveau template `.claude/templates/USER_CLAUDE_MD.md` = **noyau always-on** minimal à greffer dans un CLAUDE.md (I1/I3/I4/I5 verbatim + pointeur STD-039). Aucune migration de données.
+- **`/rappel` + capacité de lecture Graphiti** (PR #113, demande D-20260708-0002, epic E-20260708-0005 ; BRD Mémoire v1.1.0, EF-EPI-005). Premier chemin de **lecture** de la mémoire épisodique côté agent : client `graphiti_search.py` (stdlib pure) interrogeant `graphiti.somtech.solutions` `/search` **borné par `group_id`**, auth `X-API-Key` **hors bande** (secret d'infra jamais dans le pack, STD-038), frontière D5 (appel direct, jamais via SD-Graph). Le moteur a ensuite été rapatrié sous `/episodique` par le refactor STD-039 (voir ci-dessus).
+
+### Technique
+
+- Moteur `graphiti_search.py` : 11 tests unittest (HTTP mocké), rouge→vert prouvé (scoping `group_id`, secret absent = échec avant réseau, erreurs HTTP/JSON sans fuite de clé, healthcheck authentifié/keyless). Déplacé de `/rappel` vers `/episodique` via `git mv` (rename propre) lors du refactor STD-039. `.gitignore` durci (`graphiti*.env`). Les deux livraisons ont passé un code review par sub-agent fresh (règle d'or n°8).
+
 ## [1.11.2] - 2026-07-07
 
 ### Ajouté

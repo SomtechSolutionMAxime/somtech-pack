@@ -1,6 +1,6 @@
 {
   "name": "somtech-pack",
-  "version": "1.11.2",
+  "version": "1.12.0",
   "description": "Pack de configuration réutilisable pour projets Somtech (Claude Code, features, plugins Cowork, scripts)",
   "author": "Somtech",
   "repository": "https://github.com/SomtechSolutionMAxime/somtech-pack.git",
