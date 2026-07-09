@@ -82,6 +82,9 @@ swt_db_api_port() {
 swt_db_patch_config() {
   local cfg="${1:?config path}" pid="${2:?project_id}" off="${3:?offset}"
   local delta=$(( off * ${SWT_DB_STRIDE:-20} ))
+  # idempotence (M1) : si la config est déjà patchée (skip-worktree posé), ne pas
+  # re-décaler — un second passage doublerait le décalage des ports.
+  swt_db_is_patched "$cfg" && return 0
   # 1) décale les ports locaux 543xx (n'affecte ni 587 SMTP ni 8083 inspector)
   perl -i -pe "s/(543\\d\\d)/\$1+$delta/ge" "$cfg"
   # 2) remplace project_id (après le décalage, jamais re-scanné)
@@ -122,13 +125,17 @@ swt_db_write_env() {
 
 # swt_db_taken — CSV des offsets réservés par des sessions vivantes (registre).
 # Réserve un offset même quand sa stack est arrêtée (session conservée pour reprise).
+# NB : on itère via `find` (pas un glob `*/`) — sous zsh un glob sans correspondance
+# est une ERREUR fatale (`no matches found`), pas une liste vide comme en bash.
 swt_db_taken() {
   local f out=""
   [ -d "$SWT_DB_REG" ] || return 0
-  for f in "$SWT_DB_REG"/*; do
-    [ -e "$f" ] || continue
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
     out="$out,$(cat "$f" 2>/dev/null)"
-  done
+  done <<EOF
+$(find "$SWT_DB_REG" -maxdepth 1 -type f 2>/dev/null)
+EOF
   printf '%s' "${out#,}"
 }
 
@@ -146,6 +153,25 @@ swt_db_busy_offsets() {
   printf '%s' "${out#,}"
 }
 
+# swt_db_is_patched <config_path> — vrai si la config est déjà patchée (skip-worktree posé).
+swt_db_is_patched() {
+  local cfg="$1" top rel
+  top=$(git -C "$(dirname "$cfg")" rev-parse --show-toplevel 2>/dev/null) || return 1
+  rel=${cfg#"$top"/}
+  git -C "$top" ls-files -v -- "$rel" 2>/dev/null | grep -q '^S'
+}
+
+# swt_db_read_offset <config_path> — relit l'offset depuis une config DÉJÀ patchée.
+# S'appuie sur shadow_port (unique, valeur d'origine 54320) : offset = (sp-54320)/stride.
+# Permet de reconstruire le registre s'il a été perdu, sans re-décaler les ports (M1).
+swt_db_read_offset() {
+  local cfg="$1" sp stride="${SWT_DB_STRIDE:-20}"
+  sp=$(grep -oE 'shadow_port *= *[0-9]+' "$cfg" 2>/dev/null | grep -oE '[0-9]+$' | head -1)
+  [ -n "$sp" ] || return 1
+  [ $(( (sp - 54320) % stride )) -eq 0 ] || return 1
+  printf '%s' $(( (sp - 54320) / stride ))
+}
+
 # swt_db_up <main_repo> <worktree> <sess> <profile> -> echo project_id (vide si non provisionné)
 # Idempotent sur reprise : si la session a déjà un offset (registre), la config est
 # déjà patchée -> on relance seulement la stack, sans re-décaler les ports.
@@ -160,13 +186,32 @@ swt_db_up() {
   repo=$(basename "$main")
   pid=$(printf 'swt-%s-%s' "$repo" "$sess" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | cut -c1-40)
 
+  mkdir -p "$SWT_DB_REG"
   if [ -f "$SWT_DB_REG/$sess" ]; then
     offset=$(cat "$SWT_DB_REG/$sess")            # reprise : config déjà patchée
+  elif swt_db_is_patched "$cfg"; then
+    # config déjà patchée mais registre perdu (nouveau poste, $HOME différent, purge
+    # manuelle) : relire l'offset au lieu de re-patcher (M1 — sinon double-décalage
+    # des ports et registre incohérent).
+    offset=$(swt_db_read_offset "$cfg") \
+      || { printf '⚠️  config déjà patchée mais offset illisible — BD non provisionnée.\n' >&2; return 1; }
+    printf '%s' "$offset" > "$SWT_DB_REG/$sess"
   else
-    offset=$(swt_db_alloc_offset "$sess" "$(swt_db_taken),$(swt_db_busy_offsets)") \
-      || { printf '⚠️  plage de ports worktree pleine — BD non provisionnée.\n' >&2; return 0; }
+    # nouvelle session : alloc + patch + enregistrement sous verrou atomique
+    # (M2 — deux `claude-swt` quasi-simultanés ne doivent pas choisir le même offset,
+    # busy_offsets ne voyant les ports qu'une fois la stack montée).
+    local lock="$SWT_DB_REG/.lock" tries=0
+    while ! mkdir "$lock" 2>/dev/null; do
+      tries=$(( tries + 1 )); [ "$tries" -ge 100 ] && break; sleep 0.1
+    done
+    offset=$(swt_db_alloc_offset "$sess" "$(swt_db_taken),$(swt_db_busy_offsets)")
+    if [ -z "$offset" ]; then
+      rmdir "$lock" 2>/dev/null
+      printf '⚠️  plage de ports worktree pleine — BD non provisionnée.\n' >&2; return 0
+    fi
     swt_db_patch_config "$cfg" "$pid" "$offset"
-    mkdir -p "$SWT_DB_REG"; printf '%s' "$offset" > "$SWT_DB_REG/$sess"
+    printf '%s' "$offset" > "$SWT_DB_REG/$sess"
+    rmdir "$lock" 2>/dev/null
   fi
 
   printf '🗄️  BD worktree : profil %s, offset %s (ports +%s)…\n' \
@@ -192,7 +237,12 @@ swt_db_up() {
       } )
     printf '%s' "$pid"
   else
-    printf '⚠️  supabase start a échoué (profil %s). BD non disponible ; la session continue.\n' "$profile" >&2
+    # M3 : un start avorté (ex. health check) peut laisser des conteneurs montés.
+    # On les arrête pour ne pas fuir RAM/ports, et on libère l'offset (la config
+    # reste patchée → une reprise le relira via swt_db_read_offset).
+    printf '⚠️  supabase start a échoué (profil %s) — nettoyage ; la session continue.\n' "$profile" >&2
+    ( cd "$wt" && supabase stop --no-backup >/dev/null 2>&1 )
+    rm -f "$SWT_DB_REG/$sess"
     return 1
   fi
 }

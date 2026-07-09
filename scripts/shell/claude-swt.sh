@@ -73,6 +73,7 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       --auth)  profile=auth ;;                  # + PostgREST + GoTrue + kong (RLS)
       --full)  profile=full ;;                  # stack complète
       --no-db) do_db=0 ;;                       # ne provisionne aucune BD
+      --*) echo "⛔ Flag inconnu : $1 (attendus : --db|--auth|--full|--no-db)"; return 1 ;;
       *) if [ -z "$sess" ]; then sess="$1"; elif [ -z "$wtpath" ]; then wtpath="$1"; fi ;;
     esac
     shift

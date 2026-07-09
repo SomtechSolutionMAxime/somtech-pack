@@ -108,8 +108,16 @@ has  "SMTP externe 587 NON touché" "$cfg" "# port = 587"
 has  "inspector 8083 NON touché" "$cfg" "inspector_port = 8083"
 
 # skip-worktree : config.toml ne doit plus apparaître dans git status
-status=$(git -C "$REPO" status --porcelain -- supabase/config.toml)
-eq   "config.toml patché absent de git status (skip-worktree)" "$status" ""
+# (NB : `status` est une variable read-only en zsh — on utilise cfgstatus)
+cfgstatus=$(git -C "$REPO" status --porcelain -- supabase/config.toml)
+eq   "config.toml patché absent de git status (skip-worktree)" "$cfgstatus" ""
+
+# M1 : reprise sur registre perdu — la config patchée reste la source de vérité.
+swt_db_is_patched "$REPO/supabase/config.toml" && ok "is_patched détecte le skip-worktree" || ko "is_patched rate une config patchée"
+eq   "read_offset relit l'offset depuis shadow_port (1)" "$(swt_db_read_offset "$REPO/supabase/config.toml")" "1"
+# idempotence : re-patcher une config déjà patchée ne doit PAS re-décaler les ports
+swt_db_patch_config "$REPO/supabase/config.toml" "monapp-x" 3 2>/dev/null
+has  "re-patch n'a pas re-décalé (api reste 54341, pas 54401)" "$(cat "$REPO/supabase/config.toml")" "port = 54341"
 
 echo "== 4. Écriture .env.local =="
 WT="$TMP/wt"; mkdir -p "$WT"
