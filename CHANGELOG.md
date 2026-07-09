@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.12.3] - 2026-07-09
+
+### Corrigé
+
+- **`pack setup` (CLI npm) installe désormais `swt-db.sh`** (PR #120, demande D-20260709-0003, incident T-20260709-0074). Le port Node `installRcBlock` (`cli/src/shellrc.js`) ne copiait que `claude-swt.sh`, jamais la lib `swt-db.sh` (logique BD Postgres par worktree) — parité manquante avec la voie bash `scripts/install-claude-swt.sh`. Sur un poste installé via `npx @somtech-solutions/pack setup`, `claude-swt` sourçait la lib en vain (`swt_db_up` jamais défini) et **aucun Postgres n'était provisionné** par worktree.
+
+### Technique
+
+- `installRcBlock` copie la lib voisine du snippet (`<destDir>/swt-db.sh`) si présente, en aval du guard dry-run. Tests de régression rouge→vert dans `cli/test/setup.test.js` au grain unitaire **et** `run setup` (chemin réel de publication via payload bundlé). Suite CLI 53/53 verte. Revue de code par sub-agent fresh (règle d'or n°8) : GO, aucun finding.
+
 ## [1.12.2] - 2026-07-09
 
 ### Corrigé
