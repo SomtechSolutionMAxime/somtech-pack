@@ -1,7 +1,12 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.3.0
+# claude-swt.sh — v1.4.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
+#
+# v1.4.0 (D-20260709-0003) : BD Supabase isolée et légère par worktree. Si le repo
+#   est un projet Supabase, une stack élaguée est provisionnée au launch et arrêtée
+#   au teardown. Profils : --db (défaut, Postgres seul ~65 Mo), --auth, --full,
+#   --no-db. Logique dans swt-db.sh (sourcée depuis le même dossier).
 #
 # Snippet shell VERSIONNÉ et distribué par somtech-pack. À SOURCER depuis le
 # rc shell du dev (~/.zshrc), via l'installateur `scripts/install-claude-swt.sh`
@@ -22,6 +27,16 @@
 #   _claude-swt-launch <...>       (interne) cœur partagé par claude-swt[-danger]
 #   _claude-swt-pending <m> <wt> <s>  (interne) branches de session non mergées
 # ============================================================
+
+# --- lib BD par worktree (swt-db.sh), sourcée depuis le même dossier (D-20260709-0003).
+# Compatible bash (${BASH_SOURCE}) et zsh (${(%):-%x}). Sans effet si absente.
+if [ -n "${BASH_SOURCE:-}" ]; then _swt_self="${BASH_SOURCE[0]}"
+elif [ -n "${ZSH_VERSION:-}" ]; then _swt_self="${(%):-%x}"
+else _swt_self="$0"; fi
+_swt_lib="$(cd "$(dirname "$_swt_self")" 2>/dev/null && pwd)/swt-db.sh"
+# shellcheck source=/dev/null
+[ -r "$_swt_lib" ] && . "$_swt_lib"
+unset _swt_self _swt_lib
 
 # _claude-swt-pending — branches NON mergées qui bloquent le retrait d'un worktree.
 # Echo une branche par ligne ; sortie vide = rien en suspens (worktree retirable).
@@ -46,13 +61,25 @@ _claude-swt-pending() {  # usage : _claude-swt-pending <main> <wt> <sess>
 _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-swt-danger.
                         #   arg1 = session-timestamp (défaut: auto) ; arg2 = path worktree
                         #   $_CLAUDE_SWT_DANGER=1 → lance `claude --dangerously-skip-permissions`
-  local main wt repo sess
+  local main wt repo sess wtpath="" profile="db" do_db=1 sb_pid=""
   main="$PWD"; repo=$(basename "$main")
   if ! git -C "$main" rev-parse --show-toplevel >/dev/null 2>&1; then
     echo "⛔ Pas dans un repo git. Place-toi à la racine d'un repo."; return 1
   fi
-  sess="${1:-$(date +%Y%m%d-%H%M%S)}"          # identité du terminal = timestamp
-  wt="${2:-$HOME/worktrees/$repo/$sess}"
+  sess=""
+  while [ $# -gt 0 ]; do                        # flags BD + positionnels [timestamp] [path]
+    case "$1" in
+      --db)    profile=db ;;                    # défaut : Postgres seul (~65 Mo)
+      --auth)  profile=auth ;;                  # + PostgREST + GoTrue + kong (RLS)
+      --full)  profile=full ;;                  # stack complète
+      --no-db) do_db=0 ;;                       # ne provisionne aucune BD
+      --*) echo "⛔ Flag inconnu : $1 (attendus : --db|--auth|--full|--no-db)"; return 1 ;;
+      *) if [ -z "$sess" ]; then sess="$1"; elif [ -z "$wtpath" ]; then wtpath="$1"; fi ;;
+    esac
+    shift
+  done
+  sess="${sess:-$(date +%Y%m%d-%H%M%S)}"        # identité du terminal = timestamp
+  wt="${wtpath:-$HOME/worktrees/$repo/$sess}"
   case "$wt" in                                # garde anti-cloud (corruption .git)
     *CloudStorage*|*"Google Drive"*|*Dropbox*|*"Mobile Documents"*)
       echo "⛔ Chemin synchronisé cloud refusé ($wt). Choisis un disque local."; return 1 ;;
@@ -63,6 +90,14 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     echo "↻ reprise de la session $sess"
   else
     git -C "$main" worktree add "$wt" -b "wt/$sess" origin/main || return 1
+  fi
+
+  # --- BD Supabase isolée du worktree (D-20260709-0003) ---
+  # Provisionne une stack élaguée si le repo est un projet Supabase. swt_db_up est
+  # tolérant (no-op si pas de supabase/config.toml, CLI absent, ou plage pleine) et
+  # renvoie le project_id pour l'arrêter au teardown.
+  if [ "$do_db" = 1 ] && command -v swt_db_up >/dev/null 2>&1; then
+    sb_pid=$(swt_db_up "$main" "$wt" "$sess" "$profile")
   fi
 
   ( cd "$wt"                                    # la session vit dans le worktree
@@ -87,15 +122,20 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     fi )
 
   # --- au quit : retire seulement si rien en suspens (sinon garde pour reprise) ---
+  # La BD est TOUJOURS arrêtée (libère RAM/CPU) ; ses volumes ne sont purgés que si
+  # la session est réellement terminée (destroy=1), conservés sinon (reprise rapide).
   git -C "$main" fetch origin -q
   if [ -n "$(git -C "$wt" status --porcelain)" ]; then
+    [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
     echo "📌 session $sess conservée : modifications non commitées."
   else
     local pending
     pending=$(_claude-swt-pending "$main" "$wt" "$sess")
     if [ -n "$pending" ]; then
+      [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
       echo "📌 session $sess conservée : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
     else
+      [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
       git -C "$main" worktree remove "$wt" && git -C "$main" branch -D "wt/$sess" 2>/dev/null
       echo "🧹 session $sess terminée (tout mergé, rien en suspens) → worktree retiré"
     fi
