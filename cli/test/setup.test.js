@@ -23,6 +23,10 @@ test('shellrc : install frais → 1 bloc, ligne préexistante préservée, backu
   assert.equal(res.action, 'added');
   assert.equal(markerCount(rc), 1);
   assert.ok(existsSync(join(dest, 'claude-swt.sh')), 'snippet copié');
+  // Régression D-20260709-0003 : la lib swt-db.sh (logique BD par worktree) doit
+  // être copiée à côté du snippet, sinon claude-swt.sh la source en vain
+  // (`command -v swt_db_up` échoue) et aucun Postgres n'est provisionné.
+  assert.ok(existsSync(join(dest, 'swt-db.sh')), 'lib swt-db.sh copiée à côté du snippet');
   assert.ok(readFileSync(rc, 'utf8').includes('export FOO=bar'), 'ligne préexistante préservée');
   assert.ok(existsSync(`${rc}.somtech.bak`), 'backup créé');
 });
