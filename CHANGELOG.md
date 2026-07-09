@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.12.2] - 2026-07-09
+
+### Corrigé
+
+- **`/end-session` ne peut plus détruire la branche distante d'un worktree actif** (PR #118, demande D-20260709-0009). Le helper `close-merged-branches.sh` classait comme supprimable toute branche mergée sans consulter `git worktree list` : `git branch -D` échouait en silence (branche verrouillée par un autre worktree) mais `git push origin --delete` partait quand même → la session vivante perdait son upstream et GitHub fermait sa PR. Impact structurel depuis que le multi-worktree est le mode normal (règle d'or n°11).
+
+### Technique
+
+- Nouveau statut **`WORKTREE`** dans `cmb_classify` : toute branche checked-out dans un autre worktree actif est conservée, jamais supprimée localement ni à distance. Filet racine complémentaire : le `push --delete` distant est désormais **conditionné au succès du `branch -D` local**, et le compteur n'incrémente que sur suppression réelle. Tests TDD (rouge→vert) : `test-close-merged-branches.sh` — **27 scénarios** (worktree vivant local + distant préservés, filet isolé, direction inverse, `CMB_NO_REMOTE`). Revue de code par sub-agent fresh (règle d'or n°8) : aucun chemin résiduel de destruction distante.
+
 ## [1.12.1] - 2026-07-09
 
 ### Ajouté
