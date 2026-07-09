@@ -23,6 +23,10 @@ test('shellrc : install frais → 1 bloc, ligne préexistante préservée, backu
   assert.equal(res.action, 'added');
   assert.equal(markerCount(rc), 1);
   assert.ok(existsSync(join(dest, 'claude-swt.sh')), 'snippet copié');
+  // Régression D-20260709-0003 : la lib swt-db.sh (logique BD par worktree) doit
+  // être copiée à côté du snippet, sinon claude-swt.sh la source en vain
+  // (`command -v swt_db_up` échoue) et aucun Postgres n'est provisionné.
+  assert.ok(existsSync(join(dest, 'swt-db.sh')), 'lib swt-db.sh copiée à côté du snippet');
   assert.ok(readFileSync(rc, 'utf8').includes('export FOO=bar'), 'ligne préexistante préservée');
   assert.ok(existsSync(`${rc}.somtech.bak`), 'backup créé');
 });
@@ -64,6 +68,9 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   // un workflow global connu du repo
   assert.ok(existsSync(join(wd, 'analyse-decoupage-demande.js')), 'workflow global copié');
   assert.equal(markerCount(rc), 1, 'bloc claude-swt ajouté');
+  // Régression D-20260709-0003 au grain `run setup` : la lib swt-db.sh doit
+  // transiter jusqu'à dest par le chemin réel (payloadRoot → snippetSrc voisin).
+  assert.ok(existsSync(join(dd, 'swt-db.sh')), 'lib swt-db.sh installée par run setup');
   // idempotent
   code = await run(args);
   assert.equal(code, 0);

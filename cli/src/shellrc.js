@@ -2,7 +2,7 @@
 // Port Node de scripts/install-claude-swt.sh (bloc gardé par marqueurs, backup,
 // refus si déséquilibré). Aucun chemin hors de ce qui est demandé.
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 
 export const MARKER_BEGIN = '# >>> somtech claude-swt >>>';
 export const MARKER_END = '# <<< somtech claude-swt <<<';
@@ -37,6 +37,10 @@ export function buildBlock(destFile) {
 /**
  * Installe le snippet claude-swt dans `rcFile`, idempotent.
  * - copie `snippetSrc` → `<destDir>/claude-swt.sh`
+ * - copie la lib `swt-db.sh` (voisine de `snippetSrc`) → `<destDir>/swt-db.sh`
+ *   si présente : claude-swt.sh la source pour provisionner la BD par worktree
+ *   (D-20260709-0003). Sans elle, `swt_db_up` n'est jamais défini et aucun
+ *   Postgres n'est provisionné — parité avec scripts/install-claude-swt.sh.
  * - ajoute/met à jour un bloc gardé qui le source (jamais de doublon)
  * - backup `<rcFile>.somtech.bak` avant réécriture
  * Lève si le rc contient un bloc déséquilibré (BEGIN≠END) → anti-perte de données.
@@ -48,9 +52,11 @@ export function installRcBlock({ rcFile, destDir, snippetSrc, dryRun = false }) 
 
   if (dryRun) return { action: 'dry-run', destFile };
 
-  // 1. Installer le fichier source.
+  // 1. Installer le fichier source (+ la lib swt-db.sh à côté, sourcée par claude-swt.sh).
   mkdirSync(destDir, { recursive: true });
   copyFileSync(snippetSrc, destFile);
+  const libSrc = join(dirname(snippetSrc), 'swt-db.sh');
+  if (existsSync(libSrc)) copyFileSync(libSrc, join(destDir, 'swt-db.sh'));
 
   // 2. Mettre à jour le rc de façon idempotente.
   const existed = existsSync(rcFile);
