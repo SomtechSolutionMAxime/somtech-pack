@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# test-close-merged-branches.sh — v1.1.0
+# test-close-merged-branches.sh — v1.2.0
 # Classification + fermeture sûre des branches mergées.
 #
 # Scénarios (repo jetable) :
@@ -11,8 +11,10 @@
 #   featConflict modifie un fichier que main change aussi    → KEEP (merge-tree conflit)
 #   staging / wt/<ts>  protégées                            → PROTECTED
 #   featCurrent  mergée MAIS checked-out                    → CURRENT
+#   featX + worktree  mergée MAIS vivante dans un worktree  → WORKTREE (ni local ni distant)
 #
 # Le cas featNetZero est LE garde-fou anti-perte-de-données (faux positif merge-tree).
+# Le cas worktree (D-20260709-0009) est LE garde-fou anti-décapitation de session vivante.
 # ============================================================
 set -uo pipefail
 
@@ -88,6 +90,65 @@ REPO="$(build_repo)"
 ( cd "$REPO" && CMB_DRY_RUN=1 CMB_CONFIRMED="featX" CMB_REMOTE="origin-inexistant" cmb_close main >/dev/null 2>&1 )
 present featX && ok "dry-run : featX conservée" || ko "dry-run n'aurait rien dû supprimer"
 rm -rf "$REPO"; REPO=""
+
+echo "== Worktree vivant — branche mergée attachée à un AUTRE worktree : NI local NI distant supprimés (D-20260709-0009) =="
+# LE test de non-régression du bug : featX est squash-mergée+corroborée MAIS checked-out dans
+# un worktree vivant. git refuse 'branch -D' (silencieux) mais 'push --delete' partait quand même
+# → branche distante détruite, session vivante décapitée. Doit être classée WORKTREE et intouchée.
+REPO="$(build_repo)"
+BARE="$(mktemp -d)"; WT="$(mktemp -d)"; rm -rf "$WT"   # 'worktree add' exige un path inexistant
+(
+  set -e
+  cd "$REPO"
+  git init -q --bare "$BARE"
+  git remote add wtorigin "$BARE"
+  git push -q wtorigin main featX          # featX (squash-mergée) publiée sur le "distant"
+  git worktree add -q "$WT" featX          # featX désormais vivante dans un autre worktree
+) >/dev/null 2>&1
+cls2="$(cd "$REPO" && CMB_CONFIRMED="featX" cmb_classify main)"
+echo "$cls2" | grep -qx "WORKTREE featX" && ok "featX classée WORKTREE (attachée à un worktree actif)" || ko "featX aurait dû être WORKTREE, obtenu :\n$cls2"
+( cd "$REPO" && CMB_CONFIRMED="featX" CMB_REMOTE="wtorigin" cmb_close main >/dev/null 2>&1 )
+( cd "$REPO" && git show-ref --verify --quiet "refs/heads/featX" ) && ok "featX locale préservée (worktree actif)" || ko "featX locale supprimée à tort"
+( cd "$REPO" && git ls-remote --exit-code --heads wtorigin featX >/dev/null 2>&1 ) && ok "featX DISTANTE préservée (le bug d'origine)" || ko "DANGER: featX distante détruite — régression D-20260709-0009"
+( cd "$REPO" && git worktree remove --force "$WT" >/dev/null 2>&1 ) || true
+rm -rf "$REPO" "$BARE" "$WT"; REPO=""
+
+echo "== Filet de sécurité — même si une branche verrouillée atteignait MERGED, le distant survit (D-20260709-0009) =="
+# Défense en profondeur : on court-circuite le statut WORKTREE en forçant cmb_classify à
+# émettre 'MERGED featX' pour une branche RÉELLEMENT verrouillée par un worktree. git refusera
+# 'branch -D' → le push --delete distant NE DOIT PAS partir. Prouve le garde-fou racine seul.
+REPO="$(build_repo)"
+BARE="$(mktemp -d)"; WT="$(mktemp -d)"; rm -rf "$WT"
+(
+  set -e
+  cd "$REPO"
+  git init -q --bare "$BARE"; git remote add wtorigin "$BARE"
+  git push -q wtorigin main featX
+  git worktree add -q "$WT" featX          # featX verrouillée → 'branch -D featX' échouera
+) >/dev/null 2>&1
+out="$(cd "$REPO" && cmb_classify() { echo "MERGED featX"; } && CMB_REMOTE="wtorigin" cmb_close main 2>&1)"
+( cd "$REPO" && git ls-remote --exit-code --heads wtorigin featX >/dev/null 2>&1 ) && ok "distant préservé quand 'branch -D' échoue (filet racine)" || ko "DANGER: distant supprimé alors que la locale a survécu"
+echo "$out" | grep -q "0 mergée(s) traitée(s)" && ok "compteur honnête : 0 suppression réelle comptée" || ko "compteur ment (a compté une suppression qui n'a pas eu lieu) : $out"
+( cd "$REPO" && git worktree remove --force "$WT" >/dev/null 2>&1 ) || true
+rm -rf "$REPO" "$BARE" "$WT"; REPO=""
+
+echo "== Remote réel — une mergée corroborée SANS worktree voit sa branche distante EFFACÉE (sûreté-inverse) =="
+# Sans ce cas, un bug qui empêcherait le push --delete de partir passerait inaperçu :
+# tous les autres tests utilisent un remote inexistant. Ici on prouve la direction utile.
+REPO="$(build_repo)"; BARE="$(mktemp -d)"
+( set -e; cd "$REPO"; git init -q --bare "$BARE"; git remote add wtorigin "$BARE"; git push -q wtorigin featX ) >/dev/null 2>&1
+( cd "$REPO" && CMB_CONFIRMED="featX" CMB_REMOTE="wtorigin" cmb_close main >/dev/null 2>&1 )
+( cd "$REPO" && git show-ref --verify --quiet "refs/heads/featX" ) && ko "featX locale aurait dû être supprimée" || ok "featX locale supprimée (mergée corroborée)"
+( cd "$REPO" && git ls-remote --exit-code --heads wtorigin featX >/dev/null 2>&1 ) && ko "featX distante aurait dû être effacée" || ok "featX DISTANTE effacée (push --delete part bien quand il le doit)"
+rm -rf "$REPO" "$BARE"; REPO=""
+
+echo "== CMB_NO_REMOTE=1 — supprime le local mais ne touche JAMAIS au distant, même remote présent =="
+REPO="$(build_repo)"; BARE="$(mktemp -d)"
+( set -e; cd "$REPO"; git init -q --bare "$BARE"; git remote add wtorigin "$BARE"; git push -q wtorigin featX ) >/dev/null 2>&1
+( cd "$REPO" && CMB_NO_REMOTE=1 CMB_CONFIRMED="featX" CMB_REMOTE="wtorigin" cmb_close main >/dev/null 2>&1 )
+( cd "$REPO" && git show-ref --verify --quiet "refs/heads/featX" ) && ko "featX locale aurait dû être supprimée" || ok "featX locale supprimée"
+( cd "$REPO" && git ls-remote --exit-code --heads wtorigin featX >/dev/null 2>&1 ) && ok "featX distante PRÉSERVÉE (CMB_NO_REMOTE respecté)" || ko "CMB_NO_REMOTE ignoré : distant supprimé à tort"
+rm -rf "$REPO" "$BARE"; REPO=""
 
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"

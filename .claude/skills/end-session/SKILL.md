@@ -150,11 +150,12 @@ mcp__claude_ai_Somcraft__update_document
 
 `/end-session` est le signal « on a fini de travailler ». À ce moment, **fermer les branches déjà mergées** et **laisser ouvertes** celles qui portent encore du travail non mergé.
 
-> Helper : `lib/close-merged-branches.sh`. Détecte les **squash-merges** (que `git branch --merged` rate). **Protège toujours** `main`/`master`/`staging`/`develop`/`wt/*` et la branche courante.
+> Helper : `lib/close-merged-branches.sh`. Détecte les **squash-merges** (que `git branch --merged` rate). **Protège toujours** `main`/`master`/`staging`/`develop`/`wt/*`, la branche courante **et toute branche attachée à un autre worktree actif**.
 
-**Deux niveaux de certitude (sûreté anti-perte de données)** :
+**Niveaux de certitude (sûreté anti-perte de données)** :
 - **MERGED** = contenu déjà dans la base **ET** merge corroboré (vraie ancêtre git, **OU** PR mergée via `gh`, **OU** liste `CMB_CONFIRMED`) → supprimable local + distant.
 - **REVIEW** = contenu dans la base mais merge **non corroboré** (risque de faux positif : branche net-zéro `add+revert`, backup, sous-ensemble jamais mergé) → **jamais supprimée automatiquement**, signalée pour revue manuelle.
+- **WORKTREE** = branche checked-out dans un **autre worktree vivant** (`git worktree list`) → **jamais supprimée, ni localement ni à distance**. Supprimer son distant décapiterait la session vivante (perte d'upstream, PR fermée). La suppression distante est en outre **conditionnée au succès de la suppression locale** — si git refuse le `branch -D`, le `push --delete` ne part pas (filet de sécurité, D-20260709-0009).
 
 **Procédure (le dry-run et le GO sont OBLIGATOIRES — la suppression distante est une action visible à des tiers, cf. mode autonome §4)** :
 
@@ -171,9 +172,9 @@ mcp__claude_ai_Somcraft__update_document
    # CMB_NO_REMOTE=1 cmb_close origin/main   # variante : local seulement (pas de push --delete)
    ```
    La corroboration `gh` est automatique si `gh` est installé. Sinon, ne seront supprimées que les **vraies ancêtres** (true merges) ; les squash-merges non confirmés tomberont en **REVIEW** (conservés) — les confirmer via `CMB_CONFIRMED="brancheA brancheB"` si besoin.
-5. **Invariants** : ne JAMAIS supprimer `main`/`staging`/`wt-*`/branche courante ; les branches non mergées et REVIEW sont **conservées** et listées.
+5. **Invariants** : ne JAMAIS supprimer `main`/`staging`/`wt-*`/branche courante/branche d'un autre worktree ; les branches non mergées, REVIEW et WORKTREE sont **conservées** et listées.
 
-> **Worktree** : si la branche courante est elle-même mergée, elle est conservée (impossible de supprimer une branche checked-out) → la retirer après bascule, ou via `claude-swt-done <timestamp>` au teardown de session.
+> **Worktree** : une branche checked-out (courante ou dans un autre worktree `claude-swt`) est **toujours conservée**, même mergée — impossible de supprimer une branche attachée à un worktree, et son distant est protégé. La retirer après teardown du worktree concerné, via `claude-swt-done <timestamp>`.
 
 ### 5. Préparer le worktree au teardown propre
 
