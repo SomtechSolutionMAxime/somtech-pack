@@ -2,7 +2,8 @@
 
 - **Demande** : D-20260709-0003
 - **Date** : 2026-07-09
-- **Statut** : design validé (brainstorm), en attente de plan d'implémentation
+- **Statut** : implémenté & testé (benchmark GO, lib + intégration livrées sur `feat/D-20260709-0003-…`)
+- **Traçabilité** : Epic E-20260709-0009 · T-0037 (benchmark) · T-0038 (lib) · T-0039 (intégration) · T-0040 (docs)
 - **Portée** : transversale Somtech (tout projet utilisant `claude-swt` + Supabase local)
 
 ---
@@ -44,17 +45,21 @@ Directions écartées et pourquoi :
 
 ### 3.1 Profils (mapping déclaratif profil → services)
 
-| Profil | Services démarrés | Services coupés |
-|---|---|---|
-| `db` (défaut) | postgres, postgrest, pg-meta | auth, storage, realtime, studio, imgproxy, edge-runtime, **analytics/vector**, inbucket |
-| `auth` | + gotrue, kong | storage, realtime, studio, imgproxy, edge-runtime, analytics |
-| `full` | stack complète (comportement CLI actuel) | rien |
+| Profil | Services démarrés | RAM mesurée | Services coupés (`-x`) |
+|---|---|---|---|
+| `db` (défaut) | **postgres seul** | **65 Mo** | tous les 13 excludables |
+| `auth` | postgres, postgrest, postgres-meta, gotrue, kong | 293 Mo | realtime, storage-api, imgproxy, mailpit, studio, edge-runtime, logflare, vector, supavisor |
+| `full` | stack complète (comportement CLI actuel) | 1673 Mo | rien |
 
 Mécanisme : `supabase start -x <liste,de,services>` exclut des services **sans modifier `config.toml`**.
-`analytics` + `vector` (Logflare) sont coupés dès `db`/`auth` — c'est le poste de ressources le plus lourd.
+`logflare` + `vector` (analytics) sont coupés dès `db`/`auth` — c'est le poste de ressources le plus lourd.
 
-> ⚠️ **Hypothèse à valider (H1)** : le flag `-x` accepte d'exclure l'ensemble de ces services (noms exacts et
-> combinaisons). Vérifié à l'étape 0. `postgres` et le socle non-excludables restent la borne basse.
+> ✅ **H1 levée (benchmark)** : le CLI 2.78.1 accepte d'exclure les 13 services
+> (`gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor`).
+> **Correction de conception** : le profil `db` ne peut PAS garder PostgREST — sans `kong`, le health check
+> `/rest-admin/v1/ready` échoue et le CLI arrête la stack. PostgREST/kong montent donc au profil `auth`, et `db`
+> devient **Postgres seul** (1 conteneur, 65 Mo). Noms réels du CLI : `gotrue` (auth), `storage-api` (storage),
+> `postgres-meta` (pg-meta), `logflare` (analytics), `mailpit` (ex-inbucket), `supavisor` (pooler).
 
 ### 3.2 Isolation des ports
 
@@ -71,17 +76,21 @@ depuis `config.toml`). Solution : `claude-swt` patche le `config.toml` **du work
 > **casserait l'auto-teardown**. Mitigation : `git update-index --skip-worktree supabase/config.toml` juste après
 > le patch, pour masquer la modif du statut. Réversible (`--no-skip-worktree`).
 
-> ⚠️ **Hypothèse à valider (H2)** : plusieurs stacks CLI coexistent proprement sur des ports/`project_id`
-> distincts sans interférence (réseau Docker, noms de conteneurs, volumes). Vérifié à l'étape 0.
+> ✅ **H2 levée (benchmark)** : deux stacks `db` démarrées simultanément sur `project_id` + offsets distincts
+> coexistent sans collision (68 + 67 Mo).
 
 ### 3.3 Allocation d'offset
 
-Registre léger d'attribution des offsets, pour garantir l'unicité entre worktrees vivants :
+Offset ∈ **[1..8]** (offset 0 = ports `5432x` par défaut, réservés au dev hors worktree ; 8 × stride 20 reste
+sous 54499). L'offset est dérivé du hash de la session (`cksum`) puis avancé circulairement jusqu'au premier
+**libre**. Deux sources d'occupation sont unies :
 
-- source de vérité : les stacks Supabase réellement démarrées (`supabase status` / conteneurs Docker nommés par
-  `project_id`) + `~/.claude/ports-inventory.json` pour la plage réservée ;
-- offset dérivé de la session avec **détection de collision** (si l'offset calculé est déjà pris par un worktree
-  vivant, on prend le suivant libre). Éviter un pur hash sans vérification (risque de collision silencieuse).
+1. **Registre** (`~/.claude/swt-db-offsets/<sess>`) — réserve l'offset d'une session même quand sa stack est
+   arrêtée (session conservée pour reprise) ;
+2. **Scan des ports réels** (`lsof` sur le port db de chaque offset) — **indispensable** : le registre ne voit
+   pas les stacks lancées hors du mécanisme (autres worktrees, `supabase start` manuel, anciens projets). Le
+   benchmark d'intégration a révélé cette faille : un worktree existant occupait déjà l'offset candidat, invisible
+   au registre seul. Le scan est la seule source de vérité fiable.
 
 ### 3.4 Injection des credentials dans le worktree
 
@@ -129,18 +138,23 @@ l'allocation dynamique dans la plage réservée ; `reference_supabase-local.md` 
 
 ---
 
-## 5. Étape 0 — Benchmark (dé-risque la direction)
+## 5. Étape 0 — Benchmark (exécuté ✅ — verdict GO)
 
-**À faire avant tout câblage.** Mesurer, sur la machine cible :
+Mesuré sur la machine cible (Supabase CLI 2.78.1, Docker), projets temporaires isolés (T-20260709-0037) :
 
-1. RAM/CPU d'un `supabase start` complet (baseline) vs profil `db` élagué
-   (`-x analytics,vector,studio,imgproxy,realtime,storage-api,edge-runtime,inbucket`) vs profil `auth` ;
-2. le nombre de stacks `db` qui tiennent simultanément dans une enveloppe raisonnable ;
-3. valider **H1** (le `-x` accepte ces exclusions) et **H2** (coexistence propre de plusieurs stacks).
+| Profil | Conteneurs | RAM | Gain vs full |
+|---|---:|---:|---:|
+| full (baseline) | 12 | 1673 Mo | — |
+| auth | 5 | 293 Mo | −82 % |
+| **db (Postgres seul)** | **1** | **65 Mo** | **−96 %** |
 
-**Critère de décision** : si le profil `db` ne descend pas assez bas (ex. < ~400-500 Mo/stack) ou si N stacks ne
-tiennent pas, on rebascule vers la **direction B** (Postgres mutualisé) sans avoir jeté la lib `swt-db.sh` (le
-mapping profils et l'injection de credentials restent réutilisables).
+- **H1 ✅** — les 13 services s'excluent via `-x`.
+- **H2 ✅** — deux stacks `db` simultanées coexistent (68 + 67 Mo), aucune collision.
+- **R1 ✅** — 65 Mo/stack ≪ critère 400-500 Mo → des dizaines de worktrees tiennent.
+
+**Verdict : GO direction A.** Le critère de repli (si `db` > ~400-500 Mo/stack) n'est pas atteint — la direction B
+(Postgres mutualisé) n'est pas nécessaire. La lib `swt-db.sh` resterait néanmoins réutilisable si le contexte
+changeait.
 
 ---
 
@@ -157,26 +171,30 @@ Dans `scripts/tests/` (à côté des `test-claude-swt-*.sh` existants) :
   `supabase stop --project-id` ; volumes détruits seulement si terminée.
 - **rétro-compat** : repo sans `supabase/config.toml` → aucun appel Supabase, comportement claude-swt identique.
 
-Chaque test doit être **rouge avant l'implémentation** de la brique correspondante.
+Livré : `test-swt-db.sh` (unit, ci — pur/filesystem, sans Docker) + `test-swt-db-integration.sh` (smoke test réel
+`up`/`down`, se skip si Docker absent). Les 6 tests claude-swt existants restent verts (non-régression).
 
 ---
 
 ## 7. Traçabilité et documentation
 
-- **Demande** : D-20260709-0003 (Somtech Pack). Découpage en stories à faire au plan d'implémentation.
-- **ADR/REF Architecture** : décision transversale → consigner dans le dossier Architecture (REF puis ADR si
+- **Demande** : D-20260709-0003 (Somtech Pack) → Epic E-20260709-0009 → stories T-0037/0038/0039/0040.
+- **ADR/REF Architecture** : décision transversale → à consigner dans le dossier Architecture (REF puis ADR si
   adoptée), en lien avec le design worktree existant
-  (`docs/superpowers/specs/2026-06-23-worktree-par-terminal-parallelisme-design.md`).
-- **Mémoires à MAJ** : `reference_supabase-local.md`, `reference_gestion-des-ports.md`.
+  (`docs/superpowers/specs/2026-06-23-worktree-par-terminal-parallelisme-design.md`). **Reste à faire** : le
+  dossier Architecture est sur Google Drive (écriture non disponible depuis cette session) — REF à déposer par
+  Maxime ou via Somcraft.
+- **Mémoires poste MAJ** : `reference_supabase-local.md`, `reference_gestion-des-ports.md`.
 
 ---
 
-## 8. Risques ouverts (à lever en priorité)
+## 8. Risques (état)
 
-| # | Risque | Levée |
+| # | Risque | État |
 |---|---|---|
-| H1 | `-x` n'accepte pas toutes les exclusions visées | Étape 0 (benchmark) |
-| H2 | Plusieurs stacks CLI ne coexistent pas proprement | Étape 0 (benchmark) |
-| P1 | Patch `config.toml` casse l'auto-teardown | `skip-worktree` (§3.2) + test dédié (§6) |
-| R1 | L'élagage ne descend pas assez bas en RAM | Repli direction B, lib réutilisable (§5) |
-| R2 | Le `db reset` au launch ralentit l'ouverture d'une session | Option : reset lazy / en arrière-plan pendant que `claude` démarre |
+| H1 | `-x` n'accepte pas toutes les exclusions | ✅ levé — 13 services excludables (CLI 2.78.1) |
+| H2 | Plusieurs stacks CLI ne coexistent pas | ✅ levé — 2 stacks `db` simultanées OK |
+| P1 | Patch `config.toml` casse l'auto-teardown | ✅ géré — `skip-worktree` + test dédié (vert) |
+| R1 | L'élagage ne descend pas assez bas en RAM | ✅ écarté — 65 Mo/stack (−96 %) |
+| R3 | Collision avec une stack lancée hors du mécanisme | ✅ géré — scan `lsof` des ports réels uni au registre (§3.3) ; attrapé par le test d'intégration |
+| R2 | Le start au launch ralentit l'ouverture (~10-35 s) | ⏳ ouvert — profil `db` rapide (1 conteneur) ; option future : start lazy / en arrière-plan pendant que `claude` démarre |
