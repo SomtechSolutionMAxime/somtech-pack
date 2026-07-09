@@ -68,6 +68,9 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   // un workflow global connu du repo
   assert.ok(existsSync(join(wd, 'analyse-decoupage-demande.js')), 'workflow global copié');
   assert.equal(markerCount(rc), 1, 'bloc claude-swt ajouté');
+  // Régression D-20260709-0003 au grain `run setup` : la lib swt-db.sh doit
+  // transiter jusqu'à dest par le chemin réel (payloadRoot → snippetSrc voisin).
+  assert.ok(existsSync(join(dd, 'swt-db.sh')), 'lib swt-db.sh installée par run setup');
   // idempotent
   code = await run(args);
   assert.equal(code, 0);
