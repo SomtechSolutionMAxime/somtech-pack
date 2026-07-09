@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.12.1] - 2026-07-09
+
+### Ajouté
+
+- **BD Supabase isolée et légère par worktree `claude-swt`** (PR #116, demande D-20260709-0003, epic E-20260709-0009). Quand un worktree `claude-swt` ouvre un repo Supabase, une stack **élaguée** est provisionnée automatiquement, isolée par `project_id` + offset de ports (54321-54499), et arrêtée au teardown (volumes purgés si session terminée, conservés pour reprise). Profils au lancement : `--db` (défaut, **Postgres seul ~65 Mo**, −96 % vs stack complète), `--auth` (+ PostgREST + GoTrue + kong, ~293 Mo), `--full`, `--no-db`. Nouveau `scripts/shell/swt-db.sh` (lib pure + orchestration), sourcé par `claude-swt.sh` (v1.4.0). Décision « profils élagués » validée par un **benchmark chiffré** (étape 0). **Rétro-compat stricte** : un repo sans `supabase/config.toml`, ou une machine sans supabase/docker, garde le comportement inchangé.
+
+### Technique
+
+- Allocation d'offset non-collidante unissant un registre (`~/.claude/swt-db-offsets`) **et** un scan `lsof` des ports réellement écoutés (robuste face aux stacks lancées hors du mécanisme). `config.toml` patché masqué de `git status` via `skip-worktree` (protège l'auto-teardown) ; `patch_config` idempotent (guard skip-worktree + relecture d'offset via `shadow_port`) ; verrou `mkdir` atomique contre les lancements parallèles ; nettoyage des conteneurs sur start avorté. Tests : `test-swt-db.sh` (36 assertions, **bash + zsh**) + `test-swt-db-integration.sh` (smoke réel up/down) ; 5 tests `claude-swt` non régressés. Code review par sub-agent fresh (règle d'or n°8) — 2 bloquants + 3 majeurs corrigés.
+
 ## [1.12.0] - 2026-07-08
 
 ### Ajouté
