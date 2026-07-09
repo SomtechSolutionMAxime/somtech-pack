@@ -70,6 +70,9 @@ cmb_is_protected() {
 # worktree courant INCLUS. Une branche verrouillée par un worktree ne peut pas être
 # supprimée localement par git ; la supprimer À DISTANCE décapite la session vivante
 # (elle perd son upstream, sa PR se ferme). D-20260709-0009.
+# NB : un worktree stale (répertoire supprimé sans `git worktree prune`) apparaît encore
+# ici → sa branche reste conservée (faux négatif conservateur, jamais dangereux). Lancer
+# `git worktree prune` en amont si l'on veut nettoyer ces branches.
 cmb_worktree_branches() {
   git worktree list --porcelain 2>/dev/null \
     | sed -n 's#^branch refs/heads/##p'

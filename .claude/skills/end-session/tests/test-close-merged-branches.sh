@@ -132,6 +132,24 @@ echo "$out" | grep -q "0 mergée(s) traitée(s)" && ok "compteur honnête : 0 su
 ( cd "$REPO" && git worktree remove --force "$WT" >/dev/null 2>&1 ) || true
 rm -rf "$REPO" "$BARE" "$WT"; REPO=""
 
+echo "== Remote réel — une mergée corroborée SANS worktree voit sa branche distante EFFACÉE (sûreté-inverse) =="
+# Sans ce cas, un bug qui empêcherait le push --delete de partir passerait inaperçu :
+# tous les autres tests utilisent un remote inexistant. Ici on prouve la direction utile.
+REPO="$(build_repo)"; BARE="$(mktemp -d)"
+( set -e; cd "$REPO"; git init -q --bare "$BARE"; git remote add wtorigin "$BARE"; git push -q wtorigin featX ) >/dev/null 2>&1
+( cd "$REPO" && CMB_CONFIRMED="featX" CMB_REMOTE="wtorigin" cmb_close main >/dev/null 2>&1 )
+( cd "$REPO" && git show-ref --verify --quiet "refs/heads/featX" ) && ko "featX locale aurait dû être supprimée" || ok "featX locale supprimée (mergée corroborée)"
+( cd "$REPO" && git ls-remote --exit-code --heads wtorigin featX >/dev/null 2>&1 ) && ko "featX distante aurait dû être effacée" || ok "featX DISTANTE effacée (push --delete part bien quand il le doit)"
+rm -rf "$REPO" "$BARE"; REPO=""
+
+echo "== CMB_NO_REMOTE=1 — supprime le local mais ne touche JAMAIS au distant, même remote présent =="
+REPO="$(build_repo)"; BARE="$(mktemp -d)"
+( set -e; cd "$REPO"; git init -q --bare "$BARE"; git remote add wtorigin "$BARE"; git push -q wtorigin featX ) >/dev/null 2>&1
+( cd "$REPO" && CMB_NO_REMOTE=1 CMB_CONFIRMED="featX" CMB_REMOTE="wtorigin" cmb_close main >/dev/null 2>&1 )
+( cd "$REPO" && git show-ref --verify --quiet "refs/heads/featX" ) && ko "featX locale aurait dû être supprimée" || ok "featX locale supprimée"
+( cd "$REPO" && git ls-remote --exit-code --heads wtorigin featX >/dev/null 2>&1 ) && ok "featX distante PRÉSERVÉE (CMB_NO_REMOTE respecté)" || ko "CMB_NO_REMOTE ignoré : distant supprimé à tort"
+rm -rf "$REPO" "$BARE"; REPO=""
+
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
 echo "Résultat : ${PASS} OK, ${FAIL} KO"
