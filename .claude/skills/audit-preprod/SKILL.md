@@ -155,16 +155,20 @@ ni MCP ni Somcraft — c'est ici qu'on résout leurs deux frictions).
    **fichiers, migrations et le périmètre déployé** de la fonction (routes, composants,
    tables, RPC, Edge Functions, workflows CI). Les chemins de `cadrage.fichiers` sont
    relatifs à `racine_etat_deploye`.
-2. **Projection BRD éphémère** (RETEX §3.2, option A — la retenue) : l'orchestrateur
-   récupère le `brd.yaml` via `get_brd_pointer` (ServiceDesk, cf. STD-033 / STD-031 §2.7.8)
-   au **bon grain** (module si `module_id` non-NULL, sinon app) et l'écrit dans un
-   **fichier de scratch non versionné**. On passe **le chemin** aux sous-agents. La
-   projection YAML (EF/RA/HS structurés, sans narratif) est bien plus petite que le `.md`
-   de ~160K → un seul appel MCP au lieu de slicer.
-   - ⚠️ **Vérifier la fraîcheur** : comparer la `version` du pointer YAML à la version
-     d'en-tête du `.md`. Dans l'audit réel, le pointer **traînait** (0.12.0 vs doc plus
-     avancé). Si désync → re-sync (`set_brd_pointer`) **ou** retomber sur le `.md` pour ce
-     run (slice/grep). **Jamais** de copie BRD versionnée dans le repo (option B rejetée :
+2. **Projection BRD calculée à la demande** (RETEX §3.2, option A — la retenue) :
+   l'orchestrateur récupère le BRD **source** via `get_brd_pointer` (ServiceDesk, cf.
+   STD-033 / STD-031 §2.7.8) au **bon grain** (module si `module_id` non-NULL, sinon app)
+   → `read_document(brd_document_id, include_block_ids=true)`, puis **calcule la projection
+   full** (déterministe, zéro LLM) via le CLI `somtech-pack brd project --mode full` et
+   **l'écrit dans un fichier de scratch non versionné**. On passe **le chemin** aux
+   sous-agents. La projection (EF/RA/HS structurés, sans narratif, chaque exigence portant
+   un `md_block_id`) est bien plus petite que le `.md` de ~160K → un seul calcul au lieu de
+   slicer. Le `brd.yaml` n'est plus stocké : il n'y a rien à re-synchroniser.
+   - ⚠️ **Fraîcheur intrinsèque** : comme la projection est calculée **à la demande** depuis
+     le BRD.md source (le pointer `brd_document_id` → BRD.md), elle reflète toujours l'état
+     courant du BRD — plus de pointer `brd.yaml` qui **traîne** (friction historique de
+     l'audit réel). Si le calcul de projection échoue, retomber sur le `.md` pour ce run
+     (slice/grep). **Jamais** de copie BRD versionnée dans le repo (option B rejetée :
      elle dérive de Somcraft et devient un mensonge).
 3. Produire la **carte de cadrage** (passée à chaque sous-agent) :
 
@@ -183,8 +187,8 @@ cadrage:
   routes_api: [string]             # app/**/route.ts | supabase/functions/*
   tables_rpc: [string]             # tables + fonctions SQL de la fonction
   workflows_ci: [string]           # .github/workflows/* pertinents
-  brd_yaml_path: string|null       # chemin scratch de la projection BRD (ou null → mode .md)
-  brd_frais: true|false            # résultat du check de fraîcheur
+  brd_projection_path: string|null # chemin scratch de la projection BRD calculée à la demande (JSON) — ou null → mode .md
+  brd_frais: true|false            # true : projection calculée à la demande depuis le BRD.md source (fraîcheur intrinsèque)
 ```
 
 > **Drift ontologie** (règle d'or n°1) : si une entité évidente de la fonction est absente

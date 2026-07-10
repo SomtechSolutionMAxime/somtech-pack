@@ -1,0 +1,93 @@
+{
+  "requirements": {
+    "ea": [
+      {
+        "id": "EA-GBL-001",
+        "enonce": "Enjeu global unique",
+        "statut": "in_force",
+        "priorite": "M",
+        "owner": "Sponsor"
+      }
+    ],
+    "ef": [
+      {
+        "id": "EF-CLI-001",
+        "description": "Fonction du domaine Clients",
+        "statut": "in_force",
+        "priorite": "M",
+        "couvre": [
+          "EA-GBL-001"
+        ],
+        "realise_par": [],
+        "teste_par": [
+          "app/tests/cli.spec.ts"
+        ],
+        "owner": "PO",
+        "domaine": "CLI"
+      },
+      {
+        "id": "EF-FAC-001",
+        "description": "Fonction du domaine Facturation",
+        "statut": "proposed",
+        "priorite": "S",
+        "couvre": [
+          "EA-GBL-001"
+        ],
+        "realise_par": [
+          "T-20260601-0009"
+        ],
+        "teste_par": [
+          "app/tests/fac.spec.ts"
+        ],
+        "owner": "PO",
+        "domaine": "FAC"
+      }
+    ],
+    "ra": [
+      {
+        "id": "RA-CLI-001",
+        "enonce": "Règle du domaine Clients",
+        "justification": "Justif CLI",
+        "statut": "in_force",
+        "encadre": [
+          "EF-CLI-001"
+        ],
+        "teste_par": [],
+        "owner": "Sponsor",
+        "domaine": "CLI"
+      },
+      {
+        "id": "RA-FAC-001",
+        "enonce": "Règle du domaine Facturation",
+        "justification": "Justif FAC",
+        "statut": "accepted",
+        "encadre": [
+          "EF-FAC-001"
+        ],
+        "teste_par": [],
+        "owner": "Sponsor",
+        "domaine": "FAC"
+      }
+    ]
+  },
+  "out_of_scope": [
+    {
+      "id": "HS-FAC-001",
+      "enonce": "Pas de multi-devises",
+      "justification": "Scope v1",
+      "statut": "accepted",
+      "reconsidere_quand": "v2.0",
+      "domaine": "FAC"
+    }
+  ],
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-07-10",
+      "demande_projet": "D-20260710-0009",
+      "sponsor_validant": "Somtech",
+      "mode": "manuel",
+      "resume": "Fixture deux domaines"
+    }
+  ]
+}

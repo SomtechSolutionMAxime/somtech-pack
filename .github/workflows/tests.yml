@@ -31,3 +31,17 @@ jobs:
             echo "::endgroup::"
           done
           exit "$fail"
+
+  cli-tests:
+    # Suite unitaire du CLI (node --test), dont le parser BRD déterministe (parité, mutation,
+    # écriture ciblée). Zéro dépendance : aucun `npm install` requis. Comble le gap où ces tests
+    # ne tournaient qu'au publish (D-20260710-0009).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: node --test (cli)
+        run: node --test
+        working-directory: cli

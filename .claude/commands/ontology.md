@@ -195,7 +195,7 @@ Lit le YAML Somcraft + vérifie cohérence interne et ponts avec d'autres docume
    - **MVP v1** : si `get_data_schema_pointer` n'existe pas encore côté SD ou retourne NULL : skipper ces cross-checks et émettre un warning informatif « cross-check data_schema non disponible (pas de pointer renseigné ou skill `/schema-doc` pas encore en place) ».
 
    **Pont STD-033 / BRD** (warnings — informationnel) :
-   - Appeler `get_brd_pointer(application_id)`. Si `brd_yaml_document_id` est non-NULL, lire le `brd.yaml` via `read_document` et signaler les invariants ontologiques (par leur `id` `INV-XXX-NNN`) qui ne sont cités par aucune RA du BRD (informationnel, pas une erreur).
+   - Appeler `get_brd_pointer(application_id)`. Si `brd_document_id` est non-NULL, lire le BRD **source** via `read_document(brd_document_id, include_block_ids=true)` et calculer sa projection (via `somtech-pack brd project --mode full`) pour signaler les invariants ontologiques (par leur `id` `INV-XXX-NNN`) qui ne sont cités par aucune RA du BRD (informationnel, pas une erreur). Le `brd.yaml` n'est plus stocké : la projection est calculée à la demande.
    - **MVP v1** : si pas de BRD publié pour l'app, skipper.
 
 6. Afficher la liste complète des findings (erreurs + warnings, par catégorie).
@@ -273,7 +273,7 @@ L'ontologie fait partie d'une **famille de 4 documents de référence** qui suiv
 
 | Document | Skill associé | Pointer ServiceDesk | Édité par |
 |---|---|---|---|
-| **BRD** | `/brd` | `brd_document_id` + `brd_yaml_document_id` | Humain/agent en session (Somcraft) |
+| **BRD** | `/brd` | `brd_document_id` (projection BRD calculée à la demande, plus de `brd.yaml` stocké) | Humain/agent en session (Somcraft) |
 | **Ontologie** | `/ontology` (ce skill) | `ontology_document_id` | Humain/agent en session (Somcraft) |
 | **Architecture** | Publisher CI | `architecture_document_id` | CI du repo (récolte du code) |
 | **Data schema** | `/schema-doc` (à venir — cf. D-20260605-0005) | `data_schema_document_id` | CI du repo (introspection BD) |

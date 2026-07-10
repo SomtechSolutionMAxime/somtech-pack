@@ -1,0 +1,104 @@
+{
+  "requirements": {
+    "ea": [
+      {
+        "id": "EA-GBL-001",
+        "enonce": "Le client peut consulter l'historique complet de ses interactions",
+        "statut": "in_force",
+        "priorite": "M",
+        "owner": "Sponsor"
+      },
+      {
+        "id": "EA-GBL-002",
+        "enonce": "La solution synchronise les données en temps réel",
+        "statut": "in_force",
+        "priorite": "S",
+        "owner": "Sponsor"
+      }
+    ],
+    "ef": [
+      {
+        "id": "EF-CLI-001",
+        "description": "Afficher la fiche client avec son historique",
+        "statut": "in_force",
+        "priorite": "M",
+        "couvre": [
+          "EA-GBL-001"
+        ],
+        "realise_par": [],
+        "teste_par": [
+          "app/tests/e2e/clients-history.spec.ts"
+        ],
+        "owner": "PO Somtech",
+        "domaine": "CLI"
+      },
+      {
+        "id": "EF-CLI-002",
+        "description": "Synchroniser la fiche avec le CRM tiers",
+        "statut": "in_force",
+        "priorite": "S",
+        "couvre": [
+          "EA-GBL-002"
+        ],
+        "realise_par": [
+          "T-20260601-0001"
+        ],
+        "teste_par": [
+          "app/tests/e2e/clients-sync.spec.ts",
+          "app/src/modules/crm/hooks/useSync.test.ts"
+        ],
+        "owner": "PO Somtech",
+        "domaine": "CLI"
+      }
+    ],
+    "ra": [
+      {
+        "id": "RA-CLI-001",
+        "enonce": "Un client a un seul propriétaire commercial actif",
+        "justification": "Évite conflits de relance",
+        "statut": "in_force",
+        "encadre": [
+          "EF-CLI-001"
+        ],
+        "teste_par": [
+          "app/tests/e2e/L2-clients-owner-unique.spec.ts"
+        ],
+        "owner": "Sponsor",
+        "domaine": "CLI"
+      },
+      {
+        "id": "RA-CLI-002",
+        "enonce": "La synchronisation tolère un délai de 30 secondes",
+        "justification": "Trade-off perf/cohérence",
+        "statut": "in_force",
+        "encadre": [
+          "EF-CLI-001",
+          "EF-CLI-002"
+        ],
+        "teste_par": [],
+        "owner": "Lead Tech",
+        "domaine": "CLI"
+      }
+    ]
+  },
+  "out_of_scope": [
+    {
+      "id": "HS-CLI-001",
+      "enonce": "La solution ne gère pas la facturation",
+      "justification": "Phase v1, scope volontairement restreint",
+      "statut": "in_force",
+      "reconsidere_quand": "v2.0",
+      "domaine": "CLI"
+    }
+  ],
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-05-30",
+      "demande_projet": "D-20260530-0001",
+      "sponsor_validant": "Action Progex",
+      "mode": "manuel",
+      "resume": "Première version in_force après phase Validation"
+    }
+  ]
+}
