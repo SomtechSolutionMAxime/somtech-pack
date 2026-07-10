@@ -169,6 +169,37 @@ Interpreter le **code de retour** du helper :
 
 **Important** : ce gate exige une instance Supabase locale (pour `db reset`). En mode solo il ne lance jamais `db reset` (no-op avant), donc aucun cout ni prompt supplementaire pour un contributeur seul.
 
+## Etape 2.7 : Assurer l'entree CHANGELOG (sur la branche feature)
+
+> **Pourquoi ici** : sur la voie du sas staging, l'entree CHANGELOG doit etre produite **sur la branche feature, avant le merge dans staging**, pour qu'elle voyage feature→staging→main. Sinon elle serait perdue : `/pousse-staging` ne merge pas vers `main`, et `/merge` (staging→main) saute la generation sur staging en supposant qu'elle est deja arrivee — c'est ICI qu'elle arrive. Symetrique de l'etape 5.5 de `/merge` pour la voie feat→main directe (D-20260710-0001).
+
+> Helper deterministe partage avec `/merge` : `.claude/skills/merge/lib/ensure-changelog.sh` (`cec_diff_touches_changelog`, `cec_prepend_entry`).
+
+**Quand l'exécuter** : mode **Feature → staging** uniquement (on est sur la branche feat). En mode **Direct staging** (deja sur `staging`), **sauter** — on ne developpe pas sur staging.
+
+1. **Le repo veut-il un CHANGELOG ?** S'il n'y a pas de `CHANGELOG.md` a la racine et que le projet n'en tient pas, informer et passer a l'Etape 3. (Bootstrap possible comme dans `/merge` si le projet en veut un mais ne l'a pas encore.)
+
+2. **Detecter si la branche feature touche deja `CHANGELOG.md`** (diff vs `main`) :
+   ```bash
+   source .claude/skills/merge/lib/ensure-changelog.sh
+   git diff main..HEAD --name-only | cec_diff_touches_changelog CHANGELOG.md \
+     && echo "CHANGELOG deja dans la branche" || echo "CHANGELOG absent de la branche"
+   ```
+   - **Si deja present** : la session a redige son entree → **ne rien ecraser ni dupliquer**. Passer a l'Etape 3.
+
+3. **Si absent — composer l'entree** depuis le contexte (commits de la branche, ticket lie) au format Keep a Changelog, header `## [Non-versionne] - <DATE>`, categories `Ajoute`/`Modifie`/`Corrige`/`Technique`. Ecrire dans un fichier temporaire.
+
+4. **Presenter l'entree + DEMANDER UN GO** (contenu redactionnel visible).
+
+5. **Apres GO — inserer et committer sur la branche feature** (le push se fait a l'Etape 3, qui l'emportera dans staging) :
+   ```bash
+   cec_prepend_entry CHANGELOG.md /tmp/entry.md
+   git add CHANGELOG.md
+   git commit -m "docs(changelog): entree <ticket> pour la livraison"
+   ```
+
+> **Filet** : jamais de reecriture d'une entree deja presente ; commit sur la branche feature (jamais sur `staging`/`main` directement) ; GO obligatoire sur le contenu.
+
 ## Etape 3 : Push et merge dans staging
 
 ### Mode Feature → staging

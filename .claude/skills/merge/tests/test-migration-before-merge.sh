@@ -46,4 +46,13 @@ if [ "$ef_line" -ge "$merge_line" ]; then
   fail "Les Edge Functions (ligne $ef_line) doivent etre AVANT le merge (ligne $merge_line) — le frontend peut en dependre."
 fi
 
-echo "✅ PASS: migrations (L$mig_line) + gate (L$gate_line) + Edge Functions (L$ef_line) precedent bien le merge (L$merge_line)."
+# Garde-fou complementaire (D-20260710-0001) : l'entree CHANGELOG doit etre produite
+# AVANT le merge, pour partir dans le squash-merge sur main (sinon commit post-merge
+# = branche orpheline a re-merger, teardown worktree bloque).
+cl_line=$(grep -n '^## .*[Aa]ssurer l.entree CHANGELOG' "$SKILL_MD" | head -1 | cut -d: -f1)
+[ -n "$cl_line" ] || fail "Section « Assurer l'entree CHANGELOG » introuvable"
+if [ "$cl_line" -ge "$merge_line" ]; then
+  fail "L'entree CHANGELOG (ligne $cl_line) doit etre AVANT le merge (ligne $merge_line) — sinon elle ne part pas dans le squash et cree une branche orpheline."
+fi
+
+echo "✅ PASS: migrations (L$mig_line) + gate (L$gate_line) + Edge Functions (L$ef_line) + CHANGELOG (L$cl_line) precedent bien le merge (L$merge_line)."

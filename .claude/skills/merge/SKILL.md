@@ -110,6 +110,45 @@ Apres tout deploiement de migrations (Etape 3) et **avant le merge**, verifier q
      ```
    - **Si l'utilisateur refuse** : ne pas merger non plus (le frontend ne doit pas partir sans son backend). Informer que la livraison est suspendue.
 
+## Etape 5.5 : Assurer l'entree CHANGELOG (AVANT le merge)
+
+> **Pourquoi ici** : l'entree CHANGELOG doit voyager DANS la PR du travail, pour arriver sur `main` **dans le squash-merge** — jamais en post-hoc. Auparavant, `/end-session` ecrivait et committait `CHANGELOG.md` apres le merge : ce commit tombait sur une branche deja fermee (feature mergee ou socle `wt/*`), donc non-merge → il fallait rouvrir une PR pour la seule ligne de CHANGELOG, et le teardown du worktree restait bloque. On produit donc l'entree **ici**, avant le merge (D-20260710-0001). `/end-session` ne touche plus au CHANGELOG.
+
+> Helper deterministe : `lib/ensure-changelog.sh` (`cec_diff_touches_changelog`, `cec_prepend_entry`). Insertion avant la 1re section `## [`, preambule et sections existantes preserves.
+
+1. **Cas particuliers** :
+   - `HEAD_BRANCH` est `staging` (plan `PROTECTED`) : l'entree a normalement ete produite **en amont** par `/pousse-staging` (sur la branche feature, avant le merge dans staging) — elle a donc voyage feature→staging et sera dans le diff staging→main. La detection (etape 2) le confirmera et sautera. **Ne rien produire de nouveau ici** (eviter une entree agregee en double).
+   - `CHANGELOG.md` **absent** a la racine : si le projet **ne veut pas** de CHANGELOG (aucun `CHANGELOG.md` dans son historique) → informer et passer a l'Etape 6. Si le projet **en veut un mais ne l'a pas encore** (bootstrap) → le creer avec le preambule Keep a Changelog, puis continuer (l'entree y sera inseree a l'etape 5) :
+     ```bash
+     printf '# Changelog\n\nFormat base sur Keep a Changelog (https://keepachangelog.com/fr/).\n\n' > CHANGELOG.md
+     ```
+
+2. **Detecter si la PR touche deja `CHANGELOG.md`** :
+   ```bash
+   source .claude/skills/merge/lib/ensure-changelog.sh
+   gh pr diff <numero> --name-only | cec_diff_touches_changelog CHANGELOG.md \
+     && echo "CHANGELOG deja dans la PR" || echo "CHANGELOG absent de la PR"
+   ```
+   - **Si deja present** : la session a redige son entree → **ne rien ecraser, ne rien dupliquer**. Passer a l'Etape 6.
+
+3. **Si absent — composer l'entree depuis le contexte** (titre de la PR, commits, ticket lie) au format Keep a Changelog. Le header de section suit la convention DU repo :
+   - repo versionne par tag (section `## [X.Y.Z] - DATE` figee au tag, ex. somtech-pack) → header `## [Non-versionne] - <DATE>` (la version reelle sera posee a l'Etape 8) **ou** la version cible si elle est deja connue ;
+   - projet client en flux continu → header `## [Non-versionne] - <DATE>`.
+   Categoriser en `Ajoute` / `Modifie` / `Corrige` / `Technique`. Ecrire l'entree dans un fichier temporaire.
+
+4. **Presenter l'entree a l'utilisateur et DEMANDER UN GO explicite** (contenu redactionnel visible dans le CHANGELOG livre).
+
+5. **Apres GO — inserer, committer sur la branche source, pusher** :
+   ```bash
+   cec_prepend_entry CHANGELOG.md /tmp/entry.md        # insertion deterministe
+   git add CHANGELOG.md
+   git commit -m "docs(changelog): entree <ticket> pour la livraison"
+   git push
+   ```
+   Le commit part sur `HEAD_BRANCH` → il sera **inclus dans le squash-merge** de l'Etape 6 (une seule PR, zero branche supplementaire). Sur plan `DEFER`/`DELETE`, `HEAD_BRANCH` est checked-out localement (ou dans ce worktree) → le commit se fait la, sans bascule.
+
+> **Filet** : ne JAMAIS reecrire une entree deja presente (etape 2). Ne jamais committer le CHANGELOG sur `main` directement (toujours sur la branche source, via le squash). Le contenu de l'entree exige un GO (action redactionnelle visible).
+
 ## Etape 6 : Merge de la PR (worktree-aware)
 
 > Le backend est deja en prod (Etapes 3-5 : migrations + gate + Edge Functions). Ce merge declenche le redeploiement du frontend, qui tournera donc contre un backend deja pret.
