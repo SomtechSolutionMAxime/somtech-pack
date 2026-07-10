@@ -6,6 +6,9 @@
   "bin": {
     "somtech-pack": "bin/somtech-pack.js"
   },
+  "exports": {
+    "./brd": "./src/brd/index.js"
+  },
   "engines": {
     "node": ">=18"
   },
