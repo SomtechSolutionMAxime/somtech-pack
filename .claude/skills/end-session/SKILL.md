@@ -15,7 +15,7 @@ description: |
 
 # End Session - Documentation Automatique
 
-Ce skill analyse la session Claude Code en cours et met à jour la documentation du projet (CHANGELOG.md + mémoire externe d'état d'app STD-027 si applicable).
+Ce skill analyse la session Claude Code en cours et met à jour la mémoire externe d'état d'app (STD-027 si applicable). Il **ne touche plus à `CHANGELOG.md`** (D-20260710-0001) : l'entrée CHANGELOG est produite par `/merge`, dans la PR du travail. `/end-session` peut seulement la *suggérer* dans son résumé.
 
 > **Note** : ce skill ne touche pas à `.claude/CLAUDE.md` du projet — depuis 2026-05-13, le pack ne pousse plus de template CLAUDE.md projet (cf. D-20260513-0009). Le CLAUDE.md global utilisateur (`~/.claude/CLAUDE.md`) couvre toutes les règles transversales. Les projets qui ont un `.claude/CLAUDE.md` local l'ont créé eux-mêmes, et `/end-session` n'y touche pas.
 

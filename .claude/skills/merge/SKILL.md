@@ -116,9 +116,12 @@ Apres tout deploiement de migrations (Etape 3) et **avant le merge**, verifier q
 
 > Helper deterministe : `lib/ensure-changelog.sh` (`cec_diff_touches_changelog`, `cec_prepend_entry`). Insertion avant la 1re section `## [`, preambule et sections existantes preserves.
 
-1. **Cas ou l'on saute cette etape** :
-   - `HEAD_BRANCH` est `staging` (plan `PROTECTED`) : les entrees CHANGELOG sont deja arrivees via les PR feature mergees dans staging → **rien a faire**.
-   - Le repo n'a pas de `CHANGELOG.md` et n'en veut pas (verifier a la racine) → informer et passer a l'Etape 6.
+1. **Cas particuliers** :
+   - `HEAD_BRANCH` est `staging` (plan `PROTECTED`) : l'entree a normalement ete produite **en amont** par `/pousse-staging` (sur la branche feature, avant le merge dans staging) — elle a donc voyage feature→staging et sera dans le diff staging→main. La detection (etape 2) le confirmera et sautera. **Ne rien produire de nouveau ici** (eviter une entree agregee en double).
+   - `CHANGELOG.md` **absent** a la racine : si le projet **ne veut pas** de CHANGELOG (aucun `CHANGELOG.md` dans son historique) → informer et passer a l'Etape 6. Si le projet **en veut un mais ne l'a pas encore** (bootstrap) → le creer avec le preambule Keep a Changelog, puis continuer (l'entree y sera inseree a l'etape 5) :
+     ```bash
+     printf '# Changelog\n\nFormat base sur Keep a Changelog (https://keepachangelog.com/fr/).\n\n' > CHANGELOG.md
+     ```
 
 2. **Detecter si la PR touche deja `CHANGELOG.md`** :
    ```bash
