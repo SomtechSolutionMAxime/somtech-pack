@@ -191,7 +191,7 @@ Vérifie la cohérence interne + ponts cross-documents.
 
    **Pont BRD / STD-033 (warnings — si `Pilote` ≠ `—`)** :
    - L'app/module cité dans `Pilote: <app-slug>[/<module>]` existe côté ServiceDesk. **Règle de normalisation** : lister les apps via `mcp__servicedesk__applications` action `list` ; pour chaque `name` retourné, normaliser en `lowercase`, retirer espaces/tirets/underscores et suffixes connus (` somtech`, ` solutions`), puis comparer au `<app-slug>` aussi normalisé. Exemple : `Pilote: servicedesk` matche `name: "ServiceDesk"` (`servicedesk` après normalisation). Si N matches → warning « ambiguïté de slug, lister les UUIDs candidats ».
-   - Les EF citées dans R#.# (colonne « Moyens » ou « Cadre ») existent dans le `brd.yaml` de l'app (`get_brd_pointer(application_id)` puis lecture du YAML Somcraft). Si une EF citée n'existe pas : warning « EF `EF-XXX-NNN` citée dans R#.# mais introuvable dans le BRD ».
+   - Les EF citées dans R#.# (colonne « Moyens » ou « Cadre ») existent dans le BRD de l'app, via la projection calculée à la demande : `get_brd_pointer(application_id)` → `read_document(brd_document_id)` → `somtech-pack brd project --mode index` (ou `full`). Si une EF citée n'existe pas : warning « EF `EF-XXX-NNN` citée dans R#.# mais introuvable dans le BRD ».
    - **MVP v1** : si la résolution échoue (pas de BRD publié, app inexistante), skipper avec warning informatif.
 
    **Pont STD-036 INV-ABC-7 / GF transverses (warning)** :

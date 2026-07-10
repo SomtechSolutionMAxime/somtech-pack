@@ -27,7 +27,7 @@ const CTX_SCHEMA = { type: 'object', properties: {
   brd_grain: { type: 'string', enum: ['application', 'module'], description: 'Grain effectivement résolu pour le BRD (cohérent avec ADR-031, STD-033 §2.11)' },
   brd_resolved_from: { type: ['string', 'null'], enum: ['module', 'application', null], description: "Origine effective du BRD résolu : 'module' = pointer module-level direct, 'application' = fallback vers app-level (warning à afficher dans la décomposition), null = champ absent côté serveur (grain app pur, rétro-compat). Le prompt Phase 1 force 'application' pour le grain app pur ; ce null reste un filet de sécurité si le LLM suit littéralement la réponse MCP." },
   brd_version: { type: ['string', 'null'], description: 'Version SemVer du BRD résolu (du pointer ServiceDesk)' },
-  brd_yaml_publie_mcp: { type: 'boolean' },
+  brd_present: { type: 'boolean', description: 'true si brd_document_id (→ BRD.md source) est non-NULL dans le pointer. Le brd.yaml n\'est plus stocké : la projection structurée est calculée à la demande depuis le BRD.md.' },
   brd_md_lu: { type: 'boolean' },
   ef_pertinentes: { type: 'array', items: { type: 'object', properties: {
     id: { type: 'string' }, enonce: { type: 'string' }, statut: { type: 'string' } }, required: ['id'] } },
@@ -36,7 +36,7 @@ const CTX_SCHEMA = { type: 'object', properties: {
   hs_pertinents: { type: 'array', items: { type: 'string' } },
   drift_referentiel: { type: 'string' },
   note_limite: { type: 'string' },
-}, required: ['demande_titre', 'application_id', 'brd_grain', 'brd_yaml_publie_mcp', 'note_limite'] }
+}, required: ['demande_titre', 'application_id', 'brd_grain', 'brd_present', 'note_limite'] }
 
 const ANALYSE_SCHEMA = { type: 'object', properties: {
   angle: { type: 'string' },
@@ -95,9 +95,12 @@ const ctx = await agent(
    - Si module_id est NULL → appelle action=get_brd_pointer avec {application_id} (grain app pur, rétro-compat stricte).
      brd_grain='application'. Pour brd_resolved_from : tu DOIS écrire 'application' MÊME SI la réponse MCP n'inclut pas
      ce champ (rétro-compat serveur : champ omis pour grain app pur). Ne laisse jamais null si module_id est NULL.
-   - Mets brd_yaml_publie_mcp=true si brd_yaml_document_id est non-NULL dans la réponse. Capture brd_version.
-   - Si tu as un brd_yaml_document_id, lis le contenu via ToolSearch "select:mcp__claude_ai_Somcraft__read_document"
-     puis read_document avec ce document_id pour extraire les EF/RA/HS.
+   - Mets brd_present=true si brd_document_id (→ BRD.md source) est non-NULL dans la réponse. Capture brd_version.
+   - Le brd.yaml n'est PLUS stocké : la projection structurée du BRD se calcule À LA DEMANDE depuis le BRD.md source.
+     Si brd_document_id est non-NULL, lis le BRD source via ToolSearch "select:mcp__claude_ai_Somcraft__read_document"
+     puis read_document(brd_document_id, include_block_ids=true), et appuie-toi sur son contenu markdown (ou sa
+     projection full calculée par le CLI déterministe "somtech-pack brd project --mode full") pour extraire et tracer
+     les EF/RA/HS. Chaque exigence de la projection porte un md_block_id.
    ATTENTION (calibration de confiance) : "brd_document_id:null" via MCP ne veut PAS dire que le BRD n'existe pas —
    il peut exister dans Somcraft sans pointer SD posé. Ne confonds pas les deux.
 
@@ -137,8 +140,9 @@ const decoupage = await agent(
      (ex: "≥15%") : exprime une relation qualitative paramétrée par une RA ou la mesure d'un spike, sinon le test
      est décoratif (CLAUDE.md "chercher des bugs pas des PASS").
    - Si des inconnues changent l'architecture des stories, place un SPIKE timeboxé (livrable REF/ADR) AVANT tout code.
-   - Le travail de gouvernance (créer/amender EF, publier brd.yaml) se fait depuis le repo Architecture (règle d'or n°7),
-     jamais depuis le repo applicatif → epic de gouvernance dédié en tête si drift.
+   - Le travail de gouvernance (créer/amender une EF = éditer le BRD.md source via /brd edit ; la projection structurée
+     est ensuite recalculée à la demande, il n'y a plus de brd.yaml à publier) se fait depuis le repo Architecture
+     (règle d'or n°7), jamais depuis le repo applicatif → epic de gouvernance dédié en tête si drift.
    - **Si ctx.brd_resolved_from === 'application' ET ctx.module_id est non-NULL** (fallback module → app déclenché) :
      la PREMIÈRE story de l'epic de gouvernance DOIT être « Initialiser BRD module <module> » avec acceptance criteria
      pour la création du BRD module-level via /brd new <app>/<module> + premier extract, OU le découpage DOIT explicitement
@@ -174,7 +178,7 @@ return {
   brd_grain: ctx.brd_grain,
   brd_resolved_from: ctx.brd_resolved_from,
   brd_version: ctx.brd_version || null,
-  brd_yaml_publie_mcp: ctx.brd_yaml_publie_mcp,
+  brd_present: ctx.brd_present,
   drift_referentiel: ctx.drift_referentiel || '(aucun signalé)',
   note_limite: ctx.note_limite,
   decoupage,
