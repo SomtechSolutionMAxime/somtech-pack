@@ -1,0 +1,57 @@
+{
+  "requirements": {
+    "ea": [
+      {
+        "id": "EA-GBL-001",
+        "enonce": "EA avec un pipe | échappé dans l'énoncé",
+        "statut": "in_force",
+        "priorite": "M",
+        "owner": "Sponsor"
+      }
+    ],
+    "ef": [
+      {
+        "id": "EF-CLI-001",
+        "description": "EF mentionnant flag --output|stdout",
+        "statut": "in_force",
+        "priorite": "M",
+        "couvre": [
+          "EA-GBL-001"
+        ],
+        "realise_par": [],
+        "teste_par": [
+          "app/tests/e2e/cli-output.spec.ts"
+        ],
+        "owner": "PO Somtech",
+        "domaine": "CLI"
+      }
+    ],
+    "ra": [
+      {
+        "id": "RA-CLI-001",
+        "enonce": "Règle stub",
+        "justification": "Justification stub",
+        "statut": "in_force",
+        "encadre": [
+          "EF-CLI-001"
+        ],
+        "teste_par": [
+          "app/tests/e2e/L2-stub.spec.ts"
+        ],
+        "owner": "Sponsor",
+        "domaine": "CLI"
+      }
+    ]
+  },
+  "out_of_scope": [],
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-05-30",
+      "demande_projet": "D-20260530-0001",
+      "sponsor_validant": "Action Progex",
+      "mode": "manuel",
+      "resume": "Test pipe échappé"
+    }
+  ]
+}

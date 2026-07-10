@@ -1,0 +1,68 @@
+{
+  "requirements": {
+    "ea": [
+      {
+        "id": "EA-GBL-001",
+        "enonce": "EA stub",
+        "statut": "in_force",
+        "priorite": "M",
+        "owner": "Sponsor"
+      }
+    ],
+    "ef": [
+      {
+        "id": "EF-CLI-001",
+        "description": "EF in_force sans test (warning attendu)",
+        "statut": "in_force",
+        "priorite": "M",
+        "couvre": [
+          "EA-GBL-001"
+        ],
+        "realise_par": [],
+        "teste_par": [],
+        "owner": "PO Somtech",
+        "domaine": "CLI"
+      },
+      {
+        "id": "EF-CLI-002",
+        "description": "EF in_force avec test (pas de warning)",
+        "statut": "in_force",
+        "priorite": "S",
+        "couvre": [
+          "EA-GBL-001"
+        ],
+        "realise_par": [],
+        "teste_par": [
+          "app/tests/e2e/cli-002.spec.ts"
+        ],
+        "owner": "PO Somtech",
+        "domaine": "CLI"
+      }
+    ],
+    "ra": [
+      {
+        "id": "RA-CLI-001",
+        "enonce": "RA in_force sans test (warning attendu)",
+        "justification": "Justification stub",
+        "statut": "in_force",
+        "encadre": [
+          "EF-CLI-001"
+        ],
+        "teste_par": [],
+        "owner": "Sponsor",
+        "domaine": "CLI"
+      }
+    ]
+  },
+  "out_of_scope": [],
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-06-01",
+      "demande_projet": "D-20260601-0004",
+      "sponsor_validant": "Action Progex",
+      "mode": "manuel",
+      "resume": "Test gabarit v2.1.0"
+    }
+  ]
+}

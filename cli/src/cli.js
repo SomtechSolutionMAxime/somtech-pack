@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { cmdInit } from './commands/init.js';
 import { cmdUpdate } from './commands/update.js';
 import { cmdSetup } from './commands/setup.js';
+import { cmdBrd } from './commands/brd.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +24,7 @@ export function parseArgs(argv) {
     rc: null, skillsDir: null, workflowsDir: null, dest: null, noClaudeSwt: false,
     noSkills: false, noWorkflows: false,
     settings: null, hooksDir: null, noVersionHook: false,
+    mode: null, file: null,
     help: false, version: false,
   };
   const positionals = [];
@@ -43,6 +45,8 @@ export function parseArgs(argv) {
       case '--dest': flags.dest = value('--dest', ++i); break;
       case '--settings': flags.settings = value('--settings', ++i); break;
       case '--hooks-dir': flags.hooksDir = value('--hooks-dir', ++i); break;
+      case '--mode': flags.mode = value('--mode', ++i); break;
+      case '--file': flags.file = value('--file', ++i); break;
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
@@ -56,6 +60,8 @@ export function parseArgs(argv) {
         if (a.startsWith('--modules=')) flags.modules = a.slice('--modules='.length);
         else if (a.startsWith('--target=')) flags.target = a.slice('--target='.length);
         else if (a.startsWith('--source=')) flags.source = a.slice('--source='.length);
+        else if (a.startsWith('--mode=')) flags.mode = a.slice('--mode='.length);
+        else if (a.startsWith('--file=')) flags.file = a.slice('--file='.length);
         else if (a.startsWith('-')) throw new Error(`Option inconnue : ${a}`);
         else positionals.push(a);
     }
@@ -76,6 +82,8 @@ Commandes :
            claude-swt + hook de version. Re-jouable = mise à jour. Préserve skills et
            workflows perso hors-pack ; une version du pack divergente n'est prise
            qu'avec --force (backup .somtech.bak auto)
+  brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
+           brd project --mode index|full [--file <BRD.md>] (défaut : stdin)
 
 Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
@@ -111,16 +119,18 @@ export async function run(argv) {
     console.error(`✗ ${e.message}`);
     return 1;
   }
-  const { command, flags } = parsed;
+  const { command, positionals, flags } = parsed;
 
   if (flags.version) { console.log(pkgVersion()); return 0; }
-  if (flags.help || !command) { console.log(HELP); return command ? 0 : 1; }
+  // `brd` gère sa propre aide (--help) ; les autres commandes + le cas sans commande → aide globale.
+  if ((flags.help && command !== 'brd') || !command) { console.log(HELP); return command ? 0 : 1; }
 
   try {
     switch (command) {
       case 'init': return await cmdInit(flags);
       case 'update': return await cmdUpdate(flags);
       case 'setup': return await cmdSetup(flags);
+      case 'brd': return await cmdBrd(positionals, flags);
       default:
         console.error(`✗ Commande inconnue : ${command}\n`);
         console.log(HELP);
