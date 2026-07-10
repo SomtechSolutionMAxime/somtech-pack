@@ -64,6 +64,8 @@ export function parseArgs(argv) {
         else if (a.startsWith('--source=')) flags.source = a.slice('--source='.length);
         else if (a.startsWith('--mode=')) flags.mode = a.slice('--mode='.length);
         else if (a.startsWith('--file=')) flags.file = a.slice('--file='.length);
+        else if (a.startsWith('--id=')) flags.id = a.slice('--id='.length);
+        else if (a.startsWith('--patch=')) flags.patch = a.slice('--patch='.length);
         else if (a.startsWith('-')) throw new Error(`Option inconnue : ${a}`);
         else positionals.push(a);
     }

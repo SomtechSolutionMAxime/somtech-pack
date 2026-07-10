@@ -30,9 +30,17 @@ class BRDWriteError extends Error {
   constructor(message) { super(message); this.name = 'BRDWriteError'; }
 }
 
-/** Échappe un pipe littéral pour une cellule de tableau markdown. */
+// Sauts de ligne reconnus par le parser (Python splitlines + JS) : interdits dans une cellule,
+// sinon la ligne de tableau serait coupée en deux → bloc corrompu silencieusement (revue 2026-07-10).
+const LINE_BREAKS_RE = /[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
+
+/** Échappe un pipe littéral pour une cellule de tableau markdown ; rejette tout saut de ligne. */
 function escapeCell(v) {
-  return String(v ?? '').replaceAll('|', '\\|');
+  const s = String(v ?? '');
+  if (LINE_BREAKS_RE.test(s)) {
+    throw new BRDWriteError(`Valeur de cellule invalide : saut de ligne interdit dans une cellule de tableau (${JSON.stringify(s)}). Une cellule tient sur une seule ligne.`);
+  }
+  return s.replaceAll('|', '\\|');
 }
 
 /** Formate une valeur de cellule selon sa clé (liste → `, `, scalaire → échappé). */

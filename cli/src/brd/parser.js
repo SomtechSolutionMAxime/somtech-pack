@@ -167,10 +167,16 @@ function parseTable(lines, headerIdx, schemaKey) {
     throw new BRDParseError(headerIdx + 1, `En-tête de table ${schemaKey} non conforme. Attendu : ${JSON.stringify(expected)}, trouvé : ${JSON.stringify(header)}.`);
   }
   const sepIdx = headerIdx + 1;
-  if (sepIdx >= lines.length || !TABLE_SEPARATOR_REGEX.test(lines[sepIdx].trim())) {
+  // Match sur la ligne BRUTE (comme le parser Python) : un séparateur indenté est non conforme.
+  if (sepIdx >= lines.length || !TABLE_SEPARATOR_REGEX.test(lines[sepIdx])) {
     throw new BRDParseError(sepIdx + 1, `Ligne séparateur de tableau ${schemaKey} manquante ou non conforme.`);
   }
   const n = expected.length;
+  // Le séparateur doit avoir le même nombre de colonnes que l'en-tête (fidélité Python, revue 2026-07-10).
+  const sepCells = splitRow(lines[sepIdx]);
+  if (sepCells.length !== n) {
+    throw new BRDParseError(sepIdx + 1, `Séparateur de table ${schemaKey} : ${sepCells.length} cellules, attendu ${n}.`);
+  }
   const rows = [];
   let i = sepIdx + 1;
   for (; i < lines.length; i++) {
@@ -205,7 +211,9 @@ function checkDomainCoherence(rows, domainLine, domainCode, kind) {
  * @returns {{requirements: {ea: object[], ef: object[], ra: object[]}, out_of_scope: object[], changelog: object[]}}
  */
 export function parseBrd(mdText) {
-  const lines = mdText.split(/\r\n|\r|\n/);
+  // Équivalent Python str.splitlines() : coupe aussi sur VT, FF, FS/GS/RS, NEL, LS, PS
+  // (fidélité au parser de référence — une cellule contenant U+2028 doit casser la ligne, revue 2026-07-10).
+  const lines = mdText.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/);
   const result = { requirements: { ea: [], ef: [], ra: [] }, out_of_scope: [], changelog: [] };
   const seen = new Set();
   let currentDomain5 = null;
