@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.13.0] - 2026-07-10
+
+### Ajouté
+
+- **Accès BRD calculé à la demande** (demande D-20260710-0009, app Somtech Pack) — fin du `brd.yaml` stocké qui dérivait (pointeurs cassés constatés). Les projections BRD sont désormais **calculées à la demande** par un parser déterministe (zéro LLM, zéro artefact persisté → zéro drift), porté du parser Python de référence avec parité sémantique. Nouvelle sous-commande CLI `somtech-pack brd project --mode index|full` (index léger avec `md_block_id` par exigence, ou structure complète) et `somtech-pack brd edit --id --patch` (écriture ciblée `update_block` au grain domaine, sans réécrire tout le MD). Lib importable `@somtech-solutions/pack/brd` pour les agents Orbit.
+
+### Modifié
+
+- **Skill `/brd` réécrit** au modèle calculé à la demande : `extract` → `project` (lecture seule, aucune écriture Somcraft ni pointeur `brd_yaml_document_id`), nouvelle action `edit` (flux `read_document` → CLI → relecture anti-conflit → `update_block`). Claude ne parse plus le BRD à la main. Les 4 consommateurs internes du `brd.yaml` (`analyse-decoupage-demande`, `/ontology`, `/agent-brief`, `/audit-preprod`) reconvertis vers la projection à la demande ; comportement de `/plan-servicedesk` & `/superplan` préservé.
+
+### Technique
+
+- Parser `cli/src/brd/` (parser/project/write/index) : parité re-parse contre goldens générés depuis le parser Python, test de mutation (divergence sémantique → rouge), erreurs 1-based, ancrage `md_block_id` via marqueurs `<!-- bid:xxx -->` inline. Écriture prouvée en réel sur Somcraft (isolation + stabilité des blocs). Revue de code indépendante (règle d'or n°8) : 1 bug majeur corrigé (saut de ligne dans `--patch` → corruption silencieuse, désormais fail-closed) + 3 écarts de fidélité au Python (comptage colonnes séparateur, match brut, `splitlines()`). Nouveau job CI `cli-tests` (`node --test`) sur chaque PR — la suite ne tournait qu'au publish. 104 tests verts. Baseline mesurée (BRD ServiceDesk réel, 100 exigences) : index compact 21 Ko vs MD 61 Ko (2,84×).
+
 ## [1.12.4] - 2026-07-10
 
 ### Corrigé

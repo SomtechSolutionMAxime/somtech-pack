@@ -1,7 +1,7 @@
 {
   "name": "@somtech-solutions/pack",
-  "version": "1.12.4",
-  "description": "CLI d'installation du somtech-pack — point d'entrée unique (init / update / setup)",
+  "version": "1.13.0",
+  "description": "CLI d'installation du somtech-pack — point d'entrée unique (init / update / setup) + projections BRD calculées à la demande (brd project/edit)",
   "type": "module",
   "bin": {
     "somtech-pack": "bin/somtech-pack.js"
