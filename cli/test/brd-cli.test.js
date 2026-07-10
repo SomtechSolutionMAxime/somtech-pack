@@ -50,3 +50,23 @@ test('brd sans sous-commande → aide, exit 1', async () => {
   const { code } = await captureStdout(() => run(['brd']));
   assert.equal(code, 1);
 });
+
+test('brd edit → { block_id, newContent } avec la modif appliquée, exit 0', async () => {
+  const { code, out } = await captureStdout(() => run(['brd', 'edit', '--id', 'EF-CLI-001', '--patch', '{"statut":"accepted"}', '--file', join(FIX, 'valid-with-bids.md')]));
+  assert.equal(code, 0);
+  const res = JSON.parse(out);
+  assert.equal(res.block_id, 't-cli-ef');
+  assert.equal(res.kind, 'ef');
+  assert.match(res.newContent, /EF-CLI-001 \| Première fonction \| accepted/);
+  assert.match(res.newContent, /EF-CLI-002 \| Deuxième fonction \| draft/, 'le voisin est préservé');
+});
+
+test('brd edit --patch JSON invalide → exit 1', async () => {
+  const code = await run(['brd', 'edit', '--id', 'EF-CLI-001', '--patch', 'pas-du-json', '--file', join(FIX, 'valid-with-bids.md')]);
+  assert.equal(code, 1);
+});
+
+test('brd edit sur exigence sans bid → exit 3 (erreur écriture)', async () => {
+  const code = await run(['brd', 'edit', '--id', 'EF-CLI-001', '--patch', '{"statut":"accepted"}', '--file', join(FIX, 'valid-minimal.md')]);
+  assert.equal(code, 3);
+});

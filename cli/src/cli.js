@@ -24,7 +24,7 @@ export function parseArgs(argv) {
     rc: null, skillsDir: null, workflowsDir: null, dest: null, noClaudeSwt: false,
     noSkills: false, noWorkflows: false,
     settings: null, hooksDir: null, noVersionHook: false,
-    mode: null, file: null,
+    mode: null, file: null, id: null, patch: null,
     help: false, version: false,
   };
   const positionals = [];
@@ -47,6 +47,8 @@ export function parseArgs(argv) {
       case '--hooks-dir': flags.hooksDir = value('--hooks-dir', ++i); break;
       case '--mode': flags.mode = value('--mode', ++i); break;
       case '--file': flags.file = value('--file', ++i); break;
+      case '--id': flags.id = value('--id', ++i); break;
+      case '--patch': flags.patch = value('--patch', ++i); break;
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
