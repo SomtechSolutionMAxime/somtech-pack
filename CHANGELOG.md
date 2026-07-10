@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.12.4] - 2026-07-10
+
+### Corrigé
+
+- **L'entrée CHANGELOG ne crée plus de branche orpheline à re-merger** (PR #122, demande D-20260710-0001, ticket T-20260710-0014). `/end-session` écrivait et committait `CHANGELOG.md` *après* le merge du travail : ce commit tombait sur une branche déjà fermée (feature mergée ou socle `wt/*`), donc non-mergé → il fallait rouvrir une PR pour la seule ligne de CHANGELOG, et le teardown du worktree `claude-swt` restait bloqué. Désormais l'entrée est produite dans le flux de livraison, dans la PR du travail, et arrive sur `main` dans le squash-merge.
+
+### Technique
+
+- Nouveau helper déterministe `.claude/skills/merge/lib/ensure-changelog.sh` (`cec_diff_touches_changelog`, `cec_prepend_entry`) : insertion avant la 1re section `## [`, préambule et sections existantes préservés. Intégré dans `/merge` (étape 5.5, voie feat→main) **et** `/pousse-staging` (étape 2.7, voie sas staging : l'entrée est produite sur la branche feature avant le merge staging, elle voyage feature→staging→main). `/end-session` est purgé de toute écriture/commit CHANGELOG (il ne fait plus que la *suggérer*). Tests rouge→vert (11 assertions helper + garde-fou d'ordre « CHANGELOG avant merge »). Revue de code indépendante (règle d'or n°8) : finding MAJOR sur la voie staging corrigé.
+
 ## [1.12.3] - 2026-07-09
 
 ### Corrigé
