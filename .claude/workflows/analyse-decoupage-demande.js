@@ -140,9 +140,10 @@ const decoupage = await agent(
      (ex: "≥15%") : exprime une relation qualitative paramétrée par une RA ou la mesure d'un spike, sinon le test
      est décoratif (CLAUDE.md "chercher des bugs pas des PASS").
    - Si des inconnues changent l'architecture des stories, place un SPIKE timeboxé (livrable REF/ADR) AVANT tout code.
-   - Le travail de gouvernance (créer/amender une EF = éditer le BRD.md source via /brd edit ; la projection structurée
-     est ensuite recalculée à la demande, il n'y a plus de brd.yaml à publier) se fait depuis le repo Architecture
-     (règle d'or n°7), jamais depuis le repo applicatif → epic de gouvernance dédié en tête si drift.
+   - Le travail de gouvernance BRD (créer/amender une EF = éditer le BRD.md source DANS SOMCRAFT via /brd edit ou
+     /brd new ; la projection structurée est recalculée à la demande, il n'y a plus de brd.yaml à publier) se fait
+     dans le contexte de l'app via Somcraft (MCP), PAS depuis le repo Architecture ni par l'architecte. La règle d'or
+     n°10 s'applique : amender le BRD AVANT d'écrire les stories → epic de gouvernance dédié en tête si drift.
    - **Si ctx.brd_resolved_from === 'application' ET ctx.module_id est non-NULL** (fallback module → app déclenché) :
      la PREMIÈRE story de l'epic de gouvernance DOIT être « Initialiser BRD module <module> » avec acceptance criteria
      pour la création du BRD module-level via /brd new <app>/<module> + premier extract, OU le découpage DOIT explicitement

@@ -5,6 +5,12 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.13.1] - 2026-07-10
+
+### Corrigé
+
+- **Correction de doc dans le workflow `analyse-decoupage-demande`** (D-20260710-0009) : la note de gouvernance BRD affirmait à tort que « créer/amender une EF se fait depuis le repo Architecture, jamais depuis le repo applicatif ». C'est faux — l'amendement d'un BRD = éditer le `BRD.md` **dans Somcraft** via `/brd edit` ou `/brd new`, dans le contexte de l'app (opération MCP), **pas** depuis le repo Architecture ni par l'architecte. Texte hérité de l'original et conservé par erreur en v1.13.0. Le skill `/brd` était déjà correct.
+
 ## [1.13.0] - 2026-07-10
 
 ### Ajouté
