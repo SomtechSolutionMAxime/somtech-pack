@@ -5,6 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.14.0] - 2026-07-10
+
+### Ajouté
+
+- **Graphe NetworkX du BRD** (D-20260710-0009, Epic F) — nouveau mode `somtech-pack brd project --mode graph` : à la récupération, le BRD est projeté en **graphe de connaissances** (JSON node-link, natif NetworkX) que les agents Orbit chargent pour **raisonner** (RAG) et **amender** les exigences. Modèle enrichi : nœuds exigences (détail complet + `md_block_id`) + nœuds domaine ; arêtes dirigées `couvre` (EF→EA), `encadre` (RA→EF), `appartient` (→domaine). Références cassées surfacées dans `graph.dangling_refs` (pas de nœud fantôme). Calculé à la demande, jamais stocké — comme index/full.
+- **Loader Python `aims/brd-graph/`** — `load_brd_graph` (node-link → `networkx.DiGraph`, compatible NetworkX < 3.4 et ≥ 3.4) + 3 requêtes de commodité (`enjeux_orphelins`, `exigences_du_domaine`, `enjeux_servis_par`). Le format node-link du CLI est le contrat universel ; le loader est le pont NetworkX. Pour amender : `nœud → md_block_id → /brd edit`.
+
+### Technique
+
+- Builder pur `cli/src/brd/graph.js` (une seule source de vérité = parseur TS, pas de parseur Python dupliqué), exporté en lib `@somtech-solutions/pack/brd`. BRD ServiceDesk réel : 105 nœuds (100 exigences + 5 domaines), 199 arêtes. Nouveau job CI `python-tests` (pytest du loader — le reste du CI est Node-only). Revue de code indépendante (règle d'or n°8) : mergeable, zéro bloquant/majeur ; 2 findings mineurs corrigés (contrat EA de `enjeux_servis_par`, dédup des arêtes alignée sur `multigraph:false`), fidélité node-link↔NetworkX vérifiée sur 3.2.1 et 3.6.1. 112 tests CLI + 7 pytest verts.
+
 ## [1.13.1] - 2026-07-10
 
 ### Corrigé

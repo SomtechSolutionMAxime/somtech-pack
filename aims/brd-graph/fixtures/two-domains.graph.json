@@ -1,0 +1,154 @@
+{
+    "directed": true,
+    "multigraph": false,
+    "graph": {
+        "source": "brd",
+        "domaines": [
+            "CLI",
+            "FAC"
+        ],
+        "dangling_refs": []
+    },
+    "nodes": [
+        {
+            "id": "EA-GBL-001",
+            "enonce": "Enjeu global unique",
+            "statut": "in_force",
+            "priorite": "M",
+            "owner": "Sponsor",
+            "md_block_id": null,
+            "kind": "ea"
+        },
+        {
+            "id": "EF-CLI-001",
+            "description": "Fonction du domaine Clients",
+            "statut": "in_force",
+            "priorite": "M",
+            "couvre": [
+                "EA-GBL-001"
+            ],
+            "realise_par": [],
+            "teste_par": [
+                "app/tests/cli.spec.ts"
+            ],
+            "owner": "PO",
+            "domaine": "CLI",
+            "md_block_id": null,
+            "kind": "ef"
+        },
+        {
+            "id": "EF-FAC-001",
+            "description": "Fonction du domaine Facturation",
+            "statut": "proposed",
+            "priorite": "S",
+            "couvre": [
+                "EA-GBL-001"
+            ],
+            "realise_par": [
+                "T-20260601-0009"
+            ],
+            "teste_par": [
+                "app/tests/fac.spec.ts"
+            ],
+            "owner": "PO",
+            "domaine": "FAC",
+            "md_block_id": null,
+            "kind": "ef"
+        },
+        {
+            "id": "RA-CLI-001",
+            "enonce": "R\u00e8gle du domaine Clients",
+            "justification": "Justif CLI",
+            "statut": "in_force",
+            "encadre": [
+                "EF-CLI-001"
+            ],
+            "teste_par": [],
+            "owner": "Sponsor",
+            "domaine": "CLI",
+            "md_block_id": null,
+            "kind": "ra"
+        },
+        {
+            "id": "RA-FAC-001",
+            "enonce": "R\u00e8gle du domaine Facturation",
+            "justification": "Justif FAC",
+            "statut": "accepted",
+            "encadre": [
+                "EF-FAC-001"
+            ],
+            "teste_par": [],
+            "owner": "Sponsor",
+            "domaine": "FAC",
+            "md_block_id": null,
+            "kind": "ra"
+        },
+        {
+            "id": "HS-FAC-001",
+            "enonce": "Pas de multi-devises",
+            "justification": "Scope v1",
+            "statut": "accepted",
+            "reconsidere_quand": "v2.0",
+            "domaine": "FAC",
+            "md_block_id": null,
+            "kind": "hs"
+        },
+        {
+            "id": "domaine:CLI",
+            "kind": "domaine",
+            "code": "CLI"
+        },
+        {
+            "id": "domaine:FAC",
+            "kind": "domaine",
+            "code": "FAC"
+        }
+    ],
+    "links": [
+        {
+            "source": "EF-CLI-001",
+            "target": "EA-GBL-001",
+            "rel": "couvre"
+        },
+        {
+            "source": "EF-FAC-001",
+            "target": "EA-GBL-001",
+            "rel": "couvre"
+        },
+        {
+            "source": "RA-CLI-001",
+            "target": "EF-CLI-001",
+            "rel": "encadre"
+        },
+        {
+            "source": "RA-FAC-001",
+            "target": "EF-FAC-001",
+            "rel": "encadre"
+        },
+        {
+            "source": "EF-CLI-001",
+            "target": "domaine:CLI",
+            "rel": "appartient"
+        },
+        {
+            "source": "EF-FAC-001",
+            "target": "domaine:FAC",
+            "rel": "appartient"
+        },
+        {
+            "source": "RA-CLI-001",
+            "target": "domaine:CLI",
+            "rel": "appartient"
+        },
+        {
+            "source": "RA-FAC-001",
+            "target": "domaine:FAC",
+            "rel": "appartient"
+        },
+        {
+            "source": "HS-FAC-001",
+            "target": "domaine:FAC",
+            "rel": "appartient"
+        }
+    ]
+}
