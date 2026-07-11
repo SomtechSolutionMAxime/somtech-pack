@@ -24,7 +24,7 @@ Le parsing MD → projection est **déterministe** et vit dans le CLI (`cli/src/
   - Le contenu MD passé inclut les marqueurs `<!-- bid:xxx -->` rendus par Somcraft `read_document(include_block_ids=true)`.
   - `--mode index` : projection légère (`{ id, titre, statut, domaine, priorite, couvre|encadre, md_block_id }` par exigence, JSON compact).
   - `--mode full` : structure complète (parité sémantique avec l'ancien YAML) + `md_block_id` par exigence.
-  - `--mode graph` : **graphe node-link** (natif NetworkX) — nœuds exigences (détail full + `md_block_id`) + nœuds domaine ; arêtes dirigées `couvre` (EF→EA), `encadre` (RA→EF), `appartient` (→domaine). Réfs cassées dans `graph.dangling_refs`. Pour agents Orbit : raisonnement (RAG) + amendement (nœud → `md_block_id` → `/brd edit`). Charger côté Python via `nx.node_link_graph(obj, edges="links")`.
+  - `--mode graph` : **graphe node-link** (natif NetworkX) — nœuds exigences (détail full + `md_block_id`) + nœuds domaine ; arêtes dirigées `couvre` (EF→EA), `encadre` (RA→EF), `appartient` (→domaine). Réfs cassées dans `graph.dangling_refs`. **C'est le mode de raisonnement sur les relations — pour toute session (humaine ou agent Orbit), pas seulement Orbit** : impact d'un changement, EA orphelines, RA qui encadrent une EF, cohérence de traçabilité, puis amendement (nœud → `md_block_id` → `/brd edit`). Charger côté Python via `nx.node_link_graph(obj, edges="links")`.
   - Exit `2` si le BRD est invalide (format/enums/symétries de tableaux rejetés par le parser).
 - **`somtech-pack brd edit --id <EF-XXX-001> --patch '<json>' [--file <BRD.md>]`** → JSON `{ block_id, newContent, kind }` à passer à Somcraft `update_block`.
   - Exit `3` si l'édition est impossible (ex : exigence sans marqueur `bid`).
@@ -133,7 +133,99 @@ Cette règle s'applique aussi à `somcraft_workspace_id` (impact transverse plus
 
 > **Rétro-compat — alias déprécié `extract`** : si un utilisateur tape `/brd extract <slug>`, le traiter comme `/brd project <slug> --mode full` et afficher un avertissement : « ⚠️ `/brd extract` est déprécié (le modèle ne stocke plus de brd.yaml — les projections sont calculées à la demande). Utilise `/brd project <slug> [--mode index|full]`. ». Ne rien écrire dans Somcraft.
 
-Si `$ARGUMENTS` est vide, afficher cette aide et stopper.
+Si `$ARGUMENTS` est vide, afficher le **Guide d'utilisation** ci-dessous (pas seulement la grammaire) et stopper.
+
+---
+
+## Guide d'utilisation — comment se servir de `/brd`
+
+### En un coup d'œil : quelle action pour quel besoin ?
+
+| Ton besoin | La commande |
+|---|---|
+| « Je veux savoir ce que dit le BRD de cette app » | `/brd read <app>` |
+| « Je dois décomposer une demande et citer les bonnes EF » | `/brd project <app> --mode index` |
+| « Je veux le BRD complet, pour un audit » | `/brd project <app> --mode full` |
+| « Je veux le donner à un agent qui raisonne dessus (RAG) » | `/brd project <app> --mode graph` |
+| « Une exigence a changé, je dois l'amender » | `/brd edit <app> --id <EF-XXX-001> --patch '{…}'` |
+| « Est-ce que ce BRD est cohérent ? » | `/brd validate <app>` |
+| « Cette app/ce module n'a pas encore de BRD » | `/brd new <app>[/<module>]` |
+| « Quelles apps ont un BRD et lesquelles n'en ont pas ? » | `/brd list [--grain=all]` |
+
+### Quel `--mode` choisir (règle pour Claude, pas seulement pour l'humain)
+
+`project` a trois modes. **Ce n'est pas un détail de performance : le mode détermine ce que tu es capable de voir.**
+
+| Mode | Ce que tu obtiens | Quand c'est le bon choix |
+|---|---|---|
+| `index` (défaut) | Liste plate des exigences (id, titre, statut, domaine, priorité, `couvre`/`encadre`, `md_block_id`) | Tu veux **citer** des EF/RA : décomposition d'une demande, choix de l'EF `Réalisé par` d'une story, inventaire rapide. |
+| `graph` | Graphe node-link : nœuds exigences + domaines, arêtes dirigées `couvre` (EF→EA), `encadre` (RA→EF), `appartient` (→domaine), plus `dangling_refs` | Tu dois **raisonner sur les relations** : impact d'un changement, EA orphelines, quelles RA encadrent une EF, cohérence de la traçabilité, réponse à « qu'est-ce que ça casse si je touche à X ». |
+| `full` | Structure complète, corps de chaque exigence | Tu dois **lire le contenu** en détail : audit, rédaction/amendement d'une exigence, validation approfondie. |
+
+**Règle** — dès qu'une question porte sur des **liens** entre exigences (couverture, impact, dépendance, orphelines, cohérence), utilise **`--mode graph`**. `index` est une liste : il te donne les champs `couvre`/`encadre` bruts, mais tu devrais reconstruire le graphe à la main pour les exploiter — c'est exactement l'erreur que le mode `graph` existe pour éviter. Si tu te surprends à corréler des `couvre` entre eux depuis un `index`, tu as pris le mauvais mode : relance en `graph`.
+
+`graph` n'est **pas** réservé aux agents Orbit — c'est le mode de raisonnement par défaut de toute session, humaine ou agent.
+
+### Le workflow typique (nouvelle app)
+
+```
+/brd new actionprogex          # 1. instancie le BRD depuis le gabarit + pose le pointer
+                               # 2. tu complètes §4 (EA/EF) et §5 (RA) dans Somcraft
+/brd validate actionprogex     # 3. vérifie format + cohérence (couvre/encadre, orphelines, tests)
+/brd project actionprogex      # 4. la projection est fraîche, prête pour les agents
+```
+
+### Le workflow typique (app existante, avant de décomposer)
+
+```
+/brd read actionprogex                      # contexte : de quoi parle ce BRD ?
+/brd project actionprogex --mode index      # inventaire léger des EF/RA à citer
+# → si l'EF nécessaire n'existe pas : l'ajouter/l'amender AVANT d'écrire la story
+/brd edit actionprogex --id EF-CTC-014 --patch '{"statut":"in_force"}'
+```
+
+> C'est la **Phase 1 universelle** (règle d'or n°10 + STD-033 §2.8) : on ne décompose jamais sans avoir lu le BRD au bon grain. Le workflow `analyse-decoupage-demande` fait ça automatiquement.
+
+### App simple vs app à modules
+
+Le suffixe `/<module>` est **optionnel** partout. Sans lui, tout se passe au grain **application** (comportement historique, aucune régression) :
+
+```
+/brd read maplacerh            # BRD portail de l'app
+/brd read maplacerh/wbs        # BRD du module WBS
+```
+
+**Règle de choix** : si la demande/epic que tu traites porte un `module_id`, travaille au grain module. Sinon, grain application.
+
+**Attention au fallback** : en lecture (`read`, `project`), si le module n'a pas encore de BRD, le skill retombe sur le BRD de l'app **en te le disant** (warning explicite). Passe `--no-fallback` si tu veux que ça s'arrête plutôt que de retomber. En **écriture** (`edit`) et en `validate`, il n'y a **jamais** de fallback : le grain est strict, pour ne pas modifier le BRD du portail par effet de bord.
+
+### Exemples de `--patch` (action `edit`)
+
+Le patch est un objet JSON qui **écrase** les champs nommés de l'exigence ciblée ; les autres champs restent intacts.
+
+```bash
+# Faire passer une EF en vigueur
+/brd edit actionprogex --id EF-CTC-014 --patch '{"statut":"in_force"}'
+
+# Corriger le libellé et la priorité
+/brd edit actionprogex --id EF-CTC-014 --patch '{"titre":"Relancer un contact inactif","priorite":"P1"}'
+
+# Rattacher une EF à un enjeu d'affaires
+/brd edit maplacerh/wbs --id EF-WBS-003 --patch '{"couvre":["EA-WBS-001"]}'
+```
+
+Tout amendement **bumpe la version** du BRD (SemVer) et ajoute une entrée au changelog — le skill te demande le niveau de bump (patch/minor/major).
+
+### Ce à quoi il faut s'attendre
+
+- **Rien n'est stocké** : les projections (`index`/`full`/`graph`) sont **recalculées à chaque appel** depuis le BRD.md Somcraft. Il n'y a pas de `brd.yaml` à régénérer, pas de cache à invalider, donc pas de drift possible.
+- **La source de vérité est Somcraft**, pas ton disque. Tu peux éditer le BRD.md directement dans Somcraft à la main : `/brd project` le reflétera immédiatement.
+- **Le skill ne devine jamais** : si un slug d'app ou de module ne résout pas, il s'arrête et te liste ce qui existe. Il n'invente pas d'`application_id` ni de `module_id`.
+- **Les pointers sont immutables** : écraser un `brd_document_id` déjà posé exige une approbation explicite de Maxime.
+
+### Pré-requis
+
+MCP **Somcraft** + MCP **ServiceDesk** chargés dans la session, et le CLI `@somtech-solutions/pack` accessible (via `npx`). Aucune variable d'environnement, aucun fichier local à configurer — le skill marche depuis n'importe quel répertoire.
 
 ---
 
@@ -203,9 +295,11 @@ Si `$ARGUMENTS` est vide, afficher cette aide et stopper.
    Si pas de `brd_document_id` → STOP, suggérer `/brd new <slug>`.
 4. **Lire** le BRD via `mcp__claude_ai_Somcraft__read_document(document_id=<brd_document_id>, include_block_ids=true)`. Le `include_block_ids=true` garantit la présence des marqueurs `<!-- bid:xxx -->` → `md_block_id` renseigné dans la projection (nécessaire pour un `edit` ultérieur).
 5. **Écrire le contenu MD dans un fichier temporaire** du scratchpad de session (tampon d'entrée du parser, pas une source de vérité).
-6. **Calculer la projection** via le CLI : `somtech-pack brd project --mode <index|full|graph> --file <tmp>` (défaut `--mode index`). Le parser rejette déjà les erreurs de format (exit `2`) : si le CLI sort en erreur, remonter le message à l'utilisateur (le BRD.md est mal formé — le corriger dans Somcraft).
-7. **Afficher / retourner le JSON** produit :
+6. **Choisir le mode** (si l'utilisateur n'en impose pas un — cf. § « Quel `--mode` choisir ») : question sur des **liens** entre exigences → `graph` ; besoin de **citer** des EF/RA → `index` ; besoin du **contenu** détaillé → `full`.
+7. **Calculer la projection** via le CLI : `somtech-pack brd project --mode <index|full|graph> --file <tmp>` (défaut `--mode index`). Le parser rejette déjà les erreurs de format (exit `2`) : si le CLI sort en erreur, remonter le message à l'utilisateur (le BRD.md est mal formé — le corriger dans Somcraft).
+8. **Afficher / retourner le JSON** produit :
    - `index` : tableau compact des exigences (`id, titre, statut, domaine, priorite, couvre|encadre, md_block_id`) — idéal pour la Phase 1 de décomposition (léger, cite les EF sans corps lourd).
+   - `graph` : graphe node-link — raisonner sur la traçabilité (impact, orphelines, `dangling_refs`). Ne jamais reconstruire ce graphe à la main depuis un `index`.
    - `full` : structure complète — pour audit ou validation approfondie.
    Inclure dans l'en-tête le grain effectivement résolu et la version du pointer (`brd_version`).
 
@@ -324,7 +418,8 @@ Pattern unifié :
 - Créer un BRD **après** avoir écrit les stories (chaîne de causalité inversée)
 - **Stocker / éditer un BRD en filesystem local** comme source de vérité — toute édition passe par Somcraft via MCP. Le fichier temporaire de scratchpad n'est qu'un tampon d'entrée du parser, jamais une source.
 - **Parser le BRD.md à la main** (Claude ne joue plus le rôle de parser) — toujours déléguer au CLI déterministe `somtech-pack brd project`. Un parsing manuel réintroduit le risque d'erreur que le parser élimine.
-- **Stocker une projection** (index ou full) comme document Somcraft ou fichier versionné — les projections sont **calculées à la demande** ; un YAML persisté = drift garanti.
+- **Raisonner sur les relations entre exigences depuis un `index`** (corréler les `couvre`/`encadre` à la main, chercher les EA orphelines en croisant des listes) — c'est reconstruire le graphe manuellement, avec le risque d'erreur que `--mode graph` élimine. Dès qu'il s'agit de liens, relancer en `graph`.
+- **Stocker une projection** (index, full ou graph) comme document Somcraft ou fichier versionné — les projections sont **calculées à la demande** ; un YAML persisté = drift garanti.
 - **Écraser un `brd_document_id` non-NULL sans approbation Maxime** (cf. règle critique IDs immutables). S'applique identiquement aux pointers app-level et module-level.
 - **Modifier `somcraft_workspace_id` non-NULL** sans approbation (impact transverse encore plus large)
 - **Mettre en cache l'index/le contenu d'un bloc entre un `read` et un `update_block`** — toujours relire juste avant d'écrire et vérifier que le bloc n'a pas changé (pas de verrou natif ; conflit silencieux sinon, spike T-20260710-0138).
