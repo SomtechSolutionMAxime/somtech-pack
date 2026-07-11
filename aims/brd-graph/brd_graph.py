@@ -55,5 +55,14 @@ def exigences_du_domaine(g, code):
 
 
 def enjeux_servis_par(g, ef_id):
-    """EA couvertes par l'EF ``ef_id`` (arêtes ``couvre`` sortantes). Retour trié."""
-    return sorted(v for _, v, d in g.out_edges(ef_id, data=True) if d.get("rel") == "couvre")
+    """EA couvertes par l'EF ``ef_id`` (arêtes ``couvre`` sortantes vers une EA). Retour trié.
+
+    Le contrat est « EA » : sur un BRD malformé où une EF « couvre » un non-EA (le parseur ne
+    type-checke pas les cibles — surface don't validate), on ne retourne QUE les cibles de kind ``ea``.
+    """
+    if ef_id not in g:
+        return []
+    return sorted(
+        v for _, v, d in g.out_edges(ef_id, data=True)
+        if d.get("rel") == "couvre" and g.nodes[v].get("kind") == "ea"
+    )

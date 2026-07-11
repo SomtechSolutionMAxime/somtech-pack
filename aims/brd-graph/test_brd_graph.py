@@ -55,6 +55,27 @@ def test_exigences_du_domaine():
     assert exigences_du_domaine(g, "FAC") == ["EF-FAC-001", "HS-FAC-001", "RA-FAC-001"]
 
 
+def test_enjeux_servis_par_ne_retourne_que_des_ea():
+    # BRD malformé simulé : EF-CLI-002 « couvre » un EF (accepté par la regex ID mais faux sémantiquement).
+    data = {
+        "directed": True, "multigraph": False, "graph": {},
+        "nodes": [
+            {"id": "EA-GBL-001", "kind": "ea"},
+            {"id": "EF-CLI-001", "kind": "ef"},
+            {"id": "EF-CLI-002", "kind": "ef"},
+        ],
+        "links": [
+            {"source": "EF-CLI-002", "target": "EA-GBL-001", "rel": "couvre"},
+            {"source": "EF-CLI-002", "target": "EF-CLI-001", "rel": "couvre"},
+        ],
+    }
+    g = load_brd_graph(data)
+    # le contrat « EA » est tenu : le EF cible est exclu
+    assert enjeux_servis_par(g, "EF-CLI-002") == ["EA-GBL-001"]
+    # id absent → liste vide, pas de crash
+    assert enjeux_servis_par(g, "EF-ZZZ-999") == []
+
+
 def test_enjeux_orphelins():
     # two-domains : EA-GBL-001 est couverte par 2 EF → aucun orphelin.
     g = load_brd_graph(_fixture("two-domains.graph.json"))

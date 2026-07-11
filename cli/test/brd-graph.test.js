@@ -105,6 +105,24 @@ test('mutation — retirer un couvre du source change le compte d\'arêtes (le t
   assert.equal(linksByRel(g1, 'couvre').length - linksByRel(g2, 'couvre').length, 1, 'le graphe doit refléter la donnée : 1 couvre en moins');
 });
 
+test('dédup — une liste couvre à doublons ne produit qu\'une arête (aligné NetworkX multigraph:false)', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | x | in_force | M | S |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Clients (code: CLI)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-CLI-001 | ok | in_force | M | EA-GBL-001, EA-GBL-001 |  | t.spec.ts | PO |', // doublon
+    '', CHANGELOG,
+  ].join('\n');
+  const g = buildGraph(md);
+  assert.equal(linksByRel(g, 'couvre').length, 1, 'les couvre en double sont fusionnés');
+});
+
 test('CLI — brd project --mode graph → node-link compact, exit 0', async () => {
   const { code, out } = await captureStdout(() => run(['brd', 'project', '--mode', 'graph', '--file', join(FIX, 'valid-two-domains.md')]));
   assert.equal(code, 0);
