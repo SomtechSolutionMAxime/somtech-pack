@@ -2,7 +2,7 @@
 // Calcul déterministe à la demande (zéro LLM, zéro artefact stocké — STD-033 §2.12).
 //
 // Usage :
-//   somtech-pack brd project --mode index|full [--file <BRD.md>]
+//   somtech-pack brd project --mode index|full|graph [--file <BRD.md>]
 //   cat BRD.md | somtech-pack brd project --mode index
 //
 // L'appelant (skill /brd, agent Orbit) fait le hop Somcraft read_document et pipe le contenu ici :
@@ -10,6 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import { projectIndex, projectFull, toJson, toCompactJson } from '../brd/project.js';
+import { buildGraph } from '../brd/graph.js';
 import { BRDParseError } from '../brd/parser.js';
 import { applyEdit, BRDWriteError } from '../brd/write.js';
 
@@ -32,12 +33,12 @@ export async function cmdBrd(positionals, flags) {
     console.log(`somtech-pack brd — projections BRD calculées à la demande
 
 Usage :
-  somtech-pack brd project --mode index|full [--file <BRD.md>]
+  somtech-pack brd project --mode index|full|graph [--file <BRD.md>]
   cat BRD.md | somtech-pack brd project --mode index
   somtech-pack brd edit --id <EF-XXX-001> --patch '<json>' [--file <BRD.md>]
 
 Options :
-  --mode <index|full>   project : index (léger) | full (complet)
+  --mode <index|full|graph>  project : index (léger) | full (complet) | graph (node-link NetworkX)
   --id <ID>             edit : ID de l'exigence à modifier
   --patch <json>        edit : champs à écraser, ex '{"statut":"accepted"}'
   --file <chemin>       Fichier BRD.md à lire (défaut : stdin)
@@ -56,8 +57,8 @@ Le MD doit contenir les marqueurs <!-- bid:xxx --> (rendu par read_document) pou
   }
 
   const mode = flags.mode ?? 'index';
-  if (mode !== 'index' && mode !== 'full') {
-    console.error(`✗ --mode invalide : ${mode} (attendu : index | full)`);
+  if (mode !== 'index' && mode !== 'full' && mode !== 'graph') {
+    console.error(`✗ --mode invalide : ${mode} (attendu : index | full | graph)`);
     return 1;
   }
 
@@ -70,6 +71,8 @@ Le MD doit contenir les marqueurs <!-- bid:xxx --> (rendu par read_document) pou
   try {
     if (mode === 'index') {
       process.stdout.write(toCompactJson(projectIndex(md)));
+    } else if (mode === 'graph') {
+      process.stdout.write(toCompactJson(buildGraph(md)));
     } else {
       process.stdout.write(toJson(projectFull(md)));
     }

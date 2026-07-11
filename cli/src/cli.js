@@ -87,7 +87,7 @@ Commandes :
            workflows perso hors-pack ; une version du pack divergente n'est prise
            qu'avec --force (backup .somtech.bak auto)
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
-           brd project --mode index|full [--file <BRD.md>] (défaut : stdin)
+           brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
 
 Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)

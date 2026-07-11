@@ -11,3 +11,4 @@
 export { parseBrd, BRDParseError } from './parser.js';
 export { projectIndex, projectFull, toJson, toCompactJson } from './project.js';
 export { serializeTable, applyEdit, assertBlockUnchanged, BRDWriteError } from './write.js';
+export { buildGraph } from './graph.js';

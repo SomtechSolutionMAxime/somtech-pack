@@ -20,10 +20,11 @@ Tu es un assistant qui pilote le cycle de vie d'un **BRD** (Business Requirement
 
 Le parsing MD → projection est **déterministe** et vit dans le CLI (`cli/src/brd/`), exposé comme sous-commande **et** comme lib importable. **Claude ne parse jamais le MD à la main** — il délègue au CLI. Contrat (détails : `cli/src/brd/SPEC.md`, spike `docs/superpowers/specs/2026-07-10-brd-spike-contrat-block-id-REF.md`) :
 
-- **`somtech-pack brd project --mode index|full [--file <BRD.md>]`** (ou BRD.md via stdin) → **JSON** sur stdout.
+- **`somtech-pack brd project --mode index|full|graph [--file <BRD.md>]`** (ou BRD.md via stdin) → **JSON** sur stdout.
   - Le contenu MD passé inclut les marqueurs `<!-- bid:xxx -->` rendus par Somcraft `read_document(include_block_ids=true)`.
   - `--mode index` : projection légère (`{ id, titre, statut, domaine, priorite, couvre|encadre, md_block_id }` par exigence, JSON compact).
   - `--mode full` : structure complète (parité sémantique avec l'ancien YAML) + `md_block_id` par exigence.
+  - `--mode graph` : **graphe node-link** (natif NetworkX) — nœuds exigences (détail full + `md_block_id`) + nœuds domaine ; arêtes dirigées `couvre` (EF→EA), `encadre` (RA→EF), `appartient` (→domaine). Réfs cassées dans `graph.dangling_refs`. Pour agents Orbit : raisonnement (RAG) + amendement (nœud → `md_block_id` → `/brd edit`). Charger côté Python via `nx.node_link_graph(obj, edges="links")`.
   - Exit `2` si le BRD est invalide (format/enums/symétries de tableaux rejetés par le parser).
 - **`somtech-pack brd edit --id <EF-XXX-001> --patch '<json>' [--file <BRD.md>]`** → JSON `{ block_id, newContent, kind }` à passer à Somcraft `update_block`.
   - Exit `3` si l'édition est impossible (ex : exigence sans marqueur `bid`).
@@ -115,9 +116,9 @@ Cette règle s'applique aussi à `somcraft_workspace_id` (impact transverse plus
                                    Lit et affiche le BRD courant (résout pointer + workspace + read)
                                    <module> optionnel : grain module, avec fallback opt-in vers app-level
                                    --no-fallback : si module-level NULL, STOP au lieu de fallback (défaut: fallback activé)
-  project <app>[/<module>] [--mode index|full]
+  project <app>[/<module>] [--mode index|full|graph]
                                    Calcule la projection du BRD à la demande (lecture seule, aucune écriture Somcraft)
-                                   --mode (défaut: index) : index (léger) | full (structure complète)
+                                   --mode (défaut: index) : index (léger) | full (complet) | graph (node-link NetworkX)
                                    <module> optionnel : projection au grain module (fallback opt-in vers app-level)
   edit <app>[/<module>] --id <ID> --patch '<json>'
                                    Amende une exigence en place (édition ciblée d'un bloc-tableau Somcraft)
@@ -190,7 +191,7 @@ Si `$ARGUMENTS` est vide, afficher cette aide et stopper.
 
 ---
 
-### Action `project <app>[/<module>] [--mode index|full]` — projection calculée à la demande
+### Action `project <app>[/<module>] [--mode index|full|graph]` — projection calculée à la demande
 
 **Lecture seule.** Cette action ne fait **aucune écriture Somcraft, aucun `set_brd_pointer`**. Elle recalcule la projection à partir du BRD.md courant, à chaque appel → toujours fraîche, jamais stockée.
 
@@ -202,7 +203,7 @@ Si `$ARGUMENTS` est vide, afficher cette aide et stopper.
    Si pas de `brd_document_id` → STOP, suggérer `/brd new <slug>`.
 4. **Lire** le BRD via `mcp__claude_ai_Somcraft__read_document(document_id=<brd_document_id>, include_block_ids=true)`. Le `include_block_ids=true` garantit la présence des marqueurs `<!-- bid:xxx -->` → `md_block_id` renseigné dans la projection (nécessaire pour un `edit` ultérieur).
 5. **Écrire le contenu MD dans un fichier temporaire** du scratchpad de session (tampon d'entrée du parser, pas une source de vérité).
-6. **Calculer la projection** via le CLI : `somtech-pack brd project --mode <index|full> --file <tmp>` (défaut `--mode index`). Le parser rejette déjà les erreurs de format (exit `2`) : si le CLI sort en erreur, remonter le message à l'utilisateur (le BRD.md est mal formé — le corriger dans Somcraft).
+6. **Calculer la projection** via le CLI : `somtech-pack brd project --mode <index|full|graph> --file <tmp>` (défaut `--mode index`). Le parser rejette déjà les erreurs de format (exit `2`) : si le CLI sort en erreur, remonter le message à l'utilisateur (le BRD.md est mal formé — le corriger dans Somcraft).
 7. **Afficher / retourner le JSON** produit :
    - `index` : tableau compact des exigences (`id, titre, statut, domaine, priorite, couvre|encadre, md_block_id`) — idéal pour la Phase 1 de décomposition (léger, cite les EF sans corps lourd).
    - `full` : structure complète — pour audit ou validation approfondie.
