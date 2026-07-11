@@ -45,3 +45,19 @@ jobs:
       - name: node --test (cli)
         run: node --test
         working-directory: cli
+
+  python-tests:
+    # Loader NetworkX du graphe BRD (aims/brd-graph). Le reste du CI est Node-only ; ce job
+    # installe networkx + pytest pour tester le loader (Epic F, D-20260710-0009).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+        working-directory: aims/brd-graph
+      - name: pytest (aims/brd-graph)
+        run: python -m pytest -q
+        working-directory: aims/brd-graph

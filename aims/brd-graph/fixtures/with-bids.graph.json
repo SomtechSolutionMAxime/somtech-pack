@@ -1,0 +1,83 @@
+{
+    "directed": true,
+    "multigraph": false,
+    "graph": {
+        "source": "brd",
+        "domaines": [
+            "CLI"
+        ],
+        "dangling_refs": []
+    },
+    "nodes": [
+        {
+            "id": "EA-GBL-001",
+            "enonce": "Enjeu global",
+            "statut": "in_force",
+            "priorite": "M",
+            "owner": "Sponsor",
+            "md_block_id": "t-ea",
+            "kind": "ea"
+        },
+        {
+            "id": "EF-CLI-001",
+            "description": "Premi\u00e8re fonction",
+            "statut": "draft",
+            "priorite": "M",
+            "couvre": [
+                "EA-GBL-001"
+            ],
+            "realise_par": [],
+            "teste_par": [
+                "app/tests/a.spec.ts"
+            ],
+            "owner": "PO",
+            "domaine": "CLI",
+            "md_block_id": "t-cli-ef",
+            "kind": "ef"
+        },
+        {
+            "id": "EF-CLI-002",
+            "description": "Deuxi\u00e8me fonction",
+            "statut": "draft",
+            "priorite": "S",
+            "couvre": [
+                "EA-GBL-001"
+            ],
+            "realise_par": [],
+            "teste_par": [
+                "app/tests/b.spec.ts"
+            ],
+            "owner": "PO",
+            "domaine": "CLI",
+            "md_block_id": "t-cli-ef",
+            "kind": "ef"
+        },
+        {
+            "id": "domaine:CLI",
+            "kind": "domaine",
+            "code": "CLI"
+        }
+    ],
+    "links": [
+        {
+            "source": "EF-CLI-001",
+            "target": "EA-GBL-001",
+            "rel": "couvre"
+        },
+        {
+            "source": "EF-CLI-002",
+            "target": "EA-GBL-001",
+            "rel": "couvre"
+        },
+        {
+            "source": "EF-CLI-001",
+            "target": "domaine:CLI",
+            "rel": "appartient"
+        },
+        {
+            "source": "EF-CLI-002",
+            "target": "domaine:CLI",
+            "rel": "appartient"
+        }
+    ]
+}
