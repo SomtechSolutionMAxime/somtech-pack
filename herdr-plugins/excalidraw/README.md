@@ -4,17 +4,11 @@ Un canvas Excalidraw partagé entre toi et l'agent, pendant une session herdr.
 
 - Tu **dessines à la souris** dans le navigateur.
 - L'agent **lit et modifie** le fichier `.herdr/canvas.excalidraw` (JSON Excalidraw, versionnable git).
-- Un **pane herdr affiche le canvas en direct**, rendu en image via le protocole graphique Kitty.
+- Les deux vues restent synchronisées : ce que l'agent écrit apparaît sous tes yeux, ce que tu dessines est lisible par lui.
 
-Un pane herdr est un terminal : il ne peut pas héberger le canvas éditable. L'édition vit donc dans le navigateur, la **vue** vit dans le pane. Le fichier `.excalidraw` est la source de vérité unique des deux côtés.
+Le fichier `.excalidraw` est la source de vérité unique des deux côtés.
 
-> ### L'image ne s'affiche que si ton terminal sait dessiner
->
-> herdr relaie les images au terminal **hôte** — celui depuis lequel tu as lancé `herdr`. Il faut donc que cet hôte comprenne le protocole graphique Kitty : **Ghostty, Kitty ou WezTerm**.
->
-> **Terminal.app (macOS) et iTerm2 ne conviennent pas** : le premier n'affiche aucune image, le second a son propre protocole, pas celui de Kitty. Dans ces terminaux, le pane reste utile — il affiche le fichier, l'URL du canvas, le nombre d'éléments et l'heure de la dernière mise à jour — mais **pas le dessin**.
->
-> Interroger le terminal ne permet pas de le savoir : c'est **herdr** qui répond « je sais faire », pas l'hôte derrière lui. D'où le choix d'afficher toujours l'état en texte, et l'image en plus.
+> **Pourquoi pas dans un pane herdr ?** On a essayé : le pane peut afficher le canvas en image (protocole graphique Kitty), mais **seulement si le terminal hôte sait dessiner** — Ghostty, Kitty ou WezTerm. Ni Terminal.app ni iTerm2 ne le savent, et rien ne permet de le détecter depuis herdr (c'est herdr qui répond « je sais faire », pas l'hôte derrière lui). Le miroir terminal a donc été retiré ; il reste dans l'historique git si le besoin revient.
 
 ## Installation
 
@@ -26,19 +20,17 @@ L'étape de build bundle Excalidraw localement — aucun CDN, le plugin fonction
 
 ## Utilisation
 
-Invoque l'action **« Open Excalidraw canvas »** (ou `Open Excalidraw canvas (tab)` pour un onglet dédié) :
-
 ```bash
-herdr plugin action invoke --plugin somtech.excalidraw --action open
+herdr plugin action invoke open --plugin somtech.excalidraw
 ```
 
-Un serveur local démarre, un onglet navigateur s'ouvre sur le canvas, et le pane miroir apparaît à côté.
+Un serveur local démarre et le canvas du projet s'ouvre dans le navigateur.
 
 ## Synchronisation
 
 Le dernier écrivain gagne, sans boucle d'écho : le serveur mémorise le hash de ce qu'il écrit, et ignore l'événement du watcher qui en découle. Une écriture de l'agent est poussée au navigateur avec `updateScene()`, qui préserve le zoom et le scroll.
 
-Un fichier `.excalidraw` invalide n'est jamais appliqué : le pane affiche l'erreur, le dessin en cours reste intact.
+Un fichier `.excalidraw` invalide n'est jamais appliqué : le dessin en cours reste intact et un bandeau te prévient.
 
 L'édition strictement simultanée (les deux à la fois, à la même seconde) n'est pas fusionnée — le plus récent gagne.
 
@@ -63,10 +55,6 @@ Deux choses à savoir :
 - **Les `id` que tu choisis ne sont pas conservés.** Excalidraw régénère l'identifiant d'un élément incomplet. Ne t'appuie pas dessus pour retrouver un élément — repère-le par sa position ou son type.
 - **Ne vide jamais le tableau `elements` pour « repartir de zéro »** en comptant sur le navigateur : le serveur refuse (409) une scène vide qui écraserait un canvas non-vide. C'est délibéré — un rechargement de page effaçait le dessin avant ce garde-fou.
 
-## Pièges herdr rencontrés (pour qui reprendrait ce plugin)
-
-- **`plugin pane open` n'honore pas `--cwd`** : le pane démarre dans le home. Le miroir devant savoir de quel projet il est le miroir, le lanceur ouvre le pane lui-même (`pane split` + `pane run`, chemin absolu). D'où l'absence d'entrée `[[panes]]` dans le manifeste.
-- **Ne devine pas le support graphique d'après l'environnement** : dans un pane herdr, `TERM_PROGRAM` vaut encore celui du terminal hôte (`Apple_Terminal`) alors que herdr, lui, sait afficher des images. On interroge le terminal et on attend sa réponse.
 
 ## Ce que le plugin refuse de faire
 
@@ -77,4 +65,3 @@ Le canvas est du travail — le code le traite comme tel :
 - **Un chargement raté désactive la sauvegarde.** Si le canvas n'a pas pu être lu, la page l'affiche vide *et te le dit* — mais elle n'écrira rien : ton premier trait n'écrasera pas un fichier qu'on n'a jamais réussi à lire.
 - **Chaque écriture laisse un `canvas.excalidraw.bak`** de l'état précédent.
 - **Le serveur refuse les requêtes venues d'un autre site** (origine vérifiée sur les POST *et* sur le WebSocket, `content-type: application/json` exigé). Un serveur local reste joignable par n'importe quelle page web ouverte dans ton navigateur : sans ces contrôles, un site tiers pouvait écraser ton canvas et lire tes schémas en continu.
-- **Le pane annonce quand son image peut être périmée** (aucun onglet ouvert, serveur injoignable, fichier invalide) plutôt que d'afficher une vieille image l'air de rien.

@@ -1,5 +1,5 @@
 /**
- * Tests issus de la revue de code : perte de données, sécurité locale, pane qui ment.
+ * Tests issus de la revue de code : perte de données, sécurité locale, pane retiré (voir historique).
  * Chacun échouerait si le garde-fou correspondant sautait.
  */
 import { test, beforeEach, afterEach } from 'node:test'
@@ -96,28 +96,3 @@ test('chaque écriture laisse une copie de secours du contenu précédent', asyn
   assert.equal(backup.elements.length, 1, 'la sauvegarde doit contenir l’état AVANT écriture')
 })
 
-test('le pane sait si un éditeur est connecté (sinon son image peut être périmée)', async () => {
-  const file = join(dir, 'canvas.excalidraw')
-  server = await startServer({ file, port: 0 })
-
-  const pane = new WebSocket(`ws://127.0.0.1:${server.port}/ws?role=pane`)
-  const messages = []
-  pane.on('message', (raw) => messages.push(JSON.parse(raw.toString())))
-  await new Promise((r) => pane.once('open', r))
-  await new Promise((r) => setTimeout(r, 200))
-
-  const first = messages.filter((m) => m.type === 'editors').at(-1)
-  assert.equal(first.count, 0, 'aucun navigateur ouvert')
-
-  const editor = new WebSocket(`ws://127.0.0.1:${server.port}/ws?role=editor`)
-  await new Promise((r) => editor.once('open', r))
-  await new Promise((r) => setTimeout(r, 200))
-
-  assert.equal(messages.filter((m) => m.type === 'editors').at(-1).count, 1)
-
-  editor.close()
-  await new Promise((r) => setTimeout(r, 300))
-  assert.equal(messages.filter((m) => m.type === 'editors').at(-1).count, 0, 'la fermeture doit être signalée')
-
-  pane.close()
-})

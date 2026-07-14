@@ -1,8 +1,6 @@
 /**
- * Serveur local du plugin : sert la page Excalidraw, expose la scène, diffuse
- * les aperçus PNG aux panes, et surveille le fichier pour les écritures externes.
- *
- * Il ne connaît rien du terminal ; le pane ne connaît rien d'Excalidraw.
+ * Serveur local du plugin : sert la page Excalidraw, expose la scène du projet,
+ * et surveille le fichier pour propager au navigateur les écritures d'un agent.
  */
 import { createServer } from 'node:http'
 import { createServer as createTcpServer } from 'node:net'
@@ -89,8 +87,6 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
   const store = new SceneStore(file)
   await store.ensureFile()
 
-  let lastPreview = null
-
   const httpServer = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1')
 
@@ -134,12 +130,6 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
         return json(res, 200, { ok: true })
       }
 
-      if (url.pathname === '/api/preview' && req.method === 'POST') {
-        lastPreview = await readBody(req)
-        broadcast({ type: 'preview:update', png: lastPreview.toString('base64') })
-        return json(res, 200, { ok: true })
-      }
-
       return serveStatic(url.pathname, res)
     } catch (err) {
       return json(res, 400, { error: err.message })
@@ -158,24 +148,6 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
     const payload = JSON.stringify(message)
     for (const client of wss.clients) if (client.readyState === 1) client.send(payload)
   }
-
-  /**
-   * Seul le navigateur produit les aperçus. Si aucun n'est connecté, l'image du
-   * pane peut être périmée sans qu'il puisse le deviner : on le lui dit.
-   */
-  const editorCount = () => [...wss.clients].filter((c) => c.role === 'editor' && c.readyState === 1).length
-  const announceEditors = () => broadcast({ type: 'editors', count: editorCount() })
-
-  wss.on('connection', (socket, req) => {
-    socket.role = new URL(req.url, 'http://127.0.0.1').searchParams.get('role') ?? 'editor'
-
-    // Un pane qui arrive en cours de route ne doit pas rester noir.
-    if (lastPreview) {
-      socket.send(JSON.stringify({ type: 'preview:update', png: lastPreview.toString('base64') }))
-    }
-    announceEditors()
-    socket.on('close', announceEditors)
-  })
 
   const boundPort = await listen(httpServer, await findFreePort(port))
   if (portFile) await writeFile(portFile, `${boundPort}\n`, 'utf8')

@@ -1,15 +1,14 @@
-# Canvas Excalidraw vivant dans herdr.
+# Canvas Excalidraw partagé entre toi et l'agent, depuis herdr.
 #
-# Édition à la souris dans le navigateur, miroir live dans un pane (protocole
-# graphique Kitty), fichier .herdr/canvas.excalidraw comme source de vérité —
-# lisible et modifiable par un agent.
+# Une action ouvre un canvas Excalidraw dans le navigateur, adossé au fichier
+# .herdr/canvas.excalidraw du projet — que l'agent lit et modifie en direct.
 #
 # Installation : herdr plugin link herdr-plugins/excalidraw
 
 id = "somtech.excalidraw"
 name = "Excalidraw Canvas"
-version = "0.1.0"
-description = "Canvas Excalidraw partagé humain/agent : édition navigateur, miroir live dans un pane."
+version = "0.2.0"
+description = "Canvas Excalidraw partagé humain/agent, adossé à un fichier du projet."
 min_herdr_version = "0.7.0"
 platforms = ["linux", "macos"]
 
@@ -17,21 +16,12 @@ platforms = ["linux", "macos"]
 [[build]]
 command = ["bash", "scripts/build.sh"]
 
-# Pas d'entrée [[panes]] : `plugin pane open` n'honore pas `--cwd` (le pane démarre
-# dans le home), et le miroir DOIT savoir de quel projet il est le miroir. Le
-# lanceur ouvre donc le pane lui-même — `pane split` + `pane run` avec un chemin
-# absolu et le projet passé en argument.
-
+# Pas d'entrée [[panes]] : un pane herdr ne peut afficher le canvas que si le
+# terminal HÔTE sait dessiner des images (Ghostty, Kitty, WezTerm) — ni Terminal.app
+# ni iTerm2 ne le savent. Le canvas vit donc dans le navigateur, point.
 [[actions]]
 id = "open"
 title = "Open Excalidraw canvas"
-description = "Démarre le canvas, ouvre le navigateur, et affiche le miroir dans un pane."
+description = "Ouvre le canvas Excalidraw du projet dans le navigateur."
 contexts = ["workspace"]
-command = ["bash", "scripts/open.sh", "split"]
-
-[[actions]]
-id = "open-tab"
-title = "Open Excalidraw canvas (tab)"
-description = "Idem, mais le miroir occupe son propre onglet."
-contexts = ["workspace"]
-command = ["bash", "scripts/open.sh", "tab"]
+command = ["bash", "scripts/open.sh"]

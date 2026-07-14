@@ -113,41 +113,7 @@ test('un JSON invalide ne produit aucun scene:update mais une erreur', async () 
   await server.close()
 })
 
-test('POST /api/preview diffuse le PNG aux panes connectés', async () => {
-  const file = join(dir, 'canvas.excalidraw')
-  server = await startServer({ file, port: 0 })
-  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-  const messages = await collect(server.port, 400, async () => {
-    await fetch(`http://127.0.0.1:${server.port}/api/preview`, {
-      method: 'POST',
-      headers: { 'content-type': 'image/png' },
-      body: png,
-    })
-  })
-
-  const previews = messages.filter((m) => m.type === 'preview:update')
-  assert.equal(previews.length, 1)
-  assert.equal(Buffer.from(previews[0].png, 'base64').toString('hex'), png.toString('hex'))
-
-  await server.close()
-})
-
-test('le pane qui se connecte reçoit immédiatement le dernier aperçu connu', async () => {
-  const file = join(dir, 'canvas.excalidraw')
-  server = await startServer({ file, port: 0 })
-  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47])
-  await fetch(`http://127.0.0.1:${server.port}/api/preview`, {
-    method: 'POST',
-    headers: { 'content-type': 'image/png' },
-    body: png,
-  })
-
-  const messages = await collect(server.port, 300, async () => {})
-  assert.equal(messages.filter((m) => m.type === 'preview:update').length, 1)
-
-  await server.close()
-})
 
 test('si le port demandé est occupé, le serveur en prend un autre et le publie', async () => {
   const file = join(dir, 'canvas.excalidraw')

@@ -5,7 +5,7 @@
  */
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Excalidraw, exportToBlob, convertToExcalidrawElements } from '@excalidraw/excalidraw'
+import { Excalidraw, convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 
 const SAVE_DEBOUNCE_MS = 400
@@ -60,7 +60,7 @@ function App() {
   // Écritures de Claude → appliquées sans réinitialiser la vue (zoom/scroll préservés).
   useEffect(() => {
     if (!api) return
-    const socket = new WebSocket(`ws://${location.host}/ws?role=editor`)
+    const socket = new WebSocket(`ws://${location.host}/ws`)
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data)
       if (message.type !== 'scene:update') return
@@ -73,26 +73,6 @@ function App() {
     return () => socket.close()
   }, [api])
 
-  /** L'aperçu du pane. Toujours régénéré, même quand la scène vient de l'agent. */
-  const pushPreview = useCallback(async () => {
-    if (!api) return
-    // Échelle 1 : cette version d'Excalidraw applique `exportScale` au dessin sans
-    // agrandir le cadre — l'image sortirait rognée sur son coin haut-gauche. Le
-    // terminal met de toute façon l'image à l'échelle du pane.
-    const blob = await exportToBlob({
-      elements: api.getSceneElements(),
-      appState: { ...api.getAppState(), exportBackground: true, exportWithDarkMode: false, exportScale: 1 },
-      files: api.getFiles(),
-      mimeType: 'image/png',
-      exportPadding: 16,
-    })
-    await fetch('/api/preview', {
-      method: 'POST',
-      headers: { 'content-type': 'image/png' },
-      body: await blob.arrayBuffer(),
-    })
-  }, [api])
-
   /** La sauvegarde du fichier. Uniquement pour les changements venus d'ici. */
   const saveScene = useCallback(async () => {
     if (!api || loadFailed.current) return
@@ -102,7 +82,7 @@ function App() {
     // Réécrire le fichier pour ça produirait du bruit git et élargirait la
     // fenêtre de collision avec les écritures de l'agent.
     const signature = JSON.stringify(elements)
-    if (signature === lastSaved.current) return pushPreview()
+    if (signature === lastSaved.current) return
 
     // Tant que la scène chargée n'est pas montée, l'API renvoie une scène vide.
     // Sauvegarder à ce moment-là effacerait le dessin au premier rechargement.
@@ -130,21 +110,14 @@ function App() {
     }
     setWarning(null)
     lastSaved.current = signature
-    await pushPreview()
-  }, [api, pushPreview])
+  }, [api])
 
   const onChange = useCallback(() => {
+    // Une scène venue de l'agent ne doit pas être renvoyée au serveur (boucle d'écho).
+    if (applyingRemote.current) return
     clearTimeout(timer.current)
-    // Une scène venue de l'agent ne doit pas être réécrite (boucle d'écho), mais
-    // le pane doit quand même la refléter : on rafraîchit l'aperçu sans sauvegarder.
-    const action = applyingRemote.current ? pushPreview : saveScene
-    timer.current = setTimeout(action, SAVE_DEBOUNCE_MS)
-  }, [saveScene, pushPreview])
-
-  // Premier aperçu dès l'ouverture : le pane ne doit pas rester vide.
-  useEffect(() => {
-    if (api && initial) pushPreview()
-  }, [api, initial, pushPreview])
+    timer.current = setTimeout(saveScene, SAVE_DEBOUNCE_MS)
+  }, [saveScene])
 
   if (!initial) return null
 
