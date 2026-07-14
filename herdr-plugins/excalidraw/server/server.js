@@ -88,8 +88,8 @@ async function readBody(req) {
   return Buffer.concat(chunks)
 }
 
-export async function startServer({ file, port = DEFAULT_PORT, portFile = null } = {}) {
-  const store = new SceneStore(file)
+export async function startServer({ file, port = DEFAULT_PORT, portFile = null, backupFile } = {}) {
+  const store = new SceneStore(file, backupFile)
   await store.ensureFile()
 
   /** Dernier rendu produit par le navigateur — le seul à savoir dessiner fidèlement. */

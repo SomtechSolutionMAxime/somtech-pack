@@ -189,3 +189,17 @@ test('GET /api/preview.png rend le dernier rendu du canvas (relecture par un age
 
   await server.close()
 })
+
+test('deux canvas nommés vivent dans deux fichiers distincts (pas d’écrasement)', async () => {
+  const { paths } = await import('../server/paths.js')
+
+  const archi = paths(dir, 'archi')
+  const flux = paths(dir, 'flux')
+
+  assert.notEqual(archi.canvasFile, flux.canvasFile)
+  assert.match(archi.canvasFile, /docs\/diagrams\/archi\.excalidraw$/)
+  assert.notEqual(archi.portFile, flux.portFile, 'chaque canvas a son propre serveur')
+
+  // Un chemin explicite est respecté tel quel.
+  assert.match(paths(dir, 'docs/schemas/x.excalidraw').canvasFile, /docs\/schemas\/x\.excalidraw$/)
+})

@@ -11,3 +11,6 @@ graphiti*.env
 
 # Artefact de build du CLI (payload bundlé, reconstruit au publish)
 cli/payload/
+
+# Canvas Excalidraw — runtime (les schémas eux-mêmes vivent dans docs/diagrams/)
+.herdr/

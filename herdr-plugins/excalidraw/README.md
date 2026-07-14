@@ -20,11 +20,15 @@ L'étape de build bundle Excalidraw localement — aucun CDN, le plugin fonction
 
 ## Utilisation
 
+Depuis Claude Code : **`/canvas <nom>`**.
+
+En direct :
+
 ```bash
-herdr plugin action invoke open --plugin somtech.excalidraw
+bash herdr-plugins/excalidraw/scripts/open.sh architecture
 ```
 
-Un serveur local démarre et le canvas du projet s'ouvre dans le navigateur.
+Chaque canvas est un fichier distinct, versionné dans **`docs/diagrams/<nom>.excalidraw`**, servi par son propre serveur — ouvrir un second schéma n'écrase jamais le premier. Le dossier `.herdr/` ne contient que du runtime (ports, logs, copies de secours) et n'a pas à être versionné.
 
 ## Synchronisation
 

@@ -87,12 +87,12 @@ test("un WebSocket venu d'un autre site est refusé (pas d'espionnage du canvas)
 test('chaque écriture laisse une copie de secours du contenu précédent', async () => {
   const file = join(dir, 'canvas.excalidraw')
   await writeFile(file, JSON.stringify(withRect))
-  server = await startServer({ file, port: 0 })
+  server = await startServer({ file, port: 0, backupFile: join(dir, 'backup.bak') })
 
   const res = await post(server.port, { ...EMPTY_SCENE, elements: [rectangle, { ...rectangle, id: 'rect-2' }] })
   assert.equal(res.status, 200)
 
-  const backup = JSON.parse(await readFile(`${file}.bak`, 'utf8'))
+  const backup = JSON.parse(await readFile(join(dir, 'backup.bak'), 'utf8'))
   assert.equal(backup.elements.length, 1, 'la sauvegarde doit contenir l’état AVANT écriture')
 })
 

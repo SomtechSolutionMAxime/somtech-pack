@@ -29,10 +29,13 @@ const RECENT_WRITES = 8
 
 export class SceneStore {
   #file
+  #backupFile
   #recentWrites = []
 
-  constructor(file) {
+  /** `backupFile` vit hors du dossier versionné : un .bak à côté du schéma serait du bruit git. */
+  constructor(file, backupFile = `${file}.bak`) {
     this.#file = file
+    this.#backupFile = backupFile
   }
 
   get file() {
@@ -67,7 +70,10 @@ export class SceneStore {
     // Copie de secours de l'état précédent : le canvas est du travail utilisateur,
     // et une écriture est destructrice par nature.
     const previous = await readFile(this.#file, 'utf8').catch(() => null)
-    if (previous) await writeFile(`${this.#file}.bak`, previous, 'utf8')
+    if (previous) {
+      await mkdir(dirname(this.#backupFile), { recursive: true })
+      await writeFile(this.#backupFile, previous, 'utf8')
+    }
 
     await writeFile(this.#file, text, 'utf8')
   }

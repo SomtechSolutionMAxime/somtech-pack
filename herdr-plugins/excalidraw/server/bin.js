@@ -9,14 +9,18 @@ import { readFile, mkdir, rm } from 'node:fs/promises'
 import { startServer, DEFAULT_PORT } from './server.js'
 import { paths } from './paths.js'
 
+/** Décalage de port stable et sans surprise pour un nom donné. */
+const hashName = (value) => [...value].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 100000, 7)
+
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`)
   return i === -1 ? fallback : process.argv[i + 1]
 }
 
 const project = arg('project', process.cwd())
-const { dir, canvasFile, portFile } = paths(project)
-const file = arg('file', canvasFile)
+const name = arg('name', 'canvas')
+const { runtimeDir, canvasFile, portFile, backupFile } = paths(project, name)
+const file = canvasFile
 
 /** Le serveur d'une session précédente répond-il encore ? */
 async function existingPort() {
@@ -29,7 +33,7 @@ async function existingPort() {
   }
 }
 
-await mkdir(dir, { recursive: true })
+await mkdir(runtimeDir, { recursive: true })
 
 const running = await existingPort()
 
@@ -51,7 +55,11 @@ if (running) {
 // dans le vide le temps que le nouveau serveur écrase le fichier.
 await rm(portFile, { force: true })
 
-const server = await startServer({ file, port: DEFAULT_PORT, portFile }).catch((err) => {
+// Un canvas par serveur : le port de départ dépend du nom, pour que deux canvas
+// ouverts en même temps ne se disputent pas le même port.
+const startPort = DEFAULT_PORT + (hashName(name) % 100)
+
+const server = await startServer({ file, port: startPort, portFile, backupFile }).catch((err) => {
   console.error(`démarrage impossible : ${err.message}`)
   process.exit(1)
 })
