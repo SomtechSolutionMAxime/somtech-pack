@@ -85,6 +85,17 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
 
       if (url.pathname === '/api/scene' && req.method === 'POST') {
         const scene = JSON.parse((await readBody(req)).toString('utf8'))
+
+        // Garde-fou anti-perte : un navigateur qui n'a pas fini de charger la
+        // scène poste `elements: []`. Sans ce refus, un simple rechargement de
+        // page efface le dessin. Un effacement voulu passe par `?allowEmpty=1`.
+        if (scene.elements?.length === 0 && url.searchParams.get('allowEmpty') !== '1') {
+          const current = await store.read().catch(() => null)
+          if (current?.elements.length) {
+            return json(res, 409, { error: 'scène vide refusée : le canvas courant contient des éléments' })
+          }
+        }
+
         await store.write(scene)
         return json(res, 200, { ok: true })
       }

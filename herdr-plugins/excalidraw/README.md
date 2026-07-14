@@ -41,3 +41,21 @@ npm test
 ```
 
 Couvre le cœur : anti-boucle d'écho, propagation des écritures externes, rejet du JSON invalide, création du fichier absent, repli de port, et l'encodeur Kitty (découpage en morceaux, `f=100`, dimensionnement en cellules).
+
+## Écrire dans le canvas depuis un agent
+
+Le fichier `.herdr/canvas.excalidraw` est du JSON Excalidraw. Un agent peut y ajouter un élément **minimal** — le plugin complète les champs internes manquants :
+
+```json
+{ "type": "rectangle", "x": 100, "y": 100, "width": 220, "height": 120, "strokeColor": "#1971c2" }
+```
+
+Deux choses à savoir :
+
+- **Les `id` que tu choisis ne sont pas conservés.** Excalidraw régénère l'identifiant d'un élément incomplet. Ne t'appuie pas dessus pour retrouver un élément — repère-le par sa position ou son type.
+- **Ne vide jamais le tableau `elements` pour « repartir de zéro »** en comptant sur le navigateur : le serveur refuse (409) une scène vide qui écraserait un canvas non-vide. C'est délibéré — un rechargement de page effaçait le dessin avant ce garde-fou.
+
+## Pièges herdr rencontrés (pour qui reprendrait ce plugin)
+
+- **`plugin pane open` n'honore pas `--cwd`** : le pane démarre dans le home. Le miroir devant savoir de quel projet il est le miroir, le lanceur ouvre le pane lui-même (`pane split` + `pane run`, chemin absolu). D'où l'absence d'entrée `[[panes]]` dans le manifeste.
+- **Ne devine pas le support graphique d'après l'environnement** : dans un pane herdr, `TERM_PROGRAM` vaut encore celui du terminal hôte (`Apple_Terminal`) alors que herdr, lui, sait afficher des images. On interroge le terminal et on attend sa réponse.

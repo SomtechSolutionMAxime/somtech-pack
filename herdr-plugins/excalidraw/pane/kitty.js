@@ -23,6 +23,45 @@ export function clearImages() {
 }
 
 /**
+ * Requête de capacité : une image 1×1 que le terminal doit accepter sans
+ * l'afficher. Un terminal qui comprend le protocole répond `…;OK`.
+ */
+export const SUPPORT_QUERY = `${APC}i=31,s=1,v=1,a=q,t=d,f=24;AAAA${ST}`
+
+/**
+ * Le terminal supporte-t-il le protocole ? On le LUI DEMANDE.
+ *
+ * Deviner d'après les variables d'environnement ne marche pas : dans un pane
+ * herdr, TERM_PROGRAM vaut encore celui du terminal hôte (Apple_Terminal) alors
+ * que herdr, lui, sait afficher des images. On interroge, on écoute, et sans
+ * réponse dans le délai on dégrade.
+ */
+export function detectSupport(stdin, stdout, timeoutMs = 400) {
+  if (!stdout.isTTY || !stdin.isTTY) return Promise.resolve(false)
+
+  return new Promise((resolve) => {
+    let buffer = ''
+    const done = (supported) => {
+      clearTimeout(timer)
+      stdin.removeListener('data', onData)
+      stdin.setRawMode(false)
+      stdin.pause()
+      resolve(supported)
+    }
+    const onData = (chunk) => {
+      buffer += chunk.toString('latin1')
+      if (buffer.includes('_G') && buffer.includes(';OK')) done(true)
+    }
+    const timer = setTimeout(() => done(false), timeoutMs)
+
+    stdin.setRawMode(true)
+    stdin.resume()
+    stdin.on('data', onData)
+    stdout.write(SUPPORT_QUERY)
+  })
+}
+
+/**
  * Transmet-et-affiche `png`, mis à l'échelle dans la zone disponible du pane.
  * Le terminal conserve le ratio de l'image à l'intérieur de la boîte c×r.
  */

@@ -42,3 +42,25 @@ test('la charge utile est du base64 valide et reconstitue le PNG', () => {
 test('effacer les images émet la séquence de suppression', () => {
   assert.match(clearImages(), /\x1b_Ga=d/)
 })
+
+test("la détection interroge le terminal plutôt que de deviner d'après l'environnement", async (t) => {
+  const { detectSupport, SUPPORT_QUERY } = await import('../pane/kitty.js')
+  const written = []
+
+  // Un terminal qui répond OK → supporté, quelles que soient les variables d'env.
+  const stdin = new (await import('node:events')).EventEmitter()
+  Object.assign(stdin, { isTTY: true, setRawMode() {}, resume() {}, pause() {}, removeListener: stdin.removeListener.bind(stdin) })
+  const stdout = { isTTY: true, write: (s) => { written.push(s); queueMicrotask(() => stdin.emit('data', Buffer.from('\x1b_Gi=31;OK\x1b\\'))) } }
+
+  assert.equal(await detectSupport(stdin, stdout, 300), true)
+  assert.equal(written[0], SUPPORT_QUERY)
+})
+
+test('un terminal muet est considéré comme non supporté (repli, pas de blocage)', async () => {
+  const { detectSupport } = await import('../pane/kitty.js')
+  const stdin = new (await import('node:events')).EventEmitter()
+  Object.assign(stdin, { isTTY: true, setRawMode() {}, resume() {}, pause() {} })
+  const stdout = { isTTY: true, write() {} }
+
+  assert.equal(await detectSupport(stdin, stdout, 100), false)
+})

@@ -32,14 +32,23 @@ async function existingPort() {
 await mkdir(dir, { recursive: true })
 
 const running = await existingPort()
+
+// `--check` sonde et rend la main : c'est ce que le lanceur appelle AVANT de
+// décider s'il doit démarrer un serveur. Ne jamais démarrer ici — le lanceur
+// resterait bloqué sur un process qui, par nature, ne se termine pas.
+if (process.argv.includes('--check')) {
+  if (running) console.log(running)
+  process.exit(running ? 0 : 1)
+}
+
+// Deuxième invocation de l'action : on se rattache, pas de second serveur.
 if (running) {
-  // Deuxième invocation de l'action : on se rattache, on ne démarre pas un second serveur.
-  if (process.argv.includes('--print-port')) console.log(running)
+  console.log(running)
   process.exit(0)
 }
 
 const server = await startServer({ file, port: DEFAULT_PORT, portFile })
-if (process.argv.includes('--print-port')) console.log(server.port)
+console.log(server.port)
 
 const shutdown = async () => {
   await server.close()

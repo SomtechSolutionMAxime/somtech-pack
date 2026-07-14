@@ -17,12 +17,10 @@ platforms = ["linux", "macos"]
 [[build]]
 command = ["bash", "scripts/build.sh"]
 
-# Le pane miroir. Il ne fait que suivre : toute l'édition passe par le navigateur.
-[[panes]]
-id = "canvas"
-title = "Canvas"
-placement = "split"
-command = ["bash", "scripts/pane.sh"]
+# Pas d'entrée [[panes]] : `plugin pane open` n'honore pas `--cwd` (le pane démarre
+# dans le home), et le miroir DOIT savoir de quel projet il est le miroir. Le
+# lanceur ouvre donc le pane lui-même — `pane split` + `pane run` avec un chemin
+# absolu et le projet passé en argument.
 
 [[actions]]
 id = "open"

@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import WebSocket from 'ws'
 
-import { encodeImage, clearImages } from './kitty.js'
+import { encodeImage, clearImages, detectSupport } from './kitty.js'
 import { paths } from '../server/paths.js'
 
 const projectIndex = process.argv.indexOf('--project')
@@ -17,7 +17,6 @@ const project = projectIndex === -1 ? process.cwd() : process.argv[projectIndex 
 const { portFile, canvasFile } = paths(project)
 
 const OUT = process.stdout
-const supportsGraphics = OUT.isTTY && process.env.TERM_PROGRAM !== 'Apple_Terminal'
 
 let lastPng = null
 let connected = false
@@ -87,7 +86,7 @@ function connect(port) {
 }
 
 const port = await readPort()
-if (!supportsGraphics) {
+if (!(await detectSupport(process.stdin, OUT))) {
   degrade(port)
 } else {
   OUT.write('\x1b[?25l') // masque le curseur

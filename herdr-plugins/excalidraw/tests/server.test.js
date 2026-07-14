@@ -164,3 +164,39 @@ test('si le port demandé est occupé, le serveur en prend un autre et le publie
   await server.close()
   await new Promise((r) => squatter.close(r))
 })
+
+test("refuse d'écraser une scène non-vide par une scène vide (perte de données)", async () => {
+  const file = join(dir, 'canvas.excalidraw')
+  await writeFile(file, JSON.stringify({ ...EMPTY_SCENE, elements: [rectangle] }))
+  server = await startServer({ file, port: 0 })
+
+  // Le navigateur qui n'a pas fini de charger la scène poste `elements: []`.
+  const res = await fetch(`http://127.0.0.1:${server.port}/api/scene`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(EMPTY_SCENE),
+  })
+
+  assert.equal(res.status, 409)
+  const kept = JSON.parse(await readFile(file, 'utf8'))
+  assert.equal(kept.elements.length, 1, 'le dessin ne doit pas avoir été effacé')
+
+  await server.close()
+})
+
+test('un effacement délibéré (allowEmpty) est bien accepté', async () => {
+  const file = join(dir, 'canvas.excalidraw')
+  await writeFile(file, JSON.stringify({ ...EMPTY_SCENE, elements: [rectangle] }))
+  server = await startServer({ file, port: 0 })
+
+  const res = await fetch(`http://127.0.0.1:${server.port}/api/scene?allowEmpty=1`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(EMPTY_SCENE),
+  })
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).elements, [])
+
+  await server.close()
+})
