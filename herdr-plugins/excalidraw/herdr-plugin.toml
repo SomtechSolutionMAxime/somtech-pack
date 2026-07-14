@@ -1,0 +1,27 @@
+# Canvas Excalidraw partagé entre toi et l'agent, depuis herdr.
+#
+# Une action ouvre un canvas Excalidraw dans le navigateur, adossé au fichier
+# .herdr/canvas.excalidraw du projet — que l'agent lit et modifie en direct.
+#
+# Installation : herdr plugin link herdr-plugins/excalidraw
+
+id = "somtech.excalidraw"
+name = "Excalidraw Canvas"
+version = "0.2.0"
+description = "Canvas Excalidraw partagé humain/agent, adossé à un fichier du projet."
+min_herdr_version = "0.7.0"
+platforms = ["linux", "macos"]
+
+# Bundle la page Excalidraw localement (aucun CDN : le plugin marche hors-ligne).
+[[build]]
+command = ["bash", "scripts/build.sh"]
+
+# Pas d'entrée [[panes]] : un pane herdr ne peut afficher le canvas que si le
+# terminal HÔTE sait dessiner des images (Ghostty, Kitty, WezTerm) — ni Terminal.app
+# ni iTerm2 ne le savent. Le canvas vit donc dans le navigateur, point.
+[[actions]]
+id = "open"
+title = "Open Excalidraw canvas"
+description = "Ouvre le canvas Excalidraw du projet dans le navigateur."
+contexts = ["workspace"]
+command = ["bash", "scripts/open.sh"]
