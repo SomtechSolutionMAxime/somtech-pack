@@ -14,12 +14,23 @@ export const CHUNK_SIZE = 4096
 /** Lignes réservées en bas du pane pour le bandeau d'état. */
 export const STATUS_ROWS = 1
 
+/**
+ * Un identifiant FIXE, réutilisé à chaque image. Sans `i=`, le terminal alloue
+ * un nouvel id par transmission et conserve les données : une image par
+ * sauvegarde, des milliers sur une session de dessin.
+ */
+export const IMAGE_ID = 7311
+
 const APC = '\x1b_G'
 const ST = '\x1b\\'
 
-/** Efface toutes les images posées par ce pane (évite les résidus au resize). */
+/**
+ * Efface NOTRE image — placement ET données (`d=I`, majuscule ; `d=i` ne
+ * libérerait que le placement et laisserait le PNG en mémoire du terminal).
+ * Ciblé sur notre id : un `a=d` global effacerait aussi les images des panes voisins.
+ */
 export function clearImages() {
-  return `${APC}a=d${ST}`
+  return `${APC}a=d,d=I,i=${IMAGE_ID}${ST}`
 }
 
 /**
@@ -74,9 +85,11 @@ export function encodeImage(png, { columns, rows }) {
   for (let offset = 0; offset < base64.length; offset += CHUNK_SIZE) {
     const chunk = base64.slice(offset, offset + CHUNK_SIZE)
     const isLast = offset + CHUNK_SIZE >= base64.length
+    // `q=2` : pas d'accusé de réception. Le stdin du pane n'est pas en lecture,
+    // les réponses du terminal s'afficheraient par-dessus l'image.
     const control =
       offset === 0
-        ? `a=T,f=100,c=${cols},r=${imageRows},m=${isLast ? 0 : 1}`
+        ? `a=T,f=100,i=${IMAGE_ID},q=2,c=${cols},r=${imageRows},m=${isLast ? 0 : 1}`
         : `m=${isLast ? 0 : 1}`
     out += `${APC}${control};${chunk}${ST}`
   }

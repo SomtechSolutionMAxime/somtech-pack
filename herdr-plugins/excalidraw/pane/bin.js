@@ -20,6 +20,8 @@ const OUT = process.stdout
 
 let lastPng = null
 let connected = false
+let editors = 0
+let lastError = null
 
 const size = () => ({ columns: OUT.columns ?? 80, rows: OUT.rows ?? 24 })
 
@@ -28,16 +30,28 @@ function status(text) {
   OUT.write(`\x1b[${rows};1H\x1b[2K\x1b[2m${text}\x1b[0m`)
 }
 
+/**
+ * L'état, dit honnêtement. L'aperçu n'est produit QUE par le navigateur : sans
+ * éditeur connecté, l'image affichée peut être périmée — le pane ne peut pas le
+ * deviner tout seul, donc il l'annonce.
+ */
+function statusLine() {
+  if (lastError) return `⚠ ${lastError}`
+  if (!connected) return `${canvasFile} — serveur injoignable (dernier aperçu connu)`
+  if (editors === 0) return `${canvasFile} — aucun onglet ouvert : image possiblement périmée`
+  return canvasFile
+}
+
 function draw() {
   OUT.write('\x1b[2J\x1b[H') // efface l'écran
-  OUT.write(clearImages()) // ...et les images précédentes, sinon elles s'empilent
+  OUT.write(clearImages()) // ...et notre image précédente, sinon elles s'empilent
 
   if (!lastPng) {
     status(connected ? 'en attente du premier aperçu…' : 'connexion au canvas…')
     return
   }
   OUT.write(encodeImage(lastPng, size()))
-  status(connected ? `${canvasFile}` : `${canvasFile} — déconnecté (dernier aperçu connu)`)
+  status(statusLine())
 }
 
 /** Sans protocole graphique, on informe au lieu de vomir des octets. */
@@ -59,7 +73,7 @@ async function readPort() {
 }
 
 function connect(port) {
-  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`)
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?role=pane`)
 
   socket.on('open', () => {
     connected = true
@@ -70,9 +84,16 @@ function connect(port) {
     const message = JSON.parse(raw.toString())
     if (message.type === 'preview:update') {
       lastPng = Buffer.from(message.png, 'base64')
+      lastError = null // un nouvel aperçu prouve que le fichier est de nouveau lisible
+      draw()
+    } else if (message.type === 'editors') {
+      editors = message.count
       draw()
     } else if (message.type === 'error') {
-      status(`⚠ ${message.message}`)
+      // Gardée jusqu'à la prochaine bonne nouvelle : sinon le prochain aperçu
+      // l'effacerait et l'utilisateur ne saurait jamais que son fichier est cassé.
+      lastError = message.message
+      status(statusLine())
     }
   })
 

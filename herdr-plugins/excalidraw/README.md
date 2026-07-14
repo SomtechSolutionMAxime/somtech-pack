@@ -59,3 +59,14 @@ Deux choses à savoir :
 
 - **`plugin pane open` n'honore pas `--cwd`** : le pane démarre dans le home. Le miroir devant savoir de quel projet il est le miroir, le lanceur ouvre le pane lui-même (`pane split` + `pane run`, chemin absolu). D'où l'absence d'entrée `[[panes]]` dans le manifeste.
 - **Ne devine pas le support graphique d'après l'environnement** : dans un pane herdr, `TERM_PROGRAM` vaut encore celui du terminal hôte (`Apple_Terminal`) alors que herdr, lui, sait afficher des images. On interroge le terminal et on attend sa réponse.
+
+## Ce que le plugin refuse de faire
+
+Le canvas est du travail — le code le traite comme tel :
+
+- **Une scène invalide n'est jamais écrite** (400). Un JSON sans `elements` détruirait le canvas *et* rendrait le fichier illisible.
+- **Une scène vide n'écrase pas un canvas non-vide** (409), sauf demande explicite. Sans ça, un rechargement de page effaçait le dessin.
+- **Un chargement raté désactive la sauvegarde.** Si le canvas n'a pas pu être lu, la page l'affiche vide *et te le dit* — mais elle n'écrira rien : ton premier trait n'écrasera pas un fichier qu'on n'a jamais réussi à lire.
+- **Chaque écriture laisse un `canvas.excalidraw.bak`** de l'état précédent.
+- **Le serveur refuse les requêtes venues d'un autre site** (origine vérifiée sur les POST *et* sur le WebSocket, `content-type: application/json` exigé). Un serveur local reste joignable par n'importe quelle page web ouverte dans ton navigateur : sans ces contrôles, un site tiers pouvait écraser ton canvas et lire tes schémas en continu.
+- **Le pane annonce quand son image peut être périmée** (aucun onglet ouvert, serveur injoignable, fichier invalide) plutôt que d'afficher une vieille image l'air de rien.

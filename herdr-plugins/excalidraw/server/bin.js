@@ -4,7 +4,7 @@
  *
  * Usage : node server/bin.js [--project <dir>] [--file <canvas.excalidraw>] [--print-port]
  */
-import { readFile, mkdir } from 'node:fs/promises'
+import { readFile, mkdir, rm } from 'node:fs/promises'
 
 import { startServer, DEFAULT_PORT } from './server.js'
 import { paths } from './paths.js'
@@ -47,7 +47,14 @@ if (running) {
   process.exit(0)
 }
 
-const server = await startServer({ file, port: DEFAULT_PORT, portFile })
+// Un port publié par un serveur tué (-9) enverrait le pane et le navigateur
+// dans le vide le temps que le nouveau serveur écrase le fichier.
+await rm(portFile, { force: true })
+
+const server = await startServer({ file, port: DEFAULT_PORT, portFile }).catch((err) => {
+  console.error(`démarrage impossible : ${err.message}`)
+  process.exit(1)
+})
 console.log(server.port)
 
 const shutdown = async () => {

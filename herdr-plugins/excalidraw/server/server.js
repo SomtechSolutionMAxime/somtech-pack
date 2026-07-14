@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import chokidar from 'chokidar'
 import { WebSocketServer } from 'ws'
 
-import { SceneStore } from './scene.js'
+import { SceneStore, isValidScene } from './scene.js'
 
 export const DEFAULT_PORT = 4870
 const WEB_ROOT = fileURLToPath(new URL('../web/dist/', import.meta.url))
@@ -63,6 +63,22 @@ function listen(httpServer, port) {
   })
 }
 
+/**
+ * Une requête venue d'une page web tierce porte un `Origin` qui n'est pas le
+ * nôtre. Sans origine (curl, agent local) : accepté — l'attaquant visé ici est
+ * un site web, pas un process qui a déjà accès à la machine.
+ */
+function sameOrigin(req) {
+  const origin = req.headers.origin
+  if (!origin) return true
+  try {
+    const { hostname } = new URL(origin)
+    return hostname === '127.0.0.1' || hostname === 'localhost'
+  } catch {
+    return false
+  }
+}
+
 async function readBody(req) {
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
@@ -79,17 +95,35 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
     const url = new URL(req.url, 'http://127.0.0.1')
 
     try {
+      // Le serveur écoute en local, mais un site web quelconque ouvert dans le
+      // navigateur peut lui parler. Sans ce contrôle, il écraserait le canvas.
+      if (req.method === 'POST' && !sameOrigin(req)) {
+        return json(res, 403, { error: 'origine refusée' })
+      }
+
       if (url.pathname === '/api/scene' && req.method === 'GET') {
         return json(res, 200, await store.read())
       }
 
       if (url.pathname === '/api/scene' && req.method === 'POST') {
+        // `text/plain` est une requête « simple » : aucun préflight CORS ne la
+        // filtre. Exiger du JSON force le préflight, donc le contrôle d'origine.
+        if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+          return json(res, 415, { error: 'content-type application/json requis' })
+        }
+
         const scene = JSON.parse((await readBody(req)).toString('utf8'))
+
+        // Une scène sans `elements` n'est pas une scène. L'écrire détruirait le
+        // canvas ET rendrait le fichier illisible.
+        if (!isValidScene(scene)) {
+          return json(res, 400, { error: 'scène invalide : `elements` manquant' })
+        }
 
         // Garde-fou anti-perte : un navigateur qui n'a pas fini de charger la
         // scène poste `elements: []`. Sans ce refus, un simple rechargement de
         // page efface le dessin. Un effacement voulu passe par `?allowEmpty=1`.
-        if (scene.elements?.length === 0 && url.searchParams.get('allowEmpty') !== '1') {
+        if (scene.elements.length === 0 && url.searchParams.get('allowEmpty') !== '1') {
           const current = await store.read().catch(() => null)
           if (current?.elements.length) {
             return json(res, 409, { error: 'scène vide refusée : le canvas courant contient des éléments' })
@@ -112,17 +146,35 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
     }
   })
 
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+  // `verifyClient` : un WebSocket ignore CORS par construction. Sans ce filtre,
+  // n'importe quel site web pourrait lire en continu les scènes et les aperçus.
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: '/ws',
+    verifyClient: ({ req }) => sameOrigin(req),
+  })
+
   const broadcast = (message) => {
     const payload = JSON.stringify(message)
     for (const client of wss.clients) if (client.readyState === 1) client.send(payload)
   }
 
-  // Un pane qui arrive en cours de route ne doit pas rester noir.
-  wss.on('connection', (socket) => {
+  /**
+   * Seul le navigateur produit les aperçus. Si aucun n'est connecté, l'image du
+   * pane peut être périmée sans qu'il puisse le deviner : on le lui dit.
+   */
+  const editorCount = () => [...wss.clients].filter((c) => c.role === 'editor' && c.readyState === 1).length
+  const announceEditors = () => broadcast({ type: 'editors', count: editorCount() })
+
+  wss.on('connection', (socket, req) => {
+    socket.role = new URL(req.url, 'http://127.0.0.1').searchParams.get('role') ?? 'editor'
+
+    // Un pane qui arrive en cours de route ne doit pas rester noir.
     if (lastPreview) {
       socket.send(JSON.stringify({ type: 'preview:update', png: lastPreview.toString('base64') }))
     }
+    announceEditors()
+    socket.on('close', announceEditors)
   })
 
   const boundPort = await listen(httpServer, await findFreePort(port))

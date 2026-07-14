@@ -29,7 +29,7 @@ test('tous les morceaux sauf le dernier sont marqués m=1, le dernier m=0', () =
 test("l'image est dimensionnée en cellules d'après la taille du pane", () => {
   const out = encodeImage(png, { columns: 80, rows: 24 })
   assert.match(out, /c=80/)
-  assert.match(out, /r=2[0-9]/) // quelques lignes réservées au bandeau d'état
+  assert.match(out, /r=23\b/) // 24 lignes moins le bandeau d'état — exact, pas « autour de 20 »
 })
 
 test('la charge utile est du base64 valide et reconstitue le PNG', () => {

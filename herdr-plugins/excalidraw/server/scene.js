@@ -24,9 +24,12 @@ export function isValidScene(scene) {
   return Boolean(scene) && typeof scene === 'object' && Array.isArray(scene.elements)
 }
 
+/** On retient plusieurs hash : deux sauvegardes rapprochées peuvent se croiser. */
+const RECENT_WRITES = 8
+
 export class SceneStore {
   #file
-  #lastWriteHash = null
+  #recentWrites = []
 
   constructor(file) {
     this.#file = file
@@ -55,17 +58,29 @@ export class SceneStore {
   }
 
   async write(scene) {
+    if (!isValidScene(scene)) throw new TypeError('refus d’écrire une scène invalide')
+
     const text = JSON.stringify(scene, null, 2)
-    this.#lastWriteHash = hash(text)
+    this.#recentWrites.push(hash(text))
+    if (this.#recentWrites.length > RECENT_WRITES) this.#recentWrites.shift()
+
+    // Copie de secours de l'état précédent : le canvas est du travail utilisateur,
+    // et une écriture est destructrice par nature.
+    const previous = await readFile(this.#file, 'utf8').catch(() => null)
+    if (previous) await writeFile(`${this.#file}.bak`, previous, 'utf8')
+
     await writeFile(this.#file, text, 'utf8')
   }
 
   /**
-   * Le contenu actuel du fichier est-il celui que NOUS venons d'écrire ?
+   * Le contenu actuel du fichier est-il l'une de NOS écritures récentes ?
    * Sans ce test, une sauvegarde navigateur déclencherait un rechargement
    * navigateur, qui déclencherait une sauvegarde… en boucle.
+   *
+   * Plusieurs hash, pas un seul : deux sauvegardes rapprochées peuvent se
+   * croiser avec l'événement du watcher, qui lirait alors l'avant-dernière.
    */
   isOwnWrite(text) {
-    return this.#lastWriteHash !== null && hash(text) === this.#lastWriteHash
+    return this.#recentWrites.includes(hash(text))
   }
 }
