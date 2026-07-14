@@ -166,3 +166,26 @@ test('un effacement délibéré (allowEmpty) est bien accepté', async () => {
 
   await server.close()
 })
+
+test('GET /api/preview.png rend le dernier rendu du canvas (relecture par un agent)', async () => {
+  const file = join(dir, 'canvas.excalidraw')
+  server = await startServer({ file, port: 0 })
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+  // Sans rendu encore produit : on le dit, on ne rend pas une image vide en douce.
+  const empty = await fetch(`http://127.0.0.1:${server.port}/api/preview.png`)
+  assert.equal(empty.status, 404)
+
+  await fetch(`http://127.0.0.1:${server.port}/api/preview`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/png' },
+    body: png,
+  })
+
+  const res = await fetch(`http://127.0.0.1:${server.port}/api/preview.png`)
+  assert.equal(res.status, 200)
+  assert.equal(res.headers.get('content-type'), 'image/png')
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString('hex'), png.toString('hex'))
+
+  await server.close()
+})

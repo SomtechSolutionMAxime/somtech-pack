@@ -5,7 +5,7 @@
  */
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Excalidraw, convertToExcalidrawElements } from '@excalidraw/excalidraw'
+import { Excalidraw, exportToBlob, convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 
 const SAVE_DEBOUNCE_MS = 400
@@ -73,6 +73,28 @@ function App() {
     return () => socket.close()
   }, [api])
 
+  /**
+   * Le rendu du dessin, poussé au serveur pour qu'un agent puisse le RELIRE.
+   * Le navigateur est le seul à savoir dessiner un Excalidraw fidèlement.
+   * Échelle 1 : cette version applique `exportScale` au dessin sans agrandir le
+   * cadre — l'image sortirait rognée.
+   */
+  const pushRender = useCallback(async () => {
+    if (!api) return
+    const blob = await exportToBlob({
+      elements: api.getSceneElements(),
+      appState: { ...api.getAppState(), exportBackground: true, exportWithDarkMode: false, exportScale: 1 },
+      files: api.getFiles(),
+      mimeType: 'image/png',
+      exportPadding: 16,
+    })
+    await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'image/png' },
+      body: await blob.arrayBuffer(),
+    }).catch(() => {})
+  }, [api])
+
   /** La sauvegarde du fichier. Uniquement pour les changements venus d'ici. */
   const saveScene = useCallback(async () => {
     if (!api || loadFailed.current) return
@@ -82,7 +104,7 @@ function App() {
     // Réécrire le fichier pour ça produirait du bruit git et élargirait la
     // fenêtre de collision avec les écritures de l'agent.
     const signature = JSON.stringify(elements)
-    if (signature === lastSaved.current) return
+    if (signature === lastSaved.current) return pushRender()
 
     // Tant que la scène chargée n'est pas montée, l'API renvoie une scène vide.
     // Sauvegarder à ce moment-là effacerait le dessin au premier rechargement.
@@ -110,14 +132,20 @@ function App() {
     }
     setWarning(null)
     lastSaved.current = signature
-  }, [api])
+    await pushRender()
+  }, [api, pushRender])
 
   const onChange = useCallback(() => {
-    // Une scène venue de l'agent ne doit pas être renvoyée au serveur (boucle d'écho).
-    if (applyingRemote.current) return
     clearTimeout(timer.current)
-    timer.current = setTimeout(saveScene, SAVE_DEBOUNCE_MS)
-  }, [saveScene])
+    // Une scène venue de l'agent ne doit pas être réécrite (boucle d'écho), mais son
+    // rendu doit être rafraîchi : c'est ainsi que l'agent relit ce qu'il a dessiné.
+    timer.current = setTimeout(applyingRemote.current ? pushRender : saveScene, SAVE_DEBOUNCE_MS)
+  }, [saveScene, pushRender])
+
+  // Un rendu dès l'ouverture : l'agent doit pouvoir relire un canvas qu'il n'a pas modifié.
+  useEffect(() => {
+    if (api && initial) pushRender()
+  }, [api, initial, pushRender])
 
   if (!initial) return null
 

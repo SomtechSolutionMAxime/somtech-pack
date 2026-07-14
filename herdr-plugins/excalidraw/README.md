@@ -42,6 +42,16 @@ npm test
 
 Couvre le cœur : anti-boucle d'écho, propagation des écritures externes, rejet du JSON invalide, création du fichier absent, repli de port, et l'encodeur Kitty (découpage en morceaux, `f=100`, dimensionnement en cellules).
 
+## Relire son dessin (obligatoire pour un agent)
+
+Écrire du JSON Excalidraw valide ne prouve **rien** sur le rendu : des formes peuvent se chevaucher, du texte déborder, des flèches pointer à côté. Après avoir dessiné, récupère le rendu et **regarde-le** :
+
+```bash
+curl -s -o /tmp/canvas.png http://127.0.0.1:$(cat .herdr/excalidraw.port)/api/preview.png
+```
+
+Puis ouvre l'image (outil `Read`). Vérifie que le texte tient dans sa forme, que rien ne se chevauche, que les flèches relient ce qu'elles prétendent relier. Si ce n'est pas lisible ou cohérent : corrige et réexporte. Le rendu est produit par le navigateur (mêmes polices, même trait qu'à l'écran), donc le canvas doit être ouvert dans un onglet.
+
 ## Écrire dans le canvas depuis un agent
 
 Le fichier `.herdr/canvas.excalidraw` est du JSON Excalidraw. Un agent peut y ajouter un élément **minimal** — le plugin complète les champs internes manquants :

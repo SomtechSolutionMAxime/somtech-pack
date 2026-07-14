@@ -1,6 +1,11 @@
 /**
  * Serveur local du plugin : sert la page Excalidraw, expose la scène du projet,
  * et surveille le fichier pour propager au navigateur les écritures d'un agent.
+ *
+ * Il conserve aussi le dernier rendu PNG produit par le navigateur : c'est ce qui
+ * permet à un agent de RELIRE son propre dessin (`GET /api/preview.png`) et de
+ * vérifier qu'il est lisible et cohérent — écrire du JSON valide ne prouve rien
+ * sur ce que ça donne à l'œil.
  */
 import { createServer } from 'node:http'
 import { createServer as createTcpServer } from 'node:net'
@@ -87,6 +92,9 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
   const store = new SceneStore(file)
   await store.ensureFile()
 
+  /** Dernier rendu produit par le navigateur — le seul à savoir dessiner fidèlement. */
+  let lastRender = null
+
   const httpServer = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1')
 
@@ -99,6 +107,20 @@ export async function startServer({ file, port = DEFAULT_PORT, portFile = null }
 
       if (url.pathname === '/api/scene' && req.method === 'GET') {
         return json(res, 200, await store.read())
+      }
+
+      // Relecture du dessin par un agent : « est-ce que ce que j'ai écrit est lisible ? »
+      if (url.pathname === '/api/preview.png' && req.method === 'GET') {
+        if (!lastRender) {
+          return json(res, 404, { error: 'aucun rendu : ouvrir le canvas dans le navigateur' })
+        }
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' })
+        return res.end(lastRender)
+      }
+
+      if (url.pathname === '/api/preview' && req.method === 'POST') {
+        lastRender = await readBody(req)
+        return json(res, 200, { ok: true })
       }
 
       if (url.pathname === '/api/scene' && req.method === 'POST') {
