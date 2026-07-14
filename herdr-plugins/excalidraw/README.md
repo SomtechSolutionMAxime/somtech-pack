@@ -8,6 +8,14 @@ Un canvas Excalidraw partagé entre toi et l'agent, pendant une session herdr.
 
 Un pane herdr est un terminal : il ne peut pas héberger le canvas éditable. L'édition vit donc dans le navigateur, la **vue** vit dans le pane. Le fichier `.excalidraw` est la source de vérité unique des deux côtés.
 
+> ### L'image ne s'affiche que si ton terminal sait dessiner
+>
+> herdr relaie les images au terminal **hôte** — celui depuis lequel tu as lancé `herdr`. Il faut donc que cet hôte comprenne le protocole graphique Kitty : **Ghostty, Kitty ou WezTerm**.
+>
+> **Terminal.app (macOS) et iTerm2 ne conviennent pas** : le premier n'affiche aucune image, le second a son propre protocole, pas celui de Kitty. Dans ces terminaux, le pane reste utile — il affiche le fichier, l'URL du canvas, le nombre d'éléments et l'heure de la dernière mise à jour — mais **pas le dessin**.
+>
+> Interroger le terminal ne permet pas de le savoir : c'est **herdr** qui répond « je sais faire », pas l'hôte derrière lui. D'où le choix d'afficher toujours l'état en texte, et l'image en plus.
+
 ## Installation
 
 ```bash

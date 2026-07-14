@@ -18,10 +18,20 @@ const { portFile, canvasFile } = paths(project)
 
 const OUT = process.stdout
 
+let currentPort = null
 let lastPng = null
 let connected = false
 let editors = 0
 let lastError = null
+let elementCount = null
+let lastUpdate = null
+
+/**
+ * Le protocole graphique est relayé au terminal HÔTE : herdr sait le faire, mais
+ * Terminal.app (par exemple) ne sait pas dessiner d'image. Interroger le terminal
+ * ne le révèle pas — c'est herdr qui répond OK, pas l'hôte. Le pane affiche donc
+ * TOUJOURS un état lisible en texte, et tente l'image par-dessus.
+ */
 
 const size = () => ({ columns: OUT.columns ?? 80, rows: OUT.rows ?? 24 })
 
@@ -46,11 +56,18 @@ function draw() {
   OUT.write('\x1b[2J\x1b[H') // efface l'écran
   OUT.write(clearImages()) // ...et notre image précédente, sinon elles s'empilent
 
-  if (!lastPng) {
-    status(connected ? 'en attente du premier aperçu…' : 'connexion au canvas…')
-    return
-  }
-  OUT.write(encodeImage(lastPng, size()))
+  // Le texte d'abord : si le terminal hôte ne dessine pas les images, c'est tout
+  // ce que l'utilisateur verra — un pane noir ne dit rien à personne.
+  const lines = [
+    '\x1b[1mCanvas Excalidraw\x1b[0m',
+    `  fichier   ${canvasFile}`,
+    `  éditer    http://127.0.0.1:${currentPort}/`,
+    `  éléments  ${elementCount ?? '—'}`,
+    `  màj       ${lastUpdate ?? '—'}`,
+  ]
+  OUT.write(lines.join('\r\n') + '\r\n')
+
+  if (lastPng) OUT.write(encodeImage(lastPng, { columns: size().columns, rows: size().rows - lines.length }))
   status(statusLine())
 }
 
@@ -85,6 +102,8 @@ function connect(port) {
     if (message.type === 'preview:update') {
       lastPng = Buffer.from(message.png, 'base64')
       lastError = null // un nouvel aperçu prouve que le fichier est de nouveau lisible
+      lastUpdate = new Date().toLocaleTimeString('fr-CA')
+      readCount()
       draw()
     } else if (message.type === 'editors') {
       editors = message.count
@@ -106,13 +125,25 @@ function connect(port) {
   socket.on('error', () => {})
 }
 
-const port = await readPort()
-if (!(await detectSupport(process.stdin, OUT))) {
-  degrade(port)
+/** Le nombre d'éléments : la seule info de contenu lisible sans image. */
+async function readCount() {
+  try {
+    const scene = JSON.parse(await readFile(canvasFile, 'utf8'))
+    elementCount = scene.elements?.length ?? null
+  } catch {
+    elementCount = null
+  }
+}
+
+currentPort = await readPort()
+
+if (!OUT.isTTY) {
+  degrade(currentPort)
 } else {
   OUT.write('\x1b[?25l') // masque le curseur
   process.on('exit', () => OUT.write('\x1b[?25h'))
   process.stdout.on('resize', draw)
+  await readCount()
   draw()
-  connect(port)
+  connect(currentPort)
 }
