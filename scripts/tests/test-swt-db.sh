@@ -127,6 +127,106 @@ env=$(cat "$WT/.env.local" 2>/dev/null)
 has  "URL API du worktree" "$env" "54341"
 has  "clé anon exposée" "$env" "anon.key.xyz"
 
+
+# ============================================================
+# D-20260714-0008 — collisions de ports non détectées.
+#
+# Le détecteur d'origine sondait UN port par offset, sur une grille supposée
+# (54322 + offset×20). Or le patch décale les ports D'ORIGINE du projet : un
+# projet dont la config ne part pas des ports standard produit des ports hors
+# grille, invisibles au détecteur. Cas réel : actionprogex (db d'origine 54324)
+# occupait 54484, quand le détecteur regardait 54482 → « port already allocated ».
+# ============================================================
+printf '\n▸ D-20260714-0008 — ports dérivés de la config réelle\n'
+
+CFG_NS="$TMP/nonstandard.toml"
+cat > "$CFG_NS" <<'TOML'
+project_id = "actionprogex"
+[api]
+port = 54323
+[db]
+port = 54324
+shadow_port = 54320
+[studio]
+port = 54325
+TOML
+
+# 1. Les ports cibles d'un offset se lisent dans la config, pas dans une grille.
+got=$(swt_db_offset_ports "$CFG_NS" 8 | tr '\n' ' ')
+eq "offset 8 sur config non standard -> ports réels" "$got" "54483 54484 54480 54485 "
+
+CFG_STD="$TMP/standard.toml"
+cat > "$CFG_STD" <<'TOML'
+project_id = "std"
+[api]
+port = 54321
+[db]
+port = 54322
+TOML
+got=$(swt_db_offset_ports "$CFG_STD" 1 | tr '\n' ' ')
+eq "offset 1 sur config standard -> ports réels" "$got" "54341 54342 "
+
+# 2. Un offset dont UN SEUL port est occupé doit être écarté.
+#    On occupe un VRAI port de la plage 543xx (pas un port éphémère : le patch ne
+#    décale que les 543xx, un port hors plage ne prouverait rien).
+FREE_PORT=$(python3 - <<'PY'
+import socket
+for port in range(54300, 54400):
+    s = socket.socket()
+    try:
+        s.bind(('127.0.0.1', port)); s.close(); print(port); break
+    except OSError:
+        s.close()
+PY
+)
+python3 - "$FREE_PORT" "$TMP/holding" <<'PY' &
+import socket, sys, time
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', int(sys.argv[1]))); s.listen(1)
+open(sys.argv[2], 'w').write('up')
+time.sleep(30)
+PY
+BUSY_PID=$!
+for _ in $(seq 1 50); do [ -s "$TMP/holding" ] && break; sleep 0.1; done
+
+CFG_BUSY="$TMP/busy.toml"
+printf 'project_id = "x"\n[db]\nport = %s\n' "$FREE_PORT" > "$CFG_BUSY"
+
+if swt_db_offset_free "$CFG_BUSY" 0; then
+  ko "un port réellement occupé rend l'offset indisponible"
+else
+  ok "un port réellement occupé rend l'offset indisponible"
+fi
+
+got=$(swt_db_offset_conflicts "$CFG_BUSY" 0)
+case "$got" in
+  *"$FREE_PORT"*) ok "le conflit nomme le port en cause ($got)" ;;
+  *) ko "le conflit nomme le port en cause"; printf '     obtenu=[%s]\n' "$got" ;;
+esac
+
+kill "$BUSY_PID" 2>/dev/null; wait "$BUSY_PID" 2>/dev/null
+
+# Une fois le port libéré, l'offset redevient disponible.
+if swt_db_offset_free "$CFG_BUSY" 0; then
+  ok "port libéré -> offset de nouveau disponible"
+else
+  ko "port libéré -> offset de nouveau disponible"
+fi
+
+# 3. L'allocation ne doit JAMAIS rendre un offset dont les ports sont occupés.
+#    (Avant D-20260714-0008 elle le faisait : elle ignorait les ports réels.)
+CFG_ALLOC="$TMP/alloc.toml"
+printf 'project_id = "x"\n[db]\nport = 54322\n' > "$CFG_ALLOC"
+got=$(swt_db_alloc_offset "sess-x" "" "$CFG_ALLOC")
+if [ -z "$got" ]; then
+  ok "plage saturée -> aucun offset rendu (pas de faux positif)"
+elif swt_db_offset_free "$CFG_ALLOC" "$got"; then
+  ok "l'offset alloué ($got) a bien tous ses ports libres"
+else
+  ko "l'offset alloué ($got) a des ports occupés"
+fi
+
+
 echo
 [ "$fail" -eq 0 ] && echo "✅ TOUS LES TESTS PASSENT" || echo "❌ DES TESTS ÉCHOUENT"
 exit "$fail"

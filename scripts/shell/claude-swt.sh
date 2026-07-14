@@ -153,6 +153,37 @@ claude-swt-danger() { _CLAUDE_SWT_DANGER=1 _claude-swt-launch "$@"; }
 
 claude-swt-ls() { git worktree list; }          # sessions + branche courante de chacune
 
+# claude-swt-db-orphans [--stop] — stacks Supabase dont le worktree n'existe plus.
+# Elles continuent d'occuper des ports et empêchent les nouvelles sessions de
+# provisionner leur BD (D-20260714-0008). Sans --stop : on liste, on ne touche à rien.
+claude-swt-db-orphans() {
+  local stop=0 pid found=0
+  [ "${1:-}" = "--stop" ] && stop=1
+
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    found=1
+    if [ "$stop" -eq 1 ]; then
+      printf '🛑 arrêt de %s…\n' "$pid"
+      docker ps -a --format '{{.Names}}' 2>/dev/null | grep -F "_${pid}" \
+        | xargs -r docker rm -f >/dev/null 2>&1
+      printf '   arrêtée\n'
+    else
+      printf '  %s — ports : %s\n' "$pid" \
+        "$(docker ps --filter "name=_${pid}" --format '{{.Ports}}' 2>/dev/null \
+           | grep -oE '0\.0\.0\.0:[0-9]+' | cut -d: -f2 | sort -u | tr '\n' ' ')"
+    fi
+  done <<EOF
+$(swt_db_orphan_stacks)
+EOF
+
+  if [ "$found" -eq 0 ]; then
+    printf '✅ aucune stack orpheline.\n'
+  elif [ "$stop" -eq 0 ]; then
+    printf '\nCes stacks n%s ont plus de worktree. Les libérer : claude-swt-db-orphans --stop\n' "'"
+  fi
+}
+
 claude-swt-done() {  # usage : claude-swt-done <timestamp> — depuis le repo OU un worktree
   [ -z "$1" ] && { echo "usage: claude-swt-done <timestamp>"; return 1; }
   # Résoudre le worktree via git (partagé entre tous les worktrees du repo) plutôt
