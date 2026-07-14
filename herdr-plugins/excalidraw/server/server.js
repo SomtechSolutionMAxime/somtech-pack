@@ -1,0 +1,173 @@
+/**
+ * Serveur local du plugin : sert la page Excalidraw, expose la scène, diffuse
+ * les aperçus PNG aux panes, et surveille le fichier pour les écritures externes.
+ *
+ * Il ne connaît rien du terminal ; le pane ne connaît rien d'Excalidraw.
+ */
+import { createServer } from 'node:http'
+import { createServer as createTcpServer } from 'node:net'
+import { readFile, writeFile, unlink } from 'node:fs/promises'
+import { extname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import chokidar from 'chokidar'
+import { WebSocketServer } from 'ws'
+
+import { SceneStore } from './scene.js'
+
+export const DEFAULT_PORT = 4870
+const WEB_ROOT = fileURLToPath(new URL('../web/dist/', import.meta.url))
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json',
+}
+
+/**
+ * Premier port libre à partir de `port` (0 = laisser l'OS choisir).
+ *
+ * On sonde avec un serveur TCP jetable plutôt que de re-`listen()` le serveur
+ * HTTP après un échec : un serveur HTTP qui a émis EADDRINUSE peut en émettre
+ * un second de façon asynchrone, hors de portée du handler — exception non
+ * rattrapée.
+ */
+function probe(port) {
+  return new Promise((resolve, reject) => {
+    const socket = createTcpServer()
+    socket.once('error', reject)
+    socket.listen(port, '127.0.0.1', () => {
+      const bound = socket.address().port
+      socket.close(() => resolve(bound))
+    })
+  })
+}
+
+async function findFreePort(port, attemptsLeft = 20) {
+  if (port === 0) return 0
+  try {
+    return await probe(port)
+  } catch (err) {
+    if (err.code !== 'EADDRINUSE' || attemptsLeft === 0) throw err
+    return findFreePort(port + 1, attemptsLeft - 1)
+  }
+}
+
+function listen(httpServer, port) {
+  return new Promise((resolve, reject) => {
+    httpServer.once('error', reject)
+    httpServer.listen(port, '127.0.0.1', () => resolve(httpServer.address().port))
+  })
+}
+
+async function readBody(req) {
+  const chunks = []
+  for await (const chunk of req) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
+export async function startServer({ file, port = DEFAULT_PORT, portFile = null } = {}) {
+  const store = new SceneStore(file)
+  await store.ensureFile()
+
+  let lastPreview = null
+
+  const httpServer = createServer(async (req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1')
+
+    try {
+      if (url.pathname === '/api/scene' && req.method === 'GET') {
+        return json(res, 200, await store.read())
+      }
+
+      if (url.pathname === '/api/scene' && req.method === 'POST') {
+        const scene = JSON.parse((await readBody(req)).toString('utf8'))
+        await store.write(scene)
+        return json(res, 200, { ok: true })
+      }
+
+      if (url.pathname === '/api/preview' && req.method === 'POST') {
+        lastPreview = await readBody(req)
+        broadcast({ type: 'preview:update', png: lastPreview.toString('base64') })
+        return json(res, 200, { ok: true })
+      }
+
+      return serveStatic(url.pathname, res)
+    } catch (err) {
+      return json(res, 400, { error: err.message })
+    }
+  })
+
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+  const broadcast = (message) => {
+    const payload = JSON.stringify(message)
+    for (const client of wss.clients) if (client.readyState === 1) client.send(payload)
+  }
+
+  // Un pane qui arrive en cours de route ne doit pas rester noir.
+  wss.on('connection', (socket) => {
+    if (lastPreview) {
+      socket.send(JSON.stringify({ type: 'preview:update', png: lastPreview.toString('base64') }))
+    }
+  })
+
+  const boundPort = await listen(httpServer, await findFreePort(port))
+  if (portFile) await writeFile(portFile, `${boundPort}\n`, 'utf8')
+
+  // Écritures externes du fichier (Claude) → poussées au navigateur et au pane.
+  const watcher = chokidar.watch(file, { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 120 } })
+  watcher.on('change', async () => {
+    let text
+    try {
+      text = await readFile(file, 'utf8')
+    } catch {
+      return
+    }
+    if (store.isOwnWrite(text)) return // notre propre sauvegarde : ne pas rebondir
+
+    try {
+      const scene = JSON.parse(text)
+      if (!Array.isArray(scene?.elements)) throw new SyntaxError('`elements` manquant')
+      broadcast({ type: 'scene:update', scene })
+    } catch (err) {
+      // On ne pousse RIEN : un fichier cassé ne doit pas détruire le dessin en cours.
+      broadcast({ type: 'error', message: `Fichier .excalidraw invalide — ${err.message}` })
+    }
+  })
+
+  return {
+    port: boundPort,
+    url: `http://127.0.0.1:${boundPort}/`,
+    file,
+    async close() {
+      await watcher.close()
+      for (const client of wss.clients) client.terminate()
+      wss.close()
+      await new Promise((resolve) => httpServer.close(resolve))
+      if (portFile) await unlink(portFile).catch(() => {})
+    },
+  }
+}
+
+function json(res, status, body) {
+  const payload = JSON.stringify(body)
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(payload)
+}
+
+async function serveStatic(pathname, res) {
+  const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '')
+  const target = join(WEB_ROOT, relative)
+  if (!target.startsWith(WEB_ROOT)) return json(res, 403, { error: 'interdit' })
+
+  try {
+    const body = await readFile(target)
+    res.writeHead(200, { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' })
+    res.end(body)
+  } catch {
+    return json(res, 404, { error: `introuvable : ${relative}. Lancer \`npm run build\` dans le plugin.` })
+  }
+}

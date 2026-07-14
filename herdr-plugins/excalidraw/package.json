@@ -1,0 +1,17 @@
+{
+  "name": "herdr-excalidraw",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Canvas Excalidraw vivant dans un pane herdr — édition navigateur, miroir live terminal.",
+  "scripts": {
+    "build": "npm --prefix web ci && npm --prefix web run build",
+    "start": "node server/bin.js",
+    "pane": "node pane/bin.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "ws": "^8.18.0"
+  }
+}
