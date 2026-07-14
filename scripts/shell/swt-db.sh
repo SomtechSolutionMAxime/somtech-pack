@@ -49,21 +49,91 @@ swt_db_excludes() {
   esac
 }
 
-# swt_db_alloc_offset <sess> <taken_csv> — offset [1..8] libre pour cette session.
+# swt_db_config_ports <config> — tous les ports locaux (543xx) déclarés dans la config.
+# Base de tout le reste : les ports d'un worktree se DÉRIVENT de la config du projet.
+# Ne jamais supposer une grille globale (54322 + offset×20) : le patch décale les ports
+# D'ORIGINE, et un projet qui ne part pas des ports Supabase standard sort de la grille.
+# Cas réel (D-20260714-0008) : actionprogex, db d'origine 54324 → occupait 54484 quand
+# le détecteur regardait 54482. Collision invisible, `supabase start` en échec.
+swt_db_config_ports() {
+  local cfg="${1:?config path}"
+  [ -f "$cfg" ] || return 1
+  grep -oE '(^|[^0-9])543[0-9][0-9]([^0-9]|$)' "$cfg" 2>/dev/null \
+    | grep -oE '543[0-9][0-9]' | awk '!seen[$0]++'
+}
+
+# swt_db_offset_ports <config> <offset> — ports que la config OCCUPERAIT à cet offset.
+swt_db_offset_ports() {
+  local cfg="${1:?config path}" off="${2:?offset}" stride="${SWT_DB_STRIDE:-20}" p
+  swt_db_config_ports "$cfg" | while IFS= read -r p; do
+    [ -n "$p" ] && printf '%s\n' $(( p + off * stride ))
+  done
+}
+
+# swt_db_port_holder <port> — qui écoute ce port (conteneur Docker si identifiable).
+# Sert à dire QUI bloque, plutôt qu'un « port already allocated » opaque.
+swt_db_port_holder() {
+  local port="${1:?port}" name
+  name=$(docker ps --format '{{.Names}}\t{{.Ports}}' 2>/dev/null \
+    | grep -F ":$port->" | cut -f1 | head -1)
+  [ -n "$name" ] && { printf '%s' "$name"; return 0; }
+  command -v lsof >/dev/null 2>&1 \
+    && lsof -nP -iTCP:"$port" -sTCP:LISTEN -Fc 2>/dev/null | grep '^c' | head -1 | cut -c2-
+}
+
+# swt_db_offset_free <config> <offset> — vrai si TOUS les ports cibles sont libres.
+# Un seul port occupé suffit à faire échouer `supabase start` : on les teste tous.
+swt_db_offset_free() {
+  local cfg="${1:?config path}" off="${2:?offset}" p
+  command -v lsof >/dev/null 2>&1 || return 0   # sans lsof, on ne peut rien affirmer
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1 && return 1
+  done <<EOF
+$(swt_db_offset_ports "$cfg" "$off")
+EOF
+  return 0
+}
+
+# swt_db_offset_conflicts <config> <offset> — « port (détenteur) » pour chaque port pris.
+swt_db_offset_conflicts() {
+  local cfg="${1:?config path}" off="${2:?offset}" p holder out=""
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+      holder=$(swt_db_port_holder "$p")
+      out="$out $p (${holder:-inconnu})"
+    fi
+  done <<EOF
+$(swt_db_offset_ports "$cfg" "$off")
+EOF
+  printf '%s' "${out# }"
+}
+
+# swt_db_alloc_offset <sess> <taken_csv> [config] — offset [1..8] libre pour cette session.
 # Déterministe : dérive un candidat du hash de <sess>, puis avance circulairement
 # jusqu'au premier offset absent de <taken_csv> (CSV d'offsets déjà vivants).
+#
+# Si <config> est fourni, un offset n'est retenu que si TOUS les ports que cette
+# config occuperait à cet offset sont réellement libres (D-20260714-0008) — le
+# registre et une grille supposée ne suffisent pas à voir les stacks des projets
+# à ports non standard, ni celles lancées hors de ce mécanisme.
+#
 # Retourne 1 si la plage est pleine.
 swt_db_alloc_offset() {
-  local sess="${1:-}" taken="${2:-}" max="${SWT_DB_MAX_OFFSET:-8}"
+  local sess="${1:-}" taken="${2:-}" cfg="${3:-}" max="${SWT_DB_MAX_OFFSET:-8}"
   local h cand i o
   h=$(printf '%s' "$sess" | cksum | awk '{print $1}')
   cand=$(( h % max + 1 ))
   for i in $(seq 0 $(( max - 1 )) ); do
     o=$(( (cand - 1 + i) % max + 1 ))
     case ",$taken," in
-      *",$o,"*) : ;;                       # offset déjà pris
-      *) printf '%s' "$o"; return 0 ;;
+      *",$o,"*) continue ;;                # offset déjà réservé par une session
     esac
+    if [ -n "$cfg" ] && ! swt_db_offset_free "$cfg" "$o"; then
+      continue                             # ports réellement occupés : offset écarté
+    fi
+    printf '%s' "$o"; return 0
   done
   return 1
 }
@@ -139,10 +209,12 @@ EOF
   printf '%s' "${out#,}"
 }
 
-# swt_db_busy_offsets — CSV des offsets dont le port db est DÉJÀ écouté sur la
-# machine. Indispensable : le registre ne voit pas les stacks Supabase lancées
-# hors de ce mécanisme (autres worktrees, `supabase start` manuel, anciens
-# projets). On sonde donc les ports réels — seule source de vérité fiable.
+# swt_db_busy_offsets — DÉPRÉCIÉ (D-20260714-0008). Sonde un seul port par offset
+# sur une grille SUPPOSÉE (54322 + offset×20), ce qui rend invisibles les stacks
+# des projets dont la config ne part pas des ports Supabase standard — cause du
+# « port already allocated » sur actionprogex (db réel 54484, sondé 54482).
+# L'allocation s'appuie désormais sur swt_db_offset_free, qui dérive les ports de
+# la config RÉELLE du projet. Conservé pour les appelants tiers.
 swt_db_busy_offsets() {
   local off port out="" stride="${SWT_DB_STRIDE:-20}" max="${SWT_DB_MAX_OFFSET:-8}"
   command -v lsof >/dev/null 2>&1 || return 0
@@ -151,6 +223,43 @@ swt_db_busy_offsets() {
     lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && out="$out,$off"
   done
   printf '%s' "${out#,}"
+}
+
+# swt_db_report_saturation <config> — pourquoi aucun offset n'est disponible.
+# Un « plage pleine » sans coupable oblige à enquêter à la main ; on nomme donc
+# les ports pris et les conteneurs qui les tiennent (souvent des stacks orphelines
+# de worktrees supprimés).
+swt_db_report_saturation() {
+  local cfg="${1:?config path}" off max="${SWT_DB_MAX_OFFSET:-8}" conflicts
+  printf '\n'
+  printf '════════════════════════════════════════════════════════════\n'
+  printf '⛔ BD NON PROVISIONNÉE — aucun jeu de ports libre.\n'
+  printf '   Cette session démarre SANS base de données.\n'
+  printf '════════════════════════════════════════════════════════════\n'
+  for off in $(seq 1 "$max"); do
+    conflicts=$(swt_db_offset_conflicts "$cfg" "$off")
+    [ -n "$conflicts" ] && printf '   offset %s occupé : %s\n' "$off" "$conflicts"
+  done
+  printf '\n   Des stacks de worktrees disparus tiennent souvent ces ports.\n'
+  printf '   Les lister :  claude-swt-db-orphans\n'
+  printf '   Les libérer : claude-swt-db-orphans --stop\n\n'
+}
+
+# swt_db_orphan_stacks — stacks `swt-*` dont le worktree n'existe plus.
+# Le project_id encode la session (swt-<repo>-<YYYYMMDD-HHMMSS>) : si aucun worktree
+# ne porte ce timestamp, la stack est orpheline — elle occupe des ports pour rien.
+swt_db_orphan_stacks() {
+  local name pid ts
+  command -v docker >/dev/null 2>&1 || return 0
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^supabase_db_swt-' | while IFS= read -r name; do
+    pid=${name#supabase_db_}
+    ts=$(printf '%s' "$pid" | grep -oE '[0-9]{8}-[0-9]{6}$')
+    [ -n "$ts" ] || continue
+    if ! git worktree list 2>/dev/null | grep -q "$ts" \
+       && [ ! -d "$HOME/worktrees" -o -z "$(find "$HOME/worktrees" -maxdepth 2 -name "$ts" -type d 2>/dev/null)" ]; then
+      printf '%s\n' "$pid"
+    fi
+  done
 }
 
 # swt_db_is_patched <config_path> — vrai si la config est déjà patchée (skip-worktree posé).
@@ -204,10 +313,14 @@ swt_db_up() {
     while ! mkdir "$lock" 2>/dev/null; do
       tries=$(( tries + 1 )); [ "$tries" -ge 100 ] && break; sleep 0.1
     done
-    offset=$(swt_db_alloc_offset "$sess" "$(swt_db_taken),$(swt_db_busy_offsets)")
+    # Les ports cibles sont dérivés de la config RÉELLE du projet, et tous vérifiés
+    # libres (D-20260714-0008) : une grille supposée ne voit pas les stacks des
+    # projets à ports non standard, ni celles lancées hors de ce mécanisme.
+    offset=$(swt_db_alloc_offset "$sess" "$(swt_db_taken)" "$cfg")
     if [ -z "$offset" ]; then
       rmdir "$lock" 2>/dev/null
-      printf '⚠️  plage de ports worktree pleine — BD non provisionnée.\n' >&2; return 0
+      swt_db_report_saturation "$cfg" >&2
+      return 0
     fi
     swt_db_patch_config "$cfg" "$pid" "$offset"
     printf '%s' "$offset" > "$SWT_DB_REG/$sess"
