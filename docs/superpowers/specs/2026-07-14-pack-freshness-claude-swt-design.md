@@ -175,6 +175,59 @@ Chaque test doit avoir été **rouge** avant l'implémentation (règle d'or n°6
 
 ---
 
-## 10. Suite
+## 10. Amendements E1 (T-20260715-0001) — décisions structurantes figées
 
-Décomposition Epic/Story (G/W/T tracé) via `plan-servicedesk` après validation de ce spec.
+Le découpage a exposé 6 points laissés ouverts par la v1. Tranchés ici avant tout code (E2/E3/E4) :
+
+1. **Emplacement de construction du bump (E3)** — le bump est construit dans un **worktree éphémère
+   jeté**, créé par `git -C "$main" worktree add "$tmp" -b chore/pack-v<latest> origin/main`, puis
+   retiré (`git worktree remove --force`) après le push. **Jamais** dans `$main`, jamais dans un
+   worktree de travail. (`git worktree add` part d'un commit → aucune contamination du working tree
+   de `$main`.)
+
+2. **Contrat lock + idempotence (E3)** — lock atomique `mkdir "$LOCKDIR"` où
+   `LOCKDIR="$HOME/.somtech/pack-update-<clé>.lock"` et **`clé` = hash court du chemin absolu de
+   `$main` + URL du remote** (jamais le basename — deux repos homonymes ne doivent pas partager un
+   lock). **Récupération de lock périmé** : si le lock a un mtime > `PF_LOCK_TTL` (défaut 600 s), il
+   est réputé mort et retiré avant tentative. **Primauté de la garde réseau** : le lock local ne vaut
+   qu'intra-machine ; la source de vérité anti-doublon reste `git ls-remote --heads origin
+   chore/pack-v<latest>` **et** `gh pr list --head chore/pack-v<latest>`. Existe déjà → skip, quel que
+   soit l'état du lock local.
+
+3. **Nommage de branche** — `chore/pack-v<latest>` est une **branche de maintenance transversale**
+   (bump de config, non rattachée à une Demande du repo client), **exemptée** de la règle d'ID
+   `D-/P-` au même titre que les branches de domaine. Documenté dans le message de PR.
+
+4. **Détection « session active » (E4)** — au lancement, `claude-swt` pose un **marqueur de session**
+   `~/.somtech/swt-sessions/<sess>` contenant son **PID** ; retiré au teardown. Un worktree est réputé
+   **actif** si son marqueur existe **et** que le PID est vivant (`kill -0`). Un marqueur orphelin
+   (PID mort après crash) n'est pas « actif » → le worktree redevient éligible (pas de gel).
+
+5. **Sort du hook `session-start-pack-version.sh`** — **hors-scope de cette demande.** Le hook fire
+   *après* le boot de Claude (mauvais moment pour la promesse « fraîcheur à la naissance ») et
+   doublerait le signal du launcher. On **ne le câble pas** dans `settings.json`. Il est **refactoré**
+   pour sourcer la lib partagée (dé-duplication, E2 story 2.1) mais son câblage reste une décision
+   ultérieure hors de ce chantier.
+
+6. **Disponibilité du CLI** — **constaté** : `@somtech-solutions/pack` est publié (tags jusqu'à
+   v1.9.0) et `update` est **non-interactif** via `--yes` (+ `--force` pour écraser des divergents,
+   backup `.somtech.bak` auto). E3 s'appuie dessus **sans** clause « no-op si CLI absent » sur cet axe
+   (le no-op hors-ligne / sans `gh` reste, lui, légitime).
+
+### Emplacement de la logique partagée (E2)
+
+`scripts/shell/pack-freshness.sh` — lib **sourçable, sans effet de bord**, fonctions **namespacées
+`pf_*`** (pas de pollution du shell interactif où `claude-swt.sh` est sourcé). Consommée par :
+- le **launcher** `claude-swt.sh` — sourcée depuis `~/.somtech/` (ajoutée à `install-claude-swt.sh`,
+  à côté de `swt-db.sh`) ;
+- le **hook** `session-start-pack-version.sh` — sourcée par chemin relatif
+  (`<hook>/../../scripts/shell/pack-freshness.sh`, présent car le module `core` installe `.claude/`
+  **et** `scripts/`), avec **fallback fail-silent** si absente (contrat du hook : ne jamais casser).
+
+Tests : `pf_*` couverts par tests bash unitaires ; le hook conserve ses tests A–I (stdout inchangé,
+test I recâblé sur `pf_refresh_cache`).
+
+## 11. Suite
+
+Décomposition Epic/Story (G/W/T tracé) via `plan-servicedesk` — faite : Demande D-20260715-0001,
+epics E-20260715-0001..0004, stories T-20260715-0001..0008. Implémentation TDD story par story.
