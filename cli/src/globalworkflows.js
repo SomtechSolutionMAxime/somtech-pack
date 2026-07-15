@@ -10,9 +10,9 @@
 // Garanties (identiques à globalskills) :
 // - ne touche QUE les workflows présents dans le pack ; un workflow perso hors-pack
 //   n'est jamais dans le payload donc jamais écrit ni supprimé (le moteur ne supprime rien) ;
-// - un workflow du pack modifié à la main en global est « divergent » : NON écrasé
-//   sans `force` ;
-// - avec `force`, chaque écrasement crée un backup `<fichier>.somtech.bak` (anti-perte).
+// - un workflow du pack modifié à la main en global CONVERGE vers la version du pack par
+//   défaut (source de vérité unique), avec backup `<fichier>.somtech.bak` avant écrasement ;
+// - un workflow symlinké (dev qui link vers le repo source) n'est jamais écrit à travers.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectFiles, applyFiles } from './engine.js';

@@ -80,12 +80,14 @@ Usage :
 
 Commandes :
   init     Installe le pack dans le projet courant (modules core,features par défaut)
-  update   Met à jour le projet (présente un diff, n'écrase pas sans --force)
+  update   Met à jour le projet : les fichiers du pack reprennent TOUJOURS la version
+           du pack (convergence), toute dérive locale est sauvegardée en .somtech.bak.
+           Config projet (settings.json) et symlinks jamais écrasés.
   setup    Configure le poste : skills globaux (user-skills + miroir des skills du
            pack dans ~/.claude/skills) + workflows globaux (~/.claude/workflows) +
            claude-swt + hook de version. Re-jouable = mise à jour. Préserve skills et
-           workflows perso hors-pack ; une version du pack divergente n'est prise
-           qu'avec --force (backup .somtech.bak auto)
+           workflows perso hors-pack ; un fichier du pack divergent CONVERGE vers la
+           version du pack (backup .somtech.bak auto), les symlinks sont épargnés
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
 
@@ -93,7 +95,8 @@ Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
   --target <dir>    Projet cible (défaut: répertoire courant)
   --source <dir>    Racine du payload du pack (défaut: auto)
-  --force           Écrase les fichiers divergents (update)
+  --force           Déprécié / no-op : la convergence est désormais le défaut (un
+                    fichier du pack divergent est toujours écrasé, avec backup)
 
 Options (setup) :
   --rc <fichier>    Fichier rc shell (défaut: ~/.zshrc)

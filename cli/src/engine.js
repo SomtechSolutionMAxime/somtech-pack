@@ -7,9 +7,30 @@ import {
   readdirSync, lstatSync, statSync, existsSync, readFileSync,
   mkdirSync, copyFileSync, chmodSync,
 } from 'node:fs';
-import { join, dirname, resolve, sep } from 'node:path';
+import { join, dirname, resolve, relative, sep } from 'node:path';
 
 const IGNORED = new Set(['.DS_Store']);
+
+/**
+ * Vrai si le chemin de `target` jusqu'à `dest` traverse un symlink (target inclus, ou
+ * n'importe quel répertoire intermédiaire, ou la feuille elle-même). Sert à ne JAMAIS
+ * écrire à travers un lien : un dev qui symlinke `~/.claude/skills → <repo>` verrait
+ * sinon la convergence écraser son checkout (écriture hors de l'arbre cible).
+ * Un lstat par composant ; un composant inexistant (fichier à créer) arrête la marche
+ * (les répertoires qu'on créera sont réels).
+ */
+function traversesSymlink(target, dest) {
+  let cur = target;
+  try { if (lstatSync(cur).isSymbolicLink()) return true; } catch { /* target absent */ }
+  const parts = relative(target, dest).split(sep).filter(Boolean);
+  for (const part of parts) {
+    cur = join(cur, part);
+    let st;
+    try { st = lstatSync(cur); } catch { return false; } // n'existe pas encore → rien au-delà
+    if (st.isSymbolicLink()) return true;
+  }
+  return false;
+}
 
 /** Vrai si `resolve(base, p)` reste à l'intérieur de `base` (pas d'évasion `../`). */
 function within(base, p) {
@@ -108,22 +129,33 @@ function backupFile(dest, dryRun) {
 
 /**
  * Applique les fichiers du payload vers `target`. Idempotent.
- * - fichier absent      → created (copié sauf dryRun)
- * - identique           → unchanged (no-op)
- * - différent + force   → updated (copié)
- * - différent sans force → conflicts (diff, JAMAIS écrasé)
- * - hors target/payload → rejected (défense en profondeur, JAMAIS écrit)
  *
- * `preserve` : chemins (relatifs) appartenant au projet — créés s'ils sont
- * ABSENTS (starter), mais JAMAIS écrasés s'ils existent, même avec `force`
- * (ex. `.claude/settings.json` : permissions/plugins/hooks propres au projet).
+ * **Convergence par défaut (D-20260715-0002)** — le pack est la source de vérité unique.
+ * Un fichier **pack-owned** (hors `preserve`, non symlinké) prend TOUJOURS la version du
+ * pack : une copie locale qui diffère est de la DÉRIVE, pas un état à protéger.
+ * - fichier absent          → created (copié sauf dryRun)
+ * - identique               → unchanged (no-op)
+ * - différent (pack-owned)  → updated : ÉCRASÉ par la version du pack + backup .somtech.bak
+ *                             (par défaut, sans `--force` ; `force` est donc redondant ici)
+ * - symlink sur le chemin   → conflicts : JAMAIS écrit à travers — target lui-même, un
+ *                             répertoire parent OU la feuille symlinké (protège un dev setup
+ *                             `~/.claude/skills → <repo>` : on n'écrit pas dans le checkout)
+ * - backup impossible       → conflicts : si la sauvegarde .somtech.bak échoue (ex. disque
+ *                             plein), on n'écrase PAS (jamais de troncature sans filet)
+ * - hors target/payload     → rejected (défense en profondeur, JAMAIS écrit)
  *
- * `backup` : si vrai, sauvegarde la cible vers `<dest>.somtech.bak` AVANT chaque
- * écrasement `force` (filet anti-perte). Sans effet sur created/unchanged/preserved.
+ * `preserve` : chemins (relatifs) appartenant au projet/perso — créés s'ils sont ABSENTS
+ * (starter), mais JAMAIS écrasés s'ils existent (ex. `.claude/settings.json` :
+ * permissions/plugins/hooks propres au projet). C'est la SEULE catégorie protégée.
+ *
+ * `force` / `backup` : conservés pour compat ascendante mais **sans effet sur la
+ * convergence** — un divergent pack-owned est toujours écrasé, et toujours sauvegardé
+ * avant (filet anti-perte). `--force` ne débloque plus rien (il n'y a plus de gate).
  *
  * Renvoie { created, unchanged, updated, conflicts, rejected, preserved, backedUp }.
  */
 export function applyFiles({ payloadRoot, target, files, force = false, dryRun = false, preserve = [], backup = false }) {
+  void force; void backup; // acceptés (compat) mais la convergence ne dépend plus d'eux
   const preserveSet = new Set(preserve);
   const report = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [], backedUp: [] };
   for (const rel of files) {
@@ -134,12 +166,11 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
     }
     const src = join(payloadRoot, rel);
     const dest = join(target, rel);
-    // Ne JAMAIS écrire à travers un symlink en cible : `copyFileSync` suivrait le lien
-    // et écraserait la donnée pointée (potentiellement un fichier perso hors-cible).
-    // Un dest symlinké est traité comme divergent (conflict) : jamais touché.
-    let destLink = null;
-    try { destLink = lstatSync(dest); } catch { /* n'existe pas */ }
-    if (destLink && destLink.isSymbolicLink()) {
+    // Ne JAMAIS écrire à travers un symlink : `copyFileSync` suivrait le lien et écrirait
+    // hors de l'arbre cible (donnée perso, ou le repo source dans un dev setup). On teste
+    // TOUT le chemin target→dest (pas seulement la feuille) : un répertoire parent symlinké
+    // — cas courant `~/.claude/skills → <repo>` — doit aussi être épargné. Laissé en conflict.
+    if (traversesSymlink(target, dest)) {
       report.conflicts.push(rel);
       continue;
     }
@@ -147,18 +178,21 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
       copyPreservingMode(src, dest, dryRun);
       report.created.push(rel);
     } else if (preserveSet.has(rel)) {
-      report.preserved.push(rel); // appartient au projet : jamais écrasé (même --force)
+      report.preserved.push(rel); // appartient au projet : jamais écrasé
     } else if (filesEqual(src, dest)) {
       report.unchanged.push(rel);
-    } else if (force) {
-      if (backup) {
-        const bak = backupFile(dest, dryRun);
-        if (bak) report.backedUp.push(rel);
+    } else {
+      // pack-owned + divergent → CONVERGE : backup anti-perte PUIS écrasement (par défaut).
+      // Si le backup échoue (ex. disque plein), NE PAS écraser : on ne tronque jamais le
+      // fichier sans filet. On le laisse en conflit (M1) plutôt que de perdre la donnée.
+      const bak = backupFile(dest, dryRun);
+      if (!dryRun && !bak) {
+        report.conflicts.push(rel);
+        continue;
       }
+      if (bak) report.backedUp.push(rel);
       copyPreservingMode(src, dest, dryRun);
       report.updated.push(rel);
-    } else {
-      report.conflicts.push(rel);
     }
   }
   return report;

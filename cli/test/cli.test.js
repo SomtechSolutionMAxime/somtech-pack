@@ -1,7 +1,7 @@
 // Tests du CLI @somtech/pack (node:test, zéro dépendance).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync, chmodSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync, chmodSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,24 +78,96 @@ test('engine : init crée tout, re-run idempotent (no-op)', () => {
   assert.equal(r2.unchanged.length, files.length, 'tout doit être inchangé (idempotent)');
 });
 
-test('engine : fichier divergent NON écrasé sans force, écrasé avec force', () => {
+test('engine : fichier pack-owned divergent CONVERGE par défaut (écrasé + backup) SANS force (D-20260715-0002)', () => {
   const payload = makeFixture();
   const target = tmp('smtk-target-');
   const m = readManifest(payload);
   const { files } = collectFiles(payload, m.modules.core.paths);
   applyFiles({ payloadRoot: payload, target, files });
 
-  // l'utilisateur modifie un fichier installé
+  // l'utilisateur a dérivé un fichier du pack (modif locale = dérive, pas un état protégé)
   const touched = join(target, '.claude/skills/x/SKILL.md');
   writeFileSync(touched, 'MODIF UTILISATEUR\n');
 
-  const noForce = applyFiles({ payloadRoot: payload, target, files });
-  assert.ok(noForce.conflicts.includes('.claude/skills/x/SKILL.md'), 'doit être un conflit');
-  assert.equal(readFileSync(touched, 'utf8'), 'MODIF UTILISATEUR\n', 'NE DOIT PAS être écrasé sans force');
+  // convergence par DÉFAUT (sans --force) : le fichier reprend la version du pack, backup créé.
+  const r = applyFiles({ payloadRoot: payload, target, files });
+  assert.ok(r.updated.includes('.claude/skills/x/SKILL.md'), 'doit converger (updated) sans force');
+  assert.ok(r.backedUp.includes('.claude/skills/x/SKILL.md'), 'la version dérivée doit être sauvegardée');
+  assert.equal(r.conflicts.length, 0, 'plus de conflit pour un fichier pack-owned');
+  assert.equal(readFileSync(touched, 'utf8'), 'skill v1\n', 'doit être écrasé par la version du pack');
+  assert.ok(existsSync(`${touched}.somtech.bak`), 'backup .somtech.bak présent');
+  assert.equal(readFileSync(`${touched}.somtech.bak`, 'utf8'), 'MODIF UTILISATEUR\n', 'backup = ancienne version dérivée');
 
-  const withForce = applyFiles({ payloadRoot: payload, target, files, force: true });
-  assert.ok(withForce.updated.includes('.claude/skills/x/SKILL.md'));
-  assert.equal(readFileSync(touched, 'utf8'), 'skill v1\n', 'doit être écrasé avec force');
+  // idempotence : 2e run, plus rien à converger.
+  const r2 = applyFiles({ payloadRoot: payload, target, files });
+  assert.ok(r2.unchanged.includes('.claude/skills/x/SKILL.md'), '2e run : inchangé');
+  assert.equal(r2.updated.length, 0, '2e run : rien à converger');
+});
+
+test('engine : symlink en CIBLE jamais écrit à travers (dev setup protégé), même en convergence', () => {
+  const payload = makeFixture();
+  const target = tmp('smtk-target-');
+  const m = readManifest(payload);
+  const { files } = collectFiles(payload, m.modules.core.paths);
+  applyFiles({ payloadRoot: payload, target, files });
+
+  // remplacer une cible par un symlink vers un fichier hors-cible (dev qui symlink vers le repo source)
+  const dest = join(target, '.claude/skills/x/SKILL.md');
+  const external = tmp('smtk-ext-'); writeFileSync(join(external, 'linked.md'), 'CONTENU LIÉ\n');
+  rmSync(dest); symlinkSync(join(external, 'linked.md'), dest);
+
+  const r = applyFiles({ payloadRoot: payload, target, files });
+  assert.ok(r.conflicts.includes('.claude/skills/x/SKILL.md'), 'symlink → conflict (jamais écrit à travers)');
+  assert.equal(readFileSync(join(external, 'linked.md'), 'utf8'), 'CONTENU LIÉ\n', 'la cible du symlink n’est jamais touchée');
+});
+
+test('engine : répertoire PARENT symlinké → jamais écrit à travers (dev setup ~/.claude/skills → repo) (B1, D-20260715-0002)', () => {
+  const payload = makeFixture();
+  const target = tmp('smtk-target-');
+  // le "repo" du dev, hors cible, avec sa copie de travail non commitée
+  const repo = tmp('smtk-repo-');
+  mkdirSync(join(repo, 'x'), { recursive: true });
+  writeFileSync(join(repo, 'x', 'SKILL.md'), 'DEV WORKING COPY\n');
+  // dans la cible, .claude/skills est un SYMLINK de RÉPERTOIRE vers le repo (dev setup courant)
+  mkdirSync(join(target, '.claude'), { recursive: true });
+  symlinkSync(repo, join(target, '.claude', 'skills'));
+
+  const m = readManifest(payload);
+  const { files } = collectFiles(payload, m.modules.core.paths);
+  const r = applyFiles({ payloadRoot: payload, target, files });
+
+  assert.ok(r.conflicts.includes('.claude/skills/x/SKILL.md'), 'parent symlinké → conflict');
+  assert.ok(!r.updated.includes('.claude/skills/x/SKILL.md'), 'jamais convergé à travers le lien de dossier');
+  assert.equal(readFileSync(join(repo, 'x', 'SKILL.md'), 'utf8'), 'DEV WORKING COPY\n', 'checkout du dev INTACT');
+  assert.ok(!existsSync(join(repo, 'x', 'SKILL.md.somtech.bak')), 'aucun .somtech.bak déposé dans le repo');
+});
+
+test('engine : backup impossible → NE PAS écraser (jamais de troncature sans filet) (M1, D-20260715-0002)', { skip: process.getuid && process.getuid() === 0 }, () => {
+  const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-');
+  writeFileSync(join(payload, 'a.txt'), 'PACK\n');
+  writeFileSync(join(target, 'a.txt'), 'DERIVE\n');
+  chmodSync(target, 0o555); // dossier en lecture seule → création du .somtech.bak impossible
+  try {
+    const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });
+    assert.ok(r.conflicts.includes('a.txt'), 'backup KO → conflict, pas d’écrasement');
+    assert.ok(!r.updated.includes('a.txt'), 'non convergé');
+    assert.equal(readFileSync(join(target, 'a.txt'), 'utf8'), 'DERIVE\n', 'fichier NON tronqué (donnée préservée)');
+  } finally {
+    chmodSync(target, 0o755);
+  }
+});
+
+test('engine : convergences répétées → backups numérotés, aucune version perdue (M2, D-20260715-0002)', () => {
+  const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-');
+  writeFileSync(join(payload, 'a.txt'), 'PACK\n');
+  writeFileSync(join(target, 'a.txt'), 'DERIVE 1\n');
+  applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });   // converge → .somtech.bak = DERIVE 1
+  writeFileSync(join(target, 'a.txt'), 'DERIVE 2\n');                // re-dérive
+  const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });   // → .somtech.bak.1 = DERIVE 2
+  assert.ok(r.backedUp.includes('a.txt'));
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak'), 'utf8'), 'DERIVE 1\n', '1er backup préservé');
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak.1'), 'utf8'), 'DERIVE 2\n', '2e backup numéroté');
+  assert.equal(readFileSync(join(target, 'a.txt'), 'utf8'), 'PACK\n', 'converge à la fin');
 });
 
 test('engine : préserve le bit exécutable', () => {
@@ -191,15 +263,29 @@ test('run init : module inconnu → exit 1', async () => {
   assert.equal(code, 1);
 });
 
-test('run update : sans --force ne touche pas un fichier modifié, exit 2 (drift)', async () => {
+test('run update : converge par défaut un fichier pack-owned dérivé (écrase + backup), exit 0 (D-20260715-0002)', async () => {
+  const payload = makeFixture();
+  const target = tmp('smtk-target-');
+  await run(['init', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
+  const f = join(target, '.claude/agents.md');
+  const pack = readFileSync(f, 'utf8');           // version du pack, telle qu'installée
+  writeFileSync(f, 'LOCAL\n');                     // dérive locale
+  const code = await run(['update', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
+  assert.equal(code, 0, 'convergence appliquée → exit 0');
+  assert.equal(readFileSync(f, 'utf8'), pack, 'update converge : le fichier reprend la version du pack');
+  assert.equal(readFileSync(`${f}.somtech.bak`, 'utf8'), 'LOCAL\n', 'la version locale est sauvegardée (.somtech.bak)');
+});
+
+test('run update --dry-run : détecte la dérive sans écrire, exit 2 (CI drift) (D-20260715-0002)', async () => {
   const payload = makeFixture();
   const target = tmp('smtk-target-');
   await run(['init', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
   const f = join(target, '.claude/agents.md');
   writeFileSync(f, 'LOCAL\n');
-  const code = await run(['update', '--modules', 'core', '--yes', '--source', payload, '--target', target]);
-  assert.equal(code, 2, 'conflits en attente → exit 2 (drift détectable en CI)');
-  assert.equal(readFileSync(f, 'utf8'), 'LOCAL\n', 'update sans --force ne doit pas écraser');
+  const code = await run(['update', '--modules', 'core', '--yes', '--dry-run', '--source', payload, '--target', target]);
+  assert.equal(code, 2, 'dry-run + dérive → exit 2 (détection CI)');
+  assert.equal(readFileSync(f, 'utf8'), 'LOCAL\n', 'dry-run ne doit rien écrire');
+  assert.ok(!existsSync(`${f}.somtech.bak`), 'dry-run ne crée pas de backup');
 });
 
 test('SÉCURITÉ : un path de module avec ../ est rejeté, rien écrit hors target', async () => {

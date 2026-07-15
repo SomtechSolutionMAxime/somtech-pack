@@ -33,29 +33,31 @@ test('global workflows : un workflow PERSO hors-pack n’est jamais touché', ()
   );
 });
 
-test('global workflows : workflow du pack DIVERGENT en global → NON écrasé sans --force', () => {
+test('global workflows : workflow du pack DIVERGENT en global → CONVERGE par défaut + backup (D-20260715-0002)', () => {
   const wd = tmp('smtk-gw-');
   writeFileSync(join(wd, 'analyse-decoupage-demande.js'), 'VERSION LOCALE MODIFIÉE');
+  // sans --force : convergence par défaut (le pack est la source de vérité)
   const r = installGlobalWorkflows({ payloadRoot: REPO, workflowsDir: wd, force: false });
-  assert.equal(
+  assert.notEqual(
     readFileSync(join(wd, 'analyse-decoupage-demande.js'), 'utf8'),
     'VERSION LOCALE MODIFIÉE',
-    'divergent non écrasé'
+    'la dérive locale est écrasée par la version du pack'
   );
-  assert.ok(r.conflicts.includes('analyse-decoupage-demande.js'), 'reporté comme divergent');
-  assert.ok(!existsSync(join(wd, 'analyse-decoupage-demande.js.somtech.bak')), 'pas de backup sans écrasement');
+  assert.ok(r.updated.includes('analyse-decoupage-demande.js'), 'reporté comme convergé (updated)');
+  assert.equal(r.conflicts.length, 0, 'plus de conflit pour un fichier pack-owned');
+  const bak = join(wd, 'analyse-decoupage-demande.js.somtech.bak');
+  assert.ok(existsSync(bak), 'backup créé automatiquement');
+  assert.equal(readFileSync(bak, 'utf8'), 'VERSION LOCALE MODIFIÉE', 'backup = version locale d’avant');
+  assert.ok(r.backedUp.includes('analyse-decoupage-demande.js'), 'reporté dans backedUp');
 });
 
-test('global workflows : --force écrase un divergent MAIS crée un backup .somtech.bak', () => {
+test('global workflows : --force est redondant (convergence identique avec ou sans)', () => {
   const wd = tmp('smtk-gw-');
   writeFileSync(join(wd, 'analyse-decoupage-demande.js'), 'VERSION LOCALE MODIFIÉE');
   const r = installGlobalWorkflows({ payloadRoot: REPO, workflowsDir: wd, force: true });
-  const after = readFileSync(join(wd, 'analyse-decoupage-demande.js'), 'utf8');
-  assert.notEqual(after, 'VERSION LOCALE MODIFIÉE', 'écrasé par la version du pack');
-  const bak = join(wd, 'analyse-decoupage-demande.js.somtech.bak');
-  assert.ok(existsSync(bak), 'backup créé');
-  assert.equal(readFileSync(bak, 'utf8'), 'VERSION LOCALE MODIFIÉE', 'backup = version locale d’avant');
-  assert.ok(r.backedUp.includes('analyse-decoupage-demande.js'), 'reporté dans backedUp');
+  assert.notEqual(readFileSync(join(wd, 'analyse-decoupage-demande.js'), 'utf8'), 'VERSION LOCALE MODIFIÉE');
+  assert.ok(r.updated.includes('analyse-decoupage-demande.js'), 'convergé même avec --force (aucune différence)');
+  assert.ok(r.backedUp.includes('analyse-decoupage-demande.js'), 'backup créé');
 });
 
 test('global workflows : dry-run n’écrit rien', () => {

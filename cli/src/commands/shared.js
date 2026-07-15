@@ -72,17 +72,20 @@ export async function runApply(flags, { mode }) {
     preserve: manifest.preserve || [],
   });
 
+  const converged = flags.dryRun ? 'à converger' : 'convergés (version du pack)';
   console.log(`${mode === 'update' ? 'Mise à jour' : 'Installation'} (${modules.join(', ')}) → ${target}${flags.dryRun ? ' [dry-run]' : ''}`);
   summarize('créés', report.created);
-  summarize('mis à jour', report.updated);
+  summarize(converged, report.updated);
   summarize('inchangés', report.unchanged);
+  if (report.backedUp.length) {
+    console.log(`  💾 dérives sauvegardées avant convergence (.somtech.bak) : ${report.backedUp.length}`);
+  }
   if (report.preserved.length) {
     console.log(`  🔒 préservés (config projet, jamais écrasés) : ${report.preserved.join(', ')}`);
   }
   if (report.conflicts.length) {
-    console.log(`  ⚠️  divergents (NON écrasés) : ${report.conflicts.length}`);
-    for (const f of report.conflicts) console.log(`     - ${f}`);
-    console.log(`  → relance avec --force pour écraser ces fichiers.`);
+    // Ne restent en conflit que les symlinks en cible : jamais écrits à travers (dev setup).
+    console.log(`  ↩︎  symlinks en cible, non écrits à travers (${report.conflicts.length}) : ${report.conflicts.join(', ')}`);
   }
   if (missing.length) console.log(`  (chemins de module absents du payload : ${missing.join(', ')})`);
   // Sécurité : chemins qui s'évadent du payload/de la cible — jamais écrits.
@@ -92,7 +95,8 @@ export async function runApply(flags, { mode }) {
 
   if (!flags.dryRun) writeVersionFile(target, manifest, modules);
 
-  // Exit 2 si des divergences restent non appliquées (utile en CI pour détecter le drift).
-  const code = report.conflicts.length && !flags.force ? 2 : 0;
+  // Exit 2 en DRY-RUN si de la dérive existe (fichiers qui convergeraient) — détection CI.
+  // En mode réel, tout converge → exit 0 (les symlinks non écrits ne sont pas un échec).
+  const code = flags.dryRun && report.updated.length ? 2 : 0;
   return { code, report, modules };
 }

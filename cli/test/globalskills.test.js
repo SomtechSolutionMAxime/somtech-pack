@@ -28,14 +28,15 @@ test('engine backup : --force avec backup → backup .somtech.bak de l’ancienn
   assert.equal(readFileSync(join(target, 'a.txt.somtech.bak'), 'utf8'), 'ANCIEN (local)', 'backup = ancienne version');
 });
 
-test('engine backup : défaut (backup=false) → AUCUN .somtech.bak', () => {
+test('engine backup : convergence sauvegarde TOUJOURS la dérive (backup automatique) (D-20260715-0002)', () => {
   const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-');
   writeFileSync(join(payload, 'a.txt'), 'NOUVEAU');
   writeFileSync(join(target, 'a.txt'), 'ANCIEN');
-  const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'], force: true });
+  // même sans opt-in backup ni --force : converger sauvegarde d'abord (filet anti-perte).
+  const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });
   assert.deepEqual(r.updated, ['a.txt']);
-  assert.deepEqual(r.backedUp, [], 'pas de backup sans opt-in');
-  assert.ok(!existsSync(join(target, 'a.txt.somtech.bak')), 'aucun backup');
+  assert.deepEqual(r.backedUp, ['a.txt'], 'backup automatique de la dérive');
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak'), 'utf8'), 'ANCIEN', 'backup = version dérivée');
 });
 
 test('engine backup : dry-run n’écrit ni le fichier ni le backup', () => {
@@ -103,21 +104,24 @@ test('global skills : un skill PERSO hors-pack n’est jamais touché', () => {
   );
 });
 
-test('global skills : skill du pack DIVERGENT en global → NON écrasé sans --force', () => {
+test('global skills : skill du pack DIVERGENT en global → CONVERGE par défaut + backup (D-20260715-0002)', () => {
   const sd = tmp('smtk-gs-');
   mkdirSync(join(sd, 'end-session'), { recursive: true });
   writeFileSync(join(sd, 'end-session', 'SKILL.md'), 'VERSION LOCALE MODIFIÉE');
+  // sans --force : convergence vers la version du pack (source de vérité unique)
   const r = installGlobalSkills({ payloadRoot: REPO, skillsDir: sd, force: false });
-  assert.equal(
+  assert.notEqual(
     readFileSync(join(sd, 'end-session', 'SKILL.md'), 'utf8'),
     'VERSION LOCALE MODIFIÉE',
-    'divergent non écrasé'
+    'dérive écrasée par la version du pack'
   );
-  assert.ok(r.conflicts.some((p) => p.startsWith('end-session/')), 'reporté comme divergent');
-  assert.ok(!existsSync(join(sd, 'end-session', 'SKILL.md.somtech.bak')), 'pas de backup sans écrasement');
+  assert.ok(r.updated.some((p) => p.startsWith('end-session/')), 'reporté comme convergé');
+  assert.equal(r.conflicts.length, 0, 'plus de conflit pour un skill pack-owned');
+  assert.ok(existsSync(join(sd, 'end-session', 'SKILL.md.somtech.bak')), 'backup automatique');
+  assert.ok(r.backedUp.some((p) => p.startsWith('end-session/')), 'reporté dans backedUp');
 });
 
-test('global skills : --force écrase un divergent MAIS crée un backup .somtech.bak', () => {
+test('global skills : --force est redondant (convergence identique)', () => {
   const sd = tmp('smtk-gs-');
   mkdirSync(join(sd, 'end-session'), { recursive: true });
   writeFileSync(join(sd, 'end-session', 'SKILL.md'), 'VERSION LOCALE MODIFIÉE');
