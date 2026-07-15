@@ -1,7 +1,13 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.4.0
+# claude-swt.sh — v1.5.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
+#
+# v1.5.0 (D-20260715-0001) : fraîcheur du somtech-pack à la NAISSANCE. Au launch :
+#   (1) signal si le pack du projet est en retard (pf_nudge_launch) ; (2) MAJ auto
+#   single-writer gardée, détachée (pf_auto_pr → PR chore/pack-vX, opt-out
+#   CLAUDE_SWT_NO_AUTOPACK). + claude-swt-pack-sync : rebase opt-in des worktrees
+#   propres et sans session active. Détection semver dans pack-freshness.sh.
 #
 # v1.4.0 (D-20260709-0003) : BD Supabase isolée et légère par worktree. Si le repo
 #   est un projet Supabase, une stack élaguée est provisionnée au launch et arrêtée
@@ -62,6 +68,23 @@ _claude-swt-pending() {  # usage : _claude-swt-pending <main> <wt> <sess>
   done | sort -u
 }
 
+# --- Marqueur de session (D-20260715-0001, E4) ---------------------------------
+# Atteste qu'une session claude-swt est VIVANTE dans un worktree donné, pour que
+# claude-swt-pack-sync ne rebase JAMAIS une session active (drift). Le marqueur porte
+# le PID du launcher : un marqueur orphelin (PID mort après crash) n'est pas « actif »
+# → le worktree redevient éligible (pas de gel). Clé = hash du chemin absolu du worktree.
+_swt_sessions_dir()   { printf '%s' "${SWT_SESSIONS_DIR:-$HOME/.somtech/swt-sessions}"; }
+_swt_session_key()    { local p; p="$(cd "$1" 2>/dev/null && pwd -P)"; printf '%s' "${p:-$1}" | cksum | tr -d ' ' | cut -c1-16; }
+_swt_session_marker() { printf '%s/%s' "$(_swt_sessions_dir)" "$(_swt_session_key "$1")"; }
+_swt_session_lock()   { local m; m="$(_swt_session_marker "$1")"; mkdir -p "$(dirname "$m")" 2>/dev/null; printf '%s' "$$" > "$m" 2>/dev/null || true; }
+_swt_session_unlock() { rm -f "$(_swt_session_marker "$1")" 2>/dev/null || true; }
+# _swt_session_active <worktree> → 0 si marqueur présent ET PID vivant.
+_swt_session_active() {
+  local m pid; m="$(_swt_session_marker "$1")"; [ -f "$m" ] || return 1
+  pid="$(cat "$m" 2>/dev/null)"; [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
 _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-swt-danger.
                         #   arg1 = session-timestamp (défaut: auto) ; arg2 = path worktree
                         #   $_CLAUDE_SWT_DANGER=1 → lance `claude --dangerously-skip-permissions`
@@ -117,6 +140,8 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     sb_pid=$(swt_db_up "$main" "$wt" "$sess" "$profile")
   fi
 
+  _swt_session_lock "$wt"                        # marqueur « session vivante » (E4)
+
   ( cd "$wt"                                    # la session vit dans le worktree
     # Secrets hors .mcp.json (T-20260625-0013) : Claude expanse ${VAR} depuis
     # l'environnement du process, pas depuis un fichier. On source le .env du
@@ -137,6 +162,8 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     else
       claude
     fi )
+
+  _swt_session_unlock "$wt"                      # session terminée → marqueur retiré (E4)
 
   # --- au quit : retire seulement si rien en suspens (sinon garde pour reprise) ---
   # La BD est TOUJOURS arrêtée (libère RAM/CPU) ; ses volumes ne sont purgés que si
@@ -233,4 +260,44 @@ claude-swt-gc() {  # liste les sessions terminées (clean + mergées) — depuis
     [ -z "$(_claude-swt-pending "$main" "$wt" "$(basename "$wt")")" ] && \
       echo "🧹 session terminée → claude-swt-done $(basename "$wt")"
   done
+}
+
+# claude-swt-pack-sync — rattrape les worktrees après le merge d'une MAJ de pack
+# (D-20260715-0001, E4). Rebase OPT-IN la branche de travail de chaque worktree PROPRE
+# et SANS session active sur origin/main. Ne touche JAMAIS un worktree sale (modifs non
+# commitées) ni une session vivante (drift) : il les liste sans y toucher. La commande
+# elle-même est l'opt-in — un rebase reste une vraie opération. Un conflit → abort + liste.
+claude-swt-pack-sync() {
+  command -v git >/dev/null 2>&1 || { echo "⛔ git requis."; return 1; }
+  local main
+  main=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+  [ -n "$main" ] || { echo "⛔ Pas dans un repo git."; return 1; }
+  git -C "$main" fetch origin -q || true
+
+  local synced="" dirty="" active="" conflict="" wt
+  while IFS= read -r wt; do
+    [ -n "$wt" ] || continue
+    [ "$wt" = "$main" ] && continue
+    if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
+      dirty="${dirty} $(basename "$wt")"; continue
+    fi
+    if _swt_session_active "$wt"; then
+      active="${active} $(basename "$wt")"; continue
+    fi
+    if git -C "$wt" rebase origin/main >/dev/null 2>&1; then
+      synced="${synced} $(basename "$wt")"
+    else
+      git -C "$wt" rebase --abort >/dev/null 2>&1
+      conflict="${conflict} $(basename "$wt")"
+    fi
+  done <<EOF
+$(git -C "$main" worktree list --porcelain | awk '/^worktree /{print $2}')
+EOF
+
+  echo "🔄 claude-swt-pack-sync :"
+  echo "  synchronisés (rebase sur origin/main) :${synced:-  (aucun)}"
+  echo "  skippés — modifs non commitées :${dirty:-  (aucun)}"
+  echo "  skippés — session active :${active:-  (aucun)}"
+  [ -n "$conflict" ] && echo "  skippés — conflit de rebase (à traiter à la main) :$conflict"
+  echo "  ↻ relance les sessions vivantes pour charger le nouveau pack (pas de hot-reload)."
 }
