@@ -121,6 +121,55 @@ test('engine : symlink en CIBLE jamais écrit à travers (dev setup protégé), 
   assert.equal(readFileSync(join(external, 'linked.md'), 'utf8'), 'CONTENU LIÉ\n', 'la cible du symlink n’est jamais touchée');
 });
 
+test('engine : répertoire PARENT symlinké → jamais écrit à travers (dev setup ~/.claude/skills → repo) (B1, D-20260715-0002)', () => {
+  const payload = makeFixture();
+  const target = tmp('smtk-target-');
+  // le "repo" du dev, hors cible, avec sa copie de travail non commitée
+  const repo = tmp('smtk-repo-');
+  mkdirSync(join(repo, 'x'), { recursive: true });
+  writeFileSync(join(repo, 'x', 'SKILL.md'), 'DEV WORKING COPY\n');
+  // dans la cible, .claude/skills est un SYMLINK de RÉPERTOIRE vers le repo (dev setup courant)
+  mkdirSync(join(target, '.claude'), { recursive: true });
+  symlinkSync(repo, join(target, '.claude', 'skills'));
+
+  const m = readManifest(payload);
+  const { files } = collectFiles(payload, m.modules.core.paths);
+  const r = applyFiles({ payloadRoot: payload, target, files });
+
+  assert.ok(r.conflicts.includes('.claude/skills/x/SKILL.md'), 'parent symlinké → conflict');
+  assert.ok(!r.updated.includes('.claude/skills/x/SKILL.md'), 'jamais convergé à travers le lien de dossier');
+  assert.equal(readFileSync(join(repo, 'x', 'SKILL.md'), 'utf8'), 'DEV WORKING COPY\n', 'checkout du dev INTACT');
+  assert.ok(!existsSync(join(repo, 'x', 'SKILL.md.somtech.bak')), 'aucun .somtech.bak déposé dans le repo');
+});
+
+test('engine : backup impossible → NE PAS écraser (jamais de troncature sans filet) (M1, D-20260715-0002)', { skip: process.getuid && process.getuid() === 0 }, () => {
+  const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-');
+  writeFileSync(join(payload, 'a.txt'), 'PACK\n');
+  writeFileSync(join(target, 'a.txt'), 'DERIVE\n');
+  chmodSync(target, 0o555); // dossier en lecture seule → création du .somtech.bak impossible
+  try {
+    const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });
+    assert.ok(r.conflicts.includes('a.txt'), 'backup KO → conflict, pas d’écrasement');
+    assert.ok(!r.updated.includes('a.txt'), 'non convergé');
+    assert.equal(readFileSync(join(target, 'a.txt'), 'utf8'), 'DERIVE\n', 'fichier NON tronqué (donnée préservée)');
+  } finally {
+    chmodSync(target, 0o755);
+  }
+});
+
+test('engine : convergences répétées → backups numérotés, aucune version perdue (M2, D-20260715-0002)', () => {
+  const payload = tmp('smtk-pl-'); const target = tmp('smtk-tg-');
+  writeFileSync(join(payload, 'a.txt'), 'PACK\n');
+  writeFileSync(join(target, 'a.txt'), 'DERIVE 1\n');
+  applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });   // converge → .somtech.bak = DERIVE 1
+  writeFileSync(join(target, 'a.txt'), 'DERIVE 2\n');                // re-dérive
+  const r = applyFiles({ payloadRoot: payload, target, files: ['a.txt'] });   // → .somtech.bak.1 = DERIVE 2
+  assert.ok(r.backedUp.includes('a.txt'));
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak'), 'utf8'), 'DERIVE 1\n', '1er backup préservé');
+  assert.equal(readFileSync(join(target, 'a.txt.somtech.bak.1'), 'utf8'), 'DERIVE 2\n', '2e backup numéroté');
+  assert.equal(readFileSync(join(target, 'a.txt'), 'utf8'), 'PACK\n', 'converge à la fin');
+});
+
 test('engine : préserve le bit exécutable', () => {
   const payload = makeFixture();
   const target = tmp('smtk-target-');

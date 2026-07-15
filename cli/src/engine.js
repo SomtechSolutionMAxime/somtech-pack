@@ -7,9 +7,30 @@ import {
   readdirSync, lstatSync, statSync, existsSync, readFileSync,
   mkdirSync, copyFileSync, chmodSync,
 } from 'node:fs';
-import { join, dirname, resolve, sep } from 'node:path';
+import { join, dirname, resolve, relative, sep } from 'node:path';
 
 const IGNORED = new Set(['.DS_Store']);
+
+/**
+ * Vrai si le chemin de `target` jusqu'à `dest` traverse un symlink (target inclus, ou
+ * n'importe quel répertoire intermédiaire, ou la feuille elle-même). Sert à ne JAMAIS
+ * écrire à travers un lien : un dev qui symlinke `~/.claude/skills → <repo>` verrait
+ * sinon la convergence écraser son checkout (écriture hors de l'arbre cible).
+ * Un lstat par composant ; un composant inexistant (fichier à créer) arrête la marche
+ * (les répertoires qu'on créera sont réels).
+ */
+function traversesSymlink(target, dest) {
+  let cur = target;
+  try { if (lstatSync(cur).isSymbolicLink()) return true; } catch { /* target absent */ }
+  const parts = relative(target, dest).split(sep).filter(Boolean);
+  for (const part of parts) {
+    cur = join(cur, part);
+    let st;
+    try { st = lstatSync(cur); } catch { return false; } // n'existe pas encore → rien au-delà
+    if (st.isSymbolicLink()) return true;
+  }
+  return false;
+}
 
 /** Vrai si `resolve(base, p)` reste à l'intérieur de `base` (pas d'évasion `../`). */
 function within(base, p) {
@@ -116,8 +137,11 @@ function backupFile(dest, dryRun) {
  * - identique               → unchanged (no-op)
  * - différent (pack-owned)  → updated : ÉCRASÉ par la version du pack + backup .somtech.bak
  *                             (par défaut, sans `--force` ; `force` est donc redondant ici)
- * - symlink en cible        → conflicts : JAMAIS écrit à travers (protège un dev setup qui
- *                             symlinke vers le repo source)
+ * - symlink sur le chemin   → conflicts : JAMAIS écrit à travers — target lui-même, un
+ *                             répertoire parent OU la feuille symlinké (protège un dev setup
+ *                             `~/.claude/skills → <repo>` : on n'écrit pas dans le checkout)
+ * - backup impossible       → conflicts : si la sauvegarde .somtech.bak échoue (ex. disque
+ *                             plein), on n'écrase PAS (jamais de troncature sans filet)
  * - hors target/payload     → rejected (défense en profondeur, JAMAIS écrit)
  *
  * `preserve` : chemins (relatifs) appartenant au projet/perso — créés s'ils sont ABSENTS
@@ -142,12 +166,11 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
     }
     const src = join(payloadRoot, rel);
     const dest = join(target, rel);
-    // Ne JAMAIS écrire à travers un symlink en cible : `copyFileSync` suivrait le lien
-    // et écraserait la donnée pointée (potentiellement un fichier perso hors-cible, ou le
-    // repo source dans un dev setup). Un dest symlinké est laissé tel quel (conflict).
-    let destLink = null;
-    try { destLink = lstatSync(dest); } catch { /* n'existe pas */ }
-    if (destLink && destLink.isSymbolicLink()) {
+    // Ne JAMAIS écrire à travers un symlink : `copyFileSync` suivrait le lien et écrirait
+    // hors de l'arbre cible (donnée perso, ou le repo source dans un dev setup). On teste
+    // TOUT le chemin target→dest (pas seulement la feuille) : un répertoire parent symlinké
+    // — cas courant `~/.claude/skills → <repo>` — doit aussi être épargné. Laissé en conflict.
+    if (traversesSymlink(target, dest)) {
       report.conflicts.push(rel);
       continue;
     }
@@ -160,7 +183,13 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
       report.unchanged.push(rel);
     } else {
       // pack-owned + divergent → CONVERGE : backup anti-perte PUIS écrasement (par défaut).
+      // Si le backup échoue (ex. disque plein), NE PAS écraser : on ne tronque jamais le
+      // fichier sans filet. On le laisse en conflit (M1) plutôt que de perdre la donnée.
       const bak = backupFile(dest, dryRun);
+      if (!dryRun && !bak) {
+        report.conflicts.push(rel);
+        continue;
+      }
       if (bak) report.backedUp.push(rel);
       copyPreservingMode(src, dest, dryRun);
       report.updated.push(rel);

@@ -5,9 +5,9 @@
 // - ne touche QUE les skills présents dans le pack ; les skills perso hors-pack
 //   (assemblyai, brand, graphify…) ne sont jamais dans le payload donc jamais
 //   écrits ni supprimés (le moteur ne supprime rien) ;
-// - un skill du pack modifié à la main en global est « divergent » : NON écrasé
-//   sans `force` ;
-// - avec `force`, chaque écrasement crée un backup `<fichier>.somtech.bak` (anti-perte).
+// - un skill du pack modifié à la main en global CONVERGE vers la version du pack par
+//   défaut (source de vérité unique), avec backup `<fichier>.somtech.bak` avant écrasement ;
+// - un skill symlinké (dev qui link vers le repo source) n'est jamais écrit à travers.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectFiles, applyFiles } from './engine.js';
