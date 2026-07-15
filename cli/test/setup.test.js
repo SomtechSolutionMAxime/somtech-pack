@@ -27,6 +27,11 @@ test('shellrc : install frais → 1 bloc, ligne préexistante préservée, backu
   // être copiée à côté du snippet, sinon claude-swt.sh la source en vain
   // (`command -v swt_db_up` échoue) et aucun Postgres n'est provisionné.
   assert.ok(existsSync(join(dest, 'swt-db.sh')), 'lib swt-db.sh copiée à côté du snippet');
+  // Régression D-20260715-0003 : la lib pack-freshness.sh (fraîcheur du pack : nudge +
+  // auto-PR au launch, D-20260715-0001) DOIT être copiée à côté du snippet, sinon
+  // claude-swt.sh la source en vain (`command -v pf_nudge_launch` échoue) et toute la
+  // feature de fraîcheur est inerte. Parité avec swt-db.sh.
+  assert.ok(existsSync(join(dest, 'pack-freshness.sh')), 'lib pack-freshness.sh copiée à côté du snippet');
   assert.ok(readFileSync(rc, 'utf8').includes('export FOO=bar'), 'ligne préexistante préservée');
   assert.ok(existsSync(`${rc}.somtech.bak`), 'backup créé');
 });
@@ -71,6 +76,9 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   // Régression D-20260709-0003 au grain `run setup` : la lib swt-db.sh doit
   // transiter jusqu'à dest par le chemin réel (payloadRoot → snippetSrc voisin).
   assert.ok(existsSync(join(dd, 'swt-db.sh')), 'lib swt-db.sh installée par run setup');
+  // Régression D-20260715-0003 au grain `run setup` : pack-freshness.sh doit transiter
+  // jusqu'à dest, sinon la fraîcheur (nudge + auto-PR) est inerte sur le poste.
+  assert.ok(existsSync(join(dd, 'pack-freshness.sh')), 'lib pack-freshness.sh installée par run setup');
   // idempotent
   code = await run(args);
   assert.equal(code, 0);
