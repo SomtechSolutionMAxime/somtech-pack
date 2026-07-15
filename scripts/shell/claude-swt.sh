@@ -115,16 +115,12 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
   git -C "$main" fetch origin || return 1
 
   # --- Fraîcheur du somtech-pack à la NAISSANCE (D-20260715-0001) ---
-  # 1) Signal AVANT le boot si le pack du projet est en retard (lecture pure, cache 24h,
-  #    jamais bloquant). No-op si à jour / hors-ligne / marqueur absent (repo pack lui-même).
-  # 2) MAJ auto single-writer gardée, lancée DÉTACHÉE (ne ralentit jamais le launch) :
-  #    une seule session ouvre une PR chore/pack-vX ; les concurrentes skippent. Opt-out
-  #    via CLAUDE_SWT_NO_AUTOPACK=1. command -v : sans effet si la lib est absente.
+  # Signal AVANT le boot si le pack du projet est en retard (lecture pure, cache 24h,
+  # jamais bloquant). No-op si à jour / hors-ligne / marqueur absent (repo pack lui-même).
+  # NB : la MAJ auto (pf_auto_pr) est lancée PLUS BAS, APRÈS la création du worktree de
+  # session — elle provisionne son propre worktree éphémère et ne doit pas courir contre
+  # la création critique ci-dessous (contention du lock worktree de git).
   if command -v pf_nudge_launch >/dev/null 2>&1; then pf_nudge_launch "$main"; fi
-  if [ -z "${CLAUDE_SWT_NO_AUTOPACK:-}" ] && command -v pf_auto_pr >/dev/null 2>&1; then
-    ( pf_auto_pr "$main" ) >/dev/null 2>&1 &
-    disown 2>/dev/null || true
-  fi
 
   if [ -d "$wt" ]; then
     echo "↻ reprise de la session $sess"
@@ -138,6 +134,15 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
   # renvoie le project_id pour l'arrêter au teardown.
   if [ "$do_db" = 1 ] && command -v swt_db_up >/dev/null 2>&1; then
     sb_pid=$(swt_db_up "$main" "$wt" "$sess" "$profile")
+  fi
+
+  # MAJ auto single-writer gardée du pack, DÉTACHÉE (ne ralentit jamais le launch) : une
+  # seule session ouvre une PR chore/pack-vX, les concurrentes skippent. Lancée ICI, une
+  # fois le worktree de session créé, pour ne pas courir contre lui (pf_auto_pr provisionne
+  # son propre worktree éphémère). Opt-out via CLAUDE_SWT_NO_AUTOPACK=1.
+  if [ -z "${CLAUDE_SWT_NO_AUTOPACK:-}" ] && command -v pf_auto_pr >/dev/null 2>&1; then
+    ( pf_auto_pr "$main" ) >/dev/null 2>&1 &
+    disown 2>/dev/null || true
   fi
 
   _swt_session_lock "$wt"                        # marqueur « session vivante » (E4)
