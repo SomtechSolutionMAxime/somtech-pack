@@ -108,22 +108,30 @@ function backupFile(dest, dryRun) {
 
 /**
  * Applique les fichiers du payload vers `target`. Idempotent.
- * - fichier absent      → created (copié sauf dryRun)
- * - identique           → unchanged (no-op)
- * - différent + force   → updated (copié)
- * - différent sans force → conflicts (diff, JAMAIS écrasé)
- * - hors target/payload → rejected (défense en profondeur, JAMAIS écrit)
  *
- * `preserve` : chemins (relatifs) appartenant au projet — créés s'ils sont
- * ABSENTS (starter), mais JAMAIS écrasés s'ils existent, même avec `force`
- * (ex. `.claude/settings.json` : permissions/plugins/hooks propres au projet).
+ * **Convergence par défaut (D-20260715-0002)** — le pack est la source de vérité unique.
+ * Un fichier **pack-owned** (hors `preserve`, non symlinké) prend TOUJOURS la version du
+ * pack : une copie locale qui diffère est de la DÉRIVE, pas un état à protéger.
+ * - fichier absent          → created (copié sauf dryRun)
+ * - identique               → unchanged (no-op)
+ * - différent (pack-owned)  → updated : ÉCRASÉ par la version du pack + backup .somtech.bak
+ *                             (par défaut, sans `--force` ; `force` est donc redondant ici)
+ * - symlink en cible        → conflicts : JAMAIS écrit à travers (protège un dev setup qui
+ *                             symlinke vers le repo source)
+ * - hors target/payload     → rejected (défense en profondeur, JAMAIS écrit)
  *
- * `backup` : si vrai, sauvegarde la cible vers `<dest>.somtech.bak` AVANT chaque
- * écrasement `force` (filet anti-perte). Sans effet sur created/unchanged/preserved.
+ * `preserve` : chemins (relatifs) appartenant au projet/perso — créés s'ils sont ABSENTS
+ * (starter), mais JAMAIS écrasés s'ils existent (ex. `.claude/settings.json` :
+ * permissions/plugins/hooks propres au projet). C'est la SEULE catégorie protégée.
+ *
+ * `force` / `backup` : conservés pour compat ascendante mais **sans effet sur la
+ * convergence** — un divergent pack-owned est toujours écrasé, et toujours sauvegardé
+ * avant (filet anti-perte). `--force` ne débloque plus rien (il n'y a plus de gate).
  *
  * Renvoie { created, unchanged, updated, conflicts, rejected, preserved, backedUp }.
  */
 export function applyFiles({ payloadRoot, target, files, force = false, dryRun = false, preserve = [], backup = false }) {
+  void force; void backup; // acceptés (compat) mais la convergence ne dépend plus d'eux
   const preserveSet = new Set(preserve);
   const report = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [], backedUp: [] };
   for (const rel of files) {
@@ -135,8 +143,8 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
     const src = join(payloadRoot, rel);
     const dest = join(target, rel);
     // Ne JAMAIS écrire à travers un symlink en cible : `copyFileSync` suivrait le lien
-    // et écraserait la donnée pointée (potentiellement un fichier perso hors-cible).
-    // Un dest symlinké est traité comme divergent (conflict) : jamais touché.
+    // et écraserait la donnée pointée (potentiellement un fichier perso hors-cible, ou le
+    // repo source dans un dev setup). Un dest symlinké est laissé tel quel (conflict).
     let destLink = null;
     try { destLink = lstatSync(dest); } catch { /* n'existe pas */ }
     if (destLink && destLink.isSymbolicLink()) {
@@ -147,18 +155,15 @@ export function applyFiles({ payloadRoot, target, files, force = false, dryRun =
       copyPreservingMode(src, dest, dryRun);
       report.created.push(rel);
     } else if (preserveSet.has(rel)) {
-      report.preserved.push(rel); // appartient au projet : jamais écrasé (même --force)
+      report.preserved.push(rel); // appartient au projet : jamais écrasé
     } else if (filesEqual(src, dest)) {
       report.unchanged.push(rel);
-    } else if (force) {
-      if (backup) {
-        const bak = backupFile(dest, dryRun);
-        if (bak) report.backedUp.push(rel);
-      }
+    } else {
+      // pack-owned + divergent → CONVERGE : backup anti-perte PUIS écrasement (par défaut).
+      const bak = backupFile(dest, dryRun);
+      if (bak) report.backedUp.push(rel);
       copyPreservingMode(src, dest, dryRun);
       report.updated.push(rel);
-    } else {
-      report.conflicts.push(rel);
     }
   }
   return report;

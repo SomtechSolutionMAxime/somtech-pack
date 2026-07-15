@@ -68,22 +68,21 @@ export async function cmdSetup(flags) {
         ` (créés ${r.created.length}, maj ${r.updated.length}, inchangés ${r.unchanged.length})`
     );
     if (r.conflicts.length) {
-      console.log(`    ⚠️  divergents non écrasés : ${r.conflicts.length} → relance avec --force`);
+      console.log(`    ↩︎  ${r.conflicts.length} symlink(s) en cible, non écrit(s) à travers.`);
     }
 
-    // 2) Miroir GLOBAL de tous les skills du pack (anti-drift des copies ~/.claude/skills).
-    //    Ne touche jamais les skills perso hors-pack ; backup .somtech.bak avant tout
-    //    écrasement --force (filet anti-perte).
+    // 2) Miroir GLOBAL de tous les skills du pack (convergence : ~/.claude/skills reprend
+    //    TOUJOURS la version du pack, source de vérité unique). Ne touche jamais les skills
+    //    perso hors-pack ; toute dérive locale est sauvegardée (.somtech.bak) avant écrasement.
     const g = installGlobalSkills({ payloadRoot, skillsDir, dryRun: flags.dryRun, force: flags.force });
     console.log(
       `  skills du pack (global) → ${skillsDir} : ${g.skills.length} skills` +
-        ` (créés ${g.created.length}, maj ${g.updated.length}, inchangés ${g.unchanged.length})` +
-        (g.backedUp.length ? `, backups ${g.backedUp.length}` : '')
+        ` (créés ${g.created.length}, convergés ${g.updated.length}, inchangés ${g.unchanged.length})` +
+        (g.backedUp.length ? `, dérives sauvegardées ${g.backedUp.length}` : '')
     );
     if (g.conflicts.length) {
       console.log(
-        `    ⚠️  ${g.conflicts.length} skill(s) du pack divergent(s)/symlinkés en global, NON écrasés.` +
-          ` Relance avec --force pour prendre la version du pack (backup .somtech.bak auto).`
+        `    ↩︎  ${g.conflicts.length} skill(s) symlinké(s) en global, non écrit(s) à travers (dev setup préservé).`
       );
     }
     if (g.payloadLinks?.length) {
@@ -95,18 +94,17 @@ export async function cmdSetup(flags) {
     // Miroir GLOBAL des workflows du pack (~/.claude/workflows). Dépendance des skills
     // déjà globaux (ex. plan-servicedesk/superplan → workflow analyse-decoupage-demande) :
     // sans ça, le skill voyage mais casse à l'invocation du workflow sur un poste neuf.
-    // Mêmes garanties que les skills : perso hors-pack jamais touché, divergent non
-    // écrasé sans --force, backup .somtech.bak avant tout écrasement --force.
+    // Mêmes garanties que les skills : perso hors-pack jamais touché ; convergence par
+    // défaut vers la version du pack, avec sauvegarde .somtech.bak de toute dérive.
     const w = installGlobalWorkflows({ payloadRoot, workflowsDir, dryRun: flags.dryRun, force: flags.force });
     console.log(
       `  workflows du pack (global) → ${workflowsDir} : ${w.workflows.length} workflow(s)` +
-        ` (créés ${w.created.length}, maj ${w.updated.length}, inchangés ${w.unchanged.length})` +
-        (w.backedUp.length ? `, backups ${w.backedUp.length}` : '')
+        ` (créés ${w.created.length}, convergés ${w.updated.length}, inchangés ${w.unchanged.length})` +
+        (w.backedUp.length ? `, dérives sauvegardées ${w.backedUp.length}` : '')
     );
     if (w.conflicts.length) {
       console.log(
-        `    ⚠️  ${w.conflicts.length} workflow(s) du pack divergent(s)/symlinkés en global, NON écrasés.` +
-          ` Relance avec --force pour prendre la version du pack (backup .somtech.bak auto).`
+        `    ↩︎  ${w.conflicts.length} workflow(s) symlinké(s) en global, non écrit(s) à travers (dev setup préservé).`
       );
     }
     if (w.payloadLinks?.length) {
