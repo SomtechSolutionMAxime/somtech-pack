@@ -76,6 +76,25 @@ grep -q '"latest":"1.3.1"' "$C" && ok "npm vide → cache NON écrasé (latest 1
 grep -q '"latest":"1.4.0"' "$C" && ok "npm OK → cache mis à jour (1.4.0)" || ko "cache non mis à jour sur succès"
 rm -rf "$(dirname "$C")"
 
+echo "== J. Message ferme la boucle : mentionne la PR chore/pack-vY + comment la merger (D-20260715-0005) =="
+out="$(run_hook 1.3.0 1.3.1)"
+{ echo "$out" | grep -q "chore/pack-v1.3.1" && echo "$out" | grep -qi "merge"; } \
+  && ok "message mentionne la PR + le merge" || ko "message ne ferme pas la boucle : $out"
+
+echo "== K. Fallback ~/.somtech : hook isolé (sans ../../scripts/shell) trouve la lib (D-20260715-0005) =="
+ISO="$(mktemp -d)"; mkdir -p "$ISO/hooks" "$ISO/home/.somtech" "$ISO/proj/.somtech-pack"
+cp "$SCRIPT_DIR/../session-start-pack-version.sh" "$ISO/hooks/"
+cp "$SCRIPT_DIR/../../../scripts/shell/pack-freshness.sh" "$ISO/home/.somtech/"
+printf '{"name":"@somtech-solutions/pack","version":"1.0.0"}\n' > "$ISO/proj/.somtech-pack/version.json"
+printf '{"checkedAt":%s,"latest":"1.3.0"}\n' "$(date +%s)" > "$ISO/cache.json"
+out="$( cd "$ISO/proj" && HOME="$ISO/home" SOMTECH_PACK_CACHE="$ISO/cache.json" SOMTECH_PACK_NPM=0 bash "$ISO/hooks/session-start-pack-version.sh" )"
+echo "$out" | grep -q "disponible" && ok "hook isolé → lib trouvée via ~/.somtech (nudge produit)" || ko "fallback ~/.somtech KO (hook muet) : $out"
+# contre-preuve : sans la lib nulle part → silence (pas de crash)
+rm -f "$ISO/home/.somtech/pack-freshness.sh"
+out2="$( cd "$ISO/proj" && HOME="$ISO/home" SOMTECH_PACK_CACHE="$ISO/cache.json" SOMTECH_PACK_NPM=0 bash "$ISO/hooks/session-start-pack-version.sh" 2>&1 )"
+[ -z "$out2" ] && ok "lib introuvable partout → silence total (pas de crash)" || ko "devrait être muet sans lib : $out2"
+rm -rf "$ISO"
+
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
 echo "Résultat : ${PASS} OK, ${FAIL} KO"

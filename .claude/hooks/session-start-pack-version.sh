@@ -18,13 +18,17 @@ set -uo pipefail
 
 PKG="@somtech-solutions/pack"
 
-# Résoudre le dossier du hook (compatible sourcing) pour trouver la lib partagée.
-# Le module `core` installe .claude/ ET scripts/ → la lib est à ../../scripts/shell/.
+# Trouver la lib partagée pack-freshness.sh. Deux emplacements possibles (D-20260715-0005) :
+#  1. install PROJET — le module `core` pose .claude/ ET scripts/ côte à côte → ../../scripts/shell ;
+#  2. install POSTE  — `npx pack setup` copie la lib dans ~/.somtech (à côté de claude-swt.sh).
+# Le hook GLOBAL (~/.claude/hooks) n'a pas de ../../scripts/shell → sans le fallback ~/.somtech
+# il reste muet (bug D-20260715-0005). On essaie les deux, fail-silent.
 if [ -n "${BASH_SOURCE:-}" ]; then _spv_self="${BASH_SOURCE[0]}"; else _spv_self="$0"; fi
 _spv_dir="$(cd "$(dirname "$_spv_self")" 2>/dev/null && pwd)"
-_spv_lib="${_spv_dir}/../../scripts/shell/pack-freshness.sh"
-# shellcheck source=/dev/null
-[ -r "$_spv_lib" ] && . "$_spv_lib"
+for _spv_lib in "${_spv_dir}/../../scripts/shell/pack-freshness.sh" "${HOME:-/tmp}/.somtech/pack-freshness.sh"; do
+  # shellcheck source=/dev/null
+  [ -r "$_spv_lib" ] && { . "$_spv_lib"; break; }
+done
 unset _spv_self _spv_dir _spv_lib
 
 # --- Programme principal (ignoré si le fichier est SOURCÉ, p.ex. par les tests) ---
@@ -35,10 +39,12 @@ spv_main() {
   installed="${res%% *}"; latest="${res##* }"
   cat <<EOF
 <somtech-pack-update>
-⚠️ somtech-pack : version **${installed}** installée dans ce projet, **${latest}** disponible.
-Propose à l'utilisateur de mettre à jour (non-bloquant) :
-   npx ${PKG}@latest update --dry-run   # aperçu, ne touche à rien
-   npx ${PKG}@latest update             # appliquer (settings.json projet préservé)
+⚠️ somtech-pack en retard : **${installed}** installée, **${latest}** disponible.
+Les sessions **claude-swt** ouvrent automatiquement une PR de MAJ \`chore/pack-v${latest}\`
+(single-writer, voie recommandée). **Vérifie si elle existe, puis merge-la** :
+   gh pr list --head chore/pack-v${latest}   # existe ? → /merge  (ou gh pr merge … --squash)
+Sinon (pas de PR, ou session claude simple), MAJ manuelle de ce projet (convergence) :
+   npx ${PKG}@latest update
 </somtech-pack-update>
 EOF
   return 0
