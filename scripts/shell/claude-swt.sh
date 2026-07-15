@@ -33,10 +33,14 @@
 if [ -n "${BASH_SOURCE:-}" ]; then _swt_self="${BASH_SOURCE[0]}"
 elif [ -n "${ZSH_VERSION:-}" ]; then _swt_self="${(%):-%x}"
 else _swt_self="$0"; fi
-_swt_lib="$(cd "$(dirname "$_swt_self")" 2>/dev/null && pwd)/swt-db.sh"
+_swt_dir="$(cd "$(dirname "$_swt_self")" 2>/dev/null && pwd)"
 # shellcheck source=/dev/null
-[ -r "$_swt_lib" ] && . "$_swt_lib"
-unset _swt_self _swt_lib
+[ -r "$_swt_dir/swt-db.sh" ] && . "$_swt_dir/swt-db.sh"
+# --- lib fraîcheur du pack (pack-freshness.sh), sourcée depuis le même dossier
+#     (D-20260715-0001). Fonctions pf_* ; sans effet si absente.
+# shellcheck source=/dev/null
+[ -r "$_swt_dir/pack-freshness.sh" ] && . "$_swt_dir/pack-freshness.sh"
+unset _swt_self _swt_dir
 
 # _claude-swt-pending — branches NON mergées qui bloquent le retrait d'un worktree.
 # Echo une branche par ligne ; sortie vide = rien en suspens (worktree retirable).
@@ -86,6 +90,13 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
   esac
   git -C "$main" worktree prune
   git -C "$main" fetch origin || return 1
+
+  # --- Fraîcheur du somtech-pack à la NAISSANCE (D-20260715-0001) ---
+  # Signal AVANT le boot de Claude si le pack du projet est en retard (lecture pure,
+  # cache 24h, jamais bloquant). No-op silencieux si à jour / hors-ligne / marqueur
+  # absent (p.ex. le repo pack lui-même). command -v : sans effet si la lib est absente.
+  if command -v pf_nudge_launch >/dev/null 2>&1; then pf_nudge_launch "$main"; fi
+
   if [ -d "$wt" ]; then
     echo "↻ reprise de la session $sess"
   else

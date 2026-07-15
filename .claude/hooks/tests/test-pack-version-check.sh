@@ -68,11 +68,11 @@ echo "== H. Versions malformées → pas de crash ET stderr VIDE (pas de bruit) 
 [ -z "$(run_hook_err 1.2.3.4 1.3.1)" ] && ok "version 4-part : stderr vide" || ko "bruit stderr sur version 4-part"
 [ -z "$(run_hook 1.3.0 abc)" ] && ok "latest='abc' → pas de faux nudge" || ko "faux nudge sur latest malformé"
 
-echo "== I. refresh_cache : pas de clobber si npm échoue (sourcing) =="
+echo "== I. pf_refresh_cache : pas de clobber si npm échoue (sourcing) =="
 C="$(mktemp -d)/cache.json"; printf '{"checkedAt":1,"latest":"1.3.1"}\n' > "$C"
-( export SOMTECH_PACK_CACHE="$C" SOMTECH_PACK_FETCH='printf ""'; source "$HOOK"; refresh_cache )
+( export SOMTECH_PACK_CACHE="$C" SOMTECH_PACK_FETCH='printf ""'; source "$HOOK"; pf_refresh_cache )
 grep -q '"latest":"1.3.1"' "$C" && ok "npm vide → cache NON écrasé (latest 1.3.1 conservé)" || ko "DANGER: cache clobberé à vide"
-( export SOMTECH_PACK_CACHE="$C" SOMTECH_PACK_FETCH='printf "1.4.0\n"'; source "$HOOK"; refresh_cache )
+( export SOMTECH_PACK_CACHE="$C" SOMTECH_PACK_FETCH='printf "1.4.0\n"'; source "$HOOK"; pf_refresh_cache )
 grep -q '"latest":"1.4.0"' "$C" && ok "npm OK → cache mis à jour (1.4.0)" || ko "cache non mis à jour sur succès"
 rm -rf "$(dirname "$C")"
 
