@@ -32,21 +32,17 @@ done
 unset _spv_self _spv_dir _spv_lib
 
 # --- Programme principal (ignoré si le fichier est SOURCÉ, p.ex. par les tests) ---
+# Sortie : JSON `{"systemMessage": "..."}`. Sur SessionStart, `systemMessage` est le SEUL
+# canal documenté qui affiche une BANNIÈRE VISIBLE à l'utilisateur (le stdout brut n'est
+# que du contexte pour le modèle → invisible). Réf : Claude Code hooks (D-20260715-0006).
 spv_main() {
   command -v pf_check >/dev/null 2>&1 || return 0   # lib absente → silence total
-  local res installed latest
+  local res installed latest msg
   res="$(pf_check "$PWD")" || return 0              # pas en retard / rien à comparer → silence
   installed="${res%% *}"; latest="${res##* }"
-  cat <<EOF
-<somtech-pack-update>
-⚠️ somtech-pack en retard : **${installed}** installée, **${latest}** disponible.
-Les sessions **claude-swt** ouvrent automatiquement une PR de MAJ \`chore/pack-v${latest}\`
-(single-writer, voie recommandée). **Vérifie si elle existe, puis merge-la** :
-   gh pr list --head chore/pack-v${latest}   # existe ? → /merge  (ou gh pr merge … --squash)
-Sinon (pas de PR, ou session claude simple), MAJ manuelle de ce projet (convergence) :
-   npx ${PKG}@latest update
-</somtech-pack-update>
-EOF
+  # Message sur UNE ligne, sans " ni \ → JSON sûr sans échappement complexe.
+  msg="⚠️ somtech-pack en retard : ${installed} → ${latest}. Les sessions claude-swt ouvrent une PR chore/pack-v${latest} — vérifie/merge : gh pr list --head chore/pack-v${latest} puis /merge. Sinon MAJ manuelle : npx ${PKG}@latest update"
+  printf '{"systemMessage":"%s"}\n' "$msg"
   return 0
 }
 

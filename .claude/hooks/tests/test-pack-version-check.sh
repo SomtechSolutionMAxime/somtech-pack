@@ -42,10 +42,13 @@ run_hook_err() {  # → stderr seulement (doit être vide)
 echo "== A. Pas de marqueur → no-op silencieux =="
 [ -z "$(run_hook 0 x NOMARKER)" ] && ok "silence sans .somtech-pack/version.json" || ko "devrait être silencieux"
 
-echo "== B. Installé < dernière → nudge avec la commande =="
+echo "== B. Installé < dernière → nudge systemMessage JSON VISIBLE (D-20260715-0006) =="
 out="$(run_hook 1.3.0 1.3.1)"
-echo "$out" | grep -q "disponible" && echo "$out" | grep -q "npx @somtech-solutions/pack@latest update" \
-  && ok "nudge + commande" || ko "nudge attendu : $out"
+# La sortie DOIT être du JSON avec la clé systemMessage (seul canal visible utilisateur).
+echo "$out" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert "systemMessage" in d and "en retard" in d["systemMessage"]' 2>/dev/null \
+  && ok "sortie = JSON {systemMessage} visible utilisateur" || ko "attendu JSON systemMessage : $out"
+echo "$out" | grep -q "en retard" && echo "$out" | grep -q "npx @somtech-solutions/pack@latest update" \
+  && ok "message : retard + commande MAJ" || ko "message incomplet : $out"
 
 echo "== C. À jour → silence =="
 [ -z "$(run_hook 1.3.1 1.3.1)" ] && ok "silence quand à jour" || ko "devrait être silencieux"
@@ -54,13 +57,13 @@ echo "== D. Installé > dernière → pas de nudge arrière =="
 [ -z "$(run_hook 1.3.1 1.3.0)" ] && ok "pas de nudge si plus récent" || ko "ne devrait pas nudger"
 
 echo "== E. Comparaison NUMÉRIQUE : 1.9.0 < 1.10.0 → nudge =="
-echo "$(run_hook 1.9.0 1.10.0)" | grep -q "disponible" && ok "1.10.0 > 1.9.0 (numérique)" || ko "comparaison numérique ratée"
+echo "$(run_hook 1.9.0 1.10.0)" | grep -q "en retard" && ok "1.10.0 > 1.9.0 (numérique)" || ko "comparaison numérique ratée"
 
 echo "== F. Pas de cache → silence (rien à comparer) =="
 [ -z "$(run_hook 1.3.0 NOCACHE)" ] && ok "silence sans cache" || ko "devrait être silencieux"
 
 echo "== G. ANCIEN format {\"pack\":{\"version\"}} lu correctement → nudge =="
-echo "$(run_hook 1.0.0 1.3.1 OLD)" | grep -q "disponible" && ok "ancien format lu (1.0.0 < 1.3.1)" || ko "ancien format mal lu"
+echo "$(run_hook 1.0.0 1.3.1 OLD)" | grep -q "en retard" && ok "ancien format lu (1.0.0 < 1.3.1)" || ko "ancien format mal lu"
 
 echo "== H. Versions malformées → pas de crash ET stderr VIDE (pas de bruit) =="
 [ -z "$(run_hook_err abc 1.3.1)" ] && ok "installed='abc' : stderr vide" || ko "bruit stderr sur installed malformé"
@@ -88,7 +91,7 @@ cp "$SCRIPT_DIR/../../../scripts/shell/pack-freshness.sh" "$ISO/home/.somtech/"
 printf '{"name":"@somtech-solutions/pack","version":"1.0.0"}\n' > "$ISO/proj/.somtech-pack/version.json"
 printf '{"checkedAt":%s,"latest":"1.3.0"}\n' "$(date +%s)" > "$ISO/cache.json"
 out="$( cd "$ISO/proj" && HOME="$ISO/home" SOMTECH_PACK_CACHE="$ISO/cache.json" SOMTECH_PACK_NPM=0 bash "$ISO/hooks/session-start-pack-version.sh" )"
-echo "$out" | grep -q "disponible" && ok "hook isolé → lib trouvée via ~/.somtech (nudge produit)" || ko "fallback ~/.somtech KO (hook muet) : $out"
+echo "$out" | grep -q "en retard" && ok "hook isolé → lib trouvée via ~/.somtech (nudge produit)" || ko "fallback ~/.somtech KO (hook muet) : $out"
 # contre-preuve : sans la lib nulle part → silence (pas de crash)
 rm -f "$ISO/home/.somtech/pack-freshness.sh"
 out2="$( cd "$ISO/proj" && HOME="$ISO/home" SOMTECH_PACK_CACHE="$ISO/cache.json" SOMTECH_PACK_NPM=0 bash "$ISO/hooks/session-start-pack-version.sh" 2>&1 )"
