@@ -128,7 +128,10 @@ PF_LOCK_TTL="${PF_LOCK_TTL:-600}"                    # lock réputé mort au-del
 pf_gh()  { "${PF_GH:-gh}"   "$@"; }
 pf_npx() { "${PF_NPX:-npx}" "$@"; }
 
-pf_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }  # macOS | Linux
+# mtime epoch, portable : GNU/Linux (stat -c) d'abord, BSD/macOS (stat -f) en fallback.
+# Ordre critique : sur Linux `stat -f %m` réussit mais renvoie une valeur de système de
+# fichiers (pas l'mtime) → il ne faut jamais l'atteindre là où `stat -c` fonctionne.
+pf_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }  # Linux | macOS
 
 # pf_lock_key <main> — clé UNIQUE dérivée du chemin absolu + remote (jamais le basename :
 # deux repos homonymes ne doivent pas partager un lock).
