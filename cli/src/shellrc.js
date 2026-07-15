@@ -37,10 +37,14 @@ export function buildBlock(destFile) {
 /**
  * Installe le snippet claude-swt dans `rcFile`, idempotent.
  * - copie `snippetSrc` → `<destDir>/claude-swt.sh`
- * - copie la lib `swt-db.sh` (voisine de `snippetSrc`) → `<destDir>/swt-db.sh`
- *   si présente : claude-swt.sh la source pour provisionner la BD par worktree
- *   (D-20260709-0003). Sans elle, `swt_db_up` n'est jamais défini et aucun
- *   Postgres n'est provisionné — parité avec scripts/install-claude-swt.sh.
+ * - copie les libs voisines de `snippetSrc` → `<destDir>/` si présentes (claude-swt.sh
+ *   les source depuis son dossier d'install) :
+ *     · `swt-db.sh` — BD par worktree (D-20260709-0003) ; sans elle, `swt_db_up` jamais
+ *       défini, aucun Postgres provisionné ;
+ *     · `pack-freshness.sh` — fraîcheur du pack : nudge + auto-PR au launch
+ *       (D-20260715-0001) ; sans elle, `pf_nudge_launch`/`pf_auto_pr` jamais définies →
+ *       feature inerte (bug D-20260715-0003).
+ *   Parité avec scripts/install-claude-swt.sh.
  * - ajoute/met à jour un bloc gardé qui le source (jamais de doublon)
  * - backup `<rcFile>.somtech.bak` avant réécriture
  * Lève si le rc contient un bloc déséquilibré (BEGIN≠END) → anti-perte de données.
@@ -52,11 +56,15 @@ export function installRcBlock({ rcFile, destDir, snippetSrc, dryRun = false }) 
 
   if (dryRun) return { action: 'dry-run', destFile };
 
-  // 1. Installer le fichier source (+ la lib swt-db.sh à côté, sourcée par claude-swt.sh).
+  // 1. Installer le fichier source (+ les libs voisines sourcées par claude-swt.sh).
   mkdirSync(destDir, { recursive: true });
   copyFileSync(snippetSrc, destFile);
-  const libSrc = join(dirname(snippetSrc), 'swt-db.sh');
-  if (existsSync(libSrc)) copyFileSync(libSrc, join(destDir, 'swt-db.sh'));
+  // Chaque lib DOIT être copiée : claude-swt.sh les source depuis son dossier d'install ;
+  // absente, le `source` échoue en silence et la fonctionnalité correspondante est inerte.
+  for (const lib of ['swt-db.sh', 'pack-freshness.sh']) {
+    const libSrc = join(dirname(snippetSrc), lib);
+    if (existsSync(libSrc)) copyFileSync(libSrc, join(destDir, lib));
+  }
 
   // 2. Mettre à jour le rc de façon idempotente.
   const existed = existsSync(rcFile);
