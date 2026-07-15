@@ -115,3 +115,106 @@ pf_nudge_launch() {
   printf '    MAJ du projet : npx %s@latest update\n' "$PF_PKG" >&2
   return 0
 }
+
+# ============================================================
+# Auto-PR single-writer gardé (E3, D-20260715-0001).
+# Sur retard détecté, UNE session construit chore/pack-v<latest> dans un worktree
+# ÉPHÉMÈRE, ouvre une PR draft, et rollback si la PR échoue. Les concurrentes skippent.
+# Injections de test : PF_GH (def gh), PF_NPX (def npx), SOMTECH_PACK_LOCKDIR, PF_LOCK_TTL.
+# ============================================================
+
+PF_LOCK_TTL="${PF_LOCK_TTL:-600}"                    # lock réputé mort au-delà (s)
+
+pf_gh()  { "${PF_GH:-gh}"   "$@"; }
+pf_npx() { "${PF_NPX:-npx}" "$@"; }
+
+pf_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }  # macOS | Linux
+
+# pf_lock_key <main> — clé UNIQUE dérivée du chemin absolu + remote (jamais le basename :
+# deux repos homonymes ne doivent pas partager un lock).
+pf_lock_key() {
+  local abs remote; abs="$(cd "$1" 2>/dev/null && pwd)"; abs="${abs:-$1}"
+  remote="$(git -C "$1" remote get-url origin 2>/dev/null)"
+  printf '%s\n%s' "$abs" "$remote" | cksum | tr -d ' ' | cut -c1-16
+}
+pf_lock_path() { printf '%s/pack-update-%s.lock' "${SOMTECH_PACK_LOCKDIR:-${HOME:-/tmp}/.somtech}" "$(pf_lock_key "$1")"; }
+
+# pf_lock_is_stale <lockpath> → 0 si le lock existe et dépasse PF_LOCK_TTL.
+pf_lock_is_stale() {
+  local lp="$1" now mt; [ -d "$lp" ] || return 1
+  now="$(date +%s)"; mt="$(pf_mtime "$lp")"; [ -n "$mt" ] || return 1
+  [ $(( now - mt )) -ge "$PF_LOCK_TTL" ]
+}
+# pf_acquire_lock <lockpath> → 0 si acquis (récupère d'abord un lock périmé).
+pf_acquire_lock() {
+  local lp="$1"
+  pf_lock_is_stale "$lp" && rmdir "$lp" 2>/dev/null
+  mkdir -p "$(dirname "$lp")" 2>/dev/null
+  mkdir "$lp" 2>/dev/null
+}
+pf_release_lock() { rmdir "$1" 2>/dev/null || true; }
+
+# Garde d'idempotence RÉSEAU (source de vérité, vaut cross-machine).
+pf_remote_branch_exists() { git -C "$1" ls-remote --heads origin "$2" 2>/dev/null | grep -q .; }
+pf_open_pr_exists() {
+  command -v "${PF_GH:-gh}" >/dev/null 2>&1 || return 1
+  ( cd "$1" && pf_gh pr list --head "$2" --state open 2>/dev/null ) | grep -q .
+}
+
+# pf_build_and_pr <main> <installed> <latest> — construit le bump dans un worktree
+# éphémère, push, ouvre la PR draft ; rollback (delete remote branch) si la PR échoue.
+# Retour 0 si PR ouverte ; ≠0 (avec cleanup) sinon. Ne touche JAMAIS $main ni un worktree de travail.
+pf_build_and_pr() {
+  local main="$1" installed="$2" latest="$3" branch="chore/pack-v${latest}" tmp rc=0
+  tmp="$(mktemp -d)"
+  git -C "$main" worktree add -q "$tmp" -b "$branch" origin/main 2>/dev/null \
+    || { rm -rf "$tmp" 2>/dev/null; git -C "$main" branch -D "$branch" 2>/dev/null; return 1; }
+  (
+    cd "$tmp" || exit 1
+    pf_npx "${PF_PKG}@latest" update --yes >/dev/null 2>&1 || exit 2
+    git add -A
+    git diff --cached --quiet && exit 3            # aucun changement → pas de bump
+    git commit -q -m "chore(pack): bump ${installed} → ${latest} (maintenance transversale)" || exit 4
+    git push -q -u origin "$branch" 2>/dev/null || exit 5
+  ); rc=$?
+  git -C "$main" worktree remove --force "$tmp" 2>/dev/null; rm -rf "$tmp" 2>/dev/null
+  if [ "$rc" -ne 0 ]; then
+    git -C "$main" branch -D "$branch" 2>/dev/null  # jamais poussé (ou échec avant push) → nettoyer local
+    return "$rc"
+  fi
+  # PR draft ; rollback de la branche poussée si gh échoue (pas de branche orpheline).
+  if ! ( cd "$main" && pf_gh pr create --draft --head "$branch" \
+           --title "chore(pack): bump ${installed} → ${latest}" \
+           --body "MAJ automatique du somtech-pack (branche de maintenance transversale, exemptée d'ID)." \
+           >/dev/null 2>&1 ); then
+    git -C "$main" push -q origin --delete "$branch" 2>/dev/null
+    git -C "$main" branch -D "$branch" 2>/dev/null
+    return 6
+  fi
+  git -C "$main" branch -D "$branch" 2>/dev/null    # branche locale inutile (vit sur le remote)
+  return 0
+}
+
+# pf_auto_pr <main> — orchestrateur non-bloquant (à lancer DÉTACHÉ par le launcher).
+# No-op silencieux si : pas en retard, PR/branche déjà là, git/gh/npx absents, lock pris.
+pf_auto_pr() {
+  local main="${1:-$PWD}" res installed latest branch lp
+  res="$(pf_check "$main")" || return 0
+  installed="${res%% *}"; latest="${res##* }"
+  branch="chore/pack-v${latest}"
+  command -v git >/dev/null 2>&1 || return 0
+  command -v "${PF_GH:-gh}"  >/dev/null 2>&1 || return 0   # pas de gh → pas de PR → no-op
+  command -v "${PF_NPX:-npx}" >/dev/null 2>&1 || return 0  # pas de npx → pas de bump → no-op
+  # Garde réseau AVANT le lock (source de vérité).
+  pf_remote_branch_exists "$main" "$branch" && return 0
+  pf_open_pr_exists "$main" "$branch" && return 0
+  lp="$(pf_lock_path "$main")"
+  pf_acquire_lock "$lp" || return 0                        # une autre session s'en charge
+  # Re-check sous lock (course fine entre garde et acquisition).
+  if pf_remote_branch_exists "$main" "$branch" || pf_open_pr_exists "$main" "$branch"; then
+    pf_release_lock "$lp"; return 0
+  fi
+  pf_build_and_pr "$main" "$installed" "$latest"
+  pf_release_lock "$lp"
+  return 0
+}

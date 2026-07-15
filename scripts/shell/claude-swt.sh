@@ -92,10 +92,16 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
   git -C "$main" fetch origin || return 1
 
   # --- Fraîcheur du somtech-pack à la NAISSANCE (D-20260715-0001) ---
-  # Signal AVANT le boot de Claude si le pack du projet est en retard (lecture pure,
-  # cache 24h, jamais bloquant). No-op silencieux si à jour / hors-ligne / marqueur
-  # absent (p.ex. le repo pack lui-même). command -v : sans effet si la lib est absente.
+  # 1) Signal AVANT le boot si le pack du projet est en retard (lecture pure, cache 24h,
+  #    jamais bloquant). No-op si à jour / hors-ligne / marqueur absent (repo pack lui-même).
+  # 2) MAJ auto single-writer gardée, lancée DÉTACHÉE (ne ralentit jamais le launch) :
+  #    une seule session ouvre une PR chore/pack-vX ; les concurrentes skippent. Opt-out
+  #    via CLAUDE_SWT_NO_AUTOPACK=1. command -v : sans effet si la lib est absente.
   if command -v pf_nudge_launch >/dev/null 2>&1; then pf_nudge_launch "$main"; fi
+  if [ -z "${CLAUDE_SWT_NO_AUTOPACK:-}" ] && command -v pf_auto_pr >/dev/null 2>&1; then
+    ( pf_auto_pr "$main" ) >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+  fi
 
   if [ -d "$wt" ]; then
     echo "↻ reprise de la session $sess"
