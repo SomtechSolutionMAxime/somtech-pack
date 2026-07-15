@@ -304,5 +304,6 @@ EOF
   echo "  skippés — modifs non commitées :${dirty:-  (aucun)}"
   echo "  skippés — session active :${active:-  (aucun)}"
   [ -n "$conflict" ] && echo "  skippés — conflit de rebase (à traiter à la main) :$conflict"
+  [ -n "$synced" ] && echo "  ⚠️  une branche synchronisée déjà poussée devra être force-pushée (git push --force-with-lease)."
   echo "  ↻ relance les sessions vivantes pour charger le nouveau pack (pas de hot-reload)."
 }

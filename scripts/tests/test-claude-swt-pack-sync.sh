@@ -67,6 +67,17 @@ echo "$out" | grep -q "relance les sessions vivantes" && ok "rappel de redémarr
 
 rm -rf "$root"
 
+echo "== 4.3 — câblage du launcher (structurel) =="
+grep -q 'pf_nudge_launch "$main"' "$SWT" && ok "nudge câblé" || ko "pf_nudge_launch non câblé"
+grep -q 'CLAUDE_SWT_NO_AUTOPACK' "$SWT" && grep -q 'pf_auto_pr "$main"' "$SWT" && ok "auto-PR câblé avec opt-out" || ko "auto-PR/opt-out non câblé"
+grep -q 'disown' "$SWT" && ok "auto-PR détaché (disown)" || ko "détachement manquant"
+grep -q '_swt_session_lock "$wt"' "$SWT" && grep -q '_swt_session_unlock "$wt"' "$SWT" && ok "marqueur de session posé + retiré" || ko "lock/unlock de session non câblés"
+# Ordre : l'auto-PR doit être câblé APRÈS le `git worktree add "$wt"` du launcher (anti-course).
+add_ln=$(grep -n 'worktree add "$wt"' "$SWT" | head -1 | cut -d: -f1)
+apr_ln=$(grep -n 'pf_auto_pr "$main"' "$SWT" | tail -1 | cut -d: -f1)
+{ [ -n "$add_ln" ] && [ -n "$apr_ln" ] && [ "$apr_ln" -gt "$add_ln" ]; } \
+  && ok "auto-PR séquencé après la création du worktree (anti-course)" || ko "ordre auto-PR/worktree add incorrect ($apr_ln vs $add_ln)"
+
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
 echo "Résultat : ${PASS} OK, ${FAIL} KO"

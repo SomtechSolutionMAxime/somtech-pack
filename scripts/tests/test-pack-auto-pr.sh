@@ -168,6 +168,36 @@ gh="$(make_gh "$root")"; npx="$(make_npx_noop "$root")"
 [ ! -f "$root/gh_pr_created" ] && ok "diff vide → aucune PR" || ko "PR créée sans changement"
 rm -rf "$root"
 
+echo "== 3.2e — M1 : origin/main DÉJÀ à latest (working tree local en retard) → skip =="
+STUB_LATEST=1.1.0
+s="$(setup_repo 1.0.0 1.1.0)"; root="${s%%|*}"; rest="${s#*|}"; main="${rest%%|*}"; cache="${rest##*|}"
+gh="$(make_gh "$root")"; npx="$(make_npx "$root")"
+# origin/main avance à 1.1.0, mais on ramène le working tree local à 1.0.0 (dev pas encore sync).
+( cd "$main"
+  printf '{"name":"@somtech-solutions/pack","version":"1.1.0"}\n' > .somtech-pack/version.json
+  git commit -qam "bump 1.1.0"; git push -q origin main
+  git reset --hard HEAD~1 >/dev/null )   # local: working tree + branche reviennent à 1.0.0 ; origin/main reste 1.1.0
+[ "$(pf_read_version "$main/.somtech-pack/version.json")" = "1.0.0" ] || ko "setup M1 cassé (working tree pas à 1.0.0)"
+(
+  export SOMTECH_PACK_CACHE="$cache" SOMTECH_PACK_NPM=0 SOMTECH_PACK_LOCKDIR="$root/locks" PF_GH="$gh" PF_NPX="$npx"
+  pf_auto_pr "$main"
+)
+{ [ "$(remote_chore_count "$main")" = "0" ] && [ ! -f "$root/gh_pr_created" ]; } \
+  && ok "origin/main déjà à jour → aucune PR recréée (M1 fermé)" || ko "M1: a recréé une PR alors que main est à jour"
+rm -rf "$root"
+
+echo "== 3.2f — PR existante quel que soit l'état (--state all) → skip =="
+STUB_LATEST=1.1.0
+s="$(setup_repo 1.0.0 1.1.0)"; root="${s%%|*}"; rest="${s#*|}"; main="${rest%%|*}"; cache="${rest##*|}"
+gh="$(make_gh "$root")"; npx="$(make_npx "$root")"
+printf 'https://pr/merged\n' > "$root/pr_state"   # une PR existe déjà (mergée/fermée) pour cette version
+(
+  export SOMTECH_PACK_CACHE="$cache" SOMTECH_PACK_NPM=0 SOMTECH_PACK_LOCKDIR="$root/locks" PF_GH="$gh" PF_NPX="$npx"
+  pf_auto_pr "$main"
+)
+[ ! -f "$root/gh_pr_created" ] && ok "PR existante (état quelconque) → pas de recréation" || ko "a recréé une PR malgré une PR existante"
+rm -rf "$root"
+
 echo "== 3.x — à jour → no-op total =="
 STUB_LATEST=1.1.0
 s="$(setup_repo 1.1.0 1.1.0)"; root="${s%%|*}"; rest="${s#*|}"; main="${rest%%|*}"; cache="${rest##*|}"

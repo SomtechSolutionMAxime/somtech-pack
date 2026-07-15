@@ -133,7 +133,7 @@ pf_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }  # ma
 # pf_lock_key <main> — clé UNIQUE dérivée du chemin absolu + remote (jamais le basename :
 # deux repos homonymes ne doivent pas partager un lock).
 pf_lock_key() {
-  local abs remote; abs="$(cd "$1" 2>/dev/null && pwd)"; abs="${abs:-$1}"
+  local abs remote; abs="$(cd "$1" 2>/dev/null && pwd -P)"; abs="${abs:-$1}"
   remote="$(git -C "$1" remote get-url origin 2>/dev/null)"
   printf '%s\n%s' "$abs" "$remote" | cksum | tr -d ' ' | cut -c1-16
 }
@@ -156,9 +156,21 @@ pf_release_lock() { rmdir "$1" 2>/dev/null || true; }
 
 # Garde d'idempotence RÉSEAU (source de vérité, vaut cross-machine).
 pf_remote_branch_exists() { git -C "$1" ls-remote --heads origin "$2" 2>/dev/null | grep -q .; }
-pf_open_pr_exists() {
+# --state all (M1) : bloque aussi une PR déjà MERGÉE ou FERMÉE (rejetée) pour cette
+# version — sinon, branche distante supprimée au merge + working tree local encore ancien
+# → les deux gardes tombent et on recrée indéfiniment le même bump.
+pf_pr_exists() {
   command -v "${PF_GH:-gh}" >/dev/null 2>&1 || return 1
-  ( cd "$1" && pf_gh pr list --head "$2" --state open 2>/dev/null ) | grep -q .
+  ( cd "$1" && pf_gh pr list --head "$2" --state all 2>/dev/null ) | grep -q .
+}
+
+# pf_main_version <main> — version du pack COMMITTÉE sur origin/main (vide si absente).
+# Ancre la garde sur l'état intégré de main, pas sur le working tree local (qui peut
+# rester en retard après un merge tant que le dev n'a pas sync son $main).
+pf_main_version() {
+  git -C "$1" show "origin/main:$PF_MARKER" 2>/dev/null \
+    | grep -oE '"version"[[:space:]]*:[[:space:]]*"[0-9][^"]*"' | head -1 \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.+-]*' | head -1
 }
 
 # pf_build_and_pr <main> <installed> <latest> — construit le bump dans un worktree
@@ -205,13 +217,17 @@ pf_auto_pr() {
   command -v git >/dev/null 2>&1 || return 0
   command -v "${PF_GH:-gh}"  >/dev/null 2>&1 || return 0   # pas de gh → pas de PR → no-op
   command -v "${PF_NPX:-npx}" >/dev/null 2>&1 || return 0  # pas de npx → pas de bump → no-op
+  # (M1) origin/main déjà à ≥ latest → le bump est DÉJÀ intégré : le working tree local
+  # est juste en retard (le dev doit sync son $main), surtout pas rouvrir une PR.
+  local mainver; mainver="$(pf_main_version "$main")"
+  [ -n "$mainver" ] && ! pf_ver_gt "$latest" "$mainver" && return 0
   # Garde réseau AVANT le lock (source de vérité).
   pf_remote_branch_exists "$main" "$branch" && return 0
-  pf_open_pr_exists "$main" "$branch" && return 0
+  pf_pr_exists "$main" "$branch" && return 0
   lp="$(pf_lock_path "$main")"
   pf_acquire_lock "$lp" || return 0                        # une autre session s'en charge
   # Re-check sous lock (course fine entre garde et acquisition).
-  if pf_remote_branch_exists "$main" "$branch" || pf_open_pr_exists "$main" "$branch"; then
+  if pf_remote_branch_exists "$main" "$branch" || pf_pr_exists "$main" "$branch"; then
     pf_release_lock "$lp"; return 0
   fi
   pf_build_and_pr "$main" "$installed" "$latest"
