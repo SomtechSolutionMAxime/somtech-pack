@@ -40,10 +40,10 @@ spv_main() {
   cat <<EOF
 <somtech-pack-update>
 ⚠️ somtech-pack en retard : **${installed}** installée, **${latest}** disponible.
-Au lancement d'une session **claude-swt**, une PR de mise à jour \`chore/pack-v${latest}\` est
-ouverte automatiquement (single-writer, voie recommandée). **Merge-la** pour appliquer la MAJ :
-   /merge                                    # ou : gh pr merge chore/pack-v${latest} --squash
-Alternative manuelle (met à jour ce projet tout de suite, convergence) :
+Les sessions **claude-swt** ouvrent automatiquement une PR de MAJ \`chore/pack-v${latest}\`
+(single-writer, voie recommandée). **Vérifie si elle existe, puis merge-la** :
+   gh pr list --head chore/pack-v${latest}   # existe ? → /merge  (ou gh pr merge … --squash)
+Sinon (pas de PR, ou session claude simple), MAJ manuelle de ce projet (convergence) :
    npx ${PKG}@latest update
 </somtech-pack-update>
 EOF
