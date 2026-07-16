@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://somtech.ca/schemas/architecture-manifest.schema.json",
+  "title": "Somtech architecture.yaml manifest",
+  "description": "Manifeste d'architecture par repo (modèle vivant Somtech, STD-031). La vérité fine vit près du code : chaque repo déclare ses propres éléments + ses dépendances sortantes. L'agent curateur ing-* agrège tous les manifestes en lecture seule et génère stack/likec4/generated/<app>.c4. Source canonique des listes kind/audience.",
+  "type": "object",
+  "required": ["app", "elements"],
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "type": "string",
+      "description": "Slug d'application ServiceDesk = racine de namespace. Garantit l'unicité des ids entre repos.",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "elements": {
+      "type": "array",
+      "description": "Éléments d'architecture appartenant à CE repo uniquement (grain maximal).",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/element" }
+    },
+    "relations": {
+      "type": "array",
+      "description": "Relations INTERNES au repo (from et to sont des éléments locaux).",
+      "items": { "$ref": "#/$defs/relation" }
+    },
+    "depends_on": {
+      "type": "array",
+      "description": "Dépendances SORTANTES : from est local, to pointe vers un autre repo (id qualifié) ou un externe connu.",
+      "items": { "$ref": "#/$defs/relation" }
+    }
+  },
+  "$defs": {
+    "externalId": {
+      "description": "Registre canonique des systèmes externes connus (déclarés dans la couche curée somtech.c4). Une cible depends_on.to peut être l'un de ces ids, ou un id qualifié d'un autre repo. Lu par validate-manifest.py et generate-likec4-from-manifests.py.",
+      "enum": [
+        "anthropic",
+        "cohere",
+        "do_tor1",
+        "flyio",
+        "github",
+        "slack",
+        "netlify",
+        "assemblyai",
+        "mapbox",
+        "microsoft_graph"
+      ]
+    },
+    "qualifiedId": {
+      "type": "string",
+      "description": "Id qualifié <app>.<composant>[.<sous-élément>] — segments minuscules (snake_case ou tiret). La racine est le slug d'app (les slugs ServiceDesk comme ma-place-rh contiennent des tirets ; Likec4 les accepte).",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+    },
+    "element": {
+      "type": "object",
+      "required": ["id", "kind", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/qualifiedId" },
+        "kind": {
+          "description": "Taxonomie grain maximal. Étend la specification Likec4.",
+          "enum": [
+            "system",
+            "service",
+            "webapp",
+            "database",
+            "table",
+            "mcp_server",
+            "mcp_tool",
+            "api",
+            "endpoint",
+            "screen",
+            "ai_provider"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "technology": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "audience": {
+          "description": "Visibilité de l'élément. Défaut internal (fail-safe Loi 25). client-shareable doit être explicite.",
+          "enum": ["internal", "client-shareable"],
+          "default": "internal"
+        },
+        "parent": {
+          "$ref": "#/$defs/qualifiedId",
+          "description": "Id de l'élément parent (doit appartenir au même manifeste). Absent = élément racine du repo."
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "$ref": "#/$defs/qualifiedId" },
+        "to": {
+          "type": "string",
+          "description": "Cible : id qualifié (interne pour relations, ou cross-repo pour depends_on) ou id externe connu (anthropic, cohere, do_tor1, flyio, github, slack, netlify)."
+        },
+        "label": { "type": "string" }
+      }
+    }
+  }
+}

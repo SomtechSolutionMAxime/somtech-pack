@@ -6,6 +6,7 @@ import { cmdInit } from './commands/init.js';
 import { cmdUpdate } from './commands/update.js';
 import { cmdSetup } from './commands/setup.js';
 import { cmdBrd } from './commands/brd.js';
+import { cmdArchi, isArchiCommand } from './commands/archi.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -91,6 +92,16 @@ Commandes :
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
 
+Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
+  harvest-supabase <migrations…> --app <slug>   Grain tables (schéma Supabase)
+  harvest-routes   <racine> --app <slug>         Grain endpoints (routes HTTP)
+  harvest-config   <racine> --app <slug>         Grain topologie (fly/mcp/env)
+  merge-manifests  <a.yaml…> --app <slug>        Fusionne les grains récoltés
+  validate-manifest <architecture.yaml>          Valide la forme du manifeste
+  diff-manifest    <committé> <récolté> --mode warn|strict   Gate de complétude
+  generate-erd     <architecture.yaml> --out <md>            Vue ERD Mermaid
+           (chaque sous-commande accepte --help ; scripts Python bundlés)
+
 Options (init / update) :
   --modules <csv>   Modules à installer (ex: core,features,mockmig)
   --target <dir>    Projet cible (défaut: répertoire courant)
@@ -119,6 +130,12 @@ Options communes :
 
 /** Point d'entrée. Renvoie un code de sortie. */
 export async function run(argv) {
+  // Sous-commandes du modèle vivant : forward verbatim vers le script Python
+  // (leurs flags — --app, --out, --mode… — ne passent pas par parseArgs).
+  if (argv[0] && isArchiCommand(argv[0])) {
+    return cmdArchi(argv[0], argv.slice(1));
+  }
+
   let parsed;
   try {
     parsed = parseArgs(argv);

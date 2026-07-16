@@ -1,0 +1,148 @@
+# Modèle vivant Somtech — gate de complétude du manifeste architecture.yaml.
+# STD-031 §2.7 · règle d'or n°9 (manifeste à jour dans la même PR que le code).
+# Déposé par le skill /setup-archi-ci (somtech-pack). Ne pas éditer à la main :
+# régénérer via le skill. Le MODE (warn|strict) et le slug d'app vivent dans
+# .architecture/ci.yaml — durcir un repo = passer mode:strict là-bas (+ branch protection).
+name: architecture-manifest
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  packages: read
+
+# Version du pack figée (STD-031 risque « dépendance réseau ») — bump ici pour MAJ.
+env:
+  PACK_SPEC: "@somtech-solutions/pack@^1"
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dépendances Python
+        run: pip install pyyaml
+
+      # GitHub Packages est privé → auth pour npx. Le package @somtech-solutions/pack
+      # doit accorder l'accès en lecture à ce repo (Settings → Packages du package).
+      - name: Auth npm (GitHub Packages)
+        run: |
+          {
+            echo "@somtech-solutions:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
+          } > "$HOME/.npmrc"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Installer le pack (récolteurs du modèle vivant)
+        run: npm install -g "$PACK_SPEC"
+
+      - name: Lire la config (slug d'app + mode)
+        id: cfg
+        run: |
+          if [ ! -f .architecture/ci.yaml ]; then
+            echo "::error::.architecture/ci.yaml manquant — lancer le skill /setup-archi-ci."
+            exit 1
+          fi
+          APP=$(python3 -c "import yaml,sys; print(yaml.safe_load(open('.architecture/ci.yaml')).get('app',''))")
+          MODE=$(python3 -c "import yaml,sys; print(yaml.safe_load(open('.architecture/ci.yaml')).get('mode','warn'))")
+          if [ -z "$APP" ]; then echo "::error::'app' absent de .architecture/ci.yaml."; exit 1; fi
+          echo "app=$APP"   >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "→ app=$APP mode=$MODE"
+
+      - name: Garde-fou — architecture.yaml présent
+        run: |
+          if [ ! -f architecture.yaml ]; then
+            echo "::error::architecture.yaml manquant à la racine — lancer /setup-archi-ci (amorçage)."
+            exit 1
+          fi
+
+      # ── Récolte : chaque grain dégrade proprement (grain manquant ≠ conforme) ──
+      - name: Récolter les grains (tables + endpoints + config)
+        run: |
+          APP="${{ steps.cfg.outputs.app }}"
+          mkdir -p .architecture/_harvest
+          if [ -d supabase/migrations ]; then
+            somtech-pack harvest-supabase supabase/migrations --app "$APP" \
+              --out .architecture/_harvest/10-tables.yaml || echo "::warning::grain tables non vérifié"
+          fi
+          somtech-pack harvest-config . --app "$APP" \
+            --out .architecture/_harvest/20-config.yaml || echo "::warning::grain config non vérifié"
+          somtech-pack harvest-routes . --app "$APP" \
+            --out .architecture/_harvest/30-routes.yaml || echo "::warning::grain endpoints non vérifié"
+
+      - name: Fusionner les grains récoltés
+        run: |
+          APP="${{ steps.cfg.outputs.app }}"
+          FILES=$(ls .architecture/_harvest/*.yaml 2>/dev/null || true)
+          if [ -z "$FILES" ]; then
+            echo "::warning::Aucun grain récolté — rien à comparer."
+            echo "app: $APP" > .architecture/_harvest/harvested.yaml
+            echo "elements: [{id: $APP, kind: service, name: $APP}]" >> .architecture/_harvest/harvested.yaml
+          else
+            somtech-pack merge-manifests $FILES --app "$APP" \
+              --out .architecture/_harvest/harvested.yaml
+          fi
+
+      - name: Valider la forme du manifeste committé
+        run: somtech-pack validate-manifest architecture.yaml
+
+      - name: Comparer committé vs récolté (gate)
+        id: diff
+        run: |
+          set +e
+          somtech-pack diff-manifest architecture.yaml .architecture/_harvest/harvested.yaml \
+            --mode "${{ steps.cfg.outputs.mode }}" --report .architecture/_harvest/drift.md
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Vérifier la fraîcheur de l'ERD
+        id: erd
+        run: |
+          set +e
+          somtech-pack generate-erd architecture.yaml --out docs/architecture/erd.md --check
+          if [ $? -ne 0 ]; then
+            echo "" >> .architecture/_harvest/drift.md
+            echo "> ⚠️ **ERD obsolète** — régénérer : \`npx @somtech-solutions/pack generate-erd architecture.yaml --out docs/architecture/erd.md\`" >> .architecture/_harvest/drift.md
+          fi
+
+      - name: Publier le rapport en commentaire de PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- somtech-modele-vivant -->';
+            let body = marker + '\n';
+            try { body += fs.readFileSync('.architecture/_harvest/drift.md', 'utf8'); }
+            catch { body += '_Rapport du modèle vivant indisponible._'; }
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Appliquer le gate
+        run: |
+          CODE="${{ steps.diff.outputs.code }}"
+          if [ "$CODE" != "0" ]; then
+            echo "::error::Drift bloquant du manifeste (mode strict). Voir le commentaire de PR."
+            exit 1
+          fi
+          echo "✅ Manifeste complet (ou mode warn)."
