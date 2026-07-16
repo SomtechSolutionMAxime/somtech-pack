@@ -14,3 +14,7 @@ cli/payload/
 
 # Canvas Excalidraw — runtime (les schémas eux-mêmes vivent dans docs/diagrams/)
 .herdr/
+
+# graphify — symlink vers le dossier de sortie partagé ~/graphify/<clé> (D-20260716-0001).
+# Sans slash : le symlink n'est pas un répertoire, `graphify-out/` ne le matcherait pas.
+graphify-out

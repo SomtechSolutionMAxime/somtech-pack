@@ -24,7 +24,7 @@ export function parseArgs(argv) {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
     rc: null, skillsDir: null, workflowsDir: null, dest: null, noClaudeSwt: false,
     noSkills: false, noWorkflows: false,
-    settings: null, hooksDir: null, noVersionHook: false,
+    settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
     mode: null, file: null, id: null, patch: null,
     help: false, version: false,
   };
@@ -54,6 +54,7 @@ export function parseArgs(argv) {
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
+      case '--no-graphify': flags.noGraphify = true; break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
       case '--dry-run': flags.dryRun = true; break;
@@ -120,6 +121,7 @@ Options (setup) :
   --no-workflows    Ne pas installer les workflows globaux
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
+  --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)
 
 Options communes :
   --dry-run         N'écrit rien, affiche le plan

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { wireSessionStartCommand, installGlobalVersionHook } from '../src/userhooks.js';
+import { wireSessionStartCommand, installGlobalVersionHook, installGraphifyShareHook } from '../src/userhooks.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..'); // contient .claude/hooks/session-start-pack-version.sh
@@ -108,5 +108,57 @@ test('install global : dry-run n’écrit rien', () => {
   const r = installGlobalVersionHook({ payloadRoot: REPO_ROOT, hooksDir, settingsFile, dryRun: true });
   assert.ok(r.ok && r.dryRun);
   assert.ok(!existsSync(hooksDir), 'pas de copie');
+  assert.ok(!existsSync(settingsFile), 'pas de settings écrit');
+});
+
+// ── Hook graphify (D-20260716-0001) ─────────────────────────────────────────
+
+test('graphify : copie le script dans destDir + câble SessionStart, idempotent', () => {
+  const w = tmp('smtk-gph-');
+  const destDir = join(w, 'somtech'); const settingsFile = join(w, 'settings.json');
+  const r1 = installGraphifyShareHook({ payloadRoot: REPO_ROOT, destDir, settingsFile });
+  assert.ok(r1.ok && r1.wired, 'installé + câblé');
+  assert.equal(r1.dest, join(destDir, 'graphify-share-out.sh'));
+  assert.ok(existsSync(r1.dest), 'script copié dans ~/.somtech');
+  assert.ok((statSync(r1.dest).mode & 0o111) !== 0, 'script exécutable');
+  assert.equal(countCmd(settingsFile, r1.dest), 1, '1 câblage');
+  const r2 = installGraphifyShareHook({ payloadRoot: REPO_ROOT, destDir, settingsFile });
+  assert.ok(r2.ok && r2.wired === false, '2e run : déjà câblé');
+  assert.equal(countCmd(settingsFile, r1.dest), 1, 'toujours 1 câblage (idempotent)');
+});
+
+test('graphify : coexiste avec le hook de version + backup (ne clobber pas)', () => {
+  const w = tmp('smtk-gph-');
+  const destDir = join(w, 'somtech'); const hooksDir = join(w, 'hooks');
+  const settingsFile = join(w, 'settings.json');
+  // Version hook d'abord, puis graphify → 2 hooks SessionStart distincts coexistent.
+  const rv = installGlobalVersionHook({ payloadRoot: REPO_ROOT, hooksDir, settingsFile });
+  const rg = installGraphifyShareHook({ payloadRoot: REPO_ROOT, destDir, settingsFile });
+  assert.ok(rv.ok && rg.ok && rg.wired);
+  assert.ok(existsSync(`${settingsFile}.somtech.bak`), 'backup créé (settings existait)');
+  const s = JSON.parse(readFileSync(settingsFile, 'utf8'));
+  const cmds = s.hooks.SessionStart.flatMap((g) => g.hooks.map((h) => h.command));
+  assert.ok(cmds.includes(rv.dest), 'hook version préservé');
+  assert.ok(cmds.includes(rg.dest), 'hook graphify présent');
+});
+
+test('graphify : settings.json invalide → REFUS (rien copié, fichier intact)', () => {
+  const w = tmp('smtk-gph-');
+  const destDir = join(w, 'somtech'); const settingsFile = join(w, 'settings.json');
+  writeFileSync(settingsFile, '{ pas du json ');
+  const before = readFileSync(settingsFile, 'utf8');
+  const r = installGraphifyShareHook({ payloadRoot: REPO_ROOT, destDir, settingsFile });
+  assert.equal(r.ok, false, 'refusé');
+  assert.match(r.reason, /invalide/);
+  assert.equal(readFileSync(settingsFile, 'utf8'), before, 'fichier NON modifié');
+  assert.ok(!existsSync(join(destDir, 'graphify-share-out.sh')), 'rien copié');
+});
+
+test('graphify : dry-run n’écrit rien', () => {
+  const w = tmp('smtk-gph-');
+  const destDir = join(w, 'somtech'); const settingsFile = join(w, 'settings.json');
+  const r = installGraphifyShareHook({ payloadRoot: REPO_ROOT, destDir, settingsFile, dryRun: true });
+  assert.ok(r.ok && r.dryRun);
+  assert.ok(!existsSync(destDir), 'pas de copie');
   assert.ok(!existsSync(settingsFile), 'pas de settings écrit');
 });
