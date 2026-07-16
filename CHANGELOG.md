@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.22.0] - 2026-07-16
+
+### Ajouté
+
+- **Partage du dossier de sortie graphify entre worktrees** (D-20260716-0001, handoff Architecture) — un seul graphe graphify par repo (`~/graphify/<repo>-<hash8>`), vu par tous ses worktrees `claude-swt` via un symlink `graphify-out`. Évite ~800k tokens de rebuild par worktree. `pack setup` installe `graphify-share-out.sh` (→ `~/.somtech/`), câble un hook `SessionStart` global (idempotent, fusion sans clobber) et affiche le hint prérequis `uv tool install "graphifyy[mcp]"` si le binaire manque. `claude-swt` pose le symlink à la naissance du worktree, l'exclut localement (`.git/info/exclude`) et déclare le MCP `graphify` en scope **local** (jamais versionné) si un graphe existe. Nouveau flag `--no-graphify`.
+
+### Technique
+
+- Nouvelle fonction `installGraphifyShareHook` + helper `loadSettingsForWiring` (source unique de validation anti-clobber du `settings.json`, partagée avec le hook de version). Script `graphify-share-out.sh` empaqueté verbatim (canonique côté Architecture : anti-collision par hash, auto-init, `.graphify_root` vivant). Revue de code indépendante (règle d'or n°8) : 1 finding **critique** corrigé — des tests `setup` non isolés écrivaient dans le vrai `~/.claude/settings.json` (HOME sandboxé pour toute la suite + `--settings` explicite + test de non-régression ; settings du poste nettoyé) — + 3 mineurs (exclusion locale du symlink, dédup validation, backup conditionnel). 128 tests CLI + 9 assertions bash verts.
+
 ## [1.15.0] - 2026-07-15
 
 ### Ajouté
