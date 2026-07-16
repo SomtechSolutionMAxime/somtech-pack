@@ -168,6 +168,12 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     #     `claude mcp add` est idempotent (no-op si déjà présent, rc 0).
     if [ -x "$HOME/.somtech/graphify-share-out.sh" ]; then
       "$HOME/.somtech/graphify-share-out.sh" >/dev/null 2>&1 || true
+      # Exclusion LOCALE (non versionnée) du symlink : évite qu'un `git add -A` accidentel
+      # committe un lien absolu machine-local (cassé pour les autres). cwd = worktree ici.
+      _ge=$(git rev-parse --git-path info/exclude 2>/dev/null)
+      if [ -n "$_ge" ] && ! grep -qxF 'graphify-out' "$_ge" 2>/dev/null; then
+        printf 'graphify-out\n' >> "$_ge" 2>/dev/null || true
+      fi
     fi
     # MCP seulement si un graphe existe déjà (via le symlink partagé) → pas de MCP cassé
     # dans les repos qui n'utilisent pas graphify. Il s'ajoute au 1er claude-swt suivant

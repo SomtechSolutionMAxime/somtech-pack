@@ -16,6 +16,15 @@ const SNIPPET = join(REPO, 'scripts', 'shell', 'claude-swt.sh');
 const tmp = (p) => mkdtempSync(join(tmpdir(), p));
 const markerCount = (f) => (existsSync(f) ? readFileSync(f, 'utf8').split(MARKER_BEGIN).length - 1 : 0);
 
+// ── ISOLATION GLOBALE (C1) ───────────────────────────────────────────────────
+// cmdSetup résout settingsFile/hooksDir par défaut sous homedir(). Un run(['setup'])
+// sans --settings écrirait donc dans le VRAI ~/.claude/settings.json. On force HOME
+// vers un faux home tmp pour TOUT ce fichier (node --test isole chaque fichier dans
+// son process) → aucun test ne peut plus toucher le vrai ~/.claude, même s'il oublie
+// --settings. (os.homedir() honore $HOME sur POSIX — vérifié.)
+const FAKE_HOME = mkdtempSync(join(tmpdir(), 'smtk-home-'));
+process.env.HOME = FAKE_HOME;
+
 test('shellrc : install frais → 1 bloc, ligne préexistante préservée, backup', () => {
   const w = tmp('smtk-rc-'); const rc = join(w, 'zshrc'); const dest = join(w, 'dest');
   writeFileSync(rc, '# rc dev\nexport FOO=bar\n');
@@ -128,7 +137,7 @@ test('run setup --dry-run : rien écrit', async () => {
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--dry-run', '--no-version-hook']);
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--settings', join(w, 'settings.json'), '--yes', '--dry-run', '--no-version-hook']);
   assert.equal(code, 0);
   assert.equal(markerCount(rc), 0, 'dry-run ne touche pas le rc');
   assert.ok(!existsSync(sd), 'dry-run ne copie pas les skills');
@@ -139,14 +148,14 @@ test('run setup --no-skills / --no-claude-swt : portée respectée', async () =>
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--no-skills', '--no-workflows', '--no-version-hook']);
+  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--settings', join(w, 'settings.json'), '--yes', '--no-skills', '--no-workflows', '--no-version-hook']);
   assert.ok(!existsSync(sd), '--no-skills : pas de skills');
   assert.equal(markerCount(rc), 1, '--no-skills : claude-swt quand même installé');
 
   const w2 = tmp('smtk-setup-');
   const rc2 = join(w2, 'zshrc'); const sd2 = join(w2, 'skills'); const wd2 = join(w2, 'workflows'); const dd2 = join(w2, 'somtech');
   writeFileSync(rc2, '# rc\n');
-  await run(['setup', '--source', REPO, '--rc', rc2, '--skills-dir', sd2, '--workflows-dir', wd2, '--dest', dd2, '--yes', '--no-claude-swt', '--no-version-hook']);
+  await run(['setup', '--source', REPO, '--rc', rc2, '--skills-dir', sd2, '--workflows-dir', wd2, '--dest', dd2, '--settings', join(w2, 'settings.json'), '--yes', '--no-claude-swt', '--no-version-hook']);
   assert.ok(existsSync(join(sd2, 'somtech-pack-install', 'SKILL.md')), '--no-claude-swt : skills installés');
   assert.equal(markerCount(rc2), 0, '--no-claude-swt : pas de bloc rc');
 });
@@ -155,7 +164,21 @@ test('run setup --no-workflows : skills installés mais aucun workflow', async (
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--no-workflows', '--no-claude-swt', '--no-version-hook']);
+  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--settings', join(w, 'settings.json'), '--yes', '--no-workflows', '--no-claude-swt', '--no-version-hook']);
   assert.ok(existsSync(join(sd, 'somtech-pack-install', 'SKILL.md')), '--no-workflows : skills quand même installés');
   assert.ok(!existsSync(wd), '--no-workflows : aucun workflow installé');
+});
+
+test('C1 non-régression : un setup SANS --settings n’écrit que sous HOME (jamais le vrai ~/.claude)', async () => {
+  // HOME est déjà forcé en tmp (FAKE_HOME) pour tout ce fichier. On prouve ici que le
+  // settings par défaut se résout bien SOUS HOME → un oubli de --settings ne peut pas
+  // toucher un ~/.claude hors sandbox. Défense en profondeur contre la pollution C1.
+  const w = tmp('smtk-setup-'); const rc = join(w, 'zshrc');
+  writeFileSync(rc, '# rc\n');
+  await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', join(w, 'sk'),
+    '--workflows-dir', join(w, 'wf'), '--dest', join(w, 'st'), '--yes',
+    '--no-skills', '--no-workflows', '--no-claude-swt', '--no-version-hook']);
+  const defaultSettings = join(process.env.HOME, '.claude', 'settings.json');
+  assert.ok(defaultSettings.startsWith(FAKE_HOME), 'le settings par défaut est sous le HOME sandbox');
+  assert.ok(existsSync(defaultSettings), 'le hook graphify a été câblé sous HOME (pas ailleurs)');
 });

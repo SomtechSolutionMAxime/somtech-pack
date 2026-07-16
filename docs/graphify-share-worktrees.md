@@ -24,8 +24,14 @@ Sans partage, chaque worktree `claude-swt` d'un repo a son propre `graphify-out/
 | `graphify-share-out.sh` | `~/.somtech/` | `pack setup` |
 | Hook `SessionStart` global | `~/.claude/settings.json` (câblé idempotent) | `pack setup` |
 | Appel share-out + MCP graphify (scope **local**) | dans `claude-swt`, à la naissance du worktree | à chaque `claude-swt` |
-| `graphify-out` (sans slash) dans `.gitignore` | repo | manuel / template |
+| `graphify-out` dans `.git/info/exclude` (local, non versionné) | worktree | à chaque `claude-swt` (idempotent) |
+| `graphify-out` (sans slash) dans `.gitignore` versionné | repo | manuel / template (optionnel) |
 
+- Le symlink `graphify-out` est auto-posé dans **tout** repo git à l'ouverture d'une session
+  (auto-init). `claude-swt` l'ajoute à `.git/info/exclude` (exclusion **locale**, non
+  versionnée) pour qu'un `git add -A` accidentel ne committe pas le lien absolu machine-local.
+  Une session `claude` directe (hors claude-swt) n'a pas cette exclusion → ajouter
+  `graphify-out` au `.gitignore` du repo si on veut la garantie côté versionné.
 - Le **hook** ne fait **que** le symlink (pose/amorce, idempotent, jamais fatal). Pas de
   détection de fraîcheur (le `mtime` est réécrit par `git worktree add` → faux positifs). Le
   rafraîchissement reste **explicite** : `/graphify --update` (détection hash native).

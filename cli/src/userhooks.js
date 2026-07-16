@@ -69,26 +69,10 @@ export function installGlobalVersionHook({ payloadRoot, hooksDir, settingsFile, 
 
   const dest = join(hooksDir, HOOK_NAME);
 
-  // Anti-perte : valider settings.json AVANT toute copie/écriture (JSON invalide
-  // OU structure atypique → refus, fichier intact, rien copié).
-  let settings = {};
-  const settingsExisted = existsSync(settingsFile);
-  if (settingsExisted) {
-    try {
-      settings = JSON.parse(readFileSync(settingsFile, 'utf8'));
-    } catch {
-      return { ok: false, dest, reason: `${settingsFile} contient du JSON invalide — édition refusée (corrige-le à la main)` };
-    }
-    if (!isPlainObject(settings)) {
-      return { ok: false, dest, reason: `${settingsFile} n'est pas un objet JSON (settings) — édition refusée` };
-    }
-    if ('hooks' in settings && !isPlainObject(settings.hooks)) {
-      return { ok: false, dest, reason: `${settingsFile} : la clé "hooks" n'est pas un objet — édition refusée` };
-    }
-    if (isPlainObject(settings.hooks) && 'SessionStart' in settings.hooks && !Array.isArray(settings.hooks.SessionStart)) {
-      return { ok: false, dest, reason: `${settingsFile} : "hooks.SessionStart" n'est pas une liste — édition refusée` };
-    }
-  }
+  // Anti-perte : valider settings.json AVANT toute copie/écriture (source unique, M2).
+  const loaded = loadSettingsForWiring(settingsFile);
+  if (loaded.error) return { ok: false, dest, reason: loaded.error };
+  const { settings, existed: settingsExisted } = loaded;
 
   if (dryRun) return { ok: true, dest, settingsFile, dryRun: true };
 
@@ -97,14 +81,14 @@ export function installGlobalVersionHook({ payloadRoot, hooksDir, settingsFile, 
   copyFileSync(src, dest);
   try { chmodSync(dest, statSync(src).mode & 0o777); } catch { /* best-effort bit exécutable */ }
 
-  // 2. Backup + câblage idempotent.
-  let backup;
-  if (settingsExisted) {
-    backup = `${settingsFile}.somtech.bak`;
-    writeFileSync(backup, readFileSync(settingsFile));
-  }
+  // 2. Câblage idempotent — on ne backupe que si on modifie réellement les settings (M3).
   const wired = wireSessionStartCommand(settings, dest);
+  let backup;
   if (wired) {
+    if (settingsExisted) {
+      backup = `${settingsFile}.somtech.bak`;
+      writeFileSync(backup, readFileSync(settingsFile));
+    }
     mkdirSync(dirname(settingsFile), { recursive: true });
     writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
   }
@@ -137,14 +121,14 @@ export function installGraphifyShareHook({ payloadRoot, destDir, settingsFile, d
   copyFileSync(src, dest);
   try { chmodSync(dest, statSync(src).mode & 0o777); } catch { /* best-effort bit exécutable */ }
 
-  // 2. Backup + câblage idempotent.
-  let backup;
-  if (existed) {
-    backup = `${settingsFile}.somtech.bak`;
-    writeFileSync(backup, readFileSync(settingsFile));
-  }
+  // 2. Câblage idempotent — backup seulement si on modifie réellement les settings (M3).
   const wired = wireSessionStartCommand(settings, dest);
+  let backup;
   if (wired) {
+    if (existed) {
+      backup = `${settingsFile}.somtech.bak`;
+      writeFileSync(backup, readFileSync(settingsFile));
+    }
     mkdirSync(dirname(settingsFile), { recursive: true });
     writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
   }
