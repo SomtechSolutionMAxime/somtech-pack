@@ -158,6 +158,25 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     # clés API (sans espaces) c'est sans risque ; le sous-shell ( … ) isole
     # `set -a` du shell appelant même si le source échoue.
     if [ -f "$main/.env" ]; then set -a; . "$main/.env"; set +a; fi
+
+    # --- graphify : dossier de sortie partagé entre worktrees (D-20260716-0001) ---
+    # (1) Pose/amorce le symlink graphify-out -> ~/graphify/<clé> DÈS la naissance du
+    #     worktree (le hook SessionStart global le repose aussi, mais on l'a ici avant
+    #     même que claude démarre). Idempotent, jamais fatal.
+    # (2) Déclare le MCP graphify en scope LOCAL (jamais dans le .mcp.json versionné, M5),
+    #     AVANT le lancement de claude → pas de `claude mcp add` imbriqué dans un hook.
+    #     `claude mcp add` est idempotent (no-op si déjà présent, rc 0).
+    if [ -x "$HOME/.somtech/graphify-share-out.sh" ]; then
+      "$HOME/.somtech/graphify-share-out.sh" >/dev/null 2>&1 || true
+    fi
+    # MCP seulement si un graphe existe déjà (via le symlink partagé) → pas de MCP cassé
+    # dans les repos qui n'utilisent pas graphify. Il s'ajoute au 1er claude-swt suivant
+    # un `/graphify` (build), et est partagé par tous les worktrees du repo.
+    if [ -e "graphify-out/graph.json" ] \
+       && command -v claude >/dev/null 2>&1 && command -v graphify-mcp >/dev/null 2>&1; then
+      claude mcp add --scope local graphify -- graphify-mcp graphify-out/graph.json >/dev/null 2>&1 || true
+    fi
+
     if [ -n "${_CLAUDE_SWT_DANGER:-}" ]; then
       echo "⚠️  Mode DANGER : claude --dangerously-skip-permissions — toutes les"
       echo "    autorisations d'outils sont sautées pour cette session. À réserver à"

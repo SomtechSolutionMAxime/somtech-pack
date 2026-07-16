@@ -1,12 +1,24 @@
 // setup.js — configure le poste : skills globaux + claude-swt, en une commande.
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { resolvePayloadRoot } from '../modules.js';
 import { installRcBlock } from '../shellrc.js';
 import { installUserSkills } from '../userskills.js';
 import { installGlobalSkills } from '../globalskills.js';
 import { installGlobalWorkflows } from '../globalworkflows.js';
-import { installGlobalVersionHook } from '../userhooks.js';
+import { installGlobalVersionHook, installGraphifyShareHook } from '../userhooks.js';
+
+/** True si un binaire est sur le PATH (best-effort, jamais fatal). */
+function hasBinary(name) {
+  try {
+    // `name` passé en $1 (pas d'interpolation dans la commande) → aucune injection.
+    execFileSync('/bin/sh', ['-c', 'command -v "$1" >/dev/null 2>&1', 'sh', name], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Consentement avant d'écrire des fichiers personnels (rc shell, skills globaux).
@@ -45,9 +57,10 @@ export async function cmdSetup(flags) {
   const doWorkflows = !flags.noWorkflows;
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
+  const doGraphify = !flags.noGraphify;
 
-  if (!doSkills && !doWorkflows && !doSwt && !doVersionHook) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-claude-swt et --no-version-hook).');
+  if (!doSkills && !doWorkflows && !doSwt && !doVersionHook && !doGraphify) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-claude-swt, --no-version-hook et --no-graphify).');
     return 0;
   }
 
@@ -56,6 +69,8 @@ export async function cmdSetup(flags) {
   if (doWorkflows) consentTargets.push(workflowsDir);
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
+  if (doGraphify && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
+  if (doGraphify && !consentTargets.includes(destDir)) consentTargets.push(destDir);
   if (!(await consent(flags, consentTargets))) return 1;
 
   console.log(`Setup poste${flags.dryRun ? ' [dry-run]' : ''} :`);
@@ -137,6 +152,27 @@ export async function cmdSetup(flags) {
           (r.wired ? ` (câblé dans ${settingsFile})` : ` (déjà câblé dans ${settingsFile})`) +
           (r.backup ? `, backup ${r.backup}` : '')
       );
+    }
+  }
+
+  if (doGraphify) {
+    const r = installGraphifyShareHook({ payloadRoot, destDir, settingsFile, dryRun: flags.dryRun });
+    if (!r.ok) {
+      console.log(`  ⚠️  hook graphify (partage worktrees) non installé : ${r.reason}`);
+    } else if (flags.dryRun) {
+      console.log(`  hook graphify → ${r.dest} + câblage ${settingsFile} [dry-run]`);
+    } else {
+      console.log(
+        `  hook graphify → ${r.dest}` +
+          (r.wired ? ` (câblé dans ${settingsFile})` : ` (déjà câblé dans ${settingsFile})`) +
+          (r.backup ? `, backup ${r.backup}` : '')
+      );
+      // Prérequis binaire : graphify-mcp (extra [mcp]). Hint non bloquant.
+      if (!hasBinary('graphify-mcp')) {
+        console.log('    ℹ️  Prérequis graphify absent : installe le binaire avec l\'extra MCP →');
+        console.log('        uv tool install "graphifyy[mcp]"');
+        console.log('        (sans l\'extra [mcp], graphify-mcp lève ImportError: mcp not installed)');
+      }
     }
   }
 

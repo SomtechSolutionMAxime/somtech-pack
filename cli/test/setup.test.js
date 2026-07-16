@@ -64,8 +64,9 @@ test('shellrc : dry-run n’écrit rien', () => {
 test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => {
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
+  const st = join(w, 'settings.json'); // ISOLE le settings : ne JAMAIS toucher le vrai ~/.claude
   writeFileSync(rc, '# rc\n');
-  const args = ['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--yes', '--no-version-hook'];
+  const args = ['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--settings', st, '--yes', '--no-version-hook'];
   let code = await run(args);
   assert.equal(code, 0);
   // un skill global connu du repo
@@ -73,6 +74,9 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   // un workflow global connu du repo
   assert.ok(existsSync(join(wd, 'analyse-decoupage-demande.js')), 'workflow global copié');
   assert.equal(markerCount(rc), 1, 'bloc claude-swt ajouté');
+  // Hook graphify (D-20260716-0001) : script installé dans dest + câblé dans settings.
+  assert.ok(existsSync(join(dd, 'graphify-share-out.sh')), 'graphify-share-out.sh installé par run setup');
+  assert.ok(existsSync(st) && readFileSync(st, 'utf8').includes('graphify-share-out.sh'), 'hook graphify câblé dans settings');
   // Régression D-20260709-0003 au grain `run setup` : la lib swt-db.sh doit
   // transiter jusqu'à dest par le chemin réel (payloadRoot → snippetSrc voisin).
   assert.ok(existsSync(join(dd, 'swt-db.sh')), 'lib swt-db.sh installée par run setup');
@@ -83,6 +87,18 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   code = await run(args);
   assert.equal(code, 0);
   assert.equal(markerCount(rc), 1, 'toujours 1 bloc après re-run');
+});
+
+test('run setup --no-graphify : ni script ni hook graphify', async () => {
+  const w = tmp('smtk-setup-');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
+  const st = join(w, 'settings.json');
+  writeFileSync(rc, '# rc\n');
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd,
+    '--dest', dd, '--settings', st, '--yes', '--no-version-hook', '--no-graphify']);
+  assert.equal(code, 0);
+  assert.ok(!existsSync(join(dd, 'graphify-share-out.sh')), 'aucun script graphify avec --no-graphify');
+  assert.ok(!existsSync(st), 'aucun settings écrit (ni version ni graphify)');
 });
 
 test('SÉCURITÉ : setup sans --yes en non-TTY → refus (exit 1), rc intact', async () => {
