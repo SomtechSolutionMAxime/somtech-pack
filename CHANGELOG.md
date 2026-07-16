@@ -5,6 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.15.0] - 2026-07-15
+
+### Ajouté
+
+- **Skill `/setup-archi-ci` + boîte à outils du modèle vivant** (D-20260715-0004, app Architecture — STD-031 §2.7, règles d'or n°7 et n°9) — installe dans un repo applicatif une CI GitHub Actions qui tient `architecture.yaml` **fidèle au code** : elle récolte le manifeste depuis les sources réelles, le compare au fichier committé (**gate de complétude** `warn` → `strict`, opposable en CI, jamais dans `/merge`), et publie la vue **ERD Mermaid**. La doc d'architecture n'est plus maintenue à la main — elle est récoltée.
+- **Récolteurs & outils** (`scripts/archi-ci/`, exposés en sous-commandes `npx @somtech-solutions/pack …`) : `harvest-routes` (endpoints Next.js App Router / Pages API / Express), `harvest-config` (topologie `fly.toml`/`netlify.toml`/`.mcp.json`/env → `depends_on` externes connus), `merge-manifests` (union des grains), `diff-manifest` (gate structurel, comparaison par ensembles d'ids/arêtes), `generate-erd` (grain `table` → `erDiagram`). Copies distribuées de `harvest-supabase.py`/`validate-manifest.py`/schéma (canoniques côté Architecture).
+
+### Technique
+
+- Sous-commandes CLI = wrappers vers scripts Python bundlés (payload `core`), propagation fidèle du code de sortie pour le gate `strict`. Dégradation propre : un grain non récolté n'est jamais traité comme « conforme ». Revue de code indépendante (règle d'or n°8) : 3 findings majeurs corrigés — FK « à qualifier » (`auth.users`, cross-repo) exclues du blocage, hébergement (`flyio`/`netlify`) déduit des seuls fichiers de déploiement, idempotence du skill (ne pas écraser le manifeste ni rétrograder `strict`). 22 assertions bash end-to-end + 122 tests CLI verts.
+
 ## [1.14.0] - 2026-07-10
 
 ### Ajouté

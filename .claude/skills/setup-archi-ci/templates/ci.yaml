@@ -1,0 +1,16 @@
+# Config du modèle vivant Somtech (STD-031 §2.7). Lu par le workflow
+# .github/workflows/architecture-manifest.yml à chaque PR.
+#
+# Déposé par le skill /setup-archi-ci. C'est ICI qu'on durcit le gate, repo par repo.
+
+# Slug d'application ServiceDesk = racine de namespace du manifeste.
+app: __APP_SLUG__
+
+# Mode du gate :
+#   warn   → le drift est rapporté en commentaire de PR, mais ne bloque JAMAIS le merge.
+#   strict → un drift bloquant fait échouer la CI (activer aussi la branch protection
+#            sur le job « manifest » pour rendre le gate opposable).
+#
+# On démarre TOUJOURS en warn (le temps de rattraper le manifeste), puis on passe
+# strict une fois architecture.yaml fidèle au code.
+mode: warn

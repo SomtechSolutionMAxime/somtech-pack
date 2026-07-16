@@ -25,7 +25,8 @@ Configuration réutilisable installée dans chaque projet client via les scripts
 | Composant | Rôle |
 |-----------|------|
 | `.claude/agents/` | Sub-agents spécialisés (frontend, backend, qa, product, database, devops, design) |
-| `.claude/skills/` | Skills Claude Code : audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, merge, mockmig, plan-servicedesk, pousse-staging, prototype, scaffold-aims, scaffold-component, somtech-pack-global, somtech-pack-maj, speckit, superplan, sync-app-state, validate-ui, webapp-testing |
+| `.claude/skills/` | Skills Claude Code : audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, merge, mockmig, plan-servicedesk, pousse-staging, prototype, scaffold-aims, scaffold-component, setup-archi-ci, somtech-pack-global, somtech-pack-maj, speckit, superplan, sync-app-state, validate-ui, webapp-testing |
+| `scripts/archi-ci/` | Boîte à outils du **modèle vivant** (STD-031 §2.7) — récolteurs (tables/endpoints/config), gate `diff-manifest`, générateur ERD ; exposés en sous-commandes `npx @somtech-solutions/pack …`, installés par `/setup-archi-ci` |
 | `.claude/workflows/` | Workflows Somtech (outil `Workflow`) : `analyse-decoupage-demande` (dépendance de `plan-servicedesk`/`superplan`). Mirrorés sur le poste dans `~/.claude/workflows` par `npx pack setup`. |
 | `.claude/commands/` | Commandes slash Claude Code (`/pousse`, `/brd`) |
 | `.claude/hooks/` | Hooks Claude Code (`SessionStart` → mémoire externe d'état d'app, STD-027) |
