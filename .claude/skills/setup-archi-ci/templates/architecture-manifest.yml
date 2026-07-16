@@ -70,19 +70,23 @@ jobs:
             exit 1
           fi
 
-      # ── Récolte : chaque grain dégrade proprement (grain manquant ≠ conforme) ──
+      # ── Récolte : dégradation propre (source absente = grain sauté, jamais « conforme »)
+      # mais un crash de récolteur (exit inattendu) FAIT ÉCHOUER le job — sinon un vrai
+      # drift passerait vert faute de grain récolté (F4). Les récolteurs endpoints/config
+      # sortent 0 même sans source ; tables n'est lancé que si des .sql existent.
       - name: Récolter les grains (tables + endpoints + config)
         run: |
+          set -e
           APP="${{ steps.cfg.outputs.app }}"
           mkdir -p .architecture/_harvest
-          if [ -d supabase/migrations ]; then
+          if ls supabase/migrations/*.sql >/dev/null 2>&1; then
             somtech-pack harvest-supabase supabase/migrations --app "$APP" \
-              --out .architecture/_harvest/10-tables.yaml || echo "::warning::grain tables non vérifié"
+              --out .architecture/_harvest/10-tables.yaml
+          else
+            echo "::notice::pas de migrations .sql — grain tables sauté."
           fi
-          somtech-pack harvest-config . --app "$APP" \
-            --out .architecture/_harvest/20-config.yaml || echo "::warning::grain config non vérifié"
-          somtech-pack harvest-routes . --app "$APP" \
-            --out .architecture/_harvest/30-routes.yaml || echo "::warning::grain endpoints non vérifié"
+          somtech-pack harvest-config . --app "$APP" --out .architecture/_harvest/20-config.yaml
+          somtech-pack harvest-routes . --app "$APP" --out .architecture/_harvest/30-routes.yaml
 
       - name: Fusionner les grains récoltés
         run: |

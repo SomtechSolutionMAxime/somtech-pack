@@ -58,22 +58,30 @@ def index(data):
         if el.get("parent") is None or eid == app:
             roots.add(eid)
     edges = set()
+    soft = set()  # arêtes récoltées « à qualifier » (cible non résoluble par le récolteur)
     for rel in data.get("relations") or []:
         if isinstance(rel, dict) and rel.get("from") and rel.get("to"):
             edges.add(("rel", rel["from"], rel["to"]))
     for dep in data.get("depends_on") or []:
         if isinstance(dep, dict) and dep.get("from") and dep.get("to"):
-            edges.add(("dep", dep["from"], dep["to"]))
-    return elements, roots, edges
+            key = ("dep", dep["from"], dep["to"])
+            edges.add(key)
+            if "qualifier" in str(dep.get("label") or "").lower():
+                soft.add(key)
+    return elements, roots, edges, soft
 
 
 def compute(committed, harvested):
-    c_el, c_roots, c_edges = index(committed)
-    h_el, h_roots, h_edges = index(harvested)
+    c_el, c_roots, c_edges, _c_soft = index(committed)
+    h_el, h_roots, h_edges, h_soft = index(harvested)
 
-    # Drift bloquant : récolté (code) absent du committé (doc)
+    # Drift bloquant : récolté (code) absent du committé (doc).
+    # On exclut du BLOCAGE les arêtes récoltées « à qualifier » (ex. FK vers auth.users
+    # ou une table cross-repo) : le récolteur ne peut pas résoudre leur cible, donc leur
+    # absence ne peut pas prouver un défaut de doc (F1). Elles restent listées en informatif.
     missing_elems = sorted(set(h_el) - set(c_el))
-    missing_edges = sorted(h_edges - c_edges)
+    missing_edges = sorted((h_edges - c_edges) - h_soft)
+    soft_missing = sorted((h_edges - c_edges) & h_soft)
 
     # Kind divergent sur ids communs, hors racines
     kind_mismatch = []
@@ -94,6 +102,7 @@ def compute(committed, harvested):
         "kind_mismatch": kind_mismatch,
         "extra_elems": [(e, c_el[e].get("kind", "?")) for e in extra_elems],
         "extra_edges": extra_edges,
+        "soft_missing": soft_missing,
     }
 
 
@@ -109,7 +118,7 @@ def _fmt_edge(edge):
 
 def render_report(d, mode):
     blocking = blocking_count(d)
-    info = len(d["extra_elems"]) + len(d["extra_edges"])
+    info = len(d["extra_elems"]) + len(d["extra_edges"]) + len(d["soft_missing"])
     L = ["## 🧭 Modèle vivant — complétude du manifeste", ""]
 
     if blocking == 0:
@@ -150,6 +159,9 @@ def render_report(d, mode):
             L.append(f"- `{eid}` (`{kind}`)")
         for edge in d["extra_edges"]:
             L.append(f"- {_fmt_edge(edge)}")
+        for edge in d["soft_missing"]:
+            L.append(f"- {_fmt_edge(edge)} — FK récoltée **à qualifier** "
+                     "(cible non résoluble : `auth.users`, cross-repo… — non bloquant)")
         L.append("")
         L.append("</details>")
         L.append("")

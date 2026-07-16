@@ -29,8 +29,11 @@ KNOWN_EXTERNALS = {
     "slack", "netlify", "assemblyai", "mapbox", "microsoft_graph",
 }
 
-# Signatures → externe connu. Ordre = spécifique d'abord.
-HOST_SIGNATURES = [
+# Signatures de FOURNISSEURS (API/services consommés) → externe connu. Ordre = spécifique
+# d'abord. NE contient PAS les externes d'HÉBERGEMENT (flyio, netlify) : ceux-là ne se
+# déduisent QUE de la présence d'un fichier de déploiement (F2). Une app qui APPELLE un
+# MCP hébergé sur Netlify (ex. ServiceDesk) ne déploie pas pour autant sur Netlify.
+PROVIDER_SIGNATURES = [
     (re.compile(r"api\.anthropic\.com|anthropic", re.I), "anthropic"),
     (re.compile(r"api\.cohere\.(com|ai)|\bcohere\b", re.I), "cohere"),
     (re.compile(r"graph\.microsoft\.com|microsoft[_-]?graph|ms[_-]?graph", re.I), "microsoft_graph"),
@@ -38,12 +41,9 @@ HOST_SIGNATURES = [
     (re.compile(r"api\.mapbox\.com|mapbox", re.I), "mapbox"),
     (re.compile(r"slack\.com|slack", re.I), "slack"),
     (re.compile(r"api\.github\.com|github\.com|\bgithub\b", re.I), "github"),
-    (re.compile(r"netlify", re.I), "netlify"),
-    (re.compile(r"tor1|digitalocean|\bdo[_-]|nyc3\.digitaloceanspaces", re.I), "do_tor1"),
-    (re.compile(r"\bfly\.io\b|flyio|fly-io", re.I), "flyio"),
 ]
 
-# Noms de variables d'env / secrets → externe connu.
+# Noms de variables d'env / secrets → externe connu (fournisseurs uniquement, pas d'hébergement).
 ENVVAR_SIGNATURES = [
     (re.compile(r"ANTHROPIC", re.I), "anthropic"),
     (re.compile(r"COHERE", re.I), "cohere"),
@@ -52,9 +52,7 @@ ENVVAR_SIGNATURES = [
     (re.compile(r"MICROSOFT_GRAPH|MS_GRAPH|GRAPH_(CLIENT|TENANT)", re.I), "microsoft_graph"),
     (re.compile(r"SLACK", re.I), "slack"),
     (re.compile(r"GITHUB|\bGH_", re.I), "github"),
-    (re.compile(r"NETLIFY", re.I), "netlify"),
     (re.compile(r"DIGITALOCEAN|\bDO_SPACES|SPACES_(KEY|SECRET)|TOR1", re.I), "do_tor1"),
-    (re.compile(r"\bFLY_API|FLY_APP|FLYIO", re.I), "flyio"),
 ]
 
 # Fournisseurs hors registre qu'on VEUT signaler (pas inventer).
@@ -90,7 +88,8 @@ def detect_fly(root):
 
 
 def scan_signatures(text, found, reported):
-    for rx, ext in HOST_SIGNATURES:
+    """Scanne un contenu pour des FOURNISSEURS connus (jamais d'hébergement — F2)."""
+    for rx, ext in PROVIDER_SIGNATURES:
         if rx.search(text):
             found.add(ext)
     for rx, name in UNREGISTERED_HINTS:

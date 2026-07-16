@@ -71,17 +71,26 @@ partie écrite à la main, à marquer). `<SLUG>` = slug de l'étape 1.
 
 ```bash
 mkdir -p .architecture/_boot docs/architecture
-[ -d supabase/migrations ] && npx -y @somtech-solutions/pack harvest-supabase supabase/migrations --app <SLUG> --out .architecture/_boot/10-tables.yaml
+ls supabase/migrations/*.sql >/dev/null 2>&1 && npx -y @somtech-solutions/pack harvest-supabase supabase/migrations --app <SLUG> --out .architecture/_boot/10-tables.yaml
 npx -y @somtech-solutions/pack harvest-config . --app <SLUG> --out .architecture/_boot/20-config.yaml
 npx -y @somtech-solutions/pack harvest-routes . --app <SLUG> --out .architecture/_boot/30-routes.yaml
-npx -y @somtech-solutions/pack merge-manifests .architecture/_boot/*.yaml --app <SLUG> --out architecture.yaml
+npx -y @somtech-solutions/pack merge-manifests .architecture/_boot/*.yaml --app <SLUG> --out .architecture/_boot/harvested.yaml
+
+# ⚠️ Idempotence (F3) : NE JAMAIS écraser un architecture.yaml existant maintenu à la main.
+if [ -f architecture.yaml ]; then
+  echo "architecture.yaml existe déjà — comparaison au lieu d'écrasement :"
+  npx -y @somtech-solutions/pack diff-manifest architecture.yaml .architecture/_boot/harvested.yaml --mode warn
+  echo "→ compléter architecture.yaml à la main d'après le drift ci-dessus."
+else
+  cp .architecture/_boot/harvested.yaml architecture.yaml   # amorçage initial seulement
+fi
 npx -y @somtech-solutions/pack validate-manifest architecture.yaml
 npx -y @somtech-solutions/pack generate-erd architecture.yaml --out docs/architecture/erd.md
 rm -rf .architecture/_boot
 ```
 
-- **Si `architecture.yaml` existe déjà** : NE PAS l'écraser. Le récolter dans un fichier
-  temporaire et présenter le `diff-manifest` à l'humain pour qu'il complète à la main.
+- **Si `architecture.yaml` existait déjà** : le bloc ci-dessus ne l'écrase pas — il montre le
+  `diff-manifest` pour que tu le complètes à la main.
 - Relire le manifeste amorcé : corriger `kind`/`name` de la racine, qualifier les FK
   cross-repo (`depends_on … à qualifier`), régler `audience` (défaut `internal`, Loi 25).
 
@@ -92,15 +101,20 @@ porte le slug + le mode) :
 
 ```bash
 mkdir -p .github/workflows .architecture
+# Le workflow est verbatim → toujours mis à jour vers la version du skill.
 cp "<CHEMIN_DU_SKILL>/templates/architecture-manifest.yml" .github/workflows/architecture-manifest.yml
-# ci.yaml : substituer le slug, garder mode: warn (ou le mode existant si déjà équipé)
-sed "s/__APP_SLUG__/<SLUG>/" "<CHEMIN_DU_SKILL>/templates/ci.yaml" > .architecture/ci.yaml
+
+# ⚠️ Idempotence (F3) : ne créer ci.yaml QUE s'il n'existe pas — sinon on préserve le
+# `mode` déjà en place (ne JAMAIS rétrograder un strict durci vers warn).
+if [ ! -f .architecture/ci.yaml ]; then
+  sed "s/__APP_SLUG__/<SLUG>/" "<CHEMIN_DU_SKILL>/templates/ci.yaml" > .architecture/ci.yaml
+else
+  echo ".architecture/ci.yaml existe déjà — mode préservé : $(grep '^mode:' .architecture/ci.yaml)"
+fi
 ```
 
 - `<CHEMIN_DU_SKILL>` = dossier de ce skill (`.claude/skills/setup-archi-ci`, ou sa copie
   globale `~/.claude/skills/setup-archi-ci`). Trouver via `Glob` si besoin.
-- **Idempotent** : si `.architecture/ci.yaml` existe, préserver son `mode` (ne pas rétrograder
-  un `strict` déjà durci).
 - Ajouter au `.gitignore` : `.architecture/_harvest/` (artefacts CI éphémères).
 
 ### 5. Ouvrir la PR d'amorçage (règle PR-tôt)

@@ -66,13 +66,14 @@ def build(data):
             label = str(rel.get("label") or "FK").replace('"', "'")
             edges.append((tables[frm], tables[to], label))
 
-    # FK cross-repo → entité externe annotée
+    # FK cross-repo → entité externe annotée. Toute dépendance sortante DEPUIS une table
+    # est une référence de données, quel que soit son label (F7 : ne pas exiger « FK »).
     externals = {}
     for dep in data.get("depends_on") or []:
         if not isinstance(dep, dict):
             continue
         frm, to = dep.get("from"), dep.get("to")
-        if frm in tables and "FK" in str(dep.get("label") or ""):
+        if frm in tables and to:
             ext = entity_name(to, app) + "_ext"
             externals[to] = ext
             label = str(dep.get("label") or "FK").replace('"', "'")
@@ -92,9 +93,16 @@ def build(data):
 
 def render_md(app, tables, mermaid):
     n = len(tables)
+    header = f"# ERD — {app}\n\n{BANNER}\n"
+    # 0 table → pas de bloc `erDiagram` vide (GitHub rend une erreur Mermaid — F6).
+    if n == 0:
+        return (
+            f"{header}"
+            "_Aucune table récoltée dans `architecture.yaml` — pas de diagramme entité-relation "
+            "à afficher (service sans schéma de données propre)._\n"
+        )
     return (
-        f"# ERD — {app}\n\n"
-        f"{BANNER}\n"
+        f"{header}"
         f"{n} table(s) récoltée(s) depuis `architecture.yaml`.\n\n"
         "```mermaid\n"
         f"{mermaid}"

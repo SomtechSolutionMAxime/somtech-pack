@@ -81,6 +81,47 @@ printf 'obsolete\n' > "$WORK/erd.md"
 "$PY" "$S/generate-erd.py" "$WORK/harvested.yaml" --out "$WORK/erd.md" --check >/dev/null 2>&1
 [ $? -eq 1 ] && ok "ERD --check : obsolète → exit 1" || ko "ERD --check devrait détecter l'obsolescence"
 
+echo "== E. Régressions de revue (F1/F2/F6) =="
+
+# F1 — FK « à qualifier » (auth.users) ne bloque JAMAIS en strict, même si le committé
+#      la qualifie autrement (auth.users) que le récolté (bare users).
+cat > "$WORK/f1-harvested.yaml" <<'YAML'
+app: demo-app
+elements:
+  - {id: demo-app, kind: service, name: demo-app}
+  - {id: demo-app.profiles, kind: table, name: profiles, parent: demo-app}
+depends_on:
+  - {from: demo-app.profiles, to: users, label: FK cross-repo (à qualifier)}
+YAML
+cat > "$WORK/f1-committed.yaml" <<'YAML'
+app: demo-app
+elements:
+  - {id: demo-app, kind: service, name: demo-app}
+  - {id: demo-app.profiles, kind: table, name: profiles, parent: demo-app}
+depends_on:
+  - {from: demo-app.profiles, to: auth.users, label: FK vers auth Supabase}
+YAML
+"$PY" "$S/diff-manifest.py" "$WORK/f1-committed.yaml" "$WORK/f1-harvested.yaml" --mode strict --report "$WORK/f1.md" >/dev/null 2>&1
+[ $? -eq 0 ] && ok "F1 : FK 'à qualifier' → strict NON bloquant" || ko "F1 : FK à qualifier bloque le strict (régression)"
+grep -q 'à qualifier' "$WORK/f1.md" && ok "F1 : FK à qualifier listée en informatif" || ko "F1 : FK à qualifier absente du rapport"
+
+# F2 — .mcp.json vers un MCP hébergé sur Netlify NE crée PAS de dépendance netlify.
+mkdir -p "$WORK/f2"
+printf 'app = "svc"\n' > "$WORK/f2/fly.toml"
+printf '{"mcpServers":{"sd":{"url":"https://servicedesksomtech.netlify.app/mcp"}}}\n' > "$WORK/f2/.mcp.json"
+"$PY" "$S/harvest-config.py" "$WORK/f2" --app svc --out "$WORK/f2.yaml" 2>/dev/null
+grep -q 'to: netlify' "$WORK/f2.yaml" && ko "F2 : netlify fantôme récolté depuis .mcp.json" || ok "F2 : pas de netlify fantôme"
+grep -q 'to: flyio' "$WORK/f2.yaml" && ok "F2 : flyio récolté (fly.toml présent)" || ko "F2 : flyio manquant"
+
+# F6 — ERD sur manifeste 0 table → pas de bloc erDiagram vide.
+cat > "$WORK/f6.yaml" <<'YAML'
+app: svc
+elements:
+  - {id: svc, kind: service, name: svc}
+YAML
+"$PY" "$S/generate-erd.py" "$WORK/f6.yaml" --out "$WORK/f6.md" 2>/dev/null
+grep -q 'erDiagram' "$WORK/f6.md" && ko "F6 : bloc erDiagram vide généré (rendu cassé)" || ok "F6 : 0 table → note, pas de diagramme vide"
+
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
 echo; echo "== Bilan : ${P// /} réussis, ${F// /} échoués =="
