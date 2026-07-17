@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-07-17
+
+### Corrigé
+
+- **Divergence de version** (D-20260715-0004) — `pack.json` était resté figé à `1.14.0` alors que `VERSION`, le CLI et le dernier tag publié étaient à `1.22.0`. Côté client, `version.json` affichait donc `version: 1.22.0` mais `packContentVersion: 1.14.0`. `pack.json` est aligné sur `1.22.0`.
+
+### Technique
+
+- **Le tag git devient la source unique de version** : `publish.yml` aligne désormais `VERSION` + `pack.json` sur le tag **avant** de construire le payload (en plus du CLI) — fin de l'alignement manuel à oublier. Nouveau test `cli/test/version-consistency.test.js` qui fait échouer le release si `VERSION`, `pack.json` et `cli/package.json` divergent. Revue de code indépendante (règle d'or n°8) : GO, 6 risques CI couverts (ordre des steps, roundtrip byte-identique de `pack.json`, anti-injection).
+
 ## [1.22.0] - 2026-07-16
 
 ### Ajouté
