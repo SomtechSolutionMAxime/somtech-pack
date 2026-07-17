@@ -44,11 +44,27 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@somtech-solutions'
 
+      # Le tag git est la SOURCE UNIQUE de version. On aligne VERSION + pack.json
+      # AVANT de construire le payload pour que le contenu bundlé porte la bonne
+      # version (fin du drift : plus aucun alignement manuel à oublier dans le repo).
+      - name: Aligner VERSION + pack.json sur le tag (source unique)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VER="${TAG#v}"
+          # Valider le format semver AVANT usage (anti-injection : TAG est un nom de tag).
+          if ! printf '%s' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'; then
+            echo "✗ Tag non semver : $TAG"; exit 1
+          fi
+          printf '%s\n' "$VER" > VERSION
+          VER="$VER" node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('pack.json','utf8'));p.version=process.env.VER;fs.writeFileSync('pack.json',JSON.stringify(p,null,2)+'\n')"
+          echo "✓ VERSION et pack.json alignés sur $VER"
+
       - name: Construire le payload (depuis le repo, anti-drift)
         run: node scripts/build-payload.mjs
         working-directory: cli
 
-      - name: Aligner la version sur le tag
+      - name: Aligner la version du CLI sur le tag
         working-directory: cli
         env:
           TAG: ${{ github.ref_name }}
