@@ -1,7 +1,13 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.5.0
+# claude-swt.sh — v1.5.1
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
+#
+# v1.5.1 (D-20260719-0001) : positionne le shell du PANE lui-même sur le worktree
+#   (pas seulement le sous-shell de lancement de `claude`). Les outils tiers scopés
+#   sur le cwd du pane (ex. plugins herdr : `herdr pane list` → `cwd`) résolvaient le
+#   repo PRINCIPAL au lieu du worktree. Restauration de $main au teardown avant le
+#   `git worktree remove` (le remove échoue si le cwd est dans le worktree à retirer).
 #
 # v1.5.0 (D-20260715-0001) : fraîcheur du somtech-pack à la NAISSANCE. Au launch :
 #   (1) signal si le pack du projet est en retard (pf_nudge_launch) ; (2) MAJ auto
@@ -147,7 +153,15 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
 
   _swt_session_lock "$wt"                        # marqueur « session vivante » (E4)
 
-  ( cd "$wt"                                    # la session vit dans le worktree
+  # Positionne le shell du PANE lui-même sur le worktree (D-20260719-0001).
+  # Sans ça, seul le sous-shell de lancement de `claude` (ci-dessous) était dans le
+  # worktree : le shell parent du pane restait dans le repo principal, et tout outil
+  # tiers scopé sur le cwd du pane (ex. `herdr pane list` → `cwd`) résolvait le mauvais
+  # repo. On restaure $main au teardown AVANT `git worktree remove` (le remove échoue
+  # si le cwd est à l'intérieur du worktree à retirer).
+  cd "$wt" || { _swt_session_unlock "$wt"; echo "⛔ cd vers le worktree échoué ($wt)"; return 1; }
+
+  ( # sous-shell : isole le sourcing d'env (set -a) du shell du pane ; cwd hérité = $wt
     # Secrets hors .mcp.json (T-20260625-0013) : Claude expanse ${VAR} depuis
     # l'environnement du process, pas depuis un fichier. On source le .env du
     # repo PRINCIPAL (jamais commité, donc absent du worktree) pour que les MCP
@@ -209,6 +223,7 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
       echo "📌 session $sess conservée : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
     else
+      cd "$main"                                  # quitte le worktree AVANT de le retirer
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
       git -C "$main" worktree remove "$wt" && git -C "$main" branch -D "wt/$sess" 2>/dev/null
       echo "🧹 session $sess terminée (tout mergé, rien en suspens) → worktree retiré"
