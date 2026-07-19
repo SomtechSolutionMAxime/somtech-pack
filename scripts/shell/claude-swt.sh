@@ -1,7 +1,14 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.5.0
+# claude-swt.sh — v1.5.1
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
+#
+# v1.5.1 (D-20260719-0001) : positionne le shell du PANE lui-même sur le worktree
+#   PENDANT la session (pas seulement le sous-shell de lancement de `claude`). Les
+#   outils tiers scopés sur le cwd du pane (ex. plugins herdr : `herdr pane list` →
+#   `cwd`) résolvaient le repo PRINCIPAL au lieu du worktree. Dès que `claude` sort, on
+#   restaure $main dans TOUS les cas (reprise `claude-swt <sess>` correcte + moindre
+#   surprise ; requis avant `git worktree remove` sur le cas propre+mergé).
 #
 # v1.5.0 (D-20260715-0001) : fraîcheur du somtech-pack à la NAISSANCE. Au launch :
 #   (1) signal si le pack du projet est en retard (pf_nudge_launch) ; (2) MAJ auto
@@ -147,7 +154,20 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
 
   _swt_session_lock "$wt"                        # marqueur « session vivante » (E4)
 
-  ( cd "$wt"                                    # la session vit dans le worktree
+  # Positionne le shell du PANE lui-même sur le worktree, LE TEMPS DE LA SESSION
+  # (D-20260719-0001). Sans ça, seul le sous-shell de lancement de `claude` (ci-dessous)
+  # était dans le worktree : le shell parent du pane restait dans le repo principal, et
+  # tout outil tiers scopé sur le cwd du pane (ex. `herdr pane list` → `cwd`) résolvait
+  # le mauvais repo. On restaure $main dès que `claude` sort (plus bas), dans TOUS les
+  # cas : herdr n'a plus besoin du cwd worktree une fois la session finie, et la reprise
+  # `claude-swt <sess>` depuis ce pane doit recapturer $main (pas le worktree).
+  # Garde : si le cd échoue, on nettoie la stack BD éventuelle et le marqueur avant de sortir.
+  cd "$wt" || {
+    [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
+    _swt_session_unlock "$wt"; echo "⛔ cd vers le worktree échoué ($wt)"; return 1
+  }
+
+  ( # sous-shell : isole le sourcing d'env (set -a) du shell du pane ; cwd hérité = $wt
     # Secrets hors .mcp.json (T-20260625-0013) : Claude expanse ${VAR} depuis
     # l'environnement du process, pas depuis un fichier. On source le .env du
     # repo PRINCIPAL (jamais commité, donc absent du worktree) pour que les MCP
@@ -193,6 +213,9 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       claude
     fi )
 
+  cd "$main"                                     # session finie → le pane retrouve le repo
+                                                 # principal (corrige la reprise + moindre
+                                                 # surprise ; requis avant `worktree remove`).
   _swt_session_unlock "$wt"                      # session terminée → marqueur retiré (E4)
 
   # --- au quit : retire seulement si rien en suspens (sinon garde pour reprise) ---
@@ -201,13 +224,13 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
   git -C "$main" fetch origin -q
   if [ -n "$(git -C "$wt" status --porcelain)" ]; then
     [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
-    echo "📌 session $sess conservée : modifications non commitées."
+    echo "📌 session $sess conservée ($wt) : modifications non commitées."
   else
     local pending
     pending=$(_claude-swt-pending "$main" "$wt" "$sess")
     if [ -n "$pending" ]; then
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
-      echo "📌 session $sess conservée : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
+      echo "📌 session $sess conservée ($wt) : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
     else
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
       git -C "$main" worktree remove "$wt" && git -C "$main" branch -D "wt/$sess" 2>/dev/null
