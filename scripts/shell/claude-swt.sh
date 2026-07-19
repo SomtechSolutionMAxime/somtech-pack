@@ -4,10 +4,11 @@
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
 #
 # v1.5.1 (D-20260719-0001) : positionne le shell du PANE lui-même sur le worktree
-#   (pas seulement le sous-shell de lancement de `claude`). Les outils tiers scopés
-#   sur le cwd du pane (ex. plugins herdr : `herdr pane list` → `cwd`) résolvaient le
-#   repo PRINCIPAL au lieu du worktree. Restauration de $main au teardown avant le
-#   `git worktree remove` (le remove échoue si le cwd est dans le worktree à retirer).
+#   PENDANT la session (pas seulement le sous-shell de lancement de `claude`). Les
+#   outils tiers scopés sur le cwd du pane (ex. plugins herdr : `herdr pane list` →
+#   `cwd`) résolvaient le repo PRINCIPAL au lieu du worktree. Dès que `claude` sort, on
+#   restaure $main dans TOUS les cas (reprise `claude-swt <sess>` correcte + moindre
+#   surprise ; requis avant `git worktree remove` sur le cas propre+mergé).
 #
 # v1.5.0 (D-20260715-0001) : fraîcheur du somtech-pack à la NAISSANCE. Au launch :
 #   (1) signal si le pack du projet est en retard (pf_nudge_launch) ; (2) MAJ auto
@@ -153,13 +154,18 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
 
   _swt_session_lock "$wt"                        # marqueur « session vivante » (E4)
 
-  # Positionne le shell du PANE lui-même sur le worktree (D-20260719-0001).
-  # Sans ça, seul le sous-shell de lancement de `claude` (ci-dessous) était dans le
-  # worktree : le shell parent du pane restait dans le repo principal, et tout outil
-  # tiers scopé sur le cwd du pane (ex. `herdr pane list` → `cwd`) résolvait le mauvais
-  # repo. On restaure $main au teardown AVANT `git worktree remove` (le remove échoue
-  # si le cwd est à l'intérieur du worktree à retirer).
-  cd "$wt" || { _swt_session_unlock "$wt"; echo "⛔ cd vers le worktree échoué ($wt)"; return 1; }
+  # Positionne le shell du PANE lui-même sur le worktree, LE TEMPS DE LA SESSION
+  # (D-20260719-0001). Sans ça, seul le sous-shell de lancement de `claude` (ci-dessous)
+  # était dans le worktree : le shell parent du pane restait dans le repo principal, et
+  # tout outil tiers scopé sur le cwd du pane (ex. `herdr pane list` → `cwd`) résolvait
+  # le mauvais repo. On restaure $main dès que `claude` sort (plus bas), dans TOUS les
+  # cas : herdr n'a plus besoin du cwd worktree une fois la session finie, et la reprise
+  # `claude-swt <sess>` depuis ce pane doit recapturer $main (pas le worktree).
+  # Garde : si le cd échoue, on nettoie la stack BD éventuelle et le marqueur avant de sortir.
+  cd "$wt" || {
+    [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
+    _swt_session_unlock "$wt"; echo "⛔ cd vers le worktree échoué ($wt)"; return 1
+  }
 
   ( # sous-shell : isole le sourcing d'env (set -a) du shell du pane ; cwd hérité = $wt
     # Secrets hors .mcp.json (T-20260625-0013) : Claude expanse ${VAR} depuis
@@ -207,6 +213,9 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       claude
     fi )
 
+  cd "$main"                                     # session finie → le pane retrouve le repo
+                                                 # principal (corrige la reprise + moindre
+                                                 # surprise ; requis avant `worktree remove`).
   _swt_session_unlock "$wt"                      # session terminée → marqueur retiré (E4)
 
   # --- au quit : retire seulement si rien en suspens (sinon garde pour reprise) ---
@@ -223,7 +232,6 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
       echo "📌 session $sess conservée : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
     else
-      cd "$main"                                  # quitte le worktree AVANT de le retirer
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
       git -C "$main" worktree remove "$wt" && git -C "$main" branch -D "wt/$sess" 2>/dev/null
       echo "🧹 session $sess terminée (tout mergé, rien en suspens) → worktree retiré"
