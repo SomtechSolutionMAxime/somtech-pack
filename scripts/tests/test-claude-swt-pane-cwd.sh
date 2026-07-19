@@ -51,6 +51,10 @@ cwd_of() {
   else c="$(lsof -a -p "$p" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"; fi
   [ -n "$c" ] && ( cd "$c" 2>/dev/null && pwd -P )
 }
+# Sonde : si l'introspection ne sait même pas lire NOTRE propre cwd (ni /proc ni
+# lsof), tout ancêtre renverra vide → jamais de match → faux 'clean'. On rend le
+# verdict 'inconclusive' (traité comme KO) plutôt que de passer en silence.
+if [ -z "$(cwd_of "$$")" ]; then printf 'inconclusive' > "${SWT_TEST_WITNESS:-/dev/null}"; exit 0; fi
 verdict=clean
 pid="$PPID"; i=0
 while [ "${pid:-0}" -gt 1 ] 2>/dev/null && [ "$i" -lt 8 ]; do

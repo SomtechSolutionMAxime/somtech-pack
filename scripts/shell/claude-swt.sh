@@ -224,13 +224,13 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
   git -C "$main" fetch origin -q
   if [ -n "$(git -C "$wt" status --porcelain)" ]; then
     [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
-    echo "📌 session $sess conservée : modifications non commitées."
+    echo "📌 session $sess conservée ($wt) : modifications non commitées."
   else
     local pending
     pending=$(_claude-swt-pending "$main" "$wt" "$sess")
     if [ -n "$pending" ]; then
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 0
-      echo "📌 session $sess conservée : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
+      echo "📌 session $sess conservée ($wt) : branches non mergées → $(printf '%s' "$pending" | tr '\n' ' ')"
     else
       [ -n "$sb_pid" ] && swt_db_down "$wt" "$sess" 1
       git -C "$main" worktree remove "$wt" && git -C "$main" branch -D "wt/$sess" 2>/dev/null
