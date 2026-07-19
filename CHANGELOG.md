@@ -5,7 +5,13 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-07-17
+## [Non-versionné] - 2026-07-19
+
+### Corrigé
+
+- **`claude-swt` : les outils herdr scopés-repo montraient le repo principal au lieu du worktree** (D-20260719-0001, T-20260719-0002) — le lanceur positionnait `claude` dans un sous-shell mais laissait le shell du *pane* dans le repo principal. `herdr pane list` exposait donc `cwd` = repo principal, et un plugin scopé sur ce `cwd` (ex. herdr-file-viewer) résolvait le mauvais repo — jusqu'à afficher des fichiers fantômes du principal alors que le worktree de travail était propre. Le pane est désormais positionné sur le worktree **pendant** la session vivante, puis restauré sur le repo principal au quit (dans tous les cas — la reprise `claude-swt <sess>` reste intacte). Correctif 100 % côté pack, sans dépendre du plugin tiers. Test red/green couvrant la propriété « pane sur le worktree pendant la session » (introspection des ancêtres) + la restauration au quit. Revue de code indépendante (règle d'or n°8) : APPROUVÉ après correction d'une régression de reprise et d'une fuite de stack BD.
+
+## [1.22.1] - 2026-07-17
 
 ### Corrigé
 
