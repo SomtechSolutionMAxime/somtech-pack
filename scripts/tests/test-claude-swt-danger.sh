@@ -63,11 +63,12 @@ if [ -f "$SNIPPET" ]; then
   grep -qiE 'danger|⚠|permissions? sautées|skip.*permission' "$SNIPPET" \
     && ok "avertissement de mode danger présent" || ko "aucun avertissement de mode danger"
 
-  # (3) la commande normale ne force pas le mode danger inconditionnellement :
-  # le chemin `else` doit lancer `claude` NU (sans flag). On cible la ligne
-  # `claude` seule — pas n'importe quel `else` (qui donnerait une fausse assurance).
-  grep -qE '^[[:space:]]*claude[[:space:]]*$' "$SNIPPET" \
-    && ok "chemin normal (claude sans flag) préservé" || ko "chemin normal sans flag introuvable"
+  # (3) la commande normale ne force pas le mode danger inconditionnellement : le
+  # chemin `else` lance `claude` SANS --dangerously-skip-permissions. Depuis
+  # T-20260720-0004 la ligne porte une prompt optionnelle (`claude "$@"`), d'où le
+  # `"$@"?` toléré — mais jamais le flag danger sur ce chemin.
+  grep -qE '^[[:space:]]*claude( "\$@")?[[:space:]]*$' "$SNIPPET" \
+    && ok "chemin normal (claude sans flag danger) préservé" || ko "chemin normal sans flag danger introuvable"
 fi
 
 echo ""

@@ -5,6 +5,12 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.23.0] - 2026-07-20
+
+### Ajouté
+
+- **`claude-swt --prompt "<texte>"` : injecter une prompt initiale à l'agent au lancement** (T-20260720-0004) — démarrer (ou reprendre) une session avec une prompt déjà passée à `claude`, sans avoir à la retaper une fois la session ouverte. Le flag est parsé par le cœur partagé `_claude-swt-launch`, donc hérité par `claude-swt` **et** `claude-swt-danger`, et passé à `claude` comme 1er argument positionnel (session interactive amorcée) avec un quoting sûr (espaces, accents, apostrophes, retours de ligne), compatible zsh **et** bash. `--prompt` sans valeur (ou vide) → erreur claire, aucun lancement silencieux ; sans le flag, comportement strictement inchangé. S'applique aussi au chemin de reprise (`claude-swt <timestamp> --prompt "…"`) pour relancer une session avec une nouvelle consigne. Snippet bumpé v1.5.1 → v1.6.0. Test TDD red→green à 7 scénarios (discriminant : 5 KO rejoué contre v1.5.1) + revue de code indépendante (règle d'or n°8) sans défaut bloquant.
+
 ## [Non-versionné] - 2026-07-19
 
 ### Corrigé
