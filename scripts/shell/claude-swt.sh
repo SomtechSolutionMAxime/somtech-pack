@@ -1,7 +1,16 @@
 # shellcheck shell=bash
 # ============================================================
-# claude-swt.sh — v1.5.1
+# claude-swt.sh — v1.6.0
 # Lanceur de session Claude Code en worktree (règle d'or n°11 amendée 2026-06-23).
+#
+# v1.6.0 (T-20260720-0004) : flag --prompt "<texte>" pour injecter une prompt
+#   initiale à l'agent au lancement (hérité par claude-swt ET claude-swt-danger).
+#   La prompt est passée à `claude` comme 1er argument positionnel (session
+#   interactive amorcée), quoting sûr. --prompt sans valeur → erreur, aucun
+#   lancement. Sans le flag : comportement inchangé. S'applique aussi à la reprise
+#   de session (claude-swt <timestamp> --prompt "…") — le flag est parsé avant le
+#   branchement création/reprise, donc utile pour relancer une session avec une
+#   nouvelle consigne.
 #
 # v1.5.1 (D-20260719-0001) : positionne le shell du PANE lui-même sur le worktree
 #   PENDANT la session (pas seulement le sous-shell de lancement de `claude`). Les
@@ -32,8 +41,11 @@
 #   Architecture/docs/superpowers/specs/2026-06-23-worktree-par-terminal-parallelisme-design.md
 #
 # Fonctions :
-#   claude-swt [timestamp] [path]  ouvre/reprend une session worktree isolée
-#   claude-swt-danger [ts] [path]  IDEM mais lance `claude --dangerously-skip-permissions`
+#   claude-swt [--prompt "…"] [timestamp] [path]
+#                                  ouvre/reprend une session worktree isolée ;
+#                                  --prompt injecte une prompt initiale à l'agent
+#   claude-swt-danger [--prompt "…"] [ts] [path]
+#                                  IDEM mais lance `claude --dangerously-skip-permissions`
 #   claude-swt-ls                  liste les sessions (= git worktree list)
 #   claude-swt-done <timestamp>    retire le worktree + branche d'une session
 #   claude-swt-gc                  liste les sessions terminées (clean + mergées)
@@ -95,7 +107,7 @@ _swt_session_active() {
 _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-swt-danger.
                         #   arg1 = session-timestamp (défaut: auto) ; arg2 = path worktree
                         #   $_CLAUDE_SWT_DANGER=1 → lance `claude --dangerously-skip-permissions`
-  local main wt repo sess wtpath="" profile="db" do_db=1 sb_pid=""
+  local main wt repo sess wtpath="" profile="db" do_db=1 sb_pid="" prompt=""
   main="$PWD"; repo=$(basename "$main")
   if ! git -C "$main" rev-parse --show-toplevel >/dev/null 2>&1; then
     echo "⛔ Pas dans un repo git. Place-toi à la racine d'un repo."; return 1
@@ -107,7 +119,12 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       --auth)  profile=auth ;;                  # + PostgREST + GoTrue + kong (RLS)
       --full)  profile=full ;;                  # stack complète
       --no-db) do_db=0 ;;                       # ne provisionne aucune BD
-      --*) echo "⛔ Flag inconnu : $1 (attendus : --db|--auth|--full|--no-db)"; return 1 ;;
+      --prompt)                                 # prompt initiale injectée à `claude`
+        if [ $# -lt 2 ] || [ -z "$2" ]; then    # (T-20260720-0004) — deux positions
+          echo "⛔ --prompt requiert une valeur (le texte de la prompt initiale)."; return 1
+        fi
+        prompt="$2"; shift ;;                    # consomme la valeur ; le flag est shifté en fin de boucle
+      --*) echo "⛔ Flag inconnu : $1 (attendus : --db|--auth|--full|--no-db|--prompt)"; return 1 ;;
       *) if [ -z "$sess" ]; then sess="$1"; elif [ -z "$wtpath" ]; then wtpath="$1"; fi ;;
     esac
     shift
@@ -203,14 +220,21 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
       claude mcp add --scope local graphify -- graphify-mcp graphify-out/graph.json >/dev/null 2>&1 || true
     fi
 
+    # Prompt initiale optionnelle (T-20260720-0004) : passée à `claude` comme 1er
+    # argument positionnel → la session interactive démarre amorcée par ce texte. Vide
+    # (aucun --prompt) = aucun argument, donc comportement historique inchangé. `set --`
+    # garantit des positionnels propres dans CE sous-shell (bash + zsh), sans toucher au
+    # shell appelant. Le quoting "$@" préserve espaces/accents/apostrophes/retours de ligne.
+    set --
+    [ -n "$prompt" ] && set -- "$prompt"
     if [ -n "${_CLAUDE_SWT_DANGER:-}" ]; then
       echo "⚠️  Mode DANGER : claude --dangerously-skip-permissions — toutes les"
       echo "    autorisations d'outils sont sautées pour cette session. À réserver à"
       echo "    un environnement de confiance (jamais sur du code non revu)."
       echo "    NB : le flag refuse de démarrer en root/sudo (garde-fou de Claude Code)."
-      claude --dangerously-skip-permissions
+      claude --dangerously-skip-permissions "$@"
     else
-      claude
+      claude "$@"
     fi )
 
   cd "$main"                                     # session finie → le pane retrouve le repo
@@ -240,7 +264,7 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
 }
 
 # claude-swt — session worktree isolée, permissions normales de Claude Code.
-claude-swt() { _claude-swt-launch "$@"; }        # usage : claude-swt [timestamp] [path]
+claude-swt() { _claude-swt-launch "$@"; }        # usage : claude-swt [--prompt "…"] [timestamp] [path]
 
 # claude-swt-danger — IDENTIQUE à claude-swt, mais lance Claude avec
 # --dangerously-skip-permissions (aucun prompt d'autorisation d'outil). Réutilise
