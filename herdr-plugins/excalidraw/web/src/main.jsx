@@ -7,6 +7,7 @@ import { StrictMode, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Excalidraw, exportToBlob, convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
+import { fontsToPreload } from './fonts.js'
 
 const SAVE_DEBOUNCE_MS = 400
 
@@ -39,6 +40,8 @@ function App() {
   const loadFailed = useRef(false)
   /** Dernière scène écrite : évite de réécrire le fichier sur un simple zoom. */
   const lastSaved = useRef(null)
+  /** Éléments bruts de la scène initiale : reconvertis une fois les polices prêtes (anti-clip). */
+  const rawInitial = useRef([])
   const [warning, setWarning] = useState(null)
 
   useEffect(() => {
@@ -46,6 +49,7 @@ function App() {
       .then((r) => r.json())
       .then((scene) => {
         hydrated.current = (scene.elements ?? []).length === 0 // rien à perdre : un canvas vide l'est déjà
+        rawInitial.current = scene.elements ?? [] // gardés bruts pour la re-mesure post-polices
         setInitial({ elements: normalize(scene.elements), appState: { viewBackgroundColor: '#ffffff' } })
       })
       .catch((err) => {
@@ -145,6 +149,46 @@ function App() {
   // Un rendu dès l'ouverture : l'agent doit pouvoir relire un canvas qu'il n'a pas modifié.
   useEffect(() => {
     if (api && initial) pushRender()
+  }, [api, initial, pushRender])
+
+  // Anti-clip au premier rendu (T-20260721-0001).
+  // `convertToExcalidrawElements` mesure la largeur des textes avec la police
+  // COURANTE. Au tout premier rendu (cache froid), les web-fonts (Excalifont,
+  // Nunito, …) ne sont pas encore chargées → largeurs sous-évaluées → texte
+  // coupé à droite. Un zoom re-mesure et corrige, mais un chargement passif
+  // reste coupé. Une fois les polices prêtes, on reconvertit la scène initiale
+  // UNE fois pour re-mesurer — sauf si l'utilisateur a déjà modifié la scène
+  // (on ne veut jamais écraser son travail).
+  const remeasured = useRef(false)
+  useEffect(() => {
+    if (!api || !initial || remeasured.current) return
+    if (!('fonts' in document)) return // navigateur sans Font Loading API : rien à faire
+    remeasured.current = true
+    let cancelled = false
+    const baseline = api.getSceneElements().map((el) => el.id).join(',')
+    ;(async () => {
+      try {
+        // Belt : forcer le chargement des polices de la scène au cas où
+        // `fonts.ready` se résoudrait avant qu'Excalidraw ait lancé le leur.
+        await Promise.all(
+          fontsToPreload(rawInitial.current).map((spec) => document.fonts.load(spec).catch(() => {})),
+        )
+        await document.fonts.ready
+      } catch {
+        return // pas de re-mesure possible : on laisse le rendu initial tel quel
+      }
+      if (cancelled || loadFailed.current) return
+      // Ne rien écraser : si la scène a changé depuis le montage, l'utilisateur a
+      // édité → on renonce à la re-mesure (le clip se corrigera à la 1re interaction).
+      if (api.getSceneElements().map((el) => el.id).join(',') !== baseline) return
+      // Reconvertit avec les polices désormais chargées → largeurs correctes.
+      // Marqué « remote » : pas une édition utilisateur, donc pas de réécriture fichier.
+      applyingRemote.current = true
+      api.updateScene({ elements: normalize(rawInitial.current) })
+      setTimeout(() => (applyingRemote.current = false), SAVE_DEBOUNCE_MS + 100)
+      pushRender()
+    })()
+    return () => { cancelled = true }
   }, [api, initial, pushRender])
 
   if (!initial) return null
