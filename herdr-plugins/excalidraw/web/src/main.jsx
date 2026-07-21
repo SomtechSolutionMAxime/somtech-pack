@@ -8,12 +8,9 @@ import { createRoot } from 'react-dom/client'
 import { Excalidraw, exportToBlob, convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import { fontsToPreload } from './fonts.js'
+import { isComplete, remeasureAfterFonts, waitForFonts } from './remeasure.js'
 
 const SAVE_DEBOUNCE_MS = 400
-
-/** Un élément déjà complet porte les champs internes d'Excalidraw. */
-const isComplete = (element) =>
-  typeof element?.seed === 'number' && typeof element?.versionNonce === 'number'
 
 /**
  * Un agent écrit naturellement des éléments minimaux ({type, x, y, width, height}).
@@ -157,36 +154,34 @@ function App() {
   // Nunito, …) ne sont pas encore chargées → largeurs sous-évaluées → texte
   // coupé à droite. Un zoom re-mesure et corrige, mais un chargement passif
   // reste coupé. Une fois les polices prêtes, on reconvertit la scène initiale
-  // UNE fois pour re-mesurer — sauf si l'utilisateur a déjà modifié la scène
-  // (on ne veut jamais écraser son travail).
+  // UNE fois — sauf si l'utilisateur a déjà édité la scène (garde par signature
+  // de contenu, on ne veut jamais écraser son travail). Le drapeau n'est posé
+  // qu'en cas de SUCCÈS : sous StrictMode, le run annulé ne bloque pas le retry.
   const remeasured = useRef(false)
   useEffect(() => {
     if (!api || !initial || remeasured.current) return
     if (!('fonts' in document)) return // navigateur sans Font Loading API : rien à faire
-    remeasured.current = true
     let cancelled = false
-    const baseline = api.getSceneElements().map((el) => el.id).join(',')
     ;(async () => {
-      try {
-        // Belt : forcer le chargement des polices de la scène au cas où
-        // `fonts.ready` se résoudrait avant qu'Excalidraw ait lancé le leur.
-        await Promise.all(
-          fontsToPreload(rawInitial.current).map((spec) => document.fonts.load(spec).catch(() => {})),
-        )
-        await document.fonts.ready
-      } catch {
-        return // pas de re-mesure possible : on laisse le rendu initial tel quel
+      const outcome = await remeasureAfterFonts({
+        rawElements: rawInitial.current,
+        getSceneElements: () => api.getSceneElements(),
+        normalize,
+        updateScene: (elements) => {
+          // Marqué « remote » : pas une édition utilisateur → pas de réécriture fichier.
+          applyingRemote.current = true
+          api.updateScene({ elements })
+          setTimeout(() => (applyingRemote.current = false), SAVE_DEBOUNCE_MS + 100)
+        },
+        pushRender,
+        waitForFonts: () => waitForFonts(document.fonts, fontsToPreload(rawInitial.current)),
+        isCancelled: () => cancelled || loadFailed.current,
+      })
+      // Ne verrouiller que si le travail est fait (ou inutile). Un run 'cancelled'
+      // ou 'user-edited' laisse le drapeau bas → un remount StrictMode réessaie.
+      if (outcome === 'remeasured' || outcome === 'remeasured-fonts-timeout' || outcome === 'no-text') {
+        remeasured.current = true
       }
-      if (cancelled || loadFailed.current) return
-      // Ne rien écraser : si la scène a changé depuis le montage, l'utilisateur a
-      // édité → on renonce à la re-mesure (le clip se corrigera à la 1re interaction).
-      if (api.getSceneElements().map((el) => el.id).join(',') !== baseline) return
-      // Reconvertit avec les polices désormais chargées → largeurs correctes.
-      // Marqué « remote » : pas une édition utilisateur, donc pas de réécriture fichier.
-      applyingRemote.current = true
-      api.updateScene({ elements: normalize(rawInitial.current) })
-      setTimeout(() => (applyingRemote.current = false), SAVE_DEBOUNCE_MS + 100)
-      pushRender()
     })()
     return () => { cancelled = true }
   }, [api, initial, pushRender])

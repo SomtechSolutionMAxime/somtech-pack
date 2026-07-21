@@ -39,6 +39,14 @@ test('honore la taille de police demandée', () => {
   assert.deepEqual(fontsToPreload([{ type: 'text', fontFamily: 5 }], 16), ['16px Excalifont'])
 })
 
+test('ignore un fontFamily inconnu (pas de mapping) plutôt que de fabriquer un spec bidon', () => {
+  const specs = fontsToPreload([
+    { type: 'text', fontFamily: 99, text: 'inconnu' },
+    { type: 'text', fontFamily: 5, text: 'ok' },
+  ])
+  assert.deepEqual(specs, ['20px Excalifont'])
+})
+
 test('tolère une entrée vide ou nulle', () => {
   assert.deepEqual(fontsToPreload(undefined), [])
   assert.deepEqual(fontsToPreload([]), [])
