@@ -48,7 +48,7 @@ Réduire la surface per-repo **aide** (diffs plus petits, moins de review) mais 
 
 | Risque | Mitigation |
 |---|---|
-| Bruit de PR (20 PR/release) | Canary (1-2 repos puis flotte) ; auto-merge des diffs triviaux (skills/docs), review humaine seulement si `settings.json`/hooks changent |
+| Bruit de PR (20 PR/release) | Canary (1-2 repos puis flotte). **Auto-merge HORS SCOPE** (violerait la règle d'or n°8) : le livrable s'arrête à la PR draft gatée, merge humain. La corvée est **réduite/déplacée** (dormants rattrapés, propagation auto), pas éliminée. |
 | Sécurité des tokens (règle secrets) | **GitHub App least-privilege**, secret en env CI, **jamais dans le code** (STD-038) |
 | Un mauvais release casse 20 repos | **Canary** + fan-out par **PR** (pas push direct) → la CI de chaque repo gate ; rollback = ne pas merger |
 | Écrasement de customisations locales | `pack update` fait déjà diff/no-overwrite-sans-`--force` ; le fleet updater ouvre une **PR**, jamais `--force` |

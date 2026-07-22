@@ -1,41 +1,42 @@
 # Découpage — Réduire la corvée de MAJ du pack (D-20260722-0004)
 
 - **Demande** : D-20260722-0004 · **App** : Somtech Pack (`2098c2fd-...`)
-- **Grain BRD** : application · **BRD présent** : NON (pointer `brd_document_id` NULL, **vérifié via `get_brd_pointer`** + `brd_coverage has_brd=false`) → stories `Réalisé par : N/A` (voie sanctionnée app-outil, règle d'or n°10)
-- **Verdict critique** : **`pret_a_creer = false`** — 1 bloquant + 4 majeurs. **Aucune hiérarchie créée** (gate dur).
+- **BRD** : absent (pointer NULL **vérifié** `get_brd_pointer` + `brd_coverage has_brd=false`) → stories `Réalisé par : N/A` (voie sanctionnée app-outil, règle d'or n°10)
+- **Verdict critique (2e passe, baseline réconciliée)** : **`pret_a_creer = true`** — 5 majeurs + 2 mineurs, **0 bloquant** (corrections de cadrage intégrées aux stories).
+- **Hiérarchie CRÉÉE dans ServiceDesk** (voir codes ci-dessous).
 - Design : `2026-07-22-fleet-updater-pack-design.md`
 
-## Découpage proposé (4 epics, ordre recommandé)
+## Baseline réconciliée (delta réel)
 
-**Epic 0 — Gouvernance & dé-risquage (prérequis, AVANT tout code)**
-- SPIKE ~1j : 3 inconnues dures — (1) registre `applications.repo_url` fiable pour ~20 apps ? (2) GitHub App least-privilege provisionnable — repos clients dans l'org Somtech ou orgs clientes distinctes (cross-org possiblement bloquant) ? (3) `npx pack update --yes` headless en CI + auth registre privé ?
-- ADR : bénir le fleet updater comme **unique automatisation centrale** autorisée à pousser (par PR only) dans d'autres repos (exception cadrée à la règle d'or n°7).
+L'existant **D-20260715-0001** (tout `completed`) livre déjà l'auto-PR **par repo, déclenché au lancement** (`pack-freshness.sh` : `pf_auto_pr`/`pf_build_and_pr`, gardes réseau d'idempotence, lock, PR draft, rollback). **Le delta de cette demande** : une orchestration **centrale, déclenchée sur release `v*`**, qui itère **toute la flotte** (registre SD, dormants inclus) et **réutilise** ce primitive — sans le ré-implémenter.
 
-**Epic 1 — Fleet updater : fan-out automatisé par PR (Track 1)** ⚠️ *baseline à corriger (voir critique)*
-- Auth GitHub App least-privilege + secret CI (L1).
-- Résolution du registre depuis SD `applications.repo_url` (repos sans `repo_url` remontés, jamais sautés).
-- Workflow fan-out canary chaîné **en aval du publish `v*`** (idempotence par repo×version).
-- Rapport de convergence annexé à la PR (car `pack update` converge : la dérive locale part en `.somtech.bak` gitignoré → invisible dans le diff git seul — **fait vérifié** dans `cli/src/commands/update.js`).
-- Fan-out flotte complète, matrix `fail-fast:false` (échec isolé par repo).
-- ~~Auto-merge du trivial~~ → **retiré du scope** (voir critique).
+## Hiérarchie (ordre recommandé)
 
-**Epic 2 — Vue « pack version coverage » (CROSS-APP → ServiceDesk, session séparée)**
-- ⚠️ Modifie **ServiceDesk** (app **dotée d'un BRD** v1.10.0), pas le pack → sort en epic dédié pour éviter l'anti-pattern ADR-031. À livrer dans le repo ServiceDesk.
-- Amender le BRD ServiceDesk (EF « observabilité couverture de version ») **avant** la story de vue.
-- Vue repo → version installée → version courante → retard (repos sans marqueur = « inconnu », jamais omis).
+**Epic 0 — Gouvernance & levée d'inconnues (E-20260722-0003, gate dur)**
+- `T-20260722-0021` — SPIKE : 4 inconnues (registre SD, GitHub App mono/cross-org [bloquant possible, en 1er], `pack update --yes` headless + auth registre privé, source de vérité version — confirmer que la garde M1 `pf_main_version` sur origin/main tranche déjà).
+- `T-20260722-0022` — ADR : bénir le fleet updater comme unique automatisation centrale (PR-only, jamais `--force`/auto-merge, GitHub App least-privilege, STD-038). **Gate dur** avant Epic 1.
 
-**Epic 3 — Rétrécir la surface per-repo (Track 2, APRÈS Track 1 prouvé)**
-- SPIKE/ADR : cartographier irréductible (mcp, app.yaml, hooks contextuels, pin de version) vs générique global + trancher le pin.
-- Implémenter la surface mince sans casser la reproductibilité clone-seul.
+**Epic 1 — Fleet updater : fan-out release-triggered par PR (E-20260722-0004, Track 1)**
+- `T-20260722-0023` — Lecteur du registre SD + canary (repos sans `repo_url` remontés).
+- `T-20260722-0024` — Provisionner + installer la **GitHub App** least-privilege sur la flotte (dédiée ; dépend du verdict cross-org).
+- `T-20260722-0025` — Orchestrateur per-repo : **réplique les pré-gardes** `pf_remote_branch_exists`/`pf_pr_exists` **avant** `pf_build_and_pr` (sinon re-run **destructif**), **pin `pack@<tag>`**, **base-branch paramétrable** (origin/main hardcodé l.185).
+- `T-20260722-0026` — Workflow GitHub Actions **ordonné après publish** (`workflow_run`/`needs:`) + **secret registre gaté** + E2E canary.
+- `T-20260722-0027` — Fan-out flotte complète + **isolation d'échec** (matrix `fail-fast:false`).
+- `T-20260722-0028` — Rapport de run + **rapport de convergence** dans chaque PR (dérive `.somtech.bak` invisible dans le diff git).
 
-## Critique adversariale — pourquoi `pret_a_creer = false`
+**Epic 2 (Track 2) — Rétrécir la surface per-repo (E-20260722-0005, après Track 1 prouvé)**
+- `T-20260722-0029` — SPIKE/ADR : cartographie irréductible vs générique.
+- `T-20260722-0030` — Migration du générique au global + preuve de reproductibilité clone-seul.
 
-1. **🔴 BLOQUANT — baseline fausse (vérifié en session)** : `scripts/shell/pack-freshness.sh` expose **déjà** `pf_build_and_pr`/`pf_auto_pr`/`pf_acquire_lock` (lock single-writer, idempotence par branche, PR draft, rollback), livré sous **E3 / D-20260715-0001**, **avec** `scripts/tests/test-pack-auto-pr.sh` (T-20260715-0004/0005/0006). Plusieurs stories d'Epic 1 re-spécifient ce comportement livré → risque de double livraison + tickets orphelins. **→ Re-scoper Epic 1 sur le SEUL vrai delta : une orchestration centrale déclenchée sur release `v*` qui itère la flotte et INVOQUE le primitive existant** (aujourd'hui launcher-triggered, pas release-triggered).
-2. **🟠 MAJEUR** — l'auto-merge normalise une violation de la règle d'or n°8 → **sortir du scope** (l'ouverture de PR atteint déjà la valeur).
-3. **🟠 MAJEUR** — Epic 2 : décision de modèle de données (`version.json` committé vs colonne SD) enfouie dans un G/W/T → **extraire en décision préalable**.
-4. **🟠 MAJEUR** — la note du workflow disait `test-pack-auto-pr.sh` absent : **faux**, il existe → recadrer le SPIKE (partir du harnais existant).
-5. Mineurs — dépendance de complétude Epic 1↔2 à expliciter ; portée SPIKE inconnue #3 surestimée (le harnais exerce déjà `pack update --yes`).
+## Corrections de la critique intégrées
 
-## Prochaine étape (reco)
+1. **🔴→corrigé** `pf_build_and_pr` ne porte QUE le rollback ; l'idempotence est dans `pf_auto_pr`. Appel nu au re-run **supprime la branche de la PR ouverte** → l'orchestrateur (T-0025) réplique les pré-gardes.
+2. Fan-out et `publish.yml` partagent `on: push tags v*` → parallèles. **Ordonner** (workflow_run/needs) + **pin `pack@<tag>`** (T-0026, T-0025).
+3. Secret auth **registre privé** non gaté → critère ajouté (T-0026).
+4. Tension `out_of_scope` « ne pas modifier pf_* » vs hardcode `origin/main` → **base-branch paramétrable** autorisé (T-0025, Epic 1 out_of_scope).
+5. Story workflow trop grosse (provisioning App cross-org) → **story dédiée** (T-0024).
+6-7. mineurs : source-of-truth version déjà tranchée par M1 ; `installed == tag` (pas « pas de diff ») pour « à jour ».
 
-Réconcilier avec **E3 / D-20260715-0001** : re-scoper Epic 1 sur le delta réel (orchestration release-triggered qui invoque `pf_auto_pr`), retirer l'auto-merge, extraire la décision de données d'Epic 2, puis **re-lancer le découpage** → création de la hiérarchie seulement quand `pret_a_creer = true`.
+## Hors découpage (pas oublié)
+
+**Vue « pack version coverage » (drift)** : modifie **ServiceDesk** (app avec BRD v1.10.0) → epic dédié, tracé à une **EF SD à créer**, livré **dans le repo ServiceDesk, session séparée** (règle n°7, anti-pattern ADR-031 évité). Dépend du marqueur de version d'Epic 1.
