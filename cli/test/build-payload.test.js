@@ -44,6 +44,48 @@ test('build-payload : embarque pack.json + VERSION + modules, identiques au repo
   );
 });
 
+test('build-payload : le canvas voyage dans le paquet, prêt à démarrer', () => {
+  const out = mkdtempSync(join(tmpdir(), 'smtk-payload-build-'));
+  buildInto(out);
+
+  // Sans ces fichiers, /canvas échoue à sa première étape chez celui qui installe.
+  for (const f of [
+    'herdr-plugins/excalidraw/herdr-plugin.toml',
+    'herdr-plugins/excalidraw/server/server.js',
+    'herdr-plugins/excalidraw/server/bin.js',
+    'herdr-plugins/excalidraw/scripts/open.sh',
+  ]) {
+    assert.ok(existsSync(join(out, f)), `${f} absent du paquet — le canvas ne démarrera pas`);
+  }
+
+  // La page construite et les dépendances d'exécution du serveur ne sont pas versionnées :
+  // la chaîne de publication les produit avant de construire le paquet. Quand elles sont
+  // là, elles doivent voyager — sinon le paquet promet un canvas qu'il ne livre pas.
+  for (const [src, why] of [
+    ['herdr-plugins/excalidraw/web/dist', 'la page construite'],
+    ['herdr-plugins/excalidraw/node_modules', "les dépendances d'exécution du serveur"],
+  ]) {
+    if (existsSync(join(REPO, src))) {
+      assert.ok(existsSync(join(out, src)), `${why} (${src}) présente au dépôt mais absente du paquet`);
+    }
+  }
+});
+
+test('build-payload : aucun résidu de construction ni d\'exécution dans le paquet', () => {
+  const out = mkdtempSync(join(tmpdir(), 'smtk-payload-build-'));
+  buildInto(out);
+
+  for (const residue of [
+    'herdr-plugins/excalidraw/web/node_modules',
+    'herdr-plugins/excalidraw/web/src',
+    'herdr-plugins/excalidraw/web/vite.config.js',
+    'herdr-plugins/excalidraw/.herdr',
+    'herdr-plugins/excalidraw/tests',
+  ]) {
+    assert.ok(!existsSync(join(out, residue)), `${residue} n'a rien à faire dans le paquet publié`);
+  }
+});
+
 test('build-payload : le payload produit est un payload CLI consommable', () => {
   const out = mkdtempSync(join(tmpdir(), 'smtk-payload-build-'));
   buildInto(out);

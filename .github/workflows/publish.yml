@@ -60,6 +60,14 @@ jobs:
           VER="$VER" node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('pack.json','utf8'));p.version=process.env.VER;fs.writeFileSync('pack.json',JSON.stringify(p,null,2)+'\n')"
           echo "✓ VERSION et pack.json alignés sur $VER"
 
+      # Le canvas est embarqué CONSTRUIT dans le paquet : sa page et les dépendances
+      # d'exécution de son serveur ne sont pas versionnées, elles se produisent ici.
+      # Sans cette étape, le paquet promet un canvas qu'il ne livre pas.
+      # Décision : docs/superpowers/specs/2026-07-24-distribution-canvas-decision.md
+      - name: Construire le canvas (page + dépendances d'exécution du serveur)
+        run: bash scripts/build.sh
+        working-directory: herdr-plugins/excalidraw
+
       - name: Construire le payload (depuis le repo, anti-drift)
         run: node scripts/build-payload.mjs
         working-directory: cli

@@ -7,8 +7,10 @@
 //
 // Lancé par `npm run build:payload` et par `prepublishOnly`.
 import { rmSync, mkdirSync, cpSync, copyFileSync, existsSync, readFileSync, lstatSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { isPayloadResidue } from '../src/payload-filter.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // cli/scripts
 const CLI_DIR = resolve(HERE, '..'); // cli
@@ -44,10 +46,11 @@ for (const p of [...paths].sort()) {
   cpSync(src, join(OUT, p), {
     recursive: true,
     dereference: false,
-    // Exclure .DS_Store ET les symlinks (alignement avec l'engine d'install,
-    // qui ignore les liens — évite qu'un lien voyage dans le tarball).
+    // Exclure les symlinks (alignement avec l'engine d'install, qui ignore les liens
+    // — évite qu'un lien voyage dans le tarball) et les résidus de construction ou
+    // d'exécution qui traînent dans l'arborescence de travail (cf. payload-filter.js).
     filter: (s) => {
-      if (s.endsWith('.DS_Store')) return false;
+      if (isPayloadResidue(relative(REPO, s))) return false;
       try { if (lstatSync(s).isSymbolicLink()) return false; } catch { /* noop */ }
       return true;
     },
