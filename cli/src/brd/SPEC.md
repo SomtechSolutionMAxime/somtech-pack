@@ -4,6 +4,11 @@
 > `validate-brd.py`, fixtures `Architecture/scripts/test-brd/`. Cible : gabarit Somcraft **v2.1.0**.
 > Parité = **re-parse round-trip** (PAS byte-à-byte : PyYAML ≠ sérialiseur JS). Cadre : STD-033 §2.12.
 > Contrat block_id validé au spike : voir `docs/superpowers/specs/2026-07-10-brd-spike-contrat-block-id-REF.md`.
+>
+> **Divergence assumée vs le parser Python** (T-20260725-0001, décision Maxime du 2026-07-26) : ce parser accepte
+> les codes de domaine à **4 lettres** et les références `D-`/`P-` dans `Réalisé par` ; le Python les rejette
+> encore. La divergence va dans le sens permissif (tout BRD accepté par le Python l'est ici), donc les goldens
+> Python restent valides. Aligner `extract-brd-yaml.py` relève du repo Architecture — hors périmètre (règle d'or n°7).
 
 ## Structure du BRD.md (v2.1.0) — sections reconnues
 
@@ -12,13 +17,13 @@ Le parser ne lit QUE 4 familles de sections (regex sur headings) ; tout le reste
 | Section | Regex heading (JS, `^` sans `$` sauf indiqué) | Amorce |
 |---|---|---|
 | §4 EA (global) | `^##\s+4\.\s*Exigences d'affaires` | tableau EA |
-| §5.X Domaine | `^###\s+5\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3})\)` | pose `currentDomain5` = groupe 1 |
+| §5.X Domaine | `^###\s+5\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3,4})\)` | pose `currentDomain5` = groupe 1 |
 | EF | `^####\s+Exigences fonctionnelles\s*$` | tableau EF du domaine courant |
 | RA | `^####\s+Règles d'affaires\s*$` | tableau RA du domaine courant |
-| §6.X Domaine | `^###\s+6\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3})\)` | tableau HS (code = groupe 1) |
+| §6.X Domaine | `^###\s+6\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3,4})\)` | tableau HS (code = groupe 1) |
 | §7 Changelog (global) | `^##\s+7\.\s*Changelog` | tableau Changelog |
 
-- EA + Changelog **globaux** (pas de domaine) ; EF/RA/HS **scopés à un domaine** (code 3 lettres du heading).
+- EA + Changelog **globaux** (pas de domaine) ; EF/RA/HS **scopés à un domaine** (code de 3 ou 4 lettres du heading).
 - §4 et §7 **obligatoires** (absence → erreur). §4/§7 en double → erreur. EF/RA/HS multi-domaines → `extend`.
 - Marqueurs Somcraft `<!-- bid:xxx -->` : lignes à **tracker** (dernier bid vu = block_id du prochain tableau) mais
   **ignorées** pour la structure. Absents (fixtures Python) → `md_block_id = null`.
@@ -45,8 +50,8 @@ Pour EF/RA/HS : la clé `domaine` est ajoutée **en dernier** à chaque row.
 
 ## Enums & regex
 
-- `ID_REGEX = ^(EA|EF|RA|HS)-[A-Z]{3}-\d{3}$` (padding 3 chiffres obligatoire)
-- `TICKET_REGEX = ^T-\d{8}-\d{4}$` (colonne `Réalisé par`)
+- `ID_REGEX = ^(EA|EF|RA|HS)-[A-Z]{3,4}-\d{3}$` (code de domaine de 3 ou 4 lettres, padding 3 chiffres obligatoire)
+- `REALISE_PAR_REGEX = ^[TDP]-\d{8}-\d{4}$` (colonne `Réalisé par` — story `T-`, demande `D-` ou projet `P-`)
 - `SEMVER_REGEX = ^\d+\.\d+\.\d+$` (colonne `Version`)
 - `STATUS = {draft, proposed, accepted, in_force, superseded, deprecated}`
 - `PRIORITY = {M, S, C, W}`
