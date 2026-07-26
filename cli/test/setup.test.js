@@ -73,15 +73,22 @@ test('shellrc : dry-run n’écrit rien', () => {
 test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => {
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
+  const cd = join(w, 'commands');
   const st = join(w, 'settings.json'); // ISOLE le settings : ne JAMAIS toucher le vrai ~/.claude
   writeFileSync(rc, '# rc\n');
-  const args = ['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--settings', st, '--yes', '--no-version-hook'];
+  // Une commande perso, pour vérifier que le miroir ne la touche pas.
+  mkdirSync(cd, { recursive: true });
+  writeFileSync(join(cd, 'ma-commande-perso.md'), 'PERSO');
+  const args = ['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--commands-dir', cd, '--dest', dd, '--settings', st, '--yes', '--no-version-hook'];
   let code = await run(args);
   assert.equal(code, 0);
   // un skill global connu du repo
   assert.ok(existsSync(join(sd, 'somtech-pack-install', 'SKILL.md')), 'skill global copié');
   // un workflow global connu du repo
   assert.ok(existsSync(join(wd, 'analyse-decoupage-demande.js')), 'workflow global copié');
+  // une commande globale connue du repo — sans elle, /canvas n'existe hors d'un projet installé
+  assert.ok(existsSync(join(cd, 'canvas.md')), 'commande globale copiée');
+  assert.equal(readFileSync(join(cd, 'ma-commande-perso.md'), 'utf8'), 'PERSO', 'commande perso intacte');
   assert.equal(markerCount(rc), 1, 'bloc claude-swt ajouté');
   // Hook graphify (D-20260716-0001) : script installé dans dest + câblé dans settings.
   assert.ok(existsSync(join(dd, 'graphify-share-out.sh')), 'graphify-share-out.sh installé par run setup');
