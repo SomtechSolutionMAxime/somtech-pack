@@ -45,7 +45,7 @@ Tu es un assistant de déploiement. Exécute les étapes suivantes dans l'ordre,
    ```
    git diff main..HEAD --name-only -- supabase/migrations/
    ```
-2. **Si aucune migration détectée** : Informe l'utilisateur qu'il n'y a pas de migration SQL à pousser en production. Fin du processus.
+2. **Si aucune migration détectée** : Informe l'utilisateur qu'il n'y a pas de migration SQL à pousser en production, puis **passe à l'étape 5** — une branche sans migration peut très bien modifier une app Fly.io.
 3. **Si des migrations sont détectées** :
    - Liste chaque fichier de migration détecté.
    - Affiche le contenu de chaque fichier de migration pour revue.
