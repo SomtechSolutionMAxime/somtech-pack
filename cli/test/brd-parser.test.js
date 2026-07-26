@@ -139,7 +139,7 @@ test('bornes du code de domaine — 3 et 4 lettres passent, 2 et 5 sont rejetée
   }
 });
 
-test('heading de domaine à 5 lettres — non reconnu, donc la sous-section EF est orpheline', () => {
+test('heading de domaine §5 à 5 lettres — rejeté bruyamment, en pointant le heading', () => {
   const md = [
     '## 4. Exigences d\'affaires (EA)', '',
     '| ID | Énoncé | Statut | Priorité | Owner |',
@@ -152,7 +152,85 @@ test('heading de domaine à 5 lettres — non reconnu, donc la sous-section EF e
     '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
     '| EF-GRAPHE-001 | Fx | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |',
   ].join('\n');
-  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError && /sans domaine/.test(e.message));
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError
+    && /[Hh]eading de domaine/.test(e.message) && e.lineNo === 9);
+});
+
+// Régression : un heading de domaine que le parser ne reconnaît PAS faisait disparaître sa table
+// entière en silence (exit 0, aucun warning). Cas réel : `(codes: CON / SAL)` au pluriel dans
+// /architecture/business-requirements/BRD-memoire-client.md → 2 hors-scope in_force évaporés.
+// Un hors-scope in_force sert à refuser du travail : le perdre en silence fait proposer du
+// hors-scope. Le parser doit échouer bruyamment plutôt que de rendre un résultat amputé.
+test('régression — un heading §6 non reconnu ne fait plus disparaître sa table en silence', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 6. Hors-scope (HS)', '',
+    '### 6.1 Domaine — Clients (code: CLI)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CLI-001 | Visible | Scope v1 | accepted | v2.0 |', '',
+    '### 6.2 Domaine — Consolidation / Saillance (codes: CON / SAL)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CON-001 | Perdu avant le fix | Scope v1 | accepted | v2.0 |',
+    '| HS-SAL-001 | Perdu avant le fix | Scope v1 | accepted | v2.0 |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError
+    && /[Hh]eading de domaine/.test(e.message) && e.lineNo === 15);
+});
+
+// Second mode de défaillance du même fallthrough, plus insidieux : en §5, `currentDomain5` gardait
+// la valeur du domaine PRÉCÉDENT, donc les EF/RA du domaine non reconnu étaient rattachées au
+// mauvais domaine — et checkDomainCoherence ne rattrapait rien, puisque le segment central de l'ID
+// matchait ce domaine précédent. Exit 0, données fausses plutôt que manquantes.
+test('régression — un heading §5 non reconnu ne rattache plus ses EF au domaine précédent', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Présentation (code: PRES)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-PRES-001 | Vraie EF du domaine PRES | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |', '',
+    '### 5.2 Domaine — Consolidation / Saillance (codes: CON / SAL)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-PRES-002 | Rattachée à tort à PRES avant le fix | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError
+    && /[Hh]eading de domaine/.test(e.message) && e.lineNo === 17);
+});
+
+test('régression — le heading §6 non reconnu est bien ce qui perdait les lignes (sanity du cas nominal)', () => {
+  // Même document, heading corrigé au singulier : les 3 hors-scope doivent tous ressortir.
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 6. Hors-scope (HS)', '',
+    '### 6.1 Domaine — Clients (code: CLI)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CLI-001 | Visible | Scope v1 | accepted | v2.0 |', '',
+    '### 6.2 Domaine — Consolidation (code: CON)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CON-001 | Visible | Scope v1 | accepted | v2.0 |', '',
+    '## 7. Changelog', '',
+    '| Version | Date | Demande / Projet | Sponsor validant | Mode | Résumé du changement |',
+    '|---------|------|------------------|------------------|------|----------------------|',
+    '| 1.0.0 | 2026-07-26 | D-20260726-0001 | Somtech | manuel | init |',
+  ].join('\n');
+  const parsed = parseBrd(md);
+  assert.deepStrictEqual(parsed.out_of_scope.map((r) => r.id), ['HS-CLI-001', 'HS-CON-001']);
 });
 
 test('cohérence domaine↔ID — tient aussi sur les codes à 4 lettres', () => {

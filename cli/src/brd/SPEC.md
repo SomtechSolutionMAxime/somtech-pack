@@ -51,7 +51,11 @@ Pour EF/RA/HS : la clé `domaine` est ajoutée **en dernier** à chaque row.
 ## Enums & regex
 
 - `ID_REGEX = ^(EA|EF|RA|HS)-[A-Z]{3,4}-\d{3}$` (code de domaine de 3 ou 4 lettres, padding 3 chiffres obligatoire)
-- `REALISE_PAR_REGEX = ^[TDP]-\d{8}-\d{4}$` (colonne `Réalisé par` — story `T-`, demande `D-` ou projet `P-`)
+- `REALISE_PAR_REGEX = ^[TDP]-\d{8}-\d{4}$` (colonne `Réalisé par` — story `T-`, demande `D-` ou projet `P-`).
+  L'epic `E-` reste exclu : le gabarit prescrit d'y lister les stories enfants, et aucun BRD ne l'a contredit.
+- Un heading `^###\s+[56]\.\d+\s+Domaine\s+—` dont le `(code: XXX)` n'est pas reconnu est une **erreur dure**.
+  Sans ce filet, la ligne tombait à travers la boucle : en §6 la table HS disparaissait (exit 0, silencieux),
+  en §5 les EF/RA étaient rattachées au domaine précédent. Fail loud plutôt que projection amputée.
 - `SEMVER_REGEX = ^\d+\.\d+\.\d+$` (colonne `Version`)
 - `STATUS = {draft, proposed, accepted, in_force, superseded, deprecated}`
 - `PRIORITY = {M, S, C, W}`
@@ -88,7 +92,7 @@ Pour EF/RA/HS : la clé `domaine` est ajoutée **en dernier** à chaque row.
 - Vide après trim → `[]`.
 - Trailing comma (`endsWith(",")`) → erreur.
 - Si contient `,` : doit matcher `^[^,]+(, [^,]+)+$` (séparateur strict `, `) sinon erreur.
-- Split `,`, trim, rejet item vide. Puis validation : `Réalisé par`→TICKET_REGEX ; `Couvre`/`Encadre`→ID_REGEX ;
+- Split `,`, trim, rejet item vide. Puis validation : `Réalisé par`→REALISE_PAR_REGEX ; `Couvre`/`Encadre`→ID_REGEX ;
   `Testé par`→non-vide (pas de regex format).
 
 ## Projections (project.js)
@@ -108,6 +112,9 @@ Un seul parse → deux projections :
   ne pas ajouter `domaine`) doit rendre au moins un test ROUGE — sinon le test ne teste rien.
 - Cas invalides : les 9 `invalid-*` (erreur parser) doivent **throw** ; les 3 `invalid-cross-*` sont hors parser
   (relèvent du validateur, non porté ici) → ne pas exiger d'erreur parser dessus.
+- **`valid-four-letter-domain.md` n'a volontairement PAS de golden** : le parser Python la rejette par
+  construction (domaine `GRPH`, références `D-`/`P-`). Elle n'est donc pas dans `VALID_GOLDENS` — c'est une
+  fixture de **divergence assumée**, pas de parité. Ne pas tenter d'en régénérer un golden.
 
 ## Trous connus (à combler côté TS)
 - Multi-domaines : aucune fixture Python ≥2 domaines → **ajouter une fixture 2 domaines** (vérifier accumulation + `domaine` par row).
