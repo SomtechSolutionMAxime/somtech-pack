@@ -64,6 +64,44 @@ test('payload-filter : ce qui fait tourner le canvas voyage', () => {
   }
 });
 
+test('payload-filter : aucun fichier d\'ignore ne voyage', () => {
+  // npm applique les .gitignore IMBRIQUÉS dans l'arborescence d'un paquet quand il n'y a
+  // pas de .npmignore. Un .gitignore de plugin arrivé jusque dans le payload retirerait
+  // du tarball publié la page construite et les dépendances du serveur — c'est-à-dire
+  // exactement ce que le paquet est censé livrer, sans qu'aucun voyant ne s'allume.
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/.gitignore'), true);
+  assert.equal(isPayloadResidue('plugins/audit-loi25/.gitignore'), true);
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/.npmignore'), true);
+});
+
+test('payload-filter : les dépendances imbriquées du serveur voyagent aussi', () => {
+  // npm crée un node_modules imbriqué dès qu'il y a conflit de version. En perdre un
+  // casserait le démarrage du serveur, silencieusement : rien ne le signalerait avant
+  // qu'un poste tente d'ouvrir un canvas.
+  assert.equal(
+    isPayloadResidue('herdr-plugins/excalidraw/node_modules/chokidar/node_modules/readdirp/index.js'),
+    false
+  );
+  assert.equal(
+    isPayloadResidue('herdr-plugins/excalidraw/node_modules/.package-lock.json'),
+    false
+  );
+});
+
+test('payload-filter : sous la page web, seul ce qui sert à la servir voyage', () => {
+  // Liste blanche et non liste noire : un fichier ajouté demain sous web/ ne doit pas
+  // partir dans un paquet distribué à toute l'entreprise parce que personne n'a pensé
+  // à l'exclure — un .env local, par exemple.
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/dist/index.html'), false);
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/package.json'), false);
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/package-lock.json'), false);
+
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/index.html'), true);
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/tsconfig.json'), true);
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/.env.example'), true);
+  assert.equal(isPayloadResidue('herdr-plugins/excalidraw/web/public/logo.svg'), true);
+});
+
 test('payload-filter : le reste du pack n\'est pas affecté', () => {
   for (const keep of [
     '.claude/commands/canvas.md',
