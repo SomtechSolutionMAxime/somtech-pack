@@ -89,9 +89,10 @@ Commandes :
            Config projet (settings.json) et symlinks jamais écrasés.
   setup    Configure le poste : skills globaux (user-skills + miroir des skills du
            pack dans ~/.claude/skills) + workflows globaux (~/.claude/workflows) +
-           claude-swt + hook de version. Re-jouable = mise à jour. Préserve skills et
-           workflows perso hors-pack ; un fichier du pack divergent CONVERGE vers la
-           version du pack (backup .somtech.bak auto), les symlinks sont épargnés
+           commandes globales (~/.claude/commands) + claude-swt + hook de version.
+           Re-jouable = mise à jour. Préserve skills, workflows et commandes perso
+           hors-pack ; un fichier du pack divergent CONVERGE vers la version du pack
+           (backup .somtech.bak auto), les symlinks sont épargnés
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
 

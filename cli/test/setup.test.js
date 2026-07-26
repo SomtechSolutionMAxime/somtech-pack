@@ -117,16 +117,30 @@ test('run setup --no-graphify : ni script ni hook graphify', async () => {
   assert.ok(!existsSync(st), 'aucun settings écrit (ni version ni graphify)');
 });
 
+test('run setup --no-commands : aucune commande installée, le reste intact', async () => {
+  const w = tmp('smtk-setup-');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows');
+  const cd = join(w, 'commands'); const dd = join(w, 'somtech'); const st = join(w, 'settings.json');
+  writeFileSync(rc, '# rc\n');
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd,
+    '--commands-dir', cd, '--dest', dd, '--settings', st, '--yes', '--no-version-hook', '--no-commands']);
+  assert.equal(code, 0);
+  assert.ok(!existsSync(cd), 'aucune commande installée avec --no-commands');
+  assert.ok(existsSync(join(sd, 'somtech-pack-install', 'SKILL.md')), 'les skills sont installés quand même');
+});
+
 test('SÉCURITÉ : setup sans --yes en non-TTY → refus (exit 1), rc intact', async () => {
   // En test, process.stdin.isTTY est falsy → chemin non-interactif sans consentement.
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc utilisateur\nexport KEEP=1\n');
-  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--no-version-hook']);
+  const cd = join(w, 'commands');
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--commands-dir', cd, '--dest', dd, '--no-version-hook']);
   assert.equal(code, 1, 'doit refuser sans --yes ni TTY');
   assert.equal(markerCount(rc), 0, 'le rc ne doit PAS être touché sans consentement');
   assert.ok(!existsSync(sd), 'aucun skill installé sans consentement');
   assert.ok(!existsSync(wd), 'aucun workflow installé sans consentement');
+  assert.ok(!existsSync(cd), 'aucune commande installée sans consentement');
 });
 
 test('shellrc : contenu après le bloc préservé après ré-install (invariant)', () => {
@@ -144,11 +158,13 @@ test('run setup --dry-run : rien écrit', async () => {
   const w = tmp('smtk-setup-');
   const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows'); const dd = join(w, 'somtech');
   writeFileSync(rc, '# rc\n');
-  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--dest', dd, '--settings', join(w, 'settings.json'), '--yes', '--dry-run', '--no-version-hook']);
+  const cd = join(w, 'commands');
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd, '--commands-dir', cd, '--dest', dd, '--settings', join(w, 'settings.json'), '--yes', '--dry-run', '--no-version-hook']);
   assert.equal(code, 0);
   assert.equal(markerCount(rc), 0, 'dry-run ne touche pas le rc');
   assert.ok(!existsSync(sd), 'dry-run ne copie pas les skills');
   assert.ok(!existsSync(wd), 'dry-run ne copie pas les workflows');
+  assert.ok(!existsSync(cd), 'dry-run ne copie pas les commandes');
 });
 
 test('run setup --no-skills / --no-claude-swt : portée respectée', async () => {
