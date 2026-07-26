@@ -77,6 +77,16 @@ export function resolveModules(manifest, names) {
         `Modules valides : ${allModuleNames(manifest).join(', ')}`
     );
   }
+  // Un module de portée « poste » est un OUTIL : il est déclaré pour que le paquet
+  // publié l'embarque, mais il s'installe une fois par machine — pas dans chaque dépôt.
+  // `default: false` ne suffit pas à l'empêcher : il faut refuser la demande explicite.
+  const posteOnly = names.filter((n) => manifest.modules[n]?.scope === 'poste');
+  if (posteOnly.length) {
+    throw new Error(
+      `Module(s) réservé(s) au poste : ${posteOnly.join(', ')}. ` +
+        `Ces modules ne s'installent pas dans un projet — passe par « pack setup » (une copie par machine).`
+    );
+  }
   return names.map((name) => ({
     name,
     paths: (manifest.modules[name].paths || []).slice(),
