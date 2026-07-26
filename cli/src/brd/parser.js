@@ -14,6 +14,9 @@ const SENTINEL = '\x00BRD_ESCAPED_PIPE\x00';
 const ID_REGEX = /^(EA|EF|RA|HS)-[A-Z]{3,4}-\d{3}$/;
 // « Réalisé par » accepte une story (T-), mais aussi une demande (D-) ou un projet (P-) :
 // une exigence peut être réalisée par un chantier entier, pas seulement par une story.
+// L'epic (E-) reste volontairement exclu : c'est le seul cas pour lequel le gabarit BRD prescrit
+// une alternative explicite — « lister les stories enfants individuellement » — et aucun BRD ne
+// l'a contredit en pratique. On élargit sur ce qui est constaté, pas au-delà.
 const REALISE_PAR_REGEX = /^[TDP]-\d{8}-\d{4}$/;
 const SEMVER_REGEX = /^\d+\.\d+\.\d+$/;
 const LIST_SEP_REGEX = /^[^,]+(, [^,]+)+$/;
@@ -27,6 +30,11 @@ const RE_SECTION_EF = /^####\s+Exigences fonctionnelles\s*$/;
 const RE_SECTION_RA = /^####\s+Règles d'affaires\s*$/;
 const RE_SECTION_DOMAIN_6 = /^###\s+6\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3,4})\)/;
 const RE_SECTION_CHANGELOG = /^##\s+7\.\s*Changelog/;
+// Filet : un heading qui se présente comme un domaine §5/§6 mais dont le `(code: XXX)` n'est pas
+// reconnu tombait à travers la boucle en silence — §6 perdait sa table HS entière (exit 0, sans
+// warning), §5 rattachait ses EF/RA au domaine PRÉCÉDENT. On échoue bruyamment plutôt que de
+// rendre un BRD amputé : un hors-scope in_force qui disparaît fait proposer du hors-scope.
+const RE_SECTION_DOMAIN_ANY = /^###\s+[56]\.\d+\s+Domaine\s+—/;
 
 const STATUS = new Set(['draft', 'proposed', 'accepted', 'in_force', 'superseded', 'deprecated']);
 const PRIORITY = new Set(['M', 'S', 'C', 'W']);
@@ -285,6 +293,12 @@ export function parseBrd(mdText) {
       tagBlock(rows, h);
       result.out_of_scope.push(...rows);
       i = endIdx + 1; continue;
+    }
+
+    // Ni §5 ni §6 n'a matché alors que la ligne se présente comme un heading de domaine :
+    // son `(code: XXX)` est absent ou mal formé (ex. `(codes: CON / SAL)` au pluriel).
+    if (RE_SECTION_DOMAIN_ANY.test(line)) {
+      throw new BRDParseError(i + 1, `Heading de domaine non reconnu : '${line.trim()}'. Attendu un unique code de 3 ou 4 lettres majuscules, sous la forme '(code: XXX)'.`);
     }
 
     if (RE_SECTION_CHANGELOG.test(line)) {
