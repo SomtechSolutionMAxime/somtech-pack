@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-07-26
+
+### Ajouté
+- **Canvas Excalidraw distribué avec le pack** — nouveau module `canvas` (opt-in) : le paquet publié embarque le serveur du canvas, sa page déjà construite et ses dépendances d'exécution. Outil de poste, installé une fois par machine, jamais copié dans les projets. (T-20260724-0019)
+
+### Corrigé
+- **Le paquet publié ne livrait pas ce qu'il promettait** — un fichier d'ignore embarqué dans le payload amputait l'archive au moment du packing : npm en retirait la page construite et les dépendances du serveur. Les fichiers d'ignore ne voyagent plus. (T-20260724-0019)
+
+### Technique
+- Le filtre de payload distingue les dépendances d'exécution (voyagent) de celles de construction (restent au dépôt), applique une liste blanche sous la page web et prend en charge les arbres imbriqués.
+- La chaîne de publication construit le canvas avant le paquet ; le script de construction passe à `npm ci` (reproductibilité).
+- Nouveau test qui interroge la liste réelle du paquet npm plutôt que le dossier de construction.
+
+
 ## [1.23.0] - 2026-07-20
 
 ### Ajouté
