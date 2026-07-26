@@ -10,6 +10,7 @@
 import { createServer } from 'node:http'
 import { createServer as createTcpServer } from 'node:net'
 import { readFile, writeFile, unlink } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import chokidar from 'chokidar'
@@ -225,6 +226,13 @@ async function serveStatic(pathname, res) {
     res.writeHead(200, { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' })
     res.end(body)
   } catch {
-    return json(res, 404, { error: `introuvable : ${relative}. Lancer \`npm run build\` dans le plugin.` })
+    // Deux contextes : dans le dépôt somtech-pack, la page se (re)construit ; installée
+    // depuis le paquet publié, ses sources n'ont pas voyagé — `npm run build` y échouerait
+    // toujours, il faut réinstaller le pack.
+    const fromSources = existsSync(fileURLToPath(new URL('../web/vite.config.js', import.meta.url)))
+    const remede = fromSources
+      ? 'Lancer `npm run build` dans le plugin.'
+      : 'Page du canvas absente ou incomplète — réinstalle le pack (`npx @somtech-solutions/pack setup`).'
+    return json(res, 404, { error: `introuvable : ${relative}. ${remede}` })
   }
 }
