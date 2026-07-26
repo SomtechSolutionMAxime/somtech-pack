@@ -99,9 +99,12 @@ test('paquet npm : le canvas survit à la fabrication du tarball', () => {
   // de publication les produit. On les simule ici pour que le test vaille aussi sur un
   // dépôt fraîchement récupéré, où elles sont absentes — c'est précisément le cas de la CI,
   // et c'est là que le défaut passait inaperçu.
+  // Noms volontairement inexistants ailleurs : planter `node_modules/ws/index.js`
+  // écraserait le vrai point d'entrée de `ws` dans le répertoire de construction.
+  // Ces chemins exercent exactement les mêmes règles du filtre.
   const planted = [
-    join(payload, 'herdr-plugins/excalidraw/web/dist/index.html'),
-    join(payload, 'herdr-plugins/excalidraw/node_modules/ws/index.js'),
+    join(payload, 'herdr-plugins/excalidraw/web/dist/__sonde__.html'),
+    join(payload, 'herdr-plugins/excalidraw/node_modules/__sonde__/index.js'),
   ];
   for (const f of planted) {
     mkdirSync(dirname(f), { recursive: true });
@@ -118,8 +121,8 @@ test('paquet npm : le canvas survit à la fabrication du tarball', () => {
   for (const f of [
     'payload/herdr-plugins/excalidraw/server/server.js',
     'payload/herdr-plugins/excalidraw/herdr-plugin.toml',
-    'payload/herdr-plugins/excalidraw/web/dist/index.html',
-    'payload/herdr-plugins/excalidraw/node_modules/ws/index.js',
+    'payload/herdr-plugins/excalidraw/web/dist/__sonde__.html',
+    'payload/herdr-plugins/excalidraw/node_modules/__sonde__/index.js',
   ]) {
     assert.ok(
       files.includes(f),

@@ -45,8 +45,10 @@ export function isPayloadResidue(relPath) {
   // Un fichier d'ignore embarqué ampute le paquet au packing (cf. note 2 en tête).
   if (name === '.gitignore' || name === '.npmignore') return true;
   if (name === '.DS_Store') return true;
-  // Copies de secours laissées par une mise à jour du pack ou par un éditeur.
-  if (name.endsWith('.bak')) return true;
+  // Copies de secours laissées par une mise à jour du pack ou par un éditeur. L'engine
+  // numérote les siennes quand le nom de base est déjà pris (`.somtech.bak`, `.bak.1`, …),
+  // d'où le test sur l'infixe et pas seulement sur le suffixe.
+  if (name.endsWith('.bak') || name.includes('.somtech.bak')) return true;
 
   // État d'exécution d'un canvas : port, journal, scène de travail.
   if (parts.includes('.herdr')) return true;

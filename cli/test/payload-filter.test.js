@@ -43,6 +43,9 @@ test('payload-filter : l\'état d\'exécution ne voyage jamais', () => {
   assert.equal(isPayloadResidue('some/project/.herdr/excalidraw-archi.port'), true);
   assert.equal(isPayloadResidue('herdr-plugins/excalidraw/.herdr/excalidraw-archi.log'), true);
   assert.equal(isPayloadResidue('docs/diagrams/pack.excalidraw.somtech.bak'), true);
+  // L'engine numérote ses copies de secours quand le nom de base est déjà pris.
+  assert.equal(isPayloadResidue('.claude/skills/merge/SKILL.md.somtech.bak.1'), true);
+  assert.equal(isPayloadResidue('.claude/skills/merge/SKILL.md.somtech.bak.12'), true);
 });
 
 test('payload-filter : les tests du plugin restent au dépôt', () => {
