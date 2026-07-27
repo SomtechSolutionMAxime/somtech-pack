@@ -89,6 +89,8 @@ test('run setup : skills copiés + claude-swt, idempotent, exit 0', async () => 
   // une commande globale connue du repo — sans elle, /canvas n'existe hors d'un projet installé
   assert.ok(existsSync(join(cd, 'canvas.md')), 'commande globale copiée');
   assert.equal(readFileSync(join(cd, 'ma-commande-perso.md'), 'utf8'), 'PERSO', 'commande perso intacte');
+  // le serveur du canvas — sans lui, la commande /canvas est distribuée mais ne trouve rien
+  assert.ok(existsSync(join(dd, 'herdr-plugins', 'excalidraw', 'server', 'bin.js')), 'serveur du canvas déposé avec les outils du poste');
   assert.equal(markerCount(rc), 1, 'bloc claude-swt ajouté');
   // Hook graphify (D-20260716-0001) : script installé dans dest + câblé dans settings.
   assert.ok(existsSync(join(dd, 'graphify-share-out.sh')), 'graphify-share-out.sh installé par run setup');

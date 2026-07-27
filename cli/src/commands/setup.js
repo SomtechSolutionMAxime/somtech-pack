@@ -8,6 +8,7 @@ import { installUserSkills } from '../userskills.js';
 import { installGlobalSkills } from '../globalskills.js';
 import { installGlobalWorkflows } from '../globalworkflows.js';
 import { installGlobalCommands } from '../globalcommands.js';
+import { installPosteModules } from '../posteonly.js';
 import { installGlobalVersionHook, installGraphifyShareHook } from '../userhooks.js';
 
 /** True si un binaire est sur le PATH (best-effort, jamais fatal). */
@@ -58,12 +59,13 @@ export async function cmdSetup(flags) {
   const doSkills = !flags.noSkills;
   const doWorkflows = !flags.noWorkflows;
   const doCommands = !flags.noCommands;
+  const doCanvas = !flags.noCanvas;
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
   const doGraphify = !flags.noGraphify;
 
-  if (!doSkills && !doWorkflows && !doCommands && !doSwt && !doVersionHook && !doGraphify) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-claude-swt, --no-version-hook et --no-graphify).');
+  if (!doSkills && !doWorkflows && !doCommands && !doCanvas && !doSwt && !doVersionHook && !doGraphify) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-claude-swt, --no-version-hook et --no-graphify).');
     return 0;
   }
 
@@ -71,6 +73,7 @@ export async function cmdSetup(flags) {
   if (doSkills) consentTargets.push(skillsDir);
   if (doWorkflows) consentTargets.push(workflowsDir);
   if (doCommands) consentTargets.push(commandsDir);
+  if (doCanvas && !consentTargets.includes(destDir)) consentTargets.push(destDir);
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
   if (doGraphify && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
@@ -151,6 +154,29 @@ export async function cmdSetup(flags) {
     }
     if (c.payloadLinks?.length) {
       console.log(`    ℹ️  ${c.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
+    }
+  }
+
+  if (doCanvas) {
+    // Outils de poste : une copie par machine, jamais dans les projets (le module porte
+    // scope: poste, et l'installation projet le refuse). Le canvas est le premier de la
+    // famille. Il est déposé avec les autres outils de poste du pack (claude-swt et ses
+    // bibliothèques) — pas dans ~/.claude, qui est la CONFIG de Claude Code, pas un
+    // dépôt de binaires.
+    const p = installPosteModules({ payloadRoot, toolsDir: destDir, dryRun: flags.dryRun, force: flags.force });
+    if (p.modules.length) {
+      console.log(
+        `  outils de poste → ${destDir} : ${p.modules.join(', ')}` +
+          ` (créés ${p.created.length}, convergés ${p.updated.length}, inchangés ${p.unchanged.length})` +
+          (p.backedUp.length ? `, dérives sauvegardées ${p.backedUp.length}` : '')
+      );
+      if (p.conflicts.length) {
+        console.log(
+          `    ↩︎  ${p.conflicts.length} fichier(s) symlinké(s) en global, non écrit(s) à travers (dev setup préservé).`
+        );
+      }
+    } else {
+      console.log('  outils de poste : aucun module de portée poste dans ce pack.');
     }
   }
 

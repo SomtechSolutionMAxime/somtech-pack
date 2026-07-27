@@ -16,10 +16,10 @@ Le serveur du canvas vit dans le plugin `somtech.excalidraw`. Le chercher dans c
 herdr plugin list --json 2>/dev/null \
   | python3 -c 'import sys,json;print(next(p["plugin_root"] for p in json.load(sys.stdin)["result"]["plugins"] if p["plugin_id"]=="somtech.excalidraw"))' 2>/dev/null \
   || ls -d ./herdr-plugins/excalidraw 2>/dev/null \
-  || ls -d ~/.claude/herdr-plugins/excalidraw 2>/dev/null
+  || ls -d ~/.somtech/herdr-plugins/excalidraw 2>/dev/null
 ```
 
-Si rien n'est trouvé : dire à Maxime que le plugin n'est pas installé et proposer `herdr plugin link herdr-plugins/excalidraw` depuis somtech-pack. **Ne pas improviser un autre canvas.**
+Si rien n'est trouvé : dire à Maxime que le plugin n'est pas installé et proposer `npx @somtech-solutions/pack setup` (le canvas fait partie des outils de poste, déposés dans `~/.somtech`). **Ne pas improviser un autre canvas.**
 
 ## Étape 2 — Démarrer le canvas
 
