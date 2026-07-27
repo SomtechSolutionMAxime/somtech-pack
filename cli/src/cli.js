@@ -23,7 +23,7 @@ export function parseArgs(argv) {
   const flags = {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
     rc: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
-    noSkills: false, noWorkflows: false, noCommands: false,
+    noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
     mode: null, file: null, id: null, patch: null,
     help: false, version: false,
@@ -55,6 +55,7 @@ export function parseArgs(argv) {
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
       case '--no-commands': flags.noCommands = true; break;
+      case '--no-canvas': flags.noCanvas = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--no-graphify': flags.noGraphify = true; break;
       case '--yes': case '-y': flags.yes = true; break;
@@ -89,7 +90,8 @@ Commandes :
            Config projet (settings.json) et symlinks jamais écrasés.
   setup    Configure le poste : skills globaux (user-skills + miroir des skills du
            pack dans ~/.claude/skills) + workflows globaux (~/.claude/workflows) +
-           commandes globales (~/.claude/commands) + claude-swt + hook de version.
+           commandes globales (~/.claude/commands) + outils de poste (~/.somtech,
+           dont le canvas) + claude-swt + hook de version.
            Re-jouable = mise à jour. Préserve skills, workflows et commandes perso
            hors-pack ; un fichier du pack divergent CONVERGE vers la version du pack
            (backup .somtech.bak auto), les symlinks sont épargnés
@@ -124,6 +126,7 @@ Options (setup) :
   --no-skills       Ne pas installer les skills globaux
   --no-workflows    Ne pas installer les workflows globaux
   --no-commands     Ne pas installer les commandes globales
+  --no-canvas       Ne pas installer les outils de poste (canvas), déposés dans ~/.somtech
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
   --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)
