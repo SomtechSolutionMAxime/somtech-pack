@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.23.0] - 2026-07-27
+
+### Ajouté
+- **Orchestrer un chantier par agents dédiés** — nouvelle compétence `/orchestrer-chantier` : piloter une Demande ou un Projet de bout en bout en confiant chaque epic à un agent qui naît, travaille et meurt dans son propre espace de travail. Elle encode un modèle éprouvé plutôt qu'une intention : un pilote qui n'exécute jamais, un agent à la fois, un dimensionnement borné par ce qu'un agent peut mener sans compacter son contexte, une condition de fin obligatoire, un review indépendant qui mute le code, et une fermeture qui retire la session **et** son espace de travail. (T-20260727-0071)
+- **Garde-fou contre les commandes d'outillage inexistantes** — la suite de tests refuse désormais toute commande `herdr` que le binaire ne connaît pas, groupe comme sous-commande, dans tout le contenu livré par le pack. Motif : une compétence documentait une commande d'attente qui n'existe pas, et les agents qui la suivaient échouaient sans que rien ne l'ait signalé. (T-20260727-0072)
+
+### Corrigé
+- **La procédure de fermeture d'un agent pouvait fermer son coordonnateur** — trouvé au code review : fermer l'onglet d'un agent emporte tous ceux qui le partagent, et un onglet en héberge souvent plusieurs. On ferme maintenant la seule session visée. (T-20260727-0071)
+
 ## [Non-versionné] - 2026-07-27
 
 ### Ajouté
