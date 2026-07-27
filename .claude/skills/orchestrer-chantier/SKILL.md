@@ -106,11 +106,21 @@ Pour chaque epic dans l'ordre :
 P=$(herdr tab create --workspace <ws> --label "<epic> <sujet>" --no-focus \
     | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['root_pane']['pane_id'])")
 herdr pane run "$P" 'cd <repo-principal> && claude-swt'
-sleep 28
-herdr agent rename "$P" e-20260727-0010
+
+# Attendre que l'agent soit réellement détecté, plutôt que de parier sur un délai.
+for _ in $(seq 1 30); do
+  herdr agent get "$P" 2>/dev/null | grep -q '"result"' && break
+  sleep 2
+done
+herdr agent rename "$P" e-20260727-0010 | grep -q '"result"' \
+  || echo "⛔ pas d'agent dans $P — regarde ce qui s'y passe (herdr pane read) avant d'aller plus loin"
 ```
 
 `claude-swt` crée le worktree **puis** lance l'agent dedans : la règle d'or n°11 est tenue par construction. Le nom de l'agent est le code de l'unité de travail dont il a la charge, en minuscules.
+
+**Vérifie que le rename a pris avant de continuer.** Un agent qui met plus longtemps que prévu à démarrer reste anonyme, et `herdr agent rename` répond alors `agent_not_found` — silencieusement, si personne ne lit sa sortie. Or tout ce qui suit dépend de ce nom : le compte rendu qu'il t'enverra, tes messages à ses pairs, et ton inventaire des worktrees. Un agent anonyme est inadressable, et tu ne t'en apercevras qu'au moment où tu auras besoin de lui parler.
+
+Même prudence pour la suite : après avoir livré le brief, relis son pane (`herdr pane read "$P"`) pour confirmer qu'il l'a bien reçu. Une session qui s'ouvre sur un dossier neuf peut poser une question avant d'accepter le premier message — auquel cas ton brief a servi de réponse à cette question, et non de brief.
 
 *À savoir* : `claude-swt` et ses variantes sont des **fonctions du shell interactif**, pas des binaires. Elles marchent dans un pane (qui charge le profil), mais pas depuis un outil qui lance un shell non interactif — là, utilise les commandes `git worktree` directement.
 
@@ -136,10 +146,12 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches :
 
 Ce qui doit toujours y figurer : **le livrable**, **la preuve** (les tests qui l'attestent), **l'état du ServiceDesk**, et **le compte rendu au coordonnateur**. Les trois derniers sont précisément ce qu'un agent saute quand rien ne l'en empêche.
 
-**d. Exiger le suivi actif.** Le brief doit lui demander d'**invoquer la compétence `herdr`** et de te prévenir lui-même :
+**d. Exiger le suivi actif.** Le brief doit lui demander de te prévenir lui-même, **en lui donnant la commande exacte** plutôt qu'en le renvoyant à une documentation :
 
-- quand il a fini : `herdr agent prompt <ton-pane> "<son-nom> a fini : <une ligne> — PR #<n>"` ;
+- quand il a fini : `herdr agent prompt <ton-nom-ou-ton-pane> "<son-nom> a fini : <une ligne> — PR #<n>"` ;
 - **immédiatement** s'il se bloque, si une contrainte se révèle impraticable, ou s'il découvre un défaut qui touche un autre chantier.
+
+⚠️ **N'envoie pas ton exécutant lire la compétence `herdr` du poste sans le prévenir.** Elle n'est pas livrée par le pack — elle vient de l'outil — et elle enseigne aujourd'hui `herdr wait output …` et `herdr wait agent-status …`, deux commandes qui **n'existent pas** (`unknown command: wait`). Un agent qui les suit perd du temps sur une erreur qui n'est pas la sienne. Donne-lui les commandes dans son brief ; si tu tiens à l'y renvoyer, dis-lui dans le même souffle que les formes réelles sont `herdr agent wait … --until …` et `herdr pane wait-output …`.
 
 Ça supprime le délai entre « il a fini » et « je m'en aperçois ». En filet, tu peux attendre :
 
@@ -169,14 +181,16 @@ Un agent qui a fini laisse **deux** choses derrière lui : son pane et son workt
 git -C ~/worktrees/<repo>/<timestamp> status --porcelain
 git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}.. 2>/dev/null
 
-# 2. fermer le pane (retrouve son tab si tu ne l'as pas noté)
-herdr tab close $(herdr pane get "$P" | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['pane']['tab_id'])")
+# 2. fermer SON pane, pas son tab
+herdr pane close "$P"
 
 # 3. retirer le worktree et sa branche-socle
 claude-swt-done <timestamp>          # depuis un pane ; sinon, ou si refusé :
 git -C <repo> worktree remove --force ~/worktrees/<repo>/<timestamp>
 git -C <repo> worktree prune
 ```
+
+**Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, dont potentiellement toi. `herdr tab close` les emporte tous, sans confirmation : tu peux te fermer toi-même en croyant fermer ton exécutant. Si tu veux savoir avec qui un agent partage son tab avant d'agir, `herdr agent list` donne le `tab_id` de chacun.
 
 **Fais l'inventaire régulièrement** — les worktrees s'accumulent vite quand on enchaîne les agents :
 
@@ -229,7 +243,8 @@ Dans les deux cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert po
 |---|---|
 | Coder « juste ce petit bout » soi-même | Le contexte du pilote se remplit, et il ne tient plus le chantier |
 | Verser son contexte dans le brief | L'agent reçoit ce que tu sais, pas ce dont il a besoin — et paie pour le lire |
-| Lancer deux agents en parallèle sur le même dépôt | Conflits de fichiers, et deux fils à suivre au lieu d'un |
+| Faire travailler deux de tes exécutants en même temps | Techniquement possible — chacun a son worktree — mais tu as deux fils à suivre, deux séries de correctifs, et des merges qui se croisent sur des epics souvent liés. Le gain est rarement là où on l'attend |
+| Mettre deux agents dans le même worktree | Là, ce n'est plus un arbitrage : ils se marchent dessus sur les mêmes fichiers et la même branche |
 | Laisser un agent fini ouvert | Son worktree pointe sur un commit périmé, et le pane occupe l'écran |
 | Accrocher la dette du review à l'epic livré | L'epic ne ferme jamais et le ServiceDesk ment |
 | Faire corriger par le reviewer | Il perd l'indépendance qui faisait sa valeur |
