@@ -89,10 +89,15 @@ export function installPosteModules({ payloadRoot, toolsDir, dryRun = false, for
 
   // Ce qui est installé mais inutilisable : le dire ici plutôt que de laisser l'utilisateur
   // le découvrir plus tard sur une trace Node dans un fichier de journal.
+  //
+  // On sonde l'ÉTAT DU POSTE, pas la source : un poste déjà pourvu reste utilisable même
+  // si le pack qu'on rejoue, lui, n'a pas été construit. En dry-run rien n'a été écrit,
+  // c'est donc la source qui renseigne sur ce que l'installation apporterait.
+  const sonde = dryRun ? payloadRoot : toolsDir;
   const warnings = [];
   for (const m of installed) {
     for (const [rel, quoi] of REQUIS[m.name] || []) {
-      if (!existsSync(join(payloadRoot, rel))) {
+      if (!existsSync(join(sonde, rel))) {
         warnings.push(
           `${m.name} installé sans ${quoi} — il ne démarrera pas. ` +
             'Construis-le (`bash scripts/build.sh` dans herdr-plugins/excalidraw) ou installe depuis le paquet publié.'

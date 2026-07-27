@@ -170,18 +170,21 @@ export async function cmdSetup(flags) {
           ` (créés ${p.created.length}, convergés ${p.updated.length}, inchangés ${p.unchanged.length})` +
           (p.backedUp.length ? `, dérives sauvegardées ${p.backedUp.length}` : '')
       );
-      if (p.conflicts.length) {
-        console.log(
-          `    ↩︎  ${p.conflicts.length} fichier(s) symlinké(s) en global, non écrit(s) à travers (dev setup préservé).`
-        );
-      }
-      if (p.payloadLinks?.length) {
-        console.log(`    ℹ️  ${p.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
-      }
-      for (const w of p.warnings) console.log(`    ⚠️  ${w}`);
-    } else {
+    } else if (!p.conflicts.length) {
       console.log('  outils de poste : aucun module de portée poste dans ce pack.');
     }
+    // Hors du test ci-dessus : un dossier symlinké vers le dépôt source donne 0 fichier
+    // appliqué et 187 conflits — c'est justement le cas où le diagnostic compte le plus.
+    if (p.conflicts.length) {
+      console.log(
+        `  outils de poste → ${destDir} : ${p.conflicts.length} fichier(s) symlinké(s) en global,` +
+          ' non écrit(s) à travers (dev setup préservé).'
+      );
+    }
+    if (p.payloadLinks?.length) {
+      console.log(`    ℹ️  ${p.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
+    }
+    for (const w of p.warnings) console.log(`    ⚠️  ${w}`);
   }
 
   if (doSwt) {

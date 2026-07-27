@@ -118,6 +118,24 @@ test('poste : un canvas installé sans sa page construite le dit', () => {
   assert.match(r.warnings.join(' '), /build\.sh|paquet/, 'il doit dire quoi faire');
 });
 
+test('poste : un poste déjà pourvu ne reçoit pas d\'avertissement alarmiste', () => {
+  // Rejouer setup depuis un clone non construit ne doit pas annoncer « il ne démarrera
+  // pas » si le poste, lui, a déjà tout ce qu'il faut : l'avertissement porte sur l'état
+  // de la machine, pas sur celui de la source.
+  const toolsDir = tmp('smtk-poste-');
+  const complet = installPosteModules({ payloadRoot: REPO, toolsDir });
+  assert.deepEqual(complet.warnings, [], 'une installation complète ne dit rien');
+
+  const ampute = tmp('smtk-pl-');
+  mkdirSync(join(ampute, 'herdr-plugins', 'excalidraw', 'server'), { recursive: true });
+  writeFileSync(join(ampute, 'herdr-plugins', 'excalidraw', 'server', 'bin.js'), '// serveur\n');
+  writeFileSync(join(ampute, 'pack.json'), JSON.stringify({
+    modules: { canvas: { default: false, scope: 'poste', paths: ['herdr-plugins/'] } },
+  }));
+  const r = installPosteModules({ payloadRoot: ampute, toolsDir });
+  assert.deepEqual(r.warnings, [], 'le poste est pourvu : rien à signaler');
+});
+
 test('poste : le rapport ne liste que les modules réellement installés', () => {
   // Les trois miroirs aînés dérivent leur liste de ce qui a été traité, pas du manifeste.
   const fake = tmp('smtk-pl-');
