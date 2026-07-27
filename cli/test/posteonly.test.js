@@ -122,16 +122,36 @@ test('poste : un poste déjà pourvu ne reçoit pas d\'avertissement alarmiste',
   // Rejouer setup depuis un clone non construit ne doit pas annoncer « il ne démarrera
   // pas » si le poste, lui, a déjà tout ce qu'il faut : l'avertissement porte sur l'état
   // de la machine, pas sur celui de la source.
-  const toolsDir = tmp('smtk-poste-');
-  const complet = installPosteModules({ payloadRoot: REPO, toolsDir });
-  assert.deepEqual(complet.warnings, [], 'une installation complète ne dit rien');
+  //
+  // Le payload est fabriqué de toutes pièces : `web/dist` et `node_modules` ne sont pas
+  // versionnés, donc s'appuyer sur le dépôt ferait passer ce test sur un poste où le
+  // canvas a été construit et échouer sur un dépôt fraîchement récupéré — le cas de la
+  // chaîne d'intégration.
+  const complet = tmp('smtk-pl-');
+  const racine = join(complet, 'herdr-plugins', 'excalidraw');
+  for (const [rel, contenu] of [
+    ['server/bin.js', '// serveur\n'],
+    ['node_modules/ws/index.js', '// dépendance\n'],
+    ['web/dist/index.html', '<!doctype html>\n'],
+  ]) {
+    mkdirSync(dirname(join(racine, rel)), { recursive: true });
+    writeFileSync(join(racine, rel), contenu);
+  }
+  const manifeste = JSON.stringify({
+    modules: { canvas: { default: false, scope: 'poste', paths: ['herdr-plugins/'] } },
+  });
+  writeFileSync(join(complet, 'pack.json'), manifeste);
 
+  const toolsDir = tmp('smtk-poste-');
+  const plein = installPosteModules({ payloadRoot: complet, toolsDir });
+  assert.deepEqual(plein.warnings, [], 'une installation complète ne dit rien');
+
+  // Même poste, mais on rejoue depuis une source amputée.
   const ampute = tmp('smtk-pl-');
   mkdirSync(join(ampute, 'herdr-plugins', 'excalidraw', 'server'), { recursive: true });
   writeFileSync(join(ampute, 'herdr-plugins', 'excalidraw', 'server', 'bin.js'), '// serveur\n');
-  writeFileSync(join(ampute, 'pack.json'), JSON.stringify({
-    modules: { canvas: { default: false, scope: 'poste', paths: ['herdr-plugins/'] } },
-  }));
+  writeFileSync(join(ampute, 'pack.json'), manifeste);
+
   const r = installPosteModules({ payloadRoot: ampute, toolsDir });
   assert.deepEqual(r.warnings, [], 'le poste est pourvu : rien à signaler');
 });
