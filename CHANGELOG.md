@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-07-27
+
+### Ajouté
+- **Le canvas s'installe sur le poste** — `pack setup` dépose désormais le serveur du canvas dans `~/.somtech`, aux côtés de `claude-swt`. La commande `/canvas` fonctionne donc dans toute session, y compris hors d'un projet ayant reçu le pack. Nouveau drapeau `--no-canvas`. (T-20260724-0022)
+- **Notion de portée d'un module** — un module déclaré `scope: poste` est embarqué dans le paquet publié mais refusé à l'installation projet : un dépôt client n'a pas à porter d'outillage interne. Le canvas est le premier de cette famille. (T-20260724-0019)
+
+### Corrigé
+- **Une installation incomplète se signale** — installer le canvas depuis un dépôt jamais construit déposait le serveur sans sa page ni ses dépendances, et se déclarait réussi ; l'échec n'apparaissait qu'à l'usage, dans un fichier de journal. L'installation dit maintenant ce qui manque et quoi faire. (T-20260724-0022)
+
+
 ## [Non-versionné] - 2026-07-26
 
 ### Ajouté
