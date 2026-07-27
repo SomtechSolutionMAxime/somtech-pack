@@ -53,7 +53,7 @@ Le découpage prévoyait que l'installation du pack dans un projet y dépose le 
 | Élément | Destination | Pourquoi |
 |---|---|---|
 | La commande `/canvas` | Le projet (module `core`, déjà le cas) | C'est de la configuration d'agent, elle appartient au projet |
-| Le serveur du canvas + sa page construite | **Le poste uniquement** (`~/.claude/herdr-plugins/excalidraw`) | C'est un outil, une copie par poste suffit ; la commande interroge déjà cet emplacement |
+| Le serveur du canvas + sa page construite | **Le poste uniquement** (`~/.somtech/herdr-plugins/excalidraw`, avec les autres outils de poste du pack) | C'est un outil, une copie par poste suffit ; `~/.claude` est la configuration de Claude Code, pas un dépôt de binaires |
 | Les schémas (`docs/diagrams/*.excalidraw`) | Le projet | Ce sont des données du projet, pas l'outil |
 
 **Comment le faire proprement** — déclarer un module `canvas` dans `pack.json` avec `default: false` et le chemin `herdr-plugins/`. La construction du paquet embarque **tous** les modules déclarés, quel que soit leur défaut : le canvas entre donc au paquet (EF-DIS-003 satisfait) sans être copié dans les projets. La configuration du poste l'installe ensuite depuis le paquet.

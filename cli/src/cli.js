@@ -90,7 +90,8 @@ Commandes :
            Config projet (settings.json) et symlinks jamais écrasés.
   setup    Configure le poste : skills globaux (user-skills + miroir des skills du
            pack dans ~/.claude/skills) + workflows globaux (~/.claude/workflows) +
-           commandes globales (~/.claude/commands) + claude-swt + hook de version.
+           commandes globales (~/.claude/commands) + outils de poste (~/.somtech,
+           dont le canvas) + claude-swt + hook de version.
            Re-jouable = mise à jour. Préserve skills, workflows et commandes perso
            hors-pack ; un fichier du pack divergent CONVERGE vers la version du pack
            (backup .somtech.bak auto), les symlinks sont épargnés

@@ -60,7 +60,7 @@ test('poste : ce qui est nécessaire au démarrage voyage jusqu\'au poste', () =
 test('poste : les dépendances de construction ne sont pas installées', () => {
   // Le filtre ne doit pas s'appliquer qu'à la fabrication du paquet : installer depuis
   // le dépôt (cas du développeur) doit donner le même résultat qu'installer depuis le
-  // paquet publié. Sinon on copie 273 Mo de dépendances de construction dans ~/.claude.
+  // paquet publié. Sinon on copie 273 Mo de dépendances de construction dans ~/.somtech.
   const toolsDir = tmp('smtk-poste-');
   const r = installPosteModules({ payloadRoot: REPO, toolsDir });
 
@@ -98,6 +98,41 @@ test('poste : dry-run n\'écrit rien, ré-exécution idempotente', () => {
   const r2 = installPosteModules({ payloadRoot: REPO, toolsDir });
   assert.equal(r2.created.length, 0, '2e run : rien de neuf');
   assert.ok(r2.unchanged.length > 0, '2e run : tout inchangé');
+});
+
+test('poste : un canvas installé sans sa page construite le dit', () => {
+  // Cas du développeur qui installe depuis un clone jamais construit : `web/dist` et
+  // les dépendances du serveur sont gitignorés. Sans avertissement, `setup` se déclare
+  // réussi et `/canvas` échoue plus tard sur une trace Node dans un fichier de log —
+  // exactement le travers que ce chantier existe pour supprimer.
+  const fake = tmp('smtk-pl-');
+  mkdirSync(join(fake, 'herdr-plugins', 'excalidraw', 'server'), { recursive: true });
+  writeFileSync(join(fake, 'herdr-plugins', 'excalidraw', 'server', 'bin.js'), '// serveur\n');
+  writeFileSync(join(fake, 'pack.json'), JSON.stringify({
+    modules: { canvas: { default: false, scope: 'poste', paths: ['herdr-plugins/'] } },
+  }));
+
+  const r = installPosteModules({ payloadRoot: fake, toolsDir: tmp('smtk-poste-') });
+  assert.ok(r.warnings.length > 0, 'une installation incomplète doit être signalée');
+  assert.match(r.warnings.join(' '), /canvas/, "l'avertissement doit nommer le module concerné");
+  assert.match(r.warnings.join(' '), /build\.sh|paquet/, 'il doit dire quoi faire');
+});
+
+test('poste : le rapport ne liste que les modules réellement installés', () => {
+  // Les trois miroirs aînés dérivent leur liste de ce qui a été traité, pas du manifeste.
+  const fake = tmp('smtk-pl-');
+  writeFileSync(join(fake, 'pack.json'), JSON.stringify({
+    modules: { canvas: { default: false, scope: 'poste', paths: ['herdr-plugins/'] } },
+  }));
+  const r = installPosteModules({ payloadRoot: fake, toolsDir: tmp('smtk-poste-') });
+  assert.deepEqual(r.modules, [], 'un module déclaré mais absent du payload ne doit pas être annoncé installé');
+});
+
+test('poste : un manifeste illisible ne casse pas la configuration du poste', () => {
+  const fake = tmp('smtk-pl-');
+  writeFileSync(join(fake, 'pack.json'), '{ ceci n est pas du JSON');
+  const r = installPosteModules({ payloadRoot: fake, toolsDir: tmp('smtk-poste-') });
+  assert.deepEqual(r.modules, [], 'on dégrade proprement au lieu d\'interrompre setup en plein milieu');
 });
 
 test('poste : un pack sans module de portée poste ne fait rien, sans erreur', () => {

@@ -175,6 +175,10 @@ export async function cmdSetup(flags) {
           `    ↩︎  ${p.conflicts.length} fichier(s) symlinké(s) en global, non écrit(s) à travers (dev setup préservé).`
         );
       }
+      if (p.payloadLinks?.length) {
+        console.log(`    ℹ️  ${p.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
+      }
+      for (const w of p.warnings) console.log(`    ⚠️  ${w}`);
     } else {
       console.log('  outils de poste : aucun module de portée poste dans ce pack.');
     }

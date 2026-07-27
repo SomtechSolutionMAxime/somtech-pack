@@ -60,6 +60,7 @@ Le pack est modulaire. Chaque module est défini dans `pack.json` :
 | **security** | ○ | `security/` — Doc sécurité Somtech (architecture, Loi 25, références CAI). **Opt-in** pour ne pas écraser l'architecture sécurité projet-spécifique. |
 | **mockmig** | ○ | `.mockmig/`, `.specify/` — Workflow migration maquette → production |
 | **plugins** | ○ | `plugins/` — Plugins Cowork (audit-loi25, somtech-proposals, somtech-silo-manager, somtech-somcraft-deployer, somtech-rag, somtech-estimator, mcp-expose) |
+| **canvas** | ○ | `herdr-plugins/` — Serveur du canvas Excalidraw (commande `/canvas`). **Portée poste** : embarqué au paquet publié et installé par `pack setup` dans `~/.somtech`, jamais dans un projet — une installation projet le refuse explicitement. |
 
 ### Méthode 1 — CLI npm `@somtech-solutions/pack` (canonique)
 
