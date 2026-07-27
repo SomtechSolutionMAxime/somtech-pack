@@ -27,11 +27,12 @@ npx @somtech-solutions/pack update
 npx @somtech-solutions/pack update --force
 
 # Configurer le poste : skills globaux (~/.claude/skills) + workflows globaux
-# (~/.claude/workflows) + claude-swt (~/.zshrc)
+# (~/.claude/workflows) + commandes globales (~/.claude/commands) + claude-swt (~/.zshrc)
 npx @somtech-solutions/pack setup --yes
 npx @somtech-solutions/pack setup --dry-run      # aperçu sans écrire
 npx @somtech-solutions/pack setup --no-skills    # claude-swt seul
 npx @somtech-solutions/pack setup --no-workflows # ne pas mirrorer les workflows
+npx @somtech-solutions/pack setup --no-commands  # ne pas mirrorer les commandes
 ```
 
 ### Options
@@ -43,8 +44,8 @@ npx @somtech-solutions/pack setup --no-workflows # ne pas mirrorer les workflows
 | `--force` | `update` : écrase les fichiers divergents |
 | `--dry-run` | N'écrit rien, affiche le plan |
 | `--yes`, `-y` | Non-interactif (CI) / consentement explicite (`setup` écrit le rc) |
-| `--rc` / `--skills-dir` / `--workflows-dir` / `--dest` | `setup` : cibles personnalisées |
-| `--no-skills` / `--no-workflows` / `--no-claude-swt` | `setup` : restreindre la portée |
+| `--rc` / `--skills-dir` / `--workflows-dir` / `--commands-dir` / `--dest` | `setup` : cibles personnalisées |
+| `--no-skills` / `--no-workflows` / `--no-commands` / `--no-claude-swt` | `setup` : restreindre la portée |
 
 `npx` plutôt que `npm i -g` : l'outil se lance ponctuellement, toujours à la bonne
 version (`@latest` ou une version épinglée), sans installation globale à maintenir.

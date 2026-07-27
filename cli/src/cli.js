@@ -22,8 +22,8 @@ function pkgVersion() {
 export function parseArgs(argv) {
   const flags = {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
-    rc: null, skillsDir: null, workflowsDir: null, dest: null, noClaudeSwt: false,
-    noSkills: false, noWorkflows: false,
+    rc: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
+    noSkills: false, noWorkflows: false, noCommands: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
     mode: null, file: null, id: null, patch: null,
     help: false, version: false,
@@ -43,6 +43,7 @@ export function parseArgs(argv) {
       case '--rc': flags.rc = value('--rc', ++i); break;
       case '--skills-dir': flags.skillsDir = value('--skills-dir', ++i); break;
       case '--workflows-dir': flags.workflowsDir = value('--workflows-dir', ++i); break;
+      case '--commands-dir': flags.commandsDir = value('--commands-dir', ++i); break;
       case '--dest': flags.dest = value('--dest', ++i); break;
       case '--settings': flags.settings = value('--settings', ++i); break;
       case '--hooks-dir': flags.hooksDir = value('--hooks-dir', ++i); break;
@@ -53,6 +54,7 @@ export function parseArgs(argv) {
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
+      case '--no-commands': flags.noCommands = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--no-graphify': flags.noGraphify = true; break;
       case '--yes': case '-y': flags.yes = true; break;
@@ -87,9 +89,10 @@ Commandes :
            Config projet (settings.json) et symlinks jamais écrasés.
   setup    Configure le poste : skills globaux (user-skills + miroir des skills du
            pack dans ~/.claude/skills) + workflows globaux (~/.claude/workflows) +
-           claude-swt + hook de version. Re-jouable = mise à jour. Préserve skills et
-           workflows perso hors-pack ; un fichier du pack divergent CONVERGE vers la
-           version du pack (backup .somtech.bak auto), les symlinks sont épargnés
+           commandes globales (~/.claude/commands) + claude-swt + hook de version.
+           Re-jouable = mise à jour. Préserve skills, workflows et commandes perso
+           hors-pack ; un fichier du pack divergent CONVERGE vers la version du pack
+           (backup .somtech.bak auto), les symlinks sont épargnés
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
 
@@ -114,11 +117,13 @@ Options (setup) :
   --rc <fichier>    Fichier rc shell (défaut: ~/.zshrc)
   --skills-dir <d>  Dossier des skills globaux (défaut: ~/.claude/skills)
   --workflows-dir <d> Dossier des workflows globaux (défaut: ~/.claude/workflows)
+  --commands-dir <d>  Dossier des commandes globales (défaut: ~/.claude/commands)
   --dest <dir>      Dossier d'install de claude-swt (défaut: ~/.somtech)
   --settings <f>    Fichier settings global (défaut: ~/.claude/settings.json)
   --hooks-dir <d>   Dossier des hooks globaux (défaut: ~/.claude/hooks)
   --no-skills       Ne pas installer les skills globaux
   --no-workflows    Ne pas installer les workflows globaux
+  --no-commands     Ne pas installer les commandes globales
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
   --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)

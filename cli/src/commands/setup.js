@@ -7,6 +7,7 @@ import { installRcBlock } from '../shellrc.js';
 import { installUserSkills } from '../userskills.js';
 import { installGlobalSkills } from '../globalskills.js';
 import { installGlobalWorkflows } from '../globalworkflows.js';
+import { installGlobalCommands } from '../globalcommands.js';
 import { installGlobalVersionHook, installGraphifyShareHook } from '../userhooks.js';
 
 /** True si un binaire est sur le PATH (best-effort, jamais fatal). */
@@ -50,23 +51,26 @@ export async function cmdSetup(flags) {
   const rcFile = flags.rc || join(home, '.zshrc');
   const skillsDir = flags.skillsDir || join(home, '.claude', 'skills');
   const workflowsDir = flags.workflowsDir || join(home, '.claude', 'workflows');
+  const commandsDir = flags.commandsDir || join(home, '.claude', 'commands');
   const destDir = flags.dest || join(home, '.somtech');
   const settingsFile = flags.settings || join(home, '.claude', 'settings.json');
   const hooksDir = flags.hooksDir || join(home, '.claude', 'hooks');
   const doSkills = !flags.noSkills;
   const doWorkflows = !flags.noWorkflows;
+  const doCommands = !flags.noCommands;
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
   const doGraphify = !flags.noGraphify;
 
-  if (!doSkills && !doWorkflows && !doSwt && !doVersionHook && !doGraphify) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-claude-swt, --no-version-hook et --no-graphify).');
+  if (!doSkills && !doWorkflows && !doCommands && !doSwt && !doVersionHook && !doGraphify) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-claude-swt, --no-version-hook et --no-graphify).');
     return 0;
   }
 
   const consentTargets = [];
   if (doSkills) consentTargets.push(skillsDir);
   if (doWorkflows) consentTargets.push(workflowsDir);
+  if (doCommands) consentTargets.push(commandsDir);
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
   if (doGraphify && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
@@ -124,6 +128,29 @@ export async function cmdSetup(flags) {
     }
     if (w.payloadLinks?.length) {
       console.log(`    ℹ️  ${w.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
+    }
+  }
+
+  if (doCommands) {
+    // Miroir GLOBAL des commandes du pack (~/.claude/commands). Les commandes slash
+    // (`/canvas`, `/brd`, `/pousse`…) voyagent déjà vers les projets avec `.claude/`,
+    // mais n'existaient nulle part au poste : une session ouverte hors d'un projet
+    // installé ne les avait pas, contrairement aux compétences. Mêmes garanties que
+    // les skills : perso hors-pack jamais touché ; convergence vers la version du pack
+    // avec sauvegarde .somtech.bak de toute dérive.
+    const c = installGlobalCommands({ payloadRoot, commandsDir, dryRun: flags.dryRun, force: flags.force });
+    console.log(
+      `  commandes du pack (global) → ${commandsDir} : ${c.commands.length} commande(s)` +
+        ` (créées ${c.created.length}, convergées ${c.updated.length}, inchangées ${c.unchanged.length})` +
+        (c.backedUp.length ? `, dérives sauvegardées ${c.backedUp.length}` : '')
+    );
+    if (c.conflicts.length) {
+      console.log(
+        `    ↩︎  ${c.conflicts.length} commande(s) symlinkée(s) en global, non écrite(s) à travers (dev setup préservé).`
+      );
+    }
+    if (c.payloadLinks?.length) {
+      console.log(`    ℹ️  ${c.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
     }
   }
 

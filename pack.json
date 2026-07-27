@@ -49,6 +49,7 @@
     "canvas": {
       "description": "Canvas Excalidraw partagé humain/agent (commande /canvas). OUTIL DE POSTE : embarqué au paquet publié et installé une fois par machine dans ~/.claude, jamais copié dans les projets — un dépôt client n'a pas à porter 8 Mo d'outillage interne. Les projets reçoivent la commande (module core) et leurs schémas.",
       "default": false,
+      "scope": "poste",
       "paths": [
         "herdr-plugins/"
       ]

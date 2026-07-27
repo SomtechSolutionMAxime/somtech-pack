@@ -8,6 +8,18 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 ## [Non-versionné] - 2026-07-26
 
 ### Ajouté
+- **Les commandes du pack sont installées au poste** — `pack setup` miroite désormais `.claude/commands` vers `~/.claude/commands`, comme il le fait déjà pour les compétences et les workflows. Une commande (`/canvas`, `/brd`, `/pousse`…) est donc disponible dans toute session, et plus seulement dans un projet ayant reçu le pack. Nouveaux drapeaux `--commands-dir` et `--no-commands`. (T-20260724-0021)
+
+### Modifié
+- **`/pousse` est enfin complet dans le pack** — la version distribuée n'avait ni garde de branche, ni contrôle de fraîcheur, ni déploiement Fly.io, alors qu'une version bien plus riche vivait sur le poste. C'est celle-ci qui fait désormais foi. (T-20260724-0021)
+
+### Corrigé
+- **`/pousse` : une branche sans migration atteint quand même le déploiement Fly.io** — l'étape des migrations se terminait par « fin du processus », court-circuitant le déploiement pour toute branche qui ne touchait pas au SQL.
+
+
+## [Non-versionné] - 2026-07-26
+
+### Ajouté
 - **Canvas Excalidraw distribué avec le pack** — nouveau module `canvas` (opt-in) : le paquet publié embarque le serveur du canvas, sa page déjà construite et ses dépendances d'exécution. Outil de poste, installé une fois par machine, jamais copié dans les projets. (T-20260724-0019)
 
 ### Corrigé

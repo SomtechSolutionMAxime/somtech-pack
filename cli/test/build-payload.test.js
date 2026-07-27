@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,12 +111,21 @@ test('paquet npm : le canvas survit à la fabrication du tarball', () => {
     writeFileSync(f, '// artefact simulé pour le test\n');
   }
 
-  const out = execFileSync('npm', ['pack', '--dry-run', '--json'], {
-    cwd: CLI_DIR,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  const files = JSON.parse(out)[0].files.map((f) => f.path);
+  let files;
+  try {
+    const out = execFileSync('npm', ['pack', '--dry-run', '--json'], {
+      cwd: CLI_DIR,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    files = JSON.parse(out)[0].files.map((f) => f.path);
+  } finally {
+    // Ne rien laisser derrière : `resolvePayloadRoot` préfère `cli/payload` à la racine du
+    // dépôt, donc un artefact de test oublié ici se retrouverait installé par quiconque
+    // lance le CLI depuis un clone.
+    for (const f of planted) rmSync(f, { force: true });
+    rmSync(join(payload, 'herdr-plugins/excalidraw/node_modules/__sonde__'), { recursive: true, force: true });
+  }
 
   for (const f of [
     'payload/herdr-plugins/excalidraw/server/server.js',
