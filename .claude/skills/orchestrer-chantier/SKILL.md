@@ -126,14 +126,18 @@ Même prudence pour la suite : après avoir livré le brief, relis son pane (`he
 
 **b-bis. Consigner la filiation — au moment où tu ouvres, pas après.**
 
-Note qui vient d'être ouvert, par qui, et pour quelle unité de travail. **Tu es le seul à détenir cette information**, et seulement à cet instant : elle ne se déduit ni du dépôt, ni de la liste des agents — qui dit qui existe, jamais qui a fait naître qui — et elle disparaît avec ta session. Sans elle, personne ne peut reconstituer la structure d'un chantier, ni pendant qu'il tourne, ni après coup pour comprendre ce qui s'est passé.
+Note quel agent tu viens d'ouvrir, sur quelle unité de travail, et où il travaille.
 
-Consigne-la là où elle sera relue :
+**Sois précis sur ce qui se perd** : la structure du chantier, elle, est déjà dans le ServiceDesk — un epic porte sa demande ou son projet — et l'ID de traçabilité est dans le nom de chaque branche. Ce qui n'existe nulle part, c'est **l'attache entre un agent et son unité de travail** : quelle session, quel pane, quel worktree ont servi à livrer quoi. Elle ne vit que dans ta tête, et elle disparaît en 4f, au moment où tu fermes le pane et retires le worktree. Après, plus personne ne peut relier une livraison à l'agent qui l'a produite — ni pour lui reposer une question, ni pour comprendre un choix.
 
-- **Toujours** — un commentaire sur l'epic : le nom de l'agent (en minuscules, tel que herdr le porte), son pane, son worktree, et le moment. C'est le support qui existe partout ; il suffit à lui seul.
-- **En plus** — si le poste tient un journal des échanges entre agents, il sait porter la filiation (parent, enfant, unité de travail). Vérifie qu'il est réellement en place avant de compter dessus : un journal prévu au contrat mais dont personne n'écrit l'événement laisse une interface vide sans que rien ne le signale.
+Où l'écrire — les surfaces qui existent réellement :
 
-**Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Ce qui dépend d'un geste manuel se troue au premier oubli — c'est précisément pourquoi, partout ailleurs, on fait journaliser l'outil et jamais l'agent. Elle tient jusqu'à ce que la naissance d'un agent soit déclenchée par l'outillage, qui enregistrera la filiation sans avoir à te la demander. En attendant, l'oublier coûte une structure de travail illisible.
+- **Toujours** : complète la description de l'epic (`epics` action `update`). C'est le seul support attaché à l'unité de travail elle-même, et il survit à la fermeture de l'agent. **Un epic n'a pas de fil de commentaires** — l'action n'existe pas ; c'est bien la description qu'on complète.
+- **Si le chantier a un fil de discussion** : une Demande (`demands` action `comment`) ou une Livraison (`delivery_comments` action `create`). Mets-y la même ligne : c'est là que le dirigeant lit. **Un Projet n'a pas ce fil** — pour lui, la description de l'epic fait foi.
+
+Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minuscules), son pane, son worktree, et le moment. **Le worktree est `foreground_cwd`, pas `cwd`** : tu as lancé `claude-swt` depuis le dépôt principal, donc `cwd` y reste pendant que `foreground_cwd` suit l'agent dans son worktree. Les deux champs sont déjà dans le `herdr agent get "$P"` que tu viens de lancer.
+
+**Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Ce qui dépend d'un geste manuel se troue au premier oubli — c'est précisément pourquoi, partout ailleurs, on fait journaliser l'outil et jamais l'agent. Elle tiendra jusqu'à ce que la naissance d'un agent soit elle-même outillée, et que l'outil enregistre la filiation sans avoir à te la demander. Note au passage que ça ne viendra pas gratuitement pour la façon de faire décrite ici : ouvrir un agent par `tab create` puis `pane run` n'est pas un point d'instrumentation — il faudra que le geste passe par la commande de démarrage d'agent pour qu'un outil ait quelque chose à observer.
 
 **c. Livrer le brief par référence.**
 
@@ -236,7 +240,8 @@ Les exécutants tiennent leurs stories ; **toi tu réponds de l'ensemble**. Un a
 À chaque étape :
 
 - **statuts au moment où l'état change**, jamais différés (règle d'or n°13) — et pour *toutes* les stories qu'un merge ferme, pas seulement la principale ;
-- **un commentaire d'avancement sur le chantier lui-même** — Demande (MCP `demands` action `comment`) ou Projet (MCP `projects`). C'est là que le dirigeant regarde, pas dans les tickets. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est ;
+- **la filiation de chaque agent que tu ouvres** (voir 4b-bis) — c'est une écriture ServiceDesk comme les autres, et la seule qui disparaît définitivement si tu l'oublies sur le moment ;
+- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
 - ce qui reste ouvert, avec **ce qui bloque quoi** ;
 - ce qui appartient au dirigeant, énoncé comme tel.
 
@@ -263,4 +268,5 @@ Dans les deux cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert po
 | Différer les statuts « pour tout faire à la fin » | Entre-temps, le ServiceDesk raconte autre chose que la réalité |
 | Donner un epic trop gros en se disant qu'il compactera | Il finit sur un résumé de lui-même, incohérent avec son propre début |
 | Comparer des noms d'agents sensibles à la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
-| Ouvrir un agent sans noter qui il est ni pour quoi | La structure du chantier n'existe alors nulle part : elle vivait dans ta session, et ta session finira |
+| Ouvrir un agent sans noter qui il est ni sur quoi | Le lien entre l'agent et ce qu'il a livré disparaît avec son pane : on gardera le code, jamais qui l'a fait ni pourquoi |
+| Chercher un fil de commentaires sur un epic | Il n'y en a pas — l'action n'existe pas. C'est la description qu'on complète, ou le fil du chantier parent |
