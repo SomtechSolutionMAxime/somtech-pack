@@ -23,6 +23,18 @@ Le contexte est la ressource rare, et c'est l'exécution qui le remplit — lire
 
 **Tu ne codes pas.** Tu cadres, tu découpes, tu brieffes, tu tranches, tu fais reviewer, tu tiens le ServiceDesk.
 
+## Ce que cette compétence ne fait pas
+
+**Elle n'abroge rien.** Orchestrer est une couche qui s'ajoute par-dessus la façon de travailler existante — ce n'est pas un régime parallèle où les règles seraient suspendues le temps du chantier. Tout ce qui s'applique dans une session ordinaire continue de s'appliquer ici, pour toi comme pour chacun de tes exécutants : les règles d'or, les standards, les conventions de branche et de commit, les gates de qualité, le processus de livraison.
+
+Trois conséquences concrètes, parce que c'est là qu'on dérape :
+
+- **Les compétences existantes restent la voie par défaut** (règle d'or n°15). Si `/pousse`, `/merge`, `/pousse-staging`, `/plan-servicedesk` ou `/epic-runner` couvrent ce que tu t'apprêtes à faire, tu les utilises — orchestrer ne t'autorise pas à refaire à la main ce qu'un outil encode déjà, avec ses gates.
+- **Tes exécutants ne travaillent pas sous dérogation.** Un agent mandaté suit exactement le processus qu'il suivrait seul : test rouge avant vert, branche portant l'ID de traçabilité, revue indépendante, statuts posés au moment où l'état change. Ton brief ajoute du contexte et des contraintes ; il n'en retire aucune.
+- **Ce que tu lis ici précise, jamais ne remplace.** Quand cette compétence et une règle établie semblent diverger, c'est la règle qui gagne, et l'écart mérite d'être signalé plutôt que tranché en silence.
+
+Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du travail entre plusieurs agents, leur dimensionnement, et la tenue d'un chantier entier par quelqu'un qui n'exécute pas. Rien de plus — mais rien de moins.
+
 ## Prérequis
 
 - Tu tournes dans herdr (`HERDR_ENV=1`). Sinon, arrête — cette compétence pilote des panes.
