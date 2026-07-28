@@ -1,11 +1,19 @@
 ---
 name: orchestrer-chantier
-description: Orchestrer un chantier ServiceDesk — une Demande (D-…) ou un Projet (P-…) — de bout en bout, en faisant exécuter chaque epic par un agent herdr dédié, ouvert puis fermé un à la fois. Le coordonnateur ne code jamais : il cadre, découpe, brieffe, tranche les arbitrages, fait reviewer et tient le ServiceDesk à jour. Utilise cette compétence dès qu'on te confie une demande ou un projet entier à mener, qu'on te demande de coordonner plusieurs agents sur un même chantier, de piloter D-… ou P-… jusqu'à livraison, ou de faire exécuter des epics par des agents — même si le mot « orchestrer » n'est pas prononcé. NE PAS confondre avec /epic-runner (exécution d'un seul epic) ni /plan-servicedesk (création de la hiérarchie depuis un brainstorm).
+description: Orchestrer un chantier ServiceDesk — une Demande (D-…), un Projet (P-…) ou une Livraison (J-…) — de bout en bout, en faisant exécuter chaque unité de travail par un agent herdr dédié, ouvert puis fermé un à la fois. Le coordonnateur ne code jamais : il cadre, découpe ou inventorie, brieffe, tranche les arbitrages, fait reviewer et tient le ServiceDesk à jour. Utilise cette compétence dès qu'on te confie une demande, un projet ou un jalon de livraison entier à mener, qu'on te demande de coordonner plusieurs agents sur un même chantier, de piloter D-…, P-… ou J-… jusqu'à la mise en production, ou de faire exécuter des epics par des agents — même si le mot « orchestrer » n'est pas prononcé. NE PAS confondre avec /epic-runner (exécution d'un seul epic) ni /plan-servicedesk (création de la hiérarchie depuis un brainstorm).
 ---
 
 # Orchestrer un chantier
 
-Tu deviens le **pilote** d'un chantier — une **Demande** (`D-…`) ou un **Projet** (`P-…`). Les deux se pilotent de la même façon : ils portent des epics, qui portent des stories. Ce qui les distingue tient en deux lignes, signalées là où ça compte.
+Tu deviens le **pilote** d'un chantier. Il en existe trois formes, et elles se pilotent de la même façon — ce qui les distingue tient en quelques lignes, signalées là où ça compte :
+
+| Forme | Code | Ce que tu reçois |
+|---|---|---|
+| **Demande** | `D-…` | un besoin à découper en epics |
+| **Projet** | `P-…` | un chantier long à découper, souvent en jalons |
+| **Livraison** | `J-…` | un **périmètre déjà constitué** à mener en production |
+
+Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule des trois qui ne se découpe pas : elle regroupe des demandes et des tickets qui existent déjà — souvent une vingtaine — et porte l'engagement de les mettre en production. Partout où ça change ta façon de faire, tu trouveras un paragraphe *Si ton chantier est une Livraison*. Si le tien n'en est pas une, saute-les.
 
 Un seul principe gouverne tout le reste :
 
@@ -20,7 +28,7 @@ Le contexte est la ressource rare, et c'est l'exécution qui le remplit — lire
 - Tu tournes dans herdr (`HERDR_ENV=1`). Sinon, arrête — cette compétence pilote des panes.
 - Le MCP `servicedesk` est disponible.
 - `claude-swt` existe sur le poste.
-- Le chantier existe dans le ServiceDesk et tu as son code — `D-YYYYMMDD-NNNN` pour une Demande, `P-YYYYMMDD-NNNN` pour un Projet.
+- Le chantier existe dans le ServiceDesk et tu as son code — `D-YYYYMMDD-NNNN` pour une Demande, `P-YYYYMMDD-NNNN` pour un Projet, `J-YYYYMMDD-NNNN` pour une Livraison.
 
 ## Checklist
 
@@ -30,7 +38,7 @@ Crée une tâche par item et exécute-les dans l'ordre.
 
 ```bash
 herdr pane current                                  # ton pane (result.pane.pane_id)
-herdr agent rename <ton-pane> d-20260727-0004       # ou p-20260706-0004 pour un Projet
+herdr agent rename <ton-pane> d-20260727-0004       # ou p-20260706-0004, ou j-20260705-0001
 ```
 
 **herdr impose les minuscules.** Un nom doit commencer par une lettre minuscule et ne contenir que minuscules, chiffres, `-` ou `_` (1 à 32 caractères) ; sinon `invalid_agent_name`. La convention Somtech écrit `D-20260727-0004`, le nom réellement porté est `d-20260727-0004`. **Toute comparaison de noms d'agents est donc insensible à la casse** — partout où tu en fais, y compris pour retrouver un pair dans `herdr agent list`.
@@ -46,19 +54,47 @@ herdr agent rename <ton-pane> d-20260727-0004       # ou p-20260706-0004 pour un
 
 **L'ontologie** (règle d'or n°1) — si le chantier touche des entités, relations ou attributs, lis l'ontologie du projet avant de découper. **Si tu détectes un écart entre l'ontologie et le code, signale-le avant de continuer** : soit on met l'ontologie à jour d'abord, soit on documente le décalage comme ticket. Jamais de code par-dessus en silence — et surtout, ne laisse pas un agent exécutant découvrir l'écart tout seul et l'arbitrer à sa façon.
 
-**Le chantier lui-même** — MCP `demands` action `get` pour une Demande, `projects` pour un Projet. Vérifie qu'il décrit encore ce qu'on veut faire : un énoncé rédigé il y a trois semaines décrit souvent autre chose que le besoin actuel. **S'il a divergé, réécris-le avant de découper** — tout ce qui suit en dépend.
+**Le chantier lui-même** — MCP `demands` action `get` pour une Demande, `projects` pour un Projet, `deliveries` pour une Livraison. Vérifie qu'il décrit encore ce qu'on veut faire : un énoncé rédigé il y a trois semaines décrit souvent autre chose que le besoin actuel. **S'il a divergé, réécris-le avant de découper** — tout ce qui suit en dépend.
 
-*Différence Demande / Projet à connaître* : les statuts d'une **Demande** sont dérivés automatiquement de ses enfants (triggers en base) — tu ne les poses jamais à la main, sauf la transition `received → in_analysis` qui t'appartient. Un **Projet** se pilote plus librement, mais rien ne le fera avancer à ta place.
+*Ce qui avance tout seul, et ce qui ne bouge que si tu le pousses* — à connaître avant de commencer, parce que ça décide de ce que tu auras à faire toi-même :
+
+| | Statuts |
+|---|---|
+| **Demande** | dérivés de ses enfants par des déclencheurs en base. Tu ne les poses jamais à la main, sauf `received → in_analysis` qui t'appartient |
+| **Projet** | se pilote librement (`projects` action `transition`), mais rien ne le fera avancer à ta place |
+| **Livraison** | **rien n'est automatique** — les cinq états se posent à la main (`deliveries` action `update`, il n'y a pas d'`update_status`) |
+
+*Si ton chantier est une Livraison* : son cycle est `draft → planned → in_progress → qa → deployed`, plus `cancelled` qui existe nativement — inutile ici du contournement « fermé + note » qu'imposent les tickets.
+
+Deux choses à savoir sur cet état `qa`. La première : c'est **un état à part entière**, donc sur un jalon la règle d'or n°5 cesse d'être une discipline pour devenir une étape à traverser explicitement avant `deployed`. La seconde, plus embarrassante : **en pratique, presque personne ne l'utilise** — des jalons passent à `deployed` sans y être passés. Ce que tu lis ici est donc une **prescription, pas un usage** : en t'y tenant, tu inaugures plutôt que tu ne suis. Assume-le, et laisse la trace de ce qui a été vérifié.
+
+*Comment fermer `qa`, justement* : la méthode et son coût sont cadrés par STD-030 §2.7. Sur un jalon, l'arbitrage est le tien et il pèse — la validation automatisée par cahier de test coûte quelques dizaines de sous par scénario, la recette pilotée par un agent dans un vrai navigateur coûte de l'ordre de cent fois plus. Sur vingt tickets, l'écart n'est plus un détail. Réserve la seconde à ce qui la mérite : sécurité, facturation, authentification, ou un parcours qu'aucun scénario ne couvre encore.
+
+*Si ton chantier est une Livraison* — **regarde si elle appartient à un Projet** (`project_id`) : c'est le cas de la grande majorité des jalons. Si oui, lis ce projet, et considère que son pilote existe et attend d'être informé. Tu n'es alors pas seul aux commandes : tu mènes une tranche d'un chantier plus large, et ce que tu sors du périmètre atterrit chez lui. Traite-le comme un pair (voir §6), pas comme un décor.
 
 Lis aussi le design doc s'il existe.
 
-### 3. Découper en epics
+### 3. Découper en epics — ou inventorier, si le périmètre t'est donné
 
 Découpe **par valeur pour l'utilisateur**, jamais par couche technique. Chaque epic porte son problème, son résultat attendu, son hors-scope, ses contraintes et ses critères de succès.
 
 Pose les `sequence_order` et les `depends_on_ids` : c'est ce qui te dira quoi lancer ensuite sans y repenser.
 
 **Ce qui ne bloque pas un epic ne doit pas y être accroché.** Un epic dont la valeur est livrée doit pouvoir fermer ; la dette découverte en le relisant va dans un epic de dette dédié, sinon le ServiceDesk affiche « en cours » pour un travail terminé.
+
+*Si ton chantier est une Livraison* — **tu n'as rien à découper : le périmètre t'est donné.** Un jalon regroupe des demandes et des tickets qui existent déjà, venus de plusieurs hiérarchies différentes. Leur nombre varie beaucoup : beaucoup de jalons ne portent que quelques tickets, certains en portent plusieurs dizaines — regarde avant de supposer. Ton travail ici n'est pas de créer, c'est d'**inventorier et d'ordonner** :
+
+- **lis le périmètre réel** avec `deliveries` action `get` : la réponse contient les tickets rattachés. Compare-la à ce que le titre du jalon promet — l'écart entre les deux est ta première information ;
+- **pour retrouver les demandes** du jalon : `demands` action `list` avec `delivery_id`. Ce filtre-là fonctionne ;
+- pose l'ordre sur les tickets (`sequence_order`, `depends_on_ids`), comme tu le ferais sur des epics ;
+- **regroupe avant de distribuer** : un jalon de vingt tickets ne fait pas vingt agents. Réunis ceux qui touchent la même zone du code en un lot qu'un seul agent mène d'un trait, et applique le critère de dimensionnement ci-dessous à ces lots.
+
+⚠️ **Deux pièges d'outillage, vérifiés** — ils te coûteront ton premier appel si tu ne les connais pas :
+
+- `deliveries` action `get` **exige l'UUID**, pas le code `J-…` (contrairement à `projects` action `get`, qui accepte `P-…`). Passe par `deliveries` action `list` pour retrouver l'UUID à partir du code ;
+- `tickets` action `list` **accepte `delivery_id` et l'ignore** : tu récupères la base entière, d'autres applications comprises, sans erreur ni avertissement. Ne t'en sers jamais pour lire un périmètre — c'est `deliveries` action `get` qui fait foi.
+
+Pour faire entrer ou sortir quelque chose du jalon : par le haut quand c'est une demande entière (elle porte `delivery_id`, ses epics et tickets en héritent), ou ticket par ticket avec `deliveries` actions `add_ticket` / `remove_ticket`. Ne rattache pas un à un ce qui appartient à une demande entière.
 
 ### 3-bis. Dimensionner — la règle qui décide de tout
 
@@ -217,11 +253,15 @@ Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
 **g. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
 
+*Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
+
 ### 5. Ce que tu tranches toi-même
 
 Un arbitrage qui remonte, tu le prends. N'en renvoie au dirigeant que ce qui relève vraiment de lui : un choix de produit, un risque assumé, une dépense. Tout le reste — priorité, périmètre, conception, désaccord entre deux agents — c'est ton travail.
 
 **Inscris la décision dans le ServiceDesk**, avec son motif, au moment où tu la prends. Une décision qui ne vit que dans ta conversation est perdue dès que ta session se termine.
+
+*Si ton chantier est une Livraison* — tu as un arbitrage de plus, et c'est le tien : **une date planifiée qui ne tiendra pas.** Un jalon porte un engagement de mise en production ; les deux seules issues honnêtes sont de **sortir du périmètre ce qui n'est pas prêt** (détacher son `delivery_id`, il retournera dans un jalon suivant) ou de **déplacer la date en le disant**. Ce qui n'est pas une issue : laisser la date passer en silence en espérant rattraper. Sors ce qui n'est pas prêt aussi tôt que tu le sais — plus tu attends, moins celui qui attend la livraison a de marge pour s'organiser.
 
 ### 6. Coordonner les chantiers voisins
 
@@ -251,7 +291,12 @@ Les exécutants tiennent leurs stories ; **toi tu réponds de l'ensemble**. Un a
 
 Une **Demande** passe `delivered` toute seule quand tous ses enfants sont fermés — c'est un trigger, pas un geste. Un **Projet** ne se ferme pas seul : tu le clos explicitement quand ses epics le sont.
 
-Dans les deux cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne.
+*Si ton chantier est une Livraison* — rien ne se fermera tout seul, et il y a **deux fronts, pas un** :
+
+- le jalon lui-même : tu le fais passer `qa` puis `deployed` à la main, dans cet ordre. `deployed` sans être passé par `qa` est un mensonge sur ce qui a été vérifié ;
+- **les demandes d'origine**. Un jalon est transverse : ses tickets viennent de plusieurs demandes, et fermer le jalon n'en ferme aucune. Reprends-les une à une. Celles dont *tous* les enfants sont fermés se seront mises à jour d'elles-mêmes ; celles dont il reste une story ailleurs sont encore ouvertes à bon droit — et c'est une information, pas un oubli : elle te dit que le besoin du client n'est pas entièrement couvert par ce que tu viens de livrer.
+
+Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne.
 
 ## Anti-patterns
 
@@ -270,3 +315,7 @@ Dans les deux cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert po
 | Comparer des noms d'agents sensibles à la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
 | Ouvrir un agent sans noter qui il est ni sur quoi | Le lien entre l'agent et ce qu'il a livré disparaît avec son pane : on gardera le code, jamais qui l'a fait ni pourquoi |
 | Chercher un fil de commentaires sur un epic | Il n'y en a pas — l'action n'existe pas. C'est la description qu'on complète, ou le fil du chantier parent |
+| Sur un jalon : découper ce qui est déjà découpé | Le périmètre t'est donné. Créer des epics par-dessus dédouble la traçabilité et personne ne sait plus lequel fait foi |
+| Sur un jalon : ouvrir un agent par ticket | Vingt tickets ne font pas vingt agents. Regroupe par zone de code, puis dimensionne les lots |
+| Sur un jalon : laisser la date passer en silence | Sortir du périmètre ce qui n'est pas prêt se dit ; une date ratée sans préavis se subit |
+| Fermer un jalon en croyant avoir fermé les demandes | Un jalon est transverse : aucune demande ne se ferme parce qu'il est déployé |
