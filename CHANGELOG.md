@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.26.0] - 2026-07-28
+
+### Ajouté
+- **Orchestrer une Livraison, et plus seulement une Demande ou un Projet** — la compétence `/orchestrer-chantier` couvre désormais les trois formes de chantier du ServiceDesk. Un jalon ne se découpe pas : son périmètre est donné, on l'inventorie et on l'ordonne. Rien n'y avance par déclencheur, la validation y est une étape à traverser explicitement, et sa durée réelle est la somme des passages par le sas de préproduction — pas celle du plus long. (T-20260728-0073)
+- **La filiation des agents se consigne à l'ouverture** — un coordonnateur note quel agent il vient d'ouvrir et sur quoi. C'est la seule information qui disparaît définitivement à la fermeture du pane : le code reste, le lien entre l'agent et ce qu'il a livré, non. (T-20260728-0047)
+
+### Corrigé
+- **Deux consignes désignaient des actions inexistantes** — trouvées par revue indépendante : un commentaire sur un epic (aucune surface de commentaire n'existe sur cette entité) et un filtre de tickets par livraison, accepté puis silencieusement ignoré, qui rendait la base entière au lieu du périmètre d'un jalon. Les deux chemins réels sont maintenant écrits, avec le piège nommé. (T-20260728-0047, T-20260728-0073)
+
 ## [1.25.0] - 2026-07-27
 
 ### Ajouté
