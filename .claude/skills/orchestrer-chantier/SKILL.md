@@ -124,6 +124,17 @@ Même prudence pour la suite : après avoir livré le brief, relis son pane (`he
 
 *À savoir* : `claude-swt` et ses variantes sont des **fonctions du shell interactif**, pas des binaires. Elles marchent dans un pane (qui charge le profil), mais pas depuis un outil qui lance un shell non interactif — là, utilise les commandes `git worktree` directement.
 
+**b-bis. Consigner la filiation — au moment où tu ouvres, pas après.**
+
+Note qui vient d'être ouvert, par qui, et pour quelle unité de travail. **Tu es le seul à détenir cette information**, et seulement à cet instant : elle ne se déduit ni du dépôt, ni de la liste des agents — qui dit qui existe, jamais qui a fait naître qui — et elle disparaît avec ta session. Sans elle, personne ne peut reconstituer la structure d'un chantier, ni pendant qu'il tourne, ni après coup pour comprendre ce qui s'est passé.
+
+Consigne-la là où elle sera relue :
+
+- **Toujours** — un commentaire sur l'epic : le nom de l'agent (en minuscules, tel que herdr le porte), son pane, son worktree, et le moment. C'est le support qui existe partout ; il suffit à lui seul.
+- **En plus** — si le poste tient un journal des échanges entre agents, il sait porter la filiation (parent, enfant, unité de travail). Vérifie qu'il est réellement en place avant de compter dessus : un journal prévu au contrat mais dont personne n'écrit l'événement laisse une interface vide sans que rien ne le signale.
+
+**Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Ce qui dépend d'un geste manuel se troue au premier oubli — c'est précisément pourquoi, partout ailleurs, on fait journaliser l'outil et jamais l'agent. Elle tient jusqu'à ce que la naissance d'un agent soit déclenchée par l'outillage, qui enregistrera la filiation sans avoir à te la demander. En attendant, l'oublier coûte une structure de travail illisible.
+
 **c. Livrer le brief par référence.**
 
 ```bash
@@ -252,3 +263,4 @@ Dans les deux cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert po
 | Différer les statuts « pour tout faire à la fin » | Entre-temps, le ServiceDesk raconte autre chose que la réalité |
 | Donner un epic trop gros en se disant qu'il compactera | Il finit sur un résumé de lui-même, incohérent avec son propre début |
 | Comparer des noms d'agents sensibles à la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
+| Ouvrir un agent sans noter qui il est ni pour quoi | La structure du chantier n'existe alors nulle part : elle vivait dans ta session, et ta session finira |
