@@ -64,7 +64,13 @@ herdr agent rename <ton-pane> d-20260727-0004       # ou p-20260706-0004, ou j-2
 | **Projet** | se pilote librement (`projects` action `transition`), mais rien ne le fera avancer à ta place |
 | **Livraison** | **rien n'est automatique** — les cinq états se posent à la main (`deliveries` action `update`, il n'y a pas d'`update_status`) |
 
-*Si ton chantier est une Livraison* : son cycle est `draft → planned → in_progress → qa → deployed`, plus `cancelled` qui existe nativement — inutile ici du contournement « fermé + note » qu'imposent les tickets. Retiens surtout que **`qa` est un état à part entière** : sur un jalon, la règle d'or n°5 cesse d'être une discipline pour devenir une étape que tu dois traverser explicitement avant `deployed`.
+*Si ton chantier est une Livraison* : son cycle est `draft → planned → in_progress → qa → deployed`, plus `cancelled` qui existe nativement — inutile ici du contournement « fermé + note » qu'imposent les tickets.
+
+Deux choses à savoir sur cet état `qa`. La première : c'est **un état à part entière**, donc sur un jalon la règle d'or n°5 cesse d'être une discipline pour devenir une étape à traverser explicitement avant `deployed`. La seconde, plus embarrassante : **en pratique, presque personne ne l'utilise** — des jalons passent à `deployed` sans y être passés. Ce que tu lis ici est donc une **prescription, pas un usage** : en t'y tenant, tu inaugures plutôt que tu ne suis. Assume-le, et laisse la trace de ce qui a été vérifié.
+
+*Comment fermer `qa`, justement* : la méthode et son coût sont cadrés par STD-030 §2.7. Sur un jalon, l'arbitrage est le tien et il pèse — la validation automatisée par cahier de test coûte quelques dizaines de sous par scénario, la recette pilotée par un agent dans un vrai navigateur coûte de l'ordre de cent fois plus. Sur vingt tickets, l'écart n'est plus un détail. Réserve la seconde à ce qui la mérite : sécurité, facturation, authentification, ou un parcours qu'aucun scénario ne couvre encore.
+
+*Si ton chantier est une Livraison* — **regarde si elle appartient à un Projet** (`project_id`) : c'est le cas de la grande majorité des jalons. Si oui, lis ce projet, et considère que son pilote existe et attend d'être informé. Tu n'es alors pas seul aux commandes : tu mènes une tranche d'un chantier plus large, et ce que tu sors du périmètre atterrit chez lui. Traite-le comme un pair (voir §6), pas comme un décor.
 
 Lis aussi le design doc s'il existe.
 
@@ -76,13 +82,19 @@ Pose les `sequence_order` et les `depends_on_ids` : c'est ce qui te dira quoi la
 
 **Ce qui ne bloque pas un epic ne doit pas y être accroché.** Un epic dont la valeur est livrée doit pouvoir fermer ; la dette découverte en le relisant va dans un epic de dette dédié, sinon le ServiceDesk affiche « en cours » pour un travail terminé.
 
-*Si ton chantier est une Livraison* — **tu n'as rien à découper : le périmètre t'est donné.** Un jalon regroupe des demandes et des tickets qui existent déjà, souvent une vingtaine, venus de plusieurs hiérarchies différentes. Ton travail à cette étape n'est pas de créer, c'est d'**inventorier et d'ordonner** :
+*Si ton chantier est une Livraison* — **tu n'as rien à découper : le périmètre t'est donné.** Un jalon regroupe des demandes et des tickets qui existent déjà, venus de plusieurs hiérarchies différentes. Leur nombre varie beaucoup : beaucoup de jalons ne portent que quelques tickets, certains en portent plusieurs dizaines — regarde avant de supposer. Ton travail ici n'est pas de créer, c'est d'**inventorier et d'ordonner** :
 
-- fais la liste réelle de ce qui est rattaché (`deliveries` action `get`, plus les tickets et epics filtrés par `delivery_id`) — et compare-la à ce que le titre du jalon promet. L'écart entre les deux est ta première information ;
+- **lis le périmètre réel** avec `deliveries` action `get` : la réponse contient les tickets rattachés. Compare-la à ce que le titre du jalon promet — l'écart entre les deux est ta première information ;
+- **pour retrouver les demandes** du jalon : `demands` action `list` avec `delivery_id`. Ce filtre-là fonctionne ;
 - pose l'ordre sur les tickets (`sequence_order`, `depends_on_ids`), comme tu le ferais sur des epics ;
-- **regroupe avant de distribuer** : vingt tickets ne font pas vingt agents. Réunis ceux qui touchent la même zone du code en un lot qu'un seul agent mène d'un trait, et applique le critère de dimensionnement ci-dessous à ces lots.
+- **regroupe avant de distribuer** : un jalon de vingt tickets ne fait pas vingt agents. Réunis ceux qui touchent la même zone du code en un lot qu'un seul agent mène d'un trait, et applique le critère de dimensionnement ci-dessous à ces lots.
 
-Un rattachement se fait par le haut : une demande porte `delivery_id`, et ses epics et tickets en héritent. Ne rattache pas ticket par ticket ce qui appartient à une demande entière.
+⚠️ **Deux pièges d'outillage, vérifiés** — ils te coûteront ton premier appel si tu ne les connais pas :
+
+- `deliveries` action `get` **exige l'UUID**, pas le code `J-…` (contrairement à `projects` action `get`, qui accepte `P-…`). Passe par `deliveries` action `list` pour retrouver l'UUID à partir du code ;
+- `tickets` action `list` **accepte `delivery_id` et l'ignore** : tu récupères la base entière, d'autres applications comprises, sans erreur ni avertissement. Ne t'en sers jamais pour lire un périmètre — c'est `deliveries` action `get` qui fait foi.
+
+Pour faire entrer ou sortir quelque chose du jalon : par le haut quand c'est une demande entière (elle porte `delivery_id`, ses epics et tickets en héritent), ou ticket par ticket avec `deliveries` actions `add_ticket` / `remove_ticket`. Ne rattache pas un à un ce qui appartient à une demande entière.
 
 ### 3-bis. Dimensionner — la règle qui décide de tout
 
@@ -240,6 +252,8 @@ git -C <repo> worktree list          # compare avec herdr agent list
 Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
 **g. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
+
+*Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
 
 ### 5. Ce que tu tranches toi-même
 
