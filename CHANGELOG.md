@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.26.1] - 2026-08-03
+
+### Corrigé
+- **Le récolteur d'architecture n'invente plus de relations entre tables** — une modification de table s'appariait à la première clé étrangère rencontrée **plus loin dans le fichier**, parfois des centaines de lignes après, et fabriquait un lien qui n'existe pas. L'outil punissait la rigueur : plus un projet protégeait ses tables, plus il en inventait. Conséquence la plus fâcheuse, le contrôle de cohérence en mode strict finissait par exiger qu'on documente une contrainte inexistante — un garde-fou conçu pour empêcher la documentation de mentir se mettait à l'exiger. Signalé et mesuré par le chantier SI Bélanger (D-20260731-0001). (PR #157)
+
+### Technique
+- Le correctif borne l'appariement à l'instruction courante ; il ne regarde pas ce que fait la modification de table, il l'empêche de déborder. La fausse piste — croire que l'activation de la sécurité par ligne est en cause — est écartée par la mesure et documentée : n'importe quelle modification de table suffit, et un filtre visant la seule sécurité par ligne aurait laissé passer le reste en donnant l'impression d'avoir fini.
+- Les limites que ce bornage ne couvre pas (point-virgule ou double tiret à l'intérieur d'un texte littéral, fichier sans point-virgule final, nom de contrainte contenant le mot-clé) sont désormais écrites dans le fichier, reproduites une à une par une revue indépendante. La sortie complète de cette classe de défauts demande un découpage en instructions conscient des textes littéraux — chantier distinct.
+
 ## [1.26.0] - 2026-07-28
 
 ### Ajouté
