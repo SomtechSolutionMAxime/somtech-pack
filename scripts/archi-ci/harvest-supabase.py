@@ -39,8 +39,28 @@ _CREATE_TABLE = re.compile(
 )
 _REFERENCES = re.compile(r"REFERENCES\s+([\"`]?[\w.]+[\"`]?)\s*(?:\([^)]*\))?", re.IGNORECASE)
 _ALTER_FK = re.compile(
-    r"ALTER\s+TABLE\s+(?:ONLY\s+)?([\"`]?[\w.]+[\"`]?).*?REFERENCES\s+([\"`]?[\w.]+[\"`]?)",
-    re.IGNORECASE | re.DOTALL,
+    # `[^;]*?` et non `.*?` : borne l'appariement a L'INSTRUCTION COURANTE. Avec `.*?`
+    # (et re.DOTALL), n'importe quel ALTER TABLE s'appariait au PROCHAIN `REFERENCES` du
+    # fichier, meme des centaines de lignes plus loin — le recolteur inventait alors une
+    # relation qui n'existe pas. Le declencheur n'est pas le RLS : tout ALTER TABLE deborde,
+    # y compris un DROP CONSTRAINT. Le RLS n'est qu'une correlation (c'est l'ALTER TABLE le
+    # plus frequent dans un projet discipline), et filtrer le RLS laisserait passer le reste.
+    # `[^;]` traverse les sauts de ligne : une contrainte declaree sur plusieurs lignes
+    # (ALTER TABLE ONLY ... / ADD CONSTRAINT ... / REFERENCES ...) reste bien recoltee.
+    #
+    # CE QUE CE BORNAGE NE COUVRE PAS — mesure, a traiter par un decoupage en instructions
+    # conscient des litteraux (une classe de caracteres n'y suffira jamais) :
+    #  - un `;` DANS un litteral de la meme instruction coupe trop tot et fait perdre une
+    #    vraie FK. Sens rassurant : on perd une relation, on n'en invente pas ;
+    #  - un `--` dans un litteral fait disparaitre le `;` des `strip_comments` (il croit
+    #    voir un commentaire) : le debordement reprend alors comme avant ce correctif, et
+    #    celui-la FABRIQUE une relation ;
+    #  - un fichier sans `;` terminal n'a aucune borne du tout ;
+    #  - un nom de contrainte contenant `references` s'apparie a l'interieur de l'identifiant.
+    # Plus de DOTALL : sans `.` hors classe de caracteres, le drapeau n'avait plus d'effet et
+    # laissait croire que l'appariement traversait encore les instructions.
+    r"ALTER\s+TABLE\s+(?:ONLY\s+)?([\"`]?[\w.]+[\"`]?)[^;]*?REFERENCES\s+([\"`]?[\w.]+[\"`]?)",
+    re.IGNORECASE,
 )
 
 
