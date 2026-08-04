@@ -13,6 +13,7 @@ import { resolvePayloadRoot } from '../modules.js';
 const SCRIPTS = {
   'harvest-supabase': 'harvest-supabase.py',
   'harvest-routes': 'harvest-routes.py',
+  'harvest-screens': 'harvest-screens.py',
   'harvest-config': 'harvest-config.py',
   'merge-manifests': 'merge-manifests.py',
   'validate-manifest': 'validate-manifest.py',

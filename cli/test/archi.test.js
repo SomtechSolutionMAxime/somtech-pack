@@ -25,7 +25,7 @@ function pythonAvailable() {
 }
 
 test('isArchiCommand reconnaît les sous-commandes du modèle vivant', () => {
-  for (const c of ['harvest-supabase', 'harvest-routes', 'harvest-config',
+  for (const c of ['harvest-supabase', 'harvest-routes', 'harvest-screens', 'harvest-config',
                    'merge-manifests', 'validate-manifest', 'diff-manifest', 'generate-erd']) {
     assert.equal(isArchiCommand(c), true, `${c} devrait être une commande archi`);
   }
@@ -34,9 +34,9 @@ test('isArchiCommand reconnaît les sous-commandes du modèle vivant', () => {
   assert.equal(isArchiCommand('generate-erd '), false); // pas de fuzzy match
 });
 
-test('archiCommands liste les 7 outils, triés', () => {
+test('archiCommands liste les 8 outils, triés', () => {
   const cmds = archiCommands();
-  assert.equal(cmds.length, 7);
+  assert.equal(cmds.length, 8);
   assert.deepEqual(cmds, [...cmds].sort());
 });
 

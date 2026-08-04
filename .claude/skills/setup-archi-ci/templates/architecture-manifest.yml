@@ -74,19 +74,22 @@ jobs:
       # mais un crash de récolteur (exit inattendu) FAIT ÉCHOUER le job — sinon un vrai
       # drift passerait vert faute de grain récolté (F4). Les récolteurs endpoints/config
       # sortent 0 même sans source ; tables n'est lancé que si des .sql existent.
-      - name: Récolter les grains (tables + endpoints + config)
+      - name: Récolter les grains (tables + endpoints + écrans + config)
         run: |
           set -e
           APP="${{ steps.cfg.outputs.app }}"
           mkdir -p .architecture/_harvest
-          if ls supabase/migrations/*.sql >/dev/null 2>&1; then
-            somtech-pack harvest-supabase supabase/migrations --app "$APP" \
-              --out .architecture/_harvest/10-tables.yaml
-          else
-            echo "::notice::pas de migrations .sql — grain tables sauté."
-          fi
-          somtech-pack harvest-config . --app "$APP" --out .architecture/_harvest/20-config.yaml
-          somtech-pack harvest-routes . --app "$APP" --out .architecture/_harvest/30-routes.yaml
+          # `--discover` balaie les emplacements NOMMÉS où vit le schéma d'un dépôt Somtech
+          # (supabase/migrations, supabase/schemas, dumps supabase/*.sql, scripts/migrations…)
+          # au lieu du seul supabase/migrations. Un dépôt dont le schéma vit ailleurs — un
+          # dump `pg_dump` de référence, un second dossier de migrations — n'était sinon
+          # récolté qu'en partie, et le gate comparait le manifeste à une vérité tronquée.
+          somtech-pack harvest-supabase --discover . --app "$APP" \
+            --out .architecture/_harvest/10-tables.yaml \
+            || echo "::notice::aucun .sql trouvé — grain tables sauté."
+          somtech-pack harvest-config  . --app "$APP" --out .architecture/_harvest/20-config.yaml
+          somtech-pack harvest-routes  . --app "$APP" --out .architecture/_harvest/30-routes.yaml
+          somtech-pack harvest-screens . --app "$APP" --out .architecture/_harvest/40-screens.yaml
 
       - name: Fusionner les grains récoltés
         run: |

@@ -99,8 +99,9 @@ Commandes :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
 
 Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
-  harvest-supabase <migrations…> --app <slug>   Grain tables (schéma Supabase)
-  harvest-routes   <racine> --app <slug>         Grain endpoints (routes HTTP)
+  harvest-supabase --discover <racine> --app <slug>  Grain tables + FK + descriptions (SQL du dépôt)
+  harvest-routes   <racine> --app <slug>         Grain endpoints (Edge Functions, Next.js, Express)
+  harvest-screens  <racine> --app <slug>         Grain écrans (React Router, Next.js)
   harvest-config   <racine> --app <slug>         Grain topologie (fly/mcp/env)
   merge-manifests  <a.yaml…> --app <slug>        Fusionne les grains récoltés
   validate-manifest <architecture.yaml>          Valide la forme du manifeste

@@ -19,7 +19,11 @@ Usage :
   python3 merge-manifests.py <a.yaml> <b.yaml> ... --app <slug> [--out <fichier>]
 """
 import argparse
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from yamlemit import yaml_str  # noqa: E402
 
 try:
     import yaml
@@ -58,8 +62,14 @@ def merge(paths, app):
                 elem_order.append(eid)
             else:
                 existing = elements[eid]
-                # conflit de kind → signalé, on garde le premier
-                if "kind" in el and "kind" in existing and el["kind"] != existing["kind"]:
+                # Conflit de kind → signalé, on garde le premier. Sauf sur la RACINE :
+                # chaque récolteur y émet un placeholder de topologie avec son propre défaut
+                # (`service` côté tables/routes, `webapp` côté écrans), et le kind réel se
+                # règle à la main à l'amorçage — diff-manifest exclut d'ailleurs la racine de
+                # sa comparaison de kind. Le signaler serait un avertissement permanent et
+                # sans action possible, le bruit qui apprend à ne plus lire les avertissements.
+                if (eid != app and "kind" in el and "kind" in existing
+                        and el["kind"] != existing["kind"]):
                     kind_conflicts.append((eid, existing["kind"], el["kind"]))
                 # complète les champs absents (le premier fichier reste prioritaire)
                 for k, v in el.items():
@@ -83,7 +93,15 @@ def merge(paths, app):
 
 
 def emit_yaml(merged):
-    """Émission déterministe (ordre de champs stable) pour un diff lisible."""
+    """Émission déterministe (ordre de champs stable) pour un diff lisible.
+
+    Les valeurs passent par `yamlemit.yaml_str`. Depuis que les récolteurs remontent des
+    `description:` tirées des commentaires SQL et du code, ce texte est arbitraire : une
+    description comme « Registre de configuration : quelles tables… » contient un « : »
+    qui, réécrit tel quel, produit un document YAML INVALIDE. Les récolteurs quotaient déjà
+    leur sortie ; la fusion la relisait puis la ré-émettait sans quoter, et annulait le
+    travail juste avant la validation.
+    """
     L = [
         "# RÉCOLTÉ (fusionné) — ne pas éditer. Union des grains des récolteurs.",
         "# Régénéré par scripts/archi-ci/merge-manifests.py. STD-031 §2.7.7.",
@@ -98,7 +116,9 @@ def emit_yaml(merged):
                 continue
             v = el[k]
             if k == "tags" and isinstance(v, list):
-                v = "[" + ", ".join(str(x) for x in v) + "]"
+                v = "[" + ", ".join(yaml_str(x) for x in v) + "]"
+            elif k != "id":
+                v = yaml_str(v)
             prefix = "  - " if first else "    "
             L.append(f"{prefix}{k}: {v}")
             first = False
@@ -111,7 +131,7 @@ def emit_yaml(merged):
             L.append(f"  - from: {rel.get('from')}")
             L.append(f"    to: {rel.get('to')}")
             if rel.get("label") is not None:
-                L.append(f"    label: {rel.get('label')}")
+                L.append(f"    label: {yaml_str(rel.get('label'))}")
     return "\n".join(L) + "\n"
 
 
