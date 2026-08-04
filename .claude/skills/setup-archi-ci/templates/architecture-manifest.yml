@@ -79,14 +79,27 @@ jobs:
           set -e
           APP="${{ steps.cfg.outputs.app }}"
           mkdir -p .architecture/_harvest
-          if ls supabase/migrations/*.sql >/dev/null 2>&1; then
-            somtech-pack harvest-supabase supabase/migrations --app "$APP" \
+          # `--discover` balaie les emplacements NOMMÉS où vit le schéma d'un dépôt Somtech
+          # (supabase/migrations, supabase/schemas, dumps supabase/*.sql, scripts/migrations…)
+          # au lieu du seul supabase/migrations. Un dépôt dont le schéma vit ailleurs — un
+          # dump `pg_dump` de référence, un second dossier de migrations — n'était sinon
+          # récolté qu'en partie, et le gate comparait le manifeste à une vérité tronquée.
+          # Pas de `|| true` ici : « aucun .sql » et « le récolteur a planté » sortent tous
+          # deux en 1, et les confondre ferait passer un vrai drift au vert faute de grain
+          # récolté. On distingue donc AVANT d'appeler.
+          if find . -path ./node_modules -prune -o -name '*.sql' -print -quit | grep -q .; then
+            somtech-pack harvest-supabase --discover . --app "$APP" \
               --out .architecture/_harvest/10-tables.yaml
           else
-            echo "::notice::pas de migrations .sql — grain tables sauté."
+            echo "::notice::aucun fichier .sql dans le dépôt — grain tables sauté."
           fi
-          somtech-pack harvest-config . --app "$APP" --out .architecture/_harvest/20-config.yaml
-          somtech-pack harvest-routes . --app "$APP" --out .architecture/_harvest/30-routes.yaml
+          somtech-pack harvest-config  . --app "$APP" --out .architecture/_harvest/20-config.yaml
+          somtech-pack harvest-routes  . --app "$APP" --out .architecture/_harvest/30-routes.yaml
+          # Le grain `screen` n'est PAS récolté par la CI. `harvest-screens` existe et
+          # fonctionne, mais il a fabriqué de fausses adresses à deux revues successives :
+          # il n'a donc pas passé I19 (« zéro faux positif ») et STD-031 §2.7.9 interdit de
+          # l'opposer aux dépôts tant que ce n'est pas le cas. Les écrans restent déclarés à
+          # la main dans architecture.yaml, et le gate ne les confronte pas au code.
 
       - name: Fusionner les grains récoltés
         run: |

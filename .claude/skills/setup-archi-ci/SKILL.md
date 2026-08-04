@@ -58,10 +58,27 @@ Annoncer ce qui est trouvé et ce qui manque (dégradation propre — un grain a
 **jamais** traité comme « conforme ») :
 
 ```bash
-test -d supabase/migrations && echo "✓ tables (Supabase)"        || echo "· pas de migrations Supabase"
-{ ls app/**/route.* src/app/**/route.* pages/api/** src/pages/api/** 2>/dev/null | head -1 >/dev/null && echo "✓ endpoints (Next.js)"; } || echo "· pas de routes Next.js évidentes"
+# Tables : le récolteur découvre lui-même les emplacements nommés du schéma — il ne se
+# limite pas à supabase/migrations (un dump de référence ou un second dossier de migrations
+# compte tout autant). `--discover` liste sur stderr ce qu'il a effectivement retenu.
+npx -y @somtech-solutions/pack harvest-supabase --discover . --app _probe --out /dev/null
+{ test -d supabase/functions || ls app/**/route.* src/app/**/route.* pages/api/** src/pages/api/** 2>/dev/null | head -1 >/dev/null; } \
+  && echo "✓ endpoints (Edge Functions / Next.js / Express)" || echo "· pas de surface HTTP évidente"
 { test -f fly.toml || test -f netlify.toml || test -f .mcp.json; } && echo "✓ config/topologie" || echo "· pas de config d'infra évidente"
 ```
+
+> **Le grain `screen` n'est pas récolté.** `harvest-screens` existe dans le pack et
+> fonctionne, mais il a fabriqué de fausses adresses à deux revues successives : il n'a pas
+> passé I19 (« zéro faux positif sur un dépôt réel ») et **STD-031 §2.7.9 interdit d'opposer
+> aux dépôts un récolteur qui échoue à l'un des trois critères**. Les écrans restent donc
+> déclarés à la main dans `architecture.yaml`, et le gate ne les confronte pas au code — comme
+> avant. On peut l'appeler à la main pour comparer (`npx … harvest-screens . --app <SLUG>`),
+> jamais s'en servir comme référence.
+
+> **Ce qui n'est PAS récolté est signalé, jamais deviné.** Chaque récolteur écrit sur stderr
+> ce qu'il n'a pas su lire — un `CREATE TABLE` construit dynamiquement, un framework de
+> routage inconnu. Ces grains restent « non vérifiés » : ni conformes, ni en drift. Les
+> déclarer à la main dans `architecture.yaml` reste possible, et le gate ne s'y oppose pas.
 
 ### 3. Récolter l'amorçage du manifeste
 
@@ -71,9 +88,9 @@ partie écrite à la main, à marquer). `<SLUG>` = slug de l'étape 1.
 
 ```bash
 mkdir -p .architecture/_boot docs/architecture
-ls supabase/migrations/*.sql >/dev/null 2>&1 && npx -y @somtech-solutions/pack harvest-supabase supabase/migrations --app <SLUG> --out .architecture/_boot/10-tables.yaml
-npx -y @somtech-solutions/pack harvest-config . --app <SLUG> --out .architecture/_boot/20-config.yaml
-npx -y @somtech-solutions/pack harvest-routes . --app <SLUG> --out .architecture/_boot/30-routes.yaml
+npx -y @somtech-solutions/pack harvest-supabase --discover . --app <SLUG> --out .architecture/_boot/10-tables.yaml
+npx -y @somtech-solutions/pack harvest-config  . --app <SLUG> --out .architecture/_boot/20-config.yaml
+npx -y @somtech-solutions/pack harvest-routes  . --app <SLUG> --out .architecture/_boot/30-routes.yaml
 npx -y @somtech-solutions/pack merge-manifests .architecture/_boot/*.yaml --app <SLUG> --out .architecture/_boot/harvested.yaml
 
 # ⚠️ Idempotence (F3) : NE JAMAIS écraser un architecture.yaml existant maintenu à la main.
@@ -93,6 +110,8 @@ rm -rf .architecture/_boot
   `diff-manifest` pour que tu le complètes à la main.
 - Relire le manifeste amorcé : corriger `kind`/`name` de la racine, qualifier les FK
   cross-repo (`depends_on … à qualifier`), régler `audience` (défaut `internal`, Loi 25).
+- Le `kind` de la racine est un **placeholder** émis par chaque récolteur : la fusion ne le
+  signale pas et le gate l'ignore. C'est à l'amorçage qu'on le fixe.
 
 ### 4. Déposer le workflow + la config
 
@@ -132,10 +151,31 @@ gh pr create --draft --title "chore(archi): modèle vivant — amorçage manifes
 
 1. **Relire la PR d'amorçage** — le manifeste est récolté, pas inventé ; vérifier la racine,
    les FK cross-repo, l'`audience`.
-2. La CI tourne en **`warn`** : elle poste le drift en commentaire de PR sans bloquer.
+2. La CI tourne en **`warn`** : elle poste le drift en commentaire de PR **sans bloquer**.
+   C'est le mode par défaut, et il le reste tant que le manifeste du repo n'a pas rattrapé
+   son code. On ne durcit pas un repo pour le forcer à se mettre à jour.
 3. Quand `architecture.yaml` est fidèle au code → passer `.architecture/ci.yaml` en
    **`mode: strict`** et activer la **branch protection** sur le job `manifest` (rend le
    gate opposable, STD-031).
+
+### Si le gate bloque — l'ordre de vérification n'est pas négociable (I18)
+
+Un gate qui bloque n'est jamais l'accusé. Deux hypothèses, dans cet ordre (STD-031 §2.7.9) :
+
+1. **Le manifeste est en retard sur les sources** → on le régénère. Cas nominal.
+2. **La récolte affirme quelque chose qui n'est pas dans les sources** → le **récolteur est
+   défectueux**, et le blocage est son comportement correct : il signale un outil cassé, pas
+   une documentation incomplète.
+
+Dans le cas 2, trois réponses, dans cet ordre : **corriger le récolteur** (voie normale, dans
+`somtech-pack`) · **épingler la version antérieure** du pack dans le repo touché, le temps du
+correctif (voie d'attente, le gate reste `strict`) · **rien d'autre**.
+
+**Interdits** : écrire l'élément faux dans le manifeste, et desserrer le gate (`strict → warn`)
+pour débloquer. Le premier fait mentir la documentation — précisément ce que le modèle vivant
+existe pour empêcher. Le second tue le gate le jour de sa naissance : un gate qu'on desserre à
+sa première morsure ne mordra plus jamais. Il n'y a **aucun mécanisme d'exception** dans le
+manifeste, et c'est délibéré : un défaut d'outil se corrige, il ne se documente pas.
 
 ---
 

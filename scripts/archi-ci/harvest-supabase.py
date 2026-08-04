@@ -7,10 +7,10 @@
 │ côté Architecture, puis re-synchroniser cette copie via le pack.            │
 └───────────────────────────────────────────────────────────────────────────┘
 
-Modèle vivant Somtech (STD-031 §2.7.7, I16/I17). Lit les migrations SQL d'un repo
-(CREATE TABLE + clés étrangères) et émet un manifeste `architecture.yaml` RÉCOLTÉ :
-les tables (kind=table) + les relations FK. Lecture seule sur les sources — aucun
-write-back. La sortie porte une bannière « RÉCOLTÉ — ne pas éditer ».
+Modèle vivant Somtech (STD-031 §2.7.7, I16/I17/I19). Lit le SQL d'un repo et émet un
+manifeste `architecture.yaml` RÉCOLTÉ : les tables (kind=table), leurs descriptions et
+leurs relations FK. Lecture seule sur les sources — aucun write-back. La sortie porte une
+bannière « RÉCOLTÉ — ne pas éditer ».
 
 ⚠️ RÈGLE 7 : à exécuter DEPUIS le repo applicatif cible (là où vivent ses migrations),
 pas depuis `architecture`. Cet outil est canonique là-bas, distribué ici par le pack.
@@ -19,8 +19,18 @@ Le schéma ne porte que le GRAIN data. La TOPOLOGIE (le service, ses dépendance
 du récolteur de config (fly.toml/.mcp.json/env) — ici on émet une racine `service`
 minimale, à fusionner. Aucune règle métier n'est extraite (hors champ, I17).
 
+CE QUI EST LU, ET CE QUI NE L'EST PAS (discipline I19 — on sous-récolte, on n'invente pas)
+
+Le SQL est d'abord découpé en instructions par `sqlscan` (conscient des littéraux, des
+identifiants quotés et du dollar-quoting), puis chaque instruction n'est reconnue que si
+elle COMMENCE par le motif attendu. Une instruction ne peut donc jamais déborder sur la
+suivante, et un `CREATE TABLE` cité à l'intérieur d'un corps de fonction ou d'un `DO $$ … $$`
+n'est PAS récolté : il est SIGNALÉ sur stderr comme grain non vérifié. On préfère une table
+manquante — visible dans le rapport de drift — à une table inventée (I17).
+
 Usage :
   python3 harvest-supabase.py <migrations_dir|fichier.sql ...> --app <slug> [options]
+  python3 harvest-supabase.py --discover <racine_repo> --app <slug>   (emplacements nommés)
   options : --root-kind service|webapp (défaut service) · --root-name "<nom>"
             --out architecture.yaml (défaut: stdout)
 """
@@ -29,84 +39,219 @@ import glob
 import os
 import re
 import sys
+import unicodedata
 
-# ── Parsing SQL (regex, tolérant) ────────────────────────────────────────────
-_COMMENT_LINE = re.compile(r"--[^\n]*")
-_COMMENT_BLOCK = re.compile(r"/\*.*?\*/", re.DOTALL)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sqlscan import QNAME, fqn, parse_qname, split_statements  # noqa: E402
+from yamlemit import yaml_str as _yaml_str  # noqa: E402
+
+# ── Motifs, tous ancrés en DÉBUT d'instruction (`\A`) ────────────────────────
+# L'ancrage est le cœur du correctif D-20260731-0001 : couplé au découpage en
+# instructions, il rend structurellement impossible qu'un motif s'apparie avec le
+# contenu de l'instruction suivante. Aucune borne à régler, donc rien qui se dégrade
+# quand le dépôt grossit (invariant d'échelle, STD-031 §2.7.9).
 _CREATE_TABLE = re.compile(
-    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\"`]?[\w.]+[\"`]?)\s*\(",
+    r"\ACREATE\s+(?:(?P<temp>TEMP|TEMPORARY|UNLOGGED|GLOBAL|LOCAL)\s+)*TABLE\s+"
+    r"(?:IF\s+NOT\s+EXISTS\s+)?(?P<name>" + QNAME + r")",
     re.IGNORECASE,
 )
-_REFERENCES = re.compile(r"REFERENCES\s+([\"`]?[\w.]+[\"`]?)\s*(?:\([^)]*\))?", re.IGNORECASE)
-_ALTER_FK = re.compile(
-    # `[^;]*?` et non `.*?` : borne l'appariement a L'INSTRUCTION COURANTE. Avec `.*?`
-    # (et re.DOTALL), n'importe quel ALTER TABLE s'appariait au PROCHAIN `REFERENCES` du
-    # fichier, meme des centaines de lignes plus loin — le recolteur inventait alors une
-    # relation qui n'existe pas. Le declencheur n'est pas le RLS : tout ALTER TABLE deborde,
-    # y compris un DROP CONSTRAINT. Le RLS n'est qu'une correlation (c'est l'ALTER TABLE le
-    # plus frequent dans un projet discipline), et filtrer le RLS laisserait passer le reste.
-    # `[^;]` traverse les sauts de ligne : une contrainte declaree sur plusieurs lignes
-    # (ALTER TABLE ONLY ... / ADD CONSTRAINT ... / REFERENCES ...) reste bien recoltee.
-    #
-    # CE QUE CE BORNAGE NE COUVRE PAS — mesure, a traiter par un decoupage en instructions
-    # conscient des litteraux (une classe de caracteres n'y suffira jamais) :
-    #  - un `;` DANS un litteral de la meme instruction coupe trop tot et fait perdre une
-    #    vraie FK. Sens rassurant : on perd une relation, on n'en invente pas ;
-    #  - un `--` dans un litteral fait disparaitre le `;` des `strip_comments` (il croit
-    #    voir un commentaire) : le debordement reprend alors comme avant ce correctif, et
-    #    celui-la FABRIQUE une relation ;
-    #  - un fichier sans `;` terminal n'a aucune borne du tout ;
-    #  - un nom de contrainte contenant `references` s'apparie a l'interieur de l'identifiant.
-    # Plus de DOTALL : sans `.` hors classe de caracteres, le drapeau n'avait plus d'effet et
-    # laissait croire que l'appariement traversait encore les instructions.
-    r"ALTER\s+TABLE\s+(?:ONLY\s+)?([\"`]?[\w.]+[\"`]?)[^;]*?REFERENCES\s+([\"`]?[\w.]+[\"`]?)",
+_DROP_TABLE = re.compile(
+    r"\ADROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?P<names>" + QNAME + r"(?:\s*,\s*" + QNAME + r")*)",
     re.IGNORECASE,
+)
+_ALTER_TABLE = re.compile(
+    r"\AALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?P<name>" + QNAME + r")",
+    re.IGNORECASE,
+)
+_RENAME_TO = re.compile(r"\bRENAME\s+TO\s+(?P<name>" + QNAME + r")", re.IGNORECASE)
+_SET_SCHEMA = re.compile(r"\bSET\s+SCHEMA\s+(?P<name>" + QNAME + r")", re.IGNORECASE)
+_REFERENCES = re.compile(r"\bREFERENCES\s+(?P<name>" + QNAME + r")", re.IGNORECASE)
+_COMMENT_ON_TABLE = re.compile(
+    r"\ACOMMENT\s+ON\s+TABLE\s+(?P<name>" + QNAME + r")\s+IS\s+(?P<body>'(?:[^']|'')*'|NULL)",
+    re.IGNORECASE | re.DOTALL,
+)
+# Un `CREATE TABLE` qui n'est PAS en tête d'instruction vit forcément dans un littéral ou
+# un corps `$$` : on ne le récolte pas, on le compte pour le signaler (grain non vérifié).
+_EMBEDDED_CREATE = re.compile(r"(?<!\A)CREATE\s+TABLE\s", re.IGNORECASE)
+# `DO $$ … $$` : bloc anonyme EXÉCUTÉ au moment de la migration. Son corps fait donc partie
+# du schéma déployé au même titre qu'une instruction de premier niveau, et le motif
+# `DO $$ BEGIN IF NOT EXISTS … CREATE TABLE … END $$` est courant. On y descend.
+# Un corps de `CREATE FUNCTION`, lui, ne s'exécute QUE si la fonction est appelée : une
+# table qui y est écrite n'existe pas du fait de la migration. On n'y descend pas.
+_DO_BLOCK = re.compile(r"\ADO\s+(?:LANGUAGE\s+\w+\s+)?(\$(?:\w+)?\$)(?P<body>.*?)\1",
+                       re.IGNORECASE | re.DOTALL)
+# Dans un corps PL/pgSQL, l'instruction utile est précédée de mots-clés de structure :
+# `BEGIN`, `IF … THEN`, `ELSE`, `LOOP`. On les épluche pour retrouver l'ancrage — sans quoi
+# la migration défensive `IF NOT EXISTS (…) THEN CREATE TABLE …` resterait invisible.
+# Or c'est un motif de projet DISCIPLINÉ : ne pas le lire ferait exactement ce que
+# STD-031 §2.7.9 interdit — dégrader la récolte à mesure que le projet devient rigoureux.
+_PLPGSQL_PREAMBLE = re.compile(
+    r"\A(?:BEGIN|DECLARE|ELSE|LOOP|THEN"
+    r"|(?:ELS)?IF\b.*?\bTHEN"
+    r"|(?:WHILE|FOR)\b.*?\bLOOP)\s+",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
-def strip_comments(sql):
-    return _COMMENT_LINE.sub("", _COMMENT_BLOCK.sub("", sql))
-
-
-def bare(name):
-    """public.\"Foo\" → foo (sans schéma ni guillemets, minuscule)."""
-    n = name.strip().strip('"`')
-    if "." in n:
-        n = n.split(".")[-1].strip('"`')
-    return n.lower()
-
-
-def extract_body(sql, open_paren_pos):
-    """Corps équilibré à partir de la parenthèse ouvrante."""
-    depth, i = 0, open_paren_pos
-    while i < len(sql):
-        if sql[i] == "(":
+def extract_body(stmt):
+    """Corps parenthésé équilibré d'un CREATE TABLE, ou '' s'il n'y en a pas (AS SELECT)."""
+    start = stmt.find("(")
+    if start < 0:
+        return ""
+    depth, i = 0, start
+    while i < len(stmt):
+        if stmt[i] == "(":
             depth += 1
-        elif sql[i] == ")":
+        elif stmt[i] == ")":
             depth -= 1
             if depth == 0:
-                return sql[open_paren_pos + 1:i]
+                return stmt[start + 1:i]
         i += 1
-    return sql[open_paren_pos + 1:]
+    return stmt[start + 1:]
 
 
-def harvest(sql_text):
-    """Retourne (tables:set, fks:set[(from,to)])."""
-    sql = strip_comments(sql_text)
-    tables, fks = set(), set()
-    for m in _CREATE_TABLE.finditer(sql):
-        tname = bare(m.group(1))
-        tables.add(tname)
-        body = extract_body(sql, m.end() - 1)
-        for r in _REFERENCES.finditer(body):
-            target = bare(r.group(1))
-            if target != tname:
-                fks.add((tname, target))
-    for m in _ALTER_FK.finditer(sql):
-        src, target = bare(m.group(1)), bare(m.group(2))
-        if src != target:
-            fks.add((src, target))
-    return tables, fks
+def _unquote_literal(lit):
+    if lit.upper() == "NULL":
+        return None
+    return lit[1:-1].replace("''", "'").strip() or None
+
+
+class Schema:
+    """État du schéma reconstruit en rejouant les instructions dans l'ordre.
+
+    Rejouer plutôt qu'accumuler : une table créée puis supprimée ne doit pas survivre dans
+    le manifeste, et une table renommée doit y figurer sous son nom final. Un récolteur qui
+    se contente d'unir tous les `CREATE TABLE` du dépôt documente l'histoire du schéma, pas
+    le schéma (I16 : le manifeste est une photo de l'état, pas un journal).
+    """
+
+    def __init__(self):
+        self.tables = {}        # (schema, table) → {"description": str|None}
+        self.fks = set()        # ((s_sch, s_tbl), (t_sch, t_tbl))
+        self.embedded = 0       # CREATE TABLE vus dans un littéral / corps $$ (non récoltés)
+
+    def _drop(self, key):
+        self.tables.pop(key, None)
+        self.fks = {(s, t) for (s, t) in self.fks if s != key}
+
+    def _rename(self, old, new):
+        if old not in self.tables:
+            return
+        self.tables[new] = self.tables.pop(old)
+        self.fks = {((new if s == old else s), (new if t == old else t)) for (s, t) in self.fks}
+
+    def apply(self, stmt, _depth=0):
+        m = _DO_BLOCK.match(stmt)
+        if m:
+            if _depth < 4:  # garde-fou : un DO qui contient un DO reste borné
+                for inner in split_statements(m.group("body")):
+                    self.apply(inner, _depth + 1)
+            return
+
+        if _depth:
+            while True:
+                peeled = _PLPGSQL_PREAMBLE.sub("", stmt, count=1)
+                if peeled == stmt:
+                    break
+                stmt = peeled
+
+        m = _CREATE_TABLE.match(stmt)
+        if m:
+            if m.group("temp") and m.group("temp").upper() in ("TEMP", "TEMPORARY"):
+                return  # table de session : n'existe pas dans le schéma déployé
+            key = parse_qname(m.group("name"))
+            self.tables.setdefault(key, {"description": None})
+            for r in _REFERENCES.finditer(extract_body(stmt)):
+                target = parse_qname(r.group("name"))
+                if target != key:
+                    self.fks.add((key, target))
+            return
+
+        m = _DROP_TABLE.match(stmt)
+        if m:
+            for raw in re.split(r",", m.group("names")):
+                key = parse_qname(raw)
+                if key:
+                    self._drop(key)
+            return
+
+        m = _ALTER_TABLE.match(stmt)
+        if m:
+            key = parse_qname(m.group("name"))
+            rn = _RENAME_TO.search(stmt)
+            if rn and not re.search(r"\bRENAME\s+(?:COLUMN|CONSTRAINT)\b", stmt, re.IGNORECASE):
+                self._rename(key, (key[0], parse_qname(rn.group("name"))[1]))
+                return
+            ss = _SET_SCHEMA.search(stmt)
+            if ss:
+                self._rename(key, (parse_qname(ss.group("name"))[1], key[1]))
+                return
+            # L'instruction est bornée par le découpage : le `REFERENCES` trouvé ici lui
+            # appartient, il ne peut pas venir de centaines de lignes plus loin.
+            for r in _REFERENCES.finditer(stmt):
+                target = parse_qname(r.group("name"))
+                if target != key:
+                    self.fks.add((key, target))
+            return
+
+        m = _COMMENT_ON_TABLE.match(stmt)
+        if m:
+            key = parse_qname(m.group("name"))
+            if key in self.tables:
+                self.tables[key]["description"] = _unquote_literal(m.group("body"))
+            return
+
+        if _EMBEDDED_CREATE.search(stmt):
+            self.embedded += 1
+
+
+# ── Découverte des sources ───────────────────────────────────────────────────
+# Emplacements NOMMÉS, pas un balayage aveugle du dépôt. Un balayage ramasserait les jeux
+# de données de test et les brouillons, et ferait entrer dans le modèle des tables qui
+# n'existent nulle part. Cette liste vient des dépôts réels du corpus : le schéma d'une app
+# Somtech ne vit pas toujours dans `supabase/migrations` — Morasse tient le sien dans un
+# `supabase/_baseline_prod_public.sql` doublé d'un second dossier `scripts/migrations`.
+DISCOVER_GLOBS = [
+    "supabase/migrations/**/*.sql",
+    "supabase/schemas/**/*.sql",
+    "supabase/*.sql",           # dumps de référence (_baseline_prod_public.sql, …)
+    "scripts/migrations/**/*.sql",
+    "db/migrations/**/*.sql",
+    "migrations/**/*.sql",
+]
+# Exclusions : contenu qui n'est PAS le schéma déployé.
+DISCOVER_EXCLUDE = re.compile(
+    r"(^|/)(node_modules|\.git|tmp|temp|fixtures?|__tests__|test|tests)(/|$)"
+    r"|(^|/)(seed|seeds)[^/]*\.sql$"
+    r"|_(test|qa|sample|example)[^/]*\.sql$",
+    re.IGNORECASE,
+)
+# … mais JAMAIS à l'intérieur d'un dossier de migrations : ce qui s'y trouve est appliqué,
+# donc fait partie du schéma, quel que soit son nom. Sans cette réserve, une vraie migration
+# comme `20260303161434_cleanup_test_accounts_v2.sql` était écartée pour le seul mot « test »
+# dans son intitulé — et une migration qui créerait une table `test_results` disparaîtrait
+# du modèle sans que rien ne le signale.
+# Le CLI Supabase n'applique que les `.sql` posés DIRECTEMENT dans le dossier de migrations.
+# Un `supabase/migrations/tests/seed_test_data.sql` n'est donc pas le schéma — d'où l'ancrage
+# en fin de chemin, et non « quelque part sous migrations/ ».
+_ALWAYS_KEPT = re.compile(r"(^|/)migrations$", re.IGNORECASE)
+
+
+def discover(root):
+    """Retourne (fichiers, emplacements_retenus) depuis les emplacements nommés."""
+    files, used = [], []
+    for pattern in DISCOVER_GLOBS:
+        hits = sorted(
+            f for f in glob.glob(os.path.join(root, pattern), recursive=True)
+            if os.path.isfile(f) and (
+                _ALWAYS_KEPT.search(os.path.dirname(os.path.relpath(f, root)))
+                or not DISCOVER_EXCLUDE.search(os.path.relpath(f, root)))
+        )
+        hits = [f for f in hits if f not in files]
+        if hits:
+            used.append((pattern, len(hits)))
+            files += hits
+    return files, used
 
 
 def collect_sql(paths):
@@ -119,69 +264,162 @@ def collect_sql(paths):
     return files
 
 
-def emit_yaml(app, root_kind, root_name, tables, fks):
+def harvest_files(files):
+    schema = Schema()
+    for f in files:
+        try:
+            text = open(f, encoding="utf-8", errors="ignore").read()
+        except OSError:
+            continue
+        for stmt in split_statements(text):
+            schema.apply(stmt)
+    return schema
+
+
+# ── Émission ─────────────────────────────────────────────────────────────────
+def emit_yaml(app, root_kind, root_name, schema):
+    tables = schema.tables
     L = [
-        "# RÉCOLTÉ — ne pas éditer (source : migrations Supabase). STD-031 §2.7.7 / I16-I17.",
+        "# RÉCOLTÉ — ne pas éditer (source : SQL du dépôt). STD-031 §2.7.7 / I16-I17.",
         "# Régénéré par scripts/archi-ci/harvest-supabase.py. Modifier le SCHÉMA, pas ce fichier.",
         "# La racine ci-dessous est un placeholder de TOPOLOGIE à fusionner avec le récolteur de config.",
         f"app: {app}",
         "elements:",
         f"  - id: {app}",
         f"    kind: {root_kind}",
-        f"    name: {root_name}",
+        f"    name: {_yaml_str(root_name)}",
         "    audience: internal",
     ]
-    for t in sorted(tables):
+
+    # Le schéma du manifeste impose des ids en minuscules sans accent
+    # (`^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$`). PostgreSQL, lui, accepte `CREATE TABLE
+    # réservations` et `CREATE TABLE "Utilisateurs"`. Émettre l'identifiant brut produirait
+    # un manifeste que `validate-manifest` refuse — et un gate strict deviendrait alors
+    # INSATISFIABLE : impossible de le contenter sans écrire un fait faux (I18). L'id est
+    # donc translittéré ; le vrai nom reste intact dans `name:`.
+    slugs = {}
+
+    def _slug(raw):
+        s = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode().lower()
+        s = re.sub(r"[^a-z0-9_-]+", "_", s).strip("_") or "x"
+        if not re.match(r"[a-z]", s[0]):
+            s = "t_" + s
+        return s
+
+    taken = {}
+
+    def _unique(raw, scope, kind="table"):
+        """Slug stable et unique DANS son niveau de la hiérarchie.
+
+        Le niveau compte : un conteneur de schéma et une table du schéma `public` sont tous
+        deux des enfants directs de l'app — ils se disputent donc le même id. Les cloisonner
+        séparément laissait passer `CREATE SCHEMA maestro` + `CREATE TABLE public.maestro`,
+        et le manifeste était rejeté pour id dupliqué.
+        """
+        # La clé porte AUSSI la nature de l'élément : un schéma `maestro` et une table
+        # `public.maestro` sont deux choses différentes qui réclament le même id.
+        key = (scope, kind, raw)
+        if key in slugs:
+            return slugs[key]
+        used = taken.setdefault(scope, set())
+        base, candidate, n = _slug(raw), _slug(raw), 2
+        while candidate in used:
+            candidate, n = f"{base}_{n}", n + 1
+        used.add(candidate)
+        slugs[key] = candidate
+        return candidate
+
+    def eid(key):
+        schema_name, table = key
+        if schema_name == "public":
+            return f"{app}.{_unique(table, '@racine', 'table')}"
+        return f"{app}.{_unique(schema_name, '@racine', 'schema')}.{_unique(table, schema_name, 'table')}"
+
+    def parent(key):
+        return app if key[0] == "public" else f"{app}.{_unique(key[0], '@racine', 'schema')}"
+
+    # Un schéma non-public devient un conteneur explicite. Sans lui, `maestro.entities` et
+    # `public.entities` s'écraseraient sous le même id et le modèle affirmerait qu'une table
+    # vit dans un schéma où elle n'est pas.
+    for sch in sorted({s for (s, _) in tables if s != "public"}):
         L += [
-            f"  - id: {app}.{t}",
-            "    kind: table",
-            f"    name: {t}",
+            f"  - id: {app}.{_unique(sch, '@racine', 'schema')}",
+            "    kind: database",
+            f"    name: {_yaml_str(sch)}",
+            "    technology: schéma PostgreSQL",
             f"    parent: {app}",
             "    audience: internal",
         ]
-    rel = [(s, t) for (s, t) in sorted(fks) if s in tables and t in tables]
+
+    for key in sorted(tables):
+        L += [
+            f"  - id: {eid(key)}",
+            "    kind: table",
+            f"    name: {_yaml_str(fqn(key))}",
+        ]
+        desc = tables[key].get("description")
+        if desc:
+            L.append(f"    description: {_yaml_str(desc)}")
+        L += [f"    parent: {parent(key)}", "    audience: internal"]
+
+    rel = [(s, t) for (s, t) in sorted(schema.fks) if s in tables and t in tables]
     if rel:
         L.append("relations:")
         for s, t in rel:
-            L += [f"  - from: {app}.{s}", f"    to: {app}.{t}", "    label: FK"]
+            L += [f"  - from: {eid(s)}", f"    to: {eid(t)}", "    label: FK"]
+
     # FK vers une table hors de ce repo → dépendance sortante (cross-repo)
-    ext = [(s, t) for (s, t) in sorted(fks) if s in tables and t not in tables]
+    ext = [(s, t) for (s, t) in sorted(schema.fks) if s in tables and t not in tables]
     if ext:
         L.append("depends_on:")
         for s, t in ext:
-            L += [f"  - from: {app}.{s}", f"    to: {t}", "    label: FK cross-repo (à qualifier)"]
+            L += [f"  - from: {eid(s)}", f"    to: {fqn(t)}",
+                  "    label: FK cross-repo (à qualifier)"]
     return "\n".join(L) + "\n"
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("sources", nargs="+", help="Dossier de migrations ou fichiers .sql")
+    ap.add_argument("sources", nargs="*", help="Dossier de migrations ou fichiers .sql")
+    ap.add_argument("--discover", metavar="RACINE",
+                    help="Découvrir le SQL du dépôt depuis les emplacements nommés")
     ap.add_argument("--app", required=True, help="Slug ServiceDesk (racine de namespace)")
     ap.add_argument("--root-kind", default="service", choices=["service", "webapp", "system"])
     ap.add_argument("--root-name", default=None)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    files = collect_sql(args.sources)
+    if args.discover:
+        files, used = discover(args.discover)
+        for pattern, count in used:
+            print(f"   · {pattern} → {count} fichier(s)", file=sys.stderr)
+        files += collect_sql(args.sources)
+    else:
+        if not args.sources:
+            ap.error("fournir des sources, ou --discover <racine_repo>")
+        files = collect_sql(args.sources)
+
     if not files:
         print("❌ Aucun fichier .sql trouvé.", file=sys.stderr)
         sys.exit(1)
 
-    tables, fks = set(), set()
-    for f in files:
-        with open(f) as fh:
-            t, k = harvest(fh.read())
-            tables |= t
-            fks |= k
+    schema = harvest_files(files)
 
-    if not tables:
-        print("⚠️  Aucune table détectée (CREATE TABLE).", file=sys.stderr)
+    if not schema.tables:
+        print("⚠️  Aucune table détectée (CREATE TABLE). Grain `table` non vérifié — "
+              "ni conforme, ni en drift.", file=sys.stderr)
+    if schema.embedded:
+        print(f"⚠️  {schema.embedded} instruction(s) contiennent un CREATE TABLE dans un "
+              f"littéral ou un corps $$ (DO block, EXECUTE). NON récolté — à déclarer à la "
+              f"main si ces tables existent vraiment.", file=sys.stderr)
 
-    yaml_out = emit_yaml(args.app, args.root_kind, args.root_name or args.app, tables, fks)
+    described = sum(1 for v in schema.tables.values() if v.get("description"))
+    yaml_out = emit_yaml(args.app, args.root_kind, args.root_name or args.app, schema)
     if args.out:
         with open(args.out, "w") as f:
             f.write(yaml_out)
-        print(f"✅ Récolté {len(tables)} table(s) + {len(fks)} FK depuis {len(files)} fichier(s) "
+        print(f"✅ Récolté {len(schema.tables)} table(s) ({described} décrite(s) via "
+              f"COMMENT ON TABLE) + {len(schema.fks)} FK depuis {len(files)} fichier(s) "
               f"→ {args.out}", file=sys.stderr)
     else:
         sys.stdout.write(yaml_out)

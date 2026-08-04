@@ -5,6 +5,37 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.27.0] - 2026-08-04
+
+### Corrigé
+- **Le récolteur d'architecture lisait mal les sources — les manifestes qui en sortaient faisaient mentir le modèle.** Quatorze défauts mesurés puis corrigés, sur quatre dépôts clients réels. Trois d'entre eux **inventaient** des éléments : le dossier `app/` d'un monorepo pris pour le routeur d'une application web (des adresses d'API qui n'existent nulle part), un dossier de composants pris pour un routeur (quinze écrans imaginaires), et les fichiers de test lus comme des routes. Les onze autres faisaient l'inverse : ils omettaient du réel. Un schéma de production entier restait invisible parce qu'il ne vivait pas dans le dossier attendu et qu'il était écrit dans une forme que l'outil ne savait pas lire ; les tables supprimées ou renommées continuaient d'être déclarées ; l'isolement d'un schéma dédié — une posture de protection des renseignements personnels — était effacé, deux tables homonymes de schémas différents se retrouvant confondues. (D-20260804-0006)
+- **La documentation d'un projet ne le pénalise plus.** Chaque marque de discipline cassait l'outil : commenter ses tables, isoler ses données sensibles, écrire des migrations prudentes, tester ses routes, versionner une base de référence, ranger son dépôt en monorepo. Plus un projet était rigoureux, plus son modèle d'architecture devenait faux. C'est l'effet pervers que STD-031 §2.7.9 nomme explicitement ; il a maintenant un test par motif.
+- **Les descriptions ne sont plus vides.** Elles étaient absentes partout — un champ vide que la relecture humaine remplissait à la main, et que la régénération suivante effaçait. Elles viennent désormais de ce que les sources portent déjà : les commentaires des tables dans les migrations (199 tables sur 303 du corpus en ont, avec de fortes disparités d'un projet à l'autre), et l'en-tête des fichiers pour les points d'API et les écrans.
+- **Le manifeste fusionné pouvait être illisible.** Une description contenant un deux-points suffisait à produire un document invalide, et l'écran d'une adresse revendiquait le même identifiant que la table du même nom — un élément disparaissait alors sans bruit à la fusion.
+
+### Ajouté
+- **Un récolteur d'écrans, livré mais NON branché** — décision assumée. C'est la seule famille du modèle que personne ne récoltait, et elle continue de s'écrire à la main : l'outil a annoncé de fausses adresses à deux relectures indépendantes d'affilée, il ne peut donc pas servir de référence à un contrôle automatique. Il reste dans le paquet, utilisable à la main pour comparer, et sera branché le jour où une relecture ne trouvera plus rien. Documenter à partir d'un outil qui se trompe coûte plus cher que ne pas documenter.
+- **Les fonctions Supabase deviennent visibles.** Elles sont la surface d'API principale des applications Somtech — cent deux dans le corpus — et aucune n'apparaissait : la documentation affirmait qu'une application n'avait pas d'API là où elle en avait des dizaines.
+- **Une validation sur dépôts réels, rejouable** (`scripts/tests/test-archi-ci-corpus.sh`). STD-031 §2.7.9 exige qu'un récolteur se prouve sur du vrai code avant d'être opposable : des fixtures écrites pour l'occasion n'y suffisent pas. La suite se saute proprement là où les dépôts sont absents — cette preuve-là ne se simule pas. Rapport détaillé : `docs/modele-vivant/validation-corpus-recolteurs.md`.
+
+### Trouvé en revue de code, corrigé avant livraison
+- **Le récolteur d'écrans, neuf dans cette version, inventait des adresses.** Quand une application découpe son interface en modules, chaque module déclare ses écrans avec des chemins **relatifs** à l'endroit où il est branché. Lus isolément, ces chemins devenaient des adresses absolues : sur un dépôt client, 76 des 98 écrans annoncés menaient à une page introuvable — et il s'en ajoutait une à chaque nouveau module. Le récolteur suit désormais le branchement des modules. Il ne balaie plus non plus le dépôt entier : les maquettes, les instantanés de documentation et les copies du dépôt dans lui-même ne sont pas des écrans déployés.
+- **Une barre oblique inverse isolée dans un texte SQL rouvrait la brèche de la version précédente** — le lecteur croyait le texte encore ouvert, avalait la fin de l'instruction et rattachait une contrainte à la mauvaise table. Défaut latent, jamais rencontré sur les dépôts actuels, mais c'est exactement la classe de défaut que cette version prétend clore.
+- **Un filtre de découverte écartait une vraie migration** parce que son intitulé contenait le mot « test ». Ce qui vit dans un dossier de migrations est appliqué : c'est le schéma, quel que soit son nom.
+- **Trois contrôles passaient pour de mauvaises raisons** : ils vérifiaient qu'une chose n'apparaissait pas, dans un fichier que l'outil n'avait pas produit. Un contrôle qui ne peut pas échouer ne contrôle rien.
+
+### Trouvé en contre-revue du correctif, corrigé
+La correction ci-dessus a été relue à son tour. Elle avait créé trois défauts et en laissait deux : une page « adresse introuvable » annoncée comme servant la racine du site · des modules métier effacés du modèle parce qu'ils s'appellent « archives » ou « docs » · les applications rangées ailleurs qu'à la racine du dépôt (`frontend/`, `apps/web/`) ne rendant plus aucun écran, en silence · un sous-routeur inséré autrement qu'en composant, toujours non rattaché · deux écrans identiques pouvant encore revendiquer le même identifiant. Tous corrigés, chacun avec son test.
+
+### Inchangé, délibérément
+- **Les écrans restent écrits à la main.** Rien ne change pour les projets : ce qui était déjà déclaré le reste, et aucun contrôle ne vient le confronter au code.
+- **Le contrôle de cohérence reste en mode signalement.** Il rapporte l'écart sans bloquer. Un contrôle n'exige jamais qu'on écrive un fait faux (STD-031 §2.7.9, I18) ; durcir un dépôt reste une décision qui se prend dépôt par dépôt, une fois son manifeste à jour.
+
+### Technique
+- Le découpage du SQL passe par un balayage conscient des textes littéraux, des identifiants entre guillemets et des corps `$$` — ce que la note de la version 1.26.1 annonçait comme le seul moyen de sortir de cette classe de défauts. Les motifs sont ancrés en début d'instruction : une expression ne peut plus déborder sur la suivante, et la précision ne dépend plus de la taille du dépôt.
+- Reconnaître un framework exige désormais une preuve (configuration ou dépendance déclarée), jamais un nom de dossier. Les conventions de Next.js ne s'appliquent plus à une application Vite.
+- La copie canonique de `harvest-supabase.py` vit dans le dépôt `architecture` : elle doit être resynchronisée depuis ce pack (règle d'or n°7 — aucune écriture hors du dépôt courant).
+
 ## [1.26.1] - 2026-08-03
 
 ### Corrigé

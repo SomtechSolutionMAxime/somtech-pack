@@ -7,12 +7,21 @@ RÉCOLTÉ : une racine, un noeud `api`, et un `endpoint` par (méthode, chemin).
 seule sur les sources — aucun write-back.
 
 Patterns reconnus (par ordre de confiance) :
-  1. Next.js App Router  — fichiers `route.ts|js|tsx|mjs` sous `app/` ou `src/app/`
+  1. Supabase Edge Functions — `supabase/functions/<nom>/index.ts` → `/functions/v1/<nom>`.
+     C'est la surface HTTP MAJORITAIRE des apps Somtech : leur front est un client Vite/React
+     qui parle à Supabase, sans serveur Next.js ni Express. Un récolteur qui ne connaît que
+     Next.js et Express déclare donc « aucun endpoint » sur la plupart des dépôts du parc —
+     et la doc affirme qu'il n'y a pas d'API là où il y en a des dizaines.
+  2. Next.js App Router  — fichiers `route.ts|js|tsx|mjs` sous `app/` ou `src/app/`
      (méthodes = exports GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS ; chemin = arbo).
-  2. Next.js Pages API   — fichiers sous `pages/api/` ou `src/pages/api/` (1 handler
+  3. Next.js Pages API   — fichiers sous `pages/api/` ou `src/pages/api/` (1 handler
      par fichier ; méthode indéterminée → ANY).
-  3. Express             — `app|router.<method>('/chemin', …)` dans les fichiers qui
+  4. Express             — `app|router.<method>('/chemin', …)` dans les fichiers qui
      importent/instancient Express (best-effort, signalé si non reconnu).
+
+La description d'un endpoint vient du commentaire de tête de son fichier — la source la
+plus proche du code. Un champ laissé vide n'est pas neutre : il pousse la relecture humaine
+à le remplir à la main, et la première projection régénérée l'efface.
 
 ⚠️ RÈGLE 7 : exécuter DEPUIS le repo applicatif cible. Aucune règle métier extraite (I17).
 Un pattern non reconnu est SIGNALÉ (stderr), jamais deviné.
@@ -26,6 +35,10 @@ import argparse
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from frameworks import next_router_dirs  # noqa: E402
+from yamlemit import yaml_str as _yaml_str  # noqa: E402
 
 HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
 SKIP_DIRS = {"node_modules", ".git", ".next", "dist", "build", "out", "coverage",
@@ -45,11 +58,56 @@ _EXPRESS_ROUTE = re.compile(
 _EXPRESS_HINT = re.compile(r"require\(['\"]express['\"]\)|from\s+['\"]express['\"]|express\(\)|Router\(\)")
 
 
+def leading_doc(text):
+    """Première phrase du commentaire de tête d'un fichier (JSDoc `/** … */` ou `// …`).
+
+    Ni les directives (`@ts-nocheck`, `eslint-…`), ni les en-têtes de licence, ni les
+    bannières de séparation ne sont des descriptions : on les écarte.
+    """
+    lines = text.lstrip("﻿").splitlines()
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    collected = []
+    if i < len(lines) and lines[i].lstrip().startswith("/*"):
+        for line in lines[i:]:
+            body = re.sub(r"^\s*/\*+|\*+/\s*$|^\s*\*\s?", "", line).strip()
+            if body:
+                collected.append(body)
+            if "*/" in line:
+                break
+    else:
+        for line in lines[i:]:
+            if not line.lstrip().startswith("//"):
+                break
+            collected.append(line.lstrip()[2:].strip())
+    out = []
+    for c in collected:
+        if c.startswith("@") or re.match(r"^(eslint|ts-|prettier|@ts|copyright|license)", c, re.I):
+            continue
+        # Un en-tête qui ne fait que redonner le chemin du fichier ne décrit rien.
+        if re.fullmatch(r"[\w./@-]+\.[jt]sx?", c):
+            continue
+        if not re.sub(r"[=\-–—*_#~]", "", c).strip():  # ligne de séparation
+            continue
+        out.append(c)
+        if c.endswith("."):
+            break
+    desc = " ".join(out).strip()
+    return desc[:280] or None
+
+
+# Un fichier de test n'est pas une route : `route.test.ts` n'est jamais servi. Le motif
+# `startswith("route.")` l'attrapait pourtant — et une fois de plus au détriment du projet
+# le plus rigoureux, celui qui teste ses routes (effet pervers nommé en STD-031 §2.7.9).
+_TEST_FILE = re.compile(r"\.(test|spec|stories|d)\.[jt]sx?$|(^|/)__tests__/", re.IGNORECASE)
+
+
 def walk_code(root):
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".git")]
         for fn in filenames:
-            if fn.endswith(CODE_EXT):
+            if fn.endswith(CODE_EXT) and not _TEST_FILE.search(fn):
                 yield os.path.join(dirpath, fn)
 
 
@@ -63,16 +121,50 @@ def _app_dir_to_url(rel_dir):
     return "/" + "/".join(segments) if segments else "/"
 
 
+def harvest_supabase_functions(root):
+    """Retourne set[(method, path, 'supabase-edge', description)].
+
+    Une Edge Function déployée est jointe sur `/functions/v1/<nom>` — c'est le chemin que
+    `supabase.functions.invoke('<nom>')` appelle. Un dossier préfixé `_` (`_shared`) est du
+    code commun, pas une fonction : il n'est pas déployé et n'a pas d'URL.
+
+    La méthode n'est resserrée que lorsque le code la contrôle explicitement (un garde
+    `req.method !== 'POST'`). Sinon `ANY` : Deno.serve répond à tout ce qui arrive, et
+    inventer un `POST` là où le code n'en dit rien serait affirmer plus que la source (I17).
+    """
+    found = set()
+    fn_root = os.path.join(root, "supabase", "functions")
+    if not os.path.isdir(fn_root):
+        return found
+    for name in sorted(os.listdir(fn_root)):
+        d = os.path.join(fn_root, name)
+        if not os.path.isdir(d) or name.startswith("_") or name.startswith("."):
+            continue
+        entry = next((os.path.join(d, f"index{e}") for e in CODE_EXT
+                      if os.path.isfile(os.path.join(d, f"index{e}"))), None)
+        if entry is None:
+            continue  # dossier sans point d'entrée : pas une fonction déployable
+        try:
+            text = open(entry, encoding="utf-8", errors="ignore").read()
+        except OSError:
+            continue
+        guarded = {m.group(1).upper() for m in re.finditer(
+            r"req\.method\s*(?:!==?|===?)\s*[\"'](" + "|".join(HTTP_METHODS) + r")[\"']",
+            text, re.IGNORECASE)}
+        guarded.discard("OPTIONS")  # préflight CORS : présent partout, ne définit rien
+        methods = sorted(guarded) if len(guarded) == 1 else ["ANY"]
+        for m in methods:
+            found.add((m, f"/functions/v1/{name}", "supabase-edge", leading_doc(text)))
+    return found
+
+
 def harvest_next_app(root):
     """Retourne set[(method, path, 'next-app')]."""
     found = set()
-    for base in ("app", os.path.join("src", "app")):
-        app_root = os.path.join(root, base)
-        if not os.path.isdir(app_root):
-            continue
+    for app_root in next_router_dirs(root)[0]:
         for path in walk_code(app_root):
             fn = os.path.basename(path)
-            if not (fn.startswith("route.") and fn.endswith(CODE_EXT)):
+            if os.path.splitext(fn)[0] != "route":
                 continue
             rel_dir = os.path.relpath(os.path.dirname(path), app_root)
             rel_dir = "" if rel_dir == "." else rel_dir
@@ -83,15 +175,15 @@ def harvest_next_app(root):
                 continue
             methods = {m.group(1).upper() for m in _APP_METHOD.finditer(text)}
             for m in sorted(methods) or ["ANY"]:
-                found.add((m, url, "next-app"))
+                found.add((m, url, "next-app", leading_doc(text)))
     return found
 
 
 def harvest_next_pages_api(root):
     """Retourne set[(method, path, 'next-pages')]."""
     found = set()
-    for base in ("pages/api", os.path.join("src", "pages", "api")):
-        api_root = os.path.join(root, *base.split("/"))
+    for pages_root in next_router_dirs(root)[1]:
+        api_root = os.path.join(pages_root, "api")
         if not os.path.isdir(api_root):
             continue
         for path in walk_code(api_root):
@@ -101,7 +193,11 @@ def harvest_next_pages_api(root):
                 rel_noext = rel_noext[: -len("/index")]
             url = "/api/" + rel_noext if rel_noext else "/api"
             url = url.rstrip("/") or "/api"
-            found.add(("ANY", url, "next-pages"))
+            try:
+                doc = leading_doc(open(path, encoding="utf-8", errors="ignore").read())
+            except OSError:
+                doc = None
+            found.add(("ANY", url, "next-pages", doc))
     return found
 
 
@@ -120,7 +216,7 @@ def harvest_express(root):
             if not re.search(r"(?:^|_)(app|router)$", obj, re.IGNORECASE) and \
                not obj.lower().endswith("router") and obj.lower() not in ("app", "router"):
                 continue  # objet peu plausible (évite axios.get, etc.)
-            found.add(("ALL" if method == "ALL" else method, url, "express"))
+            found.add(("ALL" if method == "ALL" else method, url, "express", None))
     return found
 
 
@@ -140,7 +236,7 @@ def emit_yaml(app, root_kind, root_name, endpoints):
         "elements:",
         f"  - id: {app}",
         f"    kind: {root_kind}",
-        f"    name: {root_name}",
+        f"    name: {_yaml_str(root_name)}",
         "    audience: internal",
     ]
     if endpoints:
@@ -152,7 +248,7 @@ def emit_yaml(app, root_kind, root_name, endpoints):
             "    audience: internal",
         ]
         used = {}
-        for method, url, tech in sorted(endpoints, key=lambda e: (e[1], e[0])):
+        for method, url, tech, desc in sorted(endpoints, key=lambda e: (e[1], e[0])):
             base = slugify(method, url)
             slug = base
             n = 2
@@ -165,9 +261,10 @@ def emit_yaml(app, root_kind, root_name, endpoints):
                 "    kind: endpoint",
                 f"    name: {method} {url}",
                 f"    technology: {tech}",
-                f"    parent: {app}.api",
-                "    audience: internal",
             ]
+            if desc:
+                L.append(f"    description: {_yaml_str(desc)}")
+            L += [f"    parent: {app}.api", "    audience: internal"]
     return "\n".join(L) + "\n"
 
 
@@ -186,16 +283,17 @@ def main():
         sys.exit(1)
 
     endpoints = set()
+    endpoints |= harvest_supabase_functions(root)
     endpoints |= harvest_next_app(root)
     endpoints |= harvest_next_pages_api(root)
     endpoints |= harvest_express(root)
 
     by_tech = {}
-    for _, _, tech in endpoints:
+    for _, _, tech, _desc in endpoints:
         by_tech[tech] = by_tech.get(tech, 0) + 1
 
     if not endpoints:
-        print("⚠️  Aucun endpoint reconnu (Next.js App Router / Pages API / Express). "
+        print("⚠️  Aucun endpoint reconnu (Edge Functions / Next.js / Express). "
               "Grain endpoints non vérifié — ni conforme, ni en drift.", file=sys.stderr)
 
     yaml_out = emit_yaml(args.app, args.root_kind, args.root_name or args.app, endpoints)
