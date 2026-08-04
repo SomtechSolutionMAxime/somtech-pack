@@ -9,7 +9,7 @@ installée via le skill **`/setup-archi-ci`** (somtech-pack) et exposés en sous
 | `harvest-supabase.py` | `harvest-supabase` | SQL du dépôt → grain `table` + FK + descriptions | **copie** — canonique dans `architecture/scripts/` |
 | `sqlscan.py` · `frameworks.py` · `yamlemit.py` | — | socles communs (découpage SQL, détection de framework, émission YAML) | pack (D-20260804-0006) |
 | `harvest-routes.py` | `harvest-routes` | routes HTTP → grain `endpoint` (Supabase Edge Functions / Next.js / Express) | pack (D-20260715-0004) |
-| `harvest-screens.py` | `harvest-screens` | routes d'interface → grain `screen` (React Router / Next.js) | pack (D-20260804-0006) |
+| `harvest-screens.py` | `harvest-screens` | routes d'interface → grain `screen` — ⚠️ **pas opposable, hors CI** (I19 non passé) | pack (D-20260804-0006) |
 | `harvest-config.py` | `harvest-config` | `fly.toml`/`netlify.toml`/`.mcp.json`/env → racine + `depends_on` | pack (D-20260715-0004) |
 | `merge-manifests.py` | `merge-manifests` | union des grains récoltés → 1 manifeste | pack (D-20260715-0004) |
 | `validate-manifest.py` | `validate-manifest` | valide la **forme** du manifeste (schéma) | **copie** — canonique dans `architecture/scripts/` |
@@ -54,6 +54,18 @@ d'abord sur les projets les plus rigoureux. Schéma isolé dans un schéma dédi
 commentées, migrations défensives, tests colocalisés — chacune de ces marques de discipline a
 déjà cassé une version de cet outil. La question n'est jamais seulement « est-ce qu'il se
 trompe ? », mais « **sur qui se trompe-t-il en premier ?** ».
+
+## Un récolteur non opposable reste hors de la CI
+
+`harvest-screens` fonctionne, ses tests passent, et il n'est branché à **aucune** CI. Il a
+fabriqué de fausses adresses à deux revues indépendantes successives — 76 URL sur 98 la
+première fois, puis 5 restantes et 3 nouveaux défauts créés par le correctif. Il échoue donc
+au premier critère d'I19, et §2.7.9 est sans ambiguïté : **on ne l'oppose pas aux dépôts.**
+
+Le garder dans le pack sans le brancher n'est pas une demi-mesure, c'est la seule voie
+cohérente : le supprimer perdrait le travail et les tests, le brancher ferait circuler de la
+documentation fausse. Il s'appelle à la main pour comparer ; il ne sert jamais de référence.
+Levée de la réserve : une revue indépendante sur corpus réel qui ne trouve aucun défaut neuf.
 
 ## Grain non vérifié ≠ conforme
 

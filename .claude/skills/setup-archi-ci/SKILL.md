@@ -64,9 +64,16 @@ Annoncer ce qui est trouvé et ce qui manque (dégradation propre — un grain a
 npx -y @somtech-solutions/pack harvest-supabase --discover . --app _probe --out /dev/null
 { test -d supabase/functions || ls app/**/route.* src/app/**/route.* pages/api/** src/pages/api/** 2>/dev/null | head -1 >/dev/null; } \
   && echo "✓ endpoints (Edge Functions / Next.js / Express)" || echo "· pas de surface HTTP évidente"
-grep -rlq "<Route" src app 2>/dev/null && echo "✓ écrans (React Router / Next.js)" || echo "· pas de routage d'interface évident"
 { test -f fly.toml || test -f netlify.toml || test -f .mcp.json; } && echo "✓ config/topologie" || echo "· pas de config d'infra évidente"
 ```
+
+> **Le grain `screen` n'est pas récolté.** `harvest-screens` existe dans le pack et
+> fonctionne, mais il a fabriqué de fausses adresses à deux revues successives : il n'a pas
+> passé I19 (« zéro faux positif sur un dépôt réel ») et **STD-031 §2.7.9 interdit d'opposer
+> aux dépôts un récolteur qui échoue à l'un des trois critères**. Les écrans restent donc
+> déclarés à la main dans `architecture.yaml`, et le gate ne les confronte pas au code — comme
+> avant. On peut l'appeler à la main pour comparer (`npx … harvest-screens . --app <SLUG>`),
+> jamais s'en servir comme référence.
 
 > **Ce qui n'est PAS récolté est signalé, jamais deviné.** Chaque récolteur écrit sur stderr
 > ce qu'il n'a pas su lire — un `CREATE TABLE` construit dynamiquement, un framework de
@@ -84,7 +91,6 @@ mkdir -p .architecture/_boot docs/architecture
 npx -y @somtech-solutions/pack harvest-supabase --discover . --app <SLUG> --out .architecture/_boot/10-tables.yaml
 npx -y @somtech-solutions/pack harvest-config  . --app <SLUG> --out .architecture/_boot/20-config.yaml
 npx -y @somtech-solutions/pack harvest-routes  . --app <SLUG> --out .architecture/_boot/30-routes.yaml
-npx -y @somtech-solutions/pack harvest-screens . --app <SLUG> --out .architecture/_boot/40-screens.yaml
 npx -y @somtech-solutions/pack merge-manifests .architecture/_boot/*.yaml --app <SLUG> --out .architecture/_boot/harvested.yaml
 
 # ⚠️ Idempotence (F3) : NE JAMAIS écraser un architecture.yaml existant maintenu à la main.
@@ -104,9 +110,8 @@ rm -rf .architecture/_boot
   `diff-manifest` pour que tu le complètes à la main.
 - Relire le manifeste amorcé : corriger `kind`/`name` de la racine, qualifier les FK
   cross-repo (`depends_on … à qualifier`), régler `audience` (défaut `internal`, Loi 25).
-- Le `kind` de la racine diffère d'un récolteur à l'autre (`service` côté données, `webapp`
-  côté écrans) : c'est un **placeholder** que la fusion ne signale pas et que le gate ignore.
-  C'est à l'amorçage qu'on le fixe.
+- Le `kind` de la racine est un **placeholder** émis par chaque récolteur : la fusion ne le
+  signale pas et le gate l'ignore. C'est à l'amorçage qu'on le fixe.
 
 ### 4. Déposer le workflow + la config
 

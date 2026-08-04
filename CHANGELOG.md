@@ -14,7 +14,7 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Le manifeste fusionné pouvait être illisible.** Une description contenant un deux-points suffisait à produire un document invalide, et l'écran d'une adresse revendiquait le même identifiant que la table du même nom — un élément disparaissait alors sans bruit à la fusion.
 
 ### Ajouté
-- **Les écrans sont récoltés.** C'était la seule famille du modèle que personne ne récoltait : elle s'écrivait entièrement à la main, donc dérivait sans que rien ne le signale. Un écran porte maintenant le nom de son composant réel, pas celui de la garde d'authentification qui l'enveloppe.
+- **Un récolteur d'écrans, livré mais NON branché** — décision assumée. C'est la seule famille du modèle que personne ne récoltait, et elle continue de s'écrire à la main : l'outil a annoncé de fausses adresses à deux relectures indépendantes d'affilée, il ne peut donc pas servir de référence à un contrôle automatique. Il reste dans le paquet, utilisable à la main pour comparer, et sera branché le jour où une relecture ne trouvera plus rien. Documenter à partir d'un outil qui se trompe coûte plus cher que ne pas documenter.
 - **Les fonctions Supabase deviennent visibles.** Elles sont la surface d'API principale des applications Somtech — cent deux dans le corpus — et aucune n'apparaissait : la documentation affirmait qu'une application n'avait pas d'API là où elle en avait des dizaines.
 - **Une validation sur dépôts réels, rejouable** (`scripts/tests/test-archi-ci-corpus.sh`). STD-031 §2.7.9 exige qu'un récolteur se prouve sur du vrai code avant d'être opposable : des fixtures écrites pour l'occasion n'y suffisent pas. La suite se saute proprement là où les dépôts sont absents — cette preuve-là ne se simule pas. Rapport détaillé : `docs/modele-vivant/validation-corpus-recolteurs.md`.
 
@@ -28,6 +28,7 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 La correction ci-dessus a été relue à son tour. Elle avait créé trois défauts et en laissait deux : une page « adresse introuvable » annoncée comme servant la racine du site · des modules métier effacés du modèle parce qu'ils s'appellent « archives » ou « docs » · les applications rangées ailleurs qu'à la racine du dépôt (`frontend/`, `apps/web/`) ne rendant plus aucun écran, en silence · un sous-routeur inséré autrement qu'en composant, toujours non rattaché · deux écrans identiques pouvant encore revendiquer le même identifiant. Tous corrigés, chacun avec son test.
 
 ### Inchangé, délibérément
+- **Les écrans restent écrits à la main.** Rien ne change pour les projets : ce qui était déjà déclaré le reste, et aucun contrôle ne vient le confronter au code.
 - **Le contrôle de cohérence reste en mode signalement.** Il rapporte l'écart sans bloquer. Un contrôle n'exige jamais qu'on écrive un fait faux (STD-031 §2.7.9, I18) ; durcir un dépôt reste une décision qui se prend dépôt par dépôt, une fois son manifeste à jour.
 
 ### Technique

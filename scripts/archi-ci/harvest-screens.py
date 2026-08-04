@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Récolteur — écrans → grain `screen` du manifeste architecture.yaml.
 
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ PAS ENCORE OPPOSABLE — I19 NON PASSÉ. Cet outil n'est branché à AUCUNE CI.     │
+│ Il a fabriqué de fausses adresses à deux revues successives (76 URL sur 98,    │
+│ puis 5 restantes + 3 défauts créés par le correctif). STD-031 §2.7.9 : un      │
+│ récolteur qui échoue au critère « zéro faux positif » est disqualifié — on ne  │
+│ l'oppose pas aux dépôts. Utilisable À LA MAIN pour comparer ; jamais comme     │
+│ référence, jamais dans un gate. Décision de Maxime, 2026-08-04 (D-20260804-0006).│
+│ Levée : une revue indépendante sur corpus réel sans nouveau défaut.            │
+└───────────────────────────────────────────────────────────────────────────────┘
+
 Modèle vivant Somtech (STD-031 §2.7.7, I16/I17/I19). Émet un `screen` par route d'interface
 réellement déclarée dans le code. Lecture seule sur les sources — aucun write-back.
 

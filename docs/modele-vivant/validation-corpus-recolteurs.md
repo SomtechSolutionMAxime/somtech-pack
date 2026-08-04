@@ -160,6 +160,21 @@ discipline cassait une version de l'outil, et chacune a maintenant son test :
 - **Deux composants d'écran à profondeur égale** dans un même `element` : on ne tranche pas au
   hasard, l'écran garde le nom de son adresse. Moins précis, jamais faux.
 
+## Décision de livraison — les écrans restent hors CI
+
+Le récolteur d'écrans a échoué **deux fois** au premier critère d'I19 (« zéro faux positif
+sur un dépôt discipliné réel »), et les défauts de la seconde ronde avaient été **créés par
+la correction de la première**. §2.7.9 tranche : un récolteur qui échoue à l'un des trois
+critères est disqualifié, on ne l'oppose pas aux dépôts.
+
+Il est donc livré **débranché** : présent dans le pack, absent de la CI, appelable à la main
+pour comparer, jamais comme référence. La CI récolte tables, endpoints et topologie — les
+trois grains qui ont traversé les deux revues sans un seul faux positif. Les écrans restent
+déclarés à la main, exactement comme avant : personne ne perd ce qu'il avait.
+
+Levée de la réserve : une revue indépendante sur corpus réel qui ne trouve aucun défaut neuf.
+Décision de Maxime, 2026-08-04.
+
 ## Ce qui reste à trancher (hors outillage)
 
 `constructiongauthier` délègue explicitement son grain fin à `docs/schema/schema.yaml` et ne

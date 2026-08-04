@@ -74,7 +74,7 @@ jobs:
       # mais un crash de récolteur (exit inattendu) FAIT ÉCHOUER le job — sinon un vrai
       # drift passerait vert faute de grain récolté (F4). Les récolteurs endpoints/config
       # sortent 0 même sans source ; tables n'est lancé que si des .sql existent.
-      - name: Récolter les grains (tables + endpoints + écrans + config)
+      - name: Récolter les grains (tables + endpoints + config)
         run: |
           set -e
           APP="${{ steps.cfg.outputs.app }}"
@@ -95,7 +95,11 @@ jobs:
           fi
           somtech-pack harvest-config  . --app "$APP" --out .architecture/_harvest/20-config.yaml
           somtech-pack harvest-routes  . --app "$APP" --out .architecture/_harvest/30-routes.yaml
-          somtech-pack harvest-screens . --app "$APP" --out .architecture/_harvest/40-screens.yaml
+          # Le grain `screen` n'est PAS récolté par la CI. `harvest-screens` existe et
+          # fonctionne, mais il a fabriqué de fausses adresses à deux revues successives :
+          # il n'a donc pas passé I19 (« zéro faux positif ») et STD-031 §2.7.9 interdit de
+          # l'opposer aux dépôts tant que ce n'est pas le cas. Les écrans restent déclarés à
+          # la main dans architecture.yaml, et le gate ne les confronte pas au code.
 
       - name: Fusionner les grains récoltés
         run: |
