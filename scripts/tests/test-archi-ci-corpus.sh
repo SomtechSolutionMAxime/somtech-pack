@@ -93,6 +93,18 @@ grep -qE "technology: route /(AdminUsers|ClientCreator|HomeWip) " "$MS" \
   && ko "écran inventé depuis src/pages (app Vite lue comme du Next.js)" \
   || ok "aucun écran inventé depuis la convention d'un autre framework"
 
+# Sous-routeurs montés : sur Construction Gauthier, quatre modules déclarent leurs routes
+# dans des fichiers séparés, avec des chemins RELATIFS à leur point de montage. Publier ces
+# chemins tels quels donnait 76 URL en 404 sur 98 écrans.
+CGS="$WORK/constructiongauthier-screens.yaml"
+grep -q "technology: route /ma-place-rh/" "$CGS" \
+  && ok "sous-routeur monté : chemins préfixés (/ma-place-rh/…)" || ko "préfixe de montage perdu"
+for nu in /dashboard /par-phase /previsionnel; do
+  grep -qE "technology: route $nu \(" "$CGS" \
+    && ko "chemin relatif publié comme adresse absolue ($nu)" \
+    || ok "aucun chemin relatif publié nu ($nu)"
+done
+
 # ── Critère 2 — INVARIANT D'ÉCHELLE ───────────────────────────────────────────────────────
 # Le dépôt le plus gros du corpus (constructiongauthier : 462 fichiers SQL, 178 activations
 # de RLS) ne doit pas produire PLUS d'erreurs que le plus petit. C'est ce que le défaut
@@ -183,13 +195,25 @@ if "$PY" -c 'import yaml' 2>/dev/null; then
           "$WORK/$r-routes.yaml" "$WORK/$r-screens.yaml" \
           --app "$r" --out "$WORK/$r-full.yaml" 2>"$WORK/$r-merge.err"
     if [ -s "$WORK/$r-merge.err" ] && grep -q "Conflit de kind" "$WORK/$r-merge.err"; then
-      ko "$r : collision d'id entre grains à la fusion — $(grep -m1 'Conflit' "$WORK/$r-merge.err")"
+      ko "$r : collision de kind entre grains à la fusion — $(grep -m1 'Conflit' "$WORK/$r-merge.err")"
     else
-      ok "$r : grains fusionnés sans collision d'id"
+      ok "$r : grains fusionnés sans collision de kind"
     fi
     "$PY" "$S/validate-manifest.py" "$WORK/$r-full.yaml" >/dev/null 2>&1 \
       && ok "$r : manifeste fusionné valide (schéma)" \
       || ko "$r : manifeste fusionné INVALIDE — $("$PY" "$S/validate-manifest.py" "$WORK/$r-full.yaml" 2>&1 | sed -n '2p')"
+
+    # Valider CHAQUE grain séparément, pas seulement la fusion. La fusion unit les éléments
+    # par id : deux écrans distincts qui revendiquaient le même id s'y écrasaient en silence,
+    # et le manifeste fusionné passait la validation en ayant perdu un élément. Six collisions
+    # réelles sur ce corpus ont survécu ainsi à une suite verte.
+    for grain in tables routes screens; do
+      f="$WORK/$r-$grain.yaml"
+      [ -s "$f" ] || { ko "$r/$grain : aucune sortie du récolteur"; continue; }
+      "$PY" "$S/validate-manifest.py" "$f" >/dev/null 2>&1 \
+        && ok "$r/$grain : grain récolté valide (ids uniques, hiérarchie)" \
+        || ko "$r/$grain : grain INVALIDE — $("$PY" "$S/validate-manifest.py" "$f" 2>&1 | sed -n '2p')"
+    done
   done
 fi
 

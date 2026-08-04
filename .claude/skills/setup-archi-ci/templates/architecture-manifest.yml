@@ -84,9 +84,15 @@ jobs:
           # au lieu du seul supabase/migrations. Un dépôt dont le schéma vit ailleurs — un
           # dump `pg_dump` de référence, un second dossier de migrations — n'était sinon
           # récolté qu'en partie, et le gate comparait le manifeste à une vérité tronquée.
-          somtech-pack harvest-supabase --discover . --app "$APP" \
-            --out .architecture/_harvest/10-tables.yaml \
-            || echo "::notice::aucun .sql trouvé — grain tables sauté."
+          # Pas de `|| true` ici : « aucun .sql » et « le récolteur a planté » sortent tous
+          # deux en 1, et les confondre ferait passer un vrai drift au vert faute de grain
+          # récolté. On distingue donc AVANT d'appeler.
+          if find . -path ./node_modules -prune -o -name '*.sql' -print -quit | grep -q .; then
+            somtech-pack harvest-supabase --discover . --app "$APP" \
+              --out .architecture/_harvest/10-tables.yaml
+          else
+            echo "::notice::aucun fichier .sql dans le dépôt — grain tables sauté."
+          fi
           somtech-pack harvest-config  . --app "$APP" --out .architecture/_harvest/20-config.yaml
           somtech-pack harvest-routes  . --app "$APP" --out .architecture/_harvest/30-routes.yaml
           somtech-pack harvest-screens . --app "$APP" --out .architecture/_harvest/40-screens.yaml

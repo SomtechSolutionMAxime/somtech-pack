@@ -16,6 +16,15 @@ WORK="$(mktemp -d)"
 trap 'rm -f "$PASS_FILE" "$FAIL_FILE"; rm -rf "$WORK"' EXIT
 ok() { echo "  ✅ $1"; echo x >> "$PASS_FILE"; }
 ko() { echo "  ❌ $1"; echo x >> "$FAIL_FILE"; }
+# Une assertion NÉGATIVE (« X ne doit pas apparaître ») passe pour de mauvaises raisons quand
+# le récolteur n'a rien produit : `grep` échoue faute de fichier, et la branche de succès est
+# prise. Vérifié : à la version d'avant ce correctif, trois assertions négatives restaient
+# vertes alors que le récolteur sortait en erreur. On exige donc le fichier d'abord.
+# absent <fichier> <motif> <libellé si absent> <libellé si présent>
+absent() {
+  if [ ! -s "$1" ]; then ko "$4 (aucune sortie du récolteur — assertion non concluante)"; return; fi
+  if grep -q "$2" "$1"; then ko "$4"; else ok "$3"; fi
+}
 
 PY="${SOMTECH_PYTHON:-python3}"
 command -v "$PY" >/dev/null 2>&1 || { echo "⚠️  python3 indisponible — test sauté (skip)"; exit 0; }
@@ -183,7 +192,7 @@ SQL
 grep -q 'name: archive_matrices' "$WORK/fid.yaml" && ok "F7 : identifiant quoté par segment (\"public\".\"x\")" || ko "F7 : \"public\".\"x\" non récolté"
 grep -q 'id: demo-app.audit.events' "$WORK/fid.yaml" && grep -q 'id: demo-app.events$' "$WORK/fid.yaml" \
   && ok "F8 : audit.events et public.events restent distinctes" || ko "F8 : schéma écrasé (collision de tables)"
-grep -q 'jetable' "$WORK/fid.yaml" && ko "F13b : table supprimée encore déclarée" || ok "F9 : DROP TABLE retire la table"
+absent "$WORK/fid.yaml" 'jetable' "F9 : DROP TABLE retire la table" "F9 : table supprimée encore déclarée"
 grep -q 'name: nouveau_nom' "$WORK/fid.yaml" && ! grep -q 'name: ancien_nom' "$WORK/fid.yaml" \
   && ok "F10 : RENAME TO — nom final seul" || ko "F10 : renommage non suivi"
 grep -q "description: Journal des évènements métier." "$WORK/fid.yaml" \
@@ -194,7 +203,7 @@ grep -q 'name: conditionnelle' "$WORK/fid.yaml" \
   && ok "F13 : CREATE TABLE dans un DO \$\$ conditionnel récolté" || ko "F13 : migration défensive invisible"
 grep -q 'name: audit_logs' "$WORK/fid.yaml" \
   && ok "F14 : --discover trouve le SQL hors supabase/migrations" || ko "F14 : source hors migrations ignorée"
-grep -q 'fixture_qa' "$WORK/fid.yaml" && ko "F15 : table de jeu de test entrée dans le modèle" || ok "F15 : seed de test exclu de la découverte"
+absent "$WORK/fid.yaml" 'fixture_qa' "F15 : seed de test exclu de la découverte" "F15 : table de jeu de test entrée dans le modèle"
 
 # F16 — Supabase Edge Functions : la surface HTTP majoritaire du parc Somtech.
 # F17 — un fichier de test n'est pas une route (`route.test.ts`).
@@ -210,13 +219,12 @@ printf 'app = "mono"\n' > "$MONO/app/next.config.js"
 "$PY" "$S/harvest-routes.py" "$MONO" --app demo-app --out "$WORK/mono.yaml" 2>/dev/null
 grep -q 'name: POST /functions/v1/envoyer-courriel' "$WORK/mono.yaml" \
   && ok "F16 : Edge Function récoltée (méthode resserrée par le garde du code)" || ko "F16 : Edge Function invisible"
-grep -q '_shared' "$WORK/mono.yaml" && ko "F16b : dossier de code partagé publié comme endpoint" || ok "F16b : _shared exclu"
+absent "$WORK/mono.yaml" '_shared' "F16b : _shared exclu" "F16b : dossier de code partagé publié comme endpoint"
 grep -q "description: Envoie un courriel transactionnel." "$WORK/mono.yaml" \
   && ok "F17 : description d'endpoint tirée de l'en-tête du fichier" || ko "F17 : description d'endpoint vide"
 grep -q 'name: GET /api/sante' "$WORK/mono.yaml" \
   && ok "F18 : monorepo — URL sans le préfixe du workspace" || ko "F18 : URL fantôme /src/app/…"
-[ "$(grep -c 'name: ANY /api/sante' "$WORK/mono.yaml")" -eq 0 ] \
-  && ok "F19 : route.test.ts n'est pas un endpoint" || ko "F19 : fichier de test publié comme endpoint"
+absent "$WORK/mono.yaml" 'name: ANY /api/sante' "F19 : route.test.ts n'est pas un endpoint" "F19 : fichier de test publié comme endpoint"
 
 # F20 — écrans React Router, wrapper de garde déballé.
 # F21 — `src/pages/` d'une app Vite n'est PAS un routeur Next.js.
@@ -239,9 +247,147 @@ grep -q 'name: MatrixWorkspace' "$WORK/screens.yaml" \
   && ok "F20 : écran nommé par le composant, pas par sa garde" || ko "F20 : garde d'authentification prise pour un écran"
 grep -q "description: Espace de travail des matrices." "$WORK/screens.yaml" \
   && ok "F20b : description d'écran suivie jusqu'au composant importé" || ko "F20b : description d'écran vide"
-grep -q '/AdminUsers' "$WORK/screens.yaml" \
-  && ko "F21 : src/pages d'une app Vite lu comme un routeur Next.js" || ok "F21 : pas d'écran inventé depuis src/pages (Vite)"
+absent "$WORK/screens.yaml" '/AdminUsers' "F21 : pas d'écran inventé depuis src/pages (Vite)" "F21 : src/pages d'une app Vite lu comme un routeur Next.js"
 grep -q 'name: Login' "$WORK/screens.yaml" && ok "F22 : écran sans wrapper récolté" || ko "F22 : écran simple manquant"
+
+
+echo "== G. Défauts trouvés en revue de code (PR #159) =="
+# Tous rouges avant la revue. Ils verrouillent des régressions dont la revue a montré
+# qu'elles produisaient du FAUX — le seul défaut qu'I17/I19 ne pardonnent pas.
+
+# G1 — sous-routeur monté : les chemins d'un module sont RELATIFS à son point de montage.
+#      Mesuré sur Construction Gauthier : 76 URL sur 98 étaient publiées sans leur préfixe.
+G="$WORK/nested"; mkdir -p "$G/src/modules/rh"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$G/package.json"
+cat > "$G/src/App.tsx" <<'TSX'
+import { RhRoutes } from './modules/rh/routes';
+export default function App(){ return (
+  <Routes>
+    <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+      <Route index element={<Accueil />} />
+      <Route path="profil" element={<Profil />} />
+    </Route>
+    <Route path="rh/*" element={<ProtectedRoute><RhRoutes /></ProtectedRoute>} />
+    <Route path="/liste" element={<Liste />}>
+      <Route path=":id" element={<Detail />} />
+    </Route>
+  </Routes>
+);}
+TSX
+cat > "$G/src/modules/rh/routes.tsx" <<'TSX'
+export function RhRoutes(){ return (
+  <Routes>
+    <Route path="tableau-de-bord" element={<Dashboard />} />
+    <Route path="conges/:id" element={<CongeDetail />} />
+  </Routes>
+);}
+TSX
+"$PY" "$S/harvest-screens.py" "$G" --app demo --out "$WORK/g1.yaml" 2>/dev/null
+grep -q 'route /rh/tableau-de-bord ' "$WORK/g1.yaml" \
+  && ok "G1 : chemin d'un sous-routeur préfixé par son point de montage" \
+  || ko "G1 : URL de module publiée sans son préfixe (404)"
+absent "$WORK/g1.yaml" 'route /tableau-de-bord ' "G1b : le chemin relatif nu n'est pas publié" \
+  "G1b : chemin relatif publié comme adresse absolue"
+grep -q 'route /rh/conges/:id ' "$WORK/g1.yaml" && ok "G1c : segment dynamique préfixé" || ko "G1c : segment dynamique mal composé"
+grep -q 'route /liste/:id ' "$WORK/g1.yaml" && ok "G1d : imbrication DANS un même fichier composée" || ko "G1d : imbrication interne ignorée"
+# Une route de mise en page qui porte un `index` n'est pas un écran de plus à son adresse.
+[ "$(grep -c 'technology: route / ' "$WORK/g1.yaml")" -eq 1 ] \
+  && ok "G1e : mise en page + index → un seul écran à l'adresse" \
+  || ko "G1e : le cadre et son contenu comptés comme deux écrans"
+"$PY" "$S/validate-manifest.py" "$WORK/g1.yaml" >/dev/null 2>&1 \
+  && ok "G1f : manifeste d'écrans valide (ids uniques)" || ko "G1f : ids dupliqués — manifeste rejeté"
+
+# G2 — deux écrans DISTINCTS servis sur la même adresse (deux modules, un même /dashboard)
+#      doivent recevoir deux ids. Dédupliquer sur l'URL seule les faisait s'écraser.
+G2="$WORK/dup"; mkdir -p "$G2/src"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$G2/package.json"
+cat > "$G2/src/App.tsx" <<'TSX'
+<Routes>
+  <Route path="/a/vue" element={<VueA />} />
+  <Route path="/b/vue" element={<VueB />} />
+</Routes>
+TSX
+"$PY" "$S/harvest-screens.py" "$G2" --app demo --out "$WORK/g2.yaml" 2>/dev/null
+"$PY" "$S/validate-manifest.py" "$WORK/g2.yaml" >/dev/null 2>&1 && ok "G2 : ids d'écrans uniques" || ko "G2 : collision d'ids d'écrans"
+
+# G3 — maquettes, instantanés de documentation et copies du dépôt ne sont PAS déployés.
+G3="$WORK/junk"; mkdir -p "$G3/src" "$G3/src/maquette/v1" "$G3/DOC/snap/src" "$G3/modules/maquette"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$G3/package.json"
+printf '<Routes><Route path="/reel" element={<Reel />} /></Routes>\n' > "$G3/src/App.tsx"
+printf '<Routes><Route path="/maquette-only" element={<Faux />} /></Routes>\n' > "$G3/src/maquette/v1/App.tsx"
+printf '<Routes><Route path="/doc-only" element={<Faux />} /></Routes>\n' > "$G3/DOC/snap/src/App.tsx"
+printf '<Routes><Route path="/module-maquette" element={<Faux />} /></Routes>\n' > "$G3/modules/maquette/App.tsx"
+"$PY" "$S/harvest-screens.py" "$G3" --app demo --out "$WORK/g3.yaml" 2>/dev/null
+grep -q 'route /reel ' "$WORK/g3.yaml" && ok "G3 : l'écran réel est récolté" || ko "G3 : écran réel manquant"
+for faux in maquette-only doc-only module-maquette; do
+  absent "$WORK/g3.yaml" "route /$faux " "G3 : code non déployé exclu ($faux)" \
+    "G3 : écran inventé depuis du code non déployé ($faux)"
+done
+
+# G4 — `'\'` est un littéral COMPLET (standard_conforming_strings). Le lire comme une chaîne
+#      ouverte rouvre exactement la brèche D-20260731-0001 : une FK apparaît entre deux
+#      tables qui n'en ont aucune.
+G4="$WORK/backslash"; mkdir -p "$G4"
+cat > "$G4/0001.sql" <<'SQL'
+CREATE TABLE public.a (id uuid PRIMARY KEY);
+CREATE TABLE public.b (id uuid PRIMARY KEY, c_id uuid);
+CREATE TABLE public.c (id uuid PRIMARY KEY);
+ALTER TABLE public.a ADD COLUMN sep text NOT NULL DEFAULT '\';
+ALTER TABLE public.b ADD CONSTRAINT fk_b_c FOREIGN KEY (c_id) REFERENCES public.c(id);
+CREATE TABLE public.d (slug text CHECK (slug NOT LIKE '%\_%' ESCAPE '\'));
+CREATE TABLE public.e (id uuid, note text DEFAULT E'it\'s ok');
+SQL
+"$PY" "$S/harvest-supabase.py" "$G4" --app demo --out "$WORK/g4.yaml" 2>/dev/null
+absent "$WORK/g4.yaml" 'from: demo.a' "G4 : aucune FK inventée depuis un littéral contre-barre" \
+  "G4 : FK FABRIQUÉE — le littéral '\\' a fait déborder l'instruction"
+grep -q 'from: demo.b' "$WORK/g4.yaml" && ok "G4b : la vraie FK b→c est récoltée" || ko "G4b : vraie FK perdue"
+for t in d e; do
+  grep -q "^    name: $t$" "$WORK/g4.yaml" && ok "G4c : table '$t' après un littéral contre-barre" \
+    || ko "G4c : table '$t' perdue silencieusement"
+done
+
+# G5/G6/G7/G8 — lecture des attributs d'une balise Route.
+G5="$WORK/attrs"; mkdir -p "$G5/src"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$G5/package.json"
+printf 'export default function TableauDeBord(){}\n' > "$G5/src/TableauDeBord.tsx"
+cat > "$G5/src/App.tsx" <<'TSX'
+import TableauDeBord from './TableauDeBord';
+<Routes>
+  <Route path={ROUTES.HOME} element={<Calcule />} />
+  {items.map((it, index) => (<Route key={index} path={it.path} element={<Item />} />))}
+  <Route path="/tableau" element={<Cadre><TableauDeBord /><PiedDePage /></Cadre>} />
+  <Route path="/auth/callback" element={<AuthCallbackPage />} />
+</Routes>
+TSX
+"$PY" "$S/harvest-screens.py" "$G5" --app demo --out "$WORK/g5.yaml" 2>"$WORK/g5.err"
+absent "$WORK/g5.yaml" 'ROUTES.HOME' "G5 : chemin calculé non récolté" "G5 : URL inventée depuis une expression"
+grep -q 'chemin calculé' "$WORK/g5.err" && ok "G5b : chemin calculé SIGNALÉ sur stderr" || ko "G5b : chemin calculé tu en silence"
+[ "$(grep -c 'technology: route / ' "$WORK/g5.yaml")" -eq 0 ] \
+  && ok "G6 : key={index} n'est pas une route index" || ko "G6 : key={index} pris pour une route index"
+grep -q 'name: TableauDeBord' "$WORK/g5.yaml" \
+  && ok "G7 : écran le plus profond, pas le dernier tag" || ko "G7 : mauvais composant (dernier tag pris)"
+grep -q 'name: AuthCallbackPage' "$WORK/g5.yaml" \
+  && ok "G8 : un écran nommé Auth* n'est pas pris pour une garde" || ko "G8 : écran légitime avalé par la liste des cadres"
+
+# G9 — PostgreSQL accepte des identifiants que le schéma du manifeste refuse. Émettre l'id
+#      brut rendrait un gate strict INSATISFIABLE : impossible de le contenter sans écrire
+#      un fait faux (I18).
+G9="$WORK/idents"; mkdir -p "$G9"
+cat > "$G9/0001.sql" <<'SQL'
+CREATE TABLE réservations (id uuid PRIMARY KEY);
+CREATE TABLE "Utilisateurs" (id uuid PRIMARY KEY);
+CREATE TABLE "Audit-X"."Événements" (id uuid PRIMARY KEY);
+CREATE TABLE reservations (id uuid PRIMARY KEY);
+SQL
+"$PY" "$S/harvest-supabase.py" "$G9" --app demo --out "$WORK/g9.yaml" 2>/dev/null
+"$PY" "$S/validate-manifest.py" "$WORK/g9.yaml" >/dev/null 2>&1 \
+  && ok "G9 : identifiants accentués/quotés → manifeste valide" || ko "G9 : id refusé par le schéma (gate insatisfiable)"
+grep -q 'name: réservations' "$WORK/g9.yaml" && ok "G9b : le vrai nom est conservé dans name" || ko "G9b : nom réel perdu"
+
+# G10 — un nom de racine contenant « : » ne doit pas casser le document.
+"$PY" "$S/harvest-routes.py" "$REPO" --app demo-app --root-name "Morasse: hub" --out "$WORK/g10.yaml" 2>/dev/null
+"$PY" "$S/validate-manifest.py" "$WORK/g10.yaml" >/dev/null 2>&1 \
+  && ok "G10 : --root-name avec ':' → YAML valide" || ko "G10 : nom de racine non quoté, document cassé"
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")

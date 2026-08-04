@@ -236,7 +236,7 @@ def emit_yaml(app, root_kind, root_name, endpoints):
         "elements:",
         f"  - id: {app}",
         f"    kind: {root_kind}",
-        f"    name: {root_name}",
+        f"    name: {_yaml_str(root_name)}",
         "    audience: internal",
     ]
     if endpoints:

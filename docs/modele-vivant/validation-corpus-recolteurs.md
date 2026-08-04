@@ -8,7 +8,7 @@
 
 | Dépôt | Front | Volume SQL | Pourquoi il est dans le corpus |
 |---|---|---|---|
-| `constructiongauthier` | Vite + React Router | 461 fichiers, 178 activations de RLS | Le plus gros — c'est lui qui révèle une précision qui se dégrade avec la taille |
+| `constructiongauthier` | Vite + React Router | 462 fichiers, 178 activations de RLS | Le plus gros — c'est lui qui révèle une précision qui se dégrade avec la taille |
 | `actionprogex` | Next.js en monorepo | 91 fichiers | Monorepo + tests colocalisés aux routes |
 | `servicedesk-somtech` | Vite + Express + Edge | 107 fichiers | Trois surfaces HTTP dans un seul dépôt |
 | `print-template-hub` (Morasse) | Vite + React Router | 22 fichiers, 3 emplacements | Assez petit pour une vérité terrain **exhaustive et vérifiable à la main** |
@@ -33,7 +33,8 @@ La mesure dit autre chose, et c'est plus simple :
 
 Le récolteur ne se trompait donc jamais dans les deux sens : **il sous-récoltait, toujours.**
 Le seul défaut qui fabriquait vraiment du faux — l'appariement non borné des clés étrangères —
-était déjà corrigé (D-20260731-0001) : 0 appariement suspect sur les 96 du corpus.
+était déjà corrigé (D-20260731-0001) : sur les 96 appariements `ALTER TABLE … REFERENCES`
+du corpus, aucun ne déborde de son instruction.
 
 ## Défauts corrigés
 
@@ -54,30 +55,66 @@ Le seul défaut qui fabriquait vraiment du faux — l'appariement non borné des
 | 13 | Description contenant `:` réécrite sans quote à la fusion | Construction Gauthier | manifeste fusionné **YAML invalide** |
 | 14 | Collision d'id entre la table `matrices` et l'écran `/matrices` | Morasse, Construction Gauthier | un élément perdu silencieusement à la fusion |
 
-Les défauts **10, 11 et 12 fabriquaient du faux** — les seuls de cette nature, et tous
-préexistants au chantier. Les autres sous-récoltaient.
+Les défauts **10, 11 et 12 fabriquaient du faux** — et tous trois préexistaient au chantier.
+Les autres sous-récoltaient.
+
+## Défauts trouvés par la revue de code, et corrigés
+
+Une revue indépendante (adversariale, sur PR #159) a trouvé quatre défauts de plus, dont
+**trois introduits par ce chantier même** :
+
+| Défaut | Mesuré sur | Effet |
+|---|---|---|
+| Sous-routeurs non résolus : les chemins d'un module, RELATIFS à leur point de montage, publiés comme absolus | Construction Gauthier | **76 URL inventées sur 98** — et une de plus à chaque module ajouté |
+| Balayage aveugle du dépôt par le récolteur d'écrans | ActionProgex, ServiceDesk | maquettes, instantanés de doc et copies du dépôt récoltés comme écrans |
+| Contre-barre traitée comme échappement hors littéral `E'…'` | latent | `'\'` fait déborder l'instruction → **FK fabriquée** (retour de D-20260731-0001) |
+| Filtre de découverte excluant une vraie migration pour le mot « test » dans son nom | Construction Gauthier | 1 migration ignorée ; une table `test_*` disparaîtrait sans bruit |
+
+Et six défauts mineurs : chemin de route pris dans une expression (`path={ROUTES.HOME}`),
+`key={index}` lu comme route `index`, composant d'écran choisi comme « le dernier » plutôt que
+« le plus profond », liste de gardes trop large avalant `AuthCallbackPage`, identifiants SQL
+accentués produisant un id que le schéma refuse (**gate insatisfiable, I18**), nom de racine
+non quoté cassant le document YAML.
+
+**Trois assertions passaient pour de mauvaises raisons** — le récolteur ne produisait aucun
+fichier, `grep` échouait, et la branche de succès était prise. Les assertions négatives exigent
+désormais que la sortie existe. La suite valide aussi **chaque grain séparément**, et non plus
+seulement le manifeste fusionné : la fusion unit par id, et masquait donc les collisions.
 
 ## Résultat
 
 | Dépôt | Tables | Tables décrites | Endpoints | Écrans |
 |---|---|---|---|---|
-| `actionprogex` | 59 → **61** | 0 → **46** | 10 (dont 4 faux) → **31** | 0 → **25** |
-| `constructiongauthier` | 171 → **169** | 0 → **125** | 0 → **37** | 0 → **98** |
+| `actionprogex` | 59 → **61** | 0 → **46** | 10 (dont 4 faux) → **31** | 0 → **24** |
+| `constructiongauthier` | 171 → **169** | 0 → **125** | 0 → **37** | 0 → **90** |
 | `print-template-hub` | 11 → **26** | 0 → **13** | 0 → **2** | 0 → **20** |
-| `servicedesk-somtech` | 33 → **47** | 0 → **15** | 6 → **44** | 0 → **23** |
+| `servicedesk-somtech` | 33 → **47** | 0 → **15** | 6 → **44** | 0 → **22** |
 
 Les variations à la baisse sont des corrections : `constructiongauthier` passe de 171 à 169
 parce que les tables supprimées et renommées ne sont plus comptées deux fois.
 
+**Descriptions : 199 tables sur 303, soit 65 %.** La couverture suit celle des `COMMENT ON
+TABLE` du dépôt, et elle est très inégale — 75 % chez `actionprogex`, 74 % chez
+`constructiongauthier`, 50 % chez Morasse, 32 % chez `servicedesk-somtech`. Le tiers restant
+se comble **dans les migrations**, pas dans l'outil (I16).
+
 ## Les trois critères d'I19
 
 **1 — Zéro faux positif, sur un dépôt discipliné réel.** Morasse sert de vérité terrain
-exhaustive : ses 26 tables sont vérifiées une à une contre les `CREATE TABLE` de ses trois
-emplacements de schéma. Récolte = 26. Aucune table absente, aucune inventée. Le jeu de données
+exhaustive : chacune des 26 tables récoltées est vérifiée à la main contre les `CREATE TABLE`
+de ses trois emplacements de schéma. Aucune table absente, aucune inventée. Le jeu de données
 de test (`seed_test_qa.sql`) reste dehors. Les 20 écrans correspondent aux 20 routes réelles,
 nommés par leur composant et non par leur garde d'authentification.
 
-**2 — Invariant d'échelle.** Sur `constructiongauthier` — 461 fichiers, 20× Morasse — aucune
+> **26 récoltées, 25 dans le manifeste — l'écart est instructif, pas une erreur.** Le dump de
+> production `_baseline_prod_public.sql` contient exactement les 25 tables du manifeste tenu à
+> la main. La 26e, `audit_logs`, n'est déclarée que dans `scripts/migrations/2025-10-22_auth_rls_audit.sql` :
+> elle est écrite dans une source du dépôt mais absente du dump de production. Le récolteur
+> rapporte donc fidèlement ce que le dépôt déclare ; savoir si cette table est réellement
+> déployée est une question sur le dépôt — précisément ce qu'un rapport de drift existe pour
+> poser.
+
+**2 — Invariant d'échelle.** Sur `constructiongauthier` — 462 fichiers, 20× Morasse — aucune
 relation ne pointe vers une table qui n'existe pas. Le bornage ne repose plus sur un réglage
 mais sur un découpage en instructions : rien à re-régler quand le dépôt grossit.
 
@@ -107,6 +144,13 @@ discipline cassait une version de l'outil, et chacune a maintenant son test :
   source**, pas dans l'outil (I16).
 - **Frameworks de routage hors React Router et Next.js** : signalés comme grain non vérifié,
   jamais devinés.
+- **Chemin de route calculé** (`path={ROUTES.HOME}`, `path={r.path}`) : non récolté, signalé.
+  Publier `/ROUTES.HOME` serait publier une adresse qui n'existe sur aucun serveur.
+- **Monorepo dont le `package.json` racine déclare `next`** : la racine est alors prise pour
+  le projet Next.js et les applications de `apps/*` ne sont pas visitées. Aucun dépôt du
+  corpus n'est dans ce cas ; à traiter quand il s'en présentera un.
+- **Deux composants d'écran à profondeur égale** dans un même `element` : on ne tranche pas au
+  hasard, l'écran garde le nom de son adresse. Moins précis, jamais faux.
 
 ## Ce qui reste à trancher (hors outillage)
 

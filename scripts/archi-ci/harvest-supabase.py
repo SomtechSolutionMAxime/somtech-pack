@@ -39,6 +39,7 @@ import glob
 import os
 import re
 import sys
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sqlscan import QNAME, fqn, parse_qname, split_statements  # noqa: E402
@@ -218,13 +219,19 @@ DISCOVER_GLOBS = [
     "db/migrations/**/*.sql",
     "migrations/**/*.sql",
 ]
-# Exclusions : contenu qui n'est pas le schéma déployé.
+# Exclusions : contenu qui n'est PAS le schéma déployé.
 DISCOVER_EXCLUDE = re.compile(
     r"(^|/)(node_modules|\.git|tmp|temp|fixtures?|__tests__|test|tests)(/|$)"
     r"|(^|/)(seed|seeds)[^/]*\.sql$"
     r"|_(test|qa|sample|example)[^/]*\.sql$",
     re.IGNORECASE,
 )
+# … mais JAMAIS à l'intérieur d'un dossier de migrations : ce qui s'y trouve est appliqué,
+# donc fait partie du schéma, quel que soit son nom. Sans cette réserve, une vraie migration
+# comme `20260303161434_cleanup_test_accounts_v2.sql` était écartée pour le seul mot « test »
+# dans son intitulé — et une migration qui créerait une table `test_results` disparaîtrait
+# du modèle sans que rien ne le signale.
+_ALWAYS_KEPT = re.compile(r"(^|/)migrations(/|$)", re.IGNORECASE)
 
 
 def discover(root):
@@ -233,7 +240,9 @@ def discover(root):
     for pattern in DISCOVER_GLOBS:
         hits = sorted(
             f for f in glob.glob(os.path.join(root, pattern), recursive=True)
-            if os.path.isfile(f) and not DISCOVER_EXCLUDE.search(os.path.relpath(f, root))
+            if os.path.isfile(f) and (
+                _ALWAYS_KEPT.search(os.path.dirname(os.path.relpath(f, root)))
+                or not DISCOVER_EXCLUDE.search(os.path.relpath(f, root)))
         )
         hits = [f for f in hits if f not in files]
         if hits:
@@ -279,19 +288,47 @@ def emit_yaml(app, root_kind, root_name, schema):
         "    audience: internal",
     ]
 
+    # Le schéma du manifeste impose des ids en minuscules sans accent
+    # (`^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$`). PostgreSQL, lui, accepte `CREATE TABLE
+    # réservations` et `CREATE TABLE "Utilisateurs"`. Émettre l'identifiant brut produirait
+    # un manifeste que `validate-manifest` refuse — et un gate strict deviendrait alors
+    # INSATISFIABLE : impossible de le contenter sans écrire un fait faux (I18). L'id est
+    # donc translittéré ; le vrai nom reste intact dans `name:`.
+    slugs = {}
+
+    def _slug(raw):
+        s = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode().lower()
+        s = re.sub(r"[^a-z0-9_-]+", "_", s).strip("_") or "x"
+        if not re.match(r"[a-z]", s[0]):
+            s = "t_" + s
+        return s
+
+    def _unique(raw, scope):
+        key = (scope, raw)
+        if key in slugs:
+            return slugs[key]
+        base, s, n = _slug(raw), _slug(raw), 2
+        while (scope, s) in slugs.values() or any(
+                v == s and k[0] == scope for k, v in slugs.items()):
+            s, n = f"{base}_{n}", n + 1
+        slugs[key] = s
+        return s
+
     def eid(key):
         schema_name, table = key
-        return f"{app}.{table}" if schema_name == "public" else f"{app}.{schema_name}.{table}"
+        if schema_name == "public":
+            return f"{app}.{_unique(table, 'public')}"
+        return f"{app}.{_unique(schema_name, '@schema')}.{_unique(table, schema_name)}"
 
     def parent(key):
-        return app if key[0] == "public" else f"{app}.{key[0]}"
+        return app if key[0] == "public" else f"{app}.{_unique(key[0], '@schema')}"
 
     # Un schéma non-public devient un conteneur explicite. Sans lui, `maestro.entities` et
     # `public.entities` s'écraseraient sous le même id et le modèle affirmerait qu'une table
     # vit dans un schéma où elle n'est pas.
     for sch in sorted({s for (s, _) in tables if s != "public"}):
         L += [
-            f"  - id: {app}.{sch}",
+            f"  - id: {app}.{_unique(sch, '@schema')}",
             "    kind: database",
             f"    name: {_yaml_str(sch)}",
             "    technology: schéma PostgreSQL",

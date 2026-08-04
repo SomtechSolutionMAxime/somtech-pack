@@ -81,6 +81,15 @@ def split_statements(sql):
 
         # '…' (littéral) — `''` est un guillemet doublé, pas une fin de chaîne.
         if c == "'":
+            # La contre-barre n'échappe QUE dans un littéral préfixé `E`. Ailleurs elle est
+            # un caractère ordinaire : PostgreSQL tourne avec `standard_conforming_strings`
+            # depuis la 9.1, et les dumps du parc le posent explicitement. Traiter `\` comme
+            # un échappement partout fait lire `'\'` — un littéral pourtant complet — comme
+            # une chaîne encore ouverte : le balayeur avale alors le `;` et l'instruction
+            # suivante, et rouvre exactement la brèche D-20260731-0001 (un ALTER TABLE
+            # apparié au REFERENCES d'une AUTRE instruction). Idiome courant du parc :
+            # `CHECK (slug NOT LIKE '%\_%' ESCAPE '\')`.
+            escaping = i > 0 and sql[i - 1] in "Ee" and (i < 2 or not sql[i - 2].isalnum())
             j = i + 1
             while j < n:
                 if sql[j] == "'":
@@ -89,8 +98,7 @@ def split_statements(sql):
                         continue
                     j += 1
                     break
-                # E'…\'…' : le backslash échappe le guillemet suivant.
-                if sql[j] == "\\" and j + 1 < n:
+                if escaping and sql[j] == "\\" and j + 1 < n:
                     j += 2
                     continue
                 j += 1
