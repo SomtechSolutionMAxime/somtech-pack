@@ -24,6 +24,9 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Un filtre de découverte écartait une vraie migration** parce que son intitulé contenait le mot « test ». Ce qui vit dans un dossier de migrations est appliqué : c'est le schéma, quel que soit son nom.
 - **Trois contrôles passaient pour de mauvaises raisons** : ils vérifiaient qu'une chose n'apparaissait pas, dans un fichier que l'outil n'avait pas produit. Un contrôle qui ne peut pas échouer ne contrôle rien.
 
+### Trouvé en contre-revue du correctif, corrigé
+La correction ci-dessus a été relue à son tour. Elle avait créé trois défauts et en laissait deux : une page « adresse introuvable » annoncée comme servant la racine du site · des modules métier effacés du modèle parce qu'ils s'appellent « archives » ou « docs » · les applications rangées ailleurs qu'à la racine du dépôt (`frontend/`, `apps/web/`) ne rendant plus aucun écran, en silence · un sous-routeur inséré autrement qu'en composant, toujours non rattaché · deux écrans identiques pouvant encore revendiquer le même identifiant. Tous corrigés, chacun avec son test.
+
 ### Inchangé, délibérément
 - **Le contrôle de cohérence reste en mode signalement.** Il rapporte l'écart sans bloquer. Un contrôle n'exige jamais qu'on écrive un fait faux (STD-031 §2.7.9, I18) ; durcir un dépôt reste une décision qui se prend dépôt par dépôt, une fois son manifeste à jour.
 

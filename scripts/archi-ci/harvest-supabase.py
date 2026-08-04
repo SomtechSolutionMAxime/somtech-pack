@@ -231,7 +231,10 @@ DISCOVER_EXCLUDE = re.compile(
 # comme `20260303161434_cleanup_test_accounts_v2.sql` était écartée pour le seul mot « test »
 # dans son intitulé — et une migration qui créerait une table `test_results` disparaîtrait
 # du modèle sans que rien ne le signale.
-_ALWAYS_KEPT = re.compile(r"(^|/)migrations(/|$)", re.IGNORECASE)
+# Le CLI Supabase n'applique que les `.sql` posés DIRECTEMENT dans le dossier de migrations.
+# Un `supabase/migrations/tests/seed_test_data.sql` n'est donc pas le schéma — d'où l'ancrage
+# en fin de chemin, et non « quelque part sous migrations/ ».
+_ALWAYS_KEPT = re.compile(r"(^|/)migrations$", re.IGNORECASE)
 
 
 def discover(root):
@@ -303,32 +306,44 @@ def emit_yaml(app, root_kind, root_name, schema):
             s = "t_" + s
         return s
 
-    def _unique(raw, scope):
-        key = (scope, raw)
+    taken = {}
+
+    def _unique(raw, scope, kind="table"):
+        """Slug stable et unique DANS son niveau de la hiérarchie.
+
+        Le niveau compte : un conteneur de schéma et une table du schéma `public` sont tous
+        deux des enfants directs de l'app — ils se disputent donc le même id. Les cloisonner
+        séparément laissait passer `CREATE SCHEMA maestro` + `CREATE TABLE public.maestro`,
+        et le manifeste était rejeté pour id dupliqué.
+        """
+        # La clé porte AUSSI la nature de l'élément : un schéma `maestro` et une table
+        # `public.maestro` sont deux choses différentes qui réclament le même id.
+        key = (scope, kind, raw)
         if key in slugs:
             return slugs[key]
-        base, s, n = _slug(raw), _slug(raw), 2
-        while (scope, s) in slugs.values() or any(
-                v == s and k[0] == scope for k, v in slugs.items()):
-            s, n = f"{base}_{n}", n + 1
-        slugs[key] = s
-        return s
+        used = taken.setdefault(scope, set())
+        base, candidate, n = _slug(raw), _slug(raw), 2
+        while candidate in used:
+            candidate, n = f"{base}_{n}", n + 1
+        used.add(candidate)
+        slugs[key] = candidate
+        return candidate
 
     def eid(key):
         schema_name, table = key
         if schema_name == "public":
-            return f"{app}.{_unique(table, 'public')}"
-        return f"{app}.{_unique(schema_name, '@schema')}.{_unique(table, schema_name)}"
+            return f"{app}.{_unique(table, '@racine', 'table')}"
+        return f"{app}.{_unique(schema_name, '@racine', 'schema')}.{_unique(table, schema_name, 'table')}"
 
     def parent(key):
-        return app if key[0] == "public" else f"{app}.{_unique(key[0], '@schema')}"
+        return app if key[0] == "public" else f"{app}.{_unique(key[0], '@racine', 'schema')}"
 
     # Un schéma non-public devient un conteneur explicite. Sans lui, `maestro.entities` et
     # `public.entities` s'écraseraient sous le même id et le modèle affirmerait qu'une table
     # vit dans un schéma où elle n'est pas.
     for sch in sorted({s for (s, _) in tables if s != "public"}):
         L += [
-            f"  - id: {app}.{_unique(sch, '@schema')}",
+            f"  - id: {app}.{_unique(sch, '@racine', 'schema')}",
             "    kind: database",
             f"    name: {_yaml_str(sch)}",
             "    technology: schéma PostgreSQL",

@@ -76,6 +76,14 @@ Et six défauts mineurs : chemin de route pris dans une expression (`path={ROUTE
 accentués produisant un id que le schéma refuse (**gate insatisfiable, I18**), nom de racine
 non quoté cassant le document YAML.
 
+**Une contre-revue du correctif lui-même a trouvé cinq défauts de plus**, dont trois créés
+par la correction : une route attrape-tout (`path="*"`) publiée à l'adresse racine · des
+modules métier supprimés parce qu'ils s'appellent `archives` ou `docs` · les applications
+rangées hors de la racine du dépôt (`frontend/`, `apps/web/`) rendant zéro écran en silence.
+Et deux restes : un sous-routeur inséré en **fragment JSX** (`{rasciRoutes}`) encore non monté
+— 5 URL fausses — et un identifiant d'écran encore duplicable. Tous corrigés, tous verrouillés
+(section H de la suite de fixtures).
+
 **Trois assertions passaient pour de mauvaises raisons** — le récolteur ne produisait aucun
 fichier, `grep` échouait, et la branche de succès était prise. Les assertions négatives exigent
 désormais que la sortie existe. La suite valide aussi **chaque grain séparément**, et non plus
@@ -86,9 +94,9 @@ seulement le manifeste fusionné : la fusion unit par id, et masquait donc les c
 | Dépôt | Tables | Tables décrites | Endpoints | Écrans |
 |---|---|---|---|---|
 | `actionprogex` | 59 → **61** | 0 → **46** | 10 (dont 4 faux) → **31** | 0 → **24** |
-| `constructiongauthier` | 171 → **169** | 0 → **125** | 0 → **37** | 0 → **90** |
+| `constructiongauthier` | 171 → **169** | 0 → **125** | 0 → **37** | 0 → **91** |
 | `print-template-hub` | 11 → **26** | 0 → **13** | 0 → **2** | 0 → **20** |
-| `servicedesk-somtech` | 33 → **47** | 0 → **15** | 6 → **44** | 0 → **22** |
+| `servicedesk-somtech` | 33 → **47** | 0 → **15** | 6 → **44** | 0 → **23** |
 
 Les variations à la baisse sont des corrections : `constructiongauthier` passe de 171 à 169
 parce que les tables supprimées et renommées ne sont plus comptées deux fois.

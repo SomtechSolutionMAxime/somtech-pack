@@ -303,12 +303,15 @@ G2="$WORK/dup"; mkdir -p "$G2/src"
 printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$G2/package.json"
 cat > "$G2/src/App.tsx" <<'TSX'
 <Routes>
-  <Route path="/a/vue" element={<VueA />} />
-  <Route path="/b/vue" element={<VueB />} />
+  <Route path="/vue" element={<VueA />} />
+  <Route path="/vue" element={<VueB />} />
 </Routes>
 TSX
 "$PY" "$S/harvest-screens.py" "$G2" --app demo --out "$WORK/g2.yaml" 2>/dev/null
 "$PY" "$S/validate-manifest.py" "$WORK/g2.yaml" >/dev/null 2>&1 && ok "G2 : ids d'écrans uniques" || ko "G2 : collision d'ids d'écrans"
+[ "$(grep -c 'kind: screen' "$WORK/g2.yaml")" -eq 2 ] \
+  && ok "G2b : deux écrans distincts à la même adresse sont tous deux conservés" \
+  || ko "G2b : un des deux écrans a été écrasé"
 
 # G3 — maquettes, instantanés de documentation et copies du dépôt ne sont PAS déployés.
 G3="$WORK/junk"; mkdir -p "$G3/src" "$G3/src/maquette/v1" "$G3/DOC/snap/src" "$G3/modules/maquette"
@@ -354,7 +357,8 @@ cat > "$G5/src/App.tsx" <<'TSX'
 import TableauDeBord from './TableauDeBord';
 <Routes>
   <Route path={ROUTES.HOME} element={<Calcule />} />
-  {items.map((it, index) => (<Route key={index} path={it.path} element={<Item />} />))}
+  {items.map((it, index) => (<Route key={index} element={<Item />} />))}
+  <Route path={ROUTES.LIST} element={<Liste />} />
   <Route path="/tableau" element={<Cadre><TableauDeBord /><PiedDePage /></Cadre>} />
   <Route path="/auth/callback" element={<AuthCallbackPage />} />
 </Routes>
@@ -388,6 +392,130 @@ grep -q 'name: réservations' "$WORK/g9.yaml" && ok "G9b : le vrai nom est conse
 "$PY" "$S/harvest-routes.py" "$REPO" --app demo-app --root-name "Morasse: hub" --out "$WORK/g10.yaml" 2>/dev/null
 "$PY" "$S/validate-manifest.py" "$WORK/g10.yaml" >/dev/null 2>&1 \
   && ok "G10 : --root-name avec ':' → YAML valide" || ko "G10 : nom de racine non quoté, document cassé"
+
+
+echo "== H. Défauts trouvés en contre-revue (correctif de la revue) =="
+# La correction des 3 bloquants en a introduit d'autres. Chacun est verrouillé ici.
+
+# H1 — `path="*"` n'est PAS l'adresse du parent. Le dé-suffixage `/*` ne vaut que pour un
+#      point de montage ; appliqué à une feuille, il faisait servir NotFound à `/`.
+H="$WORK/star"; mkdir -p "$H/src"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$H/package.json"
+cat > "$H/src/App.tsx" <<'TSX'
+<Routes>
+  <Route path="/" element={<Accueil />} />
+  <Route path="*" element={<NotFound />} />
+</Routes>
+TSX
+"$PY" "$S/harvest-screens.py" "$H" --app demo --out "$WORK/h1.yaml" 2>/dev/null
+grep -q 'route /\* ' "$WORK/h1.yaml" && ok "H1 : la route attrape-tout garde son '*'" || ko "H1 : '*' publié comme l'adresse racine"
+[ "$(grep -c 'technology: route / ' "$WORK/h1.yaml")" -eq 1 ] \
+  && ok "H1b : une seule route à l'adresse racine" || ko "H1b : deux écrans revendiquent '/'"
+
+# H2 — un module métier nommé `archives` ou `docs` est du code DÉPLOYÉ.
+H2="$WORK/modnames"; mkdir -p "$H2/src/modules/archives"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$H2/package.json"
+cat > "$H2/src/App.tsx" <<'TSX'
+import { ArchivesRoutes } from './modules/archives/routes';
+<Routes>
+  <Route path="archives/*" element={<ArchivesRoutes />} />
+</Routes>
+TSX
+cat > "$H2/src/modules/archives/routes.tsx" <<'TSX'
+export function ArchivesRoutes(){ return (
+  <Routes>
+    <Route path="liste" element={<Liste />} />
+    <Route path="detail/:id" element={<Detail />} />
+  </Routes>
+);}
+TSX
+"$PY" "$S/harvest-screens.py" "$H2" --app demo --out "$WORK/h2.yaml" 2>/dev/null
+grep -q 'route /archives/liste ' "$WORK/h2.yaml" \
+  && ok "H2 : module nommé 'archives' récolté (pas confondu avec du rebut)" \
+  || ko "H2 : module métier supprimé sur la foi de son nom"
+
+# H3 — l'application ne vit pas toujours à la racine du dépôt.
+for layout in frontend apps/web; do
+  H3="$WORK/layout-$(echo "$layout" | tr / -)"; mkdir -p "$H3/$layout/src"
+  printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$H3/$layout/package.json"
+  printf '<Routes><Route path="/tableau" element={<Tableau />} /></Routes>\n' > "$H3/$layout/src/App.tsx"
+  "$PY" "$S/harvest-screens.py" "$H3" --app demo --out "$WORK/h3.yaml" 2>/dev/null
+  grep -q 'route /tableau ' "$WORK/h3.yaml" \
+    && ok "H3 : application en $layout/ trouvée" || ko "H3 : structure $layout/ → zéro écran, en silence"
+done
+
+# H4 — un sous-routeur exporté en FRAGMENT (`export const xRoutes = (<Route …>)`) puis
+#      inséré par `{xRoutes}` est un montage, pas une racine. Motif réel (Construction
+#      Gauthier, module rasci), et il restait invisible après le premier correctif.
+H4="$WORK/fragment"; mkdir -p "$H4/src/modules/rh/rasci"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$H4/package.json"
+cat > "$H4/src/App.tsx" <<'TSX'
+import { RhRoutes } from './modules/rh/routes';
+<Routes>
+  <Route path="rh/*" element={<RhRoutes />} />
+</Routes>
+TSX
+cat > "$H4/src/modules/rh/routes.tsx" <<'TSX'
+import { rasciRoutes } from './rasci/routes';
+export function RhRoutes(){ return (
+  <Routes>
+    <Route path="conges" element={<Conges />} />
+    {rasciRoutes}
+  </Routes>
+);}
+TSX
+cat > "$H4/src/modules/rh/rasci/routes.tsx" <<'TSX'
+export const rasciRoutes = (
+  <Route path="rasci">
+    <Route path="par-phase" element={<ParPhase />} />
+  </Route>
+);
+TSX
+"$PY" "$S/harvest-screens.py" "$H4" --app demo --out "$WORK/h4.yaml" 2>/dev/null
+grep -q 'route /rh/rasci/par-phase ' "$WORK/h4.yaml" \
+  && ok "H4 : sous-routeur monté en fragment {xRoutes} préfixé" \
+  || ko "H4 : montage par fragment ignoré — chemins republiés nus"
+absent "$WORK/h4.yaml" 'route /rasci/par-phase ' "H4b : le chemin nu du fragment n'est pas publié" \
+  "H4b : chemin de fragment publié comme adresse absolue"
+# H5 — `import { RhRoutes } from …` a la FORME d'un fragment : le compter comme montage
+#      faisait ressortir le module deux fois, une fois préfixé, une fois nu.
+[ "$(grep -c 'kind: screen' "$WORK/h4.yaml")" -eq 2 ] \
+  && ok "H5 : un import n'est pas un point de montage (pas de doublon)" \
+  || ko "H5 : module monté deux fois — l'import compté comme fragment"
+
+# H6 — montages circulaires : aucun point d'entrée déterminable. On ne devine pas, on le dit.
+H6="$WORK/cycle"; mkdir -p "$H6/src"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$H6/package.json"
+printf 'import { B } from "./b";\nexport function A(){ return (<Routes><Route path="a" element={<B />} /></Routes>); }\n' > "$H6/src/a.tsx"
+printf 'import { A } from "./a";\nexport function B(){ return (<Routes><Route path="b" element={<A />} /></Routes>); }\n' > "$H6/src/b.tsx"
+"$PY" "$S/harvest-screens.py" "$H6" --app demo --out "$WORK/h6.yaml" 2>"$WORK/h6.err"
+grep -q 'cycle' "$WORK/h6.err" && ok "H6 : cycle de montages SIGNALÉ" || ko "H6 : cycle tu en silence (zéro écran sans explication)"
+
+# H7 — deux entrées ne différant que par la description décrivent le MÊME écran.
+H7="$WORK/dedup"; mkdir -p "$H7/src/pages"
+printf '{"dependencies":{"react-router-dom":"^6"}}\n' > "$H7/package.json"
+printf '/** Le tableau. */\nexport default function Tableau(){}\n' > "$H7/src/pages/Tableau.tsx"
+printf 'import Tableau from "./pages/Tableau";\n<Routes><Route path="/t" element={<Tableau />} /></Routes>\n' > "$H7/src/A.tsx"
+printf '<Routes><Route path="/t" element={<Tableau />} /></Routes>\n' > "$H7/src/B.tsx"
+"$PY" "$S/harvest-screens.py" "$H7" --app demo --out "$WORK/h7.yaml" 2>/dev/null
+"$PY" "$S/validate-manifest.py" "$WORK/h7.yaml" >/dev/null 2>&1 \
+  && ok "H7 : même écran vu deux fois → un seul id" || ko "H7 : id dupliqué (gate insatisfiable, I18)"
+
+# H8 — le CLI Supabase n'applique que les .sql DIRECTEMENT dans supabase/migrations.
+H8="$WORK/migsub"; mkdir -p "$H8/supabase/migrations/tests"
+printf 'CREATE TABLE public.vraie (id uuid);\n' > "$H8/supabase/migrations/0001.sql"
+printf 'CREATE TABLE public.faux_de_test (id uuid);\n' > "$H8/supabase/migrations/tests/seed_test_data.sql"
+"$PY" "$S/harvest-supabase.py" --discover "$H8" --app demo --out "$WORK/h8.yaml" 2>/dev/null
+grep -q 'name: vraie' "$WORK/h8.yaml" && ok "H8 : migration réelle récoltée" || ko "H8 : migration réelle manquante"
+absent "$WORK/h8.yaml" 'faux_de_test' "H8b : sous-dossier de migrations (non appliqué) exclu" \
+  "H8b : jeu de test d'un sous-dossier entré dans le modèle"
+
+# H9 — un schéma et une table publique homonymes se disputent le même id.
+H9="$WORK/homonyme"; mkdir -p "$H9"
+printf 'CREATE SCHEMA maestro;\nCREATE TABLE public.maestro (id uuid);\nCREATE TABLE maestro.entities (id uuid);\n' > "$H9/0.sql"
+"$PY" "$S/harvest-supabase.py" "$H9" --app demo --out "$WORK/h9.yaml" 2>/dev/null
+"$PY" "$S/validate-manifest.py" "$WORK/h9.yaml" >/dev/null 2>&1 \
+  && ok "H9 : schéma et table homonymes → ids distincts" || ko "H9 : id dupliqué schéma/table (gate insatisfiable)"
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")

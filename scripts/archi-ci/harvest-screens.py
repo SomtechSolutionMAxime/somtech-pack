@@ -144,7 +144,11 @@ _IMPORT_LAZY = re.compile(
 # Un sous-routeur s'exporte le plus souvent NOMMÉ, pas par défaut : sans ce motif, le point
 # de montage reste introuvable et les routes du module sont publiées sans leur préfixe.
 _IMPORT_NAMED = re.compile(r"import\s*\{([^}]*)\}\s*from\s*[\"']([^\"']+)[\"']")
-_NAMED_PART = re.compile(r"\b([A-Z][\w]*)\b(?:\s+as\s+([A-Z][\w]*))?")
+# Minuscule acceptée : un sous-routeur exporté en fragment se nomme `rasciRoutes`, pas
+# `RasciRoutes`. Ne garder que les identifiants capitalisés laissait ces montages invisibles.
+# Sans risque de bruit : un import ne sert de montage que si sa cible déclare elle-même des
+# routes, et le nom d'un écran reste cherché parmi les balises JSX (donc capitalisé).
+_NAMED_PART = re.compile(r"\b([A-Za-z_$][\w$]*)\b(?:\s+as\s+([A-Za-z_$][\w$]*))?")
 
 
 def leading_doc(text):
@@ -193,23 +197,46 @@ _TEST_FILE = re.compile(r"\.(test|spec|stories|d)\.[jt]sx?$|(^|/)__tests__/", re
 # (`modules/maquette/…`), des instantanés de documentation (`DOC/<uuid>/src/…`), des copies
 # du dépôt dans lui-même et des dossiers dupliqués par le Finder (« … 2 ») : autant de
 # routeurs qui ne sont pas déployés, et donc autant d'écrans inventés.
-UI_ROOTS = ("src", "app", "pages", os.path.join("app", "src"), os.path.join("src", "app"))
+UI_ROOTS = ("src", "app", "pages")
+# Emplacements où un dépôt Somtech range une application : à la racine, ou dans un
+# sous-projet (`frontend/`, `apps/web/`, `packages/ui/`…). Ne chercher qu'à la racine
+# rendait « aucun écran » sur toute structure en monorepo — et « aucun écran » se lit,
+# côté gate, comme « grain non vérifié », donc comme un silence, pas comme une alerte.
+_PROJECT_DEPTH = 2
 # Noms de dossiers qui signalent du code non déployé, où qu'ils se trouvent.
-_NOT_SHIPPED = re.compile(r"\A(maquette|maquettes|mockup|mockups|storybook|examples?|"
-                          r"samples?|snapshots?|archive|archives|doc|docs|__mocks__)\Z"
+# Liste VOLONTAIREMENT étroite : uniquement des noms qui désignent du code non déployé de
+# façon non ambiguë. `docs`, `archives`, `examples` en ont été RETIRÉS — ce sont des noms de
+# modules métier courants, et les écarter faisait disparaître des écrans bien réels sans
+# rien signaler. Les instantanés de documentation et les copies du dépôt sont déjà hors
+# d'atteinte : ils ne vivent pas sous une racine d'interface (`ui_roots`).
+_NOT_SHIPPED = re.compile(r"\A(maquette|maquettes|mockup|mockups|storybook|__mocks__)\Z"
                           r"|\s\d+\Z", re.IGNORECASE)
+
+
+def _project_dirs(root):
+    """Racine du dépôt + sous-projets (dossiers portant un package.json, peu profonds)."""
+    dirs = [root]
+    root = os.path.abspath(root)
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = dirpath.count(os.sep) - root.count(os.sep)
+        dirnames[:] = [] if depth >= _PROJECT_DEPTH else [
+            d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        if dirpath != root and "package.json" in filenames:
+            dirs.append(dirpath)
+    return dirs
 
 
 def ui_roots(root):
     """Racines de code d'interface présentes dans ce dépôt (chemins absolus, dédupliqués)."""
     seen, out = set(), []
-    for rel in UI_ROOTS:
-        d = os.path.join(root, rel)
-        real = os.path.realpath(d)
-        if os.path.isdir(d) and real not in seen and not any(
-                real.startswith(s + os.sep) for s in seen):
-            seen.add(real)
-            out.append(d)
+    for project in _project_dirs(root):
+        for rel in UI_ROOTS:
+            d = os.path.join(project, rel)
+            real = os.path.realpath(d)
+            if os.path.isdir(d) and real not in seen and not any(
+                    real.startswith(s + os.sep) for s in seen):
+                seen.add(real)
+                out.append(d)
     return out
 
 
@@ -284,8 +311,13 @@ def _parse_route_tree(text):
     publié comme `/dashboard`, une adresse qui répond 404. Sur Construction Gauthier, 76 des
     98 écrans étaient dans ce cas : le modèle affirmait des URL inexistantes, et il en
     fabriquait une de plus à chaque module ajouté.
+
+    Chaque noeud retient son corps PROPRE — le texte qui lui appartient, débarrassé de celui
+    de ses enfants. C'est ce qui permet de repérer un sous-routeur inséré en fragment
+    (`{rasciRoutes}`) à l'endroit exact où il est monté, et pas à tous les niveaux au-dessus.
     """
-    root = {"path": None, "index": False, "attrs": "", "children": []}
+    root = {"path": None, "index": False, "attrs": "", "children": [],
+            "tag_start": 0, "body_start": 0, "body_end": len(text), "body": ""}
     stack = [root]
     i = 0
     while i < len(text):
@@ -294,7 +326,9 @@ def _parse_route_tree(text):
         if m and (close < 0 or m.start() < close):
             attrs = _route_attrs(text, m.end())
             end = m.end() + len(attrs)
-            node = {"path": None, "index": False, "attrs": attrs, "children": []}
+            node = {"path": None, "index": False, "attrs": attrs, "children": [],
+                    "tag_start": m.start(), "body_start": end + 1,
+                    "body_end": end + 1, "body": ""}
             pm = _ATTR_PATH.search(attrs)
             if pm:
                 node["path"] = pm.group("url")
@@ -310,8 +344,20 @@ def _parse_route_tree(text):
         if close < 0:
             break
         if len(stack) > 1:
-            stack.pop()
+            stack.pop()["body_end"] = close
         i = close + len("</Route")
+
+    def own(node):
+        """Texte du noeud, privé de celui de ses enfants."""
+        parts, cursor = [], node["body_start"]
+        for child in node["children"]:
+            parts.append(text[cursor:child["tag_start"]])
+            cursor = max(cursor, child["body_end"])
+            own(child)
+        parts.append(text[cursor:node["body_end"]])
+        node["body"] = "".join(parts)
+
+    own(root)
     return root
 
 
@@ -323,8 +369,17 @@ def _join_url(prefix, segment):
     else:
         base = prefix.rstrip("/") + "/" + segment if segment else prefix
     base = re.sub(r"/{2,}", "/", base)
-    base = re.sub(r"/\*$", "", base) or "/"
-    return base if base.startswith("/") else "/" + base
+    return (base if base.startswith("/") else "/" + base) or "/"
+
+
+def _as_prefix(url):
+    """URL d'un noeud vue comme PRÉFIXE de ses enfants : le `/*` final tombe.
+
+    Le dé-suffixage n'a de sens que là. Appliqué aussi aux feuilles, il transformait
+    `<Route path="*" element={<NotFound/>}/>` en un écran servi à `/` — une affirmation
+    fausse, puisque `/` est capté par la route qui le déclare explicitement.
+    """
+    return re.sub(r"/\*+$", "", url) or "/"
 
 
 def _router_files(root):
@@ -337,9 +392,30 @@ def _router_files(root):
             continue
         if "<Route" not in text:
             continue
-        files[path] = {"text": text, "tree": _parse_route_tree(text),
+        files[path] = {"text": text, "tree": _parse_route_tree(blank_imports(text)),
                        "imports": _component_files(path, text, root)}
     return files
+
+
+# `{rasciRoutes}` — un sous-routeur exporté comme FRAGMENT JSX (`export const rasciRoutes =
+# (<Route path="rasci" …>)`) puis inséré dans le parent. Ce n'est pas un composant : il
+# n'apparaît dans aucun `element={…}`, donc le montage passait inaperçu et le fichier était
+# traité comme une racine — ses chemins relatifs republiés en absolu.
+_FRAGMENT_REF = re.compile(r"\{\s*([A-Za-z_$][\w$]*)\s*\}")
+# `import { MaPlaceRHRoutes } from …` porte exactement la forme d'un fragment `{X}`. Laissé
+# tel quel, chaque import de sous-routeur était compté comme un montage À LA RACINE, en plus
+# du montage réel : le module ressortait deux fois, une fois préfixé, une fois nu.
+_IMPORT_STMT = re.compile(
+    r"^[ \t]*import\s[^;]*?\sfrom\s*[\"'][^\"']+[\"'][ \t]*;?"
+    r"|^[ \t]*import\s*\{[^}]*\}\s*from\s*[\"'][^\"']+[\"'][ \t]*;?"
+    r"|^[ \t]*import\s*[\"'][^\"']+[\"'][ \t]*;?"
+    r"|^[ \t]*export\s*\{[^}]*\}\s*from\s*[\"'][^\"']+[\"'][ \t]*;?",
+    re.MULTILINE | re.DOTALL)
+
+
+def blank_imports(text):
+    """Neutralise les instructions d'import/export en préservant les positions."""
+    return _IMPORT_STMT.sub(lambda m: " " * len(m.group(0)), text)
 
 
 def _mount_target(node, imports, files):
@@ -351,9 +427,24 @@ def _mount_target(node, imports, files):
     return None
 
 
+def _fragment_mounts(body, imports, files):
+    """Fichiers de routes insérés en fragment `{identifiant}` dans ce corps de balise."""
+    out = []
+    for m in _FRAGMENT_REF.finditer(body or ""):
+        target = imports.get(m.group(1))
+        if target in files and target not in out:
+            out.append(target)
+    return out
+
+
 def _flatten(node, prefix, path, files, out, unresolved, seen):
     """Parcourt l'arbre d'un fichier et suit les montages vers les autres fichiers."""
     info = files[path]
+    # Sous-routeurs insérés en fragment `{mesRoutes}` directement dans ce noeud.
+    for target in _fragment_mounts(node.get("body"), info["imports"], files):
+        if target not in seen:
+            _flatten(files[target]["tree"], _as_prefix(prefix), target, files, out,
+                     unresolved, seen | {target})
     for child in node["children"]:
         if child["path"] is _UNRESOLVED:
             unresolved.append(path)
@@ -361,11 +452,11 @@ def _flatten(node, prefix, path, files, out, unresolved, seen):
         url = prefix if child["index"] else _join_url(prefix, child["path"])
         target = _mount_target(child, info["imports"], files)
         if target and target not in seen:
-            _flatten(files[target]["tree"], url, target, files, out, unresolved,
-                     seen | {target})
+            _flatten(files[target]["tree"], _as_prefix(url), target, files, out,
+                     unresolved, seen | {target})
             continue
-        if child["children"]:
-            _flatten(child, url, path, files, out, unresolved, seen)
+        if child["children"] or _fragment_mounts(child.get("body"), info["imports"], files):
+            _flatten(child, _as_prefix(url), path, files, out, unresolved, seen)
             # Une route qui porte une route `index` est une MISE EN PAGE : à cette adresse,
             # c'est l'enfant `index` qui s'affiche dans son emplacement. Émettre les deux
             # ferait deux écrans pour une seule adresse — le cadre et son contenu.
@@ -373,6 +464,8 @@ def _flatten(node, prefix, path, files, out, unresolved, seen):
                 continue
         if child["path"] is None and not child["index"]:
             continue     # <Route> sans chemin : porte ses enfants, n'est pas un écran
+        if child["children"] and not _ATTR_ELEMENT.search(child["attrs"]):
+            continue     # regroupement de chemin sans rendu propre : pas un écran non plus
         comp = _screen_name(child["attrs"], info["imports"])
         if comp in ("Navigate", "Outlet"):
             continue         # redirection ou point d'insertion : pas un écran
@@ -382,29 +475,41 @@ def _flatten(node, prefix, path, files, out, unresolved, seen):
         out.add((url, comp or url, "react-router", doc))
 
 
-def harvest_react_router(root):
-    """Retourne (set[(url, name, 'react-router', description)], chemins_non_résolus)."""
-    files = _router_files(root)
-    # Un fichier monté par un autre n'est PAS une racine : ses chemins sont relatifs et
-    # n'ont de sens qu'une fois préfixés. L'émettre seul reviendrait à publier des URL
-    # tronquées — précisément le défaut corrigé ici.
+def _mounted_files(files):
+    """Fichiers de routes montés par un autre — donc jamais des racines."""
     mounted = set()
     for path, info in files.items():
         stack = [info["tree"]]
         while stack:
             node = stack.pop()
+            for target in _fragment_mounts(node.get("body"), info["imports"], files):
+                if target != path:
+                    mounted.add(target)
             for child in node["children"]:
                 target = _mount_target(child, info["imports"], files)
                 if target and target != path:
                     mounted.add(target)
                 stack.append(child)
+    return mounted
+
+
+def harvest_react_router(root):
+    """Retourne (set[(url, name, 'react-router', description)], fichiers non résolus)."""
+    files = _router_files(root)
+    # Un fichier monté par un autre n'est PAS une racine : ses chemins sont relatifs et
+    # n'ont de sens qu'une fois préfixés. L'émettre seul reviendrait à publier des URL
+    # tronquées — précisément le défaut corrigé ici.
+    mounted = _mounted_files(files)
+    roots = [p for p in sorted(files) if p not in mounted]
 
     found, unresolved = set(), []
-    for path in sorted(files):
-        if path in mounted:
-            continue
+    for path in roots:
         _flatten(files[path]["tree"], "/", path, files, found, unresolved, {path})
-    return found, unresolved
+
+    # Tous montés et aucune racine : les montages forment un cycle, on ne sait pas par où
+    # entrer. On n'invente pas un point d'entrée — on le dit.
+    orphans = [] if roots else sorted(files)
+    return found, unresolved, orphans
 
 
 def harvest_next_pages(root):
@@ -471,8 +576,18 @@ def emit_yaml(app, root_kind, root_name, screens):
             f"    parent: {app}",
             "    audience: internal",
         ]
+    # Un écran est identifié par (adresse, composant). La description, elle, dépend de la
+    # résolution de l'import : deux entrées identiques à la description près décrivent le
+    # MÊME écran et doivent fusionner. Sans cette réduction, elles produisaient deux fois le
+    # même id et `validate-manifest` rejetait le manifeste — un gate strict devenait alors
+    # insatisfiable sans écrire un fait faux (I18).
+    merged = {}
+    for url, name, tech, desc in screens:
+        key = (url, name, tech)
+        if key not in merged or (desc and not merged[key]):
+            merged[key] = desc
     used = {}
-    for url, name, tech, desc in sorted(screens, key=lambda s: (s[0], s[1])):
+    for (url, name, tech), desc in sorted(merged.items(), key=lambda kv: (kv[0][0], kv[0][1])):
         base = slugify(url)
         slug, n = base, 2
         # La clé est le COUPLE (url, composant) : deux écrans réellement distincts servis
@@ -507,8 +622,13 @@ def main():
         print(f"❌ Racine introuvable : {args.root}", file=sys.stderr)
         sys.exit(1)
 
-    screens, unresolved = harvest_react_router(args.root)
+    screens, unresolved, orphans = harvest_react_router(args.root)
     screens |= harvest_next_pages(args.root)
+    if orphans:
+        print(f"⚠️  {len(orphans)} fichier(s) de routes se montent mutuellement (cycle) : "
+              f"aucun point d'entrée déterminable, écrans NON récoltés. "
+              f"Fichiers : {', '.join(os.path.relpath(o, args.root) for o in orphans[:5])}",
+              file=sys.stderr)
     if unresolved:
         print(f"⚠️  {len(unresolved)} route(s) déclarent un chemin calculé (path={{…}}) : "
               f"non récoltées, à déclarer à la main si ce sont des écrans. "

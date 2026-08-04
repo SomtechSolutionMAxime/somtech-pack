@@ -99,7 +99,12 @@ grep -qE "technology: route /(AdminUsers|ClientCreator|HomeWip) " "$MS" \
 CGS="$WORK/constructiongauthier-screens.yaml"
 grep -q "technology: route /ma-place-rh/" "$CGS" \
   && ok "sous-routeur monté : chemins préfixés (/ma-place-rh/…)" || ko "préfixe de montage perdu"
-for nu in /dashboard /par-phase /previsionnel; do
+# Le module `rasci` est monté DEUX fois : ma-place-rh dans App.tsx, puis rasci en fragment
+# `{rasciRoutes}` dans ma-place-rh. C'est le cas que la première correction ratait encore.
+grep -q "technology: route /ma-place-rh/rasci/par-phase " "$CGS" \
+  && ok "montage en fragment résolu (/ma-place-rh/rasci/…, imbriqué deux fois)" \
+  || ko "sous-routeur inséré en fragment non résolu"
+for nu in /dashboard /par-phase /previsionnel /rasci /manager /estimations; do
   grep -qE "technology: route $nu \(" "$CGS" \
     && ko "chemin relatif publié comme adresse absolue ($nu)" \
     || ok "aucun chemin relatif publié nu ($nu)"
