@@ -28,7 +28,10 @@ import re
 # plusieurs, séparés par des points — chaque segment pouvant être quoté SÉPARÉMENT.
 # C'est la forme que produit `pg_dump` : "public"."archive_matrices". Une expression qui
 # cherche `[\w.]+` avec des guillemets seulement aux extrémités ne la voit pas du tout.
-_IDENT = r'(?:"(?:[^"]|"")+"|[A-Za-z_-￿][\w$-￿]*)'
+# La plage accentuee est bornee explicitement (latin etendu). Ecrite comme une plage
+# ouverte partant de `_`, elle engloberait `{`, `|`, `}` et `~` : un identifiant pourrait
+# alors avaler de la ponctuation et deborder sur ce qui le suit.
+_IDENT = r'(?:"(?:[^"]|"")+"|[A-Za-z_\u00c0-\u024f][\w$\u00c0-\u024f]*)'
 QNAME = _IDENT + r'(?:\s*\.\s*' + _IDENT + r')*'
 _IDENT_RE = re.compile(_IDENT)
 
