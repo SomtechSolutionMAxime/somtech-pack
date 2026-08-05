@@ -164,7 +164,7 @@ test('LE CHIEN DE GARDE RÉTABLIT une écoute morte sans événement de fermetur
   };
   // Une connexion morte à MOITIÉ : l'objet existe, mais il n'écoute plus. Aucun événement
   // n'a été émis — c'est précisément le cas que l'écoute d'un `close` ne couvre pas.
-  v.ws = { readyState: WebSocket.CLOSED };
+  v.ws = { readyState: 3 }; // CLOSED, selon la norme WebSocket
 
   const minuteur = v.surveiller(20);
   await new Promise((r) => setTimeout(r, 70));
@@ -179,7 +179,7 @@ test('le chien de garde NE RECONNECTE PAS quand l’écoute est vivante', async 
   v.connecterSlack = () => {
     tentatives += 1;
   };
-  v.ws = { readyState: WebSocket.OPEN };
+  v.ws = { readyState: 1 }; // OPEN
 
   const minuteur = v.surveiller(20);
   await new Promise((r) => setTimeout(r, 70));
@@ -194,7 +194,7 @@ test('une connexion EN COURS d’établissement est laissée tranquille', async 
   v.connecterSlack = () => {
     tentatives += 1;
   };
-  v.ws = { readyState: WebSocket.CONNECTING };
+  v.ws = { readyState: 0 }; // CONNECTING
 
   const minuteur = v.surveiller(20);
   await new Promise((r) => setTimeout(r, 70));
