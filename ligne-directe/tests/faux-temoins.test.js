@@ -217,3 +217,56 @@ test('`dire` sur une ligne close échoue au lieu de poster dans un canal abandon
   assert.match(r.erreur, /close/i);
   assert.equal(s.postes.length, 0, 'rien ne doit partir vers une ligne close');
 });
+
+// —————————————————————————————————————————————————————————————————————————— renommage
+
+test('RENOMMER met à jour Slack ET le registre — jamais l’un sans l’autre', async () => {
+  // Un renommage fait à la main dans Slack laisse le registre sur l'ancien nom : le
+  // routage tient (il passe par l'identifiant du canal), mais l'état affiché cesse de
+  // correspondre à ce que le dirigeant voit dans son espace.
+  const s = slackDouble();
+  s.renommes = [];
+  s.renommerCanal = async (_j, canal, nom) => {
+    s.renommes.push({ canal, nom });
+    return { id: canal, nom };
+  };
+  sauverRegistre({
+    version: 1,
+    lignes: [{ chantier: 'D-20260805-0004', canal_id: 'C1', canal_nom: 'd-20260805-0004', pane: 'w1:p1', worktree: '/w/a', visage: 'x', ouverte_le: 'h', close_le: null }],
+  });
+  const v = veilleur({ slack: s, herdr: { async agents() { return []; } } });
+
+  const r = await v.renommer({ canal_id: 'C1', titre: '[FEAT] Refonte du tableau de bord' });
+
+  assert.equal(r.ok, true);
+  assert.equal(r.avant, 'd-20260805-0004');
+  assert.equal(r.canal, 'refonte-du-tableau-de-bord');
+  assert.deepEqual(s.renommes, [{ canal: 'C1', nom: 'refonte-du-tableau-de-bord' }]);
+  assert.equal(chargerRegistre().lignes[0].canal_nom, 'refonte-du-tableau-de-bord', 'le registre doit suivre');
+});
+
+test('renommer vers le nom déjà porté ne fait rien', async () => {
+  const s = slackDouble();
+  let appels = 0;
+  s.renommerCanal = async () => {
+    appels += 1;
+    return { id: 'C1', nom: 'x' };
+  };
+  sauverRegistre({
+    version: 1,
+    lignes: [{ chantier: 'D-1', canal_id: 'C1', canal_nom: 'refonte-du-tableau-de-bord', pane: 'w1:p1', worktree: '/w/a', visage: 'x', ouverte_le: 'h', close_le: null }],
+  });
+  const v = veilleur({ slack: s, herdr: { async agents() { return []; } } });
+
+  const r = await v.renommer({ canal_id: 'C1', titre: 'Refonte du tableau de bord' });
+
+  assert.equal(r.inchange, true);
+  assert.equal(appels, 0, 'aucun appel inutile à Slack');
+});
+
+test('renommer une ligne inexistante échoue clairement', async () => {
+  const v = veilleur({ slack: slackDouble(), herdr: { async agents() { return []; } } });
+  const r = await v.renommer({ canal_id: 'C_INCONNU', titre: 'Peu importe' });
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /aucune ligne/);
+});

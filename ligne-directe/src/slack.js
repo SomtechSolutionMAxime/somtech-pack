@@ -151,6 +151,18 @@ export async function poster(jetonRobot, { canal, texte, nom, emoji }) {
   return d.ts;
 }
 
+/**
+ * Renomme un canal.
+ *
+ * Ne JAMAIS renommer à la main dans Slack quand une ligne est ouverte : l'identifiant du
+ * canal ne change pas, donc les messages continuent d'arriver — mais le registre garde
+ * l'ancien nom et se met à mentir sur ce qui est ouvert.
+ */
+export async function renommerCanal(jetonRobot, canal, nom) {
+  const d = await appeler('conversations.rename', jetonRobot, { channel: canal, name: nom });
+  return { id: d.channel.id, nom: d.channel.name };
+}
+
 export async function archiverCanal(jetonRobot, canal) {
   try {
     await appeler('conversations.archive', jetonRobot, { channel: canal });

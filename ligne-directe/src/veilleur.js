@@ -219,6 +219,8 @@ export class Veilleur {
         return this.dire(requete);
       case 'fermer':
         return this.fermer(requete);
+      case 'renommer':
+        return this.renommer(requete);
       case 'etat':
         return this.etat();
       case 'ping':
@@ -293,6 +295,31 @@ export class Veilleur {
       emoji: ligne.visage,
     });
     return { ok: true, canal: ligne.canal_nom, ts };
+  }
+
+  /**
+   * Renomme le canal d'une ligne — dans Slack ET au registre, en un seul geste.
+   *
+   * Les deux ensemble, jamais l'un sans l'autre : un renommage fait à la main dans Slack
+   * laisse le registre sur l'ancien nom, et l'état affiché cesse de correspondre à ce que
+   * le dirigeant voit dans son espace.
+   */
+  async renommer({ chantier, worktree, titre, canal_id: canalId }) {
+    const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
+    if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
+    if (!titre) return { ok: false, erreur: 'titre requis' };
+
+    const pris = nomsPris(this.registre);
+    pris.delete(ligne.canal_nom); // son propre nom ne se fait pas concurrence
+    const nom = nomDeCanal(libelleDeCanal(ligne.chantier, titre), (n) => pris.has(n));
+    if (nom === ligne.canal_nom) return { ok: true, inchange: true, canal: nom };
+
+    const ancien = ligne.canal_nom;
+    const d = await this.slack.renommerCanal(this.jetons.robot, ligne.canal_id, nom);
+    ligne.canal_nom = d.nom;
+    sauverRegistre(this.registre);
+    journaliser(`canal renommé — ${ligne.chantier} : #${ancien} → #${d.nom}`);
+    return { ok: true, inchange: false, avant: ancien, canal: d.nom };
   }
 
   async fermer({ chantier, worktree, bilan, archiver = true, canal_id: canalId }) {

@@ -27,6 +27,7 @@ $LD ouvrir D-20260805-0004 --titre "le titre de la demande ou du projet" \
 $LD dire "le jalon franchi, en quelques lignes"
 $LD demander "l'arbitrage dont tu as besoin, et les options"
 $LD fermer --bilan "ce qui a été livré, ce qui reste"
+$LD renommer --titre "le nouveau titre"
 $LD etat
 ```
 
@@ -35,6 +36,7 @@ $LD etat
 - **`dire`** — un jalon franchi, un fait qui change la donne.
 - **`demander`** — un arbitrage. Le message est marqué comme attendant une réponse. **Tu ne te bloques pas** : tu continues ce qui ne dépend pas de la réponse.
 - **`fermer`** — en clôturant, avec le bilan. Le canal est archivé.
+- **`renommer`** — si le titre du chantier change, ou si la ligne a été ouverte sans titre. **Ne renomme jamais le canal à la main dans Slack** : les messages continueraient d'arriver (le routage passe par l'identifiant, pas par le nom), mais le registre resterait sur l'ancien nom et l'état affiché cesserait de correspondre à ce que le dirigeant voit.
 
 Le chantier n'est demandé qu'à l'ouverture. Ensuite, la commande retrouve ta ligne par ton pane : tu n'as rien à retenir.
 
