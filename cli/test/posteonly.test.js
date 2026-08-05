@@ -180,3 +180,53 @@ test('poste : un pack sans module de portée poste ne fait rien, sans erreur', (
   assert.deepEqual(r.modules, []);
   assert.deepEqual(r.created, []);
 });
+
+// —————————————————————————————————————————————————————————————————————————————————
+// Un drapeau par outil de poste.
+//
+// Avant la ligne directe, un SEUL drapeau (`--no-canvas`) gouvernait toute la famille des
+// modules de portée poste : le jour où un second outil est arrivé, taper `--no-canvas`
+// l'aurait emporté aussi, sans que rien ne le dise. On vérifie donc qu'écarter un module
+// n'écarte que lui.
+
+test('poste : la ligne directe est déposée là où la compétence la cherche', () => {
+  const toolsDir = tmp('smtk-poste-');
+  const r = installPosteModules({ payloadRoot: REPO, toolsDir });
+
+  for (const f of [
+    'ligne-directe/bin/ligne-directe.js',
+    'ligne-directe/src/veilleur.js',
+    'ligne-directe/src/trousseau.js',
+  ]) {
+    assert.ok(existsSync(join(toolsDir, f)), `${f} absent — la compétence ne trouvera pas sa commande`);
+  }
+  assert.ok(r.modules.includes('ligne-directe'));
+});
+
+test('poste : écarter le canvas N’EMPORTE PAS la ligne directe', () => {
+  const toolsDir = tmp('smtk-poste-');
+  const r = installPosteModules({ payloadRoot: REPO, toolsDir, exclure: ['canvas'] });
+
+  assert.ok(r.modules.includes('ligne-directe'), 'la ligne directe doit survivre à --no-canvas');
+  assert.ok(!r.modules.includes('canvas'));
+  assert.ok(existsSync(join(toolsDir, 'ligne-directe/bin/ligne-directe.js')));
+  assert.ok(!existsSync(join(toolsDir, 'herdr-plugins/excalidraw/server/bin.js')));
+});
+
+test('poste : écarter la ligne directe n’emporte pas le canvas', () => {
+  const toolsDir = tmp('smtk-poste-');
+  const r = installPosteModules({ payloadRoot: REPO, toolsDir, exclure: ['ligne-directe'] });
+
+  assert.ok(r.modules.includes('canvas'));
+  assert.ok(!r.modules.includes('ligne-directe'));
+  assert.ok(!existsSync(join(toolsDir, 'ligne-directe/bin/ligne-directe.js')));
+});
+
+test('poste : la ligne directe ne porte AUCUNE dépendance à installer', () => {
+  // C'est ce qui la met hors d'atteinte du piège vérifié du chemin de publication : les
+  // dépendances d'exécution ne voyagent que sous l'arborescence des plugins. N'en avoir
+  // aucune, c'est n'avoir rien à perdre en route.
+  const pkg = JSON.parse(readFileSync(join(REPO, 'ligne-directe', 'package.json'), 'utf8'));
+  assert.deepEqual(pkg.dependencies ?? {}, {});
+  assert.deepEqual(pkg.peerDependencies ?? {}, {});
+});

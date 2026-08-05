@@ -23,7 +23,7 @@ export function parseArgs(argv) {
   const flags = {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
     rc: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
-    noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false,
+    noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false, noLigneDirecte: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
     mode: null, file: null, id: null, patch: null,
     help: false, version: false,
@@ -56,6 +56,7 @@ export function parseArgs(argv) {
       case '--no-workflows': flags.noWorkflows = true; break;
       case '--no-commands': flags.noCommands = true; break;
       case '--no-canvas': flags.noCanvas = true; break;
+      case '--no-ligne-directe': flags.noLigneDirecte = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--no-graphify': flags.noGraphify = true; break;
       case '--yes': case '-y': flags.yes = true; break;
@@ -127,7 +128,8 @@ Options (setup) :
   --no-skills       Ne pas installer les skills globaux
   --no-workflows    Ne pas installer les workflows globaux
   --no-commands     Ne pas installer les commandes globales
-  --no-canvas       Ne pas installer les outils de poste (canvas), déposés dans ~/.somtech
+  --no-canvas       Ne pas installer le canvas (outil de poste, ~/.somtech)
+  --no-ligne-directe  Ne pas installer la ligne directe (outil de poste, ~/.somtech)
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
   --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)

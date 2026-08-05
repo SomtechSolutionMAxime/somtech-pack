@@ -1,0 +1,16 @@
+{
+  "name": "@somtech-solutions/ligne-directe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ligne de discussion bidirectionnelle entre un agent herdr et le dirigeant, par Slack. Aucune dépendance d'exécution.",
+  "type": "module",
+  "bin": {
+    "ligne-directe": "bin/ligne-directe.js"
+  },
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "somtech-pack",
-  "version": "1.27.0",
+  "version": "1.28.0",
   "description": "Pack de configuration réutilisable pour projets Somtech (Claude Code, features, plugins Cowork, scripts)",
   "author": "Somtech",
   "repository": "https://github.com/SomtechSolutionMAxime/somtech-pack.git",
@@ -52,6 +52,14 @@
       "scope": "poste",
       "paths": [
         "herdr-plugins/"
+      ]
+    },
+    "ligne-directe": {
+      "description": "Ligne de discussion bidirectionnelle entre un agent herdr et le dirigeant (Slack). OUTIL DE POSTE : un veilleur par machine, installé dans ~/.somtech aux côtés de claude-swt et du canvas — jamais copié dans un projet. Aucune dépendance d'exécution : Node seul suffit, donc rien à construire et rien qui puisse être perdu au passage du paquet. Les projets reçoivent la compétence (module core), le poste reçoit le veilleur.",
+      "default": false,
+      "scope": "poste",
+      "paths": [
+        "ligne-directe/"
       ]
     }
   }
