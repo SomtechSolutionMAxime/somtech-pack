@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.0] - 2026-08-05
+
+### Ajouté
+- **Un agent peut désormais joindre le dirigeant hors de son écran, et recevoir sa réponse.** Un chantier qui dure plusieurs jours et qui bloque sur un arbitrage restait bloqué jusqu'à ce que quelqu'un passe devant le bon pane. La compétence `/ligne-directe` ouvre un canal Slack par chantier : l'agent y pousse ce qui appelle une décision et ses jalons, le dirigeant répond depuis son téléphone, et sa réponse atterrit dans le pane de l'agent comme s'il l'avait tapée. Quatre gestes — ouvrir, dire, demander, fermer — et le chantier est déduit du pane, donc rien à retenir. `/orchestrer-chantier` ouvre sa ligne en naissant et la referme en clôturant : c'est le premier usage, pas le propriétaire du mécanisme. (D-20260805-0004)
+- **Le veilleur est un outil de poste, installé une fois par machine** (`npx pack setup`), avec son service pour revenir après un redémarrage (`ligne-directe service installer`). Une seule application Slack déclarée, mais chaque agent poste sous le nom et l'avatar de son chantier : trois chantiers actifs, trois interlocuteurs distincts à l'œil. **Aucune dépendance d'exécution** — rien à construire, donc rien que le chemin de publication puisse perdre en silence. Les jetons vivent au trousseau du poste, jamais dans un dépôt ; le point d'entrée est un socket local en 0600, sans aucun port réseau.
+
+### Corrigé
+- **Le drapeau qui désactive les outils de poste ne les emportait pas un par un.** `--no-canvas` gouvernait toute la famille : le jour où un second outil est arrivé, le taper l'aurait fait disparaître aussi, sans que rien ne le dise. Chaque outil a désormais son drapeau (`--no-canvas`, `--no-ligne-directe`).
+- **Le lint anti-secrets se déclenchait sur la prose qui le décrit** — un document expliquant ce que le lint recherche le faisait échouer — et scannait `cli/payload/`, un artefact de build non versionné, ce qui faisait échouer un développeur sur une copie périmée d'un fichier déjà corrigé.
+
 ## [1.27.0] - 2026-08-04
 
 ### Corrigé

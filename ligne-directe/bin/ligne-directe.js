@@ -32,10 +32,32 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
   process.exit(code);
 }
 
+/** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
+const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan']);
+
 function option(args, nom) {
   const i = args.indexOf(nom);
   if (i === -1) return null;
   return args[i + 1] ?? null;
+}
+
+/**
+ * Le premier argument libre — en sautant les VALEURS d'options.
+ *
+ * Relevé en revue : un simple « premier mot qui ne commence pas par -- » prenait la valeur
+ * d'une option pour le chantier. `ouvrir --inviter maxime@somtech.ca D-1` créait un canal
+ * nommé d'après l'adresse courriel. Silencieux, et le canal reste.
+ */
+function premierLibre(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a.startsWith('--')) {
+      if (OPTIONS_A_VALEUR.has(a)) i += 1; // sa valeur n'est pas un argument libre
+      continue;
+    }
+    return a;
+  }
+  return null;
 }
 
 function rendre(reponse) {
@@ -69,7 +91,7 @@ if (geste === 'service') {
 } else if (geste === 'veilleur') {
   await import('../src/demarrer-veilleur.js');
 } else if (geste === 'ouvrir') {
-  const chantier = args.find((a) => !a.startsWith('--'));
+  const chantier = premierLibre(args);
   if (!chantier) usage(1);
   const courriel = option(args, '--inviter');
   const invites = [];
@@ -91,7 +113,7 @@ if (geste === 'service') {
     })
   );
 } else if (geste === 'dire' || geste === 'demander') {
-  const texte = args.find((a) => !a.startsWith('--'));
+  const texte = premierLibre(args);
   if (!texte) usage(1);
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });

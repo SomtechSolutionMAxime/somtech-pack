@@ -58,8 +58,23 @@ export function lignesOuvertes(registre) {
   return registre.lignes.filter((l) => !l.close_le);
 }
 
+/**
+ * La ligne d'un canal — **l'ouverte d'abord**.
+ *
+ * BLOQUANT relevé en revue : un `.find()` naïf rendait la ligne CLOSE quand un chantier
+ * était rouvert. Or Slack réutilise le même canal quand on reprend un nom libéré : la
+ * nouvelle ligne partage donc l'identifiant de l'ancienne. L'agent vivant ne recevait
+ * jamais rien, et le dirigeant s'entendait répondre « cette ligne est close » à
+ * perpétuité — le registre survivant au redémarrage, c'était définitif. Et c'est le cycle
+ * NOMINAL d'un chantier repris.
+ */
 export function ligneParCanal(registre, canalId) {
-  return registre.lignes.find((l) => l.canal_id === canalId) || null;
+  const ouverte = registre.lignes.find((l) => l.canal_id === canalId && !l.close_le);
+  if (ouverte) return ouverte;
+  // Aucune ouverte : on rend la plus récemment close, pour pouvoir répondre « c'est clos »
+  // au lieu d'avaler le message.
+  const closes = registre.lignes.filter((l) => l.canal_id === canalId);
+  return closes.length ? closes[closes.length - 1] : null;
 }
 
 export function ligneOuverteParCle(registre, chantier, worktree) {

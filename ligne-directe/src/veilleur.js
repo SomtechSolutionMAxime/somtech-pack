@@ -203,7 +203,12 @@ export class Veilleur {
       case 'etat':
         return this.etat();
       case 'ping':
-        return { ok: true, veilleur: 'vivant', espace: this.identite.equipe };
+        // BLOQUANT relevé en revue : ce ping répondait `ok:false` tant que l'identité
+        // n'était pas chargée — plusieurs centaines de millisecondes, le temps de lire le
+        // trousseau et d'interroger Slack. Un second veilleur y lisait « place libre »,
+        // retirait le socket et s'installait : DEUX écoutes, chaque message remis en
+        // double. Un ping répond la PRÉSENCE, jamais la disponibilité.
+        return { ok: true, veilleur: 'vivant', espace: this.identite?.equipe ?? null, pret: Boolean(this.identite) };
       default:
         return { ok: false, erreur: `geste inconnu : ${geste}` };
     }
@@ -221,6 +226,7 @@ export class Veilleur {
       // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
+      if (invites.length) deja.autorises = [...new Set([...(deja.autorises || []), ...invites])];
       sauverRegistre(this.registre);
       return { ok: true, reprise: true, canal: deja.canal_nom, canal_id: deja.canal_id, visage: deja.visage };
     }
@@ -240,6 +246,10 @@ export class Veilleur {
       pane,
       worktree: worktree || null,
       herdr_socket: herdrSocket,
+      // Qui a le droit de piloter l'agent par cette ligne. Le canal est public : sans
+      // cette liste, n'importe quel membre de l'espace ferait passer un message pour une
+      // consigne du dirigeant — le cadre lui en donne l'autorité.
+      autorises: invites.slice(),
       visage,
       ouverte_le: maintenant(),
       close_le: null,
@@ -363,6 +373,18 @@ export class Veilleur {
   }
 
   async surMessage(evt, ws) {
+    try {
+      await this.traiterTrame(evt, ws);
+    } catch (err) {
+      // BLOQUANT relevé en revue : un rejet qui s'échappait d'ici n'était rattrapé par
+      // personne — rejet non géré, processus à terre. Et l'enveloppe ayant déjà été
+      // acquittée, Slack ne rejouait jamais le message : perdu, définitivement, en
+      // silence. Rien ne doit sortir de ce listener.
+      journaliser(`trame non traitée : ${err?.message || err}`);
+    }
+  }
+
+  async traiterTrame(evt, ws) {
     let trame;
     try {
       trame = JSON.parse(evt.data);
@@ -399,12 +421,32 @@ export class Veilleur {
     const texte = (ev.text || '').trim();
     if (!texte) return;
 
+    // Qui parle ? Le canal est PUBLIC : n'importe quel membre de l'espace peut y écrire, et
+    // le cadre que reçoit l'agent donne à ce texte l'autorité du dirigeant. On ne remet donc
+    // que ce qui vient de quelqu'un d'invité sur cette ligne. Liste vide = ligne ouverte
+    // sans invité (usage local) : on n'ouvre pas pour autant la porte à tout l'espace.
+    if (!this.autorise(ligne, ev.user)) {
+      journaliser(`écarté — #${ligne.canal_nom} : ${ev.user} n'est pas autorisé sur cette ligne`);
+      return;
+    }
+
     if (ligne.close_le) {
       await this.repondreEnPropre(ligne, `Cette ligne est close depuis le ${ligne.close_le.slice(0, 10)} — plus personne ne travaille sur ${ligne.chantier}. Ton message n'a donc été remis à aucun agent.`);
       return;
     }
 
-    if (!(await this.herdr.vivant(ligne.pane, { socket: ligne.herdr_socket }))) {
+    // Un herdr injoignable N'EST PAS un agent mort : la session peut être momentanément
+    // absente. Le confondre refermait la ligne d'un agent bien vivant — et, avant ça,
+    // laissait échapper un rejet qui mettait le veilleur à terre.
+    let present;
+    try {
+      present = await this.herdr.vivant(ligne.pane, { socket: ligne.herdr_socket });
+    } catch (err) {
+      await this.repondreEnPropre(ligne, `Je n'arrive pas à joindre l'agent de ${ligne.chantier} en ce moment (${err.message}). Ton message n'a été remis à personne — renvoie-le dans un instant.`);
+      journaliser(`herdr injoignable — #${ligne.canal_nom} : ${err.message}`);
+      return;
+    }
+    if (!present) {
       clore(this.registre, ligne.canal_id, maintenant());
       sauverRegistre(this.registre);
       await this.repondreEnPropre(ligne, `L'agent de ${ligne.chantier} n'est plus là — son pane ${ligne.pane} a disparu. Je referme la ligne ; ton message n'a été remis à personne.`);
@@ -427,6 +469,26 @@ export class Veilleur {
     }
   }
 
+  /**
+   * Cette parole a-t-elle le droit de piloter l'agent ?
+   *
+   * On accepte les invités inscrits à l'ouverture de la ligne. Une ligne sans liste
+   * d'invités est une ligne locale : personne d'autre que son ouvreur n'est censé y
+   * écrire, et on ne l'ouvre pas à tout l'espace par commodité.
+   */
+  autorise(ligne, utilisateur) {
+    if (!utilisateur) return false;
+    // Une ligne OUVERTE AVANT ce contrôle ne porte pas de liste du tout. La traiter comme
+    // une liste vide couperait la parole à un dirigeant en pleine conversation, sans qu'il
+    // comprenne pourquoi. On la laisse passer et on le dit — la liste se remplira à la
+    // prochaine réouverture.
+    if (!Array.isArray(ligne.autorises)) {
+      journaliser(`ligne ${ligne.chantier} sans liste d'autorisés (ouverte avant le contrôle) — parole acceptée`);
+      return true;
+    }
+    return ligne.autorises.includes(utilisateur);
+  }
+
   /** Le veilleur parle en son nom propre — jamais sous l'identité d'un agent qui n'est plus là. */
   async repondreEnPropre(ligne, texte) {
     try {
@@ -442,13 +504,22 @@ export class Veilleur {
    * au bout. On les referme plutôt que de les laisser mentir.
    */
   async reconcilier() {
-    let vivants;
+    let liste;
     try {
-      vivants = new Set((await this.herdr.agents()).map((a) => a.pane_id));
+      liste = await this.herdr.agents();
     } catch (err) {
       journaliser(`réconciliation impossible (herdr injoignable) : ${err.message}`);
       return;
     }
+    // « Aucun agent » et « aucune session joignable » se ressemblent et ne veulent pas dire
+    // la même chose. Au démarrage du poste, le service naît AVANT les sessions herdr : lire
+    // une liste vide comme « tout le monde est mort » refermait et archivait TOUTES les
+    // lignes vivantes à chaque redémarrage — l'inverse exact de ce qu'on promet.
+    if (!liste.length) {
+      journaliser('réconciliation reportée — aucune session herdr joignable pour le moment');
+      return;
+    }
+    const vivants = new Set(liste.map((a) => a.pane_id));
     let fermees = 0;
     for (const ligne of lignesOuvertes(this.registre)) {
       if (!vivants.has(ligne.pane)) {
