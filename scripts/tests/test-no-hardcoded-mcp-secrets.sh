@@ -38,7 +38,12 @@ echo "== Lint — clés Bearer en clair dans les snippets .mcp.json (.md) =="
 hits="$(grep -rIn --include='*.md' --include='*.tpl' --include='*.json' \
   -E '"Authorization"[[:space:]]*:[[:space:]]*"Bearer ' "$ROOT" 2>/dev/null \
   | grep -v '/node_modules/' \
-  | grep -v '/scripts/tests/' || true)"
+  | grep -v '/scripts/tests/' \
+  | grep -v '/cli/payload/' || true)"
+# `cli/payload/` est un ARTEFACT DE BUILD (non versionné) : une copie du dépôt fabriquée
+# pour la publication. Le scanner double chaque signalement — et pire, il fait échouer le
+# lint sur une copie périmée d'un fichier déjà corrigé, tant que le développeur n'a pas
+# reconstruit le paquet. Ce qui est versionné est déjà couvert par le scan de la source.
 
 # Conforme = "Bearer ${VAR}" PUR (pas de défaut `:-…` qui pourrait masquer un
 # secret ni produire un Bearer vide → 401 silencieux). Tout le reste est une
