@@ -101,8 +101,9 @@ test('le cas nominal : la parole du dirigeant arrive dans le pane de son agent',
   await v.remettreAuChantier(parole('C1', "L'option B, et n'attends pas."));
 
   assert.equal(h.remis.length, 1);
-  // Apostrophes intactes : aucun shell n'est impliqué dans la remise.
-  assert.equal(h.remis[0].texte, "L'option B, et n'attends pas.");
+  // Apostrophes intactes : aucun shell n'est impliqué dans la remise. La parole est
+  // ENCADRÉE (voir plus bas) mais jamais altérée — d'où le `includes` plutôt qu'un `equal`.
+  assert.ok(h.remis[0].texte.includes("L'option B, et n'attends pas."));
   assert.equal(s.postes.length, 0, 'rien à répondre quand la remise réussit');
 });
 
@@ -244,4 +245,37 @@ test('rouvrir une ligne existante la reprend et met à jour le pane', async () =
   assert.equal(r.ok, true);
   assert.equal(r.reprise, true);
   assert.equal(ligneParCanal(chargerRegistre(), 'C1').pane, 'w9:p9');
+});
+
+// —————————————————————————————————————————————————————————————————————————————————
+// Le cadre du message remis.
+//
+// Défaut trouvé à l'usage, pas au design : le premier échange réel a bien traversé le
+// pont, mais l'agent a répondu DANS SON TERMINAL. Côté dirigeant : rien. Il a conclu que
+// son message n'était jamais arrivé — alors qu'il avait été remis et lu.
+
+test('LA PAROLE REMISE PORTE SON CADRE — sinon l’agent répond dans le vide', async () => {
+  const s = slackDouble();
+  const h = herdrDouble({ vivants: ['w1:p1'] });
+  const v = veilleurAvec({ lignes: [ligne()], slack: s, herdr: h });
+
+  await v.remettreAuChantier(parole('C1', "L'option B."));
+
+  const remis = h.remis[0].texte;
+  assert.match(remis, /LIGNE DIRECTE/, "l'agent doit savoir que ce message ne vient pas de son terminal");
+  assert.match(remis, /D-20260805-0004/, 'le chantier concerné doit être nommé');
+  assert.ok(remis.includes("L'option B."), 'la parole du dirigeant doit rester intacte dans le cadre');
+  assert.match(remis, /ligne-directe\.js" dire/, 'la commande de réponse doit être donnée, pas évoquée');
+  assert.match(remis, /il ne le voit pas/, "l'agent doit savoir que son terminal ne répond à personne");
+});
+
+test('le cadre ne dénature pas la parole : apostrophes, retours à la ligne, accents', async () => {
+  const s = slackDouble();
+  const h = herdrDouble({ vivants: ['w1:p1'] });
+  const v = veilleurAvec({ lignes: [ligne()], slack: s, herdr: h });
+  const parolePiegee = "Vas-y, mais n'oublie pas :\n- l'accès\n- la clôture";
+
+  await v.remettreAuChantier(parole('C1', parolePiegee));
+
+  assert.ok(h.remis[0].texte.includes(parolePiegee), 'la parole doit traverser mot pour mot');
 });

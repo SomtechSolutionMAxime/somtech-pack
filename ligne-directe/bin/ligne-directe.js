@@ -24,6 +24,7 @@ function usage(code = 0) {
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
   etat                                                     ce qui est ouvert
+  service installer|retirer|etat                           le veilleur revient après un redémarrage
   veilleur                                                 lance le veilleur au premier plan
 
 Le chantier est déduit du pane courant, sauf à l'ouverture.
@@ -49,7 +50,23 @@ function rendre(reponse) {
 const [geste, ...args] = process.argv.slice(2);
 if (!geste || geste === '--help' || geste === '-h') usage();
 
-if (geste === 'veilleur') {
+if (geste === 'service') {
+  const { installerService, retirerService, etatService } = await import('../src/service.js');
+  const quoi = args[0] || 'etat';
+  if (quoi === 'installer') {
+    const r = await installerService();
+    if (!r.ok) {
+      process.stderr.write(`installation refusée : ${r.erreur}\n`);
+      process.exit(1);
+    }
+    process.stdout.write(`service installé (${r.chemin}) — le veilleur reviendra à chaque ouverture de session\n`);
+  } else if (quoi === 'retirer') {
+    const r = await retirerService();
+    process.stdout.write(`service retiré (${r.chemin})\n`);
+  } else {
+    process.stdout.write(`${JSON.stringify(await etatService(), null, 2)}\n`);
+  }
+} else if (geste === 'veilleur') {
   await import('../src/demarrer-veilleur.js');
 } else if (geste === 'ouvrir') {
   const chantier = args.find((a) => !a.startsWith('--'));
@@ -68,6 +85,7 @@ if (geste === 'veilleur') {
       chantier,
       pane: ici.pane,
       worktree: ici.worktree,
+      herdr_socket: ici.herdr_socket,
       sujet: option(args, '--sujet'),
       invites,
     })

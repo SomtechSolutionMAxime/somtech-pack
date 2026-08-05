@@ -6,6 +6,13 @@
 import { Veilleur, journaliser } from './veilleur.js';
 
 const veilleur = await Veilleur.demarrer().catch((err) => {
+  if (err.code === 'DEJA_VIVANT') {
+    // Ce n'est pas un échec : le service du poste et le démarrage paresseux peuvent viser
+    // la même place. Le second se retire en silence, et surtout SANS code d'erreur — sinon
+    // le gestionnaire de services le relancerait en boucle en croyant qu'il a planté.
+    journaliser('un veilleur tourne déjà — ce démarrage se retire');
+    process.exit(0);
+  }
   journaliser(`DÉMARRAGE IMPOSSIBLE — ${err.name || 'Erreur'} : ${err.message}`);
   process.exit(1);
 });

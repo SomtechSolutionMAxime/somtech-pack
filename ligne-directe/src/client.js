@@ -17,14 +17,14 @@ const ICI = dirname(fileURLToPath(import.meta.url));
 const DELAI_REPONSE = 30_000;
 
 /** Un aller-retour sur le socket local. Ne démarre rien. */
-export function demander(requete, cheminSocket = CHEMIN_SOCKET) {
+export function demander(requete, cheminSocket = CHEMIN_SOCKET, { delai = DELAI_REPONSE } = {}) {
   return new Promise((resolve, reject) => {
     const flux = connect(cheminSocket);
     let tampon = '';
     const minuteur = setTimeout(() => {
       flux.destroy();
-      reject(new Error(`le veilleur n'a pas répondu en ${DELAI_REPONSE / 1000}s`));
-    }, DELAI_REPONSE);
+      reject(new Error(`le veilleur n'a pas répondu en ${delai / 1000}s`));
+    }, delai);
     flux.on('connect', () => flux.write(`${JSON.stringify(requete)}\n`));
     flux.on('data', (m) => {
       tampon += m.toString('utf8');

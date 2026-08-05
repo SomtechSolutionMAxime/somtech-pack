@@ -21,6 +21,7 @@ import { lireJetons } from './trousseau.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe } from './nommage.js';
+import { cadrerPourAgent } from './cadre.js';
 import {
   CHEMIN_SOCKET,
   CHEMIN_JOURNAL,
@@ -69,11 +70,46 @@ export class Veilleur {
     this.arrete = false;
   }
 
+  /**
+   * Y a-t-il DÉJÀ un veilleur au bout du socket ?
+   *
+   * Question vitale depuis qu'il y a deux façons de naître : le démarrage paresseux (un
+   * agent qui ouvre sa ligne) et le service du poste (au démarrage de la machine). Deux
+   * veilleurs, c'est deux connexions d'écoute — donc CHAQUE MESSAGE DU DIRIGEANT REMIS EN
+   * DOUBLE dans le pane de l'agent. Le second doit renoncer, pas s'installer par-dessus.
+   *
+   * On ne se fie pas à la présence du fichier : un socket résiduel d'un veilleur tué
+   * survit à son processus. Seule une réponse fait foi.
+   */
+  static async dejaVivant(cheminSocket = CHEMIN_SOCKET) {
+    if (!existsSync(cheminSocket)) return false;
+    try {
+      const { demander } = await import('./client.js');
+      // Sondage COURT : c'est un test de présence, pas un appel de travail. Avec le délai
+      // ordinaire, un socket muet ferait attendre trente secondes au démarrage du poste —
+      // pile au moment où l'on veut que la ligne reprenne vite.
+      const r = await demander({ geste: 'ping' }, cheminSocket, { delai: 2000 });
+      return r?.ok === true;
+    } catch {
+      return false; // socket orphelin : la place est libre
+    }
+  }
+
   static async demarrer(options = {}) {
-    const jetons = await lireJetons();
-    const identite = await slack.identite(jetons.robot);
-    const v = new Veilleur({ ...options, jetons, identite });
+    // La place D'ABORD, le reste ensuite. Lire le trousseau puis interroger Slack prend
+    // quelques centaines de millisecondes : assez pour qu'un second veilleur naisse en
+    // croyant la place libre. On prend donc le socket avant toute opération lente, et on
+    // le rend si la suite échoue.
+    const v = new Veilleur(options);
     await v.ecouterLocal();
+    try {
+      v.jetons = await lireJetons();
+      v.identite = await slack.identite(v.jetons.robot);
+    } catch (err) {
+      await v.arreter();
+      throw err;
+    }
+    const { identite } = v;
     v.connecterSlack();
     await v.reconcilier();
     journaliser(`veilleur démarré — espace ${identite.equipe}, ${lignesOuvertes(v.registre).length} ligne(s) ouverte(s)`);
@@ -87,16 +123,9 @@ export class Veilleur {
    * rien à joindre depuis le réseau — « n'accepte d'instructions que du poste » cesse
    * d'être une intention de design pour devenir une propriété vérifiable.
    */
-  ecouterLocal() {
+  ecouterLocal({ reprendrePlaceOrpheline = true } = {}) {
     return new Promise((resolve, reject) => {
       mkdirSync(dirname(this.cheminSocket), { recursive: true });
-      if (existsSync(this.cheminSocket)) {
-        try {
-          unlinkSync(this.cheminSocket);
-        } catch {
-          /* socket résiduel d'un veilleur mort */
-        }
-      }
       this.serveur = createServer((flux) => {
         let tampon = '';
         flux.on('data', async (morceau) => {
@@ -119,7 +148,34 @@ export class Veilleur {
         });
         flux.on('error', () => {});
       });
-      this.serveur.on('error', reject);
+      // C'EST ICI QUE SE JOUE L'UNICITÉ, et elle doit se jouer AVANT tout appel lent.
+      //
+      // Mesuré : deux veilleurs lancés à 200 ms d'écart (le service du poste et un
+      // démarrage paresseux) sondaient tous deux un socket encore absent, parce que le
+      // premier était occupé à lire le trousseau puis à interroger Slack. Résultat : deux
+      // connexions d'écoute, et CHAQUE MESSAGE DU DIRIGEANT REMIS EN DOUBLE.
+      //
+      // La création du socket, elle, est atomique : `EADDRINUSE` est un verrou fiable, là
+      // où un sondage préalable ne l'est pas.
+      this.serveur.on('error', async (err) => {
+        if (err.code !== 'EADDRINUSE') return reject(err);
+        if (!reprendrePlaceOrpheline) return reject(err);
+        // Place occupée : quelqu'un répond-il vraiment, ou est-ce un socket d'un veilleur
+        // mort ? Seule une réponse fait foi.
+        if (await Veilleur.dejaVivant(this.cheminSocket)) {
+          const occupe = new Error('Un veilleur tourne déjà sur ce poste — celui-ci se retire.');
+          occupe.code = 'DEJA_VIVANT';
+          return reject(occupe);
+        }
+        try {
+          unlinkSync(this.cheminSocket);
+        } catch {
+          /* disparu entre-temps : tant mieux */
+        }
+        // Une seule reprise : si la place se réoccupe dans l'intervalle, c'est qu'un vrai
+        // veilleur est né — on lui laisse.
+        this.ecouterLocal({ reprendrePlaceOrpheline: false }).then(resolve, reject);
+      });
       this.serveur.listen(this.cheminSocket, () => {
         try {
           chmodSync(this.cheminSocket, 0o600);
@@ -151,7 +207,7 @@ export class Veilleur {
 
   // ————————————————————————————————————————————————————————————————— les quatre gestes
 
-  async ouvrir({ chantier, pane, worktree, sujet, invites = [] }) {
+  async ouvrir({ chantier, pane, worktree, sujet, invites = [], herdr_socket: herdrSocket = null }) {
     if (!chantier) return { ok: false, erreur: 'chantier requis' };
     if (!pane) return { ok: false, erreur: 'pane requis' };
 
@@ -160,6 +216,7 @@ export class Veilleur {
       // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans le
       // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
       deja.pane = pane;
+      if (herdrSocket) deja.herdr_socket = herdrSocket;
       sauverRegistre(this.registre);
       return { ok: true, reprise: true, canal: deja.canal_nom, canal_id: deja.canal_id, visage: deja.visage };
     }
@@ -178,6 +235,7 @@ export class Veilleur {
       canal_nom: canal.nom,
       pane,
       worktree: worktree || null,
+      herdr_socket: herdrSocket,
       visage,
       ouverte_le: maintenant(),
       close_le: null,
@@ -305,7 +363,7 @@ export class Veilleur {
       return;
     }
 
-    if (!(await this.herdr.vivant(ligne.pane))) {
+    if (!(await this.herdr.vivant(ligne.pane, { socket: ligne.herdr_socket }))) {
       clore(this.registre, ligne.canal_id, maintenant());
       sauverRegistre(this.registre);
       await this.repondreEnPropre(ligne, `L'agent de ${ligne.chantier} n'est plus là — son pane ${ligne.pane} a disparu. Je referme la ligne ; ton message n'a été remis à personne.`);
@@ -314,7 +372,13 @@ export class Veilleur {
     }
 
     try {
-      await this.herdr.remettre(ligne.pane, texte);
+      // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
+      // dans son terminal, et le dirigeant conclut que rien n'est arrivé.
+      await this.herdr.remettre(
+        ligne.pane,
+        cadrerPourAgent({ chantier: ligne.chantier, texte, canal: ligne.canal_nom }),
+        { socket: ligne.herdr_socket }
+      );
       journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car.)`);
     } catch (err) {
       await this.repondreEnPropre(ligne, `Je n'ai pas pu remettre ton message à l'agent de ${ligne.chantier} : ${err.message}`);
