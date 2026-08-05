@@ -5,6 +5,11 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.7] - 2026-08-05
+
+### Corrigé
+- **Les messages d'erreur de la ligne directe sortaient noyés sous une trace de pile Node.** Le texte était juste — il disait quoi faire, avec la commande exacte — mais personne ne lit la troisième ligne d'une trace : le message était donc invisible. La commande affiche désormais l'explication seule et sort en échec. Premier fichier de tests sur `bin/`, qui n'en avait aucun : c'est une des zones sans couverture que la revue indépendante avait pointées.
+
 ## [1.28.6] - 2026-08-05
 
 ### Corrigé
