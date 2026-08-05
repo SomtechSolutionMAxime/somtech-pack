@@ -225,3 +225,38 @@ test("L'ORDRE DES GARDE-FOUS : place occupée l'emporte sur toute autre plainte"
     serveur.close();
   }
 });
+
+// —————————————————————————————————————————————————————————————————————————————————
+// Passer la main.
+//
+// Défaut trouvé en usage, et le plus sournois de la journée : le verrou d'unicité protège
+// des remises en double, mais il INTERDIT du même coup toute mise à jour. Le veilleur neuf
+// trouve la place occupée, se retire poliment — et la version fraîchement publiée reste
+// sans effet. Tout a l'air installé, rien ne l'est, et rien ne le signale.
+
+test('LE VEILLEUR SAIT CÉDER LA PLACE — sinon aucune mise à jour ne prend jamais effet', async () => {
+  const v = new Veilleur({ cheminSocket: join(racine, 'ceder.sock'), identite: { equipe: 'T' } });
+  await v.ecouterLocal();
+  try {
+    const r = await v.traiterGeste({ geste: 'ceder' });
+    assert.equal(r.ok, true);
+    assert.equal(r.cede, true, 'le geste doit exister et confirmer, sinon il faut tuer un processus à la main');
+  } finally {
+    await v.arreter().catch(() => {});
+  }
+});
+
+test('céder répond AVANT de se retirer — sinon l’appelant ne sait pas si ça a marché', async () => {
+  // Le retrait est différé : la réponse doit partir d'abord. Un veilleur qui se couperait
+  // la parole laisserait l'appelant sur une erreur de connexion, incapable de distinguer
+  // « il a cédé » de « il est mort ».
+  const v = new Veilleur({ cheminSocket: join(racine, 'ceder2.sock'), identite: { equipe: 'T' } });
+  await v.ecouterLocal();
+  try {
+    const { demander } = await import('../src/client.js');
+    const r = await demander({ geste: 'ceder' }, join(racine, 'ceder2.sock'), { delai: 2000 });
+    assert.equal(r.ok, true);
+  } finally {
+    await v.arreter().catch(() => {});
+  }
+});

@@ -67,6 +67,45 @@ const dodo = (ms) => new Promise((r) => setTimeout(r, ms));
  * exemple), il faut le DIRE, pas boucler en silence. L'erreur du veilleur mort-né est
  * dans son journal, dont on donne le chemin.
  */
+/**
+ * Fait passer la main : le veilleur en place se retire, un neuf prend sa suite.
+ *
+ * C'est le geste qui manquait. Le verrou d'unicité protège des remises en double, mais il
+ * interdisait du même coup toute mise à jour : le veilleur neuf trouvait la place occupée
+ * et se retirait, donc une version fraîchement publiée restait sans effet — sans que rien
+ * ne le signale. Il fallait chercher un identifiant de processus et le tuer à la main.
+ */
+export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
+  let ancien = false;
+  try {
+    const r = await demander({ geste: 'ceder' }, cheminSocket, { delai: 5000 });
+    ancien = Boolean(r?.ok);
+  } catch {
+    // Personne au bout du fil : rien à faire céder, on démarre simplement.
+  }
+  // Attendre que la place se libère vraiment avant de rappeler quelqu'un.
+  for (let essai = 0; essai < 40; essai += 1) {
+    await dodo(250);
+    if (!existsSync(cheminSocket)) break;
+    try {
+      await demander({ geste: 'ping' }, cheminSocket, { delai: 1000 });
+    } catch {
+      break; // le socket ne répond plus : la place est libre
+    }
+  }
+  reveillerVeilleur();
+  for (let essai = 0; essai < 40; essai += 1) {
+    await dodo(250);
+    try {
+      const r = await demander({ geste: 'ping' }, cheminSocket, { delai: 2000 });
+      if (r?.ok) return { ok: true, ancien_cede: ancien };
+    } catch {
+      /* pas encore prêt */
+    }
+  }
+  throw new Error(`Le veilleur n'a pas repris la main en 10s. Regarde pourquoi : tail -20 ${CHEMIN_JOURNAL}`);
+}
+
 export async function parler(requete, { reveiller = true, cheminSocket = CHEMIN_SOCKET } = {}) {
   try {
     if (!existsSync(cheminSocket)) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });

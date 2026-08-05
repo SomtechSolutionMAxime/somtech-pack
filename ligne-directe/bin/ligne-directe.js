@@ -11,7 +11,7 @@
 // Le chantier n'est demandé qu'à l'ouverture : ensuite, la commande retrouve la ligne
 // par le pane depuis lequel elle est invoquée. Un agent n'a donc rien à retenir.
 
-import { parler } from '../src/client.js';
+import { parler, passerLaMain } from '../src/client.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
@@ -28,6 +28,8 @@ function usage(code = 0) {
   renommer --titre "..." [--canal <id>]                    renomme le canal (Slack + registre)
   etat                                                     ce qui est ouvert
   service installer|retirer|etat                           le veilleur revient après un redémarrage
+  relever                                                  fait passer la main a un veilleur neuf
+                                                           (a lancer apres chaque mise a jour du pack)
   veilleur                                                 lance le veilleur au premier plan
 
 Le chantier est déduit du pane courant, sauf à l'ouverture.
@@ -75,7 +77,10 @@ function rendre(reponse) {
 const [geste, ...args] = process.argv.slice(2);
 if (!geste || geste === '--help' || geste === '-h') usage();
 
-if (geste === 'service') {
+if (geste === 'relever') {
+  const r = await passerLaMain();
+  process.stdout.write(`${JSON.stringify(r)}\n`);
+} else if (geste === 'service') {
   const { installerService, retirerService, etatService } = await import('../src/service.js');
   const quoi = args[0] || 'etat';
   if (quoi === 'installer') {

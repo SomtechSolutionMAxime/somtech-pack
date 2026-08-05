@@ -15,6 +15,8 @@ Le mécanisme est générique. Il ne t'appartient pas et tu n'as pas à le conna
 
 Tu tournes dans un pane herdr. Sinon, tu n'as pas de ligne à ouvrir — la commande n'aurait personne à qui remettre les réponses.
 
+Après une mise à jour du pack, lance **`ligne-directe relever`** : le veilleur en place cède la main à la version neuve. Sans ce geste, le verrou qui empêche deux veilleurs de coexister empêche aussi la relève — et la mise à jour reste sans effet.
+
 Si un geste échoue en disant qu'un jeton manque au trousseau, **n'essaie pas de le contourner** : c'est une installation à faire une fois par poste, par le dirigeant lui-même. Dis-le et continue ton travail sans ligne.
 
 ## Les quatre gestes
