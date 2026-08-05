@@ -202,3 +202,26 @@ test('une connexion EN COURS d’établissement est laissée tranquille', async 
 
   assert.equal(tentatives, 0, "sans quoi le chien de garde relancerait par-dessus chaque tentative en cours");
 });
+
+test("L'ORDRE DES GARDE-FOUS : place occupée l'emporte sur toute autre plainte", async () => {
+  // Trouvé par la CI. La vérification de version Node était passée en tête de `demarrer` :
+  // sur un Node ancien, un veilleur qui trouvait la place occupée se plaignait de sa
+  // version au lieu de se retirer proprement — et le gestionnaire de services, voyant une
+  // erreur, le relançait en boucle. Le verrou d'unicité prime sur tout le reste.
+  const chemin = join(racine, 'ordre.sock');
+  const serveur = await veilleurFactice(chemin);
+  const vraiWS = globalThis.WebSocket;
+  globalThis.WebSocket = undefined; // on se met dans la peau d'un Node antérieur à 22
+  try {
+    await assert.rejects(
+      () => Veilleur.demarrer({ cheminSocket: chemin }),
+      (err) => {
+        assert.equal(err.code, 'DEJA_VIVANT', `attendu DEJA_VIVANT, reçu : ${err.message}`);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.WebSocket = vraiWS;
+    serveur.close();
+  }
+});

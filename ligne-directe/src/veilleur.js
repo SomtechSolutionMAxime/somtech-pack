@@ -106,14 +106,6 @@ export class Veilleur {
   }
 
   static async demarrer(options = {}) {
-    // Le veilleur tient sa connexion d'écoute avec le WebSocket natif. Sans lui, rien ne
-    // fonctionne — autant le dire tout de suite et clairement, plutôt que de laisser une
-    // erreur de référence sortir au premier message.
-    if (typeof WebSocket === 'undefined') {
-      throw new Error(
-        `Node ${process.versions.node} ne fournit pas WebSocket — la ligne directe demande Node 22 ou plus récent.`
-      );
-    }
     // La place D'ABORD, le reste ensuite. Lire le trousseau puis interroger Slack prend
     // quelques centaines de millisecondes : assez pour qu'un second veilleur naisse en
     // croyant la place libre. On prend donc le socket avant toute opération lente, et on
@@ -121,6 +113,18 @@ export class Veilleur {
     const v = new Veilleur(options);
     await v.ecouterLocal();
     try {
+      // APRÈS la prise du socket, et l'ordre compte : un veilleur qui trouve la place déjà
+      // occupée doit se retirer en disant « un autre tourne », pas se plaindre de sa version
+      // de Node. Le verrou d'unicité prime sur tout le reste.
+      //
+      // Le veilleur tient sa connexion d'écoute avec le WebSocket natif. Sans lui rien ne
+      // fonctionne — autant le dire en une phrase plutôt que de laisser sortir une erreur
+      // de référence au premier message.
+      if (typeof WebSocket === 'undefined') {
+        throw new Error(
+          `Node ${process.versions.node} ne fournit pas WebSocket — la ligne directe demande Node 22 ou plus récent.`
+        );
+      }
       v.jetons = await lireJetons();
       v.identite = await slack.identite(v.jetons.robot);
     } catch (err) {

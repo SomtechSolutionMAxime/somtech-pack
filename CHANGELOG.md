@@ -5,6 +5,11 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.2] - 2026-08-05
+
+### Corrigé
+- **Sur un Node antérieur à la version 22, un veilleur qui trouvait la place déjà occupée se plaignait de sa version au lieu de se retirer.** La vérification de version passait avant le verrou d'unicité : le gestionnaire de services voyait une erreur là où il n'y avait rien d'anormal, et relançait en boucle. Le verrou prime désormais sur toute autre plainte.
+
 ## [1.28.1] - 2026-08-05
 
 ### Corrigé
