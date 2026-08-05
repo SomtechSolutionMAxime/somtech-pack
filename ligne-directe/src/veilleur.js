@@ -20,7 +20,7 @@ import { dirname } from 'node:path';
 import { lireJetons } from './trousseau.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
-import { nomDeCanal, visageDe } from './nommage.js';
+import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { cadrerPourAgent } from './cadre.js';
 import {
   CHEMIN_SOCKET,
@@ -235,7 +235,7 @@ export class Veilleur {
 
   // ————————————————————————————————————————————————————————————————— les quatre gestes
 
-  async ouvrir({ chantier, pane, worktree, sujet, invites = [], herdr_socket: herdrSocket = null }) {
+  async ouvrir({ chantier, pane, worktree, sujet, titre, invites = [], herdr_socket: herdrSocket = null }) {
     if (!chantier) return { ok: false, erreur: 'chantier requis' };
     if (!pane) return { ok: false, erreur: 'pane requis' };
 
@@ -251,11 +251,14 @@ export class Veilleur {
     }
 
     const pris = nomsPris(this.registre);
-    const nom = nomDeCanal(chantier, (n) => pris.has(n));
+    // Le NOM vient du titre ; le CODE, lui, part dans le sujet du canal — il reste donc
+    // lisible d'un coup d'œil sans encombrer le nom.
+    const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));
     const visage = visageDe(chantier);
 
     const canal = await this.slack.creerCanal(this.jetons.robot, nom);
-    if (sujet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujet);
+    const sujetComplet = [chantier, sujet].filter(Boolean).join(' — ');
+    if (sujetComplet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetComplet);
     if (invites.length) await this.slack.inviter(this.jetons.robot, canal.id, invites);
 
     const ligne = inscrireLigne(this.registre, {

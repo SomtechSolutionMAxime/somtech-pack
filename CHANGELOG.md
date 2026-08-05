@@ -5,6 +5,11 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.3] - 2026-08-05
+
+### Modifié
+- **Le canal d'une ligne directe porte désormais le titre du chantier, plus son code.** `#d-20260805-0004` ne disait rien à personne ; `#refonte-du-tableau-de-bord` se lit. Le code ne disparaît pas — il part dans le sujet du canal, où il reste visible d'un coup d'œil. Les préfixes de catégorie (`[FEAT]`, `[FIX]`…) sont retirés du nom : utiles dans un registre de tickets, muets sur un canal. Sans titre fourni, le canal porte le code comme avant : un nom moche vaut mieux qu'une ligne qui refuse de s'ouvrir.
+
 ## [1.28.2] - 2026-08-05
 
 ### Corrigé
