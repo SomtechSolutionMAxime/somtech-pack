@@ -35,6 +35,13 @@ import {
   clore,
 } from './registre.js';
 
+// États d'une connexion, tels que les définit la norme WebSocket. On ne lit PAS
+// `WebSocket.OPEN` : le global n'existe qu'à partir de Node 22, et une simple lecture de
+// constante y suffirait à faire tomber le veilleur sur un poste plus ancien — avec une
+// erreur qui ne parle de rien. Les valeurs, elles, sont figées par la norme.
+const CONNEXION_EN_COURS = 0;
+const CONNEXION_OUVERTE = 1;
+
 const RECONNEXION_MIN = 1_000;
 const RECONNEXION_MAX = 60_000;
 /** Cadence du chien de garde : à quelle fréquence on vérifie qu'on écoute VRAIMENT. */
@@ -99,6 +106,14 @@ export class Veilleur {
   }
 
   static async demarrer(options = {}) {
+    // Le veilleur tient sa connexion d'écoute avec le WebSocket natif. Sans lui, rien ne
+    // fonctionne — autant le dire tout de suite et clairement, plutôt que de laisser une
+    // erreur de référence sortir au premier message.
+    if (typeof WebSocket === 'undefined') {
+      throw new Error(
+        `Node ${process.versions.node} ne fournit pas WebSocket — la ligne directe demande Node 22 ou plus récent.`
+      );
+    }
     // La place D'ABORD, le reste ensuite. Lire le trousseau puis interroger Slack prend
     // quelques centaines de millisecondes : assez pour qu'un second veilleur naisse en
     // croyant la place libre. On prend donc le socket avant toute opération lente, et on
@@ -302,7 +317,7 @@ export class Veilleur {
       worktree: l.worktree,
       depuis: l.ouverte_le,
     }));
-    return { ok: true, espace: this.identite.equipe, connecte: this.ws?.readyState === WebSocket.OPEN, ouvertes };
+    return { ok: true, espace: this.identite.equipe, connecte: this.ws?.readyState === CONNEXION_OUVERTE, ouvertes };
   }
 
   // —————————————————————————————————————————————————————————————— écoute permanente
@@ -323,7 +338,7 @@ export class Veilleur {
     this.chienDeGarde = setInterval(() => {
       if (this.arrete) return;
       const etat = this.ws?.readyState;
-      if (etat === WebSocket.OPEN || etat === WebSocket.CONNECTING) return;
+      if (etat === CONNEXION_OUVERTE || etat === CONNEXION_EN_COURS) return;
       journaliser(`chien de garde : plus d'écoute (état ${etat ?? 'aucun'}) — on rétablit`);
       this.attente = RECONNEXION_MIN;
       this.connecterSlack();
@@ -336,7 +351,7 @@ export class Veilleur {
     if (this.arrete) return;
     // Ne jamais empiler deux connexions : le chien de garde et l'événement de fermeture
     // peuvent viser en même temps, et deux écoutes remettraient chaque message en double.
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+    if (this.ws && (this.ws.readyState === CONNEXION_OUVERTE || this.ws.readyState === CONNEXION_EN_COURS)) return;
     if (this.connexionEnCours) return;
     this.connexionEnCours = true;
     this.slack

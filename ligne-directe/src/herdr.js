@@ -126,7 +126,13 @@ export async function agents({ socket } = {}) {
   // plus récente ferait conclure « cet agent est mort » pour tout agent vivant dans une
   // autre session — et refermerait sa ligne alors qu'il travaille.
   const vus = new Map();
-  for (const s of socketsHerdr()) {
+  // Aucune session trouvée sur le disque ne veut pas dire « pas de herdr » : la découverte
+  // suppose une arborescence qui peut ne pas exister (autre système, autre version). On
+  // tente alors l'appel sans socket imposé et on laisse herdr chercher lui-même — sans
+  // cela, le veilleur cessait purement et simplement de consulter herdr, donc concluait
+  // que tous les agents étaient morts.
+  const sessions = socketsHerdr();
+  for (const s of sessions.length ? sessions : [undefined]) {
     try {
       const reponse = await herdrStrict(['agent', 'list'], s);
       for (const a of (reponse.result?.agents || []).filter((x) => x.agent)) {

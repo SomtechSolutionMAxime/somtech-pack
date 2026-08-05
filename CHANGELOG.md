@@ -5,6 +5,12 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.1] - 2026-08-05
+
+### Corrigé
+- **La ligne directe ne démarrait pas sur un Node antérieur à la version 22**, et le disait par une erreur qui ne parlait de rien. Le veilleur lisait des constantes du `WebSocket` global, absent avant Node 22 : la lecture seule suffisait à le faire tomber. Il vérifie désormais la version au démarrage et le dit en une phrase.
+- **Sans session herdr trouvée sur le disque, le veilleur cessait d'interroger herdr** — et concluait donc que tous les agents étaient morts, refermant toutes les lignes. La découverte suppose une arborescence qui peut ne pas exister ; on interroge maintenant herdr quand même, en le laissant chercher lui-même.
+
 ## [1.28.0] - 2026-08-05
 
 ### Ajouté

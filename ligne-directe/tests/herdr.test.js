@@ -75,3 +75,23 @@ test('un pane vivant est reconnu, un pane fermé ne l’est pas', async () => {
   // Un pane sans agent (un shell) n'est pas un destinataire valable.
   assert.equal(await vivant('w2:p2'), false);
 });
+
+test("SANS session herdr sur le disque, on interroge quand meme herdr", async () => {
+  // Trouvé par la CI, pas en local : la découverte des sessions suppose une arborescence
+  // qui peut ne pas exister (autre système, autre version, machine d'intégration). Le
+  // veilleur cessait alors de consulter herdr — donc concluait que TOUS les agents étaient
+  // morts et refermait toutes les lignes.
+  const { agents } = await import('../src/herdr.js');
+  const memoire = process.env.HERDR_SOCKET_PATH;
+  const memoireHome = process.env.HOME;
+  delete process.env.HERDR_SOCKET_PATH;
+  process.env.HOME = bac; // un dossier personnel vide : aucune session à découvrir
+  fauxHerdr('{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","pane_id":"w1:p1"}]}}');
+  try {
+    const liste = await agents();
+    assert.equal(liste.length, 1, 'herdr doit être interrogé même sans session découverte');
+  } finally {
+    if (memoire) process.env.HERDR_SOCKET_PATH = memoire;
+    process.env.HOME = memoireHome;
+  }
+});
