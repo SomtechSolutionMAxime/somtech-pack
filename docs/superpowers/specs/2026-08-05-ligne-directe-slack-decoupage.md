@@ -2,8 +2,33 @@
 
 - **Demande** : D-20260805-0004 · **Application** : Somtech Pack
 - **BRD** : grain `application`, résolu depuis `application`, version **0.5.0** (présent : True)
-- **Verdict** : `pret_a_creer` = **False** — aucune création ServiceDesk tant que les bloquants ne sont pas levés (gate dur `/plan-servicedesk` Phase D)
-- **Nature** : proposition en lecture seule produite par le workflow `analyse-decoupage-demande`. Rien n'a été créé.
+- **Verdict du workflow** : `pret_a_creer` = **False** — 3 bloquants.
+- **Nature** : proposition en lecture seule produite par le workflow `analyse-decoupage-demande`.
+
+## ⚠️ Ce document est la proposition BRUTE — lire d'abord ce qui a été retenu
+
+Les trois bloquants ont été corrigés **à la main** par la session, sur décision explicite de Maxime de ne pas repayer une re-validation complète du workflow (~25 min, ~800k jetons) pour des corrections connues et mécaniques. Le dépassement du gate est donc **assumé et tracé ici**, conformément à l'exception prévue par `/plan-servicedesk` Phase D.
+
+**Corrections appliquées à la structure ci-dessous :**
+
+| Bloquant | Correction retenue |
+|---|---|
+| Arbitrage Loi 25 orphelin | Tranché par Maxime le 2026-08-05 : **aucune restriction**, risque assumé et consigné (décision D1 sur la demande). Le point ne bloque plus. |
+| E0 = 9 stories de gouvernance sans valeur ni test | Fusionnées en **une seule** story d'amendement du BRD, exécutée en phase d'analyse. |
+| Ordre E0-avant-E1 inexécutable | **Inversé** : les vérifications préalables d'abord, l'amendement du référentiel ensuite, avec les faits mesurés. |
+| (majeur) Axe « dépôts distincts » | Réécrit sur la **copie de travail (worktree)** — `claude-swt` crée N worktrees d'un même dépôt, c'est le mode nominal. |
+
+**Structure réellement créée dans le ServiceDesk** (7 epics rattachés à D-20260805-0004) :
+
+1. `E-20260805-0008` — Vérifications préalables (4 stories créées)
+2. `E-20260805-0009` — Amendement du BRD à la v0.6.0 (1 story créée)
+3. `E-20260805-0010` — Le sens sortant
+4. `E-20260805-0011` — Le sens entrant
+5. `E-20260805-0012` — La ligne ne perd aucun message
+6. `E-20260805-0013` — Distribution et filets
+7. `E-20260805-0014` — La compétence et son premier usage
+
+**Les epics 3 à 7 n'ont volontairement pas encore de stories.** Leurs critères d'acceptation porteraient sur des faits que les vérifications préalables doivent d'abord établir (forme d'appel réelle de l'injection dans un pane, ce que Slack permet, habitat d'un processus permanent). Les écrire aujourd'hui produirait des tests décoratifs — exactement ce que la critique reproche. Chaque epic est décomposé par l'agent qui l'exécute, au moment de l'exécuter, comme le veut `/orchestrer-chantier`. Le matériau brut de ces stories est conservé plus bas dans ce document.
 
 ## Verdict de la critique adversariale
 
