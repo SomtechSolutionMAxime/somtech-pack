@@ -53,10 +53,15 @@ export function journaliser(message, chemin = CHEMIN_JOURNAL) {
 }
 
 export class Veilleur {
-  constructor({ jetons, identite, cheminSocket = CHEMIN_SOCKET } = {}) {
+  constructor({ jetons, identite, cheminSocket = CHEMIN_SOCKET, slack: slackInjecte, herdr: herdrInjecte } = {}) {
     this.jetons = jetons;
     this.identite = identite;
     this.cheminSocket = cheminSocket;
+    // Slack et herdr sont injectables : les cas de rupture (ligne close, agent disparu,
+    // veilleur qui reprend du service) ne se prouvent pas autrement — on ne va pas tuer un
+    // vrai agent et attendre qu'un dirigeant écrive pour vérifier qu'on lui répond.
+    this.slack = slackInjecte || slack;
+    this.herdr = herdrInjecte || herdr;
     this.registre = chargerRegistre();
     this.ws = null;
     this.serveur = null;
@@ -163,9 +168,9 @@ export class Veilleur {
     const nom = nomDeCanal(chantier, (n) => pris.has(n));
     const visage = visageDe(chantier);
 
-    const canal = await slack.creerCanal(this.jetons.robot, nom);
-    if (sujet) await slack.definirSujet(this.jetons.robot, canal.id, sujet);
-    if (invites.length) await slack.inviter(this.jetons.robot, canal.id, invites);
+    const canal = await this.slack.creerCanal(this.jetons.robot, nom);
+    if (sujet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujet);
+    if (invites.length) await this.slack.inviter(this.jetons.robot, canal.id, invites);
 
     const ligne = inscrireLigne(this.registre, {
       chantier,
@@ -187,7 +192,7 @@ export class Veilleur {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier} » — ouvre-la d'abord` };
     if (ligne.close_le) return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est close depuis ${ligne.close_le}` };
-    const ts = await slack.poster(this.jetons.robot, {
+    const ts = await this.slack.poster(this.jetons.robot, {
       canal: ligne.canal_id,
       texte,
       nom: ligne.chantier,
@@ -200,7 +205,7 @@ export class Veilleur {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier} »` };
     if (bilan) {
-      await slack.poster(this.jetons.robot, {
+      await this.slack.poster(this.jetons.robot, {
         canal: ligne.canal_id,
         texte: bilan,
         nom: ligne.chantier,
@@ -210,7 +215,7 @@ export class Veilleur {
     // ORDRE IMPOSÉ PAR SLACK, mesuré : un canal archivé est en LECTURE SEULE. Le bilan
     // doit donc partir AVANT l'archivage — l'inverse perd le message sans rien dire.
     let archive = false;
-    if (archiver) archive = await slack.archiverCanal(this.jetons.robot, ligne.canal_id);
+    if (archiver) archive = await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
     clore(this.registre, ligne.canal_id, maintenant());
     sauverRegistre(this.registre);
     journaliser(`ligne close — ${ligne.chantier} (#${ligne.canal_nom}) archive=${archive}`);
@@ -232,7 +237,7 @@ export class Veilleur {
 
   connecterSlack() {
     if (this.arrete) return;
-    slack
+    this.slack
       .ouvrirEcoute(this.jetons.ecoute)
       .then((url) => {
         const ws = new WebSocket(url);
@@ -300,7 +305,7 @@ export class Veilleur {
       return;
     }
 
-    if (!(await herdr.vivant(ligne.pane))) {
+    if (!(await this.herdr.vivant(ligne.pane))) {
       clore(this.registre, ligne.canal_id, maintenant());
       sauverRegistre(this.registre);
       await this.repondreEnPropre(ligne, `L'agent de ${ligne.chantier} n'est plus là — son pane ${ligne.pane} a disparu. Je referme la ligne ; ton message n'a été remis à personne.`);
@@ -309,7 +314,7 @@ export class Veilleur {
     }
 
     try {
-      await herdr.remettre(ligne.pane, texte);
+      await this.herdr.remettre(ligne.pane, texte);
       journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car.)`);
     } catch (err) {
       await this.repondreEnPropre(ligne, `Je n'ai pas pu remettre ton message à l'agent de ${ligne.chantier} : ${err.message}`);
@@ -320,7 +325,7 @@ export class Veilleur {
   /** Le veilleur parle en son nom propre — jamais sous l'identité d'un agent qui n'est plus là. */
   async repondreEnPropre(ligne, texte) {
     try {
-      await slack.poster(this.jetons.robot, { canal: ligne.canal_id, texte, nom: 'Ligne directe', emoji: '📻' });
+      await this.slack.poster(this.jetons.robot, { canal: ligne.canal_id, texte, nom: 'Ligne directe', emoji: '📻' });
     } catch (err) {
       journaliser(`impossible de répondre dans #${ligne.canal_nom} : ${err.message}`);
     }
@@ -334,7 +339,7 @@ export class Veilleur {
   async reconcilier() {
     let vivants;
     try {
-      vivants = new Set((await herdr.agents()).map((a) => a.pane_id));
+      vivants = new Set((await this.herdr.agents()).map((a) => a.pane_id));
     } catch (err) {
       journaliser(`réconciliation impossible (herdr injoignable) : ${err.message}`);
       return;
@@ -345,7 +350,7 @@ export class Veilleur {
         clore(this.registre, ligne.canal_id, maintenant());
         fermees += 1;
         await this.repondreEnPropre(ligne, `Je reprends du service et l'agent de ${ligne.chantier} n'est plus là. Je referme cette ligne.`);
-        await slack.archiverCanal(this.jetons.robot, ligne.canal_id);
+        await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
       }
     }
     if (fermees) {

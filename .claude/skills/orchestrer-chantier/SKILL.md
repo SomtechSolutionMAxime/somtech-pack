@@ -55,6 +55,21 @@ herdr agent rename <ton-pane> d-20260727-0004       # ou p-20260706-0004, ou j-2
 
 **herdr impose les minuscules.** Un nom doit commencer par une lettre minuscule et ne contenir que minuscules, chiffres, `-` ou `_` (1 à 32 caractères) ; sinon `invalid_agent_name`. La convention Somtech écrit `D-20260727-0004`, le nom réellement porté est `d-20260727-0004`. **Toute comparaison de noms d'agents est donc insensible à la casse** — partout où tu en fais, y compris pour retrouver un pair dans `herdr agent list`.
 
+### 1-bis. Ouvrir ta ligne avec le dirigeant
+
+```bash
+node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" ouvrir D-20260727-0004 \
+  --sujet "<le chantier en deux mots>" --inviter maxime.leboeuf@somtech.ca
+```
+
+Un chantier dure plus longtemps que le moment où quelqu'un regarde ton pane. Sans ligne, l'arbitrage que tu attends te bloque jusqu'à ce que quelqu'un passe — et c'est ce qui fait qu'un chantier dort une nuit pour une question de trente secondes.
+
+**Tu l'ouvres en naissant, tu la refermes en clôturant** (§8). Entre les deux, tu y pousses ce qui appelle une décision et tes jalons — jamais ton journal de bord : un canal qu'on cesse de lire annule tout le bénéfice de la ligne. La compétence `/ligne-directe` dit quoi y mettre, et surtout quoi n'y mettre pas.
+
+Un arbitrage rendu dans la conversation **n'est acquis qu'une fois réinscrit au ServiceDesk** (§5). Le fil de discussion ne fait pas foi.
+
+Si la ligne ne peut pas s'ouvrir — jeton absent du poste, par exemple —, dis-le et continue sans elle : ce n'est pas un préalable au chantier.
+
 ### 2. Cadrer — le BRD et l'ontologie d'abord
 
 **Tu es le garant du BRD et de l'ontologie sur ce chantier.** Ce ne sont pas des formalités de fin de course : ce sont les deux sources qui disent *pourquoi* on fait le travail et *de quoi* on parle. Un découpage écrit sans elles produit des stories qui ne se rattachent à rien et du code qui invente son vocabulaire.
@@ -309,6 +324,15 @@ Une **Demande** passe `delivered` toute seule quand tous ses enfants sont fermé
 - **les demandes d'origine**. Un jalon est transverse : ses tickets viennent de plusieurs demandes, et fermer le jalon n'en ferme aucune. Reprends-les une à une. Celles dont *tous* les enfants sont fermés se seront mises à jour d'elles-mêmes ; celles dont il reste une story ailleurs sont encore ouvertes à bon droit — et c'est une information, pas un oubli : elle te dit que le besoin du client n'est pas entièrement couvert par ce que tu viens de livrer.
 
 Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne.
+
+**Referme ta ligne, avec son bilan** — c'est le dernier geste :
+
+```bash
+node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
+  --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au dirigeant>"
+```
+
+Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne sans la refermer laisse un canal ouvert sur une question sans réponse — et le jour où le dirigeant y écrit, personne n'est au bout. (Le veilleur finit par le détecter et referme d'office, mais il le fait à ta place et le dit : autant le faire toi.)
 
 ## Anti-patterns
 
