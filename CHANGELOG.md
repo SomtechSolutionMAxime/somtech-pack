@@ -5,6 +5,11 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.5] - 2026-08-05
+
+### Corrigé
+- **Aucune mise à jour de la ligne directe ne prenait effet tant que le veilleur ne mourait pas de lui-même.** Le verrou d'unicité — qui protège des messages remis en double — interdisait du même coup toute relève : le veilleur neuf trouvait la place occupée, se retirait poliment, et la version fraîchement publiée restait sans effet. Tout avait l'air installé, rien ne l'était, et rien ne le signalait ; il fallait chercher un identifiant de processus et le tuer à la main. Un geste manquait, il existe : **`ligne-directe relever`** fait céder le veilleur en place, attend que le socket se libère, et rappelle un neuf. À lancer après chaque mise à jour du pack.
+
 ## [1.28.4] - 2026-08-05
 
 ### Ajouté

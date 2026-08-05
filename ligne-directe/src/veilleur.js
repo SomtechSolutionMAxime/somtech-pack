@@ -223,6 +223,15 @@ export class Veilleur {
         return this.renommer(requete);
       case 'etat':
         return this.etat();
+      case 'ceder':
+        // Le veilleur en place se retire pour laisser la place à une version plus récente.
+        //
+        // Sans ce geste, le verrou d'unicité — qui protège des remises en double — INTERDIT
+        // toute mise à jour : le veilleur neuf trouve la place occupée et se retire
+        // poliment, donc les correctifs publiés n'arrivent jamais. Tout a l'air installé,
+        // et rien ne l'est. Il faut une porte de sortie volontaire.
+        setTimeout(() => this.arreter().then(() => process.exit(0)), 50).unref?.();
+        return { ok: true, cede: true };
       case 'ping':
         // BLOQUANT relevé en revue : ce ping répondait `ok:false` tant que l'identité
         // n'était pas chargée — plusieurs centaines de millisecondes, le temps de lire le
