@@ -146,3 +146,59 @@ test('un socket ORPHELIN est repris — sinon le poste reste sans veilleur jusqu
     await neuf.arreter();
   }
 });
+
+// —————————————————————————————————————————————————————————————————————————————————
+// Le chien de garde de l'écoute.
+//
+// Défaut RÉEL, constaté en usage : la connexion d'écoute est tombée et n'est jamais
+// revenue. Le veilleur tournait, répondait aux commandes locales, et n'écoutait plus rien —
+// le dirigeant a écrit, rien n'est arrivé, et rien ne le lui a dit. Sur un portable, la
+// connexion meurt à moitié (veille, changement de réseau) sans qu'aucun événement de
+// fermeture ne soit émis : attendre qu'on nous prévienne ne suffit pas.
+
+test('LE CHIEN DE GARDE RÉTABLIT une écoute morte sans événement de fermeture', async () => {
+  const v = new Veilleur({ cheminSocket: join(racine, 'garde.sock'), identite: { equipe: 'T' } });
+  let tentatives = 0;
+  v.connecterSlack = () => {
+    tentatives += 1;
+  };
+  // Une connexion morte à MOITIÉ : l'objet existe, mais il n'écoute plus. Aucun événement
+  // n'a été émis — c'est précisément le cas que l'écoute d'un `close` ne couvre pas.
+  v.ws = { readyState: WebSocket.CLOSED };
+
+  const minuteur = v.surveiller(20);
+  await new Promise((r) => setTimeout(r, 70));
+  clearInterval(minuteur);
+
+  assert.ok(tentatives >= 2, `le chien de garde doit rétablir (${tentatives} tentative(s))`);
+});
+
+test('le chien de garde NE RECONNECTE PAS quand l’écoute est vivante', async () => {
+  const v = new Veilleur({ cheminSocket: join(racine, 'garde2.sock'), identite: { equipe: 'T' } });
+  let tentatives = 0;
+  v.connecterSlack = () => {
+    tentatives += 1;
+  };
+  v.ws = { readyState: WebSocket.OPEN };
+
+  const minuteur = v.surveiller(20);
+  await new Promise((r) => setTimeout(r, 70));
+  clearInterval(minuteur);
+
+  assert.equal(tentatives, 0, 'reconnecter une écoute vivante empilerait deux connexions');
+});
+
+test('une connexion EN COURS d’établissement est laissée tranquille', async () => {
+  const v = new Veilleur({ cheminSocket: join(racine, 'garde3.sock'), identite: { equipe: 'T' } });
+  let tentatives = 0;
+  v.connecterSlack = () => {
+    tentatives += 1;
+  };
+  v.ws = { readyState: WebSocket.CONNECTING };
+
+  const minuteur = v.surveiller(20);
+  await new Promise((r) => setTimeout(r, 70));
+  clearInterval(minuteur);
+
+  assert.equal(tentatives, 0, "sans quoi le chien de garde relancerait par-dessus chaque tentative en cours");
+});

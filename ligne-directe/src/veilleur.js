@@ -37,6 +37,8 @@ import {
 
 const RECONNEXION_MIN = 1_000;
 const RECONNEXION_MAX = 60_000;
+/** Cadence du chien de garde : à quelle fréquence on vérifie qu'on écoute VRAIMENT. */
+const SURVEILLANCE = 30_000;
 
 function maintenant() {
   return new Date().toISOString();
@@ -66,6 +68,7 @@ export class Veilleur {
     this.registre = chargerRegistre();
     this.ws = null;
     this.serveur = null;
+    this.chienDeGarde = null;
     this.attente = RECONNEXION_MIN;
     this.arrete = false;
   }
@@ -111,6 +114,7 @@ export class Veilleur {
     }
     const { identite } = v;
     v.connecterSlack();
+    v.surveiller();
     await v.reconcilier();
     journaliser(`veilleur démarré — espace ${identite.equipe}, ${lignesOuvertes(v.registre).length} ligne(s) ouverte(s)`);
     return v;
@@ -293,8 +297,38 @@ export class Veilleur {
 
   // —————————————————————————————————————————————————————————————— écoute permanente
 
+  /**
+   * Le chien de garde — et il n'est pas une ceinture de sécurité, il est la ceinture.
+   *
+   * MESURÉ : la connexion d'écoute est tombée et n'est JAMAIS revenue. Se reposer sur
+   * l'événement de fermeture suppose qu'il arrive toujours ; sur un portable, il n'arrive
+   * pas — le Mac se met en veille, le réseau change, et la connexion meurt à moitié : plus
+   * rien ne transite, aucun événement n'est émis, et le veilleur se croit à l'écoute.
+   *
+   * Personne ne s'en aperçoit : le dirigeant écrit, rien ne se passe, rien ne le dit. La
+   * seule défense est de VÉRIFIER périodiquement plutôt que d'attendre qu'on nous prévienne.
+   */
+  surveiller(cadence = SURVEILLANCE) {
+    clearInterval(this.chienDeGarde);
+    this.chienDeGarde = setInterval(() => {
+      if (this.arrete) return;
+      const etat = this.ws?.readyState;
+      if (etat === WebSocket.OPEN || etat === WebSocket.CONNECTING) return;
+      journaliser(`chien de garde : plus d'écoute (état ${etat ?? 'aucun'}) — on rétablit`);
+      this.attente = RECONNEXION_MIN;
+      this.connecterSlack();
+    }, cadence);
+    this.chienDeGarde.unref?.();
+    return this.chienDeGarde;
+  }
+
   connecterSlack() {
     if (this.arrete) return;
+    // Ne jamais empiler deux connexions : le chien de garde et l'événement de fermeture
+    // peuvent viser en même temps, et deux écoutes remettraient chaque message en double.
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+    if (this.connexionEnCours) return;
+    this.connexionEnCours = true;
     this.slack
       .ouvrirEcoute(this.jetons.ecoute)
       .then((url) => {
@@ -302,15 +336,22 @@ export class Veilleur {
         this.ws = ws;
         ws.addEventListener('open', () => {
           this.attente = RECONNEXION_MIN;
+          this.connexionEnCours = false;
           journaliser('écoute permanente établie');
         });
         ws.addEventListener('message', (evt) => this.surMessage(evt, ws));
-        ws.addEventListener('close', () => this.reconnecter('connexion fermée'));
+        ws.addEventListener('close', () => {
+          this.connexionEnCours = false;
+          this.reconnecter('connexion fermée');
+        });
         ws.addEventListener('error', () => {
           /* le `close` qui suit déclenche la reconnexion */
         });
       })
-      .catch((err) => this.reconnecter(`ouverture refusée : ${err.message}`));
+      .catch((err) => {
+        this.connexionEnCours = false;
+        this.reconnecter(`ouverture refusée : ${err.message}`);
+      });
   }
 
   reconnecter(raison) {
@@ -425,6 +466,7 @@ export class Veilleur {
 
   async arreter() {
     this.arrete = true;
+    clearInterval(this.chienDeGarde);
     try {
       this.ws?.close();
     } catch {
