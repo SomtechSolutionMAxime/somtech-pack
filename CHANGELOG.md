@@ -5,6 +5,12 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.6] - 2026-08-05
+
+### Corrigé
+- **Un `process.exit` enfoui dans le veilleur tuait le lanceur de tests.** Le geste de cession mettait fin au processus lui-même : dans la suite de tests, il coupait le runner en plein vol. Seize tests étaient rapportés, le dix-septième n'était jamais exécuté, et le code de sortie restait à zéro — donc tout paraissait vert. Une bibliothèque ne met pas fin au processus de son appelant : c'est désormais le point d'entrée qui décide comment mourir.
+- **`ligne-directe relever` se déclarait réussi même quand la relève n'avait pas eu lieu.** Un veilleur d'une version antérieure ne connaît pas le geste de cession : il refuse et garde la place, le neuf se retire — et la commande rendait « ok » quand même. Un faux succès sur le geste précisément écrit pour réparer les faux succès. Elle vérifie désormais que la place se libère vraiment, et échoue en disant quoi faire quand ce n'est pas le cas.
+
 ## [1.28.5] - 2026-08-05
 
 ### Corrigé

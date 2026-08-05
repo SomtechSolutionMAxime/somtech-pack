@@ -260,3 +260,33 @@ test('céder répond AVANT de se retirer — sinon l’appelant ne sait pas si �
     await v.arreter().catch(() => {});
   }
 });
+
+test('UNE RELÈVE QUI N’A PAS EU LIEU ÉCHOUE — elle ne se déclare pas réussie', async () => {
+  // Trouvé sur mon propre correctif, une heure après l'avoir écrit : un veilleur d'une
+  // version antérieure ne connaît pas le geste, il refuse et garde la place — et la relève
+  // rendait « ok » quand même. Un faux succès sur le geste censé réparer les faux succès.
+  const chemin = join(racine, 'tetu.sock');
+  const { createServer: creer } = await import('node:net');
+  // Un veilleur têtu : il répond à tout, il ne cède jamais, il ne meurt pas.
+  const tetu = await new Promise((resolve) => {
+    const srv = creer((flux) => {
+      flux.on('data', (m) => {
+        const geste = JSON.parse(m.toString().trim()).geste;
+        flux.write(`${JSON.stringify(geste === 'ceder' ? { ok: false, erreur: 'geste inconnu : ceder' } : { ok: true })}\n`);
+      });
+    });
+    srv.listen(chemin, () => resolve(srv));
+  });
+
+  const { passerLaMain } = await import('../src/client.js');
+  try {
+    await assert.rejects(() => passerLaMain({ cheminSocket: chemin }), (err) => {
+      assert.match(err.message, /n'a pas cédé/);
+      // Et l'erreur doit dire QUOI FAIRE, pas seulement que ça a raté.
+      assert.match(err.message, /pkill/);
+      return true;
+    });
+  } finally {
+    tetu.close();
+  }
+});

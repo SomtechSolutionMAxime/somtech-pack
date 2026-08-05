@@ -5,7 +5,7 @@
 
 import { Veilleur, journaliser } from './veilleur.js';
 
-const veilleur = await Veilleur.demarrer().catch((err) => {
+const veilleur = await Veilleur.demarrer({ surArret: () => process.exit(0) }).catch((err) => {
   if (err.code === 'DEJA_VIVANT') {
     // Ce n'est pas un échec : le service du poste et le démarrage paresseux peuvent viser
     // la même place. Le second se retire en silence, et surtout SANS code d'erreur — sinon

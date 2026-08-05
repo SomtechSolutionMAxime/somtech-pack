@@ -63,7 +63,7 @@ export function journaliser(message, chemin = CHEMIN_JOURNAL) {
 }
 
 export class Veilleur {
-  constructor({ jetons, identite, cheminSocket = CHEMIN_SOCKET, slack: slackInjecte, herdr: herdrInjecte } = {}) {
+  constructor({ jetons, identite, cheminSocket = CHEMIN_SOCKET, slack: slackInjecte, herdr: herdrInjecte, surArret } = {}) {
     this.jetons = jetons;
     this.identite = identite;
     this.cheminSocket = cheminSocket;
@@ -76,6 +76,9 @@ export class Veilleur {
     this.ws = null;
     this.serveur = null;
     this.chienDeGarde = null;
+    // Ce que le veilleur fait une fois arrêté — fourni par le point d'entrée, jamais
+    // décidé ici : une bibliothèque ne met pas fin au processus de son appelant.
+    this.surArret = surArret || null;
     this.attente = RECONNEXION_MIN;
     this.arrete = false;
   }
@@ -230,7 +233,13 @@ export class Veilleur {
         // toute mise à jour : le veilleur neuf trouve la place occupée et se retire
         // poliment, donc les correctifs publiés n'arrivent jamais. Tout a l'air installé,
         // et rien ne l'est. Il faut une porte de sortie volontaire.
-        setTimeout(() => this.arreter().then(() => process.exit(0)), 50).unref?.();
+        // On NE SORT PAS du processus ici. C'est au point d'entrée de décider comment
+        // mourir — un `process.exit` enfoui dans une méthode tue aussi le lanceur de tests,
+        // et fait passer pour verts des tests qui n'ont jamais été exécutés (vécu : seize
+        // tests rapportés, le dix-septième jamais lancé, code de sortie 0).
+        setTimeout(() => {
+          this.arreter().then(() => this.surArret?.());
+        }, 50).unref?.();
         return { ok: true, cede: true };
       case 'ping':
         // BLOQUANT relevé en revue : ce ping répondait `ok:false` tant que l'identité
