@@ -59,13 +59,18 @@ export async function cmdSetup(flags) {
   const doSkills = !flags.noSkills;
   const doWorkflows = !flags.noWorkflows;
   const doCommands = !flags.noCommands;
-  const doCanvas = !flags.noCanvas;
+  // Chaque outil de poste a SON drapeau : un seul drapeau pour toute la famille faisait
+  // disparaître des outils que l'utilisateur ne visait pas.
+  const exclurePoste = [];
+  if (flags.noCanvas) exclurePoste.push('canvas');
+  if (flags.noLigneDirecte) exclurePoste.push('ligne-directe');
+  const doPoste = !(flags.noCanvas && flags.noLigneDirecte);
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
   const doGraphify = !flags.noGraphify;
 
-  if (!doSkills && !doWorkflows && !doCommands && !doCanvas && !doSwt && !doVersionHook && !doGraphify) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-claude-swt, --no-version-hook et --no-graphify).');
+  if (!doSkills && !doWorkflows && !doCommands && !doPoste && !doSwt && !doVersionHook && !doGraphify) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-claude-swt, --no-version-hook et --no-graphify).');
     return 0;
   }
 
@@ -73,7 +78,7 @@ export async function cmdSetup(flags) {
   if (doSkills) consentTargets.push(skillsDir);
   if (doWorkflows) consentTargets.push(workflowsDir);
   if (doCommands) consentTargets.push(commandsDir);
-  if (doCanvas && !consentTargets.includes(destDir)) consentTargets.push(destDir);
+  if (doPoste && !consentTargets.includes(destDir)) consentTargets.push(destDir);
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
   if (doGraphify && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
@@ -157,13 +162,13 @@ export async function cmdSetup(flags) {
     }
   }
 
-  if (doCanvas) {
+  if (doPoste) {
     // Outils de poste : une copie par machine, jamais dans les projets (le module porte
     // scope: poste, et l'installation projet le refuse). Le canvas est le premier de la
     // famille. Il est déposé avec les autres outils de poste du pack (claude-swt et ses
     // bibliothèques) — pas dans ~/.claude, qui est la CONFIG de Claude Code, pas un
     // dépôt de binaires.
-    const p = installPosteModules({ payloadRoot, toolsDir: destDir, dryRun: flags.dryRun, force: flags.force });
+    const p = installPosteModules({ payloadRoot, toolsDir: destDir, dryRun: flags.dryRun, force: flags.force, exclure: exclurePoste });
     if (p.modules.length) {
       console.log(
         `  outils de poste → ${destDir} : ${p.modules.join(', ')}` +

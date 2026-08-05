@@ -38,10 +38,11 @@ const REQUIS = {
   ],
 };
 
-/** Modules du manifeste dont la portée est « poste ». */
-function posteModules(manifest) {
+/** Modules du manifeste dont la portée est « poste », moins ceux qu'on écarte. */
+function posteModules(manifest, exclure = []) {
+  const ecartes = new Set(exclure);
   return Object.entries(manifest.modules || {})
-    .filter(([, m]) => m && m.scope === 'poste')
+    .filter(([name, m]) => m && m.scope === 'poste' && !ecartes.has(name))
     .map(([name, m]) => ({ name, paths: (m.paths || []).slice() }));
 }
 
@@ -52,7 +53,7 @@ function posteModules(manifest) {
  * Renvoie le rapport applyFiles (avec `backedUp`), la liste des modules réellement
  * installés, et `warnings` : ce qui est installé mais inutilisable en l'état.
  */
-export function installPosteModules({ payloadRoot, toolsDir, dryRun = false, force = false }) {
+export function installPosteModules({ payloadRoot, toolsDir, dryRun = false, force = false, exclure = [] }) {
   const empty = { created: [], unchanged: [], updated: [], conflicts: [], rejected: [], preserved: [], backedUp: [], modules: [], warnings: [] };
 
   let manifest;
@@ -64,7 +65,10 @@ export function installPosteModules({ payloadRoot, toolsDir, dryRun = false, for
     return empty;
   }
 
-  const mods = posteModules(manifest);
+  // `exclure` porte les modules qu'un drapeau a écartés. Sans lui, un seul drapeau
+  // gouvernait TOUTE la famille : `--no-canvas` emportait aussi les outils de poste qui
+  // n'ont rien à voir avec le canvas, et personne ne l'aurait vu venir en le tapant.
+  const mods = posteModules(manifest, exclure);
   if (!mods.length) return empty;
 
   const paths = mods.flatMap((m) => m.paths);
