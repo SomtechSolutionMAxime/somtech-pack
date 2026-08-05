@@ -77,6 +77,11 @@ function rendre(reponse) {
 const [geste, ...args] = process.argv.slice(2);
 if (!geste || geste === '--help' || geste === '-h') usage();
 
+// Tout le corps est enveloppé : une erreur attendue — jeton absent, veilleur qui refuse de
+// céder — porte un message écrit pour être lu et suivi. Le déverser sous une trace de pile
+// Node, c'est le rendre invisible : personne ne lit la troisième ligne d'une trace.
+try {
+
 if (geste === 'relever') {
   const r = await passerLaMain();
   process.stdout.write(`${JSON.stringify(r)}\n`);
@@ -171,4 +176,8 @@ if (geste === 'relever') {
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
 } else {
   usage(1);
+}
+} catch (err) {
+  process.stderr.write(`${err.message}\n`);
+  process.exit(1);
 }
