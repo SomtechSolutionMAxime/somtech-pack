@@ -5,6 +5,11 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.28.4] - 2026-08-05
+
+### Ajouté
+- **`ligne-directe renommer --titre "…"`** — renomme le canal d'une ligne ouverte, dans Slack **et** au registre, en un seul geste. Les canaux ouverts avant le changement de nommage portaient encore le code du chantier ; les renommer à la main dans Slack aurait marché en apparence — l'identifiant du canal ne change pas, donc les messages continuent d'arriver — mais le registre serait resté sur l'ancien nom et l'état affiché aurait cessé de correspondre à ce qu'on voit dans son espace.
+
 ## [1.28.3] - 2026-08-05
 
 ### Modifié

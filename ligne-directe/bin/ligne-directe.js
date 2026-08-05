@@ -25,6 +25,7 @@ function usage(code = 0) {
   dire "texte"                                             rapporte un jalon
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
+  renommer --titre "..." [--canal <id>]                    renomme le canal (Slack + registre)
   etat                                                     ce qui est ouvert
   service installer|retirer|etat                           le veilleur revient après un redémarrage
   veilleur                                                 lance le veilleur au premier plan
@@ -144,6 +145,22 @@ if (geste === 'service') {
       archiver: !args.includes('--sans-archiver'),
     })
   );
+} else if (geste === 'renommer') {
+  const titre = option(args, '--titre');
+  if (!titre) usage(1);
+  const canalId = option(args, '--canal');
+  if (canalId) {
+    rendre(await parler({ geste: 'renommer', canal_id: canalId, titre }));
+  } else {
+    const ici = await herdr.paneCourant();
+    const etat = await parler({ geste: 'etat' });
+    const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+    if (!mienne) {
+      process.stderr.write('aucune ligne ouverte depuis ce pane — precise --canal <id>\n');
+      process.exit(1);
+    }
+    rendre(await parler({ geste: 'renommer', chantier: mienne.chantier, worktree: mienne.worktree, titre }));
+  }
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
