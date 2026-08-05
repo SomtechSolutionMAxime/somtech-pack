@@ -19,7 +19,9 @@ import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
 
-  ouvrir <chantier> [--sujet "..."] [--inviter courriel]   ouvre le canal du chantier
+  ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel]
+                                                           ouvre le canal du chantier
+                                                           (--titre nomme le canal ; sans lui, c'est le code)
   dire "texte"                                             rapporte un jalon
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
@@ -33,7 +35,7 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
 }
 
 /** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
-const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan']);
+const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre']);
 
 function option(args, nom) {
   const i = args.indexOf(nom);
@@ -109,6 +111,7 @@ if (geste === 'service') {
       worktree: ici.worktree,
       herdr_socket: ici.herdr_socket,
       sujet: option(args, '--sujet'),
+      titre: option(args, '--titre'),
       invites,
     })
   );

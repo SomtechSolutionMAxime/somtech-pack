@@ -22,7 +22,8 @@ Si un geste échoue en disant qu'un jeton manque au trousseau, **n'essaie pas de
 ```bash
 LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"
 
-$LD ouvrir D-20260805-0004 --sujet "en deux mots, de quoi il s'agit" --inviter maxime.leboeuf@somtech.ca
+$LD ouvrir D-20260805-0004 --titre "le titre de la demande ou du projet" \
+    --sujet "en deux mots, de quoi il s'agit" --inviter maxime.leboeuf@somtech.ca
 $LD dire "le jalon franchi, en quelques lignes"
 $LD demander "l'arbitrage dont tu as besoin, et les options"
 $LD fermer --bilan "ce qui a été livré, ce qui reste"
@@ -30,6 +31,7 @@ $LD etat
 ```
 
 - **`ouvrir`** — une fois, en naissant. Crée le canal du chantier et y invite le dirigeant. Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans la même copie de travail retrouve son canal.
+  - **Donne toujours `--titre`** : c'est lui qui nomme le canal. `#refonte-du-tableau-de-bord` se lit ; `#d-20260805-0004` ne dit rien à personne. Le code, lui, part dans le sujet du canal — il ne se perd pas, il change de place. Sans titre, le canal porte le code : ça marche, mais personne ne saura de quoi il s'agit.
 - **`dire`** — un jalon franchi, un fait qui change la donne.
 - **`demander`** — un arbitrage. Le message est marqué comme attendant une réponse. **Tu ne te bloques pas** : tu continues ce qui ne dépend pas de la réponse.
 - **`fermer`** — en clôturant, avec le bilan. Le canal est archivé.

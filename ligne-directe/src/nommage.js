@@ -26,6 +26,26 @@ export function normaliserNom(libelle) {
 }
 
 /**
+ * Le libellé à partir duquel nommer le canal.
+ *
+ * Un canal nommé d'après le CODE du chantier — `d-20260805-0004` — ne dit rien à personne,
+ * et devant un client il est franchement mauvais. On nomme donc d'après le TITRE, et le
+ * code va dans le sujet du canal et le message d'ouverture : la traçabilité ne se perd
+ * pas, elle change de place.
+ *
+ * Les préfixes de catégorie (`[FEAT]`, `[FIX]`…) sont retirés : ils sont utiles dans un
+ * registre de tickets, muets dans un nom de canal.
+ *
+ * Sans titre, on retombe sur le code — un nom moche vaut mieux qu'une ligne qui refuse
+ * de s'ouvrir.
+ */
+export function libelleDeCanal(chantier, titre) {
+  if (!titre || !String(titre).trim()) return chantier;
+  const sansPrefixe = String(titre).replace(/^\s*(\[[^\]]{1,20}\]\s*)+/, '').trim();
+  return sansPrefixe || chantier;
+}
+
+/**
  * Nom de canal d'un chantier, évitant les noms déjà pris.
  *
  * Le cas qui compte n'est pas le chantier exotique : c'est DEUX COPIES DE TRAVAIL DU MÊME
