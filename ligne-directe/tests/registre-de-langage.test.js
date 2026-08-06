@@ -323,6 +323,52 @@ test('STRUCTUREL — le veilleur ne peut PAS écrire un texte en clair dans un c
   assert.deepEqual([...causesUtilisees].sort(), [...CAUSES].sort(), 'toute cause déclarée doit être réellement utilisée');
 });
 
+/** Les seules méthodes du veilleur qui aient le droit d'écrire dans un canal Slack. */
+const SITES_SANCTIONNES = ['dire', 'fermer', 'repondreEnPropre'];
+
+/**
+ * Dans quelle méthode de la classe tombe ce point de la source ?
+ *
+ * On repère les entêtes de méthode à leur indentation de deux espaces — celle des membres
+ * de classe. Les fonctions du module ne sont pas indentées, les fermetures internes le sont
+ * davantage : ni les unes ni les autres ne se font passer pour une méthode.
+ */
+function methodeContenant(source, position) {
+  let methode = null;
+  for (const entete of source.matchAll(/^ {2}(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(/gm)) {
+    if (entete.index > position) break;
+    methode = entete[1];
+  }
+  return methode;
+}
+
+test('STRUCTUREL — AUCUN autre chemin du veilleur ne peut écrire dans un canal', () => {
+  // RELEVÉ EN REVUE, et c'était un bloquant : la garde ci-dessus n'inspecte QUE les appels à
+  // `repondreEnPropre`. Elle vérifiait la porte principale pendant que le mur restait ouvert
+  // à côté — un septième chemin de non-remise appelant `this.slack.poster` directement, avec
+  // le nom du pane et le code du chantier dans sa phrase, partait chez un client sans qu'un
+  // seul test rougisse. Mesuré par le reviewer : 131 verts, zéro échec.
+  //
+  // La garde porte donc désormais sur L'ÉCRITURE ELLE-MÊME, pas sur l'un de ses appelants :
+  // tout `this.slack.poster` vit dans l'un des trois sites sanctionnés, ou la suite échoue.
+  const source = readFileSync(join(ICI, '..', 'src', 'veilleur.js'), 'utf8');
+  const ecritures = [...source.matchAll(/this\.slack\.poster\(/g)];
+
+  assert.ok(ecritures.length >= 3, 'les trois écritures légitimes doivent être présentes');
+
+  const sites = new Set();
+  for (const ecriture of ecritures) {
+    const methode = methodeContenant(source, ecriture.index);
+    assert.ok(
+      SITES_SANCTIONNES.includes(methode),
+      `écriture dans un canal hors des sites sanctionnés : « ${methode} » — ` +
+        `elle contourne le registre de langage et peut envoyer une phrase interne à un client`
+    );
+    sites.add(methode);
+  }
+  assert.deepEqual([...sites].sort(), [...SITES_SANCTIONNES].sort(), 'chaque site sanctionné doit exister et être le seul');
+});
+
 test('CE QUI PART VRAIMENT VERS SLACK sur une ligne cliente est la variante cliente', async () => {
   // Assertion sur l'appel réellement émis : un registre de langage juste, câblé à l'envers,
   // ne se verrait nulle part ailleurs.
