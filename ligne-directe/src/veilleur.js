@@ -342,22 +342,18 @@ export class Veilleur {
       // Le nom vient du TITRE du chantier. Une ligne client titrée du nom de son client
       // tombe très naturellement sur un canal public homonyme déjà présent dans l'espace —
       // et le reprendre exposerait ce qu'on cherchait précisément à cacher.
-      // Un canal archivé ne se rattrape pas par le code — le geste qui le lève est humain.
-      // Le message porte déjà le quoi et le comment ; on le relaie tel quel plutôt que de
-      // laisser une trace de pile enterrer la seule phrase utile.
-      if (err.name === 'CanalArchive') {
+      // On relaie sur le FAIT — « réessayer ne changera rien » —, jamais sur une liste de
+      // noms d'erreurs. Une liste oublie la prochaine ; le fait, lui, voyage avec l'erreur.
+      //
+      // Et on relaie le message TEL QUEL. Le composer ici avait produit le pire conseil du
+      // lot : « ou archive le canal #X », qui détruit sans retour un canal d'équipe pour
+      // libérer un nom. Le conseil vit désormais avec la cause, en un seul endroit qu'on
+      // peut garder.
+      if (err.reessayable === false) {
         journaliser(`ouverture refusée — ${chantier} : ${err.message}`);
         return { ok: false, erreur: err.message };
       }
-      if (err.name !== 'ConfidentialiteIncompatible') throw err;
-      journaliser(`ouverture refusée — ${chantier} : ${err.message}`);
-      return {
-        ok: false,
-        erreur:
-          `${err.message}. Une ligne ${natureVoulue} ne s'installe pas dans un canal ` +
-          `${err.reelle ? 'privé' : 'public'} existant — donne un --titre qui mène à un autre nom, ` +
-          `ou archive le canal #${err.canal}.`,
-      };
+      throw err;
     }
 
     // DEUXIÈME VERROU, et il n'est pas redondant : le premier protège la REPRISE d'un canal

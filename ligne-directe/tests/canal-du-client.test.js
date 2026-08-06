@@ -207,6 +207,13 @@ test('LES CHEMINS QUI ARCHIVENT SONT ÉNUMÉRÉS — un troisième ne peut pas a
   // service. Chacun est éprouvé au-dessus, dans les deux natures. Un troisième site
   // ajouté demain fait rougir ici AVANT qu'on découvre en production qu'il ferme le canal
   // d'un client.
+  //
+  // ⚠️ CE QUE CETTE GARDE NE VOIT PAS, et il ne faut pas la croire étanche : elle lit du
+  // TEXTE. Un alias la contourne — `const archiver = this.slack.archiverCanal; archiver(…)`
+  // ne ressemble plus au motif cherché, et un troisième chemin passerait. Une garde
+  // étanche demanderait d'instrumenter l'adaptateur lui-même plutôt que de lire sa source.
+  // Elle vaut contre l'oubli, qui est le mode de panne observé trois fois sur ce chantier ;
+  // elle ne vaut pas contre une réécriture qui la déjoue.
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const source = readFileSync(fileURLToPath(new URL('../src/veilleur.js', import.meta.url)), 'utf8');
@@ -232,6 +239,90 @@ test('LES CHEMINS QUI ARCHIVENT SONT ÉNUMÉRÉS — un troisième ne peut pas a
 
 // ═════════════════════ un canal archivé est perdu — le code ne doit pas prétendre le rattraper
 
+// Ce que ces deux tests gardent, et pourquoi ils ne cherchent PAS des mots-clés.
+//
+// La première version vérifiait que le message contenait « archivé » et « à la main ».
+// Remplacer tout le texte par « réessaie dans quelques minutes » — le contresens exact,
+// puisque justement il ne faut jamais réessayer — laissait 163 tests verts. Une garde qui
+// vérifie ce qu'un texte CONTIENT ne prouve rien de ce qu'il DIT.
+//
+// D'où le déplacement : chaque refus définitif porte `reessayable = false`, un fait que le
+// code UTILISE pour décider s'il relaie. Les tests ci-dessous gardent la cohérence entre ce
+// fait et le texte — un refus qui se déclare définitif et invite à patienter se contredit
+// lui-même — plus l'absence de tout conseil destructeur. Les deux valent pour les refus à
+// venir, pas seulement pour les deux d'aujourd'hui.
+
+/** Inviter à patienter sur un refus définitif est un contresens : rien ne changera. */
+const INVITE_A_PATIENTER = /(réessa|ressa|retent|renvoie|plus tard|dans (quelques|un) (instants?|minutes?|moments?))/i;
+
+/** Un conseil qui détruit sans retour n'a rien à faire dans un message de refus. */
+const CONSEILLE_DE_DETRUIRE = /\barchive[rz]?\s+(le\s+|ce\s+)?(canal|#)/i;
+
+/** Tous les refus définitifs de la couche Slack, instanciés comme le code les lève. */
+async function refusDefinitifs() {
+  const { ConfidentialiteIncompatible, CanalArchive } = await import('../src/slack.js');
+  return [
+    new CanalArchive('acme', 'C_arch'),
+    new ConfidentialiteIncompatible('acme', true, false),
+    new ConfidentialiteIncompatible('acme', false, true),
+  ];
+}
+
+test('AUCUN refus définitif n’invite à patienter — ce serait se contredire soi-même', async () => {
+  for (const refus of await refusDefinitifs()) {
+    assert.equal(refus.reessayable, false, `${refus.name} doit se déclarer définitif`);
+    assert.ok(
+      !INVITE_A_PATIENTER.test(refus.message),
+      `${refus.name} se déclare définitif et invite pourtant à patienter : « ${refus.message} »`
+    );
+  }
+});
+
+test('AUCUN refus ne conseille un geste qui détruit sans retour', async () => {
+  // Le refus de confidentialité conseillait « ou archive le canal #X ». Suivre ce conseil
+  // libère bien le nom — et détruit sans retour un canal d'équipe, puisqu'on ne sait pas
+  // désarchiver. Un refus qui recommande ce qu'un autre refus existe pour empêcher est un
+  // référentiel qui se contredit d'un fichier à l'autre.
+  for (const refus of await refusDefinitifs()) {
+    assert.ok(
+      !CONSEILLE_DE_DETRUIRE.test(refus.message),
+      `${refus.name} conseille d’archiver un canal : « ${refus.message} »`
+    );
+  }
+});
+
+test('un refus définitif dit OÙ agir — sinon il ferme la porte sans en donner la clé', async () => {
+  // Le pendant positif des deux gardes ci-dessus : refuser sans dire quoi faire transforme
+  // une impasse de trente secondes en enquête. Chaque refus nomme le canal concerné et un
+  // geste concret hors de la portée du code.
+  for (const refus of await refusDefinitifs()) {
+    assert.match(refus.message, /#acme/, `${refus.name} doit nommer le canal concerné`);
+    assert.match(
+      refus.message,
+      /(à la main|dans Slack|--titre)/i,
+      `${refus.name} doit dire quel geste lève la situation : « ${refus.message} »`
+    );
+  }
+});
+
+test('le veilleur relaie un refus sur le FAIT qu’il est définitif, pas sur son nom', async () => {
+  // Une liste de noms d'erreurs oublie toujours la prochaine. Une erreur définitive inédite
+  // doit déjà être relayée telle quelle — sinon elle remonte en trace de pile et la seule
+  // phrase utile se perd.
+  const { RefusDefinitif } = await import('../src/slack.js');
+  const inedit = new RefusDefinitif('#acme est verrouillé par une politique de l’espace — fais-le lever à la main dans Slack.');
+
+  const s = slackDouble();
+  s.creerCanal = async () => {
+    throw inedit;
+  };
+  const v = veilleur({ slack: s, herdr: herdrDouble() });
+  const r = await v.ouvrir({ chantier: 'acme', pane: 'w1:p1', worktree: '/w/a', nature: 'client', titre: 'acme' });
+
+  assert.equal(r.ok, false);
+  assert.equal(r.erreur, inedit.message, 'le message doit être relayé tel quel');
+});
+
 test('un canal archivé ne se rattrape PAS : le refus le dit, et rien n’est tenté', async () => {
   // `conversations.unarchive` n'accepte pas un jeton de robot, et c'est le seul dont ce
   // code dispose. Le tenter quand même donnait au lecteur — et aux tests — la certitude
@@ -254,9 +345,8 @@ test('un canal archivé ne se rattrape PAS : le refus le dit, et rien n’est te
     );
     assert.ok(echec, 'reprendre un canal archivé doit échouer');
     assert.equal(echec.name, 'CanalArchive', `erreur inattendue : ${echec?.message}`);
-    assert.match(echec.message, /archiv/i, 'le message doit nommer la cause');
-    assert.match(echec.message, /main|humain|Slack/i, 'et le geste humain qui la lève');
-    assert.ok(CanalArchive, 'la cause est une erreur nommée, pas une chaîne à reconnaître');
+    assert.ok(echec instanceof CanalArchive, 'la cause est une erreur nommée, pas une chaîne à reconnaître');
+    assert.equal(echec.reessayable, false, 'et un fait que l’appelant peut lire, pas seulement une phrase');
 
     assert.deepEqual(
       monde.appels.filter((a) => a.methode === 'conversations.unarchive'),

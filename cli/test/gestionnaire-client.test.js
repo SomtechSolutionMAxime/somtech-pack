@@ -254,12 +254,30 @@ test('RA-REL-001 : le cloisonnement est écrit, et sa suppression fait rougir', 
   const section = texte.split(/^#{2,3} /m).find((s) => /^Un seul client, un seul canal/.test(s));
   assert.ok(section, 'la compétence doit porter une section de cloisonnement');
 
-  // Les trois interdits, chacun testé séparément : c'est ce qui empêche qu'une section
-  // vidée de sa substance passe pour une section présente.
-  assert.match(section, /second client/i, 'un second client se refuse');
-  assert.match(section, /second canal/i, 'un second canal se refuse');
+  // LES INTERDITS SONT ÉNUMÉRÉS, ET LEUR NOMBRE EST GARDÉ.
+  //
+  // La première version cherchait trois motifs séparément et couvrait deux tiers de la
+  // règle : supprimer l'interdit « une session ne change pas de client » laissait 191 tests
+  // sur 191 verts. Un garde qui couvre deux tiers d'une règle laisse passer le tiers qu'on
+  // oubliera — et c'est toujours celui-là qu'on oublie.
+  //
+  // On garde donc la STRUCTURE en plus des mots : autant de puces que d'interdits, et
+  // chacune reconnue une fois exactement. Retirer une puce fait tomber le compte ; en
+  // ajouter une qui ne dit rien fait tomber l'appariement.
+  const INTERDITS = [
+    { quoi: 'un second client se refuse', sonde: /second client/i },
+    { quoi: 'un second canal se refuse', sonde: /second canal/i },
+    { quoi: 'une session ne change pas de client en cours de route', sonde: /ne change pas de client/i },
+    { quoi: 'le travail d’un autre client ne se cite jamais', sonde: /autre client/i },
+  ];
+  const puces = section.split('\n').filter((l) => /^\s*-\s+\S/.test(l));
+  assert.equal(puces.length, INTERDITS.length, `${puces.length} interdit(s) écrit(s) pour ${INTERDITS.length} gardé(s)`);
+
+  for (const { quoi, sonde } of INTERDITS) {
+    const trouvees = puces.filter((p) => sonde.test(p));
+    assert.equal(trouvees.length, 1, `« ${quoi} » doit figurer une fois exactement (${trouvees.length} trouvée·s)`);
+  }
   assert.match(section, /refuse/i, 'et le verbe doit être le refus, pas la préférence');
-  assert.match(section, /(autre client|un autre client)/i, 'le travail d’un autre client ne se cite jamais');
   assert.match(section, /structurel/i, 'le cloisonnement est structurel, pas déclaratif');
 
   // Sa raison doit y figurer : sans elle, un agent pressé la lira comme de la rigidité et
@@ -274,6 +292,28 @@ test('RA-REL-001 : le cloisonnement est écrit, et sa suppression fait rougir', 
   for (const forme of invocations) {
     assert.equal((forme.match(/--canal/g) || []).length, 1, `deux canaux dans une invocation : ${forme}`);
     assert.ok(!/,/.test(forme), `une liste dans l’invocation ouvre la porte à deux portefeuilles : ${forme}`);
+  }
+});
+
+test('la compétence de transport n’affirme jamais l’archivage sans dire pour quelle nature', () => {
+  // « Le canal est archivé » a été vrai jusqu'à ce que le canal d'un client cesse de l'être.
+  // La phrase est restée, et c'est devenu de la documentation qui ment — deux fois, sur deux
+  // passages différents, parce qu'à chaque correctif on ne cherchait que celui qu'on avait
+  // sous les yeux.
+  //
+  // La garde ne lit pas un vocabulaire : elle exige qu'aucune affirmation d'archivage ne
+  // soit INCONDITIONNELLE. Le comportement dépend de la nature de la ligne ; une phrase qui
+  // ne la nomme pas est fausse pour l'une des deux, quelle que soit sa formulation.
+  const transport = readFileSync(join(REPO, '.claude', 'skills', 'ligne-directe', 'SKILL.md'), 'utf8');
+  const affirmations = transport.split('\n').filter((l) => /archiv/i.test(l));
+  assert.ok(affirmations.length >= 3, 'la compétence doit parler d’archivage — sinon ce test ne prouve rien');
+
+  for (const ligne of affirmations) {
+    assert.match(
+      ligne,
+      /\b(interne|client)\b/i,
+      `affirmation d’archivage sans nature de ligne — vraie pour l’une, fausse pour l’autre : « ${ligne.trim()} »`
+    );
   }
 });
 
