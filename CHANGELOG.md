@@ -5,6 +5,12 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-06
+
+### Technique
+
+- **Les 76 tests de la ligne directe tournent enfin dans la chaîne d'intégration** (PR #169, T-20260806-0014). Ils existaient depuis la livraison de la ligne directe et n'étaient exécutés par aucun travail de la chaîne : `shell-tests`, `cli-tests` et `python-tests` ne pointaient nulle part vers `ligne-directe/`. Six exigences en vigueur du BRD se retrouvaient donc sans preuve citable — la preuve existait, elle n'était simplement pas vivante (RA-DIS-004). Le nouveau travail tourne en **Node 22**, et non dans `cli-tests` qui tourne en Node 20 : le veilleur tient sa connexion avec le `WebSocket` natif, absent avant Node 22. Vérifié par mutation — un défaut volontaire fait rougir ce travail et lui seul, son retrait le fait reverdir.
+
 ## [1.28.7] - 2026-08-05
 
 ### Corrigé
