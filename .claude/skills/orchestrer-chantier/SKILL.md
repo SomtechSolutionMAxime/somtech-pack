@@ -162,6 +162,7 @@ Pour chaque epic dans l'ordre :
 - comment il travaille : décomposer en stories G/W/T d'abord, test rouge avant vert, branche portant l'ID de traçabilité, PR draft dès le premier commit, statut `in_progress` au moment où il commence ;
 - **le suivi** (voir 4d) ;
 - **la consigne de compaction** : *si tu sens que tu vas devoir compacter ton contexte, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
+- **la consigne de sas occupé** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus : sans cette ligne dans son brief, le déclencheur ne t'atteint jamais et l'attente reste muette.
 
 **b. Faire naître l'agent — le worktree avant lui.**
 
@@ -227,7 +228,8 @@ Ce qui doit toujours y figurer : **le livrable**, **la preuve** (les tests qui l
 **d. Exiger le suivi actif.** Le brief doit lui demander de te prévenir lui-même, **en lui donnant la commande exacte** plutôt qu'en le renvoyant à une documentation :
 
 - quand il a fini : `herdr agent prompt <ton-nom-ou-ton-pane> "<son-nom> a fini : <une ligne> — PR #<n>"` ;
-- **immédiatement** s'il se bloque, si une contrainte se révèle impraticable, ou s'il découvre un défaut qui touche un autre chantier.
+- **immédiatement** s'il se bloque, si une contrainte se révèle impraticable, ou s'il découvre un défaut qui touche un autre chantier ;
+- **immédiatement aussi si le sas est occupé** : `herdr agent prompt <ton-nom-ou-ton-pane> "<son-nom> : poussee refusee, sas occupe par la PR #<n> depuis <date>"`. C'est le seul de ces signaux qui n'annonce **rien de cassé** — et c'est précisément pour ça qu'on ne pense pas à l'envoyer. Il déclenche le §4g.
 
 ⚠️ **N'envoie pas ton exécutant lire la compétence `herdr` du poste sans le prévenir.** Elle n'est pas livrée par le pack — elle vient de l'outil — et elle enseigne aujourd'hui `herdr wait output …` et `herdr wait agent-status …`, deux commandes qui **n'existent pas** (`unknown command: wait`). Un agent qui les suit perd du temps sur une erreur qui n'est pas la sienne. Donne-lui les commandes dans son brief ; si tu tiens à l'y renvoyer, dis-lui dans le même souffle que les formes réelles sont `herdr agent wait … --until …` et `herdr pane wait-output …`.
 
@@ -278,42 +280,50 @@ git -C <repo> worktree list          # compare avec herdr agent list
 
 Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
-**g. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
+**g. Pousser — et si la mise en ligne est occupée, le dire avant toute chose.**
 
-**g-bis. Si la mise en ligne est occupée, dis-le — tu es le seul à le savoir.**
+Ceci vient **avant** le merge, parce que c'est là que ça se produit : `/pousse-staging` refuse (`acquired: false`) quand une autre livraison occupe déjà le sas. Ce n'est pas un incident, c'est le fonctionnement voulu (RA-AGT-005) — ton travail est prêt, il attend son tour.
 
-Au moment de pousser, `/pousse-staging` peut refuser : une autre livraison **de la même application** occupe déjà le sas. Ce n'est pas un incident, c'est le fonctionnement voulu (RA-AGT-005) — ton travail est prêt, il attend son tour.
-
-Le problème n'est pas l'attente, c'est le silence. **Personne d'autre que toi ne sait que tu attends.** Si ton chantier est mené pour le compte d'un **représentant de client**, il ne le devinera pas : faute de mieux, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
+Le problème n'est pas l'attente, c'est le silence. Ton **représentant de client** peut bien voir que le sas est occupé — `applications action lock_status` le lui dit. Ce qu'il ne peut pas savoir, c'est que **le chantier qui attend derrière est le sien** : le verrou nomme son détenteur, jamais ceux qui patientent. **Toi seul le sais.** Sans un mot de ta part, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
 
 Alors tu le lui dis. **Deux fois** : quand tu entres en attente, et quand ton tour vient.
 
 ```bash
 L=".claude/skills/orchestrer-chantier/lib/attente-au-sas.sh"
 
-# 1) le sas est occupé — DECISION=DIRE (rc 0), RIEN (rc 3) ou FAIL (rc 5)
-ATS_REPRESENTANT=<son-nom-d-agent> ATS_CHANTIER=D-20260806-0042 \
-ATS_APPLICATION=<ton-application> ATS_APPLICATION_VERROU=<celle du verrou rencontré> \
-ATS_DETENTEUR_PR=<blocked_by_holder_pr> ATS_DEPUIS=<blocked_since> \
+# 1) la poussée est refusée — DECISION=DIRE (rc 0), RIEN (rc 3) ou FAIL (rc 5)
+ATS_REPRESENTANT=acme-inc \
+ATS_CHANTIER=D-20260806-0042 \
+ATS_APPLICATION="Portail Acme" \
+ATS_APPLICATION_ID=2098c2fd-5448-46a3-bd98-83778e7a064d \
+ATS_DETENTEUR_PR=412 \
+ATS_DEPUIS=2026-08-06T11:20:00Z \
   bash "$L" attente
 
-# 2) plus tard, quand la poussée passe enfin
-ATS_REPRESENTANT=<son-nom-d-agent> ATS_CHANTIER=D-20260806-0042 \
-ATS_APPLICATION=<ton-application> ATS_ATTENTE_DECLAREE=oui \
+# 2) plus tard, quand ta poussée passe enfin
+ATS_REPRESENTANT=acme-inc \
+ATS_CHANTIER=D-20260806-0042 \
+ATS_APPLICATION="Portail Acme" \
+ATS_APPLICATION_ID=2098c2fd-5448-46a3-bd98-83778e7a064d \
+ATS_ATTENTE_DECLAREE=oui \
   bash "$L" passage
 ```
+
+Les valeurs viennent de là où elles existent, jamais de ton estimation : `ATS_APPLICATION_ID` est le `servicedesk.app_id` de `.somtech/app.yaml` — **celui-là même qui prend le verrou** —, `ATS_DETENTEUR_PR` et `ATS_DEPUIS` sont les `blocked_by_holder_pr` et `blocked_since` que le refus t'a rendus.
 
 Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur `RIEN`, il n'y a rien à dire et c'est juste. Sur `FAIL`, **ne te tais pas** : corrige ce qui manque et recommence.
 
 Trois choses que le helper tranche à ta place, et qui sont précisément là où l'on se trompe :
 
 - **Ton chantier n'a pas de représentant de client ?** Il rend compte au dirigeant, et **rien ne change** : tu continues exactement comme avant. C'est le cas le plus fréquent.
-- **Le verrou que tu as rencontré porte sur une autre application ?** Tu ne déclares aucune attente. La portée du droit d'accès exclusif est l'application (RA-AGT-006) — emprunter l'attente d'un voisin serait une information fausse, et elle voyagerait jusqu'à son client.
+- **Un refus de `lock_acquire` porte toujours sur ta propre application** — le verrou est pris par identifiant d'application. Tu n'as donc rien à renseigner de plus. `ATS_APPLICATION_ID_VERROU` ne sert que dans l'autre situation : quand tu regardes le verrou d'une **autre** application avec `lock_status`. Là, aucune attente n'est déclarée (RA-AGT-006) — emprunter l'attente d'un voisin serait une information fausse, et elle voyagerait jusqu'à son client.
 - **Tu ne parles jamais au client**, ni de près ni de loin. Tu parles à son représentant, qui reste l'interlocuteur unique et traduit dans ses mots.
 
 **Ne construis rien pour attendre.** Pas de registre, pas de numéro d'ordre, pas de reprise automatique du verrou : tu retentes ta poussée quand tu es prêt, et c'est ce jour-là que le second message part. Le droit d'accès exclusif par application existe déjà et suffit — un second mécanisme se désynchroniserait du premier.
 
 **Et n'oublie pas de le réinscrire au registre** (règle RA-REL-003) : ce qui ne vit que dans le fil disparaît avec la session qui l'a lu.
+
+**h. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
 
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
 
