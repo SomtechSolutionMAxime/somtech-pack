@@ -342,6 +342,13 @@ export class Veilleur {
       // Le nom vient du TITRE du chantier. Une ligne client titrée du nom de son client
       // tombe très naturellement sur un canal public homonyme déjà présent dans l'espace —
       // et le reprendre exposerait ce qu'on cherchait précisément à cacher.
+      // Un canal archivé ne se rattrape pas par le code — le geste qui le lève est humain.
+      // Le message porte déjà le quoi et le comment ; on le relaie tel quel plutôt que de
+      // laisser une trace de pile enterrer la seule phrase utile.
+      if (err.name === 'CanalArchive') {
+        journaliser(`ouverture refusée — ${chantier} : ${err.message}`);
+        return { ok: false, erreur: err.message };
+      }
       if (err.name !== 'ConfidentialiteIncompatible') throw err;
       journaliser(`ouverture refusée — ${chantier} : ${err.message}`);
       return {
@@ -486,8 +493,20 @@ export class Veilleur {
     }
     // ORDRE IMPOSÉ PAR SLACK, mesuré : un canal archivé est en LECTURE SEULE. Le bilan
     // doit donc partir AVANT l'archivage — l'inverse perd le message sans rien dire.
+    //
+    // ET UN CANAL CLIENT NE S'ARCHIVE PAS, MÊME ICI. La règle porte sur le canal, pas sur
+    // le chemin qui y mène : qu'on disparaisse ou qu'on referme volontairement, il
+    // appartient toujours au client. Refermer sa ligne veut dire « je n'écoute plus », pas
+    // « ce lieu n'existe plus » — et l'archivage est irréversible pour nous (voir
+    // `CanalArchive` : le désarchivage est refusé au jeton dont nous disposons).
+    //
+    // Les chemins qui archivent sont énumérés et gardés : `fermer` et `reconcilier`, tous
+    // deux éprouvés dans les deux natures. C'est ce qui empêche un troisième d'apparaître
+    // en silence — trois correctifs de ce chantier n'avaient couvert qu'une porte sur deux.
     let archive = false;
-    if (archiver) archive = await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
+    if (archiver && natureDe(ligne) !== 'client') {
+      archive = await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
+    }
     clore(this.registre, ligne.canal_id, maintenant());
     sauverRegistre(this.registre);
     journaliser(`ligne close — ${ligne.chantier} (#${ligne.canal_nom}) archive=${archive}`);

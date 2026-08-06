@@ -241,6 +241,42 @@ test('NÉGATIF : elle ne prend jamais le droit d’accès à la mise en ligne (H
   assert.ok(!texte.includes('lock_release'), 'ni ne le rend');
 });
 
+test('RA-REL-001 : le cloisonnement est écrit, et sa suppression fait rougir', () => {
+  // Le reviewer a supprimé la section de cloisonnement EN ENTIER et 346 tests sont restés
+  // verts. C'est la garantie structurelle de tout le lot — une session, un client, un
+  // canal — et rien ne la gardait.
+  //
+  // Ce que ce test peut prouver a une limite qu'il faut dire : le cloisonnement s'adresse
+  // à un agent, et aucune assertion ne l'empêchera de désobéir. Ce qu'on garde ici, c'est
+  // que la consigne EXISTE et qu'elle porte ses trois interdits. Sur ce chantier, tout ce
+  // qui n'était gardé par rien a fini par céder — y compris des sections entières.
+  const texte = skill();
+  const section = texte.split(/^#{2,3} /m).find((s) => /^Un seul client, un seul canal/.test(s));
+  assert.ok(section, 'la compétence doit porter une section de cloisonnement');
+
+  // Les trois interdits, chacun testé séparément : c'est ce qui empêche qu'une section
+  // vidée de sa substance passe pour une section présente.
+  assert.match(section, /second client/i, 'un second client se refuse');
+  assert.match(section, /second canal/i, 'un second canal se refuse');
+  assert.match(section, /refuse/i, 'et le verbe doit être le refus, pas la préférence');
+  assert.match(section, /(autre client|un autre client)/i, 'le travail d’un autre client ne se cite jamais');
+  assert.match(section, /structurel/i, 'le cloisonnement est structurel, pas déclaratif');
+
+  // Sa raison doit y figurer : sans elle, un agent pressé la lira comme de la rigidité et
+  // la contournera de bonne foi. Une fuite d'un client vers un autre n'est pas une
+  // maladresse d'ergonomie.
+  assert.match(section, /fuite/i, 'la section doit dire ce qu’une violation coûte');
+
+  // Et la signature d'invocation ne prend qu'un client et qu'un canal — la conséquence la
+  // plus proche du principe, celle qu'une relecture distraite laisserait passer.
+  const invocations = [...texte.matchAll(/\/gestionnaire-client [^\n`]*/g)].map((m) => m[0]);
+  assert.ok(invocations.length >= 1, 'la compétence doit montrer son invocation');
+  for (const forme of invocations) {
+    assert.equal((forme.match(/--canal/g) || []).length, 1, `deux canaux dans une invocation : ${forme}`);
+    assert.ok(!/,/.test(forme), `une liste dans l’invocation ouvre la porte à deux portefeuilles : ${forme}`);
+  }
+});
+
 test('le chemin de remontée est nommé pour ce qu’il est : un pis-aller qui ne prévient personne', () => {
   // Le mécanisme prévu — une seconde ligne, avec le dirigeant — n'existe pas encore. Ce
   // qui reste est d'écrire sur la demande, et **une note n'est pas une notification** :

@@ -165,8 +165,18 @@ export function fauxSlack({ canaux = [], utilisateurs = [], espace = 'T_ESSAIS',
         return reponse({ ok: true, members: page, response_metadata: { next_cursor: suite } });
       }
 
-      case 'conversations.join':
       case 'conversations.unarchive':
+        // SLACK REFUSE LE DÉSARCHIVAGE À UN JETON DE ROBOT, et c'est le seul jeton dont ce
+        // code dispose. Le double l'acceptait — quatrième fois qu'il se montre plus
+        // permissif que le service réel, et cette fois il laissait croire qu'un canal
+        // archivé se récupère. Il ne se récupère pas.
+        //
+        // Le refus est inconditionnel ici, volontairement : ce n'est pas une simulation de
+        // la politique de jetons de Slack, c'est la vérité de ce que NOUS pouvons faire.
+        // Si quelqu'un réintroduit l'appel un jour, il rougit avant d'atteindre l'espace.
+        return echec('not_allowed_token_type');
+
+      case 'conversations.join':
       case 'conversations.archive': {
         if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
         const canal = monde.canaux.find((c) => c.id === args.channel);
@@ -179,7 +189,6 @@ export function fauxSlack({ canaux = [], utilisateurs = [], espace = 'T_ESSAIS',
           if (canal.is_archived) return echec('already_archived');
           canal.is_archived = true;
         }
-        if (methode === 'conversations.unarchive') canal.is_archived = false;
         return reponse({ ok: true });
       }
 

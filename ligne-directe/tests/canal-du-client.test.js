@@ -55,7 +55,10 @@ function slackDouble({ membres = [], canalExistant = null } = {}) {
       // leçon une fois.
       if (canalExistant && canalExistant.nom === nom) {
         if (this.archives.includes(canalExistant.id)) {
-          throw new Error('is_archived — un canal archivé est en lecture seule');
+          // La vraie classe, pas une chaîne qui y ressemble : un double qui invente sa
+          // propre forme d'échec laisse passer un appelant qui ne sait pas la reconnaître.
+          const { CanalArchive } = await import('../src/slack.js');
+          throw new CanalArchive(canalExistant.nom, canalExistant.id);
         }
         return { ...canalExistant, reutilise: true };
       }
@@ -162,6 +165,122 @@ test('CLIENT — le message qui arrive après la disparition n’archive rien no
 
   assert.deepEqual(s.archives, [], 'écrire dans son propre canal ne doit pas le lui fermer');
   assert.equal(s.postes.length, 1, 'le silence s’arrête quand il écrit — il reçoit une réponse');
+});
+
+test('CLIENT — FERMER une ligne cliente n’archive pas son canal non plus', async () => {
+  // Relevé en revue, et c'est la TROISIÈME fois de ce chantier qu'un correctif ne couvre
+  // qu'une porte sur deux. La règle porte sur le canal, pas sur le chemin qui y mène :
+  // qu'on disparaisse ou qu'on referme volontairement, il appartient toujours au client.
+  //
+  // Refermer sa ligne veut dire « je n'écoute plus », jamais « ce lieu n'existe plus ».
+  sauverRegistre({ version: 1, lignes: [ligneOrpheline('client')] });
+  const s = slackDouble({ membres: ['UCLIENT'] });
+  const v = veilleur({ slack: s, herdr: herdrDouble() });
+
+  const r = await v.fermer({ chantier: 'acme', worktree: '/w/ancienne-session', bilan: 'c’est en ligne' });
+
+  assert.equal(r.ok, true, r.erreur);
+  assert.equal(r.archive, false, 'la réponse doit dire la vérité sur l’archivage');
+  assert.deepEqual(s.archives, [], 'le canal du client ne s’archive pas, même sur un geste explicite');
+  assert.equal(s.postes.length, 1, 'le bilan part quand même');
+  assert.deepEqual(lignesOuvertes(chargerRegistre()), [], 'et la ligne est bien close');
+});
+
+test('INTERNE — NON-RÉGRESSION : fermer archive le canal, et le bilan part AVANT', async () => {
+  sauverRegistre({ version: 1, lignes: [ligneOrpheline('interne')] });
+  const s = slackDouble();
+  const v = veilleur({ slack: s, herdr: herdrDouble() });
+
+  const r = await v.fermer({ chantier: 'D-20260805-0005', worktree: '/w/ancienne-session', bilan: 'livré' });
+
+  assert.equal(r.archive, true);
+  assert.deepEqual(s.archives, ['C_acme']);
+  assert.equal(s.postes.length, 1, 'un canal archivé est en lecture seule : le bilan doit partir avant');
+});
+
+test('LES CHEMINS QUI ARCHIVENT SONT ÉNUMÉRÉS — un troisième ne peut pas apparaître en silence', async () => {
+  // Ce test ne prouve pas un comportement, il prouve une COUVERTURE — et c'est lui qui
+  // répond au motif que ce chantier répète : un correctif appliqué à une porte pendant
+  // qu'une autre reste ouverte, trois fois de suite.
+  //
+  // Deux chemins archivent, et deux seulement : le geste explicite et la reprise du
+  // service. Chacun est éprouvé au-dessus, dans les deux natures. Un troisième site
+  // ajouté demain fait rougir ici AVANT qu'on découvre en production qu'il ferme le canal
+  // d'un client.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const source = readFileSync(fileURLToPath(new URL('../src/veilleur.js', import.meta.url)), 'utf8');
+
+  const SITES = ['fermer', 'reconcilier'];
+  const methodeContenant = (texte, position) => {
+    const avant = texte.slice(0, position);
+    const noms = [...avant.matchAll(/^\s{2}(?:async\s+)?([a-zA-Zà-ÿ_$][\w$]*)\s*\(/gm)];
+    return noms.length ? noms[noms.length - 1][1] : '(hors méthode)';
+  };
+
+  const archivages = [...source.matchAll(/this\.slack\.archiverCanal\(/g)];
+  assert.equal(archivages.length, SITES.length, `${archivages.length} archivage(s) trouvé(s) pour ${SITES.length} site(s) éprouvé(s)`);
+
+  const vus = new Set();
+  for (const a of archivages) {
+    const methode = methodeContenant(source, a.index);
+    assert.ok(SITES.includes(methode), `un canal est archivé depuis « ${methode} », qu’aucun test ne garde`);
+    vus.add(methode);
+  }
+  assert.deepEqual([...vus].sort(), [...SITES].sort(), 'chaque site énuméré doit exister et être le seul');
+});
+
+// ═════════════════════ un canal archivé est perdu — le code ne doit pas prétendre le rattraper
+
+test('un canal archivé ne se rattrape PAS : le refus le dit, et rien n’est tenté', async () => {
+  // `conversations.unarchive` n'accepte pas un jeton de robot, et c'est le seul dont ce
+  // code dispose. Le tenter quand même donnait au lecteur — et aux tests — la certitude
+  // fausse qu'un canal archivé se récupère. Il ne se récupère pas : il est perdu, y compris
+  // pour les canaux clients archivés avant ce correctif.
+  //
+  // On ne tente donc plus, et on refuse en NOMMANT l'impossibilité et le geste humain qui
+  // la lève. Une impasse expliquée vaut trente secondes ; une impasse muette vaut une
+  // enquête.
+  const { fauxSlack } = await import('./aide/faux-slack.js');
+  const { creerCanal, CanalArchive } = await import('../src/slack.js');
+
+  const monde = fauxSlack({
+    canaux: [{ id: 'C_arch', name: 'acme', is_private: true, is_archived: true, membres: [] }],
+  }).installer();
+  try {
+    const echec = await creerCanal('jeton-robot', 'acme', true).then(
+      () => null,
+      (err) => err
+    );
+    assert.ok(echec, 'reprendre un canal archivé doit échouer');
+    assert.equal(echec.name, 'CanalArchive', `erreur inattendue : ${echec?.message}`);
+    assert.match(echec.message, /archiv/i, 'le message doit nommer la cause');
+    assert.match(echec.message, /main|humain|Slack/i, 'et le geste humain qui la lève');
+    assert.ok(CanalArchive, 'la cause est une erreur nommée, pas une chaîne à reconnaître');
+
+    assert.deepEqual(
+      monde.appels.filter((a) => a.methode === 'conversations.unarchive'),
+      [],
+      'aucun désarchivage ne doit être tenté : on sait déjà qu’il échouerait'
+    );
+  } finally {
+    monde.restaurer();
+  }
+});
+
+test('l’ouverture d’une ligne sur un canal archivé rend un refus lisible, pas une trace de pile', async () => {
+  const s = slackDouble();
+  s.creerCanal = async () => {
+    const { CanalArchive } = await import('../src/slack.js');
+    throw new CanalArchive('acme', 'C_arch');
+  };
+  const v = veilleur({ slack: s, herdr: herdrDouble() });
+
+  const r = await v.ouvrir({ chantier: 'acme', pane: 'w1:p1', worktree: '/w/a', nature: 'client', titre: 'acme' });
+
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /archiv/i, 'le refus doit nommer la cause');
+  assert.deepEqual(chargerRegistre().lignes, [], 'et rien ne doit être inscrit');
 });
 
 // ═════════════════════ une session neuve reprend la conversation

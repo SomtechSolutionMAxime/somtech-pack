@@ -143,6 +143,26 @@ export class ConfidentialiteIncompatible extends Error {
 }
 
 /**
+ * Le canal existe, mais il est archivé — donc en lecture seule, et hors de notre portée.
+ *
+ * Erreur NOMMÉE plutôt que message à reconnaître : l'appelant doit pouvoir la distinguer
+ * d'une panne passagère, parce que la suite n'est pas la même. Une panne se retente ; ceci
+ * ne se retente jamais et demande un geste humain.
+ */
+export class CanalArchive extends Error {
+  constructor(canal, id) {
+    super(
+      `#${canal} est archivé : un canal archivé est en lecture seule, et le désarchiver ` +
+        `n'est pas à notre portée — Slack le réserve à un compte humain. ` +
+        `Fais-le sortir des archives à la main dans Slack (#${canal}, ${id}), puis recommence.`
+    );
+    this.name = 'CanalArchive';
+    this.canal = canal;
+    this.id = id;
+  }
+}
+
+/**
  * Crée un canal. Slack impose des noms en minuscules, sans espace ni accent, 80 car. max.
  * Si le canal existe déjà, on le rejoint plutôt que d'échouer : rouvrir une ligne sur un
  * chantier repris est un cas normal, pas une erreur — MAIS seulement à confidentialité
@@ -162,9 +182,18 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
     if (Boolean(existant.is_private) !== Boolean(prive)) {
       throw new ConfidentialiteIncompatible(nom, prive, existant.is_private);
     }
-    // Un canal archivé est en lecture seule : il faut le sortir des archives avant d'y
-    // écrire, sinon toute la ligne échoue au premier message.
-    if (existant.is_archived) await appeler('conversations.unarchive', jetonRobot, { channel: existant.id });
+    // UN CANAL ARCHIVÉ EST PERDU POUR NOUS, et il faut le dire au lieu de faire semblant.
+    //
+    // Ce code tentait `conversations.unarchive`. Slack ne sert cette méthode qu'à un jeton
+    // d'utilisateur — le nôtre est un jeton de robot, le seul dont ce composant dispose.
+    // L'appel ne pouvait donc pas aboutir : il donnait au lecteur, et aux tests, la
+    // certitude fausse qu'on savait rattraper une situation qu'on ne sait pas rattraper.
+    //
+    // Conséquence à connaître : tout canal client archivé — y compris ceux archivés avant
+    // que ce chemin ne soit fermé — ne se rejoint plus par le code. Le geste qui le lève
+    // est humain, il prend trente secondes dans Slack, et c'est exactement pour ça que le
+    // refus doit le nommer plutôt que de laisser tomber une erreur brute au premier message.
+    if (existant.is_archived) throw new CanalArchive(nom, existant.id);
     await rejoindreCanal(jetonRobot, existant.id);
     // On rend la confidentialité DU CANAL, pas celle qu'on demandait.
     //
