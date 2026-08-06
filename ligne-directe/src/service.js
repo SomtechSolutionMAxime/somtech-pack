@@ -22,6 +22,7 @@ import { join, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CHEMIN_JOURNAL, RACINE } from './registre.js';
+import { enEssais, refuser } from './cloison.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -81,8 +82,32 @@ async function launchctl(args) {
   }
 }
 
-/** Installe (ou réinstalle) le service, et le démarre. */
+/**
+ * Installe (ou réinstalle) le service, et le démarre.
+ *
+ * QUATRIÈME MUR, et il contourne les trois autres par le haut — relevé en troisième revue.
+ *
+ * Ce chemin écrit un LaunchAgent qui pointe sur le dossier source COURANT, puis le confie à
+ * `launchd`. Or un job `launchd` ne reçoit que le `PATH` de son plist : il **n'hérite pas**
+ * de `NODE_TEST_CONTEXT`. Le veilleur qui en naît est donc un veilleur de PRODUCTION, lancé
+ * depuis un worktree, hors d'atteinte du trousseau, du transport et de l'écoute — les trois
+ * murs sont derrière lui, pas devant.
+ *
+ * Pire : le `bootout` d'ouverture porte sur l'étiquette du POSTE. Un test qui atteint cette
+ * fonction arrête d'abord le veilleur de production, puis le remplace par le sien.
+ * MESURÉ sous cloison avant correctif : `bootout gui/501/ca.somtech.ligne-directe`, puis
+ * `bootstrap` d'un plist pointant sur `…/worktrees/…/src/demarrer-veilleur.js`.
+ *
+ * Aucun test ne prenait ce chemin. C'est exactement pourquoi il fallait le fermer : la
+ * porte qu'on ne surveille pas est celle par laquelle l'incident revient.
+ */
 export async function installerService() {
+  if (enEssais()) {
+    refuser(
+      "l'installation du service du poste",
+      'Le LaunchAgent pointerait sur ce dossier source et naîtrait HORS cloison — launchd ne transmet pas NODE_TEST_CONTEXT.'
+    );
+  }
   const chemin = cheminPlist();
   mkdirSync(dirname(chemin), { recursive: true });
   mkdirSync(RACINE, { recursive: true });
@@ -99,7 +124,20 @@ export async function installerService() {
   return { ok: true, chemin };
 }
 
+/**
+ * Retire le service du poste.
+ *
+ * Le retrait n'est pas plus anodin que la pose, et il est même plus discret : son `bootout`
+ * porte sur l'étiquette du POSTE et n'écrit rien nulle part. Un test qui l'atteint coupe le
+ * dirigeant de tous ses chantiers ouverts sans laisser la moindre trace qui l'explique.
+ */
 export async function retirerService() {
+  if (enEssais()) {
+    refuser(
+      'le retrait du service du poste',
+      'Son bootout arrêterait le veilleur de production et couperait le dirigeant de ses lignes ouvertes.'
+    );
+  }
   const chemin = cheminPlist();
   const r = await launchctl(['bootout', `gui/${process.getuid()}/${ETIQUETTE}`]);
   if (existsSync(chemin)) unlinkSync(chemin);

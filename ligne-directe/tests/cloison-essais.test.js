@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { CloisonEssais, enEssais } from '../src/cloison.js';
 import { lireJeton, lireJetons } from '../src/trousseau.js';
@@ -144,6 +144,85 @@ test('MÊME AVEC LA CLOISON HERDR DÉFAITE, AUCUN VEILLEUR N’ATTEINT SLACK', a
   // Et rien de vivant ne reste derrière : ni socket, ni registre.
   const restes = readdirSync(bac).filter((f) => f !== 'bin' && f !== 'veilleur.log');
   assert.deepEqual(restes, [], `aucun registre ni socket ne doit survivre — trouvé : ${restes.join(', ')}`);
+});
+
+// ═════════════════════════════════ la quatrième porte : le service du poste
+
+/**
+ * Fait tourner une expression dans un processus enfant SOUS CLOISON, avec les deux effets
+ * dangereux détournés vers un bac jetable.
+ *
+ * POURQUOI CE HARNAIS, et c'est le point délicat de ce fichier : la mutation qui prouve ce
+ * mur — le retirer et regarder le code s'exécuter — écrirait un vrai LaunchAgent et
+ * ferait `bootout` sur le service du poste, c'est-à-dire qu'elle TUERAIT le veilleur de
+ * production pour le remplacer par un veilleur né d'un worktree. On ne prouve pas une
+ * cloison en commettant l'incident qu'elle existe pour empêcher.
+ *
+ * On détourne donc les deux seules portes vers le poste — `HOME` (d'où sort le chemin du
+ * LaunchAgent) et le `PATH` (d'où sort `launchctl`) — vers un bac. Le code muté s'exécute
+ * alors POUR DE VRAI et laisse ses traces là où on peut les lire, sans toucher au poste.
+ */
+function sousCloisonDansUnBac(expression) {
+  const bac = mkdtempSync(join(tmpdir(), 'ld-service-'));
+  const binDir = join(bac, 'bin');
+  mkdirSync(binDir, { recursive: true });
+  // Un faux `launchctl` qui note ce qu'on lui demande au lieu de le faire. Sans lui, le
+  // vrai serait trouvé dans /bin et `bootout` arrêterait le veilleur du poste.
+  const faux = join(binDir, 'launchctl');
+  writeFileSync(faux, `#!/bin/sh\necho "$@" >> "${join(bac, 'launchctl.log')}"\nexit 0\n`, { mode: 0o755 });
+  chmodSync(faux, 0o755);
+
+  return { bac, binDir, faux };
+}
+
+async function jouerService(geste) {
+  const { bac, binDir } = sousCloisonDansUnBac();
+  const service = pathToFileURL(join(ICI, '..', 'src', 'service.js')).href;
+  const code =
+    `import { ${geste} } from ${JSON.stringify(service)};\n` +
+    `try { const r = await ${geste}(); console.log(JSON.stringify({ leve: false, resultat: r })); }\n` +
+    `catch (err) { console.log(JSON.stringify({ leve: true, nom: err.name, message: err.message })); }\n`;
+
+  const { stdout } = await execFileAsync(process.execPath, ['--input-type=module', '-e', code], {
+    env: { ...process.env, HOME: bac, LIGNE_DIRECTE_RACINE: bac, PATH: binDir },
+  });
+  const journalLaunchctl = join(bac, 'launchctl.log');
+  return {
+    ...JSON.parse(stdout.trim().split('\n').pop()),
+    plistEcrit: existsSync(join(bac, 'Library', 'LaunchAgents', 'ca.somtech.ligne-directe.plist')),
+    launchctlAppele: existsSync(journalLaunchctl) ? readFileSync(journalLaunchctl, 'utf8').trim() : '',
+  };
+}
+
+test('MUR 4 — INSTALLER LE SERVICE DU POSTE EST REFUSÉ SOUS ESSAIS', async () => {
+  // LA QUATRIÈME PORTE, relevée en troisième revue, et elle sortait de toutes les autres :
+  // `installerService()` écrit un LaunchAgent qui pointe sur le dossier source COURANT,
+  // puis fait `bootout`, `bootstrap` et `kickstart`. Or un job launchd ne reçoit que le
+  // `PATH` de son plist — il n'hérite PAS de `NODE_TEST_CONTEXT`. Le veilleur qui en naît
+  // est donc un veilleur de PRODUCTION, lancé depuis un worktree, hors d'atteinte des trois
+  // autres murs : l'incident d'hier soir, un cran plus haut.
+  //
+  // Aucun test ne prend ce chemin aujourd'hui. C'est justement pourquoi il faut le fermer
+  // maintenant : la story affirmait « aucune porte de sortie », et cette affirmation était
+  // fausse tant que celle-ci restait ouverte.
+  const r = await jouerService('installerService');
+
+  assert.equal(r.leve, true, 'installerService doit refuser sous essais');
+  assert.equal(r.nom, 'CloisonEssais');
+  assert.equal(r.plistEcrit, false, 'aucun LaunchAgent ne doit être écrit, même dans un bac');
+  assert.equal(r.launchctlAppele, '', `launchctl ne doit pas même être invoqué — reçu : ${r.launchctlAppele}`);
+});
+
+test('MUR 4 — RETIRER LE SERVICE DU POSTE EST REFUSÉ AUSSI', async () => {
+  // Le retrait n'est pas plus anodin que la pose : son `bootout` porte sur l'étiquette du
+  // service du POSTE. Un test qui l'atteint arrête le veilleur de production et coupe le
+  // dirigeant de tous ses chantiers — sans rien écrire nulle part, donc sans laisser de
+  // trace qui l'expliquerait.
+  const r = await jouerService('retirerService');
+
+  assert.equal(r.leve, true, 'retirerService doit refuser sous essais');
+  assert.equal(r.nom, 'CloisonEssais');
+  assert.equal(r.launchctlAppele, '', `aucun bootout ne doit partir — reçu : ${r.launchctlAppele}`);
 });
 
 test('le mur tient AUSSI quand un jeton arrive par un autre chemin que le trousseau', async () => {
