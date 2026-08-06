@@ -64,20 +64,32 @@ const INTERNE = {
  *
  * Aucun texte ne prend donc de détail : les paramètres sont ignorés, volontairement. C'est
  * ce qui garantit qu'aucune interpolation ne peut y glisser une fuite plus tard.
+ *
+ * Une QUATRIÈME chose n'y entre jamais, et elle a été apprise après coup : **l'annonce
+ * d'une fin**. Ces phrases disaient « cette conversation se termine ici » quand notre
+ * session disparaissait — or le canal appartient au client, il n'est pas archivé, et une
+ * session neuve reprend la relation. La phrase était donc simplement fausse, et son coût
+ * n'était pas le style : un client à qui l'on annonce une fin repart par courriel, ce que
+ * toute cette fonction existe pour supprimer. Ce qu'on lui doit est exact et borné dans le
+ * temps — personne n'est là *en ce moment*, son message n'est pas passé, qu'il revienne.
  */
 const CLIENT = {
   non_autorise: () =>
     "Votre message n'a pas été transmis : vous n'avez pas accès à cette conversation. " +
     'Écrivez à votre interlocuteur habituel pour qu’il vous y ajoute.',
-  ligne_close: () => 'Cette conversation est terminée — plus personne ne la suit. Votre message n’a donc pas été transmis.',
+  ligne_close: () =>
+    'Personne ne suit cette conversation en ce moment — votre message n’a pas été transmis. ' +
+    'Écrivez-nous de nouveau un peu plus tard, ou passez par votre interlocuteur habituel si c’est pressant.',
   agent_injoignable: () =>
     'Votre interlocuteur n’est pas joignable en ce moment. ' +
     'Votre message n’a pas été transmis — renvoyez-le dans quelques instants.',
   agent_disparu: () =>
-    'Votre interlocuteur n’est plus disponible : cette conversation se termine ici. Votre message n’a pas été transmis.',
+    'Votre interlocuteur n’est pas disponible en ce moment — votre message n’a pas été transmis. ' +
+    'Renvoyez-le un peu plus tard : quelqu’un reprendra le fil.',
   echec_remise: () =>
     'Votre message n’a pas pu être transmis à votre interlocuteur. Renvoyez-le dans quelques instants.',
-  reprise_agent_disparu: () => 'Votre interlocuteur n’est plus disponible : cette conversation se termine ici.',
+  reprise_agent_disparu: () =>
+    'Votre interlocuteur n’est pas disponible en ce moment. Quelqu’un reprendra le fil de cette conversation.',
 };
 
 const REGISTRES = { interne: INTERNE, client: CLIENT };

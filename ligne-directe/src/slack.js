@@ -121,6 +121,26 @@ export async function identite(jetonRobot) {
 }
 
 /**
+ * Un refus qu'il ne sert à RIEN de réessayer — et cette propriété n'est pas décorative :
+ * c'est elle que l'appelant lit pour décider s'il relaie le message ou s'il laisse remonter.
+ *
+ * Elle existe parce qu'un test qui vérifie la présence de certains mots dans un message ne
+ * prouve rien de ce que le message DIT. Remplacer tout le texte d'un refus définitif par
+ * « réessaie dans quelques minutes » — le contresens exact — passait au vert. En liant le
+ * texte à un fait que le code utilise, le contresens devient détectable : une erreur
+ * `reessayable = false` dont le texte invite à réessayer se contredit elle-même, et c'est
+ * cette contradiction qu'on garde, pas un vocabulaire.
+ */
+export class RefusDefinitif extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'RefusDefinitif';
+    /** Réessayer ne changera rien : la situation demande un geste, pas de la patience. */
+    this.reessayable = false;
+  }
+}
+
+/**
  * Le canal repris n'a pas la confidentialité demandée. On refuse, on ne s'accommode pas.
  *
  * RELEVÉ EN REVUE, et c'était le défaut que tout ce chantier existe pour supprimer : la
@@ -129,16 +149,42 @@ export async function identite(jetonRobot) {
  * registre comme « client », et son autorisation-par-appartenance ouvrait la ligne à
  * quiconque peut entrer dans un canal public. Les deux défauts d'un coup, en silence.
  */
-export class ConfidentialiteIncompatible extends Error {
+export class ConfidentialiteIncompatible extends RefusDefinitif {
   constructor(nom, demandee, reelle) {
     super(
       `le canal #${nom} existe déjà et il est ${reelle ? 'privé' : 'public'} — ` +
-        `on en demandait un ${demandee ? 'privé' : 'public'}`
+        `on en demandait un ${demandee ? 'privé' : 'public'}. ` +
+        // LE CONSEIL A CHANGÉ, et l'ancien était dangereux : il proposait d'archiver le
+        // canal qui gêne. Suivre ce conseil détruit sans retour un canal d'équipe — on ne
+        // sait pas désarchiver (voir `CanalArchive`) — pour libérer un nom. Renommer est
+        // réversible et obtient la même chose ; c'est donc ce qu'on propose.
+        `Donne un --titre qui mène à un autre nom, ou fais renommer #${nom} dans Slack. ` +
+        `N'archive pas #${nom} pour libérer son nom : l'archivage est sans retour.`
     );
     this.name = 'ConfidentialiteIncompatible';
     this.canal = nom;
     this.demandee = Boolean(demandee);
     this.reelle = Boolean(reelle);
+  }
+}
+
+/**
+ * Le canal existe, mais il est archivé — donc en lecture seule, et hors de notre portée.
+ *
+ * Erreur NOMMÉE plutôt que message à reconnaître : l'appelant doit pouvoir la distinguer
+ * d'une panne passagère, parce que la suite n'est pas la même. Une panne se retente ; ceci
+ * ne se retente jamais et demande un geste humain.
+ */
+export class CanalArchive extends RefusDefinitif {
+  constructor(canal, id) {
+    super(
+      `#${canal} est archivé : un canal archivé est en lecture seule, et le désarchiver ` +
+        `n'est pas à notre portée — Slack le réserve à un compte humain. ` +
+        `Fais-le sortir des archives à la main dans Slack (#${canal}, ${id}), puis recommence.`
+    );
+    this.name = 'CanalArchive';
+    this.canal = canal;
+    this.id = id;
   }
 }
 
@@ -162,9 +208,18 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
     if (Boolean(existant.is_private) !== Boolean(prive)) {
       throw new ConfidentialiteIncompatible(nom, prive, existant.is_private);
     }
-    // Un canal archivé est en lecture seule : il faut le sortir des archives avant d'y
-    // écrire, sinon toute la ligne échoue au premier message.
-    if (existant.is_archived) await appeler('conversations.unarchive', jetonRobot, { channel: existant.id });
+    // UN CANAL ARCHIVÉ EST PERDU POUR NOUS, et il faut le dire au lieu de faire semblant.
+    //
+    // Ce code tentait `conversations.unarchive`. Slack ne sert cette méthode qu'à un jeton
+    // d'utilisateur — le nôtre est un jeton de robot, le seul dont ce composant dispose.
+    // L'appel ne pouvait donc pas aboutir : il donnait au lecteur, et aux tests, la
+    // certitude fausse qu'on savait rattraper une situation qu'on ne sait pas rattraper.
+    //
+    // Conséquence à connaître : tout canal client archivé — y compris ceux archivés avant
+    // que ce chemin ne soit fermé — ne se rejoint plus par le code. Le geste qui le lève
+    // est humain, il prend trente secondes dans Slack, et c'est exactement pour ça que le
+    // refus doit le nommer plutôt que de laisser tomber une erreur brute au premier message.
+    if (existant.is_archived) throw new CanalArchive(nom, existant.id);
     await rejoindreCanal(jetonRobot, existant.id);
     // On rend la confidentialité DU CANAL, pas celle qu'on demandait.
     //

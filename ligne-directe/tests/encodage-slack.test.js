@@ -50,6 +50,25 @@ async function avecSlack(etat, corps) {
 
 // ═════════════════════════════════ le double d'abord : une cloison qu'on n'éprouve pas n'en est pas une
 
+test('LE DOUBLE REFUSE LE DÉSARCHIVAGE — Slack ne le sert pas au jeton dont ce code dispose', async () => {
+  // Cette cloison ne se prouve que par elle-même : le code n'appelle plus `unarchive`, donc
+  // l'assouplir n'a aujourd'hui aucun effet observable ailleurs — et une cloison qui ne se
+  // prouve que par son absence d'effet n'en est pas une. Sans ce test, le jour où quelqu'un
+  // réintroduit l'appel, il le verra passer au vert contre un double complaisant.
+  //
+  // C'est la quatrième fois sur ce chantier que le double se montre plus permissif que le
+  // service réel, et la première où on s'en aperçoit avant d'y avoir cru.
+  await avecSlack({ canaux: [{ id: 'C1', name: 'ligne', is_private: false, is_archived: true, membres: [] }] }, async (monde) => {
+    const echec = await appeler('conversations.unarchive', 'jeton-robot', { channel: 'C1' }).then(
+      () => null,
+      (err) => err
+    );
+    assert.ok(echec, 'le désarchivage doit échouer');
+    assert.equal(echec.code, 'not_allowed_token_type', `code inattendu : ${echec.code}`);
+    assert.equal(monde.canalNomme('ligne').is_archived, true, 'et le canal doit rester archivé');
+  });
+});
+
 test('LE DOUBLE REFUSE CE QUE SLACK REFUSE — un corps JSON sur une méthode de lecture ne porte aucun argument', async () => {
   // Sans cette propriété, tout le reste du fichier ne prouve rien : c'est exactement la
   // permissivité du double précédent qui a laissé 97 tests verts couvrir une fonction morte.
@@ -173,10 +192,24 @@ test('TOUTE MÉTHODE QUE LE CODE APPELLE PASSE LE DOUBLE STRICT — les quatorze
     assert.equal(await archiverCanal('jeton', publique.id), true);
     assert.equal(monde.canalNomme('d-interne').is_archived, true, 'archiver doit archiver POUR DE VRAI');
 
-    // conversations.unarchive, par le chemin nominal d'une reprise de ligne
-    const repris = await creerCanal('jeton', 'd-interne', false);
-    assert.equal(repris.reutilise, true);
-    assert.equal(monde.canalNomme('d-interne').is_archived, false, 'la reprise doit sortir le canal des archives');
+    // La reprise d'un canal ARCHIVÉ — et ce test affirmait le contraire de ce qui est vrai.
+    //
+    // Il disait « la reprise doit sortir le canal des archives », et il passait, parce que
+    // le double acceptait un désarchivage que Slack refuse à un jeton de robot. Trois
+    // affirmations fausses ont été trouvées sur ce lot ; celle-ci était la plus coûteuse,
+    // parce qu'elle certifiait un rattrapage inexistant sur des canaux clients qui, eux,
+    // sont définitivement perdus une fois archivés.
+    const echec = await creerCanal('jeton', 'd-interne', false).then(
+      () => null,
+      (err) => err
+    );
+    assert.equal(echec?.name, 'CanalArchive', `reprendre un canal archivé doit échouer : ${echec?.message}`);
+    assert.equal(monde.canalNomme('d-interne').is_archived, true, 'et le canal reste archivé');
+    assert.deepEqual(
+      monde.appels.filter((a) => a.methode === 'conversations.unarchive'),
+      [],
+      'aucun désarchivage tenté : on sait qu’il échouerait'
+    );
 
     const methodes = new Set(monde.appels.map((a) => a.methode));
     for (const attendue of [
@@ -190,7 +223,9 @@ test('TOUTE MÉTHODE QUE LE CODE APPELLE PASSE LE DOUBLE STRICT — les quatorze
       'conversations.setPurpose',
       'conversations.rename',
       'conversations.archive',
-      'conversations.unarchive',
+      // `conversations.unarchive` ne figure plus ici : le code ne l'appelle plus, parce
+      // qu'il ne le peut pas. Une méthode listée mais jamais appelée est le contraire de ce
+      // que ce test existe pour prouver.
       'chat.postMessage',
       'users.lookupByEmail',
       'users.list',

@@ -21,9 +21,12 @@ function usage(code = 0) {
 
   ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel] [--nature client]
                                                            ouvre le canal du chantier
-                                                           (--titre nomme le canal ; sans lui, c'est le code)
+                                                           (--titre nomme le canal ET signe chaque message ;
+                                                            sans lui, en interne, c'est le code du chantier)
                                                            (--nature client : canal PRIVE, ou parlent les
                                                             gens du client qu'un humain y a invites.
+                                                            --titre y est OBLIGATOIRE : le client ne doit
+                                                            jamais voir un code de chantier.
                                                             Sans --nature, la ligne est interne : canal
                                                             public, autorisation par --inviter)
   dire "texte"                                             rapporte un jalon
