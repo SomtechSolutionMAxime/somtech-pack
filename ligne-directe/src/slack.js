@@ -276,6 +276,42 @@ export class CanalArchive extends RefusDefinitif {
 }
 
 /**
+ * Le canal existe, notre robot n'en est pas membre — et il ne peut pas s'y mettre lui-même.
+ *
+ * MESURÉ CONTRE LE VRAI SLACK LE 2026-08-06, et la mesure a évité une réinstallation de
+ * l'application pour rien : `conversations.join` répond `missing_scope` parce que le droit
+ * `channels:join` n'est pas accordé. L'accorder ne réglerait pourtant PAS le cas qui nous
+ * occupait — ce droit ne couvre que les canaux publics, et un canal privé ne se rejoint
+ * d'aucune façon : on y est invité, par un humain.
+ *
+ * D'où un refus qui nomme le geste plutôt qu'un droit : c'est l'invitation qui débloque,
+ * dans les deux cas, et elle prend trente secondes à qui est déjà dans le canal.
+ */
+export class InvitationRequise extends RefusDefinitif {
+  constructor(nom, id) {
+    // Le canal se désigne par son NOM quand on l'a — un identifiant `C0BNDJKC66P` ne se
+    // retrouve pas dans une barre latérale Slack, et c'est là que le geste doit être fait.
+    const nomme = nom && nom !== id;
+    super(
+      `notre robot n'est pas membre de ${nomme ? `#${nom} (${id})` : `ce canal (${id})`} et il ne peut pas ` +
+        `s'y mettre lui-même — Slack ne rend ce geste ni sur un canal privé, ni sans le droit d'y entrer. ` +
+        `Fais-le inviter à la main dans Slack (« /invite » depuis ${nomme ? `#${nom}` : 'ce canal'}), puis recommence.`
+    );
+    this.name = 'InvitationRequise';
+    this.canal = nom;
+    this.id = id;
+    /**
+     * Le geste qui lève l'impasse, comme FAIT lisible — pas comme phrase à reconnaître.
+     *
+     * Même raison que `reessayable` : un test qui cherche des mots dans un message ne prouve
+     * rien de ce que le message dit. Lié à un fait que l'appelant utilise, le contresens
+     * devient détectable.
+     */
+    this.geste = 'invitation_humaine';
+  }
+}
+
+/**
  * Crée un canal. Slack impose des noms en minuscules, sans espace ni accent, 80 car. max.
  * Si le canal existe déjà, on le rejoint plutôt que d'échouer : rouvrir une ligne sur un
  * chantier repris est un cas normal, pas une erreur — MAIS seulement à confidentialité
@@ -307,7 +343,16 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
     // est humain, il prend trente secondes dans Slack, et c'est exactement pour ça que le
     // refus doit le nommer plutôt que de laisser tomber une erreur brute au premier message.
     if (existant.is_archived) throw new CanalArchive(nom, existant.id);
-    await rejoindreCanal(jetonRobot, existant.id);
+    // ON NE REJOINT PAS UN CANAL QU'ON A DÉJÀ REJOINT — et c'est le défaut qui a bloqué le
+    // premier gestionnaire client réel. Le dirigeant avait invité le robot dans son canal
+    // privé ; ce chemin appelait `conversations.join` sans jamais poser la question, Slack
+    // refusait, et la ligne ne s'inscrivait pas : tout ce que le client écrivait se perdait.
+    //
+    // La question ne coûte rien : `conversations.list` porte déjà `is_member` sur chaque
+    // canal qu'il rend, donc le cas nominal ne fait AUCUN appel de plus.
+    if (!(await estMembreDuCanal(jetonRobot, existant))) {
+      await rejoindreCanal(jetonRobot, existant.id, { nom });
+    }
     // On rend la confidentialité DU CANAL, pas celle qu'on demandait.
     //
     // MUTATION ÉQUIVALENTE, dite plutôt que maquillée : remplacer ceci par `Boolean(prive)`
@@ -334,7 +379,33 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
 export async function infoCanal(jetonRobot, canal) {
   const d = await appeler('conversations.info', jetonRobot, { channel: canal });
   const c = d.channel || {};
-  return { id: c.id, nom: c.name, prive: Boolean(c.is_private), archive: Boolean(c.is_archived) };
+  return {
+    id: c.id,
+    nom: c.name,
+    prive: Boolean(c.is_private),
+    archive: Boolean(c.is_archived),
+    membre: Boolean(c.is_member),
+  };
+}
+
+/**
+ * Notre robot est-il DÉJÀ dans ce canal ?
+ *
+ * La question qui n'était jamais posée. Slack la porte sur chaque canal qu'il rend —
+ * `conversations.list` comme `conversations.info` — donc sur le chemin de reprise, où le
+ * canal vient de la liste, la réponse est déjà en main : aucun appel de plus.
+ *
+ * Le repli sur `conversations.info` couvre le cas où le canal vient d'ailleurs. Il ne
+ * DEVINE pas : un canal privé n'est visible que de l'intérieur, on pourrait donc conclure
+ * de sa seule présence qu'on y est — mais cette déduction serait juste aujourd'hui et
+ * fausse le jour où le canal arrive par un autre chemin. On demande.
+ *
+ * @param {object|string} canal un canal rendu par Slack, ou son identifiant
+ */
+export async function estMembreDuCanal(jetonRobot, canal) {
+  if (typeof canal?.is_member === 'boolean') return canal.is_member;
+  const id = typeof canal === 'string' ? canal : canal?.id;
+  return (await infoCanal(jetonRobot, id)).membre;
 }
 
 /** Cherche un canal par son nom, archives comprises. */
@@ -376,12 +447,30 @@ export async function membresDuCanal(jetonRobot, canal) {
   return membres;
 }
 
-export async function rejoindreCanal(jetonRobot, canal) {
+/**
+ * Rejoint un canal — ce qui ne se tente QUE quand on n'y est pas déjà (voir `creerCanal`).
+ *
+ * Les deux refus de Slack sont RELAYÉS, pas avalés, et c'est le changement qui compte :
+ * `method_not_supported_for_channel_type` était silencieux ici, ce qui donnait à l'appelant
+ * la certitude fausse d'être entré dans un canal privé où il n'entrerait jamais. Le suivant
+ * — `missing_scope` — n'était pas rattrapé du tout, et tombait en panne muette.
+ *
+ * Les deux disent la même chose et appellent le même geste : il faut qu'un humain invite le
+ * robot. C'est donc un seul refus nommé qui sort d'ici.
+ *
+ * @param {string} canal identifiant du canal
+ * @param {{nom?: string}} [contexte] nom lisible du canal, pour que le refus le nomme
+ */
+export async function rejoindreCanal(jetonRobot, canal, { nom } = {}) {
   try {
     await appeler('conversations.join', jetonRobot, { channel: canal });
   } catch (err) {
-    // Déjà dedans : ce n'est pas un échec.
-    if (err.code !== 'already_in_channel' && err.code !== 'method_not_supported_for_channel_type') throw err;
+    // Quelqu'un nous y a mis entre notre question et notre geste : ce n'est pas un échec.
+    if (err.code === 'already_in_channel') return;
+    if (err.code === 'missing_scope' || err.code === 'method_not_supported_for_channel_type') {
+      throw new InvitationRequise(nom || canal, canal);
+    }
+    throw err;
   }
 }
 
