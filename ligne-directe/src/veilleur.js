@@ -101,6 +101,9 @@ export class Veilleur {
     this.slack = slackInjecte || slack;
     this.herdr = herdrInjecte || herdr;
     this.registre = chargerRegistre();
+    // La nature des canaux où l'on écrit sans y avoir de ligne — demandée une fois, retenue.
+    // Sans ce cache, un canal d'équipe actif coûterait un appel plafonné par message.
+    this.canauxEtrangers = new Map();
     this.ws = null;
     this.serveur = null;
     this.chienDeGarde = null;
@@ -650,10 +653,44 @@ export class Veilleur {
     // sous-types à exclure oublie celui que Slack ajoutera, et l'oubli irait dans le mauvais
     // sens — une entrée dans un canal remise à l'agent, un client à qui l'on répond parce
     // qu'il a changé le sujet du canal.
+    // UN MESSAGE REPRIS PAR SON AUTEUR A SON PROPRE CHEMIN, et il ne pouvait pas en être
+    // autrement : la trame de `message_changed` ne porte rien à sa racine — ni texte, ni
+    // auteur. Le message vit sous `ev.message`, le canal reste sur l'enveloppe. L'ajouter à la
+    // liste blanche aurait donc remis à l'agent un message vide, ce qui est une autre façon de
+    // ne rien lui dire.
+    if (ev.subtype === 'message_changed') {
+      await this.remettreLaReprise(ev);
+      return;
+    }
     if (ev.subtype && !SOUS_TYPES_PAROLE.has(ev.subtype)) return;
     if (ev.user === this.identite.utilisateur) return;
 
     await this.remettreAuChantier(ev);
+  }
+
+  /**
+   * Un message que son auteur a repris — corrigé, complété, précisé.
+   *
+   * HUITIÈME CHEMIN MUET, relevé en revue après le septième : un client qui écrit de son
+   * téléphone se relit et complète. C'est un geste ordinaire, et il n'était entendu de
+   * personne — ni remis, ni répondu, ni journalisé, comme le septième.
+   *
+   * LE PIÈGE INVERSE EST TOUT AUSSI RÉEL, et c'est pour ça qu'on compare les textes : Slack
+   * émet exactement la même trame quand il attache LUI-MÊME l'aperçu d'un lien, sans que
+   * personne n'ait rien écrit. Remettre celle-là ferait recevoir deux fois le même message à
+   * l'agent — qui répondrait deux fois, sous les yeux du client.
+   */
+  async remettreLaReprise(ev) {
+    const message = ev.message;
+    if (!message) return;
+    if (message.bot_id || message.user === this.identite.utilisateur) return;
+
+    const avant = (ev.previous_message?.text || '').trim();
+    const apres = (message.text || '').trim();
+    const memesPieces = (ev.previous_message?.files || []).length === (message.files || []).length;
+    if (avant === apres && memesPieces) return; // rien n'a été dit : un aperçu, une épingle…
+
+    await this.remettreAuChantier({ ...message, channel: ev.channel, subtype: undefined, modifie: true });
   }
 
   /**
@@ -663,7 +700,10 @@ export class Veilleur {
    */
   async remettreAuChantier(ev) {
     const ligne = ligneParCanal(this.registre, ev.channel);
-    if (!ligne) return; // canal qui ne nous regarde pas
+    if (!ligne) {
+      await this.canalSansLigne(ev);
+      return;
+    }
 
     const texte = (ev.text || '').trim();
     // DEUX FORMES POUR LA MÊME CHOSE, et n'en lire qu'une rouvre le trou qu'on vient de
@@ -748,6 +788,7 @@ export class Veilleur {
           auteur: await this.nomDeLAuteur(ligne, ev.user),
           pieces,
           piecesManquantes: refus.length,
+          modifie: Boolean(ev.modifie),
         }),
         { socket: ligne.herdr_socket }
       );
@@ -774,6 +815,52 @@ export class Veilleur {
       const detail = refus.find((r) => r.cause === 'piece_non_recuperee');
       await this.repondreEnPropre(ligne, 'piece_non_recuperee', { erreur: detail?.detail });
     }
+  }
+
+  /**
+   * Un message arrivé dans un canal dont AUCUNE ligne n'est au registre.
+   *
+   * « Canal qui ne nous regarde pas » : c'est ce que disait le commentaire, et c'était vrai
+   * d'un canal d'équipe. Ça ne l'est pas du canal PRIVÉ d'un client — on ne s'invite pas
+   * soi-même dans un canal privé, on nous y a mis à la main. Un registre reparti à vide (il le
+   * fait quand il est illisible) suffit à produire la situation, et le client, lui, continue
+   * d'écrire dans le silence le plus complet des trois directions.
+   *
+   * LA NATURE DU CANAL TRANCHE, et il fallait un critère qui ne demande rien à personne :
+   *   - **public** → un canal d'équipe où notre robot ne fait que figurer. On se tait, sinon
+   *     la ligne devient un importun qui répond à chaque phrase du salon commun ;
+   *   - **privé** → presque à coup sûr un client orphelin. On lui répond, dans SON registre de
+   *     langage : la ligne perdue est notre affaire, pas la sienne.
+   *
+   * La nature est demandée UNE FOIS par canal et retenue : sans ce cache, un canal d'équipe
+   * actif ferait un appel Slack par message, sur une méthode plafonnée.
+   */
+  async canalSansLigne(ev) {
+    let canal = this.canauxEtrangers.get(ev.channel);
+    if (!canal) {
+      try {
+        canal = await this.slack.infoCanal(this.jetons.robot, ev.channel);
+      } catch (err) {
+        // On ne peut pas classer ce canal : se taire est le moindre risque — répondre dans un
+        // salon d'équipe est visible de tous, et se répéterait à chaque message.
+        journaliser(`canal ${ev.channel} inclassable (${err.message}) — aucune réponse par prudence`);
+        return;
+      }
+      this.canauxEtrangers.set(ev.channel, canal);
+      if (!canal.prive) journaliser(`canal #${canal.nom} sans ligne, public — on n'y répond pas`);
+    }
+    if (!canal.prive) return;
+
+    journaliser(
+      `message sur #${canal.nom} (${ev.channel}) : canal privé ABSENT du registre — ` +
+        `non remis, son auteur en est informé`
+    );
+    // Une ligne le temps de répondre, et rien de plus : elle n'entre pas au registre — on ne
+    // sait pas à quel chantier ce canal appartenait, et l'inventer serait pire que l'oublier.
+    // Sa nature est cliente parce que c'est le seul registre de langage présentable à
+    // quelqu'un qu'on ne sait pas identifier : il n'y a rien à lui apprendre de nos rouages.
+    const etrangere = { canal_id: ev.channel, canal_nom: canal.nom, nature: 'client', libelle: canal.nom };
+    await this.repondreEnPropre(etrangere, 'ligne_inconnue', { canal: canal.nom });
   }
 
   /**

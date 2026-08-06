@@ -40,10 +40,11 @@ beforeEach(() => {
 
 const journal = () => (existsSync(CHEMIN_JOURNAL) ? readFileSync(CHEMIN_JOURNAL, 'utf8') : '');
 
-function slackDouble() {
+function slackDouble(canaux = { C1: { nom: 'client-acme', prive: true } }) {
   return {
     postes: [],
     telecharges: [],
+    infosDemandees: [],
     async poster(_j, m) {
       this.postes.push(m);
       return '1';
@@ -53,6 +54,11 @@ function slackDouble() {
     },
     async membresDuCanal() {
       return ['UCLIENT'];
+    },
+    async infoCanal(_j, canal) {
+      this.infosDemandees.push(canal);
+      if (!(canal in canaux)) throw new Error('channel_not_found');
+      return { id: canal, nom: canaux[canal].nom, prive: canaux[canal].prive, archive: false };
     },
     async telechargerFichier(_j, fichier) {
       this.telecharges.push(fichier);
@@ -167,7 +173,6 @@ test('LE COMPTE DES CHEMINS — ce qui n’est pas une parole reste silencieux',
   const nonParoles = [
     { subtype: 'channel_join', text: 'a rejoint le canal' },
     { subtype: 'channel_leave', text: 'a quitté le canal' },
-    { subtype: 'message_changed', text: 'texte modifié' },
     { subtype: 'message_deleted', text: '' },
     { subtype: 'channel_topic', text: 'a changé le sujet' },
     { subtype: 'bot_message', text: 'je suis un robot' },
@@ -211,4 +216,120 @@ test('UNE PIÈCE SANS UN MOT est tout de même une parole — elle est remise', 
 
   assert.equal(h.remis.length, 1, 'une pièce déposée sans texte reste une parole adressée à la ligne');
   assert.equal(s.postes.length, 0, 'et ce n’est pas une non-remise : rien à répondre en propre');
+});
+
+// ═══════════ le HUITIÈME chemin muet — relevé en revue, et il y en avait deux
+
+test('UN MESSAGE MODIFIÉ EST ENTENDU — un client qui complète sa phrase parlait bien à quelqu’un', async () => {
+  // Le reviewer a passé les 38 sous-types de Slack un à un : 34 muets, dont celui-ci à tort.
+  // Un client qui écrit de son téléphone se relit et complète — c'est un geste ordinaire, pas
+  // un cas limite. Muet dans les trois directions, c'est exactement la famille du septième.
+  //
+  // La trame ne porte PAS le message à sa racine : il vit sous `ev.message`, et le canal reste
+  // sur l'enveloppe. C'est pour ça que ce n'est pas une entrée de plus dans la liste blanche —
+  // l'ajouter là aurait remis à l'agent un message dont `text` est vide.
+  const s = slackDouble();
+  const h = herdrDouble();
+  const v = veilleur({ slack: s, herdr: h });
+  v.registre.lignes.push(ligne());
+
+  await v.surMessage(
+    trame({
+      type: 'message',
+      subtype: 'message_changed',
+      channel: 'C1',
+      previous_message: { user: 'UCLIENT', text: 'ça ne marche pas' },
+      message: { user: 'UCLIENT', text: 'ça ne marche pas — depuis la mise à jour d’hier', edited: { user: 'UCLIENT' } },
+    }),
+    muet
+  );
+
+  assert.equal(h.remis.length, 1, 'un message repris reste une parole adressée à la ligne');
+  assert.ok(h.remis[0].texte.includes('depuis la mise à jour d’hier'), 'c’est la version À JOUR qui est remise');
+  assert.match(h.remis[0].texte, /MODIFIÉ/, 'l’agent doit savoir qu’il a peut-être déjà répondu à la version d’avant');
+});
+
+test('MESSAGE MODIFIÉ — un aperçu de lien attaché par Slack N’EST PAS une parole', async () => {
+  // Slack émet `message_changed` quand il attache lui-même l'aperçu d'un lien, sans que
+  // personne n'ait rien écrit. Le remettre ferait recevoir DEUX FOIS le même message à
+  // l'agent, qui répondrait deux fois — le défaut inverse de celui qu'on ferme, et tout aussi
+  // visible côté client. On compare donc les textes : sans changement, rien n'a été dit.
+  const s = slackDouble();
+  const h = herdrDouble();
+  const v = veilleur({ slack: s, herdr: h });
+  v.registre.lignes.push(ligne());
+
+  await v.surMessage(
+    trame({
+      type: 'message',
+      subtype: 'message_changed',
+      channel: 'C1',
+      previous_message: { user: 'UCLIENT', text: 'regarde https://exemple.invalide' },
+      message: { user: 'UCLIENT', text: 'regarde https://exemple.invalide', attachments: [{ title: 'Exemple' }] },
+    }),
+    muet
+  );
+
+  assert.equal(h.remis.length, 0, 'aucun texte n’a changé : personne n’a parlé');
+  assert.equal(s.postes.length, 0);
+});
+
+test('MESSAGE MODIFIÉ — nos propres messages ne repartent pas dans la boucle', async () => {
+  const s = slackDouble();
+  const h = herdrDouble();
+  const v = veilleur({ slack: s, herdr: h });
+  v.registre.lignes.push(ligne());
+
+  for (const message of [
+    { bot_id: 'BMOI', text: 'ma réponse, corrigée' },
+    { user: 'UMOI', text: 'moi encore, corrigé' },
+  ]) {
+    await v.surMessage(
+      trame({ type: 'message', subtype: 'message_changed', channel: 'C1', previous_message: { text: 'avant' }, message }),
+      muet
+    );
+  }
+
+  assert.equal(h.remis.length, 0);
+  assert.equal(s.postes.length, 0);
+});
+
+test('UN CANAL PRIVÉ SANS LIGNE AU REGISTRE — le client n’est pas laissé sans réponse', async () => {
+  // Mesuré en revue : remis 0, répondu 0, journal vide. Silence plus complet encore que le
+  // septième chemin. Notre robot est pourtant toujours membre du canal PRIVÉ de ce client —
+  // il n'y est pas par hasard, on l'y a mis à la main. Un registre reparti à vide (il le fait
+  // quand il est illisible) suffit à produire la situation, et le client, lui, continue d'écrire.
+  const s = slackDouble({ C_ORPHELIN: { nom: 'client-orphelin', prive: true } });
+  const h = herdrDouble();
+  const v = veilleur({ slack: s, herdr: h });
+  // aucune ligne au registre : c'est tout le sujet
+
+  await v.surMessage(trame({ type: 'message', channel: 'C_ORPHELIN', user: 'UCLIENT', text: 'des nouvelles ?' }), muet);
+
+  assert.equal(h.remis.length, 0, 'il n’y a personne à qui remettre — ce n’est pas ce qu’on répare');
+  assert.equal(s.postes.length, 1, 'mais celui qui a écrit doit l’apprendre (RA-REL-009)');
+  assert.match(journal(), /registre/i, 'et la non-remise laisse une trace lisible');
+
+  // La réponse part dans le canal d'un TIERS : c'est le registre client qui parle, jamais l'interne.
+  for (const mot of ['pane', 'veilleur', 'worktree', 'herdr', 'chantier', 'agent', 'registre', 'socket']) {
+    assert.ok(!s.postes[0].texte.toLowerCase().includes(mot), `« ${mot} » ne part pas chez un tiers : ${s.postes[0].texte}`);
+  }
+  assert.notEqual(s.postes[0].nom, 'Ligne directe', 'et pas sous le nom de notre outillage');
+});
+
+test('UN CANAL PUBLIC SANS LIGNE reste silencieux — et n’est interrogé qu’une fois', async () => {
+  // La contrepartie, et elle n'est pas optionnelle : notre robot est membre de canaux d'équipe
+  // publics. Y répondre à chaque message ferait de la ligne un importun, et le second appel à
+  // Slack par message ferait sauter le plafond de l'API sur un canal actif.
+  const s = slackDouble({ C_EQUIPE: { nom: 'general', prive: false } });
+  const h = herdrDouble();
+  const v = veilleur({ slack: s, herdr: h });
+
+  for (const texte of ['bonjour', 'ça va ?', 'à demain']) {
+    await v.surMessage(trame({ type: 'message', channel: 'C_EQUIPE', user: 'UCLIENT', text: texte }), muet);
+  }
+
+  assert.equal(s.postes.length, 0, 'on ne répond pas dans un canal d’équipe où l’on ne fait que figurer');
+  assert.equal(h.remis.length, 0);
+  assert.deepEqual(s.infosDemandees, ['C_EQUIPE'], 'la nature d’un canal se demande une fois, pas à chaque message');
 });

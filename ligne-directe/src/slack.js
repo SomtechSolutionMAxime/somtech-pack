@@ -303,6 +303,23 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
   }
 }
 
+/**
+ * Ce que Slack sait d'un canal — et surtout : est-il PRIVÉ ?
+ *
+ * Cette question tranche le sort d'un message arrivé dans un canal dont aucune ligne n'est au
+ * registre. Un canal public où notre robot figure est un canal d'équipe : on n'y répond pas,
+ * sous peine de devenir un importun. Un canal PRIVÉ, lui, ne s'obtient pas par hasard — on
+ * nous y a mis à la main, et c'est presque toujours celui d'un client dont la ligne s'est
+ * perdue. Le silence y est le pire résultat possible.
+ *
+ * Demande `channels:read` (public) ou `groups:read` (privé) — les deux sont déjà exigés.
+ */
+export async function infoCanal(jetonRobot, canal) {
+  const d = await appeler('conversations.info', jetonRobot, { channel: canal });
+  const c = d.channel || {};
+  return { id: c.id, nom: c.name, prive: Boolean(c.is_private), archive: Boolean(c.is_archived) };
+}
+
 /** Cherche un canal par son nom, archives comprises. */
 export async function trouverCanal(jetonRobot, nom) {
   let curseur;

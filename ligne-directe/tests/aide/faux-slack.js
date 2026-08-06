@@ -297,6 +297,12 @@ export function fauxSlack({
         return u ? reponse({ ok: true, user: u }) : echec('users_not_found');
       }
 
+      case 'conversations.info': {
+        if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
+        const canal = monde.canaux.find((c) => c.id === args.channel);
+        return canal ? reponse({ ok: true, channel: canal }) : echec('channel_not_found');
+      }
+
       case 'users.info': {
         if (!args.user) return echec('invalid_arguments', { detail: 'missing required field: user' });
         const u = monde.utilisateurs.find((x) => x.id === args.user);

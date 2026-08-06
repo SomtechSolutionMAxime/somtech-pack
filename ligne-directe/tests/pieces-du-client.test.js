@@ -19,13 +19,13 @@
 
 import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync, statSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, statSync, readdirSync, rmSync, mkdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { fauxSlack } from './aide/faux-slack.js';
 
-let Veilleur, sauverRegistre, CHEMIN_JOURNAL, telechargerFichier, RACINE_PIECES, TAILLE_MAX;
+let Veilleur, sauverRegistre, CHEMIN_JOURNAL, telechargerFichier, RACINE_PIECES, TAILLE_MAX, nomSur;
 let racine;
 
 /** Le jeton du robot — s'il ressort où que ce soit, la fuite est prouvée. */
@@ -37,7 +37,7 @@ before(async () => {
   ({ Veilleur } = await import('../src/veilleur.js'));
   ({ sauverRegistre, CHEMIN_JOURNAL } = await import('../src/registre.js'));
   ({ telechargerFichier } = await import('../src/slack.js'));
-  ({ RACINE_PIECES, TAILLE_MAX } = await import('../src/pieces.js'));
+  ({ RACINE_PIECES, TAILLE_MAX, nomSur } = await import('../src/pieces.js'));
 });
 
 let monde;
@@ -199,13 +199,19 @@ test('LE JETON NE FUIT NULLE PART — ni chemin, ni trace, ni cadre, ni message 
     m.postes.map((p) => `${p.text} ${p.username}`).join('\n'),
   ];
 
+  // L'ERREUR SE BALAIE EN ENTIER, pas par les champs qu'on croit se rappeler. Ce balayage
+  // lisait `err.details` quand la classe expose `err.detail` : un jeton entier déposé dans
+  // `detail` passait au vert, et le test annonçait une garantie qu'il ne tenait pas. On sérialise
+  // donc TOUT ce que porte l'erreur — un champ ajouté demain est balayé sans qu'on y pense.
   let erreurLevee = '';
   try {
     await telechargerFichier(JETON, { id: 'FX', url_private_download: 'https://files.slack.invalide/absente' });
   } catch (err) {
-    erreurLevee = `${err.message} ${JSON.stringify(err.details ?? '')}`;
+    const champs = Object.getOwnPropertyNames(err).map((c) => `${c}=${String(err[c])}`);
+    erreurLevee = `${err.message} ${champs.join(' ')}`;
   }
   assert.ok(erreurLevee, 'une récupération impossible doit lever, pas rendre un objet vide');
+  assert.match(erreurLevee, /detail=/, 'le balayage doit lire les champs réels de l’erreur, pas ceux qu’on lui suppose');
   sorties.push(erreurLevee);
 
   for (const sortie of sorties) {
@@ -436,4 +442,73 @@ test('AUCUN TEXTE ET LA SEULE PIÈCE A ÉCHOUÉ : le cadre dit ce qui s’est pa
   assert.match(cadre, /aucun texte/i, 'l’agent doit savoir qu’il n’y avait rien d’écrit');
   assert.match(cadre, /pas pu être recueillie/i, 'et que ce qui devait accompagner n’est pas arrivé');
   assert.equal(m.postes.length, 1, 'le client, lui, l’apprend');
+});
+
+// ═══════════════ la CAUSE émise, pas seulement une phrase qui ressemble
+
+test('CHAQUE REFUS ÉMET SA PROPRE CAUSE — pas une phrase voisine (relevé en revue)', async () => {
+  // LE DÉFAUT QUE CE TEST EXISTE POUR ATTRAPER, et il a survécu à toute la première série :
+  // router l'échec de récupération vers `piece_type_refuse` laissait 190 tests sur 190 verts.
+  // La PR vendait trois refus distincts ; la distinction n'était tenue que pour deux.
+  //
+  // Ce que ça donne chez le client : sa capture n'a pas pu être rapatriée — un incident
+  // passager, il n'a qu'à la renvoyer — et il s'entend dire que nous ne pouvons pas recevoir
+  // ce type de fichier. Un refus DÉFINITIF. Il ne la renverra jamais, et c'est l'inverse exact
+  // du raisonnement écrit dans `langage.js` : le définitif prime sur le négociable parce qu'ils
+  // n'appellent pas le même geste. Se tromper de sens coûte la pièce.
+  //
+  // On compare donc au texte CANONIQUE de la cause attendue — une égalité, pas une sonde. Une
+  // sonde sur quelques mots reconnaît deux causes voisines ; l'égalité n'en reconnaît qu'une.
+  const { reponse } = await import('../src/langage.js');
+
+  const situations = [
+    ['récupération en échec', { fichiers: {} }, capture(), 'piece_non_recuperee'],
+    ['droit de lecture manquant', { droitFichiers: false }, capture(), 'piece_non_recuperee'],
+    ['au-delà de 5 Mo', {}, capture({ size: TAILLE_MAX + 1 }), 'piece_trop_lourde'],
+    ['type non recevable', {}, capture({ name: 'a.zip', mimetype: 'application/zip', size: 10 }), 'piece_type_refuse'],
+  ];
+
+  for (const [quoi, monde_, fichier, attendue] of situations) {
+    monde?.restaurer();
+    sauverRegistre({ version: 1, lignes: [] });
+    const m = espace(monde_);
+    const v = veilleur();
+    v.registre.lignes.push(ligne());
+
+    await v.remettreAuChantier(parole({ files: [fichier] }));
+
+    assert.equal(m.postes.length, 1, `${quoi} : le client doit recevoir exactement une réponse`);
+    assert.equal(m.postes[0].text, reponse(attendue, 'client'), `${quoi} : la cause émise n’est pas « ${attendue} »`);
+  }
+});
+
+test('UN DÉPÔT DÉJÀ TROP OUVERT EST REFERMÉ — c’est le préexistant que les droits tiennent', async () => {
+  // CE QUE CE TEST GARDE, ET POURQUOI IL A FALLU LE RELEVER EN REVUE : les trois `chmod` du
+  // dépôt pouvaient être retirés sans qu'un seul test rougisse. Le garde-fou était bon, mais
+  // rien ne le prouvait — et sa justification écrite était fausse par-dessus le marché.
+  //
+  // Le mode passé à `mkdir` et à `writeFile` ne s'applique qu'à la CRÉATION. Sur un dossier
+  // ou un fichier qui existe déjà, il est purement ignoré : un dépôt laissé en 777 par une
+  // manipulation, une restauration de sauvegarde ou une version antérieure resterait ouvert à
+  // tout le poste, et chaque capture d'écran de client viendrait s'y déposer.
+  //
+  // (L'ancien commentaire invoquait un umask permissif : un umask ne peut qu'ENLEVER des bits,
+  // jamais en ajouter. Une raison fausse survit mal à celui qui la relit et la « simplifie ».)
+  espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  const dossier = join(RACINE_PIECES, 'C1');
+  const cible = join(dossier, `${nomSur('F1')}-${nomSur('capture.png')}`);
+  mkdirSync(dossier, { recursive: true });
+  chmodSync(RACINE_PIECES, 0o777);
+  chmodSync(dossier, 0o777);
+  writeFileSync(cible, 'une pièce d’un client précédent');
+  chmodSync(cible, 0o666);
+
+  await v.remettreAuChantier(parole());
+
+  assert.equal(statSync(RACINE_PIECES).mode & 0o777, 0o700, 'la racine du dépôt doit être refermée');
+  assert.equal(statSync(dossier).mode & 0o777, 0o700, 'le dossier du canal doit être refermé');
+  assert.equal(statSync(cible).mode & 0o777, 0o600, 'le fichier réécrit doit être refermé');
 });

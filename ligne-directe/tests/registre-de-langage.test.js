@@ -55,6 +55,7 @@ const CODE_CHANTIER = 'D-20260805-0005';
 const ERREUR_TECHNIQUE = 'herdr: pane w26:pQ introuvable (socket absent)';
 
 const DETAILS = {
+  canal: 'client-acme',
   chantier: CODE_CHANTIER,
   pane: 'w26:pQ',
   close_le: '2026-08-06T10:00:00.000Z',
@@ -283,6 +284,8 @@ test('NON-RÉGRESSION — les réponses internes sont identiques MOT POUR MOT au
   // Recopiées du code livré, pas reconstruites : c'est ce que le dirigeant lit aujourd'hui.
   const attendu = {
     non_autorise: "Ton message n'a été remis à aucun agent : tu n'es pas autorisé à écrire sur cette ligne.",
+    ligne_inconnue:
+      "Un message est arrivé sur #client-acme, qui ne correspond à AUCUNE ligne du registre — il n'a été remis à aucun agent. Le canal étant privé, son auteur a reçu une réponse cliente.",
     message_vide: "Ton message est arrivé sans rien à remettre — ni texte, ni pièce jointe. Il n'a donc été remis à aucun agent.",
     ligne_close: `Cette ligne est close depuis le 2026-08-06 — plus personne ne travaille sur ${CODE_CHANTIER}. Ton message n'a donc été remis à aucun agent.`,
     agent_injoignable: `Je n'arrive pas à joindre l'agent de ${CODE_CHANTIER} en ce moment (${ERREUR_TECHNIQUE}). Ton message n'a été remis à personne — renvoie-le dans un instant.`,

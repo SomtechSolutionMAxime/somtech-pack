@@ -38,6 +38,13 @@ function slackDouble() {
     async creerCanal(_jeton, nom) {
       return { id: `C_${nom}`, nom, reutilise: false };
     },
+    // Un canal sans ligne au registre n'est plus traité pareil selon sa nature : PUBLIC on se
+    // tait, PRIVÉ on répond (c'est le canal d'un client dont la ligne s'est perdue). Sans
+    // cette réponse, le test ci-dessous passerait au vert par accident — le veilleur se
+    // taisant faute d'avoir pu classer le canal, et non parce qu'il l'a jugé public.
+    async infoCanal(_jeton, canal) {
+      return { id: canal, nom: canal.replace(/^C_/, ''), prive: false, archive: false };
+    },
     async definirSujet() {},
     async inviter() {},
     async ouvrirEcoute() {
@@ -179,7 +186,10 @@ test('chaque enveloppe reçue est acquittée, sinon Slack la rejoue indéfinimen
   assert.equal(h.remis.length, 1);
 });
 
-test('un message dans un canal qui ne nous regarde pas est ignoré sans bruit', async () => {
+test('un message dans un canal PUBLIC qui ne nous regarde pas est ignoré sans bruit', async () => {
+  // La contrepartie du huitième chemin : notre robot figure dans des canaux d'équipe. Y
+  // répondre à chaque message ferait de la ligne un importun. C'est la NATURE du canal qui
+  // tranche — public, on se tait ; privé, c'est un client qu'on ne laisse pas sans réponse.
   const s = slackDouble();
   const h = herdrDouble({ vivants: ['w1:p1'] });
   const v = veilleurAvec({ lignes: [ligne()], slack: s, herdr: h });

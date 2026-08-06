@@ -42,6 +42,14 @@ Le veilleur écoute en **Socket Mode**. Il lui faut, en plus du jeton de robot, 
 1. **Toute modification de portée impose de RÉINSTALLER l'application** dans l'espace de travail. Accorder une portée sans réinstaller ne change rien, et rien ne le signale.
 2. **Le manifeste de l'application ne reflète plus ce qui est accordé.** L'application a été créée depuis un manifeste ; `files:read`, `files:write` et les portées `groups:*` ont été ajoutés à la main le 2026-08-06. **Rejouer le manifeste les effacerait sans bruit** — le même piège qu'une migration qui diverge de sa base. Mettre le manifeste à jour avant de le rejouer, jamais l'inverse.
 
+## Un canal privé dont la ligne a disparu du registre
+
+Le registre repart à vide quand il est illisible. Le robot, lui, reste membre du canal privé de son client — qui continue d'écrire dans le vide.
+
+Le veilleur répond donc, **dans le registre de langage client**, à tout message arrivé sur un canal **privé** absent du registre : *« cette conversation n'est suivie par personne en ce moment »*. Sur un canal **public**, il se tait — notre robot figure dans des canaux d'équipe, et y répondre à chaque message en ferait un importun.
+
+La nature du canal est demandée à Slack (`conversations.info`, portées déjà exigées) **une fois par canal**, puis retenue en mémoire.
+
 ## Ce que les pièces déposées laissent sur le poste
 
 Une pièce recueillie est écrite dans `~/.somtech/ligne-directe/pieces/<canal>/`, en **0700 pour le dossier, 0600 pour le fichier** : seul le compte du poste peut la lire.

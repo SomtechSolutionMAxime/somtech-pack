@@ -32,6 +32,7 @@
 export const CAUSES_DE_NON_REMISE = [
   'non_autorise',
   'ligne_close',
+  'ligne_inconnue',
   'message_vide',
   'agent_injoignable',
   'agent_disparu',
@@ -71,6 +72,9 @@ const INTERNE = {
   ligne_close: ({ close_le: closeLe, chantier }) =>
     `Cette ligne est close depuis le ${String(closeLe).slice(0, 10)} — plus personne ne travaille sur ${chantier}. ` +
     `Ton message n'a donc été remis à aucun agent.`,
+  ligne_inconnue: ({ canal }) =>
+    `Un message est arrivé sur #${canal}, qui ne correspond à AUCUNE ligne du registre — ` +
+    `il n'a été remis à aucun agent. Le canal étant privé, son auteur a reçu une réponse cliente.`,
   message_vide: () =>
     `Ton message est arrivé sans rien à remettre — ni texte, ni pièce jointe. ` +
     `Il n'a donc été remis à aucun agent.`,
@@ -119,6 +123,9 @@ const CLIENT = {
   ligne_close: () =>
     'Personne ne suit cette conversation en ce moment — votre message n’a pas été transmis. ' +
     'Écrivez-nous de nouveau un peu plus tard, ou passez par votre interlocuteur habituel si c’est pressant.',
+  ligne_inconnue: () =>
+    'Cette conversation n’est suivie par personne en ce moment — votre message n’a pas été transmis. ' +
+    'Réécrivez-nous un peu plus tard, ou passez par votre interlocuteur habituel si c’est pressant.',
   message_vide: () =>
     'Votre message nous est bien parvenu, mais il était vide — ni texte, ni fichier. ' +
     'Il n’a donc pas été transmis : réécrivez-le, s’il vous plaît.',

@@ -109,12 +109,16 @@ export function deposer(canalId, fichier, octets, { racine = RACINE_PIECES } = {
   mkdirSync(racine, { recursive: true, mode: 0o700 });
   const dossier = join(racine, nomSur(canalId));
   mkdirSync(dossier, { recursive: true, mode: 0o700 });
-  // `mkdirSync` applique le masque du compte : sans ce chmod, un umask permissif rendrait le
-  // dossier lisible par tout le poste — ce qui est exactement ce qu'on cherche à empêcher.
+  // LE MODE PASSÉ CI-DESSUS NE VAUT QU'À LA CRÉATION — sur un dossier qui existe déjà, il est
+  // purement ignoré. Ce que ces `chmod` tiennent, c'est donc le PRÉEXISTANT : un dépôt laissé
+  // ouvert par une manipulation, une restauration de sauvegarde ou une version antérieure
+  // resterait lisible par tout le poste, et chaque capture d'écran de client viendrait s'y
+  // déposer. On referme à chaque dépôt plutôt que d'espérer que personne n'a rien ouvert.
   chmodSync(racine, 0o700);
   chmodSync(dossier, 0o700);
 
   const chemin = join(dossier, `${nomSur(fichier?.id || 'piece')}-${nomSur(fichier?.name)}`);
+  // Même règle pour le fichier : réécrire un fichier existant n'en change pas les droits.
   writeFileSync(chemin, octets, { mode: 0o600 });
   chmodSync(chemin, 0o600);
   return chemin;

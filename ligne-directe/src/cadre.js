@@ -21,6 +21,17 @@
 export const COMMANDE = 'node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js"';
 
 /**
+ * Ce qui s'ajoute à l'en-tête quand l'auteur a repris son message.
+ *
+ * L'agent a peut-être DÉJÀ RÉPONDU à la version d'avant — et son interlocuteur, lui, croit
+ * avoir posé une seule question. Le dire en tête plutôt qu'en note : c'est la première ligne
+ * qu'on lit, et c'est elle qui change la réponse à écrire.
+ */
+function repris(modifie) {
+  return modifie ? ', MODIFIÉ depuis son envoi' : '';
+}
+
+/**
  * Le corps du message tel qu'il arrive.
  *
  * UN TEXTE VIDE NE SE REMET PAS TEL QUEL quand une pièce l'accompagne : l'agent lirait un
@@ -84,11 +95,11 @@ function blocDesPieces(pieces, manquantes, nature) {
  * @param {string} [p.nature] 'interne' (défaut) ou 'client'
  * @param {string} [p.auteur] qui a écrit — nom d'usage, à défaut identifiant. Ligne cliente.
  */
-export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', auteur, pieces = [], piecesManquantes = 0 }) {
+export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', auteur, pieces = [], piecesManquantes = 0, modifie = false }) {
   const ou = canal ? ` (#${canal})` : '';
-  if (nature === 'client') return cadreClient({ chantier, texte, ou, auteur, pieces, piecesManquantes });
+  if (nature === 'client') return cadreClient({ chantier, texte, ou, auteur, pieces, piecesManquantes, modifie });
   return [
-    `[LIGNE DIRECTE — ${chantier}${ou}] Message du dirigeant, reçu par Slack :`,
+    `[LIGNE DIRECTE — ${chantier}${ou}] Message du dirigeant${repris(modifie)}, reçu par Slack :`,
     '',
     corpsRecu(texte, pieces, piecesManquantes),
     ...blocDesPieces(pieces, piecesManquantes, 'interne'),
@@ -111,10 +122,10 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
  *      sur une ligne cliente, proposer ce geste ferait poser au CLIENT une question qui
  *      appartient au dirigeant. L'agent est renvoyé vers sa ligne interne.
  */
-function cadreClient({ chantier, texte, ou, auteur, pieces = [], piecesManquantes = 0 }) {
+function cadreClient({ chantier, texte, ou, auteur, pieces = [], piecesManquantes = 0, modifie = false }) {
   const qui = auteur || 'une personne du client, non identifiée';
   return [
-    `[LIGNE DIRECTE — ${chantier}${ou}] Message de ${qui}, du client, reçu par Slack :`,
+    `[LIGNE DIRECTE — ${chantier}${ou}] Message de ${qui}, du client${repris(modifie)}, reçu par Slack :`,
     '',
     corpsRecu(texte, pieces, piecesManquantes),
     ...blocDesPieces(pieces, piecesManquantes, 'client'),
