@@ -36,6 +36,10 @@ export const FORMULAIRE_SEULEMENT = new Set([
   'users.list',
   'users.info',
   'users.lookupByEmail',
+  // MESURÉ contre le vrai Slack le 2026-08-06 : `files.info` répond 200 en formulaire et
+  // refuse en JSON avec `invalid_arguments`. Il appartient donc bien à cette famille — et
+  // c'est le seul appel du code qui serve à décider si une pièce est recevable.
+  'files.info',
 ]);
 
 function enTete(init, nom) {
@@ -126,6 +130,7 @@ export function fauxSlack({
   robot = 'UMOI',
   fichiers = {},
   droitFichiers = true,
+  infosFichiers = {},
 } = {}) {
   const monde = {
     canaux: canaux.map((c) => ({ is_private: false, is_archived: false, membres: [], ...c })),
@@ -295,6 +300,14 @@ export function fauxSlack({
         if (!args.email) return echec('invalid_arguments', { detail: 'missing required field: email' });
         const u = monde.utilisateurs.find((x) => x.profile?.email === args.email);
         return u ? reponse({ ok: true, user: u }) : echec('users_not_found');
+      }
+
+      case 'files.info': {
+        // La fiche complète d'un fichier — le seul moyen de savoir ce qu'est une pièce que
+        // Slack a livrée caviardée (ni nom, ni type, juste un identifiant).
+        if (!args.file) return echec('invalid_arguments', { detail: 'missing required field: file' });
+        const fiche = infosFichiers[args.file];
+        return fiche ? reponse({ ok: true, file: fiche }) : echec('file_not_found');
       }
 
       case 'conversations.info': {

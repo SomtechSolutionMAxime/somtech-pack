@@ -124,6 +124,26 @@ export function deposer(canalId, fichier, octets, { racine = RACINE_PIECES } = {
   return chemin;
 }
 
+/**
+ * Cet objet fichier est-il trop pauvre pour qu'on décide quoi que ce soit ?
+ *
+ * MESURÉ contre le vrai espace le 2026-08-06 : nos objets arrivent COMPLETS (`name`,
+ * `mimetype`, `size`, les deux adresses). Le cas caviardé existe pourtant côté Slack — il se
+ * signale par `mode: 'file_access'` / `file_access: 'check_file_info'` — et il ne livre qu'un
+ * identifiant.
+ *
+ * POURQUOI CETTE QUESTION VAUT SON CODE : sans elle, un objet caviardé n'a ni type ni nom, la
+ * lecture du type rend `null`, et le client s'entend dire que nous ne pouvons pas recevoir ce
+ * type de fichier. Un refus **définitif**, rendu sur une capture d'écran parfaitement valable —
+ * il ne la renverra jamais. On demande donc la fiche avant de conclure, plutôt que de conclure
+ * de ce qui manque.
+ */
+export function pieceACompleter(fichier) {
+  if (!fichier?.id) return false;
+  if (fichier.file_access === 'check_file_info' || fichier.mode === 'file_access') return true;
+  return !fichier.mimetype && !fichier.name;
+}
+
 /** Un gabarit lisible pour le cadre remis à l'agent — jamais l'octet près. */
 export function gabarit(octets) {
   const ko = Math.max(1, Math.round(octets / 1024));

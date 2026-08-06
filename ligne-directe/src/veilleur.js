@@ -24,7 +24,7 @@ import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { cadrerPourAgent } from './cadre.js';
 import { reponse } from './langage.js';
-import { TAILLE_MAX, typeDePiece, deposer, gabarit } from './pieces.js';
+import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
 import {
   CHEMIN_SOCKET,
   CHEMIN_JOURNAL,
@@ -882,9 +882,33 @@ export class Veilleur {
   async recueillirPieces(ligne, fichiers) {
     const pieces = [];
     const refus = [];
-    for (const fichier of fichiers) {
+    for (const recu of fichiers) {
+      // UN OBJET TROP PAUVRE SE COMPLÈTE AVANT DE SE JUGER. Un objet caviardé n'a ni nom ni
+      // type : le refuser sur cette absence rendrait un refus DÉFINITIF de type sur une
+      // capture d'écran valable, et le client ne la renverrait jamais. On demande sa fiche.
+      let fichier = recu;
+      if (pieceACompleter(recu)) {
+        try {
+          fichier = (await this.slack.infoFichier(this.jetons.robot, recu.id)) || recu;
+          journaliser(`pièce complétée — #${ligne.canal_nom} : ${recu.id} livrée sans nom ni type`);
+        } catch (err) {
+          // On ne sait PAS ce qu'était cette pièce. Le dire ainsi, plutôt qu'affirmer un type
+          // qu'on ignore : la seule réponse honnête est celle qui invite à réessayer.
+          refus.push({ cause: 'piece_non_recuperee', detail: 'fiche_illisible' });
+          journaliser(`fiche illisible — #${ligne.canal_nom} : ${recu.id} (${err?.code || err?.message})`);
+          continue;
+        }
+      }
+
       const mime = typeDePiece(fichier);
       if (!mime) {
+        // Toujours sans nom ni type APRÈS sa fiche : on ne conclut pas davantage qu'avant.
+        // Le refus définitif est réservé à ce qu'on a vraiment lu.
+        if (pieceACompleter(fichier)) {
+          refus.push({ cause: 'piece_non_recuperee', detail: 'fiche_incomplete' });
+          journaliser(`pièce indéchiffrable — #${ligne.canal_nom} : ${fichier?.id} sans nom ni type même après sa fiche`);
+          continue;
+        }
         refus.push({ cause: 'piece_type_refuse' });
         journaliser(`pièce écartée — #${ligne.canal_nom} : ${fichier?.id} d'un type non recevable`);
         continue;

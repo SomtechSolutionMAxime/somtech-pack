@@ -68,12 +68,13 @@ const capture = (sur = {}) => ({
   ...sur,
 });
 
-function espace({ fichiers = { [ADRESSE]: { octets: PIXELS, mime: 'image/png' } }, droitFichiers = true } = {}) {
+function espace({ fichiers = { [ADRESSE]: { octets: PIXELS, mime: 'image/png' } }, droitFichiers = true, infosFichiers = {} } = {}) {
   monde = fauxSlack({
     canaux: [{ id: 'C1', name: 'client-acme', is_private: true, membres: ['UMOI', 'UCLIENT'] }],
     utilisateurs: [{ id: 'UCLIENT', name: 'jean', real_name: 'Jean Tremblay', profile: {} }],
     fichiers,
     droitFichiers,
+    infosFichiers,
   });
   return monde.installer();
 }
@@ -511,4 +512,75 @@ test('UN DÉPÔT DÉJÀ TROP OUVERT EST REFERMÉ — c’est le préexistant que
   assert.equal(statSync(RACINE_PIECES).mode & 0o777, 0o700, 'la racine du dépôt doit être refermée');
   assert.equal(statSync(dossier).mode & 0o777, 0o700, 'le dossier du canal doit être refermé');
   assert.equal(statSync(cible).mode & 0o777, 0o600, 'le fichier réécrit doit être refermé');
+});
+
+// ═══════════ l'objet fichier caviardé — mesuré contre le vrai espace le 2026-08-06
+
+/** Ce que Slack livre quand l'objet est caviardé : un identifiant, et de quoi le demander. */
+const caviardee = (sur = {}) => ({ id: 'F9', mode: 'file_access', file_access: 'check_file_info', ...sur });
+
+test('UNE PIÈCE CAVIARDÉE SE COMPLÈTE — jamais un refus de type sur une capture valable', async () => {
+  // MESURÉ : notre espace livre aujourd'hui des objets COMPLETS (name, mimetype, size, les deux
+  // adresses). La fonction n'est donc pas inerte. Mais le cas caviardé existe côté Slack, et
+  // s'il se présentait, l'objet n'aurait ni nom ni type — notre lecture du type rendrait `null`,
+  // et le client s'entendrait dire que nous ne pouvons pas recevoir ce type de fichier.
+  //
+  // Un refus DÉFINITIF, rendu sur une capture d'écran parfaitement valable : l'inverse exact de
+  // ce qu'il faut. On demande donc la fiche du fichier avant de conclure quoi que ce soit.
+  const m = espace({ infosFichiers: { F9: { ...capture(), id: 'F9' } } });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [caviardee()] }));
+
+  assert.equal(m.postes.length, 0, 'rien à dire au client : sa pièce est arrivée');
+  assert.equal(deposees().length, 1, 'la pièce complétée se dépose comme n’importe quelle autre');
+  assert.ok(v.herdr.remis[0].texte.includes('capture.png'), 'le cadre la nomme, avec le nom rendu par sa fiche');
+});
+
+test('UNE FICHE ILLISIBLE NE DEVIENT PAS UN REFUS DÉFINITIF — on ne ferme pas la porte sur un doute', async () => {
+  // La dégradation qui compte. Si la fiche ne s'obtient pas — droit manquant, plafond, panne —
+  // on ne sait PAS ce qu'était cette pièce. Rendre « ce type ne passe pas » serait affirmer un
+  // fait qu'on ignore, et le client ne renverrait jamais sa capture. La seule réponse honnête
+  // est celle qui l'invite à réessayer.
+  const { reponse } = await import('../src/langage.js');
+  const m = espace({ infosFichiers: {} }); // la fiche ne répond pas
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [caviardee()] }));
+
+  assert.equal(v.herdr.remis.length, 1, 'le message du client passe, comme toujours');
+  assert.equal(m.postes.length, 1);
+  assert.equal(m.postes[0].text, reponse('piece_non_recuperee', 'client'), 'le refus rendu doit rester réversible');
+  assert.notEqual(m.postes[0].text, reponse('piece_type_refuse', 'client'), 'jamais un définitif sur un doute');
+});
+
+test('UN OBJET COMPLET NE COÛTE AUCUNE FICHE — le cas nominal ne paie pas pour le cas rare', async () => {
+  // Notre espace livre des objets complets : demander leur fiche à chaque message ajouterait
+  // un appel plafonné sur le chemin le plus fréquent, pour rien.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  assert.deepEqual(m.appels.filter((a) => a.methode === 'files.info'), [], 'aucune fiche ne doit être demandée');
+  assert.equal(deposees().length, 1);
+});
+
+test('UNE FICHE QUI NE DIT RIEN DE PLUS ne devient pas non plus un refus définitif', async () => {
+  // La seconde moitié de la même porte, et c'est le motif qui revient à chaque tour de revue :
+  // un correctif qui ne couvre qu'un chemin sur deux. La fiche peut répondre `ok` sans porter
+  // ni nom ni type — on n'en sait alors pas plus qu'avant de la demander, et affirmer un type
+  // resterait une affirmation sans lecture.
+  const { reponse } = await import('../src/langage.js');
+  const m = espace({ infosFichiers: { F9: { id: 'F9' } } });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [caviardee()] }));
+
+  assert.equal(v.herdr.remis.length, 1, 'le message du client passe');
+  assert.equal(m.postes[0].text, reponse('piece_non_recuperee', 'client'), 'le doute ne se rend pas en refus définitif');
 });

@@ -59,7 +59,24 @@ Deux choses à savoir avant d'opérer ce dossier :
 1. **Ce sont des données de client, souvent personnelles.** Une capture d'écran en dit beaucoup plus qu'une phrase, et elle est arrivée ici sans relecture humaine. Le dossier se traite comme le trousseau, pas comme un cache.
 2. **Rien ne l'efface aujourd'hui.** Le ménage et la rétention sont une dette ouverte (`T-20260806-0138`), pas un oubli : le sujet a été relevé et remis à un lot qui le traitera pour lui-même. En attendant, un opérateur peut vider ce dossier à la main sans rien casser — les pièces qui comptent ont été rattachées à leur demande.
 
-Les adresses de fichiers Slack sont privées : le veilleur présente le jeton du robot pour les rapatrier. **Sans `files:read`, Slack ne refuse pas** — il répond `200` avec sa page de connexion en HTML. Le code le détecte et le dit ; c'est le mode d'échec à connaître si des pièces cessent d'arriver après une réinstallation.
+Les adresses de fichiers Slack sont privées : le veilleur présente le jeton du robot pour les rapatrier.
+
+### Ce qui a été mesuré contre l'espace réel, le 2026-08-06
+
+Sonde exécutée sur une vraie capture déposée dans un canal. À ne pas re-dériver :
+
+| Mesure | Résultat |
+|---|---|
+| L'objet fichier livré par l'événement | **complet** — `name`, `mimetype`, `size`, `mode: hosted`, `file_access: visible`, les deux adresses |
+| Téléchargement avec le jeton du robot | `200`, `content-type: image/png`, `content-length` présent, 317 919 octets, aucune redirection, l'hôte reste `files.slack.com` |
+| Téléchargement **sans** jeton | `200` **avec du `text/html`** — la page de connexion |
+| `files.info` | répond en **formulaire**, refuse un corps JSON avec `invalid_arguments` |
+
+Trois conséquences tenues par le code :
+
+1. **Un `200` ne prouve rien.** La détection du HTML dans une réponse à `200` est ce qui distingue une image d'une page de connexion. C'est le mode d'échec à connaître si des pièces cessent d'arriver après une réinstallation.
+2. `content-length` est présent : la taille se contrôle **avant** de rapatrier quoi que ce soit.
+3. **L'objet caviardé** (`mode: file_access`, `file_access: check_file_info`) ne se manifeste pas sur notre espace, mais il existe côté Slack. S'il arrivait, l'objet n'aurait ni nom ni type — et le refuser sur cette absence rendrait au client un refus **définitif** de type sur une capture valable. Le veilleur demande donc sa fiche (`files.info`) avant de conclure ; si la fiche ne dit rien de plus, le refus rendu reste **réversible** (« renvoyez-le »), jamais définitif.
 
 ## Vérifier plutôt que supposer
 

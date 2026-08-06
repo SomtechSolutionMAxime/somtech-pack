@@ -268,3 +268,28 @@ test('une erreur de Slack reste lisible telle quelle — l’encodage ne masque 
     });
   });
 });
+
+test('files.info APPARTIENT À LA FAMILLE FORMULAIRE — mesuré contre le vrai Slack le 2026-08-06', async () => {
+  // CINQUIÈME FOIS que le double serait plus permissif que le service qu'il imite, et c'est
+  // ce piège précis qui a rendu un lot entièrement inerte : `files.info` répond 200 en
+  // formulaire et refuse en JSON avec `invalid_arguments`. Un double qui servirait le corps
+  // JSON laisserait passer un code qui, en production, interrogerait Slack avec ZÉRO argument
+  // — et rendrait « pièce introuvable » sur chaque capture caviardée.
+  const monde = fauxSlack({ infosFichiers: { F9: { id: 'F9', name: 'image.png', mimetype: 'image/png', size: 317919 } } });
+
+  const enJson = await monde.servir('https://slack.com/api/files.info', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer x', 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ file: 'F9' }),
+  });
+  const enFormulaire = await monde.servir('https://slack.com/api/files.info', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer x', 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'file=F9',
+  });
+
+  const refus = await enJson.json();
+  assert.equal(refus.ok, false, 'le double doit refuser le corps JSON, comme le vrai Slack');
+  assert.match(refus.detail || '', /missing required field: file/);
+  assert.equal((await enFormulaire.json()).file.mimetype, 'image/png');
+});

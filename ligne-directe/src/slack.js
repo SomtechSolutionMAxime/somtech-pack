@@ -178,6 +178,23 @@ export async function telechargerFichier(jetonRobot, fichier, { tailleMax = Infi
   return { octets, mime: type || null };
 }
 
+/**
+ * La fiche complète d'un fichier — ce qu'il est, comment il s'appelle, où le prendre.
+ *
+ * Ne sert QU'AU CAS CAVIARDÉ : quand Slack ne livre qu'un identifiant, c'est le seul moyen de
+ * savoir si la pièce est recevable. Sur un objet complet — ce que notre espace livre
+ * aujourd'hui, mesuré — cet appel n'a pas lieu : ce serait un appel plafonné de plus sur le
+ * chemin le plus fréquent, pour une information déjà en main.
+ *
+ * MESURÉ le 2026-08-06 : `files.info` répond en formulaire et refuse un corps JSON avec
+ * `invalid_arguments`. Il passe donc par `appeler`, qui n'encode qu'en formulaire — la règle
+ * uniforme qui ne peut pas se tromper de méthode.
+ */
+export async function infoFichier(jetonRobot, fichier) {
+  const d = await appeler('files.info', jetonRobot, { file: fichier });
+  return d.file || null;
+}
+
 /** Ouvre la connexion d'écoute permanente et rend son adresse. */
 export async function ouvrirEcoute(jetonEcoute) {
   const { url } = await appeler('apps.connections.open', jetonEcoute);
