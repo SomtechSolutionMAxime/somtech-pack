@@ -8,7 +8,16 @@
 // `invalid_auth` (jeton refusé) ne veulent pas dire la même chose, et un veilleur qui les
 // aplatit en « échec d'authentification » fait chercher au mauvais endroit.
 
+import { enEssais, transportRemplace, refuser } from './cloison.js';
+
 const BASE = 'https://slack.com/api';
+
+/**
+ * Le transport tel qu'il est à l'ouverture du module — la référence de la cloison d'essais.
+ * Un test qui monte un faux Slack remplace `globalThis.fetch` ; tant qu'il ne l'a pas fait,
+ * un appel partirait vers slack.com pour de bon.
+ */
+const TRANSPORT_NATIF = globalThis.fetch;
 
 export class ErreurSlack extends Error {
   constructor(methode, code, details) {
@@ -21,20 +30,61 @@ export class ErreurSlack extends Error {
 }
 
 /**
+ * Encode les arguments comme Slack les attend TOUJOURS : en formulaire.
+ *
+ * MESURÉ CONTRE LE VRAI SLACK, et ça a rendu toute la capacité inerte : le corps JSON
+ * n'est servi que par une PARTIE des méthodes d'écriture. Les méthodes de lecture
+ * (`conversations.members`, `conversations.list`, `conversations.info`, `users.list`…) ne
+ * le lisent pas — et elles ne s'en plaignent pas non plus. Elles s'exécutent simplement
+ * avec zéro argument : `conversations.members` répond « missing required field: channel »,
+ * `conversations.list` rend ses défauts (100 canaux, publics seulement) comme si de rien
+ * n'était. Une ligne cliente naissait donc avec une liste d'autorisés VIDE, et refusait
+ * poliment le premier message de chaque personne du client — pour toujours.
+ *
+ * Le formulaire, lui, est accepté par toutes les méthodes sans exception. On l'utilise
+ * donc partout : il n'y a aucun appel pour lequel il soit le mauvais choix, et une règle
+ * uniforme ne peut pas se tromper de méthode.
+ *
+ * Deux pièges propres à cet encodage, tenus ici :
+ *   - une valeur absente doit être ABSENTE, pas envoyée comme le mot « undefined » —
+ *     Slack prendrait `cursor=undefined` pour un vrai curseur et rendrait une page vide ;
+ *   - un argument composé (`blocks`, `attachments`) se transmet en texte JSON DANS le
+ *     champ de formulaire. Le code n'en envoie pas aujourd'hui ; celui qui en ajoutera un
+ *     demain n'aura pas à redécouvrir la règle.
+ */
+function encoderFormulaire(corps) {
+  const champs = new URLSearchParams();
+  for (const [cle, valeur] of Object.entries(corps)) {
+    if (valeur === undefined || valeur === null) continue;
+    champs.set(cle, typeof valeur === 'object' ? JSON.stringify(valeur) : String(valeur));
+  }
+  return champs.toString();
+}
+
+/**
  * Appelle une méthode de l'API Slack.
  * @param {string} methode ex. 'chat.postMessage'
  * @param {string} jeton
  * @param {object} corps
  */
 export async function appeler(methode, jeton, corps = {}, { essais = 3 } = {}) {
+  // DEUXIÈME MUR. Il vaut même si le premier tombe — un jeton pourrait arriver autrement
+  // (variable d'environnement d'un poste, jeton injecté par un test mal cloisonné).
+  if (enEssais() && !transportRemplace(TRANSPORT_NATIF, globalThis.fetch)) {
+    refuser(
+      `l'appel Slack « ${methode} »`,
+      'Aucun double n’a été monté : cet appel partirait vers l’espace Slack de production.'
+    );
+  }
+  const charge = encoderFormulaire(corps);
   for (let essai = 1; ; essai += 1) {
     const reponse = await fetch(`${BASE}/${methode}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${jeton}`,
-        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
       },
-      body: JSON.stringify(corps),
+      body: charge,
     });
 
     // Slack plafonne ses méthodes et le dit par un 429 + Retry-After. Ignorer cet en-tête,
