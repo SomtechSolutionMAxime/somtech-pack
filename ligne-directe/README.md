@@ -18,7 +18,7 @@ Les agents, eux, n'ont pas besoin de ceci — leur mode d'emploi est la compéte
 | **`groups:write`** | créer, renommer, archiver un canal **privé** | **aucune ligne client ne s'ouvre** |
 | **`groups:read`** | retrouver un canal privé **et lister ses membres** | **personne n'est autorisé à écrire sur une ligne client** — l'autorisation s'y décide par l'appartenance au canal |
 | **`groups:history`** | lire les messages d'un canal privé | **le client écrit, rien n'arrive** |
-| `users:read` | résoudre un courriel ou un nom en identifiant Slack | `--inviter` ne trouve personne, le canal naît sans son destinataire |
+| `users:read` | résoudre un courriel ou un nom en identifiant Slack, **et nommer l'auteur d'un message sur une ligne client** | `--inviter` ne trouve personne, le canal naît sans son destinataire ; sur une ligne client, l'agent voit l'identifiant Slack de son interlocuteur au lieu de son nom — le message arrive tout de même |
 | `im:write` | ouvrir une conversation directe | — |
 | `files:read` | lire une pièce déposée par le client | une capture d'écran reste inaccessible |
 

@@ -306,9 +306,8 @@ test('STRUCTUREL — le veilleur ne peut PAS écrire un texte en clair dans un c
   // par le registre ; un point d'appel qui passerait sa propre phrase le contournerait
   // entièrement, et c'est exactement ainsi qu'une phrase interne finit chez un client.
   const source = readFileSync(join(ICI, '..', 'src', 'veilleur.js'), 'utf8');
-  const appels = [...source.matchAll(/repondreEnPropre\(\s*([^;]*?)\)\s*;/gs)]
-    // la définition de la méthode elle-même n'est pas un appel
-    .filter((m) => !m[0].includes('async repondreEnPropre'));
+  // `this.` cible les APPELS et rien d'autre — la définition de la méthode n'en est pas un.
+  const appels = [...source.matchAll(/this\.repondreEnPropre\(\s*([^;]*?)\)\s*;/gs)];
 
   assert.ok(appels.length >= 6, 'les six chemins de non-remise doivent être présents');
 
@@ -374,20 +373,21 @@ test('BALAYAGE EN SITUATION — les six chemins de non-remise d’une ligne clie
   // Le balayage sur le registre prouve les textes ; celui-ci prouve le CÂBLAGE de chaque
   // chemin, y compris ceux qu'on n'atteint qu'en cassant quelque chose.
   const situations = [
-    ['message écarté', { ligne: { nature: 'client', autorises: [] }, herdr: {} }],
+    // le seul cas où l'auteur n'est PAS membre du canal privé : c'est ce qui l'écarte
+    ['message écarté', { ligne: { nature: 'client', autorises: [] }, herdr: {}, user: 'U_INTRUS' }],
     ['conversation terminée', { ligne: { nature: 'client', autorises: ['UCLIENT'], close_le: '2026-08-06T10:00:00.000Z' }, herdr: {} }],
     ['interlocuteur injoignable', { ligne: { nature: 'client', autorises: ['UCLIENT'] }, herdr: { echecVivant: ERREUR_TECHNIQUE } }],
     ['interlocuteur disparu', { ligne: { nature: 'client', autorises: ['UCLIENT'] }, herdr: { vivant: false } }],
     ['échec de remise', { ligne: { nature: 'client', autorises: ['UCLIENT'] }, herdr: { echecRemise: ERREUR_TECHNIQUE } }],
   ];
 
-  for (const [quoi, { ligne: sur, herdr: opts }] of situations) {
+  for (const [quoi, { ligne: sur, herdr: opts, user = 'UCLIENT' }] of situations) {
     sauverRegistre({ version: 1, lignes: [] });
     const s = slackDouble();
     const v = veilleur({ slack: s, herdr: herdrDouble(opts) });
     v.registre.lignes.push(ligne(sur));
 
-    await v.remettreAuChantier(parole('bonjour', { user: 'UCLIENT' }));
+    await v.remettreAuChantier(parole('bonjour', { user }));
 
     assert.equal(s.postes.length, 1, `${quoi} : le client doit recevoir une réponse`);
     estPresentable(s.postes[0].texte, quoi);
