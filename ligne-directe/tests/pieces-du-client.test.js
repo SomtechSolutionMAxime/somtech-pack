@@ -1,0 +1,586 @@
+// Ce que le client dépose — et ce qui arrive quand ça ne passe pas.
+//
+// Un client qui signale un problème envoie une capture d'écran AVANT d'écrire trois phrases.
+// C'est le cas nominal, pas un confort. Et les adresses de fichiers Slack sont privées : il
+// faut présenter le jeton pour les obtenir.
+//
+// CES TESTS TOURNENT CONTRE LE VRAI CODE DE TÉLÉCHARGEMENT, pas contre un double du veilleur :
+// le double de Slack sert les fichiers comme Slack les sert — il exige le jeton porteur, et
+// SANS le droit `files:read` il rend une page de connexion en HTML avec un code 200, exactement
+// comme le vrai. C'est la leçon la plus chère du chantier : un double plus permissif que le
+// service qu'il imite a déjà couvert une capacité entièrement inerte derrière 97 tests verts.
+//
+// Ce qui compte ici, ce sont les cas d'échec — pas le chemin nominal :
+//   - une image ne bloque JAMAIS le message (RA-REL-010) ;
+//   - la limite de 5 Mo produit une phrase présentable au client, jamais un échec silencieux ;
+//   - le jeton ne fuit nulle part : ni chemin, ni trace, ni message d'erreur ;
+//   - une capture contient souvent des données personnelles : dépôt en droits restreints,
+//     et rien du contenu au journal.
+
+import { test, before, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, statSync, readdirSync, rmSync, mkdirSync, chmodSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { fauxSlack } from './aide/faux-slack.js';
+
+let Veilleur, sauverRegistre, CHEMIN_JOURNAL, telechargerFichier, RACINE_PIECES, TAILLE_MAX, nomSur;
+let racine;
+
+/** Le jeton du robot — s'il ressort où que ce soit, la fuite est prouvée. */
+const JETON = 'xoxb-JETON-QUI-NE-DOIT-JAMAIS-SORTIR';
+
+before(async () => {
+  racine = mkdtempSync(join(tmpdir(), 'ld-pieces-'));
+  process.env.LIGNE_DIRECTE_RACINE = racine;
+  ({ Veilleur } = await import('../src/veilleur.js'));
+  ({ sauverRegistre, CHEMIN_JOURNAL } = await import('../src/registre.js'));
+  ({ telechargerFichier } = await import('../src/slack.js'));
+  ({ RACINE_PIECES, TAILLE_MAX, nomSur } = await import('../src/pieces.js'));
+});
+
+let monde;
+beforeEach(() => {
+  sauverRegistre({ version: 1, lignes: [] });
+  writeFileSync(CHEMIN_JOURNAL, '');
+  // Le dépôt SURVIT d'un test à l'autre — c'est sa raison d'être. Un test qui compte les
+  // pièces déposées compterait donc celles du précédent, et « rien ne se dépose » serait faux
+  // pour une raison qui n'a rien à voir avec ce qu'il prouve.
+  rmSync(RACINE_PIECES, { recursive: true, force: true });
+  monde = null;
+});
+afterEach(() => monde?.restaurer());
+
+const journal = () => (existsSync(CHEMIN_JOURNAL) ? readFileSync(CHEMIN_JOURNAL, 'utf8') : '');
+
+const ADRESSE = 'https://files.slack.invalide/files-pri/T1-F1/download/capture.png';
+const PIXELS = Buffer.from('\x89PNG des pixels bien à moi');
+
+/** Ce que Slack envoie dans l'événement quand quelqu'un dépose un fichier. */
+const capture = (sur = {}) => ({
+  id: 'F1',
+  name: 'capture.png',
+  mimetype: 'image/png',
+  filetype: 'png',
+  size: PIXELS.length,
+  url_private_download: ADRESSE,
+  ...sur,
+});
+
+function espace({ fichiers = { [ADRESSE]: { octets: PIXELS, mime: 'image/png' } }, droitFichiers = true, infosFichiers = {} } = {}) {
+  monde = fauxSlack({
+    canaux: [{ id: 'C1', name: 'client-acme', is_private: true, membres: ['UMOI', 'UCLIENT'] }],
+    utilisateurs: [{ id: 'UCLIENT', name: 'jean', real_name: 'Jean Tremblay', profile: {} }],
+    fichiers,
+    droitFichiers,
+    infosFichiers,
+  });
+  return monde.installer();
+}
+
+function herdrDouble() {
+  return {
+    remis: [],
+    async vivant() {
+      return true;
+    },
+    async remettre(pane, texte) {
+      this.remis.push({ pane, texte });
+      return {};
+    },
+    async agents() {
+      return [{ agent: 'claude', pane_id: 'w1:p1' }];
+    },
+  };
+}
+
+let compteur = 0;
+const veilleur = (opts = {}) =>
+  new Veilleur({
+    cheminSocket: join(racine, `${(compteur += 1)}.sock`),
+    jetons: { robot: JETON, ecoute: 'y' },
+    identite: { equipe: 'T', utilisateur: 'UMOI' },
+    herdr: herdrDouble(),
+    ...opts,
+  });
+
+const ligne = (sur = {}) => ({
+  chantier: 'D-20260805-0005',
+  canal_id: 'C1',
+  canal_nom: 'client-acme',
+  pane: 'w1:p1',
+  worktree: '/w/a',
+  visage: '🧭',
+  ouverte_le: 'hier',
+  close_le: null,
+  herdr_socket: null,
+  nature: 'client',
+  libelle: 'Espace Acme',
+  autorises: ['UCLIENT'],
+  noms: { UCLIENT: 'Jean Tremblay' },
+  ...sur,
+});
+
+const parole = (sur = {}) => ({
+  type: 'message',
+  subtype: 'file_share',
+  channel: 'C1',
+  user: 'UCLIENT',
+  text: 'voilà ce que je vois',
+  files: [capture()],
+  ...sur,
+});
+
+const telechargements = () => monde.appels.filter((a) => a.methode === 'files.download');
+
+/** Le chemin de la seule pièce déposée pour ce canal, ou null. */
+function deposees(canal = 'C1') {
+  const dossier = join(RACINE_PIECES, canal);
+  if (!existsSync(dossier)) return [];
+  return readdirSync(dossier).map((n) => join(dossier, n));
+}
+
+// ═════════════════════════ T-20260806-0133 — la capture arrive chez son interlocuteur
+
+test('LA CAPTURE EST RÉCUPÉRÉE EN PRÉSENTANT LE JETON, et l’agent sait où la lire', async () => {
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  // 1. le jeton a bien été présenté — le double refuse tout ce qui n'en porte pas
+  assert.equal(telechargements().length, 1, 'la pièce doit être demandée à Slack');
+  assert.equal(telechargements()[0].autorise, `Bearer ${JETON}`, 'les adresses de fichiers Slack sont privées');
+
+  // 2. la pièce est sur le poste, octet pour octet
+  const fichiers = deposees();
+  assert.equal(fichiers.length, 1, 'la pièce doit être déposée là où l’agent peut la lire');
+  assert.deepEqual(readFileSync(fichiers[0]), PIXELS, 'le contenu déposé doit être celui reçu');
+
+  // 3. l'agent SAIT qu'elle est là, et où
+  assert.equal(m.postes.length, 0, 'le chemin nominal ne dit rien au client');
+  const cadre = v.herdr.remis[0].texte;
+  assert.ok(cadre.includes('voilà ce que je vois'), 'le texte du client arrive intact');
+  assert.ok(cadre.includes('capture.png'), 'le cadre nomme la pièce');
+  assert.ok(cadre.includes(fichiers[0]), 'le cadre donne le chemin exact de lecture');
+});
+
+test('LE DÉPÔT LOCAL EST EN DROITS RESTREINTS — une capture porte souvent des données personnelles', async () => {
+  espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  const fichier = deposees()[0];
+  assert.equal(statSync(join(RACINE_PIECES, 'C1')).mode & 0o777, 0o700, 'le dossier n’est lisible que par ce compte');
+  assert.equal(statSync(fichier).mode & 0o777, 0o600, 'le fichier n’est lisible que par ce compte');
+});
+
+test('LE JETON NE FUIT NULLE PART — ni chemin, ni trace, ni cadre, ni message au client, ni erreur', async () => {
+  // Balayage en négatif sur TOUT ce qui sort du veilleur, la pièce réussie ET la pièce ratée
+  // dans le même message : c'est le chemin d'erreur qui recopie le plus volontiers ce qu'il
+  // ne devrait pas.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(
+    parole({
+      files: [capture(), capture({ id: 'F2', name: 'perdue.png', url_private_download: 'https://files.slack.invalide/absente' })],
+    })
+  );
+
+  const sorties = [
+    ...deposees(),
+    journal(),
+    v.herdr.remis.map((r) => r.texte).join('\n'),
+    m.postes.map((p) => `${p.text} ${p.username}`).join('\n'),
+  ];
+
+  // L'ERREUR SE BALAIE EN ENTIER, pas par les champs qu'on croit se rappeler. Ce balayage
+  // lisait `err.details` quand la classe expose `err.detail` : un jeton entier déposé dans
+  // `detail` passait au vert, et le test annonçait une garantie qu'il ne tenait pas. On sérialise
+  // donc TOUT ce que porte l'erreur — un champ ajouté demain est balayé sans qu'on y pense.
+  let erreurLevee = '';
+  try {
+    await telechargerFichier(JETON, { id: 'FX', url_private_download: 'https://files.slack.invalide/absente' });
+  } catch (err) {
+    const champs = Object.getOwnPropertyNames(err).map((c) => `${c}=${String(err[c])}`);
+    erreurLevee = `${err.message} ${champs.join(' ')}`;
+  }
+  assert.ok(erreurLevee, 'une récupération impossible doit lever, pas rendre un objet vide');
+  assert.match(erreurLevee, /detail=/, 'le balayage doit lire les champs réels de l’erreur, pas ceux qu’on lui suppose');
+  sorties.push(erreurLevee);
+
+  for (const sortie of sorties) {
+    assert.ok(!sortie.includes(JETON), `le jeton ne doit apparaître nulle part — trouvé dans : ${sortie.slice(0, 200)}`);
+    assert.ok(!sortie.includes('xoxb'), `aucun fragment de jeton ne doit sortir — trouvé dans : ${sortie.slice(0, 200)}`);
+  }
+});
+
+test('RIEN DU CONTENU N’EST JOURNALISÉ — on trace le fait, jamais ce que la capture montre', async () => {
+  espace({ fichiers: { [ADRESSE]: { octets: Buffer.from('numero-assurance-sociale-123456789'), mime: 'image/png' } } });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [capture({ name: 'jean-tremblay-dossier-medical.png' })] }));
+
+  const trace = journal();
+  assert.match(trace, /pièce/i, 'le journal doit dire qu’une pièce est arrivée');
+  assert.ok(!trace.includes('numero-assurance-sociale'), 'le contenu de la pièce ne va pas au journal');
+  assert.ok(!trace.includes('jean-tremblay-dossier-medical'), 'le nom d’une pièce en dit déjà trop — il n’y va pas non plus');
+});
+
+test('UN NOM DE FICHIER PIÉGÉ ne fait pas sortir la pièce de son dépôt', async () => {
+  // Le nom vient du client. Il désigne un fichier qu'on écrit sur notre poste.
+  espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [capture({ name: '../../../../evasion.png' })] }));
+
+  const fichiers = deposees();
+  assert.equal(fichiers.length, 1, 'la pièce doit être déposée');
+  assert.ok(fichiers[0].startsWith(join(RACINE_PIECES, 'C1')), `la pièce est sortie de son dépôt : ${fichiers[0]}`);
+  assert.ok(!existsSync(join(racine, 'evasion.png')), 'rien ne doit être écrit hors du dépôt');
+});
+
+test('SANS LE DROIT DE LECTURE DES FICHIERS, Slack rend une page de connexion avec un code 200', async () => {
+  // LE PIÈGE, et il ne se signale pas : sans `files:read`, Slack ne refuse pas — il répond
+  // 200 avec du HTML. Un code qui se contente du code de réponse déposerait une page web sur
+  // le poste, l'appellerait « capture.png », et l'agent ouvrirait une page de connexion.
+  const m = espace({ droitFichiers: false });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  assert.equal(deposees().length, 0, 'une page de connexion n’est pas une pièce : rien ne se dépose');
+  assert.equal(v.herdr.remis.length, 1, 'le message du client arrive quand même');
+  assert.equal(m.postes.length, 1, 'et le client apprend que sa pièce n’est pas passée');
+  assert.match(journal(), /droit/i, 'le journal dit la cause plutôt que de la faire deviner');
+});
+
+test('LA CLOISON D’ESSAIS retient aussi le téléchargement d’une pièce', async () => {
+  // Sans double monté, cet appel partirait vers files.slack.com pour de bon — avec le jeton
+  // de production du poste. Le mur vaut pour toute sortie, pas seulement pour l'API.
+  await assert.rejects(() => telechargerFichier(JETON, capture()), /CLOISON D'ESSAIS/);
+});
+
+// ═════════════ T-20260806-0134 — le message arrive même quand l'image ne suit pas
+
+test('UNE RÉCUPÉRATION QUI ÉCHOUE NE BLOQUE JAMAIS LE MESSAGE (RA-REL-010)', async () => {
+  const m = espace({ fichiers: {} }); // l'adresse ne répond rien
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  assert.equal(v.herdr.remis.length, 1, 'perdre trois phrases parce qu’une image n’a pas suivi est le vrai coût');
+  const cadre = v.herdr.remis[0].texte;
+  assert.ok(cadre.includes('voilà ce que je vois'), 'le texte du client atteint l’agent');
+  assert.match(cadre, /pas pu|n’a pas|absente/i, 'le cadre dit à l’agent qu’une pièce manque');
+  assert.equal(m.postes.length, 1, 'et celui qui l’a envoyée l’apprend');
+});
+
+test('PLUS DE 5 Mo : rien n’est téléchargé, et le client reçoit une phrase qui lui dit la limite', async () => {
+  // Une capture pleine page ou un PDF numérisé dépasse la limite sans difficulté. Elle est
+  // celle du registre des demandes, et elle se constate sur ce que Slack ANNONCE — avant de
+  // rapatrier six mégaoctets pour les refuser ensuite.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [capture({ name: 'page-entiere.png', size: TAILLE_MAX + 1 })] }));
+
+  assert.equal(telechargements().length, 0, 'on ne rapatrie pas un fichier qu’on refusera de toute façon');
+  assert.equal(v.herdr.remis.length, 1, 'le message passe');
+  assert.equal(m.postes.length, 1, 'le client l’apprend — jamais un échec silencieux');
+  assert.match(m.postes[0].text, /5 Mo/i, 'la phrase doit dire la limite, sinon elle n’aide personne');
+});
+
+test('UNE VIDÉO S’ENTEND DIRE QUE SON TYPE NE PASSE PAS, pas qu’elle est trop lourde', async () => {
+  // L'ORDRE DES DEUX REFUS SE JOUE ICI, et il se voit sur le cas le plus probable : la vidéo,
+  // qui est à la fois trop lourde ET d'un type qu'on ne peut pas recevoir. Lui parler de la
+  // limite de 5 Mo l'enverrait compresser sa vidéo pour se la faire refuser une seconde fois.
+  // Le refus de type est DÉFINITIF, celui de taille est négociable : le définitif prime.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [capture({ name: 'demo.mp4', mimetype: 'video/mp4', size: TAILLE_MAX + 1 })] }));
+
+  assert.equal(telechargements().length, 0);
+  assert.equal(v.herdr.remis.length, 1, 'le message passe');
+  assert.equal(m.postes.length, 1);
+  assert.match(m.postes[0].text, /type de fichier/i, 'ce qu’il doit apprendre, c’est que ça ne passera jamais');
+  assert.ok(!/5 Mo/i.test(m.postes[0].text), 'lui parler de la taille l’enverrait compresser pour rien');
+});
+
+test('UN FICHIER NON-IMAGE ne fait pas échouer le traitement du message', async () => {
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [capture({ name: 'journaux.zip', mimetype: 'application/zip', size: 400 })] }));
+
+  assert.equal(telechargements().length, 0, 'un type qu’on ne peut pas recevoir se refuse avant de coûter un appel');
+  assert.equal(v.herdr.remis.length, 1, 'le message du client arrive');
+  assert.equal(m.postes.length, 1, 'et il apprend quels types passent');
+  assert.match(m.postes[0].text, /PDF|image/i);
+});
+
+test('DEUX PIÈCES REFUSÉES POUR LA MÊME RAISON ne produisent qu’une seule réponse', async () => {
+  // Un lieu de conversation qu'on inonde cesse d'être lu.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(
+    parole({
+      files: [
+        capture({ id: 'F1', name: 'a.zip', mimetype: 'application/zip', size: 10 }),
+        capture({ id: 'F2', name: 'b.zip', mimetype: 'application/zip', size: 10 }),
+      ],
+    })
+  );
+
+  assert.equal(m.postes.length, 1, 'une raison, une phrase');
+});
+
+test('CE QU’ON CACHE AU CLIENT, on le dit au dirigeant', async () => {
+  // Même échec, deux natures de ligne. Le client ne lit ni notre outillage, ni nos codes de
+  // dossier, ni un message d'erreur ; le dirigeant, lui, a besoin du détail pour agir.
+  const client = espace({ fichiers: {} });
+  const vClient = veilleur();
+  vClient.registre.lignes.push(ligne());
+  await vClient.remettreAuChantier(parole());
+
+  const dit = client.postes[0].text;
+  for (const mot of ['pane', 'veilleur', 'worktree', 'herdr', 'chantier', 'agent', 'registre', 'socket']) {
+    assert.ok(!dit.toLowerCase().includes(mot), `« ${mot} » ne part pas chez un client — reçu : ${dit}`);
+  }
+  assert.ok(!dit.includes('D-20260805-0005'), 'le code du dossier ne part pas chez un client');
+
+  monde.restaurer();
+  sauverRegistre({ version: 1, lignes: [] });
+  const interne = espace({ fichiers: {} });
+  const vInterne = veilleur();
+  vInterne.registre.lignes.push(ligne({ nature: 'interne', canal_nom: 'd-20260805-0005', autorises: ['UCLIENT'] }));
+  await vInterne.remettreAuChantier(parole());
+
+  assert.equal(interne.postes.length, 1, 'le dirigeant aussi apprend qu’une pièce n’est pas passée');
+  assert.notEqual(interne.postes[0].text, dit, 'les deux registres de langage ne disent pas la même chose');
+});
+
+test('UNE PIÈCE SANS UN MOT : le cadre le dit, plutôt que de remettre un message qui paraît vide', async () => {
+  espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ text: '' }));
+
+  assert.equal(v.herdr.remis.length, 1);
+  const cadre = v.herdr.remis[0].texte;
+  assert.match(cadre, /aucun texte/i, 'l’agent doit comprendre qu’il n’y a rien à lire que la pièce');
+  assert.ok(cadre.includes('capture.png'));
+});
+
+// ═════════════════ T-20260806-0135 — la pièce se rattache à la demande, pas au fil
+
+test('LE CADRE RAPPELLE que la pièce se rattache à la demande, et que le fil ne fait pas foi', async () => {
+  espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  const cadre = v.herdr.remis[0].texte;
+  assert.match(cadre, /demande/i, 'le cadre doit dire où la pièce doit atterrir');
+  assert.match(cadre, /ne fait pas foi|pas seulement dans le fil/i, 'et pourquoi le fil ne suffit pas');
+});
+
+// ═══════════ deux portes que le premier correctif laissait entrouvertes
+
+test('UN ÉVÉNEMENT QUI NE PORTE QUE `file` — la forme héritée — n’est pas pris pour un message vide', async () => {
+  // Slack envoie aujourd'hui une liste `files`, et gardera longtemps le champ `file` de la
+  // forme ancienne. Ne lire que la liste ferait retomber ce message dans le trou dont tout ce
+  // lot existe pour le sortir : « message vide » répondu à quelqu'un qui vient de déposer sa
+  // capture. C'est le même défaut, par la seconde porte.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier({
+    type: 'message',
+    subtype: 'file_share',
+    channel: 'C1',
+    user: 'UCLIENT',
+    text: '',
+    file: capture(),
+  });
+
+  assert.equal(v.herdr.remis.length, 1, 'la pièce est le contenu du message — il n’est pas vide');
+  assert.equal(deposees().length, 1, 'et elle est recueillie comme n’importe quelle autre');
+  assert.equal(m.postes.length, 0, 'rien à répondre : le message est passé');
+});
+
+test('AUCUN TEXTE ET LA SEULE PIÈCE A ÉCHOUÉ : le cadre dit ce qui s’est passé, il n’arrive pas creux', async () => {
+  // Le cas se produit exactement quand il coûte le plus cher : le client n'a rien écrit, sa
+  // capture n'a pas pu être rapatriée. Un cadre au centre vide fait conclure à l'agent qu'il
+  // a reçu un message parasite — alors que quelqu'un vient de lui parler et attend.
+  const m = espace({ fichiers: {} });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ text: '' }));
+
+  assert.equal(v.herdr.remis.length, 1, 'le message atteint l’agent même sans texte ni pièce recueillie');
+  const cadre = v.herdr.remis[0].texte;
+  assert.match(cadre, /aucun texte/i, 'l’agent doit savoir qu’il n’y avait rien d’écrit');
+  assert.match(cadre, /pas pu être recueillie/i, 'et que ce qui devait accompagner n’est pas arrivé');
+  assert.equal(m.postes.length, 1, 'le client, lui, l’apprend');
+});
+
+// ═══════════════ la CAUSE émise, pas seulement une phrase qui ressemble
+
+test('CHAQUE REFUS ÉMET SA PROPRE CAUSE — pas une phrase voisine (relevé en revue)', async () => {
+  // LE DÉFAUT QUE CE TEST EXISTE POUR ATTRAPER, et il a survécu à toute la première série :
+  // router l'échec de récupération vers `piece_type_refuse` laissait 190 tests sur 190 verts.
+  // La PR vendait trois refus distincts ; la distinction n'était tenue que pour deux.
+  //
+  // Ce que ça donne chez le client : sa capture n'a pas pu être rapatriée — un incident
+  // passager, il n'a qu'à la renvoyer — et il s'entend dire que nous ne pouvons pas recevoir
+  // ce type de fichier. Un refus DÉFINITIF. Il ne la renverra jamais, et c'est l'inverse exact
+  // du raisonnement écrit dans `langage.js` : le définitif prime sur le négociable parce qu'ils
+  // n'appellent pas le même geste. Se tromper de sens coûte la pièce.
+  //
+  // On compare donc au texte CANONIQUE de la cause attendue — une égalité, pas une sonde. Une
+  // sonde sur quelques mots reconnaît deux causes voisines ; l'égalité n'en reconnaît qu'une.
+  const { reponse } = await import('../src/langage.js');
+
+  const situations = [
+    ['récupération en échec', { fichiers: {} }, capture(), 'piece_non_recuperee'],
+    ['droit de lecture manquant', { droitFichiers: false }, capture(), 'piece_non_recuperee'],
+    ['au-delà de 5 Mo', {}, capture({ size: TAILLE_MAX + 1 }), 'piece_trop_lourde'],
+    ['type non recevable', {}, capture({ name: 'a.zip', mimetype: 'application/zip', size: 10 }), 'piece_type_refuse'],
+  ];
+
+  for (const [quoi, monde_, fichier, attendue] of situations) {
+    monde?.restaurer();
+    sauverRegistre({ version: 1, lignes: [] });
+    const m = espace(monde_);
+    const v = veilleur();
+    v.registre.lignes.push(ligne());
+
+    await v.remettreAuChantier(parole({ files: [fichier] }));
+
+    assert.equal(m.postes.length, 1, `${quoi} : le client doit recevoir exactement une réponse`);
+    assert.equal(m.postes[0].text, reponse(attendue, 'client'), `${quoi} : la cause émise n’est pas « ${attendue} »`);
+  }
+});
+
+test('UN DÉPÔT DÉJÀ TROP OUVERT EST REFERMÉ — c’est le préexistant que les droits tiennent', async () => {
+  // CE QUE CE TEST GARDE, ET POURQUOI IL A FALLU LE RELEVER EN REVUE : les trois `chmod` du
+  // dépôt pouvaient être retirés sans qu'un seul test rougisse. Le garde-fou était bon, mais
+  // rien ne le prouvait — et sa justification écrite était fausse par-dessus le marché.
+  //
+  // Le mode passé à `mkdir` et à `writeFile` ne s'applique qu'à la CRÉATION. Sur un dossier
+  // ou un fichier qui existe déjà, il est purement ignoré : un dépôt laissé en 777 par une
+  // manipulation, une restauration de sauvegarde ou une version antérieure resterait ouvert à
+  // tout le poste, et chaque capture d'écran de client viendrait s'y déposer.
+  //
+  // (L'ancien commentaire invoquait un umask permissif : un umask ne peut qu'ENLEVER des bits,
+  // jamais en ajouter. Une raison fausse survit mal à celui qui la relit et la « simplifie ».)
+  espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  const dossier = join(RACINE_PIECES, 'C1');
+  const cible = join(dossier, `${nomSur('F1')}-${nomSur('capture.png')}`);
+  mkdirSync(dossier, { recursive: true });
+  chmodSync(RACINE_PIECES, 0o777);
+  chmodSync(dossier, 0o777);
+  writeFileSync(cible, 'une pièce d’un client précédent');
+  chmodSync(cible, 0o666);
+
+  await v.remettreAuChantier(parole());
+
+  assert.equal(statSync(RACINE_PIECES).mode & 0o777, 0o700, 'la racine du dépôt doit être refermée');
+  assert.equal(statSync(dossier).mode & 0o777, 0o700, 'le dossier du canal doit être refermé');
+  assert.equal(statSync(cible).mode & 0o777, 0o600, 'le fichier réécrit doit être refermé');
+});
+
+// ═══════════ l'objet fichier caviardé — mesuré contre le vrai espace le 2026-08-06
+
+/** Ce que Slack livre quand l'objet est caviardé : un identifiant, et de quoi le demander. */
+const caviardee = (sur = {}) => ({ id: 'F9', mode: 'file_access', file_access: 'check_file_info', ...sur });
+
+test('UNE PIÈCE CAVIARDÉE SE COMPLÈTE — jamais un refus de type sur une capture valable', async () => {
+  // MESURÉ : notre espace livre aujourd'hui des objets COMPLETS (name, mimetype, size, les deux
+  // adresses). La fonction n'est donc pas inerte. Mais le cas caviardé existe côté Slack, et
+  // s'il se présentait, l'objet n'aurait ni nom ni type — notre lecture du type rendrait `null`,
+  // et le client s'entendrait dire que nous ne pouvons pas recevoir ce type de fichier.
+  //
+  // Un refus DÉFINITIF, rendu sur une capture d'écran parfaitement valable : l'inverse exact de
+  // ce qu'il faut. On demande donc la fiche du fichier avant de conclure quoi que ce soit.
+  const m = espace({ infosFichiers: { F9: { ...capture(), id: 'F9' } } });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [caviardee()] }));
+
+  assert.equal(m.postes.length, 0, 'rien à dire au client : sa pièce est arrivée');
+  assert.equal(deposees().length, 1, 'la pièce complétée se dépose comme n’importe quelle autre');
+  assert.ok(v.herdr.remis[0].texte.includes('capture.png'), 'le cadre la nomme, avec le nom rendu par sa fiche');
+});
+
+test('UNE FICHE ILLISIBLE NE DEVIENT PAS UN REFUS DÉFINITIF — on ne ferme pas la porte sur un doute', async () => {
+  // La dégradation qui compte. Si la fiche ne s'obtient pas — droit manquant, plafond, panne —
+  // on ne sait PAS ce qu'était cette pièce. Rendre « ce type ne passe pas » serait affirmer un
+  // fait qu'on ignore, et le client ne renverrait jamais sa capture. La seule réponse honnête
+  // est celle qui l'invite à réessayer.
+  const { reponse } = await import('../src/langage.js');
+  const m = espace({ infosFichiers: {} }); // la fiche ne répond pas
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [caviardee()] }));
+
+  assert.equal(v.herdr.remis.length, 1, 'le message du client passe, comme toujours');
+  assert.equal(m.postes.length, 1);
+  assert.equal(m.postes[0].text, reponse('piece_non_recuperee', 'client'), 'le refus rendu doit rester réversible');
+  assert.notEqual(m.postes[0].text, reponse('piece_type_refuse', 'client'), 'jamais un définitif sur un doute');
+});
+
+test('UN OBJET COMPLET NE COÛTE AUCUNE FICHE — le cas nominal ne paie pas pour le cas rare', async () => {
+  // Notre espace livre des objets complets : demander leur fiche à chaque message ajouterait
+  // un appel plafonné sur le chemin le plus fréquent, pour rien.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole());
+
+  assert.deepEqual(m.appels.filter((a) => a.methode === 'files.info'), [], 'aucune fiche ne doit être demandée');
+  assert.equal(deposees().length, 1);
+});
+
+test('UNE FICHE QUI NE DIT RIEN DE PLUS ne devient pas non plus un refus définitif', async () => {
+  // La seconde moitié de la même porte, et c'est le motif qui revient à chaque tour de revue :
+  // un correctif qui ne couvre qu'un chemin sur deux. La fiche peut répondre `ok` sans porter
+  // ni nom ni type — on n'en sait alors pas plus qu'avant de la demander, et affirmer un type
+  // resterait une affirmation sans lecture.
+  const { reponse } = await import('../src/langage.js');
+  const m = espace({ infosFichiers: { F9: { id: 'F9' } } });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ files: [caviardee()] }));
+
+  assert.equal(v.herdr.remis.length, 1, 'le message du client passe');
+  assert.equal(m.postes[0].text, reponse('piece_non_recuperee', 'client'), 'le doute ne se rend pas en refus définitif');
+});

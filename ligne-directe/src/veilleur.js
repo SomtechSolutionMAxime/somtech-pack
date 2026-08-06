@@ -24,6 +24,7 @@ import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { cadrerPourAgent } from './cadre.js';
 import { reponse } from './langage.js';
+import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
 import {
   CHEMIN_SOCKET,
   CHEMIN_JOURNAL,
@@ -56,6 +57,19 @@ const CONNEXION_EN_COURS = 0;
 const ECOUTE_NATIVE = globalThis.WebSocket;
 const CONNEXION_OUVERTE = 1;
 
+/**
+ * Les sous-types de message qui SONT une parole adressée à la ligne.
+ *
+ * Liste blanche, et c'est le sens de la garde : tout le reste — entrée et sortie de canal,
+ * modification, suppression, changement de sujet, message de robot — n'est pas quelqu'un qui
+ * s'adresse à l'agent, et n'attend donc ni remise ni réponse.
+ *
+ *   - `file_share`      : un message accompagné d'un fichier. LE cas du client.
+ *   - `me_message`      : la forme `/me`, qui reste une phrase écrite par quelqu'un.
+ *   - `thread_broadcast`: une réponse en fil, renvoyée dans le canal — écrite, adressée, lue.
+ */
+const SOUS_TYPES_PAROLE = new Set(['file_share', 'me_message', 'thread_broadcast']);
+
 const RECONNEXION_MIN = 1_000;
 const RECONNEXION_MAX = 60_000;
 /** Cadence du chien de garde : à quelle fréquence on vérifie qu'on écoute VRAIMENT. */
@@ -87,6 +101,9 @@ export class Veilleur {
     this.slack = slackInjecte || slack;
     this.herdr = herdrInjecte || herdr;
     this.registre = chargerRegistre();
+    // La nature des canaux où l'on écrit sans y avoir de ligne — demandée une fois, retenue.
+    // Sans ce cache, un canal d'équipe actif coûterait un appel plafonné par message.
+    this.canauxEtrangers = new Map();
     this.ws = null;
     this.serveur = null;
     this.chienDeGarde = null;
@@ -625,12 +642,55 @@ export class Veilleur {
 
     const ev = trame.payload?.event;
     if (!ev || ev.type !== 'message') return;
-    // Nos propres messages, les entrées/sorties de canal, les modifications : rien de tout
-    // cela n'est une parole du dirigeant.
-    if (ev.bot_id || ev.subtype) return;
+    // Nos propres messages ne repartent jamais dans la boucle.
+    if (ev.bot_id) return;
+    // LE SOUS-TYPE NE DISQUALIFIAIT PAS UNE TRAME, IL LA FAISAIT DISPARAÎTRE. Tout sous-type
+    // était écarté ici — donc `file_share`, c'est-à-dire TOUT MESSAGE PORTANT UNE PIÈCE
+    // JOINTE. Un client qui signale un problème dépose sa capture avant d'écrire trois
+    // phrases : il ne recevait rien, et l'agent ignorait qu'on lui avait parlé.
+    //
+    // On énumère donc ce qui EST une parole, jamais ce qui ne l'est pas : une liste de
+    // sous-types à exclure oublie celui que Slack ajoutera, et l'oubli irait dans le mauvais
+    // sens — une entrée dans un canal remise à l'agent, un client à qui l'on répond parce
+    // qu'il a changé le sujet du canal.
+    // UN MESSAGE REPRIS PAR SON AUTEUR A SON PROPRE CHEMIN, et il ne pouvait pas en être
+    // autrement : la trame de `message_changed` ne porte rien à sa racine — ni texte, ni
+    // auteur. Le message vit sous `ev.message`, le canal reste sur l'enveloppe. L'ajouter à la
+    // liste blanche aurait donc remis à l'agent un message vide, ce qui est une autre façon de
+    // ne rien lui dire.
+    if (ev.subtype === 'message_changed') {
+      await this.remettreLaReprise(ev);
+      return;
+    }
+    if (ev.subtype && !SOUS_TYPES_PAROLE.has(ev.subtype)) return;
     if (ev.user === this.identite.utilisateur) return;
 
     await this.remettreAuChantier(ev);
+  }
+
+  /**
+   * Un message que son auteur a repris — corrigé, complété, précisé.
+   *
+   * HUITIÈME CHEMIN MUET, relevé en revue après le septième : un client qui écrit de son
+   * téléphone se relit et complète. C'est un geste ordinaire, et il n'était entendu de
+   * personne — ni remis, ni répondu, ni journalisé, comme le septième.
+   *
+   * LE PIÈGE INVERSE EST TOUT AUSSI RÉEL, et c'est pour ça qu'on compare les textes : Slack
+   * émet exactement la même trame quand il attache LUI-MÊME l'aperçu d'un lien, sans que
+   * personne n'ait rien écrit. Remettre celle-là ferait recevoir deux fois le même message à
+   * l'agent — qui répondrait deux fois, sous les yeux du client.
+   */
+  async remettreLaReprise(ev) {
+    const message = ev.message;
+    if (!message) return;
+    if (message.bot_id || message.user === this.identite.utilisateur) return;
+
+    const avant = (ev.previous_message?.text || '').trim();
+    const apres = (message.text || '').trim();
+    const memesPieces = (ev.previous_message?.files || []).length === (message.files || []).length;
+    if (avant === apres && memesPieces) return; // rien n'a été dit : un aperçu, une épingle…
+
+    await this.remettreAuChantier({ ...message, channel: ev.channel, subtype: undefined, modifie: true });
   }
 
   /**
@@ -640,10 +700,17 @@ export class Veilleur {
    */
   async remettreAuChantier(ev) {
     const ligne = ligneParCanal(this.registre, ev.channel);
-    if (!ligne) return; // canal qui ne nous regarde pas
+    if (!ligne) {
+      await this.canalSansLigne(ev);
+      return;
+    }
 
     const texte = (ev.text || '').trim();
-    if (!texte) return;
+    // DEUX FORMES POUR LA MÊME CHOSE, et n'en lire qu'une rouvre le trou qu'on vient de
+    // fermer : Slack envoie une liste `files`, et a longtemps envoyé — envoie encore — un
+    // champ `file` unique. Un message qui ne porte que le second passerait pour vide, et son
+    // auteur s'entendrait répondre que son message n'avait rien dedans, sa capture à la main.
+    const fichiers = Array.isArray(ev.files) ? ev.files : ev.file ? [ev.file] : [];
 
     // Qui parle ? Le cadre que reçoit l'agent donne à ce texte l'autorité du dirigeant : on
     // ne remet donc que ce qui vient de quelqu'un que la nature de la ligne autorise.
@@ -666,6 +733,20 @@ export class Veilleur {
       return;
     }
 
+    // RIEN À REMETTRE N'EST PAS UNE RAISON DE SE TAIRE. Un texte vide sortait d'ici sans un
+    // mot ; l'auteur croyait avoir été entendu et attendait une réponse qui ne viendrait
+    // jamais. Le contrôle arrive APRÈS l'autorisation, volontairement : dire à un intrus que
+    // son message était vide lui cacherait la vraie cause et le ferait retenter.
+    //
+    // Une pièce jointe SANS un mot reste une parole — c'est même la façon la plus fréquente
+    // dont un client signale un problème. Ce n'est donc pas la présence de texte qui décide,
+    // c'est l'absence de tout.
+    if (!texte && !fichiers.length) {
+      journaliser(`message vide — #${ligne.canal_nom} : ni texte ni pièce jointe, rien à remettre`);
+      await this.repondreEnPropre(ligne, 'message_vide');
+      return;
+    }
+
     // Un herdr injoignable N'EST PAS un agent mort : la session peut être momentanément
     // absente. Le confondre refermait la ligne d'un agent bien vivant — et, avant ça,
     // laissait échapper un rejet qui mettait le veilleur à terre.
@@ -685,6 +766,12 @@ export class Veilleur {
       return;
     }
 
+    // LES PIÈCES SE RECUEILLENT APRÈS avoir vérifié qu'il y a quelqu'un au bout du fil, et
+    // l'ordre n'est pas un détail : rapatrier la capture d'écran d'un client — souvent une
+    // donnée personnelle — pour la déposer sur le disque d'un poste dont l'agent est mort
+    // serait écrire pour personne, en prenant le risque pour rien.
+    const { pieces, refus } = await this.recueillirPieces(ligne, fichiers);
+
     try {
       // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
       // dans son terminal, et son interlocuteur conclut que rien n'est arrivé.
@@ -699,14 +786,150 @@ export class Veilleur {
           canal: ligne.canal_nom,
           nature: natureDe(ligne),
           auteur: await this.nomDeLAuteur(ligne, ev.user),
+          pieces,
+          piecesManquantes: refus.length,
+          modifie: Boolean(ev.modifie),
         }),
         { socket: ligne.herdr_socket }
       );
-      journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car.)`);
+      journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car., ${pieces.length} pièce(s))`);
     } catch (err) {
       await this.repondreEnPropre(ligne, 'echec_remise', { erreur: err.message });
       journaliser(`ÉCHEC de remise — #${ligne.canal_nom} → ${ligne.pane} : ${err.message}`);
+      return;
     }
+
+    // CE QUI N'EST PAS PASSÉ SE DIT — après la remise, jamais à sa place (RA-REL-010).
+    //
+    // Une seule phrase par RAISON, pas par fichier : trois pièces refusées pour le même motif
+    // n'apprennent rien de plus que la première, et un lieu de conversation qu'on inonde cesse
+    // d'être lu — ce qui reviendrait à perdre le message suivant.
+    //
+    // Chaque cause est nommée à son propre point d'appel, en toutes lettres. C'est plus long
+    // qu'une boucle, et c'est voulu : la garde structurelle qui empêche une phrase interne de
+    // partir chez un client lit les points d'appel, pas les variables qui les traversent.
+    const causes = new Set(refus.map((r) => r.cause));
+    if (causes.has('piece_trop_lourde')) await this.repondreEnPropre(ligne, 'piece_trop_lourde');
+    if (causes.has('piece_type_refuse')) await this.repondreEnPropre(ligne, 'piece_type_refuse');
+    if (causes.has('piece_non_recuperee')) {
+      const detail = refus.find((r) => r.cause === 'piece_non_recuperee');
+      await this.repondreEnPropre(ligne, 'piece_non_recuperee', { erreur: detail?.detail });
+    }
+  }
+
+  /**
+   * Un message arrivé dans un canal dont AUCUNE ligne n'est au registre.
+   *
+   * « Canal qui ne nous regarde pas » : c'est ce que disait le commentaire, et c'était vrai
+   * d'un canal d'équipe. Ça ne l'est pas du canal PRIVÉ d'un client — on ne s'invite pas
+   * soi-même dans un canal privé, on nous y a mis à la main. Un registre reparti à vide (il le
+   * fait quand il est illisible) suffit à produire la situation, et le client, lui, continue
+   * d'écrire dans le silence le plus complet des trois directions.
+   *
+   * LA NATURE DU CANAL TRANCHE, et il fallait un critère qui ne demande rien à personne :
+   *   - **public** → un canal d'équipe où notre robot ne fait que figurer. On se tait, sinon
+   *     la ligne devient un importun qui répond à chaque phrase du salon commun ;
+   *   - **privé** → presque à coup sûr un client orphelin. On lui répond, dans SON registre de
+   *     langage : la ligne perdue est notre affaire, pas la sienne.
+   *
+   * La nature est demandée UNE FOIS par canal et retenue : sans ce cache, un canal d'équipe
+   * actif ferait un appel Slack par message, sur une méthode plafonnée.
+   */
+  async canalSansLigne(ev) {
+    let canal = this.canauxEtrangers.get(ev.channel);
+    if (!canal) {
+      try {
+        canal = await this.slack.infoCanal(this.jetons.robot, ev.channel);
+      } catch (err) {
+        // On ne peut pas classer ce canal : se taire est le moindre risque — répondre dans un
+        // salon d'équipe est visible de tous, et se répéterait à chaque message.
+        journaliser(`canal ${ev.channel} inclassable (${err.message}) — aucune réponse par prudence`);
+        return;
+      }
+      this.canauxEtrangers.set(ev.channel, canal);
+      if (!canal.prive) journaliser(`canal #${canal.nom} sans ligne, public — on n'y répond pas`);
+    }
+    if (!canal.prive) return;
+
+    journaliser(
+      `message sur #${canal.nom} (${ev.channel}) : canal privé ABSENT du registre — ` +
+        `non remis, son auteur en est informé`
+    );
+    // Une ligne le temps de répondre, et rien de plus : elle n'entre pas au registre — on ne
+    // sait pas à quel chantier ce canal appartenait, et l'inventer serait pire que l'oublier.
+    // Sa nature est cliente parce que c'est le seul registre de langage présentable à
+    // quelqu'un qu'on ne sait pas identifier : il n'y a rien à lui apprendre de nos rouages.
+    const etrangere = { canal_id: ev.channel, canal_nom: canal.nom, nature: 'client', libelle: canal.nom };
+    await this.repondreEnPropre(etrangere, 'ligne_inconnue', { canal: canal.nom });
+  }
+
+  /**
+   * Rapatrie ce que le client a déposé, et rend le compte de ce qui n'a pas suivi.
+   *
+   * NE LÈVE JAMAIS. C'est la propriété qui compte de toute cette méthode : ce qui accompagne
+   * un message ne conditionne jamais son arrivée. Perdre trois phrases parce qu'une image n'a
+   * pas pu être rapatriée transforme un incident mineur en conversation manquée.
+   *
+   * Deux refus se prononcent AVANT tout appel réseau — la taille et le type sont annoncés par
+   * Slack, et les deux limites sont celles du registre des demandes. Rapatrier six mégaoctets
+   * pour les refuser ensuite coûterait le réseau, la mémoire, et déposerait sur le poste une
+   * donnée personnelle qu'on ne pourrait pas utiliser.
+   *
+   * CE QUI VA AU JOURNAL EST LE FAIT, JAMAIS LE CONTENU — ni les octets, ni même le NOM du
+   * fichier : « bilan-sanguin-jean-tremblay.png » en dit déjà trop, et un journal se lit, se
+   * copie et survit plus longtemps que la conversation.
+   */
+  async recueillirPieces(ligne, fichiers) {
+    const pieces = [];
+    const refus = [];
+    for (const recu of fichiers) {
+      // UN OBJET TROP PAUVRE SE COMPLÈTE AVANT DE SE JUGER. Un objet caviardé n'a ni nom ni
+      // type : le refuser sur cette absence rendrait un refus DÉFINITIF de type sur une
+      // capture d'écran valable, et le client ne la renverrait jamais. On demande sa fiche.
+      let fichier = recu;
+      if (pieceACompleter(recu)) {
+        try {
+          fichier = (await this.slack.infoFichier(this.jetons.robot, recu.id)) || recu;
+          journaliser(`pièce complétée — #${ligne.canal_nom} : ${recu.id} livrée sans nom ni type`);
+        } catch (err) {
+          // On ne sait PAS ce qu'était cette pièce. Le dire ainsi, plutôt qu'affirmer un type
+          // qu'on ignore : la seule réponse honnête est celle qui invite à réessayer.
+          refus.push({ cause: 'piece_non_recuperee', detail: 'fiche_illisible' });
+          journaliser(`fiche illisible — #${ligne.canal_nom} : ${recu.id} (${err?.code || err?.message})`);
+          continue;
+        }
+      }
+
+      const mime = typeDePiece(fichier);
+      if (!mime) {
+        // Toujours sans nom ni type APRÈS sa fiche : on ne conclut pas davantage qu'avant.
+        // Le refus définitif est réservé à ce qu'on a vraiment lu.
+        if (pieceACompleter(fichier)) {
+          refus.push({ cause: 'piece_non_recuperee', detail: 'fiche_incomplete' });
+          journaliser(`pièce indéchiffrable — #${ligne.canal_nom} : ${fichier?.id} sans nom ni type même après sa fiche`);
+          continue;
+        }
+        refus.push({ cause: 'piece_type_refuse' });
+        journaliser(`pièce écartée — #${ligne.canal_nom} : ${fichier?.id} d'un type non recevable`);
+        continue;
+      }
+      if (Number(fichier?.size) > TAILLE_MAX) {
+        refus.push({ cause: 'piece_trop_lourde' });
+        journaliser(`pièce écartée — #${ligne.canal_nom} : ${fichier?.id} dépasse 5 Mo (${gabarit(Number(fichier.size))})`);
+        continue;
+      }
+      try {
+        const { octets } = await this.slack.telechargerFichier(this.jetons.robot, fichier, { tailleMax: TAILLE_MAX });
+        const chemin = deposer(ligne.canal_id, fichier, octets);
+        pieces.push({ nom: fichier.name, mime, chemin, gabarit: gabarit(octets.length) });
+        journaliser(`pièce recueillie — #${ligne.canal_nom} : ${fichier?.id} (${mime}, ${gabarit(octets.length)})`);
+      } catch (err) {
+        const cause = err?.code === 'trop_lourde' ? 'piece_trop_lourde' : 'piece_non_recuperee';
+        refus.push({ cause, detail: err?.code || 'échec' });
+        journaliser(`pièce non recueillie — #${ligne.canal_nom} : ${fichier?.id} (${err?.code || err?.message})`);
+      }
+    }
+    return { pieces, refus };
   }
 
   /**

@@ -42,6 +42,42 @@ Le veilleur écoute en **Socket Mode**. Il lui faut, en plus du jeton de robot, 
 1. **Toute modification de portée impose de RÉINSTALLER l'application** dans l'espace de travail. Accorder une portée sans réinstaller ne change rien, et rien ne le signale.
 2. **Le manifeste de l'application ne reflète plus ce qui est accordé.** L'application a été créée depuis un manifeste ; `files:read`, `files:write` et les portées `groups:*` ont été ajoutés à la main le 2026-08-06. **Rejouer le manifeste les effacerait sans bruit** — le même piège qu'une migration qui diverge de sa base. Mettre le manifeste à jour avant de le rejouer, jamais l'inverse.
 
+## Un canal privé dont la ligne a disparu du registre
+
+Le registre repart à vide quand il est illisible. Le robot, lui, reste membre du canal privé de son client — qui continue d'écrire dans le vide.
+
+Le veilleur répond donc, **dans le registre de langage client**, à tout message arrivé sur un canal **privé** absent du registre : *« cette conversation n'est suivie par personne en ce moment »*. Sur un canal **public**, il se tait — notre robot figure dans des canaux d'équipe, et y répondre à chaque message en ferait un importun.
+
+La nature du canal est demandée à Slack (`conversations.info`, portées déjà exigées) **une fois par canal**, puis retenue en mémoire.
+
+## Ce que les pièces déposées laissent sur le poste
+
+Une pièce recueillie est écrite dans `~/.somtech/ligne-directe/pieces/<canal>/`, en **0700 pour le dossier, 0600 pour le fichier** : seul le compte du poste peut la lire.
+
+Deux choses à savoir avant d'opérer ce dossier :
+
+1. **Ce sont des données de client, souvent personnelles.** Une capture d'écran en dit beaucoup plus qu'une phrase, et elle est arrivée ici sans relecture humaine. Le dossier se traite comme le trousseau, pas comme un cache.
+2. **Rien ne l'efface aujourd'hui.** Le ménage et la rétention sont une dette ouverte (`T-20260806-0138`), pas un oubli : le sujet a été relevé et remis à un lot qui le traitera pour lui-même. En attendant, un opérateur peut vider ce dossier à la main sans rien casser — les pièces qui comptent ont été rattachées à leur demande.
+
+Les adresses de fichiers Slack sont privées : le veilleur présente le jeton du robot pour les rapatrier.
+
+### Ce qui a été mesuré contre l'espace réel, le 2026-08-06
+
+Sonde exécutée sur une vraie capture déposée dans un canal. À ne pas re-dériver :
+
+| Mesure | Résultat |
+|---|---|
+| L'objet fichier livré par l'événement | **complet** — `name`, `mimetype`, `size`, `mode: hosted`, `file_access: visible`, les deux adresses |
+| Téléchargement avec le jeton du robot | `200`, `content-type: image/png`, `content-length` présent, 317 919 octets, aucune redirection, l'hôte reste `files.slack.com` |
+| Téléchargement **sans** jeton | `200` **avec du `text/html`** — la page de connexion |
+| `files.info` | répond en **formulaire**, refuse un corps JSON avec `invalid_arguments` |
+
+Trois conséquences tenues par le code :
+
+1. **Un `200` ne prouve rien.** La détection du HTML dans une réponse à `200` est ce qui distingue une image d'une page de connexion. C'est le mode d'échec à connaître si des pièces cessent d'arriver après une réinstallation.
+2. `content-length` est présent : la taille se contrôle **avant** de rapatrier quoi que ce soit.
+3. **L'objet caviardé** (`mode: file_access`, `file_access: check_file_info`) ne se manifeste pas sur notre espace, mais il existe côté Slack. S'il arrivait, l'objet n'aurait ni nom ni type — et le refuser sur cette absence rendrait au client un refus **définitif** de type sur une capture valable. Le veilleur demande donc sa fiche (`files.info`) avant de conclure ; si la fiche ne dit rien de plus, le refus rendu reste **réversible** (« renvoyez-le »), jamais définitif.
+
 ## Vérifier plutôt que supposer
 
 Les portées réellement accordées se lisent dans la réponse de `auth.test` (en-tête `x-oauth-scopes`), pas à l'écran de configuration — l'écran montre ce qui est demandé, la réponse montre ce qui est en vigueur. La différence entre les deux, c'est exactement une réinstallation oubliée.

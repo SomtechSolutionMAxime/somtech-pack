@@ -55,6 +55,7 @@ const CODE_CHANTIER = 'D-20260805-0005';
 const ERREUR_TECHNIQUE = 'herdr: pane w26:pQ introuvable (socket absent)';
 
 const DETAILS = {
+  canal: 'client-acme',
   chantier: CODE_CHANTIER,
   pane: 'w26:pQ',
   close_le: '2026-08-06T10:00:00.000Z',
@@ -279,15 +280,23 @@ test('BALAYAGE — CHAQUE réponse automatique a sa variante cliente, et AUCUNE 
   }
 });
 
-test('NON-RÉGRESSION — les six réponses internes sont identiques MOT POUR MOT au livré', () => {
+test('NON-RÉGRESSION — les réponses internes sont identiques MOT POUR MOT au livré', () => {
   // Recopiées du code livré, pas reconstruites : c'est ce que le dirigeant lit aujourd'hui.
   const attendu = {
     non_autorise: "Ton message n'a été remis à aucun agent : tu n'es pas autorisé à écrire sur cette ligne.",
+    ligne_inconnue:
+      "Un message est arrivé sur #client-acme, qui ne correspond à AUCUNE ligne du registre — il n'a été remis à aucun agent. Le canal étant privé, son auteur a reçu une réponse cliente.",
+    message_vide: "Ton message est arrivé sans rien à remettre — ni texte, ni pièce jointe. Il n'a donc été remis à aucun agent.",
     ligne_close: `Cette ligne est close depuis le 2026-08-06 — plus personne ne travaille sur ${CODE_CHANTIER}. Ton message n'a donc été remis à aucun agent.`,
     agent_injoignable: `Je n'arrive pas à joindre l'agent de ${CODE_CHANTIER} en ce moment (${ERREUR_TECHNIQUE}). Ton message n'a été remis à personne — renvoie-le dans un instant.`,
     agent_disparu: `L'agent de ${CODE_CHANTIER} n'est plus là — son pane w26:pQ a disparu. Je referme la ligne ; ton message n'a été remis à personne.`,
     echec_remise: `Je n'ai pas pu remettre ton message à l'agent de ${CODE_CHANTIER} : ${ERREUR_TECHNIQUE}`,
     reprise_agent_disparu: `Je reprends du service et l'agent de ${CODE_CHANTIER} n'est plus là. Je referme cette ligne.`,
+    piece_trop_lourde:
+      "Le message est bien remis, mais une pièce jointe dépasse 5 Mo : elle n'a pas été recueillie. Le registre des demandes la refuserait de toute façon.",
+    piece_type_refuse:
+      "Le message est bien remis, mais une pièce jointe n'est pas d'un type recevable (jpeg, png, gif, webp, pdf, markdown) : elle n'a pas été recueillie.",
+    piece_non_recuperee: `Le message est bien remis, mais je n'ai pas pu récupérer une pièce jointe : ${ERREUR_TECHNIQUE}.`,
   };
 
   for (const [cause, texte] of Object.entries(attendu)) {

@@ -351,3 +351,48 @@ test('NÉGATIF : le relèvement se lit AVANT de parler, et il est ordonné', () 
   assert.match(section, /action get/, 'il doit relire les demandes une à une, pas seulement leur liste');
   assert.match(section, /commentaires/i, 'c’est le fil de commentaires qui porte ce qui a été compris et promis');
 });
+
+// ═══════════════════ 4. ce que le client dépose : la pièce suit la demande (EF-REL-013)
+
+test('la pièce déposée par le client se rattache à SA DEMANDE, et sans attendre', () => {
+  // Le point qui compte de tout le lot : une capture qui reste dans le fil, c'est une équipe
+  // qui travaille sans elle — exactement le besoin dont la moitié du contexte vit ailleurs
+  // que cette fonction existe pour supprimer. Le transport dépose la pièce sur le poste ;
+  // seul le gestionnaire peut la faire entrer dans la demande, et lui seul sait laquelle.
+  //
+  // « Sans attendre » n'est pas du zèle : RA-REL-007. Ce qui est rattaché pendant la
+  // conversation survit à la session ; ce qu'on garde pour la fin disparaît avec elle.
+  const section = skill().split(/^## /m).find((s) => /^Ce que le client dépose/.test(s));
+  assert.ok(section, 'la compétence doit dire quoi faire d’une pièce déposée par le client');
+  assert.match(section, /add_attachment/, 'le geste exact doit y être, pas un renvoi à une documentation');
+  assert.match(section, /demande/i, 'la pièce atterrit dans la demande');
+  assert.match(section, /tout de suite|sans attendre|immédiat/i, 'au fil de l’eau, jamais à la fin (RA-REL-007)');
+});
+
+test('conformité : la compétence annonce EXACTEMENT ce que le transport sait recevoir', async () => {
+  // EF-AGT-002, appliqué à une limite plutôt qu'à une commande. Un gestionnaire qui promet
+  // à un client d'accepter ce que le registre refusera lui fait perdre un aller-retour, et
+  // se dédit ensuite. Les deux chiffres vivent dans le code : ils sont lus ici, jamais
+  // recopiés — c'est ce qui fait rougir le jour où l'un des deux bouge.
+  const { TYPES_ACCEPTES, TAILLE_MAX } = await import(
+    new URL('../../ligne-directe/src/pieces.js', import.meta.url).href
+  );
+  const texte = skill();
+
+  const mo = TAILLE_MAX / 1024 / 1024;
+  assert.match(texte, new RegExp(`${mo}\\s*Mo`, 'i'), `la limite réelle est de ${mo} Mo — la compétence doit la dire`);
+
+  for (const type of TYPES_ACCEPTES) {
+    const court = type.split('/')[1];
+    assert.match(texte, new RegExp(court, 'i'), `« ${court} » est accepté par le transport, la compétence l’ignore`);
+  }
+});
+
+test('NÉGATIF : elle n’enseigne jamais à ENVOYER une pièce au client (HS-REL-003)', () => {
+  // Réception seulement. L'envoi ajoute une surface — et une occasion de se tromper de
+  // destinataire — sans besoin identifié.
+  const texte = skill();
+  for (const geste of ['files.upload', 'files_upload', 'chat.postMessage']) {
+    assert.ok(!texte.includes(geste), `la compétence enseigne « ${geste} » : elle ne renvoie rien au client`);
+  }
+});

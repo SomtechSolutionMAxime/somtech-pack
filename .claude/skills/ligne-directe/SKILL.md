@@ -119,6 +119,8 @@ Inutile de t'en occuper — c'est le rôle du veilleur :
 - **Si tu meurs sans fermer**, ta ligne est refermée — et sur une ligne interne le canal est archivé, pas de canal fantôme. Sur une ligne client il reste ouvert, et rien n'est dit au client.
 - **Le poste redémarre** : les lignes reprennent, celles dont l'agent a disparu sont refermées.
 - **Apostrophes, guillemets et retours à la ligne** traversent intacts : aucun shell n'est impliqué dans la remise.
+- **Un message repris par son auteur te revient**, marqué `MODIFIÉ` dans son cadre : quelqu'un qui se relit et complète sa phrase parlait bien à quelqu'un. Prends garde, tu as peut-être déjà répondu à la version d'avant. L'aperçu de lien que Slack attache tout seul, lui, ne t'est pas remis — sinon tu répondrais deux fois au même message.
+- **Une pièce jointe est rapatriée pour toi** : les adresses de fichiers Slack sont privées, le veilleur présente le jeton, dépose le fichier sur ce poste en droits restreints, et le cadre du message te donne son chemin — tu n'as qu'à le lire. Ce qu'il ne peut pas recueillir (au-delà de 5 Mo, ou d'un type non recevable) est dit à celui qui l'a envoyé, dans son langage, et signalé dans ton cadre. **Ce qui accompagne un message ne conditionne jamais son arrivée** : le texte te parvient même quand la pièce n'a pas suivi.
 
 Si un geste échoue, il te le dit. **Un rapport qui échoue bruyamment vaut mieux qu'un rapport perdu en silence** — ne conclus jamais qu'un message est passé parce que la commande n'a rien affiché.
 

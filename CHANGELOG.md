@@ -9,6 +9,15 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Ajouté
 
+- **Une capture d'écran déposée par un client arrive jusqu'à nous** (PR #173, E-20260806-0010). Le veilleur récupère la pièce en présentant le jeton, la dépose en droits restreints là où l'agent peut la lire, et lui rappelle de la rattacher à la demande — parce qu'une capture restée dans Slack, c'est une équipe qui travaille sans elle. Vérifié contre le **vrai** Slack, pas contre un double : le fichier se rapatrie, l'adresse est bien privée, et sans jeton elle rend une page de connexion sous un code de succès — d'où la détection de cette page, indispensable.
+
+### Corrigé
+
+- **Un message porteur d'une pièce jointe ou vide était jeté en silence total** — ni remis, ni répondu, ni journalisé (T-20260806-0104). Un client déposait sa capture, ne recevait rien, et l'agent ignorait qu'on lui avait parlé : le pire résultat possible pour une fonction dont la promesse est qu'un client ait enfin un endroit où poser sa question. Deux autres chemins muets ont été fermés dans la foulée — un message **édité** (le cas du client qui complète depuis son téléphone) et un canal dont la ligne n'est plus au registre alors que notre robot y est toujours membre.
+- Les cas d'échec sont désormais distingués **par la cause émise** et non par le texte rendu : une pièce qu'on n'a pas pu rapatrier ne s'annonce plus comme un type de fichier refusé — un refus définitif qui aurait fait qu'un client ne renvoie jamais sa capture.
+
+### Ajouté
+
 - **La compétence `/gestionnaire-client` — une session devient le représentant d'un client** (PR #172, E-20260806-0011). Elle transforme la session courante, sans faire naître aucun agent, et porte quatre choses : la posture de représentant du besoin *à l'intérieur de notre équipe* plutôt que de guichet ; la frontière de l'engagement, avec « est-ce possible ? » explicitement du côté qui remonte au dirigeant ; le cycle complet, du premier message au lancement de l'orchestrateur avec un but qui lui rend compte *à lui* ; et le relèvement, une session neuve reprenant le canal sans que le client s'en aperçoive.
 - **Le client ne voit plus nos identifiants internes** : le code du chantier atteignait encore le client par le sujet du canal, le nom d'expéditeur de chaque message et le nom du canal. Le registre de langage soignait ce qu'on dit ; il restait le matricule sur ce qu'on est.
 

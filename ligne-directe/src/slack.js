@@ -108,6 +108,93 @@ export async function appeler(methode, jeton, corps = {}, { essais = 3 } = {}) {
   }
 }
 
+/**
+ * Une pièce qui n'a pas pu être rapatriée. Porte un CODE, jamais une phrase à reconnaître :
+ * c'est lui que l'appelant lit pour décider ce qu'il dit — et ce qu'il dit dépend du registre
+ * de langage, pas du texte de cette erreur.
+ *
+ * Le jeton n'entre dans aucun de ces champs, et c'est délibéré : un message d'erreur voyage
+ * dans les journaux, dans les rapports, parfois jusque dans un canal. C'est la sortie la plus
+ * distraite du système, donc celle qu'on garde le plus.
+ */
+export class ErreurFichierSlack extends Error {
+  constructor(code, detail) {
+    super(`la pièce n'a pas pu être récupérée (${code})`);
+    this.name = 'ErreurFichierSlack';
+    this.code = code;
+    this.detail = detail || null;
+  }
+}
+
+/**
+ * Rapatrie une pièce déposée dans un canal.
+ *
+ * **Ce n'est PAS un appel d'API** : autre hôte (`files.slack.com`), autre méthode (un GET),
+ * autre forme de réponse (des octets). Une seule chose ne change pas — il faut présenter le
+ * jeton, parce que les adresses de fichiers Slack sont privées. C'est précisément pour ça que
+ * rien n'arrivait jusqu'ici.
+ *
+ * DEUX PIÈGES TENUS ICI, et le premier ne se signale pas :
+ *
+ *   1. **Sans le droit `files:read`, Slack ne refuse pas.** Il répond `200` avec la page de
+ *      connexion en HTML. Un code qui se fie au code de réponse déposerait cette page sur le
+ *      poste, l'appellerait « capture.png », et l'agent ouvrirait un formulaire de connexion.
+ *      On regarde donc le TYPE de ce qui revient, pas seulement le code.
+ *   2. **La taille annoncée peut mentir.** On la vérifie avant de lire, puis on vérifie ce
+ *      qu'on a réellement reçu : c'est le second contrôle qui protège la mémoire du poste.
+ *
+ * @returns {{octets: Buffer, mime: string|null}}
+ */
+export async function telechargerFichier(jetonRobot, fichier, { tailleMax = Infinity } = {}) {
+  const adresse = fichier?.url_private_download || fichier?.url_private;
+  if (!adresse) throw new ErreurFichierSlack('adresse_absente');
+
+  // MÊME MUR QUE POUR L'API, et il vaut autant : ceci sort du poste vers Slack, avec le jeton
+  // de production. Une suite de tests n'a rien à faire sur files.slack.com.
+  if (enEssais() && !transportRemplace(TRANSPORT_NATIF, globalThis.fetch)) {
+    refuser(
+      'le téléchargement d’une pièce Slack',
+      'Aucun double n’a été monté : cet appel partirait vers l’espace Slack de production.'
+    );
+  }
+
+  const reponse = await fetch(adresse, { headers: { Authorization: `Bearer ${jetonRobot}` } });
+  if (reponse.status !== 200) throw new ErreurFichierSlack('refus', `code ${reponse.status}`);
+
+  const type = String(reponse.headers.get('content-type') || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  if (type === 'text/html') {
+    throw new ErreurFichierSlack('droit_manquant', 'Slack a rendu sa page de connexion — la portée files:read manque à l’application');
+  }
+
+  const annoncee = Number(reponse.headers.get('content-length') || 0);
+  if (annoncee > tailleMax) throw new ErreurFichierSlack('trop_lourde', `${annoncee} octets annoncés`);
+
+  const octets = Buffer.from(await reponse.arrayBuffer());
+  if (!octets.length) throw new ErreurFichierSlack('vide');
+  if (octets.length > tailleMax) throw new ErreurFichierSlack('trop_lourde', `${octets.length} octets reçus`);
+  return { octets, mime: type || null };
+}
+
+/**
+ * La fiche complète d'un fichier — ce qu'il est, comment il s'appelle, où le prendre.
+ *
+ * Ne sert QU'AU CAS CAVIARDÉ : quand Slack ne livre qu'un identifiant, c'est le seul moyen de
+ * savoir si la pièce est recevable. Sur un objet complet — ce que notre espace livre
+ * aujourd'hui, mesuré — cet appel n'a pas lieu : ce serait un appel plafonné de plus sur le
+ * chemin le plus fréquent, pour une information déjà en main.
+ *
+ * MESURÉ le 2026-08-06 : `files.info` répond en formulaire et refuse un corps JSON avec
+ * `invalid_arguments`. Il passe donc par `appeler`, qui n'encode qu'en formulaire — la règle
+ * uniforme qui ne peut pas se tromper de méthode.
+ */
+export async function infoFichier(jetonRobot, fichier) {
+  const d = await appeler('files.info', jetonRobot, { file: fichier });
+  return d.file || null;
+}
+
 /** Ouvre la connexion d'écoute permanente et rend son adresse. */
 export async function ouvrirEcoute(jetonEcoute) {
   const { url } = await appeler('apps.connections.open', jetonEcoute);
@@ -231,6 +318,23 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
     // c'est elle qui reste juste si quelqu'un déplace le garde-fou un jour.
     return { id: existant.id, nom: existant.name, prive: Boolean(existant.is_private), reutilise: true };
   }
+}
+
+/**
+ * Ce que Slack sait d'un canal — et surtout : est-il PRIVÉ ?
+ *
+ * Cette question tranche le sort d'un message arrivé dans un canal dont aucune ligne n'est au
+ * registre. Un canal public où notre robot figure est un canal d'équipe : on n'y répond pas,
+ * sous peine de devenir un importun. Un canal PRIVÉ, lui, ne s'obtient pas par hasard — on
+ * nous y a mis à la main, et c'est presque toujours celui d'un client dont la ligne s'est
+ * perdue. Le silence y est le pire résultat possible.
+ *
+ * Demande `channels:read` (public) ou `groups:read` (privé) — les deux sont déjà exigés.
+ */
+export async function infoCanal(jetonRobot, canal) {
+  const d = await appeler('conversations.info', jetonRobot, { channel: canal });
+  const c = d.channel || {};
+  return { id: c.id, nom: c.name, prive: Boolean(c.is_private), archive: Boolean(c.is_archived) };
 }
 
 /** Cherche un canal par son nom, archives comprises. */
