@@ -440,12 +440,19 @@ test('BALAYAGE EN SITUATION — les six chemins de non-remise d’une ligne clie
   }
 
   // Sixième chemin : la reprise du service, qui referme les lignes dont l'agent a disparu.
+  //
+  // CE CAS A ÉTÉ RENVERSÉ, et le renversement vaut d'être expliqué là où le test l'attend.
+  // Ce fichier affirmait « le client doit l'apprendre ». Il ne le doit pas : la mort de
+  // notre session est un événement interne, la sienne continue, et son canal n'est plus
+  // archivé — la conversation reprendra dès qu'une session neuve s'y rattache. L'informer,
+  // c'était lui exposer notre plomberie pour un incident qu'on répare, et l'inviter à
+  // repartir par courriel. Le silence s'arrête quand IL écrit : les cinq situations
+  // ci-dessus couvrent ce moment-là, y compris « interlocuteur disparu ».
   sauverRegistre({ version: 1, lignes: [] });
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble() });
   v.registre.lignes.push(ligne({ nature: 'client', pane: 'w9:pDISPARU' }));
   await v.reconcilier();
 
-  assert.equal(s.postes.length, 1, 'reprise du service : le client doit l’apprendre');
-  estPresentable(s.postes[0].texte, 'reprise du service');
+  assert.deepEqual(s.postes, [], 'reprise du service : sur une ligne cliente, on ne dit rien');
 });

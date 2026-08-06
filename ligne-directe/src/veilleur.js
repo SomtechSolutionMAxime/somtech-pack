@@ -831,6 +831,27 @@ export class Veilleur {
       if (!vivants.has(ligne.pane)) {
         clore(this.registre, ligne.canal_id, maintenant());
         fermees += 1;
+
+        // LE CANAL D'UN CLIENT NE SUIT PAS LE SORT DU TRAVAIL QU'ON Y MÈNE.
+        //
+        // Un canal interne naît avec un chantier et meurt avec lui : l'archiver referme un
+        // lieu qui n'a plus d'objet, et le dirigeant a besoin de savoir que la ligne s'est
+        // refermée sans lui. Rien ne change de ce côté.
+        //
+        // Un canal client, lui, appartient au client. L'archiver le met en LECTURE SEULE :
+        // il ne peut plus écrire, et aucune session neuve ne peut reprendre la relation —
+        // c'est-à-dire qu'on lui ferme la porte au nez pour un incident qui n'est pas le
+        // sien, et qu'on rend le relèvement impossible au moment précis où il servirait.
+        //
+        // On ne lui dit rien non plus : la mort de notre session est un événement interne,
+        // la sienne continue. Le silence s'arrête au moment où il écrit — son message tombe
+        // alors dans le chemin « personne au bout du fil », qui a sa variante cliente et qui
+        // se garde bien de lui annoncer une fin.
+        if (natureDe(ligne) === 'client') {
+          journaliser(`ligne cliente refermée sans archivage — #${ligne.canal_nom} reste au client`);
+          continue;
+        }
+
         await this.repondreEnPropre(ligne, 'reprise_agent_disparu');
         await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
       }

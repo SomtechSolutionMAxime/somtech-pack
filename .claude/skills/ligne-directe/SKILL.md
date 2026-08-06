@@ -61,6 +61,7 @@ Ce que ça change, et rien d'autre :
 - **`--titre` devient obligatoire, et l'ouverture est refusée sans lui.** Il ne nomme pas que le canal : c'est aussi **le nom qui signe chacun de tes messages**, et le seul que le client verra. Choisis-le comme tu choisirais la façon dont tu te présentes — le nom du projet, l'espace du client. Jamais un code de chantier : le client verrait une conversation entière signée d'un numéro de dossier.
 - **Le code du chantier n'entre nulle part dans ce que voit le client** — ni dans le nom du canal, ni dans son sujet, ni en signature. Le `--sujet` d'une ligne cliente, s'il est donné, est posé tel quel ; sans lui, aucun sujet n'est posé. En interne, rien ne bouge : le code ouvre le sujet, et c'est ce qui te permet de retrouver ton chantier depuis Slack.
 - **`renommer` suit les deux** : le canal et la signature. Un canal qui dirait une chose pendant que chaque message en dit une autre ne se verrait que du côté du client.
+- **Si tu disparais sans refermer, le canal du client n'est PAS archivé** — contrairement à une ligne interne, qui s'archive avec son chantier. Le canal appartient au client : il reste ouvert, rien ne lui est annoncé, et une session neuve peut s'y rattacher et reprendre. C'est ce qui rend la reprise possible ; ne l'archive donc pas non plus à la main.
 
 Deux garde-fous, parce que l'erreur y serait définitive et muette :
 
