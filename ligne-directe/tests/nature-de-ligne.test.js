@@ -34,7 +34,7 @@ beforeEach(() => sauverRegistre({ version: 1, lignes: [] }));
  * C'est le seul moyen de prouver qu'un canal client naît privé : côté registre, un canal
  * public et un canal privé se ressemblent trait pour trait.
  */
-function slackDouble({ membres = [] } = {}) {
+function slackDouble({ membres = [], membresIllisibles = false, rendPrive = null } = {}) {
   return {
     postes: [],
     crees: [],
@@ -45,10 +45,14 @@ function slackDouble({ membres = [] } = {}) {
     },
     async creerCanal(_j, nom, prive) {
       this.crees.push({ nom, prive });
-      return { id: `C_${nom}`, nom, reutilise: false };
+      // `rendPrive` simule un Slack qui ne rend PAS ce qu'on lui a demandé. Le double
+      // rendait jusqu'ici la confidentialité voulue plutôt que la confidentialité réelle —
+      // c'est-à-dire qu'il prouvait l'intention, pas le résultat.
+      return { id: `C_${nom}`, nom, prive: rendPrive === null ? Boolean(prive) : rendPrive, reutilise: false };
     },
     async membresDuCanal(_j, canal) {
       this.membresDemandes.push(canal);
+      if (membresIllisibles) throw new Error('missing_scope');
       return membres;
     },
     async definirSujet() {},
@@ -161,6 +165,103 @@ test('rouvrir une ligne en changeant sa nature est REFUSÉ — un canal ne chang
   assert.equal(chargerRegistre().lignes[0].nature, 'interne', 'la nature inscrite ne doit pas avoir bougé');
 });
 
+// ————————————————————— relevé en revue : le canal REPRIS gardait sa confidentialité à lui
+
+test('UNE LIGNE CLIENT NE S’INSTALLE PAS DANS UN CANAL PUBLIC EXISTANT', async () => {
+  // LE BLOQUANT de la revue, et c'est le défaut que tout cet epic existe pour supprimer.
+  //
+  // Le nom du canal vient du `--titre`. Une ligne client titrée du nom de son client tombe
+  // très naturellement sur un canal public homonyme déjà présent dans l'espace. La reprise
+  // rendait alors ce canal tel quel : registre marqué « client », canal resté PUBLIC, et
+  // l'autorisation-par-appartenance ouvrant la ligne à quiconque peut y entrer. Les deux
+  // défauts d'un coup — portefeuille exposé ET autorisation grande ouverte — en silence.
+  const { ConfidentialiteIncompatible } = await import('../src/slack.js');
+  const s = slackDouble();
+  s.creerCanal = async (_j, nom, prive) => {
+    s.crees.push({ nom, prive });
+    throw new ConfidentialiteIncompatible(nom, prive, false); // homonyme public déjà là
+  };
+  const v = veilleur({ slack: s, herdr: herdrDouble() });
+
+  const r = await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', titre: 'Acme', nature: 'client' });
+
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /public/i, 'le refus doit dire ce qui cloche');
+  assert.equal(chargerRegistre().lignes.length, 0, 'AUCUNE ligne ne doit être inscrite sur un canal public');
+});
+
+test('la couche Slack REFUSE la reprise avant de rejoindre le canal — on ne s’installe pas où on va refuser', async () => {
+  // Le refus doit tomber AVANT `conversations.unarchive` et `conversations.join` : sinon le
+  // robot entre dans un canal public du client, y reste, et l'échec laisse une trace visible
+  // de tout l'espace.
+  const { creerCanal, ConfidentialiteIncompatible } = await import('../src/slack.js');
+  const vraiFetch = globalThis.fetch;
+  const methodes = [];
+  globalThis.fetch = async (url) => {
+    const methode = String(url).split('/').pop();
+    methodes.push(methode);
+    if (methode === 'conversations.create') {
+      return { status: 200, headers: new Map(), async json() { return { ok: false, error: 'name_taken' }; } };
+    }
+    if (methode === 'conversations.list') {
+      return {
+        status: 200,
+        headers: new Map(),
+        async json() {
+          return { ok: true, channels: [{ id: 'C_PUB', name: 'acme', is_private: false, is_archived: true }] };
+        },
+      };
+    }
+    return { status: 200, headers: new Map(), async json() { return { ok: true }; } };
+  };
+  try {
+    await assert.rejects(() => creerCanal('jeton', 'acme', true), (err) => {
+      assert.ok(err instanceof ConfidentialiteIncompatible);
+      assert.equal(err.reelle, false);
+      assert.equal(err.demandee, true);
+      return true;
+    });
+    assert.ok(!methodes.includes('conversations.join'), 'on ne rejoint pas un canal qu’on refuse');
+    assert.ok(!methodes.includes('conversations.unarchive'), 'on ne désarchive pas un canal qu’on refuse');
+  } finally {
+    globalThis.fetch = vraiFetch;
+  }
+});
+
+test('la couche Slack rend la confidentialité RÉELLE du canal, pas celle qu’on espérait', async () => {
+  // C'est le fait que jetait l'ancienne reprise. Sans lui, aucun verrou en amont ne peut
+  // être écrit : on n'a rien à comparer.
+  const { creerCanal } = await import('../src/slack.js');
+  const vraiFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    status: 200,
+    headers: new Map(),
+    async json() {
+      return { ok: true, channel: { id: 'C1', name: 'acme', is_private: true } };
+    },
+  });
+  try {
+    assert.equal((await creerCanal('jeton', 'acme', true)).prive, true);
+  } finally {
+    globalThis.fetch = vraiFetch;
+  }
+});
+
+test('SI SLACK REND UN CANAL PUBLIC ALORS QU’ON EN DEMANDAIT UN PRIVÉ, la ligne n’ouvre pas', async () => {
+  // Le second verrou, et il n'est pas redondant : le premier protège la REPRISE d'un
+  // homonyme, celui-ci la CRÉATION. Un droit manquant ou une politique d'espace de travail
+  // peut rendre un canal public sans que Slack s'en plaigne. Inscrire « client » sans
+  // vérifier, c'est signer une garantie qu'on n'a pas.
+  const s = slackDouble({ rendPrive: false });
+  const v = veilleur({ slack: s, herdr: herdrDouble() });
+
+  const r = await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', nature: 'client' });
+
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /groups:write|groups:read/, 'le message doit orienter vers la portée manquante');
+  assert.equal(chargerRegistre().lignes.length, 0);
+});
+
 test('UN REGISTRE ÉCRIT PAR LA VERSION PRÉCÉDENTE se relit et se comporte comme avant', async () => {
   // Format d'avant : aucun champ `nature` nulle part. Le veilleur doit le charger sans
   // erreur ET traiter la ligne comme interne — pas la refuser, pas la traiter comme client
@@ -217,6 +318,24 @@ test('sur une ligne client, qui n’appartient PAS au canal privé ne pilote pas
 
   assert.equal(h.remis.length, 0, 'l’appartenance au canal privé fait foi, et elle seule');
   assert.deepEqual(chargerRegistre().lignes[0].autorises, [], 'un refusé ne doit pas s’inscrire au passage');
+});
+
+test('MEMBRES ILLISIBLES : ON REFUSE, ON N’OUVRE PAS — et ce n’est pas silencieux', async () => {
+  // TROU DE PREUVE relevé en revue : la bascule fail-closed → fail-open survivait aux 91
+  // tests. Or c'est la branche qui se déclenche EN PREMIER si `groups:read` n'est pas
+  // accordé — le jour d'une réinstallation ratée, un droit manquant ferait autoriser tout
+  // le monde sur le canal privé d'un client, et rien ne le dirait.
+  const s = slackDouble({ membresIllisibles: true });
+  const h = herdrDouble();
+  sauverRegistre({ version: 1, lignes: [ligne({ nature: 'client', autorises: [] })] });
+  const v = veilleur({ slack: s, herdr: h });
+  const avant = journal().length;
+
+  await v.remettreAuChantier(parole('bonjour', { user: 'U_INCONNU' }));
+
+  assert.equal(h.remis.length, 0, 'ne pas pouvoir vérifier n’est pas une autorisation');
+  assert.equal(s.postes.length, 1, 'et le refus se dit — RA-REL-009 vaut aussi quand la cause est chez nous');
+  assert.match(journal().slice(avant), /illisible/i, 'le journal doit dire que la vérification a échoué, pas seulement que c’est refusé');
 });
 
 test('NON-RÉGRESSION — une ligne interne décide sur sa liste, sans jamais interroger Slack', async () => {

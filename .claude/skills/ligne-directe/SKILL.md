@@ -19,6 +19,8 @@ Après une mise à jour du pack, lance **`ligne-directe relever`** : le veilleur
 
 Si un geste échoue en disant qu'un jeton manque au trousseau, **n'essaie pas de le contourner** : c'est une installation à faire une fois par poste, par le dirigeant lui-même. Dis-le et continue ton travail sans ligne.
 
+De même si Slack refuse une portée (`missing_scope`) : **dis-le, ne contourne pas**. Ce qu'il faut accorder à l'application, et ce qui casse sans chaque droit, est écrit dans `~/.somtech/ligne-directe/README.md` — donne ce chemin au dirigeant plutôt que de chercher toi-même.
+
 ## Les quatre gestes
 
 ```bash

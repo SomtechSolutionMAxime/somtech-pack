@@ -71,23 +71,60 @@ export async function identite(jetonRobot) {
 }
 
 /**
+ * Le canal repris n'a pas la confidentialité demandée. On refuse, on ne s'accommode pas.
+ *
+ * RELEVÉ EN REVUE, et c'était le défaut que tout ce chantier existe pour supprimer : la
+ * reprise d'un canal existant rendait le canal tel quel, en JETANT son `is_private`. Un
+ * canal client tombant sur un homonyme public naissait donc public, s'inscrivait au
+ * registre comme « client », et son autorisation-par-appartenance ouvrait la ligne à
+ * quiconque peut entrer dans un canal public. Les deux défauts d'un coup, en silence.
+ */
+export class ConfidentialiteIncompatible extends Error {
+  constructor(nom, demandee, reelle) {
+    super(
+      `le canal #${nom} existe déjà et il est ${reelle ? 'privé' : 'public'} — ` +
+        `on en demandait un ${demandee ? 'privé' : 'public'}`
+    );
+    this.name = 'ConfidentialiteIncompatible';
+    this.canal = nom;
+    this.demandee = Boolean(demandee);
+    this.reelle = Boolean(reelle);
+  }
+}
+
+/**
  * Crée un canal. Slack impose des noms en minuscules, sans espace ni accent, 80 car. max.
  * Si le canal existe déjà, on le rejoint plutôt que d'échouer : rouvrir une ligne sur un
- * chantier repris est un cas normal, pas une erreur.
+ * chantier repris est un cas normal, pas une erreur — MAIS seulement à confidentialité
+ * égale, et le `prive` rendu est toujours celui du canal RÉEL, jamais celui qu'on espérait.
  */
 export async function creerCanal(jetonRobot, nom, prive = false) {
   try {
     const d = await appeler('conversations.create', jetonRobot, { name: nom, is_private: prive });
-    return { id: d.channel.id, nom: d.channel.name, reutilise: false };
+    return { id: d.channel.id, nom: d.channel.name, prive: Boolean(d.channel.is_private), reutilise: false };
   } catch (err) {
     if (err.code !== 'name_taken') throw err;
     const existant = await trouverCanal(jetonRobot, nom);
     if (!existant) throw err;
+    // AVANT de désarchiver et de rejoindre : on ne s'installe pas dans un canal qu'on va
+    // refuser. Le nom vient du titre du chantier — un titre portant le nom d'un client
+    // tombe très naturellement sur un canal déjà existant à ce nom.
+    if (Boolean(existant.is_private) !== Boolean(prive)) {
+      throw new ConfidentialiteIncompatible(nom, prive, existant.is_private);
+    }
     // Un canal archivé est en lecture seule : il faut le sortir des archives avant d'y
     // écrire, sinon toute la ligne échoue au premier message.
     if (existant.is_archived) await appeler('conversations.unarchive', jetonRobot, { channel: existant.id });
     await rejoindreCanal(jetonRobot, existant.id);
-    return { id: existant.id, nom: existant.name, reutilise: true };
+    // On rend la confidentialité DU CANAL, pas celle qu'on demandait.
+    //
+    // MUTATION ÉQUIVALENTE, dite plutôt que maquillée : remplacer ceci par `Boolean(prive)`
+    // survit à toute la suite, et c'est normal — le garde-fou juste au-dessus a déjà prouvé
+    // que les deux sont égaux ici. Aucun test ne peut les départager, et en inventer un
+    // serait décoratif. Ce qui est prouvé, c'est le garde-fou lui-même : le retirer fait
+    // rougir. On garde la formulation qui énonce un FAIT plutôt qu'un souhait, parce que
+    // c'est elle qui reste juste si quelqu'un déplace le garde-fou un jour.
+    return { id: existant.id, nom: existant.name, prive: Boolean(existant.is_private), reutilise: true };
   }
 }
 

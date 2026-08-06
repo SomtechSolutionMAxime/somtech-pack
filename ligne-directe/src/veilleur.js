@@ -306,9 +306,46 @@ export class Veilleur {
     const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));
     const visage = visageDe(chantier);
 
-    // LA CONFIDENTIALITÉ SE JOUE ICI, et nulle part ailleurs : Slack fixe la nature d'un
-    // canal à sa création et ne la change plus jamais. Un canal client né public le reste.
-    const canal = await this.slack.creerCanal(this.jetons.robot, nom, natureVoulue === 'client');
+    // LA CONFIDENTIALITÉ SE JOUE ICI : Slack fixe la nature d'un canal à sa création et ne
+    // la change plus jamais. Un canal client né public le reste.
+    const privePrevu = natureVoulue === 'client';
+    let canal;
+    try {
+      canal = await this.slack.creerCanal(this.jetons.robot, nom, privePrevu);
+    } catch (err) {
+      // Le nom vient du TITRE du chantier. Une ligne client titrée du nom de son client
+      // tombe très naturellement sur un canal public homonyme déjà présent dans l'espace —
+      // et le reprendre exposerait ce qu'on cherchait précisément à cacher.
+      if (err.name !== 'ConfidentialiteIncompatible') throw err;
+      journaliser(`ouverture refusée — ${chantier} : ${err.message}`);
+      return {
+        ok: false,
+        erreur:
+          `${err.message}. Une ligne ${natureVoulue} ne s'installe pas dans un canal ` +
+          `${err.reelle ? 'privé' : 'public'} existant — donne un --titre qui mène à un autre nom, ` +
+          `ou archive le canal #${err.canal}.`,
+      };
+    }
+
+    // DEUXIÈME VERROU, et il n'est pas redondant : le premier protège la REPRISE d'un canal
+    // homonyme, celui-ci protège la CRÉATION. Slack peut rendre un canal public alors qu'on
+    // en demandait un privé — un droit manquant, une politique d'espace de travail — et il
+    // le fait sans se plaindre. Inscrire « client » au registre sur un canal dont on n'a pas
+    // vérifié la confidentialité, c'est signer une garantie qu'on n'a pas.
+    if (Boolean(canal.prive) !== privePrevu) {
+      journaliser(
+        `ouverture refusée — ${chantier} : #${canal.nom} est ${canal.prive ? 'privé' : 'public'}, ` +
+          `on attendait ${privePrevu ? 'privé' : 'public'}`
+      );
+      return {
+        ok: false,
+        erreur:
+          `Slack a rendu un canal ${canal.prive ? 'privé' : 'public'} (#${canal.nom}) alors qu'une ligne ` +
+          `${natureVoulue} en demande un ${privePrevu ? 'privé' : 'public'} — la ligne n'est pas ouverte. ` +
+          `Vérifie les portées ${privePrevu ? 'groups:write / groups:read' : 'channels:manage'} de l'application.`,
+      };
+    }
+
     const sujetComplet = [chantier, sujet].filter(Boolean).join(' — ');
     if (sujetComplet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetComplet);
     if (invites.length) await this.slack.inviter(this.jetons.robot, canal.id, invites);
