@@ -9,6 +9,11 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Ajouté
 
+- **Le veilleur ne parle plus à un client comme il parle au dirigeant** (PR #171, E-20260806-0009). Ses réponses automatiques suivent désormais la nature de la ligne : sobres et sans jargon face à un client, franches et techniques face au dirigeant — dont les textes n'ont pas changé d'un caractère. Et le cadre qui accompagne un message remis à l'agent **nomme l'auteur réel** : il annonçait « Message du dirigeant » à tout le monde, ce qui aurait présenté la phrase d'un client comme une consigne du dirigeant — un tiers pilotant nos agents sans le savoir. L'agent sait maintenant qu'un client demande, et n'ordonne pas.
+- **Une garde interdit à toute écriture vers un canal de contourner le registre de langage.** Elle ne surveillait d'abord que la fonction de réponse : une revue a prouvé qu'un septième chemin postant directement pouvait envoyer une phrase interne — nom de pane et code de chantier compris — dans un canal client sans qu'aucun des 131 tests ne rougisse. Elle porte désormais sur toute écriture, hors des trois sites sanctionnés.
+
+### Ajouté
+
 - **Une ligne de discussion connaît sa nature, et un canal client est privé** (PR #170, E-20260806-0008). Une ligne est désormais *interne* (le dirigeant) ou *cliente* (les gens d'un client), et cette nature commande deux choses : la confidentialité du canal, et qui a le droit d'y écrire. Un canal client est privé — un canal public expose le portefeuille client par son seul nom. Une ligne sans nature déclarée reste interne et publique, exactement comme avant. Un message écarté laisse désormais une trace et celui qui l'a écrit l'apprend : c'était le défaut le plus coûteux, celui qui ne casse rien et fait juste croire que ça marche.
 
 ### Corrigé
