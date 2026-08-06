@@ -544,7 +544,6 @@ export class Veilleur {
    * écrire, et on ne l'ouvre pas à tout l'espace par commodité.
    */
   autorise(ligne, utilisateur) {
-    if (utilisateur) return true; // MUTATION VOLONTAIRE — T-20260806-0014, a revertir
     if (!utilisateur) return false;
     // Une ligne OUVERTE AVANT ce contrôle ne porte pas de liste du tout. La traiter comme
     // une liste vide couperait la parole à un dirigeant en pleine conversation, sans qu'il
