@@ -132,26 +132,50 @@ CMD="$(champ COMMANDE)"
   || ko "la commande rendue n'est pas celle attendue : $CMD"
 
 # =================================================================
-# 2. La valeur qui part dans une COMMANDE exécutée n'est pas de confiance.
-#    Le nom du représentant est recopié à la main depuis le registre.
+# 2. Le nom du représentant obéit à la FORME imposée par herdr, ou il est refusé.
+#    Une liste d'exemples hostiles ne prouve que ce que son auteur a imaginé :
+#    la version précédente n'essayait qu'un nom à majuscule INITIALE, si bien
+#    qu'élargir la forme à `[A-Za-z]` laissait la suite verte — et `acme-Inc`
+#    serait parti dans la commande. Ce qu'on mesure ici, c'est la forme
+#    elle-même — ^[a-z][a-z0-9_-]{0,31}$ — règle par règle, chacune avec son
+#    contre-exemple et son verdict attendu.
+#    L'enjeu n'est pas que l'injection : `herdr agent prompt` ne trouve pas un
+#    agent au nom mal formé, et l'attente n'est alors jamais dite — le défaut
+#    même que RA-AGT-007 nomme.
 # =================================================================
-for HOSTILE in 'acme-inc; touch PWNED' 'acme$(touch PWNED)' 'acme && touch PWNED' \
-               'acme|touch PWNED' 'acme inc' 'Acme-Inc' '-acme' \
-               'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; do
+NOM_32="$(printf 'a%.0s' $(seq 1 32))"
+NOM_33="$(printf 'a%.0s' $(seq 1 33))"
+for CAS in \
+    "acme-inc:DIRE" "a:DIRE" "a1:DIRE" "acme_inc-2:DIRE" "${NOM_32}:DIRE" \
+    "${NOM_33}:FAIL" "acme-Inc:FAIL" "acmeInc:FAIL" "Acme-inc:FAIL" \
+    "2acme:FAIL" "-acme:FAIL" "_acme:FAIL" "acme.inc:FAIL" "acme inc:FAIL" \
+    "acmé-inc:FAIL" "acme/inc:FAIL" "acme-inc; touch PWNED:FAIL" \
+    "acme\$(touch PWNED):FAIL" "acme && touch PWNED:FAIL" "acme|touch PWNED:FAIL"; do
+  NOM="${CAS%:*}"; ATTENDU="${CAS##*:}"
   run attente \
-    ATS_REPRESENTANT="$HOSTILE" \
+    ATS_REPRESENTANT="$NOM" \
     ATS_CHANTIER=D-20260806-0042 \
     "ATS_APPLICATION=Portail Acme" \
     ATS_APPLICATION_ID="$APP_ID"
-  if [ "$RC" = "5" ] && [ "$(champ DECISION)" = "FAIL" ] && [ -z "$(champ COMMANDE)" ]; then
-    :
+  if [ "$ATTENDU" = "FAIL" ]; then
+    if [ "$RC" = "5" ] && [ "$(champ DECISION)" = "FAIL" ] && [ -z "$(champ COMMANDE)" ]; then
+      :
+    else
+      ko "nom hors de la forme herdr accepté : '$NOM' → '$(champ DECISION)'/rc $RC ; COMMANDE='$(champ COMMANDE)'"
+      FORME_KO=1
+    fi
   else
-    ko "nom de représentant hostile accepté : '$HOSTILE' → '$(champ DECISION)'/rc $RC ; COMMANDE='$(champ COMMANDE)'"
-    HOSTILE_KO=1
+    if [ "$RC" = "0" ] && [ "$(champ DECISION)" = "DIRE" ] \
+       && [ "$(champ COMMANDE)" = "herdr agent prompt '${NOM}' '$(champ MESSAGE)'" ]; then
+      :
+    else
+      ko "nom conforme à la forme herdr refusé ou mal adressé : '$NOM' → '$(champ DECISION)'/rc $RC ; COMMANDE='$(champ COMMANDE)'"
+      FORME_KO=1
+    fi
   fi
 done
-[ "${HOSTILE_KO:-0}" = "0" ] \
-  && ok "tout nom de représentant hors de la forme imposée par herdr est refusé (rc 5), sans commande rendue" || true
+[ "${FORME_KO:-0}" = "0" ] \
+  && ok "le nom du représentant suit la forme imposée par herdr, règle par règle — conforme accepté et adressé, hors forme refusé (rc 5) sans commande" || true
 
 # Preuve par l'exécution : la ligne rendue ne fait rien d'autre que la remise,
 # même quand les données sont hostiles. (garde-fou vérifié authentique en revue :
@@ -485,12 +509,24 @@ TEMOIN
   # premier, ce qui laisse une attente annoncée sans fin annoncée.
   BRIEF="$(awk '/^\*\*a\. Écrire le brief/,/^\*\*b\. Faire naître/' "$SKILL_ORCH")"
   SUIVI="$(awk '/^\*\*d\. Exiger le suivi actif/,/^\*\*e\. Faire reviewer/' "$SKILL_ORCH")"
-  printf '%s' "$BRIEF" | grep -qiE 'sas occup|pousse-staging refuse' \
-    && ok "le brief de l'exécutant porte la consigne de sas occupé" \
-    || ko "le brief de l'exécutant ne porte pas la consigne — l'exécutant se taira"
-  printf '%s' "$BRIEF" | grep -qiE 'quand ta pouss[ée]e (finit par )?pass|poussee pass|reprise' \
-    && ok "le brief demande aussi de signaler la reprise — sinon l'attente n'a jamais de fin" \
-    || ko "le brief ne demande pas de signaler la reprise : la moitié « le tour est venu » n'a aucun déclencheur"
+
+  # On n'interroge PAS la section entière : la consigne est une phrase dictée à
+  # l'exécutant, et c'est elle seule qui compte. Chercher « reprise » n'importe
+  # où dans le paragraphe laissait passer la suppression de la seconde moitié de
+  # la consigne — le commentaire qui l'entoure emploie le même mot, et la suite
+  # restait verte. On extrait donc la consigne (le passage en italique) et on
+  # exige que SES DEUX MOITIÉS y soient.
+  CONSIGNE="$(printf '%s\n' "$BRIEF" | sed 's/\*\*//g' | grep -oE '\*[^*]+\*' \
+              | grep -iE 'sas|pousse-staging' | head -1)"
+  if [ -z "$CONSIGNE" ]; then
+    ko "le brief de l'exécutant ne DICTE pas la consigne de sas occupé — l'exécutant se taira"
+    ko "le brief ne demande pas de signaler la reprise : la moitié « le tour est venu » n'a aucun déclencheur"
+  else
+    ok "le brief dicte à l'exécutant la consigne de sas occupé"
+    printf '%s' "$CONSIGNE" | grep -qiE 'quand ta pouss[ée]e (finit par )?pass|poussee pass' \
+      && ok "la consigne dictée porte aussi sa seconde moitié : signaler la reprise" \
+      || ko "la consigne dictée s'arrête au refus : la moitié « le tour est venu » n'a aucun déclencheur — $CONSIGNE"
+  fi
   printf '%s' "$SUIVI" | grep -qiE 'sas occup' \
     && ok "le suivi actif liste le sas occupé parmi les signaux à remonter" \
     || ko "le suivi actif ne liste pas le sas occupé"
@@ -500,9 +536,20 @@ TEMOIN
 
   # La source de ATS_REPRESENTANT doit être nommée : c'est elle qui décide QUI
   # reçoit, et le helper refuse un nom mal recopié.
-  awk '/^\*\*g\. Pousser/,/^\*\*h\. Merger/' "$SKILL_ORCH" | grep -q 'ATS_REPRESENTANT' \
-    && ok "la section dit où prendre le nom du représentant" \
-    || ko "la section ne dit pas d'où vient ATS_REPRESENTANT — l'agent devra le deviner"
+  # Le bloc d'exemple ne prouve rien ici : il contient déjà `ATS_REPRESENTANT=`,
+  # si bien que retirer la ligne qui dit OÙ PRENDRE la valeur laissait la suite
+  # verte. On lit donc la section HORS des blocs de code — la prose et le
+  # tableau — et on exige qu'elle nomme la variable ET sa provenance.
+  HORS_BLOC="$(awk '/^\*\*g\. Pousser/,/^\*\*h\. Merger/' "$SKILL_ORCH" \
+               | awk '/^```/ { dans = !dans; next } !dans')"
+  LIGNE_REP="$(printf '%s\n' "$HORS_BLOC" | grep 'ATS_REPRESENTANT' | head -1)"
+  if [ -z "$LIGNE_REP" ]; then
+    ko "hors des blocs de code, la section ne nomme jamais ATS_REPRESENTANT — l'agent devra deviner d'où vient le nom"
+  else
+    printf '%s' "$LIGNE_REP" | grep -qiE 'demande|brief|registre' \
+      && ok "la section dit, en prose, où prendre le nom du représentant" \
+      || ko "la section nomme ATS_REPRESENTANT sans dire d'où le prendre : $LIGNE_REP"
+  fi
 
   grep -qiE 'attend(re|rait)? (au sas )?(son tour )?sans le dire|attente (muette|non dite)' "$SKILL_ORCH" \
     && ok "orchestrer-chantier porte l'anti-pattern de l'attente muette" \
