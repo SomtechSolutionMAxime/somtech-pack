@@ -9,6 +9,21 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Ajouté
 
+- **La compétence `/gestionnaire-client` — une session devient le représentant d'un client** (PR #172, E-20260806-0011). Elle transforme la session courante, sans faire naître aucun agent, et porte quatre choses : la posture de représentant du besoin *à l'intérieur de notre équipe* plutôt que de guichet ; la frontière de l'engagement, avec « est-ce possible ? » explicitement du côté qui remonte au dirigeant ; le cycle complet, du premier message au lancement de l'orchestrateur avec un but qui lui rend compte *à lui* ; et le relèvement, une session neuve reprenant le canal sans que le client s'en aperçoive.
+- **Le client ne voit plus nos identifiants internes** : le code du chantier atteignait encore le client par le sujet du canal, le nom d'expéditeur de chaque message et le nom du canal. Le registre de langage soignait ce qu'on dit ; il restait le matricule sur ce qu'on est.
+
+### Corrigé
+
+- **Le canal d'un client ne se referme plus quand notre session disparaît.** Un canal archivé est en lecture seule : le client ne pouvait plus écrire et aucune session neuve ne pouvait reprendre — le relèvement était inatteignable. Le canal appartient au client, pas au chantier, et ne suit donc plus son sort. Les deux chemins qui archivent sont énumérés et gardés : un troisième fait rougir la suite.
+- **Le désarchivage d'un canal était du théâtre** : Slack interdit le jeton robot sur cette opération, donc le code tentait ce qu'il ne pouvait pas faire. Le chemin est supprimé et remplacé par un refus qui nomme l'impossibilité et le geste humain qui la lève. Un canal client archivé est perdu pour de bon — c'est maintenant écrit dans le code, dans la compétence, et dans le refus rendu à l'agent.
+- **Un conseil qui détruisait** : un refus invitait à archiver un canal public d'équipe, opération sans retour. Il invite désormais à le renommer, qui obtient la même chose et se défait.
+
+### Technique
+
+- Les refus définitifs portent désormais le fait qu'il est inutile de réessayer, au lieu d'être reconnus par une liste de noms d'erreurs qui oublie toujours la prochaine. Les gardes vérifient la cohérence entre ce fait et le texte rendu : un refus qui se déclare définitif et invite à patienter se contredit lui-même — et ça vaut pour les refus à venir.
+
+### Ajouté
+
 - **Le veilleur ne parle plus à un client comme il parle au dirigeant** (PR #171, E-20260806-0009). Ses réponses automatiques suivent désormais la nature de la ligne : sobres et sans jargon face à un client, franches et techniques face au dirigeant — dont les textes n'ont pas changé d'un caractère. Et le cadre qui accompagne un message remis à l'agent **nomme l'auteur réel** : il annonçait « Message du dirigeant » à tout le monde, ce qui aurait présenté la phrase d'un client comme une consigne du dirigeant — un tiers pilotant nos agents sans le savoir. L'agent sait maintenant qu'un client demande, et n'ordonne pas.
 - **Une garde interdit à toute écriture vers un canal de contourner le registre de langage.** Elle ne surveillait d'abord que la fonction de réponse : une revue a prouvé qu'un septième chemin postant directement pouvait envoyer une phrase interne — nom de pane et code de chantier compris — dans un canal client sans qu'aucun des 131 tests ne rougisse. Elle porte désormais sur toute écriture, hors des trois sites sanctionnés.
 
