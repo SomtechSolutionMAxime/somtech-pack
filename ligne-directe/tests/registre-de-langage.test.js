@@ -279,10 +279,11 @@ test('BALAYAGE — CHAQUE réponse automatique a sa variante cliente, et AUCUNE 
   }
 });
 
-test('NON-RÉGRESSION — les six réponses internes sont identiques MOT POUR MOT au livré', () => {
+test('NON-RÉGRESSION — les réponses internes sont identiques MOT POUR MOT au livré', () => {
   // Recopiées du code livré, pas reconstruites : c'est ce que le dirigeant lit aujourd'hui.
   const attendu = {
     non_autorise: "Ton message n'a été remis à aucun agent : tu n'es pas autorisé à écrire sur cette ligne.",
+    message_vide: "Ton message est arrivé sans rien à remettre — ni texte, ni pièce jointe. Il n'a donc été remis à aucun agent.",
     ligne_close: `Cette ligne est close depuis le 2026-08-06 — plus personne ne travaille sur ${CODE_CHANTIER}. Ton message n'a donc été remis à aucun agent.`,
     agent_injoignable: `Je n'arrive pas à joindre l'agent de ${CODE_CHANTIER} en ce moment (${ERREUR_TECHNIQUE}). Ton message n'a été remis à personne — renvoie-le dans un instant.`,
     agent_disparu: `L'agent de ${CODE_CHANTIER} n'est plus là — son pane w26:pQ a disparu. Je referme la ligne ; ton message n'a été remis à personne.`,

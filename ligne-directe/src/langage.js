@@ -17,14 +17,21 @@
 // besoin de savoir — et il n'a pas à apprendre comment nous travaillons pour l'apprendre.
 
 /**
- * Les six situations où le veilleur répond de lui-même dans le canal.
+ * Les situations où le veilleur répond de lui-même dans le canal.
  *
- * L'ordre suit celui du chemin de remise : autorisation, ligne close, agent injoignable,
- * agent disparu, échec de remise — puis la reprise du service, hors de ce chemin.
+ * L'ordre suit celui du chemin de remise : autorisation, ligne close, message sans rien à
+ * remettre, agent injoignable, agent disparu, échec de remise — puis la reprise du service,
+ * hors de ce chemin.
+ *
+ * `message_vide` est le SEPTIÈME chemin de non-remise, et il était invisible : un message
+ * sans texte ni pièce était jeté au filtrage, sans trace, sans réponse, sans remise. Le
+ * compte des chemins n'est pas décoratif — trois correctifs de ce chantier n'avaient couvert
+ * qu'une porte sur deux, et celui-ci n'avait été compté par personne.
  */
 export const CAUSES = [
   'non_autorise',
   'ligne_close',
+  'message_vide',
   'agent_injoignable',
   'agent_disparu',
   'echec_remise',
@@ -43,6 +50,9 @@ const INTERNE = {
   ligne_close: ({ close_le: closeLe, chantier }) =>
     `Cette ligne est close depuis le ${String(closeLe).slice(0, 10)} — plus personne ne travaille sur ${chantier}. ` +
     `Ton message n'a donc été remis à aucun agent.`,
+  message_vide: () =>
+    `Ton message est arrivé sans rien à remettre — ni texte, ni pièce jointe. ` +
+    `Il n'a donc été remis à aucun agent.`,
   agent_injoignable: ({ chantier, erreur }) =>
     `Je n'arrive pas à joindre l'agent de ${chantier} en ce moment (${erreur}). ` +
     `Ton message n'a été remis à personne — renvoie-le dans un instant.`,
@@ -80,6 +90,9 @@ const CLIENT = {
   ligne_close: () =>
     'Personne ne suit cette conversation en ce moment — votre message n’a pas été transmis. ' +
     'Écrivez-nous de nouveau un peu plus tard, ou passez par votre interlocuteur habituel si c’est pressant.',
+  message_vide: () =>
+    'Votre message nous est bien parvenu, mais il était vide — ni texte, ni fichier. ' +
+    'Il n’a donc pas été transmis : réécrivez-le, s’il vous plaît.',
   agent_injoignable: () =>
     'Votre interlocuteur n’est pas joignable en ce moment. ' +
     'Votre message n’a pas été transmis — renvoyez-le dans quelques instants.',

@@ -56,6 +56,19 @@ const CONNEXION_EN_COURS = 0;
 const ECOUTE_NATIVE = globalThis.WebSocket;
 const CONNEXION_OUVERTE = 1;
 
+/**
+ * Les sous-types de message qui SONT une parole adressée à la ligne.
+ *
+ * Liste blanche, et c'est le sens de la garde : tout le reste — entrée et sortie de canal,
+ * modification, suppression, changement de sujet, message de robot — n'est pas quelqu'un qui
+ * s'adresse à l'agent, et n'attend donc ni remise ni réponse.
+ *
+ *   - `file_share`      : un message accompagné d'un fichier. LE cas du client.
+ *   - `me_message`      : la forme `/me`, qui reste une phrase écrite par quelqu'un.
+ *   - `thread_broadcast`: une réponse en fil, renvoyée dans le canal — écrite, adressée, lue.
+ */
+const SOUS_TYPES_PAROLE = new Set(['file_share', 'me_message', 'thread_broadcast']);
+
 const RECONNEXION_MIN = 1_000;
 const RECONNEXION_MAX = 60_000;
 /** Cadence du chien de garde : à quelle fréquence on vérifie qu'on écoute VRAIMENT. */
@@ -625,9 +638,18 @@ export class Veilleur {
 
     const ev = trame.payload?.event;
     if (!ev || ev.type !== 'message') return;
-    // Nos propres messages, les entrées/sorties de canal, les modifications : rien de tout
-    // cela n'est une parole du dirigeant.
-    if (ev.bot_id || ev.subtype) return;
+    // Nos propres messages ne repartent jamais dans la boucle.
+    if (ev.bot_id) return;
+    // LE SOUS-TYPE NE DISQUALIFIAIT PAS UNE TRAME, IL LA FAISAIT DISPARAÎTRE. Tout sous-type
+    // était écarté ici — donc `file_share`, c'est-à-dire TOUT MESSAGE PORTANT UNE PIÈCE
+    // JOINTE. Un client qui signale un problème dépose sa capture avant d'écrire trois
+    // phrases : il ne recevait rien, et l'agent ignorait qu'on lui avait parlé.
+    //
+    // On énumère donc ce qui EST une parole, jamais ce qui ne l'est pas : une liste de
+    // sous-types à exclure oublie celui que Slack ajoutera, et l'oubli irait dans le mauvais
+    // sens — une entrée dans un canal remise à l'agent, un client à qui l'on répond parce
+    // qu'il a changé le sujet du canal.
+    if (ev.subtype && !SOUS_TYPES_PAROLE.has(ev.subtype)) return;
     if (ev.user === this.identite.utilisateur) return;
 
     await this.remettreAuChantier(ev);
@@ -643,7 +665,7 @@ export class Veilleur {
     if (!ligne) return; // canal qui ne nous regarde pas
 
     const texte = (ev.text || '').trim();
-    if (!texte) return;
+    const fichiers = Array.isArray(ev.files) ? ev.files : [];
 
     // Qui parle ? Le cadre que reçoit l'agent donne à ce texte l'autorité du dirigeant : on
     // ne remet donc que ce qui vient de quelqu'un que la nature de la ligne autorise.
@@ -663,6 +685,20 @@ export class Veilleur {
 
     if (ligne.close_le) {
       await this.repondreEnPropre(ligne, 'ligne_close');
+      return;
+    }
+
+    // RIEN À REMETTRE N'EST PAS UNE RAISON DE SE TAIRE. Un texte vide sortait d'ici sans un
+    // mot ; l'auteur croyait avoir été entendu et attendait une réponse qui ne viendrait
+    // jamais. Le contrôle arrive APRÈS l'autorisation, volontairement : dire à un intrus que
+    // son message était vide lui cacherait la vraie cause et le ferait retenter.
+    //
+    // Une pièce jointe SANS un mot reste une parole — c'est même la façon la plus fréquente
+    // dont un client signale un problème. Ce n'est donc pas la présence de texte qui décide,
+    // c'est l'absence de tout.
+    if (!texte && !fichiers.length) {
+      journaliser(`message vide — #${ligne.canal_nom} : ni texte ni pièce jointe, rien à remettre`);
+      await this.repondreEnPropre(ligne, 'message_vide');
       return;
     }
 
