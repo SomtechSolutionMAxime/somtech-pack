@@ -18,6 +18,7 @@ import { existsSync, unlinkSync, chmodSync, mkdirSync, appendFileSync } from 'no
 import { dirname } from 'node:path';
 
 import { lireJetons } from './trousseau.js';
+import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
@@ -43,6 +44,14 @@ import {
 // constante y suffirait à faire tomber le veilleur sur un poste plus ancien — avec une
 // erreur qui ne parle de rien. Les valeurs, elles, sont figées par la norme.
 const CONNEXION_EN_COURS = 0;
+
+/**
+ * La connexion d'écoute telle qu'elle est à l'ouverture du module — référence de la cloison
+ * d'essais. C'est LA connexion qui a fait des dégâts : deux veilleurs orphelins nés sous
+ * tests l'ont tenue pendant des heures, et Slack, qui répartit ses événements entre les
+ * connexions actives, en a jeté les deux tiers dans un veilleur sans registre.
+ */
+const ECOUTE_NATIVE = globalThis.WebSocket;
 const CONNEXION_OUVERTE = 1;
 
 const RECONNEXION_MIN = 1_000;
@@ -486,6 +495,14 @@ export class Veilleur {
 
   connecterSlack() {
     if (this.arrete) return;
+    // TROISIÈME MUR, et le dernier avant la connexion elle-même. Il se lève AVANT tout
+    // appel : un veilleur né sous tests ne doit pas même demander son adresse d'écoute.
+    if (enEssais() && !transportRemplace(ECOUTE_NATIVE, globalThis.WebSocket)) {
+      refuser(
+        'l’ouverture de la connexion d’écoute',
+        'Un veilleur né sous tests capterait les messages destinés aux lignes de production.'
+      );
+    }
     // Ne jamais empiler deux connexions : le chien de garde et l'événement de fermeture
     // peuvent viser en même temps, et deux écoutes remettraient chaque message en double.
     if (this.ws && (this.ws.readyState === CONNEXION_OUVERTE || this.ws.readyState === CONNEXION_EN_COURS)) return;
