@@ -114,7 +114,10 @@ test('UNE LIGNE CLIENT CRÉE UN CANAL PRIVÉ — vérifié sur l’appel émis v
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble() });
 
-  const r = await v.ouvrir({ chantier: 'D-CLIENT', pane: 'w1:p1', worktree: '/w/a', nature: 'client' });
+  // `titre` est exigé depuis T-20260806-0105 : sans lui le canal porterait le code du
+  // chantier, que le client verrait dans sa barre latérale. Il ne change rien à ce que ce
+  // test prouve — la confidentialité de l'appel émis.
+  const r = await v.ouvrir({ chantier: 'D-CLIENT', pane: 'w1:p1', worktree: '/w/a', nature: 'client', titre: 'Acme' });
 
   assert.equal(r.ok, true);
   assert.equal(s.crees.length, 1);
@@ -255,7 +258,7 @@ test('SI SLACK REND UN CANAL PUBLIC ALORS QU’ON EN DEMANDAIT UN PRIVÉ, la lig
   const s = slackDouble({ rendPrive: false });
   const v = veilleur({ slack: s, herdr: herdrDouble() });
 
-  const r = await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', nature: 'client' });
+  const r = await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', nature: 'client', titre: 'Acme' });
 
   assert.equal(r.ok, false);
   assert.match(r.erreur, /groups:write|groups:read/, 'le message doit orienter vers la portée manquante');

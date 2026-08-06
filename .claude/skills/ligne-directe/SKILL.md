@@ -36,7 +36,7 @@ $LD etat
 ```
 
 - **`ouvrir`** — une fois, en naissant. Crée le canal du chantier et y invite le dirigeant. Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans la même copie de travail retrouve son canal.
-  - **Donne toujours `--titre`** : c'est lui qui nomme le canal. `#refonte-du-tableau-de-bord` se lit ; `#d-20260805-0004` ne dit rien à personne. Le code, lui, part dans le sujet du canal — il ne se perd pas, il change de place. Sans titre, le canal porte le code : ça marche, mais personne ne saura de quoi il s'agit.
+  - **Donne toujours `--titre`** : c'est lui qui nomme le canal. `#refonte-du-tableau-de-bord` se lit ; `#d-20260805-0004` ne dit rien à personne. Le code, lui, part dans le sujet du canal — il ne se perd pas, il change de place. Sans titre, le canal porte le code : ça marche sur une ligne interne, mais personne ne saura de quoi il s'agit — et sur une ligne **client**, c'est refusé (voir plus bas).
 - **`dire`** — un jalon franchi, un fait qui change la donne.
 - **`demander`** — un arbitrage. Le message est marqué comme attendant une réponse. **Tu ne te bloques pas** : tu continues ce qui ne dépend pas de la réponse.
 - **`fermer`** — en clôturant, avec le bilan. Le canal est archivé.
@@ -51,13 +51,16 @@ Par défaut, une ligne est **interne** : canal public, et seules les personnes p
 Une ligne peut aussi être de nature **client** :
 
 ```bash
-$LD ouvrir D-20260806-0001 --titre "le titre du chantier" --nature client
+$LD ouvrir D-20260806-0001 --titre "le nom que le client reconnaîtra" --nature client
 ```
 
 Ce que ça change, et rien d'autre :
 
 - **Le canal naît privé**, invisible du reste de l'espace. Ce n'est pas un confort : le nom seul d'un canal public exposerait le portefeuille client à quiconque a un compte chez nous.
 - **Ceux qui ont le droit d'y écrire sont les membres du canal**, pas une liste que tu inscris. On ne s'invite pas soi-même dans un canal privé : y être, c'est y avoir été mis par un humain, et ce geste *est* l'autorisation. **Inviter les gens du client dans Slack reste un geste humain** — tu ne le fais pas.
+- **`--titre` devient obligatoire, et l'ouverture est refusée sans lui.** Il ne nomme pas que le canal : c'est aussi **le nom qui signe chacun de tes messages**, et le seul que le client verra. Choisis-le comme tu choisirais la façon dont tu te présentes — le nom du projet, l'espace du client. Jamais un code de chantier : le client verrait une conversation entière signée d'un numéro de dossier.
+- **Le code du chantier n'entre nulle part dans ce que voit le client** — ni dans le nom du canal, ni dans son sujet, ni en signature. Le `--sujet` d'une ligne cliente, s'il est donné, est posé tel quel ; sans lui, aucun sujet n'est posé. En interne, rien ne bouge : le code ouvre le sujet, et c'est ce qui te permet de retrouver ton chantier depuis Slack.
+- **`renommer` suit les deux** : le canal et la signature. Un canal qui dirait une chose pendant que chaque message en dit une autre ne se verrait que du côté du client.
 
 Deux garde-fous, parce que l'erreur y serait définitive et muette :
 

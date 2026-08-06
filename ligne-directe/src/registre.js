@@ -39,6 +39,29 @@ export function natureDe(ligne) {
   return ligne?.nature === 'client' ? 'client' : NATURE_PAR_DEFAUT;
 }
 
+/**
+ * Le nom sous lequel une ligne se présente dans son canal — ce qui COIFFE chacun de ses
+ * messages, et donc ce que l'interlocuteur lit avant même de lire le texte.
+ *
+ * Sur une ligne INTERNE, c'est le code du chantier, et c'est utile : le dirigeant suit
+ * plusieurs chantiers à la fois et doit voir lequel lui parle.
+ *
+ * Sur une ligne CLIENT, un code de chantier est un matricule. Le registre de langage avait
+ * nettoyé ce qu'on DIT à un client sans toucher à ce qu'on EST devant lui : il voyait une
+ * suite de messages signés d'un numéro de dossier, alors qu'on prétend lui donner un
+ * représentant. C'est donc le libellé donné à l'ouverture qui parle.
+ *
+ * Le repli d'une ligne cliente inscrite par une version antérieure — le champ n'existait
+ * pas — n'est PAS le chantier : c'est le nom du canal, qui vient déjà du titre et ne porte
+ * donc aucun code. Moins joli, jamais fuyant. Un repli sur le chantier ferait exactement
+ * réapparaître le défaut là où personne n'a plus la main pour le corriger.
+ */
+export function libelleDeLigne(ligne) {
+  if (ligne?.libelle) return ligne.libelle;
+  if (natureDe(ligne) === 'client') return ligne?.canal_nom || 'votre interlocuteur';
+  return ligne?.chantier;
+}
+
 function vide() {
   return { version: VERSION, lignes: [] };
 }

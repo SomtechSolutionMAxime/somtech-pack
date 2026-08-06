@@ -36,6 +36,7 @@ import {
   inscrireLigne,
   clore,
   natureDe,
+  libelleDeLigne,
   NATURES,
   NATURE_PAR_DEFAUT,
 } from './registre.js';
@@ -310,8 +311,23 @@ export class Veilleur {
       };
     }
 
+    // SUR UNE LIGNE CLIENTE, LE TITRE N'EST PLUS UN CONFORT. Sans lui, `libelleDeCanal`
+    // retombe sur le code du chantier : le canal s'appelle `#d-20260805-0005`, et le client
+    // le voit dans sa barre latérale à longueur de journée. Le repli qui rend service en
+    // interne est exactement ce qu'on refuse ici — et il est irréparable, Slack ne renomme
+    // pas un canal sans que tout le monde le remarque. On refuse, plutôt.
+    const titreUtile = String(titre ?? '').trim();
+    if (natureVoulue === 'client' && !titreUtile) {
+      return {
+        ok: false,
+        erreur:
+          'une ligne cliente exige --titre : sans lui le canal porterait le code du chantier, ' +
+          'et c’est la première chose que le client verrait de nous',
+      };
+    }
+
     const pris = nomsPris(this.registre);
-    // Le NOM vient du titre ; le CODE, lui, part dans le sujet du canal — il reste donc
+    // Le NOM vient du titre. En interne, le CODE part dans le sujet du canal — il reste donc
     // lisible d'un coup d'œil sans encombrer le nom.
     const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));
     const visage = visageDe(chantier);
@@ -356,7 +372,13 @@ export class Veilleur {
       };
     }
 
-    const sujetComplet = [chantier, sujet].filter(Boolean).join(' — ');
+    // Le sujet du canal est la deuxième surface par laquelle le code atteignait le client.
+    // En interne il ouvre le sujet — c'est ce qui permet de retrouver le chantier depuis
+    // Slack. Sur une ligne cliente, il n'y a rien à retrouver : le client sait de quoi il
+    // parle, et un numéro de dossier en tête de son canal ne renseigne que nous. S'il n'y a
+    // pas de sujet à dire, on n'en pose aucun plutôt que d'y mettre le code par défaut.
+    const sujetComplet =
+      natureVoulue === 'client' ? String(sujet ?? '').trim() : [chantier, sujet].filter(Boolean).join(' — ');
     if (sujetComplet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetComplet);
     if (invites.length) await this.slack.inviter(this.jetons.robot, canal.id, invites);
 
@@ -368,6 +390,10 @@ export class Veilleur {
       worktree: worktree || null,
       herdr_socket: herdrSocket,
       nature: natureVoulue,
+      // Le nom sous lequel la ligne se présente dans son canal — voir `libelleDeLigne`.
+      // Inscrit à l'ouverture, jamais recalculé : le titre peut changer (`renommer`), et
+      // c'est ce geste-là qui le met à jour, en même temps que le nom du canal.
+      libelle: natureVoulue === 'client' ? titreUtile : chantier,
       // Qui a le droit de piloter l'agent par cette ligne.
       //
       // Sur une ligne INTERNE, le canal est public : sans cette liste, n'importe quel
@@ -403,7 +429,7 @@ export class Veilleur {
     const ts = await this.slack.poster(this.jetons.robot, {
       canal: ligne.canal_id,
       texte,
-      nom: ligne.chantier,
+      nom: libelleDeLigne(ligne),
       emoji: ligne.visage,
     });
     return { ok: true, canal: ligne.canal_nom, ts };
@@ -420,6 +446,19 @@ export class Veilleur {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
     if (!titre) return { ok: false, erreur: 'titre requis' };
+
+    // Sur une ligne cliente, le titre nomme DEUX choses : le canal, et l'expéditeur de
+    // chaque message. Ne suivre que la première laisserait le canal dire « Espace client
+    // Acme » pendant que chaque message continue d'être signé de l'ancien libellé — et le
+    // décalage passerait d'autant plus inaperçu qu'il n'est visible que côté client.
+    //
+    // Mis à jour AVANT la sortie « nom inchangé » : deux titres différents peuvent mener au
+    // même nom de canal (la normalisation aplatit accents, casse et ponctuation), et c'est
+    // précisément là qu'un renommage n'aurait servi à rien.
+    if (natureDe(ligne) === 'client') {
+      ligne.libelle = String(titre).trim();
+      sauverRegistre(this.registre);
+    }
 
     const pris = nomsPris(this.registre);
     pris.delete(ligne.canal_nom); // son propre nom ne se fait pas concurrence
@@ -441,7 +480,7 @@ export class Veilleur {
       await this.slack.poster(this.jetons.robot, {
         canal: ligne.canal_id,
         texte: bilan,
-        nom: ligne.chantier,
+        nom: libelleDeLigne(ligne),
         emoji: ligne.visage,
       });
     }
@@ -752,8 +791,14 @@ export class Veilleur {
       close_le: ligne.close_le,
       ...details,
     });
+    // Le NOM d'expéditeur suit la même règle que le texte. « Ligne directe » nomme notre
+    // outillage : devant le dirigeant c'est juste — il sait que c'est la ligne qui parle et
+    // non son agent —, devant un client c'est une fuite de plus, sur la surface la plus
+    // visible qui soit. Le client, lui, n'a qu'un interlocuteur : la ligne lui répond donc
+    // sous le même nom que le reste de la conversation.
+    const nom = natureDe(ligne) === 'client' ? libelleDeLigne(ligne) : 'Ligne directe';
     try {
-      await this.slack.poster(this.jetons.robot, { canal: ligne.canal_id, texte, nom: 'Ligne directe', emoji: '📻' });
+      await this.slack.poster(this.jetons.robot, { canal: ligne.canal_id, texte, nom, emoji: '📻' });
     } catch (err) {
       journaliser(`impossible de répondre dans #${ligne.canal_nom} : ${err.message}`);
     }
