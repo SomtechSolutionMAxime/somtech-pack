@@ -5,6 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-06
+
+### Corrigé
+
+- **La ligne ne se rejoint plus dans un canal qu'elle a déjà rejoint** (PR #176, T-20260806-0096). Sur le chemin de reprise d'un canal existant, le code demandait à Slack de rejoindre sans vérifier s'il était déjà membre — un geste à la fois inutile et impossible, puisqu'un robot ne rejoint pas un canal privé : on l'y invite. Slack refusait, la ligne ne s'inscrivait pas, et **tout ce que l'interlocuteur écrivait était perdu**. Trouvé au premier usage réel du gestionnaire client, une heure après sa livraison.
+- **Un refus de Slack faute de droit devient un refus nommé** qui dit le geste humain qui le lève — faire inviter le robot — au lieu d'une panne muette.
+
+**Ce que la revue a mesuré, et qui vaut plus que le correctif** : les dix lignes de discussion vivantes du poste étaient **à une reprise de casser**. Une sonde sur le code d'avant, avec un double fidèle au vrai Slack, échoue en `missing_scope` ; la même sonde sur la branche passe sans émettre aucun appel de jointure. Le correctif ne prévient pas un risque futur, il répare une régression déjà en place.
+
+Aucun droit Slack n'a été demandé : le diagnostic initial — accorder `channels:join` et réinstaller l'application — a été **écarté par la mesure**, ce droit ne couvrant que les canaux publics.
+
 ## [1.29.0] - 2026-08-06
 
 ### Ajouté
