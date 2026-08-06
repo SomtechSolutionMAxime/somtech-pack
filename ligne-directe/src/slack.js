@@ -313,9 +313,12 @@ export class InvitationRequise extends RefusDefinitif {
 
 /**
  * Crée un canal. Slack impose des noms en minuscules, sans espace ni accent, 80 car. max.
- * Si le canal existe déjà, on le rejoint plutôt que d'échouer : rouvrir une ligne sur un
+ * Si le canal existe déjà, on le REPREND plutôt que d'échouer : rouvrir une ligne sur un
  * chantier repris est un cas normal, pas une erreur — MAIS seulement à confidentialité
  * égale, et le `prive` rendu est toujours celui du canal RÉEL, jamais celui qu'on espérait.
+ *
+ * Reprendre n'est pas rejoindre : le cas le plus fréquent est celui où le robot est DÉJÀ
+ * dans le canal, parce qu'un humain l'y a invité. On ne le rejoint alors pas — voir plus bas.
  */
 export async function creerCanal(jetonRobot, nom, prive = false) {
   try {
