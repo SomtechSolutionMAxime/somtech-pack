@@ -18,6 +18,7 @@ import { existsSync, unlinkSync, chmodSync, mkdirSync, appendFileSync } from 'no
 import { dirname } from 'node:path';
 
 import { lireJetons } from './trousseau.js';
+import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
@@ -33,6 +34,9 @@ import {
   nomsPris,
   inscrireLigne,
   clore,
+  natureDe,
+  NATURES,
+  NATURE_PAR_DEFAUT,
 } from './registre.js';
 
 // États d'une connexion, tels que les définit la norme WebSocket. On ne lit PAS
@@ -40,6 +44,14 @@ import {
 // constante y suffirait à faire tomber le veilleur sur un poste plus ancien — avec une
 // erreur qui ne parle de rien. Les valeurs, elles, sont figées par la norme.
 const CONNEXION_EN_COURS = 0;
+
+/**
+ * La connexion d'écoute telle qu'elle est à l'ouverture du module — référence de la cloison
+ * d'essais. C'est LA connexion qui a fait des dégâts : deux veilleurs orphelins nés sous
+ * tests l'ont tenue pendant des heures, et Slack, qui répartit ses événements entre les
+ * connexions actives, en a jeté les deux tiers dans un veilleur sans registre.
+ */
+const ECOUTE_NATIVE = globalThis.WebSocket;
 const CONNEXION_OUVERTE = 1;
 
 const RECONNEXION_MIN = 1_000;
@@ -255,19 +267,46 @@ export class Veilleur {
 
   // ————————————————————————————————————————————————————————————————— les quatre gestes
 
-  async ouvrir({ chantier, pane, worktree, sujet, titre, invites = [], herdr_socket: herdrSocket = null }) {
+  async ouvrir({ chantier, pane, worktree, sujet, titre, invites = [], nature, herdr_socket: herdrSocket = null }) {
     if (!chantier) return { ok: false, erreur: 'chantier requis' };
     if (!pane) return { ok: false, erreur: 'pane requis' };
 
+    // Une nature mal orthographiée NE SE RABAT PAS sur le défaut. `--nature cliet` créerait
+    // un canal PUBLIC pour un client — le portefeuille client exposé par une faute de
+    // frappe, et rien pour le dire. Refuser coûte une seconde, l'autre issue est définitive.
+    if (nature != null && nature !== '' && !NATURES.includes(nature)) {
+      return { ok: false, erreur: `nature inconnue : « ${nature} » — les natures admises sont ${NATURES.join(', ')}` };
+    }
+    const natureVoulue = nature || NATURE_PAR_DEFAUT;
+
     const deja = ligneOuverteParCle(this.registre, chantier, worktree);
     if (deja) {
+      // Une ligne ne CHANGE PAS de nature en cours de route : le canal existe déjà dans
+      // Slack, et Slack ne bascule pas un canal public en privé parce qu'on le rouvre
+      // autrement. Accepter ici inscrirait « client » au registre sur un canal resté
+      // visible de tout l'espace — un mensonge du registre sur la seule chose qui compte.
+      if (natureDe(deja) !== natureVoulue) {
+        return {
+          ok: false,
+          erreur:
+            `la ligne de « ${deja.chantier} » est déjà ouverte en nature ${natureDe(deja)} ` +
+            `(#${deja.canal_nom}) — un canal ne change pas de nature ; referme-la d'abord`,
+        };
+      }
       // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans le
       // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
       if (invites.length) deja.autorises = [...new Set([...(deja.autorises || []), ...invites])];
       sauverRegistre(this.registre);
-      return { ok: true, reprise: true, canal: deja.canal_nom, canal_id: deja.canal_id, visage: deja.visage };
+      return {
+        ok: true,
+        reprise: true,
+        canal: deja.canal_nom,
+        canal_id: deja.canal_id,
+        visage: deja.visage,
+        nature: natureDe(deja),
+      };
     }
 
     const pris = nomsPris(this.registre);
@@ -276,7 +315,46 @@ export class Veilleur {
     const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));
     const visage = visageDe(chantier);
 
-    const canal = await this.slack.creerCanal(this.jetons.robot, nom);
+    // LA CONFIDENTIALITÉ SE JOUE ICI : Slack fixe la nature d'un canal à sa création et ne
+    // la change plus jamais. Un canal client né public le reste.
+    const privePrevu = natureVoulue === 'client';
+    let canal;
+    try {
+      canal = await this.slack.creerCanal(this.jetons.robot, nom, privePrevu);
+    } catch (err) {
+      // Le nom vient du TITRE du chantier. Une ligne client titrée du nom de son client
+      // tombe très naturellement sur un canal public homonyme déjà présent dans l'espace —
+      // et le reprendre exposerait ce qu'on cherchait précisément à cacher.
+      if (err.name !== 'ConfidentialiteIncompatible') throw err;
+      journaliser(`ouverture refusée — ${chantier} : ${err.message}`);
+      return {
+        ok: false,
+        erreur:
+          `${err.message}. Une ligne ${natureVoulue} ne s'installe pas dans un canal ` +
+          `${err.reelle ? 'privé' : 'public'} existant — donne un --titre qui mène à un autre nom, ` +
+          `ou archive le canal #${err.canal}.`,
+      };
+    }
+
+    // DEUXIÈME VERROU, et il n'est pas redondant : le premier protège la REPRISE d'un canal
+    // homonyme, celui-ci protège la CRÉATION. Slack peut rendre un canal public alors qu'on
+    // en demandait un privé — un droit manquant, une politique d'espace de travail — et il
+    // le fait sans se plaindre. Inscrire « client » au registre sur un canal dont on n'a pas
+    // vérifié la confidentialité, c'est signer une garantie qu'on n'a pas.
+    if (Boolean(canal.prive) !== privePrevu) {
+      journaliser(
+        `ouverture refusée — ${chantier} : #${canal.nom} est ${canal.prive ? 'privé' : 'public'}, ` +
+          `on attendait ${privePrevu ? 'privé' : 'public'}`
+      );
+      return {
+        ok: false,
+        erreur:
+          `Slack a rendu un canal ${canal.prive ? 'privé' : 'public'} (#${canal.nom}) alors qu'une ligne ` +
+          `${natureVoulue} en demande un ${privePrevu ? 'privé' : 'public'} — la ligne n'est pas ouverte. ` +
+          `Vérifie les portées ${privePrevu ? 'groups:write / groups:read' : 'channels:manage'} de l'application.`,
+      };
+    }
+
     const sujetComplet = [chantier, sujet].filter(Boolean).join(' — ');
     if (sujetComplet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetComplet);
     if (invites.length) await this.slack.inviter(this.jetons.robot, canal.id, invites);
@@ -288,17 +366,32 @@ export class Veilleur {
       pane,
       worktree: worktree || null,
       herdr_socket: herdrSocket,
-      // Qui a le droit de piloter l'agent par cette ligne. Le canal est public : sans
-      // cette liste, n'importe quel membre de l'espace ferait passer un message pour une
-      // consigne du dirigeant — le cadre lui en donne l'autorité.
+      nature: natureVoulue,
+      // Qui a le droit de piloter l'agent par cette ligne.
+      //
+      // Sur une ligne INTERNE, le canal est public : sans cette liste, n'importe quel
+      // membre de l'espace ferait passer un message pour une consigne du dirigeant — le
+      // cadre lui en donne l'autorité.
+      //
+      // Sur une ligne CLIENT, elle démarre vide et c'est normal : les gens du client sont
+      // invités À LA MAIN dans Slack, après l'ouverture. C'est leur appartenance au canal
+      // privé qui les autorise, et cette liste ne sert plus qu'à s'en souvenir.
       autorises: invites.slice(),
       visage,
       ouverte_le: maintenant(),
       close_le: null,
     });
     sauverRegistre(this.registre);
-    journaliser(`ligne ouverte — ${chantier} → #${canal.nom} (${canal.id}) pane ${pane}`);
-    return { ok: true, reprise: false, canal: canal.nom, canal_id: canal.id, visage, canal_reutilise: canal.reutilise };
+    journaliser(`ligne ouverte — ${chantier} → #${canal.nom} (${canal.id}) pane ${pane} nature ${natureVoulue}`);
+    return {
+      ok: true,
+      reprise: false,
+      canal: canal.nom,
+      canal_id: canal.id,
+      visage,
+      nature: natureVoulue,
+      canal_reutilise: canal.reutilise,
+    };
   }
 
   /** Poste sous l'identité du chantier. Échoue BRUYAMMENT : un rapport perdu en silence est pire qu'une erreur. */
@@ -365,6 +458,7 @@ export class Veilleur {
     const ouvertes = lignesOuvertes(this.registre).map((l) => ({
       chantier: l.chantier,
       canal: l.canal_nom,
+      nature: natureDe(l),
       pane: l.pane,
       worktree: l.worktree,
       depuis: l.ouverte_le,
@@ -401,6 +495,14 @@ export class Veilleur {
 
   connecterSlack() {
     if (this.arrete) return;
+    // TROISIÈME MUR, et le dernier avant la connexion elle-même. Il se lève AVANT tout
+    // appel : un veilleur né sous tests ne doit pas même demander son adresse d'écoute.
+    if (enEssais() && !transportRemplace(ECOUTE_NATIVE, globalThis.WebSocket)) {
+      refuser(
+        'l’ouverture de la connexion d’écoute',
+        'Un veilleur né sous tests capterait les messages destinés aux lignes de production.'
+      );
+    }
     // Ne jamais empiler deux connexions : le chien de garde et l'événement de fermeture
     // peuvent viser en même temps, et deux écoutes remettraient chaque message en double.
     if (this.ws && (this.ws.readyState === CONNEXION_OUVERTE || this.ws.readyState === CONNEXION_EN_COURS)) return;
@@ -488,12 +590,22 @@ export class Veilleur {
     const texte = (ev.text || '').trim();
     if (!texte) return;
 
-    // Qui parle ? Le canal est PUBLIC : n'importe quel membre de l'espace peut y écrire, et
-    // le cadre que reçoit l'agent donne à ce texte l'autorité du dirigeant. On ne remet donc
-    // que ce qui vient de quelqu'un d'invité sur cette ligne. Liste vide = ligne ouverte
-    // sans invité (usage local) : on n'ouvre pas pour autant la porte à tout l'espace.
-    if (!this.autorise(ligne, ev.user)) {
+    // Qui parle ? Le cadre que reçoit l'agent donne à ce texte l'autorité du dirigeant : on
+    // ne remet donc que ce qui vient de quelqu'un que la nature de la ligne autorise.
+    if (!(await this.autorise(ligne, ev.user))) {
       journaliser(`écarté — #${ligne.canal_nom} : ${ev.user} n'est pas autorisé sur cette ligne`);
+      // RA-REL-009 — un message non remis laisse une trace ET celui qui l'a écrit l'apprend.
+      //
+      // C'était le SEUL chemin de non-remise qui se terminait sans rien dire à personne :
+      // ligne close, agent disparu, herdr injoignable et échec de remise répondent tous
+      // déjà dans le canal. Un journal sur le disque du poste n'est pas une trace que
+      // l'auteur du message peut lire — il croyait avoir été entendu et attendait une
+      // réponse qui ne serait jamais venue.
+      //
+      // TEXTE PROVISOIRE : la rédaction des réponses du veilleur — et le fait qu'elle
+      // s'adresse aujourd'hui à un client comme au dirigeant — appartient à
+      // E-20260806-0009 (registre de langage). Ici on transporte, on ne rédige pas.
+      await this.repondreEnPropre(ligne, "Ton message n'a été remis à aucun agent : tu n'es pas autorisé à écrire sur cette ligne.");
       return;
     }
 
@@ -537,14 +649,44 @@ export class Veilleur {
   }
 
   /**
-   * Cette parole a-t-elle le droit de piloter l'agent ?
+   * Cette parole a-t-elle le droit de piloter l'agent ? La NATURE de la ligne en décide.
    *
-   * On accepte les invités inscrits à l'ouverture de la ligne. Une ligne sans liste
-   * d'invités est une ligne locale : personne d'autre que son ouvreur n'est censé y
-   * écrire, et on ne l'ouvre pas à tout l'espace par commodité.
+   * **Ligne interne** — la liste des invités portés à l'ouverture, et elle seule. Le canal
+   * est public : y lire l'appartenance reviendrait à autoriser tout l'espace.
+   *
+   * **Ligne client** — l'appartenance au canal PRIVÉ fait foi. On ne s'invite pas soi-même
+   * dans un canal privé : y être, c'est y avoir été mis par un humain, et ce geste EST
+   * l'autorisation. Les gens du client sont invités à la main APRÈS l'ouverture de la
+   * ligne — les attendre dans une liste inscrite à l'ouverture, c'est écarter leur premier
+   * message en silence, ce qui était exactement le défaut.
    */
-  autorise(ligne, utilisateur) {
+  async autorise(ligne, utilisateur) {
     if (!utilisateur) return false;
+
+    if (natureDe(ligne) === 'client') {
+      // La liste au registre sert de MÉMOIRE, pas de source de vérité : on n'interroge
+      // Slack que sur un inconnu. Sans cela, chaque message d'une conversation consommerait
+      // un appel plafonné — et `conversations.members` l'est.
+      if (Array.isArray(ligne.autorises) && ligne.autorises.includes(utilisateur)) return true;
+
+      let membres;
+      try {
+        membres = await this.slack.membresDuCanal(this.jetons.robot, ligne.canal_id);
+      } catch (err) {
+        // Ne PAS ouvrir la porte quand on n'a pas pu vérifier : un droit Slack manquant
+        // deviendrait une autorisation universelle sur le canal d'un client. On refuse, et
+        // l'auteur l'apprend par la réponse que RA-REL-009 impose de toute façon.
+        journaliser(`membres de #${ligne.canal_nom} illisibles (${err.message}) — parole refusée par prudence`);
+        return false;
+      }
+
+      if (!membres.includes(utilisateur)) return false;
+      ligne.autorises = [...new Set([...(ligne.autorises || []), utilisateur])];
+      sauverRegistre(this.registre);
+      journaliser(`autorisé — #${ligne.canal_nom} : ${utilisateur} appartient au canal privé`);
+      return true;
+    }
+
     // Une ligne OUVERTE AVANT ce contrôle ne porte pas de liste du tout. La traiter comme
     // une liste vide couperait la parole à un dirigeant en pleine conversation, sans qu'il
     // comprenne pourquoi. On la laisse passer et on le dit — la liste se remplira à la

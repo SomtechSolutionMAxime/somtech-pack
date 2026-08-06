@@ -8,7 +8,16 @@
 // `invalid_auth` (jeton refusé) ne veulent pas dire la même chose, et un veilleur qui les
 // aplatit en « échec d'authentification » fait chercher au mauvais endroit.
 
+import { enEssais, transportRemplace, refuser } from './cloison.js';
+
 const BASE = 'https://slack.com/api';
+
+/**
+ * Le transport tel qu'il est à l'ouverture du module — la référence de la cloison d'essais.
+ * Un test qui monte un faux Slack remplace `globalThis.fetch` ; tant qu'il ne l'a pas fait,
+ * un appel partirait vers slack.com pour de bon.
+ */
+const TRANSPORT_NATIF = globalThis.fetch;
 
 export class ErreurSlack extends Error {
   constructor(methode, code, details) {
@@ -21,20 +30,61 @@ export class ErreurSlack extends Error {
 }
 
 /**
+ * Encode les arguments comme Slack les attend TOUJOURS : en formulaire.
+ *
+ * MESURÉ CONTRE LE VRAI SLACK, et ça a rendu toute la capacité inerte : le corps JSON
+ * n'est servi que par une PARTIE des méthodes d'écriture. Les méthodes de lecture
+ * (`conversations.members`, `conversations.list`, `conversations.info`, `users.list`…) ne
+ * le lisent pas — et elles ne s'en plaignent pas non plus. Elles s'exécutent simplement
+ * avec zéro argument : `conversations.members` répond « missing required field: channel »,
+ * `conversations.list` rend ses défauts (100 canaux, publics seulement) comme si de rien
+ * n'était. Une ligne cliente naissait donc avec une liste d'autorisés VIDE, et refusait
+ * poliment le premier message de chaque personne du client — pour toujours.
+ *
+ * Le formulaire, lui, est accepté par toutes les méthodes sans exception. On l'utilise
+ * donc partout : il n'y a aucun appel pour lequel il soit le mauvais choix, et une règle
+ * uniforme ne peut pas se tromper de méthode.
+ *
+ * Deux pièges propres à cet encodage, tenus ici :
+ *   - une valeur absente doit être ABSENTE, pas envoyée comme le mot « undefined » —
+ *     Slack prendrait `cursor=undefined` pour un vrai curseur et rendrait une page vide ;
+ *   - un argument composé (`blocks`, `attachments`) se transmet en texte JSON DANS le
+ *     champ de formulaire. Le code n'en envoie pas aujourd'hui ; celui qui en ajoutera un
+ *     demain n'aura pas à redécouvrir la règle.
+ */
+function encoderFormulaire(corps) {
+  const champs = new URLSearchParams();
+  for (const [cle, valeur] of Object.entries(corps)) {
+    if (valeur === undefined || valeur === null) continue;
+    champs.set(cle, typeof valeur === 'object' ? JSON.stringify(valeur) : String(valeur));
+  }
+  return champs.toString();
+}
+
+/**
  * Appelle une méthode de l'API Slack.
  * @param {string} methode ex. 'chat.postMessage'
  * @param {string} jeton
  * @param {object} corps
  */
 export async function appeler(methode, jeton, corps = {}, { essais = 3 } = {}) {
+  // DEUXIÈME MUR. Il vaut même si le premier tombe — un jeton pourrait arriver autrement
+  // (variable d'environnement d'un poste, jeton injecté par un test mal cloisonné).
+  if (enEssais() && !transportRemplace(TRANSPORT_NATIF, globalThis.fetch)) {
+    refuser(
+      `l'appel Slack « ${methode} »`,
+      'Aucun double n’a été monté : cet appel partirait vers l’espace Slack de production.'
+    );
+  }
+  const charge = encoderFormulaire(corps);
   for (let essai = 1; ; essai += 1) {
     const reponse = await fetch(`${BASE}/${methode}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${jeton}`,
-        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
       },
-      body: JSON.stringify(corps),
+      body: charge,
     });
 
     // Slack plafonne ses méthodes et le dit par un 429 + Retry-After. Ignorer cet en-tête,
@@ -71,23 +121,60 @@ export async function identite(jetonRobot) {
 }
 
 /**
+ * Le canal repris n'a pas la confidentialité demandée. On refuse, on ne s'accommode pas.
+ *
+ * RELEVÉ EN REVUE, et c'était le défaut que tout ce chantier existe pour supprimer : la
+ * reprise d'un canal existant rendait le canal tel quel, en JETANT son `is_private`. Un
+ * canal client tombant sur un homonyme public naissait donc public, s'inscrivait au
+ * registre comme « client », et son autorisation-par-appartenance ouvrait la ligne à
+ * quiconque peut entrer dans un canal public. Les deux défauts d'un coup, en silence.
+ */
+export class ConfidentialiteIncompatible extends Error {
+  constructor(nom, demandee, reelle) {
+    super(
+      `le canal #${nom} existe déjà et il est ${reelle ? 'privé' : 'public'} — ` +
+        `on en demandait un ${demandee ? 'privé' : 'public'}`
+    );
+    this.name = 'ConfidentialiteIncompatible';
+    this.canal = nom;
+    this.demandee = Boolean(demandee);
+    this.reelle = Boolean(reelle);
+  }
+}
+
+/**
  * Crée un canal. Slack impose des noms en minuscules, sans espace ni accent, 80 car. max.
  * Si le canal existe déjà, on le rejoint plutôt que d'échouer : rouvrir une ligne sur un
- * chantier repris est un cas normal, pas une erreur.
+ * chantier repris est un cas normal, pas une erreur — MAIS seulement à confidentialité
+ * égale, et le `prive` rendu est toujours celui du canal RÉEL, jamais celui qu'on espérait.
  */
 export async function creerCanal(jetonRobot, nom, prive = false) {
   try {
     const d = await appeler('conversations.create', jetonRobot, { name: nom, is_private: prive });
-    return { id: d.channel.id, nom: d.channel.name, reutilise: false };
+    return { id: d.channel.id, nom: d.channel.name, prive: Boolean(d.channel.is_private), reutilise: false };
   } catch (err) {
     if (err.code !== 'name_taken') throw err;
     const existant = await trouverCanal(jetonRobot, nom);
     if (!existant) throw err;
+    // AVANT de désarchiver et de rejoindre : on ne s'installe pas dans un canal qu'on va
+    // refuser. Le nom vient du titre du chantier — un titre portant le nom d'un client
+    // tombe très naturellement sur un canal déjà existant à ce nom.
+    if (Boolean(existant.is_private) !== Boolean(prive)) {
+      throw new ConfidentialiteIncompatible(nom, prive, existant.is_private);
+    }
     // Un canal archivé est en lecture seule : il faut le sortir des archives avant d'y
     // écrire, sinon toute la ligne échoue au premier message.
     if (existant.is_archived) await appeler('conversations.unarchive', jetonRobot, { channel: existant.id });
     await rejoindreCanal(jetonRobot, existant.id);
-    return { id: existant.id, nom: existant.name, reutilise: true };
+    // On rend la confidentialité DU CANAL, pas celle qu'on demandait.
+    //
+    // MUTATION ÉQUIVALENTE, dite plutôt que maquillée : remplacer ceci par `Boolean(prive)`
+    // survit à toute la suite, et c'est normal — le garde-fou juste au-dessus a déjà prouvé
+    // que les deux sont égaux ici. Aucun test ne peut les départager, et en inventer un
+    // serait décoratif. Ce qui est prouvé, c'est le garde-fou lui-même : le retirer fait
+    // rougir. On garde la formulation qui énonce un FAIT plutôt qu'un souhait, parce que
+    // c'est elle qui reste juste si quelqu'un déplace le garde-fou un jour.
+    return { id: existant.id, nom: existant.name, prive: Boolean(existant.is_private), reutilise: true };
   }
 }
 
@@ -106,6 +193,28 @@ export async function trouverCanal(jetonRobot, nom) {
     curseur = d.response_metadata?.next_cursor || '';
   } while (curseur);
   return null;
+}
+
+/**
+ * Les membres d'un canal — c'est-à-dire, sur un canal PRIVÉ, la liste de ceux qui ont le
+ * droit d'y parler.
+ *
+ * Un canal privé est invisible et on ne s'y invite pas soi-même : y être, c'est y avoir
+ * été mis par un humain. Ce geste EST l'autorisation, ce qui évite d'entretenir une
+ * seconde liste en parallèle de la réalité Slack — et c'est la divergence entre les deux
+ * qui écarterait un client en silence.
+ *
+ * Demande `groups:read` pour un canal privé (`channels:read` pour un public).
+ */
+export async function membresDuCanal(jetonRobot, canal) {
+  const membres = [];
+  let curseur;
+  do {
+    const d = await appeler('conversations.members', jetonRobot, { channel: canal, limit: 200, cursor: curseur });
+    membres.push(...(d.members || []));
+    curseur = d.response_metadata?.next_cursor || '';
+  } while (curseur);
+  return membres;
 }
 
 export async function rejoindreCanal(jetonRobot, canal) {

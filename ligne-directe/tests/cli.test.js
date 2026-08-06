@@ -17,11 +17,28 @@ import { fileURLToPath } from 'node:url';
 const execFileAsync = promisify(execFile);
 const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'ligne-directe.js');
 
-/** Lance la commande et rend ce que l'utilisateur voit vraiment. */
+/**
+ * Lance la commande et rend ce que l'utilisateur voit vraiment — SOUS CLOISON.
+ *
+ * VÉCU, et ça a coûté deux vrais canaux Slack : ces tests lancent la vraie commande, qui
+ * sait réveiller le vrai veilleur du poste. Tant que le code est sain, l'argument manquant
+ * arrête la commande avant tout appel — mais la vérification par mutation, que ce chantier
+ * impose, casse justement ce garde-fou. Une campagne de mutations a donc fait créer deux
+ * canaux `#client` dans l'espace Slack de production, depuis une suite de tests.
+ *
+ * Deux cloisons, parce qu'une seule laisse une porte :
+ *   - un `LIGNE_DIRECTE_RACINE` jetable — le registre et le socket du poste sont hors de
+ *     portée, quoi qu'il arrive ;
+ *   - un `PATH` vide de `herdr` — la commande ne peut plus résoudre son pane, donc elle
+ *     s'arrête avant d'avoir quoi que ce soit à dire à Slack. C'est la cloison qui compte :
+ *     sans elle, un `LIGNE_DIRECTE_RACINE` neuf ferait NAÎTRE un veilleur, qui lirait le
+ *     vrai trousseau et se connecterait pour de bon.
+ */
 async function lancer(args, env = {}) {
+  const bac = mkdtempSync(join(tmpdir(), 'ld-bac-'));
   try {
     const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, ...args], {
-      env: { ...process.env, ...env },
+      env: { ...process.env, LIGNE_DIRECTE_RACINE: bac, PATH: join(bac, 'sans-herdr'), ...env },
     });
     return { code: 0, stdout, stderr };
   } catch (err) {
@@ -69,6 +86,42 @@ test('UNE ERREUR ATTENDUE SORT LISIBLE — pas sous une trace de pile', async ()
   } finally {
     tetu.close();
   }
+});
+
+test('LA SUITE NE PEUT PAS ATTEINDRE LE VEILLEUR DU POSTE — cloison prouvée, pas déclarée', async () => {
+  // Une cloison qu'on affirme sans l'éprouver n'est pas une cloison. Ici on demande
+  // explicitement une ouverture COMPLÈTE et bien formée : sans cloison, elle réveillerait
+  // le veilleur du poste et créerait un vrai canal Slack — c'est arrivé.
+  const { readdirSync } = await import('node:fs');
+  const bac = mkdtempSync(join(tmpdir(), 'ld-cloison-'));
+
+  const r = await lancer(['ouvrir', 'D-CANAL-QUI-NE-DOIT-PAS-NAITRE', '--nature', 'client'], {
+    LIGNE_DIRECTE_RACINE: bac,
+  });
+
+  assert.equal(r.code, 1, 'sans herdr joignable, la commande doit renoncer');
+  assert.deepEqual(readdirSync(bac), [], 'aucun veilleur, aucun registre, aucun socket : rien ne doit être né');
+});
+
+test('LA VALEUR DE --nature N’EST PAS PRISE POUR LE CHANTIER', async () => {
+  // Le piège que la revue avait déjà attrapé sur `--inviter` : un « premier mot qui ne
+  // commence pas par -- » prend la VALEUR d'une option pour le chantier. Ici, oublier
+  // `--nature` dans la liste des options à valeur ferait ouvrir un canal nommé « client »
+  // — silencieusement, et le canal reste.
+  //
+  // La commande sans chantier doit donc montrer l'usage. Avec le défaut, elle irait
+  // chercher le pane courant et échouerait ailleurs, sans jamais montrer l'usage.
+  const r = await lancer(['ouvrir', '--nature', 'client']);
+  assert.equal(r.code, 1);
+  assert.match(r.stdout, /ouvrir <chantier>/, 'sans chantier, la commande doit montrer son usage');
+});
+
+test('l’usage annonce --nature, et dit ce qu’elle change', async () => {
+  // Une capacité du pack décrit ses commandes telles qu'elles existent réellement
+  // (RA-AGT-002) : un drapeau livré mais absent de l'usage n'existe pour personne.
+  const r = await lancer([]);
+  assert.match(r.stdout, /--nature client/);
+  assert.match(r.stdout, /PRIVE/i, "l'usage doit dire ce que la nature change vraiment");
 });
 
 test('un geste inconnu ne plante pas, il montre l’usage', async () => {

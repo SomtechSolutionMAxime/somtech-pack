@@ -15,6 +15,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { enEssais, refuser } from './cloison.js';
+
 // execFile avec un tableau d'arguments : aucun shell n'est impliqué, donc aucun caractère
 // spécial d'un nom de service ne peut être interprété.
 const execFileAsync = promisify(execFile);
@@ -56,6 +58,15 @@ export class JetonVide extends Error {
  * @returns {Promise<string>}
  */
 export async function lireJeton(service) {
+  // PREMIER MUR, et le plus en amont : sans jeton, aucun processus né d'une suite de tests
+  // ne peut s'authentifier auprès de Slack — quelle que soit la suite des événements.
+  // C'est la porte par laquelle sont passés les deux veilleurs orphelins.
+  if (enEssais()) {
+    refuser(
+      `la lecture du jeton « ${service} » au trousseau du poste`,
+      'Un veilleur né sous tests lirait les VRAIS jetons et se connecterait à l’espace de production.'
+    );
+  }
   let sortie;
   try {
     const { stdout } = await execFileAsync('security', ['find-generic-password', '-a', COMPTE, '-s', service, '-w']);

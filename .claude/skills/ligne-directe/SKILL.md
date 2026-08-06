@@ -19,6 +19,8 @@ Après une mise à jour du pack, lance **`ligne-directe relever`** : le veilleur
 
 Si un geste échoue en disant qu'un jeton manque au trousseau, **n'essaie pas de le contourner** : c'est une installation à faire une fois par poste, par le dirigeant lui-même. Dis-le et continue ton travail sans ligne.
 
+De même si Slack refuse une portée (`missing_scope`) : **dis-le, ne contourne pas**. Ce qu'il faut accorder à l'application, et ce qui casse sans chaque droit, est écrit dans `~/.somtech/ligne-directe/README.md` — donne ce chemin au dirigeant plutôt que de chercher toi-même.
+
 ## Les quatre gestes
 
 ```bash
@@ -41,6 +43,28 @@ $LD etat
 - **`renommer`** — si le titre du chantier change, ou si la ligne a été ouverte sans titre. **Ne renomme jamais le canal à la main dans Slack** : les messages continueraient d'arriver (le routage passe par l'identifiant, pas par le nom), mais le registre resterait sur l'ancien nom et l'état affiché cesserait de correspondre à ce que le dirigeant voit.
 
 Le chantier n'est demandé qu'à l'ouverture. Ensuite, la commande retrouve ta ligne par ton pane : tu n'as rien à retenir.
+
+## La nature d'une ligne — interne ou client
+
+Par défaut, une ligne est **interne** : canal public, et seules les personnes portées par `--inviter` peuvent te parler. C'est le cas de tout ce qui précède, et tu n'as rien à déclarer.
+
+Une ligne peut aussi être de nature **client** :
+
+```bash
+$LD ouvrir D-20260806-0001 --titre "le titre du chantier" --nature client
+```
+
+Ce que ça change, et rien d'autre :
+
+- **Le canal naît privé**, invisible du reste de l'espace. Ce n'est pas un confort : le nom seul d'un canal public exposerait le portefeuille client à quiconque a un compte chez nous.
+- **Ceux qui ont le droit d'y écrire sont les membres du canal**, pas une liste que tu inscris. On ne s'invite pas soi-même dans un canal privé : y être, c'est y avoir été mis par un humain, et ce geste *est* l'autorisation. **Inviter les gens du client dans Slack reste un geste humain** — tu ne le fais pas.
+
+Deux garde-fous, parce que l'erreur y serait définitive et muette :
+
+- Une nature mal orthographiée est **refusée**, jamais rabattue sur « interne ». Sans ça, `--nature cliet` créerait un canal public pour un client sans que rien ne le dise.
+- **Une ligne ne change pas de nature** en cours de route : Slack fixe la confidentialité d'un canal à sa création et ne la reprend jamais. Rouvrir en changeant de nature est refusé ; il faut refermer d'abord.
+
+`etat` affiche la nature de chaque ligne ouverte.
 
 ## Quand parler — et c'est là que tout se joue
 

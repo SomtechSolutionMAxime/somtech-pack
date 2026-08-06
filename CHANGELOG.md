@@ -7,6 +7,20 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionné] - 2026-08-06
 
+### Ajouté
+
+- **Une ligne de discussion connaît sa nature, et un canal client est privé** (PR #170, E-20260806-0008). Une ligne est désormais *interne* (le dirigeant) ou *cliente* (les gens d'un client), et cette nature commande deux choses : la confidentialité du canal, et qui a le droit d'y écrire. Un canal client est privé — un canal public expose le portefeuille client par son seul nom. Une ligne sans nature déclarée reste interne et publique, exactement comme avant. Un message écarté laisse désormais une trace et celui qui l'a écrit l'apprend : c'était le défaut le plus coûteux, celui qui ne casse rien et fait juste croire que ça marche.
+
+### Corrigé
+
+- **Les appels vers Slack partaient en JSON là où Slack n'accepte que le format formulaire** — 14 méthodes corrigées, 4 avérées cassées. Conséquence mesurée contre le vrai service : la recherche de qui a le droit d'écrire échouait **systématiquement** en production, donc une ligne cliente démarrait avec une liste d'autorisés vide et refusait poliment le premier message de tout le monde. La fonction aurait été livrée inerte. Découvert en sortant du double de test pour parler au vrai service — 97 tests verts, deux revues et quatre travaux d'intégration verts ne l'avaient pas vu.
+- **Le double de test était plus permissif que Slack** : il acceptait un corps JSON là où le vrai service le refuse. C'est la racine du défaut ci-dessus — un double plus permissif que le service qu'il imite transforme chaque test en faux témoin. Il refuse désormais ce que Slack refuse ; avec l'ancien encodage, 8 des 9 nouveaux tests rougissent.
+- **Un essai pouvait faire naître un veilleur branché sur l'espace Slack réel.** Arrivé pour de vrai : deux veilleurs orphelins nés d'une campagne de mutation ont tenu une connexion de production pendant trois heures, et comme Slack répartit ses événements entre les connexions actives, **deux messages du dirigeant sur trois ont été jetés en silence** — il a cru sa ligne morte. Quatre barrières posées (trousseau, transport, connexion d'écoute, installation du service du poste), chacune prouvée nécessaire par mutation.
+
+### Technique
+
+- La pagination des appels de lecture Slack (`users.list`, `conversations.list`) est enfin honorée : `limit` et `cursor` étaient jetés.
+
 ### Technique
 
 - **Les 76 tests de la ligne directe tournent enfin dans la chaîne d'intégration** (PR #169, T-20260806-0014). Ils existaient depuis la livraison de la ligne directe et n'étaient exécutés par aucun travail de la chaîne : `shell-tests`, `cli-tests` et `python-tests` ne pointaient nulle part vers `ligne-directe/`. Six exigences en vigueur du BRD se retrouvaient donc sans preuve citable — la preuve existait, elle n'était simplement pas vivante (RA-DIS-004). Le nouveau travail tourne en **Node 22**, et non dans `cli-tests` qui tourne en Node 20 : le veilleur tient sa connexion avec le `WebSocket` natif, absent avant Node 22. Vérifié par mutation — un défaut volontaire fait rougir ce travail et lui seul, son retrait le fait reverdir.
