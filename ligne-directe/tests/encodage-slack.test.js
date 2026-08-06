@@ -184,9 +184,20 @@ test('TOUTE MÉTHODE QUE LE CODE APPELLE PASSE LE DOUBLE STRICT — les quatorze
     assert.equal(await trouverMembre('jeton', 'claire@acme.com'), 'U_CLI');
     assert.equal(await trouverMembre('jeton', 'maxime'), 'U_DIR', 'le repli par l’annuaire doit marcher aussi');
 
-    // conversations.join sur un canal public
+    // conversations.join — et il ABOUTIT À UN REFUS, y compris sur un canal public.
+    //
+    // Ce test affirmait l'inverse, et le double le lui accordait : le droit `channels:join`
+    // n'est pas accordé à l'application, mesuré contre le vrai Slack le 2026-08-06
+    // (`missing_scope`, en-tête `x-oauth-scopes` à l'appui). Le code de production ne passe
+    // plus par ici sur le chemin de reprise — il vérifie d'abord `is_member` — mais la
+    // méthode reste exercée, et son refus doit être celui de Slack.
     const publique = await creerCanal('jeton', 'd-interne', false);
-    await rejoindreCanal('jeton', publique.id);
+    const refusJoin = await rejoindreCanal('jeton', publique.id, { nom: publique.nom }).then(
+      () => null,
+      (err) => err
+    );
+    assert.equal(refusJoin?.name, 'InvitationRequise', `refus attendu, obtenu : ${refusJoin?.message}`);
+    assert.equal(refusJoin?.geste, 'invitation_humaine', 'et il doit nommer le geste qui le lève');
 
     // conversations.archive
     assert.equal(await archiverCanal('jeton', publique.id), true);

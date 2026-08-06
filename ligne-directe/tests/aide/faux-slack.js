@@ -122,6 +122,12 @@ function pageDeConnexion() {
  *                                  files.slack.com, qui n'est PAS l'API et n'a pas ses règles
  * @param {boolean} etat.droitFichiers  l'application a-t-elle `files:read` ? Sans lui, Slack
  *                                  rend une page de connexion en 200, il ne refuse pas.
+ * @param {boolean} etat.droitRejoindre l'application a-t-elle `channels:join` ? **Faux par
+ *                                  défaut, comme l'application réelle** — mesuré le
+ *                                  2026-08-06 : `conversations.join` répond `missing_scope`.
+ *                                  Un double qui laisserait passer ce join serait plus
+ *                                  permissif que le service, et c'est exactement ce qui a
+ *                                  laissé partir en production un chemin de reprise cassé.
  */
 export function fauxSlack({
   canaux = [],
@@ -130,6 +136,7 @@ export function fauxSlack({
   robot = 'UMOI',
   fichiers = {},
   droitFichiers = true,
+  droitRejoindre = false,
   infosFichiers = {},
 } = {}) {
   const monde = {
@@ -138,6 +145,17 @@ export function fauxSlack({
     appels: [],
     postes: [],
   };
+
+  /**
+   * Un canal tel que SLACK le rend — c'est-à-dire avec `is_member`, le fait qui dit si notre
+   * robot est dedans.
+   *
+   * Il est CALCULÉ depuis les membres à chaque réponse, jamais stocké : un double dont
+   * l'appartenance déclarée peut diverger de sa liste de membres finit par affirmer le
+   * contraire de ce qu'il simule, et c'est la famille de défauts que ce fichier existe pour
+   * fermer.
+   */
+  const commeSlack = (canal) => ({ ...canal, is_member: canal.membres.includes(robot) });
 
   let precedent;
 
@@ -204,7 +222,7 @@ export function fauxSlack({
           membres: [robot],
         };
         monde.canaux.push(canal);
-        return reponse({ ok: true, channel: canal });
+        return reponse({ ok: true, channel: commeSlack(canal) });
       }
 
       case 'conversations.list': {
@@ -220,7 +238,7 @@ export function fauxSlack({
         const visibles = monde.canaux.filter(
           (c) => (c.is_private ? inclutPrive : inclutPublic) && !(excluteArchives && c.is_archived)
         );
-        const page = visibles.slice(depart, depart + limite);
+        const page = visibles.slice(depart, depart + limite).map(commeSlack);
         const suite = depart + limite < visibles.length ? String(depart + limite) : '';
         return reponse({ ok: true, channels: page, response_metadata: { next_cursor: suite } });
       }
@@ -255,6 +273,12 @@ export function fauxSlack({
         const canal = monde.canaux.find((c) => c.id === args.channel);
         if (!canal) return echec('channel_not_found');
         if (methode === 'conversations.join') {
+          // L'ORDRE DES DEUX REFUS EST CELUI DE SLACK, et il n'est pas décoratif : le droit se
+          // vérifie AVANT le canal. C'est pour ça que la production a rendu `missing_scope`
+          // sur un canal privé — et qu'un lecteur pressé en a conclu qu'accorder
+          // `channels:join` réglerait l'affaire. Ça ne l'aurait pas réglée : le refus suivant
+          // l'attendait, et lui ne se lève par aucun droit.
+          if (!droitRejoindre) return echec('missing_scope', { needed: 'channels:join' });
           if (canal.is_private) return echec('method_not_supported_for_channel_type');
           if (!canal.membres.includes(robot)) canal.membres.push(robot);
         }
@@ -313,7 +337,7 @@ export function fauxSlack({
       case 'conversations.info': {
         if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
         const canal = monde.canaux.find((c) => c.id === args.channel);
-        return canal ? reponse({ ok: true, channel: canal }) : echec('channel_not_found');
+        return canal ? reponse({ ok: true, channel: commeSlack(canal) }) : echec('channel_not_found');
       }
 
       case 'users.info': {
