@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# test-attente-au-sas.sh — v2.0.0
+# test-attente-au-sas.sh — v3.0.0
 # L'attente au sas se dit — de l'orchestrateur au représentant du client.
 # Epic E-20260806-0005 · stories T-20260806-0148 / -0149 / -0150.
 #
@@ -15,16 +15,23 @@
 #               client sans inventer.
 #   HS-REL-005  Aucun mécanisme de file n'est construit.
 #
-# HISTORIQUE — pourquoi cette suite est écrite ainsi
-#   Une revue indépendante a réfuté la v1 : SEPT mutations du code la laissaient
-#   verte, et les quatre assertions qui prétendaient prouver « une attente muette
-#   est rattrapée » étaient de simples `grep` sur un fichier Markdown. Le reviewer
-#   a remplacé toute la section du SKILL.md par un commentaire HTML disant
-#   « ne rien faire de spécial » — les quatre greps passaient encore.
-#   D'où deux partis pris ici :
-#     • on EXÉCUTE le bloc documenté au lieu d'y chercher des chaînes (§7) ;
-#     • chaque garantie annoncée dans le message a son assertion, y compris les
-#       clauses qu'on croit décoratives (elles portent la garantie n°1).
+# HISTORIQUE — deux revues indépendantes, et ce qu'elles ont appris
+#   v1 : 7 mutations sur 7 laissaient la suite verte. Les 4 assertions censées
+#        prouver « une attente muette est rattrapée » étaient des `grep` sur du
+#        Markdown : le reviewer a remplacé la section par un commentaire HTML
+#        disant « ne rien faire de spécial », suite verte.
+#   v2 : on exécutait le bloc documenté au lieu de le lire — mais on ne vérifiait
+#        que ses SORTIES. Le second reviewer a remplacé la section par quatre
+#        `echo` imprimant les bonnes chaînes : suite verte. Le théâtre avait
+#        simplement monté d'un cran. Il a aussi permuté chantier/application et
+#        n°/date dans le message : verte aussi, parce que toutes les assertions
+#        cherchaient des sous-chaînes, jamais une PLACE.
+#   D'où les trois partis pris de cette version :
+#     • le bloc documenté doit PROUVER qu'il appelle le helper (§8, témoin) ;
+#     • les deux messages sont comparés en ENTIER, pas par morceaux (§1, §5).
+#       La formulation EST le livrable : la changer doit être un acte délibéré ;
+#     • le helper est exercé dans deux environnements de locale, qui le cassent
+#       de façons opposées et masquent chacun le défaut de l'autre.
 #
 # Usage : bash scripts/tests/test-attente-au-sas.sh
 # ============================================================
@@ -32,7 +39,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-HELPER="${ROOT}/.claude/skills/orchestrer-chantier/lib/attente-au-sas.sh"
+REL_HELPER=".claude/skills/orchestrer-chantier/lib/attente-au-sas.sh"
+HELPER="${ROOT}/${REL_HELPER}"
 SKILL_ORCH="${ROOT}/.claude/skills/orchestrer-chantier/SKILL.md"
 SKILL_GEST="${ROOT}/.claude/skills/gestionnaire-client/SKILL.md"
 
@@ -45,9 +53,9 @@ trap 'rm -rf "$PASS_FILE" "$FAIL_FILE" "$TMPDIR_T"' EXIT
 ok() { echo "  ✅ $1"; echo x >> "$PASS_FILE"; }
 ko() { echo "  ❌ $1"; echo x >> "$FAIL_FILE"; }
 
-# `env -i` retire la locale : c'est la condition réelle d'un pane dépouillé et de
-# la chaîne d'intégration, et c'est là qu'un outil externe manipulant des
-# caractères accentués lâche — parfois en échouant, parfois en mutilant.
+# `env -i` retire la locale : condition réelle d'un pane dépouillé et de la
+# chaîne d'intégration. C'est là qu'un outil externe manipulant des caractères
+# accentués lâche — parfois en échouant, souvent en mutilant sans rien dire.
 run() {
   local moment="$1"; shift
   OUT="$(env -i PATH="$PATH" HOME="$HOME" "$@" bash "$HELPER" "$moment" 2>&1)"
@@ -58,13 +66,10 @@ run() {
   esac
 }
 
-# La même chose, mais dans une locale RICHE. Ce n'est pas une redite : les deux
-# environnements cassent le helper de façons OPPOSÉES, et chacun masque le défaut
-# de l'autre. En C, un outil externe mutile les accents. En UTF-8, les intervalles
-# de motifs (`[A-Z]`) matchent aussi les minuscules sur bash 3.2 — un défaut réel,
-# trouvé parce que le bloc documenté, lui, tournait en locale normale : le message
-# de fin d'attente ne partait jamais. Une suite qui n'exerce qu'un seul des deux
-# ne prouve rien.
+# La même chose en locale RICHE. Ce n'est pas une redite : les intervalles de
+# motifs (`[A-Z]`) matchent aussi les minuscules sur bash 3.2 en UTF-8 — défaut
+# réel, qui empêchait le message de fin d'attente de partir, et que `env -i`
+# masquait complètement.
 run_locale() {
   local moment="$1"; shift
   local loc="fr_CA.UTF-8"
@@ -82,10 +87,14 @@ if [ ! -f "$HELPER" ]; then
 else
 
 # =================================================================
-# 1. Entrée en attente : ON PARLE, et le message porte tout ce que le
-#    représentant doit pouvoir relayer sans rien inventer.
+# 1. Entrée en attente : le message est comparé EN ENTIER.
+#    Le second reviewer a permuté chantier/application, puis n°/date : la suite
+#    restait verte parce qu'elle ne cherchait que des sous-chaînes. Le client
+#    aurait reçu « Portail Acme attend son tour pour la mise en ligne de D-42 ».
 #    T-20260806-0148 / -0149 · EF-AGT-003
 # =================================================================
+ATTENDU_ATTENTE="D-20260806-0042 : le travail est termine et pousse. Il attend son tour pour la mise en ligne de Portail Acme, occupee par la livraison #412 depuis 2026-08-06T11:20:00Z. A dire au client comme une attente, jamais comme un travail qui avance. Je te previens des que le tour vient."
+
 run attente \
   ATS_REPRESENTANT=acme-inc \
   ATS_CHANTIER=D-20260806-0042 \
@@ -99,34 +108,32 @@ run attente \
   || ko "sas occupé + représentant → attendu DIRE/rc 0, obtenu '$(champ DECISION)'/rc $RC"
 
 MSG="$(champ MESSAGE)"
+[ "$MSG" = "$ATTENDU_ATTENTE" ] \
+  && ok "le message d'attente est exactement celui attendu, mot pour mot et place pour place" \
+  || ko "le message d'attente a dérivé.
+     attendu : $ATTENDU_ATTENTE
+     obtenu  : $MSG"
+
+# Les assertions ci-dessous sont redondantes avec l'égalité — elles restent
+# parce qu'elles DISENT ce que chaque morceau garantit, et pointent le bon
+# coupable quand l'égalité tombe.
 case "$MSG" in *"attend son tour"*) ok "le message nomme l'attente pour ce qu'elle est" ;;
-  *) ko "le message ne nomme pas l'attente : $MSG" ;; esac
-case "$MSG" in *"D-20260806-0042"*) ok "le message nomme le chantier" ;;
-  *) ko "le message ne nomme pas le chantier" ;; esac
-case "$MSG" in *"Portail Acme"*) ok "le message nomme l'application, sous son nom lisible" ;;
-  *) ko "le message ne nomme pas l'application" ;; esac
-case "$MSG" in *412*) ok "le message nomme la livraison qui occupe le sas" ;;
-  *) ko "le message ne nomme pas la livraison qui occupe" ;; esac
-# Sans « depuis quand », le représentant ne peut pas répondre à la seule question
-# que le client posera. Cette donnée était supprimable sans échec en v1.
-case "$MSG" in *"2026-08-06T11:20:00Z"*) ok "le message dit depuis quand le sas est occupé" ;;
-  *) ko "le message tait depuis quand — le représentant devra inventer : $MSG" ;; esac
-# La clause qui PORTE la garantie n°1. Elle était supprimable sans échec en v1 :
-# le message restait « correct » et perdait la consigne qui empêche le
-# représentant de le transformer en « c'est en cours ».
-case "$MSG" in *"jamais comme un travail qui avance"*) ok "le message interdit explicitement de le présenter comme un travail qui avance" ;;
-  *) ko "la consigne qui porte la garantie n°1 a disparu du message : $MSG" ;; esac
+  *) ko "le message ne nomme pas l'attente" ;; esac
+case "$MSG" in *"jamais comme un travail qui avance"*) ok "le message interdit de le présenter comme un travail qui avance (garantie n°1)" ;;
+  *) ko "la consigne qui porte la garantie n°1 a disparu du message" ;; esac
 case "$MSG" in *"en cours"*) ko "le message présente l'attente comme un travail en cours" ;;
   *) ok "le message ne présente jamais l'attente comme un travail en cours" ;; esac
+case "$MSG" in *"  "*) ko "double espace dans le message — la normalisation finale a sauté" ;;
+  *) ok "le message est proprement normalisé (aucune double espace)" ;; esac
 
 CMD="$(champ COMMANDE)"
-case "$CMD" in *"acme-inc"*) ok "la commande vise le représentant du client" ;;
-  *) ko "la commande ne vise pas le représentant : $CMD" ;; esac
+[ "$CMD" = "herdr agent prompt 'acme-inc' '${ATTENDU_ATTENTE}'" ] \
+  && ok "la commande rendue vise le représentant et quote ses deux arguments" \
+  || ko "la commande rendue n'est pas celle attendue : $CMD"
 
 # =================================================================
 # 2. La valeur qui part dans une COMMANDE exécutée n'est pas de confiance.
 #    Le nom du représentant est recopié à la main depuis le registre.
-#    (défaut trouvé en revue : injection de commande)
 # =================================================================
 for HOSTILE in 'acme-inc; touch PWNED' 'acme$(touch PWNED)' 'acme && touch PWNED' \
                'acme|touch PWNED' 'acme inc' 'Acme-Inc' '-acme' \
@@ -144,11 +151,11 @@ for HOSTILE in 'acme-inc; touch PWNED' 'acme$(touch PWNED)' 'acme && touch PWNED
   fi
 done
 [ "${HOSTILE_KO:-0}" = "0" ] \
-  && ok "tout nom de représentant hors de la forme imposée par herdr est refusé (rc 5), et aucune commande n'est rendue" \
-  || true
+  && ok "tout nom de représentant hors de la forme imposée par herdr est refusé (rc 5), sans commande rendue" || true
 
-# Et la preuve par l'exécution : la commande rendue pour un nom valide ne fait
-# rien d'autre que la remise, même si les données sont hostiles.
+# Preuve par l'exécution : la ligne rendue ne fait rien d'autre que la remise,
+# même quand les données sont hostiles. (garde-fou vérifié authentique en revue :
+# rendre la COMMANDE réellement injectable fait rougir cette assertion)
 run attente \
   ATS_REPRESENTANT=acme-inc \
   'ATS_CHANTIER=D-42; touch PWNED_CHANTIER' \
@@ -157,10 +164,7 @@ run attente \
 CMD="$(champ COMMANDE)"
 (
   cd "$TMPDIR_T" || exit 1
-  # On remplace la remise réelle par un leurre : ce qui compte est de vérifier
-  # qu'AUCUN effet de bord ne survient à l'exécution de la ligne rendue.
   herdr() { :; }
-  export -f herdr 2>/dev/null || true
   eval "$CMD" >/dev/null 2>&1
 )
 if [ -z "$(find "$TMPDIR_T" -name 'PWNED*' 2>/dev/null)" ]; then
@@ -170,7 +174,7 @@ else
 fi
 
 # =================================================================
-# 3. Aucun représentant → COMPORTEMENT INCHANGÉ (T-20260806-0148)
+# 3. Aucun représentant → COMPORTEMENT INCHANGÉ
 # =================================================================
 run attente \
   ATS_CHANTIER=D-20260806-0042 \
@@ -182,25 +186,20 @@ run attente \
   || ko "chantier sans représentant → attendu RIEN/rc 3 sans message, obtenu '$(champ DECISION)'/rc $RC"
 
 # =================================================================
-# 4. La portée est l'application — et elle se décide sur un IDENTIFIANT,
-#    jamais sur un nom lisible. RA-AGT-006 · T-20260806-0148
+# 4. La portée est l'application — décidée sur un IDENTIFIANT, jamais sur un
+#    nom lisible. RA-AGT-006
 # =================================================================
 run attente \
-  ATS_REPRESENTANT=acme-inc \
-  ATS_CHANTIER=D-20260806-0042 \
-  "ATS_APPLICATION=Portail Acme" \
-  ATS_APPLICATION_ID="$APP_ID" \
-  ATS_APPLICATION_ID_VERROU="$AUTRE_APP_ID" \
-  ATS_DETENTEUR_PR=999
+  ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-20260806-0042 \
+  "ATS_APPLICATION=Portail Acme" ATS_APPLICATION_ID="$APP_ID" \
+  ATS_APPLICATION_ID_VERROU="$AUTRE_APP_ID" ATS_DETENTEUR_PR=999
 [ "$RC" = "3" ] && [ "$(champ DECISION)" = "RIEN" ] \
   && ok "verrou sur une autre application → RIEN (RA-AGT-006)" \
   || ko "verrou sur une autre application → attendu RIEN/rc 3, obtenu '$(champ DECISION)'/rc $RC"
 case "$(champ MOTIF)" in *[Aa]pplication*) ok "le motif dit que la portée est l'application" ;;
   *) ko "le motif n'explique pas la portée : $(champ MOTIF)" ;; esac
 
-# Égalité STRICTE, jamais un préfixe : `acme` et `acme-portail` sont deux
-# applications, et les confondre déclare au client une attente qui n'est pas la
-# sienne. (mutation « comparaison par préfixe » non rattrapée en v1)
+# Égalité STRICTE, jamais un préfixe.
 for PAIRE in "acme:acme-portail" "acme-portail:acme" "acme:acmeportail"; do
   A="${PAIRE%%:*}"; B="${PAIRE##*:}"
   run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
@@ -210,17 +209,13 @@ done
 [ "${PREFIXE_KO:-0}" = "0" ] \
   && ok "deux identifiants voisins ne sont jamais confondus (égalité stricte, pas un préfixe)" || true
 
-# La casse ASCII ne doit pas décider — le même identifiant vient de deux sources.
 run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
   ATS_APPLICATION_ID="2098C2FD-5448-46A3-BD98-83778E7A064D" ATS_APPLICATION_ID_VERROU="$APP_ID"
 [ "$(champ DECISION)" = "DIRE" ] \
   && ok "comparaison d'identifiants insensible à la casse" \
   || ko "comparaison sensible à la casse → fausse absence d'attente"
 
-# Absent ET blanc doivent donner le MÊME verdict : ce sont deux façons de ne rien
-# dire, et un refus de lock_acquire porte par construction sur notre application.
-run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
-  ATS_APPLICATION_ID="$APP_ID"
+run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" ATS_APPLICATION_ID="$APP_ID"
 D1="$(champ DECISION)"
 run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
   ATS_APPLICATION_ID="$APP_ID" ATS_APPLICATION_ID_VERROU="   "
@@ -229,115 +224,119 @@ D2="$(champ DECISION)"
   && ok "identifiant du verrou absent ou blanc → même verdict, aucune asymétrie" \
   || ko "asymétrie absent/blanc sur l'identifiant du verrou : '$D1' vs '$D2'"
 
-# Le NOM LISIBLE ne décide de rien : accentué, il n'a jamais fait taire personne.
 run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 \
   "ATS_APPLICATION=Portail Élève" ATS_APPLICATION_ID="$APP_ID"
 [ "$(champ DECISION)" = "DIRE" ] \
   && ok "un nom d'application accentué ne fait pas taire l'orchestrateur" \
   || ko "un nom accentué fait taire l'orchestrateur — le silence exact qu'on interdit"
 
-# Un identifiant qui n'en est pas un → FAIL bruyant, pas un silence.
+# Un identifiant mal formé, du chantier OU du verrou : FAIL bruyant. Basculer
+# l'un des deux en RIEN (silence) est l'inversion exacte que RA-AGT-007 interdit.
 for MAUVAIS in "Portail Élève" "app;rm" "app/../x"; do
   run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
     ATS_APPLICATION_ID="$MAUVAIS"
-  [ "$RC" = "5" ] || { ko "identifiant mal formé accepté : '$MAUVAIS' → rc $RC"; ID_KO=1; }
+  [ "$RC" = "5" ] || { ko "identifiant de chantier mal formé accepté : '$MAUVAIS' → rc $RC"; ID_KO=1; }
+  run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
+    ATS_APPLICATION_ID="$APP_ID" ATS_APPLICATION_ID_VERROU="$MAUVAIS"
+  [ "$RC" = "5" ] || { ko "identifiant de VERROU mal formé accepté : '$MAUVAIS' → rc $RC ($(champ DECISION))"; ID_KO=1; }
 done
-[ "${ID_KO:-0}" = "0" ] && ok "un identifiant d'application mal formé échoue bruyamment (rc 5)" || true
+[ "${ID_KO:-0}" = "0" ] && ok "un identifiant d'application mal formé échoue bruyamment (rc 5), des deux côtés" || true
 
 # =================================================================
-# 5. Le tour venu se dit aussi (T-20260806-0149 · EF-AGT-003)
+# 5. Le tour venu se dit aussi — message comparé EN ENTIER lui aussi.
 # =================================================================
+ATTENDU_PASSAGE="D-20260806-0042 : le tour est venu. La mise en ligne de Portail Acme est engagee maintenant — ce qui attendait vient de partir. Tu peux le dire au client."
+
 run passage \
-  ATS_REPRESENTANT=acme-inc \
-  ATS_CHANTIER=D-20260806-0042 \
-  "ATS_APPLICATION=Portail Acme" \
-  ATS_ATTENTE_DECLAREE=oui
+  ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-20260806-0042 \
+  "ATS_APPLICATION=Portail Acme" ATS_ATTENTE_DECLAREE=oui
 [ "$RC" = "0" ] && [ "$(champ DECISION)" = "DIRE" ] \
   && ok "le tour venu après une attente déclarée → DIRE" \
   || ko "le tour venu → attendu DIRE/rc 0, obtenu '$(champ DECISION)'/rc $RC"
 MSG="$(champ MESSAGE)"
-case "$MSG" in *"le tour est venu"*) ok "le message annonce que le tour est venu" ;;
-  *) ko "le message n'annonce pas la fin de l'attente : $MSG" ;; esac
-case "$MSG" in *"Portail Acme"*) ok "le message de passage nomme l'application" ;;
-  *) ko "le message de passage ne nomme pas l'application" ;; esac
-case "$MSG" in *"vient de partir"*) ok "le message de passage arrive entier" ;;
-  *) ko "le message de passage est tronqué : $MSG" ;; esac
+[ "$MSG" = "$ATTENDU_PASSAGE" ] \
+  && ok "le message de fin d'attente est exactement celui attendu" \
+  || ko "le message de fin d'attente a dérivé.
+     attendu : $ATTENDU_PASSAGE
+     obtenu  : $MSG"
 if printf '%s' "$MSG" | LC_ALL=en_US.UTF-8 grep -q '—'; then
   ok "les caractères multi-octets du message survivent intacts"
 else
   ko "un caractère multi-octets a été mutilé — le représentant relaierait du charabia"
 fi
 
-# La réponse « oui » vient d'un humain ou d'un autre agent : elle arrive avec des
-# espaces et dans la casse qu'on lui donne. (mutation non rattrapée en v1)
 for OUI in "oui" " oui " "OUI" "Oui"; do
   run passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
     ATS_ATTENTE_DECLAREE="$OUI"
-  [ "$(champ DECISION)" = "DIRE" ] || { ko "attente déclarée non reconnue : '$OUI' → $(champ DECISION)"; OUI_KO=1; }
+  [ "$(champ DECISION)" = "DIRE" ] || { ko "attente déclarée non reconnue : '$OUI'"; OUI_KO=1; }
 done
 [ "${OUI_KO:-0}" = "0" ] \
   && ok "l'attente déclarée est reconnue quels que soient la casse et les espaces" || true
 
-run passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
-  ATS_ATTENTE_DECLAREE=non
+run passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" ATS_ATTENTE_DECLAREE=non
 [ "$RC" = "3" ] && [ "$(champ DECISION)" = "RIEN" ] \
   && ok "passage sans attente déclarée → RIEN (le canal reste silencieux)" \
   || ko "passage sans attente déclarée → attendu RIEN/rc 3, obtenu '$(champ DECISION)'/rc $RC"
 
+# Les DEUX moments exigent de quoi nommer le chantier. Sans ça le helper rendait
+# « : le tour est venu. La mise en ligne de est engagee maintenant… » — un
+# message qui ne nomme rien, envoyé au représentant.
+run passage ATS_REPRESENTANT=acme-inc "ATS_APPLICATION=X" ATS_ATTENTE_DECLAREE=oui
+[ "$RC" = "5" ] || { ko "passage sans chantier → rc $RC au lieu de 5 : '$(champ MESSAGE)'"; PASS_KO=1; }
+run passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 ATS_ATTENTE_DECLAREE=oui
+[ "$RC" = "5" ] || { ko "passage sans application → rc $RC au lieu de 5 : '$(champ MESSAGE)'"; PASS_KO=1; }
+[ "${PASS_KO:-0}" = "0" ] \
+  && ok "le message de fin d'attente exige lui aussi de quoi nommer le chantier et l'application" || true
+
 # =================================================================
 # 5-bis. LES MÊMES GARANTIES EN LOCALE RICHE.
-#    Le helper tourne aussi bien dans un pane sans locale que dans un terminal
-#    normal, et les deux le cassent de façons opposées.
 # =================================================================
 for OUI in "oui" "OUI" " oui "; do
   run_locale passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
     ATS_ATTENTE_DECLAREE="$OUI"
-  [ "$(champ DECISION)" = "DIRE" ] || { ko "en locale riche, attente déclarée non reconnue : '$OUI' → $(champ DECISION) / $(champ MOTIF)"; LOC_KO=1; }
+  [ "$(champ DECISION)" = "DIRE" ] || { ko "en locale riche, attente déclarée non reconnue : '$OUI' → $(champ MOTIF)"; LOC_KO=1; }
 done
-run_locale passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
-  ATS_ATTENTE_DECLAREE=non
+run_locale passage ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" ATS_ATTENTE_DECLAREE=non
 [ "$(champ DECISION)" = "RIEN" ] || { ko "en locale riche, « non » est pris pour « oui »"; LOC_KO=1; }
-
 run_locale attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-20260806-0042 \
   "ATS_APPLICATION=Portail Élève" ATS_APPLICATION_ID="$APP_ID" ATS_DETENTEUR_PR=412
 [ "$(champ DECISION)" = "DIRE" ] || { ko "en locale riche, l'entrée en attente ne se dit pas"; LOC_KO=1; }
 case "$(champ MESSAGE)" in *"Portail Élève"*) : ;;
-  *) ko "en locale riche, le nom accentué de l'application est mutilé : $(champ MESSAGE)"; LOC_KO=1 ;; esac
+  *) ko "en locale riche, le nom accentué est mutilé : $(champ MESSAGE)"; LOC_KO=1 ;; esac
 run_locale attente ATS_REPRESENTANT='acme-inc; touch PWNED' ATS_CHANTIER=D-1 \
   "ATS_APPLICATION=X" ATS_APPLICATION_ID="$APP_ID"
 [ "$RC" = "5" ] || { ko "en locale riche, un nom de représentant hostile passe (rc $RC)"; LOC_KO=1; }
-
 [ "${LOC_KO:-0}" = "0" ] \
   && ok "les mêmes garanties tiennent en locale riche (casse, accents, refus d'un nom hostile)" || true
 
+# Sourcer le helper ne doit RIEN changer chez l'appelant : le fichier se déclare
+# sourçable, et imposer sa locale infligerait à son hôte la mutilation des
+# accents que son propre en-tête décrit comme le défaut à éviter.
+LOC_APRES="$(bash -c 'export LC_ALL=en_US.UTF-8; . "$1" >/dev/null 2>&1; printf "%s" "$LC_ALL"' _ "$HELPER" 2>/dev/null)"
+[ "$LOC_APRES" = "en_US.UTF-8" ] \
+  && ok "sourcer le helper ne modifie pas la locale de l'appelant" \
+  || ko "sourcer le helper impose sa locale à l'appelant (obtenu '$LOC_APRES')"
+
 # =================================================================
-# 6. Le transport ne casse pas (RA-REL-005) — le prompt est passé entre
-#    apostrophes simples et se soumet au premier saut de ligne.
+# 6. Le transport ne casse pas (RA-REL-005)
 # =================================================================
 run attente \
-  ATS_REPRESENTANT=acme-inc \
-  ATS_CHANTIER=D-20260806-0042 \
+  ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-20260806-0042 \
   "ATS_APPLICATION=portail de l'Atelier ’ \` fin" \
-  ATS_APPLICATION_ID="$APP_ID" \
-  ATS_DETENTEUR_PR=412
+  ATS_APPLICATION_ID="$APP_ID" ATS_DETENTEUR_PR=412
 MSG="$(champ MESSAGE)"; CMD="$(champ COMMANDE)"
 [ "$(champ DECISION)" = "DIRE" ] \
   && ok "les caractères de transport dans une donnée n'empêchent pas de parler" \
   || ko "des caractères de transport font taire l'orchestrateur"
-case "$MSG" in *"'"*) ko "apostrophe simple laissée dans le message — remise coupée" ;;
-  *) ok "apostrophe simple retirée" ;; esac
-case "$MSG" in *"’"*) ko "apostrophe typographique laissée — remise coupée" ;;
-  *) ok "apostrophe typographique retirée" ;; esac
-case "$MSG" in *'`'*) ko "accent grave laissé dans le message" ;;
-  *) ok "accent grave retiré" ;; esac
+case "$MSG" in *"'"*) ko "apostrophe simple laissée — remise coupée" ;; *) ok "apostrophe simple retirée" ;; esac
+case "$MSG" in *"’"*) ko "apostrophe typographique laissée — remise coupée" ;; *) ok "apostrophe typographique retirée" ;; esac
+case "$MSG" in *'`'*) ko "accent grave laissé dans le message" ;; *) ok "accent grave retiré" ;; esac
 case "$MSG" in *Atelier*) ok "le message survit entier à la normalisation" ;;
   *) ko "la normalisation a mutilé le message : '$MSG'" ;; esac
 [ "$(printf '%s' "$CMD" | wc -l | tr -d ' ')" = "0" ] \
   && ok "la commande tient sur une seule ligne" \
   || ko "la commande tient sur plusieurs lignes — le prompt serait soumis en deux morceaux"
 
-# Saut de ligne ET retour chariot : `wc -l` ne compte que le premier, et un CR
-# seul suffit à couper la remise. (mutation non rattrapée en v1)
 run attente ATS_REPRESENTANT=acme-inc \
   "ATS_CHANTIER=$(printf 'D-42\r\nsuite')" "ATS_APPLICATION=X" ATS_APPLICATION_ID="$APP_ID"
 MSG="$(champ MESSAGE)"
@@ -346,8 +345,28 @@ case "$MSG" in *$'\r'*) ko "un retour chariot traverse le message — remise cou
 case "$MSG" in *$'\n'*) ko "un saut de ligne traverse le message" ;;
   *) ok "le saut de ligne est neutralisé" ;; esac
 
+# La MÊME exigence sur le message de fin d'attente. Le helper ne repasse
+# volontairement aucune normalisation sur le message composé — ce serait du code
+# qu'aucune entrée ne peut exercer. Ce sont donc ces assertions-ci qui tiennent
+# la garantie de transport, et elles doivent couvrir les DEUX moments.
+run passage ATS_REPRESENTANT=acme-inc \
+  "ATS_CHANTIER=$(printf 'D-42\r\nsuite')" \
+  "ATS_APPLICATION=portail de l'Atelier ’ \` fin" ATS_ATTENTE_DECLAREE=oui
+MSG="$(champ MESSAGE)"; CMD="$(champ COMMANDE)"
+[ "$(champ DECISION)" = "DIRE" ] \
+  && ok "le message de fin d'attente part malgré des données hostiles" \
+  || ko "des caractères de transport font taire la fin d'attente"
+TRANSPORT_KO=0
+case "$MSG" in *"'"*|*"’"*|*'`'*|*$'\r'*|*$'\n'*|*"  "*) TRANSPORT_KO=1 ;; esac
+[ "$TRANSPORT_KO" = "0" ] \
+  && ok "le message de fin d'attente ne porte aucun caractère qui casse la remise" \
+  || ko "le message de fin d'attente porte un caractère de transport : '$MSG'"
+[ "$(printf '%s' "$CMD" | wc -l | tr -d ' ')" = "0" ] \
+  && ok "la commande de fin d'attente tient sur une seule ligne" \
+  || ko "la commande de fin d'attente tient sur plusieurs lignes"
+
 # =================================================================
-# 7. Le silence n'est jamais le repli (RA-AGT-007) — T-20260806-0150
+# 7. Le silence n'est jamais le repli (RA-AGT-007) — et une donnée jetée se dit.
 # =================================================================
 run attente ATS_REPRESENTANT=acme-inc "ATS_APPLICATION=X" ATS_APPLICATION_ID="$APP_ID"
 [ "$RC" = "5" ] && [ "$(champ DECISION)" = "FAIL" ] \
@@ -355,32 +374,56 @@ run attente ATS_REPRESENTANT=acme-inc "ATS_APPLICATION=X" ATS_APPLICATION_ID="$A
   || ko "chantier inconnu → attendu FAIL/rc 5, obtenu '$(champ DECISION)'/rc $RC"
 
 run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 ATS_APPLICATION_ID="$APP_ID"
-[ "$RC" = "5" ] \
-  && ok "application inconnue + représentant → FAIL bruyant" \
+[ "$RC" = "5" ] && ok "application inconnue + représentant → FAIL bruyant" \
   || ko "application inconnue → rc $RC au lieu de 5"
 
-run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
-  ATS_APPLICATION_ID="$APP_ID" ATS_DETENTEUR_PR=""
+run bidule ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X"
+[ "$RC" = "5" ] && ok "moment inconnu → FAIL bruyant, jamais un silence" \
+  || ko "moment inconnu → rc $RC au lieu de 5"
+
+# « Depuis quand » est la seule question que le client posera. Elle était jetée
+# en silence dès que l'on ignorait QUI occupe le sas.
+run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-42 "ATS_APPLICATION=Portail Acme" \
+  ATS_APPLICATION_ID="$APP_ID" ATS_DETENTEUR_PR="" ATS_DEPUIS=2026-08-01T09:00:00Z
 [ "$(champ DECISION)" = "DIRE" ] \
   && ok "détenteur inconnu → on dit quand même l'attente" \
   || ko "détenteur inconnu → l'orchestrateur se tait, alors qu'il attend"
-case "$(champ MESSAGE)" in *"attend son tour"*) ok "détenteur inconnu → l'attente reste nommée" ;;
-  *) ko "détenteur inconnu → l'attente n'est plus nommée" ;; esac
+case "$(champ MESSAGE)" in *"2026-08-01T09:00:00Z"*) ok "détenteur inconnu → « depuis quand » est conservé" ;;
+  *) ko "« depuis quand » jeté en silence faute de connaître le détenteur : $(champ MESSAGE)" ;; esac
 
-run bidule ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X"
+# Un n° de livraison illisible n'est pas relayé — mais son abandon est DIT.
+run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-42 "ATS_APPLICATION=Portail Acme" \
+  ATS_APPLICATION_ID="$APP_ID" ATS_DETENTEUR_PR="412 depuis mardi" ATS_DEPUIS=2026-08-01T09:00:00Z
+[ "$(champ DECISION)" = "DIRE" ] && [ -n "$(champ AVERTISSEMENT)" ] \
+  && ok "un n° de livraison illisible n'est pas relayé, et son abandon est signalé" \
+  || ko "un n° de livraison illisible passe tel quel ou est jeté en silence : $(champ MESSAGE)"
+case "$(champ MESSAGE)" in *"depuis mardi"*) ko "un n° de livraison absurde est relayé au client" ;;
+  *) ok "le n° de livraison absurde ne part pas vers le client" ;; esac
+
+# Le repli de casse forkait 3 sous-processus par caractère : 29 s sur 16 000
+# lettres, sans plafond de longueur nulle part. Une entrée d'agent ne doit pas
+# pouvoir immobiliser le chemin.
+DEBUT=$SECONDS
+LONG="$(printf 'A%.0s' $(seq 1 16000))"
+run attente ATS_REPRESENTANT=acme-inc ATS_CHANTIER=D-1 "ATS_APPLICATION=X" \
+  ATS_APPLICATION_ID="$LONG" ATS_ATTENTE_DECLAREE="$LONG"
+ECOULE=$(( SECONDS - DEBUT ))
+[ "$ECOULE" -le 5 ] \
+  && ok "une entrée démesurée est tranchée en ${ECOULE}s (bornée, pas quadratique)" \
+  || ko "une entrée démesurée immobilise le chemin ${ECOULE}s"
 [ "$RC" = "5" ] \
-  && ok "moment inconnu → FAIL bruyant, jamais un silence" \
-  || ko "moment inconnu → rc $RC au lieu de 5"
+  && ok "un identifiant démesuré est refusé plutôt que traité" \
+  || ko "un identifiant démesuré est accepté (rc $RC)"
 
 fi
 
 # =================================================================
-# 8. Le chemin documenté EST exécuté — pas relu (RA-AGT-007)
-#    T-20260806-0150. C'est ici que la v1 était du théâtre : quatre `grep`
-#    passaient encore sur un commentaire HTML disant « ne rien faire de spécial ».
-#    On extrait le bloc de commandes de la section et on le fait tourner : si la
-#    section disparaît, si le bloc part, ou si un nom de variable dérive du
-#    helper, il n'y a plus rien à exécuter et ça rougit.
+# 8. Le chemin documenté APPELLE VRAIMENT le helper (RA-AGT-007)
+#    v1 : quatre `grep` passaient sur un commentaire HTML.
+#    v2 : quatre `echo` imprimant les bonnes chaînes passaient aussi.
+#    Ici le bloc tourne contre un helper TÉMOIN, qui délègue au vrai et laisse
+#    une empreinte que seule une invocation réelle peut produire. Un bloc qui
+#    imite les sorties, ou qui appelle autre chose, ne la produit pas.
 # =================================================================
 if [ ! -f "$SKILL_ORCH" ]; then
   ko "SKILL.md orchestrer-chantier introuvable"
@@ -397,21 +440,37 @@ else
     ko "aucun bloc de commandes exécutable dans la section « g. Pousser » — le chemin a disparu du SKILL.md"
   else
     ok "la section « g. Pousser » porte un bloc de commandes extractible"
-    SORTIE="$(cd "$ROOT" && bash "$BLOC" 2>&1)"
+
+    FAUX_ROOT="${TMPDIR_T}/faux-depot"
+    mkdir -p "${FAUX_ROOT}/$(dirname "$REL_HELPER")"
+    NONCE="temoin-8f21c4"
+    cat > "${FAUX_ROOT}/${REL_HELPER}" <<TEMOIN
+#!/usr/bin/env bash
+echo "PREUVE_APPEL=${NONCE} \$1"
+exec bash "${HELPER}" "\$@"
+TEMOIN
+
+    SORTIE="$(cd "$FAUX_ROOT" && bash "$BLOC" 2>&1)"
+    NB_PREUVE="$(printf '%s\n' "$SORTIE" | grep -c "^PREUVE_APPEL=${NONCE}" || true)"
     NB_DIRE="$(printf '%s\n' "$SORTIE" | grep -c '^DECISION=DIRE' || true)"
+
+    [ "$NB_PREUVE" = "2" ] \
+      && ok "le bloc documenté appelle réellement le helper, deux fois (témoin)" \
+      || ko "le bloc documenté n'appelle pas le helper ($NB_PREUVE invocation(s) témoin) — il imite ses sorties ou appelle autre chose"
+    printf '%s\n' "$SORTIE" | grep -q "^PREUVE_APPEL=${NONCE} attente$" \
+      && ok "le bloc documenté invoque le moment « attente »" \
+      || ko "le bloc documenté n'invoque jamais le moment « attente »"
+    printf '%s\n' "$SORTIE" | grep -q "^PREUVE_APPEL=${NONCE} passage$" \
+      && ok "le bloc documenté invoque le moment « passage »" \
+      || ko "le bloc documenté n'invoque jamais le moment « passage »"
     [ "$NB_DIRE" = "2" ] \
-      && ok "le bloc documenté s'exécute et produit les DEUX paroles (entrée en attente + tour venu)" \
-      || ko "le bloc documenté ne produit pas les deux paroles attendues (obtenu $NB_DIRE) : $SORTIE"
-    case "$SORTIE" in *"attend son tour"*) ok "le bloc documenté fait bien dire l'attente" ;;
-      *) ko "le bloc documenté ne fait pas dire l'attente" ;; esac
-    case "$SORTIE" in *"le tour est venu"*) ok "le bloc documenté fait bien dire le tour venu" ;;
-      *) ko "le bloc documenté ne fait pas dire le tour venu" ;; esac
-    case "$SORTIE" in *FAIL*|*"MOTIF="*) ko "le bloc documenté échoue à l'exécution — la doc a dérivé du helper : $SORTIE" ;;
+      && ok "le bloc documenté produit les DEUX paroles (entrée en attente + tour venu)" \
+      || ko "le bloc documenté ne produit pas les deux paroles (obtenu $NB_DIRE) : $SORTIE"
+    case "$SORTIE" in *"DECISION=FAIL"*) ko "le bloc documenté échoue — la doc a dérivé du helper : $SORTIE" ;;
       *) ok "la doc n'a pas dérivé du helper (aucun FAIL à l'exécution)" ;; esac
   fi
 
-  # Chronologie : le refus de poussée survient AVANT le merge. Une consigne lue
-  # après le merge arrive trop tard.
+  # Chronologie : le refus survient AVANT le merge.
   L_POUSSE="$(grep -n '^\*\*g\. Pousser' "$SKILL_ORCH" | head -1 | cut -d: -f1)"
   L_MERGE="$(grep -n '^\*\*h\. Merger' "$SKILL_ORCH" | head -1 | cut -d: -f1)"
   if [ -n "$L_POUSSE" ] && [ -n "$L_MERGE" ] && [ "$L_POUSSE" -lt "$L_MERGE" ]; then
@@ -420,24 +479,36 @@ else
     ko "la consigne d'attente n'est pas placée avant le merge (pousser=$L_POUSSE, merger=$L_MERGE)"
   fi
 
-  # Le chaînon : c'est l'exécutant qui VOIT le refus, le coordonnateur qui a la
-  # parole. Sans consigne dans le brief, le déclencheur n'atteint jamais celui
-  # qui doit parler — et l'attente reste muette malgré tout le reste.
-  grep -qiE 'sas occup' "$SKILL_ORCH" \
-    && ok "le gabarit de brief ou le suivi actif nomme le sas occupé" \
-    || ko "rien ne demande à l'exécutant de remonter un sas occupé — le déclencheur n'arrive jamais"
-  awk '/^\*\*a\. Écrire le brief/,/^\*\*b\. Faire naître/' "$SKILL_ORCH" | grep -qiE 'sas occup|pousse-staging refuse' \
+  # Le chaînon, DANS LES DEUX SENS. C'est l'exécutant qui voit le refus ET la
+  # reprise ; le coordonnateur a la parole. Sans consigne dans le brief, le
+  # déclencheur ne l'atteint jamais — et le second manque plus souvent que le
+  # premier, ce qui laisse une attente annoncée sans fin annoncée.
+  BRIEF="$(awk '/^\*\*a\. Écrire le brief/,/^\*\*b\. Faire naître/' "$SKILL_ORCH")"
+  SUIVI="$(awk '/^\*\*d\. Exiger le suivi actif/,/^\*\*e\. Faire reviewer/' "$SKILL_ORCH")"
+  printf '%s' "$BRIEF" | grep -qiE 'sas occup|pousse-staging refuse' \
     && ok "le brief de l'exécutant porte la consigne de sas occupé" \
     || ko "le brief de l'exécutant ne porte pas la consigne — l'exécutant se taira"
-  awk '/^\*\*d\. Exiger le suivi actif/,/^\*\*e\. Faire reviewer/' "$SKILL_ORCH" | grep -qiE 'sas occup' \
+  printf '%s' "$BRIEF" | grep -qiE 'quand ta pouss[ée]e (finit par )?pass|poussee pass|reprise' \
+    && ok "le brief demande aussi de signaler la reprise — sinon l'attente n'a jamais de fin" \
+    || ko "le brief ne demande pas de signaler la reprise : la moitié « le tour est venu » n'a aucun déclencheur"
+  printf '%s' "$SUIVI" | grep -qiE 'sas occup' \
     && ok "le suivi actif liste le sas occupé parmi les signaux à remonter" \
     || ko "le suivi actif ne liste pas le sas occupé"
+  printf '%s' "$SUIVI" | grep -qiE 'poussee pass|pouss[ée]e pass' \
+    && ok "le suivi actif liste aussi la reprise" \
+    || ko "le suivi actif ne liste pas la reprise"
+
+  # La source de ATS_REPRESENTANT doit être nommée : c'est elle qui décide QUI
+  # reçoit, et le helper refuse un nom mal recopié.
+  awk '/^\*\*g\. Pousser/,/^\*\*h\. Merger/' "$SKILL_ORCH" | grep -q 'ATS_REPRESENTANT' \
+    && ok "la section dit où prendre le nom du représentant" \
+    || ko "la section ne dit pas d'où vient ATS_REPRESENTANT — l'agent devra le deviner"
 
   grep -qiE 'attend(re|rait)? (au sas )?(son tour )?sans le dire|attente (muette|non dite)' "$SKILL_ORCH" \
     && ok "orchestrer-chantier porte l'anti-pattern de l'attente muette" \
     || ko "orchestrer-chantier ne nomme pas l'attente muette comme un défaut"
 
-  # HS-REL-005 : aucun mécanisme de file construit.
+  # HS-REL-005 : aucun mécanisme de file.
   grep -qiE 'sonda(ge|nt) (p[ée]riodique|du verrou)|boucle d.attente sur le verrou|registre de file|num[ée]ro d.ordre dans la file' "$SKILL_ORCH" \
     && ko "orchestrer-chantier introduit un mécanisme de file (HS-REL-005)" \
     || ok "aucun mécanisme de file introduit dans le chemin (HS-REL-005)"

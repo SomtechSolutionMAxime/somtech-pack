@@ -162,7 +162,7 @@ Pour chaque epic dans l'ordre :
 - comment il travaille : décomposer en stories G/W/T d'abord, test rouge avant vert, branche portant l'ID de traçabilité, PR draft dès le premier commit, statut `in_progress` au moment où il commence ;
 - **le suivi** (voir 4d) ;
 - **la consigne de compaction** : *si tu sens que tu vas devoir compacter ton contexte, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
-- **la consigne de sas occupé** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus : sans cette ligne dans son brief, le déclencheur ne t'atteint jamais et l'attente reste muette.
+- **la consigne de sas occupé, dans les deux sens** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter ; et préviens-moi de nouveau quand ta poussée finit par passer.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus **et la reprise** : sans ces deux lignes dans son brief, le déclencheur ne t'atteint jamais. Le second manque plus souvent que le premier — et une attente annoncée dont la fin ne l'est pas est pire que le silence d'origine.
 
 **b. Faire naître l'agent — le worktree avant lui.**
 
@@ -229,7 +229,14 @@ Ce qui doit toujours y figurer : **le livrable**, **la preuve** (les tests qui l
 
 - quand il a fini : `herdr agent prompt <ton-nom-ou-ton-pane> "<son-nom> a fini : <une ligne> — PR #<n>"` ;
 - **immédiatement** s'il se bloque, si une contrainte se révèle impraticable, ou s'il découvre un défaut qui touche un autre chantier ;
-- **immédiatement aussi si le sas est occupé** : `herdr agent prompt <ton-nom-ou-ton-pane> "<son-nom> : poussee refusee, sas occupe par la PR #<n> depuis <date>"`. C'est le seul de ces signaux qui n'annonce **rien de cassé** — et c'est précisément pour ça qu'on ne pense pas à l'envoyer. Il déclenche le §4g.
+- **immédiatement aussi si le sas est occupé**, puis **une seconde fois quand sa poussée passe** :
+
+```bash
+herdr agent prompt <ton-nom-ou-ton-pane> '<son-nom> : poussee refusee, sas occupe par la PR #<n> depuis <date>'
+herdr agent prompt <ton-nom-ou-ton-pane> '<son-nom> : poussee passee, le sas etait libre'
+```
+
+Ce sont les deux seuls de ces signaux qui n'annoncent **rien de cassé** — et c'est précisément pour ça qu'on ne pense pas à les envoyer. Ils déclenchent les deux moitiés du §4g. Le second est celui qu'on oublie : sans lui, tu auras annoncé une attente au représentant et jamais sa fin, ce qui est pire que de n'avoir rien dit.
 
 ⚠️ **N'envoie pas ton exécutant lire la compétence `herdr` du poste sans le prévenir.** Elle n'est pas livrée par le pack — elle vient de l'outil — et elle enseigne aujourd'hui `herdr wait output …` et `herdr wait agent-status …`, deux commandes qui **n'existent pas** (`unknown command: wait`). Un agent qui les suit perd du temps sur une erreur qui n'est pas la sienne. Donne-lui les commandes dans son brief ; si tu tiens à l'y renvoyer, dis-lui dans le même souffle que les formes réelles sont `herdr agent wait … --until …` et `herdr pane wait-output …`.
 
@@ -309,7 +316,18 @@ ATS_ATTENTE_DECLAREE=oui \
   bash "$L" passage
 ```
 
-Les valeurs viennent de là où elles existent, jamais de ton estimation : `ATS_APPLICATION_ID` est le `servicedesk.app_id` de `.somtech/app.yaml` — **celui-là même qui prend le verrou** —, `ATS_DETENTEUR_PR` et `ATS_DEPUIS` sont les `blocked_by_holder_pr` et `blocked_since` que le refus t'a rendus.
+**Qui pousse ne change rien à qui parle.** Le plus souvent c'est ton exécutant qui lance `/pousse-staging` et qui voit le refus — c'est pour ça que son brief lui demande de te le remonter (§4a, §4d). La parole vers le représentant, elle, reste la tienne : lui ne connaît pas le représentant, et ne doit pas le connaître.
+
+Les valeurs viennent de là où elles existent, jamais de ton estimation :
+
+| Variable | Où la prendre |
+|---|---|
+| `ATS_REPRESENTANT` | le nom d'agent de ton représentant, celui à qui ton brief te dit de rendre compte. Il l'a lui-même inscrit sur la demande en t'ouvrant (`demands` action `get`, fil de commentaires). **Recopie-le, ne le devine pas** : le helper refuse un nom mal formé plutôt que d'envoyer à côté |
+| `ATS_APPLICATION` | le nom lisible de l'application — celui que le client reconnaîtrait, jamais un code |
+| `ATS_APPLICATION_ID` | le `servicedesk.app_id` de `.somtech/app.yaml` — **celui-là même qui prend le verrou** |
+| `ATS_DETENTEUR_PR` · `ATS_DEPUIS` | les `blocked_by_holder_pr` et `blocked_since` que le refus t'a rendus |
+
+Si une ligne `AVERTISSEMENT=` sort, une donnée reçue était illisible et n'a pas été relayée — le message part quand même, amputé de ce seul point. Regarde d'où elle venait.
 
 Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur `RIEN`, il n'y a rien à dire et c'est juste. Sur `FAIL`, **ne te tais pas** : corrige ce qui manque et recommence.
 
