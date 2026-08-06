@@ -42,6 +42,17 @@ Le veilleur écoute en **Socket Mode**. Il lui faut, en plus du jeton de robot, 
 1. **Toute modification de portée impose de RÉINSTALLER l'application** dans l'espace de travail. Accorder une portée sans réinstaller ne change rien, et rien ne le signale.
 2. **Le manifeste de l'application ne reflète plus ce qui est accordé.** L'application a été créée depuis un manifeste ; `files:read`, `files:write` et les portées `groups:*` ont été ajoutés à la main le 2026-08-06. **Rejouer le manifeste les effacerait sans bruit** — le même piège qu'une migration qui diverge de sa base. Mettre le manifeste à jour avant de le rejouer, jamais l'inverse.
 
+## Ce que les pièces déposées laissent sur le poste
+
+Une pièce recueillie est écrite dans `~/.somtech/ligne-directe/pieces/<canal>/`, en **0700 pour le dossier, 0600 pour le fichier** : seul le compte du poste peut la lire.
+
+Deux choses à savoir avant d'opérer ce dossier :
+
+1. **Ce sont des données de client, souvent personnelles.** Une capture d'écran en dit beaucoup plus qu'une phrase, et elle est arrivée ici sans relecture humaine. Le dossier se traite comme le trousseau, pas comme un cache.
+2. **Rien ne l'efface aujourd'hui.** Le ménage et la rétention sont une dette ouverte (`T-20260806-0138`), pas un oubli : le sujet a été relevé et remis à un lot qui le traitera pour lui-même. En attendant, un opérateur peut vider ce dossier à la main sans rien casser — les pièces qui comptent ont été rattachées à leur demande.
+
+Les adresses de fichiers Slack sont privées : le veilleur présente le jeton du robot pour les rapatrier. **Sans `files:read`, Slack ne refuse pas** — il répond `200` avec sa page de connexion en HTML. Le code le détecte et le dit ; c'est le mode d'échec à connaître si des pièces cessent d'arriver après une réinstallation.
+
 ## Vérifier plutôt que supposer
 
 Les portées réellement accordées se lisent dans la réponse de `auth.test` (en-tête `x-oauth-scopes`), pas à l'écran de configuration — l'écran montre ce qui est demandé, la réponse montre ce qui est en vigueur. La différence entre les deux, c'est exactement une réinstallation oubliée.

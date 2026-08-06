@@ -20,7 +20,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-let Veilleur, sauverRegistre, chargerRegistre, lignesOuvertes, CAUSES, reponse;
+let Veilleur, sauverRegistre, chargerRegistre, lignesOuvertes, CAUSES, CAUSES_DE_NON_REMISE, CAUSES_DE_PIECE, reponse;
 let racine;
 
 before(async () => {
@@ -28,7 +28,7 @@ before(async () => {
   process.env.LIGNE_DIRECTE_RACINE = racine;
   ({ Veilleur } = await import('../src/veilleur.js'));
   ({ sauverRegistre, chargerRegistre, lignesOuvertes } = await import('../src/registre.js'));
-  ({ CAUSES, reponse } = await import('../src/langage.js'));
+  ({ CAUSES, CAUSES_DE_NON_REMISE, CAUSES_DE_PIECE, reponse } = await import('../src/langage.js'));
 });
 
 beforeEach(() => sauverRegistre({ version: 1, lignes: [] }));
@@ -425,13 +425,33 @@ test('CLIENT — aucune réponse automatique ne laisse entendre que la conversat
   }
 });
 
-test('CLIENT — mais chaque réponse dit bien que le message n’est pas passé', async () => {
+test('CLIENT — chaque réponse de NON-REMISE dit bien que le message n’est pas passé', async () => {
   // Ne pas annoncer de fin ne veut pas dire rester vague : RA-REL-009 exige que celui qui
   // a écrit l'apprenne. Une phrase rassurante qui laisse croire à une remise serait pire
   // que le silence.
-  for (const cause of CAUSES.filter((c) => c !== 'reprise_agent_disparu')) {
+  for (const cause of CAUSES_DE_NON_REMISE.filter((c) => c !== 'reprise_agent_disparu')) {
     const texte = reponse(cause, 'client', {});
     assert.match(texte, /pas été transmis|pas pu être transmis/, `« ${cause} » ne dit pas que le message n’est pas passé : ${texte}`);
+  }
+});
+
+test('CLIENT — une pièce qui n’a pas suivi dit L’INVERSE : le message, lui, est bien arrivé', async () => {
+  // LA SYMÉTRIE COMPTE AUTANT QUE LA RÈGLE D'AU-DESSUS, et elle se prouve dans les deux sens.
+  // Ce qui accompagne un message ne conditionne jamais son arrivée (RA-REL-010) : un client à
+  // qui l'on parle d'un fichier qui n'est pas passé, sans lui dire que son message l'est,
+  // conclut qu'il a tout perdu et recommence — ou pire, repart par courriel.
+  //
+  // Les deux familles couvrent ensemble TOUTES les causes déclarées : une cause ajoutée demain
+  // tombe forcément dans l'une ou dans l'autre, et se fait donc balayer par l'un des deux tests.
+  assert.deepEqual([...CAUSES].sort(), [...CAUSES_DE_NON_REMISE, ...CAUSES_DE_PIECE].sort());
+
+  for (const cause of CAUSES_DE_PIECE) {
+    const texte = reponse(cause, 'client', {});
+    assert.match(texte, /bien parvenu/, `« ${cause} » doit d’abord rassurer sur le message : ${texte}`);
+    assert.ok(
+      !/pas été transmis|pas pu être transmis/.test(texte),
+      `« ${cause} » laisse croire que le message n’est pas passé : ${texte}`
+    );
   }
 });
 

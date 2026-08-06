@@ -24,6 +24,7 @@ import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { cadrerPourAgent } from './cadre.js';
 import { reponse } from './langage.js';
+import { TAILLE_MAX, typeDePiece, deposer, gabarit } from './pieces.js';
 import {
   CHEMIN_SOCKET,
   CHEMIN_JOURNAL,
@@ -721,6 +722,12 @@ export class Veilleur {
       return;
     }
 
+    // LES PIÈCES SE RECUEILLENT APRÈS avoir vérifié qu'il y a quelqu'un au bout du fil, et
+    // l'ordre n'est pas un détail : rapatrier la capture d'écran d'un client — souvent une
+    // donnée personnelle — pour la déposer sur le disque d'un poste dont l'agent est mort
+    // serait écrire pour personne, en prenant le risque pour rien.
+    const { pieces, refus } = await this.recueillirPieces(ligne, fichiers);
+
     try {
       // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
       // dans son terminal, et son interlocuteur conclut que rien n'est arrivé.
@@ -735,14 +742,79 @@ export class Veilleur {
           canal: ligne.canal_nom,
           nature: natureDe(ligne),
           auteur: await this.nomDeLAuteur(ligne, ev.user),
+          pieces,
+          piecesManquantes: refus.length,
         }),
         { socket: ligne.herdr_socket }
       );
-      journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car.)`);
+      journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car., ${pieces.length} pièce(s))`);
     } catch (err) {
       await this.repondreEnPropre(ligne, 'echec_remise', { erreur: err.message });
       journaliser(`ÉCHEC de remise — #${ligne.canal_nom} → ${ligne.pane} : ${err.message}`);
+      return;
     }
+
+    // CE QUI N'EST PAS PASSÉ SE DIT — après la remise, jamais à sa place (RA-REL-010).
+    //
+    // Une seule phrase par RAISON, pas par fichier : trois pièces refusées pour le même motif
+    // n'apprennent rien de plus que la première, et un lieu de conversation qu'on inonde cesse
+    // d'être lu — ce qui reviendrait à perdre le message suivant.
+    //
+    // Chaque cause est nommée à son propre point d'appel, en toutes lettres. C'est plus long
+    // qu'une boucle, et c'est voulu : la garde structurelle qui empêche une phrase interne de
+    // partir chez un client lit les points d'appel, pas les variables qui les traversent.
+    const causes = new Set(refus.map((r) => r.cause));
+    if (causes.has('piece_trop_lourde')) await this.repondreEnPropre(ligne, 'piece_trop_lourde');
+    if (causes.has('piece_type_refuse')) await this.repondreEnPropre(ligne, 'piece_type_refuse');
+    if (causes.has('piece_non_recuperee')) {
+      const detail = refus.find((r) => r.cause === 'piece_non_recuperee');
+      await this.repondreEnPropre(ligne, 'piece_non_recuperee', { erreur: detail?.detail });
+    }
+  }
+
+  /**
+   * Rapatrie ce que le client a déposé, et rend le compte de ce qui n'a pas suivi.
+   *
+   * NE LÈVE JAMAIS. C'est la propriété qui compte de toute cette méthode : ce qui accompagne
+   * un message ne conditionne jamais son arrivée. Perdre trois phrases parce qu'une image n'a
+   * pas pu être rapatriée transforme un incident mineur en conversation manquée.
+   *
+   * Deux refus se prononcent AVANT tout appel réseau — la taille et le type sont annoncés par
+   * Slack, et les deux limites sont celles du registre des demandes. Rapatrier six mégaoctets
+   * pour les refuser ensuite coûterait le réseau, la mémoire, et déposerait sur le poste une
+   * donnée personnelle qu'on ne pourrait pas utiliser.
+   *
+   * CE QUI VA AU JOURNAL EST LE FAIT, JAMAIS LE CONTENU — ni les octets, ni même le NOM du
+   * fichier : « bilan-sanguin-jean-tremblay.png » en dit déjà trop, et un journal se lit, se
+   * copie et survit plus longtemps que la conversation.
+   */
+  async recueillirPieces(ligne, fichiers) {
+    const pieces = [];
+    const refus = [];
+    for (const fichier of fichiers) {
+      const mime = typeDePiece(fichier);
+      if (!mime) {
+        refus.push({ cause: 'piece_type_refuse' });
+        journaliser(`pièce écartée — #${ligne.canal_nom} : ${fichier?.id} d'un type non recevable`);
+        continue;
+      }
+      if (Number(fichier?.size) > TAILLE_MAX) {
+        refus.push({ cause: 'piece_trop_lourde' });
+        journaliser(`pièce écartée — #${ligne.canal_nom} : ${fichier?.id} dépasse 5 Mo (${gabarit(Number(fichier.size))})`);
+        continue;
+      }
+      try {
+        const { octets } = await this.slack.telechargerFichier(this.jetons.robot, fichier, { tailleMax: TAILLE_MAX });
+        const chemin = deposer(ligne.canal_id, fichier, octets);
+        pieces.push({ nom: fichier.name, mime, chemin, gabarit: gabarit(octets.length) });
+        journaliser(`pièce recueillie — #${ligne.canal_nom} : ${fichier?.id} (${mime}, ${gabarit(octets.length)})`);
+      } catch (err) {
+        const cause = err?.code === 'trop_lourde' ? 'piece_trop_lourde' : 'piece_non_recuperee';
+        refus.push({ cause, detail: err?.code || 'échec' });
+        journaliser(`pièce non recueillie — #${ligne.canal_nom} : ${fichier?.id} (${err?.code || err?.message})`);
+      }
+    }
+    return { pieces, refus };
   }
 
   /**

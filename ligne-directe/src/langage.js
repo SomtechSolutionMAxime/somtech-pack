@@ -17,18 +17,19 @@
 // besoin de savoir — et il n'a pas à apprendre comment nous travaillons pour l'apprendre.
 
 /**
- * Les situations où le veilleur répond de lui-même dans le canal.
+ * Les chemins de NON-REMISE : le message n'est pas parvenu à son destinataire, et celui qui
+ * l'a écrit doit l'apprendre (RA-REL-009).
  *
  * L'ordre suit celui du chemin de remise : autorisation, ligne close, message sans rien à
  * remettre, agent injoignable, agent disparu, échec de remise — puis la reprise du service,
  * hors de ce chemin.
  *
- * `message_vide` est le SEPTIÈME chemin de non-remise, et il était invisible : un message
- * sans texte ni pièce était jeté au filtrage, sans trace, sans réponse, sans remise. Le
- * compte des chemins n'est pas décoratif — trois correctifs de ce chantier n'avaient couvert
- * qu'une porte sur deux, et celui-ci n'avait été compté par personne.
+ * `message_vide` est le SEPTIÈME, et il était invisible : un message sans texte ni pièce était
+ * jeté au filtrage, sans trace, sans réponse, sans remise. Le compte des chemins n'est pas
+ * décoratif — trois correctifs de ce chantier n'avaient couvert qu'une porte sur deux, et
+ * celui-ci n'avait été compté par personne.
  */
-export const CAUSES = [
+export const CAUSES_DE_NON_REMISE = [
   'non_autorise',
   'ligne_close',
   'message_vide',
@@ -37,6 +38,26 @@ export const CAUSES = [
   'echec_remise',
   'reprise_agent_disparu',
 ];
+
+/**
+ * Les causes qui accompagnent une remise RÉUSSIE — une pièce jointe n'a pas suivi.
+ *
+ * DEUX FAMILLES, ET ELLES DISENT L'INVERSE L'UNE DE L'AUTRE : celles du dessus annoncent que
+ * le message n'est pas passé, celles-ci commencent par dire qu'il l'est. Les confondre serait
+ * coûteux dans les deux sens — un client qui croit son message perdu le réécrit, un client qui
+ * croit sa pièce arrivée attend qu'on la regarde.
+ *
+ * Ce qui accompagne un message ne conditionne jamais son arrivée (RA-REL-010) ; son absence,
+ * elle, se dit toujours.
+ *
+ * Trois causes plutôt qu'une, et c'est le point : « votre fichier n'est pas passé » n'aide
+ * personne. Ce qui aide, c'est de savoir s'il faut le renvoyer, le convertir, ou passer par un
+ * autre chemin — et ces trois réponses-là ne se déduisent pas l'une de l'autre.
+ */
+export const CAUSES_DE_PIECE = ['piece_trop_lourde', 'piece_type_refuse', 'piece_non_recuperee'];
+
+/** Toutes les situations où le veilleur prend la parole — l'union des deux familles. */
+export const CAUSES = [...CAUSES_DE_NON_REMISE, ...CAUSES_DE_PIECE];
 
 /**
  * Le registre INTERNE — mot pour mot ce que le dirigeant lit depuis la mise en service.
@@ -62,6 +83,14 @@ const INTERNE = {
   echec_remise: ({ chantier, erreur }) => `Je n'ai pas pu remettre ton message à l'agent de ${chantier} : ${erreur}`,
   reprise_agent_disparu: ({ chantier }) =>
     `Je reprends du service et l'agent de ${chantier} n'est plus là. Je referme cette ligne.`,
+  piece_trop_lourde: () =>
+    `Le message est bien remis, mais une pièce jointe dépasse 5 Mo : elle n'a pas été recueillie. ` +
+    `Le registre des demandes la refuserait de toute façon.`,
+  piece_type_refuse: () =>
+    `Le message est bien remis, mais une pièce jointe n'est pas d'un type recevable ` +
+    `(jpeg, png, gif, webp, pdf, markdown) : elle n'a pas été recueillie.`,
+  piece_non_recuperee: ({ erreur }) =>
+    `Le message est bien remis, mais je n'ai pas pu récupérer une pièce jointe${erreur ? ` : ${erreur}` : ''}.`,
 };
 
 /**
@@ -103,6 +132,19 @@ const CLIENT = {
     'Votre message n’a pas pu être transmis à votre interlocuteur. Renvoyez-le dans quelques instants.',
   reprise_agent_disparu: () =>
     'Votre interlocuteur n’est pas disponible en ce moment. Quelqu’un reprendra le fil de cette conversation.',
+  // Les trois qui suivent commencent toutes par dire que le message, LUI, est arrivé. C'est
+  // l'inverse d'un détail : sans cette première phrase, un client à qui l'on parle d'un
+  // fichier qui n'est pas passé conclut que son message ne l'est pas non plus, et il recommence.
+  piece_trop_lourde: () =>
+    'Votre message nous est bien parvenu, mais le fichier joint est trop volumineux pour nous ' +
+    'arriver : la limite est de 5 Mo. Une capture d’écran passe ; une vidéo, non — dans ce cas, ' +
+    'envoyez-la par votre moyen habituel.',
+  piece_type_refuse: () =>
+    'Votre message nous est bien parvenu, mais nous ne pouvons pas recevoir ce type de fichier. ' +
+    'Les images (JPEG, PNG, GIF, WebP), les PDF et les fichiers texte passent.',
+  piece_non_recuperee: () =>
+    'Votre message nous est bien parvenu, mais nous n’avons pas pu récupérer le fichier joint. ' +
+    'Renvoyez-le si vous voulez qu’on le voie.',
 };
 
 const REGISTRES = { interne: INTERNE, client: CLIENT };

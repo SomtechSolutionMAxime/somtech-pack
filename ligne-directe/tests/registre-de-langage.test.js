@@ -289,6 +289,11 @@ test('NON-RÉGRESSION — les réponses internes sont identiques MOT POUR MOT au
     agent_disparu: `L'agent de ${CODE_CHANTIER} n'est plus là — son pane w26:pQ a disparu. Je referme la ligne ; ton message n'a été remis à personne.`,
     echec_remise: `Je n'ai pas pu remettre ton message à l'agent de ${CODE_CHANTIER} : ${ERREUR_TECHNIQUE}`,
     reprise_agent_disparu: `Je reprends du service et l'agent de ${CODE_CHANTIER} n'est plus là. Je referme cette ligne.`,
+    piece_trop_lourde:
+      "Le message est bien remis, mais une pièce jointe dépasse 5 Mo : elle n'a pas été recueillie. Le registre des demandes la refuserait de toute façon.",
+    piece_type_refuse:
+      "Le message est bien remis, mais une pièce jointe n'est pas d'un type recevable (jpeg, png, gif, webp, pdf, markdown) : elle n'a pas été recueillie.",
+    piece_non_recuperee: `Le message est bien remis, mais je n'ai pas pu récupérer une pièce jointe : ${ERREUR_TECHNIQUE}.`,
   };
 
   for (const [cause, texte] of Object.entries(attendu)) {

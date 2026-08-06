@@ -77,14 +77,56 @@ function echec(erreur, extra = {}) {
   return reponse({ ok: false, error: erreur, ...extra });
 }
 
+function corps(octets) {
+  const vue = Uint8Array.from(octets);
+  return vue.buffer.slice(vue.byteOffset, vue.byteOffset + vue.byteLength);
+}
+
+/**
+ * La page de connexion que Slack rend — AVEC UN CODE 200 — quand l'application n'a pas le
+ * droit de lire les fichiers.
+ *
+ * C'est le piège de toute cette famille d'appels, et il ne se signale pas : rien dans le code
+ * de réponse ne dit qu'on vient de recevoir du HTML au lieu d'une image. Un double qui
+ * rendrait une erreur franche ici serait plus SÉVÈRE que le vrai service, et laisserait passer
+ * un code qui dépose une page web sur le poste en l'appelant « capture.png ».
+ */
+function pageDeConnexion() {
+  const html = '<!DOCTYPE html><html><head><title>Slack</title></head><body>Sign in to continue</body></html>';
+  return {
+    status: 200,
+    headers: new Map([
+      ['content-type', 'text/html; charset=utf-8'],
+      ['content-length', String(html.length)],
+    ]),
+    async arrayBuffer() {
+      return corps(Buffer.from(html));
+    },
+    async json() {
+      throw new Error('ce n’est pas du JSON — c’est une page de connexion');
+    },
+  };
+}
+
 /**
  * Un espace Slack en mémoire, servi à travers `globalThis.fetch`.
  *
  * @param {object} etat
  * @param {Array}  etat.canaux      { id, name, is_private, is_archived, membres:[] }
  * @param {Array}  etat.utilisateurs { id, name, real_name, profile:{email} }
+ * @param {object} etat.fichiers    adresse privée → { octets, mime } — le contenu servi par
+ *                                  files.slack.com, qui n'est PAS l'API et n'a pas ses règles
+ * @param {boolean} etat.droitFichiers  l'application a-t-elle `files:read` ? Sans lui, Slack
+ *                                  rend une page de connexion en 200, il ne refuse pas.
  */
-export function fauxSlack({ canaux = [], utilisateurs = [], espace = 'T_ESSAIS', robot = 'UMOI' } = {}) {
+export function fauxSlack({
+  canaux = [],
+  utilisateurs = [],
+  espace = 'T_ESSAIS',
+  robot = 'UMOI',
+  fichiers = {},
+  droitFichiers = true,
+} = {}) {
   const monde = {
     canaux: canaux.map((c) => ({ is_private: false, is_archived: false, membres: [], ...c })),
     utilisateurs,
@@ -95,6 +137,32 @@ export function fauxSlack({ canaux = [], utilisateurs = [], espace = 'T_ESSAIS',
   let precedent;
 
   const servir = async (url, init = {}) => {
+    // LE TÉLÉCHARGEMENT D'UN FICHIER N'EST PAS UN APPEL D'API : autre hôte, autre protocole
+    // (un GET), autre forme de réponse (des octets, pas du JSON). Ce qui ne change pas, c'est
+    // qu'il faut présenter le jeton — les adresses de fichiers Slack sont privées.
+    if (/^https:\/\/files\.slack\./.test(String(url))) {
+      const autorise = enTete(init, 'authorization');
+      monde.appels.push({ methode: 'files.download', url: String(url), autorise });
+      if (!autorise.startsWith('Bearer ')) {
+        return { status: 401, headers: new Map(), async arrayBuffer() { return corps(Buffer.alloc(0)); } };
+      }
+      if (!droitFichiers) return pageDeConnexion();
+      const fichier = fichiers[String(url)];
+      if (!fichier) {
+        return { status: 404, headers: new Map(), async arrayBuffer() { return corps(Buffer.alloc(0)); } };
+      }
+      return {
+        status: 200,
+        headers: new Map([
+          ['content-type', fichier.mime || 'application/octet-stream'],
+          ['content-length', String(fichier.octets.length)],
+        ]),
+        async arrayBuffer() {
+          return corps(fichier.octets);
+        },
+      };
+    }
+
     const methode = String(url).split('/').pop();
     const args = argumentsRecus(methode, init);
     monde.appels.push({ methode, args, type: enTete(init, 'content-type') });
@@ -226,6 +294,12 @@ export function fauxSlack({ canaux = [], utilisateurs = [], espace = 'T_ESSAIS',
       case 'users.lookupByEmail': {
         if (!args.email) return echec('invalid_arguments', { detail: 'missing required field: email' });
         const u = monde.utilisateurs.find((x) => x.profile?.email === args.email);
+        return u ? reponse({ ok: true, user: u }) : echec('users_not_found');
+      }
+
+      case 'users.info': {
+        if (!args.user) return echec('invalid_arguments', { detail: 'missing required field: user' });
+        const u = monde.utilisateurs.find((x) => x.id === args.user);
         return u ? reponse({ ok: true, user: u }) : echec('users_not_found');
       }
 
