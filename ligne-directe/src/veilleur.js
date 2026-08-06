@@ -666,7 +666,11 @@ export class Veilleur {
     if (!ligne) return; // canal qui ne nous regarde pas
 
     const texte = (ev.text || '').trim();
-    const fichiers = Array.isArray(ev.files) ? ev.files : [];
+    // DEUX FORMES POUR LA MÊME CHOSE, et n'en lire qu'une rouvre le trou qu'on vient de
+    // fermer : Slack envoie une liste `files`, et a longtemps envoyé — envoie encore — un
+    // champ `file` unique. Un message qui ne porte que le second passerait pour vide, et son
+    // auteur s'entendrait répondre que son message n'avait rien dedans, sa capture à la main.
+    const fichiers = Array.isArray(ev.files) ? ev.files : ev.file ? [ev.file] : [];
 
     // Qui parle ? Le cadre que reçoit l'agent donne à ce texte l'autorité du dirigeant : on
     // ne remet donc que ce qui vient de quelqu'un que la nature de la ligne autorise.

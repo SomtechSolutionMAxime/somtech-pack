@@ -27,10 +27,17 @@ export const COMMANDE = 'node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js
  * cadre au centre creux et conclurait à un bogue, alors que le message est complet — c'est
  * simplement une capture d'écran sans commentaire, la façon la plus fréquente dont un client
  * signale un problème.
+ *
+ * Le troisième cas est celui qui coûte le plus cher, et c'est le moins évident : aucun texte,
+ * ET la seule pièce n'a pas pu être recueillie. Il ne reste alors rien à mettre au centre — le
+ * cadre doit dire ce qui s'est passé, sans quoi l'agent croit avoir reçu une trame parasite
+ * pendant que quelqu'un, en face, attend une réponse.
  */
-function corpsRecu(texte, pieces) {
+function corpsRecu(texte, pieces, manquantes) {
   if (texte) return texte;
-  return pieces.length ? '(aucun texte — tout est dans ce qui est joint)' : '';
+  if (pieces.length) return '(aucun texte — tout est dans ce qui est joint)';
+  if (manquantes) return '(aucun texte : ce message ne portait qu’une pièce jointe, et elle n’a pas pu être recueillie)';
+  return '';
 }
 
 /**
@@ -83,7 +90,7 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
   return [
     `[LIGNE DIRECTE — ${chantier}${ou}] Message du dirigeant, reçu par Slack :`,
     '',
-    corpsRecu(texte, pieces),
+    corpsRecu(texte, pieces, piecesManquantes),
     ...blocDesPieces(pieces, piecesManquantes, 'interne'),
     '',
     '——',
@@ -109,7 +116,7 @@ function cadreClient({ chantier, texte, ou, auteur, pieces = [], piecesManquante
   return [
     `[LIGNE DIRECTE — ${chantier}${ou}] Message de ${qui}, du client, reçu par Slack :`,
     '',
-    corpsRecu(texte, pieces),
+    corpsRecu(texte, pieces, piecesManquantes),
     ...blocDesPieces(pieces, piecesManquantes, 'client'),
     '',
     '——',

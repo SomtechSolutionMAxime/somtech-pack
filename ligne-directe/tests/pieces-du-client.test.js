@@ -395,3 +395,45 @@ test('LE CADRE RAPPELLE que la pièce se rattache à la demande, et que le fil n
   assert.match(cadre, /demande/i, 'le cadre doit dire où la pièce doit atterrir');
   assert.match(cadre, /ne fait pas foi|pas seulement dans le fil/i, 'et pourquoi le fil ne suffit pas');
 });
+
+// ═══════════ deux portes que le premier correctif laissait entrouvertes
+
+test('UN ÉVÉNEMENT QUI NE PORTE QUE `file` — la forme héritée — n’est pas pris pour un message vide', async () => {
+  // Slack envoie aujourd'hui une liste `files`, et gardera longtemps le champ `file` de la
+  // forme ancienne. Ne lire que la liste ferait retomber ce message dans le trou dont tout ce
+  // lot existe pour le sortir : « message vide » répondu à quelqu'un qui vient de déposer sa
+  // capture. C'est le même défaut, par la seconde porte.
+  const m = espace();
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier({
+    type: 'message',
+    subtype: 'file_share',
+    channel: 'C1',
+    user: 'UCLIENT',
+    text: '',
+    file: capture(),
+  });
+
+  assert.equal(v.herdr.remis.length, 1, 'la pièce est le contenu du message — il n’est pas vide');
+  assert.equal(deposees().length, 1, 'et elle est recueillie comme n’importe quelle autre');
+  assert.equal(m.postes.length, 0, 'rien à répondre : le message est passé');
+});
+
+test('AUCUN TEXTE ET LA SEULE PIÈCE A ÉCHOUÉ : le cadre dit ce qui s’est passé, il n’arrive pas creux', async () => {
+  // Le cas se produit exactement quand il coûte le plus cher : le client n'a rien écrit, sa
+  // capture n'a pas pu être rapatriée. Un cadre au centre vide fait conclure à l'agent qu'il
+  // a reçu un message parasite — alors que quelqu'un vient de lui parler et attend.
+  const m = espace({ fichiers: {} });
+  const v = veilleur();
+  v.registre.lignes.push(ligne());
+
+  await v.remettreAuChantier(parole({ text: '' }));
+
+  assert.equal(v.herdr.remis.length, 1, 'le message atteint l’agent même sans texte ni pièce recueillie');
+  const cadre = v.herdr.remis[0].texte;
+  assert.match(cadre, /aucun texte/i, 'l’agent doit savoir qu’il n’y avait rien d’écrit');
+  assert.match(cadre, /pas pu être recueillie/i, 'et que ce qui devait accompagner n’est pas arrivé');
+  assert.equal(m.postes.length, 1, 'le client, lui, l’apprend');
+});
