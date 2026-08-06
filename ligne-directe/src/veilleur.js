@@ -23,6 +23,7 @@ import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { cadrerPourAgent } from './cadre.js';
+import { reponse } from './langage.js';
 import {
   CHEMIN_SOCKET,
   CHEMIN_JOURNAL,
@@ -602,15 +603,12 @@ export class Veilleur {
       // l'auteur du message peut lire — il croyait avoir été entendu et attendait une
       // réponse qui ne serait jamais venue.
       //
-      // TEXTE PROVISOIRE : la rédaction des réponses du veilleur — et le fait qu'elle
-      // s'adresse aujourd'hui à un client comme au dirigeant — appartient à
-      // E-20260806-0009 (registre de langage). Ici on transporte, on ne rédige pas.
-      await this.repondreEnPropre(ligne, "Ton message n'a été remis à aucun agent : tu n'es pas autorisé à écrire sur cette ligne.");
+      await this.repondreEnPropre(ligne, 'non_autorise');
       return;
     }
 
     if (ligne.close_le) {
-      await this.repondreEnPropre(ligne, `Cette ligne est close depuis le ${ligne.close_le.slice(0, 10)} — plus personne ne travaille sur ${ligne.chantier}. Ton message n'a donc été remis à aucun agent.`);
+      await this.repondreEnPropre(ligne, 'ligne_close');
       return;
     }
 
@@ -621,31 +619,72 @@ export class Veilleur {
     try {
       present = await this.herdr.vivant(ligne.pane, { socket: ligne.herdr_socket });
     } catch (err) {
-      await this.repondreEnPropre(ligne, `Je n'arrive pas à joindre l'agent de ${ligne.chantier} en ce moment (${err.message}). Ton message n'a été remis à personne — renvoie-le dans un instant.`);
+      await this.repondreEnPropre(ligne, 'agent_injoignable', { erreur: err.message });
       journaliser(`herdr injoignable — #${ligne.canal_nom} : ${err.message}`);
       return;
     }
     if (!present) {
       clore(this.registre, ligne.canal_id, maintenant());
       sauverRegistre(this.registre);
-      await this.repondreEnPropre(ligne, `L'agent de ${ligne.chantier} n'est plus là — son pane ${ligne.pane} a disparu. Je referme la ligne ; ton message n'a été remis à personne.`);
+      await this.repondreEnPropre(ligne, 'agent_disparu');
       journaliser(`ligne close d'office — agent disparu (${ligne.chantier}, pane ${ligne.pane})`);
       return;
     }
 
     try {
       // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
-      // dans son terminal, et le dirigeant conclut que rien n'est arrivé.
+      // dans son terminal, et son interlocuteur conclut que rien n'est arrivé.
+      //
+      // Le cadre suit la NATURE de la ligne : sur une ligne cliente, il nomme l'auteur réel
+      // et rappelle à l'agent que ces mots sont une demande, pas une consigne du dirigeant.
       await this.herdr.remettre(
         ligne.pane,
-        cadrerPourAgent({ chantier: ligne.chantier, texte, canal: ligne.canal_nom }),
+        cadrerPourAgent({
+          chantier: ligne.chantier,
+          texte,
+          canal: ligne.canal_nom,
+          nature: natureDe(ligne),
+          auteur: await this.nomDeLAuteur(ligne, ev.user),
+        }),
         { socket: ligne.herdr_socket }
       );
       journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car.)`);
     } catch (err) {
-      await this.repondreEnPropre(ligne, `Je n'ai pas pu remettre ton message à l'agent de ${ligne.chantier} : ${err.message}`);
+      await this.repondreEnPropre(ligne, 'echec_remise', { erreur: err.message });
       journaliser(`ÉCHEC de remise — #${ligne.canal_nom} → ${ligne.pane} : ${err.message}`);
     }
+  }
+
+  /**
+   * Qui a écrit ce message — sous le nom que porterait un humain qui le lit.
+   *
+   * **Ligne interne** : personne à nommer. C'est le dirigeant, le cadre le dit déjà, et
+   * interroger l'annuaire à chaque message ajouterait un appel plafonné sur le chemin le
+   * plus fréquent de tout le veilleur.
+   *
+   * **Ligne cliente** : on résout le nom d'usage, puis on s'en souvient au registre — même
+   * raison que pour la liste des autorisés, on n'interroge Slack que sur un inconnu.
+   *
+   * Quand le nom ne se résout pas, on rend l'IDENTIFIANT, jamais rien. Un cadre sans auteur
+   * du tout retomberait sur une désignation vague, et le repli qui compte vraiment — celui
+   * sur « le dirigeant » — est structurellement impossible : `cadrerPourAgent` ne l'écrit
+   * que sur une ligne interne.
+   */
+  async nomDeLAuteur(ligne, utilisateur) {
+    if (natureDe(ligne) !== 'client' || !utilisateur) return null;
+    if (ligne.noms?.[utilisateur]) return ligne.noms[utilisateur];
+    let nom = null;
+    try {
+      nom = await this.slack.nomDeMembre(this.jetons.robot, utilisateur);
+    } catch (err) {
+      // Un droit d'annuaire manquant ne doit pas coûter une conversation : le message part
+      // avec l'identifiant de son auteur, et on le dit au journal plutôt qu'au client.
+      journaliser(`nom de ${utilisateur} illisible (${err.message}) — l'identifiant fera foi`);
+    }
+    if (!nom) return utilisateur;
+    ligne.noms = { ...(ligne.noms || {}), [utilisateur]: nom };
+    sauverRegistre(this.registre);
+    return nom;
   }
 
   /**
@@ -698,8 +737,21 @@ export class Veilleur {
     return ligne.autorises.includes(utilisateur);
   }
 
-  /** Le veilleur parle en son nom propre — jamais sous l'identité d'un agent qui n'est plus là. */
-  async repondreEnPropre(ligne, texte) {
+  /**
+   * Le veilleur parle en son nom propre — jamais sous l'identité d'un agent qui n'est plus là.
+   *
+   * ON NE LUI PASSE PAS UNE PHRASE, mais une CAUSE : la rédaction vit dans `langage.js`, où
+   * chaque cause porte sa variante interne et sa variante cliente. C'est ce qui rend la
+   * couverture structurelle plutôt que déclarative — un chemin de non-remise ajouté demain
+   * ne peut pas envoyer sa propre phrase à un client, il n'a pas où l'écrire.
+   */
+  async repondreEnPropre(ligne, cause, details = {}) {
+    const texte = reponse(cause, natureDe(ligne), {
+      chantier: ligne.chantier,
+      pane: ligne.pane,
+      close_le: ligne.close_le,
+      ...details,
+    });
     try {
       await this.slack.poster(this.jetons.robot, { canal: ligne.canal_id, texte, nom: 'Ligne directe', emoji: '📻' });
     } catch (err) {
@@ -734,7 +786,7 @@ export class Veilleur {
       if (!vivants.has(ligne.pane)) {
         clore(this.registre, ligne.canal_id, maintenant());
         fermees += 1;
-        await this.repondreEnPropre(ligne, `Je reprends du service et l'agent de ${ligne.chantier} n'est plus là. Je referme cette ligne.`);
+        await this.repondreEnPropre(ligne, 'reprise_agent_disparu');
         await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
       }
     }

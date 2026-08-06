@@ -283,6 +283,24 @@ export async function archiverCanal(jetonRobot, canal) {
 }
 
 /**
+ * Le nom d'usage d'un membre — pour que le cadre remis dans un pane NOMME l'auteur du
+ * message plutôt que de rendre un identifiant illisible.
+ *
+ * Ne demande que `users:read`, droit déjà exigé par `trouverMembre` : aucune portée
+ * supplémentaire, donc aucune réinstallation de l'application.
+ *
+ * Rend `null` quand le nom ne se résout pas, et n'invente rien : l'appelant retombe sur
+ * l'identifiant. Un nom introuvable ne doit jamais empêcher un message d'arriver — c'est
+ * l'accessoire, la parole est le principal.
+ */
+export async function nomDeMembre(jetonRobot, utilisateur) {
+  if (!utilisateur) return null;
+  const d = await appeler('users.info', jetonRobot, { user: utilisateur });
+  const u = d.user || {};
+  return u.profile?.display_name || u.profile?.real_name || u.real_name || u.name || null;
+}
+
+/**
  * Résout un membre pour l'inviter dans sa ligne.
  *
  * MESURÉ : la recherche par courriel exige le droit `users:read.email`, distinct de
