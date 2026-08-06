@@ -71,6 +71,27 @@ test('UNE ERREUR ATTENDUE SORT LISIBLE — pas sous une trace de pile', async ()
   }
 });
 
+test('LA VALEUR DE --nature N’EST PAS PRISE POUR LE CHANTIER', async () => {
+  // Le piège que la revue avait déjà attrapé sur `--inviter` : un « premier mot qui ne
+  // commence pas par -- » prend la VALEUR d'une option pour le chantier. Ici, oublier
+  // `--nature` dans la liste des options à valeur ferait ouvrir un canal nommé « client »
+  // — silencieusement, et le canal reste.
+  //
+  // La commande sans chantier doit donc montrer l'usage. Avec le défaut, elle irait
+  // chercher le pane courant et échouerait ailleurs, sans jamais montrer l'usage.
+  const r = await lancer(['ouvrir', '--nature', 'client']);
+  assert.equal(r.code, 1);
+  assert.match(r.stdout, /ouvrir <chantier>/, 'sans chantier, la commande doit montrer son usage');
+});
+
+test('l’usage annonce --nature, et dit ce qu’elle change', async () => {
+  // Une capacité du pack décrit ses commandes telles qu'elles existent réellement
+  // (RA-AGT-002) : un drapeau livré mais absent de l'usage n'existe pour personne.
+  const r = await lancer([]);
+  assert.match(r.stdout, /--nature client/);
+  assert.match(r.stdout, /PRIVE/i, "l'usage doit dire ce que la nature change vraiment");
+});
+
 test('un geste inconnu ne plante pas, il montre l’usage', async () => {
   const r = await lancer(['fais-moi-un-cafe']);
   assert.equal(r.code, 1);

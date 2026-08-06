@@ -108,6 +108,28 @@ export async function trouverCanal(jetonRobot, nom) {
   return null;
 }
 
+/**
+ * Les membres d'un canal — c'est-à-dire, sur un canal PRIVÉ, la liste de ceux qui ont le
+ * droit d'y parler.
+ *
+ * Un canal privé est invisible et on ne s'y invite pas soi-même : y être, c'est y avoir
+ * été mis par un humain. Ce geste EST l'autorisation, ce qui évite d'entretenir une
+ * seconde liste en parallèle de la réalité Slack — et c'est la divergence entre les deux
+ * qui écarterait un client en silence.
+ *
+ * Demande `groups:read` pour un canal privé (`channels:read` pour un public).
+ */
+export async function membresDuCanal(jetonRobot, canal) {
+  const membres = [];
+  let curseur;
+  do {
+    const d = await appeler('conversations.members', jetonRobot, { channel: canal, limit: 200, cursor: curseur });
+    membres.push(...(d.members || []));
+    curseur = d.response_metadata?.next_cursor || '';
+  } while (curseur);
+  return membres;
+}
+
 export async function rejoindreCanal(jetonRobot, canal) {
   try {
     await appeler('conversations.join', jetonRobot, { channel: canal });

@@ -19,9 +19,13 @@ import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
 
-  ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel]
+  ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel] [--nature client]
                                                            ouvre le canal du chantier
                                                            (--titre nomme le canal ; sans lui, c'est le code)
+                                                           (--nature client : canal PRIVE, ou parlent les
+                                                            gens du client qu'un humain y a invites.
+                                                            Sans --nature, la ligne est interne : canal
+                                                            public, autorisation par --inviter)
   dire "texte"                                             rapporte un jalon
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
@@ -38,7 +42,7 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
 }
 
 /** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
-const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre']);
+const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre', '--nature']);
 
 function option(args, nom) {
   const i = args.indexOf(nom);
@@ -123,6 +127,10 @@ if (geste === 'relever') {
       herdr_socket: ici.herdr_socket,
       sujet: option(args, '--sujet'),
       titre: option(args, '--titre'),
+      // Transmise TELLE QUELLE, jamais normalisée ici : c'est le veilleur qui refuse une
+      // nature inconnue. Rabattre une faute de frappe sur le défaut côté commande créerait
+      // un canal public pour un client sans que rien ne le dise.
+      nature: option(args, '--nature'),
       invites,
     })
   );

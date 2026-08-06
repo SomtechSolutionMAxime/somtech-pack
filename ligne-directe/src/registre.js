@@ -19,6 +19,26 @@ export const CHEMIN_JOURNAL = join(RACINE, 'veilleur.log');
 
 const VERSION = 1;
 
+/**
+ * La NATURE d'une ligne — qui commande la confidentialité du canal et qui a le droit d'y
+ * écrire. `interne` : le dirigeant, canal public, autorisation par liste d'invités.
+ * `client` : les gens d'un client, canal privé, autorisation par appartenance au canal.
+ */
+export const NATURES = ['interne', 'client'];
+export const NATURE_PAR_DEFAUT = 'interne';
+
+/**
+ * Lit la nature d'une ligne — et c'est le SEUL point de lecture, volontairement.
+ *
+ * Un registre écrit par une version antérieure ne porte aucun champ `nature`. Le faire
+ * retomber ici sur `interne` est ce qui garantit que les lignes déjà ouvertes en production
+ * ne changent pas de comportement : tout test d'égalité fait ailleurs (`l.nature === …`)
+ * traiterait `undefined` comme un troisième cas, et c'est là que la régression se glisse.
+ */
+export function natureDe(ligne) {
+  return ligne?.nature === 'client' ? 'client' : NATURE_PAR_DEFAUT;
+}
+
 function vide() {
   return { version: VERSION, lignes: [] };
 }
