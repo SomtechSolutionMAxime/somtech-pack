@@ -46,6 +46,26 @@ jobs:
         run: node --test
         working-directory: cli
 
+  ligne-directe-tests:
+    # Suite de la ligne directe (node --test). Job DISTINCT de `cli-tests`, et ce n'est pas
+    # un doublon : `ligne-directe/` déclare `engines.node >= 22` parce que le veilleur tient
+    # son écoute avec le WebSocket natif, absent avant Node 22. L'étendre à `cli-tests`
+    # (Node 20) ferait tomber la moitié de la suite sur une erreur de référence.
+    #
+    # Sans ce job, les 76 tests qui prouvent les garanties les plus coûteuses de la ligne
+    # directe — la remise qui échoue bruyamment, la ligne close qui répond, l'agent disparu
+    # dont la ligne se referme — ne s'exécutaient nulle part (T-20260806-0014). RA-DIS-004 :
+    # une preuve que personne n'exécute n'est pas une preuve.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: node --test (ligne-directe)
+        run: npm test
+        working-directory: ligne-directe
+
   python-tests:
     # Loader NetworkX du graphe BRD (aims/brd-graph). Le reste du CI est Node-only ; ce job
     # installe networkx + pytest pour tester le loader (Epic F, D-20260710-0009).
