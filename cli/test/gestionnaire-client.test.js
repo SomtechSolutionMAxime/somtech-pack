@@ -241,6 +241,29 @@ test('NÉGATIF : elle ne prend jamais le droit d’accès à la mise en ligne (H
   assert.ok(!texte.includes('lock_release'), 'ni ne le rend');
 });
 
+test('le chemin de remontée est nommé pour ce qu’il est : un pis-aller qui ne prévient personne', () => {
+  // Le mécanisme prévu — une seconde ligne, avec le dirigeant — n'existe pas encore. Ce
+  // qui reste est d'écrire sur la demande, et **une note n'est pas une notification** :
+  // personne n'est prévenu. Le risque n'est pas l'attente, c'est la PROMESSE — un
+  // gestionnaire qui dit « je reviens vers toi » alors que rien n'a été déclenché a
+  // engagé une réponse que personne ne doit. D6 n'est pas satisfait, et la compétence doit
+  // le dire au lieu de le laisser croire réglé.
+  const section = skill().split(/^#{2,3} /m).find((s) => /^Comment tu remontes/.test(s));
+  assert.ok(section, 'la compétence doit dire par où l’arbitrage remonte');
+  assert.match(section, /pas le mécanisme prévu/i, 'le pis-aller doit être nommé comme tel');
+  assert.match(section, /n['’]est pas une notification/i, 'et dire qu’une note ne prévient personne');
+  assert.match(section, /ne prévient personne|ne fait pas/i, 'et ce qu’elle ne fait pas');
+
+  // Et nulle part la compétence ne propose au client une phrase qui promet une décision
+  // en route. C'est la formulation exacte qu'elle recommandait avant ce constat.
+  for (const cite of skill().matchAll(/^> «[^\n]*/gm)) {
+    assert.ok(
+      !/je fais valider/i.test(cite[0]),
+      `une formulation proposée promet une décision en route : ${cite[0]}`
+    );
+  }
+});
+
 test('NÉGATIF : le relèvement se lit AVANT de parler, et il est ordonné', () => {
   // EF-REL-012. Une consigne allusive sera lue par un agent, pas par une personne : le
   // chemin doit être une suite de lectures numérotées, pas une intention.
