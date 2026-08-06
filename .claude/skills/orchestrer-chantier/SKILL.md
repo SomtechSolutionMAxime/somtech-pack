@@ -280,6 +280,41 @@ Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
 **g. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
 
+**g-bis. Si la mise en ligne est occupée, dis-le — tu es le seul à le savoir.**
+
+Au moment de pousser, `/pousse-staging` peut refuser : une autre livraison **de la même application** occupe déjà le sas. Ce n'est pas un incident, c'est le fonctionnement voulu (RA-AGT-005) — ton travail est prêt, il attend son tour.
+
+Le problème n'est pas l'attente, c'est le silence. **Personne d'autre que toi ne sait que tu attends.** Si ton chantier est mené pour le compte d'un **représentant de client**, il ne le devinera pas : faute de mieux, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
+
+Alors tu le lui dis. **Deux fois** : quand tu entres en attente, et quand ton tour vient.
+
+```bash
+L=".claude/skills/orchestrer-chantier/lib/attente-au-sas.sh"
+
+# 1) le sas est occupé — DECISION=DIRE (rc 0), RIEN (rc 3) ou FAIL (rc 5)
+ATS_REPRESENTANT=<son-nom-d-agent> ATS_CHANTIER=D-20260806-0042 \
+ATS_APPLICATION=<ton-application> ATS_APPLICATION_VERROU=<celle du verrou rencontré> \
+ATS_DETENTEUR_PR=<blocked_by_holder_pr> ATS_DEPUIS=<blocked_since> \
+  bash "$L" attente
+
+# 2) plus tard, quand la poussée passe enfin
+ATS_REPRESENTANT=<son-nom-d-agent> ATS_CHANTIER=D-20260806-0042 \
+ATS_APPLICATION=<ton-application> ATS_ATTENTE_DECLAREE=oui \
+  bash "$L" passage
+```
+
+Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur `RIEN`, il n'y a rien à dire et c'est juste. Sur `FAIL`, **ne te tais pas** : corrige ce qui manque et recommence.
+
+Trois choses que le helper tranche à ta place, et qui sont précisément là où l'on se trompe :
+
+- **Ton chantier n'a pas de représentant de client ?** Il rend compte au dirigeant, et **rien ne change** : tu continues exactement comme avant. C'est le cas le plus fréquent.
+- **Le verrou que tu as rencontré porte sur une autre application ?** Tu ne déclares aucune attente. La portée du droit d'accès exclusif est l'application (RA-AGT-006) — emprunter l'attente d'un voisin serait une information fausse, et elle voyagerait jusqu'à son client.
+- **Tu ne parles jamais au client**, ni de près ni de loin. Tu parles à son représentant, qui reste l'interlocuteur unique et traduit dans ses mots.
+
+**Ne construis rien pour attendre.** Pas de registre, pas de numéro d'ordre, pas de reprise automatique du verrou : tu retentes ta poussée quand tu es prêt, et c'est ce jour-là que le second message part. Le droit d'accès exclusif par application existe déjà et suffit — un second mécanisme se désynchroniserait du premier.
+
+**Et n'oublie pas de le réinscrire au registre** (règle RA-REL-003) : ce qui ne vit que dans le fil disparaît avec la session qui l'a lu.
+
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
 
 ### 5. Ce que tu tranches toi-même
@@ -347,6 +382,10 @@ Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne san
 | Faire corriger par le reviewer | Il perd l'indépendance qui faisait sa valeur |
 | Attendre passivement l'état d'un agent | Le brief doit lui demander de te prévenir ; l'attente n'est qu'un filet |
 | Différer les statuts « pour tout faire à la fin » | Entre-temps, le ServiceDesk raconte autre chose que la réalité |
+| Attendre au sas sans le dire à son représentant de client | Tu es le seul à savoir que tu attends. Il annoncera « c'est en cours » — c'est faux, et ça se découvre quand le client relance |
+| Annoncer l'attente et jamais sa fin | Une attente sans fin annoncée oblige le représentant à te relancer, ou le client à s'inquiéter |
+| Déclarer une attente causée par une autre application | La portée du verrou est l'application : cette attente-là n'est pas la tienne, et le client n'a aucun moyen de la démentir |
+| Se mettre à sonder le verrou en boucle en attendant son tour | C'est un second mécanisme de file : il se désynchronise du premier, qui existe déjà et suffit |
 | Donner un epic trop gros en se disant qu'il compactera | Il finit sur un résumé de lui-même, incohérent avec son propre début |
 | Comparer des noms d'agents sensibles à la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
 | Ouvrir un agent sans noter qui il est ni sur quoi | Le lien entre l'agent et ce qu'il a livré disparaît avec son pane : on gardera le code, jamais qui l'a fait ni pourquoi |
