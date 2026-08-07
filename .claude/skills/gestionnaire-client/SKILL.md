@@ -1,6 +1,6 @@
 ---
 name: gestionnaire-client
-description: Prépare le lieu d'un représentant client — un dossier versionné, dans le dépôt du client, qui porte son métier, ses moyens bornés au ServiceDesk, et ses droits en lecture seule. Vérifie d'abord que le canal privé du client est joignable et refuse tout net, sans rien créer, si le robot n'y est pas déjà invité. Utilise cette compétence quand on te demande d'installer, de préparer, de mettre en place ou d'initialiser un représentant pour un client — même si on dit seulement « ouvre-lui un canal » ou « fais-lui un représentant ». NE PAS confondre avec /ligne-directe (le transport qu'elle vérifie sans l'ouvrir) ni avec l'ouverture de la session du représentant lui-même, qui est un lot séparé.
+description: Prépare le lieu d'un représentant client — un dossier versionné, dans le dépôt du client, qui porte son métier, ses moyens bornés au ServiceDesk, et ses droits en lecture seule. Vérifie d'abord qu'elle a de quoi finir — les gabarits du pack présents dans ce dépôt, et le canal privé du client joignable — et refuse tout net, sans rien créer, s'il manque l'un ou l'autre. Utilise cette compétence quand on te demande d'installer, de préparer, de mettre en place ou d'initialiser un représentant pour un client — même si on dit seulement « ouvre-lui un canal » ou « fais-lui un représentant ». NE PAS confondre avec /ligne-directe (le transport qu'elle vérifie sans l'ouvrir) ni avec l'ouverture de la session du représentant lui-même, qui est un lot séparé.
 ---
 
 # Tu prépares le lieu d'un représentant client
@@ -42,12 +42,19 @@ Le résultat, quand tout va bien :
 
 ## Le seul principe qui gouverne tout le reste
 
-> **Elle ne crée rien tant qu'elle n'a pas vérifié que le canal est joignable.**
+> **Elle ne crée rien tant qu'elle n'a pas de quoi finir.**
 
 Un représentant né sur un canal où le robot n'est pas invité est un représentant **muet** :
 il croit parler, personne ne l'entend, et rien ne le signale — c'est le mode de panne que
 cette compétence existe pour supprimer. La vérification n'est donc pas une précaution parmi
 d'autres, elle **précède littéralement** la première écriture sur disque.
+
+**Le canal n'est pas la seule chose qui peut manquer.** Un dépôt qui n'a pas reçu la version
+du pack portant les gabarits n'a rien à copier — et vérifier le canal sans vérifier la source,
+c'est créer le répertoire puis échouer dedans. C'est arrivé (`T-20260807-0067`) : le lieu vide
+restait, et la relance suivante le lisait comme un lieu posé. **La source est donc vérifiée au
+même titre que le canal, fichier par fichier, et avant lui** — un refus qui ne dépend que du
+disque local ne coûte aucun aller-retour vers Slack.
 
 ## Prérequis
 
@@ -57,6 +64,9 @@ d'autres, elle **précède littéralement** la première écriture sur disque.
   est un geste humain — cette compétence ne le fait jamais (voir plus bas).
 - **Tu es dans le dépôt du client**, ou tu connais son chemin (`--depot`, par défaut le
   répertoire courant). C'est ce dépôt qui reçoit `.gestionnaire/<client>/`.
+- **Ce dépôt a reçu la version du pack qui porte les gabarits** — la commande le vérifie
+  elle-même et refuse sans rien créer si ce n'est pas le cas. Le geste qui débloque :
+  `npx @somtech-solutions/pack update` dans le dépôt du client.
 
 ## Le geste
 
@@ -67,13 +77,20 @@ $LD representant <client> --canal <le canal privé, sans le croisillon> [--depot
 ```
 
 La commande rend un objet JSON et son code de sortie le résume : `0` si le lieu existe
-désormais (qu'elle vienne de le créer ou qu'il y était déjà), `1` si elle a refusé.
+désormais **en entier** (qu'elle vienne de le créer ou qu'il y était déjà), `1` si elle a
+refusé. Sur un refus, le motif est aussi écrit en clair sur la sortie d'erreur — lis-le, il
+nomme le geste qui débloque.
 
-**Elle est idempotente.** Relancée sur un client déjà installé, elle ne retouche à rien —
-pas même pour compléter un lieu resté incomplet après une interruption précédente. Elle le
-dit (`deja_installe`, avec la liste de ce qu'elle trouve) et s'arrête là. Sur cette voie,
-elle ne fait même pas l'aller-retour vers Slack : il n'y a rien à vérifier pour ne rien
-faire.
+**Elle est idempotente, et l'idempotence ne vaut que pour un lieu COMPLET.** Relancée sur un
+client déjà installé — ses quatre fichiers présents — elle ne retouche à rien, le dit
+(`deja_installe`) et s'arrête là ; sur cette voie elle ne fait même pas l'aller-retour vers
+Slack, il n'y a rien à vérifier pour ne rien faire.
+
+**Un lieu incomplet, lui, n'est pas un lieu.** Elle le refuse (`lieu_partiel`) au lieu de le
+déclarer installé — c'est le défaut le plus grave corrigé par `T-20260807-0067` : un
+répertoire vide, résidu d'une pose interrompue, était rendu comme `deja_installe: true` avec
+`presents: []`. Elle ne le complète pas non plus : elle ne saurait pas ce qu'un humain y a
+déjà changé. Retire le reste à la main, puis relance.
 
 ## Si elle refuse — et c'est le cas qui compte le plus
 
@@ -81,8 +98,14 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 
 | Motif rendu | Ce qui s'est passé | Le geste qui débloque |
 |---|---|---|
+| `lieu_partiel` | `.gestionnaire/<client>/` existe mais lui manque des fichiers | Retire ce reste (`rm -rf`), puis relance — elle ne complète jamais |
+| `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du client |
 | `absent` | Aucun canal de ce nom n'existe | Vérifie l'orthographe, ou fais créer le canal |
 | `non_membre` | Le canal existe, le robot n'y est pas | Fais-le **inviter** par un humain (`/invite` depuis le canal) |
+| `ecriture_interrompue` | La pose a échoué en cours de route (droits, disque) | Rien à nettoyer — elle a retiré ce qu'elle avait commencé. Corrige la cause, relance |
+
+Les deux premiers sont prononcés **sans toucher au réseau** : ils ne dépendent que du disque
+du dépôt client.
 
 **Tu ne contournes ni l'un ni l'autre toi-même.** Un robot ne rejoint pas un canal privé —
 Slack ne rend ce geste à aucun jeton d'application, sur aucun canal privé, quel que soit le
@@ -140,8 +163,9 @@ Dire qu'on attend n'a jamais coûté un client ; laisser croire que ça avance, 
   n'est pas son affaire.
 - **Elle n'ouvre ni ne connecte la session du représentant.** Le lieu posé, elle s'arrête —
   la suite est un autre lot.
-- **Elle ne rafraîchit pas un lieu déjà posé.** Une reprise ne retouche à rien, même pour
-  compléter un fichier manquant ; rafraîchir est un geste différent, pas celui-ci.
+- **Elle ne rafraîchit pas un lieu déjà posé, et ne le répare pas davantage.** Une reprise sur
+  un lieu complet ne retouche à rien ; sur un lieu incomplet, elle refuse au lieu de le
+  compléter. Rafraîchir et réparer sont des gestes différents, pas celui-ci.
 - **Elle ne verse pas Somcraft dans les moyens du représentant.** Il porte les documents de
   *tous* les clients ; un représentant qui y aurait accès pourrait lire le dossier d'un
   autre. Seul le ServiceDesk figure dans `.mcp.json` — vérifie-le en lisant les clés
