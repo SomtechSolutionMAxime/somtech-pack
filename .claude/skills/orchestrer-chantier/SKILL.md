@@ -35,6 +35,52 @@ Trois conséquences concrètes, parce que c'est là qu'on dérape :
 
 Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du travail entre plusieurs agents, leur dimensionnement, et la tenue d'un chantier entier par quelqu'un qui n'exécute pas. Rien de plus — mais rien de moins.
 
+## Les trois niveaux — et quand les utiliser
+
+À partir d'une certaine taille, un seul orchestrateur devient le goulot — briefs, déblocages, arbitrages, fusions, statuts, tout passe par lui. La solution est d'interposer un **chef d'équipe herdr** qui distribue et synthétise. Mais cela ne s'impose que si tu as **plusieurs périmètres indépendants à la fois**. Sur un chantier d'un seul épic, reste simple.
+
+| Niveau | Qui | Ce qu'il fait | Ce qu'il ne fait **jamais** | Quand le justifier |
+|---|---|---|---|---|
+| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code | toujours |
+| **Chef d'équipe** | agent herdr optionnel | reçoit plusieurs unités, les distribue, intègre, rend compte | n'ouvre aucun agent herdr | 2+ périmètres parallèles, ou 5+ agents à coordonner |
+| **Sous-agents et coéquipiers** | outil `Agent`, autant que nécessaire | écrivent, testent, reviewent | ne fusionnent rien, ne parlent pas à l'orchestrateur | toujours |
+
+**Le chef d'équipe fait le lien unique** — il est l'interlocuteur **exclusif** de l'orchestrateur pour son périmètre. Les sous-agents lui rendent compte, jamais directement à toi. C'est ce qui économise le contexte de l'orchestrateur et fait que le système tient à l'échelle.
+
+**Trois règles non négociables pour le chef d'équipe** :
+
+1. **Ligne de rapport unique** — un seul fil, orchestrateur ← chef d'équipe ← sous-agents. Jamais en direct.
+2. **Agrégation, pas relais** — il synthétise ce qu'il reçoit, il ne transmet pas mot à mot.
+3. **Arbitrage immédiat** — ce qui bloque remonte tout de suite, jamais gardé pour la fin. C'est le piège de ce niveau : un intermédiaire qui retient l'info fait pire qu'un goulot.
+
+## Quand ne pas ouvrir d'agent herdr
+
+Avant d'ouvrir un agent, même un chef d'équipe, demande-toi : **cette tâche tiendrait-elle dans un seul contexte d'agent ?**
+
+- Tâche < 30 min de travail, ou < 5 fichiers à toucher → **sous-agent seul**, pas d'agent herdr
+- Tâche multi-journée ou multi-périmètre → agent herdr
+- Plusieurs tâches indépendantes en parallèle → agent herdr chef d'équipe + sous-agents
+
+**Critère de taille herdr** : un agent herdr consomme 15-20 min rien qu'à démarrer (brief, détection, permissions). C'est rentable si tu économises plus qu'ça à ne pas le faire.
+
+## Sous-agent ou coéquipier — le choix qui économise le contexte
+
+Les deux outils existent, et le chef d'équipe doit savoir lequel utiliser. **Lis toi-même les descriptions de l'outil `Agent` et `SendMessage`** — ce qui a été mesuré :
+
+| Outil | Quand l'utiliser | Durée de vie | Signature |
+|---|---|---|---|
+| **Sous-agent** | exploration, revue ponctuelle, vérification | une tâche, puis mort | `Agent(prompt)` — pas de nom |
+| **Coéquipier** | correction après revue, lot qu'on reprend, spécialiste reconsulté | persiste après completion | `Agent(prompt, name: "…")` puis `SendMessage(to: "…")` |
+
+**Le critère** : **aura-t-on besoin de lui reparler ?**
+
+- Exploration d'une erreur → sous-agent, il meurt après son rapport
+- Revue d'une PR → sous-agent, elle est ponctuelle
+- Correction post-review → **coéquipier**, tu vas le relancer avec le feedback
+- Lot complexe qu'on découpe en deux → agent herdr, mais si c'est juste une suite de corrections → **coéquipier**, tu ne perds pas son contexte
+
+C'est exactement le coût qu'un chantier a payé : chaque agent herdr rouvert repartait de zéro, perte de 10-15 min à rejouer la même histoire. Le coéquipier évite ça. Laisse le sous-agent mourir.
+
 ## Prérequis
 
 - Tu tournes dans herdr (`HERDR_ENV=1`). Sinon, arrête — cette compétence pilote des panes.
@@ -149,9 +195,21 @@ Les signaux qu'un epic ne tiendra pas :
 
 **Demande-leur de te prévenir.** Tu ne peux pas mesurer le contexte d'un agent de l'extérieur — seul l'agent le sait. Le brief doit donc lui dire : *si tu sens que tu vas devoir compacter, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.* Un agent qui s'arrête proprement à mi-chemin vaut infiniment mieux qu'un agent qui finit dans le brouillard.
 
-### 4. La boucle — un epic, un agent, à la fois
+### 4. La boucle — orchestrateur et chef d'équipe
 
-Pour chaque epic dans l'ordre :
+**Si tu es orchestrateur** : tu ouvres des agents herdr (un par epic) et tu suis §4 complètement.
+
+**Si tu es chef d'équipe** : tu reçois plusieurs unités de travail d'un orchestrateur, et tu fais la **même boucle** (§4) mais avec des outils différents :
+- Au lieu de `herdr pane run` (agent herdr) → `Agent(prompt)` ou `Agent(prompt, name: "...")` (sous-agent/coéquipier)
+- Au lieu de `herdr pane close` → pas de fermeture (sous-agent meurt après), ou `SendMessage(to: "coequipier-name")` pour le reprendre
+- Au lieu de `herdr agent prompt` → des messages directs aux sous-agents en logs/structuré
+- La traçabilité (§4b-bis, filiation) s'écrit dans tes propres notes, pas dans ServiceDesk (c'est l'orchestrateur qui tient le registre)
+
+**Le reste (briefs, mutations, review à deux passes, fermeture) reste identique.**
+
+### 4-bis. Pour chaque unité de travail
+
+Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ordre :
 
 **a. Écrire le brief dans un fichier.** Jamais dans le terminal : un retour à la ligne soumet le prompt et coupe le message en deux. Le brief contient :
 
@@ -182,7 +240,14 @@ herdr agent rename "$P" e-20260727-0010 | grep -q '"result"' \
 
 `claude-swt` crée le worktree **puis** lance l'agent dedans : la règle d'or n°11 est tenue par construction. Le nom de l'agent est le code de l'unité de travail dont il a la charge, en minuscules.
 
-**Vérifie que le rename a pris avant de continuer.** Un agent qui met plus longtemps que prévu à démarrer reste anonyme, et `herdr agent rename` répond alors `agent_not_found` — silencieusement, si personne ne lit sa sortie. Or tout ce qui suit dépend de ce nom : le compte rendu qu'il t'enverra, tes messages à ses pairs, et ton inventaire des worktrees. Un agent anonyme est inadressable, et tu ne t'en apercevras qu'au moment où tu auras besoin de lui parler.
+**Vérifie que le rename a pris avant de continuer.** Utilise `jq` pour parser la réponse herdr, pas `grep` :
+
+```bash
+herdr agent rename "$P" e-20260727-0010 | jq -e '.result != null and .error == null' \
+  || echo "⛔ pas d'agent dans $P — regarde ce qui s'y passe (herdr pane read) avant d'aller plus loin"
+```
+
+Un `grep -q '"result"'` accepte une réponse `{"error": "...", "result": null}` parce que le mot est présent. `jq` vérifie le **fait** : `result` est non-nul ET pas d'erreur. Un agent qui met plus longtemps que prévu à démarrer reste anonyme, et sans cette vérification tu ne t'en apercevras qu'au moment où tu as besoin de lui parler.
 
 Même prudence pour la suite : après avoir livré le brief, relis son pane (`herdr pane read "$P"`) pour confirmer qu'il l'a bien reçu. Une session qui s'ouvre sur un dossier neuf peut poser une question avant d'accepter le premier message — auquel cas ton brief a servi de réponse à cette question, et non de brief.
 
@@ -250,28 +315,48 @@ herdr agent wait "$P" --until done --until blocked --timeout 1800000   # en arri
 
 *Deux pièges de nommage* : il n'existe **pas** de `herdr wait` de premier niveau — l'attente d'un état d'agent est `herdr agent wait`, et l'attente d'une sortie de terminal est `herdr pane wait-output`. Et `herdr agent list` répond déjà en JSON : pas de `--json` à lui passer.
 
-**e. Faire reviewer par un agent frais.** Règle d'or n°8, et ce n'est pas une formalité : dans une livraison réelle, le review indépendant a trouvé deux défauts sérieux que l'auteur avait manqués, dont une perte silencieuse de données. Le brief du reviewer doit lui demander de :
+**e. Faire reviewer par deux sous-agents — Haiku d'abord, Sonnet ensuite.** Règle d'or n°8, et ce n'est pas une formalité : dans une livraison réelle, le review indépendant a trouvé deux défauts sérieux que l'auteur avait manqués, dont une perte silencieuse de données.
+
+La revue passe par **deux sous-agents**, **jamais** par un agent herdr :
+
+| Passe | Modèle | Rôle | Verdicts admis | Verdicts interdits |
+|---|---|---|---|---|
+| **1 — Portail** | Haiku (sous-agent jetable) | rejette rapidement les défauts évidents | `REJET` ou `RIEN VU` | **jamais** « mergeable » |
+| **2 — Fond** | Sonnet (sous-agent jetable) | revue complète si Haiku n'a rien vu | mergeable / correctifs / reprendre | — |
+
+**Pourquoi deux** :
+
+- Haiku économise Sonnet en rejetant tôt les cas perdus (coût : ~$0.15 vs $5+)
+- Sonnet est une vraie revue, pas un double check : elle ne vaut que sur du code candidat
+- Un sous-agent démarre en secondes, pas 15 min comme un agent herdr
+- Deux revues superficielles valent **moins qu'une** sérieuse — `RIEN VU` de Haiku ne doit **jamais** baisser la garde de Sonnet
+
+Le brief de revue (voir section dédiée ci-après) prescrit à chaque sous-agent :
 
 - **reproduire** les défauts plutôt que de les déduire ;
 - **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit. Un test qui reste vert après mutation est un faux témoin, et c'est ce qui laisse passer les vrais défauts ;
 - **trancher les désaccords par la mesure**, pas par l'autorité ;
-- rendre un verdict : mergeable tel quel / après correctifs listés / à reprendre.
+- rendre un verdict franc, sans équivoque.
 
-Un reviewer **ne corrige pas** — sinon il perd son indépendance pour la suite.
+Un reviewer **ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
 
 **f. Fermer proprement avant d'ouvrir le suivant — les deux, pas seulement le pane.**
 
-Un agent qui a fini laisse **deux** choses derrière lui : son pane et son worktree. Fermer le pane sans retirer le worktree ne nettoie rien — le worktree reste sur le disque, figé sur un commit périmé, et le prochain qui y retourne travaille sur une copie morte sans s'en apercevoir.
+Un agent qui a fini laisse **trois** choses derrière lui : son pane, son worktree, et la traçabilité de ce qu'il a livré. Ne rien perdre.
 
 ```bash
-# 1. vérifier que son travail est bien parti — jamais retirer un worktree qui a du non-poussé
+# 1. consigner l'état final avant disparition — c'est la porte de sortie de la filiation
+#    complète la description de l'epic avec un résumé final : PR #, branche, état, verdict
+epics action update <epic-id> --description "...[ajouter à la fin]\n\nAgent e-20260727-0010, pane <pane-id>, worktree ~/worktrees/<repo>/<timestamp>\n**État final** : PR #<n>, branche <branche>, mergé <date>."
+
+# 2. vérifier que son travail est bien parti — jamais retirer un worktree qui a du non-poussé
 git -C ~/worktrees/<repo>/<timestamp> status --porcelain
 git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}.. 2>/dev/null
 
-# 2. fermer SON pane, pas son tab
+# 3. fermer SON pane, pas son tab
 herdr pane close "$P"
 
-# 3. retirer le worktree et sa branche-socle
+# 4. retirer le worktree et sa branche-socle
 claude-swt-done <timestamp>          # depuis un pane ; sinon, ou si refusé :
 git -C <repo> worktree remove --force ~/worktrees/<repo>/<timestamp>
 git -C <repo> worktree prune
