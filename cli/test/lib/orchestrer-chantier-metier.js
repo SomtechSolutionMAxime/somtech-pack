@@ -167,10 +167,26 @@ export function chapeauDe(item, quoi) {
   return m[1];
 }
 
-/** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
+/**
+ * Exige qu'un énoncé oblige, plutôt qu'il ne recommande.
+ *
+ * ⚠️ **Cette garde est un filet, jamais la garantie principale.** Elle repose sur une
+ * liste de tournures, donc sur une énumération qu'on peut toujours contourner par une
+ * formule absente : une revue a fait passer « à la veille, **jamais** à ta main » à
+ * « à la veille, **autant que possible** » — sens exactement retourné, liste muette.
+ * La liste s'élargit quand un contournement est trouvé, mais la vraie garde d'une
+ * prescription est la résolution de son AFFIRMATION (voir `chapeauDe`, et les
+ * assertions de négation explicite portées par les contrôles eux-mêmes).
+ */
 export function exigeImperatif(enonce, quoi) {
-  const PERMISSIF =
-    /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|besoin|ça presse|celui-ci presse|tu as un doute)\b|\bau besoin\b|\bde préférence\b|\bsi possible\b|\bidéalement\b|\bsauf si\b/i;
+  const PERMISSIF = new RegExp([
+    /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b/.source,
+    /\bsi (?:tu le souhaites|besoin|ça presse|celui-ci presse|tu as un doute|tu peux|possible|c'est possible)\b/.source,
+    /\bau besoin\b|\bde préférence\b|\bsi possible\b|\bidéalement\b|\bsauf si\b|\bsauf exception\b/.source,
+    /\bautant que possible\b|\bdans la mesure du possible\b|\bquand c'est possible\b/.source,
+    /\ben principe\b|\ben général\b|\bgénéralement\b|\bhabituellement\b|\bnormalement\b/.source,
+    /\ble plus souvent\b|\bparfois\b|\bsouvent\b|\bplutôt que de\b/.source,
+  ].join('|'), 'i');
   const relache = enonce.match(PERMISSIF);
   assert.ok(!relache, `« ${quoi} » s'est assoupli en recommandation (« ${relache && relache[0]} »)`);
 }
@@ -299,10 +315,16 @@ export const CONTROLES = [
       const seuil = s.corps.match(/\d+\s*\+|\b(?:à partir de|au-delà de|dès)\s+\d/i);
       assert.ok(!seuil, `un seuil chiffré est réapparu dans la section des niveaux (« ${seuil && seuil[0]} »)`);
 
-      // Et le texte dit POURQUOI : le rôle, jamais un chiffre.
+      // La règle ET son motif — deux affirmations distinctes, deux assertions distinctes.
+      // Un « ou » entre les deux laisserait chaque moitié disparaître en silence : c'est
+      // le motif « une porte sur deux », et c'est une revue qui l'a trouvé ici.
       assert.match(
-        s.corps, /jamais dans un seuil|n'avait été mesuré par rien/i,
-        'le texte doit dire que le niveau se lit dans le rôle et que le seuil n\'avait rien mesuré'
+        s.corps, /jamais dans un seuil/i,
+        'le texte doit dire que le niveau se lit dans le rôle, JAMAIS dans un seuil'
+      );
+      assert.match(
+        s.corps, /n'avait été mesuré par rien/i,
+        'le texte doit dire POURQUOI le seuil est tombé : il n\'avait été mesuré par rien'
       );
     },
   },
@@ -366,6 +388,94 @@ export const CONTROLES = [
       assert.match(
         arbitrage, /jamais gardé pour la fin|tout de suite/i,
         'la règle d\'arbitrage doit interdire de garder ce qui bloque pour la fin'
+      );
+    },
+  },
+
+  {
+    id: 'critere-de-non-ouverture',
+    quoi: 'le critère de taille dit COMBIEN d\'agents ouvrir — et surtout quand n\'en ouvrir AUCUN',
+    verifier({ skill }) {
+      const s = sectionDe(skill, /combien d'agents ouvrir/i, 'sur le nombre d\'agents à ouvrir');
+
+      // 1. La section commence par désamorcer la confusion que le seuil retiré causait.
+      assert.match(
+        s.corps, /ne décide pas \*\*si\*\*/i,
+        'la section doit dire que le critère de taille ne décide PAS si le niveau existe'
+      );
+      assert.match(
+        s.corps, /décide \*\*combien\*\*/i,
+        'la section doit dire ce que le critère décide : combien de chefs d\'équipe ouvrir'
+      );
+
+      // 2. Les trois cas sont énumérés, et le premier est celui qui dit de NE PAS ouvrir.
+      const puces = pucesDe(s.corps);
+      assert.equal(puces.length, 3, `trois cas de dimensionnement attendus (${puces.length})`);
+
+      const petite = puces.find((p) => /30 min|5 fichiers/i.test(p));
+      assert.ok(
+        petite,
+        'le cas de la petite tâche doit rester chiffré — c\'est la forme LÉGITIME du chiffre, celle qui dit de ne pas ouvrir un agent de plus'
+      );
+      assert.match(
+        petite, /n'ouvre pas un agent|ne pas ouvrir/i,
+        `le cas de la petite tâche doit conclure qu'on N'OUVRE PAS d'agent (« ${petite} »)`
+      );
+      assert.ok(
+        !/→\s*(?:un|ouvre)\b/i.test(petite.split('→')[1] ?? ''),
+        `le cas de la petite tâche prescrit désormais d'ouvrir un agent (« ${petite} »)`
+      );
+
+      // 3. Le coût qui fonde le critère est chiffré, sinon il n'est plus opposable.
+      assert.match(s.corps, /15-20 min/i, 'le coût de démarrage d\'un agent herdr doit rester chiffré');
+
+      // 4. Et le contre-exemple qui coûte le plus : paralléliser sur des fichiers partagés.
+      assert.match(
+        s.corps, /partagent des fichiers/i,
+        'la section doit garder le contre-exemple des périmètres qui partagent des fichiers'
+      );
+      assert.match(
+        s.corps, /réellement indépendants/i,
+        'le nombre d\'agents suit les périmètres RÉELLEMENT indépendants, jamais le nombre d\'epics'
+      );
+    },
+  },
+
+  {
+    id: 'anti-patterns-portent-les-decisions',
+    quoi: 'la table des anti-patterns porte une ligne pour chacune des quatre décisions',
+    verifier({ skill }) {
+      // Les anti-patterns sont des prescriptions comme les autres — les laisser sans
+      // garde, c'est laisser retirer en silence la moitié opérationnelle du texte.
+      const s = sectionDe(skill, /^Anti-patterns$/i, 'des anti-patterns');
+      const table = tableDe(
+        s.corps,
+        [/^Ce qu'on est tenté de faire$/, /^Pourquoi ça casse$/],
+        'des anti-patterns'
+      );
+      const iTente = colonneDe(table, /^Ce qu'on est tenté de faire$/, 'ce qu\'on est tenté de faire');
+      const iCasse = colonneDe(table, /^Pourquoi ça casse$/, 'pourquoi ça casse');
+
+      const DECISIONS = [
+        [/seuil qui justifierait/i, 'le seuil qui rouvrirait le niveau'],
+        [/sans déclarer son modèle/i, 'le modèle non déclaré au lancement'],
+        [/d'après le sujet du chantier/i, 'le nom tiré du sujet du chantier'],
+        [/à la place d'un agent/i, 'les gestes faits à la place d\'un agent'],
+      ];
+      for (const [sonde, quoi] of DECISIONS) {
+        const l = ligneDe(table, iTente, sonde, `de l'anti-pattern « ${quoi} »`);
+        assert.ok(
+          l[iCasse]?.length > 20,
+          `l'anti-pattern « ${quoi} » n'explique pas pourquoi ça casse (« ${l[iCasse]} »)`
+        );
+        exigeImperatif(l[iCasse], `l'anti-pattern « ${quoi} »`);
+      }
+
+      // Le seuil : sa ligne doit NIER qu'il en existe un, pas seulement le mentionner.
+      const seuil = ligneDe(table, iTente, /seuil qui justifierait/i, 'du seuil')[iCasse];
+      assert.match(
+        seuil, /il n'y en a pas/i,
+        `l'anti-pattern du seuil doit nier qu'il en existe un (« ${seuil} »)`
       );
     },
   },
@@ -521,8 +631,22 @@ export const CONTROLES = [
           !/\b(toi|orchestrateur)\b/i.test(l[iQui]),
           `le geste « ${quoi} » est rendu à l'orchestrateur lui-même (« ${l[iQui]} »)`
         );
+        // Une attribution s'écrit « à … » — un énoncé qui cesse d'attribuer a cessé
+        // de rendre le geste, même s'il ne nomme pas l'orchestrateur pour autant.
+        assert.match(l[iQui], /^à\s+\S/i, `le geste « ${quoi} » n'attribue plus à personne (« ${l[iQui]} »)`);
         exigeImperatif(l[iQui], `l'attribution du geste « ${quoi} »`);
       }
+
+      // Le déblocage est le seul des quatre dont l'attribution porte une NÉGATION : elle
+      // dit à qui il revient ET qu'il ne revient pas à ta main. C'est cette négation qui
+      // se fait retourner — « jamais à ta main » devenu « autant que possible » a passé
+      // la garde de modalité, qui ne connaissait pas la formule. On résout donc
+      // l'affirmation elle-même, pas le vocabulaire qui l'entoure.
+      const deblocage = ligneDe(table, iGeste, /débloqu/i, 'du geste « débloquer »')[iQui];
+      assert.match(
+        deblocage, /jamais à ta main/i,
+        `le déblocage doit rester interdit à la main de l'orchestrateur, sans réserve (« ${deblocage} »)`
+      );
     },
   },
 
@@ -778,6 +902,84 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "| **Chef d'équipe** | tout agent herdr que tu ouvres |",
       "| **Chef d'équipe** | agent herdr optionnel, si le chantier le justifie |"
+    ),
+  },
+
+  {
+    // Trouvée par la passe 1 de revue : la garde acceptait la règle OU son motif.
+    id: 'motif-du-retrait-du-seuil-efface',
+    quoi: 'le motif du retrait disparaît — la règle survit, la raison qui la fonde s\'efface',
+    sur: 'skill',
+    cible: 'aucun-seuil-nouvre-le-niveau',
+    muter: (t) => t.replace(
+      "**Ce seuil n'avait été mesuré par rien** : il a été inventé en rédigeant.",
+      'Ce seuil rendait des services : il avait sa logique.'
+    ),
+  },
+
+  {
+    id: 'regle-du-role-effacee',
+    quoi: 'la règle disparaît — le motif survit, mais plus rien ne dit que le niveau se lit dans le rôle',
+    sur: 'skill',
+    cible: 'aucun-seuil-nouvre-le-niveau',
+    muter: (t) => t.replace(
+      '**Le niveau se lit dans le rôle, jamais dans un seuil.**',
+      '**Le niveau se lit dans le rôle autant que dans le volume.**'
+    ),
+  },
+
+  {
+    // Trouvée par la passe 2 de revue : aucun contrôle ne sondait cette section.
+    id: 'petite-tache-ouvre-quand-meme-un-agent',
+    quoi: 'la petite tâche mérite désormais son propre agent — le seul critère qui dit de NE PAS ouvrir se retourne',
+    sur: 'skill',
+    cible: 'critere-de-non-ouverture',
+    muter: (t) => t.replace(
+      "- Tâche < 30 min de travail, ou < 5 fichiers à toucher → traite-la **dans le chef d'équipe qui est déjà ouvert**, ou attends de la regrouper avec une autre. N'ouvre pas un agent pour ça.",
+      '- Toute tâche, même de 5 minutes → un chef d\'équipe dédié, systématiquement.'
+    ),
+  },
+
+  {
+    id: 'critere-de-taille-devient-un-critere-d-existence',
+    quoi: 'le critère de taille redevient ce qui décide SI le niveau existe',
+    sur: 'skill',
+    cible: 'critere-de-non-ouverture',
+    muter: (t) => t.replace(
+      'Le critère de taille ne décide pas **si** le niveau chef d\'équipe existe : il existe toujours. Il décide **combien** de chefs d\'équipe tu ouvres, et s\'il en faut un seul.',
+      'Le critère de taille décide si le niveau chef d\'équipe se justifie, et combien tu en ouvres.'
+    ),
+  },
+
+  {
+    id: 'anti-pattern-du-seuil-retire',
+    quoi: 'l\'anti-pattern qui interdit de rechercher un seuil disparaît de la table',
+    sur: 'skill',
+    cible: 'anti-patterns-portent-les-decisions',
+    muter: (t) => t.replace(/^\| Chercher le seuil qui justifierait un chef d'équipe \|.*\n/m, ''),
+  },
+
+  {
+    id: 'anti-pattern-du-modele-assoupli',
+    quoi: 'l\'anti-pattern du modèle non déclaré s\'assouplit en cas particulier',
+    sur: 'skill',
+    cible: 'anti-patterns-portent-les-decisions',
+    muter: (t) => t.replace(
+      '| Faire naître un agent sans déclarer son modèle | Il naît en Haiku, sans mode auto, et s\'arrête à chaque permission.',
+      '| Faire naître un agent sans déclarer son modèle | Il naît parfois en Haiku, sans mode auto.'
+    ),
+  },
+
+  {
+    // Trouvée par la passe 2 de revue : « jamais à ta main » → « autant que possible »
+    // retournait le sens sans qu'aucune garde ne bouge.
+    id: 'deblocage-rendu-tolerable-a-la-main',
+    quoi: 'le déblocage à la main redevient acceptable « autant que possible » — la négation s\'efface sans mot interdit',
+    sur: 'skill',
+    cible: 'quatre-gestes-hors-orchestrateur',
+    muter: (t) => t.replace(
+      '| **Débloquer** une permission | à la veille, jamais à ta main |',
+      '| **Débloquer** une permission | à la veille, autant que possible |'
     ),
   },
 
