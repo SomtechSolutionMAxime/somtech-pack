@@ -6,10 +6,26 @@ name: Publier @somtech-solutions/pack (GitHub Packages)
 #     peut publier. Si l'org diffère du owner du repo, fournir un PAT
 #     `PACKAGES_TOKEN` (write:packages) dans les secrets du repo.
 #   - Sinon, GITHUB_TOKEN suffit (package owned par le owner du repo).
+#
+# La chaîne tourne AUSSI à blanc, hors tag (PR touchant ce qui est publié, ou
+# déclenchement manuel) : mêmes étapes, `npm publish --dry-run` au lieu du vrai.
+# Sans ça, la publication n'était éprouvée qu'au moment où on taguait — et un
+# tag ne se rejoue pas. C'est ce qui a laissé v1.29.1 partir vers un échec que
+# rien n'avait pu voir venir. Seul un tag poussé atteint le registre (l'étape
+# « Publier » est gardée là-dessus, et un test le vérifie).
 on:
   push:
     tags:
       - 'v*'
+  pull_request:
+    paths:
+      - '.github/workflows/publish.yml'
+      - 'cli/**'
+      - 'ligne-directe/**'
+      - 'herdr-plugins/excalidraw/**'
+      - 'pack.json'
+      - 'VERSION'
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -17,6 +33,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # SEUL un tag poussé publie pour de vrai. PR et déclenchement manuel
+      # rejouent la même chaîne à blanc — rien n'atteint le registre.
+      RELEASE: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +67,10 @@ jobs:
       # Le tag git est la SOURCE UNIQUE de version. On aligne VERSION + pack.json
       # AVANT de construire le payload pour que le contenu bundlé porte la bonne
       # version (fin du drift : plus aucun alignement manuel à oublier dans le repo).
+      # Hors tag, il n'y a pas de version à aligner : le VERSION du repo fait foi,
+      # et le garde-fou version-consistency.test.js le tient déjà cohérent.
       - name: Aligner VERSION + pack.json sur le tag (source unique)
+        if: env.RELEASE == 'true'
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -73,6 +96,7 @@ jobs:
         working-directory: cli
 
       - name: Aligner la version du CLI sur le tag
+        if: env.RELEASE == 'true'
         working-directory: cli
         env:
           TAG: ${{ github.ref_name }}
@@ -93,7 +117,17 @@ jobs:
         run: npm test
         working-directory: cli
 
+      # À blanc : npm fait tout le travail de publication — prepublishOnly
+      # (reconstruction du payload), empaquetage, inventaire du tarball — et
+      # s'arrête avant d'écrire au registre. C'est ce qui rend la chaîne
+      # vérifiable sans brûler un tag.
+      - name: Publier à blanc (hors tag — rien n'atteint le registre)
+        if: env.RELEASE != 'true'
+        working-directory: cli
+        run: npm publish --dry-run
+
       - name: Publier
+        if: env.RELEASE == 'true'
         working-directory: cli
         run: npm publish
         env:
