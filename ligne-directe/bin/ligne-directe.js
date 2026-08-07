@@ -200,6 +200,10 @@ if (geste === 'relever') {
     verifierJoignabilite: async () => verifierCanalJoignable(await lireJeton(SERVICE_ROBOT), canal),
   });
   process.stdout.write(`${JSON.stringify(r)}\n`);
+  // Le JSON est le contrat de qui appelle ; le motif écrit en clair est celui de qui LIT. Sans
+  // cette ligne, un refus ne laissait sur stderr que ce que Node y avait déversé lui-même — un
+  // « ENOENT ... copyfile ... » brut, illisible et faux (T-20260807-0067).
+  if (!r.ok && r.refus?.message) process.stderr.write(`${r.refus.message}\n`);
   process.exit(r.ok ? 0 : 1);
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
