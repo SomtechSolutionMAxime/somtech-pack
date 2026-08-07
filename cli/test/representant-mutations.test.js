@@ -31,6 +31,26 @@
 // D'où la garde d'entrée : **toute mutation doit produire un texte DIFFÉRENT de l'original,
 // sinon le harnais échoue en la déclarant inopérante.** Une mutation qui ne s'applique pas
 // n'est pas une mutation attrapée : c'est un test qui ne s'est jamais exécuté.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────
+// CE QUE LE DÉCOMPTE DIT, ET CE QU'IL NE DIT PAS
+//
+// « n mutations posées, n attrapées » se lit spontanément comme *le métier est gardé*.
+// Il dit en réalité : **les n points auxquels on a pensé sont gardés.** Rien de plus.
+//
+// Le gabarit fait plus de trois cents lignes ; on n'en garde pas chaque phrase, et ce
+// serait absurde d'essayer. Les garanties gardées ici sont celles que l'epic revendique
+// et celles qu'un défaut réel a déjà coûtées. Le reste du texte est écrit, pas gardé.
+//
+// Cette précision n'est pas de la modestie de façade : une revue indépendante a posé douze
+// mutations de son cru contre la première version de ces contrôles et **onze ont survécu**.
+// Les douze sont désormais dans `MUTATIONS`, préfixées `revue-`. Un lecteur — ou un futur
+// chantier qui s'appuierait sur ce harnais — doit savoir que le décompte mesure une
+// couverture choisie, jamais une couverture totale.
+//
+// Corollaire pratique : quand une garantie du gabarit devient importante, on n'ajoute pas
+// seulement un contrôle. On ajoute la mutation qui le met à l'épreuve — sans quoi on ne
+// saura pas s'il garde quoi que ce soit.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

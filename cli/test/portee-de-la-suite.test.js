@@ -25,6 +25,54 @@ const CLI_DIR = resolve(HERE, '..');
 const REPO_ROOT = resolve(HERE, '..', '..');
 const WORKFLOWS = join(REPO_ROOT, '.github', 'workflows');
 
+test('un seul fichier de test construit cli/payload — sinon la course revient, par intermittence', () => {
+  // Le danger JUMEAU de la découverte récursive, et il s'est produit sur la PR #180.
+  //
+  // `npm pack` lit `cli/payload`, un répertoire UNIQUE et partagé, et `node --test` exécute
+  // UN PROCESSUS PAR FICHIER. Deux fichiers qui le reconstruisent se marchent dessus :
+  // l'un le supprime pendant que l'autre l'empaquette, et le test qui perd la course
+  // accuse un fichier d'ignore imaginaire — donc le mauvais coupable.
+  //
+  // L'invariant « un seul fichier y touche » était jusqu'ici un COMMENTAIRE. Un commentaire
+  // n'arrête personne : le prochain fichier qui a besoin d'interroger le vrai paquet
+  // rouvrira la course, qui se manifestera par intermittence — donc au pire moment.
+  //
+  // Les autres fichiers gardent le droit de CONSTRUIRE un payload : ils passent
+  // `PAYLOAD_OUT` vers un répertoire temporaire, qui ne partage rien.
+  // ⚠️ CETTE GARDE A ÉTÉ CORRIGÉE UNE FOIS, ET LA LEÇON EST LA MÊME QUE PARTOUT AILLEURS
+  // SUR CE CHANTIER. Sa première version cherchait toute MENTION de « cli/payload », y
+  // compris dans une chaîne de caractères — elle s'attrapait donc elle-même, ainsi que le
+  // commentaire d'un autre fichier qui explique précisément pourquoi il n'y touche pas.
+  // Elle gardait le texte, pas le comportement. On vise désormais les deux GESTES qui
+  // provoquent réellement la course, et les commentaires sont dépouillés d'abord.
+  const PROPRIETAIRE = 'build-payload.test.js';
+  const sansCommentaires = (src) => src
+    .split('\n')
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join('\n');
+
+  const GESTES = [
+    { forme: /join\(\s*CLI_DIR\s*,\s*['"`]payload['"`]\s*\)/, quoi: 'construit un chemin vers le payload partagé' },
+    { forme: /['"`]npm['"`]\s*,\s*\[\s*['"`]pack['"`]/, quoi: 'lance « npm pack », qui lit le payload partagé' },
+  ];
+
+  const fautifs = [];
+  for (const f of readdirSync(HERE).filter((n) => /\.test\.[cm]?js$/.test(n) && n !== PROPRIETAIRE)) {
+    const src = sansCommentaires(readFileSync(join(HERE, f), 'utf8'));
+    for (const { forme, quoi } of GESTES) {
+      if (forme.test(src)) fautifs.push(`${f} (${quoi})`);
+    }
+  }
+
+  assert.deepEqual(
+    fautifs, [],
+    `Ces fichiers désignent cli/payload alors que seul ${PROPRIETAIRE} peut y toucher : `
+      + `${fautifs.join(', ')}. Deux fichiers qui le construisent entrent en course (un processus `
+      + `par fichier) et le perdant accuse un fichier d'ignore imaginaire. Construire ailleurs `
+      + `via PAYLOAD_OUT, ou ajouter l'assertion dans ${PROPRIETAIRE}.`,
+  );
+});
+
 test('le script `test` du CLI est borné à test/ (jamais une découverte récursive depuis cli/)', () => {
   const script = JSON.parse(readFileSync(join(CLI_DIR, 'package.json'), 'utf8')).scripts.test;
 
