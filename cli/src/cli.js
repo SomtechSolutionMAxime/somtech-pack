@@ -25,6 +25,7 @@ export function parseArgs(argv) {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
     rc: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
     noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false, noLigneDirecte: false,
+    noNaissanceRepresentant: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
     mode: null, file: null, id: null, patch: null, client: null,
     help: false, version: false,
@@ -59,6 +60,7 @@ export function parseArgs(argv) {
       case '--no-commands': flags.noCommands = true; break;
       case '--no-canvas': flags.noCanvas = true; break;
       case '--no-ligne-directe': flags.noLigneDirecte = true; break;
+      case '--no-naissance-representant': flags.noNaissanceRepresentant = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--no-graphify': flags.noGraphify = true; break;
       case '--yes': case '-y': flags.yes = true; break;
@@ -138,6 +140,7 @@ Options (setup) :
   --no-commands     Ne pas installer les commandes globales
   --no-canvas       Ne pas installer le canvas (outil de poste, ~/.somtech)
   --no-ligne-directe  Ne pas installer la ligne directe (outil de poste, ~/.somtech)
+  --no-naissance-representant  Ne pas installer la naissance du représentant (outil de poste, ~/.somtech)
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
   --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)

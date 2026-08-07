@@ -22,6 +22,7 @@ on:
       - '.github/workflows/publish.yml'
       - 'cli/**'
       - 'ligne-directe/**'
+      - 'naissance-representant/**'
       - 'herdr-plugins/excalidraw/**'
       - 'pack.json'
       - 'VERSION'
