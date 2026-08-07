@@ -74,9 +74,40 @@ Chaque plugin inclut un `.zip` versionné prêt à installer dans Claude Cowork.
 | **Skills** (24) | audit-rls, create-migration, deploy-aims, deploy-metering, end-session, feature-doc-generator, git-module, lier-app, mcp-builder, merge, mockmig, plan-servicedesk, pousse-staging, prototype, scaffold-aims, scaffold-component, setup-archi-ci, somtech-pack-global, somtech-pack-maj, speckit, superplan, sync-app-state, validate-ui, webapp-testing |
 | **Agents** (7) | backend, database, design, devops, frontend, product, qa |
 | **Commandes** | `/pousse` |
-| **Hooks** | `SessionStart` → mémoire externe d'état d'app (STD-027) |
+| **Hooks** | `SessionStart` → mémoire externe d'état d'app (STD-027) ; `SessionStart` → registre injoignable (E-20260807-0009) |
 | **Templates** | Bootstrap pour ontologie, constitution, architecture sécurité, USER_CLAUDE_MD.md |
 | **User-skills** | `somtech-pack-install` (skill global utilisateur pour bootstrap d'un projet) |
+
+### Les jetons MCP du poste — un lieu unique
+
+Claude Code résout les `${VAR}` d'un `.mcp.json` depuis l'environnement du **processus**
+qui lance la session, jamais depuis un fichier. Un serveur dont la variable manque est
+refusé au premier échange et **disparaît de la session** : l'agent n'a plus de registre,
+et il ne s'en aperçoit qu'au premier appel — souvent après avoir déjà travaillé.
+
+Le pack tient donc les jetons du poste à **un seul endroit**, `~/.somtech/mcp-env` (droits
+`600`, hors de tout dépôt), chargé par `scripts/shell/mcp-env.sh`. Cette lib est sourcée
+par `claude-swt.sh`, lui-même sourcé par le rc du shell : **tout** shell du poste porte
+les jetons, donc toute session `claude` qui en naît les hérite — y compris celles qui ne
+passent pas par le lanceur (agent ouvert par un orchestrateur, `claude` lancé directement
+dans un plan de travail existant, reprise de session).
+
+| Commande | Rôle |
+|---|---|
+| `python3 scripts/migrate-mcp-secrets.py` | inspecte : quels jetons sont encore en clair dans `~/.claude.json` |
+| `… --apply` | les déplace vers le lieu unique et les remplace par `${VAR}` |
+| `… --from-env <.env> --apply` | importe aussi les jetons d'un serveur déclaré au seul niveau projet |
+| `claude mcp list` | le verdict vivant : quels serveurs répondent réellement |
+
+La réécriture de `~/.claude.json` est prudente **parce que ce fichier est partagé et
+vivant** (une centaine de projets, plus les réglages de toutes les sessions ouvertes) :
+relecture avant écriture, écriture atomique, sauvegarde, et vérification après coup que
+rien d'autre n'a bougé — restauration sinon. Un conflit de valeurs est **signalé, jamais
+tranché à ta place**.
+
+Le hook `session-start-registre.sh` ferme la boucle : si malgré tout un agent naît sans
+registre, il l'apprend **à sa naissance**, avec le nom des serveurs muets et le geste qui
+répare.
 
 ### 3. Features (blueprints réutilisables) (`features/`)
 
