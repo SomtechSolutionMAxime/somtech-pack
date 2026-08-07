@@ -27,7 +27,7 @@
     "directory": "cli"
   },
   "scripts": {
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
     "build:payload": "node scripts/build-payload.mjs",
     "prepublishOnly": "node scripts/build-payload.mjs"
   },
