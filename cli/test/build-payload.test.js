@@ -150,7 +150,7 @@ test('paquet npm : le canvas et les gabarits du représentant survivent à la fa
     'payload/.claude/templates/gestionnaire-client/CLAUDE.md',
     'payload/.claude/templates/gestionnaire-client/CONTEXTE.md',
     'payload/.claude/templates/gestionnaire-client/.mcp.json',
-    'payload/.claude/templates/gestionnaire-client/settings.json',
+    'payload/.claude/templates/gestionnaire-client/.claude/settings.json',
   ]) {
     assert.ok(
       files.includes(f),

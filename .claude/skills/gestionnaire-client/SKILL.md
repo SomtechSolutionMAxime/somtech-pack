@@ -20,11 +20,19 @@ Le résultat, quand tout va bien :
 <dépôt du client>/
 └── .gestionnaire/
     └── <client>/
-        ├── CLAUDE.md        ← le métier, copié du pack — généré, jamais édité à la main
-        ├── CONTEXTE.md      ← ce qui est propre à ce client — à la main, jamais écrasé
-        ├── .mcp.json        ← le ServiceDesk SEUL — Somcraft en est exclu, délibérément
-        └── settings.json    ← lecture du dépôt, sa ligne, le registre — rien d'autre
+        ├── CLAUDE.md               ← le métier, copié du pack — généré, jamais édité à la main
+        ├── CONTEXTE.md             ← ce qui est propre à ce client — à la main, jamais écrasé
+        ├── .mcp.json               ← le ServiceDesk SEUL — Somcraft en est exclu, délibérément
+        └── .claude/
+            └── settings.json       ← lecture du dépôt, sa ligne, le registre — rien d'autre
 ```
+
+> **Pourquoi `settings.json` n'est pas à plat, contrairement à `.mcp.json`.** Claude Code ne
+> résout les permissions d'un projet qu'à `.claude/settings.json` — jamais à sa racine. Un
+> `settings.json` posé à plat serait présent sur disque et **jamais lu** : les permissions du
+> représentant ne borneraient rien, en silence. C'est un défaut déjà vécu sur ce lot — corrigé
+> avant fusion, gardé depuis par un test qui ancre le placement sur ce dépôt lui-même plutôt
+> que sur une supposition.
 
 > **Ce que cette compétence n'est pas.** Elle ne répond à personne, n'ouvre aucune demande,
 > ne lance aucun chantier. Ça, c'est le métier du représentant **une fois installé** — décrit

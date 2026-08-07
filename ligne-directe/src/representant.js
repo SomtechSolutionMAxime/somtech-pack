@@ -17,13 +17,26 @@
 // `verifierCanalJoignable`, plus bas, est l'implémentation réelle — celle que la ligne de
 // commande branche — mais un test peut en fournir une autre sans monter Slack du tout.
 
-import { existsSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
 import { trouverCanal, estMembreDuCanal } from './slack.js';
 
-/** Les quatre fichiers qui constituent le lieu du représentant. Ordre sans importance. */
-export const GABARITS = ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', 'settings.json'];
+/**
+ * Les quatre fichiers qui constituent le lieu du représentant, en CHEMINS RELATIFS à sa
+ * racine — pas en simples noms. `settings.json` n'est PAS à plat : Claude Code ne lit les
+ * permissions projet qu'à `.claude/settings.json`, jamais à la racine (mesuré sur ce dépôt
+ * même — voir le test qui l'ancre à cette réalité observée, pas à une supposition).
+ *
+ * DÉFAUT VÉCU ICI, et il n'est pas théorique : la première version posait les quatre
+ * fichiers à plat. `.mcp.json` fonctionnait — Claude Code LE lit bien à la racine — et ce
+ * seul succès a caché que `settings.json`, lui, était mort au même endroit : posé, présent,
+ * jamais lu. RA-REL-015 (« aucune écriture, aucun envoi, aucune fusion ») aurait été fausse
+ * en production, derrière des tests qui ne vérifiaient que le CONTENU du fichier, jamais où
+ * Claude Code va le chercher — exactement le motif qui a coûté le plus cher au chantier
+ * précédent : une fonction inerte, derrière des tests verts qui ne regardaient pas l'effet.
+ */
+export const GABARITS = ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', join('.claude', 'settings.json')];
 
 /** Fichiers dont la présence, à la racine du dépôt client, atteste un accès au registre. */
 export const FICHIERS_ENV_CONNUS = ['.env', '.envrc'];
@@ -123,7 +136,9 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
   const source = gabaritsDir(depotClient);
   mkdirSync(racine, { recursive: true });
   for (const fichier of GABARITS) {
-    copyFileSync(join(source, fichier), join(racine, fichier));
+    const cible = join(racine, fichier);
+    mkdirSync(dirname(cible), { recursive: true }); // ex. .claude/ pour settings.json
+    copyFileSync(join(source, fichier), cible);
   }
   // ═══ fin du point d'écriture.
 
@@ -136,11 +151,4 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
   }
 
   return { ok: true, cree: true, racine, fichiers: [...GABARITS].sort(), avertissements };
-}
-
-/** Utilitaire de diagnostic — les fichiers réellement présents dans un lieu, triés. */
-export function fichiersDuLieu(depotClient, client) {
-  const racine = join(depotClient, '.gestionnaire', client);
-  if (!existsSync(racine)) return [];
-  return readdirSync(racine).sort();
 }

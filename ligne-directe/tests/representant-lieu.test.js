@@ -13,7 +13,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, cpSync } from 'node:fs';
+import { mkdtempSync, existsSync, mkdirSync, writeFileSync, readFileSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,7 +73,10 @@ test('mutation : si la garde de joignabilité disparaît, le refus laisse pourta
   const racine = join(depot, '.gestionnaire', 'client-x');
   const source = join(depot, '.claude', 'templates', 'gestionnaire-client');
   mkdirSync(racine, { recursive: true });
-  for (const f of GABARITS) writeFileSync(join(racine, f), readFileSync(join(source, f)));
+  for (const f of GABARITS) {
+    mkdirSync(dirname(join(racine, f)), { recursive: true });
+    writeFileSync(join(racine, f), readFileSync(join(source, f)));
+  }
   assert.ok(existsSync(racine), 'témoin : sans garde de joignabilité, un lieu se crée — la garde réelle doit donc l’empêcher');
 });
 
@@ -88,7 +91,9 @@ test('création : canal joignable — les quatre fichiers naissent, identiques a
   assert.equal(r.ok, true);
   assert.equal(r.cree, true);
   const racine = join(depot, '.gestionnaire', 'client-x');
-  assert.deepEqual(readdirSync(racine).sort(), [...GABARITS].sort());
+  for (const fichier of GABARITS) {
+    assert.ok(existsSync(join(racine, fichier)), `${fichier} doit exister au chemin exact où Claude Code va le lire`);
+  }
 
   for (const fichier of GABARITS) {
     assert.equal(
@@ -139,7 +144,7 @@ test('idempotence : un lieu PARTIEL (une pose interrompue) n’est pas complét�
   const etat = etatLieu(depot, 'client-x');
   assert.equal(etat.existe, true);
   assert.deepEqual(etat.presents, ['CONTEXTE.md']);
-  assert.deepEqual(etat.manquants, ['CLAUDE.md', '.mcp.json', 'settings.json']);
+  assert.deepEqual(etat.manquants, GABARITS.filter((f) => f !== 'CONTEXTE.md'));
 });
 
 // ═══════════════════════════════ 4. absence de Somcraft — constatée, pas lue
@@ -181,4 +186,84 @@ test('aucun avertissement quand le dépôt porte déjà un fichier d’environne
 
   assert.equal(r.cree, true);
   assert.deepEqual(r.avertissements, [], 'un dépôt déjà pourvu ne doit produire aucun faux avertissement');
+});
+
+// ═══════════════════════════════ 6. l'EFFET du placement, pas son contenu — défaut confirmé sur #181
+//
+// Défaut vécu : la première version de ce lot posait les quatre fichiers À PLAT. `.mcp.json`
+// fonctionnait — Claude Code le lit bien à la racine du répertoire de travail — et ce seul
+// succès a caché que `settings.json`, lui, était mort au même endroit : présent, jamais lu,
+// parce que Claude Code ne résout les permissions PROJET qu'à `.claude/settings.json`. La
+// garantie RA-REL-015 (« aucune écriture, aucun envoi, aucune fusion ») aurait été FAUSSE en
+// production, derrière des tests qui ne vérifiaient que le CONTENU du fichier posé, jamais
+// l'endroit où l'outil va le chercher — le même motif, encore : la garde regardait ce que le
+// fichier CONTIENT, pas ce qu'il FAIT.
+//
+// CE QUE CES TESTS PROUVENT, ET CE QU'ILS NE PROUVENT PAS — À LIRE AVANT DE LES CROIRE :
+//
+// Ils prouvent le PLACEMENT, condition nécessaire pour que Claude Code lise le fichier du
+// tout, en l'ANCRANT sur la réalité observée de CE dépôt-ci, qui tourne actuellement sous sa
+// propre configuration. Ce n'est pas une supposition relue dans une documentation : c'est
+// vérifié ci-dessous, sur le dépôt réel, avant même de tester le code produit.
+//
+// Ils ne prouvent PAS l'effet de bout en bout — qu'une vraie session Claude Code démarrée
+// dans le lieu produit refuserait réellement une écriture hors périmètre. Ça demanderait de
+// faire tourner le harnais Claude Code lui-même à l'intérieur du test, ce qu'aucun test de ce
+// dépôt ne fait nulle part ailleurs non plus : le harnais n'est pas un module qu'on importe.
+// Le dire ici plutôt que de laisser croire que c'est réglé.
+
+test('réalité observée : CE dépôt lit ses permissions à .claude/settings.json, jamais à plat', () => {
+  assert.ok(
+    existsSync(join(REPO, '.claude', 'settings.json')),
+    'ce dépôt doit avoir un .claude/settings.json — sinon l’ancrage qui suit ne prouve rien'
+  );
+  assert.ok(
+    !existsSync(join(REPO, 'settings.json')),
+    'et aucun settings.json à plat à sa racine — sinon les deux coexisteraient sans qu’on sache lequel compte'
+  );
+});
+
+test('réalité observée : CE dépôt lit son .mcp.json À PLAT, à sa racine', () => {
+  assert.ok(existsSync(join(REPO, '.mcp.json')), 'ce dépôt doit avoir un .mcp.json à sa racine — sinon l’ancrage qui suit ne prouve rien');
+});
+
+test('le lieu créé place settings.json exactement là où cette réalité dit qu’il est lu — jamais à plat', async () => {
+  const depot = depotClientJetable();
+  await preparerLieuRepresentant({
+    depotClient: depot, client: 'client-x', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
+  });
+  const racine = join(depot, '.gestionnaire', 'client-x');
+
+  assert.ok(existsSync(join(racine, '.claude', 'settings.json')), 'settings.json doit exister sous .claude/');
+  assert.ok(
+    !existsSync(join(racine, 'settings.json')),
+    'et JAMAIS à plat — c’est très exactement le défaut confirmé sur #181 : un fichier posé, présent, jamais lu'
+  );
+});
+
+test('le lieu créé place .mcp.json à plat — comme ce dépôt le fait lui-même', async () => {
+  const depot = depotClientJetable();
+  await preparerLieuRepresentant({
+    depotClient: depot, client: 'client-x', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
+  });
+  const racine = join(depot, '.gestionnaire', 'client-x');
+
+  assert.ok(existsSync(join(racine, '.mcp.json')), '.mcp.json doit exister à la racine du lieu');
+  assert.ok(
+    !existsSync(join(racine, '.claude', '.mcp.json')),
+    '.mcp.json ne doit pas être sous .claude/ — ce n’est pas là que Claude Code le lit'
+  );
+});
+
+test('la convention suivie ici reste alignée sur celle du pack — cli/src/commands/setup.js, jamais réinventée', () => {
+  // Ancrage indépendant de ce dépôt-ci : le point cité en revue (cli/src/commands/setup.js:57)
+  // résout DÉJÀ les permissions à `.claude/settings.json`. Ce test garde ce module aligné sur
+  // cette convention établie — si l'un des deux dérive un jour, ce test le voit avant qu'un
+  // lieu de représentant ne reparte inerte pour la même raison.
+  const src = readFileSync(join(REPO, 'cli', 'src', 'commands', 'setup.js'), 'utf8');
+  assert.match(
+    src,
+    /join\([^)]*'\.claude',\s*'settings\.json'\)/,
+    'cli/src/commands/setup.js ne résout plus les permissions à .claude/settings.json — la convention citée en revue a changé, GABARITS doit suivre'
+  );
 });
