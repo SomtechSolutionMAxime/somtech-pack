@@ -119,6 +119,18 @@ découvrira en pleine conversation si personne ne l'a prévenu à l'installation
 exactement le silence que cette compétence existe pour éviter, et le taire ici le
 réintroduirait par un autre chemin.
 
+## Ce que le représentant dira, une fois installé (non-régression EF-AGT-003 / RA-AGT-007)
+
+Le `CLAUDE.md` que cette compétence copie porte déjà cette promesse, telle quelle — **cette
+compétence-ci ne la prononce pas elle-même**, elle prépare seulement le lieu où elle vit :
+un chantier mené pour ce client dit au représentant, et à lui seul, que sa mise en ligne
+**attend son tour** — jamais qu'elle est **en cours** quand ce n'est pas vrai.
+
+> ✅ « C'est prêt. Ça attend son tour pour la mise en ligne — je te préviens dès que c'est en place. »
+> ❌ « C'est en cours. »
+
+Dire qu'on attend n'a jamais coûté un client ; laisser croire que ça avance, oui.
+
 ## Ce que cette compétence ne fait jamais
 
 - **Elle ne crée pas le canal**, ne l'invite pas, ne demande aucun droit Slack
