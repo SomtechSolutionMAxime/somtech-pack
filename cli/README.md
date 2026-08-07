@@ -33,6 +33,11 @@ npx @somtech-solutions/pack setup --dry-run      # aperçu sans écrire
 npx @somtech-solutions/pack setup --no-skills    # claude-swt seul
 npx @somtech-solutions/pack setup --no-workflows # ne pas mirrorer les workflows
 npx @somtech-solutions/pack setup --no-commands  # ne pas mirrorer les commandes
+
+# Rafraîchir un représentant DÉJÀ POSÉ chez un client (.gestionnaire/<client>/) :
+# CLAUDE.md converge toujours vers le pack, CONTEXTE.md n'est jamais touché.
+npx @somtech-solutions/pack representant-update --client acme --dry-run
+npx @somtech-solutions/pack representant-update --client acme
 ```
 
 ### Options
@@ -46,6 +51,7 @@ npx @somtech-solutions/pack setup --no-commands  # ne pas mirrorer les commandes
 | `--yes`, `-y` | Non-interactif (CI) / consentement explicite (`setup` écrit le rc) |
 | `--rc` / `--skills-dir` / `--workflows-dir` / `--commands-dir` / `--dest` | `setup` : cibles personnalisées |
 | `--no-skills` / `--no-workflows` / `--no-commands` / `--no-claude-swt` | `setup` : restreindre la portée |
+| `--client <slug>` | `representant-update` : le client dont le lieu (`.gestionnaire/<slug>/`) est rafraîchi (obligatoire, minuscules/chiffres/tirets) |
 
 `npx` plutôt que `npm i -g` : l'outil se lance ponctuellement, toujours à la bonne
 version (`@latest` ou une version épinglée), sans installation globale à maintenir.
