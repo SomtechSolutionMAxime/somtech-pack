@@ -65,29 +65,21 @@ test('distribution : le paquet CONSTRUIT les embarque, identiques à la source (
   }
 });
 
-test('paquet npm : les gabarits survivent à la fabrication du tarball', () => {
-  // Le test précédent inspecte un RÉPERTOIRE. Ça ne prouve rien sur ce que npm met
-  // réellement dans le tarball : il applique les fichiers d'ignore imbriqués au moment de
-  // packer, et c'est ainsi qu'un paquet amputé est déjà parti sans que personne le voie.
-  // Ce test interroge la liste réelle du paquet, pas le disque.
-  const payload = join(CLI_DIR, 'payload');
-  execFileSync(process.execPath, [BUILD], { env: { ...process.env, PAYLOAD_OUT: payload }, stdio: 'pipe' });
-
-  const sortie = execFileSync('npm', ['pack', '--dry-run', '--json'], {
-    cwd: CLI_DIR,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  const fichiers = JSON.parse(sortie)[0].files.map((f) => f.path);
-
-  for (const chemin of [CHEMIN_METIER, CHEMIN_CONTEXTE]) {
-    const attendu = `payload/${chemin.split(/[\\/]/).join('/')}`;
-    assert.ok(
-      fichiers.includes(attendu),
-      `${attendu} est dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — le représentant naîtrait sans son métier`
-    );
-  }
-});
+// ── La survie au TARBALL npm est vérifiée dans `build-payload.test.js`, délibérément.
+//
+// Inspecter le répertoire `payload` ne prouve rien sur ce que npm met réellement dans le
+// paquet : il applique les fichiers d'ignore IMBRIQUÉS au moment de packer, et c'est ainsi
+// qu'un paquet amputé est déjà parti sans que personne le voie. Il faut donc interroger
+// `npm pack`, qui lit `cli/payload` — un répertoire unique et partagé.
+//
+// Or `node --test` exécute UN PROCESSUS PAR FICHIER : deux fichiers qui construisent
+// `cli/payload` se marchent dessus, l'un le supprimant pendant que l'autre l'empaquette.
+// Le test qui perd la course accuse alors un fichier d'ignore imaginaire — c'est arrivé
+// ici, et la CI l'a rattrapé. Un seul fichier touche donc à `cli/payload`.
+//
+// L'assertion elle-même n'est pas perdue : elle vit dans le test
+// « paquet npm : le canvas et les gabarits du représentant survivent à la fabrication du
+// tarball », qui interroge le vrai `cli/` — jamais une copie plus permissive.
 
 // ═══════════════════════════════ 2. le métier dit ce qu'il doit dire
 
