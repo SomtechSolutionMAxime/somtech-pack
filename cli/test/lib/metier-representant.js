@@ -115,8 +115,31 @@ export function tableDe(corps) {
  * C'est ce qui rend la permutation de deux en-têtes détectable : le contrôle suit le sens,
  * pas la géométrie. Permuter les libellés déplace l'index que cette fonction renvoie, et
  * les cellules restées en place se retrouvent alors du mauvais côté.
+ *
+ * ⚠️ LA SONDE DOIT COUVRIR LE LIBELLÉ ENTIER — et cette exigence est le quatrième tour du
+ * même motif, trouvé en seconde revue.
+ *
+ * La version précédente reconnaissait la colonne à un MOT-CLÉ contenu dans son libellé :
+ * `/remontes/i` pour « Tu remontes au dirigeant ». Six reformulations gardaient le mot-clé
+ * en retournant le sens, et passaient toutes :
+ *
+ *     « Tu remontes au dirigeant SI TU AS UN DOUTE »   ← l'obligation devient une option
+ *     « Ce que tu NE dis JAMAIS à la place »           ← la colonne des réponses s'inverse
+ *     « Tu NE remontes RIEN »                          ← l'inverse exact, mot-clé intact
+ *
+ * On était revenu, un cran plus bas, à garder par la présence d'un mot. Une sonde non
+ * ancrée est donc refusée ici même : l'ancrage n'est pas une convention d'écriture, c'est
+ * la garantie elle-même. Et le libellé retenu doit ENCORE OBLIGER — un en-tête peut être
+ * exact et s'être assoupli (« Ta posture, quand tu as le temps »).
  */
 export function colonneDe(table, sonde, quoi) {
+  assert.ok(
+    sonde.source.startsWith('^') && sonde.source.endsWith('$'),
+    `la sonde de la colonne « ${quoi} » n'est pas ancrée (${sonde}) : une sonde qui cherche `
+      + `un mot-clé dans le libellé accepte « ${quoi} si tu as un doute » ou sa négation, `
+      + `qui gardent le mot et retournent le sens. Ancrer sur le libellé ENTIER (^…$).`,
+  );
+
   const trouves = table.entetes
     .map((libelle, i) => ({ libelle, i }))
     .filter(({ libelle }) => sonde.test(libelle));
@@ -125,6 +148,8 @@ export function colonneDe(table, sonde, quoi) {
     `la colonne « ${quoi} » doit se reconnaître une fois exactement à son en-tête `
       + `(${trouves.length} trouvée·s parmi : ${table.entetes.map((e) => `« ${e} »`).join(', ')})`,
   );
+
+  exigeImperatif(trouves[0].libelle, `l'en-tête de colonne « ${trouves[0].libelle} »`);
   return trouves[0].i;
 }
 
@@ -240,7 +265,7 @@ export const CONTROLES = [
       assert.ok(table.lignes.length >= 4, `les réflexes doivent être énumérés (${table.lignes.length} trouvé·s)`);
 
       const iRang = colonneDe(table, /^#$/, 'le rang du réflexe');
-      const iNom = colonneDe(table, /réflexe/i, 'le nom du réflexe');
+      const iNom = colonneDe(table, /^Le réflexe$/i, 'le nom du réflexe');
       const rangs = table.lignes.map((l, position) => ({ rang: Number(l[iRang]), position, cle: l[iNom] }));
 
       const complaisance = rangs.filter((r) => /complaisance/i.test(r.cle));
@@ -252,8 +277,8 @@ export const CONTROLES = [
       // Permuter les deux en-têtes ferait dire au métier que « oui, c'est possible » est ce
       // qu'on répond à la place de la complaisance — le contresens exact. Les cellules
       // n'ayant pas bougé, seul l'appariement en-tête↔contenu le voit.
-      const pressions = colonne(table, /pression/i, 'ce que la pression fait dire').join(' ');
-      const reponses = colonne(table, /à la place/i, 'ce que tu dis à la place');
+      const pressions = colonne(table, /^Ce que la pression te fait dire$/i, 'ce que la pression te fait dire').join(' ');
+      const reponses = colonne(table, /^Ce que tu dis à la place$/i, 'ce que tu dis à la place');
 
       const COMPLAISANTES = [/c.est possible/i, /devrait être prêt/i, /\bbientôt\b/i];
       for (const sonde of COMPLAISANTES) {
@@ -278,8 +303,8 @@ export const CONTROLES = [
       // notre équipe, pas un guichet ». Cette table n'était gardée par rien, et permuter
       // ses deux en-têtes faisait de « ce n'est pas prévu au contrat » la posture à tenir.
       const table = tableDe(metier.split(/^##\s/m)[0]);
-      const guichet = colonne(table, /guichet/i, 'le réflexe de guichet').join(' ');
-      const posture = colonne(table, /posture/i, 'ta posture').join(' ');
+      const guichet = colonne(table, /^Le réflexe de guichet$/i, 'le réflexe de guichet').join(' ');
+      const posture = colonne(table, /^Ta posture$/i, 'ta posture').join(' ');
 
       for (const [sonde, quoi] of [
         [/pas prévu au contrat/i, 'opposer le contrat'],
@@ -317,8 +342,8 @@ export const CONTROLES = [
       // de cette table faisait répondre seul sur le prix, le délai et la faisabilité.
       const s = sectionDe(metier, /frontière de l.engagement/i, 'sur la frontière de l’engagement');
       const table = tableDe(s.corps);
-      const seul = colonne(table, /seul/i, 'ce à quoi tu réponds seul').join(' ');
-      const remonte = colonne(table, /remontes/i, 'ce qui remonte au dirigeant').join(' ');
+      const seul = colonne(table, /^Tu réponds seul$/i, 'ce à quoi tu réponds seul').join(' ');
+      const remonte = colonne(table, /^Tu remontes au dirigeant$/i, 'ce qui remonte au dirigeant').join(' ');
 
       assert.match(remonte, /est-ce possible/i, 'la faisabilité remonte au dirigeant');
       assert.ok(!/est-ce possible/i.test(seul), 'la faisabilité ne se répond pas seul');
@@ -336,8 +361,8 @@ export const CONTROLES = [
       // d'origine annonçait pourtant garder.
       const s = sectionDe(metier, /frontière de l.engagement/i, 'sur la frontière de l’engagement');
       const table = tableDe(s.corps);
-      const seul = colonne(table, /seul/i, 'ce à quoi tu réponds seul').join(' ').toLowerCase();
-      const remonte = colonne(table, /remontes/i, 'ce qui remonte au dirigeant').join(' ').toLowerCase();
+      const seul = colonne(table, /^Tu réponds seul$/i, 'ce à quoi tu réponds seul').join(' ').toLowerCase();
+      const remonte = colonne(table, /^Tu remontes au dirigeant$/i, 'ce qui remonte au dirigeant').join(' ').toLowerCase();
 
       for (const engage of ['délai', 'prix', 'priorité', 'engagement']) {
         assert.ok(remonte.includes(engage), `« ${engage} » doit figurer du côté qui remonte`);
@@ -364,7 +389,11 @@ export const CONTROLES = [
       const puces = pucesDe(s.corps);
       assert.equal(puces.length, INTERDITS.length, `${puces.length} interdit(s) écrit(s) pour ${INTERDITS.length} gardé(s)`);
       for (const { quoi, sonde } of INTERDITS) {
-        assert.equal(puces.filter((p) => sonde.test(p)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
+        const trouvees = puces.filter((p) => sonde.test(p));
+        assert.equal(trouvees.length, 1, `« ${quoi} » doit figurer une fois exactement`);
+        // La MODALITÉ manquait ici : un interdit peut garder sa puce, son compte et son
+        // vocabulaire tout en cessant d'obliger — « tu peux refuser » n'est pas « tu refuses ».
+        exigeImperatif(trouvees[0], quoi);
       }
       assert.match(s.corps, /refuse/i, 'le verbe doit être le refus, pas la préférence');
       assert.match(s.corps, /structurel/i, 'le cloisonnement est structurel, pas déclaratif');
@@ -414,6 +443,13 @@ export const CONTROLES = [
       const valider = rangUnique(etapes, /faire valider/i, 'faire valider la formulation');
       const lancer = rangUnique(etapes, /lancer l.exécution/i, 'lancer l’exécution');
       assert.ok(valider.rang < lancer.rang, `la validation (rang ${valider.rang}) doit précéder le lancement (rang ${lancer.rang})`);
+
+      // LE RANG NE SUFFIT PAS, ICI NON PLUS. L'étape peut rester à sa place et cesser
+      // d'obliger : « tu peux lancer sans attendre si le besoin est clair » laisse l'ordre
+      // intact et supprime la garantie. C'est RA-REL-004 qui tombe — un besoin mal formulé
+      // parti en travail coûte un chantier, quand la validation coûtait une question.
+      const corps = sectionDe(metier, /faire valider/i, 'de la validation de la formulation').corps;
+      exigeImperatif(corps, 'l’étape « faire valider la formulation »');
     },
   },
 
@@ -480,8 +516,8 @@ export const CONTROLES = [
       // raison de la commettre.
       const s = sectionDe(metier, /anti-patterns/i, 'd’anti-patterns');
       const table = tableDe(s.corps);
-      const fautes = colonne(table, /tenté de faire/i, 'ce qu’on est tenté de faire');
-      const raisons = colonne(table, /casse/i, 'pourquoi ça casse').join(' ');
+      const fautes = colonne(table, /^Ce qu'on est tenté de faire$/i, 'ce qu’on est tenté de faire');
+      const raisons = colonne(table, /^Pourquoi ça casse$/i, 'pourquoi ça casse').join(' ');
 
       const FAUTES = [
         { quoi: 'relever avant d’être joignable', sonde: /avant d.avoir ouvert sa ligne/i },
@@ -1015,6 +1051,76 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "il t'appartient, et aucune mise à jour du pack n'y touchera jamais.",
       "les mises à jour du pack le remplacent comme les autres.",
+    ),
+  },
+
+  // ── les libellés d'en-tête reformulés : le mot-clé reste, le sens s'inverse
+  //
+  // Ces six-là viennent de la SECONDE revue. Elles survivaient toutes tant que `colonneDe`
+  // reconnaissait une colonne à un mot-clé contenu dans son libellé. Elles sont la raison
+  // pour laquelle la sonde doit désormais couvrir le libellé ENTIER.
+  {
+    id: 'revue2-R13-la-remontee-devient-conditionnelle',
+    quoi: 'l’en-tête devient « Tu remontes au dirigeant si tu as un doute » — l’obligation se change en option, mot-clé intact',
+    cible: 'faisabilite-remonte',
+    fichier: 'metier',
+    muter: (t) => t.replace('| Tu réponds seul | Tu remontes au dirigeant |', '| Tu réponds seul | Tu remontes au dirigeant si tu as un doute |'),
+  },
+  {
+    id: 'revue2-R14-on-ne-remonte-plus-rien',
+    quoi: 'l’en-tête devient « Tu ne remontes rien » — l’inverse exact, et le mot-clé y est encore',
+    cible: 'faisabilite-remonte',
+    fichier: 'metier',
+    muter: (t) => t.replace('| Tu réponds seul | Tu remontes au dirigeant |', '| Tu réponds seul | Tu ne remontes rien |'),
+  },
+  {
+    id: 'revue2-R15-la-colonne-des-reponses-se-nie',
+    quoi: 'l’en-tête devient « Ce que tu ne dis jamais à la place » — la colonne des bonnes réponses devient celle des interdits',
+    cible: 'anti-complaisance-en-tete',
+    fichier: 'metier',
+    muter: (t) => t.replace('| Ce que tu dis à la place |', '| Ce que tu ne dis jamais à la place |'),
+  },
+  {
+    id: 'revue2-R16-la-posture-devient-optionnelle',
+    quoi: 'l’en-tête devient « Ta posture, quand tu as le temps »',
+    cible: 'posture-fondatrice',
+    fichier: 'metier',
+    muter: (t) => t.replace('| Le réflexe de guichet | Ta posture |', '| Le réflexe de guichet | Ta posture, quand tu as le temps |'),
+  },
+  {
+    id: 'revue2-R17-les-anti-patterns-deviennent-des-conseils',
+    quoi: 'l’en-tête « Pourquoi ça casse » devient « Pourquoi ça peut aider »',
+    cible: 'anti-patterns-couverts',
+    fichier: 'metier',
+    muter: (t) => t.replace("| Ce qu'on est tenté de faire | Pourquoi ça casse |", "| Ce qu'on est tenté de faire | Pourquoi ça peut aider |"),
+  },
+  {
+    id: 'revue2-R18-la-pression-devient-conditionnelle',
+    quoi: 'l’en-tête devient « Ce que la pression te fait dire, parfois » — la colonne cesse de désigner une faute',
+    cible: 'anti-complaisance-en-tete',
+    fichier: 'metier',
+    muter: (t) => t.replace('| Ce que la pression te fait dire |', '| Ce que la pression te fait dire, si tu le souhaites |'),
+  },
+
+  // ── la modalité, là où seul le rang ou le compte était gardé
+  {
+    id: 'revue2-le-cloisonnement-devient-optionnel',
+    quoi: 'le refus d’un second canal garde sa puce et son verbe, mais cesse d’obliger',
+    cible: 'cloisonnement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'même pour le même client : **tu refuses** de la même façon',
+      'même pour le même client : **tu peux refuser** de la même façon',
+    ),
+  },
+  {
+    id: 'revue2-on-lance-sans-attendre-si-c-est-clair',
+    quoi: 'l’étape de validation garde son rang mais devient facultative — « tu peux lancer sans attendre »',
+    cible: 'validation-avant-lancement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Rien ne part avant qu\'il ait dit « oui, c\'est ça ».**',
+      '**Tu peux lancer sans attendre si le besoin te paraît clair.**',
     ),
   },
 

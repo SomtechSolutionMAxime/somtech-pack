@@ -51,6 +51,20 @@ test('un seul fichier de test construit cli/payload — sinon la course revient,
     .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
     .join('\n');
 
+  // ⚠️ CE QUE CETTE GARDE NE COUVRE PAS, ET IL FAUT LE SAVOIR AVANT DE S'Y FIER.
+  //
+  // Elle énumère DEUX ORTHOGRAPHES du geste, pas le geste lui-même. Un fichier qui
+  // écrirait `resolve(CLI_DIR, 'payload')`, qui composerait le chemin en deux temps, ou qui
+  // lancerait `npm pack` par une commande en une seule chaîne, passerait sans être vu — et
+  // rouvrirait la course.
+  //
+  // C'est assumé plutôt que corrigé : couvrir le geste réellement demanderait de suivre les
+  // chemins à l'exécution, ce qui coûte bien plus que ce que ce risque justifie. Mais la
+  // limite est écrite ici pour que personne ne lise le vert de ce test comme une preuve que
+  // la course est impossible. Elle prouve seulement que les deux façons de l'écrire qu'on a
+  // rencontrées sont fermées.
+  //
+  // Si un troisième cas apparaît, l'ajouter à cette liste — c'est le geste attendu.
   const GESTES = [
     { forme: /join\(\s*CLI_DIR\s*,\s*['"`]payload['"`]\s*\)/, quoi: 'construit un chemin vers le payload partagé' },
     { forme: /['"`]npm['"`]\s*,\s*\[\s*['"`]pack['"`]/, quoi: 'lance « npm pack », qui lit le payload partagé' },
