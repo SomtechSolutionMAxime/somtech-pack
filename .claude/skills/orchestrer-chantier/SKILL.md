@@ -1,6 +1,6 @@
 ---
 name: orchestrer-chantier
-description: Orchestrer un chantier ServiceDesk — une Demande (D-…), un Projet (P-…) ou une Livraison (J-…) — de bout en bout, en faisant exécuter chaque unité de travail par un agent herdr dédié, ouvert puis fermé un à la fois. Le coordonnateur ne code jamais : il cadre, découpe ou inventorie, brieffe, tranche les arbitrages, fait reviewer et tient le ServiceDesk à jour. Utilise cette compétence dès qu'on te confie une demande, un projet ou un jalon de livraison entier à mener, qu'on te demande de coordonner plusieurs agents sur un même chantier, de piloter D-…, P-… ou J-… jusqu'à la mise en production, ou de faire exécuter des epics par des agents — même si le mot « orchestrer » n'est pas prononcé. NE PAS confondre avec /epic-runner (exécution d'un seul epic) ni /plan-servicedesk (création de la hiérarchie depuis un brainstorm).
+description: Orchestrer un chantier ServiceDesk — une Demande (D-…), un Projet (P-…) ou une Livraison (J-…) — de bout en bout, en faisant mener chaque unité de travail par un chef d'équipe herdr dédié, ouvert puis fermé un à la fois. Tout agent herdr qu'un orchestrateur ouvre est un chef d'équipe : il mène son unité de travail et distribue à ses propres sous-agents. Le coordonnateur ne code jamais : il cadre, découpe ou inventorie, brieffe, tranche les arbitrages, fait reviewer et tient le ServiceDesk à jour. Utilise cette compétence dès qu'on te confie une demande, un projet ou un jalon de livraison entier à mener, qu'on te demande de coordonner plusieurs agents sur un même chantier, de piloter D-…, P-… ou J-… jusqu'à la mise en production, ou de faire mener des epics par des chefs d'équipe — même si le mot « orchestrer » n'est pas prononcé. NE PAS confondre avec /epic-runner (exécution d'un seul epic) ni /plan-servicedesk (création de la hiérarchie depuis un brainstorm).
 ---
 
 # Orchestrer un chantier
@@ -15,35 +15,41 @@ Tu deviens le **pilote** d'un chantier. Il en existe trois formes, et elles se p
 
 Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule des trois qui ne se découpe pas : elle regroupe des demandes et des tickets qui existent déjà — souvent une vingtaine — et porte l'engagement de les mettre en production. Partout où ça change ta façon de faire, tu trouveras un paragraphe *Si ton chantier est une Livraison*. Si le tien n'en est pas une, saute-les.
 
-Un seul principe gouverne tout le reste :
+Deux principes gouvernent tout le reste :
 
 > **Un agent qui orchestre n'exécute jamais.**
+>
+> **L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents.**
 
-Le contexte est la ressource rare, et c'est l'exécution qui le remplit — lire des fichiers, lancer des commandes, déboguer. L'orchestration n'en consomme presque rien. C'est cette séparation qui te permet de tenir un chantier entier pendant que tes exécutants naissent et meurent à la tâche.
+Le contexte est la ressource rare, et c'est l'exécution qui le remplit — lire des fichiers, lancer des commandes, déboguer. L'orchestration n'en consomme presque rien. C'est cette séparation qui te permet de tenir un chantier entier pendant que tes chefs d'équipe naissent et meurent à la tâche.
 
 **Tu ne codes pas.** Tu cadres, tu découpes, tu brieffes, tu tranches, tu fais reviewer, tu tiens le ServiceDesk.
 
 ## Ce que cette compétence ne fait pas
 
-**Elle n'abroge rien.** Orchestrer est une couche qui s'ajoute par-dessus la façon de travailler existante — ce n'est pas un régime parallèle où les règles seraient suspendues le temps du chantier. Tout ce qui s'applique dans une session ordinaire continue de s'appliquer ici, pour toi comme pour chacun de tes exécutants : les règles d'or, les standards, les conventions de branche et de commit, les gates de qualité, le processus de livraison.
+**Elle n'abroge rien.** Orchestrer est une couche qui s'ajoute par-dessus la façon de travailler existante — ce n'est pas un régime parallèle où les règles seraient suspendues le temps du chantier. Tout ce qui s'applique dans une session ordinaire continue de s'appliquer ici, pour toi comme pour chacun de tes chefs d'équipe : les règles d'or, les standards, les conventions de branche et de commit, les gates de qualité, le processus de livraison.
 
 Trois conséquences concrètes, parce que c'est là qu'on dérape :
 
 - **Les compétences existantes restent la voie par défaut** (règle d'or n°15). Si `/pousse`, `/merge`, `/pousse-staging`, `/plan-servicedesk` ou `/epic-runner` couvrent ce que tu t'apprêtes à faire, tu les utilises — orchestrer ne t'autorise pas à refaire à la main ce qu'un outil encode déjà, avec ses gates.
-- **Tes exécutants ne travaillent pas sous dérogation.** Un agent mandaté suit exactement le processus qu'il suivrait seul : test rouge avant vert, branche portant l'ID de traçabilité, revue indépendante, statuts posés au moment où l'état change. Ton brief ajoute du contexte et des contraintes ; il n'en retire aucune.
+- **Tes chefs d'équipe ne travaillent pas sous dérogation.** Un agent mandaté suit exactement le processus qu'il suivrait seul : test rouge avant vert, branche portant l'ID de traçabilité, revue indépendante, statuts posés au moment où l'état change. Ton brief ajoute du contexte et des contraintes ; il n'en retire aucune.
 - **Ce que tu lis ici précise, jamais ne remplace.** Quand cette compétence et une règle établie semblent diverger, c'est la règle qui gagne, et l'écart mérite d'être signalé plutôt que tranché en silence.
 
 Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du travail entre plusieurs agents, leur dimensionnement, et la tenue d'un chantier entier par quelqu'un qui n'exécute pas. Rien de plus — mais rien de moins.
 
-## Les trois niveaux — et quand les utiliser
+## Les trois niveaux — et ce qui les sépare
 
-À partir d'une certaine taille, un seul orchestrateur devient le goulot — briefs, déblocages, arbitrages, fusions, statuts, tout passe par lui. La solution est d'interposer un **chef d'équipe herdr** qui distribue et synthétise. Mais cela ne s'impose que si tu as **plusieurs périmètres indépendants à la fois**. Sur un chantier d'un seul épic, reste simple.
+| Niveau | Qui | Ce qu'il fait | Ce qu'il ne fait **jamais** |
+|---|---|---|---|
+| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre aucun agent qui ne soit un chef d'équipe |
+| **Chef d'équipe** | tout agent herdr que tu ouvres | mène son unité de travail, la distribue à ses sous-agents, intègre, rend compte | n'ouvre aucun agent herdr |
+| **Sous-agents et coéquipiers** | outil `Agent`, autant que nécessaire | écrivent, testent, reviewent | ne fusionnent rien, ne parlent pas à l'orchestrateur |
 
-| Niveau | Qui | Ce qu'il fait | Ce qu'il ne fait **jamais** | Quand le justifier |
-|---|---|---|---|---|
-| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code | toujours |
-| **Chef d'équipe** | agent herdr optionnel | reçoit plusieurs unités, les distribue, intègre, rend compte | n'ouvre aucun agent herdr | 2+ périmètres parallèles, ou 5+ agents à coordonner |
-| **Sous-agents et coéquipiers** | outil `Agent`, autant que nécessaire | écrivent, testent, reviewent | ne fusionnent rien, ne parlent pas à l'orchestrateur | toujours |
+**Le niveau se lit dans le rôle, jamais dans un seuil.** Un agent herdr que tu ouvres **est** un chef d'équipe, du seul fait qu'il lancera des sous-agents — ne serait-ce que pour se faire reviewer, ce que la règle d'or n°8 lui impose de toute façon. Il n'y a donc aucun niveau à ajouter au-dessus de celui qui exécute : il y a un rôle à nommer correctement.
+
+C'est pourquoi la question « ce chantier justifie-t-il un chef d'équipe ? » ne se pose pas. Elle s'est posée un temps, sous la forme d'un seuil — *deux périmètres parallèles, cinq agents à coordonner*. **Ce seuil n'avait été mesuré par rien** : il a été inventé en rédigeant. Une définition par le rôle ne se discute pas ; un chiffre arbitraire se rediscute à chaque chantier, et il finit toujours par autoriser l'exception qu'on souhaitait.
+
+Et il coûtait cher dans l'autre sens. Le jour même où ce seuil a été écrit, l'orchestrateur qui l'appliquait a lancé deux sous-agents lui-même, faute d'atteindre le seuil — donc fait du travail de chef d'équipe sans le nommer. C'est exactement ce que le premier principe cherche à empêcher.
 
 **Le chef d'équipe fait le lien unique** — il est l'interlocuteur **exclusif** de l'orchestrateur pour son périmètre. Les sous-agents lui rendent compte, jamais directement à toi. C'est ce qui économise le contexte de l'orchestrateur et fait que le système tient à l'échelle.
 
@@ -53,15 +59,43 @@ Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du tr
 2. **Agrégation, pas relais** — il synthétise ce qu'il reçoit, il ne transmet pas mot à mot.
 3. **Arbitrage immédiat** — ce qui bloque remonte tout de suite, jamais gardé pour la fin. C'est le piège de ce niveau : un intermédiaire qui retient l'info fait pire qu'un goulot.
 
-## Quand ne pas ouvrir d'agent herdr
+## Combien d'agents ouvrir — et quand n'en ouvrir aucun
 
-Avant d'ouvrir un agent, même un chef d'équipe, demande-toi : **cette tâche tiendrait-elle dans un seul contexte d'agent ?**
+Le critère de taille ne décide pas **si** le niveau chef d'équipe existe : il existe toujours. Il décide **combien** de chefs d'équipe tu ouvres, et s'il en faut un seul.
 
-- Tâche < 30 min de travail, ou < 5 fichiers à toucher → **sous-agent seul**, pas d'agent herdr
-- Tâche multi-journée ou multi-périmètre → agent herdr
-- Plusieurs tâches indépendantes en parallèle → agent herdr chef d'équipe + sous-agents
+Avant d'ouvrir un agent, demande-toi : **cette tâche tiendrait-elle dans un seul contexte d'agent ?**
 
-**Critère de taille herdr** : un agent herdr consomme 15-20 min rien qu'à démarrer (brief, détection, permissions). C'est rentable si tu économises plus qu'ça à ne pas le faire.
+- Tâche < 30 min de travail, ou < 5 fichiers à toucher → traite-la **dans le chef d'équipe qui est déjà ouvert**, ou attends de la regrouper avec une autre. N'ouvre pas un agent pour ça.
+- Tâche multi-journée ou multi-périmètre → un chef d'équipe pour elle.
+- Plusieurs tâches indépendantes en parallèle → **un chef d'équipe par périmètre indépendant**, et chacun distribue chez lui.
+
+**Critère de taille herdr** : un agent herdr consomme 15-20 min rien qu'à démarrer — brief, naissance du worktree, détection, nommage. C'est rentable quand le travail qu'il porte pèse plus lourd que ce démarrage ; en dessous, tu paies le démarrage deux fois pour rien.
+
+**Le contre-exemple à ne pas oublier** : ouvrir plusieurs agents sur des unités qui *partagent des fichiers* ne parallélise rien. Tu fabriques une attente, puis un rebase. Le nombre d'agents suit le nombre de périmètres **réellement indépendants**, jamais le nombre d'epics.
+
+## Déclarer le modèle — toujours, explicitement, au lancement
+
+> **Le modèle d'un agent que tu fais naître se déclare au lancement. Toujours. Sans exception.**
+
+Ce n'est pas une optimisation, c'est une correction d'un piège :
+
+**`claude` lancé sans argument démarre en Haiku.** Il n'hérite **pas** du modèle de la session qui l'a lancé. Un orchestrateur qui tourne en Opus et qui ouvre un agent sans rien préciser vient de faire naître un Haiku sans le savoir — et il ne s'en apercevra qu'à la troisième demande de permission restée sans réponse.
+
+| Ce que tu fais naître | Modèle | Pourquoi |
+|---|---|---|
+| **Agent herdr** (chef d'équipe) | **Opus** — **jamais Haiku** | Haiku n'a pas de mode auto : il s'arrête à *chaque* demande de permission et attend qu'on l'autorise, commande par commande. Mesuré : deux reviewers Haiku ouverts en pane se sont bloqués en boucle, et le gain de vitesse a été entièrement mangé par le déblocage manuel |
+| **Sous-agent** (outil `Agent`) | **Haiku possible, et utile** | Un sous-agent n'a pas d'invite de permission à lui : il hérite de la session qui l'a lancé. Haiku y a toute sa place — notamment en **passe 1 de revue**, en portail de rejet |
+
+**Le lanceur de session ne relaie pas le modèle** — il refuse les drapeaux qu'il ne connaît pas, `--model` compris. Il faut donc **décomposer son geste** : faire naître le worktree, puis lancer l'agent dedans avec son modèle.
+
+```bash
+TS=$(date +%Y%m%d-%H%M%S)
+herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS && claude --model opus"
+```
+
+C'est la seule voie qui tienne à la fois la règle d'or n°11 — le worktree naît **avant** l'agent — et la déclaration explicite du modèle. Le worktree se retire ensuite à la main (§4f), le lanceur ne le connaissant pas.
+
+**Si tu découvres un agent déjà né sur le mauvais modèle**, `herdr pane run "$P" '/model opus'` le corrige — mais c'est un rattrapage, pas la méthode : entre sa naissance et ta découverte, il a déjà travaillé.
 
 ## Sous-agent ou coéquipier — le choix qui économise le contexte
 
@@ -77,15 +111,52 @@ Les deux outils existent, et le chef d'équipe doit savoir lequel utiliser. **Li
 - Exploration d'une erreur → sous-agent, il meurt après son rapport
 - Revue d'une PR → sous-agent, elle est ponctuelle
 - Correction post-review → **coéquipier**, tu vas le relancer avec le feedback
-- Lot complexe qu'on découpe en deux → agent herdr, mais si c'est juste une suite de corrections → **coéquipier**, tu ne perds pas son contexte
+- Lot complexe qu'on découpe en deux → un second chef d'équipe, mais si c'est juste une suite de corrections → **coéquipier**, tu ne perds pas son contexte
 
 C'est exactement le coût qu'un chantier a payé : chaque agent herdr rouvert repartait de zéro, perte de 10-15 min à rejouer la même histoire. Le coéquipier évite ça. Laisse le sous-agent mourir.
+
+## Ce que tu ne fais pas de tes mains
+
+> **L'orchestrateur qui renomme, débloque des permissions, corrige des scripts ou relance des processus a déjà perdu le fil.**
+
+Ces quatre gestes appartiennent au **chef d'équipe**. Ils ont ceci en commun : chacun paraît minuscule sur le moment, chacun se justifie par « c'est plus rapide si je le fais », et chacun te fait franchir la frontière que le premier principe trace. Tu ne les remarques pas parce qu'ils ne ressemblent pas à du code — mais ils remplissent ton contexte exactement comme du code, et pendant que tu les fais, personne ne tient le chantier.
+
+Ce ne sont pas des interdits de plus : ce sont des **symptômes**. Quand tu te surprends à en faire un, la question n'est pas « puis-je ? » mais « pourquoi est-ce tombé chez moi ? ». La réponse est presque toujours dans la naissance de l'agent, et c'est là qu'on corrige :
+
+| Le geste | À qui il appartient | Ce qu'il révèle, et ce qu'on corrige à la source |
+|---|---|---|
+| **Renommer** un agent | à lui-même | Son brief ne lui a pas dit son nom. Écris-le dedans — *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* — comme tu t'es nommé toi-même (§1). Toi, tu **vérifies** qu'il l'a fait ; lire n'est pas exécuter |
+| **Débloquer** une permission | à la veille, jamais à ta main | Deux causes : l'agent est né sur le mauvais modèle (voir la déclaration du modèle), ou personne n'a posé la veille de déblocage à sa naissance. Répare la naissance, pas l'instance |
+| **Corriger** un script qui échoue chez lui | à lui | Tu es en train de déboguer — c'est de l'exécution, la plus coûteuse qui soit en contexte. Renvoie-lui le constat, pas le correctif |
+| **Relancer** un processus mort | à lui | Un agent qui ne se relève pas seul est un agent dont le but ne dit pas quand il a fini (§4c-bis), ou dont le brief ne dit pas quoi faire en cas d'échec |
+
+**Le cas frontière, pour qu'il soit clair** : *poser* un automatisme à la naissance d'un agent — la veille, le but, le nom qu'il portera — fait partie du cadrage et t'appartient. *Actionner* ce que l'automatisme aurait dû faire, à la main, une fois de plus, est le symptôme. Le premier s'écrit une fois ; le second se répète, et c'est cette répétition qui te mange.
+
+**Et quand la veille s'arrête devant un écran qu'elle ne reconnaît pas, tu ne prends pas le clavier à sa place** — tu regardes, et tu tranches : c'est un arbitrage, et l'arbitrage est précisément ton métier.
+
+### La veille de déblocage — l'automatisme qui remplace ta main
+
+Un agent herdr s'arrête sur les demandes de permission de son environnement. Sans rien, il attend qu'un humain passe ; avec toi qui le débloques, tu deviens sa boucle d'événements. La veille est la troisième voie : une petite surveillance qui répond à sa place, et **qui s'arrête net dès qu'elle n'est plus sûre**.
+
+```bash
+scripts/orchestration/veille-deblocage.sh <pane> <agent>     # en arrière-plan, dès la naissance
+```
+
+Trois garanties la rendent utilisable, et ce sont elles qu'il ne faut jamais relâcher :
+
+1. **Elle ne répond que devant une vraie demande de permission**, reconnue par **deux signes concordants** — jamais un seul. Un seul signe peut appartenir à autre chose qu'une permission, et une réponse envoyée à autre chose est une frappe au hasard dans une session qui travaille.
+2. **Devant un écran qu'elle ne reconnaît pas, elle ne répond pas.** Elle s'arrête et le dit. C'est le seul moyen que cet outil nuise, donc c'est la garantie qu'on protège en premier : une veille qui devine est pire que pas de veille.
+3. **La position d'une option ne dit jamais son sens.** Certaines demandes n'ont que deux options et la deuxième y est « Non » — descendre d'un cran par habitude aurait refusé. D'autres proposent « oui, et dis-moi quoi faire ensuite », qui laisse l'agent attendre une instruction qui ne viendra jamais. On ne descend sur une option qu'après avoir **lu** qu'elle autorise durablement.
+
+Le troisième point est le même motif que partout ailleurs dans cette compétence : **ne jamais déduire le sens de la position** — ni celui d'une option, ni celui d'une colonne, ni celui d'un rang dans une liste.
+
+**Quand tu dois quand même répondre toi-même** — parce que la veille n'était pas posée, ou qu'elle a rendu la main —, réponds *« oui, et ne redemande plus »* plutôt qu'un simple oui. Chaque réponse de cette forme supprime une famille entière de blocages futurs ; un simple oui te ramène le même écran dans deux minutes.
 
 ## Prérequis
 
 - Tu tournes dans herdr (`HERDR_ENV=1`). Sinon, arrête — cette compétence pilote des panes.
 - Le MCP `servicedesk` est disponible.
-- `claude-swt` existe sur le poste.
+- `git worktree` et `claude --model …` sont disponibles dans les panes que tu ouvres.
 - Le chantier existe dans le ServiceDesk et tu as son code — `D-YYYYMMDD-NNNN` pour une Demande, `P-YYYYMMDD-NNNN` pour un Projet, `J-YYYYMMDD-NNNN` pour une Livraison.
 
 ## Checklist
@@ -100,6 +171,31 @@ herdr agent rename <ton-pane> d-20260727-0004       # ou p-20260706-0004, ou j-2
 ```
 
 **herdr impose les minuscules.** Un nom doit commencer par une lettre minuscule et ne contenir que minuscules, chiffres, `-` ou `_` (1 à 32 caractères) ; sinon `invalid_agent_name`. La convention Somtech écrit `D-20260727-0004`, le nom réellement porté est `d-20260727-0004`. **Toute comparaison de noms d'agents est donc insensible à la casse** — partout où tu en fais, y compris pour retrouver un pair dans `herdr agent list`.
+
+### 1-ter. Nommer — la chaîne registre → mandat → agent
+
+Elle vaut pour toi comme pour chacun de tes chefs d'équipe, et elle se lit dans cet ordre :
+
+> **Un agent reçoit un mandat rattaché au registre — une demande, un projet, une livraison, un epic, une story — et il porte le code de ce mandat. Rien d'autre.**
+
+- ✅ `e-20260807-0006` — l'epic qu'il mène
+- ✅ `d-20260807-0005` — la demande, quand il porte plusieurs epics de la même
+- ❌ `chef-equipe-orchestration`, `achever-orchestration`, `revue-pr180` — des noms inventés
+
+Un nom inventé n'est raccordé à rien : personne ne peut retrouver ce que l'agent a livré, ni relier une livraison à son mandat. Le code, lui, est unique par construction, et il ouvre le registre. Ce qui n'est pas rattaché au registre n'est pas traçable et disparaît avec la session.
+
+**Le nom vient du mandat, jamais du sujet du chantier.** C'est la faute qui revient le plus souvent, parce qu'elle paraît descriptive : nommer un chef d'équipe d'après ce sur quoi porte le chantier le rend **indistinguable de son orchestrateur**, qui porte déjà, lui, le code du chantier. Deux agents nommés d'après le même sujet, et l'on ne sait plus lequel arbitre et lequel exécute.
+
+Vaut aussi pour les agents de revue : ils portent le code de ce qu'ils revoient, jamais un nom de rôle.
+
+**Le libellé de l'onglet, lui, ne sert pas à adresser — il sert à reconnaître.** Il porte donc **le code, puis deux à quatre mots qui disent ce que l'agent fabrique** :
+
+```
+e-20260807-0006 preuves de la compétence
+d-20260807-0005 orchestration et veille
+```
+
+Deux à quatre mots, sur ce qui se **fabrique** — pas sur le domaine, pas sur le rôle, pas sur l'état. « e-20260807-0006 orchestration » ne distingue rien d'un onglet voisin ; « e-20260807-0006 harnais de mutation » se reconnaît d'un coup d'œil dans une fenêtre qui en compte huit.
 
 ### 1-bis. Ouvrir ta ligne avec le dirigeant
 
@@ -125,7 +221,7 @@ Si la ligne ne peut pas s'ouvrir — jeton absent du poste, par exemple —, dis
 - **Le BRD n'existe pas** → tu ne découpes pas encore. Fais-le écrire par un agent dédié (c'est un epic à part entière), ou amende-le si l'exigence manque. Une story qui ne se rattache à aucune EF est une violation au même titre qu'un manifeste périmé.
 - **Le BRD existe mais ne couvre pas le besoin** → amende-le **avant** d'écrire la story, pas après. Un domaine entier peut manquer : c'est fréquent sur un BRD jeune, et ça reste un préalable, pas une dette.
 
-**L'ontologie** (règle d'or n°1) — si le chantier touche des entités, relations ou attributs, lis l'ontologie du projet avant de découper. **Si tu détectes un écart entre l'ontologie et le code, signale-le avant de continuer** : soit on met l'ontologie à jour d'abord, soit on documente le décalage comme ticket. Jamais de code par-dessus en silence — et surtout, ne laisse pas un agent exécutant découvrir l'écart tout seul et l'arbitrer à sa façon.
+**L'ontologie** (règle d'or n°1) — si le chantier touche des entités, relations ou attributs, lis l'ontologie du projet avant de découper. **Si tu détectes un écart entre l'ontologie et le code, signale-le avant de continuer** : soit on met l'ontologie à jour d'abord, soit on documente le décalage comme ticket. Jamais de code par-dessus en silence — et surtout, ne laisse pas un chef d'équipe découvrir l'écart tout seul et l'arbitrer à sa façon.
 
 **Le chantier lui-même** — MCP `demands` action `get` pour une Demande, `projects` pour un Projet, `deliveries` pour une Livraison. Vérifie qu'il décrit encore ce qu'on veut faire : un énoncé rédigé il y a trois semaines décrit souvent autre chose que le besoin actuel. **S'il a divergé, réécris-le avant de découper** — tout ce qui suit en dépend.
 
@@ -197,9 +293,9 @@ Les signaux qu'un epic ne tiendra pas :
 
 ### 4. La boucle — orchestrateur et chef d'équipe
 
-**Si tu es orchestrateur** : tu ouvres des agents herdr (un par epic) et tu suis §4 complètement.
+**Si tu es orchestrateur** : tu ouvres des chefs d'équipe (un par périmètre indépendant) et tu suis §4 complètement.
 
-**Si tu es chef d'équipe** : tu reçois plusieurs unités de travail d'un orchestrateur, et tu fais la **même boucle** (§4) mais avec des outils différents :
+**Si tu es chef d'équipe** : tu as reçu une ou plusieurs unités de travail d'un orchestrateur, et tu fais la **même boucle** (§4) mais avec des outils différents :
 - Au lieu de `herdr pane run` (agent herdr) → `Agent(prompt)` ou `Agent(prompt, name: "...")` (sous-agent/coéquipier)
 - Au lieu de `herdr pane close` → pas de fermeture (sous-agent meurt après), ou `SendMessage(to: "coequipier-name")` pour le reprendre
 - Au lieu de `herdr agent prompt` → des messages directs aux sous-agents en logs/structuré
@@ -213,7 +309,8 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 
 **a. Écrire le brief dans un fichier.** Jamais dans le terminal : un retour à la ligne soumet le prompt et coupe le message en deux. Le brief contient :
 
-- qui il est (l'epic, le chantier parent, son coordonnateur) ;
+- qui il est (l'epic, le chantier parent, son coordonnateur) — **et le nom qu'il porte**, qu'il se donnera lui-même en naissant : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
+- **qu'il est chef d'équipe** : il distribue à ses propres sous-agents ce qui se distribue, il intègre, et il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
 - **ce qu'il doit lire lui-même** — chemins git, id d'epic, wireframes. *Une référence, jamais un contenu* : il ira le chercher avec son propre contexte, pas le tien ;
 - les contraintes non négociables, avec **le test qui doit les prouver** ;
 - **ce qu'il ne doit pas toucher** — nomme les fichiers où un autre agent travaille en ce moment ;
@@ -222,36 +319,41 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 - **la consigne de compaction** : *si tu sens que tu vas devoir compacter ton contexte, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
 - **la consigne de sas occupé, dans les deux sens** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter ; et préviens-moi de nouveau quand ta poussée finit par passer.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus **et la reprise** : sans ces deux lignes dans son brief, le déclencheur ne t'atteint jamais. Le second manque plus souvent que le premier — et une attente annoncée dont la fin ne l'est pas est pire que le silence d'origine.
 
-**b. Faire naître l'agent — le worktree avant lui.**
+**b. Faire naître le chef d'équipe — le worktree avant lui, le modèle avec lui.**
 
 ```bash
-P=$(herdr tab create --workspace <ws> --label "<epic> <sujet>" --no-focus \
+# Le libellé porte le code, puis 2 à 4 mots sur ce que l'agent FABRIQUE (§1-ter).
+P=$(herdr tab create --workspace <ws> --label "e-20260727-0010 lecteur du journal" --no-focus \
     | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['root_pane']['pane_id'])")
-herdr pane run "$P" 'cd <repo-principal> && claude-swt'
+
+# Le worktree naît AVANT l'agent (règle d'or n°11), et le modèle se déclare AU lancement.
+TS=$(date +%Y%m%d-%H%M%S)
+herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS && claude --model opus"
 
 # Attendre que l'agent soit réellement détecté, plutôt que de parier sur un délai.
 for _ in $(seq 1 30); do
-  herdr agent get "$P" 2>/dev/null | grep -q '"result"' && break
+  herdr agent get "$P" 2>/dev/null | jq -e '.result != null and .error == null' >/dev/null && break
   sleep 2
 done
-herdr agent rename "$P" e-20260727-0010 | grep -q '"result"' \
-  || echo "⛔ pas d'agent dans $P — regarde ce qui s'y passe (herdr pane read) avant d'aller plus loin"
+
+# Poser la veille de déblocage, pour ne jamais avoir à débloquer toi-même.
+scripts/orchestration/veille-deblocage.sh "$P" e-20260727-0010 &
 ```
 
-`claude-swt` crée le worktree **puis** lance l'agent dedans : la règle d'or n°11 est tenue par construction. Le nom de l'agent est le code de l'unité de travail dont il a la charge, en minuscules.
+**Pourquoi ce geste est décomposé** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Voir la section sur la déclaration du modèle.
 
-**Vérifie que le rename a pris avant de continuer.** Utilise `jq` pour parser la réponse herdr, pas `grep` :
+**Le nom, c'est lui qui se le donne** : son brief le lui dit (*« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »*), et c'est à lui de faire le geste — pas à toi (voir « Ce que tu ne fais pas de tes mains »). Toi, tu **vérifies** :
 
 ```bash
-herdr agent rename "$P" e-20260727-0010 | jq -e '.result != null and .error == null' \
-  || echo "⛔ pas d'agent dans $P — regarde ce qui s'y passe (herdr pane read) avant d'aller plus loin"
+herdr agent get "$P" | jq -e '.result.agent.name == "e-20260727-0010"' \
+  || echo "⛔ pas d'agent nommé dans $P — regarde ce qui s'y passe (herdr pane read) avant d'aller plus loin"
 ```
 
-Un `grep -q '"result"'` accepte une réponse `{"error": "...", "result": null}` parce que le mot est présent. `jq` vérifie le **fait** : `result` est non-nul ET pas d'erreur. Un agent qui met plus longtemps que prévu à démarrer reste anonyme, et sans cette vérification tu ne t'en apercevras qu'au moment où tu as besoin de lui parler.
+**Vérifie par le fait, jamais par le mot.** Un `grep -q '"result"'` accepte une réponse `{"error": "...", "result": null}` parce que le mot y est présent. `jq -e` vérifie ce qui est vrai : `result` non nul, pas d'erreur, et le nom effectivement porté. Un agent qui met plus longtemps que prévu à démarrer reste anonyme, et sans cette vérification tu ne t'en apercevras qu'au moment où tu as besoin de lui parler.
 
 Même prudence pour la suite : après avoir livré le brief, relis son pane (`herdr pane read "$P"`) pour confirmer qu'il l'a bien reçu. Une session qui s'ouvre sur un dossier neuf peut poser une question avant d'accepter le premier message — auquel cas ton brief a servi de réponse à cette question, et non de brief.
 
-*À savoir* : `claude-swt` et ses variantes sont des **fonctions du shell interactif**, pas des binaires. Elles marchent dans un pane (qui charge le profil), mais pas depuis un outil qui lance un shell non interactif — là, utilise les commandes `git worktree` directement.
+*À savoir* : `claude-swt` et ses variantes sont des **fonctions du shell interactif**, pas des binaires. Elles marchent dans un pane (qui charge le profil), mais pas depuis un outil qui lance un shell non interactif. Et même dans un pane, elles ne relaient pas le modèle — c'est pourquoi la naissance ci-dessus passe par `git worktree` directement.
 
 **b-bis. Consigner la filiation — au moment où tu ouvres, pas après.**
 
@@ -264,7 +366,7 @@ Où l'écrire — les surfaces qui existent réellement :
 - **Toujours** : complète la description de l'epic (`epics` action `update`). C'est le seul support attaché à l'unité de travail elle-même, et il survit à la fermeture de l'agent. **Un epic n'a pas de fil de commentaires** — l'action n'existe pas ; c'est bien la description qu'on complète.
 - **Si le chantier a un fil de discussion** : une Demande (`demands` action `comment`) ou une Livraison (`delivery_comments` action `create`). Mets-y la même ligne : c'est là que le dirigeant lit. **Un Projet n'a pas ce fil** — pour lui, la description de l'epic fait foi.
 
-Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minuscules), son pane, son worktree, et le moment. **Le worktree est `foreground_cwd`, pas `cwd`** : tu as lancé `claude-swt` depuis le dépôt principal, donc `cwd` y reste pendant que `foreground_cwd` suit l'agent dans son worktree. Les deux champs sont déjà dans le `herdr agent get "$P"` que tu viens de lancer.
+Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minuscules), son pane, son worktree, et le moment. **Le worktree est `foreground_cwd`, pas `cwd`** : le pane a démarré dans le dépôt principal, donc `cwd` y reste pendant que `foreground_cwd` suit l'agent dans son worktree. Les deux champs sont déjà dans le `herdr agent get "$P"` que tu viens de lancer.
 
 **Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Ce qui dépend d'un geste manuel se troue au premier oubli — c'est précisément pourquoi, partout ailleurs, on fait journaliser l'outil et jamais l'agent. Elle tiendra jusqu'à ce que la naissance d'un agent soit elle-même outillée, et que l'outil enregistre la filiation sans avoir à te la demander. Note au passage que ça ne viendra pas gratuitement pour la façon de faire décrite ici : ouvrir un agent par `tab create` puis `pane run` n'est pas un point d'instrumentation — il faudra que le geste passe par la commande de démarrage d'agent pour qu'un outil ait quelque chose à observer.
 
@@ -303,7 +405,7 @@ herdr agent prompt <ton-nom-ou-ton-pane> '<son-nom> : poussee passee, le sas eta
 
 Ce sont les deux seuls de ces signaux qui n'annoncent **rien de cassé** — et c'est précisément pour ça qu'on ne pense pas à les envoyer. Ils déclenchent les deux moitiés du §4g. Le second est celui qu'on oublie : sans lui, tu auras annoncé une attente au représentant et jamais sa fin, ce qui est pire que de n'avoir rien dit.
 
-⚠️ **N'envoie pas ton exécutant lire la compétence `herdr` du poste sans le prévenir.** Elle n'est pas livrée par le pack — elle vient de l'outil — et elle enseigne aujourd'hui `herdr wait output …` et `herdr wait agent-status …`, deux commandes qui **n'existent pas** (`unknown command: wait`). Un agent qui les suit perd du temps sur une erreur qui n'est pas la sienne. Donne-lui les commandes dans son brief ; si tu tiens à l'y renvoyer, dis-lui dans le même souffle que les formes réelles sont `herdr agent wait … --until …` et `herdr pane wait-output …`.
+⚠️ **N'envoie pas ton chef d'équipe lire la compétence `herdr` du poste sans le prévenir.** Elle n'est pas livrée par le pack — elle vient de l'outil — et elle enseigne aujourd'hui `herdr wait output …` et `herdr wait agent-status …`, deux commandes qui **n'existent pas** (`unknown command: wait`). Un agent qui les suit perd du temps sur une erreur qui n'est pas la sienne. Donne-lui les commandes dans son brief ; si tu tiens à l'y renvoyer, dis-lui dans le même souffle que les formes réelles sont `herdr agent wait … --until …` et `herdr pane wait-output …`.
 
 Ça supprime le délai entre « il a fini » et « je m'en aperçois ». En filet, tu peux attendre :
 
@@ -357,12 +459,14 @@ git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}.. 2>/dev/null
 herdr pane close "$P"
 
 # 4. retirer le worktree et sa branche-socle
-claude-swt-done <timestamp>          # depuis un pane ; sinon, ou si refusé :
-git -C <repo> worktree remove --force ~/worktrees/<repo>/<timestamp>
+#    Tu l'as créé toi-même avec `git worktree add` (§4b) : c'est donc `git` qui le retire.
+#    Le teardown du lanceur de session ne connaît pas les worktrees qu'il n'a pas ouverts.
+git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>   # --force si des restes traînent
+git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
 
-**Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, dont potentiellement toi. `herdr tab close` les emporte tous, sans confirmation : tu peux te fermer toi-même en croyant fermer ton exécutant. Si tu veux savoir avec qui un agent partage son tab avant d'agir, `herdr agent list` donne le `tab_id` de chacun.
+**Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, dont potentiellement toi. `herdr tab close` les emporte tous, sans confirmation : tu peux te fermer toi-même en croyant fermer ton chef d'équipe. Si tu veux savoir avec qui un agent partage son tab avant d'agir, `herdr agent list` donne le `tab_id` de chacun.
 
 **Fais l'inventaire régulièrement** — les worktrees s'accumulent vite quand on enchaîne les agents :
 
@@ -401,7 +505,7 @@ ATS_ATTENTE_DECLAREE=oui \
   bash "$L" passage
 ```
 
-**Qui pousse ne change rien à qui parle.** Le plus souvent c'est ton exécutant qui lance `/pousse-staging` et qui voit le refus — c'est pour ça que son brief lui demande de te le remonter (§4a, §4d). La parole vers le représentant, elle, reste la tienne : lui ne connaît pas le représentant, et ne doit pas le connaître.
+**Qui pousse ne change rien à qui parle.** Le plus souvent c'est ton chef d'équipe qui lance `/pousse-staging` et qui voit le refus — c'est pour ça que son brief lui demande de te le remonter (§4a, §4d). La parole vers le représentant, elle, reste la tienne : lui ne connaît pas le représentant, et ne doit pas le connaître.
 
 Les valeurs viennent de là où elles existent, jamais de ton estimation :
 
@@ -450,7 +554,7 @@ Nomme les agents sans nom que tu croises : un agent anonyme est inadressable.
 
 ### 7. Tenir le ServiceDesk — c'est ton travail, pas le leur
 
-Les exécutants tiennent leurs stories ; **toi tu réponds de l'ensemble**. Un agent fermé ne corrigera plus rien : ce qu'il a laissé de faux dans le ServiceDesk y reste jusqu'à ce que tu le voies.
+Les chefs d'équipe tiennent leurs stories ; **toi tu réponds de l'ensemble**. Un agent fermé ne corrigera plus rien : ce qu'il a laissé de faux dans le ServiceDesk y reste jusqu'à ce que tu le voies.
 
 À chaque étape :
 
@@ -487,8 +591,19 @@ Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne san
 | Ce qu'on est tenté de faire | Pourquoi ça casse |
 |---|---|
 | Coder « juste ce petit bout » soi-même | Le contexte du pilote se remplit, et il ne tient plus le chantier |
+| Lancer soi-même deux sous-agents « parce que ça ne valait pas un agent » | C'est du travail de chef d'équipe non nommé — exactement ce que le premier principe interdit. Si le lot mérite des sous-agents, il mérite un chef d'équipe |
+| Chercher le seuil qui justifierait un chef d'équipe | Il n'y en a pas : tout agent herdr que tu ouvres en est un. Le seuil qui a existé n'avait été mesuré par rien |
+| Faire naître un agent sans déclarer son modèle | Il naît en Haiku, sans mode auto, et s'arrête à chaque permission. Le modèle ne s'hérite pas de la session qui lance |
+| Faire naître un agent herdr sur Haiku | Il n'a pas de mode auto : le gain de vitesse est intégralement mangé par le déblocage manuel |
+| Nommer un agent d'après le sujet du chantier | Il devient indistinguable de son orchestrateur, qui porte déjà ce code. Le nom vient du **mandat**, pas du sujet |
+| Inventer un nom d'agent « plus parlant » | Il n'est raccordé à rien : plus personne ne relie la livraison à son mandat, et ça disparaît avec la session |
+| Mettre le rôle ou le domaine dans le libellé de l'onglet | Le libellé sert à **reconnaître** dans une fenêtre qui en compte huit : le code, puis 2 à 4 mots sur ce qui se fabrique |
+| Renommer, débloquer, corriger un script ou relancer un processus à la place d'un agent | Ces quatre gestes appartiennent au chef d'équipe. Quand ils tombent chez toi, c'est la naissance de l'agent qu'il faut corriger, pas l'instance |
+| Débloquer les permissions à la main plutôt que de poser la veille | Tu deviens sa boucle d'événements. La veille s'écrit une fois ; ta main se répète |
+| Répondre « oui » plutôt que « oui, et ne redemande plus » | Le même écran revient dans deux minutes ; l'autre forme supprime une famille entière de blocages |
+| Laisser la veille deviner devant un écran qu'elle ne reconnaît pas | C'est le seul moyen que cet outil nuise. Une veille qui devine est pire que pas de veille |
 | Verser son contexte dans le brief | L'agent reçoit ce que tu sais, pas ce dont il a besoin — et paie pour le lire |
-| Faire travailler deux de tes exécutants en même temps | Techniquement possible — chacun a son worktree — mais tu as deux fils à suivre, deux séries de correctifs, et des merges qui se croisent sur des epics souvent liés. Le gain est rarement là où on l'attend |
+| Faire travailler deux de tes chefs d'équipe en même temps | Techniquement possible — chacun a son worktree — mais tu as deux fils à suivre, deux séries de correctifs, et des merges qui se croisent sur des epics souvent liés. Le gain est rarement là où on l'attend |
 | Mettre deux agents dans le même worktree | Là, ce n'est plus un arbitrage : ils se marchent dessus sur les mêmes fichiers et la même branche |
 | Laisser un agent fini ouvert | Son worktree pointe sur un commit périmé, et le pane occupe l'écran |
 | Accrocher la dette du review à l'epic livré | L'epic ne ferme jamais et le ServiceDesk ment |

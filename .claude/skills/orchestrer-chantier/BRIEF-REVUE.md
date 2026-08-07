@@ -42,9 +42,9 @@
 - Résultat : une valeur périmée reste accessible par l'autre chemin.
 
 **Garde efficace** :
-- Un correctif touch pas une table → vérifier aussi ce qui en **sort**
+- Un correctif ajoute quelque chose dans une table → vérifier aussi ce qui en **sort**
 - Une validation ajoutée → tester aussi la suppression / annulation / rollback du même état
-- Deux sens ? Résolve le positif **ET** le négatif.
+- Deux sens ? Résous le positif **ET** le négatif.
 
 ---
 
@@ -54,11 +54,21 @@ Le code ou le texte que tu reviews prescrit-il les trois niveaux ?
 
 | Niveau | Doit être nommé et expliqué | Exemple de défaut à chercher |
 |---|---|---|
-| **Orchestrateur** | « cadre, découpe, arbitre, fusionne, tient registre » | dit qu'il code, ou qu'il revoit lui-même |
-| **Chef d'équipe** | « distribue, synthétise, rend compte au seul orchestrateur » | dit qu'il ouvre un agent herdr (rôle du niveau suivant) |
+| **Orchestrateur** | « cadre, découpe, arbitre, fusionne, tient registre » | dit qu'il code, qu'il revoit lui-même, ou qu'il ouvre autre chose qu'un chef d'équipe |
+| **Chef d'équipe** | « mène son unité, distribue à ses sous-agents, intègre, rend compte au seul orchestrateur » | dit qu'il ouvre un agent herdr (rôle du niveau au-dessus) |
 | **Sous-agents/coéquipiers** | « écrivent, testent, reviewent » ; distingue les deux outils | confond sous-agent (jetable, `Agent(prompt)`) et coéquipier (persistant, `Agent(..., name)` + `SendMessage`) |
 
-Le texte doit dire **quand** chaque niveau se justifie. Cherche : « 2+ périmètres » ou « 5+ agents » pour chef d'équipe, « tâche < 30 min » pour ne pas ouvrir d'agent.
+⚠️ **Le défaut le plus grave à chercher ici est un seuil.** Le niveau chef d'équipe **ne se justifie par aucun chiffre** : tout agent herdr qu'un orchestrateur ouvre en est un, du seul fait qu'il lancera des sous-agents. Un texte qui écrit « à partir de 2 périmètres », « au-delà de 5 agents », ou toute autre condition numérique pour *ouvrir le niveau* a réintroduit l'erreur que ce brief existe pour attraper. Le chiffre a le droit de rester pour décider **combien** d'agents ouvrir (le démarrage coûte 15-20 min) — jamais pour décider **si le niveau existe**.
+
+Cherche aussi « tâche < 30 min » : c'est la forme légitime du critère, celle qui dit de ne pas ouvrir un agent *de plus*.
+
+## Les trois autres prescriptions à vérifier
+
+| Prescription | Ce que le texte doit dire | Défaut à chercher |
+|---|---|---|
+| **Modèle déclaré au lancement** | le modèle se déclare **toujours**, explicitement ; un lancement nu naît en Haiku et **n'hérite pas** de la session appelante ; agent herdr = Opus, **jamais** Haiku ; sous-agent = Haiku possible et utile en passe 1 | « par défaut », « si besoin », « on peut préciser » — toute forme qui rend la déclaration facultative ; ou l'affirmation que le modèle s'hérite |
+| **Registre → mandat → agent** | le nom **vient du mandat** au registre (`e-…`, `d-…`, `t-…`), jamais du sujet du chantier ni d'un rôle ; le **libellé d'onglet** porte le code puis 2 à 4 mots sur ce que l'agent **fabrique** | un exemple de libellé qui nomme le domaine ou le rôle ; la confusion nom d'agent / libellé d'onglet ; un nom inventé donné en exemple sans être marqué comme fautif |
+| **Les gestes qui n'appartiennent pas à l'orchestrateur** | renommer, débloquer une permission, corriger un script, relancer un processus — **les quatre**, chacun rendu au chef d'équipe | l'énumération amputée : trois gestes sur quatre, ou un geste transformé en « sauf si ça presse ». Compte-les |
 
 ---
 
@@ -108,9 +118,11 @@ Défauts trouvés :
 - [motif 1 ou 2 ou 3 ?] : détail observable du défaut
 
 Mutations posées :
-- mutation 1 : [décrivain ce que tu as changé → a fait rougir / n'a pas rougir]
+- mutation 1 : [ce que tu as changé → a rougi / est resté vert]
 - mutation 2 : […]
 - mutation 3 : […]
+
+Mutations restées vertes (= faux témoins) : […] ou « aucune »
 
 Verdict : `REJET` / `RIEN VU` (Haiku) | `mergeable` / `correctifs` / `reprendre` (Sonnet)
 ```
