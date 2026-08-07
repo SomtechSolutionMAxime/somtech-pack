@@ -87,20 +87,25 @@ test('conformité : CONTEXTE.md est nommé comme jamais touché, jamais fabriqu�
 
 // ═══════════════════════════════ 2. ce que ce lot ne devait pas casser
 
-test('/gestionnaire-client (E-20260807-0002, en chantier parallèle) n’a pas été modifié par ce lot', () => {
-  // Le brief est explicite : « Ne touche pas à /gestionnaire-client. Si tu te retrouves à
-  // devoir la modifier, arrête-toi. » On le garde par le CONTENU, comparé à HEAD — pas par
-  // « le fichier existe encore », qui ne prouverait rien sur une modification en place.
+test('/gestionnaire-client, la compétence de pose, existe toujours à côté de celle-ci', () => {
+  // CE QUE CE TEST GARDAIT, ET POURQUOI IL NE LE GARDE PLUS AINSI (T-20260807-0067).
+  //
+  // Il comparait le CONTENU de /gestionnaire-client à `git diff HEAD`, pour faire respecter
+  // une consigne de brief datée — « n'y touche pas, un autre lot y travaille en parallèle ».
+  // Deux raisons de ne pas le laisser tel quel :
+  //   1. il ne gardait rien au-delà du commit suivant — `git diff HEAD` redevient vide dès
+  //      qu'on valide, donc la garde s'évaporait au moment même où la modification devenait
+  //      permanente. Une preuve qui disparaît quand ce qu'elle surveille arrive n'en est pas une ;
+  //   2. le chantier parallèle qu'il protégeait est fusionné (#184), et /gestionnaire-client
+  //      a depuis été corrigée sur son propre lot — sa documentation DOIT suivre son
+  //      comportement, sinon on garde une doc qui ment pour garder un test qui ne prouve rien.
+  //
+  // Ce qui reste vrai et vaut d'être gardé : les deux compétences sont distinctes, celle-ci ne
+  // pose aucun lieu, et l'autre existe pour ça — le test ci-dessus (« ne pose aucun lieu neuf »)
+  // le vérifie côté texte, celui-ci vérifie que l'alternative qu'il nomme existe pour de bon.
   const chemin = join('.claude', 'skills', 'gestionnaire-client', 'SKILL.md');
-  assert.ok(existsSync(join(REPO, chemin)), 'la compétence de pose a disparu — ce lot ne devait pas la retirer');
-
-  let diff;
-  try {
-    diff = execFileSync('git', ['diff', '--stat', 'HEAD', '--', chemin], { cwd: REPO, encoding: 'utf8' });
-  } catch {
-    diff = null; // pas un repo git dans ce contexte de test — rien à comparer, on ne fait pas échouer pour ça
-  }
-  if (diff !== null) {
-    assert.equal(diff.trim(), '', `${chemin} a été modifié par ce lot alors que le brief l'interdit :\n${diff}`);
-  }
+  assert.ok(
+    existsSync(join(REPO, chemin)),
+    'la compétence de pose a disparu — celle-ci renvoie vers elle, la promesse serait morte'
+  );
 });

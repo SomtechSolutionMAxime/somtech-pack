@@ -17,7 +17,7 @@
 // `verifierCanalJoignable`, plus bas, est l'implémentation réelle — celle que la ligne de
 // commande branche — mais un test peut en fournir une autre sans monter Slack du tout.
 
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
 import { trouverCanal, estMembreDuCanal } from './slack.js';
@@ -46,6 +46,24 @@ function gabaritsDir(depotClient) {
   return join(depotClient, '.claude', 'templates', 'gestionnaire-client');
 }
 
+/**
+ * Ce que la SOURCE offre, avant qu'on ait écrit quoi que ce soit — fichier par fichier, jamais
+ * « le répertoire existe ».
+ *
+ * DÉFAUT VÉCU ICI (T-20260807-0067) : rien ne vérifiait la source du tout. Sur un dépôt qui
+ * n'avait pas reçu la version du pack portant les gabarits, `mkdirSync` créait
+ * `.gestionnaire/<client>/`, puis `copyFileSync` levait un `ENOENT` brut — et le répertoire
+ * vide restait. La relance suivante le lisait comme un lieu posé. Vérifier seulement la
+ * présence du RÉPERTOIRE de gabarits n'aurait corrigé qu'une porte sur deux : un pack
+ * partiellement déposé serait passé, pour échouer sur le fichier manquant, au même endroit.
+ */
+export function etatSource(depotClient) {
+  const source = gabaritsDir(depotClient);
+  const presents = GABARITS.filter((f) => existsSync(join(source, f)));
+  const manquants = GABARITS.filter((f) => !presents.includes(f));
+  return { source, complete: manquants.length === 0, presents, manquants };
+}
+
 /** Le dépôt client porte-t-il un fichier d'environnement connu, à sa racine ? */
 export function aFichierEnvironnement(depotClient) {
   return FICHIERS_ENV_CONNUS.some((f) => existsSync(join(depotClient, f)));
@@ -54,16 +72,20 @@ export function aFichierEnvironnement(depotClient) {
 /**
  * Ce que le lieu d'un client contient déjà, sans jamais y toucher.
  *
- * Ne regarde PAS si les quatre fichiers sont tous là : un lieu PARTIELLEMENT posé (une
- * interruption au milieu d'une pose précédente, par exemple) doit rester intact lui aussi —
- * « elle ne recrée rien, n'écrase rien » ne souffre pas d'exception pour un lieu incomplet.
+ * Rend `existe` ET `complet`, et la distinction n'est pas cosmétique : c'est le défaut le plus
+ * grave de T-20260807-0067. Un répertoire créé puis abandonné par une pose qui a échoué EXISTE
+ * sans être un lieu — `presents: []` et `deja_installe: true` ne peuvent pas coexister. Un
+ * représentant ouvert là n'aurait ni métier, ni outils, ni permissions bornées, et rien ne le
+ * signalerait. L'idempotence ne repose donc que sur `complet` ; un lieu partiel est nommé comme
+ * tel et refusé — jamais complété (« elle ne recrée rien, n'écrase rien » reste entier), jamais
+ * déclaré installé.
  */
 export function etatLieu(depotClient, client) {
   const racine = join(depotClient, '.gestionnaire', client);
-  if (!existsSync(racine)) return { existe: false, racine };
+  if (!existsSync(racine)) return { existe: false, complet: false, racine, presents: [], manquants: [...GABARITS] };
   const presents = GABARITS.filter((f) => existsSync(join(racine, f)));
   const manquants = GABARITS.filter((f) => !presents.includes(f));
-  return { existe: true, racine, presents, manquants };
+  return { existe: true, complet: manquants.length === 0, racine, presents, manquants };
 }
 
 /**
@@ -85,6 +107,30 @@ export async function verifierCanalJoignable(jetonRobot, nomCanal) {
   if (!membre) return { joignable: false, motif: 'non_membre', canal: nomCanal, id: canal.id };
 
   return { joignable: true, canal: nomCanal, id: canal.id, prive: Boolean(canal.is_private) };
+}
+
+/**
+ * Retire ce qu'une pose interrompue avait commencé — le lieu de CE client, et rien d'autre.
+ *
+ * DÉFAUT RELEVÉ EN REVUE, et il n'est pas théorique : la première version de ce retrait
+ * décidait de supprimer `.gestionnaire/` entier d'après un `existsSync` lu AVANT l'écriture
+ * (« il n'existait pas quand j'ai commencé, donc c'est moi qui l'ai créé, donc je peux le
+ * reprendre »). Entre cette lecture et le retrait, un autre processus a le temps de poser le
+ * lieu d'un AUTRE client : deux poses lancées ensemble sur le même dépôt lisent toutes deux
+ * « il n'existait pas », et celle qui échoue emporte le lieu que l'autre venait de réussir.
+ *
+ * On ne présume donc plus de qui a créé quoi : on retire le lieu du client, puis on tente de
+ * retirer `.gestionnaire/` SANS `recursive` — le noyau refuse (`ENOTEMPTY`) s'il reste le
+ * moindre voisin dedans, et c'est lui, pas nous, qui arbitre au moment exact du retrait.
+ */
+export function retirerCeQuiAEteCommence(depotClient, client) {
+  rmSync(join(depotClient, '.gestionnaire', client), { recursive: true, force: true });
+  try {
+    rmdirSync(join(depotClient, '.gestionnaire')); // sans `recursive` : échoue s'il reste un voisin
+  } catch {
+    // Il reste quelque chose, ou il n'y a plus rien à retirer — dans les deux cas, ce n'est
+    // plus notre affaire. Le lieu de ce client, lui, est bien parti.
+  }
 }
 
 /** Le message de refus, écrit pour être lu et suivi — jamais pour être analysé par un test. */
@@ -117,11 +163,52 @@ function messageDeRefus(joignabilite) {
  * @param {() => Promise<{joignable: boolean, motif?: string}>} p.verifierJoignabilite
  */
 export async function preparerLieuRepresentant({ depotClient, client, canal, verifierJoignabilite }) {
+  // ─── Garde 1 : l'idempotence, et elle ne vaut QUE pour un lieu complet.
   const etat = etatLieu(depotClient, client);
-  if (etat.existe) {
+  if (etat.complet) {
     return { ok: true, cree: false, deja_installe: true, ...etat };
   }
+  if (etat.existe) {
+    return {
+      ok: false,
+      cree: false,
+      deja_installe: false,
+      ...etat,
+      refus: {
+        motif: 'lieu_partiel',
+        racine: etat.racine,
+        presents: etat.presents,
+        manquants: etat.manquants,
+        message:
+          `« ${etat.racine} » existe mais n'est pas un lieu : il manque ${etat.manquants.join(', ')}. ` +
+          `Un représentant ouvert là n'aurait ni métier, ni moyens, ni permissions bornées. ` +
+          `Retire ce reste (« rm -rf ${etat.racine} »), puis relance — cette compétence ne complète ` +
+          `jamais un lieu à demi posé, elle ne saurait pas ce qu'un humain y a déjà changé.`,
+      },
+    };
+  }
 
+  // ─── Garde 2 : la SOURCE, vérifiée au même titre que le canal, et AVANT lui — un refus qui
+  // ne dépend que du disque local ne doit coûter aucun aller-retour réseau.
+  const source = etatSource(depotClient);
+  if (!source.complete) {
+    return {
+      ok: false,
+      cree: false,
+      refus: {
+        motif: 'gabarits_absents',
+        source: source.source,
+        manquants: source.manquants,
+        message:
+          `ce dépôt n'a pas reçu la version du pack qui porte les gabarits du représentant : ` +
+          `${source.manquants.join(', ')} ${source.manquants.length > 1 ? 'sont introuvables' : 'est introuvable'} ` +
+          `sous « ${source.source} ». Mets le pack à jour dans ce dépôt ` +
+          `(« npx @somtech-solutions/pack update »), puis relance.`,
+      },
+    };
+  }
+
+  // ─── Garde 3 : la joignabilité du canal.
   const joignabilite = await verifierJoignabilite();
   if (!joignabilite.joignable) {
     return {
@@ -132,13 +219,32 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
   }
 
   // ═══ SEUL POINT D'ÉCRITURE — rien avant cette ligne n'a créé quoi que ce soit sur disque.
+  //
+  // Il est enveloppé, et ce n'est pas de la ceinture-bretelles : les trois gardes ci-dessus
+  // rendent l'échec improbable, pas impossible (disque plein, droits retirés, gabarit remplacé
+  // par un répertoire). Ce qui ne doit JAMAIS survivre à un échec, c'est le lieu à demi posé —
+  // c'est lui, et lui seul, que la relance suivante lirait comme un lieu.
   const racine = join(depotClient, '.gestionnaire', client);
-  const source = gabaritsDir(depotClient);
-  mkdirSync(racine, { recursive: true });
-  for (const fichier of GABARITS) {
-    const cible = join(racine, fichier);
-    mkdirSync(dirname(cible), { recursive: true }); // ex. .claude/ pour settings.json
-    copyFileSync(join(source, fichier), cible);
+  try {
+    mkdirSync(racine, { recursive: true });
+    for (const fichier of GABARITS) {
+      const cible = join(racine, fichier);
+      mkdirSync(dirname(cible), { recursive: true }); // ex. .claude/ pour settings.json
+      copyFileSync(join(source.source, fichier), cible);
+    }
+  } catch (err) {
+    retirerCeQuiAEteCommence(depotClient, client);
+    return {
+      ok: false,
+      cree: false,
+      refus: {
+        motif: 'ecriture_interrompue',
+        racine,
+        message:
+          `la pose de « ${racine} » s'est interrompue (${err.message}) — ce qu'elle avait commencé ` +
+          `a été retiré, rien ne subsiste. Corrige la cause, puis relance.`,
+      },
+    };
   }
   // ═══ fin du point d'écriture.
 
