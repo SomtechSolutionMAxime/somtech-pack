@@ -68,6 +68,25 @@ jobs:
         run: npm test
         working-directory: ligne-directe
 
+  naissance-representant-tests:
+    # Suite du garde de naissance (node --test). Job DISTINCT de `cli-tests` pour la même
+    # raison que `ligne-directe-tests` : ce module importe directement `ligne-directe/src/*`
+    # (herdr.js, client.js, representant.js) et hérite donc de sa contrainte `engines.node
+    # >= 22`.
+    #
+    # Sans ce job, le garde qui empêche un représentant d'agir avant d'avoir ouvert sa ligne
+    # (T-20260806-0192) ne s'exécuterait nulle part en CI — une preuve que personne n'exécute
+    # n'est pas une preuve (RA-DIS-004, même principe que ligne-directe-tests ci-dessus).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: node --test (naissance-representant)
+        run: npm test
+        working-directory: naissance-representant
+
   python-tests:
     # Loader NetworkX du graphe BRD (aims/brd-graph). Le reste du CI est Node-only ; ce job
     # installe networkx + pytest pour tester le loader (Epic F, D-20260710-0009).

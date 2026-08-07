@@ -61,6 +61,14 @@
       "paths": [
         "ligne-directe/"
       ]
+    },
+    "naissance-representant": {
+      "description": "Fait naître une session dans le lieu d'un client (.gestionnaire/<client>/) et la rend joignable — par un garde technique, pas seulement une consigne — avant tout le reste (E-20260807-0003). OUTIL DE POSTE : installé dans ~/.somtech aux côtés de ligne-directe, dont il dépend directement (le garde lit l'état des lignes via ligne-directe, et fusionne son hook dans le settings.json que ligne-directe representant pose déjà). Jamais copié dans un projet client.",
+      "default": false,
+      "scope": "poste",
+      "paths": [
+        "naissance-representant/"
+      ]
     }
   }
 }

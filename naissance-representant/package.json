@@ -1,0 +1,16 @@
+{
+  "name": "@somtech-solutions/naissance-representant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fait naître une session dans le lieu d'un client (.gestionnaire/<client>/) et la rend joignable avant tout le reste — E-20260807-0003.",
+  "type": "module",
+  "bin": {
+    "gestionnaire-naitre": "bin/naitre.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
