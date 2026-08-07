@@ -5,6 +5,36 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.31.0] - 2026-08-07
+
+### Modifié
+
+- **L'orchestrateur ne déploie que des chefs d'équipe** (D-20260807-0005, E-20260807-0006). La version précédente justifiait ce niveau par un **seuil** — « 2+ périmètres parallèles, ou 5+ agents à coordonner ». Ce seuil **n'avait été mesuré par rien** : il a été inventé en rédigeant. Il est retiré, et remplacé par une définition fonctionnelle : **tout agent herdr qu'un orchestrateur ouvre est un chef d'équipe**, du seul fait qu'il lancera des sous-agents — ne serait-ce que pour se faire reviewer. Il n'y avait donc aucun niveau à ajouter, seulement un rôle à nommer correctement.
+
+  Ce que le seuil coûtait, mesuré le jour même de sa livraison : l'orchestrateur qui l'appliquait a lancé deux sous-agents lui-même, faute de l'atteindre — donc fait du travail de chef d'équipe sans le nommer, ce que le principe « un agent qui orchestre n'exécute jamais » existe précisément pour empêcher. Le critère de taille (un agent coûte 15-20 min à démarrer) reste, mais il décide désormais **combien** d'agents ouvrir, jamais **si** le niveau existe.
+
+### Ajouté
+
+- **Le modèle d'un agent se déclare toujours, explicitement, au lancement.** `claude` lancé sans argument démarre en **Haiku** et **n'hérite pas** du modèle de la session appelante — un orchestrateur en Opus qui ouvre un agent sans rien préciser fait naître un Haiku sans le savoir, et ne s'en aperçoit qu'à la troisième permission restée sans réponse. Un **agent herdr naît en Opus, jamais en Haiku** (Haiku n'a pas de mode auto : il s'arrête à chaque demande de permission) ; un **sous-agent peut être en Haiku**, et c'est là qu'il est utile — en passe 1 de revue. Le lanceur de session ne relayant pas `--model`, la compétence décompose désormais le geste de naissance : worktree d'abord, puis `claude --model opus` dedans.
+- **La chaîne registre → mandat → agent.** Un agent porte le **code de son mandat** au registre (`e-…`, `d-…`, `t-…`), jamais un nom inventé, et surtout **jamais le sujet du chantier** — qui le rendrait indistinguable de son orchestrateur, lequel porte déjà ce code. Le **libellé de l'onglet**, lui, ne sert pas à adresser mais à reconnaître : il porte le code, puis **deux à quatre mots sur ce que l'agent fabrique**.
+- **Quatre gestes qui n'appartiennent pas à l'orchestrateur** : renommer un agent, débloquer une permission, corriger un script, relancer un processus. Chacun paraît minuscule, chacun se justifie par « c'est plus rapide si je le fais », et chacun signale que le fil est déjà perdu. Ils appartiennent au chef d'équipe, et quand ils tombent chez l'orchestrateur c'est la **naissance de l'agent** qu'il faut corriger, pas l'instance.
+- **La veille de déblocage entre au pack** (E-20260807-0007) : `scripts/orchestration/veille-deblocage.sh <pane> <agent>`, posée à la naissance d'un agent pour que personne n'ait à débloquer ses permissions à la main. Trois garanties, éprouvées par 24 assertions exécutées en CI contre un faux `herdr` : elle ne répond **que** devant une vraie demande reconnue par **deux** signes concordants ; devant un écran qu'elle ne reconnaît pas **elle ne répond pas**, elle s'arrête et le dit ; et **la position d'une option ne dit jamais son sens** — certaines demandes n'ont que deux options et la deuxième y est « No », d'autres proposent « oui, et dis-moi quoi faire ensuite », qui laisserait l'agent attendre une instruction qui ne viendra jamais.
+
+### Technique
+
+- **La compétence d'orchestration a enfin ses preuves** (E-20260807-0008), la dette assumée à la livraison de 1.30.0. Deux familles :
+
+  **La distribution, prouvée en construisant.** `BRIEF-REVUE.md`, la compétence elle-même et la veille sont vérifiés **dans le paquet réellement construit**, à l'octet près, jamais déduits du fait que `.claude/` figure dans un module (RA-DIS-002). La veille est en outre vérifiée exécutable dans le paquet : une compétence qui prescrit un script non livré prescrit un geste impossible.
+
+  **Un harnais de mutation** : 21 contrôles, 37 mutations. Chaque prescription rougit quand on l'inverse — polarité des trois niveaux, modalité des trois règles du chef d'équipe, compte des quatre gestes et des trois garanties de la veille, interdiction faite à la passe 1 de conclure « mergeable ». Le harnais **échoue aussi si une mutation devient inopérante** : une mutation qui ne change rien au texte se compterait sinon comme attrapée sans avoir rien posé. Et chaque mutation doit être attrapée **par le contrôle qu'elle vise**, pas par un dommage collatéral.
+
+  Ce harnais a trouvé **deux faux témoins dans ses propres contrôles** avant que la suite ne passe : une garde qui cherchait le mot « code » restait verte quand l'interdit de coder disparaissait, parce que « code » survivait dans « ne relit pas le code » ; et une garde qui cherchait « jamais » dans un paragraphe restait verte quand « la position ne dit **jamais** son sens » devenait « indique généralement son sens », parce qu'un « jamais » subsistait trente mots plus loin. Les deux gardes portent désormais sur l'affirmation entière, pas sur un mot qui y figure.
+
+  **La revue indépendante en a trouvé trois de plus**, chacune par une mutation et aucune par la lecture — et deux d'entre elles visaient une prescription qu'aucun contrôle ne gardait :
+  - une garde acceptait la règle (« jamais dans un seuil ») **ou** son motif (« n'avait été mesuré par rien ») ; ce « ou » laissait chaque moitié disparaître en silence. Les deux sont désormais exigées séparément ;
+  - la garde de modalité repose sur une liste de tournures permissives, donc sur une énumération : « à la veille, **jamais** à ta main » est devenu « à la veille, **autant que possible** » — sens exactement retourné, liste muette. La liste s'est élargie, mais surtout la négation elle-même est désormais résolue, et non plus le vocabulaire qui l'entoure ;
+  - **aucun contrôle ne sondait la section qui dit quand n'ouvrir aucun agent** : la puce « tâche < 30 min → n'ouvre pas un agent pour ça » a pu être remplacée par « toute tâche, même de 5 minutes → un chef d'équipe systématiquement » — le contre-exemple exact que ce journal cite — sans qu'un seul test ne rougisse. Cette section et la table des anti-patterns, qui portait elle aussi les quatre décisions sans garde, ont maintenant leurs contrôles.
+
 ## [1.30.0] - 2026-08-07
 
 ### Ajouté
