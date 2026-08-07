@@ -5,6 +5,7 @@
 //   ligne-directe dire "..."
 //   ligne-directe demander "..."
 //   ligne-directe fermer [--bilan "..."] [--sans-archiver]
+//   ligne-directe representant <client> --canal <canal> [--depot <chemin>]
 //   ligne-directe etat
 //   ligne-directe veilleur          (démarre le veilleur au premier plan, pour l'observer)
 //
@@ -15,6 +16,7 @@ import { parler, passerLaMain } from '../src/client.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
+import { preparerLieuRepresentant, verifierCanalJoignable } from '../src/representant.js';
 
 function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
@@ -33,6 +35,10 @@ function usage(code = 0) {
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
   renommer --titre "..." [--canal <id>]                    renomme le canal (Slack + registre)
+  representant <client> --canal <canal> [--depot <chemin>] prepare le lieu d'un representant
+                                                           dans <chemin> (defaut : le repertoire
+                                                           courant) — refuse tout net et NE CREE
+                                                           RIEN si <canal> n'est pas joignable
   etat                                                     ce qui est ouvert
   service installer|retirer|etat                           le veilleur revient après un redémarrage
   relever                                                  fait passer la main a un veilleur neuf
@@ -45,7 +51,7 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
 }
 
 /** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
-const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre', '--nature']);
+const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre', '--nature', '--canal', '--depot']);
 
 function option(args, nom) {
   const i = args.indexOf(nom);
@@ -182,6 +188,19 @@ if (geste === 'relever') {
     }
     rendre(await parler({ geste: 'renommer', chantier: mienne.chantier, worktree: mienne.worktree, titre }));
   }
+} else if (geste === 'representant') {
+  const client = premierLibre(args);
+  const canal = option(args, '--canal');
+  if (!client || !canal) usage(1);
+  const depotClient = option(args, '--depot') || process.cwd();
+  const r = await preparerLieuRepresentant({
+    depotClient,
+    client,
+    canal,
+    verifierJoignabilite: async () => verifierCanalJoignable(await lireJeton(SERVICE_ROBOT), canal),
+  });
+  process.stdout.write(`${JSON.stringify(r)}\n`);
+  process.exit(r.ok ? 0 : 1);
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
