@@ -28,7 +28,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { preparerLieuRepresentant, etatSource, etatLieu, GABARITS } from '../src/representant.js';
+import {
+  preparerLieuRepresentant, etatSource, etatLieu, retirerCeQuiAEteCommence, GABARITS,
+} from '../src/representant.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -226,6 +228,45 @@ test('le retrait après échec ne touche pas au lieu d’un AUTRE client', async
   assert.equal(r.ok, false);
   assert.equal(existsSync(join(depot, '.gestionnaire', 'client-x')), false, 'son propre résidu part');
   assert.equal(existsSync(join(depot, '.gestionnaire', 'voisin', 'CLAUDE.md')), true, 'celui du voisin reste');
+});
+
+// Le retrait est éprouvé SÉPARÉMENT du chemin qui l'appelle, et c'est délibéré : le cas qui
+// compte — un voisin apparu PENDANT la pose, posé par un autre processus — ne se construit pas
+// depuis le dehors sans truquer l'horloge. Interroger le retrait lui-même sur les deux états du
+// disque qu'il peut rencontrer prouve le FAIT ; le test « écriture interrompue » ci-dessus
+// prouve, lui, que le chemin d'échec l'appelle bel et bien. Ni l'un ni l'autre ne suffit seul.
+
+test('le retrait emporte `.gestionnaire/` quand il ne reste que le lieu de ce client', () => {
+  const depot = depotSansGabarits();
+  mkdirSync(join(depot, '.gestionnaire', 'client-x'), { recursive: true });
+  writeFileSync(join(depot, '.gestionnaire', 'client-x', 'CLAUDE.md'), 'a demi pose\n');
+
+  retirerCeQuiAEteCommence(depot, 'client-x');
+
+  assert.equal(existsSync(join(depot, '.gestionnaire')), false, 'rien ne doit subsister');
+});
+
+test('le retrait épargne un voisin apparu ENTRE-TEMPS — jamais d’après ce qui existait au départ', () => {
+  // La course que la revue a nommée : deux poses lancées ensemble sur un dépôt où
+  // `.gestionnaire/` n'existe encore pour personne. Toutes deux liraient « il n'existait pas ».
+  // Celle qui échoue ne doit PAS pouvoir emporter le lieu que l'autre vient de réussir.
+  const depot = depotSansGabarits();
+  mkdirSync(join(depot, '.gestionnaire', 'client-x'), { recursive: true });
+  mkdirSync(join(depot, '.gestionnaire', 'voisin'), { recursive: true });
+  writeFileSync(join(depot, '.gestionnaire', 'voisin', 'CLAUDE.md'), 'pose pendant ce temps-la\n');
+
+  retirerCeQuiAEteCommence(depot, 'client-x');
+
+  assert.equal(existsSync(join(depot, '.gestionnaire', 'client-x')), false, 'son propre reste part');
+  assert.equal(
+    readFileSync(join(depot, '.gestionnaire', 'voisin', 'CLAUDE.md'), 'utf8'), 'pose pendant ce temps-la\n',
+    'et le voisin, qui n’a rien demandé, reste entier'
+  );
+});
+
+test('le retrait ne se plaint pas quand il n’y a rien à retirer', () => {
+  const depot = depotSansGabarits();
+  assert.doesNotThrow(() => retirerCeQuiAEteCommence(depot, 'jamais-pose'));
 });
 
 // ═══════════════════════════════ 4. le CODE DE SORTIE — lu, jamais supposé

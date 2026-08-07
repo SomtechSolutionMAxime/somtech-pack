@@ -17,7 +17,7 @@
 // `verifierCanalJoignable`, plus bas, est l'implémentation réelle — celle que la ligne de
 // commande branche — mais un test peut en fournir une autre sans monter Slack du tout.
 
-import { existsSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
 import { trouverCanal, estMembreDuCanal } from './slack.js';
@@ -107,6 +107,30 @@ export async function verifierCanalJoignable(jetonRobot, nomCanal) {
   if (!membre) return { joignable: false, motif: 'non_membre', canal: nomCanal, id: canal.id };
 
   return { joignable: true, canal: nomCanal, id: canal.id, prive: Boolean(canal.is_private) };
+}
+
+/**
+ * Retire ce qu'une pose interrompue avait commencé — le lieu de CE client, et rien d'autre.
+ *
+ * DÉFAUT RELEVÉ EN REVUE, et il n'est pas théorique : la première version de ce retrait
+ * décidait de supprimer `.gestionnaire/` entier d'après un `existsSync` lu AVANT l'écriture
+ * (« il n'existait pas quand j'ai commencé, donc c'est moi qui l'ai créé, donc je peux le
+ * reprendre »). Entre cette lecture et le retrait, un autre processus a le temps de poser le
+ * lieu d'un AUTRE client : deux poses lancées ensemble sur le même dépôt lisent toutes deux
+ * « il n'existait pas », et celle qui échoue emporte le lieu que l'autre venait de réussir.
+ *
+ * On ne présume donc plus de qui a créé quoi : on retire le lieu du client, puis on tente de
+ * retirer `.gestionnaire/` SANS `recursive` — le noyau refuse (`ENOTEMPTY`) s'il reste le
+ * moindre voisin dedans, et c'est lui, pas nous, qui arbitre au moment exact du retrait.
+ */
+export function retirerCeQuiAEteCommence(depotClient, client) {
+  rmSync(join(depotClient, '.gestionnaire', client), { recursive: true, force: true });
+  try {
+    rmdirSync(join(depotClient, '.gestionnaire')); // sans `recursive` : échoue s'il reste un voisin
+  } catch {
+    // Il reste quelque chose, ou il n'y a plus rien à retirer — dans les deux cas, ce n'est
+    // plus notre affaire. Le lieu de ce client, lui, est bien parti.
+  }
 }
 
 /** Le message de refus, écrit pour être lu et suivi — jamais pour être analysé par un test. */
@@ -201,8 +225,6 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
   // par un répertoire). Ce qui ne doit JAMAIS survivre à un échec, c'est le lieu à demi posé —
   // c'est lui, et lui seul, que la relance suivante lirait comme un lieu.
   const racine = join(depotClient, '.gestionnaire', client);
-  const gestionnaire = join(depotClient, '.gestionnaire');
-  const gestionnaireExistait = existsSync(gestionnaire); // un autre client y vit peut-être déjà
   try {
     mkdirSync(racine, { recursive: true });
     for (const fichier of GABARITS) {
@@ -211,9 +233,7 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
       copyFileSync(join(source.source, fichier), cible);
     }
   } catch (err) {
-    // On ne retire QUE ce que cette pose-ci a créé : le lieu de ce client, et `.gestionnaire/`
-    // lui-même seulement s'il n'existait pas avant — le voisin n'a rien demandé.
-    rmSync(gestionnaireExistait ? racine : gestionnaire, { recursive: true, force: true });
+    retirerCeQuiAEteCommence(depotClient, client);
     return {
       ok: false,
       cree: false,
