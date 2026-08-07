@@ -64,13 +64,14 @@ export async function cmdSetup(flags) {
   const exclurePoste = [];
   if (flags.noCanvas) exclurePoste.push('canvas');
   if (flags.noLigneDirecte) exclurePoste.push('ligne-directe');
-  const doPoste = !(flags.noCanvas && flags.noLigneDirecte);
+  if (flags.noNaissanceRepresentant) exclurePoste.push('naissance-representant');
+  const doPoste = !(flags.noCanvas && flags.noLigneDirecte && flags.noNaissanceRepresentant);
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
   const doGraphify = !flags.noGraphify;
 
   if (!doSkills && !doWorkflows && !doCommands && !doPoste && !doSwt && !doVersionHook && !doGraphify) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-claude-swt, --no-version-hook et --no-graphify).');
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-naissance-representant, --no-claude-swt, --no-version-hook et --no-graphify).');
     return 0;
   }
 
