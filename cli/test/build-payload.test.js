@@ -86,7 +86,7 @@ test('build-payload : aucun résidu de construction ni d\'exécution dans le paq
   }
 });
 
-test('paquet npm : le canvas survit à la fabrication du tarball', () => {
+test('paquet npm : le canvas et les gabarits du représentant survivent à la fabrication du tarball', () => {
   // Le test précédent inspecte le RÉPERTOIRE payload. Ça ne prouve rien sur ce que npm
   // met réellement dans le tarball : npm applique les fichiers d'ignore imbriqués au
   // moment de packer. Un payload parfait peut donc produire un paquet amputé — c'est
@@ -136,6 +136,22 @@ test('paquet npm : le canvas survit à la fabrication du tarball', () => {
     assert.ok(
       files.includes(f),
       `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing (fichier d'ignore embarqué ?) — le canvas ne démarrera pas`
+    );
+  }
+
+  // Les gabarits du représentant (E-20260807-0001, EF-REL-014). Ils sont vérifiés ICI et
+  // non dans leur propre fichier de test, et ce n'est pas un rangement arbitraire :
+  // `npm pack` lit `cli/payload`, et `node --test` exécute un PROCESSUS PAR FICHIER. Deux
+  // fichiers qui construisent ce même répertoire se marchent dessus — l'un supprime le
+  // payload pendant que l'autre l'empaquette, et le test qui perd la course accuse un
+  // fichier d'ignore imaginaire. Un seul fichier touche donc à `cli/payload`, celui-ci.
+  for (const f of [
+    'payload/.claude/templates/gestionnaire-client/CLAUDE.md',
+    'payload/.claude/templates/gestionnaire-client/CONTEXTE.md',
+  ]) {
+    assert.ok(
+      files.includes(f),
+      `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un représentant naîtrait sans son métier`
     );
   }
 });
