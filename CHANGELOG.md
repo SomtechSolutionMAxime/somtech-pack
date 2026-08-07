@@ -7,6 +7,12 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [1.29.1] - 2026-08-06
 
+### Technique
+
+- **La publication du pack ne s'exécutait plus** (PR #179, T-20260806-0165). Le travail de publication construit le paquet — qui embarque une copie de `ligne-directe/` — puis lançait `node --test` sans portée depuis `cli/` : la copie était donc exécutée **une seconde fois, sous Node 20**, alors que la ligne directe exige Node 22. Un test s'en apercevait et refusait de passer — à juste titre : il vérifie qu'un veilleur a été arrêté *par le garde-fou*, et il avait été arrêté par l'absence de `WebSocket`. Rien ne sortait donc du registre.
+
+  La portée est désormais bornée. **Aucun test n'est affaibli** : 411 → 202, et l'écart de 209 est exactement la copie de la suite `ligne-directe`, qui continue de tourner dans son propre travail en Node 22. C'est aussi la fin du double comptage signalé sans qu'on en mesure la portée.
+
 ### Corrigé
 
 - **La ligne ne se rejoint plus dans un canal qu'elle a déjà rejoint** (PR #176, T-20260806-0096). Sur le chemin de reprise d'un canal existant, le code demandait à Slack de rejoindre sans vérifier s'il était déjà membre — un geste à la fois inutile et impossible, puisqu'un robot ne rejoint pas un canal privé : on l'y invite. Slack refusait, la ligne ne s'inscrivait pas, et **tout ce que l'interlocuteur écrivait était perdu**. Trouvé au premier usage réel du gestionnaire client, une heure après sa livraison.
