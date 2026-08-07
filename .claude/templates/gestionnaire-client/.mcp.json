@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "servicedesk": {
+      "type": "http",
+      "url": "https://vdpuktsqrecdxbmweate.supabase.co/functions/v1/servicedesk-mcp",
+      "headers": {
+        "Authorization": "Bearer ${SOMTECH_DESK_API_KEY}"
+      }
+    }
+  }
+}

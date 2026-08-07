@@ -139,19 +139,22 @@ test('paquet npm : le canvas et les gabarits du représentant survivent à la fa
     );
   }
 
-  // Les gabarits du représentant (E-20260807-0001, EF-REL-014). Ils sont vérifiés ICI et
-  // non dans leur propre fichier de test, et ce n'est pas un rangement arbitraire :
-  // `npm pack` lit `cli/payload`, et `node --test` exécute un PROCESSUS PAR FICHIER. Deux
-  // fichiers qui construisent ce même répertoire se marchent dessus — l'un supprime le
-  // payload pendant que l'autre l'empaquette, et le test qui perd la course accuse un
-  // fichier d'ignore imaginaire. Un seul fichier touche donc à `cli/payload`, celui-ci.
+  // Les gabarits du représentant (E-20260807-0001, EF-REL-014 ; puis E-20260807-0002, les
+  // deux gabarits techniques du lieu). Ils sont vérifiés ICI et non dans leur propre fichier
+  // de test, et ce n'est pas un rangement arbitraire : `npm pack` lit `cli/payload`, et
+  // `node --test` exécute un PROCESSUS PAR FICHIER. Deux fichiers qui construisent ce même
+  // répertoire se marchent dessus — l'un supprime le payload pendant que l'autre l'empaquette,
+  // et le test qui perd la course accuse un fichier d'ignore imaginaire. Un seul fichier
+  // touche donc à `cli/payload`, celui-ci.
   for (const f of [
     'payload/.claude/templates/gestionnaire-client/CLAUDE.md',
     'payload/.claude/templates/gestionnaire-client/CONTEXTE.md',
+    'payload/.claude/templates/gestionnaire-client/.mcp.json',
+    'payload/.claude/templates/gestionnaire-client/settings.json',
   ]) {
     assert.ok(
       files.includes(f),
-      `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un représentant naîtrait sans son métier`
+      `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un représentant naîtrait sans son métier ou avec des moyens non bornés`
     );
   }
 });
