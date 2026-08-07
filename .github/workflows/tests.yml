@@ -42,8 +42,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # `npm test` et non `node --test` : une seule source de vérité pour la
+      # portée de la suite (le package.json du CLI, borné à cli/test/).
       - name: node --test (cli)
-        run: node --test
+        run: npm test
         working-directory: cli
 
   ligne-directe-tests:

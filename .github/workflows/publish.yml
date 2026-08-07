@@ -84,8 +84,13 @@ jobs:
           fi
           npm version "$VER" --no-git-tag-version --allow-same-version
 
+      # Passer par `npm test` (et pas `node --test`) : la portée vient du
+      # package.json du CLI, qui borne la découverte à cli/test/. Sans ce
+      # bornage, l'étape précédente vient de construire cli/payload/ — une COPIE
+      # de ligne-directe, qui exige Node 22 — et sa suite s'exécuterait ici en
+      # Node 20. C'est ce qui a fait échouer la publication de v1.29.1.
       - name: Tests
-        run: node --test
+        run: npm test
         working-directory: cli
 
       - name: Publier
