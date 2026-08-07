@@ -7,6 +7,7 @@ import { cmdUpdate } from './commands/update.js';
 import { cmdSetup } from './commands/setup.js';
 import { cmdBrd } from './commands/brd.js';
 import { cmdArchi, isArchiCommand } from './commands/archi.js';
+import { cmdRepresentantUpdate } from './commands/representant.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +26,7 @@ export function parseArgs(argv) {
     rc: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
     noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false, noLigneDirecte: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
-    mode: null, file: null, id: null, patch: null,
+    mode: null, file: null, id: null, patch: null, client: null,
     help: false, version: false,
   };
   const positionals = [];
@@ -51,6 +52,7 @@ export function parseArgs(argv) {
       case '--file': flags.file = value('--file', ++i); break;
       case '--id': flags.id = value('--id', ++i); break;
       case '--patch': flags.patch = value('--patch', ++i); break;
+      case '--client': flags.client = value('--client', ++i); break;
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
@@ -72,6 +74,7 @@ export function parseArgs(argv) {
         else if (a.startsWith('--file=')) flags.file = a.slice('--file='.length);
         else if (a.startsWith('--id=')) flags.id = a.slice('--id='.length);
         else if (a.startsWith('--patch=')) flags.patch = a.slice('--patch='.length);
+        else if (a.startsWith('--client=')) flags.client = a.slice('--client='.length);
         else if (a.startsWith('-')) throw new Error(`Option inconnue : ${a}`);
         else positionals.push(a);
     }
@@ -98,6 +101,11 @@ Commandes :
            (backup .somtech.bak auto), les symlinks sont épargnés
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
+  representant-update   Rafraîchit un lieu de représentant déjà posé chez un client
+           (.gestionnaire/<client>/) : CLAUDE.md reprend TOUJOURS la version du pack
+           (convergence, backup .somtech.bak), CONTEXTE.md n'est JAMAIS touché
+           (RA-REL-014). Échoue si le lieu n'existe pas encore (ne pose rien).
+           --client <slug>  (obligatoire, minuscules/chiffres/tirets)
 
 Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
   harvest-supabase --discover <racine> --app <slug>  Grain tables + FK + descriptions (SQL du dépôt)
@@ -168,6 +176,7 @@ export async function run(argv) {
       case 'update': return await cmdUpdate(flags);
       case 'setup': return await cmdSetup(flags);
       case 'brd': return await cmdBrd(positionals, flags);
+      case 'representant-update': return await cmdRepresentantUpdate(flags);
       default:
         console.error(`✗ Commande inconnue : ${command}\n`);
         console.log(HELP);
