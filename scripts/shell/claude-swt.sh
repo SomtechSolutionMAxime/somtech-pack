@@ -65,6 +65,14 @@ _swt_dir="$(cd "$(dirname "$_swt_self")" 2>/dev/null && pwd)"
 #     (D-20260715-0001). Fonctions pf_* ; sans effet si absente.
 # shellcheck source=/dev/null
 [ -r "$_swt_dir/pack-freshness.sh" ] && . "$_swt_dir/pack-freshness.sh"
+# --- lib jetons MCP (mcp-env.sh), sourcée depuis le même dossier (E-20260807-0009).
+#     SEULE lib de ce lot à avoir un effet au chargement, et c'est voulu : elle
+#     exporte les jetons du lieu unique du poste. Comme le rc du shell source ce
+#     fichier-ci, TOUT shell du poste les porte — donc toute session `claude` qui
+#     en naît, y compris celles qui ne passent pas par claude-swt (chef d'équipe
+#     ouvert par un orchestrateur, `claude` lancé dans un plan existant, reprise).
+# shellcheck source=/dev/null
+[ -r "$_swt_dir/mcp-env.sh" ] && . "$_swt_dir/mcp-env.sh"
 unset _swt_self _swt_dir
 
 # _claude-swt-pending — branches NON mergées qui bloquent le retrait d'un worktree.
@@ -194,6 +202,12 @@ _claude-swt-launch() {  # interne — cœur partagé par claude-swt et claude-sw
     # espaces/caractères spéciaux doivent être quotées (KEY="a b"). Pour des
     # clés API (sans espaces) c'est sans risque ; le sous-shell ( … ) isole
     # `set -a` du shell appelant même si le source échoue.
+    # Lieu unique du poste D'ABORD (E-20260807-0009) : il couvre le cas où le
+    # fichier a été créé APRÈS l'ouverture de ce shell (le chargement au source
+    # de la lib n'avait alors rien à charger). Le `.env` du dépôt passe ensuite
+    # et prime : c'est la déclaration du projet, et elle a priorité sur celle du
+    # poste. Ceinture ET bretelles — aucune des deux n'est requise pour démarrer.
+    if command -v mcp_env_load >/dev/null 2>&1; then mcp_env_load; fi
     if [ -f "$main/.env" ]; then set -a; . "$main/.env"; set +a; fi
 
     # --- graphify : dossier de sortie partagé entre worktrees (D-20260716-0001) ---
