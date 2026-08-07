@@ -5,6 +5,14 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.30.0] - 2026-08-07
+
+### Ajouté
+
+- **`/orchestrer-chantier` décrit trois niveaux d'orchestration** (PR #185, E-20260807-0006) : l'orchestrateur cadre, découpe et arbitre ; un chef d'équipe distribue le travail et fait le lien quand le chantier dépasse un seul périmètre ; des sous-agents et coéquipiers exécutent. La compétence dit désormais **quand ne pas ouvrir d'agent** (tâche trop courte pour justifier le coût de démarrage), et distingue le sous-agent jetable (`Agent(prompt)`, tâche isolée sans suite) du coéquipier persistant (`Agent(..., name)` puis `SendMessage`, travail qu'on reprend).
+- **La revue de code prescrite passe à deux sous-agents** : Haiku en portail de rejet (rejette vite les cas perdus, ou dit « rien vu » — jamais un verdict `mergeable`), puis Sonnet en revue de fond sur ce qui reste.
+- **`BRIEF-REVUE.md` entre au pack**, réutilisable par les deux passes de revue. Il porte les trois motifs de défaut mesurés sur des chantiers orchestrés, avec leur coût : une garde qui vérifie le contenu au lieu du fait (10 survies, dont un refus qui a survécu à son contresens exact), un double de test plus permissif que le vrai service (6 survies, une fonction inerte en prod derrière 97 tests verts), et un correctif qui ne couvre qu'une porte sur deux (3 survies, l'autre chemin reste ouvert sans que personne ne le dise).
+
 ## [1.29.1] - 2026-08-06
 
 ### Technique
