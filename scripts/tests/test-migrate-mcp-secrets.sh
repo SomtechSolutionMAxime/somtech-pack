@@ -103,8 +103,12 @@ assert c['projects']['/chemin/projet-7']['lastCost']==0.07
 
 echo "== Le lieu unique =="
 [ -f "$ENVF" ] && ok "le lieu unique existe" || ko "le lieu unique n'a pas été créé"
-PERMS=$(stat -f '%Lp' "$ENVF" 2>/dev/null || stat -c '%a' "$ENVF" 2>/dev/null)
-[ "$PERMS" = "600" ] && ok "droits 600" || ko "droits $PERMS — le jeton est lisible par d'autres"
+# GNU (`-c`) d'abord, BSD/macOS (`-f`) ensuite : sur Linux `stat -f` réussit en
+# renvoyant des statistiques de système de fichiers, donc l'ordre inverse ne
+# tombe jamais sur le repli. C'est exactement ce qui a fait rougir la chaîne
+# d'intégration alors que la suite passait sur un poste macOS.
+PERMS=$(stat -c '%a' "$ENVF" 2>/dev/null || stat -f '%Lp' "$ENVF" 2>/dev/null)
+[ "$PERMS" = "600" ] && ok "droits 600" || ko "droits '$PERMS' — le jeton est lisible par d'autres"
 grep -qx "SOMTECH_DESK_API_KEY=${FAKE}" "$ENVF"  && ok "le jeton de l'en-tête est déposé sans le préfixe Bearer" \
                                                  || ko "jeton d'en-tête mal déposé"
 grep -qx "SOMCRAFT_MCP_API_KEY=${FAKE2}" "$ENVF" && ok "le jeton de l'URL est déposé" || ko "jeton d'URL mal déposé"

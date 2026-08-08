@@ -44,6 +44,7 @@
 # Fonctions :
 #   claude …                    → enveloppe : jetons chargés pour CE seul appel
 #   mcp_env_file                → chemin du lieu unique
+#   mcp_env_mode <fichier>      → droits en octal, portable GNU/BSD (ou rien)
 #   mcp_env_load [fichier]      → charge (idempotent, jamais fatal)
 #   mcp_env_refs <mcp.json>     → noms des variables référencées par un .mcp.json
 #   mcp_env_missing <mcp.json>  → parmi elles, celles absentes de l'environnement
@@ -52,14 +53,32 @@
 # Chemin du lieu unique. Surchargeable pour les tests (jamais en usage courant).
 mcp_env_file() { printf '%s' "${SOMTECH_MCP_ENV_FILE:-$HOME/.somtech/mcp-env}"; }
 
+# mcp_env_mode <fichier> — droits en octal, ou rien si on ne sait pas les lire.
+#
+# ORDRE CRITIQUE, et c'est un piège qui a déjà mordu ce dépôt (voir pf_mtime dans
+# pack-freshness.sh) : sur Linux, `stat -f` ne veut PAS dire « format » mais
+# « statistiques du système de fichiers » — la commande RÉUSSIT et renvoie tout
+# autre chose, donc le repli après `||` n'est jamais atteint. GNU (`-c`) d'abord,
+# BSD/macOS (`-f`) ensuite. Le résultat est validé : ce qui n'est pas un mode
+# octal est traité comme « inconnu » plutôt que rapporté de travers.
+mcp_env_mode() {
+  local m
+  m=$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null || true)
+  case "$m" in
+    [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) printf '%s' "$m" ;;
+    *) : ;;
+  esac
+}
+
 # mcp_env_perms <fichier> — droits trop larges = jeton lisible par un autre compte
 # du poste. On le dit, sans bloquer : refuser le chargement priverait l'agent de
-# registre pour un défaut qui n'est pas le sien.
+# registre pour un défaut qui n'est pas le sien. Droits illisibles = silence : on
+# n'invente pas une alerte à partir d'une mesure qu'on n'a pas.
 mcp_env_perms() {
   local perms
-  perms=$(stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null || echo '')
+  perms=$(mcp_env_mode "$1")
   case "$perms" in
-    ''|600|400) : ;;
+    ''|600|400|0600|0400) : ;;
     *) printf '⚠️  %s est en %s — attendu 600. Corrige : chmod 600 %s\n' "$1" "$perms" "$1" >&2 ;;
   esac
 }
