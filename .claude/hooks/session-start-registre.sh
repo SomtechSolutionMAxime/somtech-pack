@@ -53,7 +53,13 @@ fi
 [ -n "$MISSING" ] || exit 0
 
 # Quels serveurs sont touchés — pour nommer le registre plutôt qu'une variable.
+#
+# C'est AUSSI le filtre qui évite la fausse alerte : une variable manquante qui
+# n'appartient à aucun serveur déclaré (glissée ailleurs dans le fichier) ne rend
+# aucun registre muet. On l'écarte. Une alarme qui crie pour rien est une alarme
+# qu'on cesse de lire — et le jour où elle a raison, plus personne ne l'écoute.
 SERVERS=""
+RETENUES=""
 for _v in $MISSING; do
   _s=$(python3 - "$MCP_FILE" "$_v" <<'PY' 2>/dev/null || true
 import json, sys
@@ -65,8 +71,13 @@ needle = '${%s}' % sys.argv[2]
 print(' '.join(n for n, c in conf.items() if needle in json.dumps(c)))
 PY
 )
-  [ -n "$_s" ] && SERVERS="${SERVERS} ${_s}"
+  [ -n "$_s" ] || continue          # variable hors mcpServers → aucun serveur muet
+  SERVERS="${SERVERS} ${_s}"
+  RETENUES="${RETENUES}${_v}
+"
 done
+MISSING=$(printf '%s' "$RETENUES" | sed '/^$/d')
+[ -n "$MISSING" ] || exit 0
 SERVERS=$(printf '%s' "$SERVERS" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ')
 
 cat >&2 <<MSG

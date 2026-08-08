@@ -99,6 +99,36 @@ printf '{"mcpServers":{"local":{"command":"node","args":["s.js"]}}}\n' > "${LIT}
 OUT=$(CLAUDE_PROJECT_DIR="$LIT" SOMTECH_MCP_ENV_LIB="$LIB" bash "$HOOK" 2>&1)
 [ -z "$OUT" ] && ok "serveur local sans variable : silencieux" || ko "faux positif : '$OUT'"
 
+echo "== Une variable hors mcpServers ne déclenche PAS l'alarme =="
+# Une alarme qui crie pour rien est une alarme qu'on cesse de lire. Une ${VAR}
+# glissée ailleurs dans le fichier ne rend aucun serveur muet — elle ne doit donc
+# rien déclencher. Les deux chemins du hook (avec et sans la lib) sont éprouvés.
+HORS="${WORK}/hors-serveurs"; mkdir -p "$HORS"
+cat > "${HORS}/.mcp.json" <<'JSON'
+{"note":"chemin ${UNE_VARIABLE_SANS_RAPPORT} laissée ici",
+ "mcpServers":{"local":{"command":"node","args":["s.js"]}}}
+JSON
+for LIBMODE in with-lib no-lib; do
+  libarg=""; [ "$LIBMODE" = "with-lib" ] && libarg="$LIB"
+  OUT=$(env -u UNE_VARIABLE_SANS_RAPPORT CLAUDE_PROJECT_DIR="$HORS" \
+        SOMTECH_MCP_ENV_LIB="$libarg" bash "$HOOK" 2>&1)
+  [ -z "$OUT" ] && ok "[$LIBMODE] aucune fausse alerte sur une variable hors mcpServers" \
+                || ko "[$LIBMODE] fausse alerte : '$OUT'"
+done
+
+echo "== Mais une variable DANS mcpServers déclenche toujours =="
+MIXTE="${WORK}/mixte"; mkdir -p "$MIXTE"
+cat > "${MIXTE}/.mcp.json" <<'JSON'
+{"note":"${UNE_VARIABLE_SANS_RAPPORT}",
+ "mcpServers":{"servicedesk":{"type":"http","url":"https://x","headers":{"Authorization":"Bearer ${SOMTECH_DESK_API_KEY}"}}}}
+JSON
+OUT=$(env -u SOMTECH_DESK_API_KEY -u UNE_VARIABLE_SANS_RAPPORT CLAUDE_PROJECT_DIR="$MIXTE" \
+      SOMTECH_MCP_ENV_LIB="$LIB" bash "$HOOK" 2>&1)
+case "$OUT" in *servicedesk*) ok "le vrai serveur muet est bien signalé" ;;
+               *) ko "le filtre a fait taire une VRAIE alerte : '$OUT'" ;; esac
+case "$OUT" in *UNE_VARIABLE_SANS_RAPPORT*) ko "la variable hors serveurs est encore citée" ;;
+               *) ok "seule la variable qui rend un serveur muet est citée" ;; esac
+
 echo
 echo "Résultat : ${PASS} réussis, ${FAIL} échoués"
 [ "$FAIL" -eq 0 ]

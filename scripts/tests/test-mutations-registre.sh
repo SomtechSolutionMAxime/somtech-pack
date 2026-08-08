@@ -25,6 +25,7 @@ ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LIB_SRC="${ROOT}/scripts/shell/mcp-env.sh"
 HOOK_SRC="${ROOT}/.claude/hooks/session-start-registre.sh"
 MIG_SRC="${ROOT}/scripts/migrate-mcp-secrets.py"
+SWT_SRC="${ROOT}/scripts/shell/claude-swt.sh"
 
 WORK="$(mktemp -d)"; PASS=0; FAIL=0
 trap 'rm -rf "$WORK"' EXIT
@@ -112,6 +113,18 @@ mutate "$HOOK_SRC" "$M" 's = s.replace("[ -n \"$MISSING\" ] || exit 0", "true")'
        env REGISTRE_HOOK_SRC="$M" bash "${SCRIPT_DIR}/test-session-start-registre.sh" \
   || ko "mutation 8 inopérante"
 
+M="${WORK}/m18.sh"
+mutate "$HOOK_SRC" "$M" 's = s.replace("  [ -n \"$_s\" ] || continue", "  :")' \
+  && expect_red "une variable hors mcpServers déclenche une fausse alarme" \
+       env REGISTRE_HOOK_SRC="$M" bash "${SCRIPT_DIR}/test-session-start-registre.sh" \
+  || ko "mutation 18 inopérante"
+
+M="${WORK}/m19.sh"
+mutate "$HOOK_SRC" "$M" 's = s.replace("RETENUES=\"${RETENUES}${_v}", "RETENUES=\"${RETENUES}")' \
+  && expect_red "le filtre fait taire une VRAIE alerte" \
+       env REGISTRE_HOOK_SRC="$M" bash "${SCRIPT_DIR}/test-session-start-registre.sh" \
+  || ko "mutation 19 inopérante"
+
 echo "== Mutations de la migration des jetons =="
 
 M="${WORK}/m9.py"
@@ -161,6 +174,24 @@ mutate "$MIG_SRC" "$M" 's = s.replace("                conflicts.append((k, src)
   && expect_red "un conflit bloque l'import des autres variables (dommage collatéral)" \
        env MIGRATE_SRC="$M" bash "${SCRIPT_DIR}/test-migrate-mcp-secrets.sh" \
   || ko "mutation 15 inopérante"
+
+echo "== Mutations des portes de naissance =="
+
+# Le chaînage rc → claude-swt.sh → mcp-env.sh est ce qui ouvre les quatre portes.
+# Le couper est le retour exact à l'état d'avant le lot.
+M="${WORK}/m16.sh"
+mutate "$SWT_SRC" "$M" 's = s.replace("[ -r \"$_swt_dir/mcp-env.sh\" ] && . \"$_swt_dir/mcp-env.sh\"", ":")' \
+  && expect_red "le lanceur ne charge plus la lib des jetons — retour au défaut" \
+       env SWT_SRC_OVERRIDE="$M" bash "${SCRIPT_DIR}/test-portes-naissance.sh" \
+  || ko "mutation 16 inopérante"
+
+# L'effet de bord au chargement EST la raison d'être de la lib. Le retirer laisse
+# les fonctions définies et l'environnement vide : tout paraît en place, rien ne marche.
+M="${WORK}/m17.sh"
+mutate "$LIB_SRC" "$M" 's = s.replace("[ -n \"${SOMTECH_MCP_ENV_NOLOAD:-}\" ] || mcp_env_load", ":")' \
+  && expect_red "la lib ne charge plus rien au source — les fonctions existent, l'environnement est vide" \
+       env MCP_ENV_SRC_OVERRIDE="$M" bash "${SCRIPT_DIR}/test-portes-naissance.sh" \
+  || ko "mutation 17 inopérante"
 
 echo
 echo "Résultat : ${PASS} mutations tuées, ${FAIL} problèmes"
