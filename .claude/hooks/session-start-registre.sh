@@ -32,12 +32,14 @@ MCP_FILE="${CLAUDE_PROJECT_DIR:-$PWD}/.mcp.json"
 MISSING=""
 _LIB="${SOMTECH_MCP_ENV_LIB:-$HOME/.somtech/mcp-env.sh}"
 if [ -r "$_LIB" ]; then
-  # NOLOAD : le hook diagnostique l'environnement de la SESSION tel qu'il est.
-  # S'il chargeait le lieu unique, il verrait des variables que les serveurs MCP,
-  # eux, n'ont jamais eues — et il conclurait que tout va bien. Le double serait
-  # plus indulgent que le vrai service.
+  # NOWRAP : on veut les fonctions de la lib, pas son enveloppe — un hook n'a
+  # aucune raison de redéfinir `claude`. Et surtout, on ne charge JAMAIS le lieu
+  # unique ici : le hook diagnostique l'environnement de la SESSION tel qu'il est.
+  # S'il le chargeait, il verrait des variables que les serveurs MCP, eux, n'ont
+  # jamais eues, et conclurait que tout va bien — le double plus indulgent que le
+  # vrai service, exactement le défaut qu'on corrige.
   # shellcheck source=/dev/null
-  SOMTECH_MCP_ENV_NOLOAD=1 . "$_LIB"
+  SOMTECH_MCP_ENV_NOWRAP=1 . "$_LIB"
   MISSING=$(mcp_env_missing "$MCP_FILE")
 else
   _REFS=$(grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*\}' "$MCP_FILE" 2>/dev/null \

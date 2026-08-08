@@ -139,6 +139,55 @@ grep -q "$FAKE" "$CONF2" && ok "collision : la configuration n'a pas été touch
 case "$OUT" in *"$FAKE"*|*"un-AUTRE-jeton-deja-la"*) ko "🚨 le message de collision imprime une valeur" ;;
                *) ok "le message de collision n'imprime aucune valeur" ;; esac
 
+echo "== Une réécriture qui abîmerait le voisinage est REFUSÉE avant d'écrire =="
+# La garde que la revue de fond a retirée sans qu'un seul test bronche. Elle
+# protège contre NOTRE propre erreur : si une évolution future de la réécriture
+# emportait des projets, rien ne doit atteindre le disque. On vérifie avant
+# d'écrire, précisément pour n'avoir jamais à restaurer par-dessus une session tierce.
+CONF7="${WORK}/c7.json"; ENV7="${WORK}/e8/mcp-env"
+make_conf "$CONF7"
+BEFORE7=$(cksum < "$CONF7")
+OUT=$(SOMTECH_MIGRATE_TEST_ABIME=1 python3 "$MIG" --config "$CONF7" --env-file "$ENV7" --apply 2>&1); RC=$?
+[ "$RC" != "0" ] && ok "réécriture abîmée : sortie non nulle" || ko "une réécriture qui perd les projets est passée"
+case "$OUT" in *"rien n'a été écrit"*) ok "l'abandon dit explicitement que rien n'a été écrit" ;;
+               *) ko "message inattendu : $OUT" ;; esac
+[ "$(cksum < "$CONF7")" = "$BEFORE7" ] && ok "le fichier partagé est intact au bit près" \
+                                       || ko "🚨 le fichier a été touché malgré le refus"
+[ ! -f "${CONF7}.somtech.bak" ] && ok "aucune sauvegarde inutile : on n'a jamais commencé à écrire" \
+                               || ko "une sauvegarde a été prise alors que rien ne devait être écrit"
+
+echo "== Une session tierce écrit pendant l'opération : on ABANDONNE, on n'écrase pas =="
+# Le cas que le docstring du script dit vouloir couvrir, et que rien n'éprouvait :
+# la revue de fond a retiré la garde et la suite est restée verte. Elle ne le
+# restera plus. Le point d'injection simule une autre session qui réécrit le
+# fichier juste avant notre bascule.
+CONF5="${WORK}/c5.json"; ENV5="${WORK}/e6/mcp-env"
+make_conf "$CONF5"
+TIERS="${WORK}/tiers.py"
+cat > "$TIERS" <<PYEOF
+import json, sys
+c = json.load(open("${CONF5}"))
+c["projects"]["/chemin/ajoute-par-une-autre-session"] = {"allowedTools": [], "lastCost": 9.99}
+json.dump(c, open("${CONF5}", "w"), ensure_ascii=False, indent=2)
+PYEOF
+OUT=$(SOMTECH_MIGRATE_TEST_HOOK="python3 '$TIERS'" \
+      python3 "$MIG" --config "$CONF5" --env-file "$ENV5" --apply 2>&1); RC=$?
+[ "$RC" != "0" ] && ok "écriture concurrente : sortie non nulle" || ko "l'écriture concurrente est passée inaperçue"
+case "$OUT" in *"autre session"*) ok "l'abandon nomme la cause" ;; *) ko "cause non nommée : $OUT" ;; esac
+python3 -c "
+import json,sys
+c=json.load(open(sys.argv[1]))
+assert '/chemin/ajoute-par-une-autre-session' in c['projects'], 'travail de la session tierce PERDU'
+" "$CONF5" && ok "le travail de la session tierce est intact" || ko "🚨 le travail de la session tierce a été effacé"
+grep -q "$FAKE" "$CONF5" && ok "notre écriture n'a pas eu lieu (relançable)" || ko "la configuration a été réécrite malgré l'abandon"
+
+echo "== Sans écriture concurrente, la migration passe normalement =="
+CONF6="${WORK}/c6.json"; ENV6="${WORK}/e7/mcp-env"
+make_conf "$CONF6"
+OUT=$(SOMTECH_MIGRATE_TEST_HOOK="true" python3 "$MIG" --config "$CONF6" --env-file "$ENV6" --apply 2>&1); RC=$?
+[ "$RC" = "0" ] && ok "point d'injection inoffensif : la migration aboutit" || ko "sortie $RC : $OUT"
+grep -q "$FAKE" "$CONF6" && ko "le jeton est resté en clair" || ok "le jeton a bien été sorti"
+
 echo "== Import depuis un .env de dépôt (--from-env) =="
 # Un serveur déclaré au SEUL niveau projet n'a jamais eu de jeton au poste : sans
 # import, il reste muet sur les trois portes de naissance qui ne passent pas par

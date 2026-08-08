@@ -86,11 +86,17 @@ refusé au premier échange et **disparaît de la session** : l'agent n'a plus d
 et il ne s'en aperçoit qu'au premier appel — souvent après avoir déjà travaillé.
 
 Le pack tient donc les jetons du poste à **un seul endroit**, `~/.somtech/mcp-env` (droits
-`600`, hors de tout dépôt), chargé par `scripts/shell/mcp-env.sh`. Cette lib est sourcée
-par `claude-swt.sh`, lui-même sourcé par le rc du shell : **tout** shell du poste porte
-les jetons, donc toute session `claude` qui en naît les hérite — y compris celles qui ne
-passent pas par le lanceur (agent ouvert par un orchestrateur, `claude` lancé directement
-dans un plan de travail existant, reprise de session).
+`600`, hors de tout dépôt). `scripts/shell/mcp-env.sh` pose une **enveloppe** autour de
+`claude` qui les charge dans un sous-shell, le temps de cet appel. Cette lib est sourcée
+par `claude-swt.sh`, lui-même sourcé par le rc du shell : l'enveloppe existe donc dans
+tout shell du poste, et **les cinq portes de naissance d'un agent** sont couvertes —
+`claude-swt` depuis le dépôt, agent ouvert par un orchestrateur, `claude` lancé
+directement dans un plan de travail, reprise de session, naissance d'un représentant client.
+
+Une enveloppe plutôt qu'un export global : exporter les jetons dans le shell les donnerait
+à tout ce qui tourne ensuite dans ce terminal — un `npm install` et ses scripts de
+post-installation, un outil qui vide `env`, un rapport de plantage. Même couverture,
+exposition réduite au seul processus qui en a besoin.
 
 | Commande | Rôle |
 |---|---|

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 # test-portes-naissance.sh — v1.0.0
-# LES QUATRE PORTES par lesquelles un agent peut naître — toutes couvertes, et
+# LES CINQ PORTES par lesquelles un agent peut naître — toutes couvertes, et
 # le compte déclaré (E-20260807-0009, critère 6).
 #
 # POURQUOI LE COMPTE EST UNE ASSERTION ET PAS UN COMMENTAIRE
@@ -10,13 +10,15 @@
 # et personne n'en parle. Avant ce lot, UNE SEULE des quatre portes fournissait
 # les jetons — et ce n'était pas celle qu'emprunte un orchestrateur pour ouvrir
 # un chef d'équipe. Si quelqu'un ajoute une porte sans la couvrir, le compte
-# devient faux et ce test rougit.
+# devient faux et ce test rougit. La cinquième — la naissance d'un représentant
+# client — a justement été trouvée par la revue de fond, pas par nous.
 #
 # CE QU'ON MESURE ICI, ET CE QU'ON NE MESURE PAS
 # Ici : la PLOMBERIE — la variable arrive-t-elle jusqu'au processus lancé ? Un
 # faux `claude` en tête de PATH écrit ce qu'il a reçu, ce qui est la mesure
 # exacte de la question posée. On ne lit aucune configuration : on observe ce que
-# l'enfant a réellement dans son environnement.
+# l'enfant a réellement dans son environnement. Et on vérifie AUSSI que le shell
+# appelant, lui, n'en garde rien.
 # Pas ici : la réponse du VRAI service. Elle est prouvée séparément, sur un vrai
 # plan de travail et une vraie session, par test-naissance-registre-reel.sh —
 # parce qu'un double serait plus indulgent que le vrai registre.
@@ -123,12 +125,31 @@ echo "== Porte 4 — reprise \`claude-swt <horodatage>\` DEPUIS un plan de trava
 [ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
                           || ko "reçu '$(recu)'"
 
+echo "== Porte 5 — naissance d'un représentant client =="
+# `herdr pane run <pane> "cd <lieu> && claude"` — la forme exacte que produit
+# naissance-representant/src/naissance.js. Le lieu du représentant porte son
+# propre .mcp.json qui référence ${SOMTECH_DESK_API_KEY} : sans jeton, le
+# représentant naît muet lui aussi. Porte trouvée par la revue de fond.
+LIEU="${WORK}/lieu-representant"; mkdir -p "$LIEU"
+: > "$WITNESS"
+( PATH="${FAKEBIN}:${PATH}" bash -c ". \"$RC\"; cd ${LIEU} && claude" ) >/dev/null 2>&1
+[ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
+                          || ko "reçu '$(recu)'"
+
 echo "== Le compte des portes est déclaré =="
-if [ "$PORTES_COUVERTES" -eq 4 ]; then
-  ok "4 portes de naissance recensées, 4 couvertes"
+if [ "$PORTES_COUVERTES" -eq 5 ]; then
+  ok "5 portes de naissance recensées, 5 couvertes"
 else
-  ko "seulement ${PORTES_COUVERTES} porte(s) sur 4 délivrent le jeton — le correctif est partiel"
+  ko "seulement ${PORTES_COUVERTES} porte(s) sur 5 délivrent le jeton — le correctif est partiel"
 fi
+
+echo "== Aucune porte ne laisse le jeton dans le shell appelant =="
+# L'enveloppe borne l'exposition au seul processus \`claude\`. Si un jour quelqu'un
+# la remplaçait par un export global, ce cas rougirait — et c'est bien ce qu'on veut.
+RESTE=$( PATH="${FAKEBIN}:${PATH}" bash -c \
+  ". \"$RC\"; cd \"${WORK}/wt2\" && claude >/dev/null 2>&1; env | grep -c '^SOMTECH_DESK_API_KEY=' || true" )
+[ "$RESTE" = "0" ] && ok "le shell qui a fait naître l'agent ne porte aucun jeton" \
+                   || ko "le jeton persiste dans le shell — exposé à tout ce qui tourne ensuite dans ce terminal"
 
 echo "== Sans le lieu unique, ces portes SONT mortes (le correctif est bien ce qui les ouvre) =="
 RC_NU="${WORK}/rc-nu.sh"

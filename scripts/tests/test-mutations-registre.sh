@@ -20,6 +20,13 @@
 # ============================================================
 set -uo pipefail
 
+# ISOLEMENT DU POSTE (E-20260807-0009) — obligatoire dès qu'un test source la lib
+# des jetons, directement ou via claude-swt.sh. Sans cette borne, le test lirait le
+# VRAI lieu unique de la machine et un faux `claude` pourrait recracher un vrai
+# jeton dans une sortie de test. Le garde-fou est vérifié par test-mcp-env.sh.
+export SOMTECH_MCP_ENV_FILE="${SOMTECH_MCP_ENV_FILE:-/nonexistent/somtech-mcp-env-de-test}"
+
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LIB_SRC="${ROOT}/scripts/shell/mcp-env.sh"
@@ -69,6 +76,12 @@ mutate "$LIB_SRC" "$M" 's = s.replace("  set -a\n  # shellcheck", "  # shellchec
        env MCP_ENV_SRC="$M" bash "${SCRIPT_DIR}/test-mcp-env.sh" \
   || ko "mutation 1 inopérante (le code a changé de forme ?)"
 
+M="${WORK}/m1b.sh"
+mutate "$LIB_SRC" "$M" 's = s.replace("    set -a; eval \"$line\"; set +a", "    eval \"$line\"")' \
+  && expect_red "l'enveloppe définit les jetons sans les exporter — l'enfant n'en voit rien" \
+       env MCP_ENV_SRC="$M" bash "${SCRIPT_DIR}/test-mcp-env.sh" \
+  || ko "mutation 1b inopérante"
+
 M="${WORK}/m2.sh"
 mutate "$LIB_SRC" "$M" 's = s.replace("  . \"$f\"\n  set +a", "  . \"$f\"")' \
   && expect_red "auto-export laissé actif (set +a retiré) — fuite d'environnement" \
@@ -93,10 +106,18 @@ mutate "$LIB_SRC" "$M" 's = s.replace("  esac\n", "  esac\n  grep SOMTECH_DESK \
        env MCP_ENV_SRC="$M" bash "${SCRIPT_DIR}/test-mcp-env.sh" \
   || ko "mutation 5 inopérante"
 
+# La préséance est ce qui empêche le poste d'écraser silencieusement la
+# déclaration d'un dépôt. L'inverser passe toutes les épreuves de plomberie.
+M="${WORK}/m24.sh"
+mutate "$LIB_SRC" "$M" 's = s.replace("    [ -n \"$cur\" ] && continue", "    :")' \
+  && expect_red "le lieu unique écrase la valeur déjà fournie par le dépôt" \
+       env MCP_ENV_SRC="$M" bash "${SCRIPT_DIR}/test-mcp-env.sh" \
+  || ko "mutation 24 inopérante"
+
 echo "== Mutations du hook de naissance =="
 
 M="${WORK}/m6.sh"
-mutate "$HOOK_SRC" "$M" 's = s.replace("  SOMTECH_MCP_ENV_NOLOAD=1 . \"$_LIB\"", "  . \"$_LIB\"")'  \
+mutate "$HOOK_SRC" "$M" 's = s.replace("  SOMTECH_MCP_ENV_NOWRAP=1 . \"$_LIB\"", "  mcp_env_load; . \"$_LIB\"")'  \
   && expect_red "le hook se rassure avec le lieu unique au lieu de lire la session" \
        env REGISTRE_HOOK_SRC="$M" bash "${SCRIPT_DIR}/test-session-start-registre.sh" \
   || ko "mutation 6 inopérante"
@@ -188,10 +209,42 @@ mutate "$SWT_SRC" "$M" 's = s.replace("[ -r \"$_swt_dir/mcp-env.sh\" ] && . \"$_
 # L'effet de bord au chargement EST la raison d'être de la lib. Le retirer laisse
 # les fonctions définies et l'environnement vide : tout paraît en place, rien ne marche.
 M="${WORK}/m17.sh"
-mutate "$LIB_SRC" "$M" 's = s.replace("[ -n \"${SOMTECH_MCP_ENV_NOLOAD:-}\" ] || mcp_env_load", ":")' \
-  && expect_red "la lib ne charge plus rien au source — les fonctions existent, l'environnement est vide" \
+mutate "$LIB_SRC" "$M" 's = s.replace("      ( mcp_env_fill \"$_f\"; command claude \"$@\" )", "      command claude \"$@\"")' \
+  && expect_red "l'enveloppe ne charge plus les jetons — les portes redeviennent mortes" \
        env MCP_ENV_SRC_OVERRIDE="$M" bash "${SCRIPT_DIR}/test-portes-naissance.sh" \
   || ko "mutation 17 inopérante"
+
+# L'enveloppe existe pour BORNER l'exposition. La remplacer par un export global
+# donne la même couverture et passe tous les cas de plomberie — seul le cas
+# « le shell ne garde rien » la distingue. C'est la mutation qui protège le choix
+# de conception, pas seulement son résultat.
+M="${WORK}/m20.sh"
+mutate "$LIB_SRC" "$M" 's = s.replace("if [ -z \"${SOMTECH_MCP_ENV_NOWRAP:-}\" ]; then", "mcp_env_load\nif [ -z \"${SOMTECH_MCP_ENV_NOWRAP:-}\" ]; then")' \
+  && expect_red "export global au lieu de l'enveloppe — le jeton fuit dans tout le terminal" \
+       env MCP_ENV_SRC="$M" bash "${SCRIPT_DIR}/test-mcp-env.sh" \
+  || ko "mutation 20 inopérante"
+
+# LA mutation que la revue de fond a posée et vue SURVIVRE : retirer la garde
+# anti-concurrence de la migration. Elle doit désormais tuer.
+M="${WORK}/m21.py"
+mutate "$MIG_SRC" "$M" 's = s.replace("    if raw_juste_avant != raw_now:", "    if False:")' \
+  && expect_red "la garde anti-concurrence est retirée — une session tierce est écrasée" \
+       env MIGRATE_SRC="$M" bash "${SCRIPT_DIR}/test-migrate-mcp-secrets.sh" \
+  || ko "mutation 21 inopérante"
+
+# Et la restauration de secours après vérification, que la revue a aussi vue survivre.
+M="${WORK}/m22.py"
+mutate "$MIG_SRC" "$M" 's = s.replace("    if skeleton(conf_new, secrets_now) != before_skeleton:", "    if False:")' \
+  && expect_red "la vérification avant écriture ne bloque plus une réécriture qui abîme le voisinage" \
+       env MIGRATE_SRC="$M" bash "${SCRIPT_DIR}/test-migrate-mcp-secrets.sh" \
+  || ko "mutation 22 inopérante"
+
+# La 5e porte, trouvée par la revue : si elle cesse d'être couverte, le compte tombe.
+M="${WORK}/m23.sh"
+mutate "$LIB_SRC" "$M" 's = s.replace("  claude() {", "  claude() { command claude \"$@\"; return; #")' \
+  && expect_red "l'enveloppe devient un passe-plat — les cinq portes redeviennent mortes" \
+       env MCP_ENV_SRC_OVERRIDE="$M" bash "${SCRIPT_DIR}/test-portes-naissance.sh" \
+  || ko "mutation 23 inopérante"
 
 echo
 echo "Résultat : ${PASS} mutations tuées, ${FAIL} problèmes"

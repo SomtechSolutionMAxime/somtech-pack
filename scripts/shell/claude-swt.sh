@@ -66,11 +66,13 @@ _swt_dir="$(cd "$(dirname "$_swt_self")" 2>/dev/null && pwd)"
 # shellcheck source=/dev/null
 [ -r "$_swt_dir/pack-freshness.sh" ] && . "$_swt_dir/pack-freshness.sh"
 # --- lib jetons MCP (mcp-env.sh), sourcée depuis le même dossier (E-20260807-0009).
-#     SEULE lib de ce lot à avoir un effet au chargement, et c'est voulu : elle
-#     exporte les jetons du lieu unique du poste. Comme le rc du shell source ce
-#     fichier-ci, TOUT shell du poste les porte — donc toute session `claude` qui
-#     en naît, y compris celles qui ne passent pas par claude-swt (chef d'équipe
-#     ouvert par un orchestrateur, `claude` lancé dans un plan existant, reprise).
+#     Elle pose une enveloppe autour de `claude` qui charge les jetons du lieu
+#     unique DANS UN SOUS-SHELL, le temps de l'appel. Comme le rc du shell source
+#     ce fichier-ci, l'enveloppe existe dans tout shell du poste — donc toutes les
+#     portes de naissance sont couvertes, y compris celles qui ne passent pas par
+#     claude-swt (chef d'équipe ouvert par un orchestrateur, `claude` lancé dans un
+#     plan existant, reprise, naissance d'un représentant client). Les jetons ne
+#     séjournent jamais dans le shell lui-même : l'exposition s'arrête à `claude`.
 # shellcheck source=/dev/null
 [ -r "$_swt_dir/mcp-env.sh" ] && . "$_swt_dir/mcp-env.sh"
 unset _swt_self _swt_dir

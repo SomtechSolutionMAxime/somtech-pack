@@ -263,23 +263,68 @@ def main() -> int:
     # légitime, et le lui reprocher ferait échouer la migration sans raison.
     before_skeleton = skeleton(conf_now, secrets_now)
 
-    # 3. Sauvegarde, puis écriture ATOMIQUE (temporaire dans le MÊME dossier puis
-    #    renommage) : jamais de fenêtre où le fichier est tronqué ou à moitié écrit.
-    backup = f"{args.config}.somtech.bak"
-    shutil.copy2(args.config, backup)
-    print(f"→ sauvegarde : {backup}")
-
+    # 3. Construire la nouvelle configuration EN MÉMOIRE, et la vérifier AVANT
+    #    d'écrire quoi que ce soit.
+    #
+    #    Vérifier après coup obligerait, en cas d'écart, à restaurer une sauvegarde
+    #    — et si une session tierce a écrit entre-temps, cette restauration
+    #    effacerait SON travail pour réparer le nôtre. On ne se met pas dans cette
+    #    position : ce qui est faux n'est jamais écrit.
+    conf_new = json.loads(json.dumps(conf_now))
     for name, location, raw, var in secrets_now:
-        cfg = conf_now["mcpServers"][name]
+        cfg = conf_new["mcpServers"][name]
         if location.endswith("Authorization"):
             cfg["headers"]["Authorization"] = f"Bearer ${{{var}}}"
         else:
             cfg["url"] = re.sub(r"([?&]key=)([^&\s]+)", rf"\1${{{var}}}", cfg["url"])
 
+    # Second point d'injection RÉSERVÉ AUX TESTS : abîme volontairement la
+    # configuration reconstruite, pour que la garde ci-dessous ait quelque chose
+    # à attraper. Sans lui, cette garde ne serait jamais mise à l'épreuve — et la
+    # revue de fond a montré qu'on pouvait la retirer sans qu'un seul test bronche.
+    if os.environ.get("SOMTECH_MIGRATE_TEST_ABIME"):
+        conf_new.pop("projects", None)
+
+    if find_secrets(conf_new):
+        print("⛔ un jeton en clair subsisterait après réécriture — rien n'a été écrit.", file=sys.stderr)
+        return 1
+    if skeleton(conf_new, secrets_now) != before_skeleton:
+        print("⛔ la réécriture toucherait autre chose que les emplacements attendus "
+              "— rien n'a été écrit.", file=sys.stderr)
+        return 1
+
+    # Sauvegarde, puis écriture ATOMIQUE (temporaire dans le MÊME dossier puis
+    # renommage) : jamais de fenêtre où le fichier est tronqué ou à moitié écrit.
+    backup = f"{args.config}.somtech.bak"
+    shutil.copy2(args.config, backup)
+    print(f"→ sauvegarde : {backup}")
+
+    # Point d'injection RÉSERVÉ AUX TESTS : simule une session tierce qui écrit
+    # juste avant notre bascule. Sans lui, la garde ci-dessous ne serait jamais
+    # mise à l'épreuve — et une garde qu'aucun test ne fait mordre n'est pas une
+    # garde, c'est un commentaire (constat de la revue de fond).
+    hook = os.environ.get("SOMTECH_MIGRATE_TEST_HOOK")
+    if hook:
+        os.system(hook)
+
+    # DERNIÈRE VÉRIFICATION, au plus près de la bascule. Notre édition est fondée
+    # sur les octets lus plus haut ; si le fichier a changé depuis, une session
+    # tierce a écrit et notre écriture l'effacerait — sans que ça se voie, et sans
+    # que la sauvegarde (prise avant son écriture) permette de la récupérer.
+    # On préfère ne rien faire : le jeton en clair reste une seconde de plus,
+    # le travail de l'autre session est intact, et on peut relancer.
+    with open(args.config, encoding="utf-8") as fh:
+        raw_juste_avant = fh.read()
+    if raw_juste_avant != raw_now:
+        print("⛔ la configuration a été réécrite par une autre session pendant "
+              "l'opération — abandon avant écriture, rien n'a été touché. Relance.",
+              file=sys.stderr)
+        return 1
+
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(args.config) or ".", prefix=".claude.json.")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(conf_now, fh, ensure_ascii=False, indent=2)
+            json.dump(conf_new, fh, ensure_ascii=False, indent=2)
             fh.write("\n")
         os.replace(tmp, args.config)
     except BaseException:
@@ -287,21 +332,20 @@ def main() -> int:
             os.unlink(tmp)
         raise
 
-    # 4. Relire ce qu'on vient d'écrire et prouver que RIEN d'autre n'a bougé.
-    with open(args.config, encoding="utf-8") as fh:
-        conf_after = json.load(fh)
-    after_secrets = find_secrets(conf_after)
-    if after_secrets:
-        shutil.copy2(backup, args.config)
-        print("⛔ un jeton en clair subsiste après écriture — configuration restaurée.", file=sys.stderr)
+    # 4. Relire ce qu'on vient d'écrire — le disque a le dernier mot. On ne
+    #    restaure PAS ici : à ce stade, un écart signifie qu'une autre session a
+    #    déjà réécrit le fichier, et lui rendre notre version effacerait son
+    #    travail. On le dit, et on laisse l'humain trancher avec la sauvegarde
+    #    sous la main.
+    try:
+        with open(args.config, encoding="utf-8") as fh:
+            conf_after = json.load(fh)
+    except json.JSONDecodeError:
+        print(f"⚠️  la configuration relue est illisible. Sauvegarde intacte : {backup}", file=sys.stderr)
         return 1
-    if skeleton(conf_after, secrets_now) != before_skeleton:
-        shutil.copy2(backup, args.config)
-        print(
-            "⛔ la vérification a détecté un écart hors des emplacements attendus — "
-            "configuration restaurée depuis la sauvegarde.",
-            file=sys.stderr,
-        )
+    if find_secrets(conf_after):
+        print(f"⚠️  un jeton en clair subsiste à la relecture — une autre session a "
+              f"probablement réécrit le fichier. Sauvegarde : {backup}", file=sys.stderr)
         return 1
 
     n_projects = len(conf_after.get("projects") or {})
