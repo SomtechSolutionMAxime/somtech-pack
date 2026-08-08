@@ -26,6 +26,8 @@ Usage :
   migrate-mcp-secrets.py --apply         # applique
   migrate-mcp-secrets.py --config <f> --env-file <f>   # points d'injection (tests)
   migrate-mcp-secrets.py --from-env <.env> --apply     # importe aussi les jetons d'un .env de dépôt
+  migrate-mcp-secrets.py --from-env <.env> --adopter SOMTECH_DESK_API_KEY --apply
+                                                       # arbitrage : cette source fait foi
 
 IMPORTER DEPUIS UN .env DE DÉPÔT (--from-env)
   Un serveur peut ne jamais avoir été déclaré au poste : son jeton vit alors dans
@@ -147,6 +149,9 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="applique (sans ce drapeau : inspection seule)")
     ap.add_argument("--from-env", action="append", default=[], metavar="FICHIER",
                     help="importe aussi les jetons de ce .env dans le lieu unique (répétable)")
+    ap.add_argument("--adopter", action="append", default=[], metavar="VARIABLE",
+                    help="pour CETTE variable, la source --from-env fait foi et remplace "
+                         "la valeur en place (répétable ; c'est le geste d'arbitrage)")
     args = ap.parse_args()
 
     if not os.path.exists(args.config):
@@ -167,6 +172,7 @@ def main() -> int:
     # projet — c'est exactement le cas de Somcraft.
     imported = []
     conflicts = []
+    adopted = []
     for src in args.from_env:
         if not os.path.exists(src):
             print(f"⚠️  {src} introuvable — ignoré.", file=sys.stderr)
@@ -180,6 +186,13 @@ def main() -> int:
         current = load_env_file(args.env_file)
         added = []
         for k, v in incoming.items():
+            if k in current and current[k] != v and k in set(args.adopter):
+                # Arbitrage explicite : quelqu'un a tranché, en nommant la variable.
+                # On ne le fait jamais en gros, jamais par défaut — nommer la variable
+                # EST la décision.
+                adopted.append(k)
+                current[k] = v
+                continue
             if k in current and current[k] != v:
                 # Deux déclarations vivantes pour la même variable. Choisir à la
                 # place de l'humain, c'est risquer de basculer tout le poste sur
@@ -197,12 +210,15 @@ def main() -> int:
     if imported:
         verbe = "importerait" if not args.apply else "importé(s) dans " + args.env_file
         print(f"Jeton(s) {verbe} : {', '.join(sorted(set(imported)))}")
+    if adopted:
+        print(f"Arbitrage appliqué — la source nommée fait foi pour : {', '.join(sorted(set(adopted)))}")
     if conflicts:
         print("\n⚠️  À TRANCHER — deux déclarations vivantes pour la même variable :", file=sys.stderr)
         for k, src in conflicts:
             print(f"  · {k} : {args.env_file} porte une valeur, {src} en porte une AUTRE.", file=sys.stderr)
         print("  La valeur déjà en place a été CONSERVÉE — rien n'a été écrasé.", file=sys.stderr)
-        print("  Vérifie laquelle doit faire foi, puis aligne la source perdante à la main.", file=sys.stderr)
+        print("  Pour trancher : relance avec --adopter <VARIABLE> — la source --from-env", file=sys.stderr)
+        print("  fera alors foi pour CETTE variable, nommée explicitement.", file=sys.stderr)
 
     secrets = find_secrets(conf)
     if not secrets:

@@ -196,6 +196,14 @@ mutate "$MIG_SRC" "$M" 's = s.replace("                conflicts.append((k, src)
        env MIGRATE_SRC="$M" bash "${SCRIPT_DIR}/test-migrate-mcp-secrets.sh" \
   || ko "mutation 15 inopérante"
 
+# L'arbitrage doit rester CIBLÉ : le rendre global écraserait des variables que
+# personne n'a nommées — exactement ce qu'on refuse depuis le début du lot.
+M="${WORK}/m25.py"
+mutate "$MIG_SRC" "$M" 's = s.replace("and k in set(args.adopter):", "and True:")' \
+  && expect_red "l'arbitrage déborde sur les variables que personne n'a nommées" \
+       env MIGRATE_SRC="$M" bash "${SCRIPT_DIR}/test-migrate-mcp-secrets.sh" \
+  || ko "mutation 25 inopérante"
+
 echo "== Mutations des portes de naissance =="
 
 # Le chaînage rc → claude-swt.sh → mcp-env.sh est ce qui ouvre les quatre portes.

@@ -227,6 +227,26 @@ grep -qx "NOUVELLE_VAR=ok" "$ENV4" && ok "conflit : les variables SANS conflit s
 case "$OUT" in *valeur-deja-en-place*|*valeur-differente*) ko "🚨 le message de conflit imprime une valeur" ;;
                *) ok "le message de conflit n'imprime aucune valeur" ;; esac
 
+echo "== Arbitrage explicite (--adopter) : la source nommée fait foi =="
+# Le conflit n'est pas une erreur, c'est une décision — et elle appartient à un
+# humain. --adopter est la façon de l'exprimer : il faut NOMMER la variable, une
+# par une. Pas de bascule en gros, pas de valeur par défaut qui tranche à sa place.
+CONF8="${WORK}/c8.json"; ENV8="${WORK}/e9/mcp-env"; SRC8="${WORK}/depot3.env"
+make_conf "$CONF8"; mkdir -p "$(dirname "$ENV8")"
+printf 'SOMCRAFT_MCP_API_KEY=valeur-du-poste\nAUTRE=inchange\n' > "$ENV8"; chmod 600 "$ENV8"
+printf 'SOMCRAFT_MCP_API_KEY=valeur-du-depot\nAUTRE=tentative-ecrasement\n' > "$SRC8"
+OUT=$(python3 "$MIG" --config "$CONF8" --env-file "$ENV8" --from-env "$SRC8" \
+       --adopter SOMCRAFT_MCP_API_KEY --apply 2>&1); RC=$?
+grep -qx "SOMCRAFT_MCP_API_KEY=valeur-du-depot" "$ENV8" && ok "la variable NOMMÉE a bien adopté la valeur du dépôt" \
+                                                        || ko "l'arbitrage n'a pas été appliqué"
+grep -qx "AUTRE=inchange" "$ENV8" && ok "une variable NON nommée n'est pas touchée, même en conflit" \
+                                 || ko "🚨 l'arbitrage a débordé sur une variable non nommée"
+case "$OUT" in *"Arbitrage appliqué"*) ok "l'arbitrage est annoncé" ;; *) ko "arbitrage silencieux : $OUT" ;; esac
+case "$OUT" in *valeur-du-depot*|*valeur-du-poste*) ko "🚨 l'annonce d'arbitrage imprime une valeur" ;;
+               *) ok "l'annonce d'arbitrage n'imprime aucune valeur" ;; esac
+[ "$RC" != "0" ] && ok "le conflit restant (AUTRE) fait toujours sortir en non nul" \
+                 || ko "le conflit restant est passé sous silence"
+
 echo
 echo "Résultat : ${PASS} réussis, ${FAIL} échoués"
 [ "$FAIL" -eq 0 ]
