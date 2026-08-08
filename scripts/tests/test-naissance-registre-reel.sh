@@ -24,6 +24,20 @@
 # LES DEUX BRAS SONT OBLIGATOIRES : sans le bras négatif, ce test ne prouverait
 # pas que c'est le correctif qui fait la différence.
 #
+# CE QUE CE TEST NE PROUVE PAS, ET COMMENT ON L'A PROUVÉ AUTREMENT
+# Il ouvre des sessions NON INTERACTIVES (`claude -p`). La revue de fond a posé la
+# bonne objection : `-p` pourrait sauter le dialogue de confiance qu'une naissance
+# interactive déclencherait sur un chemin jamais approuvé — auquel cas l'agent
+# naîtrait gelé devant une question que personne ne regarde, jeton ou pas.
+#
+# La preuve existe, et elle est directe : la session qui a écrit ce lot est née
+# `claude --model opus` — interactive, sans aucun drapeau de contournement — dans
+# un plan de travail créé le jour même. Ce chemin était, et reste, ABSENT du
+# fichier de configuration du poste ; aucun des plans de travail de la machine n'y
+# figure (0 sur 102 entrées). Aucun dialogue n'a bloqué cette naissance : seuls
+# les serveurs MCP manquaient, faute de jeton. L'approbation par chemin n'est donc
+# pas le verrou, y compris en interactif.
+#
 # SAUTÉ proprement quand il ne peut pas être honnête : pas de `claude`, ou aucun
 # jeton disponible sur la machine (cas de la chaîne d'intégration).
 # Forcer le saut : SOMTECH_SKIP_E2E=1
