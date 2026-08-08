@@ -41,6 +41,8 @@ export function buildBlock(destFile) {
  *   les source depuis son dossier d'install) :
  *     · `swt-db.sh` — BD par worktree (D-20260709-0003) ; sans elle, `swt_db_up` jamais
  *       défini, aucun Postgres provisionné ;
+ *     · `mcp-env.sh` — jetons MCP du poste (E-20260807-0009) ; sans elle, aucune
+ *       session née hors de `claude-swt` n'a de registre joignable ;
  *     · `pack-freshness.sh` — fraîcheur du pack : nudge + auto-PR au launch
  *       (D-20260715-0001) ; sans elle, `pf_nudge_launch`/`pf_auto_pr` jamais définies →
  *       feature inerte (bug D-20260715-0003).
@@ -61,7 +63,7 @@ export function installRcBlock({ rcFile, destDir, snippetSrc, dryRun = false }) 
   copyFileSync(snippetSrc, destFile);
   // Chaque lib DOIT être copiée : claude-swt.sh les source depuis son dossier d'install ;
   // absente, le `source` échoue en silence et la fonctionnalité correspondante est inerte.
-  for (const lib of ['swt-db.sh', 'pack-freshness.sh']) {
+  for (const lib of ['swt-db.sh', 'pack-freshness.sh', 'mcp-env.sh']) {
     const libSrc = join(dirname(snippetSrc), lib);
     if (existsSync(libSrc)) copyFileSync(libSrc, join(destDir, lib));
   }

@@ -113,10 +113,26 @@ test('run setup --no-graphify : ni script ni hook graphify', async () => {
   const st = join(w, 'settings.json');
   writeFileSync(rc, '# rc\n');
   const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd,
-    '--dest', dd, '--settings', st, '--yes', '--no-version-hook', '--no-graphify']);
+    '--dest', dd, '--settings', st, '--yes', '--no-version-hook', '--no-graphify', '--no-registre-hook']);
   assert.equal(code, 0);
   assert.ok(!existsSync(join(dd, 'graphify-share-out.sh')), 'aucun script graphify avec --no-graphify');
-  assert.ok(!existsSync(st), 'aucun settings écrit (ni version ni graphify)');
+  assert.ok(!existsSync(st), 'aucun settings écrit (ni version, ni graphify, ni registre)');
+});
+
+// E-20260807-0009 — le hook « registre injoignable » est la garantie de dernier
+// recours : un agent né sans registre doit le savoir tout de suite. Il s'installe
+// donc SANS qu'on le demande. Ce cas serait rouge si quelqu'un le rendait opt-in.
+test('run setup : le hook registre est installé par défaut', async () => {
+  const w = tmp('smtk-setup-');
+  const rc = join(w, 'zshrc'); const sd = join(w, 'skills'); const wd = join(w, 'workflows');
+  const dd = join(w, 'somtech'); const st = join(w, 'settings.json'); const hd = join(w, 'hooks');
+  writeFileSync(rc, '# rc\n');
+  const code = await run(['setup', '--source', REPO, '--rc', rc, '--skills-dir', sd, '--workflows-dir', wd,
+    '--dest', dd, '--settings', st, '--hooks-dir', hd, '--yes', '--no-version-hook', '--no-graphify']);
+  assert.equal(code, 0);
+  assert.ok(existsSync(join(hd, 'session-start-registre.sh')), 'le hook registre est déposé');
+  const wired = JSON.stringify(JSON.parse(readFileSync(st, 'utf8')));
+  assert.ok(wired.includes('session-start-registre.sh'), 'le hook registre est câblé dans les settings');
 });
 
 test('run setup --no-commands : aucune commande installée, le reste intact', async () => {

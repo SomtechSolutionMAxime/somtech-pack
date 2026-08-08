@@ -63,6 +63,7 @@ export function parseArgs(argv) {
       case '--no-naissance-representant': flags.noNaissanceRepresentant = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--no-graphify': flags.noGraphify = true; break;
+      case '--no-registre-hook': flags.noRegistreHook = true; break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
       case '--dry-run': flags.dryRun = true; break;
@@ -144,6 +145,8 @@ Options (setup) :
   --no-claude-swt   Ne pas installer claude-swt
   --no-version-hook Ne pas installer le hook de version global
   --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)
+  --no-registre-hook  Ne pas installer le hook « registre injoignable » (dit à la
+                    naissance d'un agent que ses serveurs MCP sont muets)
 
 Options communes :
   --dry-run         N'écrit rien, affiche le plan

@@ -15,6 +15,13 @@
 # ============================================================
 set -uo pipefail
 
+# ISOLEMENT DU POSTE (E-20260807-0009) — obligatoire dès qu'un test source la lib
+# des jetons, directement ou via claude-swt.sh. Sans cette borne, le test lirait le
+# VRAI lieu unique de la machine et un faux `claude` pourrait recracher un vrai
+# jeton dans une sortie de test. Le garde-fou est vérifié par test-mcp-env.sh.
+export SOMTECH_MCP_ENV_FILE="${SOMTECH_MCP_ENV_FILE:-/nonexistent/somtech-mcp-env-de-test}"
+
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 INSTALLER="${SCRIPTS_DIR}/install-claude-swt.sh"

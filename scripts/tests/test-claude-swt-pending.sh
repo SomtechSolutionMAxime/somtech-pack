@@ -10,6 +10,13 @@
 # ============================================================
 set -u
 
+# ISOLEMENT DU POSTE (E-20260807-0009) — obligatoire dès qu'un test source la lib
+# des jetons, directement ou via claude-swt.sh. Sans cette borne, le test lirait le
+# VRAI lieu unique de la machine et un faux `claude` pourrait recracher un vrai
+# jeton dans une sortie de test. Le garde-fou est vérifié par test-mcp-env.sh.
+export SOMTECH_MCP_ENV_FILE="${SOMTECH_MCP_ENV_FILE:-/nonexistent/somtech-mcp-env-de-test}"
+
+
 HERE="$(cd "$(dirname "$0")/../shell" && pwd)"
 # shellcheck source=/dev/null
 . "$HERE/claude-swt.sh"

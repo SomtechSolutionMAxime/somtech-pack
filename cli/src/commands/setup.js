@@ -9,7 +9,7 @@ import { installGlobalSkills } from '../globalskills.js';
 import { installGlobalWorkflows } from '../globalworkflows.js';
 import { installGlobalCommands } from '../globalcommands.js';
 import { installPosteModules } from '../posteonly.js';
-import { installGlobalVersionHook, installGraphifyShareHook } from '../userhooks.js';
+import { installGlobalVersionHook, installGraphifyShareHook, installGlobalRegistreHook } from '../userhooks.js';
 
 /** True si un binaire est sur le PATH (best-effort, jamais fatal). */
 function hasBinary(name) {
@@ -69,9 +69,12 @@ export async function cmdSetup(flags) {
   const doSwt = !flags.noClaudeSwt;
   const doVersionHook = !flags.noVersionHook;
   const doGraphify = !flags.noGraphify;
+  // Hook « registre injoignable » (E-20260807-0009) : installé par défaut. C'est la
+  // garantie de dernier recours — l'agent qui naît sans registre le sait tout de suite.
+  const doRegistreHook = !flags.noRegistreHook;
 
-  if (!doSkills && !doWorkflows && !doCommands && !doPoste && !doSwt && !doVersionHook && !doGraphify) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-naissance-representant, --no-claude-swt, --no-version-hook et --no-graphify).');
+  if (!doSkills && !doWorkflows && !doCommands && !doPoste && !doSwt && !doVersionHook && !doGraphify && !doRegistreHook) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-naissance-representant, --no-claude-swt, --no-version-hook, --no-graphify et --no-registre-hook).');
     return 0;
   }
 
@@ -83,6 +86,8 @@ export async function cmdSetup(flags) {
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
   if (doGraphify && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
+  if (doRegistreHook && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
+  if (doRegistreHook && !consentTargets.includes(hooksDir)) consentTargets.push(hooksDir);
   if (doGraphify && !consentTargets.includes(destDir)) consentTargets.push(destDir);
   if (!(await consent(flags, consentTargets))) return 1;
 
@@ -215,6 +220,21 @@ export async function cmdSetup(flags) {
     } else {
       console.log(
         `  hook version (global) → ${r.dest}` +
+          (r.wired ? ` (câblé dans ${settingsFile})` : ` (déjà câblé dans ${settingsFile})`) +
+          (r.backup ? `, backup ${r.backup}` : '')
+      );
+    }
+  }
+
+  if (doRegistreHook) {
+    const r = installGlobalRegistreHook({ payloadRoot, hooksDir, settingsFile, dryRun: flags.dryRun });
+    if (!r.ok) {
+      console.log(`  ⚠️  hook registre global non installé : ${r.reason}`);
+    } else if (flags.dryRun) {
+      console.log(`  hook registre (global) → ${r.dest} + câblage ${settingsFile} [dry-run]`);
+    } else {
+      console.log(
+        `  hook registre (global) → ${r.dest}` +
           (r.wired ? ` (câblé dans ${settingsFile})` : ` (déjà câblé dans ${settingsFile})`) +
           (r.backup ? `, backup ${r.backup}` : '')
       );
