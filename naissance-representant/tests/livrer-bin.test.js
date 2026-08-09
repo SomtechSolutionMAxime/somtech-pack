@@ -31,6 +31,7 @@ let pathOriginal;
  *   soumetSeule   — `agent prompt` soumet-il vraiment, ou laisse-t-il le texte dans la boîte ?
  *   lectureCassee — `agent read` échoue (sortie vide) : la boîte est illisible
  *   statutMuet    — `agent get` reste bloqué sur `idle` : le seul témoin restant est la boîte
+ *   dejaOccupee   — la session travaillait DÉJÀ avant qu'on arrive (un autre appelant lui parle)
  */
 function installerFauxHerdr(scenario = {}) {
   const journal = join(bac, 'appels.jsonl');
@@ -38,7 +39,7 @@ function installerFauxHerdr(scenario = {}) {
   writeFileSync(journal, '');
   writeFileSync(
     etat,
-    JSON.stringify({ boiteInitiale: '', soumetSeule: true, lectureCassee: false, statutMuet: false, ...scenario })
+    JSON.stringify({ boiteInitiale: '', soumetSeule: true, lectureCassee: false, statutMuet: false, dejaOccupee: false, ...scenario })
   );
   const script = `#!/usr/bin/env node
 const fs = require('fs');
@@ -48,7 +49,7 @@ const sc = JSON.parse(fs.readFileSync(${JSON.stringify(etat)}, 'utf8'));
 const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);
 fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
 const cmd = args.slice(0, 2).join(' ');
-const SEP = '-'.repeat(20);
+const SEP = '\u2500'.repeat(20);   // le VRAI filet de l'ecran, pas un tiret ASCII
 
 const promptFait  = passes.find((a) => a[0] === 'agent' && a[1] === 'prompt');
 const enterEnvoye = passes.some((a) => a[0] === 'agent' && a[1] === 'send-keys');
@@ -76,7 +77,7 @@ if (cmd === 'agent read') {
 }
 if (cmd === 'agent get') {
   process.stdout.write(JSON.stringify({
-    result: { type: 'agent_info', agent: { pane_id: args[2], name: 'acme', agent_status: (!sc.statutMuet && travaille()) ? 'working' : 'idle' } },
+    result: { type: 'agent_info', agent: { pane_id: args[2], name: 'acme', agent_status: sc.dejaOccupee ? 'working' : ((!sc.statutMuet && travaille()) ? 'working' : 'idle') } },
   }));
   process.exit(0);
 }
@@ -146,11 +147,12 @@ test('livraison nominale : la boîte était vide, la session prend le brief', ()
   assert.equal(rendu.repare, false, 'rien à réparer quand la soumission part du premier coup');
 
   const a = appels(journal);
-  // On REGARDE avant d'écrire — la première chose faite est une lecture d'écran.
-  assert.deepEqual(a[0].slice(0, 2), ['agent', 'read']);
+  // On REGARDE avant d'écrire — les DEUX portes : l'état de la session et sa boîte.
   const iPrompt = a.findIndex((x) => x[0] === 'agent' && x[1] === 'prompt');
   const iRead = a.findIndex((x) => x[0] === 'agent' && x[1] === 'read');
-  assert.ok(iRead < iPrompt, 'la boîte doit être regardée AVANT qu’on y écrive');
+  const iGet = a.findIndex((x) => x[0] === 'agent' && x[1] === 'get');
+  assert.ok(iRead !== -1 && iRead < iPrompt, 'la boîte doit être regardée AVANT qu’on y écrive');
+  assert.ok(iGet !== -1 && iGet < iPrompt, 'l’état de la session doit être lu AVANT qu’on y écrive');
   assert.ok(a[iPrompt].includes('--wait'), 'l’appel nu rend un succès dans tous les cas — --wait est obligatoire');
   // Et on RELIT après : la réponse de l'outil ne fait pas foi.
   assert.ok(
@@ -197,6 +199,19 @@ test('une boîte NON VIDE fait refuser la livraison — jamais écrire par-dessu
   assert.ok(
     !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'prompt'),
     'rien ne doit être écrit dans une boîte qui n’est pas vide'
+  );
+});
+
+test('une session qui travaille DÉJÀ fait refuser la livraison — rien n’est écrit', () => {
+  // Un autre appelant lui parle en ce moment. Écrire maintenant serait déclaré « livré » par
+  // le seul fait qu'elle travaille — un témoin vrai avant même qu'on ait écrit.
+  const journal = installerFauxHerdr({ dejaOccupee: true });
+  const r = livrer('w9:p1', '--texte', 'BRIEF-REEL');
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /working/);
+  assert.ok(
+    !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'prompt'),
+    'rien ne doit être écrit dans une session déjà occupée'
   );
 });
 

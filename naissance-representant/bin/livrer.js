@@ -92,9 +92,13 @@ async function main() {
 
   const commandes = commandesLivraison(pane, texte, { attenteMs: ATTENTE_MS });
 
-  // 1. REGARDER avant d'écrire. Une boîte non vide est un refus, jamais une fusion.
+  // 1. REGARDER avant d'écrire — la boîte ET l'état. Une boîte non vide est un refus, jamais
+  //    une fusion ; une session qui travaille déjà est un refus aussi, parce que la preuve de
+  //    prise (« elle a quitté l'attente ») serait vraie avant même qu'on écrive.
+  const etatAvant = await appelHerdr(commandes.interroger);
+  const statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
   const avant = await lireEcran(commandes.lireEcran);
-  const obstacle = obstacleAvantLivraison(avant);
+  const obstacle = obstacleAvantLivraison(avant, statutAvant);
   if (obstacle) {
     process.stderr.write(`${obstacle}\n`);
     process.exit(1);

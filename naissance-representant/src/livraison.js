@@ -34,26 +34,48 @@
 /** La marque de la boîte de saisie d'une session Claude Code dans un terminal. */
 const INVITE = '❯';
 
+/** Un filet — la ligne de tirets qui encadre la boîte de saisie à l'écran. */
+const FILET = /^[─-╿]{8,}\s*$/;
+
 /**
  * Le contenu ACTUEL de la boîte de saisie, lu dans un dump de terminal.
  *
- * La boîte est la DERNIÈRE invite du dump : les invites précédentes appartiennent au
- * transcript (les messages déjà soumis y restent affichés, précédés de la même marque). Lire
- * la première, ou n'importe laquelle, ferait prendre un message déjà traité pour un reste.
+ * POURQUOI ON NE CHERCHE PAS SIMPLEMENT L'INVITE (relevé en revue de fond, motif 1 — « la
+ * garde vérifie le contenu, pas le fait »). La première version prenait la DERNIÈRE ligne
+ * portant `❯`. C'était déjà mieux que la première (les messages déjà soumis restent affichés
+ * avec la même marque, et les lire ferait prendre un message traité pour un reste) — mais ça
+ * reste une garde sur un CARACTÈRE. Un brief bloqué dans la boîte dont une ligne ne porte
+ * qu'un `❯` — cas plausible dès qu'un brief parle de terminaux, comme ceux de ce dépôt — se
+ * lisait alors comme une boîte VIDE, et on écrivait par-dessus : exactement la fusion que ce
+ * module existe pour empêcher.
  *
- * Rend `''` quand la boîte est vide. Rend `null` quand aucune invite n'est visible — ce n'est
- * PAS une boîte vide : c'est une boîte qu'on n'a pas su lire, et les deux ne se traitent pas
- * pareil (on ne livre pas dans ce qu'on ne voit pas).
+ * On s'ancre donc sur la STRUCTURE de l'écran, qui est ce qui distingue vraiment la boîte :
+ * elle est encadrée par deux filets, et c'est le dernier couple de filets du dump. Tout ce qui
+ * est entre les deux est le contenu de la boîte — y compris ses lignes suivantes, ce que la
+ * lecture ligne-à-ligne ne savait pas faire non plus.
+ *
+ * Rend `''` quand la boîte est vue vide. Rend `null` quand on n'a pas su la reconnaître — ce
+ * n'est PAS une boîte vide : c'est une boîte qu'on n'a pas lue, et les deux ne se traitent pas
+ * pareil. Un écran dont le format change rend donc `null`, ce qui fait refuser la livraison
+ * plutôt que la fusionner : c'est le sens sûr.
  */
 export function contenuBoite(texteTerminal) {
   const lignes = String(texteTerminal ?? '').split('\n');
-  for (let i = lignes.length - 1; i >= 0; i -= 1) {
-    const ligne = lignes[i];
-    const j = ligne.indexOf(INVITE);
-    if (j === -1) continue;
-    return ligne.slice(j + INVITE.length).trim();
+  const filets = [];
+  for (let i = 0; i < lignes.length; i += 1) {
+    if (FILET.test(lignes[i].trim())) filets.push(i);
   }
-  return null;
+  if (filets.length < 2) return null;
+
+  const bas = filets[filets.length - 1];
+  const haut = filets[filets.length - 2];
+  const dedans = lignes.slice(haut + 1, bas);
+  if (dedans.length === 0) return null;
+
+  const j = dedans[0].indexOf(INVITE);
+  if (j === -1) return null; // ce n'est pas la boîte de saisie : on ne l'a pas reconnue
+  const corps = [dedans[0].slice(j + INVITE.length), ...dedans.slice(1)];
+  return corps.join('\n').trim();
 }
 
 /** La boîte est-elle vide ET lisible ? Une boîte illisible n'est pas une boîte vide. */
@@ -78,12 +100,39 @@ export function briefEstPris({ statut, terminal }) {
 }
 
 /**
- * Ce que la boîte contient de trop AVANT qu'on écrive — la raison de refuser.
- *
- * Rend `null` quand on peut livrer, sinon le message qui dit pourquoi on ne livre pas. Écrire
- * par-dessus un reste ne produit pas deux messages : ça produit UN message faux (mesuré).
+ * Les états dans lesquels une session peut recevoir un brief — et être vue le recevoir.
+ * `done` est admis : le tour précédent est fini, la boîte est rendue.
  */
-export function obstacleAvantLivraison(terminal) {
+const ETATS_DISPONIBLES = ['idle', 'done'];
+
+/**
+ * Ce qui empêche de livrer AVANT qu'on écrive — la raison de refuser.
+ *
+ * Rend `null` quand on peut livrer, sinon le message qui dit pourquoi on ne livre pas.
+ *
+ * DEUX PORTES, ET LA SECONDE A ÉTÉ OUBLIÉE À LA PREMIÈRE ÉCRITURE (relevé en revue de fond,
+ * motif 3) :
+ *
+ *   • la BOÎTE — écrire par-dessus un reste ne produit pas deux messages, ça produit UN
+ *     message faux (mesuré contre le vrai service) ;
+ *   • le STATUT — et c'est le plus grave des deux, parce qu'il ne casse pas la livraison, il
+ *     casse la PREUVE. `briefEstPris` tient `working` pour le témoin qu'une session a pris le
+ *     brief. Si elle travaillait DÉJÀ quand on est arrivé — un autre appelant lui parle en
+ *     même temps —, ce témoin est vrai avant même qu'on écrive : la commande déclarerait
+ *     « livré » sans que rien n'ait été pris. Une garde qui peut se prouver elle-même vraie
+ *     n'est pas une garde.
+ *
+ * Un statut qu'on n'a pas pu lire (`null`, `unknown`) est aussi un refus : on ne livre pas
+ * dans une session dont on ignore l'état, pour la même raison qu'on ne livre pas dans une
+ * boîte qu'on ne voit pas.
+ */
+export function obstacleAvantLivraison(terminal, statut) {
+  if (!ETATS_DISPONIBLES.includes(statut)) {
+    return (
+      `la session n’est pas disponible pour un brief (statut « ${statut ?? '—'} ») — ` +
+      'livrer maintenant ne se prouverait pas : elle a déjà quitté l’attente sans nous'
+    );
+  }
   const reste = contenuBoite(terminal);
   if (reste === null) {
     return 'la boîte de saisie de la session est illisible — on ne livre pas dans ce qu’on ne voit pas';

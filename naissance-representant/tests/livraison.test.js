@@ -59,7 +59,7 @@ test('un reste dans la boîte est lu tel quel', () => {
 // ── Le refus AVANT d'écrire — c'est lui qui empêche la fusion silencieuse.
 
 test('on refuse de livrer dans une boîte qui contient déjà quelque chose', () => {
-  const m = obstacleAvantLivraison(ECRAN_RESTE);
+  const m = obstacleAvantLivraison(ECRAN_RESTE, 'idle');
   assert.ok(m, 'une boîte non vide doit faire refuser la livraison');
   assert.match(m, /reste ici/, 'le message doit montrer ce qui bloque');
   assert.match(m, /coll/, 'et dire pourquoi : les deux textes seraient collés en UN message');
@@ -68,12 +68,64 @@ test('on refuse de livrer dans une boîte qui contient déjà quelque chose', ()
 test('on refuse aussi de livrer dans une boîte qu’on n’a pas su lire', () => {
   // Une lecture d'écran ratée ne doit jamais passer pour une boîte vide : on livrerait à
   // l'aveugle, ce qui est exactement la situation que ce module existe pour empêcher.
-  assert.match(obstacleAvantLivraison(null), /illisible/);
-  assert.match(obstacleAvantLivraison(''), /illisible/);
+  assert.match(obstacleAvantLivraison(null, 'idle'), /illisible/);
+  assert.match(obstacleAvantLivraison('', 'idle'), /illisible/);
 });
 
 test('on livre dans une boîte vue vide, et seulement là', () => {
-  assert.equal(obstacleAvantLivraison(ECRAN_VIDE), null);
+  assert.equal(obstacleAvantLivraison(ECRAN_VIDE, 'idle'), null);
+  assert.equal(obstacleAvantLivraison(ECRAN_VIDE, 'done'), null, 'un tour fini rend la boîte');
+});
+
+// Relevé en revue de fond (motif 3) — la seconde porte, oubliée à la première écriture.
+test('on refuse de livrer à une session qui travaille DÉJÀ — sinon la preuve se prouve elle-même', () => {
+  // `briefEstPris` tient `working` pour le témoin qu'une session a pris le brief. Si elle
+  // travaillait avant qu'on écrive, ce témoin est vrai sans nous : la commande dirait
+  // « livré » sans que rien n'ait été pris.
+  const m = obstacleAvantLivraison(ECRAN_VIDE, 'working');
+  assert.ok(m, 'une session qui travaille déjà ne peut pas recevoir un brief vérifiable');
+  assert.match(m, /working/);
+  assert.match(m, /prouve/, 'le message doit dire que c’est la PREUVE qui est en cause');
+});
+
+test('on refuse aussi quand l’état de la session est inconnu ou illisible', () => {
+  assert.ok(obstacleAvantLivraison(ECRAN_VIDE, 'unknown'));
+  assert.ok(obstacleAvantLivraison(ECRAN_VIDE, 'blocked'));
+  assert.ok(obstacleAvantLivraison(ECRAN_VIDE, null));
+});
+
+// Relevé en revue de fond (motif 1) — la garde s'ancre sur la STRUCTURE, pas sur un caractère.
+test('un brief bloqué dans la boîte dont une ligne ne porte qu’un « ❯ » ne passe pas pour une boîte vide', () => {
+  // Le cas exact : un brief qui parle de terminaux — il y en a dans ce dépôt même. Avec une
+  // lecture ligne-à-ligne, sa dernière ligne « ❯ » se lisait comme une boîte vide, et on
+  // écrivait par-dessus : la fusion, reproduite par la garde censée l'empêcher.
+  const ecran = [
+    '  ▘▘ ▝▝    ~/.gestionnaire/acme',
+    SEP,
+    '❯ Lis ceci et prepare le rapport. Le pane montre :',
+    '❯',
+    'Merci.',
+    SEP,
+    '  ⏵⏵ auto mode on',
+  ].join('\n');
+  const vu = contenuBoite(ecran);
+  assert.notEqual(vu, '', 'cette boîte n’est PAS vide');
+  assert.match(vu, /Lis ceci/, 'tout le contenu de la boîte est lu, ses lignes suivantes comprises');
+  assert.match(vu, /Merci\./);
+  assert.ok(obstacleAvantLivraison(ecran, 'idle'), 'et la livraison doit être refusée');
+});
+
+test('un écran sans filets n’est pas une boîte vide — c’est une boîte qu’on n’a pas su lire', () => {
+  // Sans les filets, on ne sait pas où commence ni où finit la boîte. Rendre `''` reviendrait
+  // à dire « elle est vide, écris dedans » sur la foi d'une structure qu'on n'a pas reconnue.
+  assert.equal(contenuBoite(['❯ un brief coince', '❯', 'suite'].join('\n')), null);
+  assert.equal(contenuBoite('❯'), null);
+});
+
+test('un format d’écran inattendu fait REFUSER, jamais fusionner — c’est le sens sûr', () => {
+  const inattendu = [SEP, 'pas d’invite ici du tout', SEP].join('\n');
+  assert.equal(contenuBoite(inattendu), null);
+  assert.match(obstacleAvantLivraison(inattendu, 'idle'), /illisible/);
 });
 
 // ── Le verdict de prise — par le fait, jamais par la réponse de l'outil.
