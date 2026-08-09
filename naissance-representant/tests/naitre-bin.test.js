@@ -42,6 +42,7 @@ let pathOriginal;
  *
  *   detecteApres  — nombre d'appels `agent get` qui REFUSENT avant que l'agent existe
  *   refusRenommage— null | 'sortie-1' | 'sortie-0'  (la seconde est le chemin silencieux)
+ *   refusLancement— `pane run` refuse (un pane disparu entre sa création et son lancement)
  *   repertoire    — ce que `agent get` rapporte comme répertoire de travail réel
  */
 function installerFauxHerdr(scenario = {}) {
@@ -50,7 +51,13 @@ function installerFauxHerdr(scenario = {}) {
   writeFileSync(journal, '');
   writeFileSync(
     etat,
-    JSON.stringify({ detecteApres: 0, refusRenommage: null, repertoire: null, ...scenario })
+    JSON.stringify({
+      detecteApres: 0,
+      refusRenommage: null,
+      refusLancement: false,
+      repertoire: null,
+      ...scenario,
+    })
   );
   const script = `#!/usr/bin/env node
 const fs = require('fs');
@@ -70,7 +77,11 @@ if (cmd === 'tab create') sortir({ result: { root_pane: { pane_id: 'w9:p1' } } }
 // disait \`{"result":{"ok":true}}\` — et c'est ce mensonge-là qui a fait échouer la première
 // version du correctif contre le vrai service, alors que la suite était verte. Huitième
 // occurrence du motif, sur ce ticket même : le double doit dire ce que le service dit.
-if (cmd === 'pane run') { process.exit(0); }
+// Il refuse aussi, comme le vrai : un pane disparu entre sa création et son lancement.
+if (cmd === 'pane run') {
+  if (sc.refusLancement) sortir(refus('pane_not_found'), 1);
+  process.exit(0);
+}
 
 if (cmd === 'agent get') {
   const vus = passes.filter((a) => a[0] === 'agent' && a[1] === 'get').length;
@@ -266,6 +277,47 @@ test('une session née AILLEURS que dans le lieu fait échouer la commande — e
     assert.notEqual(r.code, 0, 'un répertoire de travail hors du lieu doit faire échouer la naissance');
     assert.match(r.stderr, /lieu du représentant/);
     assert.ok(r.stderr.includes(lieu), 'le message doit dire où elle aurait dû naître');
+    assert.ok(appelsJournalises(journal).some((a) => a[0] === 'pane' && a[1] === 'close'));
+  }));
+
+// Relevé en revue de fond : la garde existait dans le code, mais AUCUN test ne l'exerçait —
+// la retirer laissait la suite verte. Un garde que rien ne prouve n'est pas un garde.
+test('un refus de LANCEMENT fait échouer la commande, et referme le pane', () =>
+  avecLieu((client, lieu) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu, refusLancement: true });
+    const r = lancerNaitre(client);
+    assert.notEqual(r.code, 0, 'la session ne s’est pas lancée : la commande ne peut pas rendre 0');
+    assert.match(r.stderr, /pane_not_found/);
+    assert.equal(r.stdout.trim(), '');
+    assert.ok(
+      appelsJournalises(journal).some((a) => a[0] === 'pane' && a[1] === 'close' && a[2] === 'w9:p1'),
+      'un lancement refusé ne doit pas laisser le pane derrière lui'
+    );
+    assert.ok(
+      !appelsJournalises(journal).some((a) => a[0] === 'agent' && a[1] === 'rename'),
+      'inutile de nommer un agent dans un pane où rien n’a été lancé'
+    );
+  }));
+
+// Relevé en revue de fond : le seul cas « née ailleurs » testé était un répertoire PARENT du
+// lieu — plus court, donc structurellement incapable de démasquer une comparaison affaiblie.
+// Un frère à préfixe partagé, lui, passerait un `startsWith` et échoue sur l'égalité. C'est
+// ce qui verrouille la comparaison exacte contre une régression future.
+test('un répertoire FRÈRE à préfixe partagé n’est pas le lieu — la comparaison est exacte, pas par préfixe', () =>
+  avecLieu((client, lieu) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: `${lieu}-bis` });
+    const r = lancerNaitre(client);
+    assert.notEqual(r.code, 0, `${lieu}-bis n’est pas ${lieu} — la naissance doit échouer`);
+    assert.match(r.stderr, /lieu du représentant/);
+    assert.ok(appelsJournalises(journal).some((a) => a[0] === 'pane' && a[1] === 'close'));
+  }));
+
+test('un SOUS-répertoire du lieu n’est pas le lieu non plus — la session n’y charge pas le même projet', () =>
+  avecLieu((client, lieu) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: join(lieu, '.claude') });
+    const r = lancerNaitre(client);
+    assert.notEqual(r.code, 0);
+    assert.match(r.stderr, /lieu du représentant/);
     assert.ok(appelsJournalises(journal).some((a) => a[0] === 'pane' && a[1] === 'close'));
   }));
 
