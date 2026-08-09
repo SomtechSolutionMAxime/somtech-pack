@@ -17,6 +17,11 @@ import {
   poserGarde,
   gardePose,
   commandesNaissance,
+  nomAgentHerdr,
+  lireReponseHerdr,
+  agentDetecte,
+  agentPorteLeNom,
+  repertoireDeLaSession,
 } from '../src/naissance.js';
 
 const PERMISSIONS_DU_LIEU = { permissions: { allow: ['mcp__servicedesk__*'], deny: ['Edit', 'Write'] } };
@@ -166,8 +171,22 @@ test('commandesNaissance exige --workspace, sans deviner un défaut', () => {
 
 test('commandesNaissance construit des tableaux d’arguments herdr — AUCUN shell, comme herdr.js', () => {
   const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
-  assert.deepEqual(c.tabCreate, ['tab', 'create', '--workspace', 'w1', '--label', 'acme', '--no-focus']);
+  assert.deepEqual(c.tabCreate, [
+    'tab', 'create', '--workspace', 'w1', '--cwd', '/repo/.gestionnaire/acme', '--label', 'acme', '--no-focus',
+  ]);
   assert.deepEqual(c.renommer('w1:p1'), ['agent', 'rename', 'w1:p1', 'acme']);
+  assert.deepEqual(c.interroger('w1:p1'), ['agent', 'get', 'w1:p1']);
+  assert.deepEqual(c.fermer('w1:p1'), ['pane', 'close', 'w1:p1']);
+});
+
+// T-20260809-0023, défaut le plus grave : le pane naissait là où herdr l'ouvrait, pas dans le
+// lieu. Le `cd` de `pane run` ne suffit pas — une ligne écrite dans un shell qui n'est pas
+// encore prêt est perdue en entier. Le lieu doit être posé à la CRÉATION du pane.
+test('le pane naît DANS le lieu — `--cwd` à la création, pas seulement un `cd` écrit ensuite', () => {
+  const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
+  const i = c.tabCreate.indexOf('--cwd');
+  assert.notEqual(i, -1, '`tab create` doit porter --cwd : sans lui, la session naît n’importe où');
+  assert.equal(c.tabCreate[i + 1], '/repo/.gestionnaire/acme');
 });
 
 test('commandesNaissance lance depuis le lieu lui-même (cd) — .mcp.json et .claude/settings.json s’y lisent sans drapeau', () => {
@@ -178,4 +197,99 @@ test('commandesNaissance lance depuis le lieu lui-même (cd) — .mcp.json et .c
 test('cheminHook et cheminLieu restent sous la racine passée — pas d’absolu en dur', () => {
   assert.match(cheminHook('/un/repo'), /^\/un\/repo\//);
   assert.match(cheminLieu('/un/repo', 'acme'), /^\/un\/repo\/\.gestionnaire\/acme$/);
+});
+
+// ── Lire une réponse herdr — la porte par laquelle « 0 alors que rien n'a abouti » est passé.
+
+test('une réponse herdr porteuse d’une `error` n’est JAMAIS un succès, même sortie en 0', () => {
+  // C'est EXACTEMENT ce que le vrai service a rendu au premier usage réel (T-20260809-0023) :
+  // `{"error":{"code":"agent_not_found"}}`. L'ancien code ne lisait pas ce résultat.
+  const v = lireReponseHerdr('{"error":{"code":"agent_not_found","message":"agent target w26:p1Y not found"}}', {
+    commande: ['agent', 'rename', 'w26:p1Y', 'maxime'],
+  });
+  assert.equal(v.ok, false);
+  assert.match(v.message, /agent_not_found|not found/);
+  assert.match(v.message, /herdr agent rename/, 'le message doit dire QUELLE commande a refusé');
+});
+
+test('une réponse sans `result` exploitable n’est pas un succès non plus', () => {
+  assert.equal(lireReponseHerdr('{"result":null}').ok, false);
+  assert.equal(lireReponseHerdr('{}').ok, false);
+  assert.equal(lireReponseHerdr('').ok, false);
+  assert.equal(lireReponseHerdr('pas du json du tout').ok, false);
+});
+
+test('une réponse pleine est un succès, et rend l’objet lu', () => {
+  const v = lireReponseHerdr('{"result":{"root_pane":{"pane_id":"w9:p1"}}}', { commande: ['tab', 'create'] });
+  assert.equal(v.ok, true);
+  assert.equal(v.reponse.result.root_pane.pane_id, 'w9:p1');
+});
+
+test('un processus herdr en échec sans sortie JSON reste un échec, avec son message', () => {
+  const v = lireReponseHerdr('', { commande: ['pane', 'run'], erreurProcessus: new Error('spawn herdr ENOENT') });
+  assert.equal(v.ok, false);
+  assert.match(v.message, /ENOENT/);
+});
+
+// Mesuré contre le vrai service : `herdr pane run` réussi ne rend RIEN. La première version
+// du correctif l'exigeait quand même et faisait échouer une naissance parfaitement réussie —
+// le double, lui, répondait `{"result":{"ok":true}}` et n'a rien vu.
+test('une commande qui ne répond pas (pane run) réussit sur une sortie vide — et seulement si on l’a déclaré', () => {
+  assert.equal(lireReponseHerdr('', { commande: ['pane', 'run'], resultatAttendu: false }).ok, true);
+  assert.equal(lireReponseHerdr('   \n', { commande: ['pane', 'run'], resultatAttendu: false }).ok, true);
+  assert.equal(lireReponseHerdr('', { commande: ['tab', 'create'] }).ok, false, 'là où un résultat est attendu, le silence reste un échec');
+});
+
+test('un refus reste un refus même pour une commande qui ne répond pas — le code de sortie ne décide rien', () => {
+  const v = lireReponseHerdr('{"error":{"code":"pane_not_found"}}', {
+    commande: ['pane', 'run'],
+    resultatAttendu: false,
+  });
+  assert.equal(v.ok, false);
+  assert.match(v.message, /pane_not_found/);
+});
+
+// ── Vérifier par le fait, jamais par le mot (/orchestrer-chantier §4b).
+
+test('agentDetecte refuse `{"error":…,"result":null}` — le mot « result » y est pourtant', () => {
+  assert.equal(agentDetecte({ error: { code: 'agent_not_found' }, result: null }), false);
+  assert.equal(agentDetecte({ result: null }), false);
+  assert.equal(agentDetecte({ result: {} }), false, 'un result sans agent n’est pas un agent détecté');
+  assert.equal(agentDetecte({ result: { agent: { name: 'acme' } } }), true);
+});
+
+test('le nom porté se compare sans la casse — herdr impose les minuscules, la convention écrit en majuscules', () => {
+  const rep = { result: { agent: { name: 'd-20260807-0005' } } };
+  assert.equal(agentPorteLeNom(rep, 'D-20260807-0005'), true);
+  assert.equal(agentPorteLeNom(rep, 'autre'), false);
+  assert.equal(agentPorteLeNom({ result: {} }, 'acme'), false);
+});
+
+test('le répertoire réel est celui du processus au premier plan, pas celui du shell resté en arrière', () => {
+  assert.equal(
+    repertoireDeLaSession({ result: { agent: { cwd: '/depot', foreground_cwd: '/depot/.gestionnaire/acme' } } }),
+    '/depot/.gestionnaire/acme'
+  );
+  assert.equal(repertoireDeLaSession({ result: { agent: { cwd: '/depot' } } }), '/depot');
+  assert.equal(repertoireDeLaSession({ result: null }), null);
+});
+
+// ── Le nom de l'agent : refusé AVANT de créer un pane, jamais après.
+
+test('nomAgentHerdr abaisse la casse — herdr refuse les majuscules (`invalid_agent_name`)', () => {
+  assert.equal(nomAgentHerdr('Acme'), 'acme');
+  assert.equal(nomAgentHerdr('maxime'), 'maxime');
+  assert.equal(nomAgentHerdr('ville-de-quebec_2'), 'ville-de-quebec_2');
+});
+
+test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu’un pane existe', () => {
+  assert.throws(() => nomAgentHerdr('2acme'), /minuscule/, 'un nom ne commence pas par un chiffre');
+  assert.throws(() => nomAgentHerdr('acme corp'), /minuscule/, 'pas d’espace');
+  assert.throws(() => nomAgentHerdr('acmé'), /minuscule/, 'pas d’accent');
+  assert.throws(() => nomAgentHerdr(''), /minuscule/);
+  assert.throws(() => nomAgentHerdr('a'.repeat(33)), /minuscule/, '32 caractères au plus');
+});
+
+test('commandesNaissance refuse un client innommable AVANT de construire quoi que ce soit', () => {
+  assert.throws(() => commandesNaissance('/repo', 'Acme Corp', { workspace: 'w1' }), /minuscule/);
 });
