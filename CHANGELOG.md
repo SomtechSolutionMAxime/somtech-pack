@@ -5,6 +5,19 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.32.0] - 2026-08-09
+
+### Corrigé
+
+- **Un plan de travail neuf naît désormais avec le registre joignable, quel que soit le chemin de naissance** (E-20260807-0009, PR #189). Cinq chemins de naissance étaient possibles ; un seul fournissait les jetons — et ce n'était pas celui qu'emprunte un orchestrateur pour ouvrir un chef d'équipe. Un agent né par les quatre autres chemins ne pouvait ni lire son mandat, ni poser ses statuts, ni inscrire ses stories, et restait entièrement dépendant de son coordonnateur — le goulot que le registre existe pour supprimer. Mesuré le 2026-08-07 : trois agents relayés par fichier, quatorze stories inscrites par quelqu'un d'autre que leur auteur, un agent en attente près d'une heure. 160 plans de travail sur 26 dépôts étaient dans ce cas.
+- **La cause n'était pas celle portée par la demande.** Elle attribuait la panne à l'approbation par chemin dans `~/.claude.json`. Mesuré en conditions réelles — deux bras sur le **même** chemin, resté absent du fichier d'approbation dans les deux cas — la session échoue sans le jeton dans l'environnement du processus qui la lance, et réussit avec. Le verrou, c'est le jeton absent, pas l'approbation.
+- **Un agent qui naît malgré tout sans registre le dit à sa naissance**, nomme les serveurs muets et le geste qui répare — au lieu de le découvrir en pleine tâche.
+- **Les jetons ne vivent plus en clair dans le fichier de configuration du poste.** Un script de migration les en sort et les remplace par une référence résolue depuis un lieu unique au poste, chargé par tout shell — les cinq portes de naissance sont couvertes, pas une.
+
+### Technique
+
+- Preuve à deux bras sur un plan de travail et une session réels (le registre doit **répondre**, pas seulement être exposé), et une campagne de mutation dédiée au compte des cinq portes — si une porte s'ajoute sans être couverte, le compte déclaré devient faux et le test rougit. Aucun jeton n'apparaît dans un test, un message ou une trace.
+
 ## [1.31.0] - 2026-08-07
 
 ### Modifié
