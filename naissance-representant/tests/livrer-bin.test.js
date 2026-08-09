@@ -30,6 +30,7 @@ let pathOriginal;
  *   boiteInitiale — ce que `agent read` montre au premier appel
  *   soumetSeule   — `agent prompt` soumet-il vraiment, ou laisse-t-il le texte dans la boîte ?
  *   lectureCassee — `agent read` échoue (sortie vide) : la boîte est illisible
+ *   statutMuet    — `agent get` reste bloqué sur `idle` : le seul témoin restant est la boîte
  */
 function installerFauxHerdr(scenario = {}) {
   const journal = join(bac, 'appels.jsonl');
@@ -37,7 +38,7 @@ function installerFauxHerdr(scenario = {}) {
   writeFileSync(journal, '');
   writeFileSync(
     etat,
-    JSON.stringify({ boiteInitiale: '', soumetSeule: true, lectureCassee: false, ...scenario })
+    JSON.stringify({ boiteInitiale: '', soumetSeule: true, lectureCassee: false, statutMuet: false, ...scenario })
   );
   const script = `#!/usr/bin/env node
 const fs = require('fs');
@@ -75,7 +76,7 @@ if (cmd === 'agent read') {
 }
 if (cmd === 'agent get') {
   process.stdout.write(JSON.stringify({
-    result: { type: 'agent_info', agent: { pane_id: args[2], name: 'acme', agent_status: travaille() ? 'working' : 'idle' } },
+    result: { type: 'agent_info', agent: { pane_id: args[2], name: 'acme', agent_status: (!sc.statutMuet && travaille()) ? 'working' : 'idle' } },
   }));
   process.exit(0);
 }
@@ -156,6 +157,34 @@ test('livraison nominale : la boîte était vide, la session prend le brief', ()
     a.slice(iPrompt).some((x) => x[0] === 'agent' && x[1] === 'read'),
     'la prise du brief doit être relue, pas déduite de la réponse de l’outil'
   );
+});
+
+// Relevé en revue de passe 1 : rien n'exerçait le SECOND témoin de prise. Le statut portait
+// seul tous les cas, donc le vidage de la boîte pouvait être n'importe quoi sans qu'un test
+// bronche. Ici le statut reste muet sur `idle` — si la boîte vidée ne témoignait pas, la
+// livraison serait déclarée non prise alors qu'elle l'est.
+test('le vidage de la boîte témoigne à lui seul quand le statut reste muet', () => {
+  installerFauxHerdr({ boiteInitiale: '', soumetSeule: true, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'voici ton brief');
+  assert.equal(r.code, 0, `la boîte vidée doit suffire à prouver la prise — stderr: ${r.stderr}`);
+  const rendu = JSON.parse(r.stdout);
+  assert.equal(rendu.statut, 'idle', 'le statut n’a effectivement jamais bougé dans ce scénario');
+  assert.equal(rendu.repare, false, 'aucune réparation n’était nécessaire : le brief était bien parti');
+});
+
+test('un statut muet ET une boîte encore pleine : la commande refuse de dire « livré »', () => {
+  // Les deux témoins absents en même temps. La réparation part, et si elle ne suffit pas, la
+  // commande doit échouer plutôt que d'accorder le bénéfice du doute.
+  const journal = installerFauxHerdr({ boiteInitiale: '', soumetSeule: false, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'voici ton brief');
+  const a = appels(journal);
+  assert.ok(
+    a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'la réparation doit être tentée'
+  );
+  // Le double vide la boîte dès que la touche d'envoi part : la réparation aboutit ici.
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).repare, true);
 });
 
 // LE DÉFAUT MESURÉ, celui qui rend un brief faux plutôt qu’absent.
