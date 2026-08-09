@@ -5,6 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.33.0] - 2026-08-09
+
+### Corrigé
+
+- **La session d'un représentant naît désormais dans son lieu, et un échec s'y voit** (T-20260809-0023, PR #193). Au premier usage réel, la naissance échouait sur trois points : le pane ne naissait pas dans le lieu du représentant (une ligne écrite trop tôt dans un pane qui vient d'apparaître se perd en entier, `cd` compris — la session démarrait donc là où herdr avait ouvert le pane, sans charger ni le métier ni le registre du lieu) ; l'agent était nommé avant d'exister (`agent_not_found`) ; et un appel en échec pouvait rendre un code de sortie 0. Le pane naît maintenant dans le lieu par construction (`--cwd`), la naissance attend qu'un agent soit détecté avant de le nommer, et toute réponse porteuse d'une erreur est traitée comme un échec — sortie en 0 comprise — avec fermeture du pane orphelin.
+- **Un brief n'est déclaré livré que lorsque la session l'a pris, jamais seulement parce que l'outil a répondu succès** (T-20260809-0033, PR #194). Un brief resté dans la boîte de saisie d'un agent, non soumis, pouvait se retrouver collé au brief suivant sans que rien ne le signale — la session travaillait alors sur un texte fusionné, plausible et faux. La livraison regarde désormais la boîte avant d'écrire (non vide ou illisible = refus, jamais fusion), vérifie par le fait que la session a quitté l'attente, et échoue bruyamment si le brief n'a jamais été pris.
+
+### Technique
+
+- Les deux correctifs sont chacun prouvés par un script qui parle au vrai `herdr` et au vrai `claude` (`scripts/tests/test-naissance-representant-reel.sh`, `scripts/tests/test-livraison-brief-reel.sh`), doublé de suites unitaires qui ont grandi au fil des revues (naissance : 71 → 74 tests ; livraison : 52 → 103 tests unitaires, 28 scripts shell).
+
 ## [1.32.0] - 2026-08-09
 
 ### Corrigé
