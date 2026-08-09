@@ -42,10 +42,63 @@ export function cheminLieu(repoRoot, client) {
   return join(repoRoot, '.gestionnaire', client);
 }
 
-/** Le chemin du garde d'ouverture, tel que `.claude/settings.json` doit le référencer. */
-export function cheminHook(repoRoot) {
-  return join(repoRoot, 'naissance-representant', 'hooks', 'garde-ouverture-ligne.js');
-}
+// ═══════════════════════════════ Le garde, tel qu'un fichier VERSIONNÉ peut le désigner
+//
+// T-20260809-0032. Le garde était inscrit en chemin ABSOLU, calculé depuis la position du
+// dépôt au moment de l'appel — donc, quand on posait depuis un plan de travail horodaté :
+//
+//   "command": "node /Users/…/worktrees/somtech-pack/20260809-092622/naissance-…/garde….js"
+//
+// Deux torts, et seul le premier fait mal :
+//
+//   1. le chemin dépend d'OÙ LA POSE A ÉTÉ LANCÉE. Posé depuis un plan de travail, il meurt
+//      au `claude-swt-done` — et un hook qui ne pointe sur rien NE DIT PAS qu'il ne garde
+//      plus : `node <fichier absent>` sort en 1 sans rien écrire, et un PreToolUse sorti en
+//      1 laisse passer l'appel d'outil. Le garde cesse de mordre, en silence ;
+//   2. le chemin part dans git avec le nom d'utilisateur et l'arborescence de la machine.
+//      Pas un incident — mais ça n'a rien à faire dans le dépôt d'un client.
+//
+// LE POINT D'ANCRAGE, ET POURQUOI CE N'EST PAS LA RACINE DU DÉPÔT. Le pack déclare bien ses
+// propres hooks en relatif (`.claude/hooks/session-start-app-state.sh`), et la tentation est
+// d'en faire autant. Elle est fausse ici : `naissance-representant` porte `scope: poste`
+// dans `pack.json` — il vit dans `~/.somtech`, jamais copié dans un dépôt. Un chemin relatif
+// au lieu (`../../naissance-representant/…`) ne résoudrait que dans ce dépôt-ci, qui héberge
+// les deux par hasard ; dans le dépôt d'un client, il ne pointerait sur rien. Le gabarit du
+// lieu tranche déjà, et depuis toujours, dans l'autre sens : il autorise
+// `Bash(node $HOME/.somtech/ligne-directe/bin/ligne-directe.js *)`. On suit la même règle —
+// l'outil de poste se désigne par son installation de poste.
+//
+// `$HOME` est développé par le shell qui exécute la commande du hook (mesuré : un hook reçoit
+// l'environnement, et `CLAUDE_PROJECT_DIR`/`PWD` y valent le répertoire de démarrage).
+const CHEMIN_GARDE_POSTE = '$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js';
+
+// Le refus servi quand le garde n'est PAS installé sur ce poste. Sans lui, l'absence est
+// muette et permissive — exactement le motif « fonction inerte derrière des tests verts ».
+// Aucune apostrophe droite dans le texte : la charge voyage entre guillemets simples de shell.
+const REFUS_GARDE_ABSENT = JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse',
+    permissionDecision: 'deny',
+    permissionDecisionReason:
+      'le garde d’ouverture est introuvable sur ce poste (~/.somtech/naissance-representant) — ' +
+      'installe-le avec `npx @somtech-solutions/pack setup`. Refus par défaut : un garde absent ' +
+      'ne vaut jamais un garde permissif.',
+  },
+});
+
+/**
+ * La commande de hook posée dans le `.claude/settings.json` VERSIONNÉ du lieu.
+ *
+ * Une constante, pas une fonction d'un `repoRoot` : c'est précisément ce dont elle ne doit
+ * plus dépendre. Deux naissances lancées de deux endroits écrivent le même octet.
+ *
+ * `cat >/dev/null` avant le refus : Claude Code écrit la requête sur l'entrée du hook, et
+ * sortir sans la lire fermerait le tuyau sous sa plume.
+ */
+export const COMMANDE_GARDE =
+  `G="${CHEMIN_GARDE_POSTE}"; ` +
+  'if [ -f "$G" ]; then exec node "$G"; ' +
+  `else cat >/dev/null 2>&1; printf '%s\\n' '${REFUS_GARDE_ABSENT}'; fi`;
 
 /** Le chemin du `.claude/settings.json` posé par `ligne-directe representant`. */
 function cheminSettings(repoRoot, client) {
@@ -65,13 +118,17 @@ export function verifierLieu(repoRoot, client) {
  * `permissions`. Idempotent : reposer deux fois ne double pas le hook (comparé par
  * `command`, remplacé s'il y est déjà plutôt que dupliqué).
  */
-export function fusionnerGarde(settingsExistant, repoRoot) {
+export function fusionnerGarde(settingsExistant) {
   const hooks = { ...(settingsExistant.hooks || {}) };
-  const commande = `node ${cheminHook(repoRoot)}`;
+  // Reconnu par le FICHIER qu'il appelle, jamais par l'égalité de la commande entière : un
+  // garde posé par une version antérieure porte un chemin absolu mort, qu'une comparaison
+  // stricte laisserait en place à côté du neuf — deux hooks, dont un qui échoue à chaque
+  // appel d'outil. On remplace, on ne juxtapose pas.
+  const estLeGarde = (h) => typeof h?.command === 'string' && h.command.includes('garde-ouverture-ligne.js');
   const preToolUseSansNotreHook = (hooks.PreToolUse || []).filter(
-    (bloc) => !(bloc.hooks || []).some((h) => h.command === commande)
+    (bloc) => !(bloc.hooks || []).some(estLeGarde)
   );
-  hooks.PreToolUse = [...preToolUseSansNotreHook, { hooks: [{ type: 'command', command: commande }] }];
+  hooks.PreToolUse = [...preToolUseSansNotreHook, { hooks: [{ type: 'command', command: COMMANDE_GARDE }] }];
   return { ...settingsExistant, hooks };
 }
 
@@ -86,7 +143,7 @@ export function poserGarde(repoRoot, client) {
   const lieu = verifierLieu(repoRoot, client);
   const chemin = cheminSettings(repoRoot, client);
   const existant = JSON.parse(readFileSync(chemin, 'utf8'));
-  const fusionne = fusionnerGarde(existant, repoRoot);
+  const fusionne = fusionnerGarde(existant);
   mkdirSync(join(lieu, '.claude'), { recursive: true });
   writeFileSync(chemin, `${JSON.stringify(fusionne, null, 2)}\n`);
   return chemin;
