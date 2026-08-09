@@ -59,6 +59,7 @@ if [[ -n "$DRY_RUN" ]]; then
   echo "[dry-run] copierait : $SRC_FILE → $DEST_FILE"
   echo "[dry-run] copierait : $(dirname "$SRC_FILE")/swt-db.sh → ${DEST_DIR}/swt-db.sh (si présent)"
   echo "[dry-run] copierait : $(dirname "$SRC_FILE")/pack-freshness.sh → ${DEST_DIR}/pack-freshness.sh (si présent)"
+  echo "[dry-run] copierait : $(dirname "$SRC_FILE")/mcp-env.sh → ${DEST_DIR}/mcp-env.sh (si présent)"
   if [[ -f "$RC_FILE" ]] && grep -qF "$MARKER_BEGIN" "$RC_FILE"; then
     echo "[dry-run] bloc déjà présent dans $RC_FILE → mise à jour en place"
   else
@@ -75,6 +76,8 @@ LIB_FILE="$(dirname "$SRC_FILE")/swt-db.sh"
 [[ -f "$LIB_FILE" ]] && cp "$LIB_FILE" "${DEST_DIR}/swt-db.sh"
 PF_LIB_FILE="$(dirname "$SRC_FILE")/pack-freshness.sh"
 [[ -f "$PF_LIB_FILE" ]] && cp "$PF_LIB_FILE" "${DEST_DIR}/pack-freshness.sh"
+ME_LIB_FILE="$(dirname "$SRC_FILE")/mcp-env.sh"
+[[ -f "$ME_LIB_FILE" ]] && cp "$ME_LIB_FILE" "${DEST_DIR}/mcp-env.sh"
 
 # 2. Mettre à jour le rc shell de façon idempotente.
 touch "$RC_FILE"

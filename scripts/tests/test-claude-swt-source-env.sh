@@ -57,6 +57,13 @@ make_repo() {  # $1 = chemin du repo principal
   git -C "$main" push -q origin main
 }
 
+# ISOLEMENT DU POSTE — obligatoire. La lib des jetons pose une enveloppe autour de
+# `claude` qui comble les variables manquantes depuis le lieu unique du poste. Sans
+# cette borne, ce test lirait le VRAI fichier de jetons de la machine et le faux
+# `claude`, qui imprime son environnement, écrirait un vrai jeton dans la sortie du
+# test. Aucun test ne doit pouvoir approcher un jeton réel.
+export SOMTECH_MCP_ENV_FILE="${WORK}/aucun-lieu-unique"
+
 run_swt() {  # lance claude-swt dans un sous-shell isolé ; $1=repo $2=session $3=wtpath
   ( cd "$1" \
     && PATH="${FAKEBIN}:${PATH}" \

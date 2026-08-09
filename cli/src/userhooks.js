@@ -11,6 +11,10 @@ const HOOK_NAME = 'session-start-pack-version.sh';
 const GRAPHIFY_HOOK_REL = 'scripts/shell/graphify-share-out.sh';
 const GRAPHIFY_HOOK_NAME = 'graphify-share-out.sh';
 
+// Hook registre : un agent né sans registre le dit à sa naissance (E-20260807-0009).
+const REGISTRE_HOOK_REL = '.claude/hooks/session-start-registre.sh';
+const REGISTRE_HOOK_NAME = 'session-start-registre.sh';
+
 /** Vrai si `v` est un objet JSON « plain » (ni null, ni array, ni scalaire). */
 function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -122,6 +126,46 @@ export function installGraphifyShareHook({ payloadRoot, destDir, settingsFile, d
   try { chmodSync(dest, statSync(src).mode & 0o777); } catch { /* best-effort bit exécutable */ }
 
   // 2. Câblage idempotent — backup seulement si on modifie réellement les settings (M3).
+  const wired = wireSessionStartCommand(settings, dest);
+  let backup;
+  if (wired) {
+    if (existed) {
+      backup = `${settingsFile}.somtech.bak`;
+      writeFileSync(backup, readFileSync(settingsFile));
+    }
+    mkdirSync(dirname(settingsFile), { recursive: true });
+    writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+  }
+  return { ok: true, dest, settingsFile, backup, wired };
+}
+
+/**
+ * Installe le hook « registre injoignable » en global (E-20260807-0009, livrable 4).
+ * - copie payload/.claude/hooks/session-start-registre.sh → <hooksDir>/
+ * - câble <settingsFile> (SessionStart) vers le chemin ABSOLU du hook
+ *
+ * Pourquoi en GLOBAL et pas au projet : un agent naît dans un plan de travail
+ * fraîchement créé, parfois dans un dépôt qui n'a pas reçu le pack. Le câblage
+ * poste est le seul qui couvre toutes les naissances — c'est justement le trou
+ * que ce lot bouche.
+ * Renvoie { ok, dest, wired, backup, reason? }.
+ */
+export function installGlobalRegistreHook({ payloadRoot, hooksDir, settingsFile, dryRun = false }) {
+  const src = join(payloadRoot, REGISTRE_HOOK_REL);
+  if (!existsSync(src)) return { ok: false, reason: `source du hook registre introuvable (${REGISTRE_HOOK_REL})` };
+
+  const dest = join(hooksDir, REGISTRE_HOOK_NAME);
+
+  const loaded = loadSettingsForWiring(settingsFile);
+  if (loaded.error) return { ok: false, dest, reason: loaded.error };
+  const { settings, existed } = loaded;
+
+  if (dryRun) return { ok: true, dest, settingsFile, dryRun: true };
+
+  mkdirSync(hooksDir, { recursive: true });
+  copyFileSync(src, dest);
+  try { chmodSync(dest, statSync(src).mode & 0o777); } catch { /* best-effort bit exécutable */ }
+
   const wired = wireSessionStartCommand(settings, dest);
   let backup;
   if (wired) {
