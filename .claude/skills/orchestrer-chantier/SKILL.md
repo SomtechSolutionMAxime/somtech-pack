@@ -370,13 +370,20 @@ Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minus
 
 **Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Ce qui dépend d'un geste manuel se troue au premier oubli — c'est précisément pourquoi, partout ailleurs, on fait journaliser l'outil et jamais l'agent. Elle tiendra jusqu'à ce que la naissance d'un agent soit elle-même outillée, et que l'outil enregistre la filiation sans avoir à te la demander. Note au passage que ça ne viendra pas gratuitement pour la façon de faire décrite ici : ouvrir un agent par `tab create` puis `pane run` n'est pas un point d'instrumentation — il faudra que le geste passe par la commande de démarrage d'agent pour qu'un outil ait quelque chose à observer.
 
-**c. Livrer le brief par référence.**
+**c. Livrer le brief par référence — et vérifier qu'il a été PRIS, pas seulement envoyé.**
 
 ```bash
-herdr pane run "$P" 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet ici et execute-le : <chemin>'
+node <depot>/naissance-representant/bin/livrer.js "$P" \
+  --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet ici et execute-le : <chemin>'
 ```
 
-Une seule ligne, sans apostrophe ni retour à la ligne.
+Une seule ligne, sans apostrophe ni retour à la ligne. La commande sort **non nulle** si le brief n'a pas été pris — c'est ce qui remplace la relecture à l'œil.
+
+**Pourquoi une commande plutôt que le geste nu** (T-20260809-0033, mesuré contre le vrai service) : `herdr agent prompt` rend un succès que la soumission parte ou non, et — c'est le cas grave — **écrire dans une boîte de saisie qui contient déjà quelque chose ne livre pas deux messages, il en livre UN, les deux textes collés**. L'agent se met alors à travailler sur un texte que personne n'a écrit. Un brief fusionné est pire qu'un brief absent : l'absent se voit, le fusionné produit un travail plausible et faux.
+
+La commande regarde la boîte avant d'écrire (une boîte non vide est un refus, jamais une fusion), relit pour savoir si la session a quitté l'attente, répare une fois le cas connu, et échoue bruyamment sinon.
+
+**Relis quand même son pane ensuite** (`herdr pane read "$P"`). La commande prouve que le brief a été *pris* ; elle ne dit rien de ce qu'il a *déclenché*. Une session qui s'ouvre sur un dossier neuf peut poser une question avant d'accepter le premier message — auquel cas ton brief a servi de réponse à cette question, et non de brief.
 
 **c-bis. Poser son but — obligatoire.**
 

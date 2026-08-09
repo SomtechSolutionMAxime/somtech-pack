@@ -5,7 +5,8 @@
   "description": "Fait naître une session dans le lieu d'un client (.gestionnaire/<client>/) et la rend joignable avant tout le reste — E-20260807-0003.",
   "type": "module",
   "bin": {
-    "gestionnaire-naitre": "bin/naitre.js"
+    "gestionnaire-naitre": "bin/naitre.js",
+    "gestionnaire-livrer": "bin/livrer.js"
   },
   "scripts": {
     "test": "node --test"
