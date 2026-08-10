@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.34.0] - 2026-08-10
+
+### Corrigé
+
+- **Le garde d'ouverture d'un représentant client ne porte plus de chemin de machine** (T-20260809-0032, PR #195). Le garde était inscrit dans `.gestionnaire/<client>/.claude/settings.json` — un fichier versionné — en chemin absolu, calculé depuis la position du dépôt au moment de la pose. Posé depuis un plan de travail horodaté, ce chemin meurt au nettoyage du plan, et le garde cessait de mordre en silence : rien ne signalait la panne, tests verts compris. L'ancrage passe désormais par le poste (`~/.somtech`), jamais par le dépôt qui a servi à poser — le même choix que porte déjà `ligne-directe`. Un garde absent du poste refuse maintenant l'ouverture au lieu de se taire, et reposer un garde par-dessus un ancien le remplace au lieu de le laisser traîner à côté.
+
+### Technique
+
+- Preuve par un script qui parle au vrai `herdr` et au vrai `claude` (`scripts/tests/test-garde-apres-disparition-du-plan.sh`) : le plan de travail qui pose le garde est effacé, le fichier posé voyage vers un autre dépôt, puis une vraie session ouvre le lieu — le bras négatif (garde d'origine) laisse passer une commande interdite sans le dire, le bras positif bloque et le dit. 108/108 en unitaire.
+
 ## [1.33.0] - 2026-08-09
 
 ### Corrigé
