@@ -4,13 +4,15 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { GABARITS } from '../../ligne-directe/src/representant.js';
 import {
   cheminLieu,
-  cheminHook,
+  COMMANDE_GARDE,
   verifierLieu,
   LieuAbsent,
   fusionnerGarde,
@@ -85,28 +87,144 @@ test('naître accepte un lieu posé avec ses 4 gabarits', () => {
 // ═══════════════════════════════ fusionnerGarde — jamais écraser les permissions du lieu
 
 test('fusionnerGarde préserve les permissions existantes intégralement', () => {
-  const fusionne = fusionnerGarde(PERMISSIONS_DU_LIEU, '/repo');
+  const fusionne = fusionnerGarde(PERMISSIONS_DU_LIEU);
   assert.deepEqual(fusionne.permissions, PERMISSIONS_DU_LIEU.permissions);
 });
 
 test('fusionnerGarde ajoute le PreToolUse pointant le vrai garde, au bon chemin', () => {
-  const fusionne = fusionnerGarde(PERMISSIONS_DU_LIEU, '/repo');
+  const fusionne = fusionnerGarde(PERMISSIONS_DU_LIEU);
   const commande = fusionne.hooks.PreToolUse[0].hooks[0].command;
-  assert.match(commande, /naissance-representant\/hooks\/garde-ouverture-ligne\.js$/);
+  assert.match(commande, /naissance-representant\/hooks\/garde-ouverture-ligne\.js/);
 });
 
 test('fusionnerGarde est idempotent — reposer deux fois ne double pas le hook', () => {
-  const uneFois = fusionnerGarde(PERMISSIONS_DU_LIEU, '/repo');
-  const deuxFois = fusionnerGarde(uneFois, '/repo');
+  const uneFois = fusionnerGarde(PERMISSIONS_DU_LIEU);
+  const deuxFois = fusionnerGarde(uneFois);
   assert.equal(deuxFois.hooks.PreToolUse.length, 1);
   assert.deepEqual(deuxFois, uneFois);
 });
 
 test('fusionnerGarde préserve un hook PreToolUse déjà présent, ajouté par ailleurs', () => {
   const avecAutreHook = { ...PERMISSIONS_DU_LIEU, hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'autre-chose' }] }] } };
-  const fusionne = fusionnerGarde(avecAutreHook, '/repo');
+  const fusionne = fusionnerGarde(avecAutreHook);
   assert.equal(fusionne.hooks.PreToolUse.length, 2);
   assert.ok(fusionne.hooks.PreToolUse.some((b) => b.hooks[0].command === 'autre-chose'));
+});
+
+// ═══════════════════════════ T-20260809-0032 — le garde ne porte AUCUN chemin de machine
+
+test('T-20260809-0032 — la commande posée ne porte ni chemin de poste, ni trace du plan de travail', () => {
+  const commande = fusionnerGarde(PERMISSIONS_DU_LIEU).hooks.PreToolUse[0].hooks[0].command;
+  assert.ok(!/\/Users\//.test(commande), `un chemin de machine est parti dans un fichier versionné : ${commande}`);
+  assert.ok(!/worktrees/.test(commande), `le plan de travail est parti dans un fichier versionné : ${commande}`);
+  assert.ok(
+    commande.includes('$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js'),
+    'le garde doit désigner l’installation de POSTE — le module porte `scope: poste` et n’est jamais copié dans un dépôt client'
+  );
+});
+
+test('T-20260809-0032 — deux plans de travail différents posent le même octet', () => {
+  const planA = repoTemp();
+  const planB = repoTemp();
+  try {
+    poserLeLieu(planA, 'acme');
+    poserLeLieu(planB, 'acme');
+    poserGarde(planA, 'acme');
+    poserGarde(planB, 'acme');
+    const a = readFileSync(join(cheminLieu(planA, 'acme'), '.claude', 'settings.json'), 'utf8');
+    const b = readFileSync(join(cheminLieu(planB, 'acme'), '.claude', 'settings.json'), 'utf8');
+    assert.equal(a, b, 'naître depuis deux plans de travail ne doit plus salir le fichier versionné');
+  } finally {
+    rmSync(planA, { recursive: true, force: true });
+    rmSync(planB, { recursive: true, force: true });
+  }
+});
+
+test('T-20260809-0032 — reposer par-dessus un garde ancien en chemin absolu le REMPLACE, sans laisser le mort derrière', () => {
+  const repoRoot = repoTemp();
+  const ancienne =
+    'node /Users/quelquun/worktrees/somtech-pack/20260809-092622/naissance-representant/hooks/garde-ouverture-ligne.js';
+  try {
+    poserLeLieu(repoRoot, 'acme', {
+      settings: { ...PERMISSIONS_DU_LIEU, hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: ancienne }] }] } },
+    });
+    poserGarde(repoRoot, 'acme');
+    const relu = gardePose(repoRoot, 'acme');
+    const commandes = relu.hooks.PreToolUse.flatMap((b) => b.hooks.map((h) => h.command));
+    assert.ok(!commandes.includes(ancienne), 'le garde mort doit disparaître — sinon il échoue à chaque appel d’outil');
+    assert.equal(
+      commandes.filter((c) => c.includes('garde-ouverture-ligne.js')).length,
+      1,
+      'un seul garde, jamais deux'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ═══════════════ La commande posée, EXÉCUTÉE — pas relue. `/bin/sh` est le plus strict des
+// shells que Claude Code puisse employer : ce qui passe ici passe partout.
+
+const HERE_TEST = dirname(fileURLToPath(import.meta.url));
+const MODULE_ROOT = resolve(HERE_TEST, '..');
+
+/** Un faux poste : `$HOME/.somtech/naissance-representant` pointe (ou non) sur le vrai module. */
+function postTemp({ avecGarde }) {
+  const h = mkdtempSync(join(tmpdir(), 'smtk-poste-'));
+  mkdirSync(join(h, '.somtech'), { recursive: true });
+  if (avecGarde) symlinkSync(MODULE_ROOT, join(h, '.somtech', 'naissance-representant'));
+  return h;
+}
+
+function jouerLaCommande(commande, { home, cwd, requete }) {
+  const stdout = execFileSync('/bin/sh', ['-c', commande], {
+    input: JSON.stringify(requete),
+    cwd,
+    env: { ...process.env, HOME: home },
+    timeout: 15000,
+  });
+  return JSON.parse(stdout).hookSpecificOutput;
+}
+
+test('T-20260809-0032 — la commande posée S’EXÉCUTE et rend la vraie décision (garde présent au poste)', () => {
+  const home = postTemp({ avecGarde: true });
+  const ailleurs = mkdtempSync(join(tmpdir(), 'smtk-ailleurs-'));
+  try {
+    // Hors du lieu d'un représentant : `src/hook.js` répond `allow` AVANT de toucher herdr.
+    // Ce motif de réponse n'existe nulle part ailleurs — le lire prouve que la commande a
+    // bien atteint le vrai garde, sans jamais approcher le vrai espace de conversation.
+    const out = jouerLaCommande(COMMANDE_GARDE, {
+      home,
+      cwd: ailleurs,
+      requete: { cwd: ailleurs, tool_name: 'Bash', tool_input: { command: 'git status' } },
+    });
+    assert.equal(out.hookEventName, 'PreToolUse');
+    assert.equal(out.permissionDecision, 'allow');
+    assert.match(out.permissionDecisionReason, /hors du lieu/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(ailleurs, { recursive: true, force: true });
+  }
+});
+
+test('T-20260809-0032 — garde ABSENT du poste : la commande REFUSE et le dit, elle ne se tait pas', () => {
+  // Le motif que le ticket nomme : « un hook qui ne pointe sur rien ne dit pas qu'il ne
+  // garde plus ». Un `node <fichier absent>` sort en 1 sans rien écrire, et Claude Code
+  // laisse alors passer l'appel d'outil : garde inerte, en silence. Refus par défaut.
+  const home = postTemp({ avecGarde: false });
+  const ailleurs = mkdtempSync(join(tmpdir(), 'smtk-ailleurs-'));
+  try {
+    const out = jouerLaCommande(COMMANDE_GARDE, {
+      home,
+      cwd: ailleurs,
+      requete: { cwd: ailleurs, tool_name: 'Bash', tool_input: { command: 'git status' } },
+    });
+    assert.equal(out.permissionDecision, 'deny');
+    assert.match(out.permissionDecisionReason, /introuvable/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(ailleurs, { recursive: true, force: true });
+  }
 });
 
 // ═══════════════════════════════ poserGarde — écrit RÉELLEMENT, dans LEUR fichier
@@ -121,7 +239,10 @@ test('poserGarde fusionne dans .claude/settings.json du lieu, sans en créer un 
 
     const relu = gardePose(repoRoot, 'acme');
     assert.deepEqual(relu.permissions, PERMISSIONS_DU_LIEU.permissions, 'leurs permissions doivent survivre intactes');
-    assert.match(relu.hooks.PreToolUse[0].hooks[0].command, /garde-ouverture-ligne\.js$/);
+    assert.match(
+      relu.hooks.PreToolUse[0].hooks[0].command,
+      /\$HOME\/\.somtech\/naissance-representant\/hooks\/garde-ouverture-ligne\.js/
+    );
   } finally {
     rmSync(repoRoot, { recursive: true, force: true });
   }
@@ -194,8 +315,7 @@ test('commandesNaissance lance depuis le lieu lui-même (cd) — .mcp.json et .c
   assert.deepEqual(c.paneRun('w1:p1'), ['pane', 'run', 'w1:p1', 'cd /repo/.gestionnaire/acme && claude']);
 });
 
-test('cheminHook et cheminLieu restent sous la racine passée — pas d’absolu en dur', () => {
-  assert.match(cheminHook('/un/repo'), /^\/un\/repo\//);
+test('cheminLieu reste sous la racine passée', () => {
   assert.match(cheminLieu('/un/repo', 'acme'), /^\/un\/repo\/\.gestionnaire\/acme$/);
 });
 

@@ -210,7 +210,12 @@ test('naitre.js pose le garde, fait naître le pane DANS le lieu, attend l’age
     // Le garde a réellement été fusionné DANS leur fichier, sans effacer leurs permissions.
     const settingsFinal = JSON.parse(readFileSync(join(lieu, '.claude', 'settings.json'), 'utf8'));
     assert.deepEqual(settingsFinal.permissions, { allow: ['mcp__servicedesk__*'] });
-    assert.match(settingsFinal.hooks.PreToolUse[0].hooks[0].command, /garde-ouverture-ligne\.js$/);
+    // Le garde se reconnaît au fichier qu'il appelle, jamais à la fin de la ligne : la
+    // commande porte désormais son propre repli si le poste ne l'a pas (T-20260809-0032).
+    assert.match(
+      settingsFinal.hooks.PreToolUse[0].hooks[0].command,
+      /\$HOME\/\.somtech\/naissance-representant\/hooks\/garde-ouverture-ligne\.js/
+    );
 
     const appels = appelsJournalises(journal);
     // Le pane naît DANS le lieu — le drapeau, pas seulement le `cd` écrit ensuite.
