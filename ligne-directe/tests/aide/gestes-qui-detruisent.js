@@ -11,23 +11,40 @@
 // chose qui marchait. Chacun est nommé avec ce qu'il coûte, parce que le motif seul ne le dit
 // pas, et que c'est ce coût qui justifie la garde.
 
-/** @type {{motif: RegExp, quoi: string}[]} */
+// CHAQUE GESTE PORTE SON PROPRE EXEMPLE, et ce n'est pas de la décoration.
+//
+// DÉFAUT VÉCU SUR CE CORRECTIF, relevé en seconde revue : les exemples vivaient à part, dans
+// le fichier de test, et n'étaient appariés aux motifs que par leur NOMBRE. On pouvait donc
+// ajouter un motif mort — une expression cassée qui ne mord sur rien — accompagné d'un
+// exemple qui, lui, était attrapé par un AUTRE motif déjà présent. Le compte tombait juste,
+// chaque exemple avait bien son unique correspondance, et les 251 tests restaient verts
+// autour d'une garde à demi morte.
+//
+// L'exemple vit donc avec son motif, et le test exige que l'exemple d'un geste rende CE
+// geste — nommément. Un motif qui ne mord pas sur son propre exemple ne peut plus passer,
+// et un geste ajouté sans exemple ne compile même pas la promesse.
+
+/** @type {{motif: RegExp, quoi: string, exemple: string}[]} */
 export const GESTES_QUI_DETRUISENT = [
   {
     motif: /add-generic-password[^\n]*\s-U(\s|$)/,
     quoi: '« security add-generic-password -U » ÉCRASE l’entrée existante — celle qui marchait',
+    exemple: 'security add-generic-password -U -a "$USER" -s ligne-directe-bot -w "$(pbpaste)"',
   },
   {
     motif: /\bdelete-generic-password\b/,
     quoi: '« security delete-generic-password » SUPPRIME l’entrée — même perte, un geste plus tôt',
+    exemple: 'security delete-generic-password -a moi -s ligne-directe-bot',
   },
   {
     motif: /\brm\s+-[a-zA-Z]*[rf]/,
     quoi: '« rm -rf » supprime sans retour, et personne ne sait ce qu’un humain avait mis là',
+    exemple: 'Retire ce reste (« rm -rf /tmp/un-lieu »), puis relance',
   },
   {
     motif: /\b(pkill|killall)\b/,
     quoi: '« pkill »/« killall » tuent PAR MOTIF — donc au-delà de la cible, et les lignes vivantes avec',
+    exemple: 'pkill -f demarrer-veilleur.js',
   },
 ];
 

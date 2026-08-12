@@ -212,18 +212,18 @@ test('LA GARDE PARTAGÉE SAIT RECONNAÎTRE UN GESTE QUI DÉTRUIT — sinon elle 
     'le message du vécu DOIT être attrapé, et nommé pour ce qu’il coûte'
   );
 
-  // Chacun des gestes gardés doit mordre SÉPARÉMENT : une garde qui n'attrape que le premier
-  // laisse passer les autres, et le compte ci-dessous fait rougir l'ajout d'un geste qu'on
-  // aurait gardé sans jamais l'éprouver.
-  const UN_EXEMPLE_PAR_GESTE = [
-    'security add-generic-password -U -a moi -s truc -w x',
-    'security delete-generic-password -a moi -s truc',
-    'Retire ce reste (« rm -rf /tmp/un-lieu »), puis relance',
-    'pkill -f demarrer-veilleur.js',
-  ];
-  assert.equal(GESTES_QUI_DETRUISENT.length, UN_EXEMPLE_PAR_GESTE.length, 'un geste gardé sans exemple ici n’est pas éprouvé');
-  for (const exemple of UN_EXEMPLE_PAR_GESTE) {
-    assert.equal(gestesQuiDetruisentDans(exemple).length, 1, `ce geste doit être attrapé, et une seule fois : ${exemple}`);
+  // Chacun des gestes gardés doit mordre SÉPARÉMENT, et mordre sur SON PROPRE exemple.
+  //
+  // Apparier par le nombre ne suffisait pas, et c'est le trou qu'a trouvé la seconde revue :
+  // un motif mort accompagné d'un exemple attrapé par un AUTRE motif faisait tomber le compte
+  // juste. On exige donc l'égalité nommée — l'exemple d'un geste rend CE geste, et lui seul.
+  assert.ok(GESTES_QUI_DETRUISENT.length >= 4, 'les quatre gestes du vécu doivent au moins être gardés');
+  for (const geste of GESTES_QUI_DETRUISENT) {
+    assert.deepEqual(
+      gestesQuiDetruisentDans(geste.exemple),
+      [geste.quoi],
+      `l’exemple de ce geste doit être attrapé par LUI, pas par un autre ni par personne : ${geste.exemple}`
+    );
   }
 
   // Et elle doit laisser passer ce qui ne détruit rien — une garde qui refuse tout serait
