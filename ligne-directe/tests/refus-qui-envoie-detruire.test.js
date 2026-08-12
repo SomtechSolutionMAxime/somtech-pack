@@ -35,6 +35,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { GESTES_QUI_DETRUISENT, gestesQuiDetruisentDans, aucunGesteQuiDetruit } from './aide/gestes-qui-detruisent.js';
 import { compteDuPoste, chercherJeton, JetonManquant, JetonVide, SERVICE_ROBOT } from '../src/trousseau.js';
 import { refusVeilleurTetu } from '../src/client.js';
 import { preparerLieuRepresentant, GABARITS } from '../src/representant.js';
@@ -189,47 +190,52 @@ test('LE VRAI TROUSSEAU N’EST ATTEIGNABLE PAR AUCUN DÉFAUT — l’exécuteur
 
 // ═════════════════════════════ 3. aucun refus n'envoie détruire
 
-/**
- * Les gestes qu'un message de refus ne doit jamais proposer, et POURQUOI chacun — le motif
- * seul ne dit pas ce qu'il coûte, et c'est ce coût qui justifie la garde.
- *
- * On ne cherche pas « le message contient tel mot » : on cherche des GESTES, c'est-à-dire
- * des commandes qui, exécutées par quelqu'un qui fait confiance au message, détruisent
- * quelque chose qui marchait. C'est la propriété qui a coûté au dirigeant, littéralement.
- */
-const GESTES_QUI_DETRUISENT = [
-  {
-    motif: /add-generic-password[^\n]*\s-U(\s|$)/,
-    quoi: '« security add-generic-password -U » ÉCRASE l’entrée existante — celle qui marchait',
-  },
-  {
-    motif: /\bdelete-generic-password\b/,
-    quoi: '« security delete-generic-password » SUPPRIME l’entrée — même perte, un geste plus tôt',
-  },
-  {
-    motif: /\brm\s+-[a-zA-Z]*[rf]/,
-    quoi: '« rm -rf » supprime sans retour, et personne ne sait ce qu’un humain avait mis là',
-  },
-  {
-    motif: /\b(pkill|killall)\b/,
-    quoi: '« pkill »/« killall » tuent PAR MOTIF — donc au-delà de la cible, et les lignes vivantes avec',
-  },
-];
+// La garde vit dans `aide/gestes-qui-detruisent.js`, parce que trois fichiers de test s'en
+// servent. Elle est éprouvée ICI — sur la copie PARTAGÉE, jamais sur un double local.
+//
+// DÉFAUT VÉCU SUR CE CORRECTIF MÊME, relevé en seconde revue : la garde avait d'abord été
+// écrite en deux exemplaires — un partagé, un local à ce fichier — et le test positif
+// n'exerçait que le local. Vider entièrement le partagé laissait donc les 251 tests verts :
+// un détecteur désarmé, et invisible. C'est le motif 2 dans sa forme la plus discrète, et il
+// visait la garde elle-même. Un seul exemplaire, éprouvé là où il vit.
 
-/** Les gestes destructeurs proposés par un message, nommés — vide quand le message est sûr. */
-function gestesQuiDetruisentDans(message) {
-  return GESTES_QUI_DETRUISENT.filter((g) => g.motif.test(message)).map((g) => g.quoi);
-}
-
-test('LA GARDE SAIT RECONNAÎTRE UN GESTE QUI DÉTRUIT — sinon elle passerait tout', () => {
+test('LA GARDE PARTAGÉE SAIT RECONNAÎTRE UN GESTE QUI DÉTRUIT — sinon elle passerait tout', () => {
   // Un détecteur qu'on n'a jamais vu mordre est une opinion. On lui donne le message EXACT
   // qui a été rendu au dirigeant le 2026-08-11, et il doit le refuser.
   const messageDuVecu =
     'Aucun jeton « ligne-directe-bot » au trousseau du poste.\n' +
     '  Dépose-le : security add-generic-password -U -a "$USER" -s ligne-directe-bot -w "$(pbpaste)"';
 
-  assert.equal(gestesQuiDetruisentDans(messageDuVecu).length, 1, 'le message du vécu DOIT être attrapé par la garde');
-  assert.deepEqual(gestesQuiDetruisentDans('security find-generic-password -a moi -s truc'), [], 'et une lecture doit passer');
+  assert.deepEqual(
+    gestesQuiDetruisentDans(messageDuVecu),
+    ['« security add-generic-password -U » ÉCRASE l’entrée existante — celle qui marchait'],
+    'le message du vécu DOIT être attrapé, et nommé pour ce qu’il coûte'
+  );
+
+  // Chacun des gestes gardés doit mordre SÉPARÉMENT : une garde qui n'attrape que le premier
+  // laisse passer les autres, et le compte ci-dessous fait rougir l'ajout d'un geste qu'on
+  // aurait gardé sans jamais l'éprouver.
+  const UN_EXEMPLE_PAR_GESTE = [
+    'security add-generic-password -U -a moi -s truc -w x',
+    'security delete-generic-password -a moi -s truc',
+    'Retire ce reste (« rm -rf /tmp/un-lieu »), puis relance',
+    'pkill -f demarrer-veilleur.js',
+  ];
+  assert.equal(GESTES_QUI_DETRUISENT.length, UN_EXEMPLE_PAR_GESTE.length, 'un geste gardé sans exemple ici n’est pas éprouvé');
+  for (const exemple of UN_EXEMPLE_PAR_GESTE) {
+    assert.equal(gestesQuiDetruisentDans(exemple).length, 1, `ce geste doit être attrapé, et une seule fois : ${exemple}`);
+  }
+
+  // Et elle doit laisser passer ce qui ne détruit rien — une garde qui refuse tout serait
+  // désarmée dès la semaine suivante. Ce sont les gestes que ce correctif met à la place.
+  for (const sur of [
+    'security find-generic-password -a "maximeleboeuf" -s ligne-directe-bot',
+    'security add-generic-password -a "maximeleboeuf" -s ligne-directe-bot -w "$(pbpaste)"',
+    'mv /tmp/un-lieu /tmp/un-lieu.ecarte',
+    'lsof -t /tmp/veilleur.sock',
+  ]) {
+    assert.deepEqual(gestesQuiDetruisentDans(sur), [], `ce geste ne détruit rien et doit passer : ${sur}`);
+  }
 });
 
 /** Prépare un lieu de représentant À DEMI POSÉ dans un bac jetable, pour obtenir son refus. */
@@ -259,10 +265,6 @@ test('AUCUN REFUS DE CE MODULE NE PROPOSE UN GESTE QUI DÉTRUIT', async () => {
   ];
 
   for (const [quel, message] of refus) {
-    assert.deepEqual(
-      gestesQuiDetruisentDans(message),
-      [],
-      `le refus « ${quel} » envoie détruire :\n    ${gestesQuiDetruisentDans(message).join('\n    ')}\n  message rendu :\n${message}`
-    );
+    aucunGesteQuiDetruit(assert, message, quel);
   }
 });
