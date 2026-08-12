@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 
+import { aucunGesteQuiDetruit } from './aide/gestes-qui-detruisent.js';
+
 let Veilleur, construirePlist, ETIQUETTE, sauverRegistre;
 let racine;
 
@@ -283,7 +285,14 @@ test('UNE RELÈVE QUI N’A PAS EU LIEU ÉCHOUE — elle ne se déclare pas réu
     await assert.rejects(() => passerLaMain({ cheminSocket: chemin }), (err) => {
       assert.match(err.message, /n'a pas cédé/);
       // Et l'erreur doit dire QUOI FAIRE, pas seulement que ça a raté.
-      assert.match(err.message, /pkill/);
+      //
+      // Cette ligne exigeait `pkill` — c'est-à-dire qu'elle ANCRAIT un geste qui frappe par
+      // motif, et qui tuait donc tous les veilleurs du poste (T-20260811-0087). Ce qu'on veut
+      // vraiment est plus fort qu'un mot : le geste proposé doit VISER LA PLACE OCCUPÉE, et
+      // le seul moyen de le prouver est qu'il porte le chemin du socket en cause — ce qu'un
+      // motif global ne peut pas faire.
+      assert.ok(err.message.includes(chemin), `le geste proposé doit viser CETTE place — reçu :\n${err.message}`);
+      aucunGesteQuiDetruit(assert, err.message, 'veilleur qui ne cède pas');
       return true;
     });
   } finally {
