@@ -5,6 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.35.0] - 2026-08-12
+
+### Corrigé
+
+- **Le trousseau ne cherche plus le jeton sous un compte tiré d'une variable d'environnement** (T-20260811-0087, PR #199). `ligne-directe` faisait sortir le compte de recherche macOS de `process.env.USER`. Une session qui ne porte ni `USER` ni `LOGNAME` — ce qui s'est produit — cherchait donc sous le compte `''` ; `security` ne trouvait rien, et ce rien était traduit en « le jeton n'est pas au trousseau », alors qu'il y était. Le refus donnait en plus une commande qui **écrase** l'entrée existante (`security add-generic-password -U`) — et cette commande lisait, elle aussi, `$USER`. Suivie dans la session même où le défaut se produit, elle aurait déposé le jeton sous un compte vide après avoir détruit celui qui marchait. Le compte vient désormais du système (`os.userInfo().username`), sans aucun repli sur une variable, et le refus dit ce qu'il a cherché (compte et service) plutôt que d'affirmer une absence qu'il n'a pas mesurée.
+- **Plus aucun message de refus ne propose un geste destructeur.** Quatre lecteurs de `USER` étaient en cause — la lecture elle-même, son repli `LOGNAME`, et deux commandes suggérées à l'humain — et quatre messages envoyaient détruire : le dépôt du jeton perd son `-U`, le refus « jeton vide » ne propose plus de commande, le `pkill -f demarrer-veilleur.js` du veilleur est remplacé par un geste qui ne nomme que le processus en cause, et le `rm -rf` d'un lieu à demi posé devient un déplacement réversible.
+
+### Technique
+
+- Le test décisif rejoue le vécu dans un processus enfant à l'environnement amputé, cloison levée, et vérifie que le jeton est **trouvé** — pas que le refus est joli. Rouge constaté avant correctif : recherche sous le compte vide au lieu du compte réel. Deux tests existants qui ancraient le `pkill` sur son nom exact vérifient désormais que le geste vise la place occupée sans rien détruire au-delà — l'un d'eux a attrapé un vrai défaut du correctif, un refus qui nommait le mauvais socket. Suite `ligne-directe` : 251/251.
+
 ## [1.34.0] - 2026-08-10
 
 ### Corrigé
