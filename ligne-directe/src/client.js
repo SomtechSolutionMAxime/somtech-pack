@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 
 import { CHEMIN_SOCKET, CHEMIN_JOURNAL, RACINE } from './registre.js';
+import { ETIQUETTE as ETIQUETTE_SERVICE } from './service.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const DELAI_REPONSE = 30_000;
@@ -68,6 +69,29 @@ const dodo = (ms) => new Promise((r) => setTimeout(r, ms));
  * dans son journal, dont on donne le chemin.
  */
 /**
+ * Le refus rendu quand le veilleur en place ne cède pas la main.
+ *
+ * CE REFUS PROPOSAIT `pkill -f demarrer-veilleur.js`, et c'est le même défaut que celui du
+ * trousseau (T-20260811-0087) par un autre chemin : `pkill -f` frappe PAR MOTIF, sur la
+ * ligne de commande entière. Il tuait donc tout veilleur du poste — les onze lignes de
+ * discussion vivantes avec — et jusqu'à un `tail` ou un éditeur ouvert sur ce fichier-là.
+ * Un message d'erreur ne met pas ce geste dans la bouche de quelqu'un qui lui fait confiance.
+ *
+ * On nomme donc le processus AVANT de l'arrêter : `lsof` rend le seul qui tient la place.
+ */
+export function refusVeilleurTetu(refus, { cheminSocket = CHEMIN_SOCKET } = {}) {
+  return new Error(
+    `Le veilleur en place n'a pas cédé la main${refus ? ` (${refus})` : ''}.\n` +
+      `  C'est le cas d'une version antérieure à celle qui sait céder — une seule fois, il faut l'arrêter.\n` +
+      `  S'il vient du service du poste, un redémarrage suffit et ne touche à rien d'autre :\n` +
+      `    launchctl kickstart -k gui/$(id -u)/${ETIQUETTE_SERVICE}\n` +
+      `  Sinon, nomme d'abord le seul processus qui tient la place, puis arrête CELUI-LÀ :\n` +
+      `    lsof -t ${cheminSocket}\n` +
+      `  Les relèves suivantes se feront toutes seules.`
+  );
+}
+
+/**
  * Fait passer la main : le veilleur en place se retire, un neuf prend sa suite.
  *
  * C'est le geste qui manquait. Le verrou d'unicité protège des remises en double, mais il
@@ -103,17 +127,15 @@ export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
     }
   }
 
-  // ÉCHOUER PLUTÔT QUE MENTIR. Un veilleur d'une version antérieure ne connaît pas le
+  // ÉCHOUER PLUTÔT QUE MENTIR — le refus vit dans `refusVeilleurTetu`, plus bas.
+  // Un veilleur d'une version antérieure ne connaît pas le
   // geste : il refuse, garde la place, et le neuf se retire. Rendre « ok » ici laisserait
   // croire à une relève qui n'a pas eu lieu — et c'est précisément le mode de panne que
   // cette capacité passe sa vie à combattre.
   if (!libre) {
-    throw new Error(
-      `Le veilleur en place n'a pas cédé la main${refus ? ` (${refus})` : ''}.\n` +
-        `  C'est le cas d'une version antérieure à celle qui sait céder — une seule fois, il faut l'arrêter :\n` +
-        `    pkill -f demarrer-veilleur.js\n` +
-        `  Les relèves suivantes se feront toutes seules.`
-    );
+    // Le socket EN CAUSE, pas celui du poste : un message qui nomme la mauvaise place
+    // envoie regarder à côté — c'est la même faute que celle qu'on corrige ici.
+    throw refusVeilleurTetu(refus, { cheminSocket });
   }
 
   reveillerVeilleur();

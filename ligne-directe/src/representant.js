@@ -182,8 +182,9 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
         message:
           `« ${etat.racine} » existe mais n'est pas un lieu : il manque ${etat.manquants.join(', ')}. ` +
           `Un représentant ouvert là n'aurait ni métier, ni moyens, ni permissions bornées. ` +
-          `Retire ce reste (« rm -rf ${etat.racine} »), puis relance — cette compétence ne complète ` +
-          `jamais un lieu à demi posé, elle ne saurait pas ce qu'un humain y a déjà changé.`,
+          `Écarte ce reste (« mv ${etat.racine} ${etat.racine}.ecarte »), puis relance — cette compétence ` +
+          `ne complète jamais un lieu à demi posé, elle ne saurait pas ce qu'un humain y a déjà changé. ` +
+          `On l'écarte plutôt qu'on ne le supprime, pour cette raison exacte : ce message ne sait pas non plus.`,
       },
     };
   }

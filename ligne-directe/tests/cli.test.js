@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { aucunGesteQuiDetruit } from './aide/gestes-qui-detruisent.js';
+
 const execFileAsync = promisify(execFile);
 const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'ligne-directe.js');
 
@@ -81,7 +83,12 @@ test('UNE ERREUR ATTENDUE SORT LISIBLE — pas sous une trace de pile', async ()
 
     assert.equal(r.code, 1, 'une relève qui n’a pas eu lieu doit sortir en échec');
     assert.match(r.stderr, /n'a pas cédé/, "l'explication doit être là");
-    assert.match(r.stderr, /pkill/, "et elle doit dire quoi faire");
+    // « Elle doit dire quoi faire » exigeait le mot `pkill` — donc ce test ANCRAIT le geste
+    // qui tuait tous les veilleurs du poste (T-20260811-0087). Ce qui compte n'est pas qu'un
+    // mot soit là : c'est que le geste proposé vise LA place occupée, et qu'il ne détruise
+    // rien au-delà.
+    assert.ok(r.stderr.includes(join(bac, 'veilleur.sock')), `elle doit dire quoi faire, en visant CETTE place — reçu :\n${r.stderr}`);
+    aucunGesteQuiDetruit(assert, r.stderr, 'relève refusée, vue depuis la ligne de commande');
     assert.doesNotMatch(r.stderr, /throw new Error/, "le code source ne doit pas être recopié à l'écran");
   } finally {
     tetu.close();
