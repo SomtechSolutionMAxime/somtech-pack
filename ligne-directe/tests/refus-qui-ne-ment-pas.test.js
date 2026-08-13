@@ -219,10 +219,46 @@ test('LE REFUS MONTRE CE QUE L’OUTIL A DIT — la cause n’est plus jetée', 
   assert.match(r.message, /36/, 'le code rendu par le poste doit figurer dans le refus');
   assert.match(r.message, /quelque chose de précis/, 'et les mots de l’outil avec');
 
-  // Le cas muet — celui du dirigeant — doit se dire AUSSI, sinon le lecteur croit à un oubli.
+  // ─── LE CAS MUET — celui du dirigeant : code 36, stderr VIDE.
+  //
+  // ⚠️ RELEVÉ EN REVUE (passe 1) : la première version gardait ça par un MOT — `/silence|aucun
+  // message/`. C'est le motif dominant de ce dépôt, retombé dans le fichier même qui prétend
+  // le fermer : la phrase est écrite par le code d'à côté, donc l'assertion vérifiait que
+  // nous avions bien recopié notre propre texte. Une reformulation la faisait rougir pour
+  // rien ; une régression qui garde le mot la laissait verte.
+  //
+  // Ce qu'il faut garder est le FAIT, et il est précis. Le piège réel — celui que j'ai écrit,
+  // puis corrigé — est de se rabattre sur `err.message` quand `stderr` est vide : `execFile`
+  // y compose « Command failed: /usr/bin/security find-generic-password … », c'est-à-dire LA
+  // COMMANDE QU'ON A LANCÉE. Affichée sous « ce que le poste a répondu », elle fait passer
+  // notre propre écho pour la parole de l'outil, et le SILENCE — le seul indice qui menait au
+  // trousseau verrouillé — disparaît sous du texte.
+  //
+  // On garde donc LA LIGNE DE CAUSE, isolée — pas le message entier. Le refus propose par
+  // ailleurs des gestes qui LISENT, et ceux-là nomment légitimement `find-generic-password` :
+  // les confondre avec l'écho du lanceur ferait rougir un refus correct (mesuré : c'est ce
+  // qu'a fait la première version de cette garde).
+  const ligneDeCause = (message) => message.split('\n').find((l) => /Cause brute/.test(l)) ?? '';
+
   const muet = await verdict(rejette(sortieEnEchec({ code: 36, stderr: '' })));
-  assert.match(muet.message, /36/);
-  assert.match(muet.message, /silence|aucun message/i, 'un stderr vide doit être NOMMÉ, pas laissé blanc');
+  assert.match(muet.message, /36/, 'le code doit figurer même quand l’outil se tait');
+  const causeMuette = ligneDeCause(muet.message);
+  assert.ok(causeMuette, 'le refus doit porter une ligne de cause identifiable');
+  for (const echo of ['Command failed', 'find-generic-password']) {
+    assert.ok(
+      !causeMuette.includes(echo),
+      `la ligne de cause resert « ${echo} » — c’est NOTRE commande, présentée comme la réponse ` +
+        `de l’outil, et le silence disparaît dessous :\n  ${causeMuette}`
+    );
+  }
+
+  // Et les deux cas doivent être DISTINGUABLES : un outil qui parle et un outil qui se tait ne
+  // peuvent pas rendre le même refus, sinon le lecteur n'a aucun moyen de savoir lequel il a.
+  assert.notEqual(
+    muet.message,
+    r.message,
+    'un échec muet et un échec bavard rendent le même texte — le silence n’est plus une information'
+  );
 });
 
 test('L’ENTRÉE VIDE reste l’entrée vide — le renversement ne l’a pas avalée', async () => {
