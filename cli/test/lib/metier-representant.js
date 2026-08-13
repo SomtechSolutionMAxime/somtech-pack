@@ -187,8 +187,34 @@ export function enteteDe(texte) {
  * énoncé peut garder sa place, sa colonne et son rang tout en cessant d'obliger : « ouvre ta
  * ligne » reste l'étape 2, mais devient « tu peux aussi le faire après si ça presse ».
  * Le rang est nécessaire ; il n'est pas suffisant.
+ *
+ * ⚠️ DEUX FAMILLES, ET LA SECONDE MANQUAIT — relevée en revue de fond du lot T-20260813-0043.
+ *
+ * La PERMISSION (« tu peux », « facultatif ») dit que l'obligation n'en est pas une. L'EXCEPTION
+ * (« sauf si… », « si tu en as le temps ») la laisse debout et lui ouvre une porte — ce qui la
+ * vide tout aussi bien, en ayant l'air de la respecter. Trois altérations mesurées passaient
+ * la garde : « son propre ticket, **avant** de le faire, SI TU EN AS LE TEMPS », « … n'a pas de
+ * ticket propre, SAUF si le dirigeant en demande un », « … jamais le geste — SAUF décision
+ * contraire ponctuelle ». Aucune n'est une permission ; toutes rendent la consigne inopérante.
+ *
+ * Une TROISIÈME famille est arrivée par la contre-vérification du même lot : la NÉCESSITÉ niée
+ * (« même si ce n'est pas strictement nécessaire tout de suite »), qui ne demande ni permission
+ * ni exception — elle nie simplement que la consigne s'applique maintenant.
+ *
+ * ⚠️ CE QUE CETTE GARDE NE PEUT PAS FAIRE, ET IL FAUT LE SAVOIR AVANT DE S'Y FIER.
+ *
+ * C'est une LISTE DE VOCABULAIRE, donc finie par construction : elle attrape les tournures
+ * connues, jamais « toute façon d'assouplir une consigne ». Deux idiomes usuels lui ont échappé
+ * jusqu'à ce qu'un reviewer les pose (« à moins que », « pas strictement nécessaire ») et il en
+ * reste. Elle vaut comme filet sur la MODALITÉ ; elle ne remplace pas la polarité et la position,
+ * qui, elles, ne dépendent d'aucun vocabulaire.
+ *
+ * ⚠️ PAS DE `\b` DEVANT UNE INITIALE ACCENTUÉE. En JavaScript, `à` n'est pas un caractère de mot :
+ * `\bà moins que` ne s'apparie JAMAIS, et l'alternative serait morte-née — vraie par construction,
+ * donc invisible. Le piège est le jumeau exact de celui documenté sur `privé\b` plus bas, et il
+ * a été attrapé ici par une mutation, pas par une relecture.
  */
-const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b/i;
+export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {

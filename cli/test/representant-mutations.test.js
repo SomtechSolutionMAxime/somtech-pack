@@ -55,7 +55,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CONTROLES, MUTATIONS, lireGabarits } from './lib/metier-representant.js';
+import { CONTROLES, MUTATIONS, PERMISSIF, exigeImperatif, lireGabarits } from './lib/metier-representant.js';
 
 const ORIGINAL = lireGabarits();
 
@@ -124,3 +124,103 @@ for (const mutation of MUTATIONS) {
     );
   });
 }
+
+// ═════════════════════════════════════════ l'axe MODALITÉ, et sa panne silencieuse
+//
+// `PERMISSIF` est une LISTE DE TOURNURES, donc elle a un mode de panne que les autres gardes
+// n'ont pas : **une alternative peut ne s'apparier à rien, jamais**. Elle est alors vraie par
+// construction — l'axe est réputé couvert, et il ne l'est pas. Rien ne le dit : la suite reste
+// verte, le vocabulaire a l'air riche, et l'assouplissement passe.
+//
+// CE N'EST PAS UNE CRAINTE THÉORIQUE : le cas s'est produit DEUX FOIS dans le même lot
+// (T-20260813-0043), sur `\bà moins que` et `\bà ta discrétion`. En JavaScript, `à` n'est pas
+// un caractère de mot : un `\b` posé devant ne s'apparie jamais. Les deux alternatives sont
+// nées mortes, et c'est une mutation — pas une relecture — qui a fini par le dire.
+//
+// Ce test rend la panne impossible : chaque alternative doit être PROUVÉE VIVANTE par une
+// sonde qui la déclenche, et le compte des sondes est apparié à celui des alternatives. En
+// ajouter une sans sa sonde fait rougir, et c'est le but : ce qui n'est pas éprouvé n'existe pas.
+
+/** Les alternatives de premier niveau du motif — les `|` internes aux groupes ne coupent pas. */
+function alternativesDe(source) {
+  const out = [];
+  let courante = '';
+  let profondeur = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '\\') { courante += c + source[i + 1]; i += 1; continue; }
+    if (c === '(') profondeur += 1;
+    if (c === ')') profondeur -= 1;
+    if (c === '|' && profondeur === 0) { out.push(courante); courante = ''; continue; }
+    courante += c;
+  }
+  out.push(courante);
+  return out;
+}
+
+/**
+ * Une sonde par alternative, dans l'ordre du motif. Elles ne sont PAS dérivées du motif :
+ * une sonde fabriquée à partir de ce qu'on teste ne prouve rien — elle réussirait aussi bien
+ * sur une alternative morte, puisqu'elle en serait la transcription.
+ */
+const SONDES_PERMISSIVES = [
+  'tu peux le faire plus tard',
+  'cette étape est facultative',
+  'ce champ est optionnel',
+  "ce n'est pas obligatoire",
+  'si tu le souhaites, écris-le',
+  'au besoin, ajoute-le',
+  'de préférence avant la fin',
+  'sauf si le dirigeant en demande un',
+  'à moins que ça ne prenne cinq minutes',
+  'si tu en as le temps',
+  'si le temps le permet',
+  'si possible, inscris-le',
+  'dans la mesure du possible',
+  'à ta discrétion',
+  "même si ce n'est pas strictement nécessaire",
+];
+
+test('axe MODALITÉ : chaque tournure permissive est VIVANTE, et chacune a sa sonde', () => {
+  const alternatives = alternativesDe(PERMISSIF.source);
+  assert.equal(
+    SONDES_PERMISSIVES.length, alternatives.length,
+    `${SONDES_PERMISSIVES.length} sonde(s) pour ${alternatives.length} tournure(s) : une tournure `
+      + `ajoutée sans sa sonde n'est prouvée par rien, et c'est exactement ainsi qu'on en écrit `
+      + `une qui ne s'apparie jamais (${alternatives.join('  ·  ')})`,
+  );
+
+  const vues = new Set();
+  for (const sonde of SONDES_PERMISSIVES) {
+    const trouve = sonde.match(PERMISSIF);
+    assert.ok(trouve, `la sonde « ${sonde} » ne déclenche AUCUNE tournure — elle ne prouve donc rien`);
+    assert.throws(
+      () => exigeImperatif(`Tu inscris le travail, ${sonde}.`, 'un énoncé de sonde'),
+      `« ${sonde} » n'assouplit rien aux yeux de la garde, alors que c'est son objet même`,
+    );
+    vues.add(trouve[0].toLowerCase());
+  }
+
+  // Deux sondes qui déclenchent la MÊME tournure laisseraient une autre sans preuve, tout en
+  // gardant le compte juste. C'est la porte que le compte seul n'a jamais fermée.
+  assert.equal(
+    vues.size, SONDES_PERMISSIVES.length,
+    `deux sondes déclenchent la même tournure : une autre n'est donc éprouvée par rien `
+      + `(déclenchées : ${[...vues].join(' · ')})`,
+  );
+});
+
+test('axe MODALITÉ : aucune tournure ne commence par \\b devant une initiale accentuée', () => {
+  // La cause mécanique du cas ci-dessus, gardée à la source plutôt qu'à ses effets. `\b` exige
+  // une frontière entre caractère de mot et non-mot ; `à`, `é`, `ê` n'en sont pas, donc la
+  // frontière ne se produit jamais. Le piège est le jumeau exact de `privé\b`, documenté sur
+  // le canal privé du représentant — et il se retend à chaque tournure française ajoutée.
+  for (const alt of alternativesDe(PERMISSIF.source)) {
+    const initiale = alt.match(/^\\b(.)/);
+    assert.ok(
+      !initiale || /\w/.test(initiale[1]),
+      `la tournure « ${alt} » est morte-née : en JavaScript « ${initiale && initiale[1]} » n'est pas `
+        + `un caractère de mot, donc le \\b qui la précède ne s'apparie jamais. Retire-le.`,
+    );
+  }
+});

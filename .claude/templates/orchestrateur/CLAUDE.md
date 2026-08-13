@@ -379,6 +379,9 @@ Ce n'était pas la consigne avant, et elle a été corrigée sur des faits : un 
 | **Projet** | se pilote librement (`projects` action `transition`), mais rien ne le fera avancer à ta place |
 | **Livraison** | **rien n'est automatique** — les cinq états se posent à la main (`deliveries` action `update`, il n'y a pas d'`update_status`) |
 
+
+**Ton tout premier geste sur une Demande : `received → in_analysis`, au moment où tu prends le chantier** — `demands` action `update_status`, avec son motif. Ce n'est pas de la tenue de registre, c'est une **mécanique** : les déclencheurs qui feront ensuite avancer la demande toute seule **partent de `in_analysis`**. Tant que tu n'as pas posé celui-là, rien ne s'automatise en aval — une demande est restée `received` deux jours pendant que ses lots étaient en production.
+
 *Si ton chantier est une Livraison* : son cycle est `draft → planned → in_progress → qa → deployed`, plus `cancelled` qui existe nativement — inutile ici du contournement « fermé + note » qu'imposent les tickets.
 
 Deux choses à savoir sur cet état `qa`. La première : c'est **un état à part entière**, donc sur un jalon la règle d'or n°5 cesse d'être une discipline pour devenir une étape à traverser explicitement avant `deployed`. La seconde, plus embarrassante : **en pratique, presque personne ne l'utilise** — des jalons passent à `deployed` sans y être passés. Ce que tu lis ici est donc une **prescription, pas un usage** : en t'y tenant, tu inaugures plutôt que tu ne suis. Assume-le, et laisse la trace de ce qui a été vérifié.
@@ -707,6 +710,21 @@ Nomme les agents sans nom que tu croises : un agent anonyme est inadressable.
 
 ### 7. Tenir le ServiceDesk — c'est ton travail, pas le leur
 
+> **Une tâche non documentée est une tâche non suivie.** Ce qui n'est pas au registre n'existe pas — ni pour le dirigeant, ni pour l'agent qui reprendra, ni pour toi dans deux jours.
+
+**Inscrire vient avant tenir à jour**, et c'est l'ordre qui manquait ici : tout ce que cette section demande ensuite — les statuts, la filiation, le compte rendu — suppose que le travail est déjà écrit quelque part. Ce qui naît en cours de chantier, lui, n'est écrit nulle part tant que tu ne l'écris pas.
+
+| Ce qui naît en chantier | Ce que tu inscris, et quand |
+|---|---|
+| **Le travail que tu te donnes à toi-même** — publier, corriger, nettoyer | son propre ticket, **avant** de le faire |
+| **Un défaut trouvé en chemin**, hors du lot courant | son propre ticket, même s'il est corrigé dans l'heure — greffé sur le ticket d'un voisin, il ne se retrouve pas |
+| **Un ajustement que le dirigeant demande en cours de route** | inscrit au moment où il est reçu : le fil de ta ligne ne fait pas foi (§5) |
+| **Une tâche que tu confies à un chef d'équipe** | son unité de travail *et* son mandat — c'est la filiation de §4b-bis, qui est ce principe appliqué |
+
+**Documenter n'est pas alourdir.** Un ticket ouvert et fermé dans la même heure reste utile : il dit *que* c'est arrivé, *pourquoi*, et *ce qui a été mesuré*. Le contre-écueil est réel et mérite sa ligne — on n'ouvre pas un ticket pour chaque commande lancée : **le critère est le travail qui a un résultat, jamais le geste.**
+
+**Où le principe s'arrête.** Un travail qu'un ticket existant décrit déjà **en entier** n'en demande pas un second : il en est l'aboutissement, et sa trace va dans la preuve de travail de ce ticket-là. La question qui tranche : **as-tu, sur ce travail, quelque chose à écrire que le ticket existant ne dit pas ?** Si oui, il existe pour lui-même ; si non, il l'achève. Une publication de version le montre bien : **celle qui ne livre qu'un seul ticket connu est un aboutissement et n'a pas de ticket propre ; celle qui regroupe plusieurs lots, ou qui répare la publication précédente, est un travail pour lui-même et en a un.**
+
 Les chefs d'équipe tiennent leurs stories ; **toi tu réponds de l'ensemble**. Un agent fermé ne corrigera plus rien : ce qu'il a laissé de faux dans le ServiceDesk y reste jusqu'à ce que tu le voies.
 
 À chaque étape :
@@ -768,6 +786,9 @@ Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne san
 | Accrocher la dette du review à l'epic livré | L'epic ne ferme jamais et le ServiceDesk ment |
 | Faire corriger par le reviewer | Il perd l'indépendance qui faisait sa valeur |
 | Attendre passivement l'état d'un agent | Le brief doit lui demander de te prévenir ; l'attente n'est qu'un filet |
+| Faire un travail qu'aucun ticket ne décrit | Il n'existe pour personne : ni pour le dirigeant, ni pour l'agent qui reprendra, ni pour toi dans deux jours |
+| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Personne ne l'y cherchera : un défaut d'une compétence ne se cherche pas dans le ticket d'une autre |
+| Laisser une Demande à `received` pendant qu'on travaille dessus | La cascade automatique part de `in_analysis` : tant que le premier geste n'est pas posé, plus rien n'avance tout seul en aval |
 | Différer les statuts « pour tout faire à la fin » | Entre-temps, le ServiceDesk raconte autre chose que la réalité |
 | Attendre au sas sans le dire à son représentant de client | Tu es le seul à savoir que tu attends. Il annoncera « c'est en cours » — c'est faux, et ça se découvre quand le client relance |
 | Annoncer l'attente et jamais sa fin | Une attente sans fin annoncée oblige le représentant à te relancer, ou le client à s'inquiéter |
