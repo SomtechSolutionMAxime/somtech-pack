@@ -61,6 +61,17 @@
 //     que c'est ainsi ») passe la garde de forme du chemin d'urgence. Vérifier qu'une raison
 //     justifie vraiment demande de lire, pas d'apparier.
 //
+//   • LA POLARITÉ EST ANCRÉE SUR LA FORMULATION, jamais sur le sens. « Tu ne proposes jamais
+//     au client un geste qui écrase… » interdit exactement la même chose que la phrase
+//     gardée, et rougit — la garde suit `/ne lui proposes aucun/`. C'est le prix de lire une
+//     structure sans lire une langue : `REFORMULATIONS_LEGITIMES` couvre les réécritures
+//     qu'on a rencontrées, pas toutes celles qu'on pourrait écrire. Quand une reformulation
+//     légitime rougit, on l'ajoute à cette liste et on élargit la garde — on ne la retire pas.
+//
+//   • `ADRESSE_AU_CLIENT` NE DISTINGUE PAS UN CANAL D'UN AUTRE : « sur le canal » suffit à
+//     déclencher. Aucun texte actuel ne s'y heurte ; un ajout futur qui parlerait d'un canal
+//     INTERNE dans cette section rougirait à tort.
+//
 // Ce qui est gardé ici est ce qui a été retourné au moins une fois, en vrai. Le reste du
 // texte est écrit, pas gardé — et c'est le décompte qu'il faut lire, jamais « le gabarit est
 // sûr ».
