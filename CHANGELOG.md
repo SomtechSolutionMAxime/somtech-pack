@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.41.0] - 2026-08-13
+
+### Ajouté
+
+- **L'orchestrateur ne peut plus écrire un fichier ni ouvrir un sous-agent** (T-20260813-0062, PR #212). La règle « un agent qui orchestre n'exécute jamais » était une prescription depuis le premier jour, et le dirigeant l'a signalée enfreinte deux fois — une heure passée à renommer, débloquer, corriger un script. Elle devient **mécanique** : le fichier de droits du lieu refuse l'écriture sur tout le disque, par tous les outils, et refuse l'ouverture d'un sous-agent. Ce n'est plus une discipline qui se relâche, c'est un moyen qu'il n'a pas.
+- **Le prix est payé et assumé : le brief va au registre.** Un orchestrateur qui ne peut plus écrire de fichier ne peut plus déposer un brief sur disque — et le métier, tel qu'il était, l'envoyait alors contourner par le terminal. Le brief vit désormais au ServiceDesk, ce qui rejoint le principe livré en 1.39.0 : ce qui n'est pas au registre n'existe pas. Ce que la mécanique **ne peut pas** borner — le terminal, l'ouverture de panes, l'écriture au registre — est écrit noir sur blanc dans le métier plutôt que laissé à l'imagination.
+- **Les biais qui le visent, posés là où le geste se pose** : la sycophantie envers ses propres chefs d'équipe — refuser un lot, c'est se déjuger sur son propre découpage — et l'autorité apparente de ses ordres, exécutés sans être questionnés. 29 mutations, chacune attrapée par le contrôle visé ; suite portée à 33 contrôles et 95 mutations.
+- **Une garde de modalité en plus, et elle manquait** : la substitution d'une contrainte par un conseil rougit désormais, mais il a fallu l'écrire — la garde existante ne voyait ni « évite de » ni « idéalement ». C'est la neuvième variante du motif dominant du dépôt : une garde qui vérifie ce qu'un texte contient, pas ce qu'il fait.
+
 ## [1.40.0] - 2026-08-13
 
 ### Ajouté
