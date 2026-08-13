@@ -128,8 +128,8 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 |---|---|---|
 | `lieu_partiel` | `.orchestrateur/<nom>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .orchestrateur/<nom> .orchestrateur/<nom>.ecarte`), puis relance — elle ne complète jamais |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du chantier |
-| `jeton_absent` | Le poste n'a pas trouvé l'entrée que le message nomme | Rétablis **celle-là**, nommément, puis relance |
-| `jeton_vide` | L'entrée existe au trousseau, mais elle est vide | Même geste, même entrée — c'est son contenu qui manque, pas elle |
+| `jeton_absent` | Aucune entrée n'a répondu au trousseau **sous ce compte, pour ce service** — c'est tout ce qui a été mesuré | Suis la marche à suivre que le message donne : elle montre d'abord ce qui est là, puis dépose **sans écraser** |
+| `jeton_vide` | L'entrée existe au trousseau, et elle est **vide** — pas absente | Le message ne propose aucune commande, et c'est voulu : remplace l'entrée depuis le Trousseau d'accès, qui la montre avant qu'on y touche |
 | `ecriture_interrompue` | La pose a échoué en cours de route (droits, disque) | Rien à nettoyer — elle a retiré ce qu'elle avait commencé. Corrige la cause, relance |
 
 Les deux premiers sont prononcés **sans lire le trousseau** : ils ne dépendent que du disque

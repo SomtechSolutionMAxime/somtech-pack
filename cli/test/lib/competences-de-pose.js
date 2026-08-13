@@ -592,7 +592,7 @@ export const MUTATIONS = [
     muter: (t) =>
       remplacer(
         t,
-        'Rétablis **celle-là**, nommément, puis relance',
+        'Suis la marche à suivre que le message donne',
         'Redépose-la : `security add-generic-password -U -a "$USER" -s ligne-directe-bot -w "$(pbpaste)"`',
       ),
   },
