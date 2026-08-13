@@ -187,8 +187,17 @@ export function enteteDe(texte) {
  * énoncé peut garder sa place, sa colonne et son rang tout en cessant d'obliger : « ouvre ta
  * ligne » reste l'étape 2, mais devient « tu peux aussi le faire après si ça presse ».
  * Le rang est nécessaire ; il n'est pas suffisant.
+ *
+ * ⚠️ DEUX FAMILLES, ET LA SECONDE MANQUAIT — relevée en revue de fond du lot T-20260813-0043.
+ *
+ * La PERMISSION (« tu peux », « facultatif ») dit que l'obligation n'en est pas une. L'EXCEPTION
+ * (« sauf si… », « si tu en as le temps ») la laisse debout et lui ouvre une porte — ce qui la
+ * vide tout aussi bien, en ayant l'air de la respecter. Trois altérations mesurées passaient
+ * la garde : « son propre ticket, **avant** de le faire, SI TU EN AS LE TEMPS », « … n'a pas de
+ * ticket propre, SAUF si le dirigeant en demande un », « … jamais le geste — SAUF décision
+ * contraire ponctuelle ». Aucune n'est une permission ; toutes rendent la consigne inopérante.
  */
-const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b/i;
+const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|\bà ta discrétion\b/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {

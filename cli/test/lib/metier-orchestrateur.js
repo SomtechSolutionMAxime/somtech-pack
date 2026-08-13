@@ -850,6 +850,7 @@ export const CONTROLES = [
       const ordres = s.corps.split('\n').filter((l) => /vient avant/i.test(l));
       assert.equal(ordres.length, 1, `l’ordre des deux gestes doit être énoncé une fois exactement (${ordres.length})`);
       const [premier, second] = ordres[0].split(/vient avant/i);
+      exigeImperatif(ordres[0], 'l’ordre des deux gestes');
       assert.match(premier, /inscrire/i, `« ${ordres[0].trim()} » : c’est INSCRIRE qui vient en premier`);
       assert.match(second, /tenir à jour/i, `« ${ordres[0].trim()} » : … et tenir à jour qui suit — les deux gestes sont inversés`);
 
@@ -875,6 +876,11 @@ export const CONTROLES = [
           `« ${quoi} » est donné comme ce qu’on inscrit — les deux colonnes de la table sont inversées`,
         );
         assert.match(inscriptions[i], quand, `le cas « ${quoi} » ne dit plus QUAND il s’inscrit (« ${inscriptions[i]} »)`);
+        // LA MODALITÉ, TROISIÈME AXE — et il manquait ici, relevé en revue de fond. La cellule
+        // peut garder sa colonne, son rang et sa portion littérale gardée, et cesser d'obliger
+        // par une clause ajoutée APRÈS : « **avant** de le faire, si tu en as le temps ». Le
+        // fragment cherché est toujours là, la consigne ne vaut plus rien.
+        exigeImperatif(inscriptions[i], `le cas « ${quoi} »`);
       }
 
       // ── LE CRITÈRE, ET SON CONTRE-ÉCUEIL. Sans lui, le principe produit du bruit — et le
@@ -883,6 +889,7 @@ export const CONTROLES = [
       const criteres = s.corps.split('\n').filter((l) => /le critère est/i.test(l));
       assert.equal(criteres.length, 1, `le critère doit être énoncé une fois exactement (${criteres.length})`);
       const [retenu, exclu] = criteres[0].split(/,\s*jamais/i);
+      exigeImperatif(criteres[0], 'le critère');
       assert.ok(exclu !== undefined, 'le critère doit dire ce qu’il EXCLUT, pas seulement ce qu’il retient');
       assert.match(retenu, /travail qui a un résultat/i, `« ${criteres[0].trim()} » : le critère est le travail qui a un résultat`);
       assert.match(exclu, /geste/i, `« ${criteres[0].trim()} » : … et ce n’est pas le geste`);
@@ -894,6 +901,9 @@ export const CONTROLES = [
       // et laisserait sans trace celle qui en regroupe plusieurs.
       const arrets = s.corps.split('\n').filter((l) => /aboutissement/i.test(l));
       assert.equal(arrets.length, 1, `le métier doit dire une fois exactement où le principe s’arrête (${arrets.length})`);
+      // Le cas limite est celui qui appelle le plus une échappatoire : « … n'a pas de ticket
+      // propre, SAUF si le dirigeant en demande un » laisse le critère écrit et le rend nul.
+      exigeImperatif(arrets[0], 'l’endroit où le principe s’arrête');
       assert.match(
         arrets[0], /décrit déjà \*\*en entier\*\*/i,
         'le critère qui sépare les deux doit être écrit — « en entier », pas « à peu près »',
@@ -954,6 +964,7 @@ export const CONTROLES = [
           + `c’est de \`in_analysis\` qu’ils partent, et c’est toute la raison du geste`,
       );
       assert.match(geste, /rien ne s'automatise en aval/i, 'et le métier doit dire ce que son absence coûte');
+      assert.match(geste, /mécanique/i, 'et le nommer pour ce qu’il est — une mécanique, pas une écriture de registre de plus');
 
       // ── LE COÛT MESURÉ, PAS SEULEMENT NOMMÉ — relevé en PASSE 1 de revue, et c'était un
       // vrai trou : « rien ne s'automatise en aval » est une affirmation, et une affirmation
@@ -968,6 +979,42 @@ export const CONTROLES = [
       );
       assert.match(immobile, /restée `received`/i, 'c’est la Demande qui est restée `received`');
       assert.match(pendant, /en production/i, '… pendant que ses lots étaient en production — les deux sont inversés');
+    },
+  },
+
+  {
+    id: 'anti-patterns-de-l-inscription',
+    quoi: 'les trois manquements qui ont motivé le principe sont nommés comme des fautes, du côté des fautes',
+    verifier({ metier }) {
+      // RELEVÉ EN REVUE DE FOND, et c'était une garantie du lot NON GARDÉE DU TOUT : les trois
+      // lignes que ce lot ajoute à la table d'anti-patterns n'étaient couvertes par rien.
+      // `anti-patterns-des-ajouts` ne garde que les six ajouts du lot précédent, et
+      // `le-metier-a-voyage-entier` ne compare que le gabarit à la compétence — or ce lot écrit
+      // dans LES DEUX, identiquement. Retirer une des trois lignes des deux fichiers laissait
+      // les 25 tests du gabarit verts, mesuré.
+      //
+      // Chacune de ces trois lignes est un manquement RÉEL de l'orchestrateur, daté du même
+      // jour. Une table d'anti-patterns dont on retire une ligne est le mode de régression le
+      // plus silencieux d'un document : rien ne casse, et la faute redevient tentante.
+      const s = sectionDe(metier, /^Anti-patterns$/i, 'd’anti-patterns');
+      const table = tableDe(s.corps);
+      const fautes = colonne(table, /^Ce qu'on est tenté de faire$/i, 'ce qu’on est tenté de faire');
+      const raisons = colonne(table, /^Pourquoi ça casse$/i, 'pourquoi ça casse');
+
+      const FAUTES = [
+        { quoi: 'faire un travail qu’aucun ticket ne décrit', sonde: /qu'aucun ticket ne décrit/i, cout: /n'existe pour personne/i },
+        { quoi: 'greffer un défaut sur le ticket d’un voisin', sonde: /sur le ticket d'un voisin/i, cout: /ne l'y cherchera/i },
+        { quoi: 'laisser une Demande à `received`', sonde: /laisser une Demande à `received`/i, cout: /part de `in_analysis`/i },
+      ];
+      for (const { quoi, sonde, cout } of FAUTES) {
+        const i = fautes.findIndex((c) => sonde.test(c));
+        assert.ok(i >= 0, `« ${quoi} » doit être nommée comme une faute — c’est un manquement mesuré, pas une idée`);
+        assert.equal(fautes.filter((c) => sonde.test(c)).length, 1, `« ${quoi} » doit être nommée une fois exactement`);
+        assert.ok(!sonde.test(raisons.join(' ')), `« ${quoi} » figure du côté des raisons — les deux colonnes sont inversées`);
+        // Une faute sans son coût est une préférence : c'est la moitié qui se retire en premier.
+        assert.match(raisons[i], cout, `l’anti-pattern « ${quoi} » n’explique plus pourquoi ça casse (« ${raisons[i]} »)`);
+        exigeImperatif(raisons[i], `l’anti-pattern « ${quoi} »`);
+      }
     },
   },
 ];
@@ -1495,6 +1542,73 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       'une demande est restée `received` deux jours pendant que ses lots étaient en production',
       'une demande est restée en production deux jours pendant que ses lots étaient `received`',
+    ),
+  },
+
+  // ── les échappatoires : la consigne reste écrite et cesse d'obliger (revue de fond)
+  //
+  // Les trois mutations qui suivent ont été MESURÉES SURVIVANTES par la revue de fond. Elles
+  // ne retirent rien et ne permutent rien : elles ajoutent une clause APRÈS la portion
+  // littérale que les gardes cherchaient. Le fragment est toujours là, la consigne ne vaut
+  // plus rien — et le filet du transport fidèle ne joue pas, ce lot écrivant dans les deux
+  // fichiers identiquement.
+  {
+    id: 'un-cas-s-assouplit-dans-sa-cellule',
+    quoi: 'le ticket du travail qu’on se donne s’écrit avant… « si tu en as le temps » — la cellule garde sa colonne, son rang et son mot gardé',
+    cible: 'inscrire-avant-de-tenir-a-jour',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '| son propre ticket, **avant** de le faire |',
+      '| son propre ticket, **avant** de le faire, si tu en as le temps |',
+    ),
+  },
+  {
+    id: 'le-critere-recoit-une-exception',
+    quoi: 'le critère s’ouvre une porte — « jamais le geste, sauf décision contraire ponctuelle »',
+    cible: 'inscrire-avant-de-tenir-a-jour',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'le critère est le travail qui a un résultat, jamais le geste.**',
+      'le critère est le travail qui a un résultat, jamais le geste — sauf décision contraire ponctuelle.**',
+    ),
+  },
+  {
+    id: 'le-cas-limite-recoit-une-exception',
+    quoi: 'l’endroit où le principe s’arrête devient négociable — « sauf si le dirigeant en demande un »',
+    cible: 'inscrire-avant-de-tenir-a-jour',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "est un aboutissement et n'a pas de ticket propre",
+      "est un aboutissement et n'a pas de ticket propre, sauf si le dirigeant en demande un",
+    ),
+  },
+
+  // ── les anti-patterns miroir du principe
+  {
+    id: 'un-anti-pattern-de-l-inscription-disparait',
+    quoi: 'la faute « laisser une Demande à `received` » n’est plus nommée comme une faute — celle-là même qui a bloqué la cascade deux jours',
+    cible: 'anti-patterns-de-l-inscription',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| Laisser une Demande à `received` pendant qu'on travaille dessus \|.*\n/m, ''),
+  },
+  {
+    id: 'un-anti-pattern-de-l-inscription-perd-son-cout',
+    quoi: 'la faute reste nommée et perd la raison qui la rend une faute — une faute sans son coût est une préférence',
+    cible: 'anti-patterns-de-l-inscription',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Personne ne l'y cherchera :",
+      "| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Ce n'est pas idéal :",
+    ),
+  },
+  {
+    id: 'la-mecanique-devient-une-ecriture-de-registre',
+    quoi: 'le geste de §2 cesse d’être nommé comme une mécanique — il redevient une consigne de documentation parmi d’autres, donc négligeable',
+    cible: 'transition-initiale-de-la-demande',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "Ce n'est pas de la tenue de registre, c'est une **mécanique**",
+      "C'est de la tenue de registre comme le reste",
     ),
   },
 ];
