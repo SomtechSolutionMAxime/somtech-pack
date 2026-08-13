@@ -346,6 +346,42 @@ test('les trois programmes ne sont nommés QU’À UN SEUL ENDROIT — leur inve
 
 // ═════════════════════════════════════════ 4. `lancer` ET LA FRONTIÈRE DES DEUX ÉCHECS
 
+test('CE QUI ARRIVE À L’EXÉCUTEUR EST LE CHEMIN, JAMAIS LE NOM — la garantie centrale', async () => {
+  // ⚠️ TROUVÉ EN REVUE (passe 2), ET C'ÉTAIT LE TROU LE PLUS GRAVE DE CETTE SUITE.
+  //
+  // Remplacer `outil.chemin` par `outil.nom` dans `lancer()` — c'est-à-dire réintroduire MOT
+  // POUR MOT la cause d'origine du ticket, `security` relancé par son nom nu — laissait les 21
+  // essais VERTS. Tous injectaient un exécuteur qui IGNORE son premier argument : aucun
+  // n'observait ce qui lui était réellement passé.
+  //
+  // C'est le motif 2 du brief — le double plus permissif que le vrai service — posé sur le
+  // mécanisme même que ce lot existe pour garantir. La garde structurelle sur le texte des
+  // sources interdit bien la forme fautive AILLEURS ; elle ne dit rien de ce que `lancer` fait.
+  const vus = [];
+  const espion = async (binaire, args) => {
+    vus.push({ binaire, args });
+    return { stdout: '', stderr: '' };
+  };
+
+  await lancer(OUTILS.security, ['find-generic-password'], { executer: espion });
+  await lancer(OUTILS.launchctl, ['print'], { executer: espion });
+
+  assert.deepEqual(
+    vus.map((v) => v.binaire),
+    ['/usr/bin/security', '/bin/launchctl'],
+    'l’exécuteur reçoit un NOM de programme — il serait donc résolu par le PATH du processus, ' +
+      'ce qui est exactement la panne que ce lot corrige'
+  );
+  assert.deepEqual(vus[0].args, ['find-generic-password'], 'et les arguments passent intacts');
+
+  // `herdr` est la seule exception, et elle est ASSUMÉE : installé par l'utilisateur, son
+  // emplacement n'est pas connu d'avance. On l'épingle ici pour que le jour où quelqu'un lui
+  // invente un chemin, ce soit une décision et pas un glissement.
+  vus.length = 0;
+  await lancer(OUTILS.herdr, ['agent', 'list'], { executer: espion });
+  assert.equal(vus[0].binaire, 'herdr', 'herdr reste résolu par le PATH — et son refus le DIT');
+});
+
 test('« lancé puis en échec » et « jamais lancé » ne se confondent pas', async () => {
   // La discrimination ne peut pas porter sur le texte du message : `execFile` compose
   // « Command failed: … » dans les deux cas.
@@ -564,6 +600,54 @@ test('la commande ne lit plus le jeton DANS L’ARGUMENT de la vérification', (
     /verifierCanalOuvrable\s*\(/,
     'la commande doit passer par la vérification qui ENTOURE la lecture du jeton'
   );
+});
+
+test('AUCUNE VÉRIFICATION NE S’ÉCHAPPE — un vérificateur qui jette rend quand même un contrat', async (t) => {
+  // ⚠️ TROUVÉ EN REVUE (passe 2). La lecture du jeton était entourée ; l'interrogation de Slack
+  // qui suit ne l'était pas. Un jeton révoqué, une limite de débit, un hoquet réseau — et
+  // l'exception traversait de nouveau toute la pose, sans le moindre JSON de contrat. Le défaut
+  // d'origine, avec une autre cause, DANS le correctif qui prétendait le fermer.
+  const depot = mkdtempSync(join(tmpdir(), 'ld-echappee-'));
+  t.after(() => rmSync(depot, { recursive: true, force: true }));
+  cpSync(
+    join(REPO, '.claude', 'templates', 'gestionnaire-client'),
+    join(depot, '.claude', 'templates', 'gestionnaire-client'),
+    { recursive: true }
+  );
+
+  // 1. Slack jette pendant la vérification du canal : ni « absent », ni « non membre » — on ne
+  //    sait pas, et les deux gestes porteraient à faux.
+  const surSlack = await verifierCanalOuvrable({
+    canal: 'client-x',
+    lireJetonRobot: async () => 'valeur-de-test',
+    verifier: async () => {
+      throw Object.assign(new Error('invalid_auth'), { name: 'ErreurSlack' });
+    },
+  });
+  assert.equal(surSlack.joignable, false);
+  assert.notEqual(surSlack.motif, 'absent', 'un canal qu’on n’a pas su interroger n’est pas un canal absent');
+  assert.notEqual(surSlack.motif, 'non_membre', 'ni un canal dont notre robot serait exclu');
+  assert.match(surSlack.message, /invalid_auth/, 'la cause brute doit être montrée');
+  for (const conseil of ['absent', 'non_membre'].map((motif) => messageDeRefus({ motif, canal: 'client-x' }))) {
+    assert.ok(!surSlack.message.includes(conseil), 'et aucun geste de canal ne doit être proposé');
+  }
+
+  // 2. LE FILET : n'importe quel vérificateur qui jette, pour n'importe quelle raison, doit
+  //    encore produire un refus STRUCTURÉ — et rien sur le disque.
+  const r = await preparerLieuRepresentant({
+    depotClient: depot,
+    client: 'client-x',
+    canal: 'client-x',
+    verifierJoignabilite: async () => {
+      throw new Error('une panne que personne n’avait prévue');
+    },
+  });
+  assert.equal(r.ok, false, 'la pose doit rendre un verdict, pas jeter');
+  assert.equal(r.cree, false);
+  assert.ok(r.refus?.motif, 'le refus doit porter un motif lisible');
+  assert.match(r.refus.message, /personne n’avait prévue/, 'et montrer la cause brute');
+  aucunDepotPropose(r.refus.message, 'vérificateur qui jette');
+  assert.ok(!existsSync(join(depot, '.gestionnaire')), 'aucun lieu ne doit exister sur le disque');
 });
 
 // ═════════════════════════════════════════ 8. HERDR — ABSENT N'EST PAS MORT

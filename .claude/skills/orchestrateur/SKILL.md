@@ -134,6 +134,7 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 | `jeton_absent` | Aucune entrée n'a répondu au trousseau **sous ce compte, pour ce service**, et `security` l'a **dit** — c'est le seul cas où l'absence est prouvée, donc le seul où déposer a un sens | Suis la marche à suivre que le message donne : elle montre d'abord ce qui est là, puis dépose **sans écraser** |
 | `jeton_vide` | L'entrée existe au trousseau, et elle est **vide** — pas absente | Le message ne propose aucune commande, et c'est voulu : remplace l'entrée depuis le Trousseau d'accès, qui la montre avant qu'on y touche |
 | `ecriture_interrompue` | La pose a échoué en cours de route (droits, disque) | Rien à nettoyer — elle a retiré ce qu'elle avait commencé. Corrige la cause, relance |
+| `verification_impossible` | Une vérification préalable a **échoué sans rendre de verdict** — on ne sait donc pas si la ligne pouvait être ouverte. Ni le trousseau, ni le canal, ni les gabarits ne sont mis en cause | Lis la cause brute que le refus montre, et **ne répare rien à l'aveugle**. Rien n'a été créé : le lieu n'est posé qu'après un verdict favorable |
 
 Les deux premiers sont prononcés **sans lire le trousseau** : ils ne dépendent que du disque
 du dépôt.

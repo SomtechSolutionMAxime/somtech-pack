@@ -161,6 +161,9 @@ export function messagesDesMotifs(racine = REPO) {
   const consequence = iMessage === -1 ? '' : orchestrateur.slice(iMessage, iMessage + 600);
 
   return {
+    // T-20260813-0054. Le FILET : quoi qu'il arrive dans un vérificateur, la pose rend un refus
+    // structuré plutôt que de laisser une exception traverser sans contrat.
+    verification_impossible: blocApres(lieu, 'verification_impossible'),
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),

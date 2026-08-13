@@ -110,8 +110,36 @@ export async function verifierCanalOuvrable({
         `personne : le canal n'a même pas été consulté.`,
     };
   }
-  const j = await verifier(jetonRobot, canal);
-  return j.joignable ? j : { ...j, portee: 'canal' };
+  // ⚠️ LA SECONDE MOITIÉ DU MÊME DÉFAUT — RELEVÉE EN REVUE (passe 2), ET C'EST « UNE PORTE SUR
+  // DEUX » DANS LE CORRECTIF QUI PRÉTENDAIT LA FERMER.
+  //
+  // La lecture du jeton était entourée ; l'interrogation de Slack qui suit ne l'était pas.
+  // `verifierCanalJoignable` appelle le service : un jeton révoqué (`invalid_auth`), une
+  // limite de débit, un hoquet réseau — et l'exception traversait de nouveau toute la pose
+  // jusqu'au filet global du binaire. Aucun JSON de contrat, le « rien n'a été créé » jamais
+  // dit : exactement ce que ce fichier affirme trois paragraphes plus haut avoir réparé.
+  //
+  // Et le motif suit le MÊME renversement que le trousseau : on ne sait pas si le canal existe,
+  // on ne sait pas si le robot en est membre. Dire l'un ou l'autre enverrait créer un canal qui
+  // existe, ou faire inviter un robot déjà invité. On dit donc ce qu'on sait : rien.
+  try {
+    const j = await verifier(jetonRobot, canal);
+    return j.joignable ? j : { ...j, portee: 'canal' };
+  } catch (err) {
+    return {
+      joignable: false,
+      portee: 'canal',
+      motif: 'canal_illisible',
+      canal,
+      message:
+        `Le canal « ${canal} » n'a pas pu être interrogé — on ne sait donc ni s'il existe, ni si ` +
+        `notre robot en est membre.\n` +
+        `  ⚠️ CE N'EST NI L'UN NI L'AUTRE. Ne le fais pas créer et ne fais inviter personne sur la ` +
+        `foi de ce refus : les deux gestes porteraient à faux.\n` +
+        `  Cause brute, telle que Slack ou le réseau l'a rendue : ${String(err?.message ?? err).slice(0, 200)}\n` +
+        `  Rien n'a été créé : le lieu du représentant n'est posé qu'une fois la ligne établie.`,
+    };
+  }
 }
 
 /**
