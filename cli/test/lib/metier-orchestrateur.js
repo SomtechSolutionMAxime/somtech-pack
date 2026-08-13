@@ -31,13 +31,18 @@
 // on ne le réécrit pas » — n'a pas empêché une réécriture d'effacer une garantie livrée la
 // veille.
 //
-// LES SIX AJOUTS, liste fermée énoncée par le dirigeant le 2026-08-12 :
+// LES SEPT AJOUTS, liste fermée énoncée par le dirigeant :
 //   1. il appelle les agents spécialisés (consulter, jamais sous-traiter) ;
 //   2. il parle au dirigeant ;
 //   3. sa ligne directe est OBLIGATOIRE — et cet ajout est un RETRAIT ;
 //   4. il veille ses agents toutes les heures, par défaut ;
 //   5. il pose un topo sur son canal chaque matin à 7 h 00 ;
-//   6. il est le gardien des ADR et des bonnes pratiques de développement.
+//   6. il est le gardien des ADR et des bonnes pratiques de développement ;
+//   7. il se sert des mémoires disponibles (2026-08-13, pendant le lot 2).
+//
+// Le septième est arrivé APRÈS la fusion du lot 1 : il est donc porté ici, dans le lot qui
+// pose le lieu. Sa source normative est STD-039 (`accepted`), lue à la source plutôt que
+// citée de mémoire — ce qui est, précisément, ce que l'ajout demande à l'orchestrateur.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -89,7 +94,7 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS_AJOUTES = 5;
+export const NB_ANTI_PATTERNS_AJOUTES = 6;
 
 // ═════════════════════════════════════════ les contrôles
 
@@ -463,6 +468,88 @@ export const CONTROLES = [
       assert.match(pourLesAdr, /décisions d'architecture/i, 'les ADR portent les décisions d’architecture');
       assert.ok(!/motifs de défaut/i.test(pourLesAdr), 'les ADR ne portent pas les motifs de défaut du dépôt — les deux registres sont inversés');
       assert.match(s.corps, /dossier Architecture/i, 'et le métier doit dire où vivent les ADR');
+    },
+  },
+
+  {
+    id: 'se-sert-des-memoires',
+    quoi: 'il rappelle avant d’engager, borné à un sujet — et un rappel ne fait jamais foi',
+    verifier({ metier }) {
+      // AJOUT 7. Sa source normative est STD-039 (`accepted`), dont le noyau *always-on*
+      // (§2.6) grave quatre invariants et POINTE le reste. Ce contrôle garde les quatre qui
+      // concernent l'orchestrateur, et surtout celui dont la violation est silencieuse :
+      // I3 — un rappel ne fait pas foi. Un orchestrateur qui tient un souvenir pour une
+      // mesure ne se trompe pas bruyamment : il conclut, et personne ne voit d'où ça vient.
+      // Trois terrains, et ils sont distincts À DESSEIN : `tableDe` lit toutes les rangées
+      // d'un corps comme UNE table, donc deux tables dans une même section se fondraient
+      // l'une dans l'autre et la résolution par en-tête cesserait de mordre. Les moments et
+      // les gestes vivent donc chacun dans leur (sous-)section.
+      const s = sectionDe(metier, /mémoires disponibles/i, 'sur l’usage des mémoires');
+      const sGestes = sectionDe(metier, /Les gestes, nommés par ce qu'ils font/i, 'sur les gestes de mémoire');
+      const sFoi = sectionDe(metier, /Un rappel ne fait pas foi/i, 'sur l’autorité d’un rappel');
+
+      // ── I3, EN POLARITÉ ET PAS EN PRÉSENCE. Écrire les deux moitiés de la distinction
+      // (« rappelle » / « fait foi ») sans les apparier laisserait passer leur PERMUTATION,
+      // qui enseigne exactement le contraire : le registre rappellerait, la mémoire ferait foi.
+      const [avant, apres] = sFoi.corps.split(/elle ne dit jamais/i);
+      assert.ok(apres, 'la phrase qui sépare « où chercher » de « ce qui est vrai » a disparu');
+      assert.match(avant, /où chercher/i, 'la mémoire dit où chercher');
+      assert.match(
+        avant,
+        /ce qui fait foi est au ServiceDesk et dans les documents/i,
+        'ce qui fait foi doit être nommé, et ce sont le registre et les documents — jamais un rappel',
+      );
+      assert.ok(
+        !/la mémoire fait foi|le rappel fait foi/i.test(sFoi.corps),
+        'le texte accorde à un rappel l’autorité qu’il n’a pas (I3)',
+      );
+      assert.match(apres, /ce qui est vrai/i, 'et la mémoire ne dit jamais ce qui est vrai aujourd’hui');
+
+      // La phrase qui porte tout l'ajout, dans les mots du dirigeant. Elle est courte, donc
+      // facile à adoucir en « complète rarement » — et l'adoucir la vide.
+      assert.match(
+        sFoi.corps,
+        /Un rappel ne remplace jamais une mesure\./,
+        'la règle qui a coûté le plus cher — un rappel ne remplace jamais une mesure — doit être écrite telle quelle',
+      );
+      assert.match(sFoi.corps, /absence de résultat/i, 'et le motif nommé : conclure d’une absence de résultat');
+
+      // ── I5, le cantonnement. Un rappel non borné ramasse le vécu d'un autre projet.
+      assert.match(sGestes.corps, /group_id/, 'le cantonnement du rappel épisodique doit être nommé (I5)');
+
+      // ── I4, la frontière : chaque mémoire s'interroge chez elle, jamais à travers une autre.
+      assert.match(sFoi.corps, /chaque mémoire chez elle/i, 'la frontière entre substrats doit être écrite (I4)');
+
+      // ── I3 encore, par sa conséquence : la seule remontée vers l'opposable.
+      assert.match(sFoi.corps, /gate de promotion/i, 'la seule voie vers l’opposable — le gate de promotion — doit être nommée');
+
+      // ── I1, NOMMER PAR LA FONCTION. La garde la plus mécanique des quatre, et celle qui
+      // se viole le plus facilement : écrire le nom du moteur au lieu du geste rend le texte
+      // faux le jour où le moteur change — ce qui est l'argument entier de l'invariant.
+      for (const mecanisme of [/graphiti/i, /neo4j/i]) {
+        assert.ok(!mecanisme.test(metier), `le métier nomme un mécanisme (${mecanisme}) au lieu d’une fonction (I1)`);
+      }
+      const gestes = colonne(tableDe(sGestes.corps), /^Geste$/i, 'les gestes de mémoire');
+      for (const attendu of ['/episodique', '/rappel', '/memoire']) {
+        assert.equal(
+          gestes.filter((g) => g.includes(attendu)).length, 1,
+          `le geste « ${attendu} » doit être nommé une fois exactement`,
+        );
+      }
+
+      // ── QUAND il rappelle. Trois moments, et ils ont en commun d'être AVANT qu'il engage
+      // quelqu'un — un rappel fait après le brief ne sert plus à rien.
+      const moments = colonne(tableDe(s.corps), /^Moment$/i, 'les moments du rappel');
+      const MOMENTS = [/avant de cadrer/i, /avant de rouvrir/i, /avant de trancher/i];
+      assert.equal(moments.length, MOMENTS.length, `${moments.length} moment(s) écrit(s) pour ${MOMENTS.length} gardé(s)`);
+      for (const sonde of MOMENTS) {
+        assert.equal(moments.filter((m) => sonde.test(m)).length, 1, `le moment « ${sonde} » doit figurer une fois exactement`);
+      }
+
+      // ── Le pointeur, et RIEN de plus. STD-039 §2.6 : le noyau *always-on* se limite à ses
+      // quatre invariants, le reste se consulte. Un métier qui recopierait le standard entier
+      // le ferait vieillir en double — et la copie ne serait pas celle qui fait foi.
+      assert.match(sFoi.corps, /STD-039/, 'le cadre doit être pointé par son code, pour qu’on aille le lire');
     },
   },
 
@@ -928,6 +1015,53 @@ export const MUTATIONS = [
     cible: 'gardien-des-adr',
     fichier: 'metier',
     muter: (t) => permuter(t, 'motifs de défaut', "décisions d'architecture"),
+  },
+
+  // ── l'ajout 7 : les mémoires
+  {
+    id: 'le-rappel-se-met-a-faire-foi',
+    quoi: 'la mémoire dit ce qui est vrai, et le registre ne fait plus que rappeler — I3 renversé',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => permuter(t, 'où chercher', "ce qui est vrai aujourd'hui"),
+  },
+  {
+    id: 'un-rappel-vaut-une-mesure',
+    quoi: 'la règle qui a coûté le plus cher s’assouplit en recommandation',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Un rappel ne remplace jamais une mesure.**',
+      '**Un rappel vaut généralement une mesure, sauf sur les points sensibles.**',
+    ),
+  },
+  {
+    id: 'le-rappel-cesse-d-etre-borne',
+    quoi: 'le cantonnement disparaît — l’orchestrateur ramasse le vécu d’un autre projet et le prend pour le sien (I5)',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^Tout rappel épisodique se fait \*\*borné.*$/m, 'Tout rappel épisodique se fait comme il vient.'),
+  },
+  {
+    id: 'le-geste-est-nomme-par-son-mecanisme',
+    quoi: 'le métier nomme le moteur au lieu de la fonction — faux le jour où le moteur change (I1)',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace('| `/episodique` |', '| `/graphiti` (Neo4j) |'),
+  },
+  {
+    id: 'un-moment-du-rappel-disparait',
+    quoi: 'on cesse de rappeler avant de trancher — retrancher autrement ce qui l’était déjà redevient possible',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| \*\*Avant de trancher\*\* \|.*\n/m, ''),
+  },
+  {
+    id: 'les-memoires-se-lisent-l-une-par-l-autre',
+    quoi: 'la frontière entre substrats tombe — une réponse qui n’a traversé aucune des deux mémoires (I4)',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace('**Tu interroges chaque mémoire chez elle**', '**Tu interroges les mémoires par le registre**'),
   },
 
   // ── les interdits transportés, et la frontière des deux fichiers
