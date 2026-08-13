@@ -505,6 +505,31 @@ test('POSTE INJOIGNABLE + GABARITS PRÉSENTS : un JSON de contrat, et RIEN sur l
   assert.ok(!existsSync(join(depot, '.gestionnaire')), 'aucun lieu ne doit exister sur le disque');
 });
 
+test('la commande ne lit plus le jeton DANS L’ARGUMENT de la vérification', () => {
+  // ⚠️ CE QUE CE CONTRÔLE PROUVE, ET CE QU'IL NE PROUVE PAS. C'est une garde de CÂBLAGE, pas
+  // de comportement : le comportement, lui, est prouvé par les trois essais ci-dessus, qui
+  // exercent `verifierCanalOuvrable` et la pose entière. Celui-ci ferme la seule chose qu'ils
+  // ne voient pas — que la commande soit rebranchée sur l'ancien montage.
+  //
+  // Il est écrit ainsi faute de mieux : forcer l'échec du trousseau dans un processus fils
+  // supposerait de toucher au VRAI trousseau du poste, ce que la cloison interdit et ce qui a
+  // déjà coûté deux veilleurs orphelins. On garde donc la forme, en le disant.
+  const cli = readFileSync(join(REPO, 'ligne-directe', 'bin', 'ligne-directe.js'), 'utf8');
+  const branche = cli.slice(cli.indexOf("geste === 'representant'"), cli.indexOf("geste === 'orchestrateur'"));
+  assert.ok(branche.length > 100, 'la branche « representant » n’a pas été retrouvée — le contrôle ne prouverait rien');
+
+  assert.ok(
+    !/verifierCanalJoignable\s*\(\s*await\s+lireJeton/.test(branche),
+    'la lecture du jeton est repassée dans l’ARGUMENT de la vérification : son échec traverserait ' +
+      'de nouveau toute la pose, sans le moindre JSON de contrat'
+  );
+  assert.match(
+    branche,
+    /verifierCanalOuvrable\s*\(/,
+    'la commande doit passer par la vérification qui ENTOURE la lecture du jeton'
+  );
+});
+
 // ═════════════════════════════════════════ 8. HERDR — ABSENT N'EST PAS MORT
 
 test('HERDR INTROUVABLE N’EST PAS « TOUS LES AGENTS SONT MORTS »', async (t) => {
