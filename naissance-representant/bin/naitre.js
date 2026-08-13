@@ -27,15 +27,12 @@
 // rend une commande sortie en `0` doublement trompeuse : elle dit que tout va bien ET elle
 // laisse une trace qui ressemble à un succès.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
 import { realpathSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   poserGarde,
   commandesNaissance,
-  lireReponseHerdr,
   agentDetecte,
   agentPorteLeNom,
   repertoireDeLaSession,
@@ -43,8 +40,8 @@ import {
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
+import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 
-const execFileAsync = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -90,38 +87,6 @@ function option(args, nom) {
 }
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Un appel herdr, et son verdict — JAMAIS une exception.
- *
- * herdr sort non nul sur `agent_not_found` (constaté) mais rien ne garantit qu'il le fasse
- * pour tous ses refus, ni qu'il continue de le faire. On récupère donc la sortie standard
- * dans les DEUX cas et on laisse `lireReponseHerdr` trancher sur la réponse elle-même. C'est
- * ce qui ferme la porte au « code 0 alors que rien n'a abouti » : le verdict ne dépend plus
- * du code de sortie d'un service dont on n'a pas la maîtrise.
- */
-async function appelHerdr(commande, { resultatAttendu = true } = {}) {
-  try {
-    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
-    return lireReponseHerdr(stdout, { commande, resultatAttendu });
-  } catch (err) {
-    return lireReponseHerdr(err?.stdout ?? '', { commande, erreurProcessus: err, resultatAttendu });
-  }
-}
-
-/**
- * `herdr agent read` rend du TEXTE BRUT, pas du JSON — il ne passe donc pas par le lecteur
- * commun. Un échec de lecture rend `null`, que `contenuBoite` traduira en « boîte illisible »,
- * jamais en « boîte vide » : on ne livre pas dans ce qu'on ne voit pas.
- */
-async function lireEcran(commande) {
-  try {
-    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
-    return stdout;
-  } catch (err) {
-    return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;
-  }
-}
 
 /** Deux chemins désignent-ils le même répertoire ? (`/tmp` → `/private/tmp` sur macOS). */
 function memeRepertoire(a, b) {

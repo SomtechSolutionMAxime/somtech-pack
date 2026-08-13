@@ -18,19 +18,17 @@
 // C'est aussi ce qui le rend robuste au temps : le jour où le topo change de forme, ce
 // fichier n'a pas à bouger.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { lireReponseHerdr } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
 import { rendezVous, orchestrateursVivants, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
+import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { RACINE } from '../../ligne-directe/src/registre.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
+import { OUTILS, OutilIntrouvable, cheminsUtiles, lancer } from '../../ligne-directe/src/outils.js';
 
-const execFileAsync = promisify(execFile);
 const ICI = dirname(fileURLToPath(import.meta.url));
 const JOURNAL = join(RACINE, 'orchestrateur-rendez-vous.log');
 
@@ -59,40 +57,27 @@ function usage(code) {
   process.exit(code);
 }
 
-/** Un appel herdr, et son verdict — jamais une exception. Même lecteur qu'à la naissance. */
-async function appelHerdr(commande, { resultatAttendu = true } = {}) {
-  try {
-    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
-    return lireReponseHerdr(stdout, { commande, resultatAttendu });
-  } catch (err) {
-    return lireReponseHerdr(err?.stdout ?? '', { commande, erreurProcessus: err, resultatAttendu });
-  }
-}
-
-/** `herdr agent read` rend du TEXTE BRUT — un échec rend `null`, jamais « boîte vide ». */
-async function lireEcran(commande) {
-  try {
-    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
-    return stdout;
-  } catch (err) {
-    return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;
-  }
-}
-
+/**
+ * Un appel à `launchctl`, et son verdict — jamais une exception.
+ *
+ * Même séparation que dans `ligne-directe/src/service.js`, et pour la même raison : « je n'ai
+ * pas pu parler à launchd » n'est pas « le rendez-vous n'est pas chargé ». Conclure le second
+ * ferait croire au dirigeant que sa ronde ne tourne plus, alors qu'elle tourne.
+ */
 async function launchctl(args) {
   try {
-    const { stdout, stderr } = await execFileAsync('launchctl', args);
-    return { ok: true, sortie: `${stdout}${stderr}`.trim() };
+    const { stdout, stderr } = await lancer(OUTILS.launchctl, args);
+    return { ok: true, outilIntrouvable: false, sortie: `${stdout}${stderr}`.trim() };
   } catch (err) {
-    return { ok: false, sortie: `${err.stdout || ''}${err.stderr || ''}`.trim() || err.message };
+    if (err instanceof OutilIntrouvable) {
+      return { ok: false, outilIntrouvable: true, sortie: err.message };
+    }
+    return {
+      ok: false,
+      outilIntrouvable: false,
+      sortie: `${err.stdout || ''}${err.stderr || ''}`.trim() || err.message,
+    };
   }
-}
-
-/** Le PATH que le service verra — un service n'hérite d'aucun profil de shell. */
-function cheminsUtiles() {
-  const dirNode = dirname(process.execPath);
-  const usuels = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
-  return [dirNode, ...usuels].filter((v, i, t) => t.indexOf(v) === i).join(':');
 }
 
 /**
@@ -153,9 +138,15 @@ async function etatService() {
   const etats = {};
   for (const nom of Object.keys(RENDEZ_VOUS)) {
     const r = await launchctl(['print', `gui/${process.getuid()}/${rendezVous(nom).etiquette}`]);
+    if (r.outilIntrouvable) {
+      // On n'a pas posé la question : on ne répond donc pas à sa place. `charge: null` se lit
+      // « inconnu », là où `false` aurait affirmé une absence qui n'a jamais été mesurée.
+      etats[nom] = { installe: existsSync(cheminPlist(nom)), charge: null, mesure: false, motif: r.sortie };
+      continue;
+    }
     etats[nom] = r.ok
-      ? { installe: true, charge: true, etat: /\bstate = (\w+)/.exec(r.sortie)?.[1] || null }
-      : { installe: existsSync(cheminPlist(nom)), charge: false };
+      ? { installe: true, charge: true, mesure: true, etat: /\bstate = (\w+)/.exec(r.sortie)?.[1] || null }
+      : { installe: existsSync(cheminPlist(nom)), charge: false, mesure: true };
   }
   return etats;
 }

@@ -12,13 +12,11 @@
 //    herdr. Un code de sortie nul ne suffit pas : c'est la façon dont un message se perd
 //    sans que personne ne s'en aperçoive.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const execFileAsync = promisify(execFile);
+import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -72,9 +70,16 @@ export function socketHerdr() {
   return socketsHerdr()[0] || null;
 }
 
+/**
+ * `herdr` est résolu par le `PATH`, et c'est le SEUL cas où c'est justifié : il est installé
+ * par l'utilisateur, son emplacement n'est pas connu d'avance, et lui en inventer un
+ * chercherait au mauvais endroit en ayant l'air de savoir. Ce qui n'est pas justifiable, en
+ * revanche, c'est de traduire « je ne l'ai pas trouvé » en autre chose — d'où `lancer`, qui
+ * qualifie l'échec de lancement au lieu de le laisser se fondre dans les autres.
+ */
 async function herdr(args, socket) {
   const env = socket ? { ...process.env, HERDR_SOCKET_PATH: socket } : process.env;
-  const { stdout } = await execFileAsync('herdr', args, { maxBuffer: 16 * 1024 * 1024, env });
+  const { stdout } = await lancer(OUTILS.herdr, args, { maxBuffer: 16 * 1024 * 1024, env });
   return JSON.parse(stdout);
 }
 
@@ -138,7 +143,19 @@ export async function agents({ socket } = {}) {
       for (const a of (reponse.result?.agents || []).filter((x) => x.agent)) {
         if (!vus.has(a.pane_id)) vus.set(a.pane_id, { ...a, herdr_socket: s });
       }
-    } catch {
+    } catch (err) {
+      // ⚠️ UN OUTIL INTROUVABLE N'EST PAS UNE SESSION INJOIGNABLE — T-20260813-0054, et c'est
+      // la conséquence la plus chère de toute cette famille de défauts.
+      //
+      // Ce `catch` est bon pour ce pour quoi il a été écrit : une session herdr morte ne doit
+      // pas invalider les autres. Mais `herdr` absent du `PATH` fait échouer TOUTES les
+      // sessions, ce silence rend alors une liste VIDE, et une liste vide veut dire « aucun
+      // agent vivant ». En aval, `vivant()` rend `false`, le veilleur clôt la ligne d'office
+      // et répond « agent disparu » — pour un agent qui travaille, dans une session ouverte.
+      //
+      // On ne l'avale donc pas : l'appelant a déjà, à chaque site, un chemin « herdr
+      // injoignable » qui reporte au lieu de conclure. C'est celui-là qu'il faut atteindre.
+      if (err instanceof OutilIntrouvable) throw err;
       /* session injoignable : les autres restent valables */
     }
   }

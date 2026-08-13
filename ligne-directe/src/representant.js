@@ -12,6 +12,7 @@
 // exactement ce que ce lot cherche à éviter : casser un mécanisme éprouvé en le rangeant.
 
 import { trouverCanal, estMembreDuCanal } from './slack.js';
+import { lireJeton, SERVICE_ROBOT, JetonIllisible, JetonVide } from './trousseau.js';
 import {
   GABARITS,
   FICHIERS_ENV_CONNUS,
@@ -60,7 +61,96 @@ export async function verifierCanalJoignable(jetonRobot, nomCanal) {
   return { joignable: true, canal: nomCanal, id: canal.id, prive: Boolean(canal.is_private) };
 }
 
-/** Le message de refus, écrit pour être lu et suivi — jamais pour être analysé par un test. */
+/**
+ * Le canal du client est-il ouvrable — POSTE COMPRIS ?
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * CE QUE CETTE FONCTION EXISTE POUR RÉPARER (T-20260813-0054, élargissement au représentant)
+ *
+ * La lecture du jeton se faisait DANS L'ARGUMENT de la vérification, à l'appel :
+ *
+ *     verifierJoignabilite: async () => verifierCanalJoignable(await lireJeton(SERVICE_ROBOT), canal)
+ *
+ * Rien n'entourait ce `await`. Quand le trousseau ne rendait pas la valeur, l'exception
+ * TRAVERSAIT toute la pose et finissait au filet global du binaire. MESURÉ, et les trois
+ * conséquences comptent :
+ *
+ *   1. AUCUN JSON n'était rendu — alors qu'un refus `gabarits_absents`, lui, en rend un. Qui
+ *      appelle la commande par contrat ne recevait rien à lire ;
+ *   2. le « rien n'a été créé » n'était jamais dit — vrai dans les faits, jamais écrit ;
+ *   3. le message BRUT de `JetonManquant` sortait — celui qui propose
+ *      `security add-generic-password`, c'est-à-dire le geste qui écrase un secret vivant.
+ *
+ * L'orchestrateur, lui, entourait déjà sa lecture (`verifierLigneOuvrable`). Une porte sur
+ * deux, pour la septième fois sur ce dépôt.
+ *
+ * ON NE DUPLIQUE PAS LE RENVERSEMENT : `trousseau.js` décide déjà, pour les DEUX rôles, de ce
+ * qui est une absence prouvée et de ce qui ne l'est pas. Ici on ne fait que RELAYER son
+ * verdict — et le ranger du côté du POSTE, qui n'a rien à voir avec le canal.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ */
+export async function verifierCanalOuvrable({
+  canal,
+  lireJetonRobot = () => lireJeton(SERVICE_ROBOT),
+  verifier = verifierCanalJoignable,
+}) {
+  let jetonRobot;
+  try {
+    jetonRobot = await lireJetonRobot();
+  } catch (err) {
+    return {
+      joignable: false,
+      portee: 'poste',
+      motif: err instanceof JetonIllisible ? 'jeton_illisible' : err instanceof JetonVide ? 'jeton_vide' : 'jeton_absent',
+      canal,
+      message:
+        `${err.message}\n` +
+        `  Rien n'a été créé : le lieu du représentant n'est posé qu'une fois la ligne établie.\n` +
+        `  ⚠️ Ce refus parle du POSTE, pas du canal « ${canal} ». N'y cherche rien, et n'y invite ` +
+        `personne : le canal n'a même pas été consulté.`,
+    };
+  }
+  // ⚠️ LA SECONDE MOITIÉ DU MÊME DÉFAUT — RELEVÉE EN REVUE (passe 2), ET C'EST « UNE PORTE SUR
+  // DEUX » DANS LE CORRECTIF QUI PRÉTENDAIT LA FERMER.
+  //
+  // La lecture du jeton était entourée ; l'interrogation de Slack qui suit ne l'était pas.
+  // `verifierCanalJoignable` appelle le service : un jeton révoqué (`invalid_auth`), une
+  // limite de débit, un hoquet réseau — et l'exception traversait de nouveau toute la pose
+  // jusqu'au filet global du binaire. Aucun JSON de contrat, le « rien n'a été créé » jamais
+  // dit : exactement ce que ce fichier affirme trois paragraphes plus haut avoir réparé.
+  //
+  // Et le motif suit le MÊME renversement que le trousseau : on ne sait pas si le canal existe,
+  // on ne sait pas si le robot en est membre. Dire l'un ou l'autre enverrait créer un canal qui
+  // existe, ou faire inviter un robot déjà invité. On dit donc ce qu'on sait : rien.
+  try {
+    const j = await verifier(jetonRobot, canal);
+    return j.joignable ? j : { ...j, portee: 'canal' };
+  } catch (err) {
+    return {
+      joignable: false,
+      portee: 'canal',
+      motif: 'canal_illisible',
+      canal,
+      message:
+        `Le canal « ${canal} » n'a pas pu être interrogé — on ne sait donc ni s'il existe, ni si ` +
+        `notre robot en est membre.\n` +
+        `  ⚠️ CE N'EST NI L'UN NI L'AUTRE. Ne le fais pas créer et ne fais inviter personne sur la ` +
+        `foi de ce refus : les deux gestes porteraient à faux.\n` +
+        `  Cause brute, telle que Slack ou le réseau l'a rendue : ${String(err?.message ?? err).slice(0, 200)}\n` +
+        `  Rien n'a été créé : le lieu du représentant n'est posé qu'une fois la ligne établie.`,
+    };
+  }
+}
+
+/**
+ * Le message de refus D'UN CANAL, écrit pour être lu et suivi — jamais pour être analysé par
+ * un test.
+ *
+ * ⚠️ IL N'A PLUS DE CAS PAR DÉFAUT, et c'est le même renversement qu'au trousseau. Le `return`
+ * final valait « fais inviter le robot » : tout motif qui n'était pas `absent` recevait donc
+ * ce conseil, y compris un refus du poste égaré ici. Un humain aurait cherché une invitation
+ * Slack pendant que son trousseau restait verrouillé.
+ */
 export function messageDeRefus(joignabilite) {
   if (joignabilite.motif === 'absent') {
     return (
@@ -68,9 +158,17 @@ export function messageDeRefus(joignabilite) {
       `par un humain, puis relance.`
     );
   }
+  if (joignabilite.motif === 'non_membre') {
+    return (
+      `notre robot n'est pas membre de « ${joignabilite.canal} » et ne peut pas s'y mettre ` +
+      `lui-même — fais-le inviter à la main dans Slack ("/invite" depuis le canal), puis relance.`
+    );
+  }
   return (
-    `notre robot n'est pas membre de « ${joignabilite.canal} » et ne peut pas s'y mettre ` +
-    `lui-même — fais-le inviter à la main dans Slack ("/invite" depuis le canal), puis relance.`
+    joignabilite.message ||
+    `le canal « ${joignabilite.canal} » n'est pas joignable, et le motif rendu (« ` +
+      `${joignabilite.motif ?? '—'} ») n'est pas un motif de canal — ne fais rien du côté de ` +
+      `Slack sur la foi de ce refus.`
   );
 }
 
@@ -93,7 +191,10 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
     verifierLigne: async () => {
       const j = await verifierJoignabilite();
       if (j.joignable) return j;
-      return { ...j, canal, message: messageDeRefus({ ...j, canal }) };
+      // UN REFUS DU POSTE PORTE DÉJÀ SON MESSAGE, et le réécrire ici l'aurait traduit en
+      // conseil de canal — « fais inviter le robot » — pour une panne de trousseau.
+      if (j.portee === 'poste') return j;
+      return { ...j, portee: 'canal', canal, message: messageDeRefus({ ...j, canal }) };
     },
   });
 }

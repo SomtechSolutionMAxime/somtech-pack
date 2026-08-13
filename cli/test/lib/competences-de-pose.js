@@ -161,11 +161,19 @@ export function messagesDesMotifs(racine = REPO) {
   const consequence = iMessage === -1 ? '' : orchestrateur.slice(iMessage, iMessage + 600);
 
   return {
+    // T-20260813-0054. Le FILET : quoi qu'il arrive dans un vérificateur, la pose rend un refus
+    // structuré plutôt que de laisser une exception traverser sans contrat.
+    verification_impossible: blocApres(lieu, 'verification_impossible'),
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),
     jeton_absent: classe(trousseau, 'JetonManquant') + consequence,
     jeton_vide: classe(trousseau, 'JetonVide') + consequence,
+    // T-20260813-0054. Ce motif est né du refus qui MENTAIT : il disait « aucune entrée ne
+    // répond » pour trois causes sans rapport. C'est désormais le cas PAR DÉFAUT — tout ce
+    // qui n'est pas une absence prouvée y tombe. Son texte vit avec les deux autres, dans le
+    // trousseau, pour la même raison qu'eux.
+    jeton_illisible: classe(trousseau, 'JetonIllisible') + consequence,
   };
 }
 

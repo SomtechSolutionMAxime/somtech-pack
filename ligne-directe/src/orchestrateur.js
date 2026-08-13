@@ -43,7 +43,7 @@
 //   2. **on ne met aucune commande destructrice dans la bouche de personne** — c'est déjà la
 //      garantie de `trousseau.js`, et on la relaie telle quelle plutôt que de la reformuler.
 
-import { lireJetons, SERVICE_ROBOT, SERVICE_ECOUTE, JetonVide } from './trousseau.js';
+import { lireJetons, SERVICE_ROBOT, SERVICE_ECOUTE, JetonVide, JetonIllisible } from './trousseau.js';
 import { preparerLieu } from './lieu-agent.js';
 
 /**
@@ -66,15 +66,30 @@ export async function verifierLigneOuvrable({ lire = lireJetons } = {}) {
     // Le message vient du trousseau : il dit ce qui a été cherché — quel service, sous quel
     // compte — plutôt que d'affirmer une absence. On y ajoute seulement la CONSÉQUENCE, qui
     // est ce que ce module sait et que le trousseau ignore : sans ligne, pas d'orchestrateur.
+    //
+    // TROIS MOTIFS, PAS DEUX (T-20260813-0054). `jeton_absent` était le FOURRE-TOUT : il
+    // recevait aussi bien l'entrée réellement absente que le binaire introuvable et le
+    // trousseau verrouillé. C'est ce refus-là que le dirigeant a reçu, deux jetons valides en
+    // poche, trois fois pour trois causes sans rapport.
+    //
+    // Ce module ne rejuge rien : la discrimination appartient au trousseau, qui exige une
+    // preuve POSITIVE d'absence avant de lever `JetonManquant`. Ici on se contente de relayer
+    // le verdict — et de ne pas ajouter, à un refus qui dit « je ne sais pas », une
+    // conséquence qui parlerait comme s'il savait.
+    const illisible = err instanceof JetonIllisible;
     return {
       joignable: false,
-      motif: err instanceof JetonVide ? 'jeton_vide' : 'jeton_absent',
+      motif: illisible ? 'jeton_illisible' : err instanceof JetonVide ? 'jeton_vide' : 'jeton_absent',
       message:
         `${err.message}\n` +
         `  Rien n'a été créé : un orchestrateur né sans ligne tranche seul ce qui ne lui appartient pas, ` +
         `ou dort jusqu'à ce que quelqu'un passe — les deux ont été observés.\n` +
-        `  Sa ligne lui sert à parler ET à entendre : les deux entrées (« ${SERVICE_ROBOT} » et ` +
-        `« ${SERVICE_ECOUTE} ») sont requises. Rétablis celle qui manque, puis relance.`,
+        (illisible
+          ? `  Ne dépose RIEN sur la foi de ce refus : on ignore ce que le trousseau contient, et écrire ` +
+            `par-dessus une entrée qui fonctionne la perdrait. Lève la cause que le refus montre, relance — ` +
+            `c'est alors seulement qu'un verdict pourra parler des entrées.`
+          : `  Sa ligne lui sert à parler ET à entendre : les deux entrées (« ${SERVICE_ROBOT} » et ` +
+            `« ${SERVICE_ECOUTE} ») sont requises. Rétablis celle qui manque, puis relance.`),
     };
   }
 }

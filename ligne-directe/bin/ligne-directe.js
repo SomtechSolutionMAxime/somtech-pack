@@ -17,7 +17,7 @@ import { parler, passerLaMain } from '../src/client.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
-import { preparerLieuRepresentant, verifierCanalJoignable } from '../src/representant.js';
+import { preparerLieuRepresentant, verifierCanalOuvrable } from '../src/representant.js';
 import { preparerLieuOrchestrateur } from '../src/orchestrateur.js';
 
 function usage(code = 0) {
@@ -203,7 +203,10 @@ if (geste === 'relever') {
     depotClient,
     client,
     canal,
-    verifierJoignabilite: async () => verifierCanalJoignable(await lireJeton(SERVICE_ROBOT), canal),
+    // La lecture du jeton passe DANS la vérification, jamais dans son argument : lue ici, son
+    // échec traversait toute la pose sans produire le moindre JSON de contrat, et déversait
+    // sur stderr un message qui proposait d'écraser un secret (T-20260813-0054).
+    verifierJoignabilite: () => verifierCanalOuvrable({ canal }),
   });
   process.stdout.write(`${JSON.stringify(r)}\n`);
   // Le JSON est le contrat de qui appelle ; le motif écrit en clair est celui de qui LIT. Sans

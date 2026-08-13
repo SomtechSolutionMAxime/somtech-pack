@@ -73,7 +73,17 @@ test('le point d’écriture de la pose est unique, et il est derrière les troi
   assert.ok(debutPose > 0, 'la fonction de pose a été renommée : cette garde ne mord plus');
 
   const corps = source.slice(debutPose);
-  const gardes = ['const etat = etatLieu', 'const source = etatSource', 'const ligne = await verifierLigne'];
+  // ⚠️ LA TROISIÈME GARDE EST DÉSIGNÉE PAR SON APPEL, PAS PAR SA DÉCLARATION (T-20260813-0054).
+  //
+  // Elle était épinglée sur « const ligne = await verifierLigne ». La vérification est désormais
+  // ENTOURÉE d'un try/catch — un vérificateur qui jette doit rendre un refus structuré, jamais
+  // laisser une exception traverser la pose sans contrat (le défaut mesuré côté représentant).
+  // La déclaration s'écrit donc `let ligne;` et l'appel vit une ligne plus bas.
+  //
+  // Ce qui est gardé ici n'a pas bougé d'un pouce : la troisième garde EXISTE et vient APRÈS
+  // les deux autres. C'est l'appel qui le dit, pas la forme de la déclaration — laquelle ne
+  // garantissait rien de plus.
+  const gardes = ['const etat = etatLieu', 'const source = etatSource', '= await verifierLigne'];
   const rangs = gardes.map((g) => corps.indexOf(g));
   for (const [i, rang] of rangs.entries()) {
     assert.ok(rang > 0, `la garde « ${gardes[i]} » a disparu de la pose`);

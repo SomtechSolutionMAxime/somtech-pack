@@ -194,14 +194,51 @@ export async function preparerLieu({ depot, role, nom, verifierLigne }) {
   // un agent né sans ligne est muet et croit parler. Ce que « la ligne peut exister » veut
   // dire diffère (un canal client déjà joignable ; un poste capable d'en ouvrir un), mais le
   // refus, lui, est le même geste : on ne crée rien.
-  const ligne = await verifierLigne();
+  // ⚠️ LE FILET, ET IL EST STRUCTUREL — RELEVÉ EN REVUE (passe 2).
+  //
+  // Chaque vérificateur entoure ses propres appels, et chacun l'a appris à ses dépens : le
+  // trousseau du côté de l'orchestrateur, puis Slack du côté du représentant, deux fois le même
+  // défaut. Compter sur la discipline de CHAQUE vérificateur, présent et à venir, c'est
+  // reconduire « une porte sur deux » — le motif que ce chantier existe pour fermer.
+  //
+  // On ferme donc ici, une fois : quoi qu'il arrive dans un vérificateur, la pose rend un REFUS
+  // STRUCTURÉ. Jamais une exception qui traverse et laisse l'appelant sans contrat. Et le motif
+  // suit le même renversement que partout ailleurs — on ne conclut rien de ce qu'on n'a pas su
+  // mesurer, et on ne propose aucun geste.
+  let ligne;
+  try {
+    ligne = await verifierLigne();
+  } catch (err) {
+    return {
+      ok: false,
+      cree: false,
+      role,
+      nom,
+      refus: {
+        motif: 'verification_impossible',
+        portee: null,
+        message:
+          `La vérification préalable a échoué sans rendre de verdict — on ne sait donc pas si la ` +
+          `ligne de « ${nom} » pouvait être ouverte.\n` +
+          `  ⚠️ N'en conclus RIEN, et ne répare rien à l'aveugle : ni le trousseau, ni le canal, ni ` +
+          `les gabarits n'ont été mis en cause ici.\n` +
+          `  Cause brute, telle qu'elle a été levée : ${String(err?.message ?? err).slice(0, 300)}\n` +
+          `  Rien n'a été créé : le lieu n'est posé qu'après un verdict favorable.`,
+      },
+    };
+  }
   if (!ligne.joignable) {
     return {
       ok: false,
       cree: false,
       role,
       nom,
-      refus: { motif: ligne.motif, message: ligne.message },
+      // `portee` DIT DE QUOI ON PARLE, et ce n'est pas une commodité (T-20260813-0054) : un
+      // refus du POSTE (le trousseau ne rend pas la valeur) et un refus du CANAL (le robot n'y
+      // est pas invité) se lèvent par deux gestes qui n'ont AUCUN rapport. Les confondre a
+      // envoyé chercher du côté de Slack un défaut qui était sur le poste — et enverrait, à
+      // l'inverse, faire inviter un robot dans un canal pendant qu'un trousseau reste verrouillé.
+      refus: { motif: ligne.motif, portee: ligne.portee ?? null, message: ligne.message },
     };
   }
 
