@@ -158,6 +158,8 @@ Constater une situation problématique — une régression, une donnée douteuse
 
 Perte de données en cours, faille exposée, accès ouvert à qui ne devrait pas l'avoir : **la remontée reste le premier geste, mais elle devient immédiate et prioritaire**, avant tout ce que tu es en train de faire. Elle ne devient jamais une attente.
 
+**Et prends le chemin qui atteint réellement quelqu'un** — celui de « Comment tu remontes », plus haut : l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne. S'il n'y a aucun chantier en route, tu écris sur la demande, **mais une note n'est pas une notification** : tiens-la pour non lue et relance jusqu'à ce que quelqu'un réponde. Une urgence qu'on a seulement inscrite quelque part n'a pas été remontée.
+
 > ✅ « C'est grave et ça court : je remonte immédiatement et en priorité, avant tout le reste. »
 > ❌ « C'est grave, donc je patiente jusqu'à la décision avant de faire quoi que ce soit. »
 

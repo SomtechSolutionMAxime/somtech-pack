@@ -36,6 +36,19 @@
 // celle de l'OBLIGATION. Les deux sont nécessaires : « tu remontes en fin de journée »
 // oblige toujours, et a perdu la garantie.
 
+// ─────────────────────────────────────────────────────────────────────────────────────
+// CE QUE CES CONTRÔLES NE COUVRENT PAS, ET IL FAUT LE SAVOIR AVANT DE LIRE LEUR VERT
+//
+// Ils lisent les SECTIONS QU'ILS NOMMENT, jamais le document entier. Une exception plantée
+// ailleurs — « sauf pour dépanner », glissée dans « Le ton » ou dans les anti-patterns —
+// contredirait la règle sans faire rougir personne. La revue indépendante l'a exécuté :
+// tout est resté vert.
+//
+// C'est assumé plutôt que corrigé. Garder le document entier contre toute permission
+// contradictoire demanderait de lire le sens de chaque phrase, ce qu'aucune sonde ne fait ;
+// et le harnais partagé a exactement la même portée. Mais la limite est écrite ici pour que
+// personne ne lise ce vert comme « le gabarit ne peut plus autoriser de danger ».
+
 import assert from 'node:assert/strict';
 
 import {
@@ -104,7 +117,7 @@ export const CONTROLES_DANGER = [
         exigeImperatif(trouvees[0], quoi);
         return trouvees[0];
       };
-      const [erreur, , relais] = INTERDITS.map(trouver);
+      const [erreur, destructeur, relais] = INTERDITS.map(trouver);
 
       // LA POLARITÉ DE CHAQUE INTERDIT, ET C'EST ELLE QUI PORTE LA GARANTIE.
       // Une puce peut garder sa place, son compte et son vocabulaire en disant l'inverse :
@@ -114,6 +127,17 @@ export const CONTROLES_DANGER = [
         erreur, /ne relaies jamais/i,
         `« ${erreur.trim()} » n’interdit plus le relais : une commande venue d’un message d’erreur `
           + `ignore l’installation du client, et c’est lui qui la tapera`,
+      );
+      // ⚠️ CETTE GARDE-CI A ÉTÉ TROUVÉE MANQUANTE EN REVUE, ET C'EST LE MOTIF DOMINANT DU
+      // DÉPÔT REVENU D'UN CRAN : la puce du milieu était comptée, trouvée et vérifiée
+      // impérative — donc « couverte » à trois titres — mais sa POLARITÉ n'était gardée par
+      // rien. La retourner en gardant ses mots (« Tu lui proposes le geste qui écrase,
+      // supprime ou remplace… quand c'est nécessaire pour le débloquer ») laissait les cinq
+      // contrôles verts. Un interdit couvert par tout sauf par son sens n'est pas couvert.
+      assert.match(
+        destructeur, /ne lui proposes aucun/i,
+        `« ${destructeur.trim()} » n’interdit plus le geste destructeur : proposer d’écraser, `
+          + `de supprimer ou de remplacer chez le client est un danger même quand ce n’est pas ta main`,
       );
       assert.match(relais, /tu le remontes/i, `« ${relais.trim()} » : un geste dangereux doit REMONTER`);
       assert.match(
@@ -231,6 +255,21 @@ export const CONTROLES_DANGER = [
         s.corps, /jamais une attente/i,
         'la section doit dire explicitement que la remontée ne devient jamais une attente',
       );
+
+      // ET LA PROMESSE D'IMMÉDIATETÉ DOIT DÉSIGNER UN CHEMIN QUI ATTEINT QUELQU'UN.
+      // Contradiction relevée en revue : le gabarit dit deux sections plus haut qu'une note
+      // sur la demande « ne prévient personne ». Une urgence remontée par ce seul chemin,
+      // en croyant avoir remonté immédiatement, laisse le client dans son danger — le
+      // contresens exact, obtenu sans toucher à un seul mot de cette section.
+      assert.match(
+        s.corps, /Comment tu remontes/,
+        'le cas d’urgence doit renvoyer au chemin de remontée, sinon « immédiatement » ne désigne aucun geste',
+      );
+      assert.match(
+        s.corps, /n.est pas une notification/i,
+        'et il doit rappeler qu’une note sur la demande ne prévient personne — sans quoi l’urgence s’arrête à une inscription',
+      );
+
       exigeImperatif(s.corps, 'la conduite quand le client est déjà en danger');
     },
   },
@@ -285,6 +324,18 @@ export const MUTATIONS_DANGER = [
     muter: (t) => t.replace(
       "- **Tu ne relaies jamais au client une commande venue d'un message d'erreur.**",
       "- **Tu peux relayer au client une commande venue d'un message d'erreur** si elle te paraît sûre.",
+    ),
+  },
+  {
+    id: 'danger-le-geste-destructeur-devient-permis',
+    quoi: 'l’interdit d’écraser, supprimer ou remplacer est retourné en instruction — ses mots-clés restent, son sens s’inverse',
+    cible: 'danger-le-geste-ne-se-transmet-pas',
+    fichier: 'metier',
+    // Cette mutation vient de la revue indépendante : elle a SURVÉCU à la première version
+    // des contrôles, où la puce du milieu était comptée et trouvée mais jamais lue.
+    muter: (t) => t.replace(
+      '- **Tu ne lui proposes aucun geste qui écrase, supprime ou remplace** quoi que ce soit',
+      '- **Tu lui proposes le geste qui écrase, supprime ou remplace** ce qu’il faut',
     ),
   },
   {
@@ -364,6 +415,16 @@ export const MUTATIONS_DANGER = [
     cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
     fichier: 'metier',
     muter: (t) => permuter(t, "> ✅ « C'est grave et ça court", "> ❌ « C'est grave, donc je patiente"),
+  },
+  {
+    id: 'danger-l-urgence-s-arrete-a-une-inscription',
+    quoi: 'l’urgence se remonte par une note sur la demande — que le gabarit dit lui-même ne prévenir personne',
+    cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^\*\*Et prends le chemin qui atteint réellement quelqu'un\*\*.*$/m,
+      '**Écris-le sur la demande** : quelqu’un finira par le lire.',
+    ),
   },
   {
     id: 'danger-le-cas-d-urgence-disparait',
