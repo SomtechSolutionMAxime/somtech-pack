@@ -97,6 +97,35 @@ export const CONTROLES = [
       const competence = readFileSync(join(REPO, CHEMIN_COMPETENCE), 'utf8');
       const dansLeGabarit = new Map(sections(metier).map((s) => [s.titre, s.corps]));
 
+      // ⚠️ LE PRÉAMBULE D'ABORD, ET C'EST UN TROU QU'UNE REVUE A TROUVÉ.
+      //
+      // `sections()` ne rend que ce qui suit un titre : tout ce qui précède la première
+      // section échappait donc à la comparaison. Or c'est là que vivent LES DEUX PRINCIPES
+      // FONDATEURS et le « tu ne codes pas ». Retirer « l'orchestrateur ne déploie que des
+      // chefs d'équipe qui gèrent des sous-agents » ne faisait rougir personne — le cœur du
+      // métier était le seul endroit non gardé.
+      //
+      // Le préambule du gabarit s'ouvre légitimement sur autre chose (son titre, la frontière
+      // des deux fichiers, l'appel au contexte) et le verbe change — on ne DEVIENT pas
+      // l'orchestrateur d'un `CLAUDE.md`, on l'EST. La comparaison porte donc sur tout ce qui
+      // suit ce pivot, et exige une inclusion littérale.
+      const PIVOT = "d'un chantier. Il en existe trois formes";
+      const preambuleSource = competence.split(/^##\s/m)[0];
+      const pivot = preambuleSource.indexOf(PIVOT);
+      assert.ok(pivot > 0, `le pivot du préambule (« ${PIVOT} ») a disparu de la compétence : la comparaison ne mordrait plus`);
+      const commun = preambuleSource.slice(pivot);
+      assert.ok(
+        commun.length > 1200,
+        `le préambule commun ne fait que ${commun.length} caractères : trop court pour que son `
+          + `inclusion prouve quoi que ce soit`,
+      );
+      assert.ok(
+        metier.split(/^##\s/m)[0].includes(commun),
+        'le PRÉAMBULE du métier a été réécrit en étant déplacé — c\'est là que vivent les deux '
+          + 'principes fondateurs (« un agent qui orchestre n\'exécute jamais », « l\'orchestrateur '
+          + 'ne déploie que des chefs d\'équipe qui gèrent des sous-agents ») et le « tu ne codes pas »',
+      );
+
       const perdues = [];
       const reecrites = [];
       let comparees = 0;
@@ -474,8 +503,19 @@ export const CONTROLES = [
         assert.ok(!sonde.test(fait), `« ${quoi} » figure du côté de ce qu’il fait — la table est inversée`);
       }
 
-      // Et le principe fondateur, hors table.
-      assert.match(metier, /Un agent qui orchestre n'exécute jamais\./, 'le premier principe doit avoir voyagé intact');
+      // Et LES DEUX principes fondateurs, hors table.
+      //
+      // La première version n'en gardait qu'un, alors que son titre en promettait trois. Une
+      // revue a retiré le second — celui qui interdit d'ouvrir un agent qui ne soit pas un
+      // chef d'équipe — et rien n'a rougi : le contrôle regardait ce qui était certain d'être
+      // là plutôt que ce qu'il prétendait garder. C'est le motif dominant du dépôt, appliqué
+      // cette fois à une garde que j'écrivais moi-même.
+      for (const [principe, quoi] of [
+        [/Un agent qui orchestre n'exécute jamais\./, 'le premier principe — orchestrer n’est pas exécuter'],
+        [/L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents\./, 'le second principe — il n’ouvre que des chefs d’équipe'],
+      ]) {
+        assert.match(metier, principe, `${quoi} doit avoir voyagé intact`);
+      }
     },
   },
 
@@ -574,6 +614,26 @@ export const MUTATIONS = [
       '**Le niveau se lit dans le rôle, jamais dans un seuil.**',
       '**Le niveau se lit dans un seuil : deux périmètres parallèles, ou cinq agents à coordonner.**',
     ),
+  },
+
+  {
+    id: 'revue-P1-le-preambule-est-reecrit',
+    quoi: 'le « tu ne codes pas » du préambule devient son contraire — hors de toute section, donc hors de la comparaison',
+    cible: 'le-metier-a-voyage-entier',
+    fichier: 'metier',
+    // Trouvée par la PASSE 1 de la revue indépendante : le préambule échappait entièrement à
+    // la garde de fidélité, `sections()` ne rendant que ce qui suit un titre.
+    muter: (t) => t.replace(
+      "**Tu ne codes pas.** Tu cadres, tu découpes",
+      "**Tu peux coder ce qui va vite.** Tu cadres, tu découpes",
+    ),
+  },
+  {
+    id: 'revue-P1-le-second-principe-fondateur-disparait',
+    quoi: 'le principe « l’orchestrateur ne déploie que des chefs d’équipe » est retiré — il ouvrait ce qu’il voulait',
+    cible: 'il-orchestre-il-n-execute-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^> \*\*L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents\.\*\*\n/m, ''),
   },
 
   // ── ajout 3 : la ligne obligatoire (le retrait)
