@@ -24,7 +24,9 @@ Le résultat, quand tout va bien :
         ├── CONTEXTE.md             ← ce qui est propre à ce dépôt — à la main, jamais écrasé
         ├── .mcp.json               ← le ServiceDesk et Somcraft
         └── .claude/
-            └── settings.json       ← lecture du dépôt, sa ligne, herdr, les deux registres
+            └── settings.json       ← ce qu'il peut : lire le dépôt, sa ligne, herdr, les deux
+                                       registres. Ce qu'il ne peut PAS : écrire un fichier,
+                                       ouvrir un sous-agent — refusé, pas seulement non autorisé
 ```
 
 > **Pourquoi `settings.json` n'est pas à plat, contrairement à `.mcp.json`.** Claude Code ne
@@ -33,6 +35,15 @@ Le résultat, quand tout va bien :
 > l'orchestrateur ne borneraient rien, en silence. C'est un défaut déjà vécu sur le lot
 > jumeau — corrigé avant fusion, gardé depuis par un test qui ancre le placement sur ce dépôt
 > lui-même plutôt que sur une supposition.
+
+> **Ce fichier ne fait pas qu'autoriser : il refuse.** Depuis T-20260813-0062, il porte une
+> liste de refus — écrire ou modifier un fichier, ouvrir un sous-agent —, et cette distinction
+> n'est pas cosmétique : **une autorisation est ignorée en entier tant que le dossier n'a pas
+> été approuvé une première fois, alors qu'un refus tient dès la naissance** (mesuré sur
+> Claude Code 2.1.231). C'est ce qui rend « un agent qui orchestre n'exécute jamais » mécanique
+> plutôt que prescriptif. Ne retire aucune de ces lignes en croyant simplifier : son métier
+> promet au lecteur ce que ce fichier refuse, et un texte qui promet ce que le fichier autorise
+> est une garantie fausse.
 
 > **Ce que cette compétence n'est pas.** Elle ne cadre aucun chantier, ne découpe rien,
 > n'ouvre aucun chef d'équipe, ne tient aucun registre. Ça, c'est le métier de l'orchestrateur

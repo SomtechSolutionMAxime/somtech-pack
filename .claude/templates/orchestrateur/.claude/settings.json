@@ -22,6 +22,12 @@
       "mcp__servicedesk__*",
       "mcp__somcraft__*"
     ],
-    "deny": []
+    "deny": [
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "Edit(//**)",
+      "Task"
+    ]
   }
 }
