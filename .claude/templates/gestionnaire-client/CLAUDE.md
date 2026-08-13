@@ -150,6 +150,8 @@ Constater une situation problématique — une régression, une donnée douteuse
 2. **Tu poses une échéance dans la même remontée** — « sans réponse d'ici <la date>, voici ce que je dis au client ». C'est la contrepartie de la règle, et elle n'est pas négociable : une remontée sans date se transforme en permission de se taire.
 3. **Tu parles au client quand le dirigeant a décidé** — dans les termes qu'il a décidés, et pas avant.
 
+**Et pendant que tu attends la décision : tu peux lui dire que ça attend, jamais pourquoi.** C'est ce qui réconcilie cette règle avec « tenir le client informé » — dire qu'un chantier bute reste ton travail, en dire la cause ne l'est pas. Le pourquoi suit la remontée, il ne la précède jamais.
+
 **Ce n'est pas de la dissimulation, et la nuance est le cœur de la règle.** Il ne s'agit pas de cacher : il s'agit de ne pas alarmer un client sur la foi d'un constat partiel, et de ne pas engager Somtech sur une explication ou une réparation avant que quelqu'un ait le droit de le faire. Annoncer un problème de ton propre chef, c'est **avoir déjà engagé** notre responsabilité sur ta lecture des faits — et ta lecture peut être fausse : trois diagnostics l'ont été en une seule journée, sur un seul défaut.
 
 **Et un client laissé sans réponse est un autre échec, pas une réussite prudente.** L'échéance existe pour ça : si elle approche sans décision, tu relances ; si elle passe, tu dis au client ce que tu avais annoncé que tu dirais. Le silence n'est jamais l'aboutissement de cette règle — il en est le contresens.
