@@ -518,3 +518,50 @@ test('COMMANDE — un nom qui ne se résout pas fait échouer la désignation EN
     assert.deepEqual(dabord, { ok: false, inconnu: 'parti@somtech.ca' });
   });
 });
+
+test('TRAME — un message de robot dans le canal commun ne fait rien faire à personne', async () => {
+  // Dernier chemin de rupture listé en revue, et il passe par la VRAIE porte d'entrée
+  // (`traiterTrame`), pas par la méthode de diffusion : c'est le seul moyen de prouver que les
+  // filtres d'amont s'appliquent aussi à ce canal. Un robot d'intégration qui poste un rapport
+  // dans le canal des annonces — un déploiement, une alerte de dépôt — réveillerait sinon tous
+  // les agents du poste sous le cadre « consigne du dirigeant ».
+  const travail = agentsQuiTravaillent({ panes: ['w1:p1'] });
+  await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
+    const v = veilleur({ herdr: travail });
+    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+
+    const trame = (event) => ({ data: JSON.stringify({ type: 'events_api', payload: { event } }) });
+    const ws = { send() {}, close() {} };
+
+    await v.traiterTrame(trame({ type: 'message', channel: 'C_ANNONCES', bot_id: 'B9', text: 'déploiement terminé' }), ws);
+    assert.equal(existsSync(travail.fichier('w1:p1')), false, 'un robot ne parle pas à tous les agents');
+
+    // LE CAS QUI DÉPARTAGE LES DEUX GARDES, et il a fallu une mutation pour le trouver : le
+    // refus ci-dessus tient par l'AUTORISATION (un message de robot n'a pas d'auteur), pas par
+    // le filtre des robots — supprimer `if (ev.bot_id) return` ne faisait rougir personne.
+    //
+    // Une application Slack qui poste AU NOM de quelqu'un — un flux de travail, une intégration
+    // de dépôt — rend une trame qui porte `bot_id` ET l'auteur humain. L'auteur est alors
+    // autorisé, et seul le filtre des robots reste entre une notification automatique et le
+    // pane de TOUS les agents du poste, sous le cadre « consigne du dirigeant ».
+    await v.traiterTrame(
+      trame({ type: 'message', channel: 'C_ANNONCES', bot_id: 'B9', user: DIRIGEANT, text: 'build #412 échoué' }),
+      ws
+    );
+    assert.equal(
+      existsSync(travail.fichier('w1:p1')),
+      false,
+      'un robot qui poste au nom du dirigeant ne réveille pas le poste'
+    );
+
+    // Et le veilleur lui-même, s'il se relisait : impossible par construction (il n'écrit jamais
+    // ici), mais le filtre doit tenir quand même.
+    await v.traiterTrame(trame({ type: 'message', channel: 'C_ANNONCES', user: 'UMOI', text: 'écho' }), ws);
+    assert.equal(existsSync(travail.fichier('w1:p1')), false);
+
+    // La même trame, du dirigeant, passe : c'est ce qui rend les deux refus ci-dessus lisibles.
+    await v.traiterTrame(trame({ type: 'message', channel: 'C_ANNONCES', user: DIRIGEANT, text: 'mettez à jour' }), ws);
+    assert.match(readFileSync(travail.fichier('w1:p1'), 'utf8'), /mettez à jour/);
+    assert.deepEqual(monde.postes, []);
+  });
+});
