@@ -5,6 +5,13 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.40.0] - 2026-08-13
+
+### Ajouté
+
+- **Le gestionnaire client ne crée jamais de danger chez le client, et un problème remonte avant d'être dit** (T-20260813-0061, PR #208). Onzième règle de conduite du représentant, et la seule qui borne toutes les autres : les dix précédentes disent comment bien servir, celle-ci dit ce qu'on ne fait jamais. Deux interdits distincts — **le geste** (il ne relaie jamais au client une commande venue d'un message d'erreur, et ne lui propose aucun geste qui écrase, supprime ou remplace ; s'il en faut un, il remonte) et **la parole** (constater une situation problématique ne l'autorise pas à en informer le client — le dirigeant décide si, quand et comment ça se dit).
+- **Les deux garde-fous qui empêchent la règle de nuire**, écrits avec elle parce qu'une règle mal bornée coûte plus cher que pas de règle : elle ne devient jamais un prétexte au silence — la remontée est faite au moment du constat, avec ce qui est mesuré, ce qui reste incertain, et une échéance ; et elle ne s'applique pas quand le client subit déjà quelque chose de grave — perte de données, faille exposée —, où elle devient « remonte immédiatement et en priorité ». 28 mutations posées, 28 attrapées, et quatre reformulations légitimes exigées vertes : le harnais sait désormais distinguer une règle affaiblie d'une règle réécrite.
+
 ## [1.39.0] - 2026-08-13
 
 ### Ajouté
