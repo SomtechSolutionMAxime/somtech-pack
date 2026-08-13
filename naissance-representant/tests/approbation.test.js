@@ -11,12 +11,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
   approuverLieu, avecApprobation, dejaApprouve, ConfigIllisible, cheminConfig,
+  serveursDuLieu, formesDuLieu,
 } from '../src/approbation.js';
 
 function bac() {
@@ -118,10 +119,118 @@ test('l’écriture est ATOMIQUE, et ne laisse aucun provisoire derrière elle',
   assert.deepEqual(restes, [], `des fichiers provisoires subsistent : ${restes.join(', ')}`);
 });
 
-test('le chemin est RÉSOLU — un lieu relatif et son absolu ne font pas deux entrées', () => {
-  const config = { projects: { [process.cwd()]: { hasTrustDialogAccepted: true } } };
-  assert.equal(dejaApprouve(config, '.'), true);
-  assert.equal(Object.keys(avecApprobation(config, '.').projects).length, 1);
+test('les DEUX portes sont exigées : le dossier de confiance ET les serveurs qu’il déclare', () => {
+  // TROUVÉ EN REVUE (passe 1). Un lieu approuvé mais dont les serveurs ne sont pas activés
+  // laisse la session s'arrêter sur le second écran — celui qui a coûté le deuxième aller-
+  // retour. Ne vérifier qu'une porte ferait croire à l'appelant qu'il n'a rien à faire.
+  const d = bac();
+  writeFileSync(join(d, '.mcp.json'), JSON.stringify({ mcpServers: { servicedesk: {}, somcraft: {} } }));
+  // Sur TOUTES les formes du lieu : « déjà approuvé » ne vaut que si chacune l'est, sinon la
+  // session démarrerait sous la forme oubliée et retrouverait l'écran.
+  const surToutesLesFormes = (projet) => ({
+    projects: Object.fromEntries(formesDuLieu(d).map((f) => [f, projet])),
+  });
+
+  assert.equal(
+    dejaApprouve(surToutesLesFormes({ hasTrustDialogAccepted: true }), d), false,
+    'le dossier seul a suffi : le second écran arrêterait la session',
+  );
+  assert.equal(
+    dejaApprouve(surToutesLesFormes({ hasTrustDialogAccepted: true, enabledMcpjsonServers: ['servicedesk'] }), d), false,
+    'un seul serveur sur deux a suffi — « une porte sur deux »',
+  );
+  assert.equal(
+    dejaApprouve(surToutesLesFormes({ hasTrustDialogAccepted: true, enabledMcpjsonServers: ['servicedesk', 'somcraft'] }), d),
+    true,
+  );
+  // Et une seule forme approuvée ne suffit pas non plus — c'est le défaut mesuré du 2026-08-13.
+  assert.equal(
+    dejaApprouve(
+      { projects: { [formesDuLieu(d)[0]]: { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['servicedesk', 'somcraft'] } } },
+      d,
+    ),
+    formesDuLieu(d).length === 1,
+    'une seule forme approuvée a suffi alors que le lieu en porte deux',
+  );
+});
+
+test('les serveurs déclarés par le lieu sont ACTIVÉS — sinon la session s’arrête sur le second écran', () => {
+  // TROUVÉ EN REVUE (passe 1) : aucun test ne prouvait la fusion elle-même. Oublier
+  // `enabledMcpjsonServers` dans l'écriture serait resté vert.
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(join(d, '.mcp.json'), JSON.stringify({ mcpServers: { servicedesk: {}, somcraft: {} } }));
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+
+  approuverLieu(d, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[d];
+  assert.deepEqual([...projet.enabledMcpjsonServers].sort(), ['servicedesk', 'somcraft']);
+});
+
+test('un serveur activé à la main pour ce lieu SURVIT — union, jamais remplacement', () => {
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(join(d, '.mcp.json'), JSON.stringify({ mcpServers: { servicedesk: {} } }));
+  writeFileSync(config, JSON.stringify({ projects: { [d]: { enabledMcpjsonServers: ['un-autre'] } } }));
+
+  approuverLieu(d, { chemin: config });
+  const actifs = JSON.parse(readFileSync(config, 'utf8')).projects[d].enabledMcpjsonServers;
+  assert.deepEqual([...actifs].sort(), ['servicedesk', 'un-autre']);
+});
+
+test('la liste des serveurs vient du lieu, jamais d’une liste écrite en dur', () => {
+  // Un gabarit qui gagne un serveur demain doit être couvert sans que ce module bouge — c'est
+  // le même principe qu'ailleurs : énumérer depuis la source plutôt que compter en dur.
+  const d = bac();
+  writeFileSync(join(d, '.mcp.json'), JSON.stringify({ mcpServers: { alpha: {}, beta: {}, gamma: {} } }));
+  assert.deepEqual(serveursDuLieu(d).sort(), ['alpha', 'beta', 'gamma']);
+
+  // Un lieu sans `.mcp.json`, ou illisible, ne déclare rien — et ne fait échouer aucune
+  // naissance : l'écran d'activation n'apparaît que s'il y a quelque chose à activer.
+  assert.deepEqual(serveursDuLieu(bac()), []);
+  const casse = bac();
+  writeFileSync(join(casse, '.mcp.json'), '{ pas du json');
+  assert.deepEqual(serveursDuLieu(casse), []);
+});
+
+test('les DEUX formes d’un même lieu sont approuvées quand elles diffèrent', () => {
+  // TROUVÉ EN REVUE (passe 1) : la version d'avant s'appuyait sur `process.cwd()`, donc son
+  // verdict dépendait du répertoire d'où on lançait la suite — verte en intégration continue,
+  // rouge ailleurs. Un test dont le résultat dépend d'où on l'appelle ne prouve rien.
+  //
+  // ET LA VERSION SUIVANTE NE MORDAIT PAS DAVANTAGE, pour une raison plus fine : elle bouclait
+  // sur ce que `formesDuLieu` rendait. Réduire cette fonction à une seule forme la laissait
+  // VERTE — la garde se conformait à l'implémentation au lieu de la contraindre. C'est le
+  // motif 1 du brief de revue, appliqué à une garde que j'écrivais moi-même.
+  //
+  // On calcule donc les deux formes ICI, depuis le système, sans jamais demander au code
+  // testé ce qu'il en pense.
+  const d = bac();
+  const normalise = resolve(d);
+  const reel = realpathSync(normalise);
+  assert.notEqual(
+    reel, normalise,
+    'sur ce système les deux formes coïncident : ce test ne peut rien prouver ici et doit être revu, pas ignoré',
+  );
+
+  const config = join(d, 'config.json');
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+  approuverLieu(d, { chemin: config });
+
+  const projets = JSON.parse(readFileSync(config, 'utf8')).projects;
+  for (const forme of [normalise, reel]) {
+    assert.equal(
+      projets[forme]?.hasTrustDialogAccepted, true,
+      `la forme « ${forme} » n’a pas été approuvée — la session démarrée sous ce nom retrouverait l’écran de confiance`,
+    );
+  }
+
+  // Et une seule forme approuvée ne doit PAS suffire à dire « déjà approuvé » : sinon la
+  // relance suivante ne réparerait pas l'oubli.
+  assert.equal(
+    dejaApprouve({ projects: { [normalise]: projets[normalise] } }, d), false,
+    'une seule forme a suffi — la session démarrée sous l’autre nom s’arrêterait quand même',
+  );
 });
 
 test('la configuration visée est bien celle du poste', () => {
