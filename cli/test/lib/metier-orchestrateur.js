@@ -1253,7 +1253,15 @@ export const CONTROLES = [
       // réécrite en « **Écrire ou modifier un fichier** — tu peux le faire n'importe où »
       // garde les mots gardés et dit le contraire. On garde donc aussi la MODALITÉ de chaque
       // cellule : un refus qui s'assouplit ou qui s'excepte cesse d'être un refus.
-      for (const cellule of cellules) exigeContrainte(cellule, `le refus « ${cellule.slice(0, 45)}… »`);
+      //
+      // ⚠️ LES DEUX COLONNES, ET C'EST LA REVUE DE FOND QUI L'A EXIGÉ. Ne tenir la modalité que
+      // sur la colonne des refus laissait poser l'exception dans la colonne d'à côté : « … tu
+      // n'ouvres que des chefs d'équipe, SAUF pour la revue à deux passes, que tu peux lancer
+      // toi-même » restait vert. Une exception écrite dans l'explication vide le refus aussi
+      // sûrement qu'une exception écrite dans le refus.
+      for (const ligne of table.lignes) {
+        for (const cellule of ligne) exigeContrainte(cellule, `le refus « ${cellule.slice(0, 45)}… »`);
+      }
 
       const ferme = colonne(table, /^Ce que ça ferme$/i, 'ce que ça ferme').join(' ');
       assert.ok(
@@ -1300,6 +1308,70 @@ export const CONTROLES = [
       assert.equal(enonces.length, 1, `le métier doit dire une fois exactement ce qu’on ne fait pas d’un refus (${enonces.length})`);
       exigeContrainte(enonces[0], 'l’interdiction de relancer la session dans un mode plus permissif');
       assert.match(enonces[0], /refus n'est pas une panne|tu ne relances pas/i, `« ${enonces[0].trim()} » n’interdit plus le contournement`);
+    },
+  },
+
+  {
+    id: 'ce-qui-a-ete-mesure-garde-sa-polarite',
+    quoi: 'c’est le REFUS qui l’emporte et l’AUTORISATION qui est ignorée — jamais l’inverse',
+    verifier({ metier }) {
+      // RELEVÉ EN REVUE DE FOND : ces deux phrases portent tout le raisonnement du dispositif,
+      // et rien ne les gardait. Les inverser — « une autorisation l'emporte sur un refus » —
+      // ne faisait rougir personne, et un lecteur en conclurait qu'il suffit d'ajouter une
+      // autorisation pour se délier d'un refus. On garde donc le SUJET de chaque affirmation,
+      // pas les mots qu'elle contient : une permutation déplace le sujet, elle ne le cache pas.
+      const s = sectionDe(metier, /Ce que tu ne peux pas faire/i, 'sur ce qui lui est mécaniquement refusé');
+      const puces = pucesDe(s.corps);
+
+      const emporte = puces.filter((p) => /l'emporte sur/i.test(p));
+      assert.equal(emporte.length, 1, `une seule affirmation doit dire ce qui l’emporte (${emporte.length} trouvée·s)`);
+      assert.match(
+        emporte[0], /^-\s*un \*\*refus\*\*/i,
+        `« ${emporte[0].trim()} » : c’est le REFUS qui l’emporte sur l’autorisation — l’inverse ferait `
+          + `croire qu’une autorisation ajoutée délie d’un refus`,
+      );
+
+      const ignoree = puces.filter((p) => /ignorée en entier/i.test(p));
+      assert.equal(ignoree.length, 1, `une seule affirmation doit dire ce qui est ignoré (${ignoree.length} trouvée·s)`);
+      assert.match(
+        ignoree[0], /^-\s*une \*\*autorisation\*\*/i,
+        `« ${ignoree[0].trim()} » : c’est l’AUTORISATION qui est ignorée tant que le dossier n’est pas `
+          + `approuvé — l’inverse ferait tenir la garantie pour nulle à la naissance de l’agent`,
+      );
+      assert.match(ignoree[0], /la liste de ce qui est refusé est la garantie/i, 'et la conséquence doit être tirée : la garantie est la liste des refus');
+    },
+  },
+
+  {
+    id: 'la-revue-est-lancee-par-le-chef-d-equipe',
+    quoi: 'les deux passes de revue sont lancées par celui qui tient le lot, jamais par l’orchestrateur — dont les droits les refusent',
+    verifier({ metier }) {
+      // ⚠️ LE DÉFAUT QUE LA REVUE DE FOND A TROUVÉ, ET IL ÉTAIT GRAVE.
+      //
+      // §4-bis(e) prescrivait la revue à deux sous-agents « pour chaque epic (si orchestrateur) ».
+      // Le refus mécanique d'ouvrir un sous-agent la rendait donc impossible — silencieusement,
+      // jusqu'à ce qu'il essaie. Un métier qui prescrit un geste que les droits refusent est
+      // pire qu'un métier muet : il envoie contourner.
+      //
+      // La réconciliation retenue suit ce que le métier disait DÉJÀ ailleurs, à trois endroits :
+      // l'orchestrateur « n'ouvre aucun agent qui ne soit un chef d'équipe », « lancer soi-même
+      // deux sous-agents » est un anti-pattern nommé, et « c'est elle qui lit le code ; toi tu
+      // vérifies qu'elle a regardé ce qu'il fallait ». La revue appartient donc à celui qui tient
+      // le lot ; l'orchestrateur l'exige et vérifie les verdicts.
+      const s = sectionDe(metier, /Pour chaque unité de travail/i, 'sur le brief et la boucle');
+      const enonces = s.corps.split('\n').filter((l) => /qui les lance/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement qui lance les deux passes (${enonces.length})`);
+      exigeContrainte(enonces[0], 'l’attribution du lancement de la revue');
+      assert.match(
+        enonces[0], /chef d'équipe.*jamais toi|jamais toi.*chef d'équipe/i,
+        `« ${enonces[0].slice(0, 70)}… » : la revue est lancée par le chef d’équipe, jamais par `
+          + `l’orchestrateur — dont les droits refusent précisément ce geste`,
+      );
+      assert.match(enonces[0], /tes droits te le refusent/i, 'et le métier doit rattacher l’attribution au refus mécanique, sinon les deux textes dérivent');
+      assert.match(
+        enonces[0], /tu l'exiges dans le brief/i,
+        'et dire ce qui reste à sa charge — sans quoi « ce n’est pas moi qui la lance » se lit comme « elle ne me regarde pas »',
+      );
     },
   },
 
@@ -2239,6 +2311,48 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       '| **Écrire ou modifier un fichier** — tous les outils d\'édition, partout sur le disque |',
       '| **Écrire ou modifier un fichier** — tu peux le faire partout sur le disque |',
+    ),
+  },
+  {
+    id: 'revue-passe-2-le-refus-du-sous-agent-recoit-son-exception',
+    quoi: 'l’exception se pose dans la colonne d’à côté — « sauf pour la revue à deux passes, que tu peux lancer toi-même »',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'metier',
+    // Posée par la REVUE DE FOND, et elle a survécu à la première version : la modalité n'était
+    // tenue que sur la colonne des refus, pas sur celle qui les explique.
+    muter: (t) => t.replace(
+      '| **Ouvrir un sous-agent** | le second principe : tu n\'ouvres que des chefs d\'équipe',
+      '| **Ouvrir un sous-agent** | le second principe : tu n\'ouvres que des chefs d\'équipe, sauf pour la revue à deux passes',
+    ),
+  },
+  {
+    id: 'revue-passe-2-la-revue-retombe-sur-l-orchestrateur',
+    quoi: 'les deux passes redeviennent son geste à lui — un geste que ses droits refusent, donc une consigne qui envoie contourner',
+    cible: 'la-revue-est-lancee-par-le-chef-d-equipe',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Qui les lance : celui qui tient le lot — le chef d\'équipe —, jamais toi.**',
+      '**Qui les lance : toi, à chaque epic qui revient.**',
+    ),
+  },
+  {
+    id: 'revue-passe-2-l-autorisation-l-emporte-sur-le-refus',
+    quoi: 'la polarité de ce qui a été mesuré s’inverse — il suffirait d’ajouter une autorisation pour se délier d’un refus',
+    cible: 'ce-qui-a-ete-mesure-garde-sa-polarite',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '- un **refus** l\'emporte sur une autorisation',
+      '- une **autorisation** l\'emporte sur un refus',
+    ),
+  },
+  {
+    id: 'revue-passe-2-c-est-le-refus-qui-serait-ignore',
+    quoi: 'le refus passerait pour ignoré tant que le dossier n’est pas approuvé — la garantie serait nulle à la naissance de l’agent',
+    cible: 'ce-qui-a-ete-mesure-garde-sa-polarite',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '- une **autorisation**, elle, est **ignorée en entier**',
+      '- un **refus**, lui, est **ignoré en entier**',
     ),
   },
   {

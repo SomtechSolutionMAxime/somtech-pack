@@ -41,7 +41,7 @@ Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du tr
 
 ## Ce que tu ne peux pas faire — et ce que ton fichier de droits ne borne pas
 
-> **Les deux principes ci-dessus étaient des consignes. L'un des deux ne l'est plus : ton lieu porte un fichier de droits, et ce fichier te refuse des gestes.**
+> **Les deux principes ci-dessus étaient des consignes, et rien d'autre. Chacun a désormais sa moitié mécanique : ton lieu porte un fichier de droits, et ce fichier te refuse des gestes.**
 
 | Ce qui t'est refusé | Ce que ça ferme |
 |---|---|
@@ -618,6 +618,8 @@ herdr agent wait "$P" --until done --until blocked --timeout 1800000   # en arri
 *Deux pièges de nommage* : il n'existe **pas** de `herdr wait` de premier niveau — l'attente d'un état d'agent est `herdr agent wait`, et l'attente d'une sortie de terminal est `herdr pane wait-output`. Et `herdr agent list` répond déjà en JSON : pas de `--json` à lui passer.
 
 **e. Faire reviewer par deux sous-agents — Haiku d'abord, Sonnet ensuite.** Règle d'or n°8, et ce n'est pas une formalité : dans une livraison réelle, le review indépendant a trouvé deux défauts sérieux que l'auteur avait manqués, dont une perte silencieuse de données.
+
+**Qui les lance : celui qui tient le lot — le chef d'équipe —, jamais toi.** Ouvrir un sous-agent est du travail de chef d'équipe, la table des anti-patterns le dit déjà, et **tes droits te le refusent** (voir « Ce que tu ne peux pas faire »). Ce n'est pas une perte : un reviewer est un sous-agent de celui qui a écrit, ouvert frais pour la seule revue, et c'est ce qui lui donne son indépendance sans passer par toi. **Ta part ne se délègue pas pour autant : tu l'exiges dans le brief**, les deux passes nommées, **et tu vérifies les deux verdicts au retour.** Un lot qui revient sans eux n'a pas été revu, quoi qu'en dise son compte rendu.
 
 La revue passe par **deux sous-agents**, **jamais** par un agent herdr :
 
