@@ -5,7 +5,7 @@
 // (stdin, herdr, ligne-directe) : il n'est qu'un fil qui relie ce fichier au monde. Toute la
 // décision qu'on peut mettre à l'épreuve vit ici, à l'abri d'un vrai processus enfant.
 
-import { estUnLieuDeRepresentant } from './lieu.js';
+import { roleDuLieu } from './lieu.js';
 import { decider, ligneEstOuverte } from './garde.js';
 
 /**
@@ -23,8 +23,11 @@ import { decider, ligneEstOuverte } from './garde.js';
 export async function traiterRequete(requete, obtenirPaneEtEtat) {
   const cwd = requete?.cwd || process.cwd();
 
-  if (!estUnLieuDeRepresentant(cwd)) {
-    return { permissionDecision: 'allow', permissionDecisionReason: 'hors du lieu d’un représentant' };
+  // Le rôle est lu du LIEU, jamais reçu de l'appelant : c'est ce qui fait qu'un garde posé
+  // dans un lieu d'orchestrateur ne peut pas se voir présenter la séquence d'un représentant.
+  const role = roleDuLieu(cwd);
+  if (!role) {
+    return { permissionDecision: 'allow', permissionDecisionReason: 'hors du lieu d’un agent' };
   }
 
   let ligneOuverte = false;
@@ -35,5 +38,5 @@ export async function traiterRequete(requete, obtenirPaneEtEtat) {
     ligneOuverte = false;
   }
 
-  return decider({ toolName: requete?.tool_name, toolInput: requete?.tool_input, ligneOuverte });
+  return decider({ toolName: requete?.tool_name, toolInput: requete?.tool_input, ligneOuverte, role });
 }

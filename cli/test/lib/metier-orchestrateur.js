@@ -404,13 +404,22 @@ export const CONTROLES = [
         assert.equal(puces.filter((p) => sonde.test(p)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
       }
 
-      // ET CE QU'IL NE DIT PAS, DÉLIBÉRÉMENT. Le mécanisme d'horloge est du « comment » et
-      // il vient avec la naissance, au lot suivant. L'inventer ici produirait un dispositif
-      // calibré sur une supposition — la faute exacte du seuil « 2+ périmètres, 5+ agents »
-      // que le dirigeant a fait retirer de la compétence.
+      // LE DÉCLENCHEMENT EXISTE DÉSORMAIS (E-20260813-0002), et le métier le dit — mais il
+      // ne le PRESCRIT toujours pas : le mécanisme est un outil, remplaçable, et le graver
+      // ici rendrait le métier faux le jour où il change. L'interdiction ci-dessous tient
+      // donc entière ; c'est seulement l'attente qui est levée.
+      //
+      // ET LA GARANTIE QUI COMPTE VRAIMENT : le rendez-vous reste TIEN. Un réveil en panne
+      // ne fait aucun bruit — un topo qui n'arrive pas ressemble trait pour trait à une
+      // matinée sans rien à dire. Sans cette phrase, la panne serait indiscernable du
+      // silence, et c'est exactement la confusion que le topo existe pour lever.
       assert.match(
-        s.corps, /Ce que ce document ne dit pas encore/i,
-        'le métier doit dire que le déclenchement du topo n’est pas tranché, plutôt que d’inventer une horloge',
+        s.corps, /le rendez-vous reste tien/i,
+        'le métier doit dire que le rendez-vous appartient à l’orchestrateur, réveil ou pas — sinon un réveil muet efface le topo sans que rien ne le signale',
+      );
+      assert.match(
+        s.corps, /tu tiens le rendez-vous quand même/i,
+        'et ce qu’il fait quand le rappel ne vient pas',
       );
       for (const invente of ['crontab', 'cron -', 'launchd', 'systemd']) {
         assert.ok(!s.corps.includes(invente), `le métier prescrit un mécanisme d’horloge (« ${invente} ») qui n’a pas été tranché`);
@@ -986,8 +995,8 @@ export const MUTATIONS = [
     cible: 'topo-matinal',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "> **Ce que ce document ne dit pas encore**",
-      "> **Le déclenchement** : pose une entrée `crontab` à 7 h 00 sur ton poste.\n>\n> **Ce que ce document ne dit plus**",
+      "> **Tu seras rappelé, et le rendez-vous reste tien.**",
+      "> **Le déclenchement** : pose une entrée `crontab` à 7 h 00 sur ton poste.\n>\n> **Tu seras rappelé.**",
     ),
   },
 
@@ -1015,6 +1024,17 @@ export const MUTATIONS = [
     cible: 'gardien-des-adr',
     fichier: 'metier',
     muter: (t) => permuter(t, 'motifs de défaut', "décisions d'architecture"),
+  },
+
+  {
+    id: 'le-reveil-devient-le-responsable',
+    quoi: 'le topo repose entièrement sur le réveil — un réveil muet efface le rendez-vous sans que rien ne le dise',
+    cible: 'topo-matinal',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^> \*\*S'il ne fait pas signe.*$/m,
+      '> Si le réveil ne fait pas signe, c’est qu’il n’y avait rien à dire.',
+    ),
   },
 
   // ── l'ajout 7 : les mémoires

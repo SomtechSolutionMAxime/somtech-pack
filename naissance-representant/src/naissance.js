@@ -21,25 +21,34 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { GABARITS } from '../../ligne-directe/src/representant.js';
+import { GABARITS, racineLieu } from '../../ligne-directe/src/lieu-agent.js';
+import { role as roleDe } from '../../ligne-directe/src/roles.js';
+
+/** La commande qui POSE le lieu de chaque rôle — citée dans le refus, pour qu'il dise quoi faire. */
+const COMMANDE_DE_POSE = {
+  representant: 'ligne-directe representant <client> --canal <canal>',
+  orchestrateur: 'ligne-directe orchestrateur <nom>',
+};
 
 export class LieuAbsent extends Error {
-  constructor(client, chemin, manquants) {
+  constructor(nom, chemin, manquants, role = 'representant') {
     super(
-      `le lieu de « ${client} » n'existe pas encore ou est incomplet (${chemin}, manque : ` +
-        `${manquants.join(', ')}) — pose-le d'abord (\`ligne-directe representant <client> --canal <canal>\`) ; ` +
+      `le lieu de « ${nom} » n'existe pas encore ou est incomplet (${chemin}, manque : ` +
+        `${manquants.join(', ')}) — pose-le d'abord (\`${COMMANDE_DE_POSE[role] || COMMANDE_DE_POSE.representant}\`) ; ` +
         `la naissance ne crée jamais le lieu, elle en dépend`
     );
     this.name = 'LieuAbsent';
-    this.client = client;
+    this.client = nom;
+    this.nom = nom;
+    this.role = role;
     this.chemin = chemin;
     this.manquants = manquants;
   }
 }
 
-/** Le chemin du lieu d'un client, sous la racine du dépôt. */
-export function cheminLieu(repoRoot, client) {
-  return join(repoRoot, '.gestionnaire', client);
+/** Le chemin du lieu d'un agent, sous la racine du dépôt. */
+export function cheminLieu(repoRoot, nom, role = 'representant') {
+  return racineLieu(repoRoot, role, nom);
 }
 
 // ═══════════════════════════════ Le garde, tel qu'un fichier VERSIONNÉ peut le désigner
@@ -100,16 +109,16 @@ export const COMMANDE_GARDE =
   'if [ -f "$G" ]; then exec node "$G"; ' +
   `else cat >/dev/null 2>&1; printf '%s\\n' '${REFUS_GARDE_ABSENT}'; fi`;
 
-/** Le chemin du `.claude/settings.json` posé par `ligne-directe representant`. */
-function cheminSettings(repoRoot, client) {
-  return join(cheminLieu(repoRoot, client), '.claude', 'settings.json');
+/** Le chemin du `.claude/settings.json` posé par la commande qui pose le lieu. */
+function cheminSettings(repoRoot, nom, role) {
+  return join(cheminLieu(repoRoot, nom, role), '.claude', 'settings.json');
 }
 
 /** Refuse de naître si le lieu n'a pas déjà été posé, EN ENTIER (les 4 gabarits de `GABARITS`). */
-export function verifierLieu(repoRoot, client) {
-  const chemin = cheminLieu(repoRoot, client);
+export function verifierLieu(repoRoot, nom, role = 'representant') {
+  const chemin = cheminLieu(repoRoot, nom, role);
   const manquants = GABARITS.filter((f) => !existsSync(join(chemin, f)));
-  if (manquants.length > 0) throw new LieuAbsent(client, chemin, manquants);
+  if (manquants.length > 0) throw new LieuAbsent(nom, chemin, manquants, role);
   return chemin;
 }
 
@@ -139,9 +148,9 @@ export function fusionnerGarde(settingsExistant) {
  * même client portent, sur ce point, EXACTEMENT le même contenu (vérification « le même
  * représentant à chaque naissance »).
  */
-export function poserGarde(repoRoot, client) {
-  const lieu = verifierLieu(repoRoot, client);
-  const chemin = cheminSettings(repoRoot, client);
+export function poserGarde(repoRoot, nom, role = 'representant') {
+  const lieu = verifierLieu(repoRoot, nom, role);
+  const chemin = cheminSettings(repoRoot, nom, role);
   const existant = JSON.parse(readFileSync(chemin, 'utf8'));
   const fusionne = fusionnerGarde(existant);
   mkdirSync(join(lieu, '.claude'), { recursive: true });
@@ -150,8 +159,8 @@ export function poserGarde(repoRoot, client) {
 }
 
 /** Le contenu actuellement posé — pour la vérification, jamais utilisé pour décider. */
-export function gardePose(repoRoot, client) {
-  const chemin = cheminSettings(repoRoot, client);
+export function gardePose(repoRoot, nom, role = 'representant') {
+  const chemin = cheminSettings(repoRoot, nom, role);
   if (!existsSync(chemin)) return null;
   return JSON.parse(readFileSync(chemin, 'utf8'));
 }
@@ -165,11 +174,11 @@ export function gardePose(repoRoot, client) {
  * du nom du client — et on refuse AVANT de créer quoi que ce soit ce que herdr refuserait
  * après, plutôt que de laisser un pane orphelin derrière un renommage impossible.
  */
-export function nomAgentHerdr(client) {
-  const nom = String(client || '').toLowerCase();
+export function nomAgentHerdr(brut) {
+  const nom = String(brut || '').toLowerCase();
   if (!/^[a-z][a-z0-9_-]{0,31}$/.test(nom)) {
     throw new Error(
-      `« ${client} » ne peut pas nommer un agent herdr : attendu 1 à 32 caractères, ` +
+      `« ${brut} » ne peut pas nommer un agent herdr : attendu 1 à 32 caractères, ` +
         'commençant par une lettre minuscule, puis minuscules, chiffres, « - » ou « _ »'
     );
   }
@@ -280,16 +289,18 @@ export function agentPorteLeNom(reponse, nom) {
  * Ce que ni l'un ni l'autre ne prouve, c'est le résultat : il se lit après coup, dans le
  * répertoire de travail réel de la session (`repertoireDeLaSession`).
  */
-export function commandesNaissance(repoRoot, client, { workspace } = {}) {
+export function commandesNaissance(repoRoot, quiVientAuMonde, { workspace, role = 'representant' } = {}) {
   if (!workspace) {
     throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
   }
-  const lieu = cheminLieu(repoRoot, client);
-  const nom = nomAgentHerdr(client);
+  roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
+  const lieu = cheminLieu(repoRoot, quiVientAuMonde, role);
+  const nom = nomAgentHerdr(quiVientAuMonde);
   return {
     lieu,
     nom,
-    tabCreate: ['tab', 'create', '--workspace', workspace, '--cwd', lieu, '--label', client, '--no-focus'],
+    role,
+    tabCreate: ['tab', 'create', '--workspace', workspace, '--cwd', lieu, '--label', quiVientAuMonde, '--no-focus'],
     paneRun: (paneId) => ['pane', 'run', paneId, `cd ${lieu} && claude`],
     interroger: (paneId) => ['agent', 'get', paneId],
     renommer: (paneId) => ['agent', 'rename', paneId, nom],

@@ -17,18 +17,48 @@
  * Les segments de commande Bash qui font partie de la séquence d'ouverture, et RIEN
  * D'AUTRE. Chacun est ancré (^...$) : une sonde non ancrée laisserait passer une commande
  * composée qui commence par un segment autorisé et enchaîne autre chose derrière.
+ *
+ * Ce qui précède la ligne d'ouverture est commun aux deux rôles — trouver son pane, se
+ * nommer, lire l'état des lignes. C'est la ligne elle-même qui diffère, et la différence
+ * n'est pas cosmétique : la NATURE du canal.
  */
-const SEGMENTS_AUTORISES = [
+const SEGMENTS_COMMUNS = [
   /^\s*$/, // ligne vide
   /^#.*$/, // commentaire
   /^LD=.*ligne-directe\.js.*$/, // pose la variable, aucun effet
   /^herdr pane current$/,
   /^herdr agent rename \S+ \S+$/,
   /^\$LD etat$/,
-  /^\$LD ouvrir \S+.*--nature client.*--titre\s+".+"$/,
   /^node \S*ligne-directe\.js etat$/,
-  /^node \S*ligne-directe\.js ouvrir \S+.*--nature client.*--titre\s+".+"$/,
 ];
+
+/**
+ * L'ouverture propre à chaque rôle.
+ *
+ * REPRÉSENTANT — `--nature client` OBLIGATOIRE (canal privé, où parlent les gens du client)
+ * et `--titre` obligatoire avec elle : le client ne doit jamais voir un code de chantier.
+ *
+ * ORCHESTRATEUR — sa ligne est INTERNE : canal public, entre nous, nommé par le code de son
+ * chantier. `--nature` y est donc absente, et c'est délibéré : l'autoriser ici laisserait un
+ * orchestrateur ouvrir un canal privé de client pour y déverser de l'interne — précisément
+ * ce que le cloisonnement interdit. La forme admise est celle que son métier enseigne
+ * (§1-bis), et le sujet comme l'invitation restent libres.
+ */
+const OUVERTURE = {
+  representant: [
+    /^\$LD ouvrir \S+.*--nature client.*--titre\s+".+"$/,
+    /^node \S*ligne-directe\.js ouvrir \S+.*--nature client.*--titre\s+".+"$/,
+  ],
+  orchestrateur: [
+    /^\$LD ouvrir \S+(?!.*--nature).*$/,
+    /^node \S*ligne-directe\.js ouvrir \S+(?!.*--nature).*$/,
+  ],
+};
+
+/** Les segments admis pour le rôle donné — un rôle inconnu n'admet que le commun, donc rien qui ouvre. */
+export function segmentsAutorises(role) {
+  return [...SEGMENTS_COMMUNS, ...(OUVERTURE[role] || [])];
+}
 
 /** Découpe une commande Bash en segments indépendants — chacun doit être autorisé. */
 export function segments(commande) {
@@ -38,18 +68,19 @@ export function segments(commande) {
     .filter((s) => s.length > 0);
 }
 
-/** Les segments d'une commande qui n'appartiennent pas à la séquence d'ouverture. */
-export function segmentsHorsSequence(commande) {
-  return segments(commande).filter((s) => !SEGMENTS_AUTORISES.some((r) => r.test(s)));
+/** Les segments d'une commande qui n'appartiennent pas à la séquence d'ouverture de ce rôle. */
+export function segmentsHorsSequence(commande, role = 'representant') {
+  const admis = segmentsAutorises(role);
+  return segments(commande).filter((s) => !admis.some((r) => r.test(s)));
 }
 
 /**
  * La décision pour un appel d'outil, sachant si la ligne est déjà ouverte pour ce pane.
  *
- * @param {{toolName: string, toolInput: object, ligneOuverte: boolean}} params
+ * @param {{toolName: string, toolInput: object, ligneOuverte: boolean, role?: string}} params
  * @returns {{permissionDecision: 'allow'|'deny', permissionDecisionReason: string}}
  */
-export function decider({ toolName, toolInput, ligneOuverte }) {
+export function decider({ toolName, toolInput, ligneOuverte, role = 'representant' }) {
   if (ligneOuverte) {
     return { permissionDecision: 'allow', permissionDecisionReason: 'la ligne est déjà ouverte pour ce pane' };
   }
@@ -67,7 +98,7 @@ export function decider({ toolName, toolInput, ligneOuverte }) {
     // ce qui n'a jamais été reconnu comme la séquence d'ouverture. Il faut donc AU MOINS UN
     // segment reconnu, pas seulement AUCUN segment refusé.
     const segs = segments(toolInput?.command);
-    const hors = segmentsHorsSequence(toolInput?.command);
+    const hors = segmentsHorsSequence(toolInput?.command, role);
     if (segs.length > 0 && hors.length === 0) {
       return { permissionDecision: 'allow', permissionDecisionReason: 'fait partie de la séquence d’ouverture de ligne' };
     }

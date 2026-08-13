@@ -7,7 +7,7 @@ import { cmdUpdate } from './commands/update.js';
 import { cmdSetup } from './commands/setup.js';
 import { cmdBrd } from './commands/brd.js';
 import { cmdArchi, isArchiCommand } from './commands/archi.js';
-import { cmdRepresentantUpdate } from './commands/representant.js';
+import { cmdRepresentantUpdate, cmdOrchestrateurUpdate } from './commands/representant.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +54,7 @@ export function parseArgs(argv) {
       case '--id': flags.id = value('--id', ++i); break;
       case '--patch': flags.patch = value('--patch', ++i); break;
       case '--client': flags.client = value('--client', ++i); break;
+      case '--nom': flags.nom = value('--nom', ++i); break;
       case '--no-claude-swt': flags.noClaudeSwt = true; break;
       case '--no-skills': flags.noSkills = true; break;
       case '--no-workflows': flags.noWorkflows = true; break;
@@ -78,6 +79,7 @@ export function parseArgs(argv) {
         else if (a.startsWith('--id=')) flags.id = a.slice('--id='.length);
         else if (a.startsWith('--patch=')) flags.patch = a.slice('--patch='.length);
         else if (a.startsWith('--client=')) flags.client = a.slice('--client='.length);
+        else if (a.startsWith('--nom=')) flags.nom = a.slice('--nom='.length);
         else if (a.startsWith('-')) throw new Error(`Option inconnue : ${a}`);
         else positionals.push(a);
     }
@@ -109,6 +111,12 @@ Commandes :
            (convergence, backup .somtech.bak), CONTEXTE.md n'est JAMAIS touché
            (RA-REL-014). Échoue si le lieu n'existe pas encore (ne pose rien).
            --client <slug>  (obligatoire, minuscules/chiffres/tirets)
+  orchestrateur-update  Rafraîchit un lieu d'orchestrateur déjà posé dans ce dépôt
+           (.orchestrateur/<nom>/) : même frontière — CLAUDE.md converge vers le pack,
+           CONTEXTE.md (à qui il répond, le gestionnaire du projet, sa PORTÉE) n'est
+           JAMAIS touché. Sa portée écrite est ce qui empêche deux orchestrateurs d'un
+           même dépôt de se marcher dessus.
+           --nom <slug>  (obligatoire, minuscules/chiffres/tirets)
 
 Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
   harvest-supabase --discover <racine> --app <slug>  Grain tables + FK + descriptions (SQL du dépôt)
@@ -183,6 +191,7 @@ export async function run(argv) {
       case 'setup': return await cmdSetup(flags);
       case 'brd': return await cmdBrd(positionals, flags);
       case 'representant-update': return await cmdRepresentantUpdate(flags);
+      case 'orchestrateur-update': return await cmdOrchestrateurUpdate(flags);
       default:
         console.error(`✗ Commande inconnue : ${command}\n`);
         console.log(HELP);

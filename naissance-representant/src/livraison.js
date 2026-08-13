@@ -166,3 +166,94 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000 } = {}) {
     soumettre: ['agent', 'send-keys', pane, 'Enter'],
   };
 }
+
+/**
+ * Livrer un brief à une session, et RENDRE CE QU'ON A CONSTATÉ — jamais ce qu'on espère.
+ *
+ * Cette boucle vivait dans `bin/livrer.js`. Elle en sort pour que la NAISSANCE amorce le
+ * premier tour par le même chemin, et c'est le sixième des sept défauts qui l'exige : une
+ * session « née correctement, qui ne fait rien, parce que personne ne lui dit de commencer ».
+ * L'amorcer par un `herdr agent prompt` nu aurait rejoué le défaut d'à côté — celui qui rend
+ * `agent_prompted` sur un brief resté dans la boîte de saisie.
+ *
+ * Deux portes pour un même geste divergeraient : celle du bin a coûté trois corrections
+ * (regarder avant d'écrire, vérifier par le fait, réparer une fois), et une seconde copie
+ * n'en aurait hérité aucune.
+ *
+ * L'I/O est INJECTÉE (`appelHerdr`, `lireEcran`, `dormir`) : ce module reste sans processus
+ * enfant, donc exerçable sans jamais toucher un vrai pane.
+ *
+ * @returns {Promise<{ok: boolean, message?: string, statut: ?string, repare: boolean, attendu: boolean}>}
+ */
+export async function livrerBrief({
+  pane,
+  texte,
+  appelHerdr,
+  lireEcran,
+  dormir,
+  essais = 15,
+  delaiMs = 2000,
+  attenteMs = 20000,
+}) {
+  const commandes = commandesLivraison(pane, texte, { attenteMs });
+
+  // 1. REGARDER avant d'ecrire — la boite ET l'etat. Une boite non vide est un refus, jamais
+  //    une fusion ; une session qui travaille deja est un refus aussi, parce que la preuve de
+  //    prise (« elle a quitte l'attente ») serait vraie avant meme qu'on ecrive.
+  const etatAvant = await appelHerdr(commandes.interroger);
+  const statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
+  const avant = await lireEcran(commandes.lireEcran);
+  const obstacle = obstacleAvantLivraison(avant, statutAvant);
+  if (obstacle) return { ok: false, message: obstacle, statut: statutAvant, repare: false, attendu: false };
+
+  // 2. LIVRER. `--wait` est l'indice de herdr, jamais la preuve : ce qu'il rapporte peut etre
+  //    un faux negatif (un tour plus rapide que son echantillonnage). On l'enregistre, on ne
+  //    tranche pas dessus — c'est la relecture qui tranche.
+  const livraison = await appelHerdr(commandes.livrer);
+
+  // 3. VERIFIER PAR LE FAIT — la session a-t-elle quitte l'attente ?
+  const prisMaintenant = async () => {
+    const etat = await appelHerdr(commandes.interroger);
+    const statut = etat.reponse?.result?.agent?.agent_status ?? null;
+    const terminal = await lireEcran(commandes.lireEcran);
+    return { pris: briefEstPris({ statut, terminal }), statut, terminal };
+  };
+
+  let vu = await prisMaintenant();
+  for (let i = 0; i < essais && !vu.pris; i += 1) {
+    await dormir(delaiMs);
+    vu = await prisMaintenant();
+  }
+
+  // 4. REPARER une fois le cas connu : le texte est bien dans la boite, la soumission n'est
+  //    pas partie. On envoie la touche d'envoi, puis on re-verifie — sans jamais reecrire le
+  //    brief, ce qui le collerait a lui-meme.
+  let repare = false;
+  if (!vu.pris) {
+    const reste = contenuBoite(vu.terminal);
+    if (reste) {
+      const envoi = await appelHerdr(commandes.soumettre);
+      repare = envoi.ok;
+      for (let i = 0; i < essais && !vu.pris; i += 1) {
+        await dormir(delaiMs);
+        vu = await prisMaintenant();
+      }
+    }
+  }
+
+  if (!vu.pris) {
+    const reste = contenuBoite(vu.terminal);
+    return {
+      ok: false,
+      statut: vu.statut,
+      repare,
+      attendu: livraison.ok,
+      message:
+        `le brief n\u2019a pas \u00e9t\u00e9 pris par la session de ${pane} \u2014 statut \u00ab ${vu.statut ?? '\u2014'} \u00bb, ` +
+        `bo\u00eete ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (\u00ab ${reste.slice(0, 60)}\u2026 \u00bb)`}` +
+        `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}`,
+    };
+  }
+
+  return { ok: true, statut: vu.statut, repare, attendu: livraison.ok };
+}
