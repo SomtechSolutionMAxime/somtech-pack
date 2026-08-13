@@ -50,7 +50,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  REPO, sections, sectionDe, tableDe, colonne, pucesDe, blocsBash, enteteDe,
+  REPO, sections, sectionDe, tableDe, colonne, colonneDe, pucesDe, blocsBash, enteteDe,
   exigeImperatif, permuter,
 } from './metier-representant.js';
 
@@ -74,8 +74,19 @@ export function lireGabarits(racine = REPO) {
   return {
     metier: readFileSync(join(racine, CHEMIN_METIER), 'utf8'),
     contexte: readFileSync(join(racine, CHEMIN_CONTEXTE), 'utf8'),
+    // Le fichier de DROITS est lu comme les deux autres, et pour la même raison : il est
+    // devenu porteur d'une garantie du métier (T-20260813-0062). Un texte qui promet « je ne
+    // peux pas écrire » pendant que le fichier l'autorise est le pire des deux mondes — une
+    // garantie fausse. Les contrôles apparient donc les deux.
+    droits: readFileSync(join(racine, CHEMIN_PERMISSIONS), 'utf8'),
   };
 }
+
+/** Les paragraphes d'un texte — un bloc séparé des autres par une ligne vide. */
+export const parasDe = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 40);
+
+/** Une sonde ancrée sur un titre de section littéral (les titres portent des points). */
+const titre = (t) => new RegExp(`^${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
 
 /**
  * Les deux seules sections que ce lot avait le droit d'amender, avec le motif de chacune.
@@ -86,7 +97,31 @@ export function lireGabarits(racine = REPO) {
  */
 export const SECTIONS_AMENDEES = new Map([
   ['1-bis. Ouvrir ta ligne avec le dirigeant', 'ajout 3 — la ligne devient obligatoire, la phrase de repli disparaît'],
-  ['Anti-patterns', 'le miroir des six ajouts, dans la table qui existe déjà pour ça'],
+  ['Anti-patterns', 'le miroir des ajouts, dans la table qui existe déjà pour ça'],
+  ['4-bis. Pour chaque unité de travail', 'T-20260813-0062 — le brief va au registre (écrire un fichier lui est mécaniquement refusé), et un compte rendu se vérifie avant d’être validé'],
+  ['5. Ce que tu tranches toi-même', 'T-20260813-0062 — la calibration et le « je n’ai pas vérifié », à l’endroit exact où il tranche'],
+  ['6. Coordonner les chantiers voisins', 'T-20260813-0062 — un ordre transmis porte sa source, parce qu’il sera exécuté sans être questionné'],
+]);
+
+/**
+ * Ce que les amendements de T-20260813-0062 REMPLACENT dans la section d'origine — et rien
+ * d'autre n'a le droit d'y disparaître.
+ *
+ * ⚠️ POURQUOI CETTE LISTE EXISTE, ET C'EST LA LEÇON DE LA PASSE 2 DU LOT PRÉCÉDENT.
+ *
+ * Inscrire une section dans `SECTIONS_AMENDEES` la sort de la comparaison octet pour octet :
+ * elle est alors hors de TOUTE garde, bien au-delà de l'amendement qu'on voulait s'autoriser.
+ * Sur le lot précédent, cette exemption a laissé retirer deux lignes d'origine et un
+ * paragraphe entier sans une rougeur. La garde qui tient est **l'inclusion littérale de ce
+ * qui devait rester**, plus la déclaration nommée de ce qui part.
+ */
+export const AMENDEMENTS_DU_LOT = new Map([
+  ['4-bis. Pour chaque unité de travail', [
+    '**a. Écrire le brief dans un fichier.**',        // → au registre
+    "execute-le : <chemin>'",                          // → epics action get
+  ]],
+  ['5. Ce que tu tranches toi-même', []],              // que des ajouts
+  ['6. Coordonner les chantiers voisins', []],         // que des ajouts
 ]);
 
 /** La phrase que l'ajout 3 RETIRE. Un retrait se défait par mégarde plus facilement qu'un ajout. */
@@ -97,7 +132,33 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS_AJOUTES = 6;
+export const NB_ANTI_PATTERNS_AJOUTES = 11;
+
+/**
+ * Tournures qui transforment une CONTRAINTE en CONSEIL sans la retirer.
+ *
+ * `PERMISSIF` (partagé avec le harnais du représentant) attrape la permission, l'exception et
+ * la nécessité niée. Il manque la troisième porte, et c'est celle que ce lot combat : le
+ * conseil bienveillant. « Évite de valider un compte rendu que tu n'as pas vérifié » ne
+ * demande aucune permission, n'ouvre aucune exception, ne nie aucune nécessité — et ne
+ * contraint plus rien. Un agent le lit comme une préférence de style.
+ *
+ * Elle est écrite ICI plutôt que dans le harnais partagé, à dessein : celui-ci est commun aux
+ * deux métiers et ce lot n'a pas mandat de le changer. Le manque y est réel, et il est
+ * remonté au registre plutôt que corrigé de la main d'un lot qui ne le porte pas.
+ */
+export const CONSEIL = /\bévite(?:r|z)? de\b|\bessaie de\b|\bidéalement\b|\btu devrais\b|\bil vaut mieux\b|\bpense à\b|\bn'hésite pas\b|\bmieux vaut\b|\bon recommande\b|\bil est conseillé\b/i;
+
+/** Exige qu'un énoncé CONTRAIGNE : ni assoupli en permission, ni retombé en conseil. */
+export function exigeContrainte(enonce, quoi) {
+  exigeImperatif(enonce, quoi);
+  const conseil = enonce.match(CONSEIL);
+  assert.ok(
+    !conseil,
+    `« ${quoi} » est retombé au rang de conseil (« ${conseil && conseil[0]} ») : une contrainte `
+      + `qui se contente de conseiller ne contraint plus rien — « ${enonce.trim()} »`,
+  );
+}
 
 // ═════════════════════════════════════════ les contrôles
 
@@ -151,8 +212,34 @@ export const CONTROLES = [
         if (dansLeGabarit.get(s.titre) !== s.corps) reecrites.push(s.titre);
       }
 
+      // ⚠️ AUCUNE SECTION N'EST EXEMPTÉE SANS ÊTRE REPRISE PAR UNE AUTRE GARDE.
+      //
+      // Le seuil chiffré qui vivait ici (« au moins 20 comparées ») avait un défaut : chaque
+      // lot qui amende une section de plus le fait baisser, et on abaisse alors le seuil — la
+      // garde se desserre d'elle-même, lot après lot. On exige donc DEUX choses qui ne se
+      // desserrent pas : que tout ce qui n'est pas exempté ait bien été comparé, et que tout
+      // ce qui est exempté soit nommément gardé ailleurs (le compte des anti-patterns et
+      // l'inclusion des paragraphes de §1-bis, ici même ; l'inclusion paragraphe par
+      // paragraphe pour les sections de T-20260813-0062).
+      const GARDEES_AUTREMENT = new Set([
+        '1-bis. Ouvrir ta ligne avec le dirigeant',
+        'Anti-patterns',
+        ...AMENDEMENTS_DU_LOT.keys(),
+      ]);
+      for (const t of SECTIONS_AMENDEES.keys()) {
+        assert.ok(
+          GARDEES_AUTREMENT.has(t),
+          `« ${t} » est exemptée de la comparaison octet pour octet sans qu’aucune garde ne la `
+            + `reprenne : l’exemption la met hors de TOUTE garde, bien au-delà de l’amendement voulu`,
+        );
+      }
+      assert.equal(
+        comparees, sections(competence).length - SECTIONS_AMENDEES.size,
+        `${comparees} section(s) comparée(s) pour ${sections(competence).length} au métier moins `
+          + `${SECTIONS_AMENDEES.size} amendée(s) : des sections échappent à la comparaison sans être déclarées`,
+      );
       assert.ok(
-        comparees >= 20,
+        comparees >= 15,
         `seules ${comparees} sections ont été comparées : le métier fait plusieurs dizaines de `
           + `sections, un si petit nombre veut dire que la comparaison ne mord plus`,
       );
@@ -193,7 +280,6 @@ export const CONTROLES = [
 
       // §1-bis : même principe, au paragraphe. Tout ce que la compétence y écrit doit se
       // retrouver dans le gabarit, SAUF l'unique paragraphe que l'ajout 3 retire.
-      const parasDe = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 40);
       const sourceBis = sectionDe(competence, /Ouvrir ta ligne avec le dirigeant/i, 'de l’ouverture de la ligne (compétence)').corps;
       const gabaritBis = sectionDe(metier, /Ouvrir ta ligne avec le dirigeant/i, 'de l’ouverture de la ligne (gabarit)').corps;
       const aRetirer = parasDe(sourceBis).filter((p) => p.includes(PHRASE_RETIREE));
@@ -1057,6 +1143,350 @@ export const CONTROLES = [
       }
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // T-20260813-0062 — protéger l'orchestrateur des biais LLM, en remontant le plus haut
+  // possible : d'abord ce qu'il NE PEUT PAS faire, ensuite ce qu'il relit à chaque tour,
+  // ensuite le réflexe placé à l'endroit de l'acte. La liste de biais arrive dernière.
+  // ═══════════════════════════════════════════════════════════════════════════════════
+
+  {
+    id: 'les-amendements-ne-cachent-pas-une-reecriture',
+    quoi: 'les sections que ce lot amende ne perdent rien d’autre que ce qu’il déclare remplacer',
+    verifier({ metier }) {
+      // Inscrire une section dans SECTIONS_AMENDEES la sort de la comparaison octet pour
+      // octet — donc de toute garde. C'est le trou que la passe 2 du lot précédent a trouvé.
+      // Ici, chaque paragraphe d'origine doit se retrouver MOT POUR MOT dans le gabarit, sauf
+      // ceux que `AMENDEMENTS_DU_LOT` nomme. Ajouter est libre ; retirer se déclare.
+      const competence = readFileSync(join(REPO, CHEMIN_COMPETENCE), 'utf8');
+      for (const [t, remplaces] of AMENDEMENTS_DU_LOT) {
+        const source = sectionDe(competence, titre(t), `« ${t} » (compétence)`).corps;
+        const cible = sectionDe(metier, titre(t), `« ${t} » (gabarit)`).corps;
+        const paras = parasDe(source);
+        assert.ok(paras.length >= 3, `« ${t} » ne porte que ${paras.length} paragraphe(s) : la garde ne mordrait pas`);
+
+        for (const marqueur of remplaces) {
+          assert.equal(
+            paras.filter((p) => p.includes(marqueur)).length, 1,
+            `« ${marqueur} » ne désigne plus un paragraphe unique de « ${t} » : la déclaration `
+              + `de ce qui est remplacé a cessé de correspondre au texte, et la garde exempterait au hasard`,
+          );
+          assert.ok(
+            !cible.includes(marqueur),
+            `« ${marqueur} » est déclaré remplacé mais figure encore dans le gabarit — l’amendement n’a pas eu lieu`,
+          );
+        }
+
+        const perdus = paras
+          .filter((p) => !remplaces.some((m) => p.includes(m)))
+          .filter((p) => !cible.includes(p));
+        assert.deepEqual(
+          perdus, [],
+          `ces paragraphes de « ${t} » ont disparu alors que ce lot ne devait qu’y ajouter : `
+            + perdus.map((p) => p.slice(0, 70) + '…').join(' · '),
+        );
+      }
+    },
+  },
+
+  {
+    id: 'les-droits-refusent-ce-que-le-metier-promet',
+    quoi: 'le fichier de droits REFUSE d’écrire un fichier et d’ouvrir un sous-agent, et le métier dit la même chose que lui',
+    verifier({ metier, droits }) {
+      // LE NIVEAU LE PLUS HAUT DE LA PROTECTION : ce que l'agent n'a pas le moyen de faire.
+      //
+      // ⚠️ CE QUI A ÉTÉ MESURÉ (Claude Code 2.1.231, 2026-08-13), et pourquoi les entrées sont
+      // exigées SOUS CES FORMES-LÀ :
+      //   • un refus l'emporte sur une autorisation, tient sur un dossier jamais approuvé, et
+      //     tient sous `--permission-mode acceptEdits` ;
+      //   • une AUTORISATION est ignorée EN ENTIER tant que le dossier n'est pas approuvé
+      //     (« Ignoring N permissions.allow entries: this workspace has not been trusted ») —
+      //     la liste `allow` est un confort, la liste `deny` est la garantie ;
+      //   • `Write(chemin)` n'est PAS évalué sur les fichiers — Claude Code le dit lui-même :
+      //     seules les règles `Edit(chemin)` le sont, et elles couvrent tous les outils
+      //     d'écriture ;
+      //   • `Edit(**)` laisse écrire HORS du répertoire (mesuré : `../evade.txt` créé), et
+      //     `Edit(../**)` est totalement inerte. Seule la forme absolue `Edit(//**)` a fermé
+      //     les quatre gestes essayés. Une de ces deux formes à la place de l'autre donnerait
+      //     un fichier qu'on croit contraignant et qui ne l'est pas — pire que rien.
+      const perms = JSON.parse(droits).permissions;
+      const deny = perms.deny || [];
+      const allow = perms.allow || [];
+
+      const REFUS = [
+        { quoi: 'écrire ou modifier un fichier', entrees: ['Write', 'Edit', 'NotebookEdit', 'Edit(//**)'] },
+        { quoi: 'ouvrir un sous-agent', entrees: ['Task'] },
+      ];
+      for (const { quoi, entrees } of REFUS) {
+        for (const e of entrees) {
+          assert.ok(
+            deny.includes(e),
+            `« ${e} » a disparu des refus : ${quoi} redevient possible — et ce qui n’est pas refusé `
+              + `n’est pas interdit, c’est demandé, donc accordable par une veille`,
+          );
+        }
+      }
+
+      // Une autorisation ne rattrape jamais un refus (mesuré), mais un `allow` qui porte un
+      // outil refusé se lit comme une permission par quiconque relit le fichier — et c'est le
+      // premier pas d'un desserrage « puisque c'est déjà autorisé plus haut ».
+      for (const e of allow) {
+        assert.ok(
+          !/^(Write|Edit|NotebookEdit|Task)\b/.test(e),
+          `« ${e} » est autorisé alors que le même outil est refusé : le fichier se contredit`,
+        );
+      }
+
+      // ET LE TEXTE DIT LA MÊME CHOSE QUE LE FICHIER. Les deux dérivent l'un de l'autre sinon :
+      // un métier qui promet « je ne peux pas écrire » pendant que le fichier l'autorise est
+      // une garantie fausse, exactement ce que ce lot existe pour empêcher.
+      const s = sectionDe(metier, /Ce que tu ne peux pas faire/i, 'sur ce qui lui est mécaniquement refusé');
+      const table = tableDe(s.corps);
+      const refuse = colonne(table, /^Ce qui t'est refusé$/i, 'ce qui t’est refusé').join(' ');
+      assert.equal(table.lignes.length, REFUS.length, `${table.lignes.length} refus décrit(s) pour ${REFUS.length} posé(s) dans le fichier`);
+      assert.match(refuse, /écrire ou modifier un fichier/i, 'le métier doit nommer le refus d’écrire');
+      assert.match(refuse, /ouvrir un sous-agent/i, 'le métier doit nommer le refus d’ouvrir un sous-agent');
+
+      const ferme = colonne(table, /^Ce que ça ferme$/i, 'ce que ça ferme').join(' ');
+      assert.ok(
+        !/écrire ou modifier un fichier/i.test(ferme),
+        'la table des refus est inversée : ce qui est refusé figure du côté de ce que ça ferme',
+      );
+    },
+  },
+
+  {
+    id: 'la-contrainte-dit-aussi-ce-qu-elle-ne-borne-pas',
+    quoi: 'le métier nomme les trois zones que le fichier de droits ne borne pas, et refuse qu’un refus se contourne',
+    verifier({ metier }) {
+      // Une garantie partielle qu'on présente comme totale est une garantie fausse. Le métier
+      // doit donc dire OÙ la contrainte s'arrête — sans quoi un orchestrateur croira que ne
+      // pas pouvoir écrire l'empêche d'exécuter, alors que le terminal reste ouvert.
+      const s = sectionDe(metier, /Ce que tu ne peux pas faire/i, 'sur ce qui lui est mécaniquement refusé');
+      const NON_BORNE = [
+        { quoi: 'le terminal', sonde: /terminal/i },
+        { quoi: 'ce qu’il fait faire ailleurs', sonde: /pane run/i },
+        { quoi: 'le registre', sonde: /registre/i },
+      ];
+      const puces = pucesDe(s.corps).filter((p) => NON_BORNE.some(({ sonde }) => sonde.test(p)));
+      assert.equal(
+        puces.length, NON_BORNE.length,
+        `${puces.length} zone(s) non bornée(s) nommée(s) pour ${NON_BORNE.length} — en retirer une fait `
+          + `croire à une clôture qui n’existe pas`,
+      );
+      for (const { quoi, sonde } of NON_BORNE) {
+        assert.equal(puces.filter((p) => sonde.test(p)).length, 1, `« ${quoi} » doit être nommé une fois exactement`);
+      }
+
+      // Ce qui n'est pas refusé est DEMANDÉ, pas interdit : sans cette phrase, l'absence d'un
+      // geste de la liste se lit comme une interdiction, et la veille qui l'accorde passe pour
+      // un incident plutôt que pour le fonctionnement normal.
+      assert.match(
+        s.corps, /n'est pas interdit\s*:\s*c'est demandé/i,
+        'le métier doit dire que ce qui n’est pas refusé est demandé — donc accordable',
+      );
+
+      // Et le refus ne se contourne pas : c'est ici que se joue la différence entre une
+      // contrainte et un obstacle.
+      const enonces = s.corps.split('\n').filter((l) => /mode plus permissif/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement ce qu’on ne fait pas d’un refus (${enonces.length})`);
+      exigeContrainte(enonces[0], 'l’interdiction de relancer la session dans un mode plus permissif');
+      assert.match(enonces[0], /refus n'est pas une panne|tu ne relances pas/i, `« ${enonces[0].trim()} » n’interdit plus le contournement`);
+    },
+  },
+
+  {
+    id: 'reflexes-qui-le-visent',
+    quoi: 'les quatre pièges sont en table, l’autorité apparente ouvre, et ce qu’il dit à la place n’est pas la version complaisante',
+    verifier({ metier }) {
+      // La forme vient du représentant, parce qu'elle FONCTIONNE : le piège · ce que la
+      // pression te fait dire · ce que tu dis à la place. Gardée par POLARITÉ (résolue aux
+      // libellés d'en-tête ancrés) et par POSITION, jamais par la présence de mots.
+      const s = sectionDe(metier, /Tes réflexes/i, 'sur ses réflexes');
+      const table = tableDe(s.corps);
+      assert.ok(table.lignes.length >= 4, `les réflexes doivent être énumérés (${table.lignes.length} trouvé·s)`);
+
+      const iRang = colonneDe(table, /^#$/, 'le rang du piège');
+      const iNom = colonneDe(table, /^Le piège$/i, 'le nom du piège');
+      const rangs = table.lignes.map((l, position) => ({ rang: Number(l[iRang]), position, cle: l[iNom] }));
+
+      // L'autorité apparente OUVRE : c'est celle dont l'absence coûte le plus vite, parce que
+      // ses ordres sont exécutés sans être questionnés.
+      const autorite = rangs.filter((r) => /autorité apparente/i.test(r.cle));
+      assert.equal(autorite.length, 1, 'l’autorité apparente doit figurer une fois exactement — c’est le piège qui le vise en premier');
+      assert.equal(autorite[0].rang, 1, `l’autorité apparente porte le rang ${autorite[0].rang} au lieu de 1`);
+      assert.equal(autorite[0].position, 0, 'et elle ouvre la table — un réflexe listé en dernier se lit en dernier');
+
+      // Les trois autres existent aussi : une table dont on retire une ligne est le mode de
+      // régression le plus silencieux d'un document.
+      for (const [sonde, quoi] of [
+        [/complaisance/i, 'la complaisance envers ses propres agents'],
+        [/calibration/i, 'la calibration'],
+        [/ancrage/i, 'l’ancrage'],
+      ]) {
+        assert.equal(rangs.filter((r) => sonde.test(r.cle)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
+      }
+
+      // LA POLARITÉ. Permuter les deux en-têtes, sans déplacer une cellule, ferait de l'ordre
+      // reformulé de mémoire et du « beau travail, on fusionne » ce qu'on dit À LA PLACE.
+      const pressions = colonne(table, /^Ce que la pression te fait dire$/i, 'ce que la pression te fait dire').join(' ');
+      const reponses = colonne(table, /^Ce que tu dis à la place$/i, 'ce que tu dis à la place');
+
+      const COMPLAISANTES = [/reformulé de mémoire/i, /on fusionne/i, /rendus comme un constat/i];
+      for (const sonde of COMPLAISANTES) {
+        assert.match(pressions, sonde, `${sonde} doit figurer sous l’en-tête « ce que la pression te fait dire »`);
+      }
+      for (const reponse of reponses) {
+        for (const sonde of COMPLAISANTES) {
+          assert.ok(!sonde.test(reponse), `« ${reponse} » est donné comme la réponse à faire alors qu’il porte ${sonde} — la polarité est inversée`);
+        }
+        // ET LA MODALITÉ, dans la cellule même : « évite de valider trop vite » garde sa
+        // colonne, son rang et son vocabulaire, et ne contraint plus rien.
+        exigeContrainte(reponse, `la réponse « ${reponse.slice(0, 40)}… »`);
+      }
+    },
+  },
+
+  {
+    id: 'le-doute-est-une-information-attendue',
+    quoi: '« je n’ai pas vérifié » est déclaré attendu et jamais une faute — aux deux endroits qui le portent',
+    verifier({ metier }) {
+      // Ce que STD-011 ne dit pas, et sans quoi tous les réflexes cèdent sous la pression : un
+      // agent invente surtout quand admettre son ignorance semble coûteux. Écrit à deux
+      // endroits — la section des réflexes et celle où il tranche —, donc gardé aux deux :
+      // n'en garder qu'un laisse assouplir l'autre, et le lecteur applique ce qu'il a lu en dernier.
+      const enonces = metier.split('\n').filter((l) => /je n'ai pas vérifié/i.test(l) && /information attendue/i.test(l));
+      assert.equal(
+        enonces.length, 2,
+        `« je n’ai pas vérifié » doit être déclaré une information attendue aux DEUX endroits qui le `
+          + `portent (${enonces.length} trouvé·s) — la section des réflexes et celle où il tranche`,
+      );
+      for (const e of enonces) {
+        exigeContrainte(e, 'la déclaration que le doute est attendu');
+        assert.match(
+          e, /jamais une faute/i,
+          `« ${e.trim()} » ne dit plus que ce n’est jamais une faute : devant un dirigeant pressé, `
+            + `« je ne sais pas » se sent comme un échec, et c’est là qu’on invente`,
+        );
+      }
+    },
+  },
+
+  {
+    id: 'il-ne-s-evalue-pas-lui-meme',
+    quoi: 'ses conclusions sont tenues au standard qu’il impose au code : ce qui n’a pas été repris se dit comme tel',
+    verifier({ metier }) {
+      // La règle d'or n°8 est déjà dans le métier pour le CODE ; elle ne l'était pas pour ses
+      // propres conclusions. Trois diagnostics faux en une soirée sur un seul défaut, dont deux
+      // de l'orchestrateur — et son métier portait déjà, fortement, l'anti-hallucination.
+      const s = sectionDe(metier, /Tes réflexes/i, 'sur ses réflexes');
+      const enonces = s.corps.split('\n').filter((l) => /tu ne t'évalues pas toi-même/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement qu’il ne s’évalue pas lui-même (${enonces.length})`);
+      exigeContrainte(enonces[0], 'l’interdit de s’évaluer soi-même');
+      assert.match(enonces[0], /règle d'or n°8/i, 'et il doit le rattacher à la règle qui l’impose déjà au code');
+      assert.match(
+        enonces[0], /conclusions n'y échappent pas/i,
+        'la règle doit porter sur SES CONCLUSIONS — appliquée au seul code, elle était déjà là et n’ajoute rien',
+      );
+      assert.match(
+        s.corps, /nommer un biais ne protège pas/i,
+        'et la section doit dire pourquoi la liste des biais ne suffit pas — c’est la leçon du vécu qui l’a motivée',
+      );
+    },
+  },
+
+  {
+    id: 'le-brief-va-au-registre',
+    quoi: 'le brief s’écrit au registre — jamais dans un fichier, que ses droits lui refusent de toute façon',
+    verifier({ metier }) {
+      // Conséquence directe du refus mécanique : un métier qui demanderait encore d'écrire un
+      // fichier pousserait l'orchestrateur vers la seule porte qui reste — le terminal —,
+      // c'est-à-dire lui enseignerait le contournement. Les deux moitiés se tiennent.
+      const s = sectionDe(metier, /Pour chaque unité de travail/i, 'sur le brief et la boucle');
+      const enonces = s.corps.split('\n').filter((l) => /^\*\*a\. Écrire le brief/.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement où s’écrit le brief (${enonces.length})`);
+      assert.match(enonces[0], /au registre/i, `« ${enonces[0].slice(0, 60)}… » : le brief doit aller au registre`);
+      assert.match(enonces[0], /jamais dans un fichier/i, 'et le métier doit dire qu’il ne va pas dans un fichier');
+      exigeContrainte(enonces[0], 'la consigne d’écrire le brief au registre');
+      assert.match(enonces[0], /epics` action `update`|epics action update/, 'et il doit donner la surface exacte, pas une intention');
+
+      // La livraison du brief pointe vers le registre, pas vers un chemin de fichier.
+      const livraisons = blocsBash(s.corps).filter((b) => b.includes('livrer.js'));
+      assert.equal(livraisons.length, 1, `le brief se livre par une seule commande (${livraisons.length} trouvée·s)`);
+      assert.ok(!/<chemin>/.test(livraisons[0]), 'la livraison pointe encore vers un chemin de fichier');
+      assert.match(livraisons[0], /epics action get/, 'la livraison doit pointer vers le registre');
+    },
+  },
+
+  {
+    id: 'un-compte-rendu-se-verifie-avant-d-etre-valide',
+    quoi: 'devant un compte rendu qui conclut sans montrer, le lot attend — et la consigne contraint encore',
+    verifier({ metier }) {
+      // LE BIAIS QUI LE VISE, LUI, À L'ENDROIT EXACT OÙ IL SE COMMET. Il valide le travail
+      // d'agents qu'il a lui-même ouverts, briefés et dimensionnés : refuser leur lot, c'est se
+      // déjuger sur son propre découpage. Le métier disait qu'il « vérifie que la revue a eu
+      // lieu » ; il ne disait rien de ce qu'il fait devant un compte rendu plausible.
+      const s = sectionDe(metier, /Pour chaque unité de travail/i, 'sur le brief et la boucle');
+      const enonces = s.corps.split('\n').filter((l) => /tant que tu ne l'as pas/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement ce qu’il exige avant de valider (${enonces.length})`);
+      exigeContrainte(enonces[0], 'l’exigence de preuve avant validation');
+      assert.match(enonces[0], /n'est pas validé|le lot attend/i, `« ${enonces[0].slice(0, 60)}… » : sans conséquence, l’exigence n’en est pas une`);
+      assert.match(enonces[0], /verdict/i, 'et elle doit nommer ce qui est exigé — un verdict par passe, pas « des preuves »');
+      assert.match(
+        s.corps, /n'est pas une preuve\s*:\s*la preuve est ce qu'il \*\*montre\*\*/i,
+        'le métier doit distinguer un compte rendu qui CONCLUT d’un compte rendu qui MONTRE',
+      );
+      // Et l'exigence ne doit pas contredire l'interdit de relire le code : demander une
+      // preuve n'est pas aller la chercher soi-même dans les fichiers.
+      assert.match(s.corps, /n'est pas relire le code/i, 'et dire pourquoi exiger une preuve ne le fait pas relire le code');
+    },
+  },
+
+  {
+    id: 'un-ordre-transmis-porte-sa-source',
+    quoi: 'ce qu’il transmet se recopie avec son origine — un ordre reformulé de mémoire est un ordre que personne n’a donné',
+    verifier({ metier }) {
+      // AUTORITÉ APPARENTE, au seul endroit où il émet vraiment des ordres. Mesuré :
+      // des consignes arrivées aux équipes ne venaient de personne, 2/10 puis 5/11 puis 5/6.
+      const s = sectionDe(metier, /Coordonner les chantiers voisins/i, 'sur les chantiers voisins');
+      const enonces = s.corps.split('\n').filter((l) => /porte sa source/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement ce que porte un message transmis (${enonces.length})`);
+      exigeContrainte(enonces[0], 'l’obligation de transmettre avec la source');
+      assert.match(
+        enonces[0], /se recopie/i,
+        `« ${enonces[0].slice(0, 60)}… » : une source qui se reformule est une source inventée`,
+      );
+      assert.ok(
+        !/se reformule\b(?!\s*pas)/i.test(enonces[0]),
+        'le métier autorise la reformulation de la source — c’est exactement l’ordre que personne n’a donné',
+      );
+      assert.match(s.corps, /ordre que personne n'a donné/i, 'et il doit nommer ce que devient un ordre reformulé de mémoire');
+    },
+  },
+
+  {
+    id: 'il-calibre-au-moment-ou-il-tranche',
+    quoi: 'les trois états de ce qu’il sait sont nommés là où il décide, et « non prouvé » n’est pas « faux »',
+    verifier({ metier }) {
+      // C3 était pratiqué sans jamais être nommé comme une échelle. Placé en §5 — l'endroit où
+      // il rend une décision —, pas en annexe : ce qui protège est le geste imposé au moment
+      // où l'acte se pose.
+      const s = sectionDe(metier, /Ce que tu tranches toi-même/i, 'sur ce qu’il tranche');
+      const enonces = s.corps.split('\n').filter((l) => /sépare ce que tu as mesuré/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit poser l’échelle une fois exactement (${enonces.length})`);
+      exigeContrainte(enonces[0], 'la séparation entre ce qui est mesuré et ce qui est supposé');
+
+      for (const etat of ['vérifié', 'déduit', 'supposé']) {
+        assert.match(s.corps, new RegExp(`\\*\\*${etat}\\*\\*`, 'i'), `l’état « ${etat} » doit être nommé — une échelle à deux crans n’en est pas une`);
+      }
+      assert.match(
+        s.corps, /non prouvée n'est pas une hypothèse fausse/i,
+        'le métier doit distinguer « non prouvé » de « faux » — l’écart a coûté une soirée, et celle '
+          + 'qu’on avait déclarée fausse était juste',
+      );
+      assert.match(s.corps, /autre session/i, 'et nommer le cas mesuré : une mesure faite ailleurs rendue comme un constat d’ici');
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -1691,6 +2121,244 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "Ce n'est pas de la tenue de registre, c'est une **mécanique**",
       "C'est de la tenue de registre comme le reste",
+    ),
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // T-20260813-0062 — ce qui doit rougir pour que la protection ne soit pas décorative.
+  // Les trois premières sont celles que le ticket nomme : la version complaisante de « ce
+  // que tu dis à la place », le retrait de l'autorité apparente, et la contrainte
+  // transformée en conseil — la dégradation la plus difficile à attraper, parce qu'elle
+  // garde la place, la colonne, le rang et le vocabulaire.
+  // ═══════════════════════════════════════════════════════════════════════════════════
+
+  {
+    id: 'la-reponse-devient-la-version-complaisante',
+    quoi: 'ce qu’il dit à la place devient ce que la pression lui fait dire — le contresens exact, sans qu’une cellule change de contenu',
+    cible: 'reflexes-qui-le-visent',
+    fichier: 'metier',
+    muter: (t) => permuter(
+      t,
+      '« Beau travail, on fusionne », devant un compte rendu plausible que tu n\'as pas vérifié',
+      '« Montre-moi le verdict de chaque passe et l\'état de la chaîne » — et tant que ce n\'est pas là, le lot attend',
+    ),
+  },
+  {
+    id: 'les-en-tetes-des-reflexes-sont-permutes',
+    quoi: 'les deux libellés d’en-tête sont échangés — l’ordre reformulé de mémoire devient ce qu’on dit à la place, aucune cellule ne bouge',
+    cible: 'reflexes-qui-le-visent',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '| # | Le piège | Ce que la pression te fait dire | Ce que tu dis à la place |',
+      '| # | Le piège | Ce que tu dis à la place | Ce que la pression te fait dire |',
+    ),
+  },
+  {
+    id: 'l-autorite-apparente-disparait',
+    quoi: 'la ligne sur l’autorité apparente est retirée — c’est celle dont l’absence coûte le plus vite',
+    cible: 'reflexes-qui-le-visent',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| 1 \| \*\*Autorité apparente\*\* \|.*\n/m, ''),
+  },
+  {
+    id: 'l-autorite-apparente-est-releguee',
+    quoi: 'l’autorité apparente cesse d’ouvrir la table — un réflexe listé en dernier se lit en dernier',
+    cible: 'reflexes-qui-le-visent',
+    fichier: 'metier',
+    muter: (t) => permuter(t, '**Autorité apparente**', '**Ancrage**'),
+  },
+  {
+    id: 'la-contrainte-devient-un-conseil',
+    quoi: 'la réponse à faire garde sa colonne, son rang et ses mots, et cesse de contraindre — « évite de valider trop vite »',
+    cible: 'reflexes-qui-le-visent',
+    fichier: 'metier',
+    // LA MUTATION QUE CE LOT COMBAT. Elle ne demande aucune permission, n'ouvre aucune
+    // exception, ne nie aucune nécessité : elle conseille. Aucune garde de modalité existante
+    // ne la voyait — d'où `CONSEIL`, écrit ici plutôt que dans le harnais partagé.
+    muter: (t) => t.replace(
+      '« Montre-moi le verdict de chaque passe et l\'état de la chaîne » — et tant que ce n\'est pas là, le lot attend',
+      'Évite de valider trop vite : idéalement, demande-lui le verdict de chaque passe',
+    ),
+  },
+
+  {
+    id: 'le-refus-d-ecrire-disparait-du-fichier-de-droits',
+    quoi: 'l’outil d’écriture quitte la liste des refus — le métier promet toujours qu’il ne peut pas écrire, et c’est devenu faux',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'droits',
+    muter: (t) => t.replace('      "Write",\n', ''),
+  },
+  {
+    id: 'le-refus-du-sous-agent-disparait',
+    quoi: 'l’ouverture de sous-agents redevient possible — le second principe fondateur retombe au rang de consigne',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'droits',
+    muter: (t) => t.replace('      "Task"\n', '      "Read"\n'),
+  },
+  {
+    id: 'le-refus-absolu-devient-le-refus-permeable',
+    quoi: 'le refus passe de la forme absolue à la forme relative — MESURÉ perméable : elle laisse écrire hors du répertoire',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'droits',
+    // C'est le cœur du « à mesurer, jamais à supposer » : les deux formes se ressemblent, et
+    // une seule ferme la porte. `Edit(**)` a laissé créer `../evade.txt` ; `Edit(../**)` n'a
+    // rien borné du tout. Un fichier de droits qu'on croit contraignant est pire que rien.
+    muter: (t) => t.replace('"Edit(//**)"', '"Edit(**)"'),
+  },
+  {
+    id: 'un-outil-refuse-est-aussi-autorise',
+    quoi: 'le même outil figure des deux côtés — le fichier se contredit, et se relit comme une permission',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'droits',
+    muter: (t) => t.replace('      "Read",\n', '      "Read",\n      "Write",\n'),
+  },
+  {
+    id: 'le-metier-cesse-de-nommer-ce-qui-lui-est-refuse',
+    quoi: 'la table des refus perd la ligne du sous-agent — le texte et le fichier divergent',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| \*\*Ouvrir un sous-agent\*\* \|.*\n/m, ''),
+  },
+
+  {
+    id: 'une-zone-non-bornee-disparait',
+    quoi: 'le terminal cesse d’être nommé comme non borné — la contrainte partielle se lit comme totale',
+    cible: 'la-contrainte-dit-aussi-ce-qu-elle-ne-borne-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^- \*\*le terminal\*\*.*\n/m, ''),
+  },
+  {
+    id: 'le-refus-devient-un-obstacle-a-contourner',
+    quoi: 'relancer la session dans un mode plus permissif cesse d’être interdit',
+    cible: 'la-contrainte-dit-aussi-ce-qu-elle-ne-borne-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Tu ne relances pas ta session dans un mode plus permissif, et tu ne desserres pas ta propre laisse**',
+      'Tu peux relancer ta session dans un mode plus permissif si un refus te bloque',
+    ),
+  },
+  {
+    id: 'ce-qui-n-est-pas-refuse-devient-interdit',
+    quoi: 'le métier laisse croire qu’un geste absent des listes est interdit, alors qu’il est seulement demandé — donc accordable',
+    cible: 'la-contrainte-dit-aussi-ce-qu-elle-ne-borne-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**ce qui n'est pas refusé n'est pas interdit : c'est demandé.**",
+      '**ce qui ne figure dans aucune des deux listes est interdit.**',
+    ),
+  },
+
+  {
+    id: 'le-doute-redevient-une-faute',
+    quoi: '« je n’ai pas vérifié » cesse d’être une information attendue — et tous les réflexes cèdent sous la pression',
+    cible: 'le-doute-est-une-information-attendue',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Un « je n\'ai pas vérifié » est une information attendue de toi, jamais une faute**',
+      'Un « je n\'ai pas vérifié » reste un aveu qu\'il vaut mieux éviter',
+    ),
+  },
+  {
+    id: 'le-doute-ne-reste-attendu-qu-a-un-seul-endroit',
+    quoi: 'la seconde affirmation s’efface pendant que la première tient — le lecteur applique celle qu’il a lue en dernier',
+    cible: 'le-doute-est-une-information-attendue',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'et **« je n\'ai pas vérifié » est une information attendue de toi, jamais une faute** (voir « Tes réflexes »)',
+      'et tu le signales si tu le juges utile',
+    ),
+  },
+
+  {
+    id: 'il-se-remet-a-s-evaluer-lui-meme',
+    quoi: 'la règle d’or n°8 cesse de porter sur ses propres conclusions — appliquée au seul code, elle était déjà là',
+    cible: 'il-ne-s-evalue-pas-lui-meme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Et tu ne t\'évalues pas toi-même.** La règle d\'or n°8 fait relire le code par quelqu\'un qui ne l\'a pas écrit ; **tes conclusions n\'y échappent pas.**',
+      '**Et tu fais relire le code.** La règle d\'or n°8 le veut ; tes conclusions, elles, sont les tiennes.',
+    ),
+  },
+
+  {
+    id: 'le-brief-retourne-dans-un-fichier',
+    quoi: 'le brief redevient un fichier — que ses droits lui refusent, donc le métier l’envoie contourner par le terminal',
+    cible: 'le-brief-va-au-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**a. Écrire le brief au registre.**',
+      '**a. Écrire le brief dans un fichier.**',
+    ),
+  },
+  {
+    id: 'la-livraison-repointe-vers-un-chemin',
+    quoi: 'la commande de livraison renvoie l’agent vers un fichier local plutôt que vers le registre',
+    cible: 'le-brief-va-au-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Lis ton brief complet au registre — epics action get E-20260727-0010 — et execute-le.',
+      'Lis ton brief complet ici et execute-le : <chemin>',
+    ),
+  },
+
+  {
+    id: 'le-compte-rendu-se-valide-sur-parole',
+    quoi: 'l’exigence de preuve perd sa conséquence — sans conséquence, une exigence n’en est pas une',
+    cible: 'un-compte-rendu-se-verifie-avant-d-etre-valide',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'et tant que tu ne l\'as pas, le lot n\'est pas validé.**',
+      'et tant que tu ne l\'as pas, tu peux quand même avancer si le compte rendu paraît sérieux.**',
+    ),
+  },
+  {
+    id: 'un-compte-rendu-qui-conclut-vaut-preuve',
+    quoi: 'la distinction entre un compte rendu qui CONCLUT et un compte rendu qui MONTRE disparaît',
+    cible: 'un-compte-rendu-se-verifie-avant-d-etre-valide',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'n\'est pas une preuve : la preuve est ce qu\'il **montre**.',
+      'vaut preuve quand il est circonstancié.',
+    ),
+  },
+
+  {
+    id: 'la-source-d-un-ordre-se-reformule',
+    quoi: 'un ordre du dirigeant peut être relayé « en substance » — c’est ainsi qu’arrivent des ordres que personne n’a donnés',
+    cible: 'un-ordre-transmis-porte-sa-source',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ce que tu transmets porte sa source, et une source se recopie — elle ne se reformule pas.**',
+      '**Ce que tu transmets porte sa source, et une source se reformule volontiers pour être plus claire.**',
+    ),
+  },
+
+  {
+    id: 'l-echelle-de-calibration-perd-un-cran',
+    quoi: 'l’état « supposé » disparaît — une échelle à deux crans laisse rendre une supposition comme une déduction',
+    cible: 'il-calibre-au-moment-ou-il-tranche',
+    fichier: 'metier',
+    muter: (t) => t.replace('**supposé**, tu le penses', 'et voilà'),
+  },
+  {
+    id: 'non-prouve-redevient-faux',
+    quoi: 'la distinction entre « non prouvé » et « faux » disparaît — l’écart a coûté une soirée, et l’hypothèse déclarée fausse était juste',
+    cible: 'il-calibre-au-moment-ou-il-tranche',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Et une hypothèse non prouvée n\'est pas une hypothèse fausse.**',
+      '**Et une hypothèse que rien n\'appuie peut être écartée comme fausse.**',
+    ),
+  },
+
+  {
+    id: 'un-paragraphe-d-origine-disparait-d-une-section-amendee',
+    quoi: 'un paragraphe d’origine est retiré d’une section que ce lot s’autorise à amender — l’exemption servirait de trou, pas d’amendement',
+    cible: 'les-amendements-ne-cachent-pas-une-reecriture',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^\*\*Inscris la décision dans le ServiceDesk\*\*[\s\S]*?\n\n/m,
+      '',
     ),
   },
 ];
