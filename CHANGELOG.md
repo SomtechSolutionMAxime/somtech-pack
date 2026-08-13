@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.36.0] - 2026-08-13
+
+### Ajouté
+
+- **Le métier de l'orchestrateur devient un gabarit, avec ses six ajouts** (E-20260813-0001, PR #201). Comme le gestionnaire client avant lui, l'orchestrateur cesse d'être une session qu'on transforme une fois : son métier vit désormais dans un `CLAUDE.md` (`.claude/templates/orchestrateur/CLAUDE.md`) relu à **chaque** échange plutôt que dans une compétence lue une seule fois au démarrage, accompagné d'un `CONTEXTE.md` propre au dépôt qui ne voyage jamais. Le gabarit porte la compétence existante intégralement — le texte voyage octet pour octet, garde vérifiée par comparaison section par section — plus six ajouts fermés par le dirigeant (2026-08-12) : il appelle les agents spécialisés (consulter, jamais sous-traiter), il parle au dirigeant et cette parole ne se partage pas, sa **ligne directe devient obligatoire** (la phrase qui la rendait facultative a été retirée), il veille sur ses agents chaque heure par défaut, il pose un topo sur son canal chaque matin à 7 h, et il est gardien des ADR et des bonnes pratiques — par le brief, la revue et le signalement, jamais en relisant le code.
+
+### Technique
+
+- 34 mutations, 56 tests. Deux passes de revue indépendante ont chacune trouvé un trou de garde réel plutôt qu'un faux positif : la première a montré que le préambule du métier — où vivent les deux principes fondateurs et le « tu ne codes pas » — échappait entièrement à la comparaison octet-pour-octet, `sections()` ne rendant que ce qui suit un titre ; la seconde a montré que `CONTEXTE.md` n'était gardé que sur l'existence de ses titres (un corps vidé restait vert), que l'obligation de la ligne directe n'était vérifiée qu'à un seul des deux endroits qui l'affirment, et que les sections exemptées de la comparaison octet-pour-octet l'étaient en entier plutôt que sur le seul amendement ciblé. Les mutations des deux revues sont conservées, préfixées `revue-P1-`/`revue-P2-`, pour que les défauts qu'elles ont révélés ne puissent pas revenir.
+
 ## [1.35.0] - 2026-08-12
 
 ### Corrigé
