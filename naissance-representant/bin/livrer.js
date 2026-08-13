@@ -21,12 +21,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { lireReponseHerdr } from '../src/naissance.js';
-import {
-  commandesLivraison,
-  contenuBoite,
-  briefEstPris,
-  obstacleAvantLivraison,
-} from '../src/livraison.js';
+import { livrerBrief } from '../src/livraison.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -90,62 +85,19 @@ async function main() {
     process.exit(1);
   }
 
-  const commandes = commandesLivraison(pane, texte, { attenteMs: ATTENTE_MS });
+  const resultat = await livrerBrief({
+    pane,
+    texte,
+    appelHerdr,
+    lireEcran,
+    dormir,
+    essais: ESSAIS,
+    delaiMs: DELAI_MS,
+    attenteMs: ATTENTE_MS,
+  });
 
-  // 1. REGARDER avant d'écrire — la boîte ET l'état. Une boîte non vide est un refus, jamais
-  //    une fusion ; une session qui travaille déjà est un refus aussi, parce que la preuve de
-  //    prise (« elle a quitté l'attente ») serait vraie avant même qu'on écrive.
-  const etatAvant = await appelHerdr(commandes.interroger);
-  const statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
-  const avant = await lireEcran(commandes.lireEcran);
-  const obstacle = obstacleAvantLivraison(avant, statutAvant);
-  if (obstacle) {
-    process.stderr.write(`${obstacle}\n`);
-    process.exit(1);
-  }
-
-  // 2. LIVRER. `--wait` est l'indice de herdr, jamais la preuve : ce qu'il rapporte peut être
-  //    un faux négatif (un tour plus rapide que son échantillonnage). On l'enregistre, on ne
-  //    tranche pas dessus — c'est la relecture qui tranche.
-  const livraison = await appelHerdr(commandes.livrer);
-
-  // 3. VÉRIFIER PAR LE FAIT — la session a-t-elle quitté l'attente ?
-  const prisMaintenant = async () => {
-    const etat = await appelHerdr(commandes.interroger);
-    const statut = etat.reponse?.result?.agent?.agent_status ?? null;
-    const terminal = await lireEcran(commandes.lireEcran);
-    return { pris: briefEstPris({ statut, terminal }), statut, terminal };
-  };
-
-  let vu = await prisMaintenant();
-  for (let i = 0; i < ESSAIS && !vu.pris; i += 1) {
-    await dormir(DELAI_MS);
-    vu = await prisMaintenant();
-  }
-
-  // 4. RÉPARER une fois le cas connu : le texte est bien dans la boîte, la soumission n'est
-  //    pas partie. On envoie la touche d'envoi, puis on re-vérifie — sans jamais réécrire le
-  //    brief, ce qui le collerait à lui-même.
-  let repare = false;
-  if (!vu.pris) {
-    const reste = contenuBoite(vu.terminal);
-    if (reste) {
-      const envoi = await appelHerdr(commandes.soumettre);
-      repare = envoi.ok;
-      for (let i = 0; i < ESSAIS && !vu.pris; i += 1) {
-        await dormir(DELAI_MS);
-        vu = await prisMaintenant();
-      }
-    }
-  }
-
-  if (!vu.pris) {
-    const reste = contenuBoite(vu.terminal);
-    process.stderr.write(
-      `le brief n’a pas été pris par la session de ${pane} — statut « ${vu.statut ?? '—'} », ` +
-        `boîte ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (« ${reste.slice(0, 60)}… »)`}` +
-        `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}\n`
-    );
+  if (!resultat.ok) {
+    process.stderr.write(`${resultat.message}\n`);
     process.exit(1);
   }
 
@@ -154,9 +106,9 @@ async function main() {
       ok: true,
       pane,
       caracteres: texte.length,
-      statut: vu.statut,
-      repare,
-      attendu: livraison.ok,
+      statut: resultat.statut,
+      repare: resultat.repare,
+      attendu: resultat.attendu,
     })}\n`
   );
 }

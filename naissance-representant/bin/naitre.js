@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// naitre.js — la commande qui fait naître une session dans le lieu d'un client.
+// naitre.js — la commande qui fait naître une session dans le lieu d'un agent.
 //
-//   gestionnaire-naitre <client> --workspace <espace herdr>
+//   gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur]
+//                             [--depot <chemin>]
 //
-// Elle ne pose jamais le lieu (compétence /gestionnaire-client, E-20260807-0002) : elle le
-// vérifie, y repose le garde d'ouverture (à chaque appel — idempotent), puis fait naître le
-// pane, EXACTEMENT à cet endroit. AUCUN shell : chaque commande herdr part par `execFile`
+// Elle ne pose jamais le lieu (E-20260807-0002 pour le représentant, E-20260813-0002 pour
+// l'orchestrateur) : elle le vérifie, y repose le garde d'ouverture (à chaque appel —
+// idempotent), puis fait naître le pane, EXACTEMENT à cet endroit. AUCUN shell : chaque commande herdr part par `execFile`
 // avec un tableau d'arguments, comme ligne-directe/src/herdr.js et pour la même raison.
 //
 // L'ORDRE DES GESTES, ET POURQUOI IL A CHANGÉ (T-20260809-0023)
@@ -29,7 +30,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
-import { realpathSync } from 'node:fs';
+import { realpathSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   poserGarde,
@@ -40,10 +41,34 @@ import {
   repertoireDeLaSession,
   LieuAbsent,
 } from '../src/naissance.js';
+import { livrerBrief } from '../src/livraison.js';
+import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
 
 const execFileAsync = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, '..', '..');
+
+/**
+ * Le dépôt où le lieu a été posé.
+ *
+ * PAR DÉFAUT, celui qui héberge ce module — le comportement d'origine, et il reste juste
+ * quand la commande est lancée depuis le dépôt du pack.
+ *
+ * DÉFAUT TROUVÉ PAR LA PREUVE RÉELLE, ET PAS PAR LES 826 TESTS VERTS : ce chemin est calculé
+ * depuis la POSITION DU FICHIER. Or la pose, elle, accepte `--depot` depuis toujours. Poser
+ * dans un dépôt et faire naître ailleurs donnait donc un refus parfaitement exact — « le lieu
+ * n'existe pas » — sur un lieu qui venait d'être posé deux lignes plus haut. Le message était
+ * juste, et il envoyait chercher au mauvais endroit.
+ *
+ * ⚠️ CE QUE CE CORRECTIF NE RÈGLE PAS, et qui est nommé plutôt qu'escamoté : installé en
+ * outil de poste (`~/.somtech/naissance-representant`), le défaut vaut `~/.somtech` — donc
+ * un représentant posé chez un client ne peut naître qu'en passant `--depot`. Le rendre
+ * implicite (déduire le dépôt du répertoire courant) changerait le comportement d'appelants
+ * déjà écrits ; ça se tranche sur un cas réel, pas ici.
+ */
+function depotDe(args) {
+  const i = args.indexOf('--depot');
+  return i === -1 ? resolve(HERE, '..', '..') : resolve(args[i + 1] ?? '.');
+}
 
 // La même patience que /orchestrer-chantier §4b : on interroge plutôt que de parier sur un
 // délai. 30 × 2 s = une minute — assez pour une session qui démarre lentement, assez court
@@ -52,7 +77,10 @@ const ESSAIS = Number(process.env.NAISSANCE_ESSAIS || 30);
 const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 
 function usage(code) {
-  process.stderr.write('gestionnaire-naitre <client> --workspace <espace herdr>\n');
+  process.stderr.write(
+    'gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur] ' +
+      '[--depot <chemin>]\n'
+  );
   process.exit(code);
 }
 
@@ -81,6 +109,20 @@ async function appelHerdr(commande, { resultatAttendu = true } = {}) {
   }
 }
 
+/**
+ * `herdr agent read` rend du TEXTE BRUT, pas du JSON — il ne passe donc pas par le lecteur
+ * commun. Un échec de lecture rend `null`, que `contenuBoite` traduira en « boîte illisible »,
+ * jamais en « boîte vide » : on ne livre pas dans ce qu'on ne voit pas.
+ */
+async function lireEcran(commande) {
+  try {
+    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
+    return stdout;
+  } catch (err) {
+    return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;
+  }
+}
+
 /** Deux chemins désignent-ils le même répertoire ? (`/tmp` → `/private/tmp` sur macOS). */
 function memeRepertoire(a, b) {
   if (!a || !b) return false;
@@ -96,13 +138,35 @@ function memeRepertoire(a, b) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const client = args[0];
+  const nom = args[0];
   const workspace = option(args, '--workspace');
-  if (!client || client.startsWith('--') || !workspace) usage(1);
+  // Le défaut reste `representant` : la commande existait pour lui, et un appelant déjà écrit
+  // ne doit pas changer de comportement du seul fait qu'un second rôle existe.
+  const role = option(args, '--role') || 'representant';
+  const amorceFichier = option(args, '--amorce');
+  const amorceTexte = option(args, '--amorce-texte');
+  const REPO_ROOT = depotDe(args);
+  if (!nom || nom.startsWith('--') || !workspace) usage(1);
+
+  // L'amorce est lue AVANT qu'un pane existe : un fichier illisible doit arrêter la commande
+  // ici, pas après avoir fait naître une session qu'on n'aura rien à dire.
+  let amorce = null;
+  if (amorceFichier || amorceTexte) {
+    try {
+      amorce = String(amorceFichier ? readFileSync(amorceFichier, 'utf8') : amorceTexte).trim();
+    } catch (err) {
+      process.stderr.write(`amorce illisible (${amorceFichier}) : ${err.message}\n`);
+      process.exit(1);
+    }
+    if (!amorce) {
+      process.stderr.write('une amorce vide n\u2019est pas une amorce\n');
+      process.exit(1);
+    }
+  }
 
   let cheminGarde;
   try {
-    cheminGarde = poserGarde(REPO_ROOT, client);
+    cheminGarde = poserGarde(REPO_ROOT, nom, role);
   } catch (err) {
     if (err instanceof LieuAbsent) {
       process.stderr.write(`${err.message}\n`);
@@ -113,7 +177,23 @@ async function main() {
 
   // Construire les commandes AVANT de créer quoi que ce soit : un nom que herdr refuserait
   // (`invalid_agent_name`) doit arrêter la commande ici, pas après avoir ouvert un pane.
-  const commandes = commandesNaissance(REPO_ROOT, client, { workspace });
+  const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role });
+
+  // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
+  // confiance de Claude Code et attend une touche que personne ne tapera. Elle serait
+  // pourtant DÉTECTÉE, dans le bon répertoire, portant son nom : une naissance qui a l'air
+  // réussie de tous les points de vue observables, et une session qui ne commence jamais.
+  // Mesuré contre le vrai `claude` (voir src/approbation.js).
+  let approbation;
+  try {
+    approbation = approuverLieu(commandes.lieu);
+  } catch (err) {
+    if (err instanceof ConfigIllisible) {
+      process.stderr.write(`${err.message}\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
 
   const creation = await appelHerdr(commandes.tabCreate);
   if (!creation.ok) {
@@ -191,13 +271,52 @@ async function main() {
     );
   }
 
+  // ═══ L'AMORCE — le sixième des sept défauts : une session « née correctement, qui ne fait
+  // rien, parce que personne ne lui dit de commencer ». Elle passe par la MÊME porte que
+  // `livrer.js`, qui regarde la boîte avant d'écrire et vérifie par le fait que le brief a
+  // été pris. Un `herdr agent prompt` nu rendrait « livré » sur un brief resté dans la boîte.
+  //
+  // Un échec d'amorce ne referme PAS le pane, et c'est délibéré : à ce stade la session est
+  // née, elle est dans son lieu, elle porte son nom et son garde — la détruire coûterait plus
+  // que de dire ce qui manque. Mais la commande ÉCHOUE : une naissance qui n'a pas amorcé
+  // n'est pas une naissance réussie, et la déclarer telle est exactement ce que le défaut
+  // faisait.
+  let amorcee = false;
+  if (amorce) {
+    const livre = await livrerBrief({
+      pane: paneId,
+      texte: amorce,
+      appelHerdr,
+      lireEcran,
+      dormir,
+      essais: ESSAIS,
+      delaiMs: DELAI_MS,
+      // La session vient de naître : on lui laisse le temps d'afficher sa boîte de saisie,
+      // avec la même patience qu'on a mise à attendre qu'elle soit détectée.
+      essaisDisponible: ESSAIS,
+    });
+    if (!livre.ok) {
+      process.stderr.write(
+        `la session de ${paneId} est née dans son lieu mais n\u2019a pas pris son amorce : ${livre.message}\n` +
+          `  Le pane est laissé ouvert — briefe-la à la main plutôt que de la refaire naître.\n`
+      );
+      process.exit(1);
+    }
+    amorcee = true;
+  }
+
   process.stdout.write(
     `${JSON.stringify({
       ok: true,
-      client,
+      role,
+      nom,
+      amorcee,
+      client: nom, // conservé : le contrat de sortie d'origine, que des appelants lisent déjà
+      depot: REPO_ROOT,
       agent: commandes.nom,
       pane: paneId,
       garde: cheminGarde,
+      approuve: approbation.deja ? 'déjà' : 'maintenant',
       lieu: commandes.lieu,
       repertoire,
     })}\n`

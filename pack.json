@@ -63,7 +63,7 @@
       ]
     },
     "naissance-representant": {
-      "description": "Fait naître une session dans le lieu d'un client (.gestionnaire/<client>/) et la rend joignable — par un garde technique, pas seulement une consigne — avant tout le reste (E-20260807-0003). OUTIL DE POSTE : installé dans ~/.somtech aux côtés de ligne-directe, dont il dépend directement (le garde lit l'état des lignes via ligne-directe, et fusionne son hook dans le settings.json que ligne-directe representant pose déjà). Jamais copié dans un projet client.",
+      "description": "Fait naître une session dans le lieu d'un agent qui dure — le représentant d'un client (.gestionnaire/<client>/, E-20260807-0003) comme l'orchestrateur d'un chantier (.orchestrateur/<nom>/, E-20260813-0002) — et la rend joignable par un garde technique, pas seulement par une consigne, avant tout le reste. Porte aussi l'amorce du premier tour et les deux rendez-vous de l'orchestrateur (ronde horaire, topo de 7 h). Le nom du module reste celui de son premier usage : les gardes déjà posés chez des clients le désignent par ce chemin, et le renommer les rendrait tous inertes. OUTIL DE POSTE : installé dans ~/.somtech aux côtés de ligne-directe, dont il dépend directement (le garde lit l'état des lignes via ligne-directe, et fusionne son hook dans le settings.json que la pose écrit déjà). Jamais copié dans un projet client.",
       "default": false,
       "scope": "poste",
       "paths": [

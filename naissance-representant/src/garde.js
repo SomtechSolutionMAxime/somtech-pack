@@ -17,18 +17,74 @@
  * Les segments de commande Bash qui font partie de la séquence d'ouverture, et RIEN
  * D'AUTRE. Chacun est ancré (^...$) : une sonde non ancrée laisserait passer une commande
  * composée qui commence par un segment autorisé et enchaîne autre chose derrière.
+ *
+ * Ce qui précède la ligne d'ouverture est commun aux deux rôles — trouver son pane, se
+ * nommer, lire l'état des lignes. C'est la ligne elle-même qui diffère, et la différence
+ * n'est pas cosmétique : la NATURE du canal.
  */
-const SEGMENTS_AUTORISES = [
+const SEGMENTS_COMMUNS = [
   /^\s*$/, // ligne vide
   /^#.*$/, // commentaire
   /^LD=.*ligne-directe\.js.*$/, // pose la variable, aucun effet
   /^herdr pane current$/,
   /^herdr agent rename \S+ \S+$/,
   /^\$LD etat$/,
-  /^\$LD ouvrir \S+.*--nature client.*--titre\s+".+"$/,
   /^node \S*ligne-directe\.js etat$/,
-  /^node \S*ligne-directe\.js ouvrir \S+.*--nature client.*--titre\s+".+"$/,
 ];
+
+/**
+ * L'ouverture propre à chaque rôle.
+ *
+ * REPRÉSENTANT — `--nature client` OBLIGATOIRE (canal privé, où parlent les gens du client)
+ * et `--titre` obligatoire avec elle : le client ne doit jamais voir un code de chantier.
+ *
+ * ORCHESTRATEUR — sa ligne est INTERNE : canal public, entre nous, nommé par le code de son
+ * chantier. `--nature` y est donc INTERDITE : l'autoriser laisserait un orchestrateur ouvrir
+ * un canal privé de client pour y déverser de l'interne — précisément ce que le cloisonnement
+ * interdit. Le sujet et l'invitation restent libres.
+ *
+ * ⚠️ DÉFAUT TROUVÉ EN REVUE DE FOND (passe 2), et c'est le motif 1 du brief appliqué à moi :
+ * la première version écrivait l'interdiction en POSITION — `ouvrir \S+(?!.*--nature)` —, donc
+ * après le premier mot. Écrire `ouvrir --nature client D-1` faisait consommer `--nature` par
+ * le `\S+`, et le reste de la commande, lui, n'en portait plus : la garde disait `allow` sur
+ * la commande exacte qu'elle existait pour refuser. MESURÉ, pas supposé.
+ *
+ * L'interdiction porte donc désormais sur le FAIT — le segment entier ne contient nulle part
+ * `--nature` —, et elle est vérifiée à part, avant toute reconnaissance de forme.
+ */
+const OUVERTURE = {
+  representant: [
+    /^\$LD ouvrir \S+.*--nature client.*--titre\s+".+"$/,
+    /^node \S*ligne-directe\.js ouvrir \S+.*--nature client.*--titre\s+".+"$/,
+  ],
+  orchestrateur: [
+    /^\$LD ouvrir \S+.*$/,
+    /^node \S*ligne-directe\.js ouvrir \S+.*$/,
+  ],
+};
+
+/**
+ * Ce qu'un rôle ne doit JAMAIS voir passer, où que ce soit dans le segment.
+ *
+ * Séparé des formes admises à dessein : une interdiction glissée dans une expression de forme
+ * se met à dépendre de l'ordre des mots, et c'est exactement ce qui a laissé passer
+ * `ouvrir --nature client`. Ici, la question posée est « ce texte contient-il ceci ? », à
+ * laquelle la position ne peut rien changer.
+ */
+const INTERDITS = {
+  orchestrateur: [/--nature/],
+  representant: [],
+};
+
+/** Les segments admis pour le rôle donné — un rôle inconnu n'admet que le commun, donc rien qui ouvre. */
+export function segmentsAutorises(role) {
+  return [...SEGMENTS_COMMUNS, ...(OUVERTURE[role] || [])];
+}
+
+/** Un segment porte-t-il quelque chose que ce rôle ne doit jamais employer ? */
+export function porteUnInterdit(segment, role) {
+  return (INTERDITS[role] || []).some((r) => r.test(segment));
+}
 
 /** Découpe une commande Bash en segments indépendants — chacun doit être autorisé. */
 export function segments(commande) {
@@ -38,18 +94,21 @@ export function segments(commande) {
     .filter((s) => s.length > 0);
 }
 
-/** Les segments d'une commande qui n'appartiennent pas à la séquence d'ouverture. */
-export function segmentsHorsSequence(commande) {
-  return segments(commande).filter((s) => !SEGMENTS_AUTORISES.some((r) => r.test(s)));
+/** Les segments d'une commande qui n'appartiennent pas à la séquence d'ouverture de ce rôle. */
+export function segmentsHorsSequence(commande, role = 'representant') {
+  const admis = segmentsAutorises(role);
+  // L'interdit l'emporte sur la forme : un segment interdit est hors séquence même s'il
+  // ressemble à une ouverture valable. C'est ce qui referme le contournement par la position.
+  return segments(commande).filter((s) => porteUnInterdit(s, role) || !admis.some((r) => r.test(s)));
 }
 
 /**
  * La décision pour un appel d'outil, sachant si la ligne est déjà ouverte pour ce pane.
  *
- * @param {{toolName: string, toolInput: object, ligneOuverte: boolean}} params
+ * @param {{toolName: string, toolInput: object, ligneOuverte: boolean, role?: string}} params
  * @returns {{permissionDecision: 'allow'|'deny', permissionDecisionReason: string}}
  */
-export function decider({ toolName, toolInput, ligneOuverte }) {
+export function decider({ toolName, toolInput, ligneOuverte, role = 'representant' }) {
   if (ligneOuverte) {
     return { permissionDecision: 'allow', permissionDecisionReason: 'la ligne est déjà ouverte pour ce pane' };
   }
@@ -67,7 +126,7 @@ export function decider({ toolName, toolInput, ligneOuverte }) {
     // ce qui n'a jamais été reconnu comme la séquence d'ouverture. Il faut donc AU MOINS UN
     // segment reconnu, pas seulement AUCUN segment refusé.
     const segs = segments(toolInput?.command);
-    const hors = segmentsHorsSequence(toolInput?.command);
+    const hors = segmentsHorsSequence(toolInput?.command, role);
     if (segs.length > 0 && hors.length === 0) {
       return { permissionDecision: 'allow', permissionDecisionReason: 'fait partie de la séquence d’ouverture de ligne' };
     }

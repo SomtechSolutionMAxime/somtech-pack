@@ -6,6 +6,7 @@
 //   ligne-directe demander "..."
 //   ligne-directe fermer [--bilan "..."] [--sans-archiver]
 //   ligne-directe representant <client> --canal <canal> [--depot <chemin>]
+//   ligne-directe orchestrateur <nom> [--depot <chemin>]
 //   ligne-directe etat
 //   ligne-directe veilleur          (démarre le veilleur au premier plan, pour l'observer)
 //
@@ -17,6 +18,7 @@ import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import { preparerLieuRepresentant, verifierCanalJoignable } from '../src/representant.js';
+import { preparerLieuOrchestrateur } from '../src/orchestrateur.js';
 
 function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
@@ -39,6 +41,10 @@ function usage(code = 0) {
                                                            dans <chemin> (defaut : le repertoire
                                                            courant) — refuse tout net et NE CREE
                                                            RIEN si <canal> n'est pas joignable
+  orchestrateur <nom> [--depot <chemin>]                   prepare le lieu d'un orchestrateur,
+                                                           nomme, dans <chemin> — refuse tout net
+                                                           et NE CREE RIEN si le poste ne peut pas
+                                                           ouvrir de ligne (sa ligne est obligatoire)
   etat                                                     ce qui est ouvert
   service installer|retirer|etat                           le veilleur revient après un redémarrage
   relever                                                  fait passer la main a un veilleur neuf
@@ -203,6 +209,16 @@ if (geste === 'relever') {
   // Le JSON est le contrat de qui appelle ; le motif écrit en clair est celui de qui LIT. Sans
   // cette ligne, un refus ne laissait sur stderr que ce que Node y avait déversé lui-même — un
   // « ENOENT ... copyfile ... » brut, illisible et faux (T-20260807-0067).
+  if (!r.ok && r.refus?.message) process.stderr.write(`${r.refus.message}\n`);
+  process.exit(r.ok ? 0 : 1);
+} else if (geste === 'orchestrateur') {
+  const nom = premierLibre(args);
+  if (!nom) usage(1);
+  const depot = option(args, '--depot') || process.cwd();
+  const r = await preparerLieuOrchestrateur({ depot, nom });
+  process.stdout.write(`${JSON.stringify(r)}\n`);
+  // Même contrat que `representant` : le JSON pour qui appelle, le motif en clair pour qui LIT.
+  // Un refus qui ne laisse sur stderr que ce que Node y a déversé est illisible et faux.
   if (!r.ok && r.refus?.message) process.stderr.write(`${r.refus.message}\n`);
   process.exit(r.ok ? 0 : 1);
 } else if (geste === 'etat') {
