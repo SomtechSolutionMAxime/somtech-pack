@@ -106,8 +106,10 @@ $LD orchestrateur <nom> [--depot <chemin>]
 
 La commande rend un objet JSON et son code de sortie le résume : `0` si le lieu existe
 désormais **en entier** (qu'elle vienne de le créer ou qu'il y était déjà), `1` si elle a
-refusé. Sur un refus, le motif est aussi écrit en clair sur la sortie d'erreur — lis-le, il
-nomme le geste qui débloque.
+refusé. Sur un refus, le motif est aussi écrit en clair sur la sortie d'erreur — lis-le : il
+dit ce qui a été mesuré, et le geste qui débloque **quand il y en a un** à proposer sans
+risque. Un des cinq n'en propose aucun, délibérément — remplacer une entrée du trousseau
+suppose de détruire celle qui est en place, et ce refus-là ne met pas ce geste dans ta bouche.
 
 **Elle est idempotente, et l'idempotence ne vaut que pour un lieu COMPLET.** Relancée sur un
 orchestrateur déjà posé — ses quatre fichiers présents — elle ne retouche à rien, le dit
