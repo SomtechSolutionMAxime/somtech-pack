@@ -954,6 +954,20 @@ export const CONTROLES = [
           + `c’est de \`in_analysis\` qu’ils partent, et c’est toute la raison du geste`,
       );
       assert.match(geste, /rien ne s'automatise en aval/i, 'et le métier doit dire ce que son absence coûte');
+
+      // ── LE COÛT MESURÉ, PAS SEULEMENT NOMMÉ — relevé en PASSE 1 de revue, et c'était un
+      // vrai trou : « rien ne s'automatise en aval » est une affirmation, et une affirmation
+      // se renégocie au premier chantier pressé. L'incident qui l'a prouvée, non. Gardé en
+      // POLARITÉ, parce que le retourner serait la façon silencieuse de le vider : c'est la
+      // DEMANDE qui est restée `received` pendant que ses LOTS étaient en production.
+      const [immobile, pendant] = geste.split(/pendant que/i);
+      assert.ok(
+        pendant !== undefined,
+        `« ${geste.trim()} » a perdu l'incident qui prouve le coût du geste non posé — il ne reste `
+          + `qu'une affirmation, et une affirmation se renégocie`,
+      );
+      assert.match(immobile, /restée `received`/i, 'c’est la Demande qui est restée `received`');
+      assert.match(pendant, /en production/i, '… pendant que ses lots étaient en production — les deux sont inversés');
     },
   },
 ];
@@ -1463,5 +1477,24 @@ export const MUTATIONS = [
     cible: 'transition-initiale-de-la-demande',
     fichier: 'metier',
     muter: (t) => t.replace('**partent de `in_analysis`**', '**partent de `received`**'),
+  },
+  {
+    id: 'l-incident-qui-prouve-le-cout-disparait',
+    quoi: 'la prescription garde son coût nommé et perd l’incident qui l’a prouvé — il ne reste qu’une affirmation, et une affirmation se renégocie',
+    cible: 'transition-initiale-de-la-demande',
+    fichier: 'metier',
+    // Trouvée par la PASSE 1 de la revue indépendante : la garde exigeait que le coût soit
+    // NOMMÉ, pas qu'il soit PROUVÉ. Vider l'incident laissait le contrôle vert.
+    muter: (t) => t.replace(' — une demande est restée `received` deux jours pendant que ses lots étaient en production', ''),
+  },
+  {
+    id: 'l-incident-est-retourne',
+    quoi: 'l’incident est retourné — la Demande aurait été en production pendant que ses lots disaient « reçue », ce qui n’accuse plus le geste manquant',
+    cible: 'transition-initiale-de-la-demande',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'une demande est restée `received` deux jours pendant que ses lots étaient en production',
+      'une demande est restée en production deux jours pendant que ses lots étaient `received`',
+    ),
   },
 ];
