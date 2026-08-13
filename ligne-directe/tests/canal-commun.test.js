@@ -171,6 +171,20 @@ test('DÉSIGNER — le canal doit exister, et notre robot y être invité', asyn
   });
 });
 
+test('DÉSIGNER — un canal ARCHIVÉ est refusé : il a l’air posé, et aucune consigne n’en part jamais', async () => {
+  // Relevé en revue de fond. `trouverCanal` cherche archives comprises (`exclude_archived:
+  // false`), et le robot reste membre d'un canal archivé — les deux garde-fous existants
+  // laissaient donc passer. Le résultat était le pire des trois : `ok:true`, canal désigné,
+  // et le silence total sur le canal censé réveiller tout le poste.
+  await avecSlack({ canaux: [{ ...ANNONCES, is_archived: true }] }, async () => {
+    const v = veilleur();
+    const r = await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    assert.equal(r.ok, false, 'un canal archivé ne se désigne pas');
+    assert.equal(r.motif, 'archive');
+    assert.equal(canalCommun(chargerRegistre()), null, 'et rien n’est inscrit');
+  });
+});
+
 test('DÉSIGNER — sans autorisé, rien n’est désigné : tout l’espace parlerait à tous les agents', async () => {
   await avecSlack({ canaux: [ANNONCES] }, async () => {
     const v = veilleur();
@@ -280,6 +294,39 @@ test('DIFFUSER — un membre NON autorisé ne parle pas à tous les agents', asy
     await v.remettreAuChantier({ channel: 'C_ANNONCES', user: 'UQUELQUUN', text: 'redémarrez tout' });
     assert.equal(existsSync(travail.fichier('w1:p1')), false, 'aucun agent ne doit avoir agi');
     assert.deepEqual(monde.postes, [], 'et on ne lui répond pas DANS le canal de tous les agents');
+  });
+});
+
+test('DIFFUSER — les trois silences : rien à dire, herdr muet, personne au travail', async () => {
+  // Trois branches qui se terminent SANS remise ET SANS un mot dans le canal. Elles ne sont pas
+  // des oublis : c'est le choix assumé de ne rien déverser dans un canal d'urgence (RA-REL-008).
+  // Ce qu'on éprouve ici, c'est qu'elles ne LÈVENT pas et n'écrivent nulle part — un rejet qui
+  // s'échappe de ce chemin met le veilleur à terre, et l'enveloppe Slack est déjà acquittée :
+  // le message serait perdu définitivement, en silence.
+  await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
+    // 1. Un message qui ne porte QU'UNE pièce jointe : les pièces ne suivent pas ce canal.
+    const sansTexte = agentsQuiTravaillent({ panes: ['w1:p1'] });
+    const v1 = veilleur({ herdr: sansTexte });
+    await v1.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v1.remettreAuChantier({ channel: 'C_ANNONCES', user: DIRIGEANT, text: '   ', files: [{ id: 'F1' }] });
+    assert.equal(existsSync(sansTexte.fichier('w1:p1')), false, 'rien ne devait être remis');
+
+    // 2. herdr injoignable — on reporte, on ne conclut pas que le poste est vide.
+    const herdrMuet = {
+      ...agentsQuiTravaillent(),
+      async agents() {
+        throw new Error('herdr introuvable dans le PATH');
+      },
+    };
+    const v2 = veilleur({ herdr: herdrMuet });
+    assert.equal(await v2.diffuserConsigne({ channel: 'C_ANNONCES', user: DIRIGEANT, text: 'consigne' }), undefined);
+
+    // 3. Personne au travail en ce moment.
+    const desert = { ...agentsQuiTravaillent(), async agents() { return []; } };
+    const v3 = veilleur({ herdr: desert });
+    assert.equal(await v3.diffuserConsigne({ channel: 'C_ANNONCES', user: DIRIGEANT, text: 'consigne' }), undefined);
+
+    assert.deepEqual(monde.postes, [], 'et aucun des trois silences ne parle dans le canal');
   });
 });
 

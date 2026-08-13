@@ -15,6 +15,7 @@
 
 import { parler, passerLaMain } from '../src/client.js';
 import { ligneDuPane } from '../src/registre.js';
+import { option, optionsRepetees, premierLibre } from '../src/arguments.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
@@ -61,58 +62,6 @@ function usage(code = 0) {
 Le chantier est déduit du pane courant, sauf à l'ouverture.
 `);
   process.exit(code);
-}
-
-/** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
-const OPTIONS_A_VALEUR = new Set([
-  '--sujet',
-  '--inviter',
-  '--bilan',
-  '--titre',
-  '--nature',
-  '--canal',
-  '--depot',
-  '--dirigeant',
-]);
-
-function option(args, nom) {
-  const i = args.indexOf(nom);
-  if (i === -1) return null;
-  return args[i + 1] ?? null;
-}
-
-/**
- * Toutes les valeurs d'une option répétée — `--dirigeant a --dirigeant b`.
- *
- * `option` rend la PREMIÈRE, ce qui est juste pour un titre ou un sujet. La liste des
- * autorisés du canal commun, elle, se perdrait en silence : deux personnes nommées, une seule
- * inscrite, et celle qui manque s'entend refuser la parole sans savoir pourquoi.
- */
-function optionsRepetees(args, nom) {
-  const valeurs = [];
-  for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === nom && args[i + 1] != null && !String(args[i + 1]).startsWith('--')) valeurs.push(args[i + 1]);
-  }
-  return valeurs;
-}
-
-/**
- * Le premier argument libre — en sautant les VALEURS d'options.
- *
- * Relevé en revue : un simple « premier mot qui ne commence pas par -- » prenait la valeur
- * d'une option pour le chantier. `ouvrir --inviter maxime@somtech.ca D-1` créait un canal
- * nommé d'après l'adresse courriel. Silencieux, et le canal reste.
- */
-function premierLibre(args) {
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i];
-    if (a.startsWith('--')) {
-      if (OPTIONS_A_VALEUR.has(a)) i += 1; // sa valeur n'est pas un argument libre
-      continue;
-    }
-    return a;
-  }
-  return null;
 }
 
 function rendre(reponse) {

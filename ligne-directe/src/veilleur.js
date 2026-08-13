@@ -522,6 +522,24 @@ export class Veilleur {
 
     const trouve = await this.slack.trouverCanal(this.jetons.robot, canal);
     if (!trouve) return { ok: false, erreur: `aucun canal #${canal} dans cet espace`, motif: 'absent' };
+
+    // UN CANAL ARCHIVÉ EST EN LECTURE SEULE, ET IL RESTE DANS LA LISTE. `trouverCanal`
+    // interroge Slack avec `exclude_archived: false` — c'est voulu ailleurs, pour pouvoir DIRE
+    // qu'un canal est archivé plutôt que « introuvable ». Ici, sans ce refus, la désignation
+    // répondait `ok:true` : le canal commun aurait l'air posé, et AUCUNE consigne ne serait
+    // jamais partie, puisque plus personne ne peut écrire dans ce canal. Le silence exact que
+    // tout ce dispositif existe pour supprimer, sur le canal censé réveiller le poste entier.
+    // (Et le robot en reste membre : `estMembreDuCanal` n'aurait rien vu.)
+    if (trouve.is_archived) {
+      return {
+        ok: false,
+        motif: 'archive',
+        erreur:
+          `#${canal} est archivé — personne ne peut plus y écrire, aucune consigne n’en partirait. ` +
+          `Désarchive-le dans Slack (un compte humain le peut, pas notre robot) ou désigne-en un autre.`,
+      };
+    }
+
     if (!(await this.slack.estMembreDuCanal(this.jetons.robot, trouve))) {
       return {
         ok: false,
