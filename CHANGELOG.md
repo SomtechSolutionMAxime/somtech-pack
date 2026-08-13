@@ -5,6 +5,18 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.39.0] - 2026-08-13
+
+### Ajouté
+
+- **Une tâche non documentée est une tâche non suivie** (T-20260813-0043, PR #207). Le métier de l'orchestrateur disait comment **tenir à jour** le registre — statuts au moment où l'état change, filiation des agents, compte rendu d'avancement — et supposait partout que le travail y était déjà inscrit. Rien ne couvrait ce qui **naît** en cours de chantier : le travail qu'il se donne à lui-même, le défaut trouvé en chemin, l'ajustement reçu du dirigeant. Le principe ouvre désormais §7 et précède le suivi au lieu de le suivre. Il porte son critère d'arrêt — un travail qu'un ticket existant décrit déjà en entier en est l'aboutissement — pour qu'il ne dégénère pas en bruit.
+- **Le geste qui déverrouille la cascade**, prescrit en §2 comme une mécanique et non comme une consigne : `received → in_analysis` au moment où l'orchestrateur prend le chantier. Les déclencheurs qui font ensuite avancer une demande partent de `in_analysis` — sans ce geste manuel, rien en aval ne s'automatise. Vécu : une demande a dit « reçue » pendant deux jours alors que ses deux lots étaient en production.
+
+### Corrigé
+
+- **Le refus ne se prononce sur une absence que s'il l'a prouvée** (T-20260813-0054, PR #209). Trois causes sans rapport — binaire introuvable, trousseau verrouillé, entrée réellement absente — rendaient le même verdict « aucune entrée ne répond », suivi d'une marche à suivre pour **déposer un jeton par-dessus celui qui fonctionne**. Le dirigeant l'a rencontré deux fois en trois jours. La charge de la preuve est renversée : `jeton_absent` exige une preuve positive (code 44, ou la phrase de `security`) ; tout le reste, connu ou inconnu, devient `jeton_illisible` — avec la cause brute, et aucune commande de dépôt. Une cause qu'on n'avait pas prévue tombe désormais du côté prudent, au lieu du côté qui ment.
+- **Sept portes traitées, le représentant compris** — le ticket en listait cinq. Les binaires du système sont appelés par chemin absolu, et la lecture du jeton côté représentant est entourée comme elle l'était côté orchestrateur : son échec devient un refus structuré au lieu d'une exception qui traverse. La revue de fond a trouvé que l'appel Slack qui suit ne l'était pas — « une porte sur deux » reproduit dans le correctif du défaut « une porte sur deux ». D'où le motif `canal_illisible` et un filet structurel dans la pose.
+
 ## [1.38.0] - 2026-08-13
 
 ### Ajouté
