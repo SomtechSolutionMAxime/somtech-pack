@@ -306,12 +306,33 @@ export const CONTROLES_DANGER = [
       // pendant qu'un client perd ses données, et le message ci-dessous dit quelle forme
       // reprendre.
       assert.match(
-        priorite, /d.abord\s*,\s*(?:parce qu|car\b)/i,
+        priorite, /d.abord\s*(?:,\s*(?:parce qu|car\b|puisqu|étant donné)|\s*[:—–])/i,
         `« ${priorite.trim()} » : ce qui suit « d’abord » n’est pas une justification. La clause `
-          + `doit nommer le chemin prioritaire PUIS dire pourquoi il l’est (« …d’abord, parce que `
-          + `c’est le seul qui prévienne une personne »). Toute autre suite — « idéalement », `
-          + `« quand tu y penses », « si l’idée te vient » — transforme une priorité en souhait `
-          + `en gardant le mot « d’abord » intact.`,
+          + `doit nommer le chemin prioritaire PUIS dire pourquoi il l’est — par « parce que », `
+          + `« car », « puisque », « étant donné que », un deux-points ou un tiret explicatif. `
+          + `Toute autre suite — « idéalement », « quand tu y penses », « si l’idée te vient » — `
+          + `transforme une priorité en souhait en gardant le mot « d’abord » intact.`,
+      );
+
+      // ET LA JUSTIFICATION NE DOIT PAS NIER CE QU'ELLE JUSTIFIE.
+      //
+      // Trouvé par la revue contre la version précédente : « d'abord, PARCE QUE ÇA NE PRESSE
+      // PAS » respecte la forme à la lettre et retire l'urgence. La forme dit qu'une raison
+      // est donnée ; elle ne dit rien de ce que cette raison affirme. On garde donc aussi la
+      // MODALITÉ DU DÉLAI sur toute la section — dont le sujet entier est le contraire d'un
+      // délai, ce qui rend tout vocabulaire d'ajournement contradictoire par construction.
+      //
+      // ⚠️ CE QUI RESTE OUVERT, ET IL FAUT LE SAVOIR AVANT DE LIRE CE VERT. Une justification
+      // syntaxiquement correcte et sémantiquement vide — « d'abord, parce que c'est ainsi » —
+      // passe, et aucune sonde ne l'en empêchera : vérifier qu'une raison justifie vraiment
+      // demande de lire, pas d'apparier. Ce qui est gardé ici : la priorité est énoncée, elle
+      // est motivée, et rien dans la section ne la reporte. Pas davantage.
+      exigeImmediat(s.corps, 'la conduite quand le client est déjà en danger');
+      const nieUrgence = s.corps.match(/\b(?:ne presse pas|n.est pas urgent|peut attendre|rien ne presse|sans urgence)\b/i);
+      assert.ok(
+        !nieUrgence,
+        `la section du client déjà en danger contient « ${nieUrgence && nieUrgence[0]} » : sa raison d’être `
+          + `est que rien n’attend. Une justification qui nie l’urgence retire la priorité qu’elle prétend motiver.`,
       );
 
       const iAtteint = chemin.search(/orchestrateur/i);
@@ -502,6 +523,17 @@ export const MUTATIONS_DANGER = [
     muter: (t) => t.replace(
       "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
       "l'orchestrateur du chantier en cours d'abord, idéalement.",
+    ),
+  },
+  {
+    id: 'danger-l-urgence-se-justifie-par-l-absence-d-urgence',
+    quoi: 'la justification respecte la forme et retire l’urgence — « d’abord, parce que ça ne presse pas »',
+    cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
+    fichier: 'metier',
+    // Posée par la revue contre la garde de forme : elle en respectait la lettre entière.
+    muter: (t) => t.replace(
+      "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
+      "l'orchestrateur du chantier en cours d'abord, parce que ça ne presse pas.",
     ),
   },
   {
