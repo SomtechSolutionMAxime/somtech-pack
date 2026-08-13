@@ -136,3 +136,24 @@ test('un geste inconnu ne plante pas, il montre l’usage', async () => {
   assert.equal(r.code, 1);
   assert.match(r.stdout + r.stderr, /ouvrir/);
 });
+
+test('COMMUN — sans --dirigeant, la commande montre son usage et n’inscrit RIEN', async () => {
+  // Le geste `commun` désigne le canal dont chaque message est remis à TOUS les agents du
+  // poste. Sans liste d'autorisés, n'importe quel membre de l'espace pourrait faire rafraîchir
+  // la configuration de chacun d'eux — le refus se prononce donc AVANT de joindre quoi que ce
+  // soit, ce qui est aussi la seule raison pour laquelle ce test peut exister sous cloison.
+  const r = await lancer(['commun', 'annonces-agents']);
+  assert.equal(r.code, 1);
+  assert.match(r.stdout, /commun <canal> --dirigeant/, 'l’usage doit nommer l’option manquante');
+  assert.doesNotMatch(r.stdout, /^\{/m, 'aucun contrat JSON ne sort d’un refus d’usage');
+});
+
+test('COMMUN — l’usage annonce le geste et dit qu’il est descendant', async () => {
+  // RA-AGT-002 : un geste livré mais absent de l'usage n'existe pour personne. Et celui-ci
+  // porte une propriété qu'on ne devine pas — rien n'y remonte —, sans quoi un opérateur
+  // pourrait croire qu'il ouvre un lieu de conversation de plus.
+  const r = await lancer([]);
+  assert.match(r.stdout, /commun <canal>/);
+  assert.match(r.stdout, /TOUS les\s+agents du poste/i);
+  assert.match(r.stdout, /Descendant seulement/i, 'l’usage doit dire que rien n’y remonte');
+});

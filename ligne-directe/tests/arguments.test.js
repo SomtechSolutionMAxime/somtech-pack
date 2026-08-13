@@ -35,6 +35,12 @@ test('toute option à valeur EMPLOYÉE PAR LA COMMANDE est déclarée', async ()
   //
   // Il lit donc LA SOURCE DE LA COMMANDE, et vérifie que chaque option qu'elle interroge y est
   // déclarée. Une option ajoutée demain sans l'être fait rougir ici, quel que soit le geste.
+  //
+  // SON ANGLE MORT EST CONNU ET MESURÉ, plutôt que découvert un jour : la lecture est
+  // littérale. Un nom d'option passé par une variable, ou un `args` renommé localement, lui
+  // échappe — vérifié, les deux restent verts. Cette garde couvre l'OUBLI, qui est le défaut
+  // réel et fréquent ; elle ne couvre pas une écriture détournée, et aucune indirection de ce
+  // genre n'existe dans le binaire aujourd'hui.
   const source = readFileSync(new URL('../bin/ligne-directe.js', import.meta.url), 'utf8');
   const employees = new Set(
     [...source.matchAll(/(?:option|optionsRepetees)\(args,\s*'(--[a-z-]+)'\)/g)].map((m) => m[1])
