@@ -98,7 +98,7 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 
 | Motif rendu | Ce qui s'est passé | Le geste qui débloque |
 |---|---|---|
-| `lieu_partiel` | `.gestionnaire/<client>/` existe mais lui manque des fichiers | Retire ce reste (`rm -rf`), puis relance — elle ne complète jamais |
+| `lieu_partiel` | `.gestionnaire/<client>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .gestionnaire/<client> .gestionnaire/<client>.ecarte`), puis relance — elle ne complète jamais |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du client |
 | `absent` | Aucun canal de ce nom n'existe | Vérifie l'orthographe, ou fais créer le canal |
 | `non_membre` | Le canal existe, le robot n'y est pas | Fais-le **inviter** par un humain (`/invite` depuis le canal) |
