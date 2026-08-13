@@ -166,6 +166,11 @@ export function messagesDesMotifs(racine = REPO) {
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),
     jeton_absent: classe(trousseau, 'JetonManquant') + consequence,
     jeton_vide: classe(trousseau, 'JetonVide') + consequence,
+    // T-20260813-0054. Ce motif est né du refus qui MENTAIT : il disait « aucune entrée ne
+    // répond » pour trois causes sans rapport. C'est désormais le cas PAR DÉFAUT — tout ce
+    // qui n'est pas une absence prouvée y tombe. Son texte vit avec les deux autres, dans le
+    // trousseau, pour la même raison qu'eux.
+    jeton_illisible: classe(trousseau, 'JetonIllisible') + consequence,
   };
 }
 

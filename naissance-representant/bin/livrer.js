@@ -17,13 +17,9 @@
 // refuse de livrer dans une boîte qu'elle n'a pas trouvée vide, elle relit pour savoir si le
 // brief a été pris, elle répare une fois le cas connu, et elle échoue bruyamment sinon.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
-import { lireReponseHerdr } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
-
-const execFileAsync = promisify(execFile);
+import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
@@ -39,30 +35,6 @@ function usage(code) {
 function option(args, nom) {
   const i = args.indexOf(nom);
   return i === -1 ? null : args[i + 1] ?? null;
-}
-
-/** Un appel herdr qui rend du JSON — le verdict passe par le lecteur commun de la naissance. */
-async function appelHerdr(commande, { resultatAttendu = true } = {}) {
-  try {
-    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
-    return lireReponseHerdr(stdout, { commande, resultatAttendu });
-  } catch (err) {
-    return lireReponseHerdr(err?.stdout ?? '', { commande, erreurProcessus: err, resultatAttendu });
-  }
-}
-
-/**
- * `herdr agent read` rend du TEXTE BRUT, pas du JSON — il ne passe donc pas par
- * `lireReponseHerdr` (mesuré : la sortie n'est pas parsable). Un échec de lecture rend `null`,
- * que `contenuBoite` traduira en « boîte illisible » — jamais en « boîte vide ».
- */
-async function lireEcran(commande) {
-  try {
-    const { stdout } = await execFileAsync('herdr', commande, { maxBuffer: 16 * 1024 * 1024 });
-    return stdout;
-  } catch (err) {
-    return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;
-  }
 }
 
 async function main() {

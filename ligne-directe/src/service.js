@@ -14,30 +14,20 @@
 //     de trouver `herdr`. C'est la panne classique de ce genre d'installation — tout marche
 //     à la main, rien ne marche au démarrage.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { writeFileSync, existsSync, unlinkSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, dirname, delimiter } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CHEMIN_JOURNAL, RACINE } from './registre.js';
 import { enEssais, refuser } from './cloison.js';
-
-const execFileAsync = promisify(execFile);
+import { OUTILS, OutilIntrouvable, cheminsUtiles, lancer } from './outils.js';
 
 export const ETIQUETTE = 'ca.somtech.ligne-directe';
 const ICI = dirname(fileURLToPath(import.meta.url));
 
 export function cheminPlist() {
   return join(homedir(), 'Library', 'LaunchAgents', `${ETIQUETTE}.plist`);
-}
-
-/** Le PATH que le service verra — un service n'hérite d'aucun profil de shell. */
-function cheminsUtiles() {
-  const dirNode = dirname(process.execPath);
-  const usuels = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
-  return [dirNode, ...usuels].filter((v, i, t) => t.indexOf(v) === i).join(delimiter);
 }
 
 function echapper(texte) {
@@ -73,12 +63,28 @@ export function construirePlist({ node = process.execPath, script = join(ICI, 'd
 `;
 }
 
+/**
+ * Un appel à `launchctl`, et son verdict — jamais une exception.
+ *
+ * TROIS ISSUES, PAS DEUX (T-20260813-0054). `ok: false` disait « launchd a refusé » ; il
+ * disait aussi, sans le distinguer, « je n'ai pas pu lui parler ». `etatService` en concluait
+ * alors « service non chargé » d'un service peut-être parfaitement vivant — le même mensonge
+ * que le trousseau a servi au dirigeant, sur une autre surface. `outilIntrouvable` sépare les
+ * deux, et le texte rendu parle du BINAIRE, pas de l'état du service.
+ */
 async function launchctl(args) {
   try {
-    const { stdout, stderr } = await execFileAsync('launchctl', args);
-    return { ok: true, sortie: `${stdout}${stderr}`.trim() };
+    const { stdout, stderr } = await lancer(OUTILS.launchctl, args);
+    return { ok: true, outilIntrouvable: false, sortie: `${stdout}${stderr}`.trim() };
   } catch (err) {
-    return { ok: false, sortie: `${err.stdout || ''}${err.stderr || ''}`.trim() || err.message };
+    if (err instanceof OutilIntrouvable) {
+      return { ok: false, outilIntrouvable: true, sortie: err.message };
+    }
+    return {
+      ok: false,
+      outilIntrouvable: false,
+      sortie: `${err.stdout || ''}${err.stderr || ''}`.trim() || err.message,
+    };
   }
 }
 
@@ -146,8 +152,14 @@ export async function retirerService() {
 
 export async function etatService() {
   const r = await launchctl(['print', `gui/${process.getuid()}/${ETIQUETTE}`]);
-  if (!r.ok) return { installe: existsSync(cheminPlist()), charge: false };
+  // « Je n'ai pas pu demander » n'est pas « il n'est pas chargé ». Répondre `charge: false`
+  // à une question qu'on n'a pas posée fait conclure au dirigeant que sa ligne est morte,
+  // alors qu'elle tourne — et le pousse à réinstaller par-dessus un service vivant.
+  if (r.outilIntrouvable) {
+    return { installe: existsSync(cheminPlist()), charge: null, mesure: false, motif: r.sortie };
+  }
+  if (!r.ok) return { installe: existsSync(cheminPlist()), charge: false, mesure: true };
   const pid = /\bpid = (\d+)/.exec(r.sortie)?.[1];
   const etat = /\bstate = (\w+)/.exec(r.sortie)?.[1];
-  return { installe: true, charge: true, pid: pid ? Number(pid) : null, etat: etat || null };
+  return { installe: true, charge: true, mesure: true, pid: pid ? Number(pid) : null, etat: etat || null };
 }

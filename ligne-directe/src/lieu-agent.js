@@ -201,7 +201,12 @@ export async function preparerLieu({ depot, role, nom, verifierLigne }) {
       cree: false,
       role,
       nom,
-      refus: { motif: ligne.motif, message: ligne.message },
+      // `portee` DIT DE QUOI ON PARLE, et ce n'est pas une commodité (T-20260813-0054) : un
+      // refus du POSTE (le trousseau ne rend pas la valeur) et un refus du CANAL (le robot n'y
+      // est pas invité) se lèvent par deux gestes qui n'ont AUCUN rapport. Les confondre a
+      // envoyé chercher du côté de Slack un défaut qui était sur le poste — et enverrait, à
+      // l'inverse, faire inviter un robot dans un canal pendant qu'un trousseau reste verrouillé.
+      refus: { motif: ligne.motif, portee: ligne.portee ?? null, message: ligne.message },
     };
   }
 

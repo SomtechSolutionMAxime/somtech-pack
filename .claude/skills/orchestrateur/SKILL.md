@@ -130,7 +130,8 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 |---|---|---|
 | `lieu_partiel` | `.orchestrateur/<nom>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .orchestrateur/<nom> .orchestrateur/<nom>.ecarte`), puis relance — elle ne complète jamais |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du chantier |
-| `jeton_absent` | Aucune entrée n'a répondu au trousseau **sous ce compte, pour ce service** — c'est tout ce qui a été mesuré | Suis la marche à suivre que le message donne : elle montre d'abord ce qui est là, puis dépose **sans écraser** |
+| `jeton_illisible` | La **valeur** n'a pas pu être obtenue, et **personne n'a établi que l'entrée manque** — un jeton valide, en service, donne ce refus. C'est le cas **par défaut** : binaire introuvable, trousseau verrouillé, et toute cause qu'on n'avait pas prévue | Lis la cause brute que le message montre, et suis ses gestes — ils ne font que **regarder**. Ne dépose **rien** sur la foi de ce refus : écrire par-dessus une entrée qui fonctionne la perdrait |
+| `jeton_absent` | Aucune entrée n'a répondu au trousseau **sous ce compte, pour ce service**, et `security` l'a **dit** — c'est le seul cas où l'absence est prouvée, donc le seul où déposer a un sens | Suis la marche à suivre que le message donne : elle montre d'abord ce qui est là, puis dépose **sans écraser** |
 | `jeton_vide` | L'entrée existe au trousseau, et elle est **vide** — pas absente | Le message ne propose aucune commande, et c'est voulu : remplace l'entrée depuis le Trousseau d'accès, qui la montre avant qu'on y touche |
 | `ecriture_interrompue` | La pose a échoué en cours de route (droits, disque) | Rien à nettoyer — elle a retiré ce qu'elle avait commencé. Corrige la cause, relance |
 
