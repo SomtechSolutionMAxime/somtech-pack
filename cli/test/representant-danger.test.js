@@ -107,5 +107,25 @@ for (const mutation of MUTATIONS_DANGER) {
         + `Le contrôle « ${mutation.cible} » devait la voir : il est décoratif, réécris-le `
         + 'en polarité ou en position plutôt qu\'en présence de mots.',
     );
+
+    // ── ET C'EST LE CONTRÔLE VISÉ QUI DOIT LA VOIR, PAS N'IMPORTE LEQUEL.
+    //
+    // Le harnais partagé se contente d'« au moins un rouge » et le documente. C'est une
+    // porte ouverte, relevée en revue de ce lot : ces cinq contrôles lisent deux sections
+    // communes, et une mutation peut être attrapée PAR RICOCHET — la suppression d'un geste
+    // fait tomber un compte voisin — pendant que le contrôle censé la garder reste vert.
+    // On croirait alors garder la garantie que la mutation visait, et on ne garderait que
+    // sa voisine. Le jour où la voisine change, la garantie disparaît sans une rougeur.
+    //
+    // (Qu'un second contrôle rougisse AUSSI est normal et sans danger : plusieurs gardes
+    // peuvent légitimement voir le même retournement.)
+    assert.ok(
+      rouges.some((r) => r.id === mutation.cible),
+      `MUTATION ATTRAPÉE PAR RICOCHET — ${mutation.quoi}\n`
+        + `Le contrôle visé « ${mutation.cible} » est resté VERT ; seul(s) `
+        + `${rouges.map((r) => `« ${r.id} »`).join(', ')} a/ont rougi.\n`
+        + 'La garantie que cette mutation met à l\'épreuve n\'est donc pas gardée par le contrôle '
+        + 'qui prétend la garder — corrige le contrôle, ou la cible si elle était mal nommée.',
+    );
   });
 }
