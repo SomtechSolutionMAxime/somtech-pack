@@ -157,6 +157,18 @@ test('paquet npm : le canvas et les gabarits du représentant survivent à la fa
       `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un représentant naîtrait sans son métier ou avec des moyens non bornés`
     );
   }
+
+  // Les gabarits de l'orchestrateur (E-20260813-0001). Même raison d'être ici que ceux du
+  // représentant : un seul fichier de test touche à `cli/payload`.
+  for (const f of [
+    'payload/.claude/templates/orchestrateur/CLAUDE.md',
+    'payload/.claude/templates/orchestrateur/CONTEXTE.md',
+  ]) {
+    assert.ok(
+      files.includes(f),
+      `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un orchestrateur naîtrait sans son métier`
+    );
+  }
 });
 
 test('build-payload : le payload produit est un payload CLI consommable', () => {
