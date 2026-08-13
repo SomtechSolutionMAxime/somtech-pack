@@ -11,7 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync, realpathSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -203,22 +203,26 @@ test('les DEUX formes d’un même lieu sont approuvées quand elles diffèrent'
   // VERTE — la garde se conformait à l'implémentation au lieu de la contraindre. C'est le
   // motif 1 du brief de revue, appliqué à une garde que j'écrivais moi-même.
   //
-  // On calcule donc les deux formes ICI, depuis le système, sans jamais demander au code
-  // testé ce qu'il en pense.
-  const d = bac();
-  const normalise = resolve(d);
-  const reel = realpathSync(normalise);
-  assert.notEqual(
-    reel, normalise,
-    'sur ce système les deux formes coïncident : ce test ne peut rien prouver ici et doit être revu, pas ignoré',
-  );
+  // ET LA TROISIÈME A ÉTÉ TROUVÉE PAR LA CHAÎNE, PAS PAR MES SUITES : elle s'appuyait sur le
+  // fait que les répertoires temporaires de ce poste sont derrière un lien (`/var` →
+  // `/private/var` sur macOS). En intégration continue, où `/tmp` n'en est pas un, les deux
+  // formes coïncidaient et le test échouait — sur un système où le défaut ne peut pas se
+  // produire. Un test qui dépend de la forme du système d'accueil ne prouve rien de plus
+  // qu'un test qui dépend du répertoire d'appel.
+  //
+  // On FABRIQUE donc la divergence — un lien vers le lieu — au lieu de l'espérer. La
+  // propriété est alors éprouvée partout, et pour la même raison partout.
+  const reel = bac();
+  const lien = `${reel}-par-un-lien`;
+  symlinkSync(reel, lien);
+  assert.notEqual(realpathSync(lien), lien, 'le lien n’en est pas un : le cas à éprouver n’a pas été construit');
 
-  const config = join(d, 'config.json');
+  const config = join(reel, 'config.json');
   writeFileSync(config, JSON.stringify({ projects: {} }));
-  approuverLieu(d, { chemin: config });
+  approuverLieu(lien, { chemin: config });
 
   const projets = JSON.parse(readFileSync(config, 'utf8')).projects;
-  for (const forme of [normalise, reel]) {
+  for (const forme of [lien, realpathSync(lien)]) {
     assert.equal(
       projets[forme]?.hasTrustDialogAccepted, true,
       `la forme « ${forme} » n’a pas été approuvée — la session démarrée sous ce nom retrouverait l’écran de confiance`,
@@ -228,7 +232,7 @@ test('les DEUX formes d’un même lieu sont approuvées quand elles diffèrent'
   // Et une seule forme approuvée ne doit PAS suffire à dire « déjà approuvé » : sinon la
   // relance suivante ne réparerait pas l'oubli.
   assert.equal(
-    dejaApprouve({ projects: { [normalise]: projets[normalise] } }, d), false,
+    dejaApprouve({ projects: { [lien]: projets[lien] } }, lien), false,
     'une seule forme a suffi — la session démarrée sous l’autre nom s’arrêterait quand même',
   );
 });
