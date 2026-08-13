@@ -60,13 +60,21 @@ test('un représentant NE PEUT PAS ouvrir une ligne interne — le nom de son cl
   assert.equal(d.permissionDecision, 'deny');
 });
 
-test('la nature ne se glisse pas en fin de commande pour un orchestrateur', () => {
-  // La sonde de l'orchestrateur exige l'ABSENCE de `--nature`, et l'absence se contourne par
-  // la position si on la cherche mal. On éprouve donc les deux placements.
+test('la nature est refusée À TOUTE POSITION pour un orchestrateur', () => {
+  // DÉFAUT TROUVÉ EN REVUE DE FOND (passe 2), et ce test est né de lui : la garde écrivait
+  // l'interdiction en position, donc APRÈS le premier mot. `ouvrir --nature client D-1`
+  // passait — la commande exacte que la garde existe pour refuser.
+  //
+  // La version précédente de ce test n'éprouvait QUE les placements tardifs : elle était
+  // verte sur une garde trouée. « Une porte sur deux », dans un test cette fois.
   for (const commande of [
+    '$LD ouvrir --nature client D-1 --titre "X"',
+    '$LD ouvrir  --nature client D-1',
+    'node /x/ligne-directe.js ouvrir --nature client D-1 --titre "X"',
     '$LD ouvrir D-1 --nature client --titre "X"',
     '$LD ouvrir D-1 --sujet "x" --nature client --titre "X"',
     'node /x/ligne-directe.js ouvrir D-1 --sujet "x" --nature client --titre "X"',
+    '$LD ouvrir D-1 --sujet "x" --titre "X" --nature client',
   ]) {
     assert.equal(
       decider({ ...bash(commande), role: 'orchestrateur' }).permissionDecision, 'deny',

@@ -39,10 +39,18 @@ const SEGMENTS_COMMUNS = [
  * et `--titre` obligatoire avec elle : le client ne doit jamais voir un code de chantier.
  *
  * ORCHESTRATEUR — sa ligne est INTERNE : canal public, entre nous, nommé par le code de son
- * chantier. `--nature` y est donc absente, et c'est délibéré : l'autoriser ici laisserait un
- * orchestrateur ouvrir un canal privé de client pour y déverser de l'interne — précisément
- * ce que le cloisonnement interdit. La forme admise est celle que son métier enseigne
- * (§1-bis), et le sujet comme l'invitation restent libres.
+ * chantier. `--nature` y est donc INTERDITE : l'autoriser laisserait un orchestrateur ouvrir
+ * un canal privé de client pour y déverser de l'interne — précisément ce que le cloisonnement
+ * interdit. Le sujet et l'invitation restent libres.
+ *
+ * ⚠️ DÉFAUT TROUVÉ EN REVUE DE FOND (passe 2), et c'est le motif 1 du brief appliqué à moi :
+ * la première version écrivait l'interdiction en POSITION — `ouvrir \S+(?!.*--nature)` —, donc
+ * après le premier mot. Écrire `ouvrir --nature client D-1` faisait consommer `--nature` par
+ * le `\S+`, et le reste de la commande, lui, n'en portait plus : la garde disait `allow` sur
+ * la commande exacte qu'elle existait pour refuser. MESURÉ, pas supposé.
+ *
+ * L'interdiction porte donc désormais sur le FAIT — le segment entier ne contient nulle part
+ * `--nature` —, et elle est vérifiée à part, avant toute reconnaissance de forme.
  */
 const OUVERTURE = {
   representant: [
@@ -50,14 +58,32 @@ const OUVERTURE = {
     /^node \S*ligne-directe\.js ouvrir \S+.*--nature client.*--titre\s+".+"$/,
   ],
   orchestrateur: [
-    /^\$LD ouvrir \S+(?!.*--nature).*$/,
-    /^node \S*ligne-directe\.js ouvrir \S+(?!.*--nature).*$/,
+    /^\$LD ouvrir \S+.*$/,
+    /^node \S*ligne-directe\.js ouvrir \S+.*$/,
   ],
+};
+
+/**
+ * Ce qu'un rôle ne doit JAMAIS voir passer, où que ce soit dans le segment.
+ *
+ * Séparé des formes admises à dessein : une interdiction glissée dans une expression de forme
+ * se met à dépendre de l'ordre des mots, et c'est exactement ce qui a laissé passer
+ * `ouvrir --nature client`. Ici, la question posée est « ce texte contient-il ceci ? », à
+ * laquelle la position ne peut rien changer.
+ */
+const INTERDITS = {
+  orchestrateur: [/--nature/],
+  representant: [],
 };
 
 /** Les segments admis pour le rôle donné — un rôle inconnu n'admet que le commun, donc rien qui ouvre. */
 export function segmentsAutorises(role) {
   return [...SEGMENTS_COMMUNS, ...(OUVERTURE[role] || [])];
+}
+
+/** Un segment porte-t-il quelque chose que ce rôle ne doit jamais employer ? */
+export function porteUnInterdit(segment, role) {
+  return (INTERDITS[role] || []).some((r) => r.test(segment));
 }
 
 /** Découpe une commande Bash en segments indépendants — chacun doit être autorisé. */
@@ -71,7 +97,9 @@ export function segments(commande) {
 /** Les segments d'une commande qui n'appartiennent pas à la séquence d'ouverture de ce rôle. */
 export function segmentsHorsSequence(commande, role = 'representant') {
   const admis = segmentsAutorises(role);
-  return segments(commande).filter((s) => !admis.some((r) => r.test(s)));
+  // L'interdit l'emporte sur la forme : un segment interdit est hors séquence même s'il
+  // ressemble à une ouverture valable. C'est ce qui referme le contournement par la position.
+  return segments(commande).filter((s) => porteUnInterdit(s, role) || !admis.some((r) => r.test(s)));
 }
 
 /**

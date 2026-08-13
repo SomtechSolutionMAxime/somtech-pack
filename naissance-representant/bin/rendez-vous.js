@@ -36,10 +36,18 @@ const JOURNAL = join(RACINE, 'orchestrateur-rendez-vous.log');
 
 // Une session occupée ne peut pas recevoir de rappel — et ce n'est pas un échec, c'est
 // « pas maintenant ». On repasse, plutôt que de renoncer : « on ne saute pas son tour ».
-// Six essais de cinq minutes couvrent une demi-heure, ce qui suffit à un tour de travail
-// ordinaire sans jamais empiéter sur le rendez-vous suivant (le plus serré est horaire).
-const ESSAIS = Math.max(1, Number(process.env.RENDEZ_VOUS_ESSAIS || 6));
+//
+// L'ÉCHÉANCE EST GLOBALE, PAS PAR ORCHESTRATEUR — relevé en revue de fond. Compter les
+// essais par orchestrateur, séquentiellement, faisait dépendre la durée totale du NOMBRE
+// d'orchestrateurs vivants : trois occupés × six essais de cinq minutes = une heure et demie,
+// donc un réveil horaire encore en train de tourner quand le suivant démarre. Deux réveils
+// qui se chevauchent écriraient dans la même boîte de saisie — précisément la fusion de
+// briefs que ce dépôt a déjà payée une fois.
+//
+// La demi-heure couvre un tour de travail ordinaire et laisse le rendez-vous le plus serré
+// (l'horaire) se terminer bien avant le suivant, quel que soit le nombre d'orchestrateurs.
 const DELAI_MS = Number(process.env.RENDEZ_VOUS_DELAI_MS || 5 * 60 * 1000);
+const ECHEANCE_MS = Number(process.env.RENDEZ_VOUS_ECHEANCE_MS || 30 * 60 * 1000);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -169,17 +177,25 @@ async function tenir(nom) {
   }
 
   const vivants = orchestrateursVivants(liste.reponse);
-  const comptes = [];
-  for (const o of vivants) {
-    let livre = null;
-    for (let i = 0; i < ESSAIS; i += 1) {
-      livre = await livrerBrief({ pane: o.pane, texte: r.rappel, appelHerdr, lireEcran, dormir });
-      if (livre.ok) break;
-      // Occupée, ou boîte non vide : on repasse. On ne force JAMAIS — écrire par-dessus un
-      // reste ne livrerait pas deux messages, ça en livrerait un, les deux textes collés.
-      if (i < ESSAIS - 1) await dormir(DELAI_MS);
+  const fin = Date.now() + ECHEANCE_MS;
+
+  // Un tour pour tout le monde, puis on ne repasse que sur ceux qui n'ont pas pris — et
+  // seulement tant que l'échéance GLOBALE le permet. Un orchestrateur occupé ne fait donc
+  // plus attendre les autres, et le rendez-vous se termine avant le suivant quel que soit
+  // leur nombre.
+  const comptes = vivants.map((o) => ({ agent: o.nom, pane: o.pane, livre: false, motif: null }));
+  let restants = comptes;
+  while (restants.length > 0) {
+    for (const c of restants) {
+      // On ne force JAMAIS : écrire par-dessus un reste ne livrerait pas deux messages, ça en
+      // livrerait un, les deux textes collés.
+      const livre = await livrerBrief({ pane: c.pane, texte: r.rappel, appelHerdr, lireEcran, dormir });
+      c.livre = livre.ok;
+      c.motif = livre.ok ? null : livre.message;
     }
-    comptes.push({ agent: o.nom, pane: o.pane, livre: livre.ok, motif: livre.ok ? null : livre.message });
+    restants = restants.filter((c) => !c.livre);
+    if (restants.length === 0 || Date.now() + DELAI_MS >= fin) break;
+    await dormir(DELAI_MS);
   }
 
   const manques = comptes.filter((c) => !c.livre);

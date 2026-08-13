@@ -558,10 +558,30 @@ export const CONTROLES = [
         assert.equal(moments.filter((m) => sonde.test(m)).length, 1, `le moment « ${sonde} » doit figurer une fois exactement`);
       }
 
-      // ── Le pointeur, et RIEN de plus. STD-039 §2.6 : le noyau *always-on* se limite à ses
-      // quatre invariants, le reste se consulte. Un métier qui recopierait le standard entier
-      // le ferait vieillir en double — et la copie ne serait pas celle qui fait foi.
+      // ── Le pointeur, et RIEN de plus.
+      //
+      // STD-039 §2.6 borne le noyau *always-on* à quatre invariants + un pointeur, et dit que
+      // le voir grossir est « un signal de dérive à corriger, pas à tolérer ». Ce que le
+      // métier porte ici n'est pas ce noyau — c'est le MÉTIER de l'orchestrateur : quand il
+      // rappelle, et pourquoi un rappel ne vaut pas une mesure. La distinction tient, mais
+      // l'esprit du bornage s'applique quand même, et RIEN NE LE GARDAIT (relevé en revue de
+      // fond) : on pouvait coller le standard entier ici sans qu'un test bronche.
       assert.match(sFoi.corps, /STD-039/, 'le cadre doit être pointé par son code, pour qu’on aille le lire');
+
+      const section = s.corps + sGestes.corps + sFoi.corps;
+      assert.ok(
+        section.length < 4000,
+        `la section mémoire fait ${section.length} caractères : elle a cessé de pointer le cadre pour le `
+          + `recopier. Une copie du standard vieillit en double, et ce n'est pas elle qui fait foi.`,
+      );
+      // Les invariants que le standard NE demande PAS de graver ici. Les y voir apparaître est
+      // le signe qu'on a recopié §2.2 au lieu de pointer le standard.
+      for (const horsNoyau of [/\bI2\b/, /\bI6\b/, /\bI7\b/, /\bI8\b/]) {
+        assert.ok(
+          !horsNoyau.test(section),
+          `la section recopie un invariant hors du noyau (${horsNoyau}) : le standard se consulte, il ne se duplique pas`,
+        );
+      }
     },
   },
 
@@ -1041,6 +1061,20 @@ export const MUTATIONS = [
   },
 
   // ── l'ajout 7 : les mémoires
+  {
+    id: 'le-standard-est-recopie-au-lieu-d-etre-pointe',
+    quoi: 'la section mémoire recopie le standard au lieu de le pointer — une copie qui vieillit et ne fait pas foi',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '> Le cadre complet est **STD-039**.',
+      '> Les huit invariants, in extenso : I1 nommage par fonction. I2 symétrie des gestes : si une '
+        + 'fonction expose une écriture, sa lecture vit au même endroit nommé. I3 un rappel ne fait pas '
+        + 'foi. I4 frontière D5. I5 cantonnement group_id. I6 secret hors bande : les credentials '
+        + 'restent côté agent. I7 l’encodage travail vers épisodique ne passe pas par le gate. I8 la '
+        + 'discipline prime sur le geste.\n>\n> Le cadre complet est **STD-039**.',
+    ),
+  },
   {
     id: 'le-rappel-se-met-a-faire-foi',
     quoi: 'la mémoire dit ce qui est vrai, et le registre ne fait plus que rappeler — I3 renversé',

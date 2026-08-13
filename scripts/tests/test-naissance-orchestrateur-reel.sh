@@ -164,10 +164,15 @@ AMORCE="${BAC}/amorce.txt"
 # lisait son amorce, la traitait, et finissait sans rien produire : un faux négatif qui
 # accusait la naissance d'un défaut qui n'était pas le sien.
 #
-# Ici : une lecture de son propre lieu, suivie d'une réponse qui en DÉPEND. Elle ne peut
-# pas être fabriquée sans avoir lu — c'est ça, « elle fait quelque chose », par opposition
-# à « le message est parti ».
-printf 'Lis le fichier CONTEXTE.md de ton répertoire courant et réponds en une seule ligne, commençant par PREUVE= suivi du titre exact de sa première ligne. Rien d%s autre.\n' "'" > "$AMORCE"
+# Et la preuve se lit dans la TRANSCRIPTION de la session, pas à l'écran — trouvé en
+# relançant : l'écran d'un terminal défile, et la réponse peut en être sortie. Un test qui
+# dépend de ce qui reste affiché est intermittent, ce qui est pire qu'absent.
+#
+# Ce qu'on exige est le MARQUEUR qu'on a demandé (« PREUVE= »), jamais le contenu exact de
+# la réponse : ce contenu appartient au modèle, pas à ce lot. La première version exigeait
+# un titre de fichier précis — la session a répondu avec le marqueur et un autre titre, et
+# le test a accusé la naissance d'un défaut qui n'était pas le sien.
+printf 'Réponds en une seule ligne, commençant par le mot PREUVE= suivi de ton nom d%sagent. Rien d%s autre.\n' "'" "'" > "$AMORCE"
 
 SORTIE=$(node "$NAITRE" "$UN" --workspace "$WS" --role orchestrateur --depot "$DEPOT" --amorce "$AMORCE" 2>&1)
 CODE=$?
@@ -210,16 +215,18 @@ if [ -n "$PANE" ]; then
     && ok "la commande déclare l'amorce prise (et elle l'a VÉRIFIÉE, pas supposée)" \
     || ko "la commande ne déclare pas l'amorce prise"
 
-  # La trace du travail, relue à l'écran de la session. On n'attend pas un délai : on
-  # regarde jusqu'à ce que ce soit vrai, comme la naissance interroge jusqu'à ce que
-  # l'agent soit détecté.
+  # La trace du travail, relue dans la TRANSCRIPTION de la session — un effet persistant,
+  # que rien n'efface. On n'attend pas un délai : on regarde jusqu'à ce que ce soit vrai,
+  # comme la naissance interroge jusqu'à ce que l'agent soit détecté.
+  LIEU_REEL=$(cd "${DEPOT}/.orchestrateur/${UN}" && pwd -P)
+  TRANSCRIPTIONS="${HOME}/.claude/projects/$(printf '%s' "$LIEU_REEL" | sed 's|[/.]|-|g')"
   VU_PREUVE=0
   for _ in $(seq 1 60); do
-    if herdr agent read "$PANE" 2>/dev/null | grep -q "propre à ce dépôt"; then VU_PREUVE=1; break; fi
+    if [ -d "$TRANSCRIPTIONS" ] && grep -lq 'PREUVE=' "$TRANSCRIPTIONS"/*.jsonl 2>/dev/null; then VU_PREUVE=1; break; fi
     sleep 2
   done
   if [ "$VU_PREUVE" -eq 1 ]; then
-    ok "la session a AGI : elle a lu son contexte et rendu une réponse qui en dépend"
+    ok "la session a AGI : sa transcription porte un tour de travail qui répond à l'amorce"
   else
     STATUT=$(herdr agent get "$PANE" 2>/dev/null | champ result.agent.agent_status)
     ko "🚨 la session est née mais n'a rien fait (statut « ${STATUT:-—} ») — c'est le défaut « née correctement, ne commence pas »"

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-# test-garde-apres-disparition-du-plan.sh — v1.0.0
+# test-garde-apres-disparition-du-plan.sh — v1.1.0
 # LA preuve de T-20260809-0032 : le garde d'ouverture MORD depuis le lieu du
 # représentant APRÈS que le plan de travail qui l'a posé a disparu.
+#
+# v1.1.0 (E-20260813-0002) : le même garde sert désormais les DEUX rôles, et il
+# lit celui du lieu dans l'en-tête de son métier. Un troisième bras l'éprouve
+# donc dans un lieu d'ORCHESTRATEUR — « c'est le même code » n'est pas une
+# preuve quand ce code doit d'abord reconnaître à qui il a affaire.
 #
 # CE QUI SE MESURE ICI, ET CE QUI NE SE MESURE PAS
 # Lire le chemin écrit dans `.claude/settings.json` ne prouve rien : c'est
@@ -170,6 +175,37 @@ if grep -q "$REFUS" "${BAC}/positif.jsonl"; then
   ok "le garde MORD depuis le lieu, après la disparition du plan de travail"
 else
   ko "🚨 le garde n'a pas mordu (voir ${BAC}/positif.jsonl)"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Le MÊME garde, sur un lieu d'ORCHESTRATEUR (E-20260813-0002).
+#
+# Il n'y a qu'un mécanisme pour les deux rôles, et c'est délibéré : deux mécanismes
+# qui font la même chose sous deux noms divergent. Mais « c'est le même code » n'est
+# pas une preuve — le garde lit le RÔLE dans l'en-tête du métier du lieu, et un rôle
+# mal reconnu rendrait le garde muet là où il devrait mordre. On l'éprouve donc pour
+# de vrai, dans un lieu d'orchestrateur, avec le plan de travail toujours effacé.
+echo
+echo "== Bras positif — le même garde, dans un lieu d'ORCHESTRATEUR =="
+LIEU_ORCH="${DEPOT}/.orchestrateur/e2eorch$$"
+mkdir -p "${LIEU_ORCH}/.claude"
+printf "# Tu es l'orchestrateur de ce chantier\n" > "${LIEU_ORCH}/CLAUDE.md"
+printf '# Ce qui est propre à ce dépôt\n'         > "${LIEU_ORCH}/CONTEXTE.md"
+printf '{"mcpServers":{}}\n'                      > "${LIEU_ORCH}/.mcp.json"
+printf '%s' "$POSE"                                > "${LIEU_ORCH}/.claude/settings.json"
+
+( cd "$LIEU_ORCH" && claude -p \
+    "Exécute la commande bash suivante, exactement : git status. Rapporte ce que tu obtiens." \
+    --output-format stream-json --verbose >"${BAC}/orchestrateur.jsonl" 2>&1 ) &
+pid_orch=$!
+( sleep 240; kill -9 "$pid_orch" 2>/dev/null ) & chien_orch=$!
+wait "$pid_orch"
+kill "$chien_orch" 2>/dev/null
+
+if grep -q "$REFUS" "${BAC}/orchestrateur.jsonl"; then
+  ok "le garde MORD aussi depuis le lieu d'un orchestrateur — le rôle est reconnu par son métier"
+else
+  ko "🚨 le garde n'a pas mordu dans un lieu d'orchestrateur (voir ${BAC}/orchestrateur.jsonl)"
 fi
 
 echo
