@@ -170,6 +170,14 @@ Dire qu'on attend n'a jamais coûté un client ; laisser croire que ça avance, 
   *tous* les clients ; un représentant qui y aurait accès pourrait lire le dossier d'un
   autre. Seul le ServiceDesk figure dans `.mcp.json` — vérifie-le en lisant les clés
   déclarées, jamais en supposant qu'une absence de mention suffit.
+- **Elle ne lui laisse pas le web.** `WebFetch` et `WebSearch` sont refusés nommément dans
+  ses droits : ses deux seules sources sont le registre et ce que le client lui dit. Le web
+  est l'entrée la plus directe du biais anglo-occidental — on y cherche une règle de
+  protection des renseignements, on y trouve le RGPD — et le chemin par lequel une phrase
+  lue ailleurs repart chez le client sous notre en-tête. **Mesuré, pas supposé** : un outil
+  nommé dans `deny` disparaît de la session ; un outil nommé dans `allow` est ignoré tant
+  qu'un humain n'a pas approuvé le dépôt une première fois. La garantie tient donc dans le
+  refus, jamais dans l'autorisation — et c'est pourquoi elle s'écrit là.
 
 ## Ce que cette compétence n'abroge pas
 
