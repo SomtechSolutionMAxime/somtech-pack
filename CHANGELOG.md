@@ -5,6 +5,21 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.37.0] - 2026-08-13
+
+### Ajouté
+
+- **On peut désormais poser le lieu d'un orchestrateur, l'y faire naître, et garder ses copies à jour** (E-20260813-0002, PR #203). Second et dernier lot du dispositif : l'orchestrateur cesse d'être une session qu'on transforme et devient un lieu versionné, exactement comme le gestionnaire client. `ligne-directe orchestrateur <nom> [--depot <chemin>]` pose un lieu nommé, quatre fichiers, et **refuse** avant toute écriture si les gabarits manquent au dépôt ou si la ligne directe ne peut pas s'ouvrir. `naitre <nom> --workspace <ws> --role orchestrateur [--amorce <fichier>]` fait naître la session dans ce lieu, y charge son métier, et démarre. `pack orchestrateur-update --nom <nom>` fait converger le métier vers le pack sans jamais toucher au contexte. Le lot déclenche aussi le scrum matinal par agents de session, et porte le septième ajout au métier — l'orchestrateur se sert des mémoires, avec l'invariant qui compte : un rappel ne fait pas foi.
+- **La factorisation avec le gestionnaire client.** Les deux rôles ne diffèrent plus que par une table (`ligne-directe/src/roles.js`) ; le reste — les trois gardes, le point d'écriture unique, l'attente avant de nommer, la vérification par le fait — est le même code, celui qui a coûté sept défauts au premier lot.
+
+### Corrigé
+
+- **Deux défauts trouvés en prouvant contre le vrai service, qui bénéficient aussi au gestionnaire client.** Une session née dans un répertoire jamais vu s'arrêtait sur l'écran de confiance de Claude Code — détectée, dans le bon répertoire, portant son nom, et bloquée devant une question que personne ne lit — puis, une fois ce dossier approuvé, sur l'écran suivant : les serveurs MCP que son propre `.mcp.json` déclare. Les deux lots précédents ne les avaient pas vus parce que leur preuve s'arrêtait au répertoire de travail ; celle-ci va jusqu'à « la session fait quelque chose ».
+
+### Technique
+
+- 31 fichiers, deux passes de revue indépendante. La première (Haiku) a trouvé trois trous dans les tests d'approbation, dont un verdict qui dépendait du répertoire d'appel. La seconde (Sonnet) a trouvé un cloisonnement client trouable — `ouvrir --nature client D-1` laissait un orchestrateur ouvrir un canal de client, l'interdiction étant écrite en position plutôt que sur le fait. `scripts/tests/test-naissance-orchestrateur-reel.sh` : 20/20. `test-garde-apres-disparition-du-plan.sh` : 8/8. Chaîne : 6/6.
+
 ## [1.36.0] - 2026-08-13
 
 ### Ajouté
