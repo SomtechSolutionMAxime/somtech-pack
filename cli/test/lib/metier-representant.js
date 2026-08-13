@@ -756,7 +756,7 @@ function dansEntete(texte, muter) {
 }
 
 /** Remplace `a` par `b` et `b` par `a`, en une passe. Jette si l'un des deux manque. */
-function permuter(texte, a, b) {
+export function permuter(texte, a, b) {
   assert.ok(texte.includes(a) && texte.includes(b), `permutation inapplicable : « ${a} » ou « ${b} » est absent`);
   const jeton = ' JETON ';
   return texte.split(a).join(jeton).split(b).join(a).split(jeton).join(b);

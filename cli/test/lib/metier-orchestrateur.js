@@ -1,0 +1,805 @@
+// Les contrôles du métier de l'orchestrateur, et les mutations qui les mettent à l'épreuve.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────
+// POURQUOI CE FICHIER N'EST PAS UN TEST
+//
+// Il est importé par DEUX suites qui ne demandent pas la même chose aux mêmes contrôles :
+//
+//   • `orchestrateur-gabarit.test.js` les exécute sur le gabarit RÉEL — ils doivent passer ;
+//   • `orchestrateur-mutations.test.js` les exécute sur des versions RETOURNÉES du gabarit —
+//     et exige que le contrôle VISÉ rougisse, pour chacune.
+//
+// Les primitives de lecture de structure viennent de `metier-representant.js` : elles ont
+// résisté à quatre passes de revue sur le lot jumeau, chacune ayant trouvé un cran plus fin
+// du même défaut (garder un MOT, puis une POSITION, puis une MENTION, puis un MOT-CLÉ dans
+// un libellé de colonne). Les réinventer moins bien ici aurait été la cinquième.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────
+// CE QUE CE LOT DÉPLACE, ET CE QU'IL AJOUTE — LA DISTINCTION EST GARDÉE MÉCANIQUEMENT
+//
+// Le métier de l'orchestrateur est écrit, éprouvé et payé : chaque phrase de la compétence
+// vient soit d'un défaut trouvé en production, soit d'un rappel du dirigeant. Ce lot le
+// DÉPLACE d'une compétence (lue une fois au démarrage) vers un `CLAUDE.md` (relu à chaque
+// échange). Il ne le rejuge pas.
+//
+// Le contrôle `le-metier-a-voyage-entier` en fait une garantie mécanique plutôt qu'une
+// promesse : chaque section de la compétence doit exister dans le gabarit, avec un corps
+// IDENTIQUE OCTET POUR OCTET — sauf les deux endroits nommément amendés. Une réécriture
+// silencieuse, si petite soit-elle, rougit.
+//
+// C'est la garde qui manquait au lot du gestionnaire, où la même consigne — « on le déplace,
+// on ne le réécrit pas » — n'a pas empêché une réécriture d'effacer une garantie livrée la
+// veille.
+//
+// LES SIX AJOUTS, liste fermée énoncée par le dirigeant le 2026-08-12 :
+//   1. il appelle les agents spécialisés (consulter, jamais sous-traiter) ;
+//   2. il parle au dirigeant ;
+//   3. sa ligne directe est OBLIGATOIRE — et cet ajout est un RETRAIT ;
+//   4. il veille ses agents toutes les heures, par défaut ;
+//   5. il pose un topo sur son canal chaque matin à 7 h 00 ;
+//   6. il est le gardien des ADR et des bonnes pratiques de développement.
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  REPO, sections, sectionDe, tableDe, colonne, pucesDe, blocsBash, enteteDe,
+  exigeImperatif, permuter,
+} from './metier-representant.js';
+
+export { REPO, permuter };
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+assert.equal(resolve(HERE, '..', '..', '..'), REPO, 'la racine du dépôt a bougé');
+
+/** Le lieu d'où le pack distribue les gabarits de l'orchestrateur (module `core`). */
+export const GABARIT_DIR = join('.claude', 'templates', 'orchestrateur');
+export const CHEMIN_METIER = join(GABARIT_DIR, 'CLAUDE.md');
+export const CHEMIN_CONTEXTE = join(GABARIT_DIR, 'CONTEXTE.md');
+
+/** La compétence dont ce lot déplace le métier. Elle survit jusqu'au lot qui la remplacera. */
+export const CHEMIN_COMPETENCE = join('.claude', 'skills', 'orchestrer-chantier', 'SKILL.md');
+
+export function lireGabarits(racine = REPO) {
+  return {
+    metier: readFileSync(join(racine, CHEMIN_METIER), 'utf8'),
+    contexte: readFileSync(join(racine, CHEMIN_CONTEXTE), 'utf8'),
+  };
+}
+
+/**
+ * Les deux seules sections que ce lot avait le droit d'amender, avec le motif de chacune.
+ *
+ * Elles sont écrites ici, en dur et nommément, pour que la liste soit un ENGAGEMENT plutôt
+ * qu'une constatation : élargir ce qu'on s'autorise à réécrire demande d'éditer cette liste,
+ * ce qui se voit en revue. Une garde qui s'adapterait à ce qu'elle trouve ne garderait rien.
+ */
+export const SECTIONS_AMENDEES = new Map([
+  ['1-bis. Ouvrir ta ligne avec le dirigeant', 'ajout 3 — la ligne devient obligatoire, la phrase de repli disparaît'],
+  ['Anti-patterns', 'le miroir des six ajouts, dans la table qui existe déjà pour ça'],
+]);
+
+/** La phrase que l'ajout 3 RETIRE. Un retrait se défait par mégarde plus facilement qu'un ajout. */
+export const PHRASE_RETIREE = 'continue sans elle';
+
+// ═════════════════════════════════════════ les contrôles
+
+export const CONTROLES = [
+  {
+    id: 'le-metier-a-voyage-entier',
+    quoi: 'chaque section de la compétence existe dans le gabarit, mot pour mot — sauf les deux nommément amendées',
+    verifier({ metier }) {
+      // « On ne réinvente pas le but, on réinvente le comment. » Le support change ; le
+      // texte, non. Comparer les corps OCTET POUR OCTET est la seule façon de le prouver :
+      // une garde qui vérifierait que les titres sont là laisserait vider les sections.
+      const competence = readFileSync(join(REPO, CHEMIN_COMPETENCE), 'utf8');
+      const dansLeGabarit = new Map(sections(metier).map((s) => [s.titre, s.corps]));
+
+      const perdues = [];
+      const reecrites = [];
+      let comparees = 0;
+      for (const s of sections(competence)) {
+        if (SECTIONS_AMENDEES.has(s.titre)) continue;
+        if (!dansLeGabarit.has(s.titre)) { perdues.push(s.titre); continue; }
+        comparees += 1;
+        if (dansLeGabarit.get(s.titre) !== s.corps) reecrites.push(s.titre);
+      }
+
+      assert.ok(
+        comparees >= 20,
+        `seules ${comparees} sections ont été comparées : le métier fait plusieurs dizaines de `
+          + `sections, un si petit nombre veut dire que la comparaison ne mord plus`,
+      );
+      assert.deepEqual(perdues, [], `ces sections du métier n'ont pas voyagé : ${perdues.join(' · ')}`);
+      assert.deepEqual(
+        reecrites, [],
+        `ces sections ont été RÉÉCRITES en étant déplacées, alors que le lot devait les `
+          + `transporter telles quelles : ${reecrites.join(' · ')}`,
+      );
+    },
+  },
+
+  {
+    id: 'ligne-obligatoire',
+    quoi: 'la ligne est un préalable au chantier — la phrase « continue sans elle » a disparu et le refus oblige',
+    verifier({ metier }) {
+      // L'AJOUT QUI EST UN RETRAIT, et le plus fragile des six : un retrait se défait d'un
+      // copier-coller malheureux, sans que personne le remarque. On garde donc les DEUX
+      // moitiés — l'absence de l'ancienne consigne, et la présence effective du refus.
+      assert.ok(
+        !metier.includes(PHRASE_RETIREE),
+        `le métier dit encore « ${PHRASE_RETIREE} » : la ligne est redevenue facultative, et un `
+          + `orchestrateur sans ligne tranche seul ce qu'il ne devait pas trancher`,
+      );
+
+      const s = sectionDe(metier, /Ouvrir ta ligne avec le dirigeant/i, 'sur l’ouverture de la ligne');
+      const enonces = s.corps.split('\n').filter((l) => /ne peut pas s'ouvrir/i.test(l));
+      assert.equal(enonces.length, 1, `le métier doit dire une fois exactement ce qui arrive quand la ligne ne s’ouvre pas (${enonces.length})`);
+      exigeImperatif(enonces[0], 'le refus de commencer sans ligne');
+      assert.match(
+        enonces[0], /tu ne commences pas|arrête-toi/i,
+        `« ${enonces[0].trim()} » ne refuse plus : sans ligne, le chantier ne commence pas`,
+      );
+      assert.match(s.corps, /préalable au chantier/i, 'et le métier doit nommer la ligne comme un préalable');
+
+      // Le refus doit dire QUOI FAIRE, pas seulement constater — le gestionnaire a mis trois
+      // défauts à rendre ce geste honnête, autant les reprendre plutôt que les redécouvrir.
+      assert.match(enonces[0], /dis (?:ce qui manque|quoi faire)|quoi faire/i, 'un refus qui ne dit pas quoi faire laisse le lecteur sans issue');
+    },
+  },
+
+  {
+    id: 'consulter-jamais-sous-traiter',
+    quoi: 'appeler un spécialiste est une question qu’on lui pose, jamais une unité de travail qu’on lui confie',
+    verifier({ metier }) {
+      // AJOUT 1. La frontière que le dirigeant a nommée : « un orchestrateur qui délègue son
+      // chantier à un spécialiste au lieu de lui poser une question devient un guichet ».
+      // Résolue par LIBELLÉ D'EN-TÊTE ANCRÉ : permuter les deux libellés, sans déplacer une
+      // cellule, ferait de la sous-traitance la bonne pratique.
+      const s = sectionDe(metier, /Tu appelles les agents spécialisés/i, 'sur l’appel des spécialistes');
+      const table = tableDe(s.corps.split('**La frontière')[1] || '');
+      const fait = colonne(table, /^\*\*Consulter — ce que tu fais\*\*$/i, 'ce que tu fais').join(' ');
+      const jamais = colonne(table, /^\*\*Sous-traiter — ce que tu ne fais jamais\*\*$/i, 'ce que tu ne fais jamais').join(' ');
+
+      for (const [sonde, quoi] of [
+        [/question de son domaine/i, 'lui poser une question de son domaine'],
+        [/gardes la décision/i, 'garder la décision'],
+      ]) {
+        assert.match(fait, sonde, `« ${quoi} » est ce que tu fais, il doit figurer de ce côté`);
+        assert.ok(!sonde.test(jamais), `« ${quoi} » est donné comme ce qu’on ne fait jamais — la frontière est inversée`);
+      }
+      for (const [sonde, quoi] of [
+        [/confies une unité de travail/i, 'lui confier une unité de travail'],
+        [/relaies/i, 'relayer ce qu’il rend'],
+      ]) {
+        assert.match(jamais, sonde, `« ${quoi} » est de la sous-traitance, il doit figurer de ce côté`);
+        assert.ok(!sonde.test(fait), `« ${quoi} » est donné comme ce que tu fais — la frontière est inversée`);
+      }
+
+      assert.match(s.corps, /guichet/i, 'le métier doit dire ce qu’un orchestrateur qui sous-traite devient');
+      assert.match(s.corps, /Quand appeler/i, 'le métier doit dire QUAND appeler');
+      assert.match(s.corps, /Lequel appeler/i, 'le métier doit dire LEQUEL appeler');
+    },
+  },
+
+  {
+    id: 'ouvrir-n-est-pas-appeler',
+    quoi: 'ouvrir un chef d’équipe et appeler un spécialiste sont deux gestes distincts, et le spécialiste préexiste',
+    verifier({ metier }) {
+      // AJOUT 1, sa moitié descriptive. La compétence décrivait les agents qu'il OUVRE et ne
+      // disait rien de ceux qui EXISTENT DÉJÀ. Confondre les deux est ce qui fait qu'on
+      // « ouvre » un officier de sécurité — donc qu'on en fabrique un second, ignorant.
+      const s = sectionDe(metier, /Tu appelles les agents spécialisés/i, 'sur l’appel des spécialistes');
+      const table = tableDe(s.corps);
+      const gestes = colonne(table, /^Le geste$/i, 'le geste');
+      const qui = colonne(table, /^Qui$/i, 'qui c’est');
+
+      const rang = (sonde) => gestes.findIndex((g) => sonde.test(g));
+      const ouvrir = rang(/\*\*Ouvrir\*\*/);
+      const appeler = rang(/\*\*Appeler\*\*/);
+      assert.ok(ouvrir >= 0 && appeler >= 0, 'les deux gestes doivent être nommés dans la table');
+      assert.notEqual(ouvrir, appeler, 'ouvrir et appeler ne sont pas le même geste');
+
+      assert.match(qui[ouvrir], /naît de ta main/i, 'un chef d’équipe naît de ta main');
+      assert.match(qui[appeler], /existait avant toi/i, 'un spécialiste existait avant toi — sinon ce n’est pas un appel, c’est une ouverture');
+      assert.ok(!/existait avant toi/i.test(qui[ouvrir]), 'un chef d’équipe qui préexiste n’est pas un chef d’équipe — la table est inversée');
+    },
+  },
+
+  {
+    id: 'parole-au-dirigeant-exclusive',
+    quoi: 'parler au dirigeant est sa capacité, et elle ne se partage pas avec ses chefs d’équipe',
+    verifier({ metier }) {
+      // AJOUT 2. Écrite comme capacité, et exclusive : si un chef d'équipe peut parler au
+      // dirigeant, l'orchestrateur cesse d'être le point unique et deux versions du chantier
+      // circulent. La ligne de rapport unique existe déjà pour les sous-agents ; celle-ci
+      // est son pendant vers le haut.
+      const s = sectionDe(metier, /Tu parles au dirigeant/i, 'sur la parole au dirigeant');
+      const enonces = s.corps.split('\n').filter((l) => /chefs d'équipe/i.test(l));
+      assert.equal(enonces.length, 1, `l’exclusivité doit être énoncée une fois exactement (${enonces.length})`);
+      assert.match(
+        enonces[0], /ni tes chefs d'équipe ni leurs sous-agents ne parlent au dirigeant/i,
+        `« ${enonces[0].trim()} » n’énonce plus l’exclusivité : ce qui doit arriver au dirigeant passe par toi`,
+      );
+      assert.match(s.corps, /passe par toi/i, 'et le métier doit dire que ce qui remonte passe par lui');
+    },
+  },
+
+  {
+    id: 'ronde-horaire',
+    quoi: 'la ronde est horaire et par défaut, et la veille de déblocage ne la remplace pas',
+    verifier({ metier }) {
+      // AJOUT 4. Mesuré : trois agents ont attendu en silence cette semaine, dont un près
+      // d'une heure. La cadence est le livrable — « régulièrement » ne se vérifie pas, et
+      // « sur demande » est exactement ce qui a produit les trois attentes.
+      const s = sectionDe(metier, /Veiller tes agents/i, 'sur la ronde');
+      exigeImperatif(s.titre, 'le titre de la ronde');
+
+      const citation = s.corps.split('\n').filter((l) => l.trim().startsWith('>'));
+      assert.ok(citation.length >= 1, 'la cadence doit être énoncée en tête de section, comme un principe');
+      const enonce = citation.join(' ');
+      assert.match(enonce, /toutes les heures/i, 'la cadence est horaire');
+      assert.match(enonce, /par défaut/i, 'et elle vaut par défaut');
+      assert.ok(
+        !/sur demande\b(?!,)/i.test(enonce.replace(/pas sur demande/i, '')),
+        'la ronde ne se déclenche pas sur demande — c’est ce qui a laissé trois agents attendre',
+      );
+      exigeImperatif(enonce, 'la cadence de la ronde');
+
+      // LA POLARITÉ QUI COMPTE : ce que la veille NE couvre pas. L'inverser ferait croire
+      // que l'automatisme existant suffit — et la ronde deviendrait facultative de fait.
+      const veille = s.corps.split('\n').filter((l) => /veille de déblocage/i.test(l));
+      assert.equal(veille.length, 1, `la section doit situer la veille une fois exactement (${veille.length})`);
+      assert.match(veille[0], /ne remplace pas/i, `« ${veille[0].trim()} » laisse croire que la veille suffit`);
+      for (const angle of [/a fini/i, /arrêté proprement/i, /rouge/i]) {
+        assert.match(s.corps, angle, `la section doit nommer ce que la veille ne voit pas (${angle})`);
+      }
+    },
+  },
+
+  {
+    id: 'ronde-n-execute-pas',
+    quoi: 'ce que la ronde trouve retourne à qui de droit — elle ne fait pas de l’orchestrateur un exécutant',
+    verifier({ metier }) {
+      // AJOUT 4, son revers. Une consigne de surveillance horaire est une invitation à
+      // « juste débloquer ça vite fait » douze fois par jour — c'est-à-dire exactement la
+      // dérive que le métier existant nomme (« ce que tu ne fais pas de tes mains ») et que
+      // le dirigeant a reprise sur ce chantier même.
+      const s = sectionDe(metier, /Veiller tes agents/i, 'sur la ronde');
+      const enonces = s.corps.split('\n').filter((l) => /Ce que tu fais de ce que tu trouves/i.test(l));
+      assert.equal(enonces.length, 1, 'la section doit dire ce qu’on fait de ce qu’on trouve');
+      assert.match(enonces[0], /ne change pas/i, 'la ronde ne change rien aux gestes qui ne t’appartiennent pas');
+      assert.match(enonces[0], /ne prends pas le clavier/i, 'et elle ne t’autorise pas à prendre le clavier à sa place');
+      assert.match(s.corps, /ne te transforme pas en exécutant/i, 'la section doit conclure sur ce qu’elle n’autorise pas');
+    },
+  },
+
+  {
+    id: 'topo-matinal',
+    quoi: 'le topo est quotidien, à 7 h 00, sur son canal, et porte les quatre rubriques',
+    verifier({ metier }) {
+      // AJOUT 5. L'heure et le lieu sont le livrable : un topo « régulier » « quelque part »
+      // ne se tient pas. Les quatre rubriques sont gardées en COMPTE — en retirer une (la
+      // seule qui appelle une décision, en général) ne casserait rien d'autre.
+      const s = sectionDe(metier, /Le topo du matin/i, 'sur le topo du matin');
+      const cadence = s.corps.split('\n').filter((l) => /7\s?h/i.test(l));
+      assert.ok(cadence.length >= 1, 'l’heure du topo doit être écrite');
+      assert.match(cadence[0], /chaque matin/i, 'le topo est quotidien');
+      assert.match(cadence[0], /ta ligne|ton canal/i, 'et il se pose sur son canal');
+      exigeImperatif(cadence[0], 'le rendez-vous du topo');
+
+      const RUBRIQUES = [
+        { quoi: 'où en est le chantier', sonde: /où en est le chantier/i },
+        { quoi: 'ce qui tourne en ce moment', sonde: /ce qui tourne/i },
+        { quoi: 'ce qui est bloqué', sonde: /bloqué/i },
+        { quoi: 'ce qui attend une décision du dirigeant', sonde: /attend une décision/i },
+      ];
+      const puces = pucesDe(s.corps);
+      assert.equal(puces.length, RUBRIQUES.length, `${puces.length} rubrique(s) écrite(s) pour ${RUBRIQUES.length} gardée(s)`);
+      for (const { quoi, sonde } of RUBRIQUES) {
+        assert.equal(puces.filter((p) => sonde.test(p)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
+      }
+
+      // ET CE QU'IL NE DIT PAS, DÉLIBÉRÉMENT. Le mécanisme d'horloge est du « comment » et
+      // il vient avec la naissance, au lot suivant. L'inventer ici produirait un dispositif
+      // calibré sur une supposition — la faute exacte du seuil « 2+ périmètres, 5+ agents »
+      // que le dirigeant a fait retirer de la compétence.
+      assert.match(
+        s.corps, /Ce que ce document ne dit pas encore/i,
+        'le métier doit dire que le déclenchement du topo n’est pas tranché, plutôt que d’inventer une horloge',
+      );
+      for (const invente of ['crontab', 'cron -', 'launchd', 'systemd']) {
+        assert.ok(!s.corps.includes(invente), `le métier prescrit un mécanisme d’horloge (« ${invente} ») qui n’a pas été tranché`);
+      }
+    },
+  },
+
+  {
+    id: 'gardien-des-adr',
+    quoi: 'il garde les ADR par le brief, la revue et le signalement — jamais en relisant le code',
+    verifier({ metier }) {
+      // AJOUT 6, et sa TENSION avec le métier existant : « ne code pas, ne relit pas le
+      // code ». Les trois gestes sont la résolution ; les garder en compte empêche qu'on en
+      // perde un — et c'est « vérifier que la revue a couvert » qui disparaîtrait en premier,
+      // parce que c'est le seul qui demande de renvoyer quelqu'un à son travail.
+      const s = sectionDe(metier, /gardien des ADR/i, 'sur la garde des ADR');
+      const table = tableDe(s.corps);
+      const gestes = colonne(table, /^Ce que tu fais$/i, 'ce que tu fais');
+      const pourquoi = colonne(table, /^Pourquoi ça tient sans lire le code$/i, 'pourquoi ça tient sans lire le code').join(' ');
+
+      const GESTES = [
+        { quoi: 'porter la contrainte dans le brief', sonde: /dans le brief/i },
+        { quoi: 'vérifier que la revue l’a couverte', sonde: /la revue l'a couverte/i },
+        { quoi: 'signaler l’écart sans le trancher', sonde: /signales l'écart/i },
+      ];
+      assert.equal(gestes.length, GESTES.length, `${gestes.length} geste(s) écrit(s) pour ${GESTES.length} gardé(s)`);
+      for (const { quoi, sonde } of GESTES) {
+        assert.equal(gestes.filter((g) => sonde.test(g)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
+      }
+      assert.ok(
+        !/tu relis le code|tu lis le code/i.test(gestes.join(' ')),
+        'un des gestes fait relire le code à l’orchestrateur — c’est précisément ce que son métier lui interdit',
+      );
+      assert.match(pourquoi, /ignorance/i, 'le brief prévient la violation par ignorance, qui est la plus fréquente');
+
+      // La tension doit être NOMMÉE, pas escamotée : un lecteur qui trouve les deux règles
+      // sans la résolution appliquera celle qu'il a lue en dernier.
+      assert.match(s.corps, /ne pas relire le code|ne relit pas le code/i, 'la tension avec l’interdit de relire le code doit être nommée');
+      assert.match(s.corps, /Lire une décision n'est pas relire le code/i, 'et résolue explicitement');
+
+      // ADR ≠ brief de revue. Deux registres, deux endroits ; les confondre ferait chercher
+      // les décisions d'architecture dans les motifs de défaut du dépôt, où elles ne sont pas.
+      const distinction = s.corps.split('\n').filter((l) => /BRIEF-REVUE\.md/.test(l));
+      assert.equal(distinction.length, 1, 'la distinction avec le brief de revue doit être faite une fois exactement');
+
+      // LA POLARITÉ, PAS LA PRÉSENCE. La première version de cette garde vérifiait que les
+      // deux expressions figuraient dans la phrase : les PERMUTER les y laissait toutes les
+      // deux, et la garde restait verte en enseignant le contraire — on cherchait les
+      // décisions d'architecture dans les motifs de défaut du dépôt. On apparie donc chaque
+      // registre à ce qu'il porte, en coupant la phrase là où le sujet change.
+      const [pourLaRevue, pourLesAdr] = distinction[0].split(/Les ADR portent/i);
+      assert.ok(pourLesAdr, 'la phrase doit dire ce que portent les ADR, après avoir dit ce que porte le brief de revue');
+      assert.match(pourLaRevue, /motifs de défaut/i, 'le brief de revue porte les motifs de défaut du dépôt');
+      assert.ok(!/décisions d'architecture/i.test(pourLaRevue), 'le brief de revue ne porte pas les décisions d’architecture — les deux registres sont inversés');
+      assert.match(pourLesAdr, /décisions d'architecture/i, 'les ADR portent les décisions d’architecture');
+      assert.ok(!/motifs de défaut/i.test(pourLesAdr), 'les ADR ne portent pas les motifs de défaut du dépôt — les deux registres sont inversés');
+      assert.match(s.corps, /dossier Architecture/i, 'et le métier doit dire où vivent les ADR');
+    },
+  },
+
+  {
+    id: 'pas-de-chemin-de-machine',
+    quoi: 'le gabarit ne porte aucun chemin de poste — il est déposé dans des dépôts qui ne sont pas celui-ci',
+    verifier({ metier, contexte }) {
+      // Un gabarit distribué qui nomme le disque d'une machine est faux partout ailleurs. Le
+      // pack l'a déjà commis (« garde d'ouverture sans chemin de machine », T-20260809-0032),
+      // et l'ajout 6 rouvrait précisément la porte : les ADR vivent dans un dossier
+      // synchronisé dont le chemin absolu est propre à chaque poste.
+      for (const [nom, texte] of [['CLAUDE.md', metier], ['CONTEXTE.md', contexte]]) {
+        const trouve = texte.match(/\/Users\/[a-z]|\/home\/[a-z]|CloudStorage|Disques partagés/i);
+        assert.ok(!trouve, `${nom} porte un chemin de machine (« ${trouve && trouve[0]} ») : faux dans tout autre dépôt que celui-ci`);
+      }
+    },
+  },
+
+  {
+    id: 'contexte-appele-et-necessaire',
+    quoi: 'le métier renvoie au contexte pour ce qu’il ne peut pas savoir, et le contexte porte ses trois rubriques',
+    verifier({ metier, contexte }) {
+      // La frontière entre les deux fichiers n'existe que si le métier RENVOIE réellement au
+      // contexte. Les trois rubriques sont celles que le dirigeant a énoncées : « le contexte
+      // porte à qui il répond, qui est le gestionnaire client de ce projet, quelle est sa
+      // portée ». Un gabarit qui les perdrait ferait un orchestrateur sans destinataire.
+      // ⚠️ LA SONDE DU VERBE DOIT ÊTRE ANCRÉE. La première version cherchait `/lis/i` dans
+      // la ligne : `herdr agent list`, cité deux lignes plus bas, la satisfaisait. La garde
+      // survivait donc au remplacement de l'appel par une simple mention — le contresens
+      // exact de ce qu'elle prétendait garder.
+      const appels = metier
+        .split('\n')
+        .filter((l) => !l.trim().startsWith('>'))
+        .filter((l) => /\blis\b[^\n]*`CONTEXTE\.md`/i.test(l));
+      assert.equal(
+        appels.length, 1,
+        `le métier doit dire une fois exactement de LIRE le contexte, pas seulement mentionner `
+          + `qu'il existe (${appels.length} appel·s trouvé·s)`,
+      );
+      exigeImperatif(appels[0], 'l’appel au contexte');
+
+      const RUBRIQUES = [
+        { quoi: 'à qui il répond', sonde: /^À qui tu réponds$/i },
+        { quoi: 'qui est le gestionnaire client du projet', sonde: /^Qui est le gestionnaire client de ce projet$/i },
+        { quoi: 'sa portée', sonde: /^Ta portée$/i },
+      ];
+      const titres = sections(contexte).map((s) => s.titre);
+      for (const { quoi, sonde } of RUBRIQUES) {
+        assert.equal(titres.filter((t) => sonde.test(t)).length, 1, `le contexte doit porter la rubrique « ${quoi} » (parmi : ${titres.join(' · ')})`);
+      }
+    },
+  },
+
+  {
+    id: 'frontiere-des-deux-fichiers',
+    quoi: 'chaque gabarit dit lequel des deux est remplacé et lequel n’est jamais touché',
+    verifier({ metier, contexte }) {
+      // Même garde que sur le lot du gestionnaire, et pour la même raison : si les deux
+      // avertissements s'inversent, ce qui est propre au dépôt est écrit dans le fichier que
+      // la prochaine mise à jour remplace. Perte silencieuse.
+      //
+      // La première version de cette garde, là-bas, était DÉCORATIVE — c'est le harnais de
+      // mutation qui l'a dit, pas une relecture. Elle tient parce que chaque ligne NOMME le
+      // fichier dont elle parle : on apparie alors la polarité au sujet qu'elle gouverne.
+      for (const [nom, texte] of [['CLAUDE.md', metier], ['CONTEXTE.md', contexte]]) {
+        // On ne retient que les lignes d'avertissement qui NOMMENT l'un des deux fichiers :
+        // l'en-tête du métier porte aussi les deux principes fondateurs, dont l'un contient
+        // « jamais » (« un agent qui orchestre n'exécute jamais »). Sans ce filtre, la garde
+        // rougissait sur un gabarit correct — et une garde rouge à tort finit désactivée.
+        const entete = enteteDe(texte).filter((l) => /`(?:CLAUDE|CONTEXTE)\.md`/.test(l));
+        assert.ok(entete.length >= 2, `${nom} doit s’ouvrir sur un avertissement qui dit à qui appartient chacun des deux fichiers`);
+
+        const sujetDe = (sonde, polarite) => {
+          const lignes = entete.filter((l) => sonde.test(l));
+          assert.equal(lignes.length, 1, `${nom} : une seule ligne doit porter « ${polarite} » (${lignes.length} trouvée·s)`);
+          const nommes = ['CLAUDE.md', 'CONTEXTE.md'].filter((f) => lignes[0].includes(`\`${f}\``));
+          assert.equal(nommes.length, 1, `${nom} : « ${lignes[0]} » doit nommer exactement un fichier`);
+          return nommes[0];
+        };
+
+        assert.equal(sujetDe(/remplac/i, 'remplacé'), 'CLAUDE.md', `${nom} : la frontière est inversée`);
+        assert.equal(sujetDe(/jamais/i, 'jamais touché'), 'CONTEXTE.md', `${nom} : la frontière est inversée`);
+      }
+    },
+  },
+
+  {
+    id: 'il-orchestre-il-n-execute-pas',
+    quoi: 'les interdits fondateurs ont survécu au déplacement — il ne code pas, ne relit pas le code, n’ouvre que des chefs d’équipe',
+    verifier({ metier }) {
+      // Ce que le dirigeant a rappelé le 2026-08-12 : « les moyens à lui retirer sont déjà
+      // décrits dans le skill existant ». Ils voyagent avec le métier — encore faut-il qu'ils
+      // arrivent. La table des trois niveaux est résolue par en-tête : permuter « ce qu'il
+      // fait » et « ce qu'il ne fait jamais » ferait un orchestrateur qui code.
+      const s = sectionDe(metier, /Les trois niveaux/i, 'sur les trois niveaux');
+      const table = tableDe(s.corps);
+      const fait = colonne(table, /^Ce qu'il fait$/i, 'ce qu’il fait').join(' ');
+      const jamais = colonne(table, /^Ce qu'il ne fait \*\*jamais\*\*$/i, 'ce qu’il ne fait jamais').join(' ');
+
+      for (const [sonde, quoi] of [
+        [/ne code pas/i, 'ne pas coder'],
+        [/ne relit pas le code/i, 'ne pas relire le code'],
+        [/qui ne soit un chef d'équipe/i, 'n’ouvrir que des chefs d’équipe'],
+      ]) {
+        assert.match(jamais, sonde, `« ${quoi} » doit figurer du côté de ce qu’il ne fait jamais`);
+        assert.ok(!sonde.test(fait), `« ${quoi} » figure du côté de ce qu’il fait — la table est inversée`);
+      }
+
+      // Et le principe fondateur, hors table.
+      assert.match(metier, /Un agent qui orchestre n'exécute jamais\./, 'le premier principe doit avoir voyagé intact');
+    },
+  },
+
+  {
+    id: 'anti-patterns-des-ajouts',
+    quoi: 'les six ajouts ont leur miroir dans les anti-patterns, du côté des fautes',
+    verifier({ metier }) {
+      // Une table d'anti-patterns dont on retire une ligne est le mode de régression le plus
+      // silencieux d'un document : rien ne casse, et la faute redevient tentante. La colonne
+      // est résolue par son en-tête — sinon permuter les deux libellés ferait de chaque faute
+      // une raison de la commettre.
+      const s = sectionDe(metier, /^Anti-patterns$/i, 'd’anti-patterns');
+      const table = tableDe(s.corps);
+      const fautes = colonne(table, /^Ce qu'on est tenté de faire$/i, 'ce qu’on est tenté de faire');
+      const raisons = colonne(table, /^Pourquoi ça casse$/i, 'pourquoi ça casse').join(' ');
+
+      const FAUTES = [
+        { quoi: 'sous-traiter à un spécialiste', sonde: /agent spécialisé au lieu de lui poser une question/i },
+        { quoi: 'commencer sans ligne', sonde: /sans avoir ouvert sa ligne/i },
+        { quoi: 'compter sur la veille pour savoir qu’un agent a fini', sonde: /veille de déblocage pour savoir/i },
+        { quoi: 'sauter le topo', sonde: /sauter le topo/i },
+        { quoi: 'brieffer sans l’ADR applicable', sonde: /sans lui donner l'ADR/i },
+      ];
+      for (const { quoi, sonde } of FAUTES) {
+        assert.equal(fautes.filter((c) => sonde.test(c)).length, 1, `« ${quoi} » doit être nommée une fois exactement comme une faute`);
+        assert.ok(!sonde.test(raisons), `« ${quoi} » figure du côté des raisons — les deux colonnes sont inversées`);
+      }
+
+      // Les anti-patterns du métier d'origine sont couverts par `le-metier-a-voyage-entier`,
+      // qui compare la table entière : inutile de les redire ici.
+    },
+  },
+
+  {
+    id: 'aucune-substitution',
+    quoi: 'le gabarit du métier est identique pour tous les dépôts — donc comparable octet pour octet',
+    verifier({ metier }) {
+      // Ce qui rendra la mise à jour des copies posées (lot suivant) capable de détecter une
+      // divergence sans deviner. Un seul emplacement à substituer, et il faudrait re-rendre
+      // le gabarit pour comparer.
+      for (const moteur of [/\{\{[^}]+\}\}/, /%%[^%]+%%/, /<%[^%]*%>/]) {
+        const trouve = metier.match(moteur);
+        assert.ok(!trouve, `le gabarit porte un emplacement à substituer (« ${trouve && trouve[0]} ») : il cesse d’être comparable tel quel`);
+      }
+    },
+  },
+
+  {
+    id: 'gestes-de-session-existants',
+    quoi: 'chaque commande de session enseignée s’adresse à un objet connu et est employée par la compétence de référence',
+    verifier({ metier }) {
+      // L'outil de session n'est pas versionné ici : on n'admet que des formes déjà employées
+      // par la compétence éprouvée, relevées dans ses BLOCS DE COMMANDES et jamais dans sa
+      // prose — celle-ci cite nommément des contre-exemples (`herdr wait output`, qui n'existe
+      // pas). Les ajouts introduisent des commandes : c'est le moment où l'on en invente une.
+      const reference = readFileSync(join(REPO, CHEMIN_COMPETENCE), 'utf8');
+      const formes = (t) => new Set([...t.matchAll(/\bherdr ([a-z-]+ [a-z-]+)/g)].map((m) => m[1]));
+      const connues = formes(blocsBash(reference).join('\n'));
+      assert.ok(connues.size >= 5, 'les formes de référence n’ont pas été relevées — le contrôle ne prouverait rien');
+
+      for (const forme of formes(blocsBash(metier).join('\n'))) {
+        assert.ok(['pane', 'agent', 'tab'].includes(forme.split(' ')[0]), `« herdr ${forme} » ne s’adresse à aucun objet connu — inventé ?`);
+        assert.ok(connues.has(forme), `« herdr ${forme} » n’est employé nulle part ailleurs dans le pack — inventé ?`);
+      }
+    },
+  },
+];
+
+// ═════════════════════════════════════════ les mutations
+
+/**
+ * Chaque mutation : { id, quoi, cible, fichier, muter(texte) }.
+ *
+ * `cible` nomme le contrôle qui DOIT la voir — et ici, contrairement au harnais du
+ * gestionnaire, c'est EXIGÉ et non seulement affiché. La raison est propre à ce lot :
+ * `le-metier-a-voyage-entier` compare des sections entières, donc il attraperait
+ * accidentellement presque toutes les mutations posées sur le métier transporté. Un
+ * harnais qui se contenterait d'« au moins un contrôle rouge » déclarerait alors gardées
+ * des garanties dont le contrôle dédié est décoratif.
+ */
+export const MUTATIONS = [
+  // ── le transport fidèle
+  {
+    id: 'une-section-du-metier-disparait',
+    quoi: 'la règle de dimensionnement — « aucun agent ne doit jamais avoir besoin de compacter » — est perdue au déplacement',
+    cible: 'le-metier-a-voyage-entier',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^### 3-bis\. Dimensionner[\s\S]*?(?=^### 4\. )/m, ''),
+  },
+  {
+    id: 'une-section-du-metier-est-reecrite',
+    quoi: 'le seuil retiré par le dirigeant est réintroduit en « améliorant » une section au passage',
+    cible: 'le-metier-a-voyage-entier',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Le niveau se lit dans le rôle, jamais dans un seuil.**',
+      '**Le niveau se lit dans un seuil : deux périmètres parallèles, ou cinq agents à coordonner.**',
+    ),
+  },
+
+  // ── ajout 3 : la ligne obligatoire (le retrait)
+  {
+    id: 'la-phrase-retiree-revient',
+    quoi: 'la phrase « continue sans elle » est réintroduite — la ligne redevient facultative',
+    cible: 'ligne-obligatoire',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Ta ligne est obligatoire, et c'est un préalable au chantier.**",
+      "Si la ligne ne peut pas s'ouvrir — jeton absent du poste, par exemple —, dis-le et continue sans elle : ce n'est pas un préalable au chantier.\n\n**Ta ligne est recommandée.**",
+    ),
+  },
+  {
+    id: 'le-refus-devient-une-recommandation',
+    quoi: 'le refus garde sa place et cesse d’obliger — « tu peux commencer sans elle si ça presse »',
+    cible: 'ligne-obligatoire',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**tu ne commences pas** : dis ce qui manque",
+      "tu peux commencer quand même si ça presse : dis ce qui manque",
+    ),
+  },
+
+  // ── ajout 1 : appeler les spécialistes
+  {
+    id: 'la-frontiere-de-l-appel-est-permutee',
+    quoi: 'les en-têtes consulter/sous-traiter sont permutés — confier son chantier devient la bonne pratique, sans qu’une cellule bouge',
+    cible: 'consulter-jamais-sous-traiter',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '| **Consulter — ce que tu fais** | **Sous-traiter — ce que tu ne fais jamais** |',
+      '| **Sous-traiter — ce que tu ne fais jamais** | **Consulter — ce que tu fais** |',
+    ),
+  },
+  {
+    id: 'sous-traiter-devient-permis',
+    quoi: 'confier une unité de travail à un spécialiste passe du côté de ce qu’on fait',
+    cible: 'consulter-jamais-sous-traiter',
+    fichier: 'metier',
+    muter: (t) => permuter(
+      t,
+      "Tu lui poses une question de son domaine",
+      "Tu lui confies une unité de travail de ton chantier",
+    ),
+  },
+  {
+    id: 'le-specialiste-devient-un-agent-qu-on-ouvre',
+    quoi: 'le spécialiste naît de la main de l’orchestrateur — on en fabrique donc un second, ignorant du domaine',
+    cible: 'ouvrir-n-est-pas-appeler',
+    fichier: 'metier',
+    muter: (t) => permuter(t, 'il naît de ta main, pour ton chantier', 'il existait avant toi, il te survivra'),
+  },
+
+  // ── ajout 2 : parler au dirigeant
+  {
+    id: 'les-chefs-d-equipe-parlent-au-dirigeant',
+    quoi: 'l’exclusivité de la parole tombe — deux versions du chantier circulent',
+    cible: 'parole-au-dirigeant-exclusive',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "Ni tes chefs d'équipe ni leurs sous-agents ne parlent au dirigeant",
+      "Tes chefs d'équipe peuvent lui parler directement quand ça va plus vite",
+    ),
+  },
+
+  // ── ajout 4 : la ronde horaire
+  {
+    id: 'la-ronde-devient-occasionnelle',
+    quoi: 'la cadence horaire devient un « régulièrement » qui ne se vérifie pas',
+    cible: 'ronde-horaire',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '> **Tu fais le tour de tes agents et du travail qui tourne toutes les heures. Par défaut, pas sur demande.**',
+      '> **Tu fais le tour de tes agents et du travail qui tourne régulièrement, au besoin.**',
+    ),
+  },
+  {
+    id: 'la-veille-est-donnee-comme-suffisante',
+    quoi: 'la veille de déblocage est présentée comme couvrant la ronde — celle-ci devient facultative de fait',
+    cible: 'ronde-horaire',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**La veille de déblocage ne remplace pas ta ronde**',
+      '**La veille de déblocage fait déjà ta ronde**',
+    ),
+  },
+  {
+    id: 'la-ronde-autorise-a-prendre-le-clavier',
+    quoi: 'la ronde devient une tournée de dépannage — la dérive que le dirigeant a reprise sur ce chantier même',
+    cible: 'ronde-n-execute-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Ce que tu fais de ce que tu trouves ne change pas** : tu ne prends pas le clavier à sa place",
+      "**Ce que tu fais de ce que tu trouves t'appartient** : tu prends le clavier à sa place quand c'est plus rapide",
+    ),
+  },
+
+  // ── ajout 5 : le topo matinal
+  {
+    id: 'le-topo-perd-son-heure',
+    quoi: 'le topo n’a plus de rendez-vous — donc il n’a plus lieu',
+    cible: 'topo-matinal',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Chaque matin à 7 h 00, tu poses un topo sur ta ligne.**',
+      '**Quand tu en ressens le besoin, tu peux poser un topo sur ta ligne.**',
+    ),
+  },
+  {
+    id: 'le-topo-perd-la-rubrique-qui-decide',
+    quoi: 'la rubrique « ce qui attend une décision de lui » disparaît — le topo devient un bulletin qu’on lit sans rien faire',
+    cible: 'topo-matinal',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^- \*\*ce qui attend une décision de lui\*\*.*\n/m, ''),
+  },
+  {
+    id: 'une-horloge-est-inventee',
+    quoi: 'le métier prescrit un mécanisme de déclenchement que personne n’a tranché',
+    cible: 'topo-matinal',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "> **Ce que ce document ne dit pas encore**",
+      "> **Le déclenchement** : pose une entrée `crontab` à 7 h 00 sur ton poste.\n>\n> **Ce que ce document ne dit plus**",
+    ),
+  },
+
+  // ── ajout 6 : gardien des ADR
+  {
+    id: 'la-verification-de-la-revue-disparait',
+    quoi: 'le geste qui demande de renvoyer une revue incomplète est retiré — celui qui coûte le plus à faire',
+    cible: 'gardien-des-adr',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| \*\*Tu vérifies que la revue l'a couverte\*\*.*\n/m, ''),
+  },
+  {
+    id: 'le-gardien-se-met-a-relire-le-code',
+    quoi: 'la tension est résolue dans le mauvais sens — l’orchestrateur va vérifier lui-même dans les fichiers',
+    cible: 'gardien-des-adr',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '| **Tu portes la contrainte dans le brief** |',
+      '| **Tu relis le code des chantiers sensibles** |',
+    ),
+  },
+  {
+    id: 'les-adr-sont-confondus-avec-le-brief-de-revue',
+    quoi: 'les décisions d’architecture sont renvoyées aux motifs de défaut du dépôt, où elles ne sont pas',
+    cible: 'gardien-des-adr',
+    fichier: 'metier',
+    muter: (t) => permuter(t, 'motifs de défaut', "décisions d'architecture"),
+  },
+
+  // ── les interdits transportés, et la frontière des deux fichiers
+  {
+    id: 'la-table-des-trois-niveaux-est-permutee',
+    quoi: 'les en-têtes « ce qu’il fait » et « ce qu’il ne fait jamais » sont permutés — l’orchestrateur code',
+    cible: 'il-orchestre-il-n-execute-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "| Niveau | Qui | Ce qu'il fait | Ce qu'il ne fait **jamais** |",
+      "| Niveau | Qui | Ce qu'il ne fait **jamais** | Ce qu'il fait |",
+    ),
+  },
+  {
+    id: 'la-frontiere-des-fichiers-s-inverse',
+    quoi: 'le contexte devient le fichier remplacé — ce qui est propre au dépôt disparaît à la première mise à jour',
+    cible: 'frontiere-des-deux-fichiers',
+    fichier: 'contexte',
+    muter: (t) => permuter(t, '`CONTEXTE.md` — ce fichier —', '`CLAUDE.md`'),
+  },
+  {
+    id: 'le-metier-cesse-d-appeler-le-contexte',
+    quoi: 'l’appel au contexte devient une mention — l’orchestrateur ne sait plus à qui il répond',
+    cible: 'contexte-appele-et-necessaire',
+    fichier: 'metier',
+    muter: (t) => t.replace('**Avant tout : lis `CONTEXTE.md`.**', 'Un fichier `CONTEXTE.md` existe à côté de celui-ci.'),
+  },
+  {
+    id: 'une-rubrique-du-contexte-disparait',
+    quoi: 'la portée n’est plus écrite — deux orchestrateurs d’un même dépôt se marchent dessus',
+    cible: 'contexte-appele-et-necessaire',
+    fichier: 'contexte',
+    muter: (t) => t.replace('## Ta portée', '## Divers'),
+  },
+
+  // ── les anti-patterns et la distribution
+  {
+    id: 'un-anti-pattern-des-ajouts-disparait',
+    quoi: 'la faute « commencer un chantier sans ligne » n’est plus nommée comme une faute',
+    cible: 'anti-patterns-des-ajouts',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| Commencer un chantier sans avoir ouvert sa ligne \|.*\n/m, ''),
+  },
+  {
+    id: 'les-anti-patterns-sont-permutes',
+    quoi: 'les deux en-têtes de la table sont permutés — chaque faute devient une raison de la commettre',
+    cible: 'anti-patterns-des-ajouts',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "| Ce qu'on est tenté de faire | Pourquoi ça casse |",
+      "| Pourquoi ça casse | Ce qu'on est tenté de faire |",
+    ),
+  },
+  {
+    id: 'un-chemin-de-machine-entre-dans-le-gabarit',
+    quoi: 'le chemin du dossier Architecture est écrit en dur — faux dans tout autre poste',
+    cible: 'pas-de-chemin-de-machine',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'vivent dans le dossier Architecture partagé',
+      'vivent dans `/Users/maximeleboeuf/Library/CloudStorage/GoogleDrive-maxime.leboeuf@somtech.ca/Disques partagés/Architecture/`',
+    ),
+  },
+  {
+    id: 'un-emplacement-a-substituer-entre-dans-le-gabarit',
+    quoi: 'le gabarit cesse d’être comparable tel quel — la mise à jour des copies ne saurait plus détecter une divergence',
+    cible: 'aucune-substitution',
+    fichier: 'metier',
+    muter: (t) => t.replace('Tu es le **pilote** d\'un chantier.', 'Tu es le **pilote** de {{CHANTIER}}.'),
+  },
+  {
+    id: 'une-commande-de-session-est-inventee',
+    quoi: 'la ronde enseigne une commande qui n’existe pas — chaque orchestrateur qui la suit perd du temps sur une erreur qui n’est pas la sienne',
+    cible: 'gestes-de-session-existants',
+    fichier: 'metier',
+    muter: (t) => t.replace('herdr agent list                       #', 'herdr agent survey                     #'),
+  },
+];
