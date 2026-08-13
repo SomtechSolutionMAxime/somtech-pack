@@ -5,6 +5,13 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.38.0] - 2026-08-13
+
+### Ajouté
+
+- **La compétence qui pose un orchestrateur** (T-20260813-0030, PR #205). La mécanique existait depuis la 1.37.0, mais rien ne l'enveloppait : il fallait lancer les commandes à la main, puis brancher, verser et ouvrir la demande de fusion soi-même. Le gestionnaire client avait sa compétence depuis le premier jour ; l'orchestrateur n'en avait pas — le parallèle avait semblé aller de soi, et il n'allait pas de soi. Le manque a été trouvé par la question du dirigeant : « je ne lance pas les commandes via une session Claude ? ». La compétence enveloppe désormais le geste complet — elle vérifie, refuse en disant quoi faire, pose le lieu, verse en branche et ouvre la demande de fusion.
+- **Deux différences avec la compétence du gestionnaire, portées explicitement** : aucun canal client à donner, puisque l'orchestrateur ouvre sa propre ligne directe ; et un **refus si cette ligne ne peut pas s'ouvrir**, sa ligne étant obligatoire (décision du 2026-08-12). C'est le pendant du canal injoignable côté gestionnaire, et le même mode de panne qu'il évite : un agent qui croit parler sans que personne l'entende.
+
 ## [1.37.0] - 2026-08-13
 
 ### Ajouté
