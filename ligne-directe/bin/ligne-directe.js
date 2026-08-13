@@ -14,6 +14,7 @@
 // par le pane depuis lequel elle est invoquée. Un agent n'a donc rien à retenir.
 
 import { parler, passerLaMain } from '../src/client.js';
+import { ligneDuPane } from '../src/registre.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
@@ -37,6 +38,12 @@ function usage(code = 0) {
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
   renommer --titre "..." [--canal <id>]                    renomme le canal (Slack + registre)
+  commun <canal> --dirigeant courriel [--dirigeant ...]    designe le CANAL COMMUN : chacun de
+                                                           ses messages est remis a TOUS les
+                                                           agents du poste. Descendant seulement
+                                                           — aucun agent n'y ecrit, aucune
+                                                           commande n'y poste. Le canal doit
+                                                           exister et notre robot y etre invite.
   representant <client> --canal <canal> [--depot <chemin>] prepare le lieu d'un representant
                                                            dans <chemin> (defaut : le repertoire
                                                            courant) — refuse tout net et NE CREE
@@ -57,12 +64,36 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
 }
 
 /** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
-const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre', '--nature', '--canal', '--depot']);
+const OPTIONS_A_VALEUR = new Set([
+  '--sujet',
+  '--inviter',
+  '--bilan',
+  '--titre',
+  '--nature',
+  '--canal',
+  '--depot',
+  '--dirigeant',
+]);
 
 function option(args, nom) {
   const i = args.indexOf(nom);
   if (i === -1) return null;
   return args[i + 1] ?? null;
+}
+
+/**
+ * Toutes les valeurs d'une option répétée — `--dirigeant a --dirigeant b`.
+ *
+ * `option` rend la PREMIÈRE, ce qui est juste pour un titre ou un sujet. La liste des
+ * autorisés du canal commun, elle, se perdrait en silence : deux personnes nommées, une seule
+ * inscrite, et celle qui manque s'entend refuser la parole sans savoir pourquoi.
+ */
+function optionsRepetees(args, nom) {
+  const valeurs = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === nom && args[i + 1] != null && !String(args[i + 1]).startsWith('--')) valeurs.push(args[i + 1]);
+  }
+  return valeurs;
 }
 
 /**
@@ -154,7 +185,9 @@ if (geste === 'relever') {
   if (!texte) usage(1);
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });
-  const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+  // `etat.ouvertes` ne porte QUE des lignes — le canal commun est rendu à côté, exprès : un
+  // geste qui parle ne doit pas pouvoir le désigner, même par accident.
+  const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
   if (!mienne) {
     process.stderr.write("aucune ligne ouverte depuis ce pane — commence par : ligne-directe ouvrir <chantier>\n");
     process.exit(1);
@@ -164,7 +197,7 @@ if (geste === 'relever') {
 } else if (geste === 'fermer') {
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });
-  const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+  const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
   if (!mienne) {
     process.stderr.write('aucune ligne ouverte depuis ce pane\n');
     process.exit(1);
@@ -187,13 +220,36 @@ if (geste === 'relever') {
   } else {
     const ici = await herdr.paneCourant();
     const etat = await parler({ geste: 'etat' });
-    const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+    const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
     if (!mienne) {
       process.stderr.write('aucune ligne ouverte depuis ce pane — precise --canal <id>\n');
       process.exit(1);
     }
     rendre(await parler({ geste: 'renommer', chantier: mienne.chantier, worktree: mienne.worktree, titre }));
   }
+} else if (geste === 'commun') {
+  // Désigne le canal commun. Ce geste est celui de l'OPÉRATEUR du poste, une fois — pas celui
+  // d'un agent : rien ici n'ouvre de ligne, n'inscrit de pane, ni ne poste quoi que ce soit.
+  const canal = premierLibre(args);
+  if (!canal) usage(1);
+  const nomsDirigeants = optionsRepetees(args, '--dirigeant');
+  if (!nomsDirigeants.length) usage(1);
+
+  // On résout AVANT d'appeler le veilleur, et on refuse si l'un des noms ne se résout pas.
+  // Une liste amputée en silence est le pire des trois résultats possibles : le canal est
+  // désigné, tout a l'air en place, et la personne qui manque s'entend refuser la parole sans
+  // que rien ne le dise — sur le canal qui sert précisément à ne plus attendre.
+  const jeton = await lireJeton(SERVICE_ROBOT);
+  const autorises = [];
+  for (const qui of nomsDirigeants) {
+    const id = await trouverMembre(jeton, qui);
+    if (!id) {
+      process.stderr.write(`aucun membre pour ${qui} — le canal commun n'est PAS designe\n`);
+      process.exit(1);
+    }
+    autorises.push(id);
+  }
+  rendre(await parler({ geste: 'commun', canal, autorises }));
 } else if (geste === 'representant') {
   const client = premierLibre(args);
   const canal = option(args, '--canal');

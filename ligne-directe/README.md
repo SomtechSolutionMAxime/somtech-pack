@@ -42,6 +42,27 @@ Le veilleur écoute en **Socket Mode**. Il lui faut, en plus du jeton de robot, 
 1. **Toute modification de portée impose de RÉINSTALLER l'application** dans l'espace de travail. Accorder une portée sans réinstaller ne change rien, et rien ne le signale.
 2. **Le manifeste de l'application ne reflète plus ce qui est accordé.** L'application a été créée depuis un manifeste ; `files:read`, `files:write` et les portées `groups:*` ont été ajoutés à la main le 2026-08-06. **Rejouer le manifeste les effacerait sans bruit** — le même piège qu'une migration qui diverge de sa base. Mettre le manifeste à jour avant de le rejouer, jamais l'inverse.
 
+## Le canal commun — parler à tous les agents qui tournent déjà
+
+Une ligne joint **un** agent. Quand une version du pack est publiée, les agents en cours tournent sur celle d'avant et **aucun ne le sait** : il faut aller le leur dire un par un, ou attendre qu'ils meurent. Le canal commun est l'autre moitié — il porte ce qui doit être **pris en compte rapidement** par tout le monde. Ce qui peut attendre la prochaine naissance reste au **feed** du ServiceDesk, que chaque agent relit en naissant ; les deux coexistent et aucun ne couvre le cas seul.
+
+**Il se désigne une fois par poste**, par le dirigeant :
+
+```bash
+ligne-directe commun annonces-agents --dirigeant maxime.leboeuf@somtech.ca
+```
+
+- Le canal **existe déjà** et notre robot **y a été invité à la main** — on ne le crée pas, on ne le rejoint pas (un robot ne se met pas lui-même dans un canal). La désignation refuse en nommant lequel des deux manque.
+- `--dirigeant` est **obligatoire** et se répète. Sans liste, n'importe quel membre de l'espace ferait rafraîchir la configuration de chaque agent du poste. Un nom qui ne se résout pas fait échouer la désignation entière plutôt que d'amputer la liste en silence.
+- `ligne-directe etat` rend le canal commun **à côté** des lignes ouvertes, jamais parmi elles.
+
+Ce qu'il fait, et ce qu'il ne fera jamais :
+
+- chaque message y est remis à **tous les agents du poste** — herdr dit lesquels vivent, personne ne s'abonne. Un agent qui n'a **aucune ligne** entend aussi, et un chef d'équipe qui ne vit que deux heures également : il n'y a rien à faire pour entendre ;
+- **rien n'y remonte, jamais.** `dire`, `fermer` et `renommer` y sont refusés, aucune ligne ne peut s'y ouvrir, et le veilleur lui-même n'y écrit rien — ni accusé, ni erreur, ni compte rendu. C'est une entorse assumée à la règle « celui qui écrit apprend que son message n'est pas passé » : une réponse ici serait lue par tous les agents à la fois, et **un canal d'urgence qu'on encombre est un canal qu'on cesse de lire** — ce qui coûterait la consigne suivante. Ce qui ne passe pas va au journal du veilleur ;
+- **les pièces jointes ne suivent pas** ce canal : une consigne est une phrase. Un message qui n'en porte pas n'est pas diffusé ;
+- **la ligne propre de chaque agent est intouchée.** Le canal commun n'entre pas au registre des lignes, donc jamais dans ce que la commande parcourt pour savoir de quelle ligne un agent parle. Il n'est candidat à aucun geste sortant — c'est ce qui empêche une consigne interne de partir dans le canal d'un client.
+
 ## Un canal privé dont la ligne a disparu du registre
 
 Le registre repart à vide quand il est illisible. Le robot, lui, reste membre du canal privé de son client — qui continue d'écrire dans le vide.
