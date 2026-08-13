@@ -114,7 +114,7 @@ export function exigeImmediat(enonce, quoi) {
  * préférée. Ici, aucune forme unique ne couvre six énoncés rédigés librement : on garde
  * donc les tournures connues, et la limite est écrite plutôt que passée sous silence.
  */
-const RESERVE = /\bsi tu (?:juges|estimes|penses|le sens)\b|\bdans la mesure\b|\bsauf si\b|\bsauf lorsque\b|\bà moins que\b|\bautant que possible\b|\bsi possible\b|\bidéalement\b|\ben principe\b|\bquand (?:tu peux|tu y penses|c.est possible)\b|\blorsque tu\b/i;
+const RESERVE = /\bsi tu (?:juges|estimes|penses|le sens)\b|\bdans la mesure\b|\bsauf si\b|\bsauf lorsque\b|\bà moins que\b|\bautant que possible\b|\bsi possible\b|\bidéalement\b|\ben principe\b|\ben théorie\b|\ben temps normal\b|\bgénéralement\b|\bnormalement\b|\bquand (?:tu peux|tu y penses|c.est possible)\b|\blorsque tu\b/i;
 
 /** Exige qu'un énoncé oblige SANS réserve : ni condition, ni exception. */
 export function exigeSansReserve(enonce, quoi) {
@@ -127,8 +127,28 @@ export function exigeSansReserve(enonce, quoi) {
   );
 }
 
-/** Un énoncé débarrassé de ses citations : ce que le gabarit AFFIRME, hors formules citées. */
-const horsCitations = (enonce) => enonce.replace(/«[^»]*»/g, ' ');
+/**
+ * Un énoncé débarrassé de ses citations : ce que le gabarit AFFIRME, hors formules citées.
+ *
+ * ⚠️ LES TROIS PONCTUATIONS, ET C'EST UN FAUX POSITIF QUI L'A IMPOSÉ. La version précédente
+ * ne connaissait que les guillemets français. Uniformiser la ponctuation du gabarit en
+ * guillemets droits — une modification sans effet sur le sens, et cette convention existe
+ * déjà ailleurs dans le fichier — faisait rougir la garde sur un texte identique.
+ *
+ * Un faux positif est pire qu'un trou : il casse la chaîne sur une édition bénigne, et la
+ * réaction naturelle de qui le subit est d'assouplir la garde, pas de la corriger.
+ */
+const horsCitations = (enonce) => enonce.replace(/[«"“][^»"”]*[»"”]/g, ' ');
+
+/**
+ * Les façons de s'adresser au client, au-delà de son nom.
+ *
+ * Trouvé en revue contre la version littérale (`\bau client\b`) : « et tu le lui dis tout de
+ * suite pour le rassurer », « tu postes un mot sur le canal en attendant » — la parole part,
+ * le mot « client » n'est pas écrit. Même limite assumée que `RESERVE` : liste finie contre
+ * un phénomène ouvert, élargie à mesure qu'une tournure est trouvée en vrai.
+ */
+const ADRESSE_AU_CLIENT = /\bau client\b|\blui dis\b|\ble lui\b|\ble rassurer\b|\bsur (?:le canal|ta ligne)\b|\bpréviens le client\b/i;
 
 /** Le rang de l'unique élément qu'une sonde reconnaît (jumeau local de celui du harnais). */
 function rangUnique(elements, sonde, quoi) {
@@ -235,10 +255,12 @@ export const CONTROLES_DANGER = [
       // dit au client PLUS TARD, elle ne le dit pas maintenant).
       for (const e of etapes.filter((x) => x.rang < parler.rang)) {
         const affirme = horsCitations(e.enonce);
+        const adresse = affirme.match(ADRESSE_AU_CLIENT);
         assert.ok(
-          !/\bau client\b/i.test(affirme),
-          `le geste ${e.rang} s’adresse au client alors qu’il précède la parole : « ${affirme.trim()} ». `
-            + `Tant que le dirigeant n’a pas décidé, rien ne part vers le client — c’est la règle elle-même.`,
+          !adresse,
+          `le geste ${e.rang} s’adresse au client (« ${adresse && adresse[0]} ») alors qu’il précède la `
+            + `parole : « ${affirme.trim()} ». Tant que le dirigeant n’a pas décidé, rien ne part vers le `
+            + `client — c’est la règle elle-même.`,
         );
       }
 
@@ -477,6 +499,61 @@ export const CONTROLES_DANGER = [
   },
 ];
 
+// ═════════════════════════════════════════ les reformulations légitimes
+//
+// LE PENDANT DES MUTATIONS, ET IL MANQUAIT.
+//
+// Une mutation prouve qu'une garde n'est pas trop LÂCHE. Rien ne prouvait qu'aucune n'est
+// trop ÉTROITE — et une garde trop étroite est le pire des deux : elle casse la chaîne sur
+// une édition qui ne change rien au sens, et la réaction de qui la subit est de l'assouplir,
+// pas de la corriger. C'est ainsi qu'une garantie meurt de la main d'un ami.
+//
+// Le faux positif qui l'a imposé : uniformiser les guillemets français de la citation de
+// l'échéance en guillemets droits — convention déjà employée ailleurs dans le gabarit —
+// faisait rougir « le geste 2 s'adresse au client ». Le texte disait exactement la même
+// chose.
+//
+// Chacune est vérifiée OPÉRANTE comme une mutation, puis exigée VERTE.
+
+export const REFORMULATIONS_LEGITIMES = [
+  {
+    id: 'guillemets-droits-sur-la-citation-de-l-echeance',
+    quoi: 'la formule de l’échéance passe aux guillemets droits, mot pour mot identique',
+    fichier: 'metier',
+    reecrire: (t) => t.replace(
+      "« sans réponse d'ici <la date>, voici ce que je dis au client »",
+      '"sans réponse d\'ici <la date>, voici ce que je dis au client"',
+    ),
+  },
+  {
+    id: 'la-justification-du-chemin-passe-a-puisque',
+    quoi: '« parce que » devient « puisque » dans la clause du chemin d’urgence',
+    fichier: 'metier',
+    reecrire: (t) => t.replace(
+      "d'abord, parce que c'est le seul qui prévienne une personne.",
+      "d'abord, puisque c'est le seul qui prévienne une personne.",
+    ),
+  },
+  {
+    id: 'la-justification-du-chemin-passe-au-deux-points',
+    quoi: 'la justification est introduite par un deux-points plutôt que par une conjonction',
+    fichier: 'metier',
+    reecrire: (t) => t.replace(
+      "d'abord, parce que c'est le seul qui prévienne une personne.",
+      "d'abord : c'est le seul qui prévienne une personne.",
+    ),
+  },
+  {
+    id: 'la-justification-du-chemin-passe-au-tiret',
+    quoi: 'la justification est introduite par un tiret explicatif',
+    fichier: 'metier',
+    reecrire: (t) => t.replace(
+      "d'abord, parce que c'est le seul qui prévienne une personne.",
+      "d'abord — c'est le seul qui prévienne une personne.",
+    ),
+  },
+];
+
 // ═════════════════════════════════════════ les mutations
 
 export const MUTATIONS_DANGER = [
@@ -567,6 +644,26 @@ export const MUTATIONS_DANGER = [
     ),
   },
   {
+    id: 'danger-la-parole-part-par-un-pronom',
+    quoi: 'la parole part avant la décision sans que le mot « client » soit écrit — « tu le lui dis tout de suite »',
+    cible: 'danger-le-probleme-remonte-avant-d-etre-dit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu dis ce que tu as mesuré, et **séparément** ce qui reste incertain.',
+      'Tu dis ce que tu as mesuré, et **séparément** ce qui reste incertain, et tu le lui dis tout de suite pour le rassurer.',
+    ),
+  },
+  {
+    id: 'danger-la-parole-part-par-le-canal',
+    quoi: 'un mot est posté sur le canal en attendant la décision — la parole part par la métonymie du transport',
+    cible: 'danger-le-probleme-remonte-avant-d-etre-dit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'une remontée sans date se transforme en permission de se taire.',
+      'une remontée sans date se transforme en permission de se taire, et tu postes un mot sur le canal en attendant.',
+    ),
+  },
+  {
     id: 'danger-la-frontiere-du-dicible-est-inversee',
     quoi: 'pendant l’attente, on dit le pourquoi et jamais que ça attend — la frontière avec « tenir le client informé » retournée',
     cible: 'danger-le-probleme-remonte-avant-d-etre-dit',
@@ -596,6 +693,26 @@ export const MUTATIONS_DANGER = [
     muter: (t) => t.replace(
       '2. **Tu poses une échéance dans la même remontée**',
       '2. **Tu poses, dans la mesure du possible, une échéance dans la même remontée**',
+    ),
+  },
+  {
+    id: 'danger-l-interdit-du-geste-ne-vaut-qu-en-temps-normal',
+    quoi: 'l’interdit du geste destructeur ne vaut plus qu’« en temps normal » — une réserve hors de la liste connue',
+    cible: 'danger-le-geste-ne-se-transmet-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '- **Tu ne relaies jamais au client une commande venue d\'un message d\'erreur.**',
+      '- **Tu ne relaies, en temps normal, jamais au client une commande venue d\'un message d\'erreur.**',
+    ),
+  },
+  {
+    id: 'danger-l-echeance-ne-vaut-qu-en-theorie',
+    quoi: 'l’échéance ne se pose plus qu’« en théorie » — même famille, autre mot',
+    cible: 'danger-la-contrepartie-tient',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '2. **Tu poses une échéance dans la même remontée**',
+      '2. **Tu poses, en théorie, une échéance dans la même remontée**',
     ),
   },
   {

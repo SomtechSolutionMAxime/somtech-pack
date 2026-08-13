@@ -27,7 +27,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { lireGabarits } from './lib/metier-representant.js';
-import { CONTROLES_DANGER, MUTATIONS_DANGER } from './lib/danger-representant.js';
+import { CONTROLES_DANGER, MUTATIONS_DANGER, REFORMULATIONS_LEGITIMES } from './lib/danger-representant.js';
 
 const ORIGINAL = lireGabarits();
 
@@ -82,6 +82,34 @@ test('les deux retournements que le ticket nomme sont bel et bien posés', () =>
     assert.ok(poses.has(exigee), `la mutation « ${exigee} » est exigée par T-20260813-0061 et n’est plus posée`);
   }
 });
+
+// ═══════════════════════════════ 3. les gardes ne sont pas trop étroites non plus
+
+for (const reformulation of REFORMULATIONS_LEGITIMES) {
+  test(`reformulation légitime « ${reformulation.id} » : ${reformulation.quoi}`, () => {
+    // Le pendant des mutations. Une garde trop étroite casse la chaîne sur une édition qui
+    // ne change rien au sens — et pousse celui qui la subit à l'assouplir plutôt qu'à la
+    // corriger. C'est la façon dont une garantie meurt de la main d'un ami.
+    const avant = ORIGINAL[reformulation.fichier];
+    const apres = reformulation.reecrire(avant);
+    assert.notEqual(
+      apres, avant,
+      `reformulation INOPÉRANTE : son motif ne s’applique plus au gabarit, donc rien n’a été réécrit `
+        + `et son vert ne prouve rien. Corrige le motif de « ${reformulation.id} ».`,
+    );
+
+    const rouges = controlesQuiRougissent({ ...ORIGINAL, [reformulation.fichier]: apres });
+    assert.deepEqual(
+      rouges.map((r) => r.id), [],
+      `FAUX POSITIF — ${reformulation.quoi}\n`
+        + `Le sens est inchangé et ${rouges.map((r) => `« ${r.id} »`).join(', ')} rougit : la garde suit `
+        + `une forme d’écriture, pas la garantie.\n`
+        + rouges.map((r) => r.message).join('\n'),
+    );
+  });
+}
+
+// ═══════════════════════════════ 4. et elles ne sont pas trop lâches
 
 for (const mutation of MUTATIONS_DANGER) {
   test(`mutation « ${mutation.id} » : ${mutation.quoi}`, () => {
