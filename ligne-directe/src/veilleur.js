@@ -22,7 +22,7 @@ import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
-import { cadrerPourAgent } from './cadre.js';
+import { cadrerPourAgent, cadrerConsigneCommune } from './cadre.js';
 import { reponse } from './langage.js';
 import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
 import {
@@ -38,6 +38,8 @@ import {
   clore,
   natureDe,
   libelleDeLigne,
+  canalCommun,
+  estCanalCommun,
   NATURES,
   NATURE_PAR_DEFAUT,
 } from './registre.js';
@@ -255,6 +257,8 @@ export class Veilleur {
         return this.fermer(requete);
       case 'renommer':
         return this.renommer(requete);
+      case 'commun':
+        return this.designerCommun(requete);
       case 'etat':
         return this.etat();
       case 'ceder':
@@ -373,6 +377,22 @@ export class Veilleur {
       throw err;
     }
 
+    // UNE LIGNE NE S'INSTALLE PAS SUR LE CANAL COMMUN, et ce n'est pas une hypothèse d'école :
+    // le nom d'un canal vient du TITRE, la normalisation aplatit accents, casse et ponctuation,
+    // et `creerCanal` REPREND un canal homonyme existant au lieu d'échouer. Un chantier titré
+    // « Annonces » tomberait donc naturellement sur le canal d'annonces — et à partir de là,
+    // tout ce que cet agent dit part dans le pane de tous les autres, sous l'autorité du
+    // dirigeant. On refuse avant d'inscrire quoi que ce soit : sujet, invitations, registre.
+    if (estCanalCommun(this.registre, canal.id)) {
+      journaliser(`ouverture refusée — ${chantier} : #${canal.nom} est le canal commun`);
+      return {
+        ok: false,
+        erreur:
+          `#${canal.nom} est le canal commun, celui qui porte les consignes du dirigeant à TOUS les agents : ` +
+          `aucune ligne ne s'y ouvre. Donne un autre titre à ce chantier.`,
+      };
+    }
+
     // DEUXIÈME VERROU, et il n'est pas redondant : le premier protège la REPRISE d'un canal
     // homonyme, celui-ci protège la CRÉATION. Slack peut rendre un canal public alors qu'on
     // en demandait un privé — un droit manquant, une politique d'espace de travail — et il
@@ -441,9 +461,124 @@ export class Veilleur {
     };
   }
 
+  /**
+   * Le refus opposé à tout geste qui viserait le canal commun — ou `null` si ce n'est pas lui.
+   *
+   * LE « DESCENDANT SEULEMENT » EST UNE GARANTIE, PAS UNE CONVENTION, et c'est ici qu'il le
+   * devient. Trois gestes écrivent ou modifient un canal — `dire`, `fermer`, `renommer` — et
+   * chacun peut recevoir un `canal_id` de son appelant. Sans cette garde, le canal commun leur
+   * est déjà inaccessible par le chemin ordinaire (il n'entre pas dans `lignes[]`, donc pas
+   * dans `etat().ouvertes`, donc pas dans la sélection par pane de la commande) — mais « il ne
+   * s'y trouve pas aujourd'hui » n'est pas la même phrase que « il ne peut pas s'y trouver ».
+   *
+   * Ce qui est en jeu tient en une image : une parole d'agent — la réponse d'un représentant à
+   * son client, un rapport de chantier — arrivant dans le pane de TOUS les agents du poste.
+   * Le refus est donc nommé, à un seul endroit, et il vaut quelle que soit la porte.
+   *
+   * ON LUI DONNE TOUTES LES DÉSIGNATIONS DU CANAL, pas seulement l'argument reçu — et c'est une
+   * vérification par mutation qui l'a imposé : gardée sur le seul `canal_id` passé par
+   * l'appelant, elle laissait passer le chemin par CHANTIER. Le registre survit aux versions du
+   * pack : une ligne inscrite sur ce canal par une version qui ne connaissait pas le canal
+   * commun y reste, et `fermer` aurait posté son bilan puis ARCHIVÉ le canal de tous les agents.
+   * On teste donc aussi la ligne une fois résolue.
+   */
+  refusSurCommun(geste, ...canaux) {
+    if (!canaux.some((c) => estCanalCommun(this.registre, c))) return null;
+    const commun = canalCommun(this.registre);
+    journaliser(`refusé — ${geste} visait le canal commun #${commun.canal_nom} : rien n'y remonte`);
+    return {
+      ok: false,
+      erreur:
+        `#${commun.canal_nom} est le canal commun : il porte les consignes du dirigeant à TOUS les agents, ` +
+        `et rien n'y remonte jamais. Le geste « ${geste} » y est refusé — ce que tu as à dire va sur ta ligne.`,
+    };
+  }
+
+  /**
+   * Désigne le canal commun — celui dont chaque message est remis à TOUS les agents du poste.
+   *
+   * On ne le CRÉE pas, on le désigne : un canal où le dirigeant parle à toute son équipe
+   * existe déjà, et notre robot doit y avoir été invité par un humain — un robot ne se met pas
+   * lui-même dans un canal (mesuré le 2026-08-06 : `conversations.join` répond `missing_scope`,
+   * et le refus suivant attend sur les canaux privés). Deux refus distincts, parce que les
+   * gestes qui les lèvent ne sont pas les mêmes : un canal ABSENT se corrige, un canal dont on
+   * n'est PAS MEMBRE demande une invitation.
+   *
+   * LA LISTE DES AUTORISÉS EST OBLIGATOIRE, et c'est le refus le moins évident des quatre. Sur
+   * une ligne, un intrus fait passer un message pour une consigne à UN agent ; ici, il parle à
+   * tous à la fois, dans un cadre qui annonce le dirigeant. Sans liste, tout membre de l'espace
+   * pourrait faire rafraîchir la configuration de chaque agent du poste — ou pire.
+   */
+  async designerCommun({ canal, autorises = [] }) {
+    if (!canal) return { ok: false, erreur: 'canal requis' };
+    if (!autorises.length) {
+      return {
+        ok: false,
+        erreur:
+          'un canal commun sans autorisé n’est pas désigné : il porte la parole du dirigeant à tous les agents, ' +
+          'et sans liste n’importe quel membre de l’espace pourrait la prendre. Nomme au moins une personne.',
+      };
+    }
+
+    const trouve = await this.slack.trouverCanal(this.jetons.robot, canal);
+    if (!trouve) return { ok: false, erreur: `aucun canal #${canal} dans cet espace`, motif: 'absent' };
+
+    // UN CANAL ARCHIVÉ EST EN LECTURE SEULE, ET IL RESTE DANS LA LISTE. `trouverCanal`
+    // interroge Slack avec `exclude_archived: false` — c'est voulu ailleurs, pour pouvoir DIRE
+    // qu'un canal est archivé plutôt que « introuvable ». Ici, sans ce refus, la désignation
+    // répondait `ok:true` : le canal commun aurait l'air posé, et AUCUNE consigne ne serait
+    // jamais partie, puisque plus personne ne peut écrire dans ce canal. Le silence exact que
+    // tout ce dispositif existe pour supprimer, sur le canal censé réveiller le poste entier.
+    // (Et le robot en reste membre : `estMembreDuCanal` n'aurait rien vu.)
+    if (trouve.is_archived) {
+      return {
+        ok: false,
+        motif: 'archive',
+        erreur:
+          `#${canal} est archivé — personne ne peut plus y écrire, aucune consigne n’en partirait. ` +
+          `Désarchive-le dans Slack (un compte humain le peut, pas notre robot) ou désigne-en un autre.`,
+      };
+    }
+
+    if (!(await this.slack.estMembreDuCanal(this.jetons.robot, trouve))) {
+      return {
+        ok: false,
+        motif: 'non_membre',
+        erreur:
+          `notre robot n’est pas dans #${canal} — il faut l’y inviter à la main. ` +
+          `Un robot ne rejoint pas un canal de lui-même.`,
+      };
+    }
+
+    // UN CANAL NE PEUT PAS ÊTRE LES DEUX. Désigner comme canal commun le canal d'une ligne
+    // ouverte ferait remettre chaque message de cet interlocuteur à TOUS les agents — et, si
+    // c'est une ligne cliente, c'est le client qui parlerait à tout le poste.
+    const dejaLigne = this.registre.lignes.find((l) => l.canal_id === trouve.id && !l.close_le);
+    if (dejaLigne) {
+      return {
+        ok: false,
+        erreur:
+          `#${canal} porte déjà la ligne de « ${dejaLigne.chantier} » — un canal ne peut pas être à la fois ` +
+          `une ligne et le canal commun. Choisis-en un autre.`,
+      };
+    }
+
+    this.registre.commun = {
+      canal_id: trouve.id,
+      canal_nom: trouve.name || canal,
+      autorises: [...new Set(autorises)],
+      designe_le: maintenant(),
+    };
+    sauverRegistre(this.registre);
+    journaliser(`canal commun désigné — #${this.registre.commun.canal_nom} (${trouve.id}), ${autorises.length} autorisé(s)`);
+    return { ok: true, canal: this.registre.commun.canal_nom, canal_id: trouve.id, autorises: autorises.length };
+  }
+
   /** Poste sous l'identité du chantier. Échoue BRUYAMMENT : un rapport perdu en silence est pire qu'une erreur. */
   async dire({ chantier, worktree, texte, canal_id: canalId }) {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
+    const refus = this.refusSurCommun('dire', canalId, ligne?.canal_id);
+    if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier} » — ouvre-la d'abord` };
     if (ligne.close_le) return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est close depuis ${ligne.close_le}` };
     const ts = await this.slack.poster(this.jetons.robot, {
@@ -464,6 +599,8 @@ export class Veilleur {
    */
   async renommer({ chantier, worktree, titre, canal_id: canalId }) {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
+    const refus = this.refusSurCommun('renommer', canalId, ligne?.canal_id);
+    if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
     if (!titre) return { ok: false, erreur: 'titre requis' };
 
@@ -494,7 +631,11 @@ export class Veilleur {
   }
 
   async fermer({ chantier, worktree, bilan, archiver = true, canal_id: canalId }) {
+    // `fermer` porte un bilan qu'il POSTE, et il archive : les deux gestes qu'on ne veut voir
+    // ni l'un ni l'autre sur le canal de tous les agents.
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
+    const refus = this.refusSurCommun('fermer', canalId, ligne?.canal_id);
+    if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier} »` };
     if (bilan) {
       await this.slack.poster(this.jetons.robot, {
@@ -535,7 +676,18 @@ export class Veilleur {
       worktree: l.worktree,
       depuis: l.ouverte_le,
     }));
-    return { ok: true, espace: this.identite.equipe, connecte: this.ws?.readyState === CONNEXION_OUVERTE, ouvertes };
+    // LE CANAL COMMUN EST RENDU À CÔTÉ DE `ouvertes`, JAMAIS DEDANS. C'est la même règle que
+    // celle du registre, et pour la même raison : `ouvertes` est ce que la commande parcourt
+    // pour savoir de quelle ligne un agent parle. Un canal commun qui s'y glisserait
+    // deviendrait un candidat de cette sélection.
+    const commun = canalCommun(this.registre);
+    return {
+      ok: true,
+      espace: this.identite.equipe,
+      connecte: this.ws?.readyState === CONNEXION_OUVERTE,
+      ouvertes,
+      commun: commun ? { canal: commun.canal_nom, autorises: (commun.autorises || []).length } : null,
+    };
   }
 
   // —————————————————————————————————————————————————————————————— écoute permanente
@@ -699,6 +851,14 @@ export class Veilleur {
    * le vide » : chaque écriture reçoit une suite, réponse de l'agent ou explication.
    */
   async remettreAuChantier(ev) {
+    // LA CONSIGNE COMMUNE SE DÉTOURNE ICI, avant toute lecture de ligne — et l'endroit est
+    // choisi : la reprise d'un message (`remettreLaReprise`) repasse par cette méthode, donc
+    // une consigne corrigée par son auteur est rediffusée sans qu'on ait à y penser.
+    if (estCanalCommun(this.registre, ev.channel)) {
+      await this.diffuserConsigne(ev);
+      return;
+    }
+
     const ligne = ligneParCanal(this.registre, ev.channel);
     if (!ligne) {
       await this.canalSansLigne(ev);
@@ -815,6 +975,83 @@ export class Veilleur {
       const detail = refus.find((r) => r.cause === 'piece_non_recuperee');
       await this.repondreEnPropre(ligne, 'piece_non_recuperee', { erreur: detail?.detail });
     }
+  }
+
+  /**
+   * Une consigne du dirigeant, remise à TOUS les agents qui travaillent en ce moment.
+   *
+   * PERSONNE NE S'ABONNE, ET C'EST LE CŒUR DE LA CONCEPTION. On aurait pu faire inscrire les
+   * agents un à un — c'était le chemin naturel, et c'était le piège : une inscription veut dire
+   * une seconde écoute par pane, donc une seconde entrée quelque part, donc un second candidat
+   * à la sélection par pane du chemin sortant. C'est très exactement le défaut mesuré des deux
+   * lignes, rejoué par le mécanisme censé aider. Et « tous les agents » serait devenu « tous
+   * ceux qui ont pensé à s'inscrire ».
+   *
+   * On demande donc à herdr qui vit MAINTENANT, et on remet à chacun. Trois conséquences, et
+   * elles répondent aux questions laissées ouvertes :
+   *   - un agent qui n'a AUCUNE ligne entend quand même : il n'a rien eu à faire ;
+   *   - un chef d'équipe qui ne vit que deux heures entend, pour la même raison ;
+   *   - rien n'est écrit au registre : ni ligne, ni abonnement, ni pane. La ligne propre de
+   *     chaque agent est intouchée, au sens strict — aucune structure qu'elle emprunte n'a
+   *     changé.
+   *
+   * RIEN N'EST POSTÉ DANS CE CANAL, JAMAIS — ni refus, ni accusé, ni compte rendu de diffusion.
+   * C'est une exception assumée à RA-REL-009 (« celui qui écrit apprend que son message n'est
+   * pas passé »), et elle se justifie par l'audience : une réponse ici serait lue par tous les
+   * agents à la fois, et un canal d'urgence qu'on encombre est un canal qu'on cesse de lire
+   * (RA-REL-008) — ce qui coûterait la consigne SUIVANTE. Ce qui ne passe pas va au journal.
+   */
+  async diffuserConsigne(ev) {
+    const commun = canalCommun(this.registre);
+    const texte = (ev.text || '').trim();
+
+    // Qui a le droit de parler à tous. La liste est la seule autorisation : le canal est
+    // interne et public, y lire l'appartenance reviendrait à autoriser l'espace entier.
+    if (!ev.user || !(commun.autorises || []).includes(ev.user)) {
+      journaliser(`consigne écartée — #${commun.canal_nom} : ${ev.user || 'auteur inconnu'} n'est pas autorisé`);
+      return;
+    }
+
+    // LES PIÈCES JOINTES NE SUIVENT PAS. Une consigne est une phrase ; rapatrier un fichier
+    // pour le déposer sur le poste autant de fois qu'il y a d'agents coûterait le réseau et le
+    // disque pour un usage que personne n'a demandé. Un message qui ne porte QUE des pièces
+    // n'a donc rien à diffuser — et on ne le dit pas dans le canal, on le dit au journal.
+    if (!texte) {
+      journaliser(`consigne sans texte — #${commun.canal_nom} : rien à diffuser (les pièces ne suivent pas ce canal)`);
+      return;
+    }
+
+    let vivants;
+    try {
+      vivants = await this.herdr.agents();
+    } catch (err) {
+      journaliser(`consigne non diffusée — #${commun.canal_nom} : herdr injoignable (${err.message})`);
+      return;
+    }
+    if (!vivants.length) {
+      journaliser(`consigne non diffusée — #${commun.canal_nom} : aucun agent au travail en ce moment`);
+      return;
+    }
+
+    const cadre = cadrerConsigneCommune({ texte, canal: commun.canal_nom, modifie: Boolean(ev.modifie) });
+    let remis = 0;
+    const echecs = [];
+    for (const agent of vivants) {
+      try {
+        await this.herdr.remettre(agent.pane_id, cadre, { socket: agent.herdr_socket });
+        remis += 1;
+      } catch (err) {
+        // UN AGENT QUI NE REÇOIT PAS N'EN EMPÊCHE AUCUN AUTRE. Une consigne qui s'arrête au
+        // premier pane mort n'atteindrait qu'une partie du poste, et rien ne dirait laquelle.
+        echecs.push(agent.pane_id);
+        journaliser(`consigne non remise à ${agent.pane_id} : ${err.message}`);
+      }
+    }
+    journaliser(
+      `consigne diffusée — #${commun.canal_nom} → ${remis}/${vivants.length} agent(s)` +
+        `${echecs.length ? `, échec sur ${echecs.join(', ')}` : ''}`
+    );
+    return { remis, echecs };
   }
 
   /**

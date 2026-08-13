@@ -112,6 +112,45 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
 }
 
 /**
+ * Une consigne du dirigeant adressée à TOUS les agents — le canal commun.
+ *
+ * CE CADRE EST LE DISPOSITIF, pas son emballage. Un agent ne sait pas que ce canal existe :
+ * il a une ligne, il en reçoit les messages, et quand un texte apparaît dans son pane il n'a
+ * qu'une explication disponible — c'est mon interlocuteur qui parle. Chez un gestionnaire
+ * client, cet interlocuteur est LE CLIENT. Il lirait « mettez à jour vos configurations »
+ * comme venant de lui, et le réflexe d'un bon représentant est de répondre : il répondrait au
+ * client, dans le canal du client, à propos de nos rouages internes.
+ *
+ * Trois choses doivent donc être dites avant tout, et la troisième est celle qui coupe le
+ * réflexe :
+ *   1. ça vient du DIRIGEANT — pas de l'interlocuteur de cette ligne, quel qu'il soit ;
+ *   2. ça vaut pour TOUS les agents — ce n'est pas une consigne sur ton chantier ;
+ *   3. ON N'Y RÉPOND PAS — il n'existe aucune commande qui écrive dans ce canal.
+ *
+ * Et une quatrième, qui rassure sur ce qui compte : **ta ligne n'a pas bougé**. Sans elle, un
+ * agent prudent pourrait conclure que sa ligne a été détournée et cesser de s'en servir.
+ *
+ * Le mot « ligne » n'apparaît pas dans l'en-tête, volontairement : `[LIGNE DIRECTE — …]` est
+ * la signature visuelle du message d'un interlocuteur, et la réutiliser ici ferait ressembler
+ * la consigne commune à ce qu'elle n'est pas — au premier coup d'œil, qui est le seul qu'on
+ * ait quand un texte tombe au milieu d'un travail.
+ */
+export function cadrerConsigneCommune({ texte, canal, modifie = false } = {}) {
+  const ou = canal ? ` (#${canal})` : '';
+  return [
+    `[CANAL COMMUN — À TOUS LES AGENTS${ou}] Consigne du dirigeant${repris(modifie)}, reçue par Slack :`,
+    '',
+    texte,
+    '',
+    '——',
+    `Ceci ne vient PAS de l'interlocuteur de ta ligne, et ne porte pas sur ton chantier :`,
+    `c'est une consigne du dirigeant à TOUS les agents de ce poste, reçue en même temps par chacun.`,
+    `ON N'Y RÉPOND PAS — aucune commande n'écrit dans ce canal, et rien de ce que tu diras n'y parviendra.`,
+    `Ta propre ligne est intacte : « dire » et « demander » y vont toujours, et à personne d'autre.`,
+  ].join('\n');
+}
+
+/**
  * Le cadre d'une ligne cliente.
  *
  * Deux différences avec le cadre interne, et aucune n'est cosmétique :

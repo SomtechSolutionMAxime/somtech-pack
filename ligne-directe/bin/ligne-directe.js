@@ -14,8 +14,11 @@
 // par le pane depuis lequel elle est invoquée. Un agent n'a donc rien à retenir.
 
 import { parler, passerLaMain } from '../src/client.js';
+import { ligneDuPane } from '../src/registre.js';
+import { option, optionsRepetees, premierLibre } from '../src/arguments.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
+import { resoudreAutorises } from '../src/canal-commun.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import { preparerLieuRepresentant, verifierCanalOuvrable } from '../src/representant.js';
 import { preparerLieuOrchestrateur } from '../src/orchestrateur.js';
@@ -37,6 +40,12 @@ function usage(code = 0) {
   demander "texte"                                         sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
   renommer --titre "..." [--canal <id>]                    renomme le canal (Slack + registre)
+  commun <canal> --dirigeant courriel [--dirigeant ...]    designe le CANAL COMMUN : chacun de
+                                                           ses messages est remis a TOUS les
+                                                           agents du poste. Descendant seulement
+                                                           — aucun agent n'y ecrit, aucune
+                                                           commande n'y poste. Le canal doit
+                                                           exister et notre robot y etre invite.
   representant <client> --canal <canal> [--depot <chemin>] prepare le lieu d'un representant
                                                            dans <chemin> (defaut : le repertoire
                                                            courant) — refuse tout net et NE CREE
@@ -54,34 +63,6 @@ function usage(code = 0) {
 Le chantier est déduit du pane courant, sauf à l'ouverture.
 `);
   process.exit(code);
-}
-
-/** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
-const OPTIONS_A_VALEUR = new Set(['--sujet', '--inviter', '--bilan', '--titre', '--nature', '--canal', '--depot']);
-
-function option(args, nom) {
-  const i = args.indexOf(nom);
-  if (i === -1) return null;
-  return args[i + 1] ?? null;
-}
-
-/**
- * Le premier argument libre — en sautant les VALEURS d'options.
- *
- * Relevé en revue : un simple « premier mot qui ne commence pas par -- » prenait la valeur
- * d'une option pour le chantier. `ouvrir --inviter maxime@somtech.ca D-1` créait un canal
- * nommé d'après l'adresse courriel. Silencieux, et le canal reste.
- */
-function premierLibre(args) {
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i];
-    if (a.startsWith('--')) {
-      if (OPTIONS_A_VALEUR.has(a)) i += 1; // sa valeur n'est pas un argument libre
-      continue;
-    }
-    return a;
-  }
-  return null;
 }
 
 function rendre(reponse) {
@@ -154,7 +135,9 @@ if (geste === 'relever') {
   if (!texte) usage(1);
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });
-  const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+  // `etat.ouvertes` ne porte QUE des lignes — le canal commun est rendu à côté, exprès : un
+  // geste qui parle ne doit pas pouvoir le désigner, même par accident.
+  const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
   if (!mienne) {
     process.stderr.write("aucune ligne ouverte depuis ce pane — commence par : ligne-directe ouvrir <chantier>\n");
     process.exit(1);
@@ -164,7 +147,7 @@ if (geste === 'relever') {
 } else if (geste === 'fermer') {
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });
-  const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+  const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
   if (!mienne) {
     process.stderr.write('aucune ligne ouverte depuis ce pane\n');
     process.exit(1);
@@ -187,13 +170,29 @@ if (geste === 'relever') {
   } else {
     const ici = await herdr.paneCourant();
     const etat = await parler({ geste: 'etat' });
-    const mienne = (etat.ouvertes || []).find((l) => l.pane === ici.pane);
+    const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
     if (!mienne) {
       process.stderr.write('aucune ligne ouverte depuis ce pane — precise --canal <id>\n');
       process.exit(1);
     }
     rendre(await parler({ geste: 'renommer', chantier: mienne.chantier, worktree: mienne.worktree, titre }));
   }
+} else if (geste === 'commun') {
+  // Désigne le canal commun. Ce geste est celui de l'OPÉRATEUR du poste, une fois — pas celui
+  // d'un agent : rien ici n'ouvre de ligne, n'inscrit de pane, ni ne poste quoi que ce soit.
+  const canal = premierLibre(args);
+  if (!canal) usage(1);
+  const nomsDirigeants = optionsRepetees(args, '--dirigeant');
+  if (!nomsDirigeants.length) usage(1);
+
+  // La résolution vit dans `src/canal-commun.js` — une boucle enfouie ici n'était exercée par
+  // aucun test, et c'est là que « la liste amputée en silence » se réintroduit sans qu'on la voie.
+  const r = await resoudreAutorises(await lireJeton(SERVICE_ROBOT), nomsDirigeants);
+  if (!r.ok) {
+    process.stderr.write(`aucun membre pour ${r.inconnu} — le canal commun n'est PAS designe\n`);
+    process.exit(1);
+  }
+  rendre(await parler({ geste: 'commun', canal, autorises: r.autorises }));
 } else if (geste === 'representant') {
   const client = premierLibre(args);
   const canal = option(args, '--canal');
