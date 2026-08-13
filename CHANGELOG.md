@@ -5,6 +5,19 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.42.0] - 2026-08-13
+
+### Ajouté
+
+- **Le canal commun atteint les agents qui tournent déjà** (T-20260813-0075, PR #214). Jusqu'ici chaque agent n'entendait que sa propre ligne : une version publiée ne parvenait à personne, il fallait aller le dire un par un ou attendre que les sessions meurent — sept versions en une semaine, six en une soirée. Le canal porte ce qui doit être **pris en compte rapidement** ; le feed continue de porter ce qui doit être **su** et se relit à la naissance. Aucun des deux ne couvre le cas seul.
+- **Un message y est une intention, pas un ordre** — l'agent le prend en compte et choisit son moment. **Personne ne s'abonne** : herdr dit qui travaille, le veilleur remet à chacun, donc un agent sans ligne entend aussi.
+- **Le canal commun n'est pas une ligne, et c'est la décision qui fait tenir le lot.** Aucune troisième nature ne lui a été donnée : une nature qualifie une ligne — son pane, son chantier, ses autorisations — et le canal n'a rien de tout cela. Lui en attribuer une l'aurait fait entrer dans les structures de lignes, c'est-à-dire rejouer le défaut qu'il fallait éviter. Il reçoit à la place son propre cadre de remise, qui dit d'où vient le message, qu'il vaut pour tous, qu'on n'y répond pas, et que la ligne propre de l'agent est intacte.
+- **Rien ne repart vers le canal commun**, prouvé par l'absence côté Slack et non par le texte d'un refus. `dire`, `fermer` et `renommer` sont refusés **sur les deux clés** — canal et chantier : la première garde n'en couvrait qu'une, et la mutation l'a prise en défaut. `fermer` aurait posté son bilan dans le canal de tous, puis l'aurait archivé.
+
+### Corrigé
+
+- **Un canal archivé se désignait avec succès** — trouvé en revue de fond. Le canal avait l'air posé, et aucune consigne n'en serait jamais partie. Même famille que le lieu vide déclaré installé du lot jumeau : un succès rendu sur un état qui ne peut rien porter.
+
 ## [1.41.0] - 2026-08-13
 
 ### Ajouté
