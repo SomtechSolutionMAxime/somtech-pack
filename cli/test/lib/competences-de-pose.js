@@ -149,12 +149,23 @@ export function messagesDesMotifs(racine = REPO) {
     return i === -1 ? '' : src.slice(i, i + 1200);
   };
 
+  // La CONSÉQUENCE que le module de pose ajoute au message du trousseau — bornée à son bloc,
+  // pas au fichier.
+  //
+  // ⚠️ RELEVÉ EN REVUE (passe 2) : ces deux motifs recevaient `orchestrateur.js` EN ENTIER,
+  // cinq fois plus de vocabulaire que les trois autres. Le seuil de deux mots partagés est
+  // alors bien plus facile à atteindre — la garde était donc plus lâche pour les deux motifs
+  // qu'elle avait le plus de raisons de tenir. Une garde inégale selon la ligne qu'elle
+  // regarde ne garde pas ce que son nom laisse croire.
+  const iMessage = orchestrateur.indexOf('message:');
+  const consequence = iMessage === -1 ? '' : orchestrateur.slice(iMessage, iMessage + 600);
+
   return {
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),
-    jeton_absent: classe(trousseau, 'JetonManquant') + orchestrateur,
-    jeton_vide: classe(trousseau, 'JetonVide') + orchestrateur,
+    jeton_absent: classe(trousseau, 'JetonManquant') + consequence,
+    jeton_vide: classe(trousseau, 'JetonVide') + consequence,
   };
 }
 
@@ -426,6 +437,46 @@ export const CONTROLES_ORCHESTRATEUR = [
             + `Ce qu’elle affirme : « ${dit} »`,
         );
       }
+    },
+  },
+
+  {
+    id: 'les-deux-refus-de-jeton-ne-se-confondent-pas',
+    quoi: 'l’entrée ABSENTE et l’entrée VIDE restent chacune de son côté — leurs gestes ne sont pas les mêmes',
+    verifier({ texte }) {
+      // TROUVÉ EN REVUE (passe 2) : permuter le contenu des deux lignes en gardant leurs codes
+      // laissait tout vert. Le recoupement de vocabulaire ne pouvait pas les séparer — les deux
+      // refus parlent du même trousseau, du même compte, du même service. C'est un axe de
+      // POLARITÉ, pas de vocabulaire.
+      //
+      // Et la distinction n'est pas une subtilité : `trousseau.js` l'ouvre par « les deux
+      // erreurs qu'on ne doit jamais confondre ». L'absente se dépose (sans écraser) ; la vide
+      // EXISTE, et remplacer une entrée en place suppose de détruire ce qui y est — c'est
+      // pourquoi ce refus-là ne propose délibérément aucune commande. Un lecteur qui suit la
+      // mauvaise ligne fait exactement le geste que T-20260811-0087 a interdit.
+      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const table = tableDe(section.corps);
+      const iMotif = table.entetes.findIndex((e) => /^Motif rendu$/.test(e));
+      const ligneDe = (motif) => {
+        const l = table.lignes.find((x) => new RegExp(`\`${motif}\``).test(x[iMotif]));
+        assert.ok(l, `la table doit porter une ligne « ${motif} »`);
+        return l.filter((_, i) => i !== iMotif).join(' ');
+      };
+
+      const absent = ligneDe('jeton_absent');
+      assert.match(absent, /aucune entrée|n[e’']a répondu|introuvable/i, '« jeton_absent » doit dire qu’AUCUNE entrée n’a répondu');
+      assert.ok(
+        !/l[e’']entrée existe/i.test(absent),
+        '« jeton_absent » affirme que l’entrée existe : c’est le refus de l’entrée VIDE, pas celui-ci',
+      );
+
+      const vide = ligneDe('jeton_vide');
+      assert.match(vide, /existe/i, '« jeton_vide » doit dire que l’entrée EXISTE — c’est ce qui le distingue de l’absence');
+      assert.match(vide, /vide/i, '« jeton_vide » doit dire qu’elle est vide');
+      assert.ok(
+        !/aucune entrée/i.test(vide),
+        '« jeton_vide » nie l’existence de l’entrée : il enverrait déposer là où il faut remplacer',
+      );
     },
   },
 
@@ -809,6 +860,31 @@ export const MUTATIONS = [
       t.replace(
         /^\| `lieu_partiel` \|[^\n]*$/m,
         '| `lieu_partiel` | Rien de grave, ça arrive parfois | On verra plus tard |',
+      ),
+  },
+  {
+    id: 'les-deux-refus-de-jeton-permutes',
+    quoi: 'le contenu des lignes « absente » et « vide » est échangé, codes intacts — la mutation de la passe 2',
+    competence: 'orchestrateur',
+    cible: 'les-deux-refus-de-jeton-ne-se-confondent-pas@orchestrateur',
+    muter(t) {
+      const absent = t.match(/^\| `jeton_absent` \|([^\n]*)$/m);
+      const vide = t.match(/^\| `jeton_vide` \|([^\n]*)$/m);
+      assert.ok(absent && vide, 'les deux lignes doivent exister pour être permutées');
+      return t
+        .replace(absent[0], `| \`jeton_absent\` |${vide[1]}`)
+        .replace(vide[0], `| \`jeton_vide\` |${absent[1]}`);
+    },
+  },
+  {
+    id: 'refus-de-jeton-absent-qui-affirme-l-existence',
+    quoi: 'la ligne « absente » affirme que l’entrée est là — elle enverrait remplacer au lieu de déposer',
+    competence: 'orchestrateur',
+    cible: 'les-deux-refus-de-jeton-ne-se-confondent-pas@orchestrateur',
+    muter: (t) =>
+      t.replace(
+        /^\| `jeton_absent` \|[^|]*\|/m,
+        '| `jeton_absent` | L’entrée existe au trousseau mais le poste ne sait pas la lire |',
       ),
   },
   {
