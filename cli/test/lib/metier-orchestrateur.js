@@ -1242,10 +1242,18 @@ export const CONTROLES = [
       // une garantie fausse, exactement ce que ce lot existe pour empêcher.
       const s = sectionDe(metier, /Ce que tu ne peux pas faire/i, 'sur ce qui lui est mécaniquement refusé');
       const table = tableDe(s.corps);
-      const refuse = colonne(table, /^Ce qui t'est refusé$/i, 'ce qui t’est refusé').join(' ');
+      const cellules = colonne(table, /^Ce qui t'est refusé$/i, 'ce qui t’est refusé');
+      const refuse = cellules.join(' ');
       assert.equal(table.lignes.length, REFUS.length, `${table.lignes.length} refus décrit(s) pour ${REFUS.length} posé(s) dans le fichier`);
       assert.match(refuse, /écrire ou modifier un fichier/i, 'le métier doit nommer le refus d’écrire');
       assert.match(refuse, /ouvrir un sous-agent/i, 'le métier doit nommer le refus d’ouvrir un sous-agent');
+
+      // ⚠️ RELEVÉ PAR LA PASSE 1 DE LA REVUE, et c'est le motif dominant du dépôt appliqué à
+      // ce lot même : les deux lignes ci-dessus cherchent une SOUS-CHAÎNE. Une cellule
+      // réécrite en « **Écrire ou modifier un fichier** — tu peux le faire n'importe où »
+      // garde les mots gardés et dit le contraire. On garde donc aussi la MODALITÉ de chaque
+      // cellule : un refus qui s'assouplit ou qui s'excepte cesse d'être un refus.
+      for (const cellule of cellules) exigeContrainte(cellule, `le refus « ${cellule.slice(0, 45)}… »`);
 
       const ferme = colonne(table, /^Ce que ça ferme$/i, 'ce que ça ferme').join(' ');
       assert.ok(
@@ -2220,6 +2228,19 @@ export const MUTATIONS = [
     muter: (t) => t.replace(/^\| \*\*Ouvrir un sous-agent\*\* \|.*\n/m, ''),
   },
 
+  {
+    id: 'revue-passe-1-le-refus-dit-son-contraire-en-gardant-ses-mots',
+    quoi: 'la cellule du refus garde les mots gardés et autorise ce qu’elle refusait — « tu peux le faire n’importe où »',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'metier',
+    // Posée par la PASSE 1 de la revue indépendante : la garde du texte cherchait une
+    // SOUS-CHAÎNE, donc le contresens exact la laissait verte. C'est le motif dominant du
+    // dépôt, retrouvé un cran plus loin — dans le contrôle censé apparier le texte au fichier.
+    muter: (t) => t.replace(
+      '| **Écrire ou modifier un fichier** — tous les outils d\'édition, partout sur le disque |',
+      '| **Écrire ou modifier un fichier** — tu peux le faire partout sur le disque |',
+    ),
+  },
   {
     id: 'une-zone-non-bornee-disparait',
     quoi: 'le terminal cesse d’être nommé comme non borné — la contrainte partielle se lit comme totale',
