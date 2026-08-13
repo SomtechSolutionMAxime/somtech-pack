@@ -194,16 +194,33 @@ export async function livrerBrief({
   essais = 15,
   delaiMs = 2000,
   attenteMs = 20000,
+  essaisDisponible = 1,
 }) {
   const commandes = commandesLivraison(pane, texte, { attenteMs });
 
   // 1. REGARDER avant d'ecrire — la boite ET l'etat. Une boite non vide est un refus, jamais
   //    une fusion ; une session qui travaille deja est un refus aussi, parce que la preuve de
   //    prise (« elle a quitte l'attente ») serait vraie avant meme qu'on ecrive.
-  const etatAvant = await appelHerdr(commandes.interroger);
-  const statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
-  const avant = await lireEcran(commandes.lireEcran);
-  const obstacle = obstacleAvantLivraison(avant, statutAvant);
+  //
+  // `essaisDisponible` VAUT 1 PAR DÉFAUT — pour une session établie, un obstacle est un
+  // refus immédiat, et c'est le comportement d'origine. L'AMORCE, elle, arrive sur une
+  // session qui vient de naître : l'agent est détecté avant que son écran porte sa boîte de
+  // saisie, et livrer là rend « boîte illisible » sur une session parfaitement saine.
+  //
+  // MESURÉ contre le vrai `claude` le 2026-08-13 : c'est ce qui faisait échouer l'amorce
+  // alors que la session était née dans son lieu, portait son nom, et attendait. On ne parie
+  // donc sur aucun délai — on regarde jusqu'à ce que la boîte soit là, comme la naissance
+  // interroge jusqu'à ce que l'agent soit détecté.
+  let statutAvant = null;
+  let obstacle = null;
+  for (let i = 0; i < Math.max(1, essaisDisponible); i += 1) {
+    const etatAvant = await appelHerdr(commandes.interroger);
+    statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
+    const avant = await lireEcran(commandes.lireEcran);
+    obstacle = obstacleAvantLivraison(avant, statutAvant);
+    if (!obstacle) break;
+    if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
+  }
   if (obstacle) return { ok: false, message: obstacle, statut: statutAvant, repare: false, attendu: false };
 
   // 2. LIVRER. `--wait` est l'indice de herdr, jamais la preuve : ce qu'il rapporte peut etre

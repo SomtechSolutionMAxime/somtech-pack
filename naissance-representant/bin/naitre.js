@@ -2,6 +2,7 @@
 // naitre.js — la commande qui fait naître une session dans le lieu d'un agent.
 //
 //   gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur]
+//                             [--depot <chemin>]
 //
 // Elle ne pose jamais le lieu (E-20260807-0002 pour le représentant, E-20260813-0002 pour
 // l'orchestrateur) : elle le vérifie, y repose le garde d'ouverture (à chaque appel —
@@ -41,10 +42,33 @@ import {
   LieuAbsent,
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
+import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
 
 const execFileAsync = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, '..', '..');
+
+/**
+ * Le dépôt où le lieu a été posé.
+ *
+ * PAR DÉFAUT, celui qui héberge ce module — le comportement d'origine, et il reste juste
+ * quand la commande est lancée depuis le dépôt du pack.
+ *
+ * DÉFAUT TROUVÉ PAR LA PREUVE RÉELLE, ET PAS PAR LES 826 TESTS VERTS : ce chemin est calculé
+ * depuis la POSITION DU FICHIER. Or la pose, elle, accepte `--depot` depuis toujours. Poser
+ * dans un dépôt et faire naître ailleurs donnait donc un refus parfaitement exact — « le lieu
+ * n'existe pas » — sur un lieu qui venait d'être posé deux lignes plus haut. Le message était
+ * juste, et il envoyait chercher au mauvais endroit.
+ *
+ * ⚠️ CE QUE CE CORRECTIF NE RÈGLE PAS, et qui est nommé plutôt qu'escamoté : installé en
+ * outil de poste (`~/.somtech/naissance-representant`), le défaut vaut `~/.somtech` — donc
+ * un représentant posé chez un client ne peut naître qu'en passant `--depot`. Le rendre
+ * implicite (déduire le dépôt du répertoire courant) changerait le comportement d'appelants
+ * déjà écrits ; ça se tranche sur un cas réel, pas ici.
+ */
+function depotDe(args) {
+  const i = args.indexOf('--depot');
+  return i === -1 ? resolve(HERE, '..', '..') : resolve(args[i + 1] ?? '.');
+}
 
 // La même patience que /orchestrer-chantier §4b : on interroge plutôt que de parier sur un
 // délai. 30 × 2 s = une minute — assez pour une session qui démarre lentement, assez court
@@ -54,7 +78,8 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 
 function usage(code) {
   process.stderr.write(
-    'gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur]\n'
+    'gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur] ' +
+      '[--depot <chemin>]\n'
   );
   process.exit(code);
 }
@@ -120,6 +145,7 @@ async function main() {
   const role = option(args, '--role') || 'representant';
   const amorceFichier = option(args, '--amorce');
   const amorceTexte = option(args, '--amorce-texte');
+  const REPO_ROOT = depotDe(args);
   if (!nom || nom.startsWith('--') || !workspace) usage(1);
 
   // L'amorce est lue AVANT qu'un pane existe : un fichier illisible doit arrêter la commande
@@ -152,6 +178,22 @@ async function main() {
   // Construire les commandes AVANT de créer quoi que ce soit : un nom que herdr refuserait
   // (`invalid_agent_name`) doit arrêter la commande ici, pas après avoir ouvert un pane.
   const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role });
+
+  // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
+  // confiance de Claude Code et attend une touche que personne ne tapera. Elle serait
+  // pourtant DÉTECTÉE, dans le bon répertoire, portant son nom : une naissance qui a l'air
+  // réussie de tous les points de vue observables, et une session qui ne commence jamais.
+  // Mesuré contre le vrai `claude` (voir src/approbation.js).
+  let approbation;
+  try {
+    approbation = approuverLieu(commandes.lieu);
+  } catch (err) {
+    if (err instanceof ConfigIllisible) {
+      process.stderr.write(`${err.message}\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
 
   const creation = await appelHerdr(commandes.tabCreate);
   if (!creation.ok) {
@@ -249,6 +291,9 @@ async function main() {
       dormir,
       essais: ESSAIS,
       delaiMs: DELAI_MS,
+      // La session vient de naître : on lui laisse le temps d'afficher sa boîte de saisie,
+      // avec la même patience qu'on a mise à attendre qu'elle soit détectée.
+      essaisDisponible: ESSAIS,
     });
     if (!livre.ok) {
       process.stderr.write(
@@ -267,9 +312,11 @@ async function main() {
       nom,
       amorcee,
       client: nom, // conservé : le contrat de sortie d'origine, que des appelants lisent déjà
+      depot: REPO_ROOT,
       agent: commandes.nom,
       pane: paneId,
       garde: cheminGarde,
+      approuve: approbation.deja ? 'déjà' : 'maintenant',
       lieu: commandes.lieu,
       repertoire,
     })}\n`
