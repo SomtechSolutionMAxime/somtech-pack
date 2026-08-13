@@ -43,7 +43,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { REPO, sections, sectionDe, tableDe, colonne, blocsBash, exigeImperatif } from './metier-representant.js';
+import { REPO, sectionDe, tableDe, colonne, blocsBash, exigeImperatif } from './metier-representant.js';
 import { GESTES_QUI_DETRUISENT } from '../../../ligne-directe/tests/aide/gestes-qui-detruisent.js';
 
 export { REPO };
@@ -115,6 +115,52 @@ export function motifsDuCode(racine = REPO) {
     }
   }
   return motifs;
+}
+
+/**
+ * Ce que le CODE dit réellement de chaque motif — le texte du refus tel qu'il part vers
+ * l'humain.
+ *
+ * ⚠️ POURQUOI CETTE FONCTION A ÉTÉ AJOUTÉE, ET PAR QUI. La première version des contrôles
+ * gardait la table des refus par ses CODES seuls : `lieu_partiel` devait y avoir une ligne.
+ * Une revue en passe 1 a posé la mutation qui manquait — remplacer l'explication d'un motif
+ * par une phrase creuse en gardant le code entre ses accents graves — et la garde est restée
+ * verte. C'était le motif dominant du dépôt, une fois de plus : on gardait la présence d'un
+ * jeton de texte, pas ce que la ligne APPREND à qui la lit.
+ *
+ * Le refus qui appartient à `jeton_absent` et `jeton_vide` est écrit dans le trousseau, pas
+ * dans les deux modules de pose : c'est lui qui nomme le compte et le service cherchés, et
+ * c'est le texte que l'humain verra. On le lit donc là où il est.
+ */
+export function messagesDesMotifs(racine = REPO) {
+  const lieu = readFileSync(join(racine, 'ligne-directe', 'src', 'lieu-agent.js'), 'utf8');
+  const orchestrateur = readFileSync(join(racine, 'ligne-directe', 'src', 'orchestrateur.js'), 'utf8');
+  const trousseau = readFileSync(join(racine, 'ligne-directe', 'src', 'trousseau.js'), 'utf8');
+
+  /** Le corps du refus qui suit `motif: '<m>'`, jusqu'à la fermeture de son objet. */
+  const blocApres = (src, motif) => {
+    const i = src.indexOf(`motif: '${motif}'`);
+    if (i === -1) return '';
+    return src.slice(i, i + 1200);
+  };
+  /** Le corps d'une classe d'erreur, qui porte son message. */
+  const classe = (src, nom) => {
+    const i = src.indexOf(`class ${nom}`);
+    return i === -1 ? '' : src.slice(i, i + 1200);
+  };
+
+  return {
+    lieu_partiel: blocApres(lieu, 'lieu_partiel'),
+    gabarits_absents: blocApres(lieu, 'gabarits_absents'),
+    ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),
+    jeton_absent: classe(trousseau, 'JetonManquant') + orchestrateur,
+    jeton_vide: classe(trousseau, 'JetonVide') + orchestrateur,
+  };
+}
+
+/** Les mots porteurs d'un texte : cinq lettres ou plus, accents compris, casse écrasée. */
+export function motsPorteurs(texte) {
+  return new Set((String(texte).toLowerCase().match(/[a-zà-ÿ]{5,}/g) || []));
 }
 
 // ═════════════════════════════════════════ lecture de structure propre aux compétences
@@ -338,6 +384,76 @@ export const CONTROLES_ORCHESTRATEUR = [
 
       const inventes = [...cites].filter((m) => !attendus.has(m)).sort();
       assert.deepEqual(inventes, [], `ces motifs sont tabulés mais aucun code ne les rend : ${inventes.join(', ')}`);
+    },
+  },
+
+  {
+    id: 'chaque-ligne-de-refus-dit-ce-que-le-code-dit',
+    quoi: 'l’explication et le geste de chaque motif recoupent le refus que le CODE rend vraiment',
+    verifier({ texte, racine }) {
+      // TROUVÉ EN REVUE (passe 1), et c'est le motif dominant du dépôt : le contrôle d'à côté
+      // garde les CODES de la table — `lieu_partiel` doit y figurer. Vider la ligne de son
+      // sens en gardant le code entre ses accents graves le laissait vert. La table pouvait
+      // enseigner n'importe quoi.
+      //
+      // On compare donc chaque ligne au TEXTE DU REFUS que le code envoie réellement, par les
+      // mots porteurs qu'ils partagent. Le seuil est de DEUX : un seul se rencontre par
+      // hasard (« relance », « lieu » traînent partout), deux supposent qu'on parle de la même
+      // chose.
+      //
+      // ⚠️ CE QUE CETTE GARDE NE COUVRE PAS, et il faut le savoir avant de s'y fier : une
+      // explication remplacée par une AUTRE explication plausible mais fausse — deux mots
+      // justes, un sens retourné — passerait. Aucune garde mécanique ne lit le sens ; celle-ci
+      // ferme la porte du vidage, pas celle du contresens. La relecture humaine reste requise.
+      const messages = messagesDesMotifs(racine);
+      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const table = tableDe(section.corps);
+      const iMotif = table.entetes.findIndex((e) => /^Motif rendu$/.test(e));
+      assert.ok(iMotif !== -1, 'la table des refus doit porter une colonne « Motif rendu »');
+
+      for (const ligne of table.lignes) {
+        const motif = (ligne[iMotif].match(/`([a-z_]+)`/) || [])[1];
+        if (!motif) continue; // couvert par le contrôle voisin
+        const source = messages[motif];
+        assert.ok(source, `aucun message de code n’a été retrouvé pour « ${motif} » — le contrôle ne prouverait rien`);
+
+        const dit = ligne.filter((_, i) => i !== iMotif).join(' ');
+        const partages = [...motsPorteurs(dit)].filter((m) => motsPorteurs(source).has(m));
+        assert.ok(
+          partages.length >= 2,
+          `la ligne « ${motif} » ne dit rien de ce que le refus dit vraiment `
+            + `(${partages.length} mot·s en commun : ${partages.join(', ') || '—'}). `
+            + `Ce qu’elle affirme : « ${dit} »`,
+        );
+      }
+    },
+  },
+
+  {
+    id: 'aucun-geste-tabule-que-le-code-ne-propose',
+    quoi: 'les commandes que la table met dans la bouche du lecteur sont celles que le refus propose',
+    verifier({ texte, racine }) {
+      // L'autre porte du même défaut. La garde des gestes destructeurs attrape les quatre
+      // gestes qui coûtent ; celle-ci attrape le geste INVENTÉ — celui que le code ne propose
+      // pas, qui n'a donc été mesuré par personne, et dont personne ne sait ce qu'il fait sur
+      // le poste de qui le colle.
+      const messages = messagesDesMotifs(racine);
+      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const table = tableDe(section.corps);
+      const iMotif = table.entetes.findIndex((e) => /^Motif rendu$/.test(e));
+
+      for (const ligne of table.lignes) {
+        const motif = (ligne[iMotif].match(/`([a-z_]+)`/) || [])[1];
+        if (!motif || !messages[motif]) continue;
+        const commandes = [...ligne.join(' ').matchAll(/`([a-z][a-z0-9-]*)\s[^`]*`/g)].map((m) => m[1]);
+        for (const verbe of commandes) {
+          assert.ok(
+            messages[motif].includes(verbe),
+            `la ligne « ${motif} » propose « ${verbe} … », que le refus du code ne propose pas — `
+              + 'un geste que personne n’a mesuré n’a rien à faire dans un message d’erreur',
+          );
+        }
+      }
     },
   },
 
@@ -682,6 +798,31 @@ export const MUTATIONS = [
       t.replace(
         /^(\| `jeton_vide`.*)$/m,
         '$1\n| `canal_absent` | Aucun canal de ce nom | Vérifie l’orthographe, ou fais créer le canal |',
+      ),
+  },
+  {
+    id: 'explication-de-refus-videe',
+    quoi: 'la ligne d’un motif garde son code et perd ce qu’elle apprend — la mutation trouvée en revue',
+    competence: 'orchestrateur',
+    cible: 'chaque-ligne-de-refus-dit-ce-que-le-code-dit@orchestrateur',
+    muter: (t) =>
+      t.replace(
+        /^\| `lieu_partiel` \|[^\n]*$/m,
+        '| `lieu_partiel` | Rien de grave, ça arrive parfois | On verra plus tard |',
+      ),
+  },
+  {
+    id: 'geste-invente-dans-la-table',
+    quoi: 'la table propose une commande que le refus du code ne propose pas',
+    competence: 'orchestrateur',
+    cible: 'aucun-geste-tabule-que-le-code-ne-propose@orchestrateur',
+    // Ancrée sur la LIGNE DE LA TABLE, pas sur la chaîne : le même geste est cité en
+    // Prérequis, et un simple remplacement y mordait au lieu de la table — la mutation
+    // changeait bien quelque chose, mais pas ce qu'elle prétendait éprouver.
+    muter: (t) =>
+      t.replace(
+        /^(\| `gabarits_absents` \|[^|]*\|)[^\n]*$/m,
+        '$1 `brew reinstall somtech-pack` sur ce poste |',
       ),
   },
   {
