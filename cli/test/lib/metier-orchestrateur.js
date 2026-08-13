@@ -983,6 +983,46 @@ export const CONTROLES = [
   },
 
   {
+    id: 'le-suivi-oblige-encore',
+    quoi: 'les cinq consignes de suivi de §7 obligent toujours — celle qui porte la règle d’or n°13 comme les autres',
+    verifier({ metier }) {
+      // MOTIF 3 DU DÉPÔT — « un correctif qui ne couvre qu'une porte sur deux » —, relevé par la
+      // contre-vérification des correctifs. Ce lot a apporté la MODALITÉ dans §7 et l'a posée sur
+      // ce qu'il écrivait : la table des quatre cas, le critère, le cas limite. Les consignes
+      // VOISINES, dans la même section, restaient sans aucune garde de modalité — dont celle qui
+      // cite nommément la règle d'or n°13. Mesuré : « statuts au moment où l'état change, jamais
+      // différés, SAUF SI TU MANQUES DE TEMPS » survivait à tout.
+      //
+      // Ces consignes viennent du métier transporté, pas de ce lot. Les garder ici n'est pas les
+      // rejuger : c'est refuser de laisser à côté d'une garantie neuve une garantie voisine que
+      // la même altération vide, et qui dit précisément la même chose que le principe qu'on ajoute.
+      const s = sectionDe(metier, /Tenir le ServiceDesk/i, 'sur la tenue du ServiceDesk');
+      const suivi = s.corps.slice(s.corps.search(/^À chaque étape/m));
+
+      const CONSIGNES = [
+        { quoi: 'les statuts au moment où l’état change (règle d’or n°13)', sonde: /statuts au moment où l'état change/i },
+        { quoi: 'la filiation de chaque agent ouvert', sonde: /filiation de chaque agent/i },
+        { quoi: 'le compte rendu d’avancement sur le chantier', sonde: /compte rendu d'avancement/i },
+        { quoi: 'ce qui reste ouvert, et ce qui bloque quoi', sonde: /ce qui reste ouvert/i },
+        { quoi: 'ce qui appartient au dirigeant', sonde: /appartient au dirigeant/i },
+      ];
+      const puces = pucesDe(suivi);
+      assert.equal(puces.length, CONSIGNES.length, `${puces.length} consigne(s) de suivi écrite(s) pour ${CONSIGNES.length} gardée(s)`);
+      for (const { quoi, sonde } of CONSIGNES) {
+        const trouvees = puces.filter((p) => sonde.test(p));
+        assert.equal(trouvees.length, 1, `« ${quoi} » doit figurer une fois exactement (${trouvees.length} trouvée·s)`);
+        exigeImperatif(trouvees[0], `la consigne de suivi « ${quoi} »`);
+      }
+
+      // Et la relecture après livraison, qui ferme la section : c'est elle qui rattrape ce qu'un
+      // agent fermé a laissé de faux, et elle est la seule qui n'a pas de puce pour la porter.
+      const relectures = s.corps.split('\n').filter((l) => /^\*\*Relis-toi\.\*\*/.test(l));
+      assert.equal(relectures.length, 1, `la relecture après livraison doit être prescrite une fois exactement (${relectures.length})`);
+      exigeImperatif(relectures[0], 'la relecture après livraison');
+    },
+  },
+
+  {
     id: 'anti-patterns-de-l-inscription',
     quoi: 'les trois manquements qui ont motivé le principe sont nommés comme des fautes, du côté des fautes',
     verifier({ metier }) {
@@ -1580,6 +1620,48 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "est un aboutissement et n'a pas de ticket propre",
       "est un aboutissement et n'a pas de ticket propre, sauf si le dirigeant en demande un",
+    ),
+  },
+
+  {
+    id: 'la-regle-d-or-13-s-assouplit-dans-le-suivi',
+    quoi: 'la consigne voisine du principe — les statuts au moment où l’état change — s’ouvre une porte, et le ServiceDesk se remet à mentir',
+    cible: 'le-suivi-oblige-encore',
+    fichier: 'metier',
+    // Mesurée survivante par la contre-vérification : la modalité était posée sur ce que le lot
+    // écrivait, jamais sur la consigne d'à côté, qui dit pourtant la même chose.
+    muter: (t) => t.replace(
+      "- **statuts au moment où l'état change**, jamais différés (règle d'or n°13)",
+      "- **statuts au moment où l'état change**, jamais différés (règle d'or n°13) — sauf si tu manques de temps",
+    ),
+  },
+  {
+    id: 'une-consigne-de-suivi-disparait',
+    quoi: 'la consigne du compte rendu d’avancement est retirée — le chantier dit ce qu’on allait faire, jamais où on en est',
+    cible: 'le-suivi-oblige-encore',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^- \*\*un compte rendu d'avancement sur le chantier lui-même\*\*.*\n/m, ''),
+  },
+  {
+    id: 'la-relecture-devient-negociable',
+    quoi: 'la relecture après livraison cesse d’obliger — ce qu’un agent fermé a laissé de faux y reste',
+    cible: 'le-suivi-oblige-encore',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Relis-toi.** Après chaque livraison,',
+      '**Relis-toi.** À moins que la livraison ne soit petite, après chaque livraison,',
+    ),
+  },
+  {
+    id: 'une-cellule-nie-sa-necessite',
+    quoi: 'la cellule du chef d’équipe est vidée par une nécessité niée — ni permission ni exception, la troisième famille',
+    cible: 'inscrire-avant-de-tenir-a-jour',
+    fichier: 'metier',
+    // Posée par la contre-vérification, et survivante : `PERMISSIF` ne connaissait que la
+    // permission et l'exception.
+    muter: (t) => t.replace(
+      "c'est la filiation de §4b-bis, qui est ce principe appliqué |",
+      "c'est la filiation de §4b-bis, même si ce n'est pas strictement nécessaire tout de suite |",
     ),
   },
 
