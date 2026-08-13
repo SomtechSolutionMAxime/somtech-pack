@@ -286,10 +286,32 @@ export const CONTROLES_DANGER = [
 
       const priorite = chemin.split(/(?<=\.)\s/)[0];
       exigeImperatif(priorite, 'la clause qui désigne le chemin de remontée en urgence');
-      assert.ok(
-        !/\b(?:si|lorsque|éventuellement|dans la mesure)\b/i.test(priorite),
-        `« ${priorite.trim()} » conditionne le chemin prioritaire : une priorité qui dépend d’une `
-          + `condition n’en est plus une, et le mot « d’abord » y survit intact`,
+
+      // ⚠️ POURQUOI UNE FORME ATTENDUE ICI, ET NON UNE LISTE DE MOTS INTERDITS.
+      //
+      // La version précédente bannissait quatre connecteurs conditionnels (« si »,
+      // « lorsque »…). La revue a trouvé la sortie en une passe : « d'abord, IDÉALEMENT »,
+      // « d'abord, quand tu y penses », « d'abord, une fois que tu as un instant » — aucun
+      // mot de la liste, la priorité devenue un souhait, tout vert. Le français a plus
+      // d'adverbes d'atténuation qu'une liste n'en contiendra jamais : bannir un à un est un
+      // puits sans fond, et chaque tour donne l'illusion d'avoir refermé la porte.
+      //
+      // On inverse donc la garde : au lieu d'énumérer ce qui est REFUSÉ, on exige la FORME
+      // ACCEPTÉE. La clause nomme le chemin prioritaire, puis dit POURQUOI il l'est — rien
+      // d'autre ne s'attache à « d'abord ». Toute atténuation, connue ou non, échoue par
+      // construction, puisqu'elle n'est pas une justification.
+      //
+      // Contrepartie assumée : une reformulation légitime qui abandonnerait le « parce que »
+      // rougira. C'est voulu — cette clause porte le seul chemin qui prévienne une personne
+      // pendant qu'un client perd ses données, et le message ci-dessous dit quelle forme
+      // reprendre.
+      assert.match(
+        priorite, /d.abord\s*,\s*(?:parce qu|car\b)/i,
+        `« ${priorite.trim()} » : ce qui suit « d’abord » n’est pas une justification. La clause `
+          + `doit nommer le chemin prioritaire PUIS dire pourquoi il l’est (« …d’abord, parce que `
+          + `c’est le seul qui prévienne une personne »). Toute autre suite — « idéalement », `
+          + `« quand tu y penses », « si l’idée te vient » — transforme une priorité en souhait `
+          + `en gardant le mot « d’abord » intact.`,
       );
 
       const iAtteint = chemin.search(/orchestrateur/i);
@@ -466,6 +488,20 @@ export const MUTATIONS_DANGER = [
     muter: (t) => t.replace(
       "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
       "l'orchestrateur du chantier en cours d'abord, si l'idée te vient.",
+    ),
+  },
+  {
+    id: 'danger-le-chemin-d-urgence-devient-un-souhait',
+    quoi: 'la priorité devient « idéalement » — un seul adverbe, aucun connecteur conditionnel, la priorité s’efface',
+    cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
+    fichier: 'metier',
+    // La plus nette des quatre trouvées par la seconde revue contre la liste de mots
+    // interdits (« idéalement », « quand tu y penses », « quand l'occasion se présente »,
+    // « une fois que tu as un instant »). Elles échouent toutes désormais par la même
+    // garde de forme ; celle-ci est posée pour que la garde ne puisse pas y revenir.
+    muter: (t) => t.replace(
+      "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
+      "l'orchestrateur du chantier en cours d'abord, idéalement.",
     ),
   },
   {
