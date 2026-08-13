@@ -84,6 +84,13 @@ export const SECTIONS_AMENDEES = new Map([
 /** La phrase que l'ajout 3 RETIRE. Un retrait se défait par mégarde plus facilement qu'un ajout. */
 export const PHRASE_RETIREE = 'continue sans elle';
 
+/**
+ * Combien d'anti-patterns le gabarit ajoute à ceux du métier — un par ajout qui en appelle un,
+ * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
+ * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
+ */
+export const NB_ANTI_PATTERNS_AJOUTES = 5;
+
 // ═════════════════════════════════════════ les contrôles
 
 export const CONTROLES = [
@@ -147,6 +154,50 @@ export const CONTROLES = [
         `ces sections ont été RÉÉCRITES en étant déplacées, alors que le lot devait les `
           + `transporter telles quelles : ${reecrites.join(' · ')}`,
       );
+
+      // ⚠️ LES DEUX SECTIONS AMENDÉES SONT GARDÉES AUSSI — ET C'EST LA PASSE 2 QUI L'A EXIGÉ.
+      //
+      // Les exempter de la comparaison octet-pour-octet les avait mises hors de TOUTE garde,
+      // au-delà des quelques phrases que les contrôles dédiés ciblent nommément. La revue a
+      // retiré deux lignes d'origine de la table d'anti-patterns et une phrase de §1-bis :
+      // les trois mutations sont restées vertes. Une exemption qui devait couvrir un amendement
+      // précis couvrait en fait tout le reste de la section.
+      //
+      // La garde qui tient : **inclusion littérale de ce qui devait rester, plus un compte
+      // exact de ce qui s'ajoute.** Retirer une ligne d'origine rougit ; en ajouter une
+      // sixième rougit aussi.
+      const tableSource = tableDe(sectionDe(competence, /^Anti-patterns$/i, 'd’anti-patterns de la compétence').corps);
+      const tableGabarit = tableDe(sectionDe(metier, /^Anti-patterns$/i, 'd’anti-patterns du gabarit').corps);
+      const cle = (l) => l.join(' | ');
+      const perduesTable = tableSource.lignes.map(cle).filter((l) => !tableGabarit.lignes.map(cle).includes(l));
+      assert.deepEqual(
+        perduesTable, [],
+        `ces anti-patterns du métier ont disparu au déplacement — chacun a été payé une fois, et `
+          + `une table dont on retire une ligne est le mode de régression le plus silencieux d'un `
+          + `document : ${perduesTable.join(' · ')}`,
+      );
+      assert.equal(
+        tableGabarit.lignes.length - tableSource.lignes.length, NB_ANTI_PATTERNS_AJOUTES,
+        `le gabarit ajoute ${tableGabarit.lignes.length - tableSource.lignes.length} anti-pattern(s) `
+          + `pour ${NB_ANTI_PATTERNS_AJOUTES} attendu(s) — les ajouts sont une liste fermée, et un `
+          + `anti-pattern de plus est une idée qui s'est glissée dans le texte`,
+      );
+
+      // §1-bis : même principe, au paragraphe. Tout ce que la compétence y écrit doit se
+      // retrouver dans le gabarit, SAUF l'unique paragraphe que l'ajout 3 retire.
+      const parasDe = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 40);
+      const sourceBis = sectionDe(competence, /Ouvrir ta ligne avec le dirigeant/i, 'de l’ouverture de la ligne (compétence)').corps;
+      const gabaritBis = sectionDe(metier, /Ouvrir ta ligne avec le dirigeant/i, 'de l’ouverture de la ligne (gabarit)').corps;
+      const aRetirer = parasDe(sourceBis).filter((p) => p.includes(PHRASE_RETIREE));
+      assert.equal(aRetirer.length, 1, `la compétence doit porter une fois exactement le paragraphe que l’ajout 3 retire (${aRetirer.length})`);
+      const conserves = parasDe(sourceBis).filter((p) => !p.includes(PHRASE_RETIREE));
+      assert.ok(conserves.length >= 3, `trop peu de paragraphes conservés (${conserves.length}) pour que la garde morde`);
+      const perdusBis = conserves.filter((p) => !gabaritBis.includes(p));
+      assert.deepEqual(
+        perdusBis, [],
+        `ces paragraphes de §1-bis ont disparu au déplacement, alors que seul celui qui porte `
+          + `« ${PHRASE_RETIREE} » devait partir : ${perdusBis.map((p) => p.slice(0, 60) + '…').join(' · ')}`,
+      );
     },
   },
 
@@ -176,6 +227,23 @@ export const CONTROLES = [
       // Le refus doit dire QUOI FAIRE, pas seulement constater — le gestionnaire a mis trois
       // défauts à rendre ce geste honnête, autant les reprendre plutôt que les redécouvrir.
       assert.match(enonces[0], /dis (?:ce qui manque|quoi faire)|quoi faire/i, 'un refus qui ne dit pas quoi faire laisse le lecteur sans issue');
+
+      // ⚠️ LA SECONDE AFFIRMATION, ET LA PASSE 2 L'A TROUVÉE NON GARDÉE.
+      //
+      // L'obligation est écrite à DEUX endroits — §1-bis, où vit le geste, et la sous-section
+      // des capacités, où elle est nommée. Ne garder que le premier laissait assouplir le
+      // second : « tu peux commencer un chantier sans elle si ça presse » restait vert. Un
+      // lecteur qui trouve les deux appliquera celui qu'il a lu en dernier.
+      const dediee = sectionDe(metier, /Ta ligne directe est obligatoire/i, 'de la ligne comme capacité');
+      exigeImperatif(dediee.titre, 'le titre de la sous-section de la ligne');
+      const affirmations = dediee.corps.split('\n').filter((l) => /sans elle\b/i.test(l));
+      assert.equal(affirmations.length, 1, `la sous-section doit affirmer l’obligation une fois exactement (${affirmations.length})`);
+      exigeImperatif(affirmations[0], 'l’affirmation de l’obligation dans la sous-section dédiée');
+      assert.match(
+        affirmations[0], /ne commences pas/i,
+        `« ${affirmations[0].trim()} » n’affirme plus l’obligation : les deux endroits qui la portent `
+          + `doivent dire la même chose`,
+      );
     },
   },
 
@@ -441,10 +509,34 @@ export const CONTROLES = [
         { quoi: 'qui est le gestionnaire client du projet', sonde: /^Qui est le gestionnaire client de ce projet$/i },
         { quoi: 'sa portée', sonde: /^Ta portée$/i },
       ];
-      const titres = sections(contexte).map((s) => s.titre);
+      // ⚠️ UN TITRE N'EST PAS UNE RUBRIQUE — la passe 2 a vidé le corps de chacune des trois
+      // et rien n'a rougi. Une garde qui ne regarde que les titres laisse un contexte creux :
+      // l'orchestrateur y trouve les bonnes questions et aucune place où lire les réponses.
+      const rubriques = sections(contexte);
+      const titres = rubriques.map((s) => s.titre);
       for (const { quoi, sonde } of RUBRIQUES) {
-        assert.equal(titres.filter((t) => sonde.test(t)).length, 1, `le contexte doit porter la rubrique « ${quoi} » (parmi : ${titres.join(' · ')})`);
+        const trouvees = rubriques.filter((s) => sonde.test(s.titre));
+        assert.equal(trouvees.length, 1, `le contexte doit porter la rubrique « ${quoi} » (parmi : ${titres.join(' · ')})`);
+        assert.ok(
+          trouvees[0].corps.trim().length > 120,
+          `la rubrique « ${quoi} » est vide ou creuse (${trouvees[0].corps.trim().length} caractères) : `
+            + `un gabarit qui pose la question sans ménager la place de la réponse ne se remplit pas`,
+        );
+        // Et elle doit porter des emplacements à renseigner : c'est ce qui distingue un gabarit
+        // d'un texte fini, et ce que le contexte dit lui-même — « un orchestrateur qui trouve un
+        // chevron le dit plutôt que de deviner ».
+        assert.match(
+          trouvees[0].corps, /<[^>]{10,}>/,
+          `la rubrique « ${quoi} » ne porte aucun emplacement à renseigner : rien n’indique à qui `
+            + `la remplit ce qu’on attend d’elle`,
+        );
       }
+
+      // L'interdit que le contexte porte, et qui ne vit nulle part ailleurs pour lui : il ne
+      // parle jamais au client. La revue l'a retiré sans qu'aucun contrôle s'en aperçoive.
+      const interdits = contexte.split('\n').filter((l) => /client, ni de près ni de loin/i.test(l));
+      assert.equal(interdits.length, 1, `le contexte doit dire une fois exactement qu’il ne parle jamais au client (${interdits.length})`);
+      exigeImperatif(interdits[0], 'l’interdit de parler au client');
     },
   },
 
@@ -656,6 +748,57 @@ export const MUTATIONS = [
       "**tu ne commences pas** : dis ce qui manque",
       "tu peux commencer quand même si ça presse : dis ce qui manque",
     ),
+  },
+
+  {
+    id: 'revue-P2-la-seconde-affirmation-s-assouplit',
+    quoi: 'l’obligation est assouplie là où elle est nommée, pendant qu’elle tient là où elle est gardée',
+    cible: 'ligne-obligatoire',
+    fichier: 'metier',
+    // Trouvée par la PASSE 2 : l'ajout 3 affirme l'obligation à deux endroits, et un seul
+    // était gardé. Un lecteur applique celui qu'il a lu en dernier.
+    muter: (t) => t.replace(
+      "**Tu ne commences pas un chantier sans elle**",
+      "Tu peux commencer un chantier sans elle si ça presse",
+    ),
+  },
+  {
+    id: 'revue-P2-un-anti-pattern-d-origine-disparait',
+    quoi: 'une ligne d’origine de la table d’anti-patterns est retirée — la section amendée servait de trou, pas d’amendement',
+    cible: 'le-metier-a-voyage-entier',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| Coder « juste ce petit bout » soi-même \|.*\n/m, ''),
+  },
+  {
+    id: 'revue-P2-un-paragraphe-de-1bis-disparait',
+    quoi: 'la phrase « un arbitrage n’est acquis qu’une fois réinscrit au ServiceDesk » est perdue dans la section exemptée',
+    cible: 'le-metier-a-voyage-entier',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^Un arbitrage rendu dans la conversation \*\*n'est acquis[\s\S]*?\n\n/m, ''),
+  },
+  {
+    id: 'revue-P2-un-septieme-anti-pattern-se-glisse',
+    quoi: 'une idée de plus entre dans la table par la porte de la section exemptée — la liste des ajouts n’est plus fermée',
+    cible: 'le-metier-a-voyage-entier',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^\| Sauter le topo du matin/m,
+      "| Laisser un chef d'équipe fusionner sans revue | Une idée qui n'a jamais été énoncée par le dirigeant |\n| Sauter le topo du matin",
+    ),
+  },
+  {
+    id: 'revue-P2-une-rubrique-du-contexte-est-videe',
+    quoi: 'la portée garde son titre et perd son corps — l’orchestrateur trouve la question et aucune place pour la réponse',
+    cible: 'contexte-appele-et-necessaire',
+    fichier: 'contexte',
+    muter: (t) => t.replace(/(## Ta portée\n)[\s\S]*?(?=\n## )/m, '$1\n'),
+  },
+  {
+    id: 'revue-P2-l-interdit-de-parler-au-client-disparait',
+    quoi: 'l’orchestrateur peut parler au client — le cloisonnement que le représentant existe pour tenir tombe',
+    cible: 'contexte-appele-et-necessaire',
+    fichier: 'contexte',
+    muter: (t) => t.replace(/^> \*\*Tu ne parles jamais au client.*\n/m, ''),
   },
 
   // ── ajout 1 : appeler les spécialistes
