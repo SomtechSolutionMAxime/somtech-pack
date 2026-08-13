@@ -63,6 +63,9 @@ assert.equal(resolve(HERE, '..', '..', '..'), REPO, 'la racine du dépôt a boug
 export const GABARIT_DIR = join('.claude', 'templates', 'orchestrateur');
 export const CHEMIN_METIER = join(GABARIT_DIR, 'CLAUDE.md');
 export const CHEMIN_CONTEXTE = join(GABARIT_DIR, 'CONTEXTE.md');
+/** Les deux autres fichiers du lieu, posés par le lot qui pose (E-20260813-0002). */
+export const CHEMIN_MCP = join(GABARIT_DIR, '.mcp.json');
+export const CHEMIN_PERMISSIONS = join(GABARIT_DIR, '.claude', 'settings.json');
 
 /** La compétence dont ce lot déplace le métier. Elle survit jusqu'au lot qui la remplacera. */
 export const CHEMIN_COMPETENCE = join('.claude', 'skills', 'orchestrer-chantier', 'SKILL.md');

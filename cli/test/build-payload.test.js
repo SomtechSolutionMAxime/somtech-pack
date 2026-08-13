@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,6 +86,17 @@ test('build-payload : aucun résidu de construction ni d\'exécution dans le paq
   }
 });
 
+/** Les fichiers d'un gabarit, en chemins relatifs — répertoires imbriqués compris. */
+function fichiersDe(racine, prefixe = '') {
+  const out = [];
+  for (const e of readdirSync(join(racine, prefixe), { withFileTypes: true })) {
+    const rel = prefixe ? `${prefixe}/${e.name}` : e.name;
+    if (e.isDirectory()) out.push(...fichiersDe(racine, rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
 test('paquet npm : le canvas et les gabarits du représentant survivent à la fabrication du tarball', () => {
   // Le test précédent inspecte le RÉPERTOIRE payload. Ça ne prouve rien sur ce que npm
   // met réellement dans le tarball : npm applique les fichiers d'ignore imbriqués au
@@ -139,35 +150,35 @@ test('paquet npm : le canvas et les gabarits du représentant survivent à la fa
     );
   }
 
-  // Les gabarits du représentant (E-20260807-0001, EF-REL-014 ; puis E-20260807-0002, les
-  // deux gabarits techniques du lieu). Ils sont vérifiés ICI et non dans leur propre fichier
-  // de test, et ce n'est pas un rangement arbitraire : `npm pack` lit `cli/payload`, et
-  // `node --test` exécute un PROCESSUS PAR FICHIER. Deux fichiers qui construisent ce même
+  // Les gabarits des deux rôles qui posent un lieu — représentant (E-20260807-0001/0002) et
+  // orchestrateur (E-20260813-0001/0002). Ils sont vérifiés ICI et non dans leur propre
+  // fichier de test, et ce n'est pas un rangement arbitraire : `npm pack` lit `cli/payload`,
+  // et `node --test` exécute un PROCESSUS PAR FICHIER. Deux fichiers qui construisent ce même
   // répertoire se marchent dessus — l'un supprime le payload pendant que l'autre l'empaquette,
   // et le test qui perd la course accuse un fichier d'ignore imaginaire. Un seul fichier
   // touche donc à `cli/payload`, celui-ci.
-  for (const f of [
-    'payload/.claude/templates/gestionnaire-client/CLAUDE.md',
-    'payload/.claude/templates/gestionnaire-client/CONTEXTE.md',
-    'payload/.claude/templates/gestionnaire-client/.mcp.json',
-    'payload/.claude/templates/gestionnaire-client/.claude/settings.json',
-  ]) {
+  //
+  // LA LISTE EST ÉNUMÉRÉE DEPUIS LA SOURCE, jamais écrite en dur — et c'est le correctif d'un
+  // motif qui a déjà mordu quatre fois sur ce dépôt. Elle l'était : quand le gabarit de
+  // l'orchestrateur a gagné son `.mcp.json` et son `settings.json`, la garde ne couvrait
+  // toujours que ses deux premiers fichiers. Un orchestrateur serait né sans ses outils ni
+  // ses permissions, derrière un test vert. Énumérer rend la garde juste par construction :
+  // un fichier ajouté demain au gabarit est couvert sans que personne y pense.
+  for (const role of ['gestionnaire-client', 'orchestrateur']) {
+    const source = join(REPO, '.claude', 'templates', role);
+    const attendus = fichiersDe(source).map((rel) => `payload/.claude/templates/${role}/${rel}`);
     assert.ok(
-      files.includes(f),
-      `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un représentant naîtrait sans son métier ou avec des moyens non bornés`
+      attendus.length >= 4,
+      `le gabarit « ${role} » ne porte que ${attendus.length} fichier(s) : le lieu en compte quatre, `
+        + `et une garde qui en énumère moins ne garde plus rien`,
     );
-  }
-
-  // Les gabarits de l'orchestrateur (E-20260813-0001). Même raison d'être ici que ceux du
-  // représentant : un seul fichier de test touche à `cli/payload`.
-  for (const f of [
-    'payload/.claude/templates/orchestrateur/CLAUDE.md',
-    'payload/.claude/templates/orchestrateur/CONTEXTE.md',
-  ]) {
-    assert.ok(
-      files.includes(f),
-      `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au packing — un orchestrateur naîtrait sans son métier`
-    );
+    for (const f of attendus) {
+      assert.ok(
+        files.includes(f),
+        `${f} présent dans le payload mais absent du paquet npm : quelque chose l'a retiré au `
+          + `packing — l'agent naîtrait sans son métier, sans ses outils, ou avec des moyens non bornés`,
+      );
+    }
   }
 });
 

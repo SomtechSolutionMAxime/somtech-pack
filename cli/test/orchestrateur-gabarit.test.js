@@ -27,7 +27,8 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  CONTROLES, lireGabarits, CHEMIN_METIER, CHEMIN_CONTEXTE, CHEMIN_COMPETENCE, REPO,
+  CONTROLES, lireGabarits, CHEMIN_METIER, CHEMIN_CONTEXTE, CHEMIN_MCP, CHEMIN_PERMISSIONS,
+  CHEMIN_COMPETENCE, REPO,
 } from './lib/metier-orchestrateur.js';
 import { readManifest } from '../src/modules.js';
 
@@ -39,10 +40,28 @@ const gabarits = lireGabarits();
 
 // ═══════════════════════════════ 1. la chaîne de distribution
 
-test('distribution : les deux gabarits existent dans les sources du dépôt', () => {
-  for (const chemin of [CHEMIN_METIER, CHEMIN_CONTEXTE]) {
+test('distribution : les QUATRE fichiers du lieu existent dans les sources du dépôt', () => {
+  // Le lieu en compte quatre — le métier, le contexte, les outils, les permissions. N'en
+  // garder que deux (ce que faisait ce test quand le gabarit n'en portait que deux) laisserait
+  // naître un orchestrateur sans ses outils ni ses moyens bornés, derrière un test vert.
+  for (const chemin of [CHEMIN_METIER, CHEMIN_CONTEXTE, CHEMIN_MCP, CHEMIN_PERMISSIONS]) {
     assert.ok(existsSync(join(REPO, chemin)), `${chemin} est absent des sources`);
   }
+});
+
+test('distribution : les outils du lieu sont lisibles et bornés à ce qu’il lui faut', () => {
+  // Il tient le registre (ServiceDesk) et il est gardien des ADR, qui vivent dans les
+  // documents (Somcraft) — sans ce second, il garderait de mémoire, ce que son métier lui
+  // interdit désormais nommément.
+  const mcp = JSON.parse(readFileSync(join(REPO, CHEMIN_MCP), 'utf8'));
+  assert.deepEqual(Object.keys(mcp.mcpServers || {}).sort(), ['servicedesk', 'somcraft']);
+});
+
+test('distribution : les permissions ne portent aucun secret, et rien n’y est écrit en dur', () => {
+  const brut = readFileSync(join(REPO, CHEMIN_PERMISSIONS), 'utf8');
+  assert.ok(!/\/Users\//.test(brut), 'un chemin de machine est écrit en dur dans les permissions');
+  const perms = JSON.parse(brut).permissions;
+  assert.ok(Array.isArray(perms.allow) && perms.allow.length > 0, 'un lieu sans aucune permission ferait tout demander');
 });
 
 test('distribution : ils vivent sous un chemin qu’un module déclaré embarque', () => {
