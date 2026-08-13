@@ -11,6 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { option, optionsRepetees, premierLibre, OPTIONS_A_VALEUR } from '../src/arguments.js';
 
@@ -23,12 +24,28 @@ test('premierLibre saute les VALEURS d’options — le défaut d’origine', as
   assert.equal(premierLibre(['--sans-archiver']), null, 'un drapeau seul ne laisse aucun argument libre');
 });
 
-test('toute option à valeur est déclarée — sinon sa valeur devient l’argument principal', async () => {
-  // Garde de COMPTE, pas de présence : une option ajoutée demain sans être déclarée ici fait
-  // rougir, au lieu de faire nommer un canal d'après un titre ou un chemin de dépôt.
+test('toute option à valeur EMPLOYÉE PAR LA COMMANDE est déclarée', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // CE TEST A ÉTÉ RÉÉCRIT APRÈS UNE REVUE QUI L'A PRIS EN FAUX TÉMOIN.
+  //
+  // Il comparait `OPTIONS_A_VALEUR` à une liste écrite à la main juste à côté : il ne prouvait
+  // que son propre accord avec lui-même. Le reviewer a ajouté une option `--espace` dans le
+  // binaire sans la déclarer — c'est-à-dire le défaut d'origine rejoué à l'identique, une
+  // valeur d'option prise pour l'argument principal — et les 313 tests sont restés verts.
+  //
+  // Il lit donc LA SOURCE DE LA COMMANDE, et vérifie que chaque option qu'elle interroge y est
+  // déclarée. Une option ajoutée demain sans l'être fait rougir ici, quel que soit le geste.
+  const source = readFileSync(new URL('../bin/ligne-directe.js', import.meta.url), 'utf8');
+  const employees = new Set(
+    [...source.matchAll(/(?:option|optionsRepetees)\(args,\s*'(--[a-z-]+)'\)/g)].map((m) => m[1])
+  );
+  assert.ok(employees.size >= 6, `la lecture de la source a échoué : ${employees.size} option(s) trouvée(s)`);
+  const oubliees = [...employees].filter((o) => !OPTIONS_A_VALEUR.has(o));
   assert.deepEqual(
-    [...OPTIONS_A_VALEUR].sort(),
-    ['--bilan', '--canal', '--depot', '--dirigeant', '--inviter', '--nature', '--sujet', '--titre']
+    oubliees,
+    [],
+    `option(s) employée(s) par la commande mais absente(s) d’OPTIONS_A_VALEUR : ${oubliees.join(', ')} — ` +
+      `leur valeur sera prise pour l’argument principal (le canal, le chantier, le client)`
   );
 });
 

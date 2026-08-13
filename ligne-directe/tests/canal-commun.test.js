@@ -488,3 +488,33 @@ test('CADRE — la consigne ne peut pas être prise pour la parole de l’interl
   assert.match(commun, /TOUS les agents/, 'et que ça vaut pour tous');
   assert.match(commun, /ON N'Y RÉPOND PAS/, 'et qu’on n’y répond pas');
 });
+
+// ═════════════════ 6. LA COMMANDE — la liste des autorisés ne s'ampute pas en silence
+
+test('COMMANDE — un nom qui ne se résout pas fait échouer la désignation ENTIÈRE', async () => {
+  // Relevé en revue de fond : cette boucle vivait dans `bin/`, exercée par rien. Ni les tests
+  // du veilleur (qui reçoivent une liste déjà résolue), ni ceux de la lecture d'arguments (qui
+  // s'arrêtent avant). Le reviewer a supprimé le refus : les 313 tests sont restés verts.
+  //
+  // Ce qu'on garde ici est le pire des trois résultats possibles : le canal désigné, tout ayant
+  // l'air en place, et la personne qui manque s'entendant refuser la parole sans que rien ne le
+  // dise. On éprouve la résolution contre le VRAI annuaire du double, pas contre une injection.
+  const { resoudreAutorises } = await import('../src/canal-commun.js');
+  const annuaire = [
+    { id: 'UDIR', name: 'maxime', real_name: 'Maxime', profile: { email: 'maxime.leboeuf@somtech.ca' } },
+  ];
+
+  await avecSlack({ canaux: [ANNONCES], utilisateurs: annuaire }, async () => {
+    const seul = await resoudreAutorises('xoxb-x', ['maxime.leboeuf@somtech.ca']);
+    assert.deepEqual(seul, { ok: true, autorises: ['UDIR'] });
+
+    // L'inconnu en SECOND : les précédents sont déjà résolus, et c'est là que la tentation
+    // d'inscrire « ce qu'on a » est la plus forte.
+    const ampute = await resoudreAutorises('xoxb-x', ['maxime.leboeuf@somtech.ca', 'parti@somtech.ca']);
+    assert.deepEqual(ampute, { ok: false, inconnu: 'parti@somtech.ca' }, 'aucune liste partielle ne sort d’ici');
+
+    // Et en PREMIER : on n'interroge pas l'annuaire pour les suivants, on s'arrête.
+    const dabord = await resoudreAutorises('xoxb-x', ['parti@somtech.ca', 'maxime.leboeuf@somtech.ca']);
+    assert.deepEqual(dabord, { ok: false, inconnu: 'parti@somtech.ca' });
+  });
+});

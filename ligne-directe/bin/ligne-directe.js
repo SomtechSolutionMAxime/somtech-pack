@@ -18,6 +18,7 @@ import { ligneDuPane } from '../src/registre.js';
 import { option, optionsRepetees, premierLibre } from '../src/arguments.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
+import { resoudreAutorises } from '../src/canal-commun.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import { preparerLieuRepresentant, verifierCanalOuvrable } from '../src/representant.js';
 import { preparerLieuOrchestrateur } from '../src/orchestrateur.js';
@@ -184,21 +185,14 @@ if (geste === 'relever') {
   const nomsDirigeants = optionsRepetees(args, '--dirigeant');
   if (!nomsDirigeants.length) usage(1);
 
-  // On résout AVANT d'appeler le veilleur, et on refuse si l'un des noms ne se résout pas.
-  // Une liste amputée en silence est le pire des trois résultats possibles : le canal est
-  // désigné, tout a l'air en place, et la personne qui manque s'entend refuser la parole sans
-  // que rien ne le dise — sur le canal qui sert précisément à ne plus attendre.
-  const jeton = await lireJeton(SERVICE_ROBOT);
-  const autorises = [];
-  for (const qui of nomsDirigeants) {
-    const id = await trouverMembre(jeton, qui);
-    if (!id) {
-      process.stderr.write(`aucun membre pour ${qui} — le canal commun n'est PAS designe\n`);
-      process.exit(1);
-    }
-    autorises.push(id);
+  // La résolution vit dans `src/canal-commun.js` — une boucle enfouie ici n'était exercée par
+  // aucun test, et c'est là que « la liste amputée en silence » se réintroduit sans qu'on la voie.
+  const r = await resoudreAutorises(await lireJeton(SERVICE_ROBOT), nomsDirigeants);
+  if (!r.ok) {
+    process.stderr.write(`aucun membre pour ${r.inconnu} — le canal commun n'est PAS designe\n`);
+    process.exit(1);
   }
-  rendre(await parler({ geste: 'commun', canal, autorises }));
+  rendre(await parler({ geste: 'commun', canal, autorises: r.autorises }));
 } else if (geste === 'representant') {
   const client = premierLibre(args);
   const canal = option(args, '--canal');
