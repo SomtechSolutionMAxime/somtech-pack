@@ -270,6 +270,37 @@ export const CONTROLES_DANGER = [
         'et il doit rappeler qu’une note sur la demande ne prévient personne — sans quoi l’urgence s’arrête à une inscription',
       );
 
+      // ⚠️ ET C'EST ICI QUE LES DEUX ASSERTIONS CI-DESSUS NE SUFFISENT PAS.
+      //
+      // Elles gardent une PRÉSENCE : elles voient le retrait de la phrase, jamais son
+      // assouplissement. La seconde revue l'a exécuté — « l'orchestrateur du chantier en
+      // cours d'abord, SI L'IDÉE TE VIENT » gardait les deux phrases, les deux mots-clés,
+      // et rendait facultatif le seul chemin qui prévienne une personne. C'est le motif
+      // dominant du dépôt rouvert d'un cran, dans le correctif du cran précédent.
+      //
+      // On garde donc la CLAUSE elle-même, sur deux axes : sa modalité (elle ordonne, elle
+      // ne suggère pas, et elle ne se conditionne pas) et sa position (le chemin qui atteint
+      // quelqu'un vient AVANT le chemin qui n'atteint personne).
+      const chemin = s.corps.split('\n').find((l) => /prends le chemin/i.test(l));
+      assert.ok(chemin, 'la clause qui désigne le chemin de remontée en urgence a disparu');
+
+      const priorite = chemin.split(/(?<=\.)\s/)[0];
+      exigeImperatif(priorite, 'la clause qui désigne le chemin de remontée en urgence');
+      assert.ok(
+        !/\b(?:si|lorsque|éventuellement|dans la mesure)\b/i.test(priorite),
+        `« ${priorite.trim()} » conditionne le chemin prioritaire : une priorité qui dépend d’une `
+          + `condition n’en est plus une, et le mot « d’abord » y survit intact`,
+      );
+
+      const iAtteint = chemin.search(/orchestrateur/i);
+      const iInscrit = chemin.search(/sur la demande/i);
+      assert.ok(iAtteint >= 0 && iInscrit >= 0, 'les deux chemins de remontée doivent être nommés tous les deux');
+      assert.ok(
+        iAtteint < iInscrit,
+        'le chemin qui ATTEINT quelqu’un doit être donné avant celui qui ne prévient personne — '
+          + 'l’ordre inverse envoie l’urgence vers une note que personne ne lira',
+      );
+
       exigeImperatif(s.corps, 'la conduite quand le client est déjà en danger');
     },
   },
@@ -424,6 +455,27 @@ export const MUTATIONS_DANGER = [
     muter: (t) => t.replace(
       /^\*\*Et prends le chemin qui atteint réellement quelqu'un\*\*.*$/m,
       '**Écris-le sur la demande** : quelqu’un finira par le lire.',
+    ),
+  },
+  {
+    id: 'danger-le-chemin-d-urgence-devient-facultatif',
+    quoi: 'le seul chemin qui prévienne une personne devient « si l’idée te vient » — mots-clés intacts, priorité perdue',
+    cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
+    fichier: 'metier',
+    // Posée par la seconde revue : elle a survécu aux gardes de PRÉSENCE qui la précédaient.
+    muter: (t) => t.replace(
+      "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
+      "l'orchestrateur du chantier en cours d'abord, si l'idée te vient.",
+    ),
+  },
+  {
+    id: 'danger-le-chemin-d-urgence-est-inverse',
+    quoi: 'l’urgence part d’abord vers la note que personne ne lit, et l’orchestrateur ne vient qu’ensuite',
+    cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "celui de « Comment tu remontes », plus haut : l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne. S'il n'y a aucun chantier en route, tu écris sur la demande,",
+      "celui de « Comment tu remontes », plus haut : tu écris sur la demande d'abord, parce que ça survit à ta session. S'il y a un chantier en route, tu préviens ensuite son orchestrateur,",
     ),
   },
   {
