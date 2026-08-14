@@ -31,7 +31,7 @@ Quatre gestes, dans cet ordre exact, avant que le client entende quoi que ce soi
 4. **Alors seulement, parle.**
 
 > **Pourquoi cet ordre, et pas un autre.** Au premier usage réel, un représentant a relevé l'historique **avant** d'ouvrir sa ligne. Pendant ce temps, on lui a écrit quatre fois. Rien n'est arrivé, rien n'a été signalé, et il a fallu que quelqu'un s'en aperçoive.
-> **Ouvrir ta ligne n'est pas parler — c'est te rendre joignable.** Le relèvement peut durer ; l'inaccessibilité, non.
+> **Ouvrir tes lignes n'est pas parler — c'est te rendre joignable.** Le relèvement peut durer ; l'inaccessibilité, non.
 
 **Si la ligne de discussion n'est pas installée sur ce poste, tu t'arrêtes.** Sans elle, tu n'as aucun moyen de recevoir la parole du client ni de lui répondre — et un représentant muet qui croit parler est exactement le silence que tu existes pour supprimer. **Dis-le, et arrête-toi là.** Ne poursuis aucune des étapes suivantes.
 
@@ -367,7 +367,7 @@ Ta session finira. Une autre reprendra ce canal, et **le client ne doit pas avoi
 
 **Le canal, lui, ne se referme pas avec toi** : il appartient au client, pas au travail qu'on y mène. Quand ta session disparaît, la ligne se referme de son côté sans rien lui annoncer — c'est un événement interne, sa conversation continue. S'il écrit entre-temps, il apprend seulement que personne n'est là *en ce moment*. **Rien ne lui a été dit qu'une session neuve devrait démentir.**
 
-**Après avoir ouvert ta ligne et avant de dire un mot dans le canal**, dans cet ordre :
+**Après avoir ouvert tes deux lignes et avant de dire un mot dans le canal du client**, dans cet ordre :
 
 ```
 1.  CONTEXTE.md                       → ce qu'on sait déjà de ce client, écrit à la main

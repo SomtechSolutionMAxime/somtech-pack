@@ -33,6 +33,10 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { segmentsHorsSequence, decider, naturesOuvertesDuPane } from '../src/garde.js';
+// LES FONCTIONS QUE LA COMMANDE APPELLE — la résolution d'un « --a » et le nommage d'un canal.
+// Les réécrire ici ne prouverait que l'accord de cet essai avec lui-même.
+import { ligneDuPane } from '../../ligne-directe/src/registre.js';
+import { nomDeCanal, libelleDeCanal } from '../../ligne-directe/src/nommage.js';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const METIER = join(REPO, '.claude', 'templates', 'gestionnaire-client', 'CLAUDE.md');
@@ -106,6 +110,59 @@ test('ET ELLE OUVRE LES DEUX LIGNES QUE LE GARDE EXIGE — sinon le pane ne se r
     }).permissionDecision,
     'allow',
     'après la séquence du métier, le gestionnaire doit pouvoir travailler'
+  );
+});
+
+test('CHAQUE « --a » DU MÉTIER DÉSIGNE UNE LIGNE QUE LE MÉTIER OUVRE — sinon chaque remontée est refusée', () => {
+  // ⚠️ LE PONT S'ARRÊTAIT À L'OUVERTURE (relevé en revue de passe 1). Il prouvait que la
+  // séquence passe le garde ; il ne disait RIEN de l'usage. Or les deux moitiés du métier
+  // peuvent diverger sans qu'aucune suite ne rougisse : si le chantier ouvert devenait
+  // `patron` pendant que les remontées gardent `--a dirigeant`, la séquence resterait permise,
+  // le gestionnaire naîtrait avec ses deux lignes — et CHAQUE remontée serait refusée, faute
+  // de ligne désignée. Il est tenu de remonter quatre choses ; il n'en remonterait aucune.
+  //
+  // ON RÉSOUT AVEC `ligneDuPane`, LA FONCTION QUE LA COMMANDE APPELLE (T-20260813-0078).
+  // Réécrire ici la règle de désignation ne prouverait que l'accord de l'essai avec lui-même —
+  // c'est le piège que ce dépôt nomme, et le lot d'à côté l'a déjà payé.
+  const texte = readFileSync(METIER, 'utf8');
+  const substituer = (s) => s.replace(/<le client>/g, 'acme').replace(/<le titre donné par CONTEXTE\.md>/g, 'Espace Acme');
+
+  // Les lignes que la séquence du métier ferait naître, telles que `etat()` les rendrait.
+  const ouvertures = [...texte.matchAll(/\$LD ouvrir ([^\n]*)/g)].map((m) => substituer(m[1]));
+  assert.equal(ouvertures.length, 2, 'le métier doit ouvrir deux lignes');
+  const ouvertes = ouvertures.map((args) => {
+    const chantier = args.split(/\s+/)[0];
+    const titre = args.match(/--titre\s+"([^"]*)"/);
+    return {
+      chantier,
+      // Le nom du canal vient du TITRE, par les fonctions du module — jamais deviné ici.
+      canal: nomDeCanal(libelleDeCanal(chantier, titre && titre[1])),
+      pane: 'w1:p1',
+    };
+  });
+
+  // Chaque désignation que le métier enseigne doit tomber sur une ligne, et UNE SEULE.
+  const designations = [...texte.matchAll(/--a\s+(<[^>]*>|\S+)/g)].map((m) => substituer(m[1]));
+  assert.ok(designations.length >= 2, `le métier doit enseigner l’usage des DEUX lignes (${designations.length} désignation·s)`);
+  for (const nom of designations) {
+    const { ligne, refus } = ligneDuPane(ouvertes, 'w1:p1', nom);
+    assert.ok(
+      ligne,
+      `« --a ${nom} » ne désigne aucune ligne que le métier ouvre (${refus && refus.motif}) — ` +
+        `les lignes ouvertes sont : ${ouvertes.map((l) => l.chantier).join(', ')}`
+    );
+  }
+
+  // ET LES DEUX SONT ENSEIGNÉES, pas seulement l'une. Un métier qui n'apprendrait à viser que
+  // le client laisserait la ligne du dirigeant ouverte et jamais employée — le manque
+  // d'origine, avec une ligne de plus pour faire illusion.
+  const visees = new Set(
+    designations.map((nom) => ligneDuPane(ouvertes, 'w1:p1', nom).ligne?.chantier).filter(Boolean)
+  );
+  assert.deepEqual(
+    [...visees].sort(),
+    ouvertes.map((l) => l.chantier).sort(),
+    'le métier doit enseigner à viser CHACUNE de ses deux lignes'
   );
 });
 
