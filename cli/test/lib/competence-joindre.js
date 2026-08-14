@@ -179,6 +179,29 @@ export const CONTROLES = [
       // Et la phrase qui l'établit doit OBLIGER : « tu peux tous les redésigner par prudence »
       // dit le contraire de ce que la compétence promet, en gardant tout son vocabulaire.
       exigeImperatif(lien[0], 'la phrase qui dit ce que la mesure apprend');
+      // ⚠️ ET ELLE DOIT AFFIRMER LE LIEN, PAS LE NIER — trouvé en vérifiant les correctifs :
+      // « Savoir quels rôles n'ont pas de canal n'a rien à voir avec `communs` : ce champ répond
+      // à une autre question » porte les mêmes jetons, dans le même ordre, sans un seul mot
+      // permissif. Le sens était retourné et la sonde restait verte.
+      const rupture = lien[0].match(/n['’]a rien à voir|aucun rapport|ne dit pas|ne renseigne pas|autre question|sans rapport/i);
+      assert.ok(
+        !rupture,
+        `la phrase NIE le lien qu’elle doit établir (« ${rupture && rupture[0]} ») : « ${lien[0].trim()} »`,
+      );
+
+      // La seconde porte, et elle est structurelle plutôt que verbale : la table de lecture de
+      // l'état doit dire, sur sa ligne `communs`, que ce champ porte les rôles. Une phrase se
+      // réécrit ; une ligne de table qui perd son sens se voit.
+      const lecture = tableDe(sectionDe(texte, /mesure/i, 'sur ce qu’elle mesure d’abord').corps);
+      const iLu = lecture.entetes.findIndex((e) => /^Ce que tu lis$/.test(e));
+      assert.ok(iLu !== -1, 'la table de lecture doit porter une colonne « Ce que tu lis »');
+      const ligneCommuns = lecture.lignes.find((l) => /`communs`/.test(l[iLu]));
+      assert.ok(ligneCommuns, 'la table de lecture doit porter une ligne pour le champ `communs`');
+      assert.match(
+        ligneCommuns.filter((_, i) => i !== iLu).join(' '),
+        /r[ôo]le/i,
+        '`communs` doit s’expliquer par les RÔLES qu’il porte — c’est ce qui rend les rôles manquants lisibles',
+      );
     },
   },
 
@@ -265,12 +288,35 @@ export const CONTROLES = [
         /recopie-le/i,
         'le texte doit dire de RECOPIER le message de la commande, en toutes lettres',
       );
-      const reformulation = section.corps.match(/résume-le|reformule-le|dans tes mots|réécris-le|plus clair/i);
-      assert.ok(
-        !reformulation,
-        `le texte invite à reformuler le refus (« ${reformulation && reformulation[0]} ») : `
-          + 'une reformulation remplace ce qui a été mesuré par ce qu’on en conclut',
-      );
+      // ⚠️ LA PREMIÈRE VERSION DE CETTE SONDE ÉTAIT UNE LISTE NOIRE ÉTROITE, et la vérification
+      // des correctifs l'a contournée du premier coup : « Traduis-le dans tes propres mots si la
+      // phrase brute te semble trop technique » gardait l'injonction de recopier, échappait aux
+      // cinq expressions listées, et rouvrait le défaut en entier.
+      //
+      // On vise donc la FAMILLE, sur ses deux axes : le VERBE qui transforme un texte, et la
+      // tournure « avec tes mots » sous toutes ses formes.
+      //
+      // ⚠️ CE QUE CETTE GARDE NE COUVRE PAS, et il faut le savoir avant de s'y fier : une
+      // périphrase qui n'emploie aucun de ces verbes (« dis-lui l'essentiel », « garde ce qui
+      // compte ») passerait. Aucune garde mécanique ne lit le sens. Celle-ci ferme la porte des
+      // formulations qu'on écrit spontanément ; la relecture humaine reste requise.
+      const TRANSFORME = /\b(?:r[ée]sum|reformul|r[ée][ée]cri|tradui|paraphras|simplifi|clarifi|adapt|synth[ée]tis|abr[ée]g|condens|vulgaris)\w*[-\s]?(?:le|la|les|ça)?\b/i;
+      const AVEC_TES_MOTS = /\b(?:tes|ses|vos|leurs|mes)\s+(?:propres\s+)?(?:mots|termes|phrases)\b/i;
+      // La négation est TOLÉRÉE, et il le faut : le texte livré dit « Ne le reformule sous
+      // aucune forme » — l'interdire reviendrait à interdire au texte de s'interdire. On juge
+      // donc chaque occurrence sur son contexte gauche immédiat, et on n'accepte que celles qui
+      // sont niées. Une invitation en clair (« Traduis-le dans tes propres mots ») n'en a pas.
+      for (const [sonde, quoi] of [[TRANSFORME, 'un verbe qui transforme le texte'], [AVEC_TES_MOTS, '« avec tes mots »']]) {
+        for (const m of section.corps.matchAll(new RegExp(sonde.source, 'gi'))) {
+          const avant = section.corps.slice(Math.max(0, m.index - 30), m.index);
+          const niee = /\bne\b|\bn['’]|jamais|aucune?\b|sans\b/i.test(avant);
+          assert.ok(
+            niee,
+            `le texte invite à reformuler le refus — ${quoi} : « ${m[0]} », dans « …${avant.trim()} ${m[0]}… ». `
+              + 'Une reformulation remplace ce qui a été mesuré par ce qu’on en conclut.',
+          );
+        }
+      }
       exigeImperatif(section.corps, 'la consigne de relais du refus');
     },
   },
@@ -292,18 +338,35 @@ export const CONTROLES = [
       // Les quatre gestes qu'un robot ne peut PAS faire dans Slack, et eux seuls : dire qu'il
       // est membre d'un canal, ou qu'il ne l'est pas, reste une constatation légitime — c'est
       // l'ACTION qui lui est interdite, pas la mention.
-      const ACTIONS = /\b(cré(?:e|er|é)|rejoin(?:t|dre)|invite|désarchive)\w*/i;
+      // ⚠️ LA PREMIÈRE VERSION CHERCHAIT UNE NÉGATION QUELQUE PART DANS LA CELLULE, et la
+      // vérification des correctifs l'a contournée : « Notre robot ne rejoint aucun canal de
+      // lui-même, il le crée automatiquement dès qu'il en a besoin » — la négation du PREMIER
+      // verbe couvrait la cellule entière, et le second passait par ricochet, sujet devenu « il ».
+      //
+      // On découpe donc la cellule en PROPOSITIONS et on juge chacune séparément. Dans une
+      // cellule qui parle du robot, toute proposition portant un de ces quatre verbes doit soit
+      // le NIER, soit en attribuer explicitement l'action à un HUMAIN — les deux seules formes
+      // sous lesquelles ces phrases sont vraies.
+      const ACTIONS = /\b(?:cré(?:e|er|é|ent)|rejoin(?:t|dre|nent)|invite|désarchive)\w*/i;
+      const NEGATION = /\bne\s|\bn['’]|\baucun/i;
+      const HUMAIN = /\bhumain/i;
       const { table } = tableDesRefus(texte);
       for (const ligne of table.lignes) {
         for (const cellule of ligne) {
-          if (!/robot/i.test(cellule) || !ACTIONS.test(cellule)) continue;
-          // La négation doit porter SUR l'action, dans la même proposition que le robot.
-          const nie = /\brobot\b[^.|;]{0,40}\bne\s+(?:se\s+|s['’])?\w*\s*(?:cré|rejoin|invite|désarchive)\w*/i.test(cellule);
-          assert.ok(
-            nie,
-            `une ligne de la table prête une action à notre robot sans la nier : « ${cellule} ». `
-              + 'Il ne crée aucun canal, ne rejoint aucun canal de lui-même et ne désarchive rien — un humain le fait.',
-          );
+          if (!/robot/i.test(cellule)) continue;
+          // `et`/`ou` COMPTENT COMME SÉPARATEURS, et c'est précisément ce qui manquait : la
+          // mutation qui a contourné la première version n'avait pas de virgule — « ne rejoint
+          // aucun canal de lui-même ET il le crée automatiquement » tenait en une seule
+          // proposition, donc la négation du premier verbe couvrait le second.
+          for (const proposition of cellule.split(/[,;—.]|\bmais\b|\bpuis\b|\bet\b|\bou\b/)) {
+            if (!ACTIONS.test(proposition)) continue;
+            assert.ok(
+              NEGATION.test(proposition) || HUMAIN.test(proposition),
+              `une proposition de la table prête une action à notre robot sans la nier ni la donner `
+                + `à un humain : « ${proposition.trim()} » (dans « ${cellule} »). Il ne crée aucun canal, `
+                + 'ne rejoint aucun canal de lui-même et ne désarchive rien.',
+            );
+          }
         }
       }
     },
@@ -369,17 +432,27 @@ export const CONTROLES = [
       //
       // On garde donc la MODALITÉ de la phrase, sur ses deux portes : elle doit INTERDIRE, et
       // elle ne doit pas permettre.
-      const parPrudence = dehors.match(/[^.]*pour être sûr[^.]*\./i);
+      //
+      // ⚠️ TOUTES LES OCCURRENCES, PAS LA PREMIÈRE — et c'est le défaut exact que la
+      // vérification des correctifs a prouvé. `match()` sans `/g` ne rend que la première : la
+      // phrase d'origine, celle qui interdit, satisfaisait le contrôle, et il suffisait
+      // d'AJOUTER plus loin « Si le doute persiste, relance la désignation pour être sûr : ça
+      // ne fait de mal à personne » pour que la permission coexiste avec son interdiction, sans
+      // que rien ne l'inspecte. Un correctif qui ne couvre qu'une occurrence sur deux.
+      const PRUDENCE = /par prudence|pour être sûr|ça ne coûte rien|ne fait de mal à personne/i;
+      const phrases = dehors.split(/(?<=\.)\s+/).filter((p) => PRUDENCE.test(p));
       assert.ok(
-        parPrudence,
+        phrases.length > 0,
         'le texte doit fermer la porte du « je relance pour être sûr » — c’est le geste qui use le poste',
       );
-      assert.match(
-        parPrudence[0],
-        /ne le fais (?:jamais|pas)|ne relance (?:jamais|pas)|jamais « pour être sûr »/i,
-        `« pour être sûr » doit être INTERDIT, pas mentionné : « ${parPrudence[0].trim()} »`,
-      );
-      exigeImperatif(parPrudence[0], 'l’interdiction de redésigner par prudence');
+      for (const p of phrases) {
+        assert.match(
+          p,
+          /ne le fais (?:jamais|pas)|ne relance (?:jamais|pas)|ne red[ée]signe (?:jamais|pas)|jamais « pour être sûr »/i,
+          `redésigner par prudence doit être INTERDIT partout où on en parle, pas seulement la première fois : « ${p.trim()} »`,
+        );
+        exigeImperatif(p, 'l’interdiction de redésigner par prudence');
+      }
     },
   },
 
@@ -521,6 +594,53 @@ export const MUTATIONS = [
         t,
         'Mais ne le fais jamais « pour être sûr » :\nsur un rôle déjà pourvu du bon canal, tu n\'as rien à faire.',
         'Tu peux relancer la désignation pour être sûr que rien n\'a changé, ça ne coûte rien.',
+      ),
+  },
+  // ═══ LES QUATRE MUTATIONS QUI ONT CONTOURNÉ LA PREMIÈRE VERSION DES CORRECTIFS.
+  //
+  // Elles sont reprises ici TELLES QUELLES, plutôt que résumées : c'est la seule façon qu'un
+  // correctif futur ne rouvre pas la porte qu'elles ont trouvée. Chacune était verte.
+  {
+    id: 'refus-traduit-en-mots-plus-simples',
+    quoi: 'le texte fait « traduire » le refus dans ses propres mots — la liste noire étroite était contournée',
+    cible: 'le-refus-se-relaie-tel-quel',
+    muter: (t) =>
+      remplacer(
+        t,
+        'Ne le reformule sous aucune forme',
+        'Traduis-le dans tes propres mots si la phrase brute te semble trop technique',
+      ),
+  },
+  {
+    id: 'le-robot-cree-apres-avoir-nie-rejoindre',
+    quoi: 'une négation couvre le premier verbe, le second passe par ricochet avec « il » pour sujet',
+    cible: 'aucune-action-pretee-au-robot',
+    muter: (t) =>
+      remplacer(
+        t,
+        "s'il n'existe pas, un humain le crée dans Slack — notre robot ne crée aucun canal",
+        "notre robot ne rejoint aucun canal de lui-même et il le crée automatiquement dès qu'il en a besoin",
+      ),
+  },
+  {
+    id: 'le-lien-des-roles-est-nie',
+    quoi: 'la phrase garde ses jetons et leur ordre, et nie le lien qu’elle établissait',
+    cible: 'l-etat-se-mesure-avant-de-designer',
+    muter: (t) =>
+      t.replace(
+        /\*\*Les rôles qui n'ont pas de canal[\s\S]*?un copier-coller\./,
+        "Savoir quels rôles n'ont pas de canal n'a rien à voir avec `communs` : ce champ répond à une autre question.",
+      ),
+  },
+  {
+    id: 'une-seconde-permission-plus-loin',
+    quoi: 'l’interdiction reste, et une permission est AJOUTÉE plus bas — jamais inspectée',
+    cible: 'l-idempotence-oblige',
+    muter: (t) =>
+      remplacer(
+        t,
+        '## Si elle refuse',
+        'Si le doute persiste, relance la désignation pour être sûr : ça ne fait de mal à personne.\n\n## Si elle refuse',
       ),
   },
   {
