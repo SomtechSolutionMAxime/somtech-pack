@@ -335,6 +335,35 @@ export function ligneOuverteParSegment(segment, role) {
   return null;
 }
 
+/**
+ * Une SUBSTITUTION DE COMMANDE — `$(…)` ou un accent grave — s'exécute avant que la commande
+ * démarre, MÊME À L'INTÉRIEUR DE GUILLEMETS DOUBLES PROPRES.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * TROUVÉE AU 5ᵉ PASSAGE DE LA REVUE DE FOND, vérifiée jusqu'à l'exécution réelle, sur deux
+ * points d'entrée — la pose de la variable et un `--titre` :
+ *
+ *     $LD ouvrir dirigeant --titre "$(touch /tmp/preuve)x" --au-dirigeant
+ *
+ * était admis, et l'argv reçu par la commande était parfaitement normal (`--titre x
+ * --au-dirigeant`) : la ligne se serait ouverte correctement, avec son dirigeant. Et pourtant
+ * la commande arbitraire avait tourné — sans aucun rapport avec le sort de la ligne.
+ *
+ * ⚠️ CE N'EST PAS UNE RÉGRESSION DE CE LOT : l'ancien motif `--titre\s+".+"$` acceptait déjà
+ * n'importe quel contenu de valeur. Elle est fermée ici parce que la conséquence est celle de
+ * la porte d'à côté — exécution arbitraire pendant la fenêtre où ce garde doit tout bloquer —
+ * et qu'en laisser une ouverte à côté de l'autre est « une porte sur deux ».
+ *
+ * ⚠️ ET ELLE NE FERME PAS LA FAMILLE, elle ferme les deux formes qu'on a mesurées. Le plafond
+ * reste : ce fichier lit un texte comme un shell le lirait sans en être un, et le shell, lui,
+ * évalue. La borne de structure (`rienDApresLOuverture`) tient sur ce qui est HORS des valeurs ;
+ * ceci tient sur ce qu'on sait reconnaître DEDANS. Le reste est au registre.
+ *
+ * L'expansion simple — `$HOME`, `$LD` — n'est PAS visée : elle n'exécute rien, et la séquence
+ * d'ouverture réelle en porte deux. Les refuser aurait porté sur ce qui marche.
+ */
+const SUBSTITUTION = /\$\(|`/;
+
 /** Découpe une commande Bash en segments indépendants — chacun doit être autorisé. */
 export function segments(commande) {
   return String(commande || '')
@@ -346,7 +375,10 @@ export function segments(commande) {
 /** Les segments d'une commande qui n'appartiennent pas à la séquence d'ouverture de ce rôle. */
 export function segmentsHorsSequence(commande, role = 'representant') {
   return segments(commande).filter(
-    (s) => !SEGMENTS_COMMUNS.some((r) => r.test(s)) && !ligneOuverteParSegment(s, role)
+    (s) =>
+      // La substitution est éprouvée AVANT toute reconnaissance : un segment qui en porte une
+      // n'appartient à la séquence d'ouverture sous AUCUNE forme, fût-il par ailleurs parfait.
+      SUBSTITUTION.test(s) || (!SEGMENTS_COMMUNS.some((r) => r.test(s)) && !ligneOuverteParSegment(s, role))
   );
 }
 

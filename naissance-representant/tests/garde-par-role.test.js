@@ -276,6 +276,44 @@ test('LA POSE DE LA VARIABLE NE PORTE PAS DE QUEUE NON PLUS — et sa forme rée
   );
 });
 
+test('UNE SUBSTITUTION DE COMMANDE N’OUVRE RIEN — même dans une valeur citée parfaitement propre', () => {
+  // ⚠️ 5ᵉ PASSAGE DE LA REVUE DE FOND, vérifiée jusqu'à l'exécution réelle. Ce qui la rend
+  // sournoise : l'argv reçu par la commande est PARFAITEMENT NORMAL — `--titre x
+  // --au-dirigeant` —, la ligne s'ouvrirait correctement, avec son dirigeant. Et pourtant la
+  // commande arbitraire a tourné, sans aucun rapport avec le sort de la ligne. Aucune des
+  // quatre bornes précédentes ne la voit : elles bornent la STRUCTURE, jamais le CONTENU
+  // d'une valeur — et le shell, lui, évalue le contenu avant que node démarre.
+  //
+  // Antérieure à ce lot (l'ancien motif acceptait n'importe quel contenu de valeur), fermée
+  // ici parce que la conséquence est celle de la porte d'à côté.
+  for (const commande of [
+    '$LD ouvrir dirigeant --titre "$(touch /tmp/preuve)x" --au-dirigeant',
+    '$LD ouvrir dirigeant --titre "`touch /tmp/preuve`x" --au-dirigeant',
+    '$LD ouvrir acme --nature client --titre "$(id)"',
+    'LD="node $(touch /tmp/preuve)ligne-directe.js"',
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer — la substitution s’exécuterait`
+    );
+  }
+});
+
+test('MAIS L’EXPANSION SIMPLE RESTE PERMISE — `$HOME` et `$LD` n’exécutent rien, et la séquence en porte deux', () => {
+  // Refuser tout `$` aurait porté sur ce qui marche : la séquence d'ouverture réelle écrit
+  // `LD="node $HOME/…"` puis invoque `$LD`. C'est la substitution — `$(` et l'accent grave —
+  // qui exécute, pas l'expansion.
+  assert.deepEqual(
+    segmentsHorsSequence('LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"', 'representant'),
+    []
+  );
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "ligne dirigeant acme" --au-dirigeant', 'representant'),
+    []
+  );
+});
+
 test('MAIS UNE APOSTROPHE DANS UNE VALEUR CITÉE RESTE PERMISE — c’est du français, pas une citation', () => {
   // La séquence d'ouverture RÉELLE d'un orchestrateur en porte une. Refuser ici aurait été un
   // refus portant sur ce qui marche — et il n'aurait eu aucun geste qui le lève.
