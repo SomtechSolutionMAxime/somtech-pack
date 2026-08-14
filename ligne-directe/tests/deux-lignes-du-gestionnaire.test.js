@@ -225,6 +225,26 @@ test('SANS DIRIGEANT DÉSIGNÉ SUR LE POSTE, LA LIGNE N’EST PAS OUVERTE — et
   });
 });
 
+test('UN GESTIONNAIRE RELANCÉ RETROUVE SES DEUX LIGNES — sans créer un second canal', async () => {
+  // Le cycle NOMINAL : une session tombe, on la refait naître dans le même worktree, sur un
+  // pane NEUF. `ouvrir` reprend alors la ligne existante et rafraîchit son pane. Créer un
+  // second canal à la place aurait laissé le dirigeant écrire dans l'ancien — muet — pendant
+  // que l'agent écoute le nouveau. Personne ne s'en apercevrait avant d'en avoir besoin.
+  await avecPoste({ canaux: [CANAL_CLIENT] }, async ({ monde, ld }) => {
+    await ouvrirLesDeuxLignes(ld);
+    const canauxApresLaPremiere = monde.canaux.length;
+
+    const r = await ld(['ouvrir', 'dirigeant', '--titre', 'ligne dirigeant acme', '--au-dirigeant'], 'w1:p9');
+    assert.equal(r.code, 0, r.stderr);
+
+    assert.equal(monde.canaux.length, canauxApresLaPremiere, 'AUCUN second canal — la ligne est reprise, pas refaite');
+    const ligne = chargerRegistre().lignes.filter((l) => l.chantier === 'dirigeant');
+    assert.equal(ligne.length, 1, 'une seule ligne au registre, pas deux');
+    assert.equal(ligne[0].pane, 'w1:p9', 'et c’est le pane NEUF qui l’écoute désormais');
+    assert.deepEqual(ligne[0].autorises, [UDIR], 'le dirigeant reste autorisé — la reprise ne le perd pas');
+  });
+});
+
 // ═════════════════ 2. AUCUNE INVERSION — prouvée par l'ABSENCE, dans les deux sens
 
 test('CE QUI VA AU DIRIGEANT EST ABSENT DU CANAL DU CLIENT — le mode de panne unique de ce lot', async () => {
