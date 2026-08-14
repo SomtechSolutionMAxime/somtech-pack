@@ -271,11 +271,18 @@ export function ligneDuPane(ouvertes, pane, nom = null) {
   const noms = nomsDesignables(candidates);
   if (!candidates.length) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.AUCUNE, noms } };
 
-  const vise = normaliserDesignation(nom);
-  if (!vise) {
+  // « AUCUN NOM DONNÉ » ET « UN NOM QUI NE VEUT RIEN DIRE » NE SONT PAS LA MÊME CHOSE — relevé
+  // en revue de fond. La normalisation aplatit `--a "---"`, `--a "!!!"` et `--a ""` sur la chaîne
+  // vide : les confondre avec l'absence d'option rendait le nom DÉCORATIF dès qu'il n'y avait
+  // qu'un candidat, en contradiction avec ce que la commande promet. Qui a tapé `--a` a voulu
+  // désigner quelqu'un ; s'il n'a désigné personne, on refuse.
+  if (nom == null) {
     if (candidates.length > 1) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.NOM_REQUIS, noms } };
     return { ligne: candidates[0], candidates, refus: null };
   }
+
+  const vise = normaliserDesignation(nom);
+  if (!vise) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.NOM_INCONNU, nom, noms } };
 
   const vises = candidates.filter((l) => designationsDeLigne(l).includes(vise));
   if (vises.length === 1) return { ligne: vises[0], candidates, refus: null };

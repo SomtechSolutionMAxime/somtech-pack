@@ -603,6 +603,17 @@ export class Veilleur {
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
     if (!titre) return { ok: false, erreur: 'titre requis' };
+    // MÊME GARDE QUE `fermer`, ET C'EST LA PORTE QUE LE PREMIER CORRECTIF AVAIT LAISSÉE —
+    // relevée en revue de fond, sur le lot qui corrigeait précisément « une porte sur deux ».
+    //
+    // `ligneParCanal` retombe volontairement sur la ligne CLOSE quand aucune n'est ouverte, pour
+    // pouvoir répondre « c'est clos » à qui écrit. `renommer --canal <id>` atteint donc n'importe
+    // quelle ligne close SANS aucune course : le canal d'un client parti serait renommé sous ses
+    // yeux — il en reste membre, un canal client ne s'archive jamais — et le libellé de la ligne
+    // close écrasé au registre, c'est-à-dire l'historique réécrit.
+    if (ligne.close_le) {
+      return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est close depuis ${ligne.close_le} — son canal ne se renomme plus` };
+    }
 
     // Sur une ligne cliente, le titre nomme DEUX choses : le canal, et l'expéditeur de
     // chaque message. Ne suivre que la première laisserait le canal dire « Espace client

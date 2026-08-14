@@ -309,6 +309,11 @@ export function fauxSlack({
         if (!args.name) return echec('invalid_arguments', { detail: 'missing required field: name' });
         const canal = monde.canaux.find((c) => c.id === args.channel);
         if (!canal) return echec('channel_not_found');
+        // UN CANAL ARCHIVÉ EST EN LECTURE SEULE — CINQUIÈME FOIS QUE CE DOUBLE SE MONTRE PLUS
+        // PERMISSIF QUE LE SERVICE, relevé en revue de fond (T-20260813-0078). Il acceptait de
+        // renommer un canal archivé, donc un test qui aurait prouvé « on ne renomme pas ce
+        // canal-là » aurait prouvé son accord avec le double, pas avec Slack.
+        if (canal.is_archived) return echec('is_archived');
         canal.name = args.name;
         return reponse({ ok: true, channel: canal });
       }

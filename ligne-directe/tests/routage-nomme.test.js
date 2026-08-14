@@ -305,6 +305,22 @@ test('UNE LIGNE DÉJÀ CLOSE NE SE REFERME PAS DEUX FOIS — le bilan ne part pa
   });
 });
 
+test('UNE LIGNE CLOSE NE SE RENOMME PLUS — la porte que `fermer` avait fermée et pas `renommer`', async () => {
+  // RELEVÉ EN REVUE DE FOND, et c'est le motif « une porte sur deux » rejoué à l'intérieur du
+  // correctif qui le combattait. `renommer --canal <id>` n'a besoin d'AUCUNE course : il atteint
+  // directement n'importe quelle ligne close. Sur un canal client — jamais archivé, le client en
+  // reste membre — le canal aurait été renommé sous ses yeux, et le libellé de la ligne close
+  // écrasé au registre.
+  const close = ligne({ chantier: 'acme', canalId: 'C_acme', canalNom: 'acme', nature: 'client', libelle: 'Acme' });
+  close.close_le = '2026-08-13T00:00:00.000Z';
+  await avecPoste({ lignes: [close], canaux: [CLIENT] }, async ({ monde, ld }) => {
+    const r = await ld(['renommer', '--titre', 'Autre chose', '--canal', 'C_acme']);
+    assert.equal(r.code, 1);
+    assert.equal(monde.canalNomme('acme').name, 'acme', 'le canal du client garde son nom');
+    assert.equal(chargerRegistre().lignes[0].libelle, 'Acme', 'et le registre n’est pas réécrit');
+  });
+});
+
 // ═════════════════ 5. L'ENTRANT RESTE INTACT — il route déjà par une clé unique
 
 test('ENTRANT — un message sur chaque ligne arrive au bon pane, avec le cadre de SA ligne', async () => {
@@ -322,6 +338,22 @@ test('ENTRANT — un message sur chaque ligne arrive au bon pane, avec le cadre 
 });
 
 // ═════════════════ 6. LA LECTURE DE LA LIGNE DE COMMANDE
+
+test('UN NOM QUI NE VEUT RIEN DIRE N’EST PAS « AUCUN NOM » — `--a ---` est refusé, pas ignoré', async () => {
+  // La normalisation aplatit la ponctuation : sans distinction, `--a "---"` retombait sur
+  // « aucun nom fourni » et l'unique ligne du pane était servie en silence. Le nom serait alors
+  // décoratif — exactement ce que la commande promet de ne pas être.
+  await avecPoste(
+    { lignes: [ligne({ chantier: 'acme', canalId: 'C_acme', canalNom: 'acme', nature: 'client' })], canaux: [CLIENT] },
+    async ({ monde, ld }) => {
+      assert.equal((await ld(['dire', 'texte', '--a', '---'])).code, 1);
+      assert.equal((await ld(['dire', 'texte', '--a', ''])).code, 1);
+      // `--a` en dernier : la valeur a été oubliée, pas l'option.
+      assert.equal((await ld(['dire', 'texte', '--a'])).code, 1);
+      assert.deepEqual(canauxTouches(monde), [], 'aucun des trois n’a rien envoyé');
+    }
+  );
+});
 
 test('`--a` NE MANGE PAS LE MESSAGE — placé avant le texte, il reste une option', async () => {
   // `--a` non déclaré comme option à valeur aurait fait prendre « dirigeant » pour le texte :

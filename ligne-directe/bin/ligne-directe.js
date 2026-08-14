@@ -85,7 +85,12 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
  * un motif nommé, pour que ce qui la prouve n'ait pas à lire une phrase.
  */
 function ligneVisee(geste, ouvertes, ici, args) {
-  const { ligne, refus } = ligneDuPane(ouvertes, ici.pane, option(args, '--a'));
+  // `--a` PRÉSENT MAIS SANS VALEUR N'EST PAS `--a` ABSENT : `option` rend `null` dans les deux
+  // cas, et les confondre ferait passer `dire "texte" --a` (la valeur oubliée) pour un appel
+  // sans nom — donc accepté en silence dès qu'il n'y a qu'une ligne. On distingue la PRÉSENCE
+  // de l'option de sa valeur, et une valeur manquante devient une désignation vide, refusée.
+  const nom = args.includes('--a') ? (option(args, '--a') ?? '') : null;
+  const { ligne, refus } = ligneDuPane(ouvertes, ici.pane, nom);
   if (ligne) return ligne;
   const noms = refus.noms.map((n) => `--a ${n}`).join('  ou  ');
   if (refus.motif === REFUS_SELECTION.AUCUNE) {
@@ -102,7 +107,9 @@ function ligneVisee(geste, ouvertes, ici, args) {
     );
   } else if (refus.motif === REFUS_SELECTION.NOM_INCONNU) {
     process.stderr.write(
-      `aucune ligne « ${refus.nom} » depuis ce pane — rien n'a ete envoye.\n  ${noms}\n`
+      String(refus.nom ?? '').trim()
+        ? `aucune ligne « ${refus.nom} » depuis ce pane — rien n'a ete envoye.\n  ${noms}\n`
+        : `« --a » attend le nom de la ligne visee — rien n'a ete envoye.\n  ${noms}\n`
     );
   } else {
     process.stderr.write(
