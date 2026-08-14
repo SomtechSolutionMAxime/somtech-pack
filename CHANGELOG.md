@@ -5,6 +5,22 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.45.0] - 2026-08-14
+
+### Ajouté
+
+- **Le gestionnaire client peut enfin parler au dirigeant** (T-20260813-0076 et T-20260814-0033, PR #221). Il n'avait qu'une ligne — celle de son client — alors que **quatre obligations livrées** de son métier lui imposent de remonter : ce qui engage Somtech, toute situation problématique **avant** d'en parler au client, une question qu'il ne peut pas trancher, et son topo du matin. Il était tenu de faire une chose qu'il n'avait pas le moyen de faire.
+- **Sa seconde ligne est posée à sa naissance, par le garde d'ouverture** — pas au premier message. Le dirigeant initie quand il veut ; la ligne doit donc exister avant que l'agent ait quoi que ce soit à dire. Le garde tient le pane fermé tant que les deux ne sont pas là : une consigne écrite se relâche, un refus mécanique non.
+- **`roles.js` déclare les lignes d'un rôle, pas sa nature** — un rôle en porte plusieurs. Le représentant en a deux, l'orchestrateur une. Une ligne de table, jamais un second module.
+- **Un canal par gestionnaire** (`#ligne-dirigeant-<client>`), et non un canal commun aux gestionnaires : partagé, ils se liraient entre eux, et les affaires d'un client seraient visibles par le représentant d'un autre. La prolifération est le prix assumé du cloisonnement.
+- **L'adresse du dirigeant ne part jamais dans le dépôt d'un client.** Elle est désignée une fois par poste ; l'agent demande « le dirigeant », jamais son courriel.
+- **Son métier dit désormais ce qui ne traverse jamais**, et le nomme comme un « jamais » plutôt que comme un conseil. L'interdit devenu faux — *« tu n'ouvres jamais une seconde ligne »* — est retiré, mais ce qu'il protégeait est tenu autrement : par le nommage obligatoire du destinataire, gardé par mutation des deux côtés.
+
+### Corrigé
+
+- **Le métier prescrivait une séquence que le garde refusait.** Ses propres commentaires de fin de ligne : le commentaire shell avait été appris au garde par **un seul de ses deux chemins**. Un gestionnaire qui recopiait son propre métier était bloqué au premier geste, **sans qu'aucune des deux suites ne rougisse**. Un contrôle neuf fait désormais le pont entre les deux lots — il présente la séquence réelle du métier au garde réel, et résout chaque destinataire contre les lignes que le métier ouvre.
+- **La moitié qui manquait au harnais de mutation est posée.** Il prouvait qu'une garde attrape ce qu'elle doit ; il ne prouvait pas qu'elle **laisse passer ce qui marche**. Quatre passages de revue de fond ont trouvé quatre défauts, dont **trois dans les correctifs eux-mêmes** — une correction posée sur le symptôme plutôt qu'à la racine, des alternatives trop larges dont une faisait rougir un texte vivant dans deux compétences, et un principe enfreint sur son voisin dans le commit qui l'écrivait. Aucun n'était visible en relecture ; tous l'étaient par mutation.
+
 ## [1.44.0] - 2026-08-14
 
 ### Corrigé
