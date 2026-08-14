@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 // livrer.js — livrer un brief à une session déjà née, et PROUVER qu'elle l'a pris.
 //
-//   gestionnaire-livrer <pane> --brief <fichier>
-//   gestionnaire-livrer <pane> --texte "…"
+//   gestionnaire-livrer <pane|nom-d-agent> --brief <fichier>
+//   gestionnaire-livrer <pane|nom-d-agent> --texte "…"
+//
+// C'EST AUSSI LA VOIE POUR PARLER À UN AGENT DÉJÀ NÉ (T-20260814-0138) — transmettre à un pair,
+// relancer quelqu'un, rendre compte à son coordonnateur. Ces gestes se faisaient par
+// `herdr agent prompt` nu, qui rend un succès même quand le message reste dans la boîte de
+// saisie sans être soumis. Un compte rendu perdu de cette façon est muet des deux côtés :
+// l'expéditeur a son accusé, le destinataire reste `idle`, et rien ne les détrompe.
+//
+// Le destinataire se désigne par son PANE ou par son NOM, et il est cherché DANS TOUTES LES
+// SESSIONS du poste — onze y tournent, et le cas normal est qu'il ne soit pas dans la sienne.
 //
 // Le brief se passe par FICHIER de préférence : un retour à la ligne tapé dans un terminal
 // soumet le message et le coupe en deux (/orchestrer-chantier §4a). Le fichier est lu ici et
@@ -20,6 +29,7 @@
 import { readFileSync } from 'node:fs';
 import { livrerBrief } from '../src/livraison.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
+import { trouverDestinataire } from '../src/destinataire.js';
 
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
@@ -28,7 +38,7 @@ const ATTENTE_MS = Number(process.env.LIVRAISON_ATTENTE_MS || 20000);
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function usage(code) {
-  process.stderr.write('gestionnaire-livrer <pane> (--brief <fichier> | --texte "…")\n');
+  process.stderr.write('gestionnaire-livrer <pane|nom-d-agent> (--brief <fichier> | --texte "…") [--en-attente]\n');
   process.exit(code);
 }
 
@@ -39,10 +49,15 @@ function option(args, nom) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const pane = args[0];
+  const cible = args[0];
   const fichier = option(args, '--brief');
   const direct = option(args, '--texte');
-  if (!pane || pane.startsWith('--') || (!fichier && !direct)) usage(1);
+  // `--en-attente` : exiger un destinataire qui N'EST PAS en train de travailler. C'est la
+  // garde du brief de NAISSANCE, où « la session a quitté l'attente » est la preuve de prise.
+  // Elle n'est plus le défaut : un pair est occupé la plupart du temps, et l'exiger revenait à
+  // n'avoir aucune voie vérifiée pour lui parler (voir `briefEstPris`, qui change de témoin).
+  const enAttente = args.includes('--en-attente');
+  if (!cible || cible.startsWith('--') || (!fichier && !direct)) usage(1);
 
   let texte;
   try {
@@ -57,9 +72,19 @@ async function main() {
     process.exit(1);
   }
 
+  // OÙ VIT LE DESTINATAIRE — sa session, et son pane si on l'a désigné par son nom.
+  const ou = await trouverDestinataire(cible);
+  if (!ou.ok) {
+    process.stderr.write(`${ou.message}\n`);
+    process.exit(1);
+  }
+  const pane = ou.pane;
+
   const resultat = await livrerBrief({
     pane,
     texte,
+    socket: ou.socket,
+    pairOccupe: !enAttente,
     appelHerdr,
     lireEcran,
     dormir,
@@ -77,6 +102,7 @@ async function main() {
     `${JSON.stringify({
       ok: true,
       pane,
+      agent: ou.nom,
       caracteres: texte.length,
       statut: resultat.statut,
       repare: resultat.repare,

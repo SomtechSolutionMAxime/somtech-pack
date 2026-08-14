@@ -404,14 +404,17 @@ Ce qui doit toujours y figurer : **le livrable**, **la preuve** (les tests qui l
 
 **d. Exiger le suivi actif.** Le brief doit lui demander de te prévenir lui-même, **en lui donnant la commande exacte** plutôt qu'en le renvoyant à une documentation :
 
-- quand il a fini : `herdr agent prompt <ton-nom-ou-ton-pane> "<son-nom> a fini : <une ligne> — PR #<n>"` ;
+- quand il a fini : `node $HOME/.somtech/naissance-representant/bin/livrer.js <ton-nom> --texte "<son-nom> a fini : <une ligne> — PR #<n>"` ;
 - **immédiatement** s'il se bloque, si une contrainte se révèle impraticable, ou s'il découvre un défaut qui touche un autre chantier ;
 - **immédiatement aussi si le sas est occupé**, puis **une seconde fois quand sa poussée passe** :
 
 ```bash
-herdr agent prompt <ton-nom-ou-ton-pane> '<son-nom> : poussee refusee, sas occupe par la PR #<n> depuis <date>'
-herdr agent prompt <ton-nom-ou-ton-pane> '<son-nom> : poussee passee, le sas etait libre'
+node $HOME/.somtech/naissance-representant/bin/livrer.js <ton-nom> --texte '<son-nom> : poussee refusee, sas occupe par la PR #<n> depuis <date>'
+node $HOME/.somtech/naissance-representant/bin/livrer.js <ton-nom> --texte '<son-nom> : poussee passee, le sas etait libre'
 ```
+
+⚠️ **C'est `livrer.js` qui sert à parler à un agent, plus `herdr agent prompt`** (T-20260814-0138). Le geste nu rend un succès même quand le message reste dans la boîte de saisie du destinataire sans être soumis : l'expéditeur a son accusé, le destinataire reste `idle` — ce qui ne se distingue pas d'un agent qui n'a rien à faire — et **personne des deux côtés ne peut le savoir**. Un compte rendu perdu de cette façon laisse le coordonnateur croire que le lot tourne encore, pendant que son chef d'équipe croit avoir rendu.
+`livrer.js` relit la boîte du destinataire après avoir écrit, débloque la soumission si elle a calé, et **échoue bruyamment** si le message n'est pas passé. Il accepte le **nom** de l'agent aussi bien que son pane, et il le cherche **dans toutes les sessions du poste** — le destinataire est presque toujours dans une autre que la tienne.
 
 Ce sont les deux seuls de ces signaux qui n'annoncent **rien de cassé** — et c'est précisément pour ça qu'on ne pense pas à les envoyer. Ils déclenchent les deux moitiés du §4g. Le second est celui qu'on oublie : sans lui, tu auras annoncé une attente au représentant et jamais sa fin, ce qui est pire que de n'avoir rien dit.
 
@@ -557,10 +560,10 @@ Un arbitrage qui remonte, tu le prends. N'en renvoie au dirigeant que ce qui rel
 Si un autre agent travaille sur le même dépôt, il est ton pair, pas ton subordonné. Tu lui **transmets** ce qu'il doit savoir — un contrat, un défaut trouvé dans son code, un merge qui déplace `main` — et tu le laisses décider chez lui.
 
 ```bash
-herdr agent prompt <son-pane> '<message d une ligne, sans apostrophe>'
+node $HOME/.somtech/naissance-representant/bin/livrer.js <son-nom-ou-son-pane> --texte '<message d une ligne, sans apostrophe>'
 ```
 
-Nomme les agents sans nom que tu croises : un agent anonyme est inadressable.
+Nomme les agents sans nom que tu croises : un agent anonyme est inadressable — et c'est par son nom qu'on l'atteint le plus sûrement, un pane changeant à chaque session relancée.
 
 ### 7. Tenir le ServiceDesk — c'est ton travail, pas le leur
 
