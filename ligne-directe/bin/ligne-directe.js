@@ -55,8 +55,10 @@ function usage(code = 0) {
   renommer --titre "..." [--canal <id>] [--a <ligne>]      renomme le canal (Slack + registre)
 
   --a <ligne> NOMME LA LIGNE VISEE, et c'est le DESTINATAIRE qu'il nomme, jamais toi :
-              depuis le pane d'un gestionnaire, « --a client » / « --a dirigeant ».
-              Le nom est le chantier de la ligne, ou le nom de son canal.
+              depuis le pane d'un gestionnaire, « --a <le client> » / « --a dirigeant ».
+              Le nom est le chantier de la ligne, ou le nom de son canal — c'est donc
+              le nom sous lequel elle a ete OUVERTE. La ligne du dirigeant s'ouvre sur
+              le chantier « dirigeant » ; celle du client, sur le nom du client.
               Un pane qui porte PLUSIEURS lignes exige ce nom : sans lui, le geste est
               REFUSE et rien n'est envoye — jamais la premiere ligne venue.
               Un pane qui n'en porte qu'une n'exige rien.

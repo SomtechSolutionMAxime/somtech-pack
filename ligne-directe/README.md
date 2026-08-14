@@ -71,11 +71,12 @@ Tous les gestes qui écrivent — `dire`, `demander`, `fermer`, `renommer` — a
 
 ```bash
 ligne-directe dire "le devis part demain" --a dirigeant
-ligne-directe dire "bonjour, c'est noté"  --a client
+ligne-directe dire "bonjour, c'est noté"  --a acme
 ligne-directe fermer --bilan "…" --a dirigeant
 ```
 
-- **Le nom désigne le DESTINATAIRE, jamais l'émetteur.** Depuis le pane d'un gestionnaire, `--a client` / `--a dirigeant` — *« gestionnaire », c'est lui*, et se nommer soi-même rouvrirait l'ambiguïté qu'on ferme.
+- **Le nom désigne le DESTINATAIRE, jamais l'émetteur.** Depuis le pane d'un gestionnaire, `--a <le client>` / `--a dirigeant` — *« gestionnaire », c'est lui*, et se nommer soi-même rouvrirait l'ambiguïté qu'on ferme.
+- **Le nom est celui sous lequel la ligne a été OUVERTE**, et c'est ce qui commande le choix du chantier à l'ouverture : la ligne du dirigeant s'ouvre sur le chantier `dirigeant`, celle du client sur le nom du client.
 - **Le nom est le chantier de la ligne, ou le nom de son canal** — accents, casse et ponctuation aplatis. **Jamais sa nature** : elle tombe juste par coïncidence chez un gestionnaire et se casse chez un orchestrateur, dont toutes les lignes sont `interne`. C'est l'identité qui tranche, jamais le genre.
 - **Plus d'une ligne sur le pane et pas de nom → le geste est REFUSÉ**, et rien n'est envoyé. Jamais la première venue : l'incertitude tombe du côté prudent, parce que l'autre côté envoie au client ce qui ne lui était pas destiné. Le refus nomme les lignes du pane.
 - **Un nom qui ne désigne aucune ligne du pane est refusé lui aussi**, même s'il n'y en a qu'une — sinon `--a` serait décoratif.
