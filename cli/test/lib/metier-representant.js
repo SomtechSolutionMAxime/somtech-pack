@@ -235,6 +235,17 @@ export function enteteDe(texte) {
  * « tente DE le faire » adressé à quelqu'un ; « tenter d'autre » ne s'adresse à personne. On
  * ne garde donc que la seconde personne.
  *
+ * ⚠️ ET LA RÈGLE CI-DESSUS A ÉTÉ ENFREINTE DANS LE COMMIT QUI L'ÉCRIVAIT. `essa(?:ie|ye|yer)`
+ * rangeait l'infinitif dans le même groupe que les deux impératifs — « tu dois ESSAYER DE
+ * comprendre le besoin » aurait rougi. Un principe posé ne se relit pas tout seul sur ses
+ * voisins : chaque alternative de la famille a dû être reprise une à une.
+ *
+ * ⚠️ ET UNE TOURNURE QUE LE VOCABULAIRE DU DÉPÔT REND INDISTINGUABLE N'ENTRE PAS. `veille à` a
+ * été essayé puis RETIRÉ : l'impératif adressé et le présent de la troisième personne s'écrivent
+ * IDENTIQUEMENT, et « le veilleur veille à… » est une phrase que ce dépôt écrira. Là où
+ * `tente`/`tenter` se départageaient par l'orthographe, celle-ci ne se départage pas — même
+ * conclusion que `tâche de`, pour une raison différente.
+ *
  * ⚠️ ET UNE TOURNURE QUI COLLISIONNE AVEC UN NOM N'ENTRE PAS. `tâche de` a été essayé puis
  * RETIRÉ : « la tâche de fond » est du français parfaitement impératif, et une garde qui rougit
  * sur du texte correct ne survit pas — le premier qui la rencontre la supprime, et emporte
@@ -247,7 +258,7 @@ export function enteteDe(texte) {
  * rougit sur du texte parfaitement impératif est pire qu'absente : on la « corrige » en la
  * retirant. On écrit donc `d['’]`, les deux apostrophes réelles.
  */
-export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de\b|que\b|d['’])|en évitant|essa(?:ie|ye|yer) (?:de\b|d['’])|\btente (?:de\b|d['’])|\bveille à|\befforce-toi\b/i;
+export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de\b|que\b|d['’])|en évitant|essa(?:ie|ye) (?:de\b|d['’])|\btente (?:de\b|d['’])|fais en sorte (?:de\b|d['’])|\befforce-toi\b/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {

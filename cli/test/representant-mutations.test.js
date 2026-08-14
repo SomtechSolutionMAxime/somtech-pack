@@ -191,7 +191,7 @@ const SONDES_PERMISSIVES = [
   // connaissait que « essaie » ; « essaye » est aussi correct, et assouplit tout autant.
   'essaye de le faire avant',
   'tente de le faire avant',
-  'veille à le faire tôt',
+  'fais en sorte de le faire tôt',
   'efforce-toi de le faire tôt',
 ];
 
@@ -224,6 +224,11 @@ const TEXTES_IMPERATIFS = [
   'évite dix minutes de trajet au client',
   'évite deux allers-retours au client',
   'xefforce-toi de le faire', // la tournure enchâssée dans un mot n'en est pas une
+  'tu dois essayer de comprendre le besoin avant de répondre', // l'infinitif, encore : le
+  // principe posé pour « tenter » avait été enfreint sur son voisin « essayer », dans le
+  // commit même qui l'écrivait.
+  'le veilleur veille à ce qu’aucune ligne ne reste orpheline', // « veille à » ne se départage
+  // pas de l'impératif — et « veilleur » est du vocabulaire central de ce dépôt.
   'tu remontes au dirigeant, au moment du constat',
   'tu nommes toujours la ligne que tu vises',
   'rien ne part avant qu’il ait dit « oui, c’est ça »',
