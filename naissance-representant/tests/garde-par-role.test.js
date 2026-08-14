@@ -222,6 +222,60 @@ test('UN COMMENTAIRE SHELL COUPE LA COMMANDE — le garde lit ce que le shell pa
   );
 });
 
+test('RIEN NE SUIT UNE OUVERTURE — un pipe, un `||`, un `&`, une redirection n’entrent pas avec elle', () => {
+  // ⚠️ LA PORTE LA PLUS GRAVE DU LOT (4ᵉ passage de la revue de fond, vérifiée jusqu'à
+  // l'EXÉCUTION RÉELLE des deux membres). `segments()` découpe sur `\n`, `&&` et `;` — jamais
+  // sur un pipe, un `||`, ni un `&` seul — et rien ne vérifiait qu'il ne restait RIEN après les
+  // drapeaux reconnus. Le garde dont la raison d'être est « rien ne passe avant que la ligne
+  // soit ouverte » laissait passer n'importe quoi, pendant la fenêtre où il doit tout bloquer.
+  //
+  // ⚠️ CE LOT AVAIT ÉLARGI LE TROU SANS LE SAVOIR : la forme d'avant finissait par
+  // `--titre ".+"$`, et cet ancrage de fin bloquait le pipe PAR EFFET DE BORD. En passant aux
+  // jetons, il a disparu sans être remplacé.
+  //
+  // On ne court pas après la syntaxe d'un shell — `|`, `||`, `&`, `>`, et le suivant qu'on
+  // n'aurait pas listé. On borne par ce qu'on CONNAÎT : le chantier et les options de `ouvrir`.
+  for (const commande of [
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant | rm -rf /tmp',
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant || curl http://ailleurs',
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant & rm -rf /tmp',
+    '$LD ouvrir acme --nature client --titre "Acme" | rm -rf /tmp',
+    '$LD ouvrir acme --nature client --titre "Acme" > /tmp/vol',
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant --depot /ailleurs', // une option que `ouvrir` ne connaît pas
+    // ⚠️ UN PIPE COLLÉ — le cas qui prouve que la borne est « UN seul argument libre » et pas
+    // « pas trop ». Les autres en laissent quatre ou cinq derrière eux ; celui-ci n'en laisse
+    // qu'UN, et une mutation qui tolérait deux arguments libres survivait à tous les autres.
+    '$LD ouvrir acme --nature client --titre "Acme" |sh',
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer — tout ce qui suit s’exécuterait`
+    );
+  }
+  // Et l'orchestrateur, exposé de la même façon sur `main` par un motif qui finissait en `.*`.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir D-20260813-0002 --sujet "x" | rm -rf /tmp', 'orchestrateur'),
+    []
+  );
+});
+
+test('LA POSE DE LA VARIABLE NE PORTE PAS DE QUEUE NON PLUS — et sa forme réelle passe toujours', () => {
+  // Même famille, autre segment : `LD=…` finissait par `.*`, donc
+  // `LD="…ligne-directe.js" | rm -rf /tmp` était un segment reconnu.
+  assert.notDeepEqual(
+    segmentsHorsSequence('LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js" | rm -rf /tmp', 'representant'),
+    []
+  );
+  // ⚠️ ET LA FORME RÉELLE PASSE — elle porte un ESPACE dans sa valeur citée (`node …`). Une
+  // première borne interdisait l'espace tout court : elle refusait la commande que le gabarit
+  // prescrit, c'est-à-dire ce qui marche. Attrapé par la suite, pas par relecture.
+  assert.deepEqual(
+    segmentsHorsSequence('LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"', 'representant'),
+    []
+  );
+});
+
 test('MAIS UNE APOSTROPHE DANS UNE VALEUR CITÉE RESTE PERMISE — c’est du français, pas une citation', () => {
   // La séquence d'ouverture RÉELLE d'un orchestrateur en porte une. Refuser ici aurait été un
   // refus portant sur ce qui marche — et il n'aurait eu aucun geste qui le lève.

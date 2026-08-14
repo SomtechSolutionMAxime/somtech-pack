@@ -27,12 +27,22 @@ import { lignesDuRole } from '../../ligne-directe/src/roles.js';
 // qui réécrirait la lecture d'arguments prouverait seulement qu'il est d'accord avec lui-même,
 // et divergerait de la commande au premier correctif porté à l'une des deux (T-20260813-0078
 // a payé exactement ça sur `option`, qui trouvait un drapeau là où il n'était qu'une valeur).
-import { optionDonnee, premierLibre } from '../../ligne-directe/src/arguments.js';
+import { optionDonnee, premierLibre, OPTIONS_A_VALEUR } from '../../ligne-directe/src/arguments.js';
 
 const SEGMENTS_COMMUNS = [
   /^\s*$/, // ligne vide
   /^#.*$/, // commentaire
-  /^LD=.*ligne-directe\.js.*$/, // pose la variable, aucun effet
+  // POSE LA VARIABLE, AUCUN EFFET — mais la BORNE compte autant que la forme. `.*` en queue
+  // laissait passer `LD="…ligne-directe.js" | rm -rf /tmp` : le segment était reconnu, et tout
+  // ce qui suivait le pipe s'exécutait. Défaut antérieur à ce lot, fermé ici parce qu'il est de
+  // la MÊME famille que celui qu'on ferme juste à côté — en laisser un ouvert à côté de
+  // l'autre, c'est « une porte sur deux ».
+  //
+  // ⚠️ LA VALEUR CITÉE PORTE UN ESPACE, ET C'EST LA FORME RÉELLE : la séquence d'ouverture écrit
+  // `LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"`. Interdire l'espace tout court
+  // — première tentative — refusait la commande que le gabarit prescrit, c'est-à-dire un refus
+  // portant sur ce qui marche. On borne donc à la fermeture du guillemet, pas à l'espace.
+  /^LD=(?:"[^"]*ligne-directe\.js"|\S*ligne-directe\.js)$/,
   /^herdr pane current$/,
   /^herdr agent rename \S+ \S+$/,
   /^\$LD etat$/,
@@ -182,6 +192,58 @@ export function jetonsDuSegment(segment) {
 const APPELS = [/^\$LD$/, /^node$/];
 
 /**
+ * Les options que `ouvrir` connaît — et donc, par différence, TOUT LE RESTE.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LA BORNE DE FIN, ET C'EST LA PORTE LA PLUS GRAVE DU LOT (4ᵉ passage de la revue de fond,
+ * vérifiée jusqu'à l'exécution réelle).
+ *
+ * `segments()` découpe sur `\n`, `&&` et `;` — jamais sur un PIPE, un `||`, ni un `&` seul. Et
+ * rien ne vérifiait qu'il ne restait RIEN après les drapeaux reconnus :
+ *
+ *     $LD ouvrir dirigeant --titre "x" --au-dirigeant | rm -rf /tmp
+ *
+ * était admis. Les deux membres s'exécutaient. Le garde dont la raison d'être, écrite en tête
+ * de ce fichier, est « rien ne passe avant que la ligne soit ouverte » laissait passer
+ * n'importe quoi — pendant la fenêtre exacte où il doit tout bloquer.
+ *
+ * ⚠️ CE LOT AVAIT ÉLARGI LE TROU SANS LE SAVOIR. La forme d'avant finissait par `--titre
+ * ".+"$` : l'ancrage de fin bloquait le pipe PAR EFFET DE BORD. En passant aux jetons, cet
+ * ancrage a disparu sans être remplacé. (L'orchestrateur, lui, était déjà exposé sur `main` —
+ * son motif finissait par `.*` ; on le ferme du même geste.)
+ *
+ * ON NE COURT PAS APRÈS LA SYNTAXE D'UN SHELL — `|`, `||`, `&`, `>`, `<`, et le suivant qu'on
+ * n'aurait pas listé. On borne par ce qu'on CONNAÎT : la commande porte le chantier et ces
+ * options-là, rien d'autre. Tout jeton qui n'entre pas dans ce compte fait que le segment
+ * n'ouvre rien — quel que soit le mécanisme qui l'a mis là.
+ */
+const OPTIONS_OUVRIR = new Set(['--titre', '--sujet', '--inviter', '--nature', '--au-dirigeant']);
+
+/**
+ * Ce segment ne porte-t-il QUE l'ouverture — un chantier, et des options connues ?
+ *
+ * La valeur d'une option à valeur est sautée comme `premierLibre` et `optionDonnee` la
+ * sautent : sans ça, un titre serait compté comme un second argument libre et toute ouverture
+ * légitime serait refusée.
+ */
+function rienDApresLOuverture(args) {
+  let libres = 0;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a.startsWith('--')) {
+      if (!OPTIONS_OUVRIR.has(a)) return false;
+      if (OPTIONS_A_VALEUR.has(a)) i += 1;
+      continue;
+    }
+    // UN SEUL argument libre : le chantier. Le deuxième est déjà la commande de quelqu'un
+    // d'autre — `rm`, un chemin, un opérateur que le shell nous a laissé passer.
+    libres += 1;
+    if (libres > 1) return false;
+  }
+  return true;
+}
+
+/**
  * Les arguments de `ouvrir` portés par ce segment, ou `null` si ce segment n'ouvre rien.
  *
  * La position n'est éprouvée QUE là où elle est le fait : l'invocation, puis le geste. Tout le
@@ -196,7 +258,10 @@ function argumentsDOuverture(segment) {
   const debut = jetons[0] === 'node' ? 2 : 1;
   if (jetons[0] === 'node' && !/ligne-directe\.js$/.test(jetons[1] || '')) return null;
   if (jetons[debut] !== 'ouvrir') return null;
-  return jetons.slice(debut + 1);
+  const args = jetons.slice(debut + 1);
+  // LA BORNE DE FIN — voir `OPTIONS_OUVRIR`. Sans elle, tout ce qui suit une ouverture
+  // syntaxiquement correcte passait avec elle, pipe compris.
+  return rienDApresLOuverture(args) ? args : null;
 }
 
 /** Les lignes d'un rôle, avec les chantiers que ce rôle réserve — jamais l'une sans l'autre. */
