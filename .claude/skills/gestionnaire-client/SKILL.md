@@ -188,8 +188,10 @@ Dire qu'on attend n'a jamais coûté un client ; laisser croire que ça avance, 
   Le troisième est celui qui compte : `deny` est une **liste finie contre un phénomène
   ouvert**. `python3 -c` et une dizaine d'autres chemins atteignent le web sans passer par
   `curl`. Ce bornage retire donc les portes qu'on prend sans y penser — il ne clôt pas le
-  shell, et personne ne doit le lire comme s'il le faisait. Ce qui protège le client au-delà,
-  c'est le métier écrit dans `CLAUDE.md`, pas ce fichier.
+  shell, et personne ne doit le lire comme s'il le faisait. Ce qui couvre le reste est une
+  ligne du métier, dans `CLAUDE.md` : *« tu ne vas jamais chercher ailleurs ce que tu n'as
+  pas — tes sources sont deux : le registre, et ce que ce client t'a dit »*. Les deux moitiés
+  sont nécessaires, et aucune ne remplace l'autre.
 
 ## Ce que cette compétence n'abroge pas
 

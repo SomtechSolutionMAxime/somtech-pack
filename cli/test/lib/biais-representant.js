@@ -393,6 +393,41 @@ export const CONTROLES_BIAIS = [
   },
 
   {
+    id: 'biais-les-sources-sont-bornees',
+    quoi: 'ses deux sources sont nommées, et le web est exclu — y compris par un chemin que ses droits ne ferment pas',
+    verifier({ metier }) {
+      // LA MOITIÉ QUE LA MÉCANIQUE NE PEUT PAS TENIR. Les droits du lieu retirent les portes
+      // évidentes vers le web (`WebFetch`, `WebSearch`, `curl`, `wget`) ; ils n'en retirent
+      // pas la capacité — `python3 -c` et une dizaine d'autres restent ouverts, et une
+      // commande non listée s'exécute sans rien demander (mesuré).
+      //
+      // La compétence qui pose le lieu attribue donc le reste au métier. Cette garde existe
+      // pour que cette attribution soit VRAIE : trouvée en contre-revue, où le métier ne
+      // portait aucun interdit de ce genre et où la compétence promettait pourtant qu'il en
+      // portait un. Une garantie renvoyée à un texte qui ne la dit pas n'est portée par rien.
+      const s = sectionDe(metier, /porte notre nom/i, 'sur ce que son écrit engage');
+      const { ligne, gras } = grasUnique(s.corps, /chercher ailleurs/i, 'la borne de ses sources');
+
+      for (const { quoi, sonde } of [
+        { quoi: 'le registre', sonde: /registre/i },
+        { quoi: 'ce que le client lui a dit', sonde: /client/i },
+      ]) {
+        assert.match(
+          ligne, sonde,
+          `« ${ligne.trim()} » ne nomme plus ${quoi} comme source — un interdit qui ne dit pas où `
+            + `chercher renvoie à chercher n'importe où`,
+        );
+      }
+      assert.match(
+        ligne, /le web n.en est pas une|jamais le web/i,
+        `« ${ligne.trim()} » n'exclut plus le web : c'est la moitié de la garantie que les droits `
+          + `du lieu ne peuvent pas tenir, et la seule qui couvre les chemins qu'ils laissent ouverts`,
+      );
+      exigeContrainte(gras, 'la borne des sources');
+    },
+  },
+
+  {
     id: 'biais-droits-bornes',
     quoi: 'ce qui n’a rien à faire dans une conversation client est REFUSÉ par les droits du lieu, pas confié à sa vigilance',
     verifier({ droits }) {
@@ -643,6 +678,28 @@ export const MUTATIONS_BIAIS = [
     muter: (t) => t.replace(
       "**aucun chiffre : l'envergure seulement**",
       "**un ordre de grandeur chiffré, pour qu'il se situe**",
+    ),
+  },
+
+  // ── la borne des sources
+  {
+    id: 'biais-le-web-redevient-une-source',
+    quoi: 'le web redevient une source « à vérifier au besoin » — la moitié que la mécanique ne tient pas s’ouvre',
+    cible: 'biais-les-sources-sont-bornees',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "Le web n'en est pas une — ni par tes outils, ni par le terminal, ni par quelqu'un à qui tu le ferais chercher.",
+      "Le web peut compléter, au besoin, quand le registre ne dit rien.",
+    ),
+  },
+  {
+    id: 'biais-la-borne-des-sources-devient-un-conseil',
+    quoi: 'la borne garde tous ses mots et cesse d’obliger — « mieux vaut ne pas aller chercher ailleurs »',
+    cible: 'biais-les-sources-sont-bornees',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Et tu ne vas jamais chercher ailleurs ce que tu n'as pas.**",
+      "**Et mieux vaut ne pas aller chercher ailleurs ce que tu n'as pas.**",
     ),
   },
 
