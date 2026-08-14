@@ -153,6 +153,33 @@ export function lignesOuvertes(registre) {
 }
 
 /**
+ * LES PANES QUI PORTENT CETTE LIGNE — son agent, et le PAIR qui la partage avec lui.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * UNE LIGNE À DEUX AGENTS (T-20260814-0093), ET C'EST LE SEUL ENDROIT QUI LE SAIT.
+ *
+ * La ligne d'un chantier était portée par un pane : celui de l'orchestrateur. Le gestionnaire
+ * client qui a ouvert la demande n'avait donc aucun chemin vers lui — il faisait faire, et le
+ * compte rendu n'avait nulle part où revenir. L'arbitrage du dirigeant (2026-08-14) : « c'est
+ * une équipe », la ligne du chantier les porte tous les deux, dans les deux sens.
+ *
+ * ⚠️ CE N'EST PAS UNE SECONDE LIGNE, et la distinction commande tout le reste. Une seconde
+ * ligne aurait voulu dire un second canal par chantier, une seconde inscription au registre, et
+ * un candidat de plus à la sélection par pane du chemin sortant — le défaut mesuré de
+ * T-20260813-0078, rejoué par le mécanisme censé aider. C'est la MÊME ligne, le MÊME canal, le
+ * MÊME `--a <chantier>` : un porteur de plus, rien d'autre.
+ *
+ * ⚠️ ET C'EST UN POINT DE LECTURE UNIQUE, pour la raison qui vaut partout ici : un
+ * `l.pane === pane` recopié ailleurs continuerait de ne voir qu'un porteur, et la ligne
+ * deviendrait indésignable selon d'où on la regarde. Ce qui lit ENCORE `l.pane` seul le fait
+ * exprès — le garde d'ouverture compte les lignes que l'agent doit ouvrir LUI-MÊME, et une
+ * ligne qu'un pair lui a partagée n'en est pas une.
+ */
+export function panesDeLigne(ligne) {
+  return [ligne?.pane, ligne?.pair?.pane].filter(Boolean);
+}
+
+/**
  * La ligne d'un canal — **l'ouverte d'abord**.
  *
  * BLOQUANT relevé en revue : un `.find()` naïf rendait la ligne CLOSE quand un chantier
@@ -367,7 +394,11 @@ export function nomsDesignables(candidates) {
  * @returns {{ligne: object|null, candidates: object[], refus: {motif: string, nom?: string, noms: string[]}|null}}
  */
 export function ligneDuPane(ouvertes, pane, nom = null) {
-  const candidates = (ouvertes || []).filter((l) => l.pane === pane);
+  // `panesDeLigne`, JAMAIS `l.pane` : une ligne de chantier partagée avec un gestionnaire est
+  // portée par DEUX panes (T-20260814-0093), et un filtre sur le seul porteur d'origine la
+  // rendrait invisible depuis le pane du pair — c'est-à-dire un `--a <chantier>` refusé pour
+  // « aucune ligne ouverte », à celui qui en a une.
+  const candidates = (ouvertes || []).filter((l) => panesDeLigne(l).includes(pane));
   const noms = nomsDesignables(candidates);
   if (!candidates.length) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.AUCUNE, noms } };
 

@@ -114,6 +114,57 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
 }
 
 /**
+ * La parole d'un PAIR sur la ligne d'un chantier — l'orchestrateur et son gestionnaire client.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * TROIS CHOSES À DIRE, ET AUCUNE N'EST DÉCORATIVE (T-20260814-0093).
+ *
+ * 1. **CE N'EST NI LE DIRIGEANT NI LE CLIENT.** C'est la leçon exacte du cadre commun : un
+ *    agent qui voit un texte tomber dans son pane n'a qu'une explication disponible — c'est
+ *    l'interlocuteur de ma ligne. Chez un gestionnaire, cet interlocuteur est LE CLIENT ; il
+ *    lirait le compte rendu technique d'un chantier comme une question de son client, et le
+ *    réflexe d'un bon représentant est de répondre. Il répondrait au client, dans le canal du
+ *    client, à propos de nos rouages internes. Le mot « dirigeant » n'apparaît pas non plus :
+ *    ce n'est pas lui qui parle, et le cadre lui donnerait l'autorité d'une consigne.
+ *
+ * 2. **ÇA SE DEMANDE, ÇA NE SE COMMANDE PAS** (arbitrage du dirigeant, 2026-08-14 : « c'est
+ *    une équipe »). Le gestionnaire signale ce qu'il a ouvert, demande une échéance, relance.
+ *    L'orchestrateur reste maître de son chantier et de ses priorités. Sans cette phrase, un
+ *    orchestrateur réordonne son travail au premier message reçu — et un gestionnaire qui
+ *    l'apprend cesse de demander.
+ *
+ * 3. **LE CLIENT N'EN VOIT RIEN.** Dit au gestionnaire, à l'endroit où il lit le message, et
+ *    pas dans un métier qu'il a lu ce matin. C'est le mode de panne unique de ce lot.
+ *
+ * Et la commande de réponse porte `--a <chantier>` : le pane d'un gestionnaire porte
+ * désormais TROIS lignes, et un `dire` sans nom y est refusé — un cadre qui l'omettrait
+ * enverrait son lecteur droit sur un refus.
+ */
+export function cadrerPourPair({ chantier, texte, canal, deRole, deNom, versRole }) {
+  const ou = canal ? ` (#${canal})` : '';
+  const qui = deRole === 'representant' ? 'du gestionnaire client' : 'de l’orchestrateur du chantier';
+  const nomme = deNom ? ` ${deNom}` : '';
+  const versGestionnaire = versRole === 'representant';
+  return [
+    `[LIGNE DIRECTE — ${chantier}${ou}] Message ${qui}${nomme}, sur la ligne de ce chantier :`,
+    '',
+    texte,
+    '',
+    '——',
+    `Ceci ne vient NI de ton client, NI du dirigeant : c'est ton pair sur ce chantier, qui te parle`,
+    `sur la ligne que vous partagez. Ce qu'il écrit se DEMANDE — ça ne se commande pas : tu restes`,
+    `maître de ton travail et de tes priorités, et tu réponds ce que tu sais, y compris « pas avant X ».`,
+    ...(versGestionnaire
+      ? [
+          `⚠️ RIEN DE CE FIL NE DESCEND AU CLIENT — ni ce message, ni ce que tu en déduis. Ce que le`,
+          `client entend, c'est ce que TU décides de lui dire, dans ses mots, sur SA ligne.`,
+        ]
+      : []),
+    `Réponds-lui avec :  ${COMMANDE} dire "ta réponse" --a ${chantier}`,
+  ].join('\n');
+}
+
+/**
  * Une consigne du dirigeant adressée à TOUS les agents — le canal commun.
  *
  * CE CADRE EST LE DISPOSITIF, pas son emballage. Un agent ne sait pas que ce canal existe :

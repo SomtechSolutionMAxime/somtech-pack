@@ -28,6 +28,11 @@ export const OPTIONS_A_VALEUR = new Set([
   '--canal',
   '--depot',
   '--dirigeant',
+  // `--au-gestionnaire <nom>` nomme le gestionnaire client qui partage la ligne d'un chantier
+  // (T-20260814-0093). Même piège, même côté : sans cette déclaration,
+  // `ouvrir --au-gestionnaire acme D-1` prendrait « acme » pour le chantier — le canal
+  // porterait le nom du client, sur une ligne INTERNE, c'est-à-dire publique.
+  '--au-gestionnaire',
 ]);
 
 /**

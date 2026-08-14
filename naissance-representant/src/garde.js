@@ -217,7 +217,24 @@ const APPELS = [/^\$LD$/, /^node$/];
  * options-là, rien d'autre. Tout jeton qui n'entre pas dans ce compte fait que le segment
  * n'ouvre rien — quel que soit le mécanisme qui l'a mis là.
  */
-const OPTIONS_OUVRIR = new Set(['--titre', '--sujet', '--inviter', '--nature', '--au-dirigeant']);
+const OPTIONS_OUVRIR = new Set([
+  '--titre',
+  '--sujet',
+  '--inviter',
+  '--nature',
+  '--au-dirigeant',
+  // ⚠️ `--au-gestionnaire` EST ICI PARCE QUE LE MÉTIER LE PRESCRIT (T-20260814-0093). Un
+  // orchestrateur mandaté par un gestionnaire ouvre sa ligne en le nommant ; sans cette entrée,
+  // `rienDApresLOuverture` compterait le drapeau comme « la commande de quelqu'un d'autre » et
+  // le garde refuserait la séquence d'ouverture QUE LE GABARIT DICTE — l'agent bloqué au premier
+  // geste, sans que rien ne lui dise pourquoi. C'est le défaut mesuré de T-20260814-0033, et il
+  // se rejoue à chaque option que la commande apprend sans que ce garde l'apprenne.
+  //
+  // Elle n'entre dans AUCUNE condition d'ouverture (`ouvreCetteLigne`) : elle borne ce qui suit,
+  // elle ne prescrit rien. Ce qu'elle vaut vraiment — refus sur une ligne cliente, refus d'un nom
+  // qui ne désigne aucun gestionnaire vivant — est éprouvé par le veilleur, qui voit les agents.
+  '--au-gestionnaire',
+]);
 
 /**
  * Ce segment ne porte-t-il QUE l'ouverture — un chantier, et des options connues ?

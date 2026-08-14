@@ -50,6 +50,16 @@ function usage(code = 0) {
                                                             jamais voir un code de chantier.
                                                             Sans --nature, la ligne est interne : canal
                                                             public, autorisation par --inviter)
+                    [--au-gestionnaire <nom-d-agent>]      PARTAGE cette ligne avec le gestionnaire
+                                                           client nomme : ce que l'un dit arrive dans
+                                                           le pane de l'autre, dans les deux sens.
+                                                           C'est une conversation entre PAIRS — ce qui
+                                                           s'y demande ne se commande pas.
+                                                           Refuse sur une ligne CLIENTE, et refuse un
+                                                           nom qu'aucun gestionnaire vivant ne porte :
+                                                           la ligne n'est alors PAS ouverte.
+                                                           S'utilise aussi a la REPRISE, pour accueillir
+                                                           un gestionnaire sur une ligne deja ouverte.
   dire "texte" [--a <ligne>]                               rapporte un jalon
   demander "texte" [--a <ligne>]                           sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver] [--a <ligne>] referme la ligne
@@ -218,6 +228,11 @@ if (geste === 'relever') {
       // un `includes` y aurait vu une demande d'ouvrir la ligne du dirigeant. `optionDonnee`
       // parcourt les jetons et saute la valeur d'une option à valeur.
       au_dirigeant: optionDonnee(args, '--au-dirigeant').presente,
+      // `--au-gestionnaire <nom>` PARTAGE CETTE LIGNE avec le gestionnaire client nommé
+      // (T-20260814-0093) : à partir de là, ce que l'un dit arrive dans le pane de l'autre, dans
+      // les deux sens. C'est une VALEUR, pas un drapeau — le nom d'agent est ce qui permet au
+      // veilleur de le retrouver chez herdr, et un nom qu'on ne trouve pas est un REFUS.
+      au_gestionnaire: option(args, '--au-gestionnaire'),
     })
   );
 } else if (geste === 'dire' || geste === 'demander') {
@@ -232,7 +247,11 @@ if (geste === 'relever') {
   // ON DÉSIGNE LE CANAL, PAS LE CHANTIER — la clé qui identifie, comme le fait déjà le chemin
   // entrant. Le veilleur sait router par l'une ou par l'autre ; celle-ci est unique par
   // construction, et c'est la seule qui ne puisse pas rendre une autre ligne que celle visée.
-  rendre(await parler({ geste: 'dire', canal_id: mienne.canal_id, texte: corps }));
+  // ON DIT AUSSI D'OÙ ÇA PART. Une ligne de chantier peut être portée par DEUX panes
+  // (T-20260814-0093) : sans le pane de l'émetteur, le veilleur ne peut pas savoir à qui faire
+  // écho — et le seul repli disponible serait de renvoyer à quelqu'un sa propre parole, cadrée
+  // comme celle de son pair. Sur une ligne sans pair, ce champ ne sert à rien et ne coûte rien.
+  rendre(await parler({ geste: 'dire', canal_id: mienne.canal_id, texte: corps, pane: ici.pane }));
 } else if (geste === 'fermer') {
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });
