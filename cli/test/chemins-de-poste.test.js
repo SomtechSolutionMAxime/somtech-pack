@@ -25,10 +25,16 @@
 // éprouve l'ACCORD : tout module de poste nommé dans un document PRESCRIPTIF doit l'être
 // depuis la racine du poste. Il attrapera donc la prochaine dérive, pas seulement celle-ci.
 //
-// CE QU'IL NE COUVRE PAS, DÉLIBÉRÉMENT : `scripts/tests/*.sh`. Ces scripts sont éprouvés
-// DANS le pack, où les modules de poste SONT des sous-dossiers — les y nommer relativement
-// est juste, et le `skip` qu'ils portent est ce qui les rend inertes ailleurs. Ce contrôle
-// vise les documents qu'on RECOPIE chez un client, pas ceux qu'on exécute ici.
+// CE QU'IL NE COUVRE PAS, DÉLIBÉRÉMENT : `scripts/tests/*.sh`. Ces scripts nomment bien les
+// modules de poste relativement à la racine du dépôt — et c'est juste, parce qu'ils sont
+// ÉPROUVÉS ici, où ces modules SONT des sous-dossiers.
+//
+// ⚠️ Et ils voyagent quand même : `scripts/` fait partie du module `core`, donc chaque
+// installation cliente les reçoit. Ce qui les rend inertes là-bas n'est PAS leur absence —
+// c'est le `[ -f "$BIN" ] || skip` que chacun porte avant tout usage du chemin. La nuance
+// n'est pas cosmétique : le jour où l'un d'eux perdrait son `skip`, il faudrait le couvrir
+// ici. (Une première version de ce commentaire disait qu'ils ne quittaient pas le pack —
+// c'était faux, et la revue de fond l'a relevé.)
 //
 // Traçabilité : T-20260814-0140, issu de la revue de surface T-20260814-0135.
 
@@ -71,18 +77,28 @@ function racineDuPoste() {
   return trouve[1];
 }
 
-/** Tous les documents PRESCRIPTIFS du pack : ce qu'un agent lit et recopie. */
+/**
+ * Tous les documents PRESCRIPTIFS du pack : ce qu'un agent lit, recopie ou subit.
+ *
+ * ⚠️ ON NE FILTRE PAS PAR NOM DE FICHIER. Une première version de ce contrôle ne regardait
+ * que `CLAUDE.md` et `SKILL.md` — et laissait donc passer la MÊME dérive dans le
+ * `settings.json` posé juste à côté, dans le même dossier, recopié chez le même client.
+ * Démontré par la revue de fond : le défaut réintroduit là restait vert. On prend donc tout
+ * ce qui est lu ou appliqué — `.md` et `.json` — sur les quatre racines que le pack
+ * distribue.
+ */
 function documentsPrescriptifs() {
   const trouves = [];
   const parcourir = (repertoire) => {
     for (const entree of readdirSync(repertoire)) {
       const chemin = join(repertoire, entree);
       if (statSync(chemin).isDirectory()) parcourir(chemin);
-      else if (entree === 'CLAUDE.md' || entree === 'SKILL.md') trouves.push(chemin);
+      else if (entree.endsWith('.md') || entree.endsWith('.json')) trouves.push(chemin);
     }
   };
-  parcourir(join(REPO, '.claude', 'templates'));
-  parcourir(join(REPO, '.claude', 'skills'));
+  for (const racine of ['templates', 'skills', 'commands', 'workflows']) {
+    parcourir(join(REPO, '.claude', racine));
+  }
   return trouves;
 }
 
