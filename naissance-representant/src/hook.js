@@ -6,7 +6,7 @@
 // décision qu'on peut mettre à l'épreuve vit ici, à l'abri d'un vrai processus enfant.
 
 import { roleDuLieu } from './lieu.js';
-import { decider, ligneEstOuverte } from './garde.js';
+import { decider, naturesOuvertesDuPane } from './garde.js';
 
 /**
  * Traite une requête de hook PreToolUse déjà parsée.
@@ -30,13 +30,17 @@ export async function traiterRequete(requete, obtenirPaneEtEtat) {
     return { permissionDecision: 'allow', permissionDecisionReason: 'hors du lieu d’un agent' };
   }
 
-  let ligneOuverte = false;
+  // LES NATURES OUVERTES, PAS UN BOOLÉEN — un rôle peut devoir PLUSIEURS lignes
+  // (T-20260813-0076), et « il y en a une » ne dit pas laquelle. Un gestionnaire qui n'aurait
+  // ouvert que celle de son client serait relâché par un booléen, et naîtrait sans aucun
+  // chemin vers le dirigeant : le manque exact que ce lot ferme.
+  let naturesOuvertes = [];
   try {
     const { pane, etat } = await obtenirPaneEtEtat(cwd);
-    ligneOuverte = ligneEstOuverte(etat, pane);
+    naturesOuvertes = naturesOuvertesDuPane(etat, pane);
   } catch {
-    ligneOuverte = false;
+    naturesOuvertes = [];
   }
 
-  return decider({ toolName: requete?.tool_name, toolInput: requete?.tool_input, ligneOuverte, role });
+  return decider({ toolName: requete?.tool_name, toolInput: requete?.tool_input, naturesOuvertes, role });
 }

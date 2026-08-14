@@ -213,8 +213,52 @@ export function enteteDe(texte) {
  * `\bà moins que` ne s'apparie JAMAIS, et l'alternative serait morte-née — vraie par construction,
  * donc invisible. Le piège est le jumeau exact de celui documenté sur `privé\b` plus bas, et il
  * a été attrapé ici par une mutation, pas par une relecture.
+ *
+ * ⚠️ ET LA RÉCIPROQUE, QUI A COÛTÉ TROIS DÉFAUTS D'UN COUP (revue de fond, T-20260814-0033).
+ * « Pas de `\b` devant un accent » n'autorise pas à s'en passer PARTOUT : `efforce-toi` commence
+ * et finit par des lettres ASCII, il se borne normalement, et sans bornes il s'appariait dans
+ * `xefforce-toi`. L'exemption est une exception mesurée, jamais une habitude.
+ *
+ * ⚠️ ET LA BORNE FINALE TOMBE DANS LE MÊME PIÈGE QUE L'INITIALE — refaite dans le correctif
+ * qui venait de le documenter, deux lignes plus haut. `\bveille à\b` ne s'apparie JAMAIS : la
+ * borne d'après `à` cherche une frontière que `à` ne peut pas former. On la retire.
+ *
+ * ⚠️ ET `de` SANS BORNE MORD LE MOT SUIVANT. « évite DEux allers-retours au client » est un
+ * impératif parfait, et `évite (?:de)` s'y appariait sur le préfixe de « deux ». Chaque
+ * alternative se termine donc par sa borne — sauf celles qui finissent par une apostrophe, où
+ * il n'y a rien à borner. Trouvé en cherchant le cas qui départageait DEUX AUTRES formes :
+ * un essai qu'on écrit pour prouver une chose en révèle une autre, et c'est la quatrième.
+ *
+ * ⚠️ ET SEULE LA FORME QUI COMMANDE EST UNE TOURNURE PERMISSIVE — L'INFINITIF EST DU FRANÇAIS
+ * ORDINAIRE. `tente(?:r)?` a fait rougir « sans rien tenter d'autre », qui est un impératif
+ * PARFAIT et vit dans deux compétences réelles. Ce qui assouplit une consigne, c'est
+ * « tente DE le faire » adressé à quelqu'un ; « tenter d'autre » ne s'adresse à personne. On
+ * ne garde donc que la seconde personne.
+ *
+ * ⚠️ ET LA RÈGLE CI-DESSUS A ÉTÉ ENFREINTE DANS LE COMMIT QUI L'ÉCRIVAIT. `essa(?:ie|ye|yer)`
+ * rangeait l'infinitif dans le même groupe que les deux impératifs — « tu dois ESSAYER DE
+ * comprendre le besoin » aurait rougi. Un principe posé ne se relit pas tout seul sur ses
+ * voisins : chaque alternative de la famille a dû être reprise une à une.
+ *
+ * ⚠️ ET UNE TOURNURE QUE LE VOCABULAIRE DU DÉPÔT REND INDISTINGUABLE N'ENTRE PAS. `veille à` a
+ * été essayé puis RETIRÉ : l'impératif adressé et le présent de la troisième personne s'écrivent
+ * IDENTIQUEMENT, et « le veilleur veille à… » est une phrase que ce dépôt écrira. Là où
+ * `tente`/`tenter` se départageaient par l'orthographe, celle-ci ne se départage pas — même
+ * conclusion que `tâche de`, pour une raison différente.
+ *
+ * ⚠️ ET UNE TOURNURE QUI COLLISIONNE AVEC UN NOM N'ENTRE PAS. `tâche de` a été essayé puis
+ * RETIRÉ : « la tâche de fond » est du français parfaitement impératif, et une garde qui rougit
+ * sur du texte correct ne survit pas — le premier qui la rencontre la supprime, et emporte
+ * avec elle les tournures qu'elle gardait vraiment. Une alternative de moins vaut mieux qu'une
+ * garde qu'on apprend à ignorer.
+ *
+ * ⚠️ ET UN POINT DANS UNE ALTERNATIVE EST UN MÉTACARACTÈRE, PAS UNE APOSTROPHE. `essaie (?:de|d.)`
+ * — écrit pour couvrir l'élision `d'` — s'appariait sur « évite DAns ce cas », « essaie DUne
+ * façon » : n'importe quelle phrase commençant par la bonne lettre. Une garde de modalité qui
+ * rougit sur du texte parfaitement impératif est pire qu'absente : on la « corrige » en la
+ * retirant. On écrit donc `d['’]`, les deux apostrophes réelles.
  */
-export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b/i;
+export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de\b|que\b|d['’])|en évitant|essa(?:ie|ye) (?:de\b|d['’])|\btente (?:de\b|d['’])|fais en sorte (?:de\b|d['’])|\befforce-toi\b/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {
@@ -257,7 +301,9 @@ export const CONTROLES = [
       for (const e of etapes) assert.ok(e.libelle, `l’étape ${e.rang} n’a pas de libellé en gras — son rang serait illisible`);
 
       const contexte = rangUnique(etapes, /CONTEXTE\.md/, 'lire son contexte');
-      const ouvrir = rangUnique(etapes, /ouvre ta ligne/i, 'ouvrir sa ligne');
+      // T-20260814-0033 : l'étape 2 ouvre désormais LES DEUX lignes. Le libellé le dit, et
+      // c'est voulu — le rang seul ne prouverait pas que la seconde y est.
+      const ouvrir = rangUnique(etapes, /ouvre tes deux lignes/i, 'ouvrir ses deux lignes');
       const relever = rangUnique(etapes, /relève/i, 'relever');
       const parler = rangUnique(etapes, /parle/i, 'parler');
 
@@ -444,6 +490,12 @@ export const CONTROLES = [
         { quoi: 'aucun mécanisme de file', sonde: /mécanisme de file/i },
         { quoi: 'il n’invite personne dans le canal', sonde: /n.invites personne/i },
         { quoi: 'il ne renvoie aucune pièce au client', sonde: /ne renvoies aucune pièce/i },
+        // T-20260814-0033 — CE QUI REMPLACE L'ANCIEN INTERDIT. « Tu n'ouvres jamais une
+        // seconde ligne » est tombé parce qu'il est devenu faux ; le risque qu'il protégeait,
+        // lui, n'a pas bougé d'un pouce. Il est désormais tenu par le nommage obligatoire, et
+        // c'est donc CE nommage qui doit figurer parmi les « jamais » — sans quoi on aurait
+        // retiré une garde en croyant retirer une erreur.
+        { quoi: 'il n’écrit jamais sans nommer la ligne visée', sonde: /sans nommer la ligne/i },
       ];
       const puces = pucesDe(s.corps);
       assert.equal(puces.length, INTERDITS.length, `${puces.length} interdit(s) écrit(s) pour ${INTERDITS.length} gardé(s)`);
@@ -610,14 +662,156 @@ export const CONTROLES = [
       // RA-REL-014. La frontière entre les deux fichiers n'existe sur le papier que si le
       // métier RENVOIE réellement au contexte. Un titre écrit en dur dans le gabarit le
       // rendrait décoratif — et ferait signer tous les représentants du même nom.
+      // T-20260814-0033 : DEUX ouvertures, et on les distingue par ce qu'elles PORTENT, pas
+      // par leur rang dans le texte. Les compter sans les apparier laisserait passer deux
+      // lignes clientes, ou deux lignes internes — c'est-à-dire un gestionnaire muet d'un côté
+      // ou l'autre, avec le bon nombre de commandes.
       const ouvertures = [...metier.matchAll(/\$LD ouvrir[^\n]*/g)].map((m) => m[0]);
-      assert.equal(ouvertures.length, 1, 'une session, un client, un canal : une seule ouverture de ligne');
-      assert.match(ouvertures[0], /--nature client/, 'le canal d’un client doit naître privé');
-      assert.match(ouvertures[0], /--titre/, 'sans titre, la commande refuse d’ouvrir une ligne cliente');
+      assert.equal(ouvertures.length, 2, `un gestionnaire ouvre DEUX lignes — celle du client et celle du dirigeant (${ouvertures.length} trouvée·s)`);
 
-      const titre = ouvertures[0].match(/--titre\s+"([^"]*)"/);
+      const clientes = ouvertures.filter((o) => /--nature client/.test(o));
+      assert.equal(clientes.length, 1, 'une seule ligne CLIENTE — un client, un canal privé');
+      assert.match(clientes[0], /--titre/, 'sans titre, la commande refuse d’ouvrir une ligne cliente');
+
+      const titre = clientes[0].match(/--titre\s+"([^"]*)"/);
       assert.ok(titre, 'le titre doit être passé entre guillemets');
       assert.match(titre[1], /CONTEXTE\.md/, `le titre « ${titre[1]} » est écrit en dur : il doit venir du contexte du client`);
+
+      // ═══ LA LIGNE DU DIRIGEANT — et chacune de ces trois choses a une conséquence propre.
+      const internes = ouvertures.filter((o) => !/--nature client/.test(o));
+      assert.equal(internes.length, 1, 'une seule ligne vers le DIRIGEANT');
+      assert.ok(
+        !/--nature/.test(internes[0]),
+        `« ${internes[0]} » nomme une nature : sa ligne interne n’en porte aucune, et le garde du lieu la refuserait`,
+      );
+      // Le CHANTIER est ce que `--a` visera (T-20260813-0078) : s'il change ici, « --a
+      // dirigeant » ne désigne plus rien et chaque remontée est refusée.
+      assert.match(
+        internes[0], /\$LD ouvrir dirigeant(?=\s|$)/,
+        `« ${internes[0]} » n’ouvre pas le chantier « dirigeant » — « --a dirigeant » ne désignerait plus sa ligne`,
+      );
+      // Sans ce drapeau, la ligne s'ouvre avec une liste d'autorisés VIDE : elle a l'air
+      // ouverte et refuse la parole à tout le monde, au dirigeant le premier.
+      assert.match(
+        internes[0], /--au-dirigeant(?=\s|$)/,
+        `« ${internes[0]} » n’autorise personne : la ligne naîtrait muette`,
+      );
+    },
+  },
+
+  {
+    id: 'deux-lignes-et-ce-qui-ne-traverse-pas',
+    quoi: 'les deux lignes sont distinguées par leur DESTINATAIRE, le nommage oblige, et l’étanchéité est un interdit — pas un conseil',
+    verifier({ metier }) {
+      // T-20260814-0033. L'ancien métier interdisait la seconde ligne ; elle existe désormais
+      // (T-20260813-0076) et le garde du lieu l'EXIGE. Ce qui a disparu, c'est l'interdit —
+      // pas le risque : ce qui transite vers le dirigeant est précisément ce qu'on ne dit pas
+      // au client, et une inversion lui livre la chose exacte qu'on lui cachait.
+      //
+      // ⚠️ CE CONTRÔLE NE CHERCHE PAS DE PHRASE. Il porte sur la POLARITÉ (quelle ligne porte
+      // quel destinataire, résolue par les libellés d'en-tête et jamais par l'index), sur la
+      // MODALITÉ (l'étanchéité est-elle un interdit ou une recommandation), et sur le COMPTE
+      // des gestes qui exigent d'être nommés. C'est la seule forme qui survive à une
+      // reformulation légitime tout en rougissant sur un affaiblissement.
+      const s = sectionDe(metier, /tes deux lignes/i, 'sur les deux lignes');
+      const table = tableDe(s.corps);
+
+      // LA POLARITÉ. Permuter les deux en-têtes ferait viser le client par « --a dirigeant »
+      // sans déplacer une seule cellule — l'inversion, écrite dans le métier lui-même.
+      const versClient = colonne(table, /^ta ligne avec le client$/i, 'la ligne du client').join(' ');
+      const versDirigeant = colonne(table, /^ta ligne avec le dirigeant$/i, 'la ligne du dirigeant').join(' ');
+      assert.match(versDirigeant, /--a dirigeant/, 'la ligne du dirigeant se vise par « --a dirigeant »');
+      assert.ok(
+        !/--a dirigeant/.test(versClient),
+        'le client se viserait par « --a dirigeant » : les deux colonnes sont inversées',
+      );
+      // Et ce qui y passe : le client reçoit ce qu'on lui dit, le dirigeant ce qu'on ne lui
+      // dit PAS. Une table dont les deux moitiés diraient la même chose n'enseignerait rien.
+      assert.notEqual(
+        versClient, versDirigeant,
+        'les deux lignes portent le même contenu : rien ne les distingue plus',
+      );
+
+      // LE NOMMAGE OBLIGE — et le compte des gestes est gardé, parce qu'en oublier un dans
+      // l'énumération est exactement la façon dont une garde se perd sans qu'on la retire.
+      const nommage = s.corps.split('\n').filter((l) => /--a\b/.test(l) && /\bexige|\btoujours\b/i.test(l));
+      assert.ok(nommage.length >= 1, 'le métier doit dire que la ligne visée se nomme TOUJOURS');
+      exigeImperatif(nommage.join(' '), 'le nommage de la ligne visée');
+      for (const geste of ['dire', 'demander', 'fermer', 'renommer']) {
+        assert.match(
+          s.corps, new RegExp(`\`${geste}\``),
+          `« ${geste} » exige d’être nommé lui aussi — l’oublier ici le laisse deviner sa ligne`,
+        );
+      }
+      // Sans nom, le geste est REFUSÉ. Si le métier annonçait qu'il part quand même « sur la
+      // ligne la plus probable », il enseignerait le contraire de ce que la commande fait.
+      assert.match(s.corps, /refus/i, 'le métier doit dire qu’un geste sans nom est REFUSÉ, pas deviné');
+
+      // L'ÉTANCHÉITÉ EST UN INTERDIT, PAS UN CONSEIL. C'est la mutation qui compte : « évite
+      // de faire descendre… » garde tous les mots et ne garde plus rien.
+      const etanche = s.corps
+        .split('\n')
+        .filter((l) => /ne\s+(?:descend|traverse)|ne\s+descend|traverse jamais/i.test(l) || /rien de ce qui monte/i.test(l));
+      assert.ok(etanche.length >= 1, 'le métier doit dire ce qui ne traverse JAMAIS d’une ligne à l’autre');
+      exigeImperatif(etanche.join(' '), 'l’étanchéité entre les deux lignes');
+      // ⚠️ CE CONTRÔLE N'A PLUS DE SONDE À LUI, ET C'EST LE CORRECTIF — relevé en revue de fond.
+      //
+      // Il en portait une (« évite », « essaie »…), écrite ici parce que `PERMISSIF` ne les
+      // connaissait pas : `\bévite` ne s'apparie JAMAIS (`é` n'est pas un caractère de mot),
+      // le piège que ce fichier documente déjà pour « privé\b », rejoué par l'autre bout.
+      // Corriger LOCALEMENT laissait la même famille ouverte sur la dizaine d'autres appels
+      // d'`exigeImperatif` — dont celui qui garde le nommage, c'est-à-dire la garde qui
+      // REMPLACE l'ancien interdit. « Une porte sur deux », dans le correctif d'une porte sur
+      // deux. La famille est donc entrée dans `PERMISSIF`, et `exigeImperatif` ci-dessus la
+      // porte pour tout le monde.
+      //
+      // Sa forme y est PRÉCISE — « évite de », « en évitant » — jamais « évite » nu : le
+      // gabarit dit légitimement « l'aveu qu'on cherche à éviter », dans une puce elle-même
+      // gardée. Une sonde plus large aurait fait rougir ce qui marche.
+      // Et elle doit dire ce qu'une inversion COÛTE — sans quoi elle se lit comme une règle
+      // d'hygiène qu'on relâche le jour où elle gêne.
+      assert.match(s.corps, /ne se reprend pas|irrattrapable|lu avant d.être effacé/i, 'et ce qu’une inversion coûte');
+    },
+  },
+
+  {
+    id: 'remontee-par-la-ligne',
+    quoi: 'la remontée passe par la ligne du dirigeant — le registre garde la trace, il ne prévient personne',
+    verifier({ metier }) {
+      // T-20260814-0033. L'ancien texte disait que la remontée était « un pis-aller » et
+      // envoyait vers un orchestrateur tiers, ou vers une note qui « ne prévient personne ».
+      // Les deux obligations du métier — remonter ce qui engage, remonter un danger AVANT
+      // d'en parler au client — n'avaient donc aucun chemin qui atteigne quelqu'un.
+      const s = sectionDe(metier, /comment tu remontes/i, 'sur la remontée au dirigeant');
+
+      // LE GESTE, ET SA LIGNE. Un `demander` qui ne nomme pas sa ligne serait refusé ; un
+      // `demander` nommé vers le client poserait AU CLIENT la question qui appartient au
+      // dirigeant. C'est l'appariement des deux qui compte, pas leur présence séparée.
+      const blocs = blocsBash(s.corps).join('\n');
+      assert.match(blocs, /demander[^\n]*--a dirigeant/, 'la remontée se fait par « demander … --a dirigeant »');
+      assert.ok(
+        !/--a\s+<le client>/.test(blocs),
+        'la section de remontée enseigne un geste vers le CLIENT : l’arbitrage lui serait posé à lui',
+      );
+
+      // LA DISTINCTION QUI PORTE TOUT : la ligne fait ARRIVER, le registre fait DURER. Les
+      // confondre ramène le défaut d'origine — une question inscrite quelque part et jamais lue.
+      assert.match(s.corps, /registre|demands/i, 'ce qui doit survivre à la session va aussi au registre');
+      assert.match(
+        s.corps, /n.est pas une notification|ne prévient personne/i,
+        'le métier doit dire qu’une note au registre ne prévient personne',
+      );
+      // Et le pis-aller ne doit plus être présenté comme le chemin : un métier qui dit encore
+      // « ce n'est pas le mécanisme prévu » enseigne de ne pas s'en servir.
+      // ⚠️ LE TITRE COMPTE AUTANT QUE LE CORPS, et c'est une mutation SURVIVANTE qui l'a
+      // imposé : elle remettait « et pourquoi c'est aujourd'hui un pis-aller » dans le TITRE
+      // seul, que `sectionDe` ne rend pas avec le corps. Un agent lit le titre en premier —
+      // « ce n'est pas le mécanisme prévu » lui dit de ne pas s'en servir, quoi que dise la suite.
+      const entier = `${s.titre}\n${s.corps}`;
+      assert.ok(
+        !/pis-aller|n.est pas le mécanisme prévu|en attendant/i.test(entier),
+        'la remontée est encore présentée comme un pis-aller — elle est le mécanisme, désormais',
+      );
     },
   },
 
@@ -811,7 +1005,7 @@ export const MUTATIONS = [
     quoi: 'on relève l’historique avant d’ouvrir sa ligne — le défaut exact de T-20260806-0192',
     cible: 'ordre-ouverture',
     fichier: 'metier',
-    muter: (t) => permuter(t, '**Ouvre ta ligne.**', '**Relève ce qui existe déjà**'),
+    muter: (t) => permuter(t, '**Ouvre tes deux lignes**', '**Relève ce qui existe déjà**'),
   },
   {
     id: 'parler-avant-de-relever',
@@ -826,8 +1020,8 @@ export const MUTATIONS = [
     cible: 'ordre-ouverture',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "2. **Ouvre ta ligne.** C'est ce qui te rend **joignable**.",
-      "2. **Ouvre ta ligne.** C'est utile, mais tu peux aussi le faire après le relèvement si celui-ci presse. C'est ce qui te rend **joignable**.",
+      "2. **Ouvre tes deux lignes** — celle du client, puis celle du dirigeant. C'est ce qui te rend **joignable** des deux côtés.",
+      "2. **Ouvre tes deux lignes** — celle du client, puis celle du dirigeant. C'est utile, mais tu peux aussi le faire après le relèvement si celui-ci presse. C'est ce qui te rend **joignable** des deux côtés.",
     ),
   },
   {
@@ -1019,6 +1213,101 @@ export const MUTATIONS = [
     ),
   },
 
+  // ── les deux lignes du gestionnaire (T-20260814-0033)
+  //
+  // Les trois premières sont celles que le lot demandait nommément : elles rejouent la
+  // régression exacte que ce lot existe pour rendre impossible.
+  {
+    id: 'l-interdit-de-la-seconde-ligne-revient',
+    quoi: '« tu n’ouvres jamais une seconde ligne » est réintroduit — le métier redit le contraire de ce que le garde exige',
+    cible: 'contexte-necessaire',
+    fichier: 'metier',
+    // C'EST LA RÉGRESSION QUE CE LOT FERME. Le garde du lieu tient le pane fermé tant que les
+    // deux lignes ne sont pas là ; un métier qui interdit la seconde fait naître un agent qui
+    // ne peut RIEN faire — muet, en croyant pouvoir parler.
+    muter: (t) =>
+      t.replace(
+        '$LD ouvrir dirigeant --titre "ligne dirigeant <le client>" --au-dirigeant\n',
+        '',
+      ).replace(
+        '- **Tu ouvres les DEUX, et la seconde n\'est pas facultative.**',
+        '- **Tu n\'ouvres jamais une seconde ligne depuis ce pane.**',
+      ),
+  },
+  {
+    id: 'revue-l-ordre-s-assouplit-par-l-evitement',
+    quoi: 'l’étape 2 garde son rang et son verbe, et s’assouplit par « en évitant de trop tarder »',
+    cible: 'ordre-ouverture',
+    fichier: 'metier',
+    // ⚠️ POSÉE PAR LA REVUE DE FOND, ET ELLE PASSAIT. La famille de l'évitement manquait à
+    // `PERMISSIF` ; sa première correction avait été écrite dans un seul contrôle, laissant
+    // tous les autres appels d'`exigeImperatif` ouverts — dont celui-ci, qui garde l'ordre
+    // même où un représentant s'est déjà fait écrire quatre fois sans que rien n'arrive.
+    muter: (t) => t.replace(
+      "C'est ce qui te rend **joignable** des deux côtés.",
+      "C'est ce qui te rend **joignable** des deux côtés, en évitant de trop tarder.",
+    ),
+  },
+  {
+    id: 'le-nommage-de-la-ligne-devient-facultatif',
+    quoi: 'le nommage obligatoire tombe — le geste « choisit » sa ligne, et l’autre est le canal du client',
+    cible: 'deux-lignes-et-ce-qui-ne-traverse-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Tu nommes toujours la ligne que tu vises.** Chaque geste qui écrit — `dire`, `demander`, `fermer`, `renommer` — exige `--a`.',
+      '**Tu peux nommer la ligne que tu vises.** Chaque geste qui écrit — `dire`, `demander`, `fermer`, `renommer` — accepte `--a`.',
+    ),
+  },
+  {
+    id: 'l-etancheite-devient-un-conseil',
+    quoi: '« ce qui ne traverse jamais » se change en recommandation — les mots restent, la garde part',
+    cible: 'deux-lignes-et-ce-qui-ne-traverse-pas',
+    fichier: 'metier',
+    // Le motif dominant de ce dépôt, appliqué à la règle la plus coûteuse du lot : une
+    // interdiction qui garde tout son vocabulaire et cesse d'obliger.
+    muter: (t) => t.replace(
+      '**Rien de ce qui monte vers le dirigeant ne descend chez le client.**',
+      '**Évite que ce qui monte vers le dirigeant ne descende chez le client.**',
+    ),
+  },
+  {
+    id: 'les-deux-lignes-sont-permutees',
+    quoi: 'les en-têtes des deux lignes sont permutés — « --a dirigeant » désigne le client, sans qu’une cellule bouge',
+    cible: 'deux-lignes-et-ce-qui-ne-traverse-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '| | ta ligne avec le client | ta ligne avec le dirigeant |',
+      '| | ta ligne avec le dirigeant | ta ligne avec le client |',
+    ),
+  },
+  {
+    id: 'la-ligne-du-dirigeant-n-autorise-personne',
+    quoi: '`--au-dirigeant` disparaît de l’ouverture — la ligne naît muette et refuse sa parole au dirigeant',
+    cible: 'contexte-necessaire',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '$LD ouvrir dirigeant --titre "ligne dirigeant <le client>" --au-dirigeant',
+      '$LD ouvrir dirigeant --titre "ligne dirigeant <le client>"',
+    ),
+  },
+  {
+    id: 'la-remontee-redevient-un-pis-aller',
+    quoi: 'la remontée repasse par un tiers et par une note — les deux chemins qui n’atteignent personne',
+    cible: 'remontee-par-la-ligne',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "### Comment tu remontes — par ta ligne, et elle atteint quelqu'un",
+      "### Comment tu remontes — et pourquoi c'est aujourd'hui un pis-aller",
+    ),
+  },
+  {
+    id: 'l-arbitrage-est-pose-au-client',
+    quoi: 'la remontée nomme la ligne du CLIENT — l’arbitrage qui appartient au dirigeant lui est posé à lui',
+    cible: 'remontee-par-la-ligne',
+    fichier: 'metier',
+    muter: (t) => t.replace('ta recommandation>" --a dirigeant', 'ta recommandation>" --a <le client>'),
+  },
+
   // ── le transport et la frontière des fichiers
   {
     id: 'revue-R12-le-canal-naît-public',
@@ -1135,8 +1424,8 @@ export const MUTATIONS = [
     cible: 'cloisonnement',
     fichier: 'metier',
     muter: (t) => t.replace(
-      'même pour le même client : **tu refuses** de la même façon',
-      'même pour le même client : **tu peux refuser** de la même façon',
+      'ou vers un autre : **tu refuses** de la même façon',
+      'ou vers un autre : **tu peux refuser** de la même façon',
     ),
   },
   {

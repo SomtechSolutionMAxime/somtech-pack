@@ -20,13 +20,26 @@ import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
-import { preparerLieuRepresentant, verifierCanalOuvrable } from '../src/representant.js';
+import {
+  preparerLieuRepresentant,
+  verifierLignesDuRepresentant,
+  retirerCeQuiAEteCommence,
+} from '../src/representant.js';
 import { preparerLieuOrchestrateur } from '../src/orchestrateur.js';
 
 function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
 
   ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel] [--nature client]
+                    [--au-dirigeant]                       --au-dirigeant : autorise LE DIRIGEANT
+                                                           du poste sur cette ligne interne, sans
+                                                           que tu aies a connaitre son adresse.
+                                                           C'est ainsi que le gestionnaire ouvre
+                                                           sa ligne vers lui :
+                                                             ouvrir dirigeant --titre "ligne dirigeant <client>" --au-dirigeant
+                                                           Sans dirigeant designe sur le poste, la
+                                                           ligne est REFUSEE — une ligne interne
+                                                           sans invite refuse la parole a tous.
                                                            ouvre le canal du chantier
                                                            (--titre nomme le canal ET signe chaque message ;
                                                             sans lui, en interne, c'est le code du chantier)
@@ -42,8 +55,10 @@ function usage(code = 0) {
   renommer --titre "..." [--canal <id>] [--a <ligne>]      renomme le canal (Slack + registre)
 
   --a <ligne> NOMME LA LIGNE VISEE, et c'est le DESTINATAIRE qu'il nomme, jamais toi :
-              depuis le pane d'un gestionnaire, « --a client » / « --a dirigeant ».
-              Le nom est le chantier de la ligne, ou le nom de son canal.
+              depuis le pane d'un gestionnaire, « --a <le client> » / « --a dirigeant ».
+              Le nom est le chantier de la ligne, ou le nom de son canal — c'est donc
+              le nom sous lequel elle a ete OUVERTE. La ligne du dirigeant s'ouvre sur
+              le chantier « dirigeant » ; celle du client, sur le nom du client.
               Un pane qui porte PLUSIEURS lignes exige ce nom : sans lui, le geste est
               REFUSE et rien n'est envoye — jamais la premiere ligne venue.
               Un pane qui n'en porte qu'une n'exige rien.
@@ -53,10 +68,18 @@ function usage(code = 0) {
                                                            — aucun agent n'y ecrit, aucune
                                                            commande n'y poste. Le canal doit
                                                            exister et notre robot y etre invite.
-  representant <client> --canal <canal> [--depot <chemin>] prepare le lieu d'un representant
+  dirigeant <courriel>                                     designe LE DIRIGEANT de ce poste, une
+                                                           fois. Son adresse ne quitte jamais le
+                                                           poste : les agents demandent « le
+                                                           dirigeant », jamais son courriel.
+  representant <client> --canal <canal> --dirigeant <courriel> [--depot <chemin>]
+                                                           prepare le lieu d'un representant
                                                            dans <chemin> (defaut : le repertoire
                                                            courant) — refuse tout net et NE CREE
-                                                           RIEN si <canal> n'est pas joignable
+                                                           RIEN si <canal> n'est pas joignable,
+                                                           si le poste ne peut pas ouvrir de
+                                                           ligne, ou si <courriel> ne designe
+                                                           personne dans l'espace
   orchestrateur <nom> [--depot <chemin>]                   prepare le lieu d'un orchestrateur,
                                                            nomme, dans <chemin> — refuse tout net
                                                            et NE CREE RIEN si le poste ne peut pas
@@ -183,6 +206,11 @@ if (geste === 'relever') {
       // un canal public pour un client sans que rien ne le dise.
       nature: option(args, '--nature'),
       invites,
+      // LA PRÉSENCE EST LUE PAR `optionDonnee`, JAMAIS PAR `includes` — c'est la leçon exacte
+      // de T-20260813-0078 : `--titre "--au-dirigeant"` contient le drapeau sans le porter, et
+      // un `includes` y aurait vu une demande d'ouvrir la ligne du dirigeant. `optionDonnee`
+      // parcourt les jetons et saute la valeur d'une option à valeur.
+      au_dirigeant: optionDonnee(args, '--au-dirigeant').presente,
     })
   );
 } else if (geste === 'dire' || geste === 'demander') {
@@ -238,10 +266,29 @@ if (geste === 'relever') {
     process.exit(1);
   }
   rendre(await parler({ geste: 'commun', canal, autorises: r.autorises }));
+} else if (geste === 'dirigeant') {
+  // Le geste de l'OPÉRATEUR du poste, une fois — pas celui d'un agent. Rien ici n'ouvre de
+  // ligne, n'inscrit de pane, ni ne poste quoi que ce soit : on nomme qui est le dirigeant.
+  const courriel = premierLibre(args);
+  if (!courriel) usage(1);
+  const id = await trouverMembre(await lireJeton(SERVICE_ROBOT), courriel);
+  if (!id) {
+    process.stderr.write(
+      `aucun membre pour ${courriel} — le dirigeant n'est PAS designe.\n` +
+        `  Rien n'a change : les lignes deja ouvertes gardent leurs autorises.\n`
+    );
+    process.exit(1);
+  }
+  rendre(await parler({ geste: 'dirigeant', id, courriel }));
 } else if (geste === 'representant') {
   const client = premierLibre(args);
   const canal = option(args, '--canal');
-  if (!client || !canal) usage(1);
+  // `--dirigeant` EST EXIGÉ, ET C'EST LE LOT LUI-MÊME (T-20260813-0076). Un gestionnaire posé
+  // sans chemin vers le dirigeant est celui qu'on avait : tenu de remonter ce qui engage
+  // Somtech, toute situation problématique et son topo du matin, sans aucun moyen de le faire.
+  // Le rendre facultatif aurait laissé reparaître exactement ce manque, en silence.
+  const courrielDirigeant = option(args, '--dirigeant');
+  if (!client || !canal || !courrielDirigeant) usage(1);
   const depotClient = option(args, '--depot') || process.cwd();
   const r = await preparerLieuRepresentant({
     depotClient,
@@ -250,8 +297,40 @@ if (geste === 'relever') {
     // La lecture du jeton passe DANS la vérification, jamais dans son argument : lue ici, son
     // échec traversait toute la pose sans produire le moindre JSON de contrat, et déversait
     // sur stderr un message qui proposait d'écraser un secret (T-20260813-0054).
-    verifierJoignabilite: () => verifierCanalOuvrable({ canal }),
+    verifierJoignabilite: () => verifierLignesDuRepresentant({ canal, courrielDirigeant }),
   });
+
+  // ═══ LA DÉSIGNATION VIENT APRÈS LA POSE, ET ELLE LA DÉFAIT SI ELLE ÉCHOUE.
+  //
+  // Elle ne peut pas venir avant : `preparerLieu` refuse d'abord sur ce qui ne dépend que du
+  // disque local (gabarits absents), et payer un aller-retour au veilleur pour un dépôt qui
+  // n'a pas reçu le pack serait le défaut que ce module a déjà nommé.
+  //
+  // Elle ne peut pas manquer non plus : un lieu posé dont le poste ignore le dirigeant est un
+  // gestionnaire qui naîtra sans pouvoir ouvrir sa seconde ligne — le garde le tiendra fermé,
+  // et personne ne saura pourquoi. Alors si elle échoue, on RETIRE ce qui vient d'être posé :
+  // la promesse « pose interrompue → rien sur disque » vaut pour cette étape comme pour les
+  // autres, sans quoi elle ne vaudrait que pour celles qu'on avait prévues.
+  if (r.ok && r.cree) {
+    const d = await parler({ geste: 'dirigeant', id: r.ligne?.dirigeant?.id, courriel: courrielDirigeant });
+    if (!d.ok) {
+      retirerCeQuiAEteCommence(depotClient, client);
+      process.stdout.write(
+        `${JSON.stringify({
+          ok: false,
+          cree: false,
+          role: 'representant',
+          nom: client,
+          refus: { motif: 'dirigeant_non_designe', portee: 'poste', message: d.erreur },
+        })}\n`
+      );
+      process.stderr.write(
+        `${d.erreur}\n` +
+          `  Le lieu qui venait d'etre pose a ete RETIRE : rien ne subsiste dans ${depotClient}.\n`
+      );
+      process.exit(1);
+    }
+  }
   process.stdout.write(`${JSON.stringify(r)}\n`);
   // Le JSON est le contrat de qui appelle ; le motif écrit en clair est celui de qui LIT. Sans
   // cette ligne, un refus ne laissait sur stderr que ce que Node y avait déversé lui-même — un

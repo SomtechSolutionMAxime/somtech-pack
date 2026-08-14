@@ -11,7 +11,7 @@ sans rien redécouvrir. Cette compétence ne devient **jamais** ce représentant
 prépare son adresse, une fois, puis s'arrête.
 
 ```
-/gestionnaire-client <client> --canal <le canal privé de ce client>
+/gestionnaire-client <client> --canal <le canal privé de ce client> --dirigeant <son courriel>
 ```
 
 Le résultat, quand tout va bien :
@@ -62,6 +62,11 @@ disque local ne coûte aucun aller-retour vers Slack.
   elle, aucune vérification n'est possible : dis-le et arrête-toi.
 - **Le canal du client existe déjà et il est privé.** Le créer, ou y inviter le robot,
   est un geste humain — cette compétence ne le fait jamais (voir plus bas).
+- **Tu connais le courriel du dirigeant, et il est celui d'un membre de l'espace.** Un
+  gestionnaire naît avec DEUX lignes : celle de son client, et une ligne interne vers le
+  dirigeant — sans laquelle il ne peut honorer aucune des quatre obligations de son métier
+  qui exigent qu'il REMONTE. La pose refuse et ne crée rien si ce courriel ne désigne
+  personne (`dirigeant_inconnu`).
 - **Tu es dans le dépôt du client**, ou tu connais son chemin (`--depot`, par défaut le
   répertoire courant). C'est ce dépôt qui reçoit `.gestionnaire/<client>/`.
 - **Ce dépôt a reçu la version du pack qui porte les gabarits** — la commande le vérifie
@@ -73,7 +78,8 @@ disque local ne coûte aucun aller-retour vers Slack.
 ```bash
 LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"
 
-$LD representant <client> --canal <le canal privé, sans le croisillon> [--depot <chemin>]
+$LD representant <client> --canal <le canal privé, sans le croisillon> \
+                          --dirigeant <le courriel du dirigeant> [--depot <chemin>]
 ```
 
 La commande rend un objet JSON et son code de sortie le résume : `0` si le lieu existe
@@ -102,6 +108,8 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du client |
 | `absent` | Aucun canal de ce nom n'existe | Vérifie l'orthographe, ou fais créer le canal |
 | `non_membre` | Le canal existe, le robot n'y est pas | Fais-le **inviter** par un humain (`/invite` depuis le canal) |
+| `dirigeant_inconnu` | Aucun membre de l'espace ne répond à ce courriel | Corrige le courriel, puis relance. **Ne touche ni au canal, ni au trousseau** : les deux ont été vérifiés et vont bien |
+| `dirigeant_non_designe` | Le lieu était posé, le poste n'a pas pu retenir qui est le dirigeant | Le lieu **a été retiré**, rien ne subsiste. Corrige la cause que le message nomme, relance |
 | `ecriture_interrompue` | La pose a échoué en cours de route (droits, disque) | Rien à nettoyer — elle a retiré ce qu'elle avait commencé. Corrige la cause, relance |
 
 Les deux premiers sont prononcés **sans toucher au réseau** : ils ne dépendent que du disque

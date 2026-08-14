@@ -179,7 +179,72 @@ const SONDES_PERMISSIVES = [
   'dans la mesure du possible',
   'à ta discrétion',
   "même si ce n'est pas strictement nécessaire",
+  // ⚠️ LA FAMILLE DE L'ÉVITEMENT, entrée dans `PERMISSIF` en revue de fond (T-20260814-0033).
+  // Elle y manquait, et sa première correction avait été écrite LOCALEMENT dans un seul
+  // contrôle — laissant la dizaine d'autres appels d'`exigeImperatif` ouverts au même
+  // assouplissement. Chaque forme a sa sonde ici, sans quoi une alternative morte-née
+  // (« \bévite », qui ne s'apparie jamais) passerait pour une garde.
+  'évite de trop tarder',
+  "en évitant d'attendre la fin",
+  // ⚠️ L'ORTHOGRAPHE ALTERNATIVE EST UNE TOURNURE À PART ENTIÈRE — posée par la revue de fond,
+  // qui l'a fait passer sur l'étape 2 exactement comme le MAJEUR d'origine. Le régulateur ne
+  // connaissait que « essaie » ; « essaye » est aussi correct, et assouplit tout autant.
+  'essaye de le faire avant',
+  'tente de le faire avant',
+  'fais en sorte de le faire tôt',
+  'efforce-toi de le faire tôt',
 ];
+
+/**
+ * Des énoncés PARFAITEMENT IMPÉRATIFS que `PERMISSIF` ne doit jamais reconnaître.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LA MOITIÉ QUI MANQUAIT, ET ELLE A COÛTÉ QUATRE DÉFAUTS D'UN COUP (revue de fond).
+ *
+ * `SONDES_PERMISSIVES` prouve que chaque alternative est VIVANTE — qu'elle attrape quelque
+ * chose. Rien ne prouvait qu'aucune n'est TROP LARGE, et quatre l'étaient : `d.` (un
+ * métacaractère pris pour une apostrophe) s'appariait sur « évite DAns ce cas » ;
+ * `efforce-toi` sans borne, dans `xefforce-toi` ; `tâche de` sur « la tâche de fond » ;
+ * `tenter d'` sur « sans rien tenter d'autre », qui vit dans deux compétences réelles.
+ *
+ * UNE GARDE QUI ROUGIT SUR DU TEXTE CORRECT EST PIRE QU'ABSENTE : le premier qui la
+ * rencontre la retire, et emporte avec elle les tournures qu'elle gardait vraiment. Les deux
+ * listes se tiennent donc par les deux bouts — l'une interdit les alternatives mortes-nées,
+ * l'autre les alternatives trop larges.
+ */
+const TEXTES_IMPERATIFS = [
+  "sans rien tenter d'autre", // vit dans deux compétences réelles — l'infinitif n'est pas un conseil
+  'la tâche de fond reste la tienne',
+  'ce qui a déjà été dit, essayé, tranché',
+  "un « bonjour » est l'aveu qu'on cherche à éviter",
+  // ⚠️ CES DEUX-LÀ DÉPARTAGENT DES FORMES QUE RIEN D'AUTRE NE DÉPARTAGE, et le premier jet de
+  // cette liste les avait neutralisés en changeant le verbe — un cas de test qui ne teste plus
+  // ce pour quoi il a été écrit. « évite dix » sépare `d['’]` de `d.` (le métacaractère) ;
+  // « évite deux » sépare `de\b` de `de` nu, qui mord le mot suivant.
+  'évite dix minutes de trajet au client',
+  'évite deux allers-retours au client',
+  'xefforce-toi de le faire', // la tournure enchâssée dans un mot n'en est pas une
+  'tu dois essayer de comprendre le besoin avant de répondre', // l'infinitif, encore : le
+  // principe posé pour « tenter » avait été enfreint sur son voisin « essayer », dans le
+  // commit même qui l'écrivait.
+  'le veilleur veille à ce qu’aucune ligne ne reste orpheline', // « veille à » ne se départage
+  // pas de l'impératif — et « veilleur » est du vocabulaire central de ce dépôt.
+  'tu remontes au dirigeant, au moment du constat',
+  'tu nommes toujours la ligne que tu vises',
+  'rien ne part avant qu’il ait dit « oui, c’est ça »',
+];
+
+test('axe MODALITÉ : aucune tournure n’est TROP LARGE — un énoncé impératif ne se lit pas comme un conseil', () => {
+  for (const enonce of TEXTES_IMPERATIFS) {
+    const trouve = enonce.match(PERMISSIF);
+    assert.ok(
+      !trouve,
+      `« ${enonce} » est un énoncé impératif, et la garde y voit un assouplissement ` +
+        `(« ${trouve && trouve[0]} ») : elle rougirait sur du texte correct, et se ferait retirer.`,
+    );
+    assert.doesNotThrow(() => exigeImperatif(enonce, 'un énoncé impératif'));
+  }
+});
 
 test('axe MODALITÉ : chaque tournure permissive est VIVANTE, et chacune a sa sonde', () => {
   const alternatives = alternativesDe(PERMISSIF.source);

@@ -469,8 +469,14 @@ export const CONTROLES_DANGER = [
           + `est que rien n’attend. Une justification qui nie l’urgence retire la priorité qu’elle prétend motiver.`,
       );
 
-      const iAtteint = chemin.search(/orchestrateur/i);
-      const iInscrit = chemin.search(/sur la demande/i);
+      // ⚠️ LE CHEMIN QUI ATTEINT A CHANGÉ, LA GARDE NON (T-20260814-0033). Il passait par
+      // l'orchestrateur d'un chantier — un TIERS, et seulement s'il y en avait un en route.
+      // Le gestionnaire a désormais sa propre ligne vers le dirigeant : c'est elle qui
+      // prévient une personne, directement. Ce qui n'a pas bougé d'un pouce, c'est
+      // l'appariement gardé ici — ATTEINDRE avant INSCRIRE —, parce qu'une urgence qui part
+      // d'abord vers une note laisse le client dans son danger, quel que soit le chemin.
+      const iAtteint = chemin.search(/--a dirigeant|ta ligne avec le dirigeant/i);
+      const iInscrit = chemin.search(/registre|sur la demande/i);
       assert.ok(iAtteint >= 0 && iInscrit >= 0, 'les deux chemins de remontée doivent être nommés tous les deux');
       assert.ok(
         iAtteint < iInscrit,
@@ -799,8 +805,8 @@ export const MUTATIONS_DANGER = [
     fichier: 'metier',
     // Posée par la seconde revue : elle a survécu aux gardes de PRÉSENCE qui la précédaient.
     muter: (t) => t.replace(
-      "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
-      "l'orchestrateur du chantier en cours d'abord, si l'idée te vient.",
+      "d'abord, parce que c'est le seul qui prévienne une personne.",
+      "d'abord, si l'idée te vient.",
     ),
   },
   {
@@ -813,8 +819,8 @@ export const MUTATIONS_DANGER = [
     // « une fois que tu as un instant »). Elles échouent toutes désormais par la même
     // garde de forme ; celle-ci est posée pour que la garde ne puisse pas y revenir.
     muter: (t) => t.replace(
-      "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
-      "l'orchestrateur du chantier en cours d'abord, idéalement.",
+      "d'abord, parce que c'est le seul qui prévienne une personne.",
+      "d'abord, idéalement.",
     ),
   },
   {
@@ -824,8 +830,8 @@ export const MUTATIONS_DANGER = [
     fichier: 'metier',
     // Posée par la revue contre la garde de forme : elle en respectait la lettre entière.
     muter: (t) => t.replace(
-      "l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne.",
-      "l'orchestrateur du chantier en cours d'abord, parce que ça ne presse pas.",
+      "d'abord, parce que c'est le seul qui prévienne une personne.",
+      "d'abord, parce que ça ne presse pas.",
     ),
   },
   {
@@ -834,8 +840,8 @@ export const MUTATIONS_DANGER = [
     cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "celui de « Comment tu remontes », plus haut : l'orchestrateur du chantier en cours d'abord, parce que c'est le seul qui prévienne une personne. S'il n'y a aucun chantier en route, tu écris sur la demande,",
-      "celui de « Comment tu remontes », plus haut : tu écris sur la demande d'abord, parce que ça survit à ta session. S'il y a un chantier en route, tu préviens ensuite son orchestrateur,",
+      "ta ligne avec le dirigeant (`--a dirigeant`, voir « Comment tu remontes ») d'abord, parce que c'est le seul qui prévienne une personne. Le registre ensuite, pour que la question survive à ta session",
+      "le registre d'abord, parce que ça survit à ta session. Ta ligne avec le dirigeant (`--a dirigeant`) ensuite, pour prévenir quelqu'un",
     ),
   },
   {

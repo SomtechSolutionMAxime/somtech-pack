@@ -282,5 +282,15 @@ export async function preparerLieu({ depot, role, nom, verifierLigne }) {
     );
   }
 
-  return { ok: true, cree: true, role, nom, racine, fichiers: [...GABARITS].sort(), avertissements };
+  // `ligne` — CE QUE LA VÉRIFICATION A MESURÉ, rendu tel quel à l'appelant.
+  //
+  // Elle interroge déjà le monde (le canal, le trousseau, l'espace) ; ce qu'elle en rapporte
+  // n'appartient pas à ce module, qui ne sait pas ce qu'est un dirigeant ni un canal client.
+  // Le faire redemander à la commande aurait remis un second aller-retour réseau APRÈS la
+  // pose — et un second aller-retour, c'est une seconde façon d'échouer sur un lieu déjà posé.
+  //
+  // Rendue seulement quand elle a eu lieu : sur un lieu déjà installé, la vérification n'est
+  // JAMAIS appelée (garde 1), et rendre un `ligne` inventé ferait croire à une mesure qui n'a
+  // pas été faite.
+  return { ok: true, cree: true, role, nom, racine, fichiers: [...GABARITS].sort(), avertissements, ligne };
 }

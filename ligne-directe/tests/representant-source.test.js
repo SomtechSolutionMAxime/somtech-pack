@@ -273,9 +273,25 @@ test('le retrait ne se plaint pas quand il n’y a rien à retirer', () => {
 
 /** Lance la vraie commande, dans un vrai dépôt, et rend ce que le shell aurait vu. */
 function lancerCommande(depot, client = 'client-x') {
-  return spawnSync(process.execPath, [LIGNE_DIRECTE, 'representant', client, '--canal', 'client-x', '--depot', depot], {
-    encoding: 'utf8',
-  });
+  // `--dirigeant` est exigé depuis T-20260813-0076 : un gestionnaire posé sans chemin vers le
+  // dirigeant est celui qu'on avait — tenu de remonter, sans moyen de le faire. Ces essais
+  // portent sur des refus qui tombent AVANT toute résolution de courriel (gabarits absents,
+  // lieu partiel) : l'adresse n'est jamais interrogée, et le refus reste celui du disque local.
+  return spawnSync(
+    process.execPath,
+    [
+      LIGNE_DIRECTE,
+      'representant',
+      client,
+      '--canal',
+      'client-x',
+      '--dirigeant',
+      'personne@example.invalid',
+      '--depot',
+      depot,
+    ],
+    { encoding: 'utf8' }
+  );
 }
 
 test('code de sortie : dépôt sans gabarits — non nul, sur le MOTIF de la source, et rien sur le disque', () => {

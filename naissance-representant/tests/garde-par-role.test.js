@@ -23,7 +23,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { decider, segmentsHorsSequence } from '../src/garde.js';
+import { decider, segmentsHorsSequence, naturesOuvertesDuPane } from '../src/garde.js';
 import { roleDuLieu } from '../src/lieu.js';
 import { traiterRequete } from '../src/hook.js';
 
@@ -34,7 +34,7 @@ const OUVERTURE_INTERNE =
   'LD="$HOME/.somtech/ligne-directe/bin/ligne-directe.js"\n' +
   '$LD ouvrir D-20260813-0002 --sujet "le lieu de l\'orchestrateur" --inviter maxime.leboeuf@somtech.ca';
 
-const bash = (command) => ({ toolName: 'Bash', toolInput: { command }, ligneOuverte: false });
+const bash = (command) => ({ toolName: 'Bash', toolInput: { command }, naturesOuvertes: [] });
 
 // ═══════════════════════════════ chaque rôle ouvre SA ligne
 
@@ -58,6 +58,373 @@ test('un orchestrateur NE PEUT PAS ouvrir un canal de client — ce serait de l�
 test('un représentant NE PEUT PAS ouvrir une ligne interne — le nom de son client partirait en public', () => {
   const d = decider({ ...bash(OUVERTURE_INTERNE), role: 'representant' });
   assert.equal(d.permissionDecision, 'deny');
+});
+
+// ═══════════════════════════════ la SECONDE ligne du représentant (T-20260813-0076)
+
+const OUVERTURE_DIRIGEANT =
+  'LD="$HOME/.somtech/ligne-directe/bin/ligne-directe.js"\n' +
+  '$LD ouvrir dirigeant --titre "ligne dirigeant acme" --au-dirigeant';
+
+test('le représentant peut ouvrir sa SECONDE ligne, celle du dirigeant', () => {
+  // Sans ça, il n'a aucun chemin vers le dirigeant — alors que quatre obligations livrées de
+  // son métier lui imposent de remonter (ce qui engage Somtech, toute situation problématique,
+  // une question qu'il ne peut trancher, son topo du matin).
+  assert.deepEqual(segmentsHorsSequence(OUVERTURE_DIRIGEANT, 'representant'), []);
+});
+
+test('sa ligne interne est ANCRÉE sur « dirigeant » — pas sur n’importe quel mot', () => {
+  // ⚠️ LE PIÈGE DE CE LOT. Admettre « une ligne interne » pour le représentant sans ancrer son
+  // chantier aurait fait passer `ouvrir acme --titre "Acme"` : un canal PUBLIC portant le nom
+  // du client, c'est-à-dire le refus que ce fichier tient depuis E-20260813-0002, contourné par
+  // la porte qu'on venait d'ouvrir. La seconde ligne d'un représentant va au dirigeant, ou nulle part.
+  for (const commande of [
+    '$LD ouvrir acme --titre "Acme"',
+    '$LD ouvrir acme --titre "Acme" --au-dirigeant',
+    'node /x/ligne-directe.js ouvrir D-20260805-0005 --sujet "x"',
+    '$LD ouvrir dirigeants --titre "X"', // un mot qui COMMENCE par le bon, et n'est pas le bon
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer pour un représentant`
+    );
+  }
+});
+
+test('SANS `--au-dirigeant`, LA LIGNE DU DIRIGEANT N’EST PAS UNE OUVERTURE — elle naîtrait muette', () => {
+  // ⚠️ BLOQUANT RELEVÉ EN REVUE DE FOND, et vérifié contre un vrai veilleur avant d'être cru.
+  // `ouvrir dirigeant --titre "…"` sans le drapeau réussissait : le canal était créé et la
+  // ligne inscrite avec `autorises: []`. Or `autorise()` distingue une liste VIDE d'une liste
+  // ABSENTE — l'absente a un repli permissif rétrocompatible, la vide refuse TOUT LE MONDE, le
+  // dirigeant le premier. La ligne comptait pourtant comme `interne` présente, donc le garde
+  // relâchait le pane : un gestionnaire au travail, avec une ligne qui a l'air ouverte, et
+  // chaque message du dirigeant rejeté en silence. C'est le mode de panne exact que
+  // `--au-dirigeant` existe pour fermer, laissé ouvert par la porte d'à côté.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "ligne dirigeant acme"', 'representant'),
+    [],
+    'sans le drapeau, ce n’est pas l’ouverture de sa ligne du dirigeant'
+  );
+  // Et le drapeau doit être un DRAPEAU, pas un mot trouvé n'importe où : un titre qui vaut
+  // littéralement « --au-dirigeant » n'en est pas un (la leçon de T-20260813-0078).
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "--au-dirigeant"', 'representant'),
+    [],
+    'un drapeau consommé comme valeur d’une autre option n’est pas ce drapeau'
+  );
+});
+
+test('UN TITRE QUI VAUT UN DRAPEAU N’EST PAS CE DRAPEAU — dans les deux sens', () => {
+  // Le trou inverse, et il est le plus dangereux des deux : `ouvrir acme --titre "--nature
+  // client"` ouvre en réalité une ligne INTERNE — un canal PUBLIC portant le nom du client.
+  // Reconnaître les drapeaux « n'importe où dans le texte » l'aurait pris pour une ligne
+  // cliente et laissé passer. Le garde lit donc les arguments avec `optionDonnee`, la fonction
+  // que la commande appelle elle-même, qui saute la valeur d'une option à valeur.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir acme --titre "--nature client"', 'representant'),
+    [],
+    'le nom du client serait parti dans un canal public'
+  );
+
+  // ⚠️ LE CAS QUI EXIGE VRAIMENT DE LIRE LES GUILLEMETS, trouvé par une mutation qui a SURVÉCU
+  // au cas ci-dessus : un drapeau enfoui DANS une valeur de plusieurs mots. Découper le segment
+  // sur les espaces sans lire les guillemets rend `"x` et `client"` comme deux jetons — la
+  // valeur du `--sujet` cesse alors d'être une valeur au milieu, et le `--nature client` qu'elle
+  // contient redevient un drapeau. La commande, elle, ouvre une ligne INTERNE nommée du client :
+  // un canal PUBLIC portant son nom, admis par le garde qui existe pour l'empêcher.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir acme --sujet "x --nature client" --titre "Acme"', 'representant'),
+    [],
+    'un « --nature client » enfoui dans un sujet n’est pas une nature'
+  );
+  // Et l'inverse, sur l'autre ligne : un `--au-dirigeant` enfoui dans un sujet ferait admettre
+  // une ouverture qui n'autorise personne — la ligne muette du bloquant, par une autre porte.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --sujet "x --au-dirigeant y" --titre "X"', 'representant'),
+    [],
+    'un « --au-dirigeant » enfoui dans un sujet ne demande le dirigeant à personne'
+  );
+});
+
+test('UNE CITATION QU’ON NE SAIT PAS LIRE N’OUVRE RIEN — le garde ne devine pas le découpage du shell', () => {
+  // ⚠️ TROUVÉ EN CONTRE-REVUE DE FOND, reproduit contre un vrai veilleur À TRAVERS UN VRAI
+  // SHELL — et c'est le bloquant rouvert par une autre porte. Le premier correctif ne lisait
+  // que les guillemets doubles propres : sur `--titre 'x --au-dirigeant y'`, il éclatait la
+  // valeur et voyait un drapeau que le shell ne passe JAMAIS comme tel. Le garde admettait,
+  // la commande ouvrait sans demander le dirigeant, et la ligne naissait muette.
+  //
+  // On ne récrit pas le découpage d'un shell — il divergerait quelque part. Ce qu'on ne sait
+  // pas lire ne passe pas : le refus est récupérable (on réécrit en guillemets doubles), une
+  // admission mal lue ne l'est pas.
+  for (const commande of [
+    // APOSTROPHES — le cas reproduit contre le vrai veilleur. Le shell passe UN argument
+    // `x --au-dirigeant y` ; sans ce refus, le garde y voyait le drapeau et admettait.
+    "$LD ouvrir dirigeant --titre 'x --au-dirigeant y'",
+    // GUILLEMET ÉCHAPPÉ — l'autre mécanisme, et il a fallu DEUX essais pour trouver le cas qui
+    // le prouve. Le `\"` est un guillemet LITTÉRAL pour le shell : tout reste UN argument, donc
+    // `--au-dirigeant` n'est pas un drapeau. Sans le refus de l'échappement, notre bascule se
+    // décale et le drapeau redevient un drapeau — la ligne muette, par la troisième porte.
+    //
+    // ⚠️ IL FAUT DEUX ÉCHAPPEMENTS, ET LE DRAPEAU ENTRE LES DEUX. Avec un seul, le compte de
+    // guillemets devient impair : la citation reste ouverte à la fin, et c'est l'AUTRE contrôle
+    // qui refuse — la mutation qui retire l'échappement lui survivait alors, verte, pour une
+    // raison qui n'était pas la sienne. Mesuré, pas supposé.
+    '$LD ouvrir dirigeant --titre "a\\" --au-dirigeant b\\" c"',
+    // MÊME RÈGLE SUR L'AUTRE LIGNE — le refus ne vaut pas que pour le drapeau du dirigeant.
+    "$LD ouvrir acme --nature client --titre 'Acme'",
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer alors que son découpage est incertain`
+    );
+  }
+});
+
+test('UN COMMENTAIRE SHELL COUPE LA COMMANDE — le garde lit ce que le shell passe, pas ce qui est écrit', () => {
+  // ⚠️ LA TROISIÈME PORTE DU MÊME BLOQUANT, relevée au troisième passage de la revue de fond et
+  // reproduite contre un vrai veilleur à travers un vrai shell. Un agent qui s'annote en fin de
+  // ligne — geste des plus ordinaires — écrivait un `--au-dirigeant` que le shell n'a JAMAIS
+  // passé, et le garde le lisait comme un drapeau : ligne ouverte, `autorises: []`, muette.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "ligne dirigeant acme" # --au-dirigeant', 'representant'),
+    [],
+    'un drapeau derrière un croisillon n’est pas passé à la commande'
+  );
+  // Et symétriquement sur l'autre ligne : la nature commentée n'est pas une nature, donc ce
+  // n'est plus l'ouverture d'une ligne cliente — ce serait un canal PUBLIC au nom du client.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir acme --titre "Acme" # --nature client', 'representant'),
+    [],
+    'une nature commentée ne fait pas une ligne cliente'
+  );
+  // ON TRONQUE, ON NE REFUSE PAS : une ouverture complète suivie d'un commentaire reste une
+  // ouverture. Refuser ici aurait porté sur ce qui marche.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "X" --au-dirigeant # ma ligne interne', 'representant'),
+    []
+  );
+  // Et le croisillon EN MILIEU DE MOT reste littéral, comme pour un shell — sans quoi un titre
+  // ou un nom de canal qui en porte un serait amputé.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "salon #12" --au-dirigeant', 'representant'),
+    []
+  );
+  // ⚠️ LE CAS QUI PROUVE QUE « EN TÊTE D'UN MOT » N'EST PAS DÉCORATIF, et il a fallu le chercher :
+  // avec un croisillon CITÉ, la coupe n'a pas lieu de toute façon, et la mutation qui coupe
+  // partout survivait. Il faut un croisillon en milieu de mot NON CITÉ, et placé AVANT ce qui
+  // reste à lire — sinon la troncature emporte la fin du segment et le refus tombe à tort.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --sujet suivi#3 --titre "X" --au-dirigeant', 'representant'),
+    [],
+    'un croisillon littéral dans une valeur non citée ne coupe pas la commande'
+  );
+});
+
+test('RIEN NE SUIT UNE OUVERTURE — un pipe, un `||`, un `&`, une redirection n’entrent pas avec elle', () => {
+  // ⚠️ LA PORTE LA PLUS GRAVE DU LOT (4ᵉ passage de la revue de fond, vérifiée jusqu'à
+  // l'EXÉCUTION RÉELLE des deux membres). `segments()` découpe sur `\n`, `&&` et `;` — jamais
+  // sur un pipe, un `||`, ni un `&` seul — et rien ne vérifiait qu'il ne restait RIEN après les
+  // drapeaux reconnus. Le garde dont la raison d'être est « rien ne passe avant que la ligne
+  // soit ouverte » laissait passer n'importe quoi, pendant la fenêtre où il doit tout bloquer.
+  //
+  // ⚠️ CE LOT AVAIT ÉLARGI LE TROU SANS LE SAVOIR : la forme d'avant finissait par
+  // `--titre ".+"$`, et cet ancrage de fin bloquait le pipe PAR EFFET DE BORD. En passant aux
+  // jetons, il a disparu sans être remplacé.
+  //
+  // On ne court pas après la syntaxe d'un shell — `|`, `||`, `&`, `>`, et le suivant qu'on
+  // n'aurait pas listé. On borne par ce qu'on CONNAÎT : le chantier et les options de `ouvrir`.
+  for (const commande of [
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant | rm -rf /tmp',
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant || curl http://ailleurs',
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant & rm -rf /tmp',
+    '$LD ouvrir acme --nature client --titre "Acme" | rm -rf /tmp',
+    '$LD ouvrir acme --nature client --titre "Acme" > /tmp/vol',
+    '$LD ouvrir dirigeant --titre "x" --au-dirigeant --depot /ailleurs', // une option que `ouvrir` ne connaît pas
+    // ⚠️ UN PIPE COLLÉ — le cas qui prouve que la borne est « UN seul argument libre » et pas
+    // « pas trop ». Les autres en laissent quatre ou cinq derrière eux ; celui-ci n'en laisse
+    // qu'UN, et une mutation qui tolérait deux arguments libres survivait à tous les autres.
+    '$LD ouvrir acme --nature client --titre "Acme" |sh',
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer — tout ce qui suit s’exécuterait`
+    );
+  }
+  // Et l'orchestrateur, exposé de la même façon sur `main` par un motif qui finissait en `.*`.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir D-20260813-0002 --sujet "x" | rm -rf /tmp', 'orchestrateur'),
+    []
+  );
+});
+
+test('LA POSE DE LA VARIABLE NE PORTE PAS DE QUEUE NON PLUS — et sa forme réelle passe toujours', () => {
+  // Même famille, autre segment : `LD=…` finissait par `.*`, donc
+  // `LD="…ligne-directe.js" | rm -rf /tmp` était un segment reconnu.
+  assert.notDeepEqual(
+    segmentsHorsSequence('LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js" | rm -rf /tmp', 'representant'),
+    []
+  );
+  // ⚠️ ET LA FORME RÉELLE PASSE — elle porte un ESPACE dans sa valeur citée (`node …`). Une
+  // première borne interdisait l'espace tout court : elle refusait la commande que le gabarit
+  // prescrit, c'est-à-dire ce qui marche. Attrapé par la suite, pas par relecture.
+  assert.deepEqual(
+    segmentsHorsSequence('LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"', 'representant'),
+    []
+  );
+});
+
+test('UNE SUBSTITUTION DE COMMANDE N’OUVRE RIEN — même dans une valeur citée parfaitement propre', () => {
+  // ⚠️ 5ᵉ PASSAGE DE LA REVUE DE FOND, vérifiée jusqu'à l'exécution réelle. Ce qui la rend
+  // sournoise : l'argv reçu par la commande est PARFAITEMENT NORMAL — `--titre x
+  // --au-dirigeant` —, la ligne s'ouvrirait correctement, avec son dirigeant. Et pourtant la
+  // commande arbitraire a tourné, sans aucun rapport avec le sort de la ligne. Aucune des
+  // quatre bornes précédentes ne la voit : elles bornent la STRUCTURE, jamais le CONTENU
+  // d'une valeur — et le shell, lui, évalue le contenu avant que node démarre.
+  //
+  // Antérieure à ce lot (l'ancien motif acceptait n'importe quel contenu de valeur), fermée
+  // ici parce que la conséquence est celle de la porte d'à côté.
+  for (const commande of [
+    '$LD ouvrir dirigeant --titre "$(touch /tmp/preuve)x" --au-dirigeant',
+    '$LD ouvrir dirigeant --titre "`touch /tmp/preuve`x" --au-dirigeant',
+    '$LD ouvrir acme --nature client --titre "$(id)"',
+    'LD="node $(touch /tmp/preuve)ligne-directe.js"',
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer — la substitution s’exécuterait`
+    );
+  }
+});
+
+test('MAIS L’EXPANSION SIMPLE RESTE PERMISE — `$HOME` et `$LD` n’exécutent rien, et la séquence en porte deux', () => {
+  // Refuser tout `$` aurait porté sur ce qui marche : la séquence d'ouverture réelle écrit
+  // `LD="node $HOME/…"` puis invoque `$LD`. C'est la substitution — `$(` et l'accent grave —
+  // qui exécute, pas l'expansion.
+  assert.deepEqual(
+    segmentsHorsSequence('LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"', 'representant'),
+    []
+  );
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "ligne dirigeant acme" --au-dirigeant', 'representant'),
+    []
+  );
+});
+
+test('UN COMMENTAIRE N’OUVRE RIEN QU’UNE CITATION INCERTAINE AURAIT FERMÉ — les deux lectures refusent ensemble', () => {
+  // ⚠️ CE QUE CET ESSAI PROUVE, ET CE QU'IL NE PROUVE PAS — dit plutôt que laissé croire.
+  //
+  // Il prouve que ces trois formes sont REFUSÉES. Il ne prouve PAS l'alignement de
+  // `sansCommentaire` sur `jetonsDuSegment` que le même lot a posé : une mutation qui retire
+  // cet alignement SURVIT, et c'est vérifié. La raison est structurelle — toute troncature qui
+  // aurait lieu laisse le `'` ou le `\` orphelin dans le préfixe conservé, et cet orphelin
+  // fait échouer la reconnaissance de toute façon. Les deux versions rendent le même verdict
+  // sur toute entrée, donc aucun essai ne peut les départager.
+  //
+  // L'alignement reste pour ce qu'il garantit DEMAIN, et c'est écrit dans `sansCommentaire`.
+  for (const commande of [
+    "$LD ouvrir dirigeant --titre 'x' --au-dirigeant # commentaire",
+    '$LD ouvrir dirigeant --titre "x\\" --au-dirigeant # commentaire',
+    "herdr pane current ' # ton pane",
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer alors que sa lecture est incertaine`
+    );
+  }
+});
+
+test('MAIS UNE APOSTROPHE DANS UNE VALEUR CITÉE RESTE PERMISE — c’est du français, pas une citation', () => {
+  // La séquence d'ouverture RÉELLE d'un orchestrateur en porte une. Refuser ici aurait été un
+  // refus portant sur ce qui marche — et il n'aurait eu aucun geste qui le lève.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir D-20260813-0002 --sujet "le lieu de l\'orchestrateur"', 'orchestrateur'),
+    []
+  );
+});
+
+test('L’ORDRE DES DRAPEAUX NE DÉCIDE PLUS DE RIEN — `--titre` avant `--nature client` ouvre aussi', () => {
+  // L'exigence était écrite EN POSITION (`.*--nature client.*--titre…$`) : une commande
+  // parfaitement légitime y échappait par le seul ordre des mots, et le garde refusait
+  // l'ouverture de sa propre ligne à un représentant. Un refus qui porte sur ce qui marche est
+  // le pire des refus — il n'apprend rien et n'a pas de geste qui le lève.
+  for (const commande of [
+    '$LD ouvrir acme --titre "Acme" --nature client',
+    '$LD ouvrir acme --nature client --titre "Acme"',
+    '$LD ouvrir acme --sujet "x" --titre "Acme" --nature client',
+  ]) {
+    assert.deepEqual(segmentsHorsSequence(commande, 'representant'), [], `« ${commande} » a été refusée à tort`);
+  }
+});
+
+test('sur sa ligne du dirigeant, `--nature` reste refusée À TOUTE POSITION', () => {
+  // La ligne du dirigeant est INTERNE. Y autoriser `--nature client` ferait créer un canal
+  // PRIVÉ nommé « dirigeant » où l'appartenance vaudrait autorisation — n'importe quel invité
+  // y piloterait l'agent d'un client. L'interdit descend au niveau de la LIGNE, pas du rôle :
+  // le représentant a par ailleurs le droit d'écrire `--nature client`, sur son autre ligne.
+  for (const commande of [
+    '$LD ouvrir dirigeant --nature client --titre "X"',
+    '$LD ouvrir dirigeant --titre "X" --nature client',
+    '$LD ouvrir --nature client dirigeant --titre "X"',
+    '$LD ouvrir dirigeant --nature interne --titre "X"',
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer sur la ligne du dirigeant`
+    );
+  }
+});
+
+test('LE PANE RESTE FERMÉ TANT QUE LES DEUX LIGNES NE SONT PAS LÀ', () => {
+  // C'est ce garde, et lui seul, qui POSE la seconde ligne à la naissance. Le dirigeant initie
+  // sur cette ligne : elle doit donc exister avant que l'agent ait quoi que ce soit à dire.
+  // Une consigne écrite dans un métier se relâche — mesuré sur ce dépôt même (« l'étape 2 garde
+  // son rang mais cesse d'obliger ») ; un refus mécanique, non.
+  const quelconque = { toolName: 'mcp__servicedesk__demands', toolInput: { action: 'list' } };
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['client'], role: 'representant' }).permissionDecision,
+    'deny',
+    'la seule ligne du client ne suffit pas — il n’aurait aucun chemin vers le dirigeant'
+  );
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['interne'], role: 'representant' }).permissionDecision,
+    'deny',
+    'et l’inverse non plus — il serait muet devant son client'
+  );
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['client', 'interne'], role: 'representant' }).permissionDecision,
+    'allow',
+    'les deux : le pane est relâché'
+  );
+  // L'orchestrateur, lui, n'en a qu'une — et ce lot ne doit rien lui ajouter.
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['interne'], role: 'orchestrateur' }).permissionDecision,
+    'allow',
+    'un orchestrateur avec sa ligne travaille — rien de ce qui tourne ne casse'
+  );
+});
+
+test('UNE LIGNE SANS NATURE VAUT INTERNE — un orchestrateur déjà ouvert ne se retrouve pas enfermé', () => {
+  // Le champ `nature` n'existait pas avant les lignes clientes : une ligne inscrite par une
+  // version antérieure n'en porte pas. La traiter comme un troisième cas aurait tenu fermé,
+  // pour toujours, le pane d'un orchestrateur dont la ligne fonctionne — le pire refus
+  // possible, puisqu'il porte sur ce qui marche. C'est le même repli qu'au registre (`natureDe`).
+  const etat = { ouvertes: [{ pane: 'pane-1', chantier: 'D-1' }] }; // aucune `nature`
+  assert.deepEqual(naturesOuvertesDuPane(etat, 'pane-1'), ['interne']);
+  assert.equal(
+    decider({
+      toolName: 'Bash',
+      toolInput: { command: 'git status' },
+      naturesOuvertes: naturesOuvertesDuPane(etat, 'pane-1'),
+      role: 'orchestrateur',
+    }).permissionDecision,
+    'allow'
+  );
 });
 
 test('la nature est refusée À TOUTE POSITION pour un orchestrateur', () => {
