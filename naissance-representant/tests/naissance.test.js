@@ -411,5 +411,28 @@ test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu�
 });
 
 test('commandesNaissance refuse un client innommable AVANT de construire quoi que ce soit', () => {
-  assert.throws(() => commandesNaissance('/repo', 'Acme Corp', { workspace: 'w1' }), /minuscule/);
+  // DEUX règles se prononcent ici, et depuis T-20260814-0101 elles ne sont plus la même :
+  //
+  //   • celle du LIEU (`lieu-nom.js`) — un seul segment de chemin, casse libre. Elle passe la
+  //     PREMIÈRE, parce qu'elle est la garde de sécurité : un nom qui traverse un répertoire
+  //     ne doit atteindre ni un `readdirSync`, ni la composition d'une commande shell ;
+  //   • celle de HERDR (`nomAgentHerdr`) — minuscules, 32 caractères au plus.
+  //
+  // Un nom peut être un lieu valide et un agent impossible (33 caractères) : les deux gardes
+  // doivent donc mordre séparément, et aucune ne doit avaler l'autre.
+  assert.throws(
+    () => commandesNaissance('/repo', 'Acme Corp', { workspace: 'w1' }),
+    /segment de chemin/,
+    'un espace ne fait pas un nom de dossier — refusé par la garde du lieu, avant toute construction',
+  );
+  assert.throws(
+    () => commandesNaissance('/repo', '../evil', { workspace: 'w1' }),
+    /segment de chemin/,
+    'et un nom qui traverse un répertoire ne doit jamais atteindre la commande « cd <lieu> && claude »',
+  );
+  assert.throws(
+    () => commandesNaissance('/repo', 'a'.repeat(33), { workspace: 'w1' }),
+    /minuscule/,
+    'un lieu parfaitement valide peut rester innommable pour herdr — la seconde garde doit mordre aussi',
+  );
 });

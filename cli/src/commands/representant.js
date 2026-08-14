@@ -28,6 +28,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { resolvePayloadRoot } from '../modules.js';
 import { collectFiles, applyFiles } from '../engine.js';
+import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from '../lieu-nom.js';
 
 /**
  * Les deux rôles qui posent un lieu, avec ce qui les distingue — le gabarit dont ils
@@ -59,9 +60,20 @@ export const GABARIT_DIR = join('.claude', 'templates', ROLES.representant.gabar
  */
 export const PRESERVE = ['CONTEXTE.md'];
 
-/** Un slug : un seul segment de chemin sûr, en minuscules — jamais une évasion. */
+/**
+ * Un seul segment de chemin sûr — jamais une évasion. La casse est LIBRE.
+ *
+ * ⚠️ CETTE FONCTION NE PORTE PLUS LA RÈGLE : elle la relaie (T-20260814-0101). La règle vit
+ * dans `../lieu-nom.js`, le même texte que la POSE applique — sans quoi les deux gestes se
+ * déphasent, ce qui est exactement le défaut qu'on ferme ici. Elle reste exportée parce que
+ * des tests et des appelants la nomment ; elle ne décide plus rien de son côté.
+ *
+ * Ce qui a changé, et le pourquoi est en tête de `lieu-nom.js` : elle exigeait des MINUSCULES,
+ * pendant que la pose écrivait le nom brut. Quatre lieux réels sur cinq portent une majuscule
+ * et étaient donc inatteignables. La garde anti-évasion, elle, n'a pas bougé d'un pouce.
+ */
 export function clientSlugValide(client) {
-  return typeof client === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(client);
+  return nomDeLieuValide(client);
 }
 
 /**
@@ -74,12 +86,8 @@ export async function cmdLieuUpdate(flags, roleNom) {
   if (!role) throw new Error(`rôle inconnu : « ${roleNom} »`);
 
   const nom = flags.client ?? flags.nom;
-  if (!clientSlugValide(nom)) {
-    throw new Error(
-      `--${roleNom === 'orchestrateur' ? 'nom' : 'client'} requis : un slug en minuscules ` +
-        `(lettres/chiffres/tirets), reçu « ${nom ?? ''} »`
-    );
-  }
+  const designe = `--${roleNom === 'orchestrateur' ? 'nom' : 'client'}`;
+  if (!nomDeLieuValide(nom)) throw new Error(messageNomInvalide(nom, designe));
 
   const payloadRoot = resolvePayloadRoot({ source: flags.source });
   const sourceDir = join(payloadRoot, '.claude', 'templates', role.gabarit);
@@ -87,7 +95,15 @@ export async function cmdLieuUpdate(flags, roleNom) {
     throw new Error(`Gabarit introuvable (${sourceDir}) — le pack ne distribue pas (encore) de ${roleNom}`);
   }
 
-  const target = resolve(join(flags.target || process.cwd(), role.dossier, nom));
+  // LE LIEU SE RÉSOUT, IL NE SE COMPOSE PLUS (T-20260814-0101). `join(…, nom)` visait le nom
+  // tapé et manquait le lieu réel dès que la casse différait — sur macOS le noyau rattrapait
+  // en silence, ailleurs la commande aurait échoué (ou, pire, posé sa cible à côté du vrai).
+  // C'est la MÊME résolution que la pose applique, au même texte : `src/lieu-nom.js`.
+  const depot = flags.target || process.cwd();
+  const lieu = resoudreLieu(depot, role.dossier, nom, designe);
+  if (lieu.ambigu) throw new Error(messageLieuAmbigu(nom, resolve(lieu.parent), lieu.homonymes));
+
+  const target = resolve(lieu.racine);
   if (!existsSync(target)) {
     throw new Error(
       `${target} n'existe pas — ce ${roleNom} n'a jamais été « posé ». `
@@ -108,6 +124,10 @@ export async function cmdLieuUpdate(flags, roleNom) {
 
   const converged = flags.dryRun ? 'à converger' : 'convergés (version du pack)';
   console.log(`${role.libelle} « ${nom} » → ${target}${flags.dryRun ? ' [dry-run]' : ''}`);
+  // Le lieu réel ne porte pas la casse demandée : on le DIT. Le taire, c'est laisser croire
+  // qu'on a visé « francois » alors qu'on a écrit dans « Francois » — la confusion exacte que
+  // macOS entretenait en silence.
+  if (!lieu.exact) console.log(`  ↳ lieu trouvé sous le nom « ${lieu.nom} » (la casse diffère de « ${nom} »)`);
   if (report.created.length) console.log(`  créés : ${report.created.join(', ')}`);
   if (report.updated.length) console.log(`  ${converged} : ${report.updated.join(', ')}`);
   if (report.unchanged.length) console.log(`  inchangés : ${report.unchanged.length}`);

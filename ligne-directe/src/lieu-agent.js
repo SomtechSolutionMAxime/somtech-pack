@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync } 
 import { join, dirname } from 'node:path';
 
 import { role as roleDe, rolesConnus } from './roles.js';
+import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from './lieu-nom.js';
 
 /**
  * Les quatre fichiers qui constituent le lieu d'un agent, en CHEMINS RELATIFS à sa racine —
@@ -48,9 +49,17 @@ export function gabaritsDir(depot, role) {
   return join(depot, '.claude', 'templates', roleDe(role).gabarits);
 }
 
-/** La racine du lieu d'un agent nommé, sous le dépôt. */
+/**
+ * La racine du lieu d'un agent nommé, sous le dépôt.
+ *
+ * Ne compose PLUS le chemin elle-même (T-20260814-0101) : elle passe par `resoudreLieu`, la
+ * règle unique que la mise à jour du CLI applique aussi. Deux conséquences, voulues :
+ *   • un nom qui traverse un répertoire LÈVE ici, au lieu d'écrire hors du dépôt ;
+ *   • un lieu déjà posé dont seule la casse diffère est RETROUVÉ — `Francois` répond à
+ *     `francois`, sur macOS comme sur Linux, et non plus « seulement là où le noyau pardonne ».
+ */
 export function racineLieu(depot, role, nom) {
-  return join(depot, roleDe(role).dossier, nom);
+  return resoudreLieu(depot, roleDe(role).dossier, nom).racine;
 }
 
 /**
@@ -186,6 +195,42 @@ export function retirerCeQuiAEteCommence(depot, role, nom) {
  */
 export async function preparerLieu({ depot, role, nom, verifierLigne }) {
   const r = roleDe(role); // un rôle inconnu échoue AVANT toute lecture de disque
+
+  // ─── Garde 0 : LE NOM. Elle n'existait pas — `join(depot, dossier, '../../evil')` écrivait
+  // hors du dépôt, et rien ne le disait (T-20260814-0101). Elle passe avant tout accès disque,
+  // et avant le rôle lui-même côté message : un nom qui traverse un répertoire ne doit jamais
+  // atteindre un `readdirSync`, encore moins un `mkdirSync`.
+  if (!nomDeLieuValide(nom)) {
+    return {
+      ok: false,
+      cree: false,
+      role,
+      nom,
+      refus: {
+        motif: 'nom_invalide',
+        message: messageNomInvalide(nom, `nom du ${r.libelle}`),
+      },
+    };
+  }
+
+  // ─── Garde 0 bis : DEUX LIEUX QUI NE DIFFÈRENT QUE PAR LA CASSE. Impossible sur macOS, banal
+  // sur un volume sensible à la casse dès qu'un doublon a été produit. On ne devine pas lequel
+  // est le vrai : on refuse, et on ne crée surtout pas un TROISIÈME lieu à côté des deux.
+  const resolution = resoudreLieu(depot, r.dossier, nom);
+  if (resolution.ambigu) {
+    return {
+      ok: false,
+      cree: false,
+      role,
+      nom,
+      refus: {
+        motif: 'lieu_ambigu',
+        racine: resolution.parent,
+        homonymes: resolution.homonymes,
+        message: messageLieuAmbigu(nom, resolution.parent, resolution.homonymes),
+      },
+    };
+  }
 
   // ─── Garde 1 : l'idempotence, et elle ne vaut QUE pour un lieu complet.
   const etat = etatLieu(depot, role, nom);

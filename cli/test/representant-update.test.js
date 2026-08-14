@@ -95,14 +95,22 @@ test('cible absente : refuse, et ne crée RIEN — poser un lieu n’est pas son
   assert.ok(!existsSync(lieu(repo)), 'la commande ne doit pas avoir créé le lieu elle-même — ce n’est pas son rôle (pose)');
 });
 
-// ═══════════════════════════════ 2. le slug client est un segment de chemin, jamais une évasion
+// ═══════════════════════════════ 2. le nom du client est un segment de chemin, jamais une évasion
+//
+// ⚠️ `'Acme'` A QUITTÉ CETTE LISTE (T-20260814-0101), ET CE N'EST PAS UN RELÂCHEMENT.
+//
+// La règle exigeait des MINUSCULES pendant que la pose écrivait le nom BRUT : quatre lieux
+// réels sur cinq (`Charles-Olivier`, `Francois`, `Jacob`, `Zach`) étaient donc inatteignables
+// par cette commande, et macOS le masquait. La casse ne fait plus partie du jugement ; la
+// garde anti-évasion, elle, n'a pas bougé d'un pouce — c'est ce que cette liste éprouve, et
+// `representant-update-casse.test.js` l'éprouve des DEUX côtés (mise à jour et pose).
 
-test('slug client invalide (évasion de chemin) : refusé avant toute écriture', async () => {
+test('nom client invalide (évasion de chemin) : refusé avant toute écriture', async () => {
   const payload = makeFixturePayload();
   const repo = makeClientRepo({ pose: false });
   mkdirSync(join(repo, '.gestionnaire'), { recursive: true });
 
-  for (const client of ['../evil', '..', 'a/b', '', '.', 'Acme']) {
+  for (const client of ['../evil', '..', 'a/b', '', '.', '.cache', 'a b', 'a;b']) {
     const code = await run(['representant-update', '--client', client, '--source', payload, '--target', repo]);
     assert.notEqual(code, 0, `« ${client} » doit être refusé`);
   }

@@ -51,7 +51,7 @@ npx @somtech-solutions/pack representant-update --client acme
 | `--yes`, `-y` | Non-interactif (CI) / consentement explicite (`setup` écrit le rc) |
 | `--rc` / `--skills-dir` / `--workflows-dir` / `--commands-dir` / `--dest` | `setup` : cibles personnalisées |
 | `--no-skills` / `--no-workflows` / `--no-commands` / `--no-claude-swt` | `setup` : restreindre la portée |
-| `--client <slug>` | `representant-update` : le client dont le lieu (`.gestionnaire/<slug>/`) est rafraîchi (obligatoire, minuscules/chiffres/tirets) |
+| `--client <nom>` | `representant-update` : le client dont le lieu (`.gestionnaire/<nom>/`) est rafraîchi (obligatoire) — un seul segment de chemin (lettres, chiffres, tirets, soulignés ; commençant par une lettre ou un chiffre). La casse est libre et portée telle quelle — « Francois » et « francois » désignent le même lieu — mais un nom qui traverse un répertoire (« / », « \ », « .. ») écrirait hors du dépôt : c'est refusé. |
 
 `npx` plutôt que `npm i -g` : l'outil se lance ponctuellement, toujours à la bonne
 version (`@latest` ou une version épinglée), sans installation globale à maintenir.
