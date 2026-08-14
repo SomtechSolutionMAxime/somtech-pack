@@ -110,13 +110,17 @@ Commandes :
            (.gestionnaire/<client>/) : CLAUDE.md reprend TOUJOURS la version du pack
            (convergence, backup .somtech.bak), CONTEXTE.md n'est JAMAIS touché
            (RA-REL-014). Échoue si le lieu n'existe pas encore (ne pose rien).
-           --client <slug>  (obligatoire, minuscules/chiffres/tirets)
+           --client <nom>  (obligatoire) — un seul segment de chemin : lettres, chiffres,
+           tirets, soulignés. La CASSE EST LIBRE et portée telle quelle : « Francois » et
+           « francois » désignent le même lieu, et le nom réel du dossier est celui qui a
+           été posé. Un nom qui traverse un répertoire (« / », « \\ », « .. ») est refusé.
   orchestrateur-update  Rafraîchit un lieu d'orchestrateur déjà posé dans ce dépôt
            (.orchestrateur/<nom>/) : même frontière — CLAUDE.md converge vers le pack,
            CONTEXTE.md (à qui il répond, le gestionnaire du projet, sa PORTÉE) n'est
            JAMAIS touché. Sa portée écrite est ce qui empêche deux orchestrateurs d'un
            même dépôt de se marcher dessus.
-           --nom <slug>  (obligatoire, minuscules/chiffres/tirets)
+           --nom <nom>  (obligatoire) — mêmes règles que --client ci-dessus : un seul
+           segment de chemin, casse libre et portée, évasion refusée.
 
 Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
   harvest-supabase --discover <racine> --app <slug>  Grain tables + FK + descriptions (SQL du dépôt)

@@ -22,6 +22,11 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// La VRAIE règle, celle que la commande applique — jamais une copie recopiée dans le test.
+// Une regex réécrite ici serait un double plus permissif (ou plus strict) que le service
+// réel : le motif 2 du brief de revue, posé de nos propres mains.
+import { nomDeLieuValide } from '../src/lieu-nom.js';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_DIR = resolve(HERE, '..');
 const REPO = resolve(HERE, '..', '..');
@@ -121,6 +126,34 @@ test('aucune SECONDE règle de nommage ne subsiste dans le CLI', () => {
       `${f} porte à nouveau une règle de nommage en minuscules — la règle vit dans lieu-nom.js, et nulle part ailleurs`,
     );
   }
+});
+
+test('ce que l’opérateur LIT dit la même règle que ce que le code APPLIQUE', () => {
+  // RELEVÉ EN REVUE (passe 2), et c'est le motif 3 par la porte qu'on n'avait pas comptée :
+  // le code appliquait bien la casse libre pendant que `--help` et le README continuaient
+  // d'exiger « minuscules/chiffres/tirets ». L'aide est le PREMIER endroit qu'un opérateur
+  // consulte avant d'agir — un lot qui corrige le code en laissant la consigne périmée
+  // n'a corrigé qu'une porte sur deux, et c'est la porte humaine qui reste ouverte.
+  //
+  // La garde est par le FAIT, pas par le mot : on prend un nom que la règle ACCEPTE
+  // aujourd'hui, et on refuse que les textes d'aide le déclarent interdit.
+  const textes = {
+    'src/cli.js': readFileSync(join(CLI_DIR, 'src', 'cli.js'), 'utf8'),
+    'README.md': readFileSync(join(CLI_DIR, 'README.md'), 'utf8'),
+  };
+
+  // Toute prescription qui EXIGE des minuscules pour un nom de lieu contredit la règle.
+  const PRESCRIT_MINUSCULES = /minuscules?\s*\/\s*chiffres|en minuscules?\s*\(lettres|slug en minuscules/i;
+  for (const [nom, texte] of Object.entries(textes)) {
+    assert.ok(
+      !PRESCRIT_MINUSCULES.test(texte),
+      `cli/${nom} prescrit encore des minuscules pour un nom de lieu, alors que la règle les accepte `
+        + `librement (« Francois » est valide) — l’opérateur lirait l’inverse de ce que le code fait`,
+    );
+  }
+
+  // Contre-preuve : le nom qui a motivé ce ticket est bien accepté par la règle appliquée.
+  assert.equal(nomDeLieuValide('Francois'), true, 'témoin : si « Francois » était refusé, l’aide aurait raison et ce test serait à l’envers');
 });
 
 test('la règle unique ne dépend que de node: — c’est ce qui rend le miroir possible', () => {
