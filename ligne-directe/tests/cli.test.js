@@ -137,23 +137,32 @@ test('un geste inconnu ne plante pas, il montre l’usage', async () => {
   assert.match(r.stdout + r.stderr, /ouvrir/);
 });
 
-test('COMMUN — sans --dirigeant, la commande montre son usage et n’inscrit RIEN', async () => {
-  // Le geste `commun` désigne le canal dont chaque message est remis à TOUS les agents du
-  // poste. Sans liste d'autorisés, n'importe quel membre de l'espace pourrait faire rafraîchir
-  // la configuration de chacun d'eux — le refus se prononce donc AVANT de joindre quoi que ce
-  // soit, ce qui est aussi la seule raison pour laquelle ce test peut exister sous cloison.
-  const r = await lancer(['commun', 'annonces-agents']);
-  assert.equal(r.code, 1);
-  assert.match(r.stdout, /commun <canal> --dirigeant/, 'l’usage doit nommer l’option manquante');
-  assert.doesNotMatch(r.stdout, /^\{/m, 'aucun contrat JSON ne sort d’un refus d’usage');
+test('COMMUN — sans --dirigeant NI --role, la commande montre son usage et n’inscrit RIEN', async () => {
+  // Le geste `commun` désigne le canal dont chaque message est remis aux agents d'un rôle.
+  // Sans liste d'autorisés, n'importe quel membre de l'espace pourrait faire rafraîchir la
+  // configuration de chacun d'eux ; sans rôle, on ne saurait pas à qui remettre. Les deux refus
+  // se prononcent AVANT de joindre quoi que ce soit — ce qui est aussi la seule raison pour
+  // laquelle ce test peut exister sous cloison.
+  const sansRien = await lancer(['commun', 'annonces-orchestrateurs']);
+  assert.equal(sansRien.code, 1);
+  assert.match(sansRien.stdout, /commun <canal> --role <role> --dirigeant/, 'l’usage nomme les options manquantes');
+  assert.doesNotMatch(sansRien.stdout, /^\{/m, 'aucun contrat JSON ne sort d’un refus d’usage');
+
+  // LE RÔLE SEUL MANQUANT EST UN REFUS AUSSI — et c'est le chemin qui compte, parce qu'il est
+  // celui d'un opérateur qui a l'habitude de l'ancienne commande : il tape ce qu'il tapait
+  // hier, avec sa liste, et rien ne doit être désigné.
+  const sansRole = await lancer(['commun', 'annonces-orchestrateurs', '--dirigeant', 'maxime.leboeuf@somtech.ca']);
+  assert.equal(sansRole.code, 1, 'la commande d’hier, telle quelle, ne désigne plus rien');
+  assert.doesNotMatch(sansRole.stdout, /^\{/m);
 });
 
-test('COMMUN — l’usage annonce le geste et dit qu’il est descendant', async () => {
+test('COMMUN — l’usage annonce le geste, son rôle, et dit qu’il est descendant', async () => {
   // RA-AGT-002 : un geste livré mais absent de l'usage n'existe pour personne. Et celui-ci
-  // porte une propriété qu'on ne devine pas — rien n'y remonte —, sans quoi un opérateur
-  // pourrait croire qu'il ouvre un lieu de conversation de plus.
+  // porte deux propriétés qu'on ne devine pas — rien n'y remonte, et il ne vise QU'UN rôle —,
+  // sans quoi un opérateur croirait poser un canal que tout le poste entend.
   const r = await lancer([]);
-  assert.match(r.stdout, /commun <canal>/);
-  assert.match(r.stdout, /TOUS les\s+agents du poste/i);
-  assert.match(r.stdout, /Descendant seulement/i, 'l’usage doit dire que rien n’y remonte');
+  assert.match(r.stdout, /commun <canal> --role <role>/);
+  assert.match(r.stdout, /agents de CE role/i, 'l’usage doit dire que les autres ne reçoivent pas');
+  assert.match(r.stdout, /chef d'equipe jamais/i, 'et nommer celui qui ne reçoit jamais rien');
+  assert.match(r.stdout, /Descendant\s+seulement/i, 'l’usage doit dire que rien n’y remonte');
 });

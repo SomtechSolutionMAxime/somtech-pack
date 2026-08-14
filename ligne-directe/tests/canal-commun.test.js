@@ -30,6 +30,19 @@
 // fichier quand ils reçoivent — on lit ce qu'ils ont fait, pas ce que le veilleur prétend
 // avoir envoyé. Et « rien ne repart » se prouve par l'ABSENCE côté Slack (`monde.postes`),
 // jamais par le texte d'un refus.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUI A CHANGÉ AVEC T-20260814-0002, ET CE QUI N'A PAS BOUGÉ
+//
+// Le canal est désormais désigné POUR UN RÔLE, et n'atteint que les agents de ce rôle. Les
+// preuves ci-dessous portent donc toutes un rôle, et leurs agents tournent depuis un vrai LIEU
+// d'orchestrateur — sans quoi ils n'auraient plus de rôle établi et ne recevraient rien, ce qui
+// ferait passer ce fichier pour vert en ne prouvant plus rien du tout.
+//
+// CE FICHIER GARDE CE QUI N'EST PAS PROPRE AUX RÔLES : le routage entrant, la reprise d'un
+// message, les trois silences, le filtre des robots par la vraie porte d'entrée, la résolution
+// des autorisés. Ce qui distingue les rôles — qui reçoit quoi, le chef d'équipe qui ne reçoit
+// rien, les gardes rejouées sur plusieurs canaux — vit dans `canal-par-role.test.js`.
 
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,7 +52,7 @@ import { join } from 'node:path';
 
 import { fauxSlack } from './aide/faux-slack.js';
 
-let Veilleur, sauverRegistre, chargerRegistre, ligneDuPane, canalCommun;
+let Veilleur, sauverRegistre, chargerRegistre, ligneDuPane, canalCommunDuRole;
 let racine;
 let compteur = 0;
 
@@ -47,13 +60,35 @@ before(async () => {
   racine = mkdtempSync(join(tmpdir(), 'ld-commun-'));
   process.env.LIGNE_DIRECTE_RACINE = racine;
   ({ Veilleur } = await import('../src/veilleur.js'));
-  ({ sauverRegistre, chargerRegistre, ligneDuPane, canalCommun } = await import('../src/registre.js'));
+  ({ sauverRegistre, chargerRegistre, ligneDuPane, canalCommunDuRole } = await import('../src/registre.js'));
 });
 
-beforeEach(() => sauverRegistre({ version: 1, lignes: [], commun: null }));
+beforeEach(() => sauverRegistre({ version: 1, lignes: [], communs: {}, commun: null }));
 
 const ANNONCES = { id: 'C_ANNONCES', name: 'annonces-agents', is_private: false, membres: ['UMOI', 'UDIR'] };
 const DIRIGEANT = 'UDIR';
+/** Le rôle sous lequel ce fichier désigne son canal — le choix n'y change rien, il en faut un. */
+const ROLE = 'orchestrateur';
+
+/** Le canal désigné pour `ROLE`, ou `null` — la lecture qui remplace l'ancien `canalCommun`. */
+const designe = () => canalCommunDuRole(chargerRegistre(), ROLE);
+
+/**
+ * Un LIEU d'orchestrateur sur disque, tel que la pose l'aurait laissé.
+ *
+ * Les agents de ce fichier en ont un depuis T-20260814-0002 : un agent sans lieu n'a plus de
+ * rôle établi, donc ne reçoit plus rien — et chaque preuve de diffusion d'ici passerait au vert
+ * en ne prouvant rien. Les en-têtes sont ceux des vrais gabarits.
+ */
+function lieuDOrchestrateur() {
+  const chemin = join(racine, `lieu-${(compteur += 1)}`);
+  mkdirSync(join(chemin, '.claude'), { recursive: true });
+  writeFileSync(join(chemin, 'CLAUDE.md'), "# Tu es l'orchestrateur de ce chantier\n");
+  writeFileSync(join(chemin, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n');
+  writeFileSync(join(chemin, '.mcp.json'), '{"mcpServers":{}}\n');
+  writeFileSync(join(chemin, '.claude', 'settings.json'), '{"permissions":{"allow":[]}}\n');
+  return chemin;
+}
 
 /** Monte un espace Slack en mémoire pour la durée d'un test, et le démonte quoi qu'il arrive. */
 async function avecSlack(etat, corps) {
@@ -75,6 +110,8 @@ async function avecSlack(etat, corps) {
 function agentsQuiTravaillent({ panes = ['w1:p1'], refuse = [] } = {}) {
   const dossier = join(racine, `travail-${(compteur += 1)}`);
   mkdirSync(dossier, { recursive: true });
+  // Chacun son lieu, et un lieu RÉEL : c'est lui, et lui seul, qui établit son rôle.
+  const lieux = new Map(panes.map((p) => [p, lieuDOrchestrateur()]));
   return {
     dossier,
     fichier: (pane) => join(dossier, `${pane.replace(/[^a-z0-9]/gi, '_')}.txt`),
@@ -89,7 +126,12 @@ function agentsQuiTravaillent({ panes = ['w1:p1'], refuse = [] } = {}) {
       return { delivered: true };
     },
     async agents() {
-      return panes.map((p) => ({ agent: 'claude', pane_id: p, herdr_socket: `/s/${p}` }));
+      return panes.map((p) => ({
+        agent: 'claude',
+        pane_id: p,
+        foreground_cwd: lieux.get(p),
+        herdr_socket: `/s/${p}`,
+      }));
     },
   };
 }
@@ -126,6 +168,7 @@ test('ENTRANT — deux lignes sur un MÊME pane : chaque message arrive cadré d
   // ce qui rend une SECONDE écoute descendante possible sans rejouer le défaut.
   sauverRegistre({
     version: 1,
+    communs: {},
     commun: null,
     lignes: [
       ligne({ chantier: 'D-1', canalId: 'C_d1', canalNom: 'd-1', pane: 'w1:p1', worktree: '/w/a' }),
@@ -149,25 +192,25 @@ test('ENTRANT — deux lignes sur un MÊME pane : chaque message arrive cadré d
 test('DÉSIGNER — le canal doit exister, et notre robot y être invité', async () => {
   await avecSlack({ canaux: [] }, async () => {
     const v = veilleur();
-    const absent = await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    const absent = await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     assert.equal(absent.ok, false);
     assert.equal(absent.motif, 'absent');
-    assert.equal(canalCommun(chargerRegistre()), null, 'un refus n’inscrit rien');
+    assert.equal(designe(), null, 'un refus n’inscrit rien');
   });
 
   await avecSlack({ canaux: [{ ...ANNONCES, membres: [DIRIGEANT] }] }, async () => {
     const v = veilleur();
-    const dehors = await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    const dehors = await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     assert.equal(dehors.ok, false);
     assert.equal(dehors.motif, 'non_membre', 'un robot ne se met pas lui-même dans un canal');
-    assert.equal(canalCommun(chargerRegistre()), null);
+    assert.equal(designe(), null);
   });
 
   await avecSlack({ canaux: [ANNONCES] }, async () => {
     const v = veilleur();
-    const ok = await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    const ok = await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     assert.equal(ok.ok, true);
-    assert.equal(chargerRegistre().commun.canal_id, 'C_ANNONCES');
+    assert.equal(designe().canal_id, 'C_ANNONCES');
   });
 });
 
@@ -178,33 +221,34 @@ test('DÉSIGNER — un canal ARCHIVÉ est refusé : il a l’air posé, et aucun
   // et le silence total sur le canal censé réveiller tout le poste.
   await avecSlack({ canaux: [{ ...ANNONCES, is_archived: true }] }, async () => {
     const v = veilleur();
-    const r = await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    const r = await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     assert.equal(r.ok, false, 'un canal archivé ne se désigne pas');
     assert.equal(r.motif, 'archive');
-    assert.equal(canalCommun(chargerRegistre()), null, 'et rien n’est inscrit');
+    assert.equal(designe(), null, 'et rien n’est inscrit');
   });
 });
 
 test('DÉSIGNER — sans autorisé, rien n’est désigné : tout l’espace parlerait à tous les agents', async () => {
   await avecSlack({ canaux: [ANNONCES] }, async () => {
     const v = veilleur();
-    const r = await v.designerCommun({ canal: 'annonces-agents', autorises: [] });
+    const r = await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [] });
     assert.equal(r.ok, false);
-    assert.equal(canalCommun(chargerRegistre()), null);
+    assert.equal(designe(), null);
   });
 });
 
 test('DÉSIGNER — un canal qui porte déjà une ligne est refusé (le client parlerait à tout le poste)', async () => {
   sauverRegistre({
     version: 1,
+    communs: {},
     commun: null,
     lignes: [ligne({ chantier: 'acme', canalId: 'C_ANNONCES', canalNom: 'annonces-agents', pane: 'w1:p1', nature: 'client' })],
   });
   await avecSlack({ canaux: [ANNONCES] }, async () => {
     const v = veilleur();
-    const r = await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    const r = await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     assert.equal(r.ok, false);
-    assert.equal(canalCommun(chargerRegistre()), null);
+    assert.equal(designe(), null);
   });
 });
 
@@ -215,7 +259,7 @@ test('DIFFUSER — deux agents au travail, deux agents qui AGISSENT sur ce qu’
 
   await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     await v.remettreAuChantier({
       channel: 'C_ANNONCES',
@@ -227,7 +271,7 @@ test('DIFFUSER — deux agents au travail, deux agents qui AGISSENT sur ce qu’
       assert.ok(existsSync(travail.fichier(pane)), `${pane} n’a rien fait de ce qu’il a reçu`);
       const recu = readFileSync(travail.fichier(pane), 'utf8');
       assert.match(recu, /mettre à jour vos configurations/, 'la consigne doit arriver ENTIÈRE');
-      assert.match(recu, /^\[CANAL COMMUN — À TOUS LES AGENTS \(#annonces-agents\)\]/);
+      assert.match(recu, /^\[CANAL COMMUN — À TOUS LES ORCHESTRATEURS \(#annonces-agents\)\]/);
     }
 
     // Et rien n'est reparti : le canal commun ne porte que la parole du dirigeant.
@@ -243,7 +287,7 @@ test('DIFFUSER — un agent SANS ligne entend quand même : il n’a rien eu à 
 
   await avecSlack({ canaux: [ANNONCES] }, async () => {
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     assert.deepEqual(chargerRegistre().lignes, [], 'aucune ligne au registre : cet agent n’en a pas');
 
     await v.remettreAuChantier({ channel: 'C_ANNONCES', user: DIRIGEANT, text: 'Un nouveau MCP est disponible.' });
@@ -256,7 +300,7 @@ test('DIFFUSER — un pane injoignable n’empêche AUCUN autre agent de recevoi
 
   await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     const bilan = await v.diffuserConsigne({ channel: 'C_ANNONCES', user: DIRIGEANT, text: 'consigne' });
 
     assert.equal(bilan.remis, 1);
@@ -271,7 +315,7 @@ test('DIFFUSER — une consigne REPRISE par son auteur est rediffusée', async (
 
   await avecSlack({ canaux: [ANNONCES] }, async () => {
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     await v.remettreLaReprise({
       channel: 'C_ANNONCES',
@@ -289,7 +333,7 @@ test('DIFFUSER — un membre NON autorisé ne parle pas à tous les agents', asy
 
   await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     await v.remettreAuChantier({ channel: 'C_ANNONCES', user: 'UQUELQUUN', text: 'redémarrez tout' });
     assert.equal(existsSync(travail.fichier('w1:p1')), false, 'aucun agent ne doit avoir agi');
@@ -307,7 +351,7 @@ test('DIFFUSER — les trois silences : rien à dire, herdr muet, personne au tr
     // 1. Un message qui ne porte QU'UNE pièce jointe : les pièces ne suivent pas ce canal.
     const sansTexte = agentsQuiTravaillent({ panes: ['w1:p1'] });
     const v1 = veilleur({ herdr: sansTexte });
-    await v1.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v1.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
     await v1.remettreAuChantier({ channel: 'C_ANNONCES', user: DIRIGEANT, text: '   ', files: [{ id: 'F1' }] });
     assert.equal(existsSync(sansTexte.fichier('w1:p1')), false, 'rien ne devait être remis');
 
@@ -335,7 +379,7 @@ test('DIFFUSER — les trois silences : rien à dire, herdr muet, personne au tr
 test('DESCENDANT — « dire », « fermer » et « renommer » sont refusés sur le canal commun, et RIEN n’est posté', async () => {
   await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
     const v = veilleur({ herdr: agentsQuiTravaillent() });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     const dit = await v.dire({ canal_id: 'C_ANNONCES', texte: 'un agent qui parle à tout le monde' });
     const ferme = await v.fermer({ canal_id: 'C_ANNONCES', bilan: 'bilan de chantier' });
@@ -350,7 +394,7 @@ test('DESCENDANT — « dire », « fermer » et « renommer » sont refusés su
     assert.deepEqual(monde.postes, [], 'aucun message ne doit être parti dans le canal commun');
     assert.equal(monde.canalNomme('annonces-agents').is_archived, false, 'le canal commun ne s’archive pas');
     assert.equal(monde.canalNomme('annonces-agents').name, 'annonces-agents', 'ni ne se renomme');
-    assert.equal(chargerRegistre().commun.canal_id, 'C_ANNONCES', 'et il reste désigné');
+    assert.equal(designe().canal_id, 'C_ANNONCES', 'et il reste désigné');
   });
 });
 
@@ -399,7 +443,7 @@ test('DESCENDANT — aucune ligne ne s’installe sur le canal commun, même par
   // du canal de tous — et tout ce que cet agent dit part chez tout le monde.
   await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
     const v = veilleur({ herdr: agentsQuiTravaillent() });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     const r = await v.ouvrir({ chantier: 'D-9', titre: 'Annonces agents', pane: 'w1:p1', worktree: '/w', invites: [DIRIGEANT] });
     assert.equal(r.ok, false, `l’ouverture aurait dû être refusée, obtenu : ${JSON.stringify(r)}`);
@@ -415,13 +459,14 @@ test('LIGNE PROPRE — le canal commun n’est JAMAIS candidat à la sélection 
   // réécrirait ce filtre prouverait seulement qu'il est d'accord avec lui-même.
   sauverRegistre({
     version: 1,
+    communs: {},
     commun: null,
     lignes: [ligne({ chantier: 'acme', canalId: 'C_acme', canalNom: 'acme', pane: 'w1:p1', nature: 'client', libelle: 'Acme' })],
   });
   await avecSlack({ canaux: [ANNONCES, { id: 'C_acme', name: 'acme', is_private: true, membres: ['UMOI', 'UCLIENT'] }] }, async (monde) => {
     const travail = agentsQuiTravaillent({ panes: ['w1:p1'] });
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     // L'agent reçoit la consigne commune — c'est le moment où « il a rejoint le canal commun ».
     await v.remettreAuChantier({ channel: 'C_ANNONCES', user: DIRIGEANT, text: 'mettez à jour vos configurations' });
@@ -429,7 +474,11 @@ test('LIGNE PROPRE — le canal commun n’est JAMAIS candidat à la sélection 
 
     const etat = v.etat();
     assert.equal(etat.ouvertes.length, 1, '`ouvertes` ne porte que des LIGNES');
-    assert.equal(etat.commun.canal, 'annonces-agents', 'le canal commun est rendu À CÔTÉ');
+    assert.deepEqual(
+      etat.communs.map((c) => c.canal),
+      ['annonces-agents'],
+      'le canal commun est rendu À CÔTÉ'
+    );
 
     // La sélection de la commande, telle quelle :
     const { ligne: mienne, candidates } = ligneDuPane(etat.ouvertes, 'w1:p1');
@@ -449,6 +498,7 @@ test('LIGNE PROPRE — le canal commun n’est JAMAIS candidat à la sélection 
 test('LIGNE PROPRE — après la consigne commune, un message du client arrive toujours cadré de SA ligne', async () => {
   sauverRegistre({
     version: 1,
+    communs: {},
     commun: null,
     lignes: [ligne({ chantier: 'acme', canalId: 'C_acme', canalNom: 'acme', pane: 'w1:p1', nature: 'client', libelle: 'Acme' })],
   });
@@ -456,7 +506,7 @@ test('LIGNE PROPRE — après la consigne commune, un message du client arrive t
   await avecSlack({ canaux: [ANNONCES, canalClient], utilisateurs: [{ id: 'UCLIENT', name: 'jean', profile: {} }] }, async () => {
     const travail = agentsQuiTravaillent({ panes: ['w1:p1'] });
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     await v.remettreAuChantier({ channel: 'C_ANNONCES', user: DIRIGEANT, text: 'mettez à jour vos configurations' });
     await v.remettreAuChantier({ channel: 'C_acme', user: 'UCLIENT', text: 'Bonjour, une question.' });
@@ -528,7 +578,7 @@ test('TRAME — un message de robot dans le canal commun ne fait rien faire à p
   const travail = agentsQuiTravaillent({ panes: ['w1:p1'] });
   await avecSlack({ canaux: [ANNONCES] }, async (monde) => {
     const v = veilleur({ herdr: travail });
-    await v.designerCommun({ canal: 'annonces-agents', autorises: [DIRIGEANT] });
+    await v.designerCommun({ canal: 'annonces-agents', role: ROLE, autorises: [DIRIGEANT] });
 
     const trame = (event) => ({ data: JSON.stringify({ type: 'events_api', payload: { event } }) });
     const ws = { send() {}, close() {} };

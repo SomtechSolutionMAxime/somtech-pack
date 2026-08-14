@@ -16,6 +16,10 @@ export const OPTIONS_A_VALEUR = new Set([
   // envoyé le mot « client » à la place du rapport. Une option à valeur qui n'est pas déclarée
   // ici se trompe toujours du même côté — celui qui parle.
   '--a',
+  // `--role <rôle>` désigne le rôle d'un canal commun. Même piège, même côté : sans cette
+  // déclaration, `commun --role orchestrateur annonces-orchestrateurs` désignerait un canal
+  // nommé « orchestrateur » — et l'opérateur croirait avoir posé le sien.
+  '--role',
   '--sujet',
   '--inviter',
   '--bilan',

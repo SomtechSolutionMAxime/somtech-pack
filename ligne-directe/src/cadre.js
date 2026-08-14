@@ -17,6 +17,8 @@
 // consigne. Un client demande ; il n'ordonne pas. Le cadre le dit désormais, et le mot
 // « dirigeant » n'apparaît nulle part quand ce n'est pas lui qui parle.
 
+import { role as roleDe } from './roles.js';
+
 /** Chemin de la commande tel qu'un agent doit l'invoquer, quelle que soit son origine. */
 export const COMMANDE = 'node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js"';
 

@@ -260,6 +260,33 @@ test('DIFFUSER — un rôle qui ne s’établit pas ne reçoit rien : le défaut
   });
 });
 
+test('DIFFUSER — c’est `foreground_cwd` qui décide, et le `cwd` du pane ne doit pas le supplanter', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // TROUVÉ PAR MUTATION, et rien ne l'attrapait : inverser les deux laissait TOUT vert.
+  //
+  // Ce n'est pas un détail de préséance. Un agent né par `claude-swt` garde le DÉPÔT en `cwd`
+  // pendant que son travail vit ailleurs — et le lieu d'un rôle est un sous-répertoire de ce
+  // dépôt (`.orchestrateur/<nom>/`). Lire `cwd` d'abord ferait donc rendre `null` à
+  // `roleDuLieu` pour un orchestrateur bien posé : il ne recevrait RIEN, en silence, et le
+  // silence est justement ce qu'on ne peut pas distinguer d'un fonctionnement normal ici.
+  //
+  // L'ordre décide entre « il reçoit » et « il ne reçoit jamais rien ». Il se garde.
+  const travail = agentsQuiTravaillent([
+    { pane: 'w1:orch', repertoire: lieu(METIER_ORCH), cwd: worktreeOrdinaire() },
+  ]);
+
+  await avecSlack({ canaux: [CANAL_ORCH, CANAL_REPR] }, async () => {
+    const v = veilleur({ herdr: travail });
+    await designerLesDeux(v);
+    await v.remettreAuChantier({ channel: 'C_ORCH', user: DIRIGEANT, text: 'consigne aux orchestrateurs' });
+    assert.match(
+      travail.recu('w1:orch') ?? '',
+      /consigne aux orchestrateurs/,
+      'son lieu est au premier plan : le `cwd` du pane ne doit pas l’écarter'
+    );
+  });
+});
+
 test('DIFFUSER — un lieu du BON rôle reçoit même si l’agent n’a aucune ligne', async () => {
   // Le lot précédent avait tranché « un agent sans ligne entend quand même ». Ce lot restreint
   // par le RÔLE, pas par la ligne : un orchestrateur qui n'a pas encore ouvert la sienne reste
@@ -526,7 +553,11 @@ test('CADRE — un gestionnaire ne peut pas croire qu’une consigne d’orchest
   for (const cadre of [pourOrch, pourGest]) {
     assert.match(cadre, /Consigne du dirigeant/, 'il dit d’où ça vient');
     assert.match(cadre, /ON N'Y RÉPOND PAS/, 'et qu’on n’y répond pas');
-    assert.match(cadre, /n['’]ont pas reçu/, 'et que les autres agents ne l’ont pas reçue');
+    assert.match(
+      cadre,
+      /autres agents[^\n]*l['’]ont PAS reçue/,
+      'et que les autres agents du poste ne l’ont pas reçue — sans quoi il les croit servis'
+    );
     assert.ok(!cadre.includes('Réponds-lui'), 'aucune invitation à répondre');
     assert.ok(!cadre.includes(`${COMMANDE} dire`), 'aucune commande d’écriture');
     assert.ok(!cadre.startsWith('[LIGNE DIRECTE'), 'ni la signature visuelle d’un interlocuteur');

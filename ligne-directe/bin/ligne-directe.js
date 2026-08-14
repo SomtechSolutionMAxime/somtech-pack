@@ -19,6 +19,7 @@ import { option, optionDonnee, optionsRepetees, premierLibre } from '../src/argu
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
+import { rolesConnus } from '../src/roles.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import {
   preparerLieuRepresentant,
@@ -62,12 +63,18 @@ function usage(code = 0) {
               Un pane qui porte PLUSIEURS lignes exige ce nom : sans lui, le geste est
               REFUSE et rien n'est envoye — jamais la premiere ligne venue.
               Un pane qui n'en porte qu'une n'exige rien.
-  commun <canal> --dirigeant courriel [--dirigeant ...]    designe le CANAL COMMUN : chacun de
-                                                           ses messages est remis a TOUS les
-                                                           agents du poste. Descendant seulement
-                                                           — aucun agent n'y ecrit, aucune
-                                                           commande n'y poste. Le canal doit
-                                                           exister et notre robot y etre invite.
+  commun <canal> --role <role> --dirigeant courriel [--dirigeant ...]
+                                                           designe le CANAL COMMUN D'UN ROLE :
+                                                           chacun de ses messages est remis aux
+                                                           agents de CE role qui travaillent —
+                                                           les autres ne le recoivent pas, un
+                                                           chef d'equipe jamais. Un canal par
+                                                           role (${rolesConnus().join(', ')}),
+                                                           un role par canal. Descendant
+                                                           seulement — aucun agent n'y ecrit,
+                                                           aucune commande n'y poste. Le canal
+                                                           doit exister et notre robot y etre
+                                                           invite.
   dirigeant <courriel>                                     designe LE DIRIGEANT de ce poste, une
                                                            fois. Son adresse ne quitte jamais le
                                                            poste : les agents demandent « le
@@ -251,10 +258,12 @@ if (geste === 'relever') {
     rendre(await parler({ geste: 'renommer', canal_id: mienne.canal_id, titre }));
   }
 } else if (geste === 'commun') {
-  // Désigne le canal commun. Ce geste est celui de l'OPÉRATEUR du poste, une fois — pas celui
-  // d'un agent : rien ici n'ouvre de ligne, n'inscrit de pane, ni ne poste quoi que ce soit.
+  // Désigne le canal commun d'un RÔLE. Ce geste est celui de l'OPÉRATEUR du poste, une fois par
+  // rôle — pas celui d'un agent : rien ici n'ouvre de ligne, n'inscrit de pane, ni ne poste.
   const canal = premierLibre(args);
   if (!canal) usage(1);
+  const role = option(args, '--role');
+  if (!role) usage(1);
   const nomsDirigeants = optionsRepetees(args, '--dirigeant');
   if (!nomsDirigeants.length) usage(1);
 
@@ -262,10 +271,10 @@ if (geste === 'relever') {
   // aucun test, et c'est là que « la liste amputée en silence » se réintroduit sans qu'on la voie.
   const r = await resoudreAutorises(await lireJeton(SERVICE_ROBOT), nomsDirigeants);
   if (!r.ok) {
-    process.stderr.write(`aucun membre pour ${r.inconnu} — le canal commun n'est PAS designe\n`);
+    process.stderr.write(`aucun membre pour ${r.inconnu} — le canal n'est PAS designe\n`);
     process.exit(1);
   }
-  rendre(await parler({ geste: 'commun', canal, autorises: r.autorises }));
+  rendre(await parler({ geste: 'commun', canal, role, autorises: r.autorises }));
 } else if (geste === 'dirigeant') {
   // Le geste de l'OPÉRATEUR du poste, une fois — pas celui d'un agent. Rien ici n'ouvre de
   // ligne, n'inscrit de pane, ni ne poste quoi que ce soit : on nomme qui est le dirigeant.

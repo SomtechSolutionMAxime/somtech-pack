@@ -42,26 +42,41 @@ Le veilleur écoute en **Socket Mode**. Il lui faut, en plus du jeton de robot, 
 1. **Toute modification de portée impose de RÉINSTALLER l'application** dans l'espace de travail. Accorder une portée sans réinstaller ne change rien, et rien ne le signale.
 2. **Le manifeste de l'application ne reflète plus ce qui est accordé.** L'application a été créée depuis un manifeste ; `files:read`, `files:write` et les portées `groups:*` ont été ajoutés à la main le 2026-08-06. **Rejouer le manifeste les effacerait sans bruit** — le même piège qu'une migration qui diverge de sa base. Mettre le manifeste à jour avant de le rejouer, jamais l'inverse.
 
-## Le canal commun — parler à tous les agents qui tournent déjà
+## Le canal commun — parler aux agents d'un rôle qui tournent déjà
 
-Une ligne joint **un** agent. Quand une version du pack est publiée, les agents en cours tournent sur celle d'avant et **aucun ne le sait** : il faut aller le leur dire un par un, ou attendre qu'ils meurent. Le canal commun est l'autre moitié — il porte ce qui doit être **pris en compte rapidement** par tout le monde. Ce qui peut attendre la prochaine naissance reste au **feed** du ServiceDesk, que chaque agent relit en naissant ; les deux coexistent et aucun ne couvre le cas seul.
+Une ligne joint **un** agent. Quand une version du pack est publiée, les agents en cours tournent sur celle d'avant et **aucun ne le sait** : il faut aller le leur dire un par un, ou attendre qu'ils meurent. Le canal commun est l'autre moitié — il porte ce qui doit être **pris en compte rapidement**. Ce qui peut attendre la prochaine naissance reste au **feed** du ServiceDesk, que chaque agent relit en naissant ; les deux coexistent et aucun ne couvre le cas seul.
 
-**Il se désigne une fois par poste**, par le dirigeant :
+**Il y en a un par rôle**, et c'est le sujet : les consignes diffèrent réellement. *« Un nouveau MCP est disponible sur le ServiceDesk »* ne dit rien à un gestionnaire ; *« une règle de conduite face au client a changé »* ne dit rien à un orchestrateur. Un canal unique obligerait chacun à trier ce qui ne le concerne pas — et **un canal qu'on trie est un canal qu'on cesse de lire**.
+
+**Chacun se désigne une fois par poste**, par le dirigeant :
 
 ```bash
-ligne-directe commun annonces-agents --dirigeant maxime.leboeuf@somtech.ca
+ligne-directe commun annonces-orchestrateurs --role orchestrateur  --dirigeant maxime.leboeuf@somtech.ca
+ligne-directe commun annonces-gestionnaires  --role representant   --dirigeant maxime.leboeuf@somtech.ca
 ```
 
 - Le canal **existe déjà** et notre robot **y a été invité à la main** — on ne le crée pas, on ne le rejoint pas (un robot ne se met pas lui-même dans un canal). La désignation refuse en nommant lequel des deux manque.
-- `--dirigeant` est **obligatoire** et se répète. Sans liste, n'importe quel membre de l'espace ferait rafraîchir la configuration de chaque agent du poste. Un nom qui ne se résout pas fait échouer la désignation entière plutôt que d'amputer la liste en silence.
-- `ligne-directe etat` rend le canal commun **à côté** des lignes ouvertes, jamais parmi elles.
+- `--role` est **obligatoire** : sans lui on ne saurait pas à qui remettre, et deviner viserait le mauvais public. **Un canal ne sert qu'un rôle** ; le redésigner pour le même rôle met simplement sa liste d'autorisés à jour.
+- `--dirigeant` est **obligatoire** et se répète. Sans liste, n'importe quel membre de l'espace ferait rafraîchir la configuration de chaque agent concerné. Un nom qui ne se résout pas fait échouer la désignation entière plutôt que d'amputer la liste en silence.
+- `ligne-directe etat` rend les canaux communs **à côté** des lignes ouvertes, jamais parmi elles.
+
+### Qui reçoit, et comment le poste le sait
+
+**Le rôle d'un agent se lit dans le lieu depuis lequel il tourne** — jamais dans son nom. herdr dit quel répertoire est au premier plan de chaque pane ; ce répertoire est un lieu de rôle s'il porte **les quatre fichiers que la pose y dépose** *et* **les en-têtes réels** du métier et du contexte. C'est déjà ce sur quoi reposent le garde d'ouverture de ligne et le réveil horaire : une seule définition du rôle, pas trois.
+
+Ce qui a été écarté, et pourquoi : le **nom** de l'agent chez herdr (une chaîne libre, que n'importe qui écrit), le **dossier** qui le porte (une convention de nommage — un répertoire vide au bon nom passerait), sa **ligne** au registre (elle ne dit rien du rôle).
+
+> ⚠️ **Ce qui ne s'établit pas ne reçoit rien.** Un **chef d'équipe** tourne dans un worktree ordinaire : il n'a aucun rôle établi, donc **le canal ne l'atteint jamais** — c'est son orchestrateur qui lui retransmet ce qui le concerne. Un lieu à demi posé, un agent sans répertoire : silencieux par le même chemin. Il faut ajouter du code pour diffuser, jamais pour se taire.
 
 Ce qu'il fait, et ce qu'il ne fera jamais :
 
-- chaque message y est remis à **tous les agents du poste** — herdr dit lesquels vivent, personne ne s'abonne. Un agent qui n'a **aucune ligne** entend aussi, et un chef d'équipe qui ne vit que deux heures également : il n'y a rien à faire pour entendre ;
-- **rien n'y remonte, jamais.** `dire`, `fermer` et `renommer` y sont refusés, aucune ligne ne peut s'y ouvrir, et le veilleur lui-même n'y écrit rien — ni accusé, ni erreur, ni compte rendu. C'est une entorse assumée à la règle « celui qui écrit apprend que son message n'est pas passé » : une réponse ici serait lue par tous les agents à la fois, et **un canal d'urgence qu'on encombre est un canal qu'on cesse de lire** — ce qui coûterait la consigne suivante. Ce qui ne passe pas va au journal du veilleur ;
+- chaque message y est remis aux **agents de son rôle** qui travaillent — herdr dit lesquels vivent, personne ne s'abonne. Un agent qui n'a **aucune ligne** entend quand même : c'est son lieu qui le désigne, pas son registre ;
+- **le cadre dit pour quel rôle** la consigne vaut, et que **les autres agents ne l'ont pas reçue** — sans cette phrase, un orchestrateur croirait les agents qu'il a ouverts servis comme lui ;
+- **rien n'y remonte, jamais.** `dire`, `fermer` et `renommer` y sont refusés — **sur chaque canal commun, et par les deux clés** (le canal nommé comme le chantier d'une ligne qui s'y trouverait encore) —, aucune ligne ne peut s'y ouvrir, et le veilleur lui-même n'y écrit rien : ni accusé, ni erreur, ni compte rendu. C'est une entorse assumée à la règle « celui qui écrit apprend que son message n'est pas passé » : une réponse ici serait lue par tous les agents d'un rôle à la fois, et **un canal d'urgence qu'on encombre est un canal qu'on cesse de lire** — ce qui coûterait la consigne suivante. Ce qui ne passe pas va au journal du veilleur ;
 - **les pièces jointes ne suivent pas** ce canal : une consigne est une phrase. Un message qui n'en porte pas n'est pas diffusé ;
-- **la ligne propre de chaque agent est intouchée.** Le canal commun n'entre pas au registre des lignes, donc jamais dans ce que la commande parcourt pour savoir de quelle ligne un agent parle. Il n'est candidat à aucun geste sortant — c'est ce qui empêche une consigne interne de partir dans le canal d'un client.
+- **la ligne propre de chaque agent est intouchée.** Un canal commun n'entre pas au registre des lignes, donc jamais dans ce que la commande parcourt pour savoir de quelle ligne un agent parle, et il ne porte **aucune nature** — lui en donner une l'y ferait entrer. Il n'est candidat à aucun geste sortant : c'est ce qui empêche une consigne interne de partir dans le canal d'un client, et c'est aussi ce qui a permis de passer d'**un** canal à **plusieurs** sans toucher au routage des lignes.
+
+> **Le canal désigné avant les rôles** (v1.42.0) est relu tel quel : il **ne diffuse plus rien** — personne ne saurait à qui — mais **rien n'y remonte** non plus, la garde le couvre toujours. `ligne-directe etat` le nomme, avec la commande qui le reprend pour un rôle.
 
 ## Plusieurs lignes sur un même pane — l'appel est nommé
 

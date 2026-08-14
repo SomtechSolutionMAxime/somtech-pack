@@ -22,6 +22,8 @@ import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
+import { roleDuLieu } from './lieu-agent.js';
+import { role as roleDe, rolesConnus, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune } from './cadre.js';
 import { reponse } from './langage.js';
 import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
@@ -38,7 +40,10 @@ import {
   clore,
   natureDe,
   libelleDeLigne,
-  canalCommun,
+  canauxCommuns,
+  canalCommunDuRole,
+  canalCommunSansRole,
+  communPourCanal,
   estCanalCommun,
   dirigeantDuPoste,
   designerDirigeant,
@@ -524,19 +529,26 @@ export class Veilleur {
    * On teste donc aussi la ligne une fois résolue.
    */
   refusSurCommun(geste, ...canaux) {
-    if (!canaux.some((c) => estCanalCommun(this.registre, c))) return null;
-    const commun = canalCommun(this.registre);
-    journaliser(`refusé — ${geste} visait le canal commun #${commun.canal_nom} : rien n'y remonte`);
+    // IL Y EN A PLUSIEURS DEPUIS T-20260814-0002 — un par rôle, plus celui d'avant, désigné
+    // sans rôle. On refuse sur CELUI QUI EST VISÉ, jamais sur « le » canal commun : nommer le
+    // premier inscrit dirait à l'agent qu'il a touché un canal auquel il n'a rien fait, et
+    // laisserait le vrai passer le jour où la garde serait écrite contre un seul.
+    const vise = canaux.map((c) => communPourCanal(this.registre, c)).find(Boolean);
+    if (!vise) return null;
+    const pour = vise.role ? `des ${roleDe(vise.role).libelle_pluriel}` : 'commun';
+    journaliser(`refusé — ${geste} visait le canal ${pour} #${vise.canal_nom} : rien n'y remonte`);
     return {
       ok: false,
       erreur:
-        `#${commun.canal_nom} est le canal commun : il porte les consignes du dirigeant à TOUS les agents, ` +
-        `et rien n'y remonte jamais. Le geste « ${geste} » y est refusé — ce que tu as à dire va sur ta ligne.`,
+        `#${vise.canal_nom} est le canal ${pour} : il porte les consignes du dirigeant à tous les agents ` +
+        `concernés, et rien n'y remonte jamais. Le geste « ${geste} » y est refusé — ce que tu as à dire ` +
+        `va sur ta ligne.`,
     };
   }
 
   /**
-   * Désigne le canal commun — celui dont chaque message est remis à TOUS les agents du poste.
+   * Désigne le canal commun D'UN RÔLE — celui dont chaque message est remis aux agents de ce
+   * rôle qui travaillent en ce moment, et à eux seuls.
    *
    * On ne le CRÉE pas, on le désigne : un canal où le dirigeant parle à toute son équipe
    * existe déjà, et notre robot doit y avoir été invité par un humain — un robot ne se met pas
@@ -549,9 +561,31 @@ export class Veilleur {
    * une ligne, un intrus fait passer un message pour une consigne à UN agent ; ici, il parle à
    * tous à la fois, dans un cadre qui annonce le dirigeant. Sans liste, tout membre de l'espace
    * pourrait faire rafraîchir la configuration de chaque agent du poste — ou pire.
+   *
+   * ─────────────────────────────────────────────────────────────────────────────────────
+   * LE RÔLE EST OBLIGATOIRE, ET IL NE SE DEVINE PAS (T-20260814-0002). Les consignes diffèrent
+   * réellement selon le rôle — « un nouveau MCP au ServiceDesk » ne dit rien à un gestionnaire,
+   * « une règle de conduite face au client a changé » ne dit rien à un orchestrateur. Se rabattre
+   * sur un rôle par défaut poserait le canal, l'opérateur le croirait posé pour le rôle qu'il
+   * visait, et les consignes partiraient chez les autres.
    */
-  async designerCommun({ canal, autorises = [] }) {
+  async designerCommun({ canal, role, autorises = [] }) {
     if (!canal) return { ok: false, erreur: 'canal requis' };
+    if (!role) {
+      return {
+        ok: false,
+        motif: 'role_absent',
+        erreur:
+          `un canal commun se désigne POUR UN RÔLE — les rôles connus sont ${rolesConnus().join(', ')}. ` +
+          `Sans lui, on ne saurait pas à qui remettre ses consignes, et deviner viserait le mauvais public.`,
+      };
+    }
+    try {
+      roleDe(role); // un rôle inconnu échoue AVANT tout appel à Slack
+    } catch (err) {
+      if (!(err instanceof RoleInconnu)) throw err;
+      return { ok: false, motif: 'role_inconnu', erreur: err.message };
+    }
     if (!autorises.length) {
       return {
         ok: false,
@@ -604,15 +638,40 @@ export class Veilleur {
       };
     }
 
-    this.registre.commun = {
+    // UN CANAL NE SERT PAS DEUX RÔLES, et le refus est le lot lui-même : un canal partagé est
+    // très exactement le canal unique qu'on remplace, avec l'inconvénient de plus d'avoir l'air
+    // séparé. Chacun y trierait ce qui ne le concerne pas, et un canal qu'on trie cesse d'être
+    // lu (RA-REL-008). Redésigner LE MÊME rôle, en revanche, n'est pas un conflit : c'est ainsi
+    // qu'on corrige une liste d'autorisés.
+    const dejaAilleurs = canauxCommuns(this.registre).find((c) => c.canal_id === trouve.id && c.role && c.role !== role);
+    if (dejaAilleurs) {
+      return {
+        ok: false,
+        motif: 'deja_dun_autre_role',
+        erreur:
+          `#${canal} est déjà le canal des ${roleDe(dejaAilleurs.role).libelle_pluriel} — un canal ne sert ` +
+          `qu'un seul rôle, sinon chacun doit y trier ce qui ne le concerne pas. Désigne-en un autre.`,
+      };
+    }
+
+    this.registre.communs = { ...(this.registre.communs || {}) };
+    this.registre.communs[role] = {
       canal_id: trouve.id,
       canal_nom: trouve.name || canal,
       autorises: [...new Set(autorises)],
       designe_le: maintenant(),
     };
+    // LE CANAL D'AVANT CESSE D'ÊTRE ORPHELIN quand c'est LUI qu'on vient de désigner : sans ça,
+    // il resterait signalé « sans rôle » à perpétuité sur un canal qui en a désormais un, et
+    // l'état mentirait dans le sens qui use — un avertissement permanent qu'on finit par ignorer.
+    if (canalCommunSansRole(this.registre)?.canal_id === trouve.id) this.registre.commun = null;
     sauverRegistre(this.registre);
-    journaliser(`canal commun désigné — #${this.registre.commun.canal_nom} (${trouve.id}), ${autorises.length} autorisé(s)`);
-    return { ok: true, canal: this.registre.commun.canal_nom, canal_id: trouve.id, autorises: autorises.length };
+    const inscrit = this.registre.communs[role];
+    journaliser(
+      `canal des ${roleDe(role).libelle_pluriel} désigné — #${inscrit.canal_nom} (${trouve.id}), ` +
+        `${inscrit.autorises.length} autorisé(s)`
+    );
+    return { ok: true, role, canal: inscrit.canal_nom, canal_id: trouve.id, autorises: inscrit.autorises.length };
   }
 
   /** Poste sous l'identité du chantier. Échoue BRUYAMMENT : un rapport perdu en silence est pire qu'une erreur. */
@@ -776,13 +835,29 @@ export class Veilleur {
     // celle du registre, et pour la même raison : `ouvertes` est ce que la commande parcourt
     // pour savoir de quelle ligne un agent parle. Un canal commun qui s'y glisserait
     // deviendrait un candidat de cette sélection.
-    const commun = canalCommun(this.registre);
+    const communs = canauxCommuns(this.registre)
+      .filter((c) => c.role)
+      .map((c) => ({ role: c.role, canal: c.canal_nom, autorises: (c.autorises || []).length }));
+    // LE CANAL D'AVANT EST NOMMÉ À PART, ET C'EST TOUT LE POINT. Désigné par une version qui ne
+    // connaissait pas les rôles, il ne diffuse plus rien — mais s'il ne se voyait nulle part,
+    // l'opérateur chercherait pourquoi ses consignes ne partent plus sur le seul canal qu'il
+    // avait posé. C'est le silence exact que ce dispositif existe pour supprimer.
+    const orphelin = canalCommunSansRole(this.registre);
     return {
       ok: true,
       espace: this.identite.equipe,
       connecte: this.ws?.readyState === CONNEXION_OUVERTE,
       ouvertes,
-      commun: commun ? { canal: commun.canal_nom, autorises: (commun.autorises || []).length } : null,
+      communs,
+      sans_role: orphelin
+        ? {
+            canal: orphelin.canal_nom,
+            message:
+              `#${orphelin.canal_nom} a été désigné avant que les canaux aient un rôle : il ne diffuse plus ` +
+              `rien (personne ne saurait à qui), mais rien n'y remonte non plus. Redésigne-le pour un rôle ` +
+              `(« ligne-directe commun ${orphelin.canal_nom} --role <rôle> --dirigeant … »).`,
+          }
+        : null,
       // LE DIRIGEANT EST RENDU COMME UNE PRÉSENCE, PAS COMME UNE ADRESSE. Ce que l'appelant a
       // besoin de savoir, c'est « le poste sait à qui ouvrir la ligne » — jamais qui c'est.
       // Rendre le courriel ici l'aurait fait ressortir dans chaque `etat` d'un dépôt client,
@@ -1079,22 +1154,36 @@ export class Veilleur {
   }
 
   /**
-   * Une consigne du dirigeant, remise à TOUS les agents qui travaillent en ce moment.
+   * Une consigne du dirigeant, remise aux agents DU RÔLE de ce canal qui travaillent en ce
+   * moment — et à eux seuls.
    *
    * PERSONNE NE S'ABONNE, ET C'EST LE CŒUR DE LA CONCEPTION. On aurait pu faire inscrire les
    * agents un à un — c'était le chemin naturel, et c'était le piège : une inscription veut dire
    * une seconde écoute par pane, donc une seconde entrée quelque part, donc un second candidat
    * à la sélection par pane du chemin sortant. C'est très exactement le défaut mesuré des deux
-   * lignes, rejoué par le mécanisme censé aider. Et « tous les agents » serait devenu « tous
-   * ceux qui ont pensé à s'inscrire ».
+   * lignes, rejoué par le mécanisme censé aider. Et « les agents d'un rôle » serait devenu
+   * « ceux qui ont pensé à s'inscrire ».
    *
-   * On demande donc à herdr qui vit MAINTENANT, et on remet à chacun. Trois conséquences, et
-   * elles répondent aux questions laissées ouvertes :
-   *   - un agent qui n'a AUCUNE ligne entend quand même : il n'a rien eu à faire ;
-   *   - un chef d'équipe qui ne vit que deux heures entend, pour la même raison ;
-   *   - rien n'est écrit au registre : ni ligne, ni abonnement, ni pane. La ligne propre de
-   *     chaque agent est intouchée, au sens strict — aucune structure qu'elle emprunte n'a
-   *     changé.
+   * On demande donc à herdr qui vit MAINTENANT, et on retient ceux dont le LIEU établit le rôle.
+   * Rien n'est écrit au registre : ni ligne, ni abonnement, ni pane. La ligne propre de chaque
+   * agent est intouchée, au sens strict — aucune structure qu'elle emprunte n'a changé.
+   *
+   * ─────────────────────────────────────────────────────────────────────────────────────
+   * À QUI, ET COMMENT ON LE SAIT (T-20260814-0002)
+   *
+   * Le lot précédent remettait à tous. La source a corrigé : « on parle aux orchestrateurs et
+   * ils retransmettent, on ne parle jamais au chef d'équipe ». Le rôle se lit donc dans le LIEU
+   * depuis lequel l'agent tourne — `foreground_cwd`, puis `roleDuLieu`, qui exige les quatre
+   * fichiers de la pose ET les en-têtes réels du métier. Ni son nom herdr (une chaîne libre), ni
+   * le dossier qui le porte (une convention de nommage), ni sa ligne au registre (qui ne dit
+   * rien du rôle).
+   *
+   * ⚠️ CE QUI NE S'ÉTABLIT PAS NE REÇOIT RIEN. Un chef d'équipe tourne dans un worktree
+   * ordinaire : `roleDuLieu` rend `null`, il est hors de la remise sans qu'on ait rien à
+   * exclure nommément. Un lieu à demi posé, un agent sans répertoire, un rôle nouveau que ce
+   * canal ne vise pas : tous silencieux, par le même chemin. Il faut ajouter du code pour
+   * diffuser, jamais pour se taire — et c'est l'inverse du mode de panne de `D-20260813-0001`
+   * §1, où des consignes venues de nulle part étaient exécutées jusqu'à cinq fois sur six.
    *
    * RIEN N'EST POSTÉ DANS CE CANAL, JAMAIS — ni refus, ni accusé, ni compte rendu de diffusion.
    * C'est une exception assumée à RA-REL-009 (« celui qui écrit apprend que son message n'est
@@ -1103,8 +1192,21 @@ export class Veilleur {
    * (RA-REL-008) — ce qui coûterait la consigne SUIVANTE. Ce qui ne passe pas va au journal.
    */
   async diffuserConsigne(ev) {
-    const commun = canalCommun(this.registre);
+    const commun = communPourCanal(this.registre, ev.channel);
+    if (!commun) return; // le canal n'est plus commun : `remettreAuChantier` a déjà tranché
     const texte = (ev.text || '').trim();
+
+    // UN CANAL SANS RÔLE NE DIFFUSE PAS — celui que v1.42.0 avait désigné avant que les canaux
+    // en aient un. On ne peut pas lui en deviner un : « probablement tout le monde » est très
+    // exactement ce que ce lot supprime, et ce serait le rétablir au pire endroit. Il reste
+    // gardé en écriture ; `etat()` le nomme pour que personne ne cherche pourquoi rien n'en part.
+    if (!commun.role) {
+      journaliser(
+        `consigne non diffusée — #${commun.canal_nom} : ce canal a été désigné sans rôle, on ne sait pas ` +
+          `à qui le remettre. Redésigne-le (« ligne-directe commun ${commun.canal_nom} --role <rôle> … »).`
+      );
+      return;
+    }
 
     // Qui a le droit de parler à tous. La liste est la seule autorisation : le canal est
     // interne et public, y lire l'appartenance reviendrait à autoriser l'espace entier.
@@ -1134,10 +1236,32 @@ export class Veilleur {
       return;
     }
 
-    const cadre = cadrerConsigneCommune({ texte, canal: commun.canal_nom, modifie: Boolean(ev.modifie) });
+    // LE FILTRE, ET IL TIENT TOUT LE LOT. `foreground_cwd` d'abord — c'est le répertoire du
+    // processus au premier plan, donc celui où `claude` tourne vraiment, donc celui qui a décidé
+    // quel métier la session a chargé ; `cwd` est celui du shell du pane, qui peut rester en
+    // arrière. Même lecture que le réveil horaire des orchestrateurs, à dessein : trois
+    // décisions qui portent sur le rôle, une seule définition de ce qu'est un rôle.
+    const destinataires = vivants.filter((a) => roleDuLieu(a.foreground_cwd || a.cwd) === commun.role);
+    const eux = roleDe(commun.role).libelle_pluriel;
+    if (!destinataires.length) {
+      // On NE SE RABAT PAS sur les autres agents : ce serait remettre la consigne d'un rôle à
+      // ceux qu'elle ne concerne pas, c'est-à-dire le canal unique qu'on vient de remplacer.
+      journaliser(`consigne non diffusée — #${commun.canal_nom} : aucun des ${eux} au travail en ce moment`);
+      return;
+    }
+
+    const cadre = cadrerConsigneCommune({
+      texte,
+      canal: commun.canal_nom,
+      // LE RÔLE VIENT DU CANAL, jamais d'un destinataire : un seul cadre est composé pour toute
+      // la diffusion, et le prendre sur le premier servi ferait porter aux suivants une étiquette
+      // qui n'est pas la leur le jour où le filtre laisserait passer autre chose.
+      role: commun.role,
+      modifie: Boolean(ev.modifie),
+    });
     let remis = 0;
     const echecs = [];
-    for (const agent of vivants) {
+    for (const agent of destinataires) {
       try {
         await this.herdr.remettre(agent.pane_id, cadre, { socket: agent.herdr_socket });
         remis += 1;
@@ -1148,11 +1272,13 @@ export class Veilleur {
         journaliser(`consigne non remise à ${agent.pane_id} : ${err.message}`);
       }
     }
+    // Le dénominateur est le nombre de DESTINATAIRES, pas d'agents vivants : « 2/9 » ferait
+    // lire une diffusion à moitié perdue là où sept agents étaient simplement hors périmètre.
     journaliser(
-      `consigne diffusée — #${commun.canal_nom} → ${remis}/${vivants.length} agent(s)` +
-        `${echecs.length ? `, échec sur ${echecs.join(', ')}` : ''}`
+      `consigne diffusée — #${commun.canal_nom} → ${remis}/${destinataires.length} ${eux} ` +
+        `(${vivants.length} agent(s) au travail)${echecs.length ? `, échec sur ${echecs.join(', ')}` : ''}`
     );
-    return { remis, echecs };
+    return { remis, echecs, role: commun.role, destinataires: destinataires.length };
   }
 
   /**
