@@ -26,7 +26,8 @@
 //      On ne casse pas ce qui existe pour faire plaisir à une regex.
 //   2. LA GARDE ANTI-ÉVASION NE SE DESSERRE PAS. Elle passe de « minuscules obligatoires » à
 //      « un seul segment de chemin sûr » : la liste blanche reste une liste blanche, on n'y
-//      ajoute que `A-Z`, qui n'est un métacaractère de chemin sur aucune plateforme. Aucun
+//      ajoute que `A-Z` et `_` — dont aucun n'est un métacaractère de chemin, sur aucune
+//      plateforme, et que herdr accepte déjà pour nommer un agent (voir `NOM_DE_LIEU`). Aucun
 //      `/`, aucun `\`, aucun `.` en tête (donc ni `.`, ni `..`), aucun NUL, jamais vide.
 //      Et elle passe désormais des DEUX côtés : la pose n'en avait AUCUNE — `../../evil`
 //      y écrivait hors du dépôt.
@@ -64,8 +65,17 @@ import { join } from 'node:path';
  * Liste blanche, jamais liste noire — une liste noire oublie toujours un séparateur, un
  * encodage ou une plateforme. Commence par une lettre ou un chiffre : `.`, `..`, `.hidden` et
  * `-drapeau` sont donc refusés par la première classe, avant même le reste.
+ *
+ * LE JEU DE CARACTÈRES EST CELUI DE HERDR, ET CE N'EST PAS UNE COMMODITÉ. Un agent porte
+ * `[a-z][a-z0-9_-]{0,31}` chez herdr (`naissance-representant/src/naissance.js`), soulignés
+ * compris. Une garde du LIEU plus étroite que celle du NOM rendrait un agent parfaitement
+ * nommable impossible à loger — et, pire, rendrait inatteignable un lieu déjà posé sous un
+ * nom à souligné, la pose n'ayant eu AUCUNE garde jusqu'ici. Deux règles qui ne s'accordent
+ * pas : c'est le défaut que ce fichier existe pour fermer, on ne le réintroduit pas d'un cran
+ * plus bas. Ce que le lieu ajoute à herdr — les majuscules — ne s'y oppose pas : la naissance
+ * abaisse la casse pour nommer l'agent, et c'est déjà ce qu'elle faisait.
  */
-export const NOM_DE_LIEU = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
+export const NOM_DE_LIEU = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 /** Le nom est-il un segment de chemin sûr ? La casse n'entre PAS dans ce jugement. */
 export function nomDeLieuValide(nom) {
@@ -80,8 +90,8 @@ export function nomDeLieuValide(nom) {
  */
 export function messageNomInvalide(nom, designe = 'nom') {
   return (
-    `${designe} : un seul segment de chemin (lettres, chiffres, tirets ; commençant par une ` +
-    `lettre ou un chiffre), reçu « ${String(nom ?? '')} ». La casse est libre et PORTÉE telle ` +
+    `${designe} : un seul segment de chemin (lettres, chiffres, tirets, soulignés ; commençant ` +
+    `par une lettre ou un chiffre), reçu « ${String(nom ?? '')} ». La casse est libre et PORTÉE telle ` +
     `quelle — « Francois » et « francois » désignent le même lieu — mais un nom qui traverse ` +
     `un répertoire (« / », « \\ », « .. ») écrirait hors du dépôt : c'est refusé.`
   );
@@ -122,6 +132,13 @@ export function resoudreLieu(depot, dossier, nom, designe = 'nom') {
 
   // Un dossier de rôle absent n'est pas une anomalie : c'est le cas du tout premier lieu.
   // On ne distingue donc pas « absent » de « illisible » — dans les deux cas, rien à retrouver.
+  //
+  // SEULS LES RÉPERTOIRES SONT CANDIDATS, et `isDirectory()` ne suit pas les liens : un lieu
+  // qui serait un lien symbolique n'est donc pas retrouvé PAR SA CASSE. Ce n'est pas une
+  // régression — le chemin composé reste alors celui qu'on a demandé, exactement comme avant
+  // ce lot, et l'appelant décide sur son propre `existsSync`, qui suit les liens, lui. Ce qui
+  // se perd est borné à un cas qui n'existe pas ici : un lieu lié ET nommé dans une autre
+  // casse. On préfère ça à une résolution de casse qui traverserait un lien vers l'extérieur.
   let entrees = [];
   try {
     entrees = readdirSync(parent, { withFileTypes: true })

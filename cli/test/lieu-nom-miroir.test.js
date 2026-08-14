@@ -17,9 +17,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_DIR = resolve(HERE, '..');
@@ -65,6 +66,44 @@ test('la MISE À JOUR passe par la règle unique — elle ne recompose plus le c
     !/role\.dossier\s*,\s*nom\s*\)/.test(sansCommentaires.replace(/resoudreLieu\([^)]*\)/g, '')),
     'representant.js compose « join(…, role.dossier, nom) » à la main — c’est le chemin qui manquait le lieu réel',
   );
+});
+
+test('les deux exemplaires rendent le MÊME VERDICT — prouvé en les faisant juger, pas en lisant leur texte', async () => {
+  // RELEVÉ EN REVUE (passe 1), et c'est le motif dominant du dépôt : les gardes ci-dessus
+  // regardent des TEXTES — des octets identiques, un import présent, une regex absente. Aucune
+  // ne fait TRAVAILLER les deux exemplaires. Une comparaison de textes ne peut rien dire du
+  // jour où l'un des deux serait chargé depuis ailleurs (un paquet publié, un `--source`) :
+  // seule la comparaison des VERDICTS le dirait.
+  //
+  // On les importe donc tous les deux, et on les fait juger le même corpus — noms sûrs, noms
+  // qui traversent, casses mêlées — plus une résolution sur un vrai disque.
+  const [source, copie] = await Promise.all([
+    import(pathToFileURL(SOURCE).href),
+    import(pathToFileURL(COPIE).href),
+  ]);
+
+  const CORPUS = [
+    'maxime', 'Francois', 'Charles-Olivier', 'Jacob', 'Zach', 'ville-de-quebec_2', 'A1', '0z',
+    '../evil', '../../evil', '..', '.', '', 'a/b', 'a\\b', '/absolu', '.cache', '-drapeau',
+    'a b', 'a;rm -rf /', 'a\0b', 'é', 'a.b', 'a$b',
+  ];
+  for (const nom of CORPUS) {
+    assert.equal(
+      copie.nomDeLieuValide(nom), source.nomDeLieuValide(nom),
+      `les deux exemplaires jugent « ${nom} » différemment — la règle a divergé EN FAIT, pas seulement en texte`,
+    );
+  }
+
+  // Et le verdict qui COMPTE : le chemin résolu, sur un vrai disque, lieu posé en majuscules.
+  const depot = mkdtempSync(join(tmpdir(), 'smtk-miroir-'));
+  mkdirSync(join(depot, '.gestionnaire', 'Francois'), { recursive: true });
+  for (const nom of ['francois', 'Francois', 'FRANCOIS', 'jacob']) {
+    assert.deepEqual(
+      copie.resoudreLieu(depot, '.gestionnaire', nom),
+      source.resoudreLieu(depot, '.gestionnaire', nom),
+      `les deux exemplaires résolvent « ${nom} » vers des lieux différents — la pose et la mise à jour se déphaseraient`,
+    );
+  }
 });
 
 test('aucune SECONDE règle de nommage ne subsiste dans le CLI', () => {

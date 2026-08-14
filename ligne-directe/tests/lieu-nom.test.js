@@ -72,11 +72,24 @@ test('la casse ne fait plus partie du jugement — c’est le seul desserrement,
   }
 });
 
+test('tout nom que herdr accepte pour un agent est logeable — sinon on rouvre le désaccord d’un cran plus bas', () => {
+  // LE DÉFAUT QU'ON FERME EST « DEUX RÈGLES QUI NE S'ACCORDENT PAS ». Une garde du LIEU plus
+  // étroite que celle du NOM d'agent le rouvre : un agent parfaitement nommable n'aurait nulle
+  // part où loger, et — bien pire — un lieu DÉJÀ POSÉ sous un nom à souligné deviendrait
+  // inatteignable, la pose n'ayant eu aucune garde jusqu'ici.
+  //
+  // La règle de herdr est `^[a-z][a-z0-9_-]{0,31}$` (naissance-representant/src/naissance.js).
+  // On l'éprouve sur des noms qui la respectent, souligné compris.
+  for (const nom of ['ville-de-quebec_2', 'mon_chantier', 'd-20260813-0002', 'a']) {
+    assert.equal(nomDeLieuValide(nom), true, `« ${nom} » nomme un agent herdr valide : il doit pouvoir loger quelque part`);
+  }
+});
+
 test('la garde est une liste BLANCHE — un caractère nouveau est refusé par défaut, pas admis', () => {
   // Contre-preuve du test ci-dessus : si la règle était une liste noire, tout caractère non
   // prévu passerait. On vérifie la forme de la règle elle-même, pas seulement des exemples.
   assert.equal(NOM_DE_LIEU.source.startsWith('^[A-Za-z0-9]'), true, 'la règle doit ancrer un premier caractère alphanumérique');
-  for (const exotique of ['a$b', 'a|b', 'a*b', 'a`b', 'a\nb', 'a\tb', 'a:b', 'a~b', 'a_b', 'a.b']) {
+  for (const exotique of ['a$b', 'a|b', 'a*b', 'a`b', 'a\nb', 'a\tb', 'a:b', 'a~b', 'a.b', 'a%b', 'a"b']) {
     assert.equal(nomDeLieuValide(exotique), false, `« ${exotique} » ne doit pas passer une liste blanche`);
   }
 });
