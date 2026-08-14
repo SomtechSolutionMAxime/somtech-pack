@@ -20,6 +20,7 @@ import {
   gardePose,
   commandesNaissance,
   nomAgentHerdr,
+  avisDeCasse,
   lireReponseHerdr,
   agentDetecte,
   agentPorteLeNom,
@@ -400,6 +401,23 @@ test('nomAgentHerdr abaisse la casse — herdr refuse les majuscules (`invalid_a
   assert.equal(nomAgentHerdr('Acme'), 'acme');
   assert.equal(nomAgentHerdr('maxime'), 'maxime');
   assert.equal(nomAgentHerdr('ville-de-quebec_2'), 'ville-de-quebec_2');
+});
+
+// T-20260814-0143 — abaisser la casse est JUSTE ; le faire en silence est le défaut.
+// Mesuré sur un poste réel : le lieu `.gestionnaire/Charles-Olivier` fait vivre un agent
+// nommé `charles-olivier`. Qui cherche son agent par le nom de son lieu ne le trouve pas,
+// et rien, nulle part, ne lui dit pourquoi.
+test('avisDeCasse nomme les DEUX noms quand la naissance abaisse la casse', () => {
+  const avis = avisDeCasse('Francois');
+  assert.ok(avis, 'un nom capitalisé doit produire un avis');
+  assert.match(avis, /« Francois »/, 'l’avis doit nommer le lieu tel qu’il s’appelle');
+  assert.match(avis, /« francois »/, 'et l’agent tel qu’on devra l’adresser');
+});
+
+test('avisDeCasse se TAIT quand rien n’a été abaissé — sinon l’avis devient du bruit qu’on cesse de lire', () => {
+  assert.equal(avisDeCasse('francois'), null);
+  assert.equal(avisDeCasse('ville-de-quebec_2'), null);
+  assert.equal(avisDeCasse('t-20260814-0135'), null);
 });
 
 test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu’un pane existe', () => {

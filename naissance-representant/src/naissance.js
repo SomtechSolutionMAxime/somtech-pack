@@ -186,6 +186,33 @@ export function nomAgentHerdr(brut) {
 }
 
 /**
+ * L'avis à donner à l'humain quand le nom de l'agent NE SERA PAS celui du lieu.
+ *
+ * Abaisser la casse est juste — herdr n'accepte rien d'autre. **Le faire en silence est le
+ * défaut** (T-20260814-0143) : le lieu s'appelle `Charles-Olivier`, l'agent s'appelle
+ * `charles-olivier`, et qui cherche son agent par le nom de son lieu ne le trouve pas.
+ * Mesuré sur un poste réel, sur quatre lieux.
+ *
+ * Le seul endroit qui portait déjà l'écart était un champ de l'objet JSON rendu — douze
+ * clés, dont deux qui diffèrent d'une capitale. Un fait que personne ne relit n'est pas dit.
+ *
+ * ⚠️ ELLE SE TAIT QUAND RIEN N'A ÉTÉ ABAISSÉ, et ce n'est pas une économie de mots : un
+ * avis qui tombe à chaque naissance devient du bruit, et un bruit cesse d'être lu — ce qui
+ * ramènerait exactement le silence qu'il existe pour rompre.
+ *
+ * @returns {string|null} la phrase à écrire, ou `null` s'il n'y a rien à dire.
+ */
+export function avisDeCasse(brut) {
+  const lieu = String(brut ?? '');
+  const agent = lieu.toLowerCase();
+  if (agent === lieu) return null;
+  return (
+    `le lieu s'appelle « ${lieu} », l'agent s'appellera « ${agent} » — herdr n'accepte que ` +
+    `les minuscules. C'est sous « ${agent} » qu'on l'adresse : « herdr agent prompt ${agent} … ».`
+  );
+}
+
+/**
  * Lit une réponse de la CLI herdr et dit, d'un seul endroit, si l'appel a ABOUTI.
  *
  * C'EST LE CŒUR DU DÉFAUT DE SORTIE (T-20260809-0023, même motif que T-20260807-0067).
