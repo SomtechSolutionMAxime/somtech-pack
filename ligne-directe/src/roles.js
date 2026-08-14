@@ -34,6 +34,12 @@ const ROLES = {
   representant: {
     /** Le nom du rôle tel qu'on le dit — pour les messages, jamais pour décider. */
     libelle: 'représentant',
+    /**
+     * Le même, au pluriel, pour le cadre d'une consigne commune : « À TOUS LES … ». Écrit
+     * plutôt que dérivé — une règle d'accord tenue par du code se trompe au premier rôle qui
+     * ne finit pas en « s », et ce cadre est la première ligne que lit un agent interrompu.
+     */
+    libelle_pluriel: 'représentants de clients',
     /** Le dossier, à la racine du dépôt, sous lequel les lieux de ce rôle se rangent. */
     dossier: '.gestionnaire',
     /** Le dossier de gabarits que le pack dépose sous `.claude/templates/`. */
@@ -106,6 +112,7 @@ const ROLES = {
 
   orchestrateur: {
     libelle: 'orchestrateur',
+    libelle_pluriel: 'orchestrateurs',
     // `.orchestrateur/<nom>/` — NOMMÉ, et le nom n'est pas cosmétique. Un projet d'envergure
     // ouvrira un second orchestrateur le jour où le premier ne tiendra plus (arbitrage du
     // dirigeant, 2026-08-12) ; un lieu anonyme ne se dédouble pas. Et ces lieux SONT
@@ -142,6 +149,30 @@ export function role(nom) {
 /** Les noms de rôles connus — pour les commandes qui les énumèrent, jamais pour décider. */
 export function rolesConnus() {
   return Object.keys(ROLES);
+}
+
+/**
+ * Comment NOMMER un rôle au pluriel, même s'il n'est plus connu.
+ *
+ * ⚠️ CE REPLI N'EST PAS DE LA COURTOISIE — il évite une panne muette. LE REGISTRE SURVIT AUX
+ * VERSIONS DU PACK : un canal commun inscrit pour un rôle qu'une version ultérieure ne déclare
+ * plus y reste, et personne ne peut l'en retirer depuis le code. Or ce libellé est composé sur
+ * DEUX chemins qui ne pardonnent pas :
+ *
+ *   • le refus d'un geste sortant — une exception y remplacerait un refus par un plantage ;
+ *   • la diffusion d'une consigne, appelée depuis l'écoute Slack, dont l'enveloppe est DÉJÀ
+ *     acquittée quand on y arrive. Une exception à cet endroit perd le message définitivement,
+ *     sans que personne ne l'apprenne — le mode de panne exact que ce dispositif combat.
+ *
+ * On rend donc le nom brut du rôle plutôt que de lever. `role()` continue, lui, de refuser un
+ * rôle inconnu : DÉCIDER sur un rôle qu'on ne connaît pas reste interdit — seul le NOMMER est
+ * permis, et nommer ne décide de rien.
+ */
+export function libellePluriel(nom) {
+  // Un rôle INCONNU se nomme par son nom brut — c'est ce qui permet à l'opérateur de le
+  // retrouver au registre. Un rôle ABSENT, lui, n'a pas de nom à donner : on ne rend pas
+  // « undefined » dans un cadre que lit un agent interrompu au milieu de son travail.
+  return ROLES[nom]?.libelle_pluriel || (nom ? String(nom) : 'agents de ce rôle');
 }
 
 /**

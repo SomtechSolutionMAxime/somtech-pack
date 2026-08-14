@@ -20,10 +20,10 @@
 // (sa ligne se crée, mais seulement si le poste peut parler) — et un test peut en fournir
 // une autre sans monter Slack du tout. C'est ce qui tient la cloison (RA-REL-012).
 
-import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
-import { role as roleDe } from './roles.js';
+import { role as roleDe, rolesConnus } from './roles.js';
 
 /**
  * Les quatre fichiers qui constituent le lieu d'un agent, en CHEMINS RELATIFS à sa racine —
@@ -69,6 +69,53 @@ export function etatSource(depot, role) {
   const presents = GABARITS.filter((f) => existsSync(join(source, f)));
   const manquants = GABARITS.filter((f) => !presents.includes(f));
   return { source, complete: manquants.length === 0, presents, manquants };
+}
+
+function premiereLigne(chemin) {
+  try {
+    return readFileSync(chemin, 'utf8').split('\n', 1)[0] || '';
+  } catch {
+    // Illisible vaut absent : on n'établit RIEN d'un fichier qu'on n'a pas pu lire.
+    return '';
+  }
+}
+
+/**
+ * Le rôle du lieu qu'est `repertoire`, ou `null` si ce n'en est pas un.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * C'EST LA SEULE CHOSE QUI ÉTABLISSE UN RÔLE PAR LE FAIT, et le reste du dépôt s'y fie déjà :
+ * le garde d'ouverture de ligne (`naissance-representant/src/hook.js`) et le réveil horaire
+ * des orchestrateurs (`rendez-vous.js`) décident tous deux là-dessus. Le canal commun par rôle
+ * (T-20260814-0002) appelle la même fonction plutôt que d'en monter une troisième.
+ *
+ * CE QU'ON A ÉCARTÉ, ET POURQUOI :
+ *   • le NOM de l'agent chez herdr — une chaîne libre, que n'importe qui écrit. C'est déjà la
+ *     raison pour laquelle une ligne ne se désigne pas par son nom ;
+ *   • le DOSSIER qui le porte (`.orchestrateur/…`, `.gestionnaire/…`) — une convention de
+ *     nommage : un répertoire vide au bon nom passerait, et il ne porte aucun métier ;
+ *   • sa LIGNE au registre — elle ne dit rien du rôle (n'importe quel agent en ouvre une), et
+ *     le canal commun n'est justement PAS une ligne.
+ *
+ * Reste ce que la pose a réellement déposé : les QUATRE fichiers de `GABARITS`, et les EN-TÊTES
+ * RÉELS du métier et du contexte. Un lieu à demi posé, un worktree ordinaire, un dossier au bon
+ * nom mais vide : aucun n'établit de rôle.
+ *
+ * ⚠️ LE `null` EST LE CAS PAR DÉFAUT, ET C'EST VOULU. Tout ce qui se décide là-dessus doit se
+ * TAIRE sur un `null`, jamais se rabattre sur un rôle supposé — un chef d'équipe qui exécute une
+ * consigne d'orchestrateur est le mode de panne mesuré dans `D-20260813-0001` §1.
+ */
+export function roleDuLieu(repertoire) {
+  if (!repertoire) return null;
+  if (!GABARITS.every((f) => existsSync(join(repertoire, f)))) return null;
+  for (const nom of rolesConnus()) {
+    const attendus = roleDe(nom).entetes;
+    const concorde = Object.entries(attendus).every(([fichier, entete]) =>
+      entete.test(premiereLigne(join(repertoire, fichier)))
+    );
+    if (concorde) return nom;
+  }
+  return null;
 }
 
 /** Le dépôt porte-t-il un fichier d'environnement connu, à sa racine ? */

@@ -86,9 +86,17 @@ export function libelleDeLigne(ligne) {
  *
  * Il vit donc à côté, dans un champ qui n'est parcouru par aucun geste sortant. Aucun pane,
  * aucun chantier, aucun worktree : rien par quoi un agent puisse le désigner.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * UN CANAL PAR RÔLE (T-20260814-0002), ET C'EST CETTE DÉCISION-LÀ QUI LE REND POSSIBLE.
+ *
+ * `communs` est une table `rôle → canal`. Passer de UN canal à PLUSIEURS ne touche donc rien
+ * du routage des lignes : ils restent tous hors de `lignes[]`, donc hors de `etat().ouvertes`,
+ * donc hors de la sélection par pane. Un canal de rôle NE REÇOIT PAS DE NATURE pour la même
+ * raison — la nature qualifie une ligne, et lui en donner une l'y ferait entrer.
  */
 function vide() {
-  return { version: VERSION, lignes: [], commun: null, dirigeant: null };
+  return { version: VERSION, lignes: [], communs: {}, commun: null, dirigeant: null };
 }
 
 export function chargerRegistre(chemin = CHEMIN_REGISTRE) {
@@ -96,16 +104,23 @@ export function chargerRegistre(chemin = CHEMIN_REGISTRE) {
   try {
     const brut = JSON.parse(readFileSync(chemin, 'utf8'));
     if (!brut || !Array.isArray(brut.lignes)) return vide();
-    // `commun` absent d'un registre écrit par une version antérieure vaut « aucun canal
-    // commun désigné » — pas d'objet vide, qui aurait l'air d'une désignation faite.
+    // `communs` absent d'un registre écrit par une version antérieure vaut « aucun canal
+    // désigné » — pas d'objet vide, qui aurait l'air d'une désignation faite.
+    //
+    // `commun` — LE CANAL D'AVANT, désigné par v1.42.0 SANS rôle — est relu tel quel, et c'est
+    // délibéré. On ne peut pas lui deviner un rôle : le diffuser à tout le monde rejouerait ce
+    // que ce lot corrige, et l'oublier rouvrirait la porte par laquelle `fermer` postait son
+    // bilan dans le canal de tous puis l'ARCHIVAIT. Il reste donc gardé sans être diffusé, et
+    // l'état le nomme pour que personne ne cherche pourquoi rien n'en part.
     return {
       version: brut.version || VERSION,
       lignes: brut.lignes,
+      communs: brut.communs && typeof brut.communs === 'object' ? brut.communs : {},
       commun: brut.commun || null,
-      // Même règle que `commun` : absent d'un registre écrit par une version antérieure vaut
-      // « aucun dirigeant désigné sur ce poste » — jamais un objet vide, qui aurait l'air
-      // d'une désignation faite et ferait ouvrir une ligne interne SANS AUCUN autorisé,
-      // c'est-à-dire un canal où plus personne n'a le droit d'écrire.
+      // Même règle : absent d'un registre écrit par une version antérieure vaut « aucun
+      // dirigeant désigné sur ce poste » — jamais un objet vide, qui aurait l'air d'une
+      // désignation faite et ferait ouvrir une ligne interne SANS AUCUN autorisé, c'est-à-dire
+      // un canal où plus personne n'a le droit d'écrire.
       dirigeant: brut.dirigeant || null,
     };
   } catch {
@@ -179,21 +194,58 @@ export function clore(registre, canalId, quand) {
 
 // ————————————————————————————————————————————————————————————————— le canal commun
 
-/** Le canal commun désigné, ou `null` — jamais un objet vide, qui aurait l'air d'une désignation. */
-export function canalCommun(registre) {
+/**
+ * TOUS les canaux communs, celui d'avant compris.
+ *
+ * Rend `{role, canal_id, canal_nom, autorises}` — `role` valant `null` pour le canal désigné
+ * par une version qui ne connaissait pas les rôles. **Cette liste est celle que la garde
+ * parcourt**, et elle inclut l'orphelin exprès : ce qu'on cesse de diffuser, on ne cesse pas de
+ * protéger. Ce qui se DIFFUSE, en revanche, se lit par `communPourCanal`, qui rend le rôle.
+ */
+export function canauxCommuns(registre) {
+  const table = registre?.communs || {};
+  const par_role = Object.entries(table)
+    .filter(([, c]) => c && c.canal_id)
+    .map(([role, c]) => ({ ...c, role }));
+  const orphelin = registre?.commun;
+  return orphelin?.canal_id ? [...par_role, { ...orphelin, role: null }] : par_role;
+}
+
+/** Le canal commun désigné pour un rôle, ou `null`. */
+export function canalCommunDuRole(registre, role) {
+  return registre?.communs?.[role] || null;
+}
+
+/** Le canal commun désigné SANS rôle par une version antérieure — gardé, jamais diffusé. */
+export function canalCommunSansRole(registre) {
   return registre?.commun || null;
 }
 
 /**
- * Ce canal est-il LE canal commun ?
+ * L'entrée du canal commun qui porte cet identifiant — avec son `role`, ou `null`.
+ *
+ * C'est ce que lit la diffusion : un canal dont le `role` est `null` ne s'adresse à personne
+ * qu'on puisse nommer, donc il ne diffuse pas. Deviner « probablement tout le monde » serait
+ * très exactement le comportement que ce lot supprime.
+ */
+export function communPourCanal(registre, canalId) {
+  if (!canalId) return null;
+  return canauxCommuns(registre).find((c) => c.canal_id === canalId) || null;
+}
+
+/**
+ * Ce canal est-il UN canal commun ?
  *
  * Point de lecture unique, et c'est voulu : chaque geste qui écrit dans un canal doit pouvoir
  * poser la question d'une seule façon. Un test d'égalité recopié à cinq endroits en oublie un,
  * et l'oubli est du côté qui coûte — une parole d'agent chez tous les agents.
+ *
+ * IL EN EXISTE PLUSIEURS DEPUIS T-20260814-0002, et c'est précisément pourquoi la question ne
+ * doit se poser qu'ici : une garde écrite contre « le » canal commun aurait laissé passer le
+ * second dès le jour de sa désignation.
  */
 export function estCanalCommun(registre, canalId) {
-  const commun = canalCommun(registre);
-  return Boolean(commun && canalId && commun.canal_id === canalId);
+  return Boolean(canalId && canauxCommuns(registre).some((c) => c.canal_id === canalId));
 }
 
 // ————————————————————————————————————————————————————————————————— le dirigeant du poste
