@@ -260,6 +260,9 @@ if (geste === 'relever') {
     await parler({
       geste: 'fermer',
       canal_id: mienne.canal_id,
+      // D'OÙ PART LE GESTE — le veilleur refuse à un PAIR de refermer et d'archiver le chantier
+      // de celui qui le mène (T-20260814-0093). Il parle sur cette ligne ; il n'en dispose pas.
+      pane: ici.pane,
       bilan: option(args, '--bilan'),
       archiver: !args.includes('--sans-archiver'),
     })
@@ -268,13 +271,17 @@ if (geste === 'relever') {
   const titre = option(args, '--titre');
   if (!titre) usage(1);
   const canalId = option(args, '--canal');
+  // LE PANE EST LU DANS LES DEUX CHEMINS, y compris celui qui désigne le canal explicitement :
+  // sans lui, un pair contournerait le refus en nommant l'identifiant du canal, ce qui est
+  // précisément la porte que ce chemin-là ouvre (il existe pour renommer depuis un pane qui ne
+  // porte aucune ligne).
+  const ici = await herdr.paneCourant();
   if (canalId) {
-    rendre(await parler({ geste: 'renommer', canal_id: canalId, titre }));
+    rendre(await parler({ geste: 'renommer', canal_id: canalId, titre, pane: ici.pane }));
   } else {
-    const ici = await herdr.paneCourant();
     const etat = await parler({ geste: 'etat' });
     const mienne = ligneVisee('renommer', etat.ouvertes, ici, args);
-    rendre(await parler({ geste: 'renommer', canal_id: mienne.canal_id, titre }));
+    rendre(await parler({ geste: 'renommer', canal_id: mienne.canal_id, titre, pane: ici.pane }));
   }
 } else if (geste === 'commun') {
   // Désigne le canal commun d'un RÔLE. Ce geste est celui de l'OPÉRATEUR du poste, une fois par

@@ -366,6 +366,44 @@ test('UN NOM QUI NE DÉSIGNE AUCUN AGENT VIVANT EST UN REFUS — pas une ligne q
   });
 });
 
+// ═════════════════ 2-bis. PARLER SE PARTAGE, DISPOSER NON — l'autre porte de la même sélection
+
+test('LE GESTIONNAIRE NE FERME PAS LE CHANTIER DE SON ORCHESTRATEUR — ni ne l’archive', async () => {
+  // ⚠️ « UNE PORTE SUR DEUX » : `ligneDuPane` sert TROIS gestes, pas un. Ajouter un porteur pour
+  // `dire` donnait au gestionnaire, du même geste, le pouvoir de POSTER UN BILAN au nom du
+  // chantier puis d'ARCHIVER son canal — c'est-à-dire de mettre en lecture seule, sans retour,
+  // le lieu où l'orchestrateur attend l'arbitrage du dirigeant.
+  await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld }) => {
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    const chantier = monde.canaux.find((c) => c.name === 'refonte-du-devis');
+
+    const r = await ld(['fermer', '--bilan', 'je clos ça', '--a', 'd-1'], PANE_GESTIONNAIRE);
+    assert.equal(r.code, 1, 'le geste est refusé');
+    // LE FAIT : aucun bilan posté, canal jamais archivé, ligne toujours ouverte.
+    assert.deepEqual(canauxTouches(monde), [], 'aucun bilan n’est parti');
+    assert.equal(chantier.is_archived, false, 'le canal du chantier n’est PAS archivé');
+    assert.equal(chargerRegistre().lignes.find((l) => l.chantier === 'd-1').close_le, null, 'la ligne reste ouverte');
+
+    // Et l'orchestrateur, lui, ferme la sienne — le refus porte sur le pair, pas sur le geste.
+    assert.equal((await ld(['fermer', '--bilan', 'livré'], PANE_ORCHESTRATEUR)).code, 0);
+    assert.equal(chantier.is_archived, true, 'celui qui mène le chantier le referme bien');
+  });
+});
+
+test('IL NE RENOMME PAS SON CANAL NON PLUS — même en le désignant par son identifiant', async () => {
+  // Le chemin `--canal <id>` existe pour renommer depuis un pane qui ne porte aucune ligne : il
+  // contournerait le refus s'il ne lisait pas le pane courant. C'est la porte d'à côté.
+  await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld }) => {
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    const chantier = monde.canaux.find((c) => c.name === 'refonte-du-devis');
+
+    assert.equal((await ld(['renommer', '--titre', 'Autre chose', '--a', 'd-1'], PANE_GESTIONNAIRE)).code, 1);
+    assert.equal(chantier.name, 'refonte-du-devis', 'le canal garde son nom');
+    assert.equal((await ld(['renommer', '--titre', 'Autre chose', '--canal', chantier.id], PANE_GESTIONNAIRE)).code, 1);
+    assert.equal(chantier.name, 'refonte-du-devis', 'et l’identifiant du canal ne contourne pas le refus');
+  });
+});
+
 // ═════════════════ 3. LA NON-RÉGRESSION — celle qui compte le plus
 
 test('UN ORCHESTRATEUR SANS GESTIONNAIRE : sa ligne s’ouvre et parle EXACTEMENT comme avant', async () => {

@@ -620,6 +620,40 @@ export class Veilleur {
   }
 
   /**
+   * LE REFUS OPPOSÉ AU PAIR QUI DISPOSERAIT D'UNE LIGNE QUI N'EST PAS LA SIENNE — ou `null`.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════════════════
+   * ⚠️ « UNE PORTE SUR DEUX », ET C'ÉTAIT LA MIENNE (T-20260814-0093, trouvé en relecture).
+   *
+   * Partager une ligne, c'est ajouter un porteur à `panesDeLigne` — et `ligneDuPane` sert
+   * TROIS gestes, pas un : `dire`, `fermer`, `renommer`. Le lot n'avait pensé qu'au premier.
+   * Le gestionnaire pouvait donc **fermer la ligne du chantier de son orchestrateur**, poster
+   * un bilan en son nom et faire ARCHIVER son canal — c'est-à-dire mettre en lecture seule,
+   * sans retour, le lieu où l'orchestrateur attend l'arbitrage du dirigeant. Et le renommer.
+   *
+   * PARLER SE PARTAGE, DISPOSER NE SE PARTAGE PAS. Le chantier appartient à celui qui le mène :
+   * il l'a ouvert, il le referme. Le pair y parle, et c'est tout ce qu'on lui a donné.
+   *
+   * C'est la même forme de garde que `refusSurCommun`, au même endroit et pour la même raison :
+   * le veilleur est le point d'écriture unique, et une garde posée dans la commande se contourne
+   * par un appel direct au socket.
+   */
+  refusDuPair(geste, ligne, pane) {
+    if (!pane || !ligne?.pair?.pane || pane !== ligne.pair.pane) return null;
+    // Le porteur d'origine reste maître, même s'il partage son pane avec le pair (cas d'école,
+    // mais un `===` qui rendrait un refus au propriétaire serait pire que la porte qu'on ferme).
+    if (pane === ligne.pane) return null;
+    return {
+      ok: false,
+      motif: 'ligne_du_pair',
+      erreur:
+        `la ligne de « ${ligne.chantier} » (#${ligne.canal_nom}) est celle de l'orchestrateur qui mène ce ` +
+        `chantier : tu y parles, tu n'en disposes pas. « ${geste} » est refusé — rien n'a changé. ` +
+        `Pour parler : dire "…" --a ${ligne.chantier}.`,
+    };
+  }
+
+  /**
    * L'ÉCHO D'UNE PAROLE AUX AUTRES PORTEURS DE LA LIGNE — ce qui fait que les deux se parlent.
    *
    * Ce qui part dans Slack est lu par le dirigeant. Les agents, eux, ne lisent pas Slack : sans
@@ -867,11 +901,15 @@ export class Veilleur {
    * laisse le registre sur l'ancien nom, et l'état affiché cesse de correspondre à ce que
    * le dirigeant voit dans son espace.
    */
-  async renommer({ chantier, worktree, titre, canal_id: canalId }) {
+  async renommer({ chantier, worktree, titre, canal_id: canalId, pane }) {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('renommer', canalId, ligne?.canal_id);
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
+    // Le nom d'un canal est ce que le dirigeant voit dans sa barre latérale, et sur une ligne
+    // cliente c'est aussi la SIGNATURE de chaque message : un pair ne le change pas.
+    const refusPairRenom = this.refusDuPair('renommer', ligne, pane);
+    if (refusPairRenom) return refusPairRenom;
     if (!titre) return { ok: false, erreur: 'titre requis' };
     // MÊME GARDE QUE `fermer`, ET C'EST LA PORTE QUE LE PREMIER CORRECTIF AVAIT LAISSÉE —
     // relevée en revue de fond, sur le lot qui corrigeait précisément « une porte sur deux ».
@@ -911,13 +949,17 @@ export class Veilleur {
     return { ok: true, inchange: false, avant: ancien, canal: d.nom };
   }
 
-  async fermer({ chantier, worktree, bilan, archiver = true, canal_id: canalId }) {
+  async fermer({ chantier, worktree, bilan, archiver = true, canal_id: canalId, pane }) {
     // `fermer` porte un bilan qu'il POSTE, et il archive : les deux gestes qu'on ne veut voir
     // ni l'un ni l'autre sur le canal de tous les agents.
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('fermer', canalId, ligne?.canal_id);
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier || canalId} »` };
+    // `fermer` POSTE UN BILAN ET ARCHIVE : les deux gestes qu'un pair ne doit pas pouvoir
+    // exercer sur le chantier de quelqu'un d'autre.
+    const refusPair = this.refusDuPair('fermer', ligne, pane);
+    if (refusPair) return refusPair;
     // UNE LIGNE DÉJÀ CLOSE NE SE REFERME PAS DEUX FOIS, et la garde est arrivée avec le chemin
     // par canal (T-20260813-0078). Par chantier, `ligneOuverteParCle` ne rendait QUE des lignes
     // ouvertes ; `ligneParCanal`, lui, retombe volontairement sur la plus récemment close — pour
