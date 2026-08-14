@@ -184,6 +184,38 @@ test('RÔLE — il se lit dans le lieu, pas dans le nom que l’agent porte', as
   assert.equal(roleDuLieu(demi), null, 'un lieu incomplet n’établit aucun rôle');
 });
 
+test('RÔLE — les DEUX en-têtes doivent concorder, pas un seul', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // FAUX TÉMOIN TROUVÉ EN REVUE DE FOND, et il ne coûtait qu'un caractère : remplacer le
+  // `.every` de `roleDuLieu` par un `.some` laissait les 535 tests des deux suites VERTS.
+  // Toutes les fixtures posaient les deux en-têtes justes, ou les deux faux — jamais UN SEUL.
+  // Le ET était abondamment commenté, et gardé par rien.
+  //
+  // Ce que ça coûterait : `# Ce qui est propre à ce dépôt` est une formulation générique, que
+  // n'importe quel CONTEXTE.md peut porter par copier-coller. Avec un `.some`, ce seul fichier
+  // ferait d'un répertoire quelconque le lieu d'un orchestrateur — et depuis ce lot, cette
+  // fonction ne décide plus seulement de ce qu'un garde laisse passer : elle décide à QUI une
+  // consigne du dirigeant est remise, en direct, dans le pane d'un agent au travail.
+  const { roleDuLieu } = await import('../src/lieu-agent.js');
+
+  const moitiesEtrangeres = [
+    { claude: METIER_ORCH.claude, contexte: '# Notes en vrac', quoi: 'le métier seul' },
+    { claude: '# Un projet quelconque', contexte: METIER_ORCH.contexte, quoi: 'le contexte seul' },
+  ];
+  for (const { claude, contexte, quoi } of moitiesEtrangeres) {
+    assert.equal(roleDuLieu(lieu({ claude, contexte })), null, `${quoi} ne suffit pas à établir un rôle`);
+  }
+
+  // ET LE CAS HYBRIDE, qui est le plus mordant : chaque en-tête est celui d'un VRAI rôle, mais
+  // de deux rôles différents. Aucun des deux n'est établi — il n'y a pas de « rôle majoritaire ».
+  assert.equal(
+    roleDuLieu(lieu({ claude: METIER_ORCH.claude, contexte: METIER_REPR.contexte })),
+    null,
+    'un lieu qui emprunte à deux rôles n’en établit aucun'
+  );
+  assert.equal(roleDuLieu(lieu({ claude: METIER_REPR.claude, contexte: METIER_ORCH.contexte })), null);
+});
+
 // ═════════════════ 2. CHACUN NE REÇOIT QUE LE SIEN — par le fait
 
 test('DIFFUSER — l’orchestrateur et le gestionnaire reçoivent chacun SA consigne, et rien de l’autre', async () => {
