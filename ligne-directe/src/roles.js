@@ -34,6 +34,12 @@ const ROLES = {
   representant: {
     /** Le nom du rôle tel qu'on le dit — pour les messages, jamais pour décider. */
     libelle: 'représentant',
+    /**
+     * Le même, au pluriel, pour le cadre d'une consigne commune : « À TOUS LES … ». Écrit
+     * plutôt que dérivé — une règle d'accord tenue par du code se trompe au premier rôle qui
+     * ne finit pas en « s », et ce cadre est la première ligne que lit un agent interrompu.
+     */
+    libelle_pluriel: 'représentants de clients',
     /** Le dossier, à la racine du dépôt, sous lequel les lieux de ce rôle se rangent. */
     dossier: '.gestionnaire',
     /** Le dossier de gabarits que le pack dépose sous `.claude/templates/`. */
@@ -106,6 +112,7 @@ const ROLES = {
 
   orchestrateur: {
     libelle: 'orchestrateur',
+    libelle_pluriel: 'orchestrateurs',
     // `.orchestrateur/<nom>/` — NOMMÉ, et le nom n'est pas cosmétique. Un projet d'envergure
     // ouvrira un second orchestrateur le jour où le premier ne tiendra plus (arbitrage du
     // dirigeant, 2026-08-12) ; un lieu anonyme ne se dédouble pas. Et ces lieux SONT

@@ -134,17 +134,40 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
  * la signature visuelle du message d'un interlocuteur, et la réutiliser ici ferait ressembler
  * la consigne commune à ce qu'elle n'est pas — au premier coup d'œil, qui est le seul qu'on
  * ait quand un texte tombe au milieu d'un travail.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * IL DIT MAINTENANT POUR QUEL RÔLE ELLE VAUT (T-20260814-0002), et ce n'est pas de la
+ * précision décorative : les consignes DIFFÈRENT vraiment d'un rôle à l'autre — « un nouveau
+ * MCP au ServiceDesk » ne concerne pas un gestionnaire, « une règle de conduite face au client
+ * a changé » ne concerne aucun orchestrateur. Un cadre qui dirait encore « à tous les agents »
+ * ferait croire à chacun que celle de l'autre le vise, et il l'appliquerait.
+ *
+ * ET IL DIT LE FAIT QUI MANQUERAIT AUTREMENT : les autres agents du poste ne l'ont pas reçue.
+ * Sans cette phrase, un orchestrateur suppose que les chefs d'équipe qu'il a ouverts l'ont
+ * entendue comme lui — ils ne l'ont pas entendue, et il ne leur dirait rien. On énonce ce que
+ * le mécanisme a fait ; ce que l'agent en fait ensuite appartient à son métier, pas à ce cadre.
  */
-export function cadrerConsigneCommune({ texte, canal, modifie = false } = {}) {
+export function cadrerConsigneCommune({ texte, canal, role, modifie = false } = {}) {
   const ou = canal ? ` (#${canal})` : '';
+  // Le libellé vient de `roles.js`, jamais d'ici : un rôle se nomme à un seul endroit. Un rôle
+  // absent ou inconnu ne se rabat PAS sur « tous les agents » — ce serait le cadre d'avant,
+  // rendu au pire moment. Il n'arrive pas jusqu'ici (la diffusion refuse avant), et si un jour
+  // il y arrivait, mieux vaut un cadre qui ne promet rien qu'un cadre qui élargit l'audience.
+  let eux = 'agents de ce rôle';
+  try {
+    eux = roleDe(role).libelle_pluriel;
+  } catch {
+    /* rôle inconnu : on ne lui invente pas une audience */
+  }
   return [
-    `[CANAL COMMUN — À TOUS LES AGENTS${ou}] Consigne du dirigeant${repris(modifie)}, reçue par Slack :`,
+    `[CANAL COMMUN — À TOUS LES ${eux.toUpperCase()}${ou}] Consigne du dirigeant${repris(modifie)}, reçue par Slack :`,
     '',
     texte,
     '',
     '——',
     `Ceci ne vient PAS de l'interlocuteur de ta ligne, et ne porte pas sur ton chantier :`,
-    `c'est une consigne du dirigeant à TOUS les agents de ce poste, reçue en même temps par chacun.`,
+    `c'est une consigne du dirigeant à TOUS les ${eux} de ce poste, reçue en même temps par chacun d'eux.`,
+    `Les autres agents du poste ne l'ont PAS reçue — ni les autres rôles, ni les agents que tu as ouverts.`,
     `ON N'Y RÉPOND PAS — aucune commande n'écrit dans ce canal, et rien de ce que tu diras n'y parviendra.`,
     `Ta propre ligne est intacte : « dire » et « demander » y vont toujours, et à personne d'autre.`,
   ].join('\n');
