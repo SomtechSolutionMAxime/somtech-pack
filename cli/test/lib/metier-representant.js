@@ -213,8 +213,41 @@ export function enteteDe(texte) {
  * `\bà moins que` ne s'apparie JAMAIS, et l'alternative serait morte-née — vraie par construction,
  * donc invisible. Le piège est le jumeau exact de celui documenté sur `privé\b` plus bas, et il
  * a été attrapé ici par une mutation, pas par une relecture.
+ *
+ * ⚠️ ET LA RÉCIPROQUE, QUI A COÛTÉ TROIS DÉFAUTS D'UN COUP (revue de fond, T-20260814-0033).
+ * « Pas de `\b` devant un accent » n'autorise pas à s'en passer PARTOUT : `efforce-toi` commence
+ * et finit par des lettres ASCII, il se borne normalement, et sans bornes il s'appariait dans
+ * `xefforce-toi`. L'exemption est une exception mesurée, jamais une habitude.
+ *
+ * ⚠️ ET LA BORNE FINALE TOMBE DANS LE MÊME PIÈGE QUE L'INITIALE — refaite dans le correctif
+ * qui venait de le documenter, deux lignes plus haut. `\bveille à\b` ne s'apparie JAMAIS : la
+ * borne d'après `à` cherche une frontière que `à` ne peut pas former. On la retire.
+ *
+ * ⚠️ ET `de` SANS BORNE MORD LE MOT SUIVANT. « évite DEux allers-retours au client » est un
+ * impératif parfait, et `évite (?:de)` s'y appariait sur le préfixe de « deux ». Chaque
+ * alternative se termine donc par sa borne — sauf celles qui finissent par une apostrophe, où
+ * il n'y a rien à borner. Trouvé en cherchant le cas qui départageait DEUX AUTRES formes :
+ * un essai qu'on écrit pour prouver une chose en révèle une autre, et c'est la quatrième.
+ *
+ * ⚠️ ET SEULE LA FORME QUI COMMANDE EST UNE TOURNURE PERMISSIVE — L'INFINITIF EST DU FRANÇAIS
+ * ORDINAIRE. `tente(?:r)?` a fait rougir « sans rien tenter d'autre », qui est un impératif
+ * PARFAIT et vit dans deux compétences réelles. Ce qui assouplit une consigne, c'est
+ * « tente DE le faire » adressé à quelqu'un ; « tenter d'autre » ne s'adresse à personne. On
+ * ne garde donc que la seconde personne.
+ *
+ * ⚠️ ET UNE TOURNURE QUI COLLISIONNE AVEC UN NOM N'ENTRE PAS. `tâche de` a été essayé puis
+ * RETIRÉ : « la tâche de fond » est du français parfaitement impératif, et une garde qui rougit
+ * sur du texte correct ne survit pas — le premier qui la rencontre la supprime, et emporte
+ * avec elle les tournures qu'elle gardait vraiment. Une alternative de moins vaut mieux qu'une
+ * garde qu'on apprend à ignorer.
+ *
+ * ⚠️ ET UN POINT DANS UNE ALTERNATIVE EST UN MÉTACARACTÈRE, PAS UNE APOSTROPHE. `essaie (?:de|d.)`
+ * — écrit pour couvrir l'élision `d'` — s'appariait sur « évite DAns ce cas », « essaie DUne
+ * façon » : n'importe quelle phrase commençant par la bonne lettre. Une garde de modalité qui
+ * rougit sur du texte parfaitement impératif est pire qu'absente : on la « corrige » en la
+ * retirant. On écrit donc `d['’]`, les deux apostrophes réelles.
  */
-export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de|d.|que)|en évitant|essaie(?:r)? (?:de|d.)|tâche(?:r)? de|efforce-toi/i;
+export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de\b|que\b|d['’])|en évitant|essa(?:ie|ye|yer) (?:de\b|d['’])|\btente (?:de\b|d['’])|\bveille à|\befforce-toi\b/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {
