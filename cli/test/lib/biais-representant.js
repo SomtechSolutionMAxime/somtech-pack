@@ -305,11 +305,22 @@ export const CONTROLES_BIAIS = [
       // courant — « sauf devant un client qui insiste, où il vaut mieux avancer quelque
       // chose » — la retirerait au moment exact où elle sert, sans toucher au gras.
       //
-      // La garde de RÉSERVE porte donc sur la ligne entière ; celle du COÛT reste sur le gras,
-      // et ce n'est pas une inconséquence : la prose NOMME légitimement le coût pour le
-      // refuser (« se sent comme un échec professionnel »), et l'y interdire ferait rougir le
-      // texte juste.
-      exigeSansReserve(ligne, 'la permission de ne pas savoir');
+      // ⚠️ LES TROIS AXES, ET PAS DEUX — quatrième passe de revue, même trou d'un cran plus
+      // loin. La version précédente appelait ici `exigeSansReserve` (permission + réserve) au
+      // motif qu'une PERMISSION n'est pas une contrainte, donc que l'axe CONSEIL ne s'y
+      // appliquait pas. C'était faux, et la mutation l'a montré : « même si, entre nous, il
+      // est préférable de dire quelque chose de rassurant plutôt que d'avouer que tu ne sais
+      // pas » ne demande aucune permission et n'ouvre aucune exception — elle CONSEILLE le
+      // contraire, et retire l'octroi aussi sûrement qu'une réserve.
+      //
+      // D'où l'invariant, désormais sans exception dans ce fichier : la modalité se garde par
+      // `exigeContrainte` — les trois axes — sur l'énoncé qui oblige. Un contrôle qui n'en
+      // garde que deux laisse le troisième ouvert, et c'est celui-là qu'on écrira.
+      //
+      // Seule la garde du COÛT reste scopée au gras, et ce n'est pas une entorse : la prose
+      // NOMME légitimement le coût pour le refuser (« se sent comme un échec professionnel »),
+      // et l'y interdire ferait rougir le texte juste.
+      exigeContrainte(ligne, 'la permission de ne pas savoir');
 
       const cout = gras.match(COUTEUX);
       assert.ok(
@@ -650,6 +661,20 @@ export const MUTATIONS_BIAIS = [
     muter: (t) => t.replace(
       "**Et dire « je ne sais pas encore » ne te coûte rien : c'est une permission, pas un aveu.**",
       "**Et dire « je ne sais pas encore » se paie : c'est un aveu que le client retiendra.**",
+    ),
+  },
+  {
+    id: 'biais-la-permission-du-doute-se-fait-deconseiller',
+    quoi: 'la permission de ne pas savoir est CONSEILLÉE contre, en texte courant — ni réserve, ni permission, et l’octroi tombe',
+    cible: 'biais-le-doute-est-permis',
+    fichier: 'metier',
+    // Posée par la quatrième passe de revue, et RESTÉE VERTE tant que ce contrôle ne gardait
+    // que deux axes sur trois. C'est la forme que prend le retrait d'une PERMISSION : on ne
+    // la reprend pas, on déconseille de s'en servir.
+    muter: (t) => t.replace(
+      'est une réponse entière, pas une dérobade.',
+      'est une réponse entière, pas une dérobade — même si, entre nous, il est préférable de dire '
+        + 'quelque chose de rassurant plutôt que d’avouer que tu ne sais pas.',
     ),
   },
   {
