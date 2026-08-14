@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.49.0] - 2026-08-14
+
+### Corrigé
+
+- **Un seul nom de lieu, une seule règle** (T-20260814-0101, PR #228). La pose écrivait le dossier avec le nom brut ; la mise à jour exigeait un slug en minuscules. **Quatre lieux sur cinq d'un poste réel étaient donc inatteignables** — `Charles-Olivier`, `Francois`, `Jacob`, `Zach` — et **macOS le masquait** en ignorant la casse : la commande visait `francois`, atteignait `Francois`, et paraissait marcher. Sur un volume sensible à la casse, elle aurait créé un second lieu vide et muet pendant que le vrai restait périmé. La pose, la naissance et la mise à jour passent désormais par **la même résolution**.
+- **C'est le nom brut qui fait foi** : la casse est portée, jamais imposée. Normaliser aurait cassé les quatre lieux existants, qu'il aurait fallu renommer chez quatre clients avec leurs gestionnaires dessus. **Aucun geste requis de personne.**
+- **La pose n'avait aucune garde contre l'évasion de chemin** — `join(depot, dossier, '../../evil')` écrivait hors du dépôt du client. C'est un durcissement net, et la liste blanche reste une liste blanche : aucun métacaractère de chemin n'y entre.
+- **Le cas sensible à la casse est prouvé, pas supposé.** Les tests mesurent la sensibilité du volume par sonde — jamais déduite de la plateforme — et **se déclarent non prouvables plutôt que verts** quand il est insensible. Rejoués sur un volume APFS sensible monté pour l'occasion, et exécutés à chaque demande de fusion par la chaîne Linux. Deux témoins rejouent l'ancien geste pour établir que le mode de panne existait vraiment.
+- **La porte humaine était restée ouverte** — trouvé en revue de fond : l'aide et le README prescrivaient encore des minuscules pendant que le code acceptait la casse libre. La garde posée en réponse était une liste noire de tournures, **défaite en une mutation** ; elle est devenue une constante unique que l'aide et le README citent, exigée par comparaison littérale sur l'aide **rendue**.
+
 ## [1.48.0] - 2026-08-14
 
 ### Ajouté
