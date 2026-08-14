@@ -46,7 +46,14 @@ function slackDouble() {
       return { id: canal, nom: canal.replace(/^C_/, ''), prive: false, archive: false };
     },
     async definirSujet() {},
-    async inviter() {},
+    // Voir `faux-temoins.test.js` : l'invitation doit avoir un effet observable (T-20260814-0136).
+    membres: [],
+    async membresDuCanal() {
+      return this.membres;
+    },
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!this.membres.includes(u)) this.membres.push(u);
+    },
     async ouvrirEcoute() {
       return 'wss://exemple.invalide';
     },
@@ -250,7 +257,7 @@ test('rouvrir une ligne existante la reprend et met à jour le pane', async () =
 
   // Un agent relancé dans la même copie de travail naît dans un pane neuf : sans cette
   // mise à jour, le dirigeant écrirait vers un pane mort.
-  const r = await v.ouvrir({ chantier: 'D-20260805-0004', pane: 'w9:p9', worktree: '/w/a' });
+  const r = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w9:p9', worktree: '/w/a' });
 
   assert.equal(r.ok, true);
   assert.equal(r.reprise, true);

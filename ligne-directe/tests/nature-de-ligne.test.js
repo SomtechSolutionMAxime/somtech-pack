@@ -56,7 +56,11 @@ function slackDouble({ membres = [], membresIllisibles = false, rendPrive = null
       return membres;
     },
     async definirSujet() {},
-    async inviter() {},
+    // Voir `canal-du-client.test.js` : l'invitation doit avoir un effet observable, sinon la
+    // preuve par les membres ne prouve rien du tout (T-20260814-0136).
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!membres.includes(u)) membres.push(u);
+    },
     async archiverCanal() {
       return true;
     },
@@ -132,7 +136,7 @@ test('NON-RÉGRESSION — une ligne sans nature déclarée reste interne ET publ
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble() });
 
-  const r = await v.ouvrir({ chantier: 'D-INTERNE', pane: 'w1:p1', worktree: '/w/a' });
+  const r = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-INTERNE', pane: 'w1:p1', worktree: '/w/a' });
 
   assert.equal(r.ok, true);
   assert.notEqual(s.crees[0].prive, true, 'une ligne sans nature ne doit surtout pas devenir privée');
@@ -145,7 +149,7 @@ test('une nature inconnue est REFUSÉE, pas rabattue en silence sur « interne �
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble() });
 
-  const r = await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', nature: 'cliet' });
+  const r = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', nature: 'cliet' });
 
   assert.equal(r.ok, false);
   assert.match(r.erreur, /nature/i);
@@ -159,7 +163,7 @@ test('rouvrir une ligne en changeant sa nature est REFUSÉ — un canal ne chang
   // registre sur un canal resté visible de tout l'espace.
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble() });
-  await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a' });
+  await v.ouvrir({ invites: ['UDIR'], chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a' });
 
   const r = await v.ouvrir({ chantier: 'D-1', pane: 'w2:p2', worktree: '/w/a', nature: 'client' });
 

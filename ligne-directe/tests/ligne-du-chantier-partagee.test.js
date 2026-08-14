@@ -56,6 +56,17 @@ let compteur = 0;
 const PANE_ORCHESTRATEUR = 'w1:p1';
 const PANE_GESTIONNAIRE = 'w9:pG';
 const NOM_GESTIONNAIRE = 'acme-gestionnaire';
+/**
+ * LE POSTE CONNAÎT SON DIRIGEANT, et les lignes de chantier l'accueillent (T-20260814-0136).
+ *
+ * Ces essais ouvraient des lignes INTERNES sans aucun invité — ce que la commande acceptait, et
+ * qui donnait un canal public dont la liste d'autorisés est vide : `autorise()` y refuse alors
+ * tout le monde. C'est la panne mesurée le 2026-08-14 sur un chantier client réel. Le geste
+ * naturel de l'orchestrateur est `--au-dirigeant` : c'est à lui qu'il rend compte.
+ *
+ * Aucune assertion de ce fichier n'a bougé — seule l'ouverture est désormais complète.
+ */
+const DIRIGEANT = { id: 'UDIR', courriel: 'dirigeant@somtech.ca' };
 
 before(async () => {
   racine = mkdtempSync(join(tmpdir(), 'ld-pair-'));
@@ -81,7 +92,7 @@ before(async () => {
 
 after(() => rmSync(racine, { recursive: true, force: true }));
 
-beforeEach(() => sauverRegistre({ version: 1, lignes: [], communs: {}, commun: null, dirigeant: null }));
+beforeEach(() => sauverRegistre({ version: 1, lignes: [], communs: {}, commun: null, dirigeant: DIRIGEANT }));
 
 /**
  * UN VRAI LIEU D'AGENT SUR DISQUE — parce que le rôle d'un pair s'établit par le FAIT.
@@ -146,7 +157,7 @@ function agentsQuiTravaillent(agents) {
 
 /** Un poste complet : registre, espace Slack en mémoire, veilleur qui écoute vraiment. */
 async function avecPoste({ lignes = [], canaux = [], agents = [] }, corps) {
-  sauverRegistre({ version: 1, lignes, communs: {}, commun: null, dirigeant: null });
+  sauverRegistre({ version: 1, lignes, communs: {}, commun: null, dirigeant: DIRIGEANT });
   const monde = fauxSlack({ canaux, utilisateurs: [{ id: 'UCLIENT', name: 'jean', profile: {} }] }).installer();
   const travail = agentsQuiTravaillent(agents);
   const v = new Veilleur({
@@ -208,7 +219,7 @@ function equipe() {
 
 test('L’ORCHESTRATEUR PARLE, ÇA ARRIVE DANS LE PANE DU GESTIONNAIRE — et dans le canal du chantier', async () => {
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld, travail }) => {
-    const o = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE]);
+    const o = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE]);
     assert.equal(o.code, 0, o.stderr);
 
     const r = await ld(['dire', 'les stories sont créées, je commence']);
@@ -241,7 +252,7 @@ test('L’ORCHESTRATEUR PARLE, ÇA ARRIVE DANS LE PANE DU GESTIONNAIRE — et da
 
 test('LE GESTIONNAIRE DEMANDE, ÇA ARRIVE DANS LE PANE DE L’ORCHESTRATEUR — c’est une équipe, pas un rapport', async () => {
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld, travail }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
 
     // Il parle depuis SON pane, et il nomme la ligne : son pane en porte maintenant DEUX.
     const r = await ld(['dire', 'j’ai ouvert D-2, peux-tu t’en occuper quand ce sera possible ?', '--a', 'd-1'], PANE_GESTIONNAIRE);
@@ -268,7 +279,7 @@ test('LE GESTIONNAIRE PORTE TROIS LIGNES — chacune atteignable par son nom, au
   ];
   const canaux = [CANAL_CLIENT, { id: 'C_dir', name: 'ligne-dirigeant-acme', is_private: false, membres: ['UMOI', 'UDIR'] }];
   await avecPoste({ lignes, canaux, agents: equipe() }, async ({ monde, ld }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
 
     assert.equal((await ld(['dire', 'où en est-on ?', '--a', 'd-1'], PANE_GESTIONNAIRE)).code, 0);
     assert.equal((await ld(['dire', 'ça avance', '--a', 'acme'], PANE_GESTIONNAIRE)).code, 0);
@@ -286,7 +297,7 @@ test('LE GESTIONNAIRE PORTE TROIS LIGNES — chacune atteignable par son nom, au
 
 test('RIEN DE CE QUI TRANSITE ENTRE LES DEUX AGENTS N’ATTEINT LE CANAL DU CLIENT', async () => {
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
 
     await ld(['dire', 'la migration casse la table facture, je répare']);
     await ld(['demander', 'je bascule en lecture seule ?']);
@@ -349,7 +360,7 @@ test('UN AGENT QUI N’EST PAS UN GESTIONNAIRE N’EST PAS UN PAIR — même s�
   mkdirSync(join(racine, 'worktree-ordinaire'), { recursive: true });
   await avecPoste({ lignes: [], canaux: [CANAL_CLIENT], agents }, async ({ monde, ld, travail }) => {
     const avant = monde.canaux.length;
-    const r = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE]);
+    const r = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE]);
     assert.equal(r.code, 1, 'l’ouverture est refusée');
     assert.equal(monde.canaux.length, avant, 'aucun canal n’a été créé');
     assert.equal(travail.recu('w9:pX'), null, 'l’agent nommé par erreur n’a rien reçu');
@@ -359,7 +370,7 @@ test('UN AGENT QUI N’EST PAS UN GESTIONNAIRE N’EST PAS UN PAIR — même s�
 test('UN NOM QUI NE DÉSIGNE AUCUN AGENT VIVANT EST UN REFUS — pas une ligne qui a l’air partagée', async () => {
   await avecPoste({ lignes: [], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld }) => {
     const avant = monde.canaux.length;
-    const r = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', 'personne-de-ce-nom']);
+    const r = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', 'personne-de-ce-nom']);
     assert.equal(r.code, 1);
     assert.equal(monde.canaux.length, avant, 'aucun canal n’a été créé');
     assert.deepEqual(chargerRegistre().lignes, [], 'aucune ligne n’est inscrite');
@@ -375,7 +386,7 @@ test('UN PANE REPRIS PAR UN AUTRE AGENT NE REÇOIT RIEN — le pair est revérif
   // ce lot ferme partout ailleurs, par la porte du temps.
   const agents = equipe();
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents }, async ({ ld, travail }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
 
     // Le gestionnaire meurt ; SON PANE est repris par le représentant d'un AUTRE client.
     agents[1].name = 'bidule-gestionnaire';
@@ -393,7 +404,7 @@ test('UN PANE VIDÉ NE REÇOIT RIEN NON PLUS — dans les deux sens', async () =
   // lui au registre, mais la vie de son pane l'est — la même garantie que le chemin entrant.
   const agents = equipe();
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents }, async ({ ld, travail }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
     agents.splice(0, 1); // l'orchestrateur a disparu
 
     const r = await ld(['dire', 'et lui, il en est où ?', '--a', 'd-1'], PANE_GESTIONNAIRE);
@@ -411,7 +422,7 @@ test('LE GESTIONNAIRE NE FERME PAS LE CHANTIER DE SON ORCHESTRATEUR — ni ne l�
   // chantier puis d'ARCHIVER son canal — c'est-à-dire de mettre en lecture seule, sans retour,
   // le lieu où l'orchestrateur attend l'arbitrage du dirigeant.
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
     const chantier = monde.canaux.find((c) => c.name === 'refonte-du-devis');
 
     const r = await ld(['fermer', '--bilan', 'je clos ça', '--a', 'd-1'], PANE_GESTIONNAIRE);
@@ -431,7 +442,7 @@ test('IL NE RENOMME PAS SON CANAL NON PLUS — même en le désignant par son id
   // Le chemin `--canal <id>` existe pour renommer depuis un pane qui ne porte aucune ligne : il
   // contournerait le refus s'il ne lisait pas le pane courant. C'est la porte d'à côté.
   await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents: equipe() }, async ({ monde, ld }) => {
-    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
     const chantier = monde.canaux.find((c) => c.name === 'refonte-du-devis');
 
     assert.equal((await ld(['renommer', '--titre', 'Autre chose', '--a', 'd-1'], PANE_GESTIONNAIRE)).code, 1);
@@ -445,7 +456,7 @@ test('IL NE RENOMME PAS SON CANAL NON PLUS — même en le désignant par son id
 
 test('UN ORCHESTRATEUR SANS GESTIONNAIRE : sa ligne s’ouvre et parle EXACTEMENT comme avant', async () => {
   await avecPoste({ lignes: [], canaux: [], agents: equipe() }, async ({ monde, ld, travail }) => {
-    const o = await ld(['ouvrir', 'd-9', '--titre', 'Chantier seul', '--sujet', 'de quoi il s’agit']);
+    const o = await ld(['ouvrir', 'd-9', '--titre', 'Chantier seul', '--au-dirigeant', '--sujet', 'de quoi il s’agit']);
     assert.equal(o.code, 0, o.stderr);
     const ouverture = JSON.parse(o.stdout);
     assert.equal(ouverture.ok, true);
@@ -471,7 +482,7 @@ test('UN ORCHESTRATEUR SANS GESTIONNAIRE : sa ligne s’ouvre et parle EXACTEMEN
 
 test('SANS PAIR, LE PANE N’EN PORTE QU’UNE — `dire` sans nom marche toujours, rien n’est devenu obligatoire', async () => {
   await avecPoste({ lignes: [], canaux: [], agents: equipe() }, async ({ monde, ld }) => {
-    assert.equal((await ld(['ouvrir', 'd-9', '--titre', 'Chantier seul'])).code, 0);
+    assert.equal((await ld(['ouvrir', 'd-9', '--titre', 'Chantier seul', '--au-dirigeant'])).code, 0);
     const r = await ld(['dire', 'sans --a, comme hier']);
     assert.equal(r.code, 0, r.stderr);
     assert.deepEqual(canauxTouches(monde), ['C_chantier-seul']);
@@ -498,7 +509,7 @@ test('UNE LIGNE DÉJÀ OUVERTE ACCUEILLE SON GESTIONNAIRE — sans la refermer, 
   };
   const canaux = [CANAL_CLIENT, { id: 'C_chantier', name: 'refonte-du-devis', is_private: false, membres: ['UMOI', 'UDIR'] }];
   await avecPoste({ lignes: [LIGNE_CLIENTE, dejaOuverte], canaux, agents: equipe() }, async ({ monde, ld, travail }) => {
-    const o = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE]);
+    const o = await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-dirigeant', '--au-gestionnaire', NOM_GESTIONNAIRE]);
     assert.equal(o.code, 0, o.stderr);
     assert.equal(JSON.parse(o.stdout).reprise, true, 'c’est une reprise, pas un second canal');
     assert.equal(monde.canaux.length, canaux.length, 'aucun canal n’a été créé');

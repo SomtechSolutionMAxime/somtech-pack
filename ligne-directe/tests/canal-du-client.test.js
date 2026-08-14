@@ -64,11 +64,19 @@ function slackDouble({ membres = [], canalExistant = null } = {}) {
       }
       return { id: `C_${nom}`, nom, prive: Boolean(prive), reutilise: false };
     },
+    // INVITER A UN EFFET, ET LA LECTURE DES MEMBRES LE VOIT (T-20260814-0136).
+    //
+    // `inviter` était un vide qui ne faisait rien et `membresDuCanal` rendait une liste figée :
+    // le double était donc structurellement INCAPABLE de voir une invitation manquante — six
+    // fichiers d'essais dans ce cas, pendant que la panne mesurée était exactement celle-là.
+    // Un double dont le geste n'a pas d'effet observable ne prouve jamais ce geste.
     async membresDuCanal() {
       return membres;
     },
     async definirSujet() {},
-    async inviter() {},
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!membres.includes(u)) membres.push(u);
+    },
     async archiverCanal(_j, canal) {
       this.archives.push(canal);
       return true;

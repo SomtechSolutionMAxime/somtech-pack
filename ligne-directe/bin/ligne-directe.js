@@ -201,13 +201,14 @@ if (geste === 'relever') {
 } else if (geste === 'ouvrir') {
   const chantier = premierLibre(args);
   if (!chantier) usage(1);
+  // LE COURRIEL PART TEL QUEL — c'est le VEILLEUR qui le résout (T-20260814-0136).
+  //
+  // Il était résolu ici, ce qui obligeait la commande à lire le trousseau du poste et à appeler
+  // Slack pour son compte. Un courriel qui ne désignait personne y produisait un avertissement
+  // sur la sortie d'erreur, code 0, et la ligne s'ouvrait sans lui. Surtout, ce chemin était
+  // INÉPROUVABLE : la cloison refuse le trousseau sous essais, donc aucun essai n'a jamais pu
+  // exercer ce refus — celui qui essayait passait au vert parce que la commande TOMBAIT.
   const courriel = option(args, '--inviter');
-  const invites = [];
-  if (courriel) {
-    const id = await trouverMembre(await lireJeton(SERVICE_ROBOT), courriel);
-    if (id) invites.push(id);
-    else process.stderr.write(`avertissement : aucun membre pour ${courriel} — le canal est créé sans lui\n`);
-  }
   const ici = await herdr.paneCourant();
   rendre(
     await parler({
@@ -222,7 +223,7 @@ if (geste === 'relever') {
       // nature inconnue. Rabattre une faute de frappe sur le défaut côté commande créerait
       // un canal public pour un client sans que rien ne le dise.
       nature: option(args, '--nature'),
-      invites,
+      invites_courriels: courriel ? [courriel] : [],
       // LA PRÉSENCE EST LUE PAR `optionDonnee`, JAMAIS PAR `includes` — c'est la leçon exacte
       // de T-20260813-0078 : `--titre "--au-dirigeant"` contient le drapeau sans le porter, et
       // un `includes` y aurait vu une demande d'ouvrir la ligne du dirigeant. `optionDonnee`
