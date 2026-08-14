@@ -5,6 +5,18 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.43.0] - 2026-08-14
+
+### Ajouté
+
+- **Le gestionnaire client porte les cinq critères du standard sur les biais, et un bornage mécanique** (T-20260813-0063, PR #213). Il en portait quatre — anti-complaisance, anti-fabulation, calibration, anti-ancrage. Le contexte québécois manquait, et c'est lui, seul des deux rôles à parler au client, qui pouvait écrire « LLC » au lieu d'« Inc. » ou invoquer une règle de protection des renseignements qui n'est pas la Loi 25.
+- **Les trois angles de l'autorité, tenus ensemble plutôt qu'empilés** : ce qu'il dit engage Somtech (la parole), il ne cite jamais ce qu'il n'a pas lu textuellement (la citation), il ne donne aucun prix ni délai (le chiffre). Trois règles voisines que rien ne reliait — donc trois règles dont on applique une en oubliant les deux autres. Une seule table les porte désormais, avec l'enjeu de chacune.
+- **Ce que ses droits refusent** : `WebFetch`, `WebSearch`, `curl` et `wget`. Un représentant n'a rien à aller chercher hors de nos registres, et ce qu'il rapporterait du dehors arriverait chez un client sous l'en-tête de Somtech.
+
+### Corrigé
+
+- **La compétence promettait une fermeture que le mécanisme ne tient pas.** Mesuré : un `deny` mord même dans un dépôt non approuvé, mais un `allow` est **ignoré** tant qu'un humain n'a pas approuvé le dépôt, et **une commande shell non listée s'exécute sans rien demander**. Le bornage est donc une **liste finie opposée à un phénomène ouvert** — utile, jamais étanche. Le texte le dit maintenant au lieu de le promettre ; la dette est ouverte (T-20260814-0025) et vaut aussi pour le lieu de l'orchestrateur.
+
 ## [1.42.0] - 2026-08-13
 
 ### Ajouté
