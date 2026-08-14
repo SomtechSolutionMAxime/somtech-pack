@@ -364,11 +364,46 @@ export function ligneOuverteParSegment(segment, role) {
  */
 const SUBSTITUTION = /\$\(|`/;
 
+/**
+ * Ce qu'un shell EXÉCUTE d'un segment — la suite d'un commentaire est jetée.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ « UNE PORTE SUR DEUX », ET C'ÉTAIT LA MIENNE (T-20260814-0033).
+ *
+ * Le commentaire shell a été appris au garde par le chemin des OUVERTURES (`jetonsDuSegment`,
+ * T-20260813-0076) — et par lui seul. Les segments COMMUNS, eux, restaient éprouvés sur le
+ * texte brut, contre des expressions ancrées de bout en bout. Or c'est exactement là que le
+ * métier écrit les siens :
+ *
+ *     herdr pane current                    # ton pane
+ *     $LD etat                              # une ligne est-elle déjà ouverte sur ce pane ?
+ *
+ * Mesuré : les deux étaient REFUSÉS. Le métier prescrivait donc, mot pour mot, une séquence
+ * que le garde interdisait — le dispositif se contredisant lui-même, ce que ce lot existe
+ * précisément pour empêcher. Un agent qui recopie son propre métier se voyait bloqué au
+ * premier geste, sans que rien ne lui dise pourquoi.
+ *
+ * La coupe remonte donc d'un cran : elle a lieu UNE FOIS, ici, et les deux chemins lisent
+ * ensuite le même texte. C'est aussi ce qui empêche la prochaine asymétrie du même genre.
+ */
+function sansCommentaire(segment) {
+  const texte = String(segment || '');
+  let cite = false;
+  for (let i = 0; i < texte.length; i += 1) {
+    const c = texte[i];
+    if (c === '"') cite = !cite;
+    // Un croisillon n'ouvre un commentaire qu'EN TÊTE D'UN MOT et hors citation : `a#b` est
+    // littéral pour un shell, et couper là amputerait un titre qui porte un croisillon.
+    if (c === '#' && !cite && (i === 0 || /\s/.test(texte[i - 1]))) return texte.slice(0, i);
+  }
+  return texte;
+}
+
 /** Découpe une commande Bash en segments indépendants — chacun doit être autorisé. */
 export function segments(commande) {
   return String(commande || '')
     .split(/\n|&&|;/)
-    .map((s) => s.trim())
+    .map((s) => sansCommentaire(s).trim())
     .filter((s) => s.length > 0);
 }
 
