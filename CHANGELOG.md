@@ -5,6 +5,18 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.44.0] - 2026-08-14
+
+### Corrigé
+
+- **Le routage sortant ne devine plus la ligne, on la nomme** (T-20260813-0078, PR #218). La commande cherchait sa ligne par le pane — une clé qui ne l'identifie pas : deux lignes sur un même pane, et `find` prenait la première inscrite au registre en ignorant l'autre **en silence**. Reproduit : un rapport destiné à un chantier est parti dans le canal d'un autre, avec un succès affiché et sans un mot. `--a <ligne>` désigne désormais le destinataire, et la commande passe le canal au veilleur, qui savait déjà router par cette clé unique — la mécanique existait à l'arrivée, personne ne s'en servait.
+- **L'ambiguïté est refusée au lieu d'être devinée.** Plus d'un candidat sans nom → refus, jamais le premier venu. C'est le renversement livré sur le trousseau, appliqué au routage : l'incertitude tombe du côté prudent. Un seul candidat n'exige aucun nom — rien de ce qui tourne ne casse.
+- **Les deux clés couvertes sur les trois gestes** — `dire`, `fermer`, `renommer`. La revue de fond a trouvé un bloquant : `renommer` n'avait pas reçu la garde « ligne close » que `fermer` avait obtenue — *une porte sur deux dans le correctif lui-même*. Et une régression du correctif : `--a` cherché dans tout le tableau le trouvait comme **valeur d'une autre option**, ce qui cassait `fermer --bilan --a`.
+
+### Ajouté
+
+- **Ce que ça débloque** : un agent peut désormais porter plusieurs lignes et parler sur chacune sans risque d'inversion. C'est le préalable de la ligne privée entre le dirigeant et chaque gestionnaire client — jusqu'ici, un gestionnaire n'avait aucun moyen de lui remonter quoi que ce soit, alors que quatre obligations de son métier l'exigent.
+
 ## [1.43.0] - 2026-08-14
 
 ### Ajouté
