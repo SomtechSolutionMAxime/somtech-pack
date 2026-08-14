@@ -80,14 +80,29 @@ function racineDuPoste() {
 /**
  * Tous les documents PRESCRIPTIFS du pack : ce qu'un agent lit, recopie ou subit.
  *
- * ⚠️ ON NE FILTRE PAS PAR NOM DE FICHIER. Une première version de ce contrôle ne regardait
- * que `CLAUDE.md` et `SKILL.md` — et laissait donc passer la MÊME dérive dans le
- * `settings.json` posé juste à côté, dans le même dossier, recopié chez le même client.
- * Démontré par la revue de fond : le défaut réintroduit là restait vert. On prend donc tout
- * ce qui est lu ou appliqué — `.md` et `.json` — sur les quatre racines que le pack
- * distribue.
+ * ⚠️ NI LE NOM DES FICHIERS, NI LA LISTE DES DOSSIERS NE SONT ÉCRITS ICI. Ce contrôle a
+ * failli deux fois sur ce point, et les deux fois la revue de fond l'a démasqué :
+ *
+ *   • il ne regardait d'abord que `CLAUDE.md` et `SKILL.md` — la MÊME dérive dans le
+ *     `settings.json` posé juste à côté, même dossier, même client, restait verte ;
+ *   • il a ensuite listé quatre sous-dossiers choisis à la main, alors que `core` distribue
+ *     `.claude/` **en entier** : `agents/`, `hooks/`, `schemas/`, `user-skills/` et le
+ *     `settings.json` racine voyagent aussi, et restaient hors de vue.
+ *
+ * Le périmètre est donc LU dans `pack.json`, sur le module `core` : tout ce qu'il distribue
+ * sous `.claude/`, tout `.md` et tout `.json`. Une racine ajoutée demain y entre seule.
+ *
+ * `scripts/` et `docs/` sont écartés, et c'est le seul écart — motivé en tête de fichier.
  */
 function documentsPrescriptifs() {
+  const manifeste = JSON.parse(readFileSync(join(REPO, 'pack.json'), 'utf8'));
+  const distribues = manifeste.modules?.core?.paths ?? [];
+  const racines = distribues.filter((chemin) => chemin.replace(/\/+$/, '') === '.claude');
+  assert.ok(
+    racines.length > 0,
+    'le module `core` doit distribuer `.claude/` — sinon ce contrôle ne sait plus quoi regarder',
+  );
+
   const trouves = [];
   const parcourir = (repertoire) => {
     for (const entree of readdirSync(repertoire)) {
@@ -96,9 +111,7 @@ function documentsPrescriptifs() {
       else if (entree.endsWith('.md') || entree.endsWith('.json')) trouves.push(chemin);
     }
   };
-  for (const racine of ['templates', 'skills', 'commands', 'workflows']) {
-    parcourir(join(REPO, '.claude', racine));
-  }
+  for (const racine of racines) parcourir(join(REPO, racine.replace(/\/+$/, '')));
   return trouves;
 }
 
