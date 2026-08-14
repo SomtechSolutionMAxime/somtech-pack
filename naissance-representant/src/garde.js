@@ -147,6 +147,19 @@ export function jetonsDuSegment(segment) {
     // Une apostrophe HORS citation ouvre une citation qu'on ne sait pas suivre. Dedans, ce
     // n'est qu'un caractère du texte, et c'est le cas nominal en français.
     if (c === "'" && !cite) return null;
+    // ⚠️ UN COMMENTAIRE SHELL COUPE LA COMMANDE, ET C'EST LA TROISIÈME PORTE DU MÊME BLOQUANT
+    // (relevée au troisième passage de la revue de fond, reproduite contre un vrai veilleur à
+    // travers un vrai shell). `ouvrir dirigeant --titre "…" # --au-dirigeant` — un agent qui
+    // s'annote en fin de ligne, geste des plus ordinaires : le shell n'a JAMAIS passé ce
+    // drapeau, et le garde le lisait comme un drapeau. La ligne s'ouvrait sans autorisé.
+    //
+    // ON TRONQUE PLUTÔT QUE DE REFUSER, et c'est la différence avec les deux autres portes :
+    // ici on sait EXACTEMENT ce que le shell fait — il jette la suite. Refuser aurait porté
+    // sur des commandes commentées parfaitement légitimes ; tronquer, c'est lire comme lui.
+    //
+    // Seulement EN TÊTE D'UN MOT : `a#b` est littéral pour un shell, et le couper là aurait
+    // amputé un titre ou un nom de canal qui porte un croisillon.
+    if (c === '#' && !cite && courant === null) break;
     if (!cite && /\s/.test(c)) {
       if (courant !== null) jetons.push(courant);
       courant = null;

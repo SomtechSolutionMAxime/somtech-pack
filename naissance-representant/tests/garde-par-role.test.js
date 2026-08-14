@@ -182,6 +182,46 @@ test('UNE CITATION QU’ON NE SAIT PAS LIRE N’OUVRE RIEN — le garde ne devin
   }
 });
 
+test('UN COMMENTAIRE SHELL COUPE LA COMMANDE — le garde lit ce que le shell passe, pas ce qui est écrit', () => {
+  // ⚠️ LA TROISIÈME PORTE DU MÊME BLOQUANT, relevée au troisième passage de la revue de fond et
+  // reproduite contre un vrai veilleur à travers un vrai shell. Un agent qui s'annote en fin de
+  // ligne — geste des plus ordinaires — écrivait un `--au-dirigeant` que le shell n'a JAMAIS
+  // passé, et le garde le lisait comme un drapeau : ligne ouverte, `autorises: []`, muette.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "ligne dirigeant acme" # --au-dirigeant', 'representant'),
+    [],
+    'un drapeau derrière un croisillon n’est pas passé à la commande'
+  );
+  // Et symétriquement sur l'autre ligne : la nature commentée n'est pas une nature, donc ce
+  // n'est plus l'ouverture d'une ligne cliente — ce serait un canal PUBLIC au nom du client.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir acme --titre "Acme" # --nature client', 'representant'),
+    [],
+    'une nature commentée ne fait pas une ligne cliente'
+  );
+  // ON TRONQUE, ON NE REFUSE PAS : une ouverture complète suivie d'un commentaire reste une
+  // ouverture. Refuser ici aurait porté sur ce qui marche.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "X" --au-dirigeant # ma ligne interne', 'representant'),
+    []
+  );
+  // Et le croisillon EN MILIEU DE MOT reste littéral, comme pour un shell — sans quoi un titre
+  // ou un nom de canal qui en porte un serait amputé.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "salon #12" --au-dirigeant', 'representant'),
+    []
+  );
+  // ⚠️ LE CAS QUI PROUVE QUE « EN TÊTE D'UN MOT » N'EST PAS DÉCORATIF, et il a fallu le chercher :
+  // avec un croisillon CITÉ, la coupe n'a pas lieu de toute façon, et la mutation qui coupe
+  // partout survivait. Il faut un croisillon en milieu de mot NON CITÉ, et placé AVANT ce qui
+  // reste à lire — sinon la troncature emporte la fin du segment et le refus tombe à tort.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --sujet suivi#3 --titre "X" --au-dirigeant', 'representant'),
+    [],
+    'un croisillon littéral dans une valeur non citée ne coupe pas la commande'
+  );
+});
+
 test('MAIS UNE APOSTROPHE DANS UNE VALEUR CITÉE RESTE PERMISE — c’est du français, pas une citation', () => {
   // La séquence d'ouverture RÉELLE d'un orchestrateur en porte une. Refuser ici aurait été un
   // refus portant sur ce qui marche — et il n'aurait eu aucun geste qui le lève.
