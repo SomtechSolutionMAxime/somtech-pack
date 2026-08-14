@@ -66,8 +66,14 @@ async function avecSlack(etat, corps) {
  *
  * Reproduire ici les en-têtes en clair est délibéré : les importer de `roles.js` ferait dire
  * au test la même chose que le code, et un en-tête changé des deux côtés à la fois passerait
- * inaperçu. Ce sont les en-têtes que les gabarits du pack portent VRAIMENT — un test les garde
- * déjà par ailleurs, contre les fichiers eux-mêmes.
+ * inaperçu.
+ *
+ * ⚠️ CE CHOIX A UN PRIX, ET IL EST PAYÉ PLUS BAS. Un texte recopié à la main ne prouve rien
+ * des fichiers que le pack dépose vraiment : c'est le dernier test de ce fichier qui va les
+ * lire sur le disque. Sans lui, le jour où quelqu'un reformule la première ligne d'un gabarit
+ * — ou resserre la regex de `roles.js` — tout resterait vert ici pendant que plus AUCUN
+ * orchestrateur ne serait reconnu en production. (Relevé en revue de fond : ce commentaire
+ * affirmait qu'une telle garde existait ailleurs. Elle n'existait pas.)
  */
 function lieu(entetes, sous = `lieu-${(compteur += 1)}`) {
   const chemin = join(racine, sous);
@@ -721,4 +727,56 @@ test('COMMANDE — « --role » est une option À VALEUR : elle ne devient jamai
   assert.ok(OPTIONS_A_VALEUR.has('--role'), '`--role` doit être déclarée comme consommant sa valeur');
   assert.equal(premierLibre(args), 'annonces-orchestrateurs', 'le canal reste le canal');
   assert.equal(option(args, '--role'), 'orchestrateur');
+});
+
+// ═════════════════ 9. LE TEXTE RECOPIÉ N'EST PAS LE TEXTE LIVRÉ
+
+test('GABARITS — les en-têtes de `roles.js` concordent avec les fichiers que le pack DÉPOSE', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // LA GARDE QUE TOUT CE FICHIER SUPPOSAIT, ET QUI N'EXISTAIT PAS — relevée en revue de fond.
+  //
+  // Partout ailleurs ici, les lieux sont posés à partir d'en-têtes RECOPIÉS. C'est voulu (un
+  // test qui importerait `roles.js` serait seulement d'accord avec lui-même), mais ça laisse
+  // une porte grande ouverte : personne ne comparait jamais ces regex aux fichiers RÉELS que
+  // `.claude/templates/<rôle>/` porte et que la pose copie dans le lieu d'un agent.
+  //
+  // Le scénario, et il n'a rien d'exotique — c'est de la retouche de prose : quelqu'un
+  // reformule la première ligne d'un `CLAUDE.md` de gabarit sans toucher à `roles.js`, ou
+  // resserre la regex sans répercuter sur le gabarit. Les deux suites restent vertes — elles
+  // comparent le code à sa propre copie du texte — et en production `roleDuLieu` ne reconnaît
+  // plus JAMAIS ce rôle. Silence total : ni garde d'ouverture, ni consigne remise, et rien
+  // pour le dire. C'est le pire résultat que ce dispositif puisse produire, et il tiendrait
+  // à un mot déplacé.
+  //
+  // On lit donc les fichiers LIVRÉS, sur le disque, avec la fonction qui les lira en vrai.
+  const { readFileSync } = await import('node:fs');
+  const { role: roleDe, rolesConnus } = await import('../src/roles.js');
+  const templates = join(import.meta.dirname, '..', '..', '.claude', 'templates');
+
+  for (const nom of rolesConnus()) {
+    const r = roleDe(nom);
+    for (const [fichier, entete] of Object.entries(r.entetes)) {
+      const chemin = join(templates, r.gabarits, fichier);
+      const premiere = readFileSync(chemin, 'utf8').split('\n', 1)[0];
+      assert.match(
+        premiere,
+        entete,
+        `« ${r.gabarits}/${fichier} » ne porte plus l'en-tête que « roles.js » attend pour le rôle ` +
+          `« ${nom} » — un agent posé avec ce gabarit ne serait reconnu par personne : ni le garde ` +
+          `d'ouverture de sa ligne, ni la remise des consignes communes. Accorde les deux.`
+      );
+    }
+  }
+
+  // Et l'aller-retour COMPLET : un lieu posé depuis les vrais gabarits établit bien son rôle.
+  // C'est ce que ni les preuves d'ici (qui recopient) ni celles de la pose (qui vérifient
+  // l'idempotence et les refus, jamais le rôle obtenu) ne regardaient.
+  const { cpSync, mkdirSync: mkd } = await import('node:fs');
+  const { roleDuLieu } = await import('../src/lieu-agent.js');
+  for (const nom of rolesConnus()) {
+    const vrai = join(racine, `gabarit-reel-${nom}`);
+    mkd(vrai, { recursive: true });
+    cpSync(join(templates, roleDe(nom).gabarits), vrai, { recursive: true });
+    assert.equal(roleDuLieu(vrai), nom, `un lieu posé depuis les VRAIS gabarits de « ${nom} » doit l'établir`);
+  }
 });
