@@ -91,6 +91,11 @@ export const CHEMINS_DES_REFUS = [
   join('ligne-directe', 'src', 'veilleur.js'),
   join('ligne-directe', 'src', 'roles.js'),
   join('ligne-directe', 'bin', 'ligne-directe.js'),
+  // LE TROUSSEAU EN FAIT PARTIE, et c'est le refus qui arrive AVANT tous les autres : les deux
+  // gestes lisent le jeton du robot avant de joindre Slack, et son échec traverse le filet de
+  // la commande. Sur un poste neuf, c'est même le refus le plus probable — l'omettre laissait
+  // l'opérateur devant le seul message qu'aucune ligne de la table n'expliquait.
+  join('ligne-directe', 'src', 'trousseau.js'),
 ];
 
 export const sourcesDesRefus = (racine = REPO) =>
@@ -180,6 +185,10 @@ export const CONTROLES = [
       // canal absent, archivé, robot non membre, canal portant déjà une ligne.
       const tout = table.lignes.map((l) => l.join(' ')).join('\n');
       for (const [quoi, sonde] of [
+        // Le jeton du poste n'est pas dans la liste du ticket, et c'est justement pour ça qu'il
+        // y est ici : c'est le refus qui arrive AVANT les quatre autres, sur le poste neuf que
+        // cette compétence sert précisément à configurer.
+        ['le jeton du poste', /trousseau/i],
         ['le canal absent', /aucun canal|ne porte ce nom/i],
         ['le canal archivé', /archiv/i],
         ['le robot non membre', /robot/i],
@@ -333,6 +342,12 @@ export const MUTATIONS = [
     quoi: 'la table perd la ligne du canal archivé — celui qui a l’air posé et ne diffuse rien',
     cible: 'chaque-refus-est-cite-mot-pour-mot',
     muter: (t) => t.replace(/^\| `est archivé[^\n]*\n/m, ''),
+  },
+  {
+    id: 'refus-du-jeton-perdu',
+    quoi: 'la table perd le refus du trousseau — le premier que rencontre un poste neuf',
+    cible: 'chaque-refus-est-cite-mot-pour-mot',
+    muter: (t) => t.replace(/^\| `au trousseau de ce poste`[^\n]*\n/m, ''),
   },
   {
     id: 'traduction-vers-un-role-inconnu',

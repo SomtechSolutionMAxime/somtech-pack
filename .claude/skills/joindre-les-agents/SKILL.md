@@ -34,6 +34,9 @@ Elle dit ce qui est en place et s'arrête là.
 - **La ligne directe est installée sur ce poste** (`$HOME/.somtech/ligne-directe`). Sans elle,
   rien n'est mesurable : dis-le et arrête-toi. Le geste qui débloque :
   `npx @somtech-solutions/pack setup`.
+- **Le poste peut lire le jeton de notre robot.** Les deux gestes le lisent avant de joindre
+  Slack : sans lui, aucun des deux ne va plus loin. C'est une installation qui se fait une fois
+  par poste, par le dirigeant lui-même — si elle manque, relaie le refus et arrête-toi.
 - **Les canaux existent déjà dans Slack, et notre robot y a été invité par un humain.** Un
   robot ne se met pas lui-même dans un canal, et cette compétence n'en crée aucun.
 - **Un canal par rôle, un rôle par canal.** Un canal partagé entre deux rôles est refusé —
@@ -117,6 +120,7 @@ par ce qu'on en conclut, et c'est exactement ainsi qu'un refus se met à mentir.
 
 | Ce que le refus dit, mot pour mot | Ce qui a été mesuré | Le geste qui débloque |
 |---|---|---|
+| `au trousseau de ce poste` | Le poste n'a pas pu lire le jeton de notre robot — les deux gestes s'arrêtent là, avant même de joindre Slack | Recopie le message : il nomme l'entrée cherchée et le compte, et les gestes qu'il propose ne font que **regarder**. Ne dépose rien sur sa foi : il distingue l'entrée absente, celle qu'on n'a pas su lire et celle qui est vide, et les trois ne se corrigent pas pareil |
 | `dans cet espace` | Aucun canal ne porte ce nom | Vérifie l'orthographe du canal ; s'il n'existe pas, un humain le crée dans Slack — notre robot ne crée aucun canal |
 | `est archivé — personne ne peut plus y écrire` | Le canal existe, en lecture seule — aucune consigne n'en partirait, et le robot en est toujours membre | Un compte humain le désarchive dans Slack, ou tu en désignes un autre |
 | `Un robot ne rejoint pas un canal de lui-même.` | Le canal existe et notre robot n'y est pas | Un humain l'y invite dans Slack, puis relance |
