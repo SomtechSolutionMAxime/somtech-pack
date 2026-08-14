@@ -24,7 +24,7 @@ import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu } from './lieu-agent.js';
 import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
-import { cadrerPourAgent, cadrerConsigneCommune } from './cadre.js';
+import { cadrerPourAgent, cadrerConsigneCommune, cadrerPourPair } from './cadre.js';
 import { reponse } from './langage.js';
 import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
 import {
@@ -49,6 +49,7 @@ import {
   designerDirigeant,
   NATURES,
   NATURE_PAR_DEFAUT,
+  panesDeLigne,
 } from './registre.js';
 
 // États d'une connexion, tels que les définit la norme WebSocket. On ne lit PAS
@@ -308,6 +309,7 @@ export class Veilleur {
     invites = [],
     nature,
     au_dirigeant: auDirigeant = false,
+    au_gestionnaire: auGestionnaire = null,
     herdr_socket: herdrSocket = null,
   }) {
     if (!chantier) return { ok: false, erreur: 'chantier requis' };
@@ -348,6 +350,19 @@ export class Veilleur {
     }
     const natureVoulue = nature || NATURE_PAR_DEFAUT;
 
+    // ═══ LE PAIR QUI PARTAGE CETTE LIGNE — résolu AVANT toute création, comme le dirigeant.
+    //
+    // Un `--au-gestionnaire` qui ne désigne personne donnerait une ligne qui A L'AIR partagée et
+    // ne l'est pas : l'orchestrateur rendrait compte dans le vide, le gestionnaire attendrait, et
+    // rien ne le dirait. C'est le mode de panne silencieux que tout ce dispositif combat. Le
+    // refus tombe donc ici — avant le canal, que Slack ne reprend pas.
+    let pair = null;
+    if (auGestionnaire != null && String(auGestionnaire).trim()) {
+      const r = await this.resoudrePair(String(auGestionnaire).trim(), natureVoulue, pane);
+      if (!r.ok) return r;
+      pair = r.pair;
+    }
+
     const deja = ligneOuverteParCle(this.registre, chantier, worktree);
     if (deja) {
       // Une ligne ne CHANGE PAS de nature en cours de route : le canal existe déjà dans
@@ -367,6 +382,12 @@ export class Veilleur {
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
       if (invitesEffectifs.length) deja.autorises = [...new Set([...(deja.autorises || []), ...invitesEffectifs])];
+      // LE PAIR S'ATTACHE AUSSI À LA REPRISE, et c'est le cas nominal, pas un extra : un
+      // orchestrateur EXISTE DÉJÀ quand un gestionnaire ouvre la demande qui le concerne
+      // (arbitrage du dirigeant, 2026-08-14 — « le gestionnaire ne lance pas l'orchestrateur, il
+      // lui parle »). Sa ligne est ouverte depuis longtemps ; sans cette branche, il n'aurait
+      // aucun moyen d'y accueillir son pair sans la refermer d'abord.
+      if (pair) deja.pair = pair;
       sauverRegistre(this.registre);
       return {
         ok: true,
@@ -375,6 +396,7 @@ export class Veilleur {
         canal_id: deja.canal_id,
         visage: deja.visage,
         nature: natureDe(deja),
+        ...(deja.pair ? { pair: { role: deja.pair.role, nom: deja.pair.nom, pane: deja.pair.pane } } : {}),
       };
     }
 
@@ -490,12 +512,18 @@ export class Veilleur {
       // invités À LA MAIN dans Slack, après l'ouverture. C'est leur appartenance au canal
       // privé qui les autorise, et cette liste ne sert plus qu'à s'en souvenir.
       autorises: invitesEffectifs.slice(),
+      // LE SECOND PORTEUR DE CETTE LIGNE, s'il y en a un — `null` sinon, et `null` est le cas
+      // par défaut : une ligne ouverte sans `--au-gestionnaire` est EXACTEMENT celle d'hier.
+      pair,
       visage,
       ouverte_le: maintenant(),
       close_le: null,
     });
     sauverRegistre(this.registre);
-    journaliser(`ligne ouverte — ${chantier} → #${canal.nom} (${canal.id}) pane ${pane} nature ${natureVoulue}`);
+    journaliser(
+      `ligne ouverte — ${chantier} → #${canal.nom} (${canal.id}) pane ${pane} nature ${natureVoulue}` +
+        (pair ? ` — partagée avec ${pair.nom} (${pair.pane})` : '')
+    );
     return {
       ok: true,
       reprise: false,
@@ -504,7 +532,218 @@ export class Veilleur {
       visage,
       nature: natureVoulue,
       canal_reutilise: canal.reutilise,
+      ...(pair ? { pair: { role: pair.role, nom: pair.nom, pane: pair.pane } } : {}),
     };
+  }
+
+  /**
+   * Le PAIR qu'on attache à une ligne de chantier — établi par le FAIT, jamais sur parole.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════════════════
+   * TROIS REFUS, ET CHACUN FERME UNE PORTE DIFFÉRENTE (T-20260814-0093).
+   *
+   * 1. **JAMAIS SUR UNE LIGNE CLIENTE.** C'est LA garde de ce lot, et elle est structurelle
+   *    plutôt que déclarative : une ligne cliente ne peut pas porter de pair, donc aucun écho
+   *    ne peut partir vers le canal d'un client — il n'existe pas de chemin, pas seulement pas
+   *    d'intention. Le mode de panne unique de ce lot est fermé ici, et `echoAuPair` le
+   *    revérifie pour un registre écrit avant cette version.
+   *
+   * 2. **UN AGENT QU'ON NE TROUVE PAS N'EST PAS UN PAIR.** Le nom d'agent est une chaîne libre
+   *    qu'un humain ou un brief a tapée. Attacher un nom qu'on n'a pas vu vivre donnerait une
+   *    ligne qui a l'air partagée : le compte rendu part, `ok:true`, personne ne le reçoit.
+   *
+   * 3. **ET SON RÔLE S'ÉTABLIT PAR SON LIEU**, via `roleDuLieu` — le point unique du dépôt qui
+   *    établit un rôle par le fait (les quatre fichiers de la pose ET les en-têtes réels du
+   *    métier). Ni son nom herdr, ni le dossier qui le porte. Sans ce contrôle,
+   *    `--au-gestionnaire <n'importe quel agent>` déverserait le compte rendu technique d'un
+   *    chantier chez un agent quelconque — et si cet agent est le représentant d'un AUTRE
+   *    client, c'est très exactement la fuite qu'on ferme au point 1, par la porte d'à côté.
+   *
+   * ⚠️ HERDR INJOIGNABLE NE VAUT PAS « AGENT ABSENT » — c'est la leçon de T-20260813-0054 : un
+   * outil introuvable rendait une liste vide, qu'on lisait comme « aucun agent vivant ». On
+   * refuse en le disant, on ne conclut pas.
+   */
+  async resoudrePair(nom, natureVoulue, paneOuvreur) {
+    if (natureVoulue === 'client') {
+      return {
+        ok: false,
+        erreur:
+          `une ligne CLIENTE ne se partage pas : « --au-gestionnaire » y est refusé, et la ligne n'est ` +
+          `pas ouverte. Le canal d'un client n'a qu'un interlocuteur — un compte rendu de chantier qui ` +
+          `y atterrirait serait lu par le client.`,
+      };
+    }
+    let vivants;
+    try {
+      vivants = await this.herdr.agents();
+    } catch (err) {
+      return {
+        ok: false,
+        erreur:
+          `herdr est injoignable (${err.message}) — on ne sait pas si « ${nom} » travaille, et la ligne ` +
+          `n'est pas ouverte. Rien n'a été créé : relance quand herdr répond.`,
+      };
+    }
+    const candidats = vivants.filter((a) => a.name === nom);
+    if (!candidats.length) {
+      return {
+        ok: false,
+        erreur:
+          `aucun agent nommé « ${nom} » ne travaille sur ce poste — la ligne n'est PAS ouverte. Vérifie le ` +
+          `nom que ton gestionnaire s'est donné (« herdr agent list »), ou ouvre ta ligne sans ` +
+          `« --au-gestionnaire » si personne ne t'a mandaté.`,
+      };
+    }
+    if (candidats.length > 1) {
+      return {
+        ok: false,
+        erreur:
+          `« ${nom} » désigne ${candidats.length} agents de ce poste — on ne devine pas lequel, et la ligne ` +
+          `n'est pas ouverte. Fais renommer l'un des deux, puis relance.`,
+      };
+    }
+    const a = candidats[0];
+    if (a.pane_id === paneOuvreur) {
+      return { ok: false, erreur: `« ${nom} », c'est toi — une ligne ne se partage pas avec soi-même.` };
+    }
+    const role = roleDuLieu(a.foreground_cwd || a.cwd);
+    if (role !== 'representant') {
+      return {
+        ok: false,
+        erreur:
+          `« ${nom} » n'est pas un gestionnaire client : son lieu de travail n'en porte pas le métier — la ` +
+          `ligne n'est PAS ouverte. Seul un représentant posé par « ligne-directe representant » partage la ` +
+          `ligne d'un chantier ; y attacher quelqu'un d'autre lui livrerait ce qui ne le regarde pas.`,
+      };
+    }
+    return { ok: true, pair: { role, nom, pane: a.pane_id, herdr_socket: a.herdr_socket || null } };
+  }
+
+  /**
+   * LE REFUS OPPOSÉ AU PAIR QUI DISPOSERAIT D'UNE LIGNE QUI N'EST PAS LA SIENNE — ou `null`.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════════════════
+   * ⚠️ « UNE PORTE SUR DEUX », ET C'ÉTAIT LA MIENNE (T-20260814-0093, trouvé en relecture).
+   *
+   * Partager une ligne, c'est ajouter un porteur à `panesDeLigne` — et `ligneDuPane` sert
+   * TROIS gestes, pas un : `dire`, `fermer`, `renommer`. Le lot n'avait pensé qu'au premier.
+   * Le gestionnaire pouvait donc **fermer la ligne du chantier de son orchestrateur**, poster
+   * un bilan en son nom et faire ARCHIVER son canal — c'est-à-dire mettre en lecture seule,
+   * sans retour, le lieu où l'orchestrateur attend l'arbitrage du dirigeant. Et le renommer.
+   *
+   * PARLER SE PARTAGE, DISPOSER NE SE PARTAGE PAS. Le chantier appartient à celui qui le mène :
+   * il l'a ouvert, il le referme. Le pair y parle, et c'est tout ce qu'on lui a donné.
+   *
+   * C'est la même forme de garde que `refusSurCommun`, au même endroit et pour la même raison :
+   * le veilleur est le point d'écriture unique, et une garde posée dans la commande se contourne
+   * par un appel direct au socket.
+   */
+  refusDuPair(geste, ligne, pane) {
+    if (!pane || !ligne?.pair?.pane || pane !== ligne.pair.pane) return null;
+    // Le porteur d'origine reste maître, même s'il partage son pane avec le pair (cas d'école,
+    // mais un `===` qui rendrait un refus au propriétaire serait pire que la porte qu'on ferme).
+    if (pane === ligne.pane) return null;
+    return {
+      ok: false,
+      motif: 'ligne_du_pair',
+      erreur:
+        `la ligne de « ${ligne.chantier} » (#${ligne.canal_nom}) est celle de l'orchestrateur qui mène ce ` +
+        `chantier : tu y parles, tu n'en disposes pas. « ${geste} » est refusé — rien n'a changé. ` +
+        `Pour parler : dire "…" --a ${ligne.chantier}.`,
+    };
+  }
+
+  /**
+   * L'ÉCHO D'UNE PAROLE AUX AUTRES PORTEURS DE LA LIGNE — ce qui fait que les deux se parlent.
+   *
+   * Ce qui part dans Slack est lu par le dirigeant. Les agents, eux, ne lisent pas Slack : sans
+   * cet écho, un orchestrateur et son gestionnaire partageraient un canal sans jamais s'entendre.
+   *
+   * ⚠️ IL NE FAIT JAMAIS ÉCHOUER LE `dire`. Le message est DÉJÀ posté quand on arrive ici :
+   * lever remettrait un échec de remise sur le compte d'un envoi réussi, et l'agent renverrait
+   * son message — deux fois dans le canal. Ce qui n'est pas passé est RENDU (`pair.remis: false`)
+   * plutôt qu'avalé : « un rapport qui échoue bruyamment vaut mieux qu'un rapport perdu ».
+   *
+   * ⚠️ ET IL NE PART QUE VERS L'AUTRE. On compare des PANES, jamais des rôles : si l'émetteur
+   * n'est aucun des porteurs connus, on ne devine pas de destinataire — on journalise. Se
+   * rabattre sur « l'autre porteur » renverrait à un agent la parole d'un tiers, cadrée comme
+   * celle de son pair.
+   */
+  async echoAuPair(ligne, paneEmetteur, texte) {
+    const pair = ligne?.pair;
+    if (!pair?.pane) return null;
+    // Une ligne CLIENTE ne porte pas de pair — `resoudrePair` le refuse. On le revérifie ici
+    // pour un registre écrit à la main ou par une version antérieure : la garde qui compte ne
+    // se tient pas sur la seule promesse de son point d'entrée.
+    if (natureDe(ligne) === 'client') {
+      journaliser(`écho refusé — #${ligne.canal_nom} est une ligne cliente : elle ne porte pas de pair`);
+      return null;
+    }
+    if (!paneEmetteur) {
+      journaliser(`écho non remis — #${ligne.canal_nom} : le geste ne dit pas de quel pane il part`);
+      return { remis: false, raison: 'pane de l’émetteur inconnu' };
+    }
+    const versPair = paneEmetteur === ligne.pane;
+    if (!versPair && paneEmetteur !== pair.pane) {
+      journaliser(`écho non remis — #${ligne.canal_nom} : ${paneEmetteur} n'est pas un porteur de cette ligne`);
+      return { remis: false, raison: 'ce pane ne porte pas cette ligne' };
+    }
+    const vers = versPair ? pair.pane : ligne.pane;
+    const socket = versPair ? pair.herdr_socket : ligne.herdr_socket;
+
+    // ═══ ON REVÉRIFIE QUI EST AU BOUT, À CHAQUE ÉCHO — le pair est établi UNE FOIS, à
+    // l'ouverture, et un pane n'appartient pas pour toujours à qui l'occupait ce jour-là.
+    //
+    // ⚠️ TROUVÉ EN REVUE DE FOND, ET REPRODUIT : `resoudrePair` vérifiait la vie et le rôle au
+    // moment d'attacher, puis `{nom, pane}` était figé au registre. Le pane du gestionnaire
+    // ferme, herdr en rouvre un sous le même identifiant pour un AUTRE agent — et tout le fil
+    // technique du chantier continuait de lui être remis, cadré « c'est ton pair qui te parle »,
+    // avec `remis: true`. Si cet autre agent est le représentant d'un AUTRE client, c'est la
+    // fuite que ce lot ferme partout ailleurs, par la porte du temps.
+    //
+    // VERS LE PAIR, on exige le pane ET LE NOM : c'est ce que le registre sait de lui, et un
+    // pane repris par quelqu'un d'autre ne porte plus ce nom. VERS L'ORCHESTRATEUR, on exige la
+    // vie du pane — la même garantie que `remettreAuChantier` applique à l'entrant, ni plus
+    // (aucun nom n'est inscrit pour lui) ni moins.
+    let porteurs;
+    try {
+      porteurs = await this.herdr.agents();
+    } catch (err) {
+      // Herdr injoignable N'EST PAS un agent mort (T-20260813-0054) — mais ce n'est pas non plus
+      // une permission de remettre à l'aveugle. On ne remet pas, et on le DIT à qui a parlé.
+      journaliser(`écho non remis — #${ligne.canal_nom} : herdr injoignable (${err.message})`);
+      return { remis: false, pane: vers, raison: `herdr injoignable : ${err.message}` };
+    }
+    const occupant = porteurs.find((a) => a.pane_id === vers);
+    if (!occupant || (versPair && occupant.name !== pair.nom)) {
+      journaliser(
+        `écho non remis — #${ligne.canal_nom} : ${vers} ne porte plus ` +
+          (versPair ? `« ${pair.nom} » (${occupant ? `c'est « ${occupant.name} »` : 'plus aucun agent'})` : "l'agent de cette ligne")
+      );
+      return {
+        remis: false,
+        pane: vers,
+        raison: occupant
+          ? `ce pane porte désormais un autre agent — rien ne lui a été remis`
+          : `plus aucun agent ne travaille dans ce pane`,
+      };
+    }
+    const cadre = cadrerPourPair({
+      chantier: ligne.chantier,
+      texte,
+      canal: ligne.canal_nom,
+      deRole: versPair ? 'orchestrateur' : pair.role,
+      deNom: versPair ? ligne.chantier : pair.nom,
+      versRole: versPair ? pair.role : 'orchestrateur',
+    });
+    try {
+      await this.herdr.remettre(vers, cadre, { socket: socket || undefined });
+      journaliser(`écho remis — #${ligne.canal_nom} : ${paneEmetteur} → ${vers}`);
+      return { remis: true, pane: vers, nom: versPair ? pair.nom : null };
+    } catch (err) {
+      journaliser(`ÉCHEC de l'écho — #${ligne.canal_nom} : ${paneEmetteur} → ${vers} : ${err.message}`);
+      return { remis: false, pane: vers, raison: err.message };
+    }
   }
 
   /**
@@ -675,7 +914,7 @@ export class Veilleur {
   }
 
   /** Poste sous l'identité du chantier. Échoue BRUYAMMENT : un rapport perdu en silence est pire qu'une erreur. */
-  async dire({ chantier, worktree, texte, canal_id: canalId }) {
+  async dire({ chantier, worktree, texte, canal_id: canalId, pane }) {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('dire', canalId, ligne?.canal_id);
     if (refus) return refus;
@@ -687,7 +926,10 @@ export class Veilleur {
       nom: libelleDeLigne(ligne),
       emoji: ligne.visage,
     });
-    return { ok: true, canal: ligne.canal_nom, ts };
+    // L'ÉCHO VIENT APRÈS L'ENVOI, et l'ordre est celui de `fermer` pour la même raison : ce qui
+    // part chez l'interlocuteur humain ne dépend jamais de ce qui part chez un agent.
+    const pair = await this.echoAuPair(ligne, pane, texte);
+    return { ok: true, canal: ligne.canal_nom, ts, ...(pair ? { pair } : {}) };
   }
 
   /**
@@ -697,11 +939,15 @@ export class Veilleur {
    * laisse le registre sur l'ancien nom, et l'état affiché cesse de correspondre à ce que
    * le dirigeant voit dans son espace.
    */
-  async renommer({ chantier, worktree, titre, canal_id: canalId }) {
+  async renommer({ chantier, worktree, titre, canal_id: canalId, pane }) {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('renommer', canalId, ligne?.canal_id);
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
+    // Le nom d'un canal est ce que le dirigeant voit dans sa barre latérale, et sur une ligne
+    // cliente c'est aussi la SIGNATURE de chaque message : un pair ne le change pas.
+    const refusPairRenom = this.refusDuPair('renommer', ligne, pane);
+    if (refusPairRenom) return refusPairRenom;
     if (!titre) return { ok: false, erreur: 'titre requis' };
     // MÊME GARDE QUE `fermer`, ET C'EST LA PORTE QUE LE PREMIER CORRECTIF AVAIT LAISSÉE —
     // relevée en revue de fond, sur le lot qui corrigeait précisément « une porte sur deux ».
@@ -741,13 +987,17 @@ export class Veilleur {
     return { ok: true, inchange: false, avant: ancien, canal: d.nom };
   }
 
-  async fermer({ chantier, worktree, bilan, archiver = true, canal_id: canalId }) {
+  async fermer({ chantier, worktree, bilan, archiver = true, canal_id: canalId, pane }) {
     // `fermer` porte un bilan qu'il POSTE, et il archive : les deux gestes qu'on ne veut voir
     // ni l'un ni l'autre sur le canal de tous les agents.
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('fermer', canalId, ligne?.canal_id);
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier || canalId} »` };
+    // `fermer` POSTE UN BILAN ET ARCHIVE : les deux gestes qu'un pair ne doit pas pouvoir
+    // exercer sur le chantier de quelqu'un d'autre.
+    const refusPair = this.refusDuPair('fermer', ligne, pane);
+    if (refusPair) return refusPair;
     // UNE LIGNE DÉJÀ CLOSE NE SE REFERME PAS DEUX FOIS, et la garde est arrivée avec le chemin
     // par canal (T-20260813-0078). Par chantier, `ligneOuverteParCle` ne rendait QUE des lignes
     // ouvertes ; `ligneParCanal`, lui, retombe volontairement sur la plus récemment close — pour
@@ -828,6 +1078,12 @@ export class Veilleur {
       canal_id: l.canal_id,
       nature: natureDe(l),
       pane: l.pane,
+      // LE SECOND PORTEUR, RENDU TEL QUEL — c'est ce qui rend la ligne désignable depuis le pane
+      // du gestionnaire : la commande fait sa sélection sur `etat().ouvertes`, et `panesDeLigne`
+      // y lit `pair.pane` exactement comme il le lit au registre. L'omettre ici aurait donné une
+      // ligne partagée au registre et introuvable depuis la commande — un partage qui n'existe
+      // que du côté qui ne s'en sert pas.
+      pair: l.pair ? { role: l.pair.role, nom: l.pair.nom, pane: l.pair.pane } : null,
       worktree: l.worktree,
       depuis: l.ouverte_le,
     }));

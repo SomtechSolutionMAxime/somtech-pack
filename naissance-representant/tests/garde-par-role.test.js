@@ -48,6 +48,29 @@ test('le représentant peut ouvrir sa ligne client', () => {
   assert.equal(decider({ ...bash(OUVERTURE_CLIENT), role: 'representant' }).permissionDecision, 'allow');
 });
 
+test('UN ORCHESTRATEUR MANDATÉ NOMME SON GESTIONNAIRE À L’OUVERTURE — le garde ne l’en empêche pas', () => {
+  // ⚠️ LE DÉFAUT QUE CE TEST TIENT EST CELUI DE T-20260814-0033, PAR L'AUTRE BOUT : un métier qui
+  // prescrit ce que le mécanisme refuse bloque l'agent au premier geste, sans que rien ne le
+  // dise. `--au-gestionnaire` est la séquence d'ouverture que le gabarit de l'orchestrateur
+  // dicte désormais (T-20260814-0093) ; si `rienDApresLOuverture` la comptait comme « la
+  // commande de quelqu'un d'autre », l'orchestrateur serait bloqué avant d'exister.
+  const commande =
+    'LD="$HOME/.somtech/ligne-directe/bin/ligne-directe.js"\n' +
+    '$LD ouvrir D-20260813-0002 --titre "Refonte du devis" --au-gestionnaire acme-gestionnaire';
+  assert.deepEqual(segmentsHorsSequence(commande, 'orchestrateur'), []);
+  assert.equal(decider({ ...bash(commande), role: 'orchestrateur' }).permissionDecision, 'allow');
+});
+
+test('LA BORNE DE FIN TIENT TOUJOURS — le nom du gestionnaire n’ouvre pas la porte à ce qui suit', () => {
+  // `--au-gestionnaire` est une option À VALEUR : sa valeur est sautée, jamais comptée comme un
+  // second argument libre. Ce qui vient APRÈS, en revanche, reste la commande de quelqu'un
+  // d'autre — c'est la porte la plus grave que ce garde ait eue.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir D-1 --titre "X" --au-gestionnaire acme-gestionnaire | rm -rf /tmp', 'orchestrateur'),
+    ['$LD ouvrir D-1 --titre "X" --au-gestionnaire acme-gestionnaire | rm -rf /tmp']
+  );
+});
+
 // ═══════════════════════════════ et JAMAIS celle de l'autre
 
 test('un orchestrateur NE PEUT PAS ouvrir un canal de client — ce serait de l’interne chez le client', () => {
