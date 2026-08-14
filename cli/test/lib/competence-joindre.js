@@ -322,10 +322,18 @@ export const CONTROLES = [
       // périphrase qui n'emploie aucun de ces verbes (« dis-lui l'essentiel », « garde ce qui
       // compte ») passerait. Aucune garde mécanique ne lit le sens. Celle-ci ferme la porte des
       // formulations qu'on écrit spontanément ; la relecture humaine reste requise.
-      // Les terminaisons sont VERBALES et fermées — jamais `\w*`. Avec `\w*`, « une
-      // reformulation remplace ce qui a été mesuré » (la phrase qui EXPLIQUE le danger) était
-      // prise pour une prescription : la garde accusait le texte de dire ce qu'il dénonce.
-      const TRANSFORME = /\b(?:r[ée]sum|reformul|r[ée][ée]cri|tradui|paraphras|simplifi|clarifi|adapt|synth[ée]tis|abr[èe]g|condens|vulgaris)(?:e|es|er|ez|ons|s|is)(?:-(?:le|la|les|ça))?\b/i;
+      // ⚠️ ON EXCLUT LA NOMINALISATION, ON N'ÉNUMÈRE PAS LES CONJUGAISONS. Le problème d'origine
+      // était un seul mot : « une reformulation remplace ce qui a été mesuré » — la phrase qui
+      // EXPLIQUE le danger — que `\w*` prenait pour une prescription. La première correction a
+      // répondu par une liste blanche de terminaisons, et cette liste a aussitôt laissé passer
+      // le FUTUR : « tu le résumeras », « on le reformulera », « elle le traduira » — mêmes
+      // verbes, temps non listé. Une liste de terminaisons doit couvrir deux groupes, deux
+      // temps et six personnes ; elle oubliera toujours une case.
+      //
+      // On revient donc à `\w*` en excluant la seule vraie source du faux positif : le suffixe
+      // `-ation(s)`. Une exclusion vaut mieux qu'une énumération quand ce qu'on veut attraper
+      // est ouvert et ce qu'on veut écarter est fermé.
+      const TRANSFORME = /\b(?:r[ée]sum|reformul|r[ée][ée]cri|tradui|paraphras|simplifi|clarifi|adapt|synth[ée]tis|abr[èe]g|condens|vulgaris)\w*(?<!ations?)(?:-(?:le|la|les|ça))?\b/i;
       const AVEC_TES_MOTS = /\b(?:tes|ses|vos|leurs|mes)\s+(?:propres\s+)?(?:mots|termes|phrases)\b/i;
       // La négation est TOLÉRÉE, et il le faut : le texte livré dit « Ne le reformule sous
       // aucune forme » — l'interdire reviendrait à interdire au texte de s'interdire.
@@ -378,6 +386,11 @@ export const CONTROLES = [
       // le NIER, soit en attribuer explicitement l'action à un HUMAIN — les deux seules formes
       // sous lesquelles ces phrases sont vraies.
       const ACTIONS = /\b(?:cré(?:e|er|é|ent)|rejoin(?:t|dre|nent)|invite|désarchive)\w*/i;
+      // ⚠️ POINT DE VIGILANCE, relevé en revue et assumé : cette négation-ci n'est PAS
+      // positionnelle, contrairement à `NIE_EN_TETE` de la garde voisine — elle accepte le
+      // marqueur n'importe où dans la proposition. Le découpage en propositions borne déjà la
+      // portée, et aucune édition de bonne foi exploitant l'écart n'a été trouvée ; mais si
+      // cette garde doit être renforcée un jour, c'est par là.
       const NEGATION = /\bne\s|\bn['’]|\baucun/i;
       // ⚠️ « HUMAIN » DOIT PRÉCÉDER LE VERBE, et pas seulement se trouver dans la proposition :
       // « notre robot crée le canal lui-même comme le ferait un humain » contient le mot sans
@@ -710,6 +723,17 @@ export const MUTATIONS = [
         t,
         'et c\'est exactement ainsi qu\'un refus se met à mentir.',
         'et c\'est exactement ainsi qu\'un refus se met à mentir. Sans hésiter, traduis-le dans tes mots pour que ce soit plus limpide.',
+      ),
+  },
+  {
+    id: 'le-refus-resume-au-futur',
+    quoi: 'le même verbe, au futur — le temps qu’une liste de terminaisons oublie toujours',
+    cible: 'le-refus-se-relaie-tel-quel',
+    muter: (t) =>
+      remplacer(
+        t,
+        'et c\'est exactement ainsi qu\'un refus se met à mentir.',
+        'et c\'est exactement ainsi qu\'un refus se met à mentir. Si le message te semble confus, tu le résumeras avant de le montrer.',
       ),
   },
   {
