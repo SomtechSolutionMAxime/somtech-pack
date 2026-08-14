@@ -355,6 +355,23 @@ test('UN NOM QUI NE VEUT RIEN DIRE N’EST PAS « AUCUN NOM » — `--a ---` est
   );
 });
 
+test('UN `--a` QUI EST LA VALEUR D’UNE AUTRE OPTION N’EST PAS LE DRAPEAU — le geste passe', async () => {
+  // RELEVÉ EN CONTRE-REVUE, et c'était une régression de mon propre correctif : chercher `--a`
+  // dans TOUT le tableau des arguments le trouvait là où il n'était pas un drapeau mais un
+  // bilan. Un `fermer` légitime, sur un pane à une seule ligne, échouait — la rétrocompatibilité
+  // annoncée, cassée par la garde censée la préserver.
+  await avecPoste(
+    { lignes: [ligne({ chantier: 'd-1', canalId: 'C_dir', canalNom: 'ligne-dirigeant' })], canaux: [DIRIGEANT_CANAL] },
+    async ({ monde, ld }) => {
+      const r = await ld(['fermer', '--bilan', '--a', '--sans-archiver']);
+      assert.equal(r.code, 0, r.stderr);
+      assert.deepEqual(canauxTouches(monde), ['C_dir'], 'le bilan est parti');
+      assert.equal(monde.postes[0].text, '--a', 'et c’est bien le bilan demandé, pas un nom de ligne');
+      assert.equal(monde.canalNomme('ligne-dirigeant').is_archived, false, '--sans-archiver reste lu');
+    }
+  );
+});
+
 test('`--a` NE MANGE PAS LE MESSAGE — placé avant le texte, il reste une option', async () => {
   // `--a` non déclaré comme option à valeur aurait fait prendre « dirigeant » pour le texte :
   // le mot « dirigeant » posté à la place du rapport, et le rapport perdu.

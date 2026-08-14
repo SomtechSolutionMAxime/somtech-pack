@@ -15,7 +15,7 @@
 
 import { parler, passerLaMain } from '../src/client.js';
 import { ligneDuPane, REFUS_SELECTION } from '../src/registre.js';
-import { option, optionsRepetees, premierLibre } from '../src/arguments.js';
+import { option, optionDonnee, optionsRepetees, premierLibre } from '../src/arguments.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
@@ -85,11 +85,12 @@ Le chantier est déduit du pane courant, sauf à l'ouverture.
  * un motif nommé, pour que ce qui la prouve n'ait pas à lire une phrase.
  */
 function ligneVisee(geste, ouvertes, ici, args) {
-  // `--a` PRÉSENT MAIS SANS VALEUR N'EST PAS `--a` ABSENT : `option` rend `null` dans les deux
-  // cas, et les confondre ferait passer `dire "texte" --a` (la valeur oubliée) pour un appel
-  // sans nom — donc accepté en silence dès qu'il n'y a qu'une ligne. On distingue la PRÉSENCE
-  // de l'option de sa valeur, et une valeur manquante devient une désignation vide, refusée.
-  const nom = args.includes('--a') ? (option(args, '--a') ?? '') : null;
+  // `--a` PRÉSENT MAIS SANS VALEUR N'EST PAS `--a` ABSENT : les confondre ferait passer
+  // `dire "texte" --a` (la valeur oubliée) pour un appel sans nom — donc accepté en silence dès
+  // qu'il n'y a qu'une ligne. La présence est demandée à `optionDonnee`, qui parcourt les jetons
+  // et non le tableau : un `--a` qui est la VALEUR d'une autre option n'est pas ce drapeau.
+  const drapeau = optionDonnee(args, '--a');
+  const nom = drapeau.presente ? (drapeau.valeur ?? '') : null;
   const { ligne, refus } = ligneDuPane(ouvertes, ici.pane, nom);
   if (ligne) return ligne;
   const noms = refus.noms.map((n) => `--a ${n}`).join('  ou  ');
