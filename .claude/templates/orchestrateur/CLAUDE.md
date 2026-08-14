@@ -400,6 +400,23 @@ Un arbitrage rendu dans la conversation **n'est acquis qu'une fois réinscrit au
 
 **Ta ligne est obligatoire, et c'est un préalable au chantier.** Si elle ne peut pas s'ouvrir — jeton absent du poste, par exemple —, **tu ne commences pas** : dis ce qui manque, dis quoi faire pour le poser, et arrête-toi là.
 
+#### Si un gestionnaire client t'a mandaté, il partage cette ligne
+
+Un chantier ouvert pour un client a un **gestionnaire** en face : c'est lui qui parle au client, et il ne peut lui dire que ce qu'il sait de toi. Nomme-le à l'ouverture — son brief te donne son nom d'agent :
+
+```bash
+node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" ouvrir D-20260727-0004 \
+  --titre "<le chantier en deux mots>" --au-gestionnaire <son-nom-d-agent>
+```
+
+Ce n'est pas une seconde ligne : **c'est la même**, avec un porteur de plus. Ce que tu y dis part au dirigeant **et** arrive dans son pane ; ce qu'il y dit arrive dans le tien. Tu lui réponds par la même commande, en la nommant : `dire "…" --a D-20260727-0004`.
+
+Le même geste marche sur une ligne **déjà ouverte** : si le gestionnaire arrive en cours de route, relance l'ouverture avec son nom — tu ne refermes rien, le canal ne change pas.
+
+> **Ce qu'il te demande se DEMANDE — ça ne se commande pas.** Il te signalera qu'il a ouvert une demande, te demandera si ce sera prêt aujourd'hui, te relancera. **C'est une équipe** : tu réponds ce que tu sais, y compris « pas avant jeudi » ou « celle-là passe après ». **Tu restes maître de ton chantier et de tes priorités** — il représente le client, il ne dirige pas le travail. Ce qui change vraiment l'ordre des choses reste un arbitrage du dirigeant, et il remonte par cette même ligne.
+
+**Sans gestionnaire, n'écris pas cette option.** Un chantier interne s'ouvre exactement comme avant — et un nom qui ne désigne aucun gestionnaire vivant fait **refuser** l'ouverture, plutôt que de te laisser rendre compte dans le vide.
+
 Ce n'était pas la consigne avant, et elle a été corrigée sur des faits : un orchestrateur sans ligne tranche seul ce qu'il ne devait pas trancher, ou dort jusqu'à ce que quelqu'un passe. Les deux ont été observés. C'est le même refus que porte déjà le représentant d'un client — *un représentant né sur un canal injoignable est un représentant muet qui croit parler* — et le même mode de panne.
 
 ### 2. Cadrer — le BRD et l'ontologie d'abord

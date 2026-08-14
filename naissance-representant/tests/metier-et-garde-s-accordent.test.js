@@ -141,29 +141,71 @@ test('CHAQUE « --a » DU MÉTIER DÉSIGNE UNE LIGNE QUE LE MÉTIER OUVRE — si
     };
   });
 
-  // Chaque désignation que le métier enseigne doit tomber sur une ligne, et UNE SEULE.
+  // ⚠️ IL PORTE UNE TROISIÈME LIGNE QU'IL N'OUVRE PAS (T-20260814-0093) — celle du chantier,
+  // qu'un orchestrateur lui PARTAGE en le nommant à son ouverture. Ce contrôle ne peut donc plus
+  // exiger que toute désignation tombe sur une ligne que le métier OUVRE : ce serait refuser au
+  // gestionnaire d'enseigner l'usage de la ligne qu'on lui donne. Ce qu'il exige toujours, et
+  // qui est le vrai risque : aucune désignation ne doit rester SANS destinataire, et aucune ne
+  // doit devenir AMBIGUË une fois la ligne du chantier présente — c'est ce qui enverrait la
+  // question du client dans le canal du chantier, ou l'inverse.
   const designations = [...texte.matchAll(/--a\s+(<[^>]*>|\S+)/g)].map((m) => substituer(m[1]));
-  assert.ok(designations.length >= 2, `le métier doit enseigner l’usage des DEUX lignes (${designations.length} désignation·s)`);
-  for (const nom of designations) {
-    const { ligne, refus } = ligneDuPane(ouvertes, 'w1:p1', nom);
+  assert.ok(designations.length >= 2, `le métier doit enseigner l’usage de ses lignes (${designations.length} désignation·s)`);
+
+  const propres = new Set(ouvertes.map((l) => l.chantier));
+  const partagees = [...new Set(designations.filter((nom) => !ligneDuPane(ouvertes, 'w1:p1', nom).ligne))];
+  for (const nom of partagees) {
+    // On la présente comme le veilleur l'inscrirait : portée par l'orchestrateur, partagée avec
+    // le pane du gestionnaire. C'est `panesDeLigne` — la fonction que la commande appelle — qui
+    // décide si elle est atteignable, jamais une règle réécrite ici.
+    const avecChantier = [...ouvertes, { chantier: nom, canal: nom, pane: 'w7:pO', pair: { pane: 'w1:p1' } }];
+    const { ligne, refus } = ligneDuPane(avecChantier, 'w1:p1', nom);
     assert.ok(
       ligne,
-      `« --a ${nom} » ne désigne aucune ligne que le métier ouvre (${refus && refus.motif}) — ` +
-        `les lignes ouvertes sont : ${ouvertes.map((l) => l.chantier).join(', ')}`
+      `« --a ${nom} » n’atteint rien, même sur une ligne de chantier partagée (${refus && refus.motif})`
     );
+    assert.equal(ligne.chantier, nom, `« --a ${nom} » doit désigner la ligne du chantier, pas une autre`);
+    // Et l'inverse : la présence du chantier ne doit voler AUCUNE des deux lignes propres.
+    for (const propre of propres) {
+      assert.equal(
+        ligneDuPane(avecChantier, 'w1:p1', propre).ligne?.chantier,
+        propre,
+        `avec la ligne « ${nom} » ouverte, « --a ${propre} » cesse d’atteindre la sienne`
+      );
+    }
   }
 
-  // ET LES DEUX SONT ENSEIGNÉES, pas seulement l'une. Un métier qui n'apprendrait à viser que
-  // le client laisserait la ligne du dirigeant ouverte et jamais employée — le manque
-  // d'origine, avec une ligne de plus pour faire illusion.
+  // ET LES DEUX LIGNES PROPRES SONT ENSEIGNÉES, pas seulement l'une. Un métier qui n'apprendrait
+  // à viser que le client laisserait la ligne du dirigeant ouverte et jamais employée — le
+  // manque d'origine, avec une ligne de plus pour faire illusion.
   const visees = new Set(
     designations.map((nom) => ligneDuPane(ouvertes, 'w1:p1', nom).ligne?.chantier).filter(Boolean)
   );
-  assert.deepEqual(
-    [...visees].sort(),
-    ouvertes.map((l) => l.chantier).sort(),
-    'le métier doit enseigner à viser CHACUNE de ses deux lignes'
-  );
+  assert.deepEqual([...visees].sort(), [...propres].sort(), 'le métier doit enseigner à viser CHACUNE de ses deux lignes');
+});
+
+test('LA SÉQUENCE DE L’ORCHESTRATEUR MANDATÉ PASSE SON GARDE — mot pour mot (T-20260814-0093)', () => {
+  // Le même pont, pour l'autre rôle. Son métier lui dit désormais de nommer son gestionnaire à
+  // l'ouverture ; si le garde ne connaissait pas ce drapeau, il refuserait la séquence QUE LE
+  // GABARIT DICTE — l'agent bloqué au premier geste, exactement T-20260814-0033. Aucune des deux
+  // suites d'origine ne peut le voir : l'une lit le texte, l'autre lit la décision.
+  const metier = readFileSync(join(REPO, '.claude', 'templates', 'orchestrateur', 'CLAUDE.md'), 'utf8');
+  const ouvertures = [...metier.matchAll(/```bash\n([\s\S]*?)```/g)]
+    .map((m) => m[1])
+    .filter((b) => /ligne-directe\.js" ouvrir/.test(b))
+    .map((b) =>
+      b
+        .replace(/<le chantier en deux mots>/g, 'Refonte du devis')
+        .replace(/<son-nom-d-agent>/g, 'acme-gestionnaire')
+        .replace(/\\\n\s*/g, ' ')
+    );
+  assert.ok(ouvertures.length >= 1, 'le métier de l’orchestrateur doit porter sa séquence d’ouverture');
+  for (const sequence of ouvertures) {
+    assert.deepEqual(
+      segmentsHorsSequence(sequence, 'orchestrateur'),
+      [],
+      `le métier de l’orchestrateur prescrit un geste que son garde refuse :\n  ${sequence}`
+    );
+  }
 });
 
 /**
