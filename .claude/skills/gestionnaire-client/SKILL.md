@@ -104,6 +104,8 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 
 | Motif rendu | Ce qui s'est passé | Le geste qui débloque |
 |---|---|---|
+| `nom_invalide` | Le nom du client n'est pas **un seul segment de chemin** : il traverse un répertoire (`/`, `\`, `..`), commence par un point ou un tiret, ou porte un caractère hors lettres/chiffres/tirets. La **casse est libre** — `Charles-Olivier` est un nom parfaitement valide | Reprends un nom en lettres, chiffres et tirets. Rien n'a été créé : ce refus tombe **avant** tout accès au disque et tout appel réseau |
+| `lieu_ambigu` | Plusieurs lieux sous `.gestionnaire/` ne diffèrent **que par la casse** (`Francois` et `francois`), et aucun ne porte exactement le nom demandé. Rien ici ne peut dire lequel est le bon — en choisir un reviendrait à poser à côté d'un lieu vivant | Écarte celui qui ne sert plus (`mv .gestionnaire/<autre> .gestionnaire/<autre>.ecarte`), puis relance. Aucun troisième lieu n'a été créé |
 | `lieu_partiel` | `.gestionnaire/<client>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .gestionnaire/<client> .gestionnaire/<client>.ecarte`), puis relance — elle ne complète jamais |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du client |
 | `absent` | Aucun canal de ce nom n'existe | Vérifie l'orthographe, ou fais créer le canal |
