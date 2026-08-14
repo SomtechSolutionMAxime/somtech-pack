@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.46.0] - 2026-08-14
+
+### Ajouté
+
+- **Un canal commun par rôle, et les chefs d'équipe ne reçoivent rien** (T-20260814-0002, PR #217). Le canal livré en 1.42.0 atteignait *tous* les agents, ce qui obligeait chacun à trier ce qui ne le concernait pas — et un canal qui oblige à trier cesse d'être lu. Le dirigeant l'a dit sans détour : *« ça ne sert à rien, je ne m'en servirai pas sinon »*. Un « nouveau MCP au ServiceDesk » ne concerne pas un gestionnaire ; une règle de conduite face au client ne concerne pas un orchestrateur.
+- **Un chef d'équipe reçoit ce qui le concerne de son orchestrateur, jamais du canal.** Il a un lien unique — et le rapport du chantier Bélanger documente ce qu'il en coûte quand des ordres lui arrivent d'ailleurs : des consignes exécutées qui ne venaient de personne, jusqu'à cinq sur six.
+- **Le rôle est établi par le lieu d'où l'agent tourne**, jamais par son nom : `roleDuLieu` exige les **quatre fichiers** de la pose *et* les en-têtes réels du métier. Écartés parce qu'ils ne prouvent rien — le nom herdr (une chaîne que n'importe qui écrit), le dossier (une convention de nommage), la ligne au registre (elle ne dit rien du rôle).
+- **Le silence est le cas par défaut, par construction.** Un rôle indéterminé — un worktree ordinaire, par exemple — ne reçoit rien : **il faut ajouter du code pour diffuser, jamais pour se taire.** Prouvé par l'absence, dans le pane du chef d'équipe, sur les deux canaux, avec un orchestrateur voisin qui reçoit bien — sans quoi l'essai n'aurait rien prouvé.
+- **Les trois gardes du lot précédent rejouées à plusieurs canaux** — par rôle et sur les deux clés, avec une ligne héritée sur chaque canal. La revue de fond a trouvé un faux témoin : remplacer `.every` par `.some` sur la résolution du rôle laissait 535 tests verts.
+
 ## [1.45.0] - 2026-08-14
 
 ### Ajouté
