@@ -63,6 +63,26 @@ Ce qu'il fait, et ce qu'il ne fera jamais :
 - **les pièces jointes ne suivent pas** ce canal : une consigne est une phrase. Un message qui n'en porte pas n'est pas diffusé ;
 - **la ligne propre de chaque agent est intouchée.** Le canal commun n'entre pas au registre des lignes, donc jamais dans ce que la commande parcourt pour savoir de quelle ligne un agent parle. Il n'est candidat à aucun geste sortant — c'est ce qui empêche une consigne interne de partir dans le canal d'un client.
 
+## Plusieurs lignes sur un même pane — l'appel est nommé
+
+Un agent peut porter **plus d'une ligne** : un gestionnaire client qui parle à son client *et* au dirigeant, un orchestrateur qui a sa ligne *et* d'autres canaux. Le chemin **entrant** l'a toujours su faire — il route par le canal d'origine, une clé unique. Le chemin **sortant**, lui, déduisait la ligne du **pane**, qui n'identifie rien dès qu'il en porte deux : `.find()` rendait la **première inscrite**, et un rapport destiné à un chantier partait dans le canal d'un autre, avec `ok:true` et sans un mot.
+
+Tous les gestes qui écrivent — `dire`, `demander`, `fermer`, `renommer` — acceptent donc **`--a <ligne>`** :
+
+```bash
+ligne-directe dire "le devis part demain" --a dirigeant
+ligne-directe dire "bonjour, c'est noté"  --a client
+ligne-directe fermer --bilan "…" --a dirigeant
+```
+
+- **Le nom désigne le DESTINATAIRE, jamais l'émetteur.** Depuis le pane d'un gestionnaire, `--a client` / `--a dirigeant` — *« gestionnaire », c'est lui*, et se nommer soi-même rouvrirait l'ambiguïté qu'on ferme.
+- **Le nom est le chantier de la ligne, ou le nom de son canal** — accents, casse et ponctuation aplatis. **Jamais sa nature** : elle tombe juste par coïncidence chez un gestionnaire et se casse chez un orchestrateur, dont toutes les lignes sont `interne`. C'est l'identité qui tranche, jamais le genre.
+- **Plus d'une ligne sur le pane et pas de nom → le geste est REFUSÉ**, et rien n'est envoyé. Jamais la première venue : l'incertitude tombe du côté prudent, parce que l'autre côté envoie au client ce qui ne lui était pas destiné. Le refus nomme les lignes du pane.
+- **Un nom qui ne désigne aucune ligne du pane est refusé lui aussi**, même s'il n'y en a qu'une — sinon `--a` serait décoratif.
+- **Une seule ligne sur le pane n'exige aucun nom.** C'est toute la configuration d'aujourd'hui : rien de ce qui tourne ne change.
+
+Une fois la ligne choisie, la commande la désigne au veilleur **par son canal** — la même clé unique que le chemin entrant, jamais une déduction refaite en aval.
+
 ## Un canal privé dont la ligne a disparu du registre
 
 Le registre repart à vide quand il est illisible. Le robot, lui, reste membre du canal privé de son client — qui continue d'écrire dans le vide.

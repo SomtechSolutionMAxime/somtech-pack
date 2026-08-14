@@ -11,6 +11,11 @@
 
 /** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
 export const OPTIONS_A_VALEUR = new Set([
+  // `--a <ligne>` DÉSIGNE LA LIGNE VISÉE, et son oubli ici n'aurait pas seulement raté une
+  // option : `dire --a client "texte"` aurait pris « client » pour le texte du message, et
+  // envoyé le mot « client » à la place du rapport. Une option à valeur qui n'est pas déclarée
+  // ici se trompe toujours du même côté — celui qui parle.
+  '--a',
   '--sujet',
   '--inviter',
   '--bilan',
