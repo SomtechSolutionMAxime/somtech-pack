@@ -214,7 +214,7 @@ export function enteteDe(texte) {
  * donc invisible. Le piège est le jumeau exact de celui documenté sur `privé\b` plus bas, et il
  * a été attrapé ici par une mutation, pas par une relecture.
  */
-export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b/i;
+export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de|d.|que)|en évitant|essaie(?:r)? (?:de|d.)|tâche(?:r)? de|efforce-toi/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {
@@ -710,14 +710,20 @@ export const CONTROLES = [
         .filter((l) => /ne\s+(?:descend|traverse)|ne\s+descend|traverse jamais/i.test(l) || /rien de ce qui monte/i.test(l));
       assert.ok(etanche.length >= 1, 'le métier doit dire ce qui ne traverse JAMAIS d’une ligne à l’autre');
       exigeImperatif(etanche.join(' '), 'l’étanchéité entre les deux lignes');
-      // ⚠️ AUCUN `\b` DEVANT UN CARACTÈRE ACCENTUÉ — le piège que ce fichier documente déjà
-      // pour « privé\b », rejoué par l'autre bout : `é` n'est pas un caractère de mot en
-      // JavaScript, donc `\bévite` ne s'apparie jamais. La mutation « évite que… » a SURVÉCU
-      // à la première version de ce contrôle, exactement pour ça.
-      assert.ok(
-        !/évite|essaie|prudent|dans la mesure/i.test(etanche.join(' ')),
-        `« ${etanche.join(' ').trim()} » est devenu un conseil : l’étanchéité ne se recommande pas`,
-      );
+      // ⚠️ CE CONTRÔLE N'A PLUS DE SONDE À LUI, ET C'EST LE CORRECTIF — relevé en revue de fond.
+      //
+      // Il en portait une (« évite », « essaie »…), écrite ici parce que `PERMISSIF` ne les
+      // connaissait pas : `\bévite` ne s'apparie JAMAIS (`é` n'est pas un caractère de mot),
+      // le piège que ce fichier documente déjà pour « privé\b », rejoué par l'autre bout.
+      // Corriger LOCALEMENT laissait la même famille ouverte sur la dizaine d'autres appels
+      // d'`exigeImperatif` — dont celui qui garde le nommage, c'est-à-dire la garde qui
+      // REMPLACE l'ancien interdit. « Une porte sur deux », dans le correctif d'une porte sur
+      // deux. La famille est donc entrée dans `PERMISSIF`, et `exigeImperatif` ci-dessus la
+      // porte pour tout le monde.
+      //
+      // Sa forme y est PRÉCISE — « évite de », « en évitant » — jamais « évite » nu : le
+      // gabarit dit légitimement « l'aveu qu'on cherche à éviter », dans une puce elle-même
+      // gardée. Une sonde plus large aurait fait rougir ce qui marche.
       // Et elle doit dire ce qu'une inversion COÛTE — sans quoi elle se lit comme une règle
       // d'hygiène qu'on relâche le jour où elle gêne.
       assert.match(s.corps, /ne se reprend pas|irrattrapable|lu avant d.être effacé/i, 'et ce qu’une inversion coûte');
@@ -1183,6 +1189,20 @@ export const MUTATIONS = [
         '- **Tu ouvres les DEUX, et la seconde n\'est pas facultative.**',
         '- **Tu n\'ouvres jamais une seconde ligne depuis ce pane.**',
       ),
+  },
+  {
+    id: 'revue-l-ordre-s-assouplit-par-l-evitement',
+    quoi: 'l’étape 2 garde son rang et son verbe, et s’assouplit par « en évitant de trop tarder »',
+    cible: 'ordre-ouverture',
+    fichier: 'metier',
+    // ⚠️ POSÉE PAR LA REVUE DE FOND, ET ELLE PASSAIT. La famille de l'évitement manquait à
+    // `PERMISSIF` ; sa première correction avait été écrite dans un seul contrôle, laissant
+    // tous les autres appels d'`exigeImperatif` ouverts — dont celui-ci, qui garde l'ordre
+    // même où un représentant s'est déjà fait écrire quatre fois sans que rien n'arrive.
+    muter: (t) => t.replace(
+      "C'est ce qui te rend **joignable** des deux côtés.",
+      "C'est ce qui te rend **joignable** des deux côtés, en évitant de trop tarder.",
+    ),
   },
   {
     id: 'le-nommage-de-la-ligne-devient-facultatif',

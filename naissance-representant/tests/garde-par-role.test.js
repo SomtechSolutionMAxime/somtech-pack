@@ -314,6 +314,30 @@ test('MAIS L’EXPANSION SIMPLE RESTE PERMISE — `$HOME` et `$LD` n’exécuten
   );
 });
 
+test('UN COMMENTAIRE N’OUVRE RIEN QU’UNE CITATION INCERTAINE AURAIT FERMÉ — les deux lectures refusent ensemble', () => {
+  // ⚠️ CE QUE CET ESSAI PROUVE, ET CE QU'IL NE PROUVE PAS — dit plutôt que laissé croire.
+  //
+  // Il prouve que ces trois formes sont REFUSÉES. Il ne prouve PAS l'alignement de
+  // `sansCommentaire` sur `jetonsDuSegment` que le même lot a posé : une mutation qui retire
+  // cet alignement SURVIT, et c'est vérifié. La raison est structurelle — toute troncature qui
+  // aurait lieu laisse le `'` ou le `\` orphelin dans le préfixe conservé, et cet orphelin
+  // fait échouer la reconnaissance de toute façon. Les deux versions rendent le même verdict
+  // sur toute entrée, donc aucun essai ne peut les départager.
+  //
+  // L'alignement reste pour ce qu'il garantit DEMAIN, et c'est écrit dans `sansCommentaire`.
+  for (const commande of [
+    "$LD ouvrir dirigeant --titre 'x' --au-dirigeant # commentaire",
+    '$LD ouvrir dirigeant --titre "x\\" --au-dirigeant # commentaire',
+    "herdr pane current ' # ton pane",
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer alors que sa lecture est incertaine`
+    );
+  }
+});
+
 test('MAIS UNE APOSTROPHE DANS UNE VALEUR CITÉE RESTE PERMISE — c’est du français, pas une citation', () => {
   // La séquence d'ouverture RÉELLE d'un orchestrateur en porte une. Refuser ici aurait été un
   // refus portant sur ce qui marche — et il n'aurait eu aucun geste qui le lève.

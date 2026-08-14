@@ -392,6 +392,25 @@ function sansCommentaire(segment) {
   for (let i = 0; i < texte.length; i += 1) {
     const c = texte[i];
     if (c === '"') cite = !cite;
+    // ⚠️ ON NE COUPE PAS CE QU'ON NE SAIT PAS LIRE, et c'est la MÊME règle que
+    // `jetonsDuSegment` (relevé en revue de fond : les deux lisaient le même texte et n'en
+    // faisaient pas la même chose). Une apostrophe hors citation ou un échappement rendent la
+    // position des citations incertaine — donc celle des croisillons.
+    //
+    // ⚠️ ET UNE MUTATION QUI RETIRE CES DEUX LIGNES SURVIT À TOUTE LA SUITE. C'est dit plutôt
+    // que maquillé : la revue avait déjà classé la divergence NON EXPLOITABLE, et la
+    // vérification le confirme — toute troncature qui aurait lieu ici laisse forcément le `'`
+    // ou le `\` ORPHELIN dans le préfixe conservé, et cet orphelin fait échouer aussi bien les
+    // expressions ancrées de bout en bout de `SEGMENTS_COMMUNS` que le `null` de
+    // `jetonsDuSegment`. Aucun essai ne peut donc départager les deux versions, et en écrire
+    // un aurait été décoratif.
+    //
+    // Ces deux lignes restent pour une raison qui n'est pas d'aujourd'hui : deux fonctions qui
+    // lisent le même texte et n'en font pas la même chose divergent au premier correctif porté
+    // à l'une des deux. Le jour où `SEGMENTS_COMMUNS` cesse d'être ancré, ou où un autre
+    // appelant se sert de la troncature, c'est cette règle-là qui tient — pas la coïncidence.
+    if (c === "'" && !cite) return texte;
+    if (c === '\\') return texte;
     // Un croisillon n'ouvre un commentaire qu'EN TÊTE D'UN MOT et hors citation : `a#b` est
     // littéral pour un shell, et couper là amputerait un titre qui porte un croisillon.
     if (c === '#' && !cite && (i === 0 || /\s/.test(texte[i - 1]))) return texte.slice(0, i);

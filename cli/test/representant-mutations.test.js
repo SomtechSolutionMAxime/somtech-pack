@@ -179,6 +179,16 @@ const SONDES_PERMISSIVES = [
   'dans la mesure du possible',
   'à ta discrétion',
   "même si ce n'est pas strictement nécessaire",
+  // ⚠️ LA FAMILLE DE L'ÉVITEMENT, entrée dans `PERMISSIF` en revue de fond (T-20260814-0033).
+  // Elle y manquait, et sa première correction avait été écrite LOCALEMENT dans un seul
+  // contrôle — laissant la dizaine d'autres appels d'`exigeImperatif` ouverts au même
+  // assouplissement. Chaque forme a sa sonde ici, sans quoi une alternative morte-née
+  // (« \bévite », qui ne s'apparie jamais) passerait pour une garde.
+  'évite de trop tarder',
+  "en évitant d'attendre la fin",
+  'essaie de le faire avant',
+  'tâche de le noter',
+  'efforce-toi de le faire tôt',
 ];
 
 test('axe MODALITÉ : chaque tournure permissive est VIVANTE, et chacune a sa sonde', () => {
