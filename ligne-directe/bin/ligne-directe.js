@@ -32,6 +32,13 @@ function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
 
   ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel] [--nature client]
+                    [--jetable]                            --jetable : le canal de cette ligne peut
+                                                           etre ARCHIVE quand elle se referme. Sans
+                                                           ce drapeau la ligne est DURABLE : son
+                                                           canal survit a la fermeture, et elle peut
+                                                           rouvrir sous le meme titre. Un canal
+                                                           archive ne se rouvre pas — Slack reserve
+                                                           le desarchivage a un compte humain.
                     [--au-dirigeant]                       --au-dirigeant : autorise LE DIRIGEANT
                                                            du poste sur cette ligne interne, sans
                                                            que tu aies a connaitre son adresse.
@@ -229,6 +236,11 @@ if (geste === 'relever') {
       // un `includes` y aurait vu une demande d'ouvrir la ligne du dirigeant. `optionDonnee`
       // parcourt les jetons et saute la valeur d'une option à valeur.
       au_dirigeant: optionDonnee(args, '--au-dirigeant').presente,
+      // `--jetable` : cette ligne-ci meurt avec son chantier, son canal peut être archivé.
+      // SANS CE DRAPEAU, LA LIGNE EST DURABLE — le canal survit à la fermeture et la ligne
+      // pourra rouvrir sous le même titre (T-20260814-0085). Lu par `optionDonnee` pour la
+      // même raison que `--au-dirigeant` : un `includes` verrait le mot dans un titre.
+      jetable: optionDonnee(args, '--jetable').presente,
       // `--au-gestionnaire <nom>` PARTAGE CETTE LIGNE avec le gestionnaire client nommé
       // (T-20260814-0093) : à partir de là, ce que l'un dit arrive dans le pane de l'autre, dans
       // les deux sens. C'est une VALEUR, pas un drapeau — le nom d'agent est ce qui permet au

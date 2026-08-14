@@ -39,6 +39,7 @@ import {
   inscrireLigne,
   clore,
   natureDe,
+  jetabiliteDe,
   libelleDeLigne,
   canauxCommuns,
   canalCommunDuRole,
@@ -344,6 +345,7 @@ export class Veilleur {
     invites = [],
     invites_courriels: invitesCourriels = [],
     nature,
+    jetable = false,
     au_dirigeant: auDirigeant = false,
     au_gestionnaire: auGestionnaire = null,
     herdr_socket: herdrSocket = null,
@@ -586,6 +588,12 @@ export class Veilleur {
       worktree: worktree || null,
       herdr_socket: herdrSocket,
       nature: natureVoulue,
+      // JETABLE OU DURABLE — inscrit ici, et nulle part ailleurs (T-20260814-0085).
+      //
+      // Le champ n'existe QUE s'il a été demandé : une ligne ordinaire n'en porte pas, et
+      // `jetabiliteDe` la lit comme durable. C'est ce qui aligne les lignes déjà au registre,
+      // écrites par une version qui n'avait pas ce champ, sur le comportement sûr.
+      ...(jetable === true ? { jetable: true } : {}),
       // Le nom sous lequel la ligne se présente dans son canal — voir `libelleDeLigne`.
       // Inscrit à l'ouverture, jamais recalculé : le titre peut changer (`renommer`), et
       // c'est ce geste-là qui le met à jour, en même temps que le nom du canal.
@@ -1174,8 +1182,14 @@ export class Veilleur {
     // Les chemins qui archivent sont énumérés et gardés : `fermer` et `reconcilier`, tous
     // deux éprouvés dans les deux natures. C'est ce qui empêche un troisième d'apparaître
     // en silence — trois correctifs de ce chantier n'avaient couvert qu'une porte sur deux.
+    //
+    // ET UNE LIGNE DURABLE NE S'ARCHIVE PAS NON PLUS (T-20260814-0085). La protection du canal
+    // client ci-dessus reste une garde à part entière — elle ne bouge pas, elle ne dépend de
+    // rien d'autre — mais elle ne suffisait plus : refermer une ligne INTERNE archivait son
+    // canal, et rouvrir sous le même titre butait alors sur un canal que nous ne savons pas
+    // désarchiver. Le 2026-08-14, une ligne d'orchestrateur y est restée morte.
     let archive = false;
-    if (archiver && natureDe(ligne) !== 'client') {
+    if (archiver && natureDe(ligne) !== 'client' && jetabiliteDe(ligne) === 'jetable') {
       archive = await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
     }
     clore(this.registre, ligne.canal_id, maintenant());
@@ -1958,6 +1972,17 @@ export class Veilleur {
         }
 
         await this.repondreEnPropre(ligne, 'reprise_agent_disparu');
+
+        // ET LA MÊME RÈGLE QU'À `fermer` : une ligne DURABLE garde son canal (T-20260814-0085).
+        //
+        // Ce balayage tourne tout seul au démarrage du veilleur. Ne corriger que `fermer`
+        // aurait laissé la panne se produire sans que personne n'ait rien demandé — un agent
+        // qui meurt, un veilleur qui redémarre, et la ligne du gestionnaire irrécupérable.
+        // C'est le motif « une porte sur deux », qui a déjà eu ce dépôt dix fois.
+        if (jetabiliteDe(ligne) !== 'jetable') {
+          journaliser(`ligne durable refermée sans archivage — #${ligne.canal_nom} pourra rouvrir`);
+          continue;
+        }
         await this.slack.archiverCanal(this.jetons.robot, ligne.canal_id);
       }
     }

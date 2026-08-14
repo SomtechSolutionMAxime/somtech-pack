@@ -40,6 +40,35 @@ export function natureDe(ligne) {
 }
 
 /**
+ * La JETABILITÉ d'une ligne — dit si son canal peut être archivé quand elle se referme.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI CE N'EST PLUS LA NATURE QUI LE DIT (T-20260814-0085).
+ *
+ * Le code déduisait « jetable » de « interne » : `client` → on garde le canal, tout le reste →
+ * on archive. La règle « un canal interne naît avec un chantier et meurt avec lui » était vraie
+ * quand toutes les lignes internes étaient des lignes de chantier. Elle a cessé de l'être en
+ * v1.45.0, quand la ligne permanente entre un gestionnaire et le dirigeant est devenue interne
+ * elle aussi ; et l'incident du 2026-08-14 a montré qu'une ligne de CHANTIER est durable pour
+ * la même raison — on peut avoir besoin de la refaire, et un canal archivé ne se rouvre pas.
+ *
+ * ⚠️ LE REPLI EST L'INVERSE DE CELUI DE `natureDe`, ET C'EST DÉLIBÉRÉ.
+ *
+ * `natureDe` retombe sur `interne` parce que c'est le cas le plus courant. Ici, ce qui décide
+ * n'est pas la fréquence, c'est la RÉVERSIBILITÉ : archiver est définitif pour nous (Slack
+ * réserve le désarchivage à un compte humain), ne pas archiver laisse un canal qu'un humain
+ * ferme en trente secondes. Une ligne dont on ne sait rien est donc DURABLE.
+ *
+ * Ce n'est pas de la prudence abstraite : le registre survit aux versions du pack et rien ne
+ * migre. Toutes les lignes déjà ouvertes sur le poste du dirigeant sont sans ce champ — dont
+ * celles qui ont mordu. Un repli vers `jetable` aurait livré un correctif qui ne corrige rien
+ * pour le parc existant.
+ */
+export function jetabiliteDe(ligne) {
+  return ligne?.jetable === true ? 'jetable' : 'durable';
+}
+
+/**
  * Le nom sous lequel une ligne se présente dans son canal — ce qui COIFFE chacun de ses
  * messages, et donc ce que l'interlocuteur lit avant même de lire le texte.
  *

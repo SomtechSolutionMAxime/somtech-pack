@@ -433,8 +433,19 @@ test('LE GESTIONNAIRE NE FERME PAS LE CHANTIER DE SON ORCHESTRATEUR — ni ne l�
     assert.equal(chargerRegistre().lignes.find((l) => l.chantier === 'd-1').close_le, null, 'la ligne reste ouverte');
 
     // Et l'orchestrateur, lui, ferme la sienne — le refus porte sur le pair, pas sur le geste.
+    //
+    // ⚠️ LA PREUVE N'EST PLUS L'ARCHIVAGE (T-20260814-0085) : une ligne de chantier est
+    // DURABLE, son canal survit à la fermeture pour qu'elle puisse rouvrir sous le même titre.
+    // Ce que la fermeture produit — et que le refus ci-dessus interdisait au pair — c'est le
+    // bilan posté et la ligne close. C'est donc cela qu'on lit, et c'est plus fort que ce
+    // qu'on lisait : `is_archived` ne disait rien du bilan.
     assert.equal((await ld(['fermer', '--bilan', 'livré'], PANE_ORCHESTRATEUR)).code, 0);
-    assert.equal(chantier.is_archived, true, 'celui qui mène le chantier le referme bien');
+    assert.deepEqual(canauxTouches(monde), [chantier.id], 'le bilan part dans le canal du chantier');
+    assert.equal(
+      chargerRegistre().lignes.find((l) => l.chantier === 'd-1').close_le != null,
+      true,
+      'celui qui mène le chantier le referme bien'
+    );
   });
 });
 
