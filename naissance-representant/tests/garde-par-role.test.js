@@ -147,6 +147,50 @@ test('UN TITRE QUI VAUT UN DRAPEAU N’EST PAS CE DRAPEAU — dans les deux sens
   );
 });
 
+test('UNE CITATION QU’ON NE SAIT PAS LIRE N’OUVRE RIEN — le garde ne devine pas le découpage du shell', () => {
+  // ⚠️ TROUVÉ EN CONTRE-REVUE DE FOND, reproduit contre un vrai veilleur À TRAVERS UN VRAI
+  // SHELL — et c'est le bloquant rouvert par une autre porte. Le premier correctif ne lisait
+  // que les guillemets doubles propres : sur `--titre 'x --au-dirigeant y'`, il éclatait la
+  // valeur et voyait un drapeau que le shell ne passe JAMAIS comme tel. Le garde admettait,
+  // la commande ouvrait sans demander le dirigeant, et la ligne naissait muette.
+  //
+  // On ne récrit pas le découpage d'un shell — il divergerait quelque part. Ce qu'on ne sait
+  // pas lire ne passe pas : le refus est récupérable (on réécrit en guillemets doubles), une
+  // admission mal lue ne l'est pas.
+  for (const commande of [
+    // APOSTROPHES — le cas reproduit contre le vrai veilleur. Le shell passe UN argument
+    // `x --au-dirigeant y` ; sans ce refus, le garde y voyait le drapeau et admettait.
+    "$LD ouvrir dirigeant --titre 'x --au-dirigeant y'",
+    // GUILLEMET ÉCHAPPÉ — l'autre mécanisme, et il a fallu DEUX essais pour trouver le cas qui
+    // le prouve. Le `\"` est un guillemet LITTÉRAL pour le shell : tout reste UN argument, donc
+    // `--au-dirigeant` n'est pas un drapeau. Sans le refus de l'échappement, notre bascule se
+    // décale et le drapeau redevient un drapeau — la ligne muette, par la troisième porte.
+    //
+    // ⚠️ IL FAUT DEUX ÉCHAPPEMENTS, ET LE DRAPEAU ENTRE LES DEUX. Avec un seul, le compte de
+    // guillemets devient impair : la citation reste ouverte à la fin, et c'est l'AUTRE contrôle
+    // qui refuse — la mutation qui retire l'échappement lui survivait alors, verte, pour une
+    // raison qui n'était pas la sienne. Mesuré, pas supposé.
+    '$LD ouvrir dirigeant --titre "a\\" --au-dirigeant b\\" c"',
+    // MÊME RÈGLE SUR L'AUTRE LIGNE — le refus ne vaut pas que pour le drapeau du dirigeant.
+    "$LD ouvrir acme --nature client --titre 'Acme'",
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer alors que son découpage est incertain`
+    );
+  }
+});
+
+test('MAIS UNE APOSTROPHE DANS UNE VALEUR CITÉE RESTE PERMISE — c’est du français, pas une citation', () => {
+  // La séquence d'ouverture RÉELLE d'un orchestrateur en porte une. Refuser ici aurait été un
+  // refus portant sur ce qui marche — et il n'aurait eu aucun geste qui le lève.
+  assert.deepEqual(
+    segmentsHorsSequence('$LD ouvrir D-20260813-0002 --sujet "le lieu de l\'orchestrateur"', 'orchestrateur'),
+    []
+  );
+});
+
 test('L’ORDRE DES DRAPEAUX NE DÉCIDE PLUS DE RIEN — `--titre` avant `--nature client` ouvre aussi', () => {
   // L'exigence était écrite EN POSITION (`.*--nature client.*--titre…$`) : une commande
   // parfaitement légitime y échappait par le seul ordre des mots, et le garde refusait

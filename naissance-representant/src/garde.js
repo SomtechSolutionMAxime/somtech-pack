@@ -99,15 +99,70 @@ const SEGMENTS_COMMUNS = [
  */
 
 /**
- * Les jetons d'un segment, comme un shell les passerait à la commande.
+ * Les jetons d'un segment, comme un shell les passerait à la commande — ou `null` quand on
+ * n'en est pas sûr.
  *
- * Les guillemets doubles sont respectés puis retirés — c'est tout ce dont ces commandes ont
- * besoin, et c'est précisément ce qui fait qu'un `--titre "--nature client"` rend UN jeton,
- * pas deux. Découper sur les espaces sans les lire aurait recréé le trou qu'on ferme.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * `null` PLUTÔT QU'UNE APPROXIMATION, ET C'EST TOUT L'ENJEU (relevé en CONTRE-revue de fond,
+ * reproduit contre un vrai veilleur à travers un vrai shell avant d'être cru).
+ *
+ * La première version ne lisait que les guillemets DOUBLES propres. Sur
+ * `--titre 'x --au-dirigeant y'` — des apostrophes, qu'un agent choisit spontanément —, elle
+ * éclatait la valeur et voyait un `--au-dirigeant` que le shell, lui, ne passe JAMAIS comme
+ * drapeau : il est à l'intérieur du titre. Le garde admettait donc l'ouverture, la commande
+ * ouvrait la ligne SANS demander le dirigeant, et on retombait exactement sur le bloquant
+ * qu'on venait de fermer — `autorises: []`, une ligne qui a l'air ouverte et refuse la parole
+ * à tout le monde. Même effet avec un guillemet double ÉCHAPPÉ, par un second mécanisme.
+ *
+ * ÉCRIRE UN VRAI DÉCOUPAGE DE SHELL EST LE MAUVAIS REMÈDE : il faudrait suivre les
+ * apostrophes, les échappements, l'expansion, et il divergerait quelque part — c'est la même
+ * dette que deux sources qui disent la même chose. On fait donc l'inverse : dès qu'une forme
+ * de citation nous rend le découpage INCERTAIN, on ne devine pas, on rend `null` — et un
+ * segment qu'on ne sait pas lire n'ouvre RIEN.
+ *
+ * ⚠️ CE REFUS TOMBE DU CÔTÉ RÉCUPÉRABLE. Une ouverture légitime écrite en apostrophes est
+ * refusée : l'agent la réécrit en guillemets doubles et poursuit. L'autre côté — admettre une
+ * commande dont on a mal lu les drapeaux — donne une ligne muette que personne ne voit avant
+ * d'en avoir besoin. Et ce n'est même pas un durcissement : la forme d'avant ce lot exigeait
+ * déjà `--titre "…"` en guillemets doubles.
+ *
+ * L'APOSTROPHE À L'INTÉRIEUR D'UNE VALEUR CITÉE RESTE PERMISE — `--sujet "le lieu de
+ * l'orchestrateur"` est la séquence d'ouverture réelle d'un orchestrateur, et la refuser
+ * aurait été un refus portant sur ce qui marche.
  */
 export function jetonsDuSegment(segment) {
-  const jetons = String(segment || '').match(/"[^"]*"|\S+/g) || [];
-  return jetons.map((j) => (j.startsWith('"') && j.endsWith('"') ? j.slice(1, -1) : j));
+  const texte = String(segment || '');
+  const jetons = [];
+  let courant = null;
+  let cite = false;
+  for (const c of texte) {
+    // Un échappement rend le découpage incertain où qu'il soit : hors citation il colle le
+    // caractère suivant, dedans il neutralise une fermeture. On ne tranche ni l'un ni l'autre.
+    if (c === '\\') return null;
+    if (c === '"') {
+      cite = !cite;
+      courant ??= '';
+      continue;
+    }
+    // Une apostrophe HORS citation ouvre une citation qu'on ne sait pas suivre. Dedans, ce
+    // n'est qu'un caractère du texte, et c'est le cas nominal en français.
+    if (c === "'" && !cite) return null;
+    if (!cite && /\s/.test(c)) {
+      if (courant !== null) jetons.push(courant);
+      courant = null;
+      continue;
+    }
+    courant = (courant ?? '') + c;
+  }
+  // GUILLEMET JAMAIS REFERMÉ. ⚠️ CE REFUS-LÀ NE GARDE CONTRE AUCUNE DIVERGENCE, et c'est dit
+  // plutôt que maquillé : une mutation qui le retire SURVIT à toute la suite, et c'est normal —
+  // un shell refuse de toute façon d'exécuter une citation ouverte, donc la commande admise ne
+  // s'exécuterait jamais. Écrire un essai pour le couvrir aurait été décoratif. Il reste parce
+  // que cette fonction ne doit jamais rendre un découpage qu'elle SAIT faux : le jour où
+  // quelqu'un s'en sert ailleurs, c'est cette promesse-là qui compte, pas le shell d'aujourd'hui.
+  if (cite) return null;
+  if (courant !== null) jetons.push(courant);
+  return jetons;
 }
 
 /** Les deux façons d'invoquer la commande, et rien d'autre — la seule contrainte de position. */
@@ -121,7 +176,9 @@ const APPELS = [/^\$LD$/, /^node$/];
  */
 function argumentsDOuverture(segment) {
   const jetons = jetonsDuSegment(segment);
-  if (!jetons.length || !APPELS.some((r) => r.test(jetons[0]))) return null;
+  // `null` — on n'a pas su lire ce segment. Il n'ouvre donc rien : deviner ici, c'est admettre
+  // une commande dont on a mal lu les drapeaux.
+  if (!jetons || !jetons.length || !APPELS.some((r) => r.test(jetons[0]))) return null;
   // `node <chemin>/ligne-directe.js ouvrir …` porte le chemin en deuxième position ; `$LD` non.
   const debut = jetons[0] === 'node' ? 2 : 1;
   if (jetons[0] === 'node' && !/ligne-directe\.js$/.test(jetons[1] || '')) return null;
