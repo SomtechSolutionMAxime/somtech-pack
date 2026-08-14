@@ -60,8 +60,9 @@ Quatre choses à lire dans ce qu'elle rend, et rien d'autre ne sert ici :
 | `ouvertes` | les lignes vivantes. Aucun de leurs canaux ne peut devenir un canal commun |
 
 **Les rôles qui n'ont pas de canal sont ceux qui n'apparaissent pas dans `communs`** — les rôles
-connus sont `representant` et `orchestrateur`. C'est ce que tu rapportes avant de toucher à
-quoi que ce soit, et c'est l'apport de cette compétence sur un copier-coller.
+connus sont ceux de la table juste en dessous, et elle est la seule liste de ce texte. C'est ce
+que tu rapportes avant de toucher à quoi que ce soit, et c'est l'apport de cette compétence sur
+un copier-coller.
 
 **Le courriel du dirigeant ne ressort jamais de cette mesure**, et ce n'est pas un manque : le
 poste rend une présence, pas une adresse. S'il faut le désigner et que tu ne le connais pas,
