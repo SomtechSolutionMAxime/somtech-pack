@@ -136,6 +136,10 @@ export function messagesDesMotifs(racine = REPO) {
   const lieu = readFileSync(join(racine, 'ligne-directe', 'src', 'lieu-agent.js'), 'utf8');
   const orchestrateur = readFileSync(join(racine, 'ligne-directe', 'src', 'orchestrateur.js'), 'utf8');
   const trousseau = readFileSync(join(racine, 'ligne-directe', 'src', 'trousseau.js'), 'utf8');
+  // T-20260814-0101 : le texte des deux refus de nommage vit là où vit la RÈGLE de nommage,
+  // pas dans le module de pose — c'est le même texte que la mise à jour rend, et le tenir en
+  // un seul endroit est précisément ce que ce lot corrige.
+  const nomDeLieu = readFileSync(join(racine, 'ligne-directe', 'src', 'lieu-nom.js'), 'utf8');
 
   /** Le corps du refus qui suit `motif: '<m>'`, jusqu'à la fermeture de son objet. */
   const blocApres = (src, motif) => {
@@ -146,6 +150,11 @@ export function messagesDesMotifs(racine = REPO) {
   /** Le corps d'une classe d'erreur, qui porte son message. */
   const classe = (src, nom) => {
     const i = src.indexOf(`class ${nom}`);
+    return i === -1 ? '' : src.slice(i, i + 1200);
+  };
+  /** Le corps d'une fonction qui COMPOSE un message de refus — bornée comme les autres. */
+  const fonction = (src, nom) => {
+    const i = src.indexOf(`export function ${nom}`);
     return i === -1 ? '' : src.slice(i, i + 1200);
   };
 
@@ -164,6 +173,11 @@ export function messagesDesMotifs(racine = REPO) {
     // T-20260813-0054. Le FILET : quoi qu'il arrive dans un vérificateur, la pose rend un refus
     // structuré plutôt que de laisser une exception traverser sans contrat.
     verification_impossible: blocApres(lieu, 'verification_impossible'),
+    // T-20260814-0101. Ces deux-là sont les gardes du NOM, et leur texte est celui de la règle
+    // unique — la même que la mise à jour applique. Le lire ailleurs ferait diverger la table
+    // de ce que l'humain voit, ce qui est exactement le défaut fermé par ce lot.
+    nom_invalide: fonction(nomDeLieu, 'messageNomInvalide'),
+    lieu_ambigu: fonction(nomDeLieu, 'messageLieuAmbigu'),
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),

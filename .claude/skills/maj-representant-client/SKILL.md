@@ -32,6 +32,10 @@ Détermine `<client>` :
 - **Un seul sous-dossier sous `.gestionnaire/`** → c'est lui, pas besoin de le demander.
 - **Plusieurs, ou aucun** → demande lequel à l'utilisateur (ne devine jamais).
 
+**Reprends le nom tel qu'il est sur le disque**, majuscules comprises — `Charles-Olivier`, `Francois`, `Jacob`, `Zach` sont des noms de lieux parfaitement valides. La commande retrouve le lieu même si la casse tapée diffère (elle dit alors sous quel nom elle l'a trouvé), et elle **refuse** plutôt que de deviner si deux lieux ne diffèrent que par la casse. Ce qu'elle refuse toujours : un nom qui traverse un répertoire (`/`, `\`, `..`) — il écrirait hors du dépôt.
+
+> Jusqu'à `T-20260814-0101`, elle exigeait un slug **en minuscules** pendant que la pose écrivait le nom **brut** : quatre lieux sur cinq étaient inatteignables, et macOS le masquait en ignorant la casse. Les deux gestes appliquent désormais la même règle, au même texte.
+
 ```bash
 ls .gestionnaire/<client>/CLAUDE.md .gestionnaire/<client>/CONTEXTE.md 2>/dev/null \
   || { echo "❌ Lieu incomplet ou absent pour <client> — pose-le d'abord (/gestionnaire-client), ne le fabrique pas à moitié ici."; exit 1; }
