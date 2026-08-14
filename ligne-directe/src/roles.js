@@ -88,7 +88,10 @@ const ROLES = {
      */
     lignes: [
       { cle: 'client', nature: 'client', titreRequis: true },
-      { cle: 'dirigeant', nature: 'interne', chantier: 'dirigeant', titreRequis: true },
+      // `auDirigeant` — la ligne EXIGE que son ouverture demande le dirigeant du poste.
+      // Sans lui, elle s'ouvre avec une liste d'autorisés VIDE : elle refuse alors la parole
+      // à tout le monde, dirigeant compris, en ayant l'air ouverte. Le garde le tient.
+      { cle: 'dirigeant', nature: 'interne', chantier: 'dirigeant', titreRequis: true, auDirigeant: true },
     ],
     /**
      * Les en-têtes RÉELS des deux gabarits, pour reconnaître un lieu par ce qu'il CONTIENT

@@ -92,6 +92,75 @@ test('sa ligne interne est ANCRÉE sur « dirigeant » — pas sur n’importe q
   }
 });
 
+test('SANS `--au-dirigeant`, LA LIGNE DU DIRIGEANT N’EST PAS UNE OUVERTURE — elle naîtrait muette', () => {
+  // ⚠️ BLOQUANT RELEVÉ EN REVUE DE FOND, et vérifié contre un vrai veilleur avant d'être cru.
+  // `ouvrir dirigeant --titre "…"` sans le drapeau réussissait : le canal était créé et la
+  // ligne inscrite avec `autorises: []`. Or `autorise()` distingue une liste VIDE d'une liste
+  // ABSENTE — l'absente a un repli permissif rétrocompatible, la vide refuse TOUT LE MONDE, le
+  // dirigeant le premier. La ligne comptait pourtant comme `interne` présente, donc le garde
+  // relâchait le pane : un gestionnaire au travail, avec une ligne qui a l'air ouverte, et
+  // chaque message du dirigeant rejeté en silence. C'est le mode de panne exact que
+  // `--au-dirigeant` existe pour fermer, laissé ouvert par la porte d'à côté.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "ligne dirigeant acme"', 'representant'),
+    [],
+    'sans le drapeau, ce n’est pas l’ouverture de sa ligne du dirigeant'
+  );
+  // Et le drapeau doit être un DRAPEAU, pas un mot trouvé n'importe où : un titre qui vaut
+  // littéralement « --au-dirigeant » n'en est pas un (la leçon de T-20260813-0078).
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --titre "--au-dirigeant"', 'representant'),
+    [],
+    'un drapeau consommé comme valeur d’une autre option n’est pas ce drapeau'
+  );
+});
+
+test('UN TITRE QUI VAUT UN DRAPEAU N’EST PAS CE DRAPEAU — dans les deux sens', () => {
+  // Le trou inverse, et il est le plus dangereux des deux : `ouvrir acme --titre "--nature
+  // client"` ouvre en réalité une ligne INTERNE — un canal PUBLIC portant le nom du client.
+  // Reconnaître les drapeaux « n'importe où dans le texte » l'aurait pris pour une ligne
+  // cliente et laissé passer. Le garde lit donc les arguments avec `optionDonnee`, la fonction
+  // que la commande appelle elle-même, qui saute la valeur d'une option à valeur.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir acme --titre "--nature client"', 'representant'),
+    [],
+    'le nom du client serait parti dans un canal public'
+  );
+
+  // ⚠️ LE CAS QUI EXIGE VRAIMENT DE LIRE LES GUILLEMETS, trouvé par une mutation qui a SURVÉCU
+  // au cas ci-dessus : un drapeau enfoui DANS une valeur de plusieurs mots. Découper le segment
+  // sur les espaces sans lire les guillemets rend `"x` et `client"` comme deux jetons — la
+  // valeur du `--sujet` cesse alors d'être une valeur au milieu, et le `--nature client` qu'elle
+  // contient redevient un drapeau. La commande, elle, ouvre une ligne INTERNE nommée du client :
+  // un canal PUBLIC portant son nom, admis par le garde qui existe pour l'empêcher.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir acme --sujet "x --nature client" --titre "Acme"', 'representant'),
+    [],
+    'un « --nature client » enfoui dans un sujet n’est pas une nature'
+  );
+  // Et l'inverse, sur l'autre ligne : un `--au-dirigeant` enfoui dans un sujet ferait admettre
+  // une ouverture qui n'autorise personne — la ligne muette du bloquant, par une autre porte.
+  assert.notDeepEqual(
+    segmentsHorsSequence('$LD ouvrir dirigeant --sujet "x --au-dirigeant y" --titre "X"', 'representant'),
+    [],
+    'un « --au-dirigeant » enfoui dans un sujet ne demande le dirigeant à personne'
+  );
+});
+
+test('L’ORDRE DES DRAPEAUX NE DÉCIDE PLUS DE RIEN — `--titre` avant `--nature client` ouvre aussi', () => {
+  // L'exigence était écrite EN POSITION (`.*--nature client.*--titre…$`) : une commande
+  // parfaitement légitime y échappait par le seul ordre des mots, et le garde refusait
+  // l'ouverture de sa propre ligne à un représentant. Un refus qui porte sur ce qui marche est
+  // le pire des refus — il n'apprend rien et n'a pas de geste qui le lève.
+  for (const commande of [
+    '$LD ouvrir acme --titre "Acme" --nature client',
+    '$LD ouvrir acme --nature client --titre "Acme"',
+    '$LD ouvrir acme --sujet "x" --titre "Acme" --nature client',
+  ]) {
+    assert.deepEqual(segmentsHorsSequence(commande, 'representant'), [], `« ${commande} » a été refusée à tort`);
+  }
+});
+
 test('sur sa ligne du dirigeant, `--nature` reste refusée À TOUTE POSITION', () => {
   // La ligne du dirigeant est INTERNE. Y autoriser `--nature client` ferait créer un canal
   // PRIVÉ nommé « dirigeant » où l'appartenance vaudrait autorisation — n'importe quel invité

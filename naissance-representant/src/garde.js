@@ -23,6 +23,11 @@
  * n'est pas cosmétique : la NATURE du canal.
  */
 import { lignesDuRole } from '../../ligne-directe/src/roles.js';
+// LES FONCTIONS QUE LA COMMANDE APPELLE ELLE-MÊME — pas une copie de leur logique. Un garde
+// qui réécrirait la lecture d'arguments prouverait seulement qu'il est d'accord avec lui-même,
+// et divergerait de la commande au premier correctif porté à l'une des deux (T-20260813-0078
+// a payé exactement ça sur `option`, qui trouvait un drapeau là où il n'était qu'une valeur).
+import { optionDonnee, premierLibre } from '../../ligne-directe/src/arguments.js';
 
 const SEGMENTS_COMMUNS = [
   /^\s*$/, // ligne vide
@@ -64,69 +69,79 @@ const SEGMENTS_COMMUNS = [
  * que garde-par-role.test.js tient depuis E-20260813-0002. L'orchestrateur, lui, garde son
  * chantier LIBRE — c'est le code du chantier qu'il mène, connu de lui seul.
  *
- * ⚠️ L'INTERDIT RESTE UNE QUESTION DE FAIT, JAMAIS DE POSITION — la leçon de la passe 2 sur
- * E-20260813-0002 : la première version écrivait `ouvrir \S+(?!.*--nature)`, donc après le
- * premier mot, et `ouvrir --nature client D-1` passait parce que `\S+` avalait le drapeau. On
- * demande donc « ce segment contient-il ceci ? », à quoi la position ne peut rien changer.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LE GARDE LIT LES ARGUMENTS COMME LA COMMANDE LES LIT — il ne les RECONNAÎT plus de loin.
+ *
+ * DEUX DÉFAUTS RÉELS ONT IMPOSÉ CE RENVERSEMENT, et le premier était BLOQUANT (relevé en
+ * revue de fond, vérifié contre un vrai veilleur) :
+ *
+ *   1. `ouvrir dirigeant --titre "…"` SANS `--au-dirigeant` était admis. La commande
+ *      réussissait, créait le canal, et inscrivait `autorises: []` — une liste VIDE, que
+ *      `autorise()` distingue d'une liste absente : elle refuse alors TOUT LE MONDE, le
+ *      dirigeant le premier. La ligne existait, comptait comme `interne` présente, le garde
+ *      relâchait le pane — et chaque message du dirigeant repartait « non autorisé », en
+ *      silence. C'est le mode de panne exact que `--au-dirigeant` existe pour fermer, laissé
+ *      ouvert par la porte d'à côté ;
+ *   2. l'exigence de `--titre` (et celle de `--nature client`) était écrite EN POSITION —
+ *      `.*--nature client.*--titre\s+".+"$` —, donc `ouvrir acme --titre "Acme" --nature
+ *      client` y échappait par le seul ordre des mots. Le corriger en cherchant les drapeaux
+ *      « n'importe où » aurait ouvert le trou inverse, celui de T-20260813-0078 :
+ *      `ouvrir acme --titre "--nature client"` — un TITRE qui vaut littéralement le drapeau —
+ *      aurait été pris pour une ligne cliente, alors qu'il ouvre un canal PUBLIC portant le
+ *      nom du client.
+ *
+ * Aucune expression ne ferme les deux à la fois, parce que la question n'est pas « ce texte
+ * contient-il ceci ? » mais « cette commande PORTE-T-ELLE ce drapeau ? ». On la pose donc à
+ * `optionDonnee` et `premierLibre` — LES FONCTIONS QUE LA COMMANDE APPELLE ELLE-MÊME. Elles
+ * parcourent les jetons et sautent la valeur d'une option à valeur : un `--nature` consommé
+ * comme titre n'est pas un drapeau, et un `--au-dirigeant` oublié n'en est pas un non plus.
+ * Le garde et la commande ne peuvent plus diverger : ils lisent avec le même outil.
  */
-function formesDeLigne(ligne, reserves = []) {
-  // UN CHANTIER FIXÉ SE TERMINE, et l'oubli de cette borne est un vrai trou : sans elle,
-  // `ouvrir dirigeants` (au pluriel, ou n'importe quel mot qui COMMENCE par le bon) tombait
-  // dans la forme de la ligne du dirigeant. Trouvé par l'essai qui le cherchait, pas supposé.
-  //
-  // ⚠️ ET UN CHANTIER LIBRE EXCLUT LES CHANTIERS RÉSERVÉS DU MÊME RÔLE. Sans ça,
-  // `ouvrir dirigeant --nature client --titre "X"` était admis par la forme de la ligne
-  // CLIENTE — dont le chantier est libre —, c'est-à-dire un canal PRIVÉ portant la
-  // désignation réservée au dirigeant, où l'appartenance vaut autorisation : n'importe quel
-  // invité y piloterait le représentant d'un client. La désignation `dirigeant` ne veut dire
-  // qu'une chose, ou `--a dirigeant` ne veut plus rien dire.
-  //
-  // L'exclusion est écrite en tête de motif — immédiatement après `ouvrir ` — et c'est le seul
-  // endroit où une contrainte de POSITION est légitime ici : elle porte sur le premier mot, qui
-  // EST une position. Les interdictions qui ne portent pas sur une position (`--nature`)
-  // restent, elles, des questions de fait, éprouvées à part.
-  const exclusion = reserves.length ? `(?!(?:${reserves.map(echapper).join('|')})(?:\\s|$))` : '';
-  const chantier = ligne.chantier ? `${echapper(ligne.chantier)}(?=\\s|$)` : `${exclusion}\\S+`;
-  const titre = ligne.titreRequis ? '.*--titre\\s+".+"' : '';
-  if (ligne.nature === 'client') {
-    return {
-      cle: ligne.cle,
-      nature: ligne.nature,
-      motifs: [
-        new RegExp(`^\\$LD ouvrir ${chantier}.*--nature client${titre}$`),
-        new RegExp(`^node \\S*ligne-directe\\.js ouvrir ${chantier}.*--nature client${titre}$`),
-      ],
-      interdits: [],
-    };
-  }
-  return {
-    cle: ligne.cle,
-    nature: ligne.nature,
-    motifs: [
-      new RegExp(`^\\$LD ouvrir ${chantier}${titre}.*$`),
-      new RegExp(`^node \\S*ligne-directe\\.js ouvrir ${chantier}${titre}.*$`),
-    ],
-    // Une ligne interne ne se nomme JAMAIS d'une nature : l'autoriser laisserait ouvrir un
-    // canal privé de client pour y déverser de l'interne, ou publier le nom d'un client.
-    interdits: [/--nature/],
-  };
+
+/**
+ * Les jetons d'un segment, comme un shell les passerait à la commande.
+ *
+ * Les guillemets doubles sont respectés puis retirés — c'est tout ce dont ces commandes ont
+ * besoin, et c'est précisément ce qui fait qu'un `--titre "--nature client"` rend UN jeton,
+ * pas deux. Découper sur les espaces sans les lire aurait recréé le trou qu'on ferme.
+ */
+export function jetonsDuSegment(segment) {
+  const jetons = String(segment || '').match(/"[^"]*"|\S+/g) || [];
+  return jetons.map((j) => (j.startsWith('"') && j.endsWith('"') ? j.slice(1, -1) : j));
 }
 
-/** Un nom de chantier fixé par la table devient un motif littéral — pas un motif deviné. */
-function echapper(texte) {
-  return String(texte).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Les deux façons d'invoquer la commande, et rien d'autre — la seule contrainte de position. */
+const APPELS = [/^\$LD$/, /^node$/];
+
+/**
+ * Les arguments de `ouvrir` portés par ce segment, ou `null` si ce segment n'ouvre rien.
+ *
+ * La position n'est éprouvée QUE là où elle est le fait : l'invocation, puis le geste. Tout le
+ * reste — le chantier, les drapeaux — est lu, jamais reconnu de loin.
+ */
+function argumentsDOuverture(segment) {
+  const jetons = jetonsDuSegment(segment);
+  if (!jetons.length || !APPELS.some((r) => r.test(jetons[0]))) return null;
+  // `node <chemin>/ligne-directe.js ouvrir …` porte le chemin en deuxième position ; `$LD` non.
+  const debut = jetons[0] === 'node' ? 2 : 1;
+  if (jetons[0] === 'node' && !/ligne-directe\.js$/.test(jetons[1] || '')) return null;
+  if (jetons[debut] !== 'ouvrir') return null;
+  return jetons.slice(debut + 1);
 }
 
-/** Les formes d'ouverture admises pour ce rôle — une par ligne qu'il doit avoir. */
+/** Les lignes d'un rôle, avec les chantiers que ce rôle réserve — jamais l'une sans l'autre. */
 export function formesDOuverture(role) {
   try {
     const lignes = lignesDuRole(role);
     // Les chantiers que ce rôle RÉSERVE — ceux qu'une ligne nomme explicitement. Une ligne au
-    // chantier libre ne doit jamais pouvoir les reprendre : deux lignes du même rôle
-    // répondraient au même nom, et `--a` (T-20260813-0078) refuserait alors les deux plutôt
-    // que d'en choisir une — un gestionnaire sans destinataire adressable.
+    // chantier libre ne doit jamais pouvoir les reprendre : sans ça,
+    // `ouvrir dirigeant --nature client --titre "X"` serait admis par la ligne CLIENTE — un
+    // canal PRIVÉ portant la désignation réservée au dirigeant, où l'appartenance vaut
+    // autorisation : n'importe quel invité y piloterait le représentant d'un client. La
+    // désignation `dirigeant` ne veut dire qu'une chose, ou `--a dirigeant` ne veut plus rien
+    // dire (T-20260813-0078).
     const reserves = lignes.map((l) => l.chantier).filter(Boolean);
-    return lignes.map((l) => formesDeLigne(l, l.chantier ? [] : reserves));
+    return lignes.map((l) => ({ ...l, reserves: l.chantier ? [] : reserves }));
   } catch {
     // Un rôle inconnu n'ouvre RIEN : il n'admet que le commun. Rendre une liste permissive
     // ici serait un garde qui s'élargit sur une faute de frappe.
@@ -134,23 +149,53 @@ export function formesDOuverture(role) {
   }
 }
 
-/** Les segments admis pour le rôle donné — un rôle inconnu n'admet que le commun, donc rien qui ouvre. */
-export function segmentsAutorises(role) {
-  return [...SEGMENTS_COMMUNS, ...formesDOuverture(role).flatMap((f) => f.motifs)];
+/** Ce segment ouvre-t-il CETTE ligne ? Toutes les conditions, jamais une sur deux. */
+function ouvreCetteLigne(args, ligne) {
+  const chantier = premierLibre(args);
+  if (!chantier) return false;
+  // Le chantier : celui que la ligne fixe, ou n'importe lequel SAUF ceux qu'une autre réserve.
+  if (ligne.chantier) {
+    if (chantier !== ligne.chantier) return false;
+  } else if (ligne.reserves.includes(chantier)) {
+    return false;
+  }
+
+  const nature = optionDonnee(args, '--nature');
+  if (ligne.nature === 'client') {
+    // Une ligne cliente EXIGE sa nature — sans elle, le canal naîtrait public, portant le nom
+    // du client. On compare la VALEUR entière : `--nature clientele` n'est pas `client`.
+    if (nature.valeur !== 'client') return false;
+  } else if (nature.presente) {
+    // Une ligne interne ne se nomme JAMAIS d'une nature : l'autoriser laisserait ouvrir un
+    // canal privé de client pour y déverser de l'interne.
+    return false;
+  }
+
+  if (ligne.titreRequis) {
+    const titre = optionDonnee(args, '--titre');
+    // Un titre PRÉSENT MAIS VIDE, ou dont la valeur est le drapeau suivant, n'est pas un titre.
+    if (!titre.presente || !String(titre.valeur ?? '').trim() || String(titre.valeur).startsWith('--')) return false;
+  }
+
+  // LE DIRIGEANT SE DEMANDE EXPLICITEMENT, et son oubli est un REFUS — c'est le bloquant de la
+  // revue de fond. Sans ce drapeau, la ligne s'ouvre avec une liste d'autorisés VIDE : elle
+  // refuse alors la parole à tout le monde, dirigeant compris, en ayant l'air ouverte.
+  if (ligne.auDirigeant && !optionDonnee(args, '--au-dirigeant').presente) return false;
+
+  return true;
 }
 
 /**
  * Le segment ouvre-t-il une ligne de ce rôle — et LAQUELLE ?
  *
- * Rend la clé de la ligne, ou `null`. La forme et son interdit sont éprouvés ENSEMBLE : une
- * forme reconnue dont l'interdit est porté n'ouvre rien du tout. Les tester séparément, comme
- * le faisait la version par rôle, revenait à demander « ce rôle a-t-il des interdits ? » —
- * question qui n'a plus de sens dès qu'un rôle porte deux lignes aux interdits opposés.
+ * Rend la clé de la ligne, ou `null`. Toutes les conditions d'une ligne sont éprouvées
+ * ENSEMBLE : une forme reconnue à qui il manque une condition n'ouvre rien du tout.
  */
 export function ligneOuverteParSegment(segment, role) {
-  for (const forme of formesDOuverture(role)) {
-    if (forme.interdits.some((r) => r.test(segment))) continue;
-    if (forme.motifs.some((r) => r.test(segment))) return forme.cle;
+  const args = argumentsDOuverture(segment);
+  if (!args) return null;
+  for (const ligne of formesDOuverture(role)) {
+    if (ouvreCetteLigne(args, ligne)) return ligne.cle;
   }
   return null;
 }
