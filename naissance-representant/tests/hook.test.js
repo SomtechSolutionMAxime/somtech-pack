@@ -35,15 +35,63 @@ test('hors du lieu d’un représentant : le garde ne s’applique pas, même sa
   }
 });
 
-test('dans le lieu, ligne ouverte pour ce pane : tout passe', async () => {
+test('dans le lieu, LES DEUX lignes ouvertes pour ce pane : tout passe', async () => {
   const d = lieuTemp();
   try {
-    const double = async () => ({ pane: 'pane-1', etat: { ouvertes: [{ pane: 'pane-1', chantier: 'acme' }] } });
+    const double = async () => ({
+      pane: 'pane-1',
+      etat: {
+        ouvertes: [
+          { pane: 'pane-1', chantier: 'acme', nature: 'client' },
+          { pane: 'pane-1', chantier: 'dirigeant', nature: 'interne' },
+        ],
+      },
+    });
     const decision = await traiterRequete(
       { cwd: d, tool_name: 'mcp__servicedesk__demands', tool_input: { action: 'list' } },
       double
     );
     assert.equal(decision.permissionDecision, 'allow');
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test('dans le lieu, la SEULE ligne du client : le pane reste ferme — il n’a aucun chemin vers le dirigeant', async () => {
+  // T-20260813-0076. C'est l'agent exact que ce lot existe pour ne plus laisser naître : il
+  // répond à son client, et son métier lui impose de remonter ce qui engage Somtech, toute
+  // situation problématique et son topo du matin — sans aucune ligne pour le faire. Le relâcher
+  // ici, c'est le laisser découvrir le manque au moment où il en a besoin, c'est-à-dire trop tard.
+  const d = lieuTemp();
+  try {
+    const double = async () => ({
+      pane: 'pane-1',
+      etat: { ouvertes: [{ pane: 'pane-1', chantier: 'acme', nature: 'client' }] },
+    });
+    const decision = await traiterRequete(
+      { cwd: d, tool_name: 'mcp__servicedesk__demands', tool_input: { action: 'list' } },
+      double
+    );
+    assert.equal(decision.permissionDecision, 'deny');
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test('dans le lieu, la SEULE ligne du dirigeant : le pane reste ferme aussi — dans les deux sens', async () => {
+  // La symétrie n'est pas décorative : un garde qui ne compte que « au moins une cliente »
+  // laisserait passer l'inverse, et l'inverse est un gestionnaire muet devant son client.
+  const d = lieuTemp();
+  try {
+    const double = async () => ({
+      pane: 'pane-1',
+      etat: { ouvertes: [{ pane: 'pane-1', chantier: 'dirigeant', nature: 'interne' }] },
+    });
+    const decision = await traiterRequete(
+      { cwd: d, tool_name: 'mcp__servicedesk__demands', tool_input: { action: 'list' } },
+      double
+    );
+    assert.equal(decision.permissionDecision, 'deny');
   } finally {
     rmSync(d, { recursive: true, force: true });
   }

@@ -43,8 +43,53 @@ const ROLES = {
      * ou `interne` (canal public, entre nous). Elle décide de la séquence d'ouverture que le
      * garde laisse passer : un orchestrateur qui ouvrirait une ligne `client` créerait un
      * canal où le client verrait le code d'un chantier.
+     *
+     * ⚠️ CONSERVÉE, MAIS CE N'EST PLUS ELLE QUI DÉCIDE : depuis T-20260813-0076 un rôle porte
+     * PLUSIEURS lignes (voir `lignes` juste dessous), et cette clé ne nomme que la première.
+     * Elle reste pour les appelants déjà écrits ; le garde, lui, lit `lignes`.
      */
     nature: 'client',
+
+    /**
+     * LES LIGNES QUE CE RÔLE DOIT AVOIR À SA NAISSANCE — toutes, pas la première.
+     *
+     * ═══════════════════════════════════════════════════════════════════════════════════
+     * POURQUOI LE GESTIONNAIRE EN A DEUX (T-20260813-0076)
+     *
+     * Quatre obligations livrées de son métier lui imposent de REMONTER : ce qui engage
+     * Somtech (prix, délai, faisabilité), toute situation problématique AVANT d'en parler au
+     * client, une question du client qu'il ne peut pas trancher, et son topo du matin. Il
+     * n'avait qu'une ligne — celle de son client — donc aucun chemin pour honorer aucune des
+     * quatre. Il était tenu de faire une chose qu'il n'avait pas le moyen de faire.
+     *
+     * Sa seconde ligne est INTERNE et PAR GESTIONNAIRE (arbitrage du dirigeant, 2026-08-13).
+     * Un canal unique « les gestionnaires et le dirigeant » a été écarté explicitement : il
+     * aurait fait se lire les représentants entre eux — donc les affaires d'un client
+     * visibles par le représentant d'un autre. La prolifération est le prix du cloisonnement.
+     *
+     * ELLE EST POSÉE À LA NAISSANCE, PAS AU PREMIER MESSAGE — le dirigeant INITIE (« je veux
+     * initier », 2026-08-13), et une ligne créée au premier `dire` de l'agent ne lui laisserait
+     * rien à quoi écrire tant que l'agent n'a pas parlé le premier. C'est le garde d'ouverture
+     * qui le rend mécanique : il tient le pane fermé tant que les DEUX lignes ne sont pas là.
+     *
+     * ─────────────────────────────────────────────────────────────────────────────────────
+     * `chantier` FIXE SUR LA LIGNE DU DIRIGEANT, ET CE N'EST PAS COSMÉTIQUE.
+     *
+     * `--a` (T-20260813-0078) résout une ligne par son CHANTIER ou par le nom de son CANAL —
+     * jamais par sa nature, et c'est délibéré de leur part. Le nom que la ligne porte à
+     * l'ouverture EST donc ce que l'agent tapera pour la viser. `dirigeant` est court, se tape
+     * sans réfléchir, et se lit comme le destinataire qu'il désigne : `--a dirigeant`.
+     *
+     * Le CANAL, lui, ne peut pas s'appeler `dirigeant` : il y en a un par gestionnaire, et
+     * Slack les suffixerait en `-2`, `-3` — le dirigeant ne saurait plus lequel lui parle. Il
+     * porte donc le client dans son nom (`ligne-dirigeant-<client>`, via `--titre`), ce qui le
+     * fait aussi se ranger avec ses semblables dans la barre latérale et se retrouver d'un
+     * `ligne-dirigeant` dans la recherche.
+     */
+    lignes: [
+      { cle: 'client', nature: 'client', titreRequis: true },
+      { cle: 'dirigeant', nature: 'interne', chantier: 'dirigeant', titreRequis: true },
+    ],
     /**
      * Les en-têtes RÉELS des deux gabarits, pour reconnaître un lieu par ce qu'il CONTIENT
      * et pas seulement par son nom. Une session ordinaire qui aurait, par coïncidence, un
@@ -66,6 +111,9 @@ const ROLES = {
     dossier: '.orchestrateur',
     gabarits: 'orchestrateur',
     nature: 'interne',
+    // UNE SEULE LIGNE, et son chantier est LIBRE : c'est le code du chantier qu'il mène, connu
+    // de lui seul au moment d'ouvrir. La fixer ici l'empêcherait d'ouvrir la sienne.
+    lignes: [{ cle: 'chantier', nature: 'interne', titreRequis: false }],
     entetes: {
       'CLAUDE.md': /^# Tu es l'orchestrateur de ce chantier/,
       'CONTEXTE.md': /^# Ce qui est propre à ce dépôt/,
@@ -91,4 +139,18 @@ export function role(nom) {
 /** Les noms de rôles connus — pour les commandes qui les énumèrent, jamais pour décider. */
 export function rolesConnus() {
   return Object.keys(ROLES);
+}
+
+/**
+ * Les lignes qu'un rôle doit avoir — jamais moins.
+ *
+ * Un rôle inscrit sans `lignes` retombe sur SA nature, en une seule ligne : c'est le
+ * comportement d'avant T-20260813-0076, et il vaut mieux qu'un rôle muet fasse comme hier que
+ * comme rien. Le repli est ici, en un seul endroit, plutôt que chez chaque lecteur — sans quoi
+ * un `?? []` oublié quelque part rendrait un rôle SANS aucune ligne requise, donc un agent né
+ * muet derrière un garde qui n'exige plus rien.
+ */
+export function lignesDuRole(nom) {
+  const r = role(nom);
+  return r.lignes?.length ? r.lignes : [{ cle: 'ligne', nature: r.nature, titreRequis: r.nature === 'client' }];
 }

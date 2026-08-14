@@ -23,7 +23,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { decider, segmentsHorsSequence } from '../src/garde.js';
+import { decider, segmentsHorsSequence, naturesOuvertesDuPane } from '../src/garde.js';
 import { roleDuLieu } from '../src/lieu.js';
 import { traiterRequete } from '../src/hook.js';
 
@@ -34,7 +34,7 @@ const OUVERTURE_INTERNE =
   'LD="$HOME/.somtech/ligne-directe/bin/ligne-directe.js"\n' +
   '$LD ouvrir D-20260813-0002 --sujet "le lieu de l\'orchestrateur" --inviter maxime.leboeuf@somtech.ca';
 
-const bash = (command) => ({ toolName: 'Bash', toolInput: { command }, ligneOuverte: false });
+const bash = (command) => ({ toolName: 'Bash', toolInput: { command }, naturesOuvertes: [] });
 
 // ═══════════════════════════════ chaque rôle ouvre SA ligne
 
@@ -58,6 +58,104 @@ test('un orchestrateur NE PEUT PAS ouvrir un canal de client — ce serait de l�
 test('un représentant NE PEUT PAS ouvrir une ligne interne — le nom de son client partirait en public', () => {
   const d = decider({ ...bash(OUVERTURE_INTERNE), role: 'representant' });
   assert.equal(d.permissionDecision, 'deny');
+});
+
+// ═══════════════════════════════ la SECONDE ligne du représentant (T-20260813-0076)
+
+const OUVERTURE_DIRIGEANT =
+  'LD="$HOME/.somtech/ligne-directe/bin/ligne-directe.js"\n' +
+  '$LD ouvrir dirigeant --titre "ligne dirigeant acme" --au-dirigeant';
+
+test('le représentant peut ouvrir sa SECONDE ligne, celle du dirigeant', () => {
+  // Sans ça, il n'a aucun chemin vers le dirigeant — alors que quatre obligations livrées de
+  // son métier lui imposent de remonter (ce qui engage Somtech, toute situation problématique,
+  // une question qu'il ne peut trancher, son topo du matin).
+  assert.deepEqual(segmentsHorsSequence(OUVERTURE_DIRIGEANT, 'representant'), []);
+});
+
+test('sa ligne interne est ANCRÉE sur « dirigeant » — pas sur n’importe quel mot', () => {
+  // ⚠️ LE PIÈGE DE CE LOT. Admettre « une ligne interne » pour le représentant sans ancrer son
+  // chantier aurait fait passer `ouvrir acme --titre "Acme"` : un canal PUBLIC portant le nom
+  // du client, c'est-à-dire le refus que ce fichier tient depuis E-20260813-0002, contourné par
+  // la porte qu'on venait d'ouvrir. La seconde ligne d'un représentant va au dirigeant, ou nulle part.
+  for (const commande of [
+    '$LD ouvrir acme --titre "Acme"',
+    '$LD ouvrir acme --titre "Acme" --au-dirigeant',
+    'node /x/ligne-directe.js ouvrir D-20260805-0005 --sujet "x"',
+    '$LD ouvrir dirigeants --titre "X"', // un mot qui COMMENCE par le bon, et n'est pas le bon
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer pour un représentant`
+    );
+  }
+});
+
+test('sur sa ligne du dirigeant, `--nature` reste refusée À TOUTE POSITION', () => {
+  // La ligne du dirigeant est INTERNE. Y autoriser `--nature client` ferait créer un canal
+  // PRIVÉ nommé « dirigeant » où l'appartenance vaudrait autorisation — n'importe quel invité
+  // y piloterait l'agent d'un client. L'interdit descend au niveau de la LIGNE, pas du rôle :
+  // le représentant a par ailleurs le droit d'écrire `--nature client`, sur son autre ligne.
+  for (const commande of [
+    '$LD ouvrir dirigeant --nature client --titre "X"',
+    '$LD ouvrir dirigeant --titre "X" --nature client',
+    '$LD ouvrir --nature client dirigeant --titre "X"',
+    '$LD ouvrir dirigeant --nature interne --titre "X"',
+  ]) {
+    assert.notDeepEqual(
+      segmentsHorsSequence(commande, 'representant'),
+      [],
+      `« ${commande} » a été laissée passer sur la ligne du dirigeant`
+    );
+  }
+});
+
+test('LE PANE RESTE FERMÉ TANT QUE LES DEUX LIGNES NE SONT PAS LÀ', () => {
+  // C'est ce garde, et lui seul, qui POSE la seconde ligne à la naissance. Le dirigeant initie
+  // sur cette ligne : elle doit donc exister avant que l'agent ait quoi que ce soit à dire.
+  // Une consigne écrite dans un métier se relâche — mesuré sur ce dépôt même (« l'étape 2 garde
+  // son rang mais cesse d'obliger ») ; un refus mécanique, non.
+  const quelconque = { toolName: 'mcp__servicedesk__demands', toolInput: { action: 'list' } };
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['client'], role: 'representant' }).permissionDecision,
+    'deny',
+    'la seule ligne du client ne suffit pas — il n’aurait aucun chemin vers le dirigeant'
+  );
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['interne'], role: 'representant' }).permissionDecision,
+    'deny',
+    'et l’inverse non plus — il serait muet devant son client'
+  );
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['client', 'interne'], role: 'representant' }).permissionDecision,
+    'allow',
+    'les deux : le pane est relâché'
+  );
+  // L'orchestrateur, lui, n'en a qu'une — et ce lot ne doit rien lui ajouter.
+  assert.equal(
+    decider({ ...quelconque, naturesOuvertes: ['interne'], role: 'orchestrateur' }).permissionDecision,
+    'allow',
+    'un orchestrateur avec sa ligne travaille — rien de ce qui tourne ne casse'
+  );
+});
+
+test('UNE LIGNE SANS NATURE VAUT INTERNE — un orchestrateur déjà ouvert ne se retrouve pas enfermé', () => {
+  // Le champ `nature` n'existait pas avant les lignes clientes : une ligne inscrite par une
+  // version antérieure n'en porte pas. La traiter comme un troisième cas aurait tenu fermé,
+  // pour toujours, le pane d'un orchestrateur dont la ligne fonctionne — le pire refus
+  // possible, puisqu'il porte sur ce qui marche. C'est le même repli qu'au registre (`natureDe`).
+  const etat = { ouvertes: [{ pane: 'pane-1', chantier: 'D-1' }] }; // aucune `nature`
+  assert.deepEqual(naturesOuvertesDuPane(etat, 'pane-1'), ['interne']);
+  assert.equal(
+    decider({
+      toolName: 'Bash',
+      toolInput: { command: 'git status' },
+      naturesOuvertes: naturesOuvertesDuPane(etat, 'pane-1'),
+      role: 'orchestrateur',
+    }).permissionDecision,
+    'allow'
+  );
 });
 
 test('la nature est refusée À TOUTE POSITION pour un orchestrateur', () => {

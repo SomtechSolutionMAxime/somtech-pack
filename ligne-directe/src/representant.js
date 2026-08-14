@@ -11,8 +11,9 @@
 // de le reproduire) et la commande les appelle. Les déplacer sans les réexporter aurait fait
 // exactement ce que ce lot cherche à éviter : casser un mécanisme éprouvé en le rangeant.
 
-import { trouverCanal, estMembreDuCanal } from './slack.js';
+import { trouverCanal, estMembreDuCanal, trouverMembre } from './slack.js';
 import { lireJeton, SERVICE_ROBOT, JetonIllisible, JetonVide } from './trousseau.js';
+import { verifierLigneOuvrable } from './orchestrateur.js';
 import {
   GABARITS,
   FICHIERS_ENV_CONNUS,
@@ -143,6 +144,95 @@ export async function verifierCanalOuvrable({
 }
 
 /**
+ * LES DEUX LIGNES D'UN GESTIONNAIRE PEUVENT-ELLES EXISTER ? (T-20260813-0076)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI LA VÉRIFICATION S'ÉLARGIT, ET POURQUOI ELLE NE SE DUPLIQUE PAS
+ *
+ * Un gestionnaire naît désormais avec DEUX lignes : celle de son client (canal privé qui
+ * existe déjà) et celle du dirigeant (canal interne, qu'il crée à sa naissance). Trois
+ * choses doivent donc être vraies avant qu'un seul fichier soit posé, et chacune se lève par
+ * un geste HUMAIN DIFFÉRENT — c'est ce qui interdit de les confondre en un seul refus :
+ *
+ *   1. LE POSTE peut ouvrir une ligne — les deux jetons. Le geste qui le lève est sur le
+ *      trousseau. C'est EXACTEMENT la question de l'orchestrateur, et on appelle donc SA
+ *      fonction : un second contrôle écrit ici aurait divergé du sien au premier correctif —
+ *      le dépôt a déjà payé ça (« deux sources qui disent la même chose divergent »).
+ *   2. LE CANAL DU CLIENT est joignable — le geste est une invitation dans Slack.
+ *   3. LE DIRIGEANT existe dans l'espace — le geste est de corriger le courriel.
+ *
+ * L'ORDRE N'EST PAS LIBRE : le poste d'abord, parce qu'un trousseau muet rend les deux
+ * questions suivantes inconnaissables, et qu'un refus qui parle du canal alors que le
+ * trousseau est verrouillé envoie chercher une invitation Slack pour une panne locale — le
+ * défaut mesuré de T-20260813-0054, dans l'autre sens.
+ *
+ * ⚠️ ON RÉSOUT LE DIRIGEANT ICI PLUTÔT QUE DANS LA COMMANDE, et ce n'est pas un rangement :
+ * `preparerLieu` n'appelle cette vérification qu'APRÈS avoir refusé sur ce qui ne dépend que
+ * du disque (gabarits absents). Un dépôt qui n'a pas reçu le pack ne paie donc AUCUN
+ * aller-retour réseau — ce qui serait tombé si la commande avait résolu le courriel avant.
+ */
+export async function verifierLignesDuRepresentant({
+  canal,
+  courrielDirigeant,
+  lireJetonRobot = () => lireJeton(SERVICE_ROBOT),
+  verifierPoste = verifierLigneOuvrable,
+  verifier = verifierCanalJoignable,
+  chercherMembre = trouverMembre,
+}) {
+  // 1. LE POSTE. Sa ligne vers le dirigeant, il la CRÉE — il lui faut donc de quoi parler ET
+  // de quoi entendre, comme un orchestrateur. Le contrôle d'avant ce lot ne lisait que le
+  // jeton du robot : un gestionnaire pouvait naître capable de parler à son client et sourd à
+  // son dirigeant, ce qui est précisément la panne que ce lot existe pour fermer.
+  const poste = await verifierPoste();
+  if (!poste.joignable) return { ...poste, portee: 'poste' };
+
+  const canalOuvrable = await verifierCanalOuvrable({ canal, lireJetonRobot, verifier });
+  if (!canalOuvrable.joignable) return canalOuvrable;
+
+  // 3. LE DIRIGEANT. Un courriel qui ne désigne personne ne se rattrape pas plus tard : la
+  // ligne s'ouvrirait sans aucun autorisé, donc refuserait la parole à tout le monde — au
+  // dirigeant le premier. Et elle en aurait l'air ouverte.
+  let jetonRobot;
+  let id;
+  try {
+    jetonRobot = await lireJetonRobot();
+    id = await chercherMembre(jetonRobot, courrielDirigeant);
+  } catch (err) {
+    // MÊME RENVERSEMENT QUE PARTOUT AILLEURS : on ne conclut rien de ce qu'on n'a pas su
+    // mesurer. Une interrogation qui échoue ne dit PAS que le dirigeant est absent — et le
+    // dire enverrait corriger une adresse parfaitement juste.
+    return {
+      joignable: false,
+      portee: 'poste',
+      motif: 'dirigeant_illisible',
+      canal,
+      message:
+        `L'espace n'a pas pu être interrogé au sujet de « ${courrielDirigeant} » — on ne sait donc ` +
+        `pas si ce dirigeant existe.\n` +
+        `  ⚠️ N'en conclus RIEN : ne corrige pas l'adresse sur la foi de ce refus.\n` +
+        `  Cause brute, telle que Slack ou le réseau l'a rendue : ${String(err?.message ?? err).slice(0, 200)}\n` +
+        `  Rien n'a été créé : le lieu du représentant n'est posé qu'une fois les deux lignes établies.`,
+    };
+  }
+  if (!id) {
+    return {
+      joignable: false,
+      portee: 'dirigeant',
+      motif: 'dirigeant_inconnu',
+      canal,
+      message:
+        `aucun membre de cet espace ne répond au courriel « ${courrielDirigeant} » — le lieu n'est pas posé.\n` +
+        `  ⚠️ Ce refus ne parle NI du canal « ${canal} », NI du trousseau : les deux ont été vérifiés ` +
+        `et vont bien. N'y touche pas.\n` +
+        `  Sans lui, la ligne du gestionnaire vers le dirigeant s'ouvrirait sans aucun autorisé : ` +
+        `elle refuserait sa parole, à lui, en silence. Corrige le courriel, puis relance.`,
+    };
+  }
+
+  return { ...canalOuvrable, dirigeant: { id, courriel: courrielDirigeant } };
+}
+
+/**
  * Le message de refus D'UN CANAL, écrit pour être lu et suivi — jamais pour être analysé par
  * un test.
  *
@@ -191,9 +281,15 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
     verifierLigne: async () => {
       const j = await verifierJoignabilite();
       if (j.joignable) return j;
-      // UN REFUS DU POSTE PORTE DÉJÀ SON MESSAGE, et le réécrire ici l'aurait traduit en
-      // conseil de canal — « fais inviter le robot » — pour une panne de trousseau.
-      if (j.portee === 'poste') return j;
+      // UN REFUS QUI PORTE DÉJÀ SON MESSAGE N'EST PAS RÉÉCRIT, et la liste ne se devine pas :
+      // le réécrire l'aurait traduit en conseil de canal — « fais inviter le robot » — pour une
+      // panne de trousseau, ou pour un courriel de dirigeant mal orthographié.
+      //
+      // ⚠️ ON TESTE CE QUI EST DU CANAL, PAS CE QUI NE L'EST PAS. La version d'avant listait
+      // les portées à laisser passer (`=== 'poste'`) : chaque portée AJOUTÉE ensuite retombait
+      // par défaut du côté qui réécrit — c'est « une porte sur deux », par la porte qu'on
+      // n'avait pas encore ouverte. `dirigeant` est arrivé et serait tombé dedans.
+      if (j.portee && j.portee !== 'canal') return j;
       return { ...j, portee: 'canal', canal, message: messageDeRefus({ ...j, canal }) };
     },
   });

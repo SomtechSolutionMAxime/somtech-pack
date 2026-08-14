@@ -40,6 +40,8 @@ import {
   libelleDeLigne,
   canalCommun,
   estCanalCommun,
+  dirigeantDuPoste,
+  designerDirigeant,
   NATURES,
   NATURE_PAR_DEFAUT,
 } from './registre.js';
@@ -259,6 +261,8 @@ export class Veilleur {
         return this.renommer(requete);
       case 'commun':
         return this.designerCommun(requete);
+      case 'dirigeant':
+        return this.designerDirigeantDuPoste(requete);
       case 'etat':
         return this.etat();
       case 'ceder':
@@ -290,9 +294,46 @@ export class Veilleur {
 
   // ————————————————————————————————————————————————————————————————— les quatre gestes
 
-  async ouvrir({ chantier, pane, worktree, sujet, titre, invites = [], nature, herdr_socket: herdrSocket = null }) {
+  async ouvrir({
+    chantier,
+    pane,
+    worktree,
+    sujet,
+    titre,
+    invites = [],
+    nature,
+    au_dirigeant: auDirigeant = false,
+    herdr_socket: herdrSocket = null,
+  }) {
     if (!chantier) return { ok: false, erreur: 'chantier requis' };
     if (!pane) return { ok: false, erreur: 'pane requis' };
+
+    // ═══ « AVEC LE DIRIGEANT » — l'agent le demande, il n'apprend jamais son adresse.
+    //
+    // Une ligne INTERNE autorise par LISTE : sans invité, `autorise()` refuse tout le monde, y
+    // compris celui à qui la ligne est destinée. Elle existerait, elle aurait l'air ouverte, et
+    // chaque message du dirigeant repartirait « tu n'es pas autorisé » — la panne la plus
+    // silencieuse du lot, puisque c'est justement la ligne dont personne ne vérifie qu'elle
+    // marche tant qu'on n'en a pas besoin.
+    //
+    // ON REFUSE PLUTÔT QUE D'OUVRIR SANS PERSONNE. Le canal, lui, serait déjà créé : Slack ne
+    // le reprend pas, et un canal muet resterait dans la barre latérale du dirigeant comme une
+    // ligne qui existe. Le refus tombe donc AVANT toute création — ici, avant même de lire un
+    // titre.
+    let invitesEffectifs = invites;
+    if (auDirigeant) {
+      const d = dirigeantDuPoste(this.registre);
+      if (!d?.id) {
+        return {
+          ok: false,
+          erreur:
+            'aucun dirigeant n’est désigné sur ce poste — la ligne n’est pas ouverte. Une ligne ' +
+            'interne autorise par liste d’invités : ouverte sans lui, elle refuserait sa parole. ' +
+            'Désigne-le une fois (« ligne-directe dirigeant <courriel> »), puis relance.',
+        };
+      }
+      invitesEffectifs = [...new Set([...invites, d.id])];
+    }
 
     // Une nature mal orthographiée NE SE RABAT PAS sur le défaut. `--nature cliet` créerait
     // un canal PUBLIC pour un client — le portefeuille client exposé par une faute de
@@ -320,7 +361,7 @@ export class Veilleur {
       // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
-      if (invites.length) deja.autorises = [...new Set([...(deja.autorises || []), ...invites])];
+      if (invitesEffectifs.length) deja.autorises = [...new Set([...(deja.autorises || []), ...invitesEffectifs])];
       sauverRegistre(this.registre);
       return {
         ok: true,
@@ -420,7 +461,7 @@ export class Veilleur {
     const sujetComplet =
       natureVoulue === 'client' ? String(sujet ?? '').trim() : [chantier, sujet].filter(Boolean).join(' — ');
     if (sujetComplet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetComplet);
-    if (invites.length) await this.slack.inviter(this.jetons.robot, canal.id, invites);
+    if (invitesEffectifs.length) await this.slack.inviter(this.jetons.robot, canal.id, invitesEffectifs);
 
     const ligne = inscrireLigne(this.registre, {
       chantier,
@@ -443,7 +484,7 @@ export class Veilleur {
       // Sur une ligne CLIENT, elle démarre vide et c'est normal : les gens du client sont
       // invités À LA MAIN dans Slack, après l'ouverture. C'est leur appartenance au canal
       // privé qui les autorise, et cette liste ne sert plus qu'à s'en souvenir.
-      autorises: invites.slice(),
+      autorises: invitesEffectifs.slice(),
       visage,
       ouverte_le: maintenant(),
       close_le: null,
@@ -687,6 +728,36 @@ export class Veilleur {
     return { ok: true, canal: ligne.canal_nom, archive };
   }
 
+  /**
+   * Désigne le dirigeant du poste — une fois, pour tous les agents qui y naîtront.
+   *
+   * ON REÇOIT L'IDENTIFIANT DÉJÀ RÉSOLU, et c'est délibéré : la résolution d'un courriel en
+   * membre Slack est un appel réseau, et la faire ici l'aurait mise sur le chemin de chaque
+   * pose. La commande la fait une fois, en amont, exactement comme elle le fait déjà pour
+   * `--inviter` et pour les autorisés du canal commun — et son échec devient alors un refus
+   * de la pose, avant que rien n'ait été créé, plutôt qu'un veilleur qui rend `ok:false`
+   * après coup.
+   *
+   * RIEN N'EST DEVINÉ D'UN COURRIEL SEUL : sans identifiant, la désignation est refusée. Une
+   * désignation à moitié faite serait pire que pas de désignation du tout — elle passerait le
+   * contrôle de `--au-dirigeant` et ouvrirait une ligne dont la liste d'autorisés vaut
+   * `[undefined]`, c'est-à-dire une ligne où le dirigeant lui-même n'a pas la parole.
+   */
+  async designerDirigeantDuPoste({ id, courriel }) {
+    if (!id) {
+      return {
+        ok: false,
+        erreur:
+          'aucun identifiant Slack pour ce dirigeant — rien n’est désigné. C’est l’identifiant, ' +
+          'pas le courriel, qui autorise une parole : sans lui la ligne s’ouvrirait muette.',
+      };
+    }
+    const d = designerDirigeant(this.registre, { id, courriel });
+    sauverRegistre(this.registre);
+    journaliser(`dirigeant du poste désigné — ${courriel || '—'} (${id})`);
+    return { ok: true, dirigeant: { id: d.id, courriel: d.courriel } };
+  }
+
   etat() {
     const ouvertes = lignesOuvertes(this.registre).map((l) => ({
       chantier: l.chantier,
@@ -712,6 +783,11 @@ export class Veilleur {
       connecte: this.ws?.readyState === CONNEXION_OUVERTE,
       ouvertes,
       commun: commun ? { canal: commun.canal_nom, autorises: (commun.autorises || []).length } : null,
+      // LE DIRIGEANT EST RENDU COMME UNE PRÉSENCE, PAS COMME UNE ADRESSE. Ce que l'appelant a
+      // besoin de savoir, c'est « le poste sait à qui ouvrir la ligne » — jamais qui c'est.
+      // Rendre le courriel ici l'aurait fait ressortir dans chaque `etat` d'un dépôt client,
+      // c'est-à-dire à l'endroit précis d'où ce lot cherche à le tenir.
+      dirigeant: dirigeantDuPoste(this.registre) ? { designe: true } : null,
     };
   }
 

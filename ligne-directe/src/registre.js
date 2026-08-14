@@ -88,7 +88,7 @@ export function libelleDeLigne(ligne) {
  * aucun chantier, aucun worktree : rien par quoi un agent puisse le désigner.
  */
 function vide() {
-  return { version: VERSION, lignes: [], commun: null };
+  return { version: VERSION, lignes: [], commun: null, dirigeant: null };
 }
 
 export function chargerRegistre(chemin = CHEMIN_REGISTRE) {
@@ -98,7 +98,16 @@ export function chargerRegistre(chemin = CHEMIN_REGISTRE) {
     if (!brut || !Array.isArray(brut.lignes)) return vide();
     // `commun` absent d'un registre écrit par une version antérieure vaut « aucun canal
     // commun désigné » — pas d'objet vide, qui aurait l'air d'une désignation faite.
-    return { version: brut.version || VERSION, lignes: brut.lignes, commun: brut.commun || null };
+    return {
+      version: brut.version || VERSION,
+      lignes: brut.lignes,
+      commun: brut.commun || null,
+      // Même règle que `commun` : absent d'un registre écrit par une version antérieure vaut
+      // « aucun dirigeant désigné sur ce poste » — jamais un objet vide, qui aurait l'air
+      // d'une désignation faite et ferait ouvrir une ligne interne SANS AUCUN autorisé,
+      // c'est-à-dire un canal où plus personne n'a le droit d'écrire.
+      dirigeant: brut.dirigeant || null,
+    };
   } catch {
     // Un registre illisible ne doit pas empêcher le veilleur de démarrer : il repart
     // à vide plutôt que de refuser de vivre. Les canaux orphelins seront signalés.
@@ -185,6 +194,45 @@ export function canalCommun(registre) {
 export function estCanalCommun(registre, canalId) {
   const commun = canalCommun(registre);
   return Boolean(commun && canalId && commun.canal_id === canalId);
+}
+
+// ————————————————————————————————————————————————————————————————— le dirigeant du poste
+
+/**
+ * QUI EST LE DIRIGEANT, SUR CE POSTE — désigné une fois, jamais recopié dans un dépôt.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI IL VIT ICI ET PAS DANS LE LIEU DE L'AGENT (T-20260813-0076)
+ *
+ * La ligne du gestionnaire vers le dirigeant est INTERNE : canal public, autorisation par
+ * liste d'invités. Sans invité, `autorise()` refuse tout le monde — la ligne existerait et
+ * personne ne pourrait y écrire, le dirigeant le premier. Il faut donc un courriel au moment
+ * d'ouvrir.
+ *
+ * Le mettre dans le lieu du gestionnaire aurait fait partir le courriel du dirigeant dans le
+ * dépôt VERSIONNÉ d'un client — un renseignement personnel de chez nous, chez eux, pour
+ * toujours et dans chaque dépôt. Le poste le sait déjà et n'a aucune raison de le dire deux
+ * fois : l'agent demande « le dirigeant » (`--au-dirigeant`) et n'apprend jamais son adresse.
+ *
+ * Ce n'est PAS une ligne : aucun pane, aucun chantier, aucun canal. Rien ici n'entre dans
+ * `lignes[]`, donc rien n'en fait un candidat à la sélection du chemin sortant — la même
+ * raison exactement qui tient le canal commun à l'écart.
+ */
+export function dirigeantDuPoste(registre) {
+  return registre?.dirigeant || null;
+}
+
+/**
+ * Désigne le dirigeant du poste. Idempotent : c'est la même personne pour tous les agents.
+ *
+ * On exige l'IDENTIFIANT Slack, pas le courriel : c'est lui qui sert à autoriser une parole
+ * (`autorise()` compare des identifiants), et le résoudre au moment d'ouvrir une ligne aurait
+ * remis un appel réseau — donc un échec possible — sur le chemin de la naissance. Le courriel
+ * n'est conservé que pour être RELU par un humain qui se demanderait qui est désigné.
+ */
+export function designerDirigeant(registre, { id, courriel }) {
+  registre.dirigeant = { id, courriel: courriel || null };
+  return registre.dirigeant;
 }
 
 // ————————————————————————————————————————————————————— la ligne que l'agent DÉSIGNE

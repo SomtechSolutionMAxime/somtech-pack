@@ -597,8 +597,9 @@ test('la commande ne lit plus le jeton DANS L’ARGUMENT de la vérification', (
   );
   assert.match(
     branche,
-    /verifierCanalOuvrable\s*\(/,
-    'la commande doit passer par la vérification qui ENTOURE la lecture du jeton'
+    /verifierLignesDuRepresentant\s*\(/,
+    'la commande doit passer par la vérification qui ENTOURE la lecture du jeton — et qui, depuis ' +
+      'T-20260813-0076, éprouve les DEUX lignes du gestionnaire, pas seulement le canal du client'
   );
 });
 

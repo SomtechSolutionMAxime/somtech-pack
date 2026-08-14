@@ -83,6 +83,45 @@ ligne-directe fermer --bilan "…" --a dirigeant
 
 Une fois la ligne choisie, la commande la désigne au veilleur **par son canal** — la même clé unique que le chemin entrant, jamais une déduction refaite en aval.
 
+## Les deux lignes d'un gestionnaire client
+
+Un gestionnaire naît avec **deux lignes**, et ce n'est pas une possibilité — c'est une obligation de son métier. Quatre choses doivent **remonter** au dirigeant : ce qui engage Somtech (prix, délai, faisabilité), toute situation problématique **avant** d'en parler au client, une question du client qu'il ne peut pas trancher, et son topo du matin. Sans seconde ligne, il était tenu de faire une chose qu'il n'avait pas le moyen de faire.
+
+**Un canal par gestionnaire** (arbitrage du dirigeant, 2026-08-13). Un canal unique « les gestionnaires et le dirigeant » a été écarté : les représentants s'y seraient lus entre eux, donc les affaires d'un client visibles par le représentant d'un autre. La prolifération est le prix du cloisonnement.
+
+**Un jour, une fois par poste** — l'opérateur désigne le dirigeant :
+
+```bash
+ligne-directe dirigeant maxime.leboeuf@somtech.ca
+```
+
+Son adresse **ne quitte jamais le poste**. Les agents demandent « le dirigeant », jamais son courriel : la mettre dans le lieu du gestionnaire l'aurait fait partir dans le dépôt **versionné** d'un client, et dans chaque dépôt client, pour toujours.
+
+**À la pose du lieu**, `--dirigeant` est exigé — la pose refuse et ne crée rien si ce courriel ne désigne personne dans l'espace :
+
+```bash
+ligne-directe representant acme --canal espace-acme --dirigeant maxime.leboeuf@somtech.ca
+```
+
+**À la naissance**, l'agent ouvre ses deux lignes, et le garde d'ouverture tient son pane fermé tant que les **deux** ne sont pas là :
+
+```bash
+$LD ouvrir acme      --nature client --titre "Espace Acme"
+$LD ouvrir dirigeant --titre "ligne dirigeant acme" --au-dirigeant
+```
+
+| | ligne du client | ligne du dirigeant |
+|---|---|---|
+| **chantier** (ce que `--a` vise) | le client | `dirigeant` |
+| **canal** | celui du client, il préexiste | `#ligne-dirigeant-<client>`, créé à la naissance |
+| **nature** | `client` — privé, l'appartenance autorise | `interne` — public, la **liste** autorise |
+| **qui y parle** | les gens du client | le dirigeant, et lui seul |
+
+- **`--au-dirigeant` refuse quand aucun dirigeant n'est désigné**, et refuse **avant** de créer le canal. Une ligne interne sans invité refuserait la parole à tout le monde — au dirigeant le premier — en ayant l'air ouverte, et le canal muet resterait dans sa barre latérale.
+- **Le nom du canal porte le client** (`ligne-dirigeant-acme`) : il y en a un par gestionnaire, et un nom commun les ferait suffixer en `-2`, `-3` — le dirigeant ne saurait plus lequel lui parle. Le préfixe les range ensemble dans la barre latérale et les fait retrouver d'un `ligne-dirigeant` dans la recherche.
+- **Le chantier, lui, est court** (`dirigeant`) : c'est ce que l'agent tape, `--a dirigeant`.
+- **Un représentant ne peut ouvrir une ligne interne QUE sur le chantier `dirigeant`.** `ouvrir acme --titre "Acme"` reste refusé : ce serait le nom de son client dans un canal public.
+
 ## Un canal privé dont la ligne a disparu du registre
 
 Le registre repart à vide quand il est illisible. Le robot, lui, reste membre du canal privé de son client — qui continue d'écrire dans le vide.

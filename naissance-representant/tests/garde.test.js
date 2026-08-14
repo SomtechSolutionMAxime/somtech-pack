@@ -14,62 +14,62 @@ import { decider, segmentsHorsSequence, ligneEstOuverte } from '../src/garde.js'
 // ═══════════════════════════════ la ligne est déjà ouverte : rien n'est gardé
 
 test('ligne ouverte : un appel MCP au registre passe', () => {
-  const d = decider({ toolName: 'mcp__servicedesk__demands', toolInput: {}, ligneOuverte: true });
+  const d = decider({ toolName: 'mcp__servicedesk__demands', toolInput: {}, naturesOuvertes: ['client', 'interne'] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
 test('ligne ouverte : n’importe quelle commande Bash passe (ce garde ne gouverne que l’ordre)', () => {
-  const d = decider({ toolName: 'Bash', toolInput: { command: 'git status' }, ligneOuverte: true });
+  const d = decider({ toolName: 'Bash', toolInput: { command: 'git status' }, naturesOuvertes: ['client', 'interne'] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
 // ═══════════════════════════════ ROUGE — le défaut exact de T-20260806-0192
 
 test('ROUGE T-20260806-0192 : relever (demands list) avant l’ouverture est refusé', () => {
-  const d = decider({ toolName: 'mcp__servicedesk__demands', toolInput: { action: 'list' }, ligneOuverte: false });
+  const d = decider({ toolName: 'mcp__servicedesk__demands', toolInput: { action: 'list' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
   assert.match(d.permissionDecisionReason, /T-20260806-0192/);
 });
 
 test('ROUGE : parler (dire) avant l’ouverture est refusé', () => {
-  const d = decider({ toolName: 'Bash', toolInput: { command: '$LD dire "bonjour"' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: '$LD dire "bonjour"' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
 });
 
 test('ROUGE : un outil MCP hors registre (somcraft) est refusé tant que la ligne n’est pas ouverte', () => {
-  const d = decider({ toolName: 'mcp__somcraft__list_workspaces', toolInput: {}, ligneOuverte: false });
+  const d = decider({ toolName: 'mcp__somcraft__list_workspaces', toolInput: {}, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
 });
 
 test('ROUGE : écrire un fichier avant l’ouverture est refusé', () => {
-  const d = decider({ toolName: 'Write', toolInput: { file_path: 'x' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Write', toolInput: { file_path: 'x' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
 });
 
 test('ROUGE : une commande git avant l’ouverture est refusée', () => {
-  const d = decider({ toolName: 'Bash', toolInput: { command: 'git status' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: 'git status' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
 });
 
 // ═══════════════════════════════ VERT — la séquence d'ouverture elle-même
 
 test('VERT : lire un fichier est permis avant l’ouverture (étape 1 — lire CONTEXTE.md)', () => {
-  const d = decider({ toolName: 'Read', toolInput: { file_path: 'CONTEXTE.md' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Read', toolInput: { file_path: 'CONTEXTE.md' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
 test('VERT : herdr pane current est permis', () => {
-  const d = decider({ toolName: 'Bash', toolInput: { command: 'herdr pane current' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: 'herdr pane current' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
 test('VERT : herdr agent rename est permis', () => {
-  const d = decider({ toolName: 'Bash', toolInput: { command: 'herdr agent rename abc123 acme' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: 'herdr agent rename abc123 acme' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
 test('VERT : $LD etat est permis', () => {
-  const d = decider({ toolName: 'Bash', toolInput: { command: '$LD etat' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: '$LD etat' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
@@ -77,7 +77,7 @@ test('VERT : $LD ouvrir bien formé (--nature client et --titre) est permis', ()
   const d = decider({
     toolName: 'Bash',
     toolInput: { command: '$LD ouvrir acme --nature client --titre "Acme Corp"' },
-    ligneOuverte: false,
+    naturesOuvertes: [],
   });
   assert.equal(d.permissionDecision, 'allow');
 });
@@ -92,7 +92,7 @@ test('VERT : la séquence complète, en un seul appel Bash multi-lignes, est per
     '$LD etat',
     '$LD ouvrir acme --nature client --titre "Acme Corp"',
   ].join('\n');
-  const d = decider({ toolName: 'Bash', toolInput: { command: commande }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: commande }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'allow');
 });
 
@@ -100,7 +100,7 @@ test('VERT : la séquence complète, en un seul appel Bash multi-lignes, est per
 
 test('ADVERSARIAL : chaîner une commande interdite APRÈS un segment autorisé est refusé', () => {
   // Le piège classique d'une garde qui ne regarde que le DÉBUT de la commande.
-  const d = decider({ toolName: 'Bash', toolInput: { command: 'herdr pane current && git push' }, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: { command: 'herdr pane current && git push' }, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
 });
 
@@ -108,7 +108,7 @@ test('ADVERSARIAL : ouvrir sans --nature client est refusé (canal public pour u
   const d = decider({
     toolName: 'Bash',
     toolInput: { command: '$LD ouvrir acme --titre "Acme Corp"' },
-    ligneOuverte: false,
+    naturesOuvertes: [],
   });
   assert.equal(d.permissionDecision, 'deny');
 });
@@ -117,13 +117,13 @@ test('ADVERSARIAL : ouvrir sans --titre est refusé (le client verrait un code d
   const d = decider({
     toolName: 'Bash',
     toolInput: { command: '$LD ouvrir acme --nature client' },
-    ligneOuverte: false,
+    naturesOuvertes: [],
   });
   assert.equal(d.permissionDecision, 'deny');
 });
 
 test('ADVERSARIAL : une commande vide/absente ne fait pas passer autre chose par défaut', () => {
-  const d = decider({ toolName: 'Bash', toolInput: {}, ligneOuverte: false });
+  const d = decider({ toolName: 'Bash', toolInput: {}, naturesOuvertes: [] });
   assert.equal(d.permissionDecision, 'deny');
 });
 
