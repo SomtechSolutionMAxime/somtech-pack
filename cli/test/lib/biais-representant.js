@@ -58,6 +58,14 @@
 // gabarit dit ce qu'il doit dire et le dit de façon contraignante ; ils ne prouvent pas
 // qu'un agent obéit. Le seul étage qui ne dépende d'aucune vigilance est le fichier de
 // droits — et il ne couvre que ce qui s'y nomme.
+//
+// ⚠️ ET UNE LIMITE PRÉCISE, LAISSÉE OUVERTE SCIEMMENT PLUTÔT QUE PASSÉE SOUS SILENCE. La
+// modalité est gardée sur l'énoncé QUI OBLIGE — la cellule de table, ou la ligne entière
+// quand la contrainte y vit en texte courant. Elle ne l'est pas sur la PROSE VOISINE qui
+// justifie cet énoncé : un paragraphe ajouté plus bas et qui contredirait une cellule
+// (« sauf quand le client écrit en anglais ») ne ferait rougir personne. Un lecteur
+// résoudrait la contradiction contre la cellule, qui est la seule normative — c'est pourquoi
+// la garde s'arrête là, et non parce que le cas serait impossible.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -74,6 +82,7 @@ import {
   permuter,
 } from './metier-representant.js';
 import { exigeSansReserve } from './danger-representant.js';
+
 
 /** Les droits du lieu — là où Claude Code les résout, jamais à plat (mesuré sur ce dépôt). */
 export const CHEMIN_DROITS = join(GABARIT_DIR, '.claude', 'settings.json');
@@ -291,6 +300,17 @@ export const CONTROLES_BIAIS = [
       // « c'est un aveu » au lieu de « pas un aveu » garde la phrase, sa place et son gras.
       // Les formulations qui NIENT le coût (« pas un aveu ») sont ignorées — le gabarit
       // correct en emploie une, et une sonde naïve rougirait sur le texte juste.
+      // ET LA PERMISSION NE SE REPREND PAS PLUS BAS. Même trou que sur la borne des sources,
+      // trouvé du même coup : le gras porte l'octroi, mais une réserve ajoutée en texte
+      // courant — « sauf devant un client qui insiste, où il vaut mieux avancer quelque
+      // chose » — la retirerait au moment exact où elle sert, sans toucher au gras.
+      //
+      // La garde de RÉSERVE porte donc sur la ligne entière ; celle du COÛT reste sur le gras,
+      // et ce n'est pas une inconséquence : la prose NOMME légitimement le coût pour le
+      // refuser (« se sent comme un échec professionnel »), et l'y interdire ferait rougir le
+      // texte juste.
+      exigeSansReserve(ligne, 'la permission de ne pas savoir');
+
       const cout = gras.match(COUTEUX);
       assert.ok(
         !cout,
@@ -423,7 +443,21 @@ export const CONTROLES_BIAIS = [
         `« ${ligne.trim()} » n'exclut plus le web : c'est la moitié de la garantie que les droits `
           + `du lieu ne peuvent pas tenir, et la seule qui couvre les chemins qu'ils laissent ouverts`,
       );
-      exigeContrainte(gras, 'la borne des sources');
+
+      // ⚠️ LA MODALITÉ SE GARDE SUR LA LIGNE ENTIÈRE, JAMAIS SUR LE SEUL GRAS — et c'est la
+      // troisième passe de revue qui l'a dit, par une mutation restée verte.
+      //
+      // La première version appelait `exigeContrainte(gras, …)`. Or le gras ne porte ici que
+      // l'annonce (« tu ne vas jamais chercher ailleurs ») ; la clause qui porte réellement le
+      // poids — « le web n'en est pas une » — vit en texte courant. Lui ajouter « sauf en
+      // dernier recours si le registre et le client ne disent rien tous les deux » laissait les
+      // deux fragments en gras intacts, l'assertion de présence satisfaite (elle cherche un
+      // motif sans ancrage de fin), et rouvrait la porte que ce contrôle existe pour fermer.
+      //
+      // C'est le motif « une porte sur deux » appliqué à une garde de modalité : on avait
+      // vérifié la modalité de ce qui est mis en avant, pas celle de ce qui oblige.
+      exigeContrainte(ligne, 'la borne des sources');
+      assert.ok(gras.length > 0, 'la borne des sources doit rester mise en avant — elle se lit sinon comme un commentaire');
     },
   },
 
@@ -619,6 +653,20 @@ export const MUTATIONS_BIAIS = [
     ),
   },
   {
+    id: 'biais-la-permission-du-doute-prend-une-reserve-hors-du-gras',
+    quoi: 'la permission de ne pas savoir est reprise en texte courant — le gras l’octroie encore, la suite la retire',
+    cible: 'biais-le-doute-est-permis',
+    fichier: 'metier',
+    // Le jumeau du trou trouvé sur la borne des sources, fermé du même geste : une garantie
+    // dont on ne garde que la mise en avant se reprend deux phrases plus bas. Et la réserve
+    // écrite ici est celle qui viendrait vraiment — elle vise le moment exact où la
+    // permission sert, c'est-à-dire devant quelqu'un qui insiste.
+    muter: (t) => t.replace(
+      'est une réponse entière, pas une dérobade.',
+      'est une réponse entière, pas une dérobade — sauf devant un client qui insiste, où il vaut mieux avancer quelque chose.',
+    ),
+  },
+  {
     id: 'biais-la-permission-du-doute-disparait',
     quoi: 'la permission de ne pas savoir est retirée — la calibration ne la dit plus qu’en creux',
     cible: 'biais-le-doute-est-permis',
@@ -690,6 +738,20 @@ export const MUTATIONS_BIAIS = [
     muter: (t) => t.replace(
       "Le web n'en est pas une — ni par tes outils, ni par le terminal, ni par quelqu'un à qui tu le ferais chercher.",
       "Le web peut compléter, au besoin, quand le registre ne dit rien.",
+    ),
+  },
+  {
+    id: 'biais-la-borne-des-sources-prend-une-reserve-hors-du-gras',
+    quoi: 'l’exclusion du web prend une réserve EN TEXTE COURANT — les deux fragments en gras sont intacts',
+    cible: 'biais-les-sources-sont-bornees',
+    fichier: 'metier',
+    // Posée par la troisième passe de revue, et RESTÉE VERTE contre la première version du
+    // contrôle : la modalité n'était gardée que sur le gras, et la clause qui oblige vit en
+    // texte courant. « Sauf en dernier recours » est par ailleurs la réserve qui arrive
+    // toujours — le registre et le client se taisent bien plus souvent qu'on ne le croit.
+    muter: (t) => t.replace(
+      "Le web n'en est pas une — ni par tes outils",
+      "Le web n'en est pas une, sauf en dernier recours si le registre et le client ne disent rien tous les deux — ni par tes outils",
     ),
   },
   {
