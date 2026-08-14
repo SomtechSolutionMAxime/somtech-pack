@@ -14,8 +14,8 @@
 // par le pane depuis lequel elle est invoquée. Un agent n'a donc rien à retenir.
 
 import { parler, passerLaMain } from '../src/client.js';
-import { ligneDuPane } from '../src/registre.js';
-import { option, optionsRepetees, premierLibre } from '../src/arguments.js';
+import { ligneDuPane, REFUS_SELECTION } from '../src/registre.js';
+import { option, optionDonnee, optionsRepetees, premierLibre } from '../src/arguments.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
@@ -36,10 +36,17 @@ function usage(code = 0) {
                                                             jamais voir un code de chantier.
                                                             Sans --nature, la ligne est interne : canal
                                                             public, autorisation par --inviter)
-  dire "texte"                                             rapporte un jalon
-  demander "texte"                                         sollicite un arbitrage
-  fermer [--bilan "texte"] [--sans-archiver]               referme la ligne
-  renommer --titre "..." [--canal <id>]                    renomme le canal (Slack + registre)
+  dire "texte" [--a <ligne>]                               rapporte un jalon
+  demander "texte" [--a <ligne>]                           sollicite un arbitrage
+  fermer [--bilan "texte"] [--sans-archiver] [--a <ligne>] referme la ligne
+  renommer --titre "..." [--canal <id>] [--a <ligne>]      renomme le canal (Slack + registre)
+
+  --a <ligne> NOMME LA LIGNE VISEE, et c'est le DESTINATAIRE qu'il nomme, jamais toi :
+              depuis le pane d'un gestionnaire, « --a client » / « --a dirigeant ».
+              Le nom est le chantier de la ligne, ou le nom de son canal.
+              Un pane qui porte PLUSIEURS lignes exige ce nom : sans lui, le geste est
+              REFUSE et rien n'est envoye — jamais la premiere ligne venue.
+              Un pane qui n'en porte qu'une n'exige rien.
   commun <canal> --dirigeant courriel [--dirigeant ...]    designe le CANAL COMMUN : chacun de
                                                            ses messages est remis a TOUS les
                                                            agents du poste. Descendant seulement
@@ -63,6 +70,54 @@ function usage(code = 0) {
 Le chantier est déduit du pane courant, sauf à l'ouverture.
 `);
   process.exit(code);
+}
+
+/**
+ * La ligne que ce geste vise — ou la sortie, sans rien envoyer.
+ *
+ * TROIS GESTES PASSENT PAR ICI — `dire`, `fermer`, `renommer` — et c'est la raison d'être de ce
+ * point unique : les trois écrivent ou modifient un canal, et une garde recopiée à trois
+ * endroits en oublie un. L'oubli mesuré sur le lot d'à côté était `fermer`, qui aurait posté
+ * son bilan dans le mauvais canal PUIS l'aurait archivé.
+ *
+ * On ne devine jamais : dès qu'un pane porte plus d'une ligne, le nom est exigé. Le refus est
+ * écrit ici, en clair — c'est le seul endroit qui parle à un humain ; la sélection, elle, rend
+ * un motif nommé, pour que ce qui la prouve n'ait pas à lire une phrase.
+ */
+function ligneVisee(geste, ouvertes, ici, args) {
+  // `--a` PRÉSENT MAIS SANS VALEUR N'EST PAS `--a` ABSENT : les confondre ferait passer
+  // `dire "texte" --a` (la valeur oubliée) pour un appel sans nom — donc accepté en silence dès
+  // qu'il n'y a qu'une ligne. La présence est demandée à `optionDonnee`, qui parcourt les jetons
+  // et non le tableau : un `--a` qui est la VALEUR d'une autre option n'est pas ce drapeau.
+  const drapeau = optionDonnee(args, '--a');
+  const nom = drapeau.presente ? (drapeau.valeur ?? '') : null;
+  const { ligne, refus } = ligneDuPane(ouvertes, ici.pane, nom);
+  if (ligne) return ligne;
+  const noms = refus.noms.map((n) => `--a ${n}`).join('  ou  ');
+  if (refus.motif === REFUS_SELECTION.AUCUNE) {
+    process.stderr.write(
+      geste === 'renommer'
+        ? 'aucune ligne ouverte depuis ce pane — precise --canal <id>\n'
+        : "aucune ligne ouverte depuis ce pane — commence par : ligne-directe ouvrir <chantier>\n"
+    );
+  } else if (refus.motif === REFUS_SELECTION.NOM_REQUIS) {
+    process.stderr.write(
+      `ce pane porte ${refus.noms.length} lignes — « ${geste} » ne devine pas laquelle : nomme-la.\n` +
+        `  ${noms}\n` +
+        `  Le nom designe le DESTINATAIRE, jamais toi. Rien n'a ete envoye.\n`
+    );
+  } else if (refus.motif === REFUS_SELECTION.NOM_INCONNU) {
+    process.stderr.write(
+      String(refus.nom ?? '').trim()
+        ? `aucune ligne « ${refus.nom} » depuis ce pane — rien n'a ete envoye.\n  ${noms}\n`
+        : `« --a » attend le nom de la ligne visee — rien n'a ete envoye.\n  ${noms}\n`
+    );
+  } else {
+    process.stderr.write(
+      `« ${refus.nom} » designe plusieurs lignes de ce pane — rien n'a ete envoye.\n  ${noms}\n`
+    );
+  }
+  process.exit(1);
 }
 
 function rendre(reponse) {
@@ -137,26 +192,20 @@ if (geste === 'relever') {
   const etat = await parler({ geste: 'etat' });
   // `etat.ouvertes` ne porte QUE des lignes — le canal commun est rendu à côté, exprès : un
   // geste qui parle ne doit pas pouvoir le désigner, même par accident.
-  const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
-  if (!mienne) {
-    process.stderr.write("aucune ligne ouverte depuis ce pane — commence par : ligne-directe ouvrir <chantier>\n");
-    process.exit(1);
-  }
+  const mienne = ligneVisee(geste, etat.ouvertes, ici, args);
   const corps = geste === 'demander' ? `❓ *J'attends ton arbitrage*\n\n${texte}` : texte;
-  rendre(await parler({ geste: 'dire', chantier: mienne.chantier, worktree: mienne.worktree, texte: corps }));
+  // ON DÉSIGNE LE CANAL, PAS LE CHANTIER — la clé qui identifie, comme le fait déjà le chemin
+  // entrant. Le veilleur sait router par l'une ou par l'autre ; celle-ci est unique par
+  // construction, et c'est la seule qui ne puisse pas rendre une autre ligne que celle visée.
+  rendre(await parler({ geste: 'dire', canal_id: mienne.canal_id, texte: corps }));
 } else if (geste === 'fermer') {
   const ici = await herdr.paneCourant();
   const etat = await parler({ geste: 'etat' });
-  const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
-  if (!mienne) {
-    process.stderr.write('aucune ligne ouverte depuis ce pane\n');
-    process.exit(1);
-  }
+  const mienne = ligneVisee('fermer', etat.ouvertes, ici, args);
   rendre(
     await parler({
       geste: 'fermer',
-      chantier: mienne.chantier,
-      worktree: mienne.worktree,
+      canal_id: mienne.canal_id,
       bilan: option(args, '--bilan'),
       archiver: !args.includes('--sans-archiver'),
     })
@@ -170,12 +219,8 @@ if (geste === 'relever') {
   } else {
     const ici = await herdr.paneCourant();
     const etat = await parler({ geste: 'etat' });
-    const { ligne: mienne } = ligneDuPane(etat.ouvertes, ici.pane);
-    if (!mienne) {
-      process.stderr.write('aucune ligne ouverte depuis ce pane — precise --canal <id>\n');
-      process.exit(1);
-    }
-    rendre(await parler({ geste: 'renommer', chantier: mienne.chantier, worktree: mienne.worktree, titre }));
+    const mienne = ligneVisee('renommer', etat.ouvertes, ici, args);
+    rendre(await parler({ geste: 'renommer', canal_id: mienne.canal_id, titre }));
   }
 } else if (geste === 'commun') {
   // Désigne le canal commun. Ce geste est celui de l'OPÉRATEUR du poste, une fois — pas celui

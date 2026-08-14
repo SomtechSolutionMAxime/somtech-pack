@@ -11,6 +11,11 @@
 
 /** Options qui consomment la valeur suivante — elle n'est donc jamais un argument libre. */
 export const OPTIONS_A_VALEUR = new Set([
+  // `--a <ligne>` DÉSIGNE LA LIGNE VISÉE, et son oubli ici n'aurait pas seulement raté une
+  // option : `dire --a client "texte"` aurait pris « client » pour le texte du message, et
+  // envoyé le mot « client » à la place du rapport. Une option à valeur qui n'est pas déclarée
+  // ici se trompe toujours du même côté — celui qui parle.
+  '--a',
   '--sujet',
   '--inviter',
   '--bilan',
@@ -21,11 +26,35 @@ export const OPTIONS_A_VALEUR = new Set([
   '--dirigeant',
 ]);
 
+/**
+ * Une option est-elle DONNÉE, et avec quelle valeur ?
+ *
+ * ELLE PARCOURT LES JETONS COMME `premierLibre`, ET C'EST TOUT L'ÉCART AVEC UN `indexOf` :
+ * un `indexOf` trouve le mot n'importe où, y compris là où il n'est pas un drapeau mais la
+ * VALEUR d'une autre option. Mesuré en revue : `fermer --bilan --a --sans-archiver` — un bilan
+ * qui vaut littéralement `--a` — faisait croire à une ligne désignée « --sans-archiver », et le
+ * `fermer` légitime d'un pane à une seule ligne échouait. C'est la même famille de défaut que
+ * celle qui a motivé `premierLibre`, par l'autre bout.
+ *
+ * `presente` et `valeur` sont rendues séparément, exprès : « l'option est absente » et « elle
+ * est là, sans valeur » ne veulent pas dire la même chose — la seconde est un oubli, et un
+ * oubli sur un drapeau qui désigne un destinataire ne se devine pas.
+ *
+ * @returns {{presente: boolean, valeur: string|null}}
+ */
+export function optionDonnee(args, nom) {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (!a.startsWith('--')) continue; // un argument libre, ou une valeur déjà sautée
+    if (a === nom) return { presente: true, valeur: args[i + 1] ?? null };
+    if (OPTIONS_A_VALEUR.has(a)) i += 1; // sa valeur n'est pas un drapeau, quoi qu'elle ressemble
+  }
+  return { presente: false, valeur: null };
+}
+
 /** La première valeur d'une option, ou `null`. */
 export function option(args, nom) {
-  const i = args.indexOf(nom);
-  if (i === -1) return null;
-  return args[i + 1] ?? null;
+  return optionDonnee(args, nom).valeur;
 }
 
 /**

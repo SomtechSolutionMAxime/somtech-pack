@@ -187,9 +187,63 @@ export function estCanalCommun(registre, canalId) {
   return Boolean(commun && canalId && commun.canal_id === canalId);
 }
 
+// ————————————————————————————————————————————————————— la ligne que l'agent DÉSIGNE
+
 /**
- * La ligne ouverte depuis CE pane — la sélection que fait la commande pour savoir de quelle
- * ligne elle parle quand un agent dit, ferme ou renomme.
+ * Les motifs de refus de la sélection. Nommés, parce que le message en clair est écrit par la
+ * commande — un test qui vérifierait ce message ne prouverait rien du routage.
+ */
+export const REFUS_SELECTION = {
+  AUCUNE: 'aucune_ligne',
+  NOM_REQUIS: 'nom_requis',
+  NOM_INCONNU: 'nom_inconnu',
+  NOM_AMBIGU: 'nom_ambigu',
+};
+
+/**
+ * Ramène une désignation à sa forme comparable — accents, casse, ponctuation et `#` aplatis.
+ *
+ * C'est la même normalisation d'esprit que celle des noms de canaux : un agent qui écrit
+ * `--a "Espace client Acme"` vise le canal `#espace-client-acme`, et lui refuser sa ligne pour
+ * une majuscule serait un refus qui n'apprend rien. Ce qu'on n'aplatit PAS, c'est la
+ * différence entre deux lignes : deux désignations distinctes le restent.
+ */
+export function normaliserDesignation(nom) {
+  return String(nom ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Sous quels noms une ligne peut être DÉSIGNÉE : son chantier, son canal.
+ *
+ * DEUX CLÉS, JAMAIS SA NATURE — et l'écart n'est pas théorique. La nature tombe juste par
+ * coïncidence chez un gestionnaire (sa ligne client est `client`, celle du dirigeant est
+ * `interne`) et se casse au cas suivant : un orchestrateur a sa ligne ET d'autres canaux, tous
+ * `interne`. Deux candidats, même genre, et on serait revenu au premier arrivé. C'est
+ * l'identité qui tranche.
+ *
+ * On lit `canal` (la forme rendue par `etat()`) ET `canal_nom` (la forme du registre) : la même
+ * sélection sert des deux côtés, et n'en lire qu'une rendrait une ligne indésignable selon d'où
+ * on l'appelle.
+ */
+export function designationsDeLigne(ligne) {
+  return [ligne?.chantier, ligne?.canal, ligne?.canal_nom]
+    .map(normaliserDesignation)
+    .filter(Boolean);
+}
+
+/** Ce sous quoi une ligne se présente à qui doit la nommer — le chantier d'abord, il est court. */
+export function nomsDesignables(candidates) {
+  return (candidates || []).map((l) => l.chantier || l.canal || l.canal_nom).filter(Boolean);
+}
+
+/**
+ * La ligne que l'agent DÉSIGNE depuis ce pane — la sélection que fait la commande quand il
+ * dit, ferme ou renomme.
  *
  * ELLE VIVAIT DANS `bin/ligne-directe.js`, recopiée à trois endroits. Elle est ici pour une
  * raison précise : le canal commun promet de ne jamais passer par ce chemin, et une promesse
@@ -197,16 +251,43 @@ export function estCanalCommun(registre, canalId) {
  * seulement que le test est d'accord avec lui-même. Il appelle donc la fonction que la
  * commande appelle.
  *
- * SON DÉFAUT CONNU EST CONSERVÉ TEL QUEL, et c'est délibéré : avec deux lignes ouvertes sur un
- * même pane, elle rend la première inscrite et ignore l'autre en silence (mesuré le
- * 2026-08-13). Le renversement — refuser et demander de nommer la ligne — est un changement de
- * comportement de `dire`, `fermer` et `renommer` : il mérite sa preuve à lui, pas d'être
- * emporté dans le lot d'à côté. `candidates` est rendu pour que ce jour-là il n'y ait rien à
- * chercher.
+ * LE RENVERSEMENT (T-20260813-0078) : elle rendait la PREMIÈRE INSCRITE quand un pane portait
+ * plusieurs lignes, et ignorait l'autre en silence — un rapport destiné à un chantier est parti
+ * dans le canal d'un autre, avec `ok:true`. Elle ne devine plus : dès qu'il y a un choix, le
+ * nom est exigé, et son absence est un REFUS. L'incertitude tombe du côté prudent, parce que
+ * l'autre côté envoie au client ce qui ne lui était pas destiné.
  *
- * @returns {{ligne: object|null, candidates: object[]}}
+ * Un seul candidat n'exige aucun nom : c'est toute la configuration de production d'aujourd'hui,
+ * et rien de ce qui tourne ne casse.
+ *
+ * UN NOM QUI NE DÉSIGNE RIEN EST AUSSI UN REFUS, même avec un seul candidat. Se rabattre sur
+ * l'unique ligne parce qu'elle est là serait rendre le nom décoratif : un agent qui se trompe
+ * de nom se trompe de destinataire, et c'est exactement ce qu'on refuse de deviner.
+ *
+ * @returns {{ligne: object|null, candidates: object[], refus: {motif: string, nom?: string, noms: string[]}|null}}
  */
-export function ligneDuPane(ouvertes, pane) {
+export function ligneDuPane(ouvertes, pane, nom = null) {
   const candidates = (ouvertes || []).filter((l) => l.pane === pane);
-  return { ligne: candidates[0] || null, candidates };
+  const noms = nomsDesignables(candidates);
+  if (!candidates.length) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.AUCUNE, noms } };
+
+  // « AUCUN NOM DONNÉ » ET « UN NOM QUI NE VEUT RIEN DIRE » NE SONT PAS LA MÊME CHOSE — relevé
+  // en revue de fond. La normalisation aplatit `--a "---"`, `--a "!!!"` et `--a ""` sur la chaîne
+  // vide : les confondre avec l'absence d'option rendait le nom DÉCORATIF dès qu'il n'y avait
+  // qu'un candidat, en contradiction avec ce que la commande promet. Qui a tapé `--a` a voulu
+  // désigner quelqu'un ; s'il n'a désigné personne, on refuse.
+  if (nom == null) {
+    if (candidates.length > 1) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.NOM_REQUIS, noms } };
+    return { ligne: candidates[0], candidates, refus: null };
+  }
+
+  const vise = normaliserDesignation(nom);
+  if (!vise) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.NOM_INCONNU, nom, noms } };
+
+  const vises = candidates.filter((l) => designationsDeLigne(l).includes(vise));
+  if (vises.length === 1) return { ligne: vises[0], candidates, refus: null };
+  // Deux lignes qui répondent au même nom : le registre n'a pas de quoi les distinguer, et
+  // choisir serait rejouer le défaut qu'on corrige, une couche plus haut.
+  const motif = vises.length ? REFUS_SELECTION.NOM_AMBIGU : REFUS_SELECTION.NOM_INCONNU;
+  return { ligne: null, candidates, refus: { motif, nom, noms } };
 }

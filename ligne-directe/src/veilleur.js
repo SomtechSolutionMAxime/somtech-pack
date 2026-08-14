@@ -579,7 +579,7 @@ export class Veilleur {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('dire', canalId, ligne?.canal_id);
     if (refus) return refus;
-    if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier} » — ouvre-la d'abord` };
+    if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier || canalId} » — ouvre-la d'abord` };
     if (ligne.close_le) return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est close depuis ${ligne.close_le}` };
     const ts = await this.slack.poster(this.jetons.robot, {
       canal: ligne.canal_id,
@@ -603,6 +603,17 @@ export class Veilleur {
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne pour « ${chantier || canalId} »` };
     if (!titre) return { ok: false, erreur: 'titre requis' };
+    // MÊME GARDE QUE `fermer`, ET C'EST LA PORTE QUE LE PREMIER CORRECTIF AVAIT LAISSÉE —
+    // relevée en revue de fond, sur le lot qui corrigeait précisément « une porte sur deux ».
+    //
+    // `ligneParCanal` retombe volontairement sur la ligne CLOSE quand aucune n'est ouverte, pour
+    // pouvoir répondre « c'est clos » à qui écrit. `renommer --canal <id>` atteint donc n'importe
+    // quelle ligne close SANS aucune course : le canal d'un client parti serait renommé sous ses
+    // yeux — il en reste membre, un canal client ne s'archive jamais — et le libellé de la ligne
+    // close écrasé au registre, c'est-à-dire l'historique réécrit.
+    if (ligne.close_le) {
+      return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est close depuis ${ligne.close_le} — son canal ne se renomme plus` };
+    }
 
     // Sur une ligne cliente, le titre nomme DEUX choses : le canal, et l'expéditeur de
     // chaque message. Ne suivre que la première laisserait le canal dire « Espace client
@@ -636,7 +647,16 @@ export class Veilleur {
     const ligne = canalId ? ligneParCanal(this.registre, canalId) : ligneOuverteParCle(this.registre, chantier, worktree);
     const refus = this.refusSurCommun('fermer', canalId, ligne?.canal_id);
     if (refus) return refus;
-    if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier} »` };
+    if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier || canalId} »` };
+    // UNE LIGNE DÉJÀ CLOSE NE SE REFERME PAS DEUX FOIS, et la garde est arrivée avec le chemin
+    // par canal (T-20260813-0078). Par chantier, `ligneOuverteParCle` ne rendait QUE des lignes
+    // ouvertes ; `ligneParCanal`, lui, retombe volontairement sur la plus récemment close — pour
+    // pouvoir répondre « c'est clos » à qui écrit. Sans ce contrôle, `fermer` aurait posté son
+    // bilan dans un canal archivé (donc en lecture seule : le bilan perdu, sans un mot) et
+    // rejoué l'archivage d'un canal déjà clos.
+    if (ligne.close_le) {
+      return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est déjà close depuis ${ligne.close_le}` };
+    }
     if (bilan) {
       await this.slack.poster(this.jetons.robot, {
         canal: ligne.canal_id,
@@ -671,6 +691,11 @@ export class Veilleur {
     const ouvertes = lignesOuvertes(this.registre).map((l) => ({
       chantier: l.chantier,
       canal: l.canal_nom,
+      // LA CLÉ UNIQUE, rendue à la commande pour qu'elle puisse DÉSIGNER sa ligne au lieu de la
+      // faire redéduire. Sans elle, le chemin sortant n'avait que le pane — qui n'identifie
+      // rien dès qu'il en porte deux (T-20260813-0078). Ce n'est pas un secret : le registre
+      // est celui du poste, et l'identifiant de canal est déjà lisible dans Slack.
+      canal_id: l.canal_id,
       nature: natureDe(l),
       pane: l.pane,
       worktree: l.worktree,
