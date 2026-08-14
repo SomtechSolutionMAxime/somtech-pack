@@ -5,6 +5,21 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.48.0] - 2026-08-14
+
+### Ajouté
+
+- **Le gestionnaire client et l'orchestrateur d'un chantier se parlent, dans les deux sens** (T-20260814-0093, PR #226). La boucle était ouverte depuis le premier jour : le cadrage disait *« l'orchestrateur rend compte au gestionnaire »*, et le compte rendu n'avait nulle part où revenir. Le gestionnaire ne pouvait donc pas informer son client de l'avancement — sa fonction même. Le dirigeant a tranché le sens en cours de lot : **« c'est une équipe »**. Ce n'est pas un canal de compte rendu, c'est une conversation de travail entre pairs — le gestionnaire signale ce qu'il a ouvert, demande une échéance, relance.
+- **Ce qui s'y demande ne se commande pas**, et c'est écrit dans le métier des **deux** rôles : l'orchestrateur reste maître de son chantier et de ses priorités. Sans cette phrase, un gestionnaire finirait par diriger le chantier à travers les demandes de son client.
+- **C'est l'orchestrateur qui autorise son gestionnaire**, à l'ouverture de sa ligne ou à sa reprise s'il arrive en cours de route. Il le connaît par son brief ; sans l'option, **rien ne change** — un orchestrateur sans gestionnaire fonctionne exactement comme avant.
+- **Aucun canal de plus** : la ligne du chantier existait déjà, elle porte désormais deux pairs au lieu d'un.
+
+### Corrigé
+
+- **Trois refus structurels**, chacun mis à l'épreuve par mutation : une ligne **cliente** ne porte jamais de pair, un pair doit être un représentant **établi par son lieu** — jamais par son nom —, et un pane repris par un autre agent ne reçoit plus rien.
+- **Le pair pouvait fermer et archiver le chantier de son orchestrateur** — trouvé en revue de fond. La sélection de ligne sert trois gestes, pas un : la garde posée sur `dire` laissait `fermer` et `renommer` ouverts. Neuvième occurrence du motif « une porte sur deux », et la deuxième fois qu'il frappe la sélection de ligne.
+- **Un pane repris par un autre agent recevait tout le fil technique** avec un accusé de remise positif.
+
 ## [1.47.0] - 2026-08-14
 
 ### Ajouté
