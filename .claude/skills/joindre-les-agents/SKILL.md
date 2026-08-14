@@ -127,7 +127,7 @@ par ce qu'on en conclut, et c'est exactement ainsi qu'un refus se met à mentir.
 | `Un robot ne rejoint pas un canal de lui-même.` | Le canal existe et notre robot n'y est pas | Un humain l'y invite dans Slack, puis relance |
 | `un canal ne peut pas être à la fois` | Ce canal porte déjà la ligne d'un chantier — chaque message de cet interlocuteur partirait à tous les agents | Désignes-en un autre |
 | `qu'un seul rôle, sinon chacun doit y trier ce qui ne le concerne pas.` | Ce canal est déjà celui d'un autre rôle | Désignes-en un autre. Redésigner le **même** rôle, en revanche, passe |
-| `Nomme au moins une personne.` | Aucun autorisé n'accompagne la désignation | Ajoute `--dirigeant <courriel>`, une fois par personne |
+| `Nomme au moins une personne.` | Le poste a reçu une désignation sans aucun autorisé. Tapée sans `--dirigeant`, la commande rend son aide avant d'en arriver là — ce refus-ci vient du poste, pas de la ligne de commande | Ajoute `--dirigeant <courriel>`, une fois par personne |
 | `rôle inconnu : «` | Le rôle tapé n'est pas un rôle connu — c'est le cas de `gestionnaire` | Reprends la traduction plus haut : `representant` ou `orchestrateur` |
 | `le canal n'est PAS designe` | Un des courriels ne désigne personne dans l'espace Slack | Corrige le courriel — la désignation est entière ou nulle, elle n'inscrit jamais une liste amputée |
 | `le dirigeant n'est PAS designe.` | Le courriel ne désigne personne dans l'espace Slack | Corrige le courriel. Rien n'a changé : les lignes déjà ouvertes gardent leurs autorisés |
