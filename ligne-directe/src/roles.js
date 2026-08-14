@@ -152,6 +152,30 @@ export function rolesConnus() {
 }
 
 /**
+ * Comment NOMMER un rôle au pluriel, même s'il n'est plus connu.
+ *
+ * ⚠️ CE REPLI N'EST PAS DE LA COURTOISIE — il évite une panne muette. LE REGISTRE SURVIT AUX
+ * VERSIONS DU PACK : un canal commun inscrit pour un rôle qu'une version ultérieure ne déclare
+ * plus y reste, et personne ne peut l'en retirer depuis le code. Or ce libellé est composé sur
+ * DEUX chemins qui ne pardonnent pas :
+ *
+ *   • le refus d'un geste sortant — une exception y remplacerait un refus par un plantage ;
+ *   • la diffusion d'une consigne, appelée depuis l'écoute Slack, dont l'enveloppe est DÉJÀ
+ *     acquittée quand on y arrive. Une exception à cet endroit perd le message définitivement,
+ *     sans que personne ne l'apprenne — le mode de panne exact que ce dispositif combat.
+ *
+ * On rend donc le nom brut du rôle plutôt que de lever. `role()` continue, lui, de refuser un
+ * rôle inconnu : DÉCIDER sur un rôle qu'on ne connaît pas reste interdit — seul le NOMMER est
+ * permis, et nommer ne décide de rien.
+ */
+export function libellePluriel(nom) {
+  // Un rôle INCONNU se nomme par son nom brut — c'est ce qui permet à l'opérateur de le
+  // retrouver au registre. Un rôle ABSENT, lui, n'a pas de nom à donner : on ne rend pas
+  // « undefined » dans un cadre que lit un agent interrompu au milieu de son travail.
+  return ROLES[nom]?.libelle_pluriel || (nom ? String(nom) : 'agents de ce rôle');
+}
+
+/**
  * Les lignes qu'un rôle doit avoir — jamais moins.
  *
  * Un rôle inscrit sans `lignes` retombe sur SA nature, en une seule ligne : c'est le

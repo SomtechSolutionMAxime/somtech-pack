@@ -17,7 +17,7 @@
 // consigne. Un client demande ; il n'ordonne pas. Le cadre le dit désormais, et le mot
 // « dirigeant » n'apparaît nulle part quand ce n'est pas lui qui parle.
 
-import { role as roleDe } from './roles.js';
+import { libellePluriel } from './roles.js';
 
 /** Chemin de la commande tel qu'un agent doit l'invoquer, quelle que soit son origine. */
 export const COMMANDE = 'node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js"';
@@ -155,12 +155,7 @@ export function cadrerConsigneCommune({ texte, canal, role, modifie = false } = 
   // absent ou inconnu ne se rabat PAS sur « tous les agents » — ce serait le cadre d'avant,
   // rendu au pire moment. Il n'arrive pas jusqu'ici (la diffusion refuse avant), et si un jour
   // il y arrivait, mieux vaut un cadre qui ne promet rien qu'un cadre qui élargit l'audience.
-  let eux = 'agents de ce rôle';
-  try {
-    eux = roleDe(role).libelle_pluriel;
-  } catch {
-    /* rôle inconnu : on ne lui invente pas une audience */
-  }
+  const eux = libellePluriel(role);
   return [
     `[CANAL COMMUN — À TOUS LES ${eux.toUpperCase()}${ou}] Consigne du dirigeant${repris(modifie)}, reçue par Slack :`,
     '',

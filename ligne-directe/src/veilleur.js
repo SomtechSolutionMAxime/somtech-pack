@@ -23,7 +23,7 @@ import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu } from './lieu-agent.js';
-import { role as roleDe, rolesConnus, RoleInconnu } from './roles.js';
+import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune } from './cadre.js';
 import { reponse } from './langage.js';
 import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
@@ -535,7 +535,7 @@ export class Veilleur {
     // laisserait le vrai passer le jour où la garde serait écrite contre un seul.
     const vise = canaux.map((c) => communPourCanal(this.registre, c)).find(Boolean);
     if (!vise) return null;
-    const pour = vise.role ? `des ${roleDe(vise.role).libelle_pluriel}` : 'commun';
+    const pour = vise.role ? `des ${libellePluriel(vise.role)}` : 'commun';
     journaliser(`refusé — ${geste} visait le canal ${pour} #${vise.canal_nom} : rien n'y remonte`);
     return {
       ok: false,
@@ -649,7 +649,7 @@ export class Veilleur {
         ok: false,
         motif: 'deja_dun_autre_role',
         erreur:
-          `#${canal} est déjà le canal des ${roleDe(dejaAilleurs.role).libelle_pluriel} — un canal ne sert ` +
+          `#${canal} est déjà le canal des ${libellePluriel(dejaAilleurs.role)} — un canal ne sert ` +
           `qu'un seul rôle, sinon chacun doit y trier ce qui ne le concerne pas. Désigne-en un autre.`,
       };
     }
@@ -668,7 +668,7 @@ export class Veilleur {
     sauverRegistre(this.registre);
     const inscrit = this.registre.communs[role];
     journaliser(
-      `canal des ${roleDe(role).libelle_pluriel} désigné — #${inscrit.canal_nom} (${trouve.id}), ` +
+      `canal des ${libellePluriel(role)} désigné — #${inscrit.canal_nom} (${trouve.id}), ` +
         `${inscrit.autorises.length} autorisé(s)`
     );
     return { ok: true, role, canal: inscrit.canal_nom, canal_id: trouve.id, autorises: inscrit.autorises.length };
@@ -1242,7 +1242,7 @@ export class Veilleur {
     // arrière. Même lecture que le réveil horaire des orchestrateurs, à dessein : trois
     // décisions qui portent sur le rôle, une seule définition de ce qu'est un rôle.
     const destinataires = vivants.filter((a) => roleDuLieu(a.foreground_cwd || a.cwd) === commun.role);
-    const eux = roleDe(commun.role).libelle_pluriel;
+    const eux = libellePluriel(commun.role);
     if (!destinataires.length) {
       // On NE SE RABAT PAS sur les autres agents : ce serait remettre la consigne d'un rôle à
       // ceux qu'elle ne concerne pas, c'est-à-dire le canal unique qu'on vient de remplacer.

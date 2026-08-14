@@ -639,6 +639,45 @@ test('HÉRITÉ — le désigner pour un rôle le reprend, et il cesse d’être 
   });
 });
 
+test('HÉRITÉ — un canal inscrit pour un rôle QUE LE CODE NE CONNAÎT PLUS ne met pas le veilleur à terre', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // LE REGISTRE SURVIT AUX VERSIONS DU PACK — c'est déjà ce qui a justifié la garde du chemin
+  // par chantier. Un canal inscrit pour un rôle qu'une version ultérieure ne déclare plus y
+  // reste, et rien dans le code ne peut l'en retirer.
+  //
+  // Ce qui rendait cet état dangereux n'était pas la diffusion — le filtre par lieu ne rend
+  // aucun destinataire pour un rôle que `roleDuLieu` ne peut pas établir — mais le simple fait
+  // de NOMMER ce rôle. Ce libellé est composé sur deux chemins qui ne pardonnent pas :
+  //
+  //   • le refus d'un geste sortant, où une exception remplace un refus par un plantage ;
+  //   • la diffusion, appelée depuis l'écoute Slack DONT L'ENVELOPPE EST DÉJÀ ACQUITTÉE — une
+  //     exception y perd le message définitivement, sans que personne ne l'apprenne.
+  sauverRegistre({
+    version: 1,
+    communs: {
+      'chef-equipe': { canal_id: 'C_ORCH', canal_nom: 'annonces-orchestrateurs', autorises: [DIRIGEANT], designe_le: 'hier' },
+    },
+    commun: null,
+    lignes: [ligne({ chantier: 'D-7', canalId: 'C_ORCH', canalNom: 'annonces-orchestrateurs', pane: 'w1:p1', worktree: '/w/o' })],
+  });
+
+  const travail = agentsQuiTravaillent([{ pane: 'w1:orch', repertoire: lieu(METIER_ORCH) }]);
+  await avecSlack({ canaux: [CANAL_ORCH] }, async (monde) => {
+    const v = veilleur({ herdr: travail });
+
+    // La diffusion ne lève pas, et ne remet à personne — surtout pas aux orchestrateurs, qui
+    // seraient le repli tentant sur un rôle qu'on ne sait pas lire.
+    await v.remettreAuChantier({ channel: 'C_ORCH', user: DIRIGEANT, text: 'consigne' });
+    assert.equal(travail.recu('w1:orch'), null, 'aucun agent ne sert de repli pour un rôle illisible');
+
+    // Et la garde tient, sans lever : par le canal ET par le chantier.
+    assert.equal((await v.dire({ canal_id: 'C_ORCH', texte: 'parole' })).ok, false);
+    assert.equal((await v.fermer({ chantier: 'D-7', worktree: '/w/o', bilan: 'bilan' })).ok, false);
+    assert.equal(monde.canalNomme('annonces-orchestrateurs').is_archived, false);
+    assert.deepEqual(monde.postes, []);
+  });
+});
+
 // ═════════════════ 8. LA COMMANDE — le rôle ne se fait pas prendre pour le canal
 
 test('COMMANDE — « --role » est une option À VALEUR : elle ne devient jamais le nom du canal', async () => {
