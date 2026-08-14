@@ -73,6 +73,18 @@ export function communsRetenus() {
   for (const id of [...IDS_COMMUNS_RETENUS, ...IDS_COMMUNS_ECARTES]) {
     assert.ok(connus.has(id), `le contrôle commun « ${id} » n'existe plus — la liste doit suivre, pas retenir zéro contrôle`);
   }
+  // ET LA COUVERTURE DANS L'AUTRE SENS — trouvé en revue de fond. La garde ci-dessus ferme la
+  // porte du RENOMMAGE ; celle-ci ferme celle de l'AJOUT. Une garantie commune ajoutée en amont
+  // serait sinon ignorée en silence par cette compétence : ni retenue, ni écartée, ni signalée.
+  // Aujourd'hui les comptes concordent, mais par coïncidence — et une coïncidence ne garde rien.
+  const declares = new Set([...IDS_COMMUNS_RETENUS, ...IDS_COMMUNS_ECARTES]);
+  const ignores = CONTROLES_COMMUNS.map((c) => c.id).filter((id) => !declares.has(id));
+  assert.deepEqual(
+    ignores,
+    [],
+    `ces garanties communes sont apparues en amont sans que cette compétence dise si elles s'appliquent : `
+      + `${ignores.join(', ')}. Les ajouter à IDS_COMMUNS_RETENUS, ou les écarter NOMMÉMENT avec leur raison.`,
+  );
   return CONTROLES_COMMUNS.filter((c) => IDS_COMMUNS_RETENUS.includes(c.id));
 }
 
@@ -143,11 +155,30 @@ export const CONTROLES = [
 
       // Ce que la mesure APPREND, et que personne ne peut demander au poste autrement : quels
       // rôles n'ont pas encore de canal. Sans cette phrase, la mesure se réduit à un affichage.
-      assert.match(
-        horsBlocs(texte),
-        /r[ôo]les? qui n[e’']ont pas de canal|r[ôo]les? n[e’']ont encore aucun canal|quels r[ôo]les/i,
-        'le texte doit dire que la mesure sert à savoir quels RÔLES n’ont pas encore de canal',
+      //
+      // ⚠️ LA SONDE PAR MOT-CLÉ NE SUFFISAIT PAS, et la revue de fond l'a prouvé par mutation :
+      // « L'état ne te dit **jamais** quels rôles restent à désigner — tu peux tous les
+      // redésigner par prudence » garde les mots « quels rôles » et retourne le principe central
+      // de la compétence. C'est le motif dominant du dépôt, dixième tour.
+      //
+      // On garde donc le LIEN MÉCANIQUE que la phrase doit établir — les rôles sans canal se
+      // lisent dans le champ `communs` du rendu — et non la présence d'un mot. Une phrase qui
+      // nie que l'état renseigne les rôles ne peut pas nommer le champ où on les lit.
+      const dehors = horsBlocs(texte).replace(/\s+/g, ' ');
+      //
+      // La sonde EXCLUT les barres de table (`[^.|]`) et exige le manque, pas le rôle : la
+      // table de lecture porte déjà « un objet par rôle **déjà** pourvu » avec `communs` dans
+      // sa cellule voisine — une sonde qui se contentait de « rôle » près de `communs` y était
+      // satisfaite, et la phrase pouvait donc être retirée sans que rien ne rougisse.
+      const lien = dehors.match(/[^.|]*(?:pas de canal|aucun canal)[^.|]*`communs`[^.|]*\./i);
+      assert.ok(
+        lien,
+        'le texte doit relier les rôles SANS canal au champ `communs` du rendu — sinon la mesure '
+          + 'se réduit à un affichage, et rien ne dit ce qu’on en tire',
       );
+      // Et la phrase qui l'établit doit OBLIGER : « tu peux tous les redésigner par prudence »
+      // dit le contraire de ce que la compétence promet, en gardant tout son vocabulaire.
+      exigeImperatif(lien[0], 'la phrase qui dit ce que la mesure apprend');
     },
   },
 
@@ -188,13 +219,92 @@ export const CONTROLES = [
         // Le jeton du poste n'est pas dans la liste du ticket, et c'est justement pour ça qu'il
         // y est ici : c'est le refus qui arrive AVANT les quatre autres, sur le poste neuf que
         // cette compétence sert précisément à configurer.
-        ['le jeton du poste', /trousseau/i],
+        // Les deux sondes du trousseau sont DISJOINTES : « trousseau » apparaît sur les deux
+        // lignes, donc en supprimer une laissait l'autre satisfaire la sonde — la garde ne
+        // gardait alors qu'une ligne sur deux, sans le dire.
+        ['le jeton qu’on n’a pas obtenu', /obtenu/i],
+        // L'ENTRÉE VIDE A SA PROPRE LIGNE, et c'est la correction de la revue de fond : la
+        // ligne du trousseau citait un fragment qui n'existe QUE dans les deux autres refus
+        // (« aucune entrée n'a répondu », « la valeur n'a pas pu être obtenue »). Une entrée
+        // qui EXISTE et qui est vide est un troisième cas, dont le geste diffère des deux
+        // autres — on ne la dépose pas, on la remplace, et le message le dit exprès sans
+        // proposer de commande.
+        ['l’entrée vide', /vide/i],
         ['le canal absent', /aucun canal|ne porte ce nom/i],
         ['le canal archivé', /archiv/i],
         ['le robot non membre', /robot/i],
         ['le canal qui porte déjà une ligne', /porte d[ée]j[àa] la ligne|à la fois/i],
       ]) {
         assert.match(tout, sonde, `la table des refus ne dit rien de ${quoi}`);
+      }
+    },
+  },
+
+  {
+    id: 'le-refus-se-relaie-tel-quel',
+    quoi: 'le texte dit de RECOPIER le refus mesuré, et n’invite nulle part à le reformuler',
+    verifier({ texte }) {
+      // ⚠️ CE CONTRÔLE MANQUAIT, ET C'ÉTAIT LE DÉFAUT BLOQUANT DE LA REVUE DE FOND. La garde
+      // voisine confronte les CITATIONS au code — elle ferme la porte de la citation fausse.
+      // Elle ne dit rien de l'INSTRUCTION donnée au lecteur. Remplacer « Recopie-le tel quel »
+      // par « Résume-le dans tes mots, ce sera plus clair » laissait tout vert, et rouvrait
+      // très exactement T-20260811-0087 : c'est la reformulation qui a transformé « je n'ai pas
+      // su lire l'entrée » en « le jeton n'est pas là », puis en une commande qui l'écrasait.
+      //
+      // LES DEUX SENS, parce qu'un seul ne couvre qu'une porte : l'injonction de relayer doit
+      // être là, ET l'invitation à reformuler doit être absente. « Recopie-le, ou résume-le »
+      // garderait le premier volet en rouvrant le défaut.
+      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      assert.match(
+        section.corps,
+        /mesur[ée]/i,
+        'le refus doit être présenté comme ce qui a été MESURÉ, jamais comme une conclusion',
+      );
+      assert.match(
+        section.corps,
+        /recopie-le/i,
+        'le texte doit dire de RECOPIER le message de la commande, en toutes lettres',
+      );
+      const reformulation = section.corps.match(/résume-le|reformule-le|dans tes mots|réécris-le|plus clair/i);
+      assert.ok(
+        !reformulation,
+        `le texte invite à reformuler le refus (« ${reformulation && reformulation[0]} ») : `
+          + 'une reformulation remplace ce qui a été mesuré par ce qu’on en conclut',
+      );
+      exigeImperatif(section.corps, 'la consigne de relais du refus');
+    },
+  },
+
+  {
+    id: 'aucune-action-pretee-au-robot',
+    quoi: 'aucun geste tabulé ne fait faire au robot ce qu’il ne peut pas faire',
+    verifier({ texte }) {
+      // TROUVÉ EN REVUE DE FOND. La colonne du remède n'était confrontée à rien : « un humain
+      // le crée dans Slack — notre robot ne crée aucun canal » pouvait devenir « notre robot
+      // crée le canal lui-même au besoin » sans qu'un contrôle bronche. Ça contredit le code
+      // (`conversations.join` répond `missing_scope`, mesuré le 2026-08-06) ET la section « ce
+      // qu'elle ne fait jamais » du même fichier — le lecteur suivrait un geste qui n'existe pas
+      // et attendrait un canal que personne ne crée.
+      //
+      // La garde est de POLARITÉ, pas de vocabulaire : toute phrase de la table qui parle du
+      // robot doit le faire au NÉGATIF. C'est le seul mode sous lequel ces phrases sont vraies —
+      // notre robot ne crée aucun canal, ne s'invite nulle part, ne désarchive rien.
+      // Les quatre gestes qu'un robot ne peut PAS faire dans Slack, et eux seuls : dire qu'il
+      // est membre d'un canal, ou qu'il ne l'est pas, reste une constatation légitime — c'est
+      // l'ACTION qui lui est interdite, pas la mention.
+      const ACTIONS = /\b(cré(?:e|er|é)|rejoin(?:t|dre)|invite|désarchive)\w*/i;
+      const { table } = tableDesRefus(texte);
+      for (const ligne of table.lignes) {
+        for (const cellule of ligne) {
+          if (!/robot/i.test(cellule) || !ACTIONS.test(cellule)) continue;
+          // La négation doit porter SUR l'action, dans la même proposition que le robot.
+          const nie = /\brobot\b[^.|;]{0,40}\bne\s+(?:se\s+|s['’])?\w*\s*(?:cré|rejoin|invite|désarchive)\w*/i.test(cellule);
+          assert.ok(
+            nie,
+            `une ligne de la table prête une action à notre robot sans la nier : « ${cellule} ». `
+              + 'Il ne crée aucun canal, ne rejoint aucun canal de lui-même et ne désarchive rien — un humain le fait.',
+          );
+        }
       }
     },
   },
@@ -251,11 +361,25 @@ export const CONTROLES = [
         'le texte doit dire qu’elle ne redésigne RIEN sur un poste déjà pourvu — sans quoi elle rejoue les commandes',
       );
       exigeImperatif(phrase[0], 'la promesse d’idempotence');
-      assert.match(
-        dehors,
-        /pour être sûr|n[e’']as rien à faire|s[e’']arrête là/i,
+
+      // ⚠️ LA SONDE PAR MOT-CLÉ NE FERMAIT RIEN, et la revue de fond l'a prouvé : « Tu peux
+      // relancer la désignation pour être sûr que rien n'a changé, ça ne coûte rien » garde le
+      // mot-clé « pour être sûr » et enseigne exactement le geste que la compétence existe pour
+      // supprimer. Une édition d'une seule phrase, parfaitement plausible.
+      //
+      // On garde donc la MODALITÉ de la phrase, sur ses deux portes : elle doit INTERDIRE, et
+      // elle ne doit pas permettre.
+      const parPrudence = dehors.match(/[^.]*pour être sûr[^.]*\./i);
+      assert.ok(
+        parPrudence,
         'le texte doit fermer la porte du « je relance pour être sûr » — c’est le geste qui use le poste',
       );
+      assert.match(
+        parPrudence[0],
+        /ne le fais (?:jamais|pas)|ne relance (?:jamais|pas)|jamais « pour être sûr »/i,
+        `« pour être sûr » doit être INTERDIT, pas mentionné : « ${parPrudence[0].trim()} »`,
+      );
+      exigeImperatif(parPrudence[0], 'l’interdiction de redésigner par prudence');
     },
   },
 
@@ -348,6 +472,56 @@ export const MUTATIONS = [
     quoi: 'la table perd le refus du trousseau — le premier que rencontre un poste neuf',
     cible: 'chaque-refus-est-cite-mot-pour-mot',
     muter: (t) => t.replace(/^\| `au trousseau de ce poste`[^\n]*\n/m, ''),
+  },
+  {
+    id: 'refus-de-lentree-vide-perdu',
+    quoi: 'la table perd l’entrée qui existe et qui est vide — un troisième cas, un autre geste',
+    cible: 'chaque-refus-est-cite-mot-pour-mot',
+    muter: (t) => t.replace(/^\| `existe au trousseau sous le compte`[^\n]*\n/m, ''),
+  },
+  {
+    id: 'refus-reformule-en-supposition',
+    quoi: 'le texte invite à résumer le refus dans ses mots — le défaut bloquant de la revue de fond',
+    cible: 'le-refus-se-relaie-tel-quel',
+    muter: (t) => remplacer(t, '**Recopie-le tel\nquel.**', '**Résume-le dans tes mots**, ce sera plus clair.'),
+  },
+  {
+    id: 'relais-du-refus-assoupli',
+    quoi: 'recopier le refus devient facultatif',
+    cible: 'le-refus-se-relaie-tel-quel',
+    muter: (t) => remplacer(t, 'Ne le reformule sous aucune forme', 'Tu peux le reformuler si tu le souhaites'),
+  },
+  {
+    id: 'le-robot-cree-le-canal',
+    quoi: 'un geste tabulé fait créer le canal par notre robot — ce qu’il ne peut pas faire',
+    cible: 'aucune-action-pretee-au-robot',
+    muter: (t) =>
+      remplacer(
+        t,
+        "s'il n'existe pas, un humain le crée dans Slack — notre robot ne crée aucun canal",
+        "s'il n'existe pas, notre robot le crée lui-même dans Slack",
+      ),
+  },
+  {
+    id: 'la-mesure-nie-ce-quelle-apprend',
+    quoi: 'le texte affirme que l’état ne dit pas quels rôles restent — et invite à tout redésigner',
+    cible: 'l-etat-se-mesure-avant-de-designer',
+    muter: (t) =>
+      t.replace(
+        /\*\*Les rôles qui n'ont pas de canal[\s\S]*?un copier-coller\./,
+        'L’état ne te dit **jamais** quels rôles restent à désigner — tu peux tous les redésigner par prudence.',
+      ),
+  },
+  {
+    id: 'redesigner-par-prudence-autorise',
+    quoi: 'relancer « pour être sûr » devient permis — le geste qui use le poste',
+    cible: 'l-idempotence-oblige',
+    muter: (t) =>
+      remplacer(
+        t,
+        'Mais ne le fais jamais « pour être sûr » :\nsur un rôle déjà pourvu du bon canal, tu n\'as rien à faire.',
+        'Tu peux relancer la désignation pour être sûr que rien n\'a changé, ça ne coûte rien.',
+      ),
   },
   {
     id: 'traduction-vers-un-role-inconnu',

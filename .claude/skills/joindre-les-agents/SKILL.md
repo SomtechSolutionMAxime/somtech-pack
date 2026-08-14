@@ -116,12 +116,13 @@ sur un rôle déjà pourvu du bon canal, tu n'as rien à faire.
 ## Si elle refuse
 
 Le refus est le cas qui compte le plus, et il a déjà été écrit avec soin. **Recopie-le tel
-quel.** Ne le reformule pas dans tes mots : une reformulation remplace ce qui a été **mesuré**
+quel.** Ne le reformule sous aucune forme : une reformulation remplace ce qui a été **mesuré**
 par ce qu'on en conclut, et c'est exactement ainsi qu'un refus se met à mentir.
 
 | Ce que le refus dit, mot pour mot | Ce qui a été mesuré | Le geste qui débloque |
 |---|---|---|
-| `au trousseau de ce poste` | Le poste n'a pas pu lire le jeton de notre robot — les deux gestes s'arrêtent là, avant même de joindre Slack | Recopie le message : il nomme l'entrée cherchée et le compte, et les gestes qu'il propose ne font que **regarder**. Ne dépose rien sur sa foi : il distingue l'entrée absente, celle qu'on n'a pas su lire et celle qui est vide, et les trois ne se corrigent pas pareil |
+| `au trousseau de ce poste` | Le jeton de notre robot n'a pas été obtenu — soit aucune entrée n'a répondu, soit la valeur n'a pas pu être lue. Les deux gestes s'arrêtent là, avant même de joindre Slack | Recopie le message : il nomme l'entrée cherchée et le compte, et il dit lequel des deux cas c'est. Ne dépose rien sur sa foi — une entrée qui manque et une entrée qu'on n'a pas su lire ne se corrigent pas pareil, et un jeton parfaitement valide donne le second |
+| `existe au trousseau sous le compte` | L'entrée est là, et elle est **vide** — la lecture a réussi, il n'y avait rien dedans. C'est ce que produit un collage avalé par une invite masquée | Ouvre le Trousseau d'accès, cherche l'entrée nommée par le message, et corrige sa valeur. Le message ne propose délibérément aucune commande : remplacer une entrée en place suppose de détruire ce qui y est |
 | `dans cet espace` | Aucun canal ne porte ce nom | Vérifie l'orthographe du canal ; s'il n'existe pas, un humain le crée dans Slack — notre robot ne crée aucun canal |
 | `est archivé — personne ne peut plus y écrire` | Le canal existe, en lecture seule — aucune consigne n'en partirait, et le robot en est toujours membre | Un compte humain le désarchive dans Slack, ou tu en désignes un autre |
 | `Un robot ne rejoint pas un canal de lui-même.` | Le canal existe et notre robot n'y est pas | Un humain l'y invite dans Slack, puis relance |
