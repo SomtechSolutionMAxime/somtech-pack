@@ -366,6 +366,43 @@ test('UN NOM QUI NE DÉSIGNE AUCUN AGENT VIVANT EST UN REFUS — pas une ligne q
   });
 });
 
+test('UN PANE REPRIS PAR UN AUTRE AGENT NE REÇOIT RIEN — le pair est revérifié à CHAQUE écho', async () => {
+  // ⚠️ TROUVÉ EN REVUE DE FOND, REPRODUIT AVANT D'ÊTRE CRU. Le pair est établi UNE FOIS, à
+  // l'ouverture ; `{nom, pane}` est ensuite figé au registre. Le pane du gestionnaire ferme,
+  // herdr en rouvre un sous le MÊME identifiant pour un autre agent — et tout le fil technique
+  // du chantier continuait de lui être remis, cadré « c'est ton pair qui te parle », avec
+  // `remis: true`. Si cet autre agent est le représentant d'un AUTRE client, c'est la fuite que
+  // ce lot ferme partout ailleurs, par la porte du temps.
+  const agents = equipe();
+  await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents }, async ({ ld, travail }) => {
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+
+    // Le gestionnaire meurt ; SON PANE est repris par le représentant d'un AUTRE client.
+    agents[1].name = 'bidule-gestionnaire';
+
+    const r = await ld(['dire', 'la migration casse la table facture']);
+    assert.equal(r.code, 0, r.stderr);
+    // LE FAIT : rien n'a été écrit dans ce pane, et celui qui a parlé l'APPREND.
+    assert.equal(travail.recu(PANE_GESTIONNAIRE), null, 'le nouvel occupant du pane ne reçoit rien');
+    assert.equal(JSON.parse(r.stdout).pair.remis, false, 'et l’orchestrateur n’est pas laissé croire que c’est passé');
+  });
+});
+
+test('UN PANE VIDÉ NE REÇOIT RIEN NON PLUS — dans les deux sens', async () => {
+  // L'autre porte du même défaut : l'écho vers l'ORCHESTRATEUR. Aucun nom n'est inscrit pour
+  // lui au registre, mais la vie de son pane l'est — la même garantie que le chemin entrant.
+  const agents = equipe();
+  await avecPoste({ lignes: [LIGNE_CLIENTE], canaux: [CANAL_CLIENT], agents }, async ({ ld, travail }) => {
+    assert.equal((await ld(['ouvrir', 'd-1', '--titre', 'Refonte du devis', '--au-gestionnaire', NOM_GESTIONNAIRE])).code, 0);
+    agents.splice(0, 1); // l'orchestrateur a disparu
+
+    const r = await ld(['dire', 'et lui, il en est où ?', '--a', 'd-1'], PANE_GESTIONNAIRE);
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(travail.recu(PANE_ORCHESTRATEUR), null, 'rien n’est écrit dans un pane sans agent');
+    assert.equal(JSON.parse(r.stdout).pair.remis, false, 'et le gestionnaire l’apprend');
+  });
+});
+
 // ═════════════════ 2-bis. PARLER SE PARTAGE, DISPOSER NON — l'autre porte de la même sélection
 
 test('LE GESTIONNAIRE NE FERME PAS LE CHANTIER DE SON ORCHESTRATEUR — ni ne l’archive', async () => {

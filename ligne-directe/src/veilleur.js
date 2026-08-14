@@ -690,6 +690,44 @@ export class Veilleur {
     }
     const vers = versPair ? pair.pane : ligne.pane;
     const socket = versPair ? pair.herdr_socket : ligne.herdr_socket;
+
+    // ═══ ON REVÉRIFIE QUI EST AU BOUT, À CHAQUE ÉCHO — le pair est établi UNE FOIS, à
+    // l'ouverture, et un pane n'appartient pas pour toujours à qui l'occupait ce jour-là.
+    //
+    // ⚠️ TROUVÉ EN REVUE DE FOND, ET REPRODUIT : `resoudrePair` vérifiait la vie et le rôle au
+    // moment d'attacher, puis `{nom, pane}` était figé au registre. Le pane du gestionnaire
+    // ferme, herdr en rouvre un sous le même identifiant pour un AUTRE agent — et tout le fil
+    // technique du chantier continuait de lui être remis, cadré « c'est ton pair qui te parle »,
+    // avec `remis: true`. Si cet autre agent est le représentant d'un AUTRE client, c'est la
+    // fuite que ce lot ferme partout ailleurs, par la porte du temps.
+    //
+    // VERS LE PAIR, on exige le pane ET LE NOM : c'est ce que le registre sait de lui, et un
+    // pane repris par quelqu'un d'autre ne porte plus ce nom. VERS L'ORCHESTRATEUR, on exige la
+    // vie du pane — la même garantie que `remettreAuChantier` applique à l'entrant, ni plus
+    // (aucun nom n'est inscrit pour lui) ni moins.
+    let porteurs;
+    try {
+      porteurs = await this.herdr.agents();
+    } catch (err) {
+      // Herdr injoignable N'EST PAS un agent mort (T-20260813-0054) — mais ce n'est pas non plus
+      // une permission de remettre à l'aveugle. On ne remet pas, et on le DIT à qui a parlé.
+      journaliser(`écho non remis — #${ligne.canal_nom} : herdr injoignable (${err.message})`);
+      return { remis: false, pane: vers, raison: `herdr injoignable : ${err.message}` };
+    }
+    const occupant = porteurs.find((a) => a.pane_id === vers);
+    if (!occupant || (versPair && occupant.name !== pair.nom)) {
+      journaliser(
+        `écho non remis — #${ligne.canal_nom} : ${vers} ne porte plus ` +
+          (versPair ? `« ${pair.nom} » (${occupant ? `c'est « ${occupant.name} »` : 'plus aucun agent'})` : "l'agent de cette ligne")
+      );
+      return {
+        remis: false,
+        pane: vers,
+        raison: occupant
+          ? `ce pane porte désormais un autre agent — rien ne lui a été remis`
+          : `plus aucun agent ne travaille dans ce pane`,
+      };
+    }
     const cadre = cadrerPourPair({
       chantier: ligne.chantier,
       texte,
