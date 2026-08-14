@@ -26,7 +26,9 @@
       "Bash(gh release*)",
       "Bash(npm publish*)",
       "Bash(npx *)",
-      "Bash(supabase*)"
+      "Bash(supabase*)",
+      "Bash(curl*)",
+      "Bash(wget*)"
     ]
   }
 }

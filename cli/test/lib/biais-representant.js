@@ -315,22 +315,35 @@ export const CONTROLES_BIAIS = [
       const s = sectionDe(metier, /porte notre nom/i, 'sur ce que son écrit engage');
       const table = tableDe(s.corps);
       const iAngle = colonneDe(table, /^Ce que tu écris$/i, 'ce que tu écris');
+      const iEngage = colonneDe(table, /^Ce que ça engage$/i, 'ce que ça engage');
       const iFait = colonneDe(table, /^Ce que tu fais$/i, 'ce que tu fais');
 
+      // ⚠️ LA COLONNE DU MILIEU A ÉTÉ LAISSÉE SANS GARDE DANS LA PREMIÈRE VERSION, et c'est
+      // la revue de fond qui l'a dit, par une mutation restée verte : permuter l'enjeu de
+      // « la parole » avec celui du « chiffre » ne faisait rougir personne. Un tiers d'une
+      // table présentée comme « trois portes d'une même pièce » n'était vérifié par rien.
+      //
+      // Ce n'est pas un détail d'exhaustivité : cette colonne est ce qui DIT POURQUOI la
+      // conduite d'en face oblige. Permutée, elle enseigne qu'un chiffre engage notre lecture
+      // des faits et qu'une parole engage une facture — deux justifications fausses, sous
+      // lesquelles la conduite juste devient incompréhensible, donc négociable.
       const ANGLES = [
         {
           quoi: 'la parole — un problème remonte avant d’être dit',
           angle: /la parole/i,
+          engage: /responsabilité/i,
           fait: [/remonte/i, /avant/i],
         },
         {
           quoi: 'la citation — jamais de guillemets sur ce qu’on n’a pas lu',
           angle: /la citation/i,
+          engage: /officiellement/i,
           fait: [/aucun guillemet/i, /textuellement/i],
         },
         {
           quoi: 'le chiffre — l’envergure seulement',
           angle: /le chiffre/i,
+          engage: /facture/i,
           fait: [/aucun chiffre/i, /envergure/i],
         },
       ];
@@ -341,9 +354,28 @@ export const CONTROLES_BIAIS = [
           + `laisse une porte ouverte que les deux autres ne ferment pas`,
       );
 
-      for (const { quoi, angle, fait } of ANGLES) {
+      for (const { quoi, angle, engage, fait } of ANGLES) {
         const ligne = ligneUnique(table, iAngle, angle, quoi);
         const action = ligne[iFait] ?? '';
+
+        // L'ENJEU, ET SES DEUX PORTES. Présent en face du bon angle NE SUFFIT PAS : permuter
+        // deux cellules laisse les trois enjeux présents dans la table et les apparie tous
+        // au mauvais angle. On exige donc aussi qu'il soit ABSENT des deux autres lignes.
+        assert.match(
+          ligne[iEngage] ?? '', engage,
+          `« ${quoi} » : l'enjeu écrit en face est « ${ligne[iEngage]} », qui ne dit plus ce que `
+            + `cet angle engage — la conduite d'en face perd sa raison d'obliger`,
+        );
+        const ailleurs = table.lignes
+          .filter((l) => l !== ligne)
+          .map((l) => l[iEngage] ?? '')
+          .filter((c) => engage.test(c));
+        assert.deepEqual(
+          ailleurs, [],
+          `l'enjeu de « ${quoi} » figure aussi en face d'un autre angle (« ${ailleurs.join(' · ')} ») — `
+            + `les enjeux sont permutés, et chaque conduite est justifiée par le risque d'une autre`,
+        );
+
         for (const sonde of fait) {
           assert.match(
             action, sonde,
@@ -382,9 +414,22 @@ export const CONTROLES_BIAIS = [
       const allow = config.permissions?.allow ?? [];
       assert.ok(Array.isArray(deny) && deny.length > 0, 'les droits du lieu doivent porter une liste de refus non vide');
 
+      // ⚠️ CE QUE CE CONTRÔLE NE PROUVE PAS, ET LA REVUE DE FOND A EU RAISON DE L'EXIGER ICI.
+      //
+      // Refuser `WebFetch` et `WebSearch` retire DEUX OUTILS, pas UNE CAPACITÉ. Le troisième
+      // fait mesuré (voir l'en-tête) est sans appel : une commande shell non listée s'exécute
+      // sans rien demander. `curl` et `wget` sont donc refusés eux aussi — mais `python3 -c`
+      // et une dizaine d'autres chemins restent ouverts.
+      //
+      // `deny` est une LISTE FINIE CONTRE UN PHÉNOMÈNE OUVERT. Ce contrôle garde les portes
+      // qu'on prend sans y penser ; il ne clôt pas le shell, et personne ne doit lire son vert
+      // comme « le web est fermé ». La compétence qui pose le lieu dit la même limite, dans
+      // les mêmes termes — c'est délibéré : une garantie surestimée est pire qu'une absente.
       const REFUSES = [
         { quoi: 'la lecture d’une page web', outil: 'WebFetch' },
         { quoi: 'la recherche sur le web', outil: 'WebSearch' },
+        { quoi: 'la porte de sortie la plus banale vers le web', outil: 'Bash(curl*)' },
+        { quoi: 'sa jumelle', outil: 'Bash(wget*)' },
         { quoi: 'l’écriture de fichiers', outil: 'Edit' },
         { quoi: 'la création de fichiers', outil: 'Write' },
       ];
@@ -565,6 +610,19 @@ export const MUTATIONS_BIAIS = [
     ),
   },
   {
+    id: 'biais-les-enjeux-de-l-autorite-permutes',
+    quoi: 'les enjeux de « la parole » et du « chiffre » sont permutés — chaque conduite est justifiée par le risque d’une autre',
+    cible: 'biais-autorite-trois-angles',
+    fichier: 'metier',
+    // La mutation que la revue de fond a posée et qui est RESTÉE VERTE : la colonne du milieu
+    // n'était lue par aucun contrôle. Elle reste ici pour que ce trou ne puisse pas revenir.
+    muter: (t) => permuter(
+      t,
+      'notre responsabilité sur ta lecture des faits, et ta lecture de la première heure est souvent fausse',
+      'une facture et une échéance, quelle que soit ta prudence de langage',
+    ),
+  },
+  {
     id: 'biais-la-contrainte-devient-un-conseil',
     quoi: 'l’interdit de citer ce qu’on n’a pas lu garde TOUS ses mots et cesse d’obliger — « essaie de t’y tenir »',
     cible: 'biais-autorite-trois-angles',
@@ -595,6 +653,16 @@ export const MUTATIONS_BIAIS = [
     cible: 'biais-droits-bornes',
     fichier: 'droits',
     muter: (t) => t.replace(/^\s*"WebFetch",\n/m, ''),
+  },
+  {
+    id: 'biais-la-porte-de-sortie-du-shell-se-rouvre',
+    quoi: 'la commande `curl` n’est plus refusée — le web redevient atteignable sans passer par aucun outil web',
+    cible: 'biais-droits-bornes',
+    fichier: 'droits',
+    // Trouvée par la revue de fond : la première version refusait les deux OUTILS du web et
+    // laissait la CAPACITÉ ouverte par le shell. Mesuré depuis : `Bash(curl*)` dans `deny`
+    // fait refuser la commande, et une commande non listée s'exécute sans rien demander.
+    muter: (t) => t.replace(/,\n\s*"Bash\(curl\*\)"/, ''),
   },
   {
     id: 'biais-le-web-passe-du-cote-permis',
