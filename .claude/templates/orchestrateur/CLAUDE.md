@@ -583,7 +583,7 @@ Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minus
 **c. Livrer le brief par référence — et vérifier qu'il a été PRIS, pas seulement envoyé.**
 
 ```bash
-node <depot>/naissance-representant/bin/livrer.js "$P" \
+node $HOME/.somtech/naissance-representant/bin/livrer.js "$P" \
   --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet au registre — epics action get E-20260727-0010 — et execute-le.'
 ```
 
