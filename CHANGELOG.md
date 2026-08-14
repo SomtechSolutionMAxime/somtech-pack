@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.47.0] - 2026-08-14
+
+### Ajouté
+
+- **`/joindre-les-agents` — la compétence qui désigne les canaux communs et le dirigeant** (T-20260814-0071, PR #224). Trois commandes brutes restaient à taper à la main, avec un ordre qui compte et deux pièges que rien n'annonçait : le rôle du gestionnaire s'écrit `representant` — son nom interne — et un canal par rôle, un rôle par canal. **Troisième fois que la mécanique partait sans son interface**, et troisième fois que c'est le dirigeant qui l'attrape après coup.
+- **Elle mesure l'état avant d'agir** au lieu de rejouer les commandes à l'aveugle : le dirigeant est-il déjà désigné, **quels rôles n'ont pas encore de canal** — la question qu'un humain ne peut pas se poser sans lire le registre —, le canal existe-t-il, le robot y est-il. Relancée sur un poste configuré, elle dit ce qui est en place et **ne refait rien**.
+- **Elle porte la traduction des noms internes** : on dit « gestionnaire », la commande attend `representant`. La table est confrontée aux rôles que le code déclare — chaque rôle connu doit y figurer, et aucun rôle inventé n'est toléré.
+- **Aucune mécanique neuve** : trois fichiers ajoutés, aucun modifié, `ligne-directe/` intact. La mise à jour du pack reste hors périmètre — gardé par un test, pas par une intention.
+
+### Corrigé
+
+- **Le refus du trousseau n'était expliqué nulle part**, alors que c'est le premier qu'un poste neuf rencontre. Trouvé en écrivant la compétence, corrigé dedans.
+- **Les refus sont relayés, jamais reformulés** — et cette exigence n'avait, elle, aucun contrôle : la revue de fond l'a signalée bloquante, rouvrant `T-20260811-0087`. Un test exige désormais que chaque fragment cité existe **littéralement** dans le code qui le rend. Trois tours de revue, cinq défauts, dont quatre correctifs qui se contournaient eux-mêmes — trois par simple ajout. Les neuf mutations qui ont contourné une garde sont conservées telles quelles dans le harnais.
+
 ## [1.46.0] - 2026-08-14
 
 ### Ajouté
