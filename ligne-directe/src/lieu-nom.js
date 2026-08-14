@@ -83,18 +83,33 @@ export function nomDeLieuValide(nom) {
 }
 
 /**
+ * LA RÈGLE, DITE EN FRANÇAIS — un seul texte, comme la règle elle-même.
+ *
+ * ⚠️ RELEVÉ EN REVUE (passe 2), ET LA LEÇON VAUT AU-DELÀ D'ICI. Le correctif avait laissé
+ * `--help` et le README du CLI prescrire des « minuscules » pendant que le code acceptait la
+ * casse libre : l'opérateur lisait l'inverse de ce que la commande faisait. La garde posée en
+ * réponse cherchait des TOURNURES INTERDITES — une liste noire. La revue l'a défaite en une
+ * mutation : réécrire « bas de casse uniquement » ou « lowercase only » passait à travers.
+ *
+ * On ne garde donc plus l'accord entre deux textes : IL N'Y EN A PLUS QU'UN. L'aide du CLI et
+ * le refus le CITENT tous deux — un texte qu'on n'écrit pas ne peut pas contredire le code —,
+ * et un test exige de le retrouver, littéralement, là où l'opérateur lit. Changer la règle,
+ * c'est changer cette constante ; tout ce qui la cite suit sans qu'on y pense.
+ */
+export const REGLE_NOM_DE_LIEU =
+  'un seul segment de chemin (lettres, chiffres, tirets, soulignés ; commençant par une ' +
+  'lettre ou un chiffre). La casse est libre et portée telle quelle — « Francois » et ' +
+  '« francois » désignent le même lieu — mais un nom qui traverse un répertoire ' +
+  '(« / », « \\ », « .. ») écrirait hors du dépôt : c\'est refusé.';
+
+/**
  * Le refus d'un nom, dit d'une seule façon pour les deux gestes.
  *
  * @param {string} nom       ce qui a été reçu
  * @param {string} designe   comment l'appelant nomme ce paramètre (« --client », « <nom> »…)
  */
 export function messageNomInvalide(nom, designe = 'nom') {
-  return (
-    `${designe} : un seul segment de chemin (lettres, chiffres, tirets, soulignés ; commençant ` +
-    `par une lettre ou un chiffre), reçu « ${String(nom ?? '')} ». La casse est libre et PORTÉE telle ` +
-    `quelle — « Francois » et « francois » désignent le même lieu — mais un nom qui traverse ` +
-    `un répertoire (« / », « \\ », « .. ») écrirait hors du dépôt : c'est refusé.`
-  );
+  return `${designe} : ${REGLE_NOM_DE_LIEU} Reçu « ${String(nom ?? '')} ».`;
 }
 
 /** Levée quand un nom franchit la garde par une porte qui aurait dû le valider avant. */

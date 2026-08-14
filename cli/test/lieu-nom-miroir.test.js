@@ -128,32 +128,52 @@ test('aucune SECONDE règle de nommage ne subsiste dans le CLI', () => {
   }
 });
 
-test('ce que l’opérateur LIT dit la même règle que ce que le code APPLIQUE', () => {
-  // RELEVÉ EN REVUE (passe 2), et c'est le motif 3 par la porte qu'on n'avait pas comptée :
-  // le code appliquait bien la casse libre pendant que `--help` et le README continuaient
-  // d'exiger « minuscules/chiffres/tirets ». L'aide est le PREMIER endroit qu'un opérateur
-  // consulte avant d'agir — un lot qui corrige le code en laissant la consigne périmée
-  // n'a corrigé qu'une porte sur deux, et c'est la porte humaine qui reste ouverte.
+test('ce que l’opérateur LIT est la règle elle-même, CITÉE — jamais une seconde description', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // DEUX FOIS RELEVÉ EN REVUE (passe 2), ET LA SECONDE FOIS CONTRE MA PROPRE GARDE.
   //
-  // La garde est par le FAIT, pas par le mot : on prend un nom que la règle ACCEPTE
-  // aujourd'hui, et on refuse que les textes d'aide le déclarent interdit.
-  const textes = {
-    'src/cli.js': readFileSync(join(CLI_DIR, 'src', 'cli.js'), 'utf8'),
-    'README.md': readFileSync(join(CLI_DIR, 'README.md'), 'utf8'),
-  };
+  // 1er relevé : le code appliquait la casse libre pendant que `--help` et le README
+  //    exigeaient « minuscules/chiffres/tirets ». L'aide est le PREMIER endroit qu'un
+  //    opérateur consulte avant d'agir : le lot corrigeait le code et laissait ouverte la
+  //    porte humaine.
+  // 2e relevé : la garde posée en réponse cherchait des TOURNURES INTERDITES — une liste
+  //    noire. La revue l'a défaite en une mutation, sans toucher au code : réécrire
+  //    « bas de casse uniquement » ou « lowercase only » passait à travers, et le test
+  //    restait vert. Motif 1 du brief, posé de la main même qui voulait le fermer.
+  //
+  // On ne garde donc plus l'ACCORD entre deux textes : il n'y en a plus qu'un. `cli.js`
+  // interpole `REGLE_NOM_DE_LIEU`, et le README la porte à la lettre. Ce test l'exige par
+  // COMPARAISON LITTÉRALE à la source — pas par motif, pas par mot-clé. Réécrire l'aide à la
+  // main, dans n'importe quelle langue et n'importe quelle tournure, fait rougir : le texte
+  // exigé n'y est plus.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const { REGLE_NOM_DE_LIEU } = await import(pathToFileURL(COPIE).href);
+  assert.ok(REGLE_NOM_DE_LIEU.length > 80, 'la règle doit être une phrase, sinon la retrouver ne prouverait rien');
 
-  // Toute prescription qui EXIGE des minuscules pour un nom de lieu contredit la règle.
-  const PRESCRIT_MINUSCULES = /minuscules?\s*\/\s*chiffres|en minuscules?\s*\(lettres|slug en minuscules/i;
-  for (const [nom, texte] of Object.entries(textes)) {
-    assert.ok(
-      !PRESCRIT_MINUSCULES.test(texte),
-      `cli/${nom} prescrit encore des minuscules pour un nom de lieu, alors que la règle les accepte `
-        + `librement (« Francois » est valide) — l’opérateur lirait l’inverse de ce que le code fait`,
-    );
+  // L'aide RENDUE, pas le source : c'est ce que l'opérateur voit. Une constante importée mais
+  // jamais interpolée laisserait le source vert et l'aide muette.
+  const { run } = await import(pathToFileURL(join(CLI_DIR, 'src', 'cli.js')).href);
+  const avant = console.log;
+  let aide = '';
+  console.log = (...a) => { aide += a.join(' ') + '\n'; };
+  try {
+    await run(['--help']);
+  } finally {
+    console.log = avant;
   }
 
-  // Contre-preuve : le nom qui a motivé ce ticket est bien accepté par la règle appliquée.
-  assert.equal(nomDeLieuValide('Francois'), true, 'témoin : si « Francois » était refusé, l’aide aurait raison et ce test serait à l’envers');
+  assert.ok(
+    aide.includes(REGLE_NOM_DE_LIEU),
+    'l’aide rendue par « --help » ne porte pas la règle telle qu’elle est écrite dans lieu-nom.js — '
+      + 'une seconde description est réapparue, et c’est elle que l’opérateur lira avant d’agir',
+  );
+  assert.ok(
+    readFileSync(join(CLI_DIR, 'README.md'), 'utf8').includes(REGLE_NOM_DE_LIEU),
+    'cli/README.md ne porte pas la règle telle qu’elle est écrite dans lieu-nom.js — même défaut, autre porte',
+  );
+
+  // Et la règle CITÉE est bien celle qui est APPLIQUÉE : le nom qui a motivé ce ticket passe.
+  assert.equal(nomDeLieuValide('Francois'), true, 'témoin : si « Francois » était refusé, la règle citée mentirait et ce test serait à l’envers');
 });
 
 test('la règle unique ne dépend que de node: — c’est ce qui rend le miroir possible', () => {

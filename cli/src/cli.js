@@ -8,6 +8,10 @@ import { cmdSetup } from './commands/setup.js';
 import { cmdBrd } from './commands/brd.js';
 import { cmdArchi, isArchiCommand } from './commands/archi.js';
 import { cmdRepresentantUpdate, cmdOrchestrateurUpdate } from './commands/representant.js';
+// L'aide CITE la règle, elle ne la décrit pas (T-20260814-0101, relevé en revue) : deux
+// textes qui disent la même chose divergent, c'est mécanique — et ici le texte périmé était
+// le PREMIER que l'opérateur lisait avant d'agir.
+import { REGLE_NOM_DE_LIEU } from './lieu-nom.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -110,17 +114,13 @@ Commandes :
            (.gestionnaire/<client>/) : CLAUDE.md reprend TOUJOURS la version du pack
            (convergence, backup .somtech.bak), CONTEXTE.md n'est JAMAIS touché
            (RA-REL-014). Échoue si le lieu n'existe pas encore (ne pose rien).
-           --client <nom>  (obligatoire) — un seul segment de chemin : lettres, chiffres,
-           tirets, soulignés. La CASSE EST LIBRE et portée telle quelle : « Francois » et
-           « francois » désignent le même lieu, et le nom réel du dossier est celui qui a
-           été posé. Un nom qui traverse un répertoire (« / », « \\ », « .. ») est refusé.
+           --client <nom>  (obligatoire) — ${REGLE_NOM_DE_LIEU}
   orchestrateur-update  Rafraîchit un lieu d'orchestrateur déjà posé dans ce dépôt
            (.orchestrateur/<nom>/) : même frontière — CLAUDE.md converge vers le pack,
            CONTEXTE.md (à qui il répond, le gestionnaire du projet, sa PORTÉE) n'est
            JAMAIS touché. Sa portée écrite est ce qui empêche deux orchestrateurs d'un
            même dépôt de se marcher dessus.
-           --nom <nom>  (obligatoire) — mêmes règles que --client ci-dessus : un seul
-           segment de chemin, casse libre et portée, évasion refusée.
+           --nom <nom>  (obligatoire) — ${REGLE_NOM_DE_LIEU}
 
 Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
   harvest-supabase --discover <racine> --app <slug>  Grain tables + FK + descriptions (SQL du dépôt)
