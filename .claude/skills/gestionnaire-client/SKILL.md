@@ -170,6 +170,28 @@ Dire qu'on attend n'a jamais coûté un client ; laisser croire que ça avance, 
   *tous* les clients ; un représentant qui y aurait accès pourrait lire le dossier d'un
   autre. Seul le ServiceDesk figure dans `.mcp.json` — vérifie-le en lisant les clés
   déclarées, jamais en supposant qu'une absence de mention suffit.
+- **Elle lui retire les outils du web** — `WebFetch`, `WebSearch`, et les commandes `curl` et
+  `wget`, refusés nommément. Le web est l'entrée la plus directe du biais anglo-occidental —
+  on y cherche une règle de protection des renseignements, on y trouve le RGPD — et le chemin
+  par lequel une phrase lue ailleurs repart chez le client sous notre en-tête. Ses sources
+  sont le registre et ce que le client lui dit ; son métier n'emploie le web nulle part.
+
+  **Et voilà exactement ce que ça ne ferme pas.** Trois faits mesurés sur un poste, en faisant
+  naître de vraies sessions bornées — jamais déduits d'une documentation :
+
+  | Ce qui a été mesuré | Ce qu'on en tire |
+  |---|---|
+  | un outil nommé dans `deny` **disparaît** de la session, même dans un dépôt non approuvé | la garantie tient là, et seulement là |
+  | un outil nommé dans `allow` est **ignoré** tant qu'un humain n'a pas approuvé le dépôt une première fois | on n'écrit jamais une protection dans `allow` |
+  | une commande shell **non listée s'exécute sans rien demander** | tout ce qui n'est pas refusé est atteignable |
+
+  Le troisième est celui qui compte : `deny` est une **liste finie contre un phénomène
+  ouvert**. `python3 -c` et une dizaine d'autres chemins atteignent le web sans passer par
+  `curl`. Ce bornage retire donc les portes qu'on prend sans y penser — il ne clôt pas le
+  shell, et personne ne doit le lire comme s'il le faisait. Ce qui couvre le reste est une
+  ligne du métier, dans `CLAUDE.md` : *« tu ne vas jamais chercher ailleurs ce que tu n'as
+  pas — tes sources sont deux : le registre, et ce que ce client t'a dit »*. Les deux moitiés
+  sont nécessaires, et aucune ne remplace l'autre.
 
 ## Ce que cette compétence n'abroge pas
 
