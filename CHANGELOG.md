@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.49.1] - 2026-08-14
+
+### Corrigé
+
+- **Le brief se livre par la commande du poste, jamais par un chemin de dépôt** (T-20260814-0140, PR #232). Le métier de l'orchestrateur et `/orchestrer-chantier` prescrivaient tous deux `node <depot>/naissance-representant/bin/livrer.js`. Or ce module porte `"scope": "poste"` : il vit dans `~/.somtech` et **n'est jamais copié dans un dépôt**. Mesuré sur les quatre dépôts clients — le dossier n'y existe nulle part. **Tout orchestrateur posé chez un client qui suivait son propre métier à la lettre obtenait un `MODULE_NOT_FOUND`**, et le chemin résolvait dans le pack, le seul dépôt qui héberge les deux par hasard : donc nulle part où on l'éprouve. Le code, lui, avait écrit le motif mot pour mot — *« dans le dépôt d'un client, il ne pointerait sur rien »* — pendant que deux documents ne le suivaient pas.
+- **Le contrôle posé ne cherche pas ces deux chemins-là.** Il lit `pack.json` pour savoir quels modules sont de portée poste, lit l'installateur pour savoir où le poste les installe, et lit `pack.json` encore pour savoir ce que le module `core` distribue sous `.claude/`. Une racine ajoutée demain y entre seule ; un module qui devient « poste » aussi. Et il **refuse de tourner** si le manifeste cesse de déclarer ce qu'il lit, plutôt que de rester vert sur rien.
+- **Ce contrôle a failli deux fois sur son propre périmètre**, jamais sur ce qu'il mesure — et la revue de fond l'a démasqué les deux fois. Il ne regardait d'abord que `CLAUDE.md` et `SKILL.md` : le même défaut réintroduit dans le `settings.json` posé **juste à côté, dans le même dossier, recopié chez le même client**, restait vert. Élargi à quatre sous-dossiers *choisis à la main*, il laissait encore `agents/`, `hooks/`, `schemas/`, `user-skills/` et le `settings.json` racine hors de vue, alors que `core` distribue `.claude/` en entier. **Un contrôle qui décide lui-même de ce qu'il regarde décide aussi de ce qu'il ne verra pas** — le motif est écrit en tête du fichier.
+- **Ce que ce correctif ne fait pas descendre tout seul.** Les lieux d'orchestrateur déjà posés gardent l'ancienne forme, et les deux moitiés ne voyagent pas par le même geste : la compétence par `pack update`, le métier du lieu par `pack orchestrateur-update --nom <nom>`. Deux lieux clients sont concernés, et leur rafraîchissement demande une session ouverte dans chacun.
+
 ## [1.49.0] - 2026-08-14
 
 ### Corrigé
