@@ -63,7 +63,16 @@ export const IDS_COMMUNS_RETENUS = [
 ];
 
 /** Ceux qu'on écarte — nommés, pour qu'un renommage en amont se voie au lieu de les faire sauter. */
-export const IDS_COMMUNS_ECARTES = ['le-principe-precede-la-procedure', 'la-pr-reste-un-brouillon'];
+export const IDS_COMMUNS_ECARTES = [
+  'le-principe-precede-la-procedure',
+  'la-pr-reste-un-brouillon',
+  // T-20260814-0139 — la naissance refuse un lieu qu'aucun commit ne porte. Écarté ici parce
+  // que cette compétence NE POSE AUCUN LIEU et NE FAIT NAÎTRE PERSONNE : elle désigne le
+  // dirigeant et les canaux communs du poste. Lui demander d'enseigner un refus qu'elle ne
+  // peut pas rencontrer y ajouterait du texte que personne n'appliquerait — et un texte
+  // inapplicable est la première chose qu'on cesse de lire.
+  'le-versement-est-opposable',
+];
 
 export function communsRetenus() {
   const connus = new Set(CONTROLES_COMMUNS.map((c) => c.id));

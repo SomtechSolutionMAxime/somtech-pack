@@ -317,7 +317,8 @@ export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
   if (absentsDeTouteHistoire.length === GABARITS.length) {
     return (
       `aucun commit ne porte « ${lieu} » — ce lieu n'existe que sur ce disque, et il ` +
-      `disparaît avec lui. Verse-le : « git add » sur le lieu, puis un commit.`
+      `disparaît avec lui. La compétence qui l'a posé demande de le verser ; c'est ce geste :\n` +
+      `  git add ${lieu} && git commit -m "chore(${role}) : installe le lieu de ${nom}"`
     );
   }
 
@@ -331,16 +332,19 @@ export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
     return (
       `ce lieu est versé à moitié : aucun commit ne porte ${absentsDeTouteHistoire.join(', ')} ` +
       `(sous « ${lieu} »). Un lieu repris ailleurs — autre clone, autre poste — naîtra sans ` +
-      `eux, et rien ne le signalera. Verse-les.`
+      `eux, et rien ne le signalera. Le geste :\n` +
+      absentsDeTouteHistoire.map((f) => `  git add ${lieu}/${f}`).join('\n') +
+      `\n  git commit -m "chore(${role}) : verse le lieu de ${nom} en entier"`
     );
   }
 
   const settings = join(lieu, '.claude', 'settings.json');
   if (!git('diff', '--quiet', 'HEAD', '--', settings)) {
     return (
-      `la garde d'ouverture que je viens de poser n'est dans aucun commit (« ${settings} ») — ` +
-      `un changement de branche la retirerait sans un mot, et le fichier resterait valide, ` +
-      `simplement sans garde. Verse-la.`
+      `la garde d'ouverture posée dans ce lieu n'est dans aucun commit — un changement de ` +
+      `branche la retirerait sans un mot, et le fichier resterait valide, simplement sans ` +
+      `garde. Le geste :\n` +
+      `  git add ${settings} && git commit -m "chore(${role}) : verse la garde d ouverture de ${nom}"`
     );
   }
 

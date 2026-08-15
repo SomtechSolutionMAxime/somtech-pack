@@ -145,6 +145,20 @@ gh pr create --draft --title "chore(representant): installe le representant de <
 Passe la PR en prêt (`gh pr ready`) une fois que quelqu'un l'a relue — cette compétence ne
 fusionne jamais elle-même.
 
+> **Ce versement n'est plus facultatif, et ce n'est plus toi qui le rappelles.** Depuis
+> `T-20260814-0139`, **la naissance refuse** un lieu qu'aucun commit ne porte, un lieu versé
+> à moitié, ou un lieu dont la garde d'ouverture n'a jamais été versée. Le refus tombe
+> **avant la moindre écriture** — rien de posé, aucun pane — et son message nomme la commande
+> exacte qui le lève.
+>
+> Ce n'est pas une exigence nouvelle : c'est celle du paragraphe ci-dessus, devenue
+> opposable. Mesuré au moment de l'arbitrage : sur cinq lieux clients posés, **trois
+> portaient une garde qu'aucun commit ne contenait**, et un `git checkout` les désarmait sans
+> un mot — le fichier restant un `settings.json` valide, simplement sans `hooks`.
+>
+> Concrètement : **un lieu posé et non versé fera refuser l'ouverture de sa session**, qui est
+> un autre lot. Verse avant de passer la main.
+
 **Si la commande a rendu un avertissement** (`avertissements`, le plus souvent : aucun
 fichier d'environnement à la racine du dépôt), **dis-le** avant de continuer. Ce n'est pas
 bloquant — le lieu est créé quand même — mais un représentant né sans accès au registre le
