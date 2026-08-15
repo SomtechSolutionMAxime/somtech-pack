@@ -5,6 +5,22 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.50.1] - 2026-08-15
+
+### Corrigé
+
+- **Parler à un agent qui travaille ne rend plus un échec sur un message arrivé** (T-20260815-0007, PR #239). Régression de `v1.50.0`, trouvée **une heure après sa publication**, en production — par l'outil livré, en s'en servant pour rendre compte. Le message part bien : sur un destinataire occupé, il est **mis en file d'attente**. C'est le verdict qui mentait, et il mentait sur le chemin par lequel un chef d'équipe rend compte à son coordonnateur — où le destinataire est occupé la plupart du temps. Un orchestrateur qui croit son message perdu le renvoie, donc rejoue le défaut que `v1.50.0` venait de fermer.
+- **On ne demande plus une attente dont on sait qu'elle ne peut pas être satisfaite.** `--wait --until working` guette une *transition* vers « working » : sur un agent qui y est déjà, elle ne peut rien observer et expire. On fabriquait ainsi soi-même le faux négatif qu'on allait ensuite interpréter. La mesure du 2026-08-14 l'avait pourtant écrit — la conséquence n'en avait pas été tirée sur la commande construite.
+- **La file d'attente devient un témoin de prise**, au même rang que « la boîte s'est vidée » et « le statut a quitté l'attente ». C'est le seul témoin **positif** disponible sur un pair occupé : le statut ne bouge pas, et la boîte est vide *parce que* le message en est sorti. Il est cherché dans l'écran **brut** — il est rendu en gris, et la lecture de boîte retire le gris, à raison. Le même écran sert deux besoins opposés.
+- **Et il ne prouve que s'il est APPARU.** Un destinataire qui avait déjà des messages en attente porte le marqueur avant qu'on écrive : s'en contenter aurait retrouvé « la boîte vide » sous un autre nom — un état vrai de toute façon, c'est-à-dire pas une preuve.
+
+### Technique
+
+- **Le témoin ajouté n'était prouvé par aucun essai — relevé en revue de fond, et c'est le motif de ce dépôt rejoué dans le correctif d'un correctif, à une heure d'intervalle.** Le neutraliser entièrement laissait les douze essais verts, y compris les deux écrits nommément pour ce ticket. La raison est instructive : le correctif a **deux moitiés**, et la première — retirer l'attente impossible — suffisait à réparer la panne rapportée. La seconde était donc invisible, faute d'un scénario qui la sollicite. Un essai l'isole désormais : l'appel se rapporte en échec, le destinataire travaillait déjà, et le message est pourtant parti — il ne reste que le marqueur. Les trois mutations de la revue rougissent.
+- **La reconnaissance du marqueur s'accroche au fait, pas à la tournure** : « Press up to edit » est de la formulation, « queued messages » est ce qui est dit. Si la phrase change quand même, la panne est **silencieuse** — le témoin cesse de témoigner et le code retombe sur les autres. Le risque est nommé à l'endroit du code où il se joue.
+- **Le sens du champ `attendu` dépend du destinataire** et ne l'était nulle part : sur une session en attente c'est une transition observée, sur un pair au travail c'est seulement l'acceptation de l'appel. Documenté là où il est rendu. Aucun consommateur affecté.
+- **Un risque résiduel est laissé ouvert sciemment** : si l'envoi rendait un succès en perdant le message, sans file ni écriture, rien ne le verrait. Aucun témoin n'existe pour ce cas — en inventer un serait précisément la preuve creuse que ce lot et le précédent viennent de retirer deux fois.
+
 ## [1.50.0] - 2026-08-15
 
 ### Corrigé
