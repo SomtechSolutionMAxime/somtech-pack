@@ -532,6 +532,35 @@ export async function inviter(jetonRobot, canal, utilisateurs) {
   }
 }
 
+/**
+ * POSE UN CROCHET SUR UN MESSAGE — l'accusé de réception du dirigeant (T-20260815-0011).
+ *
+ * ⚠️ CE GESTE NE DIT PAS « J'AI REÇU », IL DIT « IL L'A ». C'est l'appelant qui en répond : il ne
+ * doit l'appeler qu'une fois la PRISE constatée chez l'agent — boîte vidée, message en file
+ * d'attente, ou session sortie de l'attente. Posé plus tôt, il mentirait dans le pire sens : le
+ * dirigeant s'y fierait, cesserait d'écrire « allo », et ce jour-là le message serait perdu.
+ *
+ * ⚠️ ET IL NE FAIT JAMAIS ÉCHOUER CE QU'IL ACCUSE. Un droit `reactions:write` manquant, un
+ * doublon, un message effacé entre-temps : rien de tout cela ne doit empêcher un message
+ * d'arriver. On rend `false`, l'appelant journalise, la mission continue — on aurait sinon
+ * troqué un inconfort contre une panne.
+ *
+ * @returns {Promise<boolean>} le crochet est-il posé, à la fin de ce geste
+ */
+export async function poserCrochet(jetonRobot, canal, ts, nom = 'white_check_mark') {
+  if (!canal || !ts) return false;
+  try {
+    await appeler('reactions.add', jetonRobot, { channel: canal, timestamp: ts, name: nom });
+    return true;
+  } catch (err) {
+    // `already_reacted` n'est pas un échec : le crochet EST là, c'est tout ce qui compte pour
+    // celui qui regarde. Le confondre avec une panne ferait journaliser une alarme sur un
+    // dispositif qui fonctionne — et une alarme qui crie à tort cesse d'être lue.
+    if (err.code === 'already_reacted') return true;
+    return false;
+  }
+}
+
 export async function definirSujet(jetonRobot, canal, sujet) {
   try {
     await appeler('conversations.setPurpose', jetonRobot, { channel: canal, purpose: sujet.slice(0, 250) });

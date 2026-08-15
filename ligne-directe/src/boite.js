@@ -92,6 +92,69 @@ export function contenuBoite(texteTerminal) {
 }
 
 /** La boîte est-elle vide ET lisible ? Une boîte illisible n'est pas une boîte vide. */
+/**
+ * LE MARQUEUR DE FILE D'ATTENTE — un message envoyé à un agent occupé n'entre pas dans sa
+ * boîte : il est mis en file et part à la fin de son tour (mesuré le 2026-08-15).
+ *
+ * ⚠️ ON S'ACCROCHE À LA PARTIE STABLE DE LA PHRASE, pas à la phrase entière : « Press up to
+ * edit » est de la tournure, « queued messages » est le fait. Si elle change quand même, la
+ * panne est SILENCIEUSE — le témoin cesse de témoigner et on retombe sur les autres.
+ *
+ * ⚠️ ET IL NE PROUVE QUE S'IL EST APPARU. Un destinataire qui avait déjà des messages en
+ * attente le porte avant qu'on écrive : c'est à l'appelant de comparer l'avant et l'après.
+ */
+const FILE_DATTENTE = /queued messages/i;
+
+export function messagesEnFile(texteTerminal) {
+  return FILE_DATTENTE.test(String(texteTerminal ?? ''));
+}
+
+/**
+ * L'AGENT A-T-IL PRIS LE MESSAGE ? — le verdict, et ses trois témoins (T-20260815-0011).
+ *
+ * ⚠️ « ÉCRIT DANS LE PANE » N'EST PAS « PRIS », et c'est le dirigeant qui a corrigé la
+ * frontière : « des fois le message est passé mais reste dans ton champ de prompt ». Mesuré le
+ * 2026-08-15 : trois panes sur trois portaient un message jamais soumis — dont un de lui — et
+ * les trois agents avaient l'air d'avoir FINI. Un message coincé n'est donc pas seulement
+ * indiscernable d'un agent occupé : il l'est aussi d'un agent au repos.
+ *
+ * Trois témoins, un seul suffit, et chacun porte sur un état qui POUVAIT être différent :
+ *
+ *   • la BOÎTE S'EST VIDÉE — le texte en est sorti ;
+ *   • un message est APPARU EN FILE — l'agent travaillait, il le prendra à la fin de son tour ;
+ *   • la SESSION A QUITTÉ L'ATTENTE — elle s'est mise au travail.
+ *
+ * Si aucun n'est constatable : **pas de prise**. C'est cette absence qui donne sa valeur au
+ * crochet, et sans elle il serait posé toujours et ne signifierait rien.
+ *
+ * ⚠️ UNE BOÎTE ILLISIBLE NE TÉMOIGNE DE RIEN — on ne la compte ni comme vidée, ni comme pleine.
+ */
+export function laPriseEstConstatee({ statutAvant, statut, ecranAvant, ecran }) {
+  // ⚠️ SANS L'AVANT, LES DEUX TÉMOINS D'ÉCRAN NE TÉMOIGNENT DE RIEN — bloquant relevé en revue
+  // de fond. `messagesEnFile(null)` rend `false` et `boiteEstVide(null)` rend `false` : une
+  // lecture ratée se lisait donc comme « il n'y avait rien », et il suffisait que l'APRÈS
+  // paraisse vide pour fabriquer une « boîte vidée » sans avoir rien constaté. L'invariant
+  // était écrit quatre lignes plus bas et n'était gardé que du côté APRÈS.
+  //
+  // Le crochet serait alors posé sur un message dont personne ne sait s'il est arrivé —
+  // c'est-à-dire la fausse assurance que ce dispositif existe pour empêcher.
+  const avantLisible = ecranAvant != null;
+
+  if (avantLisible && !messagesEnFile(ecranAvant) && messagesEnFile(ecran)) return 'file-d-attente';
+  // ⚠️ IL FAUT UN CHANGEMENT, pas un état. La première écriture acceptait `done → done` comme
+  // une sortie de l'attente — c'est-à-dire très exactement le cas MESURÉ le 2026-08-15, où les
+  // trois agents portant un message coincé étaient `done` avant comme après. Elle aurait donc
+  // posé le crochet sur les trois messages perdus. L'essai l'a attrapée.
+  const auRepos = (e) => e === 'idle' || e === 'done';
+  if (auRepos(statutAvant) && statut === 'working') return 'sortie-de-l-attente';
+  // La boîte contenait quelque chose, elle n'a plus rien : le texte en est sorti. Écrite
+  // d'abord avec une double négation qui inversait la condition — les essais l'ont attrapée.
+  // ⚠️ LE STATUT, LUI, NE DÉPEND PAS DE L'ÉCRAN : il reste lisible quand l'écran ne l'est pas,
+  // et c'est le seul témoin qui survit à cette panne-là. L'aveugler aussi serait déborder.
+  if (avantLisible && !boiteEstVide(ecranAvant) && boiteEstVide(ecran)) return 'boite-videe';
+  return null;
+}
+
 export function boiteEstVide(texteTerminal) {
   return contenuBoite(texteTerminal) === '';
 }
