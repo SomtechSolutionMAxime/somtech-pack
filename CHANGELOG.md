@@ -5,6 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.49.2] - 2026-08-15
+
+### Corrigé
+
+- **La naissance dit désormais que l'agent ne portera pas le nom de son lieu** (T-20260814-0143, PR #234). herdr n'accepte que les minuscules : un lieu `.gestionnaire/Charles-Olivier` fait naître un agent nommé `charles-olivier`. **L'abaissement est juste ; c'était le silence qui coûtait.** Quatre lieux d'un poste réel sont dans ce cas, et ça suffit pour qu'un agent soit « introuvable par le nom que la naissance a rendu » **sans qu'aucun renommage n'ait eu lieu** — c'est la cause, enfin mesurée, d'un écart que le praticien précédent rapportait comme un mystère. Le seul endroit qui portait déjà le fait était un champ d'un objet JSON de douze clés, dont deux ne diffèrent que par une capitale : **un fait que personne ne relit n'est pas dit.** La commande l'écrit maintenant sur la sortie d'erreur, avant de créer quoi que ce soit, avec les deux noms et le geste pour adresser l'agent.
+- **Elle se tait quand il n'y a rien à dire**, et c'est éprouvé au même titre que le reste : un avis qui tombe à chaque naissance devient du bruit, et un bruit cesse d'être lu — ce qui ramènerait exactement le silence qu'il existe pour rompre.
+- **L'avis compare les deux noms, il ne recalcule pas la règle de casse** — trouvé en revue de fond. La première version refaisait l'abaissement de son côté, remettant la règle à **deux endroits** alors que `v1.49.0` venait de la ramener à un seul (« un seul nom de lieu, une seule règle », T-20260814-0101, le jour même). Les deux coïncidaient, donc rien ne cassait : **c'est la forme que prend ce défaut avant de mordre.** Le contrôle qui l'ancre ne s'y laisse pas prendre — il passe un nom d'agent qui n'est pas l'abaissement du lieu, ce dont une version qui recalcule ne dirait rien.
+- **L'outil de test jetait ce qu'il était censé mesurer.** L'aide qui lance la commande rendait une sortie d'erreur vide sur le chemin du succès : **aucun avertissement de réussite n'était donc éprouvable** dans ce module, quel qu'il soit. Réparée — et la revue l'a vérifié en réintroduisant l'ancienne forme, qui fait aussitôt rougir le nouveau contrôle.
+
 ## [1.49.1] - 2026-08-14
 
 ### Corrigé
