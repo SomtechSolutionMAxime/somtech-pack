@@ -7,6 +7,25 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [1.53.0] - 2026-08-15
 
+### Corrigé
+
+- **Le cloisonnement tient désormais aux MEMBRES du canal, plus au canal lui-même** (T-20260813-0074 · T-20260814-0142, PR #244). Deux trous, une seule cause : `membresDuCanal` existait et n'était appelé **nulle part** dans le chemin de pose. La liste était disponible ; personne ne la regardait.
+- **Deux clients dans un même canal de gestionnaire** : une ligne cliente autorise **par appartenance au canal** — être dedans EST l'autorisation. Les deux étaient donc autorisés, les deux lisaient tout ce que le gestionnaire écrit, et rien ne le détectait. **Loi 25** : une communication d'affaires d'un client lue par un autre est une communication à un tiers. Le sens de la fuite est celui qu'on oublie : ce n'est pas le second client qui *écrit*, c'est ce que le premier *reçoit* et que l'autre lit par-dessus son épaule.
+- **Un client dans un canal d'orchestrateur** — où passent les arbitrages, les pannes de production, les échéances et les coûts. Le dirigeant avait posé la règle ; rien ne la faisait respecter.
+
+### Technique
+
+- **Le critère que les deux tickets proposaient n'existe pas, et le mesurer a changé la livraison.** Ils tenaient pour acquis que le domaine du courriel serait « disponible dans le profil Slack ». Interrogé avec le jeton du **robot** — celui qui fait la vérification, pas celui du dirigeant — `users.info` ne rend **aucun** courriel : `users:read.email` n'est pas accordé. **Le coder aurait produit une garde qui ne se déclenche jamais**, ce qui est pire que pas de garde : elle rassure.
+- **Ce qui existe vaut mieux.** Slack marque `is_restricted` les gens qu'on invite — c'est ainsi qu'un client entre dans un espace de travail. Vérifié sur les canaux réels : les deux personnes du canal client le portent, les collègues des canaux internes non. Le statut que l'espace accorde est plus solide que l'adresse que quelqu'un porte. Second signal gratuit : l'appartenance à une autre organisation (Slack Connect).
+- **L'arbitrage a suivi la mesure.** Le canal d'orchestrateur passe d'avertir à **refuser**. Le canal de gestionnaire renonce à l'avertissement — il frapperait le cas nominal, deux personnes d'un même client étant la situation normale — au profit d'une **photo des membres** et du signalement d'un **nouveau venu**. Aucune identité requise, et ça attrape le vrai risque : celui qu'on invite des mois plus tard sans se souvenir de ce que le canal porte. Savoir qui appartient à qui attend `D-20260806-0016`.
+- **Trois lignes de partage, chacune tenue par un essai** : un canal **client** accueille ses invités sans broncher — l'en mettre dehors aurait été la pire régression possible ; un membre dont le profil est illisible **n'est pas un suspect** et ne fait pas échouer les autres ; et à l'**ouverture** une lecture impossible refuse, alors que sur une ligne **vivante** elle avertit — personne n'attend encore dans le premier cas, quelqu'un attend dans le second.
+- **Pas de compteur d'échecs, et c'est un choix.** La revue en recommandait un, basculant en refus après N essais. Écarté : **un compteur est un état**, et un état qui se remet à zéro au redémarrage donne une garde qui **paraît armée sans l'être** — le défaut même que ce lot corrige, réintroduit par son remède. La distinction se fait sur le **moment**, sans seuil ni mémoire.
+- **Deux portes trouvées ouvertes en revue de fond, et refermées** : `fermer` n'était gardé par rien — or le bilan est le seul geste qui pose systématiquement du contenu de synthèse, et il partait sous les yeux d'un externe entré entre-temps. Il est désormais **retenu**, la ligne se refermant quand même : on cesse d'alimenter un canal compromis, on ne bloque pas son cycle de vie. Et les branches de dégradation n'étaient prouvées par **rien** — les muter pour qu'elles se taisent laissait la suite verte.
+- **Un défaut de `v1.50.0` corrigé au passage** : une lecture de membres impossible faisait **tomber** l'ouverture, l'exception traversant l'appelant au lieu de rendre un refus lisible. Invisible jusqu'à ce que le cloisonnement l'éprouve.
+- **Sept doubles de Slack ne savaient pas répondre** à la question que le code pose désormais. Un double muet n'est pas neutre : il fait refuser des canaux sains.
+
+## [1.53.0] - 2026-08-15
+
 ### Ajouté
 
 - **La naissance connaît les sessions herdr, et refuse de deviner laquelle** (T-20260814-0120, PR #242). Onze sessions tournent sur ce poste, chacune avec son propre canal de commande ; la naissance n'en connaissait aucune — elle héritait passivement de `HERDR_SOCKET_PATH`, c'est-à-dire de **rien** depuis un terminal ordinaire. Le dirigeant a tapé cette variable à la main **quatre fois en une soirée**. Elle accepte désormais `--session <nom>` et résout le socket elle-même.
