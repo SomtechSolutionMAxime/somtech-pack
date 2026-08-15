@@ -102,6 +102,6 @@ export async function verifierLigneOuvrable({ lire = lireJetons } = {}) {
  * @param {string} p.nom     nom de l'orchestrateur — dossier sous `.orchestrateur/`
  * @param {() => Promise<{joignable: boolean, motif?: string, message?: string}>} [p.verifierLigne]
  */
-export async function preparerLieuOrchestrateur({ depot, nom, verifierLigne = verifierLigneOuvrable }) {
-  return preparerLieu({ depot, role: 'orchestrateur', nom, verifierLigne });
+export async function preparerLieuOrchestrateur({ depot, nom, verifierLigne = verifierLigneOuvrable, verifierVersionnable }) {
+  return preparerLieu({ depot, role: 'orchestrateur', nom, verifierLigne, verifierVersionnable });
 }

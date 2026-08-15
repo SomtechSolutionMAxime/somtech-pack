@@ -180,6 +180,9 @@ export function messagesDesMotifs(racine = REPO) {
     lieu_ambigu: fonction(nomDeLieu, 'messageLieuAmbigu'),
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
+    // T-20260813-0059. Le refus qui garde ce qu'un lieu EST : un dossier versionné. Son texte
+    // vit dans le module de pose, avec les autres gardes d'avant l'écriture.
+    droits_non_versionnables: blocApres(lieu, 'droits_non_versionnables'),
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),
     jeton_absent: classe(trousseau, 'JetonManquant') + consequence,
     jeton_vide: classe(trousseau, 'JetonVide') + consequence,
