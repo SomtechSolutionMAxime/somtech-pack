@@ -35,7 +35,7 @@
 // parce que deux chemins écrivent dans un pane et qu'une copie n'hérite pas des corrections
 // de l'autre (T-20260814-0138). Réexportée ici : tout ce qui la nommait continue de la voir.
 export { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
-import { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
+import { contenuBoite, boiteEstVide, messagesEnFile } from '../../ligne-directe/src/boite.js';
 
 /**
  * Le brief a-t-il été PRIS ? La question n'est pas « l'outil a-t-il dit oui », c'est « la
@@ -64,16 +64,9 @@ import { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
  * porte avant qu'on écrive : s'en contenter, ce serait retrouver « la boîte vide » sous un autre
  * nom — un état vrai de toute façon. C'est l'appelant qui compare l'avant et l'après.
  */
-// ⚠️ ON S'ACCROCHE À LA PARTIE LA PLUS STABLE DE LA PHRASE, pas à la phrase entière (relevé en
-// revue de fond). C'est du texte d'interface, en anglais, qui peut être reformulé sans préavis —
-// « Press up to edit » est de la tournure, « queued messages » est le fait. Si elle change quand
-// même, la panne est SILENCIEUSE : le témoin cesse simplement de témoigner, et on retombe sur
-// les autres. C'est le risque assumé de ce mécanisme, et il est nommé ici pour qu'on le retrouve.
-const FILE_DATTENTE = /queued messages/i;
-
-export function messagesEnFile(texteTerminal) {
-  return FILE_DATTENTE.test(String(texteTerminal ?? ''));
-}
+// Le témoin de la file vit avec la lecture de boîte — un seul endroit sait lire un pane
+// (T-20260815-0011). Réexporté : tout ce qui le nommait continue de le voir.
+export { messagesEnFile } from '../../ligne-directe/src/boite.js';
 
 export function briefEstPris({ statut, terminal, statutAvant = null, envoiAccepte = true, fileApparue = false }) {
   // UN MESSAGE MIS EN FILE EST UN MESSAGE PRIS, quoi qu'en dise le reste. C'est le seul témoin

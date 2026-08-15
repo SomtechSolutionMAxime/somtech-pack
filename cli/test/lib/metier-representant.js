@@ -655,6 +655,43 @@ export const CONTROLES = [
     },
   },
 
+
+  {
+    id: 'crochet-pose-par-le-dispositif',
+    quoi: 'le crochet est posé par le dispositif, il n’est pas l’accusé de réception de l’agent',
+    verifier({ metier }) {
+      // T-20260815-0011. Le dirigeant écrivait « allo » pour savoir s'il avait été entendu.
+      // Le crochet répond à ça — mais il ne vaut que si le métier dit ce qu'il EST.
+      //
+      // ⚠️ LES DEUX SENS SE RETOURNENT FACILEMENT, et c'est ce que ce contrôle garde. Un métier
+      // qui enseignerait « pose un crochet quand tu as lu » redonnerait à la discipline de
+      // l'agent ce que le dispositif venait de lui retirer — or un agent occupé est exactement
+      // celui qui n'y pense pas. C'est le motif que le ticket écarte dès sa première ligne.
+      const enonces = metier.split('\n').filter((l) => /crochet/i.test(l));
+      assert.ok(enonces.length >= 1, 'le métier ne dit rien du crochet — un agent ne saura pas ce qu’il vaut');
+
+      const dit = enonces.join('\n');
+      // Ce n'est PAS l'agent qui le pose : la garde porte sur la polarité de l'énoncé, pas sur
+      // la présence du mot « crochet », qu'un contresens conserverait tel quel.
+      assert.match(
+        dit, /le dispositif le pose seul|tu n['’]as rien à faire/i,
+        'le métier doit dire que le crochet est posé SANS l’agent — sinon il redevient une discipline',
+      );
+      assert.ok(
+        !/\bpose(-le|s)?\s+(un\s+)?crochet\b/i.test(dit),
+        'le métier enseigne à l’agent de poser un crochet : c’est exactement ce que ce dispositif remplace',
+      );
+      // Et il ne remplace pas la parole : les deux signaux ne disent pas la même chose.
+      assert.match(
+        dit, /ne le remplace pas|reste utile/i,
+        'le métier doit dire que « je m’en occupe » garde sa valeur — le crochet dit seulement que c’est arrivé',
+      );
+      // L'ABSENCE est la moitié qui a de la valeur ; un métier qui n'en parle pas laisse
+      // l'agent conclure d'un silence qu'il n'a rien reçu.
+      assert.match(dit, /absence/i, 'le métier doit dire ce que l’absence de crochet signifie');
+    },
+  },
+
   {
     id: 'contexte-necessaire',
     quoi: 'le canal n’est nommé nulle part ailleurs que dans CONTEXTE.md — le métier ne peut pas s’exécuter sans le lire',
@@ -999,6 +1036,17 @@ export function permuter(texte, a, b) {
  * que le défaut qu'elles ont révélé ne puisse pas revenir.
  */
 export const MUTATIONS = [
+  {
+    id: 'crochet-devenu-une-discipline',
+    quoi: 'le métier enseigne à l’agent de poser lui-même le crochet — la garantie redevient une discipline',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'le dispositif le pose seul, tu n\'as rien à faire',
+      'pose un crochet sur son message dès que tu l\'as lu',
+    ),
+  },
+
   // ── l'ordre d'ouverture
   {
     id: 'relever-avant-d-etre-joignable',

@@ -144,6 +144,9 @@ export function fauxSlack({
     utilisateurs,
     appels: [],
     postes: [],
+    // Les crochets posés sur des messages — `{canal, ts, emoji}`. C'est l'état que le
+    // dirigeant VOIT ; un essai qui le lit lit ce qu'il verrait (T-20260815-0011).
+    reactions: [],
   };
 
   /**
@@ -307,6 +310,23 @@ export function fauxSlack({
         // `cant_invite_self` : toute erreur avalée est un chemin par lequel ce cas arrive.
         if (monde.inviterSansEffet) return reponse({ ok: true });
         for (const u of String(args.users).split(',')) if (!canal.membres.includes(u)) canal.membres.push(u);
+        return reponse({ ok: true });
+      }
+
+      case 'reactions.add': {
+        if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
+        if (!args.timestamp) return echec('invalid_arguments', { detail: 'missing required field: timestamp' });
+        if (!args.name) return echec('invalid_arguments', { detail: 'missing required field: name' });
+        // `monde.crochetImpossible` — le droit `reactions:write` peut manquer, et le service
+        // répond alors `missing_scope`. Un accusé de réception raté ne doit pas faire perdre le
+        // message qu'il accuse : c'est ce que cet interrupteur permet d'éprouver.
+        if (monde.crochetImpossible) return echec('missing_scope');
+        // Slack refuse un doublon exact, et c'est utile : reposer le même crochet deux fois
+        // n'est pas une erreur de l'appelant, mais il doit savoir que ça n'a rien ajouté.
+        if (monde.reactions.some((r) => r.canal === args.channel && r.ts === args.timestamp && r.emoji === args.name)) {
+          return echec('already_reacted');
+        }
+        monde.reactions.push({ canal: args.channel, ts: args.timestamp, emoji: args.name });
         return reponse({ ok: true });
       }
 

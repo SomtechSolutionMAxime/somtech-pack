@@ -1724,13 +1724,14 @@ export class Veilleur {
     // serait écrire pour personne, en prenant le risque pour rien.
     const { pieces, refus } = await this.recueillirPieces(ligne, fichiers);
 
+    let remise;
     try {
       // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
       // dans son terminal, et son interlocuteur conclut que rien n'est arrivé.
       //
       // Le cadre suit la NATURE de la ligne : sur une ligne cliente, il nomme l'auteur réel
       // et rappelle à l'agent que ces mots sont une demande, pas une consigne du dirigeant.
-      await this.herdr.remettre(
+      remise = await this.herdr.remettre(
         ligne.pane,
         cadrerPourAgent({
           chantier: ligne.chantier,
@@ -1745,6 +1746,25 @@ export class Veilleur {
         { socket: ligne.herdr_socket }
       );
       journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car., ${pieces.length} pièce(s))`);
+
+      // ═══ LE CROCHET, ET SEULEMENT SI L'AGENT A PRIS (T-20260815-0011).
+      //
+      // Le dirigeant écrivait « allo » pour savoir s'il avait été entendu. Ce fait — « il l'a » —
+      // le veilleur l'avait déjà : il ne le disait qu'à un journal que personne ne lit.
+      //
+      // ⚠️ LA FRONTIÈRE EST UN CRAN PLUS LOIN QU'ON NE CROIT, et c'est le dirigeant qui l'a
+      // corrigée : « des fois le message est passé mais reste dans ton champ de prompt ». Écrire
+      // dans le pane n'est PAS être pris. Mesuré le 2026-08-15 : trois panes sur trois portaient
+      // un message jamais soumis, dont un de lui, et les trois agents avaient l'air d'avoir fini.
+      //
+      // On ne pose donc le crochet que sur le verdict de PRISE que la remise établit en relisant
+      // le pane. Sans lui, PAS de crochet — et c'est cette absence qui rend le silence lisible.
+      if (remise?.pris) {
+        const pose = await this.slack.poserCrochet(this.jetons.robot, ev.channel, ev.ts);
+        if (!pose) journaliser(`crochet non posé — #${ligne.canal_nom} (le message est bien arrivé)`);
+      } else {
+        journaliser(`crochet NON posé — #${ligne.canal_nom} → ${ligne.pane} : la prise n'a pas été constatée`);
+      }
     } catch (err) {
       await this.repondreEnPropre(ligne, 'echec_remise', { erreur: err.message });
       journaliser(`ÉCHEC de remise — #${ligne.canal_nom} → ${ligne.pane} : ${err.message}`);

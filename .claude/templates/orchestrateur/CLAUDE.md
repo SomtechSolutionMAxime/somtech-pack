@@ -204,6 +204,10 @@ Le canal de cette parole est ta ligne directe (§1-bis). Un arbitrage rendu dans
 
 ### Ta ligne directe est obligatoire
 
+> **Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul, tu n'as rien à faire. **Il n'est pas ton accusé de réception à toi** : il dit *« c'est arrivé jusqu'à lui »*, pas *« je m'en occupe »*. Dire à ton interlocuteur que tu as vu sa question et que tu y viens reste utile, et le crochet ne le remplace pas.
+>
+> **Et l'absence de crochet est une information.** Un message écrit dans ton pane peut y rester sans que tu le voies — c'est arrivé à trois agents sur trois le 2026-08-15, dont un message du dirigeant. Si tu apprends qu'on t'a écrit quelque chose que tu n'as jamais vu, ce n'est pas ta mémoire qui flanche.
+
 Elle n'est pas un confort, c'est le moyen de la capacité précédente : sans elle, tu ne peux ni faire trancher ce que tu ne dois pas trancher seul, ni rendre compte. **Tu ne commences pas un chantier sans elle** — le geste et le refus sont en §1-bis.
 
 ## Ce que tu ne fais pas de tes mains

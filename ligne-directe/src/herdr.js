@@ -17,7 +17,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
-import { contenuBoite } from './boite.js';
+import { contenuBoite, laPriseEstConstatee } from './boite.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -103,6 +103,9 @@ export async function remettre(pane, texte, { socket } = {}) {
   if (texte.length > SEUIL_ARGV) {
     throw new RemiseEchouee(pane, `message de ${texte.length} caractères — au-delà de ${SEUIL_ARGV}, à découper`);
   }
+  // CE QU'ON VOIT AVANT D'ÉCRIRE — sans quoi rien de ce qu'on verra après ne prouvera quoi que
+  // ce soit. Un état qui ne pouvait pas être différent n'est pas un témoin (T-20260815-0011).
+  const avant = await etatDuPane(pane, socket);
   let reponse;
   try {
     reponse = await herdr(['agent', 'prompt', pane, texte], socket);
@@ -144,7 +147,54 @@ export async function remettre(pane, texte, { socket } = {}) {
       );
     }
   }
-  return reponse.result;
+
+  // ═══ L'AGENT A-T-IL PRIS ? — le verdict que l'accusé de réception du dirigeant attend.
+  //
+  // ⚠️ « ÉCRIT DANS LE PANE » N'EST PAS « PRIS ». Le dirigeant l'a dit mieux que le ticket :
+  // « des fois le message est passé mais reste dans ton champ de prompt ». On relit donc l'état
+  // APRÈS et on le compare à celui d'AVANT — trois témoins, un seul suffit, et aucun d'eux
+  // n'aurait pu être vrai sans qu'il se passe quelque chose.
+  //
+  // ⚠️ ET SI AUCUN N'EST CONSTATABLE, ON REND `pris: false` PLUTÔT QUE DE JETER. Le message est
+  // peut-être arrivé — la boîte est vide, le statut n'a pas bougé, on ne sait pas. Ce qu'on
+  // refuse, c'est de l'AFFIRMER : le crochet ne sera pas posé, et son absence est justement
+  // l'information que ce dispositif existe pour rendre lisible.
+  const apres = await etatDuPane(pane, socket);
+  const temoin = laPriseEstConstatee({
+    statutAvant: avant.statut,
+    statut: apres.statut,
+    ecranAvant: avant.ecran,
+    ecran: apres.ecran,
+  });
+  return { ...reponse.result, pris: Boolean(temoin), temoin };
+}
+
+/**
+ * L'état d'un pane à un instant — son statut et son écran, lus ensemble.
+ *
+ * Rendus tels quels, `null` compris : une lecture ratée ne doit pas se déguiser en écran vide,
+ * sinon « je n'ai pas vu » deviendrait « il n'y avait rien », qui est le motif que ce dépôt
+ * ferme partout ailleurs.
+ */
+async function etatDuPane(pane, socket) {
+  let statut = null;
+  try {
+    const r = await herdr(['agent', 'get', pane], socket);
+    statut = r?.result?.agent?.agent_status ?? null;
+  } catch {
+    /* pas de statut lisible : on le dit en le laissant à null */
+  }
+  let ecran = null;
+  try {
+    const { stdout } = await lancer(OUTILS.herdr, ['agent', 'read', pane, '--format', 'ansi'], {
+      maxBuffer: 16 * 1024 * 1024,
+      ...(socket ? { env: { ...process.env, HERDR_SOCKET_PATH: socket } } : {}),
+    });
+    ecran = stdout;
+  } catch {
+    /* écran illisible */
+  }
+  return { statut, ecran };
 }
 
 /**
