@@ -473,6 +473,25 @@ test('avisDeVersionnement CRIE quand aucun commit ne porte le lieu — il n’ex
     const avis = avisDeVersionnement(repoRoot, 'acme');
     assert.ok(avis, 'un lieu qu’aucun commit ne porte doit être dit');
     assert.match(avis, /acme/, 'l’avis doit nommer le lieu — sinon il ne sert à personne');
+
+    // ⚠️ ON ANCRE LA FORME, PAS SEULEMENT LES MOTS. Une revue de fond a muté la condition de
+    // cette branche (`=== GABARITS.length` → `>`), la rendant inatteignable — et les 185
+    // tests restaient VERTS, parce que le message de repli (« versé à moitié ») contient lui
+    // aussi le nom du lieu, « aucun commit ne porte » et « git add ». Deux messages que rien
+    // ne distinguait : le contrôle lisait le mauvais et s'en contentait.
+    //
+    // Ce qui les sépare vraiment est le GESTE : un lieu entièrement absent se verse d'un
+    // seul coup, par son répertoire ; un lieu versé à moitié se rattrape fichier par fichier.
+    assert.match(
+      avis,
+      new RegExp(`git add -f \\S*\\.gestionnaire/acme && git commit`),
+      'le lieu entier se verse en UN geste, sur son répertoire'
+    );
+    assert.doesNotMatch(
+      avis,
+      /CLAUDE\.md|settings\.json/,
+      'et surtout pas fichier par fichier — ce serait le message de l’autre branche'
+    );
   } finally {
     rmSync(repoRoot, { recursive: true, force: true });
   }
@@ -522,6 +541,12 @@ test('avisDeVersionnement CRIE sur un lieu partiellement versé — le fichier d
     const avis = avisDeVersionnement(repoRoot, 'acme');
     assert.ok(avis, 'un gabarit absent de tout commit doit être dit, même si les autres y sont');
     assert.match(avis, /settings\.json/, 'et l’avis doit nommer LEQUEL manque');
+    // Le pendant de l'ancrage ci-dessus : ici le geste porte le FICHIER, pas le répertoire.
+    assert.match(
+      avis,
+      new RegExp(`git add -f \\S*\\.claude/settings\\.json`),
+      'un lieu versé à moitié se rattrape fichier par fichier — c’est ce qui le distingue'
+    );
   } finally {
     rmSync(repoRoot, { recursive: true, force: true });
   }

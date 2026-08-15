@@ -319,6 +319,28 @@ test('naitre.js ABOUTIT sur un lieu versé, en signalant la garde qu’elle vien
     assert.match(r.stderr, /garde/i, 'la garde fraîchement posée doit être signalée');
   }));
 
+// Le troisième état, et le seul qui doit être MUET de bout en bout : lieu versé, garde
+// versée. Il n'était prouvé qu'au niveau unitaire — la revue de fond l'a relevé, et un
+// comportement silencieux non verrouillé est celui qui se met à parler sans qu'on le voie.
+test('naitre.js se TAIT quand le lieu ET sa garde sont versés — le régime normal', () =>
+  avecLieu((client, lieu, depot) => {
+    installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+    // Une naissance antérieure a posé la garde, et quelqu'un l'a versée, comme il se doit.
+    poserGarde(depot, client);
+    execFileSync('git', ['-C', depot, 'add', '-Af'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', depot, 'commit', '-qm', 'la garde, versée'], { stdio: 'ignore' });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).ok, true);
+    assert.doesNotMatch(
+      r.stderr,
+      /aucun commit|git add/,
+      `rien à verser, donc rien à dire — stderr: ${r.stderr}`
+    );
+  }));
+
 test('naitre.js exige --workspace', () => {
   assert.throws(() => execFileSync(process.execPath, [BIN, 'un-client'], { stdio: 'pipe' }));
 });

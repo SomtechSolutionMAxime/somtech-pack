@@ -237,20 +237,22 @@ export function avisDeCasse(nomDuLieu, nomDeLAgent) {
  *      désarme — **sans un mot**, puisque le fichier redevient un `settings.json`
  *      parfaitement valide, simplement sans `hooks`.
  *
- * ⚠️ ELLE AVERTIT, ELLE NE REFUSE PAS — ET CE CHOIX N'EST PAS TRANCHÉ.
+ * ⚠️ CE QU'ELLE REND FAIT REFUSER LA NAISSANCE — elle ne se contente pas d'avertir.
  *
- * Une première rédaction le justifiait par « le cas 2 se produit à CHAQUE naissance par
- * construction ». **C'était faux, et la revue de fond l'a établi** : `fusionnerGarde` est
- * idempotent, donc une fois la garde versée, la reposer réécrit un fichier byte-identique
- * et l'avis se tait. Le coût d'un refus serait **un commit après la première naissance**,
- * pas une taxe permanente.
+ * `bin/naitre.js` sort en 1 dès que cette fonction rend une phrase, **avant d'avoir écrit
+ * quoi que ce soit**. Arbitrage du dirigeant : la compétence prescrit déjà de verser le lieu
+ * après la pose, l'instruction n'était pas suivie (trois lieux clients sur cinq portaient une
+ * garde qu'aucun commit ne contenait), et le refus la rend opposable sans rien exiger de neuf.
  *
- * La raison qui reste est donc plus mince, et il faut la dire telle quelle : ce qui n'est
- * pas versé ici est le fichier des DROITS, et le dirigeant a tranché **refus** sur ce même
- * fichier au moment de la POSE (T-20260813-0059). Refuser aussi à la naissance serait
- * cohérent ; ce serait aussi un changement de comportement qui n'appartient pas à un
- * correctif d'avertissement. **L'arbitrage est remonté, il n'est pas acquis** — et ce
- * commentaire ne prétend pas le contraire.
+ * ⚠️ Une rédaction antérieure de ce commentaire disait l'inverse — « elle avertit, elle ne
+ * refuse pas » — et elle a survécu au changement de comportement. La revue de fond l'a
+ * relevée : c'est la documentation la plus proche du code, donc **la plus susceptible d'être
+ * crue**. Un commentaire qui contredit sa fonction est pire qu'un commentaire absent.
+ *
+ * Ce qu'elle NE fait PAS refuser : la garde que la naissance courante s'apprête à poser.
+ * Personne ne peut verser un fichier avant qu'il existe — le refuser rendrait toute première
+ * naissance impossible. `bin/naitre.js` la mesure donc une seconde fois, APRÈS la pose, et
+ * s'en sert alors comme d'un simple signalement.
  *
  * ⚠️ ELLE SE TAIT HORS D'UN DÉPÔT GIT, et quand git n'est pas là. Reprocher l'absence de
  * commits à un répertoire qui n'a rien à verser serait du bruit — et un bruit cesse d'être
@@ -318,7 +320,7 @@ export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
     return (
       `aucun commit ne porte « ${lieu} » — ce lieu n'existe que sur ce disque, et il ` +
       `disparaît avec lui. La compétence qui l'a posé demande de le verser ; c'est ce geste :\n` +
-      `  git add ${lieu} && git commit -m "chore(${role}) : installe le lieu de ${nom}"`
+      `  git add -f ${lieu} && git commit -m "chore(${role}) : installe le lieu de ${nom}"`
     );
   }
 
@@ -333,7 +335,7 @@ export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
       `ce lieu est versé à moitié : aucun commit ne porte ${absentsDeTouteHistoire.join(', ')} ` +
       `(sous « ${lieu} »). Un lieu repris ailleurs — autre clone, autre poste — naîtra sans ` +
       `eux, et rien ne le signalera. Le geste :\n` +
-      absentsDeTouteHistoire.map((f) => `  git add ${lieu}/${f}`).join('\n') +
+      absentsDeTouteHistoire.map((f) => `  git add -f ${lieu}/${f}`).join('\n') +
       `\n  git commit -m "chore(${role}) : verse le lieu de ${nom} en entier"`
     );
   }
@@ -344,7 +346,7 @@ export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
       `la garde d'ouverture posée dans ce lieu n'est dans aucun commit — un changement de ` +
       `branche la retirerait sans un mot, et le fichier resterait valide, simplement sans ` +
       `garde. Le geste :\n` +
-      `  git add ${settings} && git commit -m "chore(${role}) : verse la garde d ouverture de ${nom}"`
+      `  git add -f ${settings} && git commit -m "chore(${role}) : verse la garde d ouverture de ${nom}"`
     );
   }
 
