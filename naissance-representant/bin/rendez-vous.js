@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { livrerBrief } from '../src/livraison.js';
-import { rendezVous, orchestrateursVivants, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
+import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { RACINE } from '../../ligne-directe/src/registre.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
@@ -161,26 +161,46 @@ async function etatService() {
  */
 async function tenir(nom) {
   const r = rendezVous(nom);
-  const liste = await appelHerdr(['agent', 'list']);
-  if (!liste.ok) {
-    process.stderr.write(`${r.etiquette} : impossible de lire les agents — ${liste.message}\n`);
+
+  // TOUTES LES SESSIONS DU POSTE, PAS SEULEMENT LA SIENNE (T-20260815-0008). Un agent de
+  // session ne charge aucun profil de shell : sans balayage, ce réveil ne joignait AUCUNE
+  // session, et un orchestrateur vivant a passé sa vie sans en recevoir un seul.
+  const balayage = await orchestrateursDuPoste({ appel: appelHerdr });
+  const vivants = balayage.orchestrateurs;
+
+  // ⚠️ UN RÉVEIL QUI NE JOINT PERSONNE DOIT DIRE POURQUOI — les trois silences n'ont pas la
+  // même cause, et les confondre est ce qui a laissé le défaut vivre des jours dans le
+  // journal d'un service que personne ne lit.
+  if (balayage.sessions === 0) {
+    process.stderr.write(
+      `${r.etiquette} : aucune session herdr n'est ouverte sur ce poste — il n'y a personne à réveiller, ` +
+        `et ce n'est pas la même chose que « personne n'attend ».\n`
+    );
+    process.exit(1);
+  }
+  if (balayage.muettes.length === balayage.sessions) {
+    process.stderr.write(
+      `${r.etiquette} : les ${balayage.sessions} session(s) du poste sont muettes — aucune n'a rendu ` +
+        `sa liste d'agents. Le réveil n'a donc RIEN pu établir :\n  ${balayage.muettes.join('\n  ')}\n`
+    );
     process.exit(1);
   }
 
-  const vivants = orchestrateursVivants(liste.reponse);
   const fin = Date.now() + ECHEANCE_MS;
 
   // Un tour pour tout le monde, puis on ne repasse que sur ceux qui n'ont pas pris — et
   // seulement tant que l'échéance GLOBALE le permet. Un orchestrateur occupé ne fait donc
   // plus attendre les autres, et le rendez-vous se termine avant le suivant quel que soit
   // leur nombre.
-  const comptes = vivants.map((o) => ({ agent: o.nom, pane: o.pane, livre: false, motif: null }));
+  const comptes = vivants.map((o) => ({ agent: o.nom, pane: o.pane, socket: o.socket, livre: false, motif: null }));
   let restants = comptes;
   while (restants.length > 0) {
     for (const c of restants) {
       // On ne force JAMAIS : écrire par-dessus un reste ne livrerait pas deux messages, ça en
       // livrerait un, les deux textes collés.
-      const livre = await livrerBrief({ pane: c.pane, texte: r.rappel, appelHerdr, lireEcran, dormir });
+      // Le socket de SA session : un pane ne se joint pas depuis une autre. Sans lui, on
+      // remplacerait « ne réveiller personne » par « en réveiller un et croire avoir fait le tour ».
+      const livre = await livrerBrief({ pane: c.pane, socket: c.socket, texte: r.rappel, appelHerdr, lireEcran, dormir });
       c.livre = livre.ok;
       c.motif = livre.ok ? null : livre.message;
     }
@@ -191,7 +211,7 @@ async function tenir(nom) {
 
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes })}\n`
+    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes })}\n`
   );
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);
