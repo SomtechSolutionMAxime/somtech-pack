@@ -506,6 +506,72 @@ test('avisDeVersionnement se TAIT quand tout est versé — sinon l’avis devie
   }
 });
 
+// ⚠️ LE CAS QUE LA PREMIÈRE VERSION LAISSAIT PASSER EN SILENCE, et c'était le cas MESURÉ.
+//
+// `git diff --quiet HEAD -- <fichier jamais suivi>` sort en 0 : « pas de différence », parce
+// qu'un fichier que git n'a jamais vu n'a rien à comparer. Un lieu dont les trois autres
+// gabarits sont versés et dont le `settings.json` n'a JAMAIS été ajouté échappait donc aux
+// deux branches — la première voyait des fichiers dans HEAD, la seconde ne voyait aucun
+// écart. Le fichier des DROITS était le seul absent, et la commande se taisait.
+test('avisDeVersionnement CRIE sur un lieu partiellement versé — le fichier des droits jamais ajouté', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-f', '.gestionnaire/acme/CLAUDE.md', '.gestionnaire/acme/CONTEXTE.md', '.gestionnaire/acme/.mcp.json');
+    git('commit', '-qm', 'trois gabarits sur quatre');
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un gabarit absent de tout commit doit être dit, même si les autres y sont');
+    assert.match(avis, /settings\.json/, 'et l’avis doit nommer LEQUEL manque');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ CE CONTRÔLE EXISTE POUR TUER UNE MUTATION PRÉCISE : interroger l'INDEX au lieu de HEAD.
+// Une revue de fond l'a rejouée sur la première version — `ls-files --error-unmatch` à la
+// place de `cat-file -e HEAD:…` — et AUCUN test ne rougissait, alors que le commentaire du
+// module affirmait que cette distinction était le cœur de la mesure. Un fichier `git add`é
+// et jamais commité n'existe que sur ce disque, exactement comme un fichier ignoré.
+test('avisDeVersionnement CRIE sur un lieu seulement INDEXÉ — « git add » n’est pas « versé »', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    git('commit', '-qm', 'premier commit', '--allow-empty');
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-Af'); // indexé, jamais commité
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un lieu seulement indexé n’est porté par aucun commit');
+    // ⚠️ ON ANCRE SUR LA PHRASE PROPRE À CETTE BRANCHE, pas sur « aucun commit » : les DEUX
+    // messages contiennent ces deux mots, et une première version de ce contrôle passait donc
+    // sous la mutation qu'il existe pour tuer — il lisait le message de la garde et s'en
+    // contentait. Un contrôle qui se satisfait du mauvais message ne mesure rien.
+    assert.match(avis, /aucun commit ne porte/, 'c’est le lieu ENTIER qui n’est dans aucun commit');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ `git cat-file -e HEAD:<chemin>` résout le chemin depuis la RACINE du dépôt, jamais
+// depuis le répertoire de `-C`. Calculer le chemin relativement à `repoRoot` quand celui-ci
+// n'est PAS la racine faisait donc déclarer « aucun commit » un lieu entièrement versé.
+test('avisDeVersionnement se TAIT quand le dépôt courant n’est pas la racine du dépôt git', () => {
+  const { repoRoot, git } = depotGit();
+  const sousRepertoire = join(repoRoot, 'sous', 'dossier');
+  try {
+    mkdirSync(sousRepertoire, { recursive: true });
+    poserLeLieu(sousRepertoire, 'acme');
+    poserGarde(sousRepertoire, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé, dans un sous-répertoire');
+    assert.equal(
+      avisDeVersionnement(sousRepertoire, 'acme'),
+      null,
+      'un lieu entièrement versé ne doit pas être déclaré absent parce qu’on regarde depuis un sous-répertoire'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test('avisDeVersionnement se TAIT hors d’un dépôt git — il ne reproche pas ce qui n’a pas de sens', () => {
   const repoRoot = repoTemp();
   try {

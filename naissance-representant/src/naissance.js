@@ -19,7 +19,7 @@
 // qu'écrit à part — un seul `.claude/settings.json` existe par démarrage, et l'écraser
 // perdrait leurs permissions.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, relative, sep } from 'node:path';
 import { GABARITS, racineLieu } from '../../ligne-directe/src/lieu-agent.js';
@@ -237,10 +237,20 @@ export function avisDeCasse(nomDuLieu, nomDeLAgent) {
  *      désarme — **sans un mot**, puisque le fichier redevient un `settings.json`
  *      parfaitement valide, simplement sans `hooks`.
  *
- * ⚠️ ELLE AVERTIT, ELLE NE REFUSE PAS. Refuser de faire naître un agent parce que son lieu
- * n'est pas encore versé punirait le geste normal — on pose, on fait naître, on verse — et
- * le cas 2 se produit à CHAQUE naissance par construction. L'avis existe pour que le
- * poseur sache quoi verser, pas pour lui barrer la route.
+ * ⚠️ ELLE AVERTIT, ELLE NE REFUSE PAS — ET CE CHOIX N'EST PAS TRANCHÉ.
+ *
+ * Une première rédaction le justifiait par « le cas 2 se produit à CHAQUE naissance par
+ * construction ». **C'était faux, et la revue de fond l'a établi** : `fusionnerGarde` est
+ * idempotent, donc une fois la garde versée, la reposer réécrit un fichier byte-identique
+ * et l'avis se tait. Le coût d'un refus serait **un commit après la première naissance**,
+ * pas une taxe permanente.
+ *
+ * La raison qui reste est donc plus mince, et il faut la dire telle quelle : ce qui n'est
+ * pas versé ici est le fichier des DROITS, et le dirigeant a tranché **refus** sur ce même
+ * fichier au moment de la POSE (T-20260813-0059). Refuser aussi à la naissance serait
+ * cohérent ; ce serait aussi un changement de comportement qui n'appartient pas à un
+ * correctif d'avertissement. **L'arbitrage est remonté, il n'est pas acquis** — et ce
+ * commentaire ne prétend pas le contraire.
  *
  * ⚠️ ELLE SE TAIT HORS D'UN DÉPÔT GIT, et quand git n'est pas là. Reprocher l'absence de
  * commits à un répertoire qui n'a rien à verser serait du bruit — et un bruit cesse d'être
@@ -257,27 +267,71 @@ export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
       return false;
     }
   };
+  const gitDit = (...args) => {
+    try {
+      return execFileSync('git', ['-C', repoRoot, ...args], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+        .toString()
+        .trim();
+    } catch {
+      return null;
+    }
+  };
 
   // Hors dépôt, ou git absent : rien à reprocher, et rien à vérifier.
-  if (!git('rev-parse', '--git-dir')) return null;
+  const racine = gitDit('rev-parse', '--show-toplevel');
+  if (!racine) return null;
 
   const lieu = cheminLieu(repoRoot, nom, role);
+
+  // ⚠️ LE CHEMIN SE CALCULE DEPUIS LA RACINE DU DÉPÔT, JAMAIS DEPUIS `repoRoot`.
+  // `git cat-file -e HEAD:<chemin>` résout toujours depuis la racine — `-C` ne déplace pas
+  // ce point d'ancrage. Calculer relativement à `repoRoot` déclarait donc « aucun commit »
+  // un lieu entièrement versé, dès que la commande était lancée depuis un sous-répertoire.
+  // Trouvé en revue de fond, reproduit contre le vrai module.
+  // Les deux côtés sont ramenés au chemin RÉEL avant d'être soustraits : git rend toujours
+  // une racine résolue, et sur macOS « /tmp » est un lien vers « /private/tmp ». Soustraire
+  // l'un de l'autre sans les résoudre produisait un chemin en « ../.. » — et donc un lieu
+  // entièrement versé déclaré absent de toute histoire.
+  const reel = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  const lieuReel = reel(lieu);
+  const versGit = (f) => relative(reel(racine), join(lieuReel, f)).split(sep).join('/');
 
   // ⚠️ ON INTERROGE `HEAD`, PAS L'INDEX. `git ls-files` répond sur ce qui est INDEXÉ — un
   // lieu simplement `git add`é lui paraîtrait versé, alors qu'aucun commit ne le porte et
   // qu'il disparaît toujours avec le disque. C'est précisément l'écart que ce contrôle
   // existe pour voir. Un dépôt sans le moindre commit est donc, lui aussi, un dépôt où
   // aucun commit ne porte ce lieu — il n'est pas une exception, il est le cas limite.
-  const versGit = (f) => relative(repoRoot, join(lieu, f)).split(sep).join('/');
   const sansHead = !git('rev-parse', '--verify', 'HEAD');
-  const portesParUnCommit = sansHead
-    ? []
-    : GABARITS.filter((f) => git('cat-file', '-e', `HEAD:${versGit(f)}`));
+  const absentsDeTouteHistoire = sansHead
+    ? [...GABARITS]
+    : GABARITS.filter((f) => !git('cat-file', '-e', `HEAD:${versGit(f)}`));
 
-  if (portesParUnCommit.length === 0) {
+  if (absentsDeTouteHistoire.length === GABARITS.length) {
     return (
       `aucun commit ne porte « ${lieu} » — ce lieu n'existe que sur ce disque, et il ` +
       `disparaît avec lui. Verse-le : « git add » sur le lieu, puis un commit.`
+    );
+  }
+
+  // ⚠️ UN LIEU PARTIELLEMENT VERSÉ EST LE CAS QUI SE TAISAIT, et c'était le cas MESURÉ.
+  // `git diff --quiet HEAD -- <fichier jamais suivi>` sort en 0 : un fichier que git n'a
+  // jamais vu n'a rien à comparer. Un lieu dont trois gabarits sont versés et dont le
+  // `settings.json` n'a jamais été ajouté échappait donc aux deux branches — la première
+  // voyait des fichiers dans HEAD, la seconde ne voyait aucun écart. Le fichier des DROITS
+  // était le seul absent, et la commande se taisait. On nomme donc les manquants un à un.
+  if (absentsDeTouteHistoire.length > 0) {
+    return (
+      `ce lieu est versé à moitié : aucun commit ne porte ${absentsDeTouteHistoire.join(', ')} ` +
+      `(sous « ${lieu} »). Un lieu repris ailleurs — autre clone, autre poste — naîtra sans ` +
+      `eux, et rien ne le signalera. Verse-les.`
     );
   }
 
