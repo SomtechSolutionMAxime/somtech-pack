@@ -211,7 +211,7 @@ async function tenir(nom) {
 
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes })}\n`
+    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes })}\n`
   );
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);

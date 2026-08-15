@@ -58,11 +58,13 @@ function lancerRonde(sessions) {
       ...process.env,
       HERDR_SESSIONS_ESSAIS: sessions.join(':'),
       HERDR_SOCKET_PATH: '',
+      // ⚠️ CES DEUX-LÀ SEULEMENT — ce sont les seules que la ronde lit vraiment.
+      // Une première version posait aussi `LIVRAISON_*`, que RIEN ne lit sur ce chemin :
+      // une configuration morte qui affirme un contrôle qu'elle n'a pas. Le test paraissait
+      // borné et ne l'était pas — le jour où le faux herdr déclencherait une relivraison,
+      // les défauts de 15 essais et 20 s s'appliqueraient quand même.
       RENDEZ_VOUS_DELAI_MS: '5',
       RENDEZ_VOUS_ECHEANCE_MS: '50',
-      LIVRAISON_ESSAIS: '1',
-      LIVRAISON_DELAI_MS: '5',
-      LIVRAISON_ATTENTE_MS: '10',
     },
   });
   return { code: r.status ?? 1, stdout: (r.stdout ?? '').toString(), stderr: (r.stderr ?? '').toString() };
@@ -188,4 +190,35 @@ test('chaque rappel part vers la session de SON orchestrateur — jamais celle d
   assert.ok(gestesB.length > 0, 'et celui de la session B aussi — sinon on n’en réveille qu’un');
   assert.deepEqual([...new Set(gestesA)], [sockA], 'tout geste vers wA:p1 passe par la session A');
   assert.deepEqual([...new Set(gestesB)], [sockB], 'tout geste vers wB:p1 passe par la session B');
+});
+
+// ═════ LES DEUX SILENCES QUE « AUCUN ORCHESTRATEUR » CONFONDAIT ENCORE
+//
+// ⚠️ TROUVÉ PAR LA REVUE DE FOND, et c'est le mode de panne de ce ticket qui se rouvre.
+// « Zéro orchestrateur » avait deux causes que rien ne séparait : il n'y en a vraiment
+// aucun, ou `roleDuLieu` n'en a reconnu aucun — un gabarit modifié, un en-tête déplacé, et
+// la reconnaissance échoue **en silence**. Les deux rendaient le même succès, `exit 0`.
+//
+// Un poste avec onze agents vivants et zéro reconnu se déclarait donc content, exactement
+// comme un poste vide. C'est l'état qu'aurait ce ticket s'il se rouvrait, et personne ne
+// pouvait le voir sans compter les panes à la main.
+test('le compte rendu sépare « personne n’attend » de « je ne reconnais personne »', () => {
+  installerFauxHerdr({
+    agents: [
+      { pane_id: 'w1:p1', name: 'un', foreground_cwd: '/un/depot/sans/lieu' },
+      { pane_id: 'w1:p2', name: 'deux', foreground_cwd: '/un/autre/sans/lieu' },
+    ],
+  });
+  const avecDesAgents = JSON.parse(lancerRonde(['/s/a.sock']).stdout);
+  assert.equal(avecDesAgents.orchestrateurs, 0);
+  assert.equal(
+    avecDesAgents.agents_vus,
+    2,
+    'deux agents vivants et aucun reconnu — un humain doit pouvoir le voir sans compter les panes à la main'
+  );
+
+  installerFauxHerdr({ agents: [] });
+  const vraimentVide = JSON.parse(lancerRonde(['/s/a.sock']).stdout);
+  assert.equal(vraimentVide.orchestrateurs, 0);
+  assert.equal(vraimentVide.agents_vus, 0, 'ici il n’y a réellement personne — et ça ne se dit pas pareil');
 });

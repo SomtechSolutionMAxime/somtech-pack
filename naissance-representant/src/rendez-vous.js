@@ -151,6 +151,7 @@ export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleD
   const aBalayer = sessions ?? sessionsDuPoste();
   const orchestrateurs = [];
   const muettes = [];
+  let agentsVus = 0;
 
   for (const socket of aBalayer) {
     const r = await appel(['agent', 'list'], { socket });
@@ -160,10 +161,17 @@ export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleD
       muettes.push(socket);
       continue;
     }
+    // ⚠️ ON COMPTE CE QU'ON A VU AVANT DE FILTRER, et ce n'est pas de la statistique.
+    // « Aucun orchestrateur » a DEUX causes que rien ne distinguait : il n'y en a vraiment
+    // aucun, ou `roleDuLieu` n'en a reconnu aucun — un gabarit modifié, un en-tête déplacé,
+    // et la reconnaissance échoue en silence. Les deux rendaient le même succès. Or c'est
+    // exactement l'état qu'aurait ce ticket s'il se rouvrait : onze agents vivants, zéro
+    // reconnu, et un réveil qui se déclare content. Le compte des agents VUS les sépare.
+    agentsVus += Array.isArray(r.reponse?.result?.agents) ? r.reponse.result.agents.length : 0;
     for (const o of orchestrateursVivants(r.reponse, { estUnLieu })) orchestrateurs.push({ ...o, socket });
   }
 
-  return { orchestrateurs, muettes, sessions: aBalayer.length };
+  return { orchestrateurs, muettes, sessions: aBalayer.length, agentsVus };
 }
 
 /** Le chemin du descripteur d'un rendez-vous, dans les agents de session du poste. */
