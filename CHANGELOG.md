@@ -5,6 +5,23 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.51.0] - 2026-08-15
+
+### Modifié
+
+- **La naissance refuse désormais un lieu que git ne porte pas** (T-20260814-0139, PR #236). Trois états, mesurés vivants sur un poste réel : aucun commit ne porte le lieu — il n'existe que sur ce disque et disparaît avec lui ; le lieu est versé à moitié, et c'est le fichier des **droits** qui manque ; ou il porte une garde d'ouverture qu'une naissance antérieure a posée et que personne n'a versée. **Sur cinq lieux clients posés, trois étaient dans ce dernier cas** — un `git checkout` les désarmait sans un mot, le fichier restant un `settings.json` parfaitement valide, simplement sans `hooks`. Rien, à la lecture, ne distinguait un lieu gardé d'un lieu désarmé.
+- **Le refus ne crée aucune exigence nouvelle** : les deux compétences prescrivaient déjà de verser le lieu en branche après la pose. Il rend cette instruction **opposable**, parce qu'elle n'était pas suivie. Chaque refus **nomme la commande exacte** qui le lève — avec `-f`, parce qu'un `git add` nu réussit en code 0 en sautant un fichier qu'un `.gitignore` exclut, et qu'un agent autonome qui colle la commande boucle alors sans le moindre indice.
+- **Et il ne laisse rien derrière lui** : il tombe **avant la moindre écriture**. Prouvé plutôt que promis — aucun pane créé, `settings.json` à l'octet près, sortie standard vide.
+- ⚠️ **Ce qu'il ne refuse pas, et le verrou que ça évite.** La garde que la naissance *courante* pose est seulement signalée. C'est elle qui l'écrit : la refuser rendait **toute première naissance impossible** — on ne peut pas verser un fichier que la commande refuse de créer. L'arbitrage visait juste ; c'est l'endroit de la mesure qui a dû bouger, et ça ne se voyait qu'en exécutant.
+- **Les deux compétences et le harnais documentaire suivent, dans le même lot** — un refus absent de la documentation est un refus que la garde va contredire. Le contrôle qui l'ancre est commun aux deux poses, éprouvé par trois mutations, et **écarté nommément** de `/joindre-les-agents`, qui ne pose aucun lieu et ne fait naître personne.
+
+### Corrigé
+
+- **La naissance dit quand l'agent ne portera pas le nom de son lieu** (T-20260814-0143, v1.49.2, rappelé ici parce que le même module en porte les deux) — et l'avis **compare** les deux noms au lieu de recalculer la règle de casse, qui n'a toujours qu'un seul endroit où vivre.
+- **Deux contrôles qui ne mesuraient pas ce qu'ils croyaient**, trouvés en revue de fond : l'un s'ancrait sur des mots que **les deux** messages contenaient et lisait donc le mauvais ; l'autre laissait une branche entière devenir inatteignable sans rougir. Ce qui les sépare vraiment est le **geste** rendu — un répertoire d'un côté, N fichiers de l'autre — et c'est cette forme qui est désormais ancrée.
+- **Un commentaire affirmait l'inverse de sa propre fonction** : « elle avertit, elle ne refuse pas », pendant que la commande sortait en 1. Rédaction antérieure au refus, jamais reprise. C'est la documentation la plus proche du code, donc **la plus susceptible d'être crue**.
+- **Les tests du binaire écrivaient dans le dépôt de travail**, faute — disait un commentaire — de pouvoir en désigner un autre. C'était faux : l'option existait depuis longtemps, et le commentaire décrivait un état révolu que personne n'avait relu. Chaque test a maintenant son propre dépôt git jetable.
+
 ## [1.50.1] - 2026-08-15
 
 ### Corrigé
