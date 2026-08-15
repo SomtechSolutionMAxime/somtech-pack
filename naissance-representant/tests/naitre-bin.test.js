@@ -58,6 +58,10 @@ function installerFauxHerdr(scenario = {}) {
       refusRenommage: null,
       refusLancement: false,
       repertoire: null,
+      // Les espaces que la session visée porte. Le défaut de T-20260814-0120 est qu'un
+      // identifiant d'une AUTRE session passait sans que rien ne le signale : un test doit
+      // donc pouvoir décrire une session qui ne porte PAS l'espace demandé.
+      espaces: ['w9'],
       ...scenario,
     })
   );
@@ -66,12 +70,16 @@ const fs = require('fs');
 const JOURNAL = ${JSON.stringify(journal)};
 const args = process.argv.slice(2);
 const sc = JSON.parse(fs.readFileSync(${JSON.stringify(etat)}, 'utf8'));
-const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);
-fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse).map((e) => e.a);
+fs.appendFileSync(JOURNAL, JSON.stringify({ a: args, s: process.env.HERDR_SOCKET_PATH || null }) + '\\n');
 
 const sortir = (obj, code) => { process.stdout.write(JSON.stringify(obj)); process.exit(code); };
 const refus = (code) => ({ error: { code, message: code + ' pour ' + args.join(' ') } });
 const cmd = args.slice(0, 2).join(' ');
+
+if (cmd === 'workspace list') {
+  sortir({ result: { workspaces: (sc.espaces || []).map((w) => ({ workspace_id: w, label: 'essai ' + w })) } }, 0);
+}
 
 if (cmd === 'tab create') sortir({ result: { root_pane: { pane_id: 'w9:p1' } } }, 0);
 
@@ -123,8 +131,26 @@ sortir({ result: { ok: true } }, 0);
   return journal;
 }
 
-function appelsJournalises(journal) {
+function entreesJournalisees(journal) {
   return readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+}
+
+/** Les gestes, tels que les contrôles existants les lisent. */
+function appelsJournalises(journal) {
+  return entreesJournalisees(journal).map((e) => e.a);
+}
+
+/**
+ * La session à laquelle CHAQUE geste a parlé.
+ *
+ * ⚠️ SANS ÇA, RETIRER LE SOCKET D'UN SEUL APPEL NE ROUGISSAIT NULLE PART — le faux herdr ne
+ * regardait pas à qui on s'adressait. Une revue en passe 1 l'a montré, et le trou était
+ * réel : `livrerBrief` était appelé sans socket, donc l'amorce partait vers la session par
+ * défaut. Cinq appels sur six portaient la session — neuvième occurrence du motif
+ * « une porte sur deux » sur ce dépôt, et la première commise ici (T-20260814-0120).
+ */
+function sessionsJournalisees(journal) {
+  return entreesJournalisees(journal).map((e) => e.s);
 }
 
 /**
@@ -137,12 +163,23 @@ function appelsJournalises(journal) {
  * outil de mesure jette.
  */
 let depotCourant = null; // le dépôt jetable du test en cours — voir `avecLieu`
+let sessionsDesEssais = '/tmp/faux-poste/.config/herdr/sessions/essai/herdr.sock';
 
-function lancerNaitre(client, workspace = 'w9') {
+function lancerNaitre(client, workspace = 'w9', { amorce = null } = {}) {
   const args = [BIN, client, '--workspace', workspace];
   if (depotCourant) args.push('--depot', depotCourant);
+  if (amorce) args.push('--amorce-texte', amorce);
+  // UNE seule session désignée : le cas non ambigu, celui qui doit continuer à marcher sans
+  // que l'appelant précise quoi que ce soit. Les cas à plusieurs sessions sont éprouvés sur
+  // la résolution elle-même (`tests/session.test.js`), sans faire naître personne.
   const r = spawnSync(process.execPath, args, {
-    env: { ...process.env, NAISSANCE_ESSAIS: '6', NAISSANCE_DELAI_MS: '5' },
+    env: {
+      ...process.env,
+      NAISSANCE_ESSAIS: '6',
+      NAISSANCE_DELAI_MS: '5',
+      HERDR_SESSIONS_ESSAIS: sessionsDesEssais,
+      HERDR_SOCKET_PATH: '',
+    },
   });
   return {
     code: r.status ?? 1,
@@ -341,6 +378,73 @@ test('naitre.js se TAIT quand le lieu ET sa garde sont versés — le régime no
     );
   }));
 
+// ═══════════════ T-20260814-0120 — L'ESPACE D'UNE AUTRE SESSION, PROUVÉ PAR L'ABSENCE
+//
+// Le cas vécu : `w2W`, lu dans la session `somtech`, donné pour une naissance dans
+// `sibelanger`. Les identifiants d'espace ne sont pas globalement uniques — l'un désigne
+// donc un espace qui existe, mais ailleurs. Sans ce refus, la naissance ne rate pas : elle
+// réussit au mauvais endroit, et rien à l'écran ne le montre.
+//
+// La preuve exigée par le ticket est une ABSENCE : aucun onglet créé nulle part.
+test('naitre.js REFUSE un espace que la session visée ne porte pas — et n’ouvre AUCUN onglet', () =>
+  avecLieu((client, lieu) => {
+    // La session ne porte que `wAUTRE` ; on va lui demander `w9`, qui vit ailleurs.
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu, espaces: ['wAUTRE'] });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 1, `refus attendu — stderr: ${r.stderr}`);
+    assert.match(r.stderr, /w9/, 'le refus doit citer l’espace demandé');
+    assert.match(r.stderr, /wAUTRE/, 'et montrer ceux que la session porte vraiment');
+    assert.match(r.stderr, /pas uniques|autre session/i, 'et dire POURQUOI, sinon on croit à une faute de frappe');
+
+    const appels = appelsJournalises(journal);
+    assert.equal(
+      appels.filter((a) => a[0] === 'tab' && a[1] === 'create').length,
+      0,
+      'AUCUN onglet ne doit avoir été créé — la preuve est l’absence, pas le message'
+    );
+    assert.equal(r.stdout, '', 'et rien qui ressemble à un succès');
+  }));
+
+// ═══════════ T-20260814-0120 — TOUS les gestes parlent à la session visée, sans exception
+//
+// ⚠️ CE CONTRÔLE EXISTE PARCE QUE J'AI COMMIS LE DÉFAUT QU'IL GARDE. Cinq appels herdr
+// portaient la session, le sixième non : `livrerBrief` était appelé sans socket, donc
+// l'amorce partait vers la session par défaut — c'est-à-dire vers RIEN depuis un terminal
+// ordinaire. Neuvième occurrence du motif « une porte sur deux » sur ce dépôt, et la
+// première commise en le corrigeant. Une revue en passe 1 l'a vue ; aucun test ne la voyait,
+// parce que le faux herdr ne regardait pas à qui on s'adressait.
+//
+// On compte donc les gestes, on ne les nomme pas un à un : une liste de noms se déphase au
+// premier appel ajouté, et c'est exactement ainsi qu'un sixième se glisse sans socket.
+test('CHAQUE geste herdr part vers la session visée — aucun ne parle à une autre', () =>
+  avecLieu((client, lieu) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+
+    // ⚠️ L'AMORCE N'A PAS BESOIN DE RÉUSSIR POUR ÊTRE MESURÉE — il suffit qu'elle PARLE.
+    // Le double ne sait pas jouer la danse complète d'une boîte de saisie, et la faire
+    // aboutir demanderait de lui apprendre un dialogue que la suite de `livraison` éprouve
+    // déjà. Mais la livraison lit l'écran avant d'écrire : ce geste-là part, il est
+    // journalisé, et c'est lui qui portait le socket manquant.
+    lancerNaitre(client, 'w9', { amorce: 'Voici ton brief, en une ligne.' });
+
+    const appels = appelsJournalises(journal);
+    assert.ok(
+      appels.some((a) => a[0] === 'agent' && a[1] === 'read'),
+      'la livraison de l’amorce doit avoir parlé à herdr — sans quoi ce contrôle ne mesure pas ce qu’il croit'
+    );
+
+    const sessions = sessionsJournalisees(journal);
+    assert.ok(sessions.length >= 5, `trop peu de gestes pour que ce contrôle prouve quoi que ce soit (${sessions.length})`);
+    const egarees = sessions.filter((s) => s !== sessionsDesEssais);
+    assert.deepEqual(
+      egarees,
+      [],
+      `${egarees.length} geste(s) sur ${sessions.length} ont parlé à une autre session que « ${sessionsDesEssais} »`
+    );
+  }));
+
 test('naitre.js exige --workspace', () => {
   assert.throws(() => execFileSync(process.execPath, [BIN, 'un-client'], { stdio: 'pipe' }));
 });
@@ -370,11 +474,19 @@ test('naitre.js pose le garde, fait naître le pane DANS le lieu, attend l’age
     );
 
     const appels = appelsJournalises(journal);
+
+    // L'APPARTENANCE DE L'ESPACE SE VÉRIFIE AVANT QU'UN ONGLET EXISTE (T-20260814-0120).
+    // C'est ce qui fait qu'un espace pris dans une autre session ne laisse rien derrière :
+    // le refus tombe pendant qu'il n'y a encore rien à refermer.
+    const iEspaces = appels.findIndex((a) => a[0] === 'workspace' && a[1] === 'list');
+    const iTab = appels.findIndex((a) => a[0] === 'tab' && a[1] === 'create');
+    assert.ok(iEspaces >= 0, 'la commande doit demander à la session quels espaces elle porte');
+    assert.ok(iEspaces < iTab, 'et le demander AVANT de créer le moindre onglet');
+
     // Le pane naît DANS le lieu — le drapeau, pas seulement le `cd` écrit ensuite.
-    assert.deepEqual(appels[0].slice(0, 2), ['tab', 'create']);
-    assert.equal(appels[0][appels[0].indexOf('--cwd') + 1], lieu);
+    assert.equal(appels[iTab][appels[iTab].indexOf('--cwd') + 1], lieu);
     // La session est lancée AVANT toute tentative de nommage.
-    assert.deepEqual(appels[1], ['pane', 'run', 'w9:p1', `cd ${lieu} && claude`]);
+    assert.deepEqual(appels[iTab + 1], ['pane', 'run', 'w9:p1', `cd ${lieu} && claude`]);
 
     // LE DÉFAUT D'ORIGINE, en une assertion : le renommage ne part qu'APRÈS que l'agent a
     // été vu. Sur l'ancienne version, `agent rename` était le DEUXIÈME appel.

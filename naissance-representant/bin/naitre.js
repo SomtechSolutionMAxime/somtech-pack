@@ -43,6 +43,7 @@ import {
 import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
+import { sessionVisee, espaceDeLaSession } from '../src/session.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -77,8 +78,8 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 
 function usage(code) {
   process.stderr.write(
-    'gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur] ' +
-      '[--depot <chemin>]\n'
+    'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>] ' +
+      '[--role representant|orchestrateur] [--depot <chemin>]\n'
   );
   process.exit(code);
 }
@@ -112,6 +113,7 @@ async function main() {
   const role = option(args, '--role') || 'representant';
   const amorceFichier = option(args, '--amorce');
   const amorceTexte = option(args, '--amorce-texte');
+  const sessionVoulue = option(args, '--session');
   const REPO_ROOT = depotDe(args);
   if (!nom || nom.startsWith('--') || !workspace) usage(1);
 
@@ -191,6 +193,34 @@ async function main() {
   const gardeAVerser = avisDeVersionnement(REPO_ROOT, nom, role);
   if (gardeAVerser) process.stderr.write(`${gardeAVerser}\n`);
 
+  // À QUELLE SESSION HERDR ON PARLE — tranché AVANT que le moindre onglet existe
+  // (T-20260814-0120).
+  //
+  // Onze sessions tournent sur ce poste, et la commande n'en connaissait aucune : elle
+  // héritait passivement de `HERDR_SOCKET_PATH`, donc de RIEN depuis un terminal ordinaire.
+  // Le dirigeant a tapé cette variable à la main quatre fois en une soirée.
+  //
+  // On ne devine pas : plusieurs sessions et rien pour choisir → refus qui les nomme toutes.
+  const session = sessionVisee({ nomVoulu: sessionVoulue });
+  if (!session.ok) {
+    process.stderr.write(`${session.message}\n`);
+    process.exit(1);
+  }
+  const socket = session.socket;
+
+  // ⚠️ ET L'ESPACE DOIT APPARTENIR À CETTE SESSION-LÀ. C'est le contrôle qui ferme la panne
+  // silencieuse : les identifiants d'espace ne sont PAS globalement uniques — `w2W` de la
+  // session `somtech` a été donné pour une naissance dans `sibelanger`. Sans ce refus, la
+  // naissance ne rate pas : elle RÉUSSIT, au mauvais endroit, et personne ne le voit.
+  //
+  // Il tombe ici, avant `tab create` : un espace refusé ne laisse aucun onglet nulle part.
+  const espaces = await appelHerdr(['workspace', 'list'], { socket });
+  const appartenance = espaceDeLaSession(espaces.reponse, { espace: workspace, session: session.nom });
+  if (!appartenance.ok) {
+    process.stderr.write(`${espaces.ok ? '' : `${espaces.message}\n`}${appartenance.message}\n`);
+    process.exit(1);
+  }
+
   // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
   // confiance de Claude Code et attend une touche que personne ne tapera. Elle serait
   // pourtant DÉTECTÉE, dans le bon répertoire, portant son nom : une naissance qui a l'air
@@ -207,7 +237,8 @@ async function main() {
     throw err;
   }
 
-  const creation = await appelHerdr(commandes.tabCreate);
+  const creation = await appelHerdr(commandes.tabCreate, { socket });
+
   if (!creation.ok) {
     process.stderr.write(`${creation.message}\n`);
     process.exit(1);
@@ -222,7 +253,7 @@ async function main() {
 
   // À partir d'ici, un pane existe : tout échec le referme avant de sortir.
   const echouer = async (message) => {
-    const fermeture = await appelHerdr(commandes.fermer(paneId));
+    const fermeture = await appelHerdr(commandes.fermer(paneId), { socket });
     const reste = fermeture.ok ? '' : ` (⚠️ le pane ${paneId} n’a pas pu être refermé — ${fermeture.message})`;
     process.stderr.write(`${message}${reste}\n`);
     process.exit(1);
@@ -231,13 +262,13 @@ async function main() {
   // `pane run` ne rend RIEN quand il réussit (mesuré contre le vrai service). Un refus, lui,
   // sort toujours en `{"error":…}` — c'est ce qu'on lit. Ce que ce silence ne prouve pas,
   // c'est que la session s'est ouverte : c'est l'attente ci-dessous qui l'établit.
-  const lancement = await appelHerdr(commandes.paneRun(paneId), { resultatAttendu: false });
+  const lancement = await appelHerdr(commandes.paneRun(paneId), { resultatAttendu: false, socket });
   if (!lancement.ok) await echouer(lancement.message);
 
   // Attendre que l'agent soit RÉELLEMENT détecté, plutôt que de parier sur un délai.
   let vu = null;
   for (let i = 0; i < ESSAIS; i += 1) {
-    const etat = await appelHerdr(commandes.interroger(paneId));
+    const etat = await appelHerdr(commandes.interroger(paneId), { socket });
     if (etat.ok && agentDetecte(etat.reponse)) {
       vu = etat.reponse;
       break;
@@ -251,7 +282,7 @@ async function main() {
     );
   }
 
-  const renommage = await appelHerdr(commandes.renommer(paneId));
+  const renommage = await appelHerdr(commandes.renommer(paneId), { socket });
   if (!renommage.ok) await echouer(renommage.message);
 
   // VÉRIFIER PAR LE FAIT, jamais par le mot : le nom qu'il porte et le répertoire où il
@@ -259,7 +290,7 @@ async function main() {
   // relecture bornée — mais elle ne pardonne rien : ce qui n'est pas vrai à la fin échoue.
   let final = vu;
   for (let i = 0; i < ESSAIS; i += 1) {
-    const etat = await appelHerdr(commandes.interroger(paneId));
+    const etat = await appelHerdr(commandes.interroger(paneId), { socket });
     if (etat.ok && agentPorteLeNom(etat.reponse, commandes.nom)) {
       final = etat.reponse;
       break;
@@ -303,6 +334,12 @@ async function main() {
       dormir,
       essais: ESSAIS,
       delaiMs: DELAI_MS,
+      // LE PANE VIENT DE NAÎTRE DANS LA SESSION VISÉE — c'est là qu'il faut lui parler.
+      // Cet argument manquait, et c'était la neuvième occurrence du motif « une porte sur
+      // deux » : cinq appels herdr portaient le socket, le sixième non. L'amorce serait
+      // partie vers la session par défaut, c'est-à-dire vers rien depuis un terminal
+      // ordinaire — exactement la panne que ce ticket ferme.
+      socket,
       // La session vient de naître : on lui laisse le temps d'afficher sa boîte de saisie,
       // avec la même patience qu'on a mise à attendre qu'elle soit détectée.
       essaisDisponible: ESSAIS,
