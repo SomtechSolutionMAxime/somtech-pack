@@ -75,14 +75,19 @@ function slackDouble({ nom = 'Jean Tremblay', nomIllisible = false } = {}) {
       if (nomIllisible) throw new Error('missing_scope');
       return nom;
     },
+    // Voir `canal-du-client.test.js` : l'invitation doit avoir un effet que la lecture des
+    // membres constate, sinon le double ne sait pas voir une invitation qui ne part pas.
+    membres: ['UCLIENT'],
     async membresDuCanal() {
-      return ['UCLIENT'];
+      return this.membres;
     },
     async creerCanal(_j, n, prive) {
       return { id: `C_${n}`, nom: n, prive: Boolean(prive), reutilise: false };
     },
     async definirSujet() {},
-    async inviter() {},
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!this.membres.includes(u)) this.membres.push(u);
+    },
     async archiverCanal() {
       return true;
     },

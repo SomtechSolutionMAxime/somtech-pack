@@ -32,6 +32,13 @@ function usage(code = 0) {
   process.stdout.write(`ligne-directe — ouvrir une ligne de discussion avec le dirigeant
 
   ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel] [--nature client]
+                    [--jetable]                            --jetable : le canal de cette ligne peut
+                                                           etre ARCHIVE quand elle se referme. Sans
+                                                           ce drapeau la ligne est DURABLE : son
+                                                           canal survit a la fermeture, et elle peut
+                                                           rouvrir sous le meme titre. Un canal
+                                                           archive ne se rouvre pas — Slack reserve
+                                                           le desarchivage a un compte humain.
                     [--au-dirigeant]                       --au-dirigeant : autorise LE DIRIGEANT
                                                            du poste sur cette ligne interne, sans
                                                            que tu aies a connaitre son adresse.
@@ -201,13 +208,14 @@ if (geste === 'relever') {
 } else if (geste === 'ouvrir') {
   const chantier = premierLibre(args);
   if (!chantier) usage(1);
+  // LE COURRIEL PART TEL QUEL — c'est le VEILLEUR qui le résout (T-20260814-0136).
+  //
+  // Il était résolu ici, ce qui obligeait la commande à lire le trousseau du poste et à appeler
+  // Slack pour son compte. Un courriel qui ne désignait personne y produisait un avertissement
+  // sur la sortie d'erreur, code 0, et la ligne s'ouvrait sans lui. Surtout, ce chemin était
+  // INÉPROUVABLE : la cloison refuse le trousseau sous essais, donc aucun essai n'a jamais pu
+  // exercer ce refus — celui qui essayait passait au vert parce que la commande TOMBAIT.
   const courriel = option(args, '--inviter');
-  const invites = [];
-  if (courriel) {
-    const id = await trouverMembre(await lireJeton(SERVICE_ROBOT), courriel);
-    if (id) invites.push(id);
-    else process.stderr.write(`avertissement : aucun membre pour ${courriel} — le canal est créé sans lui\n`);
-  }
   const ici = await herdr.paneCourant();
   rendre(
     await parler({
@@ -222,12 +230,17 @@ if (geste === 'relever') {
       // nature inconnue. Rabattre une faute de frappe sur le défaut côté commande créerait
       // un canal public pour un client sans que rien ne le dise.
       nature: option(args, '--nature'),
-      invites,
+      invites_courriels: courriel ? [courriel] : [],
       // LA PRÉSENCE EST LUE PAR `optionDonnee`, JAMAIS PAR `includes` — c'est la leçon exacte
       // de T-20260813-0078 : `--titre "--au-dirigeant"` contient le drapeau sans le porter, et
       // un `includes` y aurait vu une demande d'ouvrir la ligne du dirigeant. `optionDonnee`
       // parcourt les jetons et saute la valeur d'une option à valeur.
       au_dirigeant: optionDonnee(args, '--au-dirigeant').presente,
+      // `--jetable` : cette ligne-ci meurt avec son chantier, son canal peut être archivé.
+      // SANS CE DRAPEAU, LA LIGNE EST DURABLE — le canal survit à la fermeture et la ligne
+      // pourra rouvrir sous le même titre (T-20260814-0085). Lu par `optionDonnee` pour la
+      // même raison que `--au-dirigeant` : un `includes` verrait le mot dans un titre.
+      jetable: optionDonnee(args, '--jetable').presente,
       // `--au-gestionnaire <nom>` PARTAGE CETTE LIGNE avec le gestionnaire client nommé
       // (T-20260814-0093) : à partir de là, ce que l'un dit arrive dans le pane de l'autre, dans
       // les deux sens. C'est une VALEUR, pas un drapeau — le nom d'agent est ce qui permet au

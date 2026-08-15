@@ -99,7 +99,27 @@ test('clore deux fois ne réécrit pas la date de clôture', () => {
   assert.equal(ligneParCanal(r, 'C1').close_le, 'A');
 });
 
-test('les noms pris ne comptent que les lignes ouvertes — un canal clos libère son nom', () => {
+test('UNE LIGNE CLOSE DURABLE GARDE SON NOM — son canal, lui, existe toujours', () => {
+  // ⚠️ RELEVÉ EN REVUE DE FOND (T-20260814-0085). Tant qu'une ligne interne s'archivait à la
+  // fermeture, libérer son nom était sans risque : une collision retombait sur `CanalArchive`,
+  // un refus visible. Depuis qu'une ligne est DURABLE par défaut, son canal survit — et un
+  // AUTRE chantier qui produirait le même nom normalisé ne verrait aucune collision, tomberait
+  // sur `name_taken`, et **reprendrait silencieusement** le canal de l'ancien : son historique
+  // et ses membres, rattachés à un chantier sans rapport.
   const r = { version: 1, lignes: [ligne({ close_le: 'hier' })] };
+  assert.equal(nomsPris(r).has('d-20260805-0004'), true, 'le nom reste pris : le canal est encore là');
+});
+
+test('SAUF POUR ELLE-MÊME — rouvrir son propre chantier doit retrouver son canal, pas un « -2 »', () => {
+  // C'est le cycle nominal que le correctif de T-20260814-0085 rend possible : refermer, puis
+  // rouvrir sous le même titre. Si son propre nom lui était compté comme pris, elle repartirait
+  // sur un canal suffixé et perdrait le lien avec le chantier tel qu'il était nommé.
+  const r = { version: 1, lignes: [ligne({ close_le: 'hier' })] };
+  const sienne = cleDeLigne('D-20260805-0004', '/w/a');
+  assert.equal(nomsPris(r, { saufCle: sienne }).has('d-20260805-0004'), false);
+});
+
+test('une ligne close JETABLE libère son nom — son canal est archivé, Slack refusera de lui-même', () => {
+  const r = { version: 1, lignes: [ligne({ close_le: 'hier', jetable: true })] };
   assert.equal(nomsPris(r).has('d-20260805-0004'), false);
 });

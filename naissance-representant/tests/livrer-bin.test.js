@@ -69,6 +69,15 @@ function travaille() {
   return Boolean(promptFait) && (sc.soumetSeule || enterEnvoye);
 }
 
+if (cmd === 'agent list') {
+  // La commande cherche d'abord OÙ vit son destinataire — elle ne suppose plus qu'il est
+  // dans sa propre session (T-20260814-0138). Ce double n'en connaît qu'une, et c'est
+  // suffisant ici : les sessions multiples sont éprouvées par parler-a-un-agent.test.js.
+  process.stdout.write(JSON.stringify({
+    result: { agents: [{ agent: 'claude', pane_id: 'w9:p1', name: 'acme', agent_status: sc.dejaOccupee ? 'working' : ((!sc.statutMuet && travaille()) ? 'working' : 'idle') }] },
+  }));
+  process.exit(0);
+}
 if (cmd === 'agent read') {
   // TEXTE BRUT — pas de JSON. Un écran cassé ne rend rien du tout.
   if (sc.lectureCassee) { process.stdout.write(''); process.exit(0); }
@@ -107,7 +116,18 @@ function livrer(...args) {
   try {
     const stdout = execFileSync(process.execPath, [BIN, ...args], {
       stdio: 'pipe',
-      env: { ...process.env, LIVRAISON_ESSAIS: '3', LIVRAISON_DELAI_MS: '5', LIVRAISON_ATTENTE_MS: '50' },
+      env: {
+        ...process.env,
+        LIVRAISON_ESSAIS: '3',
+        LIVRAISON_DELAI_MS: '5',
+        LIVRAISON_ATTENTE_MS: '50',
+        // Les sessions à interroger sont DÉSIGNÉES — la cloison refuse d'énumérer celles du
+        // poste sous essais. Onze y tournent avec du travail réel, et un essai qui les balaie
+        // rend un verdict qui dépend de ce qui est ouvert au moment où il tourne : la première
+        // version de ce fichier a vu « onze agents répondent à w9:p1 », le faux herdr répondant
+        // pour chacune (T-20260814-0138).
+        HERDR_SESSIONS_ESSAIS: '/tmp/faux-herdr-livrer.sock',
+      },
     }).toString();
     return { code: 0, stdout, stderr: '' };
   } catch (err) {
@@ -206,7 +226,11 @@ test('une session qui travaille DÉJÀ fait refuser la livraison — rien n’es
   // Un autre appelant lui parle en ce moment. Écrire maintenant serait déclaré « livré » par
   // le seul fait qu'elle travaille — un témoin vrai avant même qu'on ait écrit.
   const journal = installerFauxHerdr({ dejaOccupee: true });
-  const r = livrer('w9:p1', '--texte', 'BRIEF-REEL');
+  // ⚠️ `--en-attente` — CE REFUS EST DEVENU CELUI DU BRIEF DE NAISSANCE (T-20260814-0138).
+  // Il reste juste pour une session qui vient de naître, où « elle a quitté l'attente » EST la
+  // preuve de prise. Il ne peut plus être le défaut : un pair est occupé la plupart du temps,
+  // et l'exiger revenait à n'avoir aucune voie vérifiée pour parler à un agent vivant.
+  const r = livrer('w9:p1', '--texte', 'BRIEF-REEL', '--en-attente');
   assert.notEqual(r.code, 0);
   assert.match(r.stderr, /working/);
   assert.ok(

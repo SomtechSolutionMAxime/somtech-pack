@@ -207,7 +207,7 @@ test('LE SYMPTÔME, jusqu’à l’usager — le veilleur rend le refus en clair
         herdr: { async vivant() { return true; }, async remettre() { return {}; }, async agents() { return []; } },
       });
 
-      const r = await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', titre: 'salon equipe' });
+      const r = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a', titre: 'salon equipe' });
 
       assert.equal(r.ok, false, 'la ligne ne s’ouvre pas : le robot n’est pas dans ce canal');
       assert.match(r.erreur, /salon-equipe/, 'le refus doit nommer le canal en cause');

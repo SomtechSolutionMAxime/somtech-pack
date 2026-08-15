@@ -815,6 +815,37 @@ export const CONTROLES = [
       );
     },
   },
+
+  {
+    id: 'aucun-envoi-nu-prescrit',
+    quoi: 'aucun bloc de commande ne PRESCRIT `herdr agent prompt` pour parler à un agent',
+    verifier({ skill }) {
+      // ⚠️ CE CONTRÔLE PORTE SUR CE QUI EST PRESCRIT, PAS SUR LA PRÉSENCE DU MOT — et c'est
+      // toute la difficulté ici : le texte DOIT continuer de nommer `herdr agent prompt` pour
+      // expliquer pourquoi on ne s'en sert pas. Un contrôle qui chercherait l'absence du mot
+      // obligerait à effacer l'explication, c'est-à-dire à perdre la raison.
+      //
+      // Ce qu'on regarde, c'est donc les BLOCS DE COMMANDE et les gestes donnés en ligne comme
+      // « voici la commande » : ce qu'un agent copiera. La prose peut en parler tant qu'elle
+      // veut ; ce qui est offert à la copie doit passer par la voie vérifiée (T-20260814-0138).
+      const blocs = skill.match(/```[\s\S]*?```/g) || [];
+      for (const bloc of blocs) {
+        assert.ok(
+          !/herdr\s+agent\s+prompt/.test(bloc),
+          'un bloc de commande prescrit encore `herdr agent prompt` : ce geste rend un succès ' +
+            'même quand le message reste dans la boîte du destinataire sans être soumis. La voie ' +
+            'à enseigner est `livrer.js`, qui relit la boîte après avoir écrit.'
+        );
+      }
+
+      // Et la voie vérifiée doit être PRÉSENTE — sinon le contrôle ci-dessus serait satisfait
+      // par un texte qui n'enseigne plus aucun moyen de parler à un agent.
+      assert.ok(
+        blocs.some((b) => /livrer\.js/.test(b)),
+        'aucun bloc n’enseigne la voie vérifiée (`livrer.js`) pour parler à un agent'
+      );
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -826,6 +857,17 @@ export const CONTROLES = [
 // qui n'a rien à voir, et le harnais compterait une prise imaginaire.
 
 export const MUTATIONS = [
+  {
+    id: 'envoi-nu-reintroduit',
+    quoi: 'un bloc de commande réenseigne `herdr agent prompt` pour rendre compte',
+    sur: 'skill',
+    cible: 'aucun-envoi-nu-prescrit',
+    muter: (t) => t.replace(
+      "node $HOME/.somtech/naissance-representant/bin/livrer.js <ton-nom> --texte '<son-nom> : poussee passee, le sas etait libre'",
+      "herdr agent prompt <ton-nom> '<son-nom> : poussee passee, le sas etait libre'"
+    ),
+  },
+
   {
     id: 'orchestrateur-code',
     quoi: 'l\'orchestrateur code — la fonction principale retournée',

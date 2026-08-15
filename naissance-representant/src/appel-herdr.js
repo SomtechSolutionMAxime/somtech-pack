@@ -26,13 +26,29 @@ import { lireReponseHerdr } from './naissance.js';
 const TAILLE_MAX = 16 * 1024 * 1024;
 
 /**
+ * À QUELLE SESSION HERDR ON PARLE — et sans ça, on ne parlait qu'à la sienne (T-20260814-0138).
+ *
+ * herdr trouve sa session par `HERDR_SOCKET_PATH`. Ces appels ne la posaient jamais : ils
+ * héritaient passivement de l'environnement de l'appelant, donc cherchaient toujours le pane
+ * dans la session d'où part le geste. Onze sessions tournent sur ce poste — le cas NORMAL est
+ * que le destinataire soit ailleurs, et la voie sûre échouait précisément là, sur un refus qui
+ * parlait d'un statut « — » et envoyait chercher un défaut chez le destinataire.
+ *
+ * Le veilleur de `ligne-directe` savait déjà le faire (`src/herdr.js`) ; la leçon n'avait pas
+ * traversé jusqu'ici, alors que ce fichier importe déjà le même `outils.js`.
+ */
+function envDe(socket) {
+  return socket ? { env: { ...process.env, HERDR_SOCKET_PATH: socket } } : {};
+}
+
+/**
  * Un appel herdr qui rend du JSON, et son verdict — jamais une exception.
  *
  * @returns {Promise<{ok: boolean, reponse: ?object, message: string, outilIntrouvable?: boolean}>}
  */
-export async function appelHerdr(commande, { resultatAttendu = true, executer } = {}) {
+export async function appelHerdr(commande, { resultatAttendu = true, executer, socket = null } = {}) {
   try {
-    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, executer });
+    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, executer, ...envDe(socket) });
     return lireReponseHerdr(stdout, { commande, resultatAttendu });
   } catch (err) {
     // herdr n'a pas démarré : il n'a donc RIEN refusé et RIEN répondu. Le faire passer par
@@ -54,9 +70,9 @@ export async function appelHerdr(commande, { resultatAttendu = true, executer } 
  * C'est aussi ce qui rend un `herdr` absent inoffensif ICI : `null` fait REFUSER la livraison,
  * là où « boîte vide » l'aurait autorisée par-dessus un contenu qu'on n'a jamais vu.
  */
-export async function lireEcran(commande, { executer } = {}) {
+export async function lireEcran(commande, { executer, socket = null } = {}) {
   try {
-    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, executer });
+    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, executer, ...envDe(socket) });
     return stdout;
   } catch (err) {
     return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;

@@ -78,8 +78,11 @@ const CLIENT = { id: 'C_acme', name: 'acme', is_private: true, membres: ['UMOI',
 const DIRIGEANT_CANAL = { id: 'C_dir', name: 'ligne-dirigeant', is_private: false, membres: ['UMOI', 'UDIR'] };
 const UDIR = 'UDIR';
 
-function ligne({ chantier, canalId, canalNom, pane = 'w1:p1', worktree = '/w', nature = 'interne', libelle }) {
+function ligne({ chantier, canalId, canalNom, pane = 'w1:p1', worktree = '/w', nature = 'interne', libelle, jetable = false }) {
   return {
+    // Depuis T-20260814-0085 l'archivage ne se déduit plus de la nature : une ligne interne
+    // est durable, et seule une ligne déclarée jetable voit son canal archivé à la fermeture.
+    ...(jetable ? { jetable: true } : {}),
     chantier,
     canal_id: canalId,
     canal_nom: canalNom,
@@ -235,7 +238,7 @@ test('UNE SEULE LIGNE, APPEL SANS NOM : le message arrive — rien de ce qui tou
 test('FERMER NOMMÉ — le bilan et l’archivage tombent sur la ligne visée, l’autre est intacte', async () => {
   const deuxInternes = [
     ligne({ chantier: 'd-1', canalId: 'C_acme', canalNom: 'acme' }),
-    ligne({ chantier: 'd-2', canalId: 'C_dir', canalNom: 'ligne-dirigeant' }),
+    ligne({ chantier: 'd-2', canalId: 'C_dir', canalNom: 'ligne-dirigeant', jetable: true }),
   ];
   await avecPoste({ lignes: deuxInternes, canaux: [CLIENT, DIRIGEANT_CANAL] }, async ({ monde, ld }) => {
     const r = await ld(['fermer', '--bilan', 'chantier terminé', '--a', 'd-2']);

@@ -48,13 +48,17 @@ function slackDouble({ membres = [] } = {}) {
       this.crees.push({ nom, prive });
       return { id: `C_${nom}`, nom, prive: Boolean(prive), reutilise: false };
     },
+    // Voir `canal-du-client.test.js` : un `inviter` sans effet rend le double aveugle à
+    // l'invitation qui ne part pas — la panne mesurée le 2026-08-14 (T-20260814-0136).
     async membresDuCanal() {
       return membres;
     },
     async definirSujet(_j, canal, sujet) {
       this.sujets.push({ canal, sujet });
     },
-    async inviter() {},
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!membres.includes(u)) membres.push(u);
+    },
     async renommerCanal(_j, canal, nom) {
       return { id: canal, nom };
     },
@@ -270,7 +274,7 @@ test('LIGNE INTERNE — la réponse automatique reste signée « Ligne directe �
 test('LIGNE INTERNE — le sujet du canal continue de porter le code, suivi du sujet donné', async () => {
   const slack = slackDouble();
   const v = veilleur({ slack, herdr: herdrDouble() });
-  await v.ouvrir({ chantier: CHANTIER, pane: 'w1:p1', worktree: '/w/a', sujet: 'refonte du portail' });
+  await v.ouvrir({ invites: ['UDIR'], chantier: CHANTIER, pane: 'w1:p1', worktree: '/w/a', sujet: 'refonte du portail' });
 
   assert.deepEqual(
     slack.sujets.map((s) => s.sujet),
@@ -281,7 +285,7 @@ test('LIGNE INTERNE — le sujet du canal continue de porter le code, suivi du s
 test('LIGNE INTERNE — sans titre, le canal porte encore le code : rien ne change de ce côté', async () => {
   const slack = slackDouble();
   const v = veilleur({ slack, herdr: herdrDouble() });
-  const r = await v.ouvrir({ chantier: CHANTIER, pane: 'w1:p1', worktree: '/w/a' });
+  const r = await v.ouvrir({ invites: ['UDIR'], chantier: CHANTIER, pane: 'w1:p1', worktree: '/w/a' });
 
   assert.equal(r.ok, true, 'une ligne interne sans titre s’ouvre comme avant');
   assert.equal(slack.crees[0].nom, 'd-20260805-0005');
@@ -290,7 +294,7 @@ test('LIGNE INTERNE — sans titre, le canal porte encore le code : rien ne chan
 test('LIGNE INTERNE — sans sujet donné, le sujet reste le seul code, comme avant', async () => {
   const slack = slackDouble();
   const v = veilleur({ slack, herdr: herdrDouble() });
-  await v.ouvrir({ chantier: CHANTIER, pane: 'w1:p1', worktree: '/w/a' });
+  await v.ouvrir({ invites: ['UDIR'], chantier: CHANTIER, pane: 'w1:p1', worktree: '/w/a' });
 
   assert.deepEqual(
     slack.sujets.map((s) => s.sujet),

@@ -1491,10 +1491,23 @@ export const CONTROLES = [
       assert.match(enonces[0], /epics` action `update`|epics action update/, 'et il doit donner la surface exacte, pas une intention');
 
       // La livraison du brief pointe vers le registre, pas vers un chemin de fichier.
-      const livraisons = blocsBash(s.corps).filter((b) => b.includes('livrer.js'));
-      assert.equal(livraisons.length, 1, `le brief se livre par une seule commande (${livraisons.length} trouvée·s)`);
-      assert.ok(!/<chemin>/.test(livraisons[0]), 'la livraison pointe encore vers un chemin de fichier');
-      assert.match(livraisons[0], /epics action get/, 'la livraison doit pointer vers le registre');
+      //
+      // ⚠️ ON IDENTIFIE LE BLOC DU BRIEF PAR CE QU'IL FAIT — il lit le registre — et non par
+      // le fait d'être le seul à nommer `livrer.js` dans cette section (T-20260814-0138).
+      // Depuis que parler à un agent passe par la même commande vérifiée, la section en porte
+      // d'autres : le compte rendu du chef d'équipe, et les deux signaux du sas. Compter les
+      // blocs revenait à interdire ces gestes-là pour garder celui-ci, alors que ce qui est
+      // gardé est « le brief va au REGISTRE, jamais vers un chemin de fichier ».
+      const avecLivraison = blocsBash(s.corps).filter((b) => b.includes('livrer.js'));
+      assert.ok(avecLivraison.length >= 1, 'la section ne montre plus aucune livraison');
+      const briefs = avecLivraison.filter((b) => /epics action get/.test(b));
+      assert.equal(briefs.length, 1, `le brief se livre par une seule commande (${briefs.length} trouvée·s)`);
+      assert.ok(!/<chemin>/.test(briefs[0]), 'la livraison pointe encore vers un chemin de fichier');
+      // Et AUCUNE des autres ne doit ressusciter le chemin de fichier : c'est là que la
+      // régression rentrerait, par la porte d'à côté.
+      for (const b of avecLivraison) {
+        assert.ok(!/<chemin>/.test(b), 'une commande de livraison pointe vers un chemin de fichier');
+      }
     },
   },
 

@@ -294,6 +294,14 @@ export function fauxSlack({
         if (!args.users) return echec('invalid_arguments', { detail: 'missing required field: users' });
         const canal = monde.canaux.find((c) => c.id === args.channel);
         if (!canal) return echec('channel_not_found');
+        // `monde.inviterSansEffet` — UN ACQUIESCEMENT QUI N'AJOUTE PERSONNE.
+        //
+        // ⚠️ Ce n'est PAS une observation du service : personne n'a mesuré Slack en train de
+        // mentir. C'est le seul moyen d'éprouver que l'appelant conclut sur les MEMBRES et non
+        // sur le code de retour — sans lui, un correctif qui rendrait `ok` dès que l'appel
+        // n'a pas jeté resterait vert. `slack.js` avale déjà `already_in_channel` et
+        // `cant_invite_self` : toute erreur avalée est un chemin par lequel ce cas arrive.
+        if (monde.inviterSansEffet) return reponse({ ok: true });
         for (const u of String(args.users).split(',')) if (!canal.membres.includes(u)) canal.membres.push(u);
         return reponse({ ok: true });
       }
