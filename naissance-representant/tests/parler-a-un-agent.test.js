@@ -78,6 +78,10 @@ function installerFauxHerdr(scenario = {}) {
       // `fileDejaPleine` : il avait DÉJÀ des messages en file avant qu'on arrive. Le marqueur
       // est alors présent des deux côtés de l'envoi : il ne peut plus rien témoigner.
       fileDejaPleine: false,
+      // `refuseMaisEnFile` : l'appel se rapporte en ÉCHEC alors que le message EST parti en
+      // file. Seul cas où le marqueur est la SEULE preuve disponible — le statut ne bouge pas
+      // (il travaillait déjà) et la boîte est vide des deux côtés de l'envoi.
+      refuseMaisEnFile: false,
       // `envoiCasse` : l'appel d'envoi échoue franchement, sans jamais toucher la boîte.
       envoiCasse: false,
       ...scenario,
@@ -110,7 +114,7 @@ const promptFait = promptsPris.length ? promptsPris[0].args : null;
 function boite() {
   let b = sc.boiteInitiale;
   // Un message mis en file NE PASSE PAS par la boîte : elle reste telle qu'elle était.
-  if (sc.envoiCasse || sc.metEnFile) return b;
+  if (sc.envoiCasse || sc.metEnFile || sc.refuseMaisEnFile) return b;
   if (promptFait) b = sc.soumetSeule ? '' : b + promptFait[3];
   if (entrees.length && !sc.enterInoperant) b = '';
   return b;
@@ -134,7 +138,7 @@ if (!a) refus('agent_not_found');
 if (cmd === 'agent read') {
   // LE MARQUEUR EST EN GRIS, comme le vrai — c'est ce qui empêche de le confondre avec un
   // reste, et c'est aussi ce qui oblige à le chercher AVANT le filtrage du gris.
-  const enFile = sc.fileDejaPleine || (sc.metEnFile && promptFait);
+  const enFile = sc.fileDejaPleine || ((sc.metEnFile || sc.refuseMaisEnFile) && promptFait);
   const marqueur = enFile ? '\\u001b[2mPress up to edit queued messages\\u001b[22m' : '';
   process.stdout.write(['~/quelque-part', SEP, '\\u276f ' + boite(), SEP, marqueur, '  auto mode on'].join('\\n'));
   process.exit(0);
@@ -148,6 +152,9 @@ if (cmd === 'agent prompt') {
   // MESURÉ : sur un agent DÉJÀ au travail, l'attente guette une transition vers « working »
   // qui ne peut pas se produire, et elle expire. Le message, lui, est bien parti.
   if (sc.metEnFile && args.includes('--until') && args.includes('working')) refus('timeout');
+  // L'appel échoue APRÈS que le texte soit passé — herdr n'a pas su le confirmer. Le message
+  // est en file quand même : le cas que le marqueur, et lui seul, sait rattraper.
+  if (sc.refuseMaisEnFile) refus('agent_prompt_stalled');
   if (!sc.soumetSeule) refus('agent_prompt_stalled');
   process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } }));
   process.exit(0);
@@ -421,4 +428,27 @@ test('UNE FILE DÉJÀ PLEINE AVANT L’ENVOI NE TÉMOIGNE DE RIEN — le marqueu
   const r = livrer('w5:p3', '--texte', 'mon compte rendu de fin de lot');
 
   assert.equal(r.code, 1, 'rien n’a été écrit, et un marqueur déjà là ne le rachète pas');
+});
+
+
+test('L’APPEL SE RAPPORTE EN ÉCHEC ALORS QUE LE MESSAGE EST EN FILE — le marqueur est la SEULE preuve, et il suffit', async () => {
+  // ⚠️ RELEVÉ EN REVUE DE FOND, ET C'EST LE MOTIF DE CE DÉPÔT REJOUÉ CHEZ MOI. Les deux essais
+  // écrits pour ce ticket passaient sans que le nouveau témoin serve à rien : dans leurs
+  // montages, la boîte est vide après la mise en file, donc le témoin PRÉEXISTANT (« la boîte
+  // est vide ») donnait déjà la bonne réponse. Neutraliser entièrement `messagesEnFile`
+  // laissait les douze essais verts — exactement ce que le lot précédent avait payé.
+  //
+  // Ce scénario-ci isole le témoin : l'appel se rapporte en ÉCHEC (donc « boîte vide » ne vaut
+  // plus preuve, c'est la garde de la revue précédente), le destinataire travaillait déjà (donc
+  // le statut ne dit rien), et le message est pourtant parti. Il ne reste que le marqueur.
+  installerFauxHerdr({
+    refuseMaisEnFile: true,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'mon compte rendu de fin de lot');
+
+  assert.equal(r.code, 0, `le message est en file : le dire perdu serait faux — ${r.refus}`);
 });

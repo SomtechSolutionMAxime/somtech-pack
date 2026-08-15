@@ -64,7 +64,12 @@ import { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
  * porte avant qu'on écrive : s'en contenter, ce serait retrouver « la boîte vide » sous un autre
  * nom — un état vrai de toute façon. C'est l'appelant qui compare l'avant et l'après.
  */
-const FILE_DATTENTE = /Press up to edit queued messages/;
+// ⚠️ ON S'ACCROCHE À LA PARTIE LA PLUS STABLE DE LA PHRASE, pas à la phrase entière (relevé en
+// revue de fond). C'est du texte d'interface, en anglais, qui peut être reformulé sans préavis —
+// « Press up to edit » est de la tournure, « queued messages » est le fait. Si elle change quand
+// même, la panne est SILENCIEUSE : le témoin cesse simplement de témoigner, et on retombe sur
+// les autres. C'est le risque assumé de ce mécanisme, et il est nommé ici pour qu'on le retrouve.
+const FILE_DATTENTE = /queued messages/i;
 
 export function messagesEnFile(texteTerminal) {
   return FILE_DATTENTE.test(String(texteTerminal ?? ''));
