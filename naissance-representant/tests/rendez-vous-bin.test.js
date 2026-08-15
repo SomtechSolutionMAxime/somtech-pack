@@ -23,12 +23,13 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, '..', '..');
 const BIN = join(resolve(HERE, '..'), 'bin', 'rendez-vous.js');
 
 let bac;
@@ -117,4 +118,74 @@ test('le compte rendu porte ce que la ronde a REGARDÉ, pas seulement ce qu’el
   const r = lancerRonde(['/s/a.sock', '/s/b.sock']);
   const rendu = JSON.parse(r.stdout);
   assert.equal(rendu.sessions, 2, 'sans ce compte, un réveil qui ne voit rien est indiscernable d’un réveil qui n’a rien cherché');
+});
+
+// ═══════ LE POINT QUI DÉCIDE DE TOUT : chaque rappel part vers la session de SON destinataire
+//
+// ⚠️ CE CONTRÔLE EXISTE PARCE QUE LA REVUE DE FOND A MONTRÉ QU'IL MANQUAIT. Elle a remplacé
+// `socket: c.socket` par `socket: null` dans le binaire — le bug d'origine, exactement — et
+// **224 tests sont restés verts**. Les contrôles unitaires éprouvaient le balayage, les
+// contrôles de bout en bout n'atteignaient que les cas SANS orchestrateur.
+//
+// Sans lui, on aurait remplacé « ne réveiller personne » par « en réveiller un et croire
+// avoir fait le tour » — et c'est le genre de régression qui ne se voit qu'à un réveil qui
+// n'arrive pas, c'est-à-dire à rien.
+
+/** Un vrai lieu d'orchestrateur sur disque — `roleDuLieu` le lit, il ne le devine pas. */
+function lieuDOrchestrateur(nom) {
+  // ⚠️ ON COPIE LES VRAIS GABARITS, on n'invente pas leur contenu. `roleDuLieu` reconnaît un
+  // lieu à la PREMIÈRE LIGNE de chacun de ses fichiers — un lieu fabriqué à la main serait
+  // rejeté, et le contrôle mesurerait alors le contraire de ce qu'il croit.
+  const lieu = join(bac, 'depot', '.orchestrateur', nom);
+  const gabarits = join(REPO_ROOT, '.claude', 'templates', 'orchestrateur');
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  for (const f of ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', join('.claude', 'settings.json')]) {
+    copyFileSync(join(gabarits, f), join(lieu, f));
+  }
+  return lieu;
+}
+
+/** Un faux herdr qui note À QUI on lui a parlé, pour chaque geste. */
+function fauxHerdrQuiNoteLaSession(parSession) {
+  const journal = join(bac, 'sessions.jsonl');
+  writeFileSync(journal, '');
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+const socket = process.env.HERDR_SOCKET_PATH || null;
+fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify({ a: args, s: socket }) + '\\n');
+const parSession = ${JSON.stringify(parSession)};
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: parSession[socket] || [] } }));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+  return journal;
+}
+
+test('chaque rappel part vers la session de SON orchestrateur — jamais celle du premier venu', () => {
+  const lieuA = lieuDOrchestrateur('chez-a');
+  const lieuB = lieuDOrchestrateur('chez-b');
+  const sockA = '/s/a.sock';
+  const sockB = '/s/b.sock';
+  const journal = fauxHerdrQuiNoteLaSession({
+    [sockA]: [{ pane_id: 'wA:p1', name: 'chez-a', foreground_cwd: lieuA }],
+    [sockB]: [{ pane_id: 'wB:p1', name: 'chez-b', foreground_cwd: lieuB }],
+  });
+
+  lancerRonde([sockA, sockB]);
+
+  const entrees = readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const versPane = (pane) => entrees.filter((e) => e.a.includes(pane)).map((e) => e.s);
+
+  const gestesA = versPane('wA:p1');
+  const gestesB = versPane('wB:p1');
+  assert.ok(gestesA.length > 0, 'l’orchestrateur de la session A doit avoir reçu au moins un geste');
+  assert.ok(gestesB.length > 0, 'et celui de la session B aussi — sinon on n’en réveille qu’un');
+  assert.deepEqual([...new Set(gestesA)], [sockA], 'tout geste vers wA:p1 passe par la session A');
+  assert.deepEqual([...new Set(gestesB)], [sockB], 'tout geste vers wB:p1 passe par la session B');
 });
