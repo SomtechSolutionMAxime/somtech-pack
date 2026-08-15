@@ -34,6 +34,7 @@ import {
   poserGarde,
   commandesNaissance,
   avisDeCasse,
+  avisDeVersionnement,
   agentDetecte,
   agentPorteLeNom,
   repertoireDeLaSession,
@@ -155,6 +156,13 @@ async function main() {
   // T-20260814-0101, refermé un cran plus haut le jour même).
   const avis = avisDeCasse(nom, commandes.nom);
   if (avis) process.stderr.write(`${avis}\n`);
+
+  // Dire ce que git ne voit pas du lieu (T-20260814-0139) — APRÈS `poserGarde`, pour que la
+  // mesure porte sur l'état réel, garde comprise. Un lieu qu'aucun commit ne porte disparaît
+  // avec le disque ; une garde non versée est retirée par le premier changement de branche,
+  // sans un mot. Aucun des deux ne se voit à la lecture, et les deux ont été mesurés vivants.
+  const avisGit = avisDeVersionnement(REPO_ROOT, nom, role);
+  if (avisGit) process.stderr.write(`${avisGit}\n`);
 
   // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
   // confiance de Claude Code et attend une touche que personne ne tapera. Elle serait

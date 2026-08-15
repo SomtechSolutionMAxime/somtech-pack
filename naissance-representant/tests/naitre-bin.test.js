@@ -230,6 +230,28 @@ test('naitre.js se TAIT quand elle n’a rien abaissé — un avis systématique
     assert.doesNotMatch(r.stderr, /adresse|abaiss/i, `aucun avis de casse attendu — stderr: ${r.stderr}`);
   }));
 
+// T-20260814-0139 — DE BOUT EN BOUT, SUR UN VRAI DÉPÔT.
+//
+// `avecLieu` pose son lieu sous CE dépôt, qui est un vrai dépôt git — et ce lieu n'est
+// évidemment dans aucun commit. C'est exactement l'état d'un lieu client mesuré vivant :
+// posé, fonctionnel, et nulle part dans l'historique. La commande doit le DIRE.
+test('naitre.js CRIE qu’aucun commit ne porte le lieu — l’état mesuré vivant chez un client', () =>
+  avecLieu((client, lieu) => {
+    installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+
+    const r = lancerNaitre(client);
+    assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
+    assert.match(
+      r.stderr,
+      /aucun commit ne porte/,
+      `un lieu absent de l’historique doit être dit — stderr: ${r.stderr}`
+    );
+    assert.match(r.stderr, new RegExp(client), 'et l’avis doit nommer le lieu');
+
+    // L'avis ne remplace rien : la naissance aboutit, et son contrat de sortie tient.
+    assert.equal(JSON.parse(r.stdout).ok, true);
+  }));
+
 test('naitre.js exige --workspace', () => {
   assert.throws(() => execFileSync(process.execPath, [BIN, 'un-client'], { stdio: 'pipe' }));
 });

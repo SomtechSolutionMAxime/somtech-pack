@@ -21,6 +21,7 @@ import {
   commandesNaissance,
   nomAgentHerdr,
   avisDeCasse,
+  avisDeVersionnement,
   lireReponseHerdr,
   agentDetecte,
   agentPorteLeNom,
@@ -443,6 +444,80 @@ test('avisDeCasse COMPARE les deux noms, elle ne recalcule jamais la règle de c
     null,
     'et deux noms identiques ne disent rien, même capitalisés — c’est l’ÉCART qui parle, pas la casse'
   );
+});
+
+// ══════════════════ T-20260814-0139 — CE QUE GIT VOIT DU LIEU, ET CE QU'IL N'EN VOIT PAS
+//
+// Mesuré sur un poste réel : la garde d'ouverture n'existait dans AUCUN commit, sur aucun
+// des quatre lieux clients suivis par git. Elle ne vivait que comme modification non
+// commitée, réinjectée à chaque naissance — un `git checkout` la désarmait sans un mot,
+// puisque le fichier redevenait un `settings.json` parfaitement valide, simplement sans
+// `hooks`. Et un cinquième lieu n'était dans aucun commit du tout : métier, contexte,
+// moyens et droits n'existaient que sur ce disque-là.
+//
+// Aucun de ces deux états ne se voit à la lecture. C'est ce que ces contrôles ancrent.
+
+function depotGit() {
+  const repoRoot = repoTemp();
+  const git = (...args) => execFileSync('git', ['-C', repoRoot, ...args], { stdio: 'ignore' });
+  git('init', '-q');
+  git('config', 'user.email', 't@somtech.ca');
+  git('config', 'user.name', 'essai');
+  return { repoRoot, git };
+}
+
+test('avisDeVersionnement CRIE quand aucun commit ne porte le lieu — il n’existe que sur ce disque', () => {
+  const { repoRoot } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un lieu qu’aucun commit ne porte doit être dit');
+    assert.match(avis, /acme/, 'l’avis doit nommer le lieu — sinon il ne sert à personne');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement CRIE quand le lieu est versé mais que la garde posée par-dessus ne l’est pas', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé sans sa garde');
+    poserGarde(repoRoot, 'acme'); // la naissance la réinjecte — et personne ne la commit
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'une garde qui n’est dans aucun commit doit être dite');
+    assert.match(avis, /garde/i, 'l’avis doit nommer ce qui n’est pas versé');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement se TAIT quand tout est versé — sinon l’avis devient du bruit', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    poserGarde(repoRoot, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu ET sa garde');
+    assert.equal(avisDeVersionnement(repoRoot, 'acme'), null);
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement se TAIT hors d’un dépôt git — il ne reproche pas ce qui n’a pas de sens', () => {
+  const repoRoot = repoTemp();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    assert.equal(
+      avisDeVersionnement(repoRoot, 'acme'),
+      null,
+      'un répertoire sans git n’a rien à verser — le dire serait du bruit, pas un avertissement'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu’un pane existe', () => {

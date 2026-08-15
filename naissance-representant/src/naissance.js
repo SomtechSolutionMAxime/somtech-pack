@@ -20,7 +20,8 @@
 // perdrait leurs permissions.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { join, relative, sep } from 'node:path';
 import { GABARITS, racineLieu } from '../../ligne-directe/src/lieu-agent.js';
 import { role as roleDe } from '../../ligne-directe/src/roles.js';
 
@@ -220,6 +221,76 @@ export function avisDeCasse(nomDuLieu, nomDeLAgent) {
     `le lieu s'appelle « ${lieu} », l'agent s'appellera « ${agent} » — herdr n'accepte que ` +
     `les minuscules. C'est sous « ${agent} » qu'on l'adresse : « herdr agent prompt ${agent} … ».`
   );
+}
+
+/**
+ * Ce que git voit du lieu — et ce qu'il n'en voit pas (T-20260814-0139).
+ *
+ * DEUX ÉTATS, MESURÉS SUR UN POSTE RÉEL, QU'AUCUNE LECTURE NE DISTINGUE :
+ *
+ *   1. **Aucun commit ne porte le lieu.** Métier, contexte, moyens et droits n'existent que
+ *      sur ce disque. Un lieu client entier était dans ce cas — il disparaissait avec la
+ *      machine, et rien nulle part ne le disait.
+ *   2. **Le lieu est versé, la garde ne l'est pas.** `poserGarde` réinjecte le hook à chaque
+ *      naissance sans que personne ne le commit : sur les quatre lieux clients suivis par
+ *      git, `HEAD` n'en portait AUCUN. Un `git checkout`, un `git stash`, un clone frais les
+ *      désarme — **sans un mot**, puisque le fichier redevient un `settings.json`
+ *      parfaitement valide, simplement sans `hooks`.
+ *
+ * ⚠️ ELLE AVERTIT, ELLE NE REFUSE PAS. Refuser de faire naître un agent parce que son lieu
+ * n'est pas encore versé punirait le geste normal — on pose, on fait naître, on verse — et
+ * le cas 2 se produit à CHAQUE naissance par construction. L'avis existe pour que le
+ * poseur sache quoi verser, pas pour lui barrer la route.
+ *
+ * ⚠️ ELLE SE TAIT HORS D'UN DÉPÔT GIT, et quand git n'est pas là. Reprocher l'absence de
+ * commits à un répertoire qui n'a rien à verser serait du bruit — et un bruit cesse d'être
+ * lu, ce qui rendrait l'avis inutile là où il compte.
+ *
+ * @returns {string|null} la phrase à écrire, ou `null` s'il n'y a rien à dire.
+ */
+export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
+  const git = (...args) => {
+    try {
+      execFileSync('git', ['-C', repoRoot, ...args], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Hors dépôt, ou git absent : rien à reprocher, et rien à vérifier.
+  if (!git('rev-parse', '--git-dir')) return null;
+
+  const lieu = cheminLieu(repoRoot, nom, role);
+
+  // ⚠️ ON INTERROGE `HEAD`, PAS L'INDEX. `git ls-files` répond sur ce qui est INDEXÉ — un
+  // lieu simplement `git add`é lui paraîtrait versé, alors qu'aucun commit ne le porte et
+  // qu'il disparaît toujours avec le disque. C'est précisément l'écart que ce contrôle
+  // existe pour voir. Un dépôt sans le moindre commit est donc, lui aussi, un dépôt où
+  // aucun commit ne porte ce lieu — il n'est pas une exception, il est le cas limite.
+  const versGit = (f) => relative(repoRoot, join(lieu, f)).split(sep).join('/');
+  const sansHead = !git('rev-parse', '--verify', 'HEAD');
+  const portesParUnCommit = sansHead
+    ? []
+    : GABARITS.filter((f) => git('cat-file', '-e', `HEAD:${versGit(f)}`));
+
+  if (portesParUnCommit.length === 0) {
+    return (
+      `aucun commit ne porte « ${lieu} » — ce lieu n'existe que sur ce disque, et il ` +
+      `disparaît avec lui. Verse-le : « git add » sur le lieu, puis un commit.`
+    );
+  }
+
+  const settings = join(lieu, '.claude', 'settings.json');
+  if (!git('diff', '--quiet', 'HEAD', '--', settings)) {
+    return (
+      `la garde d'ouverture que je viens de poser n'est dans aucun commit (« ${settings} ») — ` +
+      `un changement de branche la retirerait sans un mot, et le fichier resterait valide, ` +
+      `simplement sans garde. Verse-la.`
+    );
+  }
+
+  return null;
 }
 
 /**
