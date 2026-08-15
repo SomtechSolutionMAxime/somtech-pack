@@ -106,6 +106,11 @@ async function main() {
       caracteres: texte.length,
       statut: resultat.statut,
       repare: resultat.repare,
+      // `attendu` — CE QUE HERDR A RAPPORTÉ DE SON CÔTÉ, jamais la preuve (T-20260815-0007).
+      // Son sens dépend du destinataire : sur une session en attente, c'est une transition
+      // observée ; sur un pair qui travaille déjà, on ne demande plus cette attente-là, et ce
+      // champ ne dit plus que « l'appel a été accepté ». Dans les deux cas, ce qui tranche est
+      // la relecture, pas lui.
       attendu: resultat.attendu,
     })}\n`
   );
