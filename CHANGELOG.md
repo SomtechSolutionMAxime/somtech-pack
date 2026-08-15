@@ -5,6 +5,25 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.52.0] - 2026-08-15
+
+### Corrigé
+
+- **Un lieu dont les droits ne peuvent pas être versés n'est plus posé** (T-20260813-0059, PR #238). La pose rendait `ok`, quatre fichiers annoncés, zéro avertissement — et trois seulement entraient au dépôt. Un motif `.claude/` — dans un `.gitignore`, ou dans le `.git/info/exclude` que personne ne voit en revue puisqu'il n'est pas versionné — s'applique à **toute profondeur** : le `settings.json` du lieu est écrit, présent, lu sur ce poste, et git ne le prend jamais. Le lieu paraît complet chez celui qui l'a posé ; **repris depuis un autre clone, il fait naître un agent sans droits bornés**, et rien ne le dit.
+- **Le défaut avait été fermé au placement et rouvert au versement.** La compétence met délibérément `settings.json` sous `.claude/` parce que Claude Code ne lit les permissions que là — un fichier à plat serait *« présent sur disque et jamais lu »*. Et il échappait au filet prévu : la pose refuse un lieu partiel en se fiant au **disque**, où il est complet. C'est **versionné** qu'il est partiel, et rien ne regardait là.
+- **Refus sur le fichier des droits, avertissement sur les trois autres** — arbitrage rendu, et motivé : ce qui manque quand `CONTEXTE.md` n'est pas versé est du contexte, réparable ailleurs ; ce qui manque quand `settings.json` ne l'est pas, ce sont les permissions. Et **un avertissement de plus n'est pas lu** : mesuré le même jour sur cinq lieux clients posés, dont deux sans aucune garde et un dans aucun commit, pour zéro signalement.
+- **Le refus nomme le fichier, le motif, SA SOURCE et les deux gestes qui la lèvent.** git donne la source (`.gitignore:1:` ou `.git/info/exclude:19:`) : on la cite plutôt que de laisser chercher dans le mauvais fichier. Le dirigeant a écrit *« c'est souffrant ouvrir un orchestrateur »* — un refus qui n'aide pas est exactement ce qu'il décrit.
+- **La garde tombe AVANT toute écriture**, et ce n'est pas un raffinement : `git check-ignore` répond sur un chemin qui n'existe pas encore. Le refus n'a donc rien à nettoyer derrière lui, et ne peut pas rejouer `T-20260807-0067` (une pose interrompue laissant un lieu que la relance déclarait installé).
+- **Une seule garde couvre les deux rôles.** Mesuré, pas supposé : les poses de l'orchestrateur et du représentant partagent le même corps et la même liste de fichiers. Le représentant avait bien le même trou — sur un lieu qui borne des accès **client** — et il se ferme au même endroit.
+
+### Technique
+
+- **Trois verdicts, et les confondre est le défaut qu'on ferme** : exclu · pas exclu · *pas pu mesurer*. Le troisième avertit — il ne refuse pas, et surtout il ne se tait pas.
+- **Le correctif rejouait ce défaut dans son propre code, relevé en revue de fond.** Tout échec de `rev-parse` autre que « git introuvable » était pris pour le **fait** « pas de dépôt », donc traité en **silence total** — pendant que le bloc situé quinze lignes plus bas traitait « tout le reste » comme une absence de réponse. **Deux blocs du même fichier se contredisaient.** Le cas qui mord en production est la propriété douteuse (`dubious ownership`, git ≥ 2.35), courante dès qu'un dépôt appartient à un autre compte que celui qui l'interroge : le dépôt existe, il peut exclure les droits, et on serait passé à côté sans un mot. Seul « ce n'est pas un dépôt » est désormais un fait ; deux essais tiennent la distinction dans les deux sens.
+- **Le message du refus n'était couvert par aucune garde anti-geste-destructeur.** Il passait — mais il le devait à personne : une propriété qui tient parce que nul ne l'a attaquée n'est pas gardée, elle est seulement encore vraie. Il rejoint la liste des messages éprouvés, vérifiée en y glissant un geste destructeur.
+- **Les essais montent de VRAIS dépôts git**, y compris le cas `.git/info/exclude` qui est le cas vécu. Un double de `check-ignore` aurait prouvé l'accord de l'essai avec lui-même — ce dépôt a payé six fois un double plus permissif que le service qu'il simule.
+- **Ce qui reste ouvert, et qui est assumé** : un lieu posé hors dépôt git n'est versionné nulle part, donc « pas un lieu » au sens strict. En faire un refus serait un arbitrage que le ticket n'a pas rendu — il porte sur un fichier exclu *parmi* d'autres qui, eux, sont versés.
+
 ## [1.51.0] - 2026-08-15
 
 ### Modifié
