@@ -279,6 +279,30 @@ le trousseau n'a pas été lu. Relance après avoir versé.
 > rendrait toute première naissance impossible — on ne peut pas committer un fichier que la
 > commande refuse d'écrire. Verse-la après ; sans quoi le prochain lancement, lui, refusera.
 
+## Sa vigilance ne s'installe pas toute seule — une fois par poste
+
+Le métier d'un orchestrateur lui impose deux rendez-vous : **une ronde toutes les heures** et
+**un topo à 7 h** sur sa ligne. Le mécanisme qui les déclenche existe — et **rien ne
+l'installait**.
+
+**[MESURÉ, 2026-08-15]** Sur un poste où un orchestrateur travaillait depuis des jours :
+aucun des deux agents de session n'existait, ni chez `launchctl` ni sur disque. Il n'a **jamais
+reçu un seul réveil**, a fini par poser une boucle à la main, et **sans savoir ce qu'il
+contournait** — la seule preuve de l'absence d'un réveil est un non-événement.
+
+```bash
+node $HOME/.somtech/naissance-representant/bin/rendez-vous.js service installer
+node $HOME/.somtech/naissance-representant/bin/rendez-vous.js service etat
+```
+
+**Une fois par poste, pas par orchestrateur** : les deux rendez-vous balaient toutes les
+sessions et servent tous les orchestrateurs vivants, y compris ceux qui naîtront demain. Un
+orchestrateur fermé cesse d'être réveillé sans qu'on ait rien à désinscrire.
+
+> **Vérifie l'état plutôt que de supposer.** C'est le genre de geste qu'on croit avoir fait :
+> il ne rend rien de visible quand il réussit, et son absence ne se voit qu'à un réveil qui
+> n'arrive pas — c'est-à-dire à rien.
+
 ## Ce que cette compétence ne fait jamais
 
 - **Elle n'ouvre pas la ligne de l'orchestrateur** — elle vérifie seulement que le poste

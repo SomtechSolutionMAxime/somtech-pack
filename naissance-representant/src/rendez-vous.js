@@ -53,6 +53,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { roleDuLieu } from './lieu.js';
+import { sessionsDuPoste } from './destinataire.js';
 
 /** Les deux rendez-vous, et rien d'autre — la liste est fermée parce que le métier l'est. */
 export const RENDEZ_VOUS = {
@@ -119,6 +120,50 @@ export function orchestrateursVivants(reponse, { estUnLieu = roleDuLieu } = {}) 
     .filter((a) => a?.pane_id)
     .map((a) => ({ pane: a.pane_id, nom: a.name || null, repertoire: a.foreground_cwd || a.cwd || null }))
     .filter((a) => a.repertoire && estUnLieu(a.repertoire) === 'orchestrateur');
+}
+
+/**
+ * Les orchestrateurs vivants du POSTE — toutes sessions confondues, chacun avec la sienne.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI CE BALAYAGE (T-20260815-0008)
+ *
+ * La ronde demandait la liste des agents **sans désigner de session**. Elle ne joignait donc
+ * que celle de son environnement — et un agent de session ne charge aucun profil de shell :
+ * pour lui, c'était **aucune**. Un orchestrateur vivant a passé toute sa vie sans recevoir
+ * un seul réveil, ni pour sa ronde ni pour son topo, et a fini par poser une boucle à la
+ * main sans savoir ce qu'il contournait.
+ *
+ * ⚠️ LE CORRECTIF ÉVIDENT ÉTAIT LE MAUVAIS, et c'est ce qui rend ce commentaire utile.
+ * Poser `HERDR_SOCKET_PATH` dans le descripteur du service figerait la ronde sur **une**
+ * session, choisie le jour de l'installation, pendant que le dirigeant en ouvre au fil de
+ * l'eau. Le veilleur de `ligne-directe`, lui, tourne depuis des semaines et son descripteur
+ * ne porte que `PATH` : il ne dépend d'aucune variable, il **découvre** les sessions. C'est
+ * ce modèle-là qu'on suit — la vigilance ne se pose pas sur une adresse, elle regarde.
+ *
+ * ⚠️ ET CHAQUE ORCHESTRATEUR PORTE LE SOCKET DE SA SESSION. Un pane ne se joint pas depuis
+ * une autre session : sans ça, on aurait remplacé « ne réveiller personne » par « réveiller
+ * ceux d'une session et croire avoir fait le tour ».
+ *
+ * @returns {Promise<{orchestrateurs: Array, muettes: Array, sessions: number}>}
+ */
+export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleDuLieu } = {}) {
+  const aBalayer = sessions ?? sessionsDuPoste();
+  const orchestrateurs = [];
+  const muettes = [];
+
+  for (const socket of aBalayer) {
+    const r = await appel(['agent', 'list'], { socket });
+    // Une session qui ne répond pas ne fait pas tomber la ronde : les autres attendent leur
+    // réveil, et une session morte est un fait à RAPPORTER, pas une raison d'abandonner.
+    if (!r.ok) {
+      muettes.push(socket);
+      continue;
+    }
+    for (const o of orchestrateursVivants(r.reponse, { estUnLieu })) orchestrateurs.push({ ...o, socket });
+  }
+
+  return { orchestrateurs, muettes, sessions: aBalayer.length };
 }
 
 /** Le chemin du descripteur d'un rendez-vous, dans les agents de session du poste. */
