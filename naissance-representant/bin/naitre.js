@@ -148,7 +148,12 @@ async function main() {
   // Dire, AVANT que quoi que ce soit existe, que l'agent ne portera pas le nom du lieu
   // (T-20260814-0143). L'écart était déjà dans l'objet rendu — dans un champ que personne
   // ne relit. On le dit donc là où un humain regarde, et seulement quand il y a un écart.
-  const avis = avisDeCasse(nom);
+  //
+  // On lui DONNE `commandes.nom` — le nom que herdr recevra réellement, calculé par
+  // `nomAgentHerdr` juste au-dessus. L'avis ne recalcule pas la règle de casse : deux
+  // endroits qui portent la même règle divergent au premier changement de l'un (motif de
+  // T-20260814-0101, refermé un cran plus haut le jour même).
+  const avis = avisDeCasse(nom, commandes.nom);
   if (avis) process.stderr.write(`${avis}\n`);
 
   // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de

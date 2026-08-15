@@ -200,11 +200,21 @@ export function nomAgentHerdr(brut) {
  * avis qui tombe à chaque naissance devient du bruit, et un bruit cesse d'être lu — ce qui
  * ramènerait exactement le silence qu'il existe pour rompre.
  *
+ * ⚠️ ELLE NE CALCULE RIEN — ELLE COMPARE. Une première version refaisait `toLowerCase()`
+ * de son côté, ce qui remettait la règle de casse à un SECOND endroit : deux textes qui
+ * portent la même règle divergent au premier changement de l'un des deux. C'est très
+ * exactement le défaut que `T-20260814-0101` vient de fermer un cran plus haut — « un seul
+ * nom de lieu, une seule règle » — et le refermer ici pour le rouvrir une commande plus
+ * loin n'aurait rien fermé. Le nom de l'agent lui est donc DONNÉ par `nomAgentHerdr`, la
+ * seule autorité, via ce que `commandesNaissance` a déjà rendu.
+ *
+ * @param {string} nomDuLieu  le nom tel que le lieu le porte
+ * @param {string} nomDeLAgent le nom que l'agent portera — calculé ailleurs, jamais ici
  * @returns {string|null} la phrase à écrire, ou `null` s'il n'y a rien à dire.
  */
-export function avisDeCasse(brut) {
-  const lieu = String(brut ?? '');
-  const agent = lieu.toLowerCase();
+export function avisDeCasse(nomDuLieu, nomDeLAgent) {
+  const lieu = String(nomDuLieu ?? '');
+  const agent = String(nomDeLAgent ?? '');
   if (agent === lieu) return null;
   return (
     `le lieu s'appelle « ${lieu} », l'agent s'appellera « ${agent} » — herdr n'accepte que ` +
