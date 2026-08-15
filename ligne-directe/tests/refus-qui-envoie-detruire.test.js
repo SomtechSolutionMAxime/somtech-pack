@@ -28,11 +28,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { userInfo, tmpdir } from 'node:os';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdtempSync, mkdirSync, writeFileSync, cpSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { GESTES_QUI_DETRUISENT, gestesQuiDetruisentDans, aucunGesteQuiDetruit } from './aide/gestes-qui-detruisent.js';
@@ -43,6 +43,8 @@ import { preparerLieuRepresentant, GABARITS } from '../src/representant.js';
 const execFileAsync = promisify(execFile);
 const ICI = dirname(fileURLToPath(import.meta.url));
 const TROUSSEAU = pathToFileURL(join(ICI, '..', 'src', 'trousseau.js')).href;
+/** La racine du pack — d'où viennent les gabarits qu'une pose exige. */
+const REPO_RACINE = resolve(ICI, '..', '..');
 const CLOISON = pathToFileURL(join(ICI, '..', 'src', 'cloison.js')).href;
 
 // ═════════════════════════════ 1. le compte, qui ne vient plus d'une variable
@@ -247,9 +249,29 @@ function lieuADemiPose() {
   return bac;
 }
 
+/**
+ * Un VRAI dépôt git dont un motif exclut le fichier des droits — le cas de T-20260813-0059.
+ *
+ * Il faut un vrai dépôt : c'est `git check-ignore` qui rend le motif et sa source, et c'est de
+ * là que vient le texte du refus qu'on éprouve ici.
+ */
+function depotQuiExclutLesDroits() {
+  const bac = mkdtempSync(join(tmpdir(), 'ld-refus-git-'));
+  execFileSync('git', ['init', '-q', bac]);
+  writeFileSync(join(bac, '.gitignore'), '.claude/\n');
+  cpSync(join(REPO_RACINE, '.claude', 'templates', 'gestionnaire-client'),
+    join(bac, '.claude', 'templates', 'gestionnaire-client'), { recursive: true });
+  return bac;
+}
+
 test('AUCUN REFUS DE CE MODULE NE PROPOSE UN GESTE QUI DÉTRUIT', async () => {
-  // Les quatre refus que ce module peut rendre à un humain, pris là où ils sont PRODUITS —
-  // pas recopiés. Un message recopié dans un test survit à son propre remplacement.
+  // Les refus que ce module peut rendre à un humain, pris là où ils sont PRODUITS — pas
+  // recopiés. Un message recopié dans un test survit à son propre remplacement.
+  //
+  // ⚠️ CETTE LISTE SE COMPLÈTE À CHAQUE NOUVEAU REFUS, et l'oublier est le motif relevé en
+  // revue de fond sur T-20260813-0059 : `droits_non_versionnables` proposait un geste
+  // parfaitement sûr — mais il le devait à personne. Une propriété qui tient parce que nul
+  // ne l'a attaquée n'est pas gardée ; elle est seulement encore vraie.
   const refus = [
     ['JetonManquant', new JetonManquant(SERVICE_ROBOT, 'maximeleboeuf', new Error('introuvable')).message],
     ['JetonVide', new JetonVide(SERVICE_ROBOT, 'maximeleboeuf').message],
@@ -260,6 +282,16 @@ test('AUCUN REFUS DE CE MODULE NE PROPOSE UN GESTE QUI DÉTRUIT', async () => {
       canal: 'd-un-canal',
       verifierJoignabilite: async () => {
         throw new Error('la garde d’idempotence doit refuser AVANT tout aller-retour réseau');
+      },
+    })).refus.message],
+    // T-20260813-0059. Celui-ci PROPOSE deux gestes (« git add -f », une négation d'exclusion) :
+    // c'est exactement le genre de refus où un geste destructeur se glisserait sans qu'on le voie.
+    ['droits non versionnables', (await preparerLieuRepresentant({
+      depotClient: depotQuiExclutLesDroits(),
+      client: 'un-client',
+      canal: 'd-un-canal',
+      verifierJoignabilite: async () => {
+        throw new Error('la garde de versionnabilité doit refuser AVANT tout aller-retour réseau');
       },
     })).refus.message],
   ];

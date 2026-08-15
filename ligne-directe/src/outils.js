@@ -71,6 +71,15 @@ export const OUTILS = {
     origine: 'systeme',
     quoi: 'le gestionnaire de services du poste',
   },
+  git: {
+    // Présent sur tout poste de développement, à un emplacement stable sur macOS (le shim
+    // Xcode). On le déclare quand même ici plutôt que de l'appeler à la volée : son absence
+    // doit se dire — « je n'ai pas pu poser la question » n'est pas « la réponse est non ».
+    nom: 'git',
+    chemin: '/usr/bin/git',
+    origine: 'systeme',
+    quoi: 'le gestionnaire de versions du dépôt',
+  },
   herdr: {
     // Installé par l'utilisateur : son emplacement n'est pas connu d'avance, et lui en
     // inventer un serait pire que de le chercher — on chercherait au mauvais endroit en
