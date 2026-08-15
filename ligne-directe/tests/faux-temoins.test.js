@@ -43,6 +43,14 @@ function slackDouble() {
     // quoi ce double ne saurait pas distinguer une invitation émise d'une invitation muette,
     // qui est très exactement la panne qu'il a laissée passer.
     membres: [],
+    // `profilsDuCanal` — le cloisonnement demande QUI est là, pas seulement combien
+    // (T-20260813-0074). Dérivé des membres de ce double : des nôtres, ni invités ni d'une
+    // autre organisation, ce qui est le cas nominal de ces essais. Un double muet sur une
+    // question que le code pose n'est pas neutre — il fait refuser des canaux sains.
+    async profilsDuCanal(_j, canal) {
+      const ids = await this.membresDuCanal(_j, canal);
+      return ids.map((id) => ({ id, nom: id, robot: false, invite: false, monoCanal: false, equipe: null }));
+    },
     async membresDuCanal() {
       return this.membres;
     },

@@ -692,11 +692,24 @@ export class Veilleur {
       // en silence. Le même renversement que partout ailleurs ici : un droit manquant deviendrait
       // « personne d'étranger », c'est-à-dire l'inverse de ce que la garde promet.
       journaliser(`membres de #${canalNom} illisibles (${err.message}) — cloisonnement non vérifié`);
-      // ⚠️ ON AVERTIT, ON NE REFUSE PAS. Le refus est réservé au fait CONSTATÉ — c'est la même
-      // ligne de partage que T-20260813-0059. Bloquer toute ligne interne parce qu'un appel a
-      // hoqueté serait disproportionné, et une garde disproportionnée finit désactivée.
-      return { avertissement: `qui est dans #${canalNom} n'a pas pu être lu (${err.message}) — ` +
-        `impossible de garantir qu'aucun externe n'y est. ⚠️ ${NOUS.limite}.` };
+      // ⚠️ À L'OUVERTURE, UNE LECTURE IMPOSSIBLE REFUSE — arbitrage rendu après revue de fond.
+      //
+      // La recommandation était un compteur d'échecs qui basculerait en refus après N essais.
+      // Écartée, et pour la bonne raison : **un compteur est un ÉTAT**, et un état qui se remet
+      // à zéro au redémarrage donne une garde qui PARAÎT armée sans l'être — très exactement le
+      // défaut que ce lot corrige, réintroduit par son propre remède.
+      //
+      // La distinction se fait donc sur le MOMENT, sans seuil et sans mémoire :
+      //   • à l'OUVERTURE, on peut encore ne pas ouvrir — personne n'attend, rien n'est perdu ;
+      //   • sur une ligne VIVANTE, quelqu'un attend une réponse, et couper la parole parce qu'un
+      //     droit a hoqueté serait le remède pire que le mal (voir `veillerAvantDEcrire`).
+      return {
+        motif: 'cloisonnement_invérifiable',
+        message:
+          `qui est dans #${canalNom} n'a pas pu être lu (${err.message}) — impossible de garantir ` +
+          `qu'aucun externe n'y est, donc la ligne ne s'ouvre pas. Une ligne interne porte les ` +
+          `arbitrages, les pannes de production, les échéances et les coûts. ⚠️ ${NOUS.limite}.`,
+      };
     }
     const etrangers = etrangersParmi(profils, this.identite?.equipe || null);
     if (!etrangers.length) return null;

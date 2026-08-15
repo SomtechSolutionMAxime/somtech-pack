@@ -306,7 +306,8 @@ test('UNE LECTURE IMPOSSIBLE À L’OUVERTURE FAIT ÉCHOUER — et le refus le n
     const r = await veilleur.ouvrir({ chantier: 'un-chantier', pane: PANE, worktree: '/w', invites: [UDIR] });
 
     assert.equal(r.ok, false, 'on n’ouvre pas une ligne dont on ne peut pas prouver l’état');
-    assert.match(r.erreur, /impossible de lire/i, 'et le refus dit ce qu’on n’a pas pu faire');
+    assert.match(r.erreur, /pas pu être lu/i, 'et le refus dit ce qu’on n’a pas pu faire');
+    assert.equal(r.refus.motif, 'cloisonnement_invérifiable');
     assert.deepEqual(chargerRegistre().lignes, [], 'rien n’est inscrit');
   });
 });
@@ -355,8 +356,14 @@ test('LA BRANCHE « JE N\u2019AI PAS PU LIRE » DE L\u2019OUVERTURE EST \u00c9PR
     const r = await veilleur.refusEtranger('C_quelconque', 'un-chantier', 'interne');
 
     assert.ok(r, 'on ne rend pas `null` : ce serait dire « rien \u00e0 signaler » sans avoir regard\u00e9');
-    assert.ok(r.avertissement, `on avertit, on ne refuse pas : ${JSON.stringify(r)}`);
-    assert.match(r.avertissement, /pas pu \u00eatre lu/i);
+    // ⚠️ ARBITRAGE RENDU APRÈS LA REVUE : à L'OUVERTURE d'une ligne interne, une lecture
+    // impossible REFUSE. Pas de compteur d'échecs — un compteur est un état, et un état qui se
+    // remet à zéro au redémarrage donne une garde qui PARAÎT armée sans l'être : exactement le
+    // défaut que ce lot corrige. La distinction se fait donc sur le MOMENT, pas sur un seuil :
+    // à l'ouverture on peut encore ne pas ouvrir ; sur une ligne vivante, quelqu'un attend.
+    // `refusEtranger` rend le refus À PLAT — même forme que les autres refus du module.
+    assert.equal(r.motif, 'cloisonnement_invérifiable', `on refuse : ${JSON.stringify(r)}`);
+    assert.match(r.message, /pas pu être lu/i);
   });
 });
 
