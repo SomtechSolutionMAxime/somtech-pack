@@ -256,3 +256,52 @@ test('LA POSE AVERTIT ALORS, ET POSE QUAND MÊME — un outil absent n’est pas
   assert.equal(avis.length, 1, `on doit le dire : ${JSON.stringify(r.avertissements)}`);
   assert.match(avis[0], /settings\.json/, 'et nommer le fichier dont dépend la garantie');
 });
+
+
+test('UN `rev-parse` QUI ÉCHOUE POUR UNE AUTRE RAISON N’EST PAS « HORS DÉPÔT » — on ne se tait pas', async () => {
+  // ⚠️ BLOQUANT RELEVÉ EN REVUE DE FOND, et c'est le défaut de ce lot rejoué DANS son propre
+  // correctif. Le premier jet traitait TOUT échec de `rev-parse` (hors « git introuvable »)
+  // comme le FAIT « pas de dépôt », donc en silence total — pendant que le bloc juste en
+  // dessous, lui, traitait « tout le reste » comme une absence de réponse. Deux blocs du même
+  // fichier se contredisaient.
+  //
+  // Le cas plausible en production est la propriété douteuse (« dubious ownership », git ≥ 2.35) :
+  // courante dès qu'un dépôt appartient à un autre compte que celui qui l'interroge — conteneur,
+  // sudo, intégration continue. Le dépôt EXISTE, il peut parfaitement exclure `settings.json`,
+  // et on serait passé à côté sans un mot. Pire que le comportement qu'on corrige : celui-là,
+  // au moins, laissait un compte de fichiers à relire.
+  const { versionnabiliteDe } = await import('../src/lieu-agent.js');
+  const proprieteDouteuse = async () => {
+    const err = new Error('Command failed: git rev-parse --show-toplevel');
+    err.code = 128;
+    err.stderr = "fatal: detected dubious ownership in repository at '/un/depot'\n";
+    throw err;
+  };
+
+  const v = await versionnabiliteDe('/un/depot', '/un/depot/.orchestrateur/p-1', {
+    executer: proprieteDouteuse,
+  });
+
+  assert.equal(v.connue, false, 'le dépôt existe peut-être et exclut peut-être : on n’en sait rien');
+  assert.notEqual(v.horsDepot, true, 'ce n’est PAS le fait « pas de dépôt »');
+  assert.match(v.raison, /ownership|dubious/i, 'et la raison doit rapporter ce que git a dit');
+});
+
+test('« CE N’EST PAS UN DÉPÔT » RESTE UN FAIT, LUI — et reste silencieux', async () => {
+  // La contrepartie du contrôle précédent : il ne faut pas non plus se mettre à avertir partout.
+  // Ce message-là de git est un verdict, pas une panne.
+  const { versionnabiliteDe } = await import('../src/lieu-agent.js');
+  const pasUnDepot = async () => {
+    const err = new Error('Command failed: git rev-parse --show-toplevel');
+    err.code = 128;
+    err.stderr = 'fatal: not a git repository (or any of the parent directories): .git\n';
+    throw err;
+  };
+
+  const v = await versionnabiliteDe('/un/dossier', '/un/dossier/.orchestrateur/p-1', {
+    executer: pasUnDepot,
+  });
+
+  assert.equal(v.connue, true, 'git a répondu : il n’y a pas de dépôt');
+  assert.deepEqual(v.exclus, [], 'donc rien d’exclu à signaler');
+});

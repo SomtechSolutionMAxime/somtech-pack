@@ -247,7 +247,21 @@ export async function versionnabiliteDe(depot, racine, { executer } = {}) {
     await lancer(OUTILS.git, ['rev-parse', '--show-toplevel'], { cwd: depot, executer });
   } catch (err) {
     if (err instanceof OutilIntrouvable) return { connue: false, raison: err.message };
-    return { connue: true, exclus: [], horsDepot: true };
+    const dit = String(err?.stderr || err?.message || '').trim();
+    // ⚠️ SEUL « ce n'est pas un dépôt » EST UN FAIT. Tout le reste est une absence de réponse.
+    //
+    // BLOQUANT RELEVÉ EN REVUE DE FOND : la première écriture traitait TOUT échec de `rev-parse`
+    // comme le fait « hors dépôt », donc en SILENCE TOTAL — pendant que le bloc juste en dessous
+    // traitait « tout le reste » comme une absence de réponse. Deux blocs du même fichier se
+    // contredisaient, et c'était le défaut de ce lot rejoué dans son propre correctif.
+    //
+    // Le cas qui mord en production est la propriété douteuse (« dubious ownership », git ≥ 2.35),
+    // courante dès qu'un dépôt appartient à un autre compte que celui qui l'interroge — conteneur,
+    // sudo, intégration continue. Le dépôt EXISTE, il peut parfaitement exclure les droits, et on
+    // serait passé à côté sans un mot : pire que le comportement qu'on corrige, qui laissait au
+    // moins un compte de fichiers à relire.
+    if (/not a git repository/i.test(dit)) return { connue: true, exclus: [], horsDepot: true };
+    return { connue: false, raison: dit.split('\n')[0] || `git a échoué (code ${err?.code ?? '—'})` };
   }
 
   const chemins = GABARITS.map((f) => join(racine, f));
