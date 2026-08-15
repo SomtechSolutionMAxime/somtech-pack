@@ -334,6 +334,12 @@ async function main() {
       dormir,
       essais: ESSAIS,
       delaiMs: DELAI_MS,
+      // LE PANE VIENT DE NAÎTRE DANS LA SESSION VISÉE — c'est là qu'il faut lui parler.
+      // Cet argument manquait, et c'était la neuvième occurrence du motif « une porte sur
+      // deux » : cinq appels herdr portaient le socket, le sixième non. L'amorce serait
+      // partie vers la session par défaut, c'est-à-dire vers rien depuis un terminal
+      // ordinaire — exactement la panne que ce ticket ferme.
+      socket,
       // La session vient de naître : on lui laisse le temps d'afficher sa boîte de saisie,
       // avec la même patience qu'on a mise à attendre qu'elle soit détectée.
       essaisDisponible: ESSAIS,

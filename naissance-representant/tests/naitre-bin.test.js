@@ -70,8 +70,8 @@ const fs = require('fs');
 const JOURNAL = ${JSON.stringify(journal)};
 const args = process.argv.slice(2);
 const sc = JSON.parse(fs.readFileSync(${JSON.stringify(etat)}, 'utf8'));
-const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);
-fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse).map((e) => e.a);
+fs.appendFileSync(JOURNAL, JSON.stringify({ a: args, s: process.env.HERDR_SOCKET_PATH || null }) + '\\n');
 
 const sortir = (obj, code) => { process.stdout.write(JSON.stringify(obj)); process.exit(code); };
 const refus = (code) => ({ error: { code, message: code + ' pour ' + args.join(' ') } });
@@ -131,8 +131,26 @@ sortir({ result: { ok: true } }, 0);
   return journal;
 }
 
-function appelsJournalises(journal) {
+function entreesJournalisees(journal) {
   return readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+}
+
+/** Les gestes, tels que les contrôles existants les lisent. */
+function appelsJournalises(journal) {
+  return entreesJournalisees(journal).map((e) => e.a);
+}
+
+/**
+ * La session à laquelle CHAQUE geste a parlé.
+ *
+ * ⚠️ SANS ÇA, RETIRER LE SOCKET D'UN SEUL APPEL NE ROUGISSAIT NULLE PART — le faux herdr ne
+ * regardait pas à qui on s'adressait. Une revue en passe 1 l'a montré, et le trou était
+ * réel : `livrerBrief` était appelé sans socket, donc l'amorce partait vers la session par
+ * défaut. Cinq appels sur six portaient la session — neuvième occurrence du motif
+ * « une porte sur deux » sur ce dépôt, et la première commise ici (T-20260814-0120).
+ */
+function sessionsJournalisees(journal) {
+  return entreesJournalisees(journal).map((e) => e.s);
 }
 
 /**
@@ -147,9 +165,10 @@ function appelsJournalises(journal) {
 let depotCourant = null; // le dépôt jetable du test en cours — voir `avecLieu`
 let sessionsDesEssais = '/tmp/faux-poste/.config/herdr/sessions/essai/herdr.sock';
 
-function lancerNaitre(client, workspace = 'w9') {
+function lancerNaitre(client, workspace = 'w9', { amorce = null } = {}) {
   const args = [BIN, client, '--workspace', workspace];
   if (depotCourant) args.push('--depot', depotCourant);
+  if (amorce) args.push('--amorce-texte', amorce);
   // UNE seule session désignée : le cas non ambigu, celui qui doit continuer à marcher sans
   // que l'appelant précise quoi que ce soit. Les cas à plusieurs sessions sont éprouvés sur
   // la résolution elle-même (`tests/session.test.js`), sans faire naître personne.
@@ -386,6 +405,44 @@ test('naitre.js REFUSE un espace que la session visée ne porte pas — et n’o
       'AUCUN onglet ne doit avoir été créé — la preuve est l’absence, pas le message'
     );
     assert.equal(r.stdout, '', 'et rien qui ressemble à un succès');
+  }));
+
+// ═══════════ T-20260814-0120 — TOUS les gestes parlent à la session visée, sans exception
+//
+// ⚠️ CE CONTRÔLE EXISTE PARCE QUE J'AI COMMIS LE DÉFAUT QU'IL GARDE. Cinq appels herdr
+// portaient la session, le sixième non : `livrerBrief` était appelé sans socket, donc
+// l'amorce partait vers la session par défaut — c'est-à-dire vers RIEN depuis un terminal
+// ordinaire. Neuvième occurrence du motif « une porte sur deux » sur ce dépôt, et la
+// première commise en le corrigeant. Une revue en passe 1 l'a vue ; aucun test ne la voyait,
+// parce que le faux herdr ne regardait pas à qui on s'adressait.
+//
+// On compte donc les gestes, on ne les nomme pas un à un : une liste de noms se déphase au
+// premier appel ajouté, et c'est exactement ainsi qu'un sixième se glisse sans socket.
+test('CHAQUE geste herdr part vers la session visée — aucun ne parle à une autre', () =>
+  avecLieu((client, lieu) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+
+    // ⚠️ L'AMORCE N'A PAS BESOIN DE RÉUSSIR POUR ÊTRE MESURÉE — il suffit qu'elle PARLE.
+    // Le double ne sait pas jouer la danse complète d'une boîte de saisie, et la faire
+    // aboutir demanderait de lui apprendre un dialogue que la suite de `livraison` éprouve
+    // déjà. Mais la livraison lit l'écran avant d'écrire : ce geste-là part, il est
+    // journalisé, et c'est lui qui portait le socket manquant.
+    lancerNaitre(client, 'w9', { amorce: 'Voici ton brief, en une ligne.' });
+
+    const appels = appelsJournalises(journal);
+    assert.ok(
+      appels.some((a) => a[0] === 'agent' && a[1] === 'read'),
+      'la livraison de l’amorce doit avoir parlé à herdr — sans quoi ce contrôle ne mesure pas ce qu’il croit'
+    );
+
+    const sessions = sessionsJournalisees(journal);
+    assert.ok(sessions.length >= 5, `trop peu de gestes pour que ce contrôle prouve quoi que ce soit (${sessions.length})`);
+    const egarees = sessions.filter((s) => s !== sessionsDesEssais);
+    assert.deepEqual(
+      egarees,
+      [],
+      `${egarees.length} geste(s) sur ${sessions.length} ont parlé à une autre session que « ${sessionsDesEssais} »`
+    );
   }));
 
 test('naitre.js exige --workspace', () => {
