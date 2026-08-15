@@ -5,6 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-15
+
+### Corrigé
+
+- **Le crochet apparaît sur le message du dirigeant au moment où l'agent l'a RÉELLEMENT PRIS**, plus au moment où le veilleur l'a écrit dans le pane (T-20260815-0011, PR #249). Écrire dans un pane et être lu par la session qui l'habite sont deux faits distincts : un pane peut être occupé, la boîte peut garder le texte sans qu'il parte, la session peut ne jamais sortir de son attente. Le crochet répondait à l'écriture — donc il rassurait exactement dans les cas où le message était perdu.
+- **La preuve de prise n'est pas inventée pour l'occasion : c'est celle de `livrer.js`, déjà éprouvée.** Trois témoins, et un seul suffit — la boîte s'est vidée, un message est passé en file d'attente, ou la session est sortie de l'attente. `remettre()` lit l'état du pane **avant** d'écrire, écrit, relit après, et rend son verdict avec la réponse.
+- **L'absence de crochet est la moitié qui a de la valeur.** Si aucun des trois témoins n'est constatable, le crochet n'est **pas** posé et le journal le dit. Un message sans crochet est un message dont personne ne peut affirmer qu'il est arrivé — c'est l'information qu'on cherchait.
+- **Un AVANT qu'on n'a pas pu lire ne fabrique aucun témoin.** Une lecture de pane ratée rendait `false` aux deux questions (« il y avait des messages en file ? », « la boîte était pleine ? »), ce qui se lisait comme « il n'y avait rien » — et il suffisait alors que l'APRÈS paraisse vide pour fabriquer une « boîte vidée » sans avoir rien constaté. Le statut, lui, reste un témoin : il ne dépend pas de l'écran.
+- **La consigne commune compte ce qu'elle a prouvé.** Elle payait déjà le coût du verdict et jetait la réponse : `remis` s'incrémentait sur la seule absence d'exception. Une consigne coincée dans le pane d'un orchestrateur était comptée « remise ». Elle nomme désormais ceux dont la prise n'a pas été constatée.
+- Les deux gabarits — gestionnaire et orchestrateur — disent ce que le crochet signifie et ce que son absence signifie. Le dispositif le pose seul ; personne n'a rien à faire.
 ## [1.55.0] - 2026-08-15
 
 ### Corrigé
