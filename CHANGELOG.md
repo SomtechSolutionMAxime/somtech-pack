@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.55.0] - 2026-08-15
+
+### Corrigé
+
+- **La ronde et le topo d'un orchestrateur ne réveillaient personne** (T-20260815-0008, PR #248). Un orchestrateur vivant a passé **toute sa vie sans recevoir un seul réveil**, et a fini par poser une boucle à la main **sans savoir ce qu'il contournait** — la seule preuve de l'absence d'un réveil est un non-événement. Deux causes indépendantes, mesurées : la ronde interrogeait herdr **sans désigner de session**, donc celle de son environnement — et un agent de session ne charge aucun profil de shell, donc **aucune** ; et **rien ne l'installait**, le geste n'existant que dans l'aide de la commande.
+- **Elle balaie désormais toutes les sessions du poste, et chaque rappel part sur le socket de la session où vit son destinataire.** Sans ce second point, on aurait remplacé « ne réveiller personne » par « en réveiller un et croire avoir fait le tour ».
+- ⚠️ **Le correctif évident était le mauvais, et c'est écrit dans le code pour que personne ne le repose** : poser une session dans le descripteur du service la figerait sur celle choisie le jour de l'installation, pendant que le dirigeant en ouvre au fil de l'eau. Le veilleur de `ligne-directe`, qui tourne depuis des semaines, ne porte aucune session — il les **découvre**. C'est ce modèle-là.
+- **Le geste qui installe la vigilance existe enfin**, porté par `/orchestrateur` : une fois par poste, pas par orchestrateur. Les deux rendez-vous servent tous les orchestrateurs vivants, y compris ceux qui naîtront demain.
+
+### Modifié
+
+- **Un réveil qui ne joint personne dit désormais pourquoi.** Trois silences étaient confondus — aucune session ouverte, toutes muettes, aucun orchestrateur vivant — et c'est leur confusion qui a laissé le défaut vivre des jours. Le troisième est un **succès** : personne n'attend. Les deux autres sont des pannes, et chaque session muette est nommée.
+- **Le compte rendu porte ce que la ronde a REGARDÉ**, pas seulement ce qu'elle a livré : les sessions balayées, et le nombre d'agents **vus avant filtrage**. Sans ce dernier chiffre, « zéro orchestrateur » avait deux causes indistinguables — il n'y en a vraiment aucun, ou la reconnaissance d'un lieu a échoué en silence. Un poste avec onze agents vivants et zéro reconnu se déclarait content, exactement comme un poste vide : **c'est le mode de panne de ce ticket qui se rouvrait sous son propre correctif**, et une revue de fond l'a vu.
+
 ## [1.54.0] - 2026-08-15
 
 ### Corrigé
