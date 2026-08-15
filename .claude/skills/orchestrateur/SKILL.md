@@ -215,6 +215,24 @@ pane **dans le lieu**, lance la session, attend qu'elle soit détectée, la nomm
 **par le fait** — le nom qu'elle porte, le répertoire où elle tourne. Un échec referme le pane
 qu'elle avait ouvert.
 
+### Dans quelle session herdr — et pourquoi elle refuse de deviner
+
+**Onze sessions herdr tournent sur ce poste**, chacune avec son propre canal de commande, et
+**les identifiants d'espace ne sont pas globalement uniques** : `w2W` existe dans plusieurs.
+Depuis `T-20260814-0120`, la naissance ne devine plus.
+
+| Ta situation | Ce que tu tapes |
+|---|---|
+| tu la lances **depuis un pane** | rien — l'environnement dit déjà tout |
+| une **seule** session ouverte | rien non plus |
+| **plusieurs** sessions, et tu es hors d'un pane | `--session <nom>` — sinon elle **refuse en les nommant toutes** |
+| tu fais naître **ailleurs que chez toi** | `--session <nom>`, qui **l'emporte** sur ton pane courant |
+
+**Elle refuse aussi un espace qui n'appartient pas à la session visée**, et elle le refuse
+**avant de créer le moindre onglet**. C'est le cas qui a coûté le plus cher : un identifiant
+lu dans une session, donné pour une naissance dans une autre, ne rate pas — **il réussit
+ailleurs**, et rien à l'écran ne le montre.
+
 **Les deux options qu'on n'oublie pas, parce que les oublier ne se voit pas :**
 
 - **`--role orchestrateur`.** Sans lui, la naissance vise le rôle par défaut — le représentant

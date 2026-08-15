@@ -42,8 +42,14 @@ export function estUnPane(cible) {
  * n'était couvert par rien.
  */
 export function sessionsDuPoste() {
+  // ⚠️ `!== undefined`, PAS UNE VÉRITÉ. Une liste injectée VIDE veut dire « aucune session
+  // ouverte » — c'est un état réel, et le refus qui lui répond doit pouvoir être éprouvé.
+  // Avec un test de vérité, la chaîne vide retombait sur le balayage du VRAI poste : un
+  // essai qui dit « zéro session » mesurait alors les onze qui tournent. Le défaut est de la
+  // même famille que ceux que ce fichier existe pour fermer — une porte laissée ouverte par
+  // une condition trop lâche (T-20260814-0120).
   const forcees = process.env.HERDR_SESSIONS_ESSAIS;
-  if (forcees) return forcees.split(':').filter(Boolean);
+  if (forcees !== undefined) return forcees.split(':').filter(Boolean);
   // ⚠️ SOUS ESSAIS, ON N'ÉNUMÈRE PAS LES SESSIONS DU POSTE — même en lecture.
   //
   // Onze sessions y tournent avec du travail réel. Un essai qui les balaie devient dépendant
