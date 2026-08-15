@@ -25,6 +25,7 @@ import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu } from './lieu-agent.js';
 import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune, cadrerPourPair } from './cadre.js';
+import { etrangersParmi, nouveauxVenus, photographier, NOUS } from './cloisonnement.js';
 import { reponse } from './langage.js';
 import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
 import {
@@ -366,6 +367,9 @@ export class Veilleur {
     // le reprend pas, et un canal muet resterait dans la barre latérale du dirigeant comme une
     // ligne qui existe. Le refus tombe donc AVANT toute création — ici, avant même de lire un
     // titre.
+    // Ce que les gardes ont à dire sans l'empêcher — rendu à la fin, avec la réponse.
+    const avertissementsAvant = [];
+
     // LES COURRIELS SE RÉSOLVENT ICI, PAS DANS LA COMMANDE (T-20260814-0136).
     //
     // `--inviter <courriel>` était résolu côté commande, qui lisait le trousseau du poste et
@@ -451,8 +455,18 @@ export class Veilleur {
       const autorisesFinaux = [...new Set([...(deja.autorises || []), ...invitesEffectifs])];
       const muette = refusLigneMuette(natureVoulue, autorisesFinaux, deja.chantier);
       if (muette) return muette;
+      const etrangerDeja = await this.refusEtranger(deja.canal_id, deja.canal_nom, natureVoulue);
+      if (etrangerDeja?.avertissement) avertissementsAvant.push(etrangerDeja.avertissement);
+      else if (etrangerDeja) {
+        return { ok: false, cree: false, refus: etrangerDeja, erreur: etrangerDeja.message };
+      }
+
       const entres = await this.assurerPresence(deja.canal_id, deja.canal_nom, autorisesFinaux, natureVoulue);
       if (!entres.ok) return entres;
+
+      // La photo se refait à la reprise : ce qui est là maintenant devient la référence.
+      const vusDeja = await this.membresPhotographies(deja.canal_id);
+      if (vusDeja) deja.membres_vus = vusDeja;
 
       // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans le
       // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
@@ -469,6 +483,7 @@ export class Veilleur {
       return {
         ok: true,
         reprise: true,
+        ...(avertissementsAvant.length ? { avertissements: avertissementsAvant } : {}),
         canal: deja.canal_nom,
         canal_id: deja.canal_id,
         visage: deja.visage,
@@ -580,8 +595,19 @@ export class Veilleur {
     // un canal du même nom, donc la relance retombera dessus et retentera l'invitation. Inscrire
     // la ligne malgré l'échec aurait laissé au registre une ligne d'apparence saine, et c'est
     // précisément l'illusion que tout ce lot démonte.
+    // ═══ QUI EST DÉJÀ DANS CE CANAL (T-20260814-0142). Un canal REPRIS peut porter des gens :
+    // c'est le cas que cette garde existe pour attraper. Elle tombe avant qu'on inscrive la
+    // ligne et avant qu'on y écrive quoi que ce soit.
+    const etranger = await this.refusEtranger(canal.id, canal.nom, natureVoulue);
+    if (etranger?.avertissement) avertissementsAvant.push(etranger.avertissement);
+    else if (etranger) return { ok: false, cree: false, refus: etranger, erreur: etranger.message };
+
     const entres = await this.assurerPresence(canal.id, canal.nom, invitesEffectifs, natureVoulue);
     if (!entres.ok) return entres;
+
+    // LA PHOTO DES MEMBRES (T-20260813-0074) — les identifiants, rien d'autre. C'est elle qui
+    // permettra de constater qu'un NOUVEAU est entré, sans jamais prétendre savoir qui il est.
+    const vus = await this.membresPhotographies(canal.id);
 
     const ligne = inscrireLigne(this.registre, {
       chantier,
@@ -591,6 +617,7 @@ export class Veilleur {
       worktree: worktree || null,
       herdr_socket: herdrSocket,
       nature: natureVoulue,
+      ...(vus ? { membres_vus: vus } : {}),
       // JETABLE OU DURABLE — inscrit ici, et nulle part ailleurs (T-20260814-0085).
       //
       // Le champ n'existe QUE s'il a été demandé : une ligne ordinaire n'en porte pas, et
@@ -626,12 +653,76 @@ export class Veilleur {
     return {
       ok: true,
       reprise: false,
+      ...(avertissementsAvant.length ? { avertissements: avertissementsAvant } : {}),
       canal: canal.nom,
       canal_id: canal.id,
       visage,
       nature: natureVoulue,
       canal_reutilise: canal.reutilise,
       ...(pair ? { pair: { role: pair.role, nom: pair.nom, pane: pair.pane } } : {}),
+    };
+  }
+
+  /**
+   * QUI EST DANS CE CANAL — lu chez Slack, jugé par `cloisonnement.js` (T-20260814-0142).
+   *
+   * ⚠️ SUR UNE LIGNE INTERNE SEULEMENT. Un canal CLIENT existe pour accueillir les gens du
+   * client : y appliquer cette garde fermerait la porte au nez de ceux à qui il est destiné.
+   * C'est la confusion la plus coûteuse que ce lot pouvait produire, et elle est écrite ici.
+   *
+   * Rend `null` quand il n'y a rien à redire, sinon le refus tout prêt.
+   */
+  /** La photo des membres, ou `null` si on n'a pas pu la prendre — on ne l'invente pas. */
+  async membresPhotographies(canalId) {
+    try {
+      return photographier(await this.slack.profilsDuCanal(this.jetons.robot, canalId));
+    } catch {
+      // Pas de photo vaut mieux qu'une fausse : `nouveauxVenus` ne crie pas sans référence.
+      return null;
+    }
+  }
+
+  async refusEtranger(canalId, canalNom, nature) {
+    if (nature === 'client') return null;
+    let profils;
+    try {
+      profils = await this.slack.profilsDuCanal(this.jetons.robot, canalId);
+    } catch (err) {
+      // ⚠️ ON NE CONCLUT RIEN DE CE QU'ON N'A PAS PU LIRE — et on n'ouvre pas non plus la porte
+      // en silence. Le même renversement que partout ailleurs ici : un droit manquant deviendrait
+      // « personne d'étranger », c'est-à-dire l'inverse de ce que la garde promet.
+      journaliser(`membres de #${canalNom} illisibles (${err.message}) — cloisonnement non vérifié`);
+      // ⚠️ À L'OUVERTURE, UNE LECTURE IMPOSSIBLE REFUSE — arbitrage rendu après revue de fond.
+      //
+      // La recommandation était un compteur d'échecs qui basculerait en refus après N essais.
+      // Écartée, et pour la bonne raison : **un compteur est un ÉTAT**, et un état qui se remet
+      // à zéro au redémarrage donne une garde qui PARAÎT armée sans l'être — très exactement le
+      // défaut que ce lot corrige, réintroduit par son propre remède.
+      //
+      // La distinction se fait donc sur le MOMENT, sans seuil et sans mémoire :
+      //   • à l'OUVERTURE, on peut encore ne pas ouvrir — personne n'attend, rien n'est perdu ;
+      //   • sur une ligne VIVANTE, quelqu'un attend une réponse, et couper la parole parce qu'un
+      //     droit a hoqueté serait le remède pire que le mal (voir `veillerAvantDEcrire`).
+      return {
+        motif: 'cloisonnement_invérifiable',
+        message:
+          `qui est dans #${canalNom} n'a pas pu être lu (${err.message}) — impossible de garantir ` +
+          `qu'aucun externe n'y est, donc la ligne ne s'ouvre pas. Une ligne interne porte les ` +
+          `arbitrages, les pannes de production, les échéances et les coûts. ⚠️ ${NOUS.limite}.`,
+      };
+    }
+    const etrangers = etrangersParmi(profils, this.identite?.equipe || null);
+    if (!etrangers.length) return null;
+    return {
+      motif: 'etranger_dans_le_canal',
+      qui: etrangers.map((e) => e.nom),
+      message:
+        `#${canalNom} porte ${etrangers.length > 1 ? 'des gens' : 'quelqu\'un'} qui ne ${
+          etrangers.length > 1 ? 'sont' : 'semble'
+        } pas de la maison : ${etrangers.map((e) => e.nom).join(', ')}. Une ligne interne porte ` +
+        'les arbitrages, les pannes de production, les échéances et les coûts — « pas de client ' +
+        'dans les canaux des orchestrateurs ». Fais-les sortir du canal, ou ouvre la ligne ' +
+        `ailleurs. ⚠️ ${NOUS.limite}.`,
     };
   }
 
@@ -662,7 +753,20 @@ export class Veilleur {
     // canal privé, et c'est leur appartenance qui les autorise. Rien à prouver ici.
     if (nature === 'client' || !invites.length) return { ok: true };
 
-    const avant = await this.slack.membresDuCanal(this.jetons.robot, canalId);
+    // ⚠️ UNE LECTURE IMPOSSIBLE NE FAIT PAS TOMBER L'OUVERTURE — défaut de T-20260814-0136,
+    // trouvé en éprouvant le cloisonnement : l'exception traversait `ouvrir` et l'appelant
+    // recevait une pile au lieu d'un refus lisible. On la nomme.
+    let avant;
+    try {
+      avant = await this.slack.membresDuCanal(this.jetons.robot, canalId);
+    } catch (err) {
+      return {
+        ok: false,
+        erreur:
+          `impossible de lire qui est déjà dans #${canalNom} (${err.code || err.message}) — donc ` +
+          'impossible de savoir qui reste à inviter, ni de prouver que quiconque y est entré.',
+      };
+    }
     const manquants = invites.filter((u) => !avant.includes(u));
     if (!manquants.length) return { ok: true };
 
@@ -1078,6 +1182,17 @@ export class Veilleur {
     if (refus) return refus;
     if (!ligne) return { ok: false, erreur: `aucune ligne ouverte pour « ${chantier || canalId} » — ouvre-la d'abord` };
     if (ligne.close_le) return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est close depuis ${ligne.close_le}` };
+
+    // ═══ AVANT D'ÉCRIRE, REGARDER QUI LIRA (T-20260813-0074 · T-20260814-0142).
+    //
+    // C'est le moment juste, et c'est le seul. `autorise()` relit déjà les membres — mais
+    // seulement quand quelqu'un ÉCRIT, alors que le risque de ce lot est la LECTURE : « ce n'est
+    // pas le client B qui écrit, c'est ce que le client A reçoit et que B lit par-dessus son
+    // épaule ». Un lecteur silencieux ne se manifeste jamais ; ce qu'on peut faire, c'est
+    // regarder avant de lui donner à lire.
+    const veille = await this.veillerAvantDEcrire(ligne);
+    if (veille.refus) return { ok: false, refus: veille.refus, erreur: veille.refus.message };
+
     const ts = await this.slack.poster(this.jetons.robot, {
       canal: ligne.canal_id,
       texte,
@@ -1087,7 +1202,71 @@ export class Veilleur {
     // L'ÉCHO VIENT APRÈS L'ENVOI, et l'ordre est celui de `fermer` pour la même raison : ce qui
     // part chez l'interlocuteur humain ne dépend jamais de ce qui part chez un agent.
     const pair = await this.echoAuPair(ligne, pane, texte);
-    return { ok: true, canal: ligne.canal_nom, ts, ...(pair ? { pair } : {}) };
+    return {
+      ok: true,
+      canal: ligne.canal_nom,
+      ts,
+      ...(veille.nouveaux ? { nouveaux_venus: veille.nouveaux } : {}),
+      ...(veille.invérifiable ? { cloisonnement_invérifiable: veille.invérifiable } : {}),
+      ...(pair ? { pair } : {}),
+    };
+  }
+
+  /**
+   * CE QU'ON CONSTATE DU CANAL JUSTE AVANT D'Y ÉCRIRE — et ce qu'on en fait.
+   *
+   * Deux choses, et elles ne se traitent pas pareil :
+   *
+   *   • un ÉTRANGER dans une ligne INTERNE ⇒ on n'écrit pas. « Un canal compromis qu'on
+   *     continue d'alimenter est pire qu'un canal fermé » — le point 3 de T-20260814-0142.
+   *     Sur une ligne cliente, au contraire, les invités sont ceux à qui elle est destinée ;
+   *   • un NOUVEAU VENU depuis la photo ⇒ on le DIT, et on écrit quand même. On ne prétend pas
+   *     savoir que c'est un autre client : sans registre des personnes, rien ne le permet, et
+   *     deux personnes d'un même client sont le cas nominal. On dit que le lectorat a augmenté.
+   *
+   * ⚠️ LA PHOTO SE REPREND UNE FOIS LE SIGNAL DONNÉ. Un signal répété à chaque message devient
+   * du bruit, et un bruit cesse d'être lu — ce que ce dépôt écrit partout ailleurs (RA-REL-008).
+   */
+  async veillerAvantDEcrire(ligne) {
+    const nature = natureDe(ligne);
+    let profils;
+    try {
+      profils = await this.slack.profilsDuCanal(this.jetons.robot, ligne.canal_id);
+    } catch (err) {
+      // On n'a pas pu regarder. Dans les DEUX natures on laisse écrire — couper la parole parce
+      // qu'un droit Slack a hoqueté serait le remède pire que le mal — mais sur une ligne interne
+      // on le DIT, et sur une ligne cliente on se tait : un client n'a pas à recevoir nos avaries
+      // d'outillage. (Le commentaire d'origine annonçait ici un refus que le code ne faisait pas
+      // — relevé en revue de fond.)
+      if (nature === 'client') return {};
+      journaliser(`membres de #${ligne.canal_nom} illisibles avant écriture (${err.message})`);
+      // On le DIT sans empêcher : se taire serait conclure d'une absence de mesure, et refuser
+      // couperait la parole d'un agent parce qu'un droit Slack a hoqueté.
+      return { invérifiable: `qui lit #${ligne.canal_nom} n'a pas pu être vérifié (${err.message})` };
+    }
+
+    if (nature !== 'client') {
+      const etrangers = etrangersParmi(profils, this.identite?.equipe || null);
+      if (etrangers.length) {
+        return {
+          refus: {
+            motif: 'etranger_dans_le_canal',
+            qui: etrangers.map((e) => e.nom),
+            message:
+              `#${ligne.canal_nom} porte ${etrangers.map((e) => e.nom).join(', ')}, qui ne semble ` +
+              'pas de la maison — rien n\'est écrit. Une ligne interne porte les arbitrages, les ' +
+              `pannes de production, les échéances et les coûts. ⚠️ ${NOUS.limite}.`,
+          },
+        };
+      }
+    }
+
+    const venus = nouveauxVenus(ligne.membres_vus, profils);
+    ligne.membres_vus = photographier(profils);
+    sauverRegistre(this.registre);
+    if (!venus.length) return {};
+    journaliser(`nouveau(x) venu(s) dans #${ligne.canal_nom} : ${venus.map((v) => v.nom).join(', ')}`);
+    return { nouveaux: venus.map((v) => v.nom) };
   }
 
   /**
@@ -1165,7 +1344,17 @@ export class Veilleur {
     if (ligne.close_le) {
       return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est déjà close depuis ${ligne.close_le}` };
     }
-    if (bilan) {
+    // ═══ LE BILAN EST DU CONTENU DE SYNTHÈSE — coûts, arbitrages, ce qui reste. C'est le SEUL
+    // geste qui en pose systématiquement, et il n'était gardé par rien : « une porte sur deux »,
+    // relevé en revue de fond sur ce lot même. Le scénario : un chantier court, aucun `dire`
+    // jamais appelé, un externe entré entre l'ouverture et la clôture.
+    //
+    // ⚠️ ON RETIENT LE BILAN, ON NE BLOQUE PAS LA FERMETURE. « Un canal compromis qu'on continue
+    // d'alimenter est pire qu'un canal fermé » — donc on cesse d'écrire, pas de fermer. Refuser
+    // la clôture laisserait l'agent attaché à un canal qu'il ne doit plus alimenter.
+    const veille = await this.veillerAvantDEcrire(ligne);
+    const bilanRetenu = Boolean(bilan && veille.refus);
+    if (bilan && !veille.refus) {
       await this.slack.poster(this.jetons.robot, {
         canal: ligne.canal_id,
         texte: bilan,
@@ -1198,7 +1387,14 @@ export class Veilleur {
     clore(this.registre, ligne.canal_id, maintenant());
     sauverRegistre(this.registre);
     journaliser(`ligne close — ${ligne.chantier} (#${ligne.canal_nom}) archive=${archive}`);
-    return { ok: true, canal: ligne.canal_nom, archive };
+    if (bilanRetenu) journaliser(`bilan RETENU — #${ligne.canal_nom} : ${veille.refus.message}`);
+    return {
+      ok: true,
+      canal: ligne.canal_nom,
+      archive,
+      ...(bilanRetenu ? { bilan_retenu: veille.refus.message } : {}),
+      ...(veille.nouveaux ? { nouveaux_venus: veille.nouveaux } : {}),
+    };
   }
 
   /**

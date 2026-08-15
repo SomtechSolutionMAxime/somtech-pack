@@ -464,6 +464,51 @@ export async function membresDuCanal(jetonRobot, canal) {
  * @param {string} canal identifiant du canal
  * @param {{nom?: string}} [contexte] nom lisible du canal, pour que le refus le nomme
  */
+/**
+ * LES PROFILS DES MEMBRES D'UN CANAL — réduits à ce que le jugement de cloisonnement demande.
+ *
+ * ⚠️ AUCUN COURRIEL, ET CE N'EST PAS UN OUBLI. Mesuré le 2026-08-15 avec le jeton du ROBOT :
+ * `users.info` ne rend PAS `profile.email`. Le droit `users:read.email` n'est pas accordé à
+ * notre application — le profil s'arrête à `real_name`, `display_name`, `title`, `phone`,
+ * `status_*`. Un appelant qui lirait le domaine du courriel écrirait une garde qui ne se
+ * déclenche jamais, ce qui est pire que pas de garde : elle rassure.
+ *
+ * Ce qu'on obtient, et qui suffit : `is_bot`, `is_restricted` / `is_ultra_restricted` (comment
+ * un invité — donc un client — est marqué dans un espace de travail), et `team_id` (comment un
+ * membre d'une AUTRE organisation se distingue, par Slack Connect).
+ *
+ * ⚠️ UN APPEL PAR MEMBRE. Les canaux visés en portent deux à quatre ; le plafond de `users.info`
+ * est large. Si un canal devait en porter cent, ce chemin serait à revoir — c'est dit ici plutôt
+ * que découvert un jour de panne.
+ */
+export async function profilsDuCanal(jetonRobot, canal) {
+  const ids = await membresDuCanal(jetonRobot, canal);
+  const profils = [];
+  for (const id of ids) {
+    // ⚠️ UN MEMBRE QU'ON NE SAIT PAS LIRE NE FAIT PAS ÉCHOUER LES AUTRES — et il ne devient pas
+    // un suspect pour autant. Un compte supprimé, un profil restreint, un identifiant qui n'est
+    // plus servi : le canal, lui, existe toujours, et les autres membres se lisent très bien.
+    // Jeter ici rendrait la garde inopérante sur un canal parfaitement sain, ce qui est la façon
+    // la plus sûre de la faire désactiver.
+    let u;
+    try {
+      u = (await appeler('users.info', jetonRobot, { user: id })).user || {};
+    } catch {
+      profils.push({ id, nom: id, robot: false, invite: false, monoCanal: false, equipe: null, inconnu: true });
+      continue;
+    }
+    profils.push({
+      id,
+      nom: u.profile?.display_name || u.profile?.real_name || u.real_name || u.name || id,
+      robot: Boolean(u.is_bot),
+      invite: Boolean(u.is_restricted),
+      monoCanal: Boolean(u.is_ultra_restricted),
+      equipe: u.team_id || null,
+    });
+  }
+  return profils;
+}
+
 export async function rejoindreCanal(jetonRobot, canal, { nom } = {}) {
   try {
     await appeler('conversations.join', jetonRobot, { channel: canal });

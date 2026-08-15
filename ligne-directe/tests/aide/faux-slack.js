@@ -244,6 +244,10 @@ export function fauxSlack({
       }
 
       case 'conversations.members': {
+        // `monde.membresIllisibles` — un droit révoqué, un jeton mort, un plafond atteint. Ce
+        // n'est pas une supposition : c'est le mode de dégradation que toute garde appuyée sur
+        // Slack doit savoir traverser sans se taire (T-20260813-0074, relevé en revue de fond).
+        if (monde.membresIllisibles) return echec('missing_scope');
         // C'EST L'APPEL QUI DÉCIDE QUI PEUT ÉCRIRE SUR UNE LIGNE CLIENTE. Sans `channel`,
         // Slack ne devine pas : il refuse, et le refus vaut liste vide côté appelant.
         if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });

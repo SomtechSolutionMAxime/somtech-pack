@@ -70,6 +70,14 @@ function slackDouble({ membres = [], canalExistant = null } = {}) {
     // le double était donc structurellement INCAPABLE de voir une invitation manquante — six
     // fichiers d'essais dans ce cas, pendant que la panne mesurée était exactement celle-là.
     // Un double dont le geste n'a pas d'effet observable ne prouve jamais ce geste.
+    // `profilsDuCanal` — le cloisonnement demande QUI est là, pas seulement combien
+    // (T-20260813-0074). Dérivé des membres de ce double : des nôtres, ni invités ni d'une
+    // autre organisation, ce qui est le cas nominal de ces essais. Un double muet sur une
+    // question que le code pose n'est pas neutre — il fait refuser des canaux sains.
+    async profilsDuCanal(_j, canal) {
+      const ids = await this.membresDuCanal(_j, canal);
+      return ids.map((id) => ({ id, nom: id, robot: false, invite: false, monoCanal: false, equipe: null }));
+    },
     async membresDuCanal() {
       return membres;
     },
