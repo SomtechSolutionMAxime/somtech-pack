@@ -234,6 +234,32 @@ naissance vérifie **par le fait** que le brief a été pris, et échoue s'il es
 boîte de saisie — le pane, lui, reste ouvert : briefe-la à la main plutôt que de la refaire
 naître.
 
+### Elle refuse un lieu que git ne porte pas — et c'est le versement qui la débloque
+
+Depuis `T-20260814-0139`, **la naissance refuse** quand aucun commit ne porte le lieu, quand
+il n'est versé qu'à moitié, ou quand il porte une garde d'ouverture qu'une naissance
+antérieure a posée et que personne n'a versée.
+
+Ce n'est pas une exigence nouvelle : le versement est déjà prescrit juste au-dessus. Le refus
+le rend seulement **opposable** — parce que l'instruction n'était pas suivie. Mesuré au
+moment de l'arbitrage : sur cinq lieux clients posés, **trois portaient une garde qu'aucun
+commit ne contenait**. Un `git checkout` les désarmait sans un mot, le fichier restant un
+`settings.json` parfaitement valide, simplement sans `hooks`.
+
+| Ce que le refus dit | Le geste qui le lève |
+|---|---|
+| `aucun commit ne porte « … »` | verse le lieu — la commande exacte est dans le message |
+| `ce lieu est versé à moitié : aucun commit ne porte …` | verse les fichiers qu'il nomme, un à un |
+| `la garde d'ouverture posée dans ce lieu n'est dans aucun commit` | verse le `settings.json` du lieu |
+
+**Le refus tombe avant la moindre écriture** : rien n'a été posé, aucun pane n'a été créé,
+le trousseau n'a pas été lu. Relance après avoir versé.
+
+> **Ce qu'il ne refuse PAS, et pourquoi.** La garde que *cette* naissance vient de poser est
+> seulement **signalée**. Personne ne pouvait la verser avant qu'elle existe : la refuser
+> rendrait toute première naissance impossible — on ne peut pas committer un fichier que la
+> commande refuse d'écrire. Verse-la après ; sans quoi le prochain lancement, lui, refusera.
+
 ## Ce que cette compétence ne fait jamais
 
 - **Elle n'ouvre pas la ligne de l'orchestrateur** — elle vérifie seulement que le poste

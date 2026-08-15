@@ -254,6 +254,36 @@ export const horsBlocs = (texte) => texte.replace(/```[\s\S]*?```/g, '');
  */
 export const CONTROLES_COMMUNS = [
   {
+    id: 'le-versement-est-opposable',
+    quoi: 'la compétence dit que la NAISSANCE refuse un lieu qu’aucun commit ne porte',
+    verifier({ texte }) {
+      // T-20260814-0139. Les deux compétences prescrivaient déjà de verser le lieu après la
+      // pose ; personne ne le faisait — sur cinq lieux clients posés, TROIS portaient une
+      // garde qu'aucun commit ne contenait. La naissance refuse donc désormais.
+      //
+      // CE CONTRÔLE EXISTE PARCE QU'UN REFUS ABSENT DE LA DOCUMENTATION EST UN REFUS QUE LA
+      // GARDE VA CONTREDIRE : le poseur suit un texte qui lui dit que le versement peut
+      // attendre, et se fait renvoyer par la commande. Le texte et le code doivent dire la
+      // même chose, et c'est cet accord-là qui est éprouvé — pas la présence d'un mot.
+      const hors = horsBlocs(texte);
+      assert.match(
+        hors,
+        /la naissance (\*\*)?refuse/i,
+        'la compétence doit dire que la NAISSANCE refuse — la pose refusait déjà, ce n’est pas la même chose',
+      );
+      assert.match(
+        hors,
+        /aucun commit ne porte/,
+        'et dire SUR QUOI elle refuse : un lieu qu’aucun commit ne porte',
+      );
+      assert.match(
+        hors,
+        /avant la moindre écriture/,
+        'et qu’un refus ne laisse rien derrière lui — sinon le lecteur ira nettoyer ce qui n’existe pas',
+      );
+    },
+  },
+  {
     id: 'le-principe-precede-la-procedure',
     quoi: 'le refus-avant-écriture est énoncé, il oblige, et il vient AVANT la procédure de pose',
     verifier({ texte }) {
@@ -741,6 +771,27 @@ const remplacer = (texte, quoi, par) => texte.replace(quoi, par);
  * ne garde rien.
  */
 export const MUTATIONS = [
+  {
+    id: 'la-naissance-signale-au-lieu-de-refuser@orchestrateur',
+    quoi: 'le texte adoucit le refus de la naissance en simple signalement',
+    competence: 'orchestrateur',
+    cible: 'le-versement-est-opposable@orchestrateur',
+    muter: (t) => remplacer(t, '**la naissance refuse**', 'la naissance signale'),
+  },
+  {
+    id: 'la-naissance-signale-au-lieu-de-refuser@gestionnaire',
+    quoi: 'le texte adoucit le refus de la naissance en simple signalement',
+    competence: 'gestionnaire',
+    cible: 'le-versement-est-opposable@gestionnaire',
+    muter: (t) => remplacer(t, '**la naissance refuse**', 'la naissance signale'),
+  },
+  {
+    id: 'le-refus-laisse-quelque-chose-derriere@orchestrateur',
+    quoi: 'le texte retire la promesse qu’un refus ne laisse rien derrière lui',
+    competence: 'orchestrateur',
+    cible: 'le-versement-est-opposable@orchestrateur',
+    muter: (t) => remplacer(t, 'avant la moindre écriture', 'une fois le lieu préparé'),
+  },
   {
     id: 'principe-apres-la-procedure',
     quoi: 'le principe passe APRÈS la procédure de pose — on pose d’abord, on vérifie ensuite',

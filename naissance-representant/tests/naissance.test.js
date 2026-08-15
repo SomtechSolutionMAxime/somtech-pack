@@ -21,6 +21,7 @@ import {
   commandesNaissance,
   nomAgentHerdr,
   avisDeCasse,
+  avisDeVersionnement,
   lireReponseHerdr,
   agentDetecte,
   agentPorteLeNom,
@@ -443,6 +444,171 @@ test('avisDeCasse COMPARE les deux noms, elle ne recalcule jamais la règle de c
     null,
     'et deux noms identiques ne disent rien, même capitalisés — c’est l’ÉCART qui parle, pas la casse'
   );
+});
+
+// ══════════════════ T-20260814-0139 — CE QUE GIT VOIT DU LIEU, ET CE QU'IL N'EN VOIT PAS
+//
+// Mesuré sur un poste réel : la garde d'ouverture n'existait dans AUCUN commit, sur aucun
+// des quatre lieux clients suivis par git. Elle ne vivait que comme modification non
+// commitée, réinjectée à chaque naissance — un `git checkout` la désarmait sans un mot,
+// puisque le fichier redevenait un `settings.json` parfaitement valide, simplement sans
+// `hooks`. Et un cinquième lieu n'était dans aucun commit du tout : métier, contexte,
+// moyens et droits n'existaient que sur ce disque-là.
+//
+// Aucun de ces deux états ne se voit à la lecture. C'est ce que ces contrôles ancrent.
+
+function depotGit() {
+  const repoRoot = repoTemp();
+  const git = (...args) => execFileSync('git', ['-C', repoRoot, ...args], { stdio: 'ignore' });
+  git('init', '-q');
+  git('config', 'user.email', 't@somtech.ca');
+  git('config', 'user.name', 'essai');
+  return { repoRoot, git };
+}
+
+test('avisDeVersionnement CRIE quand aucun commit ne porte le lieu — il n’existe que sur ce disque', () => {
+  const { repoRoot } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un lieu qu’aucun commit ne porte doit être dit');
+    assert.match(avis, /acme/, 'l’avis doit nommer le lieu — sinon il ne sert à personne');
+
+    // ⚠️ ON ANCRE LA FORME, PAS SEULEMENT LES MOTS. Une revue de fond a muté la condition de
+    // cette branche (`=== GABARITS.length` → `>`), la rendant inatteignable — et les 185
+    // tests restaient VERTS, parce que le message de repli (« versé à moitié ») contient lui
+    // aussi le nom du lieu, « aucun commit ne porte » et « git add ». Deux messages que rien
+    // ne distinguait : le contrôle lisait le mauvais et s'en contentait.
+    //
+    // Ce qui les sépare vraiment est le GESTE : un lieu entièrement absent se verse d'un
+    // seul coup, par son répertoire ; un lieu versé à moitié se rattrape fichier par fichier.
+    assert.match(
+      avis,
+      new RegExp(`git add -f \\S*\\.gestionnaire/acme && git commit`),
+      'le lieu entier se verse en UN geste, sur son répertoire'
+    );
+    assert.doesNotMatch(
+      avis,
+      /CLAUDE\.md|settings\.json/,
+      'et surtout pas fichier par fichier — ce serait le message de l’autre branche'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement CRIE quand le lieu est versé mais que la garde posée par-dessus ne l’est pas', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé sans sa garde');
+    poserGarde(repoRoot, 'acme'); // la naissance la réinjecte — et personne ne la commit
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'une garde qui n’est dans aucun commit doit être dite');
+    assert.match(avis, /garde/i, 'l’avis doit nommer ce qui n’est pas versé');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement se TAIT quand tout est versé — sinon l’avis devient du bruit', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    poserGarde(repoRoot, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu ET sa garde');
+    assert.equal(avisDeVersionnement(repoRoot, 'acme'), null);
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ LE CAS QUE LA PREMIÈRE VERSION LAISSAIT PASSER EN SILENCE, et c'était le cas MESURÉ.
+//
+// `git diff --quiet HEAD -- <fichier jamais suivi>` sort en 0 : « pas de différence », parce
+// qu'un fichier que git n'a jamais vu n'a rien à comparer. Un lieu dont les trois autres
+// gabarits sont versés et dont le `settings.json` n'a JAMAIS été ajouté échappait donc aux
+// deux branches — la première voyait des fichiers dans HEAD, la seconde ne voyait aucun
+// écart. Le fichier des DROITS était le seul absent, et la commande se taisait.
+test('avisDeVersionnement CRIE sur un lieu partiellement versé — le fichier des droits jamais ajouté', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-f', '.gestionnaire/acme/CLAUDE.md', '.gestionnaire/acme/CONTEXTE.md', '.gestionnaire/acme/.mcp.json');
+    git('commit', '-qm', 'trois gabarits sur quatre');
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un gabarit absent de tout commit doit être dit, même si les autres y sont');
+    assert.match(avis, /settings\.json/, 'et l’avis doit nommer LEQUEL manque');
+    // Le pendant de l'ancrage ci-dessus : ici le geste porte le FICHIER, pas le répertoire.
+    assert.match(
+      avis,
+      new RegExp(`git add -f \\S*\\.claude/settings\\.json`),
+      'un lieu versé à moitié se rattrape fichier par fichier — c’est ce qui le distingue'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ CE CONTRÔLE EXISTE POUR TUER UNE MUTATION PRÉCISE : interroger l'INDEX au lieu de HEAD.
+// Une revue de fond l'a rejouée sur la première version — `ls-files --error-unmatch` à la
+// place de `cat-file -e HEAD:…` — et AUCUN test ne rougissait, alors que le commentaire du
+// module affirmait que cette distinction était le cœur de la mesure. Un fichier `git add`é
+// et jamais commité n'existe que sur ce disque, exactement comme un fichier ignoré.
+test('avisDeVersionnement CRIE sur un lieu seulement INDEXÉ — « git add » n’est pas « versé »', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    git('commit', '-qm', 'premier commit', '--allow-empty');
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-Af'); // indexé, jamais commité
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un lieu seulement indexé n’est porté par aucun commit');
+    // ⚠️ ON ANCRE SUR LA PHRASE PROPRE À CETTE BRANCHE, pas sur « aucun commit » : les DEUX
+    // messages contiennent ces deux mots, et une première version de ce contrôle passait donc
+    // sous la mutation qu'il existe pour tuer — il lisait le message de la garde et s'en
+    // contentait. Un contrôle qui se satisfait du mauvais message ne mesure rien.
+    assert.match(avis, /aucun commit ne porte/, 'c’est le lieu ENTIER qui n’est dans aucun commit');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ `git cat-file -e HEAD:<chemin>` résout le chemin depuis la RACINE du dépôt, jamais
+// depuis le répertoire de `-C`. Calculer le chemin relativement à `repoRoot` quand celui-ci
+// n'est PAS la racine faisait donc déclarer « aucun commit » un lieu entièrement versé.
+test('avisDeVersionnement se TAIT quand le dépôt courant n’est pas la racine du dépôt git', () => {
+  const { repoRoot, git } = depotGit();
+  const sousRepertoire = join(repoRoot, 'sous', 'dossier');
+  try {
+    mkdirSync(sousRepertoire, { recursive: true });
+    poserLeLieu(sousRepertoire, 'acme');
+    poserGarde(sousRepertoire, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé, dans un sous-répertoire');
+    assert.equal(
+      avisDeVersionnement(sousRepertoire, 'acme'),
+      null,
+      'un lieu entièrement versé ne doit pas être déclaré absent parce qu’on regarde depuis un sous-répertoire'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement se TAIT hors d’un dépôt git — il ne reproche pas ce qui n’a pas de sens', () => {
+  const repoRoot = repoTemp();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    assert.equal(
+      avisDeVersionnement(repoRoot, 'acme'),
+      null,
+      'un répertoire sans git n’a rien à verser — le dire serait du bruit, pas un avertissement'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu’un pane existe', () => {

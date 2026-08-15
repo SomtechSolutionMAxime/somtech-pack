@@ -28,6 +28,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { poserGarde } from '../src/naissance.js';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_NAISSANCE = resolve(HERE, '..');
 const REPO_ROOT = resolve(REPO_NAISSANCE, '..');
@@ -134,8 +136,12 @@ function appelsJournalises(journal) {
  * rendait ces avis structurellement inéprouvables : un test ne peut pas voir ce que son
  * outil de mesure jette.
  */
+let depotCourant = null; // le dépôt jetable du test en cours — voir `avecLieu`
+
 function lancerNaitre(client, workspace = 'w9') {
-  const r = spawnSync(process.execPath, [BIN, client, '--workspace', workspace], {
+  const args = [BIN, client, '--workspace', workspace];
+  if (depotCourant) args.push('--depot', depotCourant);
+  const r = spawnSync(process.execPath, args, {
     env: { ...process.env, NAISSANCE_ESSAIS: '6', NAISSANCE_DELAI_MS: '5' },
   });
   return {
@@ -145,32 +151,48 @@ function lancerNaitre(client, workspace = 'w9') {
   };
 }
 
-// bin/naitre.js calcule REPO_ROOT depuis SA PROPRE position sur disque (../..) —
-// invariable. On ne peut donc pas lui faire croire à un autre dépôt sans le copier ; les
-// tests qui suivent posent un lieu réel, temporaire et nommé par PID, sous CE dépôt, et le
-// retirent dans un `finally`.
-
+// CHAQUE TEST A SON PROPRE DÉPÔT GIT, JETABLE — et ce n'est pas du confort.
+//
+// Ces tests posaient jusqu'ici leur lieu SOUS CE DÉPÔT-CI, faute de pouvoir désigner un
+// autre dépôt : un commentaire l'affirmait ici même (« on ne peut pas lui faire croire à un
+// autre dépôt sans le copier »). C'était faux — `--depot` existe et la commande l'accepte
+// depuis longtemps. Le commentaire décrivait un état révolu, et personne ne l'avait relu.
+//
+// Deux raisons de corriger maintenant :
+//   • la naissance REFUSE désormais un lieu qu'aucun commit ne porte (T-20260814-0139). Un
+//     lieu posé à la volée dans le dépôt de travail n'est jamais versé — tous ces tests
+//     seraient refusés, et pour la bonne raison ;
+//   • éprouver le versionnement exige un vrai dépôt qu'on peut committer sans salir celui
+//     dans lequel on travaille.
+//
+// `verser: false` reproduit l'état interdit : un lieu complet sur disque, dans aucun commit.
 let compteur = 0;
-function avecLieu(faire, prefixe = 'smoke') {
+function avecLieu(faire, prefixe = 'smoke', { verser = true } = {}) {
   compteur += 1;
   const client = `${prefixe}-${process.pid}-${compteur}`;
-  const lieu = join(REPO_ROOT, '.gestionnaire', client);
+  const depot = mkdtempSync(join(tmpdir(), 'smtk-naitre-depot-'));
+  const git = (...args) => execFileSync('git', ['-C', depot, ...args], { stdio: 'ignore' });
+  git('init', '-q');
+  git('config', 'user.email', 'essai@somtech.ca');
+  git('config', 'user.name', 'essai');
+
+  const lieu = join(depot, '.gestionnaire', client);
   mkdirSync(join(lieu, '.claude'), { recursive: true });
   writeFileSync(join(lieu, 'CLAUDE.md'), '# Tu es le représentant de ce client\n');
   writeFileSync(join(lieu, 'CONTEXTE.md'), "# Ce qu'on sait de ce client\n");
   writeFileSync(join(lieu, '.mcp.json'), '{"mcpServers":{"servicedesk":{}}}\n');
   writeFileSync(join(lieu, '.claude', 'settings.json'), '{"permissions":{"allow":["mcp__servicedesk__*"]}}\n');
+  if (verser) {
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé — comme la compétence le prescrit après la pose');
+  }
+
+  depotCourant = depot;
   try {
-    return faire(client, lieu);
+    return faire(client, lieu, depot);
   } finally {
-    rmSync(lieu, { recursive: true, force: true });
-    // Retire aussi `.gestionnaire/` si ce test l'a créé et qu'il ne reste rien dedans —
-    // sinon un répertoire vide traîne dans le dépôt à chaque exécution de la suite.
-    try {
-      rmdirSync(join(REPO_ROOT, '.gestionnaire'));
-    } catch {
-      /* non vide (un autre client y vit) ou déjà absent : rien à faire */
-    }
+    depotCourant = null;
+    rmSync(depot, { recursive: true, force: true });
   }
 }
 
@@ -228,6 +250,95 @@ test('naitre.js se TAIT quand elle n’a rien abaissé — un avis systématique
     const r = lancerNaitre(client);
     assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
     assert.doesNotMatch(r.stderr, /adresse|abaiss/i, `aucun avis de casse attendu — stderr: ${r.stderr}`);
+  }));
+
+// T-20260814-0139 — DE BOUT EN BOUT, SUR UN VRAI DÉPÔT.
+//
+// `avecLieu` pose son lieu sous CE dépôt, qui est un vrai dépôt git — et ce lieu n'est
+// évidemment dans aucun commit. C'est exactement l'état d'un lieu client mesuré vivant :
+// posé, fonctionnel, et nulle part dans l'historique. La commande doit le DIRE.
+test('naitre.js REFUSE un lieu qu’aucun commit ne porte — et ne laisse RIEN derrière elle', () =>
+  avecLieu(
+    (client, lieu) => {
+      const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+      const avant = readFileSync(join(lieu, '.claude', 'settings.json'));
+
+      const r = lancerNaitre(client);
+
+      assert.equal(r.code, 1, `refus attendu — stderr: ${r.stderr}`);
+      assert.match(r.stderr, /aucun commit ne porte/);
+      assert.match(r.stderr, new RegExp(client), 'le refus doit nommer le lieu');
+      assert.match(r.stderr, /git add/, 'et NOMMER LE GESTE qui le lève — c’est la condition posée');
+
+      // Rien derrière lui, et les trois preuves valent mieux qu'une promesse :
+      assert.equal(
+        appelsJournalises(journal).length,
+        0,
+        'aucun appel herdr : le refus tombe avant qu’un pane existe'
+      );
+      assert.deepEqual(
+        readFileSync(join(lieu, '.claude', 'settings.json')),
+        avant,
+        'le settings.json est à l’octet près celui qu’on a trouvé — la garde n’a PAS été posée'
+      );
+      assert.equal(r.stdout, '', 'et rien n’est rendu qui ressemblerait à un succès');
+    },
+    'smoke',
+    { verser: false }
+  ));
+
+// ⚠️ L'ÉTAT EXACT DES TROIS LIEUX CLIENTS MESURÉS : le lieu est versé, et il porte une garde
+// qu'aucun commit ne contient — posée par une naissance antérieure, jamais versée. C'est
+// celui-là qui doit être refusé, et il se distingue de la garde que la naissance courante
+// s'apprête à poser : celle-ci, personne ne pouvait la verser avant qu'elle existe.
+test('naitre.js REFUSE une garde PRÉEXISTANTE qu’aucun commit ne porte', () =>
+  avecLieu((client, lieu, depot) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+    // Une naissance antérieure a posé la garde ; personne ne l'a versée.
+    poserGarde(depot, client);
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 1, `refus attendu — stderr: ${r.stderr}`);
+    assert.match(r.stderr, /garde/i, 'le refus doit nommer ce qui n’est pas versé');
+    assert.match(r.stderr, /git add/, 'et le geste qui le lève');
+    assert.equal(appelsJournalises(journal).length, 0, 'aucun pane créé');
+  }));
+
+// Le pendant du précédent : la garde que CETTE naissance pose ne peut pas être versée
+// d'avance. La refuser rendrait toute première naissance impossible — on ne peut pas
+// committer un fichier que la commande refuse d'écrire. Elle avertit, et elle aboutit.
+test('naitre.js ABOUTIT sur un lieu versé, en signalant la garde qu’elle vient de poser', () =>
+  avecLieu((client, lieu) => {
+    installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).ok, true);
+    assert.match(r.stderr, /garde/i, 'la garde fraîchement posée doit être signalée');
+  }));
+
+// Le troisième état, et le seul qui doit être MUET de bout en bout : lieu versé, garde
+// versée. Il n'était prouvé qu'au niveau unitaire — la revue de fond l'a relevé, et un
+// comportement silencieux non verrouillé est celui qui se met à parler sans qu'on le voie.
+test('naitre.js se TAIT quand le lieu ET sa garde sont versés — le régime normal', () =>
+  avecLieu((client, lieu, depot) => {
+    installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+    // Une naissance antérieure a posé la garde, et quelqu'un l'a versée, comme il se doit.
+    poserGarde(depot, client);
+    execFileSync('git', ['-C', depot, 'add', '-Af'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', depot, 'commit', '-qm', 'la garde, versée'], { stdio: 'ignore' });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).ok, true);
+    assert.doesNotMatch(
+      r.stderr,
+      /aucun commit|git add/,
+      `rien à verser, donc rien à dire — stderr: ${r.stderr}`
+    );
   }));
 
 test('naitre.js exige --workspace', () => {

@@ -34,6 +34,7 @@ import {
   poserGarde,
   commandesNaissance,
   avisDeCasse,
+  avisDeVersionnement,
   agentDetecte,
   agentPorteLeNom,
   repertoireDeLaSession,
@@ -130,6 +131,33 @@ async function main() {
     }
   }
 
+  // REFUSER UN LIEU QUE GIT NE PORTE PAS — MESURÉ AVANT LA MOINDRE ÉCRITURE (T-20260814-0139).
+  //
+  // POURQUOI UN REFUS. Arbitrage du dirigeant : la compétence prescrit **déjà** de verser le
+  // lieu en branche après la pose. Le refus ne crée donc aucune friction nouvelle — il fait
+  // mordre une instruction qui existe et que personne ne suit. Le chiffre qui l'a emporté :
+  // sur cinq lieux clients posés, **trois portaient une garde qu'aucun commit ne contenait**.
+  //
+  // ⚠️ POURQUOI ICI, ET PAS APRÈS `poserGarde` — LE VERROU QU'ON A ÉVITÉ DE JUSTESSE.
+  // Une première version mesurait après avoir posé la garde. Or c'est la naissance qui POSE
+  // la garde : à la toute première, elle ne peut pas déjà être versée, et la refuser rendait
+  // cette première naissance **impossible** — on ne peut pas committer un fichier que la
+  // commande refuse d'écrire. Un verrou parfait, et invisible tant qu'on ne fait pas naître
+  // un agent neuf. On mesure donc l'état PRÉEXISTANT :
+  //
+  //   • le lieu n'est dans aucun commit, ou versé à moitié → REFUS, et rien n'a été touché ;
+  //   • une garde déjà posée par une naissance ANTÉRIEURE et jamais versée → REFUS aussi,
+  //     c'est exactement l'état des trois lieux clients mesurés ;
+  //   • la garde que CETTE naissance s'apprête à poser → simple avertissement plus bas :
+  //     personne ne pouvait la verser avant qu'elle existe.
+  //
+  // Et le refus ne laisse rien derrière lui **par construction** : il tombe avant `poserGarde`.
+  const refusGit = avisDeVersionnement(REPO_ROOT, nom, role);
+  if (refusGit) {
+    process.stderr.write(`${refusGit}\n`);
+    process.exit(1);
+  }
+
   let cheminGarde;
   try {
     cheminGarde = poserGarde(REPO_ROOT, nom, role);
@@ -155,6 +183,13 @@ async function main() {
   // T-20260814-0101, refermé un cran plus haut le jour même).
   const avis = avisDeCasse(nom, commandes.nom);
   if (avis) process.stderr.write(`${avis}\n`);
+
+  // La garde que CETTE naissance vient de poser, elle, ne pouvait pas être versée d'avance —
+  // elle n'existait pas. On la signale donc, sans barrer la route : c'est le second versement
+  // du geste normal (pose → verse → naître → verse la garde), et le refus au prochain
+  // lancement fera le reste si personne ne s'en occupe.
+  const gardeAVerser = avisDeVersionnement(REPO_ROOT, nom, role);
+  if (gardeAVerser) process.stderr.write(`${gardeAVerser}\n`);
 
   // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
   // confiance de Claude Code et attend une touche que personne ne tapera. Elle serait
