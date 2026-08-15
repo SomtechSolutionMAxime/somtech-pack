@@ -1580,6 +1580,54 @@ export const CONTROLES = [
       assert.match(s.corps, /autre session/i, 'et nommer le cas mesuré : une mesure faite ailleurs rendue comme un constat d’ici');
     },
   },
+
+  {
+    id: 'crochet-pose-par-le-dispositif',
+    quoi: 'le crochet est posé par le dispositif, il n’est pas l’accusé de réception de l’orchestrateur',
+    verifier({ metier }) {
+      // ⚠️ CE CONTRÔLE EXISTE PARCE QUE SON JUMEAU EXISTAIT SEUL — bloquant relevé en revue de
+      // fond (T-20260815-0011). Le même paragraphe a été posé dans les DEUX gabarits, et seul
+      // celui du gestionnaire était gardé : supprimer le paragraphe entier du gabarit
+      // orchestrateur laissait les 702 essais du CLI verts. C'est le motif dominant de ce
+      // dépôt — un correctif ferme une porte et laisse sa jumelle ouverte — et il s'est
+      // rejoué dans le lot qui l'avait nommé.
+      //
+      // Le fond est le même des deux côtés : un métier qui enseignerait « pose un crochet
+      // quand tu as lu » redonnerait à la discipline de l'agent ce que le dispositif venait
+      // de lui retirer — or un orchestrateur occupé est exactement celui qui n'y pense pas.
+      const enonces = metier.split('\n').filter((l) => /crochet/i.test(l));
+      assert.ok(enonces.length >= 1, 'le métier ne dit rien du crochet — un orchestrateur ne saura pas ce qu’il vaut');
+
+      const dit = enonces.join('\n');
+
+      // La garde porte sur la POLARITÉ, pas sur la présence des mots : une négation qui
+      // enveloppe l'énoncé le retourne sans en toucher un seul. Et elle lit la ligne
+      // PORTEUSE, pas tout ce qui parle de crochet — le paragraphe voisin contient « ce
+      // n'est pas ta mémoire qui flanche », phrase saine qu'une garde plus large accuserait.
+      const porteuse = enonces.find((l) => /le dispositif le pose seul/i.test(l)) || '';
+      const avantLEnonce = porteuse.slice(0, porteuse.toLowerCase().indexOf('le dispositif le pose seul'));
+      assert.ok(
+        !/\b(?:ne crois pas|contrairement|au contraire|n['’]est pas vrai|est faux)\b/i.test(avantLEnonce),
+        `« ${porteuse.trim().slice(0, 90)}… » : l'énoncé est enveloppé d'une négation — les ` +
+          'mots-clés survivent à leur propre contresens',
+      );
+      assert.match(
+        dit, /le dispositif le pose seul|tu n['’]as rien à faire/i,
+        'le métier doit dire que le crochet est posé SANS l’orchestrateur — sinon il redevient une discipline',
+      );
+      assert.ok(
+        !/\bpose(-le|s)?\s+(un\s+)?crochet\b/i.test(dit),
+        'le métier enseigne à l’orchestrateur de poser un crochet : c’est ce que ce dispositif remplace',
+      );
+      assert.match(
+        dit, /ne le remplace pas|reste utile/i,
+        'le métier doit dire que « je m’en occupe » garde sa valeur — le crochet dit seulement que c’est arrivé',
+      );
+      // L'ABSENCE est la moitié qui a de la valeur, et elle l'est davantage pour un
+      // orchestrateur : ce qu'on lui écrit et qu'il ne voit pas, ce sont des arbitrages.
+      assert.match(dit, /absence/i, 'le métier doit dire ce que l’absence de crochet signifie');
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -1595,6 +1643,27 @@ export const CONTROLES = [
  * des garanties dont le contrôle dédié est décoratif.
  */
 export const MUTATIONS = [
+  {
+    id: 'crochet-retourne-par-une-negation',
+    quoi: 'l’énoncé du crochet est retourné par une négation, en gardant tous ses mots-clés',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul, tu n'as rien à faire.",
+      "**Ne crois pas qu'un crochet apparaisse seul** — contrairement à ce qu'on dit, le dispositif le pose seul, tu n'as rien à faire est faux : c'est toi qui le poses.",
+    ),
+  },
+  {
+    id: 'crochet-devenu-une-discipline',
+    quoi: 'le métier enseigne à l’orchestrateur de poser lui-même le crochet — la garantie redevient une discipline',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'le dispositif le pose seul, tu n\'as rien à faire',
+      'pose un crochet sur son message dès que tu l\'as lu',
+    ),
+  },
+
   // ── le transport fidèle
   {
     id: 'une-section-du-metier-disparait',

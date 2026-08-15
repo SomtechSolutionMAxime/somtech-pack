@@ -39,7 +39,7 @@ import { join } from 'node:path';
 
 import { fauxSlack } from './aide/faux-slack.js';
 
-let Veilleur, sauverRegistre;
+let Veilleur, sauverRegistre, poserCrochet;
 let racine;
 let compteur = 0;
 
@@ -53,6 +53,7 @@ before(async () => {
   process.env.LIGNE_DIRECTE_RACINE = racine;
   ({ Veilleur } = await import('../src/veilleur.js'));
   ({ sauverRegistre } = await import('../src/registre.js'));
+  ({ poserCrochet } = await import('../src/slack.js'));
 });
 after(() => rmSync(racine, { recursive: true, force: true }));
 beforeEach(() => sauverRegistre({ version: 1, lignes: [], commun: null, dirigeant: { id: UDIR, courriel: 'd@somtech.ca' } }));
@@ -209,6 +210,61 @@ test('LA REMISE SE FAIT MÊME SI LE CROCHET ÉCHOUE — un accusé raté ne perd
 
     assert.equal(h.remis.length, 1, 'le message est arrivé chez l’agent');
     assert.deepEqual(monde.reactions, [], 'et le crochet, lui, n’a pas pu être posé');
+  });
+});
+
+
+// ═════════════════ 3-bis. LE GESTE DE POSE LUI-MÊME, ÉPROUVÉ SANS VEILLEUR
+//
+// ⚠️ CES TROIS ESSAIS EXISTENT PARCE QUE LES DEUX REVUES ONT MONTRÉ QUE RIEN NE LES COUVRAIT :
+// supprimer la tolérance `already_reacted`, ou les refus du double, laissait toute la suite
+// verte. Une garde que rien n'oblige n'est pas une garde — c'est un commentaire.
+//
+// On appelle `poserCrochet` directement : le monde installé remplace le transport, donc le
+// geste s'éprouve sans monter un veilleur, et son verdict (`true`/`false`) devient lisible —
+// ce qu'il n'est pas de l'extérieur, où seul le journal le laisse deviner.
+
+/** Le monde Slack seul, sans veilleur — pour éprouver un geste plutôt qu'un enchaînement. */
+async function avecMondeSeul(corps) {
+  const monde = fauxSlack({
+    canaux: [{ id: 'C1', name: 'ligne-du-chantier', is_private: false, membres: [UMOI, UDIR] }],
+    utilisateurs: [{ id: UMOI, name: 'ligne_directe', is_bot: true, team_id: 'T_ESSAIS', profile: {} }],
+    robot: UMOI,
+    espace: 'T_ESSAIS',
+  }).installer();
+  monde.horodatagesConnus = [TS];
+  try {
+    return await corps(monde);
+  } finally {
+    monde.restaurer();
+  }
+}
+
+test('UN CROCHET DÉJÀ POSÉ EST UN CROCHET POSÉ — « already_reacted » n’est pas une panne', async () => {
+  // Le veilleur peut repasser sur un message déjà crocheté (reprise, double événement Slack).
+  // Lire ce refus comme un échec ferait journaliser une alarme sur un dispositif qui marche —
+  // et une alarme qui crie à tort cesse d'être lue, y compris le jour où elle a raison.
+  await avecMondeSeul(async (monde) => {
+    assert.equal(await poserCrochet('xoxb-x', 'C1', TS), true, 'le premier passage pose');
+    assert.deepEqual(monde.reactions.length, 1);
+    assert.equal(await poserCrochet('xoxb-x', 'C1', TS), true, 'le second constate qu’il est là');
+    assert.equal(monde.reactions.length, 1, 'et il n’en a pas posé deux');
+  });
+});
+
+test('UN CANAL QUE SLACK NE CONNAÎT PAS NE REÇOIT PAS DE CROCHET — et le geste le dit', async () => {
+  await avecMondeSeul(async (monde) => {
+    assert.equal(await poserCrochet('xoxb-x', 'C_JAMAIS_VU', TS), false);
+    assert.deepEqual(monde.reactions, [], 'rien n’a été posé nulle part');
+  });
+});
+
+test('UN MESSAGE QUE SLACK NE CONNAÎT PAS NON PLUS — le double refuse ce que le service refuse', async () => {
+  // C'est la sixième fois dans ce dépôt qu'un double se montre plus permissif que le service
+  // qu'il double. Un double complaisant fait passer des essais qui ne prouvent rien.
+  await avecMondeSeul(async (monde) => {
+    assert.equal(await poserCrochet('xoxb-x', 'C1', '9999999999.000000'), false);
+    assert.deepEqual(monde.reactions, []);
   });
 });
 
