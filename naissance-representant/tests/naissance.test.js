@@ -20,6 +20,7 @@ import {
   gardePose,
   commandesNaissance,
   nomAgentHerdr,
+  avisDeCasse,
   lireReponseHerdr,
   agentDetecte,
   agentPorteLeNom,
@@ -400,6 +401,48 @@ test('nomAgentHerdr abaisse la casse — herdr refuse les majuscules (`invalid_a
   assert.equal(nomAgentHerdr('Acme'), 'acme');
   assert.equal(nomAgentHerdr('maxime'), 'maxime');
   assert.equal(nomAgentHerdr('ville-de-quebec_2'), 'ville-de-quebec_2');
+});
+
+// T-20260814-0143 — abaisser la casse est JUSTE ; le faire en silence est le défaut.
+// Mesuré sur un poste réel : le lieu `.gestionnaire/Charles-Olivier` fait vivre un agent
+// nommé `charles-olivier`. Qui cherche son agent par le nom de son lieu ne le trouve pas,
+// et rien, nulle part, ne lui dit pourquoi.
+test('avisDeCasse nomme les DEUX noms quand l’agent ne portera pas le nom du lieu', () => {
+  const avis = avisDeCasse('Francois', nomAgentHerdr('Francois'));
+  assert.ok(avis, 'un nom capitalisé doit produire un avis');
+  assert.match(avis, /« Francois »/, 'l’avis doit nommer le lieu tel qu’il s’appelle');
+  assert.match(avis, /« francois »/, 'et l’agent tel qu’on devra l’adresser');
+});
+
+test('avisDeCasse se TAIT quand les deux noms coïncident — sinon l’avis devient du bruit qu’on cesse de lire', () => {
+  for (const nom of ['francois', 'ville-de-quebec_2', 't-20260814-0135']) {
+    assert.equal(avisDeCasse(nom, nomAgentHerdr(nom)), null, `rien à dire pour « ${nom} »`);
+  }
+});
+
+// LE POINT QUE LA REVUE DE FOND A FAIT TOMBER, et il n'est pas cosmétique.
+//
+// Une première version recalculait `toLowerCase()` dans `avisDeCasse` — la règle de casse
+// se retrouvait à DEUX endroits. Les deux coïncidaient, donc rien ne cassait ; c'est
+// précisément la forme que prend ce défaut avant de mordre. `T-20260814-0101` venait de le
+// fermer un cran plus haut, le même jour : le rouvrir une commande plus loin n'aurait rien
+// fermé du tout.
+//
+// Ce contrôle l'ancre par le seul moyen qui ne se laisse pas berner : on lui donne un nom
+// d'agent qui N'EST PAS l'abaissement du lieu. Une version qui recalcule se tairait — elle
+// comparerait `Acme` à son propre `acme` et ne verrait aucun écart avec le nom qu'on lui a
+// donné. Celle qui compare parle.
+test('avisDeCasse COMPARE les deux noms, elle ne recalcule jamais la règle de casse', () => {
+  const avis = avisDeCasse('Acme', 'tout-autre-nom');
+  assert.ok(avis, 'un écart doit être vu même quand il ne vient pas d’un abaissement de casse');
+  assert.match(avis, /« Acme »/);
+  assert.match(avis, /« tout-autre-nom »/);
+
+  assert.equal(
+    avisDeCasse('Acme', 'Acme'),
+    null,
+    'et deux noms identiques ne disent rien, même capitalisés — c’est l’ÉCART qui parle, pas la casse'
+  );
 });
 
 test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu’un pane existe', () => {

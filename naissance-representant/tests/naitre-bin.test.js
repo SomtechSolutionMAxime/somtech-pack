@@ -22,7 +22,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, rmdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -125,21 +125,24 @@ function appelsJournalises(journal) {
   return readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 }
 
-/** Lance `bin/naitre.js` et rend `{ code, stdout, stderr }` — sans jamais jeter. */
+/**
+ * Lance `bin/naitre.js` et rend `{ code, stdout, stderr }` — sans jamais jeter.
+ *
+ * ⚠️ `spawnSync`, et pas `execFileSync` : la commande écrit aussi sur la sortie d'erreur
+ * quand elle RÉUSSIT — un avertissement d'amorce, un avis de casse (T-20260814-0143). La
+ * version précédente de cette aide rendait `stderr: ''` sur le chemin du succès, ce qui
+ * rendait ces avis structurellement inéprouvables : un test ne peut pas voir ce que son
+ * outil de mesure jette.
+ */
 function lancerNaitre(client, workspace = 'w9') {
-  try {
-    const stdout = execFileSync(process.execPath, [BIN, client, '--workspace', workspace], {
-      stdio: 'pipe',
-      env: { ...process.env, NAISSANCE_ESSAIS: '6', NAISSANCE_DELAI_MS: '5' },
-    }).toString();
-    return { code: 0, stdout, stderr: '' };
-  } catch (err) {
-    return {
-      code: err.status ?? 1,
-      stdout: (err.stdout ?? '').toString(),
-      stderr: (err.stderr ?? '').toString(),
-    };
-  }
+  const r = spawnSync(process.execPath, [BIN, client, '--workspace', workspace], {
+    env: { ...process.env, NAISSANCE_ESSAIS: '6', NAISSANCE_DELAI_MS: '5' },
+  });
+  return {
+    code: r.status ?? 1,
+    stdout: (r.stdout ?? '').toString(),
+    stderr: (r.stderr ?? '').toString(),
+  };
 }
 
 // bin/naitre.js calcule REPO_ROOT depuis SA PROPRE position sur disque (../..) —
@@ -148,9 +151,9 @@ function lancerNaitre(client, workspace = 'w9') {
 // retirent dans un `finally`.
 
 let compteur = 0;
-function avecLieu(faire) {
+function avecLieu(faire, prefixe = 'smoke') {
   compteur += 1;
-  const client = `smoke-${process.pid}-${compteur}`;
+  const client = `${prefixe}-${process.pid}-${compteur}`;
   const lieu = join(REPO_ROOT, '.gestionnaire', client);
   mkdirSync(join(lieu, '.claude'), { recursive: true });
   writeFileSync(join(lieu, 'CLAUDE.md'), '# Tu es le représentant de ce client\n');
@@ -188,6 +191,44 @@ test('naitre.js refuse proprement quand le lieu n’existe pas — sans jamais a
   assert.notEqual(r.code, 0);
   assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr ne doit avoir lieu si le lieu est absent');
 });
+
+// T-20260814-0143 — LE LIEU ET L'AGENT PEUVENT PORTER DEUX NOMS, ET C'EST LÉGITIME.
+// Ce qui ne l'est pas, c'est que la commande le fasse sans le dire : le seul endroit qui
+// portait l'écart était un champ d'un objet JSON de douze clés, que personne ne relit.
+// Mesuré en production avant ce correctif : `.gestionnaire/Charles-Olivier` → `charles-olivier`.
+test('naitre.js DIT qu’elle a abaissé la casse, et nomme les deux noms', () =>
+  avecLieu((client, lieu) => {
+    const journal = installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+    const attendu = client.toLowerCase();
+    assert.notEqual(attendu, client, 'ce cas n’a de sens que si la casse est réellement abaissée');
+
+    const r = lancerNaitre(client);
+    assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
+
+    // Le contrat de sortie ne bouge pas : les appelants qui lisent le JSON ne cassent pas.
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.nom, client);
+    assert.equal(rendu.agent, attendu);
+
+    // Et l'humain, lui, est prévenu — sur la sortie d'erreur, avec les DEUX noms.
+    assert.match(r.stderr, new RegExp(`« ${client} »`), 'l’avis doit nommer le lieu');
+    assert.match(r.stderr, new RegExp(`« ${attendu} »`), 'et le nom sous lequel on adresse l’agent');
+
+    // L'agent est bien nommé en minuscules chez herdr — l'avis décrit ce qui ARRIVE.
+    const appels = appelsJournalises(journal);
+    const rename = appels.find((a) => a[0] === 'agent' && a[1] === 'rename');
+    assert.equal(rename[3], attendu);
+  }, 'Smoke'));
+
+test('naitre.js se TAIT quand elle n’a rien abaissé — un avis systématique cesse d’être lu', () =>
+  avecLieu((client, lieu) => {
+    installerFauxHerdr({ detecteApres: 1, repertoire: lieu });
+    assert.equal(client, client.toLowerCase(), 'ce cas exige un nom déjà en minuscules');
+
+    const r = lancerNaitre(client);
+    assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
+    assert.doesNotMatch(r.stderr, /adresse|abaiss/i, `aucun avis de casse attendu — stderr: ${r.stderr}`);
+  }));
 
 test('naitre.js exige --workspace', () => {
   assert.throws(() => execFileSync(process.execPath, [BIN, 'un-client'], { stdio: 'pipe' }));

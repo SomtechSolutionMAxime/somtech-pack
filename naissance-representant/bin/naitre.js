@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import {
   poserGarde,
   commandesNaissance,
+  avisDeCasse,
   agentDetecte,
   agentPorteLeNom,
   repertoireDeLaSession,
@@ -143,6 +144,17 @@ async function main() {
   // Construire les commandes AVANT de créer quoi que ce soit : un nom que herdr refuserait
   // (`invalid_agent_name`) doit arrêter la commande ici, pas après avoir ouvert un pane.
   const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role });
+
+  // Dire, AVANT que quoi que ce soit existe, que l'agent ne portera pas le nom du lieu
+  // (T-20260814-0143). L'écart était déjà dans l'objet rendu — dans un champ que personne
+  // ne relit. On le dit donc là où un humain regarde, et seulement quand il y a un écart.
+  //
+  // On lui DONNE `commandes.nom` — le nom que herdr recevra réellement, calculé par
+  // `nomAgentHerdr` juste au-dessus. L'avis ne recalcule pas la règle de casse : deux
+  // endroits qui portent la même règle divergent au premier changement de l'un (motif de
+  // T-20260814-0101, refermé un cran plus haut le jour même).
+  const avis = avisDeCasse(nom, commandes.nom);
+  if (avis) process.stderr.write(`${avis}\n`);
 
   // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
   // confiance de Claude Code et attend une touche que personne ne tapera. Elle serait
