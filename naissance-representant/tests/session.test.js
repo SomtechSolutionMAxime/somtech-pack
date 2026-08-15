@@ -27,7 +27,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { sessionVisee, nomDeSession } from '../src/session.js';
+import { sessionVisee, nomDeSession, espaceDeLaSession } from '../src/session.js';
 
 /** Le socket d'une session, tel que herdr le dépose réellement. */
 const socketDe = (nom) => `/tmp/faux-poste/.config/herdr/sessions/${nom}/herdr.sock`;
@@ -106,4 +106,51 @@ test('aucune session ouverte → REFUS qui le dit, plutôt qu’un refus de conn
   const r = avec({ sessions: [] });
   assert.equal(r.ok, false);
   assert.match(r.message, /aucune session/i);
+});
+
+// ════════════════ L'ESPACE APPARTIENT-IL À CETTE SESSION — ET QUE FAIT-ON QUAND ON L'IGNORE
+//
+// ⚠️ CES CONTRÔLES EXISTENT PARCE QUE LA REVUE DE FOND A CHERCHÉ CE QUE LES AUTRES LAISSENT
+// PASSER, ET L'A TROUVÉ : `espaceDeLaSession` n'avait AUCUN contrôle unitaire. Muter sa
+// garde sur réponse malformée — retomber sur une liste vide au lieu de refuser — laissait
+// 27 tests verts. Le code était juste ; rien ne l'ancrait.
+//
+// Le cas malformé est celui qui compte le plus : ne pas savoir si l'espace appartient à la
+// session n'est PAS la même chose que savoir qu'il n'y appartient pas. Confondre les deux
+// ferait accuser l'utilisateur d'une erreur qu'il n'a pas commise — et, pire, ferait naître
+// sur une ignorance.
+
+const reponse = (...ids) => ({ result: { workspaces: ids.map((w) => ({ workspace_id: w, label: `espace ${w}` })) } });
+
+test('espaceDeLaSession accepte un espace que la session porte, et rend son libellé', () => {
+  const r = espaceDeLaSession(reponse('w4', 'w9'), { espace: 'w9', session: 'somtech' });
+  assert.equal(r.ok, true);
+  assert.equal(r.libelle, 'espace w9', 'le libellé sert à RECONNAÎTRE le sien — deux sessions peuvent porter le même identifiant');
+});
+
+test('espaceDeLaSession REFUSE un espace qui vit ailleurs, et dit pourquoi ce n’est pas une faute de frappe', () => {
+  const r = espaceDeLaSession(reponse('w4', 'w7'), { espace: 'w2W', session: 'sibelanger' });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /w2W/, 'le refus cite l’espace demandé');
+  assert.match(r.message, /sibelanger/, 'et la session où on l’a cherché');
+  assert.match(r.message, /w4/, 'et montre ceux qu’elle porte vraiment');
+  assert.match(r.message, /pas uniques|autre session/i, 'et donne la CAUSE — sinon on corrige l’orthographe d’un identifiant juste');
+});
+
+test('espaceDeLaSession REFUSE aussi quand la session n’a rien rendu d’exploitable — ignorer n’est pas savoir', () => {
+  for (const malformee of [null, undefined, {}, { result: {} }, { result: { workspaces: 'pas une liste' } }]) {
+    const r = espaceDeLaSession(malformee, { espace: 'w9', session: 'somtech' });
+    assert.equal(r.ok, false, `une réponse illisible ne doit jamais valoir un feu vert : ${JSON.stringify(malformee)}`);
+    assert.match(
+      r.message,
+      /n'a pas rendu|pas établir/i,
+      'et le refus doit mettre en cause la RÉPONSE, pas l’utilisateur — il n’a rien fait de mal'
+    );
+  }
+});
+
+test('espaceDeLaSession refuse une session qui ne porte AUCUN espace — le cas limite de la liste vide', () => {
+  const r = espaceDeLaSession(reponse(), { espace: 'w9', session: 'somtech' });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /w9/);
 });
