@@ -48,7 +48,34 @@ import { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
  *
  * Une boîte illisible (`null`) ne témoigne de rien : on ne la compte pas comme vidée.
  */
-export function briefEstPris({ statut, terminal, statutAvant = null, envoiAccepte = true }) {
+/**
+ * LE MARQUEUR DE FILE D'ATTENTE — le témoin qui manquait (T-20260815-0007).
+ *
+ * MESURÉ le 2026-08-15 : un message envoyé à un agent qui travaille n'entre pas dans sa boîte,
+ * il est MIS EN FILE et part à la fin de son tour. Ni le statut ni la boîte n'en portent trace :
+ * il travaillait déjà, et la boîte est vide *parce que* le message en est sorti. C'est ce vide-là
+ * qu'on prenait pour une absence, en rendant un échec sur un message parfaitement arrivé.
+ *
+ * ⚠️ ON LE CHERCHE DANS LE DUMP BRUT, pas dans la boîte : il est rendu en GRIS, et la lecture de
+ * boîte retire le gris — à raison, sinon une suggestion de l'éditeur passerait pour un reste. Le
+ * même dump sert donc deux besoins opposés, et c'est voulu.
+ *
+ * ⚠️ ET IL NE PROUVE QUE S'IL EST APPARU. Un destinataire qui avait déjà des messages en file le
+ * porte avant qu'on écrive : s'en contenter, ce serait retrouver « la boîte vide » sous un autre
+ * nom — un état vrai de toute façon. C'est l'appelant qui compare l'avant et l'après.
+ */
+const FILE_DATTENTE = /Press up to edit queued messages/;
+
+export function messagesEnFile(texteTerminal) {
+  return FILE_DATTENTE.test(String(texteTerminal ?? ''));
+}
+
+export function briefEstPris({ statut, terminal, statutAvant = null, envoiAccepte = true, fileApparue = false }) {
+  // UN MESSAGE MIS EN FILE EST UN MESSAGE PRIS, quoi qu'en dise le reste. C'est le seul témoin
+  // disponible sur un pair occupé — et il porte bien sur un état qui pouvait être différent,
+  // puisque l'appelant a constaté son APPARITION.
+  if (fileApparue) return true;
+
   // ⚠️ QUAND L'OUTIL DIT LUI-MÊME QUE RIEN N'EST PARTI, LA BOÎTE VIDE NE PROUVE RIEN.
   //
   // Relevé en revue de fond. Si l'appel d'envoi échoue sans jamais toucher la boîte, elle est
@@ -154,7 +181,7 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false } 
  * dans tous les cas — c'est lui qui a produit le défaut. On ne s'en contente pas pour autant :
  * ce que `--wait` rapporte est un indice de plus, jamais la preuve. La preuve se relit.
  */
-export function commandesLivraison(pane, texte, { attenteMs = 20000 } = {}) {
+export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTravail = false } = {}) {
   if (!pane) throw new Error('le pane de la session à briefer est requis');
   if (!String(texte ?? '').trim()) throw new Error('un brief vide n’est pas un brief');
   return {
@@ -163,7 +190,18 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000 } = {}) {
     // comme une boîte pleine, et la livraison est refusée sans raison (mesuré, T-20260814-0138).
     lireEcran: ['agent', 'read', pane, '--format', 'ansi'],
     interroger: ['agent', 'get', pane],
-    livrer: ['agent', 'prompt', pane, texte, '--wait', '--until', 'working', '--timeout', String(attenteMs)],
+    // ⚠️ PAS D'ATTENTE QU'ON SAIT IMPOSSIBLE À SATISFAIRE (T-20260815-0007).
+    //
+    // `--wait --until working` guette une TRANSITION vers « working ». Sur un destinataire qui y
+    // est déjà, elle ne peut rien observer : elle expire, et rend un `timeout` que l'appelant
+    // prenait pour un envoi manqué — alors que le message était parti en file d'attente.
+    //
+    // Demander une attente dont on sait qu'elle échouera, c'est fabriquer soi-même le faux
+    // négatif qu'on ira ensuite interpréter. On ne la demande donc pas ; la preuve se relit,
+    // comme partout ailleurs ici.
+    livrer: dejaAuTravail
+      ? ['agent', 'prompt', pane, texte]
+      : ['agent', 'prompt', pane, texte, '--wait', '--until', 'working', '--timeout', String(attenteMs)],
     soumettre: ['agent', 'send-keys', pane, 'Enter'],
   };
 }
@@ -205,7 +243,9 @@ export async function livrerBrief({
   // le témoin qu'on change.
   pairOccupe = false,
 }) {
-  const commandes = commandesLivraison(pane, texte, { attenteMs });
+  // Les commandes de LECTURE se construisent tout de suite ; celle qui ÉCRIT attend de savoir
+  // si le destinataire travaille déjà — l'attente qu'elle porte n'a de sens que sinon.
+  const lectures = commandesLivraison(pane, texte, { attenteMs });
   const vers = { socket };
 
   // 1. REGARDER avant d'ecrire — la boite ET l'etat. Une boite non vide est un refus, jamais
@@ -222,12 +262,13 @@ export async function livrerBrief({
   // donc sur aucun délai — on regarde jusqu'à ce que la boîte soit là, comme la naissance
   // interroge jusqu'à ce que l'agent soit détecté.
   let statutAvant = null;
+  let ecranAvant = null;
   let obstacle = null;
   for (let i = 0; i < Math.max(1, essaisDisponible); i += 1) {
-    const etatAvant = await appelHerdr(commandes.interroger, vers);
+    const etatAvant = await appelHerdr(lectures.interroger, vers);
     statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
-    const avant = await lireEcran(commandes.lireEcran, vers);
-    obstacle = obstacleAvantLivraison(avant, statutAvant, { pairOccupe });
+    ecranAvant = await lireEcran(lectures.lireEcran, vers);
+    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe });
     if (!obstacle) break;
     if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
   }
@@ -236,6 +277,12 @@ export async function livrerBrief({
   // 2. LIVRER. `--wait` est l'indice de herdr, jamais la preuve : ce qu'il rapporte peut etre
   //    un faux negatif (un tour plus rapide que son echantillonnage). On l'enregistre, on ne
   //    tranche pas dessus — c'est la relecture qui tranche.
+  // ⚠️ CE QUI ÉTAIT DÉJÀ EN FILE AVANT NOUS NE TÉMOIGNE DE RIEN (T-20260815-0007) — le marqueur
+  // ne prouve que s'il APPARAÎT. Un destinataire qui avait déjà des messages en attente le porte
+  // avant qu'on écrive : s'en contenter rejouerait « la boîte vide », un état vrai de toute façon.
+  const fileAvant = messagesEnFile(ecranAvant);
+
+  const commandes = commandesLivraison(pane, texte, { attenteMs, dejaAuTravail: statutAvant === 'working' });
   const livraison = await appelHerdr(commandes.livrer, vers);
 
   // 3. VERIFIER PAR LE FAIT — la session a-t-elle quitte l'attente ?
@@ -244,7 +291,13 @@ export async function livrerBrief({
     const statut = etat.reponse?.result?.agent?.agent_status ?? null;
     const terminal = await lireEcran(commandes.lireEcran, vers);
     return {
-      pris: briefEstPris({ statut, terminal, statutAvant, envoiAccepte: livraison.ok || repare }),
+      pris: briefEstPris({
+        statut,
+        terminal,
+        statutAvant,
+        envoiAccepte: livraison.ok || repare,
+        fileApparue: !fileAvant && messagesEnFile(terminal),
+      }),
       statut,
       terminal,
     };

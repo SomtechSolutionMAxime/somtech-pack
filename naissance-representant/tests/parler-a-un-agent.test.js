@@ -72,6 +72,12 @@ function installerFauxHerdr(scenario = {}) {
       soumetSeule: true,
       // `enterInoperant` : la touche d'envoi ne débloque rien — la course peut se rejouer.
       enterInoperant: false,
+      // `metEnFile` : le destinataire travaille, le message part en FILE D'ATTENTE — mesuré sur
+      // le vrai service le 2026-08-15. La boîte reste vide et l'écran porte le marqueur.
+      metEnFile: false,
+      // `fileDejaPleine` : il avait DÉJÀ des messages en file avant qu'on arrive. Le marqueur
+      // est alors présent des deux côtés de l'envoi : il ne peut plus rien témoigner.
+      fileDejaPleine: false,
       // `envoiCasse` : l'appel d'envoi échoue franchement, sans jamais toucher la boîte.
       envoiCasse: false,
       ...scenario,
@@ -103,7 +109,8 @@ const promptFait = promptsPris.length ? promptsPris[0].args : null;
 
 function boite() {
   let b = sc.boiteInitiale;
-  if (sc.envoiCasse) return b;
+  // Un message mis en file NE PASSE PAS par la boîte : elle reste telle qu'elle était.
+  if (sc.envoiCasse || sc.metEnFile) return b;
   if (promptFait) b = sc.soumetSeule ? '' : b + promptFait[3];
   if (entrees.length && !sc.enterInoperant) b = '';
   return b;
@@ -125,7 +132,11 @@ const a = vise(cible);
 if (!a) refus('agent_not_found');
 
 if (cmd === 'agent read') {
-  process.stdout.write(['~/quelque-part', SEP, '\\u276f ' + boite(), SEP, '  auto mode on'].join('\\n'));
+  // LE MARQUEUR EST EN GRIS, comme le vrai — c'est ce qui empêche de le confondre avec un
+  // reste, et c'est aussi ce qui oblige à le chercher AVANT le filtrage du gris.
+  const enFile = sc.fileDejaPleine || (sc.metEnFile && promptFait);
+  const marqueur = enFile ? '\\u001b[2mPress up to edit queued messages\\u001b[22m' : '';
+  process.stdout.write(['~/quelque-part', SEP, '\\u276f ' + boite(), SEP, marqueur, '  auto mode on'].join('\\n'));
   process.exit(0);
 }
 if (cmd === 'agent get') {
@@ -134,6 +145,9 @@ if (cmd === 'agent get') {
 }
 if (cmd === 'agent prompt') {
   if (sc.envoiCasse) refus('agent_prompt_failed');
+  // MESURÉ : sur un agent DÉJÀ au travail, l'attente guette une transition vers « working »
+  // qui ne peut pas se produire, et elle expire. Le message, lui, est bien parti.
+  if (sc.metEnFile && args.includes('--until') && args.includes('working')) refus('timeout');
   if (!sc.soumetSeule) refus('agent_prompt_stalled');
   process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } }));
   process.exit(0);
@@ -335,4 +349,76 @@ test('UN APPEL D’ENVOI QUI ÉCHOUE NE PASSE PAS POUR UNE LIVRAISON — la boî
   const r = livrer('w5:p3', '--texte', 'un arbitrage pour toi');
 
   assert.equal(r.code, 1, 'le geste doit ÉCHOUER : rien n’a été écrit nulle part');
+});
+
+
+// ═════════════════ UN MESSAGE MIS EN FILE D'ATTENTE EST UN MESSAGE PRIS (T-20260815-0007)
+//
+// ⚠️ RÉGRESSION DE `v1.50.0`, TROUVÉE EN PRODUCTION UNE HEURE APRÈS SA PUBLICATION — par cet
+// outil lui-même, en rendant compte à un coordonnateur qui travaillait.
+//
+// Deux causes composées, toutes deux de ce lot :
+//   1. `--wait --until working` guette une TRANSITION vers `working` sur un agent qui y est
+//      déjà : elle ne peut rien observer, et expire ;
+//   2. la garde qui exige un témoin positif quand l'appel dit que rien n'est parti — juste en
+//      soi — transformait ce faux négatif en refus, faute d'un témoin disponible sur un pair
+//      occupé (le statut ne bouge pas, la boîte est vide PARCE QUE le message est parti).
+//
+// Le geste touché est celui par lequel un chef d'équipe rend compte, et un pair est occupé la
+// plupart du temps. Un orchestrateur qui croit son message perdu le renvoie — donc rejoue le
+// défaut que ce lot venait de fermer.
+
+test('UN DESTINATAIRE OCCUPÉ MET LE MESSAGE EN FILE — et c’est une prise, pas un échec', async () => {
+  const journal = installerFauxHerdr({
+    metEnFile: true,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'mon compte rendu de fin de lot');
+
+  assert.equal(r.code, 0, `le message est arrivé : le dire perdu est un mensonge — ${r.refus}`);
+  assert.ok(
+    !appels(journal).some((p) => p.args[1] === 'send-keys'),
+    'et rien à réparer : la boîte est vide parce que le message en est sorti'
+  );
+});
+
+test('ON NE DEMANDE PAS UNE ATTENTE QUI NE PEUT RIEN OBSERVER — pas d’`--until working` sur un agent qui y est déjà', async () => {
+  // La cause première, prise à sa racine plutôt qu'à sa conséquence : demander à herdr de
+  // guetter une transition impossible garantit un timeout à chaque envoi à un pair au travail.
+  const journal = installerFauxHerdr({
+    metEnFile: true,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  livrer('w5:p3', '--texte', 'mon compte rendu de fin de lot');
+
+  const envoi = appels(journal).find((p) => p.args[1] === 'prompt');
+  assert.ok(envoi, 'le message doit avoir été envoyé');
+  assert.ok(
+    !(envoi.args.includes('--until') && envoi.args.includes('working')),
+    'sur un destinataire déjà `working`, cette attente ne peut rien observer — ne pas la demander'
+  );
+});
+
+test('UNE FILE DÉJÀ PLEINE AVANT L’ENVOI NE TÉMOIGNE DE RIEN — le marqueur doit être APPARU', async () => {
+  // ⚠️ LE PIÈGE DE CE TÉMOIN, et il est le même que celui du reste du lot : le marqueur ne
+  // prouve que s'il POUVAIT être absent. Un destinataire qui avait déjà des messages en file
+  // le porte avant qu'on écrive — s'en contenter, c'est retrouver « la boîte vide » sous un
+  // autre nom : un état vrai de toute façon.
+  installerFauxHerdr({
+    envoiCasse: true,
+    fileDejaPleine: true,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'mon compte rendu de fin de lot');
+
+  assert.equal(r.code, 1, 'rien n’a été écrit, et un marqueur déjà là ne le rachète pas');
 });
