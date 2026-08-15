@@ -70,6 +70,10 @@ function installerFauxHerdr(scenario = {}) {
       ],
       boiteInitiale: '',
       soumetSeule: true,
+      // `enterInoperant` : la touche d'envoi ne débloque rien — la course peut se rejouer.
+      enterInoperant: false,
+      // `envoiCasse` : l'appel d'envoi échoue franchement, sans jamais toucher la boîte.
+      envoiCasse: false,
       ...scenario,
     })
   );
@@ -99,13 +103,14 @@ const promptFait = promptsPris.length ? promptsPris[0].args : null;
 
 function boite() {
   let b = sc.boiteInitiale;
+  if (sc.envoiCasse) return b;
   if (promptFait) b = sc.soumetSeule ? '' : b + promptFait[3];
-  if (entrees.length) b = '';
+  if (entrees.length && !sc.enterInoperant) b = '';
   return b;
 }
 function statutDe(a) {
   if (a.statut === 'working') return 'working';           // il travaillait déjà avant nous
-  if (promptFait && (sc.soumetSeule || entrees.length)) return 'working';
+  if (!sc.envoiCasse && promptFait && (sc.soumetSeule || (entrees.length && !sc.enterInoperant))) return 'working';
   return 'idle';
 }
 
@@ -128,6 +133,7 @@ if (cmd === 'agent get') {
   process.exit(0);
 }
 if (cmd === 'agent prompt') {
+  if (sc.envoiCasse) refus('agent_prompt_failed');
   if (!sc.soumetSeule) refus('agent_prompt_stalled');
   process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } }));
   process.exit(0);
@@ -264,4 +270,69 @@ test('MAIS UNE BOÎTE QUI CONTIENT DÉJÀ QUELQUE CHOSE RESTE UN REFUS — deux 
 
   assert.equal(r.code, 1, 'le geste est refusé');
   assert.match(r.refus, /bo[iî]te/i, 'et le refus dit ce qu’il a vu');
+});
+
+
+// ═════════════════ LE TÉMOIN DU PAIR OCCUPÉ (T-20260814-0138, relevé en REVUE DE FOND)
+//
+// ⚠️ CE BLOC RÉPARE UN TROU DE COUVERTURE, PAS UN DÉFAUT DU CODE. La revue a muté
+// `briefEstPris` pour qu'il rende `true` sans jamais lire la boîte, sur le cas du pair déjà
+// `working` : les 179 essais sont restés verts. Le témoin CENTRAL du ticket — celui qui dit
+// qu'un message à un pair occupé est bien parti — ne prouvait donc rien en intégration.
+//
+// C'est la preuve-par-relecture qui manquait à elle-même sur son cas nominal.
+
+test('UN PAIR OCCUPÉ DONT LE MESSAGE RESTE COLLÉ : c’est vu, réparé, et alors seulement rendu', async () => {
+  // Le mode de panne mesuré, sur le destinataire le plus fréquent. Le statut ne peut rien dire
+  // ici — il valait déjà `working` avant qu'on écrive. Seule la boîte témoigne.
+  const journal = installerFauxHerdr({
+    soumetSeule: false,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'un arbitrage pour toi');
+
+  assert.equal(r.code, 0, `la livraison doit aboutir après réparation : ${r.refus}`);
+  assert.equal(r.sortie.repare, true, 'et elle doit DIRE qu’elle a réparé, pas le taire');
+  assert.ok(
+    appels(journal).some((p) => p.args[1] === 'send-keys'),
+    'la soumission calée doit avoir été débloquée'
+  );
+});
+
+test('UN PAIR OCCUPÉ DONT LA BOÎTE RESTE PLEINE FAIT ÉCHOUER L’ENVOI — jamais un succès muet', async () => {
+  // La touche d'envoi ne débloque rien : le double garde la boîte pleine quoi qu'il arrive.
+  // Sans ce cas, `briefEstPris` pourrait rendre `true` sans regarder la boîte et personne ne
+  // le saurait — c'est très exactement la mutation qui a survécu à la suite entière.
+  installerFauxHerdr({
+    soumetSeule: false,
+    enterInoperant: true,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'un arbitrage pour toi');
+
+  assert.equal(r.code, 1, 'le geste doit ÉCHOUER : le message n’est jamais arrivé');
+  assert.match(r.refus, /pas été pris|bo[iî]te/i, 'et le refus doit dire ce qu’il a constaté');
+});
+
+test('UN APPEL D’ENVOI QUI ÉCHOUE NE PASSE PAS POUR UNE LIVRAISON — la boîte vide ne prouve rien', async () => {
+  // ⚠️ SECOND POINT DE LA REVUE. Si l'appel d'envoi échoue sans jamais toucher la boîte, elle
+  // est vide avant ET après — et « boîte vide » était compté comme la preuve d'une prise. Une
+  // boîte vide parce que rien n'a été écrit est le contraire d'une preuve : c'est l'état par
+  // défaut. Le témoin doit être POSITIF quand l'outil dit lui-même que rien n'est parti.
+  installerFauxHerdr({
+    envoiCasse: true,
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'working' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'un arbitrage pour toi');
+
+  assert.equal(r.code, 1, 'le geste doit ÉCHOUER : rien n’a été écrit nulle part');
 });

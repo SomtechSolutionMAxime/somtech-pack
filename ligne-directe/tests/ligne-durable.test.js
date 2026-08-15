@@ -282,3 +282,32 @@ test('UN AGENT DISPARU SUR UNE LIGNE JETABLE ARCHIVE, LUI — le balayage n’es
     assert.equal(monde.canalNomme('essai-orphelin').is_archived, true, 'une ligne jetable s’archive au balayage');
   });
 });
+
+
+test('DEUX CHANTIERS DIFFÉRENTS SOUS LE MÊME TITRE N’HÉRITENT PAS DU MÊME CANAL', async () => {
+  // ⚠️ RELEVÉ EN REVUE DE FOND — c'est un effet de bord du correctif de ce ticket, pas un
+  // défaut d'origine. Tant qu'une ligne interne s'archivait à la fermeture, une collision de
+  // nom retombait sur `CanalArchive` : un refus explicite. Depuis qu'elle est DURABLE, son
+  // canal survit — et un chantier sans rapport qui produit le même nom normalisé tombait sur
+  // `name_taken`, puis **reprenait silencieusement** ce canal : son historique et ses membres,
+  // rattachés à un travail qui n'a rien à voir. Une panne bruyante remplacée par une confusion
+  // muette est un mauvais échange.
+  await avecPoste({}, async ({ monde, ld }) => {
+    assert.equal((await ld(['ouvrir', 'j-1', '--titre', 'Refonte', '--au-dirigeant'])).code, 0);
+    const premier = monde.canalNomme('refonte').id;
+    assert.equal((await ld(['fermer', 'j-1', '--bilan', 'fini'])).code, 0);
+
+    // Un AUTRE chantier, MÊME titre : la clé d'une ligne est `chantier::copie de travail`, donc
+    // `j-2` n'est pas une réouverture de `j-1` et ne bénéficie pas de l'exemption `saufCle`.
+    const r = await ld(['ouvrir', 'j-2', '--titre', 'Refonte', '--au-dirigeant']);
+    assert.equal(r.code, 0, r.stderr);
+
+    const lignes = chargerRegistre().lignes.filter((l) => !l.close_le);
+    assert.equal(lignes.length, 1, 'un seul chantier ouvert');
+    assert.notEqual(
+      lignes[0].canal_id,
+      premier,
+      'le chantier neuf ne doit PAS hériter du canal de l’ancien — historique et membres compris'
+    );
+  });
+});

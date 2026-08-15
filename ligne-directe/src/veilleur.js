@@ -36,6 +36,7 @@ import {
   ligneParCanal,
   ligneOuverteParCle,
   nomsPris,
+  cleDeLigne,
   inscrireLigne,
   clore,
   natureDe,
@@ -494,7 +495,9 @@ export class Veilleur {
       };
     }
 
-    const pris = nomsPris(this.registre);
+    // `saufCle` : sa propre ligne close ne lui fait pas concurrence — sans quoi refermer puis
+    // rouvrir le même chantier repartirait sur un « -2 » (T-20260814-0085, relevé en revue).
+    const pris = nomsPris(this.registre, { saufCle: cleDeLigne(chantier, worktree) });
     // Le NOM vient du titre. En interne, le CODE part dans le sujet du canal — il reste donc
     // lisible d'un coup d'œil sans encombrer le nom.
     const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));

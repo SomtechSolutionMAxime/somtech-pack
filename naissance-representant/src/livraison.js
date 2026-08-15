@@ -48,7 +48,18 @@ import { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
  *
  * Une boîte illisible (`null`) ne témoigne de rien : on ne la compte pas comme vidée.
  */
-export function briefEstPris({ statut, terminal, statutAvant = null }) {
+export function briefEstPris({ statut, terminal, statutAvant = null, envoiAccepte = true }) {
+  // ⚠️ QUAND L'OUTIL DIT LUI-MÊME QUE RIEN N'EST PARTI, LA BOÎTE VIDE NE PROUVE RIEN.
+  //
+  // Relevé en revue de fond. Si l'appel d'envoi échoue sans jamais toucher la boîte, elle est
+  // vide AVANT et APRÈS — et « boîte vide » était compté comme la preuve d'une prise. Or une
+  // boîte vide parce que rien n'a été écrit est le contraire d'une preuve : c'est l'état par
+  // défaut, celui qui ne pouvait pas être différent. Le témoin doit alors être POSITIF.
+  //
+  // `envoiAccepte` redevient vrai après une RÉPARATION réussie, et c'est juste : y arriver
+  // suppose qu'on a vu notre propre texte dans la boîte, puis qu'on l'a vu en sortir.
+  if (!envoiAccepte) return statutAvant !== 'working' && (statut === 'working' || statut === 'done');
+
   // ⚠️ UN DESTINATAIRE QUI TRAVAILLAIT DÉJÀ REND LE STATUT MUET (T-20260814-0138).
   //
   // « Elle travaille » ne prouve rien si elle travaillait avant qu'on écrive : le témoin serait
@@ -232,9 +243,14 @@ export async function livrerBrief({
     const etat = await appelHerdr(commandes.interroger, vers);
     const statut = etat.reponse?.result?.agent?.agent_status ?? null;
     const terminal = await lireEcran(commandes.lireEcran, vers);
-    return { pris: briefEstPris({ statut, terminal, texte, statutAvant }), statut, terminal };
+    return {
+      pris: briefEstPris({ statut, terminal, statutAvant, envoiAccepte: livraison.ok || repare }),
+      statut,
+      terminal,
+    };
   };
 
+  let repare = false;
   let vu = await prisMaintenant();
   for (let i = 0; i < essais && !vu.pris; i += 1) {
     await dormir(delaiMs);
@@ -244,7 +260,6 @@ export async function livrerBrief({
   // 4. REPARER une fois le cas connu : le texte est bien dans la boite, la soumission n'est
   //    pas partie. On envoie la touche d'envoi, puis on re-verifie — sans jamais reecrire le
   //    brief, ce qui le collerait a lui-meme.
-  let repare = false;
   if (!vu.pris) {
     const reste = contenuBoite(vu.terminal);
     if (reste) {

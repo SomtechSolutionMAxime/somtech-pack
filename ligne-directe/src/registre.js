@@ -232,8 +232,46 @@ export function ligneOuverteParCle(registre, chantier, worktree) {
   return lignesOuvertes(registre).find((l) => cleDeLigne(l.chantier, l.worktree) === cle) || null;
 }
 
-export function nomsPris(registre) {
-  return new Set(registre.lignes.filter((l) => !l.close_le).map((l) => l.canal_nom));
+/**
+ * Les noms de canaux déjà occupés — et « occupé » a changé de sens avec T-20260814-0085.
+ *
+ * ⚠️ RELEVÉ EN REVUE DE FOND, et c'est un effet de bord du correctif lui-même.
+ *
+ * Cette fonction ne comptait que les lignes OUVERTES : un chantier clos libérait son nom. Ça
+ * ne coûtait rien tant qu'une ligne interne s'archivait à la fermeture — une collision
+ * retombait alors sur `CanalArchive`, un refus explicite que quelqu'un lisait.
+ *
+ * Depuis qu'une ligne est DURABLE par défaut, son canal SURVIT à la fermeture. Un autre
+ * chantier, sans rapport, qui produirait le même nom normalisé — deux titres qui se
+ * ressemblent, ça arrive — ne verrait aucune collision ici, tomberait sur `name_taken` côté
+ * Slack, et **reprendrait silencieusement le canal de l'ancien** : son historique et ses
+ * membres, rattachés à un chantier qui n'a rien à voir. Le correctif aurait remplacé une
+ * panne bruyante par une confusion muette.
+ *
+ * `saufCle` est ce qui garde le cycle nominal ouvert : une ligne ne se fait pas concurrence à
+ * elle-même, sinon refermer puis rouvrir SON PROPRE chantier repartirait sur un « -2 » et
+ * perdrait le lien avec le chantier tel qu'il était nommé — c'est-à-dire exactement ce que
+ * T-20260814-0085 existe pour réparer.
+ *
+ * Une ligne close JETABLE, elle, ne retient rien : son canal est archivé, et Slack refusera
+ * l'homonyme de lui-même, par un refus qui se lit.
+ *
+ * ⚠️ ET UNE LIGNE CLOSE CLIENTE NE RETIENT RIEN NON PLUS — c'est LE RELÈVEMENT, et il ne doit
+ * pas être pris pour une collision. Le canal d'un client lui appartient : quand notre session
+ * meurt, une session NEUVE (autre copie de travail, donc autre clé) doit pouvoir s'y rattacher
+ * et reprendre la relation. Retenir son nom l'aurait envoyée sur un « -2 », c'est-à-dire un
+ * canal vide à côté de celui où le client parle — la panne qu'on est en train de fermer,
+ * rejouée sur le seul canal qui n'est pas à nous. La première écriture de cette garde a fait
+ * exactement ça, et l'essai du relèvement l'a arrêtée.
+ */
+export function nomsPris(registre, { saufCle = null } = {}) {
+  const pris = new Set();
+  for (const l of registre.lignes) {
+    if (saufCle && cleDeLigne(l.chantier, l.worktree) === saufCle) continue;
+    const retient = !l.close_le || (natureDe(l) !== 'client' && jetabiliteDe(l) !== 'jetable');
+    if (retient) pris.add(l.canal_nom);
+  }
+  return pris;
 }
 
 export function inscrireLigne(registre, ligne) {
