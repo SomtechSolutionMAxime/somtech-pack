@@ -5,6 +5,21 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.53.0] - 2026-08-15
+
+### Ajouté
+
+- **La naissance connaît les sessions herdr, et refuse de deviner laquelle** (T-20260814-0120, PR #242). Onze sessions tournent sur ce poste, chacune avec son propre canal de commande ; la naissance n'en connaissait aucune — elle héritait passivement de `HERDR_SOCKET_PATH`, c'est-à-dire de **rien** depuis un terminal ordinaire. Le dirigeant a tapé cette variable à la main **quatre fois en une soirée**. Elle accepte désormais `--session <nom>` et résout le socket elle-même.
+- **Quand plusieurs sessions existent et que rien ne tranche, elle refuse en les nommant toutes.** On ne devine pas, on ne prend pas la première : c'est le renversement déjà livré sur le trousseau et sur le routage, et il n'y a ici aucune alternative raisonnable — **une naissance dans la mauvaise session ne rate pas, elle réussit**, et ne se voit pas. Depuis un pane, ou avec une seule session ouverte, rien à préciser : le cas qui marchait continue de marcher.
+- **`--session` l'emporte sur le pane courant.** Faire naître ailleurs que chez soi est le cas normal, pas l'exception — sans cette priorité, l'option serait décorative précisément là où elle sert.
+- **Et l'espace doit appartenir à la session visée.** Les identifiants ne sont pas globalement uniques : `w2W` de la session `somtech` a été donné pour une naissance dans `sibelanger`. Le refus tombe **avant qu'un seul onglet existe**, et c'est cette absence qui est éprouvée — pas le message.
+
+### Corrigé
+
+- **L'amorce partait vers la mauvaise session** — trouvé en revue, sur le correctif lui-même. Cinq appels portaient la session, le sixième non : le brief qui dit à la session née de commencer repartait vers la session par défaut. **Neuvième occurrence du motif « une porte sur deux », commise en le corrigeant.** Le double de test note désormais **à qui** chaque geste a parlé, et un contrôle exige qu'aucun ne diverge — il compte les gestes au lieu de les nommer, parce qu'une liste de noms se déphase au premier appel ajouté, et que c'est ainsi qu'un sixième se glisse.
+- **Une liste de sessions injectée vide retombait sur le vrai poste** : un essai qui disait « zéro session » mesurait les onze qui tournent, et le refus qui répond à ce cas n'était éprouvable par personne. La condition testait une vérité là où elle devait tester une présence.
+- **Une garde que rien ne tenait** — trouvée en cherchant ce que le nouveau contrôle laisse passer : muter le refus sur réponse illisible laissait 27 tests verts. Le fond compte : **ne pas savoir si l'espace appartient à la session n'est pas savoir qu'il n'y appartient pas.** Confondre les deux ferait accuser l'utilisateur d'une faute qu'il n'a pas commise, et ferait naître sur une ignorance.
+
 ## [1.52.0] - 2026-08-15
 
 ### Corrigé
