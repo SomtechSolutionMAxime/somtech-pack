@@ -33,7 +33,7 @@
 
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -106,6 +106,10 @@ async function avecPoste({ ligne = LIGNE, herdr }, corps) {
     robot: UMOI,
     espace: 'T_ESSAIS',
   }).installer();
+  // Le message du dirigeant EXISTE dans le canal — c'est lui qu'on va crocheter. Le double
+  // refuse désormais un horodatage qu'il ne connaît pas, comme le vrai Slack : il faut donc
+  // dire que celui-ci est là, plutôt que de compter sur un double complaisant.
+  monde.horodatagesConnus = [TS];
   const v = new Veilleur({
     cheminSocket: join(racine, `v-${(compteur += 1)}.sock`),
     jetons: { robot: 'xoxb-x', ecoute: 'xapp-y' },
@@ -119,6 +123,23 @@ async function avecPoste({ ligne = LIGNE, herdr }, corps) {
     await v.arreter();
     monde.restaurer();
   }
+}
+
+/**
+ * UN VRAI LIEU D'ORCHESTRATEUR SUR DISQUE — parce que le rôle s'établit par le FAIT.
+ *
+ * La diffusion d'une consigne filtre ses destinataires sur `roleDuLieu(foreground_cwd)`, qui
+ * lit les quatre fichiers de la pose ET les en-têtes réels du métier. Un double qui rendrait
+ * « rôle orchestrateur » sur parole prouverait l'accord de l'essai avec lui-même.
+ */
+function lieuDOrchestrateur() {
+  const lieu = join(racine, `lieu-${(compteur += 1)}`);
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  writeFileSync(join(lieu, 'CLAUDE.md'), "# Tu es l'orchestrateur de ce chantier\n\nle métier.\n");
+  writeFileSync(join(lieu, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n\nle contexte.\n');
+  writeFileSync(join(lieu, '.mcp.json'), '{}\n');
+  writeFileSync(join(lieu, '.claude', 'settings.json'), '{}\n');
+  return lieu;
 }
 
 /** La parole du dirigeant, telle que Slack la livre — avec son horodatage, qui l'identifie. */
@@ -263,4 +284,92 @@ test('UN ÉCRAN ILLISIBLE N’EST PAS UNE BOÎTE VIDÉE — « je n’ai pas vu 
     laPriseEstConstatee({ statutAvant: 'idle', statut: 'idle', ecranAvant: avec, ecran: null }),
     null
   );
+});
+
+
+// ═════════════════ 5. UN AVANT QU'ON N'A PAS PU LIRE NE FABRIQUE PAS DE TÉMOIN
+//
+// ⚠️ BLOQUANT RELEVÉ EN REVUE DE FOND, et c'est le défaut qui rendrait ce lot NUISIBLE.
+//
+// `laPriseEstConstatee` documentait l'invariant — « une boîte illisible ne témoigne de rien,
+// on ne la compte ni comme vidée ni comme pleine » — et ne le gardait que du côté APRÈS. Côté
+// AVANT, `messagesEnFile(null)` rend `false` et `boiteEstVide(null)` rend `false` : une lecture
+// ratée se lisait donc comme « il n'y avait rien », et il suffisait que l'APRÈS paraisse vide
+// pour fabriquer une « boîte vidée » sans avoir rien constaté.
+//
+// Le scénario n'a rien d'exotique : la remise lit l'état AVANT d'écrire, et cette lecture peut
+// échouer sur un aléa transitoire. Le crochet serait alors posé sur un message dont personne ne
+// sait s'il est arrivé — c'est-à-dire la fausse assurance que ce ticket existe pour empêcher.
+
+test('UN AVANT ILLISIBLE NE DONNE PAS « BOÎTE VIDÉE » — on n’a pas vu, on ne conclut pas', async () => {
+  const { laPriseEstConstatee } = await import('../src/boite.js');
+  const SEP = '─'.repeat(20);
+  const vide = ['~/ici', SEP, '❯', SEP, ''].join('\n');
+
+  assert.equal(
+    laPriseEstConstatee({ statutAvant: 'idle', statut: 'idle', ecranAvant: null, ecran: vide }),
+    null,
+    'la boîte paraît vide APRÈS, mais on ignore ce qu’elle contenait AVANT'
+  );
+});
+
+test('UN AVANT ILLISIBLE NE DONNE PAS « FILE D’ATTENTE » NON PLUS', async () => {
+  const { laPriseEstConstatee } = await import('../src/boite.js');
+  const SEP = '─'.repeat(20);
+  const enFile = ['~/ici', SEP, '❯', SEP, 'Press up to edit queued messages'].join('\n');
+
+  assert.equal(
+    laPriseEstConstatee({ statutAvant: 'working', statut: 'working', ecranAvant: null, ecran: enFile }),
+    null,
+    'il en avait peut-être déjà : sans l’avant, l’apparition n’est pas constatable'
+  );
+});
+
+test('MAIS LE STATUT, LUI, RESTE UN TÉMOIN — il ne dépend pas de l’écran', async () => {
+  // La garde ne doit pas déborder : le changement de statut est lisible même quand l'écran ne
+  // l'est pas. L'aveugler aussi ferait perdre le seul témoin qui survit à un écran illisible.
+  const { laPriseEstConstatee } = await import('../src/boite.js');
+
+  assert.equal(
+    laPriseEstConstatee({ statutAvant: 'idle', statut: 'working', ecranAvant: null, ecran: null }),
+    'sortie-de-l-attente'
+  );
+});
+
+
+// ═════════════════ 6. LA CONSIGNE COMMUNE COMPTE CE QU'ELLE A PROUVÉ
+//
+// ⚠️ RELEVÉ EN REVUE DE FOND. Ce chemin payait déjà le coût de la vérification — la remise
+// établit le verdict pour tous ses appelants — et jetait la réponse : `remis` s'incrémentait
+// sur la seule absence d'exception. Une consigne coincée dans le pane d'un orchestrateur était
+// donc comptée « remise », et la machinerie qui le savait tournait à côté sans qu'on l'écoute.
+
+test('UNE CONSIGNE DONT LA PRISE N’EST PAS CONSTATÉE N’EST PAS COMPTÉE COMME REMISE', async () => {
+  const h = herdrQui({ pris: false });
+  const lieu = lieuDOrchestrateur();
+  h.agents = async () => [{ agent: 'claude', pane_id: PANE, foreground_cwd: lieu, herdr_socket: null }];
+  await avecPoste({ herdr: h }, async ({ veilleur }) => {
+    veilleur.registre.communs = {
+      orchestrateur: { canal_id: 'C_COMMUN', canal_nom: 'les-orchestrateurs', autorises: [UDIR] },
+    };
+    const r = await veilleur.diffuserConsigne({ type: 'message', channel: 'C_COMMUN', user: UDIR, text: 'arrêtez tout', ts: TS });
+
+    assert.equal(r.remis, 0, 'écrit n’est pas pris — on ne compte pas ce qu’on n’a pas prouvé');
+    assert.deepEqual(r.non_prouves, [PANE], 'et on DIT chez qui la prise n’a pas été constatée');
+  });
+});
+
+test('UNE CONSIGNE PRISE EST COMPTÉE, ELLE — la garde ne rend pas le compteur inerte', async () => {
+  const h = herdrQui({ pris: true });
+  const lieu = lieuDOrchestrateur();
+  h.agents = async () => [{ agent: 'claude', pane_id: PANE, foreground_cwd: lieu, herdr_socket: null }];
+  await avecPoste({ herdr: h }, async ({ veilleur }) => {
+    veilleur.registre.communs = {
+      orchestrateur: { canal_id: 'C_COMMUN', canal_nom: 'les-orchestrateurs', autorises: [UDIR] },
+    };
+    const r = await veilleur.diffuserConsigne({ type: 'message', channel: 'C_COMMUN', user: UDIR, text: 'arrêtez tout', ts: TS });
+
+    assert.equal(r.remis, 1);
+    assert.equal(r.non_prouves, undefined);
+  });
 });

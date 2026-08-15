@@ -1897,10 +1897,26 @@ export class Veilleur {
     });
     let remis = 0;
     const echecs = [];
+    /** Ceux à qui le texte a été écrit sans qu'on puisse constater qu'ils l'ont pris. */
+    const nonProuves = [];
     for (const agent of destinataires) {
       try {
-        await this.herdr.remettre(agent.pane_id, cadre, { socket: agent.herdr_socket });
-        remis += 1;
+        // ⚠️ ON LIT LE VERDICT DE PRISE ICI AUSSI — relevé en revue de fond. Ce chemin payait
+        // déjà le coût de la vérification (la remise l'établit pour tous ses appelants) et
+        // jetait la réponse : `remis` s'incrémentait sur la seule absence d'exception, soit
+        // très exactement le défaut que ce lot ferme sur le chemin d'à côté.
+        //
+        // Une consigne coincée dans le pane d'un orchestrateur était donc comptée « remise ».
+        // La machinerie qui le savait tournait à côté, sans que personne l'écoute.
+        const r = await this.herdr.remettre(agent.pane_id, cadre, { socket: agent.herdr_socket });
+        if (r?.pris === false) {
+          // Pas un échec — le texte est peut-être arrivé — mais pas une remise prouvée non
+          // plus. On ne le compte pas parmi les remis, et on le DIT plutôt que de l'arrondir.
+          nonProuves.push(agent.pane_id);
+          journaliser(`consigne écrite mais prise NON constatée — ${agent.pane_id}`);
+        } else {
+          remis += 1;
+        }
       } catch (err) {
         // UN AGENT QUI NE REÇOIT PAS N'EN EMPÊCHE AUCUN AUTRE. Une consigne qui s'arrête au
         // premier pane mort n'atteindrait qu'une partie du poste, et rien ne dirait laquelle.
@@ -1912,9 +1928,16 @@ export class Veilleur {
     // lire une diffusion à moitié perdue là où sept agents étaient simplement hors périmètre.
     journaliser(
       `consigne diffusée — #${commun.canal_nom} → ${remis}/${destinataires.length} ${eux} ` +
-        `(${vivants.length} agent(s) au travail)${echecs.length ? `, échec sur ${echecs.join(', ')}` : ''}`
+        `(${vivants.length} agent(s) au travail)${echecs.length ? `, échec sur ${echecs.join(', ')}` : ''}` +
+        `${nonProuves.length ? `, prise non constatée chez ${nonProuves.join(', ')}` : ''}`
     );
-    return { remis, echecs, role: commun.role, destinataires: destinataires.length };
+    return {
+      remis,
+      echecs,
+      ...(nonProuves.length ? { non_prouves: nonProuves } : {}),
+      role: commun.role,
+      destinataires: destinataires.length,
+    };
   }
 
   /**

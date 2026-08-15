@@ -130,7 +130,17 @@ export function messagesEnFile(texteTerminal) {
  * ⚠️ UNE BOÎTE ILLISIBLE NE TÉMOIGNE DE RIEN — on ne la compte ni comme vidée, ni comme pleine.
  */
 export function laPriseEstConstatee({ statutAvant, statut, ecranAvant, ecran }) {
-  if (!messagesEnFile(ecranAvant) && messagesEnFile(ecran)) return 'file-d-attente';
+  // ⚠️ SANS L'AVANT, LES DEUX TÉMOINS D'ÉCRAN NE TÉMOIGNENT DE RIEN — bloquant relevé en revue
+  // de fond. `messagesEnFile(null)` rend `false` et `boiteEstVide(null)` rend `false` : une
+  // lecture ratée se lisait donc comme « il n'y avait rien », et il suffisait que l'APRÈS
+  // paraisse vide pour fabriquer une « boîte vidée » sans avoir rien constaté. L'invariant
+  // était écrit quatre lignes plus bas et n'était gardé que du côté APRÈS.
+  //
+  // Le crochet serait alors posé sur un message dont personne ne sait s'il est arrivé —
+  // c'est-à-dire la fausse assurance que ce dispositif existe pour empêcher.
+  const avantLisible = ecranAvant != null;
+
+  if (avantLisible && !messagesEnFile(ecranAvant) && messagesEnFile(ecran)) return 'file-d-attente';
   // ⚠️ IL FAUT UN CHANGEMENT, pas un état. La première écriture acceptait `done → done` comme
   // une sortie de l'attente — c'est-à-dire très exactement le cas MESURÉ le 2026-08-15, où les
   // trois agents portant un message coincé étaient `done` avant comme après. Elle aurait donc
@@ -139,7 +149,9 @@ export function laPriseEstConstatee({ statutAvant, statut, ecranAvant, ecran }) 
   if (auRepos(statutAvant) && statut === 'working') return 'sortie-de-l-attente';
   // La boîte contenait quelque chose, elle n'a plus rien : le texte en est sorti. Écrite
   // d'abord avec une double négation qui inversait la condition — les essais l'ont attrapée.
-  if (!boiteEstVide(ecranAvant) && boiteEstVide(ecran)) return 'boite-videe';
+  // ⚠️ LE STATUT, LUI, NE DÉPEND PAS DE L'ÉCRAN : il reste lisible quand l'écran ne l'est pas,
+  // et c'est le seul témoin qui survit à cette panne-là. L'aveugler aussi serait déborder.
+  if (avantLisible && !boiteEstVide(ecranAvant) && boiteEstVide(ecran)) return 'boite-videe';
   return null;
 }
 

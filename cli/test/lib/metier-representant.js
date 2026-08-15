@@ -671,6 +671,28 @@ export const CONTROLES = [
       assert.ok(enonces.length >= 1, 'le métier ne dit rien du crochet — un agent ne saura pas ce qu’il vaut');
 
       const dit = enonces.join('\n');
+
+      // ⚠️ CE CONTRÔLE CHERCHAIT DES SOUS-CHAÎNES, ET UN CONTRESENS Y PASSAIT — relevé en revue
+      // de fond, prouvé en exécutant le contrôle contre le texte suivant, qui passait :
+      //
+      //   « Ne crois pas que le dispositif le pose seul, tu n'as rien à faire : en réalité
+      //     c'est TOI qui dois poser le crochet dès que tu as lu le message. »
+      //
+      // Les mots-clés y sont tous, et le sens est inversé. On regarde donc ce qui PRÉCÈDE
+      // l'énoncé sur SA ligne — une négation qui l'enveloppe le retourne sans toucher à un
+      // seul de ses mots. C'est le motif dominant de ce harnais : une garde qui lit des mots
+      // sans lire ce qu'ils disent.
+      //
+      // ⚠️ Et la garde porte sur la ligne PORTEUSE, pas sur tout ce qui parle de crochet : la
+      // première écriture attrapait « ce n'est pas ta mémoire qui flanche », phrase parfaitement
+      // saine d'un paragraphe voisin. Une garde qui crie sur le texte juste ne sera pas gardée.
+      const porteuse = enonces.find((l) => /le dispositif le pose seul/i.test(l)) || '';
+      const avantLEnonce = porteuse.slice(0, porteuse.toLowerCase().indexOf('le dispositif le pose seul'));
+      assert.ok(
+        !/\b(?:ne crois pas|contrairement|au contraire|n['’]est pas vrai|est faux)\b/i.test(avantLEnonce),
+        `« ${porteuse.trim().slice(0, 90)}… » : l'énoncé est enveloppé d'une négation — les ` +
+          'mots-clés survivent à leur propre contresens',
+      );
       // Ce n'est PAS l'agent qui le pose : la garde porte sur la polarité de l'énoncé, pas sur
       // la présence du mot « crochet », qu'un contresens conserverait tel quel.
       assert.match(
@@ -1036,6 +1058,17 @@ export function permuter(texte, a, b) {
  * que le défaut qu'elles ont révélé ne puisse pas revenir.
  */
 export const MUTATIONS = [
+  {
+    id: 'crochet-retourne-par-une-negation',
+    quoi: 'l’énoncé du crochet est retourné par une négation, en gardant tous ses mots-clés',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul, tu n'as rien à faire.",
+      "**Ne crois pas qu'un crochet apparaisse seul** — contrairement à ce qu'on dit, le dispositif le pose seul, tu n'as rien à faire est faux : c'est toi qui le poses.",
+    ),
+  },
+
   {
     id: 'crochet-devenu-une-discipline',
     quoi: 'le métier enseigne à l’agent de poser lui-même le crochet — la garantie redevient une discipline',

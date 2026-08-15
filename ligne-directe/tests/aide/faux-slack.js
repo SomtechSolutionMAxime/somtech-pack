@@ -321,6 +321,16 @@ export function fauxSlack({
         // répond alors `missing_scope`. Un accusé de réception raté ne doit pas faire perdre le
         // message qu'il accuse : c'est ce que cet interrupteur permet d'éprouver.
         if (monde.crochetImpossible) return echec('missing_scope');
+        // ⚠️ SIXIÈME FOIS QUE CE DOUBLE SE MONTRE PLUS PERMISSIF QUE LE SERVICE, relevé en revue
+        // de fond. Toutes les autres méthodes de canal vérifient son existence et rendent
+        // `channel_not_found` ; celle-ci acceptait n'importe quel canal et n'importe quel
+        // horodatage. Un essai qui poserait un crochet sur un message qui n'existe pas serait
+        // donc vert — alors que le vrai Slack refuse. C'est très exactement la classe de défaut
+        // que ce fichier existe pour fermer.
+        if (!monde.canaux.some((c) => c.id === args.channel)) return echec('channel_not_found');
+        if (!monde.postes.some((m) => m.ts === args.timestamp) && !monde.horodatagesConnus?.includes(args.timestamp)) {
+          return echec('message_not_found');
+        }
         // Slack refuse un doublon exact, et c'est utile : reposer le même crochet deux fois
         // n'est pas une erreur de l'appelant, mais il doit savoir que ça n'a rien ajouté.
         if (monde.reactions.some((r) => r.canal === args.channel && r.ts === args.timestamp && r.emoji === args.name)) {
