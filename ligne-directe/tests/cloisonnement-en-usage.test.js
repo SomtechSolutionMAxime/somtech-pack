@@ -235,3 +235,134 @@ test('UN ÉTRANGER ENTRÉ DANS UNE LIGNE INTERNE COUPE L’ÉCRITURE — un cana
     assert.match(r.erreur, /Charles-Olivier/, 'le refus nomme qui est là');
   });
 });
+
+
+// ═════════════════ 4. LES PORTES QUE LA PREMIÈRE ÉCRITURE AVAIT LAISSÉES OUVERTES
+//
+// ⚠️ RELEVÉ EN REVUE DE FOND — « une porte sur deux », le motif de ce dépôt, rejoué dans le
+// correctif qui prétend le fermer. Le premier jet gardait `ouvrir` et `dire`, et laissait
+// `fermer` écrire son bilan sans aucune vérification — alors que c'est le SEUL geste qui pose
+// systématiquement du contenu de synthèse : coûts, arbitrages, ce qui reste à faire.
+
+test('LE BILAN DE CLÔTURE NE PART PAS DANS UN CANAL OÙ UN ÉTRANGER EST ENTRÉ', async () => {
+  // Le scénario exact : un chantier court, aucun `dire` jamais appelé, un externe rejoint le
+  // canal entre l'ouverture et la clôture. L'agent referme, et le bilan des coûts s'en va sous
+  // ses yeux.
+  const canal = { id: 'C1', name: 'un-chantier', is_private: false, membres: [UMOI, UDIR, CLIENT.id] };
+  const ligne = ligneOuverte({ membresVus: [UMOI, UDIR] });
+  await avecPoste({ canaux: [canal], utilisateurs: [...NOUS, CLIENT], lignes: [ligne] }, async ({ monde, veilleur }) => {
+    const r = await veilleur.fermer({ chantier: 'j-1', worktree: '/w', bilan: 'coût final : 40 000 $', pane: PANE });
+
+    assert.deepEqual(monde.postes, [], 'LE FAIT : le bilan n’a pas été posté');
+    assert.ok(r.bilan_retenu, `la réponse doit dire que le bilan a été retenu : ${JSON.stringify(r)}`);
+  });
+});
+
+test('MAIS LA LIGNE SE REFERME QUAND MÊME — on ne bloque pas le cycle de vie sur un canal compromis', async () => {
+  // « Un canal compromis qu'on continue d'alimenter est pire qu'un canal fermé » : on cesse
+  // d'écrire, on ne cesse pas de fermer. Refuser la fermeture laisserait l'agent attaché à un
+  // canal qu'il ne doit plus alimenter — le pire des deux mondes.
+  const canal = { id: 'C1', name: 'un-chantier', is_private: false, membres: [UMOI, UDIR, CLIENT.id] };
+  const ligne = ligneOuverte({ membresVus: [UMOI, UDIR] });
+  await avecPoste({ canaux: [canal], utilisateurs: [...NOUS, CLIENT], lignes: [ligne] }, async ({ veilleur }) => {
+    const r = await veilleur.fermer({ chantier: 'j-1', worktree: '/w', bilan: 'coût final', pane: PANE });
+
+    assert.equal(r.ok, true, 'la ligne se referme');
+    assert.equal(chargerRegistre().lignes[0].close_le !== null, true, 'et elle est close au registre');
+  });
+});
+
+test('UN BILAN ORDINAIRE PART COMME AVANT — la garde ne gêne pas la clôture normale', async () => {
+  const canal = { id: 'C1', name: 'un-chantier', is_private: false, membres: [UMOI, UDIR] };
+  const ligne = ligneOuverte({ membresVus: [UMOI, UDIR] });
+  await avecPoste({ canaux: [canal], lignes: [ligne] }, async ({ monde, veilleur }) => {
+    const r = await veilleur.fermer({ chantier: 'j-1', worktree: '/w', bilan: 'livré', pane: PANE });
+
+    assert.equal(r.ok, true);
+    assert.equal(r.bilan_retenu, undefined);
+    assert.ok(monde.postes.some((p) => String(p.text || '').includes('livré')), 'le bilan est parti');
+  });
+});
+
+// ═════════════════ 5. QUAND ON N'A PAS PU LIRE — et c'est le trou que la revue a démontré
+//
+// ⚠️ QUATRIÈME FOIS QUE CE MOTIF EST RELEVÉ SUR CE CHANTIER. La revue a muté les deux branches
+// de dégradation pour qu'elles se TAISENT au lieu d'avertir : les 19 essais sont restés verts.
+// Un droit Slack révoqué, un jeton mort ou un plafond atteint dégradait donc ces gardes vers
+// « toujours ouvert, jamais un mot » — sans que rien ne le dise.
+
+test('UNE LECTURE IMPOSSIBLE À L’OUVERTURE FAIT ÉCHOUER — et le refus le nomme', async () => {
+  // ⚠️ LES DEUX GARDES N'EXIGENT PAS LA MÊME CHOSE, ET C'EST VOULU. À L'OUVERTURE, la ligne ne
+  // s'ouvre pas : `T-20260814-0136` impose de PROUVER que l'invité est bien entré dans le canal,
+  // et une preuve qu'on ne peut pas lire n'est pas une preuve — une ligne ouverte sans elle
+  // serait peut-être muette, ce que ce dispositif existe pour empêcher.
+  //
+  // AVANT D'ÉCRIRE, au contraire, la ligne existe déjà et quelqu'un attend : couper la parole
+  // parce qu'un droit a hoqueté serait le remède pire que le mal. On le dit, on n'empêche pas.
+  // La première écriture de cet essai attendait l'inverse — c'était l'essai qui avait tort.
+  const canal = { id: 'C_ko', name: 'un-chantier', is_private: false, membres: [UMOI, UDIR] };
+  await avecPoste({ canaux: [canal] }, async ({ monde, veilleur }) => {
+    monde.membresIllisibles = true;
+    const r = await veilleur.ouvrir({ chantier: 'un-chantier', pane: PANE, worktree: '/w', invites: [UDIR] });
+
+    assert.equal(r.ok, false, 'on n’ouvre pas une ligne dont on ne peut pas prouver l’état');
+    assert.match(r.erreur, /impossible de lire/i, 'et le refus dit ce qu’on n’a pas pu faire');
+    assert.deepEqual(chargerRegistre().lignes, [], 'rien n’est inscrit');
+  });
+});
+
+test('UNE LECTURE IMPOSSIBLE AVANT D’ÉCRIRE SE DIT AUSSI — sur la ligne interne comme sur la cliente', async () => {
+  const canal = { id: 'C1', name: 'un-chantier', is_private: false, membres: [UMOI, UDIR] };
+  const ligne = ligneOuverte({ membresVus: [UMOI, UDIR] });
+  await avecPoste({ canaux: [canal], lignes: [ligne] }, async ({ monde, veilleur }) => {
+    monde.membresIllisibles = true;
+    const r = await veilleur.dire({ chantier: 'j-1', worktree: '/w', texte: 'le coût', pane: PANE });
+
+    assert.equal(r.ok, true, 'le message part : couper la parole sur un hoquet serait pire');
+    assert.ok(r.cloisonnement_invérifiable, `mais on doit le DIRE : ${JSON.stringify(r)}`);
+  });
+});
+
+// ═════════════════ 6. UN MEMBRE QU'ON NE SAIT PAS LIRE
+
+test('UN MEMBRE DONT LE PROFIL EST ILLISIBLE N’EST PAS UN SUSPECT — et il ne bloque pas les autres', async () => {
+  // Un compte supprimé, un profil restreint, un identifiant qui n'est plus servi. Le canal est
+  // sain ; jeter sur ce membre-là rendrait la garde inopérante sur un canal parfaitement normal,
+  // ce qui est la façon la plus sûre de la faire désactiver.
+  const canal = { id: 'C_ok', name: 'un-chantier', is_private: false, membres: [UMOI, UDIR, 'U_DISPARU'] };
+  await avecPoste({ canaux: [canal] }, async ({ veilleur }) => {
+    const r = await veilleur.ouvrir({ chantier: 'un-chantier', pane: PANE, worktree: '/w', invites: [UDIR] });
+
+    assert.equal(r.ok, true, `un profil illisible ne doit pas faire refuser : ${r.refus?.message}`);
+    assert.ok(
+      chargerRegistre().lignes[0].membres_vus.includes('U_DISPARU'),
+      'et il compte quand même dans la photo — il est bien dans le canal'
+    );
+  });
+});
+
+
+test('LA BRANCHE « JE N\u2019AI PAS PU LIRE » DE L\u2019OUVERTURE EST \u00c9PROUV\u00c9E DIRECTEMENT', async () => {
+  // \u26a0\ufe0f CINQUI\u00c8ME FOIS QUE CE MOTIF EST RELEV\u00c9 SUR CE CHANTIER, et cette fois je l\u2019ai
+  // trouv\u00e9 moi-m\u00eame en rejouant la mutation de la revue : muter ce catch pour qu\u2019il se TAISE
+  // laissait les 25 essais verts. L\u2019essai voisin, qui passe par `ouvrir`, s\u2019arr\u00eate plus t\u00f4t
+  // \u2014 sur le refus de la preuve d\u2019invitation \u2014 et n\u2019atteint donc jamais cette branche-ci.
+  //
+  // On l\u2019\u00e9prouve donc DIRECTEMENT. Un droit r\u00e9voqu\u00e9 ne doit pas d\u00e9grader la garde vers
+  // « rien \u00e0 signaler » : c\u2019est le d\u00e9faut que tout ce chantier ferme, retourn\u00e9 contre lui.
+  await avecPoste({ canaux: [] }, async ({ monde, veilleur }) => {
+    monde.membresIllisibles = true;
+    const r = await veilleur.refusEtranger('C_quelconque', 'un-chantier', 'interne');
+
+    assert.ok(r, 'on ne rend pas `null` : ce serait dire « rien \u00e0 signaler » sans avoir regard\u00e9');
+    assert.ok(r.avertissement, `on avertit, on ne refuse pas : ${JSON.stringify(r)}`);
+    assert.match(r.avertissement, /pas pu \u00eatre lu/i);
+  });
+});
+
+test('ET SUR UNE LIGNE CLIENTE, ELLE NE S\u2019APPLIQUE PAS DU TOUT \u2014 rien \u00e0 lire, rien \u00e0 dire', async () => {
+  await avecPoste({ canaux: [] }, async ({ monde, veilleur }) => {
+    monde.membresIllisibles = true;
+    assert.equal(await veilleur.refusEtranger('C_quelconque', 'espace-acme', 'client'), null);
+  });
+});

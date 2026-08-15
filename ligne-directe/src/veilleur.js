@@ -740,7 +740,20 @@ export class Veilleur {
     // canal privé, et c'est leur appartenance qui les autorise. Rien à prouver ici.
     if (nature === 'client' || !invites.length) return { ok: true };
 
-    const avant = await this.slack.membresDuCanal(this.jetons.robot, canalId);
+    // ⚠️ UNE LECTURE IMPOSSIBLE NE FAIT PAS TOMBER L'OUVERTURE — défaut de T-20260814-0136,
+    // trouvé en éprouvant le cloisonnement : l'exception traversait `ouvrir` et l'appelant
+    // recevait une pile au lieu d'un refus lisible. On la nomme.
+    let avant;
+    try {
+      avant = await this.slack.membresDuCanal(this.jetons.robot, canalId);
+    } catch (err) {
+      return {
+        ok: false,
+        erreur:
+          `impossible de lire qui est déjà dans #${canalNom} (${err.code || err.message}) — donc ` +
+          'impossible de savoir qui reste à inviter, ni de prouver que quiconque y est entré.',
+      };
+    }
     const manquants = invites.filter((u) => !avant.includes(u));
     if (!manquants.length) return { ok: true };
 
@@ -1207,9 +1220,11 @@ export class Veilleur {
     try {
       profils = await this.slack.profilsDuCanal(this.jetons.robot, ligne.canal_id);
     } catch (err) {
-      // On n'a pas pu regarder. Sur une ligne interne, c'est un refus — voir `refusEtranger`,
-      // même raisonnement. Sur une ligne cliente, on laisse passer : couper la parole d'un
-      // client parce qu'un droit Slack a hoqueté serait le remède pire que le mal.
+      // On n'a pas pu regarder. Dans les DEUX natures on laisse écrire — couper la parole parce
+      // qu'un droit Slack a hoqueté serait le remède pire que le mal — mais sur une ligne interne
+      // on le DIT, et sur une ligne cliente on se tait : un client n'a pas à recevoir nos avaries
+      // d'outillage. (Le commentaire d'origine annonçait ici un refus que le code ne faisait pas
+      // — relevé en revue de fond.)
       if (nature === 'client') return {};
       journaliser(`membres de #${ligne.canal_nom} illisibles avant écriture (${err.message})`);
       // On le DIT sans empêcher : se taire serait conclure d'une absence de mesure, et refuser
@@ -1316,7 +1331,17 @@ export class Veilleur {
     if (ligne.close_le) {
       return { ok: false, erreur: `la ligne de « ${ligne.chantier} » est déjà close depuis ${ligne.close_le}` };
     }
-    if (bilan) {
+    // ═══ LE BILAN EST DU CONTENU DE SYNTHÈSE — coûts, arbitrages, ce qui reste. C'est le SEUL
+    // geste qui en pose systématiquement, et il n'était gardé par rien : « une porte sur deux »,
+    // relevé en revue de fond sur ce lot même. Le scénario : un chantier court, aucun `dire`
+    // jamais appelé, un externe entré entre l'ouverture et la clôture.
+    //
+    // ⚠️ ON RETIENT LE BILAN, ON NE BLOQUE PAS LA FERMETURE. « Un canal compromis qu'on continue
+    // d'alimenter est pire qu'un canal fermé » — donc on cesse d'écrire, pas de fermer. Refuser
+    // la clôture laisserait l'agent attaché à un canal qu'il ne doit plus alimenter.
+    const veille = await this.veillerAvantDEcrire(ligne);
+    const bilanRetenu = Boolean(bilan && veille.refus);
+    if (bilan && !veille.refus) {
       await this.slack.poster(this.jetons.robot, {
         canal: ligne.canal_id,
         texte: bilan,
@@ -1349,7 +1374,14 @@ export class Veilleur {
     clore(this.registre, ligne.canal_id, maintenant());
     sauverRegistre(this.registre);
     journaliser(`ligne close — ${ligne.chantier} (#${ligne.canal_nom}) archive=${archive}`);
-    return { ok: true, canal: ligne.canal_nom, archive };
+    if (bilanRetenu) journaliser(`bilan RETENU — #${ligne.canal_nom} : ${veille.refus.message}`);
+    return {
+      ok: true,
+      canal: ligne.canal_nom,
+      archive,
+      ...(bilanRetenu ? { bilan_retenu: veille.refus.message } : {}),
+      ...(veille.nouveaux ? { nouveaux_venus: veille.nouveaux } : {}),
+    };
   }
 
   /**
