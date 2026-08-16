@@ -9,8 +9,9 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Ajouté
 
-- **Une ligne dont le chantier a disparu du disque est désormais signalée** (T-20260816-0083, PR #261) — la moitié que `T-20260816-0003` avait nommée `[non fermé]` sans la fermer. Une telle ligne reste ouverte au registre, attachée à un numéro de pane que le poste réattribue : **le prochain occupant hérite d'un canal ouvert pour un client dont il n'a jamais entendu parler.** Mesuré sur le registre réel : **2 lignes ouvertes sur 42**.
+- **Une ligne dont le chantier a disparu du disque est désormais signalée** (T-20260816-0083, PR #261) — la moitié que `T-20260816-0003` avait nommée `[non fermé]` sans la fermer. Une telle ligne reste ouverte au registre, attachée à un numéro de pane que le poste réattribue : **le prochain occupant hérite d'un canal ouvert pour un client dont il n'a jamais entendu parler.** ⚠️ **Prévention, pas incident en cours** : recompté sur le registre réel, **25 lignes ouvertes, aucune au chantier disparu** — voir la correction de mesure en Technique.
 - **La ronde porte la passe** et rend son avis avec les valeurs trouvées : la ligne, le chantier, le worktree disparu, et **la commande exacte qui la referme** — avec le pane d'où la lancer, parce que `fermer` choisit parmi les lignes du pane courant. C'est l'invariant de `T-20260816-0045` appliqué à l'hygiène : *un avis qui ne nomme pas sa sortie laisse son lecteur exactement où il était*.
+- ⚠️ **Le geste conseillé porte sa CONDITION, parce qu'elle décide s'il marche** — relevé par un REFUS en revue de fond, et c'est ce lot retourné contre lui-même. `fermer` passe par la même sélection que `dire`, donc par la garde de session : **si le pane a été repris par une autre session herdr, aucune commande ne referme cette ligne**. Or c'est exactement le cas que ce lot décrit. L'avis nomme donc la commande, l'endroit, **la session**, et ce qui se passe quand elle a changé — éprouvé contre le vrai sélecteur, pas contre un double.
 - **Elle signale, elle ne ferme rien.** Refermer une ligne à tort ferait taire un canal client. L'avis le dit en toutes lettres.
 
 ### Technique

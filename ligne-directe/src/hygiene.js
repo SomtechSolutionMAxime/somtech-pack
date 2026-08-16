@@ -51,19 +51,36 @@
 // d'une absence de donnée.
 
 /**
- * Le geste qui referme une ligne, écrit avec ses valeurs réelles — jamais un gabarit.
+ * Le geste qui referme une ligne — avec sa CONDITION, parce qu'elle décide s'il marche.
  *
- * ⚠️ ET IL DIT D'OÙ LE LANCER. `fermer` choisit parmi les lignes du pane courant : la commande
- * seule ne suffit donc pas, il faut être au bon endroit. Un conseil qu'on ne peut pas exécuter
- * là où on le lit est un demi-geste, c'est-à-dire le défaut que `T-20260816-0045` a fermé.
+ * ⚠️ CE GESTE NE MARCHE PAS TOUJOURS, ET LE TAIRE SERAIT LE DÉFAUT QU'ON FERME. Relevé en revue
+ * de fond, par un REFUS : `fermer` passe par la même sélection que `dire`, donc par la garde de
+ * session de `T-20260816-0035` — une ligne n'est candidate que si le socket courant concorde
+ * avec le sien. Reproduit contre le vrai sélecteur : socket A au registre, socket B au pane,
+ * et `ligneDuPane` rend `{ ligne: null, refus: aucune_ligne }`.
+ *
+ * Autrement dit : **si le pane a été repris par une AUTRE session herdr, aucune commande ne
+ * referme cette ligne** — et c'est précisément le cas que ce lot décrit, « un numéro de pane
+ * que le poste réattribue ». Conseiller la commande sans sa condition enverrait quelqu'un se
+ * faire répondre « aucune ligne ouverte depuis ce pane » : un avis qui nomme une sortie qu'on
+ * ne peut pas emprunter, c'est-à-dire `T-20260816-0045` retourné contre son propre auteur.
+ *
+ * On nomme donc la commande, l'endroit, **la session**, et ce qui se passe quand elle a changé.
  */
 export function gesteDeFermeture(ligne) {
   const chantier = ligne?.chantier ?? '';
   const pane = ligne?.pane ?? null;
+  const session = typeof ligne?.herdr_socket === 'string' ? ligne.herdr_socket : null;
   const commande = `ligne-directe fermer --a ${chantier}`;
-  return pane
-    ? `depuis le pane « ${pane} » : \`${commande}\``
-    : `\`${commande}\` (depuis le pane qui porte cette ligne)`;
+  if (!pane) return `\`${commande}\` (depuis le pane qui porte cette ligne)`;
+  const ou = session
+    ? `depuis le pane « ${pane} » de la session « ${session} »`
+    : `depuis le pane « ${pane} »`;
+  return (
+    `${ou} : \`${commande}\` — et SEULEMENT de là : si ce pane est passé à une autre session ` +
+    `herdr, la ligne n'y est plus candidate et aucune commande ne la referme ; elle doit être ` +
+    `ôtée du registre à la main.`
+  );
 }
 
 /**
@@ -74,6 +91,11 @@ export function gesteDeFermeture(ligne) {
  * ne s'active pas tout seul là où personne ne le lui a demandé.
  */
 export function lignesAuChantierDisparu(ouvertes, { chantierExiste } = {}) {
+  // ⚠️ CETTE LIGNE-CI EST REDONDANTE AVEC LE FILET plus bas, et il faut le dire : sans
+  // prédicat, l'appel lèverait et le `catch` rendrait `false` — donc rien ne serait signalé de
+  // toute façon. Relevé en revue de fond, qui l'a mutée sans faire rougir un seul essai. On la
+  // garde pour l'intention — se taire faute de moyen de constater n'est pas la même chose que
+  // se taire parce qu'un appel a échoué — mais on ne la compte pas comme une garde prouvée.
   if (typeof chantierExiste !== 'function') return [];
   return (ouvertes || [])
     .filter((l) => {

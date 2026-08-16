@@ -36,6 +36,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { lignesAuChantierDisparu, gesteDeFermeture, avisDHygiene } from '../src/hygiene.js';
+import { ligneDuPane } from '../src/registre.js';
 
 /** Le disque, doublé : ce module rend un jugement, il ne va pas le chercher lui-même. */
 const existe = (vivants) => (chemin) => vivants.includes(chemin);
@@ -115,6 +116,31 @@ test('LE SIGNALEMENT PORTE LE GESTE EXACT QUI REFERME, ET D’OÙ LE LANCER', ()
 
   assert.match(g, /ligne-directe fermer --a chantier-mort/, 'la commande, avec la valeur réelle');
   assert.match(g, /w26:pM/, 'et le pane d’où elle doit être lancée');
+});
+
+test('⚠️ LE GESTE PORTE SA CONDITION — éprouvé contre le VRAI sélecteur, pas sur parole', () => {
+  // ⚠️ BLOQUANT RELEVÉ EN REVUE DE FOND, et c'est ce lot retourné contre lui-même. `fermer`
+  // passe par la MÊME sélection que `dire`, donc par la garde de session de `T-20260816-0035` :
+  // une ligne n'est candidate que si le socket courant concorde avec le sien. Or le cas que ce
+  // lot décrit EST celui d'un pane réattribué — souvent à une autre session.
+  //
+  // On l'éprouve ici contre `ligneDuPane` lui-même. Un essai qui monterait des lignes sans
+  // `herdr_socket` — ce que faisait la première écriture de ce fichier — ne verrait jamais
+  // cette garde mordre : c'est le seul cas où elle ne s'applique pas.
+  const morte = { ...ligne('chantier-mort', DISPARU), herdr_socket: '/s/ancienne.sock' };
+
+  const memeSession = ligneDuPane([morte], 'w26:pM', 'chantier-mort', { socket: '/s/ancienne.sock' });
+  assert.equal(memeSession.ligne?.chantier, 'chantier-mort', 'même session : le geste conseillé marche');
+
+  const autreSession = ligneDuPane([morte], 'w26:pM', 'chantier-mort', { socket: '/s/nouvelle.sock' });
+  assert.equal(autreSession.ligne, null, 'autre session : la ligne n’est même pas candidate');
+
+  // Donc l'avis DOIT dire les deux, sinon il envoie quelqu'un se faire répondre
+  // « aucune ligne ouverte depuis ce pane ».
+  const g = gesteDeFermeture(morte);
+  assert.match(g, /ancienne\.sock/, 'la session dans laquelle la commande marche');
+  assert.match(g, /autre session/i, 'et le cas où elle ne marche pas');
+  assert.match(g, /aucune commande ne la referme/i, 'dit sans détour, plutôt que promis à moitié');
 });
 
 test('SANS PANE CONNU, LE GESTE NE FABRIQUE PAS UN ENDROIT — il dit ce qu’il sait', () => {
