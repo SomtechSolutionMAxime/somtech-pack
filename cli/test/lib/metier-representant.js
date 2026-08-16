@@ -271,6 +271,55 @@ export function exigeImperatif(enonce, quoi) {
 }
 
 /**
+ * Les tournures qui RENVERSENT une garantie sans en retirer un mot.
+ *
+ * ⚠️ POURQUOI CE MOTIF EXISTE — mesuré le 2026-08-16, sur ce dépôt, par une revue fraîche.
+ *
+ * Une garde écrite en `assert.match(corps, /tu ne fermes pas/)` cherche une SOUS-CHAÎNE. Elle
+ * reste verte devant « **il n'est pas vrai que** tu ne fermes pas : **en réalité tu fermes** » —
+ * la phrase gardée est toujours là, enveloppée de sa négation. Quatre gardes neuves sont
+ * tombées sur ce trou d'un coup, dont celle qui tenait « la ronde signale et ne ferme JAMAIS ».
+ *
+ * C'est le même invariant que celui du lot de la naissance, sur une autre surface :
+ * **on vérifie le FAIT, jamais l'INDICE.** Une sous-chaîne présente est un indice ; la polarité
+ * du paragraphe qui la porte est le fait.
+ *
+ * ⚠️ CETTE LISTE RESTE COURTE, ET CHAQUE ENTRÉE EST VÉRIFIÉE ABSENTE DU TEXTE LÉGITIME avant
+ * d'être ajoutée. C'est la leçon de `PERMISSIF` juste au-dessus : une garde qui rougit sur du
+ * texte correct ne survit pas, on la « corrige » en la retirant, et elle emporte ce qu'elle
+ * gardait vraiment. « contrairement » a été ÉCARTÉ pour cette raison — le mot figure déjà,
+ * légitimement, dans le gabarit et dans la compétence.
+ */
+export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vrai|le cas|exact)|au contraire|en réalité|n['’]est plus (?:vrai|le cas)|cesse d['’]être vrai/i;
+
+/**
+ * Exige qu'une garantie tienne EN POLARITÉ — présente, et non renversée par son voisinage.
+ *
+ * À préférer systématiquement à `assert.match(corps, sonde)` pour garder une règle : le coût
+ * d'écriture est le même, et la garde attrape ce que la sous-chaîne laisse passer.
+ *
+ * @param corps  le texte de la section
+ * @param sonde  ce qui reconnaît la phrase portant la garantie
+ * @param quoi   la garantie, en clair, pour le message d'échec
+ */
+export function exigePolarite(corps, sonde, quoi) {
+  const porteurs = corps.split(/\n\s*\n/).filter((p) => sonde.test(p));
+  assert.ok(
+    porteurs.length >= 1,
+    `« ${quoi} » : la phrase qui porte la garantie est introuvable — la garde ne garde plus rien`,
+  );
+  for (const p of porteurs) {
+    const renverse = p.match(RENVERSEMENT);
+    assert.ok(
+      !renverse,
+      `« ${quoi} » est RENVERSÉE sur place (« ${renverse && renverse[0]} ») : la phrase gardée est `
+        + `toujours là, et elle dit maintenant le contraire. Une garde qui cherche une sous-chaîne `
+        + `ne voit pas ça — « ${p.trim().slice(0, 160)}… »`,
+    );
+  }
+}
+
+/**
  * Le rang de l'unique élément qu'une sonde reconnaît.
  * Échoue si la sonde n'en reconnaît aucun, ou plus d'un — une sonde ambiguë rendrait
  * l'assertion de position ininterprétable, donc inutile.

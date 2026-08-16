@@ -51,7 +51,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   REPO, sections, sectionDe, tableDe, colonne, colonneDe, pucesDe, blocsBash, enteteDe,
-  exigeImperatif, permuter,
+  exigeImperatif, exigePolarite, permuter,
 } from './metier-representant.js';
 
 export { REPO, permuter };
@@ -1657,9 +1657,9 @@ export const CONTROLES = [
       const tete = metier.split('\n').slice(0, 20).join('\n');
       assert.match(tete, /fait foi/i, 'la déclaration doit être en TÊTE — plus bas, elle est lue après ce qu’elle gouverne');
       assert.match(tete, /en découle|découle/i, 'et elle doit dire que la compétence en découle, pas l’inverse');
-      assert.match(
-        tete, /c['’]est celui-ci qui gagne|celui-ci qui gagne/i,
-        'la règle de conflit doit être écrite : en cas de divergence, c’est CE fichier qui gagne',
+      exigePolarite(
+        tete, /celui-ci qui gagne/i,
+        'la règle de conflit — en cas de divergence, c’est CE fichier qui gagne',
       );
       // Le motif, pas seulement la règle : une hiérarchie sans sa raison se renégocie.
       assert.match(
@@ -1679,14 +1679,14 @@ export const CONTROLES = [
       assert.match(s.corps, /MCP `somcraft`/i, 'le métier doit dire par où les ADR se lisent RÉELLEMENT');
       assert.match(s.corps, /\/architecture\/adr/i, 'et donner le chemin des décisions dans le miroir');
 
-      assert.match(
+      exigePolarite(
         s.corps, /illisible|Operation not permitted/i,
-        'le métier doit dire que le dossier du disque est illisible — sinon le prochain y perd son temps',
+        'le dossier du disque est illisible — sinon le prochain y perd son temps',
       );
 
-      assert.match(
-        s.corps, /incomplet/i,
-        'le métier doit dire que le miroir est INCOMPLET — c’est ce qui rend une absence non concluante',
+      exigePolarite(
+        s.corps, /miroir est incomplet/i,
+        'le miroir est INCOMPLET — c’est ce qui rend une absence non concluante',
       );
       assert.match(
         s.corps, /\[non établi\]/i,
@@ -1708,9 +1708,9 @@ export const CONTROLES = [
       // orchestrateur n'avait de raison de lire. La garde tient la place ET le moment.
       const s = sectionDe(metier, /Cadrer/i, 'sur le cadrage');
       assert.match(s.corps, /feed/i, 'le cadrage doit envoyer lire le feed');
-      assert.match(
+      exigePolarite(
         s.corps, /avant de brieffer/i,
-        'et dire QUAND : avant de brieffer — un feed lu après le brief n’a rien changé',
+        'le moment de la lecture du feed — avant de brieffer, un feed lu après n’a rien changé',
       );
       assert.match(
         s.corps, /consignes aux agents/i,
@@ -1733,9 +1733,9 @@ export const CONTROLES = [
       // dans le paragraphe même censé faire respecter la règle d'or n°14.
       // Le sas vit dans la boucle de chantier (§4g), pas dans une section à lui.
       const s = sectionDe(metier, /Pour chaque unité de travail/i, 'sur la poussée et le sas');
-      assert.match(
+      exigePolarite(
         s.corps, /ne fait pas foi/i,
-        'le métier doit dire que le verrou ne fait pas foi — c’est la garantie que ce lot ajoute',
+        'le verrou ne fait pas foi — la garantie centrale de ce lot',
       );
       // Les DEUX défaillances : ne garder que la lecture laisserait croire qu’un `acquired: true` suffit.
       assert.match(
@@ -1815,9 +1815,9 @@ export const CONTROLES = [
       }
 
       // PIÈGE 1 — signaler n'est pas fermer. La polarité est tout : « tu peux fermer » ruinerait la garantie.
-      assert.match(
-        s.corps, /tu signales, tu ne fermes pas|ne fermes pas/i,
-        'la ronde doit SIGNALER sans fermer — confondre « la PR est mergée » et « le défaut est réglé » a déjà fait rouvrir un ticket',
+      exigePolarite(
+        s.corps, /tu ne fermes pas/i,
+        'la ronde SIGNALE sans fermer — confondre « la PR est mergée » et « le défaut est réglé » a déjà fait rouvrir un ticket',
       );
       assert.match(
         s.corps, /jamais elle/i,
@@ -1848,9 +1848,9 @@ export const CONTROLES = [
 
       // LE POINT QUI FAIT LA DIFFÉRENCE, et il a été corrigé une fois déjà : le critère naïf
       // passe sur les 25 lignes et ne prouve rien. Ce qu'on cherche est l'ambiguïté d'adressage.
-      assert.match(
+      exigePolarite(
         s.corps, /ne prouve rien/i,
-        'le métier doit dire que vérifier l’existence du dossier NE PROUVE RIEN — sinon on écrit le contrôle inutile',
+        'vérifier l’existence du dossier NE PROUVE RIEN — sinon on écrit le contrôle inutile',
       );
       assert.match(
         s.corps, /même destinataire/i,
@@ -2899,4 +2899,102 @@ export const MUTATIONS = [
       '**suffit** — sur 25 lignes',
     ),
   },
+
+  // ───────────────────────────────────────────────────────────────────────────────────
+  // LA NÉGATION ENVELOPPANTE — six mutations, une par garantie de ce lot.
+  //
+  // Trouvée le 2026-08-16 par une revue fraîche, sur les gardes que ce lot venait
+  // d'écrire : elles cherchaient une SOUS-CHAÎNE, donc « il n'est pas vrai que tu ne
+  // fermes pas » les laissait toutes vertes. La phrase gardée est encore là, et elle dit
+  // le contraire. Quatre gardes sont tombées d'un coup ; deux autres ne survivaient que
+  // par accident, rattrapées par la comparaison octet pour octet parce que leur texte est
+  // dupliqué — un filet non voulu n'est pas une garantie, alors les six sont éprouvées.
+  //
+  // Ces six-là gardent `exigePolarite` honnête. Sans elles, on pourrait le retirer d'un
+  // contrôle sans qu'aucun test ne s'en aperçoive.
+  // ───────────────────────────────────────────────────────────────────────────────────
+
+  {
+    id: 'polarite-la-hierarchie-est-niee-sur-place',
+    quoi: 'le gabarit garde tous ses mots et cesse de gagner — la hiérarchie est renversée sans qu’un terme disparaisse',
+    cible: 'le-gabarit-fait-foi',
+    fichier: 'metier',
+    muter: (t) => t.replace('celui-ci qui gagne', 'celui-ci qui gagne — au contraire'),
+  },
+
+  {
+    id: 'polarite-le-miroir-est-nie-incomplet',
+    quoi: 'le miroir reste dit « incomplet » et la phrase le dédit aussitôt — une absence redevient une preuve',
+    cible: 'les-adr-se-lisent-au-miroir-et-une-absence-ne-prouve-rien',
+    fichier: 'metier',
+    muter: (t) => t.replace('miroir est incomplet', 'miroir est incomplet, en réalité il est complet'),
+  },
+
+  {
+    id: 'polarite-le-moment-du-feed-est-nie',
+    quoi: 'le feed garde son « avant de brieffer » et le perd dans la même phrase',
+    cible: 'le-feed-se-lit-avant-de-brieffer',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'avant de brieffer qui que ce soit',
+      'avant de brieffer qui que ce soit — en réalité quand tu en trouves le temps',
+    ),
+  },
+
+  {
+    id: 'polarite-le-verrou-refait-foi',
+    quoi: 'le verrou « ne fait pas foi » et fait foi trois mots plus loin — la garantie centrale du lot, renversée sur place',
+    cible: 'le-verrou-du-sas-ne-fait-pas-foi',
+    fichier: 'metier',
+    // « ne fait pas foi » seul mordait AILLEURS — le gabarit le dit aussi du fil de la ligne et
+    // d'un rappel de mémoire, et `replace` prend la première occurrence. La mutation mordait
+    // donc hors du sas et aucun contrôle ne la voyait : survivante, attrapée par la GARDE 2.
+    muter: (t) => t.replace('Le verrou ne fait pas foi', 'Le verrou ne fait pas foi — au contraire'),
+  },
+
+  {
+    id: 'polarite-la-ronde-se-remet-a-fermer',
+    quoi: 'LE cas qui a motivé cette famille de mutations : « il n’est pas vrai que tu signales, tu ne fermes pas »',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      "Il n'est pas vrai que tu signales, tu ne fermes pas",
+    ),
+  },
+
+  {
+    id: 'polarite-le-critere-naif-est-rehabilite-par-la-negation',
+    quoi: 'le critère du dossier « ne prouve rien », et la phrase le réhabilite immédiatement',
+    cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**ne prouve rien** — sur 25 lignes',
+      '**ne prouve rien** — au contraire, sur 25 lignes',
+    ),
+  },
 ];
+
+/**
+ * Les garanties de ce lot qui se gardent EN POLARITÉ, et non en présence de mots.
+ *
+ * ⚠️ CETTE LISTE EST UN OUTIL, PAS UNE DOCUMENTATION. Un test la parcourt et refuse qu'un
+ * contrôle inscrit ici garde sa règle avec un simple `assert.match` — parce que corriger six
+ * assertions ne ferme rien : le prochain qui écrira une garde écrira une sous-chaîne, comme
+ * nous l'avons tous fait, parce que c'est le geste le plus court. Il l'est encore moins
+ * maintenant : `exigePolarite(corps, sonde, quoi)` s'écrit en une ligne, comme `assert.match`,
+ * et le test ci-dessous rend l'autre chemin plus pénible que celui-là.
+ */
+export const GARANTIES_DE_POLARITE = [
+  'le-gabarit-fait-foi',
+  'les-adr-se-lisent-au-miroir-et-une-absence-ne-prouve-rien',
+  'le-feed-se-lit-avant-de-brieffer',
+  'le-verrou-du-sas-ne-fait-pas-foi',
+  'la-ronde-tient-l-hygiene-du-registre',
+  'le-topo-passe-les-deux-verifications-quotidiennes',
+];
+
+/** Le source de ce fichier — lu pour vérifier COMMENT les contrôles sont écrits, pas ce qu'ils rendent. */
+export function sourceDesControles() {
+  return readFileSync(fileURLToPath(import.meta.url), 'utf8');
+}
