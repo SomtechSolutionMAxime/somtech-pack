@@ -5,7 +5,28 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-08-16
+## [1.58.0] - 2026-08-16
+
+### Ajouté
+
+- **Le métier d'orchestrateur est aligné sur les ADR et le feed du ServiceDesk** (T-20260816-0015, T-20260816-0018, T-20260816-0006, PR #252). Première lecture intégrale dont on ait la preuve : **26 ADR**, 18 réflexions, **54 posts du feed** — dont **16 consignes opposables** à un orchestrateur, que rien ne lui disait de lire. Sept écarts trouvés avec leur conséquence observable, onze points confirmés alignés, sept marqués `[non établi]`.
+- **Le gabarit de lieu fait foi, la compétence en découle** — écrit noir sur blanc en tête des deux textes. Le motif est mécanique : un orchestrateur ne lit pas le `SKILL.md`, il lit le `CLAUDE.md` de son lieu. Mesuré : le mot « ADR » n'apparaissait **pas une seule fois** dans les 1 106 lignes de la compétence, alors que le rôle de gardien des ADR y était nommé — ailleurs. Ce rôle n'avait donc jamais atteint aucun agent né.
+- **Une étape de conception entre le découpage et le chantier** — et la phrase qui la rend opposable : *un brief de construction envoyé sans conception écrite est une faute, au même titre que fermer un ticket sans QA*. Le lot mécanique en reste dispensé, explicitement.
+- **La ronde tient désormais l'hygiène du registre** : cinq questions à chaque passe (ticket fini qui traîne, ticket qui ment sur son état, fusion et ticket qui se contredisent **dans les deux sens**, agent assigné disparu, défaut publié à marquer sans fermer) et deux vérifications quotidiennes au topo (espaces de travail orphelins, lignes ouvertes ambiguës). Elle **signale et ne ferme jamais** ; si elle ne trouve rien, **elle se tait**.
+
+### Corrigé
+
+- **Le verrou de sas ne fait plus foi — c'est l'écart git qui tranche.** Le post du feed du 2026-08-14 rapporte **deux** défaillances du même verrou : un `lock_status` qui répond « libre » sur un staging occupé depuis trois jours, **et le verrou accordé à une nouvelle PR alors que le sas était déjà pris**. Or la compétence *et* son outil s'appuyaient tous les deux dessus, dans le paragraphe même censé faire respecter la règle d'or n°14 : un orchestrateur qui suivait le texte poussait par-dessus la livraison d'un autre.
+- **Les ADR se lisent au miroir Somcraft, et une absence ne prouve rien.** Le seul pointeur du métier envoyait vers un dossier **illisible depuis le poste** (T-20260816-0007). Le miroir est par ailleurs **incomplet** — 26 ADR visibles, douze numéros absents —, donc « je ne trouve pas d'ADR sur ce sujet » ne conclut rien et s'écrit `[non établi]`.
+- **Le feed entre au cadrage**, avant de brieffer qui que ce soit — et la règle qui va avec : le feed s'amende lui-même, le post le plus récent gagne.
+- **L'ADR applicable et le manifeste `architecture.yaml` entrent dans ce que le brief doit porter** ; l'ordre de fermeture `in_progress → ready_to_deploy → merge → completed` est posé au niveau des stories, plus seulement des jalons.
+
+### Technique
+
+- **Les garanties de ce lot se gardent en POLARITÉ, pas en présence de mots** — `exigePolarite`, sept contrôles neufs, dix-neuf mutations. Quatre revues indépendantes, dont trois fraîches, ont chacune trouvé un défaut réel ; les trois dernières **dans les gardes elles-mêmes**. Une garde qui cherchait une sous-chaîne restait verte devant « il n'est pas vrai que tu signales, tu ne fermes pas » : la garantie la plus lourde du lot pouvait être inversée en silence.
+- **Pour les deux garanties sans aucun filet, on garde le fait et non la tournure** : un motif `inverse` interdit la polarité contraire quels que soient les mots qui l'amènent. Deux mutations le prouvent en écrivant l'autorisation **sans une seule négation** — invisible pour un filtre de tournures.
+- **`RENVERSEMENT` déclare dans le code ce qu'il vaut** : un filtre des formulations connues, pas une garantie de polarité. Une garde muette sur sa portée est prise pour une preuve. Le fond — *nous gardons de la prose avec du texte* — est inscrit en dette (T-20260816-0064).
+- **Le méta-test ne se satisfait plus d'un commentaire.** Sa première version cherchait le mot `exigePolarite(` dans le source ; une revue l'a retournée en laissant ce mot en commentaire. Il exige désormais l'**absence** de la forme vulnérable — et a immédiatement trouvé **treize** assertions vulnérables dans les contrôles de ce lot même.
 
 ### Corrigé
 
