@@ -254,7 +254,12 @@ export function invocations(texte, variable) {
   const lignes = texte.split('\n');
   const out = [];
   for (let i = 0; i < lignes.length; i += 1) {
-    const sonde = variable instanceof RegExp ? variable : new RegExp(`\\${variable}\\s`);
+    // ⚠️ LE SIGIL EST LITTÉRAL, ET IL A ÉTÉ PERDU UNE FOIS — trouvé par la passe portail.
+    // En ajoutant le support des sondes RegExp, l’échappement du sigil s’est réduit à une simple
+    // barre d’échappement : le motif est devenu « \\NAITRE\\s » et attrapait « NAITRE » SANS son
+    // sigil. Élargir une sonde qui sert à ACCUSER un texte est le premier pas vers un faux
+    // positif, et un faux positif finit toujours par faire désarmer la garde.
+    const sonde = variable instanceof RegExp ? variable : new RegExp(`\\$${variable}\\s`);
     if (!sonde.test(lignes[i])) continue;
     let inv = lignes[i];
     while (inv.trimEnd().endsWith('\\') && i + 1 < lignes.length) {
