@@ -19,7 +19,11 @@
 # CE QUIL NE FAIT PAS
 #   • Aucun mécanisme de file (HS-REL-005) : sans état, sans persistance, sans
 #     sondage. Le droit dacces exclusif par application existe déjà côté
-#     ServiceDesk et suffit ; on lui ajoute la parole, rien dautre.
+#     ServiceDesk et suffit A SERIALISER ; on lui ajoute la parole, rien dautre.
+#     ATTENTION — « suffit » porte sur la FILE, jamais sur la LECTURE : le verrou
+#     peut repondre `locked: false` sur un staging occupe (feed du 2026-08-14).
+#     Qui veut savoir SI le sas est libre mesure lecart git main..staging ; le
+#     verrou dit QUI detient, pas SI. Ce fichier ne lit pas le verrou : il parle.
 #   • Il ne parle ni au client ni au dirigeant : il sadresse au représentant du
 #     client, et à lui seul. Lenvoi lui-même reste au chemin appelant.
 #   • Il nappelle pas le MCP : comme `staging-lock-acquire.sh`, il fait la part

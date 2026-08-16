@@ -5,6 +5,12 @@ description: Orchestrer un chantier ServiceDesk — une Demande (D-…), un Proj
 
 # Orchestrer un chantier
 
+> **⚖️ Ce texte découle du gabarit de lieu — `.claude/templates/orchestrateur/CLAUDE.md` —, et c'est lui qui fait foi.**
+>
+> Un orchestrateur né d'un lieu posé lit **son `CLAUDE.md`**, pas cette compétence : c'est le premier fichier de son existence. Quand les deux textes divergent, **le gabarit gagne**. Si tu orchestres en ayant chargé cette compétence **sans lieu posé**, va lire le gabarit : il porte des pans entiers du métier qui ne sont pas ici — le rôle de **gardien des ADR** (et où les lire vraiment), le **fichier de droits** et ce qu'il te refuse, la **ronde horaire**, le **topo de 7 h**, les **mémoires**.
+>
+> *Arbitrage `j-20260814-0002`, 2026-08-15 (`T-20260816-0015`). Écarts restants : `T-20260816-0021`.*
+
 Tu deviens le **pilote** d'un chantier. Il en existe trois formes, et elles se pilotent de la même façon — ce qui les distingue tient en quelques lignes, signalées là où ça compte :
 
 | Forme | Code | Ce que tu reçois |
@@ -493,7 +499,19 @@ Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
 Ceci vient **avant** le merge, parce que c'est là que ça se produit : `/pousse-staging` refuse (`acquired: false`) quand une autre livraison occupe déjà le sas. Ce n'est pas un incident, c'est le fonctionnement voulu (RA-AGT-005) — ton travail est prêt, il attend son tour.
 
-Le problème n'est pas l'attente, c'est le silence. Ton **représentant de client** peut bien voir que le sas est occupé — `applications action lock_status` le lui dit. Ce qu'il ne peut pas savoir, c'est que **le chantier qui attend derrière est le sien** : le verrou nomme son détenteur, jamais ceux qui patientent. **Toi seul le sais.** Sans un mot de ta part, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
+> ⚠️ **Le verrou ne fait pas foi sur ce qui compte. Mesure l'écart, pas l'annonce.**
+>
+> Le verrou peut répondre `locked: false` alors que staging est occupé depuis trois jours — signalé au feed du ServiceDesk le **2026-08-14**, après que deux orchestrateurs s'y sont laissé prendre. **Ne conclus jamais « le sas est libre » d'un `lock_status` seul** :
+>
+> ```bash
+> git fetch origin
+> git log origin/staging -1 --format="%cI"                    # depuis quand staging ne bouge plus
+> git diff origin/main..origin/staging --name-only | wc -l    # 0 = vraiment libre
+> ```
+>
+> Un écart non nul dit qu'une livraison occupe le sas, **quoi qu'en dise le verrou**. Celui-ci sert à savoir **qui** détient, jamais **si**. Conclure « libre » sur sa seule foi, c'est pousser par-dessus la livraison d'un autre, et faire tomber la règle d'or n°14 par le paragraphe censé la tenir.
+
+Le problème n'est pas l'attente, c'est le silence. Ton **représentant de client** peut bien voir qu'un détenteur est nommé — `applications action lock_status` le lui montre. Ce qu'il ne peut pas savoir, c'est que **le chantier qui attend derrière est le sien** : le verrou nomme son détenteur, jamais ceux qui patientent. **Toi seul le sais.** Sans un mot de ta part, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
 
 Alors tu le lui dis. **Deux fois** : quand tu entres en attente, et quand ton tour vient.
 
