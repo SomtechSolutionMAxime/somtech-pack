@@ -138,7 +138,10 @@ function ligneVisee(geste, ouvertes, ici, args) {
   // et non le tableau : un `--a` qui est la VALEUR d'une autre option n'est pas ce drapeau.
   const drapeau = optionDonnee(args, '--a');
   const nom = drapeau.presente ? (drapeau.valeur ?? '') : null;
-  const { ligne, refus } = ligneDuPane(ouvertes, ici.pane, nom);
+  // La session courante entre dans la sélection (T-20260816-0035) : sans elle, une ligne restée
+  // ouverte sur le même numéro de pane dans UNE AUTRE session — donc pour un autre client —
+  // reste candidate, et le refus qui exige `--a` est tout ce qui empêche l'accident.
+  const { ligne, refus } = ligneDuPane(ouvertes, ici.pane, nom, { socket: ici.herdr_socket });
   if (ligne) return ligne;
   const noms = refus.noms.map((n) => `--a ${n}`).join('  ou  ');
   if (refus.motif === REFUS_SELECTION.AUCUNE) {

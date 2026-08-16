@@ -26,6 +26,7 @@ import { preparerLieuOrchestrateur, verifierLigneOuvrable } from '../src/orchest
 import { preparerLieuRepresentant } from '../src/representant.js';
 import { etatLieu, GABARITS } from '../src/lieu-agent.js';
 import { JetonManquant, JetonVide, SERVICE_ROBOT, SERVICE_ECOUTE } from '../src/trousseau.js';
+import { variablesReferencees } from '../src/mcp-env.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -274,4 +275,142 @@ test('la vérification passe par le trousseau CLOISONNÉ — jamais par un chemi
   // l'espace de production, comme c'est déjà arrivé deux fois.
   const r = await verifierLigneOuvrable();
   assert.equal(r.joignable, false, 'la vérification a atteint le vrai trousseau depuis une suite de tests');
+});
+
+// ═══════════════════════════════ 7. l'accès au registre — LE CAS RÉVÉLATEUR (T-20260815-0023)
+//
+// POURQUOI CETTE SECTION EST ICI ALORS QUE LE CODE EST DÉJÀ ÉPROUVÉ CHEZ LE REPRÉSENTANT :
+// le contrôle vit dans `lieu-agent.js`, commun aux deux rôles, et RIEN ne l'éprouvait de ce
+// côté-ci — relevé par T-20260815-0023. Or c'est l'orchestrateur qui porte le cas décisif :
+// son gabarit déclare DEUX variables, et l'une d'elles — `SOMCRAFT_MCP_API_KEY` — ne vit PAS
+// dans un en-tête `Authorization` mais dans la CHAÎNE DE REQUÊTE d'une URL.
+//
+// C'est très exactement ce qui avait déjà mordu côté shell : une détection limitée aux
+// en-têtes ratait Somcraft, et le serveur disparaissait de la session sans un mot (voir le
+// commentaire en tête de `scripts/tests/test-mcp-env.sh`). La logique portée en JS ici hérite
+// de ce défaut vécu ; ces cas sont ce qui l'empêche de le rejouer.
+
+const GABARIT_ORCH = join(GABARITS_SRC, 'orchestrateur', '.mcp.json');
+
+/** Ce que le gabarit réclame RÉELLEMENT — jamais une liste écrite à la main. */
+const RECLAMEES = variablesReferencees(GABARIT_ORCH);
+
+/** Celle qui vit dans l'URL, désignée PAR LE FICHIER — pas par une constante recopiée ici. */
+function variableDansUrl() {
+  const mcp = JSON.parse(readFileSync(GABARIT_ORCH, 'utf8'));
+  for (const s of Object.values(mcp.mcpServers || {})) {
+    const dans = [...String(s.url || '').matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => m[1]);
+    if (dans.length) return dans[0];
+  }
+  return null;
+}
+
+/** Voir le jumeau dans `representant-lieu.test.js` : sans ça, la suite mesure le POSTE. */
+async function avecEnvironnement(valeurs, f) {
+  const avant = new Map();
+  for (const [k, v] of Object.entries(valeurs)) {
+    avant.set(k, Object.prototype.hasOwnProperty.call(process.env, k) ? process.env[k] : undefined);
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    return await f();
+  } finally {
+    for (const [k, v] of avant) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+const AUCUNE = () => Object.fromEntries(RECLAMEES.map((v) => [v, undefined]));
+const poser = (depot, nom = 'd-1') => preparerLieuOrchestrateur({ depot, nom, verifierLigne: OUVRABLE });
+
+test('le gabarit de l’orchestrateur déclare bien DEUX variables, dont une dans une URL', () => {
+  // L'ancrage de toute la section : si le gabarit changeait au point de perdre son serveur
+  // à jeton-dans-l'URL, les cas suivants deviendraient décoratifs sans que rien ne le dise.
+  assert.equal(RECLAMEES.length, 2, `le gabarit devrait réclamer deux variables, il en réclame ${RECLAMEES.length}`);
+  assert.ok(variableDansUrl(), 'aucune variable dans une URL : le cas le plus révélateur a disparu du gabarit');
+  assert.ok(RECLAMEES.includes(variableDansUrl()), 'la variable de l’URL n’est pas comptée parmi les réclamées');
+});
+
+test('CRITÈRE 4 — la variable qui vit dans l’URL est TROUVÉE, pas seulement celle de l’en-tête', async () => {
+  // On fournit TOUT SAUF celle de l'URL. Une détection limitée aux en-têtes `Authorization`
+  // ne verrait plus rien à signaler et se tairait — l'orchestrateur naîtrait sans Somcraft,
+  // exactement le défaut déjà payé côté shell.
+  const urlVar = variableDansUrl();
+  const depot = depotJetable();
+  const fournies = Object.fromEntries(RECLAMEES.map((v) => [v, v === urlVar ? undefined : 'factice']));
+
+  const r = await avecEnvironnement(fournies, () => poser(depot));
+
+  assert.equal(r.cree, true);
+  assert.equal(r.avertissements.length, 1, `« ${urlVar} » manque et rien ne le dit — elle vit dans l’URL, pas dans un en-tête`);
+  assert.match(r.avertissements[0], new RegExp(urlVar), `l’avertissement ne nomme pas « ${urlVar} »`);
+  for (const autre of RECLAMEES.filter((v) => v !== urlVar)) {
+    assert.ok(
+      !r.avertissements[0].includes(autre),
+      `« ${autre} » est fournie et pourtant nommée manquante — l’avertissement doit nommer CE QUI MANQUE, pas tout`,
+    );
+  }
+});
+
+test('CRITÈRE 2 — ni fichier ni environnement : l’avertissement nomme LES DEUX variables', async () => {
+  const depot = depotJetable();
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+
+  assert.equal(r.cree, true, 'l’absence d’accès au registre ne bloque jamais la pose');
+  assert.equal(r.avertissements.length, 1);
+  for (const v of RECLAMEES) {
+    assert.match(r.avertissements[0], new RegExp(v), `« ${v} » manque et n’est pas nommée`);
+  }
+});
+
+test('CRITÈRE 1 — pas de .env, mais le processus porte les deux variables : AUCUN avertissement', async () => {
+  const depot = depotJetable();
+  const r = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, 'factice'])), () => poser(depot));
+
+  assert.equal(r.cree, true);
+  assert.deepEqual(r.avertissements, [], 'des variables résolues par le processus ne doivent produire aucun avertissement');
+});
+
+test('CRITÈRE 3 — un .env qui ne couvre QUE la moitié : averti sur l’autre, et sur elle seule', async () => {
+  // La forme la plus insidieuse du faux négatif : le fichier existe ET déclare quelque chose de
+  // juste. Un contrôle qui se tait sur « il y a un .env » laisse partir un orchestrateur amputé
+  // de son second serveur — sans un mot.
+  const urlVar = variableDansUrl();
+  const autre = RECLAMEES.find((v) => v !== urlVar);
+  const depot = depotJetable();
+  writeFileSync(join(depot, '.env'), `${autre}=factice\n`);
+
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+
+  assert.equal(r.avertissements.length, 1, 'un .env à moitié suffisant a été pris pour un accès au registre complet');
+  assert.match(r.avertissements[0], new RegExp(urlVar));
+  assert.ok(!r.avertissements[0].includes(autre), `« ${autre} » est déclarée dans le .env et pourtant nommée manquante`);
+});
+
+test('CRITÈRE 5 — vide dans l’environnement, vide dans le .env : manquante dans les deux cas', async () => {
+  const depotA = depotJetable();
+  const rA = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, ''])), () => poser(depotA));
+  assert.equal(rA.avertissements.length, 1, 'des variables VIDES dans l’environnement ont été prises pour fournies');
+  for (const v of RECLAMEES) assert.match(rA.avertissements[0], new RegExp(v));
+
+  const depotB = depotJetable();
+  writeFileSync(join(depotB, '.env'), RECLAMEES.map((v) => `${v}=`).join('\n') + '\n');
+  const rB = await avecEnvironnement(AUCUNE(), () => poser(depotB));
+  assert.equal(rB.avertissements.length, 1, 'des déclarations VIDES dans un .env ont été prises pour fournies');
+});
+
+test('les deux sources se COMPLÈTENT : une par le .env, l’autre par le processus — rien à signaler', async () => {
+  // Le cas normal d'un poste qui a `claude-swt` (processus) sur un dépôt qui déclare son propre
+  // jeton (fichier). La question n'est jamais « laquelle des deux sources », mais « est-ce
+  // résolu ». Un contrôle qui exigerait UNE seule source refuserait ce montage parfaitement sain.
+  const urlVar = variableDansUrl();
+  const autre = RECLAMEES.find((v) => v !== urlVar);
+  const depot = depotJetable();
+  writeFileSync(join(depot, '.env'), `${autre}=factice\n`);
+
+  const r = await avecEnvironnement({ [urlVar]: 'factice', [autre]: undefined }, () => poser(depot));
+  assert.deepEqual(r.avertissements, [], 'le processus et le fichier doivent pouvoir se compléter');
 });
