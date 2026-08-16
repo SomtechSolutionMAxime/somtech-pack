@@ -1,7 +1,7 @@
 // UN LIEU PORTÉ PAR UNE SEULE BRANCHE PEUT DISPARAÎTRE SOUS SON AGENT (T-20260814-0014).
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// LE FAIT, CINQ FOIS EN DEUX JOURS
+// LE FAIT, DEUX FOIS — et le ticket en compte cinq, dont trois d'une AUTRE surface
 //
 // Le lieu d'un orchestrateur — son `CLAUDE.md`, son `CONTEXTE.md`, ses briefs — vit sous
 // `.orchestrateur/<nom>/` **dans l'arbre de travail du dépôt partagé**. Qu'une autre session

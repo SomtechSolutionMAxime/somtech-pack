@@ -1,7 +1,7 @@
 // lieu-expose.js — UN LIEU QU'UN TIERS PEUT RETIRER SOUS SON AGENT (T-20260814-0014).
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// LE FAIT — cinq occurrences en deux jours
+// LE FAIT — deux occurrences de ce défaut — le ticket en compte cinq, dont trois relèvent d’une autre surface
 //
 // Le lieu d'un orchestrateur vit sous `.orchestrateur/<nom>/` dans l'arbre de travail du dépôt
 // **partagé**. Qu'une autre session bascule ce dépôt sur une branche qui ne porte pas ce

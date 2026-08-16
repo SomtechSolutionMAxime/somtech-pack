@@ -46,7 +46,8 @@ import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { sessionVisee, espaceDeLaSession } from '../src/session.js';
-import { verserLeLieu, exigerUnDepotGit, VersementImpossible } from '../src/versement.js';
+import { verserLeLieu, exigerUnDepotGit, VersementImpossible, branchesQuiPortent } from '../src/versement.js';
+import { expositionAlaNaissance } from '../src/naissance.js';
 import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
 import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
 
@@ -229,6 +230,21 @@ async function main() {
   // portaient une garde qu'aucun commit ne contenait (T-20260814-0139). Ce que la revue de
   // phase 1 a établi, c'est que ce gate n'a JAMAIS été une revue de code — il n'interroge que
   // `HEAD`. Un commit local le satisfait, et la commande sait le faire seule.
+  // ═══ CE LIEU PEUT-IL ÊTRE RETIRÉ SOUS LUI ? — dit ICI, à la naissance (T-20260814-0014).
+  //
+  // ⚠️ LE PLUS TÔT POSSIBLE PLUTÔT QUE LE PLUS RÉGULIÈREMENT POSSIBLE. Une ronde passerait
+  // après : l'agent serait né, aurait travaillé, aurait peut-être écrit dans un lieu qu'un
+  // `git checkout` d'un tiers emporte. Ici, personne n'a encore rien perdu.
+  //
+  // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE, et le geste nommé n'est JAMAIS de rétablir une
+  // branche — ce réflexe écrase le travail de la session qui y a commité depuis.
+  const expose = expositionAlaNaissance(REPO_ROOT, nom, role, {
+    branchesQuiPortent: branchesQuiPortent(REPO_ROOT, commandes.lieu),
+  });
+  if (expose) {
+    process.stderr.write(`⚠️  ${expose.quoi}\n    → ${expose.geste}\n`);
+  }
+
   const verse = (quoi) => {
     try {
       return verserLeLieu(REPO_ROOT, commandes.lieu, { quoi, role, nom });

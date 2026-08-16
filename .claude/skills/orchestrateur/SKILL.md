@@ -140,6 +140,17 @@ réellement recevoir, livre l'amorce et prouve qu'elle a été prise.
 > intervenir ne veut pas dire deviner : un dispositif qui devine pour éviter de déranger est ce
 > qui produit un message livré au mauvais client.
 
+> ⚠️ **ET ELLE DIT SI LE LIEU NE TIENT QU'À UNE BRANCHE** — au moment où elle le fait naître,
+> pas plus tard. Un lieu porté par une seule branche est retiré à son agent dès que quelqu'un
+> change de branche dans le dépôt partagé, **y compris quand cette branche est celle qui est
+> sortie** : tout paraît normal jusqu'au `git checkout` de quelqu'un d'autre. C'est arrivé deux
+> fois, et l'un des deux orchestrateurs travaillait encore sans le savoir.
+>
+> Elle **signale et laisse naître** — un lieu exposé reste utilisable. Ce qu'elle nomme est le
+> geste qui met à l'abri : **verser le lieu sur `main`**, où tout ce qui en descend le portera.
+> Voir « Tant que ce lieu n'est pas sur `main` » plus bas — et surtout l'interdit qui s'y
+> trouve : **ne jamais rétablir la branche**, ce réflexe écrase le travail d'un autre.
+
 > **Pourquoi `npx` et pas `~/.somtech`.** L'outillage de poste est une copie que `pack setup`
 > dépose une fois et qui vieillit — mesuré le 2026-08-16 : le poste tournait en 1.55.0 quand le
 > dépôt était en 1.56.0, et un fichier du module n'existait même pas côté poste. Une commande qui

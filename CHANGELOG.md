@@ -9,12 +9,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Ajouté
 
-- **Un lieu qu'un tiers peut retirer sous son agent est désormais signalé** (T-20260814-0014, PR #264) — **cinq occurrences en deux jours**. Le lieu d'un orchestrateur vit dans l'arbre du dépôt **partagé** : qu'une autre session bascule de branche, et son répertoire courant disparaît **en pleine session**. Deux orchestrateurs l'ont vécu ; l'un travaillait encore sans le savoir et **n'aurait pas survécu à un redémarrage** — il ne saurait plus ni qui il est, ni quelle est sa portée.
+- **Un lieu qu'un tiers peut retirer sous son agent est désormais signalé** (T-20260814-0014, PR #264) — **deux occurrences de CE défaut** (le ticket en compte cinq, mais trois relèvent d’une autre surface). Le lieu d'un orchestrateur vit dans l'arbre du dépôt **partagé** : qu'une autre session bascule de branche, et son répertoire courant disparaît **en pleine session**. Deux orchestrateurs l'ont vécu ; l'un travaillait encore sans le savoir et **n'aurait pas survécu à un redémarrage** — il ne saurait plus ni qui il est, ni quelle est sa portée.
 - **Le renversement que ce lot nomme** : ses exécutants, qui vivent quelques heures, naissent chacun dans un worktree à eux. **Lui, qui vit des jours, ne l'est pas.**
 - **Et ça mord à la NAISSANCE**, pas seulement dans une ronde — *le plus tôt possible plutôt que le plus régulièrement possible*. La ronde passe après : l'agent est né, a travaillé, a peut-être écrit dans un lieu qu'un `git checkout` emportera. À la naissance, **personne n'a encore rien perdu**.
 
 - **La compétence de pose dit désormais ce qu'elle laisse derrière elle** — et donne le geste : faire naître l'orchestrateur **dans son propre espace de travail**, exactement comme il fera naître ses chefs d'équipe. La mécanique existait, éprouvée, décrite pour eux ; elle n'avait jamais été retournée vers celui qui l'applique.
 - ⚠️ **Et elle INTERDIT le rattrapage évident** : rétablir la branche remettrait les fichiers **et écraserait le travail de la session qui y a commité depuis**. Elle donne à la place le geste qui restaure **sans toucher à la branche partagée** (`git checkout <branche-du-lieu> -- …`), et l'ordre : vérifier que tout est poussé, restaurer, le dire. *La première fois, la conduite juste a tenu parce que son auteur venait d'écrire le ticket — ce n'est pas une garde, c'est de la chance.*
+
+- ⚠️ **Et c'est la COMMANDE qui le dit, pas seulement un module qui saurait le dire.** La première écriture exportait le jugement et le testait — **sans que rien ne l'appelle en production**. Le détecteur existait dans le dépôt et nulle part dans la vie d'un agent : exactement le défaut que ce dépôt ferme partout ailleurs, commis ici par son auteur et **relevé par les deux passes de revue**. `bin/naitre.js` mesure désormais les branches porteuses et écrit l'avertissement ; un essai de bout en bout, sur la vraie commande, le prouve.
 
 ### Technique
 
