@@ -334,6 +334,39 @@ test('CE QUE LA VIGIE N’A PAS EU LE TEMPS DE REGARDER EST DIT, JAMAIS TU', () 
   assert.match(r.stderr, /n'a pas eu le temps/, 'le journal le dit aussi, en clair');
 });
 
+test('LA RONDE SIGNALE UNE LIGNE DONT LE CHANTIER A DISPARU — et ne la ferme pas', () => {
+  // ⚠️ L'ESSAI DU BRANCHEMENT, et c'est le point que ce dépôt oublie le plus souvent :
+  // `hygiene.js` a ses propres essais et ils sont verts ; ça ne prouve PAS que la ronde
+  // l'appelle. Sans celui-ci, on pourrait retirer tout le branchement et la suite resterait
+  // verte — la passe existerait dans le dépôt et nulle part dans la vie du poste.
+  const lieu = lieuDOrchestrateur('hygiene');
+  installerFauxHerdr({ agents: [{ pane_id: 'w9:pH', name: 'orch', agent_status: 'idle', foreground_cwd: lieu }] });
+  const registre = join(bac, 'registre-hygiene');
+  mkdirSync(registre, { recursive: true });
+  writeFileSync(
+    join(registre, 'registre.json'),
+    JSON.stringify({
+      version: 1,
+      lignes: [
+        { chantier: 'chantier-mort', canal_id: 'C_mort', canal_nom: 'mort', pane: 'w26:pM',
+          worktree: '/un/worktree/supprime/20260805', ouverte_le: 'h', close_le: null },
+        { chantier: 'chantier-vivant', canal_id: 'C_vif', canal_nom: 'vif', pane: 'w26:pN',
+          worktree: bac, ouverte_le: 'h', close_le: null },
+      ],
+      commun: null,
+      dirigeant: null,
+    })
+  );
+  const r = lancerRonde(['/s/a.sock'], { LIGNE_DIRECTE_RACINE: registre });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.equal(dit.lignes_au_chantier_disparu?.length, 1, 'une seule ligne morte — pas la vivante');
+  assert.equal(dit.lignes_au_chantier_disparu[0].chantier, 'chantier-mort');
+  assert.match(r.stderr, /fermer --a chantier-mort/, 'le geste exact est écrit à l’humain');
+  assert.match(r.stderr, /w26:pM/, 'avec le pane d’où le lancer');
+  assert.match(r.stderr, /Rien n'a été fermé/i, 'et rien n’a été fermé à sa place');
+});
+
 test('chaque rappel part vers la session de SON orchestrateur — jamais celle du premier venu', () => {
   const lieuA = lieuDOrchestrateur('chez-a');
   const lieuB = lieuDOrchestrateur('chez-b');

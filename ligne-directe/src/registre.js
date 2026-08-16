@@ -488,29 +488,12 @@ export function nomsDesignables(candidates) {
  * @returns {{ligne: object|null, candidates: object[], refus: {motif: string, nom?: string, noms: string[]}|null}}
  */
 export function ligneDuPane(ouvertes, pane, nom = null, { socket = null } = {}) {
-  // `panesDeLigne`, JAMAIS `l.pane` : une ligne de chantier partagée avec un gestionnaire est
-  // portée par DEUX panes (T-20260814-0093), et un filtre sur le seul porteur d'origine la
-  // rendrait invisible depuis le pane du pair — c'est-à-dire un `--a <chantier>` refusé pour
-  // « aucune ligne ouverte », à celui qui en a une.
-  // ⚠️ LA SESSION ENTRE DANS L'IDENTITÉ (T-20260816-0035). Un numéro de pane ne désigne un
-  // porteur qu'à l'intérieur d'UNE session ; sur ce poste il en désigne jusqu'à deux, dans deux
-  // dépôts de deux clients. On exige donc la concordance du couple (pane, session).
   //
-  // ⚠️ ON N'ÉCARTE QUE SUR PREUVE, JAMAIS SUR ABSENCE DE PREUVE — et la première écriture de ce
-  // correctif se trompait de sens. Elle écartait toute ligne SANS socket enregistré, au nom de
-  // « l'absence ne vaut pas concordance ». Les essais de bout en bout l'ont attrapée : une ligne
-  // écrite avant ce champ devenait INJOIGNABLE, en silence. C'est-à-dire un défaut pire que
-  // celui qu'on ferme — le ticket prévenait exactement de ça.
-  //
-  // La règle juste est plus étroite : on écarte une ligne quand on SAIT qu'elle vit ailleurs —
-  // socket connu des deux côtés, et différents. Une ligne dont la session est inconnue reste
-  // candidate ; si elle entre en concurrence, l'ambiguïté demeure et le nom est exigé, ce qui
-  // est le comportement prudent d'avant. On ne perd donc rien, et on ferme le cas mesuré.
-  //
-  // ⚠️ ET QUAND ON NE CONNAÎT PAS SA PROPRE SESSION, ON NE FILTRE PAS. Un service lancé au
-  // démarrage du poste n'hérite pas de `HERDR_SOCKET_PATH`. Filtrer sur une session inconnue
-  // rendrait TOUTES les lignes invisibles — une panne silencieuse au lieu d'une protection. On
-  // retombe alors exactement sur le comportement d'avant : l'ambiguïté demeure, le nom est exigé.
+  // ⚠️ ET LE DISQUE N'ENTRE PAS ICI (T-20260816-0083). Une ligne dont le worktree a disparu
+  // attend bien le prochain occupant de son numéro — mais la traiter par un FILTRE laisserait
+  // le registre DIRE qu'elle est ouverte pendant qu'on la cache : deux sources de vérité qui
+  // divergent en silence, le motif que ce dépôt paie le plus cher. On soigne le fait, pas sa
+  // lecture — voir `hygiene.js`, qui SIGNALE ces lignes avec le geste qui les referme.
   const candidates = (ouvertes || []).filter((l) =>
     porteursDeLigne(l).some(
       (porteur) => porteur.pane === pane && !(socket && porteur.socket && porteur.socket !== socket)
