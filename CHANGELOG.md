@@ -5,6 +5,28 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-16
+
+### Ajouté
+
+- **Un lieu qu'un tiers peut retirer sous son agent est désormais signalé** (T-20260814-0014, PR #264) — **deux occurrences de CE défaut** (le ticket en compte cinq, mais trois relèvent d’une autre surface). Le lieu d'un orchestrateur vit dans l'arbre du dépôt **partagé** : qu'une autre session bascule de branche, et son répertoire courant disparaît **en pleine session**. Deux orchestrateurs l'ont vécu ; l'un travaillait encore sans le savoir et **n'aurait pas survécu à un redémarrage** — il ne saurait plus ni qui il est, ni quelle est sa portée.
+- **Le renversement que ce lot nomme** : ses exécutants, qui vivent quelques heures, naissent chacun dans un worktree à eux. **Lui, qui vit des jours, ne l'est pas.**
+- **Et ça mord à la NAISSANCE**, pas seulement dans une ronde — *le plus tôt possible plutôt que le plus régulièrement possible*. La ronde passe après : l'agent est né, a travaillé, a peut-être écrit dans un lieu qu'un `git checkout` emportera. À la naissance, **personne n'a encore rien perdu**.
+
+- **La compétence de pose dit désormais ce qu'elle laisse derrière elle** — et donne le geste : faire naître l'orchestrateur **dans son propre espace de travail**, exactement comme il fera naître ses chefs d'équipe. La mécanique existait, éprouvée, décrite pour eux ; elle n'avait jamais été retournée vers celui qui l'applique.
+- ⚠️ **Et elle INTERDIT le rattrapage évident** : rétablir la branche remettrait les fichiers **et écraserait le travail de la session qui y a commité depuis**. Elle donne à la place le geste qui restaure **sans toucher à la branche partagée** (`git checkout <branche-du-lieu> -- …`), et l'ordre : vérifier que tout est poussé, restaurer, le dire. *La première fois, la conduite juste a tenu parce que son auteur venait d'écrire le ticket — ce n'est pas une garde, c'est de la chance.*
+
+- ⚠️ **Et c'est la COMMANDE qui le dit, pas seulement un module qui saurait le dire.** La première écriture exportait le jugement et le testait — **sans que rien ne l'appelle en production**. Le détecteur existait dans le dépôt et nulle part dans la vie d'un agent : exactement le défaut que ce dépôt ferme partout ailleurs, commis ici par son auteur et **relevé par les deux passes de revue**. `bin/naitre.js` mesure désormais les branches porteuses et écrit l'avertissement ; un essai de bout en bout, sur la vraie commande, le prouve.
+
+### Technique
+
+- ⚠️ **Et le nom de la branche par défaut n'est PAS codé en dur** — trouvé **par la chaîne d'intégration**, le jour même où ce motif a été inscrit (`T-20260816-0093`). La première écriture n'acceptait que `main` : **verte sur le poste, rouge en intégration**, où `git init` crée `master`. Le verdict dépendait du nom qu'une machine donne à sa branche — donc de la machine, pas du lieu. Les deux noms usuels sont acceptés, et l'appelant peut donner celui que le dépôt déclare.
+- ⚠️ **Le critère n'est PAS « est-ce sur `main` »**, et c'est le cœur du lot. Cette formulation aurait déclaré **sain le pire des cas**, mesuré sur un orchestrateur vivant : son lieu n'est porté que par sa propre branche, **et cette branche est celle qui est sortie**. Tout paraît normal, rien ne se voit, et il suffit d'un `git checkout` par n'importe qui. Le critère est **combien de branches portent le lieu, et lesquelles** — jamais laquelle est sortie.
+- **Le nombre seul ne suffit pas non plus** : deux branches de travail peuvent disparaître toutes les deux. Seule la branche par défaut est portée par ce qui en descend.
+- **On ne conclut pas d'une absence de mesure** : une interrogation de git qui échoue rendrait une liste vide, et « vide » vaut ici l'alarme maximale. `null` veut donc dire *pas mesuré* et fait taire le module, là où `[]` veut dire *mesuré, et rien ne le porte*.
+- ⚠️ **Le geste nommé n'est JAMAIS de rétablir la branche.** Ce réflexe remettrait les fichiers **et écraserait le travail de la session qui y a commité depuis** — le rattrapage plus dommageable que la panne. Un essai garde que le verdict ne le propose pas.
+- Le module **signale et n'empêche pas de naître** : un lieu exposé reste utilisable, et refuser la naissance coûterait plus que le risque.
+
 ## [1.61.0] - 2026-08-16
 
 ### Sécurité

@@ -140,6 +140,17 @@ réellement recevoir, livre l'amorce et prouve qu'elle a été prise.
 > intervenir ne veut pas dire deviner : un dispositif qui devine pour éviter de déranger est ce
 > qui produit un message livré au mauvais client.
 
+> ⚠️ **ET ELLE DIT SI LE LIEU NE TIENT QU'À UNE BRANCHE** — au moment où elle le fait naître,
+> pas plus tard. Un lieu porté par une seule branche est retiré à son agent dès que quelqu'un
+> change de branche dans le dépôt partagé, **y compris quand cette branche est celle qui est
+> sortie** : tout paraît normal jusqu'au `git checkout` de quelqu'un d'autre. C'est arrivé deux
+> fois, et l'un des deux orchestrateurs travaillait encore sans le savoir.
+>
+> Elle **signale et laisse naître** — un lieu exposé reste utilisable. Ce qu'elle nomme est le
+> geste qui met à l'abri : **verser le lieu sur `main`**, où tout ce qui en descend le portera.
+> Voir « Tant que ce lieu n'est pas sur `main` » plus bas — et surtout l'interdit qui s'y
+> trouve : **ne jamais rétablir la branche**, ce réflexe écrase le travail d'un autre.
+
 > **Pourquoi `npx` et pas `~/.somtech`.** L'outillage de poste est une copie que `pack setup`
 > dépose une fois et qui vieillit — mesuré le 2026-08-16 : le poste tournait en 1.55.0 quand le
 > dépôt était en 1.56.0, et un fichier du module n'existait même pas côté poste. Une commande qui
@@ -224,6 +235,44 @@ gh pr create --draft --title "chore(orchestrateur): installe l orchestrateur <no
 
 Passe la PR en prêt (`gh pr ready`) une fois que quelqu'un l'a relue — cette compétence ne
 fusionne jamais elle-même.
+
+### ⚠️ Tant que ce lieu n'est pas sur `main`, il peut disparaître sous lui
+
+**Un lieu porté par une seule branche est retiré à son agent dès que quelqu'un change de
+branche dans le dépôt partagé** — y compris quand cette branche est celle qui est sortie :
+tout paraît normal, et rien ne se voit jusqu'au `git checkout` de quelqu'un d'autre.
+
+C'est arrivé **cinq fois en deux jours** (`T-20260814-0014`). Deux orchestrateurs ont perdu
+leurs fichiers en pleine session ; l'un travaillait encore sans le savoir — son métier était
+chargé en contexte, pas relu sur le disque — et **n'aurait pas survécu à un redémarrage** : ni
+qui il est, ni quelle est sa portée.
+
+**Le renversement à corriger** : ses chefs d'équipe, qui vivent quelques heures, naissent
+chacun dans un espace de travail à eux. **Lui, qui vit des jours, n'en a pas.**
+
+**Fais-le donc naître dans le sien**, exactement comme il fera naître les siens :
+
+```bash
+TS=$(date +%Y%m%d-%H%M%S)
+herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS/.orchestrateur/<nom> && claude --model opus"
+```
+
+Dans son propre espace, **personne d'autre ne change sa branche** : le lieu ne peut plus lui
+être retiré. C'est la même mécanique que `/orchestrer-chantier` décrit pour un chef d'équipe —
+elle n'avait jamais été retournée vers celui qui l'applique.
+
+⚠️ **Et si son lieu disparaît quand même — NE RÉTABLIS PAS LA BRANCHE.** Le réflexe est le
+geste le plus dommageable : remettre la branche remettrait les fichiers **et écraserait le
+travail de la session qui y a commité depuis**. Ce qu'il faut faire, dans cet ordre :
+
+1. **vérifier que ce qui a été écrit est poussé** — entre deux poussées, un brief en cours
+   n'existe que là ;
+2. **restaurer les fichiers sans toucher à la branche** :
+   `git checkout <branche-du-lieu> -- .orchestrateur/<nom>/` ;
+3. **le dire** — à celui qui a changé de branche, et au registre.
+
+**Ce n'est pas laissé à son jugement** : la première fois, la conduite juste a tenu parce que
+son auteur venait d'écrire le ticket. Ce n'est pas une garde, c'est de la chance.
 
 **Si la commande a rendu un avertissement** (`avertissements`, le plus souvent : aucun fichier
 d'environnement à la racine du dépôt), **dis-le** avant de continuer. Ce n'est pas bloquant —

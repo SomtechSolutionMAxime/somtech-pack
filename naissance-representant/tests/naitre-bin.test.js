@@ -430,6 +430,36 @@ after(() => {
 // n'est pas de la paresse. Le lieu d'un représentant se branche sur un canal que le client
 // voit : sa pose exige un canal et un dirigeant, et le dirigeant a tranché le 2026-08-16
 // qu'elle garde sa revue. Ne pas intervenir ne veut pas dire deviner : le refus NOMME le geste.
+test('LA COMMANDE RÉELLE DIT QU’UN LIEU NE TIENT QU’À UNE BRANCHE — à la naissance, pas plus tard', () =>
+  avecLieu((client, lieu, depot) => {
+    // ⚠️ L'ESSAI QUI MANQUAIT, ET SON ABSENCE A VALU UN REJET. Le module de jugement avait ses
+    // propres essais, tous verts ; la fonction était exportée ; et RIEN NE L'APPELAIT en
+    // production. La garde existait dans le dépôt et nulle part dans la vie d'un agent —
+    // exactement le défaut que ce dépôt ferme partout ailleurs, commis ici par son auteur.
+    //
+    // Le lieu est versé sur une branche de travail, et `main` ne le porte pas : c'est le cas
+    // mesuré cinq fois en deux jours, et le pire d'entre eux — tout paraît normal tant que
+    // personne ne change de branche.
+    const git = (...args) => execFileSync('git', ['-C', depot, ...args], { stdio: 'ignore' });
+    git('branch', '-M', 'chore/lieu-du-client');
+
+    const r = lancerNaitre(client);
+
+    assert.match(r.stderr, /une seule branche/i, 'la commande le DIT, elle ne se contente pas de le savoir');
+    assert.match(r.stderr, new RegExp(client), 'avec le lieu réel, pas une formule');
+    assert.match(r.stderr, /verse|main/i, 'et le geste qui met à l’abri');
+    // ⚠️ ET JAMAIS le geste qui écrase le travail d'un autre.
+    assert.ok(!/checkout <branche>|rétablis la branche/i.test(r.stderr), 'aucune invitation à rétablir la branche');
+  }, 'expose'));
+
+test('ET ELLE SE TAIT QUAND LE LIEU EST PORTÉ PAR LA BRANCHE PAR DÉFAUT — le cas de tous les jours', () =>
+  avecLieu((client) => {
+    // La moitié qui protège : une naissance qui avertit à chaque fois cesse d'être lue. Le
+    // dépôt d'essai est sur `main` par défaut et le lieu y est versé — rien à signaler.
+    const r = lancerNaitre(client);
+    assert.ok(!/une seule branche/i.test(r.stderr), `rien ne devait être signalé — dit : ${r.stderr.slice(0, 120)}`);
+  }, 'sain'));
+
 test('sans lieu, un REPRÉSENTANT n’est pas posé d’autorité — le refus nomme /gestionnaire-client, et rien n’est écrit', () =>
   avecLieu(
     (client, lieu, depot) => {

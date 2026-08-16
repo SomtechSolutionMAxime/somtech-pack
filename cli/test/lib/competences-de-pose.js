@@ -459,7 +459,59 @@ export const CONTROLES_COMMUNS = [
 
 // ═════════════════════════════════════════ les contrôles PROPRES à l'orchestrateur
 
+export const CONTROLE_LIEU_EXPOSE = {
+  id: 'le-lieu-qui-tient-a-une-branche-est-nomme',
+  quoi: 'la compétence dit qu’un lieu porté par une seule branche peut disparaître, et interdit le rattrapage qui écrase',
+  verifier({ texte }) {
+    // T-20260814-0014, cinq occurrences en deux jours. Deux orchestrateurs ont perdu leurs
+    // fichiers en pleine session parce que leur lieu ne vivait que sur une branche que
+    // quelqu'un d'autre a quittée. La compétence posait le lieu et n'en disait rien.
+    //
+    // ⚠️ DEUX CHOSES SONT GARDÉES ICI, ET LA SECONDE EST LA PLUS IMPORTANTE.
+    assert.match(
+      texte, /une seule branche/i,
+      'la compétence doit dire qu’un lieu porté par une seule branche est retirable — sans ça, ' +
+        'celui qui le pose ne sait pas ce qu’il laisse derrière lui',
+    );
+    // Le renversement : ses exécutants sont isolés, lui non. C'est ce qui rend le geste évident.
+    assert.match(
+      texte, /worktree add|espace de travail à eux|dans le sien/i,
+      'elle doit dire de le faire naître dans son propre espace, comme il fait naître les siens',
+    );
+    // ⚠️ ET L'INTERDIT, qui est le vrai danger : le réflexe de réparation est plus dommageable
+    // que la panne. Rétablir la branche remet les fichiers ET écrase le travail de la session
+    // qui y a commité depuis. Une compétence qui décrit la panne sans interdire ce geste-là
+    // envoie son lecteur faire pire que rien.
+    assert.match(
+      texte, /NE RÉTABLIS PAS LA BRANCHE/,
+      'elle doit INTERDIRE de rétablir la branche — c’est le rattrapage qui écrase le travail d’un autre',
+    );
+    assert.match(
+      texte, /git checkout <branche-du-lieu> -- /,
+      'et donner le geste qui restaure SANS toucher à la branche partagée',
+    );
+  },
+};
+
+export const MUTATIONS_LIEU_EXPOSE = [
+  {
+    id: 'l-exposition-du-lieu-n-est-plus-dite',
+    quoi: 'la compétence cesse de dire qu’un lieu tenant à une seule branche peut disparaître',
+    competence: 'orchestrateur',
+    cible: 'le-lieu-qui-tient-a-une-branche-est-nomme@orchestrateur',
+    muter: (t) => t.replace(/une seule branche/gi, 'une branche'),
+  },
+  {
+    id: 'le-rattrapage-qui-ecrase-redevient-permis',
+    quoi: 'l’interdit de rétablir la branche disparaît — le lecteur fera le geste le plus dommageable',
+    competence: 'orchestrateur',
+    cible: 'le-lieu-qui-tient-a-une-branche-est-nomme@orchestrateur',
+    muter: (t) => t.replace('NE RÉTABLIS PAS LA BRANCHE', 'remets la branche'),
+  },
+];
+
 export const CONTROLES_ORCHESTRATEUR = [
+  CONTROLE_LIEU_EXPOSE,
   {
     id: 'les-motifs-de-refus-sont-au-complet',
     quoi: 'la table des refus couvre EXACTEMENT les motifs que le code peut rendre — ni un de moins, ni un inventé',
@@ -827,6 +879,7 @@ const remplacer = (texte, quoi, par) => texte.replace(quoi, par);
  * ne garde rien.
  */
 export const MUTATIONS = [
+  ...MUTATIONS_LIEU_EXPOSE,
   {
     id: 'la-naissance-signale-au-lieu-de-refuser@orchestrateur',
     quoi: 'le texte adoucit le refus de la naissance en simple signalement',

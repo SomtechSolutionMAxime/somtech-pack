@@ -99,6 +99,47 @@ export function exigerUnDepotGit(depot) {
   }
 }
 
+/**
+ * Les branches dont un commit porte ce chemin — la mesure que `lieu-expose.js` attend
+ * (T-20260814-0014).
+ *
+ * ⚠️ RENDS `null` QUAND ON N'A PAS PU MESURER, jamais `[]`. Une liste vide veut dire « mesuré,
+ * et rien ne le porte » — l'alarme maximale. Confondre les deux ferait crier sur un lieu
+ * parfaitement sain au motif qu'on n'a pas su regarder, et c'est le motif que ce dépôt ferme
+ * partout ailleurs.
+ */
+export function branchesQuiPortent(depot, lieu) {
+  if (!lieu) return null;
+  // ⚠️ `git cat-file <branche>:<chemin>` veut un chemin RELATIF au dépôt. Lui donner l'absolu
+  // — ce que porte `commandes.lieu` — ne trouve jamais rien : on lisait « aucune branche ne le
+  // porte » là où il y en avait une, soit l'alarme maximale sur un lieu sain. Attrapé par
+  // l'essai de bout en bout, pas par la lecture.
+  const racine = resolve(depot);
+  const abs = resolve(lieu);
+  const relatif = abs.startsWith(racine) ? abs.slice(racine.length).replace(/^[/\\]+/, '') : lieu;
+  lieu = relatif;
+  try {
+    const noms = git(depot, ['branch', '--all', '--format=%(refname:short)'])
+      .split('\n')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .filter((x) => !x.includes('->'));
+    const porteuses = [];
+    for (const b of noms) {
+      try {
+        git(depot, ['cat-file', '-e', `${b}:${lieu}`]);
+        porteuses.push(b);
+      } catch {
+        /* cette branche ne le porte pas — c'est un fait, pas une panne */
+      }
+    }
+    return porteuses;
+  } catch {
+    // git injoignable, dépôt illisible : on n'a RIEN mesuré, et on le dit.
+    return null;
+  }
+}
+
 export function verserLeLieu(depot, lieu, { quoi = 'le lieu', role = 'agent', nom = '' } = {}) {
   const rel = cheminDansLeDepot(depot, lieu);
 
