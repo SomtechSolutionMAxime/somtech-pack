@@ -41,14 +41,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fauxSlack } from './aide/faux-slack.js';
+import { posteHerdr } from './aide/faux-herdr.js';
 
 const execFileAsync = promisify(execFile);
 const ICI = dirname(fileURLToPath(import.meta.url));
 const CLI = join(ICI, '..', 'bin', 'ligne-directe.js');
 
-let Veilleur, sauverRegistre, chargerRegistre;
+let Veilleur, sauverRegistre, chargerRegistre, remettreVrai;
 let racine;
-let binFaux;
 let compteur = 0;
 
 // Les panes, nommés une fois — un pane confondu avec un autre est exactement le défaut que ce
@@ -73,21 +73,8 @@ before(async () => {
   process.env.LIGNE_DIRECTE_RACINE = racine;
   ({ Veilleur } = await import('../src/veilleur.js'));
   ({ sauverRegistre, chargerRegistre } = await import('../src/registre.js'));
+  ({ remettre: remettreVrai } = await import('../src/herdr.js'));
 
-  binFaux = join(racine, 'bin');
-  mkdirSync(binFaux, { recursive: true });
-  const faux = join(binFaux, 'herdr');
-  writeFileSync(
-    faux,
-    `#!${process.execPath}\n` +
-      `const a = process.argv.slice(2).join(' ');\n` +
-      `if (a === 'pane current') {\n` +
-      `  process.stdout.write(JSON.stringify({ result: { pane: { pane_id: process.env.FAUX_PANE, foreground_cwd: process.env.FAUX_CWD || '/w' } } }));\n` +
-      `} else {\n` +
-      `  process.stdout.write(JSON.stringify({ error: { code: 'unsupported', message: a } }));\n` +
-      `}\n`
-  );
-  chmodSync(faux, 0o755);
 });
 
 after(() => rmSync(racine, { recursive: true, force: true }));
@@ -126,52 +113,46 @@ const LIEU = {
 };
 
 /**
- * Des agents qui TRAVAILLENT — recevoir a un effet sur le disque, et c'est l'effet qu'on lit.
- * Un double qui empilerait les appels reçus laisserait passer une remise au mauvais pane :
- * c'est-à-dire, ici, un compte rendu de chantier livré au représentant d'un AUTRE client.
+ * ⚠️ LE DOUBLE D'ICI RÉIMPLÉMENTAIT LA PREUVE, ET C'ÉTAIT LE VRAI DÉFAUT (T-20260815-0021).
+ *
+ * Il rendait `{ delivered: true }` à tout coup :
+ *
+ *     async remettre(pane, texte) { writeFileSync(this.fichier(pane), texte); return { delivered: true }; }
+ *
+ * Donc il était PLUS PERMISSIF que le service qu'il doublait — motif récurrent de ce dépôt —
+ * et il ne pouvait pas montrer un pane où rien ne bouge, l'état exact des trois panes mesurés
+ * le 2026-08-15. Un essai écrit contre lui aurait prouvé que l'essai est d'accord avec lui-même.
+ *
+ * On double désormais le TRANSPORT (`aide/faux-herdr.js`, le binaire `herdr` sur le PATH) et le
+ * VRAI `remettre()` rend son verdict. Aucune assertion de ce fichier n'a changé de sens : elles
+ * disent maintenant ce qu'elles prétendaient dire.
  */
-function agentsQuiTravaillent(agents) {
-  const dossier = join(racine, `travail-${(compteur += 1)}`);
-  mkdirSync(dossier, { recursive: true });
-  return {
-    dossier,
-    fichier(pane) {
-      return join(dossier, `${pane.replace(/[^a-z0-9]/gi, '_')}.txt`);
-    },
-    recu(pane) {
-      const f = this.fichier(pane);
-      return existsSync(f) ? readFileSync(f, 'utf8') : null;
-    },
-    async vivant(pane) {
-      return agents.some((a) => a.pane_id === pane);
-    },
-    async remettre(pane, texte) {
-      writeFileSync(this.fichier(pane), texte);
-      return { delivered: true };
-    },
-    async agents() {
-      return agents.map((a) => ({ agent: 'claude', herdr_socket: `/s/${a.pane_id}`, ...a }));
-    },
-  };
-}
 
 /** Un poste complet : registre, espace Slack en mémoire, veilleur qui écoute vraiment. */
 async function avecPoste({ lignes = [], canaux = [], agents = [] }, corps) {
   sauverRegistre({ version: 1, lignes, communs: {}, commun: null, dirigeant: DIRIGEANT });
   const monde = fauxSlack({ canaux, utilisateurs: [{ id: 'UCLIENT', name: 'jean', profile: {} }] }).installer();
-  const travail = agentsQuiTravaillent(agents);
+  const travail = posteHerdr(racine, agents, `p${(compteur += 1)}`);
+  // Chaque agent vivant tient un pane qui PREND ce qu'on lui remet — le cas nominal. Un essai
+  // qui veut un pane muet ou collant le déclare lui-même par `travail.pane(...)`.
+  for (const a of agents) travail.pane(a.pane_id, { statut: 'idle' });
+  const pathAvant = process.env.PATH;
+  process.env.PATH = travail.path;
+  process.env.FAUX_HERDR_ETAT = travail.etat;
   const v = new Veilleur({
     cheminSocket: join(racine, 'veilleur.sock'),
     jetons: { robot: 'xoxb-x', ecoute: 'xapp-y' },
     identite: { equipe: 'T', utilisateur: 'UMOI' },
-    herdr: travail,
+    // LE VERDICT VIENT DU VRAI MODULE — l'inventaire des sessions, lui, reste doublé : il ne
+    // porte aucune preuve.
+    herdr: { agents: travail.agents, vivant: travail.vivant, remettre: remettreVrai },
   });
   await v.ecouterLocal();
   /** Lance la VRAIE commande, depuis le pane demandé. */
   const ld = async (args, pane = PANE_ORCHESTRATEUR) => {
     try {
       const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, ...args], {
-        env: { ...process.env, LIGNE_DIRECTE_RACINE: racine, PATH: binFaux, FAUX_PANE: pane },
+        env: { ...process.env, LIGNE_DIRECTE_RACINE: racine, PATH: travail.path, FAUX_PANE: pane },
       });
       return { code: 0, stdout, stderr };
     } catch (err) {
@@ -183,6 +164,8 @@ async function avecPoste({ lignes = [], canaux = [], agents = [] }, corps) {
   } finally {
     await v.arreter();
     monde.restaurer();
+    process.env.PATH = pathAvant;
+    delete process.env.FAUX_HERDR_ETAT;
   }
 }
 

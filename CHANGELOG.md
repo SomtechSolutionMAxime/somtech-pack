@@ -5,6 +5,18 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-16
+
+### Corrigé
+
+- **L'écho entre pairs ne se déclare plus « remis » sans l'avoir prouvé** (T-20260815-0021, PR #254). Porte jumelle de `T-20260815-0011` : depuis ce lot-là, `herdr.remettre()` calcule le verdict de prise pour **tous** ses appelants. Il y en a trois dans le veilleur ; deux le lisaient, `echoAuPair` le jetait et rendait `remis: true` sur la seule absence d'exception. Le fait était là, calculé, disponible, et un seul chemin ne le regardait pas.
+- **Ce que ça coûtait tient dans la question du dirigeant** — *« peut-on parler d'un agent à l'autre ? »*. La réponse restait « oui » même quand ça ne marchait pas : un gestionnaire relance son orchestrateur, obtient « remis », et attend une réponse que personne n'a lue.
+- **« Pas pris » n'est pas « pas parti »**, et les deux modes de panne ne se confondent pas : un pane qui **garde le texte dans sa boîte** est un échec qu'on constate ; un pane où **rien ne bouge** est un silence qu'on ne sait pas lire. Le second est l'état exact des trois panes mesurés le 2026-08-15, tous `done` avant, tous `done` après. Les deux rendent « pas remis », avec une raison différente, dite à qui a parlé.
+
+### Technique
+
+- **Le double d'essai de la ligne du chantier réimplémentait la preuve — c'était le vrai défaut.** Il rendait `{ delivered: true }` à tout coup, donc il était **plus permissif que le service qu'il double**, et il ne pouvait pas montrer un pane où rien ne bouge. Un essai écrit contre lui aurait prouvé que l'essai est d'accord avec lui-même. On double désormais le **transport** — le binaire `herdr` sur le PATH, `tests/aide/faux-herdr.js` — et le vrai module rend son verdict. Aucune assertion de ce fichier n'a changé de sens : elles disent maintenant ce qu'elles prétendaient dire.
+- La garde exige **le fait, pas l'absence de démenti** : lire `pris === false` laisserait passer un `remettre` qui ne rend rien — précisément l'ancien double. La forme durcie est elle-même gardée par un essai, parce qu'elle ne l'était pas : la relâcher laissait les 489 essais verts.
 ## [1.57.0] - 2026-08-16
 
 ### Ajouté
