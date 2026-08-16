@@ -5,6 +5,12 @@ description: Orchestrer un chantier ServiceDesk — une Demande (D-…), un Proj
 
 # Orchestrer un chantier
 
+> **⚖️ Ce texte découle du gabarit de lieu — `.claude/templates/orchestrateur/CLAUDE.md` —, et c'est lui qui fait foi.**
+>
+> Un orchestrateur né d'un lieu posé lit **son `CLAUDE.md`**, pas cette compétence : c'est le premier fichier de son existence. Quand les deux textes divergent, **le gabarit gagne**. Si tu orchestres en ayant chargé cette compétence **sans lieu posé**, va lire le gabarit : il porte des pans entiers du métier qui ne sont pas ici — le rôle de **gardien des ADR** (et où les lire vraiment), le **fichier de droits** et ce qu'il te refuse, la **ronde horaire**, le **topo de 7 h**, les **mémoires**.
+>
+> *Arbitrage `j-20260814-0002`, 2026-08-15 (`T-20260816-0015`). Écarts restants : `T-20260816-0021`.*
+
 Tu deviens le **pilote** d'un chantier. Il en existe trois formes, et elles se pilotent de la même façon — ce qui les distingue tient en quelques lignes, signalées là où ça compte :
 
 | Forme | Code | Ce que tu reçois |
@@ -246,6 +252,12 @@ Deux choses à savoir sur cet état `qa`. La première : c'est **un état à par
 
 Lis aussi le design doc s'il existe.
 
+**Et lis le feed du ServiceDesk — avant de brieffer qui que ce soit.** `mcp__servicedesk__feed`, action `list_posts`. Remonte au moins jusqu'à ton chantier précédent ; à ta première prise de poste, remonte plus loin.
+
+Ce n'est pas une lecture de courtoisie. **C'est là que vivent les consignes aux agents** — celles qui changent la façon de travailler entre deux chantiers, et que rien d'autre ne viendra t'annoncer. Le jour où on l'a lu en entier pour la première fois, il portait **54 posts et 16 consignes opposables à un orchestrateur** (`T-20260816-0015`) : le format de ton compte rendu, l'ID de traçabilité dans les branches, la PR ouverte tôt, l'ordre de fermeture, l'interdiction d'un epic orphelin. Rien de tout cela n'est une annonce ; c'est de la règle.
+
+Et c'est là qu'on a découvert que **le verrou de sas mentait**, alors que ce texte-même s'appuyait dessus (§4g). Le feed **s'amende lui-même** : quand deux posts se contredisent, **le plus récent gagne**. Tu y cherches donc en priorité ce qui change ta façon de **brieffer**, ta façon de **fermer**, et ce qui **défait une consigne plus ancienne**.
+
 ### 3. Découper en epics — ou inventorier, si le périmètre t'est donné
 
 Découpe **par valeur pour l'utilisateur**, jamais par couche technique. Chaque epic porte son problème, son résultat attendu, son hors-scope, ses contraintes et ses critères de succès.
@@ -294,6 +306,24 @@ Les signaux qu'un epic ne tiendra pas :
 
 **Demande-leur de te prévenir.** Tu ne peux pas mesurer le contexte d'un agent de l'extérieur — seul l'agent le sait. Le brief doit donc lui dire : *si tu sens que tu vas devoir compacter, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.* Un agent qui s'arrête proprement à mi-chemin vaut infiniment mieux qu'un agent qui finit dans le brouillard.
 
+### 3-ter. Concevoir — avant d'envoyer qui que ce soit construire
+
+> **Un brief de construction envoyé sans conception écrite est une faute, au même titre que fermer un ticket sans QA.**
+
+C'est l'étape qui manquait ici, et son absence a coûté. Un orchestrateur qui recevait *« règle-moi ce problème »* passait directement au brief, et **rien ne l'arrêtait — parce que rien n'avait été posé pour l'arrêter**. Or un lot mal conçu ne se rattrape pas à la revue : le code est écrit, l'agent a consommé son contexte, et la revue juge la mise en œuvre d'une idée que personne n'a examinée. Le coût d'une conception sautée se paie une journée plus tard, chez le dirigeant.
+
+**Quand elle est obligatoire** : dès que le lot **n'est pas mécanique**. Le critère est *« la façon de le faire est-elle évidente ? »* — et **si la réponse demande à être discutée, c'est qu'elle ne l'est pas**.
+
+**Ce qu'elle contient**, et elle s'écrit **au registre**, jamais dans un terminal :
+
+1. **ce qui existe déjà et qu'on ne réécrit pas** (règle d'or n°15), nommé — compétences, outils, mécanismes en place. C'est le point qui fait gagner le plus : la moitié d'un lot est souvent déjà écrite ailleurs ;
+2. **deux ou trois conceptions possibles**, avec pour chacune ce qu'elle supprime, ce qu'elle coûte, et **ce qu'elle rend impossible à réparer plus tard** ;
+3. **une recommandation argumentée**, avec **ce qui la ferait changer d'avis** ;
+4. **ce qui n'a pas pu être établi**, marqué `[non établi]` ;
+5. **portée au dirigeant** quand elle engage un choix de produit — par ta ligne, au moment où tu la poses, pas une fois le travail commencé.
+
+**Ce qui reste possible sans cérémonie** : un lot vraiment mécanique — renommer, verser, appliquer un correctif déjà spécifié. La conception n'est pas un péage ; c'est ce qui évite de payer plus tard, et beaucoup plus cher.
+
 ### 4. La boucle — orchestrateur et chef d'équipe
 
 **Si tu es orchestrateur** : tu ouvres des chefs d'équipe (un par périmètre indépendant) et tu suis §4 complètement.
@@ -310,7 +340,7 @@ Les signaux qu'un epic ne tiendra pas :
 
 Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ordre :
 
-**a. Écrire le brief dans un fichier.** Jamais dans le terminal : un retour à la ligne soumet le prompt et coupe le message en deux. Le brief contient :
+**a. Écrire le brief au registre.** Jamais dans le terminal — un retour à la ligne soumet le prompt et coupe le message en deux — et **jamais dans un fichier** : si tu es né d'un lieu posé, écrire t'est refusé par tes droits, et un brief déposé dans un worktree disparaît avec lui. Il va donc là où vit déjà l'unité de travail : la **description de l'epic** (`epics` action `update`), ou le **ticket** quand le lot n'a pas d'epic (`tickets` action `add_comment`). Il y survit à ta session, celui qui reprendra le lit, et la filiation de §4b-bis s'écrit au même endroit. Le brief contient :
 
 - qui il est (l'epic, le chantier parent, son coordonnateur) — **et le nom qu'il porte**, qu'il se donnera lui-même en naissant : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
 - **qu'il est chef d'équipe** : il distribue à ses propres sous-agents ce qui se distribue, il intègre, et il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
@@ -318,6 +348,8 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 - les contraintes non négociables, avec **le test qui doit les prouver** ;
 - **ce qu'il ne doit pas toucher** — nomme les fichiers où un autre agent travaille en ce moment ;
 - comment il travaille : décomposer en stories G/W/T d'abord, test rouge avant vert, branche portant l'ID de traçabilité, PR draft dès le premier commit, statut `in_progress` au moment où il commence ;
+- **l'ADR applicable, quand il y en a un** — nommé, **avec son titre et pas seulement son numéro**. C'est ton premier geste de gardien, et il se joue ici : la violation d'architecture la plus fréquente est celle **par ignorance**, et elle se découvre au review, quand le travail est déjà écrit. Si tu n'as pas pu établir qu'un ADR existe sur le sujet, **écris-le comme tel** — « `[non établi]`, le miroir est incomplet » — plutôt que de laisser croire que le terrain est libre ;
+- **le manifeste d'architecture, dès que le lot touche à l'architecture** : toute table, route, service, écran ou dépendance ajouté ou modifié se reflète dans le `architecture.yaml` du dépôt **dans la même PR**, récolté des sources réelles et **jamais inventé** (règle d'or n°9, STD-031). C'est la contrainte la plus facile à oublier au brief parce qu'elle ne se voit pas dans le code écrit — et un manifeste périmé fait rougir le gate CI, ce qui renvoie le lot après coup au lieu de le cadrer avant ;
 - **le suivi** (voir 4d) ;
 - **la consigne de compaction** : *si tu sens que tu vas devoir compacter ton contexte, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
 - **la consigne de sas occupé, dans les deux sens** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter ; et préviens-moi de nouveau quand ta poussée finit par passer.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus **et la reprise** : sans ces deux lignes dans son brief, le déclencheur ne t'atteint jamais. Le second manque plus souvent que le premier — et une attente annoncée dont la fin ne l'est pas est pire que le silence d'origine.
@@ -377,7 +409,7 @@ Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minus
 
 ```bash
 node $HOME/.somtech/naissance-representant/bin/livrer.js "$P" \
-  --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet ici et execute-le : <chemin>'
+  --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet au registre — epics action get E-20260727-0010 — et execute-le.'
 ```
 
 Une seule ligne, sans apostrophe ni retour à la ligne. La commande sort **non nulle** si le brief n'a pas été pris — c'est ce qui remplace la relecture à l'œil.
@@ -493,7 +525,21 @@ Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
 Ceci vient **avant** le merge, parce que c'est là que ça se produit : `/pousse-staging` refuse (`acquired: false`) quand une autre livraison occupe déjà le sas. Ce n'est pas un incident, c'est le fonctionnement voulu (RA-AGT-005) — ton travail est prêt, il attend son tour.
 
-Le problème n'est pas l'attente, c'est le silence. Ton **représentant de client** peut bien voir que le sas est occupé — `applications action lock_status` le lui dit. Ce qu'il ne peut pas savoir, c'est que **le chantier qui attend derrière est le sien** : le verrou nomme son détenteur, jamais ceux qui patientent. **Toi seul le sais.** Sans un mot de ta part, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
+> ⚠️ **Le verrou ne fait pas foi. Mesure l'écart, pas l'annonce.**
+>
+> Le **2026-08-14**, le feed a rapporté **deux** défaillances du même verrou : un `lock_status` qui répond « libre » sur un staging occupé depuis trois jours, **et le verrou accordé à une nouvelle PR alors que le sas était déjà pris**. La lecture comme l'acquisition ont failli — un `acquired: true` ne prouve donc pas davantage qu'un `locked: false`.
+>
+> **Ne conclus jamais « le sas est libre » d'un verrou, dans un sens ou dans l'autre.** Pose les deux questions qui mesurent l'état réel :
+>
+> ```bash
+> git fetch origin
+> git log origin/staging -1 --format="%cI"                    # depuis quand staging ne bouge plus
+> git diff origin/main..origin/staging --name-only | wc -l    # 0 = vraiment libre
+> ```
+>
+> Un écart non nul dit qu'une livraison occupe le sas, **quoi qu'en dise le verrou**. Celui-ci sert à savoir **qui** détient ; il ne suffit ni à savoir **si**, ni à t'autoriser à pousser. Conclure « libre » sur sa seule foi, c'est pousser par-dessus la livraison d'un autre — la règle d'or n°14 tombe, et c'est ce paragraphe qui l'aura fait tomber.
+
+Le problème n'est pas l'attente, c'est le silence. Ton **représentant de client** peut bien voir qu'un détenteur est nommé — `applications action lock_status` le lui montre. Ce qu'il ne peut pas savoir, c'est que **le chantier qui attend derrière est le sien** : le verrou nomme son détenteur, jamais ceux qui patientent. **Toi seul le sais.** Sans un mot de ta part, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
 
 Alors tu le lui dis. **Deux fois** : quand tu entres en attente, et quand ton tour vient.
 
@@ -539,11 +585,15 @@ Trois choses que le helper tranche à ta place, et qui sont précisément là o�
 - **Un refus de `lock_acquire` porte toujours sur ta propre application** — le verrou est pris par identifiant d'application. Tu n'as donc rien à renseigner de plus. `ATS_APPLICATION_ID_VERROU` ne sert que dans l'autre situation : quand tu regardes le verrou d'une **autre** application avec `lock_status`. Là, aucune attente n'est déclarée (RA-AGT-006) — emprunter l'attente d'un voisin serait une information fausse, et elle voyagerait jusqu'à son client.
 - **Tu ne parles jamais au client**, ni de près ni de loin. Tu parles à son représentant, qui reste l'interlocuteur unique et traduit dans ses mots.
 
-**Ne construis rien pour attendre.** Pas de registre, pas de numéro d'ordre, pas de reprise automatique du verrou : tu retentes ta poussée quand tu es prêt, et c'est ce jour-là que le second message part. Le droit d'accès exclusif par application existe déjà et suffit — un second mécanisme se désynchroniserait du premier.
+**Ne construis rien pour attendre.** Pas de registre, pas de numéro d'ordre, pas de reprise automatique du verrou : tu retentes ta poussée quand tu es prêt, et c'est ce jour-là que le second message part. Le droit d'accès exclusif par application existe déjà et **suffit à rendre une file inutile** — un second mécanisme se désynchroniserait du premier. *(« Suffit » ne porte que là-dessus : pour savoir si le sas est libre, c'est l'écart git qui tranche, voir l'encadré plus haut.)*
 
 **Et n'oublie pas de le réinscrire au registre** (règle RA-REL-003) : ce qui ne vit que dans le fil disparaît avec la session qui l'a lu.
 
 **h. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
+
+> ⚠️ **Mais la QA passe AVANT le merge — le merge n'est qu'un constat.** L'ordre de fermeture est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed` (STD-030, annoncé au feed le 2026-05-20). L'étape `ready_to_deploy` n'est pas décorative : elle dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte. Merger d'abord et fermer ensuite, sans être passé par là, fait de la règle d'or n°5 une intention.
+>
+> Tu tiens déjà cet ordre sur un jalon (§8 : « `deployed` sans être passé par `qa` est un mensonge sur ce qui a été vérifié »). **Les stories n'y échappent pas** — c'est le même principe, un cran plus bas.
 
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
 
@@ -644,7 +694,7 @@ Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne san
 | Attendre au sas sans le dire à son représentant de client | Tu es le seul à savoir que tu attends. Il annoncera « c'est en cours » — c'est faux, et ça se découvre quand le client relance |
 | Annoncer l'attente et jamais sa fin | Une attente sans fin annoncée oblige le représentant à te relancer, ou le client à s'inquiéter |
 | Déclarer une attente causée par une autre application | La portée du verrou est l'application : cette attente-là n'est pas la tienne, et le client n'a aucun moyen de la démentir |
-| Se mettre à sonder le verrou en boucle en attendant son tour | C'est un second mécanisme de file : il se désynchronise du premier, qui existe déjà et suffit |
+| Se mettre à sonder le verrou en boucle en attendant son tour | C'est un second mécanisme de file : il se désynchronise du premier, qui existe déjà et suffit **pour ça** — sonder n'apprend rien de plus, et le verrou ne dit pas si le sas est libre |
 | Donner un epic trop gros en se disant qu'il compactera | Il finit sur un résumé de lui-même, incohérent avec son propre début |
 | Comparer des noms d'agents sensibles à la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
 | Ouvrir un agent sans noter qui il est ni sur quoi | Le lien entre l'agent et ce qu'il a livré disparaît avec son pane : on gardera le code, jamais qui l'a fait ni pourquoi |
