@@ -209,6 +209,33 @@ export function panesDeLigne(ligne) {
 }
 
 /**
+ * LES PORTEURS D'UNE LIGNE, CHACUN AVEC SA SESSION (T-20260816-0035).
+ *
+ * ⚠️ POURQUOI UN NUMÉRO DE PANE NE SUFFIT PAS À DÉSIGNER UN PORTEUR. Onze sessions herdr
+ * vivent sur ce poste et NUMÉROTENT LEURS PANES INDÉPENDAMMENT. Mesuré le 2026-08-15 : deux
+ * chantiers de deux CLIENTS différents portaient le même `w5:p3` — l'un sur `actionprogex`,
+ * l'autre sur `somcraft`. Un agent qui parlait sans destinataire explicite pouvait donc
+ * atteindre le canal d'un client qui n'était pas le sien. Le pire cas de ce dépôt n'est pas un
+ * message perdu, c'est un message LIVRÉ AU MAUVAIS CLIENT.
+ *
+ * ⚠️ LE DISCRIMINANT EXISTAIT DÉJÀ, et c'est ce qui rend ce correctif petit : `herdr_socket`
+ * est inscrit à l'ouverture et renseigné sur 25 lignes ouvertes sur 25 (mesuré). La donnée
+ * était là ; c'est la recherche qui l'ignorait — encore « une porte sur deux ».
+ *
+ * ⚠️ ET CHAQUE PORTEUR PORTE LA SIENNE. Le pair d'une ligne partagée vit dans SA session, pas
+ * dans celle du propriétaire. Rattacher son pane au socket du propriétaire rendrait la ligne
+ * invisible depuis chez lui — le défaut de T-20260814-0093, rejoué par le mécanisme censé le
+ * protéger. Un porteur sans socket connu rend `null` : c'est un porteur qu'on ne sait pas
+ * situer, jamais un porteur qui serait « de partout ».
+ */
+export function porteursDeLigne(ligne) {
+  const porteurs = [];
+  if (ligne?.pane) porteurs.push({ pane: ligne.pane, socket: ligne.herdr_socket || null });
+  if (ligne?.pair?.pane) porteurs.push({ pane: ligne.pair.pane, socket: ligne.pair.herdr_socket || null });
+  return porteurs;
+}
+
+/**
  * La ligne d'un canal — **l'ouverte d'abord**.
  *
  * BLOQUANT relevé en revue : un `.find()` naïf rendait la ligne CLOSE quand un chantier
@@ -460,12 +487,35 @@ export function nomsDesignables(candidates) {
  *
  * @returns {{ligne: object|null, candidates: object[], refus: {motif: string, nom?: string, noms: string[]}|null}}
  */
-export function ligneDuPane(ouvertes, pane, nom = null) {
+export function ligneDuPane(ouvertes, pane, nom = null, { socket = null } = {}) {
   // `panesDeLigne`, JAMAIS `l.pane` : une ligne de chantier partagée avec un gestionnaire est
   // portée par DEUX panes (T-20260814-0093), et un filtre sur le seul porteur d'origine la
   // rendrait invisible depuis le pane du pair — c'est-à-dire un `--a <chantier>` refusé pour
   // « aucune ligne ouverte », à celui qui en a une.
-  const candidates = (ouvertes || []).filter((l) => panesDeLigne(l).includes(pane));
+  // ⚠️ LA SESSION ENTRE DANS L'IDENTITÉ (T-20260816-0035). Un numéro de pane ne désigne un
+  // porteur qu'à l'intérieur d'UNE session ; sur ce poste il en désigne jusqu'à deux, dans deux
+  // dépôts de deux clients. On exige donc la concordance du couple (pane, session).
+  //
+  // ⚠️ ON N'ÉCARTE QUE SUR PREUVE, JAMAIS SUR ABSENCE DE PREUVE — et la première écriture de ce
+  // correctif se trompait de sens. Elle écartait toute ligne SANS socket enregistré, au nom de
+  // « l'absence ne vaut pas concordance ». Les essais de bout en bout l'ont attrapée : une ligne
+  // écrite avant ce champ devenait INJOIGNABLE, en silence. C'est-à-dire un défaut pire que
+  // celui qu'on ferme — le ticket prévenait exactement de ça.
+  //
+  // La règle juste est plus étroite : on écarte une ligne quand on SAIT qu'elle vit ailleurs —
+  // socket connu des deux côtés, et différents. Une ligne dont la session est inconnue reste
+  // candidate ; si elle entre en concurrence, l'ambiguïté demeure et le nom est exigé, ce qui
+  // est le comportement prudent d'avant. On ne perd donc rien, et on ferme le cas mesuré.
+  //
+  // ⚠️ ET QUAND ON NE CONNAÎT PAS SA PROPRE SESSION, ON NE FILTRE PAS. Un service lancé au
+  // démarrage du poste n'hérite pas de `HERDR_SOCKET_PATH`. Filtrer sur une session inconnue
+  // rendrait TOUTES les lignes invisibles — une panne silencieuse au lieu d'une protection. On
+  // retombe alors exactement sur le comportement d'avant : l'ambiguïté demeure, le nom est exigé.
+  const candidates = (ouvertes || []).filter((l) =>
+    porteursDeLigne(l).some(
+      (porteur) => porteur.pane === pane && !(socket && porteur.socket && porteur.socket !== socket)
+    )
+  );
   const noms = nomsDesignables(candidates);
   if (!candidates.length) return { ligne: null, candidates, refus: { motif: REFUS_SELECTION.AUCUNE, noms } };
 

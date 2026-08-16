@@ -491,7 +491,9 @@ export const CONTROLES_BIAIS = [
       // notre nom. Rien dans son métier ne l'emploie : le refuser ne lui retire rien.
       const config = JSON.parse(droits);
       const deny = config.permissions?.deny ?? [];
-      const allow = config.permissions?.allow ?? [];
+      // Depuis T-20260816-0032 les droits sont déclarés sous `somtech.droitsAccordes` (voir
+      // `metier-orchestrateur.js`) ; on lit encore `permissions.allow` pour les lieux déjà posés.
+      const allow = [...(config.somtech?.droitsAccordes ?? []), ...(config.permissions?.allow ?? [])];
       assert.ok(Array.isArray(deny) && deny.length > 0, 'les droits du lieu doivent porter une liste de refus non vide');
 
       // ⚠️ CE QUE CE CONTRÔLE NE PROUVE PAS, ET LA REVUE DE FOND A EU RAISON DE L'EXIGER ICI.

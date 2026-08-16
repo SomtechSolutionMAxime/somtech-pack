@@ -7,6 +7,7 @@ import { cmdUpdate } from './commands/update.js';
 import { cmdSetup } from './commands/setup.js';
 import { cmdBrd } from './commands/brd.js';
 import { cmdArchi, isArchiCommand } from './commands/archi.js';
+import { cmdAgent } from './commands/agent.js';
 import { cmdRepresentantUpdate, cmdOrchestrateurUpdate } from './commands/representant.js';
 // L'aide CITE la règle, elle ne la décrit pas (T-20260814-0101, relevé en revue) : deux
 // textes qui disent la même chose divergent, c'est mécanique — et ici le texte périmé était
@@ -110,6 +111,12 @@ Commandes :
            (backup .somtech.bak auto), les symlinks sont épargnés
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
+  agent    Fait naître un agent, du néant jusqu'à ce qu'il parle sur sa ligne :
+           agent naitre <code> --depot <chemin> [--role …] [--modele …] [--amorce …]
+           Elle pose le lieu s'il manque, le VERSE au dépôt, ouvre l'espace au besoin,
+           fait naître en DÉCLARANT le modèle et le mode, et vérifie PAR L'ÉCRAN que
+           l'agent peut réellement recevoir. Devant un état qu'elle ne reconnaît pas,
+           elle s'arrête et le NOMME — jamais un succès à moitié.
   representant-update   Rafraîchit un lieu de représentant déjà posé chez un client
            (.gestionnaire/<client>/) : CLAUDE.md reprend TOUJOURS la version du pack
            (convergence, backup .somtech.bak), CONTEXTE.md n'est JAMAIS touché
@@ -173,6 +180,14 @@ export async function run(argv) {
   // (leurs flags — --app, --out, --mode… — ne passent pas par parseArgs).
   if (argv[0] && isArchiCommand(argv[0])) {
     return cmdArchi(argv[0], argv.slice(1));
+  }
+
+  // `agent` — même raison, et elle compte double ici : les options de la naissance
+  // (--depot, --role, --modele, --mode, --amorce…) appartiennent à `naitre.js`, pas au pack.
+  // Les redéclarer dans `parseArgs` créerait deux descriptions d'un même contrat, qui
+  // divergeraient au premier changement de l'une — le motif que ce lot existe pour fermer.
+  if (argv[0] === 'agent') {
+    return cmdAgent(argv.slice(1));
   }
 
   let parsed;

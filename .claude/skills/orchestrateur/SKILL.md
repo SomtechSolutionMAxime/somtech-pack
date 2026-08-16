@@ -45,6 +45,19 @@ Le résultat, quand tout va bien :
 > promet au lecteur ce que ce fichier refuse, et un texte qui promet ce que le fichier autorise
 > est une garantie fausse.
 
+> **Et depuis T-20260816-0032, les droits ne vivent plus sous `permissions.allow`.** Mesuré sur
+> Claude Code **2.1.233** : un lieu qui porte un bloc `allow` déclenche **toujours** un écran de
+> confiance renforcé — « ⚠ This folder pre-approves N tool permissions … Only proceed if you
+> trust this configuration » — que la pré-approbation ne fait **pas** taire. L'agent naît alors
+> parqué : détecté, nommé, dans le bon répertoire, et injoignable.
+>
+> Le fait de 2.1.231 ci-dessus est ce qui rend le déménagement sans coût : cette liste était
+> **déjà** ignorée avant approbation. Elle n'achetait rien à la naissance, et elle coûtait un
+> modal. Les droits sont donc déclarés sous **`somtech.droitsAccordes`** — une clé que Claude
+> Code ignore, vérifié par le fait (zéro écran, zéro avertissement) — et c'est `approuverLieu`
+> qui les rend effectifs, dans l'`allowedTools` de l'entrée de projet. **`permissions.deny` ne
+> bouge pas** : c'est la moitié qui garantit, et elle tient dès la naissance comme avant.
+
 > **Ce que cette compétence n'est pas.** Elle ne cadre aucun chantier, ne découpe rien,
 > n'ouvre aucun chef d'équipe, ne tient aucun registre. Ça, c'est le métier de l'orchestrateur
 > **une fois né** — il vit dans le `CLAUDE.md` que cette compétence copie, et il est décrit
@@ -106,6 +119,36 @@ soit créé — pas après.
 
 Le nom sert deux fois, et c'est le même : celui du dossier sous `.orchestrateur/`, et celui de
 l'agent herdr. Un dépôt peut porter plusieurs orchestrateurs ; c'est le nom qui les distingue.
+
+## Le geste le plus court — une seule commande, du néant jusqu'à sa ligne
+
+Depuis **T-20260816-0038**, tout ce que décrivent les sections suivantes tient en une commande,
+et **aucun humain ne touche un écran entre les deux** :
+
+```bash
+npx @somtech-solutions/pack agent naitre <nom> --depot <chemin du dépôt> \
+    [--amorce <fichier de brief>] [--modele <alias>] [--session <session herdr>]
+```
+
+Elle pose le lieu s'il manque, **le verse au dépôt elle-même** (le refus de git reste entier —
+c'est le geste humain qui le satisfaisait qui disparaît), ouvre l'espace de travail au besoin,
+fait naître en **déclarant le modèle et le mode**, **vérifie par l'écran** que l'agent peut
+réellement recevoir, livre l'amorce et prouve qu'elle a été prise.
+
+> ⚠️ **Et devant un état qu'elle ne reconnaît pas, elle s'arrête et le NOMME** — écran vu, geste
+> qui le lève quand elle le connaît, et rien d'inventé quand elle ne le connaît pas. Ne pas
+> intervenir ne veut pas dire deviner : un dispositif qui devine pour éviter de déranger est ce
+> qui produit un message livré au mauvais client.
+
+> **Pourquoi `npx` et pas `~/.somtech`.** L'outillage de poste est une copie que `pack setup`
+> dépose une fois et qui vieillit — mesuré le 2026-08-16 : le poste tournait en 1.55.0 quand le
+> dépôt était en 1.56.0, et un fichier du module n'existait même pas côté poste. Une commande qui
+> vit dedans est périodiquement en retard sur elle-même, sans que personne le voie.
+
+**Les sections qui suivent décrivent les mêmes gestes, un par un.** Elles restent la référence
+quand quelque chose s'arrête, et le chemin à suivre pour un lieu de **représentant** — que cette
+commande ne pose pas, parce qu'il se branche sur un canal que le client voit et que sa pose garde
+sa revue (tranché le 2026-08-16).
 
 ## Le geste — poser le lieu
 
@@ -278,6 +321,16 @@ le trousseau n'a pas été lu. Relance après avoir versé.
 > seulement **signalée**. Personne ne pouvait la verser avant qu'elle existe : la refuser
 > rendrait toute première naissance impossible — on ne peut pas committer un fichier que la
 > commande refuse d'écrire. Verse-la après ; sans quoi le prochain lancement, lui, refusera.
+
+> **Depuis T-20260816-0038, la naissance verse elle-même.** Ce versement — celui du lieu, puis
+> celui de la garde qu'elle vient de poser — n'est plus un geste humain : la commande fait un
+> `git commit` local, borné au seul chemin du lieu, et rien d'autre du dépôt n'est emporté. Elle
+> ne pousse pas, n'ouvre pas de PR et ne fusionne rien : tout ça appartient à qui relira.
+>
+> **La garantie, elle, ne bouge pas.** Le refus décrit juste au-dessus reste entier, et pour la
+> raison qui l'a fait naître : sur cinq lieux clients posés, trois portaient une garde qu'aucun
+> commit ne contenait. Ce que la revue de T-20260816-0004 a établi, c'est que ce refus n'a jamais
+> été une revue de code — il n'interroge que `HEAD`.
 
 ## Sa vigilance ne s'installe pas toute seule — une fois par poste
 

@@ -248,6 +248,10 @@ test('UN NOM QUE PERSONNE NE PORTE EST UN REFUS — jamais un envoi dans le vide
 test('DEUX AGENTS DU MÊME NOM SONT UN REFUS — on ne tire pas au sort le destinataire', async () => {
   // Le même nom dans deux sessions est banal : deux chantiers, deux orchestrateurs `general`.
   // Choisir le premier trouvé livrerait un compte rendu au mauvais chantier, en silence.
+  //
+  // ⚠️ ON A DÉSIGNÉ PAR LE NOM, et c'est le nom qui est ambigu : il n'y a donc RIEN à conseiller
+  // ici. Le refus doit tenir sans inventer de sortie — voir le bloc T-20260816-0034 plus bas,
+  // qui est né du cas symétrique où, lui, une sortie existait et n'était pas nommée.
   installerFauxHerdr({
     agents: [
       { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
@@ -258,7 +262,11 @@ test('DEUX AGENTS DU MÊME NOM SONT UN REFUS — on ne tire pas au sort le desti
   const r = livrer('general', '--texte', 'où en es-tu ?');
 
   assert.equal(r.code, 1, 'le geste est refusé');
-  assert.match(r.refus, /deux|plusieurs|homonyme/i, 'et le refus dit pourquoi');
+  assert.match(r.refus, /deux agents ou plus répondent à « general »/, 'le refus nomme la cible ambiguë');
+  assert.match(r.refus, /w5:p3/, 'et montre le premier candidat');
+  assert.match(r.refus, /w2:p2/, 'et le second — c’est ce qui rend l’ambiguïté vérifiable');
+  assert.match(r.refus, /même nom/i, 'il dit POURQUOI le nom ne départage pas');
+  assert.match(r.refus, /Rien n[’']a été envoyé\./, 'et que le message n’est parti nulle part');
 });
 
 // ═════════════════ 2. UN PAIR QUI TRAVAILLE RESTE JOIGNABLE
@@ -451,4 +459,110 @@ test('L’APPEL SE RAPPORTE EN ÉCHEC ALORS QUE LE MESSAGE EST EN FILE — le ma
   const r = livrer('w5:p3', '--texte', 'mon compte rendu de fin de lot');
 
   assert.equal(r.code, 0, `le message est en file : le dire perdu serait faux — ${r.refus}`);
+});
+
+
+// ═════════════════ UN REFUS QUI RENVOIE AU GESTE QUI VIENT D'ÉCHOUER (T-20260816-0034)
+//
+// ⚠️ LE REFUS ÉTAIT JUSTE ; SON CONSEIL ÉTAIT INAPPLICABLE. Deux sessions du poste peuvent
+// porter le MÊME identifiant de pane — `w5:p3` chez l'un et chez l'autre : c'est une coordonnée
+// interne à une session, pas une adresse du poste. Le refus des homonymes répondait alors
+// « désigne-le par son pane », c'est-à-dire exactement ce que l'expéditeur venait de faire.
+//
+// Or la sortie EXISTE : `trouverDestinataire` compare la cible au pane ET au nom. Quand les
+// agents trouvés portent des noms distincts, désigner par le nom passe — le refus ne le disait
+// pas. Un refus qui tait le seul chemin praticable coûte autant qu'un échec muet : l'expéditeur
+// rejoue le même geste, obtient le même refus, et conclut que l'outil est cassé.
+//
+// ⚠️ ET LA SYMÉTRIE EST LE CŒUR DU LOT : quand les noms ne départagent pas non plus, le refus
+// doit TENIR SANS INVENTER DE SORTIE. Conseiller un geste qu'on n'a pas vérifié possible est
+// précisément le défaut qu'on ferme — on ne le remplace pas par sa variante polie.
+
+test('DEUX AGENTS SUR LE MÊME PANE : le refus nomme les AGENTS trouvés et la commande qui passe', async () => {
+  // `w5:p3` existe dans les deux sessions. Le renvoyer vers son pane, c'est le renvoyer vers ce
+  // qui vient d'échouer ; ce qu'il lui faut, c'est le nom — et l'outil le connaît déjà.
+  installerFauxHerdr({
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'chef-de-lot', session: SOCKET_ICI, statut: 'idle' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'où en es-tu ?');
+
+  assert.equal(r.code, 1, 'le geste reste refusé — on ne tire toujours pas au sort');
+  assert.match(r.refus, /general/, 'le refus cite le nom du premier agent trouvé');
+  assert.match(r.refus, /chef-de-lot/, 'et celui du second — ce sont eux, la sortie');
+  assert.match(
+    r.refus,
+    /gestionnaire-livrer/,
+    'et il montre la FORME de commande qui passe, pas seulement le principe'
+  );
+  assert.doesNotMatch(
+    r.refus,
+    /par son pane/,
+    'et il ne renvoie plus vers le pane : c’est le geste qui vient d’échouer'
+  );
+});
+
+test('ET LA REMISE PAR CE NOM ABOUTIT — le refus conseille un chemin qu’on a vérifié praticable', async () => {
+  // NON-RÉGRESSION DU CHEMIN CONSEILLÉ. Un refus qui nomme une sortie doit être adossé à un
+  // essai qui la parcourt : sans lui, on aurait déplacé le défaut au lieu de le fermer — le
+  // conseil serait devenu une affirmation invérifiée de plus.
+  const journal = installerFauxHerdr({
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'chef-de-lot', session: SOCKET_ICI, statut: 'idle' },
+    ],
+  });
+  const r = livrer('chef-de-lot', '--texte', 'où en es-tu ?');
+
+  assert.equal(r.code, 0, `la remise par le nom doit aboutir : ${r.refus}`);
+  const prompt = appels(journal).find((p) => p.args[1] === 'prompt');
+  assert.equal(prompt.args[2], 'w5:p3', 'le nom a été résolu en son pane');
+  assert.equal(prompt.socket, SOCKET_ICI, 'et dans LA session où vit CE `w5:p3`-là, pas l’autre');
+});
+
+test('UN SEUL AGENT RÉPOND AU PANE : rien ne change — le refus ne se met pas en travers du cas normal', async () => {
+  // Le cas courant reste le cas courant. Une garde qui s'élargit en resserrant le nominal
+  // échange un mode de panne contre un autre.
+  const journal = installerFauxHerdr({
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'idle' },
+      { pane: 'w2:p2', nom: 'chef-de-lot', session: SOCKET_ICI, statut: 'idle' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'où en es-tu ?');
+
+  assert.equal(r.code, 0, `un pane sans homonyme se livre sans discuter : ${r.refus}`);
+  const prompt = appels(journal).find((p) => p.args[1] === 'prompt');
+  assert.equal(prompt.args[2], 'w5:p3');
+  assert.equal(prompt.socket, SOCKET_LA_BAS, 'dans la session où il vit');
+});
+
+test('MÊME PANE ET MÊME NOM : le refus TIENT, et ne propose pas une sortie qui n’existe pas', async () => {
+  // ⚠️ LE CAS QUI INTERDIT DE SE CONTENTER D'UN CONSEIL TOUT FAIT. Ici le nom ne lève rien non
+  // plus : il n'y a AUCUNE désignation qui départage ces deux-là dans cet outil. Le refus doit
+  // le dire, s'arrêter là, et surtout ne pas renvoyer vers le nom — ce serait reproduire, à un
+  // mot près, le défaut qu'on est en train de fermer.
+  installerFauxHerdr({
+    agents: [
+      { pane: 'w1:p1', nom: 'ici-meme', session: SOCKET_ICI, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_LA_BAS, statut: 'idle' },
+      { pane: 'w5:p3', nom: 'general', session: SOCKET_ICI, statut: 'idle' },
+    ],
+  });
+  const r = livrer('w5:p3', '--texte', 'où en es-tu ?');
+
+  assert.equal(r.code, 1, 'le geste est refusé');
+  assert.match(r.refus, /même nom/i, 'le refus dit ce qu’il a constaté');
+  assert.match(r.refus, /Rien n[’']a été envoyé\./, 'et que rien n’est parti');
+  assert.doesNotMatch(r.refus, /désigne-le/, 'il ne conseille aucun geste : il n’y en a pas');
+  assert.doesNotMatch(
+    r.refus,
+    /--session|--socket|HERDR_SOCKET_PATH/,
+    'et il n’invente pas une option que cet outil n’a pas'
+  );
 });

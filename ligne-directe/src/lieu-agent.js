@@ -26,6 +26,7 @@ import { join, dirname } from 'node:path';
 
 import { role as roleDe, rolesConnus } from './roles.js';
 import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from './lieu-nom.js';
+import { FICHIERS_ENV_CONNUS, variablesManquantes } from './mcp-env.js';
 
 /**
  * Les quatre fichiers qui constituent le lieu d'un agent, en CHEMINS RELATIFS à sa racine —
@@ -52,8 +53,15 @@ export const GABARITS = ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', join('.claude'
  */
 export const GABARITS_DROITS = join('.claude', 'settings.json');
 
-/** Fichiers dont la présence, à la racine du dépôt, atteste un accès au registre. */
-export const FICHIERS_ENV_CONNUS = ['.env', '.envrc'];
+/**
+ * Fichiers d'environnement connus à la racine d'un dépôt.
+ *
+ * ⚠️ LEUR PRÉSENCE N'ATTESTE PLUS RIEN — c'est très exactement ce que T-20260815-0023 a fermé.
+ * Ce qui compte est ce qu'ils DÉCLARENT, et la lecture vit dans `mcp-env.js`. La liste y est
+ * définie et seulement ré-exportée ici, pour les appelants historiques (`representant.js`) :
+ * deux listes qui disent la même chose divergent au premier correctif.
+ */
+export { FICHIERS_ENV_CONNUS };
 
 /** Où le pack dépose les gabarits d'un rôle dans un dépôt qui l'a installé (module `core`). */
 export function gabaritsDir(depot, role) {
@@ -89,6 +97,19 @@ export function etatSource(depot, role) {
   const presents = GABARITS.filter((f) => existsSync(join(source, f)));
   const manquants = GABARITS.filter((f) => !presents.includes(f));
   return { source, complete: manquants.length === 0, presents, manquants };
+}
+
+/**
+ * « Le représentant », « L'orchestrateur » — en tête de phrase, avec l'élision.
+ *
+ * Le `le ${r.libelle}` employé ailleurs dans ce fichier produit « le orchestrateur ». C'est
+ * lisible, mais ces avertissements sont destinés à être lus par un humain puis recopiés dans
+ * un ticket : on ne les laisse pas partir en français approximatif. Corrigé ici seulement —
+ * les autres occurrences sont hors du périmètre de ce lot.
+ */
+function leRole(libelle) {
+  const article = /^[aeiouyàâäéèêëîïôöùûü]/i.test(libelle) ? "L'" : 'Le ';
+  return `${article}${libelle}`;
 }
 
 function premiereLigne(chemin) {
@@ -138,7 +159,20 @@ export function roleDuLieu(repertoire) {
   return null;
 }
 
-/** Le dépôt porte-t-il un fichier d'environnement connu, à sa racine ? */
+/**
+ * Le dépôt porte-t-il un fichier d'environnement connu, à sa racine ?
+ *
+ * ⚠️ NE DÉCIDE PLUS RIEN, ET C'EST LE CŒUR DE T-20260815-0023. Elle a été, jusqu'ici, LE
+ * critère de l'avertissement « cet agent naîtra sans accès au registre » — c'est-à-dire
+ * l'INDICE au lieu du FAIT : elle ne consulte pas `process.env` et ignore ce que le
+ * `.mcp.json` réclame. Deux pannes symétriques en sont sorties (voir `mcp-env.js`), dont un
+ * FAUX NÉGATIF : un `.env` présent mais muet sur les bonnes variables la faisait répondre
+ * « oui », et l'agent naissait sourd sans un mot.
+ *
+ * Elle reste ici parce qu'elle est ré-exportée par `representant.js` et qu'elle répond
+ * honnêtement à SA question — « y a-t-il un tel fichier ? ». C'est le décideur qui a changé :
+ * `variablesManquantes` (mcp-env.js). N'en refais jamais un critère d'accès au registre.
+ */
 export function aFichierEnvironnement(depot) {
   return FICHIERS_ENV_CONNUS.some((f) => existsSync(join(depot, f)));
 }
@@ -542,11 +576,35 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
   }
   // ═══ fin du point d'écriture.
 
+  // ─── L'ACCÈS AU REGISTRE — sur le FAIT, plus sur l'indice (T-20260815-0023).
+  //
+  // CE QUI SE MESURAIT AVANT : « ce dépôt porte-t-il un `.env` ou un `.envrc` ? ». La fonction
+  // ne consultait jamais `process.env` et ne savait pas quelles variables le `.mcp.json` du
+  // gabarit déclare. Un dépôt sans `.env` dont le shell porte déjà les jetons (le cas normal
+  // sous `claude-swt`) était averti pour rien ; un dépôt AVEC un `.env` qui ne déclare pas les
+  // bonnes variables se taisait, et l'agent naissait sans registre en silence.
+  //
+  // CE QUI SE MESURE MAINTENANT : les variables que le `.mcp.json` DU LIEU réclame réellement —
+  // jamais une liste écrite en dur, sinon un gabarit qui gagne un serveur MCP demain
+  // reconduirait le même angle mort. On lit le fichier POSÉ (`racine`), celui-là même que
+  // Claude Code ouvrira, plutôt que le gabarit source : c'est le lieu réel qui est en question.
+  //
+  // ⚠️ ET LE PIÈGE QU'ON NE PREND PAS : consulter `process.env` À CÔTÉ du test de fichier puis
+  // se taire dès que l'un des deux répond. Ce serait échanger un faux positif contre un faux
+  // négatif. La présence du fichier ne prouve rien ; seules les variables RÉSOLUES prouvent.
+  //
+  // AVERTIR, JAMAIS REFUSER — inchangé : contrairement aux droits (garde 2 bis), ce qui manque
+  // ici se répare après coup sans que rien ne soit à reposer.
   const avertissements = [...avertissementsAvant];
-  if (!aFichierEnvironnement(depot)) {
+  const manquantes = variablesManquantes(join(racine, '.mcp.json'), { depot });
+  if (manquantes.length > 0) {
+    const pluriel = manquantes.length > 1;
     avertissements.push(
-      `${depot} ne porte aucun fichier d'environnement (${FICHIERS_ENV_CONNUS.join(' ou ')}) — ` +
-        `le ${r.libelle} naîtra sans accès au registre tant que le dépôt n'en aura pas un.`
+      `${depot} : le lieu réclame ${manquantes.join(', ')} — ` +
+        `${pluriel ? 'introuvables' : 'introuvable'} à la fois dans l'environnement du processus et dans ` +
+        `les fichiers d'environnement du dépôt (${FICHIERS_ENV_CONNUS.join(' ou ')}). ` +
+        `${leRole(r.libelle)} naîtra sans accès au registre tant ` +
+        `que ${pluriel ? 'ces variables ne seront pas résolues' : 'cette variable ne sera pas résolue'}.`
     );
   }
 

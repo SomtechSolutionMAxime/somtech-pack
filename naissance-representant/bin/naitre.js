@@ -28,7 +28,7 @@
 // laisse une trace qui ressemble à un succès.
 
 import { dirname, resolve } from 'node:path';
-import { realpathSync, readFileSync } from 'node:fs';
+import { realpathSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   poserGarde,
@@ -36,6 +36,8 @@ import {
   avisDeCasse,
   avisDeVersionnement,
   agentDetecte,
+  MODELE_PAR_DEFAUT,
+  MODE_PAR_DEFAUT,
   agentPorteLeNom,
   repertoireDeLaSession,
   LieuAbsent,
@@ -44,6 +46,9 @@ import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { sessionVisee, espaceDeLaSession } from '../src/session.js';
+import { verserLeLieu, exigerUnDepotGit, VersementImpossible } from '../src/versement.js';
+import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
+import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -78,8 +83,10 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 
 function usage(code) {
   process.stderr.write(
-    'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>] ' +
-      '[--role representant|orchestrateur] [--depot <chemin>]\n'
+    'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>]\n' +
+      '                         [--role representant|orchestrateur] [--depot <chemin>]\n' +
+      '                         [--amorce <fichier> | --amorce-texte "…"]\n' +
+      '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n'
   );
   process.exit(code);
 }
@@ -114,6 +121,11 @@ async function main() {
   const amorceFichier = option(args, '--amorce');
   const amorceTexte = option(args, '--amorce-texte');
   const sessionVoulue = option(args, '--session');
+  // Le modèle et le mode sont DITS, jamais subis. Les défauts vivent dans `naissance.js`, à
+  // côté de la commande qui les emploie — deux endroits qui portent la même valeur divergent
+  // au premier changement de l'un.
+  const modele = option(args, '--modele') || MODELE_PAR_DEFAUT;
+  const mode = option(args, '--mode') || MODE_PAR_DEFAUT;
   const REPO_ROOT = depotDe(args);
   if (!nom || nom.startsWith('--') || !workspace) usage(1);
 
@@ -154,6 +166,83 @@ async function main() {
   //     personne ne pouvait la verser avant qu'elle existe.
   //
   // Et le refus ne laisse rien derrière lui **par construction** : il tombe avant `poserGarde`.
+  // Construire les commandes AVANT de créer quoi que ce soit : un nom que herdr refuserait
+  // (`invalid_agent_name`), un rôle inconnu ou un espace manquant doivent arrêter la commande
+  // ici, avant qu'un fichier soit écrit ou qu'un onglet soit ouvert.
+  const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role, modele, mode });
+
+  // ═══ POSER LE LIEU S'IL MANQUE — le premier des gestes qu'un humain faisait à la main.
+  //
+  // ⚠️ SEULEMENT POUR UN ORCHESTRATEUR, et le refus pour l'autre rôle n'est pas de la paresse.
+  // Le lieu d'un REPRÉSENTANT se branche sur un canal que le client voit : sa pose exige un
+  // `--canal` et un `--dirigeant`, et le dirigeant a tranché le 2026-08-16 qu'elle garde sa
+  // revue. Poser un lieu client d'autorité serait franchir la seule frontière qu'il a demandé
+  // de ne pas franchir. On s'arrête donc, et on NOMME le geste — c'est l'autre moitié de la
+  // promesse : ne pas intervenir ne veut pas dire deviner.
+  // La précondition, AVANT de poser : un dépôt qui n'en est pas un ne pourra jamais porter le
+  // commit que la naissance exige, et poser d'abord pour l'apprendre ensuite laisserait un lieu
+  // à moitié posé — le demi-succès qu'on promet de ne jamais rendre.
+  try {
+    exigerUnDepotGit(REPO_ROOT);
+  } catch (err) {
+    process.stderr.write(`${err.message}\n`);
+    process.exit(1);
+  }
+
+  let poseFaite = false;
+  if (!existsSync(commandes.lieu)) {
+    if (role !== 'orchestrateur') {
+      process.stderr.write(
+        `aucun lieu de ${role} pour « ${nom} » dans ${REPO_ROOT} — et cette commande ne pose pas ` +
+          `les lieux de représentant : ils se branchent sur un canal que le client voit, et leur ` +
+          `pose garde sa revue.\n` +
+          `  Le geste qui lève le blocage : la compétence /gestionnaire-client, qui demande le canal ` +
+          `et le dirigeant que la pose exige.\n`
+      );
+      process.exit(1);
+    }
+    let pose;
+    try {
+      pose = await preparerLieuOrchestrateur({ depot: REPO_ROOT, nom });
+    } catch (err) {
+      process.stderr.write(`la pose du lieu a échoué : ${err.message}\n`);
+      process.exit(1);
+    }
+    if (!pose.ok) {
+      // La pose refuse avec un motif nommé et, quand elle le sait, la portée du blocage. On
+      // relaie SON message : le réécrire ici ferait diverger deux textes qui décrivent le même
+      // refus, et c'est comme ça qu'on se retrouve avec un conseil qui ne marche plus.
+      process.stderr.write(
+        `le lieu de l’orchestrateur « ${nom} » n’a pas pu être posé (${pose.refus?.motif ?? 'motif inconnu'}) :\n` +
+          `  ${pose.refus?.message ?? JSON.stringify(pose.refus)}\n`
+      );
+      process.exit(1);
+    }
+    poseFaite = pose.cree === true;
+    for (const a of pose.avertissements || []) process.stderr.write(`${a}\n`);
+  }
+
+  // ═══ VERSER LE LIEU — le second des gestes qu'un humain faisait à la main.
+  //
+  // ⚠️ LA GARANTIE NE BOUGE PAS, SEUL L'HUMAIN PART. `avisDeVersionnement` continue de refuser
+  // juste en dessous, et pour la raison mesurée qui l'a fait naître : 3 lieux clients sur 5
+  // portaient une garde qu'aucun commit ne contenait (T-20260814-0139). Ce que la revue de
+  // phase 1 a établi, c'est que ce gate n'a JAMAIS été une revue de code — il n'interroge que
+  // `HEAD`. Un commit local le satisfait, et la commande sait le faire seule.
+  const verse = (quoi) => {
+    try {
+      return verserLeLieu(REPO_ROOT, commandes.lieu, { quoi, role, nom });
+    } catch (err) {
+      if (err instanceof VersementImpossible) {
+        process.stderr.write(`${err.message}\n`);
+        process.exit(1);
+      }
+      throw err;
+    }
+  };
+  verse('le lieu de');
+
+  // REFUSER UN LIEU QUE GIT NE PORTE PAS — la garantie, inchangée (T-20260814-0139).
   const refusGit = avisDeVersionnement(REPO_ROOT, nom, role);
   if (refusGit) {
     process.stderr.write(`${refusGit}\n`);
@@ -171,9 +260,12 @@ async function main() {
     throw err;
   }
 
-  // Construire les commandes AVANT de créer quoi que ce soit : un nom que herdr refuserait
-  // (`invalid_agent_name`) doit arrêter la commande ici, pas après avoir ouvert un pane.
-  const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role });
+  // ═══ VERSER LA GARDE QU'ON VIENT DE POSER — le troisième geste, et celui qu'on oubliait.
+  //
+  // Personne ne pouvait la verser d'avance : elle n'existait pas. Elle était donc signalée par
+  // un avertissement, que le prochain lancement transformait en refus. C'est exactement l'état
+  // dans lequel trois lieux clients sur cinq ont été trouvés. On la verse.
+  verse('la garde d’ouverture de');
 
   // Dire, AVANT que quoi que ce soit existe, que l'agent ne portera pas le nom du lieu
   // (T-20260814-0143). L'écart était déjà dans l'objet rendu — dans un champ que personne
@@ -186,10 +278,8 @@ async function main() {
   const avis = avisDeCasse(nom, commandes.nom);
   if (avis) process.stderr.write(`${avis}\n`);
 
-  // La garde que CETTE naissance vient de poser, elle, ne pouvait pas être versée d'avance —
-  // elle n'existait pas. On la signale donc, sans barrer la route : c'est le second versement
-  // du geste normal (pose → verse → naître → verse la garde), et le refus au prochain
-  // lancement fera le reste si personne ne s'en occupe.
+  // Après versement, plus rien ne devrait manquer. Si quelque chose manque encore, on le dit —
+  // et cette fois c'est un vrai signal, pas le bruit de fond qu'il était devenu.
   const gardeAVerser = avisDeVersionnement(REPO_ROOT, nom, role);
   if (gardeAVerser) process.stderr.write(`${gardeAVerser}\n`);
 
@@ -259,36 +349,96 @@ async function main() {
     process.exit(1);
   };
 
-  // `pane run` ne rend RIEN quand il réussit (mesuré contre le vrai service). Un refus, lui,
-  // sort toujours en `{"error":…}` — c'est ce qu'on lit. Ce que ce silence ne prouve pas,
-  // c'est que la session s'est ouverte : c'est l'attente ci-dessous qui l'établit.
-  const lancement = await appelHerdr(commandes.paneRun(paneId), { resultatAttendu: false, socket });
-  if (!lancement.ok) await echouer(lancement.message);
-
-  // Attendre que l'agent soit RÉELLEMENT détecté, plutôt que de parier sur un délai.
-  let vu = null;
+  // ═══ FAIRE NAÎTRE — par la primitive de herdr, et en DÉCLARANT le modèle et le mode.
+  //
+  // ⚠️ CE QUE CE GESTE REMPLACE (T-20260816-0038). Avant : écrire `cd <lieu> && claude` dans un
+  // shell, puis interroger trente fois pour deviner si ça avait pris, puis renommer — trois
+  // gestes, une minute d'attente, et une fenêtre pendant laquelle l'agent n'était adressable
+  // que par son numéro de pane, c'est-à-dire le moment exact où l'adressage cassait
+  // (T-20260816-0002). `herdr agent start` fait les trois, nomme à la naissance, et transmet
+  // les drapeaux à `claude` — vérifié par le fait le 2026-08-16 : il rend son `argv` exact.
+  //
+  // Et le lancement n'est plus nu : le modèle et le mode sont dits. Un chef d'équipe qu'on
+  // croit sur un grand modèle et qui raisonne sur un petit rend un travail qu'on relira comme
+  // s'il venait de l'autre.
+  // ⚠️ UN PANE QUI VIENT DE NAÎTRE N'EST PAS ENCORE UN SHELL — trouvé par la preuve réelle, et
+  // pas par la suite : `herdr agent start` a refusé « agent_pane_busy … is not an available
+  // shell » sur un onglet créé une fraction de seconde plus tôt. Le pane existe, son shell
+  // démarre encore. C'est un état TRANSITOIRE qu'on reconnaît, donc on l'attend — avec la même
+  // patience bornée qu'ailleurs, jamais un délai fixe.
+  //
+  // On n'attend QUE celui-là : tout autre refus s'arrête tout de suite. Réessayer sur n'importe
+  // quel refus transformerait une panne franche en une minute de silence, puis en un message
+  // qui ne dirait plus la vraie cause.
+  const PANE_PAS_PRET = /agent_pane_busy|not an available shell/i;
+  let lancement = null;
   for (let i = 0; i < ESSAIS; i += 1) {
-    const etat = await appelHerdr(commandes.interroger(paneId), { socket });
-    if (etat.ok && agentDetecte(etat.reponse)) {
-      vu = etat.reponse;
-      break;
-    }
+    lancement = await appelHerdr(commandes.agentStart(paneId), { socket });
+    if (lancement.ok || !PANE_PAS_PRET.test(lancement.message || '')) break;
     await dormir(DELAI_MS);
   }
-  if (!vu) {
+  if (!lancement.ok) await echouer(lancement.message);
+  if (!agentDetecte(lancement.reponse)) {
     await echouer(
-      `aucun agent détecté dans ${paneId} après ${Math.round((ESSAIS * DELAI_MS) / 1000)} s — ` +
-        'la session ne s’est pas ouverte dans le lieu du représentant'
+      `herdr a rendu un succès sans agent pour ${paneId} : ${JSON.stringify(lancement.reponse)} — ` +
+        'un code 0 sans agent n’est pas une naissance'
     );
   }
 
-  const renommage = await appelHerdr(commandes.renommer(paneId), { socket });
-  if (!renommage.ok) await echouer(renommage.message);
+  // ═══ ET VÉRIFIER PAR L'ÉCRAN QU'IL PEUT RÉELLEMENT RECEVOIR (T-20260816-0033).
+  //
+  // ⚠️ LE POINT LE PLUS IMPORTANT DE CETTE COMMANDE, ET IL EST CONTRE-INTUITIF. `agent start`
+  // vient de rendre `agent_status: idle` et `interactive_ready: true`. MESURÉ le 2026-08-16 :
+  // il les rend AUSSI quand l'agent est parqué derrière un modal. S'arrêter là serait tenir un
+  // indice pour le fait — « une porte sur deux », dans la primitive même qu'on adopte pour
+  // fermer le défaut.
+  //
+  // On lit donc l'écran. Un écran connu est nommé avec le geste qui le lève ; un écran inconnu
+  // est nommé avec ce qu'on y a vu, et RIEN d'autre — on ne conseille pas ce qu'on n'a pas
+  // vérifié. Dans les deux cas la commande échoue et referme le pane : une session parquée
+  // derrière un écran est immobile ET injoignable (T-20260816-0001), et la laisser derrière
+  // soi en rendant un succès est précisément le mode de panne qu'on ferme.
+  //
+  // ⚠️ ET ON FRANCHIT LES ÉCRANS CONNUS — mais SEULEMENT eux, et jamais sans relire.
+  //
+  // La pré-approbation supprime l'écran de confiance (mesuré). Elle ne supprime PAS celui des
+  // serveurs MCP : je l'ai cru un moment, sur un essai qui ne s'est pas reproduit, et je le dis
+  // plutôt que de le laisser croire. Devant lui, la commande envoie le geste mesuré qui le
+  // confirme, puis RELIT. Franchir sans relire serait un pari ; relire en fait un fait.
+  //
+  // Le franchissement est borné : trois fois, pas plus. Un écran qui revient trois fois n'est
+  // plus l'écran qu'on croit reconnaître, et insister serait redevenir un dispositif qui tente
+  // sa chance.
+  const FRANCHISSEMENTS_MAX = 3;
+  let franchis = 0;
+  let ecran = null;
+  for (let i = 0; i < ESSAIS; i += 1) {
+    // ⚠️ `lireEcran` prend la COMMANDE, pas le pane — première écriture fautive, attrapée par la
+    // preuve réelle : elle rendait `null` à tous les coups, donc « écran illisible », donc un
+    // refus systématique. Le refus était juste dans sa forme et faux dans sa cause, ce qui est la
+    // pire des deux situations : il a l'air d'un défaut du dispositif observé.
+    ecran = etatDeLEcran(await lireEcran(commandes.lireEcran(paneId), { socket }));
+    if (ecran.pretARecevoir) break;
+    const touches = touchesPourFranchir(ecran);
+    if (touches && franchis < FRANCHISSEMENTS_MAX) {
+      franchis += 1;
+      process.stderr.write(`écran connu franchi (${ecran.quoi}) — ${franchis}${franchis > 1 ? 'e' : 're'} fois\n`);
+      await appelHerdr(['agent', 'send-keys', paneId, ...touches], { socket, resultatAttendu: false });
+    }
+    await dormir(DELAI_MS);
+  }
+  if (!ecran.pretARecevoir) {
+    await echouer(
+      `${refusDEcran(ecran, { cible: `la session de ${paneId}` })}\n` +
+        `  Rien ne lui a été livré, et le pane est refermé : une naissance qu’on ne peut pas ` +
+        `prouver joignable n’est pas une naissance.`
+    );
+  }
 
   // VÉRIFIER PAR LE FAIT, jamais par le mot : le nom qu'il porte et le répertoire où il
   // tourne, relus depuis herdr. Le renommage peut mettre un instant à se refléter, d'où la
   // relecture bornée — mais elle ne pardonne rien : ce qui n'est pas vrai à la fin échoue.
-  let final = vu;
+  let final = lancement.reponse;
   for (let i = 0; i < ESSAIS; i += 1) {
     const etat = await appelHerdr(commandes.interroger(paneId), { socket });
     if (etat.ok && agentPorteLeNom(etat.reponse, commandes.nom)) {
@@ -364,6 +514,12 @@ async function main() {
       depot: REPO_ROOT,
       agent: commandes.nom,
       pane: paneId,
+      modele: commandes.modele,
+      mode: commandes.mode,
+      pose: poseFaite ? 'maintenant' : 'déjà',
+      // CE QUI A ÉTÉ VÉRIFIÉ, et pas seulement ce qui a été fait — c'est la ligne que le ticket
+      // réclame. « L'écran est prêt » n'est pas une formule : c'est la lecture qui a eu lieu.
+      verifie: ['le lieu est versé', 'l’agent porte son nom', 'il tourne dans son lieu', 'son écran est prêt à recevoir'],
       garde: cheminGarde,
       approuve: approbation.deja ? 'déjà' : 'maintenant',
       lieu: commandes.lieu,
