@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-16
+
+### Ajouté
+
+- **Une ligne dont le chantier a disparu du disque est désormais signalée** (T-20260816-0083, PR #261) — la moitié que `T-20260816-0003` avait nommée `[non fermé]` sans la fermer. Une telle ligne reste ouverte au registre, attachée à un numéro de pane que le poste réattribue : **le prochain occupant hérite d'un canal ouvert pour un client dont il n'a jamais entendu parler.** Mesuré sur le registre réel : **2 lignes ouvertes sur 42**.
+- **La ronde porte la passe** et rend son avis avec les valeurs trouvées : la ligne, le chantier, le worktree disparu, et **la commande exacte qui la referme** — avec le pane d'où la lancer, parce que `fermer` choisit parmi les lignes du pane courant. C'est l'invariant de `T-20260816-0045` appliqué à l'hygiène : *un avis qui ne nomme pas sa sortie laisse son lecteur exactement où il était*.
+- **Elle signale, elle ne ferme rien.** Refermer une ligne à tort ferait taire un canal client. L'avis le dit en toutes lettres.
+
+### Technique
+
+- ⚠️ **La garde a changé de place, et la raison vaut au-delà de ce lot.** La première écriture filtrait à la **sélection** : la ligne morte cessait d'être proposée. Ça marchait, et c'était la mauvaise place — **un filtre laisse le registre DIRE que la ligne est ouverte pendant qu'on la cache**, soit deux sources de vérité qui divergent en silence, le motif que ce dépôt paie le plus cher. Une passe d'hygiène fait que le registre **cesse de mentir** : on soigne le fait, pas sa lecture.
+- **On n'écarte que sur preuve** — worktree connu **et** absent. Un chemin non enregistré, vide, ou qu'on n'a pas pu interroger ne prouve **rien** et ne fait rien signaler. C'est l'erreur que le correctif de `T-20260816-0003` avait déjà payée vingt essais rouges, en rendant des lignes injoignables au nom d'une absence de donnée.
+- Un second symptôme a fait regarder, sans être la raison du choix : brancher le disque dans la sélection faisait rougir **26 essais** (538 verts / 0 rouge sans, 512 / 26 avec) dont les registres portent des chemins inventés. Inscrit à part (`T-20260816-0086`) — *une garde bien placée mériterait qu'on paie ce nettoyage*.
+
 ## [1.60.0] - 2026-08-16
 
 ### Ajouté

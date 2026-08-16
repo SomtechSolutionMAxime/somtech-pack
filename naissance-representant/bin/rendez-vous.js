@@ -26,7 +26,8 @@ import { livrerBrief } from '../src/livraison.js';
 import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
-import { RACINE } from '../../ligne-directe/src/registre.js';
+import { RACINE, chargerRegistre, lignesOuvertes } from '../../ligne-directe/src/registre.js';
+import { lignesAuChantierDisparu, avisDHygiene } from '../../ligne-directe/src/hygiene.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
 import { OUTILS, OutilIntrouvable, cheminsUtiles, lancer } from '../../ligne-directe/src/outils.js';
 
@@ -266,9 +267,27 @@ async function tenir(nom) {
     );
   }
 
+  // ═══ L'HYGIÈNE DU REGISTRE — il cesse de mentir, il n'est pas filtré (T-20260816-0083).
+  //
+  // Une ligne dont le chantier a disparu du disque reste ouverte, attachée à un numéro de pane
+  // que le poste réattribue. Le prochain occupant hérite d'un canal ouvert pour un autre
+  // client. La ronde est le bon endroit : elle passe déjà, régulièrement, et elle ne code rien.
+  //
+  // ⚠️ ELLE SIGNALE, ELLE NE FERME RIEN — refermer une ligne à tort ferait taire un canal
+  // client. Et son avis NOMME SA SORTIE : la commande exacte, et le pane d'où la lancer.
+  let hygiene = [];
+  try {
+    hygiene = lignesAuChantierDisparu(lignesOuvertes(chargerRegistre()), { chantierExiste: existsSync });
+  } catch (err) {
+    // Un registre illisible n'est pas un registre sans lignes mortes : on ne conclut rien.
+    process.stderr.write(`${r.etiquette} : hygiène du registre non faite — ${err.message}\n`);
+  }
+  const avis = avisDHygiene(hygiene);
+  if (avis) process.stderr.write(`${r.etiquette} : ${avis}\n`);
+
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);
