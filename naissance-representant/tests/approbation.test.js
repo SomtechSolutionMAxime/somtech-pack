@@ -399,3 +399,33 @@ test('droitsDuLieu ne lit JAMAIS une liste écrite en dur — elle vient du fich
   assert.deepEqual(droitsDuLieu(lieu), ['Bash(quelque-chose-de-tres-improbable*)']);
   assert.deepEqual(droitsDuLieu(join(d, 'nulle-part')), []);
 });
+
+test('une entrée à qui il MANQUE UNE SEULE CLÉ n’est pas tenue pour approuvée — chacune compte', () => {
+  // ⚠️ TROUVÉ PAR LA REVUE DE FOND, et c'est le motif de ce dépôt en miniature. L'essai du « jeu
+  // de clés complet » vérifiait ce que l'écriture PRODUIT — or l'écriture construit ses clés en
+  // dur et ne consulte pas `CLES_DUNE_ENTREE`. La constante, elle, ne sert qu'à `dejaApprouve`,
+  // et rien ne l'éprouvait : on mesurait l'écriture (l'indice) au lieu du verdict (le fait).
+  //
+  // Le bug réel que ça laissait passer : une entrée à qui il manque `disabledMcpjsonServers`
+  // serait jugée « déjà approuvée », l'écriture serait sautée, et l'écran des serveurs MCP
+  // reviendrait — exactement le défaut que ce fichier existe pour fermer.
+  const d = bac();
+  const lieu = lieuAvecDroits(d, { droits: ['Read'] });
+  const complete = entreeComplete({ enabledMcpjsonServers: ['servicedesk'], allowedTools: ['Read'] });
+
+  assert.equal(
+    dejaApprouve({ projects: Object.fromEntries(formesDuLieu(lieu).map((f) => [f, complete])) }, lieu),
+    true,
+    'la référence : une entrée complète EST approuvée, sinon l’essai ne prouverait rien'
+  );
+
+  for (const cle of Object.keys(complete)) {
+    const amputee = { ...complete };
+    delete amputee[cle];
+    assert.equal(
+      dejaApprouve({ projects: Object.fromEntries(formesDuLieu(lieu).map((f) => [f, amputee])) }, lieu),
+      false,
+      `sans « ${cle} », l’entrée est encore tenue pour approuvée : l’écriture serait sautée et l’écran reviendrait`
+    );
+  }
+});

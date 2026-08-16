@@ -306,7 +306,7 @@ const aFerme = (journal, pane = 'w9:p1') =>
 let depotCourant = null; // le dépôt jetable du test en cours — voir `avecLieu`
 let sessionsDesEssais = '/tmp/faux-poste/.config/herdr/sessions/essai/herdr.sock';
 
-function lancerNaitre(client, { workspace = 'w9', amorce = null, modele = null, mode = null, role = null } = {}) {
+function lancerNaitre(client, { workspace = 'w9', amorce = null, modele = null, mode = null, role = null, essais = '3' } = {}) {
   const args = [BIN, client, '--workspace', workspace];
   if (depotCourant) args.push('--depot', depotCourant);
   if (amorce) args.push('--amorce-texte', amorce);
@@ -319,7 +319,7 @@ function lancerNaitre(client, { workspace = 'w9', amorce = null, modele = null, 
   const r = spawnSync(process.execPath, args, {
     env: {
       ...process.env,
-      NAISSANCE_ESSAIS: '3',
+      NAISSANCE_ESSAIS: essais,
       NAISSANCE_DELAI_MS: '5',
       HERDR_SESSIONS_ESSAIS: sessionsDesEssais,
       HERDR_SOCKET_PATH: '',
@@ -945,9 +945,15 @@ test('un écran connu qui NE CÈDE PAS finit par faire échouer — on n’insis
     // Un écran qu'on croit reconnaître et qui revient n'est plus celui qu'on croit. Marteler la
     // même touche jusqu'à la fin des essais serait redevenir un dispositif qui tente sa chance,
     // et il resterait muet pendant tout ce temps. Le franchissement est donc BORNÉ.
+    // ⚠️ ESSAIS > FRANCHISSEMENTS_MAX, ET C'EST TOUT LE SUJET DE CET ESSAI — trouvé par la revue
+    // de fond. La suite fixe NAISSANCE_ESSAIS à 3 pour aller vite, et la borne vaut 3 : la boucle
+    // n'avait jamais l'occasion de distinguer « borné à 3 » d'« illimité ». En production, où les
+    // essais valent 30, retirer la borne ferait marteler trente fois la même touche sur un écran
+    // qui ne cède pas — précisément ce que le code dit vouloir éviter, et l'essai le laissait
+    // passer. Un essai dont la configuration masque ce qu'il mesure ne mesure rien.
     const journal = installerFauxHerdr({ repertoire: lieu, ecran: 'serveurs-tetu' });
 
-    const r = lancerNaitre(client);
+    const r = lancerNaitre(client, { essais: '8' });
 
     assert.notEqual(r.code, 0, 'un écran qui ne cède pas n’est pas une naissance réussie');
     const touches = appelsJournalises(journal).filter((a) => a[0] === 'agent' && a[1] === 'send-keys');

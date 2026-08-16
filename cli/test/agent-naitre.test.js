@@ -7,13 +7,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
-  cmdAgent, cheminDeLaNaissance, argumentsDeNaissance, espaceDeTravail, AIDE_AGENT,
+  cmdAgent, cheminDeLaNaissance, racineDeLaNaissance, argumentsDeNaissance, espaceDeTravail, AIDE_AGENT,
 } from '../src/commands/agent.js';
+
+/** La racine de ce dépôt — cli/test → cli → racine. */
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 function bac() {
   return mkdtempSync(join(tmpdir(), 'agent-naitre-'));
@@ -190,4 +194,39 @@ test('un lanceur qui meurt sans code de sortie compte comme un ÉCHEC, jamais co
 test('un espace donné est réutilisé — on n’en fabrique pas un à chaque relance', () => {
   const r = espaceDeTravail({ depot: '/d', code: 'j-1', workspace: 'w26' });
   assert.deepEqual(r, { id: 'w26', cree: false });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 5 — D'OÙ VIENT LE CODE QU'ON EXÉCUTE — mutation SURVIVANTE trouvée par la revue de fond
+//
+// ⚠️ TOUS LES ESSAIS CI-DESSUS PASSENT `--source`, QUI COURT-CIRCUITE LA DÉCISION. La fonction
+// qui tranche « source du dépôt » contre « produit de build » — le cœur même du correctif de ce
+// fichier — n'était appelée par aucun essai. On mesurait le chemin FORCÉ (l'indice) au lieu du
+// chemin CHOISI (le fait) : exactement le motif que ce lot existe pour fermer, réintroduit dans
+// l'essai du correctif.
+
+test('sans --source, la SOURCE du dépôt l’emporte sur son propre produit de build', () => {
+  // Le bug réel que ça laissait passer : `cli/payload` est ignoré par git et reconstruit par un
+  // essai de temps en temps. S'il l'emportait, la commande exécuterait une version PÉRIMÉE
+  // d'elle-même, en silence — la dérive `~/.somtech` rejouée à l'intérieur du dépôt.
+  const racine = racineDeLaNaissance();
+  assert.ok(existsSync(join(racine, 'pack.json')), 'la racine choisie doit porter un pack.json');
+  assert.ok(existsSync(join(racine, '.git')), 'et être une copie de travail — c’est ce qui la qualifie de source');
+  assert.ok(
+    !racine.split(sep).includes('payload'),
+    `la racine choisie est un produit de build : ${racine} — la commande serait périmée sans le dire`
+  );
+  assert.equal(racine, resolve(REPO), 'depuis ce dépôt, la source EST la racine du dépôt');
+});
+
+test('et le naitre.js visé sans --source est celui de la source, pas celui du build', () => {
+  const chemin = cheminDeLaNaissance({});
+  assert.equal(chemin, join(resolve(REPO), 'naissance-representant', 'bin', 'naitre.js'));
+  assert.ok(existsSync(chemin), 'le chemin choisi doit exister — sinon la commande s’arrêterait sur un module absent');
+});
+
+test('un --source explicite reste souverain — il sert aux essais et aux cas tordus', () => {
+  const d = payload(bac());
+  assert.equal(cheminDeLaNaissance({ source: d }), join(resolve(d), 'naissance-representant', 'bin', 'naitre.js'));
+  rmSync(d, { recursive: true, force: true });
 });
