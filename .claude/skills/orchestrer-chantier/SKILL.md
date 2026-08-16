@@ -585,7 +585,7 @@ Trois choses que le helper tranche à ta place, et qui sont précisément là o�
 - **Un refus de `lock_acquire` porte toujours sur ta propre application** — le verrou est pris par identifiant d'application. Tu n'as donc rien à renseigner de plus. `ATS_APPLICATION_ID_VERROU` ne sert que dans l'autre situation : quand tu regardes le verrou d'une **autre** application avec `lock_status`. Là, aucune attente n'est déclarée (RA-AGT-006) — emprunter l'attente d'un voisin serait une information fausse, et elle voyagerait jusqu'à son client.
 - **Tu ne parles jamais au client**, ni de près ni de loin. Tu parles à son représentant, qui reste l'interlocuteur unique et traduit dans ses mots.
 
-**Ne construis rien pour attendre.** Pas de registre, pas de numéro d'ordre, pas de reprise automatique du verrou : tu retentes ta poussée quand tu es prêt, et c'est ce jour-là que le second message part. Le droit d'accès exclusif par application existe déjà et suffit — un second mécanisme se désynchroniserait du premier.
+**Ne construis rien pour attendre.** Pas de registre, pas de numéro d'ordre, pas de reprise automatique du verrou : tu retentes ta poussée quand tu es prêt, et c'est ce jour-là que le second message part. Le droit d'accès exclusif par application existe déjà et **suffit à rendre une file inutile** — un second mécanisme se désynchroniserait du premier. *(« Suffit » ne porte que là-dessus : pour savoir si le sas est libre, c'est l'écart git qui tranche, voir l'encadré plus haut.)*
 
 **Et n'oublie pas de le réinscrire au registre** (règle RA-REL-003) : ce qui ne vit que dans le fil disparaît avec la session qui l'a lu.
 
@@ -694,7 +694,7 @@ Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne san
 | Attendre au sas sans le dire à son représentant de client | Tu es le seul à savoir que tu attends. Il annoncera « c'est en cours » — c'est faux, et ça se découvre quand le client relance |
 | Annoncer l'attente et jamais sa fin | Une attente sans fin annoncée oblige le représentant à te relancer, ou le client à s'inquiéter |
 | Déclarer une attente causée par une autre application | La portée du verrou est l'application : cette attente-là n'est pas la tienne, et le client n'a aucun moyen de la démentir |
-| Se mettre à sonder le verrou en boucle en attendant son tour | C'est un second mécanisme de file : il se désynchronise du premier, qui existe déjà et suffit |
+| Se mettre à sonder le verrou en boucle en attendant son tour | C'est un second mécanisme de file : il se désynchronise du premier, qui existe déjà et suffit **pour ça** — sonder n'apprend rien de plus, et le verrou ne dit pas si le sas est libre |
 | Donner un epic trop gros en se disant qu'il compactera | Il finit sur un résumé de lui-même, incohérent avec son propre début |
 | Comparer des noms d'agents sensibles à la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
 | Ouvrir un agent sans noter qui il est ni sur quoi | Le lien entre l'agent et ce qu'il a livré disparaît avec son pane : on gardera le code, jamais qui l'a fait ni pourquoi |
