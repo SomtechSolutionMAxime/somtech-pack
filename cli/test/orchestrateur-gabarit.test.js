@@ -60,8 +60,15 @@ test('distribution : les outils du lieu sont lisibles et bornés à ce qu’il l
 test('distribution : les permissions ne portent aucun secret, et rien n’y est écrit en dur', () => {
   const brut = readFileSync(join(REPO, CHEMIN_PERMISSIONS), 'utf8');
   assert.ok(!/\/Users\//.test(brut), 'un chemin de machine est écrit en dur dans les permissions');
-  const perms = JSON.parse(brut).permissions;
-  assert.ok(Array.isArray(perms.allow) && perms.allow.length > 0, 'un lieu sans aucune permission ferait tout demander');
+  const config = JSON.parse(brut);
+  // T-20260816-0032 : les droits ont déménagé de `permissions.allow` vers `somtech.droitsAccordes`,
+  // parce qu'un bloc `allow` dans le lieu déclenche un écran de confiance que la pré-approbation
+  // ne fait pas taire (mesuré sur 2.1.233). Le fichier ne doit PLUS porter de bloc `allow` — un
+  // qui reviendrait rendrait la naissance manuelle sans que rien ne le dise.
+  assert.equal(config.permissions?.allow, undefined, 'un bloc permissions.allow est revenu : la naissance redeviendrait manuelle');
+  const droits = config.somtech?.droitsAccordes;
+  assert.ok(Array.isArray(droits) && droits.length > 0, 'un lieu sans aucun droit déclaré ferait tout demander');
+  assert.ok(Array.isArray(config.permissions?.deny) && config.permissions.deny.length > 0, 'les refus sont la moitié qui garantit : ils ne peuvent pas disparaître');
 });
 
 test('distribution : ils vivent sous un chemin qu’un module déclaré embarque', () => {

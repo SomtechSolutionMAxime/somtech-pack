@@ -1209,9 +1209,28 @@ export const CONTROLES = [
       //     `Edit(../**)` est totalement inerte. Seule la forme absolue `Edit(//**)` a fermé
       //     les quatre gestes essayés. Une de ces deux formes à la place de l'autre donnerait
       //     un fichier qu'on croit contraignant et qui ne l'est pas — pire que rien.
-      const perms = JSON.parse(droits).permissions;
-      const deny = perms.deny || [];
-      const allow = perms.allow || [];
+      // ⚠️ OÙ VIVENT LES DROITS DEPUIS T-20260816-0032, et pourquoi ils ont déménagé.
+      //
+      // MESURÉ le 2026-08-16 (Claude Code 2.1.233) : un lieu qui porte `permissions.allow`
+      // déclenche TOUJOURS un écran de confiance renforcé — « ⚠ This folder pre-approves N tool
+      // permissions … Only proceed if you trust this configuration » — et la pré-approbation ne
+      // le fait pas taire. L'agent naît alors PARQUÉ : détecté, nommé, dans le bon répertoire, et
+      // injoignable. C'est le geste n°5 du décompte de T-20260816-0004.
+      //
+      // Le fait mesuré de 2.1.231 reste vrai et c'est lui qui rend le déménagement sans coût :
+      // une autorisation était DÉJÀ ignorée tant que le dossier n'était pas approuvé. Le bloc
+      // `allow` n'achetait donc rien à la naissance, et il coûtait un modal. Les droits sont
+      // désormais déclarés sous `somtech.droitsAccordes` — une clé que Claude Code ignore
+      // (vérifié par le fait : zéro écran, zéro avertissement) — et `approuverLieu` les rend
+      // effectifs dans l'`allowedTools` de l'entrée de projet.
+      //
+      // `permissions.deny` NE BOUGE PAS : c'est la moitié qui garantit, elle tient dès la
+      // naissance, et tout ce que ce contrôle exige d'elle reste exigé mot pour mot.
+      // On lit encore `permissions.allow` en second : les lieux déjà posés le portent, et un
+      // contrôle aveugle à eux cesserait de garder ce qu'il garde là où ils vivent.
+      const config = JSON.parse(droits);
+      const deny = config.permissions?.deny || [];
+      const allow = [...(config.somtech?.droitsAccordes || []), ...(config.permissions?.allow || [])];
 
       const REFUS = [
         { quoi: 'écrire ou modifier un fichier', entrees: ['Write', 'Edit', 'NotebookEdit', 'Edit(//**)'] },

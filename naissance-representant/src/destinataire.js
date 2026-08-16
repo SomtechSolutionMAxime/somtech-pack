@@ -16,10 +16,15 @@
 //    tapée. Écrire dans un pane qu'on n'a pas vu vivre, c'est écrire dans le vide en croyant
 //    avoir parlé — le mode de panne que tout ce lot ferme.
 //
-// 2. DEUX AGENTS DU MÊME NOM. C'est banal : deux chantiers, deux orchestrateurs nommés
-//    `general`. Prendre le premier trouvé livrerait un compte rendu au mauvais chantier, en
-//    silence, et l'expéditeur aurait son accusé de réception. Le veilleur de `ligne-directe`
-//    refuse déjà les homonymes pour la même raison (`resoudrePair`) ; c'est la même règle.
+// 2. DEUX AGENTS QUI RÉPONDENT À LA MÊME DÉSIGNATION. C'est banal des deux côtés : deux
+//    chantiers, deux orchestrateurs nommés `general` — et deux sessions qui portent chacune un
+//    pane `w5:p3`, puisqu'un identifiant de pane est INTERNE à sa session. Prendre le premier
+//    trouvé livrerait un compte rendu au mauvais chantier, en silence, et l'expéditeur aurait
+//    son accusé de réception. Le veilleur de `ligne-directe` refuse déjà les homonymes pour la
+//    même raison (`resoudrePair`) ; c'est la même règle.
+//
+//    ⚠️ CE REFUS DOIT NOMMER LA SORTIE QUAND ELLE EXISTE, ET SE TAIRE QUAND ELLE N'EXISTE PAS
+//    (T-20260816-0034) — le détail est au pied de `trouverDestinataire`, là où il se décide.
 
 import { socketsHerdr } from '../../ligne-directe/src/herdr.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
@@ -100,12 +105,45 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
   if (trouves.length === 1) return { ok: true, ...trouves[0] };
 
   if (trouves.length > 1) {
-    const ou = trouves.map((t) => `${t.pane} (${t.socket})`).join(', ');
+    // ⚠️ CE REFUS RENVOYAIT VERS LE GESTE QUI VENAIT D'ÉCHOUER (T-20260816-0034). Il disait
+    // « désigne-le par son pane » à quelqu'un qui avait désigné par le pane : un identifiant de
+    // pane est une coordonnée INTERNE à une session, deux sessions du poste peuvent porter le
+    // même `w5:p3`. Un refus juste dont le conseil est inapplicable coûte autant qu'un échec
+    // muet — on rejoue le même geste et on conclut que l'outil est cassé.
+    //
+    // La sortie existait pourtant, quelques lignes plus haut : la cible est comparée au pane ET
+    // au nom. Le refus doit donc NOMMER les agents qu'il a trouvés — c'est ce qui permet de
+    // choisir — et montrer la forme de commande qui passe.
+    const ou = trouves.map((t) => (t.nom ? `${t.pane} « ${t.nom} » (${t.socket})` : `${t.pane} (${t.socket})`)).join(', ');
+    const noms = trouves.map((t) => t.nom);
+    const nomsDepartagent = noms.every(Boolean) && new Set(noms).size === noms.length;
+
+    if (nomsDepartagent) {
+      const exemples = noms.map((n) => `« ${n} »`).join(' ou ');
+      return {
+        ok: false,
+        message:
+          `deux agents ou plus répondent à « ${vise} » — ${ou}. On ne tire pas au sort le ` +
+          `destinataire d’un compte rendu : ici leurs NOMS les distinguent, désigne-le par le ` +
+          `sien — ${exemples} (gestionnaire-livrer <nom> --texte "…").`,
+      };
+    }
+
+    // ⚠️ ET QUAND LE NOM NE DÉPARTAGE PAS NON PLUS, ON S'ARRÊTE SANS CONSEIL. Deux agents du
+    // même nom, ou sans nom, ne se distinguent par aucune désignation que cette commande
+    // accepte. Proposer quand même un geste — une option de session, un socket à passer —
+    // reviendrait à refaire, à un mot près, le défaut que ce refus vient de fermer : conseiller
+    // un chemin qu'on n'a pas vérifié praticable. Ce qu'on peut dire honnêtement, c'est ce
+    // qu'on a vu et que rien n'est parti.
+    const raison = noms.every(Boolean)
+      ? 'ils portent le même nom'
+      : 'ils n’ont pas tous un nom qui les distingue';
     return {
       ok: false,
       message:
         `deux agents ou plus répondent à « ${vise} » — ${ou}. On ne tire pas au sort le ` +
-        'destinataire d’un compte rendu : désigne-le par son pane.',
+        `destinataire d’un compte rendu, et ${raison} : aucune désignation que cette commande ` +
+        'accepte ne les départage. Rien n’a été envoyé.',
     };
   }
 

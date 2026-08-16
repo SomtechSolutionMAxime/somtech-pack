@@ -1,16 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Read",
-      "Glob",
-      "Grep",
-      "Bash(git log*)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git show*)",
-      "Bash(node $HOME/.somtech/ligne-directe/bin/ligne-directe.js *)",
-      "mcp__servicedesk__*"
-    ],
     "deny": [
       "Edit",
       "Write",
@@ -29,6 +18,19 @@
       "Bash(supabase*)",
       "Bash(curl*)",
       "Bash(wget*)"
+    ]
+  },
+  "somtech": {
+    "droitsAccordes": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git log*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(node $HOME/.somtech/ligne-directe/bin/ligne-directe.js *)",
+      "mcp__servicedesk__*"
     ]
   }
 }
