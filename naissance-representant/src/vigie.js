@@ -59,7 +59,6 @@ export const LECTURES_MINIMALES = 3;
 /** L'écart minimal entre la première et la dernière lecture — sinon on a regardé trop vite. */
 export const DUREE_MINIMALE_MS = 15000;
 
-const AU_REPOS = new Set(['idle', 'done']);
 const PERDU = new Set([null, undefined, 'unknown']);
 
 /** Ce qu'on a vu, rendu tel quel — parce que le spécimen a été perdu deux fois. */
@@ -154,6 +153,7 @@ export function verdictDeVigie(lectures) {
     };
   }
 
-  if (AU_REPOS.has(l[0].statut)) return null;
+  // Tout le reste — un agent au repos, une série mixte, un statut qui a changé en cours de
+  // route — ne dit rien de certain, donc ne dit rien. C'est le penchant vers le silence.
   return null;
 }

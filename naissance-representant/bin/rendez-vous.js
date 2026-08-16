@@ -223,8 +223,20 @@ async function tenir(nom) {
   //
   // ⚠️ ET ELLE NE FAIT QUE REGARDER. Aucune touche n'est envoyée, aucun déblocage n'est tenté :
   // envoyer une touche à un agent figé, c'est taper à sa place. Le but est qu'il SE VOIE.
+  //
+  // ⚠️ ET ELLE EST BORNÉE PAR L'ÉCHÉANCE, comme la livraison — relevé en revue de fond. La
+  // série coûte trois lectures espacées PAR SUSPECT, en séquence. Une panne herdr large ferait
+  // plusieurs suspects d'un coup, et la ronde s'allongerait de N fois ce coût sans plafond,
+  // jusqu'à mordre sur la ronde suivante. Ce qui n'a pas pu être regardé est DIT, jamais tu :
+  // un silence qu'on ne s'explique pas est exactement ce que ce lot existe pour supprimer.
   const vigie = [];
+  const nonRegardes = [];
+  const finVigie = Date.now() + ECHEANCE_MS;
   for (const c of comptes.filter((x) => !x.livre)) {
+    if (Date.now() + LECTURES_MINIMALES * DELAI_VIGIE_MS > finVigie) {
+      nonRegardes.push(c.pane);
+      continue;
+    }
     const lectures = [];
     for (let i = 0; i < LECTURES_MINIMALES; i += 1) {
       const r = await appelHerdr(['agent', 'get', c.pane], { socket: c.socket });
@@ -247,10 +259,16 @@ async function tenir(nom) {
     const v = verdictDeVigie(lectures);
     if (v) vigie.push({ agent: c.agent, pane: c.pane, ...v });
   }
+  if (nonRegardes.length) {
+    process.stderr.write(
+      `${r.etiquette} : la vigie n'a pas eu le temps de regarder ${nonRegardes.length} pane(s) — ` +
+        `${nonRegardes.join(', ')}. Ils ne sont ni sains ni figés : ils n'ont pas été mesurés.\n`
+    );
+  }
 
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}) })}\n`
   );
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);
