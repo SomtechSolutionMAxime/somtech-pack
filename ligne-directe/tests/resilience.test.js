@@ -46,7 +46,22 @@ function slackDouble() {
       return { id: canal, nom: canal.replace(/^C_/, ''), prive: false, archive: false };
     },
     async definirSujet() {},
-    async inviter() {},
+    // Voir `faux-temoins.test.js` : l'invitation doit avoir un effet observable (T-20260814-0136).
+    membres: [],
+    // `profilsDuCanal` — le cloisonnement demande QUI est là, pas seulement combien
+    // (T-20260813-0074). Dérivé des membres de ce double : des nôtres, ni invités ni d'une
+    // autre organisation, ce qui est le cas nominal de ces essais. Un double muet sur une
+    // question que le code pose n'est pas neutre — il fait refuser des canaux sains.
+    async profilsDuCanal(_j, canal) {
+      const ids = await this.membresDuCanal(_j, canal);
+      return ids.map((id) => ({ id, nom: id, robot: false, invite: false, monoCanal: false, equipe: null }));
+    },
+    async membresDuCanal() {
+      return this.membres;
+    },
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!this.membres.includes(u)) this.membres.push(u);
+    },
     async ouvrirEcoute() {
       return 'wss://exemple.invalide';
     },
@@ -204,7 +219,9 @@ test('AU REDÉMARRAGE DU POSTE : les lignes dont l’agent a disparu sont referm
   const s = slackDouble();
   const h = herdrDouble({ vivants: ['w2:p2'] }); // seul le second agent a survécu
   const v = veilleurAvec({
-    lignes: [ligne({ canal_id: 'C1', pane: 'w1:p1' }), ligne({ canal_id: 'C2', canal_nom: 'autre', pane: 'w2:p2', worktree: '/w/b' })],
+    // `jetable` : depuis T-20260814-0085 une ligne durable garde son canal à la fermeture.
+    // Cet essai éprouve le BALAYAGE, donc il monte la ligne où l'archivage s'exerce encore.
+    lignes: [ligne({ canal_id: 'C1', pane: 'w1:p1', jetable: true }), ligne({ canal_id: 'C2', canal_nom: 'autre', pane: 'w2:p2', worktree: '/w/b' })],
     slack: s,
     herdr: h,
   });
@@ -230,7 +247,9 @@ test('le bilan de clôture part AVANT l’archivage — un canal archivé est en
     ordre.push(`archive:${canal}`);
     return true;
   };
-  const v = veilleurAvec({ lignes: [ligne()], slack: s, herdr: herdrDouble({ vivants: ['w1:p1'] }) });
+  // Ligne jetable : c'est le seul cas où l'archivage a encore lieu, donc le seul où son
+  // ORDRE vis-à-vis du bilan se mesure (T-20260814-0085).
+  const v = veilleurAvec({ lignes: [ligne({ jetable: true })], slack: s, herdr: herdrDouble({ vivants: ['w1:p1'] }) });
 
   await v.fermer({ chantier: 'D-20260805-0004', worktree: '/w/a', bilan: 'livré' });
 
@@ -250,7 +269,7 @@ test('rouvrir une ligne existante la reprend et met à jour le pane', async () =
 
   // Un agent relancé dans la même copie de travail naît dans un pane neuf : sans cette
   // mise à jour, le dirigeant écrirait vers un pane mort.
-  const r = await v.ouvrir({ chantier: 'D-20260805-0004', pane: 'w9:p9', worktree: '/w/a' });
+  const r = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w9:p9', worktree: '/w/a' });
 
   assert.equal(r.ok, true);
   assert.equal(r.reprise, true);

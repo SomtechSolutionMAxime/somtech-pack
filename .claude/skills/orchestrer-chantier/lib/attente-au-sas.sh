@@ -19,7 +19,14 @@
 # CE QUIL NE FAIT PAS
 #   • Aucun mécanisme de file (HS-REL-005) : sans état, sans persistance, sans
 #     sondage. Le droit dacces exclusif par application existe déjà côté
-#     ServiceDesk et suffit ; on lui ajoute la parole, rien dautre.
+#     ServiceDesk ; on lui ajoute la parole, rien dautre. Cest le seul propos de
+#     cette ligne : ne PAS bâtir une file par-dessus.
+#     ATTENTION — ne la lis pas comme une garantie dexclusivité. Le 2026-08-14,
+#     le feed a rapporte que le verrou a ete ACCORDE a une nouvelle PR alors que
+#     staging etait occupe depuis trois jours, et quun lock_status peut repondre
+#     « libre » sur un sas occupe : lacquisition comme la lecture ont failli.
+#     Qui veut savoir SI le sas est libre mesure lecart git main..staging.
+#     Ce fichier ne lit ni ne prend le verrou : il parle.
 #   • Il ne parle ni au client ni au dirigeant : il sadresse au représentant du
 #     client, et à lui seul. Lenvoi lui-même reste au chemin appelant.
 #   • Il nappelle pas le MCP : comme `staging-lock-acquire.sh`, il fait la part

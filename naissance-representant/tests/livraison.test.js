@@ -158,7 +158,9 @@ test('la livraison porte --wait : l’appel nu rend un succès dans TOUS les cas
   assert.deepEqual(c.livrer, [
     'agent', 'prompt', 'w9:p1', 'mon brief', '--wait', '--until', 'working', '--timeout', '12345',
   ]);
-  assert.deepEqual(c.lireEcran, ['agent', 'read', 'w9:p1']);
+  // `--format ansi` depuis T-20260814-0138 : c'est le gris qui distingue une suggestion de
+  // l'éditeur d'un vrai reste, et sans lui on refuse de livrer dans une boîte vide.
+  assert.deepEqual(c.lireEcran, ['agent', 'read', 'w9:p1', '--format', 'ansi']);
   assert.deepEqual(c.interroger, ['agent', 'get', 'w9:p1']);
   assert.deepEqual(c.soumettre, ['agent', 'send-keys', 'w9:p1', 'Enter']);
 });
@@ -173,4 +175,63 @@ test('un brief vide, ou sans pane, est refusé à la construction', () => {
   assert.throws(() => commandesLivraison('', 'x'), /pane/);
   assert.throws(() => commandesLivraison('w9:p1', '   '), /vide/);
   assert.throws(() => commandesLivraison('w9:p1', null), /vide/);
+});
+
+
+// ═════════════════ CE QUE LA MESURE DU 2026-08-14 A APPRIS (T-20260814-0138)
+//
+// Une campagne de 25 envois contre le vrai service a établi deux faits que le code ignorait,
+// et le second est un défaut de ce module — pas du service.
+
+/**
+ * ⚠️ UNE BOÎTE VIDE N'EST PAS UN ÉCRAN VIDE : Claude Code y affiche une SUGGESTION GRISÉE,
+ * tirée de l'historique de la session, que rien ne distingue d'un vrai contenu en texte brut.
+ *
+ * Mesuré : un agent jetable qui n'avait jamais rien reçu affichait « ignore that, check the
+ * staging sas on this repo » — la suggestion d'une AUTRE session. En `--format text`, on lit
+ * donc « la boîte contient quelque chose » sur une boîte parfaitement vide, et on REFUSE de
+ * livrer alors que tout va bien. La mesure elle-même s'y est fait prendre une fois.
+ *
+ * Le seul discriminant est le rendu : la suggestion est en dim (SGR 2). On lit donc l'écran en
+ * `--format ansi`, et ce qui est grisé ne compte pas comme un contenu.
+ */
+const ESC = String.fromCharCode(27);
+const DIM = (s) => `${ESC}[2m${s}${ESC}[22m`;
+const GRAS = (s) => `${ESC}[1m${s}${ESC}[22m`;
+const ECRAN_SUGGESTION = [
+  '  ▘▘ ▝▝    ~/.gestionnaire/acme',
+  SEP,
+  `❯ ${DIM('ignore that, check the staging sas on this repo')}`,
+  SEP,
+  '  ⏵⏵ auto mode on',
+].join('\n');
+
+/** Un vrai reste, lui, n'est PAS grisé — et il doit continuer d'être vu. */
+const ECRAN_RESTE_ANSI = [
+  '  ▘▘ ▝▝    ~/.gestionnaire/acme',
+  SEP,
+  `❯ ${GRAS('[Pasted text #56][Pasted text #57 +1 lines]')}`,
+  SEP,
+  '  ⏵⏵ paste again to expand',
+].join('\n');
+
+test('UNE SUGGESTION GRISÉE N’EST PAS UN RESTE — sinon on refuse de livrer dans une boîte vide', () => {
+  assert.equal(
+    contenuBoite(ECRAN_SUGGESTION),
+    '',
+    'la boîte est VIDE : ce qui est grisé est une proposition de l’éditeur, pas du texte saisi'
+  );
+});
+
+test('UN VRAI RESTE RESTE VU, ansi ou pas — la garde ne se désarme pas en gagnant en finesse', () => {
+  assert.equal(contenuBoite(ECRAN_RESTE_ANSI), '[Pasted text #56][Pasted text #57 +1 lines]');
+  assert.equal(contenuBoite(ECRAN_RESTE), 'reste ici', 'et le format texte d’avant continue de se lire');
+});
+
+test('L’ÉCRAN EST DEMANDÉ EN ANSI — sans quoi le gris n’arrive jamais jusqu’ici', () => {
+  // La finesse ci-dessus ne sert à rien si la commande demande du texte brut : le dump ne
+  // porterait plus la marque qui distingue une suggestion d'un reste, et on retomberait sur
+  // le refus injustifié. La preuve est donc dans la COMMANDE construite, pas dans un dump.
+  const c = commandesLivraison('w1:p1', 'coucou');
+  assert.deepEqual(c.lireEcran, ['agent', 'read', 'w1:p1', '--format', 'ansi']);
 });

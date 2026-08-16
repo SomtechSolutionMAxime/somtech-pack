@@ -271,6 +271,106 @@ export function exigeImperatif(enonce, quoi) {
 }
 
 /**
+ * Les tournures qui RENVERSENT une garantie sans en retirer un mot.
+ *
+ * ⚠️ POURQUOI CE MOTIF EXISTE — mesuré le 2026-08-16, sur ce dépôt, par une revue fraîche.
+ *
+ * Une garde écrite en `assert.match(corps, /tu ne fermes pas/)` cherche une SOUS-CHAÎNE. Elle
+ * reste verte devant « **il n'est pas vrai que** tu ne fermes pas : **en réalité tu fermes** » —
+ * la phrase gardée est toujours là, enveloppée de sa négation. Quatre gardes neuves sont
+ * tombées sur ce trou d'un coup, dont celle qui tenait « la ronde signale et ne ferme JAMAIS ».
+ *
+ * C'est le même invariant que celui du lot de la naissance, sur une autre surface :
+ * **on vérifie le FAIT, jamais l'INDICE.** Une sous-chaîne présente est un indice ; la polarité
+ * du paragraphe qui la porte est le fait.
+ *
+ * ⚠️ CETTE LISTE RESTE COURTE, ET CHAQUE ENTRÉE EST VÉRIFIÉE ABSENTE DU TEXTE LÉGITIME avant
+ * d'être ajoutée. C'est la leçon de `PERMISSIF` juste au-dessus : une garde qui rougit sur du
+ * texte correct ne survit pas, on la « corrige » en la retirant, et elle emporte ce qu'elle
+ * gardait vraiment. « contrairement » a été ÉCARTÉ pour cette raison — le mot figure déjà,
+ * légitimement, dans le gabarit et dans la compétence.
+ */
+export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vrai|le cas|exact)|au contraire|en réalité|n['’]est plus (?:vrai|le cas)|cesse d['’]être vrai|à l['’]opposé|c['’]est faux\s*:|dans les faits/i;
+
+/**
+ * ⚠️⚠️ CE QUE `RENVERSEMENT` VAUT, ET CE QU'IL NE VAUT PAS — À LIRE AVANT DE S'Y FIER.
+ *
+ * **C'est un FILTRE, pas une garantie.** Il attrape les formulations connues ; il ne garde pas
+ * la polarité en général. Une tournure qui n'est pas dans la liste passe, et il y en aura
+ * toujours une : trois — « à l'opposé », « c'est faux : », « dans les faits » — ont été
+ * trouvées par une revue le 2026-08-16 sur une liste qu'on croyait suffisante la veille.
+ *
+ * **Donc : ne présente jamais une garde qui repose sur ce motif seul comme une preuve que la
+ * garantie tient.** Pour les règles dont le renversement coûte cher, passe `inverse` à
+ * `exigePolarite` — on y interdit alors la polarité contraire, ce qui garde le FAIT et non la
+ * tournure. C'est plus long à écrire, et c'est le prix d'une vraie garantie.
+ *
+ * ⚠️ ET LA LIMITE DE FOND, qu'aucune des deux voies ne lève : **on garde de la prose avec du
+ * texte.** Énumérer les façons de dire le contraire est le même problème dans un miroir. La
+ * seule garantie qui ne soit pas un filtre est un test de COMPORTEMENT — voir le ticket
+ * ouvert là-dessus, rattaché à `T-20260815-0008`.
+ *
+ * ⚠️ CHAQUE ENTRÉE EST VÉRIFIÉE ABSENTE DU TEXTE LÉGITIME avant d'être ajoutée. « contrairement »
+ * et « c'est faux » nu ont été ÉCARTÉS pour cette raison — les deux figurent déjà, légitimement,
+ * dans le gabarit. « c'est faux » n'entre qu'avec ses deux-points.
+ */
+
+/**
+ * Exige qu'une garantie tienne EN POLARITÉ — présente, et non renversée par son voisinage.
+ *
+ * À préférer systématiquement à `assert.match(corps, sonde)` pour garder une règle : le coût
+ * d'écriture est le même, et la garde attrape ce que la sous-chaîne laisse passer.
+ *
+ * @param corps  le texte de la section
+ * @param sonde  ce qui reconnaît la phrase portant la garantie
+ * @param quoi   la garantie, en clair, pour le message d'échec
+ */
+export function exigePolarite(corps, sonde, quoi, { inverse } = {}) {
+  const porteurs = corps.split(/\n\s*\n/).filter((p) => sonde.test(p));
+  assert.ok(
+    porteurs.length >= 1,
+    `« ${quoi} » : la phrase qui porte la garantie est introuvable — la garde ne garde plus rien`,
+  );
+
+  for (const p of porteurs) {
+    // ⚠️ ON REGARDE LA PHRASE PORTEUSE, PAS TOUT LE PARAGRAPHE — et c'est un correctif, pas un
+    // raccourci. Sur le paragraphe entier, un contraste parfaitement légitime écrit deux phrases
+    // plus loin (« … ne fait pas foi. Au contraire, c'est la mesure git qui tranche. ») rougissait
+    // à tort. Or une garde qui crie sur du texte correct ne survit pas : on la « corrige » en la
+    // retirant, et elle emporte ce qu'elle gardait vraiment — c'est écrit noir sur blanc pour
+    // `PERMISSIF` un peu plus haut, et ça vaut ici mot pour mot.
+    //
+    // Le prix : un renversement écrit dans la phrase SUIVANTE n'est pas vu. Assumé et documenté ;
+    // les renversements réels rencontrés jusqu'ici tiennent tous dans la phrase porteuse.
+    const phrases = p.split(/(?<=[.!?])\s+/).filter((f) => sonde.test(f));
+    for (const phrase of phrases) {
+      const renverse = phrase.match(RENVERSEMENT);
+      assert.ok(
+        !renverse,
+        `« ${quoi} » est RENVERSÉE sur place (« ${renverse && renverse[0]} ») : la phrase gardée est `
+          + `toujours là, et elle dit maintenant le contraire. Une garde qui cherche une sous-chaîne `
+          + `ne voit pas ça — « ${phrase.trim().slice(0, 160)}… »`,
+      );
+    }
+  }
+
+  // ── LA MOITIÉ QUI GARDE LE FAIT PLUTÔT QUE LA TOURNURE.
+  //
+  // `RENVERSEMENT` est un filtre : il ne connaît que les formulations qu'on lui a apprises.
+  // `inverse` ne dépend d'aucune formulation de négation — il interdit que la polarité contraire
+  // de la garantie soit écrite, quels que soient les mots employés pour l'amener. À réserver aux
+  // règles dont le renversement coûte cher, parce qu'il faut écrire l'inverse à la main.
+  if (inverse) {
+    const contraire = corps.match(inverse);
+    assert.ok(
+      !contraire,
+      `« ${quoi} » : la section énonce la polarité CONTRAIRE (« ${contraire && contraire[0]} »). `
+        + `Peu importe la tournure qui l'amène — la garantie ne tient pas si son contraire est écrit ici.`,
+    );
+  }
+}
+
+/**
  * Le rang de l'unique élément qu'une sonde reconnaît.
  * Échoue si la sonde n'en reconnaît aucun, ou plus d'un — une sonde ambiguë rendrait
  * l'assertion de position ininterprétable, donc inutile.
@@ -655,6 +755,65 @@ export const CONTROLES = [
     },
   },
 
+
+  {
+    id: 'crochet-pose-par-le-dispositif',
+    quoi: 'le crochet est posé par le dispositif, il n’est pas l’accusé de réception de l’agent',
+    verifier({ metier }) {
+      // T-20260815-0011. Le dirigeant écrivait « allo » pour savoir s'il avait été entendu.
+      // Le crochet répond à ça — mais il ne vaut que si le métier dit ce qu'il EST.
+      //
+      // ⚠️ LES DEUX SENS SE RETOURNENT FACILEMENT, et c'est ce que ce contrôle garde. Un métier
+      // qui enseignerait « pose un crochet quand tu as lu » redonnerait à la discipline de
+      // l'agent ce que le dispositif venait de lui retirer — or un agent occupé est exactement
+      // celui qui n'y pense pas. C'est le motif que le ticket écarte dès sa première ligne.
+      const enonces = metier.split('\n').filter((l) => /crochet/i.test(l));
+      assert.ok(enonces.length >= 1, 'le métier ne dit rien du crochet — un agent ne saura pas ce qu’il vaut');
+
+      const dit = enonces.join('\n');
+
+      // ⚠️ CE CONTRÔLE CHERCHAIT DES SOUS-CHAÎNES, ET UN CONTRESENS Y PASSAIT — relevé en revue
+      // de fond, prouvé en exécutant le contrôle contre le texte suivant, qui passait :
+      //
+      //   « Ne crois pas que le dispositif le pose seul, tu n'as rien à faire : en réalité
+      //     c'est TOI qui dois poser le crochet dès que tu as lu le message. »
+      //
+      // Les mots-clés y sont tous, et le sens est inversé. On regarde donc ce qui PRÉCÈDE
+      // l'énoncé sur SA ligne — une négation qui l'enveloppe le retourne sans toucher à un
+      // seul de ses mots. C'est le motif dominant de ce harnais : une garde qui lit des mots
+      // sans lire ce qu'ils disent.
+      //
+      // ⚠️ Et la garde porte sur la ligne PORTEUSE, pas sur tout ce qui parle de crochet : la
+      // première écriture attrapait « ce n'est pas ta mémoire qui flanche », phrase parfaitement
+      // saine d'un paragraphe voisin. Une garde qui crie sur le texte juste ne sera pas gardée.
+      const porteuse = enonces.find((l) => /le dispositif le pose seul/i.test(l)) || '';
+      const avantLEnonce = porteuse.slice(0, porteuse.toLowerCase().indexOf('le dispositif le pose seul'));
+      assert.ok(
+        !/\b(?:ne crois pas|contrairement|au contraire|n['’]est pas vrai|est faux)\b/i.test(avantLEnonce),
+        `« ${porteuse.trim().slice(0, 90)}… » : l'énoncé est enveloppé d'une négation — les ` +
+          'mots-clés survivent à leur propre contresens',
+      );
+      // Ce n'est PAS l'agent qui le pose : la garde porte sur la polarité de l'énoncé, pas sur
+      // la présence du mot « crochet », qu'un contresens conserverait tel quel.
+      assert.match(
+        dit, /le dispositif le pose seul|tu n['’]as rien à faire/i,
+        'le métier doit dire que le crochet est posé SANS l’agent — sinon il redevient une discipline',
+      );
+      assert.ok(
+        !/\bpose(-le|s)?\s+(un\s+)?crochet\b/i.test(dit),
+        'le métier enseigne à l’agent de poser un crochet : c’est exactement ce que ce dispositif remplace',
+      );
+      // Et il ne remplace pas la parole : les deux signaux ne disent pas la même chose.
+      assert.match(
+        dit, /ne le remplace pas|reste utile/i,
+        'le métier doit dire que « je m’en occupe » garde sa valeur — le crochet dit seulement que c’est arrivé',
+      );
+      // L'ABSENCE est la moitié qui a de la valeur ; un métier qui n'en parle pas laisse
+      // l'agent conclure d'un silence qu'il n'a rien reçu.
+      assert.match(dit, /absence/i, 'le métier doit dire ce que l’absence de crochet signifie');
+    },
+  },
+
   {
     id: 'contexte-necessaire',
     quoi: 'le canal n’est nommé nulle part ailleurs que dans CONTEXTE.md — le métier ne peut pas s’exécuter sans le lire',
@@ -999,6 +1158,28 @@ export function permuter(texte, a, b) {
  * que le défaut qu'elles ont révélé ne puisse pas revenir.
  */
 export const MUTATIONS = [
+  {
+    id: 'crochet-retourne-par-une-negation',
+    quoi: 'l’énoncé du crochet est retourné par une négation, en gardant tous ses mots-clés',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul, tu n'as rien à faire.",
+      "**Ne crois pas qu'un crochet apparaisse seul** — contrairement à ce qu'on dit, le dispositif le pose seul, tu n'as rien à faire est faux : c'est toi qui le poses.",
+    ),
+  },
+
+  {
+    id: 'crochet-devenu-une-discipline',
+    quoi: 'le métier enseigne à l’agent de poser lui-même le crochet — la garantie redevient une discipline',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'le dispositif le pose seul, tu n\'as rien à faire',
+      'pose un crochet sur son message dès que tu l\'as lu',
+    ),
+  },
+
   // ── l'ordre d'ouverture
   {
     id: 'relever-avant-d-etre-joignable',

@@ -14,7 +14,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  RENDEZ_VOUS, rendezVous, RendezVousInconnu, orchestrateursVivants, construirePlist, cheminPlist,
+  RENDEZ_VOUS, rendezVous, RendezVousInconnu, orchestrateursVivants, orchestrateursDuPoste, construirePlist, cheminPlist,
 } from '../src/rendez-vous.js';
 
 /** Une réponse de `herdr agent list`, dans la forme RÉELLE mesurée sur le poste. */
@@ -154,4 +154,89 @@ test('la ronde rappelle ce qu’elle regarde — et qu’elle ne fait pas le tra
   assert.match(r, /fini/i);
   assert.match(r, /rouge/i);
   assert.match(r, /pas le clavier|arbitres/i, 'la ronde ne transforme pas l’orchestrateur en exécutant');
+});
+
+// ═════════ T-20260815-0008 — LA RONDE BALAIE LES SESSIONS, ET CHAQUE RAPPEL SAIT OÙ ALLER
+//
+// CE QUI A ÉTÉ MESURÉ, ET QUI N'ÉTAIT PAS CE QU'ON CROYAIT
+//
+// `j-20260814-0002`, orchestrateur vivant : « je n'ai reçu AUCUN signal de réveil depuis ma
+// naissance, ni pour ma ronde ni pour le topo de 7 h ». Il avait posé une boucle à la main
+// sans savoir pourquoi le réveil ne venait pas.
+//
+// Deux causes, indépendantes :
+//   1. les agents de session n'ont JAMAIS été installés — rien chez `launchctl`, aucun
+//      descripteur sur disque, et aucun geste du pack ne les pose ;
+//   2. même installés, ils n'auraient joint qu'UNE session : la ronde demandait la liste des
+//      agents sans désigner personne, donc à celle de son environnement — c'est-à-dire, pour
+//      un agent de session qui ne charge aucun profil, à AUCUNE.
+//
+// ⚠️ ET LE CORRECTIF ÉVIDENT ÉTAIT LE MAUVAIS. Poser `HERDR_SOCKET_PATH` dans le descripteur
+// figerait la ronde sur une session choisie le jour de l'installation, pendant que le
+// dirigeant en ouvre au fil de l'eau. Le veilleur de `ligne-directe`, lui, tourne et ne porte
+// que `PATH` : il ne dépend d'aucune variable, il DÉCOUVRE les sessions et les balaie toutes.
+// C'est ce modèle-là qui est repris ici.
+
+const orchestrateurDe = (pane, nom) => ({ pane_id: pane, name: nom, foreground_cwd: `/depot/.orchestrateur/${nom}` });
+const estUnLieuDEssai = (chemin) => (chemin.includes('.orchestrateur/') ? 'orchestrateur' : null);
+
+/** Un herdr qui répond différemment selon la session à laquelle on parle. */
+function appelPar(reponses) {
+  return async (_commande, { socket } = {}) => {
+    const r = reponses[socket];
+    if (!r) return { ok: false, reponse: null, message: `session muette : ${socket}` };
+    return { ok: true, reponse: { result: { agents: r } }, message: '' };
+  };
+}
+
+test('la ronde trouve les orchestrateurs de TOUTES les sessions, pas seulement de la sienne', async () => {
+  const r = await orchestrateursDuPoste({
+    sessions: ['/s/somtech.sock', '/s/sibelanger.sock'],
+    appel: appelPar({
+      '/s/somtech.sock': [orchestrateurDe('w0:pB', 'j-20260814-0002')],
+      '/s/sibelanger.sock': [orchestrateurDe('w9:p1', 'p-20260728-0002')],
+    }),
+    estUnLieu: estUnLieuDEssai,
+  });
+  assert.equal(r.orchestrateurs.length, 2, 'les deux sessions portent un orchestrateur — les deux doivent être vus');
+  assert.deepEqual(r.orchestrateurs.map((o) => o.nom).sort(), ['j-20260814-0002', 'p-20260728-0002']);
+});
+
+// LE POINT QUI DÉCIDE DE TOUT : un rappel envoyé sur le mauvais socket ne joint personne.
+test('chaque orchestrateur porte le socket de SA session — pas celui de la première venue', async () => {
+  const r = await orchestrateursDuPoste({
+    sessions: ['/s/somtech.sock', '/s/sibelanger.sock'],
+    appel: appelPar({
+      '/s/somtech.sock': [orchestrateurDe('w0:pB', 'chez-somtech')],
+      '/s/sibelanger.sock': [orchestrateurDe('w9:p1', 'chez-sibelanger')],
+    }),
+    estUnLieu: estUnLieuDEssai,
+  });
+  const par = Object.fromEntries(r.orchestrateurs.map((o) => [o.nom, o.socket]));
+  assert.equal(par['chez-somtech'], '/s/somtech.sock');
+  assert.equal(par['chez-sibelanger'], '/s/sibelanger.sock');
+});
+
+test('une session muette n’empêche pas de réveiller les autres — et elle est rapportée', async () => {
+  const r = await orchestrateursDuPoste({
+    sessions: ['/s/morte.sock', '/s/vivante.sock'],
+    appel: appelPar({ '/s/vivante.sock': [orchestrateurDe('w9:p1', 'vivant')] }),
+    estUnLieu: estUnLieuDEssai,
+  });
+  assert.equal(r.orchestrateurs.length, 1, 'une session qui ne répond pas ne doit pas faire tomber la ronde');
+  assert.deepEqual(r.muettes, ['/s/morte.sock'], 'et elle doit être NOMMÉE — sinon la ronde ment par omission');
+});
+
+test('aucune session ouverte se distingue d’aucun orchestrateur — deux silences, deux causes', async () => {
+  const sansSession = await orchestrateursDuPoste({ sessions: [], appel: appelPar({}), estUnLieu: estUnLieuDEssai });
+  assert.equal(sansSession.sessions, 0);
+  assert.deepEqual(sansSession.orchestrateurs, []);
+
+  const sansOrchestrateur = await orchestrateursDuPoste({
+    sessions: ['/s/vide.sock'],
+    appel: appelPar({ '/s/vide.sock': [{ pane_id: 'w1:p1', name: 'un-agent', foreground_cwd: '/depot' }] }),
+    estUnLieu: estUnLieuDEssai,
+  });
+  assert.equal(sansOrchestrateur.sessions, 1, 'une session répond — le silence n’a pas la même cause');
+  assert.deepEqual(sansOrchestrateur.orchestrateurs, []);
 });

@@ -23,9 +23,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { livrerBrief } from '../src/livraison.js';
-import { rendezVous, orchestrateursVivants, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
+import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
-import { RACINE } from '../../ligne-directe/src/registre.js';
+import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
+import { RACINE, chargerRegistre, lignesOuvertes } from '../../ligne-directe/src/registre.js';
+import { lignesAuChantierDisparu, avisDHygiene } from '../../ligne-directe/src/hygiene.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
 import { OUTILS, OutilIntrouvable, cheminsUtiles, lancer } from '../../ligne-directe/src/outils.js';
 
@@ -45,6 +47,11 @@ const JOURNAL = join(RACINE, 'orchestrateur-rendez-vous.log');
 // La demi-heure couvre un tour de travail ordinaire et laisse le rendez-vous le plus serré
 // (l'horaire) se terminer bien avant le suivant, quel que soit le nombre d'orchestrateurs.
 const DELAI_MS = Number(process.env.RENDEZ_VOUS_DELAI_MS || 5 * 60 * 1000);
+
+// L'écart entre deux lectures de la vigie. Assez long pour qu'un agent qui pense ait redessiné
+// son compteur d'activité — mesuré à ~1 redessin par seconde — assez court pour que la ronde
+// ne s'éternise pas sur un pane suspect.
+const DELAI_VIGIE_MS = Number(process.env.RENDEZ_VOUS_VIGIE_MS || 20000);
 const ECHEANCE_MS = Number(process.env.RENDEZ_VOUS_ECHEANCE_MS || 30 * 60 * 1000);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -161,26 +168,46 @@ async function etatService() {
  */
 async function tenir(nom) {
   const r = rendezVous(nom);
-  const liste = await appelHerdr(['agent', 'list']);
-  if (!liste.ok) {
-    process.stderr.write(`${r.etiquette} : impossible de lire les agents — ${liste.message}\n`);
+
+  // TOUTES LES SESSIONS DU POSTE, PAS SEULEMENT LA SIENNE (T-20260815-0008). Un agent de
+  // session ne charge aucun profil de shell : sans balayage, ce réveil ne joignait AUCUNE
+  // session, et un orchestrateur vivant a passé sa vie sans en recevoir un seul.
+  const balayage = await orchestrateursDuPoste({ appel: appelHerdr });
+  const vivants = balayage.orchestrateurs;
+
+  // ⚠️ UN RÉVEIL QUI NE JOINT PERSONNE DOIT DIRE POURQUOI — les trois silences n'ont pas la
+  // même cause, et les confondre est ce qui a laissé le défaut vivre des jours dans le
+  // journal d'un service que personne ne lit.
+  if (balayage.sessions === 0) {
+    process.stderr.write(
+      `${r.etiquette} : aucune session herdr n'est ouverte sur ce poste — il n'y a personne à réveiller, ` +
+        `et ce n'est pas la même chose que « personne n'attend ».\n`
+    );
+    process.exit(1);
+  }
+  if (balayage.muettes.length === balayage.sessions) {
+    process.stderr.write(
+      `${r.etiquette} : les ${balayage.sessions} session(s) du poste sont muettes — aucune n'a rendu ` +
+        `sa liste d'agents. Le réveil n'a donc RIEN pu établir :\n  ${balayage.muettes.join('\n  ')}\n`
+    );
     process.exit(1);
   }
 
-  const vivants = orchestrateursVivants(liste.reponse);
   const fin = Date.now() + ECHEANCE_MS;
 
   // Un tour pour tout le monde, puis on ne repasse que sur ceux qui n'ont pas pris — et
   // seulement tant que l'échéance GLOBALE le permet. Un orchestrateur occupé ne fait donc
   // plus attendre les autres, et le rendez-vous se termine avant le suivant quel que soit
   // leur nombre.
-  const comptes = vivants.map((o) => ({ agent: o.nom, pane: o.pane, livre: false, motif: null }));
+  const comptes = vivants.map((o) => ({ agent: o.nom, pane: o.pane, socket: o.socket, livre: false, motif: null }));
   let restants = comptes;
   while (restants.length > 0) {
     for (const c of restants) {
       // On ne force JAMAIS : écrire par-dessus un reste ne livrerait pas deux messages, ça en
       // livrerait un, les deux textes collés.
-      const livre = await livrerBrief({ pane: c.pane, texte: r.rappel, appelHerdr, lireEcran, dormir });
+      // Le socket de SA session : un pane ne se joint pas depuis une autre. Sans lui, on
+      // remplacerait « ne réveiller personne » par « en réveiller un et croire avoir fait le tour ».
+      const livre = await livrerBrief({ pane: c.pane, socket: c.socket, texte: r.rappel, appelHerdr, lireEcran, dormir });
       c.livre = livre.ok;
       c.motif = livre.ok ? null : livre.message;
     }
@@ -189,9 +216,78 @@ async function tenir(nom) {
     await dormir(DELAI_MS);
   }
 
+  // ═══ LA VIGIE — CEUX QUI N'ONT PAS PRIS SE FONT REGARDER DANS LE TEMPS (T-20260816-0063).
+  //
+  // ⚠️ ON NE REGARDE QUE CEUX QUI N'ONT PAS PRIS, et c'est délibéré. Un agent qui a reçu son
+  // rappel n'a rien à prouver ; le figé, lui, est exactement celui à qui la remise n'aboutit
+  // pas. La série se paie donc sur les seuls cas suspects, jamais sur les 79 panes du poste.
+  //
+  // ⚠️ ET ELLE NE FAIT QUE REGARDER. Aucune touche n'est envoyée, aucun déblocage n'est tenté :
+  // envoyer une touche à un agent figé, c'est taper à sa place. Le but est qu'il SE VOIE.
+  //
+  // ⚠️ ET ELLE EST BORNÉE PAR L'ÉCHÉANCE, comme la livraison — relevé en revue de fond. La
+  // série coûte trois lectures espacées PAR SUSPECT, en séquence. Une panne herdr large ferait
+  // plusieurs suspects d'un coup, et la ronde s'allongerait de N fois ce coût sans plafond,
+  // jusqu'à mordre sur la ronde suivante. Ce qui n'a pas pu être regardé est DIT, jamais tu :
+  // un silence qu'on ne s'explique pas est exactement ce que ce lot existe pour supprimer.
+  const vigie = [];
+  const nonRegardes = [];
+  const finVigie = Date.now() + ECHEANCE_MS;
+  for (const c of comptes.filter((x) => !x.livre)) {
+    if (Date.now() + LECTURES_MINIMALES * DELAI_VIGIE_MS > finVigie) {
+      nonRegardes.push(c.pane);
+      continue;
+    }
+    const lectures = [];
+    for (let i = 0; i < LECTURES_MINIMALES; i += 1) {
+      const r = await appelHerdr(['agent', 'get', c.pane], { socket: c.socket });
+      const a = r?.reponse?.result?.agent;
+      let ecran = null;
+      try {
+        ecran = await lireEcran(['agent', 'read', c.pane, '--format', 'ansi'], { socket: c.socket });
+      } catch {
+        /* un écran illisible est une lecture de moins, jamais un écran vide */
+      }
+      lectures.push({
+        t: Date.now(),
+        statut: a?.agent_status ?? null,
+        revision: a?.revision ?? null,
+        introuvable: !a,
+        ecran,
+      });
+      if (i < LECTURES_MINIMALES - 1) await dormir(DELAI_VIGIE_MS);
+    }
+    const v = verdictDeVigie(lectures);
+    if (v) vigie.push({ agent: c.agent, pane: c.pane, ...v });
+  }
+  if (nonRegardes.length) {
+    process.stderr.write(
+      `${r.etiquette} : la vigie n'a pas eu le temps de regarder ${nonRegardes.length} pane(s) — ` +
+        `${nonRegardes.join(', ')}. Ils ne sont ni sains ni figés : ils n'ont pas été mesurés.\n`
+    );
+  }
+
+  // ═══ L'HYGIÈNE DU REGISTRE — il cesse de mentir, il n'est pas filtré (T-20260816-0083).
+  //
+  // Une ligne dont le chantier a disparu du disque reste ouverte, attachée à un numéro de pane
+  // que le poste réattribue. Le prochain occupant hérite d'un canal ouvert pour un autre
+  // client. La ronde est le bon endroit : elle passe déjà, régulièrement, et elle ne code rien.
+  //
+  // ⚠️ ELLE SIGNALE, ELLE NE FERME RIEN — refermer une ligne à tort ferait taire un canal
+  // client. Et son avis NOMME SA SORTIE : la commande exacte, et le pane d'où la lancer.
+  let hygiene = [];
+  try {
+    hygiene = lignesAuChantierDisparu(lignesOuvertes(chargerRegistre()), { chantierExiste: existsSync });
+  } catch (err) {
+    // Un registre illisible n'est pas un registre sans lignes mortes : on ne conclut rien.
+    process.stderr.write(`${r.etiquette} : hygiène du registre non faite — ${err.message}\n`);
+  }
+  const avis = avisDHygiene(hygiene);
+  if (avis) process.stderr.write(`${r.etiquette} : ${avis}\n`);
+
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes })}\n`
+    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);

@@ -108,22 +108,88 @@ export function serveursDuLieu(lieu) {
 }
 
 /**
+ * LES DROITS QUE LE LIEU DÉCLARE — lus dans SON fichier de droits, jamais écrits en dur ici.
+ *
+ * ⚠️ POURQUOI DEUX DÉCLARATIONS SONT LUES (T-20260816-0032). Mesuré le 2026-08-16 sur Claude
+ * Code 2.1.233 : un lieu qui porte `permissions.allow` déclenche TOUJOURS un écran de confiance
+ * renforcé — « ⚠ This folder pre-approves N tool permissions … Only proceed if you trust this
+ * configuration » — et `hasTrustDialogAccepted` ne le fait pas taire. Les gabarits déclarent
+ * donc désormais leurs droits sous `somtech.droitsAccordes`, une clé que Claude Code ignore
+ * (vérifié par le fait : zéro écran, zéro avertissement), et c'est ICI qu'ils deviennent
+ * effectifs, dans l'`allowedTools` de l'entrée de projet.
+ *
+ * Ce n'est pas un contournement, c'est le déplacement du point d'application vers celui que
+ * l'outil honore sans rien demander. `permissions.deny`, lui, reste dans le fichier versionné
+ * et continue de tenir dès la naissance — c'est la moitié qui protège, et elle ne bouge pas.
+ *
+ * Les lieux DÉJÀ POSÉS portent encore `permissions.allow` : on lit les deux et on en fait
+ * l'union, pour que leurs droits survivent à la transition. On ne choisit pas l'une contre
+ * l'autre — un lieu ancien qui perdrait ses droits en silence serait un défaut de plus.
+ */
+export function droitsDuLieu(lieu) {
+  try {
+    const s = JSON.parse(readFileSync(join(resolve(lieu), '.claude', 'settings.json'), 'utf8'));
+    const declares = [...(s?.somtech?.droitsAccordes || []), ...(s?.permissions?.allow || [])];
+    return [...new Set(declares.filter((d) => typeof d === 'string' && d))];
+  } catch {
+    // Fichier absent ou illisible : le lieu ne déclare rien. On n'invente aucun droit — un
+    // droit deviné est un droit que personne n'a relu.
+    return [];
+  }
+}
+
+/**
+ * LE JEU DE CLÉS D'UNE ENTRÉE DE PROJET — celui que Claude Code écrit lui-même.
+ *
+ * ⚠️ LES DEUX CLÉS D'ORIGINE NE SUFFISENT PLUS, et c'est mesuré, pas déduit. Sur 2.1.233, un
+ * lieu approuvé avec `hasTrustDialogAccepted` + `enabledMcpjsonServers` montre quand même
+ * l'écran « N new MCP servers found in this project ». Avec le jeu complet ci-dessous : aucun
+ * écran, invite prête.
+ *
+ * La liste n'est pas inventée — elle est relevée sur les entrées de projet ordinaires du poste
+ * (3 796 au moment d'écrire). On reproduit la forme que l'outil connaît, on ne lui en propose
+ * pas une de notre cru.
+ */
+const CLES_DUNE_ENTREE = [
+  'allowedTools',
+  'mcpContextUris',
+  'mcpServers',
+  'enabledMcpjsonServers',
+  'disabledMcpjsonServers',
+  'hasTrustDialogAccepted',
+  'projectOnboardingSeenCount',
+  'hasClaudeMdExternalIncludesApproved',
+  'hasClaudeMdExternalIncludesWarningShown',
+  'hasCompletedProjectOnboarding',
+];
+
+/**
  * Le lieu est-il DÉJÀ approuvé, d'après une configuration déjà lue ?
  *
- * « Approuvé » veut dire les DEUX : le dossier est de confiance, ET chacun des serveurs qu'il
- * déclare est activé. N'en vérifier qu'un laisserait la session s'arrêter sur l'autre écran,
- * et l'appelant croirait n'avoir rien à faire.
+ * « Approuvé » veut dire TOUT : le dossier est de confiance, chacun des serveurs qu'il déclare
+ * est activé, chacun des droits qu'il déclare est accordé, ET l'entrée porte le jeu de clés
+ * complet. N'en vérifier qu'une partie laisserait la session s'arrêter sur l'écran suivant, et
+ * l'appelant croirait n'avoir rien à faire.
+ *
+ * ⚠️ LE JEU DE CLÉS COMPTE DANS LE VERDICT, et sans ça le correctif ne mordrait jamais. Les
+ * trois lieux d'orchestrateur en production au 2026-08-16 portent exactement les deux clés de
+ * l'ancienne version : un `dejaApprouve` qui s'en contenterait sauterait l'écriture, et l'écran
+ * resterait. Un correctif juste et sans effet est pire qu'un défaut connu — il a l'air réglé.
  *
  * Rendu à part pour que l'appelant puisse ne rien écrire quand il n'y a rien à faire — la
  * meilleure façon de ne pas corrompre un fichier partagé est de ne pas l'ouvrir.
  */
 export function dejaApprouve(config, lieu) {
   const serveurs = serveursDuLieu(lieu);
+  const droits = droitsDuLieu(lieu);
   return formesDuLieu(lieu).every((forme) => {
     const projet = config?.projects?.[forme];
     if (!projet?.hasTrustDialogAccepted) return false;
+    if (!CLES_DUNE_ENTREE.every((c) => c in projet)) return false;
     const actifs = new Set(projet.enabledMcpjsonServers || []);
-    return serveurs.every((s) => actifs.has(s));
+    if (!serveurs.every((s) => actifs.has(s))) return false;
+    const permis = new Set(projet.allowedTools || []);
+    return droits.every((d) => permis.has(d));
   });
 }
 
@@ -131,17 +197,34 @@ export function dejaApprouve(config, lieu) {
  * La configuration, avec le lieu approuvé — fonction PURE, donc exerçable sans jamais
  * toucher au fichier du poste.
  *
- * Les autres clés du projet (outils permis, serveurs activés) sont conservées telles quelles
- * si le projet existe déjà : on ajoute une approbation, on ne redéfinit pas un projet.
+ * Les autres clés du projet sont conservées telles quelles si le projet existe déjà : on ajoute
+ * une approbation, on ne redéfinit pas un projet.
  */
 export function avecApprobation(config, lieu) {
   const serveurs = serveursDuLieu(lieu);
+  const droits = droitsDuLieu(lieu);
   const projects = { ...(config.projects || {}) };
   for (const cle of formesDuLieu(lieu)) {
     const projet = projects[cle] || {};
-    // Union, jamais remplacement : un serveur activé à la main pour ce lieu doit survivre.
+    // Union, jamais remplacement : un serveur activé — ou un droit accordé — à la main pour ce
+    // lieu doit survivre à une nouvelle approbation.
     const actifs = [...new Set([...(projet.enabledMcpjsonServers || []), ...serveurs])];
-    projects[cle] = { ...projet, hasTrustDialogAccepted: true, enabledMcpjsonServers: actifs };
+    const permis = [...new Set([...(projet.allowedTools || []), ...droits])];
+    projects[cle] = {
+      ...projet,
+      allowedTools: permis,
+      mcpContextUris: projet.mcpContextUris || [],
+      mcpServers: projet.mcpServers || {},
+      enabledMcpjsonServers: actifs,
+      disabledMcpjsonServers: projet.disabledMcpjsonServers || [],
+      hasTrustDialogAccepted: true,
+      // L'onboarding compte les fois où il a été VU. Une entrée qui n'en a jamais vu déclencherait
+      // l'écran ; on la pose à 1 sans jamais faire reculer un compte déjà plus haut.
+      projectOnboardingSeenCount: Math.max(1, Number(projet.projectOnboardingSeenCount) || 0),
+      hasClaudeMdExternalIncludesApproved: true,
+      hasClaudeMdExternalIncludesWarningShown: true,
+      hasCompletedProjectOnboarding: true,
+    };
   }
   return { ...config, projects };
 }

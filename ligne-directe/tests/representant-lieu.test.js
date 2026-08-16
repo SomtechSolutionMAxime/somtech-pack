@@ -19,6 +19,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { preparerLieuRepresentant, etatLieu, aFichierEnvironnement, GABARITS } from '../src/representant.js';
+import { variablesReferencees } from '../src/mcp-env.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -161,31 +162,178 @@ test('le lieu créé ne donne accès qu’au ServiceDesk — Somcraft est struct
   assert.ok(!serveurs.includes('somcraft'), 'Somcraft ne doit figurer NULLE PART dans les serveurs déclarés');
 });
 
-// ═══════════════════════════════ 5. le fichier d'environnement — prévient sans bloquer, dans les DEUX sens
+// ═══════════════════════════════ 5. l'accès au registre — prévient sans bloquer, dans les DEUX sens
+//
+// ⚠️ CE QUE CETTE SECTION MESURE A CHANGÉ, ET C'EST LE DÉFAUT T-20260815-0023.
+//
+// Elle éprouvait les deux sens SUR LE FICHIER : « un `.env` existe-t-il à la racine ? ». C'est
+// l'INDICE au lieu du FAIT. Un dépôt sans `.env` dont le shell porte déjà les variables était
+// averti pour rien ; un dépôt avec un `.env` qui ne déclare PAS ce que le `.mcp.json` réclame
+// se taisait — et l'agent naissait muet, sans que rien ne le dise.
+//
+// ⚠️ ET LE PIÈGE DU CORRECTIF, NOMMÉ PAR LE TICKET : consulter `process.env` À CÔTÉ du test de
+// fichier et se taire dès que l'un des deux répond. Ça ne fait que remplacer un faux positif
+// par un faux négatif — la PRÉSENCE du fichier ne prouve toujours rien. La seule question est
+// « ces variables-là sont-elles résolubles, oui ou non ? », et le troisième cas ci-dessous est
+// celui qui saute quand on corrige vite. C'est pour lui que cette section existe.
+//
+// Les variables ne sont JAMAIS écrites en dur ici : elles sont lues du `.mcp.json` du gabarit,
+// exactement comme le code sous test les lit. Un gabarit qui changerait de serveur MCP demain
+// ferait suivre ces tests sans une ligne à toucher.
 
-test('avertit sans bloquer : dépôt sans fichier d’environnement — créé quand même, avec un avertissement', async () => {
-  const depot = depotClientJetable();
-  assert.equal(aFichierEnvironnement(depot), false);
+/** Ce que le gabarit du représentant réclame RÉELLEMENT — jamais une liste écrite à la main. */
+const RECLAMEES = variablesReferencees(join(GABARIT_SOURCE, '.mcp.json'));
 
-  const r = await preparerLieuRepresentant({
+/**
+ * Exécute `f` avec un environnement de processus MAÎTRISÉ pour les variables nommées.
+ *
+ * Sans ça, cette suite mesurerait l'environnement du POSTE qui la lance : un développeur dont
+ * le shell porte déjà `SOMTECH_DESK_API_KEY` verrait vert un test que l'intégration continue,
+ * elle, verrait rouge — ou l'inverse. La valeur posée est un jeton FACTICE, et aucune
+ * assertion ne la lit : ce qu'on éprouve, ce sont des NOMS et un verdict présent/absent.
+ */
+async function avecEnvironnement(valeurs, f) {
+  const avant = new Map();
+  for (const [k, v] of Object.entries(valeurs)) {
+    avant.set(k, Object.prototype.hasOwnProperty.call(process.env, k) ? process.env[k] : undefined);
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    return await f();
+  } finally {
+    for (const [k, v] of avant) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+/** Les variables du gabarit, toutes retirées de l'environnement du processus. */
+const AUCUNE = () => Object.fromEntries(RECLAMEES.map((v) => [v, undefined]));
+
+const poser = (depot) =>
+  preparerLieuRepresentant({
     depotClient: depot, client: 'client-x', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
   });
 
-  assert.equal(r.cree, true, 'l’absence de fichier d’environnement ne doit JAMAIS bloquer la création');
-  assert.ok(r.avertissements.length > 0, 'et elle doit le dire');
+test('le gabarit du représentant réclame au moins une variable — sinon toute cette section ne prouve rien', () => {
+  assert.ok(RECLAMEES.length > 0, 'aucun ${…} dans le .mcp.json du gabarit : les cas qui suivent seraient vides');
 });
 
-test('aucun avertissement quand le dépôt porte déjà un fichier d’environnement', async () => {
+test('CRITÈRE 1 — aucun fichier d’environnement, mais le processus porte les variables : AUCUN avertissement', async () => {
+  // C'est le faux positif de T-20260815-0023, dans sa forme la plus courante : `claude-swt`
+  // fournit les jetons au processus, le dépôt n'a aucun `.env`, et l'agent était averti d'un
+  // défaut qui n'existait pas. Un avertissement qui se trompe est un avertissement qu'on
+  // n'écoute plus — c'est ce que ce cas empêche.
   const depot = depotClientJetable();
-  writeFileSync(join(depot, '.env'), 'SOMTECH_DESK_API_KEY=essai\n');
-  assert.equal(aFichierEnvironnement(depot), true);
+  assert.equal(aFichierEnvironnement(depot), false, 'témoin : le dépôt ne porte VRAIMENT aucun fichier d’environnement');
 
-  const r = await preparerLieuRepresentant({
-    depotClient: depot, client: 'client-x', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
-  });
+  const r = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, 'factice'])), () => poser(depot));
 
   assert.equal(r.cree, true);
-  assert.deepEqual(r.avertissements, [], 'un dépôt déjà pourvu ne doit produire aucun faux avertissement');
+  assert.deepEqual(r.avertissements, [], 'des variables résolues par le processus ne doivent produire AUCUN avertissement');
+});
+
+test('CRITÈRE 2 — ni fichier, ni environnement : un avertissement qui NOMME les variables manquantes', async () => {
+  const depot = depotClientJetable();
+
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+
+  assert.equal(r.cree, true, 'l’absence d’accès au registre ne doit JAMAIS bloquer la création');
+  assert.equal(r.avertissements.length, 1, 'et elle doit le dire — une fois');
+  for (const v of RECLAMEES) {
+    assert.match(
+      r.avertissements[0], new RegExp(v),
+      `l’avertissement ne nomme pas « ${v} » — « il manque quelque chose » n’a jamais fait réparer personne`,
+    );
+  }
+});
+
+test('CRITÈRE 3 — un .env présent qui ne déclare PAS les variables attendues : averti QUAND MÊME', async () => {
+  // ⚠️ LE CAS QUI SAUTE QUAND ON CORRIGE VITE, et la raison d'être du ticket. Un correctif qui
+  // se contente d'ajouter `process.env` À CÔTÉ du test de fichier passe les critères 1 et 2 et
+  // ÉCHOUE ici : le fichier existe, donc il se tait, donc l'agent naît muet en silence.
+  // La présence du fichier ne prouve rien — seule la RÉSOLUTION des variables prouve.
+  const depot = depotClientJetable();
+  writeFileSync(join(depot, '.env'), '# un vrai .env, mais pas celui-là\nAUTRE_CHOSE=peu-importe\n');
+  assert.equal(aFichierEnvironnement(depot), true, 'témoin : le fichier est bien là — c’est tout l’intérêt du cas');
+
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+
+  assert.equal(r.avertissements.length, 1, 'un .env qui ne déclare pas ce que le .mcp.json réclame ne résout RIEN');
+  for (const v of RECLAMEES) {
+    assert.match(r.avertissements[0], new RegExp(v), `« ${v} » n’est déclarée nulle part et n’est pourtant pas nommée`);
+  }
+});
+
+test('CRITÈRE 5 — une variable présente mais VIDE dans l’environnement compte comme manquante', async () => {
+  // Une chaîne vide part quand même dans l'en-tête `Authorization` : le serveur répond 401 et
+  // disparaît de la session. « Définie » n'est pas « utilisable » — c'est déjà le verdict de
+  // `mcp_env_missing` côté shell, et il ne se perd pas en traversant vers ici.
+  const depot = depotClientJetable();
+
+  const r = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, ''])), () => poser(depot));
+
+  assert.equal(r.avertissements.length, 1, 'une variable vide a été prise pour une variable fournie');
+  for (const v of RECLAMEES) {
+    assert.match(r.avertissements[0], new RegExp(v));
+  }
+});
+
+test('le sens inverse tient : un .env qui déclare RÉELLEMENT les variables — aucun avertissement', async () => {
+  const depot = depotClientJetable();
+  writeFileSync(join(depot, '.env'), RECLAMEES.map((v) => `${v}=factice`).join('\n') + '\n');
+
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+
+  assert.equal(r.cree, true);
+  assert.deepEqual(r.avertissements, [], 'un dépôt réellement pourvu ne doit produire aucun faux avertissement');
+});
+
+test('un .envrc (direnv, « export VAR=… ») vaut un .env — c’est la même déclaration', async () => {
+  const depot = depotClientJetable();
+  writeFileSync(join(depot, '.envrc'), RECLAMEES.map((v) => `export ${v}="factice"`).join('\n') + '\n');
+
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+  assert.deepEqual(r.avertissements, [], 'la forme « export VAR=… » du .envrc n’a pas été reconnue');
+});
+
+test('un .env qui déclare la variable À VIDE ne la résout pas davantage', async () => {
+  const depot = depotClientJetable();
+  writeFileSync(join(depot, '.env'), RECLAMEES.map((v) => `${v}=`).join('\n') + '\n');
+
+  const r = await avecEnvironnement(AUCUNE(), () => poser(depot));
+  assert.equal(r.avertissements.length, 1, 'une déclaration vide dans un .env a été prise pour une variable fournie');
+});
+
+test('l’avertissement ne laisse JAMAIS fuir une valeur — seulement des noms', async () => {
+  // Un avertissement est imprimé, journalisé, collé dans un ticket. Il ne porte que des NOMS —
+  // la même garantie que `mcp-env.sh` tient côté shell (« ce qu'il ne fait jamais »).
+  const depot = depotClientJetable();
+  const TEMOIN = 'valeur-temoin-qui-ne-doit-jamais-sortir-0001';
+  // Une seule des deux moitiés est fournie côté fichier : il RESTE donc un avertissement, et
+  // c'est lui qu'on fouille. Un test sans avertissement ne prouverait aucune non-fuite.
+  writeFileSync(join(depot, '.env'), `AUTRE_CHOSE=${TEMOIN}\n`);
+
+  const r = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, TEMOIN + '-env'])), () =>
+    preparerLieuRepresentant({
+      depotClient: depot, client: 'client-y', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
+    })
+  );
+  // Ici tout est résolu : rien à dire. On refait le tour avec RIEN de résolu, pour avoir un
+  // avertissement réel à fouiller.
+  assert.deepEqual(r.avertissements, []);
+
+  const depot2 = depotClientJetable();
+  writeFileSync(join(depot2, '.env'), `AUTRE_CHOSE=${TEMOIN}\n`);
+  const r2 = await avecEnvironnement(AUCUNE(), () => poser(depot2));
+
+  assert.equal(r2.avertissements.length, 1);
+  assert.ok(
+    !r2.avertissements.join('\n').includes(TEMOIN),
+    'une valeur d’environnement a fui dans un avertissement — elle finira dans un journal, puis dans un ticket',
+  );
 });
 
 // ═══════════════════════════════ 6. l'EFFET du placement, pas son contenu — défaut confirmé sur #181

@@ -39,7 +39,24 @@ function slackDouble() {
       return { id: `C_${nom}`, nom, reutilise: false };
     },
     async definirSujet() {},
-    async inviter() {},
+    // L'INVITATION A UN EFFET QUE LA LECTURE DES MEMBRES CONSTATE (T-20260814-0136) — sans
+    // quoi ce double ne saurait pas distinguer une invitation émise d'une invitation muette,
+    // qui est très exactement la panne qu'il a laissée passer.
+    membres: [],
+    // `profilsDuCanal` — le cloisonnement demande QUI est là, pas seulement combien
+    // (T-20260813-0074). Dérivé des membres de ce double : des nôtres, ni invités ni d'une
+    // autre organisation, ce qui est le cas nominal de ces essais. Un double muet sur une
+    // question que le code pose n'est pas neutre — il fait refuser des canaux sains.
+    async profilsDuCanal(_j, canal) {
+      const ids = await this.membresDuCanal(_j, canal);
+      return ids.map((id) => ({ id, nom: id, robot: false, invite: false, monoCanal: false, equipe: null }));
+    },
+    async membresDuCanal() {
+      return this.membres;
+    },
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!this.membres.includes(u)) this.membres.push(u);
+    },
     async archiverCanal() {
       return true;
     },
@@ -90,8 +107,8 @@ test('DEUX WORKTREES DU MÊME CHANTIER obtiennent DEUX canaux — vérifié sur 
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: { async agents() { return []; } } });
 
-  const a = await v.ouvrir({ chantier: 'D-20260805-0004', pane: 'w1:p1', worktree: '/w/a' });
-  const b = await v.ouvrir({ chantier: 'D-20260805-0004', pane: 'w2:p2', worktree: '/w/b' });
+  const a = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w1:p1', worktree: '/w/a' });
+  const b = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w2:p2', worktree: '/w/b' });
 
   assert.equal(a.ok && b.ok, true);
   assert.notEqual(a.canal, b.canal, 'deux copies de travail du même dépôt ne doivent pas partager un canal');
@@ -103,8 +120,8 @@ test('rouvrir depuis la MÊME copie de travail reprend le canal au lieu d’en c
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: { async agents() { return []; } } });
 
-  await v.ouvrir({ chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a' });
-  const reprise = await v.ouvrir({ chantier: 'D-1', pane: 'w9:p9', worktree: '/w/a' });
+  await v.ouvrir({ invites: ['UDIR'], chantier: 'D-1', pane: 'w1:p1', worktree: '/w/a' });
+  const reprise = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-1', pane: 'w9:p9', worktree: '/w/a' });
 
   assert.equal(reprise.reprise, true);
   assert.equal(s.crees.length, 1, 'un seul canal doit avoir été créé');

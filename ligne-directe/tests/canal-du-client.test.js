@@ -64,11 +64,27 @@ function slackDouble({ membres = [], canalExistant = null } = {}) {
       }
       return { id: `C_${nom}`, nom, prive: Boolean(prive), reutilise: false };
     },
+    // INVITER A UN EFFET, ET LA LECTURE DES MEMBRES LE VOIT (T-20260814-0136).
+    //
+    // `inviter` était un vide qui ne faisait rien et `membresDuCanal` rendait une liste figée :
+    // le double était donc structurellement INCAPABLE de voir une invitation manquante — six
+    // fichiers d'essais dans ce cas, pendant que la panne mesurée était exactement celle-là.
+    // Un double dont le geste n'a pas d'effet observable ne prouve jamais ce geste.
+    // `profilsDuCanal` — le cloisonnement demande QUI est là, pas seulement combien
+    // (T-20260813-0074). Dérivé des membres de ce double : des nôtres, ni invités ni d'une
+    // autre organisation, ce qui est le cas nominal de ces essais. Un double muet sur une
+    // question que le code pose n'est pas neutre — il fait refuser des canaux sains.
+    async profilsDuCanal(_j, canal) {
+      const ids = await this.membresDuCanal(_j, canal);
+      return ids.map((id) => ({ id, nom: id, robot: false, invite: false, monoCanal: false, equipe: null }));
+    },
     async membresDuCanal() {
       return membres;
     },
     async definirSujet() {},
-    async inviter() {},
+    async inviter(_j, _canal, utilisateurs) {
+      for (const u of utilisateurs) if (!membres.includes(u)) membres.push(u);
+    },
     async archiverCanal(_j, canal) {
       this.archives.push(canal);
       return true;
@@ -104,8 +120,17 @@ const veilleur = (opts = {}) =>
   });
 
 /** Une ligne inscrite au registre, dont le pane a disparu. */
-function ligneOrpheline(nature) {
+/**
+ * `jetable` — depuis T-20260814-0085, l'archivage ne se déduit plus de la nature.
+ *
+ * Une ligne interne est DURABLE par défaut : son canal survit à la fermeture, pour qu'elle
+ * puisse rouvrir sous le même titre. Les essais ci-dessous éprouvent le MÉCANISME d'archivage
+ * (son ordre vis-à-vis du bilan, et son absence sur un canal client) : ils montent donc une
+ * ligne explicitement jetable, qui est le seul cas où ce mécanisme s'exerce encore.
+ */
+function ligneOrpheline(nature, { jetable = false } = {}) {
   return {
+    ...(jetable ? { jetable: true } : {}),
     chantier: nature === 'client' ? 'acme' : 'D-20260805-0005',
     canal_id: 'C_acme',
     canal_nom: 'acme',
@@ -143,8 +168,8 @@ test('CLIENT — la session disparaît : on ne dit RIEN au client, c’est un é
   assert.deepEqual(s.postes, [], 'notre session est morte, la sienne continue : il n’a rien à en savoir');
 });
 
-test('INTERNE — NON-RÉGRESSION : la ligne se referme, le canal s’archive, et le dirigeant l’apprend', async () => {
-  sauverRegistre({ version: 1, lignes: [ligneOrpheline('interne')] });
+test('JETABLE — NON-RÉGRESSION : la ligne se referme, le canal s’archive, et le dirigeant l’apprend', async () => {
+  sauverRegistre({ version: 1, lignes: [ligneOrpheline('interne', { jetable: true })] });
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble({ panesVivants: ['w1:p1'] }) });
 
@@ -186,8 +211,8 @@ test('CLIENT — FERMER une ligne cliente n’archive pas son canal non plus', a
   assert.deepEqual(lignesOuvertes(chargerRegistre()), [], 'et la ligne est bien close');
 });
 
-test('INTERNE — NON-RÉGRESSION : fermer archive le canal, et le bilan part AVANT', async () => {
-  sauverRegistre({ version: 1, lignes: [ligneOrpheline('interne')] });
+test('JETABLE — NON-RÉGRESSION : fermer archive le canal, et le bilan part AVANT', async () => {
+  sauverRegistre({ version: 1, lignes: [ligneOrpheline('interne', { jetable: true })] });
   const s = slackDouble();
   const v = veilleur({ slack: s, herdr: herdrDouble() });
 

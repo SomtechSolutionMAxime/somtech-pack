@@ -95,7 +95,20 @@ export function outilDeNaissance(racine = REPO) {
 /** Les sous-commandes que le CLI du pack accepte réellement. */
 export function sousCommandesDuPack(racine = REPO) {
   const src = readFileSync(join(racine, CHEMIN_CLI), 'utf8');
-  return new Set([...src.matchAll(/case '([a-z][a-z-]*)':\s*return await cmd/g)].map((m) => m[1]));
+  // ⚠️ LE CLI DISPATCHE DE DEUX FAÇONS, ET N'EN LIRE QU'UNE SOUS-ESTIME SA SURFACE.
+  //
+  // La plupart des commandes passent par le `switch`. Mais celles dont les options
+  // n'appartiennent pas au pack — `archi` (les drapeaux du script Python) et `agent` (ceux de
+  // `naitre.js`) — sont relayées AVANT `parseArgs`, verbatim, précisément pour ne pas
+  // redéclarer un contrat qui vit ailleurs. Elles existent tout autant.
+  //
+  // Trouvé par ce contrôle même, en ajoutant `agent naitre` (T-20260816-0038) : il accusait la
+  // compétence d'enseigner une commande inexistante, alors que c'est le RELEVÉ qui était
+  // incomplet. Un contrôle qui ne voit qu'une moitié de ce qu'il mesure finit par accuser le
+  // texte juste — et c'est comme ça qu'on désarme une garde.
+  const parLeSwitch = [...src.matchAll(/case '([a-z][a-z-]*)':\s*return await cmd/g)].map((m) => m[1]);
+  const relayees = [...src.matchAll(/argv\[0\]\s*===\s*'([a-z][a-z-]*)'/g)].map((m) => m[1]);
+  return new Set([...parLeSwitch, ...relayees]);
 }
 
 /**
@@ -180,6 +193,9 @@ export function messagesDesMotifs(racine = REPO) {
     lieu_ambigu: fonction(nomDeLieu, 'messageLieuAmbigu'),
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
+    // T-20260813-0059. Le refus qui garde ce qu'un lieu EST : un dossier versionné. Son texte
+    // vit dans le module de pose, avec les autres gardes d'avant l'écriture.
+    droits_non_versionnables: blocApres(lieu, 'droits_non_versionnables'),
     ecriture_interrompue: blocApres(lieu, 'ecriture_interrompue'),
     jeton_absent: classe(trousseau, 'JetonManquant') + consequence,
     jeton_vide: classe(trousseau, 'JetonVide') + consequence,
@@ -212,6 +228,21 @@ export function enteteYaml(texte) {
  * accuser la compétence d'inventer des options de ligne directe qu'elle n'enseigne pas — un
  * faux positif, qui ne prouve rien et qu'on finit par désarmer.
  */
+/**
+ * COMMENT ON RECONNAÎT UNE INVOCATION DE LA NAISSANCE — et il y en a DEUX formes depuis
+ * T-20260816-0038.
+ *
+ * La forme longue (`$NAITRE …`) reste la référence quand quelque chose s'arrête. La forme
+ * courte (`npx @somtech-solutions/pack agent naitre …`) est la voie normale, et elle RELAIE
+ * verbatim les options à la même commande : ce qu'elle enseigne engage donc exactement autant.
+ *
+ * ⚠️ TROUVÉ PAR LE HARNAIS, PAS EN RELISANT. En ajoutant la forme courte à la compétence, deux
+ * mutations ont SURVÉCU : elles mordaient le nouveau bloc, que les contrôles ne regardaient pas,
+ * pendant que l'ancien restait intact et les gardait verts. Un contrôle qui ne voit qu'une des
+ * deux formes laisse enseigner n'importe quoi dans l'autre.
+ */
+export const SONDE_NAISSANCE = /\$NAITRE\s|pack(?:@[a-z0-9.]+)?\s+agent\s+naitre\b/;
+
 export function invocations(texte, variable) {
   // Les continuations sont recollées LIGNE À LIGNE, jamais par un motif unique. Un
   // `[^\n]*(?:\\\n[^\n]*)*` paraît naturel et ne marche pas : la première partie, gloutonne,
@@ -223,7 +254,13 @@ export function invocations(texte, variable) {
   const lignes = texte.split('\n');
   const out = [];
   for (let i = 0; i < lignes.length; i += 1) {
-    if (!new RegExp(`\\$${variable}\\s`).test(lignes[i])) continue;
+    // ⚠️ LE SIGIL EST LITTÉRAL, ET IL A ÉTÉ PERDU UNE FOIS — trouvé par la passe portail.
+    // En ajoutant le support des sondes RegExp, l’échappement du sigil s’est réduit à une simple
+    // barre d’échappement : le motif est devenu « \\NAITRE\\s » et attrapait « NAITRE » SANS son
+    // sigil. Élargir une sonde qui sert à ACCUSER un texte est le premier pas vers un faux
+    // positif, et un faux positif finit toujours par faire désarmer la garde.
+    const sonde = variable instanceof RegExp ? variable : new RegExp(`\\$${variable}\\s`);
+    if (!sonde.test(lignes[i])) continue;
     let inv = lignes[i];
     while (inv.trimEnd().endsWith('\\') && i + 1 < lignes.length) {
       i += 1;
@@ -253,6 +290,36 @@ export const horsBlocs = (texte) => texte.replace(/```[\s\S]*?```/g, '');
  * n'est plus tenue. Exécutés tels quels sur les compétences réelles ET sur leurs mutants.
  */
 export const CONTROLES_COMMUNS = [
+  {
+    id: 'le-versement-est-opposable',
+    quoi: 'la compétence dit que la NAISSANCE refuse un lieu qu’aucun commit ne porte',
+    verifier({ texte }) {
+      // T-20260814-0139. Les deux compétences prescrivaient déjà de verser le lieu après la
+      // pose ; personne ne le faisait — sur cinq lieux clients posés, TROIS portaient une
+      // garde qu'aucun commit ne contenait. La naissance refuse donc désormais.
+      //
+      // CE CONTRÔLE EXISTE PARCE QU'UN REFUS ABSENT DE LA DOCUMENTATION EST UN REFUS QUE LA
+      // GARDE VA CONTREDIRE : le poseur suit un texte qui lui dit que le versement peut
+      // attendre, et se fait renvoyer par la commande. Le texte et le code doivent dire la
+      // même chose, et c'est cet accord-là qui est éprouvé — pas la présence d'un mot.
+      const hors = horsBlocs(texte);
+      assert.match(
+        hors,
+        /la naissance (\*\*)?refuse/i,
+        'la compétence doit dire que la NAISSANCE refuse — la pose refusait déjà, ce n’est pas la même chose',
+      );
+      assert.match(
+        hors,
+        /aucun commit ne porte/,
+        'et dire SUR QUOI elle refuse : un lieu qu’aucun commit ne porte',
+      );
+      assert.match(
+        hors,
+        /avant la moindre écriture/,
+        'et qu’un refus ne laisse rien derrière lui — sinon le lecteur ira nettoyer ce qui n’existe pas',
+      );
+    },
+  },
   {
     id: 'le-principe-precede-la-procedure',
     quoi: 'le refus-avant-écriture est énoncé, il oblige, et il vient AVANT la procédure de pose',
@@ -614,9 +681,28 @@ export const CONTROLES_ORCHESTRATEUR = [
       // n'existe pas, et elle RÉUSSIT quand il existe, faisant naître une session
       // représentante sous le nom qu'on attendait de l'orchestrateur. La compétence porte donc
       // l'option pour l'utilisateur : c'est cette promesse-là qui est gardée ici.
-      const invs = invocations(texte, 'NAITRE');
+      // ⚠️ ET LA PROMESSE N'EST PAS LA MÊME DANS LES DEUX FORMES — écart réel, pas commodité.
+      //
+      // `$NAITRE` a `representant` par DÉFAUT, et c'est délibéré chez lui : la commande existait
+      // pour ce rôle, et un appelant déjà écrit ne doit pas changer de comportement du seul fait
+      // qu'un second rôle existe. Omettre l'option y est donc le piège silencieux décrit
+      // ci-dessus, et l'exigence tient mot pour mot.
+      //
+      // `pack agent naitre`, elle, écrit `--role orchestrateur` à chaque appel, qu'on le lui
+      // demande ou non — c'est la seule chose qu'elle décide à la place de l'autre. L'exiger dans
+      // le texte enseignerait une option superflue, et un texte qui montre plus que nécessaire
+      // finit par être recopié de travers. Ce défaut-là est gardé où il vit : par l'essai
+      // « le rôle par défaut est ORCHESTRATEUR » de `cli/test/agent-naitre.test.js`, sur le CODE.
+      //
+      // On garde donc l'exigence là où l'omission est dangereuse, et on ne la simule pas ailleurs.
+      const invs = invocations(texte, SONDE_NAISSANCE);
       assert.ok(invs.length > 0, 'la compétence doit montrer au moins une invocation de la naissance');
-      for (const inv of invs) {
+      const parLOutil = invs.filter((inv) => /\$NAITRE\s/.test(inv));
+      assert.ok(
+        parLOutil.length > 0,
+        'la compétence doit montrer au moins une invocation par l’outil lui-même — c’est elle qui porte le piège du rôle'
+      );
+      for (const inv of parLOutil) {
         assert.match(inv, /--role\s+orchestrateur\b/, `une naissance est montrée sans son rôle : « ${inv.trim()} »`);
       }
     },
@@ -630,7 +716,7 @@ export const CONTROLES_ORCHESTRATEUR = [
       // dépôt par défaut depuis SA position (~/.somtech), jamais le tien. Sans --depot, on se
       // voit refuser un lieu qu'on vient de poser — un refus exact qui cherche au mauvais
       // endroit. Garder le rôle sans garder le dépôt ne couvrirait qu'une porte sur deux.
-      for (const inv of invocations(texte, 'NAITRE')) {
+      for (const inv of invocations(texte, SONDE_NAISSANCE)) {
         assert.match(inv, /--depot\b/, `une naissance est montrée sans --depot : « ${inv.trim()} »`);
       }
     },
@@ -642,7 +728,7 @@ export const CONTROLES_ORCHESTRATEUR = [
     verifier({ texte, racine }) {
       const { options } = outilDeNaissance(racine);
       assert.ok(options.size >= 3, 'les options de la naissance n’ont pas été relevées — le contrôle ne prouverait rien');
-      const citees = optionsCitees(texte, 'NAITRE');
+      const citees = optionsCitees(texte, SONDE_NAISSANCE);
       assert.ok(citees.size > 0, 'la compétence doit montrer au moins une option de naissance');
       for (const option of citees) {
         assert.ok(options.has(option), `la compétence enseigne « ${option} », que la naissance ne connaît pas`);
@@ -741,6 +827,27 @@ const remplacer = (texte, quoi, par) => texte.replace(quoi, par);
  * ne garde rien.
  */
 export const MUTATIONS = [
+  {
+    id: 'la-naissance-signale-au-lieu-de-refuser@orchestrateur',
+    quoi: 'le texte adoucit le refus de la naissance en simple signalement',
+    competence: 'orchestrateur',
+    cible: 'le-versement-est-opposable@orchestrateur',
+    muter: (t) => remplacer(t, '**la naissance refuse**', 'la naissance signale'),
+  },
+  {
+    id: 'la-naissance-signale-au-lieu-de-refuser@gestionnaire',
+    quoi: 'le texte adoucit le refus de la naissance en simple signalement',
+    competence: 'gestionnaire',
+    cible: 'le-versement-est-opposable@gestionnaire',
+    muter: (t) => remplacer(t, '**la naissance refuse**', 'la naissance signale'),
+  },
+  {
+    id: 'le-refus-laisse-quelque-chose-derriere@orchestrateur',
+    quoi: 'le texte retire la promesse qu’un refus ne laisse rien derrière lui',
+    competence: 'orchestrateur',
+    cible: 'le-versement-est-opposable@orchestrateur',
+    muter: (t) => remplacer(t, 'avant la moindre écriture', 'une fois le lieu préparé'),
+  },
   {
     id: 'principe-apres-la-procedure',
     quoi: 'le principe passe APRÈS la procédure de pose — on pose d’abord, on vérifie ensuite',

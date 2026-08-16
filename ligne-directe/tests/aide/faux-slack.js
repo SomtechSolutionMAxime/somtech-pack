@@ -144,6 +144,9 @@ export function fauxSlack({
     utilisateurs,
     appels: [],
     postes: [],
+    // Les crochets posés sur des messages — `{canal, ts, emoji}`. C'est l'état que le
+    // dirigeant VOIT ; un essai qui le lit lit ce qu'il verrait (T-20260815-0011).
+    reactions: [],
   };
 
   /**
@@ -244,6 +247,10 @@ export function fauxSlack({
       }
 
       case 'conversations.members': {
+        // `monde.membresIllisibles` — un droit révoqué, un jeton mort, un plafond atteint. Ce
+        // n'est pas une supposition : c'est le mode de dégradation que toute garde appuyée sur
+        // Slack doit savoir traverser sans se taire (T-20260813-0074, relevé en revue de fond).
+        if (monde.membresIllisibles) return echec('missing_scope');
         // C'EST L'APPEL QUI DÉCIDE QUI PEUT ÉCRIRE SUR UNE LIGNE CLIENTE. Sans `channel`,
         // Slack ne devine pas : il refuse, et le refus vaut liste vide côté appelant.
         if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
@@ -294,7 +301,42 @@ export function fauxSlack({
         if (!args.users) return echec('invalid_arguments', { detail: 'missing required field: users' });
         const canal = monde.canaux.find((c) => c.id === args.channel);
         if (!canal) return echec('channel_not_found');
+        // `monde.inviterSansEffet` — UN ACQUIESCEMENT QUI N'AJOUTE PERSONNE.
+        //
+        // ⚠️ Ce n'est PAS une observation du service : personne n'a mesuré Slack en train de
+        // mentir. C'est le seul moyen d'éprouver que l'appelant conclut sur les MEMBRES et non
+        // sur le code de retour — sans lui, un correctif qui rendrait `ok` dès que l'appel
+        // n'a pas jeté resterait vert. `slack.js` avale déjà `already_in_channel` et
+        // `cant_invite_self` : toute erreur avalée est un chemin par lequel ce cas arrive.
+        if (monde.inviterSansEffet) return reponse({ ok: true });
         for (const u of String(args.users).split(',')) if (!canal.membres.includes(u)) canal.membres.push(u);
+        return reponse({ ok: true });
+      }
+
+      case 'reactions.add': {
+        if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
+        if (!args.timestamp) return echec('invalid_arguments', { detail: 'missing required field: timestamp' });
+        if (!args.name) return echec('invalid_arguments', { detail: 'missing required field: name' });
+        // `monde.crochetImpossible` — le droit `reactions:write` peut manquer, et le service
+        // répond alors `missing_scope`. Un accusé de réception raté ne doit pas faire perdre le
+        // message qu'il accuse : c'est ce que cet interrupteur permet d'éprouver.
+        if (monde.crochetImpossible) return echec('missing_scope');
+        // ⚠️ SIXIÈME FOIS QUE CE DOUBLE SE MONTRE PLUS PERMISSIF QUE LE SERVICE, relevé en revue
+        // de fond. Toutes les autres méthodes de canal vérifient son existence et rendent
+        // `channel_not_found` ; celle-ci acceptait n'importe quel canal et n'importe quel
+        // horodatage. Un essai qui poserait un crochet sur un message qui n'existe pas serait
+        // donc vert — alors que le vrai Slack refuse. C'est très exactement la classe de défaut
+        // que ce fichier existe pour fermer.
+        if (!monde.canaux.some((c) => c.id === args.channel)) return echec('channel_not_found');
+        if (!monde.postes.some((m) => m.ts === args.timestamp) && !monde.horodatagesConnus?.includes(args.timestamp)) {
+          return echec('message_not_found');
+        }
+        // Slack refuse un doublon exact, et c'est utile : reposer le même crochet deux fois
+        // n'est pas une erreur de l'appelant, mais il doit savoir que ça n'a rien ajouté.
+        if (monde.reactions.some((r) => r.canal === args.channel && r.ts === args.timestamp && r.emoji === args.name)) {
+          return echec('already_reacted');
+        }
+        monde.reactions.push({ canal: args.channel, ts: args.timestamp, emoji: args.name });
         return reponse({ ok: true });
       }
 

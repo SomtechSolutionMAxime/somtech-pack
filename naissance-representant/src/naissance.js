@@ -19,8 +19,9 @@
 // qu'écrit à part — un seul `.claude/settings.json` existe par démarrage, et l'écraser
 // perdrait leurs permissions.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join, relative, sep } from 'node:path';
 import { GABARITS, racineLieu } from '../../ligne-directe/src/lieu-agent.js';
 import { role as roleDe } from '../../ligne-directe/src/roles.js';
 
@@ -186,6 +187,173 @@ export function nomAgentHerdr(brut) {
 }
 
 /**
+ * L'avis à donner à l'humain quand le nom de l'agent NE SERA PAS celui du lieu.
+ *
+ * Abaisser la casse est juste — herdr n'accepte rien d'autre. **Le faire en silence est le
+ * défaut** (T-20260814-0143) : le lieu s'appelle `Charles-Olivier`, l'agent s'appelle
+ * `charles-olivier`, et qui cherche son agent par le nom de son lieu ne le trouve pas.
+ * Mesuré sur un poste réel, sur quatre lieux.
+ *
+ * Le seul endroit qui portait déjà l'écart était un champ de l'objet JSON rendu — douze
+ * clés, dont deux qui diffèrent d'une capitale. Un fait que personne ne relit n'est pas dit.
+ *
+ * ⚠️ ELLE SE TAIT QUAND RIEN N'A ÉTÉ ABAISSÉ, et ce n'est pas une économie de mots : un
+ * avis qui tombe à chaque naissance devient du bruit, et un bruit cesse d'être lu — ce qui
+ * ramènerait exactement le silence qu'il existe pour rompre.
+ *
+ * ⚠️ ELLE NE CALCULE RIEN — ELLE COMPARE. Une première version refaisait `toLowerCase()`
+ * de son côté, ce qui remettait la règle de casse à un SECOND endroit : deux textes qui
+ * portent la même règle divergent au premier changement de l'un des deux. C'est très
+ * exactement le défaut que `T-20260814-0101` vient de fermer un cran plus haut — « un seul
+ * nom de lieu, une seule règle » — et le refermer ici pour le rouvrir une commande plus
+ * loin n'aurait rien fermé. Le nom de l'agent lui est donc DONNÉ par `nomAgentHerdr`, la
+ * seule autorité, via ce que `commandesNaissance` a déjà rendu.
+ *
+ * @param {string} nomDuLieu  le nom tel que le lieu le porte
+ * @param {string} nomDeLAgent le nom que l'agent portera — calculé ailleurs, jamais ici
+ * @returns {string|null} la phrase à écrire, ou `null` s'il n'y a rien à dire.
+ */
+export function avisDeCasse(nomDuLieu, nomDeLAgent) {
+  const lieu = String(nomDuLieu ?? '');
+  const agent = String(nomDeLAgent ?? '');
+  if (agent === lieu) return null;
+  return (
+    `le lieu s'appelle « ${lieu} », l'agent s'appellera « ${agent} » — herdr n'accepte que ` +
+    `les minuscules. C'est sous « ${agent} » qu'on l'adresse : « herdr agent prompt ${agent} … ».`
+  );
+}
+
+/**
+ * Ce que git voit du lieu — et ce qu'il n'en voit pas (T-20260814-0139).
+ *
+ * DEUX ÉTATS, MESURÉS SUR UN POSTE RÉEL, QU'AUCUNE LECTURE NE DISTINGUE :
+ *
+ *   1. **Aucun commit ne porte le lieu.** Métier, contexte, moyens et droits n'existent que
+ *      sur ce disque. Un lieu client entier était dans ce cas — il disparaissait avec la
+ *      machine, et rien nulle part ne le disait.
+ *   2. **Le lieu est versé, la garde ne l'est pas.** `poserGarde` réinjecte le hook à chaque
+ *      naissance sans que personne ne le commit : sur les quatre lieux clients suivis par
+ *      git, `HEAD` n'en portait AUCUN. Un `git checkout`, un `git stash`, un clone frais les
+ *      désarme — **sans un mot**, puisque le fichier redevient un `settings.json`
+ *      parfaitement valide, simplement sans `hooks`.
+ *
+ * ⚠️ CE QU'ELLE REND FAIT REFUSER LA NAISSANCE — elle ne se contente pas d'avertir.
+ *
+ * `bin/naitre.js` sort en 1 dès que cette fonction rend une phrase, **avant d'avoir écrit
+ * quoi que ce soit**. Arbitrage du dirigeant : la compétence prescrit déjà de verser le lieu
+ * après la pose, l'instruction n'était pas suivie (trois lieux clients sur cinq portaient une
+ * garde qu'aucun commit ne contenait), et le refus la rend opposable sans rien exiger de neuf.
+ *
+ * ⚠️ Une rédaction antérieure de ce commentaire disait l'inverse — « elle avertit, elle ne
+ * refuse pas » — et elle a survécu au changement de comportement. La revue de fond l'a
+ * relevée : c'est la documentation la plus proche du code, donc **la plus susceptible d'être
+ * crue**. Un commentaire qui contredit sa fonction est pire qu'un commentaire absent.
+ *
+ * Ce qu'elle NE fait PAS refuser : la garde que la naissance courante s'apprête à poser.
+ * Personne ne peut verser un fichier avant qu'il existe — le refuser rendrait toute première
+ * naissance impossible. `bin/naitre.js` la mesure donc une seconde fois, APRÈS la pose, et
+ * s'en sert alors comme d'un simple signalement.
+ *
+ * ⚠️ ELLE SE TAIT HORS D'UN DÉPÔT GIT, et quand git n'est pas là. Reprocher l'absence de
+ * commits à un répertoire qui n'a rien à verser serait du bruit — et un bruit cesse d'être
+ * lu, ce qui rendrait l'avis inutile là où il compte.
+ *
+ * @returns {string|null} la phrase à écrire, ou `null` s'il n'y a rien à dire.
+ */
+export function avisDeVersionnement(repoRoot, nom, role = 'representant') {
+  const git = (...args) => {
+    try {
+      execFileSync('git', ['-C', repoRoot, ...args], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const gitDit = (...args) => {
+    try {
+      return execFileSync('git', ['-C', repoRoot, ...args], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+        .toString()
+        .trim();
+    } catch {
+      return null;
+    }
+  };
+
+  // Hors dépôt, ou git absent : rien à reprocher, et rien à vérifier.
+  const racine = gitDit('rev-parse', '--show-toplevel');
+  if (!racine) return null;
+
+  const lieu = cheminLieu(repoRoot, nom, role);
+
+  // ⚠️ LE CHEMIN SE CALCULE DEPUIS LA RACINE DU DÉPÔT, JAMAIS DEPUIS `repoRoot`.
+  // `git cat-file -e HEAD:<chemin>` résout toujours depuis la racine — `-C` ne déplace pas
+  // ce point d'ancrage. Calculer relativement à `repoRoot` déclarait donc « aucun commit »
+  // un lieu entièrement versé, dès que la commande était lancée depuis un sous-répertoire.
+  // Trouvé en revue de fond, reproduit contre le vrai module.
+  // Les deux côtés sont ramenés au chemin RÉEL avant d'être soustraits : git rend toujours
+  // une racine résolue, et sur macOS « /tmp » est un lien vers « /private/tmp ». Soustraire
+  // l'un de l'autre sans les résoudre produisait un chemin en « ../.. » — et donc un lieu
+  // entièrement versé déclaré absent de toute histoire.
+  const reel = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  const lieuReel = reel(lieu);
+  const versGit = (f) => relative(reel(racine), join(lieuReel, f)).split(sep).join('/');
+
+  // ⚠️ ON INTERROGE `HEAD`, PAS L'INDEX. `git ls-files` répond sur ce qui est INDEXÉ — un
+  // lieu simplement `git add`é lui paraîtrait versé, alors qu'aucun commit ne le porte et
+  // qu'il disparaît toujours avec le disque. C'est précisément l'écart que ce contrôle
+  // existe pour voir. Un dépôt sans le moindre commit est donc, lui aussi, un dépôt où
+  // aucun commit ne porte ce lieu — il n'est pas une exception, il est le cas limite.
+  const sansHead = !git('rev-parse', '--verify', 'HEAD');
+  const absentsDeTouteHistoire = sansHead
+    ? [...GABARITS]
+    : GABARITS.filter((f) => !git('cat-file', '-e', `HEAD:${versGit(f)}`));
+
+  if (absentsDeTouteHistoire.length === GABARITS.length) {
+    return (
+      `aucun commit ne porte « ${lieu} » — ce lieu n'existe que sur ce disque, et il ` +
+      `disparaît avec lui. La compétence qui l'a posé demande de le verser ; c'est ce geste :\n` +
+      `  git add -f ${lieu} && git commit -m "chore(${role}) : installe le lieu de ${nom}"`
+    );
+  }
+
+  // ⚠️ UN LIEU PARTIELLEMENT VERSÉ EST LE CAS QUI SE TAISAIT, et c'était le cas MESURÉ.
+  // `git diff --quiet HEAD -- <fichier jamais suivi>` sort en 0 : un fichier que git n'a
+  // jamais vu n'a rien à comparer. Un lieu dont trois gabarits sont versés et dont le
+  // `settings.json` n'a jamais été ajouté échappait donc aux deux branches — la première
+  // voyait des fichiers dans HEAD, la seconde ne voyait aucun écart. Le fichier des DROITS
+  // était le seul absent, et la commande se taisait. On nomme donc les manquants un à un.
+  if (absentsDeTouteHistoire.length > 0) {
+    return (
+      `ce lieu est versé à moitié : aucun commit ne porte ${absentsDeTouteHistoire.join(', ')} ` +
+      `(sous « ${lieu} »). Un lieu repris ailleurs — autre clone, autre poste — naîtra sans ` +
+      `eux, et rien ne le signalera. Le geste :\n` +
+      absentsDeTouteHistoire.map((f) => `  git add -f ${lieu}/${f}`).join('\n') +
+      `\n  git commit -m "chore(${role}) : verse le lieu de ${nom} en entier"`
+    );
+  }
+
+  const settings = join(lieu, '.claude', 'settings.json');
+  if (!git('diff', '--quiet', 'HEAD', '--', settings)) {
+    return (
+      `la garde d'ouverture posée dans ce lieu n'est dans aucun commit — un changement de ` +
+      `branche la retirerait sans un mot, et le fichier resterait valide, simplement sans ` +
+      `garde. Le geste :\n` +
+      `  git add -f ${settings} && git commit -m "chore(${role}) : verse la garde d ouverture de ${nom}"`
+    );
+  }
+
+  return null;
+}
+
+/**
  * Lit une réponse de la CLI herdr et dit, d'un seul endroit, si l'appel a ABOUTI.
  *
  * C'EST LE CŒUR DU DÉFAUT DE SORTIE (T-20260809-0023, même motif que T-20260807-0067).
@@ -289,7 +457,31 @@ export function agentPorteLeNom(reponse, nom) {
  * Ce que ni l'un ni l'autre ne prouve, c'est le résultat : il se lit après coup, dans le
  * répertoire de travail réel de la session (`repertoireDeLaSession`).
  */
-export function commandesNaissance(repoRoot, quiVientAuMonde, { workspace, role = 'representant' } = {}) {
+/**
+ * LE MODÈLE ET LE MODE, DÉCLARÉS — jamais un lancement nu (T-20260816-0038).
+ *
+ * ⚠️ CE QUE COÛTE UN LANCEMENT NU. `claude` sans drapeau naît sur ce que le compte a par
+ * défaut, et personne ne sait quoi depuis l'extérieur. Un chef d'équipe qu'on croit sur un
+ * grand modèle et qui raisonne sur un petit rend un travail qu'on relira comme s'il venait de
+ * l'autre — c'est le pire des deux, parce que rien ne le dit.
+ *
+ * ⚠️ POURQUOI `acceptEdits` PAR DÉFAUT ET PAS `auto`. C'est le mode avec lequel la naissance
+ * sans écran a été MESURÉE (2026-08-16, Claude Code 2.1.233) : zéro écran, invite prête, brief
+ * pris, droits effectifs. `auto` n'a pas été mesuré ici, et poser par défaut un mode qu'on n'a
+ * pas éprouvé serait exactement le pari que ce lot existe pour supprimer. Les deux se changent
+ * par `--modele` et `--mode` ; le jour où `auto` sera mesuré, le défaut pourra bouger.
+ */
+export const MODELE_PAR_DEFAUT = 'opus';
+export const MODE_PAR_DEFAUT = 'acceptEdits';
+
+/** Combien de temps on laisse à herdr pour établir que l'agent répond. */
+const ATTENTE_NAISSANCE_MS = 120000;
+
+export function commandesNaissance(
+  repoRoot,
+  quiVientAuMonde,
+  { workspace, role = 'representant', modele = MODELE_PAR_DEFAUT, mode = MODE_PAR_DEFAUT } = {}
+) {
   if (!workspace) {
     throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
   }
@@ -300,10 +492,41 @@ export function commandesNaissance(repoRoot, quiVientAuMonde, { workspace, role 
     lieu,
     nom,
     role,
+    modele,
+    mode,
     tabCreate: ['tab', 'create', '--workspace', workspace, '--cwd', lieu, '--label', quiVientAuMonde, '--no-focus'],
-    paneRun: (paneId) => ['pane', 'run', paneId, `cd ${lieu} && claude`],
+    /**
+     * ⚠️ `agent start` REMPLACE `pane run` + la boucle d'attente (T-20260816-0038).
+     *
+     * herdr sait faire naître un agent depuis toujours, et ce dépôt le réimplémentait : une
+     * ligne écrite dans un shell, puis trente interrogations espacées de deux secondes pour
+     * deviner si ça avait pris. `agent start` fait les deux, NOMME l'agent à la naissance —
+     * ce qui ferme la fenêtre où il n'était adressable que par son numéro de pane
+     * (T-20260816-0002) — et transmet les drapeaux à `claude`, ce qu'on a vérifié par le fait :
+     * il rend son `argv` exact.
+     *
+     * ⚠️ ET SON SUCCÈS NE PROUVE PAS QU'IL EST JOIGNABLE. Mesuré le 2026-08-16 : il rend
+     * `agent_status: idle` et `interactive_ready: true` PENDANT que l'agent est parqué derrière
+     * un modal. C'est un indice, pas le fait — d'où la lecture d'écran qui suit, dans
+     * `bin/naitre.js`. Se fier à ce booléen serait « une porte sur deux » dans la primitive
+     * même qu'on adopte pour fermer le défaut.
+     */
+    agentStart: (paneId) => [
+      'agent', 'start', nom,
+      '--kind', 'claude',
+      '--pane', paneId,
+      '--timeout', String(ATTENTE_NAISSANCE_MS),
+      '--', '--model', modele, '--permission-mode', mode,
+    ],
+    /** L'écran affiché — le seul témoin qui dise si l'agent peut réellement recevoir. */
+    lireEcran: (paneId) => ['agent', 'read', paneId, '--source', 'visible', '--lines', '40'],
     interroger: (paneId) => ['agent', 'get', paneId],
-    renommer: (paneId) => ['agent', 'rename', paneId, nom],
+    // ⚠️ `paneRun` ET `renommer` ONT ÉTÉ RETIRÉS avec `agent start` (T-20260816-0038), et leur
+    // absence est délibérée. `agent start` lance ET nomme en un geste ; les garder « au cas où »
+    // aurait laissé deux constructeurs de commande que plus rien n'appelle et que plus aucun
+    // essai ne garde — c'est-à-dire du code qui décrit un chemin qui n'existe plus. Dans un
+    // module dont tout le sujet est de ne pas mentir sur ce qui arrive, c'est la dernière chose
+    // à laisser traîner.
     fermer: (paneId) => ['pane', 'close', paneId],
   };
 }

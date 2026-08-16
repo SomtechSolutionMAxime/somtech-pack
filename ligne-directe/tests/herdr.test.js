@@ -50,7 +50,15 @@ test('une remise réussie rend la preuve fournie par herdr, pas un booléen de c
   const { remettre } = await import('../src/herdr.js');
   fauxHerdr('{"id":"cli:agent:prompt","result":{"submitted":true,"pane_id":"w1:p1"}}');
   const preuve = await remettre('w1:p1', 'coucou');
-  assert.deepEqual(preuve, { submitted: true, pane_id: 'w1:p1' });
+  // La preuve de herdr est rendue TELLE QUELLE — c'est ce que ce contrôle garde depuis
+  // toujours. Depuis T-20260815-0011 elle porte en plus le verdict de PRISE, mesuré en
+  // relisant le pane : ici, ce double répond la même chose avant et après, donc rien n'a
+  // changé et rien n'est constaté. `pris: false` est la bonne réponse — et c'est cette
+  // absence qui empêchera le crochet d'être posé sur un message qui n'a peut-être rien atteint.
+  assert.equal(preuve.submitted, true);
+  assert.equal(preuve.pane_id, 'w1:p1');
+  assert.equal(preuve.pris, false, 'aucun témoin de prise : on ne l’affirme pas');
+  assert.equal(preuve.temoin, null);
 });
 
 test('une réponse sans result ni error est traitée comme un échec, pas comme un succès', async () => {

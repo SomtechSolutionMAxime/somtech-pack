@@ -271,11 +271,12 @@ export function messageDeRefus(joignabilite) {
  * @param {string} p.canal              nom du canal, pour le message de refus uniquement
  * @param {() => Promise<{joignable: boolean, motif?: string}>} p.verifierJoignabilite
  */
-export async function preparerLieuRepresentant({ depotClient, client, canal, verifierJoignabilite }) {
+export async function preparerLieuRepresentant({ depotClient, client, canal, verifierJoignabilite, verifierVersionnable }) {
   return preparerLieu({
     depot: depotClient,
     role: 'representant',
     nom: client,
+    verifierVersionnable,
     // Le motif et le message restent formés ICI : ils parlent d'un canal client, que le
     // module commun ne connaît pas et n'a pas à connaître.
     verifierLigne: async () => {

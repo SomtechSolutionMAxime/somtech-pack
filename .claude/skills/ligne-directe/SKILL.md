@@ -39,7 +39,7 @@ $LD etat
   - **Donne toujours `--titre`** : c'est lui qui nomme le canal. `#refonte-du-tableau-de-bord` se lit ; `#d-20260805-0004` ne dit rien à personne. Le code, lui, part dans le sujet du canal — il ne se perd pas, il change de place. Sans titre, le canal porte le code : ça marche sur une ligne interne, mais personne ne saura de quoi il s'agit — et sur une ligne **client**, c'est refusé (voir plus bas).
 - **`dire`** — un jalon franchi, un fait qui change la donne.
 - **`demander`** — un arbitrage. Le message est marqué comme attendant une réponse. **Tu ne te bloques pas** : tu continues ce qui ne dépend pas de la réponse.
-- **`fermer`** — en clôturant, avec le bilan. Sur une ligne **interne**, le canal est archivé ensuite ; sur une ligne **client**, il ne l'est jamais (voir plus bas). La réponse te dit ce qui s'est réellement passé.
+- **`fermer`** — en clôturant, avec le bilan. Le canal, lui, **reste ouvert** : une ligne est **durable** par défaut, pour qu'elle puisse rouvrir sous le même titre. Seule une ligne ouverte avec `--jetable` voit son canal archivé, et un canal **client** ne l'est jamais (voir plus bas). La réponse te dit ce qui s'est réellement passé (`archive: true|false`).
 - **`renommer`** — si le titre du chantier change, ou si la ligne a été ouverte sans titre. **Ne renomme jamais le canal à la main dans Slack** : les messages continueraient d'arriver (le routage passe par l'identifiant, pas par le nom), mais le registre resterait sur l'ancien nom et l'état affiché cesserait de correspondre à ce que le dirigeant voit.
 
 Le chantier n'est demandé qu'à l'ouverture. Ensuite, la commande retrouve ta ligne par ton pane : tu n'as rien à retenir.
@@ -61,7 +61,7 @@ Ce que ça change, et rien d'autre :
 - **`--titre` devient obligatoire, et l'ouverture est refusée sans lui.** Il ne nomme pas que le canal : c'est aussi **le nom qui signe chacun de tes messages**, et le seul que le client verra. Choisis-le comme tu choisirais la façon dont tu te présentes — le nom du projet, l'espace du client. Jamais un code de chantier : le client verrait une conversation entière signée d'un numéro de dossier.
 - **Le code du chantier n'entre nulle part dans ce que voit le client** — ni dans le nom du canal, ni dans son sujet, ni en signature. Le `--sujet` d'une ligne cliente, s'il est donné, est posé tel quel ; sans lui, aucun sujet n'est posé. En interne, rien ne bouge : le code ouvre le sujet, et c'est ce qui te permet de retrouver ton chantier depuis Slack.
 - **`renommer` suit les deux** : le canal et la signature. Un canal qui dirait une chose pendant que chaque message en dit une autre ne se verrait que du côté du client.
-- **Un canal client n'est JAMAIS archivé** — ni quand tu disparais, ni quand tu le refermes volontairement. Une ligne interne, elle, s'archive avec son chantier. Le canal appartient au client : il reste ouvert, rien ne lui est annoncé, et une session neuve peut s'y rattacher et reprendre. `fermer` referme donc ta ligne sans toucher au canal, et le rapporte (`archive: false`).
+- **Un canal client n'est JAMAIS archivé** — ni quand tu disparais, ni quand tu le refermes volontairement. Le canal appartient au client : il reste ouvert, rien ne lui est annoncé, et une session neuve peut s'y rattacher et reprendre. `fermer` referme donc ta ligne sans toucher au canal, et le rapporte (`archive: false`).
 - **N'archive pas un canal client à la main non plus, et c'est sans retour** : un canal archivé est en lecture seule, et le désarchiver n'est pas à la portée de la ligne — Slack le réserve à un compte humain. La commande refuse alors d'ouvrir en te disant quoi faire ; il faut passer par Slack.
 
 Deux garde-fous, parce que l'erreur y serait définitive et muette :
@@ -116,7 +116,7 @@ Inutile de t'en occuper — c'est le rôle du veilleur :
 
 - **Ta réponse arrive quand tu respires**, pas au milieu d'une opération.
 - **Un message adressé à une ligne close reçoit une réponse** expliquant pourquoi personne ne répondra. Rien n'est jamais avalé en silence.
-- **Si tu meurs sans fermer**, ta ligne est refermée — et sur une ligne interne le canal est archivé, pas de canal fantôme. Sur une ligne client il reste ouvert, et rien n'est dit au client.
+- **Si tu meurs sans fermer**, ta ligne est refermée — et son canal **reste ouvert**, sauf si tu l'avais déclarée `--jetable`. Sur une ligne client il reste ouvert lui aussi, et rien n'est dit au client.
 - **Le poste redémarre** : les lignes reprennent, celles dont l'agent a disparu sont refermées.
 - **Apostrophes, guillemets et retours à la ligne** traversent intacts : aucun shell n'est impliqué dans la remise.
 - **Un message repris par son auteur te revient**, marqué `MODIFIÉ` dans son cadre : quelqu'un qui se relit et complète sa phrase parlait bien à quelqu'un. Prends garde, tu as peut-être déjà répondu à la version d'avant. L'aperçu de lien que Slack attache tout seul, lui, ne t'est pas remis — sinon tu répondrais deux fois au même message.
@@ -134,4 +134,4 @@ Si un geste échoue, il te le dit. **Un rapport qui échoue bruyamment vaut mieu
 | Écrire dans la ligne ce qui appartient au ServiceDesk | Deux sources de vérité, dont aucune ne fait foi |
 | Ouvrir une ligne pour une tâche de dix minutes | Personne n'a besoin d'être tenu au courant de ce qui finit avant qu'il ait lu |
 | Conclure « c'est envoyé » sans regarder le résultat du geste | C'est exactement comme ça qu'un rapport se perd |
-| Fermer sans bilan | Sur une ligne interne, le canal s'archive sur une question sans réponse ; sur une ligne client, il reste ouvert et personne n'y répond plus |
+| Fermer sans bilan | Le canal reste là, sur une question sans réponse, et plus personne n'écoute — côté client comme en interne |

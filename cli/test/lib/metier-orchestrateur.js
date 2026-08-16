@@ -51,7 +51,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   REPO, sections, sectionDe, tableDe, colonne, colonneDe, pucesDe, blocsBash, enteteDe,
-  exigeImperatif, permuter,
+  exigeImperatif, exigePolarite, permuter,
 } from './metier-representant.js';
 
 export { REPO, permuter };
@@ -116,9 +116,20 @@ export const SECTIONS_AMENDEES = new Map([
  * qui devait rester**, plus la déclaration nommée de ce qui part.
  */
 export const AMENDEMENTS_DU_LOT = new Map([
+  // T-20260816-0015 : ces deux remplacements ONT DISPARU, et c'est un progrès, pas un oubli.
+  // La compétence disait « écrire le brief dans un fichier » là où le gabarit disait « au
+  // registre » — une divergence réelle, qui envoyait l'orchestrateur vers un geste que ses
+  // droits lui refusent. La compétence a été alignée sur le gabarit (déclaré source de vérité
+  // par l'arbitrage `j-20260814-0002`), donc les deux textes disent désormais la même chose et
+  // il n'y a plus rien à exempter ici. Laisser les entrées ferait rougir la garde, à juste
+  // titre : elle exige que ce qu'on déclare remplacé existe encore dans la section d'origine.
+  // Ce qui RESTE déclaré est la seule divergence encore justifiée sur ce paragraphe : le
+  // gabarit motive le refus d'écrire par un renvoi à sa section « Ce que tu ne peux pas faire »,
+  // que la compétence n'a pas. La compétence dit donc la même règle en la rattachant au lieu.
+  // Un renvoi mort serait un défaut ; l'écart est réel, donc il se déclare plutôt que de
+  // se cacher — c'est exactement ce que cette garde exige.
   ['4-bis. Pour chaque unité de travail', [
-    '**a. Écrire le brief dans un fichier.**',        // → au registre
-    "execute-le : <chemin>'",                          // → epics action get
+    "si tu es né d'un lieu posé, écrire t'est refusé par tes droits",   // gabarit : renvoi à sa propre section
   ]],
   ['5. Ce que tu tranches toi-même', []],              // que des ajouts
   ['6. Coordonner les chantiers voisins', []],         // que des ajouts
@@ -132,7 +143,24 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS_AJOUTES = 11;
+export const NB_ANTI_PATTERNS_AJOUTES = 23;
+// 11 → 23 le 2026-08-16 (T-20260816-0099, T-20260816-0097, T-20260816-0018). Les douze qui
+// s'ajoutent sont le miroir des garanties de cette version, une par garantie et pas une de plus :
+//
+//   • le grain du compte rendu (backlog = les Demandes) ;
+//   • l'analyse ajoutée à une question fermée, ET SON REVERS — répondre en liste quand une
+//     analyse est demandée ;
+//   • la production cliente non mesurée avant le geste ;
+//   • la relance faite sans avoir regardé sa propre boîte ;
+//   • la récolte prise pour une solution complète ;
+//   • l'erreur qu'on tait ;
+//   • les agents `done` dont on ne tire rien, le lot de plus démarré pendant qu'on attend un
+//     arbitrage, la reprise décidée au grain du ticket, la ronde terminée sans inscrire ;
+//   • le critère faux des lignes ambiguës (« même destinataire »).
+//
+// ⚠️ Le REVERS de la concision est celui qu'on aurait oublié, et c'est justement lui qui fait
+// la moitié exigée par la preuve du ticket : une version qui apprend à répondre court sans dire
+// qu'on répond long quand on demande long aurait déplacé le défaut au lieu de le corriger.
 
 /**
  * Tournures qui transforment une CONTRAINTE en CONSEIL sans la retirer.
@@ -1209,9 +1237,28 @@ export const CONTROLES = [
       //     `Edit(../**)` est totalement inerte. Seule la forme absolue `Edit(//**)` a fermé
       //     les quatre gestes essayés. Une de ces deux formes à la place de l'autre donnerait
       //     un fichier qu'on croit contraignant et qui ne l'est pas — pire que rien.
-      const perms = JSON.parse(droits).permissions;
-      const deny = perms.deny || [];
-      const allow = perms.allow || [];
+      // ⚠️ OÙ VIVENT LES DROITS DEPUIS T-20260816-0032, et pourquoi ils ont déménagé.
+      //
+      // MESURÉ le 2026-08-16 (Claude Code 2.1.233) : un lieu qui porte `permissions.allow`
+      // déclenche TOUJOURS un écran de confiance renforcé — « ⚠ This folder pre-approves N tool
+      // permissions … Only proceed if you trust this configuration » — et la pré-approbation ne
+      // le fait pas taire. L'agent naît alors PARQUÉ : détecté, nommé, dans le bon répertoire, et
+      // injoignable. C'est le geste n°5 du décompte de T-20260816-0004.
+      //
+      // Le fait mesuré de 2.1.231 reste vrai et c'est lui qui rend le déménagement sans coût :
+      // une autorisation était DÉJÀ ignorée tant que le dossier n'était pas approuvé. Le bloc
+      // `allow` n'achetait donc rien à la naissance, et il coûtait un modal. Les droits sont
+      // désormais déclarés sous `somtech.droitsAccordes` — une clé que Claude Code ignore
+      // (vérifié par le fait : zéro écran, zéro avertissement) — et `approuverLieu` les rend
+      // effectifs dans l'`allowedTools` de l'entrée de projet.
+      //
+      // `permissions.deny` NE BOUGE PAS : c'est la moitié qui garantit, elle tient dès la
+      // naissance, et tout ce que ce contrôle exige d'elle reste exigé mot pour mot.
+      // On lit encore `permissions.allow` en second : les lieux déjà posés le portent, et un
+      // contrôle aveugle à eux cesserait de garder ce qu'il garde là où ils vivent.
+      const config = JSON.parse(droits);
+      const deny = config.permissions?.deny || [];
+      const allow = [...(config.somtech?.droitsAccordes || []), ...(config.permissions?.allow || [])];
 
       const REFUS = [
         { quoi: 'écrire ou modifier un fichier', entrees: ['Write', 'Edit', 'NotebookEdit', 'Edit(//**)'] },
@@ -1491,10 +1538,23 @@ export const CONTROLES = [
       assert.match(enonces[0], /epics` action `update`|epics action update/, 'et il doit donner la surface exacte, pas une intention');
 
       // La livraison du brief pointe vers le registre, pas vers un chemin de fichier.
-      const livraisons = blocsBash(s.corps).filter((b) => b.includes('livrer.js'));
-      assert.equal(livraisons.length, 1, `le brief se livre par une seule commande (${livraisons.length} trouvée·s)`);
-      assert.ok(!/<chemin>/.test(livraisons[0]), 'la livraison pointe encore vers un chemin de fichier');
-      assert.match(livraisons[0], /epics action get/, 'la livraison doit pointer vers le registre');
+      //
+      // ⚠️ ON IDENTIFIE LE BLOC DU BRIEF PAR CE QU'IL FAIT — il lit le registre — et non par
+      // le fait d'être le seul à nommer `livrer.js` dans cette section (T-20260814-0138).
+      // Depuis que parler à un agent passe par la même commande vérifiée, la section en porte
+      // d'autres : le compte rendu du chef d'équipe, et les deux signaux du sas. Compter les
+      // blocs revenait à interdire ces gestes-là pour garder celui-ci, alors que ce qui est
+      // gardé est « le brief va au REGISTRE, jamais vers un chemin de fichier ».
+      const avecLivraison = blocsBash(s.corps).filter((b) => b.includes('livrer.js'));
+      assert.ok(avecLivraison.length >= 1, 'la section ne montre plus aucune livraison');
+      const briefs = avecLivraison.filter((b) => /epics action get/.test(b));
+      assert.equal(briefs.length, 1, `le brief se livre par une seule commande (${briefs.length} trouvée·s)`);
+      assert.ok(!/<chemin>/.test(briefs[0]), 'la livraison pointe encore vers un chemin de fichier');
+      // Et AUCUNE des autres ne doit ressusciter le chemin de fichier : c'est là que la
+      // régression rentrerait, par la porte d'à côté.
+      for (const b of avecLivraison) {
+        assert.ok(!/<chemin>/.test(b), 'une commande de livraison pointe vers un chemin de fichier');
+      }
     },
   },
 
@@ -1567,6 +1627,623 @@ export const CONTROLES = [
       assert.match(s.corps, /autre session/i, 'et nommer le cas mesuré : une mesure faite ailleurs rendue comme un constat d’ici');
     },
   },
+
+  {
+    id: 'crochet-pose-par-le-dispositif',
+    quoi: 'le crochet est posé par le dispositif, il n’est pas l’accusé de réception de l’orchestrateur',
+    verifier({ metier }) {
+      // ⚠️ CE CONTRÔLE EXISTE PARCE QUE SON JUMEAU EXISTAIT SEUL — bloquant relevé en revue de
+      // fond (T-20260815-0011). Le même paragraphe a été posé dans les DEUX gabarits, et seul
+      // celui du gestionnaire était gardé : supprimer le paragraphe entier du gabarit
+      // orchestrateur laissait les 702 essais du CLI verts. C'est le motif dominant de ce
+      // dépôt — un correctif ferme une porte et laisse sa jumelle ouverte — et il s'est
+      // rejoué dans le lot qui l'avait nommé.
+      //
+      // Le fond est le même des deux côtés : un métier qui enseignerait « pose un crochet
+      // quand tu as lu » redonnerait à la discipline de l'agent ce que le dispositif venait
+      // de lui retirer — or un orchestrateur occupé est exactement celui qui n'y pense pas.
+      const enonces = metier.split('\n').filter((l) => /crochet/i.test(l));
+      assert.ok(enonces.length >= 1, 'le métier ne dit rien du crochet — un orchestrateur ne saura pas ce qu’il vaut');
+
+      const dit = enonces.join('\n');
+
+      // La garde porte sur la POLARITÉ, pas sur la présence des mots : une négation qui
+      // enveloppe l'énoncé le retourne sans en toucher un seul. Et elle lit la ligne
+      // PORTEUSE, pas tout ce qui parle de crochet — le paragraphe voisin contient « ce
+      // n'est pas ta mémoire qui flanche », phrase saine qu'une garde plus large accuserait.
+      const porteuse = enonces.find((l) => /le dispositif le pose seul/i.test(l)) || '';
+      const avantLEnonce = porteuse.slice(0, porteuse.toLowerCase().indexOf('le dispositif le pose seul'));
+      assert.ok(
+        !/\b(?:ne crois pas|contrairement|au contraire|n['’]est pas vrai|est faux)\b/i.test(avantLEnonce),
+        `« ${porteuse.trim().slice(0, 90)}… » : l'énoncé est enveloppé d'une négation — les ` +
+          'mots-clés survivent à leur propre contresens',
+      );
+      assert.match(
+        dit, /le dispositif le pose seul|tu n['’]as rien à faire/i,
+        'le métier doit dire que le crochet est posé SANS l’orchestrateur — sinon il redevient une discipline',
+      );
+      assert.ok(
+        !/\bpose(-le|s)?\s+(un\s+)?crochet\b/i.test(dit),
+        'le métier enseigne à l’orchestrateur de poser un crochet : c’est ce que ce dispositif remplace',
+      );
+      assert.match(
+        dit, /ne le remplace pas|reste utile/i,
+        'le métier doit dire que « je m’en occupe » garde sa valeur — le crochet dit seulement que c’est arrivé',
+      );
+      // L'ABSENCE est la moitié qui a de la valeur, et elle l'est davantage pour un
+      // orchestrateur : ce qu'on lui écrit et qu'il ne voit pas, ce sont des arbitrages.
+      assert.match(dit, /absence/i, 'le métier doit dire ce que l’absence de crochet signifie');
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────────────────
+  // T-20260816-0015 · T-20260816-0018 · T-20260816-0006 — les garanties de CE lot.
+  //
+  // Ce qui suit garde ce que l'alignement sur les ADR et le feed a ajouté. Sans ces
+  // contrôles, 145 lignes de règles neuves entraient dans le métier sans qu'une seule
+  // mutation puisse les retourner — exactement ce que ce harnais existe pour empêcher.
+  // ───────────────────────────────────────────────────────────────────────────────────
+
+  {
+    id: 'le-gabarit-fait-foi',
+    quoi: 'le gabarit se déclare source, et dit POURQUOI — un orchestrateur ne lit pas la compétence',
+    verifier({ metier }) {
+      // La hiérarchie est le socle des autres gardes : si la compétence pouvait l'emporter,
+      // tout ce que ce fichier ajoute serait contournable en lisant l'autre.
+      const tete = metier.split('\n').slice(0, 20).join('\n');
+      exigePolarite(tete, /fait foi/i, 'la déclaration en TÊTE — plus bas, elle serait lue après ce qu’elle gouverne');
+      exigePolarite(tete, /en découle/i, 'la compétence DÉCOULE de ce fichier, pas l’inverse');
+      exigePolarite(
+        tete, /celui-ci qui gagne/i,
+        'la règle de conflit — en cas de divergence, c’est CE fichier qui gagne',
+      );
+      // Le motif, pas seulement la règle : une hiérarchie sans sa raison se renégocie.
+      exigePolarite(
+        tete, /ne lit pas le `SKILL\.md`|ne lit pas la compétence/i,
+        'le motif de la hiérarchie — c’est parce qu’un orchestrateur ne lit pas la compétence que ce fichier gagne',
+      );
+    },
+  },
+
+  {
+    id: 'les-adr-se-lisent-au-miroir-et-une-absence-ne-prouve-rien',
+    quoi: 'le métier pointe le miroir lisible, écarte le dossier illisible, et interdit de conclure d’une absence',
+    verifier({ metier }) {
+      // Deux moitiés, et la seconde est celle qui coûte : un registre incomplet présenté
+      // comme faisant foi fabrique des « il n'y a pas d'ADR là-dessus » qui sont faux.
+      const s = sectionDe(metier, /gardien des ADR/i, 'sur le rôle de gardien des ADR');
+      exigePolarite(s.corps, /MCP `somcraft`/i, 'la voie réelle par où les ADR se lisent');
+      exigePolarite(s.corps, /\/architecture\/adr/i, 'le chemin des décisions dans le miroir');
+
+      exigePolarite(
+        s.corps, /illisible|Operation not permitted/i,
+        'le dossier du disque est illisible — sinon le prochain y perd son temps',
+      );
+
+      exigePolarite(
+        s.corps, /miroir est incomplet/i,
+        'le miroir est INCOMPLET — c’est ce qui rend une absence non concluante',
+      );
+      exigePolarite(
+        s.corps, /\[non établi\]/i,
+        'le mot à employer quand on ne trouve pas : `[non établi]`',
+      );
+      // POLARITÉ : l'interdit doit porter sur le fait de CONCLURE, pas seulement recommander la prudence.
+      exigePolarite(
+        s.corps, /ne conclus (donc )?jamais|tu ne conclus JAMAIS|ne prouve rien/i,
+        'l’interdit d’une absence, écrit en négation ferme — « ne conclus jamais », pas « sois prudent »',
+      );
+    },
+  },
+
+  {
+    id: 'le-feed-se-lit-avant-de-brieffer',
+    quoi: 'le feed du ServiceDesk entre au cadrage — c’est là que vivent les consignes aux agents',
+    verifier({ metier }) {
+      // Le feed était ABSENT du métier : 54 posts et 16 consignes opposables qu'aucun
+      // orchestrateur n'avait de raison de lire. La garde tient la place ET le moment.
+      const s = sectionDe(metier, /Cadrer/i, 'sur le cadrage');
+      exigePolarite(s.corps, /feed/i, 'le cadrage doit envoyer lire le feed');
+      exigePolarite(
+        s.corps, /avant de brieffer/i,
+        'le moment de la lecture du feed — avant de brieffer, un feed lu après n’a rien changé',
+      );
+      exigePolarite(
+        s.corps, /consignes aux agents/i,
+        'le métier doit dire ce qu’on y trouve : des consignes, pas des annonces',
+      );
+      // La règle d'amendement : sans elle, un orchestrateur applique la plus ancienne des
+      // deux consignes contradictoires qu'il croise.
+      exigePolarite(
+        s.corps, /le plus récent gagne|s['’]amende lui-même/i,
+        'le métier doit dire que le feed s’amende lui-même et que le post récent gagne',
+      );
+    },
+  },
+
+  {
+    id: 'le-verrou-du-sas-ne-fait-pas-foi',
+    quoi: 'le sas se mesure par l’écart git — le verrou a failli en lecture ET en acquisition',
+    verifier({ metier }) {
+      // LA trouvaille du lot : le métier s'appuyait sur un verrou que le feed déclare menteur,
+      // dans le paragraphe même censé faire respecter la règle d'or n°14.
+      // Le sas vit dans la boucle de chantier (§4g), pas dans une section à lui.
+      const s = sectionDe(metier, /Pour chaque unité de travail/i, 'sur la poussée et le sas');
+      exigePolarite(
+        s.corps, /ne fait pas foi/i,
+        'le verrou ne fait pas foi — la garantie centrale de ce lot',
+      );
+      // Les DEUX défaillances : ne garder que la lecture laisserait croire qu’un `acquired: true` suffit.
+      exigePolarite(
+        s.corps, /acquisition/i,
+        'le métier doit dire que l’ACQUISITION aussi a failli — pas seulement la lecture du verrou',
+      );
+      // Et la mesure de remplacement doit être exécutable, pas une intention.
+      const mesure = blocsBash(s.corps).filter((b) => /origin\/main\.\.origin\/staging/.test(b));
+      assert.equal(
+        mesure.length, 1,
+        'le métier doit donner UNE fois la mesure qui tranche : l’écart git entre main et staging',
+      );
+    },
+  },
+
+  {
+    id: 'la-conception-precede-le-brief-de-construction',
+    quoi: 'concevoir est une étape, et sauter la conception est une faute — pas une maladresse',
+    verifier({ metier }) {
+      // T-20260816-0006 : le métier allait de « découper » à « brieffer » sans rien entre les
+      // deux. Ce qui manquait n'était pas le conseil de réfléchir, c'était le REFUS.
+      const s = sectionDe(metier, /Concevoir/i, 'sur l’étape de conception');
+
+      // POSITION : entre le découpage et la boucle de chantier. Écrite après, elle arrive
+      // quand le code est déjà commandé.
+      const iConcevoir = metier.indexOf('Concevoir');
+      const iBoucle = metier.indexOf('La boucle');
+      assert.ok(iConcevoir > 0 && iBoucle > 0, 'les deux sections doivent exister');
+      assert.ok(
+        iConcevoir < iBoucle,
+        'la conception doit précéder la boucle de chantier — après elle, elle ne prévient plus rien',
+      );
+
+      // POLARITÉ : c'est une faute, au même rang que fermer sans QA.
+      assert.match(
+        s.corps, /est une faute/i,
+        'le métier doit qualifier de FAUTE le brief de construction sans conception écrite',
+      );
+      assert.match(
+        s.corps, /sans QA|ticket sans QA/i,
+        'et l’adosser à une faute déjà reconnue — sinon le rang de gravité reste flou',
+      );
+      // La moitié qui empêche la cérémonie inutile.
+      assert.match(
+        s.corps, /mécanique/i,
+        'le métier doit dire que le lot mécanique en est dispensé — sans quoi la règle meurt de bruit',
+      );
+      assert.match(s.corps, /au registre/i, 'et la conception s’écrit au registre, pas dans un terminal');
+    },
+  },
+
+  {
+    id: 'la-ronde-tient-l-hygiene-du-registre',
+    quoi: 'la ronde regarde le registre, signale sans fermer, et se tait quand elle ne trouve rien',
+    verifier({ metier }) {
+      // T-20260816-0018. Les deux pièges qui comptent plus que la liste sont gardés ici :
+      // fermer à la place de quelqu'un, et parler pour ne rien dire.
+      const s = sectionDe(metier, /Veiller tes agents/i, 'sur la ronde');
+
+      // La troisième ligne de la table — le registre entre dans ce que la ronde regarde.
+      const lignes = s.corps.split('\n').filter((l) => l.trim().startsWith('|'));
+      assert.ok(
+        lignes.some((l) => /registre du chantier/i.test(l)),
+        'la table de la ronde doit porter le registre du chantier — sinon un ticket fini qui traîne ne fait aucun bruit',
+      );
+
+      // Les cinq questions, en compte : en retirer une ne casserait rien d'autre.
+      const QUESTIONS = [
+        { quoi: 'un ticket fini qui n’a pas bougé', sonde: /ready_to_deploy/i },
+        { quoi: 'un ticket en cours sans agent vivant', sonde: /in_progress`? sans agent vivant/i },
+        { quoi: 'la fusion et le ticket qui se contredisent — dans les deux sens', sonde: /et l['’]inverse/i },
+        { quoi: 'un agent assigné qui n’existe plus', sonde: /assigné qui n['’]existe plus/i },
+        { quoi: 'un défaut publié mais pas installé', sonde: /publié n['’]est pas installé/i },
+      ];
+      for (const { quoi, sonde } of QUESTIONS) {
+        exigePolarite(s.corps, sonde, `la question « ${quoi} » que la ronde pose au registre`);
+      }
+
+      // PIÈGE 1 — signaler n'est pas fermer. La polarité est tout : « tu peux fermer » ruinerait la garantie.
+      // ⚠️ VOIE B — cette garantie est la plus lourde du lot, et elle n'a AUCUN filet ailleurs :
+      // la section n'existe pas dans la compétence, donc la comparaison octet pour octet ne la
+      // rattrape pas. On n'y garde donc pas la tournure (filtre) mais le FAIT : quelle que soit
+      // la façon de l'amener, la section ne doit jamais autoriser la ronde à fermer.
+      //
+      // Le motif inverse est écrit étroit exprès : le texte dit légitimement « Fermer un ticket
+      // parce qu'une fusion est passée, c'est confondre… » et « un agent fini se ferme (§4f) ».
+      // Interdire « fermer » en général rougirait sur du texte correct — donc on ne vise que les
+      // formes qui AUTORISENT.
+      exigePolarite(
+        s.corps, /tu ne fermes pas/i,
+        'la ronde SIGNALE sans fermer — confondre « la PR est mergée » et « le défaut est réglé » a déjà fait rouvrir un ticket',
+        { inverse: /tu peux fermer|tu dois fermer|permis de fermer|autorisée? à fermer|en réalité tu fermes|la ronde ferme/i },
+      );
+      exigePolarite(
+        s.corps, /jamais elle/i,
+        'et dire explicitement que ce n’est jamais la ronde qui tranche',
+      );
+
+      // PIÈGE 3 — les deux moitiés. Une ronde qui trouve toujours quelque chose n'est plus lue.
+      exigePolarite(
+        s.corps, /tu te tais|le silence est un résultat/i,
+        'la ronde doit se taire quand elle ne trouve rien — sinon elle cesse d’être lue',
+      );
+    },
+  },
+
+  {
+    id: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    quoi: 'les espaces orphelins et les lignes ambiguës se vérifient une fois par jour — et le critère des lignes n’est pas « le dossier existe »',
+    verifier({ metier }) {
+      // Elles vivent au topo, PAS dans la ronde horaire : leur objet bouge lentement, et les
+      // passer à l'heure ne produirait que du bruit. La cadence fait partie de la garantie.
+      const s = sectionDe(metier, /Le topo du matin/i, 'sur le topo du matin');
+      exigePolarite(
+        s.corps, /une fois par jour/i,
+        'la cadence doit être écrite — ces deux-là ne sont pas des contrôles horaires',
+      );
+      exigePolarite(s.corps, /orphelin/i, 'le topo doit vérifier les espaces de travail orphelins');
+      exigePolarite(s.corps, /lignes ouvertes/i, 'et les lignes ouvertes sans personne au bout');
+
+      // LE POINT QUI FAIT LA DIFFÉRENCE, et il a été corrigé une fois déjà : le critère naïf
+      // passe sur les 25 lignes et ne prouve rien. Ce qu'on cherche est l'ambiguïté d'adressage.
+      // ⚠️ VOIE B — même raison que pour la ronde : cette section n'existe pas dans la compétence,
+      // donc aucun filet. On garde le fait : le critère naïf ne doit jamais être réhabilité,
+      // quelle que soit la tournure qui l'amène.
+      exigePolarite(
+        s.corps, /ne prouve rien/i,
+        'vérifier l’existence du dossier NE PROUVE RIEN — sinon on écrit le contrôle inutile',
+        { inverse: /dossier (?:d['’]une ligne )?existe\s*\*{0,2}\s*(?:suffit|prouve)|ce (?:test|critère) suffit|suffit à (?:le )?prouver/i },
+      );
+      exigePolarite(
+        // ⚠️ LA SONDE A DÛ CHANGER AVEC LE CRITÈRE, ET C'EST LE PIÈGE QUI A ÉTÉ COMMIS ICI
+        // AVANT D'ÊTRE VU PAR UNE MUTATION (2026-08-16).
+        //
+        // Elle cherchait `/même destinataire/` — donc elle restait VERTE sur la régression
+        // exacte qu'on voulait interdire : ramener le critère à « deux lignes qui répondent au
+        // même destinataire » laisse cette sous-chaîne en place. Corriger le libellé du message
+        // sans corriger la sonde donne une garde qui DIT garder le bon critère et garde
+        // l'ancien. C'est le motif dominant du dépôt, une fois de plus, à l'endroit précis où
+        // l'on croyait le fermer.
+        s.corps, /deux lignes de deux CHANTIERS DIFFÉRENTS/,
+        'et nommer le vrai défaut : deux CHANTIERS différents au même bout du fil',
+        { inverse: /le défaut (?:à nommer )?est deux lignes qui répondent au même destinataire/i },
+      );
+
+      // ⚠️ ET LE FAUX POSITIF DOIT ÊTRE NOMMÉ, SANS QUOI LA CORRECTION SE DÉFAIT.
+      //
+      // Un gestionnaire client porte DEUX lignes par définition de poste — celle de son client
+      // et celle du dirigeant. Sans cette phrase, le prochain qui lit « deux lignes sur le même
+      // terminal » réécrira le critère d'origine en croyant simplifier, et il rougira de nouveau
+      // trois fois sur quatre.
+      exigePolarite(
+        s.corps, /pas une anomalie, c'est sa définition de poste/i,
+        'le faux positif nommé : un gestionnaire porte deux lignes par définition de poste',
+        { inverse: /deux lignes (?:pour|chez) un gestionnaire (?:est|sont) (?:une )?anomalie/i },
+      );
+    },
+  },
+
+  {
+    id: 'l-orchestrateur-est-le-bras-droit',
+    quoi: 'la définition de poste — bras droit, homme de confiance — ouvre le métier, avant toute mécanique',
+    verifier({ metier }) {
+      // T-20260816-0099. Le dirigeant l'a dite en propres termes, et elle explique les quatre
+      // points de ce ticket mieux qu'ils ne s'expliquent eux-mêmes : ce ne sont pas quatre
+      // défauts séparés, ce sont quatre manières d'avoir manqué à ça.
+      //
+      // ⚠️ ELLE VIT DANS LE PRÉAMBULE, PAS DANS UNE SECTION — et c'est la garantie elle-même,
+      // « en tête, pas en annexe ». `sections()` ne rend que ce qui suit un titre : une garde
+      // écrite sur une section ne pourrait donc pas la voir. On lit le préambule directement,
+      // comme `le-metier-a-voyage-entier` a dû apprendre à le faire après une revue.
+      const preambule = metier.split(/^##\s/m)[0];
+
+      exigePolarite(
+        preambule, /bras droit, mon homme de confiance/i,
+        'la définition de poste, dans les mots du dirigeant',
+      );
+      exigePolarite(
+        preambule, /pas un compliment/i,
+        'et c’est une définition de POSTE, pas un compliment — l’adoucir la vide entièrement',
+        { inverse: /(?:n'est qu'|seulement |juste )un compliment|une simple façon de parler/i },
+      );
+
+      // ⚠️ LA POSITION EST LA GARANTIE, PAS LA PRÉSENCE.
+      //
+      // « Elle va EN TÊTE, pas en annexe » : un orchestrateur naît en lisant son métier, et la
+      // première chose qu'il doit savoir n'est pas la mécanique des worktrees ni l'ordre des
+      // statuts — c'est qui il est pour celui qui l'a fait naître. Reléguer ce bloc plus bas
+      // laisserait TOUS SES MOTS EN PLACE et retirerait exactement ce qui compte : une garde
+      // en présence resterait verte sur cette régression-là.
+      const rangDefinition = preambule.indexOf('bras droit');
+      const rangPilote = preambule.indexOf('Tu es le **pilote**');
+      assert.ok(rangPilote > 0, 'le repère de position a disparu : le préambule ne présente plus le rôle de pilote');
+      assert.ok(
+        rangDefinition > 0 && rangDefinition < rangPilote,
+        'la définition de poste est passée APRÈS la mécanique du chantier. Elle doit OUVRIR le '
+          + 'métier, pas le compléter : un pilote exécute un plan de vol, et c’est précisément '
+          + 'ce que cette phrase corrige.',
+      );
+
+      // Les trois conséquences, EN COMPTE : en retirer une ne casserait rien d'autre, et c'est
+      // la deuxième qui partirait — la seule qui coûte, puisqu'elle interdit de remonter un
+      // arbitrage qu'on pouvait rendre soi-même. Remonter est toujours le geste confortable.
+      const lignes = preambule.split('\n');
+      const CONSEQUENCES = [
+        { quoi: 'ne pas faire extraire sa réponse', sonde: /ne fait pas extraire sa réponse/i },
+        { quoi: 'retirer des décisions de l’assiette du dirigeant', sonde: /retire des décisions de l'assiette/i },
+        { quoi: 'dire d’abord ce qu’on n’a pas envie d’entendre', sonde: /ce qu'on n'a pas envie d'entendre/i },
+      ];
+      for (const { quoi, sonde } of CONSEQUENCES) {
+        assert.equal(
+          lignes.filter((l) => sonde.test(l)).length, 1,
+          `la conséquence « ${quoi} » doit figurer une fois exactement dans le préambule`,
+        );
+      }
+
+      // ⚠️ LA MOITIÉ QUI PROTÈGE, ET ELLE SE RETIRE SANS BRUIT.
+      //
+      // Un homme de confiance qui se trompe et le cache cesse d'être l'un et l'autre en même
+      // temps. Sans cette phrase, « bras droit » se lit comme un titre honorifique — c'est-à-dire
+      // le sens exact que le dirigeant ne lui donne pas, et celui qui rend le rôle dangereux.
+      exigePolarite(
+        preambule, /elle en est la condition/i,
+        'la franchise est la CONDITION du rôle, jamais une vertu qu’on y ajoute',
+        { inverse: /franchise est (?:une |la )?(?:vertu|qualité) ajoutée|franchise est facultative|franchise n'est pas la condition/i },
+      );
+    },
+  },
+
+  {
+    id: 'le-backlog-ce-sont-les-demandes',
+    quoi: 'il rend compte au grain de la Demande, répond la chose demandée — ET donne une analyse quand on lui en demande une',
+    verifier({ metier }) {
+      // T-20260816-0099, points 1 et 2. Mesurés le même jour, et ils se manquent séparément :
+      // le premier est un GRAIN, le second un FORMAT. Les confondre revient à corriger l'un en
+      // croyant avoir fait les deux.
+      const s = sectionDe(metier, /Rendre compte — au grain de la Demande/i, 'sur le grain du compte rendu');
+
+      exigePolarite(
+        s.corps, /ce sont les DEMANDES/,
+        'le backlog d’un orchestrateur, ce sont les Demandes',
+        { inverse: /backlog,? ce sont les tickets|les tickets sont (?:le|ton|son) backlog|tu réponds par les tickets/i },
+      );
+      exigePolarite(
+        s.corps, /mécanique interne/i,
+        'et les tickets sont sa mécanique interne — il les tient sans en accabler personne',
+      );
+      exigePolarite(
+        s.corps, /tu réponds la chose demandée/i,
+        'à une question fermée, il répond la chose demandée, sans la commenter',
+      );
+
+      // ⚠️⚠️ LA SECONDE MOITIÉ, ET C'EST ELLE QUE LA PREUVE DU TICKET EXIGE NOMMÉMENT.
+      //
+      // « Un orchestrateur né sur cette version, à qui on demande le backlog, répond par les
+      // DEMANDES — et un orchestrateur à qui on demande une analyse en donne toujours une. Une
+      // version qui rend l'un muet sur l'autre n'a fait que déplacer le défaut. »
+      //
+      // Une règle qui apprend à répondre court, SANS dire qu'on répond long quand on demande
+      // long, fabrique un orchestrateur qui rend une liste à « qu'est-ce que tu en penses ? ».
+      // C'est le même défaut, retourné — et il serait plus difficile à voir que l'original.
+      exigePolarite(
+        s.corps, /tu en donnes une — entière/i,
+        'quand une analyse est demandée, il en donne une — sinon la correction a seulement déplacé le défaut',
+        { inverse: /jamais d'analyse|ne donnes? (?:jamais )?d'analyse|refuse l'analyse|réponds toujours en liste/i },
+      );
+      exigePolarite(
+        // La sonde tolère l'emphase markdown autour du mot : le texte écrit « jamais un
+        // **plafond** », et une sonde qui l'ignorerait rendrait la garde introuvable au premier
+        // coup de gras — c'est-à-dire décorative pour une raison qui n'a rien à voir avec le sens.
+        s.corps, /jamais un \*{0,2}plafond/i,
+        'et la concision est nommée comme un DÉFAUT, jamais comme une limite',
+      );
+    },
+  },
+
+  {
+    id: 'la-production-cliente-se-mesure-avant-le-geste',
+    quoi: 'l’état de la production d’un client se mesure et s’inscrit AVANT le geste — pour que la suite reste attribuable',
+    verifier({ metier }) {
+      // T-20260816-0099, point 3 — « la leçon la plus chère de ces 48 heures ».
+      //
+      // Ce qui rend cette garantie particulière : son motif n'est PAS la prudence. Un agent l'a
+      // formulé mieux que la consigne ne l'aurait fait — si je fusionne maintenant, plus personne
+      // ne peut attribuer l'état du chat. Écrite comme une précaution, elle se négocie ; écrite
+      // comme une condition d'attribution, elle ne se négocie pas.
+      const s = sectionDe(metier, /dépôt client — mesure et inscris/i, 'sur la mesure de la production cliente');
+
+      exigePolarite(
+        s.corps, /s'inscrit AVANT qu'on y pose un geste/i,
+        'la mesure PRÉCÈDE le geste — c’est toute la garantie, et l’ordre est la garantie',
+        { inverse: /mesure(?:r|s)? après (?:le|ton) geste|il suffit de mesurer ensuite|tu peux mesurer après/i },
+      );
+      exigePolarite(
+        s.corps, /reste attribuable/i,
+        'et son motif : l’attribution de ce qui arrivera ensuite, pas la prudence',
+      );
+      exigePolarite(
+        s.corps, /ne prouve plus rien/i,
+        'une mesure prise après le geste ne sait plus séparer ce qui était déjà cassé de ce qu’on vient de casser',
+        { inverse: /mesurer après suffit|aussi bien après|on peut toujours mesurer plus tard/i },
+      );
+      exigePolarite(
+        s.corps, /se referme au premier commit/i,
+        'la fenêtre où cette preuve existe se referme — et elle ne se rouvre pas',
+      );
+
+      // ⚠️ LA MOITIÉ QUI GARDE LE PREMIER PRINCIPE, et sans elle cette section serait une
+      // invitation à le violer : MESURER EST DE L'EXÉCUTION. Un orchestrateur qui va mesurer
+      // lui-même la production d'un client vient de reprendre le clavier — et ses droits le lui
+      // refusent de toute façon, ce qui ferait de ce texte une garantie fausse.
+      exigePolarite(
+        s.corps, /appartient à ton chef d'équipe/i,
+        'mesurer appartient au chef d’équipe : l’orchestrateur porte l’exigence, pas le geste',
+        { inverse: /tu mesures toi-même|va (?:le )?mesurer toi-même|c'est à toi de mesurer/i },
+      );
+    },
+  },
+
+  {
+    id: 'avant-de-relancer-regarde-ta-propre-boite',
+    quoi: 'un silence a deux causes — la réponse déjà arrivée, et sa propre boîte pleine',
+    verifier({ metier }) {
+      // T-20260816-0099, point 4, mesuré DES DEUX CÔTÉS le même jour : une nuit passée à
+      // chercher qui donnait des ordres aux agents alors que le blocage était la boîte de
+      // l'orchestrateur (239 tentatives de jonction), et un agent qui redemande cinq fois un
+      // mandat déjà présent trois fois dans son pane.
+      const s = sectionDe(metier, /regarde d'abord ta propre boîte/i, 'sur la vérification avant relance');
+
+      exigePolarite(
+        s.corps, /tu es l'une des deux/i,
+        'un silence a deux causes, et l’orchestrateur est l’une des deux',
+        { inverse: /le silence vient toujours de l'autre|jamais de ton côté|c'est toujours lui qui/i },
+      );
+
+      const VERIFICATIONS = [
+        { quoi: 'la réponse est-elle déjà arrivée', sonde: /déjà arrivée/i },
+        { quoi: 'ta propre boîte de saisie est-elle libre', sonde: /boîte de saisie est-elle libre/i },
+      ];
+      for (const { quoi, sonde } of VERIFICATIONS) {
+        exigePolarite(s.corps, sonde, `la vérification « ${quoi} »`);
+      }
+
+      exigePolarite(
+        s.corps, /Tu ne conclus jamais d'un silence/i,
+        'et l’interdit qui les rend obligatoires : on ne conclut pas d’un silence sans avoir mesuré les deux',
+        { inverse: /un silence prouve|tu peux conclure d'un silence/i },
+      );
+    },
+  },
+
+  {
+    id: 'la-recolte-ecrit-au-lieu-de-constater',
+    quoi: 'la huitième tâche RÉCOLTE — elle écrit au registre au lieu de constater l’oubli — et sa limite est dite',
+    verifier({ metier }) {
+      // T-20260816-0097. L'arbitrage du dirigeant a écarté trois pistes de CONTRÔLE au profit
+      // d'une RÉCOLTE, et la différence est toute la valeur du lot.
+      const s = sectionDe(metier, /La récolte/i, 'sur la récolte');
+
+      exigePolarite(
+        s.corps, /tu les écris au registre/i,
+        'la récolte ÉCRIT au registre — c’est son livrable, pas un constat',
+      );
+
+      // ⚠️⚠️ LA DISTINCTION QUI PORTE TOUT LE LOT, ET ELLE SE PERD EN UN MOT.
+      //
+      // Un contrôle dit « tu as oublié » ; une récolte fait le travail. Sur un défaut qui vient
+      // de l'oubli, le second l'emporte — on ne peut pas se rappeler de se rappeler. Ramener la
+      // récolte à une vérification la vide ENTIÈREMENT sans rien retirer de visible : le texte
+      // garderait sa place, son titre et sa cadence, et ne ferait plus rien.
+      exigePolarite(
+        s.corps, /une récolte fait le travail d'écrire/i,
+        'la récolte FAIT le travail, là où un contrôle se contente de dire qu’on a oublié',
+        { inverse: /la récolte (?:constate|vérifie|signale|contrôle)\b|elle se contente de constater|il s'agit d'un contrôle/i },
+      );
+      exigePolarite(
+        s.corps, /se rappeler de se rappeler/i,
+        'et la raison pour laquelle un contrôle ne suffit pas sur un défaut d’oubli',
+      );
+
+      // ⚠️ SA LIMITE FAIT PARTIE DE LA GARANTIE, ET ELLE EST CONTRE-INTUITIVE : la retirer
+      // rendrait la récolte plus rassurante et le dispositif plus faux. Ce qui a été compacté
+      // avant la ronde est perdu — et l'agent ne le saura même pas, ce qui est le pire des deux.
+      exigePolarite(
+        s.corps, /ne rattrape jamais ce qui a déjà été compacté/i,
+        'sa limite : elle attrape ce qui a ÉCHAPPÉ, jamais ce qui a DISPARU',
+        { inverse: /la récolte rattrape tout|rien n'est perdu|elle rattrape (?:aussi )?ce qui a été compacté/i },
+      );
+      exigePolarite(
+        s.corps, /n'abroge donc rien du principe d'inscrire au plus tôt/i,
+        'donc elle n’abroge pas le principe d’inscrire au plus tôt — les deux sont nécessaires',
+        { inverse: /remplace le principe|dispense d'inscrire|il n'est plus nécessaire d'inscrire/i },
+      );
+
+      // La cadence n'est pas tranchée. Le dire est plus honnête que de la choisir au jugé — et
+      // le ticket le demande explicitement : « à mesurer sur le comportement réel ».
+      exigePolarite(s.corps, /\[non établi\]/, 'la fréquence de la récolte, marquée comme non établie');
+    },
+  },
+
+  {
+    id: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+    quoi: 'rien ne tourne → on repart du backlog au grain de la Demande, et la ronde ne finit pas avant que ses trouvailles soient au registre',
+    verifier({ metier }) {
+      // T-20260816-0018, tâche 9 + condition de fin. Mesuré le 2026-08-16 : trois agents au
+      // repos avec du travail devant eux, correctement listés `done` par la ronde — et RIEN
+      // n'en a été conclu, parce qu'aucune tâche ne demandait « est-ce que quelque chose
+      // avance ? ». Personne ne l'a su avant que le dirigeant demande « vous travaillez sur quoi ? ».
+      const s = sectionDe(metier, /observe sans agir est un journal/i, 'sur les conséquences que la ronde doit tirer');
+
+      exigePolarite(
+        s.corps, /elle en tire une conséquence/i,
+        'une ronde ne rend pas un état, elle en tire une conséquence — sinon c’est un journal',
+        { inverse: /se contente de rendre l'état|il suffit de constater|un état rendu suffit/i },
+      );
+
+      exigePolarite(
+        s.corps, /tu repars du backlog/i,
+        'la neuvième tâche : si rien ne tourne, on reprend le travail au backlog',
+        { inverse: /tu attends qu'on te réveille|tu attends une consigne|rien à faire tant qu'on ne te dit rien/i },
+      );
+      exigePolarite(
+        s.corps, /au grain de la Demande/i,
+        'et la reprise se décide au grain de la Demande, jamais du ticket',
+        // ⚠️ L'ALTERNATIVE « ticket par ticket » A ÉTÉ RETIRÉE (revue de fond, 2026-08-16).
+        //
+        // Elle ne désignait PAS le renversement de cette garantie : « ticket par ticket » nomme
+        // un tout autre geste, le rattachement d'un ticket à un jalon (`deliveries` actions
+        // `add_ticket` / `remove_ticket`), écrit légitimement en §3 du même gabarit. La garde ne
+        // criait pas encore, parce que `sectionDe` borne le corps à cette section — mais la
+        // première clarification légitime qui aurait employé ces trois mots ICI l'aurait fait
+        // rougir à tort. Et une garde qui crie à tort se fait retirer, EN EMPORTANT ce qu'elle
+        // gardait : ce dépôt l'a déjà payé, et un `inverse` trop large est la façon la plus
+        // discrète de préparer ce retrait.
+        //
+        // Ce qui reste est l'exacte polarité contraire, et elle n'a aucun usage légitime ici :
+        // décider la reprise au grain du ticket est précisément ce que la garantie interdit.
+        { inverse: /au grain du ticket/i },
+      );
+
+      // ⚠️⚠️ LE PIÈGE EST L'EXACT REVERS DE LA TÂCHE, ET SANS LUI ELLE NUIT.
+      //
+      // Les deux situations se ressemblent trait pour trait de l'extérieur — personne ne
+      // travaille — et elles appellent des gestes OPPOSÉS. Un orchestrateur qui attend un
+      // arbitrage n'est pas à l'arrêt : il est bloqué, et démarrer un lot de plus disperse au
+      // lieu d'avancer. Ce qui les sépare n'est pas l'observation, c'est le discriminant.
+      exigePolarite(
+        s.corps, /n'est pas à l'arrêt, il est bloqué/i,
+        'attendre un arbitrage n’est PAS être à l’arrêt — relancer là disperse au lieu d’avancer',
+        { inverse: /attendre un arbitrage,? c'est être à l'arrêt|tu relances quand même|relance dans tous les cas/i },
+      );
+      exigePolarite(
+        s.corps, /est-ce que j'attends quelqu'un/i,
+        'et le discriminant est nommé — « est-ce que j’attends quelqu’un ? », jamais « est-ce que quelqu’un travaille ? »',
+      );
+
+      // ⚠️ LA SECONDE CONSÉQUENCE, ET C'EST SA FORMULATION QUI EST LA GARANTIE.
+      //
+      // « Une ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au registre » est
+      // une CONDITION DE FIN. Écrite comme une bonne habitude, elle redevient exactement ce
+      // qu'elle remplace : une documentation qui repose sur le souvenir d'un seul agent.
+      exigePolarite(
+        s.corps, /ne se termine pas tant que ce qu'elle a trouvé n'est pas au registre/i,
+        'la ronde ne finit pas avant que ses trouvailles soient inscrites — c’est sa condition de fin',
+        { inverse: /si tu y penses|quand tu as le temps|il est bon d'inscrire|tu peux l'inscrire plus tard/i },
+      );
+      exigePolarite(
+        s.corps, /mourir avec la session/i,
+        'et le motif : un constat non inscrit meurt avec la session, sans que personne sache qu’il a existé',
+      );
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -1582,6 +2259,27 @@ export const CONTROLES = [
  * des garanties dont le contrôle dédié est décoratif.
  */
 export const MUTATIONS = [
+  {
+    id: 'crochet-retourne-par-une-negation',
+    quoi: 'l’énoncé du crochet est retourné par une négation, en gardant tous ses mots-clés',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul, tu n'as rien à faire.",
+      "**Ne crois pas qu'un crochet apparaisse seul** — contrairement à ce qu'on dit, le dispositif le pose seul, tu n'as rien à faire est faux : c'est toi qui le poses.",
+    ),
+  },
+  {
+    id: 'crochet-devenu-une-discipline',
+    quoi: 'le métier enseigne à l’orchestrateur de poser lui-même le crochet — la garantie redevient une discipline',
+    cible: 'crochet-pose-par-le-dispositif',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'le dispositif le pose seul, tu n\'as rien à faire',
+      'pose un crochet sur son message dès que tu l\'as lu',
+    ),
+  },
+
   // ── le transport fidèle
   {
     id: 'une-section-du-metier-disparait',
@@ -1951,9 +2649,14 @@ export const MUTATIONS = [
     quoi: 'le chemin du dossier Architecture est écrit en dur — faux dans tout autre poste',
     cible: 'pas-de-chemin-de-machine',
     fichier: 'metier',
+    // T-20260816-0015 : le motif visait « vivent dans le dossier Architecture partagé », une
+    // phrase que ce lot a dû retirer — ce dossier est ILLISIBLE depuis le poste (macOS,
+    // `Operation not permitted`, T-20260816-0007) et le métier pointe désormais le miroir
+    // Somcraft. Le motif suit son texte : ce qu'il éprouve n'a pas bougé d'un pouce — qu'un
+    // chemin de machine entre dans le gabarit et que la garde le voie.
     muter: (t) => t.replace(
-      'vivent dans le dossier Architecture partagé',
-      'vivent dans `/Users/maximeleboeuf/Library/CloudStorage/GoogleDrive-maxime.leboeuf@somtech.ca/Disques partagés/Architecture/`',
+      'se lisent **par le MCP `somcraft`**',
+      'se lisent dans `/Users/maximeleboeuf/Library/CloudStorage/GoogleDrive-maxime.leboeuf@somtech.ca/Disques partagés/Architecture/`',
     ),
   },
   {
@@ -2496,4 +3199,468 @@ export const MUTATIONS = [
       '',
     ),
   },
+
+  // ───────────────────────────────────────────────────────────────────────────────────
+  // T-20260816-0015 · T-20260816-0018 · T-20260816-0006 — les mutations de CE lot.
+  //
+  // Chacune retourne UNE garantie en polarité, en position ou en portée — jamais en
+  // retirant un mot au hasard. Toutes ont été posées et vues rougir avant d'être écrites
+  // ici : une mutation qu'on n'a pas vue mordre ne prouve rien (c'est le défaut de la
+  // passe 1 sur ce lot, qui a « posé » trois mutations sans jamais les appliquer).
+  // ───────────────────────────────────────────────────────────────────────────────────
+
+  {
+    id: 'la-hierarchie-des-deux-textes-devient-une-lecture-conjointe',
+    quoi: 'le gabarit cesse de gagner en cas de divergence — les deux textes « se lisent ensemble », et la compétence redevient opposable',
+    cible: 'le-gabarit-fait-foi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'celui-ci qui gagne',
+      'chacun porte une part de la vérité',
+    ),
+  },
+
+  {
+    id: 'le-miroir-des-adr-est-declare-complet',
+    quoi: 'le miroir est présenté comme complet — une absence redevient une preuve, et « pas d’ADR là-dessus » recommence',
+    cible: 'les-adr-se-lisent-au-miroir-et-une-absence-ne-prouve-rien',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'miroir est incomplet',
+      'miroir est exhaustif',
+    ),
+  },
+
+  {
+    id: 'le-feed-se-lit-quand-on-a-un-moment',
+    quoi: 'la lecture du feed perd son moment — lue après le brief, elle n’a rien empêché',
+    cible: 'le-feed-se-lit-avant-de-brieffer',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'avant de brieffer qui que ce soit',
+      'quand tu as un moment dans la journée',
+    ),
+  },
+
+  {
+    id: 'seule-la-lecture-du-verrou-aurait-failli',
+    quoi: 'la moitié « acquisition » disparaît — un `acquired: true` redevient une autorisation de pousser',
+    cible: 'le-verrou-du-sas-ne-fait-pas-foi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'acquisition ont failli',
+      'seule lecture a failli',
+    ),
+  },
+
+  {
+    id: 'sauter-la-conception-devient-une-maladresse',
+    quoi: 'le brief sans conception écrite cesse d’être une faute — il devient déconseillé, donc permis quand ça presse',
+    cible: 'la-conception-precede-le-brief-de-construction',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'est une faute, au même titre',
+      'est déconseillé, un peu comme',
+    ),
+  },
+
+  {
+    id: 'la-ronde-se-met-a-fermer',
+    quoi: 'la ronde ferme ce qu’elle juge fini — « la PR est mergée » redevient « le défaut est réglé »',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      'Tu peux fermer ce qui est manifestement fini',
+    ),
+  },
+
+  {
+    id: 'le-critere-des-lignes-redevient-le-dossier-existe',
+    quoi: 'le contrôle naïf est réhabilité — il passe sur les 25 lignes et laisse filer les deux qui répondent au même destinataire',
+    cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**ne prouve rien** — sur 25 lignes',
+      '**suffit** — sur 25 lignes',
+    ),
+  },
+
+  // ───────────────────────────────────────────────────────────────────────────────────
+  // LA NÉGATION ENVELOPPANTE — six mutations, une par garantie de ce lot.
+  //
+  // Trouvée le 2026-08-16 par une revue fraîche, sur les gardes que ce lot venait
+  // d'écrire : elles cherchaient une SOUS-CHAÎNE, donc « il n'est pas vrai que tu ne
+  // fermes pas » les laissait toutes vertes. La phrase gardée est encore là, et elle dit
+  // le contraire. Quatre gardes sont tombées d'un coup ; deux autres ne survivaient que
+  // par accident, rattrapées par la comparaison octet pour octet parce que leur texte est
+  // dupliqué — un filet non voulu n'est pas une garantie, alors les six sont éprouvées.
+  //
+  // Ces six-là gardent `exigePolarite` honnête. Sans elles, on pourrait le retirer d'un
+  // contrôle sans qu'aucun test ne s'en aperçoive.
+  // ───────────────────────────────────────────────────────────────────────────────────
+
+  {
+    id: 'polarite-la-hierarchie-est-niee-sur-place',
+    quoi: 'le gabarit garde tous ses mots et cesse de gagner — la hiérarchie est renversée sans qu’un terme disparaisse',
+    cible: 'le-gabarit-fait-foi',
+    fichier: 'metier',
+    muter: (t) => t.replace('celui-ci qui gagne', 'celui-ci qui gagne — au contraire'),
+  },
+
+  {
+    id: 'polarite-le-miroir-est-nie-incomplet',
+    quoi: 'le miroir reste dit « incomplet » et la phrase le dédit aussitôt — une absence redevient une preuve',
+    cible: 'les-adr-se-lisent-au-miroir-et-une-absence-ne-prouve-rien',
+    fichier: 'metier',
+    muter: (t) => t.replace('miroir est incomplet', 'miroir est incomplet, en réalité il est complet'),
+  },
+
+  {
+    id: 'polarite-le-moment-du-feed-est-nie',
+    quoi: 'le feed garde son « avant de brieffer » et le perd dans la même phrase',
+    cible: 'le-feed-se-lit-avant-de-brieffer',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'avant de brieffer qui que ce soit',
+      'avant de brieffer qui que ce soit — en réalité quand tu en trouves le temps',
+    ),
+  },
+
+  {
+    id: 'polarite-le-verrou-refait-foi',
+    quoi: 'le verrou « ne fait pas foi » et fait foi trois mots plus loin — la garantie centrale du lot, renversée sur place',
+    cible: 'le-verrou-du-sas-ne-fait-pas-foi',
+    fichier: 'metier',
+    // « ne fait pas foi » seul mordait AILLEURS — le gabarit le dit aussi du fil de la ligne et
+    // d'un rappel de mémoire, et `replace` prend la première occurrence. La mutation mordait
+    // donc hors du sas et aucun contrôle ne la voyait : survivante, attrapée par la GARDE 2.
+    muter: (t) => t.replace('Le verrou ne fait pas foi', 'Le verrou ne fait pas foi — au contraire'),
+  },
+
+  {
+    id: 'polarite-la-ronde-se-remet-a-fermer',
+    quoi: 'LE cas qui a motivé cette famille de mutations : « il n’est pas vrai que tu signales, tu ne fermes pas »',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      "Il n'est pas vrai que tu signales, tu ne fermes pas",
+    ),
+  },
+
+  {
+    id: 'polarite-le-critere-naif-est-rehabilite-par-la-negation',
+    quoi: 'le critère du dossier « ne prouve rien », et la phrase le réhabilite immédiatement',
+    cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**ne prouve rien** — sur 25 lignes',
+      '**ne prouve rien** — au contraire, sur 25 lignes',
+    ),
+  },
+
+  // ── Les trois tournures qui ont fait sauter la garde le 2026-08-16, chacune la sienne.
+  // Elles n'étaient pas dans la liste ; la garde restait verte pendant que la garantie était
+  // renversée. Elles sont désormais mutées, donc leur retrait de `RENVERSEMENT` se verrait.
+
+  {
+    id: 'polarite-la-ronde-est-niee-par-a-l-oppose',
+    quoi: 'la ronde est renversée par « à l’opposé de ce qu’on pourrait croire » — tournure absente de la liste jusqu’au 2026-08-16',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      "À l'opposé de ce qu'on pourrait croire, tu signales, tu ne fermes pas",
+    ),
+  },
+
+  {
+    id: 'polarite-la-ronde-est-niee-par-c-est-faux',
+    quoi: 'la ronde est renversée par « c’est faux : » — la forme nue figure légitimement dans le gabarit, seule celle à deux-points est un renversement',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      "C'est faux : tu signales, tu ne fermes pas",
+    ),
+  },
+
+  {
+    id: 'polarite-la-ronde-est-niee-par-dans-les-faits',
+    quoi: 'la ronde est renversée par « dans les faits »',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      'Dans les faits, tu signales, tu ne fermes pas',
+    ),
+  },
+
+  // ── VOIE B : la garantie tombe SANS aucune tournure de négation.
+  // La phrase gardée reste intacte, aucun mot de `RENVERSEMENT` n'apparaît — c'est la polarité
+  // CONTRAIRE qui est écrite ailleurs dans la section. Un filtre de tournures ne voit rien ici ;
+  // seul `inverse` l'attrape. Ces deux mutations sont la preuve que B garde le fait.
+
+  {
+    id: 'inverse-la-ronde-est-autorisee-a-fermer',
+    quoi: 'la ronde garde son « tu ne fermes pas » ET reçoit l’autorisation de fermer trois lignes plus bas — aucune négation, aucune tournure : la garantie tombe quand même',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "La ronde rend une **liste d'écarts**",
+      "Tu peux fermer ce qui est manifestement fini. La ronde rend une **liste d'écarts**",
+    ),
+  },
+
+  {
+    id: 'inverse-le-critere-naif-est-declare-suffisant',
+    quoi: 'le critère du dossier garde son « ne prouve rien » ET se voit déclaré suffisant juste après — sans une seule tournure de négation',
+    cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "Ce qu'il faut chercher est autre chose",
+      "Ce test suffit. Ce qu'il faut chercher est autre chose",
+    ),
+  },
+
+  // ═══════════════ la version « bras droit » (2026-08-16)
+  //
+  // T-20260816-0099, T-20260816-0097, T-20260816-0018. Toutes ces mutations sont posées sur la
+  // COPIE EN MÉMOIRE que `lireGabarits()` rend — aucune n'écrit sur le disque, et l'arbre de
+  // travail n'est jamais touché. C'est ce qui permet de retourner un gabarit versionné sans
+  // laisser la mutation derrière soi.
+
+  {
+    id: 'la-definition-de-poste-est-releguee-apres-la-mecanique',
+    quoi: 'le bloc « bras droit » garde TOUS SES MOTS mais passe après la mécanique du chantier — « en tête » devient « en annexe »',
+    cible: 'l-orchestrateur-est-le-bras-droit',
+    fichier: 'metier',
+    // ⚠️ LA MUTATION QUI COMPTE LE PLUS SUR CE LOT, parce que c'est la seule qu'une garde en
+    // présence de mots ne verrait JAMAIS : pas un caractère ne disparaît, seule la position
+    // change. Or la position EST la garantie — « elle va EN TÊTE, pas en annexe ».
+    muter: (t) => t.replace(
+      /(> 🧭 \*\*« L'orchestrateur[\s\S]*?elle en est la condition\.\*\*\n\n)(Tu es le \*\*pilote\*\*)/,
+      '$2',
+    ).replace(
+      /(Si le tien n'en est pas une, saute-les\.\n)/,
+      '$1\n> 🧭 **« L\'orchestrateur, c\'est mon bras droit, mon homme de confiance. »**\n>\n> *— le dirigeant, 2026-08-16*\n\n**C\'est une définition de poste, pas un compliment.** Un bras droit ne fait pas extraire sa réponse ; il retire des décisions de l\'assiette du dirigeant ; il dit d\'abord ce qu\'on n\'a pas envie d\'entendre. La franchise n\'est pas une vertu ajoutée au rôle — elle en est la condition.\n',
+    ),
+  },
+  {
+    id: 'la-definition-de-poste-redevient-un-compliment',
+    quoi: 'la phrase du dirigeant est ramenée à une marque d’estime — le rôle perd ce qu’elle lui imposait',
+    cible: 'l-orchestrateur-est-le-bras-droit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**C'est une définition de poste, pas un compliment**",
+      "**C'est une simple façon de parler, un compliment**",
+    ),
+  },
+  {
+    id: 'polarite-la-franchise-redevient-une-vertu-ajoutee',
+    quoi: 'la condition du rôle est retournée sur place, tous ses mots-clés conservés',
+    cible: 'l-orchestrateur-est-le-bras-droit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**La franchise n\'est pas une vertu ajoutée au rôle — elle en est la condition.**',
+      '**Il n\'est pas vrai que la franchise n\'est pas une vertu ajoutée au rôle — elle en est la condition, dit-on, et c\'est faux : c\'est un supplément.**',
+    ),
+  },
+
+  {
+    id: 'le-backlog-redevient-les-tickets',
+    quoi: 'le grain du compte rendu bascule sur les tickets — exactement le défaut que le dirigeant a dû reprendre deux fois',
+    cible: 'le-backlog-ce-sont-les-demandes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**1. Ton backlog, ce sont les DEMANDES — jamais les tickets.**',
+      '**1. Ton backlog, ce sont les tickets.**',
+    ),
+  },
+  {
+    id: 'inverse-la-concision-devient-un-plafond',
+    quoi: 'la règle « réponds la chose demandée » garde tous ses mots ET se voit étendue à l’analyse — la moitié qui protège tombe sans une seule négation',
+    cible: 'le-backlog-ce-sont-les-demandes',
+    fichier: 'metier',
+    // ⚠️ C'EST LA MOITIÉ QUE LA PREUVE DU TICKET EXIGE, et elle tombe par EXTENSION plutôt que
+    // par retrait : le texte reste lisible, la règle paraît simplement plus générale. Un
+    // orchestrateur muté rendrait une liste à « qu'est-ce que tu en penses ? » — le défaut
+    // d'origine, retourné, et plus difficile à voir que lui.
+    muter: (t) => t.replace(
+      'tu en donnes une — entière',
+      'tu réponds toujours en liste',
+    ),
+  },
+
+  {
+    id: 'la-production-cliente-se-mesure-apres-le-geste',
+    quoi: 'la mesure passe APRÈS le geste — la fenêtre où la preuve d’attribution existe est refermée',
+    cible: 'la-production-cliente-se-mesure-avant-le-geste',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "L'état de la production d'un client se mesure et s'inscrit AVANT qu'on y pose un geste.",
+      "L'état de la production d'un client se mesure après le geste, et il suffit de mesurer ensuite.",
+    ),
+  },
+  {
+    id: 'l-orchestrateur-mesure-la-production-lui-meme',
+    quoi: 'mesurer redevient le geste de l’orchestrateur — le premier principe cède, et ses droits le lui refusent de toute façon',
+    cible: 'la-production-cliente-se-mesure-avant-le-geste',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "ça appartient à ton chef d'équipe",
+      "c'est à toi de mesurer",
+    ),
+  },
+
+  {
+    id: 'le-silence-vient-toujours-de-l-autre',
+    quoi: 'la moitié qui met l’orchestrateur en cause disparaît — sa propre boîte cesse d’être une cause possible',
+    cible: 'avant-de-relancer-regarde-ta-propre-boite',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Un silence a deux causes, et tu es l\'une des deux.**',
+      '**Le silence vient toujours de l\'autre bout, jamais de ton côté.**',
+    ),
+  },
+  {
+    id: 'polarite-on-peut-conclure-d-un-silence',
+    quoi: 'l’interdit de conclure d’un silence est retourné sur place, tous ses mots conservés',
+    cible: 'avant-de-relancer-regarde-ta-propre-boite',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Tu ne conclus jamais d'un silence sans avoir mesuré les deux.**",
+      "**Ce n'est pas vrai que tu ne conclus jamais d'un silence sans avoir mesuré les deux : un silence prouve qu'il ne travaille pas.**",
+    ),
+  },
+
+  {
+    id: 'la-recolte-redevient-un-controle',
+    quoi: 'la récolte est ramenée à une vérification — elle constate l’oubli au lieu de faire le travail, et le lot perd tout ce qui le distinguait',
+    cible: 'la-recolte-ecrit-au-lieu-de-constater',
+    fichier: 'metier',
+    // C'est l'arbitrage du dirigeant qu'on retourne ici : il a écarté trois pistes de CONTRÔLE
+    // au profit d'une RÉCOLTE. Le texte muté garde son titre, sa cadence et sa place ; il ne
+    // fait plus rien.
+    muter: (t) => t.replace(
+      "**un contrôle te dit « tu as oublié » ; une récolte fait le travail d'écrire.**",
+      "**la récolte vérifie que tu n'as rien oublié.**",
+    ),
+  },
+  {
+    id: 'la-limite-de-la-recolte-disparait',
+    quoi: 'la récolte se déclare complète — ce qui a été compacté avant elle est réputé rattrapé, et personne ne saura que non',
+    cible: 'la-recolte-ecrit-au-lieu-de-constater',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'une récolte qui passe après coup ne rattrape jamais ce qui a déjà été compacté',
+      'la récolte rattrape tout, y compris ce qui a été compacté',
+    ),
+  },
+  {
+    id: 'inverse-la-recolte-dispense-d-inscrire-au-plus-tot',
+    quoi: 'la récolte garde sa limite ET se voit déclarée suffisante juste après — sans une seule tournure de négation',
+    cible: 'la-recolte-ecrit-au-lieu-de-constater',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Elle n'abroge donc rien du principe d'inscrire au plus tôt**",
+      "**Elle remplace le principe d'inscrire au plus tôt**",
+    ),
+  },
+
+  {
+    id: 'la-ronde-se-contente-de-rendre-l-etat',
+    quoi: 'la ronde redevient un journal — elle rend des états et n’en tire plus de conséquence',
+    cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Une ronde ne rend pas un état : elle en tire une conséquence.',
+      '**Une ronde se contente de rendre l\'état de ce qu\'elle voit.',
+    ),
+  },
+  {
+    id: 'la-reprise-se-decide-au-grain-du-ticket',
+    quoi: 'la neuvième tâche repart au grain du ticket — on relance un fragment sans savoir ce qu’il sert',
+    cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'tu prends la suite **dans le backlog, au grain de la Demande** — jamais du ticket',
+      'tu prends la suite **dans le backlog, au grain du ticket**',
+    ),
+  },
+  {
+    id: 'le-piege-de-la-neuvieme-tache-disparait',
+    quoi: 'l’orchestrateur qui attend un arbitrage est déclaré à l’arrêt — la neuvième tâche se met à disperser au lieu d’avancer',
+    cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+    fichier: 'metier',
+    // ⚠️ LE REVERS DE LA TÂCHE 9, et sans lui elle NUIT. Les deux situations se ressemblent
+    // trait pour trait de l'extérieur : personne ne travaille. Elles appellent des gestes
+    // opposés. Une garde qui ne tiendrait que la tâche laisserait passer sa moitié dangereuse.
+    muter: (t) => t.replace(
+      "**qui attend un arbitrage n'est pas à l'arrêt, il est bloqué**",
+      "**qui attend un arbitrage est à l'arrêt comme un autre, et tu relances quand même**",
+    ),
+  },
+  {
+    id: 'la-ronde-inscrit-si-elle-y-pense',
+    quoi: 'la condition de fin redevient une bonne habitude — la documentation retombe sur le souvenir d’un seul agent',
+    cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Et ta ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au registre.**",
+      "**Et il est bon d'inscrire ce que ta ronde a trouvé, si tu y penses.**",
+    ),
+  },
+
+  {
+    id: 'le-critere-des-lignes-regresse-vers-le-meme-destinataire',
+    quoi: 'le critère corrigé retourne à sa version FAUSSE — celle qui rendait trois faux positifs sur quatre',
+    cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    fichier: 'metier',
+    // ⚠️ CETTE MUTATION GARDE UNE CORRECTION, PAS UN AJOUT — et c'est le cas le plus fragile.
+    // Le critère « deux lignes qui répondent au même destinataire » a été écrit d'abord, validé,
+    // et trouvé faux à la PREMIÈRE EXÉCUTION RÉELLE : un gestionnaire client porte deux lignes
+    // par définition de poste. Une garde qui crie à tort trois fois sur quatre se fait retirer
+    // et emporte ce qu'elle gardait. Sans cette mutation, rien n'empêcherait quelqu'un de
+    // « resimplifier » le texte vers la version d'origine en croyant l'alléger.
+    muter: (t) => t.replace(
+      'deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal',
+      'deux lignes qui répondent au même destinataire',
+    ),
+  },
 ];
+
+/**
+ * Les garanties de ce lot qui se gardent EN POLARITÉ, et non en présence de mots.
+ *
+ * ⚠️ CETTE LISTE EST UN OUTIL, PAS UNE DOCUMENTATION. Un test la parcourt et refuse qu'un
+ * contrôle inscrit ici garde sa règle avec un simple `assert.match` — parce que corriger six
+ * assertions ne ferme rien : le prochain qui écrira une garde écrira une sous-chaîne, comme
+ * nous l'avons tous fait, parce que c'est le geste le plus court. Il l'est encore moins
+ * maintenant : `exigePolarite(corps, sonde, quoi)` s'écrit en une ligne, comme `assert.match`,
+ * et le test ci-dessous rend l'autre chemin plus pénible que celui-là.
+ */
+export const GARANTIES_DE_POLARITE = [
+  'le-gabarit-fait-foi',
+  'les-adr-se-lisent-au-miroir-et-une-absence-ne-prouve-rien',
+  'le-feed-se-lit-avant-de-brieffer',
+  'le-verrou-du-sas-ne-fait-pas-foi',
+  'la-ronde-tient-l-hygiene-du-registre',
+  'le-topo-passe-les-deux-verifications-quotidiennes',
+  // 2026-08-16 — les garanties de la version « bras droit » (T-20260816-0099, T-20260816-0097,
+  // T-20260816-0018). Toutes en polarité : ce lot ne produit QUE du texte, et une garde en
+  // sous-chaîne y est systématiquement renversable — c'est le défaut mesuré sur quatre gardes
+  // neuves le matin même.
+  'l-orchestrateur-est-le-bras-droit',
+  'le-backlog-ce-sont-les-demandes',
+  'la-production-cliente-se-mesure-avant-le-geste',
+  'avant-de-relancer-regarde-ta-propre-boite',
+  'la-recolte-ecrit-au-lieu-de-constater',
+  'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+];
+
+/** Le source de ce fichier — lu pour vérifier COMMENT les contrôles sont écrits, pas ce qu'ils rendent. */
+export function sourceDesControles() {
+  return readFileSync(fileURLToPath(import.meta.url), 'utf8');
+}

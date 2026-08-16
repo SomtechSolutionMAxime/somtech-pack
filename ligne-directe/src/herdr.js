@@ -17,6 +17,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
+import { contenuBoite, laPriseEstConstatee } from './boite.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -102,6 +103,9 @@ export async function remettre(pane, texte, { socket } = {}) {
   if (texte.length > SEUIL_ARGV) {
     throw new RemiseEchouee(pane, `message de ${texte.length} caractères — au-delà de ${SEUIL_ARGV}, à découper`);
   }
+  // CE QU'ON VOIT AVANT D'ÉCRIRE — sans quoi rien de ce qu'on verra après ne prouvera quoi que
+  // ce soit. Un état qui ne pouvait pas être différent n'est pas un témoin (T-20260815-0011).
+  const avant = await etatDuPane(pane, socket);
   let reponse;
   try {
     reponse = await herdr(['agent', 'prompt', pane, texte], socket);
@@ -118,7 +122,99 @@ export async function remettre(pane, texte, { socket } = {}) {
   if (!reponse || !reponse.result) {
     throw new RemiseEchouee(pane, `réponse inattendue de herdr : ${JSON.stringify(reponse).slice(0, 200)}`);
   }
-  return reponse.result;
+
+  // ═══ ET ON RELIT LA BOÎTE — parce que « l'appel a réussi » ne veut pas dire « il a lu ».
+  //
+  // Le contrôle ci-dessus ferme le piège du code de sortie 0 sur une ERREUR. Il ne dit rien du
+  // mode de panne mesuré le 2026-08-14 : l'appel réussit, et le texte reste dans la boîte de
+  // saisie sans être soumis. L'agent ne voit rien, le dirigeant a son accusé de réception, et
+  // c'est le chemin par lequel arrive sa parole.
+  //
+  // ⚠️ ON NE CODE AUCUN SEUIL DE LONGUEUR, et c'est la leçon de la mesure : 25 envois de 350 à
+  // 24 000 caractères n'ont produit aucun collage, alors que le même envoi de 2 400 caractères
+  // sur l'autre primitive reste bloqué 2 fois sur 5. Ce n'est pas une frontière, c'est une
+  // COURSE. La seule forme qui tienne contre une course est de vérifier à chaque fois.
+  const reste = await boiteDe(pane, socket);
+  if (reste) {
+    // Le cas connu : le texte est bien arrivé, la soumission n'est pas partie. On envoie la
+    // touche d'envoi — jamais le texte à nouveau, ce qui le collerait à lui-même.
+    await herdr(['agent', 'send-keys', pane, 'Enter'], socket).catch(() => null);
+    const apres = await boiteDe(pane, socket);
+    if (apres) {
+      throw new RemiseEchouee(
+        pane,
+        `le message est resté dans la boîte de saisie (« ${apres.slice(0, 60)}… ») — il n'a pas été soumis`
+      );
+    }
+  }
+
+  // ═══ L'AGENT A-T-IL PRIS ? — le verdict que l'accusé de réception du dirigeant attend.
+  //
+  // ⚠️ « ÉCRIT DANS LE PANE » N'EST PAS « PRIS ». Le dirigeant l'a dit mieux que le ticket :
+  // « des fois le message est passé mais reste dans ton champ de prompt ». On relit donc l'état
+  // APRÈS et on le compare à celui d'AVANT — trois témoins, un seul suffit, et aucun d'eux
+  // n'aurait pu être vrai sans qu'il se passe quelque chose.
+  //
+  // ⚠️ ET SI AUCUN N'EST CONSTATABLE, ON REND `pris: false` PLUTÔT QUE DE JETER. Le message est
+  // peut-être arrivé — la boîte est vide, le statut n'a pas bougé, on ne sait pas. Ce qu'on
+  // refuse, c'est de l'AFFIRMER : le crochet ne sera pas posé, et son absence est justement
+  // l'information que ce dispositif existe pour rendre lisible.
+  const apres = await etatDuPane(pane, socket);
+  const temoin = laPriseEstConstatee({
+    statutAvant: avant.statut,
+    statut: apres.statut,
+    ecranAvant: avant.ecran,
+    ecran: apres.ecran,
+  });
+  return { ...reponse.result, pris: Boolean(temoin), temoin };
+}
+
+/**
+ * L'état d'un pane à un instant — son statut et son écran, lus ensemble.
+ *
+ * Rendus tels quels, `null` compris : une lecture ratée ne doit pas se déguiser en écran vide,
+ * sinon « je n'ai pas vu » deviendrait « il n'y avait rien », qui est le motif que ce dépôt
+ * ferme partout ailleurs.
+ */
+async function etatDuPane(pane, socket) {
+  let statut = null;
+  try {
+    const r = await herdr(['agent', 'get', pane], socket);
+    statut = r?.result?.agent?.agent_status ?? null;
+  } catch {
+    /* pas de statut lisible : on le dit en le laissant à null */
+  }
+  let ecran = null;
+  try {
+    const { stdout } = await lancer(OUTILS.herdr, ['agent', 'read', pane, '--format', 'ansi'], {
+      maxBuffer: 16 * 1024 * 1024,
+      ...(socket ? { env: { ...process.env, HERDR_SOCKET_PATH: socket } } : {}),
+    });
+    ecran = stdout;
+  } catch {
+    /* écran illisible */
+  }
+  return { statut, ecran };
+}
+
+/**
+ * Ce que contient la boîte de saisie d'un pane — `''` si vide, `null` si on n'a pas su la lire.
+ *
+ * Une boîte illisible ne fait PAS échouer la remise : contrairement à la livraison d'un brief,
+ * on n'écrit pas par-dessus quoi que ce soit ici, et le message est déjà parti. Refuser sur un
+ * écran qu'on n'a pas reconnu ferait perdre une parole qui a peut-être très bien été reçue —
+ * on préfère se taire que crier au loup sur une lecture ratée.
+ */
+async function boiteDe(pane, socket) {
+  try {
+    const { stdout } = await lancer(OUTILS.herdr, ['agent', 'read', pane, '--format', 'ansi'], {
+      maxBuffer: 16 * 1024 * 1024,
+      ...(socket ? { env: { ...process.env, HERDR_SOCKET_PATH: socket } } : {}),
+    });
+    return contenuBoite(stdout) || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Tous les panes qui portent un agent, tels que herdr les voit maintenant. */

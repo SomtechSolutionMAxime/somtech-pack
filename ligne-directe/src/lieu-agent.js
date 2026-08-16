@@ -21,10 +21,12 @@
 // une autre sans monter Slack du tout. C'est ce qui tient la cloison (RA-REL-012).
 
 import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync } from 'node:fs';
+import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
 import { join, dirname } from 'node:path';
 
 import { role as roleDe, rolesConnus } from './roles.js';
 import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from './lieu-nom.js';
+import { FICHIERS_ENV_CONNUS, variablesManquantes } from './mcp-env.js';
 
 /**
  * Les quatre fichiers qui constituent le lieu d'un agent, en CHEMINS RELATIFS à sa racine —
@@ -41,8 +43,25 @@ import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } 
  */
 export const GABARITS = ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', join('.claude', 'settings.json')];
 
-/** Fichiers dont la présence, à la racine du dépôt, atteste un accès au registre. */
-export const FICHIERS_ENV_CONNUS = ['.env', '.envrc'];
+/**
+ * CELUI DES QUATRE QUI PORTE LES DROITS — nommé une fois, pour que la garde de versionnabilité
+ * ne le redésigne pas par une position dans la liste (T-20260813-0059).
+ *
+ * C'est le seul dont l'absence au dépôt vaut un REFUS : les trois autres manquent du contexte,
+ * celui-ci manque des permissions. Un lieu dont il n'est pas versé fait naître ailleurs un agent
+ * que rien ne borne.
+ */
+export const GABARITS_DROITS = join('.claude', 'settings.json');
+
+/**
+ * Fichiers d'environnement connus à la racine d'un dépôt.
+ *
+ * ⚠️ LEUR PRÉSENCE N'ATTESTE PLUS RIEN — c'est très exactement ce que T-20260815-0023 a fermé.
+ * Ce qui compte est ce qu'ils DÉCLARENT, et la lecture vit dans `mcp-env.js`. La liste y est
+ * définie et seulement ré-exportée ici, pour les appelants historiques (`representant.js`) :
+ * deux listes qui disent la même chose divergent au premier correctif.
+ */
+export { FICHIERS_ENV_CONNUS };
 
 /** Où le pack dépose les gabarits d'un rôle dans un dépôt qui l'a installé (module `core`). */
 export function gabaritsDir(depot, role) {
@@ -78,6 +97,19 @@ export function etatSource(depot, role) {
   const presents = GABARITS.filter((f) => existsSync(join(source, f)));
   const manquants = GABARITS.filter((f) => !presents.includes(f));
   return { source, complete: manquants.length === 0, presents, manquants };
+}
+
+/**
+ * « Le représentant », « L'orchestrateur » — en tête de phrase, avec l'élision.
+ *
+ * Le `le ${r.libelle}` employé ailleurs dans ce fichier produit « le orchestrateur ». C'est
+ * lisible, mais ces avertissements sont destinés à être lus par un humain puis recopiés dans
+ * un ticket : on ne les laisse pas partir en français approximatif. Corrigé ici seulement —
+ * les autres occurrences sont hors du périmètre de ce lot.
+ */
+function leRole(libelle) {
+  const article = /^[aeiouyàâäéèêëîïôöùûü]/i.test(libelle) ? "L'" : 'Le ';
+  return `${article}${libelle}`;
 }
 
 function premiereLigne(chemin) {
@@ -127,7 +159,20 @@ export function roleDuLieu(repertoire) {
   return null;
 }
 
-/** Le dépôt porte-t-il un fichier d'environnement connu, à sa racine ? */
+/**
+ * Le dépôt porte-t-il un fichier d'environnement connu, à sa racine ?
+ *
+ * ⚠️ NE DÉCIDE PLUS RIEN, ET C'EST LE CŒUR DE T-20260815-0023. Elle a été, jusqu'ici, LE
+ * critère de l'avertissement « cet agent naîtra sans accès au registre » — c'est-à-dire
+ * l'INDICE au lieu du FAIT : elle ne consulte pas `process.env` et ignore ce que le
+ * `.mcp.json` réclame. Deux pannes symétriques en sont sorties (voir `mcp-env.js`), dont un
+ * FAUX NÉGATIF : un `.env` présent mais muet sur les bonnes variables la faisait répondre
+ * « oui », et l'agent naissait sourd sans un mot.
+ *
+ * Elle reste ici parce qu'elle est ré-exportée par `representant.js` et qu'elle répond
+ * honnêtement à SA question — « y a-t-il un tel fichier ? ». C'est le décideur qui a changé :
+ * `variablesManquantes` (mcp-env.js). N'en refais jamais un critère d'accès au registre.
+ */
 export function aFichierEnvironnement(depot) {
   return FICHIERS_ENV_CONNUS.some((f) => existsSync(join(depot, f)));
 }
@@ -193,7 +238,106 @@ export function retirerCeQuiAEteCommence(depot, role, nom) {
  * @param {string} p.nom     nom de l'agent — dossier sous le dossier du rôle
  * @param {() => Promise<{joignable: boolean, motif?: string, message?: string}>} p.verifierLigne
  */
-export async function preparerLieu({ depot, role, nom, verifierLigne }) {
+
+/**
+ * CE QUE GIT REFUSERA DE PRENDRE, parmi les fichiers d'un lieu (T-20260813-0059).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * TROIS VERDICTS, ET LES CONFONDRE EST LE DÉFAUT QU'ON FERME
+ *
+ * `git check-ignore -v` a été MESURÉ le 2026-08-15, et il ne répond pas par oui/non :
+ *
+ *   • code 0   — au moins un chemin est exclu, et chaque ligne dit `<source>:<ligne>:<motif>`
+ *                puis le chemin. C'est de là que vient tout ce que le refus cite ;
+ *   • code 1   — aucun n'est exclu. Rien à signaler ;
+ *   • code 128 — pas de dépôt git, ou chemin hors du dépôt. **Ni l'un ni l'autre.**
+ *
+ * Le troisième est celui qui compte. « Je n'ai pas pu poser la question » n'est pas « la
+ * réponse est non » — `outils.js` l'écrit en tête, et ce chantier l'a payé deux fois en deux
+ * jours. On rend donc `connue: false` avec sa raison, et l'appelant en fait un AVERTISSEMENT :
+ * ni un refus (poser dans un dossier qui n'est pas un dépôt reste un usage), ni un silence.
+ *
+ * ⚠️ ON INTERROGE DES CHEMINS QUI N'EXISTENT PAS ENCORE, et c'est délibéré : git répond sur le
+ * chemin, pas sur le fichier. La garde tombe donc AVANT toute écriture, et le refus n'a rien à
+ * nettoyer derrière lui.
+ */
+export async function versionnabiliteDe(depot, racine, { executer } = {}) {
+  // ⚠️ « PAS DE DÉPÔT DU TOUT » EST UN FAIT, PAS UNE INCERTITUDE — et les deux ne se traitent
+  // pas pareil.
+  //
+  // Hors dépôt, il n'y a rien à verser et rien d'exclu : la question que cette garde pose ne se
+  // pose pas. Le dire quand même produirait un avertissement à chaque pose faite ailleurs que
+  // dans un dépôt — du bruit, et un bruit finit par ne plus être lu, ce qui est exactement ce
+  // que ce lot reproche à l'ancien comportement.
+  //
+  // ⚠️ CE QUE CE SILENCE NE COUVRE PAS, ET QUI N'EST PAS TRANCHÉ ICI : un lieu posé hors dépôt
+  // n'est versionné nulle part, donc « pas un lieu » au sens strict de la compétence. En faire
+  // un refus serait un arbitrage que le ticket n'a pas rendu — il porte sur un fichier exclu
+  // PARMI d'autres qui, eux, sont versés. On s'en tient au périmètre, et on le note.
+  //
+  // Le précédent maison est `avisDeVersionnement` (côté naissance), qui interroge lui aussi
+  // `rev-parse` avant de conclure quoi que ce soit.
+  try {
+    await lancer(OUTILS.git, ['rev-parse', '--show-toplevel'], { cwd: depot, executer });
+  } catch (err) {
+    if (err instanceof OutilIntrouvable) return { connue: false, raison: err.message };
+    const dit = String(err?.stderr || err?.message || '').trim();
+    // ⚠️ SEUL « ce n'est pas un dépôt » EST UN FAIT. Tout le reste est une absence de réponse.
+    //
+    // BLOQUANT RELEVÉ EN REVUE DE FOND : la première écriture traitait TOUT échec de `rev-parse`
+    // comme le fait « hors dépôt », donc en SILENCE TOTAL — pendant que le bloc juste en dessous
+    // traitait « tout le reste » comme une absence de réponse. Deux blocs du même fichier se
+    // contredisaient, et c'était le défaut de ce lot rejoué dans son propre correctif.
+    //
+    // Le cas qui mord en production est la propriété douteuse (« dubious ownership », git ≥ 2.35),
+    // courante dès qu'un dépôt appartient à un autre compte que celui qui l'interroge — conteneur,
+    // sudo, intégration continue. Le dépôt EXISTE, il peut parfaitement exclure les droits, et on
+    // serait passé à côté sans un mot : pire que le comportement qu'on corrige, qui laissait au
+    // moins un compte de fichiers à relire.
+    if (/not a git repository/i.test(dit)) return { connue: true, exclus: [], horsDepot: true };
+    return { connue: false, raison: dit.split('\n')[0] || `git a échoué (code ${err?.code ?? '—'})` };
+  }
+
+  const chemins = GABARITS.map((f) => join(racine, f));
+  try {
+    const { stdout } = await lancer(OUTILS.git, ['check-ignore', '-v', ...chemins], {
+      cwd: depot,
+      executer,
+    });
+    return { connue: true, exclus: lireExclusions(stdout, racine) };
+  } catch (err) {
+    if (err instanceof OutilIntrouvable) return { connue: false, raison: err.message };
+    // Code 1 : git a répondu, et sa réponse est « aucun n'est exclu ». C'est un verdict.
+    if (err?.code === 1) return { connue: true, exclus: [] };
+    // Tout le reste — 128 en tête — est une absence de réponse, pas une réponse.
+    const dit = String(err?.stderr || err?.message || '').trim().split('\n')[0];
+    return { connue: false, raison: dit || `git a échoué (code ${err?.code ?? '—'})` };
+  }
+}
+
+/**
+ * Les lignes de `check-ignore -v` ramenées à ce qu'un refus doit pouvoir dire.
+ *
+ * Format mesuré : `<source>:<ligne>:<motif>\t<chemin>` — par exemple
+ * `.git/info/exclude:19:.claude/\t.orchestrateur/p-1/.claude/settings.json`. Le chemin est rendu
+ * tel qu'il a été demandé, donc absolu ici : on le ramène au nom du gabarit, qui est ce que
+ * l'appelant manipule.
+ */
+function lireExclusions(stdout, racine) {
+  const exclus = [];
+  for (const ligne of String(stdout || '').split('\n')) {
+    const [gauche, chemin] = ligne.split('\t');
+    if (!chemin) continue;
+    const m = gauche.match(/^(.*):(\d+):(.*)$/);
+    if (!m) continue;
+    const fichier = GABARITS.find((f) => chemin.trim() === join(racine, f));
+    if (!fichier) continue;
+    exclus.push({ fichier, source: `${m[1]}:${m[2]}`, motif: m[3] });
+  }
+  return exclus;
+}
+
+export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVersionnable = versionnabiliteDe }) {
   const r = roleDe(role); // un rôle inconnu échoue AVANT toute lecture de disque
 
   // ─── Garde 0 : LE NOM. Elle n'existait pas — `join(depot, dossier, '../../evil')` écrivait
@@ -262,6 +406,10 @@ export async function preparerLieu({ depot, role, nom, verifierLigne }) {
 
   // ─── Garde 2 : la SOURCE, vérifiée au même titre que la ligne, et AVANT elle — un refus
   // qui ne dépend que du disque local ne doit coûter aucun aller-retour réseau.
+  // Ce que les gardes d'avant l'écriture ont à dire — elles ne peuvent pas le rendre elles-mêmes,
+  // puisque la réponse se construit à la toute fin.
+  const avertissementsAvant = [];
+
   const source = etatSource(depot, role);
   if (!source.complete) {
     return {
@@ -280,6 +428,68 @@ export async function preparerLieu({ depot, role, nom, verifierLigne }) {
           `(« npx @somtech-solutions/pack update »), puis relance.`,
       },
     };
+  }
+
+  // ─── Garde 2 bis : LES DROITS DOIVENT POUVOIR ÊTRE VERSÉS (T-20260813-0059).
+  //
+  // Un lieu est « un dossier VERSIONNÉ dans le dépôt » — c'est sa définition, pas un détail de
+  // rangement. La pose refusait déjà un lieu partiel en se fiant au DISQUE ; ce contrôle-ci est
+  // le même raisonnement, appliqué à ce que GIT voit.
+  //
+  // VÉCU : un motif `.claude/` — dans un `.gitignore` ou, pire, dans le `.git/info/exclude` que
+  // personne ne voit en revue — s'applique à TOUTE profondeur. `settings.json` est alors écrit,
+  // présent, lu sur ce poste… et il n'entre jamais dans le dépôt. Le lieu paraît complet chez
+  // celui qui l'a posé ; repris ailleurs, il fait naître un agent SANS DROITS BORNÉS.
+  //
+  // ⚠️ POURQUOI UN REFUS SUR CELUI-LÀ, ET UN AVERTISSEMENT SUR LES AUTRES. Ce qui manque quand
+  // `CONTEXTE.md` n'est pas versé est du contexte, réparable ailleurs. Ce qui manque quand
+  // `settings.json` ne l'est pas, ce sont les PERMISSIONS — et un avertissement de plus n'est
+  // pas lu : mesuré le 2026-08-15 sur cinq lieux clients posés, dont deux sans aucune garde et
+  // un dans aucun commit, pour zéro signalement.
+  //
+  // ⚠️ ET LE CONTRÔLE TOMBE AVANT TOUTE ÉCRITURE — `git check-ignore` répond sur un chemin qui
+  // n'existe pas encore. Le refus ne laisse donc rien derrière lui, sans avoir à nettoyer :
+  // c'est ce qui évite de rejouer T-20260807-0067 (une pose interrompue laissait un lieu que la
+  // relance suivante déclarait installé).
+  const versionnable = await verifierVersionnable(depot, racineLieu(depot, role, nom));
+  if (!versionnable.connue) {
+    // ON NE CONCLUT RIEN DE CE QU'ON N'A PAS SU MESURER. Hors dépôt git, ou git absent, le
+    // verdict n'est ni « versionnable » ni « exclu » : le taire reviendrait à conclure d'une
+    // absence de mesure à une absence de problème. On le DIT, et on pose quand même — poser
+    // dans un dossier qui n'est pas un dépôt reste un usage, il n'est simplement pas gardé.
+    avertissementsAvant.push(
+      `impossible de vérifier que les droits du ${r.libelle} seront versés (${versionnable.raison}) — ` +
+        `« ${GABARITS_DROITS} » est peut-être exclu de ce dépôt sans que rien ne le dise.`
+    );
+  } else {
+    const droits = versionnable.exclus.find((e) => e.fichier === GABARITS_DROITS);
+    if (droits) {
+      return {
+        ok: false,
+        cree: false,
+        role,
+        nom,
+        refus: {
+          motif: 'droits_non_versionnables',
+          fichier: droits.fichier,
+          motif_exclusion: droits.motif,
+          source: droits.source,
+          message:
+            `« ${droits.fichier} » ne peut pas être versé dans ce dépôt : le motif « ${droits.motif} » ` +
+            `(${droits.source}) l'exclut. Le lieu serait complet sur ce disque et amputé partout ` +
+            `ailleurs — un ${r.libelle} repris depuis un autre clone naîtrait SANS PERMISSIONS ` +
+            `BORNÉES, et rien ne le dirait. Rien n'a été créé. Lève l'exclusion, puis relance : ` +
+            `soit en suivant le fichier une fois posé (« git add -f <le fichier> »), soit en ` +
+            `ajoutant une négation au fichier d'exclusion (« !${GABARITS_DROITS} »).`,
+        },
+      };
+    }
+    for (const e of versionnable.exclus) {
+      avertissementsAvant.push(
+        `« ${e.fichier} » ne sera pas versé : le motif « ${e.motif} » (${e.source}) l'exclut. ` +
+          `Le ${r.libelle} l'aura sur ce disque et nulle part ailleurs.`
+      );
+    }
   }
 
   // ─── Garde 3 : la LIGNE. Elle est obligatoire pour les deux rôles, et pour le même motif —
@@ -366,11 +576,35 @@ export async function preparerLieu({ depot, role, nom, verifierLigne }) {
   }
   // ═══ fin du point d'écriture.
 
-  const avertissements = [];
-  if (!aFichierEnvironnement(depot)) {
+  // ─── L'ACCÈS AU REGISTRE — sur le FAIT, plus sur l'indice (T-20260815-0023).
+  //
+  // CE QUI SE MESURAIT AVANT : « ce dépôt porte-t-il un `.env` ou un `.envrc` ? ». La fonction
+  // ne consultait jamais `process.env` et ne savait pas quelles variables le `.mcp.json` du
+  // gabarit déclare. Un dépôt sans `.env` dont le shell porte déjà les jetons (le cas normal
+  // sous `claude-swt`) était averti pour rien ; un dépôt AVEC un `.env` qui ne déclare pas les
+  // bonnes variables se taisait, et l'agent naissait sans registre en silence.
+  //
+  // CE QUI SE MESURE MAINTENANT : les variables que le `.mcp.json` DU LIEU réclame réellement —
+  // jamais une liste écrite en dur, sinon un gabarit qui gagne un serveur MCP demain
+  // reconduirait le même angle mort. On lit le fichier POSÉ (`racine`), celui-là même que
+  // Claude Code ouvrira, plutôt que le gabarit source : c'est le lieu réel qui est en question.
+  //
+  // ⚠️ ET LE PIÈGE QU'ON NE PREND PAS : consulter `process.env` À CÔTÉ du test de fichier puis
+  // se taire dès que l'un des deux répond. Ce serait échanger un faux positif contre un faux
+  // négatif. La présence du fichier ne prouve rien ; seules les variables RÉSOLUES prouvent.
+  //
+  // AVERTIR, JAMAIS REFUSER — inchangé : contrairement aux droits (garde 2 bis), ce qui manque
+  // ici se répare après coup sans que rien ne soit à reposer.
+  const avertissements = [...avertissementsAvant];
+  const manquantes = variablesManquantes(join(racine, '.mcp.json'), { depot });
+  if (manquantes.length > 0) {
+    const pluriel = manquantes.length > 1;
     avertissements.push(
-      `${depot} ne porte aucun fichier d'environnement (${FICHIERS_ENV_CONNUS.join(' ou ')}) — ` +
-        `le ${r.libelle} naîtra sans accès au registre tant que le dépôt n'en aura pas un.`
+      `${depot} : le lieu réclame ${manquantes.join(', ')} — ` +
+        `${pluriel ? 'introuvables' : 'introuvable'} à la fois dans l'environnement du processus et dans ` +
+        `les fichiers d'environnement du dépôt (${FICHIERS_ENV_CONNUS.join(' ou ')}). ` +
+        `${leRole(r.libelle)} naîtra sans accès au registre tant ` +
+        `que ${pluriel ? 'ces variables ne seront pas résolues' : 'cette variable ne sera pas résolue'}.`
     );
   }
 

@@ -45,6 +45,19 @@ Le résultat, quand tout va bien :
 > promet au lecteur ce que ce fichier refuse, et un texte qui promet ce que le fichier autorise
 > est une garantie fausse.
 
+> **Et depuis T-20260816-0032, les droits ne vivent plus sous `permissions.allow`.** Mesuré sur
+> Claude Code **2.1.233** : un lieu qui porte un bloc `allow` déclenche **toujours** un écran de
+> confiance renforcé — « ⚠ This folder pre-approves N tool permissions … Only proceed if you
+> trust this configuration » — que la pré-approbation ne fait **pas** taire. L'agent naît alors
+> parqué : détecté, nommé, dans le bon répertoire, et injoignable.
+>
+> Le fait de 2.1.231 ci-dessus est ce qui rend le déménagement sans coût : cette liste était
+> **déjà** ignorée avant approbation. Elle n'achetait rien à la naissance, et elle coûtait un
+> modal. Les droits sont donc déclarés sous **`somtech.droitsAccordes`** — une clé que Claude
+> Code ignore, vérifié par le fait (zéro écran, zéro avertissement) — et c'est `approuverLieu`
+> qui les rend effectifs, dans l'`allowedTools` de l'entrée de projet. **`permissions.deny` ne
+> bouge pas** : c'est la moitié qui garantit, et elle tient dès la naissance comme avant.
+
 > **Ce que cette compétence n'est pas.** Elle ne cadre aucun chantier, ne découpe rien,
 > n'ouvre aucun chef d'équipe, ne tient aucun registre. Ça, c'est le métier de l'orchestrateur
 > **une fois né** — il vit dans le `CLAUDE.md` que cette compétence copie, et il est décrit
@@ -107,6 +120,36 @@ soit créé — pas après.
 Le nom sert deux fois, et c'est le même : celui du dossier sous `.orchestrateur/`, et celui de
 l'agent herdr. Un dépôt peut porter plusieurs orchestrateurs ; c'est le nom qui les distingue.
 
+## Le geste le plus court — une seule commande, du néant jusqu'à sa ligne
+
+Depuis **T-20260816-0038**, tout ce que décrivent les sections suivantes tient en une commande,
+et **aucun humain ne touche un écran entre les deux** :
+
+```bash
+npx @somtech-solutions/pack agent naitre <nom> --depot <chemin du dépôt> \
+    [--amorce <fichier de brief>] [--modele <alias>] [--session <session herdr>]
+```
+
+Elle pose le lieu s'il manque, **le verse au dépôt elle-même** (le refus de git reste entier —
+c'est le geste humain qui le satisfaisait qui disparaît), ouvre l'espace de travail au besoin,
+fait naître en **déclarant le modèle et le mode**, **vérifie par l'écran** que l'agent peut
+réellement recevoir, livre l'amorce et prouve qu'elle a été prise.
+
+> ⚠️ **Et devant un état qu'elle ne reconnaît pas, elle s'arrête et le NOMME** — écran vu, geste
+> qui le lève quand elle le connaît, et rien d'inventé quand elle ne le connaît pas. Ne pas
+> intervenir ne veut pas dire deviner : un dispositif qui devine pour éviter de déranger est ce
+> qui produit un message livré au mauvais client.
+
+> **Pourquoi `npx` et pas `~/.somtech`.** L'outillage de poste est une copie que `pack setup`
+> dépose une fois et qui vieillit — mesuré le 2026-08-16 : le poste tournait en 1.55.0 quand le
+> dépôt était en 1.56.0, et un fichier du module n'existait même pas côté poste. Une commande qui
+> vit dedans est périodiquement en retard sur elle-même, sans que personne le voie.
+
+**Les sections qui suivent décrivent les mêmes gestes, un par un.** Elles restent la référence
+quand quelque chose s'arrête, et le chemin à suivre pour un lieu de **représentant** — que cette
+commande ne pose pas, parce qu'il se branche sur un canal que le client voit et que sa pose garde
+sa revue (tranché le 2026-08-16).
+
 ## Le geste — poser le lieu
 
 ```bash
@@ -143,6 +186,7 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 | `lieu_ambigu` | Plusieurs lieux sous `.orchestrateur/` ne diffèrent **que par la casse** (`Chantier` et `chantier`), et aucun ne porte exactement le nom demandé. Rien ici ne peut dire lequel est le bon — en choisir un reviendrait à poser à côté d'un lieu vivant | Écarte celui qui ne sert plus (`mv .orchestrateur/<autre> .orchestrateur/<autre>.ecarte`), puis relance. Aucun troisième lieu n'a été créé |
 | `lieu_partiel` | `.orchestrateur/<nom>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .orchestrateur/<nom> .orchestrateur/<nom>.ecarte`), puis relance — elle ne complète jamais |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du chantier |
+| `droits_non_versionnables` | Un motif d'exclusion du dépôt (`.gitignore` ou `.git/info/exclude`) empêche de verser `.claude/settings.json` — le lieu serait complet sur ce disque et **sans permissions bornées partout ailleurs** | Le refus nomme le motif et sa source. Lève l'exclusion : `git add -f <le fichier>` une fois posé, ou une négation `!.claude/settings.json` dans le fichier d'exclusion |
 | `jeton_illisible` | La **valeur** n'a pas pu être obtenue, et **personne n'a établi que l'entrée manque** — un jeton valide, en service, donne ce refus. C'est le cas **par défaut** : binaire introuvable, trousseau verrouillé, et toute cause qu'on n'avait pas prévue | Lis la cause brute que le message montre, et suis ses gestes — ils ne font que **regarder**. Ne dépose **rien** sur la foi de ce refus : écrire par-dessus une entrée qui fonctionne la perdrait |
 | `jeton_absent` | Aucune entrée n'a répondu au trousseau **sous ce compte, pour ce service**, et `security` l'a **dit** — c'est le seul cas où l'absence est prouvée, donc le seul où déposer a un sens | Suis la marche à suivre que le message donne : elle montre d'abord ce qui est là, puis dépose **sans écraser** |
 | `jeton_vide` | L'entrée existe au trousseau, et elle est **vide** — pas absente | Le message ne propose aucune commande, et c'est voulu : remplace l'entrée depuis le Trousseau d'accès, qui la montre avant qu'on y touche |
@@ -214,6 +258,24 @@ pane **dans le lieu**, lance la session, attend qu'elle soit détectée, la nomm
 **par le fait** — le nom qu'elle porte, le répertoire où elle tourne. Un échec referme le pane
 qu'elle avait ouvert.
 
+### Dans quelle session herdr — et pourquoi elle refuse de deviner
+
+**Onze sessions herdr tournent sur ce poste**, chacune avec son propre canal de commande, et
+**les identifiants d'espace ne sont pas globalement uniques** : `w2W` existe dans plusieurs.
+Depuis `T-20260814-0120`, la naissance ne devine plus.
+
+| Ta situation | Ce que tu tapes |
+|---|---|
+| tu la lances **depuis un pane** | rien — l'environnement dit déjà tout |
+| une **seule** session ouverte | rien non plus |
+| **plusieurs** sessions, et tu es hors d'un pane | `--session <nom>` — sinon elle **refuse en les nommant toutes** |
+| tu fais naître **ailleurs que chez toi** | `--session <nom>`, qui **l'emporte** sur ton pane courant |
+
+**Elle refuse aussi un espace qui n'appartient pas à la session visée**, et elle le refuse
+**avant de créer le moindre onglet**. C'est le cas qui a coûté le plus cher : un identifiant
+lu dans une session, donné pour une naissance dans une autre, ne rate pas — **il réussit
+ailleurs**, et rien à l'écran ne le montre.
+
 **Les deux options qu'on n'oublie pas, parce que les oublier ne se voit pas :**
 
 - **`--role orchestrateur`.** Sans lui, la naissance vise le rôle par défaut — le représentant
@@ -233,6 +295,66 @@ qui ne fait rien, parce que personne ne lui dit de commencer ». Quand tu en pas
 naissance vérifie **par le fait** que le brief a été pris, et échoue s'il est resté dans la
 boîte de saisie — le pane, lui, reste ouvert : briefe-la à la main plutôt que de la refaire
 naître.
+
+### Elle refuse un lieu que git ne porte pas — et c'est le versement qui la débloque
+
+Depuis `T-20260814-0139`, **la naissance refuse** quand aucun commit ne porte le lieu, quand
+il n'est versé qu'à moitié, ou quand il porte une garde d'ouverture qu'une naissance
+antérieure a posée et que personne n'a versée.
+
+Ce n'est pas une exigence nouvelle : le versement est déjà prescrit juste au-dessus. Le refus
+le rend seulement **opposable** — parce que l'instruction n'était pas suivie. Mesuré au
+moment de l'arbitrage : sur cinq lieux clients posés, **trois portaient une garde qu'aucun
+commit ne contenait**. Un `git checkout` les désarmait sans un mot, le fichier restant un
+`settings.json` parfaitement valide, simplement sans `hooks`.
+
+| Ce que le refus dit | Le geste qui le lève |
+|---|---|
+| `aucun commit ne porte « … »` | verse le lieu — la commande exacte est dans le message |
+| `ce lieu est versé à moitié : aucun commit ne porte …` | verse les fichiers qu'il nomme, un à un |
+| `la garde d'ouverture posée dans ce lieu n'est dans aucun commit` | verse le `settings.json` du lieu |
+
+**Le refus tombe avant la moindre écriture** : rien n'a été posé, aucun pane n'a été créé,
+le trousseau n'a pas été lu. Relance après avoir versé.
+
+> **Ce qu'il ne refuse PAS, et pourquoi.** La garde que *cette* naissance vient de poser est
+> seulement **signalée**. Personne ne pouvait la verser avant qu'elle existe : la refuser
+> rendrait toute première naissance impossible — on ne peut pas committer un fichier que la
+> commande refuse d'écrire. Verse-la après ; sans quoi le prochain lancement, lui, refusera.
+
+> **Depuis T-20260816-0038, la naissance verse elle-même.** Ce versement — celui du lieu, puis
+> celui de la garde qu'elle vient de poser — n'est plus un geste humain : la commande fait un
+> `git commit` local, borné au seul chemin du lieu, et rien d'autre du dépôt n'est emporté. Elle
+> ne pousse pas, n'ouvre pas de PR et ne fusionne rien : tout ça appartient à qui relira.
+>
+> **La garantie, elle, ne bouge pas.** Le refus décrit juste au-dessus reste entier, et pour la
+> raison qui l'a fait naître : sur cinq lieux clients posés, trois portaient une garde qu'aucun
+> commit ne contenait. Ce que la revue de T-20260816-0004 a établi, c'est que ce refus n'a jamais
+> été une revue de code — il n'interroge que `HEAD`.
+
+## Sa vigilance ne s'installe pas toute seule — une fois par poste
+
+Le métier d'un orchestrateur lui impose deux rendez-vous : **une ronde toutes les heures** et
+**un topo à 7 h** sur sa ligne. Le mécanisme qui les déclenche existe — et **rien ne
+l'installait**.
+
+**[MESURÉ, 2026-08-15]** Sur un poste où un orchestrateur travaillait depuis des jours :
+aucun des deux agents de session n'existait, ni chez `launchctl` ni sur disque. Il n'a **jamais
+reçu un seul réveil**, a fini par poser une boucle à la main, et **sans savoir ce qu'il
+contournait** — la seule preuve de l'absence d'un réveil est un non-événement.
+
+```bash
+node $HOME/.somtech/naissance-representant/bin/rendez-vous.js service installer
+node $HOME/.somtech/naissance-representant/bin/rendez-vous.js service etat
+```
+
+**Une fois par poste, pas par orchestrateur** : les deux rendez-vous balaient toutes les
+sessions et servent tous les orchestrateurs vivants, y compris ceux qui naîtront demain. Un
+orchestrateur fermé cesse d'être réveillé sans qu'on ait rien à désinscrire.
+
+> **Vérifie l'état plutôt que de supposer.** C'est le genre de geste qu'on croit avoir fait :
+> il ne rend rien de visible quand il réussit, et son absence ne se voit qu'à un réveil qui
+> n'arrive pas — c'est-à-dire à rien.
 
 ## Ce que cette compétence ne fait jamais
 

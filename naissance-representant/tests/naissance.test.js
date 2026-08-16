@@ -19,7 +19,11 @@ import {
   poserGarde,
   gardePose,
   commandesNaissance,
+  MODELE_PAR_DEFAUT,
+  MODE_PAR_DEFAUT,
   nomAgentHerdr,
+  avisDeCasse,
+  avisDeVersionnement,
   lireReponseHerdr,
   agentDetecte,
   agentPorteLeNom,
@@ -295,7 +299,6 @@ test('commandesNaissance construit des tableaux d’arguments herdr — AUCUN sh
   assert.deepEqual(c.tabCreate, [
     'tab', 'create', '--workspace', 'w1', '--cwd', '/repo/.gestionnaire/acme', '--label', 'acme', '--no-focus',
   ]);
-  assert.deepEqual(c.renommer('w1:p1'), ['agent', 'rename', 'w1:p1', 'acme']);
   assert.deepEqual(c.interroger('w1:p1'), ['agent', 'get', 'w1:p1']);
   assert.deepEqual(c.fermer('w1:p1'), ['pane', 'close', 'w1:p1']);
 });
@@ -310,9 +313,77 @@ test('le pane naît DANS le lieu — `--cwd` à la création, pas seulement un `
   assert.equal(c.tabCreate[i + 1], '/repo/.gestionnaire/acme');
 });
 
-test('commandesNaissance lance depuis le lieu lui-même (cd) — .mcp.json et .claude/settings.json s’y lisent sans drapeau', () => {
+// ═══════════ T-20260816-0038 — `agent start` REMPLACE `pane run` + l'attente + `agent rename`
+//
+// Ce dépôt réimplémentait ce que herdr sait faire depuis toujours : une ligne écrite dans le
+// shell d'un pane (`cd <lieu> && claude`), puis trente interrogations espacées de deux secondes
+// pour deviner si ça avait pris, puis un renommage. Trois gestes, une minute d'attente, et une
+// fenêtre pendant laquelle l'agent n'était adressable que par son numéro de pane —
+// c'est-à-dire le moment exact où l'adressage cassait (T-20260816-0002).
+//
+// `agent start` fait les trois d'un coup et NOMME à la naissance. Vérifié par le fait contre le
+// vrai service le 2026-08-16 : il rend son `argv` exact.
+test('la naissance passe par `agent start` — herdr nomme l’agent lui-même, et le nom est déjà normalisé', () => {
+  // On donne un nom CAPITALISÉ à dessein : ce qui part vers herdr doit être le nom qu'il
+  // accepte, pas celui du lieu. Un `Acme` transmis tel quel rendrait `invalid_agent_name`,
+  // et l'ancien enchaînement ne s'en apercevait qu'après avoir ouvert un pane.
+  const c = commandesNaissance('/repo', 'Acme', { workspace: 'w1' });
+  assert.deepEqual(c.agentStart('w1:p1'), [
+    'agent', 'start', 'acme',
+    '--kind', 'claude',
+    '--pane', 'w1:p1',
+    '--timeout', '120000',
+    '--', '--model', MODELE_PAR_DEFAUT, '--permission-mode', MODE_PAR_DEFAUT,
+  ]);
+});
+
+// ⚠️ LE SÉPARATEUR `--` N'EST PAS DE LA PONCTUATION. Sans lui, `--model` est lu comme un drapeau
+// DE HERDR, pas de `claude` : soit herdr refuse un drapeau qu'il ne connaît pas, soit — bien
+// pire — il l'avale et la session naît sur le modèle par défaut du compte, sans que rien ne le
+// dise. C'est exactement le silence que ce lot existe pour supprimer.
+test('les drapeaux de claude passent APRÈS `--`, jamais mêlés à ceux de herdr', () => {
+  const argv = commandesNaissance('/repo', 'acme', { workspace: 'w1' }).agentStart('w1:p1');
+  const sep = argv.indexOf('--');
+  assert.notEqual(sep, -1, 'le séparateur doit être là');
+  assert.ok(
+    !argv.slice(0, sep).some((a) => a === '--model' || a === '--permission-mode'),
+    'aucun drapeau de claude ne doit se trouver du côté de herdr'
+  );
+  assert.deepEqual(argv.slice(sep + 1), ['--model', MODELE_PAR_DEFAUT, '--permission-mode', MODE_PAR_DEFAUT]);
+});
+
+test('le modèle et le mode sont DITS — et ce qui est dit est ce qui part', () => {
+  const c = commandesNaissance('/repo', 'acme', { workspace: 'w1', modele: 'sonnet', mode: 'plan' });
+  assert.equal(c.modele, 'sonnet', 'l’objet rendu doit porter ce que l’appelant a demandé');
+  assert.equal(c.mode, 'plan');
+  assert.deepEqual(
+    c.agentStart('w1:p1').slice(-4),
+    ['--model', 'sonnet', '--permission-mode', 'plan'],
+    'et le déclarer ne suffit pas : c’est la commande qui doit le porter'
+  );
+});
+
+// ⚠️ CES DEUX VALEURS SONT UN ARBITRAGE, PAS UN DÉTAIL — d'où un contrôle qui les fige.
+//
+// `claude` sans drapeau naît sur ce que le compte a par défaut, et personne ne sait quoi depuis
+// l'extérieur : un chef d'équipe qu'on croit sur un grand modèle et qui raisonne sur un petit
+// rend un travail qu'on relira comme s'il venait de l'autre. Et `acceptEdits` est le mode avec
+// lequel la naissance sans écran a été MESURÉE (2026-08-16, Claude Code 2.1.233) — poser par
+// défaut un mode qu'on n'a pas éprouvé serait le pari que ce lot existe pour supprimer.
+// Les changer reste permis ; les changer EN SILENCE, non.
+test('les défauts sont ceux qui ont été mesurés — jamais un lancement nu', () => {
+  assert.equal(MODELE_PAR_DEFAUT, 'opus');
+  assert.equal(MODE_PAR_DEFAUT, 'acceptEdits');
+});
+
+// ⚠️ ET LE SUCCÈS D'`agent start` NE PROUVE PAS QUE L'AGENT EST JOIGNABLE (T-20260816-0033).
+// Mesuré le 2026-08-16 : il rend `agent_status: idle` ET `interactive_ready: true` PENDANT que
+// l'agent est parqué derrière un modal. La commande qui lit l'écran a donc besoin de savoir le
+// demander — `--source visible` lit CE QUI EST AFFICHÉ, pas l'historique du pane, et c'est
+// l'affichage seul qui dit s'il y a un modal devant.
+test('l’écran se lit par une commande à part — la naissance ne se fie pas au booléen de herdr', () => {
   const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
-  assert.deepEqual(c.paneRun('w1:p1'), ['pane', 'run', 'w1:p1', 'cd /repo/.gestionnaire/acme && claude']);
+  assert.deepEqual(c.lireEcran('w1:p1'), ['agent', 'read', 'w1:p1', '--source', 'visible', '--lines', '40']);
 });
 
 test('cheminLieu reste sous la racine passée', () => {
@@ -400,6 +471,213 @@ test('nomAgentHerdr abaisse la casse — herdr refuse les majuscules (`invalid_a
   assert.equal(nomAgentHerdr('Acme'), 'acme');
   assert.equal(nomAgentHerdr('maxime'), 'maxime');
   assert.equal(nomAgentHerdr('ville-de-quebec_2'), 'ville-de-quebec_2');
+});
+
+// T-20260814-0143 — abaisser la casse est JUSTE ; le faire en silence est le défaut.
+// Mesuré sur un poste réel : le lieu `.gestionnaire/Charles-Olivier` fait vivre un agent
+// nommé `charles-olivier`. Qui cherche son agent par le nom de son lieu ne le trouve pas,
+// et rien, nulle part, ne lui dit pourquoi.
+test('avisDeCasse nomme les DEUX noms quand l’agent ne portera pas le nom du lieu', () => {
+  const avis = avisDeCasse('Francois', nomAgentHerdr('Francois'));
+  assert.ok(avis, 'un nom capitalisé doit produire un avis');
+  assert.match(avis, /« Francois »/, 'l’avis doit nommer le lieu tel qu’il s’appelle');
+  assert.match(avis, /« francois »/, 'et l’agent tel qu’on devra l’adresser');
+});
+
+test('avisDeCasse se TAIT quand les deux noms coïncident — sinon l’avis devient du bruit qu’on cesse de lire', () => {
+  for (const nom of ['francois', 'ville-de-quebec_2', 't-20260814-0135']) {
+    assert.equal(avisDeCasse(nom, nomAgentHerdr(nom)), null, `rien à dire pour « ${nom} »`);
+  }
+});
+
+// LE POINT QUE LA REVUE DE FOND A FAIT TOMBER, et il n'est pas cosmétique.
+//
+// Une première version recalculait `toLowerCase()` dans `avisDeCasse` — la règle de casse
+// se retrouvait à DEUX endroits. Les deux coïncidaient, donc rien ne cassait ; c'est
+// précisément la forme que prend ce défaut avant de mordre. `T-20260814-0101` venait de le
+// fermer un cran plus haut, le même jour : le rouvrir une commande plus loin n'aurait rien
+// fermé du tout.
+//
+// Ce contrôle l'ancre par le seul moyen qui ne se laisse pas berner : on lui donne un nom
+// d'agent qui N'EST PAS l'abaissement du lieu. Une version qui recalcule se tairait — elle
+// comparerait `Acme` à son propre `acme` et ne verrait aucun écart avec le nom qu'on lui a
+// donné. Celle qui compare parle.
+test('avisDeCasse COMPARE les deux noms, elle ne recalcule jamais la règle de casse', () => {
+  const avis = avisDeCasse('Acme', 'tout-autre-nom');
+  assert.ok(avis, 'un écart doit être vu même quand il ne vient pas d’un abaissement de casse');
+  assert.match(avis, /« Acme »/);
+  assert.match(avis, /« tout-autre-nom »/);
+
+  assert.equal(
+    avisDeCasse('Acme', 'Acme'),
+    null,
+    'et deux noms identiques ne disent rien, même capitalisés — c’est l’ÉCART qui parle, pas la casse'
+  );
+});
+
+// ══════════════════ T-20260814-0139 — CE QUE GIT VOIT DU LIEU, ET CE QU'IL N'EN VOIT PAS
+//
+// Mesuré sur un poste réel : la garde d'ouverture n'existait dans AUCUN commit, sur aucun
+// des quatre lieux clients suivis par git. Elle ne vivait que comme modification non
+// commitée, réinjectée à chaque naissance — un `git checkout` la désarmait sans un mot,
+// puisque le fichier redevenait un `settings.json` parfaitement valide, simplement sans
+// `hooks`. Et un cinquième lieu n'était dans aucun commit du tout : métier, contexte,
+// moyens et droits n'existaient que sur ce disque-là.
+//
+// Aucun de ces deux états ne se voit à la lecture. C'est ce que ces contrôles ancrent.
+
+function depotGit() {
+  const repoRoot = repoTemp();
+  const git = (...args) => execFileSync('git', ['-C', repoRoot, ...args], { stdio: 'ignore' });
+  git('init', '-q');
+  git('config', 'user.email', 't@somtech.ca');
+  git('config', 'user.name', 'essai');
+  return { repoRoot, git };
+}
+
+test('avisDeVersionnement CRIE quand aucun commit ne porte le lieu — il n’existe que sur ce disque', () => {
+  const { repoRoot } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un lieu qu’aucun commit ne porte doit être dit');
+    assert.match(avis, /acme/, 'l’avis doit nommer le lieu — sinon il ne sert à personne');
+
+    // ⚠️ ON ANCRE LA FORME, PAS SEULEMENT LES MOTS. Une revue de fond a muté la condition de
+    // cette branche (`=== GABARITS.length` → `>`), la rendant inatteignable — et les 185
+    // tests restaient VERTS, parce que le message de repli (« versé à moitié ») contient lui
+    // aussi le nom du lieu, « aucun commit ne porte » et « git add ». Deux messages que rien
+    // ne distinguait : le contrôle lisait le mauvais et s'en contentait.
+    //
+    // Ce qui les sépare vraiment est le GESTE : un lieu entièrement absent se verse d'un
+    // seul coup, par son répertoire ; un lieu versé à moitié se rattrape fichier par fichier.
+    assert.match(
+      avis,
+      new RegExp(`git add -f \\S*\\.gestionnaire/acme && git commit`),
+      'le lieu entier se verse en UN geste, sur son répertoire'
+    );
+    assert.doesNotMatch(
+      avis,
+      /CLAUDE\.md|settings\.json/,
+      'et surtout pas fichier par fichier — ce serait le message de l’autre branche'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement CRIE quand le lieu est versé mais que la garde posée par-dessus ne l’est pas', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé sans sa garde');
+    poserGarde(repoRoot, 'acme'); // la naissance la réinjecte — et personne ne la commit
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'une garde qui n’est dans aucun commit doit être dite');
+    assert.match(avis, /garde/i, 'l’avis doit nommer ce qui n’est pas versé');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement se TAIT quand tout est versé — sinon l’avis devient du bruit', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    poserGarde(repoRoot, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu ET sa garde');
+    assert.equal(avisDeVersionnement(repoRoot, 'acme'), null);
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ LE CAS QUE LA PREMIÈRE VERSION LAISSAIT PASSER EN SILENCE, et c'était le cas MESURÉ.
+//
+// `git diff --quiet HEAD -- <fichier jamais suivi>` sort en 0 : « pas de différence », parce
+// qu'un fichier que git n'a jamais vu n'a rien à comparer. Un lieu dont les trois autres
+// gabarits sont versés et dont le `settings.json` n'a JAMAIS été ajouté échappait donc aux
+// deux branches — la première voyait des fichiers dans HEAD, la seconde ne voyait aucun
+// écart. Le fichier des DROITS était le seul absent, et la commande se taisait.
+test('avisDeVersionnement CRIE sur un lieu partiellement versé — le fichier des droits jamais ajouté', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-f', '.gestionnaire/acme/CLAUDE.md', '.gestionnaire/acme/CONTEXTE.md', '.gestionnaire/acme/.mcp.json');
+    git('commit', '-qm', 'trois gabarits sur quatre');
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un gabarit absent de tout commit doit être dit, même si les autres y sont');
+    assert.match(avis, /settings\.json/, 'et l’avis doit nommer LEQUEL manque');
+    // Le pendant de l'ancrage ci-dessus : ici le geste porte le FICHIER, pas le répertoire.
+    assert.match(
+      avis,
+      new RegExp(`git add -f \\S*\\.claude/settings\\.json`),
+      'un lieu versé à moitié se rattrape fichier par fichier — c’est ce qui le distingue'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ CE CONTRÔLE EXISTE POUR TUER UNE MUTATION PRÉCISE : interroger l'INDEX au lieu de HEAD.
+// Une revue de fond l'a rejouée sur la première version — `ls-files --error-unmatch` à la
+// place de `cat-file -e HEAD:…` — et AUCUN test ne rougissait, alors que le commentaire du
+// module affirmait que cette distinction était le cœur de la mesure. Un fichier `git add`é
+// et jamais commité n'existe que sur ce disque, exactement comme un fichier ignoré.
+test('avisDeVersionnement CRIE sur un lieu seulement INDEXÉ — « git add » n’est pas « versé »', () => {
+  const { repoRoot, git } = depotGit();
+  try {
+    git('commit', '-qm', 'premier commit', '--allow-empty');
+    poserLeLieu(repoRoot, 'acme');
+    git('add', '-Af'); // indexé, jamais commité
+    const avis = avisDeVersionnement(repoRoot, 'acme');
+    assert.ok(avis, 'un lieu seulement indexé n’est porté par aucun commit');
+    // ⚠️ ON ANCRE SUR LA PHRASE PROPRE À CETTE BRANCHE, pas sur « aucun commit » : les DEUX
+    // messages contiennent ces deux mots, et une première version de ce contrôle passait donc
+    // sous la mutation qu'il existe pour tuer — il lisait le message de la garde et s'en
+    // contentait. Un contrôle qui se satisfait du mauvais message ne mesure rien.
+    assert.match(avis, /aucun commit ne porte/, 'c’est le lieu ENTIER qui n’est dans aucun commit');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ `git cat-file -e HEAD:<chemin>` résout le chemin depuis la RACINE du dépôt, jamais
+// depuis le répertoire de `-C`. Calculer le chemin relativement à `repoRoot` quand celui-ci
+// n'est PAS la racine faisait donc déclarer « aucun commit » un lieu entièrement versé.
+test('avisDeVersionnement se TAIT quand le dépôt courant n’est pas la racine du dépôt git', () => {
+  const { repoRoot, git } = depotGit();
+  const sousRepertoire = join(repoRoot, 'sous', 'dossier');
+  try {
+    mkdirSync(sousRepertoire, { recursive: true });
+    poserLeLieu(sousRepertoire, 'acme');
+    poserGarde(sousRepertoire, 'acme');
+    git('add', '-Af');
+    git('commit', '-qm', 'le lieu, versé, dans un sous-répertoire');
+    assert.equal(
+      avisDeVersionnement(sousRepertoire, 'acme'),
+      null,
+      'un lieu entièrement versé ne doit pas être déclaré absent parce qu’on regarde depuis un sous-répertoire'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('avisDeVersionnement se TAIT hors d’un dépôt git — il ne reproche pas ce qui n’a pas de sens', () => {
+  const repoRoot = repoTemp();
+  try {
+    poserLeLieu(repoRoot, 'acme');
+    assert.equal(
+      avisDeVersionnement(repoRoot, 'acme'),
+      null,
+      'un répertoire sans git n’a rien à verser — le dire serait du bruit, pas un avertissement'
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test('nomAgentHerdr refuse ce que herdr refuserait — et il le refuse AVANT qu’un pane existe', () => {

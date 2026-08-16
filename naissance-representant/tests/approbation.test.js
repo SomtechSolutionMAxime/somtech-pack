@@ -11,17 +11,35 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync, realpathSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, chmodSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
   approuverLieu, avecApprobation, dejaApprouve, ConfigIllisible, cheminConfig,
-  serveursDuLieu, formesDuLieu,
+  serveursDuLieu, formesDuLieu, droitsDuLieu,
 } from '../src/approbation.js';
 
 function bac() {
   return mkdtempSync(join(tmpdir(), 'approb-'));
+}
+
+/**
+ * UNE ENTRÉE DE PROJET COMPLÈTE — la forme que Claude Code écrit lui-même (T-20260816-0032).
+ *
+ * Elle est ici plutôt que recopiée dans chaque essai pour une raison précise : le jour où une
+ * clé de plus deviendra nécessaire, un fixture recopié à cinq endroits en oublierait quatre, et
+ * les essais continueraient de dire que tout va bien pendant que l’écran reviendrait.
+ */
+function entreeComplete(extra = {}) {
+  return {
+    allowedTools: [], mcpContextUris: [], mcpServers: {},
+    enabledMcpjsonServers: [], disabledMcpjsonServers: [],
+    hasTrustDialogAccepted: true, projectOnboardingSeenCount: 1,
+    hasClaudeMdExternalIncludesApproved: true, hasClaudeMdExternalIncludesWarningShown: true,
+    hasCompletedProjectOnboarding: true,
+    ...extra,
+  };
 }
 
 test('le lieu devient approuvé — c’est ce qui empêche l’écran de confiance d’arrêter la session', () => {
@@ -66,7 +84,11 @@ test('TOUT LE RESTE est conservé — on ajoute une approbation, on ne redéfini
 test('déjà approuvé : AUCUNE écriture — la meilleure façon de ne pas corrompre est de ne pas ouvrir', () => {
   const d = bac();
   const config = join(d, 'config.json');
-  writeFileSync(config, JSON.stringify({ projects: { '/un/lieu': { hasTrustDialogAccepted: true } } }));
+  // ⚠️ LE FIXTURE PORTE LE JEU DE CLÉS COMPLET depuis T-20260816-0032 : une entrée qui ne porte
+  // que la confiance n’est plus tenue pour approuvée, parce qu’elle laisse revenir l’écran des
+  // serveurs (mesuré sur Claude Code 2.1.233). Ce test garde « aucune écriture quand tout est
+  // déjà là » ; c’est « tout » qui a changé de définition, pas ce qu’il garde.
+  writeFileSync(config, JSON.stringify({ projects: { '/un/lieu': entreeComplete() } }));
   // Un fichier en lecture seule : toute tentative d'écriture ferait échouer l'appel. C'est la
   // preuve par le fait qu'aucune écriture n'a lieu, plutôt que par la comparaison du contenu.
   chmodSync(config, 0o444);
@@ -140,13 +162,13 @@ test('les DEUX portes sont exigées : le dossier de confiance ET les serveurs qu
     'un seul serveur sur deux a suffi — « une porte sur deux »',
   );
   assert.equal(
-    dejaApprouve(surToutesLesFormes({ hasTrustDialogAccepted: true, enabledMcpjsonServers: ['servicedesk', 'somcraft'] }), d),
+    dejaApprouve(surToutesLesFormes(entreeComplete({ enabledMcpjsonServers: ['servicedesk', 'somcraft'] })), d),
     true,
   );
   // Et une seule forme approuvée ne suffit pas non plus — c'est le défaut mesuré du 2026-08-13.
   assert.equal(
     dejaApprouve(
-      { projects: { [formesDuLieu(d)[0]]: { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['servicedesk', 'somcraft'] } } },
+      { projects: { [formesDuLieu(d)[0]]: entreeComplete({ enabledMcpjsonServers: ['servicedesk', 'somcraft'] }) } },
       d,
     ),
     formesDuLieu(d).length === 1,
@@ -239,4 +261,171 @@ test('les DEUX formes d’un même lieu sont approuvées quand elles diffèrent'
 
 test('la configuration visée est bien celle du poste', () => {
   assert.match(cheminConfig(), /\.claude\.json$/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// T-20260816-0032 — LA NAISSANCE NE MONTRE AUCUN ÉCRAN
+//
+// MESURÉ le 2026-08-16 sur Claude Code 2.1.233, en trois essais qui s'isolent proprement :
+//
+//   allow présent + les 2 clés d'origine       → écran de CONFIANCE renforcé
+//   allow retiré  + les 2 clés d'origine       → écran des SERVEURS MCP
+//   allow retiré  + jeu de clés COMPLET        → AUCUN écran, invite prête
+//
+// Les deux clés que ce module écrivait suffisaient quand elles ont été écrites. Elles ne
+// suffisent plus, et l'essai qui le prouve est ci-dessous : il exige la forme qu'une entrée de
+// projet ordinaire porte, parce que c'est celle que Claude Code écrit lui-même.
+
+/** Un lieu factice qui déclare des droits, comme le gabarit le fera. */
+function lieuAvecDroits(d, { droits = [], serveurs = ['servicedesk'], via = 'somtech' } = {}) {
+  const lieu = join(d, 'lieu');
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  writeFileSync(
+    join(lieu, '.mcp.json'),
+    JSON.stringify({ mcpServers: Object.fromEntries(serveurs.map((s) => [s, { type: 'http', url: 'x' }])) })
+  );
+  const settings =
+    via === 'somtech'
+      ? { permissions: { deny: ['Write'] }, somtech: { droitsAccordes: droits } }
+      : { permissions: { deny: ['Write'], allow: droits } };
+  writeFileSync(join(lieu, '.claude', 'settings.json'), JSON.stringify(settings, null, 2));
+  return lieu;
+}
+
+test('les droits déclarés par le lieu passent dans allowedTools — sinon un lieu sans bloc allow naîtrait sans droits', () => {
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+  const lieu = lieuAvecDroits(d, { droits: ['Read', 'Bash(git log*)', 'mcp__servicedesk__*'] });
+
+  approuverLieu(lieu, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[resolve(lieu)];
+  assert.deepEqual(projet.allowedTools, ['Read', 'Bash(git log*)', 'mcp__servicedesk__*']);
+});
+
+test('l’entrée porte le jeu de clés COMPLET — les deux d’avant ne suffisent plus (mesuré sur 2.1.233)', () => {
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+  const lieu = lieuAvecDroits(d, { droits: ['Read'] });
+
+  approuverLieu(lieu, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[resolve(lieu)];
+
+  // Chacune de ces clés a été mesurée présente sur une entrée de projet ordinaire du poste,
+  // et leur absence est ce qui laissait l'écran des serveurs apparaître.
+  for (const cle of [
+    'allowedTools', 'mcpContextUris', 'mcpServers', 'enabledMcpjsonServers', 'disabledMcpjsonServers',
+    'hasTrustDialogAccepted', 'projectOnboardingSeenCount',
+    'hasClaudeMdExternalIncludesApproved', 'hasClaudeMdExternalIncludesWarningShown',
+    'hasCompletedProjectOnboarding',
+  ]) {
+    assert.ok(cle in projet, `clé manquante : ${cle} — l’écran réapparaîtrait`);
+  }
+});
+
+test('une entrée écrite par l’ANCIENNE version n’est PAS tenue pour approuvée — sinon le correctif ne mordrait jamais', () => {
+  // C'est le cas RÉEL du poste au 2026-08-16 : les trois lieux d'orchestrateur en production
+  // portent exactement les deux clés d'avant. Si `dejaApprouve` s'en contentait, la naissance
+  // sauterait l'écriture et l'écran resterait — un correctif juste et sans aucun effet, ce qui
+  // est la pire des deux situations parce qu'elle a l'air réglée.
+  const d = bac();
+  const config = join(d, 'config.json');
+  const lieu = lieuAvecDroits(d, { droits: ['Read'] });
+  writeFileSync(
+    config,
+    JSON.stringify({ projects: { [resolve(lieu)]: { hasTrustDialogAccepted: true, enabledMcpjsonServers: ['servicedesk'] } } })
+  );
+
+  assert.equal(dejaApprouve(JSON.parse(readFileSync(config, 'utf8')), lieu), false);
+  const r = approuverLieu(lieu, { chemin: config });
+  assert.equal(r.deja, false, 'elle doit RÉÉCRIRE, pas se déclarer déjà faite');
+});
+
+test('un lieu sans droits déclarés est approuvé quand même, avec un allowedTools vide', () => {
+  // On ne saute jamais l'écriture au prétexte qu'il n'y a rien à accorder : c'est l'écriture
+  // elle-même qui supprime les écrans, pas son contenu.
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+  const lieu = lieuAvecDroits(d, { droits: [] });
+
+  approuverLieu(lieu, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[resolve(lieu)];
+  assert.deepEqual(projet.allowedTools, []);
+  assert.equal(projet.hasTrustDialogAccepted, true);
+});
+
+test('un lieu ANCIEN qui porte encore permissions.allow voit ses droits repris — on ne laisse personne sans droits', () => {
+  // Les lieux déjà posés portent leurs droits sous `permissions.allow`. Ils continueront de
+  // montrer l'écran de confiance (c'est le fichier qui le déclenche), mais leurs droits doivent
+  // survivre : on lit les DEUX déclarations, on ne choisit pas l'une contre l'autre.
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+  const lieu = lieuAvecDroits(d, { droits: ['Read', 'Glob'], via: 'permissions' });
+
+  approuverLieu(lieu, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[resolve(lieu)];
+  assert.deepEqual(projet.allowedTools, ['Read', 'Glob']);
+});
+
+test('un droit accordé à la main pour ce lieu SURVIT — union, jamais remplacement', () => {
+  const d = bac();
+  const config = join(d, 'config.json');
+  const lieu = lieuAvecDroits(d, { droits: ['Read'] });
+  writeFileSync(config, JSON.stringify({ projects: { [resolve(lieu)]: { allowedTools: ['Bash(ls*)'] } } }));
+
+  approuverLieu(lieu, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[resolve(lieu)];
+  assert.deepEqual([...projet.allowedTools].sort(), ['Bash(ls*)', 'Read']);
+});
+
+test('un fichier de droits illisible ne fait pas inventer de droits — la liste est vide, jamais devinée', () => {
+  const d = bac();
+  const config = join(d, 'config.json');
+  writeFileSync(config, JSON.stringify({ projects: {} }));
+  const lieu = lieuAvecDroits(d, { droits: ['Read'] });
+  writeFileSync(join(lieu, '.claude', 'settings.json'), '{ ceci n’est pas du JSON');
+
+  approuverLieu(lieu, { chemin: config });
+  const projet = JSON.parse(readFileSync(config, 'utf8')).projects[resolve(lieu)];
+  assert.deepEqual(projet.allowedTools, []);
+});
+
+test('droitsDuLieu ne lit JAMAIS une liste écrite en dur — elle vient du fichier du lieu', () => {
+  const d = bac();
+  const lieu = lieuAvecDroits(d, { droits: ['Bash(quelque-chose-de-tres-improbable*)'] });
+  assert.deepEqual(droitsDuLieu(lieu), ['Bash(quelque-chose-de-tres-improbable*)']);
+  assert.deepEqual(droitsDuLieu(join(d, 'nulle-part')), []);
+});
+
+test('une entrée à qui il MANQUE UNE SEULE CLÉ n’est pas tenue pour approuvée — chacune compte', () => {
+  // ⚠️ TROUVÉ PAR LA REVUE DE FOND, et c'est le motif de ce dépôt en miniature. L'essai du « jeu
+  // de clés complet » vérifiait ce que l'écriture PRODUIT — or l'écriture construit ses clés en
+  // dur et ne consulte pas `CLES_DUNE_ENTREE`. La constante, elle, ne sert qu'à `dejaApprouve`,
+  // et rien ne l'éprouvait : on mesurait l'écriture (l'indice) au lieu du verdict (le fait).
+  //
+  // Le bug réel que ça laissait passer : une entrée à qui il manque `disabledMcpjsonServers`
+  // serait jugée « déjà approuvée », l'écriture serait sautée, et l'écran des serveurs MCP
+  // reviendrait — exactement le défaut que ce fichier existe pour fermer.
+  const d = bac();
+  const lieu = lieuAvecDroits(d, { droits: ['Read'] });
+  const complete = entreeComplete({ enabledMcpjsonServers: ['servicedesk'], allowedTools: ['Read'] });
+
+  assert.equal(
+    dejaApprouve({ projects: Object.fromEntries(formesDuLieu(lieu).map((f) => [f, complete])) }, lieu),
+    true,
+    'la référence : une entrée complète EST approuvée, sinon l’essai ne prouverait rien'
+  );
+
+  for (const cle of Object.keys(complete)) {
+    const amputee = { ...complete };
+    delete amputee[cle];
+    assert.equal(
+      dejaApprouve({ projects: Object.fromEntries(formesDuLieu(lieu).map((f) => [f, amputee])) }, lieu),
+      false,
+      `sans « ${cle} », l’entrée est encore tenue pour approuvée : l’écriture serait sautée et l’écran reviendrait`
+    );
+  }
 });
