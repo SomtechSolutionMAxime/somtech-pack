@@ -110,6 +110,27 @@ test('⚠️ DEUX BRANCHES SANS LA PAR DÉFAUT RESTENT EXPOSÉES — le nombre n
   assert.equal(v?.risque, RISQUE.PAS_SUR_LA_PAR_DEFAUT);
 });
 
+test('⚠️ « master » MET AUSSI À L’ABRI — un critère qui code le nom en dur juge la machine', () => {
+  // ⚠️ TROUVÉ PAR LA CHAÎNE D'INTÉGRATION, LE JOUR MÊME OÙ J'AI INSCRIT LE MOTIF. Ma première
+  // écriture n'acceptait que `main` : verte sur mon poste, ROUGE en intégration, où `git init`
+  // crée `master`. Le verdict dépendait du nom qu'une machine donne à sa branche par défaut —
+  // donc de la machine, pas du lieu (T-20260816-0093).
+  assert.equal(expositionDuLieu({ lieu: LIEU, branchesQuiPortent: ['master'] }), null);
+  assert.equal(expositionDuLieu({ lieu: LIEU, branchesQuiPortent: ['origin/master'] }), null);
+});
+
+test('ET LE DÉPÔT PEUT NOMMER LA SIENNE — on ne devine pas quand on peut demander', () => {
+  // Un dépôt dont la branche par défaut s'appelle autrement (`trunk`, `principale`) doit être
+  // jugé sur SA branche, pas sur une convention.
+  assert.equal(
+    expositionDuLieu({ lieu: LIEU, branchesQuiPortent: ['origin/trunk'], brancheParDefaut: 'trunk' }),
+    null,
+  );
+  // Et quand on la nomme, elle seule compte : `main` n'est plus un laissez-passer.
+  const v = expositionDuLieu({ lieu: LIEU, branchesQuiPortent: ['origin/main'], brancheParDefaut: 'trunk' });
+  assert.equal(v?.risque, RISQUE.UNE_SEULE_BRANCHE);
+});
+
 // ═════════════════ 3. ON NE CONCLUT PAS D'UNE ABSENCE DE MESURE
 
 test('SANS LISTE DE BRANCHES, ON NE SIGNALE RIEN — « je n’ai pas pu lire » n’est pas « rien ne le porte »', () => {

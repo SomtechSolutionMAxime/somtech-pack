@@ -20,6 +20,7 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Technique
 
+- ⚠️ **Et le nom de la branche par défaut n'est PAS codé en dur** — trouvé **par la chaîne d'intégration**, le jour même où ce motif a été inscrit (`T-20260816-0093`). La première écriture n'acceptait que `main` : **verte sur le poste, rouge en intégration**, où `git init` crée `master`. Le verdict dépendait du nom qu'une machine donne à sa branche — donc de la machine, pas du lieu. Les deux noms usuels sont acceptés, et l'appelant peut donner celui que le dépôt déclare.
 - ⚠️ **Le critère n'est PAS « est-ce sur `main` »**, et c'est le cœur du lot. Cette formulation aurait déclaré **sain le pire des cas**, mesuré sur un orchestrateur vivant : son lieu n'est porté que par sa propre branche, **et cette branche est celle qui est sortie**. Tout paraît normal, rien ne se voit, et il suffit d'un `git checkout` par n'importe qui. Le critère est **combien de branches portent le lieu, et lesquelles** — jamais laquelle est sortie.
 - **Le nombre seul ne suffit pas non plus** : deux branches de travail peuvent disparaître toutes les deux. Seule la branche par défaut est portée par ce qui en descend.
 - **On ne conclut pas d'une absence de mesure** : une interrogation de git qui échoue rendrait une liste vide, et « vide » vaut ici l'alarme maximale. `null` veut donc dire *pas mesuré* et fait taire le module, là où `[]` veut dire *mesuré, et rien ne le porte*.

@@ -41,8 +41,24 @@ export const RISQUE = {
   PAS_SUR_LA_PAR_DEFAUT: 'pas-sur-la-branche-par-defaut',
 };
 
-/** La branche dont les autres descendent — la seule qui met un lieu à l'abri. */
-const PAR_DEFAUT = /(^|\/)main$/;
+/**
+ * La branche dont les autres descendent — la seule qui met un lieu à l'abri.
+ *
+ * ⚠️ ON NE CODE PAS SON NOM EN DUR, et c'est la CHAÎNE qui me l'a appris. La première écriture
+ * n'acceptait que `main` : elle passait sur mon poste et **échouait en intégration**, où
+ * `git init` crée `master`. Un critère qui dépend du nom qu'une machine donne à sa branche par
+ * défaut rend un verdict sur la machine, pas sur le lieu — c'est le motif inscrit ce matin en
+ * `T-20260816-0093`, et il m'a attrapé le jour même.
+ *
+ * On accepte donc les deux noms usuels, ET l'appelant peut donner celui que le dépôt déclare.
+ */
+const PAR_DEFAUT = /(^|\/)(main|master)$/;
+
+const estParDefaut = (b, nomme) => {
+  const s = String(b);
+  if (nomme) return s === nomme || s.endsWith(`/${nomme}`);
+  return PAR_DEFAUT.test(s);
+};
 
 /**
  * Le geste qui met le lieu à l'abri — jamais celui qui rétablit une branche partagée.
@@ -70,7 +86,7 @@ function gesteQuiLeve(lieu) {
  * sain au motif qu'on n'a pas su regarder. `null`/`undefined` veut donc dire « pas mesuré » et
  * fait taire ce module, là où `[]` veut dire « mesuré, et rien ne le porte ».
  */
-export function expositionDuLieu({ lieu, branchesQuiPortent, brancheCourante } = {}) {
+export function expositionDuLieu({ lieu, branchesQuiPortent, brancheCourante, brancheParDefaut = null } = {}) {
   if (!lieu) return null;
   if (!Array.isArray(branchesQuiPortent)) return null; // pas mesuré : on se tait
 
@@ -87,7 +103,7 @@ export function expositionDuLieu({ lieu, branchesQuiPortent, brancheCourante } =
     };
   }
 
-  if (branchesQuiPortent.some((b) => PAR_DEFAUT.test(String(b)))) return null;
+  if (branchesQuiPortent.some((b) => estParDefaut(b, brancheParDefaut))) return null;
 
   if (branchesQuiPortent.length === 1) {
     return {
