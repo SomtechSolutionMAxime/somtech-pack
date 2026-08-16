@@ -457,7 +457,31 @@ export function agentPorteLeNom(reponse, nom) {
  * Ce que ni l'un ni l'autre ne prouve, c'est le résultat : il se lit après coup, dans le
  * répertoire de travail réel de la session (`repertoireDeLaSession`).
  */
-export function commandesNaissance(repoRoot, quiVientAuMonde, { workspace, role = 'representant' } = {}) {
+/**
+ * LE MODÈLE ET LE MODE, DÉCLARÉS — jamais un lancement nu (T-20260816-0038).
+ *
+ * ⚠️ CE QUE COÛTE UN LANCEMENT NU. `claude` sans drapeau naît sur ce que le compte a par
+ * défaut, et personne ne sait quoi depuis l'extérieur. Un chef d'équipe qu'on croit sur un
+ * grand modèle et qui raisonne sur un petit rend un travail qu'on relira comme s'il venait de
+ * l'autre — c'est le pire des deux, parce que rien ne le dit.
+ *
+ * ⚠️ POURQUOI `acceptEdits` PAR DÉFAUT ET PAS `auto`. C'est le mode avec lequel la naissance
+ * sans écran a été MESURÉE (2026-08-16, Claude Code 2.1.233) : zéro écran, invite prête, brief
+ * pris, droits effectifs. `auto` n'a pas été mesuré ici, et poser par défaut un mode qu'on n'a
+ * pas éprouvé serait exactement le pari que ce lot existe pour supprimer. Les deux se changent
+ * par `--modele` et `--mode` ; le jour où `auto` sera mesuré, le défaut pourra bouger.
+ */
+export const MODELE_PAR_DEFAUT = 'opus';
+export const MODE_PAR_DEFAUT = 'acceptEdits';
+
+/** Combien de temps on laisse à herdr pour établir que l'agent répond. */
+const ATTENTE_NAISSANCE_MS = 120000;
+
+export function commandesNaissance(
+  repoRoot,
+  quiVientAuMonde,
+  { workspace, role = 'representant', modele = MODELE_PAR_DEFAUT, mode = MODE_PAR_DEFAUT } = {}
+) {
   if (!workspace) {
     throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
   }
@@ -468,8 +492,34 @@ export function commandesNaissance(repoRoot, quiVientAuMonde, { workspace, role 
     lieu,
     nom,
     role,
+    modele,
+    mode,
     tabCreate: ['tab', 'create', '--workspace', workspace, '--cwd', lieu, '--label', quiVientAuMonde, '--no-focus'],
-    paneRun: (paneId) => ['pane', 'run', paneId, `cd ${lieu} && claude`],
+    /**
+     * ⚠️ `agent start` REMPLACE `pane run` + la boucle d'attente (T-20260816-0038).
+     *
+     * herdr sait faire naître un agent depuis toujours, et ce dépôt le réimplémentait : une
+     * ligne écrite dans un shell, puis trente interrogations espacées de deux secondes pour
+     * deviner si ça avait pris. `agent start` fait les deux, NOMME l'agent à la naissance —
+     * ce qui ferme la fenêtre où il n'était adressable que par son numéro de pane
+     * (T-20260816-0002) — et transmet les drapeaux à `claude`, ce qu'on a vérifié par le fait :
+     * il rend son `argv` exact.
+     *
+     * ⚠️ ET SON SUCCÈS NE PROUVE PAS QU'IL EST JOIGNABLE. Mesuré le 2026-08-16 : il rend
+     * `agent_status: idle` et `interactive_ready: true` PENDANT que l'agent est parqué derrière
+     * un modal. C'est un indice, pas le fait — d'où la lecture d'écran qui suit, dans
+     * `bin/naitre.js`. Se fier à ce booléen serait « une porte sur deux » dans la primitive
+     * même qu'on adopte pour fermer le défaut.
+     */
+    agentStart: (paneId) => [
+      'agent', 'start', nom,
+      '--kind', 'claude',
+      '--pane', paneId,
+      '--timeout', String(ATTENTE_NAISSANCE_MS),
+      '--', '--model', modele, '--permission-mode', mode,
+    ],
+    /** L'écran affiché — le seul témoin qui dise si l'agent peut réellement recevoir. */
+    lireEcran: (paneId) => ['agent', 'read', paneId, '--source', 'visible', '--lines', '40'],
     interroger: (paneId) => ['agent', 'get', paneId],
     renommer: (paneId) => ['agent', 'rename', paneId, nom],
     fermer: (paneId) => ['pane', 'close', paneId],
