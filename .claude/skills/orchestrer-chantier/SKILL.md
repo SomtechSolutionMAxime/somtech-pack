@@ -304,6 +304,24 @@ Les signaux qu'un epic ne tiendra pas :
 
 **Demande-leur de te prévenir.** Tu ne peux pas mesurer le contexte d'un agent de l'extérieur — seul l'agent le sait. Le brief doit donc lui dire : *si tu sens que tu vas devoir compacter, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.* Un agent qui s'arrête proprement à mi-chemin vaut infiniment mieux qu'un agent qui finit dans le brouillard.
 
+### 3-ter. Concevoir — avant d'envoyer qui que ce soit construire
+
+> **Un brief de construction envoyé sans conception écrite est une faute, au même titre que fermer un ticket sans QA.**
+
+Un lot mal conçu ne se rattrape pas à la revue : le code est écrit, l'agent a consommé son contexte, et la revue juge la mise en œuvre d'une idée que personne n'a examinée. Le coût se paie une journée plus tard, chez le dirigeant.
+
+**Quand elle est obligatoire** : dès que le lot **n'est pas mécanique**. Le critère est *« la façon de le faire est-elle évidente ? »* — si la réponse demande à être discutée, elle ne l'est pas.
+
+**Ce qu'elle contient**, écrite **au registre**, jamais dans un terminal :
+
+1. **ce qui existe déjà et qu'on ne réécrit pas** (règle d'or n°15), nommé ;
+2. **deux ou trois conceptions possibles**, avec ce que chacune supprime, coûte, et **rend impossible à réparer plus tard** ;
+3. **une recommandation argumentée**, avec **ce qui la ferait changer d'avis** ;
+4. **ce qui n'a pas pu être établi**, marqué `[non établi]` ;
+5. **portée au dirigeant** quand elle engage un choix de produit.
+
+**Ce qui reste possible sans cérémonie** : un lot vraiment mécanique — renommer, verser, appliquer un correctif déjà spécifié.
+
 ### 4. La boucle — orchestrateur et chef d'équipe
 
 **Si tu es orchestrateur** : tu ouvres des chefs d'équipe (un par périmètre indépendant) et tu suis §4 complètement.

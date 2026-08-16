@@ -271,6 +271,19 @@ Ce que tu regardes, à chaque tour :
 |---|---|
 | **Tes agents ouverts** | qui est bloqué, qui a fini sans le dire, qui n'a plus rien à faire, qui n'a pas de nom |
 | **Le travail qui tourne** | une demande de fusion dont la chaîne est rouge, une poussée refusée au sas, une revue jamais rendue |
+| **Le registre du chantier** | un ticket fini qui traîne, un ticket qui ment sur son état, une fusion et un ticket qui ne disent pas la même chose |
+
+Sur le registre, tu poses **cinq questions**, toujours les mêmes :
+
+1. **un ticket `ready_to_deploy` qui n'a pas bougé** — du travail fini que personne ne pousse. C'est le cas le plus fréquent et le moins visible : un ticket a dormi **vingt jours** dans cet état, sa demande de fusion verte, et aucune ronde n'avait de raison de le voir ;
+2. **un ticket `in_progress` sans agent vivant** — l'agent est mort, le ticket dit encore « en cours » : **le registre ment** ;
+3. **une fusion passée dont le ticket est encore ouvert — et l'inverse**, un ticket fermé dont la fusion n'est jamais partie. Les deux moitiés, parce qu'on ne cherche jamais la seconde ;
+4. **un agent assigné qui n'existe plus** ;
+5. **un ticket ouvert sur un défaut déjà publié** — tu le **marques**, tu ne le fermes pas : publié n'est pas installé.
+
+> ⚠️ **Tu signales, tu ne fermes pas.** Fermer un ticket parce qu'une fusion est passée, c'est confondre *« la PR est mergée »* et *« le défaut est réglé »* — le raccourci exact qui a fait rouvrir un ticket déjà clos. La ronde rend une **liste d'écarts** ; qui tranche, c'est toi ou le dirigeant, **jamais elle**.
+>
+> ⚠️ **Et si tu ne trouves rien, tu te tais.** Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.** Ce que tu trouves, en revanche, va au topo du matin — pas dans un journal que personne n'ouvre.
 
 ```bash
 herdr agent list                       # l'état de chacun — bloqué, au travail, fini
@@ -292,6 +305,13 @@ Ce que le topo porte — quatre lignes, pas un journal de bord :
 - **ce qui attend une décision de lui** — nommément, avec la question.
 
 Un topo qui ne dit que du bien n'est pas lu longtemps. Ce qui n'a pas avancé se dit ; une nuit sans progrès est une information, pas un aveu.
+
+**Et deux vérifications de plus, une fois par jour — ici, pas à chaque ronde.** Leur objet bouge lentement ; les passer à l'heure ne produirait que du bruit.
+
+- **Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Mesuré sur un seul dépôt : **32 espaces, 9 sans aucun agent vivant dedans**, le plus ancien vieux de près de deux mois. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. `git worktree list`, puis retire ceux dont plus personne ne se sert (§4f).
+- **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test. Ce qu'il faut chercher est autre chose : **une ligne est-elle adressable sans ambiguïté ?** Le vrai défaut, mesuré, est **deux lignes de deux clients différents qui répondent au même destinataire** — un message a failli partir chez le mauvais client.
+
+Ces deux-là suivent la même règle que le reste de la ronde : **tu signales, tu ne nettoies pas en silence**, et si les deux sont propres, tu n'en dis rien.
 
 > **Tu seras rappelé, et le rendez-vous reste tien.** Ta naissance a posé un réveil qui te fait signe à l'heure — pour le topo comme pour ta ronde. Ce n'est pas lui qui rend des comptes : il ne sait rien de ton chantier et n'écrira jamais un mot à ta place. Il te dit que c'est l'heure.
 >
@@ -528,6 +548,24 @@ Les signaux qu'un epic ne tiendra pas :
 **Dans les deux cas, un agent = un lot qu'il peut finir d'un trait.** Jamais « il compactera et continuera » : c'est précisément ce qu'on refuse.
 
 **Demande-leur de te prévenir.** Tu ne peux pas mesurer le contexte d'un agent de l'extérieur — seul l'agent le sait. Le brief doit donc lui dire : *si tu sens que tu vas devoir compacter, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.* Un agent qui s'arrête proprement à mi-chemin vaut infiniment mieux qu'un agent qui finit dans le brouillard.
+
+### 3-ter. Concevoir — avant d'envoyer qui que ce soit construire
+
+> **Un brief de construction envoyé sans conception écrite est une faute, au même titre que fermer un ticket sans QA.**
+
+C'est l'étape qui manquait ici, et son absence a coûté. Un orchestrateur qui recevait *« règle-moi ce problème »* passait directement au brief, et **rien ne l'arrêtait — parce que rien n'avait été posé pour l'arrêter**. Or un lot mal conçu ne se rattrape pas à la revue : le code est écrit, l'agent a consommé son contexte, et la revue juge la mise en œuvre d'une idée que personne n'a examinée. Le coût d'une conception sautée se paie une journée plus tard, chez le dirigeant.
+
+**Quand elle est obligatoire** : dès que le lot **n'est pas mécanique**. Le critère est *« la façon de le faire est-elle évidente ? »* — et **si la réponse demande à être discutée, c'est qu'elle ne l'est pas**.
+
+**Ce qu'elle contient**, et elle s'écrit **au registre**, jamais dans un terminal :
+
+1. **ce qui existe déjà et qu'on ne réécrit pas** (règle d'or n°15), nommé — compétences, outils, mécanismes en place. C'est le point qui fait gagner le plus : la moitié d'un lot est souvent déjà écrite ailleurs ;
+2. **deux ou trois conceptions possibles**, avec pour chacune ce qu'elle supprime, ce qu'elle coûte, et **ce qu'elle rend impossible à réparer plus tard** ;
+3. **une recommandation argumentée**, avec **ce qui la ferait changer d'avis** ;
+4. **ce qui n'a pas pu être établi**, marqué `[non établi]` ;
+5. **portée au dirigeant** quand elle engage un choix de produit — par ta ligne, au moment où tu la poses, pas une fois le travail commencé.
+
+**Ce qui reste possible sans cérémonie** : un lot vraiment mécanique — renommer, verser, appliquer un correctif déjà spécifié. La conception n'est pas un péage ; c'est ce qui évite de payer plus tard, et beaucoup plus cher.
 
 ### 4. La boucle — orchestrateur et chef d'équipe
 
