@@ -25,8 +25,27 @@ trap 'rm -rf "$WORK"' EXIT
 ok() { echo "  ✅ $1"; PASS=$((PASS+1)); }
 ko() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 
+# ⚠️ L'ISOLATION D'ABORD (T-20260816-0046). Sans elle, les sous-shells héritent des jetons du
+# poste : le faux « claude » rapporte alors la VRAIE valeur, les comparaisons échouent, et les
+# messages ci-dessous la recopiaient en clair. C'est arrivé — une revue a exposé une vraie clé
+# Somcraft dans sa transcription en lançant ce fichier. Un essai qui mesure l'environnement de
+# celui qui le lance ne mesure pas le code ; et quand il le raconte, il le divulgue.
+for cle in SOMTECH_DESK_API_KEY SOMCRAFT_MCP_API_KEY; do unset "$cle"; done
+
 # Jeton factice reconnaissable : s'il fuit quelque part, on le verra.
 FAKE="jeton-factice-ne-doit-jamais-sortir-0001"
+
+# ⚠️ ON QUALIFIE, ON NE RECOPIE PAS. La valeur attendue est factice ; une valeur INATTENDUE peut
+# être un secret vivant, et c'est précisément celle que les messages d'échec montraient.
+qualifier() {
+  case "$1" in
+    "$FAKE")     printf 'la valeur attendue' ;;
+    autre)       printf 'la seconde valeur du lieu unique' ;;
+    __ABSENT__)  printf 'rien — la variable n’est pas arrivée' ;;
+    '')          printf 'aucun témoin écrit' ;;
+    *)           printf 'une AUTRE valeur, non affichée : elle peut être un secret vivant' ;;
+  esac
+}
 
 echo "== Syntaxe =="
 bash -n "$SRC" && ok "mcp-env.sh : bash -n OK" || ko "mcp-env.sh : erreur de syntaxe"
@@ -46,7 +65,7 @@ chmod +x "${FAKEBIN}/claude"
 
 GOT=$(SOMTECH_MCP_ENV_FILE="$ENVF" PATH="${FAKEBIN}:${PATH}" bash -c '. "$1"; claude' _ "$SRC")
 [ "$GOT" = "${FAKE}|autre" ] && ok "le processus lancé par l'\''enveloppe reçoit les jetons" \
-                             || ko "attendu '${FAKE}|autre', obtenu '$GOT'"
+                             || ko "obtenu $(qualifier "$GOT")"
 
 # Les variables doivent être EXPORTÉES (visibles par un processus enfant), pas
 # seulement définies dans le shell : c'est un processus enfant — `claude` — qui
@@ -83,17 +102,17 @@ GOT=$(SOMTECH_MCP_ENV_FILE="$ENVF" PATH="${FAKEBIN}:${PATH}" \
        SOMTECH_DESK_API_KEY=valeur-du-depot bash -c '. "$1"; claude' _ "$SRC")
 case "$GOT" in
   valeur-du-depot\|*) ok "la valeur déjà fournie est conservée" ;;
-  *) ko "le lieu unique a écrasé la valeur du dépôt : '$GOT'" ;;
+  *) ko "le lieu unique a écrasé la valeur du dépôt : $(qualifier "$GOT")" ;;
 esac
 case "$GOT" in
   *\|autre) ok "la variable absente est bien comblée par le lieu unique" ;;
-  *) ko "la variable manquante n'a pas été comblée : '$GOT'" ;;
+  *) ko "la variable manquante n'a pas été comblée : $(qualifier "$GOT")" ;;
 esac
 
 echo "== Sans lieu unique, l'enveloppe lance quand même \`claude\` =="
 GOT=$(SOMTECH_MCP_ENV_FILE="${WORK}/inexistant" PATH="${FAKEBIN}:${PATH}" bash -c '. "$1"; claude' _ "$SRC")
 [ "$GOT" = "VIDE|VIDE" ] && ok "session ouverte sans jeton (le hook de naissance prendra le relais)" \
-                         || ko "obtenu '$GOT' — l'enveloppe a empêché le lancement"
+                         || ko "obtenu $(qualifier "$GOT") — l'enveloppe a empêché le lancement"
 
 echo "== Un chargement explicite EXPORTE vraiment (le lanceur s'en sert en ceinture) =="
 # claude-swt appelle mcp_env_load explicitement dans son sous-shell, en plus de
