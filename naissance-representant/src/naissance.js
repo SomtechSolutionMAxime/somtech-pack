@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { execFileSync } from 'node:child_process';
 import { join, relative, sep } from 'node:path';
 import { GABARITS, racineLieu } from '../../ligne-directe/src/lieu-agent.js';
+import { expositionDuLieu } from '../../ligne-directe/src/lieu-expose.js';
 import { role as roleDe } from '../../ligne-directe/src/roles.js';
 
 /** La commande qui POSE le lieu de chaque rôle — citée dans le refus, pour qu'il dise quoi faire. */
@@ -121,6 +122,28 @@ export function verifierLieu(repoRoot, nom, role = 'representant') {
   const manquants = GABARITS.filter((f) => !existsSync(join(chemin, f)));
   if (manquants.length > 0) throw new LieuAbsent(nom, chemin, manquants, role);
   return chemin;
+}
+
+/**
+ * Ce lieu peut-il être retiré sous l'agent qui va l'habiter ? — rendu à la NAISSANCE, quand il
+ * reste tout le temps d'agir (T-20260814-0014).
+ *
+ * ⚠️ LE PLUS TÔT POSSIBLE PLUTÔT QUE LE PLUS RÉGULIÈREMENT POSSIBLE. La ronde passe, mais elle
+ * passe APRÈS : entre-temps l'agent est né, a travaillé, a peut-être écrit dans un lieu qu'un
+ * `git checkout` d'un tiers emportera. La naissance est le seul moment où personne n'a encore
+ * rien perdu — c'est là qu'un avertissement vaut quelque chose.
+ *
+ * ⚠️ ELLE SIGNALE, ELLE N'EMPÊCHE PAS DE NAÎTRE. Un lieu exposé reste un lieu utilisable, et
+ * refuser la naissance pour ça coûterait plus que le risque. Et le geste nommé n'est JAMAIS de
+ * rétablir une branche : ce réflexe-là remettrait les fichiers en écrasant le travail de la
+ * session qui y a commité depuis — le rattrapage plus dommageable que la panne.
+ *
+ * `branchesQuiPortent` est INJECTÉ : ce module ne parle pas à git, il juge ce qu'on a mesuré.
+ */
+export function expositionAlaNaissance(repoRoot, nom, role = 'representant', { branchesQuiPortent } = {}) {
+  const chemin = cheminLieu(repoRoot, nom, role);
+  const relatif = chemin.startsWith(repoRoot) ? chemin.slice(repoRoot.length).replace(/^[/\\]+/, '') : chemin;
+  return expositionDuLieu({ lieu: relatif, branchesQuiPortent });
 }
 
 /**
