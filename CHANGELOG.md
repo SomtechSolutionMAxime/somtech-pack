@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.59.0] - 2026-08-16
+
+### Corrigé
+- **Les trois refus de la livraison nomment désormais la sortie** (T-20260816-0045, PR #255). Un agent a tenté de joindre son orchestrateur **239 fois**. Chaque refus était **juste** — la boîte de saisie du destinataire contenait un texte collé, et la garde a tenu **288 fois** plutôt que de coller deux messages en un seul que personne n'aurait écrit. **Aucun ne disait quoi faire.**
+- **L'invariant est nommé, pas laissé en remarque** : *un refus qui ne nomme pas la sortie est un refus qui bloque*. Il ne protège plus, il remplace un défaut par un autre. Chaque refus dit donc deux choses : **ce qui bloque**, avec les valeurs réellement trouvées, et **le geste exact qui le lève**, en disant à qui il appartient quand ce n'est pas au lecteur.
+- **Les trois, pas seulement celui de la mesure** — boîte pleine, boîte illisible, session indisponible. Ils ont la même forme et le même manque ; n'en traiter qu'un aurait rejoué « une porte sur deux » sur un lot dont l'objet *est* ce motif.
+- **La boîte pleine avoue ce qu'elle ne peut pas faire** : soumettre ou effacer ce texte appartient à quelqu'un devant ce pane, et personne ne peut le faire à sa place — vider la boîte d'autrui serait taper à sa place. Un aveu explicite sur sa propre limite vaut mieux qu'un silence qui laisse chercher.
+- **Aucun refus n'a été affaibli.** On ajoute des mots, on ne change pas un seul verdict — un essai garde les sept cas de refus et le cas nominal. Un correctif qui aurait rendu un cas permissif aurait été **pire que le défaut**.
+### Technique
+- Les valeurs viennent de la **mesure**, jamais d'un gabarit : deux panes différents produisent deux messages différents, et **sans pane connu le refus se tait sur les commandes** plutôt que d'écrire `herdr agent read <pane>` — un gabarit non substitué est une commande que le lecteur ne peut pas exécuter, c'est-à-dire le défaut qu'on ferme retourné contre nous.
+- Le pane est passé par l'appelant réel, et un essai d'intégration le prouve : sans lui, tous les essais unitaires resteraient verts pendant que l'expéditeur réel recevrait encore un refus sans geste.
+- **La commande conseillée est celle que le code utilise lui-même** — relevé en revue de fond, et c'est ce lot retourné contre lui : le refus « boîte illisible » renvoyait vers `herdr agent read <pane>` alors que le module lit cet écran en `--format ansi`, parce que le **gris** est la seule chose qui distingue une suggestion d'un reste. Conseiller la commande sans son option enverrait le lecteur diagnostiquer avec moins que ce qu'on s'accorde à soi-même.
+- Le `[non établi]` du ticket **reste non établi** : savoir si un agent `done` à boîte pleine dispose d'une file exploitable exigerait d'écrire dans la boîte de quelqu'un pour voir ce qui arrive — exactement ce qu'on se refuse. Un essai garde que le refus **ne promet aucune file**.
+
 ## [1.58.0] - 2026-08-16
 
 ### Ajouté
@@ -20,6 +34,9 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Les ADR se lisent au miroir Somcraft, et une absence ne prouve rien.** Le seul pointeur du métier envoyait vers un dossier **illisible depuis le poste** (T-20260816-0007). Le miroir est par ailleurs **incomplet** — 26 ADR visibles, douze numéros absents —, donc « je ne trouve pas d'ADR sur ce sujet » ne conclut rien et s'écrit `[non établi]`.
 - **Le feed entre au cadrage**, avant de brieffer qui que ce soit — et la règle qui va avec : le feed s'amende lui-même, le post le plus récent gagne.
 - **L'ADR applicable et le manifeste `architecture.yaml` entrent dans ce que le brief doit porter** ; l'ordre de fermeture `in_progress → ready_to_deploy → merge → completed` est posé au niveau des stories, plus seulement des jalons.
+- **L'écho entre pairs ne se déclare plus « remis » sans l'avoir prouvé** (T-20260815-0021, PR #254). Porte jumelle de `T-20260815-0011` : depuis ce lot-là, `herdr.remettre()` calcule le verdict de prise pour **tous** ses appelants. Il y en a trois dans le veilleur ; deux le lisaient, `echoAuPair` le jetait et rendait `remis: true` sur la seule absence d'exception. Le fait était là, calculé, disponible, et un seul chemin ne le regardait pas.
+- **Ce que ça coûtait tient dans la question du dirigeant** — *« peut-on parler d'un agent à l'autre ? »*. La réponse restait « oui » même quand ça ne marchait pas : un gestionnaire relance son orchestrateur, obtient « remis », et attend une réponse que personne n'a lue.
+- **« Pas pris » n'est pas « pas parti »**, et les deux modes de panne ne se confondent pas : un pane qui **garde le texte dans sa boîte** est un échec qu'on constate ; un pane où **rien ne bouge** est un silence qu'on ne sait pas lire. Le second est l'état exact des trois panes mesurés le 2026-08-15, tous `done` avant, tous `done` après. Les deux rendent « pas remis », avec une raison différente, dite à qui a parlé.
 
 ### Technique
 
@@ -27,36 +44,11 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Pour les deux garanties sans aucun filet, on garde le fait et non la tournure** : un motif `inverse` interdit la polarité contraire quels que soient les mots qui l'amènent. Deux mutations le prouvent en écrivant l'autorisation **sans une seule négation** — invisible pour un filtre de tournures.
 - **`RENVERSEMENT` déclare dans le code ce qu'il vaut** : un filtre des formulations connues, pas une garantie de polarité. Une garde muette sur sa portée est prise pour une preuve. Le fond — *nous gardons de la prose avec du texte* — est inscrit en dette (T-20260816-0064).
 - **Le méta-test ne se satisfait plus d'un commentaire.** Sa première version cherchait le mot `exigePolarite(` dans le source ; une revue l'a retournée en laissant ce mot en commentaire. Il exige désormais l'**absence** de la forme vulnérable — et a immédiatement trouvé **treize** assertions vulnérables dans les contrôles de ce lot même.
-
-### Corrigé
-
-- **Les trois refus de la livraison nomment désormais la sortie** (T-20260816-0045, PR #255). Un agent a tenté de joindre son orchestrateur **239 fois**. Chaque refus était **juste** — la boîte de saisie du destinataire contenait un texte collé, et la garde a tenu **288 fois** plutôt que de coller deux messages en un seul que personne n'aurait écrit. **Aucun ne disait quoi faire.**
-- **L'invariant est nommé, pas laissé en remarque** : *un refus qui ne nomme pas la sortie est un refus qui bloque*. Il ne protège plus, il remplace un défaut par un autre. Chaque refus dit donc deux choses : **ce qui bloque**, avec les valeurs réellement trouvées, et **le geste exact qui le lève**, en disant à qui il appartient quand ce n'est pas au lecteur.
-- **Les trois, pas seulement celui de la mesure** — boîte pleine, boîte illisible, session indisponible. Ils ont la même forme et le même manque ; n'en traiter qu'un aurait rejoué « une porte sur deux » sur un lot dont l'objet *est* ce motif.
-- **La boîte pleine avoue ce qu'elle ne peut pas faire** : soumettre ou effacer ce texte appartient à quelqu'un devant ce pane, et personne ne peut le faire à sa place — vider la boîte d'autrui serait taper à sa place. Un aveu explicite sur sa propre limite vaut mieux qu'un silence qui laisse chercher.
-- **Aucun refus n'a été affaibli.** On ajoute des mots, on ne change pas un seul verdict — un essai garde les sept cas de refus et le cas nominal. Un correctif qui aurait rendu un cas permissif aurait été **pire que le défaut**.
-
-### Technique
-
-- Les valeurs viennent de la **mesure**, jamais d'un gabarit : deux panes différents produisent deux messages différents, et **sans pane connu le refus se tait sur les commandes** plutôt que d'écrire `herdr agent read <pane>` — un gabarit non substitué est une commande que le lecteur ne peut pas exécuter, c'est-à-dire le défaut qu'on ferme retourné contre nous.
-- Le pane est passé par l'appelant réel, et un essai d'intégration le prouve : sans lui, tous les essais unitaires resteraient verts pendant que l'expéditeur réel recevrait encore un refus sans geste.
-- **La commande conseillée est celle que le code utilise lui-même** — relevé en revue de fond, et c'est ce lot retourné contre lui : le refus « boîte illisible » renvoyait vers `herdr agent read <pane>` alors que le module lit cet écran en `--format ansi`, parce que le **gris** est la seule chose qui distingue une suggestion d'un reste. Conseiller la commande sans son option enverrait le lecteur diagnostiquer avec moins que ce qu'on s'accorde à soi-même.
-- Le `[non établi]` du ticket **reste non établi** : savoir si un agent `done` à boîte pleine dispose d'une file exploitable exigerait d'écrire dans la boîte de quelqu'un pour voir ce qui arrive — exactement ce qu'on se refuse. Un essai garde que le refus **ne promet aucune file**.
-
-## [Non-versionné] - 2026-08-16
-
-### Corrigé
-
-- **L'écho entre pairs ne se déclare plus « remis » sans l'avoir prouvé** (T-20260815-0021, PR #254). Porte jumelle de `T-20260815-0011` : depuis ce lot-là, `herdr.remettre()` calcule le verdict de prise pour **tous** ses appelants. Il y en a trois dans le veilleur ; deux le lisaient, `echoAuPair` le jetait et rendait `remis: true` sur la seule absence d'exception. Le fait était là, calculé, disponible, et un seul chemin ne le regardait pas.
-- **Ce que ça coûtait tient dans la question du dirigeant** — *« peut-on parler d'un agent à l'autre ? »*. La réponse restait « oui » même quand ça ne marchait pas : un gestionnaire relance son orchestrateur, obtient « remis », et attend une réponse que personne n'a lue.
-- **« Pas pris » n'est pas « pas parti »**, et les deux modes de panne ne se confondent pas : un pane qui **garde le texte dans sa boîte** est un échec qu'on constate ; un pane où **rien ne bouge** est un silence qu'on ne sait pas lire. Le second est l'état exact des trois panes mesurés le 2026-08-15, tous `done` avant, tous `done` après. Les deux rendent « pas remis », avec une raison différente, dite à qui a parlé.
-
-### Technique
-
 - **Le double d'essai de la ligne du chantier réimplémentait la preuve — c'était le vrai défaut.** Il rendait `{ delivered: true }` à tout coup, donc il était **plus permissif que le service qu'il double**, et il ne pouvait pas montrer un pane où rien ne bouge. Un essai écrit contre lui aurait prouvé que l'essai est d'accord avec lui-même. On double désormais le **transport** — le binaire `herdr` sur le PATH, `tests/aide/faux-herdr.js` — et le vrai module rend son verdict. Aucune assertion de ce fichier n'a changé de sens : elles disent maintenant ce qu'elles prétendaient dire.
 - **La même porte jumelle a été trouvée une fois de plus, en revue de fond** : `diffuserConsigne` — corrigée au lot précédent — lisait encore `pris === false`, soit la forme fragile que ce lot-ci dénonce dans son propre commentaire. Elle exige désormais le verdict, et un essai le garde. Deux doubles anciens qui omettaient le verdict le **déclarent** maintenant, sciemment et commenté : un double qui affirme la prise doit le faire par décision, jamais par omission.
 - **Le troisième témoin — le message mis en file par un pair déjà occupé — n'était éprouvé nulle part en intégration**, le double ne sachant pas le jouer. C'est pourtant le cas le plus fréquent. Sans lui, un écho parfaitement arrivé serait compté « pas remis » : c'est la moitié qui empêche la garde de devenir un refus abusif.
 - La garde exige **le fait, pas l'absence de démenti** : lire `pris === false` laisserait passer un `remettre` qui ne rend rien — précisément l'ancien double. La forme durcie est elle-même gardée par un essai, parce qu'elle ne l'était pas : la relâcher laissait les 489 essais verts.
+
 ## [1.57.0] - 2026-08-16
 
 ### Ajouté
