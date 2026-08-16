@@ -123,7 +123,12 @@ function agentsQuiTravaillent({ panes = ['w1:p1'], refuse = [] } = {}) {
       const cible = this.fichier(pane);
       rmSync(cible, { force: true });
       writeFileSync(cible, texte);
-      return { delivered: true };
+      // ⚠️ CE DOUBLE AFFIRME LA PRISE, ET IL LE FAIT SCIEMMENT (T-20260815-0021). Le vrai
+      // `remettre()` rend `{ pris, temoin }` ; un double qui l'omettait était plus permissif
+      // que le service, et c'est la porte par laquelle un « remis » non prouvé passait. Ces
+      // essais portent sur le ROUTAGE — qui reçoit quoi — pas sur la preuve de prise, qui a
+      // ses propres essais. On déclare donc la prise plutôt que de la taire.
+      return { delivered: true, pris: true, temoin: 'sortie-de-l-attente' };
     },
     async agents() {
       return panes.map((p) => ({

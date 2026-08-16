@@ -1938,7 +1938,12 @@ export class Veilleur {
         // Une consigne coincée dans le pane d'un orchestrateur était donc comptée « remise ».
         // La machinerie qui le savait tournait à côté, sans que personne l'écoute.
         const r = await this.herdr.remettre(agent.pane_id, cadre, { socket: agent.herdr_socket });
-        if (r?.pris === false) {
+        // ⚠️ ON EXIGE LE VERDICT, PAS L'ABSENCE DE DÉMENTI — relevé en revue de fond de
+        // `T-20260815-0021`, et c'est encore la porte jumelle : ce chemin lisait
+        // `pris === false`, donc un `remettre` qui ne rend RIEN repassait pour « remis ».
+        // C'est exactement la forme que l'ancien double d'essai rendait (`{ delivered: true }`),
+        // et c'est ainsi que le défaut d'à côté a survécu à une suite verte.
+        if (!r?.pris) {
           // Pas un échec — le texte est peut-être arrivé — mais pas une remise prouvée non
           // plus. On ne le compte pas parmi les remis, et on le DIT plutôt que de l'arrondir.
           nonProuves.push(agent.pane_id);

@@ -415,6 +415,23 @@ test('UNE CONSIGNE DONT LA PRISE N’EST PAS CONSTATÉE N’EST PAS COMPTÉE COM
   });
 });
 
+test('UNE CONSIGNE DONT LA REMISE NE REND AUCUN VERDICT N’EST PAS COMPTÉE — on exige le fait', async () => {
+  // ⚠️ MÊME GARDE, MÊME PIÈGE QUE `echoAuPair` (T-20260815-0021) : lire `pris === false`
+  // demande à `remettre` de DÉMENTIR la prise, et laisse passer celui qui ne dit rien. C'est
+  // la forme exacte de l'ancien double d'essai — `{ delivered: true }`, sans verdict — et
+  // c'est ainsi qu'un défaut de cette famille survit à une suite verte.
+  const h = herdrQui({ pris: true });
+  const lieu = lieuDOrchestrateur();
+  h.agents = async () => [{ agent: 'claude', pane_id: PANE, foreground_cwd: lieu, herdr_socket: null }];
+  h.remettre = async () => ({ delivered: true }); // aucun verdict rendu
+  await avecPoste({ herdr: h }, async ({ veilleur }) => {
+    veilleur.registre.communs = { orchestrateur: { canal_id: 'C_COMMUN', canal_nom: 'les-orchestrateurs', autorises: [UDIR] } };
+    const r = await veilleur.diffuserConsigne(parole('la consigne', { channel: 'C_COMMUN' }));
+
+    assert.equal(r.remis, 0, 'sans verdict, on ne compte rien comme remis');
+  });
+});
+
 test('UNE CONSIGNE PRISE EST COMPTÉE, ELLE — la garde ne rend pas le compteur inerte', async () => {
   const h = herdrQui({ pris: true });
   const lieu = lieuDOrchestrateur();

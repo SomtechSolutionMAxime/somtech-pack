@@ -28,6 +28,12 @@
 //     panes mesurés le 2026-08-15 — tous `done` avant, tous `done` après. Le double d'avant ne
 //     savait pas le jouer, donc rien ne pouvait le voir.
 //
+//   • EN FILE — le pair travaillait DÉJÀ et travaille encore : même statut avant et après,
+//     boîte vide des deux côtés. Le seul témoin est le marqueur de file d'attente qui APPARAÎT
+//     à l'écran. ⚠️ Ce scénario a été ajouté après une revue de fond qui a relevé que le double
+//     ne savait pas le jouer : le troisième témoin n'était donc éprouvé nulle part en
+//     intégration, et un pair occupé — le cas le plus fréquent — n'était couvert par rien.
+//
 //   • COLLANT — le texte reste dans la boîte de saisie et l'envoi ne le décoince pas.
 //     `remettre()` JETTE. Distinct du muet : ici on sait que ça n'est pas passé ; là on ne
 //     sait rien. Les deux rendent « pas remis », pour deux raisons qu'il ne faut pas confondre.
@@ -48,8 +54,9 @@ const brut = (s) => { process.stdout.write(s); process.exit(0); };
 // L'ÉCRAN, tel qu'un terminal le rend : la boîte de saisie est le dernier couple de filets,
 // et son contenu commence après l'invite. C'est la STRUCTURE que \`contenuBoite\` lit — un
 // double qui rendrait n'importe quoi ferait passer une boîte pour illisible, pas pour vide.
-const ecran = (boite) => [
+const ecran = (boite, file) => [
   'un peu de sortie precedente',
+  ...(file ? ['Press up to edit queued messages'] : []),
   '────────────────────────────',
   '❯ ' + boite,
   '────────────────────────────',
@@ -78,7 +85,8 @@ if (a[0] === 'agent' && a[1] === 'prompt') {
   appendFileSync(join(ETAT, pane.replace(/[^a-z0-9]/gi, '_') + '.txt'), texte);
   if (e.colle) e.boite = texte;                       // le texte reste dans la boîte
   else e.boite = '';                                  // il est parti
-  if (!e.muet) e.statut = 'working';                  // la session quitte l'attente
+  if (e.file) e.enFile = true;                        // il rejoint la file d'un pair occupé
+  if (!e.muet && !e.file) e.statut = 'working';       // la session quitte l'attente
   ecrire(pane, e);
   dit({ result: { delivered: true, pane_id: pane } });
 }
@@ -89,7 +97,7 @@ if (a[0] === 'agent' && a[1] === 'send-keys') {
 }
 
 if (a[0] === 'agent' && a[1] === 'get') dit({ result: { agent: { pane_id: pane, agent_status: e.statut } } });
-if (a[0] === 'agent' && a[1] === 'read') brut(ecran(e.boite));
+if (a[0] === 'agent' && a[1] === 'read') brut(ecran(e.boite, e.enFile));
 
 dit({ error: { code: 'unsupported', message: a.join(' ') } });
 `;
@@ -123,8 +131,14 @@ export function posteHerdr(racine, agents, nom = 'herdr') {
       return existsSync(f) ? readFileSync(f, 'utf8') : null;
     },
     /** Déclare un pane, et le scénario qu'il joue. Sans appel, un pane est INCONNU de herdr. */
-    pane(id, { statut = 'idle', boite = '', muet = false, colle = false } = {}) {
-      writeFileSync(join(etat, `${id.replace(/[^a-z0-9]/gi, '_')}.json`), JSON.stringify({ statut, boite, muet, colle }));
+    pane(id, { statut = 'idle', boite = '', muet = false, colle = false, file = false } = {}) {
+      // `file` implique un pair DÉJÀ occupé : son statut ne bougera pas, seul le marqueur
+      // apparaîtra. Le poser à `idle` donnerait « sortie de l'attente » et prouverait un
+      // autre témoin que celui qu'on veut éprouver.
+      writeFileSync(
+        join(etat, `${id.replace(/[^a-z0-9]/gi, '_')}.json`),
+        JSON.stringify({ statut: file ? 'working' : statut, boite, muet, colle, file, enFile: false })
+      );
       return this;
     },
     async vivant(pane) {

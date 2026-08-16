@@ -181,6 +181,22 @@ test('DANS L’AUTRE SENS AUSSI — le gestionnaire vers son orchestrateur', asy
   });
 });
 
+test('UN PAIR DÉJÀ AU TRAVAIL QUI MET LE MESSAGE EN FILE EST UN ÉCHO REMIS — le troisième témoin', async () => {
+  // ⚠️ RELEVÉ EN REVUE DE FOND : le double ne savait pas jouer ce scénario, donc le troisième
+  // témoin n'était éprouvé nulle part en intégration. Et c'est le cas le PLUS FRÉQUENT — un
+  // pair occupé. Le statut ne bouge pas (`working` avant, `working` après), la boîte est vide
+  // des deux côtés : sans ce témoin, un écho parfaitement arrivé serait compté « pas remis ».
+  //
+  // C'est la moitié qui empêche la garde de devenir un refus abusif.
+  await avecPoste({ pane: { [PANE_GEST]: { file: true } } }, async ({ veilleur, poste }) => {
+    const r = await veilleur.echoAuPair(LIGNE, PANE_ORCH, 'quand tu auras une minute');
+
+    assert.equal(r.remis, true, 'le message est en file : il sera pris');
+    assert.equal(r.temoin, 'file-d-attente', 'et on dit PAR QUOI on le sait');
+    assert.match(poste.recu(PANE_GEST), /une minute/);
+  });
+});
+
 // ═════════════════ 3. CE QUE LE VERDICT NE DOIT PAS AVALER
 
 test('UNE REMISE QUI NE REND AUCUN VERDICT N’EST PAS UNE REMISE PROUVÉE — on exige le fait', async () => {
