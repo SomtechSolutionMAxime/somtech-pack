@@ -13,6 +13,9 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Le renversement que ce lot nomme** : ses exécutants, qui vivent quelques heures, naissent chacun dans un worktree à eux. **Lui, qui vit des jours, ne l'est pas.**
 - **Et ça mord à la NAISSANCE**, pas seulement dans une ronde — *le plus tôt possible plutôt que le plus régulièrement possible*. La ronde passe après : l'agent est né, a travaillé, a peut-être écrit dans un lieu qu'un `git checkout` emportera. À la naissance, **personne n'a encore rien perdu**.
 
+- **La compétence de pose dit désormais ce qu'elle laisse derrière elle** — et donne le geste : faire naître l'orchestrateur **dans son propre espace de travail**, exactement comme il fera naître ses chefs d'équipe. La mécanique existait, éprouvée, décrite pour eux ; elle n'avait jamais été retournée vers celui qui l'applique.
+- ⚠️ **Et elle INTERDIT le rattrapage évident** : rétablir la branche remettrait les fichiers **et écraserait le travail de la session qui y a commité depuis**. Elle donne à la place le geste qui restaure **sans toucher à la branche partagée** (`git checkout <branche-du-lieu> -- …`), et l'ordre : vérifier que tout est poussé, restaurer, le dire. *La première fois, la conduite juste a tenu parce que son auteur venait d'écrire le ticket — ce n'est pas une garde, c'est de la chance.*
+
 ### Technique
 
 - ⚠️ **Le critère n'est PAS « est-ce sur `main` »**, et c'est le cœur du lot. Cette formulation aurait déclaré **sain le pire des cas**, mesuré sur un orchestrateur vivant : son lieu n'est porté que par sa propre branche, **et cette branche est celle qui est sortie**. Tout paraît normal, rien ne se voit, et il suffit d'un `git checkout` par n'importe qui. Le critère est **combien de branches portent le lieu, et lesquelles** — jamais laquelle est sortie.
