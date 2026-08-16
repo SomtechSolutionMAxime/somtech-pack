@@ -999,9 +999,38 @@ export class Veilleur {
       versRole: versPair ? pair.role : 'orchestrateur',
     });
     try {
-      await this.herdr.remettre(vers, cadre, { socket: socket || undefined });
-      journaliser(`écho remis — #${ligne.canal_nom} : ${paneEmetteur} → ${vers}`);
-      return { remis: true, pane: vers, nom: versPair ? pair.nom : null };
+      // ═══ « ÉCRIT DANS LE PANE » N'EST PAS « PRIS » — ici comme ailleurs (T-20260815-0021).
+      //
+      // ⚠️ CE FAIT ÉTAIT DÉJÀ CALCULÉ, ET SEUL CE CHEMIN LE JETAIT. Depuis `T-20260815-0011`,
+      // `remettre()` lit l'état du pane avant d'écrire, relit après, et rend `pris` selon que
+      // quelque chose a changé. Trois appelants dans ce fichier ; les deux autres le lisent.
+      // Celui-ci rendait `remis: true` sur la seule absence d'exception — donc un écho qui
+      // dort dans la session d'un pair était annoncé remis à celui qui l'avait envoyé.
+      //
+      // Ce que ça coûtait tient dans la question du dirigeant — « peut-on parler d'un agent à
+      // l'autre ? ». La réponse restait « oui » même quand ça ne marchait pas : un gestionnaire
+      // relance son orchestrateur, obtient « remis », et attend une réponse que personne n'a lue.
+      //
+      // ⚠️ ET « PAS PRIS » N'EST PAS « PAS PARTI ». Le message est peut-être arrivé — on refuse
+      // seulement de l'AFFIRMER, et on le dit en clair à qui a parlé plutôt que de le taire.
+      const remise = await this.herdr.remettre(vers, cadre, { socket: socket || undefined });
+      // ⚠️ ON EXIGE LE VERDICT, ON NE SE CONTENTE PAS DE SON ABSENCE DE DÉMENTI. Lire
+      // `pris === false` laisserait passer un `remettre` qui ne rend rien du tout — donc un
+      // double d'essai plus permissif que le service, la porte même que ce lot ferme.
+      if (!remise?.pris) {
+        journaliser(
+          `écho NON prouvé — #${ligne.canal_nom} : ${paneEmetteur} → ${vers} : ` +
+            `le texte est parti, mais rien ne montre que l'agent l'a pris`
+        );
+        return {
+          remis: false,
+          pane: vers,
+          nom: versPair ? pair.nom : null,
+          raison: 'le texte est parti, mais la prise par l’agent n’a pas été constatée',
+        };
+      }
+      journaliser(`écho remis — #${ligne.canal_nom} : ${paneEmetteur} → ${vers} (${remise?.temoin || 'pris'})`);
+      return { remis: true, pane: vers, nom: versPair ? pair.nom : null, temoin: remise?.temoin ?? null };
     } catch (err) {
       journaliser(`ÉCHEC de l'écho — #${ligne.canal_nom} : ${paneEmetteur} → ${vers} : ${err.message}`);
       return { remis: false, pane: vers, raison: err.message };
@@ -1909,7 +1938,12 @@ export class Veilleur {
         // Une consigne coincée dans le pane d'un orchestrateur était donc comptée « remise ».
         // La machinerie qui le savait tournait à côté, sans que personne l'écoute.
         const r = await this.herdr.remettre(agent.pane_id, cadre, { socket: agent.herdr_socket });
-        if (r?.pris === false) {
+        // ⚠️ ON EXIGE LE VERDICT, PAS L'ABSENCE DE DÉMENTI — relevé en revue de fond de
+        // `T-20260815-0021`, et c'est encore la porte jumelle : ce chemin lisait
+        // `pris === false`, donc un `remettre` qui ne rend RIEN repassait pour « remis ».
+        // C'est exactement la forme que l'ancien double d'essai rendait (`{ delivered: true }`),
+        // et c'est ainsi que le défaut d'à côté a survécu à une suite verte.
+        if (!r?.pris) {
           // Pas un échec — le texte est peut-être arrivé — mais pas une remise prouvée non
           // plus. On ne le compte pas parmi les remis, et on le DIT plutôt que de l'arrondir.
           nonProuves.push(agent.pane_id);
