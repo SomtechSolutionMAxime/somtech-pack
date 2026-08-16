@@ -128,7 +128,16 @@ test('les garanties de polarité se gardent avec exigePolarite, jamais avec une 
     // soit portée par un `assert.match` sur le CORPS de la section — c'est la forme exacte qui
     // est tombée. Les `assert.match` sur une ligne déjà extraite restent permis : ils ne
     // gardent pas une règle, ils lisent une valeur.
-    const vulnerables = code.match(/assert\.match\(\s*s\.corps|assert\.match\(\s*tete/g) || [];
+    // ⚠️ LE DÉTECTEUR EST LUI AUSSI UN FILTRE — il ne connaît que les formes qu'on lui a apprises.
+    // Sa première version ne voyait que `assert.match(s.corps, …)`. Une revue a trouvé que deux
+    // `assert.ok(/…/.test(s.corps))` portaient exactement la même faille, dans des contrôles
+    // pourtant inscrits ici : couverts par la promesse, jamais vérifiés par elle (T-20260816-0066).
+    // Toute forme qui applique une regex au CORPS d'une section garde une règle et doit passer par
+    // `exigePolarite` ; si tu en inventes une troisième, elle t'échappera jusqu'à ce que quelqu'un
+    // l'ajoute ici. C'est la limite de ce genre de garde, et elle est écrite plutôt que tue.
+    const vulnerables = code.match(
+      /assert\.match\(\s*(?:s\.corps|tete)|assert\.ok\(\s*[^)]*\.test\(\s*(?:s\.corps|tete)\s*\)/g,
+    ) || [];
     assert.deepEqual(
       vulnerables, [],
       `« ${id} » porte encore ${vulnerables.length} assertion(s) de garantie en assert.match sur le `

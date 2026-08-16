@@ -1712,9 +1712,9 @@ export const CONTROLES = [
         'le mot à employer quand on ne trouve pas : `[non établi]`',
       );
       // POLARITÉ : l'interdit doit porter sur le fait de CONCLURE, pas seulement recommander la prudence.
-      assert.ok(
-        /ne conclus (donc )?jamais|tu ne conclus JAMAIS|ne prouve rien/i.test(s.corps),
-        'l’interdit doit être écrit en négation ferme — « ne conclus jamais d’une absence », pas « sois prudent »',
+      exigePolarite(
+        s.corps, /ne conclus (donc )?jamais|tu ne conclus JAMAIS|ne prouve rien/i,
+        'l’interdit d’une absence, écrit en négation ferme — « ne conclus jamais », pas « sois prudent »',
       );
     },
   },
@@ -1830,7 +1830,7 @@ export const CONTROLES = [
         { quoi: 'un défaut publié mais pas installé', sonde: /publié n['’]est pas installé/i },
       ];
       for (const { quoi, sonde } of QUESTIONS) {
-        assert.ok(sonde.test(s.corps), `la ronde doit chercher « ${quoi} »`);
+        exigePolarite(s.corps, sonde, `la question « ${quoi} » que la ronde pose au registre`);
       }
 
       // PIÈGE 1 — signaler n'est pas fermer. La polarité est tout : « tu peux fermer » ruinerait la garantie.
