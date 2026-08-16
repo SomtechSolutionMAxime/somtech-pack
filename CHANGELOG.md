@@ -5,7 +5,15 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-08-16
+## [1.62.0] - 2026-08-16
+
+
+### Aussi dans cette version
+
+*Deux lots fusionnés sur `main` avant celui-ci sortent avec lui, et n'avaient pas d'entrée. Reprises de leur message de commit, sans rien y ajouter :*
+
+- **Le bras droit, la ronde de récolte, et le lieu de l'orchestrateur à jour** (T-20260816-0099, PR #265).
+- **Le lieu de l'orchestrateur `j-20260814-0002` est installé** (PR #230) — c'est ce versement qui retire l'un des deux cas exposés de `T-20260814-0014` de la trajectoire.
 
 ### Ajouté
 
