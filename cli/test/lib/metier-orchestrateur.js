@@ -1655,16 +1655,16 @@ export const CONTROLES = [
       // La hiérarchie est le socle des autres gardes : si la compétence pouvait l'emporter,
       // tout ce que ce fichier ajoute serait contournable en lisant l'autre.
       const tete = metier.split('\n').slice(0, 20).join('\n');
-      assert.match(tete, /fait foi/i, 'la déclaration doit être en TÊTE — plus bas, elle est lue après ce qu’elle gouverne');
-      assert.match(tete, /en découle|découle/i, 'et elle doit dire que la compétence en découle, pas l’inverse');
+      exigePolarite(tete, /fait foi/i, 'la déclaration en TÊTE — plus bas, elle serait lue après ce qu’elle gouverne');
+      exigePolarite(tete, /en découle/i, 'la compétence DÉCOULE de ce fichier, pas l’inverse');
       exigePolarite(
         tete, /celui-ci qui gagne/i,
         'la règle de conflit — en cas de divergence, c’est CE fichier qui gagne',
       );
       // Le motif, pas seulement la règle : une hiérarchie sans sa raison se renégocie.
-      assert.match(
+      exigePolarite(
         tete, /ne lit pas le `SKILL\.md`|ne lit pas la compétence/i,
-        'le motif doit être écrit — c’est parce qu’un orchestrateur ne lit pas la compétence que ce fichier gagne',
+        'le motif de la hiérarchie — c’est parce qu’un orchestrateur ne lit pas la compétence que ce fichier gagne',
       );
     },
   },
@@ -1676,8 +1676,8 @@ export const CONTROLES = [
       // Deux moitiés, et la seconde est celle qui coûte : un registre incomplet présenté
       // comme faisant foi fabrique des « il n'y a pas d'ADR là-dessus » qui sont faux.
       const s = sectionDe(metier, /gardien des ADR/i, 'sur le rôle de gardien des ADR');
-      assert.match(s.corps, /MCP `somcraft`/i, 'le métier doit dire par où les ADR se lisent RÉELLEMENT');
-      assert.match(s.corps, /\/architecture\/adr/i, 'et donner le chemin des décisions dans le miroir');
+      exigePolarite(s.corps, /MCP `somcraft`/i, 'la voie réelle par où les ADR se lisent');
+      exigePolarite(s.corps, /\/architecture\/adr/i, 'le chemin des décisions dans le miroir');
 
       exigePolarite(
         s.corps, /illisible|Operation not permitted/i,
@@ -1688,9 +1688,9 @@ export const CONTROLES = [
         s.corps, /miroir est incomplet/i,
         'le miroir est INCOMPLET — c’est ce qui rend une absence non concluante',
       );
-      assert.match(
+      exigePolarite(
         s.corps, /\[non établi\]/i,
-        'et nommer le mot à employer quand on ne trouve pas : `[non établi]`',
+        'le mot à employer quand on ne trouve pas : `[non établi]`',
       );
       // POLARITÉ : l'interdit doit porter sur le fait de CONCLURE, pas seulement recommander la prudence.
       assert.ok(
@@ -1707,18 +1707,18 @@ export const CONTROLES = [
       // Le feed était ABSENT du métier : 54 posts et 16 consignes opposables qu'aucun
       // orchestrateur n'avait de raison de lire. La garde tient la place ET le moment.
       const s = sectionDe(metier, /Cadrer/i, 'sur le cadrage');
-      assert.match(s.corps, /feed/i, 'le cadrage doit envoyer lire le feed');
+      exigePolarite(s.corps, /feed/i, 'le cadrage doit envoyer lire le feed');
       exigePolarite(
         s.corps, /avant de brieffer/i,
         'le moment de la lecture du feed — avant de brieffer, un feed lu après n’a rien changé',
       );
-      assert.match(
+      exigePolarite(
         s.corps, /consignes aux agents/i,
         'le métier doit dire ce qu’on y trouve : des consignes, pas des annonces',
       );
       // La règle d'amendement : sans elle, un orchestrateur applique la plus ancienne des
       // deux consignes contradictoires qu'il croise.
-      assert.match(
+      exigePolarite(
         s.corps, /le plus récent gagne|s['’]amende lui-même/i,
         'le métier doit dire que le feed s’amende lui-même et que le post récent gagne',
       );
@@ -1738,7 +1738,7 @@ export const CONTROLES = [
         'le verrou ne fait pas foi — la garantie centrale de ce lot',
       );
       // Les DEUX défaillances : ne garder que la lecture laisserait croire qu’un `acquired: true` suffit.
-      assert.match(
+      exigePolarite(
         s.corps, /acquisition/i,
         'le métier doit dire que l’ACQUISITION aussi a failli — pas seulement la lecture du verrou',
       );
@@ -1815,17 +1815,27 @@ export const CONTROLES = [
       }
 
       // PIÈGE 1 — signaler n'est pas fermer. La polarité est tout : « tu peux fermer » ruinerait la garantie.
+      // ⚠️ VOIE B — cette garantie est la plus lourde du lot, et elle n'a AUCUN filet ailleurs :
+      // la section n'existe pas dans la compétence, donc la comparaison octet pour octet ne la
+      // rattrape pas. On n'y garde donc pas la tournure (filtre) mais le FAIT : quelle que soit
+      // la façon de l'amener, la section ne doit jamais autoriser la ronde à fermer.
+      //
+      // Le motif inverse est écrit étroit exprès : le texte dit légitimement « Fermer un ticket
+      // parce qu'une fusion est passée, c'est confondre… » et « un agent fini se ferme (§4f) ».
+      // Interdire « fermer » en général rougirait sur du texte correct — donc on ne vise que les
+      // formes qui AUTORISENT.
       exigePolarite(
         s.corps, /tu ne fermes pas/i,
         'la ronde SIGNALE sans fermer — confondre « la PR est mergée » et « le défaut est réglé » a déjà fait rouvrir un ticket',
+        { inverse: /tu peux fermer|tu dois fermer|permis de fermer|autorisée? à fermer|en réalité tu fermes|la ronde ferme/i },
       );
-      assert.match(
+      exigePolarite(
         s.corps, /jamais elle/i,
         'et dire explicitement que ce n’est jamais la ronde qui tranche',
       );
 
       // PIÈGE 3 — les deux moitiés. Une ronde qui trouve toujours quelque chose n'est plus lue.
-      assert.match(
+      exigePolarite(
         s.corps, /tu te tais|le silence est un résultat/i,
         'la ronde doit se taire quand elle ne trouve rien — sinon elle cesse d’être lue',
       );
@@ -1839,20 +1849,24 @@ export const CONTROLES = [
       // Elles vivent au topo, PAS dans la ronde horaire : leur objet bouge lentement, et les
       // passer à l'heure ne produirait que du bruit. La cadence fait partie de la garantie.
       const s = sectionDe(metier, /Le topo du matin/i, 'sur le topo du matin');
-      assert.match(
+      exigePolarite(
         s.corps, /une fois par jour/i,
         'la cadence doit être écrite — ces deux-là ne sont pas des contrôles horaires',
       );
-      assert.match(s.corps, /orphelin/i, 'le topo doit vérifier les espaces de travail orphelins');
-      assert.match(s.corps, /lignes ouvertes/i, 'et les lignes ouvertes sans personne au bout');
+      exigePolarite(s.corps, /orphelin/i, 'le topo doit vérifier les espaces de travail orphelins');
+      exigePolarite(s.corps, /lignes ouvertes/i, 'et les lignes ouvertes sans personne au bout');
 
       // LE POINT QUI FAIT LA DIFFÉRENCE, et il a été corrigé une fois déjà : le critère naïf
       // passe sur les 25 lignes et ne prouve rien. Ce qu'on cherche est l'ambiguïté d'adressage.
+      // ⚠️ VOIE B — même raison que pour la ronde : cette section n'existe pas dans la compétence,
+      // donc aucun filet. On garde le fait : le critère naïf ne doit jamais être réhabilité,
+      // quelle que soit la tournure qui l'amène.
       exigePolarite(
         s.corps, /ne prouve rien/i,
         'vérifier l’existence du dossier NE PROUVE RIEN — sinon on écrit le contrôle inutile',
+        { inverse: /dossier (?:d['’]une ligne )?existe\s*\*{0,2}\s*(?:suffit|prouve)|ce (?:test|critère) suffit|suffit à (?:le )?prouver/i },
       );
-      assert.match(
+      exigePolarite(
         s.corps, /même destinataire/i,
         'et nommer le vrai défaut : deux lignes qui répondent au même destinataire',
       );
@@ -2971,6 +2985,70 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       '**ne prouve rien** — sur 25 lignes',
       '**ne prouve rien** — au contraire, sur 25 lignes',
+    ),
+  },
+
+  // ── Les trois tournures qui ont fait sauter la garde le 2026-08-16, chacune la sienne.
+  // Elles n'étaient pas dans la liste ; la garde restait verte pendant que la garantie était
+  // renversée. Elles sont désormais mutées, donc leur retrait de `RENVERSEMENT` se verrait.
+
+  {
+    id: 'polarite-la-ronde-est-niee-par-a-l-oppose',
+    quoi: 'la ronde est renversée par « à l’opposé de ce qu’on pourrait croire » — tournure absente de la liste jusqu’au 2026-08-16',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      "À l'opposé de ce qu'on pourrait croire, tu signales, tu ne fermes pas",
+    ),
+  },
+
+  {
+    id: 'polarite-la-ronde-est-niee-par-c-est-faux',
+    quoi: 'la ronde est renversée par « c’est faux : » — la forme nue figure légitimement dans le gabarit, seule celle à deux-points est un renversement',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      "C'est faux : tu signales, tu ne fermes pas",
+    ),
+  },
+
+  {
+    id: 'polarite-la-ronde-est-niee-par-dans-les-faits',
+    quoi: 'la ronde est renversée par « dans les faits »',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Tu signales, tu ne fermes pas',
+      'Dans les faits, tu signales, tu ne fermes pas',
+    ),
+  },
+
+  // ── VOIE B : la garantie tombe SANS aucune tournure de négation.
+  // La phrase gardée reste intacte, aucun mot de `RENVERSEMENT` n'apparaît — c'est la polarité
+  // CONTRAIRE qui est écrite ailleurs dans la section. Un filtre de tournures ne voit rien ici ;
+  // seul `inverse` l'attrape. Ces deux mutations sont la preuve que B garde le fait.
+
+  {
+    id: 'inverse-la-ronde-est-autorisee-a-fermer',
+    quoi: 'la ronde garde son « tu ne fermes pas » ET reçoit l’autorisation de fermer trois lignes plus bas — aucune négation, aucune tournure : la garantie tombe quand même',
+    cible: 'la-ronde-tient-l-hygiene-du-registre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "La ronde rend une **liste d'écarts**",
+      "Tu peux fermer ce qui est manifestement fini. La ronde rend une **liste d'écarts**",
+    ),
+  },
+
+  {
+    id: 'inverse-le-critere-naif-est-declare-suffisant',
+    quoi: 'le critère du dossier garde son « ne prouve rien » ET se voit déclaré suffisant juste après — sans une seule tournure de négation',
+    cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "Ce qu'il faut chercher est autre chose",
+      "Ce test suffit. Ce qu'il faut chercher est autre chose",
     ),
   },
 ];

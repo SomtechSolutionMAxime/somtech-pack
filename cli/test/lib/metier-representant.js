@@ -290,7 +290,30 @@ export function exigeImperatif(enonce, quoi) {
  * gardait vraiment. « contrairement » a été ÉCARTÉ pour cette raison — le mot figure déjà,
  * légitimement, dans le gabarit et dans la compétence.
  */
-export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vrai|le cas|exact)|au contraire|en réalité|n['’]est plus (?:vrai|le cas)|cesse d['’]être vrai/i;
+export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vrai|le cas|exact)|au contraire|en réalité|n['’]est plus (?:vrai|le cas)|cesse d['’]être vrai|à l['’]opposé|c['’]est faux\s*:|dans les faits/i;
+
+/**
+ * ⚠️⚠️ CE QUE `RENVERSEMENT` VAUT, ET CE QU'IL NE VAUT PAS — À LIRE AVANT DE S'Y FIER.
+ *
+ * **C'est un FILTRE, pas une garantie.** Il attrape les formulations connues ; il ne garde pas
+ * la polarité en général. Une tournure qui n'est pas dans la liste passe, et il y en aura
+ * toujours une : trois — « à l'opposé », « c'est faux : », « dans les faits » — ont été
+ * trouvées par une revue le 2026-08-16 sur une liste qu'on croyait suffisante la veille.
+ *
+ * **Donc : ne présente jamais une garde qui repose sur ce motif seul comme une preuve que la
+ * garantie tient.** Pour les règles dont le renversement coûte cher, passe `inverse` à
+ * `exigePolarite` — on y interdit alors la polarité contraire, ce qui garde le FAIT et non la
+ * tournure. C'est plus long à écrire, et c'est le prix d'une vraie garantie.
+ *
+ * ⚠️ ET LA LIMITE DE FOND, qu'aucune des deux voies ne lève : **on garde de la prose avec du
+ * texte.** Énumérer les façons de dire le contraire est le même problème dans un miroir. La
+ * seule garantie qui ne soit pas un filtre est un test de COMPORTEMENT — voir le ticket
+ * ouvert là-dessus, rattaché à `T-20260815-0008`.
+ *
+ * ⚠️ CHAQUE ENTRÉE EST VÉRIFIÉE ABSENTE DU TEXTE LÉGITIME avant d'être ajoutée. « contrairement »
+ * et « c'est faux » nu ont été ÉCARTÉS pour cette raison — les deux figurent déjà, légitimement,
+ * dans le gabarit. « c'est faux » n'entre qu'avec ses deux-points.
+ */
 
 /**
  * Exige qu'une garantie tienne EN POLARITÉ — présente, et non renversée par son voisinage.
@@ -302,19 +325,47 @@ export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vra
  * @param sonde  ce qui reconnaît la phrase portant la garantie
  * @param quoi   la garantie, en clair, pour le message d'échec
  */
-export function exigePolarite(corps, sonde, quoi) {
+export function exigePolarite(corps, sonde, quoi, { inverse } = {}) {
   const porteurs = corps.split(/\n\s*\n/).filter((p) => sonde.test(p));
   assert.ok(
     porteurs.length >= 1,
     `« ${quoi} » : la phrase qui porte la garantie est introuvable — la garde ne garde plus rien`,
   );
+
   for (const p of porteurs) {
-    const renverse = p.match(RENVERSEMENT);
+    // ⚠️ ON REGARDE LA PHRASE PORTEUSE, PAS TOUT LE PARAGRAPHE — et c'est un correctif, pas un
+    // raccourci. Sur le paragraphe entier, un contraste parfaitement légitime écrit deux phrases
+    // plus loin (« … ne fait pas foi. Au contraire, c'est la mesure git qui tranche. ») rougissait
+    // à tort. Or une garde qui crie sur du texte correct ne survit pas : on la « corrige » en la
+    // retirant, et elle emporte ce qu'elle gardait vraiment — c'est écrit noir sur blanc pour
+    // `PERMISSIF` un peu plus haut, et ça vaut ici mot pour mot.
+    //
+    // Le prix : un renversement écrit dans la phrase SUIVANTE n'est pas vu. Assumé et documenté ;
+    // les renversements réels rencontrés jusqu'ici tiennent tous dans la phrase porteuse.
+    const phrases = p.split(/(?<=[.!?])\s+/).filter((f) => sonde.test(f));
+    for (const phrase of phrases) {
+      const renverse = phrase.match(RENVERSEMENT);
+      assert.ok(
+        !renverse,
+        `« ${quoi} » est RENVERSÉE sur place (« ${renverse && renverse[0]} ») : la phrase gardée est `
+          + `toujours là, et elle dit maintenant le contraire. Une garde qui cherche une sous-chaîne `
+          + `ne voit pas ça — « ${phrase.trim().slice(0, 160)}… »`,
+      );
+    }
+  }
+
+  // ── LA MOITIÉ QUI GARDE LE FAIT PLUTÔT QUE LA TOURNURE.
+  //
+  // `RENVERSEMENT` est un filtre : il ne connaît que les formulations qu'on lui a apprises.
+  // `inverse` ne dépend d'aucune formulation de négation — il interdit que la polarité contraire
+  // de la garantie soit écrite, quels que soient les mots employés pour l'amener. À réserver aux
+  // règles dont le renversement coûte cher, parce qu'il faut écrire l'inverse à la main.
+  if (inverse) {
+    const contraire = corps.match(inverse);
     assert.ok(
-      !renverse,
-      `« ${quoi} » est RENVERSÉE sur place (« ${renverse && renverse[0]} ») : la phrase gardée est `
-        + `toujours là, et elle dit maintenant le contraire. Une garde qui cherche une sous-chaîne `
-        + `ne voit pas ça — « ${p.trim().slice(0, 160)}… »`,
+      !contraire,
+      `« ${quoi} » : la section énonce la polarité CONTRAIRE (« ${contraire && contraire[0]} »). `
+        + `Peu importe la tournure qui l'amène — la garantie ne tient pas si son contraire est écrit ici.`,
     );
   }
 }

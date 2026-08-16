@@ -38,6 +38,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { exigePolarite } from './lib/metier-representant.js';
 
 import {
   CONTROLES, MUTATIONS, lireGabarits, GARANTIES_DE_POLARITE, sourceDesControles,
@@ -102,12 +103,38 @@ test('les garanties de polarité se gardent avec exigePolarite, jamais avec une 
     const prochain = suite.search(/\n\s{2}\{\n\s{4}id: '/);
     const bloc = prochain === -1 ? suite : suite.slice(0, prochain);
 
+    // ⚠️ ON EXIGE L'ABSENCE DE LA FORME VULNÉRABLE, PAS LA PRÉSENCE D'UN MOT.
+    //
+    // La première version de ce test cherchait `bloc.includes('exigePolarite(')`. Une revue l'a
+    // retournée en une minute : elle a remis un `assert.match` vulnérable et laissé le mot
+    // `exigePolarite(` dans un COMMENTAIRE du même bloc — le test rapportait les six PASSE, dont
+    // celui qu'elle venait d'affaiblir. Un test qui portait l'invariant « on vérifie le fait,
+    // jamais l'indice » vérifiait lui-même un indice.
+    const code = bloc
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))   // les commentaires ne prouvent rien
+      .join('\n');
+
     assert.ok(
-      bloc.includes('exigePolarite('),
+      code.includes('exigePolarite('),
       `« ${id} » garde une règle de polarité SANS exigePolarite : sa ou ses assertions cherchent `
         + `une sous-chaîne, donc une négation enveloppante les laissera vertes. C'est le défaut `
         + `mesuré le 2026-08-16 — remplace l'assert.match qui porte la garantie par exigePolarite, `
         + `ça s'écrit sur la même ligne.`,
+    );
+
+    // La moitié qui ferme la triche : un `exigePolarite` peut coexister avec un `assert.match`
+    // qui, lui, porte la vraie garantie et reste renversable. On refuse donc que la garantie
+    // soit portée par un `assert.match` sur le CORPS de la section — c'est la forme exacte qui
+    // est tombée. Les `assert.match` sur une ligne déjà extraite restent permis : ils ne
+    // gardent pas une règle, ils lisent une valeur.
+    const vulnerables = code.match(/assert\.match\(\s*s\.corps|assert\.match\(\s*tete/g) || [];
+    assert.deepEqual(
+      vulnerables, [],
+      `« ${id} » porte encore ${vulnerables.length} assertion(s) de garantie en assert.match sur le `
+        + `corps de la section. C'est la forme vulnérable : elle reste verte devant « il n'est pas `
+        + `vrai que … ». Passe-la par exigePolarite, ou extrais d'abord la ligne si tu ne gardes `
+        + `pas une règle.`,
     );
   }
 
@@ -116,6 +143,51 @@ test('les garanties de polarité se gardent avec exigePolarite, jamais avec une 
   const connus = new Set(CONTROLES.map((c) => c.id));
   const fantomes = GARANTIES_DE_POLARITE.filter((id) => !connus.has(id));
   assert.deepEqual(fantomes, [], `ces garanties de polarité ne correspondent à aucun contrôle : ${fantomes.join(', ')}`);
+});
+
+test('exigePolarite ne rougit PAS sur un contraste légitime — les deux moitiés', () => {
+  // ⚠️ LA MOITIÉ QU'ON OUBLIE, ET C'EST CELLE QUI TUE LA GARDE.
+  //
+  // Une garde qui crie sur du texte correct ne survit pas : le premier qui la rencontre la
+  // « corrige » en la retirant, et elle emporte tout ce qu'elle gardait vraiment. Ce fichier le
+  // documente déjà pour `PERMISSIF` ; `exigePolarite` a failli répéter l'erreur — sa première
+  // version regardait le paragraphe entier, donc « … ne fait pas foi. Au contraire, c'est la
+  // mesure git qui tranche. » rougissait à tort. Zéro occurrence dans le gabarit d'aujourd'hui
+  // ne prouve rien : c'est vrai jusqu'au jour où quelqu'un écrit un paragraphe normal.
+  const LEGITIMES = [
+    'Le verrou ne fait pas foi. Au contraire, c’est la mesure git qui tranche.',
+    'Tu signales, tu ne fermes pas.\n\nEn réalité, beaucoup d’équipes font l’inverse — pas nous.',
+    'Le miroir est incomplet. Dans les faits, douze numéros manquent.',
+  ];
+  for (const texte of LEGITIMES) {
+    assert.doesNotThrow(
+      () => exigePolarite(texte, /ne fait pas foi|tu ne fermes pas|miroir est incomplet/i, 'un contraste légitime'),
+      `exigePolarite rougit sur un texte CORRECT — « ${texte.slice(0, 60)}… ». `
+        + `Une garde qui crie à tort se fait retirer, et emporte ce qu’elle gardait.`,
+    );
+  }
+
+  // Et la contre-épreuve, sans laquelle la précédente ne prouverait rien : le vrai renversement,
+  // lui, doit toujours rougir. Sinon on aurait « corrigé » le faux positif en désarmant la garde.
+  assert.throws(
+    () => exigePolarite(
+      "Il n'est pas vrai que tu signales, tu ne fermes pas : tu fermes.",
+      /tu ne fermes pas/i, 'un vrai renversement',
+    ),
+    /RENVERSÉE sur place/,
+    'le renversement dans la phrase porteuse doit toujours être vu — sinon le correctif du faux positif a désarmé la garde',
+  );
+
+  // La voie B ne dépend d'aucune tournure : elle voit la polarité contraire même écrite en clair.
+  assert.throws(
+    () => exigePolarite(
+      'Tu signales, tu ne fermes pas.\n\nCela dit, tu peux fermer ce qui est fini.',
+      /tu ne fermes pas/i, 'la ronde ne ferme jamais',
+      { inverse: /tu peux fermer/i },
+    ),
+    /polarité CONTRAIRE/,
+    'inverse doit attraper la garantie renversée sans négation — c’est tout son intérêt',
+  );
 });
 
 for (const mutation of MUTATIONS) {
