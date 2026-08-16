@@ -33,10 +33,51 @@ SCRIPTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SWT="${SWT_SRC_OVERRIDE:-${SCRIPTS_DIR}/shell/claude-swt.sh}"
 LIB="${MCP_ENV_SRC_OVERRIDE:-${SCRIPTS_DIR}/shell/mcp-env.sh}"
 
+# ============================================================
+# ⚠️ DEUX DÉFAUTS DE CE HARNAIS, CORRIGÉS LE 2026-08-16 (T-20260816-0046)
+#
+# 1. IL N'ISOLAIT PAS SON ENVIRONNEMENT, DONC IL MESURAIT LE POSTE.
+#    Les sous-shells héritaient de `SOMTECH_DESK_API_KEY` du shell appelant. Le faux `claude`
+#    recevait donc la VRAIE valeur du poste au lieu de celle que les portes délivrent, et cinq
+#    des huit vérifications échouaient — y compris « le jeton persiste dans le shell », qui
+#    constatait simplement qu'il y était AVANT.
+#
+#    MESURÉ : 3 réussis / 5 échoués tel quel ; **8 / 0** avec la seule variable retirée de
+#    l'environnement parent. **Les portes n'avaient rien.** C'est le harnais qui rendait un
+#    verdict sur la machine de celui qui le lançait.
+#
+#    C'est le motif nommé cette nuit : *un double d'essai qui ne peut pas reproduire la
+#    condition ne prouve rien de ce qu'il annonce.* Ici il ne CONTRÔLAIT pas la condition qu'il
+#    prétendait mesurer — donc son verdict portait sur autre chose que sur le code.
+#
+# 2. IL IMPRIMAIT LA VALEUR REÇUE — et sur un poste garni, cette valeur est un SECRET VIVANT.
+#    `ko "$(qualifier "$(recu)")"` recopiait le contenu du témoin dans la sortie ; sur ce poste, la
+#    sortie brute portait la vraie clé trois fois. Un essai qui affiche un secret l'expose à
+#    tout ce qui lit sa sortie — terminal, journal de CI, rapport collé dans un ticket.
+#    **Ce défaut-là est le premier : il transforme un essai en fuite.**
+# ============================================================
+
+# ⚠️ L'ISOLATION D'ABORD, AVANT TOUT LE RESTE. On retire la variable de NOTRE environnement :
+# tous les sous-shells en héritent, donc c'est ici, une fois, que la condition se contrôle.
+# Sans ça, ce script mesure le poste et non les portes.
+unset SOMTECH_DESK_API_KEY
+
 WORK="$(mktemp -d)"; PASS=0; FAIL=0
 trap 'rm -rf "$WORK"' EXIT
 ok() { echo "  ✅ $1"; PASS=$((PASS+1)); }
 ko() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
+
+# ⚠️ CE QUE LE TÉMOIN CONTIENT NE SORT JAMAIS. On qualifie, on ne recopie pas : la valeur
+# attendue est factice, mais une valeur INATTENDUE peut être un secret vivant — c'est
+# précisément ce qui est arrivé. Un verdict doit dire ce qui s'est passé, pas ce qu'il a lu.
+qualifier() {
+  case "$1" in
+    "$ATTENDU")   printf 'la valeur attendue' ;;
+    __ABSENT__)   printf 'rien — la variable n’est pas arrivée' ;;
+    __RIEN__|'')  printf 'aucun témoin écrit — le faux « claude » n’a pas été lancé' ;;
+    *)            printf 'une AUTRE valeur, non affichée : elle peut être un secret vivant' ;;
+  esac
+}
 
 ATTENDU="jeton-factice-porte-de-naissance-0005"
 PORTES_COUVERTES=0
@@ -99,7 +140,7 @@ echo "== Porte 1 — \`claude-swt\` depuis le dépôt principal =="
 : > "$WITNESS"
 ( cd "$MAIN" && PATH="${FAKEBIN}:${PATH}" bash -c ". \"$RC\"; claude-swt p1 \"${WORK}/wt1\"" ) >/dev/null 2>&1
 [ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
-                          || ko "reçu '$(recu)'"
+                          || ko "$(qualifier "$(recu)")"
 
 echo "== Porte 2 — un orchestrateur ouvre un chef d'équipe =="
 # `herdr pane run … && git worktree add … && cd … && claude` : la commande que
@@ -109,13 +150,13 @@ echo "== Porte 2 — un orchestrateur ouvre un chef d'équipe =="
 ( PATH="${FAKEBIN}:${PATH}" bash -c \
     ". \"$RC\"; git -C \"$MAIN\" worktree add -q \"${WORK}/wt2\" -b wt/p2 origin/main && cd \"${WORK}/wt2\" && claude" ) >/dev/null 2>&1
 [ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
-                          || ko "reçu '$(recu)' — c'est la porte qui a produit la panne"
+                          || ko "$(qualifier "$(recu)") — c'est la porte qui a produit la panne"
 
 echo "== Porte 3 — \`claude\` lancé directement dans un plan existant =="
 : > "$WITNESS"
 ( PATH="${FAKEBIN}:${PATH}" bash -c ". \"$RC\"; cd \"${WORK}/wt2\" && claude" ) >/dev/null 2>&1
 [ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
-                          || ko "reçu '$(recu)'"
+                          || ko "$(qualifier "$(recu)")"
 
 echo "== Porte 4 — reprise \`claude-swt <horodatage>\` DEPUIS un plan de travail =="
 # Lancé depuis un plan, le lanceur prend ce plan pour le dépôt principal — donc
@@ -123,7 +164,7 @@ echo "== Porte 4 — reprise \`claude-swt <horodatage>\` DEPUIS un plan de trava
 : > "$WITNESS"
 ( cd "${WORK}/wt2" && PATH="${FAKEBIN}:${PATH}" bash -c ". \"$RC\"; claude-swt p4 \"${WORK}/wt4\"" ) >/dev/null 2>&1
 [ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
-                          || ko "reçu '$(recu)'"
+                          || ko "$(qualifier "$(recu)")"
 
 echo "== Porte 5 — naissance d'un représentant client =="
 # `herdr pane run <pane> "cd <lieu> && claude"` — la forme exacte que produit
@@ -134,7 +175,7 @@ LIEU="${WORK}/lieu-representant"; mkdir -p "$LIEU"
 : > "$WITNESS"
 ( PATH="${FAKEBIN}:${PATH}" bash -c ". \"$RC\"; cd ${LIEU} && claude" ) >/dev/null 2>&1
 [ "$(recu)" = "$ATTENDU" ] && { ok "le jeton atteint la session"; PORTES_COUVERTES=$((PORTES_COUVERTES+1)); } \
-                          || ko "reçu '$(recu)'"
+                          || ko "$(qualifier "$(recu)")"
 
 echo "== Le compte des portes est déclaré =="
 if [ "$PORTES_COUVERTES" -eq 5 ]; then
@@ -158,7 +199,7 @@ printf 'export SOMTECH_MCP_ENV_FILE="%s/inexistant"\nexport CLAUDE_SWT_NO_AUTOPA
 ( PATH="${FAKEBIN}:${PATH}" bash -c \
     ". \"$RC_NU\"; unset SOMTECH_DESK_API_KEY; cd \"${WORK}/wt2\" && claude" ) >/dev/null 2>&1
 [ "$(recu)" = "__ABSENT__" ] && ok "sans lieu unique, la porte 3 ne délivre rien (défaut reproduit)" \
-                             || ko "le jeton arrive SANS le correctif — ce test ne prouverait rien : '$(recu)'"
+                             || ko "le jeton arrive SANS le correctif — ce test ne prouverait rien : $(qualifier "$(recu)")"
 
 echo
 echo "Résultat : ${PASS} réussis, ${FAIL} échoués"
