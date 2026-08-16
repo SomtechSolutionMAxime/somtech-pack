@@ -2196,7 +2196,20 @@ export const CONTROLES = [
       exigePolarite(
         s.corps, /au grain de la Demande/i,
         'et la reprise se décide au grain de la Demande, jamais du ticket',
-        { inverse: /au grain du ticket|ticket par ticket/i },
+        // ⚠️ L'ALTERNATIVE « ticket par ticket » A ÉTÉ RETIRÉE (revue de fond, 2026-08-16).
+        //
+        // Elle ne désignait PAS le renversement de cette garantie : « ticket par ticket » nomme
+        // un tout autre geste, le rattachement d'un ticket à un jalon (`deliveries` actions
+        // `add_ticket` / `remove_ticket`), écrit légitimement en §3 du même gabarit. La garde ne
+        // criait pas encore, parce que `sectionDe` borne le corps à cette section — mais la
+        // première clarification légitime qui aurait employé ces trois mots ICI l'aurait fait
+        // rougir à tort. Et une garde qui crie à tort se fait retirer, EN EMPORTANT ce qu'elle
+        // gardait : ce dépôt l'a déjà payé, et un `inverse` trop large est la façon la plus
+        // discrète de préparer ce retrait.
+        //
+        // Ce qui reste est l'exacte polarité contraire, et elle n'a aucun usage légitime ici :
+        // décider la reprise au grain du ticket est précisément ce que la garantie interdit.
+        { inverse: /au grain du ticket/i },
       );
 
       // ⚠️⚠️ LE PIÈGE EST L'EXACT REVERS DE LA TÂCHE, ET SANS LUI ELLE NUIT.
