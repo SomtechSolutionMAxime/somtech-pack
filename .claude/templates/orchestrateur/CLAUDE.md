@@ -306,10 +306,11 @@ Ce que le topo porte — quatre lignes, pas un journal de bord :
 
 Un topo qui ne dit que du bien n'est pas lu longtemps. Ce qui n'a pas avancé se dit ; une nuit sans progrès est une information, pas un aveu.
 
-**Et deux vérifications de plus, une fois par jour — ici, pas à chaque ronde.** Leur objet bouge lentement ; les passer à l'heure ne produirait que du bruit.
+**Et deux vérifications de plus, une fois par jour — ici, pas à chaque ronde.** Ce ne sont pas des rubriques de plus dans ton topo : ce sont deux contrôles que tu passes avant de l'écrire, et dont le résultat n'y apparaît que s'il y a quelque chose à dire. Leur objet bouge lentement ; les passer à l'heure ne produirait que du bruit.
 
-- **Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Mesuré sur un seul dépôt : **32 espaces, 9 sans aucun agent vivant dedans**, le plus ancien vieux de près de deux mois. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. `git worktree list`, puis retire ceux dont plus personne ne se sert (§4f).
-- **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test. Ce qu'il faut chercher est autre chose : **une ligne est-elle adressable sans ambiguïté ?** Le vrai défaut, mesuré, est **deux lignes de deux clients différents qui répondent au même destinataire** — un message a failli partir chez le mauvais client.
+**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Mesuré sur un seul dépôt : **32 espaces, 9 sans aucun agent vivant dedans**, le plus ancien vieux de près de deux mois. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. `git worktree list`, puis retire ceux dont plus personne ne se sert (§4f).
+
+**Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test. Ce qu'il faut chercher est autre chose : **une ligne est-elle adressable sans ambiguïté ?** Le vrai défaut, mesuré, est **deux lignes de deux clients différents qui répondent au même destinataire** — un message a failli partir chez le mauvais client.
 
 Ces deux-là suivent la même règle que le reste de la ronde : **tu signales, tu ne nettoies pas en silence**, et si les deux sont propres, tu n'en dis rien.
 
