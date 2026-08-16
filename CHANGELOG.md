@@ -5,12 +5,11 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-08-16
+## [1.61.0] - 2026-08-16
 
 ### Sécurité
 
 - **L'essai des portes de jeton n'imprime plus ce qu'il a reçu** (T-20260816-0046, PR #262). Il affichait `reçu '<valeur>'` en cas d'échec — et sur un poste garni, cette valeur est un **secret vivant** : la sortie brute de ce poste l'a portée **trois fois** avant d'être effacée. Un essai qui affiche un secret l'expose à tout ce qui lit sa sortie — terminal, journal de CI, rapport collé dans un ticket. **Ce défaut-là transformait un essai en fuite.** Il qualifie désormais ce qu'il a reçu — *la valeur attendue*, *rien*, *une autre valeur non affichée* — sans jamais la recopier.
-
 - ⚠️ **`test-mcp-env.sh` portait le MÊME défaut, et il a coûté une vraie clé.** La revue de fond l'a lancé sur ce poste et a **exposé une valeur réelle de `SOMCRAFT_MCP_API_KEY`** dans sa transcription — la clé a dû être régénérée. Ce fichier n'isolait pas davantage son environnement et recopiait la valeur obtenue en clair sur quatre sites. Corrigé dans le même lot : fermer une porte en laissant la jumelle ouverte n'aurait rien fermé du tout. Il rendait **7 échecs sur `origin/main`** ; il en rend **zéro**.
 - ⚠️ **Et sa propre garde était aveugle au trou.** Ce fichier vérifiait déjà qu'aucun essai n'approche le lieu unique réel — en cherchant **une chaîne dans les fichiers**, jamais en vérifiant que l'environnement **appelant** est isolé. *Une garde qui cherche une chaîne dans un fichier ne garde pas un environnement : ce sont deux mondes, et le second est celui où vivent les secrets.*
 
@@ -27,8 +26,10 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Un garde-fou éprouve la non-divulgation par le fait** (`scripts/tests/test-portes-ne-divulguent-rien.sh`) : on fait délivrer une valeur reconnaissable par la porte elle-même et on exige qu'elle n'apparaisse **nulle part** dans la sortie — y compris en cas d'échec, là où le risque est le plus grand. Remettre l'affichage fautif le fait rougir ; retirer l'isolation aussi.
 - ⚠️ **Son premier jet ne prouvait pas ce qu'il annonçait** : il posait la valeur dans l'environnement, que l'isolation empêche désormais d'atteindre le témoin — il restait donc vert même avec le défaut réintroduit. *Il prouvait l'isolation en croyant prouver la non-divulgation.* Réécrit pour passer par le point d'injection du harnais.
 - ⚠️ **Une affirmation du ticket est corrigée par la mesure** : cet essai **est** dans la chaîne CI (`shell-tests` exécute tous les `scripts/tests/*.sh`), et il y **passait au vert** — vérifié dans le journal du dernier run de `main`. Il échouait en local et réussissait en CI, pour la raison exacte que ce lot corrige : la CI n'a pas de jeton dans son environnement. **Un essai vert en CI et rouge sur le poste est pire qu'un essai absent de la chaîne** — il fait croire que quelqu'un regarde.
-
-## [Non-versionné] - 2026-08-16
+- ⚠️ **Correction d'une mesure de ce lot, faite par son auteur avant la fusion.** Le chiffre annoncé — « 2 lignes ouvertes sur 42 » — était **faux** : le filtre d'ouverture portait sur un champ (`fermee_le`) **qui n'existe pas au registre**, donc il ne filtrait rien. Recompté sur le vrai champ `close_le` : **25 lignes ouvertes**, dont **aucune** au chantier disparu ; les **2** lignes concernées sont **closes**. Le mécanisme reste réel — une ligne ouverte non refermée attend le prochain occupant de son pane — mais **aucune occurrence vivante n'est observée aujourd'hui**. La passe est donc une prévention, pas la réponse à un incident en cours.
+- ⚠️ **La garde a changé de place, et la raison vaut au-delà de ce lot.** La première écriture filtrait à la **sélection** : la ligne morte cessait d'être proposée. Ça marchait, et c'était la mauvaise place — **un filtre laisse le registre DIRE que la ligne est ouverte pendant qu'on la cache**, soit deux sources de vérité qui divergent en silence, le motif que ce dépôt paie le plus cher. Une passe d'hygiène fait que le registre **cesse de mentir** : on soigne le fait, pas sa lecture.
+- **On n'écarte que sur preuve** — worktree connu **et** absent. Un chemin non enregistré, vide, ou qu'on n'a pas pu interroger ne prouve **rien** et ne fait rien signaler. C'est l'erreur que le correctif de `T-20260816-0003` avait déjà payée vingt essais rouges, en rendant des lignes injoignables au nom d'une absence de donnée.
+- Un second symptôme a fait regarder, sans être la raison du choix : brancher le disque dans la sélection faisait rougir **26 essais** (538 verts / 0 rouge sans, 512 / 26 avec) dont les registres portent des chemins inventés. Inscrit à part (`T-20260816-0086`) — *une garde bien placée mériterait qu'on paie ce nettoyage*.
 
 ### Ajouté
 
@@ -36,13 +37,6 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **La ronde porte la passe** et rend son avis avec les valeurs trouvées : la ligne, le chantier, le worktree disparu, et **la commande exacte qui la referme** — avec le pane d'où la lancer, parce que `fermer` choisit parmi les lignes du pane courant. C'est l'invariant de `T-20260816-0045` appliqué à l'hygiène : *un avis qui ne nomme pas sa sortie laisse son lecteur exactement où il était*.
 - ⚠️ **Le geste conseillé porte sa CONDITION, parce qu'elle décide s'il marche** — relevé par un REFUS en revue de fond, et c'est ce lot retourné contre lui-même. `fermer` passe par la même sélection que `dire`, donc par la garde de session : **si le pane a été repris par une autre session herdr, aucune commande ne referme cette ligne**. Or c'est exactement le cas que ce lot décrit. L'avis nomme donc la commande, l'endroit, **la session**, et ce qui se passe quand elle a changé — éprouvé contre le vrai sélecteur, pas contre un double.
 - **Elle signale, elle ne ferme rien.** Refermer une ligne à tort ferait taire un canal client. L'avis le dit en toutes lettres.
-
-### Technique
-
-- ⚠️ **Correction d'une mesure de ce lot, faite par son auteur avant la fusion.** Le chiffre annoncé — « 2 lignes ouvertes sur 42 » — était **faux** : le filtre d'ouverture portait sur un champ (`fermee_le`) **qui n'existe pas au registre**, donc il ne filtrait rien. Recompté sur le vrai champ `close_le` : **25 lignes ouvertes**, dont **aucune** au chantier disparu ; les **2** lignes concernées sont **closes**. Le mécanisme reste réel — une ligne ouverte non refermée attend le prochain occupant de son pane — mais **aucune occurrence vivante n'est observée aujourd'hui**. La passe est donc une prévention, pas la réponse à un incident en cours.
-- ⚠️ **La garde a changé de place, et la raison vaut au-delà de ce lot.** La première écriture filtrait à la **sélection** : la ligne morte cessait d'être proposée. Ça marchait, et c'était la mauvaise place — **un filtre laisse le registre DIRE que la ligne est ouverte pendant qu'on la cache**, soit deux sources de vérité qui divergent en silence, le motif que ce dépôt paie le plus cher. Une passe d'hygiène fait que le registre **cesse de mentir** : on soigne le fait, pas sa lecture.
-- **On n'écarte que sur preuve** — worktree connu **et** absent. Un chemin non enregistré, vide, ou qu'on n'a pas pu interroger ne prouve **rien** et ne fait rien signaler. C'est l'erreur que le correctif de `T-20260816-0003` avait déjà payée vingt essais rouges, en rendant des lignes injoignables au nom d'une absence de donnée.
-- Un second symptôme a fait regarder, sans être la raison du choix : brancher le disque dans la sélection faisait rougir **26 essais** (538 verts / 0 rouge sans, 512 / 26 avec) dont les registres portent des chemins inventés. Inscrit à part (`T-20260816-0086`) — *une garde bien placée mériterait qu'on paie ce nettoyage*.
 
 ## [1.60.0] - 2026-08-16
 
@@ -730,7 +724,7 @@ La correction ci-dessus a été relue à son tour. Elle avait créé trois défa
 
 - **`claude-swt --prompt "<texte>"` : injecter une prompt initiale à l'agent au lancement** (T-20260720-0004) — démarrer (ou reprendre) une session avec une prompt déjà passée à `claude`, sans avoir à la retaper une fois la session ouverte. Le flag est parsé par le cœur partagé `_claude-swt-launch`, donc hérité par `claude-swt` **et** `claude-swt-danger`, et passé à `claude` comme 1er argument positionnel (session interactive amorcée) avec un quoting sûr (espaces, accents, apostrophes, retours de ligne), compatible zsh **et** bash. `--prompt` sans valeur (ou vide) → erreur claire, aucun lancement silencieux ; sans le flag, comportement strictement inchangé. S'applique aussi au chemin de reprise (`claude-swt <timestamp> --prompt "…"`) pour relancer une session avec une nouvelle consigne. Snippet bumpé v1.5.1 → v1.6.0. Test TDD red→green à 7 scénarios (discriminant : 5 KO rejoué contre v1.5.1) + revue de code indépendante (règle d'or n°8) sans défaut bloquant.
 
-## [Non-versionné] - 2026-07-19
+## [1.22.2] - 2026-07-19
 
 ### Corrigé
 
