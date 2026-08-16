@@ -52,7 +52,7 @@ process.exit(0);
 }
 
 /** Joue la ronde pour de vrai, avec les sessions qu'on lui désigne. */
-function lancerRonde(sessions) {
+function lancerRonde(sessions, surcharges = {}) {
   const r = spawnSync(process.execPath, [BIN, 'ronde'], {
     env: {
       ...process.env,
@@ -65,6 +65,10 @@ function lancerRonde(sessions) {
       // les défauts de 15 essais et 20 s s'appliqueraient quand même.
       RENDEZ_VOUS_DELAI_MS: '5',
       RENDEZ_VOUS_ECHEANCE_MS: '50',
+      // ⚠️ Les essais de la VIGIE ont besoin d'une échéance réelle : elle est bornée par le
+      // même budget que la livraison, et 50 ms ne laissent pas la place à trois lectures
+      // espacées. Le plafond a d'ailleurs coupé le premier jet de ces essais — il fonctionne.
+      ...surcharges,
     },
   });
   return { code: r.status ?? 1, stdout: (r.stdout ?? '').toString(), stderr: (r.stderr ?? '').toString() };
@@ -168,6 +172,167 @@ process.exit(0);
   chmodSync(join(bac, 'herdr'), 0o755);
   return journal;
 }
+
+/**
+ * Un faux herdr qui joue un pane FIGÉ : il répond, il se dit au travail, et sa `revision` ne
+ * bouge jamais. C'est le troisième état — ni écran, ni erreur, rien qui cloche à première vue.
+ */
+function fauxHerdrQuiFige(pane, lieu) {
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, name: 'orch-fige', agent_status: 'working',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 4242 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  // TOUJOURS la même revision — c'est ça, être figé.
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'working', revision: 4242 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write('un ecran qui ne change pas'); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à rien en vrai', () => {
+  // ⚠️ LA GARDE QUI MANQUAIT AU LOT PRÉCÉDENT, APPLIQUÉE À CELUI-CI. `verdictDeVigie` a ses
+  // propres essais et ils sont verts ; ça ne prouve PAS que la ronde l'appelle. Sans cet
+  // essai, on pourrait retirer tout le branchement et la suite resterait verte — la vigie
+  // existerait dans le dépôt et nulle part dans la vie du poste.
+  const lieu = lieuDOrchestrateur('fige');
+  fauxHerdrQuiFige('w9:pF', lieu);
+  // ⚠️ UNE SÉRIE RÉELLE, PAS INSTANTANÉE. Le premier jet de cet essai espaçait les lectures de
+  // 10 ms : la vigie a rendu `null`, et elle avait raison — trois lectures dans le même
+  // vingtième de seconde ne prouvent pas qu'un agent est figé, elles prouvent qu'on a regardé
+  // trop vite. Abaisser le seuil du jugement pour faire passer l'essai aurait détruit la garde
+  // que l'essai prétend éprouver. On paie donc les secondes.
+  const r = lancerRonde(['/s/a.sock'], { RENDEZ_VOUS_VIGIE_MS: '8000', RENDEZ_VOUS_ECHEANCE_MS: '120000' });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.ok(dit.vigie, 'le compte rendu porte ce que la vigie a vu');
+  assert.equal(dit.vigie.length, 1);
+  assert.equal(dit.vigie[0].forme, 'fige-sans-ecran');
+  assert.equal(dit.vigie[0].pane, 'w9:pF');
+  // La capture, parce que le spécimen a été perdu deux fois faute d'avoir été mesuré.
+  assert.deepEqual(dit.vigie[0].capture.revisions, [4242, 4242, 4242]);
+  assert.match(dit.vigie[0].limite, /jamais/i, 'et la limite voyage avec le verdict');
+});
+
+/**
+ * Un faux herdr COMPLET — il livre pour de vrai, et il NOTE chaque appel reçu.
+ *
+ * ⚠️ IL EXISTE PARCE QUE LE PREMIER ESSAI DE COÛT NE PROUVAIT RIEN, relevé en revue de fond.
+ * Le double d'origine ne répondait qu'à `agent list` : `agent get` rendait `{ok:true}` sans
+ * champ `agent`, donc la LIVRAISON échouait, donc l'agent « sain » était classé suspect et
+ * regardé quand même. Retirer le filtre des suspects laissait l'essai VERT — il passait par
+ * un autre chemin que celui qu'il nommait, le motif exact que ce lot documente ailleurs.
+ *
+ * Ici la boîte est vue vide, la session est `idle`, la remise aboutit — et le journal dit
+ * combien de fois chaque pane a été interrogé.
+ */
+function fauxHerdrQuiLivreEtCompte(pane, lieu, journal) {
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(journal)}, args.join(' ') + '\\n');
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, name: 'orch-sain', agent_status: 'idle',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 7 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'idle', revision: 7 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') {
+  // Une boîte de saisie VUE VIDE — sans ça la remise refuse et l'agent redevient suspect.
+  process.stdout.write(['sortie', '──────────', '\\u276f ', '──────────'].join('\\n'));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('UN AGENT QUI A PRIS SON RAPPEL N’EST PAS REGARDÉ — prouvé en COMPTANT les lectures', () => {
+  // La série coûte trois lectures espacées PAR SUSPECT. La payer sur les 79 panes du poste à
+  // chaque ronde serait un prix qu'on finirait par retirer, en emportant la garde avec.
+  //
+  // ⚠️ ET ON LE PROUVE PAR LE NOMBRE D'APPELS, pas par l'absence de verdict. Une vigie qui
+  // regarderait tout le monde ne rendrait rien non plus sur un agent sain — l'absence de
+  // section `vigie` ne distingue donc pas « il n'a pas été regardé » de « il a été regardé
+  // pour rien ». C'est le compteur qui tranche.
+  const lieu = lieuDOrchestrateur('sain');
+  const journal = join(bac, 'appels.log');
+  writeFileSync(journal, '');
+  fauxHerdrQuiLivreEtCompte('w9:pS', lieu, journal);
+  // Même budget que l'essai du figé : si la vigie regardait cet agent, elle EN AURAIT LE TEMPS.
+  // Sans ça, l'essai prouverait le plafond au lieu de prouver le filtre.
+  const r = lancerRonde(['/s/a.sock'], { RENDEZ_VOUS_VIGIE_MS: '8000', RENDEZ_VOUS_ECHEANCE_MS: '120000' });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+  const appels = readFileSync(journal, 'utf8').split('\n').filter(Boolean);
+
+  assert.equal(dit.livres, 1, 'le rappel a bien été pris — sinon l’agent serait un suspect');
+  assert.equal(dit.vigie, undefined, 'et rien n’est signalé');
+  // La remise elle-même interroge le pane ; la vigie en ajouterait TROIS de plus, espacées.
+  const gets = appels.filter((a) => a.startsWith('agent get')).length;
+  assert.ok(gets < 3, `la vigie n’a pas regardé un agent livré — ${gets} interrogation(s) au total`);
+});
+
+/** Deux panes figés dans la même session — pour éprouver ce que la vigie fait quand le temps manque. */
+function fauxHerdrQuiFigeDeux(lieu) {
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: 'w9:pA', name: 'orch-a', agent_status: 'working', foreground_cwd: ${JSON.stringify(lieu)}, revision: 11 },
+    { pane_id: 'w9:pB', name: 'orch-b', agent_status: 'working', foreground_cwd: ${JSON.stringify(lieu)}, revision: 22 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  const rev = args[2] === 'w9:pA' ? 11 : 22;
+  process.stdout.write(JSON.stringify({ result: { agent: { pane_id: args[2], agent_status: 'working', revision: rev } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write('un ecran qui ne change pas'); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('CE QUE LA VIGIE N’A PAS EU LE TEMPS DE REGARDER EST DIT, JAMAIS TU', () => {
+  // ⚠️ LA GARDE DE COÛT, ET ELLE N'ÉTAIT PROUVÉE PAR RIEN — la retirer laissait tout vert.
+  // La série coûte trois lectures espacées PAR suspect, en séquence. Une panne herdr large
+  // ferait plusieurs suspects d'un coup et la ronde s'allongerait sans plafond, jusqu'à mordre
+  // sur la suivante. Elle est donc bornée par la même échéance que la livraison.
+  //
+  // Et ce qui saute doit se DIRE : un pane non regardé n'est ni sain ni figé, il n'est pas
+  // mesuré. Le taire remettrait exactement le silence que ce lot existe pour supprimer.
+  const lieu = lieuDOrchestrateur('deux');
+  fauxHerdrQuiFigeDeux(lieu);
+  // De quoi regarder UN suspect (2 × 8 s), pas deux.
+  const r = lancerRonde(['/s/a.sock'], { RENDEZ_VOUS_VIGIE_MS: '8000', RENDEZ_VOUS_ECHEANCE_MS: '25000' });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.equal(dit.vigie?.length, 1, 'un seul a pu être regardé');
+  assert.deepEqual(dit.vigie_non_regardes, ['w9:pB'], 'et l’autre est NOMMÉ, pas passé sous silence');
+  assert.match(r.stderr, /n'a pas eu le temps/, 'le journal le dit aussi, en clair');
+});
 
 test('chaque rappel part vers la session de SON orchestrateur — jamais celle du premier venu', () => {
   const lieuA = lieuDOrchestrateur('chez-a');

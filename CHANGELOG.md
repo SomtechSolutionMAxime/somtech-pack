@@ -5,6 +5,23 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-16
+
+### Ajouté
+
+- **Un agent figé se voit, et un agent qui pense n'est pas signalé** (T-20260816-0063, PR #259). Le dispositif connaissait deux états d'un agent qui n'avance pas : au travail, ou parqué derrière un écran nommé. Il en existait un **troisième** que rien ne regardait — **figé** : ni `working`, ni `blocked`, aucun écran, rien à répondre. Une session y a passé **plus d'une heure**, et c'est une ronde **humaine** qui l'a découverte.
+- **La ronde regarde désormais dans le temps** ceux à qui le rappel n'aboutit pas — trois lectures espacées, jamais une seule. *Un point de mesure est un indice, une série est un fait.* Elle ne regarde que les suspects : payer la série sur les 79 panes du poste serait un prix qu'on finirait par retirer, en emportant la garde avec.
+- **Deux formes, et elles ne sont pas prouvées pareil** — la distinction est écrite dans le verdict lui-même : `agent-introuvable` (l'agent a quitté la détection alors que son pane vit encore) est **prouvée par un spécimen fabriqué** ; `fige-sans-ecran` **n'a jamais été observée directement** et **penche donc vers le silence**.
+- **Et la garde capture ce qu'elle trouve** : la série de revisions, leurs horodatages, le statut, l'écran. Le vrai figé existe — il a été vu deux fois, et **perdu les deux fois** faute d'avoir été mesuré avant d'être réveillé. La moitié non prouvée cesse d'attendre un laboratoire : elle s'auto-mesure sur le terrain, et la prochaine occurrence réelle rendra la preuve que personne n'a su fabriquer.
+- **On ne débloque jamais à la place de l'agent.** Envoyer une touche à un agent figé, c'est taper à sa place ; le but est qu'il **se voie**, pas qu'on le pilote. Le module de jugement ne peut, par construction, rien envoyer.
+
+### Technique
+
+- **La vigie est bornée par la même échéance que la livraison**, et ce qu'elle n'a pas eu le temps de regarder est **nommé, jamais tu** — relevé en revue de fond. La série coûte trois lectures espacées **par suspect**, en séquence : une panne herdr large ferait plusieurs suspects d'un coup, et la ronde s'allongerait sans plafond jusqu'à mordre sur la suivante. Un pane non regardé n'est **ni sain ni figé** : il n'est pas mesuré, et le taire remettrait le silence que ce lot existe pour supprimer.
+- ⛔ **La piste recommandée était fausse, et elle est barrée sur place plutôt qu'effacée.** Le passage de relais donnait `state_change_seq` comme « la piste la plus prometteuse ». **Mesuré** : figé pour un agent qui travaillait **activement**, exactement comme pour les 78 au repos — ce compteur compte les **transitions** d'état, pas l'activité. Une garde bâtie dessus aurait déclaré figé **tout agent au travail**. *Une réfutation qu'on efface se fait redécouvrir comme neuve.*
+- ✅ **Le témoin est `revision`, croisée au statut** — ~1 par seconde chez l'agent au travail, immobile chez tous les autres. C'est un **fait croisé à un état**, pas un seuil de temps : le faux positif se ferme par construction au lieu d'être contourné par un réglage.
+- ✅ **Le piège annoncé a été observé en vrai** : un agent en pleine réflexion, compteur d'activité **dépassant la minute**, `revision` +1 par seconde. Le mécanisme ne dépend pas du libellé (trois observés) mais du fait qu'un libellé d'activité **porte sa propre horloge**, donc redessine. Et le **focus ne compte pas**, mesuré sur les 79 panes — sinon la garde tombait pour tout agent en arrière-plan.
+
 ## [1.59.0] - 2026-08-16
 
 ### Corrigé
