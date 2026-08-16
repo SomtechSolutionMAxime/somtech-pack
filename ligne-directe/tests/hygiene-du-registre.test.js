@@ -8,8 +8,11 @@
 // moitié `[non fermé]` : une ligne dont le worktree n'existe plus attend encore le prochain
 // occupant de son pane, **dans la même session**, avec un canal ouvert pour un autre client.
 //
-// MESURÉ sur le registre du poste : **2 lignes ouvertes sur 42** pointent vers un worktree
-// supprimé, et **0** est sans worktree enregistré — le discriminant est disponible partout.
+// ⚠️ MESURE CORRIGÉE AVANT LA FUSION, par son auteur. Le premier compte disait « 2 lignes
+// ouvertes sur 42 » — faux : le filtre portait sur `fermee_le`, un champ qui n'existe pas au
+// registre, donc il ne filtrait rien. Sur le vrai champ `close_le` : **25 ouvertes, aucune au
+// chantier disparu** ; les 2 lignes concernées sont **closes**. Le mécanisme reste réel, mais
+// cette passe est une PRÉVENTION — pas la réponse à un incident en cours.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // POURQUOI UNE HYGIÈNE ET PAS UN FILTRE — et c'est un arbitrage, pas un détail
@@ -62,8 +65,8 @@ test('UNE LIGNE DONT LE CHANTIER A DISPARU EST SIGNALÉE — avec ce qu’on a t
 });
 
 test('UNE LIGNE VIVANTE N’EST JAMAIS SIGNALÉE — sinon la passe crie sur tout le poste', () => {
-  // 40 des 42 lignes du registre réel sont vivantes. Les signaler rendrait la passe inaudible
-  // avant qu'elle ait servi une seule fois.
+  // Les 25 lignes ouvertes du registre réel sont TOUTES vivantes. Les signaler rendrait la
+  // passe inaudible avant qu'elle ait servi une seule fois.
   assert.deepEqual(lignesAuChantierDisparu([ligne('vivant', VIVANT)], { chantierExiste: surLeDisque }), []);
 });
 

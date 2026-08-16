@@ -10,8 +10,15 @@
 //   > Une ligne qu'on abandonne sans la refermer ne reste pas inerte : elle attend le
 //   > prochain occupant du numéro. — `T-20260816-0003`
 //
-// MESURÉ sur le registre du poste le 2026-08-16 : sur **42 lignes ouvertes**, **2** pointent
-// vers un worktree supprimé, et **0** est sans worktree enregistré.
+// MESURÉ sur le registre du poste le 2026-08-16, et cette mesure a dû être REFAITE : le premier
+// compte annonçait « 2 lignes ouvertes sur 42 » en filtrant sur un champ qui n'existe pas au
+// registre (`fermee_le`) — donc en ne filtrant rien. Sur le vrai champ (`close_le`) : **25
+// lignes ouvertes, aucune au chantier disparu** ; les 2 lignes concernées sont **closes**.
+//
+// ⚠️ CE QUE ÇA CHANGE, ET IL FAUT LE DIRE : le mécanisme est réel — une ligne ouverte qu'on
+// n'a pas refermée attend le prochain occupant de son pane — mais AUCUNE occurrence vivante
+// n'est observée aujourd'hui. Cette passe est une prévention, pas la réponse à un incident en
+// cours. Elle coûte une lecture de registre par ronde et ne se déclenche que sur preuve.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // POURQUOI UNE HYGIÈNE ET PAS UN FILTRE — l'arbitrage, et sa raison
