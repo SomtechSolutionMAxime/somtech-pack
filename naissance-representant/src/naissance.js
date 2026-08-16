@@ -521,7 +521,12 @@ export function commandesNaissance(
     /** L'écran affiché — le seul témoin qui dise si l'agent peut réellement recevoir. */
     lireEcran: (paneId) => ['agent', 'read', paneId, '--source', 'visible', '--lines', '40'],
     interroger: (paneId) => ['agent', 'get', paneId],
-    renommer: (paneId) => ['agent', 'rename', paneId, nom],
+    // ⚠️ `paneRun` ET `renommer` ONT ÉTÉ RETIRÉS avec `agent start` (T-20260816-0038), et leur
+    // absence est délibérée. `agent start` lance ET nomme en un geste ; les garder « au cas où »
+    // aurait laissé deux constructeurs de commande que plus rien n'appelle et que plus aucun
+    // essai ne garde — c'est-à-dire du code qui décrit un chemin qui n'existe plus. Dans un
+    // module dont tout le sujet est de ne pas mentir sur ce qui arrive, c'est la dernière chose
+    // à laisser traîner.
     fermer: (paneId) => ['pane', 'close', paneId],
   };
 }
