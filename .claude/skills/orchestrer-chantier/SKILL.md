@@ -252,6 +252,10 @@ Deux choses à savoir sur cet état `qa`. La première : c'est **un état à par
 
 Lis aussi le design doc s'il existe.
 
+**Et lis le feed du ServiceDesk — avant de brieffer qui que ce soit.** `mcp__servicedesk__feed`, action `list_posts`. Remonte au moins jusqu'à ton chantier précédent ; à ta première prise de poste, remonte plus loin.
+
+Ce n'est pas une lecture de courtoisie : **c'est là que vivent les consignes aux agents**, celles qui changent la façon de travailler entre deux chantiers et que rien d'autre ne viendra t'annoncer. Première lecture intégrale connue : **54 posts, 16 consignes opposables à un orchestrateur** (`T-20260816-0015`). C'est aussi là qu'on a découvert que **le verrou de sas mentait**, alors que §4g s'appuyait dessus. Le feed **s'amende lui-même** — quand deux posts se contredisent, le plus récent gagne.
+
 ### 3. Découper en epics — ou inventorier, si le périmètre t'est donné
 
 Découpe **par valeur pour l'utilisateur**, jamais par couche technique. Chaque epic porte son problème, son résultat attendu, son hors-scope, ses contraintes et ses critères de succès.
@@ -316,7 +320,7 @@ Les signaux qu'un epic ne tiendra pas :
 
 Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ordre :
 
-**a. Écrire le brief dans un fichier.** Jamais dans le terminal : un retour à la ligne soumet le prompt et coupe le message en deux. Le brief contient :
+**a. Écrire le brief au registre.** Jamais dans le terminal — un retour à la ligne soumet le prompt et coupe le message en deux — et **jamais dans un fichier** : si tu es né d'un lieu posé, écrire t'est refusé par tes droits, et un brief déposé dans un worktree disparaît avec lui. Il va donc là où vit déjà l'unité de travail : la **description de l'epic** (`epics` action `update`), ou le **ticket** quand le lot n'a pas d'epic (`tickets` action `add_comment`). Il y survit à ta session, celui qui reprendra le lit, et la filiation de §4b-bis s'écrit au même endroit. Le brief contient :
 
 - qui il est (l'epic, le chantier parent, son coordonnateur) — **et le nom qu'il porte**, qu'il se donnera lui-même en naissant : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
 - **qu'il est chef d'équipe** : il distribue à ses propres sous-agents ce qui se distribue, il intègre, et il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
@@ -324,6 +328,8 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 - les contraintes non négociables, avec **le test qui doit les prouver** ;
 - **ce qu'il ne doit pas toucher** — nomme les fichiers où un autre agent travaille en ce moment ;
 - comment il travaille : décomposer en stories G/W/T d'abord, test rouge avant vert, branche portant l'ID de traçabilité, PR draft dès le premier commit, statut `in_progress` au moment où il commence ;
+- **l'ADR applicable, quand il y en a un** — nommé, **avec son titre et pas seulement son numéro**. La violation d'architecture la plus fréquente est celle **par ignorance**, et elle se découvre au review, quand le travail est déjà écrit. Si tu n'as pas pu établir qu'un ADR existe, écris `[non établi]` plutôt que de laisser croire que le terrain est libre ;
+- **le manifeste d'architecture, dès que le lot y touche** : toute table, route, service, écran ou dépendance ajouté ou modifié se reflète dans le `architecture.yaml` du dépôt **dans la même PR**, récolté du réel et **jamais inventé** (règle d'or n°9, STD-031). Facile à oublier parce qu'elle ne se voit pas dans le code écrit — et le gate CI renvoie le lot après coup ;
 - **le suivi** (voir 4d) ;
 - **la consigne de compaction** : *si tu sens que tu vas devoir compacter ton contexte, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
 - **la consigne de sas occupé, dans les deux sens** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter ; et préviens-moi de nouveau quand ta poussée finit par passer.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus **et la reprise** : sans ces deux lignes dans son brief, le déclencheur ne t'atteint jamais. Le second manque plus souvent que le premier — et une attente annoncée dont la fin ne l'est pas est pire que le silence d'origine.
@@ -383,7 +389,7 @@ Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minus
 
 ```bash
 node $HOME/.somtech/naissance-representant/bin/livrer.js "$P" \
-  --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet ici et execute-le : <chemin>'
+  --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet au registre — epics action get E-20260727-0010 — et execute-le.'
 ```
 
 Une seule ligne, sans apostrophe ni retour à la ligne. La commande sort **non nulle** si le brief n'a pas été pris — c'est ce qui remplace la relecture à l'œil.
@@ -562,6 +568,8 @@ Trois choses que le helper tranche à ta place, et qui sont précisément là o�
 **Et n'oublie pas de le réinscrire au registre** (règle RA-REL-003) : ce qui ne vit que dans le fil disparaît avec la session qui l'a lu.
 
 **h. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
+
+> ⚠️ **Mais la QA passe AVANT le merge — le merge n'est qu'un constat.** L'ordre est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed` (STD-030, feed du 2026-05-20). `ready_to_deploy` n'est pas décoratif : il dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte. Tu tiens déjà cet ordre sur un jalon (§8) ; **les stories n'y échappent pas**.
 
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
 

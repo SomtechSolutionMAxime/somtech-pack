@@ -475,6 +475,12 @@ Deux choses à savoir sur cet état `qa`. La première : c'est **un état à par
 
 Lis aussi le design doc s'il existe.
 
+**Et lis le feed du ServiceDesk — avant de brieffer qui que ce soit.** `mcp__servicedesk__feed`, action `list_posts`. Remonte au moins jusqu'à ton chantier précédent ; à ta première prise de poste, remonte plus loin.
+
+Ce n'est pas une lecture de courtoisie. **C'est là que vivent les consignes aux agents** — celles qui changent la façon de travailler entre deux chantiers, et que rien d'autre ne viendra t'annoncer. Le jour où on l'a lu en entier pour la première fois, il portait **54 posts et 16 consignes opposables à un orchestrateur** (`T-20260816-0015`) : le format de ton compte rendu, l'ID de traçabilité dans les branches, la PR ouverte tôt, l'ordre de fermeture, l'interdiction d'un epic orphelin. Rien de tout cela n'est une annonce ; c'est de la règle.
+
+Et c'est là qu'on a découvert que **le verrou de sas mentait**, alors que ce texte-même s'appuyait dessus (§4g). Le feed **s'amende lui-même** : quand deux posts se contredisent, **le plus récent gagne**. Tu y cherches donc en priorité ce qui change ta façon de **brieffer**, ta façon de **fermer**, et ce qui **défait une consigne plus ancienne**.
+
 ### 3. Découper en epics — ou inventorier, si le périmètre t'est donné
 
 Découpe **par valeur pour l'utilisateur**, jamais par couche technique. Chaque epic porte son problème, son résultat attendu, son hors-scope, ses contraintes et ses critères de succès.
@@ -547,6 +553,8 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 - les contraintes non négociables, avec **le test qui doit les prouver** ;
 - **ce qu'il ne doit pas toucher** — nomme les fichiers où un autre agent travaille en ce moment ;
 - comment il travaille : décomposer en stories G/W/T d'abord, test rouge avant vert, branche portant l'ID de traçabilité, PR draft dès le premier commit, statut `in_progress` au moment où il commence ;
+- **l'ADR applicable, quand il y en a un** — nommé, **avec son titre et pas seulement son numéro**. C'est ton premier geste de gardien, et il se joue ici : la violation d'architecture la plus fréquente est celle **par ignorance**, et elle se découvre au review, quand le travail est déjà écrit. Si tu n'as pas pu établir qu'un ADR existe sur le sujet, **écris-le comme tel** — « `[non établi]`, le miroir est incomplet » — plutôt que de laisser croire que le terrain est libre ;
+- **le manifeste d'architecture, dès que le lot touche à l'architecture** : toute table, route, service, écran ou dépendance ajouté ou modifié se reflète dans le `architecture.yaml` du dépôt **dans la même PR**, récolté des sources réelles et **jamais inventé** (règle d'or n°9, STD-031). C'est la contrainte la plus facile à oublier au brief parce qu'elle ne se voit pas dans le code écrit — et un manifeste périmé fait rougir le gate CI, ce qui renvoie le lot après coup au lieu de le cadrer avant ;
 - **le suivi** (voir 4d) ;
 - **la consigne de compaction** : *si tu sens que tu vas devoir compacter ton contexte, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
 - **la consigne de sas occupé, dans les deux sens** : *si `/pousse-staging` refuse parce qu'une autre livraison occupe le sas, préviens-moi immédiatement — ce n'est pas un blocage à résoudre, c'est une nouvelle à faire remonter ; et préviens-moi de nouveau quand ta poussée finit par passer.* C'est **toi** qui tiens la parole vers le représentant du client (§4g), mais c'est **lui** qui voit le refus **et la reprise** : sans ces deux lignes dans son brief, le déclencheur ne t'atteint jamais. Le second manque plus souvent que le premier — et une attente annoncée dont la fin ne l'est pas est pire que le silence d'origine.
@@ -789,6 +797,10 @@ Trois choses que le helper tranche à ta place, et qui sont précisément là o�
 **Et n'oublie pas de le réinscrire au registre** (règle RA-REL-003) : ce qui ne vit que dans le fil disparaît avec la session qui l'a lu.
 
 **h. Merger et fermer les statuts dans le même geste** (règle d'or n°13). Toutes les stories que le merge ferme passent `completed` immédiatement — pas à la fin de la journée.
+
+> ⚠️ **Mais la QA passe AVANT le merge — le merge n'est qu'un constat.** L'ordre de fermeture est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed` (STD-030, annoncé au feed le 2026-05-20). L'étape `ready_to_deploy` n'est pas décorative : elle dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte. Merger d'abord et fermer ensuite, sans être passé par là, fait de la règle d'or n°5 une intention.
+>
+> Tu tiens déjà cet ordre sur un jalon (§8 : « `deployed` sans être passé par `qa` est un mensonge sur ce qui a été vérifié »). **Les stories n'y échappent pas** — c'est le même principe, un cran plus bas.
 
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier, et c'est le point le plus facile à sous-estimer.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**, avec sa propre validation, le suivant attendant que le précédent soit mergé sur `main`. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, mais **une file** — et sa durée est la somme des passages, pas celle du plus long. Dimensionne la date là-dessus, dis-le tôt si elle ne tient pas, et sers-toi de la compétence de poussée vers staging plutôt que d'un `git push` manuel : c'est elle qui fait respecter le gate du sas.
 
