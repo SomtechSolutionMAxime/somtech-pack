@@ -71,6 +71,18 @@ export const ECRANS_CONNUS = [
     cle: 'serveurs-mcp',
     sonde: /new MCP servers found in this project/i,
     quoi: 'Claude Code demande quels serveurs MCP activer',
+    // ⚠️ LE SEUL ÉCRAN QU'ON FRANCHIT, ET LA DISTINCTION EST TOUT LE SUJET.
+    //
+    // Franchir n'est pas deviner. On ne le fait QUE sur un écran reconnu par son texte, avec un
+    // geste MESURÉ (2026-08-16 : `enter` confirme les serveurs déjà cochés — mais il faut lui
+    // laisser un instant, et c'est ce délai manquant qui avait fait conclure à tort que la
+    // touche ne marchait pas, T-20260815-0014), et on RELIT ensuite pour vérifier que ça a pris.
+    // Sans la relecture, ce serait un pari ; avec elle, c'est un fait.
+    //
+    // ⚠️ ET SÛREMENT PAS `esc`. L'écran propose « Esc to reject all » : ce serait faire naître
+    // l'agent SANS son registre — muet sur le chantier qu'il vient d'ouvrir. Un franchissement
+    // qui coûte à l'agent ce pour quoi il naît n'est pas un franchissement, c'est un abandon.
+    touches: ['enter'],
     geste:
       'pré-approuve le lieu avec le jeu de clés COMPLET d\'une entrée de projet — `enabledMcpjsonServers` ' +
       'seul ne suffit plus : il lui faut au moins `disabledMcpjsonServers`, `allowedTools`, ' +
@@ -191,6 +203,13 @@ export function etatDeLEcran(texteTerminal) {
  * Elle existe parce que le refus doit NOMMER : « statut blocked » sans dire ce qu'il y a devant
  * est exactement ce qui a laissé un agent parqué et injoignable pendant qu'on cherchait pourquoi.
  */
+/** Le geste mesuré qui franchit cet écran, s'il en existe un. Aucun par défaut. */
+export function touchesPourFranchir(etat) {
+  if (!etat?.ecran) return null;
+  const connu = ECRANS_CONNUS.find((c) => c.cle === etat.ecran);
+  return connu?.touches?.length ? connu.touches : null;
+}
+
 export function refusDEcran(etat, { cible = 'la session' } = {}) {
   if (etat.pretARecevoir) return null;
   if (etat.ecran) {

@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { etatDeLEcran, ECRANS_CONNUS } from '../src/ecran.js';
+import { etatDeLEcran, touchesPourFranchir, ECRANS_CONNUS } from '../src/ecran.js';
 
 const FILET = '─'.repeat(120);
 
@@ -194,4 +194,32 @@ test('le verdict ne dépend pas des séquences ANSI — un dump coloré dit la m
   const ESC = String.fromCharCode(27);
   const colore = ECRAN_CONFIANCE.replace('Quick safety check', `${ESC}[1mQuick safety check${ESC}[0m`);
   assert.equal(etatDeLEcran(colore).ecran, 'confiance');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 5 — LE GESTE MESURÉ QUI FRANCHIT — et il n'existe que là où on l'a mesuré
+
+test('l’écran des serveurs porte un geste mesuré ; celui de confiance n’en porte pas', () => {
+  // La distinction est la frontière entre « franchir » et « deviner ». Un geste ne s'invente
+  // pas : il se mesure, une fois, contre le vrai outil. L'écran de confiance, lui, se SUPPRIME
+  // par la pré-approbation — lui envoyer une touche serait accepter à la place d'un humain une
+  // question de confiance, ce qui n'est pas la même chose que confirmer une liste déjà cochée.
+  assert.deepEqual(touchesPourFranchir(etatDeLEcran(ECRAN_SERVEURS)), ['enter']);
+  assert.equal(touchesPourFranchir(etatDeLEcran(ECRAN_CONFIANCE)), null);
+});
+
+test('un écran INCONNU ne porte JAMAIS de geste à envoyer — c’est la garantie centrale', () => {
+  assert.equal(touchesPourFranchir(etatDeLEcran(ECRAN_INCONNU)), null);
+  assert.equal(touchesPourFranchir(etatDeLEcran(null)), null);
+  assert.equal(touchesPourFranchir(etatDeLEcran(ECRAN_PRET)), null);
+});
+
+test('aucun écran connu ne propose « esc » — rejeter n’est pas franchir', () => {
+  // « Esc to reject all » ferait naître l'agent SANS son registre : muet sur le chantier qu'il
+  // vient d'ouvrir. Un franchissement qui coûte à l'agent ce pour quoi il naît est un abandon.
+  for (const ec of ECRANS_CONNUS) {
+    for (const t of ec.touches || []) {
+      assert.ok(!/^esc(ape)?$/i.test(t), `l’écran « ${ec.cle} » propose « ${t} » : ce n’est pas un franchissement`);
+    }
+  }
 });

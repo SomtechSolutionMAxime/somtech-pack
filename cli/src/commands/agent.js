@@ -36,7 +36,8 @@
 // verdict là où le dépôt en a déjà deux de trop.
 
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync, execFileSync } from 'node:child_process';
 
 import { resolvePayloadRoot } from '../modules.js';
@@ -62,9 +63,36 @@ Options :
   --amorce-texte "…"      le même, en clair
 `;
 
+const ICI = dirname(fileURLToPath(import.meta.url)); // cli/src/commands
+
+/**
+ * D'OÙ VIENT LE CODE QU'ON EXÉCUTE — et la réponse n'est pas la même dans les deux vies du pack.
+ *
+ * ⚠️ TROUVÉ PAR LA PREUVE RÉELLE, ET C'EST LE MÊME DÉFAUT QUE CELUI QU'ON FERME, UN CRAN PLUS
+ * PRÈS. `resolvePayloadRoot` regarde `cli/payload` AVANT la racine du dépôt. Or `cli/payload`
+ * est un produit de build, **ignoré par git** (`.gitignore:13`), qu'un essai reconstruit de
+ * temps en temps. Lancée depuis une copie de travail, la commande exécutait donc une version
+ * PÉRIMÉE d'elle-même — en silence, et avec un message d'erreur d'une génération antérieure qui
+ * envoyait chercher au mauvais endroit.
+ *
+ * C'est exactement la dérive `~/.somtech` que cette commande existe pour fermer, rejouée à
+ * l'intérieur du dépôt. La règle est donc : **dans une copie de travail, la source fait foi sur
+ * son propre produit de build.** Dans un paquet publié il n'y a pas de source au-dessus, et le
+ * payload reprend son rôle sans rien changer.
+ *
+ * ⚠️ CE QUE ÇA NE RÈGLE PAS, et qui est nommé plutôt qu'escamoté : `init`, `update` et `setup`
+ * continuent d'installer depuis `cli/payload`. Un payload périmé leur ferait poser des fichiers
+ * périmés, avec la même discrétion. Ça se tranche sur un cas réel, pas ici.
+ */
+export function racineDeLaNaissance() {
+  const source = resolve(ICI, '..', '..', '..'); // cli/src/commands → racine du dépôt
+  if (existsSync(join(source, 'pack.json')) && existsSync(join(source, '.git'))) return source;
+  return resolvePayloadRoot();
+}
+
 /** Le `naitre.js` du paquet en train de tourner — jamais celui d'une copie de poste. */
 export function cheminDeLaNaissance({ source = null } = {}) {
-  const racine = resolvePayloadRoot(source ? { source } : {});
+  const racine = source ? resolvePayloadRoot({ source }) : racineDeLaNaissance();
   const chemin = join(racine, 'naissance-representant', 'bin', 'naitre.js');
   if (!existsSync(chemin)) {
     throw new Error(

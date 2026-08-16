@@ -19,6 +19,8 @@ import {
   poserGarde,
   gardePose,
   commandesNaissance,
+  MODELE_PAR_DEFAUT,
+  MODE_PAR_DEFAUT,
   nomAgentHerdr,
   avisDeCasse,
   avisDeVersionnement,
@@ -297,7 +299,6 @@ test('commandesNaissance construit des tableaux d’arguments herdr — AUCUN sh
   assert.deepEqual(c.tabCreate, [
     'tab', 'create', '--workspace', 'w1', '--cwd', '/repo/.gestionnaire/acme', '--label', 'acme', '--no-focus',
   ]);
-  assert.deepEqual(c.renommer('w1:p1'), ['agent', 'rename', 'w1:p1', 'acme']);
   assert.deepEqual(c.interroger('w1:p1'), ['agent', 'get', 'w1:p1']);
   assert.deepEqual(c.fermer('w1:p1'), ['pane', 'close', 'w1:p1']);
 });
@@ -312,9 +313,77 @@ test('le pane naît DANS le lieu — `--cwd` à la création, pas seulement un `
   assert.equal(c.tabCreate[i + 1], '/repo/.gestionnaire/acme');
 });
 
-test('commandesNaissance lance depuis le lieu lui-même (cd) — .mcp.json et .claude/settings.json s’y lisent sans drapeau', () => {
+// ═══════════ T-20260816-0038 — `agent start` REMPLACE `pane run` + l'attente + `agent rename`
+//
+// Ce dépôt réimplémentait ce que herdr sait faire depuis toujours : une ligne écrite dans le
+// shell d'un pane (`cd <lieu> && claude`), puis trente interrogations espacées de deux secondes
+// pour deviner si ça avait pris, puis un renommage. Trois gestes, une minute d'attente, et une
+// fenêtre pendant laquelle l'agent n'était adressable que par son numéro de pane —
+// c'est-à-dire le moment exact où l'adressage cassait (T-20260816-0002).
+//
+// `agent start` fait les trois d'un coup et NOMME à la naissance. Vérifié par le fait contre le
+// vrai service le 2026-08-16 : il rend son `argv` exact.
+test('la naissance passe par `agent start` — herdr nomme l’agent lui-même, et le nom est déjà normalisé', () => {
+  // On donne un nom CAPITALISÉ à dessein : ce qui part vers herdr doit être le nom qu'il
+  // accepte, pas celui du lieu. Un `Acme` transmis tel quel rendrait `invalid_agent_name`,
+  // et l'ancien enchaînement ne s'en apercevait qu'après avoir ouvert un pane.
+  const c = commandesNaissance('/repo', 'Acme', { workspace: 'w1' });
+  assert.deepEqual(c.agentStart('w1:p1'), [
+    'agent', 'start', 'acme',
+    '--kind', 'claude',
+    '--pane', 'w1:p1',
+    '--timeout', '120000',
+    '--', '--model', MODELE_PAR_DEFAUT, '--permission-mode', MODE_PAR_DEFAUT,
+  ]);
+});
+
+// ⚠️ LE SÉPARATEUR `--` N'EST PAS DE LA PONCTUATION. Sans lui, `--model` est lu comme un drapeau
+// DE HERDR, pas de `claude` : soit herdr refuse un drapeau qu'il ne connaît pas, soit — bien
+// pire — il l'avale et la session naît sur le modèle par défaut du compte, sans que rien ne le
+// dise. C'est exactement le silence que ce lot existe pour supprimer.
+test('les drapeaux de claude passent APRÈS `--`, jamais mêlés à ceux de herdr', () => {
+  const argv = commandesNaissance('/repo', 'acme', { workspace: 'w1' }).agentStart('w1:p1');
+  const sep = argv.indexOf('--');
+  assert.notEqual(sep, -1, 'le séparateur doit être là');
+  assert.ok(
+    !argv.slice(0, sep).some((a) => a === '--model' || a === '--permission-mode'),
+    'aucun drapeau de claude ne doit se trouver du côté de herdr'
+  );
+  assert.deepEqual(argv.slice(sep + 1), ['--model', MODELE_PAR_DEFAUT, '--permission-mode', MODE_PAR_DEFAUT]);
+});
+
+test('le modèle et le mode sont DITS — et ce qui est dit est ce qui part', () => {
+  const c = commandesNaissance('/repo', 'acme', { workspace: 'w1', modele: 'sonnet', mode: 'plan' });
+  assert.equal(c.modele, 'sonnet', 'l’objet rendu doit porter ce que l’appelant a demandé');
+  assert.equal(c.mode, 'plan');
+  assert.deepEqual(
+    c.agentStart('w1:p1').slice(-4),
+    ['--model', 'sonnet', '--permission-mode', 'plan'],
+    'et le déclarer ne suffit pas : c’est la commande qui doit le porter'
+  );
+});
+
+// ⚠️ CES DEUX VALEURS SONT UN ARBITRAGE, PAS UN DÉTAIL — d'où un contrôle qui les fige.
+//
+// `claude` sans drapeau naît sur ce que le compte a par défaut, et personne ne sait quoi depuis
+// l'extérieur : un chef d'équipe qu'on croit sur un grand modèle et qui raisonne sur un petit
+// rend un travail qu'on relira comme s'il venait de l'autre. Et `acceptEdits` est le mode avec
+// lequel la naissance sans écran a été MESURÉE (2026-08-16, Claude Code 2.1.233) — poser par
+// défaut un mode qu'on n'a pas éprouvé serait le pari que ce lot existe pour supprimer.
+// Les changer reste permis ; les changer EN SILENCE, non.
+test('les défauts sont ceux qui ont été mesurés — jamais un lancement nu', () => {
+  assert.equal(MODELE_PAR_DEFAUT, 'opus');
+  assert.equal(MODE_PAR_DEFAUT, 'acceptEdits');
+});
+
+// ⚠️ ET LE SUCCÈS D'`agent start` NE PROUVE PAS QUE L'AGENT EST JOIGNABLE (T-20260816-0033).
+// Mesuré le 2026-08-16 : il rend `agent_status: idle` ET `interactive_ready: true` PENDANT que
+// l'agent est parqué derrière un modal. La commande qui lit l'écran a donc besoin de savoir le
+// demander — `--source visible` lit CE QUI EST AFFICHÉ, pas l'historique du pane, et c'est
+// l'affichage seul qui dit s'il y a un modal devant.
+test('l’écran se lit par une commande à part — la naissance ne se fie pas au booléen de herdr', () => {
   const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
-  assert.deepEqual(c.paneRun('w1:p1'), ['pane', 'run', 'w1:p1', 'cd /repo/.gestionnaire/acme && claude']);
+  assert.deepEqual(c.lireEcran('w1:p1'), ['agent', 'read', 'w1:p1', '--source', 'visible', '--lines', '40']);
 });
 
 test('cheminLieu reste sous la racine passée', () => {

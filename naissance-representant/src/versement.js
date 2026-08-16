@@ -75,21 +75,37 @@ export class VersementImpossible extends Error {
  * doit produire aucun commit vide. Un commit vide à chaque lancement rendrait l'historique
  * illisible et ferait douter de tous les autres.
  */
-export function verserLeLieu(depot, lieu, { quoi = 'le lieu', role = 'agent', nom = '' } = {}) {
-  const rel = cheminDansLeDepot(depot, lieu);
-
-  // Hors dépôt git : on ne fabrique pas un dépôt pour pouvoir committer. C'est un état que la
-  // commande ne reconnaît pas comme le sien, et elle le dit au lieu de le corriger d'autorité.
+/**
+ * LE DÉPÔT EST-IL UN DÉPÔT ? — à demander AVANT de poser, jamais après.
+ *
+ * ⚠️ TROUVÉ PAR LA PREUVE RÉELLE, PAS PAR LA SUITE. La première version posait le lieu, puis
+ * tentait de le verser, puis échouait « ce n'est pas un dépôt git » — en LAISSANT le lieu sur
+ * disque. C'est un demi-succès, exactement ce que la commande promet de ne jamais rendre, et
+ * l'essai de bout en bout l'a attrapé du premier coup.
+ *
+ * Une précondition se vérifie avant d'agir. Après, ce n'est plus une précondition : c'est un
+ * regret.
+ */
+export function exigerUnDepotGit(depot) {
   try {
     git(depot, ['rev-parse', '--git-dir']);
-  } catch (err) {
+  } catch {
     throw new VersementImpossible(
       `${depot} n’est pas un dépôt git — le lieu ne peut pas être versé, et la naissance exige ` +
         `qu’un commit le porte (le refus vient d’une mesure : 3 lieux sur 5 portaient une garde ` +
-        `qu’aucun commit ne contenait).`,
-      `initialise le dépôt (\`git init\`) ou lance la commande depuis le dépôt du chantier avec \`--depot\`.`
+        `qu’aucun commit ne contenait). Rien n’a été posé.`,
+      `initialise le dépôt (\`git init\`), ou vise le dépôt du chantier avec \`--depot\`.`
     );
   }
+}
+
+export function verserLeLieu(depot, lieu, { quoi = 'le lieu', role = 'agent', nom = '' } = {}) {
+  const rel = cheminDansLeDepot(depot, lieu);
+
+  // Hors dépôt git : on ne fabrique pas un dépôt pour pouvoir committer. La précondition
+  // ci-dessus l'a normalement déjà dit, avant que rien ne soit posé ; ce filet couvre les
+  // appelants qui viendraient ici sans être passés par elle.
+  exigerUnDepotGit(depot);
 
   const reste = ceQuiResteAVerser(depot, lieu);
   if (!reste.length) return { verse: false, deja: true, fichiers: [] };
