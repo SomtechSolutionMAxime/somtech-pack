@@ -19,6 +19,7 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 - Les valeurs viennent de la **mesure**, jamais d'un gabarit : deux panes différents produisent deux messages différents, et **sans pane connu le refus se tait sur les commandes** plutôt que d'écrire `herdr agent read <pane>` — un gabarit non substitué est une commande que le lecteur ne peut pas exécuter, c'est-à-dire le défaut qu'on ferme retourné contre nous.
 - Le pane est passé par l'appelant réel, et un essai d'intégration le prouve : sans lui, tous les essais unitaires resteraient verts pendant que l'expéditeur réel recevrait encore un refus sans geste.
+- **La commande conseillée est celle que le code utilise lui-même** — relevé en revue de fond, et c'est ce lot retourné contre lui : le refus « boîte illisible » renvoyait vers `herdr agent read <pane>` alors que le module lit cet écran en `--format ansi`, parce que le **gris** est la seule chose qui distingue une suggestion d'un reste. Conseiller la commande sans son option enverrait le lecteur diagnostiquer avec moins que ce qu'on s'accorde à soi-même.
 - Le `[non établi]` du ticket **reste non établi** : savoir si un agent `done` à boîte pleine dispose d'une file exploitable exigerait d'écrire dans la boîte de quelqu'un pour voir ce qui arrive — exactement ce qu'on se refuse. Un essai garde que le refus **ne promet aucune file**.
 
 ## [Non-versionné] - 2026-08-16

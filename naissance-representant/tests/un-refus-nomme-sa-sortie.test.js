@@ -66,6 +66,11 @@ test('LA BOÎTE ILLISIBLE — le refus dit comment regarder soi-même', () => {
   assert.match(m, /illisible/, 'ce qui bloque');
   assert.match(m, /herdr agent read/, 'LE GESTE — la commande exacte qui montre l’écran');
   assert.match(m, new RegExp(PANE), 'avec le pane réel dedans, pas « <pane> »');
+  // ⚠️ RELEVÉ EN REVUE DE FOND, et c'est ce lot retourné contre lui-même : le code lit cet
+  // écran en `--format ansi`, parce que le GRIS est la seule chose qui distingue une
+  // suggestion d'un reste. Conseiller la commande SANS son option enverrait le lecteur
+  // diagnostiquer avec moins que ce qu'on s'accorde à soi-même — un demi-geste.
+  assert.match(m, /--format ansi/, 'la commande conseillée est celle que le code utilise lui-même');
 });
 
 test('LA SESSION INDISPONIBLE — le refus dit ce qu’on attend et comment le voir venir', () => {

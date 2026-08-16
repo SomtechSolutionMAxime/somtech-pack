@@ -163,7 +163,14 @@ const ETATS_DISPONIBLES = ['idle', 'done'];
 export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, pane = null } = {}) {
   // Le geste, écrit avec le pane RÉEL — ou tu, si on ne le connaît pas.
   const ou = pane ? ` « ${pane} »` : '';
-  const commande = (quoi) => (pane ? ` (\`herdr agent ${quoi} ${pane}\`)` : '');
+  // ⚠️ LA COMMANDE CONSEILLÉE EST CELLE QUE CE MODULE UTILISE LUI-MÊME — relevé en revue de
+  // fond, et c'est le défaut de ce lot retourné contre lui. Pour REGARDER LA BOÎTE, le code
+  // lit `agent read … --format ansi` (voir `commandesLivraison.lireEcran`) parce que le GRIS
+  // est la seule chose qui distingue une suggestion d'un reste. Conseiller la même commande
+  // sans son option enverrait le lecteur diagnostiquer avec moins que ce qu'on s'accorde à
+  // soi-même — un demi-geste, donc un conseil qu'on n'a pas vérifié bon pour ce qu'il sert.
+  const commande = (quoi, options = '') =>
+    pane ? ` (\`herdr agent ${quoi} ${pane}${options}\`)` : '';
   // ⚠️ `pairOccupe` — PARLER À UN AGENT QUI TRAVAILLE (T-20260814-0138).
   //
   // Le refus sur le statut n'est pas une garde de SÛRETÉ, c'est une garde de PREUVE : livrer à
@@ -191,7 +198,7 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
   if (reste === null) {
     return (
       `la boîte de saisie de la session${ou} est illisible — on ne livre pas dans ce qu’on ne ` +
-      'voit pas. Va regarder l’écran toi-même' + commande('read') + ' : ou bien le format a ' +
+      'voit pas. Va regarder l’écran toi-même' + commande('read', ' --format ansi') + ' : ou bien le format a ' +
       'changé et c’est un défaut à inscrire, ou bien il y a bien quelque chose dedans'
     );
   }
