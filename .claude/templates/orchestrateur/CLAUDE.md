@@ -323,7 +323,7 @@ Les décisions d'architecture de Somtech — les ADR — se lisent **par le MCP 
 
 > ⚠️ **N'essaie pas le dossier Architecture du disque partagé.** Le `CLAUDE.md` du poste le nomme comme source de vérité transversale, mais **il est illisible depuis ce poste** — macOS refuse l'accès (`Operation not permitted`), c'est mesuré (`T-20260816-0007`). Le miroir Somcraft ci-dessus est la seule voie praticable ; y perdre du temps est la première chose qu'un orchestrateur fait de travers ici.
 
-> ⚠️ **Et ce miroir est incomplet — donc tu ne conclus JAMAIS d'une absence.** On y voit **26 ADR ; douze numéros manquent** (`015`, `018` à `027`, `036`) — mesuré le 2026-08-15, `T-20260816-0010`. « Je ne trouve pas d'ADR sur ce sujet » **ne prouve rien du tout** : ni qu'il n'existe pas, ni que rien n'a été décidé. Le mot à employer est **`[non établi]`**, jamais « il n'y a pas ».
+> ⚠️ **Et ce miroir est incomplet — donc tu ne conclus JAMAIS d'une absence.** On y voit **26 ADR ; douze numéros manquent** (`015`, `018` à `027`, `036`) — compté le 2026-08-15 par `T-20260816-0015` ; l'écart entre le miroir et le dépôt d'origine est suivi par `T-20260816-0010`. « Je ne trouve pas d'ADR sur ce sujet » **ne prouve rien du tout** : ni qu'il n'existe pas, ni que rien n'a été décidé. Le mot à employer est **`[non établi]`**, jamais « il n'y a pas ».
 >
 > Ce que tu fais quand tu ne trouves pas : tu **recoupes** — `/architecture/CLAUDE.md` (il liste sujet et statut des ADR absents, mais s'arrête à mai 2026), les standards `STD-…`, le feed. Et si le recoupement ne donne rien, tu **le dis comme tel** dans ton brief, au lieu de brieffer comme si le sujet était libre.
 >
@@ -772,9 +772,11 @@ Tout worktree sans agent vivant dedans est un orphelin à retirer.
 
 Ceci vient **avant** le merge, parce que c'est là que ça se produit : `/pousse-staging` refuse (`acquired: false`) quand une autre livraison occupe déjà le sas. Ce n'est pas un incident, c'est le fonctionnement voulu (RA-AGT-005) — ton travail est prêt, il attend son tour.
 
-> ⚠️ **Le verrou ne fait pas foi sur ce qui compte. Mesure l'écart, pas l'annonce.**
+> ⚠️ **Le verrou ne fait pas foi. Mesure l'écart, pas l'annonce.**
 >
-> Le verrou peut répondre `locked: false` alors que staging est occupé depuis trois jours. Ce n'est pas une hypothèse : le feed du ServiceDesk l'a signalé le **2026-08-14**, après que deux orchestrateurs s'y sont laissé prendre. **Ne conclus donc jamais « le sas est libre » d'un `lock_status` seul** — pose les deux questions qui mesurent l'état réel plutôt que l'état déclaré :
+> Le **2026-08-14**, le feed a rapporté **deux** défaillances du même verrou : un `lock_status` qui répond « libre » sur un staging occupé depuis trois jours, **et le verrou accordé à une nouvelle PR alors que le sas était déjà pris**. La lecture comme l'acquisition ont failli — un `acquired: true` ne prouve donc pas davantage qu'un `locked: false`.
+>
+> **Ne conclus jamais « le sas est libre » d'un verrou, dans un sens ou dans l'autre.** Pose les deux questions qui mesurent l'état réel :
 >
 > ```bash
 > git fetch origin
@@ -782,7 +784,7 @@ Ceci vient **avant** le merge, parce que c'est là que ça se produit : `/pousse
 > git diff origin/main..origin/staging --name-only | wc -l    # 0 = vraiment libre
 > ```
 >
-> Un écart non nul dit qu'une livraison occupe le sas, **quoi qu'en dise le verrou**. Celui-ci reste utile pour savoir **qui** détient ; il ne suffit pas pour savoir **si**. Conclure « libre » sur sa seule foi, c'est pousser par-dessus la livraison d'un autre — la règle d'or n°14 tombe, et c'est ce paragraphe qui l'aura fait tomber.
+> Un écart non nul dit qu'une livraison occupe le sas, **quoi qu'en dise le verrou**. Celui-ci sert à savoir **qui** détient ; il ne suffit ni à savoir **si**, ni à t'autoriser à pousser. Conclure « libre » sur sa seule foi, c'est pousser par-dessus la livraison d'un autre — la règle d'or n°14 tombe, et c'est ce paragraphe qui l'aura fait tomber.
 
 Le problème n'est pas l'attente, c'est le silence. Ton **représentant de client** peut bien voir qu'un détenteur est nommé — `applications action lock_status` le lui montre. Ce qu'il ne peut pas savoir, c'est que **le chantier qui attend derrière est le sien** : le verrou nomme son détenteur, jamais ceux qui patientent. **Toi seul le sais.** Sans un mot de ta part, il dira au client « c'est en cours » — ce qui est faux, et se découvre au pire moment, quand le client relance parce que rien n'arrive.
 
