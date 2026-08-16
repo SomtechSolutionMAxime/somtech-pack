@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { livrerBrief } from '../src/livraison.js';
 import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
+import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
 import { RACINE } from '../../ligne-directe/src/registre.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
 import { OUTILS, OutilIntrouvable, cheminsUtiles, lancer } from '../../ligne-directe/src/outils.js';
@@ -45,6 +46,11 @@ const JOURNAL = join(RACINE, 'orchestrateur-rendez-vous.log');
 // La demi-heure couvre un tour de travail ordinaire et laisse le rendez-vous le plus serré
 // (l'horaire) se terminer bien avant le suivant, quel que soit le nombre d'orchestrateurs.
 const DELAI_MS = Number(process.env.RENDEZ_VOUS_DELAI_MS || 5 * 60 * 1000);
+
+// L'écart entre deux lectures de la vigie. Assez long pour qu'un agent qui pense ait redessiné
+// son compteur d'activité — mesuré à ~1 redessin par seconde — assez court pour que la ronde
+// ne s'éternise pas sur un pane suspect.
+const DELAI_VIGIE_MS = Number(process.env.RENDEZ_VOUS_VIGIE_MS || 20000);
 const ECHEANCE_MS = Number(process.env.RENDEZ_VOUS_ECHEANCE_MS || 30 * 60 * 1000);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -209,9 +215,42 @@ async function tenir(nom) {
     await dormir(DELAI_MS);
   }
 
+  // ═══ LA VIGIE — CEUX QUI N'ONT PAS PRIS SE FONT REGARDER DANS LE TEMPS (T-20260816-0063).
+  //
+  // ⚠️ ON NE REGARDE QUE CEUX QUI N'ONT PAS PRIS, et c'est délibéré. Un agent qui a reçu son
+  // rappel n'a rien à prouver ; le figé, lui, est exactement celui à qui la remise n'aboutit
+  // pas. La série se paie donc sur les seuls cas suspects, jamais sur les 79 panes du poste.
+  //
+  // ⚠️ ET ELLE NE FAIT QUE REGARDER. Aucune touche n'est envoyée, aucun déblocage n'est tenté :
+  // envoyer une touche à un agent figé, c'est taper à sa place. Le but est qu'il SE VOIE.
+  const vigie = [];
+  for (const c of comptes.filter((x) => !x.livre)) {
+    const lectures = [];
+    for (let i = 0; i < LECTURES_MINIMALES; i += 1) {
+      const r = await appelHerdr(['agent', 'get', c.pane], { socket: c.socket });
+      const a = r?.reponse?.result?.agent;
+      let ecran = null;
+      try {
+        ecran = await lireEcran(['agent', 'read', c.pane, '--format', 'ansi'], { socket: c.socket });
+      } catch {
+        /* un écran illisible est une lecture de moins, jamais un écran vide */
+      }
+      lectures.push({
+        t: Date.now(),
+        statut: a?.agent_status ?? null,
+        revision: a?.revision ?? null,
+        introuvable: !a,
+        ecran,
+      });
+      if (i < LECTURES_MINIMALES - 1) await dormir(DELAI_VIGIE_MS);
+    }
+    const v = verdictDeVigie(lectures);
+    if (v) vigie.push({ agent: c.agent, pane: c.pane, ...v });
+  }
+
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes })}\n`
+    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}) })}\n`
   );
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);

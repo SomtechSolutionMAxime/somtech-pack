@@ -169,6 +169,73 @@ process.exit(0);
   return journal;
 }
 
+/**
+ * Un faux herdr qui joue un pane FIGÉ : il répond, il se dit au travail, et sa `revision` ne
+ * bouge jamais. C'est le troisième état — ni écran, ni erreur, rien qui cloche à première vue.
+ */
+function fauxHerdrQuiFige(pane, lieu) {
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, name: 'orch-fige', agent_status: 'working',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 4242 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  // TOUJOURS la même revision — c'est ça, être figé.
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'working', revision: 4242 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write('un ecran qui ne change pas'); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à rien en vrai', () => {
+  // ⚠️ LA GARDE QUI MANQUAIT AU LOT PRÉCÉDENT, APPLIQUÉE À CELUI-CI. `verdictDeVigie` a ses
+  // propres essais et ils sont verts ; ça ne prouve PAS que la ronde l'appelle. Sans cet
+  // essai, on pourrait retirer tout le branchement et la suite resterait verte — la vigie
+  // existerait dans le dépôt et nulle part dans la vie du poste.
+  const lieu = lieuDOrchestrateur('fige');
+  fauxHerdrQuiFige('w9:pF', lieu);
+  // ⚠️ UNE SÉRIE RÉELLE, PAS INSTANTANÉE. Le premier jet de cet essai espaçait les lectures de
+  // 10 ms : la vigie a rendu `null`, et elle avait raison — trois lectures dans le même
+  // vingtième de seconde ne prouvent pas qu'un agent est figé, elles prouvent qu'on a regardé
+  // trop vite. Abaisser le seuil du jugement pour faire passer l'essai aurait détruit la garde
+  // que l'essai prétend éprouver. On paie donc les secondes.
+  const avant = process.env.RENDEZ_VOUS_VIGIE_MS;
+  process.env.RENDEZ_VOUS_VIGIE_MS = '8000';
+  const r = lancerRonde(['/s/a.sock']);
+  if (avant === undefined) delete process.env.RENDEZ_VOUS_VIGIE_MS;
+  else process.env.RENDEZ_VOUS_VIGIE_MS = avant;
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.ok(dit.vigie, 'le compte rendu porte ce que la vigie a vu');
+  assert.equal(dit.vigie.length, 1);
+  assert.equal(dit.vigie[0].forme, 'fige-sans-ecran');
+  assert.equal(dit.vigie[0].pane, 'w9:pF');
+  // La capture, parce que le spécimen a été perdu deux fois faute d'avoir été mesuré.
+  assert.deepEqual(dit.vigie[0].capture.revisions, [4242, 4242, 4242]);
+  assert.match(dit.vigie[0].limite, /jamais/i, 'et la limite voyage avec le verdict');
+});
+
+test('UN AGENT QUI A PRIS SON RAPPEL N’EST PAS REGARDÉ — la vigie ne coûte que sur les suspects', () => {
+  // La série coûte trois lectures espacées. La payer sur les 79 panes du poste à chaque ronde
+  // serait un prix qu'on finirait par retirer, en emportant la garde avec.
+  const lieu = lieuDOrchestrateur('sain');
+  installerFauxHerdr({ agents: [{ pane_id: 'w9:pS', name: 'orch-sain', agent_status: 'idle', foreground_cwd: lieu }] });
+  const r = lancerRonde(['/s/a.sock']);
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.equal(dit.vigie, undefined, 'rien à signaler ne produit AUCUNE section vigie');
+});
+
 test('chaque rappel part vers la session de SON orchestrateur — jamais celle du premier venu', () => {
   const lieuA = lieuDOrchestrateur('chez-a');
   const lieuB = lieuDOrchestrateur('chez-b');
