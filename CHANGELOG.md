@@ -30,6 +30,23 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Corrigé
 
+- **Les trois refus de la livraison nomment désormais la sortie** (T-20260816-0045, PR #255). Un agent a tenté de joindre son orchestrateur **239 fois**. Chaque refus était **juste** — la boîte de saisie du destinataire contenait un texte collé, et la garde a tenu **288 fois** plutôt que de coller deux messages en un seul que personne n'aurait écrit. **Aucun ne disait quoi faire.**
+- **L'invariant est nommé, pas laissé en remarque** : *un refus qui ne nomme pas la sortie est un refus qui bloque*. Il ne protège plus, il remplace un défaut par un autre. Chaque refus dit donc deux choses : **ce qui bloque**, avec les valeurs réellement trouvées, et **le geste exact qui le lève**, en disant à qui il appartient quand ce n'est pas au lecteur.
+- **Les trois, pas seulement celui de la mesure** — boîte pleine, boîte illisible, session indisponible. Ils ont la même forme et le même manque ; n'en traiter qu'un aurait rejoué « une porte sur deux » sur un lot dont l'objet *est* ce motif.
+- **La boîte pleine avoue ce qu'elle ne peut pas faire** : soumettre ou effacer ce texte appartient à quelqu'un devant ce pane, et personne ne peut le faire à sa place — vider la boîte d'autrui serait taper à sa place. Un aveu explicite sur sa propre limite vaut mieux qu'un silence qui laisse chercher.
+- **Aucun refus n'a été affaibli.** On ajoute des mots, on ne change pas un seul verdict — un essai garde les sept cas de refus et le cas nominal. Un correctif qui aurait rendu un cas permissif aurait été **pire que le défaut**.
+
+### Technique
+
+- Les valeurs viennent de la **mesure**, jamais d'un gabarit : deux panes différents produisent deux messages différents, et **sans pane connu le refus se tait sur les commandes** plutôt que d'écrire `herdr agent read <pane>` — un gabarit non substitué est une commande que le lecteur ne peut pas exécuter, c'est-à-dire le défaut qu'on ferme retourné contre nous.
+- Le pane est passé par l'appelant réel, et un essai d'intégration le prouve : sans lui, tous les essais unitaires resteraient verts pendant que l'expéditeur réel recevrait encore un refus sans geste.
+- **La commande conseillée est celle que le code utilise lui-même** — relevé en revue de fond, et c'est ce lot retourné contre lui : le refus « boîte illisible » renvoyait vers `herdr agent read <pane>` alors que le module lit cet écran en `--format ansi`, parce que le **gris** est la seule chose qui distingue une suggestion d'un reste. Conseiller la commande sans son option enverrait le lecteur diagnostiquer avec moins que ce qu'on s'accorde à soi-même.
+- Le `[non établi]` du ticket **reste non établi** : savoir si un agent `done` à boîte pleine dispose d'une file exploitable exigerait d'écrire dans la boîte de quelqu'un pour voir ce qui arrive — exactement ce qu'on se refuse. Un essai garde que le refus **ne promet aucune file**.
+
+## [Non-versionné] - 2026-08-16
+
+### Corrigé
+
 - **L'écho entre pairs ne se déclare plus « remis » sans l'avoir prouvé** (T-20260815-0021, PR #254). Porte jumelle de `T-20260815-0011` : depuis ce lot-là, `herdr.remettre()` calcule le verdict de prise pour **tous** ses appelants. Il y en a trois dans le veilleur ; deux le lisaient, `echoAuPair` le jetait et rendait `remis: true` sur la seule absence d'exception. Le fait était là, calculé, disponible, et un seul chemin ne le regardait pas.
 - **Ce que ça coûtait tient dans la question du dirigeant** — *« peut-on parler d'un agent à l'autre ? »*. La réponse restait « oui » même quand ça ne marchait pas : un gestionnaire relance son orchestrateur, obtient « remis », et attend une réponse que personne n'a lue.
 - **« Pas pris » n'est pas « pas parti »**, et les deux modes de panne ne se confondent pas : un pane qui **garde le texte dans sa boîte** est un échec qu'on constate ; un pane où **rien ne bouge** est un silence qu'on ne sait pas lire. Le second est l'état exact des trois panes mesurés le 2026-08-15, tous `done` avant, tous `done` après. Les deux rendent « pas remis », avec une raison différente, dite à qui a parlé.

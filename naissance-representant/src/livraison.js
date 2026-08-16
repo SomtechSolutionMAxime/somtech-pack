@@ -133,8 +133,44 @@ const ETATS_DISPONIBLES = ['idle', 'done'];
  * Un statut qu'on n'a pas pu lire (`null`, `unknown`) est aussi un refus : on ne livre pas
  * dans une session dont on ignore l'état, pour la même raison qu'on ne livre pas dans une
  * boîte qu'on ne voit pas.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * INVARIANT — UN REFUS QUI NE NOMME PAS LA SORTIE EST UN REFUS QUI BLOQUE (T-20260816-0045)
+ *
+ * Un agent a tenté de joindre son orchestrateur **239 fois**. Chaque refus était JUSTE, et la
+ * garde a tenu 288 fois plutôt que de coller deux textes en un message que personne n'aurait
+ * écrit. **Aucun ne disait quoi faire.** Un refus fondé qui laisse son lecteur exactement où
+ * il était ne protège plus : il remplace un défaut par un autre.
+ *
+ * Chaque refus d'ici dit donc DEUX choses :
+ *   1. CE QUI BLOQUE, avec les valeurs réellement trouvées — jamais une forme générique, qui
+ *      se copie sans se lire et laisse encore traduire ;
+ *   2. LE GESTE EXACT QUI LE LÈVE, et à QUI il appartient quand ce n'est pas au lecteur.
+ *
+ * ⚠️ LA MOITIÉ QUI PROTÈGE — ON N'AFFAIBLIT AUCUN REFUS. On ajoute des mots, on ne change pas
+ * un seul verdict. Un correctif qui rendrait un cas permissif serait pire que le défaut :
+ * il rouvrirait la fusion silencieuse que ce module existe pour empêcher.
+ *
+ * ⚠️ ET ON NE PROMET PAS UNE SORTIE QU'ON N'A PAS VÉRIFIÉE. Quand le geste appartient à un
+ * humain devant ce pane, on le dit — un aveu explicite vaut mieux qu'un silence qui laisse
+ * chercher, et bien mieux qu'un conseil inapplicable, qui serait ce défaut retourné contre
+ * nous (c'est le reproche exact de `T-20260816-0002` à l'ancien refus d'ambiguïté).
+ *
+ * `pane` est facultatif, et son absence se voit : sans lui, on se TAIT sur les commandes
+ * plutôt que d'écrire `herdr agent read <pane>` — un gabarit non substitué est une commande
+ * que le lecteur ne peut pas exécuter.
  */
-export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false } = {}) {
+export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, pane = null } = {}) {
+  // Le geste, écrit avec le pane RÉEL — ou tu, si on ne le connaît pas.
+  const ou = pane ? ` « ${pane} »` : '';
+  // ⚠️ LA COMMANDE CONSEILLÉE EST CELLE QUE CE MODULE UTILISE LUI-MÊME — relevé en revue de
+  // fond, et c'est le défaut de ce lot retourné contre lui. Pour REGARDER LA BOÎTE, le code
+  // lit `agent read … --format ansi` (voir `commandesLivraison.lireEcran`) parce que le GRIS
+  // est la seule chose qui distingue une suggestion d'un reste. Conseiller la même commande
+  // sans son option enverrait le lecteur diagnostiquer avec moins que ce qu'on s'accorde à
+  // soi-même — un demi-geste, donc un conseil qu'on n'a pas vérifié bon pour ce qu'il sert.
+  const commande = (quoi, options = '') =>
+    pane ? ` (\`herdr agent ${quoi} ${pane}${options}\`)` : '';
   // ⚠️ `pairOccupe` — PARLER À UN AGENT QUI TRAVAILLE (T-20260814-0138).
   //
   // Le refus sur le statut n'est pas une garde de SÛRETÉ, c'est une garde de PREUVE : livrer à
@@ -152,18 +188,27 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false } 
   // que le texte soit VU dans la sortie du destinataire, au lieu de se fier au statut.
   if (!ETATS_DISPONIBLES.includes(statut) && !(pairOccupe && statut === 'working')) {
     return (
-      `la session n’est pas disponible pour un brief (statut « ${statut ?? '—'} ») — ` +
-      'livrer maintenant ne se prouverait pas : elle a déjà quitté l’attente sans nous'
+      `la session${ou} n’est pas disponible pour un brief (statut « ${statut ?? '—'} ») — ` +
+      'livrer maintenant ne se prouverait pas : elle a déjà quitté l’attente sans nous. ' +
+      `Attends qu’elle revienne à « idle » ou « done »${commande('get')}, puis renvoie : ` +
+      'rien n’a été écrit, tu ne perds que le temps de l’attente'
     );
   }
   const reste = contenuBoite(terminal);
   if (reste === null) {
-    return 'la boîte de saisie de la session est illisible — on ne livre pas dans ce qu’on ne voit pas';
+    return (
+      `la boîte de saisie de la session${ou} est illisible — on ne livre pas dans ce qu’on ne ` +
+      'voit pas. Va regarder l’écran toi-même' + commande('read', ' --format ansi') + ' : ou bien le format a ' +
+      'changé et c’est un défaut à inscrire, ou bien il y a bien quelque chose dedans'
+    );
   }
   if (reste !== '') {
     return (
-      `la boîte de saisie n’est pas vide (elle contient « ${reste.slice(0, 80)}${reste.length > 80 ? '…' : ''} ») — ` +
-      'écrire par-dessus ne livrerait pas deux messages, ça en livrerait UN, les deux textes collés'
+      `la boîte de saisie${ou} n’est pas vide (elle contient « ${reste.slice(0, 80)}${reste.length > 80 ? '…' : ''} ») — ` +
+      'écrire par-dessus ne livrerait pas deux messages, ça en livrerait UN, les deux textes ' +
+      'collés. ⚠️ CE BLOCAGE NE SE LÈVE PAS D’ICI : quelqu’un doit soumettre ou effacer ce ' +
+      `texte devant${ou || ' ce pane'}, et personne d’autre ne peut le faire à sa place — ` +
+      'vider la boîte d’autrui serait taper à sa place'
     );
   }
   return null;
@@ -266,7 +311,12 @@ export async function livrerBrief({
     const etatAvant = await appelHerdr(lectures.interroger, vers);
     statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
     ecranAvant = await lireEcran(lectures.lireEcran, vers);
-    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe });
+    // ⚠️ LE PANE EST PASSÉ ICI, ET C'EST CE QUI REND LA SORTIE UTILISABLE (T-20260816-0045).
+    // Sans lui, les refus se taisent sur les commandes — ils restent justes, mais redeviennent
+    // ce qu'ils étaient : un blocage nommé sans geste pour le lever. C'est le seul appelant
+    // réel de cette fonction ; l'oublier ici rendrait toute la sortie muette en production
+    // pendant que les essais unitaires resteraient verts.
+    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane });
     if (!obstacle) break;
     if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
   }
