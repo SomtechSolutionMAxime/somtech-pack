@@ -7,6 +7,23 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionné] - 2026-08-16
 
+### Sécurité
+
+- **L'essai des portes de jeton n'imprime plus ce qu'il a reçu** (T-20260816-0046, PR #262). Il affichait `reçu '<valeur>'` en cas d'échec — et sur un poste garni, cette valeur est un **secret vivant** : la sortie brute de ce poste l'a portée **trois fois** avant d'être effacée. Un essai qui affiche un secret l'expose à tout ce qui lit sa sortie — terminal, journal de CI, rapport collé dans un ticket. **Ce défaut-là transformait un essai en fuite.** Il qualifie désormais ce qu'il a reçu — *la valeur attendue*, *rien*, *une autre valeur non affichée* — sans jamais la recopier.
+
+### Corrigé
+
+- **Les cinq échecs ne venaient pas des portes : le harnais mesurait le poste.** Ses sous-shells héritaient de `SOMTECH_DESK_API_KEY` du shell appelant, donc le faux `claude` recevait la vraie valeur de la machine au lieu de celle que les portes délivrent. **Mesuré : 3 réussis / 5 échoués tel quel ; 8 / 0 avec la seule variable retirée de l'environnement parent.** Les cinq portes fonctionnaient, y compris celle de la naissance d'un représentant client.
+- Et la vérification « aucune porte ne laisse le jeton dans le shell appelant » échouait pour la même raison : **il y était avant**. Elle constatait l'état du poste, pas l'effet des portes.
+
+### Technique
+
+- **Un garde-fou éprouve la non-divulgation par le fait** (`scripts/tests/test-portes-ne-divulguent-rien.sh`) : on fait délivrer une valeur reconnaissable par la porte elle-même et on exige qu'elle n'apparaisse **nulle part** dans la sortie — y compris en cas d'échec, là où le risque est le plus grand. Remettre l'affichage fautif le fait rougir ; retirer l'isolation aussi.
+- ⚠️ **Son premier jet ne prouvait pas ce qu'il annonçait** : il posait la valeur dans l'environnement, que l'isolation empêche désormais d'atteindre le témoin — il restait donc vert même avec le défaut réintroduit. *Il prouvait l'isolation en croyant prouver la non-divulgation.* Réécrit pour passer par le point d'injection du harnais.
+- ⚠️ **Une affirmation du ticket est corrigée par la mesure** : cet essai **est** dans la chaîne CI (`shell-tests` exécute tous les `scripts/tests/*.sh`), et il y **passait au vert** — vérifié dans le journal du dernier run de `main`. Il échouait en local et réussissait en CI, pour la raison exacte que ce lot corrige : la CI n'a pas de jeton dans son environnement. **Un essai vert en CI et rouge sur le poste est pire qu'un essai absent de la chaîne** — il fait croire que quelqu'un regarde.
+
+## [Non-versionné] - 2026-08-16
+
 ### Ajouté
 
 - **Une ligne dont le chantier a disparu du disque est désormais signalée** (T-20260816-0083, PR #261) — la moitié que `T-20260816-0003` avait nommée `[non fermé]` sans la fermer. Une telle ligne reste ouverte au registre, attachée à un numéro de pane que le poste réattribue : **le prochain occupant hérite d'un canal ouvert pour un client dont il n'a jamais entendu parler.** ⚠️ **Prévention, pas incident en cours** : recompté sur le registre réel, **25 lignes ouvertes, aucune au chantier disparu** — voir la correction de mesure en Technique.
