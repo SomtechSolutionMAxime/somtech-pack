@@ -1,6 +1,15 @@
 {
   "permissions": {
-    "allow": [
+    "deny": [
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "Edit(//**)",
+      "Task"
+    ]
+  },
+  "somtech": {
+    "droitsAccordes": [
       "Read",
       "Glob",
       "Grep",
@@ -21,13 +30,6 @@
       "Bash(scripts/orchestration/veille-deblocage.sh *)",
       "mcp__servicedesk__*",
       "mcp__somcraft__*"
-    ],
-    "deny": [
-      "Write",
-      "Edit",
-      "NotebookEdit",
-      "Edit(//**)",
-      "Task"
     ]
   }
 }
