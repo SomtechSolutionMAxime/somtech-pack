@@ -1,4 +1,6 @@
-# Contexte — `j-20260814-0002`
+# Ce qui est propre à ce dépôt
+
+> Chantier : **`j-20260814-0002`**.
 
 ## À qui tu réponds
 
