@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { etatDeLEcran, touchesPourFranchir, ECRANS_CONNUS } from '../src/ecran.js';
+import { etatDeLEcran, touchesPourFranchir, ECRANS_CONNUS, ecranAttendUnChoix, ressembleAUnChoix } from '../src/ecran.js';
 
 const FILET = '─'.repeat(120);
 
@@ -222,4 +222,78 @@ test('aucun écran connu ne propose « esc » — rejeter n’est pas franchir',
       assert.ok(!/^esc(ape)?$/i.test(t), `l’écran « ${ec.cle} » propose « ${t} » : ce n’est pas un franchissement`);
     }
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 6 — UN ÉCRAN QUI ATTEND UN CHOIX, ET SURTOUT UN ÉCRAN QUI N'EN ATTEND PAS (T-20260817-0006)
+//
+// ⚠️ CE BLOC EXISTE PARCE QU'UNE PASSE DE REVUE A RELEVÉ QU'IL MANQUAIT. `ecranAttendUnChoix`
+// n'était éprouvée que de biais, par deux essais d'intégration de `herdr.js`. Le cas NÉGATIF —
+// une liste numérotée ordinaire ne doit PAS déclencher le refus — n'avait aucun témoin, alors
+// que c'est la raison d'être même de cette fonction. Si les marques régressaient un jour vers
+// un motif plus large, rien ne l'aurait vu.
+//
+// ⚠️ ET CE N'EST PAS UNE CRAINTE THÉORIQUE, C'EST UNE MESURE. Appliquer la sonde LARGE
+// (`ressembleAUnChoix`, faite pour le contenu de la BOÎTE) à un écran entier déclarait « en
+// attente de choix » 3 panes réels sur 14 dans une première mesure, et **23 sur 65 — 35,4 %** —
+// dans une seconde, indépendante. Tous idle, boîte prête, parfaitement joignables. Une garde qui
+// refuse un agent sur trois rend la ligne du dirigeant inutilisable : une panne PIRE, en
+// fréquence, que celle qu'elle prétend fermer. Après resserrement : 0 sur 65.
+
+/** Le vrai dialogue de permission mesuré le 2026-08-17 — celui qui a fait exécuter une commande. */
+const DIALOGUE_REEL = [
+  ' Bash command',
+  '',
+  '   touch /tmp/mesure-dialogue-t0006',
+  '',
+  ' Do you want to proceed?',
+  ' \u276f 1. Yes',
+  '   2. Yes, and always allow access',
+  '   3. No',
+  '',
+  ' Esc to cancel \u00b7 Tab to amend',
+].join('\n');
+
+/** Une sortie d'agent parfaitement ordinaire — relevée sur des panes réels de ce poste. */
+const LISTE_ORDINAIRE = [
+  'Voici ce que je propose :',
+  '',
+  '  1. Mesurer le defaut contre le vrai service',
+  '  2. Reparer le double avant le correctif',
+  '  3. Poser la garde',
+  '',
+  '\u2500'.repeat(20),
+  '\u276f ',
+  '\u2500'.repeat(20),
+].join('\n');
+
+test('UN VRAI DIALOGUE DE PERMISSION EST RECONNU — c’est celui qui a fait exécuter une commande', () => {
+  assert.equal(ecranAttendUnChoix(DIALOGUE_REEL), true);
+});
+
+test('UNE LISTE NUMÉROTÉE ORDINAIRE N’EST PAS UN CHOIX — 35 % des agents devenaient injoignables', () => {
+  // ⚠️ L'ESSAI QUI COMPTE LE PLUS DE CE FICHIER. C'est lui qui empêche la garde de redevenir
+  // une panne. La sonde LARGE, elle, s'y trompe — et c'est normal : elle n'est pas faite pour
+  // ça. On éprouve les deux ensemble pour que la différence reste visible et voulue.
+  assert.equal(ressembleAUnChoix(LISTE_ORDINAIRE), true, 'la sonde de BOÎTE s’y trompe — elle est large exprès');
+  assert.equal(ecranAttendUnChoix(LISTE_ORDINAIRE), false, 'la sonde d’ÉCRAN, elle, ne doit pas s’y tromper');
+});
+
+test('LE CURSEUR DE SÉLECTION EST CE QUI DISTINGUE — une option pointée, pas une liste qu’on lit', () => {
+  assert.equal(ecranAttendUnChoix('  1. Oui\n  2. Non'), false, 'une liste seule ne suffit pas');
+  assert.equal(ecranAttendUnChoix('\u276f 1. Oui\n  2. Non'), true, 'le curseur sur l’option, si');
+});
+
+test('LES FORMULES D’INVITE SUFFISENT SEULES — sans aucune option numérotée', () => {
+  for (const invite of ['Do you want to continue?', 'Continue? (y/n)', 'Esc to cancel', 'Enter to confirm']) {
+    assert.equal(ecranAttendUnChoix(invite), true, `« ${invite} » doit être reconnu`);
+  }
+});
+
+test('UN ÉCRAN VIDE OU ILLISIBLE N’EST PAS « un choix » — il est traité ailleurs, et autrement', () => {
+  // Il ne faut pas que l'absence de lecture se déguise en dialogue : ce sont deux refus
+  // différents, avec deux messages différents, et les confondre priverait le dirigeant du bon.
+  assert.equal(ecranAttendUnChoix(null), false);
+  assert.equal(ecranAttendUnChoix(''), false);
+  assert.equal(ecranAttendUnChoix('   \n  '), false);
 });

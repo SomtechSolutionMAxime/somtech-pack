@@ -14,9 +14,29 @@ import { join } from 'node:path';
 let bac;
 let pathOriginal;
 
-/** Installe un faux `herdr` en tête de PATH, qui répond ce qu'on lui dit de répondre. */
-function fauxHerdr(reponseJson, { codeSortie = 0 } = {}) {
-  const script = `#!/bin/sh\ncat <<'FIN'\n${reponseJson}\nFIN\nexit ${codeSortie}\n`;
+/**
+ * Installe un faux `herdr` en tête de PATH, qui répond ce qu'on lui dit de répondre.
+ *
+ * ⚠️ `agent read` REND UN ÉCRAN, PAS DU JSON — et il a fallu le lui apprendre (T-20260817-0006).
+ * Ce double répondait la même chose à toutes les commandes : `remettre` recevait donc du JSON là
+ * où il attend le rendu d'un terminal, et concluait « écran illisible ». Tant que rien ne lisait
+ * cet écran, ça ne se voyait pas ; depuis que la boîte est regardée AVANT d'écrire, un double qui
+ * ne sait pas rendre d'écran fait échouer des essais qui n'ont rien à voir — c'est-à-dire un
+ * double plus permissif que le service, encore.
+ *
+ * Par défaut il rend une boîte VIDE, dans la structure réelle (deux filets, l'invite entre les
+ * deux) : c'est l'état ordinaire d'un pane, celui qui laisse ces essais éprouver ce qu'ils
+ * éprouvent — les pièges du code de sortie 0, pas la garde de boîte.
+ */
+function fauxHerdr(reponseJson, { codeSortie = 0, boite = '' } = {}) {
+  const filet = '─'.repeat(20);
+  const ecran = [filet, `❯ ${boite}`, filet].join('\n');
+  const script =
+    `#!/bin/sh\n` +
+    `if [ "$1" = "agent" ] && [ "$2" = "read" ]; then\n` +
+    `cat <<'ECRAN'\n${ecran}\nECRAN\n` +
+    `exit 0\nfi\n` +
+    `cat <<'FIN'\n${reponseJson}\nFIN\nexit ${codeSortie}\n`;
   writeFileSync(join(bac, 'herdr'), script);
   chmodSync(join(bac, 'herdr'), 0o755);
 }

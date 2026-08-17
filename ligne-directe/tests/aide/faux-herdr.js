@@ -54,8 +54,12 @@ const brut = (s) => { process.stdout.write(s); process.exit(0); };
 // L'ÉCRAN, tel qu'un terminal le rend : la boîte de saisie est le dernier couple de filets,
 // et son contenu commence après l'invite. C'est la STRUCTURE que \`contenuBoite\` lit — un
 // double qui rendrait n'importe quoi ferait passer une boîte pour illisible, pas pour vide.
-const ecran = (boite, file) => [
+// ⚠️ \`horsBoite\` pose ce qui s'affiche PAR-DESSUS la boîte — un dialogue de choix, un écran de
+// confiance. Sans lui, aucun essai ne peut mettre une boîte lisible SOUS un modal, et c'est
+// justement le cas où la touche d'envoi CONFIRME une action au lieu de soumettre un texte.
+const ecran = (boite, file, horsBoite) => [
   'un peu de sortie precedente',
+  ...(horsBoite ? [horsBoite] : []),
   ...(file ? ['Press up to edit queued messages'] : []),
   '────────────────────────────',
   '❯ ' + boite,
@@ -76,15 +80,35 @@ if (a[0] === 'pane' && a[1] === 'current') {
 const pane = a[2];
 const e = pane ? lire(pane) : null;
 
+// ⚠️ LE JOURNAL DES APPELS — la seule façon de prouver une ABSTENTION. Qu'une touche d'envoi
+// n'ait pas été envoyée ne se lit dans aucun état final : il faut la liste de ce qui a été
+// tenté. Écrit AVANT toute sortie, y compris les sorties d'erreur.
+appendFileSync(join(ETAT, 'appels.jsonl'), JSON.stringify(a) + '\\n');
+
 // ⚠️ UN PANE INCONNU N'EST PAS UN PANE VIDE — herdr rend \`agent_not_found\` sur stdout, avec
 // un code de sortie 0. C'est le piège que le vrai module ferme ; le double doit le poser.
 if (!e) dit({ error: { code: 'agent_not_found', message: pane || 'sans pane' } });
 
+// Ce que l'agent a REÇU — ce qui a franchi la boîte, jamais ce qu'on a tenté d'y écrire.
+const recu = (contenu) => appendFileSync(join(ETAT, pane.replace(/[^a-z0-9]/gi, '_') + '.txt'), contenu);
+
 if (a[0] === 'agent' && a[1] === 'prompt') {
   const texte = a.slice(3).join(' ');
-  appendFileSync(join(ETAT, pane.replace(/[^a-z0-9]/gi, '_') + '.txt'), texte);
-  if (e.colle) e.boite = texte;                       // le texte reste dans la boîte
-  else e.boite = '';                                  // il est parti
+  // ⚠️ MESURÉ LE 2026-08-17 CONTRE LE VRAI SERVICE (T-20260817-0006) — et c'est tout l'objet
+  // de ce lot. \`agent prompt\` n'écrit PAS dans une boîte vide : il ABOUTE son texte à ce qui
+  // s'y trouve déjà, SANS SÉPARATEUR, et l'ensemble part comme UN SEUL message.
+  //
+  // La preuve est dans la transcription du destinataire : une boîte portant
+  // « AAAA-texte-immobile-de-son-auteur-AAAA » a fait recevoir à l'agent, en un seul tour,
+  // « AAAA-texte-immobile-de-son-auteur-AAAABBBB-arbitrage-du-dirigeant-BBBB ».
+  //
+  // Le double d'avant écrivait \`e.boite = texte\` — il REMPLAÇAIT. Le mode de panne n'existait
+  // donc NULLE PART dans ce module, et aucun essai ne pouvait rougir dessus, quelle que soit
+  // la mutation qu'on tentait. C'était un banc qui ne pouvait pas échouer.
+  const fusion = (e.boite || '') + texte;
+  if (e.colle) e.boite = fusion;                      // rien ne part : le mélange reste en boîte
+  else { recu(fusion); e.boite = ''; }                // le mélange PART, comme un seul message
+  e.promptFait = true;                                // le dialogue d'APRÈS peut désormais s'afficher
   if (e.file) e.enFile = true;                        // il rejoint la file d'un pair occupé
   if (!e.muet && !e.file) e.statut = 'working';       // la session quitte l'attente
   ecrire(pane, e);
@@ -92,12 +116,16 @@ if (a[0] === 'agent' && a[1] === 'prompt') {
 }
 
 if (a[0] === 'agent' && a[1] === 'send-keys') {
-  if (!e.colle) { e.boite = ''; ecrire(pane, e); }    // un pane collant ne se décoince pas
-  dit({ result: { sent: true } });
+  // La touche d'envoi soumet CE QUE PORTE LA BOÎTE — son contenu entier, pas le dernier texte
+  // écrit. C'est par là que la fusion est confirmée quand \`agent prompt\` ne l'a pas soumise :
+  // le scénario \`cede\` est la mesure n°2 du 2026-08-17, où le texte est resté en boîte et où
+  // c'est le geste de RÉPARATION de \`remettre\` qui a soumis le mélange.
+  if (!e.colle || e.cede) { if (e.boite) recu(e.boite); e.boite = ''; ecrire(pane, e); }
+  dit({ result: { sent: true } });                    // sinon, un pane collant ne se décoince pas
 }
 
 if (a[0] === 'agent' && a[1] === 'get') dit({ result: { agent: { pane_id: pane, agent_status: e.statut } } });
-if (a[0] === 'agent' && a[1] === 'read') brut(ecran(e.boite, e.enFile));
+if (a[0] === 'agent' && a[1] === 'read') brut(ecran(e.boite, e.enFile, e.horsBoite || (e.promptFait ? e.horsBoiteApres : '')));
 
 dit({ error: { code: 'unsupported', message: a.join(' ') } });
 `;
@@ -130,14 +158,24 @@ export function posteHerdr(racine, agents, nom = 'herdr') {
       const f = this.fichier(pane);
       return existsSync(f) ? readFileSync(f, 'utf8') : null;
     },
+    /** Tout ce qui a été demandé à herdr, dans l'ordre — pour prouver ce qui N'A PAS été fait. */
+    appels() {
+      const f = join(etat, 'appels.jsonl');
+      if (!existsSync(f)) return [];
+      return readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    },
+    /** Les gestes visant un pane donné. */
+    gestes(id) {
+      return this.appels().filter((a) => a[2] === id);
+    },
     /** Déclare un pane, et le scénario qu'il joue. Sans appel, un pane est INCONNU de herdr. */
-    pane(id, { statut = 'idle', boite = '', muet = false, colle = false, file = false } = {}) {
+    pane(id, { statut = 'idle', boite = '', muet = false, colle = false, cede = false, file = false, horsBoite = '', horsBoiteApres = '' } = {}) {
       // `file` implique un pair DÉJÀ occupé : son statut ne bougera pas, seul le marqueur
       // apparaîtra. Le poser à `idle` donnerait « sortie de l'attente » et prouverait un
       // autre témoin que celui qu'on veut éprouver.
       writeFileSync(
         join(etat, `${id.replace(/[^a-z0-9]/gi, '_')}.json`),
-        JSON.stringify({ statut: file ? 'working' : statut, boite, muet, colle, file, enFile: false })
+        JSON.stringify({ statut: file ? 'working' : statut, boite, muet, colle, cede, file, horsBoite, horsBoiteApres, promptFait: false, enFile: false })
       );
       return this;
     },

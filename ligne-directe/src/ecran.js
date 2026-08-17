@@ -203,6 +203,87 @@ export function etatDeLEcran(texteTerminal) {
  * Elle existe parce que le refus doit NOMMER : « statut blocked » sans dire ce qu'il y a devant
  * est exactement ce qui a laissé un agent parqué et injoignable pendant qu'on cherchait pourquoi.
  */
+/**
+ * ⚠️ UNE BOÎTE DE SAISIE N'EST PAS UN DIALOGUE — et la touche d'envoi n'y fait pas la même chose.
+ *
+ * Devant une boîte, la touche d'envoi SOUMET un texte que quelqu'un a écrit. Devant un dialogue
+ * de choix — « veux-tu que j'exécute cette commande ? » —, elle CONFIRME l'option par défaut.
+ * Le défaut change alors de nature : ce n'est plus un message corrompu, c'est une ACTION
+ * APPROUVÉE à l'insu de celui devant qui elle s'affiche.
+ *
+ * ⚠️ ON NE SAIT PAS RECONNAÎTRE TOUS LES DIALOGUES. Le sélecteur `/model` rend une boîte
+ * ILLISIBLE, donc refusée — mais par accident, pas par conception. **[non établi]** reste le mot
+ * juste. Ne pas savoir reproduire un danger n'est pas la preuve qu'il n'existe pas : c'est le
+ * premier piège de ce dépôt. La sonde est donc LARGE et son sens sûr est de S'ABSTENIR.
+ *
+ * Elle cherche ce qui trahit un choix, jamais ce qui trahit un message : des options numérotées,
+ * et les formules d'un dialogue. Un compte rendu qui commencerait par « 1. » et parlerait de
+ * confirmation serait refusé à tort — on aura perdu une livraison, pas approuvé une action.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ELLE A ÉTÉ ÉCRITE DANS `naissance-representant/src/livraison.js` (T-20260816-0114), ET ELLE
+ * EST DESCENDUE ICI (T-20260817-0006) — parce que `ligne-directe/src/herdr.js` en a besoin lui
+ * aussi, et que `ligne-directe` ne peut pas importer de `naissance-representant` (le sens de la
+ * dépendance est unique, et ce module s'installe seul). La recopier aurait fait une porte de
+ * plus ; sa place est ici, avec les autres sondes d'écran. `livraison.js` l'importe désormais
+ * de ce fichier — un exemplaire, pas deux.
+ *
+ * ⚠️ CE QUI A CHANGÉ DEPUIS, ET QUI N'EST PLUS UNE HYPOTHÈSE : un vrai dialogue de permission
+ * A été observé le 2026-08-17, sur un pane où un message fusionné venait de partir — l'écran
+ * portait `Do you want to proceed? ❯ 1. Yes`. Le danger que cette sonde couvre est mesuré.
+ */
+const MARQUES_DE_CHOIX = [
+  /(?:^|\n)\s*(?:❯\s*)?[1-9]\.\s+\S/,
+  /\b(?:enter|entrée)\b[^\n]{0,20}\b(?:to )?confirm/i,
+  /\besc\b[^\n]{0,20}\b(?:to )?cancel/i,
+  /\(y\/n\)/i,
+  /\bdo you want to\b/i,
+];
+
+export function ressembleAUnChoix(texte) {
+  const t = String(texte ?? '');
+  return MARQUES_DE_CHOIX.some((m) => m.test(t));
+}
+
+/**
+ * UN ÉCRAN ENTIER ATTEND-IL UN CHOIX ? — la même question, posée à l'écran et non à la boîte.
+ *
+ * ⚠️ POURQUOI CE N'EST PAS `ressembleAUnChoix` APPLIQUÉE À L'ÉCRAN. Celle-ci est volontairement
+ * LARGE parce qu'elle interroge le contenu de la BOÎTE DE SAISIE, où une option numérotée n'a
+ * rien à faire. Sur un écran entier, la même largeur devient ruineuse : **mesuré le 2026-08-17
+ * sur 14 panes réels de ce poste, 3 étaient déclarés « en attente de choix » à tort — 21 %.**
+ * Tous les trois pour la même raison : la sortie ordinaire de leur agent contenait une liste
+ * numérotée (« \n  1. … »). Ils étaient `idle`, boîte prête, parfaitement joignables.
+ *
+ * Une garde qui refuserait un agent sur cinq rendrait la ligne du dirigeant inutilisable — soit
+ * une panne PIRE, en fréquence, que celle qu'on ferme. Le sens sûr d'un geste irréversible reste
+ * l'abstention, mais l'abstention ne doit pas se déclencher sur du bruit : elle cesserait d'être
+ * lue, ce qui est la façon dont une garde meurt.
+ *
+ * On exige donc un signal de dialogue ACTIF, pas la simple présence d'une liste :
+ *
+ *   • le CURSEUR DE SÉLECTION posé sur une option numérotée (« ❯ 1. Yes ») — c'est ce qui
+ *     distingue un choix qu'on attend d'une liste qu'on lit ; ou
+ *   • une FORMULE D'INVITE explicite (« Do you want to… », « (y/n) », « Esc to cancel »,
+ *     « Enter to confirm ») — des tournures qu'une prose ordinaire n'emploie pas.
+ *
+ * Les trois faux positifs mesurés disparaissent avec ce resserrement, et le vrai dialogue de
+ * permission — celui qui a fait exécuter une commande le 2026-08-17 — continue d'être reconnu.
+ */
+const MARQUES_DE_DIALOGUE_ACTIF = [
+  /❯\s*[1-9]\.\s/,
+  /\b(?:enter|entrée)\b[^\n]{0,20}\b(?:to )?confirm/i,
+  /\besc\b[^\n]{0,20}\b(?:to )?cancel/i,
+  /\(y\/n\)/i,
+  /\bdo you want to\b/i,
+];
+
+export function ecranAttendUnChoix(texteTerminal) {
+  const t = sansGris(texteTerminal);
+  if (!t) return false;
+  return MARQUES_DE_DIALOGUE_ACTIF.some((m) => m.test(t));
+}
+
 /** Le geste mesuré qui franchit cet écran, s'il en existe un. Aucun par défaut. */
 export function touchesPourFranchir(etat) {
   if (!etat?.ecran) return null;
