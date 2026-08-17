@@ -7,6 +7,26 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionné] - 2026-08-17
 
+### Corrigé
+
+- **Une boîte de saisie bloquée n'affame plus tous les émetteurs suivants** (T-20260816-0114, PR #268) — un texte laissé dans la boîte d'un agent sans être soumis mettait en famine **tout le monde** : `livrer.js` refusait d'écrire par-dessus, à raison, et seul le destinataire pouvait libérer sa boîte — c'est-à-dire le seul qui ne sait pas qu'elle bloque. Quatre occurrences en quatre rondes sur la boîte d'un orchestrateur, et **une fois sur trois l'auteur du texte coincé était déjà mort** : personne, jamais, n'allait le soumettre.
+  Un texte resté **immobile cinq minutes** est désormais **soumis pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis le message de l'émetteur part, précédé d'un avis qui apprend au destinataire que sa boîte bloquait **et lui montre le texte parti en son nom**.
+- **Le refus d'écraser est intact, et un essai-témoin le prouve** — rien ne s'écrit jamais dans une boîte qui n'a pas été **vue vide**. Boîte encombrée dont la touche d'envoi ne libère rien → zéro écriture. C'est la frontière que `T-20260809-0033` protège : deux textes collés produisent un travail plausible et faux, un texte entier tel que son auteur l'a écrit se constate par celui qui le reçoit.
+
+### Technique
+
+- **La délivrance s'abstient dans cinq cas** : le texte **a bougé** (quelqu'un tape) · la boîte ressemble à un **dialogue de choix** · la session est devant un **écran** que `etatDeLEcran` ne déclare pas prêt · la boîte est **illisible** · c'est un **brief de naissance** (`--en-attente`). `causeObstacle()` nomme les trois causes de refus ; `obstacleAvantLivraison` s'écrit par-dessus elle, verdicts inchangés.
+- **La phrase que le refus affirmait était fausse, et c'est une mesure qui l'a montré.** Il disait « personne d'autre ne peut le faire à sa place ». Mesuré sur une boîte bloquée : une touche d'envoi venue de l'extérieur la vide et le destinataire **prend** le message. Soumettre n'est pas taper à sa place — c'est finir le geste que quelqu'un a commencé, et `livrerBrief` le faisait déjà pour son propre texte.
+
+### À surveiller
+
+- ⚠️ **La revue de fond a rattrapé l'exécutant ET l'orchestrateur** : devant un **dialogue**, la touche d'envoi ne soumet pas un texte, elle **confirme l'option par défaut**. Pire, la garde d'immobilité *aggravait* le danger — quelqu'un qui réfléchit devant une confirmation ne bouge rien, donc l'état le plus dangereux se lisait « sûr à soumettre ». Corrigé par deux gardes ; la forme exacte d'un dialogue de permission Claude Code reste **`[non établi]`** faute d'avoir su la reproduire, d'où une garde **large** dont le sens sûr est de s'abstenir.
+- **Cette livraison ne répare pas les postes.** Ils tournent la version **installée**, pas `main` — le blocage continuera jusqu'à l'installation (`T-20260816-0102`). Une boîte a bloqué une **cinquième** fois en recevant le compte rendu de ce correctif.
+- **Deux restes inscrits** : `T-20260817-0006` — `remettre` (la parole du dirigeant) écrit dans la boîte **sans la regarder d'abord**, et son banc d'essai ne peut pas voir la fusion parce que son double *remplace* là où le vrai service *aboute* ; `T-20260817-0007` — quand la délivrance échoue, seul l'émetteur le sait.
+
+
+## [Non-versionné] - 2026-08-17
+
 ### Ajouté
 
 - **Les garde-fous contre les biais des LLM entrent enfin dans les prompts** (T-20260512-0002 · 0004 · 0005 · 0006 · 0008 · 0009 · 0010, PR #44) — les sept sub-agents du pack, les six gabarits d'agents autonomes et trois skills de plugins portent désormais les réflexes prescrits par **STD-011 §2.6**, chacun ceux de son persona : anti-sycophantie pour `qa`, anti-ancrage pour `product`, anti-hallucinations et approbation humaine sur opérations destructives pour `devops`, ancrage de juridiction QC/CA pour le skill qui cite des articles de loi dans des rapports client.
