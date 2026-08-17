@@ -120,6 +120,22 @@ test('le destinataire reçoit l’avis COLLÉ à son message — la preuve est d
   const livre = ecrits.join('\n');
   assert.ok(livre.includes(ORDRE_PERDU), 'le texte disparu voyage avec le message livré');
   assert.ok(livre.includes('mon message'), 'et le message de l’émetteur part quand même');
+
+  // ⚠️ ET C'EST BIEN L'AVIS DE LA BOÎTE VIDÉE, PAS CELUI DE LA BOÎTE BLOQUÉE.
+  //
+  // Sans ces deux lignes, une mutation qui ÉCHANGE les deux avis reste verte — relevé en passe 2
+  // sur 317 essais verts. Les deux portent un texte et le même message : ce qui les distingue
+  // n'est pas ce qu'ils contiennent, c'est CE QU'ILS AFFIRMENT. L'un annonce un geste posé au nom
+  // du destinataire, l'autre un constat qu'on ne sait pas expliquer.
+  //
+  // Annoncer « j'ai soumis en ton nom » quand on n'a rien soumis serait le défaut exact que ce
+  // module combat — une affirmation sur un geste qui n'a pas eu lieu.
+  // ⚠️ ON CHERCHE L'AFFIRMATION, PAS LE MOT. Première écriture de cet essai : `/SOUMIS EN TON
+  // NOM/i` — qui rougissait sur la phrase de NÉGATION de l'avis juste (« je n'ai rien soumis en
+  // ton nom »). Chercher un mot et conclure sur la fonction : le défaut même que ce chantier
+  // corrige, commis dans l'essai censé l'attraper.
+  assert.doesNotMatch(livre, /Je l’ai SOUMIS pour son auteur/i, 'on n’annonce PAS un geste qu’on n’a pas posé');
+  assert.match(livre, /ELLE S’EST VIDÉE/i, 'c’est le constat de la boîte vidée qui part');
 });
 
 test('L’ENVOI NE DOIT PAS ÉCHOUER — la cause bénigne est majoritaire, refuser ici tuerait la garde', async () => {
