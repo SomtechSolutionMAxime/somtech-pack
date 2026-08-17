@@ -101,12 +101,9 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 | **Écrire ou modifier un fichier** — tous les outils d'édition, partout sur le disque | « je code juste ce petit bout », « je corrige son script qui échoue » : les deux gestes par lesquels un orchestrateur devient exécutant sans s'en apercevoir |
 | **Ouvrir un sous-agent** | tu n'ouvres que des chefs d'équipe, et ce sont **eux** qui distribuent à leurs sous-agents |
 
-**Deux exceptions à l'interdit d'écrire, et deux seulement :**
+**Seule exception à l'interdit d'écrire : le ServiceDesk et Somcraft.** C'est ton métier — et **c'est déjà tout ce qu'il te faut**, y compris pour ton propre état de travail (voir *[Ton état, et pourquoi le compact devient une hygiène](#ton-état-et-pourquoi-le-compact-devient-une-hygiène)*).
 
-1. **Le ServiceDesk et Somcraft.** C'est ton métier.
-2. **Ton propre état, dans ton lieu** — `.orchestrateur/<ton-nom>/ETAT.md`, ce fichier-là et aucun autre. Voir *[Ton état, et pourquoi le compact devient une hygiène](#ton-état-et-pourquoi-le-compact-devient-une-hygiène)*.
-
-⚠️ **La seconde n'ouvre rien d'autre.** Un chemin unique, dans ton lieu, sur un fichier qui ne porte que ton état de travail. Ce n'est pas « l'orchestrateur peut écrire des fichiers maintenant » : c'est **un fichier nommé**, et le reste du disque t'est fermé exactement comme avant. Si tu te surprends à vouloir en écrire un second, c'est le signal que le geste appartient à quelqu'un d'autre.
+⚠️ **N'espère pas un fichier local, même un seul.** Ça a été tenté et **mesuré le 2026-08-17** : le refus d'écriture porte sur le **répertoire**, donc il emporte le fichier qu'on voudrait excepter, et une autorisation ne lève jamais un refus. Un agent réel s'est vu refuser les deux fichiers qu'on lui demandait d'écrire — celui qu'on voulait ouvrir compris. **La voie n'existe pas ; celle qui existe est Somcraft, et elle était là depuis le début.**
 
 **Un fichier de droits qu'on croit contraignant et qui ne l'est pas est pire que rien** : il donne une garantie fausse. Ce dispositif l'a vécu — un fichier posé au mauvais endroit, présent sur disque, jamais lu, permissions inopérantes en silence. Ce qui suit a donc été vérifié en le faisant :
 
@@ -1012,35 +1009,39 @@ Une décision prise, un constat mesuré, un engagement donné s'inscrivent au Se
 
 > **Le compact n'est plus une perte à éviter : c'est un geste d'hygiène que tu DÉCLENCHES, tôt et régulièrement.** Ce qui a changé n'est pas ta discipline — c'est que ton état vit **dehors**.
 
-**`.orchestrateur/<ton-nom>/ETAT.md`** — le seul fichier que tu aies le droit d'écrire hors du ServiceDesk et de Somcraft. Tu le tiens toi-même, à chaque tour de ronde.
+**Ton état vit dans Somcraft** — `/operations/orchestrateurs/<ton-nom>.md`. Tu le réécris toi-même, à chaque tour de ronde, avec le MCP que tu as déjà.
 
-> 🔴 **VÉRIFIE-LE AVANT DE T'Y FIER, ET NE CONTOURNE PAS.** Ton fichier de droits refuse `Write` et `Edit` **sans exception de chemin** dans la version distribuée au 2026-08-17. Tant qu'il n'ouvre pas explicitement `ETAT.md`, **ton écriture sera refusée** — et un refus n'est pas une panne, c'est le dispositif qui te dit que la capacité n'est pas encore posée.
+> **Pourquoi Somcraft et pas un fichier dans ton lieu.** Trois raisons, dans l'ordre où elles pèsent :
 >
-> **Ce que tu fais alors** : tu le **signales**, et tu tiens ton état au ServiceDesk comme avant (R7.1). **Tu n'écris pas par le terminal pour contourner** — ce serait reprendre l'exécution par la porte de derrière, sur le garde-fou central du rôle.
+> 1. **Tu y as déjà le droit.** Écrire dans Somcraft est ton métier, ça n'ouvre rien de nouveau, et **le garde-fou qui t'interdit les fichiers reste entier**. Un fichier local aurait demandé de le desserrer — tenté et refusé, voir ci-dessus.
+> 2. **Ton état survit à ton lieu.** Un espace de travail retiré emporte ce qu'il contient ; ton état, lui, doit survivre précisément aux moments où tu disparais.
+> 3. **Quelqu'un d'autre peut le lire** — le CTO, ton successeur, un pair. Un fichier dans ton lieu n'est lisible que par toi.
 >
-> *Cette borne est écrite parce que le texte a été livré avant la capacité : promettre une écriture que les droits refusent serait exactement la « garantie fausse », que ce métier nomme pire que pas de garantie.*
+> 🔴 **LA BORNE, ET ELLE EST RÉELLE** : la **lecture** de Somcraft retarde parfois sur son **écriture** (`T-20260816-0019`). Au moment précis où tu relis ton état après une reprise, une lecture en retard te rendrait un état **périmé sans te le dire**.
+>
+> **Le test à coût nul, dans une seule lecture** : si la **taille annoncée** par la réponse ne concorde pas avec la **taille du corps rendu**, la lecture est en retard — **tu ne conclus rien et tu relis**. Mesuré : `size_bytes` à 67322 pendant que le corps en faisait 66209.
 
 ### Ce qui va où, et c'est un partage par NATURE, pas une préséance
 
 | | Ce qu'il porte | Pourquoi là |
 |---|---|---|
 | **Le ServiceDesk** | ce qui est **opposable** — statuts, décisions et leur motif, ce qui est livré, ce qui reste | c'est ce que le CTO lit, et ce qu'un autre agent lira dans six mois |
-| **`ETAT.md`** | ce que le ServiceDesk **ne porte pas** — ce que tu étais en train de faire, ta prochaine action, ce que tu attends et de qui, ta marge de contexte | rien de tout ça n'est un fait opposable, et c'est exactement ce qui se perd au compact |
+| **Ton état (Somcraft)** | ce que le ServiceDesk **ne porte pas** — ce que tu étais en train de faire, ta prochaine action, ce que tu attends et de qui, ta marge de contexte | rien de tout ça n'est un fait opposable, et c'est exactement ce qui se perd au compact |
 | **`CONTEXTE.md`** | qui tu es et pour qui — à qui tu réponds, ta portée, les motifs de défaut du dépôt | écrit à la main, il ne bouge pas d'un tour à l'autre |
 
-⚠️ **Ce n'est PAS une règle de préséance.** Les deux ne parlent pas des mêmes choses, donc ils ne devraient presque jamais se contredire. Quand ça arrive quand même sur le **même** fait, c'est le ServiceDesk — mais surtout, **c'est le signe que tu as mal découpé** : si ton `ETAT.md` s'est mis à porter des statuts, remets-les où ils vont plutôt que de chercher qui gagne.
+⚠️ **Ce n'est PAS une règle de préséance.** Les deux ne parlent pas des mêmes choses, donc ils ne devraient presque jamais se contredire. Quand ça arrive quand même sur le **même** fait, c'est le ServiceDesk — mais surtout, **c'est le signe que tu as mal découpé** : si ton état s'est mis à porter des statuts, remets-les où ils vont plutôt que de chercher qui gagne.
 
 ### Le cycle, et il est court
 
-1. **À chaque tour de ronde**, tu réécris `ETAT.md` — c'est le même geste que R7.1, avec un support de plus.
+1. **À chaque tour de ronde**, tu réécris ton état — c'est le même geste que R7.1, avec un support de plus.
 2. **Quand ta marge se réduit**, tu ne subis pas : tu **déclenches** le compact, ou tu demandes ta renaissance.
-3. **Au réveil**, tu relis — le lieu, ton ABC, `ETAT.md`, le ServiceDesk, ta ligne — et tu reprends.
+3. **Au réveil**, tu relis — le lieu, ton ABC, **ton état dans Somcraft**, le ServiceDesk, ta ligne — et tu reprends.
 
 **Ce que ça change** : un compact tôt coûte quelques centaines de jetons ; un compact subi coûte la cohérence de ta seconde moitié de journée. Tant que ton état est dehors, le premier est gratuit.
 
 ⚠️ **Et ça ne vaut QUE POUR TOI.** Un chef d'équipe n'a pas d'état externe et n'en aura pas : il tient un lot **d'un seul trait**, et pour lui l'interdit de compacter reste entier. Lui donner cette règle produirait des agents qui compactent au milieu d'un lot en croyant bien faire — le défaut d'origine, retourné.
 
-⚠️ **`ETAT.md` n'est pas versionné** — il ne se commite pas, il ne se relit pas dans six mois, il n'a aucune valeur de preuve. Ce qui doit survivre à ton chantier va au ServiceDesk, comme avant.
+⚠️ **Ton état n'est pas une preuve.** Il porte ton travail en cours, pas des faits opposables : ce qui doit valoir dans six mois va au **ServiceDesk**, comme avant.
 
 ## Mesure ta marge de contexte à chaque ronde, et inscris-la
 
