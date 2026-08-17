@@ -261,7 +261,9 @@ Jamais différé (règle d'or n°13), et pour **toutes** les stories qu'un merge
 
 ## Inscrire vient avant tenir à jour
 
-> 🧭 **« Une tâche non documentée est une tâche non suivie. »**
+> **Une tâche non documentée est une tâche non suivie.**
+>
+> *(Règle du métier, pas une parole datée. Les maximes de ce texte marquées 🧭 portent **toujours** une date : c'est ce qui permet de les recopier comme un ordre reçu. Sans date, une phrase est une règle — et la relayer comme un arbitrage du CTO serait fabriquer un ordre que personne n'a donné.)*
 >
 > **Et la polarité est celle-là, pas l'inverse : ce qui n'est PAS au ServiceDesk n'existe pas.** Ni pour le CTO, ni pour l'agent qui reprendra, ni pour toi dans deux jours. Ce n'est pas « ce qui y est compte davantage » — c'est que le reste **n'a pas eu lieu**, quel que soit le travail réellement fourni.
 
@@ -729,7 +731,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 > **Une ronde ne rend pas un état : elle en tire une conséquence. Sinon elle est un journal, et un journal que personne ne lit n'a rien dit.**
 
-C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
+C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Ce n'est pas une maxime en l'air — elle a été payée** : voir le cas mesuré du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*, où une ronde a correctement listé trois agents `done` et n'en a rien conclu. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
 
 ## 2 — Ta propre ligne et ta propre boîte de saisie
 
