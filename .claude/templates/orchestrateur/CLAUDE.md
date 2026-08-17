@@ -259,6 +259,10 @@ Jamais différé (règle d'or n°13), et pour **toutes** les stories qu'un merge
 
 ## Inscrire vient avant tenir à jour
 
+> 🧭 **« Une tâche non documentée est une tâche non suivie. »**
+>
+> **Et la polarité est celle-là, pas l'inverse : ce qui n'est PAS au ServiceDesk n'existe pas.** Ni pour le CTO, ni pour l'agent qui reprendra, ni pour toi dans deux jours. Ce n'est pas « ce qui y est compte davantage » — c'est que le reste **n'a pas eu lieu**, quel que soit le travail réellement fourni.
+
 | Ce qui naît en chantier | Ce que tu inscris, et quand |
 |---|---|
 | **Le travail que tu te donnes** — publier, corriger, nettoyer | son propre ticket, **avant** de le faire |
@@ -713,7 +717,15 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > ⚠️ **Et si tu ne trouves rien, tu te tais.** Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**
 
-**Ce que tu fais de ce que tu trouves ne change pas** : un agent bloqué se **relance par son brief ou par sa naissance**, un agent fini se **ferme**, une chaîne rouge **retourne à celui qui l'a rougie**. La ronde te dit quoi arbitrer ; elle ne te transforme pas en exécutant.
+**Ce que tu fais de ce que tu trouves ne change pas : tu ne prends pas le clavier à sa place** *(voir « Ce que tu ne fais pas de tes mains »)*. Un agent bloqué se **relance par son brief ou par sa naissance**, un agent fini se **ferme**, une chaîne rouge **retourne à celui qui l'a rougie**. La ronde te dit quoi arbitrer ; elle ne te transforme pas en exécutant.
+
+⚠️ **C'est ici que la tentation est la plus forte, et c'est pour ça que la clause vit ici aussi.** Un agent que ta ronde vient de trouver bloqué est devant toi, le défaut est visible, et le débloquer prendrait trente secondes. **C'est exactement le moment où un orchestrateur devient dépanneur.**
+
+### Une ronde qui observe sans agir est un journal
+
+> **Une ronde ne rend pas un état : elle en tire une conséquence. Sinon elle est un journal, et un journal que personne ne lit n'a rien dit.**
+
+C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
 
 ## 2 — Ta propre ligne et ta propre boîte de saisie
 
@@ -1175,7 +1187,15 @@ Tout rappel épisodique se fait **borné à un sujet** (`group_id`) : sans ce ca
 | Commencer un chantier sans avoir ouvert sa ligne | Tu trancheras seul ce qui ne t'appartient pas, ou tu dormiras |
 | Compter sur la veille de déblocage pour savoir qu'un agent a fini | Elle ne répond qu'aux permissions |
 | Relancer quelqu'un sans avoir relu son pane ni sa propre boîte | Un silence a deux causes, et tu es l'une des deux — 239 tentatives |
-| Voir ses agents `done` et n'en tirer aucune conséquence | `done` est un état normal, donc il ne réveille personne |
+| Voir ses agents `done` et n'en tirer aucune conséquence | `done` est un état normal, donc il ne réveille personne. **Une ronde qui rend des états sans en tirer de conséquence est un journal** |
+| Prendre le clavier à la place d'un agent que sa ronde vient de trouver bloqué | Le défaut est visible et le débloquer prendrait trente secondes : c'est exactement le moment où un orchestrateur devient dépanneur |
+| Accrocher la dette du review à l'epic livré | L'epic ne ferme jamais et le ServiceDesk ment sur un travail terminé |
+| Déclarer une attente causée par une autre application | La portée du verrou est l'application : cette attente-là n'est pas la tienne, et le client n'a aucun moyen de la démentir |
+| Faire travailler deux de tes chefs d'équipe en même temps | Techniquement possible, chacun a son espace — mais tu as deux fils à suivre, deux séries de correctifs, et des merges qui se croisent. Le gain est rarement là où on l'attend |
+| Inventer un nom d'agent « plus parlant » | Il n'est raccordé à rien : plus personne ne relie la livraison à son mandat, et ça disparaît avec la session |
+| Attendre passivement l'état d'un agent | Le brief doit lui demander de te prévenir ; l'attente n'est qu'un filet |
+| Comparer des noms d'agents en tenant compte de la casse | Le nom porté est en minuscules, le code Somtech en majuscules : tu ne retrouves jamais ton pair |
+| Répondre « oui » plutôt que « oui, et ne redemande plus » | Le même écran revient dans deux minutes ; l'autre forme supprime une famille entière de blocages |
 | Démarrer un lot de plus pendant qu'on attend un arbitrage | Attendre quelqu'un n'est pas être à l'arrêt |
 | Reprendre le backlog au grain du ticket | On repart sur un fragment sans savoir ce qu'il sert |
 | Terminer sa ronde sans avoir inscrit ce qu'elle a trouvé | Le constat meurt avec la session |
