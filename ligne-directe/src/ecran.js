@@ -127,9 +127,17 @@ const RESUME_MAX = 600;
  * On garde les dernières lignes porteuses : un modal s'affiche EN BAS de l'écran, et c'est la
  * partie que quelqu'un pourra reconnaître d'un coup d'œil. Les filets et le vide sont jetés —
  * ils ne disent rien et prendraient toute la place.
+ *
+ * ⚠️ EXPORTÉE DEPUIS T-20260817-0008, et c'est le même raisonnement qu'`ecranAttendUnChoix` :
+ * le refus posé devant un dialogue doit MONTRER ce qu'il a vu, sinon il nomme un blocage sans
+ * donner de quoi le reconnaître. La recopier dans `livraison.js` aurait fait une porte de plus.
  */
-function resumeDeLEcran(texte) {
-  const lignes = texte
+export function resumeDeLEcran(texte) {
+  // ⚠️ ELLE NETTOIE ELLE-MÊME (T-20260817-0008). Elle n'était appelée que depuis `etatDeLEcran`,
+  // qui lui passait du texte déjà dégrisé — un contrat TACITE, invisible à la lecture. Le premier
+  // appelant du dehors a rendu un refus truffé de séquences ANSI, illisible pour celui à qui il
+  // s'adresse. `sansGris` est idempotente : l'appelant d'origine ne change pas de comportement.
+  const lignes = sansGris(texte)
     .split('\n')
     .map((l) => l.replace(/\s+$/, ''))
     .filter((l) => l.trim() && !FILET.test(l.trim()));

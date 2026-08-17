@@ -40,7 +40,12 @@ import { contenuBoite, boiteEstVide, messagesEnFile } from '../../ligne-directe/
 // écran de blocage, et `bin/naitre.js` s'en sert déjà. La revue de fond a relevé que la livraison
 // ne s'en servait PAS : elle regardait la boîte sans jamais regarder ce qui pouvait s'afficher
 // par-dessus. Sur un geste irréversible, c'était la porte-sur-deux dans sa forme la plus chère.
-import { etatDeLEcran, ressembleAUnChoix } from '../../ligne-directe/src/ecran.js';
+// ⚠️ `ecranAttendUnChoix` EST REPRISE, PAS RÉÉCRITE (T-20260817-0008, règle d'or n°15). Elle
+// existe dans `ecran.js` depuis `T-20260817-0006`, où elle a été RESSERRÉE puis MESURÉE contre
+// les faux positifs — une première version, plus large, déclarait 3 panes sur 14 « en attente de
+// choix » à tort. En écrire une seconde ici aurait rejoué « une porte sur deux » dans le
+// correctif écrit pour la fermer : la copie n'hérite jamais des corrections de l'autre.
+import { etatDeLEcran, ressembleAUnChoix, ecranAttendUnChoix, resumeDeLEcran } from '../../ligne-directe/src/ecran.js';
 
 /**
  * Le brief a-t-il été PRIS ? La question n'est pas « l'outil a-t-il dit oui », c'est « la
@@ -178,10 +183,58 @@ const ETATS_DISPONIBLES = ['idle', 'done'];
  * divergence irait dans le sens qui permet d'écrire quelque part. Un seul endroit décide, un
  * seul endroit met des mots dessus. Aucun verdict ne change ; seule la cause devient lisible.
  */
-export const CAUSES = Object.freeze({ STATUT: 'statut', ILLISIBLE: 'illisible', ENCOMBREE: 'encombree' });
+export const CAUSES = Object.freeze({
+  STATUT: 'statut',
+  ILLISIBLE: 'illisible',
+  ENCOMBREE: 'encombree',
+  // ⚠️ LA QUATRIÈME CAUSE, ET LA SEULE OÙ ÉCRIRE N'EST PAS UNE ERREUR MAIS UNE APPROBATION
+  // (T-20260817-0008). Les trois autres coûtent un message perdu ou corrompu ; celle-ci fait
+  // exécuter une commande que personne n'a validée, et le geste ne se défait pas.
+  DIALOGUE: 'dialogue',
+});
 
+/**
+ * ⚠️ L'ÉCRAN EST CONSULTÉ AVANT LA BOÎTE, ET C'EST TOUT LE CORRECTIF (T-20260817-0008).
+ *
+ * MESURÉ le 2026-08-17 sur le vrai service : un `herdr agent prompt` ordinaire, envoyé devant
+ * `Do you want to proceed? ❯ 1. Yes`, a FAIT EXÉCUTER la commande proposée. Le texte n'a pas été
+ * reçu comme un message — il a servi de CONFIRMATION. Ce n'est donc pas seulement la touche
+ * d'envoi qui confirme (`T-20260816-0114`, publié dans `v1.63.0`) : c'est l'ÉCRITURE elle-même,
+ * le geste que fait toute livraison.
+ *
+ * Cette fonction ne regardait que le statut et la boîte. Un dialogue affiché au-dessus d'une
+ * boîte VIDE passait donc entièrement : `reste === ''`, aucun obstacle, l'écriture partait.
+ *
+ * ⚠️ ET LE REFUS QUI MORDAIT MORDAIT PAR ACCIDENT. Sur le dialogue réellement observé, la boîte
+ * était illisible — donc refusée pour `ILLISIBLE`, une raison qui n'est pas la bonne. Elle
+ * disparaîtra au premier changement d'interface de Claude Code, sans que rien ne le signale,
+ * alors que ce qu'elle empêche est irréversible. Un garde-fou qui attrape par hasard n'attrape
+ * pas : il attend.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * L'ORDRE DES QUATRE CAUSES EST DÉLIBÉRÉ, et chacune de ses places se justifie :
+ *
+ *   1. STATUT — inchangé, et il reste PREMIER. Un pane `blocked` qui affiche un dialogue rend
+ *      toujours `statut` : c'est ce que lit `livrerBrief` pour savoir qu'il n'y a rien à
+ *      délivrer, et le déplacer changerait un verdict que personne n'a demandé de changer.
+ *   2. DIALOGUE — AVANT `ILLISIBLE`, pour que le refus porte la VRAIE raison plutôt que
+ *      l'effet de bord. C'est la moitié du défaut qu'on ferme.
+ *   3. DIALOGUE — AVANT `ENCOMBREE` aussi, et ce n'est pas cosmétique : `livrerBrief` ne tente
+ *      la délivrance que sur `ENCOMBREE`. Un dialogue au-dessus d'une boîte encombrée aurait
+ *      donc déclenché une touche d'envoi — le pire des deux mondes, l'attente perdue ET
+ *      l'action approuvée.
+ *
+ * ⚠️ LA MOITIÉ QUI PROTÈGE — MESURÉE, pas supposée. Le 2026-08-17, sur 153 panes RÉELS de ce
+ * poste à travers 11 sessions : 5 écrans déclarés « attend un choix », **5 vrais dialogues,
+ * ZÉRO faux positif**, et **ZÉRO pane livrable perdu** sur les 141 qui l'étaient (les 5 étaient
+ * déjà refusés — 3 par leur statut, 2 par leur boîte illisible). Une garde qui refuserait un
+ * agent sur cinq rendrait la ligne du dirigeant inutilisable — une panne PIRE, en fréquence,
+ * que celle qu'on ferme ; et une garde qui crie sur du bruit cesse d'être lue. C'est ainsi
+ * qu'une garde meurt, et c'est pour ça que ce chiffre-là comptait autant que l'autre.
+ */
 export function causeObstacle(terminal, statut, { pairOccupe = false } = {}) {
   if (!ETATS_DISPONIBLES.includes(statut) && !(pairOccupe && statut === 'working')) return CAUSES.STATUT;
+  if (ecranAttendUnChoix(terminal)) return CAUSES.DIALOGUE;
   const reste = contenuBoite(terminal);
   if (reste === null) return CAUSES.ILLISIBLE;
   if (reste !== '') return CAUSES.ENCOMBREE;
@@ -221,6 +274,28 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
       'livrer maintenant ne se prouverait pas : elle a déjà quitté l’attente sans nous. ' +
       `Attends qu’elle revienne à « idle » ou « done »${commande('get')}, puis renvoie : ` +
       'rien n’a été écrit, tu ne perds que le temps de l’attente'
+    );
+  }
+  // ⚠️ LE REFUS QUI DIT « DIALOGUE » PLUTÔT QUE « ILLISIBLE » (T-20260817-0008).
+  //
+  // Il nomme ce qui bloque — un dialogue, pas une boîte —, ce qu'il en coûterait — écrire y
+  // CONFIRME l'option affichée, mesuré —, et à qui appartient le geste. Ce dernier point n'est
+  // pas une politesse : un refus fondé qui laisse son lecteur exactement où il était ne protège
+  // plus, il remplace un défaut par un autre (T-20260816-0045).
+  //
+  // ⚠️ ET IL NE PROMET PAS UNE SORTIE QU'ON N'A PAS. Ce blocage ne se lève pas d'ici : répondre
+  // à la place de quelqu'un serait approuver en son nom une action qu'on n'a pas examinée —
+  // c'est-à-dire le défaut même qu'on ferme, posé cette fois volontairement.
+  if (cause === CAUSES.DIALOGUE) {
+    const vu = resumeDeLEcran(String(terminal ?? ''));
+    return (
+      `la session${ou} est devant un DIALOGUE qui attend un choix — on n’écrit pas là. ` +
+      'Mesuré le 2026-08-17 : un message ordinaire envoyé devant un dialogue n’est pas reçu ' +
+      'comme un message, il CONFIRME l’option affichée, et l’action part. ' +
+      '⚠️ CE BLOCAGE NE SE LÈVE PAS D’ICI : quelqu’un doit répondre à ce dialogue devant ' +
+      `${ou ? `le pane${ou}` : 'ce pane'} — répondre à sa place approuverait en son nom une ` +
+      'action que je n’ai pas examinée. Va voir toi-même' + commande('read', ' --format ansi') +
+      `${vu ? ` — voici ce que j’ai vu :\n${vu}` : ''}`
     );
   }
   const reste = contenuBoite(terminal);
@@ -405,6 +480,19 @@ export async function delivrerLaBoite({
   const etat = etatDeLEcran(ecran);
   if (!etat.pretARecevoir) return { ok: false, cause: 'ecran', soumis: false, resume: etat.resume, quoi: etat.quoi };
 
+  // ⚠️ ET L'ÉCRAN PEUT ATTENDRE UN CHOIX SANS QUE `etatDeLEcran` LE SACHE (T-20260817-0008).
+  //
+  // `etatDeLEcran` ne connaît que DEUX écrans nommés — la confiance et les serveurs MCP. Devant
+  // un dialogue de permission, il ne reconnaît rien, voit une boîte parfaitement lisible, et
+  // conclut « prête à recevoir ». `ressembleAUnChoix`, plus haut, interroge le TEXTE COINCÉ : un
+  // dialogue affiché au-dessus d'une boîte qui porte une phrase ordinaire lui échappe aussi.
+  //
+  // Entre les deux passait exactement le cas qui coûte le plus cher ici : la touche d'envoi sur
+  // un dialogue, c'est-à-dire une action approuvée au nom de quelqu'un qui ne l'a pas demandée.
+  if (ecranAttendUnChoix(ecran)) {
+    return { ok: false, cause: 'dialogue', soumis: false, resume: resumeDeLEcran(String(ecran ?? '')) };
+  }
+
   const apres = contenuBoite(ecran);
   if (apres === null) return { ok: false, cause: 'illisible', soumis: false };
   if (apres === '') return { ok: true, cause: 'liberee-seule', soumis: false };
@@ -436,6 +524,14 @@ export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
       '⚠️ Je n’ai RIEN soumis : ce que porte cette boîte ressemble à un **dialogue de choix**, ' +
       'pas à un message en souffrance. La touche d’envoi y confirmerait une action que personne ' +
       'ne m’a demandé d’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane'
+    );
+  }
+  if (delivrance.cause === 'dialogue') {
+    return (
+      '⚠️ Je n’ai RIEN soumis : l’écran de cette session porte un **dialogue qui attend un ' +
+      'choix**, affiché au-dessus de sa boîte. La touche d’envoi y confirmerait l’option ' +
+      'surlignée — une action que personne ne m’a demandé d’approuver, et qui ne se défait pas. ' +
+      `Quelqu’un doit répondre à ce dialogue devant ce pane${delivrance.resume ? `. Voici ce que j’ai vu :\n${delivrance.resume}` : ''}`
     );
   }
   if (delivrance.cause === 'ecran') {
@@ -677,9 +773,27 @@ export async function livrerBrief({
   // 4. REPARER une fois le cas connu : le texte est bien dans la boite, la soumission n'est
   //    pas partie. On envoie la touche d'envoi, puis on re-verifie — sans jamais reecrire le
   //    brief, ce qui le collerait a lui-meme.
+  //
+  // ⚠️ ET ON REGARDE L'ÉCRAN AVANT DE PRESSER ENTRÉE (T-20260817-0008, relevé en PASSE DE FOND).
+  //
+  // Ce bloc était le JUMEAU NON GARDÉ de `delivrerLaBoite`. Il lisait le CONTENU DE LA BOÎTE
+  // avant de soumettre, et jamais l'ÉCRAN — la moitié exacte du défaut que ce lot ferme trente
+  // lignes plus haut. « Une porte sur deux » commise dans le correctif écrit pour la fermer, et
+  // sur le chemin NORMAL de toute réparation après un envoi raté.
+  //
+  // LE SCÉNARIO, ET IL N'A RIEN D'EXOTIQUE : la boîte est vue vide, on écrit, puis un dialogue
+  // s'affiche PENDANT la boucle de vérification — l'agent a démarré une commande sur notre
+  // brief, et Claude Code demande la permission. Notre texte est toujours dans la boîte, donc
+  // `reste` est non vide, donc la touche d'envoi partait : elle aurait APPROUVÉ ce dialogue.
+  //
+  // Le refus qui suit dit alors POURQUOI on n'a pas réparé — sans quoi le lecteur verrait
+  // « boîte encore pleine » et retenterait le même geste à l'aveugle.
+  let dialogueALaReparation = false;
   if (!vu.pris) {
     const reste = contenuBoite(vu.terminal);
-    if (reste) {
+    if (reste && ecranAttendUnChoix(vu.terminal)) {
+      dialogueALaReparation = true;
+    } else if (reste) {
       const envoi = await appelHerdr(commandes.soumettre, vers);
       repare = envoi.ok;
       for (let i = 0; i < essais && !vu.pris; i += 1) {
@@ -700,7 +814,14 @@ export async function livrerBrief({
       message:
         `le brief n\u2019a pas \u00e9t\u00e9 pris par la session de ${pane} \u2014 statut \u00ab ${vu.statut ?? '\u2014'} \u00bb, ` +
         `bo\u00eete ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (\u00ab ${reste.slice(0, 60)}\u2026 \u00bb)`}` +
-        `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}`,
+        `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}` +
+        (dialogueALaReparation
+          ? '\n⚠️ ET JE N’AI PAS TENTÉ DE LE SOUMETTRE : un DIALOGUE qui attend un choix s’est ' +
+            'affiché pendant que je vérifiais. La touche d’envoi y aurait confirmé l’option ' +
+            'surlignée au lieu de soumettre mon texte — une action que personne ne m’a demandé ' +
+            'd’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane ; mon brief est ' +
+            'toujours dans la boîte, entier, et partira quand la boîte sera rendue.'
+          : ''),
     };
   }
 
