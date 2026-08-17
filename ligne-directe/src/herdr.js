@@ -18,7 +18,7 @@ import { join } from 'node:path';
 
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
 import { contenuBoite, laPriseEstConstatee } from './boite.js';
-import { etatDeLEcran, refusDEcran, ressembleAUnChoix } from './ecran.js';
+import { etatDeLEcran, refusDEcran, ecranAttendUnChoix } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -108,29 +108,9 @@ export async function remettre(pane, texte, { socket } = {}) {
   // ce soit. Un état qui ne pouvait pas être différent n'est pas un témoin (T-20260815-0011).
   const avant = await etatDuPane(pane, socket);
 
-  // ═══ ET ON REFUSE SI LA BOÎTE N'EST PAS VIDE — T-20260817-0006.
-  //
-  // ⚠️ MESURÉ le 2026-08-17 contre le vrai service, la preuve prise dans la TRANSCRIPTION du
-  // destinataire : `agent prompt` n'écrit pas dans une boîte vide, il ABOUTE son texte à ce qui
-  // s'y trouve, sans séparateur, ET SOUMET. Une boîte portant « AAAA…AAAA » a fait recevoir à
-  // l'agent, en un seul tour de parole, « AAAA…AAAABBBB…BBBB ».
-  //
-  // Deux textes que personne n'a écrits ensemble partent donc comme UN SEUL message — sur le
-  // chemin par lequel arrive la parole du dirigeant. Un arbitrage mêlé à autre chose et soumis
-  // est un ordre que personne n'a donné, et il est exécuté.
-  //
-  // ⚠️ IL N'Y A AUCUN RATTRAPAGE APRÈS COUP, et c'est ce qui commande la forme du remède : quand
-  // on relit la boîte plus bas, le mélange est déjà parti. La lecture ci-dessus n'était qu'un
-  // témoin de preuve ; elle devient aussi un GARDE. C'est le seul instant où l'on peut agir.
-  //
-  // ⚠️ ET UN ÉCRAN QU'ON N'A PAS SU LIRE EST UN REFUS. Le commentaire d'avant justifiait le
-  // contraire — « contrairement à la livraison d'un brief, on n'écrit pas par-dessus quoi que ce
-  // soit ici ». Cette prémisse était fausse : on écrit bien par-dessus. Le raisonnement s'inverse
-  // donc avec elle. Ne pas savoir ce qu'il y a dans la boîte ne permet pas d'affirmer qu'elle est
-  // vide — et c'est en écrivant sur cette supposition qu'on fusionne.
-  // ═══ ET ON NE POSE RIEN DEVANT UN ÉCRAN DE CHOIX — relevé en revue de fond, BLOQUANT, et il
-  // était juste : le refus ci-dessous ne regardait que la BOÎTE, jamais l'écran. Un dialogue
-  // affiché au-dessus d'une boîte vide passait donc entièrement.
+  // ═══ 1. ON NE POSE RIEN DEVANT UN ÉCRAN DE CHOIX — relevé en REVUE DE FOND, bloquant, et il
+  // était juste : le refus de boîte, plus bas, ne regardait que la BOÎTE. Un dialogue affiché
+  // au-dessus d'une boîte vide passait donc entièrement.
   //
   // ⚠️ MESURÉ LE 2026-08-17, ET C'EST LE FAIT QUI MANQUAIT À DEUX LOTS. `livraison.js` portait
   // **[non établi]** — personne n'avait su reproduire un vrai dialogue de permission. Reproduit
@@ -150,7 +130,7 @@ export async function remettre(pane, texte, { socket } = {}) {
   // aurait mordu — mais PAR ACCIDENT, et « protégé par accident » est le motif que ce dépôt
   // ferme partout. Un écran de choix qui laisse une boîte lisible sous lui n'était gardé par rien.
   const etatAvant = etatDeLEcran(avant.ecran);
-  if (ressembleAUnChoix(avant.ecran) || (avant.ecran && !etatAvant.pretARecevoir)) {
+  if (ecranAttendUnChoix(avant.ecran) || (avant.ecran && !etatAvant.pretARecevoir)) {
     throw new RemiseEchouee(
       pane,
       `${pane} est devant un écran qui attend un choix, pas un message — ` +
@@ -161,6 +141,26 @@ export async function remettre(pane, texte, { socket } = {}) {
     );
   }
 
+  // ═══ 2. ET ON REFUSE SI LA BOÎTE N'EST PAS VIDE — le défaut fondateur de ce lot.
+  //
+  // ⚠️ MESURÉ le 2026-08-17 contre le vrai service, la preuve prise dans la TRANSCRIPTION du
+  // destinataire : `agent prompt` n'écrit pas dans une boîte vide, il ABOUTE son texte à ce qui
+  // s'y trouve, sans séparateur, ET SOUMET. Une boîte portant « AAAA…AAAA » a fait recevoir à
+  // l'agent, en un seul tour de parole, « AAAA…AAAABBBB…BBBB ».
+  //
+  // Deux textes que personne n'a écrits ensemble partent donc comme UN SEUL message — sur le
+  // chemin par lequel arrive la parole du dirigeant. Un arbitrage mêlé à autre chose et soumis
+  // est un ordre que personne n'a donné, et il est exécuté.
+  //
+  // ⚠️ IL N'Y A AUCUN RATTRAPAGE APRÈS COUP, et c'est ce qui commande la forme du remède : quand
+  // on relit la boîte plus bas, le mélange est déjà parti. La lecture d'écran ci-dessus n'était
+  // qu'un témoin de preuve ; elle devient aussi un GARDE. C'est le seul instant où l'on peut agir.
+  //
+  // ⚠️ ET UN ÉCRAN QU'ON N'A PAS SU LIRE EST UN REFUS. Le commentaire d'avant justifiait le
+  // contraire — « contrairement à la livraison d'un brief, on n'écrit pas par-dessus quoi que ce
+  // soit ici ». Cette prémisse était fausse : on écrit bien par-dessus. Le raisonnement s'inverse
+  // donc avec elle. Ne pas savoir ce qu'il y a dans la boîte ne permet pas d'affirmer qu'elle est
+  // vide — et c'est en écrivant sur cette supposition qu'on fusionne.
   const dejaLa = contenuBoite(avant.ecran);
   if (dejaLa === null) {
     throw new RemiseEchouee(
@@ -250,7 +250,7 @@ export async function remettre(pane, texte, { socket } = {}) {
     // personne ne peut reprendre. Et ce chemin n'est atteint que si le texte est resté coincé,
     // c'est-à-dire dans un cas déjà anormal.
     const etat = etatDeLEcran(ecranApres);
-    if (ressembleAUnChoix(ecranApres) || !etat.pretARecevoir) {
+    if (ecranAttendUnChoix(ecranApres) || !etat.pretARecevoir) {
       throw new RemiseEchouee(
         pane,
         `le message est resté dans la boîte de saisie de ${pane}, et je ne peux pas l’en sortir : ` +

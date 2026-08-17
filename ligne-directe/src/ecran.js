@@ -245,6 +245,45 @@ export function ressembleAUnChoix(texte) {
   return MARQUES_DE_CHOIX.some((m) => m.test(t));
 }
 
+/**
+ * UN ÉCRAN ENTIER ATTEND-IL UN CHOIX ? — la même question, posée à l'écran et non à la boîte.
+ *
+ * ⚠️ POURQUOI CE N'EST PAS `ressembleAUnChoix` APPLIQUÉE À L'ÉCRAN. Celle-ci est volontairement
+ * LARGE parce qu'elle interroge le contenu de la BOÎTE DE SAISIE, où une option numérotée n'a
+ * rien à faire. Sur un écran entier, la même largeur devient ruineuse : **mesuré le 2026-08-17
+ * sur 14 panes réels de ce poste, 3 étaient déclarés « en attente de choix » à tort — 21 %.**
+ * Tous les trois pour la même raison : la sortie ordinaire de leur agent contenait une liste
+ * numérotée (« \n  1. … »). Ils étaient `idle`, boîte prête, parfaitement joignables.
+ *
+ * Une garde qui refuserait un agent sur cinq rendrait la ligne du dirigeant inutilisable — soit
+ * une panne PIRE, en fréquence, que celle qu'on ferme. Le sens sûr d'un geste irréversible reste
+ * l'abstention, mais l'abstention ne doit pas se déclencher sur du bruit : elle cesserait d'être
+ * lue, ce qui est la façon dont une garde meurt.
+ *
+ * On exige donc un signal de dialogue ACTIF, pas la simple présence d'une liste :
+ *
+ *   • le CURSEUR DE SÉLECTION posé sur une option numérotée (« ❯ 1. Yes ») — c'est ce qui
+ *     distingue un choix qu'on attend d'une liste qu'on lit ; ou
+ *   • une FORMULE D'INVITE explicite (« Do you want to… », « (y/n) », « Esc to cancel »,
+ *     « Enter to confirm ») — des tournures qu'une prose ordinaire n'emploie pas.
+ *
+ * Les trois faux positifs mesurés disparaissent avec ce resserrement, et le vrai dialogue de
+ * permission — celui qui a fait exécuter une commande le 2026-08-17 — continue d'être reconnu.
+ */
+const MARQUES_DE_DIALOGUE_ACTIF = [
+  /❯\s*[1-9]\.\s/,
+  /\b(?:enter|entrée)\b[^\n]{0,20}\b(?:to )?confirm/i,
+  /\besc\b[^\n]{0,20}\b(?:to )?cancel/i,
+  /\(y\/n\)/i,
+  /\bdo you want to\b/i,
+];
+
+export function ecranAttendUnChoix(texteTerminal) {
+  const t = sansGris(texteTerminal);
+  if (!t) return false;
+  return MARQUES_DE_DIALOGUE_ACTIF.some((m) => m.test(t));
+}
+
 /** Le geste mesuré qui franchit cet écran, s'il en existe un. Aucun par défaut. */
 export function touchesPourFranchir(etat) {
   if (!etat?.ecran) return null;

@@ -159,6 +159,14 @@ test('DEVANT UN DIALOGUE, ON N’ÉCRIT MÊME PAS — écrire y CONFIRME l’act
   // mordu. Mais **par accident, pas par conception** : c'est le motif que ce dépôt nomme depuis
   // `T-20260816-0114`. Un écran de choix qui laisse une boîte lisible sous lui n'était gardé par
   // rien. C'est ce que cet essai éprouve : boîte vide et parfaitement lisible, dialogue au-dessus.
+  // ⚠️ ET LA SONDE A DÛ ÊTRE RESSERRÉE, sur mesure elle aussi. Appliquer la sonde LARGE de la
+  // boîte à un écran entier déclarait « en attente de choix » **3 panes réels sur 14** de ce
+  // poste — 21 % —, tous `idle`, boîte prête, parfaitement joignables. La cause était la même
+  // dans les trois cas : une simple liste numérotée dans la sortie ordinaire de leur agent.
+  // Une garde qui refuse un agent sur cinq rend la ligne du dirigeant inutilisable : ce serait
+  // une panne PIRE, en fréquence, que celle qu'on ferme. `ecranAttendUnChoix` exige donc le
+  // curseur de sélection (« ❯ 1. ») ou une formule d'invite — les trois faux positifs
+  // disparaissent, et le dialogue mesuré reste reconnu.
   const p = poste({
     statut: 'idle',
     boite: '',
