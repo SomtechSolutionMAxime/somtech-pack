@@ -5,6 +5,29 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-17
+
+### Ajouté
+
+- **Le backlog du pack a été relu en entier, et il dit désormais la vérité** (T-20260816-0016, PR #267) — **169 tickets** non fermés, lus un par un, description **et** commentaires : **33 fermés avec leur preuve mesurée**, **132 confirmés vivants**, 4 déclarés `[non établi]` faute de pouvoir trancher.
+- **L'hypothèse de départ était juste, mais à 19 %** — pas à la majorité. Et le déjà-réglé **n'était pas où on le cherchait** : *aucune* des fermetures ne dormait dans `ready_to_deploy`. Elles dormaient dans `new`, invisibles au statut. Il fallait lire.
+- **Chaque fermeture porte sa preuve** en commentaire de son ticket : une commande et sa sortie, un `chemin:ligne` à `HEAD`, ou un commit avec sa version. Jamais *« ça a probablement été corrigé »* — le raccourci qui a produit ce backlog.
+
+### Corrigé
+
+- ⚠️ **Une fermeture a été écrite, puis rétractée** — et c'est la partie qui apprend le plus. `T-20260814-0019` avait été fermé sur *« l'orchestrateur est désormais réveillé par un service du poste »*. **Faux** : `launchctl`, les plists et `rendez-vous.js service etat` le démentent tous les trois, et `naitre.js` ne pose jamais la ronde. **La passe 2 de revue l'a rejeté ; la re-mesure lui a donné raison ; le ticket est rouvert.**
+- **Le motif de l'erreur, nommé** : lire le **mécanisme** (`rendez-vous.js` *sait* poser un service) et conclure au **dispositif**. Savoir poser n'est pas poser. C'est *« une porte sur deux »*, le motif dominant de ce dépôt — commis en fermant un ticket qui le dénonçait, et pendant que le même lot mesurait l'absence deux minutes plus tard sans relier les deux.
+
+### Technique
+
+- **Deux passes de revue**, verdicts montrés et non conclus : **portail RIEN VU** (arithmétique recomptée, demandes de fusion vérifiées, cinq fermetures échantillonnées, arbre contrôlé) · **fond REJET** (neuf fermetures re-mesurées, huit tiennent).
+- **Ce qui est corrigé au dépôt mais absent du poste est marqué, pas fermé** : `session.js`, `versement.js` et `vigie.js` — trois modules livrés entre v1.55 et v1.62 — ne sont pas installés. Inscrit sur `T-20260816-0102`, qui reste ouvert.
+- **Quatre affirmations corrigées**, dont deux venaient du brief du lot lui-même : quatre demandes de fusion en brouillon et non cinq · l'état d'installation **se mesure** par le contenu, même quand la version reste illisible.
+- **Deux demandes de fusion prêtes dormaient** : `#44` depuis **96 jours** (elle porte neuf tickets `proposed`) et `#148` avec 115 commits de retard. Arbitrées et inscrites ticket par ticket.
+- **Dix groupes de doublons candidats** signalés sur titres ; deux prouvés et traités, les autres laissés à l'arbitrage — un doublon se prouve sur les descriptions, jamais sur les titres.
+- Livrables : `docs/menage-backlog/2026-08-16-perimetre.md` et `docs/menage-backlog/2026-08-16-verdicts.md`.
+
+
 ## [1.62.0] - 2026-08-16
 
 
