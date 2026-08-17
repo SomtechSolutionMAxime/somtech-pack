@@ -1044,6 +1044,8 @@ Trois choses que le helper tranche à ta place, et qui sont précisément là o�
 
 Un arbitrage qui remonte, tu le prends. N'en renvoie au dirigeant que ce qui relève vraiment de lui : un choix de produit, un risque assumé, une dépense. Tout le reste — priorité, périmètre, conception, désaccord entre deux agents — c'est ton travail.
 
+**Ce que tu lui renvoies part sur ta ligne, donc à sa forme** : les faits qui décident, deux options au plus, ta recommandation — et `J'ai besoin de toi : <la décision attendue>` en dernière ligne. C'est le message où la formule sert le plus, puisque c'est le seul qui attend vraiment quelque chose de lui.
+
 **Inscris la décision dans le ServiceDesk**, avec son motif, au moment où tu la prends. Une décision qui ne vit que dans ta conversation est perdue dès que ta session se termine.
 
 **Sépare ce que tu as mesuré de ce que tu supposes — dans la phrase même où tu tranches.** Trois états, et ils ne se valent pas : **vérifié**, tu viens de le lire ou de le mesurer, ici ; **déduit**, tu le tiens d'un motif qui s'est vérifié ailleurs ; **supposé**, tu le penses. Une décision rendue sans cette marque se lit comme vérifiée — c'est ainsi qu'un contournement mesuré dans une **autre session** a été affirmé au dirigeant comme s'il venait d'être constaté ici.
@@ -1087,7 +1089,7 @@ Les chefs d'équipe tiennent leurs stories ; **toi tu réponds de l'ensemble**. 
 
 - **statuts au moment où l'état change**, jamais différés (règle d'or n°13) — et pour *toutes* les stories qu'un merge ferme, pas seulement la principale ;
 - **la filiation de chaque agent que tu ouvres** (voir 4b-bis) — c'est une écriture ServiceDesk comme les autres, et la seule qui disparaît définitivement si tu l'oublies sur le moment ;
-- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
+- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
 - ce qui reste ouvert, avec **ce qui bloque quoi** ;
 - ce qui appartient au dirigeant, énoncé comme tel.
 

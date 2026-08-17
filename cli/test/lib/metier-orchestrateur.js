@@ -135,6 +135,24 @@ export const AMENDEMENTS_DU_LOT = new Map([
   ['6. Coordonner les chantiers voisins', []],         // que des ajouts
 ]);
 
+/**
+ * Les endroits du métier où un message PART vers le dirigeant — donc où la formule de fin
+ * (« J'ai besoin de toi : ») doit être rappelée, sous peine de redevenir la rubrique d'un
+ * seul geste. T-20260817-0016.
+ *
+ * ⚠️ CETTE LISTE EST LA GARDE, PAS UNE DOCUMENTATION. La première version du lot ne
+ * vérifiait que deux de ces endroits, alors que le texte s'en déclarait cinq : retirer le
+ * rappel du bilan de clôture laissait le contrôle vert. Ajouter ici un endroit qu'on écrit
+ * dans le métier est ce qui empêche l'écart de se rouvrir en silence.
+ */
+export const ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE = [
+  { quoi: 'ta ligne directe (§1-bis)', sonde: /Ouvrir ta ligne avec le dirigeant/i },
+  { quoi: 'le topo du matin', sonde: /Le topo du matin/i },
+  { quoi: 'ce que tu lui renvoies quand tu ne tranches pas (§5)', sonde: /Ce que tu tranches toi-même/i },
+  { quoi: 'le compte rendu d’avancement sur le chantier (§7)', sonde: /Tenir le ServiceDesk/i },
+  { quoi: 'le bilan de clôture (§8)', sonde: /^8\. Clore$/i },
+];
+
 /** La phrase que l'ajout 3 RETIRE. Un retrait se défait par mégarde plus facilement qu'un ajout. */
 export const PHRASE_RETIREE = 'continue sans elle';
 
@@ -2327,6 +2345,16 @@ export const CONTROLES = [
         assert.match(destinations[i], ou, `« ${quoi} » ne va plus où il doit (« ${destinations[i]} ») — les deux colonnes sont inversées`);
       }
 
+      // ── LE SEUIL DE REMONTÉE D'UNE ERREUR. Sans lui, le tri ci-dessus se lit comme une
+      // règle de volume : un orchestrateur consciencieux remonte tout, « pour être franc », et
+      // la ligne redevient illisible sans qu'aucune consigne soit violée. Relevé par la passe
+      // de fond : cette phrase n'était gardée par rien, et l'inverser passait inaperçu.
+      exigePolarite(
+        s.corps, /ne remonte sur la ligne que si elle change une décision/i,
+        'une erreur ne remonte sur la ligne QUE si elle change une décision en cours — sinon elle s’inscrit et se tait',
+        { inverse: /toute erreur remonte|chaque erreur (?:se dit|remonte)|remonte-les toutes/i },
+      );
+
       // ── LES SURFACES, ET C'EST LA MOITIÉ QUI DISTINGUE CETTE RÈGLE DE CELLE QU'ELLE REMPLACE.
       // La version d'avant visait la conversation ; la ligne y échappait, et c'est par elle que
       // le débordement est passé sans qu'aucune règle ne soit techniquement violée. Retirer une
@@ -2425,12 +2453,15 @@ export const CONTROLES = [
       // La règle existait déjà : le point 3 du format de compte rendu. Elle n'a jamais mordu
       // parce qu'elle était la RUBRIQUE D'UN GESTE — un topo dans la conversation — et que les
       // autres messages n'en savaient rien. Exiger qu'elle soit écrite ici ne prouverait donc
-      // rien du tout : ce qu'on garde, c'est qu'elle soit rappelée AUX ENDROITS OÙ UN MESSAGE
-      // SE FABRIQUE. Si l'un des deux la perd, la règle est redevenue ce qu'elle était.
-      for (const { quoi, sonde } of [
-        { quoi: 'ta ligne directe (§1-bis)', sonde: /Ouvrir ta ligne avec le dirigeant/i },
-        { quoi: 'le topo du matin', sonde: /Le topo du matin/i },
-      ]) {
+      // rien du tout : ce qu'on garde, c'est qu'elle soit rappelée À CHAQUE ENDROIT OÙ UN
+      // MESSAGE SE FABRIQUE. Si l'un d'eux la perd, la règle est redevenue ce qu'elle était.
+      //
+      // ⚠️ LA PASSE DE FOND A TROUVÉ CE TROU DANS LA PREMIÈRE VERSION DE CE LOT, et il est
+      // instructif : la règle se DÉCLARAIT valable sur cinq surfaces, et la garde n'en
+      // vérifiait que deux. Retirer le rappel du bilan de clôture laissait le contrôle vert.
+      // Une garde qui vérifie moins que ce que le texte promet est un faux témoin — et c'est
+      // le motif exact que ce lot ferme, commis dans le lot qui le ferme.
+      for (const { quoi, sonde } of ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE) {
         const autre = sectionDe(metier, sonde, `« ${quoi} »`);
         assert.ok(
           /besoin de toi/i.test(autre.corps),
@@ -3948,6 +3979,39 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "et il se termine par `J'ai besoin de toi : …` (ou `rien.`)",
       'et il se termine comme tu le juges utile',
+    ),
+  },
+
+  {
+    id: 'la-formule-nest-plus-rappelee-au-bilan',
+    quoi: 'le dernier message du chantier perd la formule — la mutation que la première version de ce lot laissait passer',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.\n\n",
+      '',
+    ),
+  },
+
+  {
+    id: 'le-compte-rendu-du-chantier-nest-plus-une-surface-de-parole',
+    quoi: 'la surface que le texte déclare — « c’est là que le dirigeant regarde » — cesse de porter la formule',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris.",
+      '',
+    ),
+  },
+
+  {
+    id: 'toute-erreur-remonte-sur-la-ligne',
+    quoi: 'le seuil de remontée saute : la franchise se remet à tout envoyer sur la ligne, et elle redevient illisible',
+    cible: 'la-parole-au-dirigeant-porte-des-faits',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Une erreur ne remonte sur la ligne que si elle change une décision qu'il est en train de prendre.** Sinon elle s'inscrit, et elle se tait.",
+      "**Toute erreur remonte sur la ligne, dès que tu la vois.**",
     ),
   },
 
