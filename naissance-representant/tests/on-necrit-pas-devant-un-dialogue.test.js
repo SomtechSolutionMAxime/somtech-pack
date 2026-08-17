@@ -238,3 +238,91 @@ test('le STATUT reste la première cause — un pane indisponible ne devient pas
   // pour savoir qu’il n’y a rien à délivrer.
   assert.equal(causeObstacle(boiteVide(...DIALOGUE_PERMISSION), 'blocked'), CAUSES.STATUT);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE JUMEAU NON GARDÉ — relevé en PASSE DE FOND, et le rejet était juste.
+//
+// La première écriture de ce lot a fermé la garde d'AVANT l'écriture, et celle de
+// `delivrerLaBoite`. Elle a laissé ouverte la RÉPARATION de `livrerBrief` — l'étape 4, qui
+// envoie une touche d'envoi quand le brief est resté dans la boîte. Ce chemin lit le CONTENU de
+// la boîte avant de presser Entrée, et jamais l'ÉCRAN.
+//
+// C'est « une porte sur deux » commis dans le correctif écrit pour la fermer, à trente lignes
+// de la garde qu'il pose — et c'est le chemin NORMAL de toute réparation après un envoi raté.
+
+test('la RÉPARATION ne presse pas Entrée si un dialogue est apparu pendant qu’on vérifiait', async () => {
+  // La séquence : la boîte est vue vide et lisible → on écrit → un dialogue apparaît pendant la
+  // boucle de vérification, avec notre texte encore dans la boîte. Sans garde, la réparation
+  // presse Entrée sur ce dialogue — c’est-à-dire qu’elle APPROUVE l’option surlignée.
+  const appels = [];
+  let lectures = 0;
+  const resultat = await livrerBrief({
+    pane: 'w9:p1',
+    texte: 'mon compte rendu',
+    appelHerdr: async (commande) => {
+      appels.push(commande);
+      return { ok: true, reponse: { result: { agent: { agent_status: 'idle' } } }, message: '' };
+    },
+    lireEcran: async (commande) => {
+      appels.push(commande);
+      lectures += 1;
+      // La toute première lecture est celle de l’obstacle : rien ne bloque, on écrit.
+      if (lectures === 1) return boiteVide();
+      // Ensuite : le dialogue s’est affiché, et notre texte est toujours là.
+      return boiteAvec('mon compte rendu', ...DIALOGUE_PERMISSION);
+    },
+    dormir: async () => {},
+    essais: 2,
+    delaiMs: 0,
+    pairOccupe: true,
+    immobiliteMs: 0,
+  });
+
+  assert.equal(resultat.ok, false, 'le brief n’a pas été pris — il faut le dire');
+  assert.equal(resultat.repare, false, 'et surtout : ne rien avoir réparé');
+  assert.deepEqual(
+    appels.filter((c) => c[1] === 'send-keys'),
+    [],
+    'aucune touche d’envoi ne doit partir sur un dialogue'
+  );
+  assert.match(resultat.message, /dialogue/i, 'le refus doit dire POURQUOI on n’a pas réparé');
+});
+
+test('la réparation ordinaire n’est pas désarmée — on ferme une porte, on n’en condamne pas deux', async () => {
+  // La moitié qui protège, ici aussi : sans dialogue, la touche d’envoi doit toujours partir.
+  // C’est le mode de panne mesuré que `livrerBrief` existe pour rattraper.
+  // ⚠️ LE DOUBLE EST PILOTÉ PAR LE GESTE, PAS PAR UN COMPTEUR DE LECTURES. Une première
+  // écriture faisait se vider la boîte au bout de N lectures : elle se vidait donc AVANT la
+  // réparation, l’essai concluait « pris » sans jamais l’atteindre, et il aurait été vert sur
+  // un code qui ne répare plus du tout. C’est le mode de panne exact que ce fichier traque.
+  const appels = [];
+  let ecrit = false;
+  let soumis = false;
+  const resultat = await livrerBrief({
+    pane: 'w9:p1',
+    texte: 'mon compte rendu',
+    appelHerdr: async (commande) => {
+      appels.push(commande);
+      if (commande[1] === 'prompt') ecrit = true;
+      if (commande[1] === 'send-keys') soumis = true;
+      return { ok: true, reponse: { result: { agent: { agent_status: 'idle' } } }, message: '' };
+    },
+    // La boîte est VUE VIDE avant l’écriture — sinon on butterait sur l’obstacle « encombrée »
+    // et on n’atteindrait jamais la réparation. Le texte y reste ensuite coincé, et il n’en sort
+    // QUE par la touche d’envoi : la boîte ne se vide jamais toute seule.
+    lireEcran: async () => (!ecrit || soumis ? boiteVide() : boiteAvec('mon compte rendu')),
+    dormir: async () => {},
+    essais: 3,
+    delaiMs: 0,
+    pairOccupe: true,
+    immobiliteMs: 0,
+  });
+
+  assert.deepEqual(
+    appels.filter((c) => c[1] === 'send-keys').length,
+    1,
+    'la touche d’envoi doit bien partir quand rien ne s’y oppose'
+  );
+  assert.equal(resultat.repare, true);
+  assert.equal(resultat.ok, true);
+});

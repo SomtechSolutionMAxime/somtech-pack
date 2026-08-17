@@ -773,9 +773,27 @@ export async function livrerBrief({
   // 4. REPARER une fois le cas connu : le texte est bien dans la boite, la soumission n'est
   //    pas partie. On envoie la touche d'envoi, puis on re-verifie — sans jamais reecrire le
   //    brief, ce qui le collerait a lui-meme.
+  //
+  // ⚠️ ET ON REGARDE L'ÉCRAN AVANT DE PRESSER ENTRÉE (T-20260817-0008, relevé en PASSE DE FOND).
+  //
+  // Ce bloc était le JUMEAU NON GARDÉ de `delivrerLaBoite`. Il lisait le CONTENU DE LA BOÎTE
+  // avant de soumettre, et jamais l'ÉCRAN — la moitié exacte du défaut que ce lot ferme trente
+  // lignes plus haut. « Une porte sur deux » commise dans le correctif écrit pour la fermer, et
+  // sur le chemin NORMAL de toute réparation après un envoi raté.
+  //
+  // LE SCÉNARIO, ET IL N'A RIEN D'EXOTIQUE : la boîte est vue vide, on écrit, puis un dialogue
+  // s'affiche PENDANT la boucle de vérification — l'agent a démarré une commande sur notre
+  // brief, et Claude Code demande la permission. Notre texte est toujours dans la boîte, donc
+  // `reste` est non vide, donc la touche d'envoi partait : elle aurait APPROUVÉ ce dialogue.
+  //
+  // Le refus qui suit dit alors POURQUOI on n'a pas réparé — sans quoi le lecteur verrait
+  // « boîte encore pleine » et retenterait le même geste à l'aveugle.
+  let dialogueALaReparation = false;
   if (!vu.pris) {
     const reste = contenuBoite(vu.terminal);
-    if (reste) {
+    if (reste && ecranAttendUnChoix(vu.terminal)) {
+      dialogueALaReparation = true;
+    } else if (reste) {
       const envoi = await appelHerdr(commandes.soumettre, vers);
       repare = envoi.ok;
       for (let i = 0; i < essais && !vu.pris; i += 1) {
@@ -796,7 +814,14 @@ export async function livrerBrief({
       message:
         `le brief n\u2019a pas \u00e9t\u00e9 pris par la session de ${pane} \u2014 statut \u00ab ${vu.statut ?? '\u2014'} \u00bb, ` +
         `bo\u00eete ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (\u00ab ${reste.slice(0, 60)}\u2026 \u00bb)`}` +
-        `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}`,
+        `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}` +
+        (dialogueALaReparation
+          ? '\n⚠️ ET JE N’AI PAS TENTÉ DE LE SOUMETTRE : un DIALOGUE qui attend un choix s’est ' +
+            'affiché pendant que je vérifiais. La touche d’envoi y aurait confirmé l’option ' +
+            'surlignée au lieu de soumettre mon texte — une action que personne ne m’a demandé ' +
+            'd’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane ; mon brief est ' +
+            'toujours dans la boîte, entier, et partira quand la boîte sera rendue.'
+          : ''),
     };
   }
 
