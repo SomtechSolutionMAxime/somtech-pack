@@ -647,8 +647,14 @@ export const CONTROLES = [
       // circulent. La ligne de rapport unique existe déjà pour les sous-agents ; celle-ci
       // est son pendant vers le haut.
       //
-      // ⚠️⚠️ CETTE GARDE EST LAISSÉE ROUGE — LA FONCTION A ÉTÉ PERDUE À LA RÉÉCRITURE, ET
-      // C'EST UNE PERTE, PAS UN RENOMMAGE.
+      // ✅ CETTE GARDE A ÉTÉ LAISSÉE ROUGE, LA PERTE A ÉTÉ RÉPARÉE AU TEXTE, ET ELLE A REVERDI
+      // D'ELLE-MÊME (`b493a8f`). Le paragraphe qui suit décrit l'état d'AVANT la réparation ;
+      // il est conservé parce qu'il dit ce que la garde protège et comment on l'a établi —
+      // mais il ne décrit plus l'état courant. ⚠️ Un récit qui reste au présent après sa
+      // résolution ferme la question dans l'autre sens : le lecteur croit une perte ouverte
+      // alors qu'elle est fermée. C'est le même défaut qu'un motif faux, en miroir.
+      //
+      // ─── ce qui suit est le constat d'origine, daté ───
       //
       // Le métier portait une section « Tu parles au dirigeant » dont le corps disait :
       // « C'est ta capacité, et elle n'appartient qu'à toi sur ce chantier. Ni tes chefs
@@ -779,10 +785,13 @@ export const CONTROLES = [
       // ré-ancre JAMAIS sur ce qui reste sans que la perte soit d'abord actée.* Ré-ancrer,
       // c'est déplacer le témoin ; **le témoin doit rougir d'abord.**
       //
-      // Donc : la perte est actée (`T-20260817-0088`, P1), et **cette garde reste ROUGE** —
-      // elle exige la clause LÀ OÙ ELLE SERT, dans la ronde. Elle reverdira d'elle-même quand
-      // le texte sera réparé. La sonde sur « Ce que tu ne fais pas de tes mains » est
-      // conservée en plus, car cette moitié-là est réelle et gardait déjà quelque chose.
+      // Donc : la perte a été actée (`T-20260817-0088`, P1), la garde est restée ROUGE en
+      // exigeant la clause LÀ OÙ ELLE SERT — dans la ronde —, **le texte a été réparé
+      // (`8bc0a23:720`) et elle a reverdi D'ELLE-MÊME**. Elle n'a jamais été mise au vert à la
+      // main : c'est elle qui a dit quand la perte était fermée, et c'est tout ce qu'on lui
+      // demandait. La sonde sur « Ce que tu ne fais pas de tes mains » est conservée en plus,
+      // car cette moitié-là est réelle et gardait déjà un autre geste — la veille qui s'arrête
+      // devant un écran qu'elle ne reconnaît pas.
       const s = sectionDe(metier, /^1 — Tes agents et le travail qui tourne$/, 'sur ce que la ronde regarde');
       const enonces = s.corps.split('\n').filter((l) => /Ce que tu fais de ce que tu trouves/i.test(l));
       assert.equal(enonces.length, 1, 'la section doit dire ce qu’on fait de ce qu’on trouve');
@@ -846,7 +855,11 @@ export const CONTROLES = [
       assert.match(s.titre, /matin/i, `le topo est quotidien, il se tient le matin — le titre « ${s.titre} » ne le dit plus`);
       exigeImperatif(s.titre, 'le rendez-vous du topo');
 
-      // ⚠️⚠️ LE LIEU DU TOPO A ÉTÉ PERDU À LA RÉÉCRITURE — GARDE LAISSÉE ROUGE, PERTE REMONTÉE.
+      // ✅ LE LIEU DU TOPO AVAIT ÉTÉ PERDU, LA GARDE A ÉTÉ LAISSÉE ROUGE, LE TEXTE A ÉTÉ RÉPARÉ
+      // (`b493a8f`) ET ELLE A REVERDI D'ELLE-MÊME. Ce qui suit est le constat d'origine, daté :
+      // il dit ce que la garde protège et comment la perte a été établie, pas l'état courant.
+      //
+      // ─── constat d'origine ───
       //
       // L'ajout 5 se dit en une phrase, et c'est la liste fermée des sept qui l'énonce :
       // « il pose un topo SUR SON CANAL chaque matin à 7 h 00 ». L'heure a survécu (dans le
@@ -3419,10 +3432,10 @@ export const CONTROLES = [
       //       — aujourd'hui la faute est encore nommée, son coût a été retiré.
       //
       // ⚠️ **On ne ré-ancre pas une garde sur ce qui reste sans acter la perte d'abord.**
-      // Ré-ancrer, c'est déplacer le témoin. La perte est actée (`T-20260817-0088`, P2), et
-      // cette garde reste ROUGE : elle exige la PRESCRIPTION, pas son souvenir. Elle reverdira
-      // d'elle-même quand le texte la reprendra.
-      // ⚠️ ET LA PRESCRIPTION EST REVENUE — cherchée LÀ OÙ ELLE SERT, pas là où elle était.
+      // Ré-ancrer, c'est déplacer le témoin. La perte a été actée (`T-20260817-0088`, P2), et
+      // la garde a été laissée ROUGE : elle exige la PRESCRIPTION, pas son souvenir.
+      //
+      // ✅ ET LA PRESCRIPTION EST REVENUE — cherchée LÀ OÙ ELLE SERT, pas là où elle était.
       //
       // Le texte a été réparé (`8bc0a23`, sur `T-20260817-0088` P2) et la maxime est remise
       // sous « 1 — Tes agents et le travail qui tourne », en sous-section — **pas** sous
@@ -3742,7 +3755,12 @@ export const CONTROLES = [
       // Une garde qui vérifie moins que ce que le texte promet est un faux témoin — et c'est
       // le motif exact que ce lot ferme, commis dans le lot qui le ferme.
       //
-      // ⚠️⚠️ CETTE MOITIÉ EST LAISSÉE ROUGE — LES RAPPELS ONT ÉTÉ PERDUS À LA RÉÉCRITURE.
+      // ✅ LES CINQ RAPPELS ONT ÉTÉ RENDUS AU TEXTE (`748c67c`) ET CETTE MOITIÉ A REVERDI
+      // D'ELLE-MÊME. La garde n'a jamais été mise au vert à la main : elle est restée rouge
+      // jusqu'à ce que les quatre rappels manquants reviennent, et c'est elle qui l'a dit.
+      // Mesuré le 2026-08-17 : **5 sur 5**. Ce qui suit est le constat d'origine, daté.
+      //
+      // ─── constat d'origine ───
       //
       // Les sondes de `ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE` ont été RÉ-ANCRÉES sur les titres
       // réels du métier réorganisé (voir la liste, en tête de fichier) : sans ça, la garde
