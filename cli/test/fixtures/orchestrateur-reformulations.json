@@ -169,9 +169,9 @@
   },
   {
     "id": "r2-aucun-agent-compacter",
-    "quoi": "inversion de l'ordre négation/sujet, sens et force identiques",
-    "avant": "Aucun agent ne doit jamais avoir besoin de compacter son contexte.",
-    "apres": "Jamais un agent ne doit avoir besoin de compacter son contexte."
+    "quoi": "inversion de l'ordre négation/sujet, sens et force identiques — ré-ancrée après que le texte a repris sa clause",
+    "avant": "**Aucun agent ne doit jamais avoir besoin de compacter son contexte** — un chef d'équipe tient son lot **d'un seul trait**.",
+    "apres": "**Jamais un agent ne doit avoir besoin de compacter son contexte** — un chef d'équipe tient son lot **d'un seul trait**."
   },
   {
     "id": "r3-agent-recoit-mandat",

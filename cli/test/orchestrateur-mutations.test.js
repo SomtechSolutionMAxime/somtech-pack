@@ -59,6 +59,34 @@ function controlesQuiRougissent(gabarits) {
   return rouges;
 }
 
+/**
+ * Les contrôles qu'on ACCEPTE de voir rouges sur le gabarit intact, et le motif de chacun.
+ *
+ * ⚠️ CETTE LISTE EST UNE GARDE, PAS UNE DOCUMENTATION — et c'est une revue de fond qui l'a
+ * exigée. Sans elle, deux situations opposées se ressemblent :
+ *
+ *   • une garde ROUGE PARCE QUE LE TEXTE A PERDU CE QU'ELLE GARDE — elle fait son travail,
+ *     elle reverdira d'elle-même le jour où la perte sera réparée, et c'est la preuve qu'on
+ *     veut (c'est arrivé quatre fois le 2026-08-17) ;
+ *   • une garde ROUGE PARCE QU'ELLE EST CASSÉE — là, les mutations qui la visent passent sans
+ *     rien prouver, et l'une d'elles peut la faire REVERDIR en aggravant le texte.
+ *
+ * Y inscrire un rouge est un ENGAGEMENT : on déclare que la fonction gardée a réellement
+ * disparu du texte, et on écrit où. Élargir la liste demande d'éditer ce bloc, ce qui se voit
+ * en revue — exactement comme pour le compte des anti-patterns.
+ */
+const ROUGES_ACTES = new Map([
+  ['se-sert-des-memoires',
+    'PERTE (T-20260817-0088) — le motif qui rend un rappel non probant (conclure d’une absence '
+    + 'de résultat) et le gate de promotion de STD-039 I3 ont disparu du gabarit'],
+  ['le-suivi-oblige-encore',
+    'PERTE (T-20260817-0088, P4) — 2 des 5 consignes de suivi n’ont plus de porteur dans R1 : '
+    + '« ce qui reste ouvert, et ce qui bloque quoi » · « ce qui appartient au dirigeant »'],
+  ['le-doute-est-une-information-attendue',
+    'PERTE — « une information attendue de toi, jamais une faute » était écrite aux DEUX endroits '
+    + 'qui la portent (878f9d5) ; elle a quitté celui où il tranche'],
+]);
+
 test('référence : sur le gabarit intact, aucun contrôle ne rougit', () => {
   // Sans ce point de départ, une mutation « attrapée » pourrait l'être par un contrôle déjà
   // rouge avant elle — et on croirait garder ce qu'on ne garde pas.
@@ -89,8 +117,38 @@ test('le décompte des mutations dit ce qu’il NE prouve pas — celles que por
   // pas (ces mutations ne sont pas fautives), il **compte et nomme**. Le décompte se lit donc
   // toujours avec sa part non prouvée, et cette part **retombe à zéro d'elle-même** dès que le
   // texte rend aux gardes ce qu'elles réclament.
-  const dejaRouges = new Set(controlesQuiRougissent(ORIGINAL).map((r) => r.id));
-  const portees = MUTATIONS.filter((m) => dejaRouges.has(m.cible));
+  //
+  // ⚠️⚠️⚠️ ET UNE SECONDE PASSE DE REVUE A MONTRÉ QUE CETTE RÉPONSE ÉTAIT ENCORE TROP LARGE.
+  //
+  // « Elles redeviendront probantes quand le texte sera réparé » est vrai d'un rouge qui vient
+  // d'une PERTE DU TEXTE — pas d'un rouge qui vient d'un DÉFAUT DU HARNAIS. Et la différence
+  // n'est pas cosmétique, elle est retournée :
+  //
+  //   `NB_ANTI_PATTERNS` valait 77 pendant que la table en portait 78. Retirer une ligne de la
+  //   table ramène le compte à 77 — c'est-à-dire à la valeur attendue. **La mutation qui retire
+  //   un anti-pattern faisait donc REVERDIR sa cible**, et son test « passait » en prouvant
+  //   l'exact contraire de ce qu'il prétend. Ce n'est pas « pas encore probant » : c'est un
+  //   faux négatif actif, et aucune réparation du texte ne l'aurait fait revenir.
+  //
+  // **Un rouge non déclaré est un défaut du lot, pas du texte.** Ce test l'exige donc
+  // nommément : chaque contrôle rouge sur le gabarit intact doit être INSCRIT ci-dessous avec
+  // son motif. Un rouge qui n'y figure pas fait échouer ce test — parce qu'on ne peut pas
+  // distinguer, sans l'avoir écrit, la garde qui attend son texte de la garde qui est cassée.
+  const dejaRouges = controlesQuiRougissent(ORIGINAL).map((r) => r.id);
+
+  const nonDeclares = dejaRouges.filter((id) => !ROUGES_ACTES.has(id));
+  assert.deepEqual(
+    nonDeclares, [],
+    `ces contrôles rougissent sur le gabarit intact SANS être déclarés comme des pertes actées : `
+      + `${nonDeclares.join(', ')}.\n`
+      + `Un rouge non déclaré est un défaut du HARNAIS, pas du texte — et il est pire qu'un rouge `
+      + `déclaré : les mutations qui visent ce contrôle passent sans rien prouver, et l'une d'elles `
+      + `peut même le faire REVERDIR (c'est arrivé le 2026-08-17 : un compte figé à 77 pendant que `
+      + `la table en portait 78, si bien que RETIRER une ligne satisfaisait le compte).\n`
+      + `Soit tu répares le harnais, soit tu inscris le rouge dans ROUGES_ACTES avec son motif.`,
+  );
+
+  const portees = MUTATIONS.filter((m) => dejaRouges.includes(m.cible));
   const prouvantes = MUTATIONS.length - portees.length;
 
   if (portees.length > 0) {
@@ -99,9 +157,10 @@ test('le décompte des mutations dit ce qu’il NE prouve pas — celles que por
     console.log(
       `\n⚠️  ${prouvantes} mutation(s) sur ${MUTATIONS.length} prouvent ce qu'elles prétendent.\n`
       + `    ${portees.length} sont portées par une cible DÉJÀ ROUGE et ne prouvent rien encore :\n`
-      + [...parCible].map(([c, ids]) => `      ${c} (${ids.length}) : ${ids.join(', ')}`).join('\n')
-      + `\n    Elles redeviendront probantes quand le texte aura rendu à ces gardes ce qu'elles`
-      + ` réclament — c'est écrit au motif de chacune.\n`,
+      + [...parCible].map(([c, ids]) => `      ${c} (${ids.length}) — ${ROUGES_ACTES.get(c)}\n`
+        + `        ${ids.join(', ')}`).join('\n')
+      + `\n    Chacune redeviendra probante quand le texte aura rendu à sa garde ce qu'elle`
+      + ` réclame — les motifs ci-dessus sont ceux de ROUGES_ACTES.\n`,
     );
   }
 
