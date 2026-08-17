@@ -144,13 +144,21 @@ export const AMENDEMENTS_DU_LOT = new Map([
  * vérifiait que deux de ces endroits, alors que le texte s'en déclarait cinq : retirer le
  * rappel du bilan de clôture laissait le contrôle vert. Ajouter ici un endroit qu'on écrit
  * dans le métier est ce qui empêche l'écart de se rouvrir en silence.
+ *
+ * ⚠️ LES SONDES ONT ÉTÉ RÉ-ANCRÉES SUR LES TITRES RÉELS (réécriture par la fonction,
+ * 2026-08-17) : la numérotation `§1-bis … §8` a disparu au profit des blocs `R1 … R7`. Les
+ * ENDROITS n'ont pas bougé — ce sont les cinq mêmes surfaces —, seul le titre sous lequel
+ * chacun vit a changé. Sans ce ré-ancrage, la garde échouait sur « section introuvable » et
+ * son rejet n'apprenait rien de la garantie ; ré-ancrée, elle dit lequel des cinq a perdu son
+ * rappel. C'est un déplacement de sonde, jamais un assouplissement : la liste compte toujours
+ * cinq entrées et le contrôle les exige toutes.
  */
 export const ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE = [
-  { quoi: 'ta ligne directe (§1-bis)', sonde: /Ouvrir ta ligne avec le dirigeant/i },
+  { quoi: 'ta ligne avec le CTO', sonde: /Ta ligne est obligatoire/i },
   { quoi: 'le topo du matin', sonde: /Le topo du matin/i },
-  { quoi: 'ce que tu lui renvoies quand tu ne tranches pas (§5)', sonde: /Ce que tu tranches toi-même/i },
-  { quoi: 'le compte rendu d’avancement sur le chantier (§7)', sonde: /Tenir le ServiceDesk/i },
-  { quoi: 'le bilan de clôture (§8)', sonde: /^8\. Clore$/i },
+  { quoi: 'ce que tu lui renvoies quand tu ne tranches pas', sonde: /Ce que tu fais monter, et ce que tu tranches/i },
+  { quoi: 'le compte rendu d’avancement sur le chantier', sonde: /Tenir le ServiceDesk/i },
+  { quoi: 'le bilan de clôture', sonde: /^Clore$/i },
 ];
 
 /** La phrase que l'ajout 3 RETIRE. Un retrait se défait par mégarde plus facilement qu'un ajout. */
@@ -354,7 +362,16 @@ export const CONTROLES = [
           + `orchestrateur sans ligne tranche seul ce qu'il ne devait pas trancher`,
       );
 
-      const s = sectionDe(metier, /Ouvrir ta ligne avec le dirigeant/i, 'sur l’ouverture de la ligne');
+      // ⚠️ LA SONDE DE SECTION SUIT LA FONCTION, PAS LE TITRE D'HIER. Le geste vivait sous
+      // « 1-bis. Ouvrir ta ligne avec le dirigeant » ; la réécriture par la fonction
+      // (2026-08-17) le porte sous « Ta ligne est obligatoire », en R6. La sonde n'est pas
+      // ancrée `^…$` À DESSEIN : c'est ce titre-là qui affirme désormais l'obligation, et un
+      // titre s'assouplit comme un paragraphe (« Ta ligne est obligatoire, sauf si ça
+      // presse ») — on veut le trouver ASSOUPLI plutôt que de ne plus le trouver du tout,
+      // pour que l'échec nomme la garantie et pas une section introuvable.
+      const s = sectionDe(metier, /Ta ligne est obligatoire/i, 'sur l’ouverture de la ligne');
+      exigeImperatif(s.titre, 'le titre de la section qui affirme l’obligation');
+
       const enonces = s.corps.split('\n').filter((l) => /ne peut pas s'ouvrir/i.test(l));
       assert.equal(enonces.length, 1, `le métier doit dire une fois exactement ce qui arrive quand la ligne ne s’ouvre pas (${enonces.length})`);
       exigeImperatif(enonces[0], 'le refus de commencer sans ligne');
@@ -362,28 +379,37 @@ export const CONTROLES = [
         enonces[0], /tu ne commences pas|arrête-toi/i,
         `« ${enonces[0].trim()} » ne refuse plus : sans ligne, le chantier ne commence pas`,
       );
-      assert.match(s.corps, /préalable au chantier/i, 'et le métier doit nommer la ligne comme un préalable');
+
+      // ⚠️ « PRÉALABLE AU CHANTIER » N'EST PLUS ÉCRIT — LA FONCTION, ELLE, EST RESTÉE, et la
+      // sonde a suivi. L'ancienne rédaction qualifiait la ligne de « préalable au chantier » ;
+      // la réécriture dit la même chose par le MOMENT de son ouverture : « Tu l'ouvres en
+      // naissant, tu la refermes en clôturant. » C'est le même fait, énoncé plus fort — une
+      // ligne ouverte à la naissance ne peut pas être un confort qu'on se donne le jour où le
+      // besoin se présente. Garder le mot « préalable » aurait gardé un mot ; on garde le
+      // moment, qui est ce que la règle FAIT.
+      exigePolarite(
+        s.corps, /ouvres en naissant/i,
+        'la ligne s’ouvre à la naissance — c’est ce qui en fait un préalable au chantier',
+        { inverse: /tu l'ouvres (?:quand|si) tu en as besoin|ouvre-la (?:plus tard|au besoin)/i },
+      );
 
       // Le refus doit dire QUOI FAIRE, pas seulement constater — le gestionnaire a mis trois
       // défauts à rendre ce geste honnête, autant les reprendre plutôt que les redécouvrir.
       assert.match(enonces[0], /dis (?:ce qui manque|quoi faire)|quoi faire/i, 'un refus qui ne dit pas quoi faire laisse le lecteur sans issue');
 
-      // ⚠️ LA SECONDE AFFIRMATION, ET LA PASSE 2 L'A TROUVÉE NON GARDÉE.
+      // ⚠️ LA SECONDE AFFIRMATION A ÉTÉ FUSIONNÉE AVEC LA PREMIÈRE — c'est la réorganisation,
+      // pas une perte, et la garde qui la surveillait est RETIRÉE ICI avec son motif.
       //
-      // L'obligation est écrite à DEUX endroits — §1-bis, où vit le geste, et la sous-section
-      // des capacités, où elle est nommée. Ne garder que le premier laissait assouplir le
-      // second : « tu peux commencer un chantier sans elle si ça presse » restait vert. Un
-      // lecteur qui trouve les deux appliquera celui qu'il a lu en dernier.
-      const dediee = sectionDe(metier, /Ta ligne directe est obligatoire/i, 'de la ligne comme capacité');
-      exigeImperatif(dediee.titre, 'le titre de la sous-section de la ligne');
-      const affirmations = dediee.corps.split('\n').filter((l) => /sans elle\b/i.test(l));
-      assert.equal(affirmations.length, 1, `la sous-section doit affirmer l’obligation une fois exactement (${affirmations.length})`);
-      exigeImperatif(affirmations[0], 'l’affirmation de l’obligation dans la sous-section dédiée');
-      assert.match(
-        affirmations[0], /ne commences pas/i,
-        `« ${affirmations[0].trim()} » n’affirme plus l’obligation : les deux endroits qui la portent `
-          + `doivent dire la même chose`,
-      );
+      // L'obligation était écrite à DEUX endroits : §1-bis, où vivait le geste, et une
+      // sous-section « Ta ligne directe est obligatoire » qui la nommait parmi les capacités.
+      // La passe 2 gardait le second parce qu'on pouvait l'assouplir seul, et un lecteur
+      // applique alors celui qu'il a lu en dernier. La réécriture par la fonction n'a plus
+      // qu'UN endroit — la section lue ci-dessus : il n'y a plus deux formulations qui
+      // puissent diverger, donc plus rien à apparier. Ce qui restait de la garde a été
+      // reporté sur ce qui porte l'affirmation maintenant : le TITRE de cette section unique,
+      // gardé impératif tout en haut de ce contrôle. La mutation qui l'éprouvait
+      // (`revue-P2-la-seconde-affirmation-s-assouplit`) a suivi le même chemin : elle assouplit
+      // désormais ce titre.
     },
   },
 
@@ -453,45 +479,103 @@ export const CONTROLES = [
       // dirigeant, l'orchestrateur cesse d'être le point unique et deux versions du chantier
       // circulent. La ligne de rapport unique existe déjà pour les sous-agents ; celle-ci
       // est son pendant vers le haut.
-      const s = sectionDe(metier, /Tu parles au dirigeant/i, 'sur la parole au dirigeant');
-      const enonces = s.corps.split('\n').filter((l) => /chefs d'équipe/i.test(l));
-      assert.equal(enonces.length, 1, `l’exclusivité doit être énoncée une fois exactement (${enonces.length})`);
-      assert.match(
-        enonces[0], /ni tes chefs d'équipe ni leurs sous-agents ne parlent au dirigeant/i,
-        `« ${enonces[0].trim()} » n’énonce plus l’exclusivité : ce qui doit arriver au dirigeant passe par toi`,
+      //
+      // ⚠️⚠️ CETTE GARDE EST LAISSÉE ROUGE — LA FONCTION A ÉTÉ PERDUE À LA RÉÉCRITURE, ET
+      // C'EST UNE PERTE, PAS UN RENOMMAGE.
+      //
+      // Le métier portait une section « Tu parles au dirigeant » dont le corps disait :
+      // « C'est ta capacité, et elle n'appartient qu'à toi sur ce chantier. Ni tes chefs
+      // d'équipe ni leurs sous-agents ne parlent au dirigeant : ce qui doit lui arriver passe
+      // par toi, et ce qu'il tranche redescend par toi. » La réécriture par la fonction
+      // (2026-08-17) a supprimé la section ET la phrase. Cherchée dans TOUT le gabarit, sous
+      // les deux vocabulaires (« dirigeant » a été partout remplacé par « CTO »), l'exclusivité
+      // VERS LE HAUT n'y est plus sous aucune forme. Ce qui subsiste — « Le chef d'équipe est
+      // ton interlocuteur exclusif pour son périmètre. Ses sous-agents lui rendent compte,
+      // jamais à toi. » — est l'exclusivité VERS LE BAS : elle dit qui parle à l'orchestrateur,
+      // jamais qui a le droit de parler au CTO.
+      //
+      // C'est l'ajout 2 de la liste fermée des sept, énoncée par le dirigeant lui-même. On ne
+      // met donc rien au vert, on n'élargit rien, et on ne retire pas la garde. On la réécrit
+      // seulement pour qu'elle cherche la FONCTION dans le texte entier plutôt qu'un titre
+      // disparu : son rejet nomme désormais la garantie perdue, au lieu d'annoncer une section
+      // introuvable — un rejet fondé plutôt qu'un rejet qui a l'air d'un défaut de sonde.
+      //
+      // ✅ RENDUE À `b493a8f`, et la sonde a dû accepter LE PRONOM (2026-08-17). Le correctif
+      // écrit « Ni tes chefs d'équipe ni leurs sous-agents ne LUI parlent », l'antécédent étant
+      // posé par la phrase précédente. Écrite sur « ne parlent au CTO », la garde refusait une
+      // rédaction parfaitement correcte — un français normal reprend par un pronom plutôt que
+      // de répéter le nom. C'était le second chiffre en action : elle attrapait la perte, et
+      // elle aurait crié sur sa réparation. Ce qu'on exige est la NÉGATION portée par les deux
+      // sujets, pas la forme sous laquelle le destinataire est nommé.
+      exigePolarite(
+        metier, /ni tes chefs d'équipe ni leurs sous-agents ne (?:lui parlent|parlent (?:au CTO|au dirigeant|à lui))/i,
+        'l’exclusivité de la parole vers le haut : ni tes chefs d’équipe ni leurs sous-agents ne parlent au CTO',
+        { inverse: /chefs d'équipe (?:peuvent|pourront) (?:lui )?parler|parlent directement au CTO/i },
       );
-      assert.match(s.corps, /passe par toi/i, 'et le métier doit dire que ce qui remonte passe par lui');
+      exigePolarite(
+        metier, /ce qui doit lui arriver passe par toi/i,
+        'et ce qui doit atteindre le CTO passe par l’orchestrateur — c’est ce qui en fait le point unique',
+      );
     },
   },
 
   {
     id: 'ronde-horaire',
-    quoi: 'la ronde est horaire et par défaut, et la veille de déblocage ne la remplace pas',
+    quoi: 'la ronde a une cadence par défaut, chiffrée et posée à la naissance — et la veille de déblocage ne la remplace pas',
     verifier({ metier }) {
       // AJOUT 4. Mesuré : trois agents ont attendu en silence cette semaine, dont un près
       // d'une heure. La cadence est le livrable — « régulièrement » ne se vérifie pas, et
       // « sur demande » est exactement ce qui a produit les trois attentes.
-      const s = sectionDe(metier, /Veiller tes agents/i, 'sur la ronde');
-      exigeImperatif(s.titre, 'le titre de la ronde');
+      //
+      // ⚠️ CE QUI A CHANGÉ, ET POURQUOI. La garde cherchait un TITRE (« Veiller tes agents »),
+      // un MOT (« toutes les heures ») et une FORME (la cadence en citation de tête). Les trois
+      // ont bougé, la fonction non : le déclenchement et la cadence vivent maintenant dans
+      // « La ronde — ce qui te réveille », la valeur par défaut est passée de l'heure à 20-30
+      // minutes, et elle est en corps de section. Garder « toutes les heures » aurait gardé un
+      // CHIFFRE, et fait rougir un texte devenu plus strict ; on garde donc ce que le texte
+      // FAIT — une cadence chiffrée, donnée à défaut d'instruction, et soustraite au jugement
+      // en cours de route. Ce que le chiffre vaut n'appartient pas à la garde.
+      const declenchement = sectionDe(metier, /^La ronde — ce qui te réveille$/, 'sur le déclenchement et la cadence de la ronde');
+      exigeImperatif(declenchement.titre, 'le titre de la ronde');
 
-      const citation = s.corps.split('\n').filter((l) => l.trim().startsWith('>'));
-      assert.ok(citation.length >= 1, 'la cadence doit être énoncée en tête de section, comme un principe');
-      const enonce = citation.join(' ');
-      assert.match(enonce, /toutes les heures/i, 'la cadence est horaire');
-      assert.match(enonce, /par défaut/i, 'et elle vaut par défaut');
-      assert.ok(
-        !/sur demande\b(?!,)/i.test(enonce.replace(/pas sur demande/i, '')),
-        'la ronde ne se déclenche pas sur demande — c’est ce qui a laissé trois agents attendre',
+      // ⚠️ LA SONDE A DÛ S'ÉLARGIR D'UN CRAN, ET C'EST UNE MESURE, PAS UNE FAVEUR. Écrite sur
+      // un CHIFFRE (`\d+`), elle rougissait sur « un tour toutes les heures » — c'est-à-dire
+      // sur la cadence que ce lot avait elle-même livrée. Une garde qui crie sur du texte
+      // correct se fait retirer, en emportant ce qu'elle gardait. Ce qu'on exige est donc une
+      // PÉRIODE : un quantificateur et une unité de temps, ce qu'aucun adverbe ne fournit.
+      exigePolarite(
+        declenchement.corps, /à défaut d'instruction[^\n]*(?:\d+|toutes les|chaque|une fois par)[^\n]*(?:minute|heure|jour)/i,
+        'la cadence par défaut de la ronde, donnée en PÉRIODE — « régulièrement » ne se vérifie pas',
+        { inverse: /sur demande|quand tu le sens|quand tu y penses|à ton propre rythme/i },
       );
-      exigeImperatif(enonce, 'la cadence de la ronde');
+      exigePolarite(
+        declenchement.corps, /jamais laissée à ton jugement/i,
+        'et elle est soustraite au jugement en cours de route — c’est précisément le jugement que la perte de contexte dégrade',
+        { inverse: /tu choisis ta cadence|à ta convenance|c'est à toi de juger de la cadence/i },
+      );
+
+      const cadence = parasDe(declenchement.corps).filter((p) => /à défaut d'instruction/i.test(p));
+      assert.equal(cadence.length, 1, `la cadence doit être énoncée une fois exactement (${cadence.length})`);
+      exigeImperatif(cadence[0], 'la cadence de la ronde');
 
       // LA POLARITÉ QUI COMPTE : ce que la veille NE couvre pas. L'inverser ferait croire
       // que l'automatisme existant suffit — et la ronde deviendrait facultative de fait.
-      const veille = s.corps.split('\n').filter((l) => /veille de déblocage/i.test(l));
-      assert.equal(veille.length, 1, `la section doit situer la veille une fois exactement (${veille.length})`);
-      assert.match(veille[0], /ne remplace pas/i, `« ${veille[0].trim()} » laisse croire que la veille suffit`);
-      for (const angle of [/a fini/i, /arrêté proprement/i, /rouge/i]) {
-        assert.match(s.corps, angle, `la section doit nommer ce que la veille ne voit pas (${angle})`);
+      // Elle a suivi le chapeau qui ouvre les rondes ; la sonde l'y suit.
+      const rondes = sectionDe(metier, /^R5 — Tes rondes$/, 'qui ouvre les rondes');
+      const veille = rondes.corps.split('\n').filter((l) => /veille de déblocage/i.test(l));
+      assert.equal(veille.length, 1, `le chapeau doit situer la veille une fois exactement (${veille.length})`);
+      exigePolarite(
+        // ⚠️ SONDE ÉLARGIE AUX SYNONYMES DE « REMPLACER » — mesuré le 2026-08-17 par une
+        // campagne de reformulations légitimes écrites à l'aveugle : « ne se substitue pas à
+        // ta ronde » faisait crier cette garde sur un texte correct. La garantie est la
+        // NÉGATION du remplacement, pas le verbe choisi ; l'`inverse` ci-dessous, lui, tient
+        // la polarité et ne s'élargit pas.
+        rondes.corps, /veille de déblocage ne (?:remplace pas|se substitue pas|tient pas lieu)/i,
+        'la veille de déblocage ne remplace pas la ronde — sinon la ronde devient facultative de fait',
+        { inverse: /la veille (?:de déblocage )?(?:fait|remplace|suffit|couvre|tient lieu)/i },
+      );
+      for (const angle of [/qui a fini/i, /arrêté proprement/i, /rouge/i]) {
+        exigePolarite(rondes.corps, angle, `ce que la veille ne voit pas (${angle})`);
       }
     },
   },
@@ -500,16 +584,41 @@ export const CONTROLES = [
     id: 'ronde-n-execute-pas',
     quoi: 'ce que la ronde trouve retourne à qui de droit — elle ne fait pas de l’orchestrateur un exécutant',
     verifier({ metier }) {
-      // AJOUT 4, son revers. Une consigne de surveillance horaire est une invitation à
+      // AJOUT 4, son revers. Une consigne de surveillance régulière est une invitation à
       // « juste débloquer ça vite fait » douze fois par jour — c'est-à-dire exactement la
       // dérive que le métier existant nomme (« ce que tu ne fais pas de tes mains ») et que
       // le dirigeant a reprise sur ce chantier même.
-      const s = sectionDe(metier, /Veiller tes agents/i, 'sur la ronde');
+      //
+      // ⚠️ CE QUI A CHANGÉ : la garde lisait UNE section et y exigeait les deux moitiés. La
+      // réorganisation les a séparées — la ronde a gardé ce qu'elle autorise, et l'interdit du
+      // clavier est remonté là où il vaut pour TOUS les gestes, « Ce que tu ne fais pas de tes
+      // mains ». On DÉPLACE la seconde sonde à son nouveau lieu plutôt que de la retirer : la
+      // garantie n'a pas disparu, elle a changé de portée — et rien d'autre ne la garde.
+      const s = sectionDe(metier, /^1 — Tes agents et le travail qui tourne$/, 'sur ce que la ronde regarde');
       const enonces = s.corps.split('\n').filter((l) => /Ce que tu fais de ce que tu trouves/i.test(l));
       assert.equal(enonces.length, 1, 'la section doit dire ce qu’on fait de ce qu’on trouve');
-      assert.match(enonces[0], /ne change pas/i, 'la ronde ne change rien aux gestes qui ne t’appartiennent pas');
-      assert.match(enonces[0], /ne prends pas le clavier/i, 'et elle ne t’autorise pas à prendre le clavier à sa place');
-      assert.match(s.corps, /ne te transforme pas en exécutant/i, 'la section doit conclure sur ce qu’elle n’autorise pas');
+      exigePolarite(
+        s.corps, /Ce que tu fais de ce que tu trouves ne change pas/i,
+        'la ronde ne change rien aux gestes qui ne t’appartiennent pas',
+        { inverse: /ce que tu fais de ce que tu trouves t'appartient|tu prends le clavier|tu corriges à sa place/i },
+      );
+      exigePolarite(
+        s.corps, /retourne à celui qui l'a rougie/i,
+        'une chaîne rouge retourne à qui l’a rougie — la ronde renvoie le geste, elle ne l’exécute pas',
+      );
+      exigePolarite(
+        s.corps, /ne te transforme pas en exécutant/i,
+        'la section doit conclure sur ce qu’elle n’autorise pas',
+        { inverse: /fait de toi un exécutant|te transforme en exécutant/i },
+      );
+
+      // L'interdit lui-même, à son nouveau lieu — c'est la moitié que la ronde citait.
+      const mains = sectionDe(metier, /^Ce que tu ne fais pas de tes mains$/, 'sur les gestes qui ne sont pas les siens');
+      exigePolarite(
+        mains.corps, /tu ne prends pas le clavier à sa place/i,
+        'et elle ne t’autorise pas à prendre le clavier à sa place',
+        { inverse: /tu prends le clavier à sa place|tu peux prendre le clavier/i },
+      );
     },
   },
 
@@ -521,22 +630,55 @@ export const CONTROLES = [
       // ne se tient pas. Les quatre rubriques sont gardées en COMPTE — en retirer une (la
       // seule qui appelle une décision, en général) ne casserait rien d'autre.
       const s = sectionDe(metier, /Le topo du matin/i, 'sur le topo du matin');
-      const cadence = s.corps.split('\n').filter((l) => /7\s?h/i.test(l));
-      assert.ok(cadence.length >= 1, 'l’heure du topo doit être écrite');
-      assert.match(cadence[0], /chaque matin/i, 'le topo est quotidien');
-      assert.match(cadence[0], /ta ligne|ton canal/i, 'et il se pose sur son canal');
-      exigeImperatif(cadence[0], 'le rendez-vous du topo');
 
+      // ⚠️ LE RENDEZ-VOUS A CHANGÉ DE LIGNE, PAS DE NATURE. Il s'écrivait en tête de corps
+      // (« Chaque matin à 7 h 00, tu poses un topo sur ta ligne. ») ; la réécriture par la
+      // fonction (2026-08-17) l'a porté dans le TITRE — « 6 — Le topo du matin, 7 h 00 ». La
+      // sonde le lit donc là où il vit maintenant. Un titre s'assouplit comme un paragraphe,
+      // d'où l'exigence de modalité sur lui aussi.
+      assert.match(s.titre, /7\s?h/i, `l’heure du topo doit être écrite — le titre « ${s.titre} » ne la porte plus`);
+      assert.match(s.titre, /matin/i, `le topo est quotidien, il se tient le matin — le titre « ${s.titre} » ne le dit plus`);
+      exigeImperatif(s.titre, 'le rendez-vous du topo');
+
+      // ⚠️⚠️ LE LIEU DU TOPO A ÉTÉ PERDU À LA RÉÉCRITURE — GARDE LAISSÉE ROUGE, PERTE REMONTÉE.
+      //
+      // L'ajout 5 se dit en une phrase, et c'est la liste fermée des sept qui l'énonce :
+      // « il pose un topo SUR SON CANAL chaque matin à 7 h 00 ». L'heure a survécu (dans le
+      // titre) et les quatre rubriques aussi ; le LIEU, lui, n'est plus écrit nulle part dans
+      // la section — cherché dans tout le gabarit, « tu poses un topo sur ta ligne » a disparu
+      // et rien ne l'a remplacé. Or l'heure sans le lieu est exactement le « régulier, quelque
+      // part » que cet ajout existe pour interdire, et le lecteur ne peut plus le déduire : la
+      // section de la ligne lui interdit d'y pousser « ton journal de bord », donc un topo sans
+      // destination écrite n'a plus de destination du tout. On ne l'élargit pas et on ne la
+      // retire pas : elle cherche la fonction — où le topo se pose — là où elle doit vivre.
+      //
+      // ✅ RENDU À `b493a8f`, DANS LE TITRE : « 6 — Le topo du matin, 7 h 00, **sur ta ligne** ».
+      // Le rendez-vous porte désormais ses trois éléments au même endroit — quand, à quelle
+      // heure, où — et c'est mieux que ce qui existait. La garde lisait le seul corps : elle
+      // aurait donc refusé la réparation. On lit le titre ET le corps, parce que ce qui compte
+      // est que le lieu soit ÉCRIT dans la section, pas la ligne où il est écrit.
+      exigePolarite(
+        `${s.titre}\n${s.corps}`, /sur ta ligne|sur ton canal/i,
+        'le topo se pose sur sa ligne — l’heure sans le lieu laisse un « régulier, quelque part »',
+      );
+
+      // ⚠️ LES RUBRIQUES NE SONT PLUS DES PUCES : elles sont énumérées EN LIGNE, séparées par
+      // « · », derrière l'annonce « Quatre lignes ». La garde en COMPTE reste la même — en
+      // retirer une (la seule qui appelle une décision, en général) ne casserait rien d'autre —
+      // mais elle compte désormais les segments de l'énumération. `pucesDe` ne voyait plus rien
+      // et rendait 0 pour 4, ce qui est un rejet fondé mais muet sur la cause.
       const RUBRIQUES = [
         { quoi: 'où en est le chantier', sonde: /où en est le chantier/i },
         { quoi: 'ce qui tourne en ce moment', sonde: /ce qui tourne/i },
         { quoi: 'ce qui est bloqué', sonde: /bloqué/i },
         { quoi: 'ce qui attend une décision du dirigeant', sonde: /attend une décision/i },
       ];
-      const puces = pucesDe(s.corps);
-      assert.equal(puces.length, RUBRIQUES.length, `${puces.length} rubrique(s) écrite(s) pour ${RUBRIQUES.length} gardée(s)`);
+      const enumeration = s.corps.split('\n').filter((l) => /où en est le chantier/i.test(l));
+      assert.equal(enumeration.length, 1, `les rubriques du topo doivent être énumérées une fois exactement (${enumeration.length})`);
+      const rubriques = enumeration[0].split('·').map((x) => x.trim());
+      assert.equal(rubriques.length, RUBRIQUES.length, `${rubriques.length} rubrique(s) écrite(s) pour ${RUBRIQUES.length} gardée(s)`);
       for (const { quoi, sonde } of RUBRIQUES) {
-        assert.equal(puces.filter((p) => sonde.test(p)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
+        assert.equal(rubriques.filter((p) => sonde.test(p)).length, 1, `« ${quoi} » doit figurer une fois exactement`);
       }
 
       // LE DÉCLENCHEMENT EXISTE DÉSORMAIS (E-20260813-0002), et le métier le dit — mais il
@@ -548,16 +690,27 @@ export const CONTROLES = [
       // ne fait aucun bruit — un topo qui n'arrive pas ressemble trait pour trait à une
       // matinée sans rien à dire. Sans cette phrase, la panne serait indiscernable du
       // silence, et c'est exactement la confusion que le topo existe pour lever.
-      assert.match(
-        s.corps, /le rendez-vous reste tien/i,
-        'le métier doit dire que le rendez-vous appartient à l’orchestrateur, réveil ou pas — sinon un réveil muet efface le topo sans que rien ne le signale',
+      //
+      // ⚠️ ELLE A DÉMÉNAGÉ, ON LA SUIT PLUTÔT QUE DE L'ABANDONNER. Elle vivait sous le topo ;
+      // elle vit maintenant en tête de métier, dans « La ronde — ce qui te réveille », où elle
+      // couvre le topo ET la ronde — d'où la première sonde ci-dessous, sans laquelle un texte
+      // qui cesserait de parler du topo à cet endroit rendrait la seconde muette sur lui.
+      const reveil = sectionDe(metier, /ce qui te réveille/i, 'sur ce qui réveille l’orchestrateur');
+      exigePolarite(
+        reveil.corps, /pour le topo comme pour ta ronde/i,
+        'le réveil couvre le topo autant que la ronde — sinon la garantie qui suit ne parle plus du topo',
       );
-      assert.match(
-        s.corps, /tu tiens le rendez-vous quand même/i,
-        'et ce qu’il fait quand le rappel ne vient pas',
+      exigePolarite(
+        reveil.corps, /tu tiens le rendez-vous quand même/i,
+        'le rendez-vous appartient à l’orchestrateur, réveil ou pas — sinon un réveil muet efface le topo sans que rien ne le signale',
+        { inverse: /c'est qu'il n'y avait rien à dire|c'est qu'il n'y a rien à dire/i },
       );
+
       for (const invente of ['crontab', 'cron -', 'launchd', 'systemd']) {
-        assert.ok(!s.corps.includes(invente), `le métier prescrit un mécanisme d’horloge (« ${invente} ») qui n’a pas été tranché`);
+        assert.ok(
+          !s.corps.includes(invente) && !reveil.corps.includes(invente),
+          `le métier prescrit un mécanisme d’horloge (« ${invente} ») qui n’a pas été tranché`,
+        );
       }
     },
   },
@@ -1843,17 +1996,26 @@ export const CONTROLES = [
 
   {
     id: 'la-ronde-tient-l-hygiene-du-registre',
-    quoi: 'la ronde regarde le registre, signale sans fermer, et se tait quand elle ne trouve rien',
+    quoi: 'la ronde regarde le ServiceDesk, signale sans fermer, et se tait quand elle ne trouve rien',
     verifier({ metier }) {
       // T-20260816-0018. Les deux pièges qui comptent plus que la liste sont gardés ici :
       // fermer à la place de quelqu'un, et parler pour ne rien dire.
-      const s = sectionDe(metier, /Veiller tes agents/i, 'sur la ronde');
+      //
+      // ⚠️ CE QUI A CHANGÉ : la garde lisait une seule section (« Veiller tes agents ») qui
+      // portait à la fois la table du tour et les questions. Elles se sont séparées — la table
+      // de ce que chaque tour parcourt est passée au déclenchement, les questions et les deux
+      // pièges sont restés dans la rubrique des agents. Et le lieu que la ronde interroge ne
+      // s'appelle plus « le registre du chantier » mais le ServiceDesk : la sonde suit le NOM
+      // réel de l'objet, sinon elle garderait un vocabulaire mort.
+      const declenchement = sectionDe(metier, /^La ronde — ce qui te réveille$/, 'sur ce que chaque tour parcourt');
+      const s = sectionDe(metier, /^1 — Tes agents et le travail qui tourne$/, 'sur ce que la ronde regarde');
 
-      // La troisième ligne de la table — le registre entre dans ce que la ronde regarde.
-      const lignes = s.corps.split('\n').filter((l) => l.trim().startsWith('|'));
+      // Le ServiceDesk entre dans ce que la ronde parcourt — lu par le LIBELLÉ de la colonne,
+      // jamais par le rang : permuter deux en-têtes déplacerait les cellules sans se voir.
+      const parcours = colonne(tableDe(declenchement.corps), /^Ce que tu regardes$/, 'ce que chaque tour parcourt');
       assert.ok(
-        lignes.some((l) => /registre du chantier/i.test(l)),
-        'la table de la ronde doit porter le registre du chantier — sinon un ticket fini qui traîne ne fait aucun bruit',
+        parcours.some((c) => /ServiceDesk/i.test(c)),
+        'le tour de ronde doit parcourir le ServiceDesk — sinon un ticket fini qui traîne ne fait aucun bruit',
       );
 
       // Les cinq questions, en compte : en retirer une ne casserait rien d'autre.
@@ -1879,7 +2041,11 @@ export const CONTROLES = [
       // Interdire « fermer » en général rougirait sur du texte correct — donc on ne vise que les
       // formes qui AUTORISENT.
       exigePolarite(
-        s.corps, /tu ne fermes pas/i,
+        // ⚠️ SONDE ÉLARGIE À LA REFORMULATION DU MÊME REFUS — même campagne, même motif :
+        // « Tu signales ; fermer n'est pas ton geste » dit exactement ce que « tu ne fermes
+        // pas » dit, et faisait crier la garde. On exige la négation du geste de fermer, pas
+        // sa tournure.
+        s.corps, /tu ne fermes pas|fermer n'est pas ton geste/i,
         'la ronde SIGNALE sans fermer — confondre « la PR est mergée » et « le défaut est réglé » a déjà fait rouvrir un ticket',
         { inverse: /tu peux fermer|tu dois fermer|permis de fermer|autorisée? à fermer|en réalité tu fermes|la ronde ferme/i },
       );
@@ -1937,14 +2103,22 @@ export const CONTROLES = [
 
       // ⚠️ ET LE FAUX POSITIF DOIT ÊTRE NOMMÉ, SANS QUOI LA CORRECTION SE DÉFAIT.
       //
-      // Un gestionnaire client porte DEUX lignes par définition de poste — celle de son client
-      // et celle du dirigeant. Sans cette phrase, le prochain qui lit « deux lignes sur le même
+      // Un représentant de client porte DEUX lignes par définition de poste — celle de son
+      // client et celle du CTO. Sans cette phrase, le prochain qui lit « deux lignes sur le même
       // terminal » réécrira le critère d'origine en croyant simplifier, et il rougira de nouveau
       // trois fois sur quatre.
+      //
+      // ⚠️ LA SONDE A ÉTÉ RESSERRÉE SUR CE QUI PORTE LA GARANTIE, ET SEULEMENT SUR LUI. Elle
+      // cherchait « pas une anomalie, c'est sa définition de poste » ; la réécriture dit la
+      // même chose sans le premier membre — « un représentant de client porte **normalement**
+      // deux lignes […], c'est sa définition de poste ». La moitié « pas une anomalie » était
+      // la formulation, la moitié « définition de poste » est le FAIT : c'est elle qui empêche
+      // le prochain lecteur de traiter le cas normal comme un défaut. On garde le fait, et
+      // `inverse` continue d'interdire qu'on le déclare anomalie, quelle que soit la tournure.
       exigePolarite(
-        s.corps, /pas une anomalie, c'est sa définition de poste/i,
-        'le faux positif nommé : un gestionnaire porte deux lignes par définition de poste',
-        { inverse: /deux lignes (?:pour|chez) un gestionnaire (?:est|sont) (?:une )?anomalie/i },
+        s.corps, /c'est sa définition de poste/i,
+        'le faux positif nommé : un représentant porte deux lignes par définition de poste',
+        { inverse: /deux lignes (?:pour|chez) un (?:gestionnaire|représentant) (?:est|sont) (?:une )?anomalie|porter deux lignes est (?:une )?anomalie/i },
       );
     },
   },
@@ -1976,34 +2150,94 @@ export const CONTROLES = [
       // ⚠️ LA POSITION EST LA GARANTIE, PAS LA PRÉSENCE.
       //
       // « Elle va EN TÊTE, pas en annexe » : un orchestrateur naît en lisant son métier, et la
-      // première chose qu'il doit savoir n'est pas la mécanique des worktrees ni l'ordre des
-      // statuts — c'est qui il est pour celui qui l'a fait naître. Reléguer ce bloc plus bas
-      // laisserait TOUS SES MOTS EN PLACE et retirerait exactement ce qui compte : une garde
-      // en présence resterait verte sur cette régression-là.
-      const rangDefinition = preambule.indexOf('bras droit');
-      const rangPilote = preambule.indexOf('Tu es le **pilote**');
-      assert.ok(rangPilote > 0, 'le repère de position a disparu : le préambule ne présente plus le rôle de pilote');
+      // première chose qu'il doit savoir n'est pas la mécanique des espaces de travail ni
+      // l'ordre des statuts — c'est qui il est pour celui qui l'a fait naître. Reléguer ce bloc
+      // plus bas laisserait TOUS SES MOTS EN PLACE et retirerait exactement ce qui compte : une
+      // garde en présence resterait verte sur cette régression-là.
+      //
+      // ⚠️ CE QUI A CHANGÉ ICI, ET POURQUOI CE N'EST PAS UN ASSOUPLISSEMENT (2026-08-17).
+      //
+      // Cette garde situait la définition par rapport à un VOISIN littéral — « Tu es le
+      // **pilote** d'un chantier », la phrase qui ouvrait alors les trois formes de chantier.
+      // La reconstruction du métier a retiré ce repère du préambule, délibérément : le texte
+      // oppose désormais les deux rôles (« un pilote exécute un plan de vol ; un bras droit
+      // décide à la place de quelqu'un d'autre »), donc nommer le lecteur « le pilote » aurait
+      // contredit la définition même que cette garde protège. Sa fonction — présenter les
+      // trois formes de chantier — a une destination nommée : la section « Trois formes de
+      // chantier » et sa table `D`/`P`/`J`. VÉRIFIÉ avant de toucher à quoi que ce soit : ce
+      // n'était pas une perte, c'était un repère périmé.
+      //
+      // Une garde qui mesure une position contre un VOISIN ne survit pas au déplacement de ce
+      // voisin — et elle rougit alors en accusant le texte d'une perte qu'il n'a pas commise.
+      // On mesure donc contre ce que le texte lui-même oppose à la définition : LA MÉCANIQUE.
+      // Rien de mécanique ne peut la précéder, et elle vit avant le premier titre de section.
+      const rangDefinition = metier.indexOf('bras droit');
+      assert.ok(rangDefinition > 0, 'la définition de poste a disparu du métier');
+
+      const rangPremierTitre = metier.search(/^##\s/m);
       assert.ok(
-        rangDefinition > 0 && rangDefinition < rangPilote,
-        'la définition de poste est passée APRÈS la mécanique du chantier. Elle doit OUVRIR le '
-          + 'métier, pas le compléter : un pilote exécute un plan de vol, et c’est précisément '
-          + 'ce que cette phrase corrige.',
+        rangPremierTitre > 0 && rangDefinition < rangPremierTitre,
+        'la définition de poste est passée sous un titre de section : elle n’ouvre plus le métier, '
+          + 'elle le complète. Le préambule est le seul endroit qu’un orchestrateur lit à coup sûr '
+          + 'avant de commencer.',
       );
+
+      // Les trois mécaniques que le texte nomme lui-même comme ce qui vient APRÈS elle. Les
+      // deux premières apparaissent dans la phrase de la définition — c'est voulu : la mesure
+      // reste vraie tant que la définition les précède, et rougit dès qu'un passage mécanique
+      // remonte au-dessus d'elle.
+      const MECANIQUES = [
+        { quoi: 'la mécanique des espaces de travail', sonde: /espaces? de travail|worktree/i },
+        { quoi: 'l’ordre des statuts', sonde: /ordre des statuts/i },
+        { quoi: 'un bloc de commandes', sonde: /\n```/ },
+      ];
+      for (const { quoi, sonde } of MECANIQUES) {
+        const trouve = sonde.exec(metier);
+        assert.ok(
+          !trouve || trouve.index > rangDefinition,
+          `${quoi} précède la définition de poste. Elle doit OUVRIR le métier, pas le compléter : `
+            + 'un pilote exécute un plan de vol, et c’est précisément ce que cette phrase corrige.',
+        );
+      }
 
       // Les trois conséquences, EN COMPTE : en retirer une ne casserait rien d'autre, et c'est
       // la deuxième qui partirait — la seule qui coûte, puisqu'elle interdit de remonter un
       // arbitrage qu'on pouvait rendre soi-même. Remonter est toujours le geste confortable.
+      //
+      // ⚠️ LES SONDES SONT ÉCRITES SUR LE GESTE, PAS SUR LA PERSONNE (2026-08-17). Les trois
+      // conséquences étaient énoncées à la troisième personne (« il ne fait pas extraire sa
+      // réponse ») ; la reconstruction les adresse à l'orchestrateur (« Tu ne fais pas extraire
+      // ta réponse »). Le geste gardé est le même au mot près — seule la personne a changé, et
+      // une garde qui rougit sur un changement de personne rougit sur de la grammaire, pas sur
+      // une garantie. Les sondes acceptent donc les deux personnes et ne lâchent rien d'autre.
+      //
+      // ⚠️ ET SUR SES DEUX ANCRES, PAS SUR SA TOURNURE — MESURÉ, PAS SUPPOSÉ (2026-08-17).
+      //
+      // Une campagne de reformulations LÉGITIMES, écrites à l'aveugle par quelqu'un qui ne
+      // voyait pas ces gardes, a fait crier celle-ci deux fois sur vingt : « Tu ne fais pas
+      // extraire ta réponse » écrit au passif (« Ta réponse ne doit pas être extraite »), et
+      // « tu retires des décisions » écrit « tu enlèves des décisions ». Les deux disent la
+      // même obligation ; la garde refusait un texte correct. C'est le SECOND chiffre, celui
+      // qu'on oublie de mesurer — et une garde qui crie à tort se fait retirer, en emportant
+      // ce qu'elle gardait vraiment.
+      //
+      // On garde donc DEUX ANCRES par conséquence — le geste et son objet — présentes sur la
+      // même ligne, plus la MODALITÉ de cette ligne. Ce n'est pas revenir à garder un mot :
+      // un mot seul se conserve en retournant la phrase, deux ancres plus l'impératif ne s'y
+      // conservent pas. Et le COMPTE reste : trois conséquences, une fois chacune.
       const lignes = preambule.split('\n');
       const CONSEQUENCES = [
-        { quoi: 'ne pas faire extraire sa réponse', sonde: /ne fait pas extraire sa réponse/i },
-        { quoi: 'retirer des décisions de l’assiette du dirigeant', sonde: /retire des décisions de l'assiette/i },
-        { quoi: 'dire d’abord ce qu’on n’a pas envie d’entendre', sonde: /ce qu'on n'a pas envie d'entendre/i },
+        { quoi: 'ne pas faire extraire sa réponse', ancres: [/extrai/i, /réponse/i] },
+        { quoi: 'retirer des décisions de l’assiette du dirigeant', ancres: [/décisions/i, /assiette/i] },
+        { quoi: 'dire d’abord ce qu’on n’a pas envie d’entendre', ancres: [/envie d'entendre/i] },
       ];
-      for (const { quoi, sonde } of CONSEQUENCES) {
+      for (const { quoi, ancres } of CONSEQUENCES) {
+        const portantes = lignes.filter((l) => ancres.every((a) => a.test(l)));
         assert.equal(
-          lignes.filter((l) => sonde.test(l)).length, 1,
+          portantes.length, 1,
           `la conséquence « ${quoi} » doit figurer une fois exactement dans le préambule`,
         );
+        exigeImperatif(portantes[0], `la conséquence « ${quoi} »`);
       }
 
       // ⚠️ LA MOITIÉ QUI PROTÈGE, ET ELLE SE RETIRE SANS BRUIT.
@@ -2157,7 +2391,13 @@ export const CONTROLES = [
       // chercher qui donnait des ordres aux agents alors que le blocage était la boîte de
       // l'orchestrateur (239 tentatives de jonction), et un agent qui redemande cinq fois un
       // mandat déjà présent trois fois dans son pane.
-      const s = sectionDe(metier, /regarde d'abord ta propre boîte/i, 'sur la vérification avant relance');
+      //
+      // ⚠️ CE QUI A CHANGÉ : la sonde cherchait le TITRE de l'ancienne rubrique (« regarde
+      // d'abord ta propre boîte »). La rubrique a été renommée par ce qu'elle FAIT — elle tient
+      // ensemble les deux surfaces dont l'orchestrateur répond lui-même, sa ligne et sa boîte.
+      // La sonde désigne donc ce titre entier plutôt qu'un fragment : une sonde large sur
+      // « ta propre boîte » attraperait aussi ce qui parle du crochet et de la ligne.
+      const s = sectionDe(metier, /^2 — Ta propre ligne et ta propre boîte de saisie$/, 'sur la vérification avant relance');
 
       exigePolarite(
         s.corps, /tu es l'une des deux/i,
@@ -2183,15 +2423,21 @@ export const CONTROLES = [
 
   {
     id: 'la-recolte-ecrit-au-lieu-de-constater',
-    quoi: 'la huitième tâche RÉCOLTE — elle écrit au registre au lieu de constater l’oubli — et sa limite est dite',
+    quoi: 'la rubrique de récolte RÉCOLTE — elle écrit au ServiceDesk au lieu de constater l’oubli — et sa limite est dite',
     verifier({ metier }) {
       // T-20260816-0097. L'arbitrage du dirigeant a écarté trois pistes de CONTRÔLE au profit
       // d'une RÉCOLTE, et la différence est toute la valeur du lot.
-      const s = sectionDe(metier, /La récolte/i, 'sur la récolte');
+      //
+      // ⚠️ CE QUI A CHANGÉ : la sonde cherchait un TITRE qui nommait le RANG de la rubrique
+      // (« La récolte — la huitième tâche de ta ronde »), et le rang a bougé à la
+      // réorganisation. Elle désigne maintenant la rubrique par ce qu'elle fait, récolter son
+      // propre contexte — un rang se renumérote, une fonction non. Et le lieu où la récolte
+      // écrit s'appelle désormais le ServiceDesk : la sonde suit le nom réel de l'objet.
+      const s = sectionDe(metier, /^3 — Récolter ton propre contexte$/, 'sur la récolte');
 
       exigePolarite(
-        s.corps, /tu les écris au registre/i,
-        'la récolte ÉCRIT au registre — c’est son livrable, pas un constat',
+        s.corps, /tu l'écris au ServiceDesk/i,
+        'la récolte ÉCRIT au ServiceDesk — c’est son livrable, pas un constat',
       );
 
       // ⚠️⚠️ LA DISTINCTION QUI PORTE TOUT LE LOT, ET ELLE SE PERD EN UN MOT.
@@ -2218,37 +2464,64 @@ export const CONTROLES = [
         'sa limite : elle attrape ce qui a ÉCHAPPÉ, jamais ce qui a DISPARU',
         { inverse: /la récolte rattrape tout|rien n'est perdu|elle rattrape (?:aussi )?ce qui a été compacté/i },
       );
+      // ⚠️ LA SONDE A DÛ CHANGER PARCE QUE LE RENVOI A CHANGÉ, PAS LA GARANTIE. Le texte disait
+      // « du principe d'inscrire au plus tôt » ; il pointe maintenant la rubrique qui porte ce
+      // principe. Garder l'ancienne formule aurait fait rougir un texte devenu plus précis. Ce
+      // qu'on exige est donc les DEUX MOITIÉS sur la même ligne : qu'elle n'abroge rien, et
+      // quoi — l'inscription AU PLUS TÔT. La première seule laisserait « elle n'abroge donc
+      // rien » suivi de n'importe quoi.
       exigePolarite(
-        s.corps, /n'abroge donc rien du principe d'inscrire au plus tôt/i,
+        s.corps, /n'abroge donc rien[^\n]*inscrire \*\*au plus tôt\*\*/i,
         'donc elle n’abroge pas le principe d’inscrire au plus tôt — les deux sont nécessaires',
         { inverse: /remplace le principe|dispense d'inscrire|il n'est plus nécessaire d'inscrire/i },
       );
 
-      // La cadence n'est pas tranchée. Le dire est plus honnête que de la choisir au jugé — et
-      // le ticket le demande explicitement : « à mesurer sur le comportement réel ».
-      exigePolarite(s.corps, /\[non établi\]/, 'la fréquence de la récolte, marquée comme non établie');
+      // ⚠️ LA CADENCE A ÉTÉ TRANCHÉE, ET LA GARDE SUIT LA FONCTION PLUTÔT QUE LE MARQUEUR.
+      //
+      // Elle exigeait `[non établi]` — le mot juste tant que la fréquence n'était pas mesurée,
+      // et le ticket le demandait ainsi. La réorganisation l'a tranchée : la récolte passe À
+      // CHAQUE RONDE, et c'est ce que la table du tour porte aussi (rubrique 3). Exiger encore
+      // le marqueur ferait rougir la réponse qu'on attendait. Ce que la garde tient est donc ce
+      // qu'il gardait vraiment : la récolte a une cadence ÉCRITE, et non laissée au jugé.
+      exigePolarite(
+        s.corps, /À chaque ronde, tu relis ton propre contexte/i,
+        'la cadence de la récolte, écrite — elle passe à chaque ronde, elle n’est pas laissée au jugé',
+        { inverse: /si tu y penses|quand tu as le temps|de temps à autre/i },
+      );
     },
   },
 
   {
     id: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
-    quoi: 'rien ne tourne → on repart du backlog au grain de la Demande, et la ronde ne finit pas avant que ses trouvailles soient au registre',
+    quoi: 'rien ne tourne → on repart du backlog au grain de la Demande, et la ronde ne finit pas avant que ses trouvailles soient au ServiceDesk',
     verifier({ metier }) {
       // T-20260816-0018, tâche 9 + condition de fin. Mesuré le 2026-08-16 : trois agents au
       // repos avec du travail devant eux, correctement listés `done` par la ronde — et RIEN
       // n'en a été conclu, parce qu'aucune tâche ne demandait « est-ce que quelque chose
       // avance ? ». Personne ne l'a su avant que le dirigeant demande « vous travaillez sur quoi ? ».
-      const s = sectionDe(metier, /observe sans agir est un journal/i, 'sur les conséquences que la ronde doit tirer');
+      //
+      // ⚠️⚠️ CE QUI A CHANGÉ, ET C'EST LE CAS LE PLUS DÉLICAT DU LOT : CETTE GARDE CITAIT UN RANG.
+      //
+      // Elle désignait sa section par un titre imagé (« Une ronde qui observe sans agir est un
+      // journal ») et nommait sa règle « la neuvième tâche ». La réorganisation a renuméroté les
+      // rubriques de ronde : la reprise par le backlog est devenue la QUATRIÈME. Un rang n'est
+      // pas une garantie — il se renumérote sans qu'aucune règle bouge, et une garde qui le
+      // compte rougit sur un texte parfaitement juste. On garde donc la FONCTION : une ronde ne
+      // rend pas un état, elle en tire une conséquence, et cette conséquence-là est de repartir
+      // du backlog. Les deux conséquences se sont séparées en deux sections, la garde lit les deux.
+      const s = sectionDe(metier, /^4 — Si rien n'avance, repars du backlog$/, 'sur la conséquence que la ronde tire quand rien n’avance');
+      const fin = sectionDe(metier, /^Ta ronde ne se termine pas tant que/, 'sur la condition de fin de la ronde');
 
+      // Le défaut mesuré porte la garantie : la ronde avait l'état juste et n'en a rien conclu.
       exigePolarite(
-        s.corps, /elle en tire une conséquence/i,
+        s.corps, /et elle n'en a rien conclu/i,
         'une ronde ne rend pas un état, elle en tire une conséquence — sinon c’est un journal',
-        { inverse: /se contente de rendre l'état|il suffit de constater|un état rendu suffit/i },
+        { inverse: /se contente de rendre l'état|il suffit de constater|un état rendu suffit|rendre l'état suffit/i },
       );
 
       exigePolarite(
-        s.corps, /tu repars du backlog/i,
-        'la neuvième tâche : si rien ne tourne, on reprend le travail au backlog',
+        s.corps, /tu prends la suite \*\*dans le backlog/i,
+        'si rien ne tourne, on reprend le travail au backlog',
         { inverse: /tu attends qu'on te réveille|tu attends une consigne|rien à faire tant qu'on ne te dit rien/i },
       );
       exigePolarite(
@@ -2288,16 +2561,25 @@ export const CONTROLES = [
 
       // ⚠️ LA SECONDE CONSÉQUENCE, ET C'EST SA FORMULATION QUI EST LA GARANTIE.
       //
-      // « Une ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au registre » est
+      // « Une ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au ServiceDesk » est
       // une CONDITION DE FIN. Écrite comme une bonne habitude, elle redevient exactement ce
       // qu'elle remplace : une documentation qui repose sur le souvenir d'un seul agent.
+      //
+      // Elle a sa propre section maintenant, et l'énoncé est passé dans son TITRE — que la sonde
+      // de `sectionDe` ci-dessus ancre. Ce qui reste à garder ici est ce que le corps ajoute, et
+      // c'est là que la garantie se perdrait sans bruit : le rang de la consigne. « Condition de
+      // fin » ou « bonne habitude » — le texte est presque le même, la garantie n'existe que
+      // dans le premier cas.
       exigePolarite(
-        s.corps, /ne se termine pas tant que ce qu'elle a trouvé n'est pas au registre/i,
-        'la ronde ne finit pas avant que ses trouvailles soient inscrites — c’est sa condition de fin',
+        // ⚠️ SONDE ÉLARGIE — même campagne : « c'est **la condition qui la termine** » est la
+        // même règle. La garantie est que l'inscription CONDITIONNE la fin de la ronde ; la
+        // formulation exacte ne lui appartient pas.
+        fin.corps, /c'est \*\*(?:sa condition de fin|la condition qui la termine)\*\*/i,
+        'la ronde ne finit pas avant que ses trouvailles soient inscrites — c’est sa condition de fin, pas une bonne habitude',
         { inverse: /si tu y penses|quand tu as le temps|il est bon d'inscrire|tu peux l'inscrire plus tard/i },
       );
       exigePolarite(
-        s.corps, /mourir avec la session/i,
+        fin.corps, /mourir avec la session/i,
         'et le motif : un constat non inscrit meurt avec la session, sans que personne sache qu’il a existé',
       );
     },
@@ -2321,10 +2603,16 @@ export const CONTROLES = [
       // ── LE CALCUL QUI TRANCHE. Sans lui, la règle se lit comme une préférence de style, et
       // un orchestrateur convaincu de sa rigueur la contourne de bonne foi : son message est
       // juste. Ce qui ne l'est pas, c'est qu'il soit le dixième.
+      //
+      // ⚠️ LA SONDE COMPTE LES AGENTS, PLUS LES SEULS ORCHESTRATEURS. La réécriture élargit le
+      // dénombrement (« le nombre d'agents », dix lieux sur ce poste) là où il ne comptait que
+      // les orchestrateurs. C'est la même garantie, et elle mord plus large : ce qui la porte
+      // est la MULTIPLICATION, pas la catégorie de ceux qui écrivent. La sonde s'arrête donc
+      // avant le mot qui a bougé.
       exigePolarite(
-        s.corps, /se multiplie par le nombre d'orchestrateurs/i,
+        s.corps, /se multiplie par le nombre d'/i,
         'le motif est la multiplication — ce qu’il écrit est lu dix fois, pas une',
-        { inverse: /ton message est le seul|un seul orchestrateur t'écrit/i },
+        { inverse: /ton message est le seul|un seul (?:orchestrateur|agent) t'écrit/i },
       );
 
       // ── LE TRI, APPARIÉ CASE PAR CASE. Permuter les deux colonnes garde tous les mots de la
@@ -2335,8 +2623,11 @@ export const CONTROLES = [
       const TRI = [
         { quoi: 'un fait, un chiffre, un état', sonde: /un \*\*fait\*\*/i, ou: /\*\*la ligne\*\*/i },
         { quoi: 'une décision qui lui appartient', sonde: /décision qui lui appartient/i, ou: /\*\*la ligne\*\*/i },
-        { quoi: 'le raisonnement', sonde: /ton raisonnement/i, ou: /\*\*le registre\*\*/i },
-        { quoi: 'la rétractation et l’aveu de méthode', sonde: /rétractation/i, ou: /\*\*le registre\*\*/i },
+        // ⚠️ LA DESTINATION S'ÉCRIT « le ServiceDesk », plus « le registre » : le mot maison a
+        // été retiré du métier (44 occurrences, jamais employé chez Somtech). Le lieu n'a pas
+        // changé, seul son nom — la sonde suit le nom réel, sinon elle garde un mot mort.
+        { quoi: 'le raisonnement', sonde: /ton raisonnement/i, ou: /\*\*le ServiceDesk\*\*/i },
+        { quoi: 'la rétractation et l’aveu de méthode', sonde: /rétractation/i, ou: /\*\*le ServiceDesk\*\*/i },
       ];
       assert.equal(table.lignes.length, TRI.length, `${table.lignes.length} matière(s) triée(s) pour ${TRI.length} gardée(s) : une ligne retirée d’une table est le mode de régression le plus silencieux d’un texte`);
       for (const { quoi, sonde, ou } of TRI) {
@@ -2358,15 +2649,27 @@ export const CONTROLES = [
       // ── LES SURFACES, ET C'EST LA MOITIÉ QUI DISTINGUE CETTE RÈGLE DE CELLE QU'ELLE REMPLACE.
       // La version d'avant visait la conversation ; la ligne y échappait, et c'est par elle que
       // le débordement est passé sans qu'aucune règle ne soit techniquement violée. Retirer une
-      // seule de ces puces rend la règle à nouveau bornée — sans qu'une phrase manque.
-      const surfaces = pucesDe(s.corps);
+      // seule de ces surfaces rend la règle à nouveau bornée — sans qu'une phrase manque.
+      //
+      // ⚠️ ELLES NE SONT PLUS DES PUCES : la réécriture les énumère EN LIGNE, séparées par
+      // « · », derrière « chaque surface où ta parole l'atteint ». La garde lit donc les
+      // segments de cette énumération — et elle en COMPTE le nombre, ce que la version en
+      // puces ne faisait pas : `some()` seul laissait ajouter du bruit autour, et surtout ne
+      // disait rien du jour où l'énumération elle-même serait remplacée par une phrase vague.
+      const declaration = s.corps.split('\n').filter((l) => /chaque surface où ta parole/i.test(l));
+      assert.equal(declaration.length, 1, `les surfaces doivent être énumérées une fois exactement (${declaration.length})`);
+      const surfaces = declaration[0].split('·').map((x) => x.trim());
       const ATTENDUES = [
-        { quoi: 'sa ligne directe', sonde: /ligne directe/i },
+        { quoi: 'sa ligne avec le CTO', sonde: /\*\*ligne\*\*/i },
         { quoi: 'le topo du matin', sonde: /topo du matin/i },
         { quoi: 'sa conversation', sonde: /conversation/i },
-        { quoi: 'un commentaire au registre qu’il lira', sonde: /commentaire au registre/i },
-        { quoi: 'ce qu’un gestionnaire de client relaie de sa part', sonde: /gestionnaire de client/i },
+        { quoi: 'un commentaire au ServiceDesk qu’il lira', sonde: /commentaire au ServiceDesk/i },
+        { quoi: 'ce qu’un représentant de client relaie de sa part', sonde: /représentant de client/i },
       ];
+      assert.equal(
+        surfaces.length, ATTENDUES.length,
+        `${surfaces.length} surface(s) nommée(s) pour ${ATTENDUES.length} gardée(s) : en retirer une rend la règle bornée au geste où on l’a écrite, sans qu’une phrase manque`,
+      );
       for (const { quoi, sonde } of ATTENDUES) {
         assert.ok(
           surfaces.some((p) => sonde.test(p)),
@@ -2384,12 +2687,23 @@ export const CONTROLES = [
       // taire une erreur aurait cassé infiniment plus que la verbosité qu'elle corrige.
       exigePolarite(
         s.corps, /déplace l'aveu, ça ne le supprime jamais/i,
-        'la concision DÉPLACE l’aveu vers le registre — elle ne l’abroge pas',
+        'la concision DÉPLACE l’aveu vers le ServiceDesk — elle ne l’abroge pas',
         { inverse: /tu peux taire|inutile de le dire|garde-la pour toi|n'en parle pas/i },
       );
+
+      // ⚠️ « LA FRANCHISE EST LA CONDITION DU RÔLE » A DÉMÉNAGÉ — ON DÉPLACE LA SONDE, ON NE
+      // L'AFFAIBLIT PAS. La réécriture par la fonction l'a sortie de cette section et la dit
+      // deux fois ailleurs : au préambule, où elle définit le poste (« La franchise n'est pas
+      // une vertu ajoutée au rôle — elle en est la condition »), et dans la règle de lecture du
+      // métier, où elle porte exactement ce que cette garde-ci protège — que la CONCISION ne
+      // rabote pas la FRANCHISE, parce que ce sont deux fonctions et non une. C'est cette
+      // seconde formulation qu'on garde ici : c'est elle, et elle seule, qui empêche la règle
+      // de brièveté écrite juste au-dessus de manger la règle de franchise.
+      const lecture = sectionDe(metier, /une règle vaut pour sa FONCTION/i, 'sur la façon de lire ce métier');
       exigePolarite(
-        s.corps, /La franchise est la condition du rôle/i,
+        lecture.corps, /La franchise et la concision sont deux fonctions, pas une/i,
         'et la franchise reste la condition du rôle, jamais une vertu qu’on sacrifie à la brièveté',
+        { inverse: /la concision (?:prime|l'emporte)|sois bref avant d'être franc/i },
       );
       exigePolarite(
         s.corps, /la concision est le défaut, jamais un \*{0,2}plafond/i,
@@ -2444,7 +2758,13 @@ export const CONTROLES = [
         { inverse: /tu peux la reformuler|formule-la comme tu veux|l'esprit suffit|à ta façon/i },
       );
 
-      const portees = s.corps.split('\n').filter((l) => /sans exception/i.test(l));
+      // ⚠️ LA PORTÉE NE S'ÉCRIT PLUS « tous tes messages, sans exception » : la réécriture
+      // l'énonce par le défaut qu'elle corrige — « Ce n'est pas la rubrique d'un compte rendu,
+      // c'est la dernière ligne de tout message. » C'est la même portée, dite à l'envers, et
+      // c'est bien elle qui fait le travail : ce qui la ruine est qu'on la prenne pour la
+      // rubrique d'un geste. La sonde suit donc l'énoncé réel de la portée, et continue
+      // d'exiger qu'il CONTRAIGNE — « il vaut mieux la mettre partout » ne porterait rien.
+      const portees = s.corps.split('\n').filter((l) => /dernière ligne de tout message/i.test(l));
       assert.equal(portees.length, 1, `la portée de la formule doit être énoncée une fois exactement (${portees.length})`);
       exigeContrainte(portees[0], 'la portée de la formule');
 
@@ -2461,13 +2781,35 @@ export const CONTROLES = [
       // vérifiait que deux. Retirer le rappel du bilan de clôture laissait le contrôle vert.
       // Une garde qui vérifie moins que ce que le texte promet est un faux témoin — et c'est
       // le motif exact que ce lot ferme, commis dans le lot qui le ferme.
+      //
+      // ⚠️⚠️ CETTE MOITIÉ EST LAISSÉE ROUGE — LES RAPPELS ONT ÉTÉ PERDUS À LA RÉÉCRITURE.
+      //
+      // Les sondes de `ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE` ont été RÉ-ANCRÉES sur les titres
+      // réels du métier réorganisé (voir la liste, en tête de fichier) : sans ça, la garde
+      // échouait sur « section introuvable » et son rejet n'apprenait rien. Ré-ancrée, elle
+      // rend un verdict fondé — et ce verdict est que QUATRE des cinq rappels ont disparu.
+      // Le métier d'avant les portait tous les cinq ; il n'en reste qu'un, celui du bilan de
+      // clôture. Le texte compense par un énoncé unique de portée (« la dernière ligne de tout
+      // message ») et par la règle de lecture qui dit d'étendre une règle à sa fonction — mais
+      // c'est exactement ce dispositif-là qui n'a PAS mordu la première fois : le métier le
+      // dit lui-même, « aucune des trois n'était fausse, et aucune n'a mordu », et il cite
+      // nommément « J'ai besoin de toi » comme la règle bornée à une rubrique. Le rappel à
+      // chaque surface était le correctif payé par T-20260817-0016 ; on ne le remplace pas par
+      // la constatation qu'il a disparu. On ne met donc rien au vert et on n'élargit rien.
+      //
+      // ⚠️ ON LIT `corpsEtendu`, PAS `corps` : le rappel doit vivre QUELQUE PART sous ce titre,
+      // pas forcément dans le chapeau. R1 est un titre de niveau 1 dont le corps propre tient
+      // en deux lignes — l'exiger là aurait fabriqué un rejet faux.
+      const perdus = [];
       for (const { quoi, sonde } of ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE) {
         const autre = sectionDe(metier, sonde, `« ${quoi} »`);
-        assert.ok(
-          /besoin de toi/i.test(autre.corps),
-          `« ${quoi} » ne rappelle pas la formule : elle redevient la rubrique d’un seul geste — exactement le défaut qu’elle corrige`,
-        );
+        if (!/besoin de toi/i.test(autre.corpsEtendu)) perdus.push(`${quoi} (« ${autre.titre} »)`);
       }
+      assert.deepEqual(
+        perdus, [],
+        `${perdus.length} surface(s) ne rappellent plus la formule : elle redevient la rubrique d’un `
+          + `seul geste — exactement le défaut qu’elle corrige. ${perdus.join(' · ')}`,
+      );
     },
   },
 
@@ -2601,9 +2943,14 @@ export const MUTATIONS = [
     quoi: 'la phrase « continue sans elle » est réintroduite — la ligne redevient facultative',
     cible: 'ligne-obligatoire',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE sur le texte réel : la phrase retournée s'écrivait « Ta ligne est
+    // obligatoire, et c'est un préalable au chantier. » ; la réécriture par la fonction dit le
+    // même fait par le MOMENT de l'ouverture. La mutation retourne donc ce moment — et
+    // réintroduit du même geste la phrase que l'ajout 3 avait retirée, ce qui est exactement
+    // ce qu'elle éprouvait avant.
     muter: (t) => t.replace(
-      "**Ta ligne est obligatoire, et c'est un préalable au chantier.**",
-      "Si la ligne ne peut pas s'ouvrir — jeton absent du poste, par exemple —, dis-le et continue sans elle : ce n'est pas un préalable au chantier.\n\n**Ta ligne est recommandée.**",
+      "**Tu l'ouvres en naissant, tu la refermes en clôturant.**",
+      "**Tu l'ouvres quand tu en as besoin** — et si elle ne peut pas s'ouvrir, dis-le et continue sans elle.",
     ),
   },
   {
@@ -2622,11 +2969,16 @@ export const MUTATIONS = [
     quoi: 'l’obligation est assouplie là où elle est nommée, pendant qu’elle tient là où elle est gardée',
     cible: 'ligne-obligatoire',
     fichier: 'metier',
-    // Trouvée par la PASSE 2 : l'ajout 3 affirme l'obligation à deux endroits, et un seul
+    // Trouvée par la PASSE 2 : l'ajout 3 affirmait l'obligation à deux endroits, et un seul
     // était gardé. Un lecteur applique celui qu'il a lu en dernier.
+    //
+    // ⚠️ RÉ-ANCRÉE : la réécriture par la fonction a FUSIONNÉ les deux endroits en un seul, et
+    // c'est désormais le TITRE de la section qui porte l'affirmation. Un titre s'assouplit
+    // exactement comme le paragraphe d'hier, et sans qu'on le relise — c'est donc lui que
+    // cette mutation retourne, pour éprouver l'`exigeImperatif` posé dessus.
     muter: (t) => t.replace(
-      "**Tu ne commences pas un chantier sans elle**",
-      "Tu peux commencer un chantier sans elle si ça presse",
+      '## Ta ligne est obligatoire\n',
+      '## Ta ligne est obligatoire, sauf si ça presse\n',
     ),
   },
   {
@@ -2704,8 +3056,22 @@ export const MUTATIONS = [
     quoi: 'l’exclusivité de la parole tombe — deux versions du chantier circulent',
     cible: 'parole-au-dirigeant-exclusive',
     fichier: 'metier',
+    // ⚠️ CETTE MUTATION EST INOPÉRANTE, ET ON NE PEUT PAS LA RÉ-ANCRER — c'est un CONSTAT,
+    // pas un oubli. La phrase qu'elle retourne (« Ni tes chefs d'équipe ni leurs sous-agents
+    // ne parlent au dirigeant ») a été supprimée du métier par la réécriture du 2026-08-17, et
+    // rien ne l'a remplacée : il n'existe plus de texte sur lequel poser le retournement. La
+    // laisser telle quelle est le signal honnête — elle rougit en disant « mon motif ne
+    // s'applique plus », en même temps que `parole-au-dirigeant-exclusive` rougit en disant
+    // « la garantie est introuvable ». Les deux pointent le même trou, et les deux se
+    // refermeront ensemble le jour où l'exclusivité sera réécrite. La retirer maintenant
+    // effacerait la seule trace mécanique de la perte.
+    //
+    // Son motif accepte en revanche LES DEUX VOCABULAIRES — « au CTO » comme « au dirigeant » —
+    // parce que le métier a remplacé partout le second par le premier : une exclusivité
+    // réécrite demain le sera dans les mots d'aujourd'hui, et la mutation doit mordre ce
+    // jour-là sans qu'on ait à y repenser.
     muter: (t) => t.replace(
-      "Ni tes chefs d'équipe ni leurs sous-agents ne parlent au dirigeant",
+      /Ni tes chefs d'équipe ni leurs sous-agents ne parlent au (?:CTO|dirigeant)/,
       "Tes chefs d'équipe peuvent lui parler directement quand ça va plus vite",
     ),
   },
@@ -2713,12 +3079,16 @@ export const MUTATIONS = [
   // ── ajout 4 : la ronde horaire
   {
     id: 'la-ronde-devient-occasionnelle',
-    quoi: 'la cadence horaire devient un « régulièrement » qui ne se vérifie pas',
+    quoi: 'la cadence chiffrée devient un « quand tu le sens » qui ne se vérifie pas',
     cible: 'ronde-horaire',
     fichier: 'metier',
+    // RÉ-ANCRÉE : la cadence a quitté la citation de tête pour le corps de « La ronde — ce qui
+    // te réveille », et sa valeur par défaut est passée de l'heure à 20-30 minutes. L'ancien
+    // motif ne mordait plus — donc la garde ne prouvait plus rien. Ce qu'on retourne reste le
+    // même FAIT : une cadence donnée à défaut d'instruction devient une affaire de ressenti.
     muter: (t) => t.replace(
-      '> **Tu fais le tour de tes agents et du travail qui tourne toutes les heures. Par défaut, pas sur demande.**',
-      '> **Tu fais le tour de tes agents et du travail qui tourne régulièrement, au besoin.**',
+      "À défaut d'instruction : **un tour toutes les 20 à 30 minutes** tant que des agents tournent",
+      'À toi de voir : **un tour quand tu le sens nécessaire** tant que des agents tournent',
     ),
   },
   {
@@ -2726,9 +3096,11 @@ export const MUTATIONS = [
     quoi: 'la veille de déblocage est présentée comme couvrant la ronde — celle-ci devient facultative de fait',
     cible: 'ronde-horaire',
     fichier: 'metier',
+    // RÉ-ANCRÉE : la phrase a suivi le chapeau des rondes et gagné son point à l'intérieur du
+    // gras (« ta ronde.** »), ce qui suffisait à rendre l'ancien motif inopérant.
     muter: (t) => t.replace(
-      '**La veille de déblocage ne remplace pas ta ronde**',
-      '**La veille de déblocage fait déjà ta ronde**',
+      '**La veille de déblocage ne remplace pas ta ronde.**',
+      '**La veille de déblocage fait déjà ta ronde.**',
     ),
   },
   {
@@ -2736,9 +3108,26 @@ export const MUTATIONS = [
     quoi: 'la ronde devient une tournée de dépannage — la dérive que le dirigeant a reprise sur ce chantier même',
     cible: 'ronde-n-execute-pas',
     fichier: 'metier',
+    // RÉ-ANCRÉE : la phrase de la ronde ne cite plus le clavier (l'interdit est remonté à
+    // « Ce que tu ne fais pas de tes mains », muté juste après). Ce qui se retourne ici est ce
+    // que la ronde AUTORISE — la moitié qui vit encore dans la rubrique.
     muter: (t) => t.replace(
-      "**Ce que tu fais de ce que tu trouves ne change pas** : tu ne prends pas le clavier à sa place",
-      "**Ce que tu fais de ce que tu trouves t'appartient** : tu prends le clavier à sa place quand c'est plus rapide",
+      '**Ce que tu fais de ce que tu trouves ne change pas** : un agent bloqué se **relance par son brief ou par sa naissance**',
+      "**Ce que tu fais de ce que tu trouves t'appartient** : un agent bloqué, tu prends le clavier à sa place quand c'est plus rapide",
+    ),
+  },
+  {
+    id: 'le-clavier-redevient-permis-quand-c-est-plus-rapide',
+    quoi: 'l’interdit du clavier tombe à son nouveau lieu — la ronde peut de nouveau finir en dépannage, sans qu’un mot bouge dans la ronde',
+    cible: 'ronde-n-execute-pas',
+    fichier: 'metier',
+    // MUTATION NEUVE, et elle suit une garantie qui a DÉMÉNAGÉ. « Tu ne prends pas le clavier à
+    // sa place » a quitté la rubrique de ronde pour la section qui vaut pour tous les gestes.
+    // Sans elle, la moitié déplacée serait gardée sans être éprouvée — ce qui est exactement
+    // l'état qu'on ne sait pas distinguer d'une garde décorative.
+    muter: (t) => t.replace(
+      "tu ne prends pas le clavier à sa place** — tu regardes et tu tranches",
+      "tu prends le clavier à sa place quand c'est plus rapide** — puis tu tranches",
     ),
   },
 
@@ -2748,9 +3137,12 @@ export const MUTATIONS = [
     quoi: 'le topo n’a plus de rendez-vous — donc il n’a plus lieu',
     cible: 'topo-matinal',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE SUR LE TITRE : le rendez-vous s'écrivait en tête de corps, il s'écrit
+    // maintenant dans le titre de la section. La mutation lui retire son heure sans toucher au
+    // reste — le topo garde son nom, ses rubriques et son paragraphe, et n'a plus d'heure.
     muter: (t) => t.replace(
-      '**Chaque matin à 7 h 00, tu poses un topo sur ta ligne.**',
-      '**Quand tu en ressens le besoin, tu peux poser un topo sur ta ligne.**',
+      '## 6 — Le topo du matin, 7 h 00',
+      '## 6 — Le topo du matin, quand tu en ressens le besoin',
     ),
   },
   {
@@ -2758,16 +3150,21 @@ export const MUTATIONS = [
     quoi: 'la rubrique « ce qui attend une décision de lui » disparaît — le topo devient un bulletin qu’on lit sans rien faire',
     cible: 'topo-matinal',
     fichier: 'metier',
-    muter: (t) => t.replace(/^- \*\*ce qui attend une décision de lui\*\*.*\n/m, ''),
+    // ⚠️ RÉ-ANCRÉE : les quatre rubriques ne sont plus des puces, elles sont énumérées en
+    // ligne et séparées par « · ». On retire le segment, pas la puce.
+    muter: (t) => t.replace(' · **ce qui attend une décision de lui**, nommément.', '.'),
   },
   {
     id: 'une-horloge-est-inventee',
     quoi: 'le métier prescrit un mécanisme de déclenchement que personne n’a tranché',
     cible: 'topo-matinal',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE : le paragraphe du réveil a quitté la section du topo pour la tête de
+    // métier (« La ronde — ce qui te réveille »), où il couvre le topo ET la ronde. La
+    // mutation y grave l'horloge que personne n'a tranchée.
     muter: (t) => t.replace(
-      "> **Tu seras rappelé, et le rendez-vous reste tien.**",
-      "> **Le déclenchement** : pose une entrée `crontab` à 7 h 00 sur ton poste.\n>\n> **Tu seras rappelé.**",
+      '**Tu seras aussi rappelé par un réveil** posé à ta naissance',
+      '**Le déclenchement** : pose une entrée `crontab` à 7 h 00 sur ton poste. **Tu seras aussi rappelé par un réveil** posé à ta naissance',
     ),
   },
 
@@ -2802,9 +3199,12 @@ export const MUTATIONS = [
     quoi: 'le topo repose entièrement sur le réveil — un réveil muet efface le rendez-vous sans que rien ne le dise',
     cible: 'topo-matinal',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE : la phrase n'ouvre plus sa ligne (elle vit au milieu du paragraphe du
+    // réveil, en tête de métier), donc l'ancre `^> **S'il ne fait pas signe` ne mordait plus.
+    // On retourne la phrase elle-même, où qu'elle soit dans le paragraphe.
     muter: (t) => t.replace(
-      /^> \*\*S'il ne fait pas signe.*$/m,
-      '> Si le réveil ne fait pas signe, c’est qu’il n’y avait rien à dire.',
+      "**S'il ne fait pas signe, tu tiens le rendez-vous quand même** et tu signales qu'il manque",
+      "S'il ne fait pas signe, c'est qu'il n'y avait rien à dire",
     ),
   },
 
@@ -3683,9 +4083,12 @@ export const MUTATIONS = [
     quoi: 'la ronde garde son « tu ne fermes pas » ET reçoit l’autorisation de fermer trois lignes plus bas — aucune négation, aucune tournure : la garantie tombe quand même',
     cible: 'la-ronde-tient-l-hygiene-du-registre',
     fichier: 'metier',
+    // RÉ-ANCRÉE : « liste d'écarts » n'est plus en gras isolé, la phrase entière l'est. Le
+    // motif littéral ne mordait plus ; la mutation reste la même — l'autorisation s'ajoute à
+    // côté de l'interdit, sans y toucher.
     muter: (t) => t.replace(
-      "La ronde rend une **liste d'écarts**",
-      "Tu peux fermer ce qui est manifestement fini. La ronde rend une **liste d'écarts**",
+      "**La ronde rend une liste d'écarts",
+      "Tu peux fermer ce qui est manifestement fini. **La ronde rend une liste d'écarts",
     ),
   },
 
@@ -3694,9 +4097,12 @@ export const MUTATIONS = [
     quoi: 'le critère du dossier garde son « ne prouve rien » ET se voit déclaré suffisant juste après — sans une seule tournure de négation',
     cible: 'le-topo-passe-les-deux-verifications-quotidiennes',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE sur la phrase qui introduit le VRAI critère : « Ce qu'il faut chercher est
+    // autre chose » a disparu de la réécriture, mais l'endroit est le même — juste après le
+    // « ne prouve rien », là où l'affirmation contraire se glisse le plus naturellement.
     muter: (t) => t.replace(
-      "Ce qu'il faut chercher est autre chose",
-      "Ce test suffit. Ce qu'il faut chercher est autre chose",
+      '⚠️ **Et le défaut à chercher est deux lignes',
+      'Ce test suffit. ⚠️ **Et le défaut à chercher est deux lignes',
     ),
   },
 
@@ -3715,22 +4121,34 @@ export const MUTATIONS = [
     // ⚠️ LA MUTATION QUI COMPTE LE PLUS SUR CE LOT, parce que c'est la seule qu'une garde en
     // présence de mots ne verrait JAMAIS : pas un caractère ne disparaît, seule la position
     // change. Or la position EST la garantie — « elle va EN TÊTE, pas en annexe ».
-    muter: (t) => t.replace(
-      /(> 🧭 \*\*« L'orchestrateur[\s\S]*?elle en est la condition\.\*\*\n\n)(Tu es le \*\*pilote\*\*)/,
-      '$2',
-    ).replace(
-      /(Si le tien n'en est pas une, saute-les\.\n)/,
-      '$1\n> 🧭 **« L\'orchestrateur, c\'est mon bras droit, mon homme de confiance. »**\n>\n> *— le dirigeant, 2026-08-16*\n\n**C\'est une définition de poste, pas un compliment.** Un bras droit ne fait pas extraire sa réponse ; il retire des décisions de l\'assiette du dirigeant ; il dit d\'abord ce qu\'on n\'a pas envie d\'entendre. La franchise n\'est pas une vertu ajoutée au rôle — elle en est la condition.\n',
-    ),
+    //
+    // ⚠️ RÉ-ANCRÉE LE 2026-08-17, ET SANS ELLE LE CHIFFRE AURAIT MENTI. Elle déplaçait le bloc
+    // autour du repère « Tu es le **pilote** », que la reconstruction du métier a retiré : son
+    // motif ne mordait plus, le texte revenait intact, et un harnais naïf aurait compté ce
+    // silence comme « attrapée ». Elle DÉPLACE désormais le bloc réel — citation, définition,
+    // les trois conséquences et la moitié qui protège — sous un titre de section, derrière la
+    // table des trois formes de chantier : pas un caractère perdu, la mécanique devant.
+    muter: (t) => {
+      const bloc = /> 🧭 \*\*« L'orchestrateur[\s\S]*?elle en est la condition\.\*\*\n/.exec(t);
+      if (!bloc) return t;
+      const sansLeBloc = t.slice(0, bloc.index) + t.slice(bloc.index + bloc[0].length);
+      return sansLeBloc.replace(
+        /(\| \*\*Livraison\*\* \| `J-…` \|[^\n]*\n)/,
+        `$1\n${bloc[0]}`,
+      );
+    },
   },
   {
     id: 'la-definition-de-poste-redevient-un-compliment',
     quoi: 'la phrase du dirigeant est ramenée à une marque d’estime — le rôle perd ce qu’elle lui imposait',
     cible: 'l-orchestrateur-est-le-bras-droit',
     fichier: 'metier',
+    // Ré-ancrée le 2026-08-17 : la phrase porte désormais sa suite dans le même gras (« … pas
+    // un compliment — et c'est la première chose que tu dois savoir »), donc le motif qui se
+    // fermait sur `**` ne mordait plus. Le retournement, lui, n'a pas bougé d'un mot.
     muter: (t) => t.replace(
-      "**C'est une définition de poste, pas un compliment**",
-      "**C'est une simple façon de parler, un compliment**",
+      "C'est une définition de poste, pas un compliment",
+      "C'est une simple façon de parler, un compliment",
     ),
   },
   {
@@ -3819,9 +4237,11 @@ export const MUTATIONS = [
     // C'est l'arbitrage du dirigeant qu'on retourne ici : il a écarté trois pistes de CONTRÔLE
     // au profit d'une RÉCOLTE. Le texte muté garde son titre, sa cadence et sa place ; il ne
     // fait plus rien.
+    // RÉ-ANCRÉE : la phrase ouvre maintenant le paragraphe, donc sa majuscule a changé — une
+    // seule lettre suffisait à rendre la mutation inopérante, et la garde muette.
     muter: (t) => t.replace(
-      "**un contrôle te dit « tu as oublié » ; une récolte fait le travail d'écrire.**",
-      "**la récolte vérifie que tu n'as rien oublié.**",
+      "**Un contrôle te dit « tu as oublié » ; une récolte fait le travail d'écrire.**",
+      "**La récolte vérifie que tu n'as rien oublié.**",
     ),
   },
   {
@@ -3839,9 +4259,12 @@ export const MUTATIONS = [
     quoi: 'la récolte garde sa limite ET se voit déclarée suffisante juste après — sans une seule tournure de négation',
     cible: 'la-recolte-ecrit-au-lieu-de-constater',
     fichier: 'metier',
+    // RÉ-ANCRÉE : le renvoi a changé de forme (le principe est désormais pointé par la rubrique
+    // qui le porte) et le gras a disparu. La mutation reste la même — la limite tient, et la
+    // phrase d'à côté déclare la récolte suffisante.
     muter: (t) => t.replace(
-      "**Elle n'abroge donc rien du principe d'inscrire au plus tôt**",
-      "**Elle remplace le principe d'inscrire au plus tôt**",
+      "Elle n'abroge donc rien de R7.5 : inscrire **au plus tôt**",
+      "Elle remplace le principe d'inscrire **au plus tôt**",
     ),
   },
 
@@ -3850,14 +4273,17 @@ export const MUTATIONS = [
     quoi: 'la ronde redevient un journal — elle rend des états et n’en tire plus de conséquence',
     cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
     fichier: 'metier',
+    // RÉ-ANCRÉE : la maxime en tête de section a disparu à la réorganisation ; ce qui porte
+    // désormais la garantie est le défaut mesuré, où la ronde avait l'état juste et n'en a rien
+    // conclu. On retourne donc ce verdict-là — l'état rendu devient une fin en soi.
     muter: (t) => t.replace(
-      '**Une ronde ne rend pas un état : elle en tire une conséquence.',
-      '**Une ronde se contente de rendre l\'état de ce qu\'elle voit.',
+      "**et elle n'en a rien conclu**",
+      "**et un état rendu suffit**",
     ),
   },
   {
     id: 'la-reprise-se-decide-au-grain-du-ticket',
-    quoi: 'la neuvième tâche repart au grain du ticket — on relance un fragment sans savoir ce qu’il sert',
+    quoi: 'la reprise repart au grain du ticket — on relance un fragment sans savoir ce qu’il sert',
     cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
     fichier: 'metier',
     muter: (t) => t.replace(
@@ -3867,7 +4293,7 @@ export const MUTATIONS = [
   },
   {
     id: 'le-piege-de-la-neuvieme-tache-disparait',
-    quoi: 'l’orchestrateur qui attend un arbitrage est déclaré à l’arrêt — la neuvième tâche se met à disperser au lieu d’avancer',
+    quoi: 'l’orchestrateur qui attend un arbitrage est déclaré à l’arrêt — la reprise par le backlog se met à disperser au lieu d’avancer',
     cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
     fichier: 'metier',
     // ⚠️ LE REVERS DE LA TÂCHE 9, et sans lui elle NUIT. Les deux situations se ressemblent
@@ -3883,9 +4309,12 @@ export const MUTATIONS = [
     quoi: 'la condition de fin redevient une bonne habitude — la documentation retombe sur le souvenir d’un seul agent',
     cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
     fichier: 'metier',
+    // RÉ-ANCRÉE : l'énoncé est passé dans le TITRE de sa propre section, et le corps porte
+    // maintenant le RANG de la consigne. C'est ce rang qu'on retourne — le texte reste presque
+    // identique, et la garantie n'existe plus : « bonne habitude » ne conditionne aucune fin.
     muter: (t) => t.replace(
-      "**Et ta ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au registre.**",
-      "**Et il est bon d'inscrire ce que ta ronde a trouvé, si tu y penses.**",
+      "Ce n'est pas une bonne habitude, c'est **sa condition de fin**.",
+      "C'est une bonne habitude, quand tu y penses.",
     ),
   },
 
@@ -3917,8 +4346,10 @@ export const MUTATIONS = [
     quoi: 'le tri garde ses quatre lignes et envoie le raisonnement sur la ligne — chaque mot de la règle est encore là',
     cible: 'la-parole-au-dirigeant-porte-des-faits',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE : la destination s'écrit « le ServiceDesk » depuis que le mot maison
+    // « le registre » a été retiré du métier. La cellule est la même, seul son libellé change.
     muter: (t) => t.replace(
-      'le détail de ta méthode | **le registre** |',
+      'le détail de ta méthode | **le ServiceDesk** |',
       'le détail de ta méthode | **la ligne** |',
     ),
   },
@@ -3930,10 +4361,11 @@ export const MUTATIONS = [
     fichier: 'metier',
     // ⚠️ C'EST LA RÉGRESSION EXACTE QUE CE LOT FERME, et elle ne retire aucune phrase de règle :
     // le texte continue d'interdire le raisonnement, il cesse seulement de dire OÙ.
-    muter: (t) => t.replace(
-      "- ta **ligne directe** (§1-bis) — c'est là qu'il lit le plus ;\n",
-      '',
-    ),
+    //
+    // ⚠️ RÉ-ANCRÉE : les surfaces ne sont plus des puces, elles sont énumérées en ligne et
+    // séparées par « · ». On retire le premier segment — celui de la ligne — sans toucher aux
+    // quatre autres, comme la version en puces le faisait.
+    muter: (t) => t.replace('ta **ligne** · ', ''),
   },
 
   {
@@ -3976,6 +4408,13 @@ export const MUTATIONS = [
     quoi: 'la formule reste écrite une fois, dans sa section, et redevient la rubrique d’un seul geste',
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
+    // ⚠️ INOPÉRANTE, ET IRRÉ-ANCRABLE EN L'ÉTAT — c'est un constat, pas un oubli. Le rappel
+    // qu'elle retourne a été RETIRÉ du métier par la réécriture du 2026-08-17 : la section du
+    // topo ne dit plus que le topo se termine par la formule. Il n'y a donc plus de phrase à
+    // retourner. C'est très exactement l'état que cette mutation existait pour interdire — le
+    // texte est déjà dans sa version mutée. On la laisse : elle rougit en disant « mon motif
+    // ne s'applique plus », pendant que `la-formule-jai-besoin-de-toi` rougit en nommant les
+    // quatre surfaces qui ont perdu le rappel. Les deux se refermeront ensemble.
     muter: (t) => t.replace(
       "et il se termine par `J'ai besoin de toi : …` (ou `rien.`)",
       'et il se termine comme tu le juges utile',
@@ -3998,6 +4437,10 @@ export const MUTATIONS = [
     quoi: 'la surface que le texte déclare — « c’est là que le dirigeant regarde » — cesse de porter la formule',
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
+    // ⚠️ INOPÉRANTE POUR LA MÊME RAISON QUE `la-formule-nest-plus-rappelee-au-topo` : le rappel
+    // sur le compte rendu du chantier a été retiré du métier par la réécriture du 2026-08-17.
+    // Le texte est déjà dans l'état que cette mutation fabriquait. Elle reste écrite pour que
+    // la perte ait une trace mécanique, et elle remordra quand le rappel reviendra.
     muter: (t) => t.replace(
       " **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris.",
       '',
@@ -4009,9 +4452,12 @@ export const MUTATIONS = [
     quoi: 'le seuil de remontée saute : la franchise se remet à tout envoyer sur la ligne, et elle redevient illisible',
     cible: 'la-parole-au-dirigeant-porte-des-faits',
     fichier: 'metier',
+    // ⚠️ RÉ-ANCRÉE : la ponctuation de la phrase a changé au fil de la réécriture (le point est
+    // devenu un point-virgule, et le « Sinon » a perdu sa majuscule). Le motif suivait la
+    // ponctuation ; il suit maintenant la phrase.
     muter: (t) => t.replace(
-      "**Une erreur ne remonte sur la ligne que si elle change une décision qu'il est en train de prendre.** Sinon elle s'inscrit, et elle se tait.",
-      "**Toute erreur remonte sur la ligne, dès que tu la vois.**",
+      "**Une erreur ne remonte sur la ligne que si elle change une décision qu'il est en train de prendre** ; sinon elle s'inscrit, et elle se tait.",
+      '**Toute erreur remonte sur la ligne, dès que tu la vois.**',
     ),
   },
 
