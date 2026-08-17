@@ -143,7 +143,7 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS_AJOUTES = 23;
+export const NB_ANTI_PATTERNS_AJOUTES = 29;   // +6 : T-20260817-0016 (les trois règles du 2026-08-17, leurs deux moitiés inverses, et le motif qui les relie)
 // 11 → 23 le 2026-08-16 (T-20260816-0099, T-20260816-0097, T-20260816-0018). Les douze qui
 // s'ajoutent sont le miroir des garanties de cette version, une par garantie et pas une de plus :
 //
@@ -2003,12 +2003,19 @@ export const CONTROLES = [
 
   {
     id: 'le-backlog-ce-sont-les-demandes',
-    quoi: 'il rend compte au grain de la Demande, répond la chose demandée — ET donne une analyse quand on lui en demande une',
+    quoi: 'il rend compte au grain de la Demande, répond la chose demandée — ET donne une analyse quand on lui en demande une — ET inscrit au même grain ce qui vient du dirigeant',
     verifier({ metier }) {
       // T-20260816-0099, points 1 et 2. Mesurés le même jour, et ils se manquent séparément :
       // le premier est un GRAIN, le second un FORMAT. Les confondre revient à corriger l'un en
       // croyant avoir fait les deux.
-      const s = sectionDe(metier, /Rendre compte — au grain de la Demande/i, 'sur le grain du compte rendu');
+      //
+      // ⚠️ T-20260817-0016 — LE TROISIÈME, ET IL A COÛTÉ UN SECOND REPROCHE EN DEUX JOURS.
+      // Les deux premiers portaient sur ce que l'orchestrateur REND. Le grain auquel le
+      // dirigeant suit gouverne aussi ce qu'il OUVRE, et le texte se taisait là-dessus : quatre
+      // consignes reçues un matin, quatre tickets ouverts, aucun à son grain. La section a donc
+      // été renommée par sa fonction (le grain, pas le geste de rendre compte) — un titre qui
+      // nomme un seul geste est précisément ce qui a laissé le geste voisin découvert.
+      const s = sectionDe(metier, /Le grain auquel il suit/i, 'sur le grain auquel le dirigeant suit');
 
       exigePolarite(
         s.corps, /ce sont les DEMANDES/,
@@ -2044,6 +2051,39 @@ export const CONTROLES = [
         // coup de gras — c'est-à-dire décorative pour une raison qui n'a rien à voir avec le sens.
         s.corps, /jamais un \*{0,2}plafond/i,
         'et la concision est nommée comme un DÉFAUT, jamais comme une limite',
+      );
+
+      // ── LA TROISIÈME RÈGLE : CE QUI VIENT DE LUI S'OUVRE EN DEMANDE.
+      exigePolarite(
+        s.corps, /Jamais directement en ticket/i,
+        'ce que le dirigeant demande s’ouvre en Demande ou en Projet, jamais directement en ticket',
+        { inverse: /ouvre un ticket|un ticket suffit|inscris-le comme ticket/i },
+      );
+
+      // Le DISCRIMINANT, apparié : c'est l'origine qui décide, pas la taille ni l'urgence. Une
+      // table dont on permute les deux lignes garde chaque mot et renverse la règle — et c'est
+      // le renversement le moins visible, parce que les deux moitiés restent vraies séparément.
+      const origines = tableDe(s.corps);
+      const sources = colonne(origines, /^D'où ça vient$/i, 'd’où ça vient');
+      const ouvertures = colonne(origines, /^Ce que tu ouvres$/i, 'ce qu’il ouvre');
+      assert.equal(origines.lignes.length, 2, `le discriminant doit porter ses DEUX origines (${origines.lignes.length}) : n’en garder qu’une laisse deviner l’autre`);
+      const deLui = sources.findIndex((o) => /De lui/i.test(o));
+      const deMoi = sources.findIndex((o) => /De toi/i.test(o));
+      assert.ok(deLui >= 0 && deMoi >= 0, 'les deux origines — de lui, de toi — doivent être nommées');
+      assert.match(ouvertures[deLui], /Demande/i, `ce qui vient du dirigeant s’ouvre en Demande (« ${ouvertures[deLui]} »)`);
+      assert.match(ouvertures[deMoi], /ticket/i, `ce qui vient de l’orchestrateur s’ouvre en ticket (« ${ouvertures[deMoi]} »)`);
+      assert.ok(
+        !/^\s*\|?\s*\*{0,2}ticket/i.test(ouvertures[deLui]),
+        'ce qui vient du dirigeant est donné comme un ticket — les deux origines sont inversées, et le reproche recommence',
+      );
+
+      // ⚠️ LA MOITIÉ QUI PROTÈGE, ET ELLE EST FACILE À PERDRE. La règle dit d'où viennent les
+      // tickets, pas d'arrêter d'en ouvrir. Un orchestrateur qui cesserait d'inscrire ses
+      // propres défauts au registre aurait obéi à la lettre en cassant la règle d'or n°7.
+      exigePolarite(
+        s.corps, /ne te dit pas d'arrêter d'ouvrir des tickets/i,
+        'les tickets restent sa mécanique — la règle dit d’où ils viennent, jamais de cesser d’en ouvrir',
+        { inverse: /n'ouvre plus de tickets?|aucun ticket|les tickets disparaissent/i },
       );
     },
   },
@@ -2241,6 +2281,211 @@ export const CONTROLES = [
       exigePolarite(
         s.corps, /mourir avec la session/i,
         'et le motif : un constat non inscrit meurt avec la session, sans que personne sache qu’il a existé',
+      );
+    },
+  },
+
+  // ═══════════ T-20260817-0016 — les trois règles du 2026-08-17, et le motif qui les relie
+  //
+  // Les trois existaient DÉJÀ sous une forme voisine, et aucune n'a mordu : chacune était
+  // bornée au geste où on l'avait rencontrée, jamais à la fonction qu'elle sert. Les gardes
+  // qui suivent portent donc toutes, en plus de la règle, LA COUVERTURE DE SA FONCTION —
+  // c'est-à-dire ce que la règle FAIT, pas les mots qu'elle contient. Une garde qui se
+  // contenterait de trouver la phrase laisserait revenir exactement le défaut d'origine :
+  // une règle juste, écrite une fois, muette là où elle sert aussi.
+
+  {
+    id: 'la-parole-au-dirigeant-porte-des-faits',
+    quoi: 'sur la ligne il rend des faits, jamais son raisonnement — et la règle nomme TOUTES les surfaces où sa parole atteint le dirigeant',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Des faits, pas ton raisonnement/i, 'sur la façon de parler au dirigeant');
+
+      // ── LE CALCUL QUI TRANCHE. Sans lui, la règle se lit comme une préférence de style, et
+      // un orchestrateur convaincu de sa rigueur la contourne de bonne foi : son message est
+      // juste. Ce qui ne l'est pas, c'est qu'il soit le dixième.
+      exigePolarite(
+        s.corps, /se multiplie par le nombre d'orchestrateurs/i,
+        'le motif est la multiplication — ce qu’il écrit est lu dix fois, pas une',
+        { inverse: /ton message est le seul|un seul orchestrateur t'écrit/i },
+      );
+
+      // ── LE TRI, APPARIÉ CASE PAR CASE. Permuter les deux colonnes garde tous les mots de la
+      // règle et envoie le raisonnement sur la ligne : le défaut reproché, à la lettre.
+      const table = tableDe(s.corps);
+      const matieres = colonne(table, /^Ce que tu as en main$/i, 'ce qu’il a en main');
+      const destinations = colonne(table, /^Où ça va$/i, 'où ça va');
+      const TRI = [
+        { quoi: 'un fait, un chiffre, un état', sonde: /un \*\*fait\*\*/i, ou: /\*\*la ligne\*\*/i },
+        { quoi: 'une décision qui lui appartient', sonde: /décision qui lui appartient/i, ou: /\*\*la ligne\*\*/i },
+        { quoi: 'le raisonnement', sonde: /ton raisonnement/i, ou: /\*\*le registre\*\*/i },
+        { quoi: 'la rétractation et l’aveu de méthode', sonde: /rétractation/i, ou: /\*\*le registre\*\*/i },
+      ];
+      assert.equal(table.lignes.length, TRI.length, `${table.lignes.length} matière(s) triée(s) pour ${TRI.length} gardée(s) : une ligne retirée d’une table est le mode de régression le plus silencieux d’un texte`);
+      for (const { quoi, sonde, ou } of TRI) {
+        const i = matieres.findIndex((m) => sonde.test(m));
+        assert.ok(i >= 0, `« ${quoi} » ne figure plus parmi ce qu’il a en main`);
+        assert.match(destinations[i], ou, `« ${quoi} » ne va plus où il doit (« ${destinations[i]} ») — les deux colonnes sont inversées`);
+      }
+
+      // ── LES SURFACES, ET C'EST LA MOITIÉ QUI DISTINGUE CETTE RÈGLE DE CELLE QU'ELLE REMPLACE.
+      // La version d'avant visait la conversation ; la ligne y échappait, et c'est par elle que
+      // le débordement est passé sans qu'aucune règle ne soit techniquement violée. Retirer une
+      // seule de ces puces rend la règle à nouveau bornée — sans qu'une phrase manque.
+      const surfaces = pucesDe(s.corps);
+      const ATTENDUES = [
+        { quoi: 'sa ligne directe', sonde: /ligne directe/i },
+        { quoi: 'le topo du matin', sonde: /topo du matin/i },
+        { quoi: 'sa conversation', sonde: /conversation/i },
+        { quoi: 'un commentaire au registre qu’il lira', sonde: /commentaire au registre/i },
+        { quoi: 'ce qu’un gestionnaire de client relaie de sa part', sonde: /gestionnaire de client/i },
+      ];
+      for (const { quoi, sonde } of ATTENDUES) {
+        assert.ok(
+          surfaces.some((p) => sonde.test(p)),
+          `la surface « ${quoi} » n’est plus nommée : la règle redevient bornée au geste où on l’a écrite — le défaut même que ce lot ferme`,
+        );
+      }
+      exigePolarite(
+        s.corps, /pas sur un geste/i,
+        'et il est dit que la règle porte sur la FONCTION — lui parler — et non sur un geste',
+        { inverse: /ne vaut que (?:sur|pour|dans) la conversation|seulement dans la conversation/i },
+      );
+
+      // ── LES DEUX MOITIÉS QUI PROTÈGENT, ET ELLES NE SE VALENT PAS.
+      // La première est la plus grave : une règle de brièveté qui laisserait croire qu'on peut
+      // taire une erreur aurait cassé infiniment plus que la verbosité qu'elle corrige.
+      exigePolarite(
+        s.corps, /déplace l'aveu, ça ne le supprime jamais/i,
+        'la concision DÉPLACE l’aveu vers le registre — elle ne l’abroge pas',
+        { inverse: /tu peux taire|inutile de le dire|garde-la pour toi|n'en parle pas/i },
+      );
+      exigePolarite(
+        s.corps, /La franchise est la condition du rôle/i,
+        'et la franchise reste la condition du rôle, jamais une vertu qu’on sacrifie à la brièveté',
+      );
+      exigePolarite(
+        s.corps, /la concision est le défaut, jamais un \*{0,2}plafond/i,
+        'la concision est nommée comme un défaut, jamais comme une limite',
+        { inverse: /réponds toujours court|jamais plus de trois lignes|même quand il demande une analyse/i },
+      );
+    },
+  },
+
+  {
+    id: 'la-formule-jai-besoin-de-toi',
+    quoi: 'tout message se termine par la formule LITTÉRALE, le « rien » compris — et elle est rappelée là où les messages se fabriquent',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Tout message se termine par/i, 'sur la formule de fin de message');
+
+      // ── LA FORMULE, LITTÉRALE — et ici la littéralité EST la règle, pas un raccourci de garde.
+      // Le bénéfice décrit par le dirigeant est le coup d'œil : reconnaître une chaîne identique,
+      // toujours au même endroit, sans lire. Une garde qui accepterait un synonyme garderait
+      // l'intention en laissant tomber le seul effet recherché.
+      const LITTERALE = "J'ai besoin de toi :";
+      const lignes = s.corps.split('\n').filter((l) => /besoin de toi/i.test(l));
+      assert.ok(lignes.length >= 2, `la formule doit être montrée dans ses DEUX formes — la demande et le « rien » (${lignes.length} ligne·s trouvée·s)`);
+      for (const l of lignes) {
+        assert.ok(
+          l.includes(LITTERALE),
+          `« ${l.trim()} » n’écrit pas la formule telle quelle : le bénéfice est de reconnaître une chaîne IDENTIQUE sans lire, et une variation le détruit`,
+        );
+      }
+      assert.ok(
+        lignes.some((l) => /:\s*rien\./i.test(l)),
+        'la forme « J’ai besoin de toi : rien. » doit être montrée — c’est celle qu’on omet, et son omission annule la règle',
+      );
+
+      // ── LA VARIANTE PROSCRITE EST NOMMÉE, ET DONNÉE COMME DESTRUCTRICE.
+      // Elle doit figurer, sinon personne ne sait ce qui est interdit ; et elle doit figurer du
+      // mauvais côté, sinon le texte l'autorise en croyant l'illustrer.
+      const variantes = s.corps.split('\n').filter((l) => /ce que j'attends de toi/i.test(l));
+      assert.equal(variantes.length, 1, `la reformulation à proscrire doit être nommée une fois exactement (${variantes.length})`);
+      assert.match(
+        variantes[0], /détruit/i,
+        `« ${variantes[0].trim()} » : la variante doit être donnée comme DÉTRUISANT le bénéfice, jamais comme une formulation acceptable`,
+      );
+
+      exigePolarite(
+        s.corps, /Le `rien` s'écrit/i,
+        'le « rien » s’écrit — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir s’il y en a une',
+        { inverse: /inutile de l'écrire|seulement quand tu as besoin|on l'omet|facultative/i },
+      );
+      exigePolarite(
+        s.corps, /La formule est littérale/i,
+        'la formule est littérale — l’esprit ne suffit pas, c’est la chaîne qui se balaie',
+        { inverse: /tu peux la reformuler|formule-la comme tu veux|l'esprit suffit|à ta façon/i },
+      );
+
+      const portees = s.corps.split('\n').filter((l) => /sans exception/i.test(l));
+      assert.equal(portees.length, 1, `la portée de la formule doit être énoncée une fois exactement (${portees.length})`);
+      exigeContrainte(portees[0], 'la portée de la formule');
+
+      // ── ⚠️ LA COUVERTURE — ET C'EST ELLE QUI FERME LE DÉFAUT D'ORIGINE.
+      //
+      // La règle existait déjà : le point 3 du format de compte rendu. Elle n'a jamais mordu
+      // parce qu'elle était la RUBRIQUE D'UN GESTE — un topo dans la conversation — et que les
+      // autres messages n'en savaient rien. Exiger qu'elle soit écrite ici ne prouverait donc
+      // rien du tout : ce qu'on garde, c'est qu'elle soit rappelée AUX ENDROITS OÙ UN MESSAGE
+      // SE FABRIQUE. Si l'un des deux la perd, la règle est redevenue ce qu'elle était.
+      for (const { quoi, sonde } of [
+        { quoi: 'ta ligne directe (§1-bis)', sonde: /Ouvrir ta ligne avec le dirigeant/i },
+        { quoi: 'le topo du matin', sonde: /Le topo du matin/i },
+      ]) {
+        const autre = sectionDe(metier, sonde, `« ${quoi} »`);
+        assert.ok(
+          /besoin de toi/i.test(autre.corps),
+          `« ${quoi} » ne rappelle pas la formule : elle redevient la rubrique d’un seul geste — exactement le défaut qu’elle corrige`,
+        );
+      }
+    },
+  },
+
+  {
+    id: 'une-regle-vaut-pour-sa-fonction',
+    quoi: 'le métier dit comment il se lit — une règle vaut pour la fonction qu’elle sert, pas pour le geste où elle est écrite — ET l’extension est bornée',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /une règle vaut pour sa FONCTION/i, 'sur la façon de lire ce métier');
+
+      exigePolarite(
+        s.corps, /applique-la partout où tu exerces cette fonction/i,
+        'une règle s’applique partout où sa fonction s’exerce, y compris là où le texte ne la répète pas',
+        { inverse: /seulement là où elle est écrite|uniquement au geste décrit|ne l'étends pas|s'arrête au geste/i },
+      );
+
+      // ── LES TROIS CAS MESURÉS, APPARIÉS. C'est ce qui distingue cette section d'un principe
+      // général : chaque ligne nomme le geste couvert ET le geste resté découvert. Permuter les
+      // deux colonnes rend la table plausible et enseigne l'inverse.
+      const table = tableDe(s.corps);
+      const ecrits = colonne(table, /^Le geste pour lequel elle était écrite$/i, 'le geste pour lequel elle était écrite');
+      const decouverts = colonne(table, /^Le geste voisin, resté découvert$/i, 'le geste voisin resté découvert');
+      const CAS = [
+        { quoi: 'le format court', ecrit: /conversation/i, decouvert: /ligne directe/i },
+        { quoi: '« ce dont j’ai besoin de toi »', ecrit: /rubrique/i, decouvert: /tout message/i },
+        { quoi: 'le grain du backlog', ecrit: /rends/i, decouvert: /ouvres/i },
+      ];
+      assert.equal(table.lignes.length, CAS.length, `${table.lignes.length} cas écrit(s) pour ${CAS.length} gardé(s) — les trois sont ce qui prouve que la règle vient d’une mesure`);
+      for (const { quoi, ecrit, decouvert } of CAS) {
+        const i = ecrits.findIndex((e) => ecrit.test(e));
+        assert.ok(i >= 0, `le cas « ${quoi} » ne nomme plus le geste pour lequel la règle était écrite`);
+        assert.match(decouverts[i], decouvert, `le cas « ${quoi} » ne nomme plus le geste resté découvert (« ${decouverts[i]} »)`);
+        assert.ok(
+          !decouvert.test(ecrits[i]),
+          `le cas « ${quoi} » donne le geste découvert comme celui qui était couvert — les deux colonnes sont inversées, et le texte enseigne alors le contraire`,
+        );
+      }
+
+      // ── LA BORNE, ET ELLE EST OBLIGATOIRE. Une règle qui dit « étends tout » fabrique un
+      // orchestrateur qui invente des consignes en croyant les déduire — c'est-à-dire le
+      // premier de ses biais (l'autorité apparente), armé par son propre métier.
+      exigePolarite(
+        s.corps, /est une invention/i,
+        'l’extension est bornée à la fonction voisine — l’étendre à une fonction différente est une invention',
+        { inverse: /étends-la à tout|toute règle vaut partout|aucune limite/i },
+      );
+      exigePolarite(
+        s.corps, /se corrige à la source/i,
+        'et un trou trouvé se corrige à la SOURCE du gabarit, jamais dans le lieu posé — qui sera remplacé sans prévenir',
+        { inverse: /corrige-le dans ton lieu|modifie ton propre CLAUDE\.md|édite-le sur place/i },
       );
     },
   },
@@ -3629,6 +3874,127 @@ export const MUTATIONS = [
       'deux lignes qui répondent au même destinataire',
     ),
   },
+
+  // ═══════════ T-20260817-0016 — les mutations des trois règles du 2026-08-17
+  //
+  // Chacune est écrite pour ressembler à une amélioration, jamais à un vandalisme : c'est ainsi
+  // que ces trois règles ont disparu la première fois — non pas retirées, mais écrites à un seul
+  // endroit par quelqu'un de rigoureux. Une mutation qui hurlerait ne prouverait rien.
+
+  {
+    id: 'le-raisonnement-remonte-sur-la-ligne',
+    quoi: 'le tri garde ses quatre lignes et envoie le raisonnement sur la ligne — chaque mot de la règle est encore là',
+    cible: 'la-parole-au-dirigeant-porte-des-faits',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'le détail de ta méthode | **le registre** |',
+      'le détail de ta méthode | **la ligne** |',
+    ),
+  },
+
+  {
+    id: 'la-ligne-directe-sort-des-surfaces',
+    quoi: 'la surface où le dirigeant lit le plus disparaît de la liste — la règle redevient celle qui ne visait que la conversation',
+    cible: 'la-parole-au-dirigeant-porte-des-faits',
+    fichier: 'metier',
+    // ⚠️ C'EST LA RÉGRESSION EXACTE QUE CE LOT FERME, et elle ne retire aucune phrase de règle :
+    // le texte continue d'interdire le raisonnement, il cesse seulement de dire OÙ.
+    muter: (t) => t.replace(
+      "- ta **ligne directe** (§1-bis) — c'est là qu'il lit le plus ;\n",
+      '',
+    ),
+  },
+
+  {
+    id: 'la-brievete-autorise-a-taire-une-erreur',
+    quoi: 'la moitié qui protège la franchise se retourne en permission de se taire, sous couvert de concision',
+    cible: 'la-parole-au-dirigeant-porte-des-faits',
+    fichier: 'metier',
+    // La plus grave des trois : elle échange une règle de FORME contre une règle de FOND, et le
+    // texte reste parfaitement cohérent avec lui-même.
+    muter: (t) => t.replace(
+      "⚠️ **Ceci déplace l'aveu, ça ne le supprime jamais.**",
+      "⚠️ **Ceci vaut aussi pour tes erreurs : inutile de le dire quand ça n'a rien changé.**",
+    ),
+  },
+
+  {
+    id: 'la-formule-est-reformulee',
+    quoi: 'la formule du « rien » est remplacée par une variante de même sens — et le coup d’œil meurt sans qu’aucune règle ne manque',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "J'ai besoin de toi : rien.",
+      'Rien de ton côté.',
+    ),
+  },
+
+  {
+    id: 'le-rien-devient-facultatif',
+    quoi: 'la dernière ligne n’apparaît plus que lorsqu’il y a une demande — c’est-à-dire qu’il faut lire le message pour savoir s’il y en a une',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Le `rien` s'écrit — c'est la moitié qui fait fonctionner la règle.**",
+      "**Le `rien` est facultatif — la ligne n'apparaît que si tu as une demande.**",
+    ),
+  },
+
+  {
+    id: 'la-formule-nest-plus-rappelee-au-topo',
+    quoi: 'la formule reste écrite une fois, dans sa section, et redevient la rubrique d’un seul geste',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "et il se termine par `J'ai besoin de toi : …` (ou `rien.`)",
+      'et il se termine comme tu le juges utile',
+    ),
+  },
+
+  {
+    id: 'la-regle-sarrete-au-geste-ou-elle-est-ecrite',
+    quoi: 'la consigne de lecture est retournée : une règle ne vaut plus que là où elle est écrite',
+    cible: 'une-regle-vaut-pour-sa-fonction',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'puis applique-la partout où tu exerces cette fonction, y compris là où le texte ne la répète pas',
+      'puis applique-la au geste qu’elle décrit',
+    ),
+  },
+
+  {
+    id: 'lextension-perd-sa-borne',
+    quoi: 'la règle de lecture cesse de borner l’extension — un orchestrateur invente alors des consignes en croyant les déduire',
+    cible: 'une-regle-vaut-pour-sa-fonction',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'est une invention',
+      'est encore ton travail',
+    ),
+  },
+
+  {
+    id: 'la-consigne-du-dirigeant-devient-un-ticket',
+    quoi: 'les deux origines sont permutées — chaque moitié reste vraie séparément, et la règle est renversée',
+    cible: 'le-backlog-ce-sont-les-demandes',
+    fichier: 'metier',
+    muter: (t) => permuter(
+      t,
+      '**Demande (`D-…`)** ou **Projet (`P-…`)**',
+      '**ticket**, sous le jalon ou sous la demande',
+    ),
+  },
+
+  {
+    id: 'les-tickets-disparaissent-avec-la-regle',
+    quoi: 'la moitié qui protège tombe : la règle sur l’origine se lit comme une interdiction d’ouvrir des tickets',
+    cible: 'le-backlog-ce-sont-les-demandes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "⚠️ **Ceci ne te dit pas d'arrêter d'ouvrir des tickets — ça dit d'où ils viennent.**",
+      "⚠️ **Ceci te dit d'arrêter d'ouvrir des tickets.**",
+    ),
+  },
 ];
 
 /**
@@ -3658,6 +4024,12 @@ export const GARANTIES_DE_POLARITE = [
   'avant-de-relancer-regarde-ta-propre-boite',
   'la-recolte-ecrit-au-lieu-de-constater',
   'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
+  // 2026-08-17 — T-20260817-0016. Les trois règles du jour, plus la consigne de lecture qui
+  // ferme le motif commun. Toutes en polarité, pour la même raison que les précédentes : ce
+  // sont des règles de texte, et une garde en sous-chaîne y survit à son propre renversement.
+  'la-parole-au-dirigeant-porte-des-faits',
+  'la-formule-jai-besoin-de-toi',
+  'une-regle-vaut-pour-sa-fonction',
 ];
 
 /** Le source de ce fichier — lu pour vérifier COMMENT les contrôles sont écrits, pas ce qu'ils rendent. */

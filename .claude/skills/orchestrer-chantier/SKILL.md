@@ -632,7 +632,7 @@ Nomme les agents sans nom que tu croises : un agent anonyme est inadressable —
 |---|---|
 | **Le travail que tu te donnes à toi-même** — publier, corriger, nettoyer | son propre ticket, **avant** de le faire |
 | **Un défaut trouvé en chemin**, hors du lot courant | son propre ticket, même s'il est corrigé dans l'heure — greffé sur le ticket d'un voisin, il ne se retrouve pas |
-| **Un ajustement que le dirigeant demande en cours de route** | inscrit au moment où il est reçu : le fil de ta ligne ne fait pas foi (§5) |
+| **Un ajustement que le dirigeant demande en cours de route** | une **Demande** (`D-…`) ou un **Projet** (`P-…`), jamais un ticket seul — c'est son grain de suivi (voir « Le grain auquel il suit ») ; inscrit au moment où il est reçu : le fil de ta ligne ne fait pas foi (§5) |
 | **Une tâche que tu confies à un chef d'équipe** | son unité de travail *et* son mandat — c'est la filiation de §4b-bis, qui est ce principe appliqué |
 
 **Documenter n'est pas alourdir.** Un ticket ouvert et fermé dans la même heure reste utile : il dit *que* c'est arrivé, *pourquoi*, et *ce qui a été mesuré*. Le contre-écueil est réel et mérite sa ligne — on n'ouvre pas un ticket pour chaque commande lancée : **le critère est le travail qui a un résultat, jamais le geste.**
