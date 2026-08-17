@@ -5,7 +5,16 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-08-17
+## [1.64.0] - 2026-08-17
+
+*Trois lots sortent avec cette version, et les trois sont annoncés ici : PR #273 (T-20260817-0016) · PR #272 (T-20260817-0008, l'entrée de journal du lot ci-dessous) · PR #271 (T-20260817-0008). Vérifié commit par commit sur `v1.63.0..main` — rien d'autre ne sort. **PR #273 n'avait aucune entrée**, et c'est le lot qui compte le plus de la version : elle a été écrite avant publication, pas après.*
+
+### Ajouté
+
+- **Les trois consignes du dirigeant du 2026-08-17 entrent dans le gabarit de l'orchestrateur** (T-20260817-0016, PR #273) — un agent charge son métier à sa naissance ; tant que le gabarit ne les porte pas, chaque orchestrateur qui naît naît sans elles. **Des faits, pas ton raisonnement** — le raisonnement, les rétractations et les aveux de méthode vont au registre, où ils servent celui qui reprendra ; la ligne porte des états, des chiffres, des décisions. **`J'ai besoin de toi :` termine tout message**, littéralement et sur chaque surface, le `rien` compris — c'est le `rien` écrit qui rend la ligne balayable d'un coup d'œil. **Ce qui vient du dirigeant s'ouvre en Demande ou en Projet**, jamais directement en ticket : le ticket reste la mécanique de l'agent, et il naît *sous* la demande.
+- **Chaque règle garde sa moitié inverse**, parce que c'est elle qui l'empêche de se retourner : la concision est le **défaut, jamais un plafond** (une analyse demandée se donne entière) · l'aveu est **déplacé au registre, jamais supprimé** (la franchise reste la condition du rôle) · les tickets **continuent** d'exister pour ce qui vient de l'agent.
+- **Et la section de lecture qui ferme le motif commun** : *une règle vaut pour sa **fonction**, jamais pour le seul geste où elle est écrite*. Les trois reproches d'une même matinée portaient sur trois règles **justes** — chacune décrivait correctement l'endroit où elle avait été écrite et se taisait sur le geste voisin que la même fonction couvrait. Un orchestrateur pouvait donc appliquer les trois à la lettre et se faire reprendre trois fois sans avoir rien violé. La borne est posée dans le même geste : étendre à une fonction **voisine** est le travail, étendre à une fonction **différente** est une invention.
+- **Harnais** : 3 contrôles neufs, 1 étendu, 13 mutations, toutes en polarité. Revue à trois passes — portail RIEN VU, une passe de fond qui rejette (correctifs faits), une passe de fond fraîche. Dette connue et inscrite : `T-20260817-0021`.
 
 ### Corrigé
 
