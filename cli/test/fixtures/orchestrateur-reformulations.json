@@ -316,5 +316,17 @@
     "quoi": "synonyme (crie à tort → alerte à tort)",
     "avant": "Une garde qui crie à tort se fait retirer, et elle emporte ce qu'elle gardait vraiment",
     "apres": "Une garde qui alerte à tort se fait retirer, et elle emporte ce qu'elle gardait vraiment"
+  },
+  {
+    "id": "interdit-arobase-explique-une-fois-de-plus",
+    "quoi": "le commentaire du bloc mentionne UNE FOIS DE PLUS l’interdit — une garde qui compte les occurrences crierait ici",
+    "avant": "# 2. vérifier que son travail est bien parti — ⚠️ PAS avec @{u}, voir juste en dessous",
+    "apres": "# 2. vérifier que son travail est bien parti — ⚠️ jamais avec @{u} : voir l’encadré, et ne mets pas @{u} ici"
+  },
+  {
+    "id": "interdit-arobase-reformule-dans-la-prose",
+    "quoi": "l’encadré qui pose l’interdit est reformulé — même force, même mention de @{u}",
+    "avant": "> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.**",
+    "apres": "> ⚠️ **Ne te sers JAMAIS de `@{u}` pour ce contrôle, et n'avale jamais son erreur.**"
   }
 ]

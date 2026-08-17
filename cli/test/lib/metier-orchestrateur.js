@@ -1165,6 +1165,69 @@ export const CONTROLES = [
   },
 
   {
+    id: 'le-controle-avant-destruction-ne-ment-pas',
+    quoi: 'le contrôle qui précède la destruction d’un espace de travail compare à une référence qui existe, et n’avale pas son erreur',
+    verifier({ metier }) {
+      // ⚠️ LE DÉFAUT LE PLUS COÛTEUX DE CE TEXTE : IL DÉTRUIT DU TRAVAIL.
+      //
+      // Le contrôle enseigné avant `worktree remove` était `git log @{u}.. 2>/dev/null`. Une
+      // branche-socle `wt/<ts>` naît de `git worktree add -b wt/$TS origin/main` : elle N'A PAS
+      // d'upstream et n'en aura jamais. La commande échoue donc TOUJOURS, et la redirection
+      // transforme l'échec en SORTIE VIDE — qui se lit « tout est poussé ». On détruit alors
+      // l'espace avec ses commits, sans le moindre avertissement. Deux orchestrateurs ont
+      // exécuté la version fautive le 2026-08-17 sans rien perdre — par vigilance, pas par
+      // conception. (`T-20260817-0084`, corrigé par `f0fa26b`.)
+      //
+      // ⚠️⚠️ ET VOICI POURQUOI CETTE GARDE NE COMPTE PAS LES OCCURRENCES, MAIS CHERCHE UN USAGE.
+      //
+      // Le gabarit porte TROIS `@{u}`, et **aucune n'est un usage** : ce sont les mentions de
+      // l'interdit lui-même — un commentaire « ⚠️ PAS avec @{u} » dans le bloc, et l'encadré
+      // qui explique le piège. Une garde qui compterait les occurrences rougirait donc sur le
+      // texte qui POSE l'interdit, c'est-à-dire qu'elle punirait la correction. Elle serait
+      // retirée par le premier qui la rencontre, et emporterait ce qu'elle gardait.
+      //
+      // On cherche donc ce que le texte FAIT FAIRE : une LIGNE EXÉCUTABLE d'un bloc de
+      // commandes — celles qu'un agent recopie — commentaires retirés. C'est « ce qu'un texte
+      // fait contre ce qu'il contient », appliqué à la garde elle-même.
+      const executables = blocsBash(metier)
+        .flatMap((b) => b.split('\n'))
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !l.startsWith('#'));
+
+      const usages = executables.filter((l) => l.includes('@{u}'));
+      assert.deepEqual(
+        usages, [],
+        `une ligne EXÉCUTABLE du métier emploie « @{u} » : une branche-socle n’a pas d’upstream, `
+          + `donc la commande échoue toujours et son échec se lit comme « rien à pousser ». `
+          + `L’agent qui la recopie détruit l’espace de travail avec ses commits.`,
+      );
+
+      // La seconde moitié, et elle se perd séparément : l'erreur ne doit pas être avalée. Un
+      // `2>/dev/null` sur le contrôle rendrait n'importe quelle référence fausse silencieuse —
+      // c'est la redirection, pas `@{u}`, qui transforme un échec en vide rassurant.
+      const controles = executables.filter((l) => /git\b.*\blog\b/.test(l) && /\.\./.test(l));
+      assert.ok(
+        controles.length >= 1,
+        'le métier n’enseigne plus aucun contrôle de ce qui n’est pas poussé avant de détruire '
+          + 'un espace de travail — le geste destructeur, lui, y est toujours',
+      );
+      for (const c of controles) {
+        assert.ok(
+          !/2\s*>\s*\/dev\/null/.test(c),
+          `le contrôle avant destruction avale son erreur (« ${c} ») : un échec redirigé rend une `
+            + `sortie vide, et une sortie vide se lit « tout est poussé ». Un échec qu’on voit vaut `
+            + `infiniment mieux qu’un vide qu’on croit.`,
+        );
+        assert.match(
+          c, /origin\//,
+          `le contrôle avant destruction (« ${c} ») ne compare pas à une référence distante qui `
+            + `existe : sans elle, il ne mesure rien et échoue en silence`,
+        );
+      }
+    },
+  },
+
+  {
     id: 'pas-de-chemin-de-machine',
     quoi: 'le gabarit ne porte aucun chemin de poste — il est déposé dans des dépôts qui ne sont pas celui-ci',
     verifier({ metier, contexte }) {
@@ -4300,6 +4363,32 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "| Ce qu'on est tenté de faire | Pourquoi ça casse |",
       "| Pourquoi ça casse | Ce qu'on est tenté de faire |",
+    ),
+  },
+  // ── le contrôle qui précède la destruction d'un espace de travail (T-20260817-0084)
+  {
+    id: 'le-controle-revient-a-l-upstream',
+    quoi: 'le contrôle avant destruction repasse à `@{u}` — la commande échoue toujours, et son échec se lit « rien à pousser »',
+    cible: 'le-controle-avant-destruction-ne-ment-pas',
+    fichier: 'metier',
+    // ⚠️ ELLE MUTE UNE LIGNE EXÉCUTABLE, PAS UNE MENTION. C'est tout l'intérêt : le gabarit
+    // porte trois `@{u}` qui sont des mentions de l'interdit, et la garde doit les laisser
+    // passer. Ce que cette mutation retourne, c'est la commande que l'agent RECOPIE.
+    muter: (t) => t.replace(
+      'git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD',
+      'git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}..',
+    ),
+  },
+  {
+    id: 'le-controle-avale-son-erreur',
+    quoi: 'la redirection revient sur le contrôle — un échec devient une sortie vide, et une sortie vide se lit « tout est poussé »',
+    cible: 'le-controle-avant-destruction-ne-ment-pas',
+    fichier: 'metier',
+    // La seconde moitié, qui se perd séparément : la référence peut être juste et l'erreur
+    // quand même avalée. C'est la redirection qui a fait le dégât, pas seulement `@{u}`.
+    muter: (t) => t.replace(
+      'log --oneline origin/<branche-cible>..HEAD',
+      'log --oneline origin/<branche-cible>..HEAD 2>/dev/null',
     ),
   },
   {
