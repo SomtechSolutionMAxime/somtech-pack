@@ -2222,22 +2222,48 @@ export const CONTROLES = [
       // ce qu'elle gardait vraiment.
       //
       // On garde donc DEUX ANCRES par conséquence — le geste et son objet — présentes sur la
-      // même ligne, plus la MODALITÉ de cette ligne. Ce n'est pas revenir à garder un mot :
-      // un mot seul se conserve en retournant la phrase, deux ancres plus l'impératif ne s'y
-      // conservent pas. Et le COMPTE reste : trois conséquences, une fois chacune.
+      // même ligne, plus la MODALITÉ de cette ligne. Et le COMPTE reste : trois conséquences,
+      // une fois chacune.
+      //
+      // ⚠️⚠️ ET LA POLARITÉ, QUE LA PREMIÈRE VERSION DE CE CORRECTIF AVAIT PERDUE. Elle se
+      // contentait des deux ancres plus `exigeImperatif`, en affirmant en commentaire que
+      // « deux ancres plus l'impératif ne se conservent pas en retournant la phrase ». C'était
+      // FAUX, et la passe de fond l'a prouvé en l'exécutant : « Tu laisses le CTO extraire
+      // lui-même sa réponse depuis ton rapport » et « Tu ajoutes des décisions à son assiette,
+      // tu ne les retires jamais » gardent les deux ancres, restent impératives, et disent
+      // l'inverse exact. `exigeImperatif` ne voit que l'assouplissement, jamais le
+      // renversement. En réparant le bruit d'une garde, on lui avait retiré sa prise — les
+      // deux chiffres se paient l'un l'autre quand on ne mesure que celui qu'on vient de
+      // corriger. Chaque conséquence passe donc par `exigePolarite`, avec son inverse écrit.
       const lignes = preambule.split('\n');
       const CONSEQUENCES = [
-        { quoi: 'ne pas faire extraire sa réponse', ancres: [/extrai/i, /réponse/i] },
-        { quoi: 'retirer des décisions de l’assiette du dirigeant', ancres: [/décisions/i, /assiette/i] },
-        { quoi: 'dire d’abord ce qu’on n’a pas envie d’entendre', ancres: [/envie d'entendre/i] },
+        {
+          quoi: 'ne pas faire extraire sa réponse',
+          ancres: [/extrai/i, /réponse/i],
+          sonde: /(?=.*extrai)(?=.*réponse)/i,
+          inverse: /laisses? (?:le CTO|le dirigeant|quelqu'un|l'autre) extraire|à (?:lui|eux) d'extraire|(?:il|le CTO) extrait/i,
+        },
+        {
+          quoi: 'retirer des décisions de l’assiette du dirigeant',
+          ancres: [/décisions/i, /assiette/i],
+          sonde: /(?=.*décisions)(?=.*assiette)/i,
+          inverse: /ajoutes? des décisions (?:à|dans|sur) son assiette|tu n'en retires (?:pas|aucune|jamais)/i,
+        },
+        {
+          quoi: 'dire d’abord ce qu’on n’a pas envie d’entendre',
+          ancres: [/envie d'entendre/i],
+          sonde: /envie d'entendre/i,
+          inverse: /(?:tais|caches|gardes pour toi) ce qu'on n'a pas envie d'entendre|dis d'abord ce qu'(?:on|il) (?:veut|a envie d')entendre/i,
+        },
       ];
-      for (const { quoi, ancres } of CONSEQUENCES) {
+      for (const { quoi, ancres, sonde, inverse } of CONSEQUENCES) {
         const portantes = lignes.filter((l) => ancres.every((a) => a.test(l)));
         assert.equal(
           portantes.length, 1,
           `la conséquence « ${quoi} » doit figurer une fois exactement dans le préambule`,
         );
         exigeImperatif(portantes[0], `la conséquence « ${quoi} »`);
+        exigePolarite(portantes[0], sonde, `la conséquence « ${quoi} »`, { inverse });
       }
 
       // ⚠️ LA MOITIÉ QUI PROTÈGE, ET ELLE SE RETIRE SANS BRUIT.
@@ -2660,22 +2686,39 @@ export const CONTROLES = [
       assert.equal(declaration.length, 1, `les surfaces doivent être énumérées une fois exactement (${declaration.length})`);
       const surfaces = declaration[0].split('·').map((x) => x.trim());
       const ATTENDUES = [
-        { quoi: 'sa ligne avec le CTO', sonde: /\*\*ligne\*\*/i },
+        // Le gras a bougé d'un mot (« ta **ligne** » → « **ta ligne** ») quand la liste a été
+        // corrigée : la sonde tient le NOM de la surface, pas l'endroit où l'auteur ouvre son
+        // gras.
+        { quoi: 'sa ligne avec le CTO', sonde: /\*\*(?:ta )?ligne\*\*|ta \*\*ligne\*\*/i },
         { quoi: 'le topo du matin', sonde: /topo du matin/i },
         { quoi: 'sa conversation', sonde: /conversation/i },
         { quoi: 'un commentaire au ServiceDesk qu’il lira', sonde: /commentaire au ServiceDesk/i },
         { quoi: 'ce qu’un représentant de client relaie de sa part', sonde: /représentant de client/i },
       ];
-      assert.equal(
-        surfaces.length, ATTENDUES.length,
-        `${surfaces.length} surface(s) nommée(s) pour ${ATTENDUES.length} gardée(s) : en retirer une rend la règle bornée au geste où on l’a écrite, sans qu’une phrase manque`,
-      );
+      // ⚠️ ON COMPTE LES SURFACES NOMMÉES, PAS LES SEGMENTS — et c'est la correction d'un
+      // faux témoin qu'on a vu vivre (2026-08-17). La garde exigeait autant de segments que de
+      // surfaces gardées. Une revue a fait corriger le texte : le topo du matin **se pose sur
+      // la ligne**, ce n'est pas une surface à part, et la liste le dit maintenant en le
+      // nommant DANS le segment de la ligne. Quatre segments pour cinq surfaces, toutes
+      // nommées — la garde a rougi sur une correction qu'elle avait elle-même provoquée.
+      //
+      // Ce qui compte n'a pas changé d'un mot : aucune surface ne disparaît, et l'énumération
+      // reste une énumération plutôt qu'une phrase vague. On garde donc les deux — chaque
+      // surface nommée quelque part dans la déclaration, et au moins autant de segments qu'il
+      // faut pour que ce soit une liste. Le rang exact d'une surface dans la liste, lui,
+      // n'appartient pas à la garde : deux surfaces qui fusionnent parce que l'une vit dans
+      // l'autre est une clarification, pas une perte.
       for (const { quoi, sonde } of ATTENDUES) {
         assert.ok(
-          surfaces.some((p) => sonde.test(p)),
+          sonde.test(declaration[0]),
           `la surface « ${quoi} » n’est plus nommée : la règle redevient bornée au geste où on l’a écrite — le défaut même que ce lot ferme`,
         );
       }
+      assert.ok(
+        surfaces.length >= 4,
+        `la déclaration ne compte que ${surfaces.length} segment(s) : l’énumération a été remplacée par une phrase, `
+          + `et une règle qui vaut « partout » sans dire où redevient la règle du geste où on l’a écrite`,
+      );
       exigePolarite(
         s.corps, /pas sur un geste/i,
         'et il est dit que la règle porte sur la FONCTION — lui parler — et non sur un geste',
@@ -2747,8 +2790,12 @@ export const CONTROLES = [
         `« ${variantes[0].trim()} » : la variante doit être donnée comme DÉTRUISANT le bénéfice, jamais comme une formulation acceptable`,
       );
 
+      // La sonde accepte « s'écrit » comme « doit s'écrire » : la garantie est que le `rien`
+      // S'ÉCRIT, pas la façon dont l'obligation est conjuguée — mesuré par la campagne de
+      // reformulations légitimes du 2026-08-17, où « Le `rien` doit s'écrire » faisait crier
+      // cette garde sur un texte plus impératif que l'original.
       exigePolarite(
-        s.corps, /Le `rien` s'écrit/i,
+        s.corps, /Le `rien` (?:s'écrit|doit s'écrire)/i,
         'le « rien » s’écrit — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir s’il y en a une',
         { inverse: /inutile de l'écrire|seulement quand tu as besoin|on l'omet|facultative/i },
       );
@@ -3056,27 +3103,19 @@ export const MUTATIONS = [
     quoi: 'l’exclusivité de la parole tombe — deux versions du chantier circulent',
     cible: 'parole-au-dirigeant-exclusive',
     fichier: 'metier',
-    // ⚠️ CETTE MUTATION EST INOPÉRANTE, ET ON NE PEUT PAS LA RÉ-ANCRER — c'est un CONSTAT,
-    // pas un oubli. La phrase qu'elle retourne (« Ni tes chefs d'équipe ni leurs sous-agents
-    // ne parlent au dirigeant ») a été supprimée du métier par la réécriture du 2026-08-17, et
-    // rien ne l'a remplacée : il n'existe plus de texte sur lequel poser le retournement. La
-    // laisser telle quelle est le signal honnête — elle rougit en disant « mon motif ne
-    // s'applique plus », en même temps que `parole-au-dirigeant-exclusive` rougit en disant
-    // « la garantie est introuvable ». Les deux pointent le même trou, et les deux se
-    // refermeront ensemble le jour où l'exclusivité sera réécrite. La retirer maintenant
-    // effacerait la seule trace mécanique de la perte.
-    //
-    // Son motif accepte en revanche LES DEUX VOCABULAIRES — « au CTO » comme « au dirigeant » —
-    // parce que le métier a remplacé partout le second par le premier : une exclusivité
-    // réécrite demain le sera dans les mots d'aujourd'hui, et la mutation doit mordre ce
-    // jour-là sans qu'on ait à y repenser.
+    // ⚠️ ELLE A ÉTÉ INOPÉRANTE UNE HEURE, ET C'ÉTAIT UN CONSTAT PLUTÔT QU'UN OUBLI : la phrase
+    // qu'elle retourne avait été perdue à la réécriture, donc il n'existait plus de texte sur
+    // lequel poser le retournement. Elle n'a PAS été retirée pendant ce temps — la retirer
+    // aurait effacé la seule trace mécanique de la perte. Rendue au texte par `b493a8f`, elle
+    // remord, et c'est ce qu'on attendait d'elle : la garde et sa mutation se sont rouvertes
+    // ensemble. Le retournement accepte les deux façons de nommer le destinataire, le pronom
+    // comme le nom, pour ne pas redevenir muette à la prochaine reformulation.
     muter: (t) => t.replace(
-      /Ni tes chefs d'équipe ni leurs sous-agents ne parlent au (?:CTO|dirigeant)/,
-      "Tes chefs d'équipe peuvent lui parler directement quand ça va plus vite",
+      /Ni tes chefs d'équipe ni leurs sous-agents ne (?:lui parlent|parlent (?:au CTO|au dirigeant))/,
+      'Tes chefs d\'équipe peuvent lui parler directement',
     ),
   },
 
-  // ── ajout 4 : la ronde horaire
   {
     id: 'la-ronde-devient-occasionnelle',
     quoi: 'la cadence chiffrée devient un « quand tu le sens » qui ne se vérifie pas',
@@ -4365,7 +4404,10 @@ export const MUTATIONS = [
     // ⚠️ RÉ-ANCRÉE : les surfaces ne sont plus des puces, elles sont énumérées en ligne et
     // séparées par « · ». On retire le premier segment — celui de la ligne — sans toucher aux
     // quatre autres, comme la version en puces le faisait.
-    muter: (t) => t.replace('ta **ligne** · ', ''),
+    // Ré-ancrée le 2026-08-17 : le segment de la ligne porte désormais le topo (« **ta ligne**
+    // — et le **topo du matin** s'y pose … »). Retirer le segment retire donc les deux, ce qui
+    // est exactement la régression que la cible doit voir.
+    muter: (t) => t.replace(/\*\*ta ligne\*\* — et le \*\*topo du matin\*\* s'y pose[^·]*· /, ''),
   },
 
   {
@@ -4415,9 +4457,13 @@ export const MUTATIONS = [
     // texte est déjà dans sa version mutée. On la laisse : elle rougit en disant « mon motif
     // ne s'applique plus », pendant que `la-formule-jai-besoin-de-toi` rougit en nommant les
     // quatre surfaces qui ont perdu le rappel. Les deux se refermeront ensemble.
+    // Ré-ancrée le 2026-08-17, après que `748c67c` a rendu le rappel au topo : le texte dit
+    // maintenant « **Le topo est un message comme les autres** : des faits, et `J'ai besoin de
+    // toi : …` en dernière ligne ». La mutation le vide de sa dernière ligne sans retirer une
+    // seule règle — c'est le geste exact que la cible doit voir.
     muter: (t) => t.replace(
-      "et il se termine par `J'ai besoin de toi : …` (ou `rien.`)",
-      'et il se termine comme tu le juges utile',
+      "**Le topo est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` compris.",
+      '**Le topo est un message comme les autres** : des faits.',
     ),
   },
 
@@ -4441,8 +4487,11 @@ export const MUTATIONS = [
     // sur le compte rendu du chantier a été retiré du métier par la réécriture du 2026-08-17.
     // Le texte est déjà dans l'état que cette mutation fabriquait. Elle reste écrite pour que
     // la perte ait une trace mécanique, et elle remordra quand le rappel reviendra.
+    // Ré-ancrée le 2026-08-17, après que `748c67c` a rendu le rappel : la ponctuation du texte
+    // rendu diffère d'un tiret de l'ancienne (« — des faits », et non « : des faits »). Un
+    // signe suffisait à la rendre muette, et une mutation muette compte comme une preuve.
     muter: (t) => t.replace(
-      " **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris.",
+      " **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris.",
       '',
     ),
   },
