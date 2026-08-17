@@ -181,7 +181,17 @@ export function boiteEstVide(texteTerminal) {
  * ferait taire l'avis sur ce qu'on a su lire — la garde qui crie à tort, sur le chemin même qui
  * existe pour ne rien perdre.
  */
-const ESPACE_RESERVE = /\[Pasted text #\d+\]/g;
+// ⚠️ LE SUFFIXE « +N lines » FAIT PARTIE DE LA FORME, et l'oublier ramenait le défaut ENTIER
+// sur le cas le plus probable (relevé en revue de fond). Un collage d'UNE ligne rend
+// `[Pasted text #6]` ; dès qu'il en fait plusieurs — c'est-à-dire dès qu'il s'agit d'un brief,
+// d'un ordre, de tout ce qui bloque réellement une boîte — il rend `[Pasted text #137 +19 lines]`.
+//
+// ⚠️ CES FORMES NE SONT PAS DEVINÉES : elles sont attestées par les doubles d'écran DÉJÀ dans
+// ce dépôt — `livraison.test.js` fixe `[Pasted text #56][Pasted text #57 +1 lines]`,
+// `un-refus-nomme-sa-sortie.test.js` fixe `[Pasted text #137 +19 lines]`. La première écriture
+// de cette garde ne les couvrait pas : elle avait été réglée sur un banc neuf sans regarder ce
+// que les essais voisins savaient déjà. `lines?` parce que le singulier existe aussi.
+const ESPACE_RESERVE = /\[Pasted text #\d+(?: \+\d+ lines?)?\]/g;
 
 export function estUnEspaceReserve(texteLu) {
   const texte = String(texteLu ?? '').trim();

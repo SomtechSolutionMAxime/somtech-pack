@@ -80,6 +80,30 @@ test('un espace réservé est reconnu — c’est ce que l’écran met À LA PL
   assert.equal(estUnEspaceReserve('[Pasted text #13][Pasted text #14]'), true);
 });
 
+test('⚠️ le suffixe « +N lines » EST la forme du cas qui bloque vraiment une boîte', () => {
+  // ⚠️ CES CHAÎNES SONT RECOPIÉES DES DOUBLES D'ÉCRAN DÉJÀ PRÉSENTS DANS CE DÉPÔT — elles ne
+  // sont pas inventées ici : `livraison.test.js` et `un-refus-nomme-sa-sortie.test.js` les
+  // fixent depuis plus longtemps que ce fichier.
+  //
+  // La première écriture de cette garde ne couvrait que `[Pasted text #6]`. Elle avait été
+  // réglée sur un banc neuf — où les collages d'essai tenaient sur une ligne — SANS regarder ce
+  // que les essais voisins savaient déjà. Résultat : elle protégeait le cas rare et laissait
+  // filer le cas courant, c'est-à-dire tout collage de plusieurs lignes : un brief, un ordre,
+  // exactement ce qui bloque une boîte dans la vraie vie. **Le défaut d'origine repassait
+  // entier par là.** Relevé en revue de fond, sur le code committé et sans mutation.
+  assert.equal(estUnEspaceReserve('[Pasted text #137 +19 lines]'), true);
+  assert.equal(estUnEspaceReserve('[Pasted text #56][Pasted text #57 +1 lines]'), true);
+  assert.equal(estUnEspaceReserve('[Pasted text #7 +1 line]'), true, 'le singulier existe aussi');
+
+  // Et l'avis doit se comporter en conséquence : c'est le bout qui compte pour le signataire.
+  const avis = avisDeBoiteBloquee({ texteLibere: '[Pasted text #137 +19 lines]', immobiliteMs: 300000 });
+  assert.ok(
+    !avis.includes('┈┈┈\n[Pasted text #137 +19 lines]\n┈┈┈'),
+    'la forme multi-lignes ne doit pas non plus occuper le bloc de citation',
+  );
+  assert.ok(/JE NE SAIS PAS/i.test(avis));
+});
+
 test('un texte ordinaire n’est PAS pris pour un espace réservé — même s’il parle de collage', () => {
   assert.equal(estUnEspaceReserve(TEXTE_LONG), false);
   assert.equal(estUnEspaceReserve(''), false);
@@ -88,6 +112,17 @@ test('un texte ordinaire n’est PAS pris pour un espace réservé — même s�
   // qui crie à tort, encore, et sur le chemin qui existe pour ne rien perdre.
   assert.equal(estUnEspaceReserve(`je te renvoie ${REPLI} parce que je ne le lis pas`), false);
   assert.equal(estUnEspaceReserve(null), false);
+});
+
+test('une boîte qui ne porte que du BLANC n’est pas un espace réservé — elle est vide', () => {
+  // ⚠️ CET ESSAI EXISTE PARCE QU'UNE MUTATION EST RESTÉE VERTE SANS LUI (revue portail de ce
+  // lot) : retirer le `trim()` d'entrée laissait `'   '` franchir la garde de vacuité, puis
+  // « rien d'autre qu'un espace réservé » devenait vrai sur une chaîne qui n'en contient aucun.
+  // L'avis serait alors parti sur le chemin de l'aveu en annonçant un repère vide — il aurait
+  // dit « je ne sais pas lire » à propos de rien.
+  assert.equal(estUnEspaceReserve('   '), false);
+  assert.equal(estUnEspaceReserve('\n\t  '), false);
+  assert.equal(estUnEspaceReserve(undefined), false);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
