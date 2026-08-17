@@ -184,7 +184,7 @@ function livrer(...args) {
         LIVRAISON_DELAI_MS: '5',
         LIVRAISON_ATTENTE_MS: '50',
         // Le temps laissé à un texte coincé pour bouger avant qu'on le tienne pour immobile
-        // (T-20260816-0114). 30 s en vrai — ici de quoi ne pas faire durer un essai.
+        // (T-20260816-0114). CINQ MINUTES en vrai — ici de quoi ne pas faire durer un essai.
         LIVRAISON_IMMOBILITE_MS: '5',
         // L'appelant est dans SA session — celle d'où part le message.
         HERDR_SOCKET_PATH: SOCKET_ICI,

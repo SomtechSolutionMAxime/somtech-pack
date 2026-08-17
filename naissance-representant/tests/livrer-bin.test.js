@@ -157,7 +157,8 @@ function livrer(...args) {
         LIVRAISON_DELAI_MS: '5',
         LIVRAISON_ATTENTE_MS: '50',
         // Le temps qu'on laisse au texte coincé pour BOUGER avant de le tenir pour immobile.
-        // 30 s en vrai — ici de quoi laisser le double changer d'avis entre deux lectures.
+        // CINQ MINUTES en vrai (`IMMOBILITE_PAR_DEFAUT_MS`) — ici de quoi laisser le double
+        // changer d'avis entre deux lectures sans faire durer un essai.
         LIVRAISON_IMMOBILITE_MS: '5',
         // Les sessions à interroger sont DÉSIGNÉES — la cloison refuse d'énumérer celles du
         // poste sous essais. Onze y tournent avec du travail réel, et un essai qui les balaie
