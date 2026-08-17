@@ -5,6 +5,23 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-17
+
+### Corrigé
+
+- **On n'écrit plus dans un pane devant un dialogue — la garde consulte l'ÉCRAN, pas seulement la boîte** (T-20260817-0008, PR #271). Écrire dans un pane qui affiche un dialogue de choix ne délivre pas un message : ça **confirme l'option surlignée**. Remesuré sur le vrai service — deux textes parfaitement ordinaires envoyés par `herdr agent prompt` ont approuvé deux dialogues successifs et **le fichier a été créé** ; sur un pane à statut `idle`, le même geste a confirmé le sélecteur de modèle, avec un effet **persistant**.
+- **`T-20260816-0114` (v1.63.0) n'avait fermé que la moitié** : la touche d'envoi, jamais l'écriture elle-même — le geste que fait *toute* livraison. `causeObstacle` porte désormais une quatrième cause, `DIALOGUE`, placée avant `ILLISIBLE` (pour que le refus porte la vraie raison) et avant `ENCOMBREE` (parce que la délivrance ne se tente que sur `ENCOMBREE` : un dialogue au-dessus d'une boîte encombrée aurait déclenché une touche d'envoi — l'attente perdue **et** l'action approuvée).
+- **La réparation de `livrerBrief` était le jumeau non gardé**, et c'est une revue de fond qui l'a trouvée : elle pressait Entrée en lisant le contenu de la boîte, jamais l'écran — trente lignes sous la garde que le même lot posait. Un dialogue apparu *pendant* la boucle de vérification aurait donc été approuvé. Corrigé, et le refus dit maintenant **pourquoi** il n'a pas réparé.
+- **`ecranAttendUnChoix` est reprise, pas réécrite** (règle d'or n°15) : un seul exemplaire dans tout le dépôt, celui de `ligne-directe/src/ecran.js` déjà mesuré contre les faux positifs.
+
+### Technique
+
+- **La moitié qui protège, mesurée sur du trafic réel** : 153 panes de 11 sessions du poste, `main` contre le correctif, pane par pane — **zéro pane livrable perdu sur 141**, et deux refus qui passent d'une raison accidentelle (« boîte illisible ») à la bonne (« dialogue »). Une garde qui refuserait un agent sur cinq rendrait la ligne du dirigeant inutilisable : c'est ainsi qu'une garde meurt. *(Instantané d'un trafic, pas une garantie perpétuelle.)*
+- **Ce qui reste `[non établi]`, et n'est pas déclaré établi** : le cas « dialogue **+** boîte lisible **+** statut disponible » n'a pas pu être produit sur Claude Code 2.1.233 — sur les sept dialogues observés, la boîte rend `null` à chaque fois. **Il n'y a donc pas d'incident, et il n'y en a jamais eu** : ce qui est fermé, c'est la dépendance à un effet de bord qui pouvait disparaître sans que rien ne le signale.
+- **`resumeDeLEcran` est exportée et nettoie son entrée** : son contrat « texte déjà dégrisé » était tacite, et le premier appelant du dehors a rendu un refus truffé de séquences ANSI, illisible pour son destinataire.
+- **Trou de banc signalé, hors périmètre** : `delivrerLaBoite` — la fonction la plus irréversible de `T-20260816-0114` — n'était exercée par aucun essai avant ce lot.
+
+
 ## [1.63.0] - 2026-08-17
 
 *Quatre lots sortent avec cette version, et les quatre sont annoncés ici : PR #269 (T-20260817-0006) · PR #268 (T-20260816-0114) · PR #44 (E-20260512-0001) · PR #267 (T-20260816-0016). Vérifié commit par commit sur `v1.62.0..main` — rien d'autre ne sort.*
