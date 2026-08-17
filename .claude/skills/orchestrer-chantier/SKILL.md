@@ -632,7 +632,7 @@ Nomme les agents sans nom que tu croises : un agent anonyme est inadressable —
 |---|---|
 | **Le travail que tu te donnes à toi-même** — publier, corriger, nettoyer | son propre ticket, **avant** de le faire |
 | **Un défaut trouvé en chemin**, hors du lot courant | son propre ticket, même s'il est corrigé dans l'heure — greffé sur le ticket d'un voisin, il ne se retrouve pas |
-| **Un ajustement que le dirigeant demande en cours de route** | inscrit au moment où il est reçu : le fil de ta ligne ne fait pas foi (§5) |
+| **Un ajustement que le dirigeant demande en cours de route** | une **Demande** (`D-…`) ou un **Projet** (`P-…`), jamais un ticket seul — c'est son grain de suivi (voir « Le grain auquel il suit ») ; inscrit au moment où il est reçu : le fil de ta ligne ne fait pas foi (§5) |
 | **Une tâche que tu confies à un chef d'équipe** | son unité de travail *et* son mandat — c'est la filiation de §4b-bis, qui est ce principe appliqué |
 
 **Documenter n'est pas alourdir.** Un ticket ouvert et fermé dans la même heure reste utile : il dit *que* c'est arrivé, *pourquoi*, et *ce qui a été mesuré*. Le contre-écueil est réel et mérite sa ligne — on n'ouvre pas un ticket pour chaque commande lancée : **le critère est le travail qui a un résultat, jamais le geste.**
@@ -645,7 +645,7 @@ Les chefs d'équipe tiennent leurs stories ; **toi tu réponds de l'ensemble**. 
 
 - **statuts au moment où l'état change**, jamais différés (règle d'or n°13) — et pour *toutes* les stories qu'un merge ferme, pas seulement la principale ;
 - **la filiation de chaque agent que tu ouvres** (voir 4b-bis) — c'est une écriture ServiceDesk comme les autres, et la seule qui disparaît définitivement si tu l'oublies sur le moment ;
-- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
+- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
 - ce qui reste ouvert, avec **ce qui bloque quoi** ;
 - ce qui appartient au dirigeant, énoncé comme tel.
 
@@ -668,6 +668,8 @@ Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert po
 node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
   --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au dirigeant>"
 ```
+
+**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.
 
 Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne sans la refermer laisse un canal ouvert sur une question sans réponse — et le jour où le dirigeant y écrit, personne n'est au bout. (Le veilleur finit par le détecter et referme d'office, mais il le fait à ta place et le dit : autant le faire toi.)
 
