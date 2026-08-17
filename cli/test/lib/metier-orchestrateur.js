@@ -79,6 +79,12 @@ export function lireGabarits(racine = REPO) {
     // peux pas écrire » pendant que le fichier l'autorise est le pire des deux mondes — une
     // garantie fausse. Les contrôles apparient donc les deux.
     droits: readFileSync(join(racine, CHEMIN_PERMISSIONS), 'utf8'),
+    // La COMPÉTENCE est lue ici depuis le 2026-08-17 (lot 2). Elle l'était auparavant en
+    // direct, à l'intérieur des contrôles, ce qui la mettait hors d'atteinte du harnais de
+    // mutation : aucune mutation ne pouvait la retourner, donc rien ne prouvait que les
+    // gardes qui s'appuient dessus tiennent. Elle passe par ici pour être mutable comme les
+    // trois autres.
+    competence: readFileSync(join(racine, CHEMIN_COMPETENCE), 'utf8'),
   };
 }
 
@@ -88,52 +94,37 @@ export const parasDe = (t) => t.split(/\n\s*\n/).map((p) => p.trim()).filter((p)
 /** Une sonde ancrée sur un titre de section littéral (les titres portent des points). */
 const titre = (t) => new RegExp(`^${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
 
-/**
- * Les deux seules sections que ce lot avait le droit d'amender, avec le motif de chacune.
- *
- * Elles sont écrites ici, en dur et nommément, pour que la liste soit un ENGAGEMENT plutôt
- * qu'une constatation : élargir ce qu'on s'autorise à réécrire demande d'éditer cette liste,
- * ce qui se voit en revue. Une garde qui s'adapterait à ce qu'elle trouve ne garderait rien.
- */
-export const SECTIONS_AMENDEES = new Map([
-  ['1-bis. Ouvrir ta ligne avec le dirigeant', 'ajout 3 — la ligne devient obligatoire, la phrase de repli disparaît'],
-  ['Anti-patterns', 'le miroir des ajouts, dans la table qui existe déjà pour ça'],
-  ['4-bis. Pour chaque unité de travail', 'T-20260813-0062 — le brief va au registre (écrire un fichier lui est mécaniquement refusé), et un compte rendu se vérifie avant d’être validé'],
-  ['5. Ce que tu tranches toi-même', 'T-20260813-0062 — la calibration et le « je n’ai pas vérifié », à l’endroit exact où il tranche'],
-  ['6. Coordonner les chantiers voisins', 'T-20260813-0062 — un ordre transmis porte sa source, parce qu’il sera exécuté sans être questionné'],
-]);
-
-/**
- * Ce que les amendements de T-20260813-0062 REMPLACENT dans la section d'origine — et rien
- * d'autre n'a le droit d'y disparaître.
- *
- * ⚠️ POURQUOI CETTE LISTE EXISTE, ET C'EST LA LEÇON DE LA PASSE 2 DU LOT PRÉCÉDENT.
- *
- * Inscrire une section dans `SECTIONS_AMENDEES` la sort de la comparaison octet pour octet :
- * elle est alors hors de TOUTE garde, bien au-delà de l'amendement qu'on voulait s'autoriser.
- * Sur le lot précédent, cette exemption a laissé retirer deux lignes d'origine et un
- * paragraphe entier sans une rougeur. La garde qui tient est **l'inclusion littérale de ce
- * qui devait rester**, plus la déclaration nommée de ce qui part.
- */
-export const AMENDEMENTS_DU_LOT = new Map([
-  // T-20260816-0015 : ces deux remplacements ONT DISPARU, et c'est un progrès, pas un oubli.
-  // La compétence disait « écrire le brief dans un fichier » là où le gabarit disait « au
-  // registre » — une divergence réelle, qui envoyait l'orchestrateur vers un geste que ses
-  // droits lui refusent. La compétence a été alignée sur le gabarit (déclaré source de vérité
-  // par l'arbitrage `j-20260814-0002`), donc les deux textes disent désormais la même chose et
-  // il n'y a plus rien à exempter ici. Laisser les entrées ferait rougir la garde, à juste
-  // titre : elle exige que ce qu'on déclare remplacé existe encore dans la section d'origine.
-  // Ce qui RESTE déclaré est la seule divergence encore justifiée sur ce paragraphe : le
-  // gabarit motive le refus d'écrire par un renvoi à sa section « Ce que tu ne peux pas faire »,
-  // que la compétence n'a pas. La compétence dit donc la même règle en la rattachant au lieu.
-  // Un renvoi mort serait un défaut ; l'écart est réel, donc il se déclare plutôt que de
-  // se cacher — c'est exactement ce que cette garde exige.
-  ['4-bis. Pour chaque unité de travail', [
-    "si tu es né d'un lieu posé, écrire t'est refusé par tes droits",   // gabarit : renvoi à sa propre section
-  ]],
-  ['5. Ce que tu tranches toi-même', []],              // que des ajouts
-  ['6. Coordonner les chantiers voisins', []],         // que des ajouts
-]);
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ ICI VIVAIENT `SECTIONS_AMENDEES` ET `AMENDEMENTS_DU_LOT`, ET VOICI POURQUOI ELLES
+// N'Y VIVENT PLUS (lot 2, 2026-08-17).
+//
+// Les deux listes ne servaient qu'à la comparaison OCTET POUR OCTET entre la compétence
+// `/orchestrer-chantier` et le gabarit :
+//
+//   • `SECTIONS_AMENDEES` nommait les sections que le lot avait le droit de réécrire, et le
+//     motif de chacune — un ENGAGEMENT plutôt qu'une constatation : élargir ce qu'on
+//     s'autorise demandait d'éditer la liste, ce qui se voyait en revue.
+//   • `AMENDEMENTS_DU_LOT` fermait le trou de cette exemption, découvert par la passe 2 du
+//     lot précédent : exempter une section la sortait de TOUTE garde, bien au-delà de
+//     l'amendement voulu — deux lignes d'origine et un paragraphe entier avaient disparu
+//     sans une rougeur. La garde qui tenait était l'inclusion littérale de ce qui devait
+//     rester, plus la déclaration nommée de ce qui partait.
+//
+// **Leur objet a disparu avec la comparaison.** La réécriture du gabarit par la fonction
+// (`D-20260817-0006`) laisse **0 section identique sur 24** : il n'y a plus de corps à
+// comparer, donc plus rien à exempter d'une comparaison qui n'a plus lieu. Les garder
+// vivantes ferait croire qu'un engagement tient encore alors qu'il ne porte plus sur rien —
+// exactement le faux témoin que ce harnais combat.
+//
+// **Ce qu'elles gardaient, et où c'est passé** : voir le pavé de `la-competence-reste-invocable`,
+// qui redistribue nommément la couverture de la comparaison. La divergence elle-même est
+// tracée en `T-20260817-0081`.
+//
+// ⚠️ **La leçon qu'elles portaient, elle, reste vraie et ne doit pas partir avec elles** :
+// une exemption inscrite quelque part met la chose exemptée hors de TOUTE garde, pas
+// seulement hors de celle qu'on visait. Toute liste d'exceptions écrite dans ce fichier
+// doit être relue avec cette question-là.
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
 /**
  * Les endroits du métier où un message PART vers le dirigeant — donc où la formule de fin
@@ -169,7 +160,21 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS_AJOUTES = 29;   // +6 : T-20260817-0016 (les trois règles du 2026-08-17, leurs deux moitiés inverses, et le motif qui les relie)
+export const NB_ANTI_PATTERNS = 69;
+// ⚠️ CE NOMBRE A CHANGÉ DE NATURE LE 2026-08-17 (lot 2), ET LE MOTIF EST ICI.
+//
+// Il s'appelait `NB_ANTI_PATTERNS_AJOUTES` et valait 29 : le nombre de lignes que le gabarit
+// AJOUTAIT à la table de la compétence. Ce compte se prenait donc sur un autre texte — et cet
+// autre texte a été réécrit sur ordre (`D-20260817-0006`) : 28 de ses 35 lignes ont été
+// reformulées, la différence ne mesure plus rien. Un compte dont la référence bouge est un
+// compte qui se desserre tout seul.
+//
+// Il compte désormais la table du gabarit POUR ELLE-MÊME. La fonction gardée est exactement la
+// même — en retirer une ligne rougit, en glisser une aussi — et elle n'a plus de prémisse à
+// laquelle retomber. Tenu par `la-table-des-anti-patterns-est-une-liste-fermee`.
+//
+// ⚠️ Si tu ajoutes un anti-pattern, tu édites ce nombre, et ça se voit en revue. C'est tout
+// l'intérêt : une idée de plus ne se glisse pas dans le texte en silence.
 // 11 → 23 le 2026-08-16 (T-20260816-0099, T-20260816-0097, T-20260816-0018). Les douze qui
 // s'ajoutent sont le miroir des garanties de cette version, une par garantie et pas une de plus :
 //
@@ -217,134 +222,151 @@ export function exigeContrainte(enonce, quoi) {
 // ═════════════════════════════════════════ les contrôles
 
 export const CONTROLES = [
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // ⚠️ ICI VIVAIT `le-metier-a-voyage-entier`, ET VOICI POURQUOI IL N'Y VIT PLUS.
+  //
+  // Il comparait chaque section de la compétence `/orchestrer-chantier` au gabarit, **corps
+  // contre corps, octet pour octet** — la garantie mécanique que le métier avait été DÉPLACÉ
+  // et non réécrit. C'était la garde qui manquait au lot du gestionnaire, où la même consigne
+  // n'avait pas empêché une réécriture d'effacer une garantie livrée la veille.
+  //
+  // **Sa prémisse est tombée, et elle est tombée sur ordre.** La réécriture du gabarit par la
+  // fonction (`D-20260817-0006`) réorganise le texte en blocs `R1`-`R7`. Mesuré le 2026-08-17
+  // sur `e35bec4` : **0 section identique sur 24**, 4 réécrites, 20 absentes, 28 lignes
+  // d'anti-patterns sur 35 reformulées. Il ne reste rien à comparer.
+  //
+  // **La décision** (coordonnateur `d-20260817-0006`, 2026-08-17) : la compétence est **hors
+  // périmètre** de cette demande — elle « survit jusqu'au lot qui la remplacera » — et le
+  // métier dit lui-même qu'**un orchestrateur ne lit pas le `SKILL.md`** : elle ne gouverne
+  // rien. La garde ne peut donc plus exiger l'égalité. Elle garde ce qui reste vrai : que la
+  // compétence **existe et reste invocable**. Rien de plus, et c'est écrit plutôt que tu.
+  //
+  // ⚠️ **LA DIVERGENCE NE SE PERD PAS** : elle a son ticket, `T-20260817-0081`. Ce qui sort
+  // d'un texte se nomme avec sa destination.
+  //
+  // ⚠️ **OÙ EST PASSÉE LA COUVERTURE QU'IL APPORTAIT** — la seule question qui compte, parce
+  // qu'un retrait sans cette réponse est une perte déguisée en ménage :
+  //
+  //   • le préambule et ses deux principes fondateurs (« un agent qui orchestre n'exécute
+  //     jamais », « il ne déploie que des chefs d'équipe ») + le « tu ne codes pas »
+  //         → `il-orchestre-il-n-execute-pas`, qui les garde sur le gabarit SEUL ;
+  //   • « Le niveau se lit dans le rôle, jamais dans un seuil » — le seuil retiré par le CTO,
+  //     que RIEN d'autre ne gardait
+  //         → `le-niveau-se-lit-dans-le-role`, créé ici même pour le recueillir ;
+  //   • la table d'anti-patterns : aucune ligne retirée en silence, et les ajouts en liste
+  //     fermée — gardés jusqu'ici par différence avec la table de la compétence
+  //         → `la-table-des-anti-patterns-est-une-liste-fermee`, qui compte la table du
+  //           gabarit pour elle-même, donc sans prémisse à retomber ;
+  //   • les paragraphes de la section qui ouvre la ligne → `ligne-obligatoire` ;
+  //   • le corps de chaque autre section → les cinquante contrôles par la fonction de ce
+  //     fichier : c'est précisément le chantier que cette demande a payé.
+  // ═══════════════════════════════════════════════════════════════════════════════════
   {
-    id: 'le-metier-a-voyage-entier',
-    quoi: 'chaque section de la compétence existe dans le gabarit, mot pour mot — sauf les deux nommément amendées',
+    id: 'la-competence-reste-invocable',
+    quoi: 'la compétence /orchestrer-chantier existe encore et s’invoque encore — elle ne gouverne rien, mais elle ne disparaît pas en silence',
+    verifier({ competence }) {
+      // Ce que cette garde peut encore prouver, la prémisse de l'égalité étant tombée : que
+      // le lot n'a pas fait disparaître la compétence, ni ne l'a vidée en la « déplaçant ».
+      // Deux gardes s'appuient encore sur son CONTENU — `gestes-de-session-existants` y lit
+      // les formes `herdr` réellement employées — donc la vider désarmerait autre chose
+      // qu'elle-même, et sans un mot.
+      assert.match(
+        competence, /^---\nname: orchestrer-chantier\n/,
+        'la compétence a perdu son en-tête : elle ne s’invoquerait plus, et un texte qu’on ne '
+          + 'peut plus appeler est retiré sans que son retrait soit décidé',
+      );
+      assert.ok(
+        competence.length > 20000,
+        `la compétence ne fait plus que ${competence.length} caractères : elle a été vidée en `
+          + `étant « déplacée », et \`gestes-de-session-existants\` lit encore ses blocs de `
+          + `commandes comme référence — la vider désarme une autre garde, en silence`,
+      );
+    },
+  },
+
+  {
+    id: 'le-niveau-se-lit-dans-le-role',
+    quoi: 'aucun seuil ne décide s’il faut un chef d’équipe — le niveau se lit dans le rôle, et la question ne se pose pas',
     verifier({ metier }) {
-      // « On ne réinvente pas le but, on réinvente le comment. » Le support change ; le
-      // texte, non. Comparer les corps OCTET POUR OCTET est la seule façon de le prouver :
-      // une garde qui vérifierait que les titres sont là laisserait vider les sections.
-      const competence = readFileSync(join(REPO, CHEMIN_COMPETENCE), 'utf8');
-      const dansLeGabarit = new Map(sections(metier).map((s) => [s.titre, s.corps]));
-
-      // ⚠️ LE PRÉAMBULE D'ABORD, ET C'EST UN TROU QU'UNE REVUE A TROUVÉ.
-      //
-      // `sections()` ne rend que ce qui suit un titre : tout ce qui précède la première
-      // section échappait donc à la comparaison. Or c'est là que vivent LES DEUX PRINCIPES
-      // FONDATEURS et le « tu ne codes pas ». Retirer « l'orchestrateur ne déploie que des
-      // chefs d'équipe qui gèrent des sous-agents » ne faisait rougir personne — le cœur du
-      // métier était le seul endroit non gardé.
-      //
-      // Le préambule du gabarit s'ouvre légitimement sur autre chose (son titre, la frontière
-      // des deux fichiers, l'appel au contexte) et le verbe change — on ne DEVIENT pas
-      // l'orchestrateur d'un `CLAUDE.md`, on l'EST. La comparaison porte donc sur tout ce qui
-      // suit ce pivot, et exige une inclusion littérale.
-      const PIVOT = "d'un chantier. Il en existe trois formes";
-      const preambuleSource = competence.split(/^##\s/m)[0];
-      const pivot = preambuleSource.indexOf(PIVOT);
-      assert.ok(pivot > 0, `le pivot du préambule (« ${PIVOT} ») a disparu de la compétence : la comparaison ne mordrait plus`);
-      const commun = preambuleSource.slice(pivot);
-      assert.ok(
-        commun.length > 1200,
-        `le préambule commun ne fait que ${commun.length} caractères : trop court pour que son `
-          + `inclusion prouve quoi que ce soit`,
+      // ⚠️ CETTE GARDE EST NÉE D'UN RETRAIT (lot 2, 2026-08-17). La garantie vivait dans la
+      // comparaison octet pour octet avec la compétence : retirer celle-ci l'aurait emportée
+      // avec elle, et c'est le seul endroit du métier où le CTO a RETIRÉ un seuil. Un retrait
+      // se défait d'un copier-coller malheureux, sans que personne le remarque — c'est la
+      // même fragilité que la phrase « continue sans elle » de `ligne-obligatoire`.
+      // ⚠️ LA SONDE CHERCHE LE LIEU OÙ LA RÈGLE SERT, PAS CELUI OÙ ON L'ATTENDAIT. Écrite
+      // d'abord sur « Dimensionner — la règle qui décide de tout », elle rougissait : cette
+      // section-là dit COMBIEN d'agents ouvrir, pas ce qui fait d'un agent un chef d'équipe.
+      // Le seuil retiré se lit là où les niveaux se définissent, et c'est le bon endroit.
+      const s = sectionDe(metier, /^Les trois niveaux$/i, 'qui définit les trois niveaux');
+      exigePolarite(
+        s.corps, /jamais dans un seuil/i,
+        'le niveau se lit dans le RÔLE, jamais dans un seuil',
+        // ⚠️ L'INVERSE VISE LA FORME PRESCRIPTIVE, ET SEULEMENT ELLE. Une première version
+        // cherchait aussi « deux périmètres parallèles » — la section RACONTE le seuil retiré
+        // (« Elle s'est posée un temps, sous forme de seuil — *deux périmètres parallèles,
+        // cinq agents* ») et la garde criait sur du texte correct. Une garde qui crie à tort
+        // se fait retirer, et emporte ce qu'elle gardait vraiment.
+        { inverse: /le niveau se lit dans un seuil/i },
       );
-      assert.ok(
-        metier.split(/^##\s/m)[0].includes(commun),
-        'le PRÉAMBULE du métier a été réécrit en étant déplacé — c\'est là que vivent les deux '
-          + 'principes fondateurs (« un agent qui orchestre n\'exécute jamais », « l\'orchestrateur '
-          + 'ne déploie que des chefs d\'équipe qui gèrent des sous-agents ») et le « tu ne codes pas »',
+      // La moitié que la narration exige : raconter le seuil sans dire qu'il était infondé le
+      // réhabiliterait. C'est le seul endroit du métier où un seuil est écrit, et ce qui
+      // empêche de le relire comme une consigne est le jugement qui l'accompagne.
+      exigePolarite(
+        s.corps, /n'avait été mesuré par rien/i,
+        'le seuil raconté est nommé comme infondé — sans ce jugement, le récit se relit comme une consigne',
+        { inverse: /ce seuil (?:tient|reste|s'applique|a été mesuré)/i },
       );
+      // La moitié qui ferme : dire « jamais dans un seuil » et poser la question quand même
+      // rétablirait le seuil par la porte de derrière. Le texte doit dire que la question NE
+      // SE POSE PAS.
+      const posees = s.corps.split('\n').filter((l) => /ne se pose (donc )?pas/i.test(l));
+      assert.ok(
+        posees.length >= 1,
+        'le métier ne dit plus que la question « ce chantier justifie-t-il un chef d’équipe ? » '
+          + 'ne se pose pas : sans ça, « pas de seuil » se lit comme « à toi de juger », et le '
+          + 'seuil revient sous forme de jugement',
+      );
+    },
+  },
 
-      const perdues = [];
-      const reecrites = [];
-      let comparees = 0;
-      for (const s of sections(competence)) {
-        if (SECTIONS_AMENDEES.has(s.titre)) continue;
-        if (!dansLeGabarit.has(s.titre)) { perdues.push(s.titre); continue; }
-        comparees += 1;
-        if (dansLeGabarit.get(s.titre) !== s.corps) reecrites.push(s.titre);
-      }
-
-      // ⚠️ AUCUNE SECTION N'EST EXEMPTÉE SANS ÊTRE REPRISE PAR UNE AUTRE GARDE.
+  {
+    id: 'la-table-des-anti-patterns-est-une-liste-fermee',
+    quoi: 'la table d’anti-patterns du gabarit compte exactement ce qu’elle doit compter — en retirer une ligne rougit, en glisser une aussi',
+    verifier({ metier }) {
+      // ⚠️ CETTE GARDE REMPLACE UN COMPTE QUI SE PRENAIT SUR UN AUTRE TEXTE. Jusqu'au
+      // 2026-08-17, la fermeture de la liste se mesurait par DIFFÉRENCE avec la table de la
+      // compétence (`NB_ANTI_PATTERNS_AJOUTES`, 29 ajouts attendus). Cette prémisse est tombée
+      // avec la réécriture : 28 des 35 lignes de la compétence ont été reformulées, donc la
+      // différence ne mesure plus rien. Le compte se prend désormais sur la table du gabarit
+      // POUR ELLE-MÊME — il n'a plus de prémisse à laquelle retomber.
       //
-      // Le seuil chiffré qui vivait ici (« au moins 20 comparées ») avait un défaut : chaque
-      // lot qui amende une section de plus le fait baisser, et on abaisse alors le seuil — la
-      // garde se desserre d'elle-même, lot après lot. On exige donc DEUX choses qui ne se
-      // desserrent pas : que tout ce qui n'est pas exempté ait bien été comparé, et que tout
-      // ce qui est exempté soit nommément gardé ailleurs (le compte des anti-patterns et
-      // l'inclusion des paragraphes de §1-bis, ici même ; l'inclusion paragraphe par
-      // paragraphe pour les sections de T-20260813-0062).
-      const GARDEES_AUTREMENT = new Set([
-        '1-bis. Ouvrir ta ligne avec le dirigeant',
-        'Anti-patterns',
-        ...AMENDEMENTS_DU_LOT.keys(),
-      ]);
-      for (const t of SECTIONS_AMENDEES.keys()) {
-        assert.ok(
-          GARDEES_AUTREMENT.has(t),
-          `« ${t} » est exemptée de la comparaison octet pour octet sans qu’aucune garde ne la `
-            + `reprenne : l’exemption la met hors de TOUTE garde, bien au-delà de l’amendement voulu`,
-        );
-      }
+      // Ce que ça garde, et c'est le mode de régression le plus silencieux d'un document :
+      // une table dont on retire une ligne ne casse rien, et la faute redevient tentante.
+      // Chaque ligne a été payée une fois. En ajouter une demande d'éditer le nombre ici, ce
+      // qui se voit en revue — une idée de plus ne se glisse pas dans le texte en silence.
+      const table = tableDe(sectionDe(metier, /^Anti-patterns$/i, 'd’anti-patterns').corps);
       assert.equal(
-        comparees, sections(competence).length - SECTIONS_AMENDEES.size,
-        `${comparees} section(s) comparée(s) pour ${sections(competence).length} au métier moins `
-          + `${SECTIONS_AMENDEES.size} amendée(s) : des sections échappent à la comparaison sans être déclarées`,
+        table.lignes.length, NB_ANTI_PATTERNS,
+        `la table d’anti-patterns porte ${table.lignes.length} ligne(s) pour ${NB_ANTI_PATTERNS} `
+          + `attendue(s) : soit une faute payée a été retirée en silence, soit une idée s’est `
+          + `glissée dans le texte. Les deux se décident, aucune ne se constate.`,
       );
-      assert.ok(
-        comparees >= 15,
-        `seules ${comparees} sections ont été comparées : le métier fait plusieurs dizaines de `
-          + `sections, un si petit nombre veut dire que la comparaison ne mord plus`,
-      );
-      assert.deepEqual(perdues, [], `ces sections du métier n'ont pas voyagé : ${perdues.join(' · ')}`);
+      // Et le compte seul ne suffirait pas : une ligne retirée et une autre ajoutée le
+      // laisseraient juste. Les deux colonnes doivent rester peuplées — une faute sans son
+      // coût est une préférence, et c'est la moitié qui se vide en premier.
+      const fautes = colonne(table, /^Ce qu'on est tenté de faire$/i, 'ce qu’on est tenté de faire');
+      const raisons = colonne(table, /^Pourquoi ça casse$/i, 'pourquoi ça casse');
+      // Le seuil est bas À DESSEIN : il vise la cellule VIDE ou décorative, pas la cellule
+      // brève. Le gabarit en porte une légitime de 14 signes (« `rien` s’écrit ») — une garde
+      // calée plus haut l'aurait fait crier sur du texte correct, et une garde qui crie à tort
+      // se fait retirer en emportant ce qu'elle gardait vraiment.
+      const vides = raisons
+        .map((r, i) => [fautes[i], r])
+        .filter(([, r]) => r.trim().length < 10 || /^[-–—.\s]*$/.test(r));
       assert.deepEqual(
-        reecrites, [],
-        `ces sections ont été RÉÉCRITES en étant déplacées, alors que le lot devait les `
-          + `transporter telles quelles : ${reecrites.join(' · ')}`,
-      );
-
-      // ⚠️ LES DEUX SECTIONS AMENDÉES SONT GARDÉES AUSSI — ET C'EST LA PASSE 2 QUI L'A EXIGÉ.
-      //
-      // Les exempter de la comparaison octet-pour-octet les avait mises hors de TOUTE garde,
-      // au-delà des quelques phrases que les contrôles dédiés ciblent nommément. La revue a
-      // retiré deux lignes d'origine de la table d'anti-patterns et une phrase de §1-bis :
-      // les trois mutations sont restées vertes. Une exemption qui devait couvrir un amendement
-      // précis couvrait en fait tout le reste de la section.
-      //
-      // La garde qui tient : **inclusion littérale de ce qui devait rester, plus un compte
-      // exact de ce qui s'ajoute.** Retirer une ligne d'origine rougit ; en ajouter une
-      // sixième rougit aussi.
-      const tableSource = tableDe(sectionDe(competence, /^Anti-patterns$/i, 'd’anti-patterns de la compétence').corps);
-      const tableGabarit = tableDe(sectionDe(metier, /^Anti-patterns$/i, 'd’anti-patterns du gabarit').corps);
-      const cle = (l) => l.join(' | ');
-      const perduesTable = tableSource.lignes.map(cle).filter((l) => !tableGabarit.lignes.map(cle).includes(l));
-      assert.deepEqual(
-        perduesTable, [],
-        `ces anti-patterns du métier ont disparu au déplacement — chacun a été payé une fois, et `
-          + `une table dont on retire une ligne est le mode de régression le plus silencieux d'un `
-          + `document : ${perduesTable.join(' · ')}`,
-      );
-      assert.equal(
-        tableGabarit.lignes.length - tableSource.lignes.length, NB_ANTI_PATTERNS_AJOUTES,
-        `le gabarit ajoute ${tableGabarit.lignes.length - tableSource.lignes.length} anti-pattern(s) `
-          + `pour ${NB_ANTI_PATTERNS_AJOUTES} attendu(s) — les ajouts sont une liste fermée, et un `
-          + `anti-pattern de plus est une idée qui s'est glissée dans le texte`,
-      );
-
-      // §1-bis : même principe, au paragraphe. Tout ce que la compétence y écrit doit se
-      // retrouver dans le gabarit, SAUF l'unique paragraphe que l'ajout 3 retire.
-      const sourceBis = sectionDe(competence, /Ouvrir ta ligne avec le dirigeant/i, 'de l’ouverture de la ligne (compétence)').corps;
-      const gabaritBis = sectionDe(metier, /Ouvrir ta ligne avec le dirigeant/i, 'de l’ouverture de la ligne (gabarit)').corps;
-      const aRetirer = parasDe(sourceBis).filter((p) => p.includes(PHRASE_RETIREE));
-      assert.equal(aRetirer.length, 1, `la compétence doit porter une fois exactement le paragraphe que l’ajout 3 retire (${aRetirer.length})`);
-      const conserves = parasDe(sourceBis).filter((p) => !p.includes(PHRASE_RETIREE));
-      assert.ok(conserves.length >= 3, `trop peu de paragraphes conservés (${conserves.length}) pour que la garde morde`);
-      const perdusBis = conserves.filter((p) => !gabaritBis.includes(p));
-      assert.deepEqual(
-        perdusBis, [],
-        `ces paragraphes de §1-bis ont disparu au déplacement, alors que seul celui qui porte `
-          + `« ${PHRASE_RETIREE} » devait partir : ${perdusBis.map((p) => p.slice(0, 60) + '…').join(' · ')}`,
+        vides.map(([f]) => f), [],
+        `ces anti-patterns n’expliquent plus pourquoi ça casse : une faute sans son coût est une `
+          + `préférence, et personne ne renonce à une préférence`,
       );
     },
   },
@@ -1349,44 +1371,37 @@ export const CONTROLES = [
   // ensuite le réflexe placé à l'endroit de l'acte. La liste de biais arrive dernière.
   // ═══════════════════════════════════════════════════════════════════════════════════
 
-  {
-    id: 'les-amendements-ne-cachent-pas-une-reecriture',
-    quoi: 'les sections que ce lot amende ne perdent rien d’autre que ce qu’il déclare remplacer',
-    verifier({ metier }) {
-      // Inscrire une section dans SECTIONS_AMENDEES la sort de la comparaison octet pour
-      // octet — donc de toute garde. C'est le trou que la passe 2 du lot précédent a trouvé.
-      // Ici, chaque paragraphe d'origine doit se retrouver MOT POUR MOT dans le gabarit, sauf
-      // ceux que `AMENDEMENTS_DU_LOT` nomme. Ajouter est libre ; retirer se déclare.
-      const competence = readFileSync(join(REPO, CHEMIN_COMPETENCE), 'utf8');
-      for (const [t, remplaces] of AMENDEMENTS_DU_LOT) {
-        const source = sectionDe(competence, titre(t), `« ${t} » (compétence)`).corps;
-        const cible = sectionDe(metier, titre(t), `« ${t} » (gabarit)`).corps;
-        const paras = parasDe(source);
-        assert.ok(paras.length >= 3, `« ${t} » ne porte que ${paras.length} paragraphe(s) : la garde ne mordrait pas`);
-
-        for (const marqueur of remplaces) {
-          assert.equal(
-            paras.filter((p) => p.includes(marqueur)).length, 1,
-            `« ${marqueur} » ne désigne plus un paragraphe unique de « ${t} » : la déclaration `
-              + `de ce qui est remplacé a cessé de correspondre au texte, et la garde exempterait au hasard`,
-          );
-          assert.ok(
-            !cible.includes(marqueur),
-            `« ${marqueur} » est déclaré remplacé mais figure encore dans le gabarit — l’amendement n’a pas eu lieu`,
-          );
-        }
-
-        const perdus = paras
-          .filter((p) => !remplaces.some((m) => p.includes(m)))
-          .filter((p) => !cible.includes(p));
-        assert.deepEqual(
-          perdus, [],
-          `ces paragraphes de « ${t} » ont disparu alors que ce lot ne devait qu’y ajouter : `
-            + perdus.map((p) => p.slice(0, 70) + '…').join(' · '),
-        );
-      }
-    },
-  },
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // ⚠️ ICI VIVAIT `les-amendements-ne-cachent-pas-une-reecriture`, ET VOICI POURQUOI IL
+  // N'Y VIT PLUS (lot 2, 2026-08-17).
+  //
+  // Il gardait le trou que la passe 2 du lot précédent avait trouvé : inscrire une section
+  // dans `SECTIONS_AMENDEES` la sortait de la comparaison octet pour octet — donc de TOUTE
+  // garde, bien au-delà de l'amendement voulu. Il exigeait que chaque paragraphe d'origine
+  // des trois sections amendées (§4-bis, §5, §6) se retrouve MOT POUR MOT dans le gabarit,
+  // sauf ceux que `AMENDEMENTS_DU_LOT` déclarait remplacés. Ajouter était libre ; retirer
+  // se déclarait.
+  //
+  // **Sa prémisse est la même que celle de la comparaison, et elle est tombée avec elle** :
+  // il lisait la compétence `/orchestrer-chantier` comme texte d'origine, et §4-bis, §5, §6
+  // n'existent plus dans le gabarit réorganisé par la fonction (`D-20260817-0006`). Sa sonde
+  // ne trouvait plus ses sections — il rougissait en disant « section introuvable », ce qui
+  // n'apprend rien de la garantie.
+  //
+  // ⚠️ **CE QU'IL GARDAIT EST GARDÉ, ET AILLEURS QUE DANS UNE COMPARAISON.** Les garanties
+  // que les trois sections amendées portaient ont chacune leur contrôle, qui les cherche
+  // dans le gabarit SEUL, par la fonction :
+  //
+  //   • §4-bis → `le-brief-va-au-registre` · `un-compte-rendu-se-verifie-avant-d-etre-valide`
+  //              · `la-revue-est-lancee-par-le-chef-d-equipe` ;
+  //   • §5     → `il-calibre-au-moment-ou-il-tranche` · `le-doute-est-une-information-attendue` ;
+  //   • §6     → `un-ordre-transmis-porte-sa-source`.
+  //
+  // C'est un meilleur terrain que celui qu'on perd : ces contrôles rougissent sur ce que le
+  // texte DIT, là où celui-ci rougissait sur ce qu'un autre texte contenait.
+  //
+  // La divergence compétence / gabarit est tracée en `T-20260817-0081`.
+  // ═══════════════════════════════════════════════════════════════════════════════════
 
   {
     id: 'les-droits-refusent-ce-que-le-metier-promet',
@@ -2929,9 +2944,12 @@ export const MUTATIONS = [
     quoi: 'l’énoncé du crochet est retourné par une négation, en gardant tous ses mots-clés',
     cible: 'crochet-pose-par-le-dispositif',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (lot 2) : le gabarit reconstruit a rendu sa queue de phrase — « , tu n'as
+    // rien à faire » — à la suite du même énoncé. Le motif littéral ne mordait plus, donc la
+    // garde passait pour éprouvée sans l'être. Ce que la mutation FAIT est inchangé.
     muter: (t) => t.replace(
-      "**Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul, tu n'as rien à faire.",
-      "**Ne crois pas qu'un crochet apparaisse seul** — contrairement à ce qu'on dit, le dispositif le pose seul, tu n'as rien à faire est faux : c'est toi qui le poses.",
+      "**Un crochet apparaît sur le message qu'on t'écrit dès que tu l'as pris** — le dispositif le pose seul.",
+      "**Ne crois pas qu'un crochet apparaisse seul** — contrairement à ce qu'on dit, le dispositif le pose seul est faux : c'est toi qui le poses.",
     ),
   },
   {
@@ -2939,24 +2957,49 @@ export const MUTATIONS = [
     quoi: 'le métier enseigne à l’orchestrateur de poser lui-même le crochet — la garantie redevient une discipline',
     cible: 'crochet-pose-par-le-dispositif',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (lot 2), même cause que la précédente.
     muter: (t) => t.replace(
-      'le dispositif le pose seul, tu n\'as rien à faire',
-      'pose un crochet sur son message dès que tu l\'as lu',
+      'le dispositif le pose seul.',
+      'pose un crochet sur son message dès que tu l\'as lu.',
     ),
   },
 
-  // ── le transport fidèle
+  // ── ce que la compétence garantit encore, et le seuil que le CTO a retiré
+  //
+  // ⚠️ CES MUTATIONS VISAIENT `le-metier-a-voyage-entier`, QUI N'EXISTE PLUS (lot 2). Leur
+  // cible a été redirigée vers la garde qui a RECUEILLI la fonction qu'elles éprouvaient —
+  // jamais retirée pour faire taire un rouge. Le motif du retrait de la garde est écrit là où
+  // elle vivait, en tête de `la-competence-reste-invocable`.
+  {
+    id: 'la-competence-perd-son-en-tete',
+    quoi: 'la compétence cesse d’être invocable — son en-tête part, et elle disparaît sans que son retrait soit décidé',
+    cible: 'la-competence-reste-invocable',
+    fichier: 'competence',
+    muter: (t) => t.replace(/^---\nname: orchestrer-chantier\n/, '---\nname: orchestrer-un-chantier\n'),
+  },
+  {
+    id: 'la-competence-est-videe-en-etant-deplacee',
+    quoi: 'la compétence garde son en-tête et perd son corps — et `gestes-de-session-existants`, qui y lit les formes herdr réelles, est désarmé sans un mot',
+    cible: 'la-competence-reste-invocable',
+    fichier: 'competence',
+    muter: (t) => t.slice(0, t.indexOf('\n---\n') + 5) + '\nVoir le `CLAUDE.md` du lieu.\n',
+  },
+
   {
     id: 'une-section-du-metier-disparait',
-    quoi: 'la règle de dimensionnement — « aucun agent ne doit jamais avoir besoin de compacter » — est perdue au déplacement',
-    cible: 'le-metier-a-voyage-entier',
+    quoi: 'le bloc qui définit les trois niveaux est perdu en entier — avec lui, ce qui fait qu’un agent ouvert EST un chef d’équipe',
+    cible: 'le-niveau-se-lit-dans-le-role',
     fichier: 'metier',
-    muter: (t) => t.replace(/^### 3-bis\. Dimensionner[\s\S]*?(?=^### 4\. )/m, ''),
+    // ⚠️ RÉ-ANCRÉE (lot 2) : elle retirait « ### 3-bis. Dimensionner », un titre que la
+    // réécriture par la fonction a fait disparaître — le motif ne mordait plus. Elle retire
+    // désormais le bloc où la règle SERT. Ce qu'elle éprouve n'a pas bougé : qu'une section
+    // entière puisse partir sans qu'une garde s'en aperçoive.
+    muter: (t) => t.replace(/^## Les trois niveaux\n[\s\S]*?(?=^### Combien de chefs)/m, ''),
   },
   {
     id: 'une-section-du-metier-est-reecrite',
     quoi: 'le seuil retiré par le dirigeant est réintroduit en « améliorant » une section au passage',
-    cible: 'le-metier-a-voyage-entier',
+    cible: 'le-niveau-se-lit-dans-le-role',
     fichier: 'metier',
     muter: (t) => t.replace(
       '**Le niveau se lit dans le rôle, jamais dans un seuil.**',
@@ -2966,14 +3009,20 @@ export const MUTATIONS = [
 
   {
     id: 'revue-P1-le-preambule-est-reecrit',
-    quoi: 'le « tu ne codes pas » du préambule devient son contraire — hors de toute section, donc hors de la comparaison',
-    cible: 'le-metier-a-voyage-entier',
+    quoi: 'le « tu ne codes pas » devient son contraire — le premier interdit fondateur du métier',
+    cible: 'il-orchestre-il-n-execute-pas',
     fichier: 'metier',
     // Trouvée par la PASSE 1 de la revue indépendante : le préambule échappait entièrement à
     // la garde de fidélité, `sections()` ne rendant que ce qui suit un titre.
+    // ⚠️ RECIBLÉE (lot 2) : elle visait `le-metier-a-voyage-entier`, qui gardait le préambule
+    // par comparaison avec la compétence. Cette prémisse est tombée ; l'interdit, lui, est
+    // gardé sur le gabarit SEUL par `il-orchestre-il-n-execute-pas`, qui est son vrai terrain.
+    // Le « Tu ne codes pas. » du préambule d'origine n'existe plus comme phrase : la
+    // réécriture par la fonction porte le même interdit dans la colonne « Ce qu'il ne fait
+    // **jamais** » de la table des niveaux. Le motif suit la fonction, pas l'ancienne phrase.
     muter: (t) => t.replace(
-      "**Tu ne codes pas.** Tu cadres, tu découpes",
-      "**Tu peux coder ce qui va vite.** Tu cadres, tu découpes",
+      'ne code pas, ne relit pas le code',
+      'code ce qui va vite, relit le code',
     ),
   },
   {
@@ -3030,22 +3079,34 @@ export const MUTATIONS = [
   },
   {
     id: 'revue-P2-un-anti-pattern-d-origine-disparait',
-    quoi: 'une ligne d’origine de la table d’anti-patterns est retirée — la section amendée servait de trou, pas d’amendement',
-    cible: 'le-metier-a-voyage-entier',
+    quoi: 'une ligne de la table d’anti-patterns est retirée — le mode de régression le plus silencieux d’un document',
+    // ⚠️ RECIBLÉE (lot 2) : elle visait la comparaison avec la table de la compétence, qui a
+    // été réécrite sur ordre. Le compte se prend désormais sur la table du gabarit pour
+    // elle-même — même fonction gardée, sans prémisse à laquelle retomber.
+    cible: 'la-table-des-anti-patterns-est-une-liste-fermee',
     fichier: 'metier',
     muter: (t) => t.replace(/^\| Coder « juste ce petit bout » soi-même \|.*\n/m, ''),
   },
   {
     id: 'revue-P2-un-paragraphe-de-1bis-disparait',
-    quoi: 'la phrase « un arbitrage n’est acquis qu’une fois réinscrit au ServiceDesk » est perdue dans la section exemptée',
-    cible: 'le-metier-a-voyage-entier',
+    quoi: 'la section qui rend la ligne obligatoire perd un paragraphe — et c’est un retrait qui ne casse rien',
+    // ⚠️ RECIBLÉE ET RÉ-ANCRÉE (lot 2) : elle visait la comparaison avec la compétence sur
+    // §1-bis, et son motif littéral (« Un arbitrage rendu dans la conversation… ») a été
+    // reformulé par la réécriture — donc elle ne mordait plus ET sa cible n'existait plus.
+    // La fonction éprouvée est la même : la section qui porte l'obligation de la ligne ne
+    // perd pas un paragraphe en silence. Elle est gardée par `ligne-obligatoire`.
+    cible: 'ligne-obligatoire',
     fichier: 'metier',
-    muter: (t) => t.replace(/^Un arbitrage rendu dans la conversation \*\*n'est acquis[\s\S]*?\n\n/m, ''),
+    // Le paragraphe visé est celui qui porte le MOMENT de l'ouverture (« Tu l'ouvres en
+    // naissant ») : c'est lui qui fait de la ligne un préalable plutôt qu'un confort, et son
+    // retrait ne casse rien d'autre — exactement le retrait qu'on ne voit pas.
+    muter: (t) => t.replace(/^[^\n]*ouvres en naissant[^\n]*\n/m, ''),
   },
   {
     id: 'revue-P2-un-septieme-anti-pattern-se-glisse',
-    quoi: 'une idée de plus entre dans la table par la porte de la section exemptée — la liste des ajouts n’est plus fermée',
-    cible: 'le-metier-a-voyage-entier',
+    quoi: 'une idée de plus entre dans la table — la liste n’est plus fermée, et personne ne l’a énoncée',
+    // ⚠️ RECIBLÉE (lot 2), même motif que la précédente.
+    cible: 'la-table-des-anti-patterns-est-une-liste-fermee',
     fichier: 'metier',
     muter: (t) => t.replace(
       /^\| Sauter le topo du matin/m,
@@ -3379,7 +3440,12 @@ export const MUTATIONS = [
     quoi: 'le gabarit cesse d’être comparable tel quel — la mise à jour des copies ne saurait plus détecter une divergence',
     cible: 'aucune-substitution',
     fichier: 'metier',
-    muter: (t) => t.replace('Tu es le **pilote** d\'un chantier.', 'Tu es le **pilote** de {{CHANTIER}}.'),
+    // ⚠️ Ré-ancrée (lot 2) : la phrase « Tu es le **pilote** d'un chantier. » n'existe plus —
+    // la reconstruction oppose désormais le pilote au bras droit. Le motif littéral ne mordait
+    // plus. Ré-ancrée sur le TITRE du document, qui est le seul point du texte dont la
+    // disparition serait elle-même une perte visible ; ce que la mutation FAIT est inchangé :
+    // faire entrer un emplacement à substituer dans le gabarit.
+    muter: (t) => t.replace('# Tu es l\'orchestrateur de ce chantier', '# Tu es l\'orchestrateur de {{CHANTIER}}'),
   },
   {
     id: 'une-commande-de-session-est-inventee',
@@ -3606,9 +3672,12 @@ export const MUTATIONS = [
     quoi: 'la faute reste nommée et perd la raison qui la rend une faute — une faute sans son coût est une préférence',
     cible: 'anti-patterns-de-l-inscription',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (lot 2) : la cellule de coût a perdu son deux-points et sa suite à la
+    // reconstruction. Le motif littéral ne mordait plus. Ce que la mutation FAIT est inchangé :
+    // laisser la faute nommée et lui retirer son coût.
     muter: (t) => t.replace(
-      "| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Personne ne l'y cherchera :",
-      "| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Ce n'est pas idéal :",
+      "| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Personne ne l'y cherchera |",
+      "| Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Ce n'est pas idéal |",
     ),
   },
   {
@@ -3635,10 +3704,14 @@ export const MUTATIONS = [
     quoi: 'ce qu’il dit à la place devient ce que la pression lui fait dire — le contresens exact, sans qu’une cellule change de contenu',
     cible: 'reflexes-qui-le-visent',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (lot 2) : les deux cellules ont été resserrées à la reconstruction — la
+    // première a perdu « que tu n'as pas vérifié », la seconde sa queue « — et tant que ce
+    // n'est pas là, le lot attend ». `permuter` LEVAIT au lieu de muter, et le test comptait
+    // cette erreur comme un échec sans que personne ne voie que la garde n'était pas éprouvée.
     muter: (t) => permuter(
       t,
-      '« Beau travail, on fusionne », devant un compte rendu plausible que tu n\'as pas vérifié',
-      '« Montre-moi le verdict de chaque passe et l\'état de la chaîne » — et tant que ce n\'est pas là, le lot attend',
+      '« Beau travail, on fusionne », devant un compte rendu plausible non vérifié',
+      '« Montre-moi le verdict de chaque passe et l\'état de la chaîne »',
     ),
   },
   {
@@ -3673,8 +3746,11 @@ export const MUTATIONS = [
     // LA MUTATION QUE CE LOT COMBAT. Elle ne demande aucune permission, n'ouvre aucune
     // exception, ne nie aucune nécessité : elle conseille. Aucune garde de modalité existante
     // ne la voyait — d'où `CONSEIL`, écrit ici plutôt que dans le harnais partagé.
+    // ⚠️ Ré-ancrée (lot 2) : la cellule a perdu sa queue « — et tant que ce n'est pas là, le
+    // lot attend » à la reconstruction. Le motif ne mordait plus, et c'est LA mutation que ce
+    // lot combat qui passait pour éprouvée.
     muter: (t) => t.replace(
-      '« Montre-moi le verdict de chaque passe et l\'état de la chaîne » — et tant que ce n\'est pas là, le lot attend',
+      '« Montre-moi le verdict de chaque passe et l\'état de la chaîne »',
       'Évite de valider trop vite : idéalement, demande-lui le verdict de chaque passe',
     ),
   },
@@ -3738,9 +3814,11 @@ export const MUTATIONS = [
     fichier: 'metier',
     // Posée par la REVUE DE FOND, et elle a survécu à la première version : la modalité n'était
     // tenue que sur la colonne des refus, pas sur celle qui les explique.
+    // ⚠️ Ré-ancrée (lot 2) : la cellule a perdu son « le second principe : » à la
+    // reconstruction. Le motif ne mordait plus.
     muter: (t) => t.replace(
-      '| **Ouvrir un sous-agent** | le second principe : tu n\'ouvres que des chefs d\'équipe',
-      '| **Ouvrir un sous-agent** | le second principe : tu n\'ouvres que des chefs d\'équipe, sauf pour la revue à deux passes',
+      '| **Ouvrir un sous-agent** | tu n\'ouvres que des chefs d\'équipe',
+      '| **Ouvrir un sous-agent** | tu n\'ouvres que des chefs d\'équipe, sauf pour la revue à deux passes,',
     ),
   },
   {
@@ -3768,9 +3846,10 @@ export const MUTATIONS = [
     quoi: 'le refus passerait pour ignoré tant que le dossier n’est pas approuvé — la garantie serait nulle à la naissance de l’agent',
     cible: 'ce-qui-a-ete-mesure-garde-sa-polarite',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (lot 2) : la puce a perdu son « , elle, » à la reconstruction.
     muter: (t) => t.replace(
-      '- une **autorisation**, elle, est **ignorée en entier**',
-      '- un **refus**, lui, est **ignoré en entier**',
+      '- une **autorisation** est **ignorée en entier**',
+      '- un **refus** est **ignoré en entier**',
     ),
   },
   {
@@ -3827,8 +3906,11 @@ export const MUTATIONS = [
     quoi: 'la règle d’or n°8 cesse de porter sur ses propres conclusions — appliquée au seul code, elle était déjà là',
     cible: 'il-ne-s-evalue-pas-lui-meme',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (lot 2) : le point final est sorti du gras à la reconstruction
+    // (« pas**. » au lieu de « pas.** »). Un signe de ponctuation suffisait à rendre la
+    // mutation muette — le cinquième piège mesuré par le lot 1, vérifié ici.
     muter: (t) => t.replace(
-      '**Et tu ne t\'évalues pas toi-même.** La règle d\'or n°8 fait relire le code par quelqu\'un qui ne l\'a pas écrit ; **tes conclusions n\'y échappent pas.**',
+      '**Et tu ne t\'évalues pas toi-même.** La règle d\'or n°8 fait relire le code par quelqu\'un qui ne l\'a pas écrit ; **tes conclusions n\'y échappent pas**.',
       '**Et tu fais relire le code.** La règle d\'or n°8 le veut ; tes conclusions, elles, sont les tiennes.',
     ),
   },
@@ -3904,16 +3986,23 @@ export const MUTATIONS = [
     ),
   },
 
-  {
-    id: 'un-paragraphe-d-origine-disparait-d-une-section-amendee',
-    quoi: 'un paragraphe d’origine est retiré d’une section que ce lot s’autorise à amender — l’exemption servirait de trou, pas d’amendement',
-    cible: 'les-amendements-ne-cachent-pas-une-reecriture',
-    fichier: 'metier',
-    muter: (t) => t.replace(
-      /^\*\*Inscris la décision dans le ServiceDesk\*\*[\s\S]*?\n\n/m,
-      '',
-    ),
-  },
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // ⚠️ ICI VIVAIT `un-paragraphe-d-origine-disparait-d-une-section-amendee`, ET VOICI
+  // POURQUOI ELLE N'Y VIT PLUS (lot 2, 2026-08-17).
+  //
+  // Elle retirait un paragraphe d'origine d'une section que le lot s'autorisait à amender —
+  // pour prouver que l'exemption servait d'amendement et pas de trou. Elle éprouvait
+  // `les-amendements-ne-cachent-pas-une-reecriture`, dont la prémisse (§4-bis, §5, §6 de la
+  // compétence, comparées au gabarit) est tombée avec la réécriture par la fonction : ni les
+  // sections ni la comparaison n'existent plus, et son motif littéral ne mordait plus non plus.
+  //
+  // **Elle n'est pas retirée pour faire taire un rouge, et ce qu'elle éprouvait est éprouvé
+  // ailleurs** : les garanties des trois sections amendées sont désormais gardées une par une
+  // sur le gabarit SEUL, et chacune de ces gardes a ses propres mutations —
+  // `le-brief-va-au-registre` (2), `un-compte-rendu-se-verifie-avant-d-etre-valide` (2),
+  // `il-calibre-au-moment-ou-il-tranche` (2), `le-doute-est-une-information-attendue` (2),
+  // `un-ordre-transmis-porte-sa-source` (1). La ré-écrire ici aurait dupliqué l'une d'elles.
+  // ═══════════════════════════════════════════════════════════════════════════════════
 
   // ───────────────────────────────────────────────────────────────────────────────────
   // T-20260816-0015 · T-20260816-0018 · T-20260816-0006 — les mutations de CE lot.
