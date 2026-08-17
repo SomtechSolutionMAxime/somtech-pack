@@ -36,6 +36,11 @@
 // de l'autre (T-20260814-0138). Réexportée ici : tout ce qui la nommait continue de la voir.
 export { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
 import { contenuBoite, boiteEstVide, messagesEnFile } from '../../ligne-directe/src/boite.js';
+// ⚠️ LA SONDE D'ÉCRAN VIT DANS `ligne-directe/src/ecran.js` — un seul endroit sait reconnaître un
+// écran de blocage, et `bin/naitre.js` s'en sert déjà. La revue de fond a relevé que la livraison
+// ne s'en servait PAS : elle regardait la boîte sans jamais regarder ce qui pouvait s'afficher
+// par-dessus. Sur un geste irréversible, c'était la porte-sur-deux dans sa forme la plus chère.
+import { etatDeLEcran } from '../../ligne-directe/src/ecran.js';
 
 /**
  * Le brief a-t-il été PRIS ? La question n'est pas « l'outil a-t-il dit oui », c'est « la
@@ -310,6 +315,61 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTrava
 // propre phrase inachevée peut le constater, là où deux textes collés ne se voient pas.
 
 /**
+ * LE DÉLAI D'IMMOBILITÉ PAR DÉFAUT — cinq minutes, et le chiffre est le cœur de la garde.
+ *
+ * Trente secondes ont d'abord été écrites, et l'orchestrateur l'a refusé en approuvant la
+ * conception, avec le bord tranchant que je n'avais pas nommé :
+ *
+ *   > « Ton garde d'immobilité couvre EN TRAIN DE TAPER ; il ne couvre PAS a tapé la moitié
+ *   > puis est parti. »
+ *
+ * C'est juste. Une demi-minute suffit contre quelqu'un dont les doigts sont sur le clavier ;
+ * elle ne dit rien de quelqu'un qui s'est levé au milieu d'une phrase. Le geste étant
+ * IRRÉVERSIBLE, le délai se compte en minutes, pas en secondes.
+ *
+ * Cinq minutes, et pas plus, parce que le mal qu'on soigne se compte lui aussi : les blocages
+ * mesurés duraient ~40 minutes, pendant lesquelles PERSONNE ne pouvait joindre le destinataire.
+ *
+ * ⚠️ CE QUE LA MESURE DIT, ET CE QU'ELLE NE DIT PAS. Quatre blocages mesurés en une nuit sur la
+ * boîte d'un orchestrateur : les quatre étaient des MESSAGES D'AGENT, zéro brouillon humain.
+ * Quatre sur quatre du côté où ce délai parie — ce n'est pas la preuve que le cas humain
+ * n'arrive jamais, et c'est pour ça que la garde reste, et qu'elle est large.
+ */
+export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
+
+/**
+ * ⚠️ UNE BOÎTE DE SAISIE N'EST PAS UN DIALOGUE — et la touche d'envoi n'y fait pas la même chose
+ * (relevé en REVUE DE FOND, bloquant, et il était juste).
+ *
+ * Devant une boîte, la touche d'envoi SOUMET un texte que quelqu'un a écrit. Devant un dialogue
+ * de choix — « veux-tu que j'exécute cette commande ? » —, elle CONFIRME l'option par défaut.
+ * Le défaut change alors de nature : ce n'est plus un message corrompu, c'est une ACTION
+ * APPROUVÉE à l'insu de celui devant qui elle s'affiche. Rien dans ce module ne justifie ça.
+ *
+ * ⚠️ ET ON NE SAIT PAS RECONNAÎTRE TOUS LES DIALOGUES. Mesuré le 2026-08-17 : le sélecteur
+ * `/model` rend une boîte ILLISIBLE, donc refusée — mais par accident, pas par conception ; et
+ * un vrai dialogue de permission n'a pas pu être reproduit. **[non établi]** reste le mot juste.
+ * Ne pas savoir reproduire un danger n'est pas la preuve qu'il n'existe pas : c'est le premier
+ * piège de ce dépôt. La sonde est donc LARGE et son sens sûr est de S'ABSTENIR.
+ *
+ * Elle cherche ce qui trahit un choix, jamais ce qui trahit un message : des options numérotées,
+ * et les formules d'un dialogue. Un compte rendu qui commencerait par « 1. » et parlerait de
+ * confirmation serait refusé à tort — on aura perdu une livraison, pas approuvé une action.
+ */
+const MARQUES_DE_CHOIX = [
+  /(?:^|\n)\s*(?:❯\s*)?[1-9]\.\s+\S/,
+  /\b(?:enter|entrée)\b[^\n]{0,20}\b(?:to )?confirm/i,
+  /\besc\b[^\n]{0,20}\b(?:to )?cancel/i,
+  /\(y\/n\)/i,
+  /\bdo you want to\b/i,
+];
+
+export function ressembleAUnChoix(texte) {
+  const t = String(texte ?? '');
+  return MARQUES_DE_CHOIX.some((m) => m.test(t));
+}
+
+/**
  * Tenter de libérer une boîte encombrée — et rendre ce qu'on a constaté.
  *
  * Quatre issues, et chacune porte sur un état qui POUVAIT être différent :
@@ -338,13 +398,27 @@ export async function delivrerLaBoite({
 }) {
   // ON LAISSE AU TEXTE LE TEMPS DE BOUGER. C'est toute la garde : un brouillon vivant bouge,
   // un message coincé ne bouge pas. Sans cette attente, on ne distinguerait pas les deux.
+  // ⚠️ ON REFUSE AVANT MÊME D'ATTENDRE si ce qu'on voit n'est pas une boîte de saisie ordinaire.
+  // Attendre puis presser Entrée sur un dialogue serait le pire des deux mondes : le temps perdu
+  // ET l'action approuvée.
+  if (ressembleAUnChoix(texteCoince)) return { ok: false, cause: 'choix', soumis: false };
+
   await dormir(immobiliteMs);
 
   const ecran = await lireEcran(commandes.lireEcran, vers);
+  // L'ÉCRAN, PAS SEULEMENT LA BOÎTE. Un modal connu peut s'afficher par-dessus un écran qui
+  // porte une boîte parfaitement lisible — c'est exactement pour ça que `etatDeLEcran` cherche
+  // un écran connu AVANT de conclure que la boîte est prête. Le refuser ici est le même
+  // raisonnement, appliqué à un geste qui ne se défait pas.
+  const etat = etatDeLEcran(ecran);
+  if (!etat.pretARecevoir) return { ok: false, cause: 'ecran', soumis: false, resume: etat.resume, quoi: etat.quoi };
+
   const apres = contenuBoite(ecran);
   if (apres === null) return { ok: false, cause: 'illisible', soumis: false };
   if (apres === '') return { ok: true, cause: 'liberee-seule', soumis: false };
   if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
+  // Et une seconde fois sur ce qu'on relit : le contenu a pu devenir un dialogue entre-temps.
+  if (ressembleAUnChoix(apres)) return { ok: false, cause: 'choix', soumis: false };
 
   const envoi = await appelHerdr(commandes.soumettre, vers);
   for (let i = 0; i < Math.max(1, essais); i += 1) {
@@ -365,6 +439,19 @@ export async function delivrerLaBoite({
  */
 export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
   const attente = `${Math.round(immobiliteMs / 1000)} s`;
+  if (delivrance.cause === 'choix') {
+    return (
+      '⚠️ Je n’ai RIEN soumis : ce que porte cette boîte ressemble à un **dialogue de choix**, ' +
+      'pas à un message en souffrance. La touche d’envoi y confirmerait une action que personne ' +
+      'ne m’a demandé d’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane'
+    );
+  }
+  if (delivrance.cause === 'ecran') {
+    return (
+      `⚠️ Je n’ai RIEN soumis : la session est devant un écran${delivrance.quoi ? ` — ${delivrance.quoi}` : ' que je ne reconnais pas'}` +
+      `${delivrance.resume ? `. Voici ce que j’ai vu :\n${delivrance.resume}` : ''}`
+    );
+  }
   if (delivrance.cause === 'bouge') {
     return (
       `⚠️ J’ai attendu ${attente} et le texte A BOUGÉ entre mes deux lectures : quelqu’un est ` +
@@ -399,12 +486,24 @@ export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
  * son nom de ce qu'il a trouvé.
  */
 export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) {
-  const apercu = String(texteLibere).slice(0, 120).replace(/\s+/g, ' ').trim();
+  // ⚠️ LE TEXTE EN ENTIER, JAMAIS UN APERÇU — exigé par l'orchestrateur en approuvant la
+  // conception, et il a raison : « sans ça le destinataire voit un travail partir de chez lui
+  // sans pouvoir dire lequel. C'est la différence entre un incident CONSTATABLE et un incident
+  // INEXPLICABLE. » Un aperçu tronqué à 120 caractères — ce qu'était la première écriture —
+  // rendait précisément l'incident inexplicable.
+  //
+  // ⚠️ ET IL FAUT DIRE CE QU'ON N'A PAS VU : la lecture d'une boîte ne rend que sa portion
+  // VISIBLE à l'écran (mesuré — un texte long y est tronqué par le défilement). Ce qu'on
+  // recopie ici est donc ce qu'on a lu, pas nécessairement tout ce qui est parti.
+  const texte = String(texteLibere).trim();
   return (
-    `⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, immobile pendant ` +
-    `les ${Math.round(immobiliteMs / 1000)} s où je l’ai observée${apercu ? ` (« ${apercu}${texteLibere.length > 120 ? '…' : ''} »)` : ''}. ` +
-    'Je l’ai SOUMIS pour son auteur — sans y écrire un caractère — puis j’ai livré ceci. Tu vas ' +
-    'donc recevoir les deux. Si ce texte était un brouillon à toi, il vient de partir tel quel. ' +
+    '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, resté immobile ' +
+    `pendant les ${Math.round(immobiliteMs / 60000)} min où je l’ai observée. Je l’ai SOUMIS pour ` +
+    'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
+    'les deux.\n\n' +
+    `VOICI CE QUI A ÉTÉ SOUMIS EN TON NOM (tel que je l’ai lu à l’écran, qui n’en montre que la partie visible) :\n` +
+    `┈┈┈\n${texte}\n┈┈┈\n\n` +
+    'Si c’était un brouillon à toi, il vient de partir tel quel — et tu sais maintenant lequel. ' +
     'Tant qu’une boîte reste pleine, PERSONNE ne peut te joindre et rien ne te le dit.'
   );
 }
@@ -511,6 +610,17 @@ export async function livrerBrief({
       statutAvant = etatApres.reponse?.result?.agent?.agent_status ?? null;
       ecranAvant = await lireEcran(lectures.lireEcran, vers);
       obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane });
+      // ⚠️ UN REFUS QUI TAIT UN GESTE DÉJÀ POSÉ EST UN REFUS QUI MENT PAR OMISSION (relevé en
+      // revue de fond). Si la boîte se rebloque entre la délivrance et l'écriture, le lecteur
+      // voit « boîte pas vide » — et ignore qu'une touche d'envoi est DÉJÀ partie vers ce pane,
+      // sur un AUTRE texte, qui lui est bien parti. C'est une action irréversible qu'on lui
+      // cacherait ; il la découvrirait par ses effets, sans pouvoir la relier à ce refus.
+      if (obstacle && delivrance.soumis) {
+        obstacle =
+          `${obstacle}\n⚠️ ET J’AI DÉJÀ SOUMIS un premier texte qui bloquait cette boîte — il est ` +
+          'parti, le destinataire l’a pris. Ce qui bloque maintenant est arrivé APRÈS : c’est un ' +
+          'second texte, pas celui que j’ai délivré.';
+      }
     } else {
       // Le refus d'origine est rendu INTACT ; on lui ajoute ce qu'on a tenté. Des mots de plus,
       // pas un verdict de moins.

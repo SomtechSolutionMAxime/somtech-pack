@@ -36,21 +36,20 @@
 // Le détail, et ce que le geste coûte, sont en tête de `src/livraison.js`.
 
 import { readFileSync } from 'node:fs';
-import { livrerBrief } from '../src/livraison.js';
+import { livrerBrief, IMMOBILITE_PAR_DEFAUT_MS } from '../src/livraison.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { trouverDestinataire } from '../src/destinataire.js';
 
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
 const ATTENTE_MS = Number(process.env.LIVRAISON_ATTENTE_MS || 20000);
-// ⚠️ LE TEMPS LAISSÉ À UN TEXTE COINCÉ POUR BOUGER (T-20260816-0114). Trente secondes : assez
-// pour que quelqu'un en train d'écrire fasse bouger sa boîte, assez peu pour qu'un compte rendu
-// ne meure pas d'attente. Les blocages mesurés duraient ~40 minutes.
+// ⚠️ LE TEMPS LAISSÉ À UN TEXTE COINCÉ POUR BOUGER (T-20260816-0114) — cinq minutes, et le
+// pourquoi de ce chiffre est en tête de `src/livraison.js`, là où il se décide. En deux mots :
+// une demi-minute couvre « en train de taper », pas « a tapé la moitié puis est parti ».
 //
 // ⚠️ CE RÉGLAGE EST LE PRIX D'UN GESTE IRRÉVERSIBLE — le baisser à zéro désarme la délivrance,
-// le baisser un peu la rend hasardeuse. Non mesuré : à quelle fréquence un humain laisse un
-// texte en plan dans la boîte d'un agent. C'est ce qui justifie une valeur généreuse.
-const IMMOBILITE_MS = Number(process.env.LIVRAISON_IMMOBILITE_MS || 30000);
+// le baisser un peu la rend hasardeuse.
+const IMMOBILITE_MS = Number(process.env.LIVRAISON_IMMOBILITE_MS || IMMOBILITE_PAR_DEFAUT_MS);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 

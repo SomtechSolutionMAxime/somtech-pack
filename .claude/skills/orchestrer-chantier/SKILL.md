@@ -408,11 +408,13 @@ Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minus
 **c. Livrer le brief par référence — et vérifier qu'il a été PRIS, pas seulement envoyé.**
 
 ```bash
-node $HOME/.somtech/naissance-representant/bin/livrer.js "$P" \
+node $HOME/.somtech/naissance-representant/bin/livrer.js "$P" --en-attente \
   --texte 'Tu es lagent en charge dun epic, mandate par un coordonnateur. Lis ton brief complet au registre — epics action get E-20260727-0010 — et execute-le.'
 ```
 
 Une seule ligne, sans apostrophe ni retour à la ligne. La commande sort **non nulle** si le brief n'a pas été pris — c'est ce qui remplace la relecture à l'œil.
+
+⚠️ **`--en-attente` n'est pas décoratif ici** (T-20260816-0114). Il exige une session qui *attend* — c'est la garde du brief de naissance, où « elle a quitté l'attente » EST la preuve qu'elle a pris. Et il **désarme la délivrance** : une session qui vient de naître peut être derrière un écran de démarrage qu'on ne reconnaît pas, et on ne pose pas un geste irréversible sur ce qu'on ne comprend pas. Sans ce drapeau, tu armes la délivrance à l'instant précis où elle est le moins souhaitable.
 
 **Pourquoi une commande plutôt que le geste nu** (T-20260809-0033, mesuré contre le vrai service) : `herdr agent prompt` rend un succès que la soumission parte ou non, et — c'est le cas grave — **écrire dans une boîte de saisie qui contient déjà quelque chose ne livre pas deux messages, il en livre UN, les deux textes collés**. L'agent se met alors à travailler sur un texte que personne n'a écrit. Un brief fusionné est pire qu'un brief absent : l'absent se voit, le fusionné produit un travail plausible et faux.
 
@@ -449,7 +451,9 @@ node $HOME/.somtech/naissance-representant/bin/livrer.js <ton-nom> --texte '<son
 `livrer.js` relit la boîte du destinataire après avoir écrit, débloque la soumission si elle a calé, et **échoue bruyamment** si le message n'est pas passé. Il accepte le **nom** de l'agent aussi bien que son pane, et il le cherche **dans toutes les sessions du poste** — le destinataire est presque toujours dans une autre que la tienne.
 
 ⚠️ **Si la boîte du destinataire est bloquée, `livrer.js` la délivre — il ne l'écrase jamais** (T-20260816-0114). Une boîte laissée pleine mettait en famine **tous** les émetteurs suivants, et seul le destinataire pouvait la libérer : c'est-à-dire le seul qui ne sait pas qu'elle bloque. Quatre occurrences en quatre rondes, et une fois sur trois l'auteur du texte coincé était **déjà mort**.
-Ce que `livrer.js` fait maintenant : il attend ~30 s, relit, et **si le texte n'a pas bougé, il le soumet pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis il livre le tien. Si le texte **a bougé**, quelqu'un est devant ce pane : il n'y touche pas et refuse. Si la soumission ne libère rien, le refus reste **exactement** celui d'avant : **rien ne s'écrit jamais dans une boîte qu'on n'a pas vue vide**. Conséquence pratique : un envoi vers une boîte bloquée prend une demi-minute de plus — c'est le prix, et il est mille fois moins cher que les quarante minutes qu'un compte rendu attendait.
+Ce que `livrer.js` fait maintenant : il attend **cinq minutes**, relit, et **si le texte n'a pas bougé, il le soumet pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis il livre le tien, précédé d'un avis qui apprend au destinataire que sa boîte bloquait **et lui montre le texte parti en son nom**.
+Il s'abstient dans quatre cas, et chacun est un refus : le texte **a bougé** (quelqu'un est devant ce pane) · la boîte porte ce qui ressemble à un **dialogue de choix** (la touche d'envoi y confirmerait une action que personne n'a demandée) · la session est devant un **écran connu ou inconnu** · la boîte est **illisible**. Si la soumission ne libère rien, le **verdict** reste celui d'avant — le message, lui, dit en plus ce qui a été tenté : **rien ne s'écrit jamais dans une boîte qu'on n'a pas vue vide**.
+⚠️ **Pourquoi cinq minutes et pas trente secondes** : une demi-minute suffit contre quelqu'un dont les doigts sont sur le clavier, elle ne dit rien de quelqu'un qui a tapé la moitié d'une phrase puis s'est levé. Le geste ne se défait pas, donc il se compte en minutes. Conséquence pratique : un envoi vers une boîte bloquée prend cinq minutes de plus — c'est le prix, et il reste huit fois moins cher que les quarante minutes qu'un compte rendu a réellement attendu.
 
 Ce sont les deux seuls de ces signaux qui n'annoncent **rien de cassé** — et c'est précisément pour ça qu'on ne pense pas à les envoyer. Ils déclenchent les deux moitiés du §4g. Le second est celui qu'on oublie : sans lui, tu auras annoncé une attente au représentant et jamais sa fin, ce qui est pire que de n'avoir rien dit.
 

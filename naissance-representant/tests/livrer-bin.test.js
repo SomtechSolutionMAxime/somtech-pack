@@ -58,6 +58,9 @@ function installerFauxHerdr(scenario = {}) {
       boiteQuiChange: false,
       boiteSeLibere: false,
       enterInoperant: false,
+      // Ce que la session AFFICHE au-dessus de sa boîte — un modal, un écran de démarrage.
+      // Sans ce levier, aucun essai ne pourrait éprouver la garde d'écran.
+      horsBoite: '',
       ...scenario,
     })
   );
@@ -111,7 +114,9 @@ if (cmd === 'agent list') {
 if (cmd === 'agent read') {
   // TEXTE BRUT — pas de JSON. Un écran cassé ne rend rien du tout.
   if (sc.lectureCassee) { process.stdout.write(''); process.exit(0); }
-  process.stdout.write(['~/.gestionnaire/acme', SEP, '\\u276f ' + boite(), SEP, '  auto mode on'].join('\\n'));
+  process.stdout.write(
+    ['~/.gestionnaire/acme', sc.horsBoite || '', SEP, '\\u276f ' + boite(), SEP, '  auto mode on'].join('\\n')
+  );
   process.exit(0);
 }
 if (cmd === 'agent get') {
@@ -357,6 +362,78 @@ test('une boîte ILLISIBLE n’est jamais délivrée — on ne soumet pas ce qu�
   assert.ok(
     !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
     'soumettre un texte qu’on n’a pas lu serait soumettre n’importe quoi'
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUE LA REVUE DE FOND A TROUVÉ, ET C'ÉTAIT UN BLOQUANT JUSTE.
+//
+// La touche d'envoi ne « soumet un texte » que si ce qu'on regarde est bien une boîte de
+// saisie. Devant un DIALOGUE DE CHOIX — « veux-tu que j'exécute cette commande ? » — la même
+// touche CONFIRME L'OPTION PAR DÉFAUT. Le défaut change alors de nature : ce n'est plus un
+// message corrompu, c'est une action approuvée à l'insu de celui devant qui elle s'affiche.
+//
+// ⚠️ NON ÉTABLI, ET C'EST POUR ÇA QUE LA GARDE EST LARGE : je n'ai pas su reproduire un vrai
+// dialogue de permission Claude Code (mesuré le 2026-08-17 — le sélecteur `/model` rend une
+// boîte ILLISIBLE, donc protégée par accident, et le mode auto ne demande rien). Ne pas savoir
+// reproduire un danger n'est pas la preuve qu'il n'existe pas — c'est le premier piège nommé
+// dans le brief de ce lot. On s'abstient donc dans le doute, puisque le geste est irréversible.
+
+test('un DIALOGUE DE CHOIX n’est jamais « soumis » — la touche d’envoi y confirmerait une action', () => {
+  const journal = installerFauxHerdr({
+    boiteInitiale: '1. Yes, and don’t ask again\n  2. No, tell Claude what to do differently\n  Enter to confirm · Esc to cancel',
+  });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0, 'on refuse : ce n’est pas un message en souffrance');
+  assert.match(r.stderr, /choix|confirm/i, 'et le refus dit ce qu’il a cru voir');
+  const a = appels(journal);
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'), 'AUCUNE touche sur un dialogue');
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'prompt'), 'et rien n’est écrit par-dessus');
+});
+
+test('un ÉCRAN CONNU par-dessus la boîte n’est jamais délivré — on ne tente pas sa chance', () => {
+  // La sonde de `ligne-directe/src/ecran.js` reconnaît cet écran. `contenuBoite` peut fort bien
+  // trouver une boîte en dessous : la garde doit porter sur l'ÉCRAN, pas seulement sur la boîte.
+  const journal = installerFauxHerdr({
+    boiteInitiale: 'un texte quelconque',
+    horsBoite: 'Is this a project you created or one you trust?',
+  });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0);
+  const a = appels(journal);
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'), 'aucune touche devant un écran connu');
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'prompt'));
+});
+
+// ═══ CE QUE L'ORCHESTRATEUR A AJOUTÉ EN APPROUVANT LA CONCEPTION (2026-08-17) ═══
+//
+// « Ton garde d'immobilité couvre EN TRAIN DE TAPER ; il ne couvre PAS a tapé la moitié puis
+// est parti. » Deux exigences en découlent, et les deux sont éprouvées ici.
+
+test('l’avis porte CE QUI A ÉTÉ SOUMIS EN ENTIER — un incident constatable, pas inexplicable', () => {
+  // Sans le texte, le destinataire voit un travail partir de chez lui sans pouvoir dire lequel.
+  const coince =
+    'reprends le dossier Belanger et refais la ventilation des heures du mois dernier en ' +
+    'repartissant les surplus sur les trois chantiers ouverts, puis previens le controleur';
+  assert.ok(coince.length > 120, 'le texte d’essai doit dépasser tout aperçu tronqué');
+  const journal = installerFauxHerdr({ boiteInitiale: coince });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.equal(r.code, 0, r.stderr);
+  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
+  assert.ok(
+    prompt[3].includes(coince),
+    'l’avis doit porter le texte soumis EN ENTIER — un aperçu tronqué ne permet pas de dire lequel c’était'
+  );
+});
+
+test('le délai d’immobilité par défaut n’est pas de trente secondes — « a tapé la moitié puis est parti »', async () => {
+  // ⚠️ CET ESSAI PORTE UNE EXIGENCE, pas une implémentation. Trente secondes suffisent contre
+  // quelqu'un en train de taper ; elles ne suffisent pas contre quelqu'un qui s'est absenté au
+  // milieu d'une phrase. Le geste étant irréversible, le défaut doit se compter en minutes.
+  const { IMMOBILITE_PAR_DEFAUT_MS } = await import('../src/livraison.js');
+  assert.ok(
+    IMMOBILITE_PAR_DEFAUT_MS >= 300000,
+    `le défaut doit valoir au moins 5 minutes — trouvé ${IMMOBILITE_PAR_DEFAUT_MS} ms`
   );
 });
 
