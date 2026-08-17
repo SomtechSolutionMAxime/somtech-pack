@@ -765,9 +765,20 @@ Ce n'est pas une seconde ligne : **c'est la même**, avec un porteur de plus. Le
 
 > **Ce qu'il te demande se DEMANDE — ça ne se commande pas.** C'est une équipe : tu réponds ce que tu sais, y compris « pas avant jeudi ». **Tu restes maître de ton chantier et de tes priorités** — il représente le client, il ne dirige pas le travail.
 
-## Accuser LU, puis dire FAIT
+## Accuser LU — et dire ce que tu commences
 
-Dès l'arrivée d'un message, puis **FAIT** avec le résultat. **Il ne doit jamais avoir à demander où c'est rendu.**
+**Dès l'arrivée d'un message, avant tout autre geste.** Et le `LU` **dit ce que tu commences**, pas seulement que tu as vu.
+
+```
+LU — je pars là-dessus : <ce que tu commences, en une ligne>
+FAIT — <le résultat>
+```
+
+**Entre un accusé sec et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort. Le `LU` n'est pas une politesse : c'est ce qui distingue *« il travaille »* de *« il ne m'a pas lu »*, deux états qu'aucune autre information ne sépare.
+
+⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Ça ne l'est jamais, et pendant ce temps il ne sait pas si son message est arrivé. *Mesuré le 2026-08-17 : un « fais le naître » suivi de plusieurs minutes de silence, pendant que le travail avait commencé.*
+
+**Puis `FAIT` avec le résultat.** Il ne doit jamais avoir à demander où c'est rendu.
 
 ## Des faits, pas ton raisonnement
 
@@ -1075,6 +1086,8 @@ Tout rappel épisodique se fait **borné à un sujet** (`group_id`) : sans ce ca
 | Écrire sur la ligne ce qui appartient au registre | Le raisonnement s'y sent comme de la rigueur et s'y lit comme du bruit — ton message est le dixième |
 | Reformuler « J'ai besoin de toi : » | Le bénéfice est le coup d'œil sur une chaîne identique |
 | Omettre la dernière ligne parce qu'on n'a besoin de rien | `rien` s'écrit |
+| Se mettre à travailler sans avoir accusé LU | Il ne sait pas si son message est arrivé — et un silence ressemble trait pour trait à un agent mort |
+| Accuser LU sans dire ce qu'on commence | « LU » seul ne distingue pas « il travaille » de « il a vu et n'a rien fait » |
 | Se taire sur une erreur pour rester bref | La concision déplace l'aveu vers le registre, elle ne l'abroge pas |
 | Ajouter une analyse à une question fermée | Il a demandé une liste : la liste est la réponse |
 | Répondre en liste quand une analyse est demandée | La concision est le défaut, jamais un plafond |
