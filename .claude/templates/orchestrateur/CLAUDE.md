@@ -252,7 +252,7 @@ Jamais différé (règle d'or n°13), et pour **toutes** les stories qu'un merge
 | | Statuts | **Ton geste d'entrée, au moment où tu prends le chantier** |
 |---|---|---|
 | **Demande** | dérivés de ses enfants par des déclencheurs en base. Tu ne les poses jamais à la main, sauf celui-ci | `received → in_analysis` (`demands` action `update_status`) |
-| **Projet** | se pilote librement, mais **rien ne l'avance à ta place** | le sortir de son état initial (`projects` action `transition`) — sans quoi il reste tel quel jusqu'à la fin |
+| **Projet** | se pilote librement, mais **rien ne l'avance à ta place** | l'amener **jusqu'à `in_progress`** (`projects` action `transition`). ⚠️ Le flux est **validé** — `proposed → planned → in_progress → completed` : depuis `proposed` il faut **deux transitions**, et un saut direct est **refusé**. **S'arrêter à `planned` ne compte pas** : le ServiceDesk afficherait encore un chantier non démarré pendant que tu travailles dessus |
 | **Livraison** | **rien n'est automatique** — les cinq états se posent à la main (`deliveries` action `update` ; il n'y a pas d'`update_status`) | la faire passer à `in_progress` (`deliveries` action `update`) |
 
 ⚠️ **Les trois formes ont un geste d'entrée, pas seulement la Demande.** Le texte ne nommait que celui de la Demande — un orchestrateur de Projet ou de Livraison pouvait donc travailler des heures sur un chantier que le ServiceDesk affiche encore comme non commencé, **sans enfreindre aucune règle écrite**. Sur les deux dernières, c'est plus grave que sur la Demande : rien ne rattrape derrière, puisque rien n'y est automatique.
@@ -418,6 +418,8 @@ herdr agent rename <ton-pane> d-20260727-0004
 *À savoir* : `claude-swt` et ses variantes sont des **fonctions du shell interactif**, pas des binaires. Elles marchent dans un pane, mais pas depuis un outil qui lance un shell non interactif — et même là, elles ne relaient pas le modèle.
 
 **Si tu découvres un agent déjà né sur le mauvais modèle**, `herdr pane run "$P" '/model opus'` le corrige — mais c'est un rattrapage, pas la méthode : entre sa naissance et ta découverte, il a déjà travaillé.
+
+⚠️ **Et relis son écran après ce geste** (`herdr pane read "$P"`). Il passe par la **même boîte de saisie qu'un brief**, donc par la même panne : tu verrais un succès sans que le modèle ait changé, et tu repartirais en croyant l'agent corrigé. *C'est le seul endroit de ce texte où ce geste est mis en scène — la consigne générale plus bas ne sert à rien si elle n'est pas ici.*
 
 ## Écrire le brief au ServiceDesk
 
