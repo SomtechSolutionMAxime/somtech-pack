@@ -133,8 +133,15 @@ export async function remettre(pane, texte, { socket } = {}) {
   if (ecranAttendUnChoix(avant.ecran) || (avant.ecran && !etatAvant.pretARecevoir)) {
     throw new RemiseEchouee(
       pane,
+      // ⚠️ ON MONTRE CE QU'ON A VU, TOUJOURS. `refusDEcran` rend `null` quand l'écran est par
+      // ailleurs « prêt » — c'est le cas d'un dialogue INCONNU posé au-dessus d'une boîte
+      // lisible, donc précisément le cas le plus fréquent ici. Se rabattre alors sur une phrase
+      // générique priverait le dirigeant de la seule chose qui l'aide : ce qu'il y a à l'écran.
       `${pane} est devant un écran qui attend un choix, pas un message — ` +
-        `${refusDEcran(etatAvant, { cible: 'la session' }) || 'ce que je vois ressemble à un dialogue'}. ` +
+        `${
+          refusDEcran(etatAvant, { cible: 'la session' }) ||
+          `voici ce que j’ai vu :\n${etatAvant.resume || String(avant.ecran).slice(-400)}`
+        }. ` +
         `Y écrire ne livrerait pas ta parole : ça CONFIRMERAIT l'action affichée (mesuré). Je m'abstiens. ` +
         `Le geste : va voir l'écran (« herdr agent focus ${pane} »), réponds au dialogue toi-même, ` +
         `puis renvoie ton message.`
