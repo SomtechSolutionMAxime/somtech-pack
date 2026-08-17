@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { etatDeLEcran, touchesPourFranchir, ECRANS_CONNUS, ecranAttendUnChoix, ressembleAUnChoix } from '../src/ecran.js';
+import { etatDeLEcran, touchesPourFranchir, ECRANS_CONNUS, ecranAttendUnChoix, ressembleAUnChoix, resumeDeLEcran } from '../src/ecran.js';
 
 const FILET = '─'.repeat(120);
 
@@ -296,4 +296,28 @@ test('UN ÉCRAN VIDE OU ILLISIBLE N’EST PAS « un choix » — il est traité 
   assert.equal(ecranAttendUnChoix(null), false);
   assert.equal(ecranAttendUnChoix(''), false);
   assert.equal(ecranAttendUnChoix('   \n  '), false);
+});
+
+// ── `resumeDeLEcran` — exportée par T-20260817-0008, et elle nettoie désormais elle-même.
+
+test('LE RÉSUMÉ NETTOIE SON ENTRÉE — sinon un refus part truffé de séquences illisibles', () => {
+  // Elle n'était appelée que depuis `etatDeLEcran`, qui lui passait du texte DÉJÀ dégrisé :
+  // un contrat tacite, invisible à la lecture. Le premier appelant du dehors — le refus posé
+  // devant un dialogue, dans `naissance-representant/src/livraison.js` — a rendu un message
+  // truffé de codes ANSI, illisible pour la personne à qui il s'adresse. Mesuré sur un vrai
+  // pane le 2026-08-17, corrigé ici plutôt que chez l'appelant : le suivant aurait retrouvé
+  // le même piège.
+  const ESC = String.fromCharCode(27);
+  const brut = `${ESC}[38;5;7m❯ 1. Yes${ESC}[0m\n${ESC}[38;5;9m  2. No${ESC}[0m`;
+  const vu = resumeDeLEcran(brut);
+  assert.doesNotMatch(vu, new RegExp(ESC), 'aucune séquence ne doit survivre');
+  assert.match(vu, /❯ 1\. Yes/, 'le texte, lui, doit rester entier');
+  assert.match(vu, /2\. No/);
+});
+
+test('LE RÉSUMÉ EST IDEMPOTENT — l’appelant d’origine ne change pas de comportement', () => {
+  // `etatDeLEcran` lui passe déjà du texte dégrisé. Nettoyer deux fois doit rendre la même chose,
+  // sinon ce correctif aurait déplacé le défaut au lieu de le fermer.
+  const propre = '❯ 1. Yes\n  2. No';
+  assert.equal(resumeDeLEcran(propre), resumeDeLEcran(resumeDeLEcran(propre)));
 });
