@@ -25,15 +25,31 @@
 // Cette commande ne corrige pas herdr (règle d'or n°7 : ce dépôt n'est pas le sien). Elle
 // refuse de livrer dans une boîte qu'elle n'a pas trouvée vide, elle relit pour savoir si le
 // brief a été pris, elle répare une fois le cas connu, et elle échoue bruyamment sinon.
+//
+// ET ELLE DÉLIVRE UNE BOÎTE BLOQUÉE — SANS JAMAIS L'ÉCRASER (T-20260816-0114).
+// Une boîte laissée pleine affamait TOUS les émetteurs suivants, et seul le destinataire
+// pouvait la libérer : c'est-à-dire le seul qui ne sait pas qu'elle bloque. Quatre occurrences
+// en quatre rondes, et une fois sur trois l'auteur du texte coincé était déjà MORT.
+// Elle attend donc, relit, et si le texte n'a pas bougé elle le SOUMET pour son auteur — la
+// touche d'envoi seule, sans écrire un caractère. Si le texte a bougé, quelqu'un est devant ce
+// pane : elle n'y touche pas. Si rien ne libère la boîte, le refus reste celui d'avant.
+// Le détail, et ce que le geste coûte, sont en tête de `src/livraison.js`.
 
 import { readFileSync } from 'node:fs';
-import { livrerBrief } from '../src/livraison.js';
+import { livrerBrief, IMMOBILITE_PAR_DEFAUT_MS } from '../src/livraison.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { trouverDestinataire } from '../src/destinataire.js';
 
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
 const ATTENTE_MS = Number(process.env.LIVRAISON_ATTENTE_MS || 20000);
+// ⚠️ LE TEMPS LAISSÉ À UN TEXTE COINCÉ POUR BOUGER (T-20260816-0114) — cinq minutes, et le
+// pourquoi de ce chiffre est en tête de `src/livraison.js`, là où il se décide. En deux mots :
+// une demi-minute couvre « en train de taper », pas « a tapé la moitié puis est parti ».
+//
+// ⚠️ CE RÉGLAGE EST LE PRIX D'UN GESTE IRRÉVERSIBLE — le baisser à zéro désarme la délivrance,
+// le baisser un peu la rend hasardeuse.
+const IMMOBILITE_MS = Number(process.env.LIVRAISON_IMMOBILITE_MS || IMMOBILITE_PAR_DEFAUT_MS);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -85,6 +101,11 @@ async function main() {
     texte,
     socket: ou.socket,
     pairOccupe: !enAttente,
+    // ⚠️ LA DÉLIVRANCE NE VAUT QUE POUR UN AGENT DÉJÀ NÉ. `--en-attente` est la garde du brief
+    // de naissance : la session attend, et sa boîte ne devrait rien porter. Si elle porte
+    // quelque chose, c'est un état qu'on ne sait pas expliquer — on ne pose pas un geste
+    // irréversible dessus.
+    immobiliteMs: enAttente ? 0 : IMMOBILITE_MS,
     appelHerdr,
     lireEcran,
     dormir,
@@ -106,6 +127,10 @@ async function main() {
       caracteres: texte.length,
       statut: resultat.statut,
       repare: resultat.repare,
+      // `delivre` — LA BOÎTE ÉTAIT BLOQUÉE PAR LE TEXTE D'UN AUTRE, et on l'a soumis pour lui
+      // (T-20260816-0114). C'est un fait qui doit remonter : il dit que le destinataire vient de
+      // recevoir DEUX messages, dont un qui attendait peut-être depuis longtemps.
+      delivre: Boolean(resultat.delivre),
       // `attendu` — CE QUE HERDR A RAPPORTÉ DE SON CÔTÉ, jamais la preuve (T-20260815-0007).
       // Son sens dépend du destinataire : sur une session en attente, c'est une transition
       // observée ; sur un pair qui travaille déjà, on ne demande plus cette attente-là, et ce
