@@ -139,6 +139,36 @@ test('LE REFUS DIT CE QU’IL A VU ET CE QU’IL FAUT FAIRE — un arbitrage per
   );
 });
 
+test('DEVANT UN DIALOGUE, LA TOUCHE D’ENVOI N’EST PAS ENVOYÉE — elle y confirmerait une action', async () => {
+  // ⚠️ CE DANGER EST MESURÉ, PAS SUPPOSÉ. Le 2026-08-17, sur le pane où un message fusionné
+  // venait de partir, l'écran portait `Do you want to proceed? ❯ 1. Yes`. La touche d'envoi n'y
+  // soumet pas un texte : elle approuve l'option par défaut — donc la commande qu'un ordre que
+  // personne n'a écrit venait de déclencher.
+  //
+  // La boîte est VIDE avant écriture (sinon le refus d'avant se déclenche et on n'atteint jamais
+  // ce chemin) ; c'est notre propre texte qui y reste coincé, sous un dialogue apparu depuis.
+  const p = poste({
+    statut: 'idle',
+    boite: '',
+    colle: true,
+    horsBoite: 'Do you want to proceed?\n❯ 1. Yes\n  2. No',
+  });
+
+  await assert.rejects(
+    () => remettre('w9:p1', PAROLE_DU_DIRIGEANT),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err.name}`);
+      return true;
+    }
+  );
+
+  const gestes = p.gestes ? p.gestes('w9:p1') : null;
+  assert.ok(
+    !(gestes || []).some((g) => g[1] === 'send-keys'),
+    'aucune touche d’envoi ne doit partir devant un écran de choix'
+  );
+});
+
 test('UNE BOÎTE VIDE NE CHANGE RIEN — on ne casse pas la voie par laquelle le dirigeant parle', async () => {
   const p = poste({ statut: 'idle', boite: '' });
 

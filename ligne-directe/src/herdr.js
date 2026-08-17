@@ -18,6 +18,7 @@ import { join } from 'node:path';
 
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
 import { contenuBoite, laPriseEstConstatee } from './boite.js';
+import { etatDeLEcran, refusDEcran, ressembleAUnChoix } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -106,6 +107,46 @@ export async function remettre(pane, texte, { socket } = {}) {
   // CE QU'ON VOIT AVANT D'ÉCRIRE — sans quoi rien de ce qu'on verra après ne prouvera quoi que
   // ce soit. Un état qui ne pouvait pas être différent n'est pas un témoin (T-20260815-0011).
   const avant = await etatDuPane(pane, socket);
+
+  // ═══ ET ON REFUSE SI LA BOÎTE N'EST PAS VIDE — T-20260817-0006.
+  //
+  // ⚠️ MESURÉ le 2026-08-17 contre le vrai service, la preuve prise dans la TRANSCRIPTION du
+  // destinataire : `agent prompt` n'écrit pas dans une boîte vide, il ABOUTE son texte à ce qui
+  // s'y trouve, sans séparateur, ET SOUMET. Une boîte portant « AAAA…AAAA » a fait recevoir à
+  // l'agent, en un seul tour de parole, « AAAA…AAAABBBB…BBBB ».
+  //
+  // Deux textes que personne n'a écrits ensemble partent donc comme UN SEUL message — sur le
+  // chemin par lequel arrive la parole du dirigeant. Un arbitrage mêlé à autre chose et soumis
+  // est un ordre que personne n'a donné, et il est exécuté.
+  //
+  // ⚠️ IL N'Y A AUCUN RATTRAPAGE APRÈS COUP, et c'est ce qui commande la forme du remède : quand
+  // on relit la boîte plus bas, le mélange est déjà parti. La lecture ci-dessus n'était qu'un
+  // témoin de preuve ; elle devient aussi un GARDE. C'est le seul instant où l'on peut agir.
+  //
+  // ⚠️ ET UN ÉCRAN QU'ON N'A PAS SU LIRE EST UN REFUS. Le commentaire d'avant justifiait le
+  // contraire — « contrairement à la livraison d'un brief, on n'écrit pas par-dessus quoi que ce
+  // soit ici ». Cette prémisse était fausse : on écrit bien par-dessus. Le raisonnement s'inverse
+  // donc avec elle. Ne pas savoir ce qu'il y a dans la boîte ne permet pas d'affirmer qu'elle est
+  // vide — et c'est en écrivant sur cette supposition qu'on fusionne.
+  const dejaLa = contenuBoite(avant.ecran);
+  if (dejaLa === null) {
+    throw new RemiseEchouee(
+      pane,
+      `je n’ai pas su lire l’écran de ${pane}, donc je ne peux pas garantir que sa boîte de saisie ` +
+        `est vide — et y écrire par-dessus collerait les deux textes en un seul message. ` +
+        `Le geste : va voir l’écran (« herdr agent read ${pane} »), puis renvoie ton message.`
+    );
+  }
+  if (dejaLa !== '') {
+    throw new RemiseEchouee(
+      pane,
+      `la boîte de saisie de ${pane} porte déjà un texte que son auteur n’a pas soumis ` +
+        `(« ${dejaLa.slice(0, 60)}… ») — écrire par-dessus ne livrerait pas deux messages, ` +
+        `ça en livrerait UN, les deux textes collés. Le geste : libère la boîte (« herdr agent focus ` +
+        `${pane} », puis soumets ou efface ce qui s’y trouve), et renvoie ton message.`
+    );
+  }
+
   let reponse;
   try {
     reponse = await herdr(['agent', 'prompt', pane, texte], socket);
@@ -134,12 +175,46 @@ export async function remettre(pane, texte, { socket } = {}) {
   // 24 000 caractères n'ont produit aucun collage, alors que le même envoi de 2 400 caractères
   // sur l'autre primitive reste bloqué 2 fois sur 5. Ce n'est pas une frontière, c'est une
   // COURSE. La seule forme qui tienne contre une course est de vérifier à chaque fois.
-  const reste = await boiteDe(pane, socket);
+  const ecranApres = await ecranDe(pane, socket);
+  const reste = contenuBoite(ecranApres) || null;
   if (reste) {
+    // ═══ LA TOUCHE D'ENVOI EST GARDÉE — T-20260817-0006, et le danger est MESURÉ, pas supposé.
+    //
+    // Devant une boîte, la touche d'envoi SOUMET un texte. Devant un dialogue de choix, elle
+    // CONFIRME l'option par défaut — ce n'est plus un message qui part, c'est une ACTION
+    // approuvée à l'insu de tout le monde. Le 2026-08-17, sur le pane où un message fusionné
+    // venait de partir, l'écran portait `Do you want to proceed? ❯ 1. Yes`. Envoyer `Enter`
+    // là-dessus aurait approuvé la commande qu'un ordre inventé venait de déclencher.
+    //
+    // On s'abstient donc devant tout ce qui ressemble à un choix, et devant tout écran non
+    // déclaré prêt — l'inconnu n'est jamais prêt. Le message reste dans la boîte et le refus le
+    // dit : perdre une remise coûte un renvoi, approuver une action ne se reprend pas.
+    //
+    // ⚠️ LA SONDE PORTE SUR L'ÉCRAN ENTIER, PAS SUR LA BOÎTE — et c'est un essai qui l'a corrigé,
+    // pas un raisonnement. Sonder la seule boîte laissait passer le cas mesuré : le dialogue
+    // s'affiche AU-DESSUS d'une boîte parfaitement lisible, qui porte notre propre texte. La
+    // boîte ne ressemblait donc à rien de suspect, `etatDeLEcran` la déclarait prête — un écran
+    // de permission n'est pas parmi les écrans connus — et la touche partait quand même.
+    //
+    // Le prix de ce choix est assumé : une sortie d'agent qui parlerait de confirmation ou
+    // commencerait par « 1. » ferait refuser à tort. On aura perdu une remise — que son refus
+    // nomme, et que le dirigeant peut renvoyer — au lieu d'avoir approuvé une action que
+    // personne ne peut reprendre. Et ce chemin n'est atteint que si le texte est resté coincé,
+    // c'est-à-dire dans un cas déjà anormal.
+    const etat = etatDeLEcran(ecranApres);
+    if (ressembleAUnChoix(ecranApres) || !etat.pretARecevoir) {
+      throw new RemiseEchouee(
+        pane,
+        `le message est resté dans la boîte de saisie de ${pane}, et je ne peux pas l’en sortir : ` +
+          `${refusDEcran(etat, { cible: 'la session' }) || 'ce que je vois ressemble à un choix, pas à un message'}. ` +
+          `La touche d’envoi y confirmerait une action au lieu de soumettre un texte — je m’abstiens. ` +
+          `Le geste : va voir l’écran (« herdr agent focus ${pane} »), puis renvoie ton message.`
+      );
+    }
     // Le cas connu : le texte est bien arrivé, la soumission n'est pas partie. On envoie la
     // touche d'envoi — jamais le texte à nouveau, ce qui le collerait à lui-même.
     await herdr(['agent', 'send-keys', pane, 'Enter'], socket).catch(() => null);
-    const apres = await boiteDe(pane, socket);
+    const apres = contenuBoite(await ecranDe(pane, socket)) || null;
     if (apres) {
       throw new RemiseEchouee(
         pane,
@@ -198,20 +273,19 @@ async function etatDuPane(pane, socket) {
 }
 
 /**
- * Ce que contient la boîte de saisie d'un pane — `''` si vide, `null` si on n'a pas su la lire.
+ * L'écran d'un pane, tel que le terminal le rend — `null` si on n'a pas su le lire.
  *
- * Une boîte illisible ne fait PAS échouer la remise : contrairement à la livraison d'un brief,
- * on n'écrit pas par-dessus quoi que ce soit ici, et le message est déjà parti. Refuser sur un
- * écran qu'on n'a pas reconnu ferait perdre une parole qui a peut-être très bien été reçue —
- * on préfère se taire que crier au loup sur une lecture ratée.
+ * ⚠️ C'EST L'ÉCRAN ENTIER QU'ON REND, PAS SEULEMENT LA BOÎTE, et ce n'est pas un détail : un
+ * dialogue de choix s'affiche PAR-DESSUS un écran qui porte une boîte parfaitement lisible.
+ * Qui ne regarde que la boîte ne voit pas le modal, et envoie sa touche d'envoi dedans.
  */
-async function boiteDe(pane, socket) {
+async function ecranDe(pane, socket) {
   try {
     const { stdout } = await lancer(OUTILS.herdr, ['agent', 'read', pane, '--format', 'ansi'], {
       maxBuffer: 16 * 1024 * 1024,
       ...(socket ? { env: { ...process.env, HERDR_SOCKET_PATH: socket } } : {}),
     });
-    return contenuBoite(stdout) || null;
+    return stdout;
   } catch {
     return null;
   }

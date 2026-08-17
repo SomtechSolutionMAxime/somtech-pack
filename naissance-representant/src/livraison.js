@@ -40,7 +40,7 @@ import { contenuBoite, boiteEstVide, messagesEnFile } from '../../ligne-directe/
 // écran de blocage, et `bin/naitre.js` s'en sert déjà. La revue de fond a relevé que la livraison
 // ne s'en servait PAS : elle regardait la boîte sans jamais regarder ce qui pouvait s'afficher
 // par-dessus. Sur un geste irréversible, c'était la porte-sur-deux dans sa forme la plus chère.
-import { etatDeLEcran } from '../../ligne-directe/src/ecran.js';
+import { etatDeLEcran, ressembleAUnChoix } from '../../ligne-directe/src/ecran.js';
 
 /**
  * Le brief a-t-il été PRIS ? La question n'est pas « l'outil a-t-il dit oui », c'est « la
@@ -356,18 +356,10 @@ export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
  * et les formules d'un dialogue. Un compte rendu qui commencerait par « 1. » et parlerait de
  * confirmation serait refusé à tort — on aura perdu une livraison, pas approuvé une action.
  */
-const MARQUES_DE_CHOIX = [
-  /(?:^|\n)\s*(?:❯\s*)?[1-9]\.\s+\S/,
-  /\b(?:enter|entrée)\b[^\n]{0,20}\b(?:to )?confirm/i,
-  /\besc\b[^\n]{0,20}\b(?:to )?cancel/i,
-  /\(y\/n\)/i,
-  /\bdo you want to\b/i,
-];
-
-export function ressembleAUnChoix(texte) {
-  const t = String(texte ?? '');
-  return MARQUES_DE_CHOIX.some((m) => m.test(t));
-}
+// La sonde elle-même vit désormais dans `ligne-directe/src/ecran.js` (T-20260817-0006) :
+// `remettre()` en a besoin aussi, et `ligne-directe` ne peut pas importer d'ici. Elle est
+// ré-exportée pour que rien de ce qui l'importait de ce module n'ait à changer d'adresse.
+export { ressembleAUnChoix };
 
 /**
  * Tenter de libérer une boîte encombrée — et rendre ce qu'on a constaté.
