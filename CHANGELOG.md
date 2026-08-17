@@ -5,7 +5,17 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-08-17
+## [1.63.0] - 2026-08-17
+
+*Quatre lots sortent avec cette version, et les quatre sont annoncés ici : PR #269 (T-20260817-0006) · PR #268 (T-20260816-0114) · PR #44 (E-20260512-0001) · PR #267 (T-20260816-0016). Vérifié commit par commit sur `v1.62.0..main` — rien d'autre ne sort.*
+
+### Ajouté
+
+- **Les garde-fous contre les biais des LLM entrent enfin dans les prompts** (T-20260512-0002 · 0004 · 0005 · 0006 · 0008 · 0009 · 0010, PR #44) — les sept sub-agents du pack, les six gabarits d'agents autonomes et trois skills de plugins portent désormais les réflexes prescrits par **STD-011 §2.6**, chacun ceux de son persona : anti-sycophantie pour `qa`, anti-ancrage pour `product`, anti-hallucinations et approbation humaine sur opérations destructives pour `devops`, ancrage de juridiction QC/CA pour le skill qui cite des articles de loi dans des rapports client.
+- **Les agents autonomes reçoivent les cinq règles complètes**, et non deux ou trois réflexes : ils n'héritent d'aucun `CLAUDE.md`, donc ce qui n'est pas dans leur prompt n'existe pas pour eux.
+- **Le backlog du pack a été relu en entier, et il dit désormais la vérité** (T-20260816-0016, PR #267) — **169 tickets** non fermés, lus un par un, description **et** commentaires : **33 fermetures écrites avec leur preuve mesurée — une rétractée en revue, 32 tiennent**, **132 confirmés vivants**, 4 déclarés `[non établi]` faute de pouvoir trancher.
+- **L'hypothèse de départ était juste, mais à 19 %** — pas à la majorité. Et le déjà-réglé **n'était pas où on le cherchait** : *aucune* des fermetures ne dormait dans `ready_to_deploy`. Elles dormaient dans `new`, invisibles au statut. Il fallait lire.
+- **Chaque fermeture porte sa preuve** en commentaire de son ticket : une commande et sa sortie, un `chemin:ligne` à `HEAD`, ou un commit avec sa version. Jamais *« ça a probablement été corrigé »* — le raccourci qui a produit ce backlog.
 
 ### Corrigé
 
@@ -13,69 +23,36 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
   La mesure a démenti le ticket en l'aggravant : la fusion part **avant** que le moindre garde-fou existant soit sollicité, donc **aucun rattrapage n'est possible après coup**. `remettre()` regarde désormais la boîte **avant d'écrire** et refuse — un refus qui nomme le pane et **donne le geste**. Un écran qu'on n'a pas su lire est un refus lui aussi : la prémisse inverse (« on n'écrit pas par-dessus quoi que ce soit ici ») était fausse.
 - **On n'écrit plus rien devant un écran qui attend un choix** (T-20260817-0006) — et ce que deux lots portaient en **[non établi]** est maintenant mesuré : devant un vrai dialogue de permission, `agent prompt` d'un **texte ordinaire** a **créé le fichier** que le dialogue proposait. Le texte n'a pas été reçu comme un message, il a servi de **confirmation**. Ce n'est donc pas seulement la touche d'envoi qui est dangereuse là — c'est **l'écriture elle-même**. La garde d'écran est posée avant d'écrire comme avant la touche.
   La sonde exige un **dialogue actif** (curseur de sélection sur une option, ou formule d'invite), et non la simple présence d'une liste numérotée : **mesuré, la sonde large déclarait « en attente de choix » 23 panes réels sur 65 — 35,4 %**, tous joignables. Une garde qui refuse un agent sur trois se fait retirer, et emporte ce qu'elle gardait vraiment. Après resserrement : **0 sur 65**.
-
-### Technique
-
-- **`ressembleAUnChoix` descend de `naissance-representant` vers `ligne-directe/src/ecran.js`** (T-20260817-0006) — `ligne-directe` ne peut pas importer du module voisin (sens de dépendance unique, il s'installe seul) et la recopier aurait fait **une porte de plus**. Un exemplaire, pas deux ; `livraison.js` l'importe de là et la ré-exporte, sans changement d'adresse pour ses consommateurs.
-- **Deux doubles d'essai réparés, tous deux plus permissifs que le service qu'ils doublaient** (T-20260817-0006) — `aide/faux-herdr.js` **remplaçait** là où le vrai service **aboute** : le mode de panne n'existait nulle part, donc **aucun essai ne pouvait rougir** dessus. Il lui manquait aussi un levier de dialogue et un **journal d'appels**, sans lequel une *abstention* ne peut pas se prouver. Et `herdr.test.js` ne rendait **aucun écran** sur `agent read`. Le banc a été réparé **avant** le correctif, et l'essai vu rouge avant d'être vu vert.
-
 - **Une boîte de saisie bloquée n'affame plus tous les émetteurs suivants** (T-20260816-0114, PR #268) — un texte laissé dans la boîte d'un agent sans être soumis mettait en famine **tout le monde** : `livrer.js` refusait d'écrire par-dessus, à raison, et seul le destinataire pouvait libérer sa boîte — c'est-à-dire le seul qui ne sait pas qu'elle bloque. Quatre occurrences en quatre rondes sur la boîte d'un orchestrateur, et **une fois sur trois l'auteur du texte coincé était déjà mort** : personne, jamais, n'allait le soumettre.
   Un texte resté **immobile cinq minutes** est désormais **soumis pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis le message de l'émetteur part, précédé d'un avis qui apprend au destinataire que sa boîte bloquait **et lui montre le texte parti en son nom**.
 - **Le refus d'écraser est intact, et un essai-témoin le prouve** — rien ne s'écrit jamais dans une boîte qui n'a pas été **vue vide**. Boîte encombrée dont la touche d'envoi ne libère rien → zéro écriture. C'est la frontière que `T-20260809-0033` protège : deux textes collés produisent un travail plausible et faux, un texte entier tel que son auteur l'a écrit se constate par celui qui le reçoit.
-
-### Technique
-
-- **La délivrance s'abstient dans cinq cas** : le texte **a bougé** (quelqu'un tape) · la boîte ressemble à un **dialogue de choix** · la session est devant un **écran** que `etatDeLEcran` ne déclare pas prêt · la boîte est **illisible** · c'est un **brief de naissance** (`--en-attente`). `causeObstacle()` nomme les trois causes de refus ; `obstacleAvantLivraison` s'écrit par-dessus elle, verdicts inchangés.
-- **La phrase que le refus affirmait était fausse, et c'est une mesure qui l'a montré.** Il disait « personne d'autre ne peut le faire à sa place ». Mesuré sur une boîte bloquée : une touche d'envoi venue de l'extérieur la vide et le destinataire **prend** le message. Soumettre n'est pas taper à sa place — c'est finir le geste que quelqu'un a commencé, et `livrerBrief` le faisait déjà pour son propre texte.
-
-### À surveiller
-
-- ⚠️ **La revue de fond a rattrapé l'exécutant ET l'orchestrateur** : devant un **dialogue**, la touche d'envoi ne soumet pas un texte, elle **confirme l'option par défaut**. Pire, la garde d'immobilité *aggravait* le danger — quelqu'un qui réfléchit devant une confirmation ne bouge rien, donc l'état le plus dangereux se lisait « sûr à soumettre ». Corrigé par deux gardes ; la forme exacte d'un dialogue de permission Claude Code reste **`[non établi]`** faute d'avoir su la reproduire, d'où une garde **large** dont le sens sûr est de s'abstenir.
-- **Cette livraison ne répare pas les postes.** Ils tournent la version **installée**, pas `main` — le blocage continuera jusqu'à l'installation (`T-20260816-0102`). Une boîte a bloqué une **cinquième** fois en recevant le compte rendu de ce correctif.
-- **Deux restes inscrits** : `T-20260817-0006` — `remettre` (la parole du dirigeant) écrit dans la boîte **sans la regarder d'abord**, et son banc d'essai ne peut pas voir la fusion parce que son double *remplace* là où le vrai service *aboute* ; `T-20260817-0007` — quand la délivrance échoue, seul l'émetteur le sait.
-
-
-## [Non-versionné] - 2026-08-17
-
-### Ajouté
-
-- **Les garde-fous contre les biais des LLM entrent enfin dans les prompts** (T-20260512-0002 · 0004 · 0005 · 0006 · 0008 · 0009 · 0010, PR #44) — les sept sub-agents du pack, les six gabarits d'agents autonomes et trois skills de plugins portent désormais les réflexes prescrits par **STD-011 §2.6**, chacun ceux de son persona : anti-sycophantie pour `qa`, anti-ancrage pour `product`, anti-hallucinations et approbation humaine sur opérations destructives pour `devops`, ancrage de juridiction QC/CA pour le skill qui cite des articles de loi dans des rapports client.
-- **Les agents autonomes reçoivent les cinq règles complètes**, et non deux ou trois réflexes : ils n'héritent d'aucun `CLAUDE.md`, donc ce qui n'est pas dans leur prompt n'existe pas pour eux.
-
-### Technique
-
-- ⚠️ **Cette livraison a attendu 96 jours** — ouverte le 2026-05-12, déclarée prête, jamais fusionnée. Ce n'était pas un brouillon oublié : personne ne l'avait vue. Elle a été retrouvée par le ménage du backlog (T-20260816-0016), qui l'a nommée comme le meilleur rapport effort/résultat du dépôt.
-- **Elle n'avait jamais eu de chaîne** — pas une verte périmée : *aucune*. Elle a été rebasée sur `main` (213 commits de retard, **aucun de ses 16 fichiers touché depuis le 12 mai** — le retard ne concernait donc rien de ce qu'elle modifie), et sa chaîne a tourné pour la première fois : 5/5.
-- **Deux passes de revue avant fusion**, sur un diff que personne n'avait relu. La première a rejeté sur deux références jugées inexistantes ; **les deux ont été réfutées par la mesure** — `AIMS/core-agents/infra-ops/config/` vit dans le dépôt Architecture, et `Agent TrainerBot` est cité nommément dans STD-011. *Conclure d'une absence dans un dépôt pour une référence qui pointe ailleurs* : le motif est noté. Une passe portail refaite et une passe de fond ont ensuite rendu **RIEN VU**, fidélité au standard vérifiée persona par persona.
-
-### À surveiller
-
-- **Deux disjoncteurs coexistent désormais dans `aims/agents/dev-orchestrator/`** : celui qui existait déjà, réel et implémenté (5 échecs → 5 min, câblé dans `hooks.ts`), et celui que ce lot ajoute en texte (3 erreurs → 15 min). Rien ne dit lequel prime — relevé par la revue de fond, à clarifier.
-- **La pause de 15 minutes est recopiée telle quelle dans cinq agents éphémères** dont le délai d'expiration documenté est de 5 minutes. Inerte plutôt que nuisible, mais c'est du collage plutôt que de la rédaction par fichier.
-- **Deux tickets de la série ne sont pas fermés par cette fusion** : `T-20260512-0007` (le persona `chatbot-qa` n'est pas distribué par le pack) et le volet `qa-hybrid`/`qa-utilisateur` de `T-20260512-0003`. Cause commune inscrite en `T-20260817-0002` — *un agent qui vit sur le poste sans être distribué n'a pas de propriétaire*.
-
-
-## [Non-versionné] - 2026-08-17
-
-### Ajouté
-
-- **Le backlog du pack a été relu en entier, et il dit désormais la vérité** (T-20260816-0016, PR #267) — **169 tickets** non fermés, lus un par un, description **et** commentaires : **33 fermés avec leur preuve mesurée**, **132 confirmés vivants**, 4 déclarés `[non établi]` faute de pouvoir trancher.
-- **L'hypothèse de départ était juste, mais à 19 %** — pas à la majorité. Et le déjà-réglé **n'était pas où on le cherchait** : *aucune* des fermetures ne dormait dans `ready_to_deploy`. Elles dormaient dans `new`, invisibles au statut. Il fallait lire.
-- **Chaque fermeture porte sa preuve** en commentaire de son ticket : une commande et sa sortie, un `chemin:ligne` à `HEAD`, ou un commit avec sa version. Jamais *« ça a probablement été corrigé »* — le raccourci qui a produit ce backlog.
-
-### Corrigé
-
 - ⚠️ **Une fermeture a été écrite, puis rétractée** — et c'est la partie qui apprend le plus. `T-20260814-0019` avait été fermé sur *« l'orchestrateur est désormais réveillé par un service du poste »*. **Faux** : `launchctl`, les plists et `rendez-vous.js service etat` le démentent tous les trois, et `naitre.js` ne pose jamais la ronde. **La passe 2 de revue l'a rejeté ; la re-mesure lui a donné raison ; le ticket est rouvert.**
 - **Le motif de l'erreur, nommé** : lire le **mécanisme** (`rendez-vous.js` *sait* poser un service) et conclure au **dispositif**. Savoir poser n'est pas poser. C'est *« une porte sur deux »*, le motif dominant de ce dépôt — commis en fermant un ticket qui le dénonçait, et pendant que le même lot mesurait l'absence deux minutes plus tard sans relier les deux.
 
 ### Technique
 
+- **`ressembleAUnChoix` descend de `naissance-representant` vers `ligne-directe/src/ecran.js`** (T-20260817-0006) — `ligne-directe` ne peut pas importer du module voisin (sens de dépendance unique, il s'installe seul) et la recopier aurait fait **une porte de plus**. Un exemplaire, pas deux ; `livraison.js` l'importe de là et la ré-exporte, sans changement d'adresse pour ses consommateurs.
+- **Deux doubles d'essai réparés, tous deux plus permissifs que le service qu'ils doublaient** (T-20260817-0006) — `aide/faux-herdr.js` **remplaçait** là où le vrai service **aboute** : le mode de panne n'existait nulle part, donc **aucun essai ne pouvait rougir** dessus. Il lui manquait aussi un levier de dialogue et un **journal d'appels**, sans lequel une *abstention* ne peut pas se prouver. Et `herdr.test.js` ne rendait **aucun écran** sur `agent read`. Le banc a été réparé **avant** le correctif, et l'essai vu rouge avant d'être vu vert.
+- **La délivrance s'abstient dans cinq cas** : le texte **a bougé** (quelqu'un tape) · la boîte ressemble à un **dialogue de choix** · la session est devant un **écran** que `etatDeLEcran` ne déclare pas prêt · la boîte est **illisible** · c'est un **brief de naissance** (`--en-attente`). `causeObstacle()` nomme les trois causes de refus ; `obstacleAvantLivraison` s'écrit par-dessus elle, verdicts inchangés.
+- **La phrase que le refus affirmait était fausse, et c'est une mesure qui l'a montré.** Il disait « personne d'autre ne peut le faire à sa place ». Mesuré sur une boîte bloquée : une touche d'envoi venue de l'extérieur la vide et le destinataire **prend** le message. Soumettre n'est pas taper à sa place — c'est finir le geste que quelqu'un a commencé, et `livrerBrief` le faisait déjà pour son propre texte.
+- ⚠️ **Cette livraison a attendu 96 jours** — ouverte le 2026-05-12, déclarée prête, jamais fusionnée. Ce n'était pas un brouillon oublié : personne ne l'avait vue. Elle a été retrouvée par le ménage du backlog (T-20260816-0016), qui l'a nommée comme le meilleur rapport effort/résultat du dépôt.
+- **Elle n'avait jamais eu de chaîne** — pas une verte périmée : *aucune*. Elle a été rebasée sur `main` (213 commits de retard, **aucun de ses 16 fichiers touché depuis le 12 mai** — le retard ne concernait donc rien de ce qu'elle modifie), et sa chaîne a tourné pour la première fois : 5/5.
+- **Deux passes de revue avant fusion**, sur un diff que personne n'avait relu. La première a rejeté sur deux références jugées inexistantes ; **les deux ont été réfutées par la mesure** — `AIMS/core-agents/infra-ops/config/` vit dans le dépôt Architecture, et `Agent TrainerBot` est cité nommément dans STD-011. *Conclure d'une absence dans un dépôt pour une référence qui pointe ailleurs* : le motif est noté. Une passe portail refaite et une passe de fond ont ensuite rendu **RIEN VU**, fidélité au standard vérifiée persona par persona.
 - **Deux passes de revue**, verdicts montrés et non conclus : **portail RIEN VU** (arithmétique recomptée, demandes de fusion vérifiées, cinq fermetures échantillonnées, arbre contrôlé) · **fond REJET** (neuf fermetures re-mesurées, huit tiennent).
 - **Ce qui est corrigé au dépôt mais absent du poste est marqué, pas fermé** : `session.js`, `versement.js` et `vigie.js` — trois modules livrés entre v1.55 et v1.62 — ne sont pas installés. Inscrit sur `T-20260816-0102`, qui reste ouvert.
 - **Quatre affirmations corrigées**, dont deux venaient du brief du lot lui-même : quatre demandes de fusion en brouillon et non cinq · l'état d'installation **se mesure** par le contenu, même quand la version reste illisible.
 - **Deux demandes de fusion prêtes dormaient** : `#44` depuis **96 jours** (elle porte neuf tickets `proposed`) et `#148` avec 115 commits de retard. Arbitrées et inscrites ticket par ticket.
 - **Dix groupes de doublons candidats** signalés sur titres ; deux prouvés et traités, les autres laissés à l'arbitrage — un doublon se prouve sur les descriptions, jamais sur les titres.
 - Livrables : `docs/menage-backlog/2026-08-16-perimetre.md` et `docs/menage-backlog/2026-08-16-verdicts.md`.
+
+### À surveiller
+
+- ⚠️ **La revue de fond a rattrapé l'exécutant ET l'orchestrateur** : devant un **dialogue**, la touche d'envoi ne soumet pas un texte, elle **confirme l'option par défaut**. Pire, la garde d'immobilité *aggravait* le danger — quelqu'un qui réfléchit devant une confirmation ne bouge rien, donc l'état le plus dangereux se lisait « sûr à soumettre ». Corrigé par deux gardes ; la forme exacte d'un dialogue de permission Claude Code reste **`[non établi]`** faute d'avoir su la reproduire, d'où une garde **large** dont le sens sûr est de s'abstenir.
+- **Cette livraison ne répare pas les postes.** Ils tournent la version **installée**, pas `main` — le blocage continuera jusqu'à l'installation (`T-20260816-0102`). Une boîte a bloqué une **cinquième** fois en recevant le compte rendu de ce correctif.
+- **Deux restes inscrits** : `T-20260817-0006` — `remettre` (la parole du dirigeant) écrit dans la boîte **sans la regarder d'abord**, et son banc d'essai ne peut pas voir la fusion parce que son double *remplace* là où le vrai service *aboute* ; `T-20260817-0007` — quand la délivrance échoue, seul l'émetteur le sait.
+- **Deux disjoncteurs coexistent désormais dans `aims/agents/dev-orchestrator/`** : celui qui existait déjà, réel et implémenté (5 échecs → 5 min, câblé dans `hooks.ts`), et celui que ce lot ajoute en texte (3 erreurs → 15 min). Rien ne dit lequel prime — relevé par la revue de fond, à clarifier.
+- **La pause de 15 minutes est recopiée telle quelle dans cinq agents éphémères** dont le délai d'expiration documenté est de 5 minutes. Inerte plutôt que nuisible, mais c'est du collage plutôt que de la rédaction par fichier.
+- **Deux tickets de la série ne sont pas fermés par cette fusion** : `T-20260512-0007` (le persona `chatbot-qa` n'est pas distribué par le pack) et le volet `qa-hybrid`/`qa-utilisateur` de `T-20260512-0003`. Cause commune inscrite en `T-20260817-0002` — *un agent qui vit sur le poste sans être distribué n'a pas de propriétaire*.
 
 
 ## [1.62.0] - 2026-08-16
