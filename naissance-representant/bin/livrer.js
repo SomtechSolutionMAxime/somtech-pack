@@ -25,6 +25,15 @@
 // Cette commande ne corrige pas herdr (règle d'or n°7 : ce dépôt n'est pas le sien). Elle
 // refuse de livrer dans une boîte qu'elle n'a pas trouvée vide, elle relit pour savoir si le
 // brief a été pris, elle répare une fois le cas connu, et elle échoue bruyamment sinon.
+//
+// ET ELLE DÉLIVRE UNE BOÎTE BLOQUÉE — SANS JAMAIS L'ÉCRASER (T-20260816-0114).
+// Une boîte laissée pleine affamait TOUS les émetteurs suivants, et seul le destinataire
+// pouvait la libérer : c'est-à-dire le seul qui ne sait pas qu'elle bloque. Quatre occurrences
+// en quatre rondes, et une fois sur trois l'auteur du texte coincé était déjà MORT.
+// Elle attend donc, relit, et si le texte n'a pas bougé elle le SOUMET pour son auteur — la
+// touche d'envoi seule, sans écrire un caractère. Si le texte a bougé, quelqu'un est devant ce
+// pane : elle n'y touche pas. Si rien ne libère la boîte, le refus reste celui d'avant.
+// Le détail, et ce que le geste coûte, sont en tête de `src/livraison.js`.
 
 import { readFileSync } from 'node:fs';
 import { livrerBrief } from '../src/livraison.js';
