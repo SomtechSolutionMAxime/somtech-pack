@@ -5,6 +5,28 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-17
+
+*Un seul lot : PR #275 (T-20260817-0029), plus la correction d'en-tête que l'orchestrateur `j-20260814-0002` a arbitrée en cours de route (T-20260817-0026, qui reste ouvert pour sa classe). **Aucun tag** — arbitrage du même orchestrateur.*
+
+### Modifié
+
+- **Les deux lieux d'agent que ce dépôt porte reprennent le métier du pack `v1.64.0`** (T-20260817-0029, PR #275) — l'orchestrateur du jalon courant exerçait un métier antérieur aux trois règles de base sorties avec cette version : elles étaient publiées et il ne les avait pas. Le représentant traînait la même dérive. Convergence par les commandes du pack, l'orchestrateur d'abord puisque c'est lui qui arbitre le chantier, et la preuve est une **comparaison** : les six fichiers que le pack distribue à ces lieux sont désormais identiques byte à byte à leur gabarit au tag, `diff` à l'appui, sans exception.
+- **`CONTEXTE.md` n'a pas été touché par la convergence, et c'est mesuré des deux côtés** — empreintes identiques avant et après dans les deux lieux, **et** aucun `CONTEXTE.md` dans le diff face à `main`. Deux mesures indépendantes de la même garantie (RA-REL-014), parce qu'une seule aurait été l'empreinte fournie par l'auteur du lot.
+
+### Corrigé
+
+- **La ronde de vigilance reconnaît enfin le lieu de l'orchestrateur `j-20260814-0002`** (T-20260817-0026, PR #275) — son `CONTEXTE.md` ouvrait sur `# Contexte — j-20260814-0002` là où `ROLES.orchestrateur.entetes` exige `# Ce qui est propre à ce dépôt`, et `roleDuLieu` rendait `null` **en silence** : la vigilance installée la veille ne réveillait donc jamais l'agent qu'elle existe pour servir. Une seule ligne change, le code du chantier descend en exergue, et rien de ce que le fichier porte n'est touché — à qui il répond, le gestionnaire du projet, la portée. Mesuré par la fonction qui décide : `null` → `"orchestrateur"`.
+- **Ce fichier appartient à l'orchestrateur, pas au pack** : la correction a été **demandée puis arbitrée par lui**, jamais posée d'office. *« La ligne que tu changes est un en-tête, elle ne touche rien de ce que ce fichier porte vraiment. Et le coût de ne pas le faire est concret : la vigilance qu'on vient d'installer ne me réveille jamais. Un dispositif qu'on pose et qui ne voit pas son premier utilisateur n'a pas été posé. »*
+
+### Technique
+
+- **Deux régimes de droits changent dans les deux lieux, et il faut le savoir avant de compter sur eux.** `permissions.allow` cède la place à `somtech.droitsAccordes`, une clé que Claude Code **ignore** par dessein (un bloc `allow` dans un lieu déclenchait toujours l'écran de confiance renforcé) : seul `approbation.js`, via `naitre.js`, la rend effective dans `~/.claude.json`. Mesuré sur le poste — `allowedTools = 0` au chemin canonique de l'orchestrateur, aucune entrée pour le représentant : les **20** droits déclarés de l'un et les **9** de l'autre sont **inertes jusqu'au prochain `naitre`**. Le plancher tient, lui : `permissions.deny` reste natif, 5 règles et 17 règles.
+- **Dans le même mouvement, le garde `PreToolUse` d'ouverture de ligne quitte le `settings.json` du représentant** — et l'attribution compte : le gabarit ne l'a **jamais** porté, à aucun commit (`git log --all -S PreToolUse -- .claude/templates/` ne rend rien). Il avait été écrit **à la main dans le lieu à sa pose**, et la convergence l'efface pour la raison même qui la définit. `naissance.js` le réinjecte à chaque `naitre`, idempotent ; le lieu versionné n'en porte pas entre deux naissances.
+- **Corollaire d'exploitation, mesuré et remonté** : « mets à jour ton lieu puis redémarre » ne suffit pas. Redémarrer recharge le métier ; **seul `naitre` rend les droits effectifs et repose le garde**. La consigne avait été donnée à quatre agents le matin même ; elle a été corrigée sur cette mesure.
+- **Ceci ferme le cas d'un lieu, pas la classe.** Un lieu posé avant le gabarit actuel rejouera le même défaut en silence. `T-20260817-0026` **reste ouvert** pour la piste qu'il recommande : que la ronde **nomme** le lieu qu'elle n'a pas reconnu, au lieu de rendre `null` sans le dire. Et le correctif n'atteint pas encore l'orchestrateur **vivant** — la ronde lit la copie principale du dépôt, qui porte encore l'ancien en-tête sur une autre branche.
+- **Deux passes de vérification indépendantes**, sous-agent frais, lecture seule sur le dépôt, mutations d'épreuve sur copie hors dépôt. La première a rendu **un REJET** sur sept affirmations : le message de commit attribuait à tort le départ du garde au gabarit. Revérifié par l'auteur avant d'être accepté, puis corrigé à la source — contenu des fichiers inchangé. La seconde : cinq affirmations, aucun rejet, dont la concordance de l'en-tête vérifiée en **hexdump** plutôt qu'à l'œil, et les 11 fixtures de test qui référencent `CONTEXTE.md` confrontées à l'ancien en-tête (58/58 vertes).
+
 ## [1.64.0] - 2026-08-17
 
 *Trois lots sortent avec cette version, et les trois sont annoncés ici : PR #273 (T-20260817-0016) · PR #272 (T-20260817-0008, l'entrée de journal du lot ci-dessous) · PR #271 (T-20260817-0008). Vérifié commit par commit sur `v1.63.0..main` — rien d'autre ne sort. **PR #273 n'avait aucune entrée**, et c'est le lot qui compte le plus de la version : elle a été écrite avant publication, pas après.*
