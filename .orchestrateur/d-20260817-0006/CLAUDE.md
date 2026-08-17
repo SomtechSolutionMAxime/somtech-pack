@@ -881,7 +881,31 @@ Ce qu'il porte : où en est le chantier · quels agents sont ouverts et sur quoi
 
 **Il est rédigé pour un lecteur qui n'a aucun souvenir — c'est ton seul lecteur réel.**
 
-Il vit au **registre du chantier** (le fil de la Demande ou de la Livraison).
+**Où il vit, selon la forme de ton chantier** — et il n'y a pas de cas sans réponse :
+
+| Ton chantier | Où va ton état de reprise |
+|---|---|
+| **Demande** | le fil de la Demande (`demands` action `comment`) |
+| **Livraison** | le fil de la Livraison (`delivery_comments` action `create`) |
+| **Projet** | ⚠️ **il n'a pas de fil.** Ton état de reprise va dans son **journal de décisions** (`project_decisions`) — le seul support durable et daté qu'un Projet possède |
+
+⚠️ **Ne cherche pas un fil de commentaires sur un Projet ni sur un epic : ils n'en ont pas**, l'action n'existe pas. C'est le trou par lequel un état de reprise se perd — l'orchestrateur cherche, ne trouve pas, et improvise un endroit que personne ne relira.
+
+## Ce que tu récoltes, et où chaque chose va
+
+Ta ronde ramasse des choses de natures différentes, et **elles ne vont pas au même endroit** :
+
+| Ce que tu récoltes | Où ça va |
+|---|---|
+| Une **décision** que tu as prise, avec son motif | `project_decisions` s'il y a un projet, sinon le fil de la Demande |
+| Un **travail que tu t'es donné** | son propre ticket, **ouvert avant de le faire** |
+| Un **défaut croisé** hors du lot courant | son propre ticket — jamais greffé sur celui d'un voisin |
+| Un **arbitrage que le CTO t'a rendu sur ta ligne** | une **Demande** ou un **Projet** — son grain. Ta ligne ne fait pas foi |
+| Ce qu'un **chef d'équipe t'a rapporté** et que tu n'as pas reporté | le fil du chantier, ou la description de l'epic |
+| Ton **état de reprise** | le tableau ci-dessus |
+| L'**heure de ton tour** et ta **marge de contexte** | le fil du chantier, deux chiffres, pas un récit |
+
+⚠️ **`project_decisions` a un piège de sérialisation** : il **avale les paramètres qui SUIVENT le champ long**. Mets `rationale` et `alternatives_considered` **avant** `decision` dans l'appel, et **relis la ligne rendue** — si `rationale` est `null`, le motif est perdu, et un journal append-only ne se corrige pas, il se supersède.
 
 ## Reprendre par la lecture, jamais par la mémoire
 
