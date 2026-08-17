@@ -163,7 +163,7 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS = 69;
+export const NB_ANTI_PATTERNS = 77;
 // ⚠️ CE NOMBRE A CHANGÉ DE NATURE LE 2026-08-17 (lot 2), ET LE MOTIF EST ICI.
 //
 // Il s'appelait `NB_ANTI_PATTERNS_AJOUTES` et valait 29 : le nombre de lignes que le gabarit
@@ -179,28 +179,46 @@ export const NB_ANTI_PATTERNS = 69;
 // ⚠️ Si tu ajoutes un anti-pattern, tu édites ce nombre, et ça se voit en revue. C'est tout
 // l'intérêt : une idée de plus ne se glisse pas dans le texte en silence.
 //
-// ⚠️⚠️ ET CE QUE CE NOMBRE NE RATTRAPE PAS — écrit ici pour qu'il ne blanchisse rien.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️⚠️ POURQUOI CE NOMBRE A ÉTÉ POSÉ DEUX FOIS, ET CE QUE ÇA A COÛTÉ ET RAPPORTÉ
 //
-// Une relecture indépendante l'a relevé contre ce chiffre même : poser `69` sur la table
-// TELLE QU'ELLE EST rend invisibles les retraits déjà faits. La garde est vraie **à partir
-// de maintenant** ; elle ne l'a pas été pour la réécriture qui a fixé le nombre. La table
-// est passée de 64 à 69 lignes, et ce n'est pas +5 : c'est un solde. Mesuré ligne à ligne
-// entre `878f9d5` (avant la reconstruction) et `f0fa26b`, **six anti-patterns ont disparu
-// de la table SANS laisser une seule trace ailleurs dans le gabarit** :
+// **69, le 2026-08-17 vers 16 h 50.** Une relecture indépendante l'a relevé contre ce chiffre
+// même : poser un compte sur la table TELLE QU'ELLE EST rend invisibles les retraits déjà
+// faits. La garde devient vraie à partir de sa pose, et blanchit tout ce qui la précède. Le
+// nombre a donc été posé **avec l'inventaire de ce qu'il ne rattrapait pas, écrit ici** —
+// c'est-à-dire à l'endroit du nombre, pas dans un message de commit.
+//
+// **Moins d'une heure plus tard, cet inventaire a servi** : les lignes nommées ici ont été
+// rendues au gabarit (`8bc0a23`), le nombre est passé à 77, et la garde a rougi pour le dire.
+// C'est la seule raison pour laquelle un chiffre posé sur un état dégradé n'a rien enterré.
+//
+// ⚠️ **ET L'INVENTAIRE ÉTAIT FAUX D'UNE LIGNE — la leçon vaut plus que l'erreur.**
+//
+// Il annonçait SIX anti-patterns disparus sans trace. Il y en avait **cinq** :
 //
 //   • « Accrocher la dette du review à l'epic livré »
 //   • « Déclarer une attente causée par une autre application »
 //   • « Faire travailler deux de tes chefs d'équipe en même temps »
 //   • « Inventer un nom d'agent “plus parlant” »
-//   • « Mettre deux agents dans le même worktree »
 //   • « Attendre passivement l'état d'un agent »
 //
-// Et deux autres ont perdu leur ligne en gardant la règle en prose — la faute n'est donc
-// plus nommée comme faute : les noms d'agents sensibles à la casse (règle en l. 389) et
-// « oui, et ne redemande plus » (règle en l. 521).
+// La sixième — « Mettre deux agents dans le même **worktree** » — **n'avait jamais disparu** :
+// elle vivait sous « Mettre deux agents dans le même **espace de travail** ». La mesure avait
+// cherché le MOT `worktree`, pas la FONCTION. **C'est exactement le défaut que ce fichier tout
+// entier existe pour attraper, commis en le mesurant.** Corrigé par l'auteur du texte, qui a
+// mesuré au lieu de suivre le compte qu'on lui donnait.
 //
-// Le gabarit est GELÉ pour ce lot : ces huit-là se remontent, elles ne se réparent pas ici.
-// Elles sont au ServiceDesk plutôt que dans ce commentaire seul.
+// S'y ajoutaient deux lignes qui avaient perdu leur place en gardant leur règle en prose — la
+// faute n'était plus nommée comme faute : les noms d'agents sensibles à la casse, et
+// « oui, et ne redemande plus ». Les sept sont revenues, plus le miroir de la clause du
+// clavier rendue à la ronde : 69 + 8 = 77.
+//
+// **77 est posé sur une table vérifiée ligne à ligne contre `878f9d5`** — l'état d'avant la
+// reconstruction. Chaque anti-pattern d'alors y est présent : verbatim, reformulé, ou fusionné
+// dans un autre (« Faire naître un agent herdr sur Haiku » vit dans le coût de « Faire naître
+// un agent sans déclarer son modèle »). **Cette fois le chiffre ne blanchit rien**, et la
+// méthode de vérification est écrite pour qu'on puisse la refaire.
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // 11 → 23 le 2026-08-16 (T-20260816-0099, T-20260816-0097, T-20260816-0018). Les douze qui
 // s'ajoutent sont le miroir des garanties de cette version, une par garantie et pas une de plus :
 //
@@ -3029,9 +3047,25 @@ export const CONTROLES = [
       // Ré-ancrer, c'est déplacer le témoin. La perte est actée (`T-20260817-0088`, P2), et
       // cette garde reste ROUGE : elle exige la PRESCRIPTION, pas son souvenir. Elle reverdira
       // d'elle-même quand le texte la reprendra.
-      const prescriptions = s.corpsEtendu
+      // ⚠️ ET LA PRESCRIPTION EST REVENUE — cherchée LÀ OÙ ELLE SERT, pas là où elle était.
+      //
+      // Le texte a été réparé (`8bc0a23`, sur `T-20260817-0088` P2) et la maxime est remise
+      // sous « 1 — Tes agents et le travail qui tourne », en sous-section — **pas** sous
+      // « 4 — Si rien n'avance ». C'est le bon lieu, et le texte le dit lui-même : *« C'est la
+      // seconde moitié de la clause ci-dessus »* — celle qui interdit de prendre le clavier.
+      // Les deux moitiés vivent désormais ensemble, à la seconde où l'orchestrateur regarde
+      // l'état de ses agents. La sonde suit **le geste**, pas l'ancien emplacement.
+      //
+      // ⚠️ Ce n'est PAS un ré-ancrage sur un survivant : la perte a été actée d'abord, la garde
+      // est restée rouge, et c'est le TEXTE qui a bougé. C'est l'ordre exigé.
+      const veille = sectionDe(metier, /^1 — Tes agents et le travail qui tourne$/, 'sur ce que la ronde regarde');
+      // ⚠️ LA SONDE PORTE SUR LA MOITIÉ QUI OBLIGE, pas sur l'image qui l'illustre. Calée
+      // d'abord sur « est un journal », elle laissait passer « Une ronde rend un état, et ça
+      // suffit. Sinon elle est un journal » — la métaphore survivait, la prescription était
+      // retournée, et la mutation SURVIVAIT. Ce qui contraint, c'est « ne rend pas un état ».
+      const prescriptions = `${veille.corpsEtendu}\n${s.corpsEtendu}`
         .split('\n')
-        .filter((l) => /ne rend pas un état|est un journal|sans en tirer de conséquence/i.test(l));
+        .filter((l) => /ne rend pas un état|sans en tirer de conséquence/i.test(l));
       assert.ok(
         prescriptions.length >= 1,
         'la ronde ne PRESCRIT plus de tirer une conséquence de ce qu’elle voit. Ce qui reste est '
@@ -3043,9 +3077,9 @@ export const CONTROLES = [
       );
       for (const p of prescriptions) {
         exigePolarite(
-          p, /ne rend pas un état|est un journal|sans en tirer de conséquence/i,
+          p, /ne rend pas un état|sans en tirer de conséquence/i,
           'une ronde ne rend pas un état, elle en tire une conséquence — sinon c’est un journal',
-          { inverse: /se contente de rendre l'état|il suffit de constater|un état rendu suffit|rendre l'état suffit/i },
+          { inverse: /se contente de rendre l'état|il suffit de constater|un état rendu suffit|rendre l'état suffit|rend un état,? et ça suffit/i },
         );
       }
 
@@ -3725,12 +3759,15 @@ export const MUTATIONS = [
     quoi: 'la ronde devient une tournée de dépannage — la dérive que le dirigeant a reprise sur ce chantier même',
     cible: 'ronde-n-execute-pas',
     fichier: 'metier',
-    // RÉ-ANCRÉE : la phrase de la ronde ne cite plus le clavier (l'interdit est remonté à
-    // « Ce que tu ne fais pas de tes mains », muté juste après). Ce qui se retourne ici est ce
-    // que la ronde AUTORISE — la moitié qui vit encore dans la rubrique.
+    // ⚠️ RENDUE À LA CLAUSE (lot 2, après la réparation du texte). Le commentaire qui vivait
+    // ici disait que « l'interdit est remonté » — c'était faux : il n'a jamais bougé, et c'est
+    // la copie de la ronde qui avait été supprimée (perte P1, `T-20260817-0088`). La clause a
+    // été rendue au gabarit (`8bc0a23:720`), dans la ronde, distincte de celle de la veille
+    // (l. 135). La mutation retourne donc la clause LÀ OÙ ELLE SERT, au lieu de se rabattre
+    // sur ce que la rubrique autorisait encore.
     muter: (t) => t.replace(
-      '**Ce que tu fais de ce que tu trouves ne change pas** : un agent bloqué se **relance par son brief ou par sa naissance**',
-      "**Ce que tu fais de ce que tu trouves t'appartient** : un agent bloqué, tu prends le clavier à sa place quand c'est plus rapide",
+      '**Ce que tu fais de ce que tu trouves ne change pas : tu ne prends pas le clavier à sa place**',
+      "**Ce que tu fais de ce que tu trouves t'appartient : tu prends le clavier à sa place quand c'est plus rapide**",
     ),
   },
   {
@@ -4965,12 +5002,15 @@ export const MUTATIONS = [
     quoi: 'la ronde redevient un journal — elle rend des états et n’en tire plus de conséquence',
     cible: 'la-ronde-tire-une-consequence-de-ce-qu-elle-voit',
     fichier: 'metier',
-    // RÉ-ANCRÉE : la maxime en tête de section a disparu à la réorganisation ; ce qui porte
-    // désormais la garantie est le défaut mesuré, où la ronde avait l'état juste et n'en a rien
-    // conclu. On retourne donc ce verdict-là — l'état rendu devient une fin en soi.
+    // ⚠️ RENDUE À LA MAXIME (lot 2, après la réparation du texte). Elle avait été ré-ancrée
+    // sur le RÉCIT du défaut mesuré (« et elle n'en a rien conclu ») parce que la maxime avait
+    // disparu du texte — mais retourner un récit ne prouve rien : un fait daté n'oblige pas, et
+    // sa négation n'est pas la négation de la règle. La maxime a été rendue au gabarit
+    // (`8bc0a23`), sous la rubrique où la ronde regarde ses agents. La mutation retourne donc
+    // à nouveau la PRESCRIPTION elle-même, qui est ce que la garde garde.
     muter: (t) => t.replace(
-      "**et elle n'en a rien conclu**",
-      "**et un état rendu suffit**",
+      '**Une ronde ne rend pas un état : elle en tire une conséquence.',
+      '**Une ronde rend un état, et ça suffit.',
     ),
   },
   {
