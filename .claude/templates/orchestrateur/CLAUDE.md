@@ -249,11 +249,13 @@ Jamais différé (règle d'or n°13), et pour **toutes** les stories qu'un merge
 
 **Ton tout premier geste sur une Demande : `received → in_analysis`**, au moment où tu prends le chantier (`demands` action `update_status`, avec son motif). Ce n'est pas de la tenue de ServiceDesk, c'est une **mécanique** : les déclencheurs qui feront avancer la demande toute seule **partent de `in_analysis`**. Une demande est restée `received` deux jours pendant que ses lots étaient en production.
 
-| | Statuts |
-|---|---|
-| **Demande** | dérivés de ses enfants par des déclencheurs en base. Tu ne les poses jamais à la main, sauf `received → in_analysis` |
-| **Projet** | se pilote librement (`projects` action `transition`), mais rien ne l'avance à ta place |
-| **Livraison** | **rien n'est automatique** — les cinq états se posent à la main (`deliveries` action `update` ; il n'y a pas d'`update_status`) |
+| | Statuts | **Ton geste d'entrée, au moment où tu prends le chantier** |
+|---|---|---|
+| **Demande** | dérivés de ses enfants par des déclencheurs en base. Tu ne les poses jamais à la main, sauf celui-ci | `received → in_analysis` (`demands` action `update_status`) |
+| **Projet** | se pilote librement, mais **rien ne l'avance à ta place** | le sortir de son état initial (`projects` action `transition`) — sans quoi il reste tel quel jusqu'à la fin |
+| **Livraison** | **rien n'est automatique** — les cinq états se posent à la main (`deliveries` action `update` ; il n'y a pas d'`update_status`) | la faire passer à `in_progress` (`deliveries` action `update`) |
+
+⚠️ **Les trois formes ont un geste d'entrée, pas seulement la Demande.** Le texte ne nommait que celui de la Demande — un orchestrateur de Projet ou de Livraison pouvait donc travailler des heures sur un chantier que le ServiceDesk affiche encore comme non commencé, **sans enfreindre aucune règle écrite**. Sur les deux dernières, c'est plus grave que sur la Demande : rien ne rattrape derrière, puisque rien n'y est automatique.
 
 ## Inscrire vient avant tenir à jour
 
@@ -498,6 +500,10 @@ herdr pane run "$P" '/goal <condition de fin, en une phrase qui décrit un état
 
 Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui doit toujours y figurer : **le livrable**, **la preuve** (les tests qui l'attestent), **l'état du ServiceDesk**, et **le compte rendu au coordonnateur**. Les trois derniers sont précisément ce qu'un agent saute quand rien ne l'en empêche.
 
+> ⚠️ **`/goal` et `/model` passent par la MÊME boîte de saisie qu'un brief — donc par la même panne.** `herdr pane run` rend un succès que la soumission parte ou non, et il **colle** son texte à ce qui traînait déjà dans la boîte. Un but jamais pris est un agent qui s'arrêtera au premier palier ; un `/model` jamais pris est un agent resté sur le mauvais modèle. **Ni l'un ni l'autre ne se voit** — l'agent travaille, simplement pas comme tu crois.
+>
+> **Relis son écran après chaque `pane run`** (`herdr pane read "$P"`) et vérifie que le geste a été **pris**, pas seulement envoyé. Le texte exige cette preuve pour `livrer.js` ; **il n'y a aucune raison qu'elle s'arrête là.**
+
 ## Poser la veille de déblocage
 
 Un agent herdr s'arrête sur les demandes de permission de son environnement. Sans rien, il attend qu'un humain passe ; avec toi qui le débloques, **tu deviens sa boucle d'événements**.
@@ -555,9 +561,9 @@ herdr agent wait "$P" --until done --until blocked --timeout 1800000   # en arri
 # 1. consigner l'état final AVANT disparition — la porte de sortie de la filiation
 #    complète la description de l'epic : PR #, branche, état, verdict
 
-# 2. vérifier que son travail est bien parti
+# 2. vérifier que son travail est bien parti — ⚠️ PAS avec @{u}, voir juste en dessous
 git -C ~/worktrees/<repo>/<timestamp> status --porcelain
-git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}.. 2>/dev/null
+git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD
 
 # 3. fermer SON pane, pas son tab
 herdr pane close "$P"
@@ -567,6 +573,14 @@ git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>
 git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
+
+> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.** C'est le défaut le plus coûteux de cette page : il **détruit du travail**.
+>
+> Une branche-socle `wt/<timestamp>` est créée par `git worktree add -b wt/$TS origin/main` — **elle n'a pas d'upstream**, et elle n'en aura jamais. `git log @{u}..` échoue donc *toujours*, et un `2>/dev/null` transforme cet échec en **sortie vide**. Une sortie vide se lit « tout est poussé ». **Tu détruis alors l'espace de travail avec les commits qu'il portait**, et rien ne t'aura prévenu — l'erreur qui aurait dû t'arrêter a été avalée par la redirection.
+>
+> `origin/<branche-cible>..HEAD` compare à ce qui existe vraiment, et **échoue bruyamment** si la référence est fausse. Un échec qu'on voit vaut infiniment mieux qu'un vide qu'on croit.
+>
+> *Deux orchestrateurs ont exécuté la version fautive aujourd'hui sans rien perdre — **par vigilance, pas par conception**. Le geste ne les protégeait pas.*
 
 ⚠️ **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, **dont potentiellement toi**. `herdr tab close` les emporte tous, sans confirmation. `herdr agent list` donne le `tab_id` de chacun.
 
