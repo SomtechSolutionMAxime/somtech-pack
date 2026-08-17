@@ -70,6 +70,50 @@ test('référence : sur le gabarit intact, aucun contrôle ne rougit', () => {
   );
 });
 
+test('le décompte des mutations dit ce qu’il NE prouve pas — celles que porte une cible déjà rouge', () => {
+  // ⚠️⚠️ CE TEST EXISTE PARCE QU'UNE PASSE DE REVUE A REJETÉ CE LOT, ET QU'ELLE AVAIT
+  // À MOITIÉ RAISON. Elle a conclu que « 0 mutation survivante » était INVÉRIFIABLE tant que
+  // le test de référence est rouge, et que le harnais était « complètement bloqué ».
+  //
+  // **Le harnais n'est pas bloqué** : chaque mutation s'exécute pour son compte, et celles
+  // dont la cible est VERTE sur le gabarit intact prouvent exactement ce qu'elles prétendent —
+  // le texte a été retourné, et c'est LEUR contrôle qui l'a vu.
+  //
+  // **Mais elle visait juste dessous, et ce test est la réponse.** Une mutation dont la cible
+  // est DÉJÀ rouge fait passer son test sans rien établir : `rouges.some(r => r.id === cible)`
+  // est vrai avant même qu'elle morde. Elle est verte pour une raison qui ne la concerne pas.
+  //
+  // ⚠️ **« Aucune mutation survivante » ne couvre donc que ce qui était gardé.** Le chiffre
+  // sans son dénominateur se lit comme une preuve complète — c'est le même faux témoin que la
+  // mutation inopérante, un cran plus haut. Ce test le rend IMPOSSIBLE à taire : il n'échoue
+  // pas (ces mutations ne sont pas fautives), il **compte et nomme**. Le décompte se lit donc
+  // toujours avec sa part non prouvée, et cette part **retombe à zéro d'elle-même** dès que le
+  // texte rend aux gardes ce qu'elles réclament.
+  const dejaRouges = new Set(controlesQuiRougissent(ORIGINAL).map((r) => r.id));
+  const portees = MUTATIONS.filter((m) => dejaRouges.has(m.cible));
+  const prouvantes = MUTATIONS.length - portees.length;
+
+  if (portees.length > 0) {
+    const parCible = new Map();
+    for (const m of portees) parCible.set(m.cible, [...(parCible.get(m.cible) || []), m.id]);
+    console.log(
+      `\n⚠️  ${prouvantes} mutation(s) sur ${MUTATIONS.length} prouvent ce qu'elles prétendent.\n`
+      + `    ${portees.length} sont portées par une cible DÉJÀ ROUGE et ne prouvent rien encore :\n`
+      + [...parCible].map(([c, ids]) => `      ${c} (${ids.length}) : ${ids.join(', ')}`).join('\n')
+      + `\n    Elles redeviendront probantes quand le texte aura rendu à ces gardes ce qu'elles`
+      + ` réclament — c'est écrit au motif de chacune.\n`,
+    );
+  }
+
+  // La seule chose qui reste une FAUTE ici : une mutation dont la cible n'existe pas. Elle,
+  // ne prouvera jamais rien, et rien ne la fera revenir.
+  const connus = new Set(CONTROLES.map((c) => c.id));
+  assert.deepEqual(
+    MUTATIONS.filter((m) => !connus.has(m.cible)).map((m) => m.id), [],
+    'ces mutations visent un contrôle qui n’existe pas : elles passeront pour des preuves sans jamais en être',
+  );
+});
+
 test('chaque contrôle est mis à l’épreuve par au moins une mutation', () => {
   // Un contrôle que rien ne mute est un contrôle dont on ignore s'il tient.
   const cibles = new Set(MUTATIONS.map((m) => m.cible));
