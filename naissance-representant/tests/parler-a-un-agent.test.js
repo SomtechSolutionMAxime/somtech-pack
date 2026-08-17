@@ -183,6 +183,9 @@ function livrer(...args) {
         LIVRAISON_ESSAIS: '3',
         LIVRAISON_DELAI_MS: '5',
         LIVRAISON_ATTENTE_MS: '50',
+        // Le temps laissé à un texte coincé pour bouger avant qu'on le tienne pour immobile
+        // (T-20260816-0114). 30 s en vrai — ici de quoi ne pas faire durer un essai.
+        LIVRAISON_IMMOBILITE_MS: '5',
         // L'appelant est dans SA session — celle d'où part le message.
         HERDR_SOCKET_PATH: SOCKET_ICI,
         HERDR_SESSIONS_ESSAIS: [SOCKET_ICI, SOCKET_LA_BAS].join(':'),
@@ -290,15 +293,28 @@ test('UN DESTINATAIRE QUI TRAVAILLE REÇOIT QUAND MÊME — sinon la voie sûre 
   );
 });
 
-test('MAIS UNE BOÎTE QUI CONTIENT DÉJÀ QUELQUE CHOSE RESTE UN REFUS — deux textes collés font UN message', async () => {
+test('MAIS UNE BOÎTE QU’ON N’A PAS SU LIBÉRER RESTE UN REFUS — deux textes collés font UN message', async () => {
   // NON-RÉGRESSION, et c'est la garde à ne pas perdre en assouplissant la précédente. Écrire
   // par-dessus un reste ne livre pas deux messages : il en livre un seul, les deux textes
   // aboutés, et le destinataire lit un mélange dont personne ne sait qu'il en est un.
-  installerFauxHerdr({ boiteInitiale: 'un début de phrase qu’un humain avait tapé' });
+  //
+  // ⚠️ `enterInoperant` — LA DÉLIVRANCE NE DONNE AUCUN DROIT D'ÉCRIRE (T-20260816-0114). Depuis
+  // ce lot, un texte coincé IMMOBILE est soumis pour son auteur : le blocage doit finir. Mais
+  // quand la touche d'envoi ne libère rien, la boîte reste pleine — et le refus doit alors être
+  // exactement celui d'avant. C'est cet essai qui rougirait si « j'ai essayé » devenait un jour
+  // une permission d'écrire par-dessus.
+  const journal = installerFauxHerdr({
+    boiteInitiale: 'un début de phrase qu’un humain avait tapé',
+    enterInoperant: true,
+  });
   const r = livrer('w5:p3', '--texte', 'mon message à moi');
 
   assert.equal(r.code, 1, 'le geste est refusé');
   assert.match(r.refus, /bo[iî]te/i, 'et le refus dit ce qu’il a vu');
+  assert.ok(
+    !appels(journal).some((p) => p.args[1] === 'prompt'),
+    'et RIEN n’a été écrit dans la boîte qui n’a pas pu être vidée'
+  );
 });
 
 

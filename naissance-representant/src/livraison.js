@@ -160,6 +160,29 @@ const ETATS_DISPONIBLES = ['idle', 'done'];
  * plutôt que d'écrire `herdr agent read <pane>` — un gabarit non substitué est une commande
  * que le lecteur ne peut pas exécuter.
  */
+/**
+ * LES TROIS CAUSES DE REFUS, NOMMÉES — et rien d'autre (T-20260816-0114).
+ *
+ * `obstacleAvantLivraison` rend une PHRASE, ce qui est ce dont son lecteur a besoin, mais ce
+ * qui ne se distingue pas par du code : l'appelant ne pouvait pas savoir s'il butait sur une
+ * boîte encombrée, un statut, ou un écran illisible. Or une seule des trois se traite — celle
+ * de la boîte encombrée, qui affame tous les émetteurs suivants sans que personne le sache.
+ *
+ * ⚠️ CETTE FONCTION EST LA SEULE QUI DÉCIDE. `obstacleAvantLivraison` s'écrit PAR-DESSUS elle,
+ * et c'est délibéré : deux logiques de refus divergeraient à la première correction, et la
+ * divergence irait dans le sens qui permet d'écrire quelque part. Un seul endroit décide, un
+ * seul endroit met des mots dessus. Aucun verdict ne change ; seule la cause devient lisible.
+ */
+export const CAUSES = Object.freeze({ STATUT: 'statut', ILLISIBLE: 'illisible', ENCOMBREE: 'encombree' });
+
+export function causeObstacle(terminal, statut, { pairOccupe = false } = {}) {
+  if (!ETATS_DISPONIBLES.includes(statut) && !(pairOccupe && statut === 'working')) return CAUSES.STATUT;
+  const reste = contenuBoite(terminal);
+  if (reste === null) return CAUSES.ILLISIBLE;
+  if (reste !== '') return CAUSES.ENCOMBREE;
+  return null;
+}
+
 export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, pane = null } = {}) {
   // Le geste, écrit avec le pane RÉEL — ou tu, si on ne le connaît pas.
   const ou = pane ? ` « ${pane} »` : '';
@@ -186,7 +209,8 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
   //
   // On ne lève donc pas la garde, on change de témoin : voir `briefEstPris`, qui exige alors
   // que le texte soit VU dans la sortie du destinataire, au lieu de se fier au statut.
-  if (!ETATS_DISPONIBLES.includes(statut) && !(pairOccupe && statut === 'working')) {
+  const cause = causeObstacle(terminal, statut, { pairOccupe });
+  if (cause === CAUSES.STATUT) {
     return (
       `la session${ou} n’est pas disponible pour un brief (statut « ${statut ?? '—'} ») — ` +
       'livrer maintenant ne se prouverait pas : elle a déjà quitté l’attente sans nous. ' +
@@ -195,14 +219,14 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
     );
   }
   const reste = contenuBoite(terminal);
-  if (reste === null) {
+  if (cause === CAUSES.ILLISIBLE) {
     return (
       `la boîte de saisie de la session${ou} est illisible — on ne livre pas dans ce qu’on ne ` +
       'voit pas. Va regarder l’écran toi-même' + commande('read', ' --format ansi') + ' : ou bien le format a ' +
       'changé et c’est un défaut à inscrire, ou bien il y a bien quelque chose dedans'
     );
   }
-  if (reste !== '') {
+  if (cause === CAUSES.ENCOMBREE) {
     return (
       `la boîte de saisie${ou} n’est pas vide (elle contient « ${reste.slice(0, 80)}${reste.length > 80 ? '…' : ''} ») — ` +
       'écrire par-dessus ne livrerait pas deux messages, ça en livrerait UN, les deux textes ' +
@@ -249,6 +273,142 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTrava
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA DÉLIVRANCE — POUR QUE LE BLOCAGE FINISSE, SANS JAMAIS ÉCRASER PERSONNE (T-20260816-0114)
+//
+// LE DÉFAUT, ET IL NAÎT DE LA COMPOSITION, PAS D'UN MAILLON. Le refus ci-dessus est juste :
+// écrire par-dessus un reste livre UN message, les deux textes collés. L'émetteur a raison
+// d'attendre plutôt que de forcer. Et le destinataire ne voit rien — une boîte pleine ne se
+// signale pas, elle attend. Résultat mesuré : une boîte bloquée met en FAMINE tous les
+// émetteurs suivants, et seul le destinataire peut la libérer — c'est-à-dire le seul qui ne
+// sait pas qu'elle bloque. Trois blocages en deux jours sur la même boîte, un quatrième à la
+// ronde suivante : ce n'est pas un cas limite, c'est le régime normal d'un orchestrateur qui
+// reçoit de plusieurs agents. Et UNE FOIS SUR TROIS, l'auteur du texte coincé était DÉJÀ MORT.
+// Personne, jamais, n'allait le soumettre.
+//
+// ⚠️ CE QU'ON NE FAIT PAS, ET CE N'EST PAS NÉGOCIABLE : autoriser l'écrasement. Deux textes
+// collés produisent un travail plausible et faux — pire que l'attente, pire que la perte. Le
+// refus ci-dessus ne bouge pas d'un mot, et rien ne s'écrit tant que la boîte n'a pas été VUE
+// vide. Ce qu'on ajoute est l'autre moitié : que le blocage FINISSE.
+//
+// LE GESTE, ET POURQUOI IL EST LÉGITIME. Le refus dit lui-même quoi faire — « quelqu'un doit
+// soumettre ou effacer ce texte » — puis ajoute que personne d'autre ne peut le faire à sa
+// place. C'est cette dernière phrase que la MESURE dément. Le 2026-08-17, sur une boîte
+// bloquée d'une session jetable : une touche d'envoi envoyée DE L'EXTÉRIEUR vide la boîte, et
+// le destinataire se met au travail. Le message coincé n'est pas perdu — il est PRIS, entier,
+// tel que son auteur l'avait écrit.
+//
+// Soumettre n'est pas taper à sa place. Taper à sa place, ce serait ajouter ou retirer du
+// texte ; on n'écrit pas un caractère. On FINIT LE GESTE QUE QUELQU'UN A COMMENCÉ — et c'est
+// exactement ce que la réparation de `livrerBrief` fait déjà, plus bas, pour son PROPRE texte.
+// Le code savait faire ; il refusait seulement de le faire pour le texte d'un autre.
+//
+// ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE DIRE : soumettre est IRRÉVERSIBLE. Si le texte trouvé était
+// un brouillon que le destinataire tapait, il part inachevé. D'où la garde d'IMMOBILITÉ — on ne
+// soumet que ce qu'on a vu ne pas bouger entre deux lectures espacées, parce que quelqu'un qui
+// tape fait bouger sa boîte. Et ce qui part reste UN texte, entier : un agent qui reçoit sa
+// propre phrase inachevée peut le constater, là où deux textes collés ne se voient pas.
+
+/**
+ * Tenter de libérer une boîte encombrée — et rendre ce qu'on a constaté.
+ *
+ * Quatre issues, et chacune porte sur un état qui POUVAIT être différent :
+ *   • `liberee-seule` — son auteur l'a soumise pendant qu'on attendait : on n'a RIEN touché ;
+ *   • `bouge`         — le texte a changé : quelqu'un est devant ce pane, on n'y touche pas ;
+ *   • `illisible`     — on ne soumet pas ce qu'on ne voit pas (même règle que la livraison) ;
+ *   • soumis          — le texte était immobile, la touche d'envoi est partie, la boîte s'est
+ *                       vidée. C'est la SEULE issue où l'on a posé un geste.
+ *
+ * ⚠️ « La boîte s'est vidée » est le seul témoin admis d'une soumission réussie, et il porte
+ * bien : on l'a vue PLEINE juste avant. Le code de retour de la touche d'envoi ne prouve rien —
+ * même règle que partout ici.
+ *
+ * L'I/O est injectée : cette fonction ne touche aucun processus enfant.
+ */
+export async function delivrerLaBoite({
+  texteCoince,
+  commandes,
+  appelHerdr,
+  lireEcran,
+  dormir,
+  vers = {},
+  immobiliteMs,
+  essais = 10,
+  delaiMs = 500,
+}) {
+  // ON LAISSE AU TEXTE LE TEMPS DE BOUGER. C'est toute la garde : un brouillon vivant bouge,
+  // un message coincé ne bouge pas. Sans cette attente, on ne distinguerait pas les deux.
+  await dormir(immobiliteMs);
+
+  const ecran = await lireEcran(commandes.lireEcran, vers);
+  const apres = contenuBoite(ecran);
+  if (apres === null) return { ok: false, cause: 'illisible', soumis: false };
+  if (apres === '') return { ok: true, cause: 'liberee-seule', soumis: false };
+  if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
+
+  const envoi = await appelHerdr(commandes.soumettre, vers);
+  for (let i = 0; i < Math.max(1, essais); i += 1) {
+    const vu = await lireEcran(commandes.lireEcran, vers);
+    if (boiteEstVide(vu)) return { ok: true, cause: 'soumis', soumis: true, texte: texteCoince };
+    await dormir(delaiMs);
+  }
+  return { ok: false, cause: 'sans-effet', soumis: false, envoiAccepte: envoi.ok };
+}
+
+/**
+ * Ce qu'on ajoute au refus quand la délivrance n'a pas abouti — DES MOTS, jamais un verdict.
+ *
+ * Le refus d'origine est rendu intact et ce texte vient APRÈS lui : c'est la règle posée par
+ * `T-20260816-0045` (un refus dit ce qui bloque et le geste qui le lève) appliquée à un
+ * blocage qu'on a en plus essayé de lever soi-même. Dire qu'on a essayé évite au lecteur de
+ * retenter le même geste à l'aveugle.
+ */
+export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
+  const attente = `${Math.round(immobiliteMs / 1000)} s`;
+  if (delivrance.cause === 'bouge') {
+    return (
+      `⚠️ J’ai attendu ${attente} et le texte A BOUGÉ entre mes deux lectures : quelqu’un est ` +
+      'devant ce pane en train d’écrire. Je n’y touche pas — soumettre la phrase inachevée de ' +
+      'quelqu’un est irréversible. Renvoie dans un moment'
+    );
+  }
+  if (delivrance.cause === 'illisible') {
+    return (
+      '⚠️ La boîte est devenue illisible pendant que j’attendais : je n’ai RIEN soumis — on ne ' +
+      'soumet pas un texte qu’on n’a pas vu'
+    );
+  }
+  return (
+    `⚠️ J’ai tenté de le soumettre pour son auteur — la touche d’envoi seule, sans écrire un ` +
+    `caractère — après ${attente} d’immobilité : SANS EFFET, la boîte est restée pleine. Un ` +
+    'écran de confirmation la recouvre peut-être : va regarder ce pane toi-même'
+  );
+}
+
+/**
+ * L'AVIS AU DESTINATAIRE — la seule façon dont il peut apprendre que sa boîte a bloqué.
+ *
+ * Il est le point aveugle du défaut : une boîte pleine ne se signale pas. Cet avis voyage par
+ * le chemin qu'on vient de libérer, donc SANS nouveau transport à maintenir — et il n'existe
+ * que quand quelque chose a réellement eu lieu. Une livraison ordinaire ne porte pas un mot de
+ * plus : on n'annonce jamais un incident qui n'a pas eu lieu.
+ *
+ * ⚠️ CE N'EST PAS UNE FUSION. Le texte ajouté est le NÔTRE, pas celui d'un tiers, et il est
+ * séparé du message par une ligne vide et une marque. La fusion que ce module interdit, c'est
+ * deux messages d'auteurs différents collés en un — ici l'auteur est l'émetteur, qui parle en
+ * son nom de ce qu'il a trouvé.
+ */
+export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) {
+  const apercu = String(texteLibere).slice(0, 120).replace(/\s+/g, ' ').trim();
+  return (
+    `⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, immobile pendant ` +
+    `les ${Math.round(immobiliteMs / 1000)} s où je l’ai observée${apercu ? ` (« ${apercu}${texteLibere.length > 120 ? '…' : ''} »)` : ''}. ` +
+    'Je l’ai SOUMIS pour son auteur — sans y écrire un caractère — puis j’ai livré ceci. Tu vas ' +
+    'donc recevoir les deux. Si ce texte était un brouillon à toi, il vient de partir tel quel. ' +
+    'Tant qu’une boîte reste pleine, PERSONNE ne peut te joindre et rien ne te le dit.'
+  );
+}
+
 /**
  * Livrer un brief à une session, et RENDRE CE QU'ON A CONSTATÉ — jamais ce qu'on espère.
  *
@@ -285,6 +445,12 @@ export async function livrerBrief({
   // Voir `obstacleAvantLivraison` et `briefEstPris` — ce n'est pas la garde qu'on lève, c'est
   // le témoin qu'on change.
   pairOccupe = false,
+  // ⚠️ LE TEMPS LAISSÉ AU TEXTE COINCÉ POUR BOUGER avant qu'on le tienne pour immobile
+  // (T-20260816-0114). `0` désarme la délivrance entièrement — et c'est le cas du BRIEF DE
+  // NAISSANCE : une session qui vient de naître attend, et une boîte qui porterait déjà
+  // quelque chose est un état qu'on ne sait pas expliquer. On ne pose pas un geste
+  // irréversible sur ce qu'on ne comprend pas.
+  immobiliteMs = 0,
 }) {
   // Les commandes de LECTURE se construisent tout de suite ; celle qui ÉCRIT attend de savoir
   // si le destinataire travaille déjà — l'attente qu'elle porte n'a de sens que sinon.
@@ -320,7 +486,48 @@ export async function livrerBrief({
     if (!obstacle) break;
     if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
   }
-  if (obstacle) return { ok: false, message: obstacle, statut: statutAvant, repare: false, attendu: false };
+  // ═══ LA DÉLIVRANCE — le blocage doit FINIR, et c'est ici que ça se joue (T-20260816-0114).
+  //
+  // ⚠️ UNE SEULE CAUSE SE TRAITE : la boîte encombrée. Un statut indisponible et un écran
+  // illisible restent des refus secs — on ne pose un geste que sur ce qu'on a vu et compris.
+  let delivrance = null;
+  if (obstacle && immobiliteMs > 0 && causeObstacle(ecranAvant, statutAvant, { pairOccupe }) === CAUSES.ENCOMBREE) {
+    delivrance = await delivrerLaBoite({
+      texteCoince: contenuBoite(ecranAvant),
+      commandes: lectures,
+      appelHerdr,
+      lireEcran,
+      dormir,
+      vers,
+      immobiliteMs,
+      essais,
+      delaiMs,
+    });
+    if (delivrance.ok) {
+      // ⚠️ ON REGARDE À NOUVEAU, ON NE DÉDUIT PAS. La délivrance a pu mettre le destinataire au
+      // travail (mesuré) et sa boîte a pu se remplir à nouveau entre-temps. Le refus se
+      // re-décide sur ce qu'on voit maintenant, jamais sur le fait qu'on a agi.
+      const etatApres = await appelHerdr(lectures.interroger, vers);
+      statutAvant = etatApres.reponse?.result?.agent?.agent_status ?? null;
+      ecranAvant = await lireEcran(lectures.lireEcran, vers);
+      obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane });
+    } else {
+      // Le refus d'origine est rendu INTACT ; on lui ajoute ce qu'on a tenté. Des mots de plus,
+      // pas un verdict de moins.
+      obstacle = `${obstacle}\n${motDeLaDelivrance(delivrance, { immobiliteMs })}`;
+    }
+  }
+
+  if (obstacle) {
+    return {
+      ok: false,
+      message: obstacle,
+      statut: statutAvant,
+      repare: false,
+      attendu: false,
+      delivre: Boolean(delivrance?.soumis),
+    };
+  }
 
   // 2. LIVRER. `--wait` est l'indice de herdr, jamais la preuve : ce qu'il rapporte peut etre
   //    un faux negatif (un tour plus rapide que son echantillonnage). On l'enregistre, on ne
@@ -330,7 +537,14 @@ export async function livrerBrief({
   // avant qu'on écrive : s'en contenter rejouerait « la boîte vide », un état vrai de toute façon.
   const fileAvant = messagesEnFile(ecranAvant);
 
-  const commandes = commandesLivraison(pane, texte, { attenteMs, dejaAuTravail: statutAvant === 'working' });
+  // L'AVIS AU DESTINATAIRE ne s'ajoute QUE si quelque chose a réellement été soumis pour lui —
+  // c'est le seul moyen qu'il a d'apprendre que sa boîte bloquait, et il ne doit rien annoncer
+  // qui n'ait pas eu lieu (T-20260816-0114).
+  const texteALivrer = delivrance?.soumis
+    ? `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs })}\n\n${texte}`
+    : texte;
+
+  const commandes = commandesLivraison(pane, texteALivrer, { attenteMs, dejaAuTravail: statutAvant === 'working' });
   const livraison = await appelHerdr(commandes.livrer, vers);
 
   // 3. VERIFIER PAR LE FAIT — la session a-t-elle quitte l'attente ?
@@ -380,6 +594,7 @@ export async function livrerBrief({
       statut: vu.statut,
       repare,
       attendu: livraison.ok,
+      delivre: Boolean(delivrance?.soumis),
       message:
         `le brief n\u2019a pas \u00e9t\u00e9 pris par la session de ${pane} \u2014 statut \u00ab ${vu.statut ?? '\u2014'} \u00bb, ` +
         `bo\u00eete ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (\u00ab ${reste.slice(0, 60)}\u2026 \u00bb)`}` +
@@ -387,5 +602,5 @@ export async function livrerBrief({
     };
   }
 
-  return { ok: true, statut: vu.statut, repare, attendu: livraison.ok };
+  return { ok: true, statut: vu.statut, repare, attendu: livraison.ok, delivre: Boolean(delivrance?.soumis) };
 }

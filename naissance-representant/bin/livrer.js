@@ -34,6 +34,14 @@ import { trouverDestinataire } from '../src/destinataire.js';
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
 const ATTENTE_MS = Number(process.env.LIVRAISON_ATTENTE_MS || 20000);
+// ⚠️ LE TEMPS LAISSÉ À UN TEXTE COINCÉ POUR BOUGER (T-20260816-0114). Trente secondes : assez
+// pour que quelqu'un en train d'écrire fasse bouger sa boîte, assez peu pour qu'un compte rendu
+// ne meure pas d'attente. Les blocages mesurés duraient ~40 minutes.
+//
+// ⚠️ CE RÉGLAGE EST LE PRIX D'UN GESTE IRRÉVERSIBLE — le baisser à zéro désarme la délivrance,
+// le baisser un peu la rend hasardeuse. Non mesuré : à quelle fréquence un humain laisse un
+// texte en plan dans la boîte d'un agent. C'est ce qui justifie une valeur généreuse.
+const IMMOBILITE_MS = Number(process.env.LIVRAISON_IMMOBILITE_MS || 30000);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -85,6 +93,11 @@ async function main() {
     texte,
     socket: ou.socket,
     pairOccupe: !enAttente,
+    // ⚠️ LA DÉLIVRANCE NE VAUT QUE POUR UN AGENT DÉJÀ NÉ. `--en-attente` est la garde du brief
+    // de naissance : la session attend, et sa boîte ne devrait rien porter. Si elle porte
+    // quelque chose, c'est un état qu'on ne sait pas expliquer — on ne pose pas un geste
+    // irréversible dessus.
+    immobiliteMs: enAttente ? 0 : IMMOBILITE_MS,
     appelHerdr,
     lireEcran,
     dormir,
@@ -106,6 +119,10 @@ async function main() {
       caracteres: texte.length,
       statut: resultat.statut,
       repare: resultat.repare,
+      // `delivre` — LA BOÎTE ÉTAIT BLOQUÉE PAR LE TEXTE D'UN AUTRE, et on l'a soumis pour lui
+      // (T-20260816-0114). C'est un fait qui doit remonter : il dit que le destinataire vient de
+      // recevoir DEUX messages, dont un qui attendait peut-être depuis longtemps.
+      delivre: Boolean(resultat.delivre),
       // `attendu` — CE QUE HERDR A RAPPORTÉ DE SON CÔTÉ, jamais la preuve (T-20260815-0007).
       // Son sens dépend du destinataire : sur une session en attente, c'est une transition
       // observée ; sur un pair qui travaille déjà, on ne demande plus cette attente-là, et ce

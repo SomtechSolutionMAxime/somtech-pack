@@ -32,6 +32,16 @@ let pathOriginal;
  *   lectureCassee — `agent read` échoue (sortie vide) : la boîte est illisible
  *   statutMuet    — `agent get` reste bloqué sur `idle` : le seul témoin restant est la boîte
  *   dejaOccupee   — la session travaillait DÉJÀ avant qu'on arrive (un autre appelant lui parle)
+ *
+ * ═══ CE QUE T-20260816-0114 A AJOUTÉ, ET POURQUOI CHACUN EST UN ÉTAT RÉEL ═══
+ *   boiteQuiChange — le texte de la boîte BOUGE d'une lecture à l'autre : quelqu'un est devant
+ *                    son clavier en train de taper. C'est le seul cas où l'on ne doit RIEN
+ *                    soumettre, et sans ce scénario la garde d'immobilité serait indémontrable
+ *   boiteSeLibere  — la boîte se vide d'elle-même entre deux lectures : son auteur l'a soumise.
+ *                    On ne doit alors avoir envoyé AUCUNE touche
+ *   enterInoperant — `agent send-keys … Enter` ne libère pas la boîte. MESURÉ comme possible sur
+ *                    le vrai service (un écran de confirmation par-dessus la boîte l'avale) : la
+ *                    délivrance doit alors laisser le refus d'écraser exactement où il était
  */
 function installerFauxHerdr(scenario = {}) {
   const journal = join(bac, 'appels.jsonl');
@@ -39,7 +49,17 @@ function installerFauxHerdr(scenario = {}) {
   writeFileSync(journal, '');
   writeFileSync(
     etat,
-    JSON.stringify({ boiteInitiale: '', soumetSeule: true, lectureCassee: false, statutMuet: false, dejaOccupee: false, ...scenario })
+    JSON.stringify({
+      boiteInitiale: '',
+      soumetSeule: true,
+      lectureCassee: false,
+      statutMuet: false,
+      dejaOccupee: false,
+      boiteQuiChange: false,
+      boiteSeLibere: false,
+      enterInoperant: false,
+      ...scenario,
+    })
   );
   const script = `#!/usr/bin/env node
 const fs = require('fs');
@@ -53,19 +73,29 @@ const SEP = '\u2500'.repeat(20);   // le VRAI filet de l'ecran, pas un tiret ASC
 
 const promptFait  = passes.find((a) => a[0] === 'agent' && a[1] === 'prompt');
 const enterEnvoye = passes.some((a) => a[0] === 'agent' && a[1] === 'send-keys');
+const lectures    = passes.filter((a) => a[0] === 'agent' && a[1] === 'read').length;
+const enterUtile  = enterEnvoye && !sc.enterInoperant;
 
 // Contenu courant de la boîte, tel que le VRAI service le montrerait.
 function boite() {
   let b = sc.boiteInitiale;
+  // QUELQU'UN TAPE : le texte s'allonge d'une lecture a l'autre.
+  if (sc.boiteQuiChange && b) b = b + ' ' + '.'.repeat(lectures);
+  // SON AUTEUR L'A SOUMISE LUI-MEME entre deux lectures.
+  if (sc.boiteSeLibere && lectures >= 1) b = '';
   if (promptFait) {
     // Le vrai service COLLE le nouveau texte au reste — il ne le remplace pas.
     if (sc.soumetSeule) b = '';
     else b = b + promptFait[3];
   }
-  if (enterEnvoye) b = '';
+  if (enterUtile) b = '';
   return b;
 }
 function travaille() {
+  // MESURE du 2026-08-17 sur le vrai service : soumettre le texte d'un autre par la touche
+  // d'envoi vide la boite ET met le destinataire au travail — il PREND le message.
+  // Le double doit le reproduire, sinon la delivrance ne pourrait jamais etre vue aboutir.
+  if (enterUtile && !promptFait) return true;
   return Boolean(promptFait) && (sc.soumetSeule || enterEnvoye);
 }
 
@@ -121,6 +151,9 @@ function livrer(...args) {
         LIVRAISON_ESSAIS: '3',
         LIVRAISON_DELAI_MS: '5',
         LIVRAISON_ATTENTE_MS: '50',
+        // Le temps qu'on laisse au texte coincé pour BOUGER avant de le tenir pour immobile.
+        // 30 s en vrai — ici de quoi laisser le double changer d'avis entre deux lectures.
+        LIVRAISON_IMMOBILITE_MS: '5',
         // Les sessions à interroger sont DÉSIGNÉES — la cloison refuse d'énumérer celles du
         // poste sous essais. Onze y tournent avec du travail réel, et un essai qui les balaie
         // rend un verdict qui dépend de ce qui est ouvert au moment où il tourne : la première
@@ -209,9 +242,16 @@ test('un statut muet ET une boîte encore pleine : la commande refuse de dire «
   assert.equal(JSON.parse(r.stdout).repare, true);
 });
 
-// LE DÉFAUT MESURÉ, celui qui rend un brief faux plutôt qu’absent.
-test('une boîte NON VIDE fait refuser la livraison — jamais écrire par-dessus', () => {
-  const journal = installerFauxHerdr({ boiteInitiale: 'reste dune livraison precedente' });
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE DÉFAUT MESURÉ, celui qui rend un brief faux plutôt qu’absent — ET LE TÉMOIN CENTRAL DE
+// T-20260816-0114 : la délivrance ne rouvre PAS la porte de l’écrasement.
+//
+// La boîte est encombrée et la touche d’envoi n’a aucun effet : elle reste donc pleine du
+// début à la fin. Il ne doit sortir AUCUN `agent prompt` — jamais, sous aucun prétexte.
+// C’est cet essai qui rougirait si la délivrance se mettait un jour à écrire par-dessus
+// « puisqu’elle a essayé de libérer ».
+test('une boîte NON VIDE qu’on n’a pas su libérer fait refuser la livraison — jamais écrire par-dessus', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: 'reste dune livraison precedente', enterInoperant: true });
   const r = livrer('w9:p1', '--texte', 'BRIEF-REEL');
   assert.notEqual(r.code, 0);
   assert.match(r.stderr, /pas vide/);
@@ -219,6 +259,117 @@ test('une boîte NON VIDE fait refuser la livraison — jamais écrire par-dessu
   assert.ok(
     !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'prompt'),
     'rien ne doit être écrit dans une boîte qui n’est pas vide'
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// T-20260816-0114 — LA DÉLIVRANCE : le blocage doit FINIR, et sans écraser personne.
+//
+// Rappel du défaut : une boîte laissée pleine affame TOUS les émetteurs suivants, et seul le
+// destinataire pouvait la libérer — alors qu’il est le seul à ne pas savoir qu’elle bloque.
+// Trois occurrences sur trois blocages mesurés, et une fois sur trois l’auteur du texte coincé
+// était DÉJÀ MORT : personne, jamais, n’allait le soumettre.
+
+test('un texte coincé IMMOBILE est soumis — on finit le geste de son auteur, on ne l’écrase pas', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: 'compte rendu dun emetteur qui est mort depuis' });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu a moi');
+  assert.equal(r.code, 0, `la boîte devait être délivrée puis la livraison aboutir — stderr: ${r.stderr}`);
+  const rendu = JSON.parse(r.stdout);
+  assert.equal(rendu.delivre, true, 'la commande doit DIRE qu’elle a délivré une boîte bloquée');
+
+  const a = appels(journal);
+  const iEnter = a.findIndex((x) => x[0] === 'agent' && x[1] === 'send-keys');
+  const iPrompt = a.findIndex((x) => x[0] === 'agent' && x[1] === 'prompt');
+  assert.ok(iEnter !== -1, 'la touche d’envoi doit partir : c’est le seul geste qui libère');
+  assert.deepEqual(a[iEnter], ['agent', 'send-keys', 'w9:p1', 'Enter'], 'on soumet, on n’écrit pas un caractère');
+  assert.ok(iPrompt !== -1 && iEnter < iPrompt, 'on ne livre qu’APRÈS avoir libéré la boîte');
+  // ⚠️ ET LE TEXTE COINCÉ N’EST JAMAIS RÉÉCRIT NI COMPLÉTÉ — le seul geste posé dessus est Enter.
+  assert.ok(
+    !a.some((x) => x[0] === 'agent' && x[1] === 'send-text'),
+    'on ne tape jamais à la place de quelqu’un — soumettre n’est pas écrire'
+  );
+});
+
+test('le destinataire APPREND que sa boîte avait bloqué — l’avis voyage avec le message livré', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: 'un texte reste en plan' });
+  const r = livrer('w9:p1', '--texte', 'MON-MESSAGE-A-MOI');
+  assert.equal(r.code, 0, r.stderr);
+  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
+  assert.ok(prompt, 'le message doit bien être livré');
+  assert.match(prompt[3], /MON-MESSAGE-A-MOI/, 'le message de l’émetteur part en entier');
+  assert.match(prompt[3], /bo[iî]te/i, 'et il est précédé d’un avis qui dit que sa boîte bloquait');
+  assert.match(prompt[3], /soumis/i, 'l’avis dit ce qui a été fait du texte trouvé');
+});
+
+test('une livraison ORDINAIRE ne porte aucun avis — on n’annonce que ce qui est arrivé', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: '' });
+  const r = livrer('w9:p1', '--texte', 'MON-MESSAGE-A-MOI');
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).delivre, false, 'rien n’a été délivré : il n’y avait rien à délivrer');
+  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
+  assert.equal(prompt[3], 'MON-MESSAGE-A-MOI', 'le message part tel quel, sans un mot ajouté');
+});
+
+test('un texte qui BOUGE n’est JAMAIS soumis — quelqu’un est devant son clavier', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: 'je suis en train de taper', boiteQuiChange: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0, 'on refuse plutôt que de soumettre la phrase inachevée de quelqu’un');
+  // ⚠️ LE MOTIF EST CHOISI POUR NE PAS EXISTER DANS LE REFUS ORDINAIRE. Écrit d’abord avec
+  // « tape », cet essai passait AVANT le correctif : le vieux refus dit déjà « taper à sa
+  // place ». Un essai qu’un vocabulaire voisin rend vert ne prouve pas le comportement neuf.
+  assert.match(r.stderr, /a boug[ée]/i, 'le refus doit dire que le texte A BOUGÉ — c’est la raison de ne rien soumettre');
+  const a = appels(journal);
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'), 'aucune touche envoyée sur un texte vivant');
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'prompt'), 'et rien n’est écrit par-dessus');
+});
+
+test('une boîte que son auteur libère TOUT SEUL pendant l’attente : on livre sans avoir rien soumis', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: 'son auteur va le soumettre', boiteSeLibere: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.equal(r.code, 0, `la boîte s’est libérée d’elle-même — stderr: ${r.stderr}`);
+  assert.equal(JSON.parse(r.stdout).delivre, false, 'on n’a rien délivré : personne n’avait besoin de nous');
+  const a = appels(journal);
+  assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'), 'aucune touche envoyée : le texte est parti seul');
+});
+
+test('une délivrance SANS EFFET laisse le refus exactement où il était, et le dit', () => {
+  const journal = installerFauxHerdr({ boiteInitiale: 'un texte que rien ne deloge', enterInoperant: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /pas vide/, 'le refus d’origine est rendu intact');
+  // ⚠️ MÊME PIÈGE QUE PLUS HAUT : le vieux refus contient déjà le mot « soumettre ». Le motif
+  // doit porter sur le FAIT NEUF — qu’on a essayé, et que ça n’a rien libéré.
+  assert.match(
+    r.stderr,
+    /sans effet|n’a rien lib[ée]r[ée]|na rien lib/i,
+    'il dit que la soumission a été TENTÉE et n’a rien libéré — sinon on la retente à l’aveugle'
+  );
+  assert.ok(
+    !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'prompt'),
+    'une tentative de délivrance ne donne AUCUN droit d’écrire par-dessus'
+  );
+});
+
+test('une boîte ILLISIBLE n’est jamais délivrée — on ne soumet pas ce qu’on ne voit pas', () => {
+  const journal = installerFauxHerdr({ lectureCassee: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0);
+  assert.ok(
+    !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'soumettre un texte qu’on n’a pas lu serait soumettre n’importe quoi'
+  );
+});
+
+test('le brief de NAISSANCE ne délivre pas — une session qui vient de naître n’a rien à soumettre', () => {
+  // `--en-attente` est la garde du brief de naissance : la session attend, et si sa boîte porte
+  // quelque chose, ce n'est pas un compte rendu en souffrance — c'est un état qu'on ne sait pas
+  // expliquer. On ne pose pas un geste irréversible dessus.
+  const journal = installerFauxHerdr({ boiteInitiale: 'quelque chose dinattendu' });
+  const r = livrer('w9:p1', '--texte', 'ton brief de naissance', '--en-attente');
+  assert.notEqual(r.code, 0);
+  assert.ok(
+    !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'aucune touche envoyée sur la boîte d’une session qu’on brieffe à sa naissance'
   );
 });
 
