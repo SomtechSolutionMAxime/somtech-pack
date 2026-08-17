@@ -76,15 +76,17 @@ function controlesQuiRougissent(gabarits) {
  * en revue — exactement comme pour le compte des anti-patterns.
  */
 const ROUGES_ACTES = new Map([
-  ['se-sert-des-memoires',
-    'PERTE (T-20260817-0088) — le motif qui rend un rappel non probant (conclure d’une absence '
-    + 'de résultat) et le gate de promotion de STD-039 I3 ont disparu du gabarit'],
-  ['le-suivi-oblige-encore',
-    'PERTE (T-20260817-0088, P4) — 2 des 5 consignes de suivi n’ont plus de porteur dans R1 : '
-    + '« ce qui reste ouvert, et ce qui bloque quoi » · « ce qui appartient au dirigeant »'],
-  ['le-doute-est-une-information-attendue',
-    'PERTE — « une information attendue de toi, jamais une faute » était écrite aux DEUX endroits '
-    + 'qui la portent (878f9d5) ; elle a quitté celui où il tranche'],
+  // ✅ VIDE, ET C'EST UN RÉSULTAT — le 2026-08-17.
+  //
+  // Elle a porté trois entrées : `se-sert-des-memoires`, `le-suivi-oblige-encore` et
+  // `le-doute-est-une-information-attendue`. Les trois nommaient des pertes réelles du gabarit
+  // (`T-20260817-0088`), les trois gardes sont **restées rouges** jusqu'à ce que le texte
+  // rende ce qu'elles réclamaient, et **les trois ont reverdi d'elles-mêmes** — sans qu'une
+  // ligne du harnais ne bouge. Personne n'a eu à croire que la réparation était faite.
+  //
+  // ⚠️ **On les RETIRE, et c'est la moitié qu'on oublie.** Une entrée qui survit à la perte
+  // qu'elle décrit affirme au présent une question qui est fermée — c'est le récit périmé, le
+  // miroir exact du motif faux. Quatre commentaires de ce fichier avaient dérivé ainsi.
 ]);
 
 test('référence : sur le gabarit intact, aucun contrôle ne rougit', () => {
@@ -146,6 +148,25 @@ test('le décompte des mutations dit ce qu’il NE prouve pas — celles que por
       + `peut même le faire REVERDIR (c'est arrivé le 2026-08-17 : un compte figé à 77 pendant que `
       + `la table en portait 78, si bien que RETIRER une ligne satisfaisait le compte).\n`
       + `Soit tu répares le harnais, soit tu inscris le rouge dans ROUGES_ACTES avec son motif.`,
+  );
+
+  // ⚠️ ET LA MOITIÉ QU'ON OUBLIE — le miroir, et il coûte la même chose.
+  //
+  // Une entrée qui SURVIT à la perte qu'elle décrit affirme au présent une question qui est
+  // fermée. C'est le récit périmé : il ne fait échouer personne, donc rien ne le rattrape, et
+  // le lecteur suivant croit une perte encore ouverte. Quatre commentaires de ce dépôt avaient
+  // dérivé exactement ainsi — « GARDE LAISSÉE ROUGE » sur des gardes reverdies depuis.
+  //
+  // Ici, ça ne peut plus arriver en silence : une garde qui reverdit fait échouer ce test tant
+  // que son entrée n'est pas retirée. **Le jour où une perte est réparée, sa trace part avec.**
+  const perimes = [...ROUGES_ACTES.keys()].filter((id) => !dejaRouges.includes(id));
+  assert.deepEqual(
+    perimes, [],
+    `ces contrôles sont inscrits comme des pertes actées alors qu'ils sont VERTS : `
+      + `${perimes.join(', ')}.\n`
+      + `La perte a été réparée et la garde a reverdi — c'est le résultat qu'on voulait. Retire `
+      + `l'entrée : une déclaration qui survit à ce qu'elle décrit fait croire une question `
+      + `ouverte alors qu'elle est fermée, et personne ne va la vérifier.`,
   );
 
   const portees = MUTATIONS.filter((m) => dejaRouges.includes(m.cible));

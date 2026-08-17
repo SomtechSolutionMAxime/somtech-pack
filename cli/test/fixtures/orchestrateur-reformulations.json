@@ -295,9 +295,9 @@
   },
   {
     "id": "outils-rappel-recherche-verification",
-    "quoi": "fronting du complément, sens identique",
-    "avant": "Le rappel t'a fait gagner la recherche, pas la vérification.",
-    "apres": "Ce que le rappel t'a fait gagner, c'est la recherche — pas la vérification."
+    "quoi": "fronting du complément, sens identique — ré-ancrée après que la phrase a repris sa queue",
+    "avant": "Le rappel t'a fait gagner la recherche, pas la vérification",
+    "apres": "Ce que le rappel t'a fait gagner, c'est la recherche — pas la vérification"
   },
   {
     "id": "antipattern-contexte-se-remplit",

@@ -1118,8 +1118,15 @@ export const CONTROLES = [
       // recherche, pas la vérification. » —, précédé des deux exemples qui l'appliquent
       // (« Va le lire »). C'est la même règle, dite en geste plutôt qu'en maxime, et au même
       // endroit. Garder la citation aurait gardé des mots ; on garde ce que la règle impose.
+      // ⚠️ ET LA SONDE NE TIENT PLUS À L'ORDRE DES MOTS — le banc de faux positifs l'a attrapée.
+      // Elle exigeait « fait gagner la recherche, pas la vérification » dans cet ordre exact :
+      // « Ce que le rappel t'a fait gagner, c'est la recherche — pas la vérification », qui dit
+      // rigoureusement la même chose, la faisait crier. Ce qu'elle garde est l'OPPOSITION entre
+      // les deux — ce que le rappel donne, et ce qu'il ne donne pas —, pas la syntaxe qui la
+      // porte. Un fronting de complément est une réécriture légitime ; une garde qui l'interdit
+      // se fait retirer, et emporte ce qu'elle gardait vraiment.
       exigePolarite(
-        sMem.corps, /fait gagner la recherche, (?:pas|jamais) la vérification/i,
+        sMem.corps, /gagn\w*[^.\n]{0,40}la recherche[^.\n]{0,20}(?:pas|jamais|non)[^.\n]{0,12}la vérification/i,
         'un rappel ne remplace jamais une mesure : il fait gagner la recherche, pas la vérification',
         { inverse: /fait gagner la vérification|rappel vaut (?:généralement )?une mesure/i },
       );
@@ -4315,9 +4322,13 @@ export const MUTATIONS = [
     // vérification. » C'est la même règle, dite en geste. La mutation retourne donc la phrase
     // qui la porte aujourd'hui, et fait exactement ce qu'elle faisait : elle transforme la
     // règle qui a coûté le plus cher en recommandation à géométrie variable.
+    // ⚠️ RÉ-ANCRÉE UNE SECONDE FOIS (2026-08-17, lot des trois pertes) : la phrase a REPRIS sa
+    // queue perdue (« — et c'est le motif qui nous a le plus coûté : conclure d'une absence de
+    // résultat… »), donc son point final a disparu et le motif ne mordait plus. Ce que la
+    // mutation FAIT est inchangé au mot près.
     muter: (t) => t.replace(
-      "**Le rappel t'a fait gagner la recherche, pas la vérification.**",
-      '**Le rappel vaut généralement une mesure, sauf sur les points sensibles.**',
+      "**Le rappel t'a fait gagner la recherche, pas la vérification**",
+      '**Le rappel vaut généralement une mesure, sauf sur les points sensibles**',
     ),
   },
   {
