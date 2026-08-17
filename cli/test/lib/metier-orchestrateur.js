@@ -213,11 +213,36 @@ export const NB_ANTI_PATTERNS = 77;
 // « oui, et ne redemande plus ». Les sept sont revenues, plus le miroir de la clause du
 // clavier rendue à la ronde : 69 + 8 = 77.
 //
-// **77 est posé sur une table vérifiée ligne à ligne contre `878f9d5`** — l'état d'avant la
-// reconstruction. Chaque anti-pattern d'alors y est présent : verbatim, reformulé, ou fusionné
-// dans un autre (« Faire naître un agent herdr sur Haiku » vit dans le coût de « Faire naître
-// un agent sans déclarer son modèle »). **Cette fois le chiffre ne blanchit rien**, et la
-// méthode de vérification est écrite pour qu'on puisse la refaire.
+// ⚠️⚠️⚠️ ET LA MÊME ERREUR A ÉTÉ COMMISE UNE TROISIÈME FOIS, ICI MÊME. Ce paragraphe affirmait :
+// *« 77 est posé sur une table vérifiée ligne à ligne contre 878f9d5 — chaque anti-pattern
+// d'alors y est présent »*. **C'était faux, et une revue de fond l'a mesuré.**
+//
+// La vérification avait été faite au `grep`, motif par motif. Chercher « erreur » ramenait
+// « Se taire sur une erreur pour rester bref », et la ligne était classée présente. Mais
+// `878f9d5` en portait **DEUX**, distinctes, à sept lignes d'écart :
+//
+//   • l. 1175 — « **Se taire sur une erreur pour rester bref** » — la concision qui tait ;
+//   • l. 1182 — « **Taire une erreur qu'on vient de découvrir soi-même** » — la honte qui tait.
+//
+// **La première survit. La seconde a disparu**, et le coût de la première a perdu au passage sa
+// clause « *la franchise est la condition du rôle, pas une vertu ajoutée* ». Vérifié par
+// appariement de chacune des 64 lignes d'origine contre les 77 courantes, sur recouvrement de
+// mots plutôt que sur un motif : **63 sur 64 couvertes, une seule orpheline**, et c'est
+// celle-là. (« Faire naître un agent herdr sur Haiku » est bien fusionnée dans le coût de
+// « Faire naître un agent sans déclarer son modèle » — vérifiée, pas une perte.)
+//
+// **Le compte de 77 reste juste** : il compte la table telle qu'elle est, et c'est ce qu'il
+// garde. Ce qui était faux, c'est la phrase qui déclarait la table complète.
+//
+// ⚠️ **TROIS FOIS LA MÊME FORME, ET C'EST LA LEÇON DE CE PARAGRAPHE** : chercher un MOT et
+// conclure sur la FONCTION. « worktree » manquant alors que la ligne vivait sous « espace de
+// travail » · une lecture qui concaténait deux mutations voisines et croyait voir quatre
+// arguments · et ici, deux fautes distinctes ramenées à une parce qu'elles partagent un mot.
+// **C'est le défaut que ce fichier tout entier existe pour attraper, commis trois fois en le
+// mesurant — et attrapé trois fois par quelqu'un qui a mesuré plutôt que de me suivre.**
+//
+// Perte remontée au ServiceDesk plutôt qu'à ce seul commentaire. **Un compte ne blanchit rien
+// tant que la méthode qui l'a établi est écrite à côté de lui — y compris quand elle a failli.**
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // 11 → 23 le 2026-08-16 (T-20260816-0099, T-20260816-0097, T-20260816-0018). Les douze qui
 // s'ajoutent sont le miroir des garanties de cette version, une par garantie et pas une de plus :
