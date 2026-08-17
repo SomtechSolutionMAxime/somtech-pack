@@ -139,18 +139,29 @@ test('LE REFUS DIT CE QU’IL A VU ET CE QU’IL FAUT FAIRE — un arbitrage per
   );
 });
 
-test('DEVANT UN DIALOGUE, LA TOUCHE D’ENVOI N’EST PAS ENVOYÉE — elle y confirmerait une action', async () => {
-  // ⚠️ CE DANGER EST MESURÉ, PAS SUPPOSÉ. Le 2026-08-17, sur le pane où un message fusionné
-  // venait de partir, l'écran portait `Do you want to proceed? ❯ 1. Yes`. La touche d'envoi n'y
-  // soumet pas un texte : elle approuve l'option par défaut — donc la commande qu'un ordre que
-  // personne n'a écrit venait de déclencher.
+test('DEVANT UN DIALOGUE, ON N’ÉCRIT MÊME PAS — écrire y CONFIRME l’action, c’est mesuré', async () => {
+  // ⚠️ LE FAIT QUI A MANQUÉ À DEUX LOTS, ÉTABLI LE 2026-08-17 CONTRE LE VRAI SERVICE.
   //
-  // La boîte est VIDE avant écriture (sinon le refus d'avant se déclenche et on n'atteint jamais
-  // ce chemin) ; c'est notre propre texte qui y reste coincé, sous un dialogue apparu depuis.
+  // `livraison.js` portait **[non établi]** : personne n'avait su reproduire un vrai dialogue de
+  // permission Claude Code. Il l'a été ici, et la mesure est pire que la crainte :
+  //
+  //   1. un vrai dialogue de permission est affiché — « Do you want to proceed? ❯ 1. Yes »,
+  //      proposant d'exécuter `touch /tmp/mesure-dialogue-t0006` ;
+  //   2. `herdr agent prompt <pane> "ceci est un texte ordinaire, pas une confirmation"` ;
+  //   3. **le fichier a été créé.** Le texte n'a pas été reçu comme un message : il a servi de
+  //      CONFIRMATION, et l'action a été approuvée.
+  //
+  // Donc ce n'est pas seulement la touche d'envoi qui est dangereuse ici — c'est **l'écriture
+  // elle-même**. Le garde ne peut pas se contenter de regarder la boîte : il doit regarder
+  // l'écran AVANT d'écrire, exactement comme il le fait avant d'envoyer la touche.
+  //
+  // ⚠️ Sur le dialogue mesuré, `contenuBoite` rend `null` — le refus « écran illisible » aurait
+  // mordu. Mais **par accident, pas par conception** : c'est le motif que ce dépôt nomme depuis
+  // `T-20260816-0114`. Un écran de choix qui laisse une boîte lisible sous lui n'était gardé par
+  // rien. C'est ce que cet essai éprouve : boîte vide et parfaitement lisible, dialogue au-dessus.
   const p = poste({
     statut: 'idle',
     boite: '',
-    colle: true,
     horsBoite: 'Do you want to proceed?\n❯ 1. Yes\n  2. No',
   });
 
@@ -162,9 +173,53 @@ test('DEVANT UN DIALOGUE, LA TOUCHE D’ENVOI N’EST PAS ENVOYÉE — elle y co
     }
   );
 
-  const gestes = p.gestes ? p.gestes('w9:p1') : null;
+  const gestes = p.gestes('w9:p1');
   assert.ok(
-    !(gestes || []).some((g) => g[1] === 'send-keys'),
+    !gestes.some((g) => g[1] === 'prompt'),
+    'RIEN ne doit être écrit devant un écran de choix — l’écriture y confirme l’action'
+  );
+  assert.ok(
+    !gestes.some((g) => g[1] === 'send-keys'),
+    'et aucune touche d’envoi non plus'
+  );
+});
+
+test('DEVANT UN DIALOGUE, LA TOUCHE D’ENVOI N’EST PAS ENVOYÉE — elle y confirmerait une action', async () => {
+  // ⚠️ CE DANGER EST MESURÉ, PAS SUPPOSÉ. Le 2026-08-17, sur le pane où un message fusionné
+  // venait de partir, l'écran portait `Do you want to proceed? ❯ 1. Yes`. La touche d'envoi n'y
+  // soumet pas un texte : elle approuve l'option par défaut — donc la commande qu'un ordre que
+  // personne n'a écrit venait de déclencher.
+  //
+  // ⚠️ LE DIALOGUE APPARAÎT **APRÈS** L'ÉCRITURE, et il le faut : l'écran est propre au départ,
+  // sinon c'est la garde d'AVANT qui refuse et ce chemin-ci n'est jamais atteint — l'essai
+  // deviendrait décoratif, satisfait par une garde qu'il ne teste pas. C'est exactement la
+  // séquence mesurée le 2026-08-17 : le texte part, l'agent agit, un dialogue s'affiche, et
+  // c'est le geste de RÉPARATION qui tomberait dessus.
+  const p = poste({
+    statut: 'idle',
+    boite: '',
+    colle: true,
+    horsBoiteApres: 'Do you want to proceed?\n❯ 1. Yes\n  2. No',
+  });
+
+  await assert.rejects(
+    () => remettre('w9:p1', PAROLE_DU_DIRIGEANT),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err.name}`);
+      // Le refus doit dire qu'il s'ABSTIENT devant un choix — pas se rabattre sur « resté dans
+      // la boîte », qui serait vrai mais tairait la raison qui compte.
+      assert.match(err.message, /confirm|choix|dialogue/i, 'le refus nomme ce dont il s’abstient');
+      return true;
+    }
+  );
+
+  const gestes = p.gestes('w9:p1');
+  assert.ok(
+    gestes.some((g) => g[1] === 'prompt'),
+    'le texte a bien été écrit — c’est ce chemin-ci qu’on éprouve, pas la garde d’avant'
+  );
+  assert.ok(
+    !gestes.some((g) => g[1] === 'send-keys'),
     'aucune touche d’envoi ne doit partir devant un écran de choix'
   );
 });

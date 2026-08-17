@@ -108,6 +108,7 @@ if (a[0] === 'agent' && a[1] === 'prompt') {
   const fusion = (e.boite || '') + texte;
   if (e.colle) e.boite = fusion;                      // rien ne part : le mélange reste en boîte
   else { recu(fusion); e.boite = ''; }                // le mélange PART, comme un seul message
+  e.promptFait = true;                                // le dialogue d'APRÈS peut désormais s'afficher
   if (e.file) e.enFile = true;                        // il rejoint la file d'un pair occupé
   if (!e.muet && !e.file) e.statut = 'working';       // la session quitte l'attente
   ecrire(pane, e);
@@ -124,7 +125,7 @@ if (a[0] === 'agent' && a[1] === 'send-keys') {
 }
 
 if (a[0] === 'agent' && a[1] === 'get') dit({ result: { agent: { pane_id: pane, agent_status: e.statut } } });
-if (a[0] === 'agent' && a[1] === 'read') brut(ecran(e.boite, e.enFile, e.horsBoite));
+if (a[0] === 'agent' && a[1] === 'read') brut(ecran(e.boite, e.enFile, e.horsBoite || (e.promptFait ? e.horsBoiteApres : '')));
 
 dit({ error: { code: 'unsupported', message: a.join(' ') } });
 `;
@@ -168,13 +169,13 @@ export function posteHerdr(racine, agents, nom = 'herdr') {
       return this.appels().filter((a) => a[2] === id);
     },
     /** Déclare un pane, et le scénario qu'il joue. Sans appel, un pane est INCONNU de herdr. */
-    pane(id, { statut = 'idle', boite = '', muet = false, colle = false, cede = false, file = false, horsBoite = '' } = {}) {
+    pane(id, { statut = 'idle', boite = '', muet = false, colle = false, cede = false, file = false, horsBoite = '', horsBoiteApres = '' } = {}) {
       // `file` implique un pair DÉJÀ occupé : son statut ne bougera pas, seul le marqueur
       // apparaîtra. Le poser à `idle` donnerait « sortie de l'attente » et prouverait un
       // autre témoin que celui qu'on veut éprouver.
       writeFileSync(
         join(etat, `${id.replace(/[^a-z0-9]/gi, '_')}.json`),
-        JSON.stringify({ statut: file ? 'working' : statut, boite, muet, colle, cede, file, horsBoite, enFile: false })
+        JSON.stringify({ statut: file ? 'working' : statut, boite, muet, colle, cede, file, horsBoite, horsBoiteApres, promptFait: false, enFile: false })
       );
       return this;
     },

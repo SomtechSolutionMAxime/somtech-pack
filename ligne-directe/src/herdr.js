@@ -128,6 +128,39 @@ export async function remettre(pane, texte, { socket } = {}) {
   // soit ici ». Cette prémisse était fausse : on écrit bien par-dessus. Le raisonnement s'inverse
   // donc avec elle. Ne pas savoir ce qu'il y a dans la boîte ne permet pas d'affirmer qu'elle est
   // vide — et c'est en écrivant sur cette supposition qu'on fusionne.
+  // ═══ ET ON NE POSE RIEN DEVANT UN ÉCRAN DE CHOIX — relevé en revue de fond, BLOQUANT, et il
+  // était juste : le refus ci-dessous ne regardait que la BOÎTE, jamais l'écran. Un dialogue
+  // affiché au-dessus d'une boîte vide passait donc entièrement.
+  //
+  // ⚠️ MESURÉ LE 2026-08-17, ET C'EST LE FAIT QUI MANQUAIT À DEUX LOTS. `livraison.js` portait
+  // **[non établi]** — personne n'avait su reproduire un vrai dialogue de permission. Reproduit
+  // ici, et la mesure est pire que la crainte :
+  //
+  //   • écran : « Do you want to proceed? ❯ 1. Yes », proposant `touch /tmp/mesure-dialogue-…` ;
+  //   • geste : `herdr agent prompt <pane> "ceci est un texte ordinaire, pas une confirmation"` ;
+  //   • résultat : **le fichier a été créé**. Le texte n'a pas été reçu comme un message — il a
+  //     servi de CONFIRMATION, et l'action a été approuvée.
+  //
+  // Ce n'est donc pas seulement la touche d'envoi qui est dangereuse devant un dialogue :
+  // **c'est l'écriture elle-même**. Le garde doit regarder l'écran avant d'écrire, exactement
+  // comme il le fait avant d'envoyer la touche — la symétrie n'est pas une élégance, c'est la
+  // moitié manquante.
+  //
+  // Sur le dialogue mesuré, la boîte était de surcroît illisible, donc le refus d'en dessous
+  // aurait mordu — mais PAR ACCIDENT, et « protégé par accident » est le motif que ce dépôt
+  // ferme partout. Un écran de choix qui laisse une boîte lisible sous lui n'était gardé par rien.
+  const etatAvant = etatDeLEcran(avant.ecran);
+  if (ressembleAUnChoix(avant.ecran) || (avant.ecran && !etatAvant.pretARecevoir)) {
+    throw new RemiseEchouee(
+      pane,
+      `${pane} est devant un écran qui attend un choix, pas un message — ` +
+        `${refusDEcran(etatAvant, { cible: 'la session' }) || 'ce que je vois ressemble à un dialogue'}. ` +
+        `Y écrire ne livrerait pas ta parole : ça CONFIRMERAIT l'action affichée (mesuré). Je m'abstiens. ` +
+        `Le geste : va voir l'écran (« herdr agent focus ${pane} »), réponds au dialogue toi-même, ` +
+        `puis renvoie ton message.`
+    );
+  }
+
   const dejaLa = contenuBoite(avant.ecran);
   if (dejaLa === null) {
     throw new RemiseEchouee(
@@ -147,6 +180,21 @@ export async function remettre(pane, texte, { socket } = {}) {
     );
   }
 
+  // ⚠️ CE QUI RESTE OUVERT, ET QUI DOIT ÊTRE DIT — relevé en revue de fond.
+  //
+  // Entre la lecture de l'écran ci-dessus et l'écriture ci-dessous, il y a deux appels de
+  // processus. Quelqu'un peut taper dans la boîte pendant cet intervalle — le destinataire
+  // lui-même en train de composer sa réponse, un écho de pair. `agent prompt` aboutera alors
+  // quand même, et la garde n'aura rien vu.
+  //
+  // **Ce n'est pas fermé, et ça ne peut pas l'être ici** : il faudrait que herdr offre un geste
+  // atomique « écris seulement si la boîte est vide », ce qu'il n'expose pas. Ce qui est fermé,
+  // c'est le cas qui se produit vraiment — une boîte laissée pleine, parfois depuis des heures.
+  // La fenêtre restante se compte en centaines de millisecondes.
+  //
+  // On le nomme plutôt que de laisser croire que la porte est close des deux côtés : c'est la
+  // règle de ce module, et taire une fenêtre parce qu'elle est étroite est la façon dont elle
+  // se fait oublier.
   let reponse;
   try {
     reponse = await herdr(['agent', 'prompt', pane, texte], socket);
