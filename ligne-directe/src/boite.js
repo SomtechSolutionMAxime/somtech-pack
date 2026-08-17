@@ -158,3 +158,44 @@ export function laPriseEstConstatee({ statutAvant, statut, ecranAvant, ecran }) 
 export function boiteEstVide(texteTerminal) {
   return contenuBoite(texteTerminal) === '';
 }
+
+/**
+ * Ce qu'on a lu est-il l'ESPACE RÉSERVÉ que l'écran met à la place d'un texte, plutôt que le
+ * texte lui-même ? (T-20260817-0091)
+ *
+ * ⚠️ CE N'EST PAS UNE AFFAIRE DE LONGUEUR — c'est une affaire de MODE D'ARRIVÉE, et s'être
+ * trompé là-dessus a coûté une mesure fausse. Mesuré sur banc le 2026-08-17 :
+ *
+ *   • 900 caractères TAPÉS AU CLAVIER → lus ENTIERS (910/910), aucun espace réservé ;
+ *   • les MÊMES 900 caractères COLLÉS → `[Pasted text #N]`, soit 16 caractères lus.
+ *
+ * Une première mesure avait conclu « seuil à ~600 caractères » : elle déposait tout par
+ * collage, donc elle mesurait le collage en croyant mesurer la longueur.
+ *
+ * ⚠️ ET C'EST LE CAS COURANT ICI, pas un cas limite : écrire dans la boîte d'un agent se fait
+ * par collage. Un texte qui bloque une boîte est donc très souvent un texte qu'un autre agent
+ * y a collé — et que personne ne peut plus lire à l'écran.
+ *
+ * ⚠️ ON EXIGE QUE L'ESPACE RÉSERVÉ SOIT TOUT CE QU'ON A LU, pas qu'il y figure. Un texte réel
+ * qui MENTIONNE `[Pasted text #6]` est un texte parfaitement lisible : le prendre pour un repli
+ * ferait taire l'avis sur ce qu'on a su lire — la garde qui crie à tort, sur le chemin même qui
+ * existe pour ne rien perdre.
+ */
+// ⚠️ LE SUFFIXE « +N lines » FAIT PARTIE DE LA FORME, et l'oublier ramenait le défaut ENTIER
+// sur le cas le plus probable (relevé en revue de fond). Un collage d'UNE ligne rend
+// `[Pasted text #6]` ; dès qu'il en fait plusieurs — c'est-à-dire dès qu'il s'agit d'un brief,
+// d'un ordre, de tout ce qui bloque réellement une boîte — il rend `[Pasted text #137 +19 lines]`.
+//
+// ⚠️ CES FORMES NE SONT PAS DEVINÉES : elles sont attestées par les doubles d'écran DÉJÀ dans
+// ce dépôt — `livraison.test.js` fixe `[Pasted text #56][Pasted text #57 +1 lines]`,
+// `un-refus-nomme-sa-sortie.test.js` fixe `[Pasted text #137 +19 lines]`. La première écriture
+// de cette garde ne les couvrait pas : elle avait été réglée sur un banc neuf sans regarder ce
+// que les essais voisins savaient déjà. `lines?` parce que le singulier existe aussi.
+const ESPACE_RESERVE = /\[Pasted text #\d+(?: \+\d+ lines?)?\]/g;
+
+export function estUnEspaceReserve(texteLu) {
+  const texte = String(texteLu ?? '').trim();
+  if (!texte) return false;
+  // Tout retirer, et voir s'il restait autre chose. Si oui, on a lu du texte — pas un repli.
+  return texte.replace(ESPACE_RESERVE, '').trim() === '';
+}

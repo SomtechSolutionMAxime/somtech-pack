@@ -34,8 +34,8 @@
 // LA LECTURE DE LA BOÎTE VIT DANS `ligne-directe/src/boite.js` — un seul endroit la connaît,
 // parce que deux chemins écrivent dans un pane et qu'une copie n'hérite pas des corrections
 // de l'autre (T-20260814-0138). Réexportée ici : tout ce qui la nommait continue de la voir.
-export { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
-import { contenuBoite, boiteEstVide, messagesEnFile } from '../../ligne-directe/src/boite.js';
+export { contenuBoite, boiteEstVide, estUnEspaceReserve } from '../../ligne-directe/src/boite.js';
+import { contenuBoite, boiteEstVide, messagesEnFile, estUnEspaceReserve } from '../../ligne-directe/src/boite.js';
 // ⚠️ LA SONDE D'ÉCRAN VIT DANS `ligne-directe/src/ecran.js` — un seul endroit sait reconnaître un
 // écran de blocage, et `bin/naitre.js` s'en sert déjà. La revue de fond a relevé que la livraison
 // ne s'en servait PAS : elle regardait la boîte sans jamais regarder ce qui pouvait s'afficher
@@ -602,11 +602,42 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   // VISIBLE à l'écran (mesuré — un texte long y est tronqué par le défilement). Ce qu'on
   // recopie ici est donc ce qu'on a lu, pas nécessairement tout ce qui est parti.
   const texte = String(texteLibere).trim();
-  return (
+  const ouverture =
     '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, resté immobile ' +
     `pendant les ${Math.round(immobiliteMs / 60000)} min où je l’ai observée. Je l’ai SOUMIS pour ` +
     'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
-    'les deux.\n\n' +
+    'les deux.\n\n';
+
+  // ⚠️ CE QU'ON A LU N'EST PARFOIS PAS LE TEXTE (T-20260817-0091) — et le citer comme s'il
+  // l'était engage une signature sans dire sur quoi. Le 2026-08-17, un coordonnateur a reçu
+  // « VOICI CE QUI A ÉTÉ SOUMIS EN TON NOM : [Pasted text #6] ». Il ne sait toujours pas ce qui
+  // est parti sous son nom.
+  //
+  // ⚠️ ON NE REND PAS L'AVIS PLUS RASSURANT, ON LE REND PLUS INFORMATIF. Un avis qui cite un
+  // espace réservé sans dire qu'il ne sait pas lire est PIRE qu'un avis qui l'avoue : la
+  // franchise de la phrase ci-dessous est ce qui a rendu ce défaut visible au lieu de le
+  // laisser silencieux, et elle est gardée sur LES DEUX chemins.
+  if (estUnEspaceReserve(texte)) {
+    return (
+      ouverture +
+      'QUELQUE CHOSE EST DONC PARTI EN TON NOM, ET JE NE PEUX PAS TE DIRE QUOI (tel que je l’ai ' +
+      'lu à l’écran, qui n’en montre que la partie visible) : ce que j’y ai trouvé n’est pas le ' +
+      `texte, c’est l’ESPACE RÉSERVÉ ` +
+      `que l’écran met à sa place quand on l’y a collé — ici, ${texte}. **JE NE SAIS PAS** ce ` +
+      'qu’il contenait, ni combien il faisait. Je ne l’ai jamais lu.\n\n' +
+      // ⚠️ CE QUI SUIT EST MESURÉ, PAS ESPÉRÉ. Un témoin de 924 caractères, collé donc replié à
+      // l'écran, a été soumis ici ; interrogé sur le tour qu'il avait reçu AVANT cet avis, le
+      // destinataire en a restitué le dernier mot. Il l'avait reçu entier. L'outil ne sait pas
+      // lire ce texte — le destinataire, lui, l'a.
+      'MAIS TOI, TU L’AS : il a été soumis, donc il t’est parvenu ENTIER. C’est le message que ' +
+      'tu as reçu **JUSTE AVANT** celui-ci. Va le relire — c’est lui qui est parti sous ta ' +
+      'signature, et c’est le seul endroit où il existe encore.\n\n' +
+      'Tant qu’une boîte reste pleine, PERSONNE ne peut te joindre et rien ne te le dit.'
+    );
+  }
+
+  return (
+    ouverture +
     `VOICI CE QUI A ÉTÉ SOUMIS EN TON NOM (tel que je l’ai lu à l’écran, qui n’en montre que la partie visible) :\n` +
     `┈┈┈\n${texte}\n┈┈┈\n\n` +
     'Si c’était un brouillon à toi, il vient de partir tel quel — et tu sais maintenant lequel. ' +
@@ -631,6 +662,29 @@ export function avisDeBoiteVidee({ texteDisparu = '' } = {}) {
   // 2026-08-17, un ordre du CTO n'a survécu que parce qu'un tiers l'avait lu à l'écran avant
   // d'envoyer : sans le texte ici, il n'y a rien à recopier.
   const texte = String(texteDisparu).trim();
+
+  // ⚠️ MÊME AVEU QUE POUR LA BOÎTE BLOQUÉE, MAIS SURTOUT PAS LA MÊME SUITE (T-20260817-0091).
+  //
+  // Là-bas, le texte A ÉTÉ SOUMIS : il est parvenu entier au destinataire, et on peut lui dire
+  // d'aller le relire. ICI, ON N'A RIEN SOUMIS. Le texte n'est donc nulle part en aval, et lui
+  // promettre par symétrie qu'il le retrouvera dans son tour précédent l'enverrait chercher ce
+  // qui n'existe pas — un avis qui rassure à tort, exactement ce qu'on nous interdit.
+  //
+  // Sur ce chemin, la vérité est plus dure et se dit telle quelle : le texte est hors d'atteinte.
+  if (estUnEspaceReserve(texte)) {
+    return (
+      '⚠️ TA BOÎTE DE SAISIE PORTAIT UN TEXTE, ET ELLE S’EST VIDÉE pendant que je l’observais — ' +
+      '**sans que je touche à quoi que ce soit**. Deux causes possibles, et je ne peux pas les ' +
+      'distinguer : tu l’as soumis toi-même, ou il a disparu sans être soumis.\n\n' +
+      'ET JE NE PEUX PAS TE DIRE CE QUE C’ÉTAIT : ce que j’avais lu à l’écran n’est pas le texte, ' +
+      `c’est l’ESPACE RÉSERVÉ que l’écran met à sa place quand on l’y a collé — ici, ${texte}. ` +
+      '**JE NE SAIS PAS** ce qu’il contenait, ni combien il faisait.\n\n' +
+      '⚠️ Et je ne peux pas te dire non plus où le retrouver : **je n’ai rien soumis**, donc il ' +
+      'n’est parti nulle part. S’il a disparu sans que tu l’aies soumis toi-même, il est **perdu** ' +
+      '— je n’ai aucun moyen de te le rendre, et je préfère te le dire que te laisser chercher.'
+    );
+  }
+
   return (
     '⚠️ TA BOÎTE DE SAISIE PORTAIT UN TEXTE, ET ELLE S’EST VIDÉE pendant que je l’observais — ' +
     '**sans que je touche à quoi que ce soit**. Deux causes possibles, et je ne peux pas les ' +
