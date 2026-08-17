@@ -9,6 +9,26 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ### Ajouté
 
+- **Les garde-fous contre les biais des LLM entrent enfin dans les prompts** (T-20260512-0002 · 0004 · 0005 · 0006 · 0008 · 0009 · 0010, PR #44) — les sept sub-agents du pack, les six gabarits d'agents autonomes et trois skills de plugins portent désormais les réflexes prescrits par **STD-011 §2.6**, chacun ceux de son persona : anti-sycophantie pour `qa`, anti-ancrage pour `product`, anti-hallucinations et approbation humaine sur opérations destructives pour `devops`, ancrage de juridiction QC/CA pour le skill qui cite des articles de loi dans des rapports client.
+- **Les agents autonomes reçoivent les cinq règles complètes**, et non deux ou trois réflexes : ils n'héritent d'aucun `CLAUDE.md`, donc ce qui n'est pas dans leur prompt n'existe pas pour eux.
+
+### Technique
+
+- ⚠️ **Cette livraison a attendu 96 jours** — ouverte le 2026-05-12, déclarée prête, jamais fusionnée. Ce n'était pas un brouillon oublié : personne ne l'avait vue. Elle a été retrouvée par le ménage du backlog (T-20260816-0016), qui l'a nommée comme le meilleur rapport effort/résultat du dépôt.
+- **Elle n'avait jamais eu de chaîne** — pas une verte périmée : *aucune*. Elle a été rebasée sur `main` (213 commits de retard, **aucun de ses 16 fichiers touché depuis le 12 mai** — le retard ne concernait donc rien de ce qu'elle modifie), et sa chaîne a tourné pour la première fois : 5/5.
+- **Deux passes de revue avant fusion**, sur un diff que personne n'avait relu. La première a rejeté sur deux références jugées inexistantes ; **les deux ont été réfutées par la mesure** — `AIMS/core-agents/infra-ops/config/` vit dans le dépôt Architecture, et `Agent TrainerBot` est cité nommément dans STD-011. *Conclure d'une absence dans un dépôt pour une référence qui pointe ailleurs* : le motif est noté. Une passe portail refaite et une passe de fond ont ensuite rendu **RIEN VU**, fidélité au standard vérifiée persona par persona.
+
+### À surveiller
+
+- **Deux disjoncteurs coexistent désormais dans `aims/agents/dev-orchestrator/`** : celui qui existait déjà, réel et implémenté (5 échecs → 5 min, câblé dans `hooks.ts`), et celui que ce lot ajoute en texte (3 erreurs → 15 min). Rien ne dit lequel prime — relevé par la revue de fond, à clarifier.
+- **La pause de 15 minutes est recopiée telle quelle dans cinq agents éphémères** dont le délai d'expiration documenté est de 5 minutes. Inerte plutôt que nuisible, mais c'est du collage plutôt que de la rédaction par fichier.
+- **Deux tickets de la série ne sont pas fermés par cette fusion** : `T-20260512-0007` (le persona `chatbot-qa` n'est pas distribué par le pack) et le volet `qa-hybrid`/`qa-utilisateur` de `T-20260512-0003`. Cause commune inscrite en `T-20260817-0002` — *un agent qui vit sur le poste sans être distribué n'a pas de propriétaire*.
+
+
+## [Non-versionné] - 2026-08-17
+
+### Ajouté
+
 - **Le backlog du pack a été relu en entier, et il dit désormais la vérité** (T-20260816-0016, PR #267) — **169 tickets** non fermés, lus un par un, description **et** commentaires : **33 fermés avec leur preuve mesurée**, **132 confirmés vivants**, 4 déclarés `[non établi]` faute de pouvoir trancher.
 - **L'hypothèse de départ était juste, mais à 19 %** — pas à la majorité. Et le déjà-réglé **n'était pas où on le cherchait** : *aucune* des fermetures ne dormait dans `ready_to_deploy`. Elles dormaient dans `new`, invisibles au statut. Il fallait lire.
 - **Chaque fermeture porte sa preuve** en commentaire de son ticket : une commande et sa sortie, un `chemin:ligne` à `HEAD`, ou un commit avec sa version. Jamais *« ça a probablement été corrigé »* — le raccourci qui a produit ce backlog.
