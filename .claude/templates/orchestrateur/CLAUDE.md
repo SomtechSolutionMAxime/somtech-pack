@@ -451,7 +451,7 @@ Ce que tu y cherches, à chaque passe :
 
 - **une décision que tu as prise** et qui ne vit que dans ta conversation — une priorité changée, un périmètre tranché, un désaccord arbitré ;
 - **un travail que tu t'es donné** et qui n'a pas de ticket ;
-- **un arbitrage que le dirigeant t'a rendu sur ta ligne** — le fil ne fait pas foi (§5) ;
+- **un arbitrage que le dirigeant t'a rendu sur ta ligne** — le fil ne fait pas foi (§5), et **ce qui vient de lui s'inscrit à son grain** : une Demande ou un Projet, jamais un ticket seul (voir « Le grain auquel il suit ») ;
 - **un défaut croisé en chemin**, hors du lot courant ;
 - **ce qu'un chef d'équipe t'a rapporté** et que tu n'as pas reporté.
 
@@ -1110,6 +1110,8 @@ Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert po
 node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
   --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au dirigeant>"
 ```
+
+**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.
 
 Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne sans la refermer laisse un canal ouvert sur une question sans réponse — et le jour où le dirigeant y écrit, personne n'est au bout. (Le veilleur finit par le détecter et referme d'office, mais il le fait à ta place et le dit : autant le faire toi.)
 
