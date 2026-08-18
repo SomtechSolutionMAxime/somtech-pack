@@ -42,14 +42,20 @@ poserPlafond({ ms: 60000, quoi: 'essai', ecrire: () => {}, sortir: () => {} });
 });
 
 test('LE PLAFOND ÉCRIT AVANT DE TUER — un mort sans faire-part est un silence de plus', () => {
+  // ⚠️ LA SÉQUENCE, PAS LES COMPTES — le premier jet de cet essai disait « L'ORDRE COMPTE » et
+  // n'assertait que `dits.length === 1 && sorties.length === 1`. Une passe de revue a inversé
+  // `ecrire` et `sortir` dans `poserPlafond` : l'essai est resté VERT. Un plafond qui tue avant
+  // d'écrire n'écrit rien — c'est le mort sans faire-part, exactement ce que ce ticket combat,
+  // rejoué dans la garde censée le tenir. Un seul journal, ordonné, tranche.
+  const journal = [];
   const dits = [];
   const sorties = [];
   let rappel = null;
   poserPlafond({
     ms: 1234,
     quoi: 'ca.somtech.essai',
-    ecrire: (t) => dits.push(t),
-    sortir: (c) => sorties.push(c),
+    ecrire: (t) => { journal.push('ecrit'); dits.push(t); },
+    sortir: (c) => { journal.push('sorti'); sorties.push(c); },
     minuteur: (fn, ms) => {
       rappel = { fn, ms };
       return { unref() {} };
@@ -65,7 +71,5 @@ test('LE PLAFOND ÉCRIT AVANT DE TUER — un mort sans faire-part est un silence
   assert.match(dits[0], /1234/, 'le faire-part porte la durée exacte dépassée');
   assert.match(dits[0], /ca\.somtech\.essai/, 'et NOMME sa victime');
   assert.match(dits[0], /pas « rien à signaler »|n'a donc RIEN établi/i, 'et sépare « rien à dire » de « on n’a pas pu regarder »');
-  // ⚠️ L'ORDRE COMPTE : écrire APRÈS avoir tué n'écrit rien. La revue de ce dépôt a déjà vu
-  // un message d'échec parfait qu'aucun chemin n'atteignait.
-  assert.ok(dits.length === 1 && sorties.length === 1, 'il écrit, PUIS il tue');
+  assert.deepEqual(journal, ['ecrit', 'sorti'], 'il écrit, PUIS il tue — l’inverse n’écrit rien du tout');
 });

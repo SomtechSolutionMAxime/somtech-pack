@@ -46,6 +46,7 @@ import { contenuBoite, boiteEstVide, messagesEnFile, estUnEspaceReserve } from '
 // choix » à tort. En écrire une seconde ici aurait rejoué « une porte sur deux » dans le
 // correctif écrit pour la fermer : la copie n'hérite jamais des corrections de l'autre.
 import { etatDeLEcran, ressembleAUnChoix, ecranAttendUnChoix, resumeDeLEcran } from '../../ligne-directe/src/ecran.js';
+import { budgetPourUneAttente } from './appel-herdr.js';
 
 /**
  * Le brief a-t-il été PRIS ? La question n'est pas « l'outil a-t-il dit oui », c'est « la
@@ -850,7 +851,12 @@ export async function livrerBrief({
   }
 
   const commandes = commandesLivraison(pane, texteALivrer, { attenteMs, dejaAuTravail: statutAvant === 'working' });
-  const livraison = await appelHerdr(commandes.livrer, vers);
+  // ⚠️ CE SEUL APPEL PORTE UNE ATTENTE — `--wait --until working --timeout <attenteMs>`. Son
+  // budget doit donc CONTENIR cette attente, sinon le plafond générique par appel tuerait une
+  // livraison qui progresse et la ronde la rapporterait en « session muette » (relevé en revue
+  // de fond). Le lien est fait par construction : il ne dépend plus d'une marge que personne
+  // ne surveille entre deux constantes réglables séparément.
+  const livraison = await appelHerdr(commandes.livrer, { ...vers, delaiMs: budgetPourUneAttente(attenteMs) });
 
   // 3. VERIFIER PAR LE FAIT — la session a-t-elle quitte l'attente ?
   const prisMaintenant = async () => {

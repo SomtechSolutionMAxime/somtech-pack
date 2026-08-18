@@ -632,13 +632,28 @@ test('UNE RONDE TUÉE PAR SON PLAFOND LAISSE LA TRACE DE SA MORT — la seule qu
 // rien. Le premier jet donnait 2/3 à la livraison et lui en coûtait DEUX, sans que rien ne
 // le dise ni ne le mesure. Une valeur qu'aucun essai ne tient est une valeur qui dérivera.
 //
-// Aux valeurs de l'essai : échéance 6 s, reprise toutes les secondes. À 5/6, la livraison a
-// jusqu'à 5 s → reprises à t=0,1,2,3,4 = CINQ. À 2/3 elle aurait 4 s → QUATRE.
+// ⚠️ ET IL NE COMPTE PAS LES REPRISES, il regarde QUAND LA DERNIÈRE A EU LIEU — le premier jet
+// exigeait « au moins cinq reprises » et une seconde passe de revue l'a pris en défaut : le
+// compte dépend du COÛT de chaque tour (lancement du faux herdr, écriture du journal), donc de
+// la charge de la machine. Une garde qui rougit quand le poste est occupé mesure le poste, pas
+// le code — et elle finit retirée pour ça, en emportant ce qu'elle gardait.
+//
+// L'instant de la dernière reprise, lui, a une borne EXACTE d'un côté : une reprise ne peut
+// jamais avoir lieu à l'échéance de la livraison ou après — la boucle sort avant. À 2/3 d'un
+// budget de 12 s, cette échéance est 8 s : aucune reprise à 8 s ou au-delà, quel que soit le
+// coût des tours, quelle que soit la charge du poste. C'est une impossibilité, pas une
+// tendance.
+//
+// De l'autre côté, à 5/6 l'échéance est 10 s, et les reprises se suivent d'un délai plus le
+// coût d'un tour : il y en a forcément une qui démarre dans la fenêtre [8,4 s ; 10 s] tant que
+// ce pas reste sous 1,6 s — très large pour trois lancements d'un script de deux lignes. D'où
+// un délai court (200 ms), qui resserre le pas et élargit la marge des deux côtés.
 function fauxHerdrQuiRefuseEtCompte(pane, lieu, journal) {
   const script = `#!/usr/bin/env node
 const fs = require('fs');
 const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(journal)}, args.slice(0, 2).join(' ') + '\\n');
+// L'INSTANT de chaque geste, pas seulement son compte — voir l'essai.
+fs.appendFileSync(${JSON.stringify(journal)}, args.slice(0, 2).join(' ') + ' ' + Date.now() + '\\n');
 if (args[0] === 'agent' && args[1] === 'list') {
   process.stdout.write(JSON.stringify({ result: { agents: [
     { pane_id: ${JSON.stringify(pane)}, name: 'orch-occupe', agent_status: 'working',
@@ -666,20 +681,34 @@ test('LA LIVRAISON GARDE SA PART DU BUDGET — le partage ne la vide pas de ses 
   const journal = join(bac, 'part.log');
   writeFileSync(journal, '');
   fauxHerdrQuiRefuseEtCompte('w9:pP', lieu, journal);
-  const ECHEANCE = 6000;
+  const ECHEANCE = 12000;
+  // Entre l'échéance qu'aurait 2/3 (8 s — infranchissable) et celle de 5/6 (10 s).
+  const SEUIL = 8400;
+  const debut = Date.now();
   const r = lancerRonde(['/s/a.sock'], {
-    RENDEZ_VOUS_DELAI_MS: '1000',
+    RENDEZ_VOUS_DELAI_MS: '200',
     RENDEZ_VOUS_ECHEANCE_MS: String(ECHEANCE),
     // Assez long pour que la vigie n'ait la place de regarder personne : cet essai mesure la
-    // LIVRAISON, et une vigie qui tournerait ajouterait ses propres lectures au compteur.
-    RENDEZ_VOUS_VIGIE_MS: '5000',
+    // LIVRAISON, et une vigie qui tournerait ajouterait ses propres lectures au journal.
+    RENDEZ_VOUS_VIGIE_MS: '9000',
     RENDEZ_VOUS_PLAFOND_MS: '60000',
     LIGNE_DIRECTE_RACINE: join(bac, 'r-part'),
   });
   const dit = JSON.parse(r.stdout.trim().split('\n').pop());
-  const reprises = readFileSync(journal, 'utf8').split('\n').filter((l) => l === 'agent read').length;
+  const reprises = readFileSync(journal, 'utf8')
+    .split('\n')
+    .filter((l) => l.startsWith('agent read '))
+    .map((l) => Number(l.split(' ').pop()) - debut);
+  const derniere = Math.max(...reprises);
 
-  assert.ok(reprises >= 5, `la livraison doit garder ses cinq reprises — ${reprises} constatée(s)`);
+  // ⚠️ LA MESURE EST PRISE AVANT LE LANCEMENT du processus, donc l'écart mesuré est un peu
+  // PLUS GRAND que l'horloge interne de la ronde. Le biais joue contre l'essai du côté 2/3
+  // (il rendrait un dépassement apparent), et le seuil garde de la marge pour ça.
+  assert.ok(
+    derniere >= SEUIL,
+    `la livraison doit reprendre au-delà de ${SEUIL} ms — à 2/3 elle se serait arrêtée à 8000 ms et ` +
+      `AUCUNE reprise n'y serait possible. Dernière reprise à ${derniere} ms (${reprises.length} au total)`
+  );
   assert.ok(dit.duree_ms <= ECHEANCE, `et la ronde tient dans son budget — ${dit.duree_ms} ms`);
   assert.equal(tracePassage('r-part').ronde.verdict, 'partiel', 'une remise qui n’a pas abouti n’est pas un succès');
 });
@@ -751,4 +780,39 @@ test('UNE MORT IMPRÉVUE LAISSE SA TRACE — sinon la ronde disparaît comme si 
   const trace = tracePassage('r-erreur');
   assert.equal(trace.ronde.verdict, 'erreur');
   assert.match(trace.ronde.message, /une panne que personne/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA PANNE PROVOQUÉE N'EXISTE QUE SOUS CLOISON — et ça se prouve HORS cloison
+//
+// ⚠️ RELEVÉ EN REVUE PAR MUTATION : retirer `enEssais()` de la garde ne faisait rougir aucun
+// essai, et la revue en donnait la raison — toute la suite tourne sous `node --test`, donc
+// `NODE_TEST_CONTEXT` est vrai et hérité par le sous-processus. La cloison ne pouvait pas
+// valoir faux depuis l'intérieur du harnais, et la revue concluait « pas réparable ici ».
+//
+// Elle l'est : il suffit de RETIRER la marque de l'environnement de l'enfant. La ronde naît
+// alors exactement comme sous `launchd` — sans cloison —, et la porte d'essai doit être close.
+// Sans cet essai, une variable d'environnement suffirait à faire échouer une vraie ronde.
+test('HORS CLOISON D’ESSAIS, LA PANNE PROVOQUÉE EST IGNORÉE — la porte n’existe pas en vrai', () => {
+  installerFauxHerdr({ agents: [] });
+  const sansCloison = { ...process.env };
+  delete sansCloison.NODE_TEST_CONTEXT;
+
+  const r = spawnSync(process.execPath, [BIN, 'ronde'], {
+    env: {
+      ...sansCloison,
+      HERDR_SESSIONS_ESSAIS: '/s/a.sock',
+      HERDR_SOCKET_PATH: '',
+      LIGNE_DIRECTE_RACINE: join(bac, 'r-hors-cloison'),
+      RENDEZ_VOUS_PANNE_PROVOQUEE: 'cette panne ne doit JAMAIS être honorée ici',
+      RENDEZ_VOUS_DELAI_MS: '5',
+      RENDEZ_VOUS_ECHEANCE_MS: '2000',
+    },
+    timeout: 30000,
+    encoding: 'utf8',
+  });
+
+  assert.equal(r.status, 0, `la ronde doit aboutir normalement — stderr: ${r.stderr}`);
+  assert.doesNotMatch(r.stderr, /cette panne ne doit JAMAIS/, 'la porte d’essai est CLOSE hors cloison');
+  assert.equal(tracePassage('r-hors-cloison').ronde.verdict, 'abouti');
 });
