@@ -63,6 +63,22 @@ fi
 
 command -v git >/dev/null 2>&1 || { echo "Erreur: git est requis."; exit 1; }
 
+# `jq` est requis par l'installation PROJET — somtech_pack_pull.sh y lit les
+# chemins de chaque module dans pack.json. Il le vérifie lui-même, mais après
+# le clone : sans ce contrôle, un poste sans jq télécharge le dépôt entier pour
+# se faire refuser ensuite (T-20260818-0042). On refuse donc avant de tirer.
+# Conditionnel à --target, et pas plus : `--with-claude-swt` seul n'installe
+# aucun module et n'a jamais besoin de jq — une garde qui le refuserait
+# coûterait plus qu'elle ne rapporte.
+if [[ -n "$TARGET" ]]; then
+  command -v jq >/dev/null 2>&1 || {
+    echo "Erreur: jq est requis pour installer les modules du pack (lecture de pack.json)." >&2
+    echo "  macOS   : brew install jq" >&2
+    echo "  Debian  : sudo apt-get install jq" >&2
+    exit 1
+  }
+fi
+
 # Clone éphémère du pack pour récupérer le script de pull à jour
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT

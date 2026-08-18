@@ -152,6 +152,42 @@ echo "$OUT" | grep -qi 'clone' \
   && ok "impute la panne au clone, non à pack.json" \
   || ko "ne distingue pas un clone incomplet d'un pack.json muet"
 
+echo "== E. Une LISTE MIXTE : un module valide + un inconnu ne passe pas en succès =="
+# La garde sur le total ne voyait pas ce cas : `core` résout, donc des chemins
+# sont parcourus, des fichiers arrivent, et le module inconnu était ignoré en
+# silence. Une demande servie à moitié qui se dit réussie est le même défaut
+# que celui de ce ticket, simplement plus discret.
+installer "$PATH" "${WORK}/cible-liste-mixte" --modules core,typo-inexistant
+[ "$RC" -ne 0 ] \
+  && ok "sort en échec sur un module inconnu dans une liste valide (rc=$RC)" \
+  || ko "sort en SUCCÈS (rc=$RC) : $N_FILES fichier(s) arrivés, le module inconnu passé sous silence"
+echo "$OUT" | grep -q 'typo-inexistant' \
+  && ok "nomme le module fautif" \
+  || ko "ne nomme pas le module fautif — l'appelant ne peut pas corriger sa frappe"
+
+echo "== F. La garde amont de remote-install.sh ne refuse QUE ce qu'elle doit =="
+# `remote-install.sh` refuse désormais AVANT de cloner quand jq manque — mais
+# seulement pour une installation projet. Une garde qui refuserait aussi
+# `--with-claude-swt` (qui n'a jamais eu besoin de jq) coûterait plus qu'elle
+# ne rapporte : on mesure les DEUX chiffres, ce qu'elle attrape et ce qu'elle
+# refuse à tort.
+RI="${SCRIPT_DIR}/../remote-install.sh"
+set +e
+OUT="$(PATH="$NOJQ_BIN" bash "$RI" --target "${WORK}/cible-remote" --repo "$SRC" --ref "" 2>&1)"; RC=$?
+set -e
+{ [ "$RC" -ne 0 ] && echo "$OUT" | grep -qi 'jq'; } \
+  && ok "sans jq, une install projet est refusée et jq est nommé" \
+  || ko "ne refuse pas / ne nomme pas jq (rc=$RC)"
+echo "$OUT" | grep -qi 'Téléchargement du pack' \
+  && ko "clone le dépôt AVANT de refuser — le refus arrive trop tard" \
+  || ok "refuse AVANT de télécharger le pack"
+set +e
+OUT="$(PATH="$NOJQ_BIN" bash "$RI" --with-claude-swt --help 2>&1; echo "RC=$?")"
+set -e
+echo "$OUT" | grep -qi 'jq est requis' \
+  && ko "refuse à tort un usage qui n'a jamais eu besoin de jq" \
+  || ok "ne refuse pas un usage sans installation de modules"
+
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
 echo "Résultat : ${PASS} OK, ${FAIL} KO"

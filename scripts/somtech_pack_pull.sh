@@ -138,14 +138,18 @@ fi
 # critère : un module légitimement vide le ferait rougir à tort.
 paths_resolved=0
 paths_scanned=0
+modules_sans_chemin=""
 
 IFS=',' read -ra mod_array <<< "$modules_to_check"
 for mod in "${mod_array[@]}"; do
   mod="$(echo "$mod" | tr -d '[:space:]')"
+  [[ -z "$mod" ]] && continue
+  mod_paths=0
   while IFS= read -r mod_path; do
     [[ -z "$mod_path" ]] && continue
     mod_path="${mod_path%/}"
     paths_resolved=$((paths_resolved + 1))
+    mod_paths=$((mod_paths + 1))
 
     src_dir="${PACK_CLONE}/${mod_path}"
     tgt_dir="${TARGET_ABS}/${mod_path}"
@@ -172,27 +176,38 @@ for mod in "${mod_array[@]}"; do
       ! -name '*.zip' \
       -print 2>/dev/null)
   done < <(get_module_paths "$PACK_CLONE" "$mod")
+  [[ "$mod_paths" -eq 0 ]] && modules_sans_chemin="${modules_sans_chemin}${modules_sans_chemin:+, }${mod}"
 done
 
-# ── Garde : une installation qui n'a parcouru aucun chemin est une ANOMALIE ──
+# ── Gardes : une demande non servie ne se solde JAMAIS par un succès ─────────
 #
-# Elle se pose AVANT le message de résultat : annoncer « 0 nouveau, 0 modifié,
-# 0 identique » puis « aucun changement à appliquer » quand on n'a rien
-# parcouru, c'est emprunter la formule d'un dépôt déjà à jour pour décrire une
-# panne. Ce ticket ferme la CLASSE, pas seulement la cause connue (`jq`
-# manquant) : pack.json illisible, modules mal orthographiés, clone incomplet
-# aboutissent au même silence.
+# Elles se posent AVANT le message de résultat : annoncer « 0 nouveau, 0
+# modifié, 0 identique » puis « aucun changement à appliquer » alors qu'on n'a
+# rien parcouru, c'est emprunter la formule d'un dépôt déjà à jour pour décrire
+# une panne (T-20260818-0042).
+#
+# Deux gardes, et non une, parce qu'elles n'attrapent pas le même défaut — et
+# que la plus large ne voit pas ce que la plus fine attrape :
+
+# 1. Un module demandé dont AUCUN chemin ne se résout. La garde large ne le
+#    verrait pas dans une liste par ailleurs valide : `--modules core,typo`
+#    installait `core` et rendait 0 en passant `typo` sous silence. Une demande
+#    partiellement servie qui se dit réussie est le même défaut, en plus discret.
+if [[ -n "$modules_sans_chemin" ]]; then
+  echo ""
+  err "Module(s) sans aucun chemin : ${modules_sans_chemin}"
+  err "  Aucun chemin n'a été résolu depuis ${PACK_CLONE}/pack.json."
+  err "  Causes usuelles : nom de module inconnu (faute de frappe), module retiré"
+  err "  du pack, ou pack.json illisible."
+  die "Installation interrompue : la demande n'a pas été servie en entier."
+fi
+
+# 2. Des chemins déclarés, mais aucun présent dans le clone. Le pack.json est
+#    lisible et les modules existent — c'est le clone qui est incomplet.
 if [[ "$paths_scanned" -eq 0 ]]; then
   echo ""
-  err "Aucun chemin de module n'a été parcouru — rien n'a pu être installé."
-  if [[ "$paths_resolved" -eq 0 ]]; then
-    err "  Modules demandés : ${modules_to_check}"
-    err "  Aucun chemin n'a été résolu depuis ${PACK_CLONE}/pack.json."
-    err "  Causes usuelles : nom de module inconnu, ou pack.json illisible."
-  else
-    err "  ${paths_resolved} chemin(s) déclaré(s), aucun présent dans le clone du pack."
-    err "  Le clone est probablement incomplet : ${PACK_CLONE}"
-  fi
+  err "${paths_resolved} chemin(s) déclaré(s), aucun présent dans le clone du pack."
+  err "  Le clone est probablement incomplet : ${PACK_CLONE}"
   die "Installation interrompue : ce n'est PAS un dépôt déjà à jour."
 fi
 
