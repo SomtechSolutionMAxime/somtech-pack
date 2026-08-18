@@ -156,28 +156,80 @@ test('LES DEUX TEXTES NE SONT JAMAIS FUSIONNÉS — c’est ce que la garde prot
 
 // ═══ LA MOITIÉ QUI PROTÈGE — ces essais doivent rester verts après le correctif ═════════
 
-test('UN TEXTE TAPÉ PAR UN HUMAIN N’EST PAS SOUMIS À SA PLACE — le geste ne se défait pas', async () => {
-  const { remettre, RemiseEchouee } = await import('../src/herdr.js');
-  // Pas un repli `[Pasted text #N]` : une phrase inachevée, tapée, et que rien ne libère.
-  fauxHerdr({ occupePar: 'je pense qu’il faudrait plutôt', sourd: true });
+test('UN TEXTE TAPÉ QUI BOUGE N’EST PAS SOUMIS À SA PLACE — quelqu’un est en train d’écrire', async () => {
+  // ⚠️ CET ESSAI A ÉTÉ REFAIT DEUX FOIS, ET LA DEUXIÈME EST LA LEÇON (T-20260818-0049).
+  //
+  // Forme 1 : une boîte que rien ne libérait. Le refus tombait de toute façon — condamner le
+  // discriminant collé/tapé ne le faisait pas rougir.
+  // Forme 2 : un texte qui changeait à chaque LECTURE. Il rougissait sur d'autres mutations,
+  // mais toujours pas sur celle-ci : en changeant à chaque lecture, il bougeait aussi bien
+  // avec un délai nul qu'avec un délai plein. **Le banc mesurait le nombre de lectures, pas
+  // le temps** — et c'est le TEMPS que le discriminant achète.
+  // Forme 3, celle-ci : le texte change quand un DÉLAI RÉEL s'est écoulé, jamais avant. Sans
+  // attente, on ne le voit pas bouger et on soumet la phrase inachevée de quelqu'un ; avec
+  // l'attente, on le voit, et on s'abstient. La mutation le fait enfin rougir.
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  const marqueur = join(bac, 'premiere-lecture');
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const MARQUEUR = ${JSON.stringify(marqueur)};
+const args = process.argv.slice(2);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+if (cmd === 'agent read') {
+  // LE TEMPS, PAS LE COMPTE. La phrase ne s'allonge qu'une fois 40 ms écoulées depuis la
+  // première lecture — c'est-à-dire seulement si on a réellement ATTENDU entre deux regards.
+  let t0;
+  try { t0 = Number(fs.readFileSync(MARQUEUR, 'utf8')); }
+  catch { t0 = Date.now(); fs.writeFileSync(MARQUEUR, String(t0)); }
+  const ecoule = Date.now() - t0;
+  const phrase = 'je pense qu’il faudrait plutôt' + (ecoule >= 40 ? ' revoir tout ça' : '');
+  process.stdout.write(['~/x', SEP, '\\u276f ' + phrase, SEP, '  auto mode on'].join('\\n'));
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
 
+  const { remettre, RemiseEchouee } = await import('../src/herdr.js');
   await assert.rejects(
     () => remettre('w5:p8', 'Message du dirigeant.'),
     (err) => {
       assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
-      assert.match(err.message, /bo[iî]te/i, 'le refus doit dire ce qu’il a vu');
+      assert.match(err.message, /BOUG|inachevée/i, 'le refus doit dire que quelqu’un écrit là');
       return true;
     }
   );
+  const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
+  assert.ok(
+    !gestes.includes('agent send-keys'),
+    'ON NE SOUMET PAS la phrase de quelqu’un qui est en train de la taper — le geste ne se défait pas'
+  );
 });
 
-test('UNE BOÎTE QUI NE SE LIBÈRE PAS FAIT ÉCHOUER LA REMISE — jamais un succès silencieux', async () => {
+test('UNE BOÎTE QU’ON N’A PAS LIBÉRÉE NE REÇOIT RIEN — on n’écrit pas par-dessus, jamais', async () => {
+  // ⚠️ RÉÉCRIT LUI AUSSI APRÈS UNE MUTATION SURVIVANTE. Sa première forme n'exigeait qu'un
+  // échec — or l'échec tombait de toute façon plus bas, donc condamner le refus de délivrance
+  // ne le faisait pas rougir. Ce qui compte n'est pas QU'ON ÉCHOUE, c'est QU'ON N'AIT PAS ÉCRIT :
+  // écrire par-dessus un texte qu'on n'a pas pu libérer, c'est la FUSION — le défaut même que
+  // la garde de v1.63.0 était venue fermer. Un correctif qui la rouvrirait aurait tourné en rond.
+  const journal = fauxHerdr({ occupePar: '[Pasted text #83 +7 lines]', sourd: true });
   const { remettre, RemiseEchouee } = await import('../src/herdr.js');
-  fauxHerdr({ occupePar: '[Pasted text #83 +7 lines]', sourd: true });
 
-  await assert.rejects(
-    () => remettre('w5:p8', 'Message du dirigeant.'),
-    (err) => err instanceof RemiseEchouee
+  await assert.rejects(() => remettre('w5:p8', 'Message du dirigeant.'), (err) => err instanceof RemiseEchouee);
+
+  const ecrits = appels(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
+  assert.equal(
+    ecrits.length,
+    0,
+    'AUCUNE écriture : la boîte porte encore le texte d’autrui, y écrire collerait les deux en un seul message'
   );
 });
 
@@ -189,4 +241,133 @@ test('UNE BOÎTE LIBRE NE PAIE AUCUNE TOUCHE EN PLUS — on ne délivre que ce q
 
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
   assert.ok(!gestes.includes('agent send-keys'), 'rien à délivrer : la touche d’envoi ne part pas');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE SECOND DÉFAUT, ET C'EST CELUI QUE LE DIRIGEANT DÉCRIT EN DERNIER (T-20260818-0049)
+//
+//   « là les boîtes de texte ne se vident pas sur les fenêtres herdr et c'est vraiment un
+//     très gros problème »
+//
+// Sa formulation déplace le sujet d'un cran, et elle a raison de le faire : le symptôme n'est
+// pas le refus, c'est que LE TEXTE RESTE. Mesuré dans le code : `remettre()` SOUMET bien ce
+// qu'elle écrit — `agent prompt` soumet, et si le texte reste elle envoie la touche d'envoi.
+// L'hypothèse « elle écrit seulement » est donc écartée.
+//
+// ⚠️ MAIS ELLE NE RELIT QU'UNE FOIS, IMMÉDIATEMENT. Une touche d'envoi part, une seule lecture
+// suit, sans un instant d'attente — et si le terminal n'a pas encore traité la touche, le refus
+// tombe : « le message est resté dans la boîte de saisie — il n'a pas été soumis ». C'est le
+// message EXACT que le dirigeant a reçu, et il peut être FAUX : la touche avait pu marcher.
+//
+// Une lecture unique ne dit rien quand le système retarde. `delivrerLaBoite`, à côté, relit
+// jusqu'à `essais` fois en dormant entre deux — parce qu'une boîte ne se vide pas dans
+// l'instant. Ici, rien. C'est la même asymétrie que le lot principal : le savoir-faire existait
+// dans un module et manquait dans l'autre.
+
+test('LA BOÎTE A LE TEMPS DE SE VIDER — une lecture unique ne dit rien quand le terminal retarde', async () => {
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  // Le double reproduit le RETARD : après Entrée, la boîte reste pleine à la première
+  // relecture et ne se vide qu'à la suivante. Piloté par le GESTE et le compte de lectures
+  // POSTÉRIEURES à l'envoi — jamais par un compteur global, qui viderait la boîte trop tôt.
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const args = process.argv.slice(2);
+const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+const iEnter = passes.findIndex((a) => a[1] === 'send-keys');
+const promptFait = passes.some((a) => a[1] === 'prompt');
+// Combien de fois a-t-on relu DEPUIS la touche d'envoi ?
+const luesDepuisEnter = iEnter === -1 ? 0 : passes.slice(iEnter).filter((a) => a[1] === 'read').length;
+
+if (cmd === 'agent read') {
+  // Notre texte reste collé après le prompt ; la touche d'envoi le libère, mais SEULEMENT à
+  // partir de la deuxième relecture — le terminal a mis un instant à traiter la touche.
+  const reste = promptFait && (iEnter === -1 || luesDepuisEnter < 1) ? 'notre message' : '';
+  process.stdout.write(['~/x', SEP, '\\u276f ' + reste, SEP, '  auto mode on'].join('\\n'));
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  const { remettre } = await import('../src/herdr.js');
+  // AVANT LE CORRECTIF : une seule relecture, immédiate, et le refus tombe alors que la touche
+  // d'envoi avait marché. Le dirigeant reçoit « il n'a pas été soumis » sur un message soumis.
+  const preuve = await remettre('w5:p8', 'notre message');
+  assert.ok(preuve, 'la remise doit aboutir : la touche d’envoi a marché, il fallait laisser le temps de le voir');
+
+  const lectures = appels(journal).filter((a) => a[1] === 'read').length;
+  const enter = appels(journal).filter((a) => a[1] === 'send-keys').length;
+  assert.equal(enter, 1, 'UNE SEULE touche d’envoi — on ne matraque pas la boîte');
+  assert.ok(lectures >= 3, `la boîte doit être relue plusieurs fois après la touche — vu ${lectures} lectures`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE CONTRÔLE QUE LE DIRIGEANT DEMANDE — et c'est le vrai livrable (T-20260818-0049)
+//
+//   « Ok on doit enlever le blocage commencer et mettre un contrôle pour s'assurer que les
+//     messages sont bien soumis. »
+//
+// Son ordre est meilleur que celui qu'on poussait. On cherchait à garder le veto en le
+// doublant d'un rattrapage ; lui renverse : on ne refuse plus, et on VÉRIFIE QUE ÇA PART.
+// C'est plus sûr, parce que ça s'attaque à la cause au lieu de gérer la conséquence — si
+// chaque message est soumis, une boîte ne se remplit pas, et le veto n'a plus d'objet.
+//
+// ⚠️ ET LE CONTRÔLE PORTE SUR NOTRE PROPRE TEXTE, PAS SEULEMENT SUR CELUI D'AUTRUI. C'est la
+// moitié qui a manqué à `v1.63.0` : on a appris à refuser d'écrire sur le texte d'un autre
+// avant d'avoir appris à constater que le nôtre était parti.
+//
+// ⚠️ CE QUI N'EST PAS UNE PREUVE : `ok: true`, « la boîte était libre », le code de sortie de
+// la touche d'envoi. La seule preuve admise est que LE TEXTE N'EST PLUS DANS LA BOÎTE.
+
+test('NOTRE PROPRE TEXTE ÉCRIT ET NON SOUMIS FAIT ÉCHOUER LA REMISE — jamais un « ok » dessus', async () => {
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  // La boîte était LIBRE — donc aucun veto, aucune délivrance : on écrit. Et notre texte reste,
+  // quoi qu'on fasse. C'est le mode de panne que le dirigeant décrit : « ça ne part jamais ».
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const args = process.argv.slice(2);
+const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+const promptFait = passes.some((a) => a[1] === 'prompt');
+if (cmd === 'agent read') {
+  process.stdout.write(['~/x', SEP, '\\u276f ' + (promptFait ? 'notre message qui ne part jamais' : ''), SEP, '  auto mode on'].join('\\n'));
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  const { remettre, RemiseEchouee } = await import('../src/herdr.js');
+  await assert.rejects(
+    () => remettre('w5:p8', 'notre message qui ne part jamais'),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
+      assert.match(err.message, /pas été soumis/i, 'le refus doit dire que le message n’est PAS parti');
+      return true;
+    },
+    'un message écrit et jamais soumis ne doit JAMAIS rendre un succès — l’émetteur croirait avoir parlé'
+  );
+
+  // ET LA TOUCHE D'ENVOI A BIEN ÉTÉ TENTÉE : on ne se contente pas de constater l'échec, on
+  // essaie d'abord de le lever. Un contrôle qui ne fait que refuser laisserait le dirigeant
+  // exactement où il était.
+  const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
+  assert.ok(gestes.includes('agent send-keys'), 'on tente la touche d’envoi avant de renoncer');
 });
