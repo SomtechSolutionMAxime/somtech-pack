@@ -105,8 +105,21 @@ test('DES COLLÈGUES NE DÉCLENCHENT RIEN — sinon la garde devient du bruit et
 test('UNE RÉFÉRENCE QUI EST UN NOM N’EST PAS COMPARABLE — c’est le défaut du 2026-08-18, gardé', () => {
   assert.equal(referenceComparable('Somtech Solution'), false, 'un nom d’espace n’est pas un identifiant');
   assert.equal(referenceComparable('T091JB7AVJ4'), true, 'mesuré contre le vrai Slack le 2026-08-18');
-  assert.equal(referenceComparable('E091JB7AVJ4'), true, 'et une grille Enterprise en rend un aussi');
+  // ⚠️ RELEVÉ EN REVUE DE FOND, et le premier jet avait tort : celui-ci acceptait `E…` « pour
+  // une grille Enterprise ». Le côté d'en face est TOUJOURS un `team_id` d'espace — un
+  // identifiant d'entreprise n'est pas du même espace de noms, et l'accepter refabriquait la
+  // panne d'origine par une autre porte. Mesuré alors : `etrangersParmi(nôtres, 'E091JB7AVJ4')`
+  // reclassait TOUT LE MONDE étranger. La garde locale n'attrapait donc que la moitié des
+  // façons de se tromper d'objet.
+  assert.equal(referenceComparable('E091JB7AVJ4'), false, 'un identifiant d’entreprise n’est pas un identifiant d’espace');
   assert.equal(referenceComparable(null), false);
+});
+
+test('UN IDENTIFIANT DU MAUVAIS ESPACE DE NOMS NE CLASSE PERSONNE ÉTRANGER NON PLUS', () => {
+  // La panne d'origine par l'autre porte : `E091JB7AVJ4` a la FORME d'un identifiant, et
+  // n'est comparable à aucun `team_id`. S'abstenir en le disant est réparable ; refuser tout
+  // le monde en silence ne l'était pas.
+  assert.deepEqual(etrangersParmi([MAXIME, BRUNO, ROBOT], 'E091JB7AVJ4'), []);
 });
 
 test('COMPARÉE À UN NOM, LA GARDE NE CLASSE PERSONNE ÉTRANGER — 100 % de faux refus, mesuré', () => {

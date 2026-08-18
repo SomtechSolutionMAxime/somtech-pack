@@ -72,10 +72,21 @@ const estNotreRobot = (p) => Boolean(p?.robot);
  * ont attrapé aucune occurrence avant coup, sur ce module. On pose donc ici, sur cette
  * comparaison-là, le contrôle qui manquait : la référence doit AVOIR LA FORME d'un identifiant.
  *
- * `T091JB7AVJ4` (mesuré le 2026-08-18) · `E…` sur une grille Enterprise. Jamais
- * « Somtech Solution » : un nom d'espace porte des minuscules et des espaces.
+ * ⚠️ `T…` SEULEMENT, ET C'EST LA REVUE DE FOND QUI L'A ÉTABLI. Le premier jet acceptait aussi
+ * `E…` « pour une grille Enterprise » — une hypothèse, pas une mesure. Or le côté d'en face est
+ * TOUJOURS un `team_id` d'espace (`slack.js`, `equipe: u.team_id`), et un identifiant
+ * d'entreprise n'appartient pas à cet espace de noms. Accepter `E…` refabriquait la panne
+ * d'origine par une autre porte : mesuré sur le code, `referenceComparable('E091JB7AVJ4')`
+ * rendait `true` et `etrangersParmi` reclassait ALORS tout le monde étranger.
+ *
+ * Une forme inattendue ne refuse donc personne : on s'abstient sur l'organisation, le veilleur
+ * le journalise, et le critère de l'invité continue de mordre. **S'abstenir en le disant est
+ * réparable ; refuser tout le monde en silence ne l'était pas.**
+ *
+ * `T091JB7AVJ4` — mesuré le 2026-08-18 contre le vrai Slack. Jamais « Somtech Solution » :
+ * un nom d'espace porte des minuscules et des espaces.
  */
-const FORME_IDENTIFIANT_ESPACE = /^[TE][A-Z0-9_]{2,}$/;
+const FORME_IDENTIFIANT_ESPACE = /^T[A-Z0-9_]{2,}$/;
 
 /**
  * La référence d'organisation est-elle comparable à ce que les profils portent ?
