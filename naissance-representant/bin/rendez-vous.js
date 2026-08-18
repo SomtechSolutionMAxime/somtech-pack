@@ -104,12 +104,24 @@ const DELAI_VIGIE_MS = Number(process.env.RENDEZ_VOUS_VIGIE_MS || 20000);
 // Il est donc armé UNE fois, au début, et il couvre TOUT — balayage, livraison, vigie.
 const ECHEANCE_MS = Number(process.env.RENDEZ_VOUS_ECHEANCE_MS || 30 * 60 * 1000);
 
-// La part du budget que la LIVRAISON a le droit de dépenser. Elle en mangerait la totalité
-// si on la laissait faire — sa boucle de reprise s'arrête quand le budget est épuisé, pas
-// avant —, et la vigie n'aurait alors jamais un instant pour regarder qui que ce soit. Ce
-// n'est pas une garde qu'on peut laisser dépendre du hasard : le figé est précisément celui
-// à qui la remise n'aboutit pas, donc celui qui vide le budget.
-const PART_LIVRAISON = Number(process.env.RENDEZ_VOUS_PART_LIVRAISON || 2 / 3);
+// La part du budget que la LIVRAISON a le droit de dépenser. Elle en mangerait la totalité si
+// on la laissait faire — sa boucle de reprise ne s'arrête que quand le budget est épuisé —, et
+// la vigie n'aurait alors jamais un instant pour regarder qui que ce soit. Le figé est
+// précisément celui à qui la remise n'aboutit pas, donc celui qui vide le budget : sans part
+// réservée, la garde tombe exactement là où elle sert.
+//
+// ⚠️ CE PARTAGE COÛTE UNE REPRISE, ET C'EST UN ARBITRAGE, PAS UN EFFET DE BORD — relevé en
+// revue de fond, où il valait 2/3 et en coûtait deux. L'arithmétique, aux valeurs de
+// production (échéance 30 min, reprise toutes les 5 min, vigie 3 lectures espacées de 20 s) :
+//
+//   avant le lot   6 reprises (dernière à t+25) puis une vigie qui SE RÉ-ARMAIT 30 min → 60 min
+//   à 2/3          4 reprises (dernière à t+15) — un orchestrateur qui se libère à t+20 attend
+//                  l'heure suivante, pour rien : le budget global n'exigeait pas ça
+//   à 5/6          5 reprises (dernière à t+20) + 5 min de vigie = 5 suspects au tarif réservé
+//
+// Sur ce poste, la ronde mesurée avait 4 orchestrateurs dont 3 suspects. Cinq minutes de vigie
+// les couvrent. On rend donc à la livraison tout ce que la vigie n'a pas besoin de prendre.
+const PART_LIVRAISON = Number(process.env.RENDEZ_VOUS_PART_LIVRAISON || 5 / 6);
 
 // ═══ LE PLAFOND DUR — ce que le budget ne peut PAS attraper
 //
@@ -233,8 +245,40 @@ async function etatService() {
  * hérite : « le mot, pas le fait ».
  */
 async function tenir(nom) {
-  const r = rendezVous(nom);
   const debut = Date.now();
+  try {
+    await tenirLeRendezVous(nom, debut);
+  } catch (err) {
+    // ⚠️ LA MORT LA PLUS GRAVE ÉTAIT LA SEULE SANS TRACE — relevé en revue de fond, et c'est
+    // le point 3 du ticket manqué dans le lot qui le corrige. `tenir()` n'avait aucune garde :
+    // une exception imprévue (`commandesLivraison` lève si un `pane` manque à la réponse de
+    // herdr) traversait jusqu'à `main().catch()`, qui écrit une ligne et sort — sans jamais
+    // noter le passage. La ronde disparaissait donc en laissant l'état du poste EXACTEMENT
+    // comme si elle n'avait jamais été lancée : le silence que ce lot existe pour supprimer.
+    process.stderr.write(
+      `${rendezVous(nom).etiquette} : la ronde s'est ARRÊTÉE sur une erreur imprévue — elle n'a donc RIEN établi.\n` +
+        `  Ce n'est pas « rien à signaler ». Cause exacte : ${err.message}\n`
+    );
+    noterLePassage(nom, 'erreur', debut, { message: err.message });
+    process.exit(1);
+  }
+}
+
+async function tenirLeRendezVous(nom, debut) {
+  const r = rendezVous(nom);
+
+  // ⚠️ UNE PANNE PROVOQUÉE, ET C'EST LA SEULE FAÇON DE PROUVER LA GARDE D'AU-DESSUS. Elle
+  // existe pour les exceptions IMPRÉVUES : par définition, on ne peut pas en fabriquer une
+  // vraie. Cherchée, d'ailleurs — la route nommée en revue (`commandesLivraison` sur un pane
+  // vide) est filtrée en amont par `orchestrateursVivants`, et les lectures de fichiers de
+  // `roleDuLieu` sont déjà attrapées. La garde couvre donc une classe, pas un défaut connu :
+  // raison de plus pour qu'elle soit éprouvée, et pas seulement affirmée.
+  //
+  // SOUS CLOISON D'ESSAIS UNIQUEMENT — `launchd` ne pose jamais `NODE_TEST_CONTEXT`, ce
+  // chemin est donc inatteignable en production, quoi qu'on mette dans l'environnement.
+  if (enEssais() && process.env.RENDEZ_VOUS_PANNE_PROVOQUEE) {
+    throw new Error(process.env.RENDEZ_VOUS_PANNE_PROVOQUEE);
+  }
 
   // ⚠️ POSÉ AVANT LE PREMIER APPEL, et pas une ligne plus bas : le balayage des sessions est
   // le premier endroit où un `herdr` muet fait pendre la ronde pour toujours. Un plafond

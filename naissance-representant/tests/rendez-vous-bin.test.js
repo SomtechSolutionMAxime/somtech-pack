@@ -93,7 +93,7 @@ after(() => {
 
 test('AUCUNE SESSION OUVERTE est une panne, et la ronde le dit — pas un silence de plus', () => {
   installerFauxHerdr();
-  const r = lancerRonde([]);
+  const r = lancerRonde([], { LIGNE_DIRECTE_RACINE: join(bac, 'r-sans-session') });
   assert.equal(r.code, 1, `panne attendue — stderr: ${r.stderr}`);
   assert.match(r.stderr, /aucune session/i, 'le motif doit être nommé');
   assert.match(
@@ -101,15 +101,21 @@ test('AUCUNE SESSION OUVERTE est une panne, et la ronde le dit — pas un silenc
     /personne n'attend|pas la même chose/i,
     'et distingué du cas où personne n’attend — c’est la confusion qui a coûté des jours'
   );
+  // ⚠️ ET LA TRACE AUSSI, relevé en revue par mutation : ce chemin de sortie n'était gardé
+  // par rien. Une ronde qui meurt sans trace est indiscernable d'une ronde jamais lancée.
+  assert.equal(tracePassage('r-sans-session').ronde.verdict, 'aucune-session');
 });
 
 test('TOUTES LES SESSIONS MUETTES est une panne, et la ronde nomme celles qui n’ont pas répondu', () => {
   installerFauxHerdr({ muettes: true });
-  const r = lancerRonde(['/s/a.sock', '/s/b.sock']);
+  const r = lancerRonde(['/s/a.sock', '/s/b.sock'], { LIGNE_DIRECTE_RACINE: join(bac, 'r-muettes') });
   assert.equal(r.code, 1, `panne attendue — stderr: ${r.stderr}`);
   assert.match(r.stderr, /muettes/i);
   assert.match(r.stderr, /\/s\/a\.sock/, 'chaque session muette doit être nommée — sinon la ronde ment par omission');
   assert.match(r.stderr, /\/s\/b\.sock/);
+  const trace = tracePassage('r-muettes');
+  assert.equal(trace.ronde.verdict, 'sessions-muettes', 'et sa mort est NOMMÉE, distincte des autres');
+  assert.equal(trace.ronde.muettes, 2);
 });
 
 // ⚠️ LE CAS QUI DOIT RÉUSSIR, et c'est celui qu'on rangerait le plus volontiers avec les
@@ -219,7 +225,19 @@ test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à 
   // vingtième de seconde ne prouvent pas qu'un agent est figé, elles prouvent qu'on a regardé
   // trop vite. Abaisser le seuil du jugement pour faire passer l'essai aurait détruit la garde
   // que l'essai prétend éprouver. On paie donc les secondes.
-  const r = lancerRonde(['/s/a.sock'], { RENDEZ_VOUS_VIGIE_MS: '8000', RENDEZ_VOUS_ECHEANCE_MS: '120000' });
+  //
+  // ⚠️ ET LA REPRISE FINIT EN UN TOUR, DÉLIBÉRÉMENT (T-20260818-0014). Avec le délai par
+  // défaut du harnais (5 ms), la boucle de reprise dépense TOUT le budget de livraison en
+  // essais serrés — ce qui rendait la durée de cet essai, et le temps qu'il reste à la vigie,
+  // dépendants de la PART accordée à la livraison. Un essai de la vigie qui rougit quand on
+  // ajuste le partage du budget ne garde plus la vigie : il garde une constante. Un délai
+  // supérieur à la part fait sortir la reprise après un tour, et rend l'essai indifférent au
+  // partage — ce qu'il doit être.
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_VIGIE_MS: '8000',
+    RENDEZ_VOUS_ECHEANCE_MS: '60000',
+    RENDEZ_VOUS_DELAI_MS: '60000',
+  });
   const dit = JSON.parse(r.stdout.trim().split('\n').pop());
 
   assert.ok(dit.vigie, 'le compte rendu porte ce que la vigie a vu');
@@ -566,12 +584,16 @@ test('UNE RONDE TIENT DANS SON ÉCHÉANCE — la vigie n’en re-arme pas une se
 //
 // ⚠️ ET LA MORT PAR PLAFOND EST CELLE QUI COMPTE LE PLUS. C'est la seule qui n'a produit
 // aucun compte rendu — donc la seule qui, sans trace, reste indiscernable d'une nuit calme.
-const tracePassage = () => JSON.parse(readFileSync(join(bac, 'racine', 'orchestrateur-dernier-passage.json'), 'utf8'));
+// ⚠️ UNE RACINE PAR ESSAI, relevé en revue par mutation. Avec une racine commune, un essai
+// dont la trace n'est PAS écrite lit celle de l'essai précédent : il rougit ou verdit selon
+// l'ORDRE d'exécution, pas selon le code. Une garde qui dépend de son voisin ne garde rien.
+const tracePassage = (racine) =>
+  JSON.parse(readFileSync(join(bac, racine, 'orchestrateur-dernier-passage.json'), 'utf8'));
 
 test('UNE RONDE QUI ABOUTIT LAISSE UNE TRACE DATÉE — sinon son silence ne se distingue de rien', () => {
   installerFauxHerdr({ agents: [] });
-  lancerRonde(['/s/a.sock']);
-  const trace = tracePassage();
+  lancerRonde(['/s/a.sock'], { LIGNE_DIRECTE_RACINE: join(bac, 'r-abouti') });
+  const trace = tracePassage('r-abouti');
 
   assert.equal(trace.ronde.verdict, 'abouti');
   assert.ok(Number.isFinite(Date.parse(trace.ronde.fini_le)), 'la date doit être lisible — c’est tout ce qui sépare « il y a 12 min » de « il y a 6 h »');
@@ -586,7 +608,7 @@ test('UNE RONDE TUÉE PAR SON PLAFOND LAISSE LA TRACE DE SA MORT — la seule qu
       ...process.env,
       HERDR_SESSIONS_ESSAIS: '/s/a.sock',
       HERDR_SOCKET_PATH: '',
-      LIGNE_DIRECTE_RACINE: join(bac, 'racine'),
+      LIGNE_DIRECTE_RACINE: join(bac, 'r-plafond'),
       RENDEZ_VOUS_DELAI_MS: '5',
       RENDEZ_VOUS_ECHEANCE_MS: '2000',
       RENDEZ_VOUS_PLAFOND_MS: '2500',
@@ -595,8 +617,138 @@ test('UNE RONDE TUÉE PAR SON PLAFOND LAISSE LA TRACE DE SA MORT — la seule qu
     killSignal: 'SIGKILL',
   });
   assert.equal(r.signal, null, 'elle doit être morte de son plafond, pas du harnais');
-  const trace = tracePassage();
+  const trace = tracePassage('r-plafond');
 
   assert.equal(trace.ronde.verdict, 'plafond-depasse', 'et sa mort est NOMMÉE — « rien dans le journal » se lisait comme « rien à signaler »');
   assert.equal(trace.ronde.plafond_ms, 2500, 'avec le plafond qu’elle a dépassé');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE PARTAGE DU BUDGET EST UN ARBITRAGE — il se garde, il ne se laisse pas dériver
+//
+// ⚠️ RELEVÉ EN REVUE DE FOND. Borner la ronde à UN budget oblige à le partager entre la
+// livraison et la vigie, et ce partage COÛTE des reprises à la livraison : un orchestrateur
+// dont la boîte de saisie se libère après la dernière reprise attend l'heure suivante, pour
+// rien. Le premier jet donnait 2/3 à la livraison et lui en coûtait DEUX, sans que rien ne
+// le dise ni ne le mesure. Une valeur qu'aucun essai ne tient est une valeur qui dérivera.
+//
+// Aux valeurs de l'essai : échéance 6 s, reprise toutes les secondes. À 5/6, la livraison a
+// jusqu'à 5 s → reprises à t=0,1,2,3,4 = CINQ. À 2/3 elle aurait 4 s → QUATRE.
+function fauxHerdrQuiRefuseEtCompte(pane, lieu, journal) {
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(journal)}, args.slice(0, 2).join(' ') + '\\n');
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, name: 'orch-occupe', agent_status: 'working',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 3 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'working', revision: 3 } } }));
+  process.exit(0);
+}
+// Une boîte de saisie qui ne se vide JAMAIS — la remise est refusée à chaque tour, comme
+// les trois orchestrateurs mesurés sur le poste.
+if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write('un reste qui ne part pas'); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('LA LIVRAISON GARDE SA PART DU BUDGET — le partage ne la vide pas de ses reprises', () => {
+  const lieu = lieuDOrchestrateur('part');
+  const journal = join(bac, 'part.log');
+  writeFileSync(journal, '');
+  fauxHerdrQuiRefuseEtCompte('w9:pP', lieu, journal);
+  const ECHEANCE = 6000;
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_DELAI_MS: '1000',
+    RENDEZ_VOUS_ECHEANCE_MS: String(ECHEANCE),
+    // Assez long pour que la vigie n'ait la place de regarder personne : cet essai mesure la
+    // LIVRAISON, et une vigie qui tournerait ajouterait ses propres lectures au compteur.
+    RENDEZ_VOUS_VIGIE_MS: '5000',
+    RENDEZ_VOUS_PLAFOND_MS: '60000',
+    LIGNE_DIRECTE_RACINE: join(bac, 'r-part'),
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+  const reprises = readFileSync(journal, 'utf8').split('\n').filter((l) => l === 'agent read').length;
+
+  assert.ok(reprises >= 5, `la livraison doit garder ses cinq reprises — ${reprises} constatée(s)`);
+  assert.ok(dit.duree_ms <= ECHEANCE, `et la ronde tient dans son budget — ${dit.duree_ms} ms`);
+  assert.equal(tracePassage('r-part').ronde.verdict, 'partiel', 'une remise qui n’a pas abouti n’est pas un succès');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// UN APPEL QUI NE RÉPOND PAS EST UNE SESSION MUETTE, PAS UNE RONDE MORTE
+//
+// ⚠️ RELEVÉ EN REVUE DE FOND, ET MESURÉ PAR ELLE : un enfant lancé par `execFile` SURVIT au
+// `process.exit()` de son parent. Le plafond tue la ronde ; il ne tue pas l'appel `herdr` en
+// vol. Sans limite par appel, chaque ronde morte de son plafond laisse un `herdr` bloqué
+// derrière elle — un par heure, sur la même cible, indéfiniment.
+//
+// Et avec la limite, le plafond redevient le DERNIER recours : un herdr qui ne répond pas
+// n'est plus une panne de la ronde, c'est une session muette — un fait qu'elle sait nommer.
+test('UN HERDR QUI NE RÉPOND PAS NE LAISSE NI ORPHELIN NI RONDE MORTE', () => {
+  // ⚠️ SON PROPRE HERDR, À SON PROPRE CHEMIN, et c'est la garde de la garde. Le premier jet
+  // comptait les survivants par `pgrep` sur le `herdr` COMMUN du bac — il ramassait donc
+  // aussi les orphelins des DEUX essais de plafond, qui en laissent par construction (leur
+  // plafond est plus court que la limite d'appel). L'essai rougissait sur les enfants de ses
+  // voisins : il mesurait un objet et concluait sur un autre.
+  const coin = join(bac, 'orphelin');
+  mkdirSync(coin, { recursive: true });
+  const herdrDuCoin = join(coin, 'herdr');
+  writeFileSync(herdrDuCoin, '#!/usr/bin/env node\nsetTimeout(() => process.exit(0), 120000);\n');
+  chmodSync(herdrDuCoin, 0o755);
+
+  const debut = Date.now();
+  const r = lancerRonde(['/s/a.sock'], {
+    PATH: `${coin}:${process.env.PATH}`,
+    HERDR_DELAI_APPEL_MS: '1000',
+    RENDEZ_VOUS_ECHEANCE_MS: '20000',
+    RENDEZ_VOUS_PLAFOND_MS: '25000',
+    LIGNE_DIRECTE_RACINE: join(bac, 'r-orphelin'),
+  });
+  const ecoule = Date.now() - debut;
+
+  assert.match(r.stderr, /muettes/i, 'un appel sans réponse est une session MUETTE — un fait, pas une mort');
+  assert.equal(tracePassage('r-orphelin').ronde.verdict, 'sessions-muettes', 'et surtout PAS « plafond-depasse »');
+  assert.ok(ecoule < 10000, `la ronde n’attend pas son plafond — ${ecoule} ms`);
+
+  // ⚠️ LA MOITIÉ QUI COMPTE : l'appel a-t-il été TUÉ, ou tourne-t-il encore ?
+  const restants = spawnSync('pgrep', ['-f', herdrDuCoin], { encoding: 'utf8' });
+  const vivants = (restants.stdout || '').trim().split('\n').filter(Boolean);
+  assert.equal(vivants.length, 0, `aucun herdr ne doit survivre à la ronde — ${vivants.length} orphelin(s)`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// UNE MORT IMPRÉVUE LAISSE UNE TRACE — c'était le point 3 du ticket, manqué dans le lot
+//
+// ⚠️ RELEVÉ EN REVUE DE FOND. `tenir()` n'avait aucune garde : une exception traversait
+// jusqu'à `main().catch()`, qui écrit une ligne et sort — **sans jamais noter le passage**.
+// La ronde disparaissait en laissant l'état du poste exactement comme si elle n'avait jamais
+// été lancée : le silence que ce lot existe pour supprimer, dans le lot qui le supprime.
+//
+// ⚠️ ET LA ROUTE QUE LA REVUE NOMMAIT N'EST PAS ATTEIGNABLE — mesuré : `orchestrateursVivants`
+// filtre les agents sans `pane_id`, et les lectures de `roleDuLieu` sont déjà attrapées. La
+// garde couvre donc une CLASSE d'échecs imprévus, pas un défaut connu. C'est précisément
+// pourquoi elle a besoin d'une panne provoquée : on ne fabrique pas une exception imprévue.
+test('UNE MORT IMPRÉVUE LAISSE SA TRACE — sinon la ronde disparaît comme si elle n’avait pas eu lieu', () => {
+  installerFauxHerdr({ agents: [] });
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_PANNE_PROVOQUEE: 'une panne que personne n’avait prévue',
+    LIGNE_DIRECTE_RACINE: join(bac, 'r-erreur'),
+  });
+
+  assert.equal(r.code, 1, 'une ronde qui s’arrête sur une erreur est une PANNE');
+  assert.match(r.stderr, /n'a donc RIEN établi/i, 'et elle dit qu’elle n’a rien établi — pas « rien à signaler »');
+  assert.match(r.stderr, /une panne que personne/, 'avec la cause exacte, telle qu’elle est venue');
+  const trace = tracePassage('r-erreur');
+  assert.equal(trace.ronde.verdict, 'erreur');
+  assert.match(trace.ronde.message, /une panne que personne/);
 });

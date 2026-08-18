@@ -26,6 +26,26 @@ import { lireReponseHerdr } from './naissance.js';
 const TAILLE_MAX = 16 * 1024 * 1024;
 
 /**
+ * LE TEMPS QU'ON LAISSE À **UN** APPEL — parce qu'un appel sans limite n'échoue jamais, il PEND
+ * (T-20260818-0014, relevé en revue de fond).
+ *
+ * ⚠️ CE QUE LE PLAFOND DE LA RONDE NE PEUT PAS FAIRE À LA PLACE. Le plafond tue le PROCESSUS
+ * de la ronde ; il ne tue pas l'appel `herdr` en vol. Mesuré en revue : un enfant lancé par
+ * `execFile` **survit** au `process.exit()` de son parent, et continue de tourner, orphelin.
+ * Sans limite ici, chaque ronde qui meurt de son plafond laisse un `herdr` bloqué derrière
+ * elle — un par heure, sur la même cible, indéfiniment.
+ *
+ * Et il y a mieux : avec une limite, un `herdr` qui ne répond pas cesse d'être une panne de la
+ * ronde. Il devient une session MUETTE — un fait que la ronde sait déjà rapporter, nommément.
+ * Le plafond redevient ce qu'il doit être : le dernier recours, pas le seul.
+ *
+ * Une minute est très large — les appels mesurés sur ce poste se comptent en dizaines de
+ * millisecondes, et une ronde en balaie plus de cent cinquante. Ce qui dépasse la minute ne
+ * répond plus.
+ */
+const DELAI_APPEL_MS = Number(process.env.HERDR_DELAI_APPEL_MS || 60000);
+
+/**
  * À QUELLE SESSION HERDR ON PARLE — et sans ça, on ne parlait qu'à la sienne (T-20260814-0138).
  *
  * herdr trouve sa session par `HERDR_SOCKET_PATH`. Ces appels ne la posaient jamais : ils
@@ -46,9 +66,9 @@ function envDe(socket) {
  *
  * @returns {Promise<{ok: boolean, reponse: ?object, message: string, outilIntrouvable?: boolean}>}
  */
-export async function appelHerdr(commande, { resultatAttendu = true, executer, socket = null } = {}) {
+export async function appelHerdr(commande, { resultatAttendu = true, executer, socket = null, delaiMs = DELAI_APPEL_MS } = {}) {
   try {
-    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, executer, ...envDe(socket) });
+    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, timeout: delaiMs, executer, ...envDe(socket) });
     return lireReponseHerdr(stdout, { commande, resultatAttendu });
   } catch (err) {
     // herdr n'a pas démarré : il n'a donc RIEN refusé et RIEN répondu. Le faire passer par
@@ -70,9 +90,9 @@ export async function appelHerdr(commande, { resultatAttendu = true, executer, s
  * C'est aussi ce qui rend un `herdr` absent inoffensif ICI : `null` fait REFUSER la livraison,
  * là où « boîte vide » l'aurait autorisée par-dessus un contenu qu'on n'a jamais vu.
  */
-export async function lireEcran(commande, { executer, socket = null } = {}) {
+export async function lireEcran(commande, { executer, socket = null, delaiMs = DELAI_APPEL_MS } = {}) {
   try {
-    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, executer, ...envDe(socket) });
+    const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, timeout: delaiMs, executer, ...envDe(socket) });
     return stdout;
   } catch (err) {
     return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;

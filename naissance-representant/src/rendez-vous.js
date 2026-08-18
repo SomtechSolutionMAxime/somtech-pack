@@ -195,11 +195,19 @@ export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleD
  * plafond, et d'où le fait qu'il ÉCRIT avant de tuer. Une panne bruyante vaut infiniment
  * mieux qu'un silence qui annule les suivantes.
  *
- * ⚠️ LE MINUTEUR EST `unref` PAR CONSTRUCTION, et ce n'est pas un détail de confort. Un
- * minuteur ordinaire tiendrait le processus en vie jusqu'à son terme : une ronde de dix
- * secondes attendrait son plafond de trente minutes avant de sortir, et le rendez-vous
- * suivant serait annulé par le mécanisme censé l'en protéger. `unref` dit exactement ce
- * qu'on veut : « tant que quelque chose d'autre attend, compte — sinon, laisse partir ».
+ * ⚠️ LE MINUTEUR EST `unref`, ET VOICI CE QUE ÇA FAIT VRAIMENT — la première rédaction de ce
+ * commentaire affirmait un effet qui ne se produit PAS, et une passe de revue par mutation l'a
+ * pris en défaut : retirer le `unref` ne changeait rien d'observable, parce que `tenir()`
+ * termine aujourd'hui par un `process.exit()` sur CHACUN de ses chemins, et qu'un `exit` ne
+ * regarde aucun minuteur en attente. La justification était donc invérifiable, ce qui est le
+ * défaut dominant de ce dépôt, commis dans le lot qui le corrige.
+ *
+ * Ce que `unref` garantit réellement, et qui vaut d'être tenu : **cette fonction ne retient
+ * jamais un processus en vie**. Le jour où un chemin de sortie RENDRA la main au lieu de
+ * sortir — un refactor ordinaire —, un minuteur ordinaire ferait attendre trente-cinq minutes
+ * à une ronde de dix secondes, et annulerait la suivante par le mécanisme censé l'en
+ * protéger. C'est une propriété de `poserPlafond`, pas de son appelant : elle est donc
+ * éprouvée sur `poserPlafond` seul, sans passer par la ronde (`tests/plafond.test.js`).
  *
  * @param {object} p
  * @param {number} p.ms        le plafond, en millisecondes
