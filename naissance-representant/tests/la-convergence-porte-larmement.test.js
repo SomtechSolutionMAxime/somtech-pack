@@ -245,9 +245,17 @@ for (const role of ROLES) {
     // (vérification de version, état d'app). Un lieu qui n'en porterait qu'un s'entendrait
     // dire protégé alors qu'il ne l'est pas : le rendu qui existe pour rompre un silence
     // mentirait à sa place, ce qui est pire que le silence.
+    // ⚠️ LE HOOK ÉTRANGER EST SOUS `PreToolUse`, ET C'EST TOUT LE POINT. Une première version
+    // le rangeait sous `SessionStart` : dès que la sonde s'est bornée à `PreToolUse` — le
+    // durcissement d'un AUTRE défaut — cet essai a cessé de couvrir ce qu'il couvrait, et la
+    // mutation qu'il existait pour tuer a resurgi verte. Un essai peut se vider par le côté.
+    //
+    // Sous `PreToolUse`, le hook étranger est bel et bien VU par la sonde : c'est là que la
+    // question « est-ce le garde ? » se pose vraiment, et là qu'y répondre par « il y a
+    // quelque chose » serait faux.
     const { depot, lieu } = poserLieu(role);
     const s = JSON.parse(readFileSync(settingsDu(lieu), 'utf8'));
-    s.hooks = { SessionStart: [{ hooks: [{ type: 'command', command: 'bash .claude/hooks/session-start-pack-version.sh' }] }] };
+    s.hooks = { PreToolUse: [{ hooks: [{ type: 'command', command: 'bash .claude/hooks/un-autre-controle.sh' }] }] };
     writeFileSync(settingsDu(lieu), `${JSON.stringify(s, null, 2)}\n`);
 
     const { dit } = await converger(role, depot, { dryRun: true });
