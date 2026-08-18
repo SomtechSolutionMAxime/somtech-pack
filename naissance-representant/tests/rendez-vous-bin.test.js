@@ -420,3 +420,113 @@ test('le compte rendu sépare « personne n’attend » de « je ne reconnais pe
   assert.equal(vraimentVide.orchestrateurs, 0);
   assert.equal(vraimentVide.agents_vus, 0, 'ici il n’y a réellement personne — et ça ne se dit pas pareil');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE PLAFOND DE TEMPS — une ronde qui n'aboutit pas doit ÉCHOUER, jamais pendre
+// (T-20260818-0014)
+//
+// ⚠️ CE QUI A ÉTÉ MESURÉ, ET CE QUI A ÉTÉ ÉCARTÉ. Le ticket portait deux hypothèses sur une
+// ronde bloquée « dans `kevent`, sur une paire de tubes en fd 4/5, sans aucun enfant » : un
+// enfant qui n'a jamais démarré, ou un parent qui garde son côté écriture ouvert. **Les deux
+// sont fausses.** Mesuré : un processus Node qui ne fait qu'un `setTimeout`, sans le moindre
+// enfant, montre exactement la même chose — fd 3 KQUEUE, fd 4 et 5 une paire de tubes. C'est
+// le tube de réveil interne de libuv, présent dans TOUT processus Node. La signature ne
+// désignait aucun enfant perdu : la ronde DORMAIT, dans la boucle de reprise.
+//
+// Le vrai défaut est ailleurs, et il est ici : **rien ne borne une ronde par le haut**. Ni
+// le balayage des sessions, ni une remise, ni une lecture de la vigie n'a de plafond — un
+// seul appel `herdr` qui ne rend jamais la main suffit à faire pendre la ronde pour toujours.
+// Et comme le service n'accepte qu'une instance, une ronde qui pend n'en rate pas une : elle
+// les ANNULE TOUTES, sans que rien ne le dise.
+//
+// Cet essai reproduit exactement ça — un `herdr` qui ne répond jamais — et exige que la ronde
+// MEURE D'ELLE-MÊME, en le disant. Il distingue les deux morts : `signal` non nul veut dire
+// que c'est le harnais qui l'a tuée, pas son plafond. Sans cette distinction, l'essai serait
+// vert le jour où la ronde pend, ce qui est précisément le défaut qu'il éprouve.
+
+/** Un faux herdr qui ne répond JAMAIS — le seul appel qui fait pendre une ronde sans plafond. */
+function fauxHerdrQuiNeRepondJamais() {
+  const script = `#!/usr/bin/env node
+// Il ne sort pas, il n'écrit rien : c'est un appel dont on n'aura jamais la réponse.
+// Le filet à 120 s est là pour le cas où le plafond ne le tuerait pas — il ne doit JAMAIS
+// être atteint dans un essai vert, et il n'est pas ce que l'essai mesure.
+setTimeout(() => process.exit(0), 120000);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('UNE RONDE QUI NE REND PAS LA MAIN MEURT DE SON PLAFOND, ET LE DIT', () => {
+  fauxHerdrQuiNeRepondJamais();
+  const debut = Date.now();
+  const r = spawnSync(process.execPath, [BIN, 'ronde'], {
+    env: {
+      ...process.env,
+      HERDR_SESSIONS_ESSAIS: '/s/a.sock',
+      HERDR_SOCKET_PATH: '',
+      RENDEZ_VOUS_DELAI_MS: '5',
+      RENDEZ_VOUS_ECHEANCE_MS: '2000',
+      RENDEZ_VOUS_PLAFOND_MS: '2500',
+    },
+    // ⚠️ LE FILET DU HARNAIS, ET IL N'EST PAS LE PLAFOND ÉPROUVÉ. Sans lui, cet essai
+    // PENDRAIT au lieu d'échouer — le défaut même qu'il mesure, commis dans sa mesure.
+    timeout: 30000,
+    killSignal: 'SIGKILL',
+  });
+  const ecoule = Date.now() - debut;
+  const stderr = (r.stderr ?? '').toString();
+
+  assert.equal(
+    r.signal,
+    null,
+    `la ronde doit mourir D'ELLE-MÊME : ${r.signal} veut dire que c'est le harnais qui l'a tuée, ` +
+      `donc qu'elle pendait encore — stderr: ${stderr}`
+  );
+  assert.notEqual(r.status, 0, 'une ronde qui n’a rien pu établir est une PANNE, jamais un succès silencieux');
+  assert.ok(
+    ecoule < 15000,
+    `la ronde doit rendre la main sous son plafond — ${ecoule} ms écoulées pour un plafond de 2500 ms`
+  );
+  assert.match(stderr, /plafond/i, 'et le journal doit NOMMER le plafond — un mort sans faire-part est un silence de plus');
+  assert.match(stderr, /2500/, 'avec la durée exacte, sinon on ne sait pas ce qui a été dépassé');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// L'ÉCHÉANCE EST GLOBALE — la vigie ne s'en RE-ARME pas une deuxième
+//
+// ⚠️ LE DÉFAUT MESURÉ, et il tenait en une ligne. `tenir()` armait `fin = maintenant +
+// ÉCHÉANCE` pour la livraison, puis — APRÈS l'avoir dépensée — `finVigie = maintenant +
+// ÉCHÉANCE` pour la vigie. Deux budgets pleins à la suite : le plafond réel d'une ronde
+// n'était pas l'échéance, c'était le DOUBLE. Avec les valeurs de production, 30 min + 30 min
+// = 60 min, soit EXACTEMENT l'intervalle qui sépare deux rondes. Zéro marge, et le
+// commentaire du code affirmait le contraire en toutes lettres.
+//
+// L'essai le prouve par le TEMPS, parce que c'est la seule chose que le défaut change.
+test('UNE RONDE TIENT DANS SON ÉCHÉANCE — la vigie n’en re-arme pas une seconde', () => {
+  const lieu = lieuDOrchestrateur('budget');
+  fauxHerdrQuiFigeDeux(lieu);
+  const ECHEANCE = 8000;
+  const debut = Date.now();
+  const r = lancerRonde(['/s/a.sock'], {
+    // La reprise mord tout le budget de livraison : c'est le cas réel, mesuré sur le poste —
+    // trois orchestrateurs dont la boîte de saisie ne se vide pas toute seule.
+    RENDEZ_VOUS_DELAI_MS: '200',
+    RENDEZ_VOUS_ECHEANCE_MS: String(ECHEANCE),
+    // Trois lectures espacées de 1,5 s = 4,5 s par suspect. Il n'en reste pas tant.
+    RENDEZ_VOUS_VIGIE_MS: '1500',
+    RENDEZ_VOUS_PLAFOND_MS: '60000',
+  });
+  const ecoule = Date.now() - debut;
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.ok(
+    ecoule < ECHEANCE + 2000,
+    `la ronde doit tenir dans son échéance — ${ecoule} ms écoulées pour une échéance de ${ECHEANCE} ms. ` +
+      `Au-delà, c'est la vigie qui s'est re-armé un budget plein, et le plafond réel est le double.`
+  );
+  assert.deepEqual(
+    dit.vigie_non_regardes,
+    ['w9:pA', 'w9:pB'],
+    'et ce que le budget n’a pas permis de regarder est NOMMÉ — un pane non mesuré n’est ni sain ni figé'
+  );
+});
