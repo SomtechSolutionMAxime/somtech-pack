@@ -443,6 +443,10 @@ test('l’avis porte CE QUI A ÉTÉ SOUMIS EN ENTIER — un incident constatable
 // Les deux essais qui suivent lancent donc le binaire SANS ce réglage. C'est la seule façon de
 // mesurer ce qu'un appelant obtient vraiment.
 
+// La fenêtre que le binaire applique à un texte TAPÉ, lue là où elle est décidée — jamais
+// recopiée : un nombre écrit ici à la main cesserait de suivre le code au premier réglage.
+const { FENETRE_TEXTE_TAPE_MS: FENETRE_ATTENDUE_MS } = await import('../src/livraison.js');
+
 /** Lancer le vrai binaire avec le réglage RÉEL de la fenêtre, et le tuer s'il dépasse. */
 function lancerAvecPlafond(args, { plafondMs, env = {} }) {
   const debut = Date.now();
@@ -484,12 +488,55 @@ test('un COLLAGE immobile est délivré tout de suite — le critère du jalon e
     r.dureeMs < 15000,
     `le critère du jalon exige moins de 15 s de bout en bout — mesuré ${Math.round(r.dureeMs / 1000)} s`
   );
+  // ⚠️ ET IL NE SUFFIT PAS DE TENIR DANS LE BUDGET : une mutation qui rendait la fenêtre du
+  // texte tapé à `delivrerLaBoite` devant un COLLAGE a survécu à la seule borne de 15 s — six
+  // secondes y tiennent aussi. Ce qui est éprouvé ici est que la fenêtre n'a PAS ÉTÉ ATTENDUE,
+  // parce que devant un collage il n'y a rien à attendre.
+  assert.ok(
+    r.dureeMs < FENETRE_ATTENDUE_MS,
+    `devant un collage, aucune fenêtre ne doit être observée — mesuré ${r.dureeMs} ms, ` +
+      `soit au moins la fenêtre du texte tapé (${FENETRE_ATTENDUE_MS} ms)`
+  );
   // ET LE GESTE A BIEN EU LIEU — sans ça, « rapide » voudrait seulement dire « n'a rien fait ».
   assert.ok(
     appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
     'la touche d’envoi doit être partie : une délivrance rapide qui ne délivre pas n’est pas une délivrance'
   );
   assert.match(r.stdout, /"delivre":true/);
+});
+
+test('devant un COLLAGE, l’avis livré ne raconte pas une observation qui n’a pas eu lieu', () => {
+  // ⚠️ CETTE GARDE VIENT D'UNE MUTATION SURVIVANTE. Repasser `immobiliteMs` au lieu de la
+  // fenêtre réellement appliquée laissait tous les essais verts — et faisait dire à l'avis
+  // « resté immobile pendant les 6 s où je l'ai observée » devant un texte qu'on n'a PAS
+  // observé une seconde. Le destinataire à qui on vient de soumettre un texte en son nom
+  // recevrait un compte rendu faux de ce qu'on a fait.
+  const journal = installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]' });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.equal(r.code, 0, r.stderr);
+  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
+  assert.ok(prompt, 'le message doit avoir été livré');
+  assert.ok(
+    !/où je l’ai observée/.test(prompt[3]),
+    `aucune durée d’observation devant un collage — reçu : ${prompt[3].slice(0, 220)}`
+  );
+  assert.ok(
+    /collé|d’un seul coup/i.test(prompt[3]),
+    `l’avis doit dire POURQUOI il n’a pas observé — reçu : ${prompt[3].slice(0, 220)}`
+  );
+});
+
+test('devant un COLLAGE, un refus ne prétend pas non plus avoir attendu', () => {
+  // Même racine, autre sortie : quand la touche d'envoi reste sans effet, le refus explique ce
+  // qu'on a tenté. Il citait la fenêtre de l'appelant, pas celle qu'on a réellement observée —
+  // « après 6 s d'immobilité » devant un collage qu'on n'a pas regardé.
+  installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]', enterInoperant: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0);
+  assert.ok(
+    !/après \d+ s d’immobilité/.test(r.stderr),
+    `le refus ne doit pas chiffrer une attente qui n’a pas eu lieu — reçu : ${r.stderr.slice(0, 260)}`
+  );
 });
 
 test('un texte TAPÉ immobile est délivré sous le budget du critère — sa fenêtre reste observée', () => {

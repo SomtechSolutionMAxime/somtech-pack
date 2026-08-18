@@ -418,6 +418,11 @@ import { delivrerLaBoite, fenetreDImmobilite } from '../../ligne-directe/src/del
  * retenter le même geste à l'aveugle.
  */
 export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
+  // ⚠️ UNE ATTENTE NULLE NE SE CHIFFRE PAS (T-20260818-0076). Devant un COLLAGE, la fenêtre vaut
+  // zéro — il n'y a personne derrière le clavier, donc rien à observer. Écrire « après 0 s
+  // d'immobilité » raconte une attente qui n'a pas eu lieu, et fait passer pour une négligence
+  // ce qui est une décision. Même racine que la durée arrondie de `avisDeBoiteBloquee`.
+  const attenteEuLieu = Number(immobiliteMs) > 0;
   const attente = `${Math.round(immobiliteMs / 1000)} s`;
   if (delivrance.cause === 'choix') {
     return (
@@ -442,7 +447,7 @@ export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
   }
   if (delivrance.cause === 'bouge') {
     return (
-      `⚠️ J’ai attendu ${attente} et le texte A BOUGÉ entre mes deux lectures : quelqu’un est ` +
+      `⚠️ ${attenteEuLieu ? `J’ai attendu ${attente} et le texte A BOUGÉ` : 'LE TEXTE A BOUGÉ'} entre mes deux lectures : quelqu’un est ` +
       'devant ce pane en train d’écrire. Je n’y touche pas — soumettre la phrase inachevée de ' +
       'quelqu’un est irréversible. Renvoie dans un moment'
     );
@@ -455,7 +460,11 @@ export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
   }
   return (
     `⚠️ J’ai tenté de le soumettre pour son auteur — la touche d’envoi seule, sans écrire un ` +
-    `caractère — après ${attente} d’immobilité : SANS EFFET, la boîte est restée pleine. Un ` +
+    `caractère — ${
+      attenteEuLieu
+        ? `après ${attente} d’immobilité`
+        : 'sans attendre, le texte y étant arrivé collé, d’un seul coup'
+    } : SANS EFFET, la boîte est restée pleine. Un ` +
     'écran de confirmation la recouvre peut-être : va regarder ce pane toi-même'
   );
 }
