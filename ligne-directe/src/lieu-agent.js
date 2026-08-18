@@ -472,7 +472,10 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
         empreinte_reference: fraicheur.empreinte_reference,
         chemin_depot: fraicheur.chemin_depot,
         chemin_reference: fraicheur.chemin_reference,
-        message: fraicheur.message,
+        // CE QUE CE GESTE-CI N'A PAS FAIT — la garde ne le dit pas, et c'est voulu : elle sert
+        // aussi la mise à jour, qui ne crée rien même quand elle réussit. Chacun ajoute ce
+        // qu'il sait ; personne ne parle à la place de l'autre.
+        message: `${fraicheur.message}\n  Rien n’a été créé : le lieu n’est posé qu’après un verdict favorable.`,
       },
     };
   }

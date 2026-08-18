@@ -285,6 +285,11 @@ export function verifierFraicheur({ gabaritDepot, gabarit, libelle = 'agent', fo
   // MODIFIÉ, ou plus récent que le poste. Il porte les deux empreintes et les deux chemins,
   // et laisse l'opérateur juger.
   //
+  // ⚠️ ET IL NE DIT PAS CE QUE L'APPELANT N'A PAS FAIT — relevé en essayant la commande pour de
+  // vrai : « rien n'a été créé » sonnait faux au bout d'une MISE À JOUR, qui ne crée rien même
+  // quand elle réussit. Ce message-ci dit ce qu'il a MESURÉ ; chaque appelant ajoute ce qu'il
+  // n'a pas touché, parce que lui seul le sait.
+  //
   // ⚠️ ET AUCUNE COMMANDE DESTRUCTRICE N'Y FIGURE — même règle. La seule chose qu'on
   // recommande met à jour ; rien n'efface, rien ne force.
   return {
@@ -301,8 +306,8 @@ export function verifierFraicheur({ gabaritDepot, gabarit, libelle = 'agent', fo
       `      empreinte ${empreinteDepot}\n` +
       `    pack de ce poste   « ${reference.chemin} »\n` +
       `      empreinte ${empreinteReference}\n` +
-      `  Un ${libelle} posé sur ce gabarit-là porterait un métier qui n’est pas celui du pack — ` +
-      `et il ne le saurait jamais, puisqu’il ne lit que son lieu. Rien n’a été créé.\n` +
+      `  Un ${libelle} qui recevrait ce gabarit-là porterait un métier qui n’est pas celui du ` +
+      `pack — et il ne le saurait jamais, puisqu’il ne lit que son lieu.\n` +
       `  Mets le pack à jour dans le dépôt cible (« ${COMMANDE_DE_RATTRAPAGE} »), puis relance.`,
   };
 }
