@@ -430,3 +430,38 @@ test('le garde du gabarit ne cite AUCUN chemin de poste absolu — il voyage che
     }
   }
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA CONVERGENCE N'EMPORTE PAS LE NOM DE L'AGENT — E-20260818-0017
+//
+// Le nom d'un orchestrateur vit dans son lieu (`.nom-agent`) pour que sa renaissance le
+// reprenne. Ce fichier n'appartient à AUCUN gabarit : la convergence ne le copie donc pas, et
+// `applyFiles` n'efface pas ce qu'elle ne copie pas. **C'est un raisonnement, et un
+// raisonnement n'est pas une garantie** — celui-ci tient tant que la convergence n'apprend pas
+// à faire le ménage. Le jour où elle l'apprendrait, le lieu perdrait son nom en silence, et la
+// renaissance suivante dériverait vers une autre rivière.
+//
+// ⚠️ ET IL N'EST PAS DANS `PRESERVE`, DÉLIBÉRÉMENT. `PRESERVE` protège ce que le gabarit
+// porterait sinon (`CONTEXTE.md`, écrit à la main par l'agent) ; `.nom-agent` n'y est pas
+// exposé du tout. L'y ajouter ferait croire qu'il court le même risque, et déplacerait
+// l'attention du vrai point : la convergence ne doit rien supprimer.
+
+const NOM_DE_L_AGENT = '.nom-agent';
+
+for (const role of ROLES) {
+  test(`${role.nom} — la convergence ne mange pas « ${NOM_DE_L_AGENT} », qu'aucun gabarit ne porte`, async () => {
+    const { depot, lieu } = poserLieu(role);
+    writeFileSync(join(lieu, NOM_DE_L_AGENT), 'eastmain\n');
+
+    const { code } = await converger(role, depot);
+    assert.equal(code, 0, 'la convergence doit réussir');
+
+    assert.equal(
+      readFileSync(join(lieu, NOM_DE_L_AGENT), 'utf8').trim(),
+      'eastmain',
+      'la convergence a emporté le nom de l’agent : sa prochaine renaissance recevra une autre rivière, ' +
+        'et le dirigeant l’appellera par un nom qu’il ne porte plus',
+    );
+  });
+}
