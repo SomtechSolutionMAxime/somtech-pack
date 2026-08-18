@@ -239,6 +239,37 @@ export async function remettre(pane, texte, { socket } = {}) {
     // Ce chemin-ci, celui par lequel arrive la parole du dirigeant, a reçu l'interdit sans le
     // remède. Vingt-quatre heures pendant lesquelles il a dû ouvrir un terminal pour parler à
     // ses propres agents — et le refus le lui disait lui-même.
+    // ⚠️ LE DISCRIMINANT COLLÉ / TAPÉ TRANCHE AVANT TOUT — et il décide s'il y a un geste à
+    // poser, pas seulement combien de temps on attend (T-20260818-0049).
+    //
+    // Un texte COLLÉ se replie en `[Pasted text #N]`. Il vient d'un AGENT, il a DÉJÀ été envoyé
+    // par quelqu'un qui croit l'avoir remis. Le soumettre n'invente rien : ça achève un geste
+    // commencé. Mesuré : quatre blocages réels en une nuit, QUATRE messages d'agent, zéro
+    // brouillon humain.
+    //
+    // Un texte TAPÉ se lit entier. Quelqu'un est devant ce pane, au milieu d'une phrase.
+    // Soumettre la moitié d'une phrase envoie la moitié d'une phrase, et LE GESTE NE SE DÉFAIT
+    // PAS. On ne le pose pas — on refuse, et on le dit tout de suite.
+    //
+    // ⚠️ POURQUOI « TOUT DE SUITE » ET NON « APRÈS LE DÉLAI D'IMMOBILITÉ », qui est ce que fait
+    // l'autre appelant de `delivrerLaBoite`. Parce que CE CHEMIN-CI EST CELUI D'UN HUMAIN QUI
+    // ATTEND. Les cinq minutes d'immobilité ont été réglées là où celui qui patiente est un
+    // agent ; ici, elles ont fait pendre un essai existant pendant 300 secondes — mesuré — et
+    // elles auraient fait patienter le dirigeant en silence, ce qui est la panne qu'on ferme,
+    // pas celle qu'on ouvre. Sa règle : « on ne doit jamais être bloqué via le Slack, sinon on
+    // est pris ». Un refus INSTANTANÉ qui nomme le pane et le geste est le contraire d'être
+    // pris ; une attente muette de cinq minutes en est la forme exacte.
+    if (!estUnEspaceReserve(dejaLa)) {
+      throw new RemiseEchouee(
+        pane,
+        `quelqu'un est en train d'écrire dans la boîte de ${pane} (« ${dejaLa.slice(0, 60)}… ») — ` +
+          `c'est une phrase TAPÉE, pas un message d'agent resté coincé, et je ne la soumets pas à sa ` +
+          `place : envoyer la moitié d'une phrase ne se défait pas. Écrire par-dessus ne livrerait ` +
+          `pas deux messages non plus, ça en livrerait UN, les deux textes collés. ` +
+          `Le geste : va voir l'écran (« herdr agent focus ${pane} »), et renvoie ton message.`
+      );
+    }
+
     const delivrance = await delivrerLaBoite({
       texteCoince: dejaLa,
       commandes: {
@@ -257,21 +288,11 @@ export async function remettre(pane, texte, { socket } = {}) {
       },
       lireEcran: async () => ecranDe(pane, socket),
       dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
-      // ⚠️ LE DISCRIMINANT COLLÉ / TAPÉ, ET IL DÉCIDE DE L'ATTENTE — jamais du veto.
-      //
-      // Un texte COLLÉ se replie en `[Pasted text #N]` : il vient d'un agent, il a DÉJÀ été
-      // envoyé par quelqu'un qui croit l'avoir remis. Le soumettre n'invente rien — ça achève
-      // un geste commencé. On n'attend donc pas : c'est le cas qui bloque réellement, et faire
-      // patienter le dirigeant cinq minutes dessus serait le garder « pris » cinq minutes.
-      //
-      // Un texte TAPÉ se lit entier. Soumettre la moitié d'une phrase envoie la moitié d'une
-      // phrase, et le geste ne se défait pas. On lui laisse donc tout le délai d'immobilité —
-      // quelqu'un dont les doigts sont sur le clavier fait bouger sa boîte, et `delivrerLaBoite`
-      // s'abstient dès qu'elle a bougé. Au bout du délai on soumet quand même : la garde
-      // AVERTIT, elle ne coupe pas.
-      immobiliteMs: estUnEspaceReserve(dejaLa)
-        ? 0
-        : Number(process.env.LIGNE_IMMOBILITE_MS || IMMOBILITE_PAR_DEFAUT_MS),
+      // AUCUNE ATTENTE : on ne délivre plus que du COLLÉ, et un texte collé est par construction
+      // déjà envoyé. `delivrerLaBoite` relit quand même avant de soumettre, et s'abstient si le
+      // contenu a bougé entre-temps — la garde reste, c'est seulement le délai qui n'a plus
+      // d'objet ici. Réglable pour les bancs, jamais pour gagner du temps en production.
+      immobiliteMs: Number(process.env.LIGNE_IMMOBILITE_MS || 0),
     });
 
     // ⚠️ ON NE PASSE QUE SUR CE QU'ON A VU. `ok` couvre deux issues : la boîte a été soumise, ou

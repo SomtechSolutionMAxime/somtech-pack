@@ -156,62 +156,49 @@ test('LES DEUX TEXTES NE SONT JAMAIS FUSIONNÉS — c’est ce que la garde prot
 
 // ═══ LA MOITIÉ QUI PROTÈGE — ces essais doivent rester verts après le correctif ═════════
 
-test('UN TEXTE TAPÉ QUI BOUGE N’EST PAS SOUMIS À SA PLACE — quelqu’un est en train d’écrire', async () => {
-  // ⚠️ CET ESSAI A ÉTÉ REFAIT DEUX FOIS, ET LA DEUXIÈME EST LA LEÇON (T-20260818-0049).
+test('UNE PHRASE TAPÉE PAR UN HUMAIN N’EST JAMAIS SOUMISE À SA PLACE — et le refus est IMMÉDIAT', async () => {
+  // ⚠️ CET ESSAI A ÉTÉ REFAIT TROIS FOIS, ET CHAQUE FORME A APPRIS QUELQUE CHOSE.
   //
-  // Forme 1 : une boîte que rien ne libérait. Le refus tombait de toute façon — condamner le
-  // discriminant collé/tapé ne le faisait pas rougir.
-  // Forme 2 : un texte qui changeait à chaque LECTURE. Il rougissait sur d'autres mutations,
-  // mais toujours pas sur celle-ci : en changeant à chaque lecture, il bougeait aussi bien
-  // avec un délai nul qu'avec un délai plein. **Le banc mesurait le nombre de lectures, pas
-  // le temps** — et c'est le TEMPS que le discriminant achète.
-  // Forme 3, celle-ci : le texte change quand un DÉLAI RÉEL s'est écoulé, jamais avant. Sans
-  // attente, on ne le voit pas bouger et on soumet la phrase inachevée de quelqu'un ; avec
-  // l'attente, on le voit, et on s'abstient. La mutation le fait enfin rougir.
-  const journal = join(bac, 'appels.jsonl');
-  writeFileSync(journal, '');
-  const marqueur = join(bac, 'premiere-lecture');
-  const script = `#!/usr/bin/env node
-const fs = require('fs');
-const JOURNAL = ${JSON.stringify(journal)};
-const MARQUEUR = ${JSON.stringify(marqueur)};
-const args = process.argv.slice(2);
-fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
-const cmd = args.slice(0, 2).join(' ');
-const SEP = '\\u2500'.repeat(20);
-if (cmd === 'agent read') {
-  // LE TEMPS, PAS LE COMPTE. La phrase ne s'allonge qu'une fois 40 ms écoulées depuis la
-  // première lecture — c'est-à-dire seulement si on a réellement ATTENDU entre deux regards.
-  let t0;
-  try { t0 = Number(fs.readFileSync(MARQUEUR, 'utf8')); }
-  catch { t0 = Date.now(); fs.writeFileSync(MARQUEUR, String(t0)); }
-  const ecoule = Date.now() - t0;
-  const phrase = 'je pense qu’il faudrait plutôt' + (ecoule >= 40 ? ' revoir tout ça' : '');
-  process.stdout.write(['~/x', SEP, '\\u276f ' + phrase, SEP, '  auto mode on'].join('\\n'));
-  process.exit(0);
-}
-if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
-if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'idle' } } })); process.exit(0); }
-if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
-process.stdout.write(JSON.stringify({ result: { ok: true } }));
-`;
-  writeFileSync(join(bac, 'herdr'), script);
-  chmodSync(join(bac, 'herdr'), 0o755);
-
+  // Forme 1 — une boîte que rien ne libérait : le refus tombait de toute façon, donc condamner
+  //   le discriminant collé/tapé ne le faisait pas rougir. Il passait pour une autre raison.
+  // Forme 2 — un texte qui changeait à chaque LECTURE : il bougeait aussi bien avec un délai nul
+  //   qu'avec un délai plein. **Il mesurait le nombre de lectures, pas le temps.**
+  // Forme 3, celle-ci — le code a changé sous l'essai, et c'est le banc complet qui l'a dit :
+  //   l'attente d'immobilité de cinq minutes, correcte là où celui qui patiente est un agent,
+  //   a fait PENDRE un essai existant 300 secondes sur ce chemin-ci. Or ce chemin est celui d'un
+  //   humain qui attend. Une phrase tapée n'y déclenche donc plus d'attente du tout : elle se
+  //   refuse TOUT DE SUITE, en nommant le pane et le geste.
+  //
+  // Ce que l'essai garde, et qui est le cœur : AUCUNE TOUCHE D'ENVOI ne part sur une phrase que
+  // quelqu'un est en train de taper. Condamner le discriminant fait passer ce texte par la
+  // délivrance, la touche part, et l'essai rougit.
+  const journal = fauxHerdr({ occupePar: 'je reprends la migration demain matin si', sourd: true });
   const { remettre, RemiseEchouee } = await import('../src/herdr.js');
+
+  const debut = Date.now();
   await assert.rejects(
     () => remettre('w5:p8', 'Message du dirigeant.'),
     (err) => {
       assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
-      assert.match(err.message, /BOUG|inachevée/i, 'le refus doit dire que quelqu’un écrit là');
+      assert.match(err.message, /TAPÉE|en train d’écrire/i, 'le refus doit dire que quelqu’un écrit là');
+      assert.ok(err.message.includes('w5:p8'), 'et nommer le pane — sinon personne ne sait où aller voir');
       return true;
     }
   );
+  const ecoule = Date.now() - debut;
+
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
   assert.ok(
     !gestes.includes('agent send-keys'),
     'ON NE SOUMET PAS la phrase de quelqu’un qui est en train de la taper — le geste ne se défait pas'
   );
+  assert.ok(
+    !gestes.includes('agent prompt'),
+    'et on n’écrit pas par-dessus non plus : les deux textes partiraient collés en un seul message'
+  );
+  // ⚠️ LE DÉLAI EST UNE GARDE À PART ENTIÈRE ICI. Un refus juste rendu au bout de cinq minutes
+  // laisse le dirigeant muet pendant cinq minutes — c'est la panne qu'on ferme, pas une autre.
+  assert.ok(ecoule < 5000, `le refus doit être IMMÉDIAT — il a pris ${ecoule} ms`);
 });
 
 test('UNE BOÎTE QU’ON N’A PAS LIBÉRÉE NE REÇOIT RIEN — on n’écrit pas par-dessus, jamais', async () => {
