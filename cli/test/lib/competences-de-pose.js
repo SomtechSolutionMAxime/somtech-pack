@@ -153,6 +153,11 @@ export function messagesDesMotifs(racine = REPO) {
   // pas dans le module de pose — c'est le même texte que la mise à jour rend, et le tenir en
   // un seul endroit est précisément ce que ce lot corrige.
   const nomDeLieu = readFileSync(join(racine, 'ligne-directe', 'src', 'lieu-nom.js'), 'utf8');
+  // E-20260818-0014 : même raison exactement que les deux refus de nommage ci-dessus. Le texte
+  // du refus de fraîcheur vit là où vit la GARDE de fraîcheur, parce que la pose ET la mise à
+  // jour rendent le même — le lire dans le module de pose ferait diverger la table de ce que
+  // l'humain voit, du côté de la commande qui n'est pas allée le chercher là.
+  const fraicheur = readFileSync(join(racine, 'ligne-directe', 'src', 'fraicheur-gabarit.js'), 'utf8');
 
   /** Le corps du refus qui suit `motif: '<m>'`, jusqu'à la fermeture de son objet. */
   const blocApres = (src, motif) => {
@@ -164,6 +169,11 @@ export function messagesDesMotifs(racine = REPO) {
   const classe = (src, nom) => {
     const i = src.indexOf(`class ${nom}`);
     return i === -1 ? '' : src.slice(i, i + 1200);
+  };
+  /** Ce qui suit une ancre, borné comme tout le reste — pour un message composé hors d'un bloc `motif:`. */
+  const depuis = (src, ancre, taille = 1200) => {
+    const i = src.indexOf(ancre);
+    return i === -1 ? '' : src.slice(i, i + taille);
   };
   /** Le corps d'une fonction qui COMPOSE un message de refus — bornée comme les autres. */
   const fonction = (src, nom) => {
@@ -193,6 +203,15 @@ export function messagesDesMotifs(racine = REPO) {
     lieu_ambigu: fonction(nomDeLieu, 'messageLieuAmbigu'),
     lieu_partiel: blocApres(lieu, 'lieu_partiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
+    // E-20260818-0014. Le refus qui garde que le gabarit servi est le BON, pas seulement qu'il
+    // est là. Son bloc dans le module de pose ne fait que relayer les champs de la garde : le
+    // TEXTE que l'humain lit est composé dans `verifierFraicheur`, et c'est lui qu'on récolte.
+    // Borné comme les autres — un extrait généreux rendrait cette ligne-ci plus facile à
+    // satisfaire que ses voisines, et une garde inégale ne garde pas ce que son nom laisse croire.
+    // La commande de rattrapage est INTERPOLÉE depuis une constante — la récolter avec le
+    // bloc du refus, sinon la table paraîtrait proposer un geste que le code ne propose pas,
+    // alors qu'il le compose. Bornée serré : elle n'ajoute que sa propre ligne.
+    gabarit_perime: depuis(fraicheur, "COMMANDE_DE_RATTRAPAGE = '", 90) + depuis(fraicheur, 'perime: true'),
     // T-20260813-0059. Le refus qui garde ce qu'un lieu EST : un dossier versionné. Son texte
     // vit dans le module de pose, avec les autres gardes d'avant l'écriture.
     droits_non_versionnables: blocApres(lieu, 'droits_non_versionnables'),

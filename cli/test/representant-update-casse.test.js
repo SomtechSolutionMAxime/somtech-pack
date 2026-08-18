@@ -29,6 +29,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { run } from '../src/cli.js';
+import { alignerLePosteSur } from './lib/poste-conforme.js';
 
 const tmp = (p) => mkdtempSync(join(tmpdir(), p));
 
@@ -46,6 +47,10 @@ function makeFixturePayload() {
   mkdirSync(gabarit, { recursive: true });
   writeFileSync(join(gabarit, 'CLAUDE.md'), CLAUDE_V2);
   writeFileSync(join(gabarit, 'CONTEXTE.md'), CONTEXTE);
+  // LE POSTE EST RENDU CONFORME À CE PAYLOAD — la garde de fraîcheur tourne donc sous
+  // cette suite, elle compare, et elle trouve identique. On ne la désarme pas : on lui
+  // donne un poste qui sert le même pack que la fixture (voir lib/poste-conforme.js).
+  alignerLePosteSur(root);
   return root;
 }
 

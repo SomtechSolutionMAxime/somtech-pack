@@ -27,6 +27,7 @@ import { join, dirname } from 'node:path';
 import { role as roleDe, rolesConnus } from './roles.js';
 import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from './lieu-nom.js';
 import { FICHIERS_ENV_CONNUS, variablesManquantes } from './mcp-env.js';
+import { verifierFraicheur } from './fraicheur-gabarit.js';
 
 /**
  * Les quatre fichiers qui constituent le lieu d'un agent, en CHEMINS RELATIFS à sa racine —
@@ -337,7 +338,7 @@ function lireExclusions(stdout, racine) {
   return exclus;
 }
 
-export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVersionnable = versionnabiliteDe }) {
+export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVersionnable = versionnabiliteDe, foyer }) {
   const r = roleDe(role); // un rôle inconnu échoue AVANT toute lecture de disque
 
   // ─── Garde 0 : LE NOM. Elle n'existait pas — `join(depot, dossier, '../../evil')` écrivait
@@ -430,7 +431,53 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
     };
   }
 
-  // ─── Garde 2 bis : LES DROITS DOIVENT POUVOIR ÊTRE VERSÉS (T-20260813-0059).
+  // ─── Garde 2 ter : LE GABARIT PRÉSENT EST-IL LE BON ? (T-20260818-0111, E-20260818-0014)
+  //
+  // La garde 2 ci-dessus vérifie que les gabarits SONT LÀ. Elle ne dit rien de ce qu'ils
+  // CONTIENNENT — et c'est le motif dominant de ce dépôt, à sa neuvième occurrence : vérifier
+  // qu'une chose est en place, jamais qu'elle est la bonne.
+  //
+  // VÉCU, mesuré le 2026-08-18 chez un client : `gabaritsDir` sert le gabarit du DÉPÔT CIBLE.
+  // Un dépôt dont le pack date de la `v1.48.0` a fait naître un orchestrateur sur le métier de
+  // cette époque, pendant que le poste était en `v1.69.0` — un métier qui disait « pilote » et
+  // à qui il manquait sept sections entières. La commande a rendu `ok:true`, quatre fichiers,
+  // une ligne joignable. Rien ne signalait que le contenu était faux, et l'agent ne pouvait pas
+  // le découvrir : un orchestrateur ne lit que son lieu.
+  //
+  // ⚠️ ELLE TOMBE ICI, ET PAS AILLEURS. Après la source (comparer ce qui manque n'aurait aucun
+  // sens) et AVANT la ligne (un refus qui ne dépend que du disque local ne doit coûter aucun
+  // aller-retour réseau — la même raison qui a placé la garde 2 avant la garde 3), donc avant
+  // toute écriture : le refus ne laisse rien derrière lui, sans avoir à nettoyer.
+  //
+  // ⚠️ ET ELLE NE REFUSE QUE SUR UNE DIVERGENCE CONSTATÉE. « Je n'ai pas su mesurer » —
+  // référence absente sur un poste neuf, référence illisible — ne refuse RIEN et se DIT dans
+  // le rendu (`metier_verifie: false`). Le verdict à trois formes vit dans `fraicheur-gabarit.js`,
+  // avec le pourquoi complet ; ici on n'en fait qu'une conduite.
+  const fraicheur = verifierFraicheur({
+    depot,
+    gabaritDepot: source.source,
+    gabarit: r.gabarits,
+    libelle: r.libelle,
+    foyer,
+  });
+  if (fraicheur.perime) {
+    return {
+      ok: false,
+      cree: false,
+      role,
+      nom,
+      refus: {
+        motif: 'gabarit_perime',
+        empreinte_depot: fraicheur.empreinte_depot,
+        empreinte_reference: fraicheur.empreinte_reference,
+        chemin_depot: fraicheur.chemin_depot,
+        chemin_reference: fraicheur.chemin_reference,
+        message: fraicheur.message,
+      },
+    };
+  }
+
+  // ─── Garde 2 quater : LES DROITS DOIVENT POUVOIR ÊTRE VERSÉS (T-20260813-0059).
   //
   // Un lieu est « un dossier VERSIONNÉ dans le dépôt » — c'est sa définition, pas un détail de
   // rangement. La pose refusait déjà un lieu partiel en se fiant au DISQUE ; ce contrôle-ci est
@@ -618,5 +665,30 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
   // Rendue seulement quand elle a eu lieu : sur un lieu déjà installé, la vérification n'est
   // JAMAIS appelée (garde 1), et rendre un `ligne` inventé ferait croire à une mesure qui n'a
   // pas été faite.
-  return { ok: true, cree: true, role, nom, racine, fichiers: [...GABARITS].sort(), avertissements, ligne };
+  // `metier_verifie` — CE QUE LA GARDE DE FRAÎCHEUR A PU ÉTABLIR, et rien de plus.
+  //
+  // `true` : le gabarit servi est celui du pack de ce poste, comparé par empreinte.
+  // `false` : on n'a PAS su comparer, et `metier_non_verifie` dit pourquoi. Ce n'est jamais un
+  // « le métier est faux » — ce cas-là ne parvient pas ici, il a refusé plus haut.
+  //
+  // ⚠️ IL EST RENDU MÊME QUAND IL VAUT `true`, et ce n'est pas du bavardage : c'est le champ
+  // qui manquait. La pose rendait déjà `ok`, `cree`, quatre fichiers et une ligne joignable —
+  // tous vrais — pendant qu'elle servait un métier faux. Un appelant qui veut savoir si le
+  // métier posé fait foi n'avait rien à lire ; désormais il a ceci.
+  const avertissementsFinaux = [...avertissements];
+  if (!fraicheur.verifie) {
+    avertissementsFinaux.push(fraicheur.raison);
+  }
+  return {
+    ok: true,
+    cree: true,
+    role,
+    nom,
+    racine,
+    fichiers: [...GABARITS].sort(),
+    avertissements: avertissementsFinaux,
+    ligne,
+    metier_verifie: fraicheur.verifie,
+    ...(fraicheur.verifie ? {} : { metier_non_verifie: fraicheur.raison }),
+  };
 }
