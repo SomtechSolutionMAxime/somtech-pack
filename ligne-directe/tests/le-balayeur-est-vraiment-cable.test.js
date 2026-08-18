@@ -262,3 +262,168 @@ test('LA CADENCE VIENT DE `delivrance.js`, JAMAIS DU VEILLEUR', async () => {
   );
   assert.equal(typeof CADENCE_DU_BALAYAGE_MS, 'number');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QU'UNE PASSE DE REVUE DE FOND A REJETÉ, ET QUI EST GARDÉ ICI
+//
+// Les trois essais qui suivent n'existaient pas quand ce lot a été soumis. Ils gardent trois
+// corrections faites APRÈS un rejet fondé — et sans eux, chacune se laisserait retirer sans
+// qu'aucun essai ne rougisse, ce qui est la définition d'une garde qui ne garde rien.
+
+test('UN BAIL POSÉ PENDANT LA FENÊTRE ARRÊTE LA TOUCHE — décider et agir sont deux instants', async () => {
+  // ⚠️ UN TEXTE **TAPÉ**, ET C'EST TOUT LE SUJET. Devant un collage, `fenetreDImmobilite` rend
+  // zéro : il n'y a pas de fenêtre, donc pas d'intervalle entre la décision et le geste, donc
+  // rien à éprouver. C'est précisément parce que le texte tapé ouvre DIX SECONDES entre les deux
+  // qu'une passe de revue de fond a rejeté ce lot.
+  //
+  // ⚠️ ET LE BAIL ARRIVE PENDANT CES DIX SECONDES, PAS AVANT. Une première écriture de cet essai
+  // le posait avant le tour décisif : `unePasse` le voyait alors dès la DÉCISION, s'abstenait, et
+  // le veto n'était jamais atteint. **L'essai restait vert quand on retirait le veto** — il
+  // gardait la garde d'à côté, pas la sienne. C'est le défaut de ce jalon commis dans le
+  // correctif d'un rejet qui portait sur ce défaut.
+  const p = poste('bail-tardif', [{ pane_id: 'w7:p7', name: 'cible-tardive' }]);
+  p.pane('w7:p7', { boite: 'je tape encore ma phrase' });
+
+  const v = veilleurNu('bail-tardif');
+  const t0 = Date.now();
+  await v.unTour(t0);
+  await v.unTour(t0 + 60_000);
+
+  // Le troisième tour décide de délivrer, puis attend. Le bail est posé DEUX SECONDES après le
+  // départ du tour — donc après la décision, et bien avant que la touche ne parte.
+  const bailTardif = setTimeout(() => poserUnBail('w7:p7', { minutes: 5, pourquoi: 'un banc qui reprend ce pane' }), 2_000);
+  const rendu = await v.unTour(t0 + 120_000);
+  clearTimeout(bailTardif);
+
+  assert.equal(
+    p.gestes('w7:p7').filter((a) => a[1] === 'send-keys').length,
+    0,
+    'la touche ne doit PAS partir : le pane a été réservé entre la décision et le geste'
+  );
+  assert.equal(rendu.debloques.length, 0, 'et le tour ne doit pas compter ça comme un déblocage');
+  assert.equal(rendu.parCause['plus-autorise'], 1, 'le refus doit être NOMMÉ — un veto muet ne se distingue pas d’un geste raté');
+});
+
+test('UNE LECTURE RATÉE NE REMET PAS LE COMPTEUR À ZÉRO — « je n’ai pas vu » n’est pas « ça a changé »', async () => {
+  const { unePasse } = await import('../src/balayage.js');
+  const t = Date.now();
+
+  // Deux tours vus, puis un tour où la lecture échoue, puis un quatrième.
+  let m = new Map();
+  ({ memoire: m } = unePasse({ agents: [{ pane: 'w8:p8', contenu: 'fige' }], memoire: m, maintenant: t }));
+  ({ memoire: m } = unePasse({ agents: [{ pane: 'w8:p8', contenu: 'fige' }], memoire: m, maintenant: t + 60_000 }));
+  const raté = unePasse({ agents: [{ pane: 'w8:p8', contenu: null }], memoire: m, maintenant: t + 120_000 });
+  m = raté.memoire;
+
+  assert.equal(raté.decisions[0].cause, 'pas-lue');
+  assert.equal(m.get('w8:p8')?.tours, 2, 'le compte doit SURVIVRE à une lecture ratée — sinon la borne se dégrade en silence');
+
+  // ⚠️ ET IL NE GAGNE RIEN NON PLUS : le tour n'a rien constaté. Le pane devient candidat au
+  // tour suivant, celui qui l'aura vraiment revu — pas à celui qui ne l'a pas vu.
+  const apres = unePasse({ agents: [{ pane: 'w8:p8', contenu: 'fige' }], memoire: m, maintenant: t + 180_000 });
+  assert.equal(apres.decisions[0].action, 'delivrer', 'trois lectures RÉUSSIES du même texte : c’est le troisième vrai passage');
+});
+
+test('UN TOUR NE DÉLIVRE PAS PLUS QUE SON PLAFOND — et les reportés GARDENT leur candidature', async () => {
+  const { unTourDeBalayage } = await import('../src/balayage.js');
+  const { DELIVRANCES_PAR_TOUR } = await import('../src/delivrance.js');
+
+  const panes = ['a', 'b', 'c', 'd', 'e', 'f'].map((x) => `w9:p${x}`);
+  const agents = panes.map((pane) => ({ pane, nom: pane }));
+  const gestes = [];
+  const t = Date.now();
+
+  let memoire = new Map();
+  let rendu;
+  for (let i = 0; i < 3; i += 1) {
+    rendu = await unTourDeBalayage({
+      agents,
+      lireEcran: async () => ['x', '─'.repeat(40), `❯ ${COLLE}`, '─'.repeat(40)].join('\n'),
+      delivrer: async ({ pane }) => {
+        gestes.push(pane);
+        return { ok: true, cause: 'soumis', soumis: true, texte: COLLE };
+      },
+      avertir: async () => ({ ok: true }),
+      memoire,
+      maintenant: t + i * 60_000,
+    });
+    memoire = rendu.memoire;
+  }
+
+  assert.equal(gestes.length, DELIVRANCES_PAR_TOUR, `un tour ne délivre que ${DELIVRANCES_PAR_TOUR} boîtes`);
+  assert.equal(rendu.parCause.reporte, panes.length - DELIVRANCES_PAR_TOUR, 'le reste doit être compté sous `reporte`, jamais tronqué en silence');
+
+  // ⚠️ LA MOITIÉ QUI COMPTE. Un plafond qui rendrait les reportés à zéro les ferait attendre
+  // trois tours de plus — il punirait les boîtes oubliées à proportion de leur nombre. Ils
+  // doivent être candidats DÈS le tour suivant.
+  const suivant = await unTourDeBalayage({
+    agents,
+    lireEcran: async () => ['x', '─'.repeat(40), `❯ ${COLLE}`, '─'.repeat(40)].join('\n'),
+    delivrer: async ({ pane }) => {
+      gestes.push(pane);
+      return { ok: true, cause: 'soumis', soumis: true, texte: COLLE };
+    },
+    avertir: async () => ({ ok: true }),
+    memoire,
+    maintenant: t + 3 * 60_000,
+  });
+  assert.equal(suivant.debloques.length, DELIVRANCES_PAR_TOUR, 'les reportés sont délivrés au tour suivant, sans repasser par trois tours');
+});
+
+test('LES ÉCRANS SE LISENT PAR PAQUETS — en série, un tour dépasse sa propre cadence', async () => {
+  const { unTourDeBalayage } = await import('../src/balayage.js');
+  const { ECRANS_LUS_DE_FRONT } = await import('../src/delivrance.js');
+
+  // ⚠️ CE QU'ON MESURE ICI EST UN PARALLÉLISME, PAS UNE DURÉE. Un essai qui chronométrerait le
+  // tour mesurerait la charge du poste qui l'exécute — c'est exactement le piège que ce lot a
+  // rencontré : le même balayage a coûté 0,8 s, puis 68 s, puis 144 s selon ce qui tournait à
+  // côté. On compte donc combien de lectures sont EN VOL en même temps : ça, c'est le code.
+  let enVol = 0;
+  let maxEnVol = 0;
+  const agents = Array.from({ length: 40 }, (_, i) => ({ pane: `w1:p${i}`, nom: `a${i}` }));
+
+  await unTourDeBalayage({
+    agents,
+    lireEcran: async () => {
+      enVol += 1;
+      maxEnVol = Math.max(maxEnVol, enVol);
+      await new Promise((r) => setTimeout(r, 15));
+      enVol -= 1;
+      return ['x', '─'.repeat(40), '❯ ', '─'.repeat(40)].join('\n');
+    },
+    delivrer: async () => ({ ok: false, cause: 'sans-effet', soumis: false }),
+  });
+
+  assert.ok(
+    maxEnVol > 1,
+    `les lectures doivent partir de front — une par une, 97 panes ont expiré à deux minutes sur le poste réel (max vu : ${maxEnVol})`
+  );
+  assert.ok(
+    maxEnVol <= ECRANS_LUS_DE_FRONT,
+    `et pas toutes d’un coup : lancer un processus par pane sur un poste saturé aggraverait la cause qu’on soigne (max vu : ${maxEnVol})`
+  );
+});
+
+test('L’ORDRE DES OBSERVATIONS SUIT L’INVENTAIRE — deux comptes rendus doivent se comparer ligne à ligne', async () => {
+  const { unTourDeBalayage } = await import('../src/balayage.js');
+  const agents = Array.from({ length: 20 }, (_, i) => ({ pane: `w2:p${i}`, nom: `a${i}` }));
+
+  // Des lectures de durées volontairement inégales : sans recomposition ordonnée, les paquets
+  // rendraient leurs résultats dans l'ordre où ils finissent, et l'ordre changerait d'un tour
+  // à l'autre. On ne pourrait plus lire ce qui a bougé entre deux tours.
+  const rendu = await unTourDeBalayage({
+    agents,
+    lireEcran: async (a) => {
+      const rang = Number(a.pane.split('p')[1]);
+      await new Promise((r) => setTimeout(r, (7 - (rang % 7)) * 3));
+      return ['x', '─'.repeat(40), '❯ ', '─'.repeat(40)].join('\n');
+    },
+    delivrer: async () => ({ ok: false, cause: 'sans-effet', soumis: false }),
+  });
+
+  assert.deepEqual(
+    rendu.refus.map((r) => r.pane),
+    agents.map((a) => a.pane),
+    'l’ordre du compte rendu doit être celui de l’inventaire, pas celui des temps de réponse'
+  );
+});

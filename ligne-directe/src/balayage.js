@@ -42,6 +42,8 @@ import { contenuBoite } from './boite.js';
 import {
   TOURS_DIMMOBILITE_EXIGES,
   FENETRE_DU_BALAYAGE_MS,
+  DELIVRANCES_PAR_TOUR,
+  ECRANS_LUS_DE_FRONT,
   fenetreDImmobilite,
   avisDeBoiteBloquee,
 } from './delivrance.js';
@@ -121,8 +123,23 @@ export function unePasse({ agents = [], memoire = new Map(), sousBail = () => fa
     const contenu = brut?.contenu;
 
     // ═══ 2. UNE BOÎTE QU'ON N'A PAS LUE N'EST PAS UNE BOÎTE VIDE (`boite.js`).
+    //
+    // ⚠️ ET ELLE NE FAIT PAS SORTIR DE LA MÉMOIRE — relevé en passe de revue de fond, et le
+    // rejet était juste. Une lecture ratée ne dit RIEN du texte : elle dit qu'on n'a pas vu.
+    // L'effacer revenait à traiter « je n'ai pas regardé » comme « le texte a changé », c'est-à-
+    // dire le motif que ce dépôt ferme partout ailleurs, appliqué à un compteur.
+    //
+    // Ce que ça coûtait, et ce n'est pas théorique : sur un poste à quatre-vingt-dix agents où
+    // chaque écran se lit par un appel séparé, UN timeout ponctuel sur UN tour remettait ce pane
+    // à zéro — donc trois minutes de plus, silencieusement. **La borne annoncée n'aurait tenu
+    // que si chaque tour lisait chaque pane sans faute**, hypothèse que personne n'avait posée.
+    //
+    // On garde donc l'entrée telle quelle, SANS incrémenter : le tour n'a rien constaté, il ne
+    // gagne rien. Le pane reprend son compte là où il l'avait laissé.
     if (contenu === null || contenu === undefined) {
-      decisions.push({ ...a, action: 'sabstenir', cause: 'pas-lue', tours: 0 });
+      const garde = memoire.get(a.pane);
+      if (garde) suivante.set(a.pane, garde);
+      decisions.push({ ...a, action: 'sabstenir', cause: 'pas-lue', tours: garde?.tours ?? 0 });
       continue;
     }
 
@@ -252,25 +269,46 @@ export async function unTourDeBalayage({
 
   // ═══ CE QU'ON A VU. On ne lit PAS l'écran d'un pane sous bail : « on ne touche pas » se tient
   // jusque dans la lecture, et son contenu ne pourrait de toute façon rien décider.
-  const observations = [];
+  // ⚠️ PAR PAQUETS, ET PAS UN PAR UN — le coût en série a été mesuré et il dépasse la cadence.
+  // Le 2026-08-18, un balayage à la main sur 97 panes a EXPIRÉ à deux minutes sur un poste
+  // chargé, là où le même geste coûte moins d'une seconde sur un poste au repos. La taille du
+  // paquet est nommée dans `delivrance.js`, auprès des autres réglages de ce chemin — l'écrire
+  // ici rejouerait le défaut que ce module passe son temps à rappeler.
+  //
+  // ⚠️ L'ORDRE DES OBSERVATIONS RESTE CELUI DE L'INVENTAIRE. Un `Promise.all` par paquet rend
+  // ses résultats dans l'ordre de ses entrées ; on les concatène paquet après paquet. Sans ça,
+  // deux tours sur le même poste rendraient des comptes rendus dont les lignes ne se comparent
+  // pas — et c'est en les comparant qu'on lit ce qui s'est passé entre les deux.
+  const aObserver = [];
   for (const brut of liste) {
     const a = normaliser(brut);
     if (!a.pane) continue;
+    // On ne lit PAS l'écran d'un pane sous bail : « on ne touche pas » se tient jusque dans la
+    // lecture, et son contenu ne pourrait de toute façon rien décider.
     if (sousBail(a.pane, { maintenant })) {
-      observations.push({ ...a, contenu: undefined });
+      aObserver.push({ brut, a, sousBail: true });
       continue;
     }
-    let contenu = null;
-    try {
-      contenu = contenuBoite(await lireEcran({ ...a, ...brut }));
-    } catch (err) {
-      // Une lecture qui jette rend le même verdict qu'une lecture illisible — `pas-lue` — mais
-      // la RAISON est conservée : sans elle, un herdr injoignable et un écran d'un format
-      // inconnu se ressemblent au compte rendu, et on cherche la panne du mauvais côté.
-      contenu = null;
-      a.lectureRefusee = motDeLErreur(err);
-    }
-    observations.push({ ...a, contenu });
+    aObserver.push({ brut, a, sousBail: false });
+  }
+
+  const observations = [];
+  const paquet = Math.max(1, Number(ECRANS_LUS_DE_FRONT) || 1);
+  for (let i = 0; i < aObserver.length; i += paquet) {
+    const lot = await Promise.all(
+      aObserver.slice(i, i + paquet).map(async ({ brut, a, sousBail: reserve }) => {
+        if (reserve) return { ...a, contenu: undefined };
+        try {
+          return { ...a, contenu: contenuBoite(await lireEcran({ ...a, ...brut })) };
+        } catch (err) {
+          // Une lecture qui jette rend le même verdict qu'une lecture illisible — `pas-lue` —
+          // mais la RAISON est conservée : sans elle, un herdr injoignable et un écran d'un
+          // format inconnu se ressemblent au compte rendu, et on cherche la panne du mauvais côté.
+          return { ...a, contenu: null, lectureRefusee: motDeLErreur(err) };
+        }
+      })
+    );
+    observations.push(...lot);
   }
 
   const { decisions, memoire: suivante } = unePasse({ agents: observations, memoire, sousBail, maintenant });
@@ -279,12 +317,45 @@ export async function unTourDeBalayage({
   const refus = [];
   let avisPerdus = 0;
 
+  // ⚠️ COMBIEN DE DÉLIVRANCES DANS UN MÊME TOUR — relevé en passe de revue de fond, et MESURÉ
+  // ensuite sur le poste réel : une passe à blanc du 2026-08-18 a trouvé **neuf candidats au
+  // même tour**. Ce n'est donc pas un cas d'école.
+  //
+  // Chaque délivrance se paie en série : sa fenêtre d'immobilité (jusqu'à dix secondes pour un
+  // texte tapé) puis la relecture qui constate la boîte vidée (jusqu'à trois secondes). Neuf
+  // candidats, c'est deux minutes — soit **plus que la cadence entière**, pendant lesquelles
+  // rien du reste du poste n'est regardé. La borne annoncée est calculée pour un candidat
+  // isolé ; sans plafond, elle se dégrade avec le nombre de candidats sans que rien ne le dise.
+  //
+  // ⚠️ ET LES REPORTÉS GARDENT LEUR CANDIDATURE. C'est la moitié qui compte : les rendre à la
+  // mémoire avec un compteur remis à zéro les ferait attendre trois tours de plus — le plafond
+  // punirait alors les boîtes qu'il est censé servir, et d'autant plus qu'elles sont nombreuses.
+  // Ils repartent avec leur compte intact : ils sont candidats au tour suivant.
+  //
+  // ⚠️ ET RIEN N'EST TRONQUÉ EN SILENCE. Ce qui est reporté est compté sous sa propre cause et
+  // journalisé. Un plafond muet se lit « tout a été traité » alors qu'il en reste.
+  const aDelivrer = decisions.filter((d) => d.action === 'delivrer');
+  const reportes = aDelivrer.slice(DELIVRANCES_PAR_TOUR);
+  const retenus = new Set(aDelivrer.slice(0, DELIVRANCES_PAR_TOUR).map((d) => d));
+  if (reportes.length) {
+    journaliser(
+      `balayage — ${reportes.length} boîte(s) REPORTÉE(S) au tour suivant (plafond de ` +
+        `${DELIVRANCES_PAR_TOUR} par tour) : ${reportes.map((d) => d.pane).join(', ')}`
+    );
+    for (const d of reportes) {
+      suivante.set(d.pane, { texte: d.contenu, tours: d.tours, depuis: maintenant - d.immobiliteMs });
+      compter('reporte');
+      refus.push({ pane: d.pane, nom: d.nom, cause: 'reporte', tours: d.tours, detail: null });
+    }
+  }
+
   for (const d of decisions) {
     if (d.action === 'sabstenir') {
       compter(d.cause);
       refus.push({ pane: d.pane, nom: d.nom, cause: d.cause, tours: d.tours, detail: d.lectureRefusee || null });
       continue;
     }
+    if (!retenus.has(d)) continue; // reporté : déjà compté, déjà rendu à la mémoire
 
     // ⚠️ LE DISCRIMINANT COLLÉ / TAPÉ N'EST PAS RÉÉCRIT ICI : `fenetreDImmobilite` le porte pour
     // les trois chemins depuis T-20260818-0076, et elle JETTE si on ne lui nomme pas la fenêtre.

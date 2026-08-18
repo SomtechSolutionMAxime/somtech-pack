@@ -1640,7 +1640,16 @@ export class Veilleur {
       // « une porte sur deux » de plus. Et la fenêtre est NOMMÉE — `fenetreDImmobilite` jette
       // si l'appelant l'oublie, précisément pour qu'aucun chemin n'hérite du réglage d'un autre.
       delivrer: ({ pane, socket, texteCoince, immobiliteMs }) =>
-        herdr.delivrerLaBoiteDuPane(pane, { socket, texteCoince, immobiliteMs }),
+        herdr.delivrerLaBoiteDuPane(pane, {
+          socket,
+          texteCoince,
+          immobiliteMs,
+          // ⚠️ LE BAIL EST RELU JUSTE AVANT LA TOUCHE, PAS SEULEMENT À LA DÉCISION. Entre les
+          // deux s'écoule la fenêtre d'immobilité — jusqu'à dix secondes pendant lesquelles
+          // quelqu'un peut réserver ce pane pour y monter un banc. Décider sur une autorisation
+          // et agir sur une autre est la forme même du défaut de ce jalon.
+          encoreAutorise: () => !sousBail(pane, { maintenant: Date.now() }),
+        }),
       // ⚠️ L'AVIS N'A AUCUN TRANSPORT À LUI, et c'est ce lot qui l'a découvert. Sur les deux
       // autres chemins il est PRÉFIXÉ au message qu'on allait livrer de toute façon ; ici il
       // n'y a pas de message qui suit, donc il voyage seul — par la remise ordinaire, qui

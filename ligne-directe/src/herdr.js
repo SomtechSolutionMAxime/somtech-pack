@@ -172,9 +172,12 @@ function motDuRefusDeDelivrance(delivrance) {
  * sienne, comme `fenetreDImmobilite` l'exige, sinon le troisième chemin hériterait en silence
  * du réglage d'un autre : le défaut exact de T-20260818-0076.
  */
-export async function delivrerLaBoiteDuPane(pane, { socket, texteCoince, immobiliteMs } = {}) {
+export async function delivrerLaBoiteDuPane(pane, { socket, texteCoince, immobiliteMs, encoreAutorise } = {}) {
   return delivrerLaBoite({
     texteCoince,
+    // Le veto ultime, consulté juste avant la touche. Les appelants qui n'en passent pas —
+    // la parole du dirigeant, la livraison entre agents — gardent exactement leur comportement.
+    encoreAutorise,
     commandes: {
       lireEcran: ['agent', 'read', pane, '--format', 'ansi'],
       soumettre: ['agent', 'send-keys', pane, 'Enter'],

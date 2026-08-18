@@ -171,6 +171,55 @@ export const CADENCE_DU_BALAYAGE_MS = 60_000;
 export const TOURS_DIMMOBILITE_EXIGES = 3;
 
 /**
+ * COMBIEN DE BOÎTES ON DÉLIVRE DANS UN MÊME TOUR — et le chiffre sort d'une mesure, pas d'un avis.
+ *
+ * ⚠️ POURQUOI UN PLAFOND EXISTE. Chaque délivrance se paie EN SÉRIE : sa fenêtre d'immobilité,
+ * puis la relecture qui constate la boîte vidée. Une passe à blanc sur le poste réel, le
+ * 2026-08-18, a trouvé **neuf candidats au même tour** — le cas n'est pas d'école, il est le
+ * régime ordinaire d'un poste où plusieurs agents dorment en même temps. Neuf délivrances, c'est
+ * environ deux minutes : **plus que la cadence entière**, pendant lesquelles rien du reste du
+ * poste n'est regardé. Sans plafond, la borne annoncée se dégraderait avec le nombre de
+ * candidats, et rien ne le dirait — une promesse plus large que ce que le code tient.
+ *
+ * ⚠️ POURQUOI TROIS. Pire cas mesuré par délivrance : dix secondes de fenêtre (texte tapé) plus
+ * trois de relecture, soit treize. Trois délivrances valent trente-neuf secondes ; la lecture des
+ * quatre-vingt-dix écrans en coûte une sur un poste calme. Le tour tient donc dans sa cadence de
+ * soixante secondes avec de la marge. **[non établi]** : ce que coûte un tour sur un poste
+ * saturé — mesuré une fois à 144 s, mais c'était la machine sous une autre charge, pas le code.
+ *
+ * ⚠️ CE PLAFOND NE PERD PERSONNE, et c'est la moitié qui compte. Les boîtes reportées gardent
+ * leur candidature pour le tour suivant. Les remettre à zéro ferait attendre trois minutes de
+ * plus à celles-là mêmes que le dispositif sert — le plafond punirait les boîtes oubliées à
+ * proportion de leur nombre.
+ */
+export const DELIVRANCES_PAR_TOUR = 3;
+
+/**
+ * COMBIEN D'ÉCRANS ON LIT DE FRONT — et le chiffre vient d'un mur qu'on a heurté, pas d'un calcul.
+ *
+ * ⚠️ CE QUI A ÉTÉ MESURÉ, ET LES TROIS MESURES NE DISENT PAS LA MÊME CHOSE. Un tour lit l'écran
+ * de chaque pane du poste, un appel par pane. Le 2026-08-18, sur le même poste :
+ *   • **0,6 à 0,8 s** pour 87 panes, poste calme ;
+ *   • **68 s puis 144 s** pour 96 panes, pendant qu'une suite d'essais et deux revues tournaient ;
+ *   • et un balayage à la main sur **97 panes a EXPIRÉ à deux minutes**.
+ *
+ * **Ce n'est pas le code qui varie d'un facteur deux cents, c'est la charge de la machine.** Un
+ * appel de processus coûte quelques millisecondes sur un poste au repos et une seconde sur un
+ * poste saturé ; quatre-vingt-dix-sept fois de suite, ça fait deux minutes — c'est-à-dire **le
+ * double de la cadence**, pendant lesquelles plus rien n'est regardé.
+ *
+ * ⚠️ ET LA GARDE ANTI-CHEVAUCHEMENT NE RÉPARE PAS ÇA, elle le rend seulement inoffensif : les
+ * tours s'espacent au lieu de se marcher dessus, donc la borne annoncée se dégrade en silence
+ * exactement quand le poste est chargé — c'est-à-dire quand il porte le plus de boîtes figées.
+ *
+ * On lit donc par paquets. Huit de front : assez pour que l'attente d'un appel couvre celle des
+ * autres, assez peu pour ne pas ajouter quatre-vingt-dix processus à un poste déjà saturé — ce
+ * qui aggraverait la cause qu'on soigne. **[non établi]** : le gain réel sous charge n'est pas
+ * mesuré ; ce qui est mesuré, c'est le coût en série, et il dépasse la cadence.
+ */
+export const ECRANS_LUS_DE_FRONT = 8;
+
+/**
  * ③.c — LA FENÊTRE FINALE, PASSÉE À `fenetreDImmobilite` — dix secondes.
  *
  * ⚠️ ELLE NE PORTE PAS LA MÊME CHARGE QUE SES DEUX VOISINES, et c'est pour ça qu'elle peut être
@@ -271,6 +320,7 @@ export async function delivrerLaBoite({
   immobiliteMs,
   essais = 10,
   delaiMs = 500,
+  encoreAutorise,
 }) {
   // ON LAISSE AU TEXTE LE TEMPS DE BOUGER. C'est toute la garde : un brouillon vivant bouge,
   // un message coincé ne bouge pas. Sans cette attente, on ne distinguerait pas les deux.
@@ -323,6 +373,24 @@ export async function delivrerLaBoite({
   if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
   // Et une seconde fois sur ce qu'on relit : le contenu a pu devenir un dialogue entre-temps.
   if (ressembleAUnChoix(apres)) return { ok: false, cause: 'choix', soumis: false };
+
+  // ⚠️ LE DERNIER REGARD AVANT LE GESTE — et il existe parce qu'une passe de revue de fond l'a
+  // exigé (T-20260818-0078), à raison.
+  //
+  // Toutes les gardes ci-dessus portent sur ce QU'ON VOIT : l'écran, la boîte, le texte. Aucune
+  // ne porte sur ce QU'ON SAIT D'AILLEURS — et entre le moment où un appelant décide de délivrer
+  // et celui où la touche part, il s'écoule la fenêtre d'immobilité : jusqu'à dix secondes pour
+  // un texte tapé. **Dix secondes pendant lesquelles quelqu'un peut réserver ce pane pour y
+  // monter un banc**, et pendant lesquelles ce module continuait, lui, sur une autorisation
+  // périmée. Le critère du jalon ne souffre pas cette nuance : « quand le balayeur passe, il ne
+  // touche pas un pane réservé — QUEL QUE SOIT le contenu de sa boîte ».
+  //
+  // ⚠️ L'ABSENCE DE VETO N'EST PAS UN REFUS. Les deux appelants historiques n'en passent aucun
+  // et ne changent pas d'un caractère : personne ne réserve un pane contre la parole du
+  // dirigeant. Le veto sert celui qui agit sans que personne ne l'attende.
+  if (typeof encoreAutorise === 'function' && !(await encoreAutorise())) {
+    return { ok: false, cause: 'plus-autorise', soumis: false };
+  }
 
   const envoi = await appelHerdr(commandes.soumettre, vers);
   for (let i = 0; i < Math.max(1, essais); i += 1) {
