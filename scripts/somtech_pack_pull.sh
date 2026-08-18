@@ -58,6 +58,13 @@ done
 
 [[ -n "$TARGET" ]] || die "--target est requis"
 require_cmd git
+# `jq` est une dépendance DURE de ce chemin : get_module_paths() lit les chemins
+# de chaque module dans pack.json avec jq, et n'a aucun repli. Sans lui, les
+# modules restent nommés (get_default_modules a son propre repli) mais leurs
+# chemins sont vides — la boucle de copie ne parcourt rien et l'installation
+# rendait 0 fichier en SUCCÈS, avec le message d'un dépôt déjà à jour
+# (T-20260818-0042). Elle se déclare ici, au même titre que git.
+require_cmd jq
 
 TARGET_ABS="$(abs_path "$TARGET")"
 
@@ -119,17 +126,32 @@ else
   modules_to_check="${modules_to_check:-core,features}"
 fi
 
+# Deux compteurs, et non un seul : ils séparent les DEUX états que ce script
+# confondait (T-20260818-0042).
+#   paths_resolved : chemins que pack.json a rendus pour les modules demandés.
+#   paths_scanned  : ceux d'entre eux réellement présents dans le clone, donc
+#                    parcourus par la boucle.
+# La distinction ne porte pas sur le nombre de fichiers COPIÉS — un dépôt déjà
+# à jour en copie légitimement zéro — mais sur les chemins PARCOURUS : zéro
+# chemin parcouru veut dire qu'on n'a rien eu à comparer, jamais que tout
+# concordait. C'est aussi pourquoi « identique == 0 » ne ferait pas un bon
+# critère : un module légitimement vide le ferait rougir à tort.
+paths_resolved=0
+paths_scanned=0
+
 IFS=',' read -ra mod_array <<< "$modules_to_check"
 for mod in "${mod_array[@]}"; do
   mod="$(echo "$mod" | tr -d '[:space:]')"
   while IFS= read -r mod_path; do
     [[ -z "$mod_path" ]] && continue
     mod_path="${mod_path%/}"
+    paths_resolved=$((paths_resolved + 1))
 
     src_dir="${PACK_CLONE}/${mod_path}"
     tgt_dir="${TARGET_ABS}/${mod_path}"
 
     [[ -d "$src_dir" ]] || continue
+    paths_scanned=$((paths_scanned + 1))
 
     while IFS= read -r src_file; do
       local_rel="${src_file#${PACK_CLONE}/}"
@@ -152,10 +174,35 @@ for mod in "${mod_array[@]}"; do
   done < <(get_module_paths "$PACK_CLONE" "$mod")
 done
 
+# ── Garde : une installation qui n'a parcouru aucun chemin est une ANOMALIE ──
+#
+# Elle se pose AVANT le message de résultat : annoncer « 0 nouveau, 0 modifié,
+# 0 identique » puis « aucun changement à appliquer » quand on n'a rien
+# parcouru, c'est emprunter la formule d'un dépôt déjà à jour pour décrire une
+# panne. Ce ticket ferme la CLASSE, pas seulement la cause connue (`jq`
+# manquant) : pack.json illisible, modules mal orthographiés, clone incomplet
+# aboutissent au même silence.
+if [[ "$paths_scanned" -eq 0 ]]; then
+  echo ""
+  err "Aucun chemin de module n'a été parcouru — rien n'a pu être installé."
+  if [[ "$paths_resolved" -eq 0 ]]; then
+    err "  Modules demandés : ${modules_to_check}"
+    err "  Aucun chemin n'a été résolu depuis ${PACK_CLONE}/pack.json."
+    err "  Causes usuelles : nom de module inconnu, ou pack.json illisible."
+  else
+    err "  ${paths_resolved} chemin(s) déclaré(s), aucun présent dans le clone du pack."
+    err "  Le clone est probablement incomplet : ${PACK_CLONE}"
+  fi
+  die "Installation interrompue : ce n'est PAS un dépôt déjà à jour."
+fi
+
 echo ""
 log "Résultat : ${new_count} nouveau(x), ${modified_count} modifié(s), ${identical_count} identique(s)"
 
 if [[ "$new_count" -eq 0 ]] && [[ "$modified_count" -eq 0 ]]; then
+  # Zéro fichier à copier après avoir parcouru ${paths_scanned} chemin(s) : le
+  # dépôt est réellement à jour. C'est le cas légitime que la garde ci-dessus
+  # laisse volontairement passer.
   log "Aucun changement à appliquer."
   exit 0
 fi

@@ -191,6 +191,15 @@ list_modules() {
 }
 
 # Get paths for a specific module from pack.json
+#
+# ⚠️ Asymétrie ASSUMÉE avec get_default_modules() ci-dessous, qui a un repli sans
+# jq (« core, features ») là où celle-ci rend le vide. Lui donner le même repli
+# obligerait à recopier les chemins de pack.json EN DUR ici — une seconde source
+# de vérité qui dériverait en silence, exactement le défaut qu'on combat.
+# Le choix retenu (T-20260818-0042) : ses appelants déclarent `jq` en dépendance
+# dure et refusent tôt, plutôt que de dupliquer pack.json. Tout nouvel appelant
+# doit faire de même — sans quoi il repart en panne muette : modules nommés,
+# chemins vides, rien de parcouru, et un code de sortie 0.
 get_module_paths() {
   local source="$1"
   local module_name="$2"
