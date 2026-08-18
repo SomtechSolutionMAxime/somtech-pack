@@ -203,7 +203,7 @@ test('un lieu qui porte DÉJÀ un nom le reprend — sinon un orchestrateur chan
   });
   assert.equal(r.nom, 'bonaventure');
   assert.equal(r.attribue, false, 'rien n’a été attribué : le lieu faisait foi');
-  assert.equal(nomInscritDansLeLieu(lieu), 'bonaventure');
+  assert.deepEqual(nomInscritDansLeLieu(lieu), { nom: 'bonaventure' });
 });
 
 test('un lieu qui porte un nom HORS convention est repris EN LE DISANT — on ne bloque pas sur l’erreur d’un autre', () => {
@@ -213,4 +213,34 @@ test('un lieu qui porte un nom HORS convention est repris EN LE DISANT — on ne
   assert.equal(r.nom, 'rev-pr31');
   assert.match(r.avis, /n’est pas une rivière/);
   assert.match(r.avis, new RegExp(FICHIER_NOM_AGENT.replace('.', '\\.')), 'l’avis dit COMMENT le corriger');
+});
+
+
+test('un « .nom-agent » ILLISIBLE ne se lit pas « aucun nom » — on refuse plutôt que de faire dériver', () => {
+  // ⚠️ RELEVÉ EN REVUE DE FOND (passe 2). Le `catch` unique avalait tout : un fichier présent
+  // mais illisible — permissions, montage réseau qui décroche — se lisait « il n'en porte
+  // pas », et la naissance attribuait une AUTRE rivière à quelqu'un qui en avait déjà une.
+  // Personne ne l'apprenait. Un refus se voit ; une dérive de nom, non.
+  const lieu = bac();
+  // Un RÉPERTOIRE nommé « .nom-agent » : `readFileSync` lève EISDIR, jamais ENOENT — la même
+  // forme d'échec qu'un EACCES, sans dépendre des permissions du poste qui exécute la suite.
+  mkdirSync(join(lieu, FICHIER_NOM_AGENT));
+
+  const lu = nomInscritDansLeLieu(lieu);
+  assert.equal(lu.nom, null);
+  assert.ok(lu.illisible, 'l’échec de lecture doit être PORTÉ, pas avalé');
+
+  const r = nomDeLAgentQuiNait({
+    role: 'orchestrateur', lieu, code: 'd-1',
+    listerAgents: () => [], lireRegistre: () => ({ lignes: [] }),
+  });
+  assert.equal(r.nom, null, 'aucune rivière ne doit être attribuée par-dessus un nom qu’on n’a pas su lire');
+  assert.equal(r.motif, 'nom_du_lieu_illisible');
+  assert.match(r.message, /geste qui lève le blocage/);
+});
+
+test('un lieu SANS « .nom-agent » n’est pas un lieu illisible — l’absence est le cas normal du premier baptême', () => {
+  const lu = nomInscritDansLeLieu(bac());
+  assert.equal(lu.nom, null);
+  assert.equal(lu.illisible, undefined, 'ENOENT est une absence, pas une mesure manquée');
 });

@@ -242,13 +242,29 @@ export function attribuerRiviere({ code, pris = [] } = {}) {
  */
 export const FICHIER_NOM_AGENT = '.nom-agent';
 
-/** Le nom que ce lieu porte déjà, ou `null` s'il n'en porte pas. */
+/**
+ * Le nom que ce lieu porte déjà — et « je n'ai pas pu regarder » n'est PAS « il n'en porte pas ».
+ *
+ * ⚠️ RELEVÉ EN REVUE DE FOND (passe 2, E-20260818-0017), ET LE MODE DE PANNE EST SILENCIEUX. Un
+ * `catch` unique avalait tout : un `.nom-agent` présent mais ILLISIBLE — permissions, montage
+ * réseau qui décroche — se lisait « aucun nom », et la naissance attribuait alors une AUTRE
+ * rivière que celle que le lieu portait. L'orchestrateur changeait de nom sans que rien ne le
+ * dise, c'est-à-dire exactement ce que ce fichier existe pour empêcher.
+ *
+ * `ENOENT` est la seule absence : c'est le cas du premier baptême, et il est normal. Tout le
+ * reste est une mesure MANQUÉE, et une mesure manquée ne conclut rien — elle se dit. C'est la
+ * règle à trois états de `fraicheur-gabarit.js`, appliquée un cran plus bas.
+ *
+ * @returns {{nom: string|null, illisible?: string}} `nom: null` sans `illisible` = il n'en
+ *   porte pas ; `illisible` renseigné = on n'a pas su lire, et on n'en conclut RIEN.
+ */
 export function nomInscritDansLeLieu(lieu) {
   try {
     const brut = readFileSync(join(lieu, FICHIER_NOM_AGENT), 'utf8').trim().toLowerCase();
-    return brut || null;
-  } catch {
-    return null;
+    return { nom: brut || null };
+  } catch (err) {
+    if (err?.code === 'ENOENT') return { nom: null };
+    return { nom: null, illisible: String(err?.message ?? err).trim() };
   }
 }
 
@@ -277,24 +293,43 @@ export function inscrireNomDansLeLieu(lieu, nom) {
  * ⚠️ CE QUI EST RENDU NE CONCLUT PAS CE QU'IL N'A PAS MESURÉ : `nonVerifie` voyage avec le
  * nom, séparé de `pris`, pour que l'appelant puisse le DIRE à l'écran.
  *
- * @returns {{nom: string, attribue: boolean, avis: string|null, nonVerifie: string[]}}
- *          ou `{ nom: null, motif, message }` quand c'est un refus.
+ * @returns {{nom: string, source: string, attribue: boolean, avis: string|null, nonVerifie: string[]}}
+ *          ou `{ nom: null, motif, message }` quand c'est un refus. `source` dit D'OÙ le nom
+ *          vient — c'est ce qui permet à l'appelant de rattacher un refus ultérieur à sa cause
+ *          plutôt que de laisser deux messages sans fil entre eux (relevé en revue de fond).
  */
 export function nomDeLAgentQuiNait({ role, lieu, code, propose = null, depot, listerAgents, lireRegistre } = {}) {
   if (role !== 'orchestrateur') {
-    return { nom: String(code ?? '').toLowerCase(), attribue: false, avis: null, nonVerifie: [] };
+    return { nom: String(code ?? '').toLowerCase(), source: 'lieu_du_role', attribue: false, avis: null, nonVerifie: [] };
   }
 
   if (propose) {
     const verdict = jugerNomDOrchestrateur(propose);
     if (!verdict.conforme) return { nom: null, motif: verdict.motif, message: verdict.message };
-    return { nom: String(propose).toLowerCase(), attribue: false, avis: null, nonVerifie: [] };
+    return { nom: String(propose).toLowerCase(), source: 'propose', attribue: false, avis: null, nonVerifie: [] };
   }
 
-  const inscrit = lieu ? nomInscritDansLeLieu(lieu) : null;
+  const lu = lieu ? nomInscritDansLeLieu(lieu) : { nom: null };
+  if (lu.illisible) {
+    // ⚠️ ON REFUSE PLUTÔT QUE D'ATTRIBUER. Le lieu porte peut-être déjà un nom ; passer outre
+    // en donnerait un second à quelqu'un qui en a un, et personne ne l'apprendrait. Un refus se
+    // voit, une dérive de nom ne se voit pas.
+    return {
+      nom: null,
+      motif: 'nom_du_lieu_illisible',
+      message:
+        `le lieu porte un « ${FICHIER_NOM_AGENT} » qu'on n'a pas su lire (${lu.illisible}) — on ne ` +
+        `sait donc pas quel nom il portait, et on n'en attribue PAS un autre : ce serait le faire ` +
+        `changer de nom sans que personne l'apprenne.\n` +
+        `  Le geste qui lève le blocage : rends « ${FICHIER_NOM_AGENT} » lisible dans le lieu, ou ` +
+        `efface-le pour qu'une rivière soit attribuée de nouveau.`,
+    };
+  }
+  const inscrit = lu.nom;
   if (inscrit) {
     return {
       nom: inscrit,
+      source: 'inscrit_dans_le_lieu',
       attribue: false,
       avis: estUneRiviere(inscrit)
         ? null
@@ -309,7 +344,7 @@ export function nomDeLAgentQuiNait({ role, lieu, code, propose = null, depot, li
   const { pris, nonVerifie } = parcDesNoms({ depot, listerAgents, lireRegistre });
   const tirage = attribuerRiviere({ code, pris });
   if (!tirage.nom) return { nom: null, motif: tirage.motif, message: tirage.message };
-  return { nom: tirage.nom, attribue: true, avis: null, nonVerifie };
+  return { nom: tirage.nom, source: 'attribue', attribue: true, avis: null, nonVerifie };
 }
 
 /** Le lieu porte-t-il déjà un nom inscrit ? — pour les appelants qui veulent le savoir sans lire. */

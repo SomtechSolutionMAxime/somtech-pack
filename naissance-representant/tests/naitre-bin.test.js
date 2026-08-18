@@ -1220,7 +1220,7 @@ test('la RENAISSANCE reprend le nom inscrit — un orchestrateur ne change pas d
 
       const premiere = JSON.parse(lancerNaitre(code, { role: 'orchestrateur' }).stdout);
       assert.ok(estUneRiviere(premiere.agent));
-      assert.equal(nomInscritDansLeLieu(lieu), premiere.agent, 'le lieu porte désormais le nom');
+      assert.equal(nomInscritDansLeLieu(lieu).nom, premiere.agent, 'le lieu porte désormais le nom');
 
       // ⚠️ LE PARC A CHANGÉ ENTRE LES DEUX : la rivière qu'il porte est maintenant prise (par
       // lui). Sans le fichier, l'attribution l'enjamberait et lui donnerait un AUTRE nom — le
@@ -1291,4 +1291,27 @@ test('le nom inscrit est VERSÉ, pas seulement écrit — un clone frais doit le
     },
     'riv',
     { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}e` },
+  ));
+
+test('un « .nom-agent » que herdr refuserait est un refus QUI NOMME SA CAUSE — pas deux messages sans fil', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      const journal = installerFauxHerdr({ repertoire: lieu });
+      // Écrit à la main : aucune naissance ne peut inscrire un nom que herdr refuse.
+      writeFileSync(join(lieu, FICHIER_NOM_AGENT), 'Mon Agent !!\n');
+
+      const r = lancerNaitre(code, { role: 'orchestrateur' });
+
+      assert.equal(r.code, 1, 'refus attendu');
+      // ⚠️ RELEVÉ EN REVUE DE FOND. Avant, l'opérateur lisait deux messages qui se
+      // contredisent : le baptême disait « il est repris tel quel », puis l'échec parlait de
+      // « 1 à 32 caractères » sans jamais nommer le fichier d'où venait le nom ni le geste.
+      assert.match(r.stderr, /1 à 32 caractères/, 'la règle de herdr est dite');
+      assert.match(r.stderr, /\.nom-agent/, 'et le FICHIER d’où le nom vient est nommé');
+      assert.match(r.stderr, /efface-le/, 'et le geste qui lève le blocage');
+      assert.match(r.stderr, /Rien n’a été créé/);
+      assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr n’est parti');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}f` },
   ));

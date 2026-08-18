@@ -328,5 +328,41 @@
     "quoi": "l’encadré qui pose l’interdit est reformulé — même force, même mention de @{u}",
     "avant": "> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.**",
     "apres": "> ⚠️ **Ne te sers JAMAIS de `@{u}` pour ce contrôle, et n'avale jamais son erreur.**"
+  },
+  {
+    "id": "riviere-citation",
+    "quoi": "voix inversée : le mandat donne le code",
+    "avant": "> **Un chef d'équipe reçoit un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et il porte le code de ce mandat. Rien d'autre.**",
+    "apres": "> **Rattaché au ServiceDesk — demande, projet, livraison, epic, story —, le mandat que reçoit un chef d'équipe lui donne un code, et c'est ce code qu'il porte. Rien d'autre.**"
+  },
+  {
+    "id": "riviere-regle",
+    "quoi": "ordre des deux propositions inversé",
+    "avant": "> **Qui ARBITRE porte une rivière. Qui EXÉCUTE porte le code de son mandat.**",
+    "apres": "> **Une rivière est portée par qui ARBITRE ; le code de son mandat, par qui EXÉCUTE.**"
+  },
+  {
+    "id": "riviere-explication",
+    "quoi": "reformulation des connecteurs et de la syntaxe",
+    "avant": "**Ce n'est pas une exception à la règle du dessus — c'est ce qui la rend applicable.** Un chef d'équipe vit le temps d'un epic ; toi, tu portes **plusieurs mandats successifs**, et un code unique te décrit donc mal par construction. Et la règle du dessus le dit elle-même : nommer un chef d'équipe d'après son sujet le rendrait indistinguable de son orchestrateur. **Une rivière supprime cette collision au lieu de la contourner.**",
+    "apres": "**Loin de faire exception à la règle précédente, c'est elle qui la rend applicable.** Là où un chef d'équipe ne vit que le temps d'un epic, toi tu portes **plusieurs mandats successifs** : par construction, un code unique te décrirait mal. La règle précédente le dit d'ailleurs elle-même — nommer un chef d'équipe d'après son sujet le rendrait indistinguable de son orchestrateur. **Cette collision, une rivière la supprime au lieu de la contourner.**"
+  },
+  {
+    "id": "riviere-titre",
+    "quoi": "titre de section réordonné, apostrophe conservée",
+    "avant": "### ⚠️ Et TOI, orchestrateur, tu portes un nom de RIVIÈRE",
+    "apres": "### ⚠️ Toi, l'orchestrateur, portes quant à toi un nom de RIVIÈRE"
+  },
+  {
+    "id": "riviere-lieu",
+    "quoi": "structure passive/active échangée, propositions réordonnées",
+    "avant": "**⚠️ TON LIEU, LUI, GARDE LE CODE DU MANDAT.** `.orchestrateur/j-20260814-0001/` reste `.orchestrateur/j-20260814-0001/` même quand l'agent qui l'habite s'appelle `bonaventure`. Les deux ne servent pas la même chose : **le lieu est attaché à un chantier** — il est versé dans le dépôt de ce chantier, et son `CONTEXTE.md` décrit *ce* chantier ; **le nom sert à t'adresser la parole**. La naissance te le dit à voix haute quand les deux diffèrent, et c'est normal, pas une incohérence.",
+    "apres": "**⚠️ C'est le code du mandat, en revanche, que garde ton lieu.** Même habité par un agent nommé `bonaventure`, `.orchestrateur/j-20260814-0001/` reste `.orchestrateur/j-20260814-0001/`. Ces deux éléments ne remplissent pas la même fonction : **c'est à un chantier que le lieu est attaché** — versé dans le dépôt de ce chantier, son `CONTEXTE.md` décrivant *ce* chantier —, tandis que **c'est pour t'adresser la parole que sert le nom**. Quand les deux diffèrent, la naissance te le dit à voix haute — une situation normale, pas une incohérence."
+  },
+  {
+    "id": "riviere-renommer",
+    "quoi": "voix passive, ordre des clauses inversé",
+    "avant": "**Un orchestrateur vivant qui porte encore un code ne se renomme pas** — renommer appartient à l'agent. Il recevra sa rivière **à sa renaissance**.",
+    "apres": "**Le renommage ne s'applique pas à un orchestrateur vivant encore porteur d'un code** : c'est l'agent qui renomme, pas l'inverse. C'est **à sa renaissance** qu'il recevra sa rivière."
   }
 ]

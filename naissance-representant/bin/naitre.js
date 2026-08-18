@@ -52,7 +52,7 @@ import { verserLeLieu, exigerUnDepotGit, VersementImpossible, branchesQuiPortent
 import { expositionAlaNaissance, ATTENTE_NAISSANCE_MS } from '../src/naissance.js';
 import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
 import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
-import { nomDeLAgentQuiNait, inscrireNomDansLeLieu } from '../../ligne-directe/src/nom-de-riviere.js';
+import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
 import { chargerRegistre } from '../../ligne-directe/src/registre.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -228,7 +228,33 @@ async function main() {
   }
   if (bapteme.avis) process.stderr.write(`${bapteme.avis}\n`);
 
-  const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role, modele, mode, nomAgent: bapteme.nom });
+  // ⚠️ LE FIL ENTRE LES DEUX MESSAGES — relevé en revue de fond (passe 2, E-20260818-0017).
+  //
+  // `nomAgentHerdr` refuse ici un nom que herdr refuserait. Quand ce nom vient du `.nom-agent`
+  // du lieu — écrit à la main, puisqu'aucune naissance ne peut y mettre autre chose —, le
+  // baptême venait de dire « il est repris tel quel » et l'échec tombait deux lignes plus loin
+  // en parlant de « 1 à 32 caractères », SANS nommer le fichier ni le geste. L'opérateur lisait
+  // deux messages qui se contredisent, dont le second ne dit pas d'où vient le nom.
+  //
+  // On ne redit pas la règle de herdr ici — elle reste à son seul endroit. On ATTACHE le refus
+  // à sa cause, que seul cet appelant connaît.
+  let commandes;
+  try {
+    commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role, modele, mode, nomAgent: bapteme.nom });
+  } catch (err) {
+    if (bapteme.source === 'inscrit_dans_le_lieu') {
+      process.stderr.write(
+        `${err.message}\n` +
+          `  Ce nom vient du fichier « ${FICHIER_NOM_AGENT} » du lieu, où il a été écrit à la main — ` +
+          `aucune naissance n’aurait pu y inscrire un nom que herdr refuse.\n` +
+          `  Le geste qui lève le blocage : corrige « ${FICHIER_NOM_AGENT} » dans le lieu, ou efface-le ` +
+          `pour qu’une rivière soit attribuée de nouveau.\n` +
+          `  Rien n’a été créé : ni lieu, ni onglet, ni agent.\n`
+      );
+      process.exit(1);
+    }
+    throw err;
+  }
 
   // ═══ POSER LE LIEU S'IL MANQUE — le premier des gestes qu'un humain faisait à la main.
   //

@@ -127,6 +127,11 @@ test('les options de la naissance sont relayées telles quelles — la porte ne 
     modele: 'sonnet',
     mode: 'acceptEdits',
     amorceTexte: 'commence par lire le registre',
+    // ⚠️ AJOUTÉ APRÈS LA REVUE DE FOND (E-20260818-0017). Le drapeau était relayé par la porte
+    // et éprouvé par PERSONNE : muté — valeur corrompue, puis ligne de relais supprimée — la
+    // suite restait verte deux fois sur deux. Un drapeau qu'aucun essai ne nomme peut être
+    // perdu au relais sans qu'on l'apprenne avant un usage humain.
+    nomAgent: 'bonaventure',
   });
   assert.deepEqual(a, [
     'p-20260815-0002',
@@ -137,6 +142,7 @@ test('les options de la naissance sont relayées telles quelles — la porte ne 
     '--modele', 'sonnet',
     '--mode', 'acceptEdits',
     '--amorce-texte', 'commence par lire le registre',
+    '--nom-agent', 'bonaventure',
   ]);
 });
 
@@ -154,7 +160,7 @@ test('le rôle par défaut est ORCHESTRATEUR, à l’inverse de la commande sous
 
 test('ce qui n’est pas demandé n’est pas relayé — pas d’option vide qui vaudrait valeur', () => {
   const a = argumentsDeNaissance('j-1', { depot: '/d', workspace: 'w1' });
-  for (const absente of ['--session', '--amorce', '--amorce-texte']) {
+  for (const absente of ['--session', '--amorce', '--amorce-texte', '--nom-agent']) {
     assert.ok(!a.includes(absente), `${absente} ne doit pas apparaître quand personne ne l’a demandée`);
   }
 });
