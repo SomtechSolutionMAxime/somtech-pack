@@ -28,6 +28,13 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PULL="${SCRIPT_DIR}/../somtech_pack_pull.sh"
 
+# Le cas F invoque `remote-install.sh --with-claude-swt`, donc le chemin qui
+# mène au lanceur du poste. On borne le lieu unique des jetons sur un chemin
+# inexistant : aucun secret réel ne peut atteindre une sortie de test, même si
+# ce chemin allait plus loin qu'attendu. Règle vérifiée mécaniquement par
+# test-mcp-env.sh, pour tous les tests.
+export SOMTECH_MCP_ENV_FILE="${SOMTECH_MCP_ENV_FILE:-/nonexistent/somtech-mcp-env-de-test}"
+
 PASS_FILE="$(mktemp)"; FAIL_FILE="$(mktemp)"
 WORK="$(mktemp -d)"
 trap 'rm -f "$PASS_FILE" "$FAIL_FILE"; rm -rf "$WORK"' EXIT
