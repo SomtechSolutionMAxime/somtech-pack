@@ -585,3 +585,92 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
   );
   process.env.LIGNE_IMMOBILITE_MS = fenetreAvant;
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA QUATRIÈME MOITIÉ — LE DIALOGUE QUE LA DÉLIVRANCE ELLE-MÊME PROVOQUE (T-20260818-0049)
+//
+// ⚠️ RELEVÉ PAR UNE PASSE DE CONFIRMATION QUI A REJETÉ, et c'est le plus grave des quatre.
+//
+// LE MÉCANISME. On soumet le texte coincé d'un tiers. Ce texte peut être une COMMANDE, et sa
+// soumission déclenche chez le destinataire une demande de permission. L'écran porte alors
+// « Do you want to proceed? ❯ 1. Yes » AU-DESSUS d'une boîte parfaitement lisible et vide.
+// `delivrerLaBoite` ne teste que `boiteEstVide` avant de conclure `soumis` : elle voit la boîte
+// vide, rend `ok`, et `remettre()` écrit — SANS JAMAIS REGARDER L'ÉCRAN À NOUVEAU.
+//
+// Or écrire devant un dialogue ne livre pas un message : ça CONFIRME l'option affichée. C'est
+// mesuré dans ce dépôt (T-20260817-0006 : un texte ordinaire a fait exécuter la commande
+// proposée, le fichier a été créé). Le dirigeant reçoit un accusé de réception pour un message
+// que personne n'a lu, et une action que personne n'a validée est partie.
+//
+// ⚠️ C'EST LE RATTRAPAGE QUI OUVRE LE DANGER QUE LE LOT EXISTE POUR FERMER. La garde d'entrée
+// consulte bien l'écran — mais AVANT la délivrance. Entre le geste et l'écriture, plus rien.
+//
+// ET LE MODULE FRÈRE LE FAIT DÉJÀ : après une délivrance réussie, `livrerBrief` relit l'état
+// et rejoue `obstacleAvantLivraison` — « la délivrance a pu mettre le destinataire au travail
+// (mesuré) et sa boîte a pu se remplir à nouveau entre-temps. Le refus se re-décide sur ce
+// qu'on voit maintenant, jamais sur le fait qu'on a agi. » Encore une moitié, encore la même.
+
+test('UN DIALOGUE APPARU PENDANT LA DÉLIVRANCE ARRÊTE TOUT — on n’écrit pas sur une confirmation', async () => {
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  // Le texte coincé était une commande. Notre Entrée la soumet, et l'agent demande la
+  // permission de l'exécuter. La boîte est VIDE et LISIBLE sous le dialogue — c'est exactement
+  // le cas que `boiteEstVide` seul ne voit pas.
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const args = process.argv.slice(2);
+const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+const entrees = passes.filter((a) => a[1] === 'send-keys').length;
+if (cmd === 'agent read') {
+  if (entrees === 0) {
+    // Avant la délivrance : une boîte occupée par un texte COLLÉ, aucun dialogue.
+    process.stdout.write(['~/x', SEP, '\\u276f [Pasted text #83 +7 lines]', SEP, '  auto mode on'].join('\\n'));
+  } else {
+    // APRÈS notre Entrée : la commande est partie, l'agent demande la permission. La boîte est
+    // vide et lisible SOUS le dialogue — rien dans la boîte ne trahit le danger.
+    process.stdout.write([
+      '~/x', 'Bash(rm -rf /tmp/travaux)', '', 'Do you want to proceed?', '\\u276f 1. Yes',
+      '  2. No, and tell Claude what to do differently', SEP, '\\u276f ', SEP, '  auto mode on',
+    ].join('\\n'));
+  }
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  const { remettre, RemiseEchouee } = await import('../src/herdr.js');
+  await assert.rejects(
+    () => remettre('w5:p8', 'Message du dirigeant, reçu par Slack.'),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
+      assert.match(err.message, /DIALOGUE|choix/i, 'le refus doit nommer le dialogue');
+      // ⚠️ ET IL AVOUE LE GESTE DÉJÀ POSÉ. Sans cet aveu, le lecteur voit « dialogue » et ignore
+      // qu'une touche d'envoi est DÉJÀ partie vers ce pane, sur le texte d'un AUTRE, qui lui est
+      // bien parti. C'est une action irréversible qu'on lui cacherait ; il la découvrirait par
+      // ses effets sans pouvoir la relier à ce refus. Le module frère porte déjà cet aveu.
+      assert.match(
+        err.message,
+        /DÉJÀ SOUMIS/,
+        `le refus doit dire qu'une touche d'envoi est déjà partie sur un autre texte — reçu : ${err.message}`
+      );
+      return true;
+    },
+    'écrire devant un dialogue CONFIRME l’action affichée — le message n’est même pas reçu'
+  );
+
+  const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
+  assert.ok(gestes.includes('agent send-keys'), 'la délivrance a bien eu lieu — c’est elle qui a levé le dialogue');
+  assert.ok(
+    !gestes.includes('agent prompt'),
+    'ET RIEN N’A ÉTÉ ÉCRIT : une écriture ici aurait APPROUVÉ « rm -rf », pas livré un message'
+  );
+});

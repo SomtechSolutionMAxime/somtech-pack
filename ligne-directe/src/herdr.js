@@ -22,7 +22,7 @@ import { contenuBoite, laPriseEstConstatee, estUnEspaceReserve } from './boite.j
 // porte des gardes MESURÉES qui ont coûté un lot chacune — sur le texte coincé, sur l'écran,
 // sur l'immobilité. Une seconde copie n'hériterait jamais des corrections de la première.
 import { delivrerLaBoite, avisDeBoiteBloquee, avisDeBoiteVidee } from './delivrance.js';
-import { etatDeLEcran, refusDEcran, ecranAttendUnChoix } from './ecran.js';
+import { etatDeLEcran, refusDEcran, ecranAttendUnChoix, resumeDeLEcran } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -360,6 +360,63 @@ export async function remettre(pane, texte, { socket } = {}) {
     // et promettre par symétrie qu'on le retrouvera enverrait chercher ce qui n'existe pas.
     else if (delivrance.texteDisparu) {
       texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
+    }
+
+    // ═══ ON REGARDE À NOUVEAU. ON NE DÉDUIT PAS. (T-20260818-0049)
+    //
+    // ⚠️ RELEVÉ EN PASSE DE CONFIRMATION, BLOQUANT, ET C'EST LE PLUS GRAVE DES QUATRE DÉFAUTS
+    // DE CE LOT — parce que c'est LE RATTRAPAGE LUI-MÊME qui ouvre le danger que le lot existe
+    // pour fermer.
+    //
+    // Le texte qu'on vient de soumettre pour son auteur peut être une COMMANDE. Sa soumission
+    // déclenche alors, chez le destinataire, une demande de permission : l'écran porte
+    // « Do you want to proceed? ❯ 1. Yes » AU-DESSUS d'une boîte parfaitement lisible et vide.
+    //
+    // `delivrerLaBoite` ne teste que `boiteEstVide` avant de conclure « soumis » — elle voit la
+    // boîte vide et rend `ok`. La garde d'entrée de cette fonction, elle, consulte bien l'écran,
+    // MAIS AVANT la délivrance. Entre le geste et l'écriture, il n'y avait plus rien.
+    //
+    // Or écrire là ne livre pas un message : ça CONFIRME l'option affichée. Mesuré le
+    // 2026-08-17 contre le vrai service — un texte parfaitement ordinaire a fait EXÉCUTER la
+    // commande proposée, le fichier a été créé. Le dirigeant aurait reçu un accusé de réception
+    // pour un message que personne n'a lu, et une action que personne n'a validée serait partie.
+    //
+    // ⚠️ LE MODULE FRÈRE LE FAISAIT DÉJÀ : après une délivrance réussie, `livrerBrief` relit
+    // l'état et rejoue sa garde. Encore une moitié posée d'un côté et pas de l'autre — la
+    // quatrième de ce lot, et la quatrième du même motif.
+    const ecranApresDelivrance = await ecranDe(pane, socket);
+    const etatApresDelivrance = etatDeLEcran(ecranApresDelivrance);
+    const resteApresDelivrance = contenuBoite(ecranApresDelivrance);
+    if (
+      ecranAttendUnChoix(ecranApresDelivrance) ||
+      (ecranApresDelivrance && !etatApresDelivrance.pretARecevoir) ||
+      resteApresDelivrance === null ||
+      resteApresDelivrance !== ''
+    ) {
+      // ⚠️ ET LE REFUS AVOUE LE GESTE DÉJÀ POSÉ. Sans cet aveu, le lecteur voit « dialogue » et
+      // ignore qu'une touche d'envoi est DÉJÀ partie vers ce pane, sur le texte d'un AUTRE, qui
+      // lui est bien parti. C'est une action irréversible qu'on lui cacherait ; il la
+      // découvrirait par ses effets, sans pouvoir la relier à ce refus.
+      const vu =
+        refusDEcran(etatApresDelivrance, { cible: 'la session' }) ||
+        (resteApresDelivrance === null
+          ? 'je n’ai plus su lire son écran'
+          : resteApresDelivrance !== ''
+            ? `sa boîte porte de nouveau un texte (« ${String(resteApresDelivrance).slice(0, 60)}… »)`
+            : `ce que je vois attend un CHOIX, pas un message${
+                resumeDeLEcran(String(ecranApresDelivrance ?? '')) ? `. Voici ce que j’ai vu :\n${resumeDeLEcran(String(ecranApresDelivrance ?? ''))}` : ''
+              }`);
+      throw new RemiseEchouee(
+        pane,
+        `l’état de ${pane} a CHANGÉ pendant que je débloquais sa boîte — ${vu}. Y écrire maintenant ` +
+          `ne livrerait pas ta parole : devant un choix, l’écriture CONFIRME l’option affichée ` +
+          `(mesuré). Je m’abstiens.` +
+          (delivrance.soumis
+            ? ` ⚠️ ET J’AI DÉJÀ SOUMIS un premier texte qui bloquait cette boîte — il est parti, ` +
+              `entier, tel que son auteur l’avait écrit ; c’est peut-être lui qui a produit cet état.`
+            : '') +
+          ` Le geste : va voir l’écran (« herdr agent focus ${pane} »), puis renvoie ton message.`
+      );
     }
   }
 
