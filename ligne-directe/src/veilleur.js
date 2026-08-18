@@ -23,6 +23,9 @@ import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu } from './lieu-agent.js';
+import { unTourDeBalayage } from './balayage.js';
+import { sousBail } from './baux.js';
+import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
 import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune, cadrerPourPair } from './cadre.js';
 import { etrangersParmi, nouveauxVenus, photographier, referenceComparable, NOUS } from './cloisonnement.js';
@@ -216,6 +219,7 @@ export class Veilleur {
     const { identite } = v;
     v.connecterSlack();
     v.surveiller();
+    v.balayer();
     await v.reconcilier();
     journaliser(`veilleur démarré — espace ${identite.equipe}, ${lignesOuvertes(v.registre).length} ligne(s) ouverte(s)`);
     // ⚠️ UNE GARDE QUI NE PEUT PLUS JUGER LE DIT (T-20260818-0046). Sans identifiant d'espace
@@ -1548,6 +1552,105 @@ export class Veilleur {
     return this.chienDeGarde;
   }
 
+
+  // ————————————————————————————————————————————————————————————— le balayage des boîtes oubliées
+
+  /**
+   * LE BALAYEUR — la seule force du poste qui délivre une boîte SANS qu'on écrive à l'agent.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════════════════
+   * POURQUOI IL VIT ICI, ET PAS DANS UN SERVICE À PART (T-20260818-0078)
+   *
+   * Jusqu'à ce lot, `delivrerLaBoite` n'était appelée que depuis les chemins de LIVRAISON :
+   * le remède ne partait donc que quand quelqu'un écrivait. **Une boîte que plus personne ne
+   * relance restait bloquée indéfiniment** — mesuré le 2026-08-18 : `ristigouche` bloqué 55
+   * minutes, et le prompt de ronde d'un orchestrateur coincé dans sa PROPRE boîte, deux fois.
+   * Ce dernier cas est le pire : *il ne faisait plus ses rondes, et rien ne le lui disait.*
+   *
+   * ⚠️ ET LE COÛT EST ASYMÉTRIQUE : plus un agent est silencieux, moins on lui écrit, donc
+   * moins il a de chances d'être débloqué. Le mécanisme échouait exactement là où il servait
+   * le plus.
+   *
+   * ⚠️ CE BALAYAGE N'ACCORDE AUCUN POUVOIR NOUVEAU AU VEILLEUR, et c'est ce qui a décidé du
+   * lieu. Vérifié dans le code avant d'écrire : il voit DÉJÀ tout le poste (`herdr.agents()`
+   * sans socket agrège toutes les sessions), il écrit DÉJÀ hors registre (`diffuserConsigne`),
+   * et il délivre DÉJÀ les boîtes occupées (`remettre()` depuis T-20260818-0049). On lui donne
+   * une RAISON DE PLUS d'appeler ce qu'il appelle déjà, pas une capacité de plus.
+   *
+   * ⚠️ ET LA CADENCE N'EST PAS ÉCRITE ICI. Elle vit dans `delivrance.js`, auprès des deux
+   * fenêtres d'immobilité — parce que les avoir écrites chacune chez son appelant a coûté un
+   * lot entier (T-20260818-0076 : on annonçait dix secondes, un chemin en faisait trois cents).
+   * **Deux réglages qu'on ne voit jamais ensemble sont deux comportements dont un seul est
+   * annoncé.** Régler le balayeur demande d'ouvrir le fichier où vivent déjà ses deux voisins.
+   *
+   * ⚠️ CE QUE CE DISPOSITIF NE GARANTIT PAS, ET IL FAUT LE DIRE ICI : il tient sa borne TANT
+   * QUE LE VEILLEUR TOURNE. Mesuré le 2026-08-18 : `launchd` ne compte pas ce service actif
+   * (`state = not running`) et ne le relancera pas — `KeepAlive` n'est armé que sur une sortie
+   * NON nulle, et le veilleur sort avec 0 quand un autre tourne déjà. Ce qui le maintient en
+   * vie est le démarrage paresseux, c'est-à-dire *quelqu'un qui lui parle*. **La survie de
+   * l'hôte est un défaut distinct, plus vieux que ce lot, et elle a son propre ticket.**
+   */
+  balayer(cadence = CADENCE_DU_BALAYAGE_MS) {
+    clearInterval(this.balayeur);
+    // ⚠️ LA MÉMOIRE SE REPORTE D'UN TOUR AU SUIVANT, ET C'EST ELLE QUI FAIT LE COMPTEUR. Sans
+    // ce report, chaque tour repartirait de zéro et aucun pane n'atteindrait jamais les trois
+    // tours exigés : le balayeur tournerait pour rien, sans qu'aucune erreur ne le dise.
+    this.memoireDuBalayage = this.memoireDuBalayage || new Map();
+    // ⚠️ UN TOUR NE DÉMARRE PAS PENDANT QU'UN AUTRE COURT. La cadence est un intervalle ENTRE
+    // deux tours, pas une horloge : un tour lent (chaque candidat paie sa fenêtre d'immobilité)
+    // verrait sinon le suivant lui passer dessus, et deux tours décideraient sur la même boîte.
+    this.balayageEnCours = false;
+    this.balayeur = setInterval(() => {
+      if (this.arrete || this.balayageEnCours) return;
+      this.balayageEnCours = true;
+      this.unTour()
+        .catch((err) => journaliser(`balayage — le tour a échoué : ${err?.message || err}`))
+        .finally(() => {
+          this.balayageEnCours = false;
+        });
+    }, cadence);
+    this.balayeur.unref?.();
+    return this.balayeur;
+  }
+
+  /**
+   * Un tour, câblé sur le poste réel — et rien d'autre que du câblage.
+   *
+   * ⚠️ AUCUNE GARDE N'EST ÉCRITE ICI. `delivrer` est branché sur `delivrerLaBoite`, qui relit
+   * avant de soumettre, refuse un écran de dialogue, un choix, un écran illisible. `avertir`
+   * est branché sur `remettre()`, le chemin de remise déjà gardé. Écrire une garde de plus à
+   * cet étage serait s'en écrire une SECONDE copie, qui n'hériterait plus des corrections de
+   * la première — le motif que ce dépôt a payé dix fois.
+   *
+   * ⚠️ `sousBail` EST CÂBLÉ ICI, ET C'EST LE SEUL ENDROIT OÙ ÇA SE VOIT. `balayage.js` retombe
+   * sur `() => false` quand on ne le lui passe pas : un veilleur mal câblé balaierait donc les
+   * bancs d'essai des autres agents **sans aucune protection et sans le dire**. Un essai garde
+   * ce câblage précisément parce que son absence est silencieuse.
+   */
+  async unTour(maintenantMs = Date.now()) {
+    const rendu = await unTourDeBalayage({
+      agents: () => herdr.agents(),
+      lireEcran: (a) => herdr.ecranDe(a.pane, a.socket),
+      sousBail,
+      memoire: this.memoireDuBalayage,
+      maintenant: maintenantMs,
+      journaliser,
+      // ⚠️ LE CÂBLAGE DU GESTE N'EST PAS RECOPIÉ ICI. `delivrerLaBoiteDuPane` le porte en UN
+      // seul exemplaire pour les trois chemins ; s'en écrire une seconde version aurait fait
+      // « une porte sur deux » de plus. Et la fenêtre est NOMMÉE — `fenetreDImmobilite` jette
+      // si l'appelant l'oublie, précisément pour qu'aucun chemin n'hérite du réglage d'un autre.
+      delivrer: ({ pane, socket, texteCoince, immobiliteMs }) =>
+        herdr.delivrerLaBoiteDuPane(pane, { socket, texteCoince, immobiliteMs }),
+      // ⚠️ L'AVIS N'A AUCUN TRANSPORT À LUI, et c'est ce lot qui l'a découvert. Sur les deux
+      // autres chemins il est PRÉFIXÉ au message qu'on allait livrer de toute façon ; ici il
+      // n'y a pas de message qui suit, donc il voyage seul — par la remise ordinaire, qui
+      // trouvera la boîte libre puisqu'on vient de la vider.
+      avertir: (pane, texte, { socket } = {}) => herdr.remettre(pane, texte, { socket }),
+    });
+    this.memoireDuBalayage = rendu.memoire;
+    return rendu;
+  }
+
   connecterSlack() {
     if (this.arrete) return;
     // TROISIÈME MUR, et le dernier avant la connexion elle-même. Il se lève AVANT tout
@@ -2281,6 +2384,7 @@ export class Veilleur {
   async arreter() {
     this.arrete = true;
     clearInterval(this.chienDeGarde);
+    clearInterval(this.balayeur);
     try {
       this.ws?.close();
     } catch {

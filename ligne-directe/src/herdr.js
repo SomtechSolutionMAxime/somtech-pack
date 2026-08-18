@@ -157,6 +157,48 @@ function motDuRefusDeDelivrance(delivrance) {
  * Remet un message à un agent, et prouve la remise.
  * @returns {Promise<object>} le `result` rendu par herdr — la preuve, pas une supposition
  */
+/**
+ * BRANCHER LE GESTE SUR CE POSTE-CI — le câblage de `delivrerLaBoite`, en UN seul exemplaire.
+ *
+ * ⚠️ CETTE FONCTION EXISTE PARCE QU'UN TROISIÈME APPELANT EST ARRIVÉ (T-20260818-0078). Le
+ * balayeur des boîtes oubliées délivre lui aussi, depuis le veilleur. Recopier ce câblage
+ * chez lui aurait rejoué « une porte sur deux » — le motif que ce dépôt a payé dix fois, et
+ * deux fois DANS le correctif d'un défaut de cette famille : la copie n'hérite jamais des
+ * corrections de l'autre, et on ne s'en aperçoit qu'au prochain incident.
+ *
+ * Ce qu'elle porte est du câblage et RIEN d'autre : quelles commandes herdr, comment lire un
+ * écran, comment dormir. Les GARDES restent toutes dans `delivrerLaBoite`, qui relit avant de
+ * soumettre. **La fenêtre d'immobilité n'a PAS de défaut ici** — chaque appelant nomme la
+ * sienne, comme `fenetreDImmobilite` l'exige, sinon le troisième chemin hériterait en silence
+ * du réglage d'un autre : le défaut exact de T-20260818-0076.
+ */
+export async function delivrerLaBoiteDuPane(pane, { socket, texteCoince, immobiliteMs } = {}) {
+  return delivrerLaBoite({
+    texteCoince,
+    commandes: {
+      lireEcran: ['agent', 'read', pane, '--format', 'ansi'],
+      soumettre: ['agent', 'send-keys', pane, 'Enter'],
+    },
+    appelHerdr: async (cmd) => {
+      try {
+        await herdr(cmd, socket);
+        return { ok: true };
+      } catch {
+        // Le code de retour de la touche d'envoi ne prouve rien ici — c'est la boîte vidée qui
+        // tranche, et `delivrerLaBoite` la relit. On rend l'échec sans l'interpréter.
+        return { ok: false };
+      }
+    },
+    lireEcran: async () => ecranDe(pane, socket),
+    dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
+    // Zéro pour un texte COLLÉ — il est par construction déjà envoyé, il n'y a rien à observer.
+    // La fenêtre ne sert qu'au texte tapé. `delivrerLaBoite` relit dans les deux cas avant de
+    // soumettre et s'abstient si le contenu a bougé : la garde ne dépend pas du délai, le délai
+    // ne fait que lui donner de quoi voir.
+    immobiliteMs,
+  });
+}
+
 export async function remettre(pane, texte, { socket } = {}) {
   if (texte.length > SEUIL_ARGV) {
     throw new RemiseEchouee(pane, `message de ${texte.length} caractères — au-delà de ${SEUIL_ARGV}, à découper`);
@@ -297,30 +339,7 @@ export async function remettre(pane, texte, { socket } = {}) {
       texteTapeMs: Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_LIGNE_DU_DIRIGEANT_MS),
     });
 
-    const delivrance = await delivrerLaBoite({
-      texteCoince: dejaLa,
-      commandes: {
-        lireEcran: ['agent', 'read', pane, '--format', 'ansi'],
-        soumettre: ['agent', 'send-keys', pane, 'Enter'],
-      },
-      appelHerdr: async (cmd) => {
-        try {
-          await herdr(cmd, socket);
-          return { ok: true };
-        } catch {
-          // Le code de retour de la touche d'envoi ne prouve rien ici — c'est la boîte vidée qui
-          // tranche, et `delivrerLaBoite` la relit. On rend l'échec sans l'interpréter.
-          return { ok: false };
-        }
-      },
-      lireEcran: async () => ecranDe(pane, socket),
-      dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
-      // Zéro pour un texte COLLÉ — il est par construction déjà envoyé, il n'y a rien à
-      // observer. La fenêtre ne sert qu'au texte tapé. `delivrerLaBoite` relit dans les deux
-      // cas avant de soumettre et s'abstient si le contenu a bougé : la garde ne dépend pas
-      // du délai, le délai ne fait que lui donner de quoi voir.
-      immobiliteMs: fenetreMs,
-    });
+    const delivrance = await delivrerLaBoiteDuPane(pane, { socket, texteCoince: dejaLa, immobiliteMs: fenetreMs });
 
     // ⚠️ ON NE PASSE QUE SUR CE QU'ON A VU. `ok` couvre deux issues : la boîte a été soumise, ou
     // elle s'est vidée pendant qu'on regardait. Dans les deux cas elle est LIBRE maintenant, et
@@ -629,7 +648,12 @@ async function etatDuPane(pane, socket) {
  * dialogue de choix s'affiche PAR-DESSUS un écran qui porte une boîte parfaitement lisible.
  * Qui ne regarde que la boîte ne voit pas le modal, et envoie sa touche d'envoi dedans.
  */
-async function ecranDe(pane, socket) {
+// ⚠️ EXPORTÉE POUR LE BALAYEUR (T-20260818-0078), ET SURTOUT PAS RECOPIÉE CHEZ LUI. Le balayeur
+// lit l'écran de tous les panes du poste ; s'en écrire une seconde version aurait fait « une
+// porte sur deux » de plus — la copie n'hérite jamais des corrections de l'autre, et c'est ici
+// que vit la connaissance du `--format ansi` sans lequel une suggestion grisée se lit comme un
+// reste. Rien d'autre ne change : les appelants internes l'appellent toujours pareil.
+export async function ecranDe(pane, socket) {
   try {
     const { stdout } = await lancer(OUTILS.herdr, ['agent', 'read', pane, '--format', 'ansi'], {
       maxBuffer: 16 * 1024 * 1024,

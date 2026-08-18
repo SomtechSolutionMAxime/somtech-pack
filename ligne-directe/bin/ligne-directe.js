@@ -16,6 +16,7 @@
 import { parler, passerLaMain } from '../src/client.js';
 import { ligneDuPane, REFUS_SELECTION } from '../src/registre.js';
 import { option, optionDonnee, optionsRepetees, premierLibre } from '../src/arguments.js';
+import { poserUnBail, leverUnBail, bauxEnCours, MINUTES_PAR_DEFAUT, MINUTES_PLAFOND } from '../src/baux.js';
 import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
@@ -109,6 +110,21 @@ function usage(code = 0) {
                                                            et NE CREE RIEN si le poste ne peut pas
                                                            ouvrir de ligne (sa ligne est obligatoire)
   etat                                                     ce qui est ouvert
+  bail poser <pane> [--minutes N] [--pourquoi "..."]       RESERVE un pane : le balayeur des
+  bail lever <pane>                                        boites oubliees s'en ABSTIENT tant
+  bail liste                                               que le bail court, quel que soit le
+                                                           contenu de sa boite. C'est ainsi
+                                                           qu'un banc d'essai protege la mesure
+                                                           qu'il est en train de faire — aucun
+                                                           signe observable ne distingue un banc
+                                                           d'un agent au travail, donc c'est
+                                                           CELUI QUI MESURE QUI DECLARE.
+                                                           Tout bail EXPIRE (defaut
+                                                           ${MINUTES_PAR_DEFAUT} min, plafond ${MINUTES_PLAFOND} min : une
+                                                           duree plus longue est ECRETEE, jamais
+                                                           refusee) — un bail eternel serait un
+                                                           trou que plus personne ne leve.
+                                                           Re-poser PROLONGE.
   service installer|retirer|etat                           le veilleur revient après un redémarrage
   relever                                                  fait passer la main a un veilleur neuf
                                                            (a lancer apres chaque mise a jour du pack)
@@ -398,6 +414,74 @@ if (geste === 'relever') {
   // Un refus qui ne laisse sur stderr que ce que Node y a déversé est illisible et faux.
   if (!r.ok && r.refus?.message) process.stderr.write(`${r.refus.message}\n`);
   process.exit(r.ok ? 0 : 1);
+} else if (geste === 'bail') {
+  // LE BAIL D'UN PANE (T-20260818-0078) — le geste de CELUI QUI MESURE, jamais du balayeur.
+  //
+  // Rien ici ne parle au veilleur : un bail vit sur disque, à côté du registre, et se pose sans
+  // qu'aucune ligne soit ouverte. Même forme que `service` — un sous-verbe en `args[0]`, la
+  // sortie en JSON par `rendre` parce que ce geste est aussi tapé par un banc, pas seulement lu
+  // par un humain.
+  const quoi = args[0] || 'liste';
+  if (quoi === 'liste') {
+    // La date lisible est calculée ICI, à l'affichage, à partir du seul champ qui fait foi
+    // (`jusqua`). L'inscrire au fichier donnerait deux champs qui disent la même chose et qui
+    // divergeraient à la première prolongation.
+    const baux = bauxEnCours().map((b) => ({ ...b, jusqua_lisible: new Date(b.jusqua).toISOString() }));
+    rendre({ ok: true, baux });
+  } else if (quoi === 'poser' || quoi === 'lever') {
+    // ⚠️ LE PANE SE LIT PAR `premierLibre`, JAMAIS EN POSITION — et il a fallu que la garde de
+    // `arguments.test.js` rougisse pour que ce chemin soit le bon. Une première écriture prenait
+    // `args[1]`, ce qui refusait `bail poser --minutes 30 w5:p3` (l'ordre le plus naturel) ; et
+    // surtout, elle contournait la garde du dépôt au lieu de la satisfaire. `--minutes` et
+    // `--pourquoi` sont donc DÉCLARÉES dans `OPTIONS_A_VALEUR`, comme toutes les autres.
+    //
+    // Ce que ça évite : sans ces déclarations, `bail poser --pourquoi "banc T-…" w5:p3` poserait
+    // le bail sur « banc T-… ». Le pane réel resterait balayable pendant que la commande annonce
+    // un succès — une mesure soumise sous le nez de qui croyait l'avoir protégée.
+    //
+    // `args.slice(1)` écarte le sous-verbe, qui est lui aussi un argument libre.
+    const pane = premierLibre(args.slice(1));
+    if (!pane) {
+      process.stderr.write(
+        `« bail ${quoi} » attend le pane vise — rien n'a ete pose ni leve.\n` +
+          `  ligne-directe bail ${quoi} w1:p1${quoi === 'poser' ? ' [--minutes N] [--pourquoi "..."]' : ''}\n`
+      );
+      process.exit(1);
+    }
+    // ⚠️ `lever` REND ET SORT — mais on ne s'appuie pas sur le fait que `rendre` appelle
+    // `process.exit` : le jour où il rendrait la main, « lever » enchaînerait sur « poser » et
+    // re-poserait le bail qu'on vient de retirer. La branche est donc close pour de bon.
+    if (quoi === 'lever') {
+      const r = leverUnBail(pane);
+      rendre(r.ok ? { ...r, pane } : r);
+      process.exit(r.ok ? 0 : 1);
+    }
+    const minutes = option(args, '--minutes');
+    const r = poserUnBail(pane, {
+      // La valeur part TELLE QUELLE : c'est `poserUnBail` qui écrête et qui retombe sur le
+      // défaut, et il n'y a qu'un endroit où ces règles s'écrivent. Les rejouer ici en donnerait
+      // deux, dont une seule serait éprouvée.
+      minutes: minutes == null ? undefined : Number(minutes),
+      pourquoi: option(args, '--pourquoi'),
+    });
+    if (r.ok && r.ajustement === 'plafond') {
+      // ⚠️ L'ÉCRÊTAGE SE DIT, SINON IL MENT PAR OMISSION : celui qui a demandé une semaine
+      // croirait l'avoir. Le bail est bien posé (on protège d'abord), et le mot dit combien de
+      // temps il tient réellement — de quoi savoir qu'il faudra le renouveler.
+      process.stderr.write(
+        `duree ECRETEE : ${r.minutes_demandees} min demandees, ${r.bail.minutes} min accordees ` +
+          `(plafond ${MINUTES_PLAFOND} min). Le bail EST pose — re-pose-le pour le prolonger.\n`
+      );
+    } else if (r.ok && r.ajustement === 'defaut') {
+      process.stderr.write(
+        `duree illisible ou nulle : le bail est pose pour ${r.bail.minutes} min (defaut). ` +
+          `Un bail de zero minute serait un fichier qui dit « reserve » et une lecture qui dit « libre ».\n`
+      );
+    }
+    rendre(r);
+  } else {
+    usage(1);
+  }
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);

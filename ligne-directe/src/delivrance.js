@@ -108,6 +108,92 @@ export const FENETRE_LIGNE_DU_DIRIGEANT_MS = 10_000;
 export const FENETRE_ENTRE_AGENTS_MS = 6_000;
 
 /**
+ * ═══ ③ LE BALAYAGE DES BOÎTES OUBLIÉES — TROISIÈME CHEMIN, ET SES RÉGLAGES SONT ICI ═══
+ *
+ * ⚠️ CES TROIS VALEURS N'ONT RIEN À FAIRE CHEZ LE VEILLEUR QUI LES CONSOMME, ET C'EST LE POINT
+ * LE PLUS IMPORTANT DE CE LOT (T-20260818-0078). Les écrire au point d'appel referait, mot pour
+ * mot, le défaut que T-20260818-0076 a payé : dix secondes dans `herdr.js`, cinq minutes dans
+ * `bin/livrer.js`, un lot qui annonce « dix » et un coordonnateur qui en mesure trois cents.
+ * **Deux réglages qu'on ne voit jamais ensemble, ce sont deux comportements dont un seul est
+ * annoncé.** Elles se lisent donc d'un seul coup d'œil, sous les deux fenêtres qu'elles
+ * complètent : régler l'une en croyant régler l'autre demande de ne pas lire la ligne d'à côté.
+ *
+ * ⚠️ LE DÉFAUT QU'ELLES FERMENT. Une boîte encombrée n'est délivrée que si QUELQU'UN ÉCRIT à son
+ * porteur — `delivrerLaBoite` n'est appelée que depuis les chemins de livraison. Une boîte que
+ * plus personne ne relance reste donc bloquée indéfiniment. Mesuré le 2026-08-18 : `ristigouche`
+ * bloqué **55 minutes** ; et deux fois le prompt de ronde d'un orchestrateur coincé dans sa
+ * propre boîte — **cet orchestrateur ne faisait plus ses rondes et rien ne le lui disait**.
+ *
+ * ⚠️ ET CE CHEMIN A UNE PROPRIÉTÉ QU'AUCUN DES DEUX AUTRES N'A : **PERSONNE NE L'ATTEND.** Les
+ * deux premiers doivent délivrer en quelques secondes parce qu'un humain ou un agent patiente au
+ * bout de la ligne — c'est ce budget qui leur interdit d'observer longtemps. Le balayeur, lui,
+ * ne fait attendre personne. Il peut donc exiger ce qu'ils ne peuvent pas : non pas une fenêtre
+ * plus longue, mais une immobilité **constatée sur plusieurs tours espacés**. C'est exactement
+ * ce qui sépare un banc d'essai vivant — qu'on écrit, qu'on relit, qu'on relance, et dont la
+ * boîte bouge — d'une boîte OUBLIÉE, qui ne bouge plus du tout. Une fenêtre continue, si longue
+ * soit-elle, ne sait pas faire cette différence-là.
+ *
+ * **BORNE ANNONCÉE, ET ELLE DÉCOULE DES TROIS VALEURS CI-DESSOUS** : une boîte figée est
+ * délivrée en **moins de ~4 minutes** (au pire trois tours de cadence après le tour qui l'a vue
+ * apparaître, plus la fenêtre finale), contre les 55 minutes mesurées.
+ */
+
+/**
+ * ③.a — UN TOUR PAR MINUTE.
+ *
+ * ⚠️ CE N'EST PAS UN DÉLAI D'ATTENTE, C'EST UN PAS DE MESURE. Il fixe l'écart entre deux
+ * observations du même texte, et c'est cet écart qui donne son sens aux tours : trois lectures
+ * à une seconde d'intervalle ne diraient rien de plus qu'une seule, alors que trois lectures
+ * espacées d'une minute disent que personne n'a touché ce clavier depuis deux minutes.
+ *
+ * ⚠️ ET C'EST AUSSI LE BUDGET D'UN TOUR. Les délivrances sont séquentielles : un tour qui
+ * durerait plus longtemps que cette cadence chevaucherait le suivant. C'est à l'appelant de ne
+ * jamais lancer un tour pendant qu'un autre court — la cadence est un intervalle ENTRE deux
+ * tours, jamais une horloge qui en démarre un troisième.
+ */
+export const CADENCE_DU_BALAYAGE_MS = 60_000;
+
+/**
+ * ③.b — TROIS TOURS DU MÊME TEXTE, AU MÊME PANE, D'AFFILÉE.
+ *
+ * ⚠️ C'EST LA GARDE, ET ELLE REMPLACE LA FENÊTRE — pas l'inverse. Un texte qui change d'un
+ * caractère entre deux tours remet le compteur à zéro : quelqu'un est devant ce pane, il
+ * soumettra lui-même. Deux tours suffiraient à écarter le bruit d'une lecture, mais pas
+ * quelqu'un qui compose lentement une phrase longue ; trois tours donnent DEUX minutes pleines
+ * d'immobilité observée, ce que ni la ligne du dirigeant ni le chemin entre agents ne peuvent
+ * s'offrir.
+ *
+ * ⚠️ CE QUE ÇA NE COUVRE PAS, ET IL FAUT LE DIRE : quelqu'un parti se faire un café en laissant
+ * une phrase à moitié tapée revient dans les trois minutes et trouve sa phrase soumise. C'est
+ * le même arbitrage qu'ailleurs, pris les yeux ouverts, et ce qui le rend tenable est le même :
+ * l'avis au destinataire, qui rend l'incident CONSTATABLE au lieu de le laisser muet.
+ */
+export const TOURS_DIMMOBILITE_EXIGES = 3;
+
+/**
+ * ③.c — LA FENÊTRE FINALE, PASSÉE À `fenetreDImmobilite` — dix secondes.
+ *
+ * ⚠️ ELLE NE PORTE PAS LA MÊME CHARGE QUE SES DEUX VOISINES, et c'est pour ça qu'elle peut être
+ * courte sans rien coûter. Chez elles, la fenêtre EST toute l'observation. Ici, l'observation a
+ * déjà eu lieu — deux minutes, sur trois tours — et cette fenêtre n'est plus que la dernière
+ * chance de voir revenir quelqu'un qui s'est remis à taper dans les secondes qui précèdent le
+ * geste. Dix secondes suffisent à voir des doigts sur un clavier ; c'est le seul travail qu'on
+ * lui demande.
+ *
+ * ⚠️ ET CE QUI LA BORNE PAR LE HAUT N'EST PAS un humain qui patiente — il n'y en a pas — mais la
+ * CADENCE : chaque candidat coûte cette fenêtre au tour, et un tour ne doit pas déborder sur le
+ * suivant. C'est une raison de ne pas l'allonger, pas une raison de la raboter.
+ *
+ * ⚠️ ELLE PASSE PAR `fenetreDImmobilite`, JAMAIS DIRECTEMENT — un texte COLLÉ rend zéro, parce
+ * qu'il n'y a rien à observer devant un texte arrivé d'un seul coup. La règle vit auprès du
+ * geste depuis T-20260818-0076 ; le troisième chemin l'hérite au lieu de la réécrire. Et
+ * `fenetreDImmobilite` JETTE si l'appelant ne nomme pas sa fenêtre : il n'y a pas de défaut
+ * silencieux, c'est délibéré, et c'est ce qui garantit que cette valeur-ci ne peut pas être
+ * remplacée en silence par celle d'un autre chemin.
+ */
+export const FENETRE_DU_BALAYAGE_MS = 10_000;
+
+/**
  * COMBIEN DE TEMPS OBSERVER CE TEXTE-LÀ — la nature du texte décide, jamais l'appelant.
  *
  * ⚠️ UN TEXTE COLLÉ N'A PERSONNE DERRIÈRE LUI. Il est arrivé d'un seul coup : il n'y a aucun
@@ -276,7 +362,21 @@ export async function delivrerLaBoite({
  * deux messages d'auteurs différents collés en un — ici l'auteur est l'émetteur, qui parle en
  * son nom de ce qu'il a trouvé.
  */
-export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) {
+/**
+ * ⚠️ `suite` — CE QUI VIENT APRÈS CET AVIS, ET IL A FALLU LE PARAMÉTRER (T-20260818-0078).
+ *
+ * Cet avis a été écrit pour DEUX chemins qui, tous les deux, livrent un message juste après :
+ * la phrase « puis j'ai livré mon message. Tu vas donc recevoir les deux. » y est vraie. Le
+ * troisième chemin — le balayage des boîtes oubliées — n'a RIEN à livrer : personne n'écrivait,
+ * c'est une ronde qui a trouvé la boîte figée. La même phrase y annonce donc un second message
+ * qui ne viendra jamais, et envoie le destinataire l'attendre.
+ *
+ * ⚠️ ON NE LE CORRIGE PAS EN COLLANT UN DÉMENTI DESSOUS. Un avis qui affirme puis se contredit
+ * est pire que les deux : c'est exactement le motif « un avis qui rassure à tort » que ce module
+ * ferme ailleurs. Le défaut par défaut reste `'message'` — les deux appelants existants ne
+ * changent pas d'un caractère.
+ */
+export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0, suite = 'message' } = {}) {
   // ⚠️ LE TEXTE EN ENTIER, JAMAIS UN APERÇU — exigé par l'orchestrateur en approuvant la
   // conception, et il a raison : « sans ça le destinataire voit un travail partir de chez lui
   // sans pouvoir dire lequel. C'est la différence entre un incident CONSTATABLE et un incident
@@ -307,8 +407,11 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   const ouverture =
     '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, ' +
     `${observation(immobiliteMs)}. Je l’ai SOUMIS pour ` +
-    'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
-    'les deux.\n\n';
+    'son auteur — sans y écrire un caractère — ' +
+    (suite === 'aucune'
+      ? 'et **aucun message ne suit celui-ci** : personne ne t’écrivait. Ta boîte était figée, ' +
+        'et une boîte pleine ne se signale pas toute seule.\n\n'
+      : 'puis j’ai livré mon message. Tu vas donc recevoir les deux.\n\n');
 
   // ⚠️ CE QU'ON A LU N'EST PARFOIS PAS LE TEXTE (T-20260817-0091) — et le citer comme s'il
   // l'était engage une signature sans dire sur quoi. Le 2026-08-17, un coordonnateur a reçu
