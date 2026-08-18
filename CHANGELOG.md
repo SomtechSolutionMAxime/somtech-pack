@@ -5,6 +5,30 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.67.0] - 2026-08-18
+
+### Corrigé
+
+- **Une boîte de saisie occupée coupait le dirigeant de son agent — et personne ne le savait** (T-20260818-0049, PR #283). Quand un texte restait non soumis dans la boîte d'un agent, le veilleur refusait **toute remise Slack vers ce pane** — à raison, pour ne pas coller deux messages en un. Mais il s'arrêtait là : il rendait un geste de terminal à quelqu'un qui est sur Slack. **Mesuré le 2026-08-18 : un message d'orchestrateur est resté plus de 30 minutes dans une boîte et a coupé le dirigeant de cet agent pendant tout ce temps, sans qu'aucun signal ne le dise.** Le remède (`delivrerLaBoite`) existait depuis `eceba2e` (T-20260816-0114) — **il n'avait jamais été câblé au chemin Slack**, que `1dae9c7` (T-20260817-0006) avait pourtant doté du veto le même jour. Il l'est désormais : le veilleur passe par `remettre()`, qui délivre la boîte avant de livrer.
+
+- **Le discriminant ne décide plus QUI on refuse, mais CE QU'ON OBSERVE.** Un texte qui **bouge** n'est jamais soumis — quelqu'un a les doigts sur le clavier, il le fera lui-même dans quelques secondes. Un texte **immobile** est soumis, tapé ou collé, parce qu'immobile veut dire que son auteur est parti. Fenêtre : 10 s. **La version précédente imposait 5 minutes d'attente muette sur la ligne du dirigeant — c'est-à-dire exactement la panne qu'on ferme.**
+
+- **Le geste et ses avis voyagent ensemble.** `delivrerLaBoite` avait déménagé en laissant `avisDeBoiteBloquee` et `avisDeBoiteVidee` derrière : on soumettait le texte d'un tiers en son nom **sans le lui dire**.
+
+### Sécurité
+
+- **Le rattrapage pouvait faire exécuter une commande que personne n'avait validée.** Le texte soumis pour son auteur peut être une commande ; sa soumission ouvre un dialogue de permission **au-dessus d'une boîte vide et lisible**. La délivrance ne testait que « la boîte est-elle vide » → **écrire là confirmait l'option affichée**. Le dirigeant recevait un accusé de réception pour un message que personne n'a lu, **et une action partie sans son accord**. Une relecture d'après-délivrance refuse désormais sur dialogue, écran non prêt, boîte illisible ou re-remplie — **et le refus avoue le geste déjà posé**.
+
+### Technique
+
+- **Cinq passes de revue, cinq rejets, chacun sur du réel** — dont trois trouvés *dans le correctif écrit pour fermer les deux premiers*. Une **règle d'arrêt fixée avant le cinquième verdict** a mis fin aux correctifs ponctuels.
+- Banc du lot 12/12 · 8 des 12 rougissent sur le code d'avant · **8 mutations, zéro survivante** · `ligne-directe` 582 essais / 0 échec, 5 skips préexistants · `naissance-representant` 376/376.
+
+### ⚠️ Ce qui reste ouvert
+
+- **Un défaut de composition subsiste, et il PRÉEXISTE à cette livraison** (`naissance-representant/src/livraison.js:808` sur `main`) : quand la boîte est trouvée vide sans qu'on sache si le texte est parti ou perdu, l'avis de perte est préparé — puis **jeté en silence** si la relecture d'après-déblocage refuse. L'aveu ne branche que sur « j'ai déjà soumis », jamais sur « un texte a disparu ». **Merger ne le crée pas, il le laisse où il est.** Délibérément non corrigé → **T-20260818-0070** (la forme du module : deux moitiés chacune correcte qui ne survivent pas à leur composition).
+- **Fusionner ne suffit pas** : le veilleur exécute la copie **installée**. Publication, installation, relève du veilleur, **puis remesure du lieu vivant**.
+
 ## [Non-versionné] - 2026-08-17
 
 *Deux chantiers sortent ensemble. **Le premier** : PR #275 (T-20260817-0029), plus la correction d'en-tête que l'orchestrateur `j-20260814-0002` a arbitrée en cours de route (T-20260817-0026, qui reste ouvert pour sa classe) — il n'appelait aucun tag par lui-même. **Le second** : la reconstruction du métier de l'orchestrateur (D-20260817-0006, PR #276), qui change ce que le métier FAIT et sort donc en **minor**.*
