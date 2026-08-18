@@ -328,7 +328,7 @@ export const CONTROLES_COMMUNS = [
       // principe ensuite — c'est-à-dire jamais. Le lot jumeau garde déjà cet ordre ; il vaut
       // pour les deux, et pour la même raison.
       const principe = sectionDe(texte, /principe/i, 'sur le principe qui gouverne le reste');
-      const geste = sectionDe(texte, /^le geste/i, 'sur le geste de pose');
+      const geste = sectionDe(texte, /^Le geste(?: —|$)/i, 'sur le geste de pose');
       const iPrincipe = texte.indexOf(principe.titre);
       const iGeste = texte.indexOf(geste.titre);
       assert.ok(iPrincipe > 0 && iGeste > 0, 'les deux sections doivent être repérables dans le texte');
@@ -523,7 +523,7 @@ export const CONTROLES_ORCHESTRATEUR = [
       const attendus = motifsDuCode(racine);
       assert.ok(attendus.size >= 4, 'les motifs du code n’ont pas été relevés — le contrôle ne prouverait rien');
 
-      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const section = sectionDe(texte, /^Si elle refuse/i, 'sur ce qui se passe quand elle refuse');
       const table = tableDe(section.corps);
       const cites = new Set(
         colonne(table, /^Motif rendu$/, 'le motif rendu')
@@ -558,7 +558,7 @@ export const CONTROLES_ORCHESTRATEUR = [
       // justes, un sens retourné — passerait. Aucune garde mécanique ne lit le sens ; celle-ci
       // ferme la porte du vidage, pas celle du contresens. La relecture humaine reste requise.
       const messages = messagesDesMotifs(racine);
-      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const section = sectionDe(texte, /^Si elle refuse/i, 'sur ce qui se passe quand elle refuse');
       const table = tableDe(section.corps);
       const iMotif = table.entetes.findIndex((e) => /^Motif rendu$/.test(e));
       assert.ok(iMotif !== -1, 'la table des refus doit porter une colonne « Motif rendu »');
@@ -595,7 +595,7 @@ export const CONTROLES_ORCHESTRATEUR = [
       // EXISTE, et remplacer une entrée en place suppose de détruire ce qui y est — c'est
       // pourquoi ce refus-là ne propose délibérément aucune commande. Un lecteur qui suit la
       // mauvaise ligne fait exactement le geste que T-20260811-0087 a interdit.
-      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const section = sectionDe(texte, /^Si elle refuse/i, 'sur ce qui se passe quand elle refuse');
       const table = tableDe(section.corps);
       const iMotif = table.entetes.findIndex((e) => /^Motif rendu$/.test(e));
       const ligneDe = (motif) => {
@@ -630,7 +630,7 @@ export const CONTROLES_ORCHESTRATEUR = [
       // pas, qui n'a donc été mesuré par personne, et dont personne ne sait ce qu'il fait sur
       // le poste de qui le colle.
       const messages = messagesDesMotifs(racine);
-      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const section = sectionDe(texte, /^Si elle refuse/i, 'sur ce qui se passe quand elle refuse');
       const table = tableDe(section.corps);
       const iMotif = table.entetes.findIndex((e) => /^Motif rendu$/.test(e));
 
@@ -653,7 +653,7 @@ export const CONTROLES_ORCHESTRATEUR = [
     id: 'le-refus-se-relaie-tel-quel',
     quoi: 'le texte dit de recopier le message mesuré plutôt que de le reformuler en supposition',
     verifier({ texte }) {
-      const section = sectionDe(texte, /refuse/i, 'sur ce qui se passe quand elle refuse');
+      const section = sectionDe(texte, /^Si elle refuse/i, 'sur ce qui se passe quand elle refuse');
       assert.match(
         section.corps,
         /mesur[ée]/i,

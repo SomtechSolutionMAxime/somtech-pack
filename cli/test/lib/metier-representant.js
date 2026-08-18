@@ -68,25 +68,108 @@ export function lireGabarits(racine = REPO) {
 
 // ═════════════════════════════════════════ lecture de structure
 
-/** Découpe un markdown en sections { niveau, titre, corps }. */
+/**
+ * Découpe un markdown en sections { niveau, titre, corps }.
+ *
+ * ⚠️ LES NIVEAUX 1 À 4, ET LE NIVEAU 1 A COÛTÉ 92 GARDES ROUGES D'UN COUP.
+ *
+ * La version précédente ne reconnaissait que les niveaux 2 à 4. Tant que les textes gardés
+ * n'avaient qu'un seul titre de niveau 1 — leur titre de document —, l'écart ne se voyait
+ * pas. Le métier de l'orchestrateur, réorganisé par la fonction, a mis ses sept blocs `R1`
+ * à `R7` en niveau 1 : les gardes ont cherché des sections que le lecteur ne rendait plus,
+ * et ont rougi en bloc en annonçant « le gabarit doit porter une section … » — alors que le
+ * contenu était là. Une garde qui ne trouve pas son terrain dit « la fonction a disparu »
+ * quand elle devrait dire « je ne sais pas lire » : c'est un faux témoin, dans le sens qui
+ * coûte le plus cher, parce qu'il accuse.
+ *
+ * Le second effet est moins visible et compte autant : un titre non reconnu ne BORNE pas
+ * le corps de la section précédente. Une section de niveau 2 avalait donc tout ce qui suit,
+ * blocs de niveau 1 compris, jusqu'au prochain titre de niveau 2 — et une garde pouvait
+ * passer sur une phrase qui vit deux sections plus loin. Rendre les niveaux 1 rend aussi
+ * les bornes.
+ *
+ * ⚠️ LES BLOCS DE CODE SONT SAUTÉS, ET CE N'EST PAS UN RAFFINEMENT.
+ *
+ * Un commentaire shell (`# poser la veille…`) est, à la lettre, un titre de niveau 1. Les
+ * reconnaître ferait naître des sections fantômes au milieu d'un bloc de commandes et
+ * couperait le corps réel en deux — le lecteur deviendrait permissif là où on l'ouvre.
+ * Le métier de l'orchestrateur en porte 36 blocs ; le premier commentaire venu suffisait.
+ *
+ * ⚠️ `corps` S'ARRÊTE AU PREMIER SOUS-TITRE ; `corpsEtendu` PORTE LES SOUS-SECTIONS.
+ *
+ * Les deux existent parce que les gardes veulent les deux, et que le défaut n'est pas le
+ * même des deux côtés. Un bloc `R1` dont tout le contenu vit dans des sous-sections a un
+ * `corps` presque vide : une garde qui cherche une fonction « quelque part sous ce titre »
+ * doit lire le corps ÉTENDU, sinon elle rougit en annonçant une section vide — le second
+ * visage du faux témoin qui accuse. À l'inverse, une garde qui compte les lignes d'une
+ * table écrite juste sous le titre doit lire le `corps` : le corps étendu lui ferait
+ * ramasser les tables des sous-sections et rougir sur un décompte qui n'est pas le sien.
+ * Mesuré ici même : le corps étendu par défaut faisait lire « 7 refus décrits pour 2 posés »
+ * à la garde des droits, qui a raison de n'en vouloir que deux.
+ *
+ * La règle d'emploi tient en une ligne : le corps ÉTENDU pour ce qui doit vivre QUELQUE
+ * PART sous ce titre, le `corps` pour ce qui doit vivre à CE niveau-là. Et c'est la garde
+ * qui choisit, explicitement — un choix qui se voit en revue plutôt qu'un défaut de lecteur
+ * qui s'applique à toutes en silence.
+ */
 export function sections(texte) {
   const out = [];
   let prec = null;
-  for (const m of texte.matchAll(/^(#{2,4})\s+(.+)$/gm)) {
-    if (prec) prec.corps = texte.slice(prec._fin, m.index);
-    prec = { niveau: m[1].length, titre: m[2].trim(), _fin: m.index + m[0].length };
+  let dansUnBloc = false;
+  let offset = 0;
+
+  for (const ligne of texte.split('\n')) {
+    const debut = offset;
+    offset += ligne.length + 1;
+
+    if (/^\s*(```|~~~)/.test(ligne)) { dansUnBloc = !dansUnBloc; continue; }
+    if (dansUnBloc) continue;
+
+    const m = /^(#{1,4})\s+(.+)$/.exec(ligne);
+    if (!m) continue;
+
+    if (prec) prec.corps = texte.slice(prec._fin, debut);
+    prec = { niveau: m[1].length, titre: m[2].trim(), _fin: debut + m[0].length, _debut: debut };
     out.push(prec);
   }
   if (prec) prec.corps = texte.slice(prec._fin);
+
+  // Le corps ÉTENDU court jusqu'au prochain titre de niveau ÉGAL OU SUPÉRIEUR : les
+  // sous-sections appartiennent à leur section, ce qui la suit au même rang ne lui
+  // appartient pas.
+  for (let i = 0; i < out.length; i++) {
+    const suivante = out.slice(i + 1).find((s) => s.niveau <= out[i].niveau);
+    out[i].corpsEtendu = suivante ? texte.slice(out[i]._fin, suivante._debut) : texte.slice(out[i]._fin);
+  }
+
   return out;
 }
 
-/** La section dont le titre répond à la sonde. Échoue si elle manque — un contrôle qui ne
- *  trouve pas son terrain ne doit jamais passer en silence. */
+/**
+ * La section dont le titre répond à la sonde. Échoue si elle manque — un contrôle qui ne
+ * trouve pas son terrain ne doit jamais passer en silence — ET si plusieurs y répondent.
+ *
+ * ⚠️ L'UNICITÉ EST LA MOITIÉ QUI PROTÈGE, ET ELLE MANQUAIT ICI.
+ *
+ * La version précédente prenait la PREMIÈRE section dont le titre répondait. Tant que le
+ * lecteur ignorait les titres de niveau 1, l'ambiguïté était rare ; en les rendant, on a
+ * multiplié les titres qu'une sonde large peut atteindre — et une garde qui lit la section
+ * VOISINE de celle qu'elle croit lire est un faux témoin dans l'autre sens : elle passe.
+ * Rendre le lecteur plus permissif sans rendre la désignation stricte aurait échangé des
+ * gardes qui accusent à tort contre des gardes qui absolvent à tort. Le second est pire :
+ * il ne se voit pas.
+ *
+ * Même contrat que `colonneDe`, et que le lecteur jumeau de la compétence : une désignation
+ * ambiguë rend l'assertion ininterprétable, donc inutile.
+ */
 export function sectionDe(texte, sonde, quoi) {
-  const s = sections(texte).find((x) => sonde.test(x.titre));
-  assert.ok(s, `le gabarit doit porter une section ${quoi}`);
-  return s;
+  const trouvees = sections(texte).filter((x) => sonde.test(x.titre));
+  assert.equal(
+    trouvees.length, 1,
+    `le gabarit doit porter une section ${quoi} — une seule (${trouvees.length} trouvée·s`
+      + `${trouvees.length > 1 ? ` : ${trouvees.map((s) => `« ${s.titre} »`).join(', ')}` : ''})`,
+  );
+  return trouvees[0];
 }
 
 /**

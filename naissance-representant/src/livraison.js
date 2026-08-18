@@ -34,8 +34,8 @@
 // LA LECTURE DE LA BOÎTE VIT DANS `ligne-directe/src/boite.js` — un seul endroit la connaît,
 // parce que deux chemins écrivent dans un pane et qu'une copie n'hérite pas des corrections
 // de l'autre (T-20260814-0138). Réexportée ici : tout ce qui la nommait continue de la voir.
-export { contenuBoite, boiteEstVide } from '../../ligne-directe/src/boite.js';
-import { contenuBoite, boiteEstVide, messagesEnFile } from '../../ligne-directe/src/boite.js';
+export { contenuBoite, boiteEstVide, estUnEspaceReserve } from '../../ligne-directe/src/boite.js';
+import { contenuBoite, boiteEstVide, messagesEnFile, estUnEspaceReserve } from '../../ligne-directe/src/boite.js';
 // ⚠️ LA SONDE D'ÉCRAN VIT DANS `ligne-directe/src/ecran.js` — un seul endroit sait reconnaître un
 // écran de blocage, et `bin/naitre.js` s'en sert déjà. La revue de fond a relevé que la livraison
 // ne s'en servait PAS : elle regardait la boîte sans jamais regarder ce qui pouvait s'afficher
@@ -440,7 +440,10 @@ export { ressembleAUnChoix };
  * Tenter de libérer une boîte encombrée — et rendre ce qu'on a constaté.
  *
  * Quatre issues, et chacune porte sur un état qui POUVAIT être différent :
- *   • `liberee-seule` — son auteur l'a soumise pendant qu'on attendait : on n'a RIEN touché ;
+ *   • `vide-cause-inconnue` — la boîte s'est vidée et ON NE SAIT PAS COMMENT : son auteur l'a
+ *                       soumise (bénin, majoritaire), ou le texte a disparu sans être soumis
+ *                       (perdu). On rend ce qu'on avait vu dans `texteDisparu` — c'est ce qui
+ *                       rend la seconde issue réparable au lieu de la rendre muette ;
  *   • `bouge`         — le texte a changé : quelqu'un est devant ce pane, on n'y touche pas ;
  *   • `illisible`     — on ne soumet pas ce qu'on ne voit pas (même règle que la livraison) ;
  *   • soumis          — le texte était immobile, la touche d'envoi est partie, la boîte s'est
@@ -495,7 +498,22 @@ export async function delivrerLaBoite({
 
   const apres = contenuBoite(ecran);
   if (apres === null) return { ok: false, cause: 'illisible', soumis: false };
-  if (apres === '') return { ok: true, cause: 'liberee-seule', soumis: false };
+  // ⚠️ UNE BOÎTE VUE VIDE A DEUX CAUSES, ET ON N'EN CONNAÎT AUCUNE (T-20260817-0090).
+  //
+  // Soit son auteur l'a soumise pendant qu'on attendait — bénin, et c'est le cas majoritaire.
+  // Soit le texte a disparu SANS être soumis, et il est perdu : un texte non soumis n'existe
+  // nulle part ailleurs, ni au ServiceDesk, ni dans un fil. L'effacer, c'est le perdre.
+  //
+  // Cette branche s'appelait `liberee-seule`. **Ce nom concluait** — « libérée seule » affirme
+  // qu'un geste a eu lieu, alors qu'on n'a vu qu'une absence. C'était le seul endroit de cette
+  // fonction où une absence était lue comme un succès ; partout ailleurs, ce qu'elle ne sait pas
+  // expliquer devient un refus nommé.
+  //
+  // ⚠️ ON NE REFUSE PAS POUR AUTANT, et c'est délibéré : la cause bénigne est majoritaire.
+  // Refuser ici refuserait à tort la quasi-totalité du trafic — une garde qui crie à tort se
+  // fait retirer, et elle emporte ce qu'elle gardait. On rend donc `ok`, et on rend AUSSI ce
+  // qu'on avait vu : c'est ce qui rend la perte réparable au lieu de la rendre muette.
+  if (apres === '') return { ok: true, cause: 'vide-cause-inconnue', soumis: false, texteDisparu: texteCoince };
   if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
   // Et une seconde fois sur ce qu'on relit : le contenu a pu devenir un dialogue entre-temps.
   if (ressembleAUnChoix(apres)) return { ok: false, cause: 'choix', soumis: false };
@@ -584,15 +602,98 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   // VISIBLE à l'écran (mesuré — un texte long y est tronqué par le défilement). Ce qu'on
   // recopie ici est donc ce qu'on a lu, pas nécessairement tout ce qui est parti.
   const texte = String(texteLibere).trim();
-  return (
+  const ouverture =
     '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, resté immobile ' +
     `pendant les ${Math.round(immobiliteMs / 60000)} min où je l’ai observée. Je l’ai SOUMIS pour ` +
     'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
-    'les deux.\n\n' +
+    'les deux.\n\n';
+
+  // ⚠️ CE QU'ON A LU N'EST PARFOIS PAS LE TEXTE (T-20260817-0091) — et le citer comme s'il
+  // l'était engage une signature sans dire sur quoi. Le 2026-08-17, un coordonnateur a reçu
+  // « VOICI CE QUI A ÉTÉ SOUMIS EN TON NOM : [Pasted text #6] ». Il ne sait toujours pas ce qui
+  // est parti sous son nom.
+  //
+  // ⚠️ ON NE REND PAS L'AVIS PLUS RASSURANT, ON LE REND PLUS INFORMATIF. Un avis qui cite un
+  // espace réservé sans dire qu'il ne sait pas lire est PIRE qu'un avis qui l'avoue : la
+  // franchise de la phrase ci-dessous est ce qui a rendu ce défaut visible au lieu de le
+  // laisser silencieux, et elle est gardée sur LES DEUX chemins.
+  if (estUnEspaceReserve(texte)) {
+    return (
+      ouverture +
+      'QUELQUE CHOSE EST DONC PARTI EN TON NOM, ET JE NE PEUX PAS TE DIRE QUOI (tel que je l’ai ' +
+      'lu à l’écran, qui n’en montre que la partie visible) : ce que j’y ai trouvé n’est pas le ' +
+      `texte, c’est l’ESPACE RÉSERVÉ ` +
+      `que l’écran met à sa place quand on l’y a collé — ici, ${texte}. **JE NE SAIS PAS** ce ` +
+      'qu’il contenait, ni combien il faisait. Je ne l’ai jamais lu.\n\n' +
+      // ⚠️ CE QUI SUIT EST MESURÉ, PAS ESPÉRÉ. Un témoin de 924 caractères, collé donc replié à
+      // l'écran, a été soumis ici ; interrogé sur le tour qu'il avait reçu AVANT cet avis, le
+      // destinataire en a restitué le dernier mot. Il l'avait reçu entier. L'outil ne sait pas
+      // lire ce texte — le destinataire, lui, l'a.
+      'MAIS TOI, TU L’AS : il a été soumis, donc il t’est parvenu ENTIER. C’est le message que ' +
+      'tu as reçu **JUSTE AVANT** celui-ci. Va le relire — c’est lui qui est parti sous ta ' +
+      'signature, et c’est le seul endroit où il existe encore.\n\n' +
+      'Tant qu’une boîte reste pleine, PERSONNE ne peut te joindre et rien ne te le dit.'
+    );
+  }
+
+  return (
+    ouverture +
     `VOICI CE QUI A ÉTÉ SOUMIS EN TON NOM (tel que je l’ai lu à l’écran, qui n’en montre que la partie visible) :\n` +
     `┈┈┈\n${texte}\n┈┈┈\n\n` +
     'Si c’était un brouillon à toi, il vient de partir tel quel — et tu sais maintenant lequel. ' +
     'Tant qu’une boîte reste pleine, PERSONNE ne peut te joindre et rien ne te le dit.'
+  );
+}
+
+/**
+ * Ce qu'on dit au destinataire quand sa boîte s'est VIDÉE pendant qu'on attendait (T-20260817-0090).
+ *
+ * ⚠️ CE N'EST PAS L'AVIS DE LA BOÎTE BLOQUÉE, et la différence est tout le sujet : là-bas on a
+ * POSÉ un geste (la touche d'envoi) et on l'annonce ; ici on n'a RIEN fait, et on ne sait même
+ * pas ce qui s'est passé. L'avis dit donc ce qu'on a vu, jamais ce qu'on en déduit — un avis qui
+ * conclut ferme la question au lieu de l'ouvrir.
+ *
+ * ⚠️ ET IL PART DANS LE MESSAGE, PAS DANS UN CHAMP. Un champ de plus est un champ qu'il faut
+ * PENSER à lire — c'est déjà le défaut de `attendu`, et ce chantier a mesuré neuf fois qu'une
+ * discipline écrite ne mord pas. Collé au message livré, le destinataire ne peut pas ne pas le voir.
+ */
+export function avisDeBoiteVidee({ texteDisparu = '' } = {}) {
+  // LE TEXTE EN ENTIER, JAMAIS TRONQUÉ — c'est le seul point qui rend la perte réparable. Le
+  // 2026-08-17, un ordre du CTO n'a survécu que parce qu'un tiers l'avait lu à l'écran avant
+  // d'envoyer : sans le texte ici, il n'y a rien à recopier.
+  const texte = String(texteDisparu).trim();
+
+  // ⚠️ MÊME AVEU QUE POUR LA BOÎTE BLOQUÉE, MAIS SURTOUT PAS LA MÊME SUITE (T-20260817-0091).
+  //
+  // Là-bas, le texte A ÉTÉ SOUMIS : il est parvenu entier au destinataire, et on peut lui dire
+  // d'aller le relire. ICI, ON N'A RIEN SOUMIS. Le texte n'est donc nulle part en aval, et lui
+  // promettre par symétrie qu'il le retrouvera dans son tour précédent l'enverrait chercher ce
+  // qui n'existe pas — un avis qui rassure à tort, exactement ce qu'on nous interdit.
+  //
+  // Sur ce chemin, la vérité est plus dure et se dit telle quelle : le texte est hors d'atteinte.
+  if (estUnEspaceReserve(texte)) {
+    return (
+      '⚠️ TA BOÎTE DE SAISIE PORTAIT UN TEXTE, ET ELLE S’EST VIDÉE pendant que je l’observais — ' +
+      '**sans que je touche à quoi que ce soit**. Deux causes possibles, et je ne peux pas les ' +
+      'distinguer : tu l’as soumis toi-même, ou il a disparu sans être soumis.\n\n' +
+      'ET JE NE PEUX PAS TE DIRE CE QUE C’ÉTAIT : ce que j’avais lu à l’écran n’est pas le texte, ' +
+      `c’est l’ESPACE RÉSERVÉ que l’écran met à sa place quand on l’y a collé — ici, ${texte}. ` +
+      '**JE NE SAIS PAS** ce qu’il contenait, ni combien il faisait.\n\n' +
+      '⚠️ Et je ne peux pas te dire non plus où le retrouver : **je n’ai rien soumis**, donc il ' +
+      'n’est parti nulle part. S’il a disparu sans que tu l’aies soumis toi-même, il est **perdu** ' +
+      '— je n’ai aucun moyen de te le rendre, et je préfère te le dire que te laisser chercher.'
+    );
+  }
+
+  return (
+    '⚠️ TA BOÎTE DE SAISIE PORTAIT UN TEXTE, ET ELLE S’EST VIDÉE pendant que je l’observais — ' +
+    '**sans que je touche à quoi que ce soit**. Deux causes possibles, et je ne peux pas les ' +
+    'distinguer : tu l’as soumis toi-même, ou il a disparu sans être soumis. Dans le second cas ' +
+    'il n’existe nulle part ailleurs.\n\n' +
+    'VOICI CE QUE J’Y AVAIS LU (la portion visible à l’écran) :\n' +
+    `┈┈┈\n${texte}\n┈┈┈\n\n` +
+    'Si tu ne l’as pas soumis toi-même, **il est perdu — recopie-le depuis ici**. Je n’ai rien ' +
+    'soumis en ton nom et je n’affirme pas savoir ce qui est arrivé.'
   );
 }
 
@@ -738,9 +839,15 @@ export async function livrerBrief({
   // L'AVIS AU DESTINATAIRE ne s'ajoute QUE si quelque chose a réellement été soumis pour lui —
   // c'est le seul moyen qu'il a d'apprendre que sa boîte bloquait, et il ne doit rien annoncer
   // qui n'ait pas eu lieu (T-20260816-0114).
-  const texteALivrer = delivrance?.soumis
-    ? `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs })}\n\n${texte}`
-    : texte;
+  // ⚠️ DEUX AVIS DISTINCTS, JAMAIS CONFONDUS. `soumis` annonce un geste qu'on a posé ;
+  // `texteDisparu` annonce une disparition qu'on a CONSTATÉE sans la comprendre. Les mélanger
+  // ferait annoncer un geste qui n'a pas eu lieu — le défaut exact que ce module combat.
+  let texteALivrer = texte;
+  if (delivrance?.soumis) {
+    texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs })}\n\n${texte}`;
+  } else if (delivrance?.texteDisparu) {
+    texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
+  }
 
   const commandes = commandesLivraison(pane, texteALivrer, { attenteMs, dejaAuTravail: statutAvant === 'working' });
   const livraison = await appelHerdr(commandes.livrer, vers);
