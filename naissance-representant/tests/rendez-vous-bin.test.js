@@ -482,6 +482,12 @@ test('UNE RONDE QUI NE REND PAS LA MAIN MEURT DE SON PLAFOND, ET LE DIT', () => 
       ...process.env,
       HERDR_SESSIONS_ESSAIS: '/s/a.sock',
       HERDR_SOCKET_PATH: '',
+      // ⚠️ LA CLOISON, ICI AUSSI. Ce `spawnSync` en ligne ne passe pas par `lancerRonde` : il
+      // a donc échappé à la cloison, et il a ÉCRIT une trace « plafond-depasse » dans le VRAI
+      // ~/.somtech du poste — mesuré. Un essai qui fait dire au poste qu'une ronde vient de
+      // mourir alors qu'aucune n'a eu lieu produit le mensonge exact que cette trace existe
+      // pour rendre impossible.
+      LIGNE_DIRECTE_RACINE: join(bac, 'racine'),
       RENDEZ_VOUS_DELAI_MS: '5',
       RENDEZ_VOUS_ECHEANCE_MS: '2000',
       RENDEZ_VOUS_PLAFOND_MS: '2500',
