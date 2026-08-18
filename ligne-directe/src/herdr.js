@@ -17,8 +17,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
-import { contenuBoite, laPriseEstConstatee } from './boite.js';
-import { etatDeLEcran, refusDEcran, ecranAttendUnChoix } from './ecran.js';
+import { contenuBoite, laPriseEstConstatee, estUnEspaceReserve } from './boite.js';
+// ⚠️ LE REMÈDE EST REPRIS, PAS RÉÉCRIT (T-20260818-0049, règle d'or n°15). `delivrerLaBoite`
+// porte des gardes MESURÉES qui ont coûté un lot chacune — sur le texte coincé, sur l'écran,
+// sur l'immobilité. Une seconde copie n'hériterait jamais des corrections de la première.
+import { delivrerLaBoite, avisDeBoiteBloquee, avisDeBoiteVidee } from './delivrance.js';
+import { etatDeLEcran, refusDEcran, ecranAttendUnChoix, resumeDeLEcran } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
 const SEUIL_ARGV = 60_000;
@@ -79,6 +83,25 @@ export function socketHerdr() {
  * revanche, c'est de traduire « je ne l'ai pas trouvé » en autre chose — d'où `lancer`, qui
  * qualifie l'échec de lancement au lieu de le laisser se fondre dans les autres.
  */
+// ⚠️ CE QU'ON S'ACCORDE POUR CONSTATER QU'UNE BOÎTE S'EST VIDÉE (T-20260818-0049).
+//
+// Ce n'est PAS un délai avant d'agir : le geste est déjà posé quand ce compteur commence. C'est
+// le temps qu'on se donne pour VOIR son effet, parce qu'une lecture unique ne distingue pas
+// « la touche n'a rien fait » de « le terminal n'a pas encore fini ». Confondre les deux fait
+// rendre un refus sur un message qui est bien parti — le défaut que le dirigeant a subi.
+//
+// Dix lectures espacées de 300 ms, soit trois secondes : assez pour couvrir un terminal chargé,
+// assez court pour que sa parole ne poireaute pas quand la touche a vraiment échoué.
+// ⚠️ LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ, SUR LA LIGNE D'UN HUMAIN (T-20260818-0049).
+// Dix secondes : de quoi voir des doigts sur un clavier, pas de quoi faire attendre celui qui
+// écrit depuis Slack. À ne pas confondre avec `IMMOBILITE_PAR_DEFAUT_MS` (cinq minutes), réglé
+// pour le chemin où celui qui patiente est un agent — l'appliquer ici a fait pendre un essai
+// 300 secondes, mesuré, et aurait laissé le dirigeant muet autant de temps.
+const FENETRE_TEXTE_TAPE_MS = 10_000;
+
+const RELECTURES_APRES_ENVOI = 10;
+const DELAI_RELECTURE_MS = 300;
+
 async function herdr(args, socket) {
   const env = socket ? { ...process.env, HERDR_SOCKET_PATH: socket } : process.env;
   const { stdout } = await lancer(OUTILS.herdr, args, { maxBuffer: 16 * 1024 * 1024, env });
@@ -97,6 +120,29 @@ async function herdrStrict(args, socket) {
 }
 
 /**
+ * POURQUOI LA DÉLIVRANCE N'A PAS ABOUTI — des mots ajoutés au refus, jamais un verdict.
+ *
+ * Sans eux, le lecteur voit « boîte encore pleine » et retente le même geste à l'aveugle. Ce
+ * qui bloque n'est pas la même chose selon la cause, et le geste qui le lève non plus.
+ */
+function motDuRefusDeDelivrance(delivrance) {
+  switch (delivrance?.cause) {
+    case 'choix':
+    case 'dialogue':
+    case 'ecran':
+      return ' : ce que je vois ressemble à un DIALOGUE qui attend un choix, et la touche d’envoi y confirmerait une action au lieu de soumettre un texte';
+    case 'bouge':
+      return ' : le texte a BOUGÉ pendant que je l’observais — quelqu’un est en train d’écrire là, et je ne soumets pas une phrase inachevée à sa place';
+    case 'sans-effet':
+      return ' : la touche d’envoi est partie et la boîte est restée pleine';
+    case 'illisible':
+      return ' : je n’ai plus su lire l’écran';
+    default:
+      return '';
+  }
+}
+
+/**
  * Remet un message à un agent, et prouve la remise.
  * @returns {Promise<object>} le `result` rendu par herdr — la preuve, pas une supposition
  */
@@ -106,6 +152,10 @@ export async function remettre(pane, texte, { socket } = {}) {
   }
   // CE QU'ON VOIT AVANT D'ÉCRIRE — sans quoi rien de ce qu'on verra après ne prouvera quoi que
   // ce soit. Un état qui ne pouvait pas être différent n'est pas un témoin (T-20260815-0011).
+  // Ce qui partira réellement : le message, et — seulement si une boîte a été délivrée —
+  // l'avis qui dit au destinataire ce qui est parti en son nom.
+  let texteALivrer = texte;
+
   const avant = await etatDuPane(pane, socket);
 
   // ═══ 1. ON NE POSE RIEN DEVANT UN ÉCRAN DE CHOIX — relevé en REVUE DE FOND, bloquant, et il
@@ -178,13 +228,196 @@ export async function remettre(pane, texte, { socket } = {}) {
     );
   }
   if (dejaLa !== '') {
-    throw new RemiseEchouee(
-      pane,
-      `la boîte de saisie de ${pane} porte déjà un texte que son auteur n’a pas soumis ` +
-        `(« ${dejaLa.slice(0, 60)}… ») — écrire par-dessus ne livrerait pas deux messages, ` +
-        `ça en livrerait UN, les deux textes collés. Le geste : libère la boîte (« herdr agent focus ` +
-        `${pane} », puis soumets ou efface ce qui s’y trouve), et renvoie ton message.`
-    );
+    // ═══ ON NE REFUSE PLUS : ON DÉLIVRE, PUIS ON ÉCRIT (T-20260818-0049).
+    //
+    // ⚠️ LA RÈGLE VIENT DU DIRIGEANT, ET ELLE EST DE CONCEPTION, pas de confort :
+    //
+    //   > « On ne doit jamais être bloqué via le Slack. Sinon on est pris. »
+    //   > « Là les boîtes occupées on fait un Enter dessus sinon ça part jamais. »
+    //
+    // « Pris », c'est-à-dire sans recours ET sans moyen de signaler qu'on l'est : le seul canal
+    // par lequel on le dirait est celui qui est coupé. Le mode de panne se referme sur lui-même.
+    //
+    // ⚠️ CE QU'ON NE FAIT PAS POUR AUTANT : retirer la garde. Elle mesurait quelque chose de
+    // RÉEL — `agent prompt` aboute son texte à ce qui traîne dans la boîte ET soumet, donc deux
+    // textes que personne n'a écrits ensemble partent comme UN SEUL message. Retirer le veto
+    // sans rien mettre à la place ramènerait exactement ce défaut-là. On garde la mesure, on
+    // change la CONSÉQUENCE : le diagnostic devient un rattrapage au lieu d'un refus.
+    //
+    // ⚠️ ET C'ÉTAIT UNE MOITIÉ MANQUANTE, PAS UNE GARDE TROP ZÉLÉE. Le veto a été posé ici par
+    // `1dae9c7` (T-20260817-0006) ; le rattrapage a été livré le MÊME JOUR par `eceba2e`
+    // (T-20260816-0114) — mais dans `livraison.js`, et seulement pour ses appelants à lui.
+    // Ce chemin-ci, celui par lequel arrive la parole du dirigeant, a reçu l'interdit sans le
+    // remède. Vingt-quatre heures pendant lesquelles il a dû ouvrir un terminal pour parler à
+    // ses propres agents — et le refus le lui disait lui-même.
+    // ⚠️ LE DISCRIMINANT COLLÉ / TAPÉ DÉCIDE DE CE QU'ON OBSERVE — PAS DE QUI ON REFUSE.
+    //
+    // Il a d'abord décidé de la DURÉE de l'attente (5 min pour du tapé) : ça faisait patienter
+    // le dirigeant en silence. Il a ensuite décidé d'un REFUS SEC sur le tapé : ça le laissait
+    // PRIS. Mesuré, mot pour mot, ce qu'il recevait alors sur Slack — « Le geste : va voir
+    // l'écran (« herdr agent focus w5:p8 »), et renvoie ton message. » **Il ne peut pas.** Il
+    // est au téléphone. Le refus était juste, nommé, instantané, et il le laissait exactement
+    // où il était : « une porte sur deux » posée par le correctif qui ferme la première.
+    //
+    // SA CONSIGNE TRANCHE : « je dois pouvoir débloquer en écrivant un message, ça va lancer
+    // les deux messages ». Son message doit PARTIR, même devant un texte tapé.
+    //
+    // LA FORME QUI HONORE LES DEUX, et c'est `delivrerLaBoite` qui la porte déjà :
+    //   • le texte BOUGE pendant qu'on regarde → quelqu'un a les doigts sur le clavier. Il
+    //     soumettra lui-même dans quelques secondes. On s'abstient, on le dit, et l'état se
+    //     résout tout seul — transitoire et nommé, ce n'est pas « être pris ».
+    //   • le texte est IMMOBILE → son auteur est parti. On le soumet, et LE DESTINATAIRE EST
+    //     PRÉVENU de ce qui est parti en son nom.
+    //
+    // ⚠️ LA FENÊTRE EST COURTE, ET C'EST CE CHEMIN-CI QUI LE COMMANDE. Les cinq minutes de
+    // `IMMOBILITE_PAR_DEFAUT_MS` ont été réglées là où celui qui patiente est un agent. Ici
+    // c'est un humain, et sa ligne est tout l'objet du dispositif. Dix secondes voient des
+    // doigts sur un clavier ; elles ne font attendre personne.
+    //
+    // ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE DIRE : une fenêtre courte soumet plus souvent la phrase
+    // de quelqu'un qui a tapé la moitié puis s'est levé. C'est l'arbitrage du dirigeant, pris
+    // les yeux ouverts — et ce qui le rend tenable est l'AVIS ci-dessous, qui rend l'incident
+    // constatable au lieu de le laisser muet.
+    const colle = estUnEspaceReserve(dejaLa);
+    const fenetreMs = colle ? 0 : Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_TEXTE_TAPE_MS);
+
+    const delivrance = await delivrerLaBoite({
+      texteCoince: dejaLa,
+      commandes: {
+        lireEcran: ['agent', 'read', pane, '--format', 'ansi'],
+        soumettre: ['agent', 'send-keys', pane, 'Enter'],
+      },
+      appelHerdr: async (cmd) => {
+        try {
+          await herdr(cmd, socket);
+          return { ok: true };
+        } catch {
+          // Le code de retour de la touche d'envoi ne prouve rien ici — c'est la boîte vidée qui
+          // tranche, et `delivrerLaBoite` la relit. On rend l'échec sans l'interpréter.
+          return { ok: false };
+        }
+      },
+      lireEcran: async () => ecranDe(pane, socket),
+      dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
+      // Zéro pour un texte COLLÉ — il est par construction déjà envoyé, il n'y a rien à
+      // observer. La fenêtre ne sert qu'au texte tapé. `delivrerLaBoite` relit dans les deux
+      // cas avant de soumettre et s'abstient si le contenu a bougé : la garde ne dépend pas
+      // du délai, le délai ne fait que lui donner de quoi voir.
+      immobiliteMs: fenetreMs,
+    });
+
+    // ⚠️ ON NE PASSE QUE SUR CE QU'ON A VU. `ok` couvre deux issues : la boîte a été soumise, ou
+    // elle s'est vidée pendant qu'on regardait. Dans les deux cas elle est LIBRE maintenant, et
+    // écrire n'y collera rien. Tout le reste — écran de choix, texte qui bouge, touche sans
+    // effet — reste un refus, et il sort en erreur : un refus qui rendrait un succès serait pire
+    // que le blocage, parce que l'émetteur croirait avoir parlé.
+    if (!delivrance.ok || delivrance.cause === 'bouge') {
+      throw new RemiseEchouee(
+        pane,
+        `la boîte de saisie de ${pane} porte un texte que son auteur n’a pas soumis ` +
+          `(« ${dejaLa.slice(0, 60)}… »), et je n’ai pas pu l’en sortir${motDuRefusDeDelivrance(delivrance)}. ` +
+          `Écrire par-dessus ne livrerait pas deux messages, ça en livrerait UN, les deux textes ` +
+          `collés — je m’abstiens. Le geste : libère la boîte (« herdr agent focus ${pane} », puis ` +
+          `soumets ou efface ce qui s’y trouve), et renvoie ton message.`
+      );
+    }
+
+    // ⚠️ LE MOT QUI ACCOMPAGNE LE GESTE — sans lui, l'incident est INEXPLICABLE.
+    //
+    // On vient de soumettre le texte d'un tiers en son nom. Une boîte pleine ne se signale pas
+    // toute seule : sans cet avis, il voit un travail partir de chez lui sans pouvoir dire
+    // lequel. L'avis voyage par le chemin qu'on vient de libérer — aucun transport de plus à
+    // maintenir — et il n'existe QUE quand quelque chose a réellement eu lieu.
+    //
+    // ⚠️ CE N'EST PAS LA FUSION QU'ON INTERDIT. Le texte ajouté est LE NÔTRE, pas celui du
+    // tiers, et il est séparé du message. La fusion interdite, c'est deux messages d'AUTEURS
+    // DIFFÉRENTS collés en un ; ici l'auteur est l'émetteur, qui parle en son nom de ce qu'il
+    // a trouvé.
+    if (delivrance.soumis) {
+      texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs: fenetreMs })}\n\n${texte}`;
+    }
+
+    // ⚠️ ET L'AUTRE ISSUE, CELLE QU'ON NE SAIT PAS EXPLIQUER — relevée en passe de revue
+    // fraîche, bloquante, et le rejet était juste (T-20260818-0049).
+    //
+    // La boîte a pu être trouvée VIDE : ni immobile, ni changée. Deux causes, et ON N'EN
+    // CONNAÎT AUCUNE. Soit son auteur l'a soumise pendant qu'on regardait — bénin, et c'est
+    // le cas MAJORITAIRE. Soit le texte a disparu SANS être soumis, et il est alors perdu :
+    // un texte non soumis n'existe nulle part ailleurs, ni au ServiceDesk, ni dans un fil.
+    //
+    // `delivrerLaBoite` rend cette issue `ok` — à raison, la boîte est libre et écrire n'y
+    // collera rien. Mais elle rend AUSSI `texteDisparu`, et c'est ce qui rend la perte
+    // réparable au lieu de la rendre muette. Ce code ne testait que `!ok` (faux) et `soumis`
+    // (faux) : aucune branche ne la traitait, et le message partait sans un mot.
+    //
+    // ⚠️ C'EST LA TROISIÈME MOITIÉ LAISSÉE DERRIÈRE DANS CE LOT, et la troisième dans le
+    // correctif écrit pour fermer les précédentes. Le geste a suivi, l'avis de boîte BLOQUÉE
+    // a suivi sur un premier rejet, l'avis de boîte VIDÉE était encore resté. Le module frère
+    // le posait déjà depuis T-20260817-0090 ; seul ce chemin-ci l'ignorait.
+    //
+    // ⚠️ ET CE N'EST PAS LE MÊME AVIS QUE L'AUTRE, délibérément : là-bas le texte A ÉTÉ soumis
+    // et on peut dire d'aller le relire ; ici ON N'A RIEN SOUMIS, il n'est nulle part en aval,
+    // et promettre par symétrie qu'on le retrouvera enverrait chercher ce qui n'existe pas.
+    else if (delivrance.texteDisparu) {
+      texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
+    }
+
+    // ═══ ON REGARDE À NOUVEAU. ON NE DÉDUIT PAS. (T-20260818-0049)
+    //
+    // ⚠️ RELEVÉ EN PASSE DE CONFIRMATION, BLOQUANT, ET C'EST LE PLUS GRAVE DES QUATRE DÉFAUTS
+    // DE CE LOT — parce que c'est LE RATTRAPAGE LUI-MÊME qui ouvre le danger que le lot existe
+    // pour fermer.
+    //
+    // Le texte qu'on vient de soumettre pour son auteur peut être une COMMANDE. Sa soumission
+    // déclenche alors, chez le destinataire, une demande de permission : l'écran porte
+    // « Do you want to proceed? ❯ 1. Yes » AU-DESSUS d'une boîte parfaitement lisible et vide.
+    //
+    // `delivrerLaBoite` ne teste que `boiteEstVide` avant de conclure « soumis » — elle voit la
+    // boîte vide et rend `ok`. La garde d'entrée de cette fonction, elle, consulte bien l'écran,
+    // MAIS AVANT la délivrance. Entre le geste et l'écriture, il n'y avait plus rien.
+    //
+    // Or écrire là ne livre pas un message : ça CONFIRME l'option affichée. Mesuré le
+    // 2026-08-17 contre le vrai service — un texte parfaitement ordinaire a fait EXÉCUTER la
+    // commande proposée, le fichier a été créé. Le dirigeant aurait reçu un accusé de réception
+    // pour un message que personne n'a lu, et une action que personne n'a validée serait partie.
+    //
+    // ⚠️ LE MODULE FRÈRE LE FAISAIT DÉJÀ : après une délivrance réussie, `livrerBrief` relit
+    // l'état et rejoue sa garde. Encore une moitié posée d'un côté et pas de l'autre — la
+    // quatrième de ce lot, et la quatrième du même motif.
+    const ecranApresDelivrance = await ecranDe(pane, socket);
+    const etatApresDelivrance = etatDeLEcran(ecranApresDelivrance);
+    const resteApresDelivrance = contenuBoite(ecranApresDelivrance);
+    if (
+      ecranAttendUnChoix(ecranApresDelivrance) ||
+      (ecranApresDelivrance && !etatApresDelivrance.pretARecevoir) ||
+      resteApresDelivrance === null ||
+      resteApresDelivrance !== ''
+    ) {
+      // ⚠️ ET LE REFUS AVOUE LE GESTE DÉJÀ POSÉ. Sans cet aveu, le lecteur voit « dialogue » et
+      // ignore qu'une touche d'envoi est DÉJÀ partie vers ce pane, sur le texte d'un AUTRE, qui
+      // lui est bien parti. C'est une action irréversible qu'on lui cacherait ; il la
+      // découvrirait par ses effets, sans pouvoir la relier à ce refus.
+      const vu =
+        refusDEcran(etatApresDelivrance, { cible: 'la session' }) ||
+        (resteApresDelivrance === null
+          ? 'je n’ai plus su lire son écran'
+          : resteApresDelivrance !== ''
+            ? `sa boîte porte de nouveau un texte (« ${String(resteApresDelivrance).slice(0, 60)}… »)`
+            : `ce que je vois attend un CHOIX, pas un message${
+                resumeDeLEcran(String(ecranApresDelivrance ?? '')) ? `. Voici ce que j’ai vu :\n${resumeDeLEcran(String(ecranApresDelivrance ?? ''))}` : ''
+              }`);
+      throw new RemiseEchouee(
+        pane,
+        `l’état de ${pane} a CHANGÉ pendant que je débloquais sa boîte — ${vu}. Y écrire maintenant ` +
+          `ne livrerait pas ta parole : devant un choix, l’écriture CONFIRME l’option affichée ` +
+          `(mesuré). Je m’abstiens.` +
+          (delivrance.soumis
+            ? ` ⚠️ ET J’AI DÉJÀ SOUMIS un premier texte qui bloquait cette boîte — il est parti, ` +
+              `entier, tel que son auteur l’avait écrit ; c’est peut-être lui qui a produit cet état.`
+            : '') +
+          ` Le geste : va voir l’écran (« herdr agent focus ${pane} »), puis renvoie ton message.`
+      );
+    }
   }
 
   // ⚠️ CE QUI RESTE OUVERT, ET QUI DOIT ÊTRE DIT — relevé en revue de fond.
@@ -204,7 +437,7 @@ export async function remettre(pane, texte, { socket } = {}) {
   // se fait oublier.
   let reponse;
   try {
-    reponse = await herdr(['agent', 'prompt', pane, texte], socket);
+    reponse = await herdr(['agent', 'prompt', pane, texteALivrer], socket);
   } catch (err) {
     throw new RemiseEchouee(pane, err.message);
   }
@@ -268,12 +501,58 @@ export async function remettre(pane, texte, { socket } = {}) {
     }
     // Le cas connu : le texte est bien arrivé, la soumission n'est pas partie. On envoie la
     // touche d'envoi — jamais le texte à nouveau, ce qui le collerait à lui-même.
-    await herdr(['agent', 'send-keys', pane, 'Enter'], socket).catch(() => null);
-    const apres = contenuBoite(await ecranDe(pane, socket)) || null;
+    // ⚠️ L'ERREUR DE LA TOUCHE D'ENVOI N'EST PLUS AVALÉE — elle est GARDÉE (T-20260818-0049).
+    //
+    // Ce `.catch(() => null)` jetait ce que herdr avait répondu. Sa conséquence n'était PAS de
+    // rendre un faux succès — la relecture d'en dessous reste l'autorité, et elle refuse si le
+    // texte est encore là. Sa conséquence était autre, et coûteuse : ON NE POUVAIT PAS SAVOIR
+    // POURQUOI. Un refus qui dit « le message n'est pas parti » sans dire ce que la touche a
+    // répondu laisse son lecteur sans prise, et oblige le prochain qui enquête à refaire la
+    // mesure depuis zéro. C'est ce qui a coûté une heure sur ce lot.
+    //
+    // ⚠️ ON NE LÈVE TOUJOURS PAS DESSUS, et c'est délibéré : le code de retour de la touche
+    // d'envoi ne prouve rien DANS LES DEUX SENS — il peut rendre `ok` sans que la touche ait
+    // pris, et rendre une erreur alors qu'elle a pris. C'est la boîte vidée qui tranche, jamais
+    // lui. Mais ce qu'il a dit rejoint désormais le refus, quand il y en a un.
+    let erreurDeLEnvoi = null;
+    await herdr(['agent', 'send-keys', pane, 'Enter'], socket).catch((err) => {
+      erreurDeLEnvoi = err?.message || String(err);
+      return null;
+    });
+
+    // ═══ ON LAISSE À LA BOÎTE LE TEMPS DE SE VIDER (T-20260818-0049).
+    //
+    // ⚠️ UNE LECTURE UNIQUE NE DIT RIEN QUAND LE SYSTÈME RETARDE, et c'est le dirigeant qui a
+    // nommé le symptôme :
+    //
+    //   > « là les boîtes de texte ne se vident pas sur les fenêtres herdr et c'est vraiment
+    //   > un très gros problème »
+    //
+    // Ce code envoyait la touche d'envoi puis relisait DANS LA FOULÉE, sans un instant
+    // d'attente. Si le terminal n'avait pas encore traité la touche — et il met le temps qu'il
+    // met —, le refus tombait : « le message est resté dans la boîte de saisie — il n'a pas été
+    // soumis ». C'est le message EXACT que le dirigeant a reçu, ET IL PEUT ÊTRE FAUX : la touche
+    // avait pu marcher. Un refus qui se prononce sur une lecture trop tôt est un refus qui ment.
+    //
+    // ⚠️ ET LE SAVOIR-FAIRE EXISTAIT DÉJÀ, À CÔTÉ. `delivrerLaBoite` relit jusqu'à dix fois en
+    // dormant entre deux, précisément parce qu'une boîte ne se vide pas dans l'instant. Ici,
+    // rien. C'est la même asymétrie que celle que ce lot ferme par ailleurs : le geste juste
+    // vivait dans un module et manquait dans l'autre.
+    //
+    // UNE SEULE TOUCHE, PLUSIEURS LECTURES. On ne matraque pas la boîte — envoyer Entrée en
+    // boucle soumettrait ce que le destinataire aurait commencé à taper entre-temps. On a posé
+    // le geste une fois ; on se donne seulement de quoi le CONSTATER.
+    let apres = contenuBoite(await ecranDe(pane, socket)) || null;
+    for (let i = 0; apres && i < RELECTURES_APRES_ENVOI; i += 1) {
+      await new Promise((r) => setTimeout(r, DELAI_RELECTURE_MS));
+      apres = contenuBoite(await ecranDe(pane, socket)) || null;
+    }
     if (apres) {
       throw new RemiseEchouee(
         pane,
-        `le message est resté dans la boîte de saisie (« ${apres.slice(0, 60)}… ») — il n'a pas été soumis`
+        `le message est resté dans la boîte de saisie (« ${apres.slice(0, 60)}… ») — il n'a pas été soumis, ` +
+          `et la touche d'envoi n'y a rien changé en ${Math.round((RELECTURES_APRES_ENVOI * DELAI_RELECTURE_MS) / 1000)} s` +
+          (erreurDeLEnvoi ? ` ; la touche d'envoi a d'ailleurs répondu : ${erreurDeLEnvoi}` : '')
       );
     }
   }

@@ -51,6 +51,12 @@ let RemiseEchouee;
 let racine;
 let pathOriginal;
 let etatOriginal;
+// ⚠️ LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ EST BORNÉE ICI (T-20260818-0049) : en
+// production elle vaut dix secondes, et ce banc l'a payée trois fois — 10,4 s par essai,
+// mesuré. On borne le DÉLAI, jamais la garde : c'est le mouvement du texte qui protège, pas
+// la durée pendant laquelle on le regarde.
+process.env.LIGNE_IMMOBILITE_MS = process.env.LIGNE_IMMOBILITE_MS || '60';
+
 let compteur = 0;
 
 /** Le texte de quelqu'un d'autre, déjà dans la boîte, que son auteur n'a pas soumis. */
@@ -90,8 +96,45 @@ function poste(options) {
   return p;
 }
 
-test('UNE BOÎTE QUI PORTE LE TEXTE D’UN AUTRE NE REÇOIT PAS LA PAROLE DU DIRIGEANT PAR-DESSUS', async () => {
-  // Le service soumet de lui-même : c'est la mesure n°1, celle où `remettre` rend un SUCCÈS.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ CES TROIS ESSAIS ONT CHANGÉ DE CONTRAT LE 2026-08-18, SUR ARBITRAGE DU DIRIGEANT
+// (T-20260818-0049). Ils ne sont pas « mis au vert » : ils sont RECLASSÉS PAR FONCTION, et
+// ce qu'ils gardaient est redistribué. Le lecteur doit savoir QUI a changé la règle et POURQUOI.
+//
+// LA RÈGLE D'AVANT (T-20260817-0006) : une boîte occupée fait REFUSER, et le texte de son
+// auteur n'est jamais soumis à sa place. Elle protégeait un défaut RÉEL et MESURÉ — écrire
+// par-dessus ne livre pas deux messages, ça en livre UN, les deux textes collés.
+//
+// CE QU'ELLE A COÛTÉ, MESURÉ LE 2026-08-18 : le dirigeant s'est retrouvé incapable de parler à
+// ses propres agents, et le refus lui disait d'ouvrir un terminal — depuis Slack, depuis son
+// téléphone. Ses mots, recopiés :
+//
+//   « c un vrai problème tout le monde est bloqué règle moi ça au pc »
+//   « je dois pouvoir débloquer en envoyant un message, ça va lancer les deux messages,
+//     y a aucun risque, le message avait déjà été envoyé et aurait dû être reçu »
+//   « On ne dois jamais être bloqué via le slack. Sinon on ai pris. »
+//   « Ok on dois enlever le blocage commencer et mettre un contrle pour sassure ruqe les
+//     message sont bien soumis. »
+//
+// LA RÈGLE D'APRÈS : on ne retire pas la MESURE, on retire le VETO. Une boîte occupée est
+// DÉLIVRÉE — son texte soumis pour son auteur — puis on écrit. Deux messages, jamais fusionnés.
+//
+// ⚠️ ET CE QUI EST GARDÉ DE L'ANCIENNE RÈGLE, PARCE QUE ÇA N'A PAS ÉTÉ RENVERSÉ : on ne soumet
+// pas la phrase de quelqu'un QUI EST EN TRAIN DE LA TAPER. Le raisonnement du dirigeant vaut
+// pour un texte déjà envoyé par quelqu'un qui croit l'avoir remis ; il ne vaut pas pour une
+// phrase inachevée, et le geste ne se défait pas. Le discriminant n'est pas le TYPE du texte,
+// c'est qu'il BOUGE — immobile veut dire que son auteur est parti.
+
+test('LES DEUX TEXTES PARTENT SÉPARÉMENT, JAMAIS COLLÉS EN UN SEUL MESSAGE', async () => {
+  // ⚠️ CE QUE CET ESSAI GARDE EST INCHANGÉ, et c'est le cœur de la garde d'origine : deux
+  // textes que personne n'a écrits ensemble ne doivent pas partir comme UN message. Un ordre
+  // mêlé à autre chose et soumis est un ordre que personne n'a donné, et il est exécuté.
+  //
+  // ⚠️ CE QU'IL A CESSÉ D'EXIGER, ET POURQUOI. Sa seconde assertion interdisait que le
+  // destinataire voie les deux textes — `!(recu.includes(TIERS) && recu.includes(PAROLE))`.
+  // Sous le contrat neuf, il les voit LES DEUX, en deux tours distincts, et c'est le but même
+  // du correctif. Cette assertion mesurait donc « les deux présents » en croyant mesurer
+  // « les deux fusionnés » : deux choses différentes que l'ancien contrat rendait équivalentes.
   const p = poste({ statut: 'idle', boite: TEXTE_DUN_TIERS });
 
   await remettre('w9:p1', PAROLE_DU_DIRIGEANT).catch(() => null);
@@ -99,31 +142,46 @@ test('UNE BOÎTE QUI PORTE LE TEXTE D’UN AUTRE NE REÇOIT PAS LA PAROLE DU DIR
   const recu = p.recu('w9:p1') || '';
   assert.ok(
     !recu.includes(TEXTE_DUN_TIERS + PAROLE_DU_DIRIGEANT),
-    `l’agent a reçu les deux textes collés en un seul message : « ${recu.slice(0, 120)} »`
-  );
-  assert.ok(
-    !(recu.includes(TEXTE_DUN_TIERS) && recu.includes(PAROLE_DU_DIRIGEANT)),
-    `la parole du dirigeant est partie mêlée à celle d’un autre : « ${recu.slice(0, 120)} »`
+    `l'agent a reçu les deux textes COLLÉS en un seul message : « ${recu.slice(0, 120)} »`
   );
 });
 
-test('ET LE TEXTE DE SON AUTEUR N’EST PAS SOUMIS À SA PLACE — on ne parle pour personne', async () => {
-  // La mesure n°2, à l'identique : `agent prompt` ne soumet PAS (le mélange reste en boîte), et
-  // c'est la touche d'envoi de réparation de `remettre` qui le confirme. Ce que l'auteur n'a
-  // pas soumis ne doit partir d'aucune façon — surtout pas par le geste censé le sauver.
+test('LE TEXTE IMMOBILE D’UN AUTRE EST SOUMIS POUR LUI — et le destinataire en est PRÉVENU', async () => {
+  // ⚠️ CET ESSAI DIT L'INVERSE DE CE QU'IL DISAIT, ET C'EST UN ARBITRAGE, PAS UNE CORRECTION.
+  // Son ancien titre : « ET LE TEXTE DE SON AUTEUR N'EST PAS SOUMIS À SA PLACE — on ne parle
+  // pour personne ». Le dirigeant a renversé cette règle, en connaissance du risque :
+  //
+  //   « le message avait déjà été envoyé et aurait dû être reçu »
+  //
+  // Il a raison sur le fait : un texte laissé dans une boîte a DÉJÀ été envoyé par quelqu'un
+  // qui croit l'avoir remis. Le soumettre n'invente rien — ça achève un geste commencé. Et
+  // mesuré : quatre blocages réels en une nuit, QUATRE messages d'agent, zéro brouillon humain.
+  //
+  // ⚠️ CE QUI REND L'ARBITRAGE TENABLE EST L'AVIS. On ne soumet pas en silence : le
+  // destinataire reçoit, avec le message, ce qui est parti en son nom. Sans lui, il verrait un
+  // travail quitter sa boîte sans pouvoir dire lequel — un incident inexplicable au lieu d'un
+  // incident constatable.
   const p = poste({ statut: 'idle', boite: TEXTE_DUN_TIERS, colle: true, cede: true });
 
   await remettre('w9:p1', PAROLE_DU_DIRIGEANT).catch(() => null);
 
   const recu = p.recu('w9:p1') || '';
   assert.ok(
-    !recu.includes(TEXTE_DUN_TIERS),
-    `le texte immobile de son auteur a été soumis sans lui : « ${recu.slice(0, 120)} »`
+    recu.includes(PAROLE_DU_DIRIGEANT),
+    `la parole du dirigeant doit ARRIVER — c'est tout l'objet du lot : « ${recu.slice(0, 200)} »`
+  );
+  assert.match(
+    recu,
+    /BOÎTE DE SAISIE ÉTAIT BLOQUÉE/,
+    'et le destinataire doit être prévenu de ce qui est parti en son nom'
   );
 });
 
-test('LE REFUS DIT CE QU’IL A VU ET CE QU’IL FAUT FAIRE — un arbitrage perdu en silence est pire', async () => {
-  poste({ statut: 'idle', boite: TEXTE_DUN_TIERS });
+test('LE REFUS, QUAND IL RESTE, DIT CE QU’IL A VU ET NOMME LE PANE', async () => {
+  // ⚠️ IL RESTE DES REFUS, ET ILS DOIVENT RESTER LISIBLES. Le veto a sauté sur la boîte
+  // occupée ; il subsiste là où aucun geste sûr n'existe — ici, une boîte que la touche
+  // d'envoi ne libère pas. Un refus qui ne nomme pas le pane laisse son lecteur sans prise.
+  poste({ statut: 'idle', boite: TEXTE_DUN_TIERS, colle: true });
 
   await assert.rejects(
     () => remettre('w9:p1', PAROLE_DU_DIRIGEANT),
