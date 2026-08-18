@@ -37,12 +37,20 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { posteFabrique } from './foyer-de-reference.js';
+
 const ICI = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(ICI, '..', '..');
 const GABARITS_SRC = join(REPO, '.claude', 'templates');
 
 let preparerLieuOrchestrateur, preparerLieuRepresentant, GABARITS;
 let bacs = [];
+
+// LE FOYER DE RÉFÉRENCE — sans lui, la garde de fraîcheur viserait `$HOME` et cette suite
+// rougirait dès qu'une branche touche à un gabarit (T-20260818-0133). Voir
+// `foyer-de-reference.js` : la garde reste exercée, on fixe seulement sa référence à la même
+// source que le dépôt jetable.
+const POSTE = posteFabrique(GABARITS_SRC, ['orchestrateur', 'gestionnaire-client'], bacs);
 
 before(async () => {
   ({ preparerLieuOrchestrateur } = await import('../src/orchestrateur.js'));
@@ -51,6 +59,7 @@ before(async () => {
 });
 
 after(() => {
+  POSTE.rendre();
   for (const b of bacs) rmSync(b, { recursive: true, force: true });
 });
 
