@@ -221,6 +221,14 @@ async function main() {
     }
     poseFaite = pose.cree === true;
     for (const a of pose.avertissements || []) process.stderr.write(`${a}\n`);
+    // CE QU'ON N'A PAS PU ÉTABLIR SUR LE MÉTIER SE DIT ICI (E-20260818-0014). La pose le rend
+    // dans un champ à part — `avertissements` porte ce qui manquera au LIEU, jamais ce qu'on
+    // n'a pas su mesurer DU GABARIT. Cette commande n'affiche que les avertissements : sans
+    // cette ligne, un orchestrateur naîtrait sur un métier non vérifié en silence, et c'est
+    // très exactement le succès muet que ce lot ferme.
+    if (pose.metier_verifie === false && pose.metier_non_verifie) {
+      process.stderr.write(`${pose.metier_non_verifie}\n`);
+    }
   }
 
   // ═══ VERSER LE LIEU — le second des gestes qu'un humain faisait à la main.

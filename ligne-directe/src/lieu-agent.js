@@ -678,10 +678,19 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
   // qui manquait. La pose rendait déjà `ok`, `cree`, quatre fichiers et une ligne joignable —
   // tous vrais — pendant qu'elle servait un métier faux. Un appelant qui veut savoir si le
   // métier posé fait foi n'avait rien à lire ; désormais il a ceci.
-  const avertissementsFinaux = [...avertissements];
-  if (!fraicheur.verifie) {
-    avertissementsFinaux.push(fraicheur.raison);
-  }
+  // ⚠️ IL NE REJOINT PAS `avertissements`, ET C'EST LA CI QUI L'A ÉTABLI, pas une relecture.
+  //
+  // Première version : la raison était poussée dans `avertissements`. VERT sur le poste de
+  // l'auteur — dont le pack est installé et à jour, donc la mesure réussit et n'ajoute rien —
+  // et ROUGE en CI, où le pack n'est pas installé : la mesure échoue, un avertissement de plus
+  // apparaît, et les quatorze contrôles qui COMPTENT les avertissements du registre tombent
+  // (« CRITÈRE 1 — aucun avertissement » lisait 2 là où il en attendait 1).
+  //
+  // Le défaut n'était pas leur comptage : c'était de faire dépendre le rendu de la pose de
+  // L'ÉTAT DU POSTE qui l'exécute, par un canal que ces suites-là ne pouvaient pas voir venir.
+  // `avertissements` porte ce qui manquera AU LIEU ; `metier_verifie` porte ce qu'on a su
+  // établir DU GABARIT. Deux faits de nature différente, deux champs — et celui qui varie avec
+  // le poste ne se mêle pas à celui qui n'en dépend pas.
   return {
     ok: true,
     cree: true,
@@ -689,7 +698,7 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
     nom,
     racine,
     fichiers: [...GABARITS].sort(),
-    avertissements: avertissementsFinaux,
+    avertissements,
     ligne,
     metier_verifie: fraicheur.verifie,
     ...(fraicheur.verifie ? {} : { metier_non_verifie: fraicheur.raison }),
