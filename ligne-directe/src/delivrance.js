@@ -47,6 +47,48 @@ import { etatDeLEcran, ressembleAUnChoix, ecranAttendUnChoix, resumeDeLEcran } f
 export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
 
 /**
+ * LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ — dix secondes, et elle vaut pour TOUS les chemins.
+ *
+ * ⚠️ ELLE VIVAIT EN DEUX EXEMPLAIRES, ET ÇA A COÛTÉ LE JALON (T-20260818-0076). Elle a été
+ * réglée à dix secondes dans `herdr.js` — le chemin de la parole du dirigeant — pendant que le
+ * chemin de `livrer.js` gardait `IMMOBILITE_PAR_DEFAUT_MS` (cinq minutes). Le lot qui l'a posée
+ * annonçait « 10 secondes » sans dire de quel chemin il parlait ; un coordonnateur a mesuré
+ * l'autre, et a trouvé 300 secondes là où on lui promettait 10. Une constante par appelant, ce
+ * sont deux comportements dont un seul est annoncé.
+ *
+ * POURQUOI DIX. Assez pour voir des doigts sur un clavier — quelqu'un qui écrit fait bouger sa
+ * boîte bien avant. Pas assez pour faire attendre celui qui parle : au bout de cinq minutes,
+ * l'émetteur a conclu à une panne, et il a raison de le faire.
+ *
+ * ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE REDIRE ICI. Une fenêtre courte soumet plus souvent la phrase
+ * de quelqu'un qui a tapé la moitié puis s'est levé — c'est exactement ce que les cinq minutes
+ * achetaient. L'arbitrage a été pris les yeux ouverts sur la ligne du dirigeant, et ce qui le
+ * rend tenable est `avisDeBoiteBloquee` : le destinataire apprend, dans le message même, ce qui
+ * est parti sous sa signature. Ce chemin-ci porte le même avis — c'est la condition qui permet
+ * d'y étendre le même arbitrage, et pas une commodité.
+ */
+export const FENETRE_TEXTE_TAPE_MS = 10_000;
+
+/**
+ * COMBIEN DE TEMPS OBSERVER CE TEXTE-LÀ — la nature du texte décide, jamais l'appelant.
+ *
+ * ⚠️ UN TEXTE COLLÉ N'A PERSONNE DERRIÈRE LUI. Il est arrivé d'un seul coup : il n'y a aucun
+ * geste en cours à respecter, donc rien à observer, donc zéro. Attendre devant lui, c'est
+ * attendre un mouvement qui ne peut pas venir. Un texte TAPÉ, lui, peut avoir des doigts
+ * dessus — il garde sa fenêtre.
+ *
+ * ⚠️ ZÉRO N'EST PAS « SANS GARDE ». `delivrerLaBoite` relit dans les deux cas avant de
+ * soumettre et s'abstient si le contenu a bougé, si l'écran porte un choix, s'il est illisible.
+ * La fenêtre ne fait que donner de quoi voir ; elle n'est pas la garde elle-même.
+ *
+ * ⚠️ ET ELLE NE DÉCIDE PAS DE L'ARMEMENT. Un appelant qui ne veut PAS de délivrance du tout —
+ * le brief de naissance — le dit en n'armant pas le geste, jamais en réglant cette durée.
+ */
+export function fenetreDImmobilite(texteCoince, { texteTapeMs = FENETRE_TEXTE_TAPE_MS } = {}) {
+  return estUnEspaceReserve(texteCoince) ? 0 : texteTapeMs;
+}
+
+/**
  * ⚠️ UNE BOÎTE DE SAISIE N'EST PAS UN DIALOGUE — et la touche d'envoi n'y fait pas la même chose
  * (relevé en REVUE DE FOND, bloquant, et il était juste).
  *
@@ -201,9 +243,26 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   // VISIBLE à l'écran (mesuré — un texte long y est tronqué par le défilement). Ce qu'on
   // recopie ici est donc ce qu'on a lu, pas nécessairement tout ce qui est parti.
   const texte = String(texteLibere).trim();
+  // ⚠️ UNE DURÉE ARRONDIE À LA MINUTE NE SAIT PAS DIRE DIX SECONDES (T-20260818-0076). Cet avis
+  // a été écrit quand la seule fenêtre existante valait cinq minutes ; depuis que la fenêtre
+  // d'un texte tapé vaut dix secondes et celle d'un collage zéro, `Math.round(ms / 60000)`
+  // rendait « les 0 min où je l'ai observée » — une phrase qui dit à celui qui vient de perdre
+  // un texte qu'on ne l'a pas regardé. Le chemin de la parole du dirigeant la produisait déjà.
+  const observation = (ms) => {
+    if (!(Number(ms) > 0)) {
+      // ZÉRO N'EST PAS UNE OBSERVATION RATÉE, C'EST UN COLLAGE. Rien à observer : le texte est
+      // arrivé d'un seul coup, personne n'avait les doigts dessus. Le dire vaut mieux que
+      // laisser croire qu'on a soumis sans regarder.
+      return 'sans que j’aie eu à l’observer — il y était arrivé d’un seul coup, collé, et non tapé';
+    }
+    const secondes = Math.round(Number(ms) / 1000);
+    return secondes < 60
+      ? `resté immobile pendant les ${secondes} s où je l’ai observée`
+      : `resté immobile pendant les ${Math.round(Number(ms) / 60000)} min où je l’ai observée`;
+  };
   const ouverture =
-    '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, resté immobile ' +
-    `pendant les ${Math.round(immobiliteMs / 60000)} min où je l’ai observée. Je l’ai SOUMIS pour ` +
+    '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, ' +
+    `${observation(immobiliteMs)}. Je l’ai SOUMIS pour ` +
     'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
     'les deux.\n\n';
 

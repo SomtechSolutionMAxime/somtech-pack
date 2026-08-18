@@ -13,7 +13,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -157,8 +157,12 @@ function livrer(...args) {
         LIVRAISON_DELAI_MS: '5',
         LIVRAISON_ATTENTE_MS: '50',
         // Le temps qu'on laisse au texte coincé pour BOUGER avant de le tenir pour immobile.
-        // CINQ MINUTES en vrai (`IMMOBILITE_PAR_DEFAUT_MS`) — ici de quoi laisser le double
-        // changer d'avis entre deux lectures sans faire durer un essai.
+        // ⚠️ CE RÉGLAGE EST CE QUI A CACHÉ LE DÉFAUT DE T-20260818-0076 PENDANT TOUT UN LOT.
+        // Il rend les essais rapides — et il REMPLACE la valeur que la production utilise. Le
+        // banc empruntait donc le vrai binaire avec un réglage que personne n'a jamais en
+        // usage réel : 12/12 verts pendant que le poste attendait 300 secondes. Ce que le
+        // réglage RÉEL produit est éprouvé plus bas, par `lancerAvecPlafond`, qui ne l'écrase
+        // pas. **Un banc qui règle ce qu'il éprouve n'éprouve que son réglage.**
         LIVRAISON_IMMOBILITE_MS: '5',
         // Les sessions à interroger sont DÉSIGNÉES — la cloison refuse d'énumérer celles du
         // poste sous essais. Onze y tournent avec du travail réel, et un essai qui les balaie
@@ -427,14 +431,113 @@ test('l’avis porte CE QUI A ÉTÉ SOUMIS EN ENTIER — un incident constatable
   );
 });
 
-test('le délai d’immobilité par défaut n’est pas de trente secondes — « a tapé la moitié puis est parti »', async () => {
-  // ⚠️ CET ESSAI PORTE UNE EXIGENCE, pas une implémentation. Trente secondes suffisent contre
-  // quelqu'un en train de taper ; elles ne suffisent pas contre quelqu'un qui s'est absenté au
-  // milieu d'une phrase. Le geste étant irréversible, le défaut doit se compter en minutes.
-  const { IMMOBILITE_PAR_DEFAUT_MS } = await import('../src/livraison.js');
+// ═══ LE BUDGET DE TEMPS DU CHEMIN RÉEL — CE QUE LE BANC PRÉCÉDENT NE POUVAIT PAS VOIR ═══
+//
+// ⚠️ T-20260818-0076. Le lot d'avant rendait 12/12, 582 essais, huit mutations sans survivante,
+// et le poste mettait CINQ MINUTES à délivrer une boîte pour laquelle le critère du jalon en
+// demande moins de quinze secondes. L'écart n'était pas dans le code éprouvé : il était dans
+// `LIVRAISON_IMMOBILITE_MS: '5'` ci-dessus, que tous les essais posaient. Le banc passait par
+// le vrai binaire, avec la vraie boucle, sur le vrai faux-herdr — et remplaçait précisément la
+// grandeur qui était fausse.
+//
+// Les deux essais qui suivent lancent donc le binaire SANS ce réglage. C'est la seule façon de
+// mesurer ce qu'un appelant obtient vraiment.
+
+/** Lancer le vrai binaire avec le réglage RÉEL de la fenêtre, et le tuer s'il dépasse. */
+function lancerAvecPlafond(args, { plafondMs, env = {} }) {
+  const debut = Date.now();
+  const fils = spawnSync(process.execPath, [BIN, ...args], {
+    stdio: 'pipe',
+    timeout: plafondMs,
+    killSignal: 'SIGKILL',
+    env: {
+      ...process.env,
+      LIVRAISON_ESSAIS: '3',
+      LIVRAISON_DELAI_MS: '5',
+      LIVRAISON_ATTENTE_MS: '50',
+      // ⚠️ `LIVRAISON_IMMOBILITE_MS` EST DÉLIBÉRÉMENT ABSENT — c'est tout l'objet de ces essais.
+      HERDR_SESSIONS_ESSAIS: '/tmp/faux-herdr-livrer.sock',
+      ...env,
+    },
+  });
+  return {
+    dureeMs: Date.now() - debut,
+    tue: fils.error?.code === 'ETIMEDOUT' || fils.signal === 'SIGKILL',
+    // ⚠️ UN PROCESSUS TUÉ N'A PAS DE CODE DE SORTIE — le rendre `0` par défaut ferait passer
+    // pour un succès exactement le cas qu'on cherche à attraper.
+    code: fils.status === null ? 1 : fils.status,
+    stdout: (fils.stdout ?? '').toString(),
+    stderr: (fils.stderr ?? '').toString(),
+  };
+}
+
+test('un COLLAGE immobile est délivré tout de suite — le critère du jalon est de 15 s, le poste en faisait 300', () => {
+  // ⚠️ LE CAS EXACT MESURÉ SUR LE POSTE le 2026-08-18 : une boîte portant `[Pasted text #33]`,
+  // destinataire au repos, texte identique sur sept relevés. Cinq minutes d'attente avant le
+  // geste — pour un texte devant lequel il n'y a, par construction, personne à attendre : un
+  // collage est arrivé d'un seul coup.
+  const journal = installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]' });
+  const r = lancerAvecPlafond(['w9:p1', '--texte', 'mon compte rendu'], { plafondMs: 25000 });
+  assert.ok(!r.tue, `le binaire a dépassé son plafond — il attendait encore après ${r.dureeMs} ms`);
+  assert.equal(r.code, 0, r.stderr);
   assert.ok(
-    IMMOBILITE_PAR_DEFAUT_MS >= 300000,
-    `le défaut doit valoir au moins 5 minutes — trouvé ${IMMOBILITE_PAR_DEFAUT_MS} ms`
+    r.dureeMs < 15000,
+    `le critère du jalon exige moins de 15 s de bout en bout — mesuré ${Math.round(r.dureeMs / 1000)} s`
+  );
+  // ET LE GESTE A BIEN EU LIEU — sans ça, « rapide » voudrait seulement dire « n'a rien fait ».
+  assert.ok(
+    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'la touche d’envoi doit être partie : une délivrance rapide qui ne délivre pas n’est pas une délivrance'
+  );
+  assert.match(r.stdout, /"delivre":true/);
+});
+
+test('un texte TAPÉ immobile est délivré sous le budget du critère — sa fenêtre reste observée', () => {
+  // ⚠️ CELUI-CI GARDE L'AUTRE MOITIÉ. Un texte tapé peut avoir des doigts dessus : on l'observe
+  // vraiment, et cette attente-là est le prix d'un geste irréversible. Ce qui est éprouvé ici
+  // n'est pas qu'elle soit nulle — c'est qu'elle TIENNE DANS LE BUDGET annoncé. Cinq minutes n'y
+  // tenaient pas, et personne ne s'en apercevait parce que tous les essais la remplaçaient.
+  const journal = installerFauxHerdr({ boiteInitiale: 'un compte rendu que son auteur n’a pas soumis' });
+  const r = lancerAvecPlafond(['w9:p1', '--texte', 'mon compte rendu'], { plafondMs: 25000 });
+  assert.ok(!r.tue, `le binaire a dépassé son plafond — il attendait encore après ${r.dureeMs} ms`);
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(
+    r.dureeMs < 15000,
+    `le critère du jalon exige moins de 15 s de bout en bout — mesuré ${Math.round(r.dureeMs / 1000)} s`
+  );
+  assert.ok(
+    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'la touche d’envoi doit être partie'
+  );
+});
+
+test('la fenêtre du texte tapé n’est ni nulle ni hors budget — ce que le défaut doit valoir, et pourquoi', async () => {
+  // ⚠️ CET ESSAI PORTE UNE EXIGENCE, pas une implémentation, et elle a DEUX bords.
+  //
+  // Il gardait auparavant « au moins cinq minutes », au nom de « a tapé la moitié puis est
+  // parti » — l'exigence posée par l'orchestrateur en approuvant la conception. Elle reste
+  // vraie sur son bord, et elle est désormais tenue par ce que `delivrerLaBoite` RELIT avant
+  // de soumettre (texte qui a bougé, dialogue, écran illisible), pas par la seule longueur de
+  // l'attente. Le second bord est arrivé avec le critère du jalon : une attente qui dépasse le
+  // budget annoncé fait conclure à une panne, et l'émetteur a raison de le conclure.
+  //
+  // La garde porte donc les deux : la fenêtre observe (elle n'est pas nulle) et elle tient dans
+  // le budget (elle laisse de la place au reste du chemin).
+  const { FENETRE_TEXTE_TAPE_MS, fenetreDImmobilite } = await import('../src/livraison.js');
+  assert.ok(FENETRE_TEXTE_TAPE_MS > 0, 'une fenêtre nulle sur un texte tapé n’observe plus rien');
+  assert.ok(
+    FENETRE_TEXTE_TAPE_MS <= 12000,
+    `le critère du jalon est de 15 s de bout en bout — une fenêtre de ${FENETRE_TEXTE_TAPE_MS} ms n’y tient pas`
+  );
+  // ET LA RÈGLE QUI DÉCIDE : le COLLAGE n'a rien à observer, le TAPÉ garde sa fenêtre.
+  assert.equal(fenetreDImmobilite('[Pasted text #33]'), 0);
+  assert.equal(fenetreDImmobilite('[Pasted text #137 +19 lines]'), 0);
+  assert.equal(fenetreDImmobilite('une phrase que quelqu’un est en train de taper'), FENETRE_TEXTE_TAPE_MS);
+  // ⚠️ UN TEXTE QUI *MENTIONNE* UN COLLAGE EST UN TEXTE LISIBLE — le confondre avec un repli
+  // ferait sauter la fenêtre sur du texte réellement tapé.
+  assert.equal(
+    fenetreDImmobilite('je te renvoie le [Pasted text #6] que tu m’as passé'),
+    FENETRE_TEXTE_TAPE_MS
   );
 });
 

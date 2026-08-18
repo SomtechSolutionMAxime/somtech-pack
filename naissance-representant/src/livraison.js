@@ -401,8 +401,13 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTrava
  * On les RÉ-EXPORTE d'ici : tout ce qui les importait de `livraison.js` continue de marcher,
  * et les bancs qui les éprouvent n'ont pas bougé non plus.
  */
-export { IMMOBILITE_PAR_DEFAUT_MS, delivrerLaBoite } from '../../ligne-directe/src/delivrance.js';
-import { delivrerLaBoite } from '../../ligne-directe/src/delivrance.js';
+export {
+  IMMOBILITE_PAR_DEFAUT_MS,
+  FENETRE_TEXTE_TAPE_MS,
+  fenetreDImmobilite,
+  delivrerLaBoite,
+} from '../../ligne-directe/src/delivrance.js';
+import { delivrerLaBoite, fenetreDImmobilite } from '../../ligne-directe/src/delivrance.js';
 
 /**
  * Ce qu'on ajoute au refus quand la délivrance n'a pas abouti — DES MOTS, jamais un verdict.
@@ -547,7 +552,20 @@ export async function livrerBrief({
   // ⚠️ UNE SEULE CAUSE SE TRAITE : la boîte encombrée. Un statut indisponible et un écran
   // illisible restent des refus secs — on ne pose un geste que sur ce qu'on a vu et compris.
   let delivrance = null;
+  // ⚠️ CE QU'ON OBSERVE DÉPEND DE CE QU'ON A TROUVÉ, PAS DE L'APPELANT (T-20260818-0076).
+  //
+  // `immobiliteMs` reste ce que l'appelant ARME : à zéro, aucune délivrance n'est tentée — c'est
+  // la garde du brief de naissance, et elle ne bouge pas. Ce qu'il ne décide plus, c'est la
+  // DURÉE : elle se lit sur le texte trouvé. Devant un collage, il n'y a personne derrière le
+  // clavier et rien ne bougera jamais ; attendre là est du temps mort pur.
+  //
+  // MESURÉ SUR LE POSTE : une boîte portant `[Pasted text #33]`, destinataire au repos, texte
+  // identique sur sept relevés — 300 secondes d'attente avant le geste, pour un critère qui en
+  // demande moins de quinze. Le geste nu, lui, vide la boîte en quatre secondes : ce qui coûtait
+  // cinq minutes était l'attente, jamais la touche d'envoi.
+  let fenetreMs = immobiliteMs;
   if (obstacle && immobiliteMs > 0 && causeObstacle(ecranAvant, statutAvant, { pairOccupe }) === CAUSES.ENCOMBREE) {
+    fenetreMs = fenetreDImmobilite(contenuBoite(ecranAvant), { texteTapeMs: immobiliteMs });
     delivrance = await delivrerLaBoite({
       texteCoince: contenuBoite(ecranAvant),
       commandes: lectures,
@@ -555,7 +573,7 @@ export async function livrerBrief({
       lireEcran,
       dormir,
       vers,
-      immobiliteMs,
+      immobiliteMs: fenetreMs,
       essais,
       delaiMs,
     });
@@ -581,7 +599,7 @@ export async function livrerBrief({
     } else {
       // Le refus d'origine est rendu INTACT ; on lui ajoute ce qu'on a tenté. Des mots de plus,
       // pas un verdict de moins.
-      obstacle = `${obstacle}\n${motDeLaDelivrance(delivrance, { immobiliteMs })}`;
+      obstacle = `${obstacle}\n${motDeLaDelivrance(delivrance, { immobiliteMs: fenetreMs })}`;
     }
   }
 
@@ -612,7 +630,7 @@ export async function livrerBrief({
   // ferait annoncer un geste qui n'a pas eu lieu — le défaut exact que ce module combat.
   let texteALivrer = texte;
   if (delivrance?.soumis) {
-    texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs })}\n\n${texte}`;
+    texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs: fenetreMs })}\n\n${texte}`;
   } else if (delivrance?.texteDisparu) {
     texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
   }
