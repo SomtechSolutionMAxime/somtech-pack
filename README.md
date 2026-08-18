@@ -48,6 +48,10 @@ curl -fsSL .../scripts/remote-install.sh | bash -s -- --with-claude-swt
 ./scripts/somtech_pack_pull.sh --target /path/to/project
 ```
 
+**Prérequis : `git` et `jq`.** Les deux sont vérifiés au démarrage et l'installation
+refuse de partir sans eux — `jq` lit les chemins de chaque module dans `pack.json`.
+(Le CLI npm, lui, n'a besoin que de Node.)
+
 Cette méthode reste fonctionnelle mais sera dépréciée une fois le CLI publié.
 </details>
 
