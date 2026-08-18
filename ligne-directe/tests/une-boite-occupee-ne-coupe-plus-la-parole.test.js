@@ -186,6 +186,19 @@ test('UNE PHRASE QUE QUELQU’UN EST EN TRAIN DE TAPER N’EST PAS SOUMISE À SA
   writeFileSync(journal, '');
   const marqueur = join(bac, 'premiere-lecture-tape');
   try { rmSync(marqueur); } catch { /* premier passage */ }
+  // ⚠️ CE RÉGLAGE A ÉTÉ CORRIGÉ PARCE QU'UNE MUTATION LUI SURVIVAIT (T-20260818-0049).
+  //
+  // Le seuil du double valait 40 ms — MOINS que le temps d'un appel à herdr, qui lance un
+  // processus (mesuré : ~150 ms). Le texte « bougeait » donc de lui-même, fenêtre ou pas, et
+  // condamner la fenêtre d'observation ne faisait rougir personne. Le banc mesurait la latence
+  // du poste, pas la garde — exactement le défaut qu'il est censé traquer chez les autres.
+  //
+  // Le seuil doit être AU-DESSUS de la latence naturelle et EN DESSOUS de la fenêtre :
+  // sans fenêtre, on relit trop tôt pour voir bouger → on soumet → l'essai rougit ;
+  // avec la fenêtre, on relit après → on voit bouger → on s'abstient.
+  const SEUIL_MOUVEMENT_MS = 800;
+  const fenetreAvant = process.env.LIGNE_IMMOBILITE_MS;
+  process.env.LIGNE_IMMOBILITE_MS = '1500';
   const script = `#!/usr/bin/env node
 const fs = require('fs');
 const JOURNAL = ${JSON.stringify(journal)};
@@ -200,7 +213,7 @@ if (cmd === 'agent read') {
   let t0;
   try { t0 = Number(fs.readFileSync(MARQUEUR, 'utf8')); }
   catch { t0 = Date.now(); fs.writeFileSync(MARQUEUR, String(t0)); }
-  const phrase = 'je reprends la migration demain matin si' + (Date.now() - t0 >= 40 ? ' tu confirmes' : '');
+  const phrase = 'je reprends la migration demain matin si' + (Date.now() - t0 >= \${SEUIL_MOUVEMENT_MS} ? ' tu confirmes' : '');
   process.stdout.write(['~/x', SEP, '\\u276f ' + phrase, SEP, '  auto mode on'].join('\\n'));
   process.exit(0);
 }
@@ -231,6 +244,7 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
     !gestes.includes('agent prompt'),
     'et on n’écrit pas par-dessus : les deux textes partiraient collés en un seul message'
   );
+  process.env.LIGNE_IMMOBILITE_MS = fenetreAvant;
 });
 
 test('UNE BOÎTE QU’ON N’A PAS LIBÉRÉE NE REÇOIT RIEN — on n’écrit pas par-dessus, jamais', async () => {
