@@ -24,7 +24,7 @@
 // gabarit converge automatiquement, sans toucher ce fichier. C'est ce qui évite le motif
 // « un correctif ne couvre qu'une porte sur deux » : compter les fichiers à
 // synchroniser en dur, c'est en oublier un le jour où le gabarit grandit.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { resolvePayloadRoot } from '../modules.js';
 import { collectFiles, applyFiles } from '../engine.js';
@@ -59,6 +59,55 @@ export const GABARIT_DIR = join('.claude', 'templates', ROLES.representant.gabar
  * `applyFiles` : la seule porte d'écriture ne le voit jamais passer, dans un sens ou l'autre.
  */
 export const PRESERVE = ['CONTEXTE.md'];
+
+/**
+ * CE QUI ARME UN LIEU — le fichier de droits, et le fichier que son garde appelle.
+ *
+ * T-20260818-0034 : rafraîchir un lieu le DÉSARMAIT en silence. `.claude/settings.json` porte
+ * le garde d'ouverture de ligne, il est pack-owned, donc il convergeait — et le gabarit ne
+ * portait aucun `hooks`. Le geste qu'on recommande pour mettre un lieu à jour était celui qui
+ * lui retirait sa protection, sans un mot. Un lieu désarmé se lit exactement comme un lieu
+ * armé : seul un essai réel montrait la différence.
+ *
+ * ⚠️ LE CORRECTIF N'EST PAS D'AJOUTER CE FICHIER À `PRESERVE`, ET C'EST DÉLIBÉRÉ. Ça aurait
+ * protégé l'armement existant en condamnant tout le reste : un lieu qui n'a jamais eu le garde
+ * ne l'aurait jamais reçu, et plus aucune correction de droits n'aurait descendu. Le garde vit
+ * désormais DANS LES GABARITS — la convergence le PORTE au lieu de l'effacer, et les droits
+ * continuent de converger dans le même passage.
+ *
+ * ⚠️ ET LA CONVERGENCE N'IMPORTE PAS LE GARDE, ELLE LE RECONNAÎT. Le garde appartient à
+ * `naissance-representant`, module de POSTE : un `import` vers lui casserait le paquet npm
+ * publié, qui n'embarque que `bin/`, `src/` et `payload/` — la même contrainte que celle
+ * commentée plus haut pour `ligne-directe/src/roles.js`. On sonde donc LE FICHIER QU'IL
+ * APPELLE, jamais l'égalité de la commande entière : c'est la même règle que `fusionnerGarde`
+ * applique pour reconnaître le sien, et pour la même raison — un garde posé par une version
+ * antérieure porte un chemin absolu mort, qu'une comparaison stricte lirait comme une absence.
+ */
+const FICHIER_DES_DROITS = join('.claude', 'settings.json');
+const APPEL_DU_GARDE = 'garde-ouverture-ligne.js';
+
+/**
+ * Ce lieu est-il armé, tel qu'il se trouve MAINTENANT sur le disque ?
+ *
+ * Rend `null` — jamais `false` — quand le fichier manque ou ne se lit pas. « Je n'ai pas pu
+ * regarder » n'est pas « il n'y a rien » : confondre les deux annoncerait un désarmement sur un
+ * lieu simplement posé de façon partielle, et ferait douter d'un lieu sain. C'est un état à
+ * dire, pas à deviner.
+ */
+function armement(target) {
+  const chemin = join(target, FICHIER_DES_DROITS);
+  if (!existsSync(chemin)) return null;
+  let settings;
+  try {
+    settings = JSON.parse(readFileSync(chemin, 'utf8'));
+  } catch {
+    return null;
+  }
+  const hooks = settings?.hooks || {};
+  return Object.values(hooks).some((blocs) => (blocs || []).some(
+    (bloc) => (bloc?.hooks || []).some((h) => typeof h?.command === 'string' && h.command.includes(APPEL_DU_GARDE))
+  ));
+}
 
 /**
  * Un seul segment de chemin sûr — jamais une évasion. La casse est LIBRE.
@@ -134,6 +183,27 @@ export async function cmdLieuUpdate(flags, roleNom) {
   if (report.backedUp.length) console.log(`  💾 dérives sauvegardées avant convergence (.somtech.bak) : ${report.backedUp.join(', ')}`);
   if (report.preserved.length) console.log(`  🔒 préservés (écrits à la main, jamais écrasés) : ${report.preserved.join(', ')}`);
   if (report.conflicts.length) console.log(`  ↩︎  en conflit (symlink en cible, non écrit à travers) : ${report.conflicts.join(', ')}`);
+
+  // L'ÉTAT D'ARMEMENT DU LIEU, DIT À CHAQUE PASSAGE — et LU SUR LE DISQUE, jamais déduit de ce
+  // qu'on croit avoir écrit. C'est ce qui répond à « un lieu peut dire s'il est armé sans qu'on
+  // ait à provoquer un blocage » : la question se pose (`--dry-run` suffit, il n'écrit rien),
+  // elle ne se déclenche plus.
+  //
+  // Et c'est le filet du correctif lui-même : si un jour le garde cesse de descendre — gabarit
+  // amputé au paquet, `.claude/settings.json` laissé en conflit derrière un symlink — la
+  // commande le DIT, au lieu de rendre le succès muet qui a fait ce ticket.
+  const arme = armement(target);
+  if (arme === true) {
+    console.log('  🛡️ armé — le garde d’ouverture de ligne est en place dans ce lieu');
+  } else if (arme === false) {
+    console.log(
+      '  ⚠️ DÉSARMÉ — aucun garde d’ouverture de ligne dans ce lieu : l’agent qui l’habitera '
+        + 'pourra travailler AVANT d’avoir ouvert sa ligne, et personne ne le saura.'
+    );
+    console.log('     ↳ à rétablir en le faisant naître, ou en repassant cette commande depuis un pack à jour.');
+  } else {
+    console.log(`  ⚠️ armement INCONNU — ${FICHIER_DES_DROITS} est absent ou illisible : ce lieu est posé partiellement.`);
+  }
 
   return flags.dryRun && report.updated.length ? 2 : 0;
 }

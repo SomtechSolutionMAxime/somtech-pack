@@ -108,17 +108,25 @@ const estArme = (settings) => commandesDeHook(settings).some((c) => c.includes('
  * le cas honnête — si l'essai posait un lieu déjà identique au gabarit, la convergence
  * n'aurait rien à écraser et ne pourrait pas désarmer.
  */
-function poserLieu(role, { permissionsPerimees = true } = {}) {
+function poserLieu(role) {
   const depot = mkdtempSync(join(tmpdir(), 'smtk-cv-'));
   const lieu = join(depot, role.dossier, NOM);
   mkdirSync(lieu, { recursive: true });
   cpSync(join(REPO, '.claude', 'templates', role.gabarit), lieu, { recursive: true });
   writeFileSync(join(lieu, 'CONTEXTE.md'), CONTEXTE_ECRIT_A_LA_MAIN);
-  if (permissionsPerimees) {
-    const s = settingsDuGabarit(role);
-    s.permissions = { deny: ['Write'] }; // périmé : le gabarit en dit davantage
-    writeFileSync(settingsDu(lieu), `${JSON.stringify(s, null, 2)}\n`);
-  }
+
+  // ⚠️ LE LIEU PART DÉSARMÉ ET SES DROITS PÉRIMÉS — jamais dans l'état du gabarit courant.
+  // C'est l'état MESURÉ des lieux déjà posés : 24 lieux désarmés sur les 85 relevés au poste,
+  // et c'est très exactement ceux que la campagne de rafraîchissement va traverser.
+  //
+  // Copier le gabarit tel quel les rendrait déjà armés, et le banc perdrait sa capacité à
+  // produire le cas qu'il existe pour éprouver : la convergence n'aurait rien à écraser, donc
+  // rien à désarmer, et les essais resteraient verts sur un défaut intact.
+  const s = settingsDuGabarit(role);
+  delete s.hooks;
+  s.permissions = { deny: ['Write'] }; // périmé : le gabarit en dit davantage
+  writeFileSync(settingsDu(lieu), `${JSON.stringify(s, null, 2)}\n`);
+
   return { depot, lieu };
 }
 
