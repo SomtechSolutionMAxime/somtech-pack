@@ -220,3 +220,49 @@ function segmentOuvre(segment) {
   if (!/\bouvrir\b/.test(segment)) return null;
   return /--nature client/.test(segment) ? 'client' : 'interne';
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE MÉTIER ÉCRIT ET LA GARDE DE NOMMAGE DISENT-ILS LA MÊME CHOSE ? — E-20260818-0017
+//
+// `R3` disait littéralement l'inverse de la règle tranchée : « un agent … porte le code de ce
+// mandat. Rien d'autre », avec `revue-pr180` pour contre-exemple — et un nom de rivière est
+// exactement ça, au regard de ce texte. `matapedia` a tranché C1 et A NOMMÉ LA DETTE en
+// tranchant : tant que le gabarit n'était pas amendé À LA SOURCE, un orchestrateur qui le
+// lisait avait raison de s'y fier.
+//
+// ⚠️ CES DEUX ESSAIS GARDENT LA FONCTION, PAS UNE TOURNURE. Chercher « rivière » dans le texte
+// prouverait qu'un mot est là ; une réécriture ordonnée le remplacerait par un synonyme et la
+// garde tomberait au vert sur un métier vidé. On fait donc JUGER LES EXEMPLES DU TEXTE PAR LE
+// CODE : c'est le seul accord qui compte, et il survit à n'importe quelle rédaction.
+
+import { estUneRiviere, jugerNomDOrchestrateur } from '../../ligne-directe/src/nom-de-riviere.js';
+
+/** Les exemples que le métier donne, tels qu'il les écrit : « - ✅ `nom` » / « - ❌ `nom` ». */
+function exemplesDuMetier(marque) {
+  const metier = readFileSync(join(REPO, '.claude', 'templates', 'orchestrateur', 'CLAUDE.md'), 'utf8');
+  const motif = new RegExp('^- ' + marque + ' `([^`]+)`', 'gmu');
+  return [...metier.matchAll(motif)].map((m) => m[1].trim());
+}
+
+test('le métier ENSEIGNE la règle de la rivière — au moins un exemple positif que la garde accepte', () => {
+  const acceptes = exemplesDuMetier('✅').filter((n) => estUneRiviere(n));
+  assert.ok(
+    acceptes.length >= 1,
+    'aucun exemple ✅ du métier n’est une rivière : le texte opposable n’enseigne plus la règle que le code applique, ' +
+      'et un orchestrateur qui le lit aura raison de croire qu’il porte le code de son mandat',
+  );
+});
+
+test('AUCUN contre-exemple du métier n’est accepté par la garde — sinon le texte refuse ce que le code laisse passer', () => {
+  // Le sens qui compte : si le métier écrivait « ❌ matapedia » pendant que la garde l'accepte,
+  // le lecteur et la commande se contrediraient — et c'est le lecteur qui perdrait, puisqu'il
+  // ne peut pas voir le code.
+  for (const nom of exemplesDuMetier('❌')) {
+    assert.equal(
+      jugerNomDOrchestrateur(nom).conforme,
+      false,
+      `le métier donne « ${nom} » en contre-exemple, mais la garde l’accepterait pour un orchestrateur`,
+    );
+  }
+});

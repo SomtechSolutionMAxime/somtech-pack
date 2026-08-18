@@ -61,6 +61,10 @@ Options :
   --mode <mode>           le mode de permission déclaré (défaut : acceptEdits)
   --amorce <fichier>      le brief à livrer dès la naissance
   --amorce-texte "…"      le même, en clair
+  --nom-agent <nom>       le nom que l'agent portera, quand il diffère du code du mandat.
+                          SANS LUI, un orchestrateur reçoit une rivière ; c'est le cas normal,
+                          et le seul qui ne dépende de personne. Le LIEU garde toujours le code
+                          du mandat — seul le nom d'agent change.
 `;
 
 const ICI = dirname(fileURLToPath(import.meta.url)); // cli/src/commands
@@ -140,13 +144,14 @@ export function espaceDeTravail({ depot, code, workspace }) {
 }
 
 /** Les arguments qu'on relaie à la naissance, dans l'ordre qu'elle attend. */
-export function argumentsDeNaissance(code, { depot, workspace, role, session, modele, mode, amorce, amorceTexte }) {
+export function argumentsDeNaissance(code, { depot, workspace, role, session, modele, mode, amorce, amorceTexte, nomAgent }) {
   const a = [code, '--workspace', workspace, '--depot', resolve(depot), '--role', role || 'orchestrateur'];
   if (session) a.push('--session', session);
   if (modele) a.push('--modele', modele);
   if (mode) a.push('--mode', mode);
   if (amorce) a.push('--amorce', amorce);
   if (amorceTexte) a.push('--amorce-texte', amorceTexte);
+  if (nomAgent) a.push('--nom-agent', nomAgent);
   return a;
 }
 
@@ -210,6 +215,7 @@ export async function cmdAgent(argv, { lancer = spawnSync } = {}) {
     mode: opt('--mode'),
     amorce: opt('--amorce'),
     amorceTexte: opt('--amorce-texte'),
+    nomAgent: opt('--nom-agent'),
   });
 
   const r = lancer(process.execPath, [naitre, ...args], { stdio: 'inherit' });

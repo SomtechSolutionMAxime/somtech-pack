@@ -240,9 +240,19 @@ export function avisDeCasse(nomDuLieu, nomDeLAgent) {
   const lieu = String(nomDuLieu ?? '');
   const agent = String(nomDeLAgent ?? '');
   if (agent === lieu) return null;
+  // ⚠️ DEUX ÉCARTS, DEUX CAUSES, ET ON NE DIT QUE CELLE QU'ON A MESURÉE (E-20260818-0017).
+  // Jusqu'ici l'écart ne pouvait venir que de la casse, et le message l'affirmait. Depuis que
+  // l'agent peut porter une RIVIÈRE là où le lieu porte le code du mandat, la même phrase
+  // aurait annoncé « herdr n'accepte que les minuscules » devant `bonaventure` / `j-2026…` —
+  // un message qui explique par une cause fausse envoie chercher au mauvais endroit, et c'est
+  // pire qu'un message absent. On COMPARE plutôt que d'expliquer : le nom abaissé est-il celui
+  // du lieu, ou non ?
+  const cause = agent === lieu.toLowerCase()
+    ? 'herdr n\'accepte que les minuscules'
+    : 'le lieu porte le code du mandat, l\'agent porte son nom propre';
   return (
-    `le lieu s'appelle « ${lieu} », l'agent s'appellera « ${agent} » — herdr n'accepte que ` +
-    `les minuscules. C'est sous « ${agent} » qu'on l'adresse : « herdr agent prompt ${agent} … ».`
+    `le lieu s'appelle « ${lieu} », l'agent s'appellera « ${agent} » — ${cause}. ` +
+    `C'est sous « ${agent} » qu'on l'adresse : « herdr agent prompt ${agent} … ».`
   );
 }
 
@@ -505,17 +515,28 @@ export const MODE_PAR_DEFAUT = 'acceptEdits';
 // la fenêtre que herdr s'autorise lui-même. Elle est publique pour être BORNÉE par son appelant.
 export const ATTENTE_NAISSANCE_MS = 120000;
 
+/**
+ * @param {string} [p.nomAgent]  LE NOM QUE PORTERA L'AGENT, quand il diffère de celui du lieu
+ *   (E-20260818-0017). Sans lui, le nom reste celui du lieu — c'est le comportement d'avant ce
+ *   lot, et il vaut toujours pour les représentants et les chefs d'équipe. ⚠️ CE MODULE NE
+ *   L'ATTRIBUE PAS : il n'a ni disque ni herdr à interroger, et une attribution a besoin des
+ *   deux pour mesurer ce qui est déjà pris. La décision est prise par
+ *   `ligne-directe/src/nom-de-riviere.js` et arrive ici toute faite — un seul endroit décide.
+ */
 export function commandesNaissance(
   repoRoot,
   quiVientAuMonde,
-  { workspace, role = 'representant', modele = MODELE_PAR_DEFAUT, mode = MODE_PAR_DEFAUT } = {}
+  { workspace, role = 'representant', modele = MODELE_PAR_DEFAUT, mode = MODE_PAR_DEFAUT, nomAgent = null } = {}
 ) {
   if (!workspace) {
     throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
   }
   roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
   const lieu = cheminLieu(repoRoot, quiVientAuMonde, role);
-  const nom = nomAgentHerdr(quiVientAuMonde);
+  // ⚠️ LE NOM PASSE PAR `nomAgentHerdr` DANS LES DEUX CAS, et c'est ce qui garde la règle en un
+  // seul endroit : une rivière qui ne serait pas nommable par herdr doit échouer ICI, avant
+  // qu'un pane existe, exactement comme un nom de lieu trop long échouait déjà.
+  const nom = nomAgentHerdr(nomAgent ?? quiVientAuMonde);
   return {
     lieu,
     nom,

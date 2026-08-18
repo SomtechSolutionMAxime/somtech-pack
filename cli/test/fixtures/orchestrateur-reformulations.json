@@ -176,8 +176,8 @@
   {
     "id": "r3-agent-recoit-mandat",
     "quoi": "changement de voix (reçoit → se voit confier)",
-    "avant": "Un agent reçoit un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et il porte le code de ce mandat. Rien d'autre.",
-    "apres": "Un agent se voit confier un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et porte le code de ce mandat. Rien d'autre."
+    "avant": "Un chef d'équipe reçoit un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et il porte le code de ce mandat. Rien d'autre.",
+    "apres": "Un chef d'équipe se voit confier un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et porte le code de ce mandat. Rien d'autre."
   },
   {
     "id": "r3-nom-vient-du-mandat",
