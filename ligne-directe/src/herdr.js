@@ -21,7 +21,7 @@ import { contenuBoite, laPriseEstConstatee, estUnEspaceReserve } from './boite.j
 // ⚠️ LE REMÈDE EST REPRIS, PAS RÉÉCRIT (T-20260818-0049, règle d'or n°15). `delivrerLaBoite`
 // porte des gardes MESURÉES qui ont coûté un lot chacune — sur le texte coincé, sur l'écran,
 // sur l'immobilité. Une seconde copie n'hériterait jamais des corrections de la première.
-import { delivrerLaBoite, avisDeBoiteBloquee } from './delivrance.js';
+import { delivrerLaBoite, avisDeBoiteBloquee, avisDeBoiteVidee } from './delivrance.js';
 import { etatDeLEcran, refusDEcran, ecranAttendUnChoix } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
@@ -335,6 +335,31 @@ export async function remettre(pane, texte, { socket } = {}) {
     // a trouvé.
     if (delivrance.soumis) {
       texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs: fenetreMs })}\n\n${texte}`;
+    }
+
+    // ⚠️ ET L'AUTRE ISSUE, CELLE QU'ON NE SAIT PAS EXPLIQUER — relevée en passe de revue
+    // fraîche, bloquante, et le rejet était juste (T-20260818-0049).
+    //
+    // La boîte a pu être trouvée VIDE : ni immobile, ni changée. Deux causes, et ON N'EN
+    // CONNAÎT AUCUNE. Soit son auteur l'a soumise pendant qu'on regardait — bénin, et c'est
+    // le cas MAJORITAIRE. Soit le texte a disparu SANS être soumis, et il est alors perdu :
+    // un texte non soumis n'existe nulle part ailleurs, ni au ServiceDesk, ni dans un fil.
+    //
+    // `delivrerLaBoite` rend cette issue `ok` — à raison, la boîte est libre et écrire n'y
+    // collera rien. Mais elle rend AUSSI `texteDisparu`, et c'est ce qui rend la perte
+    // réparable au lieu de la rendre muette. Ce code ne testait que `!ok` (faux) et `soumis`
+    // (faux) : aucune branche ne la traitait, et le message partait sans un mot.
+    //
+    // ⚠️ C'EST LA TROISIÈME MOITIÉ LAISSÉE DERRIÈRE DANS CE LOT, et la troisième dans le
+    // correctif écrit pour fermer les précédentes. Le geste a suivi, l'avis de boîte BLOQUÉE
+    // a suivi sur un premier rejet, l'avis de boîte VIDÉE était encore resté. Le module frère
+    // le posait déjà depuis T-20260817-0090 ; seul ce chemin-ci l'ignorait.
+    //
+    // ⚠️ ET CE N'EST PAS LE MÊME AVIS QUE L'AUTRE, délibérément : là-bas le texte A ÉTÉ soumis
+    // et on peut dire d'aller le relire ; ici ON N'A RIEN SOUMIS, il n'est nulle part en aval,
+    // et promettre par symétrie qu'on le retrouvera enverrait chercher ce qui n'existe pas.
+    else if (delivrance.texteDisparu) {
+      texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
     }
   }
 

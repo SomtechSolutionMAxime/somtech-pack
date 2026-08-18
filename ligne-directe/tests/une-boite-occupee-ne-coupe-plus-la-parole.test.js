@@ -496,3 +496,92 @@ test('UNE LIVRAISON ORDINAIRE NE PORTE PAS UN MOT DE PLUS — on n’annonce pas
   const ecrits = appels(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
   assert.equal(ecrits[0][3], 'coucou', 'rien n’a bloqué : le message part seul, sans avis');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA TROISIÈME MOITIÉ MANQUANTE — L'AVIS DE PERTE (T-20260818-0049)
+//
+// ⚠️ RELEVÉ PAR UNE PASSE DE REVUE FRAÎCHE, QUI A REJETÉ, et le rejet était juste. C'est la
+// TROISIÈME fois dans ce lot qu'une moitié reste derrière — et cette fois dans le correctif
+// écrit pour fermer les deux premières.
+//
+//   • le GESTE (`delivrerLaBoite`) a suivi ;
+//   • l'avis de BOÎTE BLOQUÉE a suivi ensuite, sur rejet d'une première revue ;
+//   • l'avis de BOÎTE VIDÉE, lui, était resté.
+//
+// CE QUE CETTE ISSUE SIGNIFIE, et pourquoi elle n'est pas un cas limite. Après l'attente, la
+// boîte peut être trouvée VIDE — ni immobile, ni changée. Deux causes, et on n'en connaît
+// aucune : soit son auteur l'a soumise pendant qu'on regardait (bénin, et `delivrance.js`
+// documente que c'est LE CAS MAJORITAIRE), soit le texte a disparu SANS être soumis, et il
+// est alors perdu — un texte non soumis n'existe nulle part ailleurs.
+//
+// `delivrerLaBoite` rend donc `{ ok: true, cause: 'vide-cause-inconnue', soumis: false,
+// texteDisparu }`. Or `remettre()` ne testait que `!ok` (faux) et `soumis` (faux) : AUCUNE
+// branche ne la traitait. Le message du dirigeant partait seul, et personne n'apprenait jamais
+// qu'une boîte avait porté un texte dont le sort reste inconnu.
+//
+// ⚠️ ET C'EST LE CAS ORDINAIRE, PAS L'ACCIDENT : il survient dès qu'un tiers finit sa phrase
+// et la soumet pendant notre fenêtre d'observation. C'est-à-dire l'usage normal.
+
+test('UNE BOÎTE TROUVÉE VIDE NE SE TAIT PAS — on ne sait pas si le texte est parti ou perdu', async () => {
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  const marqueur = join(bac, 'premiere-lecture-videe');
+  try { rmSync(marqueur); } catch { /* premier passage */ }
+  const SEUIL_VIDAGE_MS = 800;
+  const fenetreAvant = process.env.LIGNE_IMMOBILITE_MS;
+  process.env.LIGNE_IMMOBILITE_MS = '1500';
+  // Le tiers termine sa phrase et la SOUMET LUI-MÊME pendant qu'on observe : la boîte devient
+  // vide. Piloté par le TEMPS — le seuil dépasse la latence d'un appel (~150 ms), sans quoi la
+  // boîte se viderait avant qu'on ait rien observé et l'essai mesurerait la machine.
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const MARQUEUR = ${JSON.stringify(marqueur)};
+const args = process.argv.slice(2);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+if (cmd === 'agent read') {
+  let t0;
+  try { t0 = Number(fs.readFileSync(MARQUEUR, 'utf8')); }
+  catch { t0 = Date.now(); fs.writeFileSync(MARQUEUR, String(t0)); }
+  const boite = Date.now() - t0 >= ${SEUIL_VIDAGE_MS} ? '' : 'je reprends la migration demain matin si';
+  process.stdout.write(['~/x', SEP, '\\u276f ' + boite, SEP, '  auto mode on'].join('\\n'));
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  const { remettre } = await import('../src/herdr.js');
+  const preuve = await remettre('w5:p8', 'Message du dirigeant, reçu par Slack.');
+  assert.ok(preuve, 'le message du dirigeant doit partir — la boîte est libre');
+
+  const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
+  // ⚠️ LA PREUVE QUE LE DOUBLE A RÉPONDU — sans lectures, une assertion sur le contenu ne
+  // mesure rien. Un double mort satisferait le reste.
+  const lectures = gestes.filter((g) => g === 'agent read').length;
+  assert.ok(lectures >= 2, `la boîte doit avoir été OBSERVÉE — vu ${lectures} lecture(s)`);
+  assert.ok(
+    !gestes.includes('agent send-keys'),
+    'on n’a RIEN soumis : la boîte s’est vidée toute seule, on ne s’en attribue pas le geste'
+  );
+
+  const ecrits = appels(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
+  assert.equal(ecrits.length, 1, 'un seul message écrit');
+  const livre = String(ecrits[0][3]);
+  assert.ok(
+    livre.includes('Message du dirigeant, reçu par Slack.'),
+    'la parole du dirigeant est livrée entière'
+  );
+  assert.match(
+    livre,
+    /je reprends la migration demain matin si/,
+    'et le texte disparu est RECOPIÉ — c’est la seule chose qui rende la perte réparable'
+  );
+  process.env.LIGNE_IMMOBILITE_MS = fenetreAvant;
+});
