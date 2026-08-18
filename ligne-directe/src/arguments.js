@@ -33,6 +33,14 @@ export const OPTIONS_A_VALEUR = new Set([
   // `ouvrir --au-gestionnaire acme D-1` prendrait « acme » pour le chantier — le canal
   // porterait le nom du client, sur une ligne INTERNE, c'est-à-dire publique.
   '--au-gestionnaire',
+  // `--minutes N` et `--pourquoi "..."` règlent le BAIL d'un pane (T-20260818-0078). Même piège,
+  // même côté, et il porte ici sur une garde : sans ces deux déclarations,
+  // `bail poser --pourquoi "banc T-…" w5:p3` poserait le bail sur « banc T-… » — un pane qui
+  // n'existe pas — pendant que la commande annonce un succès. Le pane RÉEL resterait balayable,
+  // et la mesure en cours serait soumise sous le nez de celui qui croyait l'avoir protégée.
+  // C'est le défaut d'origine de ce fichier, appliqué au mécanisme qui protège les essais.
+  '--minutes',
+  '--pourquoi',
 ]);
 
 /**

@@ -108,6 +108,141 @@ export const FENETRE_LIGNE_DU_DIRIGEANT_MS = 10_000;
 export const FENETRE_ENTRE_AGENTS_MS = 6_000;
 
 /**
+ * ═══ ③ LE BALAYAGE DES BOÎTES OUBLIÉES — TROISIÈME CHEMIN, ET SES RÉGLAGES SONT ICI ═══
+ *
+ * ⚠️ CES TROIS VALEURS N'ONT RIEN À FAIRE CHEZ LE VEILLEUR QUI LES CONSOMME, ET C'EST LE POINT
+ * LE PLUS IMPORTANT DE CE LOT (T-20260818-0078). Les écrire au point d'appel referait, mot pour
+ * mot, le défaut que T-20260818-0076 a payé : dix secondes dans `herdr.js`, cinq minutes dans
+ * `bin/livrer.js`, un lot qui annonce « dix » et un coordonnateur qui en mesure trois cents.
+ * **Deux réglages qu'on ne voit jamais ensemble, ce sont deux comportements dont un seul est
+ * annoncé.** Elles se lisent donc d'un seul coup d'œil, sous les deux fenêtres qu'elles
+ * complètent : régler l'une en croyant régler l'autre demande de ne pas lire la ligne d'à côté.
+ *
+ * ⚠️ LE DÉFAUT QU'ELLES FERMENT. Une boîte encombrée n'est délivrée que si QUELQU'UN ÉCRIT à son
+ * porteur — `delivrerLaBoite` n'est appelée que depuis les chemins de livraison. Une boîte que
+ * plus personne ne relance reste donc bloquée indéfiniment. Mesuré le 2026-08-18 : `ristigouche`
+ * bloqué **55 minutes** ; et deux fois le prompt de ronde d'un orchestrateur coincé dans sa
+ * propre boîte — **cet orchestrateur ne faisait plus ses rondes et rien ne le lui disait**.
+ *
+ * ⚠️ ET CE CHEMIN A UNE PROPRIÉTÉ QU'AUCUN DES DEUX AUTRES N'A : **PERSONNE NE L'ATTEND.** Les
+ * deux premiers doivent délivrer en quelques secondes parce qu'un humain ou un agent patiente au
+ * bout de la ligne — c'est ce budget qui leur interdit d'observer longtemps. Le balayeur, lui,
+ * ne fait attendre personne. Il peut donc exiger ce qu'ils ne peuvent pas : non pas une fenêtre
+ * plus longue, mais une immobilité **constatée sur plusieurs tours espacés**. C'est exactement
+ * ce qui sépare un banc d'essai vivant — qu'on écrit, qu'on relit, qu'on relance, et dont la
+ * boîte bouge — d'une boîte OUBLIÉE, qui ne bouge plus du tout. Une fenêtre continue, si longue
+ * soit-elle, ne sait pas faire cette différence-là.
+ *
+ * **BORNE ANNONCÉE, ET ELLE DÉCOULE DES TROIS VALEURS CI-DESSOUS** : une boîte figée est
+ * délivrée en **moins de ~4 minutes** (au pire trois tours de cadence après le tour qui l'a vue
+ * apparaître, plus la fenêtre finale), contre les 55 minutes mesurées.
+ */
+
+/**
+ * ③.a — UN TOUR PAR MINUTE.
+ *
+ * ⚠️ CE N'EST PAS UN DÉLAI D'ATTENTE, C'EST UN PAS DE MESURE. Il fixe l'écart entre deux
+ * observations du même texte, et c'est cet écart qui donne son sens aux tours : trois lectures
+ * à une seconde d'intervalle ne diraient rien de plus qu'une seule, alors que trois lectures
+ * espacées d'une minute disent que personne n'a touché ce clavier depuis deux minutes.
+ *
+ * ⚠️ ET C'EST AUSSI LE BUDGET D'UN TOUR. Les délivrances sont séquentielles : un tour qui
+ * durerait plus longtemps que cette cadence chevaucherait le suivant. C'est à l'appelant de ne
+ * jamais lancer un tour pendant qu'un autre court — la cadence est un intervalle ENTRE deux
+ * tours, jamais une horloge qui en démarre un troisième.
+ */
+export const CADENCE_DU_BALAYAGE_MS = 60_000;
+
+/**
+ * ③.b — TROIS TOURS DU MÊME TEXTE, AU MÊME PANE, D'AFFILÉE.
+ *
+ * ⚠️ C'EST LA GARDE, ET ELLE REMPLACE LA FENÊTRE — pas l'inverse. Un texte qui change d'un
+ * caractère entre deux tours remet le compteur à zéro : quelqu'un est devant ce pane, il
+ * soumettra lui-même. Deux tours suffiraient à écarter le bruit d'une lecture, mais pas
+ * quelqu'un qui compose lentement une phrase longue ; trois tours donnent DEUX minutes pleines
+ * d'immobilité observée, ce que ni la ligne du dirigeant ni le chemin entre agents ne peuvent
+ * s'offrir.
+ *
+ * ⚠️ CE QUE ÇA NE COUVRE PAS, ET IL FAUT LE DIRE : quelqu'un parti se faire un café en laissant
+ * une phrase à moitié tapée revient dans les trois minutes et trouve sa phrase soumise. C'est
+ * le même arbitrage qu'ailleurs, pris les yeux ouverts, et ce qui le rend tenable est le même :
+ * l'avis au destinataire, qui rend l'incident CONSTATABLE au lieu de le laisser muet.
+ */
+export const TOURS_DIMMOBILITE_EXIGES = 3;
+
+/**
+ * COMBIEN DE BOÎTES ON DÉLIVRE DANS UN MÊME TOUR — et le chiffre sort d'une mesure, pas d'un avis.
+ *
+ * ⚠️ POURQUOI UN PLAFOND EXISTE. Chaque délivrance se paie EN SÉRIE : sa fenêtre d'immobilité,
+ * puis la relecture qui constate la boîte vidée. Une passe à blanc sur le poste réel, le
+ * 2026-08-18, a trouvé **neuf candidats au même tour** — le cas n'est pas d'école, il est le
+ * régime ordinaire d'un poste où plusieurs agents dorment en même temps. Neuf délivrances, c'est
+ * environ deux minutes : **plus que la cadence entière**, pendant lesquelles rien du reste du
+ * poste n'est regardé. Sans plafond, la borne annoncée se dégraderait avec le nombre de
+ * candidats, et rien ne le dirait — une promesse plus large que ce que le code tient.
+ *
+ * ⚠️ POURQUOI TROIS. Pire cas mesuré par délivrance : dix secondes de fenêtre (texte tapé) plus
+ * trois de relecture, soit treize. Trois délivrances valent trente-neuf secondes ; la lecture des
+ * quatre-vingt-dix écrans en coûte une sur un poste calme. Le tour tient donc dans sa cadence de
+ * soixante secondes avec de la marge. **[non établi]** : ce que coûte un tour sur un poste
+ * saturé — mesuré une fois à 144 s, mais c'était la machine sous une autre charge, pas le code.
+ *
+ * ⚠️ CE PLAFOND NE PERD PERSONNE, et c'est la moitié qui compte. Les boîtes reportées gardent
+ * leur candidature pour le tour suivant. Les remettre à zéro ferait attendre trois minutes de
+ * plus à celles-là mêmes que le dispositif sert — le plafond punirait les boîtes oubliées à
+ * proportion de leur nombre.
+ */
+export const DELIVRANCES_PAR_TOUR = 3;
+
+/**
+ * COMBIEN D'ÉCRANS ON LIT DE FRONT — et le chiffre vient d'un mur qu'on a heurté, pas d'un calcul.
+ *
+ * ⚠️ CE QUI A ÉTÉ MESURÉ, ET LES TROIS MESURES NE DISENT PAS LA MÊME CHOSE. Un tour lit l'écran
+ * de chaque pane du poste, un appel par pane. Le 2026-08-18, sur le même poste :
+ *   • **0,6 à 0,8 s** pour 87 panes, poste calme ;
+ *   • **68 s puis 144 s** pour 96 panes, pendant qu'une suite d'essais et deux revues tournaient ;
+ *   • et un balayage à la main sur **97 panes a EXPIRÉ à deux minutes**.
+ *
+ * **Ce n'est pas le code qui varie d'un facteur deux cents, c'est la charge de la machine.** Un
+ * appel de processus coûte quelques millisecondes sur un poste au repos et une seconde sur un
+ * poste saturé ; quatre-vingt-dix-sept fois de suite, ça fait deux minutes — c'est-à-dire **le
+ * double de la cadence**, pendant lesquelles plus rien n'est regardé.
+ *
+ * ⚠️ ET LA GARDE ANTI-CHEVAUCHEMENT NE RÉPARE PAS ÇA, elle le rend seulement inoffensif : les
+ * tours s'espacent au lieu de se marcher dessus, donc la borne annoncée se dégrade en silence
+ * exactement quand le poste est chargé — c'est-à-dire quand il porte le plus de boîtes figées.
+ *
+ * On lit donc par paquets. Huit de front : assez pour que l'attente d'un appel couvre celle des
+ * autres, assez peu pour ne pas ajouter quatre-vingt-dix processus à un poste déjà saturé — ce
+ * qui aggraverait la cause qu'on soigne. **[non établi]** : le gain réel sous charge n'est pas
+ * mesuré ; ce qui est mesuré, c'est le coût en série, et il dépasse la cadence.
+ */
+export const ECRANS_LUS_DE_FRONT = 8;
+
+/**
+ * ③.c — LA FENÊTRE FINALE, PASSÉE À `fenetreDImmobilite` — dix secondes.
+ *
+ * ⚠️ ELLE NE PORTE PAS LA MÊME CHARGE QUE SES DEUX VOISINES, et c'est pour ça qu'elle peut être
+ * courte sans rien coûter. Chez elles, la fenêtre EST toute l'observation. Ici, l'observation a
+ * déjà eu lieu — deux minutes, sur trois tours — et cette fenêtre n'est plus que la dernière
+ * chance de voir revenir quelqu'un qui s'est remis à taper dans les secondes qui précèdent le
+ * geste. Dix secondes suffisent à voir des doigts sur un clavier ; c'est le seul travail qu'on
+ * lui demande.
+ *
+ * ⚠️ ET CE QUI LA BORNE PAR LE HAUT N'EST PAS un humain qui patiente — il n'y en a pas — mais la
+ * CADENCE : chaque candidat coûte cette fenêtre au tour, et un tour ne doit pas déborder sur le
+ * suivant. C'est une raison de ne pas l'allonger, pas une raison de la raboter.
+ *
+ * ⚠️ ELLE PASSE PAR `fenetreDImmobilite`, JAMAIS DIRECTEMENT — un texte COLLÉ rend zéro, parce
+ * qu'il n'y a rien à observer devant un texte arrivé d'un seul coup. La règle vit auprès du
+ * geste depuis T-20260818-0076 ; le troisième chemin l'hérite au lieu de la réécrire. Et
+ * `fenetreDImmobilite` JETTE si l'appelant ne nomme pas sa fenêtre : il n'y a pas de défaut
+ * silencieux, c'est délibéré, et c'est ce qui garantit que cette valeur-ci ne peut pas être
+ * remplacée en silence par celle d'un autre chemin.
+ */
+export const FENETRE_DU_BALAYAGE_MS = 10_000;
+
+/**
  * COMBIEN DE TEMPS OBSERVER CE TEXTE-LÀ — la nature du texte décide, jamais l'appelant.
  *
  * ⚠️ UN TEXTE COLLÉ N'A PERSONNE DERRIÈRE LUI. Il est arrivé d'un seul coup : il n'y a aucun
@@ -185,6 +320,7 @@ export async function delivrerLaBoite({
   immobiliteMs,
   essais = 10,
   delaiMs = 500,
+  encoreAutorise,
 }) {
   // ON LAISSE AU TEXTE LE TEMPS DE BOUGER. C'est toute la garde : un brouillon vivant bouge,
   // un message coincé ne bouge pas. Sans cette attente, on ne distinguerait pas les deux.
@@ -238,6 +374,24 @@ export async function delivrerLaBoite({
   // Et une seconde fois sur ce qu'on relit : le contenu a pu devenir un dialogue entre-temps.
   if (ressembleAUnChoix(apres)) return { ok: false, cause: 'choix', soumis: false };
 
+  // ⚠️ LE DERNIER REGARD AVANT LE GESTE — et il existe parce qu'une passe de revue de fond l'a
+  // exigé (T-20260818-0078), à raison.
+  //
+  // Toutes les gardes ci-dessus portent sur ce QU'ON VOIT : l'écran, la boîte, le texte. Aucune
+  // ne porte sur ce QU'ON SAIT D'AILLEURS — et entre le moment où un appelant décide de délivrer
+  // et celui où la touche part, il s'écoule la fenêtre d'immobilité : jusqu'à dix secondes pour
+  // un texte tapé. **Dix secondes pendant lesquelles quelqu'un peut réserver ce pane pour y
+  // monter un banc**, et pendant lesquelles ce module continuait, lui, sur une autorisation
+  // périmée. Le critère du jalon ne souffre pas cette nuance : « quand le balayeur passe, il ne
+  // touche pas un pane réservé — QUEL QUE SOIT le contenu de sa boîte ».
+  //
+  // ⚠️ L'ABSENCE DE VETO N'EST PAS UN REFUS. Les deux appelants historiques n'en passent aucun
+  // et ne changent pas d'un caractère : personne ne réserve un pane contre la parole du
+  // dirigeant. Le veto sert celui qui agit sans que personne ne l'attende.
+  if (typeof encoreAutorise === 'function' && !(await encoreAutorise())) {
+    return { ok: false, cause: 'plus-autorise', soumis: false };
+  }
+
   const envoi = await appelHerdr(commandes.soumettre, vers);
   for (let i = 0; i < Math.max(1, essais); i += 1) {
     const vu = await lireEcran(commandes.lireEcran, vers);
@@ -276,7 +430,21 @@ export async function delivrerLaBoite({
  * deux messages d'auteurs différents collés en un — ici l'auteur est l'émetteur, qui parle en
  * son nom de ce qu'il a trouvé.
  */
-export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) {
+/**
+ * ⚠️ `suite` — CE QUI VIENT APRÈS CET AVIS, ET IL A FALLU LE PARAMÉTRER (T-20260818-0078).
+ *
+ * Cet avis a été écrit pour DEUX chemins qui, tous les deux, livrent un message juste après :
+ * la phrase « puis j'ai livré mon message. Tu vas donc recevoir les deux. » y est vraie. Le
+ * troisième chemin — le balayage des boîtes oubliées — n'a RIEN à livrer : personne n'écrivait,
+ * c'est une ronde qui a trouvé la boîte figée. La même phrase y annonce donc un second message
+ * qui ne viendra jamais, et envoie le destinataire l'attendre.
+ *
+ * ⚠️ ON NE LE CORRIGE PAS EN COLLANT UN DÉMENTI DESSOUS. Un avis qui affirme puis se contredit
+ * est pire que les deux : c'est exactement le motif « un avis qui rassure à tort » que ce module
+ * ferme ailleurs. Le défaut par défaut reste `'message'` — les deux appelants existants ne
+ * changent pas d'un caractère.
+ */
+export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0, suite = 'message' } = {}) {
   // ⚠️ LE TEXTE EN ENTIER, JAMAIS UN APERÇU — exigé par l'orchestrateur en approuvant la
   // conception, et il a raison : « sans ça le destinataire voit un travail partir de chez lui
   // sans pouvoir dire lequel. C'est la différence entre un incident CONSTATABLE et un incident
@@ -307,8 +475,11 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   const ouverture =
     '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, ' +
     `${observation(immobiliteMs)}. Je l’ai SOUMIS pour ` +
-    'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
-    'les deux.\n\n';
+    'son auteur — sans y écrire un caractère — ' +
+    (suite === 'aucune'
+      ? 'et **aucun message ne suit celui-ci** : personne ne t’écrivait. Ta boîte était figée, ' +
+        'et une boîte pleine ne se signale pas toute seule.\n\n'
+      : 'puis j’ai livré mon message. Tu vas donc recevoir les deux.\n\n');
 
   // ⚠️ CE QU'ON A LU N'EST PARFOIS PAS LE TEXTE (T-20260817-0091) — et le citer comme s'il
   // l'était engage une signature sans dire sur quoi. Le 2026-08-17, un coordonnateur a reçu

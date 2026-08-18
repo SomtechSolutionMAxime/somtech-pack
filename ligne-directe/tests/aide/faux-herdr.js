@@ -85,6 +85,19 @@ const e = pane ? lire(pane) : null;
 // tenté. Écrit AVANT toute sortie, y compris les sorties d'erreur.
 appendFileSync(join(ETAT, 'appels.jsonl'), JSON.stringify(a) + '\\n');
 
+// ⚠️ L'INVENTAIRE PASSE PAR LE TRANSPORT, LUI AUSSI (T-20260818-0078). Ce faux binaire ne
+// servait PAS \`agent list\` : \`posteHerdr\` doublait \`agents()\` au niveau module, et tout ce
+// qui appelle le vrai \`agents()\` de \`herdr.js\` voyait donc **zéro agent** sur ce banc. Un
+// balayeur éprouvé là-dessus ne balaierait rien et rendrait vert sans avoir jamais balayé —
+// le banc qui ne peut pas échouer, une troisième fois dans ce dépôt.
+//
+// ⚠️ IL RÉPOND AVANT LA RECHERCHE DE PANE : \`agent list\` n'en désigne aucun, et la garde
+// \`agent_not_found\` d'en dessous le refuserait donc systématiquement.
+if (a[0] === 'agent' && a[1] === 'list') {
+  const f = join(ETAT, 'agents.json');
+  dit({ result: { agents: existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [] } });
+}
+
 // ⚠️ UN PANE INCONNU N'EST PAS UN PANE VIDE — herdr rend \`agent_not_found\` sur stdout, avec
 // un code de sortie 0. C'est le piège que le vrai module ferme ; le double doit le poser.
 if (!e) dit({ error: { code: 'agent_not_found', message: pane || 'sans pane' } });
@@ -145,6 +158,13 @@ export function posteHerdr(racine, agents, nom = 'herdr') {
   const faux = join(bin, 'herdr');
   writeFileSync(faux, BINAIRE(process.execPath));
   chmodSync(faux, 0o755);
+  // L'inventaire que le TRANSPORT servira — le même que celui du double de module, écrit une
+  // fois pour les deux. `agents()` ne garde que les entrées portant un `agent` : sans lui, la
+  // liste serait filtrée à vide et le banc redeviendrait aveugle.
+  writeFileSync(
+    join(etat, 'agents.json'),
+    JSON.stringify(agents.map((a) => ({ agent: 'claude', agent_status: 'idle', ...a })))
+  );
 
   const poste = {
     etat,

@@ -5,6 +5,51 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.70.0] - 2026-08-18
+
+*Un seul lot : PR #286 (T-20260818-0078), sous la demande `D-20260818-0006` et la livraison `J-20260814-0002`. Question du dirigeant, 10 h 46 : « **c quoi notre stratégie pour débloquer les boîtes automatiquement ?** ». Réponse honnête ce matin-là : il n'y en avait pas.*
+
+### Ajouté
+
+- **Une boîte de saisie oubliée se débloque TOUTE SEULE — sans qu'on écrive à l'agent, sans qu'un orchestrateur balaie, sans qu'un humain ouvre un terminal.** Jusqu'ici, `delivrerLaBoite` n'était appelée que depuis les chemins de **livraison** : le remède ne partait donc **que quand quelqu'un écrivait**. Une boîte que plus personne ne relance restait bloquée indéfiniment — et **le coût était asymétrique** : plus un agent est silencieux, moins on lui écrit, donc moins il a de chances d'être débloqué. *Le mécanisme échouait exactement là où il servait le plus.*
+
+  **Mesuré sur le poste réel, le 2026-08-18, veilleur relevé à 20 h 39 min 30 UTC** : **18 boîtes délivrées en 12 minutes**, sur **165 panes balayés à chaque tour**, **zéro avis perdu, zéro geste refusé, zéro tour sans inventaire**. Parmi elles : `matapedia`, que le coordonnateur avait dû débloquer à la main une heure plus tôt ; un pane bloqué depuis **plus de quatre heures** ; et un ordre `/goal` qui dormait, non soumis, chez l'agent d'une livraison.
+
+- **Le balayeur vit dans le veilleur, et il ne lui accorde AUCUN pouvoir nouveau.** Le point a été vérifié dans le code avant d'être retenu, puis contre-vérifié par le coordonnateur : le veilleur voit déjà tout le poste (`herdr.agents()` agrège toutes les sessions), écrit déjà **hors registre** (`diffuserConsigne`), et **délivre déjà** les boîtes occupées (`remettre()`, depuis `T-20260818-0049`). *On lui donne une raison de plus d'appeler ce qu'il appelle déjà, pas une capacité de plus.* Un service à part aurait dû recâbler la découverte des agents **et** le transport de l'avis — c'est-à-dire une **seconde copie du chemin de remise**, « une porte sur deux », le motif que ce dépôt a payé dix fois.
+
+- **Le bail — parce qu'aucun signe ne distingue un banc d'essai d'un agent en exercice.** Le ticket redoutait qu'un balayage automatique soumette la cible d'essai d'un autre agent et fausse son verdict. **Mesuré : 87 agents sur 87 portent une session Claude vivante** ; ni la session, ni le statut, ni le contenu ne séparent les deux populations. Se fier au nom (`cible-*`) aurait été *reconnaître une chose par un signe qui n'est pas la chose* — le défaut même de ce jalon. On ne devine donc pas : **on fait déclarer**. `ligne-directe bail poser <pane>` réserve un pane ; le balayeur s'en abstient **quel que soit le contenu de sa boîte**. Le bail **expire** — un bail éternel serait un trou permanent.
+
+- **La patience, le discriminant qui ne demande rien à personne.** Le balayeur a une propriété qu'aucun des deux autres chemins n'a : **personne ne l'attend**. Les autres doivent délivrer en moins de quinze secondes parce qu'un humain ou un agent patiente au bout ; lui peut exiger **le même texte, immobile, sur trois tours espacés d'une minute**. Un banc en cours de mesure bouge — on l'écrit, on le relit, on le relance ; une boîte oubliée ne bouge plus du tout. *Ça sépare les deux populations par ce qu'elles sont, pas par comment elles s'appellent.*
+
+- **Un avis qui dit ce qui est parti ET PAR QUOI.** Découvert en construisant : `avisDeBoiteBloquee` **n'avait aucun transport à lui** — sur les deux chemins existants il est *préfixé au message qu'on allait livrer de toute façon*. Le balayeur, lui, n'a rien à livrer : c'est sa définition. Sans ce constat, le critère « son auteur apprend que son texte a été soumis pour lui » **serait tombé en silence**. L'avis voyage donc seul, par la remise ordinaire, et il dit par quoi — là où les autres chemins n'en ont pas besoin, l'expéditeur étant visible dans le message qui suit.
+
+- **Le battement de cœur.** Chaque tour est journalisé, **même quand il n'a rien fait**. Le cas le plus cher du ticket était un orchestrateur dont le prompt de ronde dormait dans sa propre boîte : *il ne faisait plus ses rondes, et rien ne le lui disait*. Construire ce lot sans témoin aurait reproduit son défaut dans son propre correctif.
+
+### Corrigé — ce qu'une passe de revue de fond a REJETÉ, et le rejet était juste
+
+- **Le bail n'était relu qu'à la DÉCISION, jamais avant la touche.** Entre les deux s'écoule la fenêtre d'immobilité — **jusqu'à dix secondes** pendant lesquelles quelqu'un peut réserver le pane pour y monter un banc. *On décidait sur un état et on agissait sur un autre* : la famille de défauts payée toute la journée. `delivrerLaBoite` reçoit désormais un **veto ultime**, consulté juste avant le geste ; les deux appelants historiques n'en passent aucun et ne changent pas d'un caractère.
+- **Une lecture ratée effaçait le compteur d'immobilité** — « je n'ai pas vu » traité comme « le texte a changé ». Sur un poste où chaque écran se lit par un appel séparé, **un seul timeout remettait un pane à zéro**, donc trois minutes de plus, silencieusement. *La borne annoncée n'aurait tenu que si chaque tour lisait chaque pane sans faute* — hypothèse que personne n'avait posée.
+- **Rien ne bornait le nombre de délivrances par tour.** Mesuré ensuite, à blanc sur le poste réel : **neuf candidats au même tour**. Chacune se paie en série, donc un tour aurait duré plus que sa cadence entière. Un plafond de trois, **et les reportés GARDENT leur candidature** — les remettre à zéro aurait puni les boîtes oubliées à proportion de leur nombre. Rien n'est tronqué en silence : ce qui est reporté est compté sous sa cause et journalisé.
+
+### Technique
+
+- **Les écrans se lisent par paquets, et le chiffre vient d'un mur qu'on a heurté.** Le même balayage a coûté **0,6 à 0,8 s** pour 87 panes sur un poste calme, **68 s puis 144 s** pendant qu'une suite d'essais et deux revues tournaient, et un balayage à la main sur **97 panes a EXPIRÉ à deux minutes**. *Ce n'est pas le code qui varie d'un facteur deux cents, c'est la charge de la machine* — et la garde anti-chevauchement ne réparait pas ça, elle le rendait seulement inoffensif, en laissant la borne se dégrader **exactement quand le poste porte le plus de boîtes figées**.
+- **Les quatre réglages du balayeur vivent dans `delivrance.js`**, auprès des deux fenêtres d'immobilité qui y sont déjà — `CADENCE_DU_BALAYAGE_MS`, `TOURS_DIMMOBILITE_EXIGES`, `FENETRE_DU_BALAYAGE_MS`, `DELIVRANCES_PAR_TOUR`, `ECRANS_LUS_DE_FRONT`. Les écrire chez leur appelant aurait rejoué `T-20260818-0076` mot pour mot : **deux réglages qu'on ne voit jamais ensemble sont deux comportements dont un seul est annoncé**. Un essai garde ce placement.
+- **Le câblage du geste est en UN seul exemplaire** (`delivrerLaBoiteDuPane`, `herdr.js`), partagé par les trois chemins — extrait plutôt que recopié, et l'extraction est couverte par les quinze essais existants du chemin du dirigeant.
+- **Le faux `herdr` des essais sert enfin `agent list`.** Il ne le servait pas : un balayeur éprouvé dessus aurait vu **zéro agent, n'aurait rien balayé, et aurait rendu vert sans avoir jamais balayé**. Relevé **avant** d'écrire une ligne, et gardé par un essai qui échoue si le tour ne voit pas les agents que le banc a posés.
+- **Le banc du câblage déplace aussi le foyer**, pas seulement la racine : sinon il interroge le faux binaire une fois par session réelle du poste — mesuré, onze secondes pour un seul tour. *Un banc dont la réponse change selon le nombre de terminaux ouverts ne mesure plus le code, il mesure la machine.*
+- **640 essais, 0 échec.** Et **13 mutations rejouées sur l'état final** — pas sur un état antérieur : une preuve qui date d'avant un durcissement ne prouve plus ce qu'on croit. Chacune rougit sur son propre essai et son propre message. L'une d'elles a d'ailleurs révélé un essai qui ne gardait rien : en retirant `clearInterval(this.balayeur)` de `arreter()`, il **restait vert** — le drapeau `this.arrete` suffisait à museler le minuteur sans l'éteindre. L'essai lève désormais le drapeau.
+
+### ⚠️ Ce que ce lot NE garantit PAS, et il faut le lire
+
+> **Le balayeur tient sa borne TANT QUE LE VEILLEUR TOURNE. Il ne garantit RIEN si l'hôte est mort.**
+
+Mesuré le 2026-08-18 : `launchctl` ne compte pas ce service actif (`state = not running`, `runs = 1`, `LastExitStatus = 0`), et `KeepAlive` n'est armé que sur une sortie **non nulle** — or le veilleur sort avec **0** quand il constate qu'un autre tourne déjà. **`launchd` s'est donc retiré du jeu et ne le relancera pas avant le prochain démarrage du poste** ; ce qui le maintient en vie est le démarrage paresseux, c'est-à-dire *quelqu'un qui lui parle*.
+
+*C'est le défaut de ce ticket, un cran plus haut — le veilleur ne renaît que si on lui écrit, exactement comme la boîte ne se délivrait que si on écrivait à l'agent.* **La survie de l'hôte est un défaut distinct, plus vieux que ce lot, et elle a son propre ticket.** La borne annoncée ici est celle du balayeur, pas celle du poste : *un critère annoncé plus large que ce qu'on tient est le défaut même de ce jalon.*
+
+**[non établi]** — combien de temps le veilleur reste mort entre deux naissances. Le journal porte des **naissances**, pas des morts ; six aujourd'hui. *Je compte des naissances ; le trou est une durée.*
+
 ## [1.69.0] - 2026-08-18
 
 *Un seul lot : PR #285 (T-20260818-0076), sous la livraison `J-20260814-0002`. Une boîte de saisie bloquée mettait **cinq minutes** à être délivrée sur le chemin par lequel un agent parle à un autre, là où le critère du jalon en demande **moins de quinze secondes** — et le lot précédent avait annoncé « dix secondes » en réglant l'autre chemin.*
