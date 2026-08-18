@@ -21,7 +21,7 @@ import { contenuBoite, laPriseEstConstatee, estUnEspaceReserve } from './boite.j
 // ⚠️ LE REMÈDE EST REPRIS, PAS RÉÉCRIT (T-20260818-0049, règle d'or n°15). `delivrerLaBoite`
 // porte des gardes MESURÉES qui ont coûté un lot chacune — sur le texte coincé, sur l'écran,
 // sur l'immobilité. Une seconde copie n'hériterait jamais des corrections de la première.
-import { delivrerLaBoite, IMMOBILITE_PAR_DEFAUT_MS } from './delivrance.js';
+import { delivrerLaBoite, avisDeBoiteBloquee } from './delivrance.js';
 import { etatDeLEcran, refusDEcran, ecranAttendUnChoix } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
@@ -92,6 +92,13 @@ export function socketHerdr() {
 //
 // Dix lectures espacées de 300 ms, soit trois secondes : assez pour couvrir un terminal chargé,
 // assez court pour que sa parole ne poireaute pas quand la touche a vraiment échoué.
+// ⚠️ LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ, SUR LA LIGNE D'UN HUMAIN (T-20260818-0049).
+// Dix secondes : de quoi voir des doigts sur un clavier, pas de quoi faire attendre celui qui
+// écrit depuis Slack. À ne pas confondre avec `IMMOBILITE_PAR_DEFAUT_MS` (cinq minutes), réglé
+// pour le chemin où celui qui patiente est un agent — l'appliquer ici a fait pendre un essai
+// 300 secondes, mesuré, et aurait laissé le dirigeant muet autant de temps.
+const FENETRE_TEXTE_TAPE_MS = 10_000;
+
 const RELECTURES_APRES_ENVOI = 10;
 const DELAI_RELECTURE_MS = 300;
 
@@ -145,6 +152,10 @@ export async function remettre(pane, texte, { socket } = {}) {
   }
   // CE QU'ON VOIT AVANT D'ÉCRIRE — sans quoi rien de ce qu'on verra après ne prouvera quoi que
   // ce soit. Un état qui ne pouvait pas être différent n'est pas un témoin (T-20260815-0011).
+  // Ce qui partira réellement : le message, et — seulement si une boîte a été délivrée —
+  // l'avis qui dit au destinataire ce qui est parti en son nom.
+  let texteALivrer = texte;
+
   const avant = await etatDuPane(pane, socket);
 
   // ═══ 1. ON NE POSE RIEN DEVANT UN ÉCRAN DE CHOIX — relevé en REVUE DE FOND, bloquant, et il
@@ -239,36 +250,36 @@ export async function remettre(pane, texte, { socket } = {}) {
     // Ce chemin-ci, celui par lequel arrive la parole du dirigeant, a reçu l'interdit sans le
     // remède. Vingt-quatre heures pendant lesquelles il a dû ouvrir un terminal pour parler à
     // ses propres agents — et le refus le lui disait lui-même.
-    // ⚠️ LE DISCRIMINANT COLLÉ / TAPÉ TRANCHE AVANT TOUT — et il décide s'il y a un geste à
-    // poser, pas seulement combien de temps on attend (T-20260818-0049).
+    // ⚠️ LE DISCRIMINANT COLLÉ / TAPÉ DÉCIDE DE CE QU'ON OBSERVE — PAS DE QUI ON REFUSE.
     //
-    // Un texte COLLÉ se replie en `[Pasted text #N]`. Il vient d'un AGENT, il a DÉJÀ été envoyé
-    // par quelqu'un qui croit l'avoir remis. Le soumettre n'invente rien : ça achève un geste
-    // commencé. Mesuré : quatre blocages réels en une nuit, QUATRE messages d'agent, zéro
-    // brouillon humain.
+    // Il a d'abord décidé de la DURÉE de l'attente (5 min pour du tapé) : ça faisait patienter
+    // le dirigeant en silence. Il a ensuite décidé d'un REFUS SEC sur le tapé : ça le laissait
+    // PRIS. Mesuré, mot pour mot, ce qu'il recevait alors sur Slack — « Le geste : va voir
+    // l'écran (« herdr agent focus w5:p8 »), et renvoie ton message. » **Il ne peut pas.** Il
+    // est au téléphone. Le refus était juste, nommé, instantané, et il le laissait exactement
+    // où il était : « une porte sur deux » posée par le correctif qui ferme la première.
     //
-    // Un texte TAPÉ se lit entier. Quelqu'un est devant ce pane, au milieu d'une phrase.
-    // Soumettre la moitié d'une phrase envoie la moitié d'une phrase, et LE GESTE NE SE DÉFAIT
-    // PAS. On ne le pose pas — on refuse, et on le dit tout de suite.
+    // SA CONSIGNE TRANCHE : « je dois pouvoir débloquer en écrivant un message, ça va lancer
+    // les deux messages ». Son message doit PARTIR, même devant un texte tapé.
     //
-    // ⚠️ POURQUOI « TOUT DE SUITE » ET NON « APRÈS LE DÉLAI D'IMMOBILITÉ », qui est ce que fait
-    // l'autre appelant de `delivrerLaBoite`. Parce que CE CHEMIN-CI EST CELUI D'UN HUMAIN QUI
-    // ATTEND. Les cinq minutes d'immobilité ont été réglées là où celui qui patiente est un
-    // agent ; ici, elles ont fait pendre un essai existant pendant 300 secondes — mesuré — et
-    // elles auraient fait patienter le dirigeant en silence, ce qui est la panne qu'on ferme,
-    // pas celle qu'on ouvre. Sa règle : « on ne doit jamais être bloqué via le Slack, sinon on
-    // est pris ». Un refus INSTANTANÉ qui nomme le pane et le geste est le contraire d'être
-    // pris ; une attente muette de cinq minutes en est la forme exacte.
-    if (!estUnEspaceReserve(dejaLa)) {
-      throw new RemiseEchouee(
-        pane,
-        `quelqu'un est en train d'écrire dans la boîte de ${pane} (« ${dejaLa.slice(0, 60)}… ») — ` +
-          `c'est une phrase TAPÉE, pas un message d'agent resté coincé, et je ne la soumets pas à sa ` +
-          `place : envoyer la moitié d'une phrase ne se défait pas. Écrire par-dessus ne livrerait ` +
-          `pas deux messages non plus, ça en livrerait UN, les deux textes collés. ` +
-          `Le geste : va voir l'écran (« herdr agent focus ${pane} »), et renvoie ton message.`
-      );
-    }
+    // LA FORME QUI HONORE LES DEUX, et c'est `delivrerLaBoite` qui la porte déjà :
+    //   • le texte BOUGE pendant qu'on regarde → quelqu'un a les doigts sur le clavier. Il
+    //     soumettra lui-même dans quelques secondes. On s'abstient, on le dit, et l'état se
+    //     résout tout seul — transitoire et nommé, ce n'est pas « être pris ».
+    //   • le texte est IMMOBILE → son auteur est parti. On le soumet, et LE DESTINATAIRE EST
+    //     PRÉVENU de ce qui est parti en son nom.
+    //
+    // ⚠️ LA FENÊTRE EST COURTE, ET C'EST CE CHEMIN-CI QUI LE COMMANDE. Les cinq minutes de
+    // `IMMOBILITE_PAR_DEFAUT_MS` ont été réglées là où celui qui patiente est un agent. Ici
+    // c'est un humain, et sa ligne est tout l'objet du dispositif. Dix secondes voient des
+    // doigts sur un clavier ; elles ne font attendre personne.
+    //
+    // ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE DIRE : une fenêtre courte soumet plus souvent la phrase
+    // de quelqu'un qui a tapé la moitié puis s'est levé. C'est l'arbitrage du dirigeant, pris
+    // les yeux ouverts — et ce qui le rend tenable est l'AVIS ci-dessous, qui rend l'incident
+    // constatable au lieu de le laisser muet.
+    const colle = estUnEspaceReserve(dejaLa);
+    const fenetreMs = colle ? 0 : Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_TEXTE_TAPE_MS);
 
     const delivrance = await delivrerLaBoite({
       texteCoince: dejaLa,
@@ -288,11 +299,11 @@ export async function remettre(pane, texte, { socket } = {}) {
       },
       lireEcran: async () => ecranDe(pane, socket),
       dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
-      // AUCUNE ATTENTE : on ne délivre plus que du COLLÉ, et un texte collé est par construction
-      // déjà envoyé. `delivrerLaBoite` relit quand même avant de soumettre, et s'abstient si le
-      // contenu a bougé entre-temps — la garde reste, c'est seulement le délai qui n'a plus
-      // d'objet ici. Réglable pour les bancs, jamais pour gagner du temps en production.
-      immobiliteMs: Number(process.env.LIGNE_IMMOBILITE_MS || 0),
+      // Zéro pour un texte COLLÉ — il est par construction déjà envoyé, il n'y a rien à
+      // observer. La fenêtre ne sert qu'au texte tapé. `delivrerLaBoite` relit dans les deux
+      // cas avant de soumettre et s'abstient si le contenu a bougé : la garde ne dépend pas
+      // du délai, le délai ne fait que lui donner de quoi voir.
+      immobiliteMs: fenetreMs,
     });
 
     // ⚠️ ON NE PASSE QUE SUR CE QU'ON A VU. `ok` couvre deux issues : la boîte a été soumise, ou
@@ -309,6 +320,21 @@ export async function remettre(pane, texte, { socket } = {}) {
           `collés — je m’abstiens. Le geste : libère la boîte (« herdr agent focus ${pane} », puis ` +
           `soumets ou efface ce qui s’y trouve), et renvoie ton message.`
       );
+    }
+
+    // ⚠️ LE MOT QUI ACCOMPAGNE LE GESTE — sans lui, l'incident est INEXPLICABLE.
+    //
+    // On vient de soumettre le texte d'un tiers en son nom. Une boîte pleine ne se signale pas
+    // toute seule : sans cet avis, il voit un travail partir de chez lui sans pouvoir dire
+    // lequel. L'avis voyage par le chemin qu'on vient de libérer — aucun transport de plus à
+    // maintenir — et il n'existe QUE quand quelque chose a réellement eu lieu.
+    //
+    // ⚠️ CE N'EST PAS LA FUSION QU'ON INTERDIT. Le texte ajouté est LE NÔTRE, pas celui du
+    // tiers, et il est séparé du message. La fusion interdite, c'est deux messages d'AUTEURS
+    // DIFFÉRENTS collés en un ; ici l'auteur est l'émetteur, qui parle en son nom de ce qu'il
+    // a trouvé.
+    if (delivrance.soumis) {
+      texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs: fenetreMs })}\n\n${texte}`;
     }
   }
 
@@ -329,7 +355,7 @@ export async function remettre(pane, texte, { socket } = {}) {
   // se fait oublier.
   let reponse;
   try {
-    reponse = await herdr(['agent', 'prompt', pane, texte], socket);
+    reponse = await herdr(['agent', 'prompt', pane, texteALivrer], socket);
   } catch (err) {
     throw new RemiseEchouee(pane, err.message);
   }
