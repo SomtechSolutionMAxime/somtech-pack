@@ -68,7 +68,8 @@ cat > "$SRC/pack.json" <<'PJSON'
   "modules": {
     "core":     { "description": "c", "default": true,  "paths": [".claude/", "scripts/", "docs/"] },
     "features": { "description": "f", "default": true,  "paths": ["features/"] },
-    "absent":   { "description": "a", "default": false, "paths": [] }
+    "absent":   { "description": "a", "default": false, "paths": [] },
+    "fantome":  { "description": "p", "default": false, "paths": ["jamais-clone/"] }
   }
 }
 PJSON
@@ -138,6 +139,18 @@ installer "$PATH" "${WORK}/cible-sans-chemins" --modules absent
 echo "$OUT" | grep -qi 'aucun changement' \
   && ko "emprunte encore la formule du dépôt déjà à jour" \
   || ok "n'emprunte pas la formule du dépôt déjà à jour"
+
+echo "== D. Chemins DÉCLARÉS mais absents du clone : refus, et cause distincte =="
+# Sans ce cas, la moitié « chemins résolus mais aucun parcouru » ne serait
+# gardée par rien : compter les chemins AVANT le test de présence donnerait le
+# même verdict sur A, B et C, et personne ne le verrait.
+installer "$PATH" "${WORK}/cible-clone-incomplet" --modules fantome
+[ "$RC" -ne 0 ] \
+  && ok "sort en échec quand les chemins déclarés sont absents (rc=$RC)" \
+  || ko "sort en SUCCÈS (rc=$RC) sur un clone qui ne porte aucun chemin déclaré"
+echo "$OUT" | grep -qi 'clone' \
+  && ok "impute la panne au clone, non à pack.json" \
+  || ko "ne distingue pas un clone incomplet d'un pack.json muet"
 
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
