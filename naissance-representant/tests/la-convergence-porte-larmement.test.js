@@ -236,6 +236,25 @@ for (const role of ROLES) {
     assert.doesNotMatch(dit, /DÉSARMÉ/, 'et ne pas annoncer les deux états à la fois');
   });
 
+  test(`${role.nom} : un hook QUI N'EST PAS LE GARDE ne vaut pas « armé »`, async () => {
+    // ⚠️ CET ESSAI EXISTE PARCE QU'UNE MUTATION A SURVÉCU SANS LUI. Remplacer la sonde
+    // « la commande appelle le garde » par « la commande n'est pas vide » laissait la suite
+    // entièrement verte : le rendu annonçait « armé » sur n'importe quel hook.
+    //
+    // Ce n'est pas un cas de laboratoire — le pack distribue lui-même des hooks de session
+    // (vérification de version, état d'app). Un lieu qui n'en porterait qu'un s'entendrait
+    // dire protégé alors qu'il ne l'est pas : le rendu qui existe pour rompre un silence
+    // mentirait à sa place, ce qui est pire que le silence.
+    const { depot, lieu } = poserLieu(role);
+    const s = JSON.parse(readFileSync(settingsDu(lieu), 'utf8'));
+    s.hooks = { SessionStart: [{ hooks: [{ type: 'command', command: 'bash .claude/hooks/session-start-pack-version.sh' }] }] };
+    writeFileSync(settingsDu(lieu), `${JSON.stringify(s, null, 2)}\n`);
+
+    const { dit } = await converger(role, depot, { dryRun: true });
+    assert.match(dit, /⚠️ +DÉSARMÉ/, 'un hook étranger au garde laisse le lieu DÉSARMÉ');
+    assert.doesNotMatch(dit, /🛡️ +armé/, 'et ne doit jamais s’annoncer armé');
+  });
+
   test(`${role.nom} : à blanc, un lieu désarmé s'entend dire DÉSARMÉ — sans provoquer de blocage`, async () => {
     // ⚠️ LE COUPLE SYMÉTRIQUE EST LE CŒUR DE CE CONTRÔLE. Une sonde qui ne cherche qu'un mot
     // dans une sortie est satisfaite par n'importe quel texte qui le contient — un préfixe de
