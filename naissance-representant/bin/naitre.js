@@ -29,6 +29,7 @@
 
 import { dirname, resolve } from 'node:path';
 import { realpathSync, readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   poserGarde,
@@ -40,6 +41,7 @@ import {
   MODE_PAR_DEFAUT,
   agentPorteLeNom,
   repertoireDeLaSession,
+  cheminLieu,
   LieuAbsent,
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
@@ -50,6 +52,8 @@ import { verserLeLieu, exigerUnDepotGit, VersementImpossible, branchesQuiPortent
 import { expositionAlaNaissance, ATTENTE_NAISSANCE_MS } from '../src/naissance.js';
 import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
 import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
+import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
+import { chargerRegistre } from '../../ligne-directe/src/registre.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -87,7 +91,8 @@ function usage(code) {
     'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>]\n' +
       '                         [--role representant|orchestrateur] [--depot <chemin>]\n' +
       '                         [--amorce <fichier> | --amorce-texte "…"]\n' +
-      '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n'
+      '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n' +
+      '                         [--nom-agent <nom>]\n'
   );
   process.exit(code);
 }
@@ -170,7 +175,86 @@ async function main() {
   // Construire les commandes AVANT de créer quoi que ce soit : un nom que herdr refuserait
   // (`invalid_agent_name`), un rôle inconnu ou un espace manquant doivent arrêter la commande
   // ici, avant qu'un fichier soit écrit ou qu'un onglet soit ouvert.
-  const commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role, modele, mode });
+  // LA PRÉCONDITION LOCALE D'ABORD — un dépôt qui n'en est pas un ne pourra jamais porter le
+  // commit que la naissance exige, et poser d'abord pour l'apprendre ensuite laisserait un lieu
+  // à moitié posé : le demi-succès qu'on promet de ne jamais rendre.
+  //
+  // ⚠️ ELLE EST REMONTÉE ICI, AU-DESSUS DU BAPTÊME (E-20260818-0017), ET C'EST UN ESSAI QUI L'A
+  // EXIGÉ. Le baptême INTERROGE herdr pour relever le parc des noms ; le laisser au-dessus
+  // faisait partir un appel herdr sur un chemin qui n'aboutira jamais — « hors dépôt git, un
+  // ORCHESTRATEUR n'est pas posé à moitié » exige zéro appel, et il avait raison : on ne parle
+  // pas au poste pour préparer un refus qu'on connaît déjà.
+  try {
+    exigerUnDepotGit(REPO_ROOT);
+  } catch (err) {
+    process.stderr.write(`${err.message}\n`);
+    process.exit(1);
+  }
+
+  // ═══ QUEL NOM PORTERA-T-IL ? — tranché ICI, avant que quoi que ce soit existe.
+  //
+  // ⚠️ C'EST LE CŒUR DU LOT B (E-20260818-0017). Jusqu'ici le nom d'un agent était SIMPLEMENT
+  // l'argument transmis : les quatre rivières du poste avaient toutes été données à la main ou
+  // par une amorce, et le jour où personne n'y pensait, l'agent naissait sans rivière sans que
+  // rien ne le signale. Deux agents sur 42 le prouvaient (`orchestrateur`, `rev-pr31`).
+  //
+  // ⚠️ ET LE LIEU NE BOUGE PAS. `nom` reste le code du mandat — il nomme le dossier, il est
+  // versé dans le dépôt du chantier, son `CONTEXTE.md` décrit CE chantier. Seul le nom d'agent
+  // change (décision « lieu ≠ nom », T-20260818-0124). `avisDeCasse` dit l'écart quelques
+  // lignes plus bas : il était PRÉVU depuis T-20260814-0143, jamais interdit.
+  //
+  // Le parc herdr est interrogé SANS socket désigné — la session n'est résolue que plus bas, et
+  // la décision doit tomber avant. La mesure est donc partielle sur un poste à plusieurs
+  // sessions, et c'est DIT dans « nonVerifie » plutôt que conclu.
+  const nomAgentPropose = option(args, '--nom-agent');
+  const bapteme = nomDeLAgentQuiNait({
+    role,
+    lieu: cheminLieu(REPO_ROOT, nom, role),
+    code: nom,
+    propose: nomAgentPropose,
+    depot: REPO_ROOT,
+    listerAgents: () => {
+      const brut = execFileSync('herdr', ['agent', 'list'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      const agents = JSON.parse(brut)?.result?.agents ?? [];
+      return agents.map((a) => a?.name).filter(Boolean);
+    },
+    lireRegistre: () => chargerRegistre(),
+  });
+  if (!bapteme.nom) {
+    // RIEN N'A ÉTÉ CRÉÉ, et le refus le dit — il tombe avant la pose, avant le versement, avant
+    // le moindre appel herdr.
+    process.stderr.write(`${bapteme.message}\n  Rien n’a été créé : ni lieu, ni onglet, ni agent.\n`);
+    process.exit(1);
+  }
+  if (bapteme.avis) process.stderr.write(`${bapteme.avis}\n`);
+
+  // ⚠️ LE FIL ENTRE LES DEUX MESSAGES — relevé en revue de fond (passe 2, E-20260818-0017).
+  //
+  // `nomAgentHerdr` refuse ici un nom que herdr refuserait. Quand ce nom vient du `.nom-agent`
+  // du lieu — écrit à la main, puisqu'aucune naissance ne peut y mettre autre chose —, le
+  // baptême venait de dire « il est repris tel quel » et l'échec tombait deux lignes plus loin
+  // en parlant de « 1 à 32 caractères », SANS nommer le fichier ni le geste. L'opérateur lisait
+  // deux messages qui se contredisent, dont le second ne dit pas d'où vient le nom.
+  //
+  // On ne redit pas la règle de herdr ici — elle reste à son seul endroit. On ATTACHE le refus
+  // à sa cause, que seul cet appelant connaît.
+  let commandes;
+  try {
+    commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role, modele, mode, nomAgent: bapteme.nom });
+  } catch (err) {
+    if (bapteme.source === 'inscrit_dans_le_lieu') {
+      process.stderr.write(
+        `${err.message}\n` +
+          `  Ce nom vient du fichier « ${FICHIER_NOM_AGENT} » du lieu, où il a été écrit à la main — ` +
+          `aucune naissance n’aurait pu y inscrire un nom que herdr refuse.\n` +
+          `  Le geste qui lève le blocage : corrige « ${FICHIER_NOM_AGENT} » dans le lieu, ou efface-le ` +
+          `pour qu’une rivière soit attribuée de nouveau.\n` +
+          `  Rien n’a été créé : ni lieu, ni onglet, ni agent.\n`
+      );
+      process.exit(1);
+    }
+    throw err;
+  }
 
   // ═══ POSER LE LIEU S'IL MANQUE — le premier des gestes qu'un humain faisait à la main.
   //
@@ -180,16 +264,6 @@ async function main() {
   // revue. Poser un lieu client d'autorité serait franchir la seule frontière qu'il a demandé
   // de ne pas franchir. On s'arrête donc, et on NOMME le geste — c'est l'autre moitié de la
   // promesse : ne pas intervenir ne veut pas dire deviner.
-  // La précondition, AVANT de poser : un dépôt qui n'en est pas un ne pourra jamais porter le
-  // commit que la naissance exige, et poser d'abord pour l'apprendre ensuite laisserait un lieu
-  // à moitié posé — le demi-succès qu'on promet de ne jamais rendre.
-  try {
-    exigerUnDepotGit(REPO_ROOT);
-  } catch (err) {
-    process.stderr.write(`${err.message}\n`);
-    process.exit(1);
-  }
-
   let poseFaite = false;
   if (!existsSync(commandes.lieu)) {
     if (role !== 'orchestrateur') {
@@ -264,6 +338,34 @@ async function main() {
       throw err;
     }
   };
+  // ═══ INSCRIRE LE NOM DANS LE LIEU — AVANT de verser, pour qu'il parte dans le commit.
+  //
+  // ⚠️ SANS CE FICHIER, LE NOM DÉRIVE. L'attribution est déterministe, mais elle enjambe ce qui
+  // est déjà pris : un orchestrateur qui redémarre après qu'une autre rivière a été prise
+  // recevrait un AUTRE nom, et le dirigeant l'appellerait par un nom qu'il ne porte plus.
+  //
+  // ⚠️ ET SA PLACE ICI A ÉTÉ TROUVÉE PAR LA PREUVE RÉELLE, PAS PAR LA SUITE. Écrit plus bas —
+  // après le versement — le fichier existait sur le disque et n'était dans AUCUN commit :
+  // mesuré sur la première naissance réelle de ce lot, `git log --name-only` ne le portait pas.
+  // Un clone frais, un `git checkout`, un nettoyage d'arbre, et le nom était perdu **sans un
+  // mot** — le lieu restant par ailleurs parfaitement valide. C'est exactement le mode de
+  // panne de T-20260814-0139, où la garde d'ouverture vivait hors de git sur trois lieux
+  // clients sur cinq. Les essais ne pouvaient pas le voir : ils lisent le fichier, pas
+  // l'historique.
+  if (bapteme.attribue) {
+    try {
+      inscrireNomDansLeLieu(commandes.lieu, commandes.nom);
+    } catch (err) {
+      // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE. Le nom est décidé et l'agent le portera ; ce
+      // qui se perd est la FIDÉLITÉ de la prochaine renaissance, pas celle-ci. Refuser ici
+      // détruirait une naissance valide pour un fichier d'une ligne.
+      process.stderr.write(
+        `le nom « ${commandes.nom} » n’a pas pu être inscrit dans le lieu (${err.message}) — ` +
+          `il naîtra sous ce nom, mais sa prochaine renaissance pourra en recevoir un autre.\n`
+      );
+    }
+  }
+
   verse('le lieu de');
 
   // REFUSER UN LIEU QUE GIT NE PORTE PAS — la garantie, inchangée (T-20260814-0139).
@@ -299,6 +401,17 @@ async function main() {
   // `nomAgentHerdr` juste au-dessus. L'avis ne recalcule pas la règle de casse : deux
   // endroits qui portent la même règle divergent au premier changement de l'un (motif de
   // T-20260814-0101, refermé un cran plus haut le jour même).
+  // ⚠️ CE QU'ON N'A PAS PU MESURER SE DIT — et il ne se mêle JAMAIS aux noms qu'on a relevés.
+  // L'unicité d'un nom ne se mesure pas dans sa seule famille : un nom libre chez les agents
+  // peut être pris par un chantier, un canal ou un BRD. On relève ce qu'on atteint, on NOMME ce
+  // qu'on n'atteint pas, et on ne conclut rien du second.
+  if (bapteme.attribue && bapteme.nonVerifie?.length) {
+    process.stderr.write(
+      `l’unicité de « ${commandes.nom} » n’a pas pu être vérifiée partout — non mesuré : ` +
+        `${bapteme.nonVerifie.join(' · ')}.\n`
+    );
+  }
+
   const avis = avisDeCasse(nom, commandes.nom);
   if (avis) process.stderr.write(`${avis}\n`);
 

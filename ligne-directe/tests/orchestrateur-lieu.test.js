@@ -15,7 +15,7 @@
 // vrai gestionnaire de panes. Un double serait plus indulgent que le vrai service — c'est la
 // racine unique des sept défauts du lot jumeau.
 
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 import { preparerLieuOrchestrateur, verifierLigneOuvrable } from '../src/orchestrateur.js';
 import { preparerLieuRepresentant } from '../src/representant.js';
+import { posteFabrique } from './foyer-de-reference.js';
 import { etatLieu, GABARITS } from '../src/lieu-agent.js';
 import { JetonManquant, JetonVide, SERVICE_ROBOT, SERVICE_ECOUTE } from '../src/trousseau.js';
 import { variablesReferencees } from '../src/mcp-env.js';
@@ -31,6 +32,18 @@ import { variablesReferencees } from '../src/mcp-env.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const GABARITS_SRC = join(REPO, '.claude', 'templates');
+
+// LE FOYER DE RÉFÉRENCE — la garde de fraîcheur compare le gabarit servi à celui d'un pack
+// installé ; sans foyer fixe elle viserait `$HOME` et cette suite rougirait dès qu'une branche
+// touche à un gabarit (T-20260818-0133). Elle est toujours EXERCÉE : deux empreintes réelles,
+// simplement calculées sur la même source. Les essais qui amputent le gabarit du dépôt après
+// la pose du foyer font donc diverger les deux pour de vrai, exactement comme sur un poste.
+const bacs = [];
+const POSTE = posteFabrique(GABARITS_SRC, ['orchestrateur', 'gestionnaire-client'], bacs);
+after(() => {
+  POSTE.rendre();
+  for (const b of bacs) rmSync(b, { recursive: true, force: true });
+});
 
 /** Un dépôt jetable, avec les gabarits du pack déjà « installés » (précondition du lot). */
 function depotJetable({ roles = ['orchestrateur'] } = {}) {

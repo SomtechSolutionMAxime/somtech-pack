@@ -390,15 +390,33 @@ Le corpus fait foi : ce qui est déjà écrit prime sur ce qu'on inventerait, et
 > **Chaque unité de travail est menée par un agent nommé, joignable, dont on sait ce qu'il a livré.**
 > *0 agent anonyme · 0 agent né sans modèle déclaré · 0 brief dont la prise n'a pas été vérifiée.*
 
-## Le nom vient du mandat au ServiceDesk
+## Le nom d'un CHEF D'ÉQUIPE vient du mandat au ServiceDesk
 
-> **Un agent reçoit un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et il porte le code de ce mandat. Rien d'autre.**
+> **Un chef d'équipe reçoit un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et il porte le code de ce mandat. Rien d'autre.**
 
 - ✅ `e-20260807-0006` — l'epic qu'il mène
 - ✅ `d-20260807-0005` — la demande, quand il porte plusieurs epics de la même
 - ❌ `chef-equipe-orchestration`, `revue-pr180` — des noms inventés, raccordés à rien
 
 **Le nom vient du mandat, jamais du sujet du chantier.** C'est la faute qui revient le plus souvent parce qu'elle paraît descriptive : nommer un chef d'équipe d'après le sujet le rend **indistinguable de son orchestrateur**, qui porte déjà ce code.
+
+### ⚠️ Et TOI, orchestrateur, tu portes un nom de RIVIÈRE
+
+> **Qui ARBITRE porte une rivière. Qui EXÉCUTE porte le code de son mandat.**
+
+**Ce n'est pas une exception à la règle du dessus — c'est ce qui la rend applicable.** Un chef d'équipe vit le temps d'un epic ; toi, tu portes **plusieurs mandats successifs**, et un code unique te décrit donc mal par construction. Et la règle du dessus le dit elle-même : nommer un chef d'équipe d'après son sujet le rendrait indistinguable de son orchestrateur. **Une rivière supprime cette collision au lieu de la contourner.**
+
+- ✅ `matapedia`, `batiscan`, `ristigouche`, `bonaventure` — des rivières, portées par des orchestrateurs
+- ❌ `orchestrateur` — un rôle, que **tous** pourraient porter : il ne distingue personne
+- ❌ `rev-pr31` — un nom raccordé à une PR, dont on ne peut remonter à aucun chantier
+
+**Tu n'as rien à faire pour le recevoir.** `pack agent naitre` attribue la rivière **à la naissance**, sans que personne ait à la demander, et **refuse** un nom hors convention plutôt que de l'accepter en silence. *Avant que ce soit outillé, les quatre rivières du poste avaient toutes été données à la main — et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale : deux agents sur 42 étaient dans ce cas.*
+
+**⚠️ TON LIEU, LUI, GARDE LE CODE DU MANDAT.** `.orchestrateur/j-20260814-0001/` reste `.orchestrateur/j-20260814-0001/` même quand l'agent qui l'habite s'appelle `bonaventure`. Les deux ne servent pas la même chose : **le lieu est attaché à un chantier** — il est versé dans le dépôt de ce chantier, et son `CONTEXTE.md` décrit *ce* chantier ; **le nom sert à t'adresser la parole**. La naissance te le dit à voix haute quand les deux diffèrent, et c'est normal, pas une incohérence.
+
+**Ce que ça ne change pas** : ta traçabilité. Le code du mandat reste lisible dans le chemin de ton lieu, et la filiation agent ↔ lieu est inscrite au ServiceDesk à chaque naissance.
+
+**Un orchestrateur vivant qui porte encore un code ne se renomme pas** — renommer appartient à l'agent. Il recevra sa rivière **à sa renaissance**.
 
 **herdr impose les minuscules** (1 à 32 caractères, `a-z0-9-_`, initiale minuscule) ; sinon `invalid_agent_name`. La convention Somtech écrit `D-20260727-0004`, le nom porté est `d-20260727-0004`. **Toute comparaison de noms d'agents est donc insensible à la casse.**
 

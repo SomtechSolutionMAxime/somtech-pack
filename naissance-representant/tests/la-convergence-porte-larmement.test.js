@@ -39,7 +39,7 @@
 //
 // Traçabilité : T-20260818-0034, T-20260818-0006, RA-REL-014, RA-DIS-004.
 
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -53,6 +53,7 @@ import { COMMANDE_GARDE, fusionnerGarde, poserGarde } from '../src/naissance.js'
 // LA COMMANDE QUE L'HUMAIN TAPE — `run` du CLI, pas un appel direct à `cmdLieuUpdate` : ce
 // qui désarme est la commande entière, résolution du lieu et affichage compris.
 import { run } from '../../cli/src/cli.js';
+import { posteFabrique } from '../../ligne-directe/tests/foyer-de-reference.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -130,7 +131,27 @@ function poserLieu(role) {
   return { depot, lieu };
 }
 
-/** La convergence, telle qu'un humain la lance — et ce qu'elle a écrit à l'écran. */
+// LE FOYER DE RÉFÉRENCE de cette suite — voir `converger` juste dessous pour le motif.
+const bacsFoyer = [];
+const POSTE = posteFabrique(join(REPO, '.claude', 'templates'), ROLES.map((r) => r.gabarit), bacsFoyer);
+after(() => {
+  POSTE.rendre();
+  for (const b of bacsFoyer) rmSync(b, { recursive: true, force: true });
+});
+
+/**
+ * La convergence, telle qu'un humain la lance — et ce qu'elle a écrit à l'écran.
+ *
+ * ⚠️ `HOME` EST FIXÉ POUR LA SUITE ENTIÈRE, ET CE N'EST PAS UN CONTOURNEMENT (T-20260818-0133).
+ * La convergence compare le gabarit qu'elle sert au pack installé sur le poste — sous
+ * `$HOME/.claude/plugins/marketplaces/…`. Cette suite sert le gabarit DU DÉPÔT (`--source
+ * REPO`) : sans foyer fixe, elle rougirait sur un poste à jour dès qu'une branche touche à un
+ * gabarit, en restant verte en CI (qui n'a pas de marketplace). Le foyer porte EXACTEMENT le
+ * gabarit servi, donc la garde compare deux empreintes réelles et laisse passer — elle reste
+ * exercée, elle n'est pas désarmée. `HOME` plutôt qu'un paramètre : la commande n'a pas
+ * d'option de foyer, et lui en ajouter une ouvrirait une porte de production pour un besoin
+ * d'essai — `fraicheur-du-gabarit.test.js` l'interdit d'ailleurs par un essai dédié.
+ */
 async function converger(role, depot, { dryRun = false } = {}) {
   const dit = [];
   const log = console.log;
@@ -409,3 +430,38 @@ test('le garde du gabarit ne cite AUCUN chemin de poste absolu — il voyage che
     }
   }
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA CONVERGENCE N'EMPORTE PAS LE NOM DE L'AGENT — E-20260818-0017
+//
+// Le nom d'un orchestrateur vit dans son lieu (`.nom-agent`) pour que sa renaissance le
+// reprenne. Ce fichier n'appartient à AUCUN gabarit : la convergence ne le copie donc pas, et
+// `applyFiles` n'efface pas ce qu'elle ne copie pas. **C'est un raisonnement, et un
+// raisonnement n'est pas une garantie** — celui-ci tient tant que la convergence n'apprend pas
+// à faire le ménage. Le jour où elle l'apprendrait, le lieu perdrait son nom en silence, et la
+// renaissance suivante dériverait vers une autre rivière.
+//
+// ⚠️ ET IL N'EST PAS DANS `PRESERVE`, DÉLIBÉRÉMENT. `PRESERVE` protège ce que le gabarit
+// porterait sinon (`CONTEXTE.md`, écrit à la main par l'agent) ; `.nom-agent` n'y est pas
+// exposé du tout. L'y ajouter ferait croire qu'il court le même risque, et déplacerait
+// l'attention du vrai point : la convergence ne doit rien supprimer.
+
+const NOM_DE_L_AGENT = '.nom-agent';
+
+for (const role of ROLES) {
+  test(`${role.nom} — la convergence ne mange pas « ${NOM_DE_L_AGENT} », qu'aucun gabarit ne porte`, async () => {
+    const { depot, lieu } = poserLieu(role);
+    writeFileSync(join(lieu, NOM_DE_L_AGENT), 'eastmain\n');
+
+    const { code } = await converger(role, depot);
+    assert.equal(code, 0, 'la convergence doit réussir');
+
+    assert.equal(
+      readFileSync(join(lieu, NOM_DE_L_AGENT), 'utf8').trim(),
+      'eastmain',
+      'la convergence a emporté le nom de l’agent : sa prochaine renaissance recevra une autre rivière, ' +
+        'et le dirigeant l’appellera par un nom qu’il ne porte plus',
+    );
+  });
+}

@@ -113,6 +113,10 @@ Commandes :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
   agent    Fait naître un agent, du néant jusqu'à ce qu'il parle sur sa ligne :
            agent naitre <code> --depot <chemin> [--role …] [--modele …] [--amorce …]
+           Un ORCHESTRATEUR reçoit un nom de RIVIÈRE, attribué à la naissance sans
+           que personne n'ait à le demander ; son LIEU garde le code du mandat. Un
+           chef d'équipe, lui, porte le code de son mandat. --nom-agent <nom> passe
+           outre l'attribution, et un nom hors convention est refusé sans rien créer.
            Elle pose le lieu s'il manque, le VERSE au dépôt, ouvre l'espace au besoin,
            fait naître en DÉCLARANT le modèle et le mode, et vérifie PAR L'ÉCRAN que
            l'agent peut réellement recevoir. Devant un état qu'elle ne reconnaît pas,

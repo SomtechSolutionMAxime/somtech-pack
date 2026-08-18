@@ -46,6 +46,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { poserGarde, MODELE_PAR_DEFAUT, MODE_PAR_DEFAUT } from '../src/naissance.js';
+import { estUneRiviere, FICHIER_NOM_AGENT, nomInscritDansLeLieu } from '../../ligne-directe/src/nom-de-riviere.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_NAISSANCE = resolve(HERE, '..');
@@ -157,6 +158,9 @@ function installerFauxHerdr(scenario = {}) {
     ecran: 'pret',
     repertoire: null,
     nomPorte: null,
+    // LE PARC DES NOMS que `agent list` rend — vide par défaut, c'est-à-dire un poste où
+    // aucune rivière n'est prise. Les essais qui éprouvent la renaissance le peuplent.
+    agents: [],
     ...scenario,
   };
   writeFileSync(journal, '');
@@ -253,6 +257,13 @@ if (cmd === 'agent get') {
       },
     },
   }, 0);
+}
+
+// \`agent list\` — la forme EXACTE mesurée le 2026-08-18 sur ce poste : un \`result.agents\`
+// dont chaque entrée porte un \`name\`. C'est ce que le relevé du parc lit pour savoir quelles
+// rivières sont déjà portées (E-20260818-0017).
+if (cmd === 'agent list') {
+  sortir({ id: 'cli:agent:list', result: { agents: (sc.agents || []).map((n) => ({ agent: 'claude', name: n, pane_id: 'w9:pX' })) } }, 0);
 }
 
 if (cmd === 'agent prompt') sortir({ result: { type: 'agent_prompted' } }, 0);
@@ -379,7 +390,7 @@ const nombreDeCommits = (depot) => {
 //   git:    false → un répertoire qui n'est pas un dépôt (une installation de poste) ;
 //   poser:  false → aucun lieu du tout.
 let compteur = 0;
-function avecLieu(faire, prefixe = 'smoke', { verser = true, git: avecGit = true, poser = true, nom = null } = {}) {
+function avecLieu(faire, prefixe = 'smoke', { verser = true, git: avecGit = true, poser = true, nom = null, role = 'representant' } = {}) {
   compteur += 1;
   const client = nom || `${prefixe}-${process.pid}-${compteur}`;
   const depot = mkdtempSync(join(tmpdir(), 'smtk-naitre-depot-'));
@@ -390,11 +401,19 @@ function avecLieu(faire, prefixe = 'smoke', { verser = true, git: avecGit = true
     git('config', 'user.name', 'essai');
   }
 
-  const lieu = join(depot, '.gestionnaire', client);
+  // ⚠️ LE LIEU EST CELUI DU RÔLE, et son en-tête aussi : `roles.js` reconnaît un lieu par ce
+  // qu'il CONTIENT, pas seulement par son chemin. Un lieu d'orchestrateur portant l'en-tête du
+  // représentant serait un lieu que la garde ne reconnaîtrait pas — le double serait alors plus
+  // indulgent que le vrai, motif que ce fichier documente en tête et refuse.
+  const dossier = role === 'orchestrateur' ? '.orchestrateur' : '.gestionnaire';
+  const enTetes = role === 'orchestrateur'
+    ? ["# Tu es l'orchestrateur de ce chantier\n", '# Ce qui est propre à ce dépôt\n']
+    : ['# Tu es le représentant de ce client\n', "# Ce qu'on sait de ce client\n"];
+  const lieu = join(depot, dossier, client);
   if (poser) {
     mkdirSync(join(lieu, '.claude'), { recursive: true });
-    writeFileSync(join(lieu, 'CLAUDE.md'), '# Tu es le représentant de ce client\n');
-    writeFileSync(join(lieu, 'CONTEXTE.md'), "# Ce qu'on sait de ce client\n");
+    writeFileSync(join(lieu, 'CLAUDE.md'), enTetes[0]);
+    writeFileSync(join(lieu, 'CONTEXTE.md'), enTetes[1]);
     writeFileSync(join(lieu, '.mcp.json'), '{"mcpServers":{"servicedesk":{}}}\n');
     writeFileSync(join(lieu, '.claude', 'settings.json'), '{"permissions":{"allow":["mcp__servicedesk__*"]}}\n');
   }
@@ -1124,3 +1143,175 @@ test('naitre.js se TAIT quand elle n’a rien abaissé — un avis systématique
     assert.equal(r.code, 0, `naissance attendue réussie — stderr: ${r.stderr}`);
     assert.doesNotMatch(r.stderr, /adresse|abaiss/i, `aucun avis de casse attendu — stderr: ${r.stderr}`);
   }));
+
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE NOM DE RIVIÈRE — E-20260818-0017, T-20260818-0140
+//
+// Le défaut mesuré le 2026-08-18 : le nom d'un agent est L'ARGUMENT TRANSMIS. Les quatre
+// rivières portées sur ce poste — `matapedia`, `batiscan`, `ristigouche`, `bonaventure` — ont
+// TOUTES été données à la main ou par une amorce. Il n'y a jamais eu de mécanisme : le jour où
+// personne n'y pense, l'agent naît sans rivière et rien ne le signale. Deux agents sur 42 le
+// prouvaient déjà (`orchestrateur`, `rev-pr31`).
+//
+// Ces essais font naître SANS QUE RIEN NE DEMANDE DE NOM — c'est la seule forme qui prouve un
+// mécanisme plutôt qu'une consigne bien suivie.
+
+test('un ORCHESTRATEUR qui naît porte une RIVIÈRE — sans que rien ne la lui demande', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      installerFauxHerdr({ repertoire: lieu });
+
+      const r = lancerNaitre(code, { role: 'orchestrateur' });
+
+      assert.equal(r.code, 0, `naissance attendue — stderr: ${r.stderr}`);
+      const rendu = JSON.parse(r.stdout);
+      assert.ok(
+        estUneRiviere(rendu.agent),
+        `l’agent porte « ${rendu.agent} » — aucun mécanisme ne lui a donné de rivière`,
+      );
+      // ⚠️ ET LE LIEU N'A PAS BOUGÉ : il porte le code du mandat. C'est la moitié de la
+      // décision « lieu ≠ nom » (T-20260818-0124) que rien d'autre ne garde.
+      assert.equal(rendu.nom, code, 'le lieu doit continuer de porter le code du mandat');
+      assert.ok(lieu.endsWith(code), 'le chemin du lieu porte le code, pas la rivière');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}` },
+  ));
+
+test('un REPRÉSENTANT ne reçoit AUCUNE rivière — la règle ne déborde pas sur qui exécute', () =>
+  avecLieu((client, lieu) => {
+    installerFauxHerdr({ repertoire: lieu });
+    const r = lancerNaitre(client);
+    assert.equal(r.code, 0, `naissance attendue — stderr: ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.agent, client.toLowerCase(), 'un représentant porte le nom de son lieu');
+    assert.equal(estUneRiviere(rendu.agent), false);
+  }));
+
+test('un nom hors convention est REFUSÉ, et RIEN n’a été créé — prouvé par le disque et par le journal', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      const journal = installerFauxHerdr({ repertoire: lieu });
+
+      const r = spawnSync(process.execPath, [
+        BIN, code, '--workspace', 'w9', '--depot', depot, '--role', 'orchestrateur',
+        '--nom-agent', 'rev-pr31',
+      ], { env: { ...process.env, NAISSANCE_ESSAIS: '3', NAISSANCE_DELAI_MS: '5', HERDR_SOCKET_PATH: '' } });
+
+      assert.equal(r.status, 1, 'refus attendu');
+      const stderr = (r.stderr ?? '').toString();
+      assert.match(stderr, /rev-pr31/, 'le refus nomme ce qu’il refuse');
+      assert.match(stderr, /rivière/, 'et le motif, pas seulement un « non »');
+      assert.match(stderr, /Rien n’a été créé/, 'et il DIT que le disque est intact');
+      // ⚠️ LE DIRE NE SUFFIT PAS — on le mesure. Un refus qui annonce « rien n'a été créé » en
+      // laissant un onglet derrière lui est exactement le demi-succès que ce module refuse.
+      assert.equal(existsSync(join(lieu, FICHIER_NOM_AGENT)), false, 'aucun nom inscrit');
+      assert.equal(appelsJournalises(journal).length, 0, 'et aucun appel herdr n’est parti');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}r` },
+  ));
+
+test('la RENAISSANCE reprend le nom inscrit — un orchestrateur ne change pas de nom en redémarrant', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      installerFauxHerdr({ repertoire: lieu });
+
+      const premiere = JSON.parse(lancerNaitre(code, { role: 'orchestrateur' }).stdout);
+      assert.ok(estUneRiviere(premiere.agent));
+      assert.equal(nomInscritDansLeLieu(lieu).nom, premiere.agent, 'le lieu porte désormais le nom');
+
+      // ⚠️ LE PARC A CHANGÉ ENTRE LES DEUX : la rivière qu'il porte est maintenant prise (par
+      // lui). Sans le fichier, l'attribution l'enjamberait et lui donnerait un AUTRE nom — le
+      // dirigeant l'appellerait par un nom qu'il ne porte plus.
+      installerFauxHerdr({ repertoire: lieu, agents: [premiere.agent] });
+      const seconde = JSON.parse(lancerNaitre(code, { role: 'orchestrateur' }).stdout);
+
+      assert.equal(seconde.agent, premiere.agent, 'la renaissance doit reprendre le même nom');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}b` },
+  ));
+
+test('l’unicité NON VÉRIFIÉE est DITE — jamais conclue libre, et jamais mêlée aux noms relevés', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      installerFauxHerdr({ repertoire: lieu });
+      const r = lancerNaitre(code, { role: 'orchestrateur' });
+      assert.equal(r.code, 0, `naissance attendue — stderr: ${r.stderr}`);
+      assert.match(
+        r.stderr,
+        /n’a pas pu être vérifiée partout/,
+        'ce qu’on n’a pas mesuré doit se dire là où un humain regarde',
+      );
+      assert.match(r.stderr, /ServiceDesk/, 'et nommer ce qui est resté hors d’atteinte');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}c` },
+  ));
+
+test('l’avis d’écart NE DIT PLUS une cause fausse — le lieu porte le code, l’agent porte son nom', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      installerFauxHerdr({ repertoire: lieu });
+      const r = lancerNaitre(code, { role: 'orchestrateur' });
+      assert.equal(r.code, 0, `naissance attendue — stderr: ${r.stderr}`);
+      // ⚠️ AVANT CE LOT, L'ÉCART NE POUVAIT VENIR QUE DE LA CASSE, et le message l'affirmait.
+      // Servi devant « bonaventure » / « j-2026… », il aurait envoyé chercher du côté des
+      // majuscules un écart qui n'en vient pas — un message qui explique par une cause fausse
+      // est pire qu'un message absent.
+      assert.match(r.stderr, /le lieu porte le code du mandat/);
+      assert.doesNotMatch(r.stderr, /herdr n’accepte que les minuscules/);
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}d` },
+  ));
+
+test('le nom inscrit est VERSÉ, pas seulement écrit — un clone frais doit le retrouver', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      installerFauxHerdr({ repertoire: lieu });
+
+      const rendu = JSON.parse(lancerNaitre(code, { role: 'orchestrateur' }).stdout);
+      assert.ok(estUneRiviere(rendu.agent));
+
+      // ⚠️ CET ESSAI EXISTE PARCE QUE LA PREUVE RÉELLE A TROUVÉ CE QUE LA SUITE NE VOYAIT PAS.
+      // L'inscription tombait APRÈS le versement : le fichier était sur le disque, dans aucun
+      // commit. Un `git checkout`, un clone frais, et le nom disparaissait SANS UN MOT — le
+      // lieu restant par ailleurs valide. Les essais lisaient le fichier ; l'historique, non.
+      // C'est le mode de panne de T-20260814-0139, rejoué un fichier plus loin.
+      const verses = fichiersVerses(depot);
+      const chemin = verses.find((f) => f.endsWith(FICHIER_NOM_AGENT));
+      assert.ok(
+        chemin,
+        `« ${FICHIER_NOM_AGENT} » n’est dans AUCUN commit — il vit sur ce disque seulement, et ` +
+          `un clone frais ferait dériver le nom de l’agent. Versés : ${verses.join(', ')}`,
+      );
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}e` },
+  ));
+
+test('un « .nom-agent » que herdr refuserait est un refus QUI NOMME SA CAUSE — pas deux messages sans fil', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      const journal = installerFauxHerdr({ repertoire: lieu });
+      // Écrit à la main : aucune naissance ne peut inscrire un nom que herdr refuse.
+      writeFileSync(join(lieu, FICHIER_NOM_AGENT), 'Mon Agent !!\n');
+
+      const r = lancerNaitre(code, { role: 'orchestrateur' });
+
+      assert.equal(r.code, 1, 'refus attendu');
+      // ⚠️ RELEVÉ EN REVUE DE FOND. Avant, l'opérateur lisait deux messages qui se
+      // contredisent : le baptême disait « il est repris tel quel », puis l'échec parlait de
+      // « 1 à 32 caractères » sans jamais nommer le fichier d'où venait le nom ni le geste.
+      assert.match(r.stderr, /1 à 32 caractères/, 'la règle de herdr est dite');
+      assert.match(r.stderr, /\.nom-agent/, 'et le FICHIER d’où le nom vient est nommé');
+      assert.match(r.stderr, /efface-le/, 'et le geste qui lève le blocage');
+      assert.match(r.stderr, /Rien n’a été créé/);
+      assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr n’est parti');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}f` },
+  ));

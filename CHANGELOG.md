@@ -5,6 +5,33 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionné] - 2026-08-18
+
+*Un seul lot : PR #288 (`E-20260818-0017`, stories `T-20260818-0139/0140/0141`), sous la demande `D-20260818-0008`. Le nom d'un agent était **simplement l'argument transmis** — il n'y avait jamais eu de mécanisme, et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale.*
+
+### Ajouté
+
+- **Un orchestrateur qui naît porte un nom de rivière, par mécanisme** (`T-20260818-0140`, PR #288) — **mesuré le 2026-08-18** : `0` occurrence de « rivière » dans tout le dépôt, et `nomAgentHerdr` n'ajustait que la casse du nom reçu. Les quatre rivières du poste — `matapedia`, `batiscan`, `ristigouche`, `bonaventure` — avaient **toutes** été données à la main ou par une amorce. Le parc en portait déjà la conséquence : sur 40 agents, `orchestrateur` (un rôle que **tous** pourraient porter) et `e-0004-reprise` (raccordé à rien), sans que personne s'en aperçoive. *Une règle que rien ne fait respecter produit exactement ce parc-là.*
+- **Un nom hors convention est refusé avant la moindre écriture** — ni lieu, ni onglet, ni agent, ni même un appel à herdr. Le refus dit le motif **et** les gestes qui le lèvent.
+- **L'unicité se mesure hors de la seule famille des agents** : parc herdr, **chantiers et canaux** du registre des lignes, lieux déjà posés. Le ServiceDesk et les BRD restent hors d'atteinte du poste — c'est **dit**, dans un champ séparé de ce qui a été relevé, jamais conclu libre. *Un nom libre chez les agents peut être pris ailleurs : le motif était déjà payé sur ce dépôt.*
+- **Le nom attribué est inscrit dans le lieu et versé avec lui**, pour qu'une renaissance reprenne le même — un orchestrateur qui change de nom en redémarrant n'est plus adressable.
+
+### Modifié
+
+- **`R3` amendé à la source** (`T-20260818-0141`) : le gabarit disait *« un agent … porte le code de ce mandat. Rien d'autre »*, avec `revue-pr180` pour contre-exemple — c'est-à-dire **le contraire** de la règle tranchée. Il dit désormais **à qui** il s'applique : la rivière pour qui **arbitre**, le code de mandat pour qui **exécute**. **Le LIEU garde le code du mandat** dans les deux cas ; seul le nom d'agent change.
+- **L'avis d'écart cesse d'expliquer par une cause fausse** : il annonçait « herdr n'accepte que les minuscules » devant `bonaventure` / `j-2026…`, ce qui envoyait chercher du côté des majuscules un écart qui n'en vient pas.
+
+### Corrigé
+
+- **Les 3 suites de pose partent d'un foyer fixe, plus du poste qui les exécute** (`T-20260818-0139`, ferme `T-20260818-0133`) — une seule ligne ajoutée à un gabarit faisait rougir **34 essais**, et l'asymétrie était le piège : **rouge sur un poste à jour, vert en CI**, où aucune référence n'existe.
+- **Un `.nom-agent` illisible ne se lit plus « aucun nom »** — relevé en revue de fond. Le `catch` avalait tout : la naissance attribuait alors une **autre** rivière à un lieu qui en portait déjà une, sans que personne l'apprenne. `ENOENT` est la seule absence ; le reste est une mesure manquée, qui **refuse** plutôt que de faire dériver un nom en silence.
+- **Un `.nom-agent` corrompu rend un refus qui nomme sa cause** — l'opérateur lisait deux messages contradictoires, dont le second ne disait ni le fichier ni le geste.
+
+### Technique
+
+- **Les deux chiffres de la garde vivent dans le dépôt**, sur un parc figé avec sa date et sa méthode — *un chiffre que personne d'autre ne peut refaire n'est pas une mesure*. Attrapé à raison : 2 noms hors convention sur 40, plus 33 codes de mandat. Refusé à tort dans le périmètre : **0**. Coût assumé de la liste blanche, chiffré plutôt que tu : 8 rivières réelles hors liste seraient refusées, et chaque refus dit comment le lever.
+- **La règle du métier est gardée par sa FONCTION** (`CONTROLES` + `MUTATIONS` + banc de faux positifs) après qu'une revue a vidé la première garde : quinze lignes de prose remplacées par leurs seules puces laissaient six essais **verts**. Trois moitiés gardées, trois mutations qui les éprouvent — et **6 reformulations légitimes écrites à l'aveugle** ont fait tomber 2 faux refus, corrigés sans perdre la prise.
+
 ## [1.71.0] - 2026-08-18
 
 *Un seul lot : PR #287 (`E-20260818-0014`, stories `T-20260818-0111/0112/0113`), sous la demande `D-20260818-0008`. La pose d'un lieu d'agent vérifiait que le gabarit était **présent**, jamais qu'il était le **bon** — et servait donc, en rendant `ok:true`, un métier vieux de vingt-et-une versions.*

@@ -354,6 +354,55 @@ export const CONTROLES = [
   },
 
   {
+    id: 'la-riviere-nomme-qui-arbitre',
+    quoi: 'le métier enseigne que l’orchestrateur porte un nom de RIVIÈRE, et que son LIEU garde le code du mandat — les deux moitiés, pas une',
+    verifier({ metier }) {
+      // ⚠️ CETTE GARDE EXISTE PARCE QU'UNE REVUE DE FOND A VIDÉ LA PRÉCÉDENTE (E-20260818-0017).
+      // Les deux essais posés dans `naissance-representant/tests/metier-et-garde-s-accordent`
+      // font juger les EXEMPLES du gabarit par le code — un accord réel, et qui reste utile.
+      // Mais ils ne lisent que les puces « - ✅ `nom` » / « - ❌ `nom` » : la passe 2 a remplacé
+      // les quinze lignes de prose par un simple « ### Divers » suivi des mêmes puces, et les
+      // six essais sont restés VERTS. Un gabarit vidé de toute explication de la règle passait
+      // la garde sans encombre — et un orchestrateur qui le lirait n'apprendrait plus rien.
+      //
+      // ⚠️ ET C'EST LE MOTIF « UNE MOITIÉ SURVIT, LE LIEU NON » : la règle a DEUX moitiés, et
+      // une réécriture en perd typiquement une. Dire « tu portes une rivière » sans dire « ton
+      // lieu garde le code du mandat » ferait renommer les lieux à la première renaissance —
+      // c'est exactement ce que la décision de conception a écarté (T-20260818-0124), et ça
+      // jetterait le travail de convergence des lieux déjà versés. Les deux sont gardées.
+      // ⚠️ LES SONDES CHERCHENT LA CO-PRÉSENCE, JAMAIS UN ORDRE DE MOTS — et ce n'est pas un
+      // raffinement : le banc des faux positifs l'a EXIGÉ. Écrites d'abord comme « lieu … puis
+      // code du mandat », elles rougissaient sur deux reformulations parfaitement légitimes
+      // (« C'est le code du mandat, en revanche, que garde ton lieu », et une citation mise à
+      // la voix passive). 2 faux refus sur 6 — et une garde qui crie sur du texte correct se
+      // fait retirer par le premier qui la rencontre, en emportant ce qu'elle gardait vraiment.
+      // Les trois mutations qui les éprouvent mordent toujours : la prise n'a pas été échangée
+      // contre le silence.
+      exigePolarite(
+        metier,
+        /^(?=[\s\S]*orchestrateur)(?=[\s\S]*rivière)(?=[\s\S]*port)/i,
+        'l’orchestrateur porte un nom de rivière',
+        { inverse: /orchestrateur[^.]{0,60}porte le code de (son|ce) mandat/i },
+      );
+      exigePolarite(
+        metier,
+        /^(?=[\s\S]*\blieu\b)(?=[\s\S]*code du mandat)/i,
+        'le LIEU de l’orchestrateur garde le code du mandat — seul son nom d’agent change',
+        { inverse: /lieu[^.]{0,60}(porte|prend|reçoit)[^.]{0,40}rivière/i },
+      );
+      // La moitié qui ferme : la règle ne doit pas déborder sur qui exécute. Sans elle, « tout
+      // agent porte une rivière » se relit comme la règle, et les chefs d'équipe redeviennent
+      // indistinguables de leur orchestrateur — l'argument que R3 porte lui-même.
+      exigePolarite(
+        metier,
+        /^(?=[\s\S]*chef d['’]équipe)(?=[\s\S]*code)(?=[\s\S]*mandat)/i,
+        'un chef d’équipe continue de porter le code de son mandat',
+        { inverse: /chef d['’]équipe[^.]{0,60}(porte|reçoit)[^.]{0,40}rivière/i },
+      );
+    },
+  },
+
+  {
     id: 'le-niveau-se-lit-dans-le-role',
     quoi: 'aucun seuil ne décide s’il faut un chef d’équipe — le niveau se lit dans le rôle, et la question ne se pose pas',
     verifier({ metier }) {
@@ -3899,6 +3948,44 @@ export const CONTROLES = [
  * des garanties dont le contrôle dédié est décoratif.
  */
 export const MUTATIONS = [
+  // ── LE NOM DE RIVIÈRE (E-20260818-0017) — les trois moitiés de la règle, retournées une à une.
+  {
+    id: 'la-riviere-videe-de-sa-prose',
+    quoi: 'la section qui enseigne la rivière est réduite à ses puces — le gabarit garde les exemples et jette la règle',
+    cible: 'la-riviere-nomme-qui-arbitre',
+    fichier: 'metier',
+    // ⚠️ C'EST LA MUTATION QUE LA PASSE 2 A RÉELLEMENT EXÉCUTÉE, et qui laissait les essais
+    // d'exemples verts. Elle est ici pour qu'aucune version future ne la laisse passer.
+    muter: (t) => {
+      const debut = t.indexOf("### ⚠️ Et TOI, orchestrateur, tu portes un nom de RIVIÈRE");
+      if (debut === -1) return t;
+      const fin = t.indexOf('\n## ', debut);
+      return t.slice(0, debut)
+        + '### Divers\n\n- ✅ `matapedia`\n- ❌ `orchestrateur`\n- ❌ `rev-pr31`\n'
+        + (fin === -1 ? '' : t.slice(fin));
+    },
+  },
+  {
+    id: 'le-lieu-prend-la-riviere',
+    quoi: 'le métier fait porter la rivière au LIEU — la moitié qui protège les lieux déjà versés est retournée',
+    cible: 'la-riviere-nomme-qui-arbitre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**⚠️ TON LIEU, LUI, GARDE LE CODE DU MANDAT.**',
+      '**⚠️ TON LIEU, LUI, PREND AUSSI TA RIVIÈRE.**',
+    ),
+  },
+  {
+    id: 'la-riviere-deborde-sur-les-chefs-d-equipe',
+    quoi: 'la règle déborde sur qui exécute — un chef d’équipe reçoit une rivière, et redevient indistinguable de son orchestrateur',
+    cible: 'la-riviere-nomme-qui-arbitre',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "> **Un chef d'équipe reçoit un mandat rattaché au ServiceDesk — demande, projet, livraison, epic, story — et il porte le code de ce mandat. Rien d'autre.**",
+      "> **Un chef d'équipe reçoit un mandat rattaché au ServiceDesk et il reçoit lui aussi une rivière. Rien d'autre.**",
+    ),
+  },
+
   {
     id: 'crochet-retourne-par-une-negation',
     quoi: 'l’énoncé du crochet est retourné par une négation, en gardant tous ses mots-clés',
