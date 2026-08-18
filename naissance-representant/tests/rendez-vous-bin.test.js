@@ -58,6 +58,12 @@ function lancerRonde(sessions, surcharges = {}) {
       ...process.env,
       HERDR_SESSIONS_ESSAIS: sessions.join(':'),
       HERDR_SOCKET_PATH: '',
+      // ⚠️ LA RACINE DE LA RONDE VA DANS LE BAC, TOUJOURS (T-20260818-0014). Sans ça, un essai
+      // lit le VRAI registre du poste et — depuis que la ronde note son dernier passage — y
+      // ÉCRIT. Un essai qui touche l'état vivant du poste peut le faire mentir : la trace du
+      // dernier passage dirait qu'une ronde vient d'aboutir alors qu'aucune n'a eu lieu, ce
+      // qui est très exactement le mensonge que cette trace existe pour rendre impossible.
+      LIGNE_DIRECTE_RACINE: join(bac, 'racine'),
       // ⚠️ CES DEUX-LÀ SEULEMENT — ce sont les seules que la ronde lit vraiment.
       // Une première version posait aussi `LIVRAISON_*`, que RIEN ne lit sur ce chemin :
       // une configuration morte qui affirme un contrôle qu'elle n'a pas. Le test paraissait
@@ -326,7 +332,19 @@ test('CE QUE LA VIGIE N’A PAS EU LE TEMPS DE REGARDER EST DIT, JAMAIS TU', () 
   const lieu = lieuDOrchestrateur('deux');
   fauxHerdrQuiFigeDeux(lieu);
   // De quoi regarder UN suspect (2 × 8 s), pas deux.
-  const r = lancerRonde(['/s/a.sock'], { RENDEZ_VOUS_VIGIE_MS: '8000', RENDEZ_VOUS_ECHEANCE_MS: '25000' });
+  //
+  // ⚠️ CE BUDGET A ÉTÉ RECALIBRÉ (T-20260818-0014), et il faut dire pourquoi. Il valait
+  // `DELAI` par défaut (5 ms) et `ÉCHÉANCE` 25 s, et il ne tenait QUE parce que la vigie se
+  // ré-armait une échéance pleine après celle de la livraison : la reprise mangeait les 25 s,
+  // et la vigie repartait avec 25 s neuves. Le budget est désormais UN SEUL pour toute la
+  // ronde. On donne donc explicitement à la reprise de quoi finir en un tour (`DELAI` ≥ sa
+  // part du budget), et à la vigie de quoi regarder UN suspect (24 s réservées) mais pas deux
+  // (48 s) — ce que l'essai éprouve, et rien d'autre.
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_VIGIE_MS: '8000',
+    RENDEZ_VOUS_ECHEANCE_MS: '36000',
+    RENDEZ_VOUS_DELAI_MS: '60000',
+  });
   const dit = JSON.parse(r.stdout.trim().split('\n').pop());
 
   assert.equal(dit.vigie?.length, 1, 'un seul a pu être regardé');
@@ -529,4 +547,50 @@ test('UNE RONDE TIENT DANS SON ÉCHÉANCE — la vigie n’en re-arme pas une se
     ['w9:pA', 'w9:pB'],
     'et ce que le budget n’a pas permis de regarder est NOMMÉ — un pane non mesuré n’est ni sain ni figé'
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA TRACE DU DERNIER PASSAGE — ce qui SÉPARE une vigilance morte d'une vigilance muette
+// (T-20260818-0014, point 3)
+//
+// ⚠️ C'EST CE SILENCE-LÀ QUI A LAISSÉ LE DÉFAUT VIVRE DES JOURS. Une ronde qui n'a rien à
+// signaler et une ronde qui n'a jamais eu lieu produisent **exactement la même chose** :
+// rien. Personne ne pouvait répondre à « quand une ronde a-t-elle abouti pour la dernière
+// fois ? » sans relire un journal que personne ne lit.
+//
+// ⚠️ ET LA MORT PAR PLAFOND EST CELLE QUI COMPTE LE PLUS. C'est la seule qui n'a produit
+// aucun compte rendu — donc la seule qui, sans trace, reste indiscernable d'une nuit calme.
+const tracePassage = () => JSON.parse(readFileSync(join(bac, 'racine', 'orchestrateur-dernier-passage.json'), 'utf8'));
+
+test('UNE RONDE QUI ABOUTIT LAISSE UNE TRACE DATÉE — sinon son silence ne se distingue de rien', () => {
+  installerFauxHerdr({ agents: [] });
+  lancerRonde(['/s/a.sock']);
+  const trace = tracePassage();
+
+  assert.equal(trace.ronde.verdict, 'abouti');
+  assert.ok(Number.isFinite(Date.parse(trace.ronde.fini_le)), 'la date doit être lisible — c’est tout ce qui sépare « il y a 12 min » de « il y a 6 h »');
+  assert.equal(typeof trace.ronde.duree_ms, 'number', 'et ce qu’elle a coûté, sinon une ronde qui dérive ne se voit qu’une fois trop tard');
+  assert.equal(trace.topo, undefined, 'un passage PAR rendez-vous — le topo ne doit jamais faire croire la ronde vivante');
+});
+
+test('UNE RONDE TUÉE PAR SON PLAFOND LAISSE LA TRACE DE SA MORT — la seule qui n’a produit aucun compte rendu', () => {
+  fauxHerdrQuiNeRepondJamais();
+  const r = spawnSync(process.execPath, [BIN, 'ronde'], {
+    env: {
+      ...process.env,
+      HERDR_SESSIONS_ESSAIS: '/s/a.sock',
+      HERDR_SOCKET_PATH: '',
+      LIGNE_DIRECTE_RACINE: join(bac, 'racine'),
+      RENDEZ_VOUS_DELAI_MS: '5',
+      RENDEZ_VOUS_ECHEANCE_MS: '2000',
+      RENDEZ_VOUS_PLAFOND_MS: '2500',
+    },
+    timeout: 30000,
+    killSignal: 'SIGKILL',
+  });
+  assert.equal(r.signal, null, 'elle doit être morte de son plafond, pas du harnais');
+  const trace = tracePassage();
+
+  assert.equal(trace.ronde.verdict, 'plafond-depasse', 'et sa mort est NOMMÉE — « rien dans le journal » se lisait comme « rien à signaler »');
+  assert.equal(trace.ronde.plafond_ms, 2500, 'avec le plafond qu’elle a dépassé');
 });
