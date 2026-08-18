@@ -181,12 +181,22 @@ set -e
 echo "$OUT" | grep -qi 'Téléchargement du pack' \
   && ko "clone le dépôt AVANT de refuser — le refus arrive trop tard" \
   || ok "refuse AVANT de télécharger le pack"
+# Sans --target : l'appel doit DÉPASSER la garde jq. On le lance donc pour de
+# vrai (pas `--help`, qui sortirait avant d'atteindre la garde et rendrait un
+# vert qui n'a rien touché). Le dépôt source de ce test ne porte pas
+# install-claude-swt.sh : l'appel échoue donc PLUS LOIN, sur ce fichier
+# manquant — et c'est précisément la preuve qu'il a franchi la garde jq au lieu
+# d'être refusé par elle. Rien n'est installé sur le poste.
 set +e
-OUT="$(PATH="$NOJQ_BIN" bash "$RI" --with-claude-swt --help 2>&1; echo "RC=$?")"
+SRC_REF="$(cd "$SRC" && git rev-parse --abbrev-ref HEAD)"
+OUT="$(PATH="$NOJQ_BIN" bash "$RI" --with-claude-swt --repo "$SRC" --ref "$SRC_REF" 2>&1)"
 set -e
 echo "$OUT" | grep -qi 'jq est requis' \
   && ko "refuse à tort un usage qui n'a jamais eu besoin de jq" \
   || ok "ne refuse pas un usage sans installation de modules"
+echo "$OUT" | grep -qi 'install-claude-swt.sh introuvable' \
+  && ok "il est bien allé au-delà de la garde jq (échec plus loin, comme attendu)" \
+  || ko "n'a pas atteint l'étape suivante — l'assertion précédente ne prouve rien"
 
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"; FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
 echo "----------------------------------------"
