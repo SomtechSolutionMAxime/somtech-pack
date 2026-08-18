@@ -1267,3 +1267,28 @@ test('l’avis d’écart NE DIT PLUS une cause fausse — le lieu porte le code
     'riv',
     { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}d` },
   ));
+
+test('le nom inscrit est VERSÉ, pas seulement écrit — un clone frais doit le retrouver', () =>
+  avecLieu(
+    (code, lieu, depot) => {
+      installerFauxHerdr({ repertoire: lieu });
+
+      const rendu = JSON.parse(lancerNaitre(code, { role: 'orchestrateur' }).stdout);
+      assert.ok(estUneRiviere(rendu.agent));
+
+      // ⚠️ CET ESSAI EXISTE PARCE QUE LA PREUVE RÉELLE A TROUVÉ CE QUE LA SUITE NE VOYAIT PAS.
+      // L'inscription tombait APRÈS le versement : le fichier était sur le disque, dans aucun
+      // commit. Un `git checkout`, un clone frais, et le nom disparaissait SANS UN MOT — le
+      // lieu restant par ailleurs valide. Les essais lisaient le fichier ; l'historique, non.
+      // C'est le mode de panne de T-20260814-0139, rejoué un fichier plus loin.
+      const verses = fichiersVerses(depot);
+      const chemin = verses.find((f) => f.endsWith(FICHIER_NOM_AGENT));
+      assert.ok(
+        chemin,
+        `« ${FICHIER_NOM_AGENT} » n’est dans AUCUN commit — il vit sur ce disque seulement, et ` +
+          `un clone frais ferait dériver le nom de l’agent. Versés : ${verses.join(', ')}`,
+      );
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}e` },
+  ));

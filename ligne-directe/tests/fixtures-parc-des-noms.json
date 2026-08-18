@@ -1,0 +1,9 @@
+{
+  "mesure": "herdr agent list sur le poste du dirigeant, 2026-08-18, session « somtech »",
+  "comment": "LE PARC RÉEL, figé pour que le chiffre des deux gardes soit REPRODUCTIBLE. Un chiffre que personne d'autre ne peut refaire n'est pas une mesure — c'est la règle que cli/test/orchestrateur-faux-positifs.test.js a déjà établie sur ce dépôt, et le banc est ici pour la même raison. T-20260818-0124 relevait 42 agents à 18 h ; ce relevé-ci en compte 40, deux heures plus tard : rev-pr31 a disparu, bonaventure et e-0004-reprise sont apparus. Un parc vivant bouge — c'est pourquoi on le FIGE plutôt que de le relire.",
+  "noms": ["batiscan","bonaventure","charles-olivier","d-20260811-0001","d-20260813-0002","d-20260817-0006","e-0004-reprise","e-20260807-0010","e-20260809-0009","e-20260812-0002","e-20260812-0003","e-20260813-0001","e-20260813-0002","e-20260818-0002","e-20260818-0003","e-20260818-0004","e-20260818-0008","e-20260818-0017","e-20260818-0018","j-20260810-0004","matapedia","orchestrateur","ristigouche","t-20260810-0008","t-20260810-0037","t-20260811-0087","t-20260813-0030","t-20260813-0043","t-20260813-0054","t-20260813-0061","t-20260813-0062","t-20260813-0063","t-20260813-0075","t-20260813-0076","t-20260813-0078","t-20260814-0002","t-20260814-0071","t-20260814-0093","t-20260814-0101","t-20260817-0071"],
+  "rivieres_reelles_hors_liste": {
+    "comment": "Des rivières du Québec que la liste ne porte PAS — le coût mesuré de la liste blanche. Chacune serait refusée à tort si on la proposait, et c'est assumé : une liste noire oublierait toujours un cas. Le refus dit le geste qui le lève (ajouter la rivière).",
+    "noms": ["bersimis","ouiatchouan","mekinac","sheldrake","kegashka","coaticook","massawippi","dartmouth"]
+  }
+}

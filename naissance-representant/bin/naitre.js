@@ -312,6 +312,34 @@ async function main() {
       throw err;
     }
   };
+  // ═══ INSCRIRE LE NOM DANS LE LIEU — AVANT de verser, pour qu'il parte dans le commit.
+  //
+  // ⚠️ SANS CE FICHIER, LE NOM DÉRIVE. L'attribution est déterministe, mais elle enjambe ce qui
+  // est déjà pris : un orchestrateur qui redémarre après qu'une autre rivière a été prise
+  // recevrait un AUTRE nom, et le dirigeant l'appellerait par un nom qu'il ne porte plus.
+  //
+  // ⚠️ ET SA PLACE ICI A ÉTÉ TROUVÉE PAR LA PREUVE RÉELLE, PAS PAR LA SUITE. Écrit plus bas —
+  // après le versement — le fichier existait sur le disque et n'était dans AUCUN commit :
+  // mesuré sur la première naissance réelle de ce lot, `git log --name-only` ne le portait pas.
+  // Un clone frais, un `git checkout`, un nettoyage d'arbre, et le nom était perdu **sans un
+  // mot** — le lieu restant par ailleurs parfaitement valide. C'est exactement le mode de
+  // panne de T-20260814-0139, où la garde d'ouverture vivait hors de git sur trois lieux
+  // clients sur cinq. Les essais ne pouvaient pas le voir : ils lisent le fichier, pas
+  // l'historique.
+  if (bapteme.attribue) {
+    try {
+      inscrireNomDansLeLieu(commandes.lieu, commandes.nom);
+    } catch (err) {
+      // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE. Le nom est décidé et l'agent le portera ; ce
+      // qui se perd est la FIDÉLITÉ de la prochaine renaissance, pas celle-ci. Refuser ici
+      // détruirait une naissance valide pour un fichier d'une ligne.
+      process.stderr.write(
+        `le nom « ${commandes.nom} » n’a pas pu être inscrit dans le lieu (${err.message}) — ` +
+          `il naîtra sous ce nom, mais sa prochaine renaissance pourra en recevoir un autre.\n`
+      );
+    }
+  }
+
   verse('le lieu de');
 
   // REFUSER UN LIEU QUE GIT NE PORTE PAS — la garantie, inchangée (T-20260814-0139).
@@ -347,29 +375,6 @@ async function main() {
   // `nomAgentHerdr` juste au-dessus. L'avis ne recalcule pas la règle de casse : deux
   // endroits qui portent la même règle divergent au premier changement de l'un (motif de
   // T-20260814-0101, refermé un cran plus haut le jour même).
-  // ═══ INSCRIRE LE NOM DANS LE LIEU — pour que la RENAISSANCE reprenne le même.
-  //
-  // ⚠️ SANS CE FICHIER, LE NOM DÉRIVE. L'attribution est déterministe, mais elle évite ce qui
-  // est déjà pris : un orchestrateur qui redémarre après qu'une autre rivière a été prise
-  // recevrait un autre nom, et le dirigeant l'appellerait par un nom qu'il ne porte plus. Le
-  // fichier vit DANS le lieu, donc il est versé avec lui, donc il survit au poste.
-  //
-  // Écrit APRÈS la pose (le lieu doit exister) et AVANT le versement qui suit, pour qu'il parte
-  // dans le même commit que le reste du lieu.
-  if (bapteme.attribue) {
-    try {
-      inscrireNomDansLeLieu(commandes.lieu, commandes.nom);
-    } catch (err) {
-      // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE. Le nom est déjà décidé et l'agent le portera ;
-      // ce qui se perd est la FIDÉLITÉ de la prochaine renaissance, pas celle-ci. Refuser ici
-      // détruirait une naissance valide pour un fichier d'une ligne.
-      process.stderr.write(
-        `le nom « ${commandes.nom} » n’a pas pu être inscrit dans le lieu (${err.message}) — ` +
-          `il naîtra sous ce nom, mais sa prochaine renaissance pourra en recevoir un autre.\n`
-      );
-    }
-  }
-
   // ⚠️ CE QU'ON N'A PAS PU MESURER SE DIT — et il ne se mêle JAMAIS aux noms qu'on a relevés.
   // L'unicité d'un nom ne se mesure pas dans sa seule famille : un nom libre chez les agents
   // peut être pris par un chantier, un canal ou un BRD. On relève ce qu'on atteint, on NOMME ce
