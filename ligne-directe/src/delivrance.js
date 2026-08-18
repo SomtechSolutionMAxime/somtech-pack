@@ -287,9 +287,9 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   // VISIBLE à l'écran (mesuré — un texte long y est tronqué par le défilement). Ce qu'on
   // recopie ici est donc ce qu'on a lu, pas nécessairement tout ce qui est parti.
   const texte = String(texteLibere).trim();
-  // ⚠️ UNE DURÉE ARRONDIE À LA MINUTE NE SAIT PAS DIRE DIX SECONDES (T-20260818-0076). Cet avis
+  // ⚠️ UNE DURÉE ARRONDIE À LA MINUTE NE SAIT PAS DIRE SIX SECONDES (T-20260818-0076). Cet avis
   // a été écrit quand la seule fenêtre existante valait cinq minutes ; depuis que la fenêtre
-  // d'un texte tapé vaut dix secondes et celle d'un collage zéro, `Math.round(ms / 60000)`
+  // d'un texte tapé se compte en secondes et celle d'un collage vaut zéro, `Math.round(ms / 60000)`
   // rendait « les 0 min où je l'ai observée » — une phrase qui dit à celui qui vient de perdre
   // un texte qu'on ne l'a pas regardé. Le chemin de la parole du dirigeant la produisait déjà.
   const observation = (ms) => {
