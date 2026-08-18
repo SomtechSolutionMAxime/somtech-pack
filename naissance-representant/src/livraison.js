@@ -403,7 +403,7 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTrava
  */
 export {
   IMMOBILITE_PAR_DEFAUT_MS,
-  FENETRE_TEXTE_TAPE_MS,
+  FENETRE_ENTRE_AGENTS_MS,
   fenetreDImmobilite,
   delivrerLaBoite,
 } from '../../ligne-directe/src/delivrance.js';

@@ -445,7 +445,7 @@ test('l’avis porte CE QUI A ÉTÉ SOUMIS EN ENTIER — un incident constatable
 
 // La fenêtre que le binaire applique à un texte TAPÉ, lue là où elle est décidée — jamais
 // recopiée : un nombre écrit ici à la main cesserait de suivre le code au premier réglage.
-const { FENETRE_TEXTE_TAPE_MS: FENETRE_ATTENDUE_MS } = await import('../src/livraison.js');
+const { FENETRE_ENTRE_AGENTS_MS: FENETRE_ATTENDUE_MS } = await import('../src/livraison.js');
 
 /** Lancer le vrai binaire avec le réglage RÉEL de la fenêtre, et le tuer s'il dépasse. */
 function lancerAvecPlafond(args, { plafondMs, env = {} }) {
@@ -552,6 +552,32 @@ test('un texte TAPÉ immobile est délivré sous le budget du critère — sa fe
     r.dureeMs < 15000,
     `le critère du jalon exige moins de 15 s de bout en bout — mesuré ${Math.round(r.dureeMs / 1000)} s`
   );
+  // ⚠️ ET LA BORNE BASSE, QUI EST CELLE QUI GARDE VRAIMENT (relevé en REVUE DE FOND, bloquant,
+  // et le rejet était juste). Sans elle, ces essais ne vérifiaient qu'un PLAFOND : une mutation
+  // qui plafonnait l'attente réelle à 50 ms — `dormir(Math.min(immobiliteMs, 50))` dans
+  // `delivrerLaBoite` — laissait **62 essais sur 62 verts**. C'est-à-dire qu'on pouvait
+  // DÉSARMER l'observation du texte tapé, donc soumettre le brouillon de quelqu'un pendant
+  // qu'il l'écrit, sans qu'un seul essai de ce paquet ne rougisse.
+  //
+  // Une attente ne peut pas être plus COURTE que ce qu'on a demandé : cette borne ne mesure
+  // donc pas la machine, elle mesure que le geste a bien attendu avant d'agir.
+  assert.ok(
+    r.dureeMs >= FENETRE_ATTENDUE_MS,
+    `un texte TAPÉ doit être OBSERVÉ avant d’être soumis — mesuré ${r.dureeMs} ms, ` +
+      `soit moins que la fenêtre annoncée (${FENETRE_ATTENDUE_MS} ms) : l’attente n’a pas eu lieu`
+  );
+  // ⚠️ ET LA BORNE HAUTE SE PREND SUR LA FENÊTRE LUE, PAS SUR LE BUDGET DU JALON. Une mutation
+  // survivante l'a montré : faire lire au binaire dix secondes au lieu de six tenait dans les
+  // quinze secondes du critère **ici**, parce que le reste du chemin coûte une fraction de
+  // seconde au banc — là où il en coûte jusqu'à 4,3 s sur le poste. Le budget aurait donc été
+  // dépassé en usage réel sans qu'un seul essai ne rougisse. **Un banc plus rapide que le poste
+  // rend une marge qui n'existe pas.** On vérifie donc que le binaire a lu SA fenêtre, en
+  // mesurant qu'il n'a pas attendu sensiblement plus.
+  assert.ok(
+    r.dureeMs < FENETRE_ATTENDUE_MS + 4000,
+    `le binaire doit observer SA fenêtre (${FENETRE_ATTENDUE_MS} ms) — mesuré ${r.dureeMs} ms, ` +
+      `soit une attente qui n’est pas la sienne`
+  );
   assert.ok(
     appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
     'la touche d’envoi doit être partie'
@@ -570,7 +596,7 @@ test('la fenêtre du texte tapé n’est ni nulle ni hors budget — ce que le d
   //
   // La garde porte donc les deux : la fenêtre observe (elle n'est pas nulle) et elle tient dans
   // le budget (elle laisse de la place au reste du chemin).
-  const { FENETRE_TEXTE_TAPE_MS, fenetreDImmobilite } = await import('../src/livraison.js');
+  const { FENETRE_ENTRE_AGENTS_MS: FENETRE_TEXTE_TAPE_MS, fenetreDImmobilite } = await import('../src/livraison.js');
   assert.ok(FENETRE_TEXTE_TAPE_MS > 0, 'une fenêtre nulle sur un texte tapé n’observe plus rien');
   // ⚠️ LA BORNE LAISSE AU RESTE DU CHEMIN LE DOUBLE DE SON PIRE COÛT MESURÉ. Relire l'écran,
   // livrer, constater la prise ont coûté 2,4 s puis 4,3 s sur le même poste à trente secondes
@@ -582,13 +608,18 @@ test('la fenêtre du texte tapé n’est ni nulle ni hors budget — ce que le d
       `— une fenêtre de ${FENETRE_TEXTE_TAPE_MS} ms ne laisse pas de marge`
   );
   // ET LA RÈGLE QUI DÉCIDE : le COLLAGE n'a rien à observer, le TAPÉ garde sa fenêtre.
-  assert.equal(fenetreDImmobilite('[Pasted text #33]'), 0);
-  assert.equal(fenetreDImmobilite('[Pasted text #137 +19 lines]'), 0);
-  assert.equal(fenetreDImmobilite('une phrase que quelqu’un est en train de taper'), FENETRE_TEXTE_TAPE_MS);
+  assert.equal(fenetreDImmobilite('[Pasted text #33]', { texteTapeMs: FENETRE_TEXTE_TAPE_MS }), 0);
+  assert.equal(fenetreDImmobilite('[Pasted text #137 +19 lines]', { texteTapeMs: FENETRE_TEXTE_TAPE_MS }), 0);
+  assert.equal(
+    fenetreDImmobilite('une phrase que quelqu’un est en train de taper', { texteTapeMs: FENETRE_TEXTE_TAPE_MS }),
+    FENETRE_TEXTE_TAPE_MS
+  );
   // ⚠️ UN TEXTE QUI *MENTIONNE* UN COLLAGE EST UN TEXTE LISIBLE — le confondre avec un repli
   // ferait sauter la fenêtre sur du texte réellement tapé.
   assert.equal(
-    fenetreDImmobilite('je te renvoie le [Pasted text #6] que tu m’as passé'),
+    fenetreDImmobilite('je te renvoie le [Pasted text #6] que tu m’as passé', {
+      texteTapeMs: FENETRE_TEXTE_TAPE_MS,
+    }),
     FENETRE_TEXTE_TAPE_MS
   );
 });

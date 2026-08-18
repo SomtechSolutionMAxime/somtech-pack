@@ -25,7 +25,7 @@ import {
   delivrerLaBoite,
   avisDeBoiteBloquee,
   avisDeBoiteVidee,
-  FENETRE_TEXTE_TAPE_MS,
+  FENETRE_LIGNE_DU_DIRIGEANT_MS,
   fenetreDImmobilite,
 } from './delivrance.js';
 import { etatDeLEcran, refusDEcran, ecranAttendUnChoix, resumeDeLEcran } from './ecran.js';
@@ -102,9 +102,13 @@ export function socketHerdr() {
 //
 // Elle valait dix secondes sur ce chemin-ci et cinq minutes sur celui de `livrer.js`, chacune
 // écrite chez son appelant. Le lot qui a posé celle-ci a annoncé « 10 secondes » ; l'autre
-// chemin en faisait 300, et c'est ce qu'un coordonnateur a mesuré. Une constante par appelant,
-// ce sont deux comportements dont un seul est annoncé — elle vit donc désormais auprès du
-// geste qu'elle règle, dans `delivrance.js`, et les deux chemins la lisent au même endroit.
+// chemin en faisait 300, et c'est ce qu'un coordonnateur a mesuré. **Deux réglages qu'on ne
+// voit jamais ensemble, ce sont deux comportements dont un seul est annoncé.**
+//
+// Les deux vivent désormais dans `delivrance.js`, côte à côte, nommées par le chemin qu'elles
+// servent. **Celle-ci n'a pas changé de valeur** : dix secondes, réglées pour un humain qui
+// écrit depuis Slack. Le budget de bout en bout qui a fixé l'autre à six secondes est celui du
+// chemin entre agents — le dériver jusqu'ici l'appliquerait à une ligne qui ne l'a jamais eu.
 
 const RELECTURES_APRES_ENVOI = 10;
 const DELAI_RELECTURE_MS = 300;
@@ -290,7 +294,7 @@ export async function remettre(pane, texte, { socket } = {}) {
     // appelant attendait cinq minutes devant un collage — devant lequel il n'y a, par
     // construction, rien à observer. La règle vit auprès du geste ; les deux chemins l'ont.
     const fenetreMs = fenetreDImmobilite(dejaLa, {
-      texteTapeMs: Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_TEXTE_TAPE_MS),
+      texteTapeMs: Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_LIGNE_DU_DIRIGEANT_MS),
     });
 
     const delivrance = await delivrerLaBoite({

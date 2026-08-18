@@ -674,3 +674,147 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
     'ET RIEN N’A ÉTÉ ÉCRIT : une écriture ici aurait APPROUVÉ « rm -rf », pas livré un message'
   );
 });
+
+// ═══ LA FENÊTRE DE CE CHEMIN-CI EST À LUI, ET RIEN NE LA GARDAIT (T-20260818-0076) ═══
+//
+// ⚠️ RELEVÉ EN PASSE DE REVUE DE FOND, BLOQUANT, ET LE REJET ÉTAIT JUSTE. Le lot T-20260818-0076
+// a fixé la fenêtre du chemin ENTRE AGENTS à six secondes, dérivées d'un budget de bout en bout
+// — quinze secondes — que le critère de son jalon impose à `bin/livrer.js`. **La ligne du
+// dirigeant n'a jamais eu ce budget.** Son premier jet a pourtant ramené les deux chemins sur
+// une même constante : la fenêtre d'ici serait passée de dix à six secondes par ricochet d'une
+// contrainte étrangère, sans mesure et sans qu'un seul essai ne rougisse.
+//
+// Tous les essais de ce fichier fixent `LIGNE_IMMOBILITE_MS` à la main (60 ms, 1500 ms) pour
+// aller vite — ils n'exercent donc JAMAIS le défaut. Muter `FENETRE_LIGNE_DU_DIRIGEANT_MS` de
+// 10 s à 6 s laissait la suite entière verte. **Un réglage que personne n'éprouve est un
+// réglage que le premier passant peut changer.**
+
+test('LA FENÊTRE DE LA LIGNE DU DIRIGEANT EST LA SIENNE — pas celle d’un budget qui n’est pas le sien', async () => {
+  const { FENETRE_LIGNE_DU_DIRIGEANT_MS, FENETRE_ENTRE_AGENTS_MS } = await import('../src/delivrance.js');
+
+  // ⚠️ CE QUE CET ESSAI GARDE N'EST PAS LE CHIFFRE DIX — c'est que ce chemin DÉCIDE LE SIEN.
+  //
+  // Le chiffre lui-même est **[non établi]** : ni dix ni six secondes ne sortent d'une mesure du
+  // temps qui sépare deux frappes d'un humain qui hésite. Ce qui EST établi, c'est que le budget
+  // de bout en bout du chemin entre agents ne s'applique pas ici — donc qu'aligner l'un sur
+  // l'autre est un raisonnement faux, quel que soit le nombre qui en sort.
+  //
+  // La garde porte donc sur la SÉPARATION : le jour où quelqu'un voudra aligner les deux, il
+  // devra le faire en connaissance de cause, en retirant cet essai et en disant pourquoi.
+  assert.notEqual(
+    FENETRE_LIGNE_DU_DIRIGEANT_MS,
+    FENETRE_ENTRE_AGENTS_MS,
+    'les deux chemins n’ont pas la même contrainte : celui d’en face est borné par un budget de ' +
+      'bout en bout que la ligne du dirigeant n’a pas. Les aligner, c’est appliquer ici une ' +
+      'mesure faite ailleurs — le défaut même que T-20260818-0076 ferme, retourné.'
+  );
+  assert.ok(
+    FENETRE_LIGNE_DU_DIRIGEANT_MS >= 10_000,
+    `la fenêtre de la ligne du dirigeant ne se raccourcit pas sans une mesure DE CE CHEMIN — ` +
+      `trouvée à ${FENETRE_LIGNE_DU_DIRIGEANT_MS} ms`
+  );
+});
+
+test('LA REMISE OBSERVE LA FENÊTRE DE SON PROPRE CHEMIN — pas celle d’à côté', async () => {
+  // ⚠️ CETTE GARDE VIENT D'UNE MUTATION SURVIVANTE, et elle dit pourquoi l'essai d'à côté ne
+  // suffisait pas. Vérifier que la CONSTANTE vaut dix secondes ne prouve rien sur ce que le
+  // chemin LIT : remplacer sa lecture par un `6000` écrit en dur laissait la suite verte.
+  // C'est la forme exacte du défaut d'origine — une valeur juste, déclarée quelque part, et un
+  // appelant qui en utilise une autre.
+  //
+  // On mesure donc le TEMPS QU'UNE VRAIE REMISE ATTEND, sans régler `LIGNE_IMMOBILITE_MS` :
+  // c'est le seul témoin de ce que le chemin applique en usage réel.
+  const { FENETRE_LIGNE_DU_DIRIGEANT_MS } = await import('../src/delivrance.js');
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  const fenetreAvant = process.env.LIGNE_IMMOBILITE_MS;
+  delete process.env.LIGNE_IMMOBILITE_MS;
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const args = process.argv.slice(2);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+if (cmd === 'agent read') {
+  const soumis = fs.readFileSync(JOURNAL, 'utf8').includes('send-keys');
+  const phrase = soumis ? '' : 'un compte rendu que son auteur n\\u2019a pas soumis';
+  process.stdout.write(['~/x', SEP, '\\u276f ' + phrase, SEP, '  auto mode on'].join('\\n'));
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  const { remettre } = await import('../src/herdr.js');
+  const debut = Date.now();
+  await remettre('w5:p8', 'Message du dirigeant.');
+  const duree = Date.now() - debut;
+  if (fenetreAvant === undefined) delete process.env.LIGNE_IMMOBILITE_MS;
+  else process.env.LIGNE_IMMOBILITE_MS = fenetreAvant;
+
+  assert.ok(
+    appels(journal).map((a) => a.slice(0, 2).join(' ')).includes('agent send-keys'),
+    'le texte immobile doit avoir été SOUMIS — sans quoi la durée ne dirait rien'
+  );
+  assert.ok(
+    duree >= FENETRE_LIGNE_DU_DIRIGEANT_MS,
+    `ce chemin doit observer SA fenêtre (${FENETRE_LIGNE_DU_DIRIGEANT_MS} ms) — remise bouclée ` +
+      `en ${duree} ms, donc sur une fenêtre plus courte que la sienne`
+  );
+});
+
+test('LA REMISE OBSERVE VRAIMENT AVANT DE SOUMETTRE — l’attente n’est pas décorative', async () => {
+  // ⚠️ L'AUTRE MOITIÉ DU MÊME REJET. Les essais d'ici prouvent qu'un texte QUI BOUGE n'est pas
+  // soumis — mais ils règlent eux-mêmes la fenêtre, donc ils ne disent rien de ce qu'un vrai
+  // appel observe. Plafonner l'attente réelle à 50 ms dans `delivrerLaBoite` laissait la suite
+  // verte : on pouvait DÉSARMER l'observation, donc soumettre le brouillon d'un humain pendant
+  // qu'il l'écrit, sans qu'un essai ne rougisse.
+  //
+  // Une attente ne peut pas être plus COURTE que ce qu'on a demandé : cette borne ne mesure donc
+  // pas la charge de la machine, elle mesure que le geste a bien attendu avant d'agir.
+  const journal = join(bac, 'appels.jsonl');
+  writeFileSync(journal, '');
+  const fenetreAvant = process.env.LIGNE_IMMOBILITE_MS;
+  const FENETRE_MS = 1200;
+  process.env.LIGNE_IMMOBILITE_MS = String(FENETRE_MS);
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const JOURNAL = ${JSON.stringify(journal)};
+const args = process.argv.slice(2);
+fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+if (cmd === 'agent read') {
+  // Le texte est IMMOBILE, et il le reste : la boîte ne se vide qu'une fois la touche partie.
+  const soumis = fs.readFileSync(JOURNAL, 'utf8').includes('send-keys');
+  const phrase = soumis ? '' : 'un compte rendu que son auteur n\\u2019a pas soumis';
+  process.stdout.write(['~/x', SEP, '\\u276f ' + phrase, SEP, '  auto mode on'].join('\\n'));
+  process.exit(0);
+}
+if (cmd === 'agent get') { process.stdout.write(JSON.stringify({ result: { agent: { agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'agent prompt') { process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } })); process.exit(0); }
+if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  const { remettre } = await import('../src/herdr.js');
+  const debut = Date.now();
+  await remettre('w5:p8', 'Message du dirigeant.');
+  const duree = Date.now() - debut;
+
+  const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
+  assert.ok(gestes.includes('agent send-keys'), 'le texte immobile doit avoir été SOUMIS');
+  assert.ok(
+    duree >= FENETRE_MS,
+    `la fenêtre demandée (${FENETRE_MS} ms) doit avoir été RÉELLEMENT observée — ` +
+      `remise bouclée en ${duree} ms, donc sans attendre`
+  );
+  process.env.LIGNE_IMMOBILITE_MS = fenetreAvant;
+});

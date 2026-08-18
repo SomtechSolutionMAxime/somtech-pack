@@ -47,39 +47,65 @@ import { etatDeLEcran, ressembleAUnChoix, ecranAttendUnChoix, resumeDeLEcran } f
 export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
 
 /**
- * LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ — dix secondes, et elle vaut pour TOUS les chemins.
+ * ═══ LES DEUX FENÊTRES D'OBSERVATION D'UN TEXTE TAPÉ — ET ELLES SE LISENT ICI, CÔTE À CÔTE ═══
  *
- * ⚠️ ELLE VIVAIT EN DEUX EXEMPLAIRES, ET ÇA A COÛTÉ LE JALON (T-20260818-0076). Elle a été
- * réglée à dix secondes dans `herdr.js` — le chemin de la parole du dirigeant — pendant que le
- * chemin de `livrer.js` gardait `IMMOBILITE_PAR_DEFAUT_MS` (cinq minutes). Le lot qui l'a posée
- * annonçait « 10 secondes » sans dire de quel chemin il parlait ; un coordonnateur a mesuré
- * l'autre, et a trouvé 300 secondes là où on lui promettait 10. Une constante par appelant, ce
- * sont deux comportements dont un seul est annoncé.
+ * ⚠️ LE DÉFAUT N'ÉTAIT PAS QU'IL Y EN AIT DEUX. C'EST QU'ON NE POUVAIT PAS LES VOIR ENSEMBLE
+ * (T-20260818-0076). Chacune était écrite chez son appelant : dix secondes dans `herdr.js`,
+ * cinq minutes dans `bin/livrer.js`. Le lot qui a réglé la première a annoncé « dix secondes »
+ * sans dire de quel chemin il parlait ; un coordonnateur a mesuré l'autre et trouvé **300
+ * secondes** là où on lui promettait dix. **Deux réglages qu'on ne voit jamais ensemble, ce
+ * sont deux comportements dont un seul est annoncé.**
  *
- * POURQUOI SIX SECONDES, ET LE CHIFFRE SORT D'UNE MESURE. Le critère du jalon est un budget DE
- * BOUT EN BOUT — quinze secondes entre l'appel et la boîte vide. Ce budget a deux parts :
- * l'observation, qu'on règle ici, et le reste du chemin, qu'on subit (relire l'écran, livrer,
- * constater la prise). Le reste a été chronométré sur le poste réel le 2026-08-18 : **2,4 s**
- * sur un poste calme, **4,3 s** trente secondes plus tard sur le même poste. Il varie du simple
- * au double selon la charge.
+ * Elles vivent donc désormais AU MÊME ENDROIT, auprès du geste qu'elles règlent, nommées par le
+ * chemin qu'elles servent et par la contrainte qui les fixe. Régler l'une en croyant régler
+ * l'autre demande maintenant de ne pas lire la ligne d'à côté.
  *
- * Une fenêtre de DIX secondes rendait 14,3 s mesurés : sous le critère, avec sept dixièmes de
- * marge. **Une garde qui tient à 5 % près ne tient pas** — elle mesure la charge de la machine
- * autant que le code. Six secondes laissent neuf secondes au reste, soit le double de son pire
- * coût mesuré.
- *
- * ⚠️ ET SIX SECONDES VOIENT ENCORE DES DOIGTS SUR UN CLAVIER. Quelqu'un qui écrit fait bouger sa
- * boîte bien avant — ce qui protège vraiment n'est pas la longueur de l'attente, c'est la
- * RELECTURE qui suit : `delivrerLaBoite` refuse dès que le texte a changé d'un caractère.
- *
- * ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE REDIRE ICI. Une fenêtre courte soumet plus souvent la phrase
- * de quelqu'un qui a tapé la moitié puis s'est levé — c'est exactement ce que les cinq minutes
- * achetaient. L'arbitrage a été pris les yeux ouverts sur la ligne du dirigeant, et ce qui le
- * rend tenable est `avisDeBoiteBloquee` : le destinataire apprend, dans le message même, ce qui
- * est parti sous sa signature. Ce chemin-ci porte le même avis — c'est la condition qui permet
- * d'y étendre le même arbitrage, et pas une commodité.
+ * ⚠️ ET ELLES RESTENT DEUX, PARCE QUE LES DEUX CHEMINS N'ONT PAS LA MÊME CONTRAINTE. Leur
+ * imposer un chiffre unique ferait exactement ce que ce lot reproche à l'autre : dériver la
+ * valeur d'un chemin d'un budget qui n'est pas le sien.
  */
-export const FENETRE_TEXTE_TAPE_MS = 6_000;
+
+/**
+ * ① LA LIGNE DU DIRIGEANT — dix secondes, INCHANGÉES (T-20260818-0049).
+ *
+ * Celui qui patiente ici est un humain qui écrit depuis Slack, et sa ligne est tout l'objet du
+ * dispositif. Dix secondes ont été choisies pour ce chemin-là : « de quoi voir des doigts sur
+ * un clavier, pas de quoi faire attendre celui qui parle ».
+ *
+ * ⚠️ CE LOT N'Y TOUCHE PAS, ET C'EST DÉLIBÉRÉ. Une passe de revue de fond a relevé que la
+ * ramener à six secondes la ferait dériver du budget de bout en bout de l'AUTRE chemin — un
+ * budget que la ligne du dirigeant n'a jamais eu. Le rejet était juste.
+ *
+ * ⚠️ **[non établi]** — CE CHIFFRE N'A PAS DE MESURE DERRIÈRE LUI, ET N'EN A JAMAIS EU. Ni dix
+ * ni six secondes ne sortent d'une mesure du temps qui sépare deux frappes d'un humain qui
+ * hésite. On garde donc la valeur en place plutôt que d'en substituer une autre tout aussi peu
+ * établie : changer un chiffre non mesuré pour un autre n'est pas un progrès, c'est un
+ * déplacement.
+ */
+export const FENETRE_LIGNE_DU_DIRIGEANT_MS = 10_000;
+
+/**
+ * ② ENTRE AGENTS (`bin/livrer.js`) — six secondes, ET LE CHIFFRE SORT D'UNE MESURE.
+ *
+ * Ce chemin porte une contrainte que l'autre n'a pas : le critère du jalon est un budget **de
+ * bout en bout** — quinze secondes entre l'appel et la boîte vide. Ce budget a deux parts :
+ * l'observation, qu'on règle ici, et le reste du chemin, qu'on subit (relire l'écran, livrer,
+ * constater la prise).
+ *
+ * Le reste a été chronométré sur le poste réel le 2026-08-18 : **2,4 s** sur un poste calme,
+ * **4,3 s** trente secondes plus tard sur le même poste. Une fenêtre de dix secondes rendait
+ * **14,3 s mesurés** — sous le critère, avec sept dixièmes de marge. **Une garde qui tient à
+ * 5 % près mesure la charge de la machine autant que le code.** Six secondes laissent au reste
+ * le double de son pire coût mesuré ; huit envois chronométrés ont rendu 8,3 s à 10,9 s.
+ *
+ * ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE DIRE. Une fenêtre plus courte soumet plus souvent la phrase
+ * de quelqu'un qui a tapé la moitié puis s'est levé — c'est exactement ce que les cinq minutes
+ * achetaient. Ce qui rend l'arbitrage tenable est double : `avisDeBoiteBloquee`, qui apprend au
+ * destinataire ce qui est parti sous sa signature, et surtout la RELECTURE que `delivrerLaBoite`
+ * fait avant de soumettre — elle refuse dès que le texte a changé d'un caractère. **La fenêtre
+ * donne de quoi voir ; elle n'est pas la garde.**
+ */
+export const FENETRE_ENTRE_AGENTS_MS = 6_000;
 
 /**
  * COMBIEN DE TEMPS OBSERVER CE TEXTE-LÀ — la nature du texte décide, jamais l'appelant.
@@ -96,7 +122,13 @@ export const FENETRE_TEXTE_TAPE_MS = 6_000;
  * ⚠️ ET ELLE NE DÉCIDE PAS DE L'ARMEMENT. Un appelant qui ne veut PAS de délivrance du tout —
  * le brief de naissance — le dit en n'armant pas le geste, jamais en réglant cette durée.
  */
-export function fenetreDImmobilite(texteCoince, { texteTapeMs = FENETRE_TEXTE_TAPE_MS } = {}) {
+export function fenetreDImmobilite(texteCoince, { texteTapeMs }) {
+  if (!Number.isFinite(Number(texteTapeMs))) {
+    // ⚠️ PAS DE VALEUR PAR DÉFAUT ICI, ET C'EST VOULU. Un défaut silencieux ferait qu'un
+    // appelant qui oublie sa fenêtre hériterait de celle d'un autre chemin — la forme exacte
+    // du défaut que ce lot ferme. L'appelant nomme la sienne, ou il est refusé.
+    throw new Error('la fenêtre du texte tapé doit être nommée par l’appelant');
+  }
   return estUnEspaceReserve(texteCoince) ? 0 : texteTapeMs;
 }
 
