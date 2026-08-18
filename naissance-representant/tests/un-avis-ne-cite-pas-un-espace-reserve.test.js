@@ -210,3 +210,36 @@ test('sur une boîte vidée, un texte LISIBLE remonte toujours entier', () => {
   assert.ok(avis.includes(TEXTE_LONG), 'non-régression de T-20260817-0090');
   assert.ok(!avis.includes('ESPACE RÉSERVÉ'));
 });
+
+// ═══ CE QUE L'AVIS DIT DE SA PROPRE OBSERVATION (T-20260818-0076) ═══
+//
+// ⚠️ CETTE PHRASE A ÉTÉ ÉCRITE QUAND LA SEULE FENÊTRE EXISTANTE VALAIT CINQ MINUTES, et elle
+// arrondissait à la minute. Depuis que la fenêtre d'un texte tapé se compte en secondes et
+// celle d'un collage vaut zéro, elle rendait « resté immobile pendant les 0 min où je l'ai
+// observée » — à quelqu'un dont on vient de soumettre le texte en son nom. Le chemin de la
+// parole du dirigeant la produisait DÉJÀ, sans qu'aucun essai la regarde.
+
+test('l’avis ne prétend jamais avoir observé ZÉRO minute — il dit des secondes quand il en compte', () => {
+  const avis = avisDeBoiteBloquee({ texteLibere: 'un compte rendu resté dans la boîte', immobiliteMs: 6000 });
+  assert.ok(!/0 min/.test(avis), 'une durée arrondie à la minute ne sait pas dire six secondes');
+  assert.ok(/6 s/.test(avis), `l’avis doit citer la durée réellement observée — reçu : ${avis.slice(0, 200)}`);
+});
+
+test('devant un COLLAGE, l’avis ne parle pas d’une observation qui n’a pas eu lieu', () => {
+  // La fenêtre vaut zéro devant un collage : il n'y a rien à observer, personne n'a les doigts
+  // dessus. Annoncer « les 0 min où je l'ai observée » ferait croire à une surveillance ratée
+  // là où il n'y avait, par construction, rien à surveiller.
+  const avis = avisDeBoiteBloquee({ texteLibere: '[Pasted text #33 +12 lines]', immobiliteMs: 0 });
+  assert.ok(!/0 min|0 s/.test(avis), 'ne jamais annoncer une observation nulle comme si c’en était une');
+  assert.ok(
+    /collé|d’un seul coup/i.test(avis),
+    `l’avis doit dire POURQUOI il n’a pas observé — reçu : ${avis.slice(0, 200)}`,
+  );
+  // Et il garde son aveu : ce qu'on a lu n'était pas le texte.
+  assert.ok(/ESPACE RÉSERVÉ/.test(avis), 'non-régression de T-20260817-0091');
+});
+
+test('une fenêtre longue continue de se dire en minutes — non-régression', () => {
+  const avis = avisDeBoiteBloquee({ texteLibere: 'un compte rendu', immobiliteMs: 300000 });
+  assert.ok(/5 min/.test(avis), 'cinq minutes se disent en minutes, pas en 300 s');
+});

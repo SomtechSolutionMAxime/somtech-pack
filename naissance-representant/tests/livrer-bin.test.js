@@ -525,9 +525,14 @@ test('la fenêtre du texte tapé n’est ni nulle ni hors budget — ce que le d
   // le budget (elle laisse de la place au reste du chemin).
   const { FENETRE_TEXTE_TAPE_MS, fenetreDImmobilite } = await import('../src/livraison.js');
   assert.ok(FENETRE_TEXTE_TAPE_MS > 0, 'une fenêtre nulle sur un texte tapé n’observe plus rien');
+  // ⚠️ LA BORNE LAISSE AU RESTE DU CHEMIN LE DOUBLE DE SON PIRE COÛT MESURÉ. Relire l'écran,
+  // livrer, constater la prise ont coûté 2,4 s puis 4,3 s sur le même poste à trente secondes
+  // d'intervalle — ça dépend de sa charge. Une fenêtre qui remplit le budget à 5 % près rendrait
+  // le critère vert ou rouge selon ce qui tourne à côté.
   assert.ok(
-    FENETRE_TEXTE_TAPE_MS <= 12000,
-    `le critère du jalon est de 15 s de bout en bout — une fenêtre de ${FENETRE_TEXTE_TAPE_MS} ms n’y tient pas`
+    FENETRE_TEXTE_TAPE_MS <= 7000,
+    `le critère du jalon est de 15 s de bout en bout, et le reste du chemin en coûte jusqu’à 4,3 s ` +
+      `— une fenêtre de ${FENETRE_TEXTE_TAPE_MS} ms ne laisse pas de marge`
   );
   // ET LA RÈGLE QUI DÉCIDE : le COLLAGE n'a rien à observer, le TAPÉ garde sa fenêtre.
   assert.equal(fenetreDImmobilite('[Pasted text #33]'), 0);

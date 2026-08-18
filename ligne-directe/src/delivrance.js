@@ -56,9 +56,21 @@ export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
  * l'autre, et a trouvé 300 secondes là où on lui promettait 10. Une constante par appelant, ce
  * sont deux comportements dont un seul est annoncé.
  *
- * POURQUOI DIX. Assez pour voir des doigts sur un clavier — quelqu'un qui écrit fait bouger sa
- * boîte bien avant. Pas assez pour faire attendre celui qui parle : au bout de cinq minutes,
- * l'émetteur a conclu à une panne, et il a raison de le faire.
+ * POURQUOI SIX SECONDES, ET LE CHIFFRE SORT D'UNE MESURE. Le critère du jalon est un budget DE
+ * BOUT EN BOUT — quinze secondes entre l'appel et la boîte vide. Ce budget a deux parts :
+ * l'observation, qu'on règle ici, et le reste du chemin, qu'on subit (relire l'écran, livrer,
+ * constater la prise). Le reste a été chronométré sur le poste réel le 2026-08-18 : **2,4 s**
+ * sur un poste calme, **4,3 s** trente secondes plus tard sur le même poste. Il varie du simple
+ * au double selon la charge.
+ *
+ * Une fenêtre de DIX secondes rendait 14,3 s mesurés : sous le critère, avec sept dixièmes de
+ * marge. **Une garde qui tient à 5 % près ne tient pas** — elle mesure la charge de la machine
+ * autant que le code. Six secondes laissent neuf secondes au reste, soit le double de son pire
+ * coût mesuré.
+ *
+ * ⚠️ ET SIX SECONDES VOIENT ENCORE DES DOIGTS SUR UN CLAVIER. Quelqu'un qui écrit fait bouger sa
+ * boîte bien avant — ce qui protège vraiment n'est pas la longueur de l'attente, c'est la
+ * RELECTURE qui suit : `delivrerLaBoite` refuse dès que le texte a changé d'un caractère.
  *
  * ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE REDIRE ICI. Une fenêtre courte soumet plus souvent la phrase
  * de quelqu'un qui a tapé la moitié puis s'est levé — c'est exactement ce que les cinq minutes
@@ -67,7 +79,7 @@ export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
  * est parti sous sa signature. Ce chemin-ci porte le même avis — c'est la condition qui permet
  * d'y étendre le même arbitrage, et pas une commodité.
  */
-export const FENETRE_TEXTE_TAPE_MS = 10_000;
+export const FENETRE_TEXTE_TAPE_MS = 6_000;
 
 /**
  * COMBIEN DE TEMPS OBSERVER CE TEXTE-LÀ — la nature du texte décide, jamais l'appelant.
