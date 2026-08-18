@@ -44,10 +44,10 @@ import {
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
-import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
+import { appelHerdr, lireEcran, budgetPourUneAttente } from '../src/appel-herdr.js';
 import { sessionVisee, espaceDeLaSession } from '../src/session.js';
 import { verserLeLieu, exigerUnDepotGit, VersementImpossible, branchesQuiPortent } from '../src/versement.js';
-import { expositionAlaNaissance } from '../src/naissance.js';
+import { expositionAlaNaissance, ATTENTE_NAISSANCE_MS } from '../src/naissance.js';
 import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
 import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
 
@@ -389,7 +389,16 @@ async function main() {
   const PANE_PAS_PRET = /agent_pane_busy|not an available shell/i;
   let lancement = null;
   for (let i = 0; i < ESSAIS; i += 1) {
-    lancement = await appelHerdr(commandes.agentStart(paneId), { socket });
+    // ⚠️ CET APPEL PORTE UNE ATTENTE DE DEUX MINUTES (`agent start … --timeout`), et le
+    // plafond ordinaire par appel est d'une minute — relevé en revue de fond, comme une
+    // RÉGRESSION que T-20260818-0014 introduisait : une naissance qui prend entre 60 s et
+    // 120 s, dans la fenêtre que herdr s'autorise, aurait été tuée par le plafond avant
+    // d'aboutir. Même geste que pour la livraison : le budget contient l'attente, par
+    // construction.
+    lancement = await appelHerdr(commandes.agentStart(paneId), {
+      socket,
+      delaiMs: budgetPourUneAttente(ATTENTE_NAISSANCE_MS),
+    });
     if (lancement.ok || !PANE_PAS_PRET.test(lancement.message || '')) break;
     await dormir(DELAI_MS);
   }

@@ -498,7 +498,12 @@ export const MODELE_PAR_DEFAUT = 'opus';
 export const MODE_PAR_DEFAUT = 'acceptEdits';
 
 /** Combien de temps on laisse à herdr pour établir que l'agent répond. */
-const ATTENTE_NAISSANCE_MS = 120000;
+// ⚠️ EXPORTÉE DEPUIS T-20260818-0014, et pas par confort. Cette attente vit DANS l'appel
+// (`agent start … --timeout`), et le lot a posé un plafond sur chaque appel herdr. Deux durées
+// se retrouvent donc face à face, et une constante que le site d'appel ne peut pas lire est une
+// constante qu'il ne peut pas contenir : le plafond tuerait une naissance qui progresse, dans
+// la fenêtre que herdr s'autorise lui-même. Elle est publique pour être BORNÉE par son appelant.
+export const ATTENTE_NAISSANCE_MS = 120000;
 
 export function commandesNaissance(
   repoRoot,

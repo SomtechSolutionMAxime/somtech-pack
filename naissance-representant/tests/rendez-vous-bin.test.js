@@ -682,8 +682,12 @@ test('LA LIVRAISON GARDE SA PART DU BUDGET — le partage ne la vide pas de ses 
   writeFileSync(journal, '');
   fauxHerdrQuiRefuseEtCompte('w9:pP', lieu, journal);
   const ECHEANCE = 12000;
-  // Entre l'échéance qu'aurait 2/3 (8 s — infranchissable) et celle de 5/6 (10 s).
-  const SEUIL = 8400;
+  // ⚠️ AU MILIEU des deux échéances — 8 s pour 2/3 (infranchissable), 10 s pour 5/6. Le premier
+  // jet le posait à 8 400 ms, collé à la borne fautive : une passe de revue a mesuré quinze fois
+  // sous charge CPU réelle et vu la marge tomber à 112 ms. Une garde qui détecte encore, mais
+  // dont le pouvoir de détection dépend de la charge du poste, finit par rendre un faux verdict
+  // un soir de CI chargée. Recentré, elle garde ~1 s des DEUX côtés — mesuré, pas supposé.
+  const SEUIL = 9000;
   const debut = Date.now();
   const r = lancerRonde(['/s/a.sock'], {
     RENDEZ_VOUS_DELAI_MS: '200',

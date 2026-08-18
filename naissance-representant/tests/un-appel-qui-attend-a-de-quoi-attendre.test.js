@@ -24,6 +24,8 @@ import assert from 'node:assert/strict';
 
 import { budgetPourUneAttente, MARGE_APPEL_MS } from '../src/appel-herdr.js';
 import { livrerBrief } from '../src/livraison.js';
+import { ATTENTE_NAISSANCE_MS } from '../src/naissance.js';
+import { readFileSync } from 'node:fs';
 
 const SEP = '─'.repeat(40);
 const BOITE_VIDE = [SEP, '❯', SEP, '  ⏵⏵ auto mode on'].join('\n');
@@ -73,4 +75,33 @@ test('LA LIVRAISON DONNE À SON APPEL DE QUOI TENIR SON ATTENTE — mesuré sur 
       `l’appel « --wait --timeout ${ATTENTE} » doit recevoir plus que ${ATTENTE} ms — reçu ${v.delaiMs}`
     );
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ET LA NAISSANCE ATTEND DEUX FOIS PLUS LONGTEMPS QUE LE PLAFOND ORDINAIRE
+//
+// ⚠️ RELEVÉ EN REVUE DE FOND, ET C'EST UNE RÉGRESSION QUE CE LOT INTRODUISAIT. `agent start …
+// --timeout 120000` fait attendre herdr DEUX MINUTES ; le plafond ordinaire par appel, posé par
+// ce ticket, est d'UNE. Une naissance qui prend entre 60 s et 120 s — dans la fenêtre que herdr
+// s'autorise lui-même — aurait été tuée avant d'aboutir, par la garde même que ce lot pose.
+//
+// Avant ce ticket, rien ne bornait cet appel côté Node : le lot ne laissait donc pas une lacune
+// neutre, il créait un défaut. Deux commandes portent une attente dans ce dépôt — la livraison
+// et la naissance — et le lot n'en avait lié qu'une.
+test('LA NAISSANCE DONNE À SON APPEL DE QUOI TENIR SES DEUX MINUTES', () => {
+  assert.ok(
+    budgetPourUneAttente(ATTENTE_NAISSANCE_MS) > ATTENTE_NAISSANCE_MS,
+    `un « agent start --timeout ${ATTENTE_NAISSANCE_MS} » doit avoir plus que ${ATTENTE_NAISSANCE_MS} ms`
+  );
+
+  // ⚠️ LA GARDE DE LA GARDE, ENCORE : on ne se contente pas de savoir que la fonction rend le
+  // bon nombre. On lit le SITE D'APPEL, parce qu'une dérivation juste que personne n'applique
+  // est le motif dominant de ce dépôt — et c'est exactement ce qui s'est produit ici.
+  const source = readFileSync(new URL('../bin/naitre.js', import.meta.url), 'utf8');
+  const appel = source.slice(source.indexOf('commandes.agentStart(paneId)'));
+  assert.match(
+    appel.slice(0, 300),
+    /delaiMs:\s*budgetPourUneAttente\(ATTENTE_NAISSANCE_MS\)/,
+    'l’appel de naissance doit recevoir un budget dérivé de SON attente, pas le plafond ordinaire'
+  );
 });
