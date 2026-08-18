@@ -241,6 +241,321 @@ run 2
 case "$OUT" in *"TERMINE"*) ko "elle annonce la fin alors que le second relevé ne confirme pas done/idle : $OUT" ;; *) ok "elle n'annonce PAS la fin sur un done non confirmé" ;; esac
 case "$OUT" in *"bilan : 0 deblocages, 0 blocages non reconnus"*) ok "elle continue de veiller (bilan final atteint par épuisement des tours, pas par arrêt anticipé)" ;; *) ko "bilan final incorrect : $OUT" ;; esac
 
+
+# =================================================================
+# ===== E-20260818-0020 — la veille tient sa promesse, ou elle dit
+# ===== qu'elle ne la tient plus. Les scénarios ci-dessous prouvent les
+# ===== correctifs des trois défauts mesurés dans T-20260818-0109.
+# =================================================================
+
+REG="${WORK}/registre"
+
+# `run` ci-dessus fige le pane à test-pane et n'expose pas le registre. Pour
+# les scénarios de registre/journal/détachement il faut choisir le pane, le
+# répertoire de registre et lire le code de sortie — d'où cette seconde forme.
+# Elle NE partage PAS l'index de séquence entre deux appels (rm de .idx), au
+# même titre que `run`.
+run_ex() {
+  local pane="$1" agent="$2" tours="$3"; shift 3
+  : > "$WITNESS"
+  rm -f "${SEQ_FILE}.idx"
+  OUT="$(PATH="${BINDIR}:${PATH}" \
+         FAKE_HERDR_STATUS="${FAKE_HERDR_STATUS:-blocked}" \
+         FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" \
+         FAKE_HERDR_WITNESS="$WITNESS" \
+         VD_REGISTRE_DIR="$REG" \
+         VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         bash "$VEILLE" "$pane" "$agent" "$tours" "$@" 2>&1)"
+  RC=$?
+}
+
+ECRAN_PERMISSION='❯ 1. Yes
+  2. No'
+
+# =================================================================
+# 8. T-20260818-0154 — LE DÉFAUT ①. Un agent qui vient de naître est idle
+#    PARCE QU'IL ATTEND SON BRIEF. La veille ne doit pas lire cette attente
+#    comme un travail fini : c'est le geste même que le métier prescrit.
+# =================================================================
+echo "→ 8. naissance : idle constant (agent qui attend son brief) → elle VEILLE"
+: > "$SCREEN_FILE"
+rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=idle run 3
+
+case "$OUT" in *"TERMINE"*) ko "DÉFAUT ① : elle conclut que l'agent a fini alors qu'il attend son brief : $OUT" ;; *) ok "elle n'annonce PAS la fin sur un agent jamais vu au travail" ;; esac
+case "$OUT" in *"MOTIF: agent-termine"*) ko "DÉFAUT ① : motif « agent-termine » sur un agent qui n'a jamais travaillé" ;; *) ok "le motif n'est pas « agent-termine »" ;; esac
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "elle a veillé jusqu'à épuisement de ses tours" ;; *) ko "motif attendu « tours-epuises », obtenu : $OUT" ;; esac
+
+# =================================================================
+# 9. Un agent vu WORKING puis idle confirmé → elle s'arrête. Le correctif du
+#    défaut ① ne supprime PAS la détection de fin : un agent réellement
+#    terminé libère toujours sa veille.
+# =================================================================
+echo "→ 9. working puis idle confirmé → elle s'arrête (motif agent-termine)"
+: > "$SCREEN_FILE"
+printf 'working\nidle\nidle\n' > "$SEQ_FILE"
+run 4
+
+case "$OUT" in *"TERMINE"*) ok "un agent qui a travaillé puis fini libère sa veille" ;; *) ko "elle ne s'arrête pas sur un agent réellement terminé : $OUT" ;; esac
+case "$OUT" in *"MOTIF: agent-termine"*) ok "motif « agent-termine » nommé" ;; *) ko "motif attendu « agent-termine », obtenu : $OUT" ;; esac
+[ "$RC" -eq 0 ] && ok "code de sortie 0 pour un agent terminé (rc=$RC)" || ko "code de sortie attendu 0, obtenu $RC"
+
+# =================================================================
+# 10. BLOCKED arme la détection au même titre que WORKING : un agent bloqué
+#     a forcément commencé à travailler.
+# =================================================================
+echo "→ 10. blocked (donc au travail) puis idle confirmé → elle s'arrête"
+printf '%s\n' "$ECRAN_PERMISSION" > "$SCREEN_FILE"
+printf 'blocked\nidle\nidle\n' > "$SEQ_FILE"
+run 4
+
+case "$OUT" in *"MOTIF: agent-termine"*) ok "blocked arme la détection de fin" ;; *) ko "blocked n'arme pas la détection : $OUT" ;; esac
+case "$OUT" in *"debloque (#1)"*) ok "le déblocage a bien eu lieu au tour blocked" ;; *) ko "aucun déblocage au tour blocked : $OUT" ;; esac
+
+# =================================================================
+# 11. T-20260818-0155 — LE DÉFAUT ②. Elle s'éteint alors que l'agent
+#     travaille encore : elle le NOMME, et elle dit qu'il n'est plus protégé.
+# =================================================================
+echo "→ 11. tours épuisés alors que l'agent travaille encore"
+: > "$SCREEN_FILE"
+rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=working run 2
+
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "motif « tours-epuises » nommé" ;; *) ko "DÉFAUT ② : bilan muet, motif attendu « tours-epuises » : $OUT" ;; esac
+case "$OUT" in *"plus protégé"*|*"plus protege"*) ok "elle dit que l'agent n'est plus protégé" ;; *) ko "elle s'éteint sur un agent au travail sans le dire : $OUT" ;; esac
+[ "$RC" -eq 2 ] && ok "code de sortie propre aux tours épuisés (rc=$RC)" || ko "code de sortie attendu 2, obtenu $RC"
+
+# =================================================================
+# 12. Écran non reconnu répété → motif nommé ET code de sortie propre.
+#     G3 reste intacte : elle ne répond toujours pas.
+# =================================================================
+echo "→ 12. écran non reconnu → motif nommé + code propre"
+cat > "$SCREEN_FILE" <<'EOF'
+This is not a permission prompt at all. Nothing to recognize here.
+EOF
+rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=blocked run 5
+
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ok "motif « ecran-non-reconnu » nommé" ;; *) ko "motif attendu « ecran-non-reconnu », obtenu : $OUT" ;; esac
+[ "$RC" -eq 3 ] && ok "code de sortie propre à l'écran non reconnu (rc=$RC)" || ko "code de sortie attendu 3, obtenu $RC"
+case "$OUT" in *"aurait envoyé:"*) ko "G3 AFFAIBLIE : elle a répondu à un écran non reconnu" ;; *) ok "G3 intacte : jamais de réponse sur écran non reconnu" ;; esac
+
+# =================================================================
+# 13. Aucune sortie n'est muette : quel que soit le chemin d'arrêt, la ligne
+#     de motif est là. C'est l'invariant du défaut ②.
+# =================================================================
+echo "→ 13. aucun chemin d'arrêt n'est muet"
+for cas in idle working done; do
+  : > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+  FAKE_HERDR_STATUS="$cas" run 2
+  case "$OUT" in *"MOTIF: "*) ok "chemin « $cas » : motif nommé" ;; *) ko "chemin « $cas » : bilan muet — $OUT" ;; esac
+done
+
+# =================================================================
+# 14. T-20260818-0157 — un compte ne dit pas SUR QUOI on veille. Le registre
+#     rend le pane ET l'agent de chaque veille.
+# =================================================================
+echo "→ 14. registre : pane et agent de chaque veille, pas un compte"
+rm -rf "$REG"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=working run_ex "w9:pAA" "agent-alpha" 1
+FAKE_HERDR_STATUS=working run_ex "w9:pBB" "agent-beta" 1
+
+LISTE="$(PATH="${BINDIR}:${PATH}" VD_REGISTRE_DIR="$REG" bash "$VEILLE" --list 2>&1)"
+case "$LISTE" in *"w9:pAA"*) ok "le pane de la 1re veille est listé" ;; *) ko "pane w9:pAA absent de la liste : $LISTE" ;; esac
+case "$LISTE" in *"agent-alpha"*) ok "l'agent de la 1re veille est listé" ;; *) ko "agent-alpha absent de la liste : $LISTE" ;; esac
+case "$LISTE" in *"w9:pBB"*) ok "le pane de la 2e veille est listé" ;; *) ko "pane w9:pBB absent de la liste : $LISTE" ;; esac
+case "$LISTE" in *"agent-beta"*) ok "l'agent de la 2e veille est listé" ;; *) ko "agent-beta absent de la liste : $LISTE" ;; esac
+
+# =================================================================
+# 15. Une veille arrêtée porte son motif DANS le registre — l'orchestrateur
+#     qui liste apprend pourquoi elle n'est plus là.
+# =================================================================
+echo "→ 15. registre : une veille arrêtée porte son motif"
+case "$LISTE" in *"tours-epuises"*) ok "le motif d'arrêt figure dans la liste" ;; *) ko "motif absent du registre : $LISTE" ;; esac
+
+# =================================================================
+# 16. Une veille TUÉE sans avoir pu écrire son motif ne doit pas passer pour
+#     vivante. Le registre ne ment pas sur ce qu'il ne sait pas.
+# =================================================================
+echo "→ 16. registre : veille disparue sans motif ≠ veille vivante"
+mkdir -p "$REG"
+cat > "${REG}/w9-pZZ-4294967000.veille" <<'EOF'
+pane=w9:pZZ
+agent=agent-fantome
+pid=4294967000
+statut=active
+debut=2026-08-18T00:00:00
+journal=/dev/null
+tours=400
+EOF
+LISTE2="$(PATH="${BINDIR}:${PATH}" VD_REGISTRE_DIR="$REG" bash "$VEILLE" --list 2>&1)"
+case "$LISTE2" in *"agent-fantome"*) ok "la veille fantôme est listée" ;; *) ko "veille fantôme absente : $LISTE2" ;; esac
+case "$LISTE2" in *"disparue"*) ok "elle est signalée disparue (pid mort, aucun motif écrit)" ;; *) ko "une veille morte sans motif est présentée comme vivante : $LISTE2" ;; esac
+
+# =================================================================
+# 17. Un registre vide le dit. Une liste vide muette laisserait croire à une
+#     erreur d'affichage.
+# =================================================================
+echo "→ 17. registre vide → il le dit"
+VIDE_DIR="${WORK}/registre-vide"
+LISTE3="$(PATH="${BINDIR}:${PATH}" VD_REGISTRE_DIR="$VIDE_DIR" bash "$VEILLE" --list 2>&1)"
+case "$LISTE3" in *[Aa]"ucune veille"*) ok "un registre vide est annoncé explicitement" ;; *) ko "registre vide muet : $LISTE3" ;; esac
+
+# =================================================================
+# 18. T-20260818-0159 — LES DEUX CHIFFRES. Un compte de déblocages est
+#     invérifiable : le journal consigne l'écran déclencheur et la touche
+#     envoyée, pour qu'un tiers classe chaque déblocage à raison / à tort.
+# =================================================================
+echo "→ 18. journal des déblocages : écran déclencheur + touche envoyée"
+rm -rf "$REG"
+cat > "$SCREEN_FILE" <<'EOF'
+❯ 1. Yes
+  2. Yes, and don't ask again
+  3. No
+EOF
+rm -f "$SEQ_FILE"
+JOURNAL="${WORK}/deblocages.log"
+rm -f "$JOURNAL"
+OUT="$(PATH="${BINDIR}:${PATH}" \
+       FAKE_HERDR_STATUS=blocked FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+       FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+       VD_REGISTRE_DIR="$REG" VD_JOURNAL="$JOURNAL" \
+       VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+       bash "$VEILLE" test-pane test-agent 1 --dry-run 2>&1)"
+
+if [ -f "$JOURNAL" ]; then
+  ok "le journal de déblocages est écrit (y compris en --dry-run)"
+  grep -q "Yes, and don't ask again" "$JOURNAL" && ok "l'écran déclencheur est consigné" || ko "l'écran déclencheur manque au journal"
+  grep -q "Down" "$JOURNAL" && ok "la touche Down envoyée est consignée" || ko "la touche envoyée manque au journal"
+  grep -q "Enter" "$JOURNAL" && ok "la touche Enter envoyée est consignée" || ko "Enter manque au journal"
+else
+  ko "aucun journal de déblocages écrit — les deux chiffres restent invérifiables"
+  ko "l'écran déclencheur manque au journal"
+  ko "la touche envoyée manque au journal"
+  ko "Enter manque au journal"
+fi
+
+# =================================================================
+# 19. T-20260818-0158 — la durée par défaut doit couvrir un lot réel.
+#     Mesuré dans T-20260818-0109 : les lots durent 1 h à 2 h 30, l'ancien
+#     défaut couvrait ~66 min. La veille rend elle-même sa durée nominale —
+#     un `grep` sur le source prouverait qu'un mot est là, pas qu'une durée
+#     est couverte.
+# =================================================================
+echo "→ 19. durée par défaut ≥ 2 h 30"
+DUREE="$(PATH="${BINDIR}:${PATH}" bash "$VEILLE" --duree 2>&1)"
+# Ancré sur un format NOMMÉ : un grep de chiffres nus attrape la date dans le
+# chemin du worktree et rend un vert qui n'a rien mesuré.
+DUREE_S="$(printf '%s\n' "$DUREE" | sed -n 's/^DUREE_NOMINALE_S=\([0-9][0-9]*\)$/\1/p' | head -1)"
+if [ -n "$DUREE_S" ] && [ "$DUREE_S" -ge 9000 ] 2>/dev/null; then
+  ok "la durée nominale par défaut couvre un lot réel (${DUREE_S}s ≥ 9000s)"
+else
+  ko "durée par défaut insuffisante ou non rendue : « $DUREE »"
+fi
+
+# =================================================================
+# 20. Elle prévient AVANT de s'éteindre — une fois, pas à chaque tour.
+# =================================================================
+echo "→ 20. préavis d'épuisement, une seule fois"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=working run 10
+
+n_preavis=$(printf '%s\n' "$OUT" | grep -ci "PREAVIS")
+[ "$n_preavis" -eq 1 ] && ok "préavis émis exactement une fois (obtenu $n_preavis)" \
+  || ko "préavis attendu 1 fois, obtenu $n_preavis : $OUT"
+
+# =================================================================
+# 21. T-20260818-0156 — le geste prescrit SURVIT. --detach relance la veille
+#     détachée, rend la main tout de suite, et ne se relance pas à l'infini.
+# =================================================================
+echo "→ 21. --detach : elle se détache, rend son pid et son journal"
+rm -rf "$REG"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+DETACH_LOG="${WORK}/detach.log"
+OUTD="$(PATH="${BINDIR}:${PATH}" \
+        FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+        FAKE_HERDR_WITNESS="$WITNESS" \
+        VD_REGISTRE_DIR="$REG" VD_LOG="$DETACH_LOG" \
+        VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+        bash "$VEILLE" w9:pDD agent-detache 3 --detach 2>&1)"
+RCD=$?
+
+[ "$RCD" -eq 0 ] && ok "--detach rend la main sans erreur (rc=$RCD)" || ko "--detach rc=$RCD"
+case "$OUTD" in *"--- bilan :"*) ko "--detach a veillé en AVANT-PLAN (il rend un bilan) — il n'a rien détaché" ;; *) ok "le détacheur ne veille pas lui-même (aucun bilan rendu)" ;; esac
+case "$OUTD" in *"pid="*) ok "elle annonce le pid de la veille détachée" ;; *) ko "aucun pid annoncé : $OUTD" ;; esac
+case "$OUTD" in *"$DETACH_LOG"*) ok "elle annonce le chemin de son journal" ;; *) ko "aucun journal annoncé : $OUTD" ;; esac
+
+# La veille détachée doit RÉELLEMENT veiller (pas se re-détacher en boucle) :
+# on l'attend, bornée, puis on lit son journal.
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  [ -f "$DETACH_LOG" ] && grep -q "MOTIF: " "$DETACH_LOG" 2>/dev/null && break
+  sleep 0.5
+done
+if [ -f "$DETACH_LOG" ] && grep -q "MOTIF: " "$DETACH_LOG"; then
+  ok "la veille détachée a réellement veillé puis nommé son motif dans son journal"
+  n_detach=$(grep -c "pid=" "$DETACH_LOG" 2>/dev/null || echo 0)
+  [ "${n_detach:-0}" -eq 0 ] && ok "elle ne s'est PAS re-détachée (pas de récursion)" \
+    || ko "récursion de détachement : le journal contient une annonce de détachement"
+else
+  ko "la veille détachée n'a rien veillé (journal vide ou sans motif)"
+  ko "récursion de détachement non vérifiable"
+fi
+
+# =================================================================
+# 22. Tuée par son environnement, elle le DIT avant de mourir — c'est ce qui
+#     distingue « tuée » de « disparue sans qu'on sache ».
+# =================================================================
+echo "→ 22. signal reçu → motif « interrompue » avant de mourir"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+KILL_LOG="${WORK}/kill.log"; : > "$KILL_LOG"
+PATH="${BINDIR}:${PATH}" \
+  FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+  VD_REGISTRE_DIR="${WORK}/registre-kill" \
+  VD_SLEEP=1 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+  bash "$VEILLE" w9:pKK agent-tue 600 > "$KILL_LOG" 2>&1 &
+KILL_PID=$!
+
+# Attendre qu'elle ait démarré — bornée, et sur un SIGNE de démarrage (le
+# registre écrit), jamais sur un délai fixe : un délai fixe mesurerait la
+# charge du poste, pas la veille.
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  [ -d "${WORK}/registre-kill" ] && [ -n "$(ls -A "${WORK}/registre-kill" 2>/dev/null)" ] && break
+  sleep 0.5
+done
+kill -TERM "$KILL_PID" 2>/dev/null
+wait "$KILL_PID" 2>/dev/null
+RCK=$?
+
+case "$(cat "$KILL_LOG")" in
+  *"MOTIF: interrompue"*) ok "tuée par un signal, elle nomme « interrompue » avant de mourir" ;;
+  *) ko "tuée en silence — aucun motif écrit : $(cat "$KILL_LOG")" ;;
+esac
+
+# =================================================================
+# 23. LES TROIS GARANTIES D'ORIGINE, RE-PROUVÉES APRÈS CORRECTIF. Elles sont
+#     déjà prouvées aux scénarios 1-7 ; ce scénario vérifie qu'aucun des
+#     nouveaux chemins (registre, journal, détachement) ne les contourne :
+#     un écran à un seul signe reste sans réponse même journal actif.
+# =================================================================
+echo "→ 23. garanties d'origine intactes sur les nouveaux chemins"
+cat > "$SCREEN_FILE" <<'EOF'
+❯ 1. Yes
+Some unrelated trailing output, no numbered No option here.
+EOF
+rm -f "$SEQ_FILE"
+J23="${WORK}/j23.log"; rm -f "$J23"
+OUT23="$(PATH="${BINDIR}:${PATH}" \
+         FAKE_HERDR_STATUS=blocked FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_WITNESS="$WITNESS" \
+         VD_REGISTRE_DIR="$REG" VD_JOURNAL="$J23" \
+         VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         bash "$VEILLE" test-pane test-agent 3 --dry-run 2>&1)"
+
+case "$OUT23" in *"aurait envoyé:"*) ko "G1 AFFAIBLIE : elle répond sur un seul signe, journal actif" ;; *) ok "G1 intacte : un seul signe → aucune réponse" ;; esac
+[ ! -s "$J23" ] && ok "aucun déblocage consigné (rien n'a été débloqué)" || ko "un déblocage a été consigné alors qu'aucun n'a eu lieu : $(cat "$J23")"
+
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
 echo; echo "== Bilan : ${P// /} réussis, ${F// /} échoués =="
