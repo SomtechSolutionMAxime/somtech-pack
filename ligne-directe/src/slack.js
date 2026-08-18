@@ -201,10 +201,29 @@ export async function ouvrirEcoute(jetonEcoute) {
   return url;
 }
 
-/** Identité du robot — sert de garde-fou anti-boucle : on ignore nos propres messages. */
+/**
+ * Identité du robot — garde-fou anti-boucle (on ignore nos propres messages) ET référence de
+ * l'espace pour le cloisonnement.
+ *
+ * ⚠️ DEUX CHAMPS POUR L'ESPACE, ET ILS NE SONT PAS INTERCHANGEABLES (T-20260818-0046) :
+ *
+ *   • `equipe`   — le NOM (« Somtech Solution »). Ce qu'un humain lit : journal du veilleur,
+ *                  `ligne-directe etat`, bilan du poste. Il ne compare RIEN.
+ *   • `equipeId` — l'IDENTIFIANT (« T091JB7AVJ4 »). La SEULE valeur comparable à ce que
+ *                  `membresDuCanal` porte sur chaque profil (`u.team_id`).
+ *
+ * Cette projection ne retenait que le nom, et le cloisonnement le comparait aux identifiants
+ * des membres : la condition était vraie pour TOUT membre de l'espace, et la garde a refusé
+ * 100 % des gens de la maison — dirigeant compris — sans jamais trier personne.
+ *
+ * ⚠️ CE QUI MANQUAIT N'ÉTAIT PAS DANS SLACK, IL ÉTAIT DANS CETTE PROJECTION. Mesuré le
+ * 2026-08-18 avec le jeton du robot : `auth.test` rend
+ * `{ ok, url, team, user, team_id, user_id, bot_id, is_enterprise_install }` — `team_id` était
+ * là depuis toujours ; c'est ici qu'il était jeté.
+ */
 export async function identite(jetonRobot) {
   const d = await appeler('auth.test', jetonRobot);
-  return { equipe: d.team, robot: d.bot_id, utilisateur: d.user_id, url: d.url };
+  return { equipe: d.team, equipeId: d.team_id || null, robot: d.bot_id, utilisateur: d.user_id, url: d.url };
 }
 
 /**

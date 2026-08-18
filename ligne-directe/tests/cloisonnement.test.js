@@ -51,7 +51,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { etrangersParmi, nouveauxVenus, NOUS } from '../src/cloisonnement.js';
+import { etrangersParmi, nouveauxVenus, referenceComparable, NOUS } from '../src/cloisonnement.js';
 
 /** Un profil tel que `users.info` le rend — réduit à ce dont le jugement a besoin. */
 const gens = (nom, sur = {}) => ({ id: `U_${nom}`, nom, robot: false, invite: false, equipe: NOUS_EQUIPE, ...sur });
@@ -86,6 +86,52 @@ test('DES COLLÈGUES NE DÉCLENCHENT RIEN — sinon la garde devient du bruit et
   // RA-REL-008. C'est le cas nominal des 18 canaux internes du poste : le dirigeant, le robot,
   // parfois un collègue. Une garde qui parle là n'est plus lue quand elle parle ailleurs.
   assert.deepEqual(etrangersParmi([MAXIME, BRUNO, ROBOT], NOUS_EQUIPE), []);
+});
+
+// ═════════════════ 1 bis. LES DEUX CÔTÉS DE LA COMPARAISON PORTENT-ILS LA MÊME UNITÉ ?
+//
+// ⚠️ LA GARDE LOCALE POSÉE PAR `T-20260818-0046`, et la raison d'être de ces trois essais.
+//
+// Le défaut n'était pas un critère mal choisi : c'était le NOM de l'espace comparé par égalité
+// aux IDENTIFIANTS que portent les profils. Deux grandeurs qu'on croit comparables parce
+// qu'elles s'appellent pareil. Corriger le champ répare le fait ; **rien n'empêche de le
+// recasser** — sauf ceci, qui exige que la référence ait la FORME d'un identifiant.
+//
+// ⚠️ ET L'ABSTENTION N'EST PAS UN ACQUITTEMENT. Une référence inutilisable ne rend ni « tous
+// des nôtres » ni « tous étrangers » : le critère de l'invité continue de mordre, et c'est lui
+// qui attrape le cas réel du poste. `veilleur.js` journalise en plus au démarrage — une garde
+// qui ne peut plus juger doit le dire.
+
+test('UNE RÉFÉRENCE QUI EST UN NOM N’EST PAS COMPARABLE — c’est le défaut du 2026-08-18, gardé', () => {
+  assert.equal(referenceComparable('Somtech Solution'), false, 'un nom d’espace n’est pas un identifiant');
+  assert.equal(referenceComparable('T091JB7AVJ4'), true, 'mesuré contre le vrai Slack le 2026-08-18');
+  // ⚠️ RELEVÉ EN REVUE DE FOND, et le premier jet avait tort : celui-ci acceptait `E…` « pour
+  // une grille Enterprise ». Le côté d'en face est TOUJOURS un `team_id` d'espace — un
+  // identifiant d'entreprise n'est pas du même espace de noms, et l'accepter refabriquait la
+  // panne d'origine par une autre porte. Mesuré alors : `etrangersParmi(nôtres, 'E091JB7AVJ4')`
+  // reclassait TOUT LE MONDE étranger. La garde locale n'attrapait donc que la moitié des
+  // façons de se tromper d'objet.
+  assert.equal(referenceComparable('E091JB7AVJ4'), false, 'un identifiant d’entreprise n’est pas un identifiant d’espace');
+  assert.equal(referenceComparable(null), false);
+});
+
+test('UN IDENTIFIANT DU MAUVAIS ESPACE DE NOMS NE CLASSE PERSONNE ÉTRANGER NON PLUS', () => {
+  // La panne d'origine par l'autre porte : `E091JB7AVJ4` a la FORME d'un identifiant, et
+  // n'est comparable à aucun `team_id`. S'abstenir en le disant est réparable ; refuser tout
+  // le monde en silence ne l'était pas.
+  assert.deepEqual(etrangersParmi([MAXIME, BRUNO, ROBOT], 'E091JB7AVJ4'), []);
+});
+
+test('COMPARÉE À UN NOM, LA GARDE NE CLASSE PERSONNE ÉTRANGER — 100 % de faux refus, mesuré', () => {
+  // LE FAIT, rejoué : `identite()` rendait le nom, `users.info` rend l'identifiant, et TOUT
+  // membre de l'espace tombait du mauvais côté — le dirigeant compris, sur sa propre ligne.
+  const etrangers = etrangersParmi([MAXIME, BRUNO, ROBOT], 'Somtech Solution');
+  assert.deepEqual(etrangers, [], 'aucun d’eux n’est un étranger, et une unité illisible ne l’invente pas');
+});
+
+test('MAIS L’INVITÉ RESTE ATTRAPÉ — s’abstenir sur l’organisation n’acquitte pas le reste', () => {
+  const etrangers = etrangersParmi([MAXIME, ROBOT, CLIENT, AUTRE_ORG], 'Somtech Solution');
+  assert.deepEqual(etrangers.map((e) => e.nom), ['charles-olivier'], 'l’invité oui, l’autre organisation non');
 });
 
 test('SANS ÉQUIPE DE RÉFÉRENCE, ON NE JUGE PERSONNE SUR SON ORGANISATION — mais l’invité reste un invité', () => {

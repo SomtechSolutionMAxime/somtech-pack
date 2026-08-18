@@ -156,7 +156,11 @@ test('TOUTE MÉTHODE QUE LE CODE APPELLE PASSE LE DOUBLE STRICT — les quatorze
   ];
   await avecSlack({ canaux: [], utilisateurs }, async (monde) => {
     // auth.test — apps.connections.open
-    assert.equal((await identite('jeton')).equipe, 'T_ESSAIS');
+    // ⚠️ LE NOM ET L'IDENTIFIANT SONT DEUX CHAMPS (T-20260818-0046) : `auth.test` rend les
+    // deux, et les confondre a produit une garde qui refusait 100 % des membres de la maison.
+    const moi = await identite('jeton');
+    assert.equal(moi.equipe, 'Espace des essais', 'le NOM, celui qu’un humain lit');
+    assert.equal(moi.equipeId, 'T_ESSAIS', 'l’IDENTIFIANT, le seul comparable aux profils');
     assert.match(await ouvrirEcoute('jeton-ecoute'), /^wss:/);
 
     // conversations.create (privé, ce que demande une ligne cliente)

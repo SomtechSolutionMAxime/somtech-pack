@@ -25,7 +25,7 @@ import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu } from './lieu-agent.js';
 import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune, cadrerPourPair } from './cadre.js';
-import { etrangersParmi, nouveauxVenus, photographier, NOUS } from './cloisonnement.js';
+import { etrangersParmi, nouveauxVenus, photographier, referenceComparable, NOUS } from './cloisonnement.js';
 import { reponse } from './langage.js';
 import { TAILLE_MAX, typeDePiece, pieceACompleter, deposer, gabarit } from './pieces.js';
 import {
@@ -218,6 +218,16 @@ export class Veilleur {
     v.surveiller();
     await v.reconcilier();
     journaliser(`veilleur démarré — espace ${identite.equipe}, ${lignesOuvertes(v.registre).length} ligne(s) ouverte(s)`);
+    // ⚠️ UNE GARDE QUI NE PEUT PLUS JUGER LE DIT (T-20260818-0046). Sans identifiant d'espace
+    // comparable, le cloisonnement s'abstient sur l'ORGANISATION — un externe arrivé par Slack
+    // Connect ne serait plus vu. Le critère de l'invité, lui, tient toujours. C'est écrit ici
+    // parce que l'abstention silencieuse est exactement ce qui a laissé vivre le défaut.
+    if (!referenceComparable(identite.equipeId)) {
+      journaliser(
+        `⚠️ l'identifiant de l'espace est inutilisable (${JSON.stringify(identite.equipeId)}) — ` +
+          "le cloisonnement ne jugera personne sur son organisation ; les invités restent détectés"
+      );
+    }
     return v;
   }
 
@@ -711,7 +721,7 @@ export class Veilleur {
           `arbitrages, les pannes de production, les échéances et les coûts. ⚠️ ${NOUS.limite}.`,
       };
     }
-    const etrangers = etrangersParmi(profils, this.identite?.equipe || null);
+    const etrangers = etrangersParmi(profils, this.identite?.equipeId || null);
     if (!etrangers.length) return null;
     return {
       motif: 'etranger_dans_le_canal',
@@ -1275,7 +1285,7 @@ export class Veilleur {
     }
 
     if (nature !== 'client') {
-      const etrangers = etrangersParmi(profils, this.identite?.equipe || null);
+      const etrangers = etrangersParmi(profils, this.identite?.equipeId || null);
       if (etrangers.length) {
         return {
           refus: {
