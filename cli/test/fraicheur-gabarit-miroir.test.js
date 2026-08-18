@@ -64,7 +64,9 @@ test('les deux exemplaires rendent le MÊME VERDICT — prouvé en les faisant j
   const laSource = mkdtempSync(join(tmpdir(), 'mir-src-'));
   cpSync(join(GABARITS_SRC, 'orchestrateur'), join(laSource, '.claude', 'templates', 'orchestrateur'), { recursive: true });
   writeFileSync(join(laSource, '.claude', 'templates', 'orchestrateur', 'CLAUDE.md'), '# en cours de travail\n');
-  writeFileSync(join(laSource, 'pack.json'), '{"name":"somtech-pack"}');
+  // Le manifeste de la source, en ENTIER : depuis la passe 2, le nom seul ne dispense
+  // plus de rien — il faut aussi que le dépôt distribue « .claude/ ».
+  writeFileSync(join(laSource, 'pack.json'), JSON.stringify({ name: 'somtech-pack', modules: { core: { paths: ['.claude/'] } } }));
 
   const CORPUS = [
     { depot: aJour, foyer }, { depot: divergent, foyer }, { depot: sansGabarit, foyer },

@@ -158,7 +158,9 @@ test('LE DÉPÔT-SOURCE DU PACK n’est pas comparé à lui-même — et la comm
   alignerLePosteSur(payload('orchestrateur'));
   const enTravail = payload('orchestrateur', '# un métier en cours de réécriture\n');
   const { repo, lieu } = depotAvecLieu('orchestrateur', 'd-1');
-  writeFileSync(join(repo, 'pack.json'), '{"name":"somtech-pack"}');
+  // Le manifeste de la source, en ENTIER : depuis la passe 2, le nom seul ne dispense
+  // plus de rien — il faut aussi que le dépôt distribue « .claude/ ».
+  writeFileSync(join(repo, 'pack.json'), JSON.stringify({ name: 'somtech-pack', modules: { core: { paths: ['.claude/'] } } }));
 
   const lignes = [];
   const avant = console.log;
