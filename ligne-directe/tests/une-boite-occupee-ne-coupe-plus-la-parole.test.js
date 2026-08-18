@@ -213,7 +213,7 @@ if (cmd === 'agent read') {
   let t0;
   try { t0 = Number(fs.readFileSync(MARQUEUR, 'utf8')); }
   catch { t0 = Date.now(); fs.writeFileSync(MARQUEUR, String(t0)); }
-  const phrase = 'je reprends la migration demain matin si' + (Date.now() - t0 >= \${SEUIL_MOUVEMENT_MS} ? ' tu confirmes' : '');
+  const phrase = 'je reprends la migration demain matin si' + (Date.now() - t0 >= ${SEUIL_MOUVEMENT_MS} ? ' tu confirmes' : '');
   process.stdout.write(['~/x', SEP, '\\u276f ' + phrase, SEP, '  auto mode on'].join('\\n'));
   process.exit(0);
 }
@@ -231,11 +231,30 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
     (err) => {
       assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
       assert.ok(err.message.includes('w5:p8'), 'le refus nomme le pane');
+      // ⚠️ ON EXIGE LA BONNE CAUSE, PAS SEULEMENT UN REFUS — et c'est ce qui manquait.
+      //
+      // La forme précédente de cet essai n'exigeait qu'un rejet nommant le pane. Or son double
+      // était CASSÉ (une interpolation non résolue laissait « \${SEUIL_MOUVEMENT_MS} » dans le
+      // script généré) : herdr plantait, l'écran devenait illisible, et le refus tombait pour
+      // « je n'ai pas su lire l'écran ». L'essai passait — sur un chemin qui n'a rien à voir
+      // avec ce qu'il prétend éprouver, et la mutation de la fenêtre lui survivait.
+      //
+      // Un refus n'est une preuve que si c'est LE refus qu'on attendait.
+      assert.match(
+        err.message,
+        /BOUG/i,
+        `le refus doit porter sur le MOUVEMENT du texte, pas sur autre chose — reçu : ${err.message}`
+      );
       return true;
     }
   );
 
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
+  // ⚠️ LA PREUVE QUE LE DOUBLE A RÉPONDU. Deux assertions NÉGATIVES ne prouvent rien si rien
+  // n'a eu lieu : un double mort les satisfait toutes les deux. On exige donc d'abord que la
+  // boîte ait été lue PLUSIEURS fois — c'est-à-dire qu'on ait réellement observé.
+  const lectures = gestes.filter((g) => g === 'agent read').length;
+  assert.ok(lectures >= 2, `la boîte doit avoir été OBSERVÉE — vu ${lectures} lecture(s)`);
   assert.ok(
     !gestes.includes('agent send-keys'),
     'ON NE SOUMET PAS la phrase de quelqu’un qui est en train de la taper — le geste ne se défait pas'
