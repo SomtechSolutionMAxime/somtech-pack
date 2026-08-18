@@ -118,6 +118,10 @@ function pageDeConnexion() {
  * @param {object} etat
  * @param {Array}  etat.canaux      { id, name, is_private, is_archived, membres:[] }
  * @param {Array}  etat.utilisateurs { id, name, real_name, profile:{email} }
+ * @param {string} etat.espace     l'IDENTIFIANT de l'espace (`team_id`) — celui que `users.info`
+ *                                  porte sur chaque membre et que `auth.test` rend en `team_id`
+ * @param {string} etat.espaceNom   le NOM de l'espace — ce que `auth.test` rend en `team`. Il est
+ *                                  DIFFÉRENT de l'identifiant, comme chez le vrai Slack.
  * @param {object} etat.fichiers    adresse privée → { octets, mime } — le contenu servi par
  *                                  files.slack.com, qui n'est PAS l'API et n'a pas ses règles
  * @param {boolean} etat.droitFichiers  l'application a-t-elle `files:read` ? Sans lui, Slack
@@ -133,6 +137,7 @@ export function fauxSlack({
   canaux = [],
   utilisateurs = [],
   espace = 'T_ESSAIS',
+  espaceNom = 'Espace des essais',
   robot = 'UMOI',
   fichiers = {},
   droitFichiers = true,
@@ -209,7 +214,22 @@ export function fauxSlack({
 
     switch (methode) {
       case 'auth.test':
-        return reponse({ ok: true, team: espace, user_id: robot, bot_id: 'B1', url: 'https://essais.slack.com/' });
+        // ⚠️ `team` EST UN NOM, `team_id` EST UN IDENTIFIANT — et ce ne sont PAS les mêmes objets.
+        // MESURÉ contre le vrai Slack le 2026-08-18 avec le jeton du robot :
+        //   { team: "Somtech Solution", team_id: "T091JB7AVJ4", ... }
+        // Ce double leur donnait jusqu'ici LA MÊME VALEUR. C'est la seule raison pour laquelle
+        // `T-20260818-0046` a pu vivre : la garde de cloisonnement comparait `team` (d'ici) à
+        // `team_id` (de `users.info`), et cette comparaison ne pouvait être vraie QUE dans un
+        // double où les deux coïncident. En production elle était fausse pour TOUT LE MONDE —
+        // 28 refus à tort sur 31 personnes-canaux mesurées sur le poste.
+        return reponse({
+          ok: true,
+          team: espaceNom,
+          team_id: espace,
+          user_id: robot,
+          bot_id: 'B1',
+          url: 'https://essais.slack.com/',
+        });
 
       case 'apps.connections.open':
         return reponse({ ok: true, url: 'wss://essais.invalide/lien' });

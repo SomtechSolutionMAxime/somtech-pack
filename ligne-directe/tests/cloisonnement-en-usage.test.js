@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { fauxSlack } from './aide/faux-slack.js';
+import * as slack from '../src/slack.js';
 
 let Veilleur, sauverRegistre, chargerRegistre;
 let racine;
@@ -32,6 +33,13 @@ const UMOI = 'UMOI';
 const UDIR = 'UDIR';
 const PANE = 'w1:p1';
 const EQUIPE = 'T_ESSAIS';
+/**
+ * ⚠️ LE NOM DE L'ESPACE N'EST PAS SON IDENTIFIANT, et c'est tout le sujet de `T-20260818-0046`.
+ * `auth.test` rend les deux ; `users.info` ne porte que l'identifiant. Tant que ces essais
+ * fabriquaient l'identité du veilleur À LA MAIN — en y mettant l'IDENTIFIANT là où la
+ * production met le NOM — ils éprouvaient une chaîne qui n'existait nulle part.
+ */
+const EQUIPE_NOM = 'Espace des essais';
 const DIRIGEANT = { id: UDIR, courriel: 'dirigeant@somtech.ca' };
 
 /**
@@ -74,11 +82,16 @@ function agentsQuiVivent() {
 
 async function avecPoste({ canaux = [], utilisateurs = [...NOUS], lignes = [] }, corps) {
   sauverRegistre({ version: 1, lignes, commun: null, dirigeant: DIRIGEANT });
-  const monde = fauxSlack({ canaux, utilisateurs, robot: UMOI, espace: EQUIPE }).installer();
+  const monde = fauxSlack({ canaux, utilisateurs, robot: UMOI, espace: EQUIPE, espaceNom: EQUIPE_NOM }).installer();
+  // ⚠️ L'IDENTITÉ EST LUE COMME EN PRODUCTION, jamais fabriquée ici (T-20260818-0046). Le
+  // veilleur réel l'obtient de `slack.identite()` au démarrage ; un essai qui la compose à la
+  // main choisit ce que la garde comparera, et peut donc la rendre verte sur une chaîne qui
+  // n'existe pas. C'est exactement ce qui a laissé passer une garde refusant 100 % des membres.
+  const identite = await slack.identite('xoxb-x');
   const v = new Veilleur({
     cheminSocket: join(racine, `v-${(compteur += 1)}.sock`),
     jetons: { robot: 'xoxb-x', ecoute: 'xapp-y' },
-    identite: { equipe: EQUIPE, utilisateur: UMOI },
+    identite,
     herdr: agentsQuiVivent(),
   });
   // ⚠️ ON DÉMARRE L'ÉCOUTE LOCALE MÊME SANS S'EN SERVIR : `arreter()` attend la fermeture d'un

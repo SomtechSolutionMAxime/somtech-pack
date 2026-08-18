@@ -64,7 +64,11 @@ test('MUR 2 — mais un test qui monte son double travaille normalement', async 
   const { fauxSlack } = await import('./aide/faux-slack.js');
   const monde = fauxSlack({}).installer();
   try {
-    assert.equal((await appeler('auth.test', 'jeton')).team, 'T_ESSAIS');
+    const d = await appeler('auth.test', 'jeton');
+    // ⚠️ Le double distingue le NOM de l'espace de son IDENTIFIANT, comme le vrai Slack
+    // (T-20260818-0046) — les confondre ici avait rendu vert un cloisonnement inopérant.
+    assert.equal(d.team, 'Espace des essais');
+    assert.equal(d.team_id, 'T_ESSAIS');
   } finally {
     monde.restaurer();
   }

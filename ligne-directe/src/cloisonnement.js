@@ -58,6 +58,35 @@ export const NOUS = {
 const estNotreRobot = (p) => Boolean(p?.robot);
 
 /**
+ * LA FORME D'UN IDENTIFIANT D'ESPACE SLACK — et pourquoi une garde locale sur CETTE
+ * comparaison, précisément (T-20260818-0046).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * Le défaut n'était pas une garde trop stricte : c'était `p.equipe` (un IDENTIFIANT, `team_id`)
+ * comparé par égalité à une valeur qui portait le NOM de l'espace. Deux grandeurs qu'on croit
+ * comparables parce qu'elles portent le même nom de champ. **La condition ne pouvait alors être
+ * vraie que pour tout le monde** — 28 refus à tort sur 31 personnes-canaux mesurées.
+ *
+ * ⚠️ CORRIGER LE CHAMP RÉPARE LE FAIT ET LAISSE LA FORME ARMÉE. Rien, dans une comparaison de
+ * chaînes, n'oblige à NOMMER L'UNITÉ de ce qu'on compare — et cinq relectures attentives n'en
+ * ont attrapé aucune occurrence avant coup, sur ce module. On pose donc ici, sur cette
+ * comparaison-là, le contrôle qui manquait : la référence doit AVOIR LA FORME d'un identifiant.
+ *
+ * `T091JB7AVJ4` (mesuré le 2026-08-18) · `E…` sur une grille Enterprise. Jamais
+ * « Somtech Solution » : un nom d'espace porte des minuscules et des espaces.
+ */
+const FORME_IDENTIFIANT_ESPACE = /^[TE][A-Z0-9_]{2,}$/;
+
+/**
+ * La référence d'organisation est-elle comparable à ce que les profils portent ?
+ *
+ * ⚠️ EXPORTÉE POUR QUE L'APPELANT PUISSE LE DIRE. Une garde qui s'abstient en silence est le
+ * défaut que ce module a déjà payé quatre fois : `veilleur.js` consulte ceci au démarrage et
+ * journalise. Ici, on ne peut que refuser de fabriquer un verdict — ce module ne parle à rien.
+ */
+export const referenceComparable = (nous) => Boolean(nous) && FORME_IDENTIFIANT_ESPACE.test(nous);
+
+/**
  * Ceux qui, parmi ces profils, ne sont pas de la maison.
  *
  * Deux façons d'être étranger, et elles se cumulent :
@@ -65,9 +94,14 @@ const estNotreRobot = (p) => Boolean(p?.robot);
  *   • appartenir à une AUTRE organisation Slack — la façon dont un externe arrive par Slack
  *     Connect. Aucun cas sur le poste aujourd'hui, mais la porte existe et coûte une comparaison.
  *
- * ⚠️ `nous` peut être inconnu, et on ne fabrique alors aucun verdict sur l'organisation : une
- * comparaison qu'on ne peut pas faire ne rend pas « ils sont tous des nôtres ». Le reste du
- * critère tient quand même — un invité reste un invité.
+ * ⚠️ `nous` EST UN IDENTIFIANT D'ESPACE (`team_id`), jamais son nom — c'est la seule chose
+ * comparable à `p.equipe`, qui vient de `users.info`. Confondre les deux a produit une garde
+ * qui refusait 100 % des membres de la maison (T-20260818-0046).
+ *
+ * ⚠️ `nous` peut être inconnu OU ne pas avoir la forme d'un identifiant, et on ne fabrique alors
+ * aucun verdict sur l'organisation : une comparaison qu'on ne peut pas faire ne rend ni « ils
+ * sont tous des nôtres » ni « ils sont tous étrangers ». Le reste du critère tient quand même —
+ * un invité reste un invité, et c'est lui qui attrape le cas réel du poste.
  */
 export function etrangersParmi(profils, nous) {
   return (profils || []).filter((p) => {
@@ -77,7 +111,7 @@ export function etrangersParmi(profils, nous) {
     // un profil restreint ; le silence de Slack n'est pas une accusation.
     if (p.inconnu) return false;
     if (p.invite || p.monoCanal) return true;
-    if (nous && p.equipe && p.equipe !== nous) return true;
+    if (referenceComparable(nous) && p.equipe && p.equipe !== nous) return true;
     return false;
   });
 }
