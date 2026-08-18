@@ -47,7 +47,19 @@ ls .gestionnaire/<client>/CLAUDE.md .gestionnaire/<client>/CONTEXTE.md 2>/dev/nu
 npx @somtech-solutions/pack@latest representant-update --client <client> --dry-run
 ```
 
-**Afficher le rapport à l'utilisateur** : créés / convergés (dérive du pack) / inchangés / 🔒 préservés (toujours `CONTEXTE.md`, jamais écrasé). **Attendre confirmation** avant d'appliquer — même règle que `/somtech-pack-maj`.
+**Afficher le rapport à l'utilisateur** : créés / convergés (dérive du pack) / inchangés / 🔒 préservés (toujours `CONTEXTE.md`, jamais écrasé) — **et la dernière ligne, celle de l'armement** (voir ci-dessous). **Attendre confirmation** avant d'appliquer — même règle que `/somtech-pack-maj`.
+
+### La ligne d'armement se relaie TOUJOURS (T-20260818-0034)
+
+La commande termine son rapport par l'état du garde d'ouverture de ligne dans ce lieu. **Cette ligne n'est pas un détail du rapport : c'est le seul endroit où un désarmement se voit.** Un lieu désarmé se lit exactement comme un lieu armé — mêmes fichiers, même structure — et l'agent qui l'habitera pourra travailler avant d'avoir ouvert sa ligne, sans que personne ne le sache.
+
+| Ce que la commande dit | Ce que ça veut dire | Ce que tu fais |
+|---|---|---|
+| `🛡️ armé` | le garde est en place | rien, mais **dis-le** |
+| `⚠️ DÉSARMÉ` | aucun garde : le lieu ne protège rien | **remonte-le comme un défaut**, ne referme pas dessus en silence |
+| `⚠️ armement INCONNU` | le fichier de droits manque ou ne se lit pas | le lieu est posé **partiellement** — c'est la pose qu'il faut reprendre (Phase 0), pas l'armement |
+
+En `--dry-run`, cette ligne décrit le lieu **tel qu'il est maintenant** : c'est ainsi qu'on demande à un lieu s'il est armé sans avoir à provoquer un blocage.
 
 Si le rapport ne montre **aucune** convergence en attente, dis-le et arrête-toi : rien à faire.
 
@@ -71,6 +83,8 @@ npx @somtech-solutions/pack@latest representant-update --client <client>
 git diff --stat .gestionnaire/<client>/CONTEXTE.md   # doit être VIDE
 git diff --stat .gestionnaire/<client>/CLAUDE.md     # doit montrer la convergence, si elle a eu lieu
 ```
+
+**Et ne clôture pas non plus sans avoir relayé l'état d'armement** rendu en Phase 2. Un rapport de convergence qui ne dit rien du garde laisse passer exactement ce que `T-20260818-0034` a fermé : le bon geste, fait correctement, qui retire une protection sans un mot.
 
 Si `.gestionnaire/` n'est pas suivi par git dans ce dépôt, compare l'horodatage ou relis le fichier — mais **compare le contenu**, jamais seulement « le fichier existe encore ».
 
