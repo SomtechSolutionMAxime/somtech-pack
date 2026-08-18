@@ -29,6 +29,7 @@ import { join, resolve } from 'node:path';
 import { resolvePayloadRoot } from '../modules.js';
 import { collectFiles, applyFiles } from '../engine.js';
 import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from '../lieu-nom.js';
+import { verifierFraicheur } from '../fraicheur-gabarit.js';
 
 /**
  * Les deux rôles qui posent un lieu, avec ce qui les distingue — le gabarit dont ils
@@ -187,6 +188,44 @@ export async function cmdLieuUpdate(flags, roleNom) {
     );
   }
 
+  // ─── LA GARDE DE FRAÎCHEUR — la MÊME que celle de la pose (E-20260818-0014, T-20260818-0112).
+  //
+  // ⚠️ ELLE VAUT POUR LA FONCTION, PAS POUR LE GESTE OÙ ON L'A ÉCRITE. Sans elle ici, ce
+  // geste-ci — celui qu'on RECOMMANDE pour remettre un lieu d'aplomb — réinstallerait le
+  // métier périmé dans le lieu qu'il prétend réparer. Mesuré : sur les six dépôts du parc au
+  // 2026-08-18, aucun ne portait le gabarit du poste ; rafraîchir un lieu dans l'un d'eux
+  // l'aurait fait converger vers un métier d'une autre époque, en annonçant un succès.
+  //
+  // ⚠️ ET CE QU'ELLE MESURE ICI N'EST PAS CE QUE MESURE LA POSE — c'est voulu. La pose sert le
+  // gabarit du DÉPÔT ; cette commande sert celui du PAYLOAD résolu (`resolvePayloadRoot` :
+  // `--source`, `SOMTECH_PACK_PAYLOAD`, `cli/payload`, puis la racine du dépôt).
+  //
+  // CE QUI EST MESURÉ SUR CE POSTE, 2026-08-18 : `cli/payload` est ignoré par git
+  // (`.gitignore:13`), produit par `npm run build:payload` / `prepublishOnly`, et son gabarit
+  // orchestrateur CONCORDE aujourd'hui avec celui du dépôt sur les quatre fichiers. Mesuré
+  // aussi, par un autre agent, sur le chemin du paquet PUBLIÉ : trois installations du jour
+  // (v1.67, v1.68, v1.69) ont fait converger le poste vers `main`, fichier par fichier.
+  //
+  // `[non établi]` : qu'un payload SERVI puisse être périmé en pratique. C'est ce qu'on
+  // attendrait d'un produit de build non versionné, ce n'est pas ce qu'on a constaté. La garde
+  // ne repose donc sur aucune conclusion à ce sujet : elle compare `sourceDir` — quel qu'il
+  // soit, payload ou `--source` — au pack du poste. Le payload est ce qu'on MESURE, jamais ce
+  // contre quoi on mesure ; la référence ne vient QUE de `~/.claude/plugins/marketplaces/…`
+  // (voir `referenceDuPoste`), et un test l'exige.
+  //
+  // Le refus tombe AVANT `applyFiles` : le lieu n'est pas touché.
+  const fraicheur = verifierFraicheur({
+    depot,
+    gabaritDepot: sourceDir,
+    gabarit: role.gabarit,
+    libelle: role.libelle.toLowerCase(),
+  });
+  if (fraicheur.perime) {
+    throw new Error(
+      `${fraicheur.message}\n  Rien n’a été modifié dans « ${target} » : ce lieu porte encore ce qu’il portait.`
+    );
+  }
+
   const { files: tous } = collectFiles(sourceDir, ['']);
   const preserveSet = new Set(PRESERVE);
   const files = tous.filter((rel) => !preserveSet.has(rel));
@@ -200,6 +239,13 @@ export async function cmdLieuUpdate(flags, roleNom) {
 
   const converged = flags.dryRun ? 'à converger' : 'convergés (version du pack)';
   console.log(`${role.libelle} « ${nom} » → ${target}${flags.dryRun ? ' [dry-run]' : ''}`);
+  // CE QU'ON N'A PAS PU MESURER SE DIT — il ne se tait pas. Une convergence qui ne sait pas si
+  // le métier qu'elle sert est celui du pack l'annonce, plutôt que de rendre le succès muet
+  // qui a fait ce ticket. C'est aussi ce qui rend visible un `cli/payload` périmé, produit de
+  // build qu'aucun `git status` ne signale.
+  if (!fraicheur.verifie) {
+    console.log(`  ⚠️ métier NON VÉRIFIÉ — ${fraicheur.raison}`);
+  }
   // Le lieu réel ne porte pas la casse demandée : on le DIT. Le taire, c'est laisser croire
   // qu'on a visé « francois » alors qu'on a écrit dans « Francois » — la confusion exacte que
   // macOS entretenait en silence.

@@ -34,6 +34,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { run, parseArgs } from '../src/cli.js';
+import { alignerLePosteSur } from './lib/poste-conforme.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_DIR = resolve(HERE, '..');
@@ -56,6 +57,10 @@ function makeFixturePayload({ extra } = {}) {
   writeFileSync(join(gabarit, 'CLAUDE.md'), CLAUDE_V2);
   writeFileSync(join(gabarit, 'CONTEXTE.md'), CONTEXTE); // starter, jamais utilisé pour écraser
   if (extra) for (const [nom, contenu] of Object.entries(extra)) writeFileSync(join(gabarit, nom), contenu);
+  // LE POSTE EST RENDU CONFORME À CE PAYLOAD — la garde de fraîcheur tourne donc sous
+  // cette suite, elle compare, et elle trouve identique. On ne la désarme pas : on lui
+  // donne un poste qui sert le même pack que la fixture (voir lib/poste-conforme.js).
+  alignerLePosteSur(root);
   return root;
 }
 
