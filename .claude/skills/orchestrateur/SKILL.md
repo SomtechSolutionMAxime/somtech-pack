@@ -419,7 +419,9 @@ orchestrateur fermé cesse d'être réveillé sans qu'on ait rien à désinscrir
 - **Elle ne rafraîchit pas un lieu déjà posé, et ne le répare pas davantage.** Une reprise sur
   un lieu complet ne retouche à rien ; sur un lieu incomplet, elle refuse au lieu de le
   compléter. Rafraîchir est un geste différent — `npx @somtech-solutions/pack orchestrateur-update --nom <nom>` —
-  et il ne touche jamais `CONTEXTE.md`.
+  et il ne touche jamais `CONTEXTE.md`. Ce geste-là termine son rapport par l'état du garde
+  d'ouverture de ligne du lieu (`🛡️ armé`, `⚠️ DÉSARMÉ`, `⚠️ armement INCONNU`) : **cette ligne
+  se relaie toujours**, c'est le seul endroit où un désarmement se voit (T-20260818-0034).
 - **Elle ne mène aucun chantier.** Elle ne découpe pas, n'ouvre aucun chef d'équipe, ne pose
   aucun ticket. Le lieu posé et la session née, elle s'arrête.
 

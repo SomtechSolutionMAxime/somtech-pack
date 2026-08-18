@@ -41,7 +41,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -270,6 +270,93 @@ for (const role of ROLES) {
     assert.match(dit, /⚠️ +DÉSARMÉ/, 'à blanc, un lieu désarmé doit s’entendre dire désarmé');
     assert.doesNotMatch(dit, /🛡️ +armé/, 'et pas armé en même temps');
   });
+}
+
+// ═══════════════════════ 4-bis. le rendu ne mentira pas — deux angles trouvés en revue
+
+/**
+ * Écrit un `settings.json` de lieu porteur d'un `hooks` ARBITRAIRE, et rend ce que la
+ * convergence en dit. Sert les deux familles ci-dessous, qui ne se distinguent que par la
+ * forme qu'on lui donne.
+ */
+async function ceQuElleDitDe(role, hooks) {
+  const { depot, lieu } = poserLieu(role);
+  const s = JSON.parse(readFileSync(settingsDu(lieu), 'utf8'));
+  s.hooks = hooks;
+  writeFileSync(settingsDu(lieu), `${JSON.stringify(s, null, 2)}\n`);
+  return converger(role, depot, { dryRun: true });
+}
+
+for (const role of ROLES) {
+  test(`${role.nom} : le garde câblé AILLEURS QUE SUR PreToolUse ne vaut pas « armé »`, async () => {
+    // ⚠️ TROUVÉ EN REVUE. La sonde parcourait TOUS les événements : un garde rangé sous
+    // `SessionStart` la satisfaisait. Or le garde n'existe que comme PreToolUse — ailleurs il
+    // ne s'interpose devant aucun appel d'outil, et le lieu est aussi nu que sans lui.
+    // Annoncer « armé » dans ce cas rejoue le mensonge que ce ticket ferme, déplacé d'un cran.
+    const { dit } = await ceQuElleDitDe(role, { SessionStart: [{ hooks: [{ type: 'command', command: COMMANDE_GARDE }] }] });
+    assert.match(dit, /⚠️ +DÉSARMÉ/, 'un garde hors PreToolUse ne garde rien');
+    assert.doesNotMatch(dit, /🛡️ +armé/, 'et ne doit pas s’annoncer armé');
+  });
+
+  // Trois formes de `hooks` syntaxiquement valides en JSON mais structurellement fausses. Elles
+  // faisaient lever un TypeError non rattrapé : la commande rendait `exit 1` et un message
+  // interne, là où elle réussissait AVANT ce lot. Une régression, et la pire espèce — celle qui
+  // casse l'observabilité qu'on venait d'ajouter.
+  const FORMES_FAUSSES = [
+    ['PreToolUse est un objet', { PreToolUse: { a: 1 } }],
+    ['le bloc porte une chaîne', { PreToolUse: [{ hooks: 'garde-ouverture-ligne.js' }] }],
+    ['hooks est un tableau', [{ x: 1 }]],
+  ];
+  for (const [quoi, hooks] of FORMES_FAUSSES) {
+    test(`${role.nom} : un « hooks » mal formé (${quoi}) ne fait pas échouer la commande`, async () => {
+      const { code, dit } = await ceQuElleDitDe(role, hooks);
+      assert.notEqual(code, 1, 'la commande ne doit pas échouer sur une forme qu’elle sait seulement ne pas reconnaître');
+      assert.match(dit, /⚠️ +DÉSARMÉ|armement INCONNU/, 'elle doit DIRE ce qu’elle a trouvé, pas se taire');
+      assert.doesNotMatch(dit, /🛡️ +armé/, 'et surtout pas annoncer un armement');
+    });
+  }
+}
+
+// ═══════════════════════ 4-ter. trois mutations qui survivaient à la suite
+
+for (const role of ROLES) {
+  test(`${role.nom} : PLUSIEURS blocs PreToolUse, un seul porteur du garde → ARMÉ`, async () => {
+    // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE. Aucune fixture ne construisait un événement à
+    // deux blocs : remplacer le `some` des blocs par `every` laissait toute la suite verte.
+    //
+    // Or la forme à plusieurs blocs est celle de la PRODUCTION — `fusionnerGarde` ajoute le
+    // garde À LA SUITE des PreToolUse déjà présents. Et Claude Code les exécute tous : un seul
+    // bloc porteur suffit à armer. Un `every` aurait déclaré désarmé un lieu réellement gardé,
+    // ce qui ferait courir après une protection déjà en place.
+    const { dit } = await ceQuElleDitDe(role, {
+      PreToolUse: [
+        { hooks: [{ type: 'command', command: 'bash .claude/hooks/autre-chose.sh' }] },
+        { hooks: [{ type: 'command', command: COMMANDE_GARDE }] },
+      ],
+    });
+    assert.match(dit, /🛡️ +armé/, 'un bloc porteur parmi plusieurs suffit à armer le lieu');
+    assert.doesNotMatch(dit, /DÉSARMÉ/, 'et ne doit pas se lire comme un désarmement');
+  });
+
+  // « Je n'ai pas pu regarder » n'est pas « il n'y a rien ». Les deux mutations qui confondaient
+  // ces deux états (`return null` → `return false`) survivaient : aucune fixture ne présentait
+  // un lieu dont le fichier de droits manque ou ne se lit pas, alors que ce sont les deux formes
+  // d'un lieu posé PARTIELLEMENT — celles où annoncer « DÉSARMÉ » enverrait réparer un
+  // armement quand c'est la pose qu'il faut reprendre.
+  const ILLISIBLES = [
+    ['absent', (chemin) => rmSync(chemin)],
+    ['corrompu', (chemin) => writeFileSync(chemin, '{ ceci n’est pas du JSON')],
+  ];
+  for (const [quoi, casser] of ILLISIBLES) {
+    test(`${role.nom} : un fichier de droits ${quoi} se dit INCONNU, jamais « désarmé »`, async () => {
+      const { depot, lieu } = poserLieu(role);
+      casser(settingsDu(lieu));
+      const { dit } = await converger(role, depot, { dryRun: true });
+      assert.match(dit, /armement INCONNU/, `un fichier ${quoi} est un état à dire, pas à deviner`);
+      assert.doesNotMatch(dit, /DÉSARMÉ/, 'ne pas annoncer un désarmement qu’on n’a pas constaté');
+      assert.doesNotMatch(dit, /🛡️ +armé/, 'ni un armement');
+    });
+  }
 }
 
 // ═══════════════════════ 5. l'accord des deux lots : le gabarit porte le garde du pack
