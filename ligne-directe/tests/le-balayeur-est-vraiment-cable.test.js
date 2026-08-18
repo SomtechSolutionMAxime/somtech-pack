@@ -242,6 +242,21 @@ test('LE BALAYAGE S’ARRÊTE AVEC LE VEILLEUR — un intervalle qui survit à l
   await new Promise((r) => setTimeout(r, 80));
 
   assert.equal(passages, apresArret, 'après `arreter()`, plus aucun tour ne doit partir');
+
+  // ⚠️ ET LE MINUTEUR LUI-MÊME DOIT ÊTRE ÉTEINT, PAS SEULEMENT MUSELÉ — sans cette seconde
+  // moitié, cet essai ne gardait rien. Mesuré : en retirant `clearInterval(this.balayeur)` de
+  // `arreter()`, il RESTAIT VERT. Le drapeau `this.arrete` suffit à faire retourner chaque tour
+  // aussitôt, donc le compteur ne bouge pas — et l'intervalle continue pourtant de réveiller le
+  // processus toutes les minutes, pour rien, jusqu'à la fin de sa vie.
+  //
+  // On lève le drapeau : si le minuteur avait seulement été muselé, il repartirait maintenant.
+  v.arrete = false;
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(
+    passages,
+    apresArret,
+    'le minuteur doit être ÉTEINT, pas seulement gardé par un drapeau — sinon il survit à son maître'
+  );
 });
 
 test('LA CADENCE VIENT DE `delivrance.js`, JAMAIS DU VEILLEUR', async () => {
