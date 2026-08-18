@@ -5,6 +5,31 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [1.68.0] - 2026-08-18
+
+*Un seul lot : PR #284 (T-20260818-0046), sous la livraison `J-20260814-0002`. La garde de cloisonnement des lignes Slack comparait deux grandeurs qui n'étaient pas du même objet — elle refusait donc **tout le monde, en permanence**, et le premier refus qu'on lui ait vu rendre a coupé la parole du dirigeant sur sa propre ligne.*
+
+### Corrigé
+
+- **La garde de cloisonnement compare un identifiant d'espace, plus un nom** (T-20260818-0046, PR #284) — `etrangersParmi` opposait par égalité `identite.equipe`, le **nom** rendu par `auth.test` (« Somtech Solution »), à `p.equipe`, l'**identifiant** que `users.info` porte sur chaque profil (« T091JB7AVJ4 »). Deux objets différents : la condition ne pouvait être vraie **que pour tout le monde**. Un orchestrateur s'est retrouvé muet vers le dirigeant — *« #batiscan porte maxime.leboeuf, qui ne semble pas de la maison — rien n'est écrit »* — alors que celui-ci est **propriétaire de l'espace**, jamais un invité.
+- **La cause n'était pas chez Slack, elle était dans la projection.** `auth.test` rend `team_id` depuis toujours — mesuré le 2026-08-18 avec le jeton du robot : `{ team: "Somtech Solution", team_id: "T091JB7AVJ4", … }`. C'est `identite()` qui retenait quatre champs et **jetait celui-là**. Elle porte désormais les deux, et ils ne sont pas interchangeables : `equipe` pour ce qu'un humain lit (journal du veilleur, `ligne-directe etat`, bilan du poste), `equipeId` pour la seule valeur comparable à un profil. **Le correctif le plus court — remplacer `d.team` par `d.team_id` — aurait réparé la garde et remplacé « espace Somtech Solution » par « espace T091JB7AVJ4 » dans trois surfaces que personne n'aurait regardées avant longtemps.** Un essai garde cette issue.
+- **Les deux comparaisons basculent, pas une.** `ouvrir` et `dire`/`fermer` décident chacune de leur côté ; réparer l'une seule aurait laissé une ligne s'ouvrir sur un canal où l'on n'a plus le droit d'écrire, ou l'inverse. Les deux portes sont éprouvées séparément.
+
+### Sécurité
+
+- **La garde ne protégeait rien, et c'est un point de Loi 25, pas de confort.** Elle existe pour empêcher un client d'atterrir dans un canal interne — arbitrages, pannes de production, échéances, coûts. **Comme elle refusait tout le monde, elle n'a jamais trié personne** : le cloisonnement était nominal. Ce lot ne l'assouplit pas, **il le rend effectif**.
+- **Les deux chiffres, mesurés sur le trafic réel du poste** — 27 lignes ouvertes lues (`conversations.members` + `users.info`, lecture seule). Sur les **24 lignes internes**, seules où la garde s'applique : **25 personnes jugées, 25 refusées à tort avant** — soit **100 %**, nommément `maxime.leboeuf`, `Bruno Potvin`, `Félix Bouchard` — et **0 après**, sans qu'aucun vrai étranger ne passe dans l'un ou l'autre cas. ⚠️ La colonne « attrape » vaut **0** parce qu'il n'y a **aucun étranger dans ces canaux aujourd'hui** : la capacité d'attraper est prouvée **par le banc** — un invité refusé, un membre d'une autre organisation refusé — jamais par ce trafic-là.
+- **Un invité, un mono-canal, un membre d'une autre organisation Slack restent refusés sur une ligne interne.** Deux mutations le prouvent : retirer l'une ou l'autre branche fait rougir le banc.
+
+### Technique
+
+- **Pourquoi 570 essais étaient verts sur une garde inopérante** — le double de Slack rendait l'**identifiant** là où le vrai service rend le **nom**, et le banc du cloisonnement **fabriquait** l'identité du veilleur au lieu de la lire. La comparaison y opposait donc un identifiant à un identifiant : la seule façon pour cette garde d'être verte. **Un double plus cohérent que le service qu'il double rend un vert qui ne dit rien.** Corrigé des deux côtés — le double distingue `team` de `team_id`, et le banc lit son identité par `slack.identite()`, le chemin de la production.
+- **Rouge avant vert, et le rouge est venu du harnais.** Rendre le double fidèle a fait tomber **trois essais du cas nominal** — une ligne interne entre collègues qui ne s'ouvre plus, un bilan de clôture qui ne part plus, un profil illisible qui bloque les autres : le fait vécu par le dirigeant, reproduit au banc avant d'être corrigé. Après : **593 essais, 0 échec**. **Sept mutations, sept rouges.**
+- **Une garde locale d'unité, posée sur cette comparaison-là** — la référence doit **avoir la forme** d'un identifiant d'espace, sinon aucun verdict d'organisation n'est fabriqué, et le veilleur le **journalise** au démarrage plutôt que de s'abstenir en silence. Le critère de l'invité, lui, continue de mordre. Elle a tenu **sans toucher à la forme générale du module** : la question de savoir si une garde du même genre doit exister partout reste à `T-20260818-0070`.
+- **⚠️ Le premier jet de cette garde refabriquait la panne d'origine, et c'est la revue de fond qui l'a mesuré.** Elle acceptait aussi un identifiant `E…` « pour une grille Enterprise » — **une hypothèse, pas une mesure**. Or le côté d'en face est toujours un `team_id` d'espace : `referenceComparable('E091JB7AVJ4')` rendait `true`, et `etrangersParmi` reclassait alors **tout le monde étranger**. L'essai qui accompagnait ne gardait que la forme du motif, pas que la comparaison qui s'ensuit ait un sens. Resserré à `T…`, essai retourné, mutation qui le garde. **S'abstenir en le disant est réparable ; refuser tout le monde en silence ne l'était pas.**
+- **Deux passes de revue** — portail : **RIEN VU**, après énumération de tous les lecteurs de `identite.equipe` / `identite.equipeId` / `etrangersParmi` ; fond : pas de défaut bloquant, mais le défaut `E…` ci-dessus, mesuré en exécutant le code, mutations faites sur copie hors dépôt.
+- **⚠️ Limite connue, non comblée, et dite plutôt que laissée à croire couverte** : la ligne de journal du démarrage — *« l'identifiant de l'espace est inutilisable »* — n'est éprouvée **qu'unitairement**, jamais à son point d'intégration dans `Veilleur.demarrer()`, qui exige le trousseau et une connexion d'écoute.
+
 ## [1.67.0] - 2026-08-18
 
 ### Corrigé
