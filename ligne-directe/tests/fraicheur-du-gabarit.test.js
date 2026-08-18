@@ -58,6 +58,12 @@ function perimer(depot, role, { fichier = 'CLAUDE.md', texte = '# Tu es le pilot
   writeFileSync(join(depot, '.claude', 'templates', roleDe(role).gabarits, fichier), texte);
 }
 
+/** Ce que porte le dépôt-source du pack, et que ne porte aucun dépôt servi (mesuré sur le parc). */
+const MANIFESTE_DE_LA_SOURCE = JSON.stringify({
+  name: 'somtech-pack',
+  modules: { core: { default: true, paths: ['.claude/', 'scripts/'] } },
+});
+
 const pose = (depot, role, nom, foyer, extra = {}) =>
   preparerLieu({ depot, role, nom, verifierLigne: OUVRABLE, verifierVersionnable: VERSIONNABLE, foyer, ...extra });
 
@@ -246,7 +252,7 @@ test('LE DÉPÔT-SOURCE DU PACK n’est pas comparé à lui-même — et il le d
   const foyer = posteJetable();
   const depot = depotJetable();
   perimer(depot, 'orchestrateur');
-  writeFileSync(join(depot, 'pack.json'), JSON.stringify({ name: 'somtech-pack', modules: {} }));
+  writeFileSync(join(depot, 'pack.json'), MANIFESTE_DE_LA_SOURCE);
 
   const r = await pose(depot, 'orchestrateur', 'dans-la-source', foyer);
 
@@ -256,7 +262,19 @@ test('LE DÉPÔT-SOURCE DU PACK n’est pas comparé à lui-même — et il le d
 
   // ⚠️ ET LA PORTE NE S'OUVRE PAS À N'IMPORTE QUI. Un dépôt servi ne porte pas ce manifeste
   // (mesuré sur le parc) ; un `pack.json` d'un AUTRE paquet ne doit rien exempter du tout.
-  for (const contenu of ['{"name":"autre-chose"}', '{}', 'pas du json', '']) {
+  //
+  // RELEVÉ EN REVUE (passe 2) : le NOM SEUL suffisait — vingt-quatre octets déposés dans un
+  // dépôt client désarmaient la garde. Deux traits sont désormais exigés, et le second est dans
+  // cette liste : un manifeste qui se déclare « somtech-pack » sans distribuer `.claude/`
+  // n'exempte rien. Ça ne rend pas l'usurpation impossible — rien de lu dans un fichier ne le
+  // peut — ça la rend DÉLIBÉRÉE, et la dispense se dit dans le rendu quoi qu'il arrive.
+  for (const contenu of [
+    '{"name":"autre-chose"}', '{}', 'pas du json', '',
+    '{"name":"somtech-pack"}',                                        // le nom seul — ce qui suffisait
+    '{"name":"somtech-pack","modules":{}}',                           // déclaré, ne distribue rien
+    '{"name":"somtech-pack","modules":{"core":{"paths":["docs/"]}}}', // distribue autre chose
+    '{"name":"somtech-pack","modules":"core"}',                       // forme inattendue
+  ]) {
     const autre = depotJetable();
     perimer(autre, 'orchestrateur');
     writeFileSync(join(autre, 'pack.json'), contenu);
@@ -264,6 +282,43 @@ test('LE DÉPÔT-SOURCE DU PACK n’est pas comparé à lui-même — et il le d
     assert.equal(refuse.ok, false, `« ${contenu.slice(0, 20)} » a désarmé la garde`);
     assert.equal(refuse.refus.motif, 'gabarit_perime');
   }
+});
+
+test('un lieu DÉJÀ POSÉ ne refuse pas, mais il DIT que le pack du dépôt a divergé depuis', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // RELEVÉ EN REVUE (passe 2), et c'est le même silence que ce lot ferme, déplacé d'un cran :
+  // ce chemin ne portait AUCUN champ de fraîcheur — ni vrai, ni faux, ni « pas mesuré ». Un
+  // agent posé alors que tout allait bien, sur un dépôt dont le pack a vieilli DEPUIS, ne
+  // recevait rien — pas même en relançant la commande sur lui.
+  //
+  // Il ne refuse pas, et il ne doit jamais refuser : rien n'est servi ici, il n'y a aucun
+  // geste à empêcher. Il MESURE et il DIT.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const foyer = posteJetable();
+  const depot = depotJetable();
+
+  const premier = await pose(depot, 'orchestrateur', 'de-son-temps', foyer);
+  assert.equal(premier.metier_verifie, true, 'précondition : la première pose se fait sur un dépôt à jour');
+
+  // Le pack du dépôt vieillit APRÈS la pose — le cas réel du parc.
+  perimer(depot, 'orchestrateur');
+  const second = await pose(depot, 'orchestrateur', 'de-son-temps', foyer);
+
+  assert.equal(second.ok, true, 'une relance sur un lieu déjà posé a été refusée alors que rien n’était à servir');
+  assert.equal(second.deja_installe, true);
+  assert.equal(second.cree, false);
+  assert.equal(second.metier_verifie, false, 'le chemin idempotent s’est tu sur une divergence qu’il pouvait mesurer');
+  assert.ok(
+    second.metier_non_verifie?.includes('empreinte'),
+    `la relance ne dit pas CE QU’ELLE A MESURÉ : ${second.metier_non_verifie}`,
+  );
+
+  // Et le versant qui ne doit pas crier : sur un dépôt resté à jour, la relance dit « vérifié ».
+  const sain = depotJetable();
+  await pose(sain, 'orchestrateur', 'stable', foyer);
+  const relance = await pose(sain, 'orchestrateur', 'stable', foyer);
+  assert.equal(relance.deja_installe, true);
+  assert.equal(relance.metier_verifie, true, 'une relance sur un dépôt à jour a semé le doute pour rien');
 });
 
 test('un lieu DÉJÀ POSÉ reste idempotent — la garde ne transforme pas un no-op en refus', async () => {

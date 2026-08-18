@@ -218,7 +218,18 @@ export function referenceDuPoste(gabarit, { foyer } = {}) {
 export function depotEstLaSourceDuPack(depot) {
   if (!depot) return false;
   try {
-    return JSON.parse(readFileSync(join(depot, 'pack.json'), 'utf8'))?.name === 'somtech-pack';
+    const manifeste = JSON.parse(readFileSync(join(depot, 'pack.json'), 'utf8'));
+    // DEUX TRAITS, PAS UN — relevé en revue (passe 2) : un `pack.json` de vingt-quatre octets
+    // suffisait. Deux traits ne rendent pas l'usurpation impossible (rien de lu dans un fichier
+    // ne le peut), ils la rendent DÉLIBÉRÉE : il faut reproduire la forme du manifeste, pas
+    // écrire un nom. Ce qui reste vrai dans les deux cas, et qui est la vraie garantie : la
+    // dispense se DIT dans le rendu, elle ne se prend jamais en silence.
+    if (manifeste?.name !== 'somtech-pack') return false;
+    const modules = manifeste?.modules;
+    if (!modules || typeof modules !== 'object') return false;
+    return Object.values(modules).some(
+      (m) => Array.isArray(m?.paths) && m.paths.some((c) => typeof c === 'string' && c.startsWith('.claude/')),
+    );
   } catch {
     // Absent, illisible ou mal formé : ce n'est pas la source. Le doute ne dispense pas.
     return false;
@@ -248,8 +259,11 @@ export function verifierFraicheur({ gabaritDepot, gabarit, libelle = 'agent', fo
     return {
       verifie: false,
       raison:
-        `le gabarit servi n’a pas été comparé au pack de ce poste : ce dépôt EST la source du ` +
-        `pack, et son gabarit y fait foi — c’est ici qu’il se modifie.`,
+        `le gabarit servi n’a pas été comparé au pack de ce poste : ce dépôt porte un ` +
+        `« pack.json » qui se déclare « somtech-pack » et distribue « .claude/ » — c’est la ` +
+        `signature de la source du pack, où le gabarit fait foi. C’est une DÉCLARATION lue dans ` +
+        `un fichier, pas une preuve d’identité : un dépôt qui la porte à tort obtiendrait la ` +
+        `même dispense.`,
     };
   }
 

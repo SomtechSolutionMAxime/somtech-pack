@@ -380,7 +380,37 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
   // ─── Garde 1 : l'idempotence, et elle ne vaut QUE pour un lieu complet.
   const etat = etatLieu(depot, role, nom);
   if (etat.complet) {
-    return { ok: true, cree: false, deja_installe: true, role, nom, ...etat };
+    // ⚠️ CE CHEMIN NE SERT RIEN, ET IL DOIT QUAND MÊME DIRE CE QU'IL A MESURÉ.
+    //
+    // RELEVÉ EN REVUE (passe 2) : ce retour ne portait aucun champ de fraîcheur — ni vrai, ni
+    // faux, ni « pas mesuré ». Défendable pour la seule fonction « refuser une écriture
+    // périmée », puisqu'ici on n'écrit pas. Mais un agent déjà posé dont le pack du dépôt a
+    // divergé APRÈS sa pose ne recevait AUCUN signal, y compris quand on relançait la commande
+    // sur lui : c'est le même silence que ce lot ferme, déplacé de la création vers la relance.
+    //
+    // On mesure donc, et on rend. On ne refuse JAMAIS ici — rien n'est servi, il n'y a rien à
+    // empêcher : un refus ne protégerait aucun geste et rendrait la commande inutilisable sur
+    // un parc en retard. Ce qui se mesure est le GABARIT DU DÉPÔT, la même chose qu'à la pose,
+    // parce que c'est la question que pose une relance : « ce dépôt sert-il encore le bon
+    // métier ? ». Le lieu POSÉ, lui, porte aussi du texte écrit à la main — le comparer serait
+    // mesurer un objet pour conclure sur un autre, et c'est le métier de la mise à jour.
+    const dejaLa = verifierFraicheur({
+      depot,
+      gabaritDepot: gabaritsDir(depot, role),
+      gabarit: r.gabarits,
+      libelle: r.libelle,
+      foyer,
+    });
+    return {
+      ok: true,
+      cree: false,
+      deja_installe: true,
+      role,
+      nom,
+      ...etat,
+      metier_verifie: dejaLa.verifie,
+      ...(dejaLa.verifie ? {} : { metier_non_verifie: dejaLa.perime ? dejaLa.message : dejaLa.raison }),
+    };
   }
   if (etat.existe) {
     return {
