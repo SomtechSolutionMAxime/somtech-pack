@@ -174,6 +174,66 @@ export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleD
   return { orchestrateurs, muettes, sessions: aBalayer.length, agentsVus };
 }
 
+/**
+ * LE PLAFOND DE TEMPS D'UN RENDEZ-VOUS — il le TUE, et il le DIT (T-20260818-0014).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * POURQUOI IL EXISTE, ET CE QU'AUCUNE ÉCHÉANCE NE PEUT FAIRE À SA PLACE
+ *
+ * Les échéances de `tenir()` sont COOPÉRATIVES : elles décident de ne pas demander un tour
+ * de plus. Elles supposent donc que chaque tour REVIENT. Rien ne le garantit — un appel
+ * `herdr` qui ne rend jamais la main fait pendre la ronde pour toujours, et aucune échéance
+ * n'est jamais consultée, parce que le code qui la consulte n'est jamais atteint.
+ *
+ * Et une ronde qui pend ne rate pas UN rendez-vous :
+ *
+ *   > le service n'accepte qu'une instance à la fois — tant qu'elle ne rend pas la main,
+ *   > la SUIVANTE n'est pas lancée. Une ronde qui pend les ANNULE TOUTES.
+ *
+ * C'est la panne la plus chère du dispositif, parce qu'elle est SILENCIEUSE : une vigilance
+ * morte et une vigilance qui n'a rien à dire produisent exactement le même silence. D'où le
+ * plafond, et d'où le fait qu'il ÉCRIT avant de tuer. Une panne bruyante vaut infiniment
+ * mieux qu'un silence qui annule les suivantes.
+ *
+ * ⚠️ LE MINUTEUR EST `unref`, ET VOICI CE QUE ÇA FAIT VRAIMENT — la première rédaction de ce
+ * commentaire affirmait un effet qui ne se produit PAS, et une passe de revue par mutation l'a
+ * pris en défaut : retirer le `unref` ne changeait rien d'observable, parce que `tenir()`
+ * termine aujourd'hui par un `process.exit()` sur CHACUN de ses chemins, et qu'un `exit` ne
+ * regarde aucun minuteur en attente. La justification était donc invérifiable, ce qui est le
+ * défaut dominant de ce dépôt, commis dans le lot qui le corrige.
+ *
+ * Ce que `unref` garantit réellement, et qui vaut d'être tenu : **cette fonction ne retient
+ * jamais un processus en vie**. Le jour où un chemin de sortie RENDRA la main au lieu de
+ * sortir — un refactor ordinaire —, un minuteur ordinaire ferait attendre trente-cinq minutes
+ * à une ronde de dix secondes, et annulerait la suivante par le mécanisme censé l'en
+ * protéger. C'est une propriété de `poserPlafond`, pas de son appelant : elle est donc
+ * éprouvée sur `poserPlafond` seul, sans passer par la ronde (`tests/plafond.test.js`).
+ *
+ * @param {object} p
+ * @param {number} p.ms        le plafond, en millisecondes
+ * @param {string} p.quoi      ce qui est plafonné, pour que le faire-part nomme sa victime
+ * @param {(t: string) => void} p.ecrire  où le faire-part est écrit (le journal du service)
+ * @param {(code: number) => void} p.sortir  comment on meurt
+ * @param {Function} [p.minuteur]  injectable : c'est par là que ce comportement se prouve
+ */
+export function poserPlafond({ ms, quoi, ecrire, sortir, minuteur = setTimeout }) {
+  const t = minuteur(() => {
+    ecrire(
+      `${quoi} : PLAFOND DE TEMPS DÉPASSÉ (${ms} ms) — la ronde est tuée ICI, elle n'a donc RIEN établi.\n` +
+        `  Ce n'est pas « rien à signaler » : c'est « on n'a pas pu regarder ». Les deux se ressemblent\n` +
+        `  dans un journal, et c'est cette ressemblance qui a laissé le dispositif muet des jours durant.\n` +
+        `  Une ronde qui pend n'en rate pas une, elle les ANNULE TOUTES — le service n'accepte qu'une\n` +
+        `  instance à la fois. Mourir bruyamment est donc la seule issue qui laisse partir la suivante.\n` +
+        `  Ce qu'il faut regarder : le dernier appel « herdr » du journal ci-dessus — c'est celui qui\n` +
+        `  n'est jamais revenu.\n`
+    );
+    sortir(1);
+  }, ms);
+  // Voir plus haut : sans `unref`, le plafond retiendrait lui-même la ronde jusqu'à son terme.
+  if (typeof t?.unref === 'function') t.unref();
+  return t;
+}
+
 /** Le chemin du descripteur d'un rendez-vous, dans les agents de session du poste. */
 export function cheminPlist(nom) {
   return join(homedir(), 'Library', 'LaunchAgents', `${rendezVous(nom).etiquette}.plist`);

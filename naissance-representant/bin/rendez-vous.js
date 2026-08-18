@@ -18,12 +18,12 @@
 // C'est aussi ce qui le rend robuste au temps : le jour où le topo change de forme, ce
 // fichier n'a pas à bouger.
 
-import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { livrerBrief } from '../src/livraison.js';
-import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, RENDEZ_VOUS } from '../src/rendez-vous.js';
+import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, poserPlafond, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
 import { RACINE, chargerRegistre, lignesOuvertes } from '../../ligne-directe/src/registre.js';
@@ -33,6 +33,45 @@ import { OUTILS, OutilIntrouvable, cheminsUtiles, lancer } from '../../ligne-dir
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const JOURNAL = join(RACINE, 'orchestrateur-rendez-vous.log');
+
+// ═══ LA TRACE DU DERNIER PASSAGE — ce qui SÉPARE une vigilance morte d'une vigilance qui n'a
+// rien à dire (T-20260818-0014, point 3)
+//
+// C'est le défaut qui a laissé celui-ci vivre des jours : les deux produisent **exactement le
+// même silence**. Personne ne pouvait répondre à « quand une ronde a-t-elle abouti pour la
+// dernière fois ? » sans relire un journal que personne ne lit.
+//
+// ⚠️ CE FICHIER N'ALERTE PERSONNE, et il ne prétend pas le faire. Il rend l'absence
+// MESURABLE — « la dernière ronde a fini il y a six heures » se distingue enfin de « la
+// dernière ronde a fini il y a douze minutes ». Prévenir quelqu'un est un autre geste, et
+// l'écrire ici en ferait un mécanisme de plus qu'on croirait vivant sans l'avoir mesuré.
+//
+// Un passage PAR RENDEZ-VOUS : la ronde et le topo n'ont pas la même cadence, et écraser
+// l'un avec l'autre ferait croire la ronde vivante parce que le topo est passé.
+const DERNIER_PASSAGE = join(RACINE, 'orchestrateur-dernier-passage.json');
+
+/**
+ * Note qu'un rendez-vous s'est TERMINÉ, et comment. Ne fait jamais échouer la ronde.
+ *
+ * Un défaut d'écriture de la trace n'est pas un défaut du rendez-vous : le taire serait un
+ * silence de plus, le faire échouer priverait les orchestrateurs de leur rappel pour un
+ * fichier d'observation. Il se DIT, et la ronde continue.
+ */
+function noterLePassage(nom, verdict, debut, details = {}) {
+  try {
+    mkdirSync(RACINE, { recursive: true });
+    let tout = {};
+    try {
+      tout = JSON.parse(readFileSync(DERNIER_PASSAGE, 'utf8'));
+    } catch {
+      /* premier passage, ou trace illisible : on la refait, on ne perd pas celui d'aujourd'hui */
+    }
+    tout[nom] = { fini_le: new Date().toISOString(), verdict, duree_ms: Date.now() - debut, ...details };
+    writeFileSync(DERNIER_PASSAGE, `${JSON.stringify(tout, null, 2)}\n`);
+  } catch (err) {
+    process.stderr.write(`${nom} : trace du dernier passage NON écrite — ${err.message}\n`);
+  }
+}
 
 // Une session occupée ne peut pas recevoir de rappel — et ce n'est pas un échec, c'est
 // « pas maintenant ». On repasse, plutôt que de renoncer : « on ne saute pas son tour ».
@@ -52,7 +91,46 @@ const DELAI_MS = Number(process.env.RENDEZ_VOUS_DELAI_MS || 5 * 60 * 1000);
 // son compteur d'activité — mesuré à ~1 redessin par seconde — assez court pour que la ronde
 // ne s'éternise pas sur un pane suspect.
 const DELAI_VIGIE_MS = Number(process.env.RENDEZ_VOUS_VIGIE_MS || 20000);
+
+// ═══ LE BUDGET D'UNE RONDE, ET IL EST UN SEUL (T-20260818-0014)
+//
+// ⚠️ IL ÉTAIT COMPTÉ DEUX FOIS, et le commentaire d'à côté affirmait le contraire. `tenir()`
+// armait une échéance pleine pour la livraison, puis — APRÈS l'avoir dépensée — une SECONDE
+// échéance pleine pour la vigie. Le plafond réel d'une ronde n'était donc pas l'échéance,
+// c'était son DOUBLE : 30 min + 30 min = 60 min, soit EXACTEMENT l'intervalle qui sépare
+// deux rondes. Zéro marge, sur le mécanisme dont toute la raison d'être est de finir avant
+// le suivant. Mesuré : 14 605 ms pour une échéance de 8 000 ms.
+//
+// Il est donc armé UNE fois, au début, et il couvre TOUT — balayage, livraison, vigie.
 const ECHEANCE_MS = Number(process.env.RENDEZ_VOUS_ECHEANCE_MS || 30 * 60 * 1000);
+
+// La part du budget que la LIVRAISON a le droit de dépenser. Elle en mangerait la totalité si
+// on la laissait faire — sa boucle de reprise ne s'arrête que quand le budget est épuisé —, et
+// la vigie n'aurait alors jamais un instant pour regarder qui que ce soit. Le figé est
+// précisément celui à qui la remise n'aboutit pas, donc celui qui vide le budget : sans part
+// réservée, la garde tombe exactement là où elle sert.
+//
+// ⚠️ CE PARTAGE COÛTE UNE REPRISE, ET C'EST UN ARBITRAGE, PAS UN EFFET DE BORD — relevé en
+// revue de fond, où il valait 2/3 et en coûtait deux. L'arithmétique, aux valeurs de
+// production (échéance 30 min, reprise toutes les 5 min, vigie 3 lectures espacées de 20 s) :
+//
+//   avant le lot   6 reprises (dernière à t+25) puis une vigie qui SE RÉ-ARMAIT 30 min → 60 min
+//   à 2/3          4 reprises (dernière à t+15) — un orchestrateur qui se libère à t+20 attend
+//                  l'heure suivante, pour rien : le budget global n'exigeait pas ça
+//   à 5/6          5 reprises (dernière à t+20) + 5 min de vigie = 5 suspects au tarif réservé
+//
+// Sur ce poste, la ronde mesurée avait 4 orchestrateurs dont 3 suspects. Cinq minutes de vigie
+// les couvrent. On rend donc à la livraison tout ce que la vigie n'a pas besoin de prendre.
+const PART_LIVRAISON = Number(process.env.RENDEZ_VOUS_PART_LIVRAISON || 5 / 6);
+
+// ═══ LE PLAFOND DUR — ce que le budget ne peut PAS attraper
+//
+// Le budget est COOPÉRATIF : il décide de ne pas demander un tour de plus, ce qui suppose
+// que chaque tour revienne. Un appel `herdr` qui ne rend jamais la main ne revient pas, et
+// le code qui consulte le budget n'est alors jamais atteint. Le plafond, lui, ne demande
+// rien à personne. Il est au-dessus du budget pour ne pas se déclencher sur une ronde qui
+// travaille encore, et très en dessous de l'heure qui sépare deux rondes.
+const PLAFOND_MS = Number(process.env.RENDEZ_VOUS_PLAFOND_MS || ECHEANCE_MS + 5 * 60 * 1000);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -167,7 +245,55 @@ async function etatService() {
  * hérite : « le mot, pas le fait ».
  */
 async function tenir(nom) {
+  const debut = Date.now();
+  try {
+    await tenirLeRendezVous(nom, debut);
+  } catch (err) {
+    // ⚠️ LA MORT LA PLUS GRAVE ÉTAIT LA SEULE SANS TRACE — relevé en revue de fond, et c'est
+    // le point 3 du ticket manqué dans le lot qui le corrige. `tenir()` n'avait aucune garde :
+    // une exception imprévue (`commandesLivraison` lève si un `pane` manque à la réponse de
+    // herdr) traversait jusqu'à `main().catch()`, qui écrit une ligne et sort — sans jamais
+    // noter le passage. La ronde disparaissait donc en laissant l'état du poste EXACTEMENT
+    // comme si elle n'avait jamais été lancée : le silence que ce lot existe pour supprimer.
+    process.stderr.write(
+      `${rendezVous(nom).etiquette} : la ronde s'est ARRÊTÉE sur une erreur imprévue — elle n'a donc RIEN établi.\n` +
+        `  Ce n'est pas « rien à signaler ». Cause exacte : ${err.message}\n`
+    );
+    noterLePassage(nom, 'erreur', debut, { message: err.message });
+    process.exit(1);
+  }
+}
+
+async function tenirLeRendezVous(nom, debut) {
   const r = rendezVous(nom);
+
+  // ⚠️ UNE PANNE PROVOQUÉE, ET C'EST LA SEULE FAÇON DE PROUVER LA GARDE D'AU-DESSUS. Elle
+  // existe pour les exceptions IMPRÉVUES : par définition, on ne peut pas en fabriquer une
+  // vraie. Cherchée, d'ailleurs — la route nommée en revue (`commandesLivraison` sur un pane
+  // vide) est filtrée en amont par `orchestrateursVivants`, et les lectures de fichiers de
+  // `roleDuLieu` sont déjà attrapées. La garde couvre donc une classe, pas un défaut connu :
+  // raison de plus pour qu'elle soit éprouvée, et pas seulement affirmée.
+  //
+  // SOUS CLOISON D'ESSAIS UNIQUEMENT — `launchd` ne pose jamais `NODE_TEST_CONTEXT`, ce
+  // chemin est donc inatteignable en production, quoi qu'on mette dans l'environnement.
+  if (enEssais() && process.env.RENDEZ_VOUS_PANNE_PROVOQUEE) {
+    throw new Error(process.env.RENDEZ_VOUS_PANNE_PROVOQUEE);
+  }
+
+  // ⚠️ POSÉ AVANT LE PREMIER APPEL, et pas une ligne plus bas : le balayage des sessions est
+  // le premier endroit où un `herdr` muet fait pendre la ronde pour toujours. Un plafond
+  // posé après lui serait un plafond qui ne couvre pas le sol sur lequel on tombe le plus.
+  poserPlafond({
+    ms: PLAFOND_MS,
+    quoi: r.etiquette,
+    ecrire: (t) => process.stderr.write(t),
+    sortir: (code) => {
+      // ⚠️ NOTÉ AVANT DE MOURIR, sinon la mort la plus grave serait la seule sans trace — et
+      // c'est exactement celle qu'on ne voit pas passer.
+      noterLePassage(nom, 'plafond-depasse', debut, { plafond_ms: PLAFOND_MS });
+      process.exit(code);
+    },
+  });
 
   // TOUTES LES SESSIONS DU POSTE, PAS SEULEMENT LA SIENNE (T-20260815-0008). Un agent de
   // session ne charge aucun profil de shell : sans balayage, ce réveil ne joignait AUCUNE
@@ -183,6 +309,7 @@ async function tenir(nom) {
       `${r.etiquette} : aucune session herdr n'est ouverte sur ce poste — il n'y a personne à réveiller, ` +
         `et ce n'est pas la même chose que « personne n'attend ».\n`
     );
+    noterLePassage(nom, 'aucune-session', debut, { sessions: 0 });
     process.exit(1);
   }
   if (balayage.muettes.length === balayage.sessions) {
@@ -190,10 +317,14 @@ async function tenir(nom) {
       `${r.etiquette} : les ${balayage.sessions} session(s) du poste sont muettes — aucune n'a rendu ` +
         `sa liste d'agents. Le réveil n'a donc RIEN pu établir :\n  ${balayage.muettes.join('\n  ')}\n`
     );
+    noterLePassage(nom, 'sessions-muettes', debut, { sessions: balayage.sessions, muettes: balayage.muettes.length });
     process.exit(1);
   }
 
-  const fin = Date.now() + ECHEANCE_MS;
+  // Le budget global de la ronde, compté depuis son DÉBUT — le balayage des sessions en fait
+  // partie : il coûte un appel par session du poste, dont les muettes, qui coûtent le plus.
+  const finRonde = debut + ECHEANCE_MS;
+  const fin = debut + ECHEANCE_MS * PART_LIVRAISON;
 
   // Un tour pour tout le monde, puis on ne repasse que sur ceux qui n'ont pas pris — et
   // seulement tant que l'échéance GLOBALE le permet. Un orchestrateur occupé ne fait donc
@@ -232,7 +363,9 @@ async function tenir(nom) {
   // un silence qu'on ne s'explique pas est exactement ce que ce lot existe pour supprimer.
   const vigie = [];
   const nonRegardes = [];
-  const finVigie = Date.now() + ECHEANCE_MS;
+  // ⚠️ ELLE NE S'ARME PLUS RIEN : elle hérite de CE QUI RESTE du budget de la ronde. Une
+  // seconde échéance pleine ici doublait le plafond réel — voir `ECHEANCE_MS`.
+  const finVigie = finRonde;
   for (const c of comptes.filter((x) => !x.livre)) {
     if (Date.now() + LECTURES_MINIMALES * DELAI_VIGIE_MS > finVigie) {
       nonRegardes.push(c.pane);
@@ -287,8 +420,14 @@ async function tenir(nom) {
 
   const manques = comptes.filter((c) => !c.livre);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
+  noterLePassage(nom, manques.length === 0 ? 'abouti' : 'partiel', debut, {
+    orchestrateurs: comptes.length,
+    livres: comptes.length - manques.length,
+    sessions: balayage.sessions,
+    muettes: balayage.muettes.length,
+  });
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);
 }
