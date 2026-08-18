@@ -89,6 +89,10 @@ curl -fsSL .../remote-install.sh | bash -s -- --with-claude-swt        # setup p
 ./scripts/somtech_pack_pull.sh --target . [--force] [--modules core,features]   # pull local avec diff
 ```
 
+**Prérequis : `git` et `jq`** — vérifiés au démarrage, l'installation refuse de partir sans eux.
+`jq` lit les chemins de modules dans `pack.json` ; sans lui, ce chemin copiait autrefois zéro
+fichier en rendant un succès (T-20260818-0042). Le CLI npm (Méthode 1) n'exige que Node.
+
 Le one-liner `remote-install.sh` clone le pack et délègue à `somtech_pack_pull.sh`. Reste fonctionnel mais sera déprécié une fois le CLI publié. Skill Claude Code : `/somtech-pack-maj`.
 
 ### Push — publier des changements depuis un projet vers le pack
