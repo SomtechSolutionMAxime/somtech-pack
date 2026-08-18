@@ -47,6 +47,92 @@ import { etatDeLEcran, ressembleAUnChoix, ecranAttendUnChoix, resumeDeLEcran } f
 export const IMMOBILITE_PAR_DEFAUT_MS = 5 * 60 * 1000;
 
 /**
+ * ═══ LES DEUX FENÊTRES D'OBSERVATION D'UN TEXTE TAPÉ — ET ELLES SE LISENT ICI, CÔTE À CÔTE ═══
+ *
+ * ⚠️ LE DÉFAUT N'ÉTAIT PAS QU'IL Y EN AIT DEUX. C'EST QU'ON NE POUVAIT PAS LES VOIR ENSEMBLE
+ * (T-20260818-0076). Chacune était écrite chez son appelant : dix secondes dans `herdr.js`,
+ * cinq minutes dans `bin/livrer.js`. Le lot qui a réglé la première a annoncé « dix secondes »
+ * sans dire de quel chemin il parlait ; un coordonnateur a mesuré l'autre et trouvé **300
+ * secondes** là où on lui promettait dix. **Deux réglages qu'on ne voit jamais ensemble, ce
+ * sont deux comportements dont un seul est annoncé.**
+ *
+ * Elles vivent donc désormais AU MÊME ENDROIT, auprès du geste qu'elles règlent, nommées par le
+ * chemin qu'elles servent et par la contrainte qui les fixe. Régler l'une en croyant régler
+ * l'autre demande maintenant de ne pas lire la ligne d'à côté.
+ *
+ * ⚠️ ET ELLES RESTENT DEUX, PARCE QUE LES DEUX CHEMINS N'ONT PAS LA MÊME CONTRAINTE. Leur
+ * imposer un chiffre unique ferait exactement ce que ce lot reproche à l'autre : dériver la
+ * valeur d'un chemin d'un budget qui n'est pas le sien.
+ */
+
+/**
+ * ① LA LIGNE DU DIRIGEANT — dix secondes, INCHANGÉES (T-20260818-0049).
+ *
+ * Celui qui patiente ici est un humain qui écrit depuis Slack, et sa ligne est tout l'objet du
+ * dispositif. Dix secondes ont été choisies pour ce chemin-là : « de quoi voir des doigts sur
+ * un clavier, pas de quoi faire attendre celui qui parle ».
+ *
+ * ⚠️ CE LOT N'Y TOUCHE PAS, ET C'EST DÉLIBÉRÉ. Une passe de revue de fond a relevé que la
+ * ramener à six secondes la ferait dériver du budget de bout en bout de l'AUTRE chemin — un
+ * budget que la ligne du dirigeant n'a jamais eu. Le rejet était juste.
+ *
+ * ⚠️ **[non établi]** — CE CHIFFRE N'A PAS DE MESURE DERRIÈRE LUI, ET N'EN A JAMAIS EU. Ni dix
+ * ni six secondes ne sortent d'une mesure du temps qui sépare deux frappes d'un humain qui
+ * hésite. On garde donc la valeur en place plutôt que d'en substituer une autre tout aussi peu
+ * établie : changer un chiffre non mesuré pour un autre n'est pas un progrès, c'est un
+ * déplacement.
+ */
+export const FENETRE_LIGNE_DU_DIRIGEANT_MS = 10_000;
+
+/**
+ * ② ENTRE AGENTS (`bin/livrer.js`) — six secondes, ET LE CHIFFRE SORT D'UNE MESURE.
+ *
+ * Ce chemin porte une contrainte que l'autre n'a pas : le critère du jalon est un budget **de
+ * bout en bout** — quinze secondes entre l'appel et la boîte vide. Ce budget a deux parts :
+ * l'observation, qu'on règle ici, et le reste du chemin, qu'on subit (relire l'écran, livrer,
+ * constater la prise).
+ *
+ * Le reste a été chronométré sur le poste réel le 2026-08-18 : **2,4 s** sur un poste calme,
+ * **4,3 s** trente secondes plus tard sur le même poste. Une fenêtre de dix secondes rendait
+ * **14,3 s mesurés** — sous le critère, avec sept dixièmes de marge. **Une garde qui tient à
+ * 5 % près mesure la charge de la machine autant que le code.** Six secondes laissent au reste
+ * le double de son pire coût mesuré ; huit envois chronométrés ont rendu 8,3 s à 10,9 s.
+ *
+ * ⚠️ CE QUE ÇA COÛTE, ET IL FAUT LE DIRE. Une fenêtre plus courte soumet plus souvent la phrase
+ * de quelqu'un qui a tapé la moitié puis s'est levé — c'est exactement ce que les cinq minutes
+ * achetaient. Ce qui rend l'arbitrage tenable est double : `avisDeBoiteBloquee`, qui apprend au
+ * destinataire ce qui est parti sous sa signature, et surtout la RELECTURE que `delivrerLaBoite`
+ * fait avant de soumettre — elle refuse dès que le texte a changé d'un caractère. **La fenêtre
+ * donne de quoi voir ; elle n'est pas la garde.**
+ */
+export const FENETRE_ENTRE_AGENTS_MS = 6_000;
+
+/**
+ * COMBIEN DE TEMPS OBSERVER CE TEXTE-LÀ — la nature du texte décide, jamais l'appelant.
+ *
+ * ⚠️ UN TEXTE COLLÉ N'A PERSONNE DERRIÈRE LUI. Il est arrivé d'un seul coup : il n'y a aucun
+ * geste en cours à respecter, donc rien à observer, donc zéro. Attendre devant lui, c'est
+ * attendre un mouvement qui ne peut pas venir. Un texte TAPÉ, lui, peut avoir des doigts
+ * dessus — il garde sa fenêtre.
+ *
+ * ⚠️ ZÉRO N'EST PAS « SANS GARDE ». `delivrerLaBoite` relit dans les deux cas avant de
+ * soumettre et s'abstient si le contenu a bougé, si l'écran porte un choix, s'il est illisible.
+ * La fenêtre ne fait que donner de quoi voir ; elle n'est pas la garde elle-même.
+ *
+ * ⚠️ ET ELLE NE DÉCIDE PAS DE L'ARMEMENT. Un appelant qui ne veut PAS de délivrance du tout —
+ * le brief de naissance — le dit en n'armant pas le geste, jamais en réglant cette durée.
+ */
+export function fenetreDImmobilite(texteCoince, { texteTapeMs }) {
+  if (!Number.isFinite(Number(texteTapeMs))) {
+    // ⚠️ PAS DE VALEUR PAR DÉFAUT ICI, ET C'EST VOULU. Un défaut silencieux ferait qu'un
+    // appelant qui oublie sa fenêtre hériterait de celle d'un autre chemin — la forme exacte
+    // du défaut que ce lot ferme. L'appelant nomme la sienne, ou il est refusé.
+    throw new Error('la fenêtre du texte tapé doit être nommée par l’appelant');
+  }
+  return estUnEspaceReserve(texteCoince) ? 0 : texteTapeMs;
+}
+
+/**
  * ⚠️ UNE BOÎTE DE SAISIE N'EST PAS UN DIALOGUE — et la touche d'envoi n'y fait pas la même chose
  * (relevé en REVUE DE FOND, bloquant, et il était juste).
  *
@@ -201,9 +287,26 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0 } = {}) 
   // VISIBLE à l'écran (mesuré — un texte long y est tronqué par le défilement). Ce qu'on
   // recopie ici est donc ce qu'on a lu, pas nécessairement tout ce qui est parti.
   const texte = String(texteLibere).trim();
+  // ⚠️ UNE DURÉE ARRONDIE À LA MINUTE NE SAIT PAS DIRE SIX SECONDES (T-20260818-0076). Cet avis
+  // a été écrit quand la seule fenêtre existante valait cinq minutes ; depuis que la fenêtre
+  // d'un texte tapé se compte en secondes et celle d'un collage vaut zéro, `Math.round(ms / 60000)`
+  // rendait « les 0 min où je l'ai observée » — une phrase qui dit à celui qui vient de perdre
+  // un texte qu'on ne l'a pas regardé. Le chemin de la parole du dirigeant la produisait déjà.
+  const observation = (ms) => {
+    if (!(Number(ms) > 0)) {
+      // ZÉRO N'EST PAS UNE OBSERVATION RATÉE, C'EST UN COLLAGE. Rien à observer : le texte est
+      // arrivé d'un seul coup, personne n'avait les doigts dessus. Le dire vaut mieux que
+      // laisser croire qu'on a soumis sans regarder.
+      return 'sans que j’aie eu à l’observer — il y était arrivé d’un seul coup, collé, et non tapé';
+    }
+    const secondes = Math.round(Number(ms) / 1000);
+    return secondes < 60
+      ? `resté immobile pendant les ${secondes} s où je l’ai observée`
+      : `resté immobile pendant les ${Math.round(Number(ms) / 60000)} min où je l’ai observée`;
+  };
   const ouverture =
-    '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, resté immobile ' +
-    `pendant les ${Math.round(immobiliteMs / 60000)} min où je l’ai observée. Je l’ai SOUMIS pour ` +
+    '⚠️ TA BOÎTE DE SAISIE ÉTAIT BLOQUÉE — elle contenait un texte non soumis, ' +
+    `${observation(immobiliteMs)}. Je l’ai SOUMIS pour ` +
     'son auteur — sans y écrire un caractère — puis j’ai livré mon message. Tu vas donc recevoir ' +
     'les deux.\n\n';
 

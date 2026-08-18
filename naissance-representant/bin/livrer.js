@@ -36,20 +36,32 @@
 // Le détail, et ce que le geste coûte, sont en tête de `src/livraison.js`.
 
 import { readFileSync } from 'node:fs';
-import { livrerBrief, IMMOBILITE_PAR_DEFAUT_MS } from '../src/livraison.js';
+import { livrerBrief, FENETRE_ENTRE_AGENTS_MS } from '../src/livraison.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { trouverDestinataire } from '../src/destinataire.js';
 
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
 const ATTENTE_MS = Number(process.env.LIVRAISON_ATTENTE_MS || 20000);
-// ⚠️ LE TEMPS LAISSÉ À UN TEXTE COINCÉ POUR BOUGER (T-20260816-0114) — cinq minutes, et le
-// pourquoi de ce chiffre est en tête de `src/livraison.js`, là où il se décide. En deux mots :
-// une demi-minute couvre « en train de taper », pas « a tapé la moitié puis est parti ».
+// ⚠️ LE TEMPS LAISSÉ À UN TEXTE **TAPÉ** POUR BOUGER — six secondes (T-20260818-0076).
 //
-// ⚠️ CE RÉGLAGE EST LE PRIX D'UN GESTE IRRÉVERSIBLE — le baisser à zéro désarme la délivrance,
-// le baisser un peu la rend hasardeuse.
-const IMMOBILITE_MS = Number(process.env.LIVRAISON_IMMOBILITE_MS || IMMOBILITE_PAR_DEFAUT_MS);
+// C'ÉTAIT CINQ MINUTES, ET C'EST CE QUI A RENDU LE CRITÈRE ROUGE. Le chiffre venait de
+// `IMMOBILITE_PAR_DEFAUT_MS`, réglé quand ce chemin était le seul ; le chemin de la parole du
+// dirigeant est ensuite passé à dix secondes, et le lot qui l'a fait a annoncé « dix secondes »
+// sans dire lequel des deux. Mesuré sur le poste : 300 secondes ici, pour un critère qui en
+// demande moins de quinze. **Deux réglages qu'on ne voit jamais ensemble, ce sont deux
+// comportements dont un seul est annoncé** — ils vivent maintenant côte à côte dans
+// `delivrance.js`, auprès du geste qu'ils règlent, nommés par le chemin qu'ils servent. Celui-ci
+// vaut six secondes parce que le critère du jalon borne ce chemin-ci de bout en bout ; la ligne
+// du dirigeant garde les siennes, elle n'a pas ce budget.
+//
+// ⚠️ ELLE NE VAUT QUE POUR UN TEXTE TAPÉ. Devant un COLLAGE, `livrerBrief` n'attend rien : le
+// texte est arrivé d'un seul coup, personne n'a les doigts dessus, et il n'y a rien à observer.
+//
+// ⚠️ CE RÉGLAGE RESTE LE PRIX D'UN GESTE IRRÉVERSIBLE — le baisser à zéro désarme l'observation
+// du texte tapé. Ce qui protège n'est pas sa longueur seule : `delivrerLaBoite` relit avant de
+// soumettre et s'abstient devant un texte qui a bougé, un dialogue, un écran illisible.
+const IMMOBILITE_MS = Number(process.env.LIVRAISON_IMMOBILITE_MS || FENETRE_ENTRE_AGENTS_MS);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 

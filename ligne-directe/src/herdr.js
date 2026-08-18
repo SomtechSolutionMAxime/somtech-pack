@@ -17,11 +17,17 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
-import { contenuBoite, laPriseEstConstatee, estUnEspaceReserve } from './boite.js';
+import { contenuBoite, laPriseEstConstatee } from './boite.js';
 // ⚠️ LE REMÈDE EST REPRIS, PAS RÉÉCRIT (T-20260818-0049, règle d'or n°15). `delivrerLaBoite`
 // porte des gardes MESURÉES qui ont coûté un lot chacune — sur le texte coincé, sur l'écran,
 // sur l'immobilité. Une seconde copie n'hériterait jamais des corrections de la première.
-import { delivrerLaBoite, avisDeBoiteBloquee, avisDeBoiteVidee } from './delivrance.js';
+import {
+  delivrerLaBoite,
+  avisDeBoiteBloquee,
+  avisDeBoiteVidee,
+  FENETRE_LIGNE_DU_DIRIGEANT_MS,
+  fenetreDImmobilite,
+} from './delivrance.js';
 import { etatDeLEcran, refusDEcran, ecranAttendUnChoix, resumeDeLEcran } from './ecran.js';
 
 /** Un message plus long que ça part par fichier plutôt que par argv (limite système). */
@@ -92,12 +98,17 @@ export function socketHerdr() {
 //
 // Dix lectures espacées de 300 ms, soit trois secondes : assez pour couvrir un terminal chargé,
 // assez court pour que sa parole ne poireaute pas quand la touche a vraiment échoué.
-// ⚠️ LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ, SUR LA LIGNE D'UN HUMAIN (T-20260818-0049).
-// Dix secondes : de quoi voir des doigts sur un clavier, pas de quoi faire attendre celui qui
-// écrit depuis Slack. À ne pas confondre avec `IMMOBILITE_PAR_DEFAUT_MS` (cinq minutes), réglé
-// pour le chemin où celui qui patiente est un agent — l'appliquer ici a fait pendre un essai
-// 300 secondes, mesuré, et aurait laissé le dirigeant muet autant de temps.
-const FENETRE_TEXTE_TAPE_MS = 10_000;
+// ⚠️ LA FENÊTRE D'OBSERVATION D'UN TEXTE TAPÉ — ELLE N'EST PLUS DÉCLARÉE ICI (T-20260818-0076).
+//
+// Elle valait dix secondes sur ce chemin-ci et cinq minutes sur celui de `livrer.js`, chacune
+// écrite chez son appelant. Le lot qui a posé celle-ci a annoncé « 10 secondes » ; l'autre
+// chemin en faisait 300, et c'est ce qu'un coordonnateur a mesuré. **Deux réglages qu'on ne
+// voit jamais ensemble, ce sont deux comportements dont un seul est annoncé.**
+//
+// Les deux vivent désormais dans `delivrance.js`, côte à côte, nommées par le chemin qu'elles
+// servent. **Celle-ci n'a pas changé de valeur** : dix secondes, réglées pour un humain qui
+// écrit depuis Slack. Le budget de bout en bout qui a fixé l'autre à six secondes est celui du
+// chemin entre agents — le dériver jusqu'ici l'appliquerait à une ligne qui ne l'a jamais eu.
 
 const RELECTURES_APRES_ENVOI = 10;
 const DELAI_RELECTURE_MS = 300;
@@ -278,8 +289,13 @@ export async function remettre(pane, texte, { socket } = {}) {
     // de quelqu'un qui a tapé la moitié puis s'est levé. C'est l'arbitrage du dirigeant, pris
     // les yeux ouverts — et ce qui le rend tenable est l'AVIS ci-dessous, qui rend l'incident
     // constatable au lieu de le laisser muet.
-    const colle = estUnEspaceReserve(dejaLa);
-    const fenetreMs = colle ? 0 : Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_TEXTE_TAPE_MS);
+    // ⚠️ LE CHOIX COLLÉ / TAPÉ EST FAIT PAR `fenetreDImmobilite`, PLUS ICI (T-20260818-0076).
+    // Il s'écrivait en une ligne, et cette ligne n'existait que sur ce chemin : l'autre
+    // appelant attendait cinq minutes devant un collage — devant lequel il n'y a, par
+    // construction, rien à observer. La règle vit auprès du geste ; les deux chemins l'ont.
+    const fenetreMs = fenetreDImmobilite(dejaLa, {
+      texteTapeMs: Number(process.env.LIGNE_IMMOBILITE_MS || FENETRE_LIGNE_DU_DIRIGEANT_MS),
+    });
 
     const delivrance = await delivrerLaBoite({
       texteCoince: dejaLa,
