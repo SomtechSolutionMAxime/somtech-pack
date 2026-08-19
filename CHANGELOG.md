@@ -20,7 +20,9 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **L'inventaire vient du manifeste, pas d'une liste** — un module de portée `poste` qui déclare un `bin` dans son `package.json` est exposé automatiquement ; le prochain outil entrera sans qu'on touche au code.
 - **Le contrôle de contrôle** — la suite éprouve depuis un `zsh -c` (shell non interactif) plutôt qu'en relisant le fichier écrit, et **un test dédié prouve que ce contrôle voit le lieu** : le même bloc posé dans `.zshrc` doit laisser la commande introuvable. Sans lui, un correctif qui reprend le mauvais lieu passerait au vert.
 - **Le bloc gardé est mutualisé** (`upsertGuardedBlock`) — deux mécanismes de pose auraient divergé, et c'est celui qu'on ne relit plus qui aurait perdu son backup.
-- **`zsh` est installé dans le job CI** — un banc qui ne peut pas s'exécuter ne prouve rien.
+- **Un chemin d'installation biscornu ne casse plus le shell du poste** — relevé en revue de fond : un guillemet dans le chemin rendait `parse error` à **chaque** ouverture de shell, interactif compris (une panne plus large que celle qu'on ferme), et un `$(…)` s'y serait exécuté. Les chemins sont échappés avant d'entrer dans du texte shell, et la garde le mesure **sur l'effet** — une première version l'analysait avec `zsh -n`, qui n'exécute rien et restait donc verte sans l'échappement.
+- **`zsh` est installé dans le job CI** — un banc qui ne peut pas s'exécuter ne prouve rien. Et le contrôle « sans `node` sur le `PATH` » mesure un dossier **vide** : choisir `/usr/bin:/bin` le rendait vert ici et rouge en CI, où `node` vit dans `/usr/bin`.
+
 ## [1.74.0] - 2026-08-19
 
 *Lot F : PR #292 (`E-20260819-0001`, stories `T-20260819-0014` à `0019`), sous la demande `D-20260818-0008`. **Le métier de l'orchestrateur prescrivait huit gestes dont on avait prouvé la veille qu'ils ne tenaient pas.** Aucune des huit corrections mesurées le 18 août n'était encore dans le texte qui les prescrit — un texte lu en entier par chaque orchestrateur qui naît.*
