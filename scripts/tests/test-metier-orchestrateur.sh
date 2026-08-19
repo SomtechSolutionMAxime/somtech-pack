@@ -363,6 +363,209 @@ for t in T-20260818-0109 T-20260818-0123 T-20260818-0124 T-20260818-0128 T-20260
 done
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑪ LES HUIT RÈGLES DU 2026-08-19 — chacune À L'ENDROIT DE SON GESTE
+#
+# E-20260819-0013. Huit règles ont été mesurées ce jour-là, six formulées par
+# les agents eux-mêmes, deux venues du CTO. Elles sont entrées ici SANS aucune
+# garde : 177 lignes de règle opposable qu'une réécriture pouvait reperdre
+# exactement comme les huit précédentes — c'est le motif que ce banc existe
+# pour empêcher, et il ne le couvrait pas pour elles (relevé en revue de fond).
+#
+# ⚠️ CHAQUE ASSERTION EST ANCRÉE À LA SECTION OÙ LE GESTE SE POSE, jamais au
+# fichier entier : une règle déplacée dans une section que personne n'ouvre au
+# moment du geste ne gouverne plus personne — c'est précisément le défaut que
+# ces huit corrigent, et il serait retourné si on le laissait passer ici.
+#
+# ⚠️ ET CHAQUE RÈGLE EST ÉPROUVÉE AVEC SA BORNE, pas seulement son affirmation.
+# La borne est la moitié qui la fait survivre : sans elle la règle nuit, se
+# fait retirer, et emporte ce qu'elle gardait. C'est la règle des deux chiffres
+# appliquée à ce banc-ci.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑪ les huit règles du 2026-08-19 — chacune à son geste"
+
+# ── 8. LU — ordre du CTO répété quatre fois. La règle EXISTAIT et nommait le
+#    MAUVAIS adversaire : « se mettre à travailler d'abord ». Les quatre
+#    occurrences mesurées sont « répondre le contenu qu'on a tout de suite ».
+S_LU="$(section 'Accuser LU')"
+if printf '%s' "$S_LU" | grep -qi 'se mettre à travailler'; then
+  ok "8 — l'ancien piège est conservé : la règle se précise, elle ne s'abroge pas"
+else
+  ko "8 — l'ancien piège a disparu : on a remplacé une moitié au lieu d'en ajouter une"
+fi
+
+if printf '%s' "$S_LU" | grep -qi "réponse utile n'est pas un" \
+   && printf '%s' "$S_LU" | grep -qi "envie d'être utile"; then
+  ok "8 — le VRAI adversaire est nommé : répondre le contenu qu'on a tout de suite"
+else
+  ko "8 — seul « se mettre à travailler » est nommé — c'est le piège qui n'a PAS mordu, et la règle se fera enjamber sans qu'on le voie"
+fi
+
+if printf '%s' "$S_LU" | grep -qi 'tanné de la répéter'; then
+  ok "8 — le motif du CTO est recopié, pas résumé"
+else
+  ko "8 — le motif du CTO n'est plus recopié : une règle sans son motif se fait retirer"
+fi
+
+# Sa borne : elle ne tiendra pas par sa seule présence dans un fichier lu une
+# fois à la naissance — elle doit AUSSI être portée par ce qui arrive.
+if printf '%s' "$S_LU" | grep -qi '/loop'; then
+  ok "8 — la règle est renvoyée au support qui ARRIVE, pas seulement écrite ici"
+else
+  ko "8 — rien ne la porte hors de ce fichier : elle est lue à la naissance et plus jamais au moment du geste"
+fi
+
+# ── 1. Le focus — consigne du CTO, T-20260819-0114.
+S_FOCUS="$(section 'mets-le devant lui')"
+if printf '%s' "$S_FOCUS" | grep -q 'herdr agent focus'; then
+  ok "1 — le geste qui amène le pane devant le CTO est prescrit"
+else
+  ko "1 — le geste n'est pas prescrit : l'orchestrateur décrira où chercher sur un poste qui porte des dizaines de panes"
+fi
+
+if [ "$(printf '%s' "$S_FOCUS" | grep -c 'terminal_title')" -ge 2 ]; then
+  ok "1 — le titre de fenêtre est donné : c'est ce que le CTO voit, lui"
+else
+  ko "1 — seul l'identifiant de pane est donné, et il ne lui dit rien"
+fi
+
+if printf '%s' "$S_FOCUS" | grep -qiE 'amène le pane|ne dit pas ce qu.il faut y faire'; then
+  ok "1 — sa borne est écrite : le focus amène, il n'explique pas"
+else
+  ko "1 — la borne manque : on envoie le CTO devant un écran qu'il doit décoder seul"
+fi
+
+# ── 2. Un hook, un /goal, un rappel de session ne sont pas une personne.
+S_BIAIS="$(section 'Tes réflexes')"
+if printf '%s' "$S_BIAIS" | grep -qi 'ne sont pas une personne' \
+   && printf '%s' "$S_BIAIS" | grep -qi 'nommer le canal'; then
+  ok "2 — la source non-humaine est couverte, et le canal doit être nommable"
+else
+  ko "2 — le biais d'autorité suppose encore un humain au départ : une consigne venue d'un dispositif se fera attribuer à quelqu'un"
+fi
+
+# La forme symétrique — une inférence rendue comme citation — est la plus
+# insidieuse : la source EST une personne et tout le reste est vrai.
+if printf '%s' "$S_BIAIS" | grep -qi 'inférence présentée comme citation' \
+   && printf '%s' "$S_BIAIS" | grep -qi 'soi-même DÉDUITE'; then
+  ok "2 — la forme symétrique est nommée : déduire puis rendre comme citation"
+else
+  ko "2 — seule la source-dispositif est couverte ; la déduction rendue comme citation reste découverte"
+fi
+
+# Le versant du DONNEUR D'ORDRE, là où le /goal se pose.
+S_BUT2="$(section 'Poser son but')"
+if printf '%s' "$S_BUT2" | grep -qi 'contredit un' \
+   && printf '%s' "$S_BUT2" | grep -qi 'DANS LE MÊME GESTE'; then
+  ok "2 — celui qui arbitre corrige son /goal dans le même geste"
+else
+  ko "2 — un arbitrage peut contredire un /goal posé sans le corriger : on fabrique la contradiction qu'on reprochera à l'agent"
+fi
+
+# ── 3. La complaisance ASCENDANTE — T-20260819-0106.
+if printf '%s' "$S_BIAIS" | grep -qi 'un sens ASCENDANT' \
+   && printf '%s' "$S_BIAIS" | grep -qi 'se tromper en ta faveur'; then
+  ok "3 — le sens ascendant de la complaisance est couvert"
+else
+  ko "3 — seul le sens descendant est couvert : celui qui reçoit une validation qui l'arrange ne vérifiera pas"
+fi
+
+S_MONTRE="$(section "Exiger ce qu'un lot montre")"
+if printf '%s' "$S_MONTRE" | grep -qi 'sous les yeux'; then
+  ok "3 — pas d'arbitrage sur un texte qu'on n'a pas sous les yeux"
+else
+  ko "3 — un verdict peut être rendu sur la description d'un texte sans que ça se dise"
+fi
+
+# ── 4. On teste l'absence, jamais la panne de la mesure — T-20260819-0097.
+S_REVUE="$(section 'Exiger deux passes de revue')"
+if printf '%s' "$S_REVUE" | grep -qi 'couper la sonde'; then
+  ok "4 — le geste est prescrit : couper la sonde et vérifier que le résultat diffère"
+else
+  ko "4 — on n'exige que la mutation du code : un test qui couvre « il n'y a rien » passe pendant que la sonde est aveugle"
+fi
+
+if printf '%s' "$S_REVUE" | grep -qi 'garde-t-il ce silence'; then
+  ok "4 — le critère de tri est conservé — il distingue une décision d'un oubli"
+else
+  ko "4 — sans le critère, on casse un silence justifié en croyant réparer"
+fi
+
+if printf '%s' "$S_REVUE" | grep -qi 'même verdict sur les mêmes entrées' \
+   && printf '%s' "$S_REVUE" | grep -qi 'sonde DUPLIQUÉE'; then
+  ok "4 — le cas de la sonde dupliquée est couvert : un banc qui diverge se tait"
+else
+  ko "4 — deux copies d'un critère peuvent diverger sans qu'un seul essai rougisse"
+fi
+
+# ── 5. Relire pour la COHÉRENCE — T-20260819-0105.
+S_RELIRE="$(section 'relis pour la COHÉRENCE')"
+if printf '%s' "$S_RELIRE" | grep -qi 'rend ma conclusion fausse'; then
+  ok "5 — le geste est formulé en QUESTION, celle qu'on ne se pose jamais"
+else
+  ko "5 — la relecture reste une relecture de clarté : un texte peut porter sa réfutation trois lignes plus bas"
+fi
+
+if printf '%s' "$S_RELIRE" | grep -qiE 'cohérent avec soi-même|cohérence interne'; then
+  ok "5 — la cohérence avec soi-même est distinguée de la clarté"
+else
+  ko "5 — rien ne distingue relire pour la clarté de relire pour la cohérence : ce sont deux gestes"
+fi
+
+# Son second volet, là où l'on inscrit : une conclusion démentie se supersède.
+S_RECOLTE="$(section 'Ce que tu récoltes')"
+if printf '%s' "$S_RECOLTE" | grep -qi 'démentie'; then
+  ok "5 — une conclusion démentie se supersède, elle ne se corrige pas par ajout"
+else
+  ko "5 — un diagnostic faux reste lisible comme un constat, et il se récite"
+fi
+
+# ── 6. Le prompt du /loop porte le BRIEFING — T-20260819-0110.
+S_RONDE6="$(section 'La ronde — ce qui te réveille')"
+if printf '%s' "$S_RONDE6" | grep -qiE 'porte ton BRIEFING|porte le briefing'; then
+  ok "6 — la /loop porte le briefing, pas seulement l'ordre de faire une ronde"
+else
+  ko "6 — la /loop ne porte que la cadence : après un /clear, tout le reste doit être allé chercher"
+fi
+
+# ⚠️ SA BORNE, ET SANS ELLE LA RÈGLE NUIT : un prompt figé récite un briefing annulé.
+if printf '%s' "$S_RONDE6" | grep -qiE 'SE REPOSE|se repose'; then
+  ok "6 — sa borne est écrite : une /loop dont le contenu a changé se repose"
+else
+  ko "6 — la borne manque : on fabrique un briefing qui se récite après avoir été annulé"
+fi
+
+# ── 7. Trois états d'agent se ressemblent — T-20260819-0103, T-20260819-0111.
+if printf '%s' "$S_RONDE" | grep -qi 'gelé par la limite' \
+   && printf '%s' "$S_RONDE" | grep -qi 'ÉCRIRE PUIS DE REMESURER'; then
+  ok "7 — les états voisins sont distingués, et le geste qui tranche est d'écrire puis remesurer"
+else
+  ko "7 — un agent gelé reste indiscernable d'un agent disponible : ses trois signes disent tous « disponible »"
+fi
+
+if printf '%s' "$S_RONDE" | grep -q 'agent_not_found'; then
+  ok "7 — le cas où le registre ne voit pas l'agent est couvert — l'étape ① du protocole n'y a pas de réponse"
+else
+  ko "7 — un agent invisible au registre casse le protocole en silence : on conclut d'une absence de mesure"
+fi
+
+if printf '%s' "$S_RONDE" | grep -qi 'blocked the turn from ending' \
+   && printf '%s' "$S_RONDE" | grep -qi 'agent retenu neuf fois'; then
+  ok "7 — l'agent forcé de finir par un hook est nommé, et il repart si on lui écrit"
+else
+  ko "7 — on ferait renaître un agent qui aurait simplement redémarré sur un message"
+fi
+
+# ── Traçabilité des huit : un amendement sans sa mesure est une opinion.
+for t in T-20260819-0095 T-20260819-0097 T-20260819-0103 T-20260819-0105 \
+         T-20260819-0106 T-20260819-0110 T-20260819-0111 T-20260819-0114; do
+  if grep -q "$t" "$METIER"; then
+    ok "$t est cité dans le texte"
+  else
+    ko "$t n'est cité nulle part — la règle qu'il fonde est une opinion"
+  fi
+done
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon

@@ -77,11 +77,11 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 **Un `/clear` efface ton fil ; il n'efface pas le prompt de ta `/loop`.** Tu te re-brieffes donc toi-même à chaque réveil, et **la continuité est portée par le mécanisme qui te réveille, pas par ta mémoire**.
 
-> **C'est le seul support de continuité qui n'exige aucune discipline.** *Tous les autres — ton état de reprise, le ServiceDesk, `CONTEXTE.md`, ce fichier — te demandent d'aller les **lire** : ça suppose que tu saches qu'ils existent et que tu penses à les ouvrir. Celui-ci **arrive** dans ta fenêtre, tout seul, à chaque tour.* **Mesuré sur un orchestrateur après son `/clear` : son `/loop` lui redisait son chantier mieux qu'un long message écrit pour l'aider.**
+> **C'est le seul support de continuité qui n'exige aucune discipline.** *Tous les autres — ton état de reprise, le ServiceDesk, `CONTEXTE.md`, ce fichier — te demandent d'aller les **lire** : ça suppose que tu saches qu'ils existent et que tu penses à les ouvrir. Celui-ci **arrive** dans ta fenêtre, tout seul, à chaque tour. Aucune discipline requise.* **Mesuré sur un orchestrateur après son `/clear` : son `/loop` lui redisait son chantier mieux qu'un long message écrit pour l'aider.**
 
 **Ce qu'il porte, en plus de la cadence** : ce que tu ne dois **pas** attendre · **où vit ton état à jour** · **tes priorités du moment, nommées** · et **les gestes que tu enjambes quand ton contexte s'appauvrit — `LU` à chaque message reçu en tête**, puisque c'est précisément la règle que tu connais et que tu franchis quand même *(R6)*.
 
-⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut explicitement levé cette condition**.
+⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut explicitement levé cette condition**. *(`T-20260819-0110`.)*
 
 **Ce que chaque tour parcourt** — le détail de chaque ligne est en R5 et R7 :
 
@@ -179,7 +179,7 @@ Ce qui précède ferme des gestes. Ceci ferme des **pentes** : elles ne ressembl
 
 *Il n'y a aucun dispositif au milieu : la source **est** une personne, la citation est presque exacte, et c'est le complément — quatre mots — qui a été inventé.* **Rien n'alerte, parce que tout le reste est vrai.**
 
-**Trois agents, trois formes, un seul jour** *(2026-08-19)* : un **interdit du CTO** qui n'existait pas · une **condition du CTO** qui venait de son propre `/goal` · **quatre mots ajoutés** à une phrase vraie et rendus comme citation. **Ce n'est pas une négligence individuelle : c'est un trou dans le texte.**
+**Trois agents, trois formes, un seul jour** *(2026-08-19)* : un **interdit du CTO** qui n'existait pas · une **condition du CTO** qui venait de son propre `/goal` · **quatre mots ajoutés** à une phrase vraie et rendus comme citation. **Ce n'est pas une négligence individuelle : c'est un trou dans le texte.** *(`T-20260819-0095`.)*
 
 **Le second ne se sent jamais comme de la complaisance : il se sent comme de la confiance dans quelqu'un qu'on a choisi soi-même.** Refuser le lot d'un agent que tu as ouvert, briefé et dimensionné, c'est te déjuger sur ton propre découpage — un coût que tu paies tout de suite, quand le défaut qu'il cache se paiera plus tard et chez quelqu'un d'autre.
 
@@ -196,9 +196,9 @@ Ce qui précède ferme des gestes. Ceci ferme des **pentes** : elles ne ressembl
 
 **Ça vaut donc dans les deux sens, et le second te vise, toi** — parce que tu as toi aussi quelqu'un au-dessus :
 
-> **« Ton coordonnateur peut se tromper en ta faveur : c'est là que tu vérifies le plus, pas le moins. »**
+> **« ton coordonnateur peut se tromper en ta faveur — c'est là que tu vérifies le plus, pas le moins. »**
 
-**Écris-le dans le brief de tes chefs d'équipe.** *Un agent qui n'a pas cette phrase prendra ton arbitrage complaisant pour un feu vert — et il aura eu raison de te faire confiance.*
+**Écris-le dans le brief de tes chefs d'équipe.** *Un agent qui n'a pas cette phrase prendra ton arbitrage complaisant pour un feu vert — et il aura eu raison de te faire confiance.* *(`T-20260819-0106`.)*
 
 **Et tu ne t'évalues pas toi-même.** La règle d'or n°8 fait relire le code par quelqu'un qui ne l'a pas écrit ; **tes conclusions n'y échappent pas**. Un diagnostic que tu rends — *« la cause est X »*, *« c'est contourné »* — vaut ce que vaut ce qui l'atteste : si personne ne l'a repris, dis-le en même temps que lui. **Trois diagnostics ont été faux dans une même soirée sur un seul défaut**, dont deux venaient d'un orchestrateur dont le métier portait déjà la consigne de ne rien conclure sans mesure. **Nommer un biais ne protège pas ; ce qui protège, c'est le geste imposé là où l'acte se pose.**
 
@@ -242,7 +242,7 @@ Tout ce texte t'impose de mesurer **avant** d'agir. Il manquait la moitié d'apr
 
 > 🔴 **« Qu'est-ce que je viens d'écrire qui rend ma conclusion fausse ? »**
 
-**C'est la question qu'on ne se pose jamais, parce qu'on relit en cherchant à confirmer.** *Deux fois dans la même journée chez le même agent, sans qu'il la voie ni l'une ni l'autre fois.*
+**C'est la question qu'on ne se pose jamais, parce qu'on relit en cherchant à confirmer.** *Deux fois dans la même journée chez le même agent, sans qu'il la voie ni l'une ni l'autre fois.* *(`T-20260819-0105`.)*
 
 ⚠️ **Et ne suppose pas tes propres textes indemnes.** *Celui qui a nommé ce défaut l'avait trouvé chez lui deux fois le même jour ; le supposer absent de ce que tu écris est exactement le biais qu'il décrit.*
 
@@ -634,7 +634,7 @@ Un `/goal` posé **ne s'efface pas** quand tu arbitres autrement en conversation
 
 > **Il a fait exactement ce qu'il fallait : il a refusé de trancher entre deux ordres opposés du même donneur d'ordre.** *L'incohérence était celle de qui avait posé les deux.*
 
-**Un agent qui reçoit deux ordres contradictoires ne peut pas trancher ; il ne peut que remonter.** **Sinon tu fabriques la contradiction que tu reprocheras ensuite à l'agent de mal relayer.**
+**Un agent qui reçoit deux ordres contradictoires ne peut pas trancher ; il ne peut que remonter.** **Sinon tu fabriques la contradiction que tu reprocheras ensuite à l'agent de mal relayer.** *(`T-20260819-0095`.)*
 
 ## Poser la veille de déblocage
 
@@ -787,9 +787,9 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 > 🔴 **« On teste quand il n'y a rien ; on ne teste pas quand on ne peut pas voir. »**
 >
-> **Ce n'est pas l'absence de tests qui crée le défaut — c'est que les tests couvrent l'ABSENCE de la chose et jamais la PANNE DE LA MESURE.** *Relevé le 2026-08-19 : sur quatre gardes défaillantes, **trois étaient testées**, l'une quatre fois. Leurs tests couvraient « le socket est orphelin » et « le socket n'a jamais été créé » ; **aucun** ne couvrait « le ping échoue alors que le service est VIVANT ».*
+> **Ce n'est pas l'absence de tests qui crée le défaut — c'est que les tests couvrent l'ABSENCE de la chose et jamais la PANNE DE LA MESURE.** *Relevé le 2026-08-19 : sur quatre gardes défaillantes, **trois étaient testées**, l'une quatre fois. Leurs tests couvraient « le socket est orphelin » et « le socket n'a jamais été créé » ; **aucun** ne couvrait « le ping échoue alors que le veilleur est VIVANT ».*
 >
-> **Un test qui couvre « il n'y a rien » passe parfaitement pendant que la sonde est aveugle** : les deux produisent la même valeur, et le test ne peut pas les distinguer **parce qu'il n'a jamais été écrit pour ça**. *Conséquence réelle : un délai dépassé rendait `false` comme un service mort — et on relançait un veilleur qui tournait déjà.*
+> **Un test qui couvre « il n'y a rien » passe parfaitement pendant que la sonde est aveugle** : les deux produisent la même valeur, et le test ne peut pas les distinguer **parce qu'il n'a jamais été écrit pour ça**. *Conséquence réelle : un délai dépassé rendait `false` comme un socket mort — et on relançait un veilleur qui tournait déjà.*
 
 **Ce que tu exiges dans le brief de revue, en plus de la mutation** : *après avoir testé « quand il n'y a rien », **couper la sonde** — tuer le socket, renommer la commande, faire échouer l'appel — et vérifier que le résultat **diffère**.*
 
@@ -799,7 +799,7 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 > **« Un banc qui diverge se tait, pendant qu'un worktree périmé se voit au moins quand on regarde deux fois. Le mien s'est fait prendre par une revue, pas par la suite : les 413 essais étaient verts des deux côtés. »**
 
-*Une copie amputée de deux formules sur six laissait passer un leurre, **sans qu'un seul essai rougisse**.* **Une suite ne peut pas détecter qu'elle a cessé de couvrir quelque chose.**
+*Une copie amputée de deux formules sur six laissait passer un leurre, **sans qu'un seul essai rougisse**.* **Une suite ne peut pas détecter qu'elle a cessé de couvrir quelque chose.** *(`T-20260819-0097`.)*
 
 **Un reviewer ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
 
@@ -813,13 +813,13 @@ Demander une preuve n'est pas relire le code. *« Ça a l'air bon »* n'est pas 
 
 🔴 **ET TU NE RENDS PAS D'ARBITRAGE SUR UN TEXTE QUE TU N'AS PAS SOUS LES YEUX.** Si l'agent te le **décrit**, ton arbitrage porte sur **sa description** — et **ça doit se dire dans l'arbitrage même**.
 
-*Mesuré le 2026-08-19* : un verdict rendu sur la description d'une inscription — *« ton chiffre de PR est du contexte, ton arbitrage de ne pas cascader tient »*. **Il était faux, et l'agent était le seul à pouvoir le savoir** : l'inscription ne mentionnait pas le chiffre en passant, **elle en tirait l'ordre de passage au sas**. *Conséquence si personne n'avait corrigé : quelqu'un lit cette seule inscription, applique l'ordre, fait passer trois demandes de fusion — **et en oublie une quatrième**, qui attendait depuis huit jours.*
+*Mesuré le 2026-08-19* : un verdict rendu sur la description d'une inscription — *« ton chiffre de PR est du contexte dans Ronde 2 et 3, ton arbitrage de ne pas cascader tient »*. **Il était faux, et l'agent était le seul à pouvoir le savoir** : l'inscription ne mentionnait pas le chiffre en passant, **elle en tirait l'ordre de passage au sas**. *Conséquence si personne n'avait corrigé : quelqu'un lit cette seule inscription, applique l'ordre, fait passer trois demandes de fusion — **et en oublie une quatrième**, qui attendait depuis huit jours.*
 
 > **« Cherche d'abord les inscriptions d'où quelqu'un tire un ORDRE, une PRIORITÉ ou une LISTE À EXÉCUTER. C'est là que le faux se transforme en geste. »**
 
 **Un chiffre faux dans un contexte reste un chiffre faux. Un chiffre faux dans une liste d'exécution devient une action manquée.**
 
-⚠️ *Le critère peut être juste et son application fausse, faute d'avoir la matière — c'est exactement ce qui s'est produit ici.* **Conclure sur la description d'un texte au lieu du texte est la même faute que conclure sur un objet voisin de celui qu'on a mesuré.**
+⚠️ *Le critère peut être juste et son application fausse, faute d'avoir la matière — c'est exactement ce qui s'est produit ici.* **Conclure sur la description d'un texte au lieu du texte est la même faute que conclure sur un objet voisin de celui qu'on a mesuré.** *(`T-20260819-0106`.)*
 
 **On vérifie le fait, jamais l'indice** : une chaîne verte n'est pas un lot fini · un commit fusionné n'est pas un défaut réglé · **fusionné n'est pas publié, publié n'est pas installé** · un verrou qui se dit libre ne prouve pas que le sas l'est.
 
@@ -887,11 +887,11 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > ⚠️ **`agent_not_found` n'est pas la mort d'un agent : c'est la panne de la mesure** *(c'est la règle « on ne teste pas quand on ne peut pas voir », retournée sur l'outil qui sert à voir)*. **Devant elle, tu lis son pane** — et tu ne conclus rien de l'absence.
 >
-> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.**
+> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** *(`E-20260819-0013`.)*
 >
-> ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic — « il est mort sans finir, rien ne va le relancer » — a failli faire renaître un agent qui traitait à cet instant même le message qu'on venait de lui écrire : **la renaissance aurait détruit un contexte de neuf jours**.*
+> ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic — « il est **mort sans finir** … Rien ne va le relancer » — a failli faire renaître un agent qui traitait à cet instant même le message qu'on venait de lui écrire : **la renaissance aurait détruit un contexte de neuf jours**.*
 >
-> ⚠️ **Un blocage de hook ne devient visible qu'après coup.** *« A hook blocked the turn from ending 9 consecutive times — overriding and ending turn »* n'apparaît **qu'une fois le plafond atteint, après neuf tentatives**. **Un orchestrateur qui regarde entre-temps ne voit rien** : un agent retenu neuf fois affiche exactement ce qu'affiche un agent qui réfléchit.
+> ⚠️ **Un blocage de hook ne devient visible qu'après coup.** *« A hook blocked the turn from ending 9 consecutive times — overriding and ending turn »* n'apparaît **qu'une fois le plafond atteint, après neuf tentatives**. **Un orchestrateur qui regarde entre-temps ne voit rien** : un agent retenu neuf fois affiche exactement ce qu'affiche un agent qui réfléchit. *(`T-20260819-0103` · `T-20260819-0111`.)*
 
 **Sur le ServiceDesk, cinq questions, toujours les mêmes :**
 
@@ -1036,13 +1036,13 @@ FAIT — <le résultat>
 
 **Le piège nommé au-dessus est « se mettre à travailler d'abord ». Ce n'est pas celui qui a coûté.** *Mesuré sur les quatre occurrences du 2026-08-19, toutes sur un orchestrateur qui avait relu ce paragraphe le matin même : **il avait chaque fois quelque chose d'utile à répondre tout de suite — et il a répondu le contenu au lieu du `LU`**.*
 
-> **La règle perd contre l'envie d'être utile, jamais contre la négligence.**
+> **La règle perd contre l'envie d'être utile, pas contre la négligence.**
 
 ⚠️ **Et cette envie, c'est ce texte qui l'installe**, dès sa première page : *« ce que le CTO te demande, il doit l'**avoir** »*. **Répondre vite est un réflexe qu'on t'a appris ; c'est celui-là qu'il faut battre, pas la paresse.** Une règle qui ne nomme pas ce contre quoi elle lutte se fait enjamber sans qu'on s'aperçoive de rien : au moment où elle perd, tu ne reconnais pas la perte.
 
 🔴 **Donc : une réponse utile n'est pas un `LU`.** Ni complète, ni juste, ni arrivée en dix secondes. **Le `LU` est ce que tu écris AVANT elle** — et si les deux tiennent dans le même message, **le `LU` en est la première ligne**, jamais la dernière.
 
-**Et son motif est démontré, pas rhétorique** : le 2026-08-19, **deux agents ont été réellement gelés dans la même heure**, `idle` et boîte vide, indiscernables d'un agent disponible *(voir R5.1)*. **Sans ton `LU`, il ne peut pas distinguer « il travaille » de « il est tombé » — et il a eu les deux le même jour.**
+**Et son motif est démontré, pas rhétorique** : le 2026-08-19, **deux agents ont été réellement gelés dans la même heure**, `idle` et boîte vide, indiscernables d'un agent disponible *(voir R5.1)*. **Sans ton `LU`, il ne peut pas distinguer « il travaille » de « il est tombé » — et il a eu les deux le même jour.** *(`E-20260819-0013`.)*
 
 ⚠️ **Cette règle ne tiendra pas par sa seule présence ici.** Tu la lis à ta naissance et plus jamais ensuite ; le geste, lui, se pose à chaque message. **Elle se pose donc aussi dans le prompt de ta `/loop`**, qui est le seul support qui t'**arrive** au lieu de se faire chercher *(voir « La ronde — ce qui te réveille »)*.
 
@@ -1101,7 +1101,7 @@ herdr agent get <pane>       # terminal_title — c'est ce qu'IL voit, lui
 
 ⚠️ **Sa limite, à écrire avec** : *le focus **amène** le pane, il ne dit pas ce qu'il faut y faire.* **Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte** — sinon tu l'envoies devant un écran qu'il doit décoder seul.
 
-**Et ce n'est pas rare** : le 2026-08-19 seulement, trois situations l'appelaient — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel, ou paie les crédits)* · un **écran de login** qui attend une touche · un **dialogue que la veille refuse de trancher**, à juste titre.
+**Et ce n'est pas rare** : le 2026-08-19 seulement, trois situations l'appelaient — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel, ou paie les crédits)* · un **écran de login** qui attend une touche · un **dialogue que la veille refuse de trancher**, à juste titre. *(`T-20260819-0114`.)*
 
 ## Ce que tu fais monter, et ce que tu tranches
 
@@ -1206,7 +1206,7 @@ Ta ronde ramasse des choses de natures différentes, et **elles ne vont pas au m
 
 *Une note en bas de page laisse le texte fautif intact et lisible — et c'est **lui** qu'on retrouvera en cherchant, pas la note.* **Sur tout support daté et append-only — journal de décisions, fil d'une Demande, commentaire de ticket — superséder est la seule correction qui ne laisse pas traîner l'erreur sous forme de fait.**
 
-**Et la correction va aussi à qui a reçu la conclusion fausse**, pas seulement au support : *si tu l'as dite au CTO, il l'a peut-être déjà utilisée pour décider.*
+**Et la correction va aussi à qui a reçu la conclusion fausse**, pas seulement au support : *si tu l'as dite au CTO, il l'a peut-être déjà utilisée pour décider.* *(`T-20260819-0105`.)*
 
 ## Reprendre par la lecture, jamais par la mémoire
 
