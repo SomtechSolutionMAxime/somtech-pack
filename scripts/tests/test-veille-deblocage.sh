@@ -1270,6 +1270,67 @@ case "$OUT45" in
 esac
 
 
+# =================================================================
+# 46. UN HOQUET QUI CHANGE DE SENS À CHAQUE TOUR NE DOIT PAS DÉFAIRE LA
+#     CONFIRMATION « À DEUX » — ni faire brûler toute la veille en silence.
+#
+#     ⚠️ CE TEST VIENT D'UN REJET DE REVUE DE FOND, ET LE COMMENTAIRE DU CODE
+#     AFFIRMAIT LE CONTRAIRE. `ABSENCES` et `INVISIBLES` se remettent l'un
+#     l'autre à zéro — c'est juste tant que le pane répond de façon stable. Mais
+#     si `pane get` alterne présent/absent à chaque relevé, AUCUN des deux
+#     n'atteint jamais 2 : ils se cannibalisent, et la veille épuise ses 2000
+#     tours sans jamais conclure. Elle rend alors `tours-epuises — il n'a
+#     peut-être jamais reçu son brief`, un message qui MINIMISE ce qui était une
+#     absence totale et continue.
+#
+#     L'agent était absent 10 relevés sur 10 : le motif rendu doit le DIRE.
+#     Un compteur qui ne se laisse pas remettre à zéro par l'autre est ce qui
+#     manquait — les deux compteurs choisissent le MOTIF, ils ne décident pas
+#     à eux seuls s'il faut conclure.
+# =================================================================
+echo "→ 46. pane qui oscille à chaque relevé → elle conclut quand même, et dit VRAI"
+REG46="${WORK}/registre-46"; rm -rf "$REG46"; mkdir -p "$REG46"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+PANE_SEQ46="${WORK}/pane-seq-46"
+printf 'present\nabsent\npresent\nabsent\npresent\nabsent\npresent\nabsent\npresent\nabsent\npresent\n' > "$PANE_SEQ46"
+rm -f "${PANE_SEQ46}.idx"
+OUT46="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS=absent FAKE_HERDR_PANE_SEQ_FILE="$PANE_SEQ46" \
+         VD_REGISTRE_DIR="$REG46" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0 \
+         bash "$VEILLE" pane-qui-oscille agent-x 10 --dry-run 2>&1)"
+RC46=$?
+case "$OUT46" in
+  *"MOTIF: tours-epuises"*)
+    ko "ELLE BRÛLE TOUTE SA VEILLE SANS CONCLURE : l'agent était absent à CHAQUE relevé et elle rend « tours-epuises », un motif qui minimise. Les deux compteurs se cannibalisent : $OUT46" ;;
+  *"MOTIF: etat-instable"*) ok "elle conclut sur l'instabilité et la NOMME, au lieu d'épuiser ses tours" ;;
+  *) ko "motif inattendu — elle doit dire ce qu'elle voit : $OUT46" ;;
+esac
+case "$OUT46" in
+  *"jamais reçu son brief"*) ko "le message MINIMISE une absence totale et continue" ;;
+  *) ok "le message ne minimise pas l'absence" ;;
+esac
+[ "$RC46" -eq 11 ] && ok "code de sortie propre à l'instabilité (rc=$RC46), distinct du fourre-tout (5)" \
+  || ko "code de sortie $RC46 — l'instabilité doit être distinguable au code"
+
+echo "→ 46b. la contre-épreuve : un hoquet ISOLÉ ne fait pas crier"
+REG46B="${WORK}/registre-46b"; rm -rf "$REG46B"; mkdir -p "$REG46B"
+PANE_SEQ46B="${WORK}/pane-seq-46b"
+# absent, absent, PRÉSENT (le hoquet), puis l'agent revient au travail.
+printf 'absent\nabsent\npresent\npresent\npresent\n' > "$PANE_SEQ46B"
+rm -f "${PANE_SEQ46B}.idx"
+SEQ46B="${WORK}/seq-46b"
+printf 'absent\nworking\nworking\nworking\nworking\nworking\n' > "$SEQ46B"
+rm -f "${SEQ46B}.idx"
+OUT46B="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ46B" FAKE_HERDR_PANE_SEQ_FILE="$PANE_SEQ46B" \
+          VD_REGISTRE_DIR="$REG46B" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" pane-hoquet-isole agent-x 5 --dry-run 2>&1)"
+case "$OUT46B" in
+  *"MOTIF: etat-instable"*) ko "FAUX CRI : un hoquet isolé suivi d'un agent au travail fait crier à l'instabilité : $OUT46B" ;;
+  *) ok "un hoquet isolé suivi d'un agent au travail ne fait pas crier" ;;
+esac
+
+
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
 echo; echo "== Bilan : ${P// /} réussis, ${F// /} échoués =="
