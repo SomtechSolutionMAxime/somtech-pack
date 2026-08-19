@@ -476,7 +476,7 @@ export const CONTROLES_DANGER = [
       // l'appariement gardé ici — ATTEINDRE avant INSCRIRE —, parce qu'une urgence qui part
       // d'abord vers une note laisse le client dans son danger, quel que soit le chemin.
       const iAtteint = chemin.search(/--a dirigeant|ta ligne avec le dirigeant/i);
-      const iInscrit = chemin.search(/registre|sur la demande/i);
+      const iInscrit = chemin.search(/\bSD\b|registre|sur la demande/i); // « SD » depuis 2026-08-17
       assert.ok(iAtteint >= 0 && iInscrit >= 0, 'les deux chemins de remontée doivent être nommés tous les deux');
       assert.ok(
         iAtteint < iInscrit,
@@ -840,8 +840,8 @@ export const MUTATIONS_DANGER = [
     cible: 'danger-l-urgence-ne-devient-jamais-une-attente',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "ta ligne avec le dirigeant (`--a dirigeant`, voir « Comment tu remontes ») d'abord, parce que c'est le seul qui prévienne une personne. Le registre ensuite, pour que la question survive à ta session",
-      "le registre d'abord, parce que ça survit à ta session. Ta ligne avec le dirigeant (`--a dirigeant`) ensuite, pour prévenir quelqu'un",
+      "ta ligne avec le dirigeant (`--a dirigeant`, voir « Comment tu remontes ») d'abord, parce que c'est le seul qui prévienne une personne. Le SD ensuite, pour que la question survive à ta session",
+      "le SD d'abord, parce que ça survit à ta session. Ta ligne avec le dirigeant (`--a dirigeant`) ensuite, pour prévenir quelqu'un",
     ),
   },
   {

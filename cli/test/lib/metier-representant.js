@@ -752,7 +752,7 @@ export const CONTROLES = [
       assert.match(s.corps, /commentaires/i, 'c’est le fil de commentaires qui porte ce qui a été compris et promis');
 
       const REGLES = [
-        { quoi: 'ne rien dire avant d’avoir lu', sonde: /ne dis rien avant/i },
+        { quoi: 'ne rien dire du fond avant d’avoir lu', sonde: /ne dis rien (?:du fond )?avant/i },
         { quoi: 'ne pas annoncer qu’on est nouveau', sonde: /n.annonces pas que tu es nouveau/i },
         { quoi: 'ne pas inventer ce qu’on n’a pas lu', sonde: /n.inventes pas/i },
       ];
@@ -763,6 +763,128 @@ export const CONTROLES = [
         assert.equal(trouvees.length, 1, `« ${quoi} » doit figurer une fois exactement (${trouvees.length} trouvée·s)`);
         exigeImperatif(trouvees[0], quoi);
       }
+    },
+  },
+
+  {
+    id: 'ronde-tient-par-un-mecanisme',
+    quoi: 'la ronde est un MÉCANISME qu’on pose, pas une discipline — et elle laisse une trace horaire',
+    verifier({ metier }) {
+      // T-20260816-0100 : un client a eu sa production morte cinq jours sans que son
+      // représentant le sache. Écrire « fais des rondes » ne répare rien : un devoir
+      // périodique sans réveil se tient tant que quelqu'un y pense, puis cesse SANS QUE
+      // RIEN NE LE SIGNALE. C'est le seul manquement de ce métier qui ne produit aucun
+      // symptôme — donc le seul qui exige d'être gardé sur son mécanisme, pas sur son
+      // intention.
+      const s = sectionDe(metier, /^Ta ronde/, 'sur la ronde');
+
+      // (a) LE MÉCANISME. Une ronde qui repose sur la bonne volonté n'existe pas.
+      assert.match(s.corps, /boucle/i, 'la ronde doit nommer le mécanisme qui la réveille, pas seulement le devoir');
+      assert.match(
+        s.corps, /pose[s]?\b[^.]{0,40}\ben naissant\b|\ben naissant\b[^.]{0,40}\bpose/i,
+        'la boucle se pose À LA NAISSANCE — une cadence laissée au jugement en cours de route est le défaut, pas le remède',
+      );
+
+      // (b) ELLE NE SURVIT PAS À LA MORT. Sans ce rappel, un représentant renaît muet.
+      assert.match(
+        s.corps, /repose[s]?\b[^.]{0,60}renaissance|renaissance[^.]{0,60}repose/i,
+        'la ronde doit dire qu’elle se REPOSE à chaque renaissance — elle ne survit pas à la session',
+      );
+
+      // (c) UNE CADENCE CHIFFRÉE. « régulièrement » ne se vérifie pas.
+      assert.match(s.corps, /\b(?:un tour par heure|toutes les \d+|\d+\s*(?:min|heure))/i,
+        'la ronde doit porter une cadence chiffrée — « régulièrement » ne se mesure pas');
+
+      // (d) LA PREUVE. Une ronde éteinte ne produit AUCUNE erreur : la seule trace
+      // possible est l'heure de chaque tour, et son absence est le seul signal.
+      assert.match(s.corps, /heure de chaque tour|l.heure de son tour|laisse son heure/i,
+        'la ronde doit exiger que chaque tour laisse son heure — c’est la seule preuve qu’elle tourne');
+
+      // (e) ET ELLE NE RÉPARE RIEN. Le réflexe de redémarrer ce qui paraît mort détruit
+      // la capacité d'attribuer, en plus de ne rien réparer.
+      exigeImperatif(
+        s.corps.split('\n').find((l) => /ne répare jamais|jamais réparer/i.test(l)) ?? '',
+        'l’interdit de réparer pendant une ronde',
+      );
+    },
+  },
+
+  {
+    id: 'etat-de-reprise-vit-dehors',
+    quoi: 'l’état s’écrit à chaque tour, dans un lieu nommé, et ne parle jamais au client',
+    verifier({ metier }) {
+      // Ce rôle a un interlocuteur qui SE SOUVIENT DE TOUT. Perdre le fil ne coûte pas une
+      // mesure à refaire : ça fait redire au client ce qu'il a déjà dit, et ça lui apprend
+      // en une phrase que personne ne l'écoutait.
+      // `sectionDe` s'arrête au premier sous-titre : chaque sous-section se garde donc
+      // chez elle, ce qui est de toute façon la bonne maille — une règle vaut là où l'acte
+      // se pose, pas dans un préambule qui la mentionne.
+      const ecrire = sectionDe(metier, /^Écris ton état de reprise/, 'sur l’écriture de l’état');
+      const relire = sectionDe(metier, /^Reprends par la lecture/, 'sur la reprise par la lecture');
+      const attente = sectionDe(metier, /^N.oblige jamais un client/, 'sur l’attente du client');
+
+      // (a) LE MOMENT. Un relais écrit à la dernière minute est écrit par un agent déjà
+      // appauvri — c'est le moment où il en est le moins capable.
+      assert.match(ecrire.titre + ecrire.corps, /à chaque tour/i,
+        'l’état de reprise doit s’écrire À CHAQUE TOUR, pas à l’approche de la panne');
+      assert.match(ecrire.corps, /dernière minute|déjà appauvri/i,
+        'le métier doit dire POURQUOI l’écrire tard ne vaut rien, sinon la règle se relâche');
+
+      // (b) LE LIEU. Un état sans lieu nommé est un état que personne ne relira.
+      assert.match(ecrire.corps, /demands? action comment|fil de la demande/i,
+        'l’état doit nommer le lieu où il s’écrit — un lieu allusif ne se retrouve pas');
+
+      // (c) IL NE DESCEND PAS. C'est du travail en cours, pas un engagement.
+      // ⚠️ Deux interdits distincts, donc DEUX assertions. Une alternative « A ou B » ici
+      // laissait survivre la mutation qui supprime A : B suffisait à la satisfaire.
+      assert.match(ecrire.corps, /ne parle jamais au client/i,
+        'l’état ne doit jamais descendre dans le canal du client');
+      assert.match(ecrire.corps, /ne quitte jamais son fil/i,
+        'l’état ne doit jamais quitter le fil où il s’écrit');
+
+      // (d) ON REPREND PAR LA LECTURE. Un agent qui agit sur un souvenir contredit ce qui
+      // est inscrit sans le savoir.
+      assert.match(relire.titre + relire.corps, /jamais par la mémoire/i,
+        'la reprise se fait par la LECTURE, jamais par la mémoire');
+
+      // (e) ET LE CLIENT N'ATTEND PAS PENDANT UNE REPRISE. Le compact est bon marché pour
+      // l'agent, pas pour l'humain au bout du fil.
+      assert.match(attente.corps, /ensuite tu reprends|avant de reprendre/i,
+        'le métier doit interdire de reprendre pendant qu’un client attend');
+    },
+  },
+
+  {
+    id: 'accuse-precede-le-relevement',
+    quoi: 'l’accusé de réception passe AVANT le relèvement, et seul l’accusé passe avant',
+    verifier({ metier }) {
+      // D-20260817-0008 : un représentant a mené un relèvement complet et écrit deux
+      // messages au dirigeant avant que le client n'entende un mot — pendant qu'un employé
+      // de ce client s'apprêtait à relancer une commande destructrice en production. Le
+      // texte disait QU'il accuse réception. Il ne disait pas QUAND.
+      const s = sectionDe(metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+      const etapes = etapesDe(s.corps).map((e) => ({ ...e, cle: e.libelle }));
+
+      const accuse = rangUnique(etapes, /accuse/i, 'accuser réception');
+      const ronde = rangUnique(etapes, /pose ta ronde/i, 'poser sa ronde');
+      const parler = rangUnique(etapes, /parle/i, 'parler du fond');
+
+      assert.ok(accuse.rang < parler.rang,
+        `l’accusé (rang ${accuse.rang}) doit précéder la parole de fond (rang ${parler.rang})`);
+      assert.ok(ronde.rang < parler.rang,
+        `la ronde (rang ${ronde.rang}) se pose avant de parler (rang ${parler.rang}) — après, on l’oublie`);
+
+      // LE RANG NE SUFFIT PAS : une étape peut garder sa place et cesser d'obliger.
+      exigeImperatif(accuse.enonce, 'l’étape d’accusé de réception');
+      exigeImperatif(ronde.enonce, 'l’étape de pose de la ronde');
+
+      // ET LA BORNE. Un accusé qui laisse entendre une réponse en route rouvre exactement
+      // ce que la frontière de l'engagement ferme.
+      const c = sectionDe(metier, /^Accuse réception avant de travailler/, 'sur l’accusé de réception');
+      assert.match(c.corps, /n.est pas une promesse|jamais\s*«?\s*une réponse est en route/i,
+        'le métier doit dire qu’un accusé n’est PAS une promesse — sinon il engage');
+      assert.match(c.corps, /seul l.accusé passe avant/i,
+        'le métier doit borner l’exception : SEUL l’accusé passe avant le relèvement');
     },
   },
 
@@ -1038,7 +1160,7 @@ export const CONTROLES = [
 
       // LA DISTINCTION QUI PORTE TOUT : la ligne fait ARRIVER, le registre fait DURER. Les
       // confondre ramène le défaut d'origine — une question inscrite quelque part et jamais lue.
-      assert.match(s.corps, /registre|demands/i, 'ce qui doit survivre à la session va aussi au registre');
+      assert.match(s.corps, /\bSD\b|registre|demands/i, 'ce qui doit survivre à la session va aussi au SD');
       assert.match(
         s.corps, /n.est pas une notification|ne prévient personne/i,
         'le métier doit dire qu’une note au registre ne prévient personne',
@@ -1276,7 +1398,7 @@ export const MUTATIONS = [
     quoi: 'on parle au client avant d’avoir relevé son histoire',
     cible: 'ordre-ouverture',
     fichier: 'metier',
-    muter: (t) => permuter(t, '**Relève ce qui existe déjà**', '**Alors seulement, parle.**'),
+    muter: (t) => permuter(t, '**Relève ce qui existe déjà**', '**Alors seulement, parle du fond.**'),
   },
   {
     id: 'revue-R5-l-ordre-devient-facultatif',
@@ -1441,8 +1563,8 @@ export const MUTATIONS = [
     cible: 'relevement-avant-de-parler',
     fichier: 'metier',
     muter: (t) => t.replace(
-      '- **Tu ne dis rien avant d\'avoir lu.**',
-      '- **Tu peux saluer avant d\'avoir lu.**',
+      '- **Tu ne dis rien DU FOND avant d\'avoir lu.**',
+      '- **Tu peux saluer et r\u00e9pondre avant d\'avoir lu.**',
     ),
   },
 
@@ -1717,6 +1839,83 @@ export const MUTATIONS = [
     cible: 'gestes-de-ligne-existants',
     fichier: 'metier',
     muter: (t) => t.replace('--nature client --titre', '--type client --titre'),
+  },
+  {
+    id: 'ronde-devient-une-discipline',
+    quoi: 'la ronde cesse d’être un mécanisme posé et redevient une bonne intention',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ta ronde est une boucle `/loop`, que tu poses en naissant.**',
+      '**Pense à faire tes rondes régulièrement.**',
+    ),
+  },
+  {
+    id: 'ronde-ne-se-repose-plus',
+    quoi: 'la ronde n’est plus reposée à la renaissance — un représentant renaît muet',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Tu la reposes à chaque renaissance** — elle ne survit pas à ta mort.',
+      '**Elle te suit d’une session à l’autre.**',
+    ),
+  },
+  {
+    id: 'ronde-sans-trace-horaire',
+    quoi: 'la ronde ne laisse plus l’heure de ses tours — son extinction devient indétectable',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ce qui prouve que ta ronde tourne : l\'heure de chaque tour, inscrite.**',
+      '**Tu sauras bien si ta ronde tourne.**',
+    ),
+  },
+  {
+    id: 'etat-ecrit-a-la-derniere-minute',
+    quoi: 'l’état de reprise s’écrit quand la panne approche — donc par un agent déjà appauvri',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '### Écris ton état de reprise à chaque tour de ronde',
+      '### Écris ton état de reprise quand ta marge s\'épuise',
+    ),
+  },
+  {
+    id: 'etat-descend-chez-le-client',
+    quoi: 'l’état de reprise cesse d’être interdit dans le canal du client',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ton état n\'est pas une preuve, et il ne parle jamais au client.**',
+      '**Ton état peut être partagé avec le client si ça l\'aide.**',
+    ),
+  },
+  {
+    id: 'le-client-attend-la-reprise',
+    quoi: 'l’agent reprend pendant qu’un client attend — le silence redevient permis',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Tu termines l\'échange, tu accuses, ensuite tu reprends.**',
+      '**Reprends dès que tu en as besoin.**',
+    ),
+  },
+  {
+    id: 'accuse-passe-apres-le-relevement',
+    quoi: 'l’accusé retombe après la parole de fond — le client retrouve son silence',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => permuter(t, '**Accuse réception, si un message t\'attend**', '**Alors seulement, parle du fond.**'),
+  },
+  {
+    id: 'accuse-devient-une-promesse',
+    quoi: 'l’accusé cesse d’être borné — il laisse entendre qu’une réponse est en route',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '⚠️ **Mais un accusé n\'est pas une promesse.**',
+      '⚠️ **Et ton accusé annonce une réponse prochaine.**',
+    ),
   },
   {
     id: 'une-commande-de-session-inventee',
