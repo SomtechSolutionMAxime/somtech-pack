@@ -39,8 +39,33 @@
 //
 // Usage :  node scripts/mesure-ancrage-des-gardes.mjs [garde…]
 //          (sans argument : toutes les gardes — compter plusieurs minutes)
+import { execFileSync } from 'node:child_process';
+
 import { CONTROLES, lireGabarits } from '../cli/test/lib/metier-orchestrateur.js';
 import { sections } from '../cli/test/lib/metier-representant.js';
+
+/**
+ * L'ÉTAT sur lequel la mesure est prise — commit, et si l'arbre est propre.
+ *
+ * ⚠️ CETTE LIGNE EST UNE GARDE, PAS UN ORNEMENT, ET ELLE VIENT D'UN REJET DE REVUE.
+ *
+ * Le lot G a publié « 21 gardes satisfaites par 5 mots ou moins », mesuré à `0149e79`, puis
+ * a corrigé au commit SUIVANT une des gardes comptées — le chiffre valait 20 sur l'état
+ * livré, et personne ne pouvait le savoir en lisant le nombre. **Un compte se mesure sur un
+ * état ; sans cet état, il n'est pas vérifiable, seulement plausible.** C'est la même famille
+ * que ce que cet outil traque : mesurer un objet et conclure sur un autre.
+ *
+ * Un arbre SALE est dit lui aussi : le commit ne décrit alors pas ce qui a été mesuré.
+ */
+function etatMesure() {
+  try {
+    const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+    const sale = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0;
+    return `${commit}${sale ? ' + modifications NON COMMITÉES (le commit ne décrit pas ce qui est mesuré)' : ''}`;
+  } catch {
+    return 'état inconnu — git n’a pas répondu ; ce compte n’est rattachable à rien';
+  }
+}
 
 const ORIGINAL = lireGabarits();
 const FICHIER = 'metier';
@@ -120,6 +145,7 @@ const larges = [...parGarde].filter(([, rs]) => rs.some((r) => r.frag !== null))
 const ancrees = [...parGarde].filter(([, rs]) => rs.every((r) => r.frag === null));
 
 console.log(`\n═══ ${FICHIER} — ${lignes.length} lignes, ${CONTROLES.length} gardes déclarées`);
+console.log(`mesuré sur : ${etatMesure()}`);
 console.log(`gardes dépendant d'au moins une ligne de prose : ${parGarde.size}`);
 console.log(`SATISFAITES PAR UN FRAGMENT réinjecté ailleurs : ${larges.length}`);
 console.log(`  dont par 5 mots ou moins                     : ${larges.filter(([, rs]) => Math.min(...rs.filter((r) => r.frag !== null).map((r) => r.motsFrag)) <= 5).length}`);
