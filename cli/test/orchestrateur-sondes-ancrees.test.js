@@ -217,3 +217,96 @@ test('le bruit de la garde, mesuré — ce qu’elle refuse à raison ET ce qu�
       + `vraiment. ${coupables.join(' · ')}`,
   );
 });
+
+test('les garanties de la RÈGLE sont ancrées aussi — pas seulement la couverture des surfaces', () => {
+  // ⚠️ CE TEST VIENT D'UNE PASSE DE REVUE QUI A REJETÉ LA PREMIÈRE VERSION DE CE LOT, ET
+  // ELLE AVAIT RAISON — c'est le défaut le plus difficile à se voir à soi-même.
+  //
+  // Le lot énonçait le motif pour la FAMILLE — « une garde satisfaite par autre chose que ce
+  // qu'elle garde » — et ne l'appliquait qu'à MOITIÉ de sa propre garde : la couverture des
+  // cinq surfaces était ancrée sur leur phrase, mais les garanties de la RÈGLE elle-même
+  // (le `rien` s'écrit, la formule est littérale, la portée) lisaient toujours le CORPS de
+  // leur section. Mesuré : trois mots réinjectés n'importe où dans cette section suffisaient.
+  //
+  // **Une garde qui énonce un motif et l'applique à moitié enseigne le contraire de ce
+  // qu'elle dit.**
+  //
+  // ⚠️ CE QUE CE TEST NE COUVRE PAS, ÉCRIT PLUTÔT QUE TU :
+  //   • il n'éprouve que les lignes de PROSE de la section de la règle — les titres et les
+  //     blocs de code sont écartés : les retirer casse la structure que le lecteur de
+  //     sections utilise, et la garde rougirait pour une raison qui n'est pas la sienne ;
+  //   • il ne prouve rien des 36 AUTRES gardes du fichier. Celles-là sont comptées, pas
+  //     corrigées — `T-20260819-0030` les porte, avec la mesure et sa méthode.
+  const lignes = ORIGINAL.metier.split('\n');
+  const S = sections(ORIGINAL.metier);
+  const sec = S.filter((s) => /Tout message se termine par/i.test(s.titre));
+  assert.equal(sec.length, 1, 'la section de la règle doit être unique');
+
+  // Les bornes de la section, en index de ligne, et les lignes de bloc de code.
+  let pos = 0; const debutDe = [];
+  for (const l of lignes) { debutDe.push(pos); pos += l.length + 1; }
+  const finPos = sec[0]._fin + sec[0].corpsEtendu.length;
+  const premiere = debutDe.findIndex((d) => d >= sec[0]._debut);
+  let derniere = lignes.length;
+  for (let k = 0; k < debutDe.length; k++) if (debutDe[k] >= finPos) { derniere = k; break; }
+
+  const dansBloc = new Array(lignes.length).fill(false);
+  let dedans = false;
+  for (let i = 0; i < lignes.length; i++) {
+    if (/^\s*(```|~~~)/.test(lignes[i])) { dansBloc[i] = true; dedans = !dedans; continue; }
+    dansBloc[i] = dedans;
+  }
+
+  const survivants = [];
+  const eprouvees = [];
+  for (let i = premiere; i < derniere; i++) {
+    const L = lignes[i];
+    if (!L.trim() || dansBloc[i] || /^\s*#{1,4}\s/.test(L)) continue;
+
+    // La garde dépend-elle de cette ligne ? Sinon il n'y a rien à ancrer.
+    const sansL = lignes.filter((_, k) => k !== i);
+    if (!rougeur(sansL.join('\n'))) continue;
+    eprouvees.push(i + 1);
+
+    // ⚠️ ON RETIRE D'ABORD, ON RÉINJECTE ENSUITE — l'ordre inverse fait retirer par `replace`
+    // la copie qu'on vient d'insérer quand elle précède l'originale, et le test rend alors
+    // « satisfaite » sur un texte identique à l'original. C'est le défaut que ce fichier
+    // combat, commis en l'éprouvant : la première version de ce test l'a fait.
+    // ⚠️ LA RÉDUCTION SE FAIT PAR LES DEUX BOUTS, ET LA PREMIÈRE VERSION NE PRENAIT QUE LES
+    // PRÉFIXES. Elle rendait VERT sur une garantie que l'outil de mesure, lui, voyait tomber :
+    // le fragment qui la satisfaisait était un SUFFIXE (« dernière ligne de tout message »).
+    // **Un banc qui n'éprouve qu'une moitié des fragments rend un vert qui ne prouve rien** —
+    // c'est le motif de ce fichier, commis en l'éprouvant, pour la seconde fois.
+    const essayer = (frag) => {
+      const avec = [...sansL];
+      avec.splice(Math.min(derniere - 1, avec.length), 0, '', frag, '');
+      return !rougeur(avec.join('\n'));
+    };
+    let mots = L.trim().split(/\s+/);
+    const total = mots.length;
+    let progres = true;
+    while (progres && mots.length > 1) {
+      progres = false;
+      const sansPremier = mots.slice(1);
+      if (essayer(sansPremier.join(' '))) { mots = sansPremier; progres = true; continue; }
+      const sansDernier = mots.slice(0, -1);
+      if (essayer(sansDernier.join(' '))) { mots = sansDernier; progres = true; }
+    }
+    // ⚠️ LE CURSEUR EST LA MOITIÉ, ET C'EST UN CHOIX QU'ON ÉCRIT. Retirer un mot au bout d'une
+    // phrase n'en change pas la fonction : une garde a raison d'y rester verte. Mais si la
+    // MOITIÉ de la phrase suffit, la garde ne garde plus qu'un début ou qu'une fin — elle a
+    // laissé partir l'autre moitié, et c'est celle-là qui porte d'habitude le motif.
+    if (mots.length <= Math.floor(total / 2)) {
+      survivants.push(`l.${i + 1} satisfaite par ${mots.length} mot(s) sur ${total} : « ${mots.join(' ').slice(0, 60)} »`);
+    }
+  }
+
+  assert.ok(eprouvees.length >= 3, `trop peu de garanties éprouvées (${eprouvees.length}) — le test ne mesure plus rien`);
+  assert.deepEqual(
+    survivants, [],
+    `${survivants.length} garantie(s) de cette garde sont satisfaites par un FRAGMENT réinjecté `
+      + `ailleurs dans leur section : la garde ne distingue plus « la chose est là » de « quelque `
+      + `chose d'autre est là ». C'est le motif que ce lot énonce ; l'appliquer à moitié enseigne `
+      + `le contraire. ${survivants.join(' · ')}`,
+  );
+});

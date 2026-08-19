@@ -3832,6 +3832,28 @@ export const CONTROLES = [
       // S'ÉCRIT, pas la façon dont l'obligation est conjuguée — mesuré par la campagne de
       // reformulations légitimes du 2026-08-17, où « Le `rien` doit s'écrire » faisait crier
       // cette garde sur un texte plus impératif que l'original.
+      // ⚠️ LA POLARITÉ SEULE NE SUFFISAIT PAS, ET UNE PASSE DE REVUE L'A MESURÉ — 2026-08-19.
+      //
+      // La sonde `/Le `rien` s'écrit/` est courte : n'importe quelle phrase de cette section
+      // qui la porte satisfait la garantie. Mesuré — **la MOITIÉ de la phrase (28 mots sur 55)
+      // réinjectée ailleurs dans la section suffisait**, l'énoncé d'origine ayant disparu. La
+      // garde tenait l'AFFIRMATION et laissait partir le MOTIF, qui est ce qui la rend
+      // applicable : sans lui, « le rien s'écrit » est une consigne qu'on peut croire
+      // décorative, et c'est exactement comme ça qu'elle a cessé de mordre la première fois.
+      //
+      // On ancre donc la phrase porteuse sur ses DEUX moitiés — ce qu'elle affirme ET le coût
+      // qu'elle évite —, et la polarité continue de balayer le CORPS : une négation écrite
+      // dans une autre phrase de la section doit rester visible, ce qu'une lecture ligne à
+      // ligne perdrait. Les deux gardes ne se remplacent pas, elles se complètent.
+      const rien = s.corps.split('\n').filter((l) => /Le `rien` (?:s'écrit|doit s'écrire)/i.test(l));
+      assert.equal(rien.length, 1, `la règle du « rien » doit être énoncée une fois exactement (${rien.length})`);
+      assert.match(
+        rien[0], /oblige à lire le reste/i,
+        `« ${rien[0].trim().slice(0, 90)}… » affirme que le « rien » s’écrit sans dire CE QUE ÇA ÉVITE. `
+          + `Le motif — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir `
+          + `s’il y en a une — est ce qui rend la règle applicable ; sans lui elle se lit comme un détail `
+          + `de forme, et c’est ainsi qu’elle a cessé de mordre la première fois.`,
+      );
       exigePolarite(
         s.corps, /Le `rien` (?:s'écrit|doit s'écrire)/i,
         'le « rien » s’écrit — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir s’il y en a une',
@@ -3852,6 +3874,19 @@ export const CONTROLES = [
       const portees = s.corps.split('\n').filter((l) => /dernière ligne de tout message/i.test(l));
       assert.equal(portees.length, 1, `la portée de la formule doit être énoncée une fois exactement (${portees.length})`);
       exigeContrainte(portees[0], 'la portée de la formule');
+      // ⚠️ ET SES DEUX MOITIÉS — mesuré, pas supposé : cinq mots (« dernière ligne de tout
+      // message ») réinjectés ailleurs dans la section suffisaient à satisfaire cette garantie,
+      // l'énoncé d'origine ayant disparu. La portée n'est PAS « la formule va partout » : elle
+      // est écrite à l'envers, PAR LE DÉFAUT QU'ELLE CORRIGE — « ce n'est pas la rubrique d'un
+      // compte rendu ». C'est cette moitié-là qui fait le travail : le métier dit lui-même que
+      // « J'ai besoin de toi » n'a jamais mordu tant qu'elle était bornée à une rubrique. La
+      // laisser partir rendrait la portée vraie et inopérante, comme elle l'était.
+      assert.match(
+        portees[0], /rubrique/i,
+        `« ${portees[0].trim().slice(0, 90)}… » énonce la portée sans nommer CE QU'ELLE CORRIGE. `
+          + `La règle a vécu bornée à la rubrique d'un compte rendu et n'a jamais mordu ; c'est ce `
+          + `défaut nommé qui empêche un lecteur de l'y réduire à nouveau.`,
+      );
 
       // ── ⚠️ LA COUVERTURE — ET C'EST ELLE QUI FERME LE DÉFAUT D'ORIGINE.
       //
@@ -5802,6 +5837,31 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "J'ai besoin de toi : rien.",
       'Rien de ton côté.',
+    ),
+  },
+
+  // ⚠️ AJOUTÉE APRÈS UN REJET DE REVUE — la garantie tenait son AFFIRMATION et laissait
+  // partir son MOTIF. La moitié de la phrase suffisait à satisfaire la garde ; celle-ci
+  // éprouve précisément la moitié qui partait.
+  {
+    id: 'la-portee-perd-le-defaut-quelle-corrige',
+    quoi: 'la portée cesse de nommer le défaut qu’elle corrige — elle reste vraie et redevient inopérante, exactement comme quand la règle était bornée à une rubrique',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Ce n'est pas la rubrique d'un compte rendu, c'est la dernière ligne de tout message.**",
+      '**La formule est la dernière ligne de tout message.**',
+    ),
+  },
+
+  {
+    id: 'le-rien-perd-le-cout-quil-evite',
+    quoi: 'la règle du « rien » garde son affirmation et perd ce qu’elle évite — elle se relit alors comme un détail de forme, ce qui est exactement comme elle a cessé de mordre la première fois',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " ; une ligne qui n'apparaît **que** lorsqu'il y a une demande oblige à lire le reste pour savoir s'il y en a une — précisément le travail qu'elle devait lui épargner.",
+      '.',
     ),
   },
 
