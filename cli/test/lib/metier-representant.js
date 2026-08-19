@@ -483,6 +483,17 @@ export const CONTROLES = [
       assert.ok(etapes.length >= 4, `l’ordre doit être une suite d’au moins 4 étapes (${etapes.length})`);
       for (const e of etapes) assert.ok(e.libelle, `l’étape ${e.rang} n’a pas de libellé en gras — son rang serait illisible`);
 
+      // ⚠️ LE CHIFFRE ÉCRIT EN PROSE DOIT DIRE LE VRAI. Le lot qui a ajouté deux étapes a
+      // laissé « Quatre gestes » au-dessus d'une liste de six — trouvé en revue, invisible à
+      // la relecture. Un lecteur qui compte s'arrête avant de poser sa ronde.
+      const NOMBRES = { deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8 };
+      const annonce = s.corps.match(/^\s*(deux|trois|quatre|cinq|six|sept|huit)\s+gestes/im);
+      assert.ok(annonce, 'l’ordre d’ouverture doit annoncer COMBIEN de gestes il compte');
+      assert.equal(
+        NOMBRES[annonce[1].toLowerCase()], etapes.length,
+        `l’ordre annonce « ${annonce[1]} gestes » et en énumère ${etapes.length}`,
+      );
+
       const contexte = rangUnique(etapes, /CONTEXTE\.md/, 'lire son contexte');
       // T-20260814-0033 : l'étape 2 ouvre désormais LES DEUX lignes. Le libellé le dit, et
       // c'est voulu — le rang seul ne prouverait pas que la seconde y est.
@@ -802,10 +813,13 @@ export const CONTROLES = [
 
       // (e) ET ELLE NE RÉPARE RIEN. Le réflexe de redémarrer ce qui paraît mort détruit
       // la capacité d'attribuer, en plus de ne rien réparer.
-      exigeImperatif(
-        s.corps.split('\n').find((l) => /ne répare jamais|jamais réparer/i.test(l)) ?? '',
-        'l’interdit de réparer pendant une ronde',
-      );
+      // ⚠️ LA LIGNE DOIT EXISTER AVANT QU'ON JUGE SA MODALITÉ. `find()` rend `undefined`
+      // quand rien ne matche, et `exigeImperatif('')` passe en silence — la garde laissait
+      // donc SUPPRIMER l'interdit le plus dangereux de cette section sans rougir. Trouvé en
+      // revue indépendante, éprouvé : le contrôle restait vert phrase entièrement retirée.
+      const interdit = s.corps.split('\n').find((l) => /ne répare jamais|jamais réparer/i.test(l));
+      assert.ok(interdit, 'l’interdit de RÉPARER pendant une ronde doit être écrit — une ronde qui répare est plus dangereuse que le défaut qu’elle cherche');
+      exigeImperatif(interdit, 'l’interdit de réparer pendant une ronde');
     },
   },
 
@@ -837,8 +851,11 @@ export const CONTROLES = [
       // (c) IL NE DESCEND PAS. C'est du travail en cours, pas un engagement.
       // ⚠️ Deux interdits distincts, donc DEUX assertions. Une alternative « A ou B » ici
       // laissait survivre la mutation qui supprime A : B suffisait à la satisfaire.
-      assert.match(ecrire.corps, /ne parle jamais au client/i,
-        'l’état ne doit jamais descendre dans le canal du client');
+      // ⚠️ POLARITÉ, PAS PRÉSENCE. `assert.match` reste vert devant « on pourrait croire
+      // qu'il ne parle jamais au client — en réalité, un état bien résumé peut lui être
+      // recopié » : la sonde y est, la règle est retournée. Éprouvé en revue.
+      exigePolarite(ecrire.corps, /ne parle jamais au client/i,
+        'l’interdit de faire descendre l’état dans le canal du client');
       assert.match(ecrire.corps, /ne quitte jamais son fil/i,
         'l’état ne doit jamais quitter le fil où il s’écrit');
 
@@ -858,7 +875,9 @@ export const CONTROLES = [
     id: 'accuse-precede-le-relevement',
     quoi: 'l’accusé de réception passe AVANT le relèvement, et seul l’accusé passe avant',
     verifier({ metier }) {
-      // D-20260817-0008 : un représentant a mené un relèvement complet et écrit deux
+      // Chantier `D-20260817-0008` ; le fait lui-même est consigné au changelog v1.1.0 de
+      // l'ABC (Somcraft `e4b72bc9-b7a7-43f1-812e-72f58abe50be`), pas dans la Demande —
+      // pointeur corrigé en revue. Un représentant a mené un relèvement complet et écrit deux
       // messages au dirigeant avant que le client n'entende un mot — pendant qu'un employé
       // de ce client s'apprêtait à relancer une commande destructrice en production. Le
       // texte disait QU'il accuse réception. Il ne disait pas QUAND.
@@ -883,8 +902,9 @@ export const CONTROLES = [
       const c = sectionDe(metier, /^Accuse réception avant de travailler/, 'sur l’accusé de réception');
       assert.match(c.corps, /n.est pas une promesse|jamais\s*«?\s*une réponse est en route/i,
         'le métier doit dire qu’un accusé n’est PAS une promesse — sinon il engage');
-      assert.match(c.corps, /seul l.accusé passe avant/i,
-        'le métier doit borner l’exception : SEUL l’accusé passe avant le relèvement');
+      // ⚠️ Même piège : la borne se garde sur sa POLARITÉ, pas sur sa présence.
+      exigePolarite(c.corps, /seul l.accusé passe avant/i,
+        'la borne de l’exception : SEUL l’accusé passe avant le relèvement');
     },
   },
 
@@ -1915,6 +1935,43 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       '⚠️ **Mais un accusé n\'est pas une promesse.**',
       '⚠️ **Et ton accusé annonce une réponse prochaine.**',
+    ),
+  },
+  {
+    id: 'le-decompte-de-l-ordre-ment',
+    quoi: 'l’ordre d’ouverture annonce moins de gestes qu’il n’en énumère — on s’arrête avant de poser sa ronde',
+    cible: 'ordre-ouverture',
+    fichier: 'metier',
+    muter: (t) => t.replace('Six gestes, dans cet ordre exact', 'Quatre gestes, dans cet ordre exact'),
+  },
+  {
+    id: 'la-ronde-repare-ce-qu-elle-voit',
+    quoi: 'l’interdit de réparer pendant une ronde disparaît — le réflexe de redémarrer redevient permis',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Regarde, inscris, alerte — ne répare jamais.**',
+      '**Regarde, inscris, alerte — et répare ce qui est simple.**',
+    ),
+  },
+  {
+    id: 'l-etat-descend-par-un-renversement',
+    quoi: 'l’interdit de recopier l’état au client est retourné par une incise, sans que la sonde disparaisse',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '⚠️ **Ton état n\'est pas une preuve, et il ne parle jamais au client.**',
+      '⚠️ **On pourrait croire que ton état ne parle jamais au client — en réalité, un état bien résumé peut lui être recopié.**',
+    ),
+  },
+  {
+    id: 'la-borne-de-l-accuse-est-retournee',
+    quoi: 'la borne « seul l’accusé passe avant » est renversée par une incise — une réponse de fond repasse devant',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Et **seul l\'accusé passe avant**',
+      'On pourrait croire que **seul l\'accusé passe avant** ; dans les faits, une brève réponse peut partir avec lui',
     ),
   },
   {
