@@ -258,6 +258,15 @@ export const ETATS_BOITE = Object.freeze({
   ILLISIBLE: 'illisible',
   /** Rien dedans, rien de proposé. */
   VIDE: 'vide',
+  /**
+   * Rien à soumettre non plus — mais l'écran dit autre chose : le destinataire est OCCUPÉ et
+   * ses messages attendent la fin de son tour (`Press up to edit queued messages`).
+   *
+   * ⚠️ CE MARQUEUR EST GRIS LUI AUSSI, et le confondre avec une suggestion serait refaire le
+   * défaut que ce module ferme : nommer un mauvais motif. Mesuré le 2026-08-19 sur `w0:p1F`,
+   * une heure après l'écriture de `etatDeLaBoite` — c'est l'usage réel qui l'a trouvé.
+   */
+  FILE_DATTENTE: 'file-attente',
   /** Rien à soumettre : ce qui s'affiche est une proposition de l'éditeur, en gris. */
   SUGGESTION: 'suggestion',
   /** Un vrai texte, arrivé par COLLAGE — l'écran n'en montre qu'un repli, `[Pasted text #N]`. */
@@ -314,6 +323,13 @@ export function etatDeLaBoite(texteTerminal) {
       suggestion: null,
     };
   }
+  // ⚠️ LE MARQUEUR DE FILE D'ATTENTE SE LIT AVANT LA SUGGESTION — il est gris lui aussi, et il
+  // porte un fait DIFFÉRENT : le destinataire travaille, ses messages partiront à la fin de son
+  // tour. C'est déjà un témoin de prise ailleurs dans ce dépôt (`laPriseEstConstatee`) ; deux
+  // mécanismes qui lisent le même écran doivent en dire la même chose.
+  if (messagesEnFile(texteTerminal)) {
+    return { etat: ETATS_BOITE.FILE_DATTENTE, texte: '', suggestion: null };
+  }
   const suggestion = suggestionDansLaBoite(texteTerminal);
   return suggestion === null
     ? { etat: ETATS_BOITE.VIDE, texte: '', suggestion: null }
@@ -322,5 +338,9 @@ export function etatDeLaBoite(texteTerminal) {
 
 /** Une boîte où l'on peut écrire — vide, ou vide derrière une suggestion. C'est la même conduite. */
 export function riensASoumettre(etat) {
-  return etat === ETATS_BOITE.VIDE || etat === ETATS_BOITE.SUGGESTION;
+  return (
+    etat === ETATS_BOITE.VIDE ||
+    etat === ETATS_BOITE.SUGGESTION ||
+    etat === ETATS_BOITE.FILE_DATTENTE
+  );
 }

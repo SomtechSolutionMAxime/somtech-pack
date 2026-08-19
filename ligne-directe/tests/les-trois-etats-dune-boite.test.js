@@ -109,3 +109,35 @@ test('LE LECTEUR D’AVANT NE CHANGE PAS DE RÉPONSE — `contenuBoite` garde se
   assert.equal(contenuBoite(SAISI), 'reste ici');
   assert.equal(contenuBoite('rien du tout ici'), null);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE PIÈGE TROUVÉ EN SE SERVANT DE L'OUTIL, une heure après l'avoir écrit
+//
+// 🔴 CE QUI EST GRIS N'EST PAS TOUJOURS UNE SUGGESTION. Mesuré le 2026-08-19 sur `w0:p1F`
+// (`matapedia`), juste après lui avoir livré un message : sa boîte portait
+// `❯ ESC[0mESC[2mPress up to edit queued messagesESC[0m` — même attribut, même place, et ce
+// n'est PAS une proposition de texte : c'est le marqueur de FILE D'ATTENTE, l'écran qui dit
+// que le destinataire est occupé et prendra le message à la fin de son tour.
+//
+// ⚠️ LA CONDUITE ÉTAIT JUSTE — rien à soumettre dans les deux cas — MAIS LE MOT ÉTAIT FAUX, et
+// c'est très exactement le défaut que ce lot existe pour fermer : un outil qui nomme un mauvais
+// motif envoie chercher au mauvais endroit. Annoncer « l'éditeur te propose un texte » là où
+// l'écran dit « tes messages sont en file » ferait manquer un fait utile — le destinataire est
+// occupé, son tour n'est pas fini — et referait à petite échelle les six heures du 19 août.
+//
+// ⚠️ IL Y A UNE SECONDE RAISON DE LE SÉPARER : la file d'attente est déjà un témoin de PRISE
+// dans ce dépôt (`laPriseEstConstatee`). Deux mécanismes qui lisent le même écran doivent en
+// dire la même chose, sinon l'un des deux ment.
+
+test('LE MARQUEUR DE FILE D’ATTENTE N’EST PAS UNE SUGGESTION — même gris, autre fait', () => {
+  const enFile = ecran(`❯ ${ESC}[0m${ESC}[2mPress up to edit queued messages${ESC}[0m`);
+  const vu = etatDeLaBoite(enFile);
+  assert.equal(vu.etat, ETATS_BOITE.FILE_DATTENTE, 'le destinataire est occupé, ses messages attendent');
+  assert.equal(vu.texte, '', 'et il n’y a toujours rien à soumettre — la conduite ne change pas');
+  assert.equal(vu.suggestion, null, 'surtout : on n’annonce pas une proposition de texte qui n’existe pas');
+});
+
+test('ET UNE VRAIE SUGGESTION RESTE UNE SUGGESTION — la distinction ne mange pas ce qu’elle sépare', () => {
+  assert.equal(etatDeLaBoite(SUGGESTION).etat, ETATS_BOITE.SUGGESTION);
+  assert.equal(etatDeLaBoite(SUGGESTION).suggestion, 'merge la PR 37');
+});

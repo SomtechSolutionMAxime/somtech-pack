@@ -35,6 +35,10 @@ import { etatDeLaBoite, ETATS_BOITE, riensASoumettre } from '../../ligne-directe
 /** Ce que chaque état veut dire pour celui qui allait poser un geste. */
 const CONDUITE = {
   [ETATS_BOITE.VIDE]: 'boîte VIDE — rien dedans, rien de proposé : on peut y livrer',
+  [ETATS_BOITE.FILE_DATTENTE]:
+    'boîte VIDE, et le destinataire est OCCUPÉ — ses messages sont en FILE et partiront à la ' +
+    'fin de son tour. Rien à soumettre, rien n’est bloqué : ce que tu vois en gris est le ' +
+    'marqueur de file d’attente, pas un texte',
   [ETATS_BOITE.SUGGESTION]:
     'boîte VIDE derrière une SUGGESTION grisée — il n’y a RIEN à soumettre. ' +
     'Ce que tu vois à l’écran est une proposition de l’éditeur, pas un texte saisi : ' +
