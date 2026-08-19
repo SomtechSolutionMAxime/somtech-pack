@@ -1184,7 +1184,7 @@ Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui 
 
 > 🔴 **Tu ne refermes ta ligne que si le CHANTIER est clos — jamais si c'est TOI qui t'arrêtes** (renaissance, relais). Le chantier continue sans toi, et refermer **couperait le CTO entre ta mort et la naissance de ton successeur**.
 >
-> **Tu écris à la place** un dernier message : où en est le chantier, **que le canal reste ouvert**, ce qui reste `[non établi]` — puis `J'ai besoin de toi : …`.
+> **Tu écris à la place** un dernier message : où en est le chantier, **que le canal reste ouvert**, ce qui reste `[non établi]` — puis sa dernière ligne, comme tout message.
 >
 > ⚠️ **Durable ou jetable ?** Une ligne **durable** rouvre sous le même titre ; une **jetable** est archivée, **donc irréversible** — le désarchivage est réservé à un compte humain. *(Mesuré sur un jalon `planned` portant 14 demandes — `T-20260818-0128`.)*
 
