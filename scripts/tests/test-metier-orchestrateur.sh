@@ -385,13 +385,17 @@ done
 echo "⑩ le texte n'a pas gonflé sans raison"
 
 BASELINE=118856
-PLAFOND=$((BASELINE + 6500))
+MARGE=6500
+PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -c < "$METIER" | tr -d ' ')"
 
+# La marge est dérivée, jamais réécrite en dur dans le message : un banc dont
+# le compte rendu annonce une autre borne que celle qu'il applique ment sur sa
+# propre garde, et c'est le seul chiffre que personne ne pense à vérifier.
 if [ "$TAILLE" -le "$PLAFOND" ]; then
-  ok "$TAILLE octets — sous le plafond de $PLAFOND (baseline $BASELINE + 4000)"
+  ok "$TAILLE octets — sous le plafond de $PLAFOND (baseline $BASELINE + marge $MARGE), écart net $((TAILLE - BASELINE))"
 else
-  ko "$TAILLE octets — au-dessus du plafond de $PLAFOND : chaque ajout doit REMPLACER ou PRÉCISER"
+  ko "$TAILLE octets — au-dessus du plafond de $PLAFOND (écart net $((TAILLE - BASELINE)), marge $MARGE) : chaque ajout doit REMPLACER ou PRÉCISER"
 fi
 
 echo
