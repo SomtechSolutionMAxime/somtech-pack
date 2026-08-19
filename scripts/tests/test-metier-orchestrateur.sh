@@ -392,7 +392,14 @@ S_LU="$(section 'Accuser LU')"
 # le bloc ajoute juste en dessous CITE ce piège pour dire qu'il n'est pas le bon
 # (« Le piège nommé au-dessus est "se mettre à travailler d'abord" »). La citation
 # suffisait à la satisfaire. On exige donc le motif que seule la prescription
-# porte — c'est la même faiblesse que les sept mutations survivantes du 2026-08-19.
+# porte.
+#
+# ⚠️ CE RENVOI A DEJA ETE MAL LU, ET LA FORMULATION EST CORRIGEE POUR CA. Le
+# premier jet de ce bloc ⑪ laissait SEPT mutations survivantes sur 23 — toutes
+# corrigees dans le meme lot, avant livraison. Une revue de fond a lu la mention
+# de ces sept comme sept survivantes RESTANTES et en a tire un verdict de rejet.
+# Etat mesure a la livraison : 36 mutations jouees UNE A UNE sur copie hors du
+# depot (`METIER_ORCHESTRATEUR=<copie>`), ZERO survivante, arbre propre.
 if printf '%s' "$S_LU" | grep -qi 'parce que ce sera vite fait'; then
   ok "8 — l'ancien piège est conservé : la règle se précise, elle ne s'abroge pas"
 else
@@ -605,7 +612,8 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # 0 suppression sur le gabarit. La ligne de base passe de 118 856 à 145223, et
 # LA MARGE PASSE À ZÉRO. Les deux mouvements vont ensemble et ils sont arbitrés.
 #
-#   Arbitrage rendu (matapedia, 2026-08-19), recopié :
+#   Arbitrage rendu par `matapedia` sur la ligne de `e-20260819-0013`, 2026-08-19,
+#   sous `E-20260819-0013` — recopié mot pour mot :
 #   « Re-baseline le plafond sur la taille FINALE et EXACTE de ton lot. AUCUNE
 #     MARGE. Ma marge de 6 500 posée ce matin a été consommée en entier par le
 #     lot précédent — 82 octets restants. Une marge n'est pas une réserve,
