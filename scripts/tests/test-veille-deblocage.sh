@@ -495,9 +495,15 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
 done
 if [ -f "$DETACH_LOG" ] && grep -q "MOTIF: " "$DETACH_LOG"; then
   ok "la veille détachée a réellement veillé puis nommé son motif dans son journal"
-  n_detach=$(grep -c "pid=" "$DETACH_LOG" 2>/dev/null || echo 0)
-  [ "${n_detach:-0}" -eq 0 ] && ok "elle ne s'est PAS re-détachée (pas de récursion)" \
-    || ko "récursion de détachement : le journal contient une annonce de détachement"
+  # Le signe d'une récursion est l'ANNONCE de détachement dans le journal de
+  # la veille détachée : elle se serait re-détachée au lieu de veiller.
+  # (Compter avec `grep -c` sans match rend « 0 » ET un rc≠0 — un `|| echo 0`
+  # empile alors deux valeurs et le test rougit sur son propre outil.)
+  if grep -q "veille détachée" "$DETACH_LOG"; then
+    ko "récursion de détachement : la veille détachée s'est re-détachée au lieu de veiller"
+  else
+    ok "elle ne s'est PAS re-détachée (pas de récursion)"
+  fi
 else
   ko "la veille détachée n'a rien veillé (journal vide ou sans motif)"
   ko "récursion de détachement non vérifiable"
