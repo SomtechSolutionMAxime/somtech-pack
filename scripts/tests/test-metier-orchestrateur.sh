@@ -300,16 +300,24 @@ fi
 
 # Les deux conditions, mesurées dans le voisinage du geste (± 25 lignes) :
 # une condition écrite à l'autre bout du fichier ne gouverne pas ce geste-ci.
+# ⚠️ ANCRÉES SUR LEUR MARQUEUR, PAS SUR UNE FENÊTRE.
+# La première version cherchait « le tien » dans ±25 lignes autour du geste.
+# Une revue de fond a reproduit le faux témoin : en SUPPRIMANT la condition ①,
+# l'assertion restait VERTE — satisfaite par « puis livre le tien avec un avis »,
+# une phrase sans aucun rapport située 24 lignes plus haut, dans le paragraphe
+# sur la délivrance de `livrer.js`. La garde ne protégeait donc rien.
+# On exige désormais que la MÊME LIGNE porte le marqueur de la condition ET sa
+# substance : une collision fortuite ne suffit plus.
 CTX_SK="$(grep -n 'send-keys' "$METIER" | head -1 | cut -d: -f1)"
 if [ -n "$CTX_SK" ]; then
-  VOISINAGE="$(sed -n "$((CTX_SK > 25 ? CTX_SK - 25 : 1)),$((CTX_SK + 25))p" "$METIER")"
-  if printf '%s' "$VOISINAGE" | grep -qiE 'le tien|ton propre texte|que tu as écrit'; then
-    ok "condition ① — le texte est le tien, présente auprès du geste"
+  VOISINAGE="$(sed -n "$((CTX_SK > 15 ? CTX_SK - 15 : 1)),$((CTX_SK + 15))p" "$METIER")"
+  if printf '%s' "$VOISINAGE" | grep -qE '①[^①②]*(le TIEN|le tien|ton propre texte|que tu as écrit)'; then
+    ok "condition ① — le texte est le tien, portée par la ligne qui l'énumère"
   else
     ko "condition ① absente auprès du geste — on autoriserait d'écrire dans la boîte d'autrui"
   fi
-  if printf '%s' "$VOISINAGE" | grep -qiE 'juste avant|viens de relire|à l.instant'; then
-    ok "condition ② — tu viens de relire la boîte, juste avant"
+  if printf '%s' "$VOISINAGE" | grep -qE '②[^①②]*(juste avant|viens de relire|à l.instant)'; then
+    ok "condition ② — tu viens de relire la boîte, portée par la ligne qui l'énumère"
   else
     ko "condition ② absente — c'est la condition qui manquait, et son absence a produit le geste sur une boîte vide"
   fi
