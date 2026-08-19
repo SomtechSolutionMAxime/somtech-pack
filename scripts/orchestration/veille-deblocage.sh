@@ -56,6 +56,7 @@
 #        interrompue ........... 4   signal reçu — tuée par son environnement
 #        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés)
 #        (refus au démarrage) .. 7   une veille garde déjà ce pane
+#        releve-illisible ...... 8   herdr ne rend plus rien d'exploitable
 #      Un bilan muet rendait « j'ai cru qu'il avait fini » et « j'ai épuisé
 #      mes tours » indistinguables, alors qu'ils appellent des correctifs
 #      opposés.
@@ -79,10 +80,11 @@
 #      un hoquet de herdr abandonnerait un agent bien vivant.
 #
 #   9. LES DEUX CHIFFRES SONT MESURABLES. Une garde se juge sur ce qu'elle
-#      débloque à raison ET sur ce qu'elle débloque à tort. Chaque déblocage
-#      consigne dans un journal l'écran qui l'a déclenché et la touche
-#      envoyée, pour qu'un tiers relise et classe. Un compte sans sa méthode
-#      est un fait invérifiable.
+#      débloque à raison ET sur ce qu'elle refuse à tort. Le journal porte
+#      donc les DEUX populations : chaque déblocage avec l'écran qui l'a
+#      déclenché et la touche envoyée, et chaque REFUS avec l'écran qu'elle
+#      n'a pas reconnu. Un tiers relit et classe les deux ; un compte sans
+#      sa méthode est un fait invérifiable.
 #
 # Usage:
 #   veille-deblocage.sh <pane> <agent> [tours] [--dry-run] [--detach]
@@ -224,27 +226,55 @@ if [ "$DETACH" = "1" ]; then
   exit 0
 fi
 
-# Deux veilles sur le même pane liraient le même écran et enverraient
-# chacune leurs touches : un « Enter » en double peut valider la mauvaise
-# option de l'écran SUIVANT. Vécu pendant ce lot — deux veilles ont
-# réellement tourné en parallèle sur le même pane d'essai.
-# Une veille MORTE ne condamne pas son pane : `veille_vivante` le vérifie.
-if [ -d "$VD_REGISTRE_DIR" ]; then
-  for f in "$VD_REGISTRE_DIR"/*.veille; do
-    [ -f "$f" ] || continue
-    [ "$(registre_lire "$f" pane)" = "$PANE" ] || continue
-    [ "$(registre_lire "$f" statut)" = "active" ] || continue
-    autre_pid="$(registre_lire "$f" pid)"
-    if veille_vivante "$autre_pid" "$PANE"; then
-      echo "REFUS : une veille garde déjà le pane $PANE (agent=$(registre_lire "$f" agent), pid=$autre_pid)." >&2
-      echo "        L'arrêter d'abord (kill $autre_pid), ou la laisser faire — deux veilles se marcheraient dessus." >&2
-      exit 7
-    fi
+VERROU="${VD_REGISTRE_DIR}/.verrou-${PANE_SLUG}"
+
+# `mkdir` réussit pour un seul appelant, même simultané — c'est ce qui rend
+# la prise atomique là où un « lire le registre puis s'y inscrire » laissait
+# passer deux veilles.
+prendre_le_pane() {
+  if mkdir "$VERROU" 2>/dev/null; then
+    echo "$$" > "${VERROU}/pid" 2>/dev/null
+    return 0
+  fi
+  # Le verrou existe. Le tenant est-il une veille vivante sur ce pane ?
+  # Son pid peut ne pas être encore écrit : on patiente brièvement plutôt
+  # que de conclure à l'orphelin et de lui voler le pane.
+  tenant=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    tenant="$(cat "${VERROU}/pid" 2>/dev/null)"
+    [ -n "$tenant" ] && break
+    sleep 0.1
   done
+  if veille_vivante "$tenant" "$PANE"; then
+    return 1
+  fi
+  # Verrou orphelin (veille tuée sans pouvoir le rendre) : on le reprend,
+  # sinon un pane resterait condamné après le premier arrêt brutal.
+  rm -rf "$VERROU" 2>/dev/null
+  if mkdir "$VERROU" 2>/dev/null; then
+    echo "$$" > "${VERROU}/pid" 2>/dev/null
+    return 0
+  fi
+  return 1
+}
+
+rendre_le_pane() {
+  [ "$(cat "${VERROU}/pid" 2>/dev/null)" = "$$" ] && rm -rf "$VERROU" 2>/dev/null
+}
+
+if ! prendre_le_pane; then
+  autre_pid="$(cat "${VERROU}/pid" 2>/dev/null)"
+  echo "REFUS : une veille garde déjà le pane $PANE (pid=${autre_pid:-?})." >&2
+  echo "        L'arrêter d'abord (kill ${autre_pid:-<pid>}), ou la laisser faire — deux veilles se marcheraient dessus." >&2
+  exit 7
 fi
 
 DEBLOQUES=0
 INCONNUES=0
+# Un relevé illisible — herdr muet, sortie tronquée, ligne de diagnostic sur
+# le flux — n'était ni une absence ni un écran non reconnu : c'était un tour
+# TOTALEMENT silencieux. La veille pouvait devenir aveugle sans le dire.
+ILLISIBLES=0
 # Discriminant du défaut ① : tant qu'il vaut 0, un `idle` veut dire « il
 # attend qu'on lui parle », jamais « il a fini ».
 VU_TRAVAILLER=0
@@ -282,6 +312,7 @@ code_motif() {
     ecran-non-reconnu) echo 3 ;;
     interrompue)       echo 4 ;;
     pane-disparu)      echo 6 ;;
+    releve-illisible)  echo 8 ;;
     *)                 echo 5 ;;
   esac
 }
@@ -302,6 +333,7 @@ terminer() {
       echo "inconnues=$INCONNUES"
     } >> "$REGISTRE_FICHIER" 2>/dev/null
   fi
+  rendre_le_pane
   exit "$(code_motif "$motif")"
 }
 
@@ -339,6 +371,21 @@ journaliser_deblocage() {
 # Rend le statut de l'agent — ou __ABSENT__ quand herdr répond que le pane ou
 # l'agent n'existe plus. Un silence de herdr (sortie vide) reste distinct de
 # cette absence explicite : le premier est un hoquet, la seconde un fait.
+# Consigne un REFUS — un écran qu'elle n'a pas reconnu et auquel elle n'a
+# donc pas répondu. Sans cette moitié, le journal ne portait qu'une des deux
+# populations : « ce qu'elle débloque à tort » était relisable, « ce qu'elle
+# refuse à tort » ne l'était pas. Une garde se juge sur les DEUX.
+journaliser_refus() {
+  {
+    echo "=== REFUS #$INCONNUES · tour $1 · $(date -u +%Y-%m-%dT%H:%M:%SZ) · pane=$PANE agent=$AGENT"
+    echo "--- aucune touche envoyée (écran non reconnu)"
+    echo "--- écran refusé :"
+    printf '%s\n' "$2"
+    echo "=== fin refus #$INCONNUES"
+    echo
+  } >> "$VD_JOURNAL" 2>/dev/null
+}
+
 etat_courant() {
   # 2>&1 et non 2>/dev/null : herdr écrit son « agent_not_found » sur STDERR
   # avec rc=1 (mesuré). Le jeter rendait l'absence indétectable — la veille
@@ -374,6 +421,16 @@ for i in $(seq 1 "$VD_TOURS"); do
   fi
 
   case "$ETAT" in
+    '')
+      # Ni un statut, ni une absence explicite : herdr n'a rien rendu
+      # d'exploitable. Trois de suite et la veille est aveugle — elle le dit
+      # au lieu de tourner en croyant veiller.
+      ILLISIBLES=$((ILLISIBLES+1))
+      echo "[$i] relevé illisible ($ILLISIBLES/3) — herdr n'a rien rendu d'exploitable"
+      if [ "$ILLISIBLES" -ge 3 ]; then
+        terminer releve-illisible "3 relevés illisibles consécutifs — la veille ne voit plus l'agent, elle ne le garde donc plus"
+      fi
+      ;;
     __ABSENT__)
       # Deux relevés concordants avant de conclure — même exigence que la
       # garantie n°4. Un hoquet de herdr abandonnerait un agent bien vivant.
@@ -385,6 +442,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     working)
       ABSENCES=0
+      ILLISIBLES=0
       # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
       # ce reset, trois écrans bizarres espacés dans le temps coupaient la
       # veille sur un agent vivant — d'autant plus probable que ce lot
@@ -394,6 +452,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     blocked)
       ABSENCES=0
+      ILLISIBLES=0
       # Un agent bloqué a forcément commencé à travailler.
       VU_TRAVAILLER=1
       ECRAN=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
@@ -429,6 +488,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       INCONNUES=$((INCONNUES+1))
       echo "[$i] BLOQUE SANS DEMANDE RECONNUE — je ne reponds pas"
       printf '%s' "$ECRAN" | tail -8
+      journaliser_refus "$i" "$ECRAN"
       if [ "$INCONNUES" -ge 3 ]; then
         echo "ARRET : blocage non reconnu, intervention requise"
         terminer ecran-non-reconnu "3 relevés non reconnus consécutifs — elle n'a pas répondu, une intervention humaine est requise"
@@ -436,6 +496,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     done)
       ABSENCES=0
+      ILLISIBLES=0
       INCONNUES=0
       # `done` est un état terminal EXPLICITE : il ne survient pas à la
       # naissance, contrairement à `idle`. Il arme donc la détection.
@@ -449,6 +510,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     idle)
       ABSENCES=0
+      ILLISIBLES=0
       INCONNUES=0
       # ⚠️ LE DÉFAUT ① EST ICI. Un agent qui vient de naître est `idle`
       # PARCE QU'IL ATTEND SON BRIEF. Les deux relevés de la garantie n°4

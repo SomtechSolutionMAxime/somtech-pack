@@ -73,6 +73,12 @@ case "${1:-}" in
       else
         status="${FAKE_HERDR_STATUS:-blocked}"
       fi
+      if [ "$status" = "illisible" ]; then
+        # Sortie non-JSON sur le flux combiné : ni un statut, ni une absence.
+        printf 'herdr: warning: reconnecting to daemon
+'
+        exit 0
+      fi
       if [ "$status" = "absent" ]; then
         # Ce que le VRAI herdr rend quand le pane a été fermé sous la veille :
         # l'erreur part sur STDERR et le code de retour vaut 1 — mesuré. Un
@@ -573,7 +579,14 @@ OUT23="$(PATH="${BINDIR}:${PATH}" \
          bash "$VEILLE" test-pane test-agent 3 --dry-run 2>&1)"
 
 case "$OUT23" in *"aurait envoyé:"*) ko "G1 AFFAIBLIE : elle répond sur un seul signe, journal actif" ;; *) ok "G1 intacte : un seul signe → aucune réponse" ;; esac
-[ ! -s "$J23" ] && ok "aucun déblocage consigné (rien n'a été débloqué)" || ko "un déblocage a été consigné alors qu'aucun n'a eu lieu : $(cat "$J23")"
+# Le journal porte désormais les DEUX populations : il n'est plus vide quand
+# elle refuse. Ce qu'il ne doit pas contenir, c'est un DÉBLOCAGE.
+if grep -q "=== déblocage" "$J23" 2>/dev/null; then
+  ko "un déblocage a été consigné alors qu'aucun n'a eu lieu : $(cat "$J23")"
+else
+  ok "aucun déblocage consigné (rien n'a été débloqué)"
+fi
+grep -q "=== REFUS" "$J23" 2>/dev/null && ok "les refus, eux, sont bien consignés" || ko "le refus n'a pas été consigné"
 
 
 # =================================================================
@@ -741,6 +754,149 @@ run 4
 
 case "$OUT" in *"TERMINE"*) ko "G4 AFFAIBLIE sur le chemin idle : un idle isolé suffit à l'abandonner : $OUT" ;; *) ok "un idle non confirmé ne l'arrête pas (garantie n°4, chemin idle)" ;; esac
 case "$OUT" in *"MOTIF: agent-termine"*) ko "motif « agent-termine » sur un idle transitoire" ;; *) ok "elle a continué de veiller" ;; esac
+
+
+# =================================================================
+# 31. « CONFIRMÉ SUR DEUX RELEVÉS » doit valoir pour l'absence aussi : deux
+#     absences SÉPARÉES par un tour vivant ne sont pas une confirmation.
+#     Sans cette garde, chaque reset ABSENCES=0 pouvait être supprimé sans
+#     qu'un test rougisse — deux hoquets de herdr à une heure d'intervalle
+#     auraient tué un agent bien vivant.
+# =================================================================
+echo "→ 31. deux absences SÉPARÉES → elle ne conclut pas au pane disparu"
+: > "$SCREEN_FILE"
+printf 'absent\nworking\nabsent\nworking\nworking\nworking\n' > "$SEQ_FILE"
+run 6
+
+case "$OUT" in *"MOTIF: pane-disparu"*) ko "deux absences séparées par du travail suffisent à conclure — un hoquet de herdr tue un agent vivant : $OUT" ;; *) ok "deux absences séparées ne concluent pas au pane disparu" ;; esac
+
+# =================================================================
+# 32. …et le seuil vaut EXACTEMENT deux. Le scénario 25 tourne sur une
+#     absence constante : n'importe quel seuil ≤ 6 y passait, donc « DEUX
+#     relevés » n'était prouvé qu'à ±4 près.
+# =================================================================
+echo "→ 32. le seuil de confirmation vaut exactement deux"
+: > "$SCREEN_FILE"
+printf 'working\nabsent\nabsent\nworking\nworking\nworking\n' > "$SEQ_FILE"
+run 6
+
+case "$OUT" in *"MOTIF: pane-disparu"*) ok "deux absences consécutives suffisent (seuil ≤ 2)" ;; *) ko "seuil trop haut : deux absences consécutives ne concluent pas : $OUT" ;; esac
+
+# =================================================================
+# 33. Un relevé ILLISIBLE (herdr muet, sortie tronquée, ligne de bruit) ne
+#     doit pas être un tour totalement silencieux : il ne comptait ni comme
+#     absence ni comme écran non reconnu. La veille pouvait devenir aveugle
+#     sans jamais le dire — le mal exact que ce lot corrige.
+# =================================================================
+echo "→ 33. relevés illisibles → elle le dit, elle ne devient pas aveugle en silence"
+: > "$SCREEN_FILE"
+printf 'illisible\nillisible\nillisible\nillisible\nillisible\nillisible\n' > "$SEQ_FILE"
+run 6
+
+case "$OUT" in *[Ii]"llisible"*) ok "elle signale les relevés illisibles" ;; *) ko "six relevés illisibles passés en silence : $OUT" ;; esac
+case "$OUT" in *"MOTIF: releve-illisible"*) ok "elle finit par s'arrêter sur un motif nommé" ;; *) ko "aucun motif d'arrêt pour des relevés illisibles répétés : $OUT" ;; esac
+
+# Mais un relevé illisible ISOLÉ ne l'arrête pas — sinon un hoquet suffirait.
+: > "$SCREEN_FILE"
+printf 'working\nillisible\nworking\nworking\n' > "$SEQ_FILE"
+run 4
+case "$OUT" in *"MOTIF: releve-illisible"*) ko "un seul relevé illisible l'arrête — un hoquet suffirait" ;; *) ok "un relevé illisible isolé ne l'arrête pas" ;; esac
+
+# =================================================================
+# 34. Le refus de double veille est un check-then-act : deux lancements
+#     quasi simultanés passaient tous deux le contrôle et veillaient en
+#     parallèle. Reproduit par la passe de fond en élargissant la fenêtre.
+#     La prise doit être ATOMIQUE.
+# =================================================================
+echo "→ 34. deux lancements simultanés : une seule veille prend le pane"
+REG_RACE="${WORK}/registre-race"; rm -rf "$REG_RACE"; mkdir -p "$REG_RACE"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+RC_A_F="${WORK}/rc_a"; RC_B_F="${WORK}/rc_b"
+lancer_race() {
+  PATH="${BINDIR}:${PATH}" \
+    FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+    VD_REGISTRE_DIR="$REG_RACE" \
+    VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+    bash "$VEILLE" w9:pRACE "$1" 30 > "${WORK}/race-$1.log" 2>&1
+  echo $? > "$2"
+}
+lancer_race concurrent-a "$RC_A_F" &
+PA=$!
+lancer_race concurrent-b "$RC_B_F" &
+PB=$!
+wait "$PA" 2>/dev/null; wait "$PB" 2>/dev/null
+RA="$(cat "$RC_A_F" 2>/dev/null)"; RB="$(cat "$RC_B_F" 2>/dev/null)"
+n_refus=0
+[ "$RA" = "7" ] && n_refus=$((n_refus+1))
+[ "$RB" = "7" ] && n_refus=$((n_refus+1))
+[ "$n_refus" -eq 1 ] && ok "exactement une des deux est refusée (rc=7) — l'autre veille (a=$RA b=$RB)" \
+  || ko "les deux lancements ont passé le contrôle et veillent en parallèle (a=$RA b=$RB)"
+
+
+# =================================================================
+# 35. « 3 relevés illisibles CONSÉCUTIFS » — même exigence que pour les
+#     écrans non reconnus et les absences : trois hoquets de herdr espacés
+#     dans le temps ne sont pas une cécité.
+# =================================================================
+echo "→ 35. relevés illisibles NON consécutifs → elle continue de veiller"
+: > "$SCREEN_FILE"
+printf 'illisible\nworking\nillisible\nworking\nillisible\nworking\n' > "$SEQ_FILE"
+run 6
+
+case "$OUT" in *"MOTIF: releve-illisible"*) ko "trois relevés illisibles ESPACÉS l'arrêtent — un agent vivant est abandonné sur des hoquets : $OUT" ;; *) ok "trois relevés illisibles séparés par du travail ne l'arrêtent pas" ;; esac
+
+# =================================================================
+# 36. Une veille qui s'arrête REND son pane. Sans ça, le pane suivant n'est
+#     repris que par le chemin « verrou orphelin » — un rm suivi d'un mkdir,
+#     donc non atomique, exactement ce que la prise atomique évite.
+# =================================================================
+echo "→ 36. une veille qui s'arrête rend son pane"
+REG_V="${WORK}/registre-verrou"; rm -rf "$REG_V"; mkdir -p "$REG_V"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+PATH="${BINDIR}:${PATH}" \
+  FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+  VD_REGISTRE_DIR="$REG_V" \
+  VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+  bash "$VEILLE" w9:pVER agent-verrou 2 >/dev/null 2>&1
+
+if ls -d "${REG_V}"/.verrou-* >/dev/null 2>&1; then
+  ko "le verrou survit à l'arrêt — le pane n'est repris que par le chemin orphelin, non atomique"
+else
+  ok "le verrou est rendu à l'arrêt (le pane est libre, sans passer par la reprise d'orphelin)"
+fi
+
+
+# =================================================================
+# 37. LES DEUX CHIFFRES EXIGENT LES DEUX POPULATIONS. Le journal ne portait
+#     que les déblocages : « ce qu'elle débloque à tort » était relisable,
+#     « ce qu'elle REFUSE à tort » ne l'était pas. Un tiers ne pouvait donc
+#     juger que la moitié de la garde.
+# =================================================================
+echo "→ 37. le journal consigne aussi les REFUS, avec leur écran"
+cat > "$SCREEN_FILE" <<'EOF'
+Do you want to proceed with this unusual thing?
+  [y/n] type your answer freely
+EOF
+rm -f "$SEQ_FILE"
+J37="${WORK}/j37.log"; rm -f "$J37"
+OUT37="$(PATH="${BINDIR}:${PATH}" \
+         FAKE_HERDR_STATUS=blocked FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         VD_REGISTRE_DIR="${WORK}/registre-j37" VD_JOURNAL="$J37" \
+         VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         bash "$VEILLE" w9:pJ37 agent-j37 5 --dry-run 2>&1)"
+
+if [ -f "$J37" ]; then
+  ok "le journal existe après des refus"
+  grep -qi "refus" "$J37" && ok "les refus y sont nommés comme tels" || ko "les refus ne sont pas distingués dans le journal"
+  grep -q "type your answer freely" "$J37" && ok "l'écran refusé est consigné en entier" || ko "l'écran refusé n'est pas consigné"
+  grep -qi "aucune touche" "$J37" && ok "le journal dit qu'aucune touche n'a été envoyée" || ko "le journal ne dit pas qu'elle n'a rien envoyé"
+else
+  ko "aucun journal écrit alors qu'il y a eu des refus — le second chiffre reste invérifiable"
+  ko "les refus ne sont pas distingués dans le journal"
+  ko "l'écran refusé n'est pas consigné"
+  ko "le journal ne dit pas qu'elle n'a rien envoyé"
+fi
+case "$OUT37" in *"aurait envoyé:"*) ko "G1 AFFAIBLIE : elle a répondu à cet écran" ;; *) ok "G1 intacte : elle n'a pas répondu (écran non reconnu)" ;; esac
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
