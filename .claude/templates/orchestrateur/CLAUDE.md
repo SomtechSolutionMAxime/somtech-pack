@@ -540,6 +540,8 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui do
 > 🔴 **Les conditions de fin vivent AUX DEUX ENDROITS : le `/goal` ET les `success_criteria` de l'epic.** Ce n'est pas du confort — **le `/goal` seul est un point unique de défaillance** : un `pane run` vers un agent **occupé** s'affame, le texte se dépose dans sa boîte sans y être soumis, mesuré à **~16 minutes**. Ceux qui ont été **pris** l'ont été sur des agents **au repos**. *Soumis au repos, affamé pendant le travail* (`T-20260818-0143`).
 >
 > **Ce qui a sauvé un lot réel** : son but n'avait jamais été pris, **mais ses conditions de fin vivaient aussi dans les `success_criteria`**, et son chef d'équipe les a lues.
+>
+> ⚠️ **Et ton propre `/goal` est dans ce cas** — la séquence ci-dessus le pose **juste après un brief pris**, donc sur un agent qui vient de se mettre au travail. C'est pourquoi la redondance n'est pas un confort : relis son écran, et écris les conditions de fin dans l'epic **avant** de le faire naître.
 
 > ⚠️ **`/goal` et `/model` passent par la MÊME boîte de saisie qu'un brief — donc par la même panne.** `herdr pane run` rend un succès que la soumission parte ou non, et il **colle** son texte à ce qui traînait déjà dans la boîte. Un but jamais pris est un agent qui s'arrêtera au premier palier ; un `/model` jamais pris est un agent resté sur le mauvais modèle. **Ni l'un ni l'autre ne se voit** — l'agent travaille, simplement pas comme tu crois.
 >
