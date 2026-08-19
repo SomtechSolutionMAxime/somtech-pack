@@ -387,7 +387,13 @@ echo "⑪ les huit règles du 2026-08-19 — chacune à son geste"
 #    MAUVAIS adversaire : « se mettre à travailler d'abord ». Les quatre
 #    occurrences mesurées sont « répondre le contenu qu'on a tout de suite ».
 S_LU="$(section 'Accuser LU')"
-if printf '%s' "$S_LU" | grep -qi 'se mettre à travailler'; then
+# ⚠️ SUR SA SUBSTANCE, PAS SUR SON NOM. Calée d'abord sur « se mettre à
+# travailler », elle restait VERTE quand on retirait la prescription d'origine :
+# le bloc ajoute juste en dessous CITE ce piège pour dire qu'il n'est pas le bon
+# (« Le piège nommé au-dessus est "se mettre à travailler d'abord" »). La citation
+# suffisait à la satisfaire. On exige donc le motif que seule la prescription
+# porte — c'est la même faiblesse que les sept mutations survivantes du 2026-08-19.
+if printf '%s' "$S_LU" | grep -qi 'parce que ce sera vite fait'; then
   ok "8 — l'ancien piège est conservé : la règle se précise, elle ne s'abroge pas"
 else
   ko "8 — l'ancien piège a disparu : on a remplacé une moitié au lieu d'en ajouter une"
