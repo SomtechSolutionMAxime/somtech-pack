@@ -7,6 +7,29 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-19
 
+*Lot `E-20260819-0005` (PR #297), sous `D-20260819-0001`. **On ne pouvait répondre à « qui est vivant, quel métier porte-t-il, est-il à jour » que par une passe manuelle** — faite une fois le matin, périmée le lendemain, et que personne ne relancerait.*
+
+### Ajouté
+
+- **Le veilleur tient le registre des orchestrateurs du poste** (`E-20260819-0005`) — pour chaque pane dont le répertoire est un lieu d'orchestrateur reconnu **par le fait** : son mandat, sa session herdr, l'empreinte SHA-256 de son métier, ses octets, son écart à la référence du poste, et ce qu'on a pu lire de son travail en vol. Ronde toutes les 15 minutes, et `ligne-directe recensement` pour le demander à tout moment. **On ajoute une mesure à une ronde qui existe ; on ne fabrique pas une ronde.**
+- **L'état du MANDAT, à côté de l'état de la session** (`T-20260819-0056`) — un chantier clos et une session au repos disent tous les deux `idle`, et **rien dans herdr ne les distingue**. Le registre croise le ServiceDesk, et **ne propose rien à un mandat qui n'est pas prouvé ouvert** — ni clos, ni non mesuré : réveiller un chantier terminé mettrait deux orchestrateurs sur les mêmes panes, chacun croyant l'autre parti.
+
+### Mesuré
+
+- **Un agent VIVANT peut recharger son métier sans renaître** (`T-20260819-0050`) — le geste est `/clear`, envoyé dans son pane : reproduit 2 fois sur 2 sur un cobaye jetable, et le `.claude/settings.json` est relu aussi (hook ajouté à chaud → il se déclenche ; retiré → il ne se déclenche plus). C'est le **redémarrage** qui ne suffisait pas, pas le rechargement.
+- **Mais le geste efface le fil de l'agent** — et ce n'est pas ce qu'on croyait : `/clear` **n'arrête rien**. Un shell d'arrière-plan continue, un sous-agent en vol rend son résultat. C'est l'agent qui perd la connaissance de ce qui tourne : interrogé juste après, il répond « rien en cours, session propre », puis reçoit le retour d'un sous-agent qu'il ne se rappelle plus avoir lancé. **Rien n'est tué, tout devient orphelin de sa raison d'être.** D'où la règle écrite dans le code : **le registre propose, il n'impose pas — et l'agent doit pouvoir dire « pas maintenant » AVANT.**
+- **`herdr agent list` sous-comptait de 40 %** — trois lieux d'orchestrateur vivants là où `herdr pane list` en rend sept, sur treize sessions herdr. Le registre inventorie donc **par les panes**, et **par le chemin de leur lieu, jamais par le nom de l'agent** : depuis la `v1.72.0` un agent porte un nom de rivière, sans rapport avec le mandat de son lieu.
+
+### Technique
+
+- **Une panne d'inventaire rend `orchestrateurs: null`, jamais `[]`** — une liste vide se lit « il n'y en a aucun », et personne ne cherche un défaut derrière un rapport qui dit « rien à signaler ». La garde rougit sur une source **réellement** en panne (`herdr` retiré du `PATH`), pas sur une liste vide fabriquée.
+- **Un identifiant de pane n'est unique que dans sa session** — `w5:p3` désigne deux panes différents selon la session herdr. L'inventaire dédoublonne sur le couple, et le registre rend la session à côté du pane.
+- **Seize mutations jouées une à une** sur copie hors dépôt : quatorze font rougir un banc seules, deux ne rougissent qu'ensemble (les deux ceintures d'arrêt de la ronde) — c'est écrit dans le code et un banc dédié le prouve.
+
+---
+
+---
+
 *Lot G : PR #295 (`E-20260819-0003`, stories `T-20260819-0026` à `0028`), sous la demande `D-20260818-0008`. **Trois gardes ne gardaient pas ce qu'elles prétendaient garder** — et le lot en a trouvé trois de plus en se relisant, dont deux dans ses propres bancs.*
 
 ### Corrigé
