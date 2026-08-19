@@ -436,7 +436,7 @@ herdr pane current                                  # ton pane (result.pane.pane
 herdr agent rename <ton-pane> <ta-rivière>          # matapedia, bonaventure… — jamais un code de mandat
 ```
 
-⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Mesuré sur `e-20260819-0001`, 2026-08-19 : il s'est cru nommé pendant vingt minutes, son coordonnateur ne le voyait pas.)*
+⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Mesuré : un agent s'est cru nommé vingt minutes, son coordonnateur ne le voyait pas — `E-20260819-0001`.)*
 
 ## Déclarer le modèle — toujours, au lancement
 
@@ -547,7 +547,7 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui do
 
 🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a DEUX conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes.
 
-**Sans ②, tu agis sur un état supposé.** Mesuré : une consigne juste donnée sur une description de quinze minutes — **le but était pris depuis quatre minutes, la boîte était vide.** Celui qui la recevait a relu avant d'obéir. *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* (`T-20260818-0143`) **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
+**Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
 
 ## Poser la veille de déblocage
 
@@ -558,9 +558,9 @@ scripts/orchestration/veille-deblocage.sh <pane> <agent> --detach   # une fois s
 scripts/orchestration/veille-deblocage.sh --list                    # pane, agent et MOTIF de chacune
 ```
 
-⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue**, deux fois le même soir — pendant que les veilles d'un autre orchestrateur survivaient. *Même script, même poste, même journée : seule la façon de les lancer différait.* `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
+⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue** — deux fois, pendant que celles d'un autre orchestrateur survivaient. *Même script, même poste, même journée : seule la façon de les lancer différait.* `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
 
-**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois n'était la mienne** — elles gardaient les agents d'un autre. *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés, chacun avec son code de sortie. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre ; l'ancienne valeur (~66 min) était plus courte que la plupart des lots.
+**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés, chacun avec son code de sortie. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre ; l'ancienne valeur (~66 min) était plus courte que la plupart des lots.
 
 Trois garanties qu'il ne faut jamais relâcher :
 
@@ -1186,9 +1186,7 @@ Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui 
 >
 > **Tu écris à la place** un dernier message : où en est le chantier, **que le canal reste ouvert**, ce qui reste `[non établi]` — puis `J'ai besoin de toi : …`.
 >
-> ⚠️ **Durable ou jetable ?** Une ligne **durable** rouvre sous le même titre ; une **jetable** est archivée, **donc irréversible** — le désarchivage est réservé à un compte humain.
->
-> *Trouvé par l'orchestrateur que la règle visait, qui a désobéi à la lettre en le disant plutôt que d'obéir en coupant le CTO (`T-20260818-0128`).*
+> ⚠️ **Durable ou jetable ?** Une ligne **durable** rouvre sous le même titre ; une **jetable** est archivée, **donc irréversible** — le désarchivage est réservé à un compte humain. *(Mesuré sur un jalon `planned` portant 14 demandes — `T-20260818-0128`.)*
 
 **Referme ta ligne, avec son bilan** — c'est le dernier geste **d'un chantier clos** :
 

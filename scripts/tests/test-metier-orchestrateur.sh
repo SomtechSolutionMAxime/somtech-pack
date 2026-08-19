@@ -359,14 +359,33 @@ done
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
 # finit par ne plus être lu — et ce serait pire que les huit défauts réunis.
-# La borne n'est pas un seuil de confort : elle est la contrainte du brief.
 #
 # Baseline mesurée sur origin/main au 2026-08-19 : 118 856 octets.
+#
+# LA MARGE EST DE 6 500, ET CE CHIFFRE A ÉTÉ ARBITRÉ, PAS CHOISI PAR L'AUTEUR.
+# Elle était à 4 000 ; les huit amendements, mesures citées, en coûtaient 6 303.
+# L'écart a été remonté au coordonnateur AVANT tout relèvement, avec deux
+# options : garder les mesures (+6 303) ou ne garder que les règles (~+3 000).
+#
+#   Arbitrage rendu (matapedia, 2026-08-19) : GARDER LES MESURES.
+#   « La mesure citée est ce qui permet à un futur orchestrateur de CONTESTER
+#     une règle. Sans elle il ne peut que l'appliquer ou la subir — et le jour
+#     où l'une des huit se révèle fausse, personne ne saura sur quoi elle
+#     reposait. Le vrai risque du gonflement n'est pas la taille, c'est le
+#     BAVARDAGE ; une mesure n'est pas du bavardage. »
+#
+# Condition posée avec l'arbitrage, et tenue : une mesure tient en LE FAIT plus
+# le CODE du ticket — jamais le récit de sa découverte, qui vit au ServiceDesk.
+# Le texte a été repassé pour couper ce récit : 6 303 → 6 088 octets.
+#
+# ⚠️ NE RELÈVE PAS CETTE MARGE POUR FAIRE PASSER TON LOT. Si tes amendements
+# n'y tiennent pas, c'est une question qui appartient à ton coordonnateur —
+# la relever d'abord et demander ensuite rend la question décorative.
 # ═══════════════════════════════════════════════════════════════════════════
 echo "⑩ le texte n'a pas gonflé sans raison"
 
 BASELINE=118856
-PLAFOND=$((BASELINE + 4000))
+PLAFOND=$((BASELINE + 6500))
 TAILLE="$(wc -c < "$METIER" | tr -d ' ')"
 
 if [ "$TAILLE" -le "$PLAFOND" ]; then
