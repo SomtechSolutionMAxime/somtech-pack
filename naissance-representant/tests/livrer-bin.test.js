@@ -58,6 +58,10 @@ function installerFauxHerdr(scenario = {}) {
       boiteQuiChange: false,
       boiteSeLibere: false,
       enterInoperant: false,
+      // `agent send-keys` REFUSÉ par herdr — l'autre moitié du geste de réparation. Le champ
+      // `causeRepare: 'envoi-refuse'` existe pour cet état ; aucun scénario du banc ne savait
+      // le produire, donc la porte du binaire ne pouvait pas être éprouvée dessus.
+      enterRefuse: false,
       // Ce que la session AFFICHE au-dessus de sa boîte — un modal, un écran de démarrage.
       // Sans ce levier, aucun essai ne pourrait éprouver la garde d'écran.
       horsBoite: '',
@@ -77,7 +81,7 @@ const SEP = '\u2500'.repeat(20);   // le VRAI filet de l'ecran, pas un tiret ASC
 const promptFait  = passes.find((a) => a[0] === 'agent' && a[1] === 'prompt');
 const enterEnvoye = passes.some((a) => a[0] === 'agent' && a[1] === 'send-keys');
 const lectures    = passes.filter((a) => a[0] === 'agent' && a[1] === 'read').length;
-const enterUtile  = enterEnvoye && !sc.enterInoperant;
+const enterUtile  = enterEnvoye && !sc.enterInoperant && !sc.enterRefuse;
 
 // Contenu courant de la boîte, tel que le VRAI service le montrerait.
 function boite() {
@@ -136,7 +140,13 @@ if (cmd === 'agent prompt') {
   process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } }));
   process.exit(0);
 }
-if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+if (cmd === 'agent send-keys') {
+  if (sc.enterRefuse) {
+    process.stdout.write(JSON.stringify({ error: { code: 'send_keys_refused', message: 'refused' } }));
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0);
+}
 process.stdout.write(JSON.stringify({ result: { ok: true } }));
 `;
   writeFileSync(join(bac, 'herdr'), script);
@@ -731,4 +741,73 @@ test('le motif que le bin rend SUIT le chemin réellement pris — il n’est pa
   const rendu = JSON.parse(r.stdout);
   assert.equal(rendu.repare, true, 'la réparation a bien mordu dans ce scénario');
   assert.equal(rendu.causeRepare, 'soumise', 'et le motif doit avoir changé avec le chemin');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA PORTE DU BINAIRE — un refus qui ne tait pas le geste déjà posé (T-20260819-0009)
+//
+// ⚠️ LE MODULE PEUT DIRE VRAI ET LE BINAIRE JETER LE MOT AU SOL. C'est le défaut exact du lot
+// précédent (T-20260818-0031) : une cause calculée sur neuf branches qui ne franchissait pas
+// cette porte-ci. La prose du refus se lit sur `stderr` du vrai exécutable, avec un faux herdr
+// en tête de `PATH` — aucune vraie session n'est touchée.
+//
+// L'état éprouvé est celui du ticket, et il est MESURÉ possible sur le vrai service : la touche
+// d'envoi part, herdr l'accepte, et la boîte ne se vide pas (`enterInoperant`).
+
+// ⚠️ ET ON N'ASSERTE PAS SUR TOUT LE `stderr` — MESURÉ, ÇA REND UN VERT FAUX. La première
+// ligne du refus rapporte ce que herdr a dit, et herdr dit « a refusé : no state change
+// observed » : chercher « refus » dans l'ensemble du flux était donc satisfait par un mot qui
+// ne venait PAS de la prose éprouvée. Le contrôle était vert sans jamais toucher ce qu'il
+// prétendait mesurer — vérifié : en substituant à la prose du cas REFUSÉ celle du cas ACCEPTÉ,
+// il restait vert. On isole donc la ligne AVOUÉE, celle que ce lot ajoute.
+const lignesAvouees = (stderr) => stderr.split('\n').filter((l) => l.trimStart().startsWith('\u26a0'));
+
+const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frappe|raccourci|press[ée])/iu;
+// ⚠️ PAS DE `\b` APRÈS UNE LETTRE ACCENTUÉE — MESURÉ : `/ai\s+[a-zà-ÿ]+[ée]s?\b/` refusait
+// « j'ai pressé » et « j'ai appuyé ». En JavaScript, `\b` se calcule sur `[A-Za-z0-9_]` : « é »
+// n'y est pas, donc entre « é » et l'espace il n'y a AUCUNE frontière, et le motif ne peut pas
+// se fermer. La garde refusait ainsi deux tournures parfaitement honnêtes — un faux rejet né
+// d'un détail d'implémentation, jamais d'un fait.
+const AU_PASSE = /(d[ée]j[àa]|a\s+[ée]t[ée]|est\s+partie?|ai\s+[a-zà-ÿ]+[ée]s?(?![a-zà-ÿ]))/iu;
+const NON_TENTATIVE = /(n[’']ai\s+pas\s+tent|RIEN\s+soumis|\baurait\b)/iu;
+
+test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est AVOUÉE', () => {
+  const journal = installerFauxHerdr({ soumetSeule: false, enterInoperant: true, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'un compte rendu ordinaire');
+
+  assert.notEqual(r.code, 0, 'le brief n’a pas été pris : le binaire doit refuser');
+  assert.ok(
+    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'une touche d’envoi est bien partie — c’est elle que le refus doit nommer'
+  );
+
+  const avouees = lignesAvouees(r.stderr);
+  assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
+  const aveu = avouees[0];
+  assert.match(aveu, NOMME_LE_GESTE, 'la ligne d’aveu du BINAIRE nomme le geste');
+  assert.match(aveu, AU_PASSE, 'et le dit au passé');
+  assert.ok(!NON_TENTATIVE.test(aveu), 'et surtout pas avec la formule d’une non-tentative');
+});
+
+test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée aussi', () => {
+  const journal = installerFauxHerdr({ soumetSeule: false, enterRefuse: true, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'un compte rendu ordinaire');
+
+  assert.notEqual(r.code, 0);
+  assert.ok(
+    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'la commande est bel et bien partie vers herdr, même si herdr l’a repoussée'
+  );
+
+  const avouees = lignesAvouees(r.stderr);
+  assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
+  const aveu = avouees[0];
+  assert.match(aveu, NOMME_LE_GESTE);
+  assert.match(aveu, AU_PASSE);
+  assert.match(
+    aveu,
+    /(refus|repouss[ée]|rejet)/iu,
+    'la ligne d’AVEU doit distinguer « repoussée » de « aboutie » — le mot ne compte pas s’il vient du rapport de herdr'
+  );
+  assert.ok(!NON_TENTATIVE.test(aveu));
 });
