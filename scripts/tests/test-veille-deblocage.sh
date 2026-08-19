@@ -649,7 +649,13 @@ fi
 # =================================================================
 echo "→ 25. le pane disparaît sous la veille → elle le dit et s'arrête"
 : > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
-FAKE_HERDR_STATUS=absent run 6
+# ⚠️ LE PANE EST ARMÉ MORT, PAS SEULEMENT L'AGENT — ce test décrit « le pane a été
+#    FERMÉ sous elle », et `FAKE_HERDR_STATUS=absent` ne rend absent que l'AGENT.
+#    Tant qu'il ne pilotait que celui-là, il passait sur un cas qui n'est pas le
+#    sien : un pane VIVANT dont l'agent est invisible (T-20260819-0064), lequel
+#    appelle un tout autre motif. Un test qui éprouve autre chose que son titre
+#    rend un vert qui ne prouve pas ce qu'on lui prête.
+FAKE_HERDR_PANE_ABSENT=1 FAKE_HERDR_STATUS=absent run 6
 
 case "$OUT" in *"MOTIF: pane-disparu"*) ok "motif « pane-disparu » nommé" ;; *) ko "elle veille sur un pane disparu sans le dire : $OUT" ;; esac
 [ "$RC" -eq 6 ] && ok "code de sortie propre au pane disparu (rc=$RC)" || ko "code de sortie attendu 6, obtenu $RC"
@@ -813,7 +819,11 @@ case "$OUT" in *"MOTIF: pane-disparu"*) ko "deux absences séparées par du trav
 echo "→ 32. le seuil de confirmation vaut exactement deux"
 : > "$SCREEN_FILE"
 printf 'working\nabsent\nabsent\nworking\nworking\nworking\n' > "$SEQ_FILE"
-run 6
+# ⚠️ Même correction que le test 25 : ce seuil est celui du PANE disparu, il faut
+#    donc que le pane le soit. Sinon on mesure le seuil de l'agent invisible en
+#    croyant mesurer celui du pane mort — deux compteurs distincts depuis
+#    T-20260819-0064, et rien ne dit qu'ils bougeront ensemble.
+FAKE_HERDR_PANE_ABSENT=1 run 6
 
 case "$OUT" in *"MOTIF: pane-disparu"*) ok "deux absences consécutives suffisent (seuil ≤ 2)" ;; *) ko "seuil trop haut : deux absences consécutives ne concluent pas : $OUT" ;; esac
 
@@ -1191,6 +1201,134 @@ if [ -n "$(ls -A "$REG44B" 2>/dev/null)" ]; then
 else
   ok "aucun registre écrit pour un pane réellement inexistant"
 fi
+
+
+# =================================================================
+# 45. UN PANE VIVANT DONT L'AGENT EST INVISIBLE N'EST PAS UN PANE MORT.
+#
+#     ⚠️ CE TEST VIENT D'UNE MESURE SUR LE POSTE, PAS D'UNE HYPOTHÈSE. Un pane
+#     vivant hébergeant un agent Claude visible à l'écran, mais que le registre
+#     d'agents ne connaît pas (`pane get` OK · `agent get` → agent_not_found ·
+#     `agent list` l'ignore), faisait rendre à la veille :
+#
+#       MOTIF: pane-disparu — le pane w87:p2 n'existe plus (confirmé sur deux
+#       relevés) — il n'y a plus rien à garder            (rc=6)
+#
+#     TROIS AFFIRMATIONS FAUSSES DANS UNE PHRASE : le pane existe, il héberge un
+#     agent vivant, et il y a précisément quelqu'un à garder — que plus personne
+#     ne garde. **Un silence laisse la question ouverte ; un mensonge la ferme du
+#     mauvais côté** : l'orchestrateur qui lit ce motif ferme un pane vivant en
+#     croyant nettoyer.
+#
+#     ⚠️ ET C'ÉTAIT UNE INCOHÉRENCE INTERNE : le contrôle À LA POSE interroge
+#     `pane get` et laisse passer, la BOUCLE interroge `agent get` et conclut que
+#     le pane a disparu. Deux sondes du même script, deux verdicts opposés sur le
+#     même pane.
+# =================================================================
+echo "→ 45. pane VIVANT, agent invisible → motif VRAI, jamais « le pane n'existe plus »"
+REG45="${WORK}/registre-45"; rm -rf "$REG45"; mkdir -p "$REG45"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+OUT45="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS=absent FAKE_HERDR_PANE_ABSENT=0 \
+         VD_REGISTRE_DIR="$REG45" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0.05 \
+         bash "$VEILLE" pane-vivant-agent-invisible agent-hors-registre 6 --dry-run 2>&1)"
+RC45=$?
+case "$OUT45" in
+  *"n'existe plus"*|*"plus rien à garder"*)
+    ko "MENSONGE : la veille déclare le pane disparu alors qu'il EXISTE et héberge un agent — c'est le cas mesuré sur le poste : $OUT45" ;;
+  *) ok "elle ne prétend plus que le pane a disparu" ;;
+esac
+case "$OUT45" in
+  *"MOTIF: agent-invisible"*) ok "elle nomme le vrai motif — l'agent est invisible, pas le pane mort" ;;
+  *) ko "aucun motif « agent-invisible » : elle doit DIRE ce qu'elle voit, pas se taire ni mentir : $OUT45" ;;
+esac
+# ⚠️ 10, ET PAS 5 : `code_motif` rend déjà 5 pour tout motif INCONNU (son `*)`).
+#    Exiger 5 ici rendrait ce test vert sur une faute de frappe dans le nom du
+#    motif — un test qui accepte l'erreur qu'il est censé exclure.
+[ "$RC45" -eq 10 ] && ok "code de sortie propre, DISTINCT de pane-disparu (6) ET du fourre-tout (5) — rc=$RC45" \
+  || ko "code de sortie $RC45 — un agent invisible et un pane mort doivent être distinguables au code, pas seulement au texte"
+
+echo "→ 45b. la contre-épreuve : un pane RÉELLEMENT mort rend toujours pane-disparu"
+REG45B="${WORK}/registre-45b"; rm -rf "$REG45B"; mkdir -p "$REG45B"
+OUT45B="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS=absent FAKE_HERDR_PANE_ABSENT=1 \
+          VD_REGISTRE_DIR="$REG45B" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0.05 \
+          bash "$VEILLE" pane-vraiment-mort agent-x 6 --dry-run 2>&1)"
+RC45B=$?
+case "$OUT45B" in
+  *"MOTIF: pane-disparu"*) ok "un pane réellement mort rend toujours pane-disparu — le correctif du mensonge n'a pas emporté la garantie" ;;
+  *) ko "GARDE EMPORTÉE : un pane réellement mort ne rend plus pane-disparu : $OUT45B" ;;
+esac
+[ "$RC45B" -eq 6 ] && ok "et son code reste 6" || ko "le code de pane-disparu a changé (rc=$RC45B)"
+
+echo "→ 45c. les deux sondes du script ne se contredisent plus sur le même pane"
+# La pose laisse passer (le pane existe) ET la boucle ne dit pas le contraire :
+# c'est l'incohérence interne que ce lot referme.
+case "$OUT45" in
+  *"pane-disparu"*) ko "la pose accepte le pane et la boucle le déclare disparu — les deux sondes se contredisent" ;;
+  *) ok "pose et boucle rendent un verdict cohérent sur le même pane" ;;
+esac
+
+
+# =================================================================
+# 46. UN HOQUET QUI CHANGE DE SENS À CHAQUE TOUR NE DOIT PAS DÉFAIRE LA
+#     CONFIRMATION « À DEUX » — ni faire brûler toute la veille en silence.
+#
+#     ⚠️ CE TEST VIENT D'UN REJET DE REVUE DE FOND, ET LE COMMENTAIRE DU CODE
+#     AFFIRMAIT LE CONTRAIRE. `ABSENCES` et `INVISIBLES` se remettent l'un
+#     l'autre à zéro — c'est juste tant que le pane répond de façon stable. Mais
+#     si `pane get` alterne présent/absent à chaque relevé, AUCUN des deux
+#     n'atteint jamais 2 : ils se cannibalisent, et la veille épuise ses 2000
+#     tours sans jamais conclure. Elle rend alors `tours-epuises — il n'a
+#     peut-être jamais reçu son brief`, un message qui MINIMISE ce qui était une
+#     absence totale et continue.
+#
+#     L'agent était absent 10 relevés sur 10 : le motif rendu doit le DIRE.
+#     Un compteur qui ne se laisse pas remettre à zéro par l'autre est ce qui
+#     manquait — les deux compteurs choisissent le MOTIF, ils ne décident pas
+#     à eux seuls s'il faut conclure.
+# =================================================================
+echo "→ 46. pane qui oscille à chaque relevé → elle conclut quand même, et dit VRAI"
+REG46="${WORK}/registre-46"; rm -rf "$REG46"; mkdir -p "$REG46"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+PANE_SEQ46="${WORK}/pane-seq-46"
+printf 'present\nabsent\npresent\nabsent\npresent\nabsent\npresent\nabsent\npresent\nabsent\npresent\n' > "$PANE_SEQ46"
+rm -f "${PANE_SEQ46}.idx"
+OUT46="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS=absent FAKE_HERDR_PANE_SEQ_FILE="$PANE_SEQ46" \
+         VD_REGISTRE_DIR="$REG46" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0 \
+         bash "$VEILLE" pane-qui-oscille agent-x 10 --dry-run 2>&1)"
+RC46=$?
+case "$OUT46" in
+  *"MOTIF: tours-epuises"*)
+    ko "ELLE BRÛLE TOUTE SA VEILLE SANS CONCLURE : l'agent était absent à CHAQUE relevé et elle rend « tours-epuises », un motif qui minimise. Les deux compteurs se cannibalisent : $OUT46" ;;
+  *"MOTIF: etat-instable"*) ok "elle conclut sur l'instabilité et la NOMME, au lieu d'épuiser ses tours" ;;
+  *) ko "motif inattendu — elle doit dire ce qu'elle voit : $OUT46" ;;
+esac
+case "$OUT46" in
+  *"jamais reçu son brief"*) ko "le message MINIMISE une absence totale et continue" ;;
+  *) ok "le message ne minimise pas l'absence" ;;
+esac
+[ "$RC46" -eq 11 ] && ok "code de sortie propre à l'instabilité (rc=$RC46), distinct du fourre-tout (5)" \
+  || ko "code de sortie $RC46 — l'instabilité doit être distinguable au code"
+
+echo "→ 46b. la contre-épreuve : un hoquet ISOLÉ ne fait pas crier"
+REG46B="${WORK}/registre-46b"; rm -rf "$REG46B"; mkdir -p "$REG46B"
+PANE_SEQ46B="${WORK}/pane-seq-46b"
+# absent, absent, PRÉSENT (le hoquet), puis l'agent revient au travail.
+printf 'absent\nabsent\npresent\npresent\npresent\n' > "$PANE_SEQ46B"
+rm -f "${PANE_SEQ46B}.idx"
+SEQ46B="${WORK}/seq-46b"
+printf 'absent\nworking\nworking\nworking\nworking\nworking\n' > "$SEQ46B"
+rm -f "${SEQ46B}.idx"
+OUT46B="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ46B" FAKE_HERDR_PANE_SEQ_FILE="$PANE_SEQ46B" \
+          VD_REGISTRE_DIR="$REG46B" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" pane-hoquet-isole agent-x 5 --dry-run 2>&1)"
+case "$OUT46B" in
+  *"MOTIF: etat-instable"*) ko "FAUX CRI : un hoquet isolé suivi d'un agent au travail fait crier à l'instabilité : $OUT46B" ;;
+  *) ok "un hoquet isolé suivi d'un agent au travail ne fait pas crier" ;;
+esac
 
 
 # ── Bilan ────────────────────────────────────────────────────────────────────

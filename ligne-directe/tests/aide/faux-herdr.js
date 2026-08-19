@@ -98,6 +98,28 @@ if (a[0] === 'agent' && a[1] === 'list') {
   dit({ result: { agents: existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [] } });
 }
 
+// ⚠️ \`pane list\` EST SERVI PAR LE TRANSPORT, POUR LA MÊME RAISON QUE \`agent list\`. Le
+// recensement (E-20260819-0005) inventorie par LES PANES, pas par les agents détectés : le
+// doubler au niveau module ferait juger le module sur une forme que le vrai herdr ne rend
+// pas. Il répond AVANT la recherche de pane, comme \`agent list\` — il n'en désigne aucun.
+//
+// ⚠️ ET IL RÉPOND \`panes: []\` QUAND LE FICHIER MANQUE, jamais une erreur : c'est ce que fait
+// le vrai herdr sur une session sans pane, et c'est le cas qu'un essai doit pouvoir opposer à
+// « la source est en panne ». Les confondre ici rendrait la garde de panne inéprouvable.
+if (a[0] === 'pane' && a[1] === 'list') {
+  // ⚠️ LA RÉPONSE DÉPEND DE LA SESSION INTERROGÉE, comme chez le vrai herdr : chaque session a
+  // SES panes. Un double qui servirait le même inventaire à tous les sockets rendrait
+  // inéprouvable le seul endroit où ça compte — deux sessions emploient les mêmes identifiants
+  // de pane, et les confondre fait disparaître un agent vivant de l'inventaire.
+  // Le nom de la SESSION, pas celui du fichier : tous les sockets s'appellent \`herdr.sock\`, et
+  // c'est le répertoire au-dessus qui les distingue — exactement comme sur le poste réel.
+  const bouts = (process.env.HERDR_SOCKET_PATH || '').split('/');
+  const propre = bouts.length > 1 ? bouts[bouts.length - 2] : '';
+  const parSession = propre ? join(ETAT, 'panes-' + propre + '.json') : null;
+  const f = parSession && existsSync(parSession) ? parSession : join(ETAT, 'panes.json');
+  dit({ result: { panes: existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [] } });
+}
+
 // ⚠️ UN PANE INCONNU N'EST PAS UN PANE VIDE — herdr rend \`agent_not_found\` sur stdout, avec
 // un code de sortie 0. C'est le piège que le vrai module ferme ; le double doit le poser.
 if (!e) dit({ error: { code: 'agent_not_found', message: pane || 'sans pane' } });
@@ -169,6 +191,20 @@ export function posteHerdr(racine, agents, nom = 'herdr') {
   const poste = {
     etat,
     bin,
+    /**
+     * L'inventaire que servira `pane list` — la FORME RÉELLE du vrai herdr, pas une forme
+     * commode. Un pane y porte `pane_id`, `cwd` et `foreground_cwd` ; c'est `foreground_cwd`
+     * que le recensement lit, parce qu'un agent né par `claude-swt` garde le dépôt principal
+     * en `cwd` pendant que son lieu vit ailleurs. Un double qui n'aurait servi que `cwd`
+     * aurait fait passer au vert un module aveugle au cas le plus fréquent du poste.
+     */
+    panes(liste, session = null) {
+      writeFileSync(
+        join(etat, session ? `panes-${session}.json` : 'panes.json'),
+        JSON.stringify(liste.map((p) => ({ agent_status: 'idle', ...p, cwd: p.cwd ?? p.foreground_cwd })))
+      );
+      return this;
+    },
     /** Le PATH à donner aux sous-processus — et au processus d'essai lui-même. */
     path: `${bin}:${process.env.PATH}`,
     fichier(pane) {
