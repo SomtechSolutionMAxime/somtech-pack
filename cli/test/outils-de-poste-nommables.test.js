@@ -262,3 +262,34 @@ test('câblage : `pack setup` expose les outils, sans qu’on ait à le lui dema
   const rcTexte = existsSync(join(home, '.zshrc')) ? readFileSync(join(home, '.zshrc'), 'utf8') : '';
   assert.ok(!rcTexte.includes(MARKER_BEGIN), 'le PATH des outils n’est pas dans le rc');
 });
+
+// ⚠️ ET LE LIEU PAR DÉFAUT, celui que personne ne passe en option : c'est LUI qui vaut sur
+// un poste réel. Le contrôle ci-dessus passe `--zshenv` et ne verrait donc rien si le
+// défaut basculait vers le rc — exactement la dérive que ce lot devait empêcher.
+test('câblage : sans option, le PATH va dans <HOME>/.zshenv — pas dans <HOME>/.zshrc', async () => {
+  const w = tmp('smtk-setup-defaut-');
+  const home = join(w, 'home');
+  mkdirSync(home, { recursive: true });
+  const vrai = process.env.HOME;
+  process.env.HOME = home; // `cmdSetup` résout ses défauts depuis homedir(), qui suit $HOME
+  try {
+    const rc = await run([
+      'setup', '--yes', '--source', REPO,
+      '--dest', join(w, 'somtech'),
+      '--rc', join(home, '.zshrc'),
+      '--skills-dir', join(w, 'skills'),
+      '--workflows-dir', join(w, 'workflows'),
+      '--commands-dir', join(w, 'commands'),
+      '--settings', join(w, 'settings.json'),
+      '--hooks-dir', join(w, 'hooks'),
+      '--no-canvas',
+    ]);
+    assert.equal(rc, 0, 'setup doit réussir');
+  } finally {
+    process.env.HOME = vrai;
+  }
+  const zshenv = existsSync(join(home, '.zshenv')) ? readFileSync(join(home, '.zshenv'), 'utf8') : '';
+  const zshrc = existsSync(join(home, '.zshrc')) ? readFileSync(join(home, '.zshrc'), 'utf8') : '';
+  assert.ok(zshenv.includes(MARKER_BEGIN), 'le lieu par défaut est .zshenv, lu par TOUT zsh');
+  assert.ok(!zshrc.includes(MARKER_BEGIN), 'le rc ne porte pas ce PATH — un agent ne le lit jamais');
+});
