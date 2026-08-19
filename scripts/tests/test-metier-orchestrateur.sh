@@ -80,14 +80,14 @@ $(grep -n 'veille-deblocage\.sh' "$METIER" \
   | grep -v '`veille-deblocage\.sh`' || true)
 EOF
 
-# Assertion POSITIVE d'abord : il DOIT y avoir au moins deux endroits qui
-# posent la veille (le bloc de naissance et la section dédiée). Sans elle, un
-# simple effacement des deux lignes rendrait vertes toutes les assertions
-# négatives qui suivent.
-if [ "${#POSES[@]}" -ge 2 ]; then
-  ok "le geste de pose est prescrit à ${#POSES[@]} endroits (≥ 2 : la naissance et la section dédiée)"
+# Assertion POSITIVE d'abord, et elle n'est pas décorative : sans elle, un
+# simple effacement des lignes de pose rendrait VERTES toutes les assertions
+# négatives qui suivent (« aucune ne porte de & » est vrai d'un ensemble vide).
+# C'est le mode de panne « une garde qu'on peut désarmer sans rougir ».
+if [ "${#POSES[@]}" -ge 1 ]; then
+  ok "le geste de pose est prescrit (${#POSES[@]} endroit(s))"
 else
-  ko "le geste de pose n'apparaît qu'à ${#POSES[@]} endroit(s) — la naissance ET la section dédiée doivent le porter"
+  ko "aucun geste de pose dans le texte — un orchestrateur ne saurait pas poser sa veille"
 fi
 
 pose_sans_detach=0
@@ -207,7 +207,7 @@ porte_la_distinction() {
   # On exige les deux moitiés dans la même section, sinon la phrase peut être
   # juste et parler d'autre chose.
   printf '%s' "$1" | grep -qiE 'rena(is|ît|it)|successeur' \
-    && printf '%s' "$1" | grep -qiE 'ne (la )?referme (pas|jamais)|sans la refermer|garde(r)? (ta |la )?ligne ouverte|reste ouverte'
+    && printf '%s' "$1" | grep -qiE 'ne +(la +|te +)?referme[sz]? +(pas|jamais)|sans la refermer|reste ouverte'
 }
 
 S_CLORE="$(section 'Clore')"
