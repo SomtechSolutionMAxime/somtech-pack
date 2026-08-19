@@ -83,11 +83,6 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 ⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut explicitement levé cette condition**.
 
-| | |
-|---|---|
-| ✅ **survit au `/clear`** | c'est tout son intérêt |
-| 🔴 **se périme sans le dire** | *rien ne distingue un briefing courant d'un briefing dépassé* |
-
 **Ce que chaque tour parcourt** — le détail de chaque ligne est en R5 et R7 :
 
 | # | Ce que tu regardes | Où |
@@ -882,10 +877,17 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 > | **au travail** | `esc to interrupt`, un compteur qui tourne | il repartira seul — n'y touche pas |
 > | **forcé de finir par un hook** | **`done`, but NON atteint** | **écris-lui — il repart** |
 > | 🔴 **gelé par la limite de session** | **`idle`, boîte vide, pas d'`esc to interrupt`** | **écris-lui — il ne repart pas** |
+> | 🔴 **invisible au registre** | **`agent_not_found`** alors que son écran travaille | **lis son PANE — le registre ne le voit pas** |
 >
 > **Le troisième est le plus trompeur : ses trois signes disent tous « disponible ».** *Le CTO a contesté ce diagnostic — « j'ai aucun pane qui est bloqué, trouve-moi le et prouve-moi le » — et il avait toutes les raisons de le croire.*
 >
 > **Le protocole, trente secondes** : ① mesurer l'état → `idle` ; ② **déposer un texte + `Enter`** ; ③ **remesurer huit secondes plus tard**. *Un agent joignable serait passé `working` avec `esc to interrupt`. Chez un agent gelé, l'état ne bouge pas et le message est **avalé sans effet**.*
+>
+> 🔴 **Et le quatrième casse le protocole lui-même : son étape ① n'a pas de réponse.** *`herdr agent get <pane>` ne répond aucun état : il répond `agent_not_found` — alors que `herdr pane read <pane>` rend son écran, où il travaille.* **La surface PANE le voit, la surface AGENT ne le voit pas.** *Mesuré le 2026-08-19 sur un chef d'équipe en plein travail : 84 agents au registre, le sien absent.*
+>
+> ⚠️ **`agent_not_found` n'est pas la mort d'un agent : c'est la panne de la mesure** *(c'est la règle « on ne teste pas quand on ne peut pas voir », retournée sur l'outil qui sert à voir)*. **Devant elle, tu lis son pane** — et tu ne conclus rien de l'absence.
+>
+> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.**
 >
 > ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic — « il est mort sans finir, rien ne va le relancer » — a failli faire renaître un agent qui traitait à cet instant même le message qu'on venait de lui écrire : **la renaissance aurait détruit un contexte de neuf jours**.*
 >
