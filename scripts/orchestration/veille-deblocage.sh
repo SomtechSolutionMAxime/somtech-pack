@@ -59,6 +59,16 @@
 #        interrompue ........... 4   signal reçu — tuée par son environnement
 #        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés) —
 #                                    À LA POSE (avant tout tour) ou en boucle
+#        etat-instable ......... 11  l'agent est absent à chaque relevé, mais le
+#                                    PANE alterne présent/absent d'un relevé à
+#                                    l'autre : aucun état stable, donc aucun des
+#                                    deux motifs ci-dessus n'est établi — et la
+#                                    veille ne garde personne pendant ce temps
+#        agent-invisible ....... 10  le pane EXISTE mais aucun agent n'y est
+#                                    rattaché au registre (confirmé 2 relevés) :
+#                                    elle ne peut rien y lire, donc elle ne garde
+#                                    personne — et elle le DIT, au lieu de
+#                                    déclarer mort un pane vivant (T-20260819-0064)
 #        (refus au démarrage) .. 7   une veille garde déjà ce pane
 #        releve-illisible ...... 8   herdr ne rend plus rien d'exploitable
 #        (détachement raté) .... 9   la veille détachée n'a pas pris son poste
@@ -467,6 +477,27 @@ DERNIER_ETAT=""
 # tourner sur un pane qui n'existe plus — mesuré sur un agent d'essai réel :
 # elle s'annonçait « vivante » au registre en ne gardant plus rien.
 ABSENCES=0
+# Et le cas que « pane disparu » avalait : un pane VIVANT dont aucun agent n'est
+# rattaché au registre. `agent get` rend `agent_not_found` pour les DEUX, et les
+# confondre faisait déclarer mort un pane bien vivant (T-20260819-0064).
+INVISIBLES=0
+# ⚠️ ET LE COMPTEUR QUE NI L'UN NI L'AUTRE NE REMET À ZÉRO — trouvé par une revue
+# de fond. `ABSENCES` et `INVISIBLES` s'annulent mutuellement, ce qui est juste
+# tant que le pane répond de façon STABLE. Si `pane get` alterne présent/absent à
+# chaque relevé, aucun des deux n'atteint jamais 2 : ils se cannibalisent, la
+# veille épuise ses 2000 tours sans jamais conclure, et rend « tours-epuises —
+# il n'a peut-être jamais reçu son brief » sur un agent absent à CHAQUE relevé.
+# Un message qui minimise, là où ce lot promet un diagnostic.
+#
+# Celui-ci compte les relevés SANS ÉTAT LISIBLE, quel que soit ce que dit le
+# pane. Les deux autres choisissent le MOTIF ; ils ne décident pas à eux seuls
+# s'il faut conclure. Seul un état réel (working/blocked/done/idle) le remet à
+# zéro — c'est-à-dire la seule chose qui prouve qu'on voit de nouveau l'agent.
+ABSENT_TOTAL=0
+# Au-delà, on cesse d'attendre deux relevés concordants qui ne viendront pas.
+# Quatre laisse passer un hoquet ISOLÉ (une seule alternance) sans crier, et
+# attrape l'oscillation soutenue dès son deuxième aller-retour.
+SEUIL_INSTABLE=4
 
 VD_JOURNAL="${VD_JOURNAL:-${VD_REGISTRE_DIR}/${PANE_SLUG}-$$-deblocages.log}"
 REGISTRE_FICHIER="${VD_REGISTRE_DIR}/${PANE_SLUG}-$$.veille"
@@ -496,6 +527,13 @@ code_motif() {
     interrompue)       echo 4 ;;
     pane-disparu)      echo 6 ;;
     releve-illisible)  echo 8 ;;
+    # ⚠️ 10, ET SURTOUT PAS 5 : `5` est le FOURRE-TOUT de cette table (le `*)`
+    # juste dessous). Un motif inconnu — une faute de frappe dans un appel à
+    # `terminer` — rend déjà 5. Y placer `agent-invisible` le rendrait
+    # indistinguable d'une erreur de programmation : exactement le défaut que ce
+    # lot ferme, deux choses différentes qui rendent le même signal.
+    agent-invisible)   echo 10 ;;
+    etat-instable)     echo 11 ;;
     *)                 echo 5 ;;
   esac
 }
@@ -600,17 +638,63 @@ for i in $(seq 1 "$VD_TOURS"); do
       fi
       ;;
     __ABSENT__)
-      # Deux relevés concordants avant de conclure — même exigence que la
-      # garantie n°4. Un hoquet de herdr abandonnerait un agent bien vivant.
-      ABSENCES=$((ABSENCES+1))
-      echo "[$i] pane introuvable ($ABSENCES/2)"
-      if [ "$ABSENCES" -ge 2 ]; then
-        terminer pane-disparu "le pane $PANE n'existe plus (confirmé sur deux relevés) — il n'y a plus rien à garder"
+      # ⚠️ `agent get` NE DIT PAS QUE LE PANE EST MORT — il dit qu'aucun agent ne
+      # lui est rattaché, ce qui arrive AUSSI sur un pane parfaitement vivant.
+      # Mesuré sur ce poste : un pane hébergeant un agent Claude visible à
+      # l'écran, mais absent du registre, faisait rendre à cette branche « le
+      # pane n'existe plus — il n'y a plus rien à garder ». TROIS affirmations
+      # fausses : le pane existe, l'agent est vivant, et il y a précisément
+      # quelqu'un à garder que plus personne ne garde.
+      #
+      # **Un silence laisse la question ouverte ; un mensonge la ferme du mauvais
+      # côté** — l'orchestrateur qui lit ce motif ferme un pane vivant en croyant
+      # nettoyer. C'était en outre une contradiction INTERNE : le contrôle à la
+      # pose interroge `pane get` et laisse passer, la boucle interrogeait
+      # `agent get` et concluait l'inverse sur le même pane (T-20260819-0064).
+      #
+      # On demande donc au PANE, qui est la question réellement posée. Les DEUX
+      # branches gardent l'exigence de deux relevés concordants (garantie n°4),
+      # et chaque compteur remet l'autre à zéro — deux relevés « concordants »
+      # qui ne portent pas sur le même fait ne concordent pas.
+      #
+      # ⚠️ ET CE COMMENTAIRE A MENTI PENDANT UN COMMIT, RELEVÉ PAR UNE REVUE DE
+      # FOND. Il affirmait qu'« un hoquet de herdr ne doit abandonner personne,
+      # dans un sens ni dans l'autre ». **C'était faux dès que le hoquet change
+      # de sens à chaque tour** : les deux compteurs se cannibalisent, aucun
+      # n'atteint 2, et la veille brûlait ses 2000 tours sans jamais conclure —
+      # pour finir sur « tours-epuises — il n'a peut-être jamais reçu son
+      # brief », un message qui MINIMISE une absence totale et continue.
+      # C'est `ABSENT_TOTAL` qui ferme ce trou : il compte les relevés sans état
+      # lisible et ne se laisse remettre à zéro que par un état réel.
+      ABSENT_TOTAL=$((ABSENT_TOTAL+1))
+      if [ "$(pane_existe)" = "__PRESENT__" ]; then
+        INVISIBLES=$((INVISIBLES+1))
+        ABSENCES=0
+        echo "[$i] pane VIVANT mais aucun agent rattaché au registre ($INVISIBLES/2)"
+        if [ "$INVISIBLES" -ge 2 ]; then
+          terminer agent-invisible "le pane $PANE existe, mais aucun agent n'y est rattaché au registre (confirmé sur deux relevés) — elle ne peut rien y lire, donc elle ne garde personne. Le pane et son agent sont peut-être bien vivants : va le voir AVANT de le fermer, et repose une veille une fois l'agent rattaché"
+        fi
+      else
+        ABSENCES=$((ABSENCES+1))
+        INVISIBLES=0
+        echo "[$i] pane introuvable ($ABSENCES/2)"
+        if [ "$ABSENCES" -ge 2 ]; then
+          terminer pane-disparu "le pane $PANE n'existe plus (confirmé sur deux relevés) — il n'y a plus rien à garder"
+        fi
+      fi
+      # Ni l'un ni l'autre n'a pu se confirmer, et pourtant l'agent n'a pas été
+      # lu une seule fois depuis $ABSENT_TOTAL relevés : c'est le pane qui
+      # oscille. On le dit, plutôt que d'attendre des relevés concordants qui ne
+      # viendront pas — attendre, ici, c'est brûler la veille en silence.
+      if [ "$ABSENT_TOTAL" -ge "$SEUIL_INSTABLE" ]; then
+        terminer etat-instable "l'agent n'a pas été lu une seule fois en $ABSENT_TOTAL relevés, et le pane $PANE alterne présent/absent d'un relevé à l'autre — aucun des deux diagnostics ne peut se confirmer, et pendant ce temps la veille ne garde personne. Va voir le pane : herdr ne rend pas un état stable"
       fi
       ;;
     working)
       ABSENCES=0
       ILLISIBLES=0
+      INVISIBLES=0
+      ABSENT_TOTAL=0
       # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
       # ce reset, trois écrans bizarres espacés dans le temps coupaient la
       # veille sur un agent vivant — d'autant plus probable que ce lot
@@ -621,6 +705,8 @@ for i in $(seq 1 "$VD_TOURS"); do
     blocked)
       ABSENCES=0
       ILLISIBLES=0
+      INVISIBLES=0
+      ABSENT_TOTAL=0
       # Un agent bloqué a forcément commencé à travailler.
       VU_TRAVAILLER=1
       ECRAN=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
@@ -665,6 +751,8 @@ for i in $(seq 1 "$VD_TOURS"); do
     done)
       ABSENCES=0
       ILLISIBLES=0
+      INVISIBLES=0
+      ABSENT_TOTAL=0
       INCONNUES=0
       # `done` est un état terminal EXPLICITE : il ne survient pas à la
       # naissance, contrairement à `idle`. Il arme donc la détection.
@@ -679,6 +767,8 @@ for i in $(seq 1 "$VD_TOURS"); do
     idle)
       ABSENCES=0
       ILLISIBLES=0
+      INVISIBLES=0
+      ABSENT_TOTAL=0
       INCONNUES=0
       # ⚠️ LE DÉFAUT ① EST ICI. Un agent qui vient de naître est `idle`
       # PARCE QU'IL ATTEND SON BRIEF. Les deux relevés de la garantie n°4

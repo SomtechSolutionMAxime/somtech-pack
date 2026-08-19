@@ -7,6 +7,25 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-19
 
+*Lot `E-20260819-0006` : PR #298, story `T-20260819-0064`, sous la demande `D-20260818-0008`. **La veille ne tournait plus en silence — elle s'arrêtait en mentant.** Un silence laisse la question ouverte ; un mensonge la ferme du mauvais côté.*
+
+### Corrigé
+
+- **Un pane vivant dont l'agent est invisible n'est pas un pane mort** (`T-20260819-0064`) — `herdr agent get` rend `agent_not_found` dans **deux** situations très différentes : le pane a été fermé, ou le pane est bien vivant mais aucun agent ne lui est rattaché au registre. La veille les confondait et rendait, sur un pane hébergeant un agent Claude visible à l'écran : *« le pane n'existe plus (confirmé sur deux relevés) — il n'y a plus rien à garder »*, code 6. **Trois affirmations fausses dans une phrase** : le pane existe, l'agent est vivant, et il y a précisément quelqu'un à garder que plus personne ne garde. L'orchestrateur qui lit ce motif ferme un pane vivant en croyant nettoyer.
+- **La contradiction interne entre les deux sondes du script est refermée** — le contrôle *à la pose* interrogeait `pane get` et laissait passer ; la boucle interrogeait `agent get` et concluait l'inverse **sur le même pane**. Introduite par `E-20260819-0003`, corrigée ici : c'est la même fonction. La branche demande désormais au **pane**, qui est la question réellement posée.
+- **Nouveau motif `agent-invisible`, code 10 — et surtout pas 5.** `5` est le **fourre-tout** de `code_motif` : tout motif inconnu, y compris une faute de frappe dans un appel à `terminer`, rend déjà 5. Y placer ce motif l'aurait rendu indistinguable d'une erreur de programmation — c'est-à-dire aurait recréé, un cran plus loin, le défaut même que ce lot ferme : deux choses différentes qui rendent le même signal.
+- **Le message dit quoi faire** : *« le pane et son agent sont peut-être bien vivants : va le voir AVANT de le fermer, et repose une veille une fois l'agent rattaché »*. Un refus qui ne dit pas quoi faire laisse le lecteur sans issue.
+
+### Technique
+
+- **Les deux chiffres, sur les 234 panes réels du poste** — signalé **à raison : 5**, c'est-à-dire cinq panes hébergeant un agent **vivant** et invisibles au registre, que la veille déclarait morts ; signalé **à tort : 0** sur les 89 agents correctement rattachés. Les 139 autres sont des shells nus, où « aucun agent rattaché » est exact — et l'on ne pose pas de veille sur un shell.
+- **Les deux compteurs se remettent l'un l'autre à zéro** — `ABSENCES` et `INVISIBLES` gardent chacun l'exigence de deux relevés concordants (garantie n°4), et **deux relevés qui ne portent pas sur le même fait ne concordent pas**.
+- ⚠️ **Deux tests existants éprouvaient autre chose que leur titre** — les contrôles « le pane disparaît sous la veille » et « le seuil de confirmation vaut exactement deux » n'armaient que l'**agent** absent, jamais le **pane**. Ils passaient donc sur un cas qui n'est pas le leur, et ne gardaient rien de ce qu'ils annonçaient. Remis sur leur cas.
+- **La cause du brief était périmée, et ça a été arbitré avant d'écrire** — le brief décrivait « 400 tours en silence, aucun `case` ne matche ». Fermé depuis les lots E (`case ''` → `releve-illisible`, code 8) et G (`2>&1` sur la lecture d'état). Mesuré, remonté, cause corrigée sur arbitrage plutôt que réécrite en silence.
+- **Preuve par exécution** sur un pane réellement invisible fabriqué pour l'occasion — `rc=10`, motif vrai — et non sur une sortie simulée. **123 tests, 0 échec** ; 4 mutations du correctif attrapées ; **les 4 garanties historiques mutées une par une, chacune rougit**.
+
+## [1.77.0] - 2026-08-19
+
 *Lot `E-20260819-0005` (PR #297), sous `D-20260819-0001`. **On ne pouvait répondre à « qui est vivant, quel métier porte-t-il, est-il à jour » que par une passe manuelle** — faite une fois le matin, périmée le lendemain, et que personne ne relancerait.*
 
 ### Ajouté
@@ -30,6 +49,8 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Vingt-quatre mutations jouées une à une** sur copie hors dépôt : vingt-deux font rougir un banc seules, deux ne rougissent qu'ensemble (les deux ceintures d'arrêt de la ronde) — c'est écrit dans le code et un banc dédié le prouve.
 
 ---
+
+## [1.76.0] - 2026-08-19
 
 *Lot G : PR #295 (`E-20260819-0003`, stories `T-20260819-0026` à `0028`), sous la demande `D-20260818-0008`. **Trois gardes ne gardaient pas ce qu'elles prétendaient garder** — et le lot en a trouvé trois de plus en se relisant, dont deux dans ses propres bancs.*
 
