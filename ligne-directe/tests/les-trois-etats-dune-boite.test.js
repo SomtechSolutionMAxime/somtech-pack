@@ -168,3 +168,22 @@ test('UN TEXTE RÉEL QUI PORTE DES SÉQUENCES DIM RESTE UNE BOÎTE PLEINE — te
   assert.equal(vu.etat, ETATS_BOITE.SAISIE, 'le terminal a mangé les séquences — le texte compte');
   assert.equal(vu.texte, 'URGENT: ne merge pas, jai trouve un bug critique');
 });
+
+test('LE MARQUEUR DE FILE SE CHERCHE DANS LA BOÎTE — pas ailleurs sur l’écran', () => {
+  // ⚠️ MÊME PIÈGE QUE LE GRIS, UN CRAN PLUS LOIN. `messagesEnFile` regarde l'écran ENTIER — c'est
+  // juste pour son autre emploi (témoin de prise, `laPriseEstConstatee`), et faux ici : les
+  // agents de ce dépôt affichent constamment le texte `queued messages` dans leur transcript,
+  // puisque c'est le mot que le code lui-même contient. Un écran qui en parle plus haut ferait
+  // alors nommer « file d'attente » une boîte qui porte une suggestion — un mauvais motif, sur
+  // le chemin même qui existe pour ne plus en donner.
+  const transcriptQuiEnParle = [
+    '⏺ j’ai corrigé le témoin qui lit « queued messages » dans l’écran',
+    SEP,
+    `❯ ${ESC}[0m${ESC}[2mmerge la PR 37${ESC}[0m`,
+    SEP,
+    '  ⏵⏵ auto mode on',
+  ].join('\n');
+  const vu = etatDeLaBoite(transcriptQuiEnParle);
+  assert.equal(vu.etat, ETATS_BOITE.SUGGESTION, 'la BOÎTE porte une suggestion, quoi que dise le transcript');
+  assert.equal(vu.suggestion, 'merge la PR 37');
+});

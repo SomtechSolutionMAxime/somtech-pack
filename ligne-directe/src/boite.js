@@ -341,7 +341,15 @@ export function etatDeLaBoite(texteTerminal) {
   // porte un fait DIFFÉRENT : le destinataire travaille, ses messages partiront à la fin de son
   // tour. C'est déjà un témoin de prise ailleurs dans ce dépôt (`laPriseEstConstatee`) ; deux
   // mécanismes qui lisent le même écran doivent en dire la même chose.
-  if (messagesEnFile(texteTerminal)) {
+  // ⚠️ DANS LA BOÎTE, PAS SUR L'ÉCRAN — `messagesEnFile` regarde l'écran entier, ce qui est juste
+  // pour son autre emploi (témoin de prise) et faux ici : les agents de ce dépôt affichent
+  // constamment le texte `queued messages` dans leur transcript, puisque c'est le mot que le
+  // code contient. Un écran qui en parle plus haut ferait nommer « file d'attente » une boîte
+  // qui porte une suggestion — un mauvais motif, sur le chemin qui existe pour ne plus en donner.
+  const corpsRendu = corpsDeLaBoite(
+    String(texteTerminal ?? '').split('\n').map((l) => l.replace(SEQUENCE, ''))
+  );
+  if (messagesEnFile(corpsRendu)) {
     return { etat: ETATS_BOITE.FILE_DATTENTE, texte: '', suggestion: null };
   }
   const suggestion = suggestionDansLaBoite(texteTerminal);
