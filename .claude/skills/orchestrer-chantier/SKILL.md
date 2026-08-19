@@ -610,6 +610,15 @@ Un arbitrage qui remonte, tu le prends. N'en renvoie au dirigeant que ce qui rel
 
 **Inscris la décision dans le ServiceDesk**, avec son motif, au moment où tu la prends. Une décision qui ne vit que dans ta conversation est perdue dès que ta session se termine.
 
+**Et quand ce que tu attends de lui se passe sur un pane précis, mets-le devant lui** plutôt que de lui décrire où chercher — un poste porte des dizaines de sessions, chacune numérotant ses panes indépendamment.
+
+```bash
+herdr agent focus <pane>     # → focused: true
+herdr agent get <pane>       # terminal_title — c'est ce qu'il voit, lui
+```
+
+Le focus **amène** le pane ; il ne dit pas ce qu'il faut y faire. Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte. *(Consigne du dirigeant, 2026-08-19 — `T-20260819-0114`.)*
+
 *Si ton chantier est une Livraison* — tu as un arbitrage de plus, et c'est le tien : **une date planifiée qui ne tiendra pas.** Un jalon porte un engagement de mise en production ; les deux seules issues honnêtes sont de **sortir du périmètre ce qui n'est pas prêt** (détacher son `delivery_id`, il retournera dans un jalon suivant) ou de **déplacer la date en le disant**. Ce qui n'est pas une issue : laisser la date passer en silence en espérant rattraper. Sors ce qui n'est pas prêt aussi tôt que tu le sais — plus tu attends, moins celui qui attend la livraison a de marge pour s'organiser.
 
 ### 6. Coordonner les chantiers voisins
