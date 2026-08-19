@@ -57,6 +57,7 @@
 #        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés)
 #        (refus au démarrage) .. 7   une veille garde déjà ce pane
 #        releve-illisible ...... 8   herdr ne rend plus rien d'exploitable
+#        (détachement raté) .... 9   la veille détachée n'a pas pris son poste
 #      Un bilan muet rendait « j'ai cru qu'il avait fini » et « j'ai épuisé
 #      mes tours » indistinguables, alors qu'ils appellent des correctifs
 #      opposés.
@@ -64,7 +65,10 @@
 #   7. LA FORME PRESCRITE SURVIT PAR CONSTRUCTION. `… &` depuis une session
 #      Claude Code en fait une tâche de fond du harnais, qui la tue (mesuré
 #      deux fois). `--detach` fait que le script se relance LUI-MÊME détaché
-#      (nohup + disown) et rend la main en annonçant son pid et son journal.
+#      (nohup + disown) et rend la main en annonçant son pid et son journal
+#      — mais SEULEMENT après avoir vérifié qu'elle a pris son poste :
+#      déclenché n'est pas posé, et un pid annoncé pour une veille déjà
+#      morte est le faux succès que ce lot corrige.
 #      La survie ne dépend plus de la discipline de l'appelant.
 #
 #   8. ON SAIT SUR QUOI CHACUNE VEILLE. Chaque veille s'inscrit au registre
@@ -220,6 +224,32 @@ if [ "$DETACH" = "1" ]; then
   fi
   ENFANT=$!
   disown "$ENFANT" 2>/dev/null
+
+  # ⚠️ DÉCLENCHÉ N'EST PAS POSÉ. La veille détachée peut mourir aussitôt —
+  # le pane est déjà gardé, le registre est en lecture seule, herdr est
+  # absent. Annoncer « veille détachée · pid=… » et rendre 0 dans ce cas
+  # rend à l'orchestrateur exactement le faux succès que ce lot corrige : il
+  # croirait son agent protégé. On attend donc qu'elle ait pris son poste —
+  # sur un SIGNE (son inscription au registre), jamais sur un délai.
+  PRISE=0
+  for _ in $(seq 1 40); do
+    if [ -f "${VD_REGISTRE_DIR}/${PANE_SLUG}-${ENFANT}.veille" ]; then
+      PRISE=1
+      break
+    fi
+    kill -0 "$ENFANT" 2>/dev/null || break
+    sleep 0.25
+  done
+
+  if [ "$PRISE" != "1" ]; then
+    echo "ÉCHEC : la veille détachée ne veille pas — elle s'est arrêtée au démarrage." >&2
+    [ -f "$LOG" ] && cat "$LOG" >&2
+    if [ -f "$LOG" ] && grep -q "REFUS" "$LOG" 2>/dev/null; then
+      exit 7
+    fi
+    exit 9
+  fi
+
   echo "veille détachée · pane=$PANE agent=$AGENT pid=$ENFANT"
   echo "journal : $LOG"
   echo "l'arrêter : kill $ENFANT   ·   les lister : $0 --list"

@@ -898,6 +898,59 @@ else
 fi
 case "$OUT37" in *"aurait envoyé:"*) ko "G1 AFFAIBLIE : elle a répondu à cet écran" ;; *) ok "G1 intacte : elle n'a pas répondu (écran non reconnu)" ;; esac
 
+
+# =================================================================
+# 38. --detach NE DOIT PAS ANNONCER UN SUCCÈS POUR UNE VEILLE MORTE.
+#     Mesuré sur du réel : la seconde veille d'un même pane était bien
+#     refusée par l'enfant — mais le détacheur avait déjà annoncé « veille
+#     détachée · pid=… » et rendu 0. Un orchestrateur lit ce succès et croit
+#     son agent protégé : le mal exact que ce lot corrige, réintroduit par
+#     la porte du détachement.
+# =================================================================
+echo "→ 38. --detach sur un pane déjà gardé → échec annoncé, pas un faux succès"
+REG_D="${WORK}/registre-detach2"; rm -rf "$REG_D"; mkdir -p "$REG_D"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+# Une vraie veille vivante prend le pane.
+PATH="${BINDIR}:${PATH}" \
+  FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+  VD_REGISTRE_DIR="$REG_D" VD_SLEEP=2 VD_SLEEP_CONFIRM=0 \
+  bash "$VEILLE" w9:pD2 premiere 60 > "${WORK}/d2-premiere.log" 2>&1 &
+D2_PID=$!
+for _ in $(seq 1 30); do
+  ls "${REG_D}"/*.veille >/dev/null 2>&1 && break
+  sleep 0.5
+done
+
+OUT38="$(PATH="${BINDIR}:${PATH}" \
+         FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         VD_REGISTRE_DIR="$REG_D" VD_LOG="${WORK}/d2-seconde.log" \
+         VD_SLEEP=2 VD_SLEEP_CONFIRM=0 \
+         bash "$VEILLE" w9:pD2 seconde 60 --detach 2>&1)"
+RC38=$?
+
+# Ancré sur le motif d'ANNONCE DE SUCCÈS (« veille détachée · pane= ») : la
+# sous-chaîne « veille détachée » seule matche aussi la phrase d'ÉCHEC (« la
+# veille détachée ne veille pas ») — un test qui rougirait sur le correctif.
+case "$OUT38" in *"veille détachée · pane="*) ko "elle annonce un succès pour une veille qui meurt aussitôt : $OUT38" ;; *) ok "aucun faux succès annoncé" ;; esac
+[ "$RC38" -ne 0 ] && ok "le détachement raté rend un code non nul (rc=$RC38)" || ko "le détachement raté rend 0 — indistinguable d'un succès"
+case "$OUT38" in *"REFUS"*|*"déjà"*) ok "elle relaie le motif de l'échec (le pane est déjà gardé)" ;; *) ko "l'échec est annoncé sans son motif : $OUT38" ;; esac
+
+kill -TERM "$D2_PID" 2>/dev/null; wait "$D2_PID" 2>/dev/null
+
+# Et le cas nominal reste un succès annoncé — sinon on aurait corrigé en
+# cassant le geste prescrit.
+REG_D3="${WORK}/registre-detach3"; rm -rf "$REG_D3"; mkdir -p "$REG_D3"
+OUT38B="$(PATH="${BINDIR}:${PATH}" \
+          FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          VD_REGISTRE_DIR="$REG_D3" VD_LOG="${WORK}/d3.log" \
+          VD_SLEEP=2 VD_SLEEP_CONFIRM=0 \
+          bash "$VEILLE" w9:pD3 nominale 60 --detach 2>&1)"
+RC38B=$?
+case "$OUT38B" in *"veille détachée · pane="*) ok "le cas nominal annonce toujours le succès" ;; *) ko "le geste prescrit ne rend plus de succès : $OUT38B" ;; esac
+[ "$RC38B" -eq 0 ] && ok "le cas nominal rend 0" || ko "le cas nominal rend $RC38B"
+D3_PID="$(printf '%s' "$OUT38B" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
+[ -n "$D3_PID" ] && kill -TERM "$D3_PID" 2>/dev/null
+
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
 echo; echo "== Bilan : ${P// /} réussis, ${F// /} échoués =="
