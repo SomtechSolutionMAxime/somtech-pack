@@ -5,7 +5,7 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionne] - 2026-08-19
+## [1.74.0] - 2026-08-19
 
 *Lot F : PR #292 (`E-20260819-0001`, stories `T-20260819-0014` à `0019`), sous la demande `D-20260818-0008`. **Le métier de l'orchestrateur prescrivait huit gestes dont on avait prouvé la veille qu'ils ne tenaient pas.** Aucune des huit corrections mesurées le 18 août n'était encore dans le texte qui les prescrit — un texte lu en entier par chaque orchestrateur qui naît.*
 
