@@ -114,6 +114,14 @@ jobs:
       # bornage, l'étape précédente vient de construire cli/payload/ — une COPIE
       # de ligne-directe, qui exige Node 22 — et sa suite s'exécuterait ici en
       # Node 20. C'est ce qui a fait échouer la publication de v1.29.1.
+      # ⚠️ La même suite tourne dans DEUX chaînes (ici et `tests.yml`), et ce qu'elle exige
+      # doit être posé dans les deux. Les contrôles de T-20260819-0013 lancent un `zsh -c` :
+      # sans zsh, ils échouent — franchement, pas en silence — et la publication rougit sur
+      # un défaut qui n'est pas le sien. Armer une chaîne sur deux, c'est le défaut que ce
+      # dépôt paie régulièrement.
+      - name: Installer zsh (contrôle du PATH depuis un shell non interactif)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+
       - name: Tests
         run: npm test
         working-directory: cli
