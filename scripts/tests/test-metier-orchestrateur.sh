@@ -441,7 +441,14 @@ else
   ko "1 — seul l'identifiant de pane est donné, et il ne lui dit rien"
 fi
 
-if printf '%s' "$S_FOCUS" | grep -qiE 'amène le pane|ne dit pas ce qu.il faut y faire'; then
+# ⚠️ SA PREMIERE ALTERNATIVE ETAIT MORTE, et une revue de fond l'a montre : le
+# texte ecrit « le focus **amène** le pane », donc « amène le pane » n'a ZERO
+# occurrence litterale — les asterisques sont au milieu. La sonde ne tenait donc
+# que sur sa seconde moitie, et retirer toute la partie positive de la phrase la
+# laissait VERTE (mutation reproduite). Une alternative qui ne peut jamais
+# matcher ne garde rien : on exige les deux moities, sur le texte reel.
+if printf '%s' "$S_FOCUS" | grep -qi 'le focus \*\*amène\*\* le pane' \
+   && printf '%s' "$S_FOCUS" | grep -qi "ne dit pas ce qu'il faut y faire"; then
   ok "1 — sa borne est écrite : le focus amène, il n'explique pas"
 else
   ko "1 — la borne manque : on envoie le CTO devant un écran qu'il doit décoder seul"
@@ -534,7 +541,7 @@ fi
 
 # ── 6. Le prompt du /loop porte le BRIEFING — T-20260819-0110.
 S_RONDE6="$(section 'La ronde — ce qui te réveille')"
-if printf '%s' "$S_RONDE6" | grep -qiE 'porte ton BRIEFING|porte le briefing'; then
+if printf '%s' "$S_RONDE6" | grep -qi 'porte ton BRIEFING'; then
   ok "6 — la /loop porte le briefing, pas seulement l'ordre de faire une ronde"
 else
   ko "6 — la /loop ne porte que la cadence : après un /clear, tout le reste doit être allé chercher"
@@ -570,7 +577,8 @@ fi
 
 # ── Traçabilité des huit : un amendement sans sa mesure est une opinion.
 for t in T-20260819-0095 T-20260819-0097 T-20260819-0103 T-20260819-0105 \
-         T-20260819-0106 T-20260819-0110 T-20260819-0111 T-20260819-0114; do
+         T-20260819-0106 T-20260819-0110 T-20260819-0111 T-20260819-0114 \
+         T-20260819-0121; do
   if grep -q "$t" "$METIER"; then
     ok "$t est cité dans le texte"
   else
@@ -613,7 +621,9 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # LA MARGE PASSE À ZÉRO. Les deux mouvements vont ensemble et ils sont arbitrés.
 #
 #   Arbitrage rendu par `matapedia` sur la ligne de `e-20260819-0013`, 2026-08-19,
-#   sous `E-20260819-0013` — recopié mot pour mot :
+#   sous `E-20260819-0013` — INSCRIT AU FIL DE `D-20260818-0003` avec sa mesure,
+#   parce qu'un epic n'a pas de fil et qu'une citation sans référent durable ne
+#   se vérifie pas. Recopié mot pour mot :
 #   « Re-baseline le plafond sur la taille FINALE et EXACTE de ton lot. AUCUNE
 #     MARGE. Ma marge de 6 500 posée ce matin a été consommée en entier par le
 #     lot précédent — 82 octets restants. Une marge n'est pas une réserve,

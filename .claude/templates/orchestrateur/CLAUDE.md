@@ -887,7 +887,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > ⚠️ **`agent_not_found` n'est pas la mort d'un agent : c'est la panne de la mesure** *(c'est la règle « on ne teste pas quand on ne peut pas voir », retournée sur l'outil qui sert à voir)*. **Devant elle, tu lis son pane** — et tu ne conclus rien de l'absence.
 >
-> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** *(`E-20260819-0013`.)*
+> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** *(`T-20260819-0121`.)*
 >
 > ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic — « il est **mort sans finir** … Rien ne va le relancer » — a failli faire renaître un agent qui traitait à cet instant même le message qu'on venait de lui écrire : **la renaissance aurait détruit un contexte de neuf jours**.*
 >
