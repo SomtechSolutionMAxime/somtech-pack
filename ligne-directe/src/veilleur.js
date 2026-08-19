@@ -26,6 +26,7 @@ import { roleDuLieu } from './lieu-agent.js';
 import { unTourDeBalayage } from './balayage.js';
 import {
   CADENCE_DU_RECENSEMENT_MS,
+  DELAI_MAX_DUN_TOUR_MS,
   referenceDuMetier,
   unRecensement,
 } from './recensement.js';
@@ -1699,7 +1700,7 @@ export class Veilleur {
    * ⚠️ LE BATTEMENT DE CŒUR EST DANS `unRecensement`, PAS ICI — même règle que le balayage : une
    * ronde éteinte ne produit aucune erreur, et seule sa trace la distingue d'un dispositif mort.
    */
-  recenser(cadence = CADENCE_DU_RECENSEMENT_MS) {
+  recenser(cadence = CADENCE_DU_RECENSEMENT_MS, { delaiMaxMs = DELAI_MAX_DUN_TOUR_MS, journaliser: tracer = journaliser } = {}) {
     clearInterval(this.recenseur);
     // ⚠️ UNE RONDE NE DÉMARRE PAS PENDANT QU'UNE AUTRE COURT — même raison que le balayage : la
     // cadence est un intervalle ENTRE deux tours, pas une horloge.
@@ -1707,8 +1708,30 @@ export class Veilleur {
     this.recenseur = setInterval(() => {
       if (this.arrete || this.recensementEnCours) return;
       this.recensementEnCours = true;
-      this.recensementDuPoste()
-        .catch((err) => journaliser(`recensement — le tour a échoué : ${err?.message || err}`))
+      // ⚠️ UN TOUR QUI PEND NE DOIT PAS ÉTEINDRE LA RONDE. Les appels à `herdr` n'ont pas de délai
+      // propre : un socket vivant mais muet fait pendre la promesse pour toujours, et sans cette
+      // course ni le `catch` ni le `finally` ne s'exécuteraient — `recensementEnCours` resterait
+      // `true`, et plus aucun tour ne partirait. Silencieusement : c'est le mode de panne que ce
+      // dépôt nomme partout, appliqué à sa propre ronde.
+      //
+      // ⚠️ ET L'ABANDON SE DIT. Un tour abandonné qui ne laisserait pas de trace ferait chercher
+      // la panne du mauvais côté — on lirait un journal qui saute des tours sans raison.
+      const abandon = new Promise((resoudre) =>
+        setTimeout(() => {
+          resoudre('abandonné');
+        }, delaiMaxMs).unref?.()
+      );
+      Promise.race([this.recensementDuPoste(), abandon])
+        .then((rendu) => {
+          if (rendu === 'abandonné') {
+            tracer(
+              `recensement — TOUR ABANDONNÉ après ${Math.round(delaiMaxMs / 1000)} s : ` +
+                'un appel à herdr ne rend pas la main. La ronde reprend au tour suivant ; ' +
+                'ce tour-ci n’a mesuré personne — ce n’est PAS « aucun orchestrateur ».'
+            );
+          }
+        })
+        .catch((err) => tracer(`recensement — le tour a échoué : ${err?.message || err}`))
         .finally(() => {
           this.recensementEnCours = false;
         });
@@ -1720,15 +1743,31 @@ export class Veilleur {
   /**
    * Un recensement, câblé sur le poste réel — et rien d'autre que du câblage.
    *
-   * ⚠️ L'INVENTAIRE PASSE PAR `herdr.panes()`, PAS PAR `herdr.agents()`. Un lieu d'orchestrateur
-   * se reconnaît à SON RÉPERTOIRE ; `agents()` répond à une autre question (« quel pane porte un
-   * agent détecté ») et il SOUS-COMPTE — 40 % mesurés le 2026-08-19. Les noms, eux, viennent bien
-   * de `agents()`, mais seulement pour HABILLER un pane déjà trouvé : son silence ne retire
-   * personne du registre, et s'il refuse, le recensement continue sans noms plutôt que sans monde.
+   * ⚠️ INTERROGER LES TREIZE SESSIONS UNE PAR UNE N'EST PAS UN DÉTAIL D'IMPLÉMENTATION : C'EST LA
+   * RAISON D'ÊTRE DU REGISTRE. `herdr` sans socket désigné parle à UNE seule session — celle de
+   * l'appelant. **La commande ordinaire ne peut donc pas répondre à la question qu'on lui pose.**
+   *
+   * Mesuré le 2026-08-19, session par session : `somtech` 89 agents, `cg` 20, `progex` 18,
+   * `morasse` 2, `sibelanger` 1, deux autres à 0, et six muettes. **130 agents visibles sur le
+   * poste ; un orchestrateur qui tape `herdr` tout court en voit 89.** Tous les comptes de cette
+   * journée-là — trois, cinq, sept — avaient été pris sur un treizième du poste, et deux des sept
+   * orchestrateurs trouvés vivent dans `progex` et `cg`, invisibles depuis `somtech`.
+   *
+   * ⚠️ ET LA SESSION VOYAGE AVEC LE PANE, toujours. `w3:p2` seul ne désigne rien : deux sessions
+   * emploient les mêmes identifiants. Coût constaté d'un pane rendu sans sa session : dix minutes
+   * passées à chercher un pane qui existait.
+   *
+   * ⚠️ `agents()` RÉPOND À UNE AUTRE QUESTION — « quel pane porte un agent détecté » — et il
+   * SOUS-COMPTE. Les noms en viennent, mais seulement pour HABILLER un pane déjà trouvé : son
+   * silence ne retire personne du registre, et s'il refuse, le recensement continue sans noms
+   * plutôt que sans monde.
    */
   async recensementDuPoste() {
     let nomsConnus = null;
     try {
+      // La clé porte la session, comme partout ailleurs ici : sans elle, deux panes homonymes de
+      // deux sessions différentes se prêteraient leurs noms — un nom d'affichage faux est pire
+      // qu'un nom absent, parce qu'on lui parle.
       nomsConnus = new Map(
         (await herdr.agents())
           .filter((a) => a.name)

@@ -677,9 +677,18 @@ export async function ecranDe(pane, socket) {
  * `agents()` demande à herdr QUELS PANES PORTENT UN AGENT — c'est ce qu'il faut au balayage,
  * qui délivre une boîte : sans agent détecté, il n'y a pas de boîte à délivrer.
  *
- * `panes()` demande QUELS PANES EXISTENT. C'est ce qu'il faut au recensement, parce qu'un lieu
- * d'orchestrateur se reconnaît à SON RÉPERTOIRE, pas à la détection d'agent de herdr. Les deux
- * répondent à deux questions différentes ; ce n'est pas la même mesure écrite deux fois.
+ * `panes()` demande QUELS PANES EXISTENT, **et il le demande à TOUTES les sessions du poste, une
+ * par une**. Ce second point n'est pas une optimisation : c'est la chose même. `herdr` sans
+ * socket désigné parle à UNE seule session — celle de l'appelant — donc **la commande ordinaire
+ * ne peut pas répondre à la question « qui vit sur ce poste »**.
+ *
+ * Mesuré le 2026-08-19, session par session : `somtech` 89 agents, `cg` 20, `progex` 18,
+ * `morasse` 2, `sibelanger` 1, deux autres à 0, six muettes. **130 agents visibles ; un agent qui
+ * tape `herdr` tout court en voit 89.** Et ce n'est pas théorique : deux des sept orchestrateurs
+ * que ce registre trouve vivent dans `progex` et `cg`, invisibles depuis `somtech`.
+ *
+ * Les deux fonctions répondent donc à deux questions différentes ; ce n'est pas la même mesure
+ * écrite deux fois.
  *
  * ⚠️ ET L'ÉCART ENTRE LES DEUX EST MESURÉ, PAS SUPPOSÉ (T-20260819-0043, 2026-08-19) :
  * `herdr agent list` a rendu TROIS lieux d'orchestrateur vivants là où `herdr pane list` en
@@ -769,7 +778,14 @@ export async function agents({ socket } = {}) {
     try {
       const reponse = await herdrStrict(['agent', 'list'], s);
       for (const a of (reponse.result?.agents || []).filter((x) => x.agent)) {
-        if (!vus.has(a.pane_id)) vus.set(a.pane_id, { ...a, herdr_socket: s });
+        // ⚠️ LA CLÉ PORTE LA SESSION — relevé en passe de revue de fond, et le rejet était juste :
+        // `panes()`, écrit quelques lignes plus haut, mesurait et corrigeait exactement ce défaut
+        // pendant qu'il restait ici. Un identifiant de pane n'est unique que dans sa session ;
+        // dédoublonner sans elle fait disparaître un agent vivant parce qu'un homonyme d'une
+        // autre session est passé avant lui. Laisser une moitié du défaut, c'est « une porte sur
+        // deux » — le motif que ce dépôt a payé dix fois.
+        const cle = `${s ?? ''}\u0000${a.pane_id}`;
+        if (!vus.has(cle)) vus.set(cle, { ...a, herdr_socket: s });
       }
     } catch (err) {
       // ⚠️ UN OUTIL INTROUVABLE N'EST PAS UNE SESSION INJOIGNABLE — T-20260813-0054, et c'est

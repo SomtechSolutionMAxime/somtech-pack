@@ -102,6 +102,21 @@ export const CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS = [
 export const CADENCE_DU_RECENSEMENT_MS = 15 * 60_000;
 
 /**
+ * LE DÉLAI AU-DELÀ DUQUEL UN TOUR EST ABANDONNÉ — et ce réglage garde la RONDE, pas la mesure.
+ *
+ * ⚠️ RELEVÉ EN PASSE DE REVUE DE FOND, et le rejet était juste. Les appels à `herdr` n'ont aucun
+ * délai propre : un socket VIVANT MAIS MUET fait pendre l'appel indéfiniment. Sans ce garde-fou,
+ * `recensementEnCours` restait `true` pour toujours — ni le `catch` ni le `finally` ne
+ * s'exécutant jamais — et **la ronde s'éteignait en silence**. C'est mot pour mot le pire cas
+ * que `balayage.js` nomme : un dispositif indiscernable d'un dispositif mort.
+ *
+ * Deux minutes : un recensement complet du poste a été mesuré à 408 ms sur 301 panes et treize
+ * sessions ; une passe manuelle sur un poste chargé a déjà atteint deux minutes (2026-08-18).
+ * Le seuil laisse donc passer le pire cas connu et n'attrape que ce qui ne reviendra jamais.
+ */
+export const DELAI_MAX_DUN_TOUR_MS = 120_000;
+
+/**
  * LE GESTE DE REMISE À JOUR, et le seul que ce dispositif nomme.
  *
  * ⚠️ IL EST RENDU, JAMAIS ENVOYÉ. Voir la règle de conduite en tête de fichier.

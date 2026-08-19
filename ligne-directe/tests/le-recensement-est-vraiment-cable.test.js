@@ -186,3 +186,40 @@ test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, 
 
   assert.equal(passages, apresArret, 'même avec un minuteur survivant, un veilleur arrêté ne recense plus');
 });
+
+test('un tour qui PEND n’éteint pas la ronde — sans ce garde-fou, elle meurt en silence', async () => {
+  // ⚠️ RELEVÉ EN PASSE DE REVUE DE FOND, et c'est le pire mode de panne de ce dispositif. Les
+  // appels à `herdr` n'ont pas de délai propre : un socket VIVANT MAIS MUET fait pendre la
+  // promesse pour toujours. Sans course contre une horloge, ni le `catch` ni le `finally` ne
+  // s'exécutent — `recensementEnCours` reste `true`, et plus AUCUN tour ne part. La ronde
+  // s'éteint sans une ligne d'erreur : indiscernable d'un dispositif mort.
+  //
+  // Le banc « une ronde qui jette » ne l'attrape pas : une promesse rejetée se résout, une
+  // promesse qui pend, non. Ce sont deux pannes différentes, et une seule était gardée.
+  const v = veilleurNu('qui-pend');
+  // Le serveur factice : `arreter()` attend la fermeture du socket local, qu'un veilleur nu n'a
+  // pas — sans lui, ce banc PEND au lieu d'échouer, ce qui serait une jolie ironie ici.
+  v.serveur = { close: (rappel) => rappel() };
+  let departs = 0;
+  const journal = [];
+  v.recensementDuPoste = () => {
+    departs += 1;
+    return new Promise(() => {}); // ne se résout JAMAIS
+  };
+  const minuteur = v.recenser(10, { delaiMaxMs: 40, journaliser: (m) => journal.push(m) });
+  await new Promise((r) => setTimeout(r, 220));
+  clearInterval(minuteur);
+  await v.arreter().catch(() => {});
+
+  assert.ok(departs >= 2, `la ronde doit repartir après un tour qui pend (${departs} départ(s))`);
+  // ⚠️ ET L'ABANDON SE DIT : un tour abandonné muet ferait lire un journal qui saute des tours
+  // sans raison, et chercher la panne du mauvais côté.
+  assert.ok(
+    journal.some((l) => /ABANDONN/i.test(l)),
+    'l’abandon doit être journalisé'
+  );
+  assert.ok(
+    journal.some((l) => /n’est PAS « aucun orchestrateur »|PAS « aucun orchestrateur »/.test(l)),
+    'et il ne doit jamais pouvoir se lire « aucun orchestrateur »'
+  );
+});

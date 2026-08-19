@@ -24,6 +24,16 @@
 // propose rien sur ce qu'il n'a pas mesuré. Se rabattre sur « ouvert » referait, à l'échelle et
 // automatiquement, l'écart d'un humain pressé.
 
+import { enEssais, transportRemplace, refuser } from './cloison.js';
+
+/**
+ * LE TRANSPORT NATIF, CAPTURÉ AU CHARGEMENT — c'est lui qui distingue « ce banc a monté son
+ * double » de « cet appel part vers la production ». Même dispositif que `slack.js`, et pour la
+ * même raison : ce dépôt a déjà laissé une suite d'essais tenir une connexion de production
+ * pendant des heures.
+ */
+const TRANSPORT_NATIF = globalThis.fetch;
+
 /**
  * LES STATUTS QUI FERMENT UN CHANTIER, par famille — et rien d'autre n'en ferme un.
  *
@@ -37,6 +47,27 @@ export const STATUTS_CLOS = {
   deliveries: ['deployed', 'cancelled'],
   epics: ['completed', 'cancelled'],
   tickets: ['completed'],
+};
+
+/**
+ * LE CHAMP QUI PORTE LE CODE, PAR FAMILLE — et on ne cherche que celui-là.
+ *
+ * ⚠️ RELEVÉ EN PASSE DE REVUE DE FOND, et le rejet était juste. La première version balayait
+ * TOUS les champs `*_id` d'un enregistrement et retenait ceux dont la valeur ressemblait à un
+ * code. Un enregistrement qui en RÉFÉRENCE un autre de la même famille — un ticket qui pointe un
+ * ticket, un epic rattaché à une demande — aurait alors indexé le code du VOISIN sur lui-même,
+ * et rendu le statut du mauvais chantier. Ce statut décide de `remiseAJour.aProposer` : se
+ * tromper d'enregistrement, c'est proposer un réveil sur la foi de l'état de quelqu'un d'autre.
+ *
+ * On nomme donc le champ, famille par famille. Un enregistrement qui ne le porte pas n'est pas
+ * indexé — il vaut mieux « non mesuré » qu'un statut emprunté.
+ */
+export const CHAMP_DU_CODE = {
+  demands: 'demand_id',
+  projects: 'project_id',
+  deliveries: 'delivery_id',
+  epics: 'epic_id',
+  tickets: 'ticket_id',
 };
 
 /** Les statuts qu'on sait lire — hors de ces listes, on ne conclut rien. */
@@ -55,6 +86,9 @@ export const STATUTS_CONNUS = {
  * `general` : son lieu est parfaitement valide, et son chantier n'est traçable nulle part. Ce
  * n'est PAS une erreur — c'est un mandat dont l'état ne se mesure pas, et il se dira comme tel.
  */
+/** La forme d'un code de chantier, écrite une fois. */
+export const CODE_LISIBLE = /^[A-Z]-\d{8}-\d{4}$/;
+
 export function familleDuMandat(mandat) {
   const m = /^([dpjet])-(\d{8})-(\d{4})$/i.exec(String(mandat ?? '').trim());
   if (!m) return null;
@@ -139,6 +173,28 @@ export function accesServiceDesk({
   if (!cle || typeof fetcher !== 'function') return null;
 
   const appelerMcp = async (nom, args) => {
+    // ⚠️ LA CLOISON D'ESSAIS, ET ELLE MANQUAIT — relevée en passe de revue de fond, et le rejet
+    // était juste. Sur un poste de développement, `SOMTECH_DESK_API_KEY` est exportée : c'est le
+    // cas NORMAL de quiconque travaille dans un lieu d'agent. Un simple `npm test` faisait donc
+    // partir des POST réels vers le ServiceDesk de production, avec la vraie clé, pour lire le
+    // statut de la demande qui porte ce lot — et rien ne distinguait une exécution propre d'une
+    // exécution qui venait de parler à la prod.
+    //
+    // La discipline existait déjà à côté (`slack.js`), avec son incident à l'appui : une suite
+    // d'essais a tenu une connexion Slack de production pendant des heures. Le transport neuf
+    // n'en héritait pas — c'est le motif « une porte sur deux », appliqué à une cloison.
+    //
+    // ⚠️ ON COMPARE LE TRANSPORT RÉELLEMENT UTILISÉ, pas la variable globale. Ici le transport
+    // entre par paramètre (`fetcher`) : juger sur `globalThis.fetch` refuserait un banc qui a
+    // proprement injecté son double, et laisserait passer un appel natif fait par un appelant
+    // qui a, par ailleurs, remplacé le global. Ce qui compte est : est-ce que CET appel-ci part
+    // dehors ?
+    if (enEssais() && !transportRemplace(TRANSPORT_NATIF, fetcher)) {
+      refuser(
+        `un appel au ServiceDesk (${nom}/${args?.action})`,
+        `Il serait parti vers « ${url} » avec la clé de ce poste.`
+      );
+    }
     const reponse = await fetcher(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${cle}`, 'Content-Type': 'application/json' },
@@ -164,19 +220,23 @@ export function accesServiceDesk({
    * orchestrateurs ne paiera pas sept listes.
    */
   const index = new Map();
+  const tronque = new Map();
   const indexer = async (famille) => {
     if (index.has(famille)) return index.get(famille);
     const corps = await appelerMcp(famille, { action: 'list', limit: parPage });
     const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
+    const champ = CHAMP_DU_CODE[famille];
     const par = new Map();
     for (const item of liste) {
-      for (const [champ, valeur] of Object.entries(item || {})) {
-        if (champ.endsWith('_id') && typeof valeur === 'string' && /^[A-Z]-\d{8}-\d{4}$/.test(valeur)) {
-          par.set(valeur, item);
-        }
-      }
+      const code = item?.[champ];
+      if (typeof code === 'string' && CODE_LISIBLE.test(code)) par.set(code, item);
     }
+    // ⚠️ LA TRONCATURE SE DIT, ELLE NE SE TAIT PAS. Une liste plafonnée qui rend exactement son
+    // plafond a très probablement été coupée — et le mandat qu'on cherche peut être juste
+    // derrière. Sans cette marque, il retomberait en « non mesuré » avec une raison qui
+    // n'évoquerait jamais la vraie cause, et personne n'irait lever le plafond.
     index.set(famille, par);
+    tronque.set(famille, liste.length >= parPage);
     return par;
   };
 
@@ -193,7 +253,12 @@ export function accesServiceDesk({
     }
     const par = await indexer(famille);
     const trouve = par.get(code);
-    if (!trouve) throw new Error(`${code} ne figure pas dans les ${par.size} ${famille} lus`);
+    if (!trouve) {
+      throw new Error(
+        `${code} ne figure pas dans les ${par.size} ${famille} lus` +
+          (tronque.get(famille) ? ` — et cette liste est PLAFONNÉE à ${parPage} : il est peut-être juste derrière` : '')
+      );
+    }
     if (!statutDe(trouve)) throw new Error(`${code} est là, mais sans statut`);
     return trouve;
   };
