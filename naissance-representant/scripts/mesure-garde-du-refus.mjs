@@ -56,24 +56,29 @@ const LEURRES = {
   'futur': "'\\n⚠️ Une touche d’envoi partira vers ce pane si tu relances.'",
   'parle de la boîte seule': "'\\n⚠️ La boîte de ce pane est restée pleine malgré mon passage.'",
   'parle du texte, pas du geste': "'\\n⚠️ Ton texte est déjà dans la boîte de ce pane, entier.'",
+  // ⚠️ CE LEURRE-CI ÉTAIT DANS LES FORMULATIONS HONNÊTES JUSQU'À LA QUATRIÈME PASSE DE FOND.
+  // Il annonce le geste, au passé, sans rien nier — et il ne dit pas ce que le geste laisse
+  // derrière lui. C'est très exactement la mutation qui survivait. Ce qui devient inacceptable
+  // change de camp ; on ne le retire pas du jeu, sinon plus rien ne mesure la nouvelle exigence.
+  'annonce le geste SANS sa conséquence': "'\\n⚠️ Une touche d’envoi est déjà partie vers ce pane. Va le regarder.'",
   'INVERSION à sens unique': "'\\n⚠️ ET LA TOUCHE D’ENVOI DE CE PANE A ÉTÉ REFUSÉE PAR HERDR : elle est déjà partie, ' + 'mais herdr l’a repoussée, donc rien ne l’a atteinte.'",
 };
 
 /** Le même fait, écrit autrement. La garde ne doit en refuser AUCUNE. */
 const HONNETES = {
   courte: "'\\n⚠️ Une touche d’envoi est déjà partie vers ce pane, et elle n’a pas suffi.'",
-  'je-forme': "'\\n⚠️ J’ai déjà pressé la touche d’envoi sur ce pane.'",
+  'je-forme': "'\\n⚠️ J’ai déjà pressé la touche d’envoi sur ce pane, et la boîte n’a pas bougé.'",
   passive: "'\\n⚠️ La touche d’envoi a déjà été envoyée à ce pane, sans effet.'",
-  majuscules: "'\\n⚠️ ATTENTION : LA TOUCHE D’ENVOI EST DÉJÀ PARTIE ICI.'",
+  majuscules: "'\\n⚠️ ATTENTION : LA TOUCHE D’ENVOI EST DÉJÀ PARTIE ICI, ET ELLE N’A PAS SUFFI.'",
   'ordre inverse': "'\\n⚠️ La boîte n’a pas été vidée, alors que la touche d’envoi est déjà partie.'",
   irréversible: "'\\n⚠️ Un geste irréversible a déjà eu lieu ici : la touche d’envoi, partie de ma main.'",
-  "apostrophe droite": "'\\n⚠️ Une touche d\\'envoi est déjà partie vers ce pane.'",
+  "apostrophe droite": "'\\n⚠️ Une touche d\\'envoi est déjà partie vers ce pane, sans vider la boîte.'",
   'très longue': "'\\n⚠️ Avant de toucher à ce pane : j’ai pressé la touche d’envoi, herdr l’a acceptée, ' + 'et la boîte n’a pas été vidée pour autant.'",
-  'sans accent': "'\\n⚠️ Une touche d’envoi est deja partie vers ce pane.'",
+  'sans accent': "'\\n⚠️ Une touche d’envoi est deja partie vers ce pane, sans effet sur la boite.'",
   'appuyé sur Entrée': "'\\n⚠️ J’ai déjà appuyé sur Entrée dans ce pane, et la boîte est restée pleine.'",
   'frappe de soumission': "'\\n⚠️ La frappe de soumission est déjà partie vers ce pane, sans effet.'",
   "raccourci d’envoi": "'\\n⚠️ Le raccourci d’envoi a déjà été utilisé sur ce pane, sans vider la boîte.'",
-  '« aurait » dans une autre proposition': "'\\n⚠️ La touche d’envoi est déjà partie vers ce pane — quelqu’un aurait pu m’avertir que ' + 'cette boîte était fragile, mais le geste a eu lieu.'",
+  '« aurait » dans une autre proposition': "'\\n⚠️ La touche d’envoi est déjà partie vers ce pane sans le vider — quelqu’un aurait pu ' + 'm’avertir que cette boîte était fragile, mais le geste a eu lieu.'",
   'acceptation nommée': "'\\n⚠️ La touche d’envoi est déjà partie, herdr l’a acceptée, et la boîte n’a pas bougé.'",
   'rejet EN AVAL, pas par herdr': "'\\n⚠️ J’ai déjà pressé la touche d’envoi et herdr a accepté ce geste, mais la session a ' + 'ensuite rejeté ma commande sans vider la boîte.'",
 };

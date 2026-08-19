@@ -65,7 +65,13 @@ export const HERDR_A_REFUSE = /(herdr[^.]{0,40}(refus|repouss|rejet)|(refus|repo
  * pas dans l'état où il croit le trouver**. Une garde qui vérifie qu'on a parlé du geste, sans
  * vérifier qu'on a dit ce qu'il laisse derrière lui, garde la forme et laisse partir le fond.
  */
-export const DIT_LA_CONSEQUENCE = /(pas\s+suffi|n[’']a\s+pas\s+[ée]t[ée]\s+vid|pas\s+un\s+pane\s+intact|irr[ée]versible|sans\s+effet|pas\s+abouti|rest[ée]e?\s+pleine)/iu;
+// ⚠️ ET LE MOTIF A DÛ S'ÉLARGIR AUSSITÔT POSÉ. Mesuré au banc : dans sa première forme, il
+// refusait 8 formulations honnêtes sur 15 — dont « la boîte n'a pas bougé » et « sans vider la
+// boîte », qui disent exactement la conséquence, autrement. Le deuxième chiffre a fait son
+// travail le jour même où la garde est née : sans lui, on livrait une garde qui crie sur du
+// texte correct, et le premier qui la rencontre la retire.
+export const DIT_LA_CONSEQUENCE =
+  /(pas\s+suffi|n[’']a\s+pas\s+[ée]t[ée]\s+vid|pas\s+vid[ée]e?|sans\s+(?:l[ea]\s+)?vider|pas\s+un\s+pane\s+intact|irr[ée]versible|sans\s+effet|pas\s+abouti|(?:rest[ée]e?|toujours)\s+pleine|n[’']a\s+pas\s+boug)/iu;
 
 /**
  * LES LIGNES D'AVEU — celles que ce lot ajoute au refus.
