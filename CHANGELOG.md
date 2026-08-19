@@ -5,7 +5,7 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
-## [Non-versionné] - 2026-08-18
+## [1.72.0] - 2026-08-18
 
 *Un seul lot : PR #288 (`E-20260818-0017`, stories `T-20260818-0139/0140/0141`), sous la demande `D-20260818-0008`. Le nom d'un agent était **simplement l'argument transmis** — il n'y avait jamais eu de mécanisme, et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale.*
 
