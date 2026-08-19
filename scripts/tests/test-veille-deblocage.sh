@@ -73,6 +73,14 @@ case "${1:-}" in
       else
         status="${FAKE_HERDR_STATUS:-blocked}"
       fi
+      if [ "$status" = "absent" ]; then
+        # Ce que le VRAI herdr rend quand le pane a été fermé sous la veille :
+        # l'erreur part sur STDERR et le code de retour vaut 1 — mesuré. Un
+        # double qui la mettrait sur stdout serait plus complaisant que le
+        # service, et le test passerait sur un correctif qui ne mord pas.
+        printf '{"error":{"code":"agent_not_found","message":"agent target %s not found"},"id":"cli:agent:get"}' "${3:-}" >&2
+        exit 1
+      fi
       printf '{"result":{"agent":{"agent_status":"%s"}}}' "$status"
       exit 0
     fi
@@ -583,6 +591,33 @@ else
 fi
 [ "${n_pollution:-0}" -eq 0 ] && ok "aucune veille de test dans le registre du poste" \
   || ko "la suite a écrit $n_pollution veille(s) de test dans $REG_POSTE"
+
+
+# =================================================================
+# 25. LE QUATRIÈME DÉFAUT, trouvé en posant une VRAIE veille : le pane a été
+#     fermé sous elle, et elle a continué de tourner — 400 tours à veiller
+#     sur rien, en s'annonçant « vivante » au registre. C'est exactement le
+#     mal que ce lot corrige : promettre une protection qu'on n'assure plus.
+# =================================================================
+echo "→ 25. le pane disparaît sous la veille → elle le dit et s'arrête"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=absent run 6
+
+case "$OUT" in *"MOTIF: pane-disparu"*) ok "motif « pane-disparu » nommé" ;; *) ko "elle veille sur un pane disparu sans le dire : $OUT" ;; esac
+[ "$RC" -eq 6 ] && ok "code de sortie propre au pane disparu (rc=$RC)" || ko "code de sortie attendu 6, obtenu $RC"
+
+# =================================================================
+# 26. Mais une absence TRANSITOIRE ne doit pas tuer la veille : un hoquet de
+#     herdr abandonnerait un agent bien vivant. Même exigence que la
+#     garantie n°4 — deux relevés concordants avant de conclure.
+# =================================================================
+echo "→ 26. absence transitoire (1 relevé) → elle continue de veiller"
+: > "$SCREEN_FILE"
+printf 'working\nabsent\nworking\nworking\n' > "$SEQ_FILE"
+run 4
+
+case "$OUT" in *"MOTIF: pane-disparu"*) ko "un seul relevé absent suffit à l'arrêter — un hoquet de herdr abandonnerait un agent vivant" ;; *) ok "une absence isolée ne l'arrête pas" ;; esac
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "elle a veillé jusqu'au bout malgré l'absence transitoire" ;; *) ko "arrêt inattendu : $OUT" ;; esac
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")

@@ -54,6 +54,7 @@
 #                                    travaillait encore : il n'est plus protégé)
 #        ecran-non-reconnu ..... 3   3 relevés non reconnus consécutifs
 #        interrompue ........... 4   signal reçu — tuée par son environnement
+#        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés)
 #      Un bilan muet rendait « j'ai cru qu'il avait fini » et « j'ai épuisé
 #      mes tours » indistinguables, alors qu'ils appellent des correctifs
 #      opposés.
@@ -68,6 +69,13 @@
 #      (pane, agent, pid, journal, début, tours) et y inscrit son motif en
 #      s'arrêtant. `--list` rend le pane ET l'agent de chacune — un compte
 #      global (« 3 veilles tournent ») ne dit pas si l'une est la tienne.
+#
+#  10. ELLE NE VEILLE PAS SUR UN PANE QUI N'EXISTE PLUS. Un pane fermé sous
+#      la veille la laissait tourner jusqu'à épuisement de ses tours, en
+#      s'annonçant « vivante » au registre alors qu'elle ne gardait plus
+#      rien — trouvé en posant une veille réelle, pas en test. Elle s'arrête
+#      désormais sur `pane-disparu` (code 6), confirmé sur DEUX relevés :
+#      un hoquet de herdr abandonnerait un agent bien vivant.
 #
 #   9. LES DEUX CHIFFRES SONT MESURABLES. Une garde se juge sur ce qu'elle
 #      débloque à raison ET sur ce qu'elle débloque à tort. Chaque déblocage
@@ -207,6 +215,10 @@ INCONNUES=0
 VU_TRAVAILLER=0
 PREAVIS_EMIS=0
 DERNIER_ETAT=""
+# Un pane peut être fermé SOUS la veille. Sans ce compteur, elle continue de
+# tourner sur un pane qui n'existe plus — mesuré sur un agent d'essai réel :
+# elle s'annonçait « vivante » au registre en ne gardant plus rien.
+ABSENCES=0
 
 VD_JOURNAL="${VD_JOURNAL:-${VD_REGISTRE_DIR}/${PANE_SLUG}-$$-deblocages.log}"
 REGISTRE_FICHIER="${VD_REGISTRE_DIR}/${PANE_SLUG}-$$.veille"
@@ -228,6 +240,7 @@ code_motif() {
     tours-epuises)     echo 2 ;;
     ecran-non-reconnu) echo 3 ;;
     interrompue)       echo 4 ;;
+    pane-disparu)      echo 6 ;;
     *)                 echo 5 ;;
   esac
 }
@@ -282,8 +295,27 @@ journaliser_deblocage() {
   } >> "$VD_JOURNAL" 2>/dev/null
 }
 
+# Rend le statut de l'agent — ou __ABSENT__ quand herdr répond que le pane ou
+# l'agent n'existe plus. Un silence de herdr (sortie vide) reste distinct de
+# cette absence explicite : le premier est un hoquet, la seconde un fait.
 etat_courant() {
-  herdr agent get "$PANE" 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['agent'].get('agent_status',''))" 2>/dev/null
+  # 2>&1 et non 2>/dev/null : herdr écrit son « agent_not_found » sur STDERR
+  # avec rc=1 (mesuré). Le jeter rendait l'absence indétectable — la veille
+  # tournait alors sur un pane fermé sans jamais pouvoir le dire.
+  herdr agent get "$PANE" 2>&1 | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('')
+    raise SystemExit
+err = d.get('error') or {}
+if 'not_found' in str(err.get('code', '')):
+    print('__ABSENT__')
+else:
+    res = d.get('result') or {}
+    print((res.get('agent') or {}).get('agent_status', ''))
+" 2>/dev/null
 }
 
 # Seuil de préavis : 90 % des tours. Elle prévient AVANT de s'éteindre, une
@@ -301,10 +333,21 @@ for i in $(seq 1 "$VD_TOURS"); do
   fi
 
   case "$ETAT" in
+    __ABSENT__)
+      # Deux relevés concordants avant de conclure — même exigence que la
+      # garantie n°4. Un hoquet de herdr abandonnerait un agent bien vivant.
+      ABSENCES=$((ABSENCES+1))
+      echo "[$i] pane introuvable ($ABSENCES/2)"
+      if [ "$ABSENCES" -ge 2 ]; then
+        terminer pane-disparu "le pane $PANE n'existe plus (confirmé sur deux relevés) — il n'y a plus rien à garder"
+      fi
+      ;;
     working)
+      ABSENCES=0
       VU_TRAVAILLER=1
       ;;
     blocked)
+      ABSENCES=0
       # Un agent bloqué a forcément commencé à travailler.
       VU_TRAVAILLER=1
       ECRAN=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
@@ -346,6 +389,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       fi
       ;;
     done)
+      ABSENCES=0
       # `done` est un état terminal EXPLICITE : il ne survient pas à la
       # naissance, contrairement à `idle`. Il arme donc la détection.
       VU_TRAVAILLER=1
@@ -357,6 +401,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       fi
       ;;
     idle)
+      ABSENCES=0
       # ⚠️ LE DÉFAUT ① EST ICI. Un agent qui vient de naître est `idle`
       # PARCE QU'IL ATTEND SON BRIEF. Les deux relevés de la garantie n°4
       # avaient raison sur l'état et tort sur le sens. Tant qu'on ne l'a
