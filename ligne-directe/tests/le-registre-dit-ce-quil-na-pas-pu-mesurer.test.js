@@ -457,3 +457,29 @@ test('aucune session muette : le résumé le dit aussi, et reste un plancher', a
   assert.doesNotMatch(rendu.resume, /amputé/i);
   assert.match(rendu.resume, /plancher/, 'même complet, un compte reste un plancher');
 });
+
+test('un lieu écarté est NOMMÉ, pas effacé — c’est lui qui chiffre le plancher', async (t) => {
+  // ⚠️ MESURÉ EN VRAI le 2026-08-19 : huit chemins candidats sur ce poste, sept comptés, et le
+  // huitième portait un agent Claude bien vivant dans un lieu à demi posé — sans CLAUDE.md, sans
+  // moyens. L'écarter est juste ; le faire disparaître ne l'était pas : il n'aurait laissé aucune
+  // trace nulle part, et personne n'aurait su qu'un agent travaille sans métier (T-20260819-0070).
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const vrai = poserLieu(depot, 'd-20260819-0001', METIER_COURANT);
+  const coquille = join(depot, '.orchestrateur', 'p-20260728-0002');
+  mkdirSync(join(coquille, 'briefs'), { recursive: true });
+
+  const rendu = await unRecensement({
+    panes: [
+      { pane_id: 'w1:p1', foreground_cwd: vrai },
+      { pane_id: 'w3:p2', foreground_cwd: coquille },
+    ],
+    roleDuLieu,
+  });
+
+  assert.equal(rendu.orchestrateurs.length, 1, 'la coquille ne devient pas un orchestrateur');
+  assert.equal(rendu.borne.lieuxEcartes.length, 1, 'mais elle ne disparaît pas non plus');
+  assert.equal(rendu.borne.lieuxEcartes[0].pane, 'w3:p2', 'et on sait QUEL pane, pour aller voir');
+  assert.match(rendu.borne.lieuxEcartes[0].lieu, /p-20260728-0002/);
+});

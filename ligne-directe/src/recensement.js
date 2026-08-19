@@ -337,13 +337,23 @@ export async function unRecensement({
   liste = enveloppe ? enveloppe.panes : Array.isArray(liste) ? liste : [];
 
   const orchestrateurs = [];
+  // ⚠️ CE QU'ON A ÉCARTÉ SE COMPTE, IL NE DISPARAÎT PAS. Un chemin qui porte un
+  // `.orchestrateur/<mandat>/` sans porter le métier est écarté à juste titre — le rôle
+  // s'établit par le fait — mais l'écart entre « candidats » et « comptés » est justement ce qui
+  // chiffre le plancher. Mesuré sur ce poste le 2026-08-19 : huit candidats, sept comptés, et le
+  // huitième était un agent bien vivant dans un lieu à demi posé (T-20260819-0070). Sans ce
+  // champ, il n'aurait laissé aucune trace nulle part.
+  const lieuxEcartes = [];
   for (const p of liste) {
     // ⚠️ LE CHEMIN DE TRAVAIL, PAS LE `cwd`. Un agent né par `claude-swt` garde le dépôt
     // principal en `cwd` pendant que son lieu vit ailleurs — `herdr.js` le dit déjà de son côté.
     const chemin = p?.foreground_cwd || p?.cwd || null;
     const lieu = lieuDuChemin(chemin, dossier);
     if (!lieu) continue;
-    if (roleDuLieu(lieu) !== role) continue; // le rôle se reconnaît au fait, pas au nom du dossier
+    if (roleDuLieu(lieu) !== role) {
+      lieuxEcartes.push({ pane: p?.pane_id ?? p?.pane ?? null, lieu, pourquoi: `le métier du rôle « ${role} » n’y est pas établi` });
+      continue; // le rôle se reconnaît au fait, pas au nom du dossier
+    }
 
     const mesure = mesurer(lieu);
     const mandat = mandatDuChemin(chemin, dossier);
@@ -459,6 +469,10 @@ export async function unRecensement({
       // Nommées, pas comptées : une session muette est une part du poste qu'on n'a pas regardée,
       // et savoir LAQUELLE est ce qui permet d'aller voir.
       sessionsRefusees,
+      // Les chemins qui RESSEMBLAIENT à un lieu du rôle sans en porter le métier. Écartés à
+      // juste titre, mais nommés : c'est ce qui distingue « il n'y en avait pas » de « j'en ai
+      // écarté un, et voici lequel ».
+      lieuxEcartes,
       angleMort: CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
     },
     resume:
