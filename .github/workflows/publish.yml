@@ -119,8 +119,21 @@ jobs:
       # sans zsh, ils échouent — franchement, pas en silence — et la publication rougit sur
       # un défaut qui n'est pas le sien. Armer une chaîne sur deux, c'est le défaut que ce
       # dépôt paie régulièrement.
+      # ⚠️ BORNÉE DANS LE TEMPS, et pour une raison mesurée : cette même commande a pendu
+      # 30 minutes ici (verrou dpkg tenu par les mises à jour du runner) pendant qu'elle
+      # prenait 20 s dans `tests.yml`. Une étape qui attend sans borne ne rougit jamais —
+      # elle occupe un runner et laisse la chaîne « en cours » indéfiniment, ce qui se lit
+      # comme « ça va finir ». Le verrou est borné, l'étape aussi : si zsh ne peut pas
+      # s'installer, ça ÉCHOUE, franchement et vite.
       - name: Installer zsh (contrôle du PATH depuis un shell non interactif)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+        timeout-minutes: 5
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eu
+          if command -v zsh >/dev/null 2>&1; then zsh --version; exit 0; fi
+          sudo apt-get -o DPkg::Lock::Timeout=60 update -qq
+          sudo apt-get -o DPkg::Lock::Timeout=60 install -y -qq zsh
 
       - name: Tests
         run: npm test
