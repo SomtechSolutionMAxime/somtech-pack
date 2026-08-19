@@ -355,7 +355,7 @@ Un agent compacté perd le détail de ce qu'il a fait — ses décisions, les su
 1. **Le séparer en deux epics**, chacun avec sa valeur livrable. Sépare **par valeur, pas par couche** — « écrire le module » puis « le brancher » est bon ; « le backend » puis « le frontend » ne l'est pas.
 2. **Le confier à deux agents successifs.** Le second lit le code livré et le compte rendu du premier, **pas son contexte**. Chaque lot se termine sur un état cohérent — branche poussée, tests verts, compte rendu écrit.
 
-**Demande-leur de te prévenir.** Tu ne peux pas mesurer le contexte d'un agent de l'extérieur. Le brief doit lui dire : *si tu sens que tu vas devoir compacter, arrête-toi, pousse ce que tu as, écris ton compte rendu et préviens le coordonnateur.*
+**Demande-leur de te prévenir.** Tu ne peux pas mesurer le contexte d'un agent de l'extérieur — d'où la **consigne de compaction**, qui est une ligne obligatoire de tout brief (R3).
 
 ## Concevoir — avant d'envoyer qui que ce soit construire
 
@@ -410,7 +410,7 @@ Le corpus fait foi : ce qui est déjà écrit prime sur ce qu'on inventerait, et
 - ❌ `orchestrateur` — un rôle, que **tous** pourraient porter : il ne distingue personne
 - ❌ `rev-pr31` — un nom raccordé à une PR, dont on ne peut remonter à aucun chantier
 
-**Tu n'as rien à faire pour le recevoir.** `pack agent naitre` attribue la rivière **à la naissance**, sans que personne ait à la demander, et **refuse** un nom hors convention plutôt que de l'accepter en silence. *Avant que ce soit outillé, les quatre rivières du poste avaient toutes été données à la main — et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale : deux agents sur 42 étaient dans ce cas.*
+**Tu n'as rien à faire pour le recevoir.** `pack agent naitre` attribue la rivière **à la naissance**, sans que personne ait à la demander, et **refuse** un nom hors convention plutôt que de l'accepter en silence (`T-20260818-0124`). *Avant que ce soit outillé, les quatre rivières du poste avaient toutes été données à la main — et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale : deux agents sur 42 étaient dans ce cas.*
 
 **⚠️ TON LIEU, LUI, GARDE LE CODE DU MANDAT.** `.orchestrateur/j-20260814-0001/` reste `.orchestrateur/j-20260814-0001/` même quand l'agent qui l'habite s'appelle `bonaventure`. Les deux ne servent pas la même chose : **le lieu est attaché à un chantier** — il est versé dans le dépôt de ce chantier, et son `CONTEXTE.md` décrit *ce* chantier ; **le nom sert à t'adresser la parole**. La naissance te le dit à voix haute quand les deux diffèrent, et c'est normal, pas une incohérence.
 
@@ -433,8 +433,10 @@ Pas le domaine, pas le rôle, pas l'état. « e-20260807-0006 orchestration » n
 
 ```bash
 herdr pane current                                  # ton pane (result.pane.pane_id)
-herdr agent rename <ton-pane> d-20260727-0004
+herdr agent rename <ton-pane> <ta-rivière>          # matapedia, bonaventure… — jamais un code de mandat
 ```
+
+⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Mesuré : un agent s'est cru nommé vingt minutes, son coordonnateur ne le voyait pas — `E-20260819-0001`.)*
 
 ## Déclarer le modèle — toujours, au lancement
 
@@ -492,8 +494,9 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
-# Poser la veille de déblocage, pour ne jamais avoir à débloquer toi-même.
-scripts/orchestration/veille-deblocage.sh "$P" e-20260727-0010 &
+# ⚠️ LA VEILLE NE SE POSE PAS ICI, mais une fois le brief PRIS (plus bas) :
+# ici l'agent est `idle` sans rien à faire, et elle lisait cette attente comme
+# un travail fini — « TERMINE apres 0 deblocages », code 0 (T-20260818-0109).
 ```
 
 **Le nom, c'est lui qui se le donne** ; toi tu **vérifies** :
@@ -534,17 +537,32 @@ herdr pane run "$P" '/goal <condition de fin, en une phrase qui décrit un état
 
 Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui doit toujours y figurer : **le livrable**, **la preuve** (les tests qui l'attestent), **l'état du ServiceDesk**, et **le compte rendu au coordonnateur**. Les trois derniers sont précisément ce qu'un agent saute quand rien ne l'en empêche.
 
+> 🔴 **Les conditions de fin vivent AUX DEUX ENDROITS : le `/goal` ET les `success_criteria` de l'epic.** Ce n'est pas du confort — **le `/goal` seul est un point unique de défaillance** : un `pane run` vers un agent **occupé** s'affame, le texte se dépose dans sa boîte sans y être soumis, mesuré à **~16 minutes**. Ceux qui ont été **pris** l'ont été sur des agents **au repos**. *Soumis au repos, affamé pendant le travail* (`T-20260818-0143`).
+>
+> **Ce qui a sauvé un lot réel** : son but n'avait jamais été pris, **mais ses conditions de fin vivaient aussi dans les `success_criteria`**, et son chef d'équipe les a lues.
+>
+> ⚠️ **Et ton propre `/goal` est dans ce cas** — la séquence ci-dessus le pose **juste après un brief pris**, donc sur un agent qui vient de se mettre au travail. C'est pourquoi la redondance n'est pas un confort : relis son écran, et écris les conditions de fin dans l'epic **avant** de le faire naître.
+
 > ⚠️ **`/goal` et `/model` passent par la MÊME boîte de saisie qu'un brief — donc par la même panne.** `herdr pane run` rend un succès que la soumission parte ou non, et il **colle** son texte à ce qui traînait déjà dans la boîte. Un but jamais pris est un agent qui s'arrêtera au premier palier ; un `/model` jamais pris est un agent resté sur le mauvais modèle. **Ni l'un ni l'autre ne se voit** — l'agent travaille, simplement pas comme tu crois.
 >
 > **Relis son écran après chaque `pane run`** (`herdr pane read "$P"`) et vérifie que le geste a été **pris**, pas seulement envoyé. Le texte exige cette preuve pour `livrer.js` ; **il n'y a aucune raison qu'elle s'arrête là.**
+
+🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a DEUX conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes.
+
+**Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
 
 ## Poser la veille de déblocage
 
 Un agent herdr s'arrête sur les demandes de permission de son environnement. Sans rien, il attend qu'un humain passe ; avec toi qui le débloques, **tu deviens sa boucle d'événements**.
 
 ```bash
-scripts/orchestration/veille-deblocage.sh <pane> <agent>     # en arrière-plan, dès la naissance
+scripts/orchestration/veille-deblocage.sh <pane> <agent> --detach   # une fois son brief PRIS
+scripts/orchestration/veille-deblocage.sh --list                    # pane, agent et MOTIF de chacune
 ```
+
+⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue** — deux fois, pendant que celles d'un autre orchestrateur survivaient. *Même script, même poste, même journée : seule la façon de les lancer différait.* `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
+
+**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés, chacun avec son code de sortie. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre ; l'ancienne valeur (~66 min) était plus courte que la plupart des lots.
 
 Trois garanties qu'il ne faut jamais relâcher :
 
@@ -625,6 +643,8 @@ git -C <repo> worktree prune
 **Un correctif de métier n'atteint un agent vivant qu'en le faisant renaître** — un redémarrage laisse ses droits inertes et sa tête sur l'ancien métier (mesuré 2026-08-17).
 
 ⚠️ **Pour un orchestrateur, la renaissance ne t'appartient pas.** Elle est **demandée à l'orchestrateur du dépôt `somtech-pack`**, qui la pose. Tu ne te fais jamais naître toi-même. *(Arbitrage du CTO, 2026-08-17.)*
+
+🔴 **Et tu ne refermes PAS ta ligne en renaissant.** « Referme ta ligne, c'est le dernier geste » vise la **clôture d'un chantier** ; appliqué à ta renaissance, il **coupe le CTO** entre ta mort et la naissance de ton successeur. Tu écris à la place un dernier message : où en est le chantier, que le canal reste ouvert, ce qui reste `[non établi]`. **Écris ton relais pendant que tu as tout en tête**, pas quand on viendra te chercher (`T-20260818-0128` · détail en *Clore*).
 
 ---
 
@@ -732,6 +752,12 @@ gh pr checks <n>                       # la chaîne du travail en cours
 ```
 
 Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus rien à faire · qui n'a pas de nom · une demande de fusion dont la chaîne est rouge · une poussée refusée au sas · une revue jamais rendue.
+
+> 🔴 **`done` ne distingue pas « a terminé » de « a été coupé ».** Deux chefs d'équipe sont passés `done` un après-midi ; **aucun n'avait fini** — leur écran portait *« You've hit your session limit »*, l'un coupé **en plein milieu**. Sans lecture d'écran, la ronde concluait à deux lots livrés (`T-20260818-0123`).
+>
+> **Le geste est CIBLÉ** : *un agent passé `done` **dont tu n'as reçu aucun compte rendu** se relit à l'écran avant conclusion.* **Les deux signaux ensemble, jamais l'un seul** — sinon la ronde devient « lire tous les écrans à chaque tour », et une ronde impraticable est une ronde qu'on abandonne.
+>
+> ⚠️ **Et ne ferme pas son pane sur cette lecture-là.** La garde `origin/<cible>..HEAD` protège d'un **oubli de poussée**, pas d'une **confusion sur l'état** : elle se déclenche *après* que tu as décidé qu'il avait fini. Un agent coupé a du travail non poussé.
 
 **Sur le ServiceDesk, cinq questions, toujours les mêmes :**
 
@@ -934,6 +960,10 @@ Ni de près ni de loin. Tout ce qui doit l'atteindre passe par son **représenta
 
 Si un autre agent travaille sur le même dépôt, **il est ton pair, pas ton subordonné**. Tu lui **transmets** ce qu'il doit savoir — un contrat, un défaut trouvé dans son code, un merge qui déplace `main` — et tu le laisses décider chez lui.
 
+> 🔴 **La correction se rend DANS LES DEUX SENS — c'est ça qui fait que ça marche, pas la justesse de l'un.** *« Un pair qui se croit systématiquement en tort finit par ne plus corriger. Ce qui a marché n'est pas que l'un de nous ait raison plus souvent : c'est qu'aucun des deux n'a laissé passer l'autre. »* **Six corrections croisées en trois heures** entre deux orchestrateurs, chacune ayant évité une écriture fausse.
+>
+> ⚠️ **Et le compte de tes torts est une mesure comme une autre — qui se fausse plus facilement**, parce qu'elle n'a aucune empreinte à comparer. Celui qui le tenait s'était donné trois torts et zéro à son pair, du côté qui l'arrangeait moralement. **C'était faux.** Rends la correction quand elle est due : **une conclusion juste posée sur un fait faux reste un fait faux**, et il vivra dans les écritures de l'autre. (`D-20260818-0008`)
+
 ```bash
 node $HOME/.somtech/naissance-representant/bin/livrer.js <son-nom-ou-son-pane> --texte '<message d une ligne, sans apostrophe>'
 ```
@@ -1045,7 +1075,7 @@ Une décision prise, un constat mesuré, un engagement donné s'inscrivent au Se
 >
 > 🔴 **LA BORNE, ET ELLE EST RÉELLE** : la **lecture** de Somcraft retarde parfois sur son **écriture** (`T-20260816-0019`). Au moment précis où tu relis ton état après une reprise, une lecture en retard te rendrait un état **périmé sans te le dire**.
 >
-> **Le test à coût nul, dans une seule lecture** : si la **taille annoncée** par la réponse ne concorde pas avec la **taille du corps rendu**, la lecture est en retard — **tu ne conclus rien et tu relis**. Mesuré : `size_bytes` à 67322 pendant que le corps en faisait 66209.
+> **Le test à coût nul est le même qu'en *[Tu relis après ton propre geste](#tu-relis-après-ton-propre-geste-pas-seulement-avant)*** : taille annoncée ≠ taille du corps rendu → **tu ne conclus rien et tu relis**.
 
 ### Ce qui va où, et c'est un partage par NATURE, pas une préséance
 
@@ -1154,7 +1184,13 @@ Une **Demande** passe `delivered` toute seule quand tous ses enfants sont fermé
 
 Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun espace de travail orphelin ne traîne.
 
-**Referme ta ligne, avec son bilan** — c'est le dernier geste :
+> 🔴 **Tu ne refermes ta ligne que si le CHANTIER est clos — jamais si c'est TOI qui t'arrêtes** (renaissance, relais). Le chantier continue sans toi, et refermer **couperait le CTO entre ta mort et la naissance de ton successeur**.
+>
+> **Tu écris à la place** un dernier message : où en est le chantier, **que le canal reste ouvert**, ce qui reste `[non établi]` — puis sa dernière ligne, comme tout message.
+>
+> ⚠️ **Durable ou jetable ?** Une ligne **durable** rouvre sous le même titre ; une **jetable** est archivée, **donc irréversible** — le désarchivage est réservé à un compte humain. *(Mesuré sur un jalon `planned` portant 14 demandes — `T-20260818-0128`.)*
+
+**Referme ta ligne, avec son bilan** — c'est le dernier geste **d'un chantier clos** :
 
 ```bash
 node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
