@@ -365,23 +365,32 @@ test('garde : un exécutable du pack devenu orphelin est réellement RETIRÉ', (
   assert.ok(!existsSync(orphelin), 'et réellement disparu du disque — pas seulement du rapport');
 });
 
-test('garde : un chemin d’installation biscornu ne casse pas le shell du poste', () => {
-  // Mesuré par la revue de fond : un guillemet dans le chemin rendait `parse error near`
-  // à CHAQUE ouverture de shell — le pack aurait produit une panne plus large que celle
-  // qu'il ferme. Un `$(…)` ou un accent grave, eux, se seraient exécutés.
-  const piege = '/tmp/faux "poste" $(echo INJECTE) `echo INJECTE`/bin';
-  const bloc = buildPathBlock(piege);
-  const shim = buildShim(join(piege, 'x.js'), '/usr/bin/node');
+test('garde : un chemin biscornu ne casse ni n’EXÉCUTE rien — mesuré sur l’effet', () => {
   if (!zshDisponible()) assert.fail('zsh absent : ce contrôle ne peut pas prouver ce qu’il annonce (installe zsh)');
+  // ⚠️ Une version antérieure de ce contrôle passait le texte à `zsh -n` (analyse sans
+  // exécution). Il restait VERT quand on retirait l'échappement : `-n` n'exécute rien, il
+  // ne pouvait donc pas voir une substitution partir. On mesure ici ce qui se PASSE.
+  const base = tmp('smtk-piege-');
+  const temoin = join(base, 'TEMOIN-EXECUTE');
+  // Un chemin qui porte un guillemet ET une substitution : si l'un des deux passe, la
+  // ligne posée dans le `.zshenv` du poste ferait autre chose que nommer un dossier.
+  const dossier = join(base, `faux "poste" $(touch ${temoin})`);
+  mkdirSync(join(dossier, 'bin'), { recursive: true });
+  writeFileSync(join(dossier, 'cible.js'), 'console.log("OK-CIBLE");\n');
 
-  for (const [quoi, texte] of [['le bloc PATH', bloc], ['le relais', shim]]) {
-    const f = join(tmp('smtk-piege-'), 'a-lire.sh');
-    mkdirSync(dirname(f), { recursive: true });
-    writeFileSync(f, texte);
-    // `zsh -n` analyse sans exécuter : la seule façon de mesurer la syntaxe sans lancer
-    // ce que le piège contient.
-    const sortie = execFileSync('/usr/bin/env', ['zsh', '-c', `zsh -n ${JSON.stringify(f)} 2>&1; echo rc=$?`], { encoding: 'utf8' });
-    assert.ok(/rc=0/.test(sortie), `${quoi} doit rester analysable : ${sortie}`);
-    assert.ok(!/INJECTE/.test(execFileSync('/usr/bin/env', ['zsh', '-c', `zsh -n ${JSON.stringify(f)} 2>&1`], { encoding: 'utf8' })), `${quoi} n’exécute rien`);
-  }
+  // 1. Le relais : il doit atteindre sa cible, et rien d'autre.
+  const relais = join(dossier, 'bin', 'outil-piege');
+  writeFileSync(relais, buildShim(join(dossier, 'cible.js')), { mode: 0o755 });
+  const sortie = execFileSync(relais, [], { encoding: 'utf8' });
+  assert.match(sortie, /OK-CIBLE/, 'le relais atteint sa cible malgré le chemin');
+  assert.ok(!existsSync(temoin), 'AUCUNE substitution ne s’est exécutée depuis le relais');
+
+  // 2. Le bloc PATH : le shell doit démarrer proprement et porter le dossier LITTÉRAL.
+  const home = join(base, 'home');
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, '.zshenv'), buildPathBlock(join(dossier, 'bin')));
+  const { rc, out } = zshNonInteractif(home, 'printf %s "$PATH"');
+  assert.equal(rc, 0, `le shell du poste démarre sans erreur d’analyse : ${out}`);
+  assert.ok(out.includes(join(dossier, 'bin')), 'le dossier entre dans le PATH tel quel');
+  assert.ok(!existsSync(temoin), 'AUCUNE substitution ne s’est exécutée à l’ouverture du shell');
 });
