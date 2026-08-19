@@ -9,6 +9,7 @@ import { installGlobalSkills } from '../globalskills.js';
 import { installGlobalWorkflows } from '../globalworkflows.js';
 import { installGlobalCommands } from '../globalcommands.js';
 import { installPosteModules } from '../posteonly.js';
+import { installPosteBin } from '../postebin.js';
 import { installGlobalVersionHook, installGraphifyShareHook, installGlobalRegistreHook } from '../userhooks.js';
 
 /** True si un binaire est sur le PATH (best-effort, jamais fatal). */
@@ -55,6 +56,10 @@ export async function cmdSetup(flags) {
   const commandsDir = flags.commandsDir || join(home, '.claude', 'commands');
   const destDir = flags.dest || join(home, '.somtech');
   const settingsFile = flags.settings || join(home, '.claude', 'settings.json');
+  // Le PATH des outils de poste va dans `.zshenv`, JAMAIS dans le rc : `.zshrc` n'est lu
+  // que par un shell interactif, et l'appelant qui a produit T-20260819-0013 est un agent,
+  // pas un humain dans un terminal. Le choix du lieu EST le correctif.
+  const zshenvFile = flags.zshenv || join(home, '.zshenv');
   const hooksDir = flags.hooksDir || join(home, '.claude', 'hooks');
   const doSkills = !flags.noSkills;
   const doWorkflows = !flags.noWorkflows;
@@ -83,6 +88,7 @@ export async function cmdSetup(flags) {
   if (doWorkflows) consentTargets.push(workflowsDir);
   if (doCommands) consentTargets.push(commandsDir);
   if (doPoste && !consentTargets.includes(destDir)) consentTargets.push(destDir);
+  if (doPoste) consentTargets.push(zshenvFile);
   if (doSwt) consentTargets.push(rcFile);
   if (doVersionHook) consentTargets.push(settingsFile);
   if (doGraphify && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
@@ -196,6 +202,37 @@ export async function cmdSetup(flags) {
       console.log(`    ℹ️  ${p.payloadLinks.length} symlink(s) ignoré(s) dans le pack source (non mirrorés).`);
     }
     for (const w of p.warnings) console.log(`    ⚠️  ${w}`);
+
+    // Les outils que ces modules offrent doivent s'appeler par leur NOM. Sans ça, une
+    // consigne juste — `ligne-directe relever` — rend « command not found », et celui qui
+    // la suit à la lettre s'arrête (T-20260819-0013). La liste vient des modules
+    // réellement installés : un module écarté par un drapeau n'expose rien.
+    const b = installPosteBin({
+      payloadRoot,
+      toolsDir: destDir,
+      zshenvFile,
+      modules: p.modules,
+      dryRun: flags.dryRun,
+    });
+    if (b.outils.length) {
+      console.log(
+        `  outils appelables par leur nom → ${b.binDir} : ${b.outils.map((o) => o.nom).join(', ')}` +
+          (flags.dryRun
+            ? ' [dry-run]'
+            : ` (posés ${b.created.length}, convergés ${b.updated.length}, inchangés ${b.unchanged.length})` +
+              (b.removed.length ? `, retirés ${b.removed.join(', ')}` : ''))
+      );
+      if (!flags.dryRun) {
+        console.log(`    PATH → bloc ${b.pathAction} dans ${b.pathFile}` + (b.backup ? `, backup ${b.backup}` : ''));
+      }
+      // Un nom déjà pris par un outil qui n'est pas du pack : on n'écrase pas, et on le
+      // dit — sinon la commande partirait ailleurs que là où le pack le croit.
+      if (b.conflicts.length) {
+        console.log(
+          `    ⚠️  ${b.conflicts.join(', ')} : un fichier hors-pack porte déjà ce nom dans ${b.binDir}, non écrasé.`
+        );
+      }
+    }
   }
 
   if (doSwt) {

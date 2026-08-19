@@ -114,6 +114,38 @@ jobs:
       # bornage, l'étape précédente vient de construire cli/payload/ — une COPIE
       # de ligne-directe, qui exige Node 22 — et sa suite s'exécuterait ici en
       # Node 20. C'est ce qui a fait échouer la publication de v1.29.1.
+      # ⚠️ La même suite tourne dans DEUX chaînes (ici et `tests.yml`), et ce qu'elle exige
+      # doit être posé dans les deux. Les contrôles de T-20260819-0013 lancent un `zsh -c` :
+      # sans zsh, ils échouent — franchement, pas en silence — et la publication rougit sur
+      # un défaut qui n'est pas le sien. Armer une chaîne sur deux, c'est le défaut que ce
+      # dépôt paie régulièrement.
+      # ⚠️ BORNÉE DANS LE TEMPS, et pour une raison mesurée : cette même commande a pendu
+      # 30 minutes ici (verrou dpkg tenu par les mises à jour du runner) pendant qu'elle
+      # prenait 20 s dans `tests.yml`. Une étape qui attend sans borne ne rougit jamais —
+      # elle occupe un runner et laisse la chaîne « en cours » indéfiniment, ce qui se lit
+      # comme « ça va finir ». Le verrou est borné, l'étape aussi : si zsh ne peut pas
+      # s'installer, ça ÉCHOUE, franchement et vite.
+      - name: Installer zsh (contrôle du PATH depuis un shell non interactif)
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eu
+          if command -v zsh >/dev/null 2>&1; then zsh --version; exit 0; fi
+          # `install` D'ABORD, sans `update` : les index de l'image suffisent le plus
+          # souvent, et c'est `update` qui contacte tous les miroirs — c'est LUI qui a
+          # pendu, mesuré deux fois. On ne rafraîchit que si l'installation a échoué.
+          for essai in 1 2 3; do
+            if sudo apt-get -o DPkg::Lock::Timeout=60 install -y -qq zsh; then break; fi
+            echo "tentative $essai : dépôt indisponible ou index périmés — on rafraîchit"
+            sudo apt-get -o DPkg::Lock::Timeout=60 update -qq || true
+            sleep 5
+          done
+          # Le dernier mot est une MESURE, pas le code de sortie de la boucle : si zsh
+          # n'est pas là, l'étape échoue ici, franchement, plutôt que de laisser la suite
+          # découvrir l'absence à sa façon.
+          command -v zsh && zsh --version
+
       - name: Tests
         run: npm test
         working-directory: cli
