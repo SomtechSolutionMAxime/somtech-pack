@@ -595,8 +595,31 @@ done
 # ═══════════════════════════════════════════════════════════════════════════
 echo "⑩ le texte n'a pas gonflé sans raison"
 
-BASELINE=118856
-MARGE=6500
+# ⚠️ RELEVÉ LE 2026-08-19 POUR `E-20260819-0013` — huit règles, 179 insertions,
+# 0 suppression sur le gabarit. La ligne de base passe de 118 856 à 145223, et
+# LA MARGE PASSE À ZÉRO. Les deux mouvements vont ensemble et ils sont arbitrés.
+#
+#   Arbitrage rendu (matapedia, 2026-08-19), recopié :
+#   « Re-baseline le plafond sur la taille FINALE et EXACTE de ton lot. AUCUNE
+#     MARGE. Ma marge de 6 500 posée ce matin a été consommée en entier par le
+#     lot précédent — 82 octets restants. Une marge n'est pas une réserve,
+#     c'est une invitation. Sans marge, le prochain lot devra revenir me
+#     demander, et c'est exactement le comportement qu'on veut d'une garde. »
+#
+# ⚠️ ET POURQUOI ON RE-BASELINE AU LIEU D'ÉLARGIR : mesuré avant l'arbitrage,
+# `origin/main` était à 125 274 pour une ligne de base de 118 856 — le plafond
+# mesurait donc DEUX lots à la fois, celui du 18 et celui du 19, donc il ne
+# mesurait plus rien. Une ligne de base qui traîne un lot précédent est un
+# plafond qui a cessé de garder sans que personne ne le voie.
+#
+# ⚠️ NE RELÈVE PAS CE CHIFFRE POUR FAIRE PASSER TON LOT — la consigne d'origine
+# tient, et à marge nulle elle mord dès le premier octet. Si tes amendements
+# n'y tiennent pas, la question appartient à ton coordonnateur ; la relever
+# d'abord et demander ensuite rend la question décorative. Ce lot-ci a payé sa
+# part avant de demander : 2 917 octets coupés — un récapitulatif d'anti-patterns
+# qui redisait dans une liste ce que le lot pose au geste, et un hors-périmètre.
+BASELINE=145223
+MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -c < "$METIER" | tr -d ' ')"
 
