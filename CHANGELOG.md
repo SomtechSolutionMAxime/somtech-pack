@@ -33,6 +33,22 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **Preuve par une veille vivante, pas par une suite verte** : 18 permissions réellement levées sur 3 familles d'écrans, survie mesurée à 10 min 16 s (`ps` à l'appui) pendant que la session continuait de travailler, et les 4 motifs provoqués un par un sur du réel.
 
 
+## [1.73.0] - 2026-08-18
+
+*Un seul lot : PR #291 (`T-20260818-0031`, critère 3), sous la livraison `J-20260814-0002`. Deux booléens à faux par défaut — `repare` et `delivre` — ne disaient pas s'ils l'étaient parce que rien n'était nécessaire, parce qu'on avait été empêché, ou parce qu'on avait essayé et échoué. **Et la cause était déjà calculée** : `causeObstacle` la nomme sur quatre branches, `delivrerLaBoite` sur neuf — elle mourait dans la fonction qui la produit.*
+
+### Corrigé
+
+- **Un `repare: false` dit POURQUOI, et un `delivre: false` aussi** (`T-20260818-0031`, PR #291) — **mesuré le 2026-08-18 sur un cas réel** : `{"ok":true,"statut":"done","repare":false,"delivre":false,"attendu":false}`. Trois faux, aucun mot. Le chemin nominal est le **seul sans champ `message`** pour porter une explication, donc le seul entièrement muet — et c'est celui qui a produit le défaut. `livrerBrief` rend désormais `causeRepare` et `causeDelivre` sur ses **trois** sorties. *Aucune logique de diagnostic n'a été écrite : on laisse sortir un fait qui existait.*
+- **Sept motifs, un par chemin réel** — `inutile` · `soumise` · `envoi-refuse` · `dialogue` · `boite-vide` · `boite-illisible` · `rien-ecrit`, plus `non-tentee` pour `causeDelivre`, les autres venant telles quelles de `delivrerLaBoite`. Le champ **ne se tait jamais, même quand `repare` est vrai** : un motif qui n'apparaîtrait qu'à l'échec obligerait l'appelant à tester son existence avant de le lire, et un champ qui ne peut rendre qu'un seul verdict est une constante déguisée en mesure.
+- **Le motif franchit les DEUX portes** — `src/livraison.js` le calcule, `bin/livrer.js` le recopie dans son JSON. *« Une porte sur deux » est le motif le plus cher de ce dépôt, et il a déjà été commis deux fois **dans** le correctif écrit pour le fermer : un `cause` qui sort de la fonction mais que le binaire jette au sol laisse l'appelant devant le même champ muet, sur un code « corrigé ».*
+
+### Technique
+
+- **La branche « rien à soumettre » cesse d'être désarmable sans rougir** — l'épreuve par mutation, **branche par branche**, a montré que `boite-vide`/`boite-illisible` **survivait** : aucun essai ne l'atteignait, on pouvait y écrire n'importe quoi. *Une garde désarmable sans rougir, dans le lot écrit pour poser cette garde.* Les deux états qui y mènent vraiment sont désormais joués — un envoi que herdr **refuse** (la boîte reste vide, donc elle ne témoigne de rien) et un écran devenu illisible **après** l'écriture. Le mutant le plus fin — inverser les deux valeurs — rougit aussi.
+- **Une mutation groupée rougit et rassure** : elle prouve qu'**au moins une** des choses mutées était gardée, jamais que **toutes** l'étaient. Onze points mutés un à un, plus le champ retiré de chaque sortie séparément — **aucune survivante** après comblement. La revue de fond a **refait** la mesure sur copie hors dépôt, 12 points, au lieu de croire le compte de l'auteur.
+- **12 essais neufs, rouges sur `origin/main` avant le correctif** (mesuré, pas supposé) ; suite complète 407/407. La QA nomme sa limite : **un seul des sept motifs** est éprouvé contre le vrai service — le chemin nominal, par le compte rendu de ce lot lui-même ; les six autres restent sur double.
+
 ## [1.72.0] - 2026-08-18
 
 *Un seul lot : PR #288 (`E-20260818-0017`, stories `T-20260818-0139/0140/0141`), sous la demande `D-20260818-0008`. Le nom d'un agent était **simplement l'argument transmis** — il n'y avait jamais eu de mécanisme, et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale.*

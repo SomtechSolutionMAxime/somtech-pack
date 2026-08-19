@@ -195,6 +195,59 @@ export const CAUSES = Object.freeze({
 });
 
 /**
+ * POURQUOI `repare` VAUT CE QU'IL VAUT — le motif du champ, jamais un verdict de plus
+ * (T-20260818-0031, critère 3).
+ *
+ * `repare` et `delivre` sont des BOOLÉENS À FAUX PAR DÉFAUT, et un booléen à faux ne dit pas
+ * s'il l'est parce que rien n'était nécessaire, parce qu'on a été empêché, ou parce qu'on a
+ * essayé et échoué. MESURÉ le 2026-08-18 sur un cas réel : `{"ok":true,"statut":"done",
+ * "repare":false,"delivre":false,"attendu":false}` — trois faux, aucun mot. L'appelant qui lit
+ * ça ne peut rien en faire, et c'est justement lui qui refait ensuite le geste à la main.
+ *
+ * ⚠️ CES CAUSES-CI NE SONT PAS CELLES DE `CAUSES`. Celles du dessus disent pourquoi on REFUSE
+ * D'ÉCRIRE ; celles-ci disent pourquoi la RÉPARATION — la touche d'envoi de l'étape 4 — a
+ * mordu, n'a pas été tentée, ou a été repoussée. Deux registres, deux jeux de mots : les fondre
+ * ferait porter à un chemin le motif de l'autre, et c'est un défaut déjà payé ici.
+ *
+ * ⚠️ ET LE CHAMP NE SE TAIT JAMAIS, MÊME QUAND `repare` EST VRAI. Un motif qui n'apparaîtrait
+ * que sur l'échec obligerait l'appelant à tester son existence avant de le lire — et un champ
+ * qui ne peut rendre qu'un seul verdict est une constante déguisée en mesure, ce que ce ticket
+ * a déjà relevé une fois sur son propre détecteur.
+ */
+export const CAUSES_REPARATION = Object.freeze({
+  // Le brief a été pris : il n'y avait RIEN à réparer. C'est le cas dominant, et c'est une
+  // bonne nouvelle — sans mot, elle est indistinguable d'un échec de réparation.
+  INUTILE: 'inutile',
+  // La touche d'envoi est partie et herdr l'a acceptée.
+  SOUMISE: 'soumise',
+  // Elle est partie et herdr l'a REFUSÉE. Le cas le plus trompeur : on a bel et bien agi, et le
+  // champ vaut quand même faux.
+  ENVOI_REFUSE: 'envoi-refuse',
+  // On ne l'a PAS tentée : un dialogue attendait un choix, et la touche y aurait confirmé
+  // l'option surlignée au lieu de soumettre notre texte (T-20260817-0008).
+  DIALOGUE: 'dialogue',
+  // On ne l'a pas tentée non plus : la boîte ne portait rien à soumettre…
+  BOITE_VIDE: 'boite-vide',
+  // …ou on ne pouvait pas la lire, et on ne soumet pas ce qu'on n'a pas vu.
+  BOITE_ILLISIBLE: 'boite-illisible',
+  // On n'a JAMAIS écrit — la livraison a été refusée en amont. Il n'y avait donc rien à
+  // réparer, et c'est un autre fait que « j'ai essayé sans succès ». Le refus lui-même reste
+  // dans `message`, en toutes lettres.
+  RIEN_ECRIT: 'rien-ecrit',
+});
+
+/**
+ * Ce que vaut `causeDelivre` quand AUCUNE délivrance n'a été tentée — parce que la boîte
+ * n'était pas encombrée, ou parce que l'appelant a désarmé le geste (`immobiliteMs: 0`).
+ *
+ * Toutes les autres valeurs viennent de `delivrerLaBoite`, qui les nomme déjà sur neuf
+ * branches : `choix`, `ecran`, `dialogue`, `illisible`, `vide-cause-inconnue`, `bouge`,
+ * `soumis`, `sans-effet`, `plus-autorise`. On ne les recalcule pas — on les laisse SORTIR.
+ * Elles ne franchissaient pas cette fonction, et c'est tout le défaut.
+ */
+export const DELIVRANCE_NON_TENTEE = 'non-tentee';
+
+/**
  * ⚠️ L'ÉCRAN EST CONSULTÉ AVANT LA BOÎTE, ET C'EST TOUT LE CORRECTIF (T-20260817-0008).
  *
  * MESURÉ le 2026-08-17 sur le vrai service : un `herdr agent prompt` ordinaire, envoyé devant
@@ -495,7 +548,13 @@ import { avisDeBoiteBloquee, avisDeBoiteVidee } from '../../ligne-directe/src/de
  * L'I/O est INJECTÉE (`appelHerdr`, `lireEcran`, `dormir`) : ce module reste sans processus
  * enfant, donc exerçable sans jamais toucher un vrai pane.
  *
- * @returns {Promise<{ok: boolean, message?: string, statut: ?string, repare: boolean, attendu: boolean}>}
+ * ⚠️ CHAQUE BOOLÉEN SORT AVEC SON MOTIF (T-20260818-0031). `repare` et `delivre` valent faux par
+ * défaut, et un faux ne dit pas s'il vient d'un besoin absent, d'un empêchement, ou d'un échec.
+ * `causeRepare` et `causeDelivre` sont TOUJOURS présents — y compris sur le chemin nominal, le
+ * seul qui n'a pas de `message` pour porter un mot, et donc le seul qui était muet.
+ *
+ * @returns {Promise<{ok: boolean, message?: string, statut: ?string, repare: boolean,
+ *   causeRepare: string, attendu: boolean, delivre: boolean, causeDelivre: string}>}
  */
 export async function livrerBrief({
   pane,
@@ -612,14 +671,23 @@ export async function livrerBrief({
     }
   }
 
+  // ⚠️ LA CAUSE DE LA DÉLIVRANCE EST DÉJÀ CALCULÉE — on la laisse sortir, on ne la refait pas
+  // (T-20260818-0031). `delivrerLaBoite` la nomme sur neuf branches et elle mourait ici, dans
+  // une variable locale que personne ne lisait hors de la fonction qui la produit.
+  const causeDelivre = delivrance ? delivrance.cause : DELIVRANCE_NON_TENTEE;
+
   if (obstacle) {
     return {
       ok: false,
       message: obstacle,
       statut: statutAvant,
       repare: false,
+      // On n'a rien écrit : il n'y avait rien à réparer. C'est un fait DIFFÉRENT d'un échec de
+      // réparation, et l'appelant ne pouvait pas les distinguer.
+      causeRepare: CAUSES_REPARATION.RIEN_ECRIT,
       attendu: false,
       delivre: Boolean(delivrance?.soumis),
+      causeDelivre,
     };
   }
 
@@ -696,17 +764,33 @@ export async function livrerBrief({
   // Le refus qui suit dit alors POURQUOI on n'a pas réparé — sans quoi le lecteur verrait
   // « boîte encore pleine » et retenterait le même geste à l'aveugle.
   let dialogueALaReparation = false;
+  // ⚠️ LE MOTIF SE POSE SUR LA BRANCHE QU'ON VIENT DE PRENDRE — il n'est pas rediagnostiqué
+  // après coup (T-20260818-0031). Chaque `if` ci-dessous décidait déjà ; il ne le disait pas.
+  // Le défaut par défaut est `INUTILE` parce que c'est ce qu'on constate quand on n'entre même
+  // pas ici : le brief a été pris, la réparation n'avait pas lieu d'être.
+  let causeRepare = CAUSES_REPARATION.INUTILE;
   if (!vu.pris) {
     const reste = contenuBoite(vu.terminal);
     if (reste && ecranAttendUnChoix(vu.terminal)) {
       dialogueALaReparation = true;
+      causeRepare = CAUSES_REPARATION.DIALOGUE;
     } else if (reste) {
       const envoi = await appelHerdr(commandes.soumettre, vers);
       repare = envoi.ok;
+      // Le geste a EU LIEU dans les deux cas ; ce qui change est ce que herdr en a fait. Les
+      // confondre laisserait croire qu'aucune touche n'est partie vers ce pane, alors qu'une
+      // touche d'envoi est une action irréversible dont l'appelant doit savoir qu'elle a été
+      // tentée — c'est la règle du refus qui ne tait pas un geste déjà posé, trente lignes
+      // plus haut, appliquée au champ plutôt qu'à la prose.
+      causeRepare = envoi.ok ? CAUSES_REPARATION.SOUMISE : CAUSES_REPARATION.ENVOI_REFUSE;
       for (let i = 0; i < essais && !vu.pris; i += 1) {
         await dormir(delaiMs);
         vu = await prisMaintenant();
       }
+    } else {
+      // Ni dialogue ni texte : on n'avait rien à soumettre. `null` et `''` ne sont pas le même
+      // état — l'un dit qu'on n'a pas su lire, l'autre qu'il n'y avait rien.
+      causeRepare = reste === null ? CAUSES_REPARATION.BOITE_ILLISIBLE : CAUSES_REPARATION.BOITE_VIDE;
     }
   }
 
@@ -716,8 +800,10 @@ export async function livrerBrief({
       ok: false,
       statut: vu.statut,
       repare,
+      causeRepare,
       attendu: livraison.ok,
       delivre: Boolean(delivrance?.soumis),
+      causeDelivre,
       message:
         `le brief n\u2019a pas \u00e9t\u00e9 pris par la session de ${pane} \u2014 statut \u00ab ${vu.statut ?? '\u2014'} \u00bb, ` +
         `bo\u00eete ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (\u00ab ${reste.slice(0, 60)}\u2026 \u00bb)`}` +
@@ -732,5 +818,16 @@ export async function livrerBrief({
     };
   }
 
-  return { ok: true, statut: vu.statut, repare, attendu: livraison.ok, delivre: Boolean(delivrance?.soumis) };
+  // ⚠️ C'EST CETTE LIGNE-CI QUI A PRODUIT LE DÉFAUT (T-20260818-0031). Le chemin NOMINAL est le
+  // seul qui n'a pas de `message` pour porter un mot : un `{ok:true,…,repare:false}` y était
+  // donc entièrement muet, et c'est exactement la sortie mesurée le 2026-08-18.
+  return {
+    ok: true,
+    statut: vu.statut,
+    repare,
+    causeRepare,
+    attendu: livraison.ok,
+    delivre: Boolean(delivrance?.soumis),
+    causeDelivre,
+  };
 }

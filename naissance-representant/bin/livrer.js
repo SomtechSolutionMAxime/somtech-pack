@@ -139,10 +139,29 @@ async function main() {
       caracteres: texte.length,
       statut: resultat.statut,
       repare: resultat.repare,
+      // `causeRepare` — POURQUOI `repare` VAUT ÇA (T-20260818-0031, critère 3).
+      //
+      // ⚠️ CETTE LIGNE EST LA SECONDE PORTE, ET C'EST ELLE QUI DÉCIDE SI LE CORRECTIF SERT.
+      // `livraison.js` peut très bien calculer le motif : s'il ne franchit pas ce JSON,
+      // l'appelant — un agent, un orchestrateur, un script — lit le même `repare: false` muet
+      // qu'avant, sur un code pourtant « corrigé ». C'est « une porte sur deux », le motif le
+      // plus cher de ce dépôt, et il a déjà été commis deux fois DANS le correctif écrit pour
+      // le fermer. Le banc `livrer-bin.test.js` lit donc cette sortie-ci, pas la fonction.
+      //
+      // Mesuré le 2026-08-18 : `{"ok":true,"statut":"done","repare":false,"delivre":false,
+      // "attendu":false}` — trois faux, aucun mot, et personne pour savoir lequel était un
+      // problème. Les valeurs sont nommées dans `CAUSES_REPARATION`.
+      causeRepare: resultat.causeRepare,
       // `delivre` — LA BOÎTE ÉTAIT BLOQUÉE PAR LE TEXTE D'UN AUTRE, et on l'a soumis pour lui
       // (T-20260816-0114). C'est un fait qui doit remonter : il dit que le destinataire vient de
       // recevoir DEUX messages, dont un qui attendait peut-être depuis longtemps.
       delivre: Boolean(resultat.delivre),
+      // `causeDelivre` — même exigence pour l'autre booléen à faux par défaut. Sa valeur vient
+      // de `delivrerLaBoite`, qui la nomme déjà sur neuf branches (`bouge`, `dialogue`,
+      // `sans-effet`…) ; elle mourait dans la fonction qui la produit. `non-tentee` quand la
+      // boîte n'était pas encombrée ou que le geste était désarmé — la distinction entre
+      // « je n'ai pas eu à délivrer » et « j'ai essayé et je n'ai pas pu ».
+      causeDelivre: resultat.causeDelivre,
       // `attendu` — CE QUE HERDR A RAPPORTÉ DE SON CÔTÉ, jamais la preuve (T-20260815-0007).
       // Son sens dépend du destinataire : sur une session en attente, c'est une transition
       // observée ; sur un pair qui travaille déjà, on ne demande plus cette attente-là, et ce

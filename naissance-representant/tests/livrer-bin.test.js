@@ -695,3 +695,40 @@ test('un fichier de brief absent fait échouer la commande avant tout appel à h
   assert.match(r.stderr, /illisible/);
   assert.equal(appels(journal).length, 0);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA SECONDE PORTE — le motif doit survivre au passage par le BIN (T-20260818-0031, critère 3).
+//
+// `src/livraison.js` peut très bien calculer une cause que `bin/livrer.js` ne recopie pas dans
+// son JSON : l'appelant — un agent, un orchestrateur, un script — lit alors le même
+// `{"ok":true,…,"repare":false}` muet qu'avant, sur un code pourtant « corrigé ». C'est
+// « une porte sur deux », le motif le plus cher de ce dépôt, et il a déjà été commis DEUX fois
+// dans le correctif d'un défaut qu'il servait à fermer.
+//
+// Les essais unitaires de `un-repare-faux-dit-pourquoi.test.js` gardent la première porte ;
+// ceux-ci gardent la seconde, contre le vrai exécutable, en lisant ce que l'appelant lit
+// VRAIMENT : la sortie standard.
+
+test('le JSON du bin porte le motif du `repare: false` — sinon l’appelant lit le même champ muet', () => {
+  // Le cas exact mesuré le 2026-08-18 : la livraison passe, rien n'est réparé, et personne ne
+  // sait si c'était inutile ou empêché.
+  installerFauxHerdr({ boiteInitiale: '', soumetSeule: true });
+  const r = livrer('w9:p1', '--texte', 'voici ton brief');
+  assert.equal(r.code, 0, r.stderr);
+  const rendu = JSON.parse(r.stdout);
+  assert.equal(rendu.repare, false);
+  assert.equal(rendu.causeRepare, 'inutile', 'le motif doit traverser le bin, pas mourir dedans');
+  assert.equal(rendu.delivre, false);
+  assert.equal(rendu.causeDelivre, 'non-tentee', 'et `delivre` a droit au même traitement');
+});
+
+test('le motif que le bin rend SUIT le chemin réellement pris — il n’est pas écrit en dur', () => {
+  // Même binaire, autre scénario : la soumission cale, la réparation part et aboutit. Si le bin
+  // recopiait une valeur fixe, cet essai et le précédent ne pourraient pas être verts ensemble.
+  installerFauxHerdr({ boiteInitiale: '', soumetSeule: false, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'voici ton brief');
+  assert.equal(r.code, 0, r.stderr);
+  const rendu = JSON.parse(r.stdout);
+  assert.equal(rendu.repare, true, 'la réparation a bien mordu dans ce scénario');
+  assert.equal(rendu.causeRepare, 'soumise', 'et le motif doit avoir changé avec le chemin');
+});
