@@ -107,11 +107,16 @@ run() {
   local tours="$1"
   : > "$WITNESS"
   rm -f "${SEQ_FILE}.idx"
+  # VD_REGISTRE_DIR est OBLIGATOIRE ici : sans lui la veille s'inscrit dans le
+  # registre RÉEL du poste ($HOME/.somtech/veilles) et une vraie veille se
+  # retrouve noyée sous les entrées de test. Mesuré en posant une veille réelle
+  # et en devant la chercher parmi 32 lignes « test-pane ».
   OUT="$(PATH="${BINDIR}:${PATH}" \
          FAKE_HERDR_STATUS="${FAKE_HERDR_STATUS:-blocked}" \
          FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" \
          FAKE_HERDR_WITNESS="$WITNESS" \
+         VD_REGISTRE_DIR="${WORK}/registre" \
          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
          bash "$VEILLE" test-pane test-agent "$tours" --dry-run 2>&1)"
   RC=$?
@@ -561,6 +566,23 @@ OUT23="$(PATH="${BINDIR}:${PATH}" \
 
 case "$OUT23" in *"aurait envoyé:"*) ko "G1 AFFAIBLIE : elle répond sur un seul signe, journal actif" ;; *) ok "G1 intacte : un seul signe → aucune réponse" ;; esac
 [ ! -s "$J23" ] && ok "aucun déblocage consigné (rien n'a été débloqué)" || ko "un déblocage a été consigné alors qu'aucun n'a eu lieu : $(cat "$J23")"
+
+
+# =================================================================
+# 24. LA SUITE ELLE-MÊME NE TOUCHE PAS AU REGISTRE DU POSTE. Sans cette
+#     garde, un scénario qui oublie VD_REGISTRE_DIR inscrit ses veilles de
+#     test dans $HOME/.somtech/veilles et noie les vraies — mesuré : 32
+#     entrées « test-pane » y ont masqué une veille réelle.
+# =================================================================
+echo "→ 24. la suite n'écrit pas dans le registre du poste"
+REG_POSTE="${HOME}/.somtech/veilles"
+if [ -d "$REG_POSTE" ]; then
+  n_pollution=$(ls "$REG_POSTE"/test-pane-*.veille 2>/dev/null | wc -l | tr -d ' ')
+else
+  n_pollution=0
+fi
+[ "${n_pollution:-0}" -eq 0 ] && ok "aucune veille de test dans le registre du poste" \
+  || ko "la suite a écrit $n_pollution veille(s) de test dans $REG_POSTE"
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
