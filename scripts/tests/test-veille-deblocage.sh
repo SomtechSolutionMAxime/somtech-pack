@@ -100,6 +100,41 @@ case "${1:-}" in
         exit 0
         ;;
       send-keys) exit 0 ;;
+      get)
+        # ⚠️ CE DOUBLE DOIT ÊTRE AUSSI SÉVÈRE QUE LE SERVICE, JAMAIS PLUS COMPLAISANT.
+        # Mesuré sur le vrai herdr : `pane get` d'un pane inexistant écrit son
+        # `pane_not_found` sur STDERR et sort en rc=1 ; un pane qui EXISTE mais
+        # n'héberge aucun agent répond normalement, avec `agent_status: unknown`.
+        # C'est précisément la distinction qu'`agent get` ne fait PAS — lui rend
+        # `agent_not_found` dans les DEUX cas.
+        # Séquence de présences (un mot par ligne : `absent` ou `present`),
+        # même mécanique que la séquence de statuts d'`agent get` : elle est ce
+        # qui permet d'éprouver la CONFIRMATION SUR DEUX RELEVÉS à la pose —
+        # un pane absent au premier relevé et présent au second ne doit pas
+        # être refusé.
+        if [ -n "${FAKE_HERDR_PANE_SEQ_FILE:-}" ] && [ -f "${FAKE_HERDR_PANE_SEQ_FILE:-}" ]; then
+          pidx_file="${FAKE_HERDR_PANE_SEQ_FILE}.idx"
+          pidx=1
+          [ -f "$pidx_file" ] && pidx=$(( $(cat "$pidx_file") + 1 ))
+          echo "$pidx" > "$pidx_file"
+          ptotal=$(wc -l < "$FAKE_HERDR_PANE_SEQ_FILE" | tr -d ' ')
+          puse="$pidx"
+          [ "$puse" -gt "$ptotal" ] && puse="$ptotal"
+          pval="$(sed -n "${puse}p" "$FAKE_HERDR_PANE_SEQ_FILE")"
+          if [ "$pval" = "absent" ]; then
+            printf '{"error":{"code":"pane_not_found","message":"pane %s not found"},"id":"cli:pane:get"}' "${3:-}" >&2
+            exit 1
+          fi
+          printf '{"result":{"pane":{"pane_id":"%s","agent_status":"unknown"}}}' "${3:-}"
+          exit 0
+        fi
+        if [ "${FAKE_HERDR_PANE_ABSENT:-0}" = "1" ]; then
+          printf '{"error":{"code":"pane_not_found","message":"pane %s not found"},"id":"cli:pane:get"}' "${3:-}" >&2
+          exit 1
+        fi
+        printf '{"result":{"pane":{"pane_id":"%s","agent_status":"unknown"}}}' "${3:-}"
+        exit 0
+        ;;
     esac
     ;;
 esac
@@ -950,6 +985,213 @@ case "$OUT38B" in *"veille détachée · pane="*) ok "le cas nominal annonce tou
 [ "$RC38B" -eq 0 ] && ok "le cas nominal rend 0" || ko "le cas nominal rend $RC38B"
 D3_PID="$(printf '%s' "$OUT38B" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
 [ -n "$D3_PID" ] && kill -TERM "$D3_PID" 2>/dev/null
+
+# =================================================================
+# ===== T-20260819-0023 / T-20260819-0027 — deux défauts mesurés le
+# ===== 2026-08-19 : une option AVANT le pane/agent était avalée comme
+# ===== positionnel, et un pane inexistant n'était détecté qu'en boucle.
+# =================================================================
+
+# =================================================================
+# 39. LE DÉFAUT MESURÉ, reproduit exactement : `--detach <pane> <agent>`.
+#     Avant correctif, `--detach` n'était cherché que dans $3/$4/$5 : posé en
+#     $1, il devenait le pane, et le vrai pane devenait l'agent. La trace
+#     réelle du registre du poste était : « pane=--detach agent=w0:p1T … ».
+#     --detach est reconnu ici (fork réel) car c'est l'INVOCATION EXACTE du
+#     ticket — un simple --dry-run ne suffirait pas à prouver que le drapeau
+#     de tête est reconnu ET déclenche le bon chemin (fork + attente de
+#     prise de poste), pas seulement que le pane/agent sont bien nommés.
+# =================================================================
+echo "→ 39. --detach AVANT pane/agent : plus jamais avalé comme positionnel"
+REG39="${WORK}/registre-39"; rm -rf "$REG39"; mkdir -p "$REG39"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+OUT39="$(PATH="${BINDIR}:${PATH}" \
+         FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         VD_REGISTRE_DIR="$REG39" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         bash "$VEILLE" --detach w9:pREORD agent-reord 3 2>&1)"
+RC39=$?
+case "$OUT39" in
+  *"veille détachée · pane=w9:pREORD agent=agent-reord"*)
+    ok "--detach reconnu même placé AVANT le pane/agent, pane et agent correctement affectés" ;;
+  *)
+    ko "DÉFAUT REPRODUIT : --detach non reconnu en tête, pane/agent mal affectés : $OUT39" ;;
+esac
+case "$OUT39" in
+  *"pane=--detach"*) ko "DÉFAUT REPRODUIT : « --detach » a été avalé comme un pane : $OUT39" ;;
+  *) ok "« --detach » n'a jamais été pris pour un pane" ;;
+esac
+[ "$RC39" -eq 0 ] && ok "code de sortie 0 (succès du geste détaché)" || ko "code de sortie attendu 0, obtenu $RC39"
+LISTE39="$(PATH="${BINDIR}:${PATH}" VD_REGISTRE_DIR="$REG39" bash "$VEILLE" --list 2>&1)"
+case "$LISTE39" in
+  *"pane=w9:pREORD"*"agent=agent-reord"*) ok "le registre porte le VRAI pane et le vrai agent" ;;
+  *) ko "le registre ne porte pas le bon pane/agent : $LISTE39" ;;
+esac
+DPID39="$(printf '%s' "$OUT39" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
+[ -n "$DPID39" ] && kill -TERM "$DPID39" 2>/dev/null
+
+# =================================================================
+# 40. Tout jeton `--…` inconnu est REFUSÉ tout de suite — jamais pris pour
+#     un pane ou un agent (choix de conception : refuser, pas deviner).
+# =================================================================
+echo "→ 40. option inconnue → refusée, jamais prise pour un positionnel"
+# PATH pointé sur le faux herdr : sans ça, un pane inexistant appelle le VRAI
+# herdr du poste et le test devient dépendant de ce qui tourne réellement.
+# VD_SLEEP=0 + un nombre de tours borné (2) : filet de sécurité pour le cas
+# RÉGRESSÉ où l'option ne serait PAS refusée — sans quoi elle veillerait pour
+# de vrai (VD_TOURS par défaut = 2000, VD_SLEEP par défaut = 10s).
+OUT40="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_STATUS=working \
+         VD_REGISTRE_DIR="${WORK}/registre-40" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 \
+         bash "$VEILLE" --nimporte-quoi some-pane some-agent 2 2>&1)"; RC40=$?
+[ "$RC40" -ne 0 ] && ok "option inconnue → rc≠0 ($RC40)" \
+  || ko "option inconnue acceptée silencieusement, rc=$RC40"
+case "$OUT40" in
+  *"option inconnue"*) ok "le refus nomme l'option en cause" ;;
+  *) ko "refus sans message explicite : $OUT40" ;;
+esac
+case "$OUT40" in
+  *"--- bilan :"*) ko "elle a VEILLÉ malgré l'option inconnue" ;;
+  *) ok "elle n'a pas veillé sur une option inconnue" ;;
+esac
+
+# =================================================================
+# 41. --list et --duree sont reconnus où qu'ils apparaissent dans la ligne
+#     de commande — pas seulement en $1. Avant ce correctif, `--list` posé
+#     en 2e position était avalé comme AGENT (même défaut que --detach).
+# =================================================================
+echo "→ 41. --list reconnu même s'il n'est pas en \$1"
+REG41="${WORK}/registre-41"; rm -rf "$REG41"; mkdir -p "$REG41"
+OUT41="$(VD_REGISTRE_DIR="$REG41" bash "$VEILLE" un-pane --list 2>&1)"
+case "$OUT41" in
+  *"Aucune veille inscrite"*) ok "--list en 2e position déclenche bien le mode liste" ;;
+  *) ko "--list en 2e position n'a pas déclenché le mode liste : $OUT41" ;;
+esac
+
+echo "→ 41b. --duree reconnu même s'il n'est pas en \$1"
+OUT41B="$(bash "$VEILLE" un-pane --duree 2>&1)"
+case "$OUT41B" in
+  *"DUREE_NOMINALE_S="*) ok "--duree en 2e position déclenche bien le mode durée" ;;
+  *) ko "--duree en 2e position n'a pas déclenché le mode durée : $OUT41B" ;;
+esac
+
+# =================================================================
+# 42. LE PANE EST VÉRIFIÉ À LA POSE (garantie n°10 posée à la seconde zéro) :
+#     un pane inexistant est refusé AVANT toute prise de verrou/registre —
+#     jamais après un tour de ronde entier (jusqu'à VD_SLEEP secondes,
+#     10 s par défaut, plus tôt).
+# =================================================================
+echo "→ 42. pane inexistant à la pose → refus immédiat, avant toute prise"
+REG42="${WORK}/registre-42"; rm -rf "$REG42"; mkdir -p "$REG42"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+DEBUT42=$(date +%s%N)
+# ⚠️ LE PANE EST ARMÉ ABSENT, PAS SEULEMENT L'AGENT — et la distinction est le
+#    sujet même du correctif. `FAKE_HERDR_STATUS=absent` ne rend absent que
+#    l'AGENT ; un pane vivant sans agent est un cas LÉGITIME (test 44). Ce test
+#    décrit « le pane n'existe pas » : son double doit donc le dire, sinon il
+#    éprouve autre chose que son titre.
+OUT42="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_STATUS=absent FAKE_HERDR_PANE_ABSENT=1 \
+         VD_REGISTRE_DIR="$REG42" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_POSE=0.05 \
+         bash "$VEILLE" pane-fantome agent-x 5 --dry-run 2>&1)"
+RC42=$?
+FIN42=$(date +%s%N)
+MS42=$(( (FIN42 - DEBUT42) / 1000000 ))
+case "$OUT42" in
+  *"MOTIF: pane-disparu"*) ok "motif « pane-disparu » nommé à la pose" ;;
+  *) ko "pas de refus à la pose : $OUT42" ;;
+esac
+[ "$RC42" -eq 6 ] && ok "code de sortie propre au pane disparu (rc=$RC42)" \
+  || ko "code de sortie attendu 6, obtenu $RC42"
+if [ -z "$(ls -A "$REG42" 2>/dev/null)" ]; then
+  ok "AUCUN registre écrit — rien n'a été pris pour un pane qui n'existe pas (mesuré : ${MS42}ms)"
+else
+  ko "un registre a été écrit malgré un pane inexistant : $(ls -A "$REG42")"
+fi
+[ "$MS42" -lt 5000 ] && ok "refus mesuré en ${MS42}ms — bien avant le premier VD_SLEEP par défaut (10000ms)" \
+  || ko "refus trop lent : ${MS42}ms"
+
+# =================================================================
+# 43. UN FAUX POSITIF ÉVITÉ : un pane légitime qui apparaît tardivement —
+#     absent au premier relevé, présent au second (rapproché) — n'est PAS
+#     refusé. Sinon la garde à la pose créerait le défaut inverse.
+# =================================================================
+echo "→ 43. pane apparu tardivement (absent puis présent, rapproché) → pas de faux refus"
+REG43="${WORK}/registre-43"; rm -rf "$REG43"; mkdir -p "$REG43"
+: > "$SCREEN_FILE"
+printf 'working\nworking\nworking\n' > "$SEQ_FILE"
+rm -f "${SEQ_FILE}.idx"
+# ⚠️ LA SÉQUENCE PORTE SUR LE PANE, PAS SUR L'AGENT — et ce test l'a appris à ses
+#    dépens. Tant qu'il armait la séquence d'`agent get`, il est resté VERT sur un
+#    correctif qui avait SUPPRIMÉ la confirmation sur deux relevés : le contrôle de
+#    pose interroge `pane get`, que ce test ne pilotait pas. **Une mutation devenue
+#    muette est le seul signal d'une garde désarmée** — c'est le motif du lot G,
+#    commis dans son propre banc.
+PANE_SEQ43="${WORK}/pane-seq-43"
+printf 'absent\npresent\npresent\n' > "$PANE_SEQ43"
+rm -f "${PANE_SEQ43}.idx"
+OUT43="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_PANE_SEQ_FILE="$PANE_SEQ43" \
+         VD_REGISTRE_DIR="$REG43" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         VD_SLEEP_POSE=0.05 \
+         bash "$VEILLE" pane-tardif agent-tardif 2 --dry-run 2>&1)"
+case "$OUT43" in
+  *"MOTIF: pane-disparu"*) ko "FAUX POSITIF : un pane apparu au 2e relevé rapproché est quand même refusé : $OUT43" ;;
+  *) ok "un pane apparu au 2e relevé rapproché n'est PAS refusé (faux positif évité)" ;;
+esac
+if [ -n "$(ls -A "$REG43" 2>/dev/null)" ]; then
+  ok "la veille a bien été posée (registre non vide) — la pose légitime n'a pas été bloquée"
+else
+  ko "aucun registre écrit alors que le pane est légitime (apparu au 2e relevé) : $OUT43"
+fi
+
+
+# =================================================================
+# 44. LE FAUX REFUS MESURÉ SUR LE POSTE RÉEL : un pane qui EXISTE mais
+#     n'héberge pas (encore) d'agent ne doit PAS être pris pour un pane
+#     disparu.
+#
+#     ⚠️ CE TEST VIENT D'UNE MESURE, PAS D'UNE INTUITION. La première version
+#     du contrôle à la pose interrogeait `herdr agent get` — qui rend
+#     `agent_not_found` AUSSI BIEN pour un pane fermé que pour un pane vivant
+#     sans agent. Passée sur les panes réels du poste : **141 panes vivants
+#     sur 231 auraient été refusés à tort**. Une garde qui refuse six poses
+#     légitimes sur dix ne survit pas — le premier qui la rencontre la retire,
+#     et elle emporte la protection qu'elle apportait.
+#
+#     Le contrôle interroge donc `herdr pane get`, qui distingue les deux.
+# =================================================================
+echo "→ 44. pane vivant SANS agent → n'est PAS pris pour un pane disparu"
+REG44="${WORK}/registre-44"; rm -rf "$REG44"; mkdir -p "$REG44"
+: > "$SCREEN_FILE"
+printf 'absent\nabsent\nabsent\n' > "$SEQ_FILE"
+rm -f "${SEQ_FILE}.idx"
+OUT44="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_PANE_ABSENT=0 \
+         VD_REGISTRE_DIR="$REG44" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         VD_SLEEP_POSE=0.05 \
+         bash "$VEILLE" pane-sans-agent agent-pas-encore-ne 2 --dry-run 2>&1)"
+case "$OUT44" in
+  *"pane-disparu — le pane pane-sans-agent n'existe pas au moment de la pose"*)
+    ko "FAUX REFUS : un pane VIVANT sans agent est pris pour un pane disparu à la pose — c'est le cas mesuré 141 fois sur 231 sur le poste réel : $OUT44" ;;
+  *) ok "un pane vivant sans agent n'est PAS refusé à la pose (141/231 faux refus évités)" ;;
+esac
+
+echo "→ 44b. pane RÉELLEMENT inexistant → toujours refusé (la contre-épreuve)"
+REG44B="${WORK}/registre-44b"; rm -rf "$REG44B"; mkdir -p "$REG44B"
+rm -f "${SEQ_FILE}.idx"
+OUT44B="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_PANE_ABSENT=1 \
+          VD_REGISTRE_DIR="$REG44B" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+          VD_SLEEP_POSE=0.05 \
+          bash "$VEILLE" pane-fantome-44 agent-fantome 2 --dry-run 2>&1)"
+case "$OUT44B" in
+  *"MOTIF: pane-disparu"*) ok "un pane réellement inexistant est toujours refusé — le correctif du faux refus n'a pas désarmé la garde" ;;
+  *) ko "GARDE DÉSARMÉE : un pane inexistant n'est plus refusé à la pose — corriger le faux refus a emporté la garantie : $OUT44B" ;;
+esac
+if [ -n "$(ls -A "$REG44B" 2>/dev/null)" ]; then
+  ko "un registre a été écrit pour un pane réellement inexistant"
+else
+  ok "aucun registre écrit pour un pane réellement inexistant"
+fi
+
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")

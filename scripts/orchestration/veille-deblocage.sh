@@ -50,11 +50,15 @@
 #   6. ELLE NE S'ARRÊTE JAMAIS EN SILENCE. Tout chemin d'arrêt écrit une
 #      ligne « MOTIF: <code> — <phrase> » et sort sur un code propre :
 #        agent-termine ......... 0   l'agent a travaillé puis fini
+#        (arguments invalides) . 1   option `--…` inconnue, ou pane/agent
+#                                    manquant — refusé tout de suite, jamais
+#                                    interprété comme positionnel
 #        tours-epuises ......... 2   fin de sa durée (elle dit si l'agent
 #                                    travaillait encore : il n'est plus protégé)
 #        ecran-non-reconnu ..... 3   3 relevés non reconnus consécutifs
 #        interrompue ........... 4   signal reçu — tuée par son environnement
-#        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés)
+#        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés) —
+#                                    À LA POSE (avant tout tour) ou en boucle
 #        (refus au démarrage) .. 7   une veille garde déjà ce pane
 #        releve-illisible ...... 8   herdr ne rend plus rien d'exploitable
 #        (détachement raté) .... 9   la veille détachée n'a pas pris son poste
@@ -81,7 +85,32 @@
 #      s'annonçant « vivante » au registre alors qu'elle ne gardait plus
 #      rien — trouvé en posant une veille réelle, pas en test. Elle s'arrête
 #      désormais sur `pane-disparu` (code 6), confirmé sur DEUX relevés :
-#      un hoquet de herdr abandonnerait un agent bien vivant.
+#      un hoquet de herdr abandonnerait un agent bien vivant. Cette mesure
+#      s'applique maintenant AUSSI à la pose elle-même (point 11 ci-dessous),
+#      pas seulement en boucle.
+#
+# ── T-20260819-0023 / E-20260819-0003 — deux défauts mesurés le 2026-08-19
+#    (`--detach <pane> <agent>` accepté en silence, pane inexistant détecté
+#    trop tard) :
+#
+#  11. AUCUNE OPTION N'EST JAMAIS AVALÉE COMME UN POSITIONNEL. Le parsing ne
+#      cherchait les drapeaux (`--dry-run`, `--detach`) que dans $3/$4/$5 :
+#      `--detach` posé AVANT le pane et l'agent devenait lui-même le pane, et
+#      le vrai pane devenait l'agent — la veille s'inscrivait au registre sur
+#      un pane inexistant, rendait un pid, tous les signes d'une pose
+#      réussie, sans jamais garder personne (trace réelle du registre du
+#      poste : « pane=--detach agent=w0:p1T … motif=pane-disparu »). Les
+#      drapeaux connus (`--dry-run`, `--detach`, `--list`, `--duree`) sont
+#      désormais reconnus PARTOUT dans la ligne de commande ; tout jeton
+#      `--…` inconnu est REFUSÉ tout de suite (jamais pris pour un pane, un
+#      agent ou un nombre de tours).
+#
+#  12. LE PANE EST VÉRIFIÉ À LA POSE, PAS SEULEMENT EN BOUCLE. Un pane
+#      inexistant n'était détecté qu'au premier tour de ronde — après avoir
+#      déjà pris le verrou et écrit le registre. Il est désormais vérifié
+#      AVANT toute prise (même garantie que le point 10 : DEUX relevés
+#      concordants, rapprochés plutôt qu'espacés d'un tour entier), au même
+#      titre que le nom de l'agent (bloc Usage, refusé tout de suite).
 #
 #   9. LES DEUX CHIFFRES SONT MESURABLES. Une garde se juge sur ce qu'elle
 #      débloque à raison ET sur ce qu'elle refuse à tort. Le journal porte
@@ -99,11 +128,18 @@
 # et n'envoie rien. C'est ce qui rend ce script testable.
 # --detach : se relance détachée, rend son pid, et survit à la session.
 #
+# ⚠️ --dry-run, --detach, --list et --duree sont reconnus OÙ QU'ILS SOIENT
+#    dans la ligne de commande (T-20260819-0027) — jamais avalés comme un
+#    pane, un agent ou un nombre de tours. Toute autre option `--…` est
+#    REFUSÉE explicitement (code 1), jamais interprétée en silence.
+#
 # Variables d'environnement :
 #   VD_TOURS                  nombre de tours de veille max       (2000)
 #   VD_SLEEP                  attente entre deux tours              (10s)
 #   VD_SLEEP_CONFIRM          attente avant confirmation done/idle  (20s)
 #   VD_SLEEP_APRES_DEBLOCAGE  attente après un déblocage envoyé      (3s)
+#   VD_SLEEP_POSE             attente entre les 2 relevés du contrôle
+#                              de pane À LA POSE (avant tout tour)   (0.3s)
 #   VD_REGISTRE_DIR           registre des veilles  ($HOME/.somtech/veilles)
 #   VD_JOURNAL                journal des déblocages   (dans le registre)
 #   VD_LOG                    journal du mode --detach (dans le registre)
@@ -143,8 +179,108 @@ veille_vivante() {
   esac
 }
 
+# Rend le statut de l'agent — ou __ABSENT__ quand herdr répond que le pane ou
+# l'agent n'existe plus. Un silence de herdr (sortie vide) reste distinct de
+# cette absence explicite : le premier est un hoquet, la seconde un fait.
+# Définie ici (avant tout parsing) : elle sert désormais AUSSI à vérifier le
+# pane À LA POSE (T-20260819-0027, voir plus bas), pas seulement en boucle.
+etat_courant() {
+  # 2>&1 et non 2>/dev/null : herdr écrit son « agent_not_found » sur STDERR
+  # avec rc=1 (mesuré). Le jeter rendait l'absence indétectable — la veille
+  # tournait alors sur un pane fermé sans jamais pouvoir le dire.
+  herdr agent get "$PANE" 2>&1 | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('')
+    raise SystemExit
+err = d.get('error') or {}
+if 'not_found' in str(err.get('code', '')):
+    print('__ABSENT__')
+else:
+    res = d.get('result') or {}
+    print((res.get('agent') or {}).get('agent_status', ''))
+" 2>/dev/null
+}
+
+# Le PANE existe-t-il ? — et c'est une question DIFFÉRENTE de « un agent y
+# tourne-t-il ». `herdr agent get` rend `agent_not_found` dans les DEUX cas :
+# pane fermé, ou pane bien vivant qui n'héberge pas (encore) d'agent. Passer
+# le contrôle de pose par cette sonde-là refusait donc des poses parfaitement
+# légitimes — **mesuré sur les panes réels du poste : 141 sur 231**, c'est-à-dire
+# six poses sur dix. Une garde qui refuse à ce rythme ne survit pas : le premier
+# qui la rencontre la retire, et elle emporte la protection qu'elle apportait.
+#
+# `herdr pane get` distingue : `pane_not_found` (rc=1, sur STDERR) pour un pane
+# qui n'existe pas, une réponse normale pour un pane vivant même sans agent.
+pane_existe() {
+  # 2>&1 comme pour `etat_courant`, et pour la même raison mesurée : herdr écrit
+  # son erreur sur STDERR. La jeter rendrait l'absence indétectable.
+  herdr pane get "$PANE" 2>&1 | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('__ILLISIBLE__')          # un hoquet de herdr n'est pas une absence
+    raise SystemExit
+err = d.get('error') or {}
+print('__ABSENT__' if 'not_found' in str(err.get('code', '')) else '__PRESENT__')
+" 2>/dev/null
+}
+
+# ── T-20260819-0023 / T-20260819-0027 — AUCUNE OPTION N'EST JAMAIS AVALÉE
+#    COMME UN POSITIONNEL. `veille-deblocage.sh --detach <pane> <agent>` était
+#    accepté EN SILENCE : le parsing ne cherchait les drapeaux que dans
+#    $3/$4/$5, donc `--detach` devenait le pane et le pane devenait l'agent —
+#    la veille s'inscrivait au registre sur un pane inexistant, rendait un
+#    pid, tous les signes d'une pose réussie, sans jamais garder personne
+#    (trace réelle : « pane=--detach agent=w0:p1T … motif=pane-disparu »).
+#    CHOIX DE CONCEPTION (à écrire, pas à deviner) : RECONNAÎTRE PARTOUT les
+#    drapeaux connus plutôt que refuser selon leur position, et REFUSER tout
+#    jeton `--…` inconnu — jamais le prendre pour un pane/agent/tours. Un
+#    pane ou un agent herdr ne commence jamais par `--` (format `wN:pM` /
+#    noms d'agents) : la distinction drapeau/positionnel est donc sans
+#    ambiguïté, et « reconnaître partout » répare l'appel fautif du ticket
+#    au lieu de se contenter de le rejeter.
+MODE_LIST=0
+MODE_DUREE=0
+DRY_RUN=0
+DETACH=0
+PANE=""
+AGENT=""
+CLI_TOURS_BRUT=""
+for a in "$@"; do
+  case "$a" in
+    --dry-run) DRY_RUN=1 ;;
+    --detach)  DETACH=1 ;;
+    --list)    MODE_LIST=1 ;;
+    --duree)   MODE_DUREE=1 ;;
+    --*)
+      echo "REFUS : option inconnue « $a »." >&2
+      echo "Usage: $0 <pane> <agent> [tours] [--dry-run] [--detach]" >&2
+      echo "       $0 --list | --duree" >&2
+      exit 1
+      ;;
+    *)
+      # Positionnels affectés DANS L'ORDRE D'APPARITION, jamais par position
+      # fixe $1/$2/$3 — c'est ce qui permet aux drapeaux de précéder le pane
+      # et l'agent sans les avaler. Un positionnel excédentaire est ignoré,
+      # comme avant ce correctif.
+      if [ -z "$PANE" ]; then
+        PANE="$a"
+      elif [ -z "$AGENT" ]; then
+        AGENT="$a"
+      elif [ -z "$CLI_TOURS_BRUT" ]; then
+        CLI_TOURS_BRUT="$a"
+      fi
+      ;;
+  esac
+done
+
 # --list — le pane ET l'agent de chaque veille, jamais un simple compte.
-if [ "${1:-}" = "--list" ]; then
+# Reconnu où qu'il apparaisse dans la ligne de commande (voir motif ci-dessus).
+if [ "$MODE_LIST" = "1" ]; then
   if [ ! -d "$VD_REGISTRE_DIR" ] || [ -z "$(ls -A "$VD_REGISTRE_DIR"/*.veille 2>/dev/null)" ]; then
     echo "Aucune veille inscrite au registre ($VD_REGISTRE_DIR)."
     exit 0
@@ -176,13 +312,11 @@ fi
 # --duree — la durée nominale couverte, en secondes. Rendue par le script
 # lui-même : un `grep` sur le source prouverait qu'un nombre est écrit
 # quelque part, pas qu'une durée est couverte.
-if [ "${1:-}" = "--duree" ]; then
+# Reconnu où qu'il apparaisse dans la ligne de commande (voir motif ci-dessus).
+if [ "$MODE_DUREE" = "1" ]; then
   echo "DUREE_NOMINALE_S=$(( ${VD_TOURS:-$VD_TOURS_DEFAUT} * VD_SLEEP ))"
   exit 0
 fi
-
-PANE="${1:-}"
-AGENT="${2:-}"
 
 if [ -z "$PANE" ] || [ -z "$AGENT" ]; then
   echo "Usage: $0 <pane> <agent> [tours] [--dry-run] [--detach]" >&2
@@ -190,19 +324,38 @@ if [ -z "$PANE" ] || [ -z "$AGENT" ]; then
   exit 1
 fi
 
-DRY_RUN=0
-DETACH=0
-CLI_TOURS=""
-for a in "${3:-}" "${4:-}" "${5:-}"; do
-  case "$a" in
-    --dry-run) DRY_RUN=1 ;;
-    --detach)  DETACH=1 ;;
-    ''|*[!0-9]*) ;;               # ignoré : ni drapeau connu, ni un nombre
-    *) CLI_TOURS="$a" ;;
-  esac
-done
+case "$CLI_TOURS_BRUT" in
+  ''|*[!0-9]*) CLI_TOURS="" ;;                # ignoré : n'est pas un nombre
+  *)           CLI_TOURS="$CLI_TOURS_BRUT" ;;
+esac
 
 VD_TOURS="${CLI_TOURS:-${VD_TOURS:-$VD_TOURS_DEFAUT}}"
+
+# ── LE PANE EST VÉRIFIÉ À LA POSE, PAS SEULEMENT EN BOUCLE (T-20260819-0027).
+#    Même exigence que la garantie n°10 (motif `pane-disparu`, code 6) : DEUX
+#    relevés concordants avant de conclure. Mais ici RAPPROCHÉS (VD_SLEEP_POSE,
+#    pas VD_SLEEP) puisqu'il s'agit de refuser AVANT tout tour de ronde — le
+#    nom de l'agent est déjà refusé tout de suite (bloc Usage ci-dessus), le
+#    pane mérite la même franchise. Ni verrou ni registre ne sont encore pris
+#    à ce point : un simple message + exit suffit, comme pour l'usage invalide.
+#    ⚠️ ET IL INTERROGE LE PANE, PAS L'AGENT — `herdr agent get` rend
+#    `agent_not_found` aussi bien pour un pane fermé que pour un pane vivant
+#    sans agent : mesuré sur les panes réels du poste, **141 sur 231** auraient
+#    été refusés à tort. `herdr pane get` distingue les deux.
+#    Ce contrôle coûte donc UN relevé herdr de plus par pose : il pose une autre
+#    question que la boucle, sa réponse ne peut pas lui servir de premier tour.
+VD_SLEEP_POSE="${VD_SLEEP_POSE:-0.3}"
+if [ "$(pane_existe)" = "__ABSENT__" ]; then
+  # DEUX relevés concordants avant de conclure — même exigence que la garantie
+  # n°10 en boucle, mais rapprochés : il s'agit de refuser AVANT tout tour de
+  # ronde, pas de survivre à un hoquet pendant des heures. Un pane qui apparaît
+  # entre les deux relevés n'est PAS refusé (éprouvé par le banc).
+  sleep "$VD_SLEEP_POSE"
+  if [ "$(pane_existe)" = "__ABSENT__" ]; then
+    echo "MOTIF: pane-disparu — le pane $PANE n'existe pas au moment de la pose (confirmé sur deux relevés rapprochés) — rien à garder" >&2
+    exit 6
+  fi
+fi
 
 PANE_SLUG="$(printf '%s' "$PANE" | tr ':/ ' '---')"
 mkdir -p "$VD_REGISTRE_DIR" 2>/dev/null
@@ -398,9 +551,6 @@ journaliser_deblocage() {
   } >> "$VD_JOURNAL" 2>/dev/null
 }
 
-# Rend le statut de l'agent — ou __ABSENT__ quand herdr répond que le pane ou
-# l'agent n'existe plus. Un silence de herdr (sortie vide) reste distinct de
-# cette absence explicite : le premier est un hoquet, la seconde un fait.
 # Consigne un REFUS — un écran qu'elle n'a pas reconnu et auquel elle n'a
 # donc pas répondu. Sans cette moitié, le journal ne portait qu'une des deux
 # populations : « ce qu'elle débloque à tort » était relisable, « ce qu'elle
@@ -416,32 +566,20 @@ journaliser_refus() {
   } >> "$VD_JOURNAL" 2>/dev/null
 }
 
-etat_courant() {
-  # 2>&1 et non 2>/dev/null : herdr écrit son « agent_not_found » sur STDERR
-  # avec rc=1 (mesuré). Le jeter rendait l'absence indétectable — la veille
-  # tournait alors sur un pane fermé sans jamais pouvoir le dire.
-  herdr agent get "$PANE" 2>&1 | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print('')
-    raise SystemExit
-err = d.get('error') or {}
-if 'not_found' in str(err.get('code', '')):
-    print('__ABSENT__')
-else:
-    res = d.get('result') or {}
-    print((res.get('agent') or {}).get('agent_status', ''))
-" 2>/dev/null
-}
-
 # Seuil de préavis : 90 % des tours. Elle prévient AVANT de s'éteindre, une
 # seule fois — un orchestrateur qui lit son journal voit venir la fin de la
 # protection au lieu de la découvrir après coup.
 SEUIL_PREAVIS=$(( VD_TOURS * 9 / 10 ))
 
 for i in $(seq 1 "$VD_TOURS"); do
+  # ⚠️ PAS DE RÉUTILISATION DU RELEVÉ DE POSE, ET C'EST VOULU. Le contrôle de
+  # pose interroge LE PANE (`pane get`), la boucle interroge L'AGENT
+  # (`agent get`) : deux questions différentes, deux réponses différentes.
+  # Une version intermédiaire recyclait le relevé de pose comme premier tour ;
+  # elle est tombée dès que le contrôle a changé d'objet, et la boucle lisait
+  # alors un état VIDE qu'elle prenait pour un relevé illisible — 14 tests
+  # rouges d'un coup. Le coût du relevé supplémentaire est d'un appel herdr par
+  # pose ; le prix d'une garde qui lit le mauvais objet est plus élevé.
   ETAT="$(etat_courant)"
   DERNIER_ETAT="$ETAT"
 

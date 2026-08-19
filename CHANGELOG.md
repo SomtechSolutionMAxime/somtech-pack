@@ -7,6 +7,27 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-19
 
+*Lot G : PR #295 (`E-20260819-0003`, stories `T-20260819-0026` à `0028`), sous la demande `D-20260818-0008`. **Trois gardes ne gardaient pas ce qu'elles prétendaient garder** — et le lot en a trouvé trois de plus en se relisant, dont deux dans ses propres bancs.*
+
+### Corrigé
+
+- **Une garde de surface garde SA PHRASE, jamais sa section** (`T-20260819-0026`) — `la-formule-jai-besoin-de-toi` cherchait la formule n'importe où dans la section de chaque surface. Un ajout parfaitement légitime ailleurs dans la même section la **désarmait sans qu'une ligne ne rougisse** : la mutation censée la prouver devenait muette, et la suite restait verte. C'était la **troisième** occurrence sur ce fichier. Chaque surface porte désormais une sonde `porteuse` ancrée sur ce que la phrase **nomme** — le bilan, le topo, le compte rendu, ce qui part sur ta ligne.
+- **Les garanties de la règle sont ancrées sur leurs DEUX moitiés** — ce qu'elles affirment **et** ce qu'elles évitent. Relevé par une passe de revue : le lot énonçait le motif pour la famille entière et ne l'appliquait qu'à la moitié de sa propre garde. Mesuré, **trois mots** puis **cinq mots** réinjectés ailleurs dans la section suffisaient à la satisfaire. *Le motif — une ligne qui n'apparaît qu'en cas de demande oblige à lire le reste — est ce qui rend une règle applicable : sans lui, elle se relit comme un détail de forme, et c'est ainsi qu'elle avait cessé de mordre la première fois.*
+- **`veille-deblocage.sh` n'avale plus une option comme un pane** (`T-20260819-0027`) — `--detach <pane> <agent>` était accepté **en silence** : l'option devenait le pane, le pane devenait l'agent, la veille s'inscrivait au registre sur un pane inexistant et **rendait un pid**, c'est-à-dire tous les signes d'une pose réussie, sans garder personne. Les drapeaux connus sont reconnus **où qu'ils soient** ; tout `--…` inconnu est refusé (code 1).
+- **Le pane est vérifié à la pose, pas au premier tour de ronde** — un pane inexistant est désormais dit en **0,4 s** (code 6, aucun registre écrit) au lieu d'être découvert après la prise du verrou.
+
+### Technique
+
+- **Un outil qui dit ce qu'une garde exige RÉELLEMENT** (`scripts/mesure-ancrage-des-gardes.mjs`, `T-20260819-0030`) — il ne lit pas la source des gardes (un parseur ne connaîtrait que les formes qu'on lui a apprises) : il retire la ligne gardée, réinjecte un fragment ailleurs dans le périmètre, et le réduit mot à mot tant que la garde reste verte. **Mesuré sur le métier de l'orchestrateur : 37 gardes sur 47 sont satisfaites par un fragment de la phrase qu'elles gardent, 20 par cinq mots ou moins, 10 seulement sont ancrées.** Un seul mot suffit pour cinq d'entre elles. La garde grossière n'était pas un cas isolé : c'était la norme du fichier, et personne ne le savait.
+- **Un compte se rend avec l'ÉTAT sur lequel il est pris** — relevé par la passe de fond : le lot publiait « 21 » mesuré avant son propre commit suivant, qui corrigeait une des gardes comptées. C'est **20** sur l'état livré. L'outil rend désormais le commit sur lequel il mesure, et dit quand l'arbre porte des modifications non commitées — *un compte pris sur un arbre sale n'est rattachable à rien.*
+- **Les cinq surfaces sont éprouvées une à une** — la liste de mutations n'en portait que trois pour cinq surfaces déclarées. *Un rouge groupé prouve qu'au moins une chose était gardée, jamais que toutes l'étaient.*
+- **Le bruit de la garde est mesuré, pas supposé** — 6 désarmements réels sur 6 attrapés, 0 reformulation légitime sur 5 refusée à tort. Une garde qui crie sur du texte correct se fait retirer par le premier qui la rencontre, et emporte ce qu'elle gardait vraiment.
+- **La garde du pane interroge le PANE, pas l'agent** — `herdr agent get` rend `agent_not_found` aussi bien pour un pane fermé que pour un pane vivant sans agent. Mesuré sur les 231 panes réels du poste : **141 poses légitimes sur 231 auraient été refusées à tort**. `herdr pane get` distingue les deux — **141/231 → 0/231**.
+- **Deux gardes MUETTES trouvées dans les bancs du lot lui-même** — le test du « pane apparu tardivement » pilotait la séquence d'`agent get`, plus celle que le contrôle interroge depuis le correctif : il restait vert sur un code qui avait **supprimé** la confirmation sur deux relevés. Et le banc de fragments ne réduisait que par la gauche, laissant passer une garantie satisfaite par un suffixe. *Le motif attrape ceux qui le traquent.*
+- **Le `/goal` sur agent occupé, mesuré — et le métier n'est PAS touché** (`T-20260819-0028`) — le texte prescrivait de poser le `/goal` juste après un brief pris, donc sur un agent occupé : l'état exact où le même fichier mesure la famine. **4 essais sur 4 sur agent `working` : pris en 2 secondes** (5/5 avec le témoin au repos). La contradiction était apparente : **un `/goal` est une commande, traitée tout de suite ; un texte ordinaire est mis en file** et attend la fin du tour. Deux séries d'observations qui ne se recouvraient pas sont ainsi départagées. *Mesurer d'abord, écrire ensuite — ici la mesure dit de ne pas écrire.*
+
+## [1.75.0] - 2026-08-19
+
 *Un seul lot : PR #293 (`T-20260819-0013`), sous la livraison `J-20260814-0002`. **Une consigne juste, suivie à la lettre, échouait** — et le mode de panne suivant était silencieux.*
 
 ### Corrigé

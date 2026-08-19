@@ -148,11 +148,42 @@ export const ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE = [
   // ⚠️ La sonde ne tient pas à l'adjectif : « Ta ligne est **requise** » dit la même chose
   // avec la même force, et faisait rougir cette garde (banc de faux positifs, lot 2). Ce
   // qu'on désigne, c'est la section qui AFFIRME quelque chose de ta ligne.
-  { quoi: 'ta ligne avec le CTO', sonde: /^Ta ligne (?:est|reste|demeure)\b/i },
-  { quoi: 'le topo du matin', sonde: /Le topo du matin/i },
-  { quoi: 'ce que tu lui renvoies quand tu ne tranches pas', sonde: /Ce que tu fais monter, et ce que tu tranches/i },
-  { quoi: 'le compte rendu d’avancement sur le chantier', sonde: /Tenir le ServiceDesk/i },
-  { quoi: 'le bilan de clôture', sonde: /^Clore$/i },
+  //
+  // ⚠️⚠️ CHAQUE SURFACE PORTE DEUX SONDES DEPUIS LE 2026-08-19, ET C'EST LE CORRECTIF DU LOT.
+  // `sonde` désigne la SECTION où la surface vit ; `porteuse` désigne LA PHRASE qui y
+  // rappelle la formule. La garde lit la phrase, jamais la section : voir le pavé de
+  // `la-formule-jai-besoin-de-toi`, où le motif est énoncé pour la famille entière.
+  //
+  // Les `porteuse` sont ancrées sur ce que la phrase NOMME — le topo, le bilan, le compte
+  // rendu, ce qui part sur ta ligne — jamais sur la formule elle-même : une sonde qui
+  // chercherait « besoin de toi » ne distinguerait plus la phrase de n'importe quelle autre
+  // qui la contient, et le défaut serait entier. Ancrer sur le SUJET de la phrase la rend
+  // reformulable (le corps de la phrase peut changer) sans la rendre confondable.
+  {
+    quoi: 'ta ligne avec le CTO',
+    sonde: /^Ta ligne (?:est|reste|demeure)\b/i,
+    porteuse: /Ce que tu y écris/i,
+  },
+  {
+    quoi: 'le topo du matin',
+    sonde: /Le topo du matin/i,
+    porteuse: /\bLe topo\b/i,
+  },
+  {
+    quoi: 'ce que tu lui renvoies quand tu ne tranches pas',
+    sonde: /Ce que tu fais monter, et ce que tu tranches/i,
+    porteuse: /part sur ta ligne/i,
+  },
+  {
+    quoi: 'le compte rendu d’avancement sur le chantier',
+    sonde: /Tenir le ServiceDesk/i,
+    porteuse: /compte rendu d['’]avancement/i,
+  },
+  {
+    quoi: 'le bilan de clôture',
+    sonde: /^Clore$/i,
+    porteuse: /\bLe bilan\b/i,
+  },
 ];
 
 /** La phrase que l'ajout 3 RETIRE. Un retrait se défait par mégarde plus facilement qu'un ajout. */
@@ -3801,6 +3832,28 @@ export const CONTROLES = [
       // S'ÉCRIT, pas la façon dont l'obligation est conjuguée — mesuré par la campagne de
       // reformulations légitimes du 2026-08-17, où « Le `rien` doit s'écrire » faisait crier
       // cette garde sur un texte plus impératif que l'original.
+      // ⚠️ LA POLARITÉ SEULE NE SUFFISAIT PAS, ET UNE PASSE DE REVUE L'A MESURÉ — 2026-08-19.
+      //
+      // La sonde `/Le `rien` s'écrit/` est courte : n'importe quelle phrase de cette section
+      // qui la porte satisfait la garantie. Mesuré — **la MOITIÉ de la phrase (28 mots sur 55)
+      // réinjectée ailleurs dans la section suffisait**, l'énoncé d'origine ayant disparu. La
+      // garde tenait l'AFFIRMATION et laissait partir le MOTIF, qui est ce qui la rend
+      // applicable : sans lui, « le rien s'écrit » est une consigne qu'on peut croire
+      // décorative, et c'est exactement comme ça qu'elle a cessé de mordre la première fois.
+      //
+      // On ancre donc la phrase porteuse sur ses DEUX moitiés — ce qu'elle affirme ET le coût
+      // qu'elle évite —, et la polarité continue de balayer le CORPS : une négation écrite
+      // dans une autre phrase de la section doit rester visible, ce qu'une lecture ligne à
+      // ligne perdrait. Les deux gardes ne se remplacent pas, elles se complètent.
+      const rien = s.corps.split('\n').filter((l) => /Le `rien` (?:s'écrit|doit s'écrire)/i.test(l));
+      assert.equal(rien.length, 1, `la règle du « rien » doit être énoncée une fois exactement (${rien.length})`);
+      assert.match(
+        rien[0], /oblige à lire le reste/i,
+        `« ${rien[0].trim().slice(0, 90)}… » affirme que le « rien » s’écrit sans dire CE QUE ÇA ÉVITE. `
+          + `Le motif — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir `
+          + `s’il y en a une — est ce qui rend la règle applicable ; sans lui elle se lit comme un détail `
+          + `de forme, et c’est ainsi qu’elle a cessé de mordre la première fois.`,
+      );
       exigePolarite(
         s.corps, /Le `rien` (?:s'écrit|doit s'écrire)/i,
         'le « rien » s’écrit — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir s’il y en a une',
@@ -3821,6 +3874,19 @@ export const CONTROLES = [
       const portees = s.corps.split('\n').filter((l) => /dernière ligne de tout message/i.test(l));
       assert.equal(portees.length, 1, `la portée de la formule doit être énoncée une fois exactement (${portees.length})`);
       exigeContrainte(portees[0], 'la portée de la formule');
+      // ⚠️ ET SES DEUX MOITIÉS — mesuré, pas supposé : cinq mots (« dernière ligne de tout
+      // message ») réinjectés ailleurs dans la section suffisaient à satisfaire cette garantie,
+      // l'énoncé d'origine ayant disparu. La portée n'est PAS « la formule va partout » : elle
+      // est écrite à l'envers, PAR LE DÉFAUT QU'ELLE CORRIGE — « ce n'est pas la rubrique d'un
+      // compte rendu ». C'est cette moitié-là qui fait le travail : le métier dit lui-même que
+      // « J'ai besoin de toi » n'a jamais mordu tant qu'elle était bornée à une rubrique. La
+      // laisser partir rendrait la portée vraie et inopérante, comme elle l'était.
+      assert.match(
+        portees[0], /rubrique/i,
+        `« ${portees[0].trim().slice(0, 90)}… » énonce la portée sans nommer CE QU'ELLE CORRIGE. `
+          + `La règle a vécu bornée à la rubrique d'un compte rendu et n'a jamais mordu ; c'est ce `
+          + `défaut nommé qui empêche un lecteur de l'y réduire à nouveau.`,
+      );
 
       // ── ⚠️ LA COUVERTURE — ET C'EST ELLE QUI FERME LE DÉFAUT D'ORIGINE.
       //
@@ -3859,15 +3925,56 @@ export const CONTROLES = [
       // ⚠️ ON LIT `corpsEtendu`, PAS `corps` : le rappel doit vivre QUELQUE PART sous ce titre,
       // pas forcément dans le chapeau. R1 est un titre de niveau 1 dont le corps propre tient
       // en deux lignes — l'exiger là aurait fabriqué un rejet faux.
+      //
+      // ⚠️⚠️⚠️ ET LE MÊME DÉFAUT S'EST ROUVERT UNE TROISIÈME FOIS, PAR L'AUTRE BOUT — 2026-08-19.
+      //
+      // La couverture lisait le corps étendu de la SECTION et y cherchait la formule n'importe
+      // où. Le lot F a ajouté sous « Clore » un encadré sur la renaissance — une SECONDE surface
+      // de message, parfaitement légitime — qui portait la chaîne littérale. À partir de cet
+      // instant, `la-formule-nest-plus-rappelee-au-bilan` a cessé de mordre : le bilan perdait
+      // son rappel, la section le gardait, la garde restait VERTE. **Une mutation devenue muette
+      // est le seul signal d'une garde désarmée** — elle ne rougit pas, elle cesse de prouver.
+      //
+      // ⚠️ LE MOTIF EST GÉNÉRAL, ET C'EST LUI QUI COMPTE : *une garde qui cherche un motif dans
+      // un PÉRIMÈTRE plus large que ce qu'elle prétend garder est satisfaite par n'importe quoi
+      // d'autre dans ce périmètre.* Elle ne peut plus distinguer « la chose est là » de
+      // « quelque chose d'autre est là », et **ça ne se voit pas en la relisant**.
+      //
+      // ✅ CHAQUE SURFACE EST DONC ANCRÉE SUR SA PHRASE, jamais sur sa section. La sonde
+      // `porteuse` désigne la phrase par ce qu'elle NOMME — le bilan, le topo, le compte rendu,
+      // ce qui part sur ta ligne — et la garde exige que CETTE phrase porte la formule. Un ajout
+      // ailleurs dans la même section ne la satisfait plus. Éprouvé dans les deux sens par
+      // `orchestrateur-sondes-ancrees.test.js` : la mutation redevient rouge sous un ajout
+      // légitime, et une reformulation légitime de la phrase porteuse ne fait crier personne.
+      //
+      // ⚠️ DEUX ÉCHECS DISTINCTS, DEUX MESSAGES — un rejet qui n'apprend rien est un rejet perdu.
+      // La phrase INTROUVABLE (ou ambiguë) dit que la sonde est à ré-ancrer, ou que la phrase est
+      // partie avec son rappel ; la phrase TROUVÉE SANS LA FORMULE dit que la garantie est perdue
+      // à cet endroit précis. Les confondre renverrait le lecteur au mauvais correctif.
       const perdus = [];
-      for (const { quoi, sonde } of ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE) {
+      const introuvables = [];
+      for (const { quoi, sonde, porteuse } of ENDROITS_OU_UN_MESSAGE_SE_FABRIQUE) {
         const autre = sectionDe(metier, sonde, `« ${quoi} »`);
-        if (!/besoin de toi/i.test(autre.corpsEtendu)) perdus.push(`${quoi} (« ${autre.titre} »)`);
+        const candidates = autre.corpsEtendu.split('\n').filter((l) => porteuse.test(l));
+        if (candidates.length !== 1) {
+          introuvables.push(`${quoi} (« ${autre.titre} » — ${candidates.length} phrase·s répondent à ${porteuse})`);
+          continue;
+        }
+        if (!/besoin de toi/i.test(candidates[0])) perdus.push(`${quoi} (« ${autre.titre} »)`);
       }
+      assert.deepEqual(
+        introuvables, [],
+        `${introuvables.length} surface(s) n’ont plus de phrase porteuse DÉSIGNABLE : la sonde ne `
+          + `trouve pas son terrain, ou en trouve plusieurs. Une garde qui ne sait plus où regarder `
+          + `ne garde rien — ré-ancre la sonde sur ce que la phrase NOMME, ou constate que le rappel `
+          + `est parti avec elle. ${introuvables.join(' · ')}`,
+      );
       assert.deepEqual(
         perdus, [],
         `${perdus.length} surface(s) ne rappellent plus la formule : elle redevient la rubrique d’un `
-          + `seul geste — exactement le défaut qu’elle corrige. ${perdus.join(' · ')}`,
+          + `seul geste — exactement le défaut qu’elle corrige. ⚠️ La garde lit désormais LA PHRASE `
+          + `de chaque surface, pas sa section : une autre phrase de la même section qui porterait la `
+          + `formule ne la satisfait plus. ${perdus.join(' · ')}`,
       );
     },
   },
@@ -5733,6 +5840,31 @@ export const MUTATIONS = [
     ),
   },
 
+  // ⚠️ AJOUTÉE APRÈS UN REJET DE REVUE — la garantie tenait son AFFIRMATION et laissait
+  // partir son MOTIF. La moitié de la phrase suffisait à satisfaire la garde ; celle-ci
+  // éprouve précisément la moitié qui partait.
+  {
+    id: 'la-portee-perd-le-defaut-quelle-corrige',
+    quoi: 'la portée cesse de nommer le défaut qu’elle corrige — elle reste vraie et redevient inopérante, exactement comme quand la règle était bornée à une rubrique',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Ce n'est pas la rubrique d'un compte rendu, c'est la dernière ligne de tout message.**",
+      '**La formule est la dernière ligne de tout message.**',
+    ),
+  },
+
+  {
+    id: 'le-rien-perd-le-cout-quil-evite',
+    quoi: 'la règle du « rien » garde son affirmation et perd ce qu’elle évite — elle se relit alors comme un détail de forme, ce qui est exactement comme elle a cessé de mordre la première fois',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " ; une ligne qui n'apparaît **que** lorsqu'il y a une demande oblige à lire le reste pour savoir s'il y en a une — précisément le travail qu'elle devait lui épargner.",
+      '.',
+    ),
+  },
+
   {
     id: 'le-rien-devient-facultatif',
     quoi: 'la dernière ligne n’apparaît plus que lorsqu’il y a une demande — c’est-à-dire qu’il faut lire le message pour savoir s’il y en a une',
@@ -5774,6 +5906,39 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.\n\n",
       '',
+    ),
+  },
+
+  // ⚠️ LES CINQ SURFACES SONT ÉPROUVÉES UNE À UNE — 2026-08-19, et c'est la moitié qui manquait.
+  //
+  // Trois mutations visaient la couverture (le topo, le bilan, le compte rendu) pour cinq
+  // surfaces déclarées. **Un rouge groupé prouve qu'AU MOINS UNE chose était gardée, jamais que
+  // toutes l'étaient** : les deux surfaces non mutées auraient pu perdre leur rappel sans que
+  // rien ne le dise. Les deux qui suivent ferment le compte — chaque surface a désormais sa
+  // mutation, et le retrait du rappel de n'importe laquelle rougit en la nommant.
+  //
+  // Elles retirent LA CLAUSE qui porte la formule et laissent la phrase porteuse en place :
+  // c'est le défaut réel (la surface reste, son rappel part), et c'est ce qui distingue le
+  // rejet « la garantie est perdue ici » du rejet « la sonde ne trouve plus son terrain ».
+  {
+    id: 'la-formule-nest-plus-rappelee-sur-ta-ligne',
+    quoi: 'la surface où le dirigeant lit vraiment perd son rappel — la phrase reste, la formule s’en va',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "des faits, pas ton raisonnement, et `J'ai besoin de toi : ` en dernière ligne de **chaque** message, `rien.` compris.",
+      'des faits, pas ton raisonnement, et le format court.',
+    ),
+  },
+
+  {
+    id: 'la-formule-nest-plus-rappelee-sur-ce-qui-monte',
+    quoi: 'ce qu’on fait monter au dirigeant perd son rappel — le message qui ATTEND une décision cesse de la demander à la forme',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision attendue>` en dernière ligne.",
+      '**Et ça part sur ta ligne, donc à sa forme** — brièvement, en une ligne.',
     ),
   },
 
