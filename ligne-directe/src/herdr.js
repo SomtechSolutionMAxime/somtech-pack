@@ -668,6 +668,66 @@ export async function ecranDe(pane, socket) {
   }
 }
 
+/**
+ * TOUS LES PANES DU POSTE — la source d'inventaire du RECENSEMENT, et pas celle du balayage.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI DEUX INVENTAIRES, ET POURQUOI CE N'EST PAS « UNE PORTE SUR DEUX »
+ *
+ * `agents()` demande à herdr QUELS PANES PORTENT UN AGENT — c'est ce qu'il faut au balayage,
+ * qui délivre une boîte : sans agent détecté, il n'y a pas de boîte à délivrer.
+ *
+ * `panes()` demande QUELS PANES EXISTENT. C'est ce qu'il faut au recensement, parce qu'un lieu
+ * d'orchestrateur se reconnaît à SON RÉPERTOIRE, pas à la détection d'agent de herdr. Les deux
+ * répondent à deux questions différentes ; ce n'est pas la même mesure écrite deux fois.
+ *
+ * ⚠️ ET L'ÉCART ENTRE LES DEUX EST MESURÉ, PAS SUPPOSÉ (T-20260819-0043, 2026-08-19) :
+ * `herdr agent list` a rendu TROIS lieux d'orchestrateur vivants là où `herdr pane list` en
+ * rendait CINQ — quarante pour cent de sous-comptage. Le pane de l'agent qui écrit ces lignes
+ * en faisait partie : `herdr agent rename <son-pane>` répondait `agent_not_found` pendant qu'il
+ * travaillait. **Un registre bâti sur `agents()` se déclarerait complet en manquant du monde.**
+ *
+ * ⚠️ LE REFUS TRAVERSE, COMME CHEZ `agents()`. Un `herdr` introuvable fait échouer TOUTES les
+ * sessions ; avaler ce refus rendrait une liste vide, et une liste vide se lit « aucun pane ».
+ * C'est le mode de panne que `balayage.js` a déjà fermé une fois, et il se referme ici pareil.
+ */
+export async function panes({ socket } = {}) {
+  if (socket) {
+    const reponse = await herdrStrict(['pane', 'list'], socket);
+    return (reponse.result?.panes || []).map((p) => ({ ...p, herdr_socket: socket }));
+  }
+  const vus = new Map();
+  const sessions = socketsHerdr();
+  let derniereErreur = null;
+  let uneSessionARepondu = false;
+  for (const s of sessions.length ? sessions : [undefined]) {
+    try {
+      const reponse = await herdrStrict(['pane', 'list'], s);
+      uneSessionARepondu = true;
+      for (const p of reponse.result?.panes || []) {
+        // ⚠️ LA CLÉ PORTE LA SESSION, PAS SEULEMENT LE PANE — et ce n'est pas de la prudence.
+        // Un identifiant de pane n'est unique QUE dans sa session : mesuré le 2026-08-19, ce
+        // poste porte treize sessions herdr, et `w5:p3` y désigne un pane de `progex` pendant
+        // que `w5:p8` en désigne un de `somtech`. Dédoublonner sur le seul `pane_id` ferait
+        // disparaître de l'inventaire un agent parfaitement vivant, parce qu'un homonyme d'une
+        // AUTRE session est passé avant lui — un sous-comptage silencieux, c'est-à-dire le
+        // défaut exact que cette fonction existe pour fermer.
+        const cle = `${s ?? ''}\u0000${p.pane_id}`;
+        if (!vus.has(cle)) vus.set(cle, { ...p, herdr_socket: s });
+      }
+    } catch (err) {
+      if (err instanceof OutilIntrouvable) throw err;
+      derniereErreur = err;
+    }
+  }
+  // ⚠️ AUCUNE SESSION N'A RÉPONDU ⇒ ON JETTE, ON NE REND PAS UNE LISTE VIDE. Sans ça, un poste
+  // dont toutes les sessions herdr sont injoignables rendrait exactement le même `[]` qu'un
+  // poste sans le moindre pane — et le recensement conclurait « aucun orchestrateur » là où la
+  // vérité est « je n'ai pas su regarder ». C'est la panne que ce lot existe pour nommer.
+  if (!uneSessionARepondu && derniereErreur) throw derniereErreur;
+  return [...vus.values()];
+}
+
 /** Tous les panes qui portent un agent, tels que herdr les voit maintenant. */
 export async function agents({ socket } = {}) {
   if (socket) {

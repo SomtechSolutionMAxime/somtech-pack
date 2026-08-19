@@ -24,6 +24,12 @@ import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu } from './lieu-agent.js';
 import { unTourDeBalayage } from './balayage.js';
+import {
+  CADENCE_DU_RECENSEMENT_MS,
+  referenceDuMetier,
+  unRecensement,
+} from './recensement.js';
+import { accesServiceDesk, etatDuMandat } from './mandat.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
 import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
@@ -220,6 +226,7 @@ export class Veilleur {
     v.connecterSlack();
     v.surveiller();
     v.balayer();
+    v.recenser();
     await v.reconcilier();
     journaliser(`veilleur démarré — espace ${identite.equipe}, ${lignesOuvertes(v.registre).length} ligne(s) ouverte(s)`);
     // ⚠️ UNE GARDE QUI NE PEUT PLUS JUGER LE DIT (T-20260818-0046). Sans identifiant d'espace
@@ -323,6 +330,14 @@ export class Veilleur {
         return this.designerDirigeantDuPoste(requete);
       case 'etat':
         return this.etat();
+      case 'recensement':
+        // ⚠️ ON RECENSE À LA DEMANDE, ON NE REND PAS LE DERNIER TOUR. Un registre qui
+        // rendrait la mesure d'il y a quatorze minutes répondrait « qui est à jour » avec
+        // l'état d'avant la publication qu'on vient de faire — c'est-à-dire le défaut que
+        // la passe manuelle avait déjà : une photo qui périme sans le dire. La ronde sert
+        // à ce que le journal porte l'historique ; la question, elle, se mesure quand on
+        // la pose. Elle coûte 408 ms sur ce poste.
+        return this.recensementDuPoste();
       case 'ceder':
         // Le veilleur en place se retire pour laisser la place à une version plus récente.
         //
@@ -1660,6 +1675,87 @@ export class Veilleur {
     return rendu;
   }
 
+  // ———————————————————————————————————————————————— le registre des orchestrateurs du poste
+
+  /**
+   * LA RONDE DE RECENSEMENT — qui est vivant, quel métier il porte, est-il à jour.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════════════════
+   * POURQUOI ELLE VIT ICI, ET POURQUOI CE N'EST PAS UN POUVOIR DE PLUS (E-20260819-0005)
+   *
+   * Le veilleur voit DÉJÀ tout le poste et parle DÉJÀ aux orchestrateurs. Ce qui lui manquait,
+   * c'est de savoir quel métier chacun porte. On ajoute une mesure à une ronde qui existe ; on
+   * ne fabrique pas une ronde, et on n'accorde aucune capacité nouvelle — ce recensement LIT,
+   * il n'écrit nulle part et n'envoie rien à personne.
+   *
+   * ⚠️ ET IL NE DÉCLENCHE AUCUNE REMISE À JOUR, JAMAIS. Le geste qui remet un agent à jour
+   * (`/clear`) existe et il a été mesuré (`T-20260819-0050`), mais il EFFACE LE FIL DE L'AGENT :
+   * rien n'est arrêté — un shell d'arrière-plan et un sous-agent en vol survivent — mais l'agent
+   * perd la connaissance de ce qui tourne et déclare sa session propre. **Le registre propose,
+   * il n'impose pas**, et l'agent doit pouvoir dire « pas maintenant » AVANT : un consentement
+   * demandé après ne vaut rien, puisqu'il ne saura plus à quoi il consent. Un veilleur qui
+   * enverrait ce geste de lui-même casserait des chantiers en croyant les entretenir.
+   *
+   * ⚠️ LE BATTEMENT DE CŒUR EST DANS `unRecensement`, PAS ICI — même règle que le balayage : une
+   * ronde éteinte ne produit aucune erreur, et seule sa trace la distingue d'un dispositif mort.
+   */
+  recenser(cadence = CADENCE_DU_RECENSEMENT_MS) {
+    clearInterval(this.recenseur);
+    // ⚠️ UNE RONDE NE DÉMARRE PAS PENDANT QU'UNE AUTRE COURT — même raison que le balayage : la
+    // cadence est un intervalle ENTRE deux tours, pas une horloge.
+    this.recensementEnCours = false;
+    this.recenseur = setInterval(() => {
+      if (this.arrete || this.recensementEnCours) return;
+      this.recensementEnCours = true;
+      this.recensementDuPoste()
+        .catch((err) => journaliser(`recensement — le tour a échoué : ${err?.message || err}`))
+        .finally(() => {
+          this.recensementEnCours = false;
+        });
+    }, cadence);
+    this.recenseur.unref?.();
+    return this.recenseur;
+  }
+
+  /**
+   * Un recensement, câblé sur le poste réel — et rien d'autre que du câblage.
+   *
+   * ⚠️ L'INVENTAIRE PASSE PAR `herdr.panes()`, PAS PAR `herdr.agents()`. Un lieu d'orchestrateur
+   * se reconnaît à SON RÉPERTOIRE ; `agents()` répond à une autre question (« quel pane porte un
+   * agent détecté ») et il SOUS-COMPTE — 40 % mesurés le 2026-08-19. Les noms, eux, viennent bien
+   * de `agents()`, mais seulement pour HABILLER un pane déjà trouvé : son silence ne retire
+   * personne du registre, et s'il refuse, le recensement continue sans noms plutôt que sans monde.
+   */
+  async recensementDuPoste() {
+    let nomsConnus = null;
+    try {
+      nomsConnus = new Map(
+        (await herdr.agents())
+          .filter((a) => a.name)
+          .map((a) => [`${a.herdr_socket ?? ''}\u0000${a.pane_id}`, a.name])
+      );
+    } catch {
+      // ⚠️ UN ENRICHISSEMENT QUI REFUSE N'EST PAS UNE PANNE D'INVENTAIRE. On perd des noms
+      // d'affichage, pas des agents — et le rendu porte déjà `mandat`, qui identifie.
+      nomsConnus = null;
+    }
+    // ⚠️ L'ÉTAT DU MANDAT VIENT DU SERVICEDESK, PAS DE herdr — et sans clé, on ne devine pas.
+    // `accesServiceDesk` rend `null` quand rien ne permet de joindre le service ; `etatDuMandat`
+    // rend alors « non mesuré », et le registre ne propose rien. C'est voulu : proposer une
+    // remise à jour à un mandat clos réveillerait un chantier terminé, et deux orchestrateurs
+    // pourraient agir sur les mêmes panes en se croyant seuls (T-20260819-0056).
+    const acces = accesServiceDesk();
+    return unRecensement({
+      panes: () => herdr.panes(),
+      roleDuLieu,
+      reference: referenceDuMetier({}),
+      lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
+      etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
+      nomsConnus,
+      journaliser,
+    });
+  }
+
   connecterSlack() {
     if (this.arrete) return;
     // TROISIÈME MUR, et le dernier avant la connexion elle-même. Il se lève AVANT tout
@@ -2394,6 +2490,16 @@ export class Veilleur {
     this.arrete = true;
     clearInterval(this.chienDeGarde);
     clearInterval(this.balayeur);
+    // ⚠️ LA RONDE DE RECENSEMENT S'ARRÊTE ICI AVEC LES AUTRES — ET C'EST LA SECONDE CEINTURE,
+    // pas la seule. Mesuré par mutation : retirer CE `clearInterval` ne fait rougir aucun banc,
+    // parce que `this.arrete` retient déjà la ronde ; et retirer `this.arrete` n'en fait rougir
+    // aucun non plus, parce que ce `clearInterval` retient le minuteur. **Chacune est invisible
+    // seule, l'ensemble est gardé** — un banc mute les deux à la fois pour le prouver.
+    //
+    // Et ce n'est pas la vie du processus qui est en jeu : le minuteur est `unref()`, il ne le
+    // tient pas éveillé. Ce qu'on évite, c'est une ronde qui continue de se réveiller après
+    // l'arrêt — silencieuse, mais bien là.
+    clearInterval(this.recenseur);
     try {
       this.ws?.close();
     } catch {
