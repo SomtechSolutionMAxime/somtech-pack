@@ -814,7 +814,37 @@ export async function livrerBrief({
             'surlignée au lieu de soumettre mon texte — une action que personne ne m’a demandé ' +
             'd’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane ; mon brief est ' +
             'toujours dans la boîte, entier, et partira quand la boîte sera rendue.'
-          : ''),
+          : '') +
+        // ⚠️ ET LA MOITIÉ SYMÉTRIQUE — CELLE OÙ L'ON A AGI (T-20260819-0009).
+        //
+        // L'invariant est posé trente lignes plus haut, sur le refus du cas symétrique : UN
+        // REFUS QUI TAIT UN GESTE DÉJÀ POSÉ EST UN REFUS QUI MENT PAR OMISSION. Il n'était
+        // appliqué QUE de ce côté-là. Ici, la branche qui dit « je n'ai PAS agi » — le dialogue,
+        // juste au-dessus — portait cinq lignes de prose, et les deux branches qui disent
+        // « j'AI agi » n'en portaient aucune. « Une porte sur deux », appliqué à un invariant
+        // que ce module se donne à lui-même.
+        //
+        // ⚠️ CE N'EST PAS UN DÉFAUT DU CHAMP. `causeRepare` sort déjà `soumise` / `envoi-refuse`
+        // (T-20260818-0031) et reste honnête. Le champ sert la MACHINE ; ce `message` sert le
+        // LECTEUR — un agent ou un humain qui cherche pourquoi son brief n'est pas passé, et qui
+        // décidera à partir de lui s'il presse une touche à son tour.
+        //
+        // ⚠️ ET LE MOTIF N'EST PAS REDIAGNOSTIQUÉ : on lit `causeRepare`, posée sur la branche
+        // qu'on a prise à l'étape 4. Le relire sur l'écran ferait porter à ce refus le motif
+        // d'un état postérieur au geste.
+        (causeRepare === CAUSES_REPARATION.SOUMISE
+          ? '\n⚠️ ET UNE TOUCHE D’ENVOI EST DÉJÀ PARTIE VERS CE PANE : le texte était bien dans ' +
+            'la boîte et n’en partait pas, je l’ai donc soumis — herdr a accepté ce geste. Il ' +
+            'N’A PAS SUFFI : la boîte n’a pas été vidée pour autant. Ce que tu vois n’est donc ' +
+            'pas un pane intact — une action irréversible y a déjà eu lieu, et elle est de moi. ' +
+            'Va le regarder avant d’en presser une autre.'
+          : causeRepare === CAUSES_REPARATION.ENVOI_REFUSE
+            ? '\n⚠️ ET LA TOUCHE D’ENVOI A ÉTÉ TENTÉE VERS CE PANE, PUIS REFUSÉE PAR HERDR : le ' +
+              'texte était bien dans la boîte et n’en partait pas, j’ai donc demandé la ' +
+              'soumission — herdr a repoussé la commande. Le geste a été TENTÉ, pas abouti : ce ' +
+              'refus de herdr est la seule raison de croire qu’aucune touche n’a atteint ce ' +
+              'pane. Va le regarder avant d’en presser une autre.'
+            : ''),
     };
   }
 

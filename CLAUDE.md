@@ -105,7 +105,9 @@ Scope par défaut : `.claude,docs,scripts,README.md`. Les release notes génér�
 
 ### Versioning
 
-Chaque installation crée `.somtech-pack/version.json` dans le projet cible, permettant de détecter la version installée et les mises à jour disponibles. La version du pack est dans `VERSION` à la racine.
+Chaque installation crée `.somtech-pack/version.json` dans le projet cible, permettant de détecter la version installée et les mises à jour disponibles. **La version du pack se lit sur le tag git** — `git tag --sort=-v:refname | head -1` — qui en est la source unique.
+
+> ⚠️ **Les fichiers `VERSION` et `pack.json` du dépôt ne portent PAS la version publiée, et c'est voulu.** Au publish, `.github/workflows/publish.yml` les aligne sur le tag *dans le paquet*, sans jamais recommiter — le paquet publié porte donc la bonne version, le dépôt garde la dernière valeur commitée. Mesuré le 2026-08-19 : `VERSION` sur `main` disait `1.64.0` pendant que le tag et le paquet publié étaient à `1.75.0`. Lire `VERSION` dans le dépôt rend la version d'un paquet qui n'existe pas.
 
 ## Conventions
 

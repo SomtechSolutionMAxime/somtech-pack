@@ -14,6 +14,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { lignesAvouees, manquementsDeLAveu } from './lib/motifs-du-refus.mjs';
 import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -58,6 +59,10 @@ function installerFauxHerdr(scenario = {}) {
       boiteQuiChange: false,
       boiteSeLibere: false,
       enterInoperant: false,
+      // `agent send-keys` REFUSÉ par herdr — l'autre moitié du geste de réparation. Le champ
+      // `causeRepare: 'envoi-refuse'` existe pour cet état ; aucun scénario du banc ne savait
+      // le produire, donc la porte du binaire ne pouvait pas être éprouvée dessus.
+      enterRefuse: false,
       // Ce que la session AFFICHE au-dessus de sa boîte — un modal, un écran de démarrage.
       // Sans ce levier, aucun essai ne pourrait éprouver la garde d'écran.
       horsBoite: '',
@@ -77,7 +82,7 @@ const SEP = '\u2500'.repeat(20);   // le VRAI filet de l'ecran, pas un tiret ASC
 const promptFait  = passes.find((a) => a[0] === 'agent' && a[1] === 'prompt');
 const enterEnvoye = passes.some((a) => a[0] === 'agent' && a[1] === 'send-keys');
 const lectures    = passes.filter((a) => a[0] === 'agent' && a[1] === 'read').length;
-const enterUtile  = enterEnvoye && !sc.enterInoperant;
+const enterUtile  = enterEnvoye && !sc.enterInoperant && !sc.enterRefuse;
 
 // Contenu courant de la boîte, tel que le VRAI service le montrerait.
 function boite() {
@@ -136,7 +141,13 @@ if (cmd === 'agent prompt') {
   process.stdout.write(JSON.stringify({ result: { type: 'agent_prompted', agent: { agent_status: 'working' } } }));
   process.exit(0);
 }
-if (cmd === 'agent send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+if (cmd === 'agent send-keys') {
+  if (sc.enterRefuse) {
+    process.stdout.write(JSON.stringify({ error: { code: 'send_keys_refused', message: 'refused' } }));
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0);
+}
 process.stdout.write(JSON.stringify({ result: { ok: true } }));
 `;
   writeFileSync(join(bac, 'herdr'), script);
@@ -731,4 +742,80 @@ test('le motif que le bin rend SUIT le chemin réellement pris — il n’est pa
   const rendu = JSON.parse(r.stdout);
   assert.equal(rendu.repare, true, 'la réparation a bien mordu dans ce scénario');
   assert.equal(rendu.causeRepare, 'soumise', 'et le motif doit avoir changé avec le chemin');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA PORTE DU BINAIRE — un refus qui ne tait pas le geste déjà posé (T-20260819-0009)
+//
+// ⚠️ LE MODULE PEUT DIRE VRAI ET LE BINAIRE JETER LE MOT AU SOL. C'est le défaut exact du lot
+// précédent (T-20260818-0031) : une cause calculée sur neuf branches qui ne franchissait pas
+// cette porte-ci. La prose du refus se lit sur `stderr` du vrai exécutable, avec un faux herdr
+// en tête de `PATH` — aucune vraie session n'est touchée.
+//
+// L'état éprouvé est celui du ticket, et il est MESURÉ possible sur le vrai service : la touche
+// d'envoi part, herdr l'accepte, et la boîte ne se vide pas (`enterInoperant`).
+
+// ⚠️ ET ON N'ASSERTE PAS SUR TOUT LE `stderr` — MESURÉ, ÇA REND UN VERT FAUX. La première
+// ligne du refus rapporte ce que herdr a dit, et herdr dit « a refusé : no state change
+// observed » : chercher « refus » dans l'ensemble du flux était donc satisfait par un mot qui
+// ne venait PAS de la prose éprouvée. Le contrôle était vert sans jamais toucher ce qu'il
+// prétendait mesurer — vérifié : en substituant à la prose du cas REFUSÉ celle du cas ACCEPTÉ,
+// il restait vert. On isole donc la ligne AVOUÉE, celle que ce lot ajoute.
+
+// ⚠️ ET LE FILTRE NE SUFFIT PAS SEUL — RELEVÉ EN SECONDE PASSE DE FOND. `motDeLaDelivrance`
+// écrit lui aussi des lignes qui commencent par ⚠️, et l'une d'elles (« j'ai tenté de le
+// soumettre pour son auteur — la touche d'envoi seule […] SANS EFFET ») satisferait mot pour mot
+// les critères ci-dessous, en venant d'un tout AUTRE chemin (la délivrance d'une boîte étrangère,
+// T-20260816-0114). Aucun essai ne les confond aujourd'hui — les deux scénarios partent d'une
+// boîte vide, donc n'arment jamais la délivrance — mais rien ne le garantissait. On le mesure :
+// une touche d'envoi partie AVANT la première écriture est une délivrance, pas une réparation.
+const aucuneDelivranceArmee = (journal) => {
+  const a = appels(journal);
+  const iPrompt = a.findIndex((x) => x[0] === 'agent' && x[1] === 'prompt');
+  const iEnter = a.findIndex((x) => x[0] === 'agent' && x[1] === 'send-keys');
+  return iPrompt !== -1 && (iEnter === -1 || iEnter > iPrompt);
+};
+
+test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est AVOUÉE', () => {
+  const journal = installerFauxHerdr({ soumetSeule: false, enterInoperant: true, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'un compte rendu ordinaire');
+
+  assert.notEqual(r.code, 0, 'le brief n’a pas été pris : le binaire doit refuser');
+  assert.ok(
+    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'une touche d’envoi est bien partie — c’est elle que le refus doit nommer'
+  );
+
+  assert.ok(aucuneDelivranceArmee(journal), 'la ligne d’aveu doit venir de la RÉPARATION, pas d’une délivrance');
+  assert.match(r.stderr, /bo[îi]te encore pleine/iu, 'et la touche acceptée n’a bel et bien pas vidé la boîte');
+
+  const avouees = lignesAvouees(r.stderr);
+  assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
+  assert.deepEqual(
+    manquementsDeLAveu(avouees[0], { herdrARefuse: false }),
+    [],
+    `la ligne d’aveu du BINAIRE doit dire le geste, au passé, sa conséquence, sans déni — ${avouees[0]}`
+  );
+});
+
+test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée aussi', () => {
+  const journal = installerFauxHerdr({ soumetSeule: false, enterRefuse: true, statutMuet: true });
+  const r = livrer('w9:p1', '--texte', 'un compte rendu ordinaire');
+
+  assert.notEqual(r.code, 0);
+  assert.ok(
+    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    'la commande est bel et bien partie vers herdr, même si herdr l’a repoussée'
+  );
+
+  assert.ok(aucuneDelivranceArmee(journal), 'la ligne d’aveu doit venir de la RÉPARATION, pas d’une délivrance');
+  assert.match(r.stderr, /bo[îi]te encore pleine/iu, 'une touche que herdr repousse ne vide rien — la boîte doit le montrer');
+
+  const avouees = lignesAvouees(r.stderr);
+  assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
+  assert.deepEqual(
+    manquementsDeLAveu(avouees[0], { herdrARefuse: true }),
+    [],
+    `la ligne d’aveu du BINAIRE doit dire le geste tenté, repoussé par herdr, et sa conséquence — ${avouees[0]}`
+  );
 });
