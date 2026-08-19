@@ -75,26 +75,41 @@ const CONDUITE = {
  */
 async function ouEstLaBoite(cible) {
   const parAgent = await trouverDestinataire(cible);
-  if (parAgent.ok) return { ...parAgent, parPane: false };
-  if (!estUnPane(cible)) return parAgent;
+  // Un NOM d'agent n'est pas ambigu au niveau des panes : `trouverDestinataire` a déjà refusé
+  // les homonymes de nom, et il n'y a pas de second chemin à consulter.
+  if (!estUnPane(cible)) return parAgent.ok ? { ...parAgent, parPane: false } : parAgent;
 
+  // ⚠️ ON COMPTE LES SESSIONS QUI PORTENT CE PANE **MÊME QUAND LE REGISTRE A RÉPONDU** — relevé
+  // par une revue indépendante, et c'est le côté qui n'était pas gardé.
+  //
+  // Le refus d'homonymie ne couvrait que le chemin de repli : dès qu'un agent enregistré
+  // portait l'identifiant visé, on partait lire son écran sans demander si une AUTRE session du
+  // poste porte un pane du même nom. Or un identifiant de pane est INTERNE à sa session, et
+  // `w7:p1` existait dans deux sessions de ce poste au moment de la mesure — dont une seule
+  // avec un agent au registre (qui, lui, ment sur les agents neufs : `T-20260819-0121`).
+  //
+  // ⚠️ CE QUE ÇA PRODUISAIT EST LE PIRE DES RENDUS : un verdict JUSTE sur un écran qu'on n'a pas
+  // visé. Il a l'air fondé — il porte même un nom d'agent — et rien ne dit qu'il parle d'ailleurs.
   const trouves = [];
   for (const socket of sessionsDuPoste()) {
     const r = await appelHerdr(['pane', 'get', String(cible).trim()], { socket });
     if (r.ok && r.reponse?.result?.pane) trouves.push({ socket, pane: r.reponse.result.pane.pane_id ?? String(cible).trim() });
   }
-  if (trouves.length === 0) return parAgent; // le refus du registre reste le bon message
   if (trouves.length > 1) {
     return {
       ok: false,
       message:
         `deux sessions ou plus portent le pane « ${cible} » (${trouves.map((t) => t.socket).join(', ')}) — ` +
         'un identifiant de pane est interne à sa session, et lire l’un pour l’autre rendrait un ' +
-        'verdict juste sur un écran qu’on n’a pas visé. Rien n’a été lu.',
+        'verdict juste sur un écran qu’on n’a pas visé. Rien n’a été lu. Désigne-le par le NOM ' +
+        'de son agent, qui est unique sur le poste.',
     };
   }
-  // ⚠️ AUCUN NOM À DONNER, ET ON LE DIT EN LE LAISSANT NUL — plutôt que d'inventer un libellé
-  // qui ferait croire à un agent connu du registre.
+  // Une seule session le porte : si le registre y connaît un agent, on garde son NOM — il aide
+  // le lecteur à reconnaître de qui on parle. Sinon on lit le pane directement, et le nom reste
+  // nul plutôt qu'inventé.
+  if (parAgent.ok) return { ...parAgent, parPane: false };
+  if (trouves.length === 0) return parAgent; // le refus du registre reste le bon message
   return { ok: true, pane: trouves[0].pane, socket: trouves[0].socket, nom: null, parPane: true };
 }
 

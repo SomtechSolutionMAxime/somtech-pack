@@ -267,7 +267,21 @@ export const ETATS_BOITE = Object.freeze({
    * une heure après l'écriture de `etatDeLaBoite` — c'est l'usage réel qui l'a trouvé.
    */
   FILE_DATTENTE: 'file-attente',
-  /** Rien à soumettre : ce qui s'affiche est une proposition de l'éditeur, en gris. */
+  /**
+   * Rien à soumettre : ce qui s'affiche est en gris, et ce n'est aucun des marqueurs qu'on sait
+   * nommer — donc, pour tout ce qu'on en sait, une proposition de l'éditeur.
+   *
+   * ⚠️ CE NOM DIT « DU GRIS QUE JE N'AI PAS SU NOMMER AUTREMENT », et c'est délibéré. La
+   * CONDUITE, elle, est la même pour tout gris : il n'y a rien à soumettre. Le cas
+   * `queued messages` l'a montré une heure après l'écriture de ce module — un second marqueur
+   * gris existait, portant un autre fait. D'autres peuvent apparaître ; ils se nommeront ici.
+   *
+   * ⚠️ UNE REVUE A DEMANDÉ SI UN VRAI TEXTE POUVAIT ÊTRE PRIS POUR DU GRIS. Mesuré le
+   * 2026-08-19 sur un pane jetable : un texte portant lui-même `ESC[2m … ESC[22m`, COLLÉ dans
+   * la boîte, est rendu **sans aucun attribut** — Claude Code n'interprète pas les séquences
+   * qu'on lui donne, il ne met du gris que pour ses propres marqueurs. Le banc
+   * `les-trois-etats-dune-boite.test.js` fixe cette mesure.
+   */
   SUGGESTION: 'suggestion',
   /** Un vrai texte, arrivé par COLLAGE — l'écran n'en montre qu'un repli, `[Pasted text #N]`. */
   COLLEE: 'collee',

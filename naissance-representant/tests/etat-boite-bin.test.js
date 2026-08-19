@@ -46,9 +46,15 @@ fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify(args) + '\\n');
 const cmd = args.slice(0, 2).join(' ');
 const SEP = '─'.repeat(20);
 const SANS_AGENT = ${sansAgent ? 'true' : 'false'};
+// ⚠️ LE DOUBLE DOIT DISTINGUER LES SESSIONS, sinon il ne peut pas produire le cas réel :
+// une session qui porte l'agent, une autre qui porte un pane du même identifiant SANS agent.
+// Un double qui répond la même chose à tout le monde rend un banc qui ne peut pas échouer.
+const SOCKET = process.env.HERDR_SOCKET_PATH || '';
+const SESSION_SANS_REGISTRE = SOCKET.includes('faux-b');
 const ECRAN = ['⏺ un travail au-dessus', SEP, ${JSON.stringify('LIGNE')}, SEP, '  auto mode on'].join('\\n');
 if (cmd === 'agent list') {
-  process.stdout.write(JSON.stringify({ id: 'x', result: { agents: SANS_AGENT ? [] : [{ name: 'cible', pane_id: 'w1:p1', agent_status: 'idle' }] } }) + '\\n');
+  const vide = SANS_AGENT || SESSION_SANS_REGISTRE;
+  process.stdout.write(JSON.stringify({ id: 'x', result: { agents: vide ? [] : [{ name: 'cible', pane_id: 'w1:p1', agent_status: 'idle' }] } }) + '\\n');
 } else if (cmd === 'agent get') {
   if (SANS_AGENT) { process.stdout.write(JSON.stringify({ id: 'x', error: { code: 'agent_not_found', message: 'agent target w1:p1 not found' } }) + '\\n'); }
   else { process.stdout.write(JSON.stringify({ id: 'x', result: { agent: { pane_id: 'w1:p1', name: 'cible', agent_status: 'idle' } } }) + '\\n'); }
@@ -159,4 +165,36 @@ test('DEUX SESSIONS QUI PORTENT LE MÊME PANE : on REFUSE, on ne tire pas au sor
   const r = lancer(['w1:p1'], { sessions: '/tmp/faux-a.sock:/tmp/faux-b.sock' });
   assert.notEqual(r.status, 0);
   assert.match(`${r.stdout}${r.stderr}`, /deux|plusieurs/i);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// RELEVÉ PAR UNE REVUE INDÉPENDANTE — l'homonymie n'était gardée que d'un côté
+//
+// 🔴 LE REFUS D'HOMONYMIE NE COUVRAIT QUE LE CHEMIN DE REPLI. Si le registre trouve UN agent
+// portant le pane visé, la commande partait lire son écran sans jamais demander si une AUTRE
+// session du poste porte un pane du même identifiant. Or c'est le cas mesuré : `w7:p1` existe
+// dans deux sessions de ce poste, et un identifiant de pane est INTERNE à sa session.
+//
+// ⚠️ CE QUE ÇA PRODUIT EST LE PIRE DES RENDUS : un verdict JUSTE, sur un écran qu'on n'a pas
+// visé. Il a l'air fondé — il porte même un nom d'agent — et rien ne dit qu'il parle d'ailleurs.
+// Le lecteur conclut « boîte vide » sur le pane A pendant que le pane B qu'il visait porte un
+// message urgent.
+
+test('LE REGISTRE NE SUFFIT PAS À LEVER L’HOMONYMIE — on refuse même quand un agent répond', () => {
+  // Session A : un agent enregistré porte `w1:p1`, boîte vide. Session B : le même identifiant
+  // de pane existe, sans agent au registre. Les deux sont des candidats, et rien ne les
+  // départage — on ne tire pas au sort l’écran qu’on lit.
+  installerFauxHerdr({ ligneDeBoite: '❯ ' });
+  const r = lancer(['w1:p1'], { sessions: '/tmp/faux-a.sock:/tmp/faux-b.sock' });
+  assert.notEqual(r.status, 0, `un refus est attendu — vu : ${r.stdout}`);
+  assert.match(`${r.stdout}${r.stderr}`, /deux|plusieurs/i);
+});
+
+test('ET UNE SEULE SESSION QUI PORTE LE PANE SE LIT NORMALEMENT — le refus ne mange pas le cas courant', () => {
+  // ⚠️ L'AUTRE MOITIÉ : une garde qui refuserait dès qu'elle voit un pane rendrait la commande
+  // inutilisable sur un poste à une seule session, c'est-à-dire partout ailleurs qu'ici.
+  installerFauxHerdr({ ligneDeBoite: '❯ reste ici' });
+  const r = lancer(['w1:p1']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout.trim().split('\n').pop()).etat, 'saisie');
 });

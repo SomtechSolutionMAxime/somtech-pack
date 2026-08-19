@@ -141,3 +141,30 @@ test('ET UNE VRAIE SUGGESTION RESTE UNE SUGGESTION — la distinction ne mange p
   assert.equal(etatDeLaBoite(SUGGESTION).etat, ETATS_BOITE.SUGGESTION);
   assert.equal(etatDeLaBoite(SUGGESTION).suggestion, 'merge la PR 37');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA QUESTION D'UNE REVUE INDÉPENDANTE : UN VRAI TEXTE PEUT-IL ÊTRE PRIS POUR DU GRIS ?
+//
+// La revue a fabriqué un dump où le contenu de la boîte est ENTIÈREMENT encadré par une paire
+// `ESC[2m … ESC[22m` — un message urgent qui se lirait alors « rien à soumettre ». Sur un dump
+// fabriqué, elle a raison : le lecteur le classerait `suggestion`.
+//
+// ⚠️ LA MESURE DIT QUE LE TERMINAL NE PRODUIT PAS CE DUMP. Éprouvé le 2026-08-19 sur un pane
+// jetable, par exécution : le texte `ESC[2mURGENT: ne merge pas…ESC[22m` déposé par un VRAI
+// collage (`ESC[200~ … ESC[201~`) ressort à l'écran **sans aucun attribut** —
+// `❯ URGENT: ne merge pas, jai trouve un bug critique` — et le lecteur rend `saisie`, boîte
+// pleine. Claude Code n'interprète pas les séquences qu'on lui donne : il rend la boîte
+// lui-même, et n'y met du gris que pour ses propres marqueurs.
+//
+// ⚠️ CE QUE ÇA N'ÉTABLIT PAS : que ce soit vrai de toute version, de tout mode d'arrivée, de
+// tout terminal. `[non établi]`. C'est pourquoi cet essai fixe la mesure au lieu de conclure —
+// s'il rougit un jour, c'est que le rendu a changé, et la question de la revue redevient ouverte.
+
+test('UN TEXTE RÉEL QUI PORTE DES SÉQUENCES DIM RESTE UNE BOÎTE PLEINE — tel que le terminal le rend', () => {
+  // Le dump ci-dessous est recopié de la mesure : ce que l'écran a RÉELLEMENT porté après le
+  // collage d'un texte qui contenait `ESC[2m` et `ESC[22m`.
+  const rendu = ecran('❯ URGENT: ne merge pas, jai trouve un bug critique');
+  const vu = etatDeLaBoite(rendu);
+  assert.equal(vu.etat, ETATS_BOITE.SAISIE, 'le terminal a mangé les séquences — le texte compte');
+  assert.equal(vu.texte, 'URGENT: ne merge pas, jai trouve un bug critique');
+});
