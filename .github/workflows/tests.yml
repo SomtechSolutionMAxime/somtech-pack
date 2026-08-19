@@ -48,14 +48,25 @@ jobs:
       # Bornée comme dans `publish.yml` : là-bas, la même commande a pendu 30 minutes sur
       # le verrou dpkg. Ici elle a pris 20 s — c'est de la chance, pas une garantie.
       - name: Installer zsh (contrôle du PATH depuis un shell non interactif)
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           set -eu
           if command -v zsh >/dev/null 2>&1; then zsh --version; exit 0; fi
-          sudo apt-get -o DPkg::Lock::Timeout=60 update -qq
-          sudo apt-get -o DPkg::Lock::Timeout=60 install -y -qq zsh
+          # `install` D'ABORD, sans `update` : les index de l'image suffisent le plus
+          # souvent, et c'est `update` qui contacte tous les miroirs — c'est LUI qui a
+          # pendu, mesuré deux fois. On ne rafraîchit que si l'installation a échoué.
+          for essai in 1 2 3; do
+            if sudo apt-get -o DPkg::Lock::Timeout=60 install -y -qq zsh; then break; fi
+            echo "tentative $essai : dépôt indisponible ou index périmés — on rafraîchit"
+            sudo apt-get -o DPkg::Lock::Timeout=60 update -qq || true
+            sleep 5
+          done
+          # Le dernier mot est une MESURE, pas le code de sortie de la boucle : si zsh
+          # n'est pas là, l'étape échoue ici, franchement, plutôt que de laisser la suite
+          # découvrir l'absence à sa façon.
+          command -v zsh && zsh --version
       # `npm test` et non `node --test` : une seule source de vérité pour la
       # portée de la suite (le package.json du CLI, borné à cli/test/).
       - name: node --test (cli)
