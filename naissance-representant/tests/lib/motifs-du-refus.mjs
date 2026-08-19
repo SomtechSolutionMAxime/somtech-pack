@@ -82,6 +82,27 @@ export const DIT_LA_CONSEQUENCE =
  * appliquées au message entier, refusaient une phrase honnête dont le déni portait sur autre
  * chose (« je n'ai pas encore vérifié si un second destinataire attend »).
  */
+// ⚠️ CE QUE CES MOTIFS NE SAVENT PAS FAIRE, ET QUI EST MESURÉ (cinquième passe de fond).
+//
+// Ce sont des listes de tournures, pas une lecture du sens. Deux conséquences connues :
+//
+//   • ILS MATCHENT HORS CONTEXTE. Mesuré : « herdr a accepté ce geste, comme ma liste de tâches
+//     du jour, restée pleine » satisfait `DIT_LA_CONSEQUENCE` — la formule est là, elle ne parle
+//     simplement pas de la boîte. Les 35 essais restent verts. Ancrer sur le mot « boîte » ne
+//     fermerait rien : la phrase le contient déjà, ailleurs.
+//   • ILS REFUSENT DES TOURNURES JUSTES qu'on n'a pas listées. Mesuré : « et rien n'a changé sur
+//     ce pane », « resté dans le même état qu'avant », « en vain » disent la conséquence et sont
+//     rejetés.
+//
+// C'est UNE SEULE cause : une énumération se rattrape un exemple à la fois, et la liste ne
+// rejoint jamais la langue. Cinq passes de fond de suite ont trouvé une variante du même point
+// aveugle. Ce qui le fermerait n'est pas un motif de plus, c'est un critère qui lise la
+// proposition — et ça ne se décide pas dans un fichier de test. Consigné : T-20260819-0072.
+//
+// ⚠️ ET CE QUE CE POINT AVEUGLE NE MET PAS EN CAUSE : la prose réellement livrée par
+// `livraison.js`, qui est juste et qu'aucune de ces variantes n'a fait bouger. Le trou est dans
+// ce qui GARDE le texte, pas dans le texte.
+
 export const lignesAvouees = (texte) => texte.split('\n').filter((l) => l.trimStart().startsWith('⚠'));
 
 /** Ce qu'on exige d'un refus qui AVOUE un geste posé. Rend la liste des manquements. */
