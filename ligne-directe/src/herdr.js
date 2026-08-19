@@ -694,12 +694,20 @@ export async function ecranDe(pane, socket) {
 export async function panes({ socket } = {}) {
   if (socket) {
     const reponse = await herdrStrict(['pane', 'list'], socket);
-    return (reponse.result?.panes || []).map((p) => ({ ...p, herdr_socket: socket }));
+    // La MÊME forme que la branche d'agrégation : un appelant qui recevrait tantôt un tableau,
+    // tantôt un objet finirait par n'en traiter qu'une — et c'est celle qui porte les refus qu'il
+    // laisserait tomber.
+    return {
+      panes: (reponse.result?.panes || []).map((p) => ({ ...p, herdr_socket: socket })),
+      sessionsInterrogees: 1,
+      sessionsRefusees: [],
+    };
   }
   const vus = new Map();
   const sessions = socketsHerdr();
   let derniereErreur = null;
   let uneSessionARepondu = false;
+  const refus = [];
   for (const s of sessions.length ? sessions : [undefined]) {
     try {
       const reponse = await herdrStrict(['pane', 'list'], s);
@@ -718,6 +726,7 @@ export async function panes({ socket } = {}) {
     } catch (err) {
       if (err instanceof OutilIntrouvable) throw err;
       derniereErreur = err;
+      refus.push({ session: s ?? null, raison: err?.message || String(err) });
     }
   }
   // ⚠️ AUCUNE SESSION N'A RÉPONDU ⇒ ON JETTE, ON NE REND PAS UNE LISTE VIDE. Sans ça, un poste
@@ -725,7 +734,19 @@ export async function panes({ socket } = {}) {
   // poste sans le moindre pane — et le recensement conclurait « aucun orchestrateur » là où la
   // vérité est « je n'ai pas su regarder ». C'est la panne que ce lot existe pour nommer.
   if (!uneSessionARepondu && derniereErreur) throw derniereErreur;
-  return [...vus.values()];
+  // ⚠️ ET UNE SESSION QUI REFUSE SE DIT, ELLE NE SE TAIT PAS. Trouvé en répondant à la question
+  // « ce chiffre est-il un plancher ou un total ? » — et c'était le même défaut, une couche plus
+  // bas : trois sessions injoignables sur treize rendaient un compte AMPUTÉ D'UN QUART, présenté
+  // comme complet. Le `catch` était bon pour ce pour quoi il a été écrit (une session morte ne
+  // doit pas invalider les autres) ; ce qui manquait, c'est que son prix se voie.
+  //
+  // Le rendu porte donc les deux : ce qu'on a vu, et ce qu'on n'a pas su regarder. C'est ce qui
+  // permet à l'appelant d'écrire « au moins N » plutôt que « N ».
+  return {
+    panes: [...vus.values()],
+    sessionsInterrogees: sessions.length || 1,
+    sessionsRefusees: refus,
+  };
 }
 
 /** Tous les panes qui portent un agent, tels que herdr les voit maintenant. */

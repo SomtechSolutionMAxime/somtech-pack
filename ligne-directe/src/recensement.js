@@ -62,6 +62,31 @@ import { join } from 'node:path';
 import { referenceDuPoste } from './fraicheur-gabarit.js';
 
 /**
+ * CE QUE CE RECENSEMENT NE PEUT PAS VOIR — par construction, et pas par accident.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LE COMPTE RENDU EST UN **PLANCHER**, JAMAIS UN TOTAL. Et ce n'est pas une précaution de
+ * style : le 2026-08-19, le même parc — qui n'avait pas bougé — a été compté **trois**, puis
+ * **cinq**, puis **sept** en une matinée. Ce qui changeait à chaque fois était L'INSTRUMENT.
+ * **Sept n'est donc pas un total non plus** ; rien ne prouve qu'on a fini de chercher.
+ *
+ * Une seule chose a protégé le compte de trois : la marque « plancher » écrite À CÔTÉ du chiffre.
+ * Elle vit donc dans le RENDU, pas dans un compte rendu qu'on relit une fois.
+ *
+ * Ce que cette liste énumère, ce sont les façons dont un orchestrateur bien vivant peut ne pas
+ * figurer ici. Elle est incomplète par nature — c'est le propre d'un plancher — mais chacune de
+ * ses entrées a été constatée ou lue dans le code, aucune n'est imaginée.
+ */
+export const CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS = [
+  'un agent qui ne tourne pas dans une session herdr (terminal ordinaire, tmux, IDE) : herdr ne le voit pas, donc nous non plus',
+  'une session herdr dont le socket ne vit pas sous « ~/.config/herdr/sessions/<nom>/herdr.sock » : la découverte ne la trouve pas',
+  'une session herdr qui a REFUSÉ de répondre pendant ce tour : ses panes manquent, et c’est pourquoi ses refus sont rendus nommément',
+  'un agent dont le répertoire de travail n’est plus sous son lieu (il a changé de dossier) : le chemin ne dit plus rien de son mandat',
+  'un lieu dont le métier ne porte plus l’en-tête attendu du rôle : « roleDuLieu » ne l’établit alors pas — un métier assez ancien peut être invisible pour cette raison même',
+  'un lieu à demi posé : les quatre fichiers du rôle sont exigés, et il en manque un',
+];
+
+/**
  * LA CADENCE DE LA RONDE DE RECENSEMENT — et elle est déclarée ICI, avec ce qu'elle règle.
  *
  * ⚠️ PAS AUPRÈS DE `CADENCE_DU_BALAYAGE_MS`, et ce n'est pas un oubli. La leçon de
@@ -302,7 +327,14 @@ export async function unRecensement({
       regle: REGLE_DE_CONDUITE,
     };
   }
-  liste = Array.isArray(liste) ? liste : [];
+  // ⚠️ DEUX FORMES ACCEPTÉES, ET LA SECONDE PORTE CE QUI MANQUE. `herdr.panes()` rend
+  // « { panes, sessionsInterrogees, sessionsRefusees } » : une session injoignable ne fait pas
+  // échouer le tour, mais son absence se PAIE en panes non vus. Trois sessions muettes sur
+  // treize amputent le compte d'un quart — et sans ce champ, l'amputation serait invisible.
+  const enveloppe = liste && !Array.isArray(liste) && Array.isArray(liste.panes) ? liste : null;
+  const sessionsRefusees = enveloppe?.sessionsRefusees ?? [];
+  const sessionsInterrogees = enveloppe?.sessionsInterrogees ?? null;
+  liste = enveloppe ? enveloppe.panes : Array.isArray(liste) ? liste : [];
 
   const orchestrateurs = [];
   for (const p of liste) {
@@ -391,10 +423,14 @@ export async function unRecensement({
   // signale que lorsqu'il a quelque chose à dire est indiscernable d'un dispositif mort ; c'est
   // le pire cas de `balayage.js`, et il ne se rejoue pas ici.
   journaliser(
-    `recensement — ${liste.length} pane(s) vus, ${orchestrateurs.length} orchestrateur(s) : ` +
+    `recensement — ${liste.length} pane(s) vus, AU MOINS ${orchestrateurs.length} orchestrateur(s) : ` +
       `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats ` +
       `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s)` +
-      (reference?.empreinte ? ` (référence ${reference.empreinte.slice(0, 16)})` : ' (SANS référence)')
+      (reference?.empreinte ? ` (référence ${reference.empreinte.slice(0, 16)})` : ' (SANS référence)') +
+      (sessionsRefusees.length
+        ? ` — ⚠️ COMPTE AMPUTÉ : ${sessionsRefusees.length} session(s) herdr muette(s) : ` +
+          sessionsRefusees.map((r) => `${r.session ?? 'sans socket'} (${r.raison})`).join(' ; ')
+        : '')
   );
 
   return {
@@ -411,10 +447,27 @@ export async function unRecensement({
       mandatsClos,
       mandatsNonMesures,
     },
+    // ⚠️ LA BORNE VOYAGE AVEC LE CHIFFRE, dans le rendu — pas dans un compte rendu à côté.
+    // C'est elle qui interdit de lire « sept orchestrateurs » comme « il y en a sept ».
+    borne: {
+      nature: 'plancher',
+      phrase:
+        `AU MOINS ${orchestrateurs.length} orchestrateur(s) — ce compte est un PLANCHER, jamais ` +
+        'un total : chaque amélioration de l’instrument en a trouvé davantage sur un parc ' +
+        'inchangé (3, puis 5, puis 7 dans la même matinée du 2026-08-19).',
+      sessionsInterrogees,
+      // Nommées, pas comptées : une session muette est une part du poste qu'on n'a pas regardée,
+      // et savoir LAQUELLE est ce qui permet d'aller voir.
+      sessionsRefusees,
+      angleMort: CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
+    },
     resume:
-      `${orchestrateurs.length} orchestrateur(s) vivant(s) — ${aJour} à jour, ${enRetard} en ` +
-      `retard, ${nonMesures} non mesuré(s) ; mandats : ${mandatsOuverts} ouvert(s), ` +
-      `${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s).`,
+      `AU MOINS ${orchestrateurs.length} orchestrateur(s) vivant(s) — ${aJour} à jour, ` +
+      `${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats : ${mandatsOuverts} ` +
+      `ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s).` +
+      (sessionsRefusees.length
+        ? ` ⚠️ ${sessionsRefusees.length} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.`
+        : ' (plancher, pas un total)'),
     regle: REGLE_DE_CONDUITE,
   };
 }

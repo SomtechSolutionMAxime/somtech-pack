@@ -28,8 +28,6 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ---
 
----
-
 *Lot G : PR #295 (`E-20260819-0003`, stories `T-20260819-0026` à `0028`), sous la demande `D-20260818-0008`. **Trois gardes ne gardaient pas ce qu'elles prétendaient garder** — et le lot en a trouvé trois de plus en se relisant, dont deux dans ses propres bancs.*
 
 ### Corrigé

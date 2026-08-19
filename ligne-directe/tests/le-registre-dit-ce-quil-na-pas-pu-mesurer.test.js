@@ -39,6 +39,7 @@ import {
   lieuDuChemin,
   travailEnVol,
   GESTE_DE_REMISE_A_JOUR,
+  CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
 } from '../src/recensement.js';
 import { roleDuLieu } from '../src/lieu-agent.js';
 import { etatDuMandat, familleDuMandat, STATUTS_CLOS, STATUTS_CONNUS } from '../src/mandat.js';
@@ -407,4 +408,52 @@ test('deux sessions herdr qui emploient le même identifiant de pane rendent DEU
   // Et chacun porte SA session : sans elle, personne ne pourrait désigner l'un plutôt que l'autre.
   const sessionsRendues = new Set(rendu.orchestrateurs.map((o) => o.session));
   assert.equal(sessionsRendues.size, 2, 'le registre doit dire DE QUELLE session chaque pane vient');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE COMPTE EST UN PLANCHER — et il le dit lui-même
+//
+// Le 2026-08-19, le même parc a été compté TROIS, puis CINQ, puis SEPT en une matinée. Ce qui
+// changeait à chaque fois était l'INSTRUMENT, jamais le parc. Une seule chose a empêché le
+// premier compte d'être publié comme un fait : la marque « plancher » écrite À CÔTÉ du chiffre.
+
+test('le rendu porte la marque « plancher » et son angle mort — pas dans un compte rendu à côté', async () => {
+  const rendu = await unRecensement({ panes: [], roleDuLieu });
+  assert.equal(rendu.borne.nature, 'plancher');
+  assert.match(rendu.resume, /AU MOINS/, 'le résumé ne doit jamais se lire comme un total');
+  assert.ok(rendu.borne.angleMort.length >= 3, 'ce qu’on ne peut pas voir est ÉNUMÉRÉ, pas évoqué');
+  assert.equal(rendu.borne.angleMort, CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS);
+});
+
+test('une session herdr muette AMPUTE le compte — et le rendu le dit au lieu de le taire', async () => {
+  // ⚠️ CE BANC GARDE UN SOUS-COMPTAGE SILENCIEUX D'UNE COUCHE PLUS BAS. `panes()` continue quand
+  // une session refuse — c'est bon, une session morte ne doit pas invalider les autres — mais le
+  // prix doit se voir : trois sessions muettes sur treize amputent le compte d'un quart, et sans
+  // ce champ le rendu présenterait ce quart manquant comme un parc complet.
+  const rendu = await unRecensement({
+    panes: async () => ({
+      panes: [],
+      sessionsInterrogees: 13,
+      sessionsRefusees: [
+        { session: '/x/sessions/cg/herdr.sock', raison: 'connexion refusée' },
+        { session: '/x/sessions/progex/herdr.sock', raison: 'délai dépassé' },
+      ],
+    }),
+    roleDuLieu,
+  });
+  assert.equal(rendu.inventaireRefuse, null, 'ce n’est PAS une panne totale : les autres ont répondu');
+  assert.equal(rendu.borne.sessionsRefusees.length, 2);
+  // Nommées, pas comptées : savoir LAQUELLE s'est tue est ce qui permet d'aller voir.
+  assert.match(rendu.borne.sessionsRefusees[0].session, /cg/);
+  assert.match(rendu.resume, /amputé/i, 'le résumé doit porter l’amputation, pas seulement le rendu');
+  assert.equal(rendu.borne.sessionsInterrogees, 13);
+});
+
+test('aucune session muette : le résumé le dit aussi, et reste un plancher', async () => {
+  const rendu = await unRecensement({
+    panes: async () => ({ panes: [], sessionsInterrogees: 13, sessionsRefusees: [] }),
+    roleDuLieu,
+  });
+  assert.doesNotMatch(rendu.resume, /amputé/i);
+  assert.match(rendu.resume, /plancher/, 'même complet, un compte reste un plancher');
 });
