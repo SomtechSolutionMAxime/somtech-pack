@@ -5,6 +5,26 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-19
+
+*Lot F : PR #292 (`E-20260819-0001`, stories `T-20260819-0014` à `0019`), sous la demande `D-20260818-0008`. **Le métier de l'orchestrateur prescrivait huit gestes dont on avait prouvé la veille qu'ils ne tenaient pas.** Aucune des huit corrections mesurées le 18 août n'était encore dans le texte qui les prescrit — un texte lu en entier par chaque orchestrateur qui naît.*
+
+### Corrigé
+
+- **La veille de déblocage se pose avec `--detach`, plus jamais avec un `&`** — la forme prescrite était tuée par le harnais, mesurée deux fois pendant que celles d'un autre orchestrateur survivaient. Et elle se pose **après le brief**, plus à la naissance nue, où l'agent est `idle` sans rien à faire (`T-20260818-0109`).
+- **`--list` remplace le comptage** : un `ps | grep` a rendu « 3 » alors qu'aucune des trois ne gardait les agents de celui qui comptait. `--list` rend le pane, l'agent et le **motif d'arrêt** de chacune.
+- **Un `done` se relit à l'écran** avant qu'on en conclue quoi que ce soit — deux chefs d'équipe `done` n'avaient pas fini, ils avaient été coupés par une limite de session. Le geste est **ciblé** (un `done` sans compte rendu), pour que la ronde ne devienne pas « lire tous les écrans à chaque tour » (`T-20260818-0123`).
+- **Un orchestrateur qui renaît sur un chantier non clos ne referme pas sa ligne** — la règle visait la clôture d'un chantier ; appliquée à une renaissance, elle coupe le CTO entre deux orchestrateurs. Écrite **aux deux endroits** où le geste se pose, avec la différence `durable` / `jetable` (`T-20260818-0128`).
+- **Les conditions de fin d'un lot vivent aux deux endroits** — le `/goal` **et** les `success_criteria` de l'epic : un `pane run` vers un agent occupé s'affame, mesuré à ~16 minutes, et un but jamais pris est un agent qui s'arrête au premier palier (`T-20260818-0143`).
+- **Le geste qui soumet un texte resté dans une boîte a deux conditions, pas une** : le texte est le tien, **et tu viens de relire la boîte, juste avant**. Sans la seconde, une consigne juste posée sur un état de quinze minutes produit un geste sur une boîte vide.
+- **La correction entre pairs est réciproque** — *un pair qui se croit systématiquement en tort cesse de corriger*. Six corrections croisées en trois heures, chacune ayant évité une écriture fausse (`D-20260818-0008`).
+- **`R3` ne se contredit plus** : le bloc « te nommer toi-même » donnait encore un code de mandat en exemple, dans la section même qui l'interdit aux orchestrateurs. Et le nom d'agent n'est pas le titre de l'onglet — un agent qui pose l'un se croit nommé sans l'être.
+
+### Technique
+
+- **`scripts/tests/test-metier-orchestrateur.sh`** — un banc neuf qui garde ces huit gestes, ancré section par section : une règle écrite ailleurs que là où le geste se pose ne gouverne personne. 28 assertions, rouge à 23 avant le lot. Éprouvé par mutation, un point à la fois, sur copie hors dépôt.
+- **Deux passages écrits deux fois mot pour mot** dans le métier — le test `size_bytes` de Somcraft et la consigne de compaction — deviennent des renvois : **1 101 octets récupérés**. *Un texte qui se répète est un texte qu'on a cessé de relire.*
+
 ## [Non-versionne] - 2026-08-18
 
 *Un seul lot : PR #289 (`E-20260818-0020`, stories `T-20260818-0154` à `0159`), sous la demande `D-20260818-0008`. La veille de déblocage **promettait une protection qu'elle n'assurait pas, sans jamais le dire** — et le geste que le métier prescrit produisait systématiquement le défaut.*
