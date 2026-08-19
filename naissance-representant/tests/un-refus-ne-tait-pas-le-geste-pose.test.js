@@ -94,10 +94,18 @@ async function refusDevantUnDialogue() {
 // « la touche d'envoi est déjà partie — quelqu'un aurait pu m'avertir, mais le geste a eu lieu ».
 // Une garde qui crie sur du texte correct se fait retirer par le premier qui la rencontre, et
 // emporte avec elle ce qu'elle gardait vraiment.
+//
+// ⚠️ ET LE DÉNI NE SE DIT PAS QU'AVEC « TENTÉ » — élargi en troisième passe de fond, sur un leurre
+// qui repassait : « la touche d'envoi aurait normalement dû suffire, mais je ne l'ai pas encore
+// essayée ». Le déni y vit dans une autre proposition et dans un autre verbe. On garde les tours
+// qui nient un geste, pas un mot unique.
 const FORMULES_DE_NON_TENTATIVE = [
-  /n[’']ai\s+pas\s+tent/iu,
+  /n[’']ai\s+(?:pas|jamais)/iu,
+  /pas\s+encore/iu,
+  /n[’']a\s+(?:pas|jamais)\s+(?:[ée]t[ée]\s+)?(?:press|soumis|envoy|tent|part)/iu,
+  /jamais\s+[ée]t[ée]\s+tent/iu,
   /RIEN\s+soumis/iu,
-  /aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti)/iu,
+  /aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti|normalement|d[ûu])/iu,
 ];
 
 // ⚠️ CE QU'ON CHERCHE EST LA FONCTION, PAS MA RÉDACTION (relevé en passe de fond : une première
@@ -111,6 +119,12 @@ const FORMULES_DE_NON_TENTATIVE = [
 //   • IL EST AU PASSÉ — « déjà », « est partie », « j'ai pressé ». Un geste au futur ou au
 //     conditionnel n'est pas un geste posé, et c'est très exactement ce que ce lot ferme.
 const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frappe|raccourci|press[ée])/iu;
+
+// ⚠️ « HERDR A REFUSÉ », ET RIEN D'AUTRE — resserré en troisième passe de fond. Interdire le mot
+// « rejet » n'importe où refusait une prose honnête et utile : « herdr a accepté ce geste, mais
+// Claude Code a ensuite rejeté ma commande ». Un rejet EN AVAL est un fait de plus, pas un
+// mensonge ; c'est l'issue attribuée à HERDR qui doit rester vraie.
+const HERDR_A_REFUSE = /(herdr[^.]{0,40}(refus|repouss|rejet)|(refus|repouss[ée]e?|rejet[ée]e?)[^.]{0,40}par\s+herdr)/iu;
 // ⚠️ PAS DE `\b` APRÈS UNE LETTRE ACCENTUÉE — MESURÉ : `/ai\s+[a-zà-ÿ]+[ée]s?\b/` refusait
 // « j'ai pressé » et « j'ai appuyé ». En JavaScript, `\b` se calcule sur `[A-Za-z0-9_]` : « é »
 // n'y est pas, donc entre « é » et l'espace il n'y a AUCUNE frontière, et le motif ne peut pas
@@ -145,7 +159,7 @@ test('la touche d’envoi est partie et herdr l’a ACCEPTÉE, sans suffire : le
   // raison de croire qu'aucune touche n'a atteint ce pane ». L'inverser ici rendrait au lecteur
   // exactement la conclusion que ce lot existe pour lui retirer.
   assert.ok(
-    !/(refus|repouss[ée]|rejet)/iu.test(r.message),
+    !HERDR_A_REFUSE.test(r.message),
     `herdr a ACCEPTÉ ce geste : le refus ne doit pas annoncer l’inverse — ${r.message}`
   );
 });
@@ -245,6 +259,16 @@ test('aucune touche partie : AUCUN des quatre chemins muets n’en annonce une',
     },
     immobiliteMs: 0,
   });
+
+  // ⚠️ ET LE LIBELLÉ DE LA BOÎTE EST APPARIÉ À SA CAUSE (relevé en troisième passe de fond). Le
+  // même `message` dit aussi ce que la boîte MONTRAIT — « illisible », « vide », « encore pleine ».
+  // Ces libellés étaient permutables sans qu'un seul des 413 essais ne rougisse : `causeRepare`
+  // restait juste pour la machine, et le lecteur lisait le contraire de ce qu'on avait vu.
+  // « On ne sait pas lire » et « il n'y avait rien » ne sont pas le même fait.
+  assert.match(boiteIllisible.message, /bo[îi]te\s+illisible/iu, 'un écran illisible se dit illisible');
+  assert.ok(!/bo[îi]te\s+vide/iu.test(boiteIllisible.message), 'et surtout pas « vide » — on n’a pas su lire');
+  assert.match(boiteVide.message, /bo[îi]te\s+vide/iu, 'une boîte vide se dit vide');
+  assert.ok(!/bo[îi]te\s+illisible/iu.test(boiteVide.message), 'et surtout pas « illisible » — on a bien lu, il n’y avait rien');
 
   const muets = [
     ['dialogue', dialogue],

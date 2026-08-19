@@ -783,7 +783,9 @@ const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frap
 // se fermer. La garde refusait ainsi deux tournures parfaitement honnêtes — un faux rejet né
 // d'un détail d'implémentation, jamais d'un fait.
 const AU_PASSE = /(d[ée]j[àa]|a\s+[ée]t[ée]|est\s+partie?|ai\s+[a-zà-ÿ]+[ée]s?(?![a-zà-ÿ]))/iu;
-const NON_TENTATIVE = /(n[’']ai\s+pas\s+tent|RIEN\s+soumis|aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti))/iu;
+const NON_TENTATIVE = /(n[’']ai\s+(?:pas|jamais)|pas\s+encore|RIEN\s+soumis|aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti|normalement|d[ûu]))/iu;
+// Seule l'issue attribuée à HERDR doit rester vraie — un rejet en aval est un fait de plus.
+const HERDR_A_REFUSE = /(herdr[^.]{0,40}(refus|repouss|rejet)|(refus|repouss[ée]e?|rejet[ée]e?)[^.]{0,40}par\s+herdr)/iu;
 
 test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est AVOUÉE', () => {
   const journal = installerFauxHerdr({ soumetSeule: false, enterInoperant: true, statutMuet: true });
@@ -804,7 +806,7 @@ test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est
   assert.match(aveu, NOMME_LE_GESTE, 'la ligne d’aveu du BINAIRE nomme le geste');
   assert.match(aveu, AU_PASSE, 'et le dit au passé');
   assert.ok(!NON_TENTATIVE.test(aveu), 'et surtout pas avec la formule d’une non-tentative');
-  assert.ok(!/(refus|repouss[ée]|rejet)/iu.test(aveu), 'herdr a ACCEPTÉ ce geste : la ligne d’aveu ne dit pas l’inverse');
+  assert.ok(!HERDR_A_REFUSE.test(aveu), 'herdr a ACCEPTÉ ce geste : la ligne d’aveu ne dit pas l’inverse');
 });
 
 test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée aussi', () => {
