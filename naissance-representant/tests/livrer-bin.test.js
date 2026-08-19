@@ -819,3 +819,62 @@ test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée a
     `la ligne d’aveu du BINAIRE doit dire le geste tenté, repoussé par herdr, et sa conséquence — ${avouees[0]}`
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// L'ÉTAT DE LA BOÎTE FRANCHIT LA SORTIE — six heures perdues faute de ce mot (E-20260819-0015)
+//
+// 🔴 CE QUE `livrer.js` SAVAIT DÉJÀ, ET NE DISAIT PAS. Mesuré le 2026-08-19 sur les 94 panes
+// Claude Code du poste : `contenuBoite` rend « vide » sur les 33 boîtes qui portaient une
+// suggestion grisée, et « pleine » sur le seul vrai texte collé. **La lecture était juste.**
+//
+// Ce qui manquait est le MOT. L'orchestrateur qui a l'écran devant les yeux VOIT un texte ;
+// l'outil livre sans un mot, ou refuse pour une autre cause, et rien ne le détrompe. Deux
+// orchestrateurs ont ainsi bâti — et propagé — une conclusion fausse pendant trois heures
+// chacun : dans leur état de reprise, au ServiceDesk, et sur la ligne du dirigeant.
+//
+// ⚠️ UN VERDICT QU'ON NE PEUT PAS VÉRIFIER NE CONVAINC PERSONNE. La sortie porte donc l'état
+// NOMMÉ de la boîte telle qu'elle a été vue avant l'écriture, avec le texte de la suggestion
+// écartée — de quoi reconnaître son propre écran, et cesser de chercher.
+
+test('LA SORTIE NOMME LA SUGGESTION ÉCARTÉE — sinon le lecteur qui voit l’écran ne croit pas « livré »', () => {
+  const ESC = String.fromCharCode(27);
+  installerFauxHerdr({ boiteInitiale: `${ESC}[0m${ESC}[2mmerge la PR 37${ESC}[0m` });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.equal(r.code, 0, r.stderr);
+  const vu = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.equal(vu.ok, true, 'une suggestion n’a jamais empêché de livrer, et ça ne change pas');
+  assert.equal(vu.boite?.etat, 'suggestion', 'la boîte était vide DERRIÈRE une suggestion — et on le dit');
+  assert.equal(
+    vu.boite?.suggestion,
+    'merge la PR 37',
+    'avec le texte vu : c’est ce qui permet au lecteur de reconnaître SON écran'
+  );
+});
+
+test('UNE BOÎTE VRAIMENT VIDE NE S’ANNONCE PAS COMME UNE SUGGESTION — on éprouve aussi l’absence', () => {
+  // ⚠️ Une garde qui ne sait reconnaître que le cas qu'on lui a montré nomme « suggestion »
+  // tout ce qu'elle voit. Ce serait le même défaut retourné : un mot rassurant sur un fait
+  // qui n'a pas eu lieu.
+  installerFauxHerdr({ boiteInitiale: '' });
+  const vu = JSON.parse(livrer('w9:p1', '--texte', 'coucou').stdout.trim().split('\n').pop());
+  assert.equal(vu.boite?.etat, 'vide');
+  assert.equal(vu.boite?.suggestion, null);
+});
+
+test('UN REFUS SUR BOÎTE PLEINE DIT LEQUEL DES DEUX TEXTES C’EST — collé ou saisi', () => {
+  // Les deux n'appellent pas la même conduite : un texte SAISI a peut-être quelqu'un derrière
+  // le clavier, un texte COLLÉ n'en a par construction aucun. Le refus qui les confond envoie
+  // attendre devant un pane où personne ne reviendra.
+  installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]', enterInoperant: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0, 'la boîte n’a pas pu être libérée : le refus tient');
+  // ⚠️ LA PREMIÈRE ÉCRITURE DE CET ESSAI CHERCHAIT `/coll/i` — et elle passait AVANT le
+  // correctif, sur le mot « collés » de la phrase « les deux textes collés » qui parle d'autre
+  // chose. Un essai qui passe par un mot voisin ne garde rien. On exige donc la tournure qui
+  // NOMME le mode d'arrivée, et l'essai a rougi avant de verdir.
+  assert.match(
+    `${r.stdout}${r.stderr}`,
+    /arrivé par COLLAGE/,
+    'le refus nomme le MODE D’ARRIVÉE du texte qui bloque — personne n’est derrière ce clavier'
+  );
+});

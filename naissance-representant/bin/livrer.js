@@ -168,6 +168,20 @@ async function main() {
       // champ ne dit plus que « l'appel a été accepté ». Dans les deux cas, ce qui tranche est
       // la relecture, pas lui.
       attendu: resultat.attendu,
+      // `boite` — CE QUE LA BOÎTE PORTAIT **AVANT** QU'ON ÉCRIVE, nommé (E-20260819-0015).
+      //
+      // 🔴 SIX HEURES PERDUES LE 2026-08-19 FAUTE DE CE MOT. Deux orchestrateurs ont cru des
+      // boîtes bloquées alors qu'elles portaient une SUGGESTION grisée — un texte que Claude
+      // Code propose et que rien, dans un dump sans attributs, ne distingue d'un texte saisi.
+      // Cette commande, elle, ne s'y trompait pas : elle lit en `--format ansi` et livrait
+      // normalement. **Mais elle ne le DISAIT pas** — et un outil qui a raison en silence ne
+      // détrompe personne, surtout pas quelqu'un qui a l'écran devant les yeux.
+      //
+      // ⚠️ C'EST LA SECONDE PORTE, comme `causeRepare` et `causeDelivre` avant elle. `livraison.js`
+      // peut nommer l'état parfaitement : s'il ne franchit pas ce JSON, l'appelant lit la même
+      // sortie muette qu'avant. « Une porte sur deux » est le motif le plus cher de ce dépôt, et
+      // il a déjà été commis DANS le correctif écrit pour le fermer.
+      boite: resultat.boite ?? null,
     })}\n`
   );
 }

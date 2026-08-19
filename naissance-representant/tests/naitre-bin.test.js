@@ -811,7 +811,9 @@ test('naitre.js crée l’onglet DANS le lieu, fait naître l’agent, PUIS lit 
     // annonce `interactive_ready: true` sur un modal, et seule cette lecture le démasque.
     assert.deepEqual(
       appels[iRead],
-      ['agent', 'read', 'w9:p1', '--source', 'visible', '--lines', '40'],
+      // `--format ansi` ajouté le 2026-08-19 (E-20260819-0015) : la sonde d'écran dégrise, et
+      // sans attributs elle n'a rien à dégriser. Voir `naissance.js`.
+      ['agent', 'read', 'w9:p1', '--source', 'visible', '--lines', '40', '--format', 'ansi'],
       'l’écran se lit par la commande construite pour ça, sur le pane qui vient de naître'
     );
 

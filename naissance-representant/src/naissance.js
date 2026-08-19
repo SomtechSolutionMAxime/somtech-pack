@@ -567,8 +567,24 @@ export function commandesNaissance(
       '--timeout', String(ATTENTE_NAISSANCE_MS),
       '--', '--model', modele, '--permission-mode', mode,
     ],
-    /** L'écran affiché — le seul témoin qui dise si l'agent peut réellement recevoir. */
-    lireEcran: (paneId) => ['agent', 'read', paneId, '--source', 'visible', '--lines', '40'],
+    /**
+     * L'écran affiché — le seul témoin qui dise si l'agent peut réellement recevoir.
+     *
+     * ⚠️ `--format ansi` : SANS LUI, LA SONDE REÇOIT UNE ENTRÉE QUI NE PEUT PAS PORTER CE
+     * QU'ELLE CHERCHE (E-20260819-0015). `etatDeLEcran` commence par `sansGris` — parce qu'un
+     * texte GRISÉ est une proposition de l'éditeur, pas le contenu de l'écran. En texte brut,
+     * il n'y a plus d'attribut à retirer : la suggestion redevient indiscernable du reste.
+     *
+     * 🔴 CE QUE ÇA POUVAIT PRODUIRE ICI, et c'est pire qu'un mauvais diagnostic. Les sondes
+     * d'écrans connus cherchent des PHRASES. Une suggestion reprend un message déjà envoyé,
+     * donc le vocabulaire de ce poste : si elle recoupe l'une de ces phrases, la naissance
+     * conclut à un écran connu et **envoie des touches pour le franchir** — dans une boîte de
+     * saisie, sur une session qui allait très bien.
+     *
+     * Les options d'origine sont GARDÉES : on ajoute de quoi lire, on ne change pas ce qu'on
+     * regarde.
+     */
+    lireEcran: (paneId) => ['agent', 'read', paneId, '--source', 'visible', '--lines', '40', '--format', 'ansi'],
     interroger: (paneId) => ['agent', 'get', paneId],
     // ⚠️ `paneRun` ET `renommer` ONT ÉTÉ RETIRÉS avec `agent start` (T-20260816-0038), et leur
     // absence est délibérée. `agent start` lance ET nomme en un geste ; les garder « au cas où »

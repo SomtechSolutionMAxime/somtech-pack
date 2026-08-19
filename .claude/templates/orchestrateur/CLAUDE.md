@@ -622,7 +622,30 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui do
 >
 > **Relis son écran après chaque `pane run`** (`herdr pane read "$P"`) et vérifie que le geste a été **pris**, pas seulement envoyé. Le texte exige cette preuve pour `livrer.js` ; **il n'y a aucune raison qu'elle s'arrête là.**
 
-🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a DEUX conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes.
+### 🔴 Un texte GRISÉ n'est pas un texte saisi — la lecture d'écran ne les distingue PAS
+
+**Avant de conclure qu'une boîte contient quelque chose, mesure son ÉTAT — ne lis pas son écran.**
+
+```bash
+node "$HOME/.somtech/naissance-representant/bin/etat-boite.js" "$P"
+```
+
+**Elle rend l'un de trois états, nommé, et elle ne touche à rien** — aucune touche, aucune écriture : elle est faite pour être tapée sur le pane de quelqu'un d'autre.
+
+| Ce qu'elle rend | Ce que c'est | Ce que tu fais |
+|---|---|---|
+| `suggestion` | **une proposition de l'éditeur**, en gris | **rien** — il n'y a rien à soumettre, et rien n'est bloqué |
+| `collee` | un texte réel, arrivé par **collage** | boîte pleine — `livrer.js` la délivre sans l'écraser |
+| `saisie` | un texte réel, **tapé** | boîte pleine — quelqu'un est peut-être devant ce clavier |
+| `illisible` | on n'a **pas vu** | ce n'est pas « vide » — va regarder toi-même |
+
+> 🔴 **Ce que ça a coûté de ne pas l'avoir, mesuré.** Le 2026-08-19, **deux orchestrateurs ont perdu ~3 heures chacun**, le même jour, séparément, sur des boîtes qu'ils croyaient bloquées : elles portaient une **suggestion**. Chacun a remonté **trois fois** au dirigeant un geste qui n'avait aucun objet ; l'un a inscrit **huit occurrences** d'un défaut dont on ignore combien étaient réelles. C'est le dirigeant qui les a corrigés — *« il n'y a rien dans le champ texte, juste une proposition de texte faite par Claude Code »* — **parce qu'il avait l'écran physique, et eux une lecture réseau.**
+>
+> ⚠️ **Ce n'était pas de l'inattention** : `herdr pane read "$P"` rend **le même écran** pour une suggestion et pour un texte saisi. Le seul discriminant est un attribut ANSI (`[2m`), que ce geste-là n'affiche pas.
+
+**`herdr pane read` garde son emploi** — voir ce qu'un agent FAIT, ce qu'il a déclenché, s'il est devant un dialogue. Ce qu'il ne sait pas dire, c'est **s'il y a du texte dans la boîte**.
+
+🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a TROIS conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes ; ③ **tu as mesuré son ÉTAT**, pas lu son écran — un `suggestion` n'a rien à soumettre, et la touche part alors dans le vide en te faisant croire le contraire.
 
 **Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
 

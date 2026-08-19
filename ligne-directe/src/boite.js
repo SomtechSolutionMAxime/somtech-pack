@@ -72,23 +72,51 @@ export function sansGris(texteTerminal) {
     .replace(SEQUENCE, '');
 }
 
-export function contenuBoite(texteTerminal) {
-  const lignes = sansGris(texteTerminal).split('\n');
+/**
+ * LE DÉCOUPAGE DE LA BOÎTE, ÉCRIT UNE FOIS — parce que DEUX lectures en ont besoin, et qu'elles
+ * n'entrent pas par la même porte (E-20260819-0015).
+ *
+ * `contenuBoite` travaille sur un écran DÉGRISÉ — ce qui est proposé n'y est plus. `suggestion`,
+ * elle, a besoin de l'écran TEL QUEL, puisque c'est justement le gris qu'elle cherche. Recopier
+ * le repérage des filets chez la seconde aurait rejoué « une porte sur deux », le motif que ce
+ * dépôt a déjà payé dix fois : la copie n'hérite jamais des corrections de l'autre, et on ne s'en
+ * aperçoit qu'au prochain incident. Il vit donc ici, et chacune lui donne l'écran qu'elle lit.
+ *
+ * Rend `null` quand la boîte n'a pas été reconnue — jamais une chaîne vide, qui se lirait
+ * « boîte vue vide ».
+ */
+/**
+ * ⚠️ DEUX TABLEAUX, ET C'EST LA MOITIÉ QUI COMPTE. `reperes` sert à RECONNAÎTRE — filets et
+ * invite —, et il doit donc être débarrassé des séquences ANSI, sinon une ligne de filet ne
+ * ressemble plus à un filet. `aExtraire` est ce qu'on RAPPORTE, et il garde ce que l'appelant
+ * veut lire : le texte nu pour `contenuBoite`, le rendu entier pour `suggestionDansLaBoite`.
+ * Les deux ont les mêmes indices — c'est l'appelant qui le garantit en dérivant l'un de l'autre.
+ */
+function corpsDeLaBoite(reperes, aExtraire = reperes) {
   const filets = [];
-  for (let i = 0; i < lignes.length; i += 1) {
-    if (FILET.test(lignes[i].trim())) filets.push(i);
+  for (let i = 0; i < reperes.length; i += 1) {
+    if (FILET.test(reperes[i].trim())) filets.push(i);
   }
   if (filets.length < 2) return null;
 
   const bas = filets[filets.length - 1];
   const haut = filets[filets.length - 2];
-  const dedans = lignes.slice(haut + 1, bas);
-  if (dedans.length === 0) return null;
+  if (bas - haut <= 1) return null;
 
-  const j = dedans[0].indexOf(INVITE);
+  const j = reperes[haut + 1].indexOf(INVITE);
   if (j === -1) return null; // ce n'est pas la boîte de saisie : on ne l'a pas reconnue
-  const corps = [dedans[0].slice(j + INVITE.length), ...dedans.slice(1)];
-  return corps.join('\n').trim();
+  // ⚠️ L'INVITE SE COUPE SUR LA LIGNE QU'ON RAPPORTE, à sa PROPRE position — jamais à celle
+  // trouvée dans les repères. Les séquences ANSI décalent tout : couper la ligne rendue à
+  // l'indice lu dans la ligne nue tronquerait le texte, ou en laisserait un morceau d'échappement.
+  const premiere = aExtraire[haut + 1];
+  const k = premiere.indexOf(INVITE);
+  const debut = k === -1 ? premiere : premiere.slice(k + INVITE.length);
+  return [debut, ...aExtraire.slice(haut + 2, bas)].join('\n');
+}
+
+export function contenuBoite(texteTerminal) {
+  const corps = corpsDeLaBoite(sansGris(texteTerminal).split('\n'));
+  return corps === null ? null : corps.trim();
 }
 
 /** La boîte est-elle vide ET lisible ? Une boîte illisible n'est pas une boîte vide. */
@@ -198,4 +226,101 @@ export function estUnEspaceReserve(texteLu) {
   if (!texte) return false;
   // Tout retirer, et voir s'il restait autre chose. Si oui, on a lu du texte — pas un repli.
   return texte.replace(ESPACE_RESERVE, '').trim() === '';
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LES TROIS ÉTATS D'UNE BOÎTE DE SAISIE, NOMMÉS (E-20260819-0015)
+ *
+ * 🔴 CE QUE COÛTE LE FAIT DE NE PAS LES NOMMER, MESURÉ. Le 2026-08-19, DEUX orchestrateurs ont
+ * perdu ~3 heures CHACUN, le même jour, séparément, sur des boîtes qu'ils croyaient bloquées.
+ * Elles étaient vides : ce qu'ils lisaient était une SUGGESTION grisée de Claude Code. Chacun a
+ * remonté trois fois au dirigeant un geste qui n'avait aucun objet, et l'un d'eux a inscrit huit
+ * occurrences d'un « défaut de canal » dont personne ne sait plus combien étaient réelles.
+ *
+ * ⚠️ CE N'ÉTAIT PAS DE L'INATTENTION. `contenuBoite` — lui — ne s'y trompait déjà pas : mesuré
+ * le 2026-08-19 sur les 94 panes Claude Code du poste, dont 33 portaient une suggestion, il rend
+ * « vide » sur les 33 et « pleine » sur le seul vrai texte collé. **Le défaut n'était pas dans
+ * la lecture, il était dans ce que la lecture RENDAIT** : un contenu vide, muet sur la raison.
+ * L'orchestrateur qui a l'écran devant les yeux voit un texte ; l'outil lui répond « vide » sans
+ * lui dire pourquoi — alors il ne le croit pas, et il a raison de ne pas le croire.
+ *
+ * **Un verdict qu'on ne peut pas vérifier ne convainc personne : ce module rend donc l'état
+ * NOMMÉ, avec le texte de la suggestion qu'il a écartée.**
+ *
+ * ⚠️ ET LA GARDE NE S'INVERSE PAS. Ignorer une suggestion est sûr — il n'y a rien à soumettre.
+ * Ignorer un vrai texte ferait écrire par-dessus le message de quelqu'un. Dans le doute, on
+ * traite comme un texte réel : un gris qu'on n'a pas su isoler rend « vide » sans nom, pas
+ * « suggestion », et un contenu non vide reste toujours une boîte pleine.
+ */
+export const ETATS_BOITE = Object.freeze({
+  /** On n'a pas reconnu la boîte — ce n'est PAS une boîte vide, et ça ne se traite pas pareil. */
+  ILLISIBLE: 'illisible',
+  /** Rien dedans, rien de proposé. */
+  VIDE: 'vide',
+  /** Rien à soumettre : ce qui s'affiche est une proposition de l'éditeur, en gris. */
+  SUGGESTION: 'suggestion',
+  /** Un vrai texte, arrivé par COLLAGE — l'écran n'en montre qu'un repli, `[Pasted text #N]`. */
+  COLLEE: 'collee',
+  /** Un vrai texte, saisi en clair. */
+  SAISIE: 'saisie',
+});
+
+/**
+ * LE TEXTE GRISÉ DE LA BOÎTE — et rien d'autre de l'écran.
+ *
+ * ⚠️ C'EST LA BOÎTE QU'ON REGARDE, PAS L'ÉCRAN. Le pied de page de Claude Code est lui-même
+ * grisé (« ⏵⏵ auto mode on » l'est sur le poste mesuré, et `ESC[2m` y apparaît 86 fois sur 119
+ * écrans relevés). Une garde qui chercherait le gris n'importe où déclarerait une suggestion sur
+ * presque toutes les sessions du poste — y compris celles dont la boîte porte un VRAI texte, et
+ * elle ferait alors écrire par-dessus le message de quelqu'un. C'est l'inversion de garde à ne
+ * pas commettre, et c'est pourquoi le découpage passe par `corpsDeLaBoite`.
+ *
+ * Rend `null` s'il n'y a pas de gris dans la boîte, ou si on n'a pas su la découper.
+ */
+export function suggestionDansLaBoite(texteTerminal) {
+  // L'écran TEL QUEL : on retire les séquences seulement pour reconnaître les filets, jamais
+  // du texte qu'on va lire — sinon on effacerait ce qu'on cherche.
+  const brut = String(texteTerminal ?? '');
+  const lignes = brut.split('\n');
+  const reperes = lignes.map((l) => l.replace(SEQUENCE, ''));
+  const corps = corpsDeLaBoite(reperes, lignes);
+  if (corps === null) return null;
+  const grises = corps.match(GRISE) ?? [];
+  const texte = grises
+    .map((g) => g.replace(SEQUENCE, ''))
+    .join('')
+    .trim();
+  return texte === '' ? null : texte;
+}
+
+/**
+ * L'ÉTAT DE LA BOÎTE, NOMMÉ — le verdict qu'un lecteur peut vérifier sans décoder du SGR.
+ *
+ * @returns {{etat: string, texte: string|null, suggestion: string|null}}
+ *   `texte` est ce qu'il y a **à soumettre** — `''` quand il n'y a rien, `null` quand on n'a pas
+ *   lu. `suggestion` porte ce qui a été écarté, pour que le lecteur reconnaisse son écran.
+ */
+export function etatDeLaBoite(texteTerminal) {
+  const contenu = contenuBoite(texteTerminal);
+  if (contenu === null) return { etat: ETATS_BOITE.ILLISIBLE, texte: null, suggestion: null };
+  if (contenu !== '') {
+    return {
+      etat: estUnEspaceReserve(contenu) ? ETATS_BOITE.COLLEE : ETATS_BOITE.SAISIE,
+      texte: contenu,
+      // ⚠️ ON NE NOMME PAS DE SUGGESTION SUR UNE BOÎTE PLEINE. Le fait qui décide la conduite est
+      // le texte réel ; annoncer en plus « il y avait du gris » inviterait à s'en autoriser
+      // quelque chose, alors qu'il n'y a rien à en tirer : la boîte est pleine, on n'écrit pas.
+      suggestion: null,
+    };
+  }
+  const suggestion = suggestionDansLaBoite(texteTerminal);
+  return suggestion === null
+    ? { etat: ETATS_BOITE.VIDE, texte: '', suggestion: null }
+    : { etat: ETATS_BOITE.SUGGESTION, texte: '', suggestion };
+}
+
+/** Une boîte où l'on peut écrire — vide, ou vide derrière une suggestion. C'est la même conduite. */
+export function riensASoumettre(etat) {
+  return etat === ETATS_BOITE.VIDE || etat === ETATS_BOITE.SUGGESTION;
 }
