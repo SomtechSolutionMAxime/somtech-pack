@@ -85,11 +85,20 @@ async function refusDevantUnDialogue() {
 }
 
 /** Ce qui trahit une NON-tentative — la phrase du dialogue en porte deux. */
-// ⚠️ LE CONDITIONNEL EST À LUI SEUL UNE NON-TENTATIVE. Mesuré sur un leurre qui passait :
-// « la touche d'envoi aurait déjà été pressée si la boîte l'avait permis » — il porte le geste
-// ET le passé, et il dit pourtant que RIEN n'a eu lieu. On garde donc « aurait » entier, pas
-// seulement « aurait confirmé » : un geste posé ne se raconte jamais au conditionnel.
-const FORMULES_DE_NON_TENTATIVE = [/n[’']ai\s+pas\s+tent/iu, /RIEN\s+soumis/iu, /\baurait\b/iu];
+// ⚠️ LE CONDITIONNEL EST À LUI SEUL UNE NON-TENTATIVE — mesuré sur un leurre qui passait :
+// « la touche d'envoi aurait déjà été pressée si la boîte l'avait permis » porte le geste ET le
+// passé, et dit pourtant que rien n'a eu lieu.
+//
+// ⚠️ MAIS IL NE SE JUGE QUE SUR LE GESTE (resserré en seconde passe de fond). Interdire « aurait »
+// N'IMPORTE OÙ refusait une phrase honnête où le mot vivait dans une tout autre proposition :
+// « la touche d'envoi est déjà partie — quelqu'un aurait pu m'avertir, mais le geste a eu lieu ».
+// Une garde qui crie sur du texte correct se fait retirer par le premier qui la rencontre, et
+// emporte avec elle ce qu'elle gardait vraiment.
+const FORMULES_DE_NON_TENTATIVE = [
+  /n[’']ai\s+pas\s+tent/iu,
+  /RIEN\s+soumis/iu,
+  /aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti)/iu,
+];
 
 // ⚠️ CE QU'ON CHERCHE EST LA FONCTION, PAS MA RÉDACTION (relevé en passe de fond : une première
 // version exigeait le substrat exact « touche d'envoi » et refusait 6 formulations honnêtes sur
@@ -128,6 +137,17 @@ test('la touche d’envoi est partie et herdr l’a ACCEPTÉE, sans suffire : le
       `un geste POSÉ ne s’annonce pas avec la formule d’une non-tentative (${formule}) : ${r.message}`
     );
   }
+  // ⚠️ ET IL NE DIT PAS QUE HERDR A REFUSÉ — TROUVÉ EN SECONDE PASSE DE FOND, une mutation y
+  // survivait. Un texte annonçant « la touche a été REFUSÉE par herdr » sur ce chemin-ci reste
+  // DISTINCT des deux autres proses, nomme le geste, le dit au passé, ne porte aucune formule de
+  // non-tentative — il satisfaisait donc tout ce qu'on exigeait. Et il ment sur le seul point qui
+  // compte : l'autre prose du module dit en propres termes qu'un refus de herdr « est la seule
+  // raison de croire qu'aucune touche n'a atteint ce pane ». L'inverser ici rendrait au lecteur
+  // exactement la conclusion que ce lot existe pour lui retirer.
+  assert.ok(
+    !/(refus|repouss[ée]|rejet)/iu.test(r.message),
+    `herdr a ACCEPTÉ ce geste : le refus ne doit pas annoncer l’inverse — ${r.message}`
+  );
 });
 
 test('la touche d’envoi est partie et herdr l’a REFUSÉE : le refus dit aussi qu’elle a été tentée', async () => {

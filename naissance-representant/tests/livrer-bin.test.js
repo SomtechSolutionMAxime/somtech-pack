@@ -762,6 +762,20 @@ test('le motif que le bin rend SUIT le chemin réellement pris — il n’est pa
 // il restait vert. On isole donc la ligne AVOUÉE, celle que ce lot ajoute.
 const lignesAvouees = (stderr) => stderr.split('\n').filter((l) => l.trimStart().startsWith('\u26a0'));
 
+// ⚠️ ET LE FILTRE NE SUFFIT PAS SEUL — RELEVÉ EN SECONDE PASSE DE FOND. `motDeLaDelivrance`
+// écrit lui aussi des lignes qui commencent par ⚠️, et l'une d'elles (« j'ai tenté de le
+// soumettre pour son auteur — la touche d'envoi seule […] SANS EFFET ») satisferait mot pour mot
+// les critères ci-dessous, en venant d'un tout AUTRE chemin (la délivrance d'une boîte étrangère,
+// T-20260816-0114). Aucun essai ne les confond aujourd'hui — les deux scénarios partent d'une
+// boîte vide, donc n'arment jamais la délivrance — mais rien ne le garantissait. On le mesure :
+// une touche d'envoi partie AVANT la première écriture est une délivrance, pas une réparation.
+const aucuneDelivranceArmee = (journal) => {
+  const a = appels(journal);
+  const iPrompt = a.findIndex((x) => x[0] === 'agent' && x[1] === 'prompt');
+  const iEnter = a.findIndex((x) => x[0] === 'agent' && x[1] === 'send-keys');
+  return iPrompt !== -1 && (iEnter === -1 || iEnter > iPrompt);
+};
+
 const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frappe|raccourci|press[ée])/iu;
 // ⚠️ PAS DE `\b` APRÈS UNE LETTRE ACCENTUÉE — MESURÉ : `/ai\s+[a-zà-ÿ]+[ée]s?\b/` refusait
 // « j'ai pressé » et « j'ai appuyé ». En JavaScript, `\b` se calcule sur `[A-Za-z0-9_]` : « é »
@@ -769,7 +783,7 @@ const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frap
 // se fermer. La garde refusait ainsi deux tournures parfaitement honnêtes — un faux rejet né
 // d'un détail d'implémentation, jamais d'un fait.
 const AU_PASSE = /(d[ée]j[àa]|a\s+[ée]t[ée]|est\s+partie?|ai\s+[a-zà-ÿ]+[ée]s?(?![a-zà-ÿ]))/iu;
-const NON_TENTATIVE = /(n[’']ai\s+pas\s+tent|RIEN\s+soumis|\baurait\b)/iu;
+const NON_TENTATIVE = /(n[’']ai\s+pas\s+tent|RIEN\s+soumis|aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti))/iu;
 
 test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est AVOUÉE', () => {
   const journal = installerFauxHerdr({ soumetSeule: false, enterInoperant: true, statutMuet: true });
@@ -781,12 +795,16 @@ test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est
     'une touche d’envoi est bien partie — c’est elle que le refus doit nommer'
   );
 
+  assert.ok(aucuneDelivranceArmee(journal), 'la ligne d’aveu doit venir de la RÉPARATION, pas d’une délivrance');
+  assert.match(r.stderr, /bo[îi]te encore pleine/iu, 'et la touche acceptée n’a bel et bien pas vidé la boîte');
+
   const avouees = lignesAvouees(r.stderr);
   assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
   const aveu = avouees[0];
   assert.match(aveu, NOMME_LE_GESTE, 'la ligne d’aveu du BINAIRE nomme le geste');
   assert.match(aveu, AU_PASSE, 'et le dit au passé');
   assert.ok(!NON_TENTATIVE.test(aveu), 'et surtout pas avec la formule d’une non-tentative');
+  assert.ok(!/(refus|repouss[ée]|rejet)/iu.test(aveu), 'herdr a ACCEPTÉ ce geste : la ligne d’aveu ne dit pas l’inverse');
 });
 
 test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée aussi', () => {
@@ -798,6 +816,9 @@ test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée a
     appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
     'la commande est bel et bien partie vers herdr, même si herdr l’a repoussée'
   );
+
+  assert.ok(aucuneDelivranceArmee(journal), 'la ligne d’aveu doit venir de la RÉPARATION, pas d’une délivrance');
+  assert.match(r.stderr, /bo[îi]te encore pleine/iu, 'une touche que herdr repousse ne vide rien — la boîte doit le montrer');
 
   const avouees = lignesAvouees(r.stderr);
   assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
