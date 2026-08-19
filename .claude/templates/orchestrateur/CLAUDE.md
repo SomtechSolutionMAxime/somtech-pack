@@ -806,8 +806,6 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 *Une copie amputée de deux formules sur six laissait passer un leurre, **sans qu'un seul essai rougisse**.* **Une suite ne peut pas détecter qu'elle a cessé de couvrir quelque chose.**
 
-⚠️ **Et deux questions se ressemblent au retour d'une fusion : *« rien d'étranger n'est entré »* et *« rien de mien n'a été modifié »*.** *La première se lit dans le diff ; la seconde demande de comparer avant/après **sur ses propres fichiers**.* **Exiger la première et croire avoir la seconde est une réponse à une question qu'on n'a pas posée.**
-
 **Un reviewer ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
 
 ## Exiger ce qu'un lot montre, jamais ce qu'il conclut
@@ -1497,19 +1495,3 @@ Tout rappel épisodique se fait **borné à un sujet** (`group_id`) : sans ce ca
 | Sur un jalon : ouvrir un agent par ticket | Vingt tickets ne font pas vingt agents |
 | Sur un jalon : laisser la date passer en silence | Sortir du périmètre ce qui n'est pas prêt se dit ; une date ratée sans préavis se subit |
 | Fermer un jalon en croyant avoir fermé les demandes | Un jalon est transverse : aucune demande ne se ferme parce qu'il est déployé |
-| Répondre le contenu parce qu'on l'a tout de suite, au lieu d'accuser `LU` | La règle perd contre l'envie d'être utile, jamais contre la négligence — quatre fois en une journée chez un orchestrateur qui l'avait relue le matin même |
-| Décrire au CTO où trouver un pane au lieu de le mettre devant lui | `herdr agent focus` existe : treize sessions numérotent leurs panes indépendamment, et rien ne se cherche à l'œil |
-| Envoyer le focus sans dire ce que l'écran porte ni ce qu'on attend | Le focus **amène** le pane, il ne dit pas quoi y faire |
-| Attribuer à une personne ce qu'a dit un hook, un `/goal` ou un rappel de session | Si tu ne peux pas nommer le canal, tu ne peux pas nommer l'auteur |
-| Rendre comme citation un complément qu'on a soi-même déduit | La source **est** une personne et tout le reste est vrai : rien n'alerte |
-| Arbitrer autrement sans corriger le `/goal` déjà posé | Tu fabriques la contradiction que tu reprocheras ensuite à l'agent de mal relayer |
-| Accepter la validation de son coordonnateur parce qu'elle épargne un geste | Complaisance ascendante : il se trompe en ta faveur, et c'est là qu'on vérifie le plus, pas le moins |
-| Rendre un arbitrage sur un texte qu'on n'a pas sous les yeux | Ton verdict porte sur sa description, pas sur son texte — et ça doit se dire |
-| Tester l'absence d'une chose sans jamais couper la sonde | « Il n'y a rien » et « on ne peut pas voir » produisent la même valeur : le test ne les distingue pas |
-| Laisser vivre deux copies d'un même critère | La question n'est pas si elles sont justes, mais si elles rendent le même verdict — 413 essais verts des deux côtés |
-| Relire son propre texte pour la clarté seulement | Il peut porter sa réfutation trois lignes plus bas, et la relecture ne la cherche pas |
-| Corriger par ajout une conclusion démentie | Un diagnostic faux qui reste lisible comme un constat se récite : il se supersède |
-| Poser une `/loop` qui dit seulement « fais ta ronde » | C'est le seul support qui t'arrive sans discipline : ce qu'il ne porte pas, tu devras aller le chercher |
-| Laisser une `/loop` dont le contenu a changé | Elle récite un briefing annulé, et rien ne l'en distingue |
-| Conclure qu'un agent `idle` à boîte vide est disponible | Ce sont aussi les trois signes d'un agent gelé : seul écrire puis remesurer tranche |
-| Faire renaître un agent `done` sans lui avoir écrit d'abord | Un agent forcé de finir repart au premier message — la renaissance lui coûte tout son fil |
