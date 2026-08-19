@@ -307,9 +307,12 @@ test('bout en bout : la commande marche même quand `node` n’est pas sur le PA
   // absolu, puisque plus rien ne le résout.
   const vide = tmp('smtk-path-vide-');
   const zsh = execFileSync('/usr/bin/env', ['sh', '-c', 'command -v zsh'], { encoding: 'utf8' }).trim();
-  assert.equal(
+  // Le code exact d'un « introuvable » dépend du shell — `dash` (le /bin/sh d'Ubuntu) rend
+  // 127 là où zsh rend 1. On mesure donc l'absence, pas un chiffre : un contrôle dont le
+  // verdict change avec la machine ne garde rien.
+  assert.notEqual(
     execFileSync('/bin/sh', ['-c', `PATH=${vide} command -v node >/dev/null 2>&1; echo $?`], { encoding: 'utf8' }).trim(),
-    '1',
+    '0',
     'préalable : ce PATH ne doit VRAIMENT pas porter node, sinon ce contrôle ne prouve rien'
   );
   let out = '';
