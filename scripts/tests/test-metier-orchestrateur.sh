@@ -525,7 +525,13 @@ else
   ko "5 — la relecture reste une relecture de clarté : un texte peut porter sa réfutation trois lignes plus bas"
 fi
 
-if printf '%s' "$S_RELIRE" | grep -qiE 'cohérent avec soi-même|cohérence interne'; then
+# ⚠️ SA SECONDE ALTERNATIVE ÉTAIT MORTE — « cohérence interne » a zéro occurrence
+# (relevé en passe portail). Ici elle ne produisait PAS de faux vert : la branche
+# vivante suffisait, mesuré. Mais l'assertion porte sur une DISTINCTION, et une
+# distinction se garde par ses deux termes : on exige donc les deux moitiés de la
+# phrase, ce qui supprime la branche morte au lieu de la tolérer.
+if printf '%s' "$S_RELIRE" | grep -qi "pour vérifier que c'est clair" \
+   && printf '%s' "$S_RELIRE" | grep -qi "cohérent avec soi-même"; then
   ok "5 — la cohérence avec soi-même est distinguée de la clarté"
 else
   ko "5 — rien ne distingue relire pour la clarté de relire pour la cohérence : ce sont deux gestes"
