@@ -128,7 +128,11 @@ const MUTATIONS = [
   ['la prose du cas REFUSÉ retirée', LIVRAISON, REFUSE, "''", livraison0],
   ['la prose du cas REFUSÉ ← celle du cas accepté', LIVRAISON, REFUSE, ACCEPTE, livraison0],
   ['le cas REFUSÉ ← un texte qui affirme l’inverse', LIVRAISON, REFUSE, LEURRES['négation'], livraison0],
-  ['le cas ACCEPTÉ ← un texte qui affirme l’inverse', LIVRAISON, ACCEPTE, LEURRES['phrase du dialogue'], livraison0],
+  // ⚠️ CETTE MUTATION-CI INJECTAIT LE MÊME TEXTE QUE CELLE DU DIALOGUE, deux lignes plus haut —
+  // relevé en quatrième passe de fond. Le tableau annonçait donc une couverture d'un cran
+  // supérieure à celle qu'il payait. Un compte gonflé par une redondance qu'on n'a pas vue reste
+  // un compte faux, même quand chaque ligne est vraie prise seule.
+  ['le cas ACCEPTÉ ← un texte qui affirme l’inverse', LIVRAISON, ACCEPTE, LEURRES['négation'], livraison0],
   ['le cas ACCEPTÉ ← une INVERSION à sens unique', LIVRAISON, ACCEPTE, LEURRES['INVERSION à sens unique'], livraison0],
   [
     'le double herdr : `enterUtile` revenu à son ancienne formule',
@@ -136,6 +140,13 @@ const MUTATIONS = [
     'const enterUtile  = enterEnvoye && !sc.enterInoperant && !sc.enterRefuse;',
     'const enterUtile  = enterEnvoye && !sc.enterInoperant;',
     bancBin0,
+  ],
+  [
+    'la CONSÉQUENCE retirée du cas ACCEPTÉ — l’annonce du geste reste',
+    LIVRAISON,
+    ACCEPTE,
+    "'\\n⚠️ ET UNE TOUCHE D’ENVOI EST DÉJÀ PARTIE VERS CE PANE : le texte était bien dans la ' + 'boîte, je l’ai donc soumis — herdr a accepté ce geste. Va le regarder avant d’en presser une autre.'",
+    livraison0,
   ],
   [
     'les libellés de la boîte permutés (illisible ↔ vide)',
@@ -157,14 +168,30 @@ for (const [nom, fichier, avant, apres, original] of MUTATIONS) {
   remettre();
 }
 
+// ⚠️ LES VARIANTES SE POSENT SUR LES DEUX BRANCHES, PAS UNE. Relevé en quatrième passe de fond :
+// tout était injecté dans la prose du cas ACCEPTÉ, si bien que « 12 sur 12 » caractérisait la
+// robustesse d'UN emplacement, jamais celle des deux. Les leurres passent maintenant par les
+// deux ; les formulations honnêtes, elles, sont écrites pour le cas ACCEPTÉ (elles annoncent un
+// geste abouti) et n'ont de sens que là — c'est dit plutôt que passé sous silence.
+const BRANCHES = [
+  ['cas ACCEPTÉ', ACCEPTE],
+  ['cas REFUSÉ', REFUSE],
+];
+
 let passes = 0;
+let leurresPoses = 0;
 console.log('\n── CE QU’ELLE ATTRAPE — textes qui nient le geste ou en faussent l’issue');
-for (const [nom, texte] of Object.entries(LEURRES)) {
-  muter(LIVRAISON, ACCEPTE, texte, livraison0);
-  const ok = mord();
-  if (!ok) passes += 1;
-  console.log(`   ${ok ? 'rougit  ' : '⚠️ PASSE '} │ ${nom}`);
-  remettre();
+for (const [ouNom, ou] of BRANCHES) {
+  for (const [nom, texte] of Object.entries(LEURRES)) {
+    // Injecter dans une branche le texte qui est déjà le sien ne mesure rien.
+    if (texte === ou) continue;
+    muter(LIVRAISON, ou, texte, livraison0);
+    leurresPoses += 1;
+    const ok = mord();
+    if (!ok) passes += 1;
+    console.log(`   ${ok ? 'rougit  ' : '⚠️ PASSE '} │ ${nom} — ${ouNom}`);
+    remettre();
+  }
 }
 
 let refusesATort = 0;
@@ -181,7 +208,7 @@ rmSync(bac, { recursive: true, force: true });
 
 console.log(
   `\n→ mutations survivantes : ${survivantes} / ${MUTATIONS.length}` +
-    `\n→ leurres passés        : ${passes} / ${Object.keys(LEURRES).length}` +
-    `\n→ refusés à tort        : ${refusesATort} / ${Object.keys(HONNETES).length}`
+    `\n→ leurres passés        : ${passes} / ${leurresPoses} (chaque leurre sur les deux branches)` +
+    `\n→ refusés à tort        : ${refusesATort} / ${Object.keys(HONNETES).length} (branche ACCEPTÉ — les formulations annoncent un geste abouti)`
 );
 process.exit(survivantes + passes + refusesATort === 0 ? 0 : 1);

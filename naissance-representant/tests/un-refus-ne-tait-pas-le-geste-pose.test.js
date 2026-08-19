@@ -37,6 +37,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { livrerBrief } from '../src/livraison.js';
+import {
+  NOMME_LE_GESTE,
+  AU_PASSE,
+  FORMULES_DE_NON_TENTATIVE,
+  HERDR_A_REFUSE,
+  DIT_LA_CONSEQUENCE,
+  lignesAvouees,
+  manquementsDeLAveu,
+} from './lib/motifs-du-refus.mjs';
 
 const SEP = '─'.repeat(40);
 const boiteVideEcran = (...avant) => [...avant, SEP, '❯', SEP, '  ⏵⏵ auto mode on'].join('\n');
@@ -84,53 +93,11 @@ async function refusDevantUnDialogue() {
   });
 }
 
-/** Ce qui trahit une NON-tentative — la phrase du dialogue en porte deux. */
-// ⚠️ LE CONDITIONNEL EST À LUI SEUL UNE NON-TENTATIVE — mesuré sur un leurre qui passait :
-// « la touche d'envoi aurait déjà été pressée si la boîte l'avait permis » porte le geste ET le
-// passé, et dit pourtant que rien n'a eu lieu.
-//
-// ⚠️ MAIS IL NE SE JUGE QUE SUR LE GESTE (resserré en seconde passe de fond). Interdire « aurait »
-// N'IMPORTE OÙ refusait une phrase honnête où le mot vivait dans une tout autre proposition :
-// « la touche d'envoi est déjà partie — quelqu'un aurait pu m'avertir, mais le geste a eu lieu ».
-// Une garde qui crie sur du texte correct se fait retirer par le premier qui la rencontre, et
-// emporte avec elle ce qu'elle gardait vraiment.
-//
-// ⚠️ ET LE DÉNI NE SE DIT PAS QU'AVEC « TENTÉ » — élargi en troisième passe de fond, sur un leurre
-// qui repassait : « la touche d'envoi aurait normalement dû suffire, mais je ne l'ai pas encore
-// essayée ». Le déni y vit dans une autre proposition et dans un autre verbe. On garde les tours
-// qui nient un geste, pas un mot unique.
-const FORMULES_DE_NON_TENTATIVE = [
-  /n[’']ai\s+(?:pas|jamais)/iu,
-  /pas\s+encore/iu,
-  /n[’']a\s+(?:pas|jamais)\s+(?:[ée]t[ée]\s+)?(?:press|soumis|envoy|tent|part)/iu,
-  /jamais\s+[ée]t[ée]\s+tent/iu,
-  /RIEN\s+soumis/iu,
-  /aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti|normalement|d[ûu])/iu,
-];
-
-// ⚠️ CE QU'ON CHERCHE EST LA FONCTION, PAS MA RÉDACTION (relevé en passe de fond : une première
-// version exigeait le substrat exact « touche d'envoi » et refusait 6 formulations honnêtes sur
-// 8 — « j'ai appuyé sur Entrée », « la frappe de soumission est partie »… Une garde qui n'accepte
-// qu'une seule tournure est une garde figée : elle rougirait à la prochaine réécriture du texte
-// sans qu'aucun fait ait changé, et c'est ainsi qu'on apprend à la contourner plutôt qu'à la lire.)
-//
-// Deux exigences, et il les faut TOUTES LES DEUX :
-//   • LE GESTE est nommé — la touche, Entrée, la soumission, la frappe ;
-//   • IL EST AU PASSÉ — « déjà », « est partie », « j'ai pressé ». Un geste au futur ou au
-//     conditionnel n'est pas un geste posé, et c'est très exactement ce que ce lot ferme.
-const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frappe|raccourci|press[ée])/iu;
-
-// ⚠️ « HERDR A REFUSÉ », ET RIEN D'AUTRE — resserré en troisième passe de fond. Interdire le mot
-// « rejet » n'importe où refusait une prose honnête et utile : « herdr a accepté ce geste, mais
-// Claude Code a ensuite rejeté ma commande ». Un rejet EN AVAL est un fait de plus, pas un
-// mensonge ; c'est l'issue attribuée à HERDR qui doit rester vraie.
-const HERDR_A_REFUSE = /(herdr[^.]{0,40}(refus|repouss|rejet)|(refus|repouss[ée]e?|rejet[ée]e?)[^.]{0,40}par\s+herdr)/iu;
-// ⚠️ PAS DE `\b` APRÈS UNE LETTRE ACCENTUÉE — MESURÉ : `/ai\s+[a-zà-ÿ]+[ée]s?\b/` refusait
-// « j'ai pressé » et « j'ai appuyé ». En JavaScript, `\b` se calcule sur `[A-Za-z0-9_]` : « é »
-// n'y est pas, donc entre « é » et l'espace il n'y a AUCUNE frontière, et le motif ne peut pas
-// se fermer. La garde refusait ainsi deux tournures parfaitement honnêtes — un faux rejet né
-// d'un détail d'implémentation, jamais d'un fait.
-const AU_PASSE = /(d[ée]j[àa]|a\s+[ée]t[ée]|est\s+partie?|ai\s+[a-zà-ÿ]+[ée]s?(?![a-zà-ÿ]))/iu;
+// ⚠️ LES MOTIFS VIVENT DANS UN SEUL ENDROIT — `tests/lib/motifs-du-refus.mjs`. Ils étaient
+// dupliqués ici et dans `livrer-bin.test.js`, et les deux copies avaient DÉJÀ divergé : celle du
+// banc du binaire omettait deux formules de non-tentative. Le module se reproche ailleurs à
+// lui-même exactement ça — deux mécanismes pour une règle, et c'est celui qu'on ne relit plus
+// qui perd.
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // LE CAS DU TICKET
@@ -143,24 +110,17 @@ test('la touche d’envoi est partie et herdr l’a ACCEPTÉE, sans suffire : le
   assert.equal(r.causeRepare, 'soumise');
   assert.equal(envois.length, 1, 'le geste a bien eu lieu — c’est lui que le refus doit avouer');
 
-  assert.match(r.message, NOMME_LE_GESTE, 'le refus doit NOMMER le geste d’envoi');
-  assert.match(r.message, AU_PASSE, 'et le dire au PASSÉ — pas « elle pourrait partir », mais « elle est partie »');
-  for (const formule of FORMULES_DE_NON_TENTATIVE) {
-    assert.ok(
-      !formule.test(r.message),
-      `un geste POSÉ ne s’annonce pas avec la formule d’une non-tentative (${formule}) : ${r.message}`
-    );
-  }
-  // ⚠️ ET IL NE DIT PAS QUE HERDR A REFUSÉ — TROUVÉ EN SECONDE PASSE DE FOND, une mutation y
-  // survivait. Un texte annonçant « la touche a été REFUSÉE par herdr » sur ce chemin-ci reste
-  // DISTINCT des deux autres proses, nomme le geste, le dit au passé, ne porte aucune formule de
-  // non-tentative — il satisfaisait donc tout ce qu'on exigeait. Et il ment sur le seul point qui
-  // compte : l'autre prose du module dit en propres termes qu'un refus de herdr « est la seule
-  // raison de croire qu'aucune touche n'a atteint ce pane ». L'inverser ici rendrait au lecteur
-  // exactement la conclusion que ce lot existe pour lui retirer.
-  assert.ok(
-    !HERDR_A_REFUSE.test(r.message),
-    `herdr a ACCEPTÉ ce geste : le refus ne doit pas annoncer l’inverse — ${r.message}`
+  // ⚠️ ON JUGE LA LIGNE D'AVEU, PAS LE MESSAGE ENTIER. La première ligne du refus rapporte ce que
+  // herdr a dit — et herdr dit « a refusé » —, si bien qu'une garde posée sur tout le flux était
+  // satisfaite par un mot venu d'ailleurs. Dans l'autre sens, les formules de non-tentative
+  // appliquées au message entier refusaient une prose honnête dont le déni portait sur autre
+  // chose que le geste. La ligne d'aveu est l'objet de ce lot ; c'est elle qu'on mesure.
+  const aveux = lignesAvouees(r.message);
+  assert.equal(aveux.length, 1, `le refus doit porter UNE ligne d’aveu — ${r.message}`);
+  assert.deepEqual(
+    manquementsDeLAveu(aveux[0], { herdrARefuse: false }),
+    [],
+    `la ligne d’aveu doit dire le geste, au passé, sa conséquence, sans déni ni refus inventé — ${aveux[0]}`
   );
 });
 
@@ -174,24 +134,13 @@ test('la touche d’envoi est partie et herdr l’a REFUSÉE : le refus dit auss
   assert.equal(r.causeRepare, 'envoi-refuse');
   assert.equal(envois.length, 1, '…mais il a bien été tenté');
 
-  assert.match(r.message, NOMME_LE_GESTE, 'le refus doit nommer le geste tenté');
-  assert.match(r.message, AU_PASSE, 'au PASSÉ : la commande est bel et bien partie vers herdr');
-  assert.match(
-    r.message,
-    /(refus|repouss[ée]|rejet)/iu,
-    'et dire que herdr l’a repoussée — c’est ce qui distingue ce cas de celui qui a abouti'
+  const aveux = lignesAvouees(r.message);
+  assert.equal(aveux.length, 1, `le refus doit porter UNE ligne d’aveu — ${r.message}`);
+  assert.deepEqual(
+    manquementsDeLAveu(aveux[0], { herdrARefuse: true }),
+    [],
+    `la ligne d’aveu doit dire le geste tenté, au passé, repoussé par herdr, et sa conséquence — ${aveux[0]}`
   );
-  // ⚠️ CETTE BOUCLE MANQUAIT, ET UNE MUTATION Y SURVIVAIT (trouvée en passe de fond, pas en
-  // relecture). On pouvait remplacer cette prose par « LA TOUCHE N’A JAMAIS ÉTÉ TENTÉE… je n’ai
-  // donc RIEN soumis » — un texte qui affirme L’INVERSE du fait — et rester vert, parce qu’il
-  // portait quand même les mots « touche d’envoi » et « refus ». C’est le défaut que ce lot
-  // ferme, réapparu dans la moitié du lot qui le ferme.
-  for (const formule of FORMULES_DE_NON_TENTATIVE) {
-    assert.ok(
-      !formule.test(r.message),
-      `un geste TENTÉ ne s’annonce pas avec la formule d’une non-tentative (${formule}) : ${r.message}`
-    );
-  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

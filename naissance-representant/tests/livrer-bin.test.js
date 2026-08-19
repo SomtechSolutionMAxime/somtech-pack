@@ -14,6 +14,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { lignesAvouees, manquementsDeLAveu } from './lib/motifs-du-refus.mjs';
 import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -760,7 +761,6 @@ test('le motif que le bin rend SUIT le chemin réellement pris — il n’est pa
 // ne venait PAS de la prose éprouvée. Le contrôle était vert sans jamais toucher ce qu'il
 // prétendait mesurer — vérifié : en substituant à la prose du cas REFUSÉ celle du cas ACCEPTÉ,
 // il restait vert. On isole donc la ligne AVOUÉE, celle que ce lot ajoute.
-const lignesAvouees = (stderr) => stderr.split('\n').filter((l) => l.trimStart().startsWith('\u26a0'));
 
 // ⚠️ ET LE FILTRE NE SUFFIT PAS SEUL — RELEVÉ EN SECONDE PASSE DE FOND. `motDeLaDelivrance`
 // écrit lui aussi des lignes qui commencent par ⚠️, et l'une d'elles (« j'ai tenté de le
@@ -775,17 +775,6 @@ const aucuneDelivranceArmee = (journal) => {
   const iEnter = a.findIndex((x) => x[0] === 'agent' && x[1] === 'send-keys');
   return iPrompt !== -1 && (iEnter === -1 || iEnter > iPrompt);
 };
-
-const NOMME_LE_GESTE = /(touche\s+d[’']envoi|entr[ée]e|soumission|soumis|frappe|raccourci|press[ée])/iu;
-// ⚠️ PAS DE `\b` APRÈS UNE LETTRE ACCENTUÉE — MESURÉ : `/ai\s+[a-zà-ÿ]+[ée]s?\b/` refusait
-// « j'ai pressé » et « j'ai appuyé ». En JavaScript, `\b` se calcule sur `[A-Za-z0-9_]` : « é »
-// n'y est pas, donc entre « é » et l'espace il n'y a AUCUNE frontière, et le motif ne peut pas
-// se fermer. La garde refusait ainsi deux tournures parfaitement honnêtes — un faux rejet né
-// d'un détail d'implémentation, jamais d'un fait.
-const AU_PASSE = /(d[ée]j[àa]|a\s+[ée]t[ée]|est\s+partie?|ai\s+[a-zà-ÿ]+[ée]s?(?![a-zà-ÿ]))/iu;
-const NON_TENTATIVE = /(n[’']ai\s+(?:pas|jamais)|pas\s+encore|RIEN\s+soumis|aurait\s+(?:d[ée]j[àa]\s+)?(?:[ée]t[ée]\s+)?(?:press|soumis|confirm|envoy|tent|abouti|normalement|d[ûu]))/iu;
-// Seule l'issue attribuée à HERDR doit rester vraie — un rejet en aval est un fait de plus.
-const HERDR_A_REFUSE = /(herdr[^.]{0,40}(refus|repouss|rejet)|(refus|repouss[ée]e?|rejet[ée]e?)[^.]{0,40}par\s+herdr)/iu;
 
 test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est AVOUÉE', () => {
   const journal = installerFauxHerdr({ soumetSeule: false, enterInoperant: true, statutMuet: true });
@@ -802,11 +791,11 @@ test('refus rendu par le binaire : la touche d’envoi acceptée par herdr y est
 
   const avouees = lignesAvouees(r.stderr);
   assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
-  const aveu = avouees[0];
-  assert.match(aveu, NOMME_LE_GESTE, 'la ligne d’aveu du BINAIRE nomme le geste');
-  assert.match(aveu, AU_PASSE, 'et le dit au passé');
-  assert.ok(!NON_TENTATIVE.test(aveu), 'et surtout pas avec la formule d’une non-tentative');
-  assert.ok(!HERDR_A_REFUSE.test(aveu), 'herdr a ACCEPTÉ ce geste : la ligne d’aveu ne dit pas l’inverse');
+  assert.deepEqual(
+    manquementsDeLAveu(avouees[0], { herdrARefuse: false }),
+    [],
+    `la ligne d’aveu du BINAIRE doit dire le geste, au passé, sa conséquence, sans déni — ${avouees[0]}`
+  );
 });
 
 test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée aussi', () => {
@@ -824,13 +813,9 @@ test('refus rendu par le binaire : une touche REFUSÉE par herdr y est avouée a
 
   const avouees = lignesAvouees(r.stderr);
   assert.equal(avouees.length, 1, `le refus doit porter UNE ligne d’aveu, vu : ${r.stderr}`);
-  const aveu = avouees[0];
-  assert.match(aveu, NOMME_LE_GESTE);
-  assert.match(aveu, AU_PASSE);
-  assert.match(
-    aveu,
-    /(refus|repouss[ée]|rejet)/iu,
-    'la ligne d’AVEU doit distinguer « repoussée » de « aboutie » — le mot ne compte pas s’il vient du rapport de herdr'
+  assert.deepEqual(
+    manquementsDeLAveu(avouees[0], { herdrARefuse: true }),
+    [],
+    `la ligne d’aveu du BINAIRE doit dire le geste tenté, repoussé par herdr, et sa conséquence — ${avouees[0]}`
   );
-  assert.ok(!NON_TENTATIVE.test(aveu));
 });
