@@ -42,6 +42,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # Le contrôle qui tranche T-20260819-0013 lance un `zsh -c` : le PATH des outils de
+      # poste doit être trouvé par un shell NON interactif. Sans zsh, ce contrôle ne peut
+      # pas s'exécuter — et il échoue plutôt que de se taire, donc on l'installe ici.
+      - name: Installer zsh (contrôle du PATH depuis un shell non interactif)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
       # `npm test` et non `node --test` : une seule source de vérité pour la
       # portée de la suite (le package.json du CLI, borné à cli/test/).
       - name: node --test (cli)

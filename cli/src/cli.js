@@ -28,7 +28,7 @@ function pkgVersion() {
 export function parseArgs(argv) {
   const flags = {
     modules: null, yes: false, force: false, dryRun: false, source: null, target: null,
-    rc: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
+    rc: null, zshenv: null, skillsDir: null, workflowsDir: null, commandsDir: null, dest: null, noClaudeSwt: false,
     noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false, noLigneDirecte: false,
     noNaissanceRepresentant: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
@@ -48,6 +48,7 @@ export function parseArgs(argv) {
       case '--source': flags.source = value('--source', ++i); break;
       case '--target': flags.target = value('--target', ++i); break;
       case '--rc': flags.rc = value('--rc', ++i); break;
+      case '--zshenv': flags.zshenv = value('--zshenv', ++i); break;
       case '--skills-dir': flags.skillsDir = value('--skills-dir', ++i); break;
       case '--workflows-dir': flags.workflowsDir = value('--workflows-dir', ++i); break;
       case '--commands-dir': flags.commandsDir = value('--commands-dir', ++i); break;
@@ -153,6 +154,8 @@ Options (init / update) :
 
 Options (setup) :
   --rc <fichier>    Fichier rc shell (défaut: ~/.zshrc)
+  --zshenv <f>      Fichier lu par TOUT zsh, où va le PATH des outils de poste
+                    (défaut: ~/.zshenv — jamais le rc, qu'un shell non interactif ignore)
   --skills-dir <d>  Dossier des skills globaux (défaut: ~/.claude/skills)
   --workflows-dir <d> Dossier des workflows globaux (défaut: ~/.claude/workflows)
   --commands-dir <d>  Dossier des commandes globales (défaut: ~/.claude/commands)

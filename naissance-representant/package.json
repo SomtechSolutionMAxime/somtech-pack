@@ -6,7 +6,8 @@
   "type": "module",
   "bin": {
     "gestionnaire-naitre": "bin/naitre.js",
-    "gestionnaire-livrer": "bin/livrer.js"
+    "gestionnaire-livrer": "bin/livrer.js",
+    "orchestrateur-rendez-vous": "bin/rendez-vous.js"
   },
   "scripts": {
     "test": "node --test"

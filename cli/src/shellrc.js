@@ -12,15 +12,61 @@ function count(text, needle) {
 }
 
 /** Retire tout bloc gardé (entre marqueurs) du texte, normalise les fins de ligne. */
-export function stripBlock(text) {
+export function stripBlock(text, begin = MARKER_BEGIN, end = MARKER_END) {
   const out = [];
   let skip = false;
   for (const line of text.split('\n')) {
-    if (line === MARKER_BEGIN) { skip = true; continue; }
-    if (skip) { if (line === MARKER_END) skip = false; continue; }
+    if (line === begin) { skip = true; continue; }
+    if (skip) { if (line === end) skip = false; continue; }
     out.push(line);
   }
   return out.join('\n').replace(/\n+$/, '\n');
+}
+
+/**
+ * Pose (ou remplace) un bloc gardé dans un fichier de configuration de shell, de façon
+ * idempotente : jamais de doublon, backup `.somtech.bak` avant réécriture, et refus net
+ * si le fichier porte un bloc déséquilibré (BEGIN≠END) — auquel cas on ne devine pas où
+ * il finit, et deviner coûterait les lignes de quelqu'un d'autre.
+ *
+ * Extrait de `installRcBlock` quand un second bloc a eu besoin des mêmes garanties :
+ * celui qui met les outils de poste sur le PATH (T-20260819-0013). Deux mécanismes de
+ * pose auraient divergé, et c'est celui qu'on ne relit plus qui aurait perdu le backup.
+ *
+ * Renvoie { action: 'added'|'updated', backup? }.
+ */
+export function upsertGuardedBlock({ file, begin, end, block }) {
+  const existed = existsSync(file);
+  const text = existed ? readFileSync(file, 'utf8') : '';
+
+  const nBegin = count(text, begin);
+  const nEnd = count(text, end);
+  if (nBegin !== nEnd) {
+    throw new Error(
+      `Bloc déséquilibré dans ${file} (BEGIN=${nBegin}, END=${nEnd}). ` +
+        `Édition refusée pour éviter une perte de données — corrige/supprime le bloc à la main.`
+    );
+  }
+
+  let backup;
+  if (existed && text.length > 0) {
+    backup = `${file}.somtech.bak`;
+    writeFileSync(backup, text);
+  }
+
+  let next;
+  let action;
+  if (nBegin > 0) {
+    next = stripBlock(text, begin, end) + block;
+    action = 'updated';
+  } else {
+    const sep = text.length === 0 || text.endsWith('\n') ? '\n' : '\n\n';
+    next = text + sep + block;
+    action = 'added';
+  }
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, next);
+  return { action, backup };
 }
 
 /** Construit le bloc gardé qui source le snippet installé. */
@@ -68,37 +114,13 @@ export function installRcBlock({ rcFile, destDir, snippetSrc, dryRun = false }) 
     if (existsSync(libSrc)) copyFileSync(libSrc, join(destDir, lib));
   }
 
-  // 2. Mettre à jour le rc de façon idempotente.
-  const existed = existsSync(rcFile);
-  const rc = existed ? readFileSync(rcFile, 'utf8') : '';
-
-  const nBegin = count(rc, MARKER_BEGIN);
-  const nEnd = count(rc, MARKER_END);
-  if (nBegin !== nEnd) {
-    throw new Error(
-      `Bloc claude-swt déséquilibré dans ${rcFile} (BEGIN=${nBegin}, END=${nEnd}). ` +
-        `Édition refusée pour éviter une perte de données — corrige/supprime le bloc à la main.`
-    );
-  }
-
-  let backup;
-  if (existed && rc.length > 0) {
-    backup = `${rcFile}.somtech.bak`;
-    writeFileSync(backup, rc);
-  }
-
-  const block = buildBlock(destFile);
-  let next;
-  let action;
-  if (nBegin > 0) {
-    const base = stripBlock(rc);
-    next = (base === '' ? '' : base) + block;
-    action = 'updated';
-  } else {
-    const sep = rc.length === 0 || rc.endsWith('\n') ? '\n' : '\n\n';
-    next = rc + sep + block;
-    action = 'added';
-  }
-  writeFileSync(rcFile, next);
+  // 2. Mettre à jour le rc de façon idempotente (mêmes garanties pour tous les blocs
+  //    gardés du pack : pas de doublon, backup, refus si déséquilibré).
+  const { action, backup } = upsertGuardedBlock({
+    file: rcFile,
+    begin: MARKER_BEGIN,
+    end: MARKER_END,
+    block: buildBlock(destFile),
+  });
   return { action, destFile, backup };
 }

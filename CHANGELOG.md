@@ -5,6 +5,22 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-19
+
+*Un seul lot : PR #293 (`T-20260819-0013`), sous la livraison `J-20260814-0002`. **Une consigne juste, suivie à la lettre, échouait** — et le mode de panne suivant était silencieux.*
+
+### Corrigé
+
+- **Les outils de poste du pack s'appellent par leur nom** (`T-20260819-0013`) — `ligne-directe relever` rendait « command not found » : passer exigeait de connaître `~/.somtech/ligne-directe/bin/ligne-directe.js`, un détail interne. Ce qui coûte n'est pas l'erreur, c'est qu'un agent moins scrupuleux **saute le geste** au lieu de le signaler — le veilleur aurait continué à servir l'ancien code sans que personne le sache. `pack setup` pose désormais un exécutable par outil dans `~/.somtech/bin/`, et met ce dossier sur le `PATH`.
+- **Le `PATH` est posé dans `~/.zshenv`, jamais dans le rc** — c'est le seul point qui distingue un correctif réel d'un correctif qui en a l'air. Le pack exposait déjà des commandes (`claude-swt`, `pack-poste`), mais comme **fonctions** dans `~/.zshrc` : mesuré, `zsh -c 'command -v claude-swt'` ne trouve rien. Or l'appelant qui a produit ce ticket est **un agent**, dont le shell n'est pas interactif. Reprendre cette forme aurait fermé le ticket sans rien régler.
+- **Les quatre outils, pas seulement celui qui a levé le défaut** — `ligne-directe`, `gestionnaire-livrer`, `gestionnaire-naitre` et `orchestrateur-rendez-vous`, ce dernier n'étant même pas déclaré. Le canvas, lui, n'expose aucune commande : c'est un fait mesuré, pas un oubli.
+
+### Technique
+
+- **L'inventaire vient du manifeste, pas d'une liste** — un module de portée `poste` qui déclare un `bin` dans son `package.json` est exposé automatiquement ; le prochain outil entrera sans qu'on touche au code.
+- **Le contrôle de contrôle** — la suite éprouve depuis un `zsh -c` (shell non interactif) plutôt qu'en relisant le fichier écrit, et **un test dédié prouve que ce contrôle voit le lieu** : le même bloc posé dans `.zshrc` doit laisser la commande introuvable. Sans lui, un correctif qui reprend le mauvais lieu passerait au vert.
+- **Le bloc gardé est mutualisé** (`upsertGuardedBlock`) — deux mécanismes de pose auraient divergé, et c'est celui qu'on ne relit plus qui aurait perdu son backup.
+- **`zsh` est installé dans le job CI** — un banc qui ne peut pas s'exécuter ne prouve rien.
 ## [1.74.0] - 2026-08-19
 
 *Lot F : PR #292 (`E-20260819-0001`, stories `T-20260819-0014` à `0019`), sous la demande `D-20260818-0008`. **Le métier de l'orchestrateur prescrivait huit gestes dont on avait prouvé la veille qu'ils ne tenaient pas.** Aucune des huit corrections mesurées le 18 août n'était encore dans le texte qui les prescrit — un texte lu en entier par chaque orchestrateur qui naît.*
