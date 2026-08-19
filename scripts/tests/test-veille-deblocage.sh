@@ -698,7 +698,12 @@ OUT29="$(PATH="${BINDIR}:${PATH}" \
          bash "$VEILLE" w9:pDUP autre-agent 2 2>&1)"
 RC29=$?
 case "$OUT29" in *"veille"*"déjà"*) ok "elle refuse et dit qu'une veille garde déjà ce pane" ;; *) ko "une seconde veille démarre sur un pane déjà gardé : $OUT29" ;; esac
-[ "$RC29" -ne 0 ] && ok "le refus porte un code de sortie non nul (rc=$RC29)" || ko "le refus rend 0, indistinguable d'un succès"
+# Le code EXACT, et l'absence de bilan : sans ça, un refus qui laisserait la
+# veille continuer quand même passerait (elle finirait sur tours-epuises=2,
+# lui aussi non nul). Mesuré par mutation — la garde survivait à sa propre
+# suppression.
+[ "$RC29" -eq 7 ] && ok "le refus porte son code propre (rc=$RC29)" || ko "code de refus attendu 7, obtenu $RC29"
+case "$OUT29" in *"--- bilan :"*) ko "elle a VEILLÉ malgré le refus — le refus n'a rien empêché" ;; *) ok "elle n'a pas veillé : le refus l'a réellement arrêtée" ;; esac
 
 kill -TERM "$DUP_PID" 2>/dev/null; wait "$DUP_PID" 2>/dev/null
 
@@ -720,6 +725,22 @@ OUT29B="$(PATH="${BINDIR}:${PATH}" \
           VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
           bash "$VEILLE" w9:pDUP autre-agent 2 2>&1)"
 case "$OUT29B" in *"MOTIF: "*) ok "un pane dont la veille est morte se laisse re-garder" ;; *) ko "le pane reste condamné après la mort de sa veille : $OUT29B" ;; esac
+
+
+# =================================================================
+# 30. GARANTIE N°4 SUR LE CHEMIN `idle` — celui que ce lot rend central.
+#     Le scénario 7 ne couvre que le chemin `done` : la confirmation sur
+#     deux relevés pouvait être supprimée du chemin `idle` sans qu'un seul
+#     test rougisse (mesuré par mutation). Un agent vu travailler, puis idle
+#     UNE fois, puis de nouveau au travail, ne doit pas être abandonné.
+# =================================================================
+echo "→ 30. idle TRANSITOIRE après du travail → elle ne conclut pas la fin"
+: > "$SCREEN_FILE"
+printf 'working\nidle\nworking\nworking\n' > "$SEQ_FILE"
+run 4
+
+case "$OUT" in *"TERMINE"*) ko "G4 AFFAIBLIE sur le chemin idle : un idle isolé suffit à l'abandonner : $OUT" ;; *) ok "un idle non confirmé ne l'arrête pas (garantie n°4, chemin idle)" ;; esac
+case "$OUT" in *"MOTIF: agent-termine"*) ko "motif « agent-termine » sur un idle transitoire" ;; *) ok "elle a continué de veiller" ;; esac
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
