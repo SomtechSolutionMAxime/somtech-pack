@@ -5,6 +5,34 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-18
+
+*Un seul lot : PR #289 (`E-20260818-0020`, stories `T-20260818-0154` à `0159`), sous la demande `D-20260818-0008`. La veille de déblocage **promettait une protection qu'elle n'assurait pas, sans jamais le dire** — et le geste que le métier prescrit produisait systématiquement le défaut.*
+
+### Corrigé
+
+- **L'attente d'un brief n'est plus lue comme un travail fini** (`T-20260818-0154`) — un agent qui vient de naître est `idle` **parce qu'il attend son premier message**. Les deux relevés de la garantie n°4 avaient raison sur l'état et tort sur le sens : la veille rendait *« TERMINE apres 0 deblocages »*, code `0`, bilan impeccable, **et rien n'était gardé**. La détection de fin n'est désormais **armée** qu'une fois l'agent vu au travail. *Reproduit puis levé sur un agent réel : l'ancienne version conclut « TERMINE », la nouvelle répond « il attend son brief, je veille ».*
+- **Elle ne s'arrête plus en silence** (`T-20260818-0155`) — un bilan muet rendait *« j'ai cru qu'il avait fini »* et *« j'ai épuisé mes tours »* **indistinguables**, alors qu'ils appellent des correctifs opposés. Tout chemin d'arrêt nomme son motif et sort sur un code propre : `agent-termine` · `tours-epuises` · `ecran-non-reconnu` · `interrompue` · `pane-disparu` · `releve-illisible`.
+- **La forme prescrite survit à la session qui la lance** (`T-20260818-0156`) — `… &` depuis une session Claude Code en faisait une tâche de fond du harnais, **qui la tue** (mesuré deux fois). `--detach` détache la veille lui-même, et **n'annonce son pid qu'après avoir vérifié qu'elle a pris son poste** : déclenché n'est pas posé.
+- **La durée par défaut couvre un lot réel** (`T-20260818-0158`) — `400` tours (~66 min) contre des lots mesurés de **1 h à 2 h 30** : la veille s'éteignait au milieu de la plupart d'entre eux. Portée à `2000` (~5 h 30), avec un **préavis** avant extinction.
+- **« 3 relevés non reconnus CONSÉCUTIFS » veut enfin dire consécutifs** — le compteur n'était remis à zéro que par un déblocage réussi : **trois écrans bizarres espacés dans le temps** coupaient la veille sur un agent parfaitement vivant. D'autant plus probable avec la durée étendue.
+- **Elle ne veille plus sur un pane qui n'existe plus** — trouvé en posant une **vraie** veille, pas en test : le pane fermé sous elle, elle a continué de tourner en s'annonçant « vivante » au registre. Motif `pane-disparu`, confirmé sur deux relevés — un hoquet de herdr abandonnerait un agent bien vivant.
+- **Un relevé illisible n'est plus un tour totalement silencieux** — herdr muet ou tronqué ne comptait ni comme absence ni comme écran non reconnu : la veille pouvait **devenir aveugle sans jamais le dire**.
+- **Deux veilles ne peuvent plus garder le même pane** — elles lisaient le même écran et envoyaient chacune leurs touches ; un `Enter` en double peut valider la mauvaise option de l'écran suivant. La prise du pane est **atomique** (`mkdir`), avec reprise d'un verrou orphelin pour qu'un pane ne reste pas condamné.
+
+### Ajouté
+
+- **Un orchestrateur sait sur quel pane chacune de ses veilles veille** (`T-20260818-0157`) — `ps aux | grep` rendait « 3 », un chiffre rassurant qui ne disait **rien de ce qui était gardé** ; sur les trois, aucune n'était la sienne. `--list` rend le pane **et** l'agent de chacune, son motif si elle s'est arrêtée, et la signale **disparue** si son pid est mort sans motif. Un pid recyclé ne passe plus pour une veille : la ligne de commande est vérifiée.
+- **Les deux chiffres de la garde sont mesurables** (`T-20260818-0159`) — une garde se juge sur ce qu'elle débloque **à raison** ET sur ce qu'elle **refuse à tort**. Le journal porte donc les **deux populations** : chaque déblocage avec l'écran déclencheur et la touche envoyée, chaque refus avec l'écran non reconnu. *Un compte sans sa méthode est un fait invérifiable.*
+- **`--duree`** rend la durée nominale couverte, pour qu'elle se compare à un lot sans lire le source.
+
+### Technique
+
+- Les **quatre garanties d'origine** sont **intactes** — deux signes concordants · silence devant un écran inconnu · aucune option choisie par sa position · confirmation sur deux relevés. Elles sont désormais **éprouvées par mutation** : 16 mutations sur copie hors dépôt, **16 attrapées**. Deux gardes qui survivaient à leur propre suppression ont été armées, dont la garantie n°4 sur le chemin `idle` — celui que ce lot rend central.
+- **99 assertions** dans `scripts/tests/test-veille-deblocage.sh`. La suite n'écrit plus dans le registre du poste : elle y avait laissé 32 entrées de test qui noyaient une veille réelle.
+- **Preuve par une veille vivante, pas par une suite verte** : 18 permissions réellement levées sur 3 familles d'écrans, survie mesurée à 10 min 16 s (`ps` à l'appui) pendant que la session continuait de travailler, et les 4 motifs provoqués un par un sur du réel.
+
+
 ## [1.72.0] - 2026-08-18
 
 *Un seul lot : PR #288 (`E-20260818-0017`, stories `T-20260818-0139/0140/0141`), sous la demande `D-20260818-0008`. Le nom d'un agent était **simplement l'argument transmis** — il n'y avait jamais eu de mécanisme, et le jour où personne n'y pensait, l'agent naissait sans rivière sans que rien ne le signale.*
