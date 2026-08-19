@@ -55,6 +55,7 @@
 #        ecran-non-reconnu ..... 3   3 relevés non reconnus consécutifs
 #        interrompue ........... 4   signal reçu — tuée par son environnement
 #        pane-disparu .......... 6   le pane n'existe plus (confirmé 2 relevés)
+#        (refus au démarrage) .. 7   une veille garde déjà ce pane
 #      Un bilan muet rendait « j'ai cru qu'il avait fini » et « j'ai épuisé
 #      mes tours » indistinguables, alors qu'ils appellent des correctifs
 #      opposés.
@@ -121,6 +122,21 @@ registre_lire() {
   sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1
 }
 
+# Ce pid est-il RÉELLEMENT une veille sur ce pane ? `kill -0` ne répond qu'à
+# « un processus porte ce pid en ce moment » : un pid recyclé par un
+# processus sans rapport ferait passer une veille morte pour vivante —
+# l'inverse exact de ce que le registre promet.
+veille_vivante() {
+  pid_test="$1"; pane_test="$2"
+  case "$pid_test" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$pid_test" 2>/dev/null || return 1
+  cmd="$(ps -p "$pid_test" -o command= 2>/dev/null)"
+  case "$cmd" in
+    *veille-deblocage.sh*"$pane_test"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # --list — le pane ET l'agent de chaque veille, jamais un simple compte.
 if [ "${1:-}" = "--list" ]; then
   if [ ! -d "$VD_REGISTRE_DIR" ] || [ -z "$(ls -A "$VD_REGISTRE_DIR"/*.veille 2>/dev/null)" ]; then
@@ -138,7 +154,7 @@ if [ "${1:-}" = "--list" ]; then
     r_journal="$(registre_lire "$f" journal)"
     if [ "$r_statut" = "terminee" ]; then
       echo "○ terminée · pane=$r_pane agent=$r_agent pid=$r_pid motif=${r_motif:-?} journal=$r_journal"
-    elif kill -0 "$r_pid" 2>/dev/null; then
+    elif veille_vivante "$r_pid" "$r_pane"; then
       echo "● vivante  · pane=$r_pane agent=$r_agent pid=$r_pid depuis=$r_debut journal=$r_journal"
     else
       # Le registre ne prétend pas savoir ce qu'il ne sait pas : une veille
@@ -208,6 +224,25 @@ if [ "$DETACH" = "1" ]; then
   exit 0
 fi
 
+# Deux veilles sur le même pane liraient le même écran et enverraient
+# chacune leurs touches : un « Enter » en double peut valider la mauvaise
+# option de l'écran SUIVANT. Vécu pendant ce lot — deux veilles ont
+# réellement tourné en parallèle sur le même pane d'essai.
+# Une veille MORTE ne condamne pas son pane : `veille_vivante` le vérifie.
+if [ -d "$VD_REGISTRE_DIR" ]; then
+  for f in "$VD_REGISTRE_DIR"/*.veille; do
+    [ -f "$f" ] || continue
+    [ "$(registre_lire "$f" pane)" = "$PANE" ] || continue
+    [ "$(registre_lire "$f" statut)" = "active" ] || continue
+    autre_pid="$(registre_lire "$f" pid)"
+    if veille_vivante "$autre_pid" "$PANE"; then
+      echo "REFUS : une veille garde déjà le pane $PANE (agent=$(registre_lire "$f" agent), pid=$autre_pid)." >&2
+      echo "        L'arrêter d'abord (kill $autre_pid), ou la laisser faire — deux veilles se marcheraient dessus." >&2
+      exit 7
+    fi
+  done
+fi
+
 DEBLOQUES=0
 INCONNUES=0
 # Discriminant du défaut ① : tant qu'il vaut 0, un `idle` veut dire « il
@@ -232,6 +267,12 @@ REGISTRE_FICHIER="${VD_REGISTRE_DIR}/${PANE_SLUG}-$$.veille"
   echo "journal=$VD_JOURNAL"
   echo "tours=$VD_TOURS"
 } > "$REGISTRE_FICHIER" 2>/dev/null
+if [ ! -f "$REGISTRE_FICHIER" ]; then
+  # Les écritures suivantes restent silencieuses par choix (une veille ne
+  # doit pas mourir d'un problème de registre), mais l'orchestrateur doit
+  # savoir UNE FOIS que ni le registre ni le journal ne le renseigneront.
+  echo "AVERTISSEMENT : registre non écrivable ($VD_REGISTRE_DIR) — cette veille ne sera ni inventoriable ni relisable." >&2
+fi
 
 # Codes de sortie : un appelant machine tranche sans lire du texte.
 code_motif() {
@@ -344,6 +385,11 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     working)
       ABSENCES=0
+      # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
+      # ce reset, trois écrans bizarres espacés dans le temps coupaient la
+      # veille sur un agent vivant — d'autant plus probable que ce lot
+      # étend la durée à 2000 tours.
+      INCONNUES=0
       VU_TRAVAILLER=1
       ;;
     blocked)
@@ -390,6 +436,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     done)
       ABSENCES=0
+      INCONNUES=0
       # `done` est un état terminal EXPLICITE : il ne survient pas à la
       # naissance, contrairement à `idle`. Il arme donc la détection.
       VU_TRAVAILLER=1
@@ -402,6 +449,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ;;
     idle)
       ABSENCES=0
+      INCONNUES=0
       # ⚠️ LE DÉFAUT ① EST ICI. Un agent qui vient de naître est `idle`
       # PARCE QU'IL ATTEND SON BRIEF. Les deux relevés de la garantie n°4
       # avaient raison sur l'état et tort sur le sens. Tant qu'on ne l'a

@@ -619,6 +619,108 @@ run 4
 case "$OUT" in *"MOTIF: pane-disparu"*) ko "un seul relevé absent suffit à l'arrêter — un hoquet de herdr abandonnerait un agent vivant" ;; *) ok "une absence isolée ne l'arrête pas" ;; esac
 case "$OUT" in *"MOTIF: tours-epuises"*) ok "elle a veillé jusqu'au bout malgré l'absence transitoire" ;; *) ko "arrêt inattendu : $OUT" ;; esac
 
+
+# =================================================================
+# 27. « 3 relevés non reconnus CONSÉCUTIFS » doit vouloir dire consécutifs.
+#     Le compteur n'était remis à zéro que par un déblocage réussi : trois
+#     écrans bizarres SÉPARÉS par des tours de travail légitimes coupaient
+#     la veille sur un agent parfaitement vivant. Le risque grandit avec la
+#     durée étendue de ce lot (2000 tours) : plus de tours, plus de hoquets.
+# =================================================================
+echo "→ 27. écrans non reconnus NON consécutifs → elle ne s'arrête pas"
+cat > "$SCREEN_FILE" <<'EOF'
+This is not a permission prompt at all. Nothing to recognize here.
+EOF
+printf 'blocked\nworking\nblocked\nworking\nblocked\nworking\n' > "$SEQ_FILE"
+run 6
+
+case "$OUT" in *"ARRET : blocage non reconnu"*) ko "elle s'arrête sur 3 relevés NON consécutifs — un agent vivant est abandonné sur des hoquets espacés" ;; *) ok "trois écrans non reconnus séparés par du travail ne l'arrêtent pas" ;; esac
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "motif « ecran-non-reconnu » sur des relevés non consécutifs" ;; *) ok "elle a continué de veiller" ;; esac
+
+# Et le cas VRAIMENT consécutif reste couvert (scénario 5) — vérifié ici sur
+# la même séquence, sans tour de travail intercalé.
+printf 'blocked\nblocked\nblocked\nblocked\n' > "$SEQ_FILE"
+run 6
+case "$OUT" in *"ARRET : blocage non reconnu"*) ok "trois relevés RÉELLEMENT consécutifs l'arrêtent toujours" ;; *) ko "G2 AFFAIBLIE : elle ne s'arrête plus sur 3 relevés consécutifs : $OUT" ;; esac
+
+# =================================================================
+# 28. `kill -0` ne prouve pas que le pid est LA veille : un pid recyclé par
+#     un processus sans rapport ferait passer une veille morte pour vivante
+#     — l'inverse exact de ce que le registre promet.
+# =================================================================
+echo "→ 28. pid recyclé → pas annoncée vivante"
+REG_PID="${WORK}/registre-pid"; rm -rf "$REG_PID"; mkdir -p "$REG_PID"
+# Un processus bien vivant qui n'est PAS une veille : le shell de ce test.
+cat > "${REG_PID}/w9-pRR-$$.veille" <<EOF
+pane=w9:pRR
+agent=agent-recycle
+pid=$$
+statut=active
+debut=2026-08-18T00:00:00
+journal=/dev/null
+tours=400
+EOF
+LISTE4="$(PATH="${BINDIR}:${PATH}" VD_REGISTRE_DIR="$REG_PID" bash "$VEILLE" --list 2>&1)"
+case "$LISTE4" in
+  *"vivante"*) ko "un pid recyclé est annoncé « vivante » — l'orchestrateur croit à une protection qui n'existe pas : $LISTE4" ;;
+  *) ok "un pid qui n'est pas une veille n'est pas annoncé vivante" ;;
+esac
+case "$LISTE4" in *"agent-recycle"*) ok "l'entrée reste listée (on ne la cache pas, on la qualifie)" ;; *) ko "l'entrée a disparu de la liste : $LISTE4" ;; esac
+
+# =================================================================
+# 29. Deux veilles sur le MÊME pane s'enverraient chacune leurs touches sur
+#     le même écran — un Enter en double peut valider la mauvaise option de
+#     l'écran suivant. Mesuré vécu : deux veilles ont réellement tourné en
+#     parallèle sur le même pane d'essai pendant ce lot.
+# =================================================================
+echo "→ 29. une seconde veille sur le même pane est refusée"
+REG_DUP="${WORK}/registre-dup"; rm -rf "$REG_DUP"; mkdir -p "$REG_DUP"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+# Une VRAIE veille vivante sur ce pane — un fichier de registre fabriqué avec
+# un pid quelconque ne suffit plus : la liste vérifie désormais que le pid est
+# bien une veille sur CE pane (scénario 28). Le test doit donc être aussi
+# exigeant que le code qu'il éprouve.
+PATH="${BINDIR}:${PATH}" \
+  FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+  VD_REGISTRE_DIR="$REG_DUP" VD_SLEEP=2 VD_SLEEP_CONFIRM=0 \
+  bash "$VEILLE" w9:pDUP deja-la 60 > "${WORK}/dup1.log" 2>&1 &
+DUP_PID=$!
+# Attendre son inscription au registre — sur un SIGNE, jamais sur un délai
+# fixe : un délai fixe mesurerait la charge du poste.
+for _ in $(seq 1 30); do
+  ls "${REG_DUP}"/*.veille >/dev/null 2>&1 && break
+  sleep 0.5
+done
+OUT29="$(PATH="${BINDIR}:${PATH}" \
+         FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         VD_REGISTRE_DIR="$REG_DUP" \
+         VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+         bash "$VEILLE" w9:pDUP autre-agent 2 2>&1)"
+RC29=$?
+case "$OUT29" in *"veille"*"déjà"*) ok "elle refuse et dit qu'une veille garde déjà ce pane" ;; *) ko "une seconde veille démarre sur un pane déjà gardé : $OUT29" ;; esac
+[ "$RC29" -ne 0 ] && ok "le refus porte un code de sortie non nul (rc=$RC29)" || ko "le refus rend 0, indistinguable d'un succès"
+
+kill -TERM "$DUP_PID" 2>/dev/null; wait "$DUP_PID" 2>/dev/null
+
+# Et le pane d'une veille MORTE reste reposable — sinon un pane serait
+# condamné après le premier arrêt.
+rm -f "${REG_DUP}"/*.veille
+cat > "${REG_DUP}/w9-pDUP-4294967000.veille" <<'EOF'
+pane=w9:pDUP
+agent=morte
+pid=4294967000
+statut=active
+debut=2026-08-18T00:00:00
+journal=/dev/null
+tours=400
+EOF
+OUT29B="$(PATH="${BINDIR}:${PATH}" \
+          FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          VD_REGISTRE_DIR="$REG_DUP" \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 \
+          bash "$VEILLE" w9:pDUP autre-agent 2 2>&1)"
+case "$OUT29B" in *"MOTIF: "*) ok "un pane dont la veille est morte se laisse re-garder" ;; *) ko "le pane reste condamné après la mort de sa veille : $OUT29B" ;; esac
+
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
 echo; echo "== Bilan : ${P// /} réussis, ${F// /} échoués =="
