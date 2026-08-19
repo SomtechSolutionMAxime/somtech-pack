@@ -95,6 +95,21 @@ export function outilsDePoste(payloadRoot, modules) {
 }
 
 /**
+ * Un chemin, tel qu'il peut entrer SANS DANGER dans une chaîne shell entre guillemets.
+ *
+ * Sans ça, un chemin d'installation contenant un guillemet casse la syntaxe du bloc posé
+ * dans `.zshenv` — et pas seulement pour l'outil : `zsh` rend alors une erreur d'analyse
+ * à CHAQUE ouverture de shell, interactif compris. Le pack aurait produit une panne plus
+ * large que celle qu'il ferme. Un `$(…)` ou un accent grave, eux, s'exécuteraient.
+ *
+ * Le globbing du motif `case`, lui, est déjà neutralisé par les guillemets qui entourent
+ * la partie interpolée : une étoile dans un chemin y reste littérale.
+ */
+function pourShell(chemin) {
+  return String(chemin).replace(/([\\"`$])/g, '\\$1');
+}
+
+/**
  * L'exécutable posé pour un outil : un relais minimal vers le fichier installé.
  *
  * Un relais plutôt qu'un lien symbolique parce qu'il ne dépend ni du bit exécutable
@@ -114,8 +129,8 @@ export function buildShim(cibleAbsolue, nodeInstallation = process.execPath) {
   return [
     '#!/bin/sh',
     SIGNATURE,
-    `command -v node >/dev/null 2>&1 && exec node "${cibleAbsolue}" "$@"`,
-    `exec "${nodeInstallation}" "${cibleAbsolue}" "$@"`,
+    `command -v node >/dev/null 2>&1 && exec node "${pourShell(cibleAbsolue)}" "$@"`,
+    `exec "${pourShell(nodeInstallation)}" "${pourShell(cibleAbsolue)}" "$@"`,
     '',
   ].join('\n');
 }
@@ -134,8 +149,8 @@ export function buildPathBlock(binDir) {
     '# agent, ne lit que .zshenv. Le déplacer remettrait « command not found » en place.',
     '# Ne pas éditer à la main : `pack setup` le réécrit.',
     'case ":$PATH:" in',
-    `  *":${binDir}:"*) ;;`,
-    `  *) PATH="${binDir}:$PATH" ;;`,
+    `  *":${pourShell(binDir)}:"*) ;;`,
+    `  *) PATH="${pourShell(binDir)}:$PATH" ;;`,
     'esac',
     'export PATH',
     MARKER_END,

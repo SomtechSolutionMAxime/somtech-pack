@@ -40,7 +40,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-import { installPosteBin, outilsDePoste, MARKER_BEGIN, MARKER_END, buildPathBlock } from '../src/postebin.js';
+import { installPosteBin, outilsDePoste, MARKER_BEGIN, MARKER_END, buildPathBlock, buildShim } from '../src/postebin.js';
 import { installPosteModules } from '../src/posteonly.js';
 import { run } from '../src/cli.js';
 
@@ -301,19 +301,22 @@ test('câblage : sans option, le PATH va dans <HOME>/.zshenv — pas dans <HOME>
 test('bout en bout : la commande marche même quand `node` n’est pas sur le PATH', () => {
   if (!zshDisponible()) assert.fail('zsh absent : ce contrôle ne peut pas prouver ce qu’il annonce (installe zsh)');
   const { home } = fauxPoste();
-  // Un PATH volontairement pauvre : le dossier des outils s'y ajoutera par .zshenv, mais
-  // `node` n'y sera pas (il vient de homebrew / nvm / une installation utilisateur).
-  const maigre = '/usr/bin:/bin';
+  // ⚠️ Un PATH « pauvre » choisi à la main dépend de la machine : sur le runner CI, `node`
+  // vit dans /usr/bin, et le contrôle se refusait à conclure. Le seul PATH dont on sait
+  // qu'il ne porte pas node est un dossier VIDE — et zsh est alors invoqué par son chemin
+  // absolu, puisque plus rien ne le résout.
+  const vide = tmp('smtk-path-vide-');
+  const zsh = execFileSync('/usr/bin/env', ['sh', '-c', 'command -v zsh'], { encoding: 'utf8' }).trim();
   assert.equal(
-    execFileSync('/bin/sh', ['-c', `PATH=${maigre} command -v node >/dev/null 2>&1; echo $?`], { encoding: 'utf8' }).trim(),
+    execFileSync('/bin/sh', ['-c', `PATH=${vide} command -v node >/dev/null 2>&1; echo $?`], { encoding: 'utf8' }).trim(),
     '1',
     'préalable : ce PATH ne doit VRAIMENT pas porter node, sinon ce contrôle ne prouve rien'
   );
   let out = '';
   let rc = 0;
   try {
-    out = execFileSync('/usr/bin/env', ['zsh', '-c', 'ligne-directe'], {
-      env: { HOME: home, ZDOTDIR: home, PATH: maigre },
+    out = execFileSync(zsh, ['-c', 'ligne-directe'], {
+      env: { HOME: home, ZDOTDIR: home, PATH: vide },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -323,4 +326,62 @@ test('bout en bout : la commande marche même quand `node` n’est pas sur le PA
   }
   assert.equal(rc, 0, `l’outil doit répondre sans node sur le PATH — sortie : ${out.slice(0, 200)}`);
   assert.ok(/ouvrir une ligne de discussion/.test(out), 'c’est bien lui qui a répondu');
+});
+
+// ── LES TROIS GARDES QUE LA REVUE DE FOND A TROUVÉES SANS PREUVE ────────────────────────
+// Elles existaient dans le code et se lisaient bien. Aucune ne rougissait quand on la
+// retirait : « un test qui n'a jamais été rouge n'a jamais rien testé ».
+
+test('garde : un nom déjà pris par un outil hors-pack n’est PAS écrasé, et c’est dit', () => {
+  const w = tmp('smtk-postebin-pris-');
+  const toolsDir = join(w, 'somtech');
+  mkdirSync(join(toolsDir, 'bin'), { recursive: true });
+  // Le nom d'un VRAI outil du pack, occupé par le fichier de quelqu'un d'autre — le seul
+  // cas qui exerce la boucle de pose (le contrôle « fichier étranger » plus haut, lui,
+  // n'exerce que le nettoyage, puisqu'il choisit un nom inconnu du manifeste).
+  const pris = join(toolsDir, 'bin', 'ligne-directe');
+  writeFileSync(pris, '#!/bin/sh\necho "le mien, pas celui du pack"\n');
+
+  const r = installPosteBin({ payloadRoot: REPO, toolsDir, zshenvFile: join(w, '.zshenv') });
+
+  assert.equal(readFileSync(pris, 'utf8'), '#!/bin/sh\necho "le mien, pas celui du pack"\n', 'contenu intact');
+  assert.ok(r.conflicts.includes('ligne-directe'), 'le conflit est RAPPORTÉ — sinon la commande part ailleurs sans que personne le sache');
+  assert.ok(!r.updated.includes('ligne-directe'), 'et surtout : pas compté comme convergé');
+});
+
+test('garde : un exécutable du pack devenu orphelin est réellement RETIRÉ', () => {
+  const w = tmp('smtk-postebin-orphelin-');
+  const toolsDir = join(w, 'somtech');
+  installPosteBin({ payloadRoot: REPO, toolsDir, zshenvFile: join(w, '.zshenv') });
+
+  // Un outil que le pack a posé hier et que le manifeste ne déclare plus : il pointerait
+  // sur un fichier absent, ce qui répond « oui » à `command -v` et échoue à l'exécution —
+  // pire que « command not found », qui au moins ne ment pas.
+  const orphelin = join(toolsDir, 'bin', 'outil-d-hier');
+  writeFileSync(orphelin, buildShim(join(toolsDir, 'plus-la', 'bin', 'x.js')));
+
+  const r = installPosteBin({ payloadRoot: REPO, toolsDir, zshenvFile: join(w, '.zshenv') });
+  assert.ok(r.removed.includes('outil-d-hier'), 'annoncé comme retiré');
+  assert.ok(!existsSync(orphelin), 'et réellement disparu du disque — pas seulement du rapport');
+});
+
+test('garde : un chemin d’installation biscornu ne casse pas le shell du poste', () => {
+  // Mesuré par la revue de fond : un guillemet dans le chemin rendait `parse error near`
+  // à CHAQUE ouverture de shell — le pack aurait produit une panne plus large que celle
+  // qu'il ferme. Un `$(…)` ou un accent grave, eux, se seraient exécutés.
+  const piege = '/tmp/faux "poste" $(echo INJECTE) `echo INJECTE`/bin';
+  const bloc = buildPathBlock(piege);
+  const shim = buildShim(join(piege, 'x.js'), '/usr/bin/node');
+  if (!zshDisponible()) assert.fail('zsh absent : ce contrôle ne peut pas prouver ce qu’il annonce (installe zsh)');
+
+  for (const [quoi, texte] of [['le bloc PATH', bloc], ['le relais', shim]]) {
+    const f = join(tmp('smtk-piege-'), 'a-lire.sh');
+    mkdirSync(dirname(f), { recursive: true });
+    writeFileSync(f, texte);
+    // `zsh -n` analyse sans exécuter : la seule façon de mesurer la syntaxe sans lancer
+    // ce que le piège contient.
+    const sortie = execFileSync('/usr/bin/env', ['zsh', '-c', `zsh -n ${JSON.stringify(f)} 2>&1; echo rc=$?`], { encoding: 'utf8' });
+    assert.ok(/rc=0/.test(sortie), `${quoi} doit rester analysable : ${sortie}`);
+    assert.ok(!/INJECTE/.test(execFileSync('/usr/bin/env', ['zsh', '-c', `zsh -n ${JSON.stringify(f)} 2>&1`], { encoding: 'utf8' })), `${quoi} n’exécute rien`);
+  }
 });
