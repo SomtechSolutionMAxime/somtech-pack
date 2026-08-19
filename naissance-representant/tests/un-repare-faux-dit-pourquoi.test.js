@@ -281,3 +281,60 @@ test('quatre chemins distincts rendent quatre causes DISTINCTES — une cause fi
   assert.equal(causes.size, 4, `quatre chemins doivent rendre quatre causes — vu : ${[...causes].join(', ')}`);
   assert.ok(!causes.has(undefined), 'et aucun chemin ne doit rendre une cause absente');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LES DEUX CHEMINS QUE LA MUTATION A TROUVÉS NUS
+//
+// ⚠️ RELEVÉ PAR L'ÉPREUVE PAR MUTATION DE CE LOT, pas par relecture. Muter chaque branche du
+// motif une par une a montré que celle-ci — « la boîte ne portait rien à soumettre » — SURVIVAIT :
+// on pouvait la remplacer par n'importe quelle valeur sans qu'un seul essai rougisse.
+//
+// C'était une garde qu'on peut désarmer sans rougir, dans le lot écrit pour poser cette garde.
+// Les deux essais ci-dessous atteignent la branche par les seuls états qui y mènent vraiment :
+// un envoi que herdr REFUSE (la boîte reste vide, donc elle ne témoigne de rien), et un écran
+// devenu ILLISIBLE après l'écriture. `null` et `''` ne sont pas le même fait — l'un dit qu'on
+// n'a pas su lire, l'autre qu'il n'y avait rien.
+
+test('brief non pris et boîte VIDE : on n’avait rien à soumettre, et la cause le dit', async () => {
+  // L'envoi est refusé par herdr : la boîte n'a jamais rien porté, donc son vide ne prouve rien
+  // (voir `briefEstPris`, qui exige alors un témoin positif). La réparation n'a pas d'objet.
+  const appels = [];
+  const r = await livrerBrief({
+    ...socle,
+    texte: 'mon compte rendu',
+    appelHerdr: async (c) => {
+      appels.push(c);
+      if (c[1] === 'prompt') return { ok: false, reponse: {}, message: 'agent_prompt_stalled' };
+      return { ok: true, reponse: { result: { agent: { agent_status: 'idle' } } }, message: '' };
+    },
+    lireEcran: async () => boiteVide(),
+    immobiliteMs: 0,
+  });
+
+  assert.equal(r.ok, false, 'le brief n’a pas été prouvé pris');
+  assert.equal(r.repare, false);
+  assert.equal(r.causeRepare, 'boite-vide', 'il n’y avait rien dans la boîte à soumettre');
+  assert.deepEqual(appels.filter((c) => c[1] === 'send-keys'), [], 'et aucune touche ne part dans le vide');
+});
+
+test('brief non pris et boîte ILLISIBLE : on ne soumet pas ce qu’on n’a pas vu, et la cause le dit', async () => {
+  // L'écran devient illisible APRÈS l'écriture — avant, il aurait été refusé en amont, et la
+  // cause serait `rien-ecrit`. Les deux ne doivent pas se confondre.
+  const appels = [];
+  let lectures = 0;
+  const r = await livrerBrief({
+    ...socle,
+    texte: 'mon compte rendu',
+    appelHerdr: herdrOrdinaire(appels),
+    lireEcran: async () => {
+      lectures += 1;
+      return lectures === 1 ? boiteVide() : '';
+    },
+    immobiliteMs: 0,
+  });
+
+  assert.equal(r.ok, false);
+  assert.equal(r.repare, false);
+  assert.equal(r.causeRepare, 'boite-illisible', 'une boîte illisible n’est pas une boîte vide');
+  assert.deepEqual(appels.filter((c) => c[1] === 'send-keys'), [], 'on ne presse pas Entrée à l’aveugle');
+});
