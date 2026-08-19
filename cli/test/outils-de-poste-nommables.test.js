@@ -293,3 +293,34 @@ test('câblage : sans option, le PATH va dans <HOME>/.zshenv — pas dans <HOME>
   assert.ok(zshenv.includes(MARKER_BEGIN), 'le lieu par défaut est .zshenv, lu par TOUT zsh');
   assert.ok(!zshrc.includes(MARKER_BEGIN), 'le rc ne porte pas ce PATH — un agent ne le lit jamais');
 });
+
+// ⚠️ ET SI LE SHELL DE L'AGENT N'A PAS `node` ? Sur un poste où nvm pose la version de Node
+// depuis `~/.zshrc`, un shell non interactif n'en a aucune. Un relais qui ferait `exec node`
+// sec serait trouvé par son nom et échouerait sur « node: command not found » — la panne du
+// ticket, déplacée d'un cran, et tout aussi silencieuse pour qui suit la consigne.
+test('bout en bout : la commande marche même quand `node` n’est pas sur le PATH', () => {
+  if (!zshDisponible()) assert.fail('zsh absent : ce contrôle ne peut pas prouver ce qu’il annonce (installe zsh)');
+  const { home } = fauxPoste();
+  // Un PATH volontairement pauvre : le dossier des outils s'y ajoutera par .zshenv, mais
+  // `node` n'y sera pas (il vient de homebrew / nvm / une installation utilisateur).
+  const maigre = '/usr/bin:/bin';
+  assert.equal(
+    execFileSync('/bin/sh', ['-c', `PATH=${maigre} command -v node >/dev/null 2>&1; echo $?`], { encoding: 'utf8' }).trim(),
+    '1',
+    'préalable : ce PATH ne doit VRAIMENT pas porter node, sinon ce contrôle ne prouve rien'
+  );
+  let out = '';
+  let rc = 0;
+  try {
+    out = execFileSync('/usr/bin/env', ['zsh', '-c', 'ligne-directe'], {
+      env: { HOME: home, ZDOTDIR: home, PATH: maigre },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    rc = e.status ?? 1;
+    out = e.stdout ?? '';
+  }
+  assert.equal(rc, 0, `l’outil doit répondre sans node sur le PATH — sortie : ${out.slice(0, 200)}`);
+  assert.ok(/ouvrir une ligne de discussion/.test(out), 'c’est bien lui qui a répondu');
+});

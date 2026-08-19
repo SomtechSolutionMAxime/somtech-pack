@@ -100,9 +100,24 @@ export function outilsDePoste(payloadRoot, modules) {
  * Un relais plutôt qu'un lien symbolique parce qu'il ne dépend ni du bit exécutable
  * survivant à la copie, ni du `#!` du fichier visé — deux choses qu'on ne veut pas avoir
  * à vérifier sur chaque poste.
+ *
+ * ⚠️ POURQUOI DEUX LIGNES PLUTÔT QU'UN `exec node` SEC
+ *
+ * `node` du `PATH` d'abord : c'est la version que l'utilisateur a choisie, et un outil du
+ * pack n'a pas à en imposer une autre. Mais sur un poste où la version de Node est posée
+ * par nvm — qui s'initialise dans `~/.zshrc` — un shell NON interactif n'a pas de `node`
+ * du tout. Sans repli, la commande se trouverait par son nom et échouerait à l'exécution
+ * sur « node: command not found » : le mode de panne exact que ce lot ferme, déplacé d'un
+ * cran. Le repli est le Node qui a servi à l'installation, mesuré, pas deviné.
  */
-export function buildShim(cibleAbsolue) {
-  return ['#!/bin/sh', SIGNATURE, `exec node "${cibleAbsolue}" "$@"`, ''].join('\n');
+export function buildShim(cibleAbsolue, nodeInstallation = process.execPath) {
+  return [
+    '#!/bin/sh',
+    SIGNATURE,
+    `command -v node >/dev/null 2>&1 && exec node "${cibleAbsolue}" "$@"`,
+    `exec "${nodeInstallation}" "${cibleAbsolue}" "$@"`,
+    '',
+  ].join('\n');
 }
 
 /**
