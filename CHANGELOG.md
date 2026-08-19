@@ -7,6 +7,30 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-19
 
+*Lot `E-20260819-0005` (PR #297), sous `D-20260819-0001`. **On ne pouvait répondre à « qui est vivant, quel métier porte-t-il, est-il à jour » que par une passe manuelle** — faite une fois le matin, périmée le lendemain, et que personne ne relancerait.*
+
+### Ajouté
+
+- **Le veilleur tient le registre des orchestrateurs du poste** (`E-20260819-0005`) — pour chaque pane dont le répertoire est un lieu d'orchestrateur reconnu **par le fait** : son mandat, sa session herdr, l'empreinte SHA-256 de son métier, ses octets, son écart à la référence du poste, et ce qu'on a pu lire de son travail en vol. Ronde toutes les 15 minutes, et `ligne-directe recensement` pour le demander à tout moment. **On ajoute une mesure à une ronde qui existe ; on ne fabrique pas une ronde.**
+- **L'état du MANDAT, à côté de l'état de la session** (`T-20260819-0056`) — un chantier clos et une session au repos disent tous les deux `idle`, et **rien dans herdr ne les distingue**. Le registre croise le ServiceDesk, et **ne propose rien à un mandat qui n'est pas prouvé ouvert** — ni clos, ni non mesuré : réveiller un chantier terminé mettrait deux orchestrateurs sur les mêmes panes, chacun croyant l'autre parti.
+
+### Mesuré
+
+- **Un agent VIVANT peut recharger son métier sans renaître** (`T-20260819-0050`) — le geste est `/clear`, envoyé dans son pane : reproduit 2 fois sur 2 sur un cobaye jetable, et le `.claude/settings.json` est relu aussi (hook ajouté à chaud → il se déclenche ; retiré → il ne se déclenche plus). C'est le **redémarrage** qui ne suffisait pas, pas le rechargement.
+- **Mais le geste efface le fil de l'agent** — et ce n'est pas ce qu'on croyait : `/clear` **n'arrête rien**. Un shell d'arrière-plan continue, un sous-agent en vol rend son résultat. C'est l'agent qui perd la connaissance de ce qui tourne : interrogé juste après, il répond « rien en cours, session propre », puis reçoit le retour d'un sous-agent qu'il ne se rappelle plus avoir lancé. **Rien n'est tué, tout devient orphelin de sa raison d'être.** D'où la règle écrite dans le code : **le registre propose, il n'impose pas — et l'agent doit pouvoir dire « pas maintenant » AVANT.**
+- **Un agent qui tape `herdr` tout court ne voit qu'un treizième du poste** — et c'est la raison d'être du registre, pas un détail d'implémentation. `herdr` sans socket désigné parle à **une seule session**. Mesuré session par session le 2026-08-19 : `somtech` 89 agents, `cg` 20, `progex` 18, `morasse` 2, `sibelanger` 1, deux à 0, **six muettes** — **130 agents visibles, 89 vus**. Deux des sept orchestrateurs que le registre trouve vivent dans `progex` et `cg`, invisibles depuis `somtech`. Le registre interroge donc **les treize sessions une par une**, et **rend chaque pane avec sa session** : `w3:p2` seul ne désigne rien, deux sessions emploient les mêmes identifiants.
+- **Et l'inventaire se fait par le CHEMIN du lieu, jamais par le nom de l'agent** — depuis la `v1.72.0` un agent porte un nom de rivière, sans rapport avec le mandat de son lieu. Une passe d'inventaire qui cherchait les agents par leur nom en a manqué un **alors qu'il était sous ses yeux dans la liste**. Séparément, `herdr agent list` sous-compte face à `herdr pane list` — trois lieux contre cinq sur la même session, soit 40 %.
+
+### Technique
+
+- **Une panne d'inventaire rend `orchestrateurs: null`, jamais `[]`** — une liste vide se lit « il n'y en a aucun », et personne ne cherche un défaut derrière un rapport qui dit « rien à signaler ». La garde rougit sur une source **réellement** en panne (`herdr` retiré du `PATH`), pas sur une liste vide fabriquée.
+- **Un identifiant de pane n'est unique que dans sa session** — `w5:p3` désigne deux panes différents selon la session herdr. L'inventaire dédoublonne sur le couple, et le registre rend la session à côté du pane.
+- **Le transport du ServiceDesk porte la cloison d'essais** — relevé en passe de revue de fond, et le rejet était juste : sur un poste de développement la clé est exportée, donc un simple `npm test` faisait partir des appels **réels vers la production, avec la vraie clé**. La discipline existait déjà à côté (`slack.js`) ; le transport neuf n'en héritait pas.
+- **Un tour de ronde qui PEND ne l'éteint plus** — les appels à `herdr` n'ont pas de délai propre : un socket vivant mais muet laissait `recensementEnCours` à `true` pour toujours, et plus aucun tour ne partait. Sans une ligne d'erreur.
+- **Vingt-quatre mutations jouées une à une** sur copie hors dépôt : vingt-deux font rougir un banc seules, deux ne rougissent qu'ensemble (les deux ceintures d'arrêt de la ronde) — c'est écrit dans le code et un banc dédié le prouve.
+
+---
+
 *Lot G : PR #295 (`E-20260819-0003`, stories `T-20260819-0026` à `0028`), sous la demande `D-20260818-0008`. **Trois gardes ne gardaient pas ce qu'elles prétendaient garder** — et le lot en a trouvé trois de plus en se relisant, dont deux dans ses propres bancs.*
 
 ### Corrigé

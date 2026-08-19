@@ -110,6 +110,14 @@ function usage(code = 0) {
                                                            et NE CREE RIEN si le poste ne peut pas
                                                            ouvrir de ligne (sa ligne est obligatoire)
   etat                                                     ce qui est ouvert
+  recensement                                              QUI est vivant, QUEL metier il porte,
+                                                           et de combien il s'ecarte de la
+                                                           reference du poste. L'empreinte fait
+                                                           foi, jamais le numero de version.
+                                                           Il MESURE et REND : il ne remet
+                                                           personne a jour, et une source en
+                                                           panne se dit au lieu de se lire
+                                                           « aucun orchestrateur ».
   bail poser <pane> [--minutes N] [--pourquoi "..."]       RESERVE un pane : le balayeur des
   bail lever <pane>                                        boites oubliees s'en ABSTIENT tant
   bail liste                                               que le bail court, quel que soit le
@@ -485,6 +493,14 @@ if (geste === 'relever') {
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
+} else if (geste === 'recensement') {
+  // ⚠️ RENDU TEL QUEL, SANS RÉSUMÉ MAISON. Le rendu porte déjà `resume`, `regle` et — quand la
+  // mesure a échoué — `inventaireRefuse` avec `orchestrateurs: null`. Recomposer ici une phrase
+  // d'affichage, c'est se donner l'occasion d'écrire « aucun orchestrateur » sur un tableau que
+  // le veilleur a justement refusé de remplir : la panne se dirait alors « rien à signaler » au
+  // dernier étage, après avoir été correctement nommée à tous les autres.
+  const rendu = await parler({ geste: 'recensement' });
+  process.stdout.write(`${JSON.stringify(rendu, null, 2)}\n`);
 } else {
   usage(1);
 }

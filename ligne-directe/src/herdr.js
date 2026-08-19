@@ -668,6 +668,96 @@ export async function ecranDe(pane, socket) {
   }
 }
 
+/**
+ * TOUS LES PANES DU POSTE — la source d'inventaire du RECENSEMENT, et pas celle du balayage.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI DEUX INVENTAIRES, ET POURQUOI CE N'EST PAS « UNE PORTE SUR DEUX »
+ *
+ * `agents()` demande à herdr QUELS PANES PORTENT UN AGENT — c'est ce qu'il faut au balayage,
+ * qui délivre une boîte : sans agent détecté, il n'y a pas de boîte à délivrer.
+ *
+ * `panes()` demande QUELS PANES EXISTENT, **et il le demande à TOUTES les sessions du poste, une
+ * par une**. Ce second point n'est pas une optimisation : c'est la chose même. `herdr` sans
+ * socket désigné parle à UNE seule session — celle de l'appelant — donc **la commande ordinaire
+ * ne peut pas répondre à la question « qui vit sur ce poste »**.
+ *
+ * Mesuré le 2026-08-19, session par session : `somtech` 89 agents, `cg` 20, `progex` 18,
+ * `morasse` 2, `sibelanger` 1, deux autres à 0, six muettes. **130 agents visibles ; un agent qui
+ * tape `herdr` tout court en voit 89.** Et ce n'est pas théorique : deux des sept orchestrateurs
+ * que ce registre trouve vivent dans `progex` et `cg`, invisibles depuis `somtech`.
+ *
+ * Les deux fonctions répondent donc à deux questions différentes ; ce n'est pas la même mesure
+ * écrite deux fois.
+ *
+ * ⚠️ ET L'ÉCART ENTRE LES DEUX EST MESURÉ, PAS SUPPOSÉ (T-20260819-0043, 2026-08-19) :
+ * `herdr agent list` a rendu TROIS lieux d'orchestrateur vivants là où `herdr pane list` en
+ * rendait CINQ — quarante pour cent de sous-comptage. Le pane de l'agent qui écrit ces lignes
+ * en faisait partie : `herdr agent rename <son-pane>` répondait `agent_not_found` pendant qu'il
+ * travaillait. **Un registre bâti sur `agents()` se déclarerait complet en manquant du monde.**
+ *
+ * ⚠️ LE REFUS TRAVERSE, COMME CHEZ `agents()`. Un `herdr` introuvable fait échouer TOUTES les
+ * sessions ; avaler ce refus rendrait une liste vide, et une liste vide se lit « aucun pane ».
+ * C'est le mode de panne que `balayage.js` a déjà fermé une fois, et il se referme ici pareil.
+ */
+export async function panes({ socket } = {}) {
+  if (socket) {
+    const reponse = await herdrStrict(['pane', 'list'], socket);
+    // La MÊME forme que la branche d'agrégation : un appelant qui recevrait tantôt un tableau,
+    // tantôt un objet finirait par n'en traiter qu'une — et c'est celle qui porte les refus qu'il
+    // laisserait tomber.
+    return {
+      panes: (reponse.result?.panes || []).map((p) => ({ ...p, herdr_socket: socket })),
+      sessionsInterrogees: 1,
+      sessionsRefusees: [],
+    };
+  }
+  const vus = new Map();
+  const sessions = socketsHerdr();
+  let derniereErreur = null;
+  let uneSessionARepondu = false;
+  const refus = [];
+  for (const s of sessions.length ? sessions : [undefined]) {
+    try {
+      const reponse = await herdrStrict(['pane', 'list'], s);
+      uneSessionARepondu = true;
+      for (const p of reponse.result?.panes || []) {
+        // ⚠️ LA CLÉ PORTE LA SESSION, PAS SEULEMENT LE PANE — et ce n'est pas de la prudence.
+        // Un identifiant de pane n'est unique QUE dans sa session : mesuré le 2026-08-19, ce
+        // poste porte treize sessions herdr, et `w5:p3` y désigne un pane de `progex` pendant
+        // que `w5:p8` en désigne un de `somtech`. Dédoublonner sur le seul `pane_id` ferait
+        // disparaître de l'inventaire un agent parfaitement vivant, parce qu'un homonyme d'une
+        // AUTRE session est passé avant lui — un sous-comptage silencieux, c'est-à-dire le
+        // défaut exact que cette fonction existe pour fermer.
+        const cle = `${s ?? ''}\u0000${p.pane_id}`;
+        if (!vus.has(cle)) vus.set(cle, { ...p, herdr_socket: s });
+      }
+    } catch (err) {
+      if (err instanceof OutilIntrouvable) throw err;
+      derniereErreur = err;
+      refus.push({ session: s ?? null, raison: err?.message || String(err) });
+    }
+  }
+  // ⚠️ AUCUNE SESSION N'A RÉPONDU ⇒ ON JETTE, ON NE REND PAS UNE LISTE VIDE. Sans ça, un poste
+  // dont toutes les sessions herdr sont injoignables rendrait exactement le même `[]` qu'un
+  // poste sans le moindre pane — et le recensement conclurait « aucun orchestrateur » là où la
+  // vérité est « je n'ai pas su regarder ». C'est la panne que ce lot existe pour nommer.
+  if (!uneSessionARepondu && derniereErreur) throw derniereErreur;
+  // ⚠️ ET UNE SESSION QUI REFUSE SE DIT, ELLE NE SE TAIT PAS. Trouvé en répondant à la question
+  // « ce chiffre est-il un plancher ou un total ? » — et c'était le même défaut, une couche plus
+  // bas : trois sessions injoignables sur treize rendaient un compte AMPUTÉ D'UN QUART, présenté
+  // comme complet. Le `catch` était bon pour ce pour quoi il a été écrit (une session morte ne
+  // doit pas invalider les autres) ; ce qui manquait, c'est que son prix se voie.
+  //
+  // Le rendu porte donc les deux : ce qu'on a vu, et ce qu'on n'a pas su regarder. C'est ce qui
+  // permet à l'appelant d'écrire « au moins N » plutôt que « N ».
+  return {
+    panes: [...vus.values()],
+    sessionsInterrogees: sessions.length || 1,
+    sessionsRefusees: refus,
+  };
+}
+
 /** Tous les panes qui portent un agent, tels que herdr les voit maintenant. */
 export async function agents({ socket } = {}) {
   if (socket) {
@@ -688,7 +778,14 @@ export async function agents({ socket } = {}) {
     try {
       const reponse = await herdrStrict(['agent', 'list'], s);
       for (const a of (reponse.result?.agents || []).filter((x) => x.agent)) {
-        if (!vus.has(a.pane_id)) vus.set(a.pane_id, { ...a, herdr_socket: s });
+        // ⚠️ LA CLÉ PORTE LA SESSION — relevé en passe de revue de fond, et le rejet était juste :
+        // `panes()`, écrit quelques lignes plus haut, mesurait et corrigeait exactement ce défaut
+        // pendant qu'il restait ici. Un identifiant de pane n'est unique que dans sa session ;
+        // dédoublonner sans elle fait disparaître un agent vivant parce qu'un homonyme d'une
+        // autre session est passé avant lui. Laisser une moitié du défaut, c'est « une porte sur
+        // deux » — le motif que ce dépôt a payé dix fois.
+        const cle = `${s ?? ''}\u0000${a.pane_id}`;
+        if (!vus.has(cle)) vus.set(cle, { ...a, herdr_socket: s });
       }
     } catch (err) {
       // ⚠️ UN OUTIL INTROUVABLE N'EST PAS UNE SESSION INJOIGNABLE — T-20260813-0054, et c'est
