@@ -422,6 +422,16 @@ La commande regarde la boîte avant d'écrire (une boîte non vide est un refus,
 
 **Relis quand même son pane ensuite** (`herdr pane read "$P"`). La commande prouve que le brief a été *pris* ; elle ne dit rien de ce qu'il a *déclenché*. Une session qui s'ouvre sur un dossier neuf peut poser une question avant d'accepter le premier message — auquel cas ton brief a servi de réponse à cette question, et non de brief.
 
+🔴 **Mais si ta question est « y a-t-il du texte dans sa boîte ? », la lecture d'écran ne peut PAS y répondre.** Un texte **grisé** — une suggestion que l'éditeur propose — s'y rend exactement comme un texte saisi. Mesure l'état, ne lis pas l'écran :
+
+```bash
+gestionnaire-etat-boite "$P"
+```
+
+Elle rend `suggestion` ou `file-attente` (du gris : rien à soumettre, rien n'est bloqué) · `collee` ou `saisie` (boîte pleine, `livrer.js` sait la délivrer sans l'écraser) · `illisible` (on n'a pas vu — ce n'est pas « vide »). **Elle ne pose aucun geste**, donc elle se tape sur le pane d'un autre.
+
+> **Le 2026-08-19, deux orchestrateurs ont perdu ~3 heures chacun** sur des boîtes qu'ils croyaient bloquées et qui portaient une suggestion — trois remontées au dirigeant chacun, pour un geste sans objet. **Aucun des deux ne le cherchait** : sans les attributs ANSI, les deux états rendent le même écran.
+
 **c-bis. Poser son but — obligatoire.**
 
 ```bash

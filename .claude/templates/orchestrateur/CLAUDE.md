@@ -622,7 +622,23 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui do
 >
 > **Relis son écran après chaque `pane run`** (`herdr pane read "$P"`) et vérifie que le geste a été **pris**, pas seulement envoyé. Le texte exige cette preuve pour `livrer.js` ; **il n'y a aucune raison qu'elle s'arrête là.**
 
-🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a DEUX conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes.
+### 🔴 Un texte GRISÉ n'est pas un texte saisi — `herdr pane read` ne les distingue PAS
+
+**Avant de conclure qu'une boîte contient quelque chose, mesure son ÉTAT** — la commande ne pose aucun geste, elle se tape sur le pane d'un autre :
+
+```bash
+gestionnaire-etat-boite "$P"
+```
+
+| Ce qu'elle rend | Ce que tu fais |
+|---|---|
+| `suggestion` · `file-attente` — du gris : l'éditeur propose, ou tes messages attendent son tour | **rien** : rien à soumettre, rien n'est bloqué |
+| `collee` · `saisie` — un texte réel | boîte pleine — `livrer.js` la délivre sans l'écraser |
+| `illisible` | ce n'est **pas** « vide » — va regarder toi-même |
+
+> 🔴 **Deux orchestrateurs y ont perdu ~3 h chacun le 2026-08-19**, trois remontées au dirigeant chacun pour un geste sans objet. **`herdr pane read` rend le même écran** pour une suggestion et pour un texte saisi — le seul discriminant est un attribut ANSI. *(`E-20260819-0015`.)*
+
+🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a TROIS conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes ; ③ **tu as mesuré son ÉTAT**, pas lu son écran — un `suggestion` n'a rien à soumettre, et la touche part alors dans le vide en te faisant croire le contraire.
 
 **Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
 

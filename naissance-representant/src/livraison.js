@@ -35,7 +35,14 @@
 // parce que deux chemins écrivent dans un pane et qu'une copie n'hérite pas des corrections
 // de l'autre (T-20260814-0138). Réexportée ici : tout ce qui la nommait continue de la voir.
 export { contenuBoite, boiteEstVide, estUnEspaceReserve } from '../../ligne-directe/src/boite.js';
-import { contenuBoite, boiteEstVide, messagesEnFile, estUnEspaceReserve } from '../../ligne-directe/src/boite.js';
+import {
+  contenuBoite,
+  boiteEstVide,
+  messagesEnFile,
+  estUnEspaceReserve,
+  etatDeLaBoite,
+  ETATS_BOITE,
+} from '../../ligne-directe/src/boite.js';
 // ⚠️ LA SONDE D'ÉCRAN VIT DANS `ligne-directe/src/ecran.js` — un seul endroit sait reconnaître un
 // écran de blocage, et `bin/naitre.js` s'en sert déjà. La revue de fond a relevé que la livraison
 // ne s'en servait PAS : elle regardait la boîte sans jamais regarder ce qui pouvait s'afficher
@@ -361,8 +368,18 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
     );
   }
   if (cause === CAUSES.ENCOMBREE) {
+    // ⚠️ LE MODE D'ARRIVÉE DU TEXTE CHANGE LA CONDUITE, ET LE REFUS DOIT LE DIRE
+    // (E-20260819-0015). Un texte SAISI a peut-être quelqu'un derrière le clavier — attendre a
+    // un sens. Un texte COLLÉ est arrivé d'un seul coup : par construction, personne n'a les
+    // doigts dessus, et attendre devant ce pane est du temps mort pur (mesuré : 300 secondes
+    // d'attente sur un `[Pasted text #33]` immobile). Un refus qui les confond envoie attendre
+    // quelqu'un qui ne reviendra pas.
+    const mode = estUnEspaceReserve(reste)
+      ? ' — ce texte est arrivé par COLLAGE : l’écran n’en montre qu’un repli, et personne ' +
+        'n’a les doigts dessus'
+      : ' — ce texte a été SAISI en clair : quelqu’un est peut-être devant ce clavier';
     return (
-      `la boîte de saisie${ou} n’est pas vide (elle contient « ${reste.slice(0, 80)}${reste.length > 80 ? '…' : ''} ») — ` +
+      `la boîte de saisie${ou} n’est pas vide (elle contient « ${reste.slice(0, 80)}${reste.length > 80 ? '…' : ''} »)${mode} — ` +
       'écrire par-dessus ne livrerait pas deux messages, ça en livrerait UN, les deux textes ' +
       'collés. ⚠️ CE BLOCAGE NE SE LÈVE PAS D’ICI : quelqu’un doit soumettre ou effacer ce ' +
       `texte devant${ou || ' ce pane'}, et personne d’autre ne peut le faire à sa place — ` +
@@ -556,6 +573,27 @@ import { avisDeBoiteBloquee, avisDeBoiteVidee } from '../../ligne-directe/src/de
  * @returns {Promise<{ok: boolean, message?: string, statut: ?string, repare: boolean,
  *   causeRepare: string, attendu: boolean, delivre: boolean, causeDelivre: string}>}
  */
+
+/**
+ * L'ÉTAT DE LA BOÎTE TEL QU'IL FRANCHIT LA SORTIE — et pourquoi ce champ existe
+ * (E-20260819-0015).
+ *
+ * 🔴 SIX HEURES, LE MÊME JOUR, POUR UN MOT QUI MANQUAIT. Deux orchestrateurs ont perdu ~3 heures
+ * chacun sur des boîtes qu'ils croyaient bloquées : ils lisaient une SUGGESTION grisée. Ce
+ * module, lui, ne s'y trompait pas — mesuré sur les 94 panes Claude Code du poste le
+ * 2026-08-19, il rend « vide » sur les 33 qui en portaient une. **La lecture était juste ; ce
+ * qui manquait était le mot.** L'orchestrateur voit un texte à l'écran, l'outil livre sans rien
+ * dire, et rien ne le détrompe — alors il conclut au défaut de canal, et le propage.
+ *
+ * ⚠️ CE CHAMP NE DÉCIDE RIEN. La conduite reste celle de `contenuBoite` : une suggestion vaut
+ * une boîte vide, un texte reste un texte. Il ne change aucun verdict — il les rend
+ * VÉRIFIABLES, ce qui est la seule chose qui manquait.
+ */
+function etatVuDeLaBoite(ecran) {
+  const vu = etatDeLaBoite(ecran);
+  return { etat: vu.etat, texte: vu.texte, suggestion: vu.suggestion };
+}
+
 export async function livrerBrief({
   pane,
   texte,
@@ -688,6 +726,7 @@ export async function livrerBrief({
       attendu: false,
       delivre: Boolean(delivrance?.soumis),
       causeDelivre,
+      boite: etatVuDeLaBoite(ecranAvant),
     };
   }
 
@@ -859,5 +898,9 @@ export async function livrerBrief({
     attendu: livraison.ok,
     delivre: Boolean(delivrance?.soumis),
     causeDelivre,
+    // ⚠️ L'ÉTAT DE LA BOÎTE **AVANT** L'ÉCRITURE, jamais après — c'est celui-là que le lecteur a
+    // sous les yeux quand il doute. Après notre passage, la boîte porte notre texte, et le
+    // rendre ici ferait dire « pleine » d'un encombrement qu'on vient de créer soi-même.
+    boite: etatVuDeLaBoite(ecranAvant),
   };
 }

@@ -381,9 +381,18 @@ test('les défauts sont ceux qui ont été mesurés — jamais un lancement nu',
 // l'agent est parqué derrière un modal. La commande qui lit l'écran a donc besoin de savoir le
 // demander — `--source visible` lit CE QUI EST AFFICHÉ, pas l'historique du pane, et c'est
 // l'affichage seul qui dit s'il y a un modal devant.
+// ⚠️ `--format ansi` A ÉTÉ AJOUTÉ LE 2026-08-19 (E-20260819-0015), ET IL N'ENLÈVE RIEN À CE QUE
+// CET ESSAI GARDE. La garantie tenue ici est « l'écran se lit par une commande à part, qui
+// demande l'affichage » ; elle est intacte. Ce qui manquait est que `etatDeLEcran` commence par
+// `sansGris` : sans attributs dans le dump, une SUGGESTION grisée redevient indiscernable du
+// contenu de l'écran, et une suggestion qui recoupe la phrase d'un écran connu ferait envoyer
+// des touches pour franchir un écran qui n'existe pas. Les options d'origine sont conservées —
+// c'est ce que fixe l'essai frère `lecran-de-naissance-est-lu-en-ansi.test.js`.
 test('l’écran se lit par une commande à part — la naissance ne se fie pas au booléen de herdr', () => {
   const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
-  assert.deepEqual(c.lireEcran('w1:p1'), ['agent', 'read', 'w1:p1', '--source', 'visible', '--lines', '40']);
+  assert.deepEqual(c.lireEcran('w1:p1'), [
+    'agent', 'read', 'w1:p1', '--source', 'visible', '--lines', '40', '--format', 'ansi',
+  ]);
 });
 
 test('cheminLieu reste sous la racine passée', () => {

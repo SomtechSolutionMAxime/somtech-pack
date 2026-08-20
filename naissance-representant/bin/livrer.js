@@ -128,6 +128,26 @@ async function main() {
 
   if (!resultat.ok) {
     process.stderr.write(`${resultat.message}\n`);
+    // ⚠️ LE REFUS AUSSI REND SON ÉTAT, ET C'EST LA MOITIÉ QUI EN A LE PLUS BESOIN
+    // (relevé par une passe de mutation, E-20260819-0015).
+    //
+    // C'est au refus que le lecteur doute : il vient de s'entendre dire « je n'écris pas », il a
+    // l'écran devant les yeux, et sans l'état nommé il n'a rien pour trancher entre « l'outil se
+    // trompe » et « il a vu quelque chose que je ne sais pas lire ». Six heures ont été perdues
+    // exactement là. Le message reste sur `stderr` — la sortie lisible ne change pas —, et
+    // `stdout` porte le même objet que le succès, avec `ok: false`.
+    process.stdout.write(
+      `${JSON.stringify({
+        ok: false,
+        pane,
+        agent: ou.nom,
+        message: resultat.message,
+        statut: resultat.statut,
+        delivre: Boolean(resultat.delivre),
+        causeDelivre: resultat.causeDelivre,
+        boite: resultat.boite ?? null,
+      })}\n`
+    );
     process.exit(1);
   }
 
@@ -168,6 +188,20 @@ async function main() {
       // champ ne dit plus que « l'appel a été accepté ». Dans les deux cas, ce qui tranche est
       // la relecture, pas lui.
       attendu: resultat.attendu,
+      // `boite` — CE QUE LA BOÎTE PORTAIT **AVANT** QU'ON ÉCRIVE, nommé (E-20260819-0015).
+      //
+      // 🔴 SIX HEURES PERDUES LE 2026-08-19 FAUTE DE CE MOT. Deux orchestrateurs ont cru des
+      // boîtes bloquées alors qu'elles portaient une SUGGESTION grisée — un texte que Claude
+      // Code propose et que rien, dans un dump sans attributs, ne distingue d'un texte saisi.
+      // Cette commande, elle, ne s'y trompait pas : elle lit en `--format ansi` et livrait
+      // normalement. **Mais elle ne le DISAIT pas** — et un outil qui a raison en silence ne
+      // détrompe personne, surtout pas quelqu'un qui a l'écran devant les yeux.
+      //
+      // ⚠️ C'EST LA SECONDE PORTE, comme `causeRepare` et `causeDelivre` avant elle. `livraison.js`
+      // peut nommer l'état parfaitement : s'il ne franchit pas ce JSON, l'appelant lit la même
+      // sortie muette qu'avant. « Une porte sur deux » est le motif le plus cher de ce dépôt, et
+      // il a déjà été commis DANS le correctif écrit pour le fermer.
+      boite: resultat.boite ?? null,
     })}\n`
   );
 }

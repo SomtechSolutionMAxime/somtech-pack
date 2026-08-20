@@ -30,8 +30,21 @@ import { socketsHerdr } from '../../ligne-directe/src/herdr.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
 import { appelHerdr } from './appel-herdr.js';
 
-/** Un pane herdr s'écrit `w<n>:p<x>` — c'est ce qui distingue un pane d'un nom d'agent. */
-const FORME_PANE = /^w\d+:p\w+$/i;
+/**
+ * Un pane herdr s'écrit `w<id>:p<id>` — c'est ce qui distingue un pane d'un nom d'agent.
+ *
+ * ⚠️ LES DEUX IDENTIFIANTS SONT EN BASE 36, PAS EN DÉCIMAL, et l'avoir supposé rendait cette
+ * garde fausse sur près d'un pane sur deux. Mesuré le 2026-08-19 : sur les **213 panes** que
+ * `herdr pane list` rendait alors, la forme `w\d+:p\w+` n'en reconnaissait que **113** — les
+ * **100 autres** (`wQ:p1`, `w2D:pY`, `w1E:pG`) se faisaient prendre pour des NOMS d'agent, donc
+ * cherchés au registre sous une désignation que personne ne porte.
+ *
+ * ⚠️ ET ELLE NE S'ÉLARGIT PAS JUSQU'À TOUT ACCEPTER : les deux points sont ce qui sépare un pane
+ * d'un nom, et les noms de ce poste (rivières, codes de ticket) n'en portent pas. Une forme qui
+ * accepterait tout ferait chercher `ristigouche` comme un pane, et son compte rendu partirait
+ * dans le vide.
+ */
+const FORME_PANE = /^w[0-9a-z]+:p[0-9a-z]+$/i;
 
 export function estUnPane(cible) {
   return FORME_PANE.test(String(cible ?? '').trim());
