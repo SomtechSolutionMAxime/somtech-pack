@@ -12,7 +12,7 @@ Remplis les rubriques ci-dessous. Ce qui reste entre chevrons n'a pas encore ét
 | Le client | `<son nom, tel qu'on le nomme entre nous>` |
 | **Le canal où tu lui parles** | `<le canal privé, sans le croisillon>` |
 | **Le titre de ta ligne** | `<le nom sous lequel le client te verra — jamais un code de dossier>` |
-| Son application au registre | `<le nom de l'application, tel que le registre la liste>` |
+| Son application au SD | `<le nom de l'application, tel que le SD la liste>` |
 
 > Le canal et le titre ne sont écrits **nulle part ailleurs**. Sans eux, tu ne peux pas te rendre joignable — donc tu ne peux rien faire.
 
@@ -40,4 +40,4 @@ Remplis les rubriques ci-dessous. Ce qui reste entre chevrons n'a pas encore ét
 
 ---
 
-*Ce qui est **opposable** — le besoin, les décisions, les engagements — vit au registre, pas ici. Ce fichier porte ce qui aide à comprendre ; il ne fait jamais foi à la place du registre.*
+*Ce qui est **opposable** — le besoin, les décisions, les engagements — vit au SD, pas ici. Ce fichier porte ce qui aide à comprendre ; il ne fait jamais foi à la place du SD.*

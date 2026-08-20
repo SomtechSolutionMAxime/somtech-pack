@@ -55,7 +55,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CONTROLES, MUTATIONS, PERMISSIF, exigeImperatif, lireGabarits } from './lib/metier-representant.js';
+import {
+  CONTROLES, MUTATIONS, PERMISSIF, exigeImperatif, lireGabarits,
+  ANTERIORITE_SUR_LE_RELEVEMENT, POSTERIORITE_SUR_LE_RELEVEMENT, PRIORITE_DU_RELEVEMENT,
+  sectionDe, etapesDe,
+} from './lib/metier-representant.js';
 
 const ORIGINAL = lireGabarits();
 
@@ -286,6 +290,365 @@ test('axe MODALITÉ : aucune tournure ne commence par \\b devant une initiale ac
       !initiale || /\w/.test(initiale[1]),
       `la tournure « ${alt} » est morte-née : en JavaScript « ${initiale && initiale[1]} » n'est pas `
         + `un caractère de mot, donc le \\b qui la précède ne s'apparie jamais. Retire-le.`,
+    );
+  }
+});
+
+// ═══════════════════════ l'axe POSITION-EN-PROSE, et la même panne silencieuse
+//
+// `POSTERIORITE_SUR_LE_RELEVEMENT` garde la règle `R4.7` de l'ABC du gestionnaire client :
+// l'accusé de réception part AVANT le relèvement. Elle est née d'une MESURE — un lecteur neuf
+// a relevé et remonté deux fois avant que le client n'entende un mot ; ce que le dirigeant a
+// tranché le 2026-08-17, c'est la contradiction entre `CT-GCL-010` et `CT-GCL-022`, pas la
+// règle. Le RANG ne peut pas la garder — le relèvement porte le rang 3 et l'accusé le rang 4,
+// et ne pas renuméroter est un arbitrage de COORDINATION de ce chantier. C'est donc l'incise
+// en prose qui porte la garantie, et ce motif qui interdit son contresens.
+//
+// ⚠️ IL A EXACTEMENT LE MODE DE PANNE DE `PERMISSIF`, ET IL L'A SUBI DEUX FOIS AVANT D'ÊTRE
+// COMMITTÉ. Une alternative qui ne s'apparie à rien rend la garde vraie par construction :
+// l'axe est réputé couvert, la mutation qu'il existe pour attraper reste verte, et rien ne
+// le dit. Un premier jet oubliait l'espace entre l'alternance et le groupe suivant
+// (« quand » + « tu auras » ne se rejoignaient jamais) ; un second gardait `lorsqu['’]`
+// devant un `\s+`, c'est-à-dire un espace après l'apostrophe, que le français n'écrit pas.
+// Les deux ont été trouvées par la MESURE, aucune par la relecture.
+//
+// Ce test rend la panne impossible : chaque introducteur déclaré dans le motif doit avoir sa
+// sonde, le compte des deux est apparié, et deux sondes ne peuvent pas déclencher le même
+// introducteur. En ajouter un sans sa sonde fait rougir — c'est le but.
+
+/**
+ * TOUS les items d'alternance d'un motif, à TOUS les niveaux — leurs bornes dans la source.
+ *
+ * ⚠️ DEUX VERSIONS SONT MORTES AVANT CELLE-CI, ET CHAQUE FOIS C'EST LA MESURE QUI L'A DIT.
+ *
+ * La première n'extrayait que le premier groupe `(?:a|b|c)` du motif : elle voyait 6 branches
+ * sur 8, en se présentant comme complète. La seconde ne décomposait ce groupe que s'il était
+ * EN TÊTE de son alternative — sur `ANTERIORITE_SUR_LE_RELEVEMENT`, dont le groupe variable
+ * vient après `avant\s+(?:même\s+)?`, elle rendait **UNE SEULE** branche pour un motif qui en
+ * porte quatre. Casser trois d'entre elles laissait la suite entièrement verte, y compris le
+ * test qui prétendait les garder. Deux verts qui ne touchaient pas ce qu'ils prétendaient
+ * éprouver, dans le lot même qui corrigeait ce défaut ailleurs.
+ *
+ * ÉNUMÉRER LA SYNTAXE ÉTAIT LA MAUVAISE QUESTION. Ce qu'on veut savoir n'est pas « combien
+ * de branches ce motif porte-t-il », mais « chaque item sert-il à quelque chose » — et ça se
+ * MESURE : on casse l'item, et on regarde si une sonde cesse de s'apparier. Un item qu'on
+ * peut casser sans que rien ne bouge ne garde rien, quelle que soit sa place dans la source.
+ * La mesure voit 15 items là où l'énumération en voyait 8, et elle en a désigné deux qui ne
+ * servaient à rien.
+ *
+ * Les groupes SANS alternance sont ignorés : les casser rendrait `(?:(?!x)x)?` — un optionnel
+ * vide, toujours appariable —, donc aucune sonde ne bougerait et le test crierait à tort.
+ */
+function itemsDAlternance(source) {
+  const items = [];
+  const pile = [{ debut: 0, coupes: [] }];
+  const clore = (groupe, fin) => {
+    if (!groupe.coupes.length) return; // un groupe sans choix n'a pas d'items à éprouver
+    const bornes = [groupe.debut, ...groupe.coupes, fin];
+    for (let k = 0; k < bornes.length - 1; k += 1) {
+      items.push([k === 0 ? bornes[0] : bornes[k] + 1, bornes[k + 1]]);
+    }
+  };
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '\\') { i += 1; continue; }                       // échappement : le suivant est littéral
+    if (c === '[') {                                            // classe : ses `|` et `(` n'en sont pas
+      while (i < source.length && source[i] !== ']') { if (source[i] === '\\') i += 1; i += 1; }
+      continue;
+    }
+    if (c === '(') {
+      // ⚠️ `(?<=` et `(?<!` font QUATRE caractères, pas trois. Le premier jet supposait 3
+      // partout et rendait un item corrompu (« =a » au lieu de « a ») sur un lookbehind.
+      // ⚠️ ET LA CORRECTION A SUR-AFFIRMÉ À SON TOUR — relevé à la passe suivante : elle
+      // écrivait « et `(?<nom>` » dans la même phrase, alors qu'un groupe NOMMÉ a un préfixe
+      // de longueur VARIABLE (`(?<nom>` en fait 7). Sur `(?<nom>chat|chien)`, cette fonction
+      // rend « om>chat » — le même item corrompu qu'elle venait de corriger ailleurs.
+      // Aucun motif de ce dépôt n'utilise de groupe nommé (vérifié) : le piège est LATENT et
+      // il est écrit ici plutôt que corrigé à l'aveugle en fin de lot, parce que le fermer
+      // demande de lire jusqu'au `>` et qu'aucune mesure ne l'atteint aujourd'hui.
+      const prefixe = source.startsWith('(?<', i) ? 4 : source.startsWith('(?', i) ? 3 : 1;
+      pile.push({ debut: i + prefixe, coupes: [] });
+      i += prefixe - 1;
+      continue;
+    }
+    if (c === ')') { clore(pile.pop(), i); continue; }
+    if (c === '|') pile[pile.length - 1].coupes.push(i);
+  }
+  clore(pile.pop(), source.length);
+  return items;
+}
+
+/**
+ * Chaque item d'alternance doit être NÉCESSAIRE à au moins une sonde : on le casse, et une
+ * sonde au moins doit cesser de s'apparier. C'est le harnais de mutation de ce fichier,
+ * retourné contre les motifs eux-mêmes.
+ *
+ * ⚠️ CE N'EST PAS UN APPARIEMENT DE COMPTES, et c'est délibéré. « n sondes pour n items » se
+ * lit comme « chaque item est éprouvé » et ne le dit pas : il autorise deux sondes sur le
+ * même item pendant qu'un troisième reste mort. Ici, un item mort tombe nommément, quel que
+ * soit le nombre de sondes.
+ */
+function exigeItemsUtiles(motif, sondes, quoi) {
+  const src = motif.source;
+  const items = itemsDAlternance(src);
+  assert.ok(items.length > 0, `${quoi} : le motif ne porte aucun choix — ce test ne prouve rien`);
+
+  const inutiles = items
+    .map(([a, b]) => [src.slice(a, b), new RegExp(`${src.slice(0, a)}(?!x)x${src.slice(b)}`, 'i')])
+    .filter(([, casse]) => !sondes.some((s) => motif.test(s) && !casse.test(s)))
+    .map(([texte]) => texte);
+
+  assert.deepEqual(
+    inutiles, [],
+    `${quoi} : ces items ne servent à AUCUNE sonde — on peut les casser sans que rien ne bouge, `
+      + `donc ils ne gardent rien et l'axe est réputé couvert alors qu'il ne l'est pas : `
+      + `${inutiles.map((i) => `« ${i} »`).join('  ·  ')}`,
+  );
+
+  // Et symétriquement : une sonde qui ne déclenche rien ne prouve rien, et laisserait croire
+  // qu'un item est couvert alors qu'il ne l'est plus.
+  for (const sonde of sondes) {
+    assert.match(sonde, motif, `${quoi} : la sonde « ${sonde} » ne déclenche RIEN — elle ne prouve donc rien`);
+  }
+  return items;
+}
+
+const SONDES_POSTERIEURES = [
+  'quand tu auras fini de relever',
+  'lorsque tu auras relevé',
+  'une fois le relèvement terminé',
+  'après le relèvement',
+  'dès que tu as relevé',
+  'sitôt le relèvement bouclé',
+  // ⚠️ CES DEUX-LÀ N'ÉTAIENT ÉPROUVÉES PAR RIEN — les deux alternatives top-level que la
+  // première version de `branchesDe` ne voyait pas. Casser l'une d'elles laissait tout vert.
+  'après avoir fini de relever',
+  'à la fin du relèvement',
+  // ⚠️ CELLE-CI A ÉTÉ AJOUTÉE PARCE QUE LA MESURE L'A EXIGÉE : `ton relèvement` ne servait à
+  // aucune sonde. Son voisin `aies` (« quand tu aies relevé ») a été RETIRÉ du motif au lieu
+  // d'être couvert — aucune sonde française ne pouvait le rendre vivant.
+  'après ton relèvement',
+];
+
+/**
+ * Des énoncés que le motif ne doit JAMAIS reconnaître — dont le texte livré lui-même.
+ *
+ * ⚠️ C'est la moitié qui manquait à `PERMISSIF` et qui lui a coûté quatre défauts d'un coup.
+ * Une garde de polarité qui rougit sur du texte correct est pire qu'absente : le premier qui
+ * la rencontre la retire, et emporte ce qu'elle gardait vraiment. « dès que sa ligne est
+ * ouverte » vit dans l'énoncé même que ce motif garde, et il ne parle pas de relèvement.
+ */
+const TEXTES_ANTERIEURS = [
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. Voir « Ta continuité ».",
+  "**Relève ce qui existe déjà** pour ce client (voir « Le relèvement »).",
+  'Le relèvement peut durer ; l’inaccessibilité, non.',
+  'dès que sa ligne est ouverte, l’accusé part avant le relèvement',
+];
+
+/**
+ * Des énoncés d'accusé LÉGITIMES que la garde de renversement ne doit jamais reconnaître.
+ *
+ * ⚠️ Mesuré par une contre-vérification indépendante : appliquée à l'énoncé ENTIER, la garde
+ * rougissait sur une phrase parfaitement correcte écrite APRÈS l'incise. « en réalité », « au
+ * contraire », « dans les faits » sont du français ordinaire — ce qui les rend dangereux,
+ * c'est d'envelopper LA phrase qui porte la consigne, pas de figurer dans l'énoncé.
+ */
+const ENONCES_LEGITIMES = [
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. C'est, en réalité, la toute première chose que tu fais.",
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. Au contraire de la remontée, elle n'attend pas ton relèvement.",
+];
+
+/**
+ * Chaque branche du motif doit être PROUVÉE VIVANTE par au moins une sonde qui la déclenche,
+ * branche par branche — pas par un appariement de COMPTES.
+ *
+ * ⚠️ LE COMPTE NE SUFFIT PAS, et c'est le fond de ce qu'une revue indépendante a trouvé ici.
+ * « n sondes pour n branches » se lit comme « chaque branche est éprouvée » et ne le dit pas :
+ * il autorise deux sondes sur la même branche pendant qu'une troisième reste morte. On compile
+ * donc chaque branche SEULE et on exige qu'une sonde la déclenche — une branche qui ne
+ * s'apparie à rien tombe alors nommément, quel que soit le nombre de sondes.
+ */
+function exigeBranchesVivantes(motif, sondes, quoi) {
+  const branches = branchesDe(motif);
+  const mortes = branches.filter((b) => !sondes.some((s) => new RegExp(b, 'i').test(s)));
+  assert.deepEqual(
+    mortes, [],
+    `${quoi} : ces branches ne s'apparient à AUCUNE sonde — elles sont vraies par construction, `
+      + `l'axe est réputé couvert et il ne l'est pas : ${mortes.join('  ·  ')}`,
+  );
+  return branches;
+}
+
+test('axe POSITION-EN-PROSE : chaque item du motif de POSTÉRIORITÉ sert à quelque chose', () => {
+  const items = exigeItemsUtiles(
+    POSTERIORITE_SUR_LE_RELEVEMENT, SONDES_POSTERIEURES, 'la subordination à la fin du relèvement');
+  assert.ok(items.length >= 14,
+    `le motif ne porte plus que ${items.length} item(s) d'alternance — si l'un a disparu, dis-le ici `
+      + `plutôt que de laisser le test se rétrécir avec lui`);
+});
+
+/**
+ * Une attaque par item pour la garde de POLARITÉ CONTRAIRE — celle qui traverse tout
+ * l'énoncé parce qu'elle est ancrée sur le relèvement, et non sur des tournures.
+ */
+const SONDES_PRIORITAIRES = [
+  'le relèvement passe en premier',
+  'le relèvement vient d’abord',
+  'le relèvement arrive avant',
+  'relève d’abord, tu accuseras ensuite',
+  'relèvement en premier',
+  'd’abord le relèvement, puis l’accusé',
+  'en premier, tu relèves',
+  'commence par relever',
+];
+
+/**
+ * Des textes du gabarit réel, où le relèvement est nommé SANS être dit prioritaire. Ils
+ * prouvent que cette garde ne mord pas ce qu'elle traverse — elle s'applique à l'énoncé
+ * ENTIER, donc son innocuité compte double.
+ */
+const RELEVEMENTS_LEGITIMES = [
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. C'est, en réalité, la toute première chose que tu fais.",
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. Au contraire de la remontée, elle n'attend pas ton relèvement.",
+  '**Relève ce qui existe déjà** pour ce client (voir « Le relèvement »). Il peut avoir chez nous une histoire que tu ne connais pas.',
+  'Le relèvement peut durer ; l’inaccessibilité, non.',
+];
+
+test('axe POLARITÉ CONTRAIRE : chaque item du motif de PRIORITÉ sert à quelque chose', () => {
+  exigeItemsUtiles(PRIORITE_DU_RELEVEMENT, SONDES_PRIORITAIRES, 'la priorité affirmée du relèvement');
+});
+
+test('axe POLARITÉ CONTRAIRE : le motif ne mord pas un relèvement nommé sans être dit prioritaire', () => {
+  for (const texte of RELEVEMENTS_LEGITIMES) {
+    const trouve = texte.match(PRIORITE_DU_RELEVEMENT);
+    assert.ok(
+      !trouve,
+      `« ${texte} » nomme le relèvement sans le dire prioritaire, et la garde y voit le contraire `
+        + `(« ${trouve && trouve[0]} ») : elle traverse tout l'énoncé, donc elle rougirait souvent, `
+        + `et se ferait retirer.`,
+    );
+  }
+});
+
+test('axe POSITION-EN-PROSE : chaque item du motif d’ANTÉRIORITÉ sert à quelque chose', () => {
+  // ⚠️ Ce motif-ci a été le révélateur : la version précédente de ce test n'y voyait qu'UNE
+  // branche pour quatre, parce que son groupe variable n'est pas en tête. Trois de ses quatre
+  // items pouvaient être cassés sans qu'un seul test rougisse.
+  exigeItemsUtiles(ANTERIORITE_SUR_LE_RELEVEMENT, [
+    "avant même d'avoir fini de relever",
+    "avant d'avoir relevé",
+    'avant de finir de relever',
+    'avant le relèvement',
+    'avant la fin du relèvement',
+  ], 'l’antériorité de l’accusé sur le relèvement');
+});
+
+test('axe POSITION-EN-PROSE : le motif n’est pas TROP LARGE — le texte livré ne s’y reconnaît pas', () => {
+  for (const enonce of TEXTES_ANTERIEURS) {
+    const trouve = enonce.match(POSTERIORITE_SUR_LE_RELEVEMENT);
+    assert.ok(
+      !trouve,
+      `« ${enonce} » place l'accusé AVANT le relèvement, et la garde y voit le contraire `
+        + `(« ${trouve && trouve[0]} ») : elle rougirait sur du texte correct, et se ferait retirer.`,
+    );
+  }
+});
+
+test('axe POSITION-EN-PROSE : l’antériorité se reconnaît DANS L’ÉNONCÉ que le contrôle regarde', () => {
+  // ⚠️ CE TEST A D'ABORD MESURÉ LE MAUVAIS OBJET, et son échec l'a dit. Écrit sur le
+  // DOCUMENT entier, il exigeait que l'antériorité ne s'y reconnaisse qu'une fois — et le
+  // document en porte deux, la seconde parfaitement légitime (« Saluer avant d'avoir relevé »,
+  // dans les anti-patterns). Le contrôle, lui, ne regarde que l'ÉNONCÉ de l'étape d'accusé.
+  // Une mesure portée sur un objet ne conclut pas sur un autre : le test mesure désormais
+  // exactement ce que la garde regarde.
+  const s = sectionDe(ORIGINAL.metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+  const accuse = etapesDe(s.corps).find((e) => /accuse/i.test(e.libelle || ''));
+  assert.ok(accuse, 'l’étape d’accusé de réception est introuvable dans l’ordre d’ouverture');
+
+  assert.match(accuse.enonce, ANTERIORITE_SUR_LE_RELEVEMENT,
+    'l’énoncé de l’accusé ne porte plus l’antériorité sur le relèvement en toutes lettres — '
+      + 'or le RANG ne peut pas la porter : le relèvement le précède, et on ne renumérote pas');
+
+  // Et le sens inverse, sur la mutation qui existe pour ça : elle doit lui FAIRE PERDRE
+  // l'antériorité, sans quoi la garde du contrôle passerait quoi qu'on écrive.
+  const retournee = MUTATIONS.find((m) => m.id === 'accuse-attend-la-fin-du-relevement');
+  assert.ok(retournee, 'la mutation qui retourne l’incise a disparu — l’arbitrage n’est plus éprouvé');
+  const mute = retournee.muter(ORIGINAL.metier);
+  assert.notEqual(mute, ORIGINAL.metier, 'la mutation est inopérante : son motif ne mord plus');
+  const accuseMute = etapesDe(sectionDe(mute, /ordre d.ouverture/i, 'sur l’ordre d’ouverture').corps)
+    .find((e) => /accuse/i.test(e.libelle || ''));
+  assert.doesNotMatch(accuseMute.enonce, ANTERIORITE_SUR_LE_RELEVEMENT,
+    'l’énoncé retourné porte ENCORE l’antériorité : la garde du contrôle resterait verte sur lui');
+  assert.match(accuseMute.enonce, POSTERIORITE_SUR_LE_RELEVEMENT,
+    'l’énoncé retourné n’est pas reconnu comme une subordination à la fin du relèvement — '
+      + 'la garde de polarité serait alors décorative');
+});
+
+// ═══════════════ COUPER LA SONDE, PAS SEULEMENT RETIRER LA CHOSE
+//
+// ⚠️ CE TEST MANQUAIT, ET SON ABSENCE A ÉTÉ MESURÉE, pas soupçonnée : une revue indépendante
+// a REMIS `rangUnique` dans sa version boguée — celle qui rendait le même message pour deux
+// réalités opposées — et la suite est restée ENTIÈREMENT VERTE (203/201/0). Le correctif
+// était juste, et rien ne le gardait : il aurait pu disparaître au prochain refactor sans
+// qu'un seul test s'en aperçoive. C'est la règle d'or n°6 prise en défaut par le lot qui
+// venait de la citer.
+//
+// LA GARANTIE ÉPROUVÉE ICI : une garde qui rend LA MÊME VALEUR quand l'objet est absent et
+// quand la sonde est aveugle ne garde rien — le lecteur du message ne peut pas savoir s'il
+// doit RÉÉCRIRE l'étape ou seulement la RE-GRASSER. On teste donc « quand il n'y a rien »
+// ET « quand on ne peut pas voir », et on exige que les deux se distinguent.
+
+test('sonde aveugle ≠ objet absent : les deux situations ne rendent PAS le même message', () => {
+  const ctl = CONTROLES.find((c) => c.id === 'accuse-precede-le-relevement');
+  assert.ok(ctl, 'le contrôle de l’accusé de réception a disparu — ce test ne prouve plus rien');
+
+  // L'étape est DÉRIVÉE du texte, jamais recopiée : un littéral figé ici cesserait
+  // silencieusement de mordre le jour où la phrase bouge, et ce test deviendrait décoratif.
+  const section = sectionDe(ORIGINAL.metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+  const accuse = etapesDe(section.corps).find((e) => /accuse/i.test(e.libelle || ''));
+  assert.ok(accuse, 'l’étape d’accusé de réception est introuvable — la mutation serait inopérante');
+  const ligne = `${accuse.rang}. ${accuse.enonce}`;
+
+  const plainteSur = (metier) => {
+    assert.notEqual(metier, ORIGINAL.metier, 'mutation INOPÉRANTE : le texte n’a pas changé');
+    try { ctl.verifier({ ...ORIGINAL, metier }); return null; } catch (e) { return e.message; }
+  };
+
+  // (A) l'objet N'EXISTE PAS : l'étape est retirée du texte.
+  const absente = plainteSur(ORIGINAL.metier.replace(`${ligne}\n`, ''));
+  // (B) l'objet EXISTE, la SONDE est aveugle : même rang, même texte, gras retiré.
+  const aveugle = plainteSur(ORIGINAL.metier.replace(ligne, ligne.replaceAll('**', '')));
+
+  assert.ok(absente, 'l’étape supprimée ne fait rougir personne — l’absence n’est plus gardée');
+  assert.ok(aveugle, 'l’étape dégraissée ne fait rougir personne — la cécité n’est plus vue');
+  assert.notEqual(
+    absente, aveugle,
+    'l’objet absent et la sonde aveugle rendent le MÊME message, caractère pour caractère : '
+      + 'la garde ne distingue plus « ça n’existe pas » de « je ne peux pas le voir » — '
+      + `« ${absente} »`,
+  );
+  assert.match(
+    aveugle, /ne peut pas conclure à une absence|aveugle/i,
+    'le message de la sonde aveugle ne dit pas QUE la mesure est aveugle : il diffère de celui '
+      + `de l’absence, et il n’en donne pas la raison — « ${aveugle} »`,
+  );
+});
+
+test('axe POSITION-EN-PROSE : la garde de renversement ne mord pas un énoncé légitime', () => {
+  // La garde regarde la PHRASE QUI PORTE l'incise, jamais l'énoncé entier. Sans cette
+  // restriction, elle rougirait sur les énoncés ci-dessous — et une garde qui crie sur du
+  // texte correct se fait retirer, en emportant ce qu'elle gardait vraiment.
+  const ctl = CONTROLES.find((c) => c.id === 'accuse-precede-le-relevement');
+  const section = sectionDe(ORIGINAL.metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+  const accuse = etapesDe(section.corps).find((e) => /accuse/i.test(e.libelle || ''));
+  const ligne = `${accuse.rang}. ${accuse.enonce}`;
+
+  for (const enonce of ENONCES_LEGITIMES) {
+    const metier = ORIGINAL.metier.replace(ligne, `${accuse.rang}. ${enonce} Voir « Ta continuité ».`);
+    assert.notEqual(metier, ORIGINAL.metier, `mutation INOPÉRANTE pour « ${enonce.slice(0, 40)}… »`);
+    assert.doesNotThrow(
+      () => ctl.verifier({ ...ORIGINAL, metier }),
+      `le contrôle rougit sur un énoncé LÉGITIME — « ${enonce} »`,
     );
   }
 });

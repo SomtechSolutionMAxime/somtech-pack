@@ -408,6 +408,111 @@ export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vra
  * @param sonde  ce qui reconnaît la phrase portant la garantie
  * @param quoi   la garantie, en clair, pour le message d'échec
  */
+/**
+ * L'ANTÉRIORITÉ DE L'ACCUSÉ SUR LE RELÈVEMENT, écrite en toutes lettres dans l'énoncé.
+ *
+ * ⚠️ POURQUOI CE MOTIF EXISTE, ET POURQUOI IL NE RESSEMBLE À AUCUN AUTRE ICI.
+ *
+ * ⚠️ D'OÙ VIENT CETTE RÈGLE — vérifié à la source, parce qu'une première version de ce
+ * commentaire l'attribuait de travers, et qu'une attribution dans un commentaire de code se
+ * relit comme un fait. L'ABC du gestionnaire client (Somcraft `e4b72bc9-b7a7-43f1-812e-72f58abe50be`) dit ceci :
+ *
+ *   — la règle `R4.7` elle-même est née d'une MESURE, pas d'une décision. Un lecteur neuf, à
+ *     qui l'on n'avait donné que ce texte, a mené un relèvement complet et écrit deux
+ *     messages au dirigeant avant que le client n'entende un mot — pendant qu'un employé de
+ *     ce client s'apprêtait à relancer une commande destructrice en production (changelog
+ *     v1.1.0). Le texte disait QU'il accuse réception ; jamais QUAND.
+ *   — ce que le dirigeant a tranché le 2026-08-17, c'est une CONTRADICTION INTERNE :
+ *     `CT-GCL-010` et `CT-GCL-022` exigeaient l'inverse l'un de l'autre sur une session qui
+ *     naît avec un message du client. Il a tranché en faveur de l'accusé qui passe avant
+ *     (`GF-GCL-008`, changelog v1.2.0).
+ *
+ * L'accusé part donc AVANT le relèvement. Dans le texte livré, le relèvement porte le rang 3
+ * et l'accusé le rang 4 : **le rang dit l'inverse de la règle**, et c'est la prose qui le
+ * rétablit. Ne pas renuméroter est un arbitrage de COORDINATION de ce chantier — renuméroter
+ * ferait DIRE le bon ordre au texte sans rien GARDER : le rang deviendrait juste, et la
+ * réécriture suivante pourrait le retourner sans qu'un test rougisse.
+ *
+ * La garantie tient donc par l'un OU l'autre de ses deux porteurs — le rang, ou l'incise.
+ * Ce motif reconnaît le second.
+ */
+export const ANTERIORITE_SUR_LE_RELEVEMENT = /avant\s+(?:même\s+)?(?:d['’]avoir\s+(?:fini\s+de\s+)?relev|de\s+(?:finir\s+de\s+)?relev|le\s+relèvement|la\s+fin\s+du\s+relèvement)/i;
+
+/**
+ * LA POLARITÉ CONTRAIRE : l'accusé subordonné à la FIN du relèvement.
+ *
+ * ⚠️ LA PRÉSENCE DE L'INCISE NE SUFFIT PAS, et c'est le défaut que ce lot corrige. Avant
+ * lui, remplacer « — avant même d'avoir fini de relever. » par « — quand tu auras fini de
+ * relever. » — le contresens exact de l'arbitrage, un seul fragment changé — laissait la
+ * suite ENTIÈREMENT VERTE (`199 · pass 197 · fail 0`, mesuré en revue indépendante sur
+ * `7926463`). L'absence de l'étape était gardée ; sa MODALITÉ ne l'était pas.
+ *
+ * ⚠️ ET CE MOTIF NE PEUT PAS ÊTRE `PERMISSIF` — l'erreur qu'il serait tentant de faire.
+ * « quand tu auras fini de relever » n'est ni une permission, ni une exception, ni une
+ * nécessité niée : c'est un RENVERSEMENT DE POSITION en modalité temporelle. `exigeImperatif`
+ * y reste muet, et le vérifier tenait de la mesure, pas du raisonnement.
+ *
+ * ⚠️ ET UNE BRANCHE PEUT ÊTRE MORTE-NÉE — attrapé sur ce motif même, avant de l'écrire ici.
+ * Un premier jet groupait `(?:quand|…)` et `(?:tu auras )?` SANS l'espace qui les sépare :
+ * « quand tu auras fini de relever » ne s'appariait à rien, la garde était vraie par
+ * construction, et la mutation qu'elle existe pour attraper serait restée verte. C'est le
+ * jumeau exact du piège de `\bà moins que` documenté sur `PERMISSIF`. Chaque alternative est
+ * donc PROUVÉE VIVANTE par une sonde, et chacune prouvée non trop large sur du texte
+ * légitime — voir `representant-mutations.test.js`.
+ *
+ * ⚠️ ET UNE SECONDE EST TOMBÉE À LA MESURE, écrite dans ce fichier avant d'en sortir :
+ * `lorsqu['’]` suivi de `\s+` exige un espace APRÈS l'apostrophe, que le français n'écrit
+ * jamais. Elle a été RETIRÉE plutôt que rafistolée — le document tutoie, « lorsqu'il aura
+ * relevé » n'y a pas de cas d'usage, et une alternative de moins vaut mieux qu'une couverture
+ * qu'on croit avoir. Deux branches mortes-nées sur sept dans un motif écrit avec ce piège
+ * en tête : c'est la mesure qui les a dites, pas la relecture.
+ */
+/**
+ * LA POLARITÉ CONTRAIRE ELLE-MÊME : le relèvement affirmé PRIORITAIRE.
+ *
+ * ⚠️ POURQUOI CELUI-CI EXISTE EN PLUS DES DEUX AUTRES — et il a coûté un aller-retour.
+ *
+ * `RENVERSEMENT` est un filtre de tournures, et il fallait le restreindre à LA PHRASE qui
+ * porte l'incise, sans quoi il rougissait sur du français ordinaire écrit juste après
+ * (« C'est, EN RÉALITÉ, la toute première chose que tu fais »). Mais cette restriction a
+ * ROUVERT ce qu'elle fermait : le contresens écrit dans la phrase SUIVANTE y échappait —
+ * « …, dès que sa ligne est ouverte. Ce n'est pas vrai : le relèvement passe en premier. »
+ * Une vérification indépendante l'a mesuré sur le commit qui venait de « corriger » le
+ * faux positif. Élargir la portée ramenait le faux positif ; la rétrécir ouvrait le trou.
+ *
+ * ON SORT DU DILEMME EN CHANGEANT D'AXE. Les deux autres gardes cherchent des TOURNURES ;
+ * celle-ci cherche le FAIT — que le relèvement soit dit prioritaire, quels que soient les
+ * mots qui l'amènent. Elle est ancrée sur le relèvement, donc elle ne peut pas mordre une
+ * phrase qui n'en parle pas, et elle traverse tout l'énoncé sans risque. C'est le même
+ * geste que le paramètre `inverse` d'`exigePolarite`, plus haut dans ce fichier.
+ *
+ * ⚠️⚠️ ET VOICI EXACTEMENT CE QU'ELLE NE FERME PAS — mesuré, pas supposé, par une cinquième
+ * passe de revue. Les TROIS gardes réunies laissent passer le contresens dès qu'il désigne le
+ * relèvement AUTREMENT QUE PAR SON NOM. Ces deux énoncés sont VERTS sur les 25 contrôles :
+ *
+ *   « …, dès que sa ligne est ouverte. Ce n'est pas vrai : ce qui existe déjà chez nous
+ *     passe en premier. »
+ *   « …, dès que sa ligne est ouverte. Son passé chez nous vient avant, toujours. »
+ *
+ * Le premier échappe à `RENVERSEMENT` parce qu'il est dans une autre phrase que la porteuse,
+ * et à celle-ci parce qu'il ne dit pas « relèvement ». Le second ne porte aucune marque de
+ * renversement du tout. **Aucun filtre de vocabulaire ne fermera cette famille** : il faudrait
+ * une garde de FORME — interdire toute phrase non reconnue dans l'énoncé de cette étape —, ce
+ * qui ferait rougir aussi toute évolution légitime du texte. C'est un arbitrage de conception,
+ * et il est remonté au dirigeant plutôt que tranché ici.
+ *
+ * ⚠️ ET ELLE RESTE UN FILTRE, comme les autres. Chaque item est éprouvé par une attaque et
+ * quatre textes légitimes sont prouvés indemnes ; il existera d'autres formulations. Une
+ * alternative de plus — `va`, comme « le relèvement va avant » — a été RETIRÉE parce
+ * qu'aucune attaque française plausible ne la rendait vivante : une alternative de moins vaut
+ * mieux qu'une couverture qu'on croit avoir. C'est le test de contribution qui l'a dite,
+ * pas la relecture, et il l'a dite dans la minute où elle a été écrite. Ce qui garde
+ * réellement l'arbitrage, ce sont les TROIS gardes ensemble, jamais une seule.
+ */
+export const PRIORITE_DU_RELEVEMENT = /(?:le\s+)?relèvement\s+(?:passe|vient|arrive)\s+(?:en\s+premier|d['’]abord|avant)|relèv\w*\s+(?:d['’]abord|en\s+premier)|(?:d['’]abord|en\s+premier)\s*[,:]?\s*(?:tu\s+)?(?:le\s+)?relèv|commence\s+par\s+(?:le\s+)?relev/i;
+
+export const POSTERIORITE_SUR_LE_RELEVEMENT = /(?:quand|lorsque|une\s+fois|après|dès|sitôt)\s+(?:que\s+)?(?:tu\s+(?:auras|as)\s+)?(?:fini\s+de\s+)?(?:relev|le\s+relèvement|ton\s+relèvement)|après\s+(?:avoir\s+)?(?:fini\s+de\s+)?relev|à\s+la\s+fin\s+du\s+relèvement/i;
+
 export function exigePolarite(corps, sonde, quoi, { inverse } = {}) {
   const porteurs = corps.split(/\n\s*\n/).filter((p) => sonde.test(p));
   assert.ok(
@@ -457,9 +562,39 @@ export function exigePolarite(corps, sonde, quoi, { inverse } = {}) {
  * Le rang de l'unique élément qu'une sonde reconnaît.
  * Échoue si la sonde n'en reconnaît aucun, ou plus d'un — une sonde ambiguë rendrait
  * l'assertion de position ininterprétable, donc inutile.
+ *
+ * ⚠️ `cle` PEUT ÊTRE `null`, ET C'EST UNE MESURE AVEUGLE, PAS UNE ABSENCE — mesuré en
+ * revue indépendante sur le commit 7926463 (D-20260817-0006).
+ *
+ * `etapesDe()` ne pose `libelle` que s'il trouve un `**gras**` dans l'énoncé ; sans lui,
+ * `libelle` (et donc `cle`, ici) vaut `null`. L'ancien filtre, `sonde.test(e.cle || '')`,
+ * traitait ce `null` comme une chaîne vide — exactement ce que rend un élément qui n'existe
+ * PAS DU TOUT. Deux réalités opposées rendaient alors le MÊME message, caractère pour
+ * caractère : supprimer l'étape 4 de l'ordre d'ouverture, et se contenter de retirer son
+ * gras en la laissant en place, produisaient toutes deux
+ * « "accuser réception" doit se reconnaître une fois exactement (0 trouvée·s) ». Un lecteur
+ * de ce message ne peut pas savoir s'il doit RÉÉCRIRE l'étape ou seulement la RE-GRASSER.
+ *
+ * On distingue donc, avant de conclure à une absence : s'il existe des éléments dont `cle`
+ * est `null` (aveugles — on ne peut pas leur appliquer la sonde), zéro correspondance ne
+ * prouve rien, et on le dit nommément plutôt que de rendre le message de l'absence pure.
+ * Un `cle` à chaîne vide (`''`) reste une VALEUR mesurée — une colonne de table vide, par
+ * exemple — et ne déclenche pas cette branche : seule l'absence de mesure (`null`/`undefined`)
+ * le fait.
  */
 function rangUnique(elements, sonde, quoi) {
-  const trouves = elements.filter((e) => sonde.test(e.cle || ''));
+  const trouves = elements.filter((e) => e.cle != null && sonde.test(e.cle));
+
+  if (trouves.length === 0) {
+    const aveugles = elements.filter((e) => e.cle == null);
+    assert.equal(
+      aveugles.length, 0,
+      `« ${quoi} » ne peut pas conclure à une absence : ${aveugles.length} élément(s) sans libellé `
+        + `visible pour la sonde (rang·s aveugle·s : ${aveugles.map((e) => e.rang).join(', ') || '?'}) — `
+        + `impossible de distinguer « ça n'existe pas » de « je ne peux pas le voir ».`,
+    );
+  }
+
   assert.equal(trouves.length, 1, `« ${quoi} » doit se reconnaître une fois exactement (${trouves.length} trouvée·s)`);
   return trouves[0];
 }
@@ -482,6 +617,17 @@ export const CONTROLES = [
       const etapes = etapesDe(s.corps).map((e) => ({ ...e, cle: e.libelle }));
       assert.ok(etapes.length >= 4, `l’ordre doit être une suite d’au moins 4 étapes (${etapes.length})`);
       for (const e of etapes) assert.ok(e.libelle, `l’étape ${e.rang} n’a pas de libellé en gras — son rang serait illisible`);
+
+      // ⚠️ LE CHIFFRE ÉCRIT EN PROSE DOIT DIRE LE VRAI. Le lot qui a ajouté deux étapes a
+      // laissé « Quatre gestes » au-dessus d'une liste de six — trouvé en revue, invisible à
+      // la relecture. Un lecteur qui compte s'arrête avant de poser sa ronde.
+      const NOMBRES = { deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8 };
+      const annonce = s.corps.match(/^\s*(deux|trois|quatre|cinq|six|sept|huit)\s+gestes/im);
+      assert.ok(annonce, 'l’ordre d’ouverture doit annoncer COMBIEN de gestes il compte');
+      assert.equal(
+        NOMBRES[annonce[1].toLowerCase()], etapes.length,
+        `l’ordre annonce « ${annonce[1]} gestes » et en énumère ${etapes.length}`,
+      );
 
       const contexte = rangUnique(etapes, /CONTEXTE\.md/, 'lire son contexte');
       // T-20260814-0033 : l'étape 2 ouvre désormais LES DEUX lignes. Le libellé le dit, et
@@ -752,7 +898,7 @@ export const CONTROLES = [
       assert.match(s.corps, /commentaires/i, 'c’est le fil de commentaires qui porte ce qui a été compris et promis');
 
       const REGLES = [
-        { quoi: 'ne rien dire avant d’avoir lu', sonde: /ne dis rien avant/i },
+        { quoi: 'ne rien dire du fond avant d’avoir lu', sonde: /ne dis rien (?:du fond )?avant/i },
         { quoi: 'ne pas annoncer qu’on est nouveau', sonde: /n.annonces pas que tu es nouveau/i },
         { quoi: 'ne pas inventer ce qu’on n’a pas lu', sonde: /n.inventes pas/i },
       ];
@@ -763,6 +909,222 @@ export const CONTROLES = [
         assert.equal(trouvees.length, 1, `« ${quoi} » doit figurer une fois exactement (${trouvees.length} trouvée·s)`);
         exigeImperatif(trouvees[0], quoi);
       }
+    },
+  },
+
+  {
+    id: 'ronde-tient-par-un-mecanisme',
+    quoi: 'la ronde est un MÉCANISME qu’on pose, pas une discipline — et elle laisse une trace horaire',
+    verifier({ metier }) {
+      // T-20260816-0100 : un client a eu sa production morte cinq jours sans que son
+      // représentant le sache. Écrire « fais des rondes » ne répare rien : un devoir
+      // périodique sans réveil se tient tant que quelqu'un y pense, puis cesse SANS QUE
+      // RIEN NE LE SIGNALE. C'est le seul manquement de ce métier qui ne produit aucun
+      // symptôme — donc le seul qui exige d'être gardé sur son mécanisme, pas sur son
+      // intention.
+      const s = sectionDe(metier, /^Ta ronde/, 'sur la ronde');
+
+      // (a) LE MÉCANISME. Une ronde qui repose sur la bonne volonté n'existe pas.
+      assert.match(s.corps, /boucle/i, 'la ronde doit nommer le mécanisme qui la réveille, pas seulement le devoir');
+      assert.match(
+        s.corps, /pose[s]?\b[^.]{0,40}\ben naissant\b|\ben naissant\b[^.]{0,40}\bpose/i,
+        'la boucle se pose À LA NAISSANCE — une cadence laissée au jugement en cours de route est le défaut, pas le remède',
+      );
+
+      // (b) ELLE NE SURVIT PAS À LA MORT. Sans ce rappel, un représentant renaît muet.
+      assert.match(
+        s.corps, /repose[s]?\b[^.]{0,60}renaissance|renaissance[^.]{0,60}repose/i,
+        'la ronde doit dire qu’elle se REPOSE à chaque renaissance — elle ne survit pas à la session',
+      );
+
+      // (c) UNE CADENCE CHIFFRÉE. « régulièrement » ne se vérifie pas.
+      assert.match(s.corps, /\b(?:un tour par heure|toutes les \d+|\d+\s*(?:min|heure))/i,
+        'la ronde doit porter une cadence chiffrée — « régulièrement » ne se mesure pas');
+
+      // (d) LA PREUVE. Une ronde éteinte ne produit AUCUNE erreur : la seule trace
+      // possible est l'heure de chaque tour, et son absence est le seul signal.
+      assert.match(s.corps, /heure de chaque tour|l.heure de son tour|laisse son heure/i,
+        'la ronde doit exiger que chaque tour laisse son heure — c’est la seule preuve qu’elle tourne');
+
+      // (e) ET ELLE NE RÉPARE RIEN. Le réflexe de redémarrer ce qui paraît mort détruit
+      // la capacité d'attribuer, en plus de ne rien réparer.
+      // ⚠️ LA LIGNE DOIT EXISTER AVANT QU'ON JUGE SA MODALITÉ. `find()` rend `undefined`
+      // quand rien ne matche, et `exigeImperatif('')` passe en silence — la garde laissait
+      // donc SUPPRIMER l'interdit le plus dangereux de cette section sans rougir. Trouvé en
+      // revue indépendante, éprouvé : le contrôle restait vert phrase entièrement retirée.
+      const interdit = s.corps.split('\n').find((l) => /ne répare jamais|jamais réparer/i.test(l));
+      assert.ok(interdit, 'l’interdit de RÉPARER pendant une ronde doit être écrit — une ronde qui répare est plus dangereuse que le défaut qu’elle cherche');
+      exigeImperatif(interdit, 'l’interdit de réparer pendant une ronde');
+    },
+  },
+
+  {
+    id: 'etat-de-reprise-vit-dehors',
+    quoi: 'l’état s’écrit à chaque tour, dans un lieu nommé, et ne parle jamais au client',
+    verifier({ metier }) {
+      // Ce rôle a un interlocuteur qui SE SOUVIENT DE TOUT. Perdre le fil ne coûte pas une
+      // mesure à refaire : ça fait redire au client ce qu'il a déjà dit, et ça lui apprend
+      // en une phrase que personne ne l'écoutait.
+      // `sectionDe` s'arrête au premier sous-titre : chaque sous-section se garde donc
+      // chez elle, ce qui est de toute façon la bonne maille — une règle vaut là où l'acte
+      // se pose, pas dans un préambule qui la mentionne.
+      const ecrire = sectionDe(metier, /^Écris ton état de reprise/, 'sur l’écriture de l’état');
+      const relire = sectionDe(metier, /^Reprends par la lecture/, 'sur la reprise par la lecture');
+      const attente = sectionDe(metier, /^N.oblige jamais un client/, 'sur l’attente du client');
+
+      // (a) LE MOMENT. Un relais écrit à la dernière minute est écrit par un agent déjà
+      // appauvri — c'est le moment où il en est le moins capable.
+      assert.match(ecrire.titre + ecrire.corps, /à chaque tour/i,
+        'l’état de reprise doit s’écrire À CHAQUE TOUR, pas à l’approche de la panne');
+      assert.match(ecrire.corps, /dernière minute|déjà appauvri/i,
+        'le métier doit dire POURQUOI l’écrire tard ne vaut rien, sinon la règle se relâche');
+
+      // (b) LE LIEU. Un état sans lieu nommé est un état que personne ne relira.
+      assert.match(ecrire.corps, /demands? action comment|fil de la demande/i,
+        'l’état doit nommer le lieu où il s’écrit — un lieu allusif ne se retrouve pas');
+
+      // (c) IL NE DESCEND PAS. C'est du travail en cours, pas un engagement.
+      // ⚠️ Deux interdits distincts, donc DEUX assertions. Une alternative « A ou B » ici
+      // laissait survivre la mutation qui supprime A : B suffisait à la satisfaire.
+      // ⚠️ POLARITÉ, PAS PRÉSENCE. `assert.match` reste vert devant « on pourrait croire
+      // qu'il ne parle jamais au client — en réalité, un état bien résumé peut lui être
+      // recopié » : la sonde y est, la règle est retournée. Éprouvé en revue.
+      exigePolarite(ecrire.corps, /ne parle jamais au client/i,
+        'l’interdit de faire descendre l’état dans le canal du client');
+      assert.match(ecrire.corps, /ne quitte jamais son fil/i,
+        'l’état ne doit jamais quitter le fil où il s’écrit');
+
+      // (d) ON REPREND PAR LA LECTURE. Un agent qui agit sur un souvenir contredit ce qui
+      // est inscrit sans le savoir.
+      assert.match(relire.titre + relire.corps, /jamais par la mémoire/i,
+        'la reprise se fait par la LECTURE, jamais par la mémoire');
+
+      // (e) ET LE CLIENT N'ATTEND PAS PENDANT UNE REPRISE. Le compact est bon marché pour
+      // l'agent, pas pour l'humain au bout du fil.
+      assert.match(attente.corps, /ensuite tu reprends|avant de reprendre/i,
+        'le métier doit interdire de reprendre pendant qu’un client attend');
+    },
+  },
+
+  {
+    id: 'accuse-precede-le-relevement',
+    quoi: 'l’accusé de réception passe AVANT le relèvement — par le rang OU en toutes lettres —, il précède la parole de fond, et seul l’accusé passe avant',
+    verifier({ metier }) {
+      // Chantier `D-20260817-0008` ; le fait lui-même est consigné au changelog v1.1.0 de
+      // l'ABC (Somcraft `e4b72bc9-b7a7-43f1-812e-72f58abe50be`), pas dans la Demande —
+      // pointeur corrigé en revue. Un représentant a mené un relèvement complet et écrit deux
+      // messages au dirigeant avant que le client n'entende un mot — pendant qu'un employé
+      // de ce client s'apprêtait à relancer une commande destructrice en production. Le
+      // texte disait QU'il accuse réception. Il ne disait pas QUAND.
+      const s = sectionDe(metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+      const etapes = etapesDe(s.corps).map((e) => ({ ...e, cle: e.libelle }));
+
+      const accuse = rangUnique(etapes, /accuse/i, 'accuser réception');
+      const ronde = rangUnique(etapes, /pose ta ronde/i, 'poser sa ronde');
+      const parler = rangUnique(etapes, /parle/i, 'parler du fond');
+      // ⚠️ LE RELÈVEMENT SE RÉSOUT ICI, ET IL NE SE RÉSOLVAIT PAS. Ce contrôle ANNONÇAIT
+      // dans son `quoi` que l'accusé passe avant le relèvement, et ne le nommait nulle part :
+      // il comparait l'accusé à la PAROLE DE FOND, qui est une autre garantie. Un faux témoin
+      // poli — le nom rassurait sur une garde que le code ne posait pas. Relevé en revue
+      // indépendante de la PR #299.
+      const relever = rangUnique(etapes, /relève|relever/i, 'relever');
+
+      assert.ok(accuse.rang < parler.rang,
+        `l’accusé (rang ${accuse.rang}) doit précéder la parole de fond (rang ${parler.rang})`);
+      assert.ok(ronde.rang < parler.rang,
+        `la ronde (rang ${ronde.rang}) se pose avant de parler (rang ${parler.rang}) — après, on l’oublie`);
+
+      // ══ L'ANTÉRIORITÉ SUR LE RELÈVEMENT, ET ELLE NE TIENT PAS PAR LE RANG.
+      //
+      // Le relèvement porte le rang 3 et l'accusé le rang 4 : le rang dit l'INVERSE de
+      // l'arbitrage du 2026-08-17. Ne pas renuméroter est un arbitrage de COORDINATION de ce
+      // chantier — un ordre qui a l'air juste ne garde rien. La garantie a donc DEUX porteurs, et il suffit qu'un
+      // tienne : le RANG, ou l'INCISE en toutes lettres dans l'énoncé de l'accusé. Aujourd'hui
+      // c'est l'incise ; si un jour la liste est renumérotée, le rang prendra le relais sans
+      // que cette garde ait à changer.
+      const parLIncise = ANTERIORITE_SUR_LE_RELEVEMENT.exec(accuse.enonce);
+      assert.ok(
+        accuse.rang < relever.rang || parLIncise,
+        `l’accusé (rang ${accuse.rang}) ne précède pas le relèvement (rang ${relever.rang}), et son `
+          + `énoncé ne porte plus l’antériorité en toutes lettres — « ${accuse.enonce.trim()} ». `
+          + `L’arbitrage du 2026-08-17 (ABC R4.7 / GF-GCL-008 / CT-GCL-010) n’est alors porté par RIEN.`,
+      );
+
+      // ⚠️ ET LA PRÉSENCE N'EST PAS L'ABSENCE DU CONTRAIRE. Un énoncé peut porter l'incise ET
+      // la subordination inverse ; et surtout, remplacer l'incise par son contresens exact
+      // laissait tout vert avant ce lot. On interdit donc la POSTÉRIORITÉ dans cet énoncé.
+      //
+      // ⚠️ CE QUE CETTE LIGNE VAUT, ET CE QU'ELLE NE VAUT PAS. C'est un FILTRE DE VOCABULAIRE,
+      // comme `PERMISSIF` : elle attrape les tournures qu'on lui a apprises, jamais « toute
+      // façon de dire après ». Le premier jet de ce lot affirmait « quelle que soit la tournure
+      // qui l'amène » — c'était FAUX, et une revue indépendante l'a démontré en une mutation.
+      // La ligne suivante ferme la famille qu'elle laissait passer ; d'autres resteront.
+      const subordonne = POSTERIORITE_SUR_LE_RELEVEMENT.exec(accuse.enonce);
+      assert.ok(
+        !subordonne,
+        `l’énoncé de l’accusé subordonne le geste à la FIN du relèvement (« ${subordonne && subordonne[0]} ») `
+          + `— c’est le contresens exact de l’arbitrage du 2026-08-17, et il ne coûte qu’une incise : `
+          + `« ${accuse.enonce.trim()} »`,
+      );
+
+      // ⚠️ ET L'INCISE PEUT ÊTRE LÀ, INTACTE, DANS UNE PHRASE QUI LA NIE. Trouvé par la revue
+      // indépendante de ce lot, en une mutation restée VERTE : « ce n'est pas vrai que tu
+      // accuses **avant même d'avoir fini de relever** : en réalité tu accuses ensuite ».
+      // L'antériorité s'y reconnaît — c'est une sous-chaîne —, la postériorité ne s'y reconnaît
+      // pas, et le sens est exactement inversé. C'est le motif que ce fichier documente depuis
+      // le 2026-08-16 sous `RENVERSEMENT`, et que ce contrôle n'appliquait pas : la garde
+      // existait déjà, à trois cents lignes d'ici, et personne ne l'avait branchée ici.
+      //
+      // ⚠️ ET ON REGARDE LA PHRASE QUI PORTE L'INCISE, PAS L'ÉNONCÉ ENTIER — c'est un
+      // correctif, pas un raccourci, et il reprend celui d'`exigePolarite` trois cents lignes
+      // plus haut, jusqu'à son découpage sur `[.!?]` (le premier jet coupait sur `.` seul —
+      // « jumeau exact » était écrit, ça n'en était pas un ; relevé en vérification). Sur l'énoncé entier, une phrase parfaitement légitime
+      // écrite APRÈS l'incise rougissait à tort : « …, dès que sa ligne est ouverte. C'est,
+      // EN RÉALITÉ, la toute première chose que tu fais. » Mesuré par une contre-vérification
+      // indépendante. Une garde qui crie sur du texte correct ne survit pas : le premier qui
+      // la rencontre la retire, et emporte ce qu'elle gardait vraiment.
+      const porteuse = parLIncise
+        ? accuse.enonce.split(/(?<=[.!?])\s+/).find((p) => ANTERIORITE_SUR_LE_RELEVEMENT.test(p))
+        : null;
+      const enveloppe = porteuse && RENVERSEMENT.exec(porteuse);
+      assert.ok(
+        !enveloppe,
+        `la phrase qui porte l’antériorité l’enveloppe d’un renversement (« ${enveloppe && enveloppe[0]} ») : `
+          + `l’incise y est encore écrite, et la phrase dit le contraire — « ${porteuse && porteuse.trim()} »`,
+      );
+
+      // ⚠️ ET LA PHRASE D'À CÔTÉ. Restreindre la garde ci-dessus à la phrase porteuse a
+      // rouvert ce qu'elle fermait : « …, dès que sa ligne est ouverte. Ce n'est pas vrai :
+      // le relèvement passe en premier. » passait. Celle-ci traverse TOUT l'énoncé — elle
+      // le peut, parce qu'elle est ancrée sur le relèvement et non sur des tournures de
+      // français ordinaire. Les trois gardes ne se remplacent pas : chacune ferme ce que
+      // les autres laissent ouvert, et aucune ne suffit seule.
+      const prioritaire = PRIORITE_DU_RELEVEMENT.exec(accuse.enonce);
+      assert.ok(
+        !prioritaire,
+        `l’énoncé de l’accusé affirme la PRIORITÉ du relèvement (« ${prioritaire && prioritaire[0]} ») : `
+          + `c’est la polarité contraire de l’arbitrage du 2026-08-17, peu importe la tournure qui `
+          + `l’amène — « ${accuse.enonce.trim()} »`,
+      );
+
+      // LE RANG NE SUFFIT PAS : une étape peut garder sa place et cesser d'obliger.
+      exigeImperatif(accuse.enonce, 'l’étape d’accusé de réception');
+      exigeImperatif(ronde.enonce, 'l’étape de pose de la ronde');
+      // ⚠️ ET LA MODALITÉ DE L'INCISE ELLE-MÊME, pas seulement celle de l'énoncé qui la porte :
+      // « — avant même d'avoir fini de relever, si tu en as le temps » garde l'antériorité et
+      // la vide. ⚠️ Ce filet ne peut PAS attraper le renversement gardé juste au-dessus —
+      // « quand tu auras fini de relever » n'est pas une tournure permissive, et le vérifier
+      // tenait de la mesure, pas du raisonnement.
+      if (parLIncise) exigeImperatif(accuse.enonce.slice(accuse.enonce.indexOf(parLIncise[0])), 'l’incise d’antériorité de l’accusé');
+
+      // ET LA BORNE. Un accusé qui laisse entendre une réponse en route rouvre exactement
+      // ce que la frontière de l'engagement ferme.
+      const c = sectionDe(metier, /^Accuse réception avant de travailler/, 'sur l’accusé de réception');
+      assert.match(c.corps, /n.est pas une promesse|jamais\s*«?\s*une réponse est en route/i,
+        'le métier doit dire qu’un accusé n’est PAS une promesse — sinon il engage');
+      // ⚠️ Même piège : la borne se garde sur sa POLARITÉ, pas sur sa présence.
+      exigePolarite(c.corps, /seul l.accusé passe avant/i,
+        'la borne de l’exception : SEUL l’accusé passe avant le relèvement');
     },
   },
 
@@ -1038,7 +1400,7 @@ export const CONTROLES = [
 
       // LA DISTINCTION QUI PORTE TOUT : la ligne fait ARRIVER, le registre fait DURER. Les
       // confondre ramène le défaut d'origine — une question inscrite quelque part et jamais lue.
-      assert.match(s.corps, /registre|demands/i, 'ce qui doit survivre à la session va aussi au registre');
+      assert.match(s.corps, /\bSD\b|registre|demands/i, 'ce qui doit survivre à la session va aussi au SD');
       assert.match(
         s.corps, /n.est pas une notification|ne prévient personne/i,
         'le métier doit dire qu’une note au registre ne prévient personne',
@@ -1276,7 +1638,7 @@ export const MUTATIONS = [
     quoi: 'on parle au client avant d’avoir relevé son histoire',
     cible: 'ordre-ouverture',
     fichier: 'metier',
-    muter: (t) => permuter(t, '**Relève ce qui existe déjà**', '**Alors seulement, parle.**'),
+    muter: (t) => permuter(t, '**Relève ce qui existe déjà**', '**Alors seulement, parle du fond.**'),
   },
   {
     id: 'revue-R5-l-ordre-devient-facultatif',
@@ -1441,8 +1803,8 @@ export const MUTATIONS = [
     cible: 'relevement-avant-de-parler',
     fichier: 'metier',
     muter: (t) => t.replace(
-      '- **Tu ne dis rien avant d\'avoir lu.**',
-      '- **Tu peux saluer avant d\'avoir lu.**',
+      '- **Tu ne dis rien DU FOND avant d\'avoir lu.**',
+      '- **Tu peux saluer et r\u00e9pondre avant d\'avoir lu.**',
     ),
   },
 
@@ -1717,6 +2079,172 @@ export const MUTATIONS = [
     cible: 'gestes-de-ligne-existants',
     fichier: 'metier',
     muter: (t) => t.replace('--nature client --titre', '--type client --titre'),
+  },
+  {
+    id: 'ronde-devient-une-discipline',
+    quoi: 'la ronde cesse d’être un mécanisme posé et redevient une bonne intention',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ta ronde est une boucle `/loop`, que tu poses en naissant.**',
+      '**Pense à faire tes rondes régulièrement.**',
+    ),
+  },
+  {
+    id: 'ronde-ne-se-repose-plus',
+    quoi: 'la ronde n’est plus reposée à la renaissance — un représentant renaît muet',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Tu la reposes à chaque renaissance** — elle ne survit pas à ta mort.',
+      '**Elle te suit d’une session à l’autre.**',
+    ),
+  },
+  {
+    id: 'ronde-sans-trace-horaire',
+    quoi: 'la ronde ne laisse plus l’heure de ses tours — son extinction devient indétectable',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ce qui prouve que ta ronde tourne : l\'heure de chaque tour, inscrite.**',
+      '**Tu sauras bien si ta ronde tourne.**',
+    ),
+  },
+  {
+    id: 'etat-ecrit-a-la-derniere-minute',
+    quoi: 'l’état de reprise s’écrit quand la panne approche — donc par un agent déjà appauvri',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '### Écris ton état de reprise à chaque tour de ronde',
+      '### Écris ton état de reprise quand ta marge s\'épuise',
+    ),
+  },
+  {
+    id: 'etat-descend-chez-le-client',
+    quoi: 'l’état de reprise cesse d’être interdit dans le canal du client',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Ton état n\'est pas une preuve, et il ne parle jamais au client.**',
+      '**Ton état peut être partagé avec le client si ça l\'aide.**',
+    ),
+  },
+  {
+    id: 'le-client-attend-la-reprise',
+    quoi: 'l’agent reprend pendant qu’un client attend — le silence redevient permis',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Tu termines l\'échange, tu accuses, ensuite tu reprends.**',
+      '**Reprends dès que tu en as besoin.**',
+    ),
+  },
+  {
+    id: 'accuse-passe-apres-le-relevement',
+    quoi: 'l’accusé retombe après la parole de fond — le client retrouve son silence',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => permuter(t, '**Accuse réception, si un message t\'attend**', '**Alors seulement, parle du fond.**'),
+  },
+  {
+    // ⚠️ LA MUTATION QUI RESTAIT VERTE — c'est elle qui a démasqué D2, et elle est le seul
+    // critère d'acceptation de ce lot. Posée par la revue indépendante de la PR #299 sur
+    // `7926463`, elle laissait la suite ENTIÈREMENT VERTE : le texte prescrivait alors le
+    // contresens exact de la règle `R4.7`, et rien ne s'en apercevait. Elle ne
+    // retire aucun mot-clé, ne déplace aucun rang, ne supprime aucune étape — elle retourne
+    // une incise de six mots. La contre-épreuve du reviewer dit le reste : supprimer l'étape
+    // 4 entière faisait rougir quatre tests. L'absence était gardée ; la modalité, non.
+    id: 'accuse-attend-la-fin-du-relevement',
+    quoi: 'l’accusé attend la fin du relèvement — la règle du 2026-08-17 retournée par une seule incise',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "— **avant même d'avoir fini de relever**, dès que sa ligne est ouverte.",
+      "— **quand tu auras fini de relever**, dès que sa ligne est ouverte.",
+    ),
+  },
+
+  {
+    // ⚠️ LA MUTATION QUI MANQUAIT À LA GARDE DE RENVERSEMENT — et son absence a été mesurée :
+    // retirer cette garde du contrôle ne faisait rougir AUCUN test. Une garde qu'on peut
+    // désarmer sans qu'un test s'en aperçoive n'est pas gardée, elle est seulement écrite.
+    // La mutation elle-même vient de la revue indépendante de ce lot : elle laisse l'incise
+    // d'antériorité INTACTE — c'est une sous-chaîne, elle se reconnaît toujours — et la nie
+    // dans la phrase qui la porte. Ni la garde d'antériorité ni celle de postériorité ne la
+    // voient : seul `RENVERSEMENT` la voit.
+    id: 'accuse-antériorité-enveloppée-d-une-négation',
+    quoi: 'l’antériorité de l’accusé est écrite ET niée dans la même phrase — le sens est inversé, les mots sont là',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "— **avant même d'avoir fini de relever**, dès que sa ligne est ouverte.",
+      "— ce n'est pas vrai que tu accuses **avant même d'avoir fini de relever** : en réalité tu accuses ensuite, dès que sa ligne est ouverte.",
+    ),
+  },
+
+  {
+    // ⚠️ LE CAS QUI A ÉCHAPPÉ À LA GARDE PRÉCÉDENTE, et qui lui a coûté un aller-retour :
+    // le contresens n'est pas dans la phrase qui porte l'incise, il est dans la SUIVANTE.
+    // Trouvé par une vérification indépendante sur le commit qui venait de restreindre la
+    // portée de `RENVERSEMENT` pour supprimer un faux positif — la correction d'un défaut
+    // en avait ouvert un autre, sur le mécanisme même qu'elle réparait.
+    id: 'accuse-contredit-dans-la-phrase-suivante',
+    quoi: 'l’antériorité est écrite, puis contredite par la phrase d’à côté — la garde de la phrase porteuse ne la voit pas',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "dès que sa ligne est ouverte. Voir « Ta continuité ».",
+      "dès que sa ligne est ouverte. Ce n'est pas vrai : le relèvement passe en premier. Voir « Ta continuité ».",
+    ),
+  },
+
+  {
+    id: 'accuse-devient-une-promesse',
+    quoi: 'l’accusé cesse d’être borné — il laisse entendre qu’une réponse est en route',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '⚠️ **Mais un accusé n\'est pas une promesse.**',
+      '⚠️ **Et ton accusé annonce une réponse prochaine.**',
+    ),
+  },
+  {
+    id: 'le-decompte-de-l-ordre-ment',
+    quoi: 'l’ordre d’ouverture annonce moins de gestes qu’il n’en énumère — on s’arrête avant de poser sa ronde',
+    cible: 'ordre-ouverture',
+    fichier: 'metier',
+    muter: (t) => t.replace('Six gestes, dans cet ordre exact', 'Quatre gestes, dans cet ordre exact'),
+  },
+  {
+    id: 'la-ronde-repare-ce-qu-elle-voit',
+    quoi: 'l’interdit de réparer pendant une ronde disparaît — le réflexe de redémarrer redevient permis',
+    cible: 'ronde-tient-par-un-mecanisme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Regarde, inscris, alerte — ne répare jamais.**',
+      '**Regarde, inscris, alerte — et répare ce qui est simple.**',
+    ),
+  },
+  {
+    id: 'l-etat-descend-par-un-renversement',
+    quoi: 'l’interdit de recopier l’état au client est retourné par une incise, sans que la sonde disparaisse',
+    cible: 'etat-de-reprise-vit-dehors',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '⚠️ **Ton état n\'est pas une preuve, et il ne parle jamais au client.**',
+      '⚠️ **On pourrait croire que ton état ne parle jamais au client — en réalité, un état bien résumé peut lui être recopié.**',
+    ),
+  },
+  {
+    id: 'la-borne-de-l-accuse-est-retournee',
+    quoi: 'la borne « seul l’accusé passe avant » est renversée par une incise — une réponse de fond repasse devant',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Et **seul l\'accusé passe avant**',
+      'On pourrait croire que **seul l\'accusé passe avant** ; dans les faits, une brève réponse peut partir avec lui',
+    ),
   },
   {
     id: 'une-commande-de-session-inventee',

@@ -440,7 +440,10 @@ export const CONTROLES_BIAIS = [
       const { ligne, gras } = grasUnique(s.corps, /chercher ailleurs/i, 'la borne de ses sources');
 
       for (const { quoi, sonde } of [
-        { quoi: 'le registre', sonde: /registre/i },
+        // ⚠️ LE MOT A CHANGÉ, PAS LA FONCTION : le métier dit « le SD » là où il disait
+        // « le registre » — le mot maison que le dirigeant a écarté le 2026-08-17. La sonde
+        // suit le nom et garde l'ancien, pour qu'un texte non encore migré rougisse toujours.
+        { quoi: 'le SD (ex-« registre »)', sonde: /\bSD\b|registre|ServiceDesk/i },
         { quoi: 'ce que le client lui a dit', sonde: /client/i },
       ]) {
         assert.match(
