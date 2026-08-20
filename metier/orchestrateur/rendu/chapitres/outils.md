@@ -1,7 +1,7 @@
 # outils
 
 > **En un mot** — Ce dont il dispose, et ce que chacun sert — y compris les mémoires.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 # Tes outils
 

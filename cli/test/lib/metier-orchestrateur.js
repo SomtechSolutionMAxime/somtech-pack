@@ -45,7 +45,7 @@
 // citée de mémoire — ce qui est, précisément, ce que l'ajout demande à l'orchestrateur.
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -70,9 +70,32 @@ export const CHEMIN_PERMISSIONS = join(GABARIT_DIR, '.claude', 'settings.json');
 /** La compétence dont ce lot déplace le métier. Elle survit jusqu'au lot qui la remplacera. */
 export const CHEMIN_COMPETENCE = join('.claude', 'skills', 'orchestrer-chantier', 'SKILL.md');
 
+/**
+ * Le métier ENTIER d'un rôle : son socle permanent, puis ses chapitres.
+ *
+ * Un contrôle qui ne lirait que le socle jugerait un texte de 850 mots là où le
+ * métier en fait 25 000 : il passerait au vert sans rien garder.
+ */
+export function metierEntier(racine = REPO) {
+  const socle = readFileSync(join(racine, CHEMIN_METIER), 'utf8');
+  const dossier = join(racine, GABARIT_DIR, 'metier', 'chapitres');
+  if (!existsSync(dossier)) return socle;
+  const chapitres = readdirSync(dossier).sort()
+    .map((f) => readFileSync(join(dossier, f), 'utf8'));
+  return [socle, ...chapitres].join('\n\n');
+}
+
 export function lireGabarits(racine = REPO) {
   return {
-    metier: readFileSync(join(racine, CHEMIN_METIER), 'utf8'),
+    // ⚠️ Le métier n'est plus UN fichier : depuis que le gabarit est RENDU
+    // (P-20260820-0001), il tient dans un socle — `CLAUDE.md`, chargé en
+    // permanence — et des chapitres ouverts au moment d'agir. Les contrôles
+    // portent sur le métier, pas sur un fichier : ils lisent donc les deux.
+    //
+    // Sans ça, 423 contrôles cessaient de mordre en silence — le contenu qu'ils
+    // gardent avait simplement changé de fichier, et ils lisaient l'ancien.
+    // Mesuré le 2026-08-20 : c'est la moitié qui survit pendant que le lieu bouge.
+    metier: metierEntier(racine),
     contexte: readFileSync(join(racine, CHEMIN_CONTEXTE), 'utf8'),
     // Le fichier de DROITS est lu comme les deux autres, et pour la même raison : il est
     // devenu porteur d'une garantie du métier (T-20260813-0062). Un texte qui promet « je ne
@@ -4063,13 +4086,23 @@ export const MUTATIONS = [
     fichier: 'metier',
     // ⚠️ C'EST LA MUTATION QUE LA PASSE 2 A RÉELLEMENT EXÉCUTÉE, et qui laissait les essais
     // d'exemples verts. Elle est ici pour qu'aucune version future ne la laisse passer.
+    // ⚠️ La mutation retire AUSSI l'énoncé d'ABC. Depuis que le métier est rendu
+    // (P-20260820-0001), la règle de la rivière vit à deux endroits : la prose qui
+    // l'enseigne, et l'énoncé `RA-ORC-010` que le rendu émet en tête du chapitre.
+    // Ne retirer que la prose laissait l'énoncé porter la règle — la mutation
+    // passait pour survivante alors qu'elle n'avait vidé qu'une moitié.
+    //
+    // Ce n'est PAS un affaiblissement du contrôle : c'est la mutation qu'on rend
+    // fidèle à ce qu'elle prétend faire — « le gabarit jette la règle ». Jeter la
+    // prose ne jette plus la règle, et c'est une propriété du métier rendu.
     muter: (t) => {
-      const debut = t.indexOf("### ⚠️ Et TOI, orchestrateur, tu portes un nom de RIVIÈRE");
-      if (debut === -1) return t;
-      const fin = t.indexOf('\n## ', debut);
-      return t.slice(0, debut)
+      const sansEnonce = t.split('\n').filter((l) => !l.includes('RA-ORC-010')).join('\n');
+      const debut = sansEnonce.indexOf("### ⚠️ Et TOI, orchestrateur, tu portes un nom de RIVIÈRE");
+      if (debut === -1) return sansEnonce;
+      const fin = sansEnonce.indexOf('\n## ', debut);
+      return sansEnonce.slice(0, debut)
         + '### Divers\n\n- ✅ `matapedia`\n- ❌ `orchestrateur`\n- ❌ `rev-pr31`\n'
-        + (fin === -1 ? '' : t.slice(fin));
+        + (fin === -1 ? '' : sansEnonce.slice(fin));
     },
   },
   {
@@ -4174,7 +4207,13 @@ export const MUTATIONS = [
     // Le « Tu ne codes pas. » du préambule d'origine n'existe plus comme phrase : la
     // réécriture par la fonction porte le même interdit dans la colonne « Ce qu'il ne fait
     // **jamais** » de la table des niveaux. Le motif suit la fonction, pas l'ancienne phrase.
-    muter: (t) => t.replace(
+        // ⚠️ `replaceAll`, pas `replace` — depuis que le métier est RENDU
+    // (P-20260820-0001), chaque règle cardinale y figure DEUX fois : abrégée dans
+    // le socle, en prose dans son chapitre. `replace` ne prenait que la première
+    // occurrence — le socle — et la règle survivait intacte dans le chapitre :
+    // la mutation passait pour survivante alors qu'elle n'avait tué qu'une moitié.
+    // Muter partout est ce qui rend la mutation fidèle à ce qu'elle prétend faire.
+    muter: (t) => t.replaceAll(
       'ne code pas, ne relit pas le code',
       'code ce qui va vite, relit le code',
     ),
@@ -4852,7 +4891,13 @@ export const MUTATIONS = [
     fichier: 'metier',
     // ⚠️ Ré-ancrée (lot 3) : la borne s'écrit maintenant « n'en demande pas un second ». Ce
     // qu'elle FAIT est inchangé — laisser le critère écrit et lui ouvrir une porte.
-    muter: (t) => t.replace(
+        // ⚠️ `replaceAll`, pas `replace` — depuis que le métier est RENDU
+    // (P-20260820-0001), chaque règle cardinale y figure DEUX fois : abrégée dans
+    // le socle, en prose dans son chapitre. `replace` ne prenait que la première
+    // occurrence — le socle — et la règle survivait intacte dans le chapitre :
+    // la mutation passait pour survivante alors qu'elle n'avait tué qu'une moitié.
+    // Muter partout est ce qui rend la mutation fidèle à ce qu'elle prétend faire.
+    muter: (t) => t.replaceAll(
       "n'en demande pas un second",
       "n'en demande pas un second, sauf si le CTO en demande un",
     ),
@@ -5442,7 +5487,13 @@ export const MUTATIONS = [
     // « ne fait pas foi » seul mordait AILLEURS — le gabarit le dit aussi du fil de la ligne et
     // d'un rappel de mémoire, et `replace` prend la première occurrence. La mutation mordait
     // donc hors du sas et aucun contrôle ne la voyait : survivante, attrapée par la GARDE 2.
-    muter: (t) => t.replace('Le verrou ne fait pas foi', 'Le verrou ne fait pas foi — au contraire'),
+        // ⚠️ `replaceAll`, pas `replace` — depuis que le métier est RENDU
+    // (P-20260820-0001), chaque règle cardinale y figure DEUX fois : abrégée dans
+    // le socle, en prose dans son chapitre. `replace` ne prenait que la première
+    // occurrence — le socle — et la règle survivait intacte dans le chapitre :
+    // la mutation passait pour survivante alors qu'elle n'avait tué qu'une moitié.
+    // Muter partout est ce qui rend la mutation fidèle à ce qu'elle prétend faire.
+    muter: (t) => t.replaceAll('Le verrou ne fait pas foi', 'Le verrou ne fait pas foi — au contraire'),
   },
 
   {

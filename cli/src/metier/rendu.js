@@ -181,6 +181,7 @@ export function rendre(classement) {
   const dejaEnL1 = new Set(cardinales.map((i) => i.id));
   const sansChapitre = items.filter((i) => !i.chapitre && !dejaEnL1.has(i.id));
   const l1 = [
+    ...(classement?.preambule ? [classement.preambule, ''] : []),
     '# Ce qui prime',
     '',
     ...(deroges.length

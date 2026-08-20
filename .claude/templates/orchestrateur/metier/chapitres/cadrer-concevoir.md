@@ -1,7 +1,7 @@
 # cadrer-concevoir
 
-> **En un mot** — Ce qu'on lit avant de decouper, le decoupage par valeur, le dimensionnement, la conception ecrite.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **En un mot** — Ce qu'il lit avant de découper, le découpage par valeur, le dimensionnement, la conception écrite.
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 ## Ce dont ce chapitre répond
 

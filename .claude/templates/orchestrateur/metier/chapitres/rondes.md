@@ -1,7 +1,7 @@
 # rondes
 
 > **En un mot** — Ce qu'un tour de ronde parcourt, et ce qu'il en tire.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 ## Ce dont ce chapitre répond
 

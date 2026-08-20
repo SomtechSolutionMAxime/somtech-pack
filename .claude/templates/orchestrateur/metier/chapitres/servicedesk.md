@@ -1,7 +1,7 @@
 # servicedesk
 
-> **En un mot** — Tenir le ServiceDesk du chantier : ce qui s'ouvre en Demande, les statuts, la filiation, l'hygiene.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **En un mot** — Tenir le ServiceDesk du chantier : ce qui s'ouvre en Demande, les statuts, la filiation.
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 ## Ce dont ce chapitre répond
 

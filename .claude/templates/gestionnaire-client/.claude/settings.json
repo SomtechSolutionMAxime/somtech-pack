@@ -1,11 +1,36 @@
 {
   "permissions": {
     "deny": [
-      "Write",
       "Edit",
+      "Write",
       "NotebookEdit",
-      "Edit(//**)",
-      "Task"
+      "WebFetch",
+      "WebSearch",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git merge*)",
+      "Bash(git rebase*)",
+      "Bash(git reset*)",
+      "Bash(gh pr*)",
+      "Bash(gh release*)",
+      "Bash(npm publish*)",
+      "Bash(npx *)",
+      "Bash(supabase*)",
+      "Bash(curl*)",
+      "Bash(wget*)"
+    ]
+  },
+  "somtech": {
+    "droitsAccordes": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git log*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(node $HOME/.somtech/ligne-directe/bin/ligne-directe.js *)",
+      "mcp__servicedesk__*"
     ]
   },
   "hooks": {

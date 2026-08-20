@@ -1,7 +1,7 @@
 # rendre-compte
 
-> **En un mot** — Comment il parle au CTO : la ligne, l'accuse, la forme, ce qui monte et ce qu'il tranche.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **En un mot** — Sa ligne, l'accusé, la forme, ce qui monte et ce qu'il tranche.
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 ## Ce dont ce chapitre répond
 

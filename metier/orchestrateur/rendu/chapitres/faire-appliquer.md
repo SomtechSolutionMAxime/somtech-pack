@@ -1,7 +1,7 @@
 # faire-appliquer
 
-> **En un mot** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'ecart signale.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **En un mot** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'écart signalé.
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 ## Ce dont ce chapitre répond
 

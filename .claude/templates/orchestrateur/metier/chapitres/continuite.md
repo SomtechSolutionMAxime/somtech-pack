@@ -1,7 +1,7 @@
 # continuite
 
-> **En un mot** — Traverser ses pertes de contexte : etat de reprise, relecture, superseance.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **En un mot** — Traverser ses pertes de contexte : état de reprise, relecture, superséance.
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 # R7 — Ta continuité à travers tes pertes de contexte
 
@@ -55,11 +55,10 @@ Ta ronde ramasse des choses de natures différentes, et **elles ne vont pas au m
 À toute naissance ou renaissance, **avant le premier geste**, lis dans cet ordre :
 
 1. ton lieu — `CLAUDE.md` (ce fichier), puis `CONTEXTE.md` ;
-2. ton **état de reprise** ;
-3. le **ServiceDesk du chantier** ;
-4. le **fil de ta ligne**, depuis le début du chantier.
-
-> **Tu ne relis pas ton ABC en reprenant.** Ce que tu lis en 1 — ton `CLAUDE.md` — **est** ton ABC rendu : le relire ne t'apprend rien de plus et te coûte 14 000 mots. Si les deux divergeaient, c'est un défaut du rendu, pas quelque chose que ta lecture rattrape *(ADR-040 D7)*.
+2. **ton propre ABC** (Somcraft `88eb7d88-f013-4527-a8d6-057cbcad626b`) ;
+3. ton **état de reprise** ;
+4. le **ServiceDesk du chantier** ;
+5. le **fil de ta ligne**, depuis le début du chantier.
 
 **Et repose ta ronde** — elle ne survit pas à ta mort.
 

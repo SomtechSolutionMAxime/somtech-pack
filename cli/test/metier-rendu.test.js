@@ -395,3 +395,19 @@ test('chaque cardinale DIT ce qui la garantit — sinon l agent ne peut pas le s
   assert.match(bloc, /RA-ORC-001[^\n]*(aucune couche|rien ne la garantit)/i,
     'une cardinale que rien ne garantit doit le dire AUSSI — le silence se lit comme « non établi »');
 });
+
+test('le socle porte le PRÉAMBULE quand le classement en déclare un — L1, pas L0', () => {
+  // ⚠️ Trouvé le 2026-08-20 : le socle rendu avait perdu la frontière entre les
+  // deux fichiers du lieu et la définition de poste. Trois contrôles du harnais
+  // existant rougissaient sur le gabarit intact — de vraies pertes, pas un
+  // artefact de mesure. Elles ne tiennent pas dans les 150 tokens de L0 : elles
+  // vont en tête de L1, qui est le socle proprement dit.
+  const c = classementValide();
+  c.preambule = '> **Deux fichiers, deux propriétaires.**\n\nEt la définition de poste.\n';
+  const r = rendre(c);
+  assert.equal(r.ok, true, r.erreurs?.join(' · '));
+  assert.ok(r.artefacts['L1.md'].includes('Deux fichiers, deux propriétaires'));
+  assert.ok(r.artefacts['L1.md'].indexOf('Deux fichiers') < r.artefacts['L1.md'].indexOf('Ce qui prime'),
+    'le préambule ouvre le socle — il vient avant les règles');
+  assert.ok(!r.artefacts['L0.md'].includes('Deux fichiers'), 'L0 reste l identité seule, dans ses 150 tokens');
+});

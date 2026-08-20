@@ -1,7 +1,7 @@
 # mise-en-production
 
-> **En un mot** — Pousser, passer le sas, merger, fermer les statuts, clore le chantier.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
+> **En un mot** — Pousser, passer le sas, merger, fermer les statuts, clore.
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
 # Pousser, merger, clore
 

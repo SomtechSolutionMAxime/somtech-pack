@@ -8,6 +8,30 @@
       "Task"
     ]
   },
+  "somtech": {
+    "droitsAccordes": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git log*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git worktree list*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh run list*)",
+      "Bash(gh run view*)",
+      "Bash(herdr *)",
+      "Bash(node $HOME/.somtech/ligne-directe/bin/ligne-directe.js *)",
+      "Bash(node $HOME/.somtech/naissance-representant/bin/livrer.js *)",
+      "Bash(scripts/orchestration/veille-deblocage.sh *)",
+      "mcp__servicedesk__*",
+      "mcp__somcraft__*"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
