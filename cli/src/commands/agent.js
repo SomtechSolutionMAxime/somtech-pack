@@ -43,6 +43,10 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { resolvePayloadRoot } from '../modules.js';
 
 export const AIDE_AGENT = `somtech-pack agent naitre <code> --depot <chemin> [options]
+somtech-pack agent ou-naitre [chemin…] [--role <rôle>] [--json]
+                        Dit quels dépôts peuvent recevoir un agent, et ce qui manque aux autres.
+                        (\`agent ou-naitre --help\` pour le détail)
+
 
   Fait naître un agent, du néant jusqu'à ce qu'il parle sur sa ligne : elle pose le lieu s'il
   manque, le verse au dépôt, crée l'espace de travail au besoin, fait naître en DÉCLARANT le
@@ -168,6 +172,13 @@ export async function cmdAgent(argv, { lancer = spawnSync } = {}) {
   if (!sous || sous === '--help' || sous === '-h') {
     console.log(AIDE_AGENT);
     return sous ? 0 : 1;
+  }
+  // ⚠️ IMPORT DYNAMIQUE, ET C'EST VOULU : `ou-naitre.js` a besoin de `racineDeLaNaissance`, qui
+  // vit ici. Un import statique croisé ferait un cycle, dont l'ordre d'évaluation ne se lit dans
+  // aucun des deux fichiers. La porte, elle, ne charge que ce qu'elle appelle.
+  if (sous === 'ou-naitre') {
+    const { cmdOuNaitre } = await import('./ou-naitre.js');
+    return cmdOuNaitre(argv.slice(1));
   }
   if (sous !== 'naitre') {
     console.error(`✗ Sous-commande inconnue : agent ${sous}\n`);
