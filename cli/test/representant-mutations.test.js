@@ -314,34 +314,93 @@ test('axe MODALITÉ : aucune tournure ne commence par \\b devant une initiale ac
 // introducteur. En ajouter un sans sa sonde fait rougir — c'est le but.
 
 /**
- * TOUTES les branches d'un motif — les alternatives de premier niveau, ET les items du groupe
- * qui ouvre chacune d'elles.
+ * TOUS les items d'alternance d'un motif, à TOUS les niveaux — leurs bornes dans la source.
  *
- * ⚠️ SA PREMIÈRE VERSION NE VOYAIT QUE LE PREMIER GROUPE, et une revue indépendante l'a
- * démontré en cassant la troisième alternative top-level : la suite est restée ENTIÈREMENT
- * VERTE. Le test de vivacité couvrait 6 branches sur 8 tout en se présentant comme complet —
- * un vert qui ne touche pas ce qu'il prétend éprouver, exactement ce que ce harnais existe
- * pour empêcher. `alternativesDe`, juste au-dessus, faisait déjà la moitié du travail : elle
- * était là, écrite et éprouvée, et cette fonction en avait été une copie appauvrie.
+ * ⚠️ DEUX VERSIONS SONT MORTES AVANT CELLE-CI, ET CHAQUE FOIS C'EST LA MESURE QUI L'A DIT.
+ *
+ * La première n'extrayait que le premier groupe `(?:a|b|c)` du motif : elle voyait 6 branches
+ * sur 8, en se présentant comme complète. La seconde ne décomposait ce groupe que s'il était
+ * EN TÊTE de son alternative — sur `ANTERIORITE_SUR_LE_RELEVEMENT`, dont le groupe variable
+ * vient après `avant\s+(?:même\s+)?`, elle rendait **UNE SEULE** branche pour un motif qui en
+ * porte quatre. Casser trois d'entre elles laissait la suite entièrement verte, y compris le
+ * test qui prétendait les garder. Deux verts qui ne touchaient pas ce qu'ils prétendaient
+ * éprouver, dans le lot même qui corrigeait ce défaut ailleurs.
+ *
+ * ÉNUMÉRER LA SYNTAXE ÉTAIT LA MAUVAISE QUESTION. Ce qu'on veut savoir n'est pas « combien
+ * de branches ce motif porte-t-il », mais « chaque item sert-il à quelque chose » — et ça se
+ * MESURE : on casse l'item, et on regarde si une sonde cesse de s'apparier. Un item qu'on
+ * peut casser sans que rien ne bouge ne garde rien, quelle que soit sa place dans la source.
+ * La mesure voit 15 items là où l'énumération en voyait 8, et elle en a désigné deux qui ne
+ * servaient à rien.
+ *
+ * Les groupes SANS alternance sont ignorés : les casser rendrait `(?:(?!x)x)?` — un optionnel
+ * vide, toujours appariable —, donc aucune sonde ne bougerait et le test crierait à tort.
  */
-function branchesDe(motif) {
-  const branches = [];
-  for (const alt of alternativesDe(motif.source)) {
-    const tete = alt.match(/^\(\?:([^()]*)\)/);
-    if (tete && tete[1].includes('|')) {
-      for (const item of tete[1].split('|')) branches.push(item + alt.slice(tete[0].length));
-    } else {
-      branches.push(alt);
+function itemsDAlternance(source) {
+  const items = [];
+  const pile = [{ debut: 0, coupes: [] }];
+  const clore = (groupe, fin) => {
+    if (!groupe.coupes.length) return; // un groupe sans choix n'a pas d'items à éprouver
+    const bornes = [groupe.debut, ...groupe.coupes, fin];
+    for (let k = 0; k < bornes.length - 1; k += 1) {
+      items.push([k === 0 ? bornes[0] : bornes[k] + 1, bornes[k + 1]]);
     }
+  };
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '\\') { i += 1; continue; }                       // échappement : le suivant est littéral
+    if (c === '[') {                                            // classe : ses `|` et `(` n'en sont pas
+      while (i < source.length && source[i] !== ']') { if (source[i] === '\\') i += 1; i += 1; }
+      continue;
+    }
+    if (c === '(') {
+      const prefixe = source.startsWith('(?', i) ? 3 : 1;       // `(?:` ou `(`
+      pile.push({ debut: i + prefixe, coupes: [] });
+      i += prefixe - 1;
+      continue;
+    }
+    if (c === ')') { clore(pile.pop(), i); continue; }
+    if (c === '|') pile[pile.length - 1].coupes.push(i);
   }
-  return branches;
+  clore(pile.pop(), source.length);
+  return items;
 }
 
 /**
- * Une sonde par introducteur, dans l'ordre du motif. Elles ne sont PAS dérivées du motif :
- * une sonde fabriquée à partir de ce qu'elle teste réussirait aussi bien sur une branche
- * morte — elle en serait la transcription.
+ * Chaque item d'alternance doit être NÉCESSAIRE à au moins une sonde : on le casse, et une
+ * sonde au moins doit cesser de s'apparier. C'est le harnais de mutation de ce fichier,
+ * retourné contre les motifs eux-mêmes.
+ *
+ * ⚠️ CE N'EST PAS UN APPARIEMENT DE COMPTES, et c'est délibéré. « n sondes pour n items » se
+ * lit comme « chaque item est éprouvé » et ne le dit pas : il autorise deux sondes sur le
+ * même item pendant qu'un troisième reste mort. Ici, un item mort tombe nommément, quel que
+ * soit le nombre de sondes.
  */
+function exigeItemsUtiles(motif, sondes, quoi) {
+  const src = motif.source;
+  const items = itemsDAlternance(src);
+  assert.ok(items.length > 0, `${quoi} : le motif ne porte aucun choix — ce test ne prouve rien`);
+
+  const inutiles = items
+    .map(([a, b]) => [src.slice(a, b), new RegExp(`${src.slice(0, a)}(?!x)x${src.slice(b)}`, 'i')])
+    .filter(([, casse]) => !sondes.some((s) => motif.test(s) && !casse.test(s)))
+    .map(([texte]) => texte);
+
+  assert.deepEqual(
+    inutiles, [],
+    `${quoi} : ces items ne servent à AUCUNE sonde — on peut les casser sans que rien ne bouge, `
+      + `donc ils ne gardent rien et l'axe est réputé couvert alors qu'il ne l'est pas : `
+      + `${inutiles.map((i) => `« ${i} »`).join('  ·  ')}`,
+  );
+
+  // Et symétriquement : une sonde qui ne déclenche rien ne prouve rien, et laisserait croire
+  // qu'un item est couvert alors qu'il ne l'est plus.
+  for (const sonde of sondes) {
+    assert.match(sonde, motif, `${quoi} : la sonde « ${sonde} » ne déclenche RIEN — elle ne prouve donc rien`);
+  }
+  return items;
+}
+
 const SONDES_POSTERIEURES = [
   'quand tu auras fini de relever',
   'lorsque tu auras relevé',
@@ -353,6 +412,10 @@ const SONDES_POSTERIEURES = [
   // première version de `branchesDe` ne voyait pas. Casser l'une d'elles laissait tout vert.
   'après avoir fini de relever',
   'à la fin du relèvement',
+  // ⚠️ CELLE-CI A ÉTÉ AJOUTÉE PARCE QUE LA MESURE L'A EXIGÉE : `ton relèvement` ne servait à
+  // aucune sonde. Son voisin `aies` (« quand tu aies relevé ») a été RETIRÉ du motif au lieu
+  // d'être couvert — aucune sonde française ne pouvait le rendre vivant.
+  'après ton relèvement',
 ];
 
 /**
@@ -368,6 +431,19 @@ const TEXTES_ANTERIEURS = [
   "**Relève ce qui existe déjà** pour ce client (voir « Le relèvement »).",
   'Le relèvement peut durer ; l’inaccessibilité, non.',
   'dès que sa ligne est ouverte, l’accusé part avant le relèvement',
+];
+
+/**
+ * Des énoncés d'accusé LÉGITIMES que la garde de renversement ne doit jamais reconnaître.
+ *
+ * ⚠️ Mesuré par une contre-vérification indépendante : appliquée à l'énoncé ENTIER, la garde
+ * rougissait sur une phrase parfaitement correcte écrite APRÈS l'incise. « en réalité », « au
+ * contraire », « dans les faits » sont du français ordinaire — ce qui les rend dangereux,
+ * c'est d'envelopper LA phrase qui porte la consigne, pas de figurer dans l'énoncé.
+ */
+const ENONCES_LEGITIMES = [
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. C'est, en réalité, la toute première chose que tu fais.",
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. Au contraire de la remontée, elle n'attend pas ton relèvement.",
 ];
 
 /**
@@ -391,26 +467,19 @@ function exigeBranchesVivantes(motif, sondes, quoi) {
   return branches;
 }
 
-test('axe POSITION-EN-PROSE : chaque branche du motif est VIVANTE, prouvée une par une', () => {
-  const branches = exigeBranchesVivantes(
+test('axe POSITION-EN-PROSE : chaque item du motif de POSTÉRIORITÉ sert à quelque chose', () => {
+  const items = exigeItemsUtiles(
     POSTERIORITE_SUR_LE_RELEVEMENT, SONDES_POSTERIEURES, 'la subordination à la fin du relèvement');
-  assert.ok(branches.length >= 8,
-    `le motif ne porte plus que ${branches.length} branche(s) — si l'une a disparu, dis-le ici plutôt `
-      + `que de laisser le test se rétrécir avec elle`);
-
-  // Et symétriquement : une sonde qui ne déclenche rien ne prouve rien, et laisserait croire
-  // qu'une branche est couverte alors qu'elle ne l'est plus.
-  for (const sonde of SONDES_POSTERIEURES) {
-    assert.match(sonde, POSTERIORITE_SUR_LE_RELEVEMENT,
-      `la sonde « ${sonde} » ne déclenche AUCUNE branche — elle ne prouve donc rien`);
-  }
+  assert.ok(items.length >= 14,
+    `le motif ne porte plus que ${items.length} item(s) d'alternance — si l'un a disparu, dis-le ici `
+      + `plutôt que de laisser le test se rétrécir avec lui`);
 });
 
-test('axe POSITION-EN-PROSE : l’ANTÉRIORITÉ aussi est vivante branche par branche', () => {
-  // ⚠️ Ce motif-ci n'était éprouvé que par la seule branche qui vit dans le texte livré : les
-  // trois autres pouvaient être mortes sans que rien ne le dise. Relevé en revue indépendante
-  // comme constat annexe — corrigé ici parce qu'un constat annexe est un défaut qui attend.
-  exigeBranchesVivantes(ANTERIORITE_SUR_LE_RELEVEMENT, [
+test('axe POSITION-EN-PROSE : chaque item du motif d’ANTÉRIORITÉ sert à quelque chose', () => {
+  // ⚠️ Ce motif-ci a été le révélateur : la version précédente de ce test n'y voyait qu'UNE
+  // branche pour quatre, parce que son groupe variable n'est pas en tête. Trois de ses quatre
+  // items pouvaient être cassés sans qu'un seul test rougisse.
+  exigeItemsUtiles(ANTERIORITE_SUR_LE_RELEVEMENT, [
     "avant même d'avoir fini de relever",
     "avant d'avoir relevé",
     'avant de finir de relever',
@@ -508,4 +577,23 @@ test('sonde aveugle ≠ objet absent : les deux situations ne rendent PAS le mê
     'le message de la sonde aveugle ne dit pas QUE la mesure est aveugle : il diffère de celui '
       + `de l’absence, et il n’en donne pas la raison — « ${aveugle} »`,
   );
+});
+
+test('axe POSITION-EN-PROSE : la garde de renversement ne mord pas un énoncé légitime', () => {
+  // La garde regarde la PHRASE QUI PORTE l'incise, jamais l'énoncé entier. Sans cette
+  // restriction, elle rougirait sur les énoncés ci-dessous — et une garde qui crie sur du
+  // texte correct se fait retirer, en emportant ce qu'elle gardait vraiment.
+  const ctl = CONTROLES.find((c) => c.id === 'accuse-precede-le-relevement');
+  const section = sectionDe(ORIGINAL.metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+  const accuse = etapesDe(section.corps).find((e) => /accuse/i.test(e.libelle || ''));
+  const ligne = `${accuse.rang}. ${accuse.enonce}`;
+
+  for (const enonce of ENONCES_LEGITIMES) {
+    const metier = ORIGINAL.metier.replace(ligne, `${accuse.rang}. ${enonce} Voir « Ta continuité ».`);
+    assert.notEqual(metier, ORIGINAL.metier, `mutation INOPÉRANTE pour « ${enonce.slice(0, 40)}… »`);
+    assert.doesNotThrow(
+      () => ctl.verifier({ ...ORIGINAL, metier }),
+      `le contrôle rougit sur un énoncé LÉGITIME — « ${enonce} »`,
+    );
+  }
 });

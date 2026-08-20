@@ -454,7 +454,7 @@ export const ANTERIORITE_SUR_LE_RELEVEMENT = /avant\s+(?:même\s+)?(?:d['’]avo
  * qu'on croit avoir. Deux branches mortes-nées sur sept dans un motif écrit avec ce piège
  * en tête : c'est la mesure qui les a dites, pas la relecture.
  */
-export const POSTERIORITE_SUR_LE_RELEVEMENT = /(?:quand|lorsque|une\s+fois|après|dès|sitôt)\s+(?:que\s+)?(?:tu\s+(?:auras|as|aies)\s+)?(?:fini\s+de\s+)?(?:relev|le\s+relèvement|ton\s+relèvement)|après\s+(?:avoir\s+)?(?:fini\s+de\s+)?relev|à\s+la\s+fin\s+du\s+relèvement/i;
+export const POSTERIORITE_SUR_LE_RELEVEMENT = /(?:quand|lorsque|une\s+fois|après|dès|sitôt)\s+(?:que\s+)?(?:tu\s+(?:auras|as)\s+)?(?:fini\s+de\s+)?(?:relev|le\s+relèvement|ton\s+relèvement)|après\s+(?:avoir\s+)?(?:fini\s+de\s+)?relev|à\s+la\s+fin\s+du\s+relèvement/i;
 
 export function exigePolarite(corps, sonde, quoi, { inverse } = {}) {
   const porteurs = corps.split(/\n\s*\n/).filter((p) => sonde.test(p));
@@ -1017,11 +1017,22 @@ export const CONTROLES = [
       // pas, et le sens est exactement inversé. C'est le motif que ce fichier documente depuis
       // le 2026-08-16 sous `RENVERSEMENT`, et que ce contrôle n'appliquait pas : la garde
       // existait déjà, à trois cents lignes d'ici, et personne ne l'avait branchée ici.
-      const enveloppe = RENVERSEMENT.exec(accuse.enonce);
+      //
+      // ⚠️ ET ON REGARDE LA PHRASE QUI PORTE L'INCISE, PAS L'ÉNONCÉ ENTIER — c'est un
+      // correctif, pas un raccourci, et il est le jumeau exact de celui d'`exigePolarite`
+      // trois cents lignes plus haut. Sur l'énoncé entier, une phrase parfaitement légitime
+      // écrite APRÈS l'incise rougissait à tort : « …, dès que sa ligne est ouverte. C'est,
+      // EN RÉALITÉ, la toute première chose que tu fais. » Mesuré par une contre-vérification
+      // indépendante. Une garde qui crie sur du texte correct ne survit pas : le premier qui
+      // la rencontre la retire, et emporte ce qu'elle gardait vraiment.
+      const porteuse = parLIncise
+        ? accuse.enonce.split(/(?<=\.)\s+/).find((p) => ANTERIORITE_SUR_LE_RELEVEMENT.test(p))
+        : null;
+      const enveloppe = porteuse && RENVERSEMENT.exec(porteuse);
       assert.ok(
         !enveloppe,
-        `l’énoncé de l’accusé enveloppe sa propre consigne d’un renversement (« ${enveloppe && enveloppe[0]} ») : `
-          + `l’antériorité y est encore écrite, et le texte dit le contraire — « ${accuse.enonce.trim()} »`,
+        `la phrase qui porte l’antériorité l’enveloppe d’un renversement (« ${enveloppe && enveloppe[0]} ») : `
+          + `l’incise y est encore écrite, et la phrase dit le contraire — « ${porteuse && porteuse.trim()} »`,
       );
 
       // LE RANG NE SUFFIT PAS : une étape peut garder sa place et cesser d'obliger.
