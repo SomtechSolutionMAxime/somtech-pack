@@ -99,9 +99,34 @@ function corpsDeLaBoite(reperes, aExtraire = reperes) {
   }
   if (filets.length < 2) return null;
 
-  const bas = filets[filets.length - 1];
-  const haut = filets[filets.length - 2];
-  if (bas - haut <= 1) return null;
+  // ⚠️ LA BOÎTE EST LA PAIRE QUI PORTE L'INVITE, PAS LA DERNIÈRE PAIRE DE L'ÉCRAN
+  // (T-20260820-0022). Prendre les deux derniers filets marchait tant que l'écran n'en portait
+  // que deux. Dès qu'un PIED DE PAGE ENCADRÉ suit la boîte — cas courant — la « boîte »
+  // devenait l'espace entre le bas de la vraie boîte et ce pied : un espace sans invite, donc
+  // `null`, donc « illisible » sur une boîte parfaitement lisible.
+  //
+  // ⚠️ LE DÉFAUT A ÉTÉ RAPPORTÉ COMME « LE MULTI-LIGNES CASSE », ET C'ÉTAIT FAUX : trois lignes
+  // se lisent parfaitement (essai de non-régression). La corrélation trompait — un texte long
+  // fait défiler l'écran et fait apparaître un filet de plus. Deux faits corrélés, cause
+  // différente.
+  //
+  // On remonte donc les paires de la plus basse à la plus haute et on retient la PREMIÈRE dont
+  // la ligne suivante porte l'invite. La garde ne s'élargit pas : si aucune paire ne la porte,
+  // on rend toujours `null` — « je n'ai pas su lire » n'est pas « c'est vide », et seul le
+  // second autorise à écrire.
+  let haut = -1;
+  let bas = -1;
+  for (let i = filets.length - 1; i >= 1; i -= 1) {
+    const b = filets[i];
+    const h = filets[i - 1];
+    if (b - h <= 1) continue;
+    if (aExtraire[h + 1].includes(INVITE)) {
+      haut = h;
+      bas = b;
+      break;
+    }
+  }
+  if (haut === -1) return null;
 
   // ⚠️ UN SEUL INDICE, ET C'EST DÉLIBÉRÉ. L'invite se cherche et se coupe sur la ligne qu'on
   // RAPPORTE, jamais dans les repères : les séquences ANSI décalent tout, et couper la ligne

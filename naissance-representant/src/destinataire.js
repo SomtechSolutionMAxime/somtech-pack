@@ -213,10 +213,30 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
     }
   }
 
+  // ⚠️ UN REFUS NE PROPOSE PAS LA VOIE QU'IL VIENT DE REFUSER (relevé par `ristigouche`,
+  // T-20260820-0022). Ce texte conseillait « désigne-le par son pane » — à quelqu'un qui, une
+  // fois sur deux, VENAIT de le faire par son pane. Un refus qui renvoie vers le geste qui
+  // vient d'échouer se fait rejouer à l'identique, et son lecteur conclut que l'outil est
+  // cassé. C'est le même défaut que `T-20260816-0034` fermait un cran plus haut, resté ouvert
+  // sur la dernière porte.
+  //
+  // Un refus dit ce qu'il a ESSAYÉ, et ne conseille que ce qu'il n'a pas encore tenté.
+  if (estUnPane(vise)) {
+    return {
+      ok: false,
+      message:
+        `« ${vise} » a la forme d’un pane, et personne ne le porte : ni le registre des agents, ` +
+        `ni la liste des panes des ${sessionsDuPoste().length} session(s) interrogée(s). Rien n’a été envoyé. ` +
+        'Vérifie l’identifiant sur le poste (`herdr pane list`) — et souviens-toi qu’un ' +
+        'identifiant de pane est INTERNE à sa session : celui que tu as lu ailleurs ne désigne ' +
+        'peut-être rien ici. Le NOM de l’agent, lui, est unique sur le poste.',
+    };
+  }
+
   return {
     ok: false,
     message:
-      `aucun agent vivant ne porte « ${vise} » sur ce poste — rien n’a été envoyé. ` +
+      `aucun agent vivant ne porte le nom « ${vise} » sur ce poste — rien n’a été envoyé. ` +
       'Vérifie le nom (`herdr agent list`), ou désigne-le par son pane.',
   };
 }

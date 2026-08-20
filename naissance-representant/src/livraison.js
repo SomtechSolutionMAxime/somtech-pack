@@ -293,8 +293,29 @@ export const DELIVRANCE_NON_TENTEE = 'non-tentee';
  * que celle qu'on ferme ; et une garde qui crie sur du bruit cesse d'être lue. C'est ainsi
  * qu'une garde meurt, et c'est pour ça que ce chiffre-là comptait autant que l'autre.
  */
-export function causeObstacle(terminal, statut, { pairOccupe = false } = {}) {
-  if (!ETATS_DISPONIBLES.includes(statut) && !(pairOccupe && statut === 'working')) return CAUSES.STATUT;
+export function causeObstacle(terminal, statut, { pairOccupe = false, parLePane = false } = {}) {
+  // ⚠️ `parLePane` + `unknown` — LA SIGNATURE DU CAS QU'ON REPLIE, PAS UN ÉTAT SUSPECT
+  // (T-20260820-0022). Mesuré le 2026-08-20 sur les 98 panes du poste : les 83 que le registre
+  // voit sont TOUS `idle`, les 15 qu'il ignore TOUS `unknown` — séparation parfaite, zéro
+  // contre-exemple.
+  //
+  // Refuser `unknown` rendait le repli INOPÉRANT SUR EXACTEMENT LA POPULATION QU'IL VISE : un
+  // agent qu'on rejoint par son pane PARCE QUE le registre l'ignore porte, par construction, le
+  // statut que le refus écartait. Le correctif trouvait son destinataire, lisait sa boîte, et
+  // refusait au dernier mètre — sur la foi d'un champ que seul le registre renseigne.
+  //
+  // ⚠️ ET C'EST UNE CONJONCTION, PAS UNE LEVÉE. Trois conditions ensemble : arrivé PAR LE PANE
+  // (donc le registre s'est tu, donc on sait pourquoi le statut est inconnu) ET statut
+  // exactement `unknown` ET — plus bas, inchangé — la BOÎTE est vide. Par le NOM, le registre a
+  // répondu : un `unknown` y voudrait dire autre chose, et on n'a aucune mesure qui dise quoi.
+  // On ne généralise pas une levée dont on connaît la cause à un cas dont on l'ignore.
+  //
+  // La garde qui protège le texte d'autrui n'a jamais été celle du statut — c'est celle de la
+  // boîte, et elle est intacte trois lignes plus bas.
+  const statutExplicable = parLePane && statut === 'unknown';
+  if (!ETATS_DISPONIBLES.includes(statut) && !(pairOccupe && statut === 'working') && !statutExplicable) {
+    return CAUSES.STATUT;
+  }
   if (ecranAttendUnChoix(terminal)) return CAUSES.DIALOGUE;
   const reste = contenuBoite(terminal);
   if (reste === null) return CAUSES.ILLISIBLE;
@@ -302,7 +323,7 @@ export function causeObstacle(terminal, statut, { pairOccupe = false } = {}) {
   return null;
 }
 
-export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, pane = null } = {}) {
+export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, pane = null, parLePane = false } = {}) {
   // Le geste, écrit avec le pane RÉEL — ou tu, si on ne le connaît pas.
   const ou = pane ? ` « ${pane} »` : '';
   // ⚠️ LA COMMANDE CONSEILLÉE EST CELLE QUE CE MODULE UTILISE LUI-MÊME — relevé en revue de
@@ -328,8 +349,21 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
   //
   // On ne lève donc pas la garde, on change de témoin : voir `briefEstPris`, qui exige alors
   // que le texte soit VU dans la sortie du destinataire, au lieu de se fier au statut.
-  const cause = causeObstacle(terminal, statut, { pairOccupe });
+  const cause = causeObstacle(terminal, statut, { pairOccupe, parLePane });
   if (cause === CAUSES.STATUT) {
+    // ⚠️ `unknown` NE SE DÉCRIT PAS COMME UN DÉPART (T-20260820-0022). « Elle a déjà quitté
+    // l'attente sans nous » parle d'une session qu'on a VUE puis qui est partie. Un pane que le
+    // registre ignore n'a JAMAIS été vu : le refus décrivait un état qui n'était pas le sien, et
+    // envoyait attendre un retour à « idle » qui ne viendra pas. Un refus qui nomme la mauvaise
+    // cause envoie chercher au mauvais endroit — c'est le motif de tout ce chantier.
+    if (statut === 'unknown') {
+      return (
+        `le registre herdr ne voit aucun agent dans${ou || ' ce pane'} — statut « unknown ». ` +
+        'Ce pane n’a jamais été inscrit au registre : il n’y a donc aucun retour à « idle » à ' +
+        'espérer, et attendre ne changera rien. Désigne-le par son PANE plutôt que par un nom — ' +
+        'la livraison passera alors par le pane. Rien n’a été écrit.'
+      );
+    }
     return (
       `la session${ou} n’est pas disponible pour un brief (statut « ${statut ?? '—'} ») — ` +
       'livrer maintenant ne se prouverait pas : elle a déjà quitté l’attente sans nous. ' +
@@ -698,7 +732,7 @@ export async function livrerBrief({
     // ce qu'ils étaient : un blocage nommé sans geste pour le lever. C'est le seul appelant
     // réel de cette fonction ; l'oublier ici rendrait toute la sortie muette en production
     // pendant que les essais unitaires resteraient verts.
-    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane });
+    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane, parLePane });
     if (!obstacle) break;
     if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
   }
@@ -719,7 +753,7 @@ export async function livrerBrief({
   // demande moins de quinze. Le geste nu, lui, vide la boîte en quatre secondes : ce qui coûtait
   // cinq minutes était l'attente, jamais la touche d'envoi.
   let fenetreMs = immobiliteMs;
-  if (obstacle && immobiliteMs > 0 && causeObstacle(ecranAvant, statutAvant, { pairOccupe }) === CAUSES.ENCOMBREE) {
+  if (obstacle && immobiliteMs > 0 && causeObstacle(ecranAvant, statutAvant, { pairOccupe, parLePane }) === CAUSES.ENCOMBREE) {
     fenetreMs = fenetreDImmobilite(contenuBoite(ecranAvant), { texteTapeMs: immobiliteMs });
     delivrance = await delivrerLaBoite({
       texteCoince: contenuBoite(ecranAvant),
@@ -739,7 +773,7 @@ export async function livrerBrief({
       const etatApres = await appelHerdr(lectures.interroger, vers);
       statutAvant = statutRendu(etatApres.reponse);
       ecranAvant = await lireEcran(lectures.lireEcran, vers);
-      obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane });
+      obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane, parLePane });
       // ⚠️ UN REFUS QUI TAIT UN GESTE DÉJÀ POSÉ EST UN REFUS QUI MENT PAR OMISSION (relevé en
       // revue de fond). Si la boîte se rebloque entre la délivrance et l'écriture, le lecteur
       // voit « boîte pas vide » — et ignore qu'une touche d'envoi est DÉJÀ partie vers ce pane,
