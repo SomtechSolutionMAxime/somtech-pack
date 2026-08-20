@@ -187,3 +187,78 @@ test('LE MARQUEUR DE FILE SE CHERCHE DANS LA BOÎTE — pas ailleurs sur l’éc
   assert.equal(vu.etat, ETATS_BOITE.SUGGESTION, 'la BOÎTE porte une suggestion, quoi que dise le transcript');
   assert.equal(vu.suggestion, 'merge la PR 37');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// L'ÉCRAN TEL QUE LE POSTE LE REND — relevé par une passe de mutation (E-20260819-0015)
+//
+// 🔴 SEPT MUTATIONS SURVIVAIENT À CE BANC, et elles avaient toutes la même cause : les doubles
+// d'écran d'ici étaient écrits À LA MAIN, donc PROPRES. Un vrai dump ne l'est pas —
+//
+//   • ses lignes de FILET portent des séquences (`ESC[0mESC[38;5;7m────…`) ;
+//   • son invite est précédée de séquences, et suivie d'un ESPACE INSÉCABLE (`❯ `) ;
+//   • un écran réel porte souvent PLUS de deux filets (une sortie précédente, un dialogue).
+//
+// Un banc qui ne montre que des écrans propres laisse passer trois mutations du découpage
+// (repérer les filets dans les lignes brutes · couper l'invite à l'indice de la ligne nue ·
+// prendre les DEUX PREMIERS filets au lieu des deux derniers) — chacune casse la lecture sur le
+// poste RÉEL et sur lui seul. C'est la forme la plus coûteuse d'un banc qui ne peut pas
+// échouer : il éprouve un objet que la production ne produit jamais.
+//
+// L'écran ci-dessous est recopié du dump de `w26:p2K` le 2026-08-19, augmenté d'une paire de
+// filets antérieure (elle aussi réelle : c'est la forme d'un écran qui a déjà rendu une boîte).
+
+const ECRAN_REEL = [
+  `${ESC}[0m${ESC}[38;5;7m${'─'.repeat(40)}${ESC}[0m\r`,
+  `${ESC}[0m${ESC}[38;5;15mune sortie precedente, encadree elle aussi${ESC}[0m\r`,
+  `${ESC}[0m${ESC}[38;5;7m${'─'.repeat(40)}${ESC}[0m\r`,
+  `${ESC}[0m${ESC}[38;5;12m⏺ du travail entre les deux${ESC}[0m\r`,
+  `${ESC}[0m${ESC}[38;5;7m${'─'.repeat(40)}${ESC}[0m\r`,
+  `${ESC}[0m${ESC}[38;5;7m${ESC}[48;5;8m❯ ${ESC}[0m${ESC}[2mmerge la PR${ESC}[0m\r`,
+  `${ESC}[0m${ESC}[38;5;7m${'─'.repeat(40)}${ESC}[0m\r`,
+  `  ${ESC}[0m${ESC}[38;5;11m⏵⏵ auto mode on${ESC}[0m${ESC}[38;5;7m (shift+tab to cycle)${ESC}[0m`,
+].join('\n');
+
+test('SUR UN ÉCRAN RÉEL — filets colorés, invite précédée de séquences, trois paires de filets', () => {
+  const vu = etatDeLaBoite(ECRAN_REEL);
+  assert.equal(vu.etat, ETATS_BOITE.SUGGESTION, 'la DERNIÈRE boîte, pas la première paire de filets');
+  assert.equal(
+    vu.suggestion,
+    'merge la PR',
+    'et le texte grisé est rendu ENTIER — ni tronqué par l’indice de la ligne nue, ni mêlé d’échappements'
+  );
+  assert.equal(vu.texte, '');
+});
+
+test('SUR CE MÊME ÉCRAN RÉEL, UN VRAI TEXTE EST VU — la lecture ne se perd pas dans les séquences', () => {
+  const avecTexte = ECRAN_REEL.replace(`${ESC}[0m${ESC}[2mmerge la PR${ESC}[0m`, `${ESC}[0m${ESC}[38;5;15mreste ici${ESC}[0m`);
+  const vu = etatDeLaBoite(avecTexte);
+  assert.equal(vu.etat, ETATS_BOITE.SAISIE);
+  assert.equal(vu.texte, 'reste ici', 'l’invite est coupée à SA position, pas à celle lue dans la ligne nue');
+});
+
+test('UNE BOÎTE VIDE SOUS UN PIED DE PAGE GRISÉ N’EST PAS UNE SUGGESTION', () => {
+  // 🔴 LA MUTATION LA PLUS DANGEREUSE DU LOT : chercher le gris sur l'écran ENTIER. Le pied de
+  // page de Claude Code est grisé sur ce poste — `ESC[2m` y apparaît 86 fois sur 119 écrans
+  // relevés. Une garde qui le lirait déclarerait une suggestion sur presque TOUTES les sessions.
+  //
+  // ⚠️ L'essai voisin (« LE GRIS D'AILLEURS… ») ne suffisait pas : sa boîte porte un TEXTE, donc
+  // le verdict se décide avant même qu'on cherche une suggestion. Il faut une boîte VIDE pour
+  // que la question soit posée — c'est exactement ce que la mutation exploitait.
+  const boiteVideEtPiedGrise = [
+    '⏺ du travail au-dessus',
+    SEP,
+    '❯ ',
+    SEP,
+    `  ${ESC}[2m⏵⏵ auto mode on (shift+tab to cycle)${ESC}[0m`,
+  ].join('\n');
+  const vu = etatDeLaBoite(boiteVideEtPiedGrise);
+  assert.equal(vu.etat, ETATS_BOITE.VIDE, 'la boîte est vide, et rien n’y est proposé');
+  assert.equal(vu.suggestion, null, 'le gris du pied de page n’est pas une proposition de texte');
+});
+
+test('LE TEXTE GRISÉ EST RENDU SANS SES ESPACES DE BORDURE — le lecteur le compare à son écran', () => {
+  // Sans le rognage, `suggestion` porterait les espaces que le rendu met autour du texte, et la
+  // comparaison avec ce qu'on voit à l'écran cesserait d'être franche.
+  const avecEspaces = ecran(`❯ ${ESC}[2m   merge la PR 37   ${ESC}[22m`);
+  assert.equal(etatDeLaBoite(avecEspaces).suggestion, 'merge la PR 37');
+});

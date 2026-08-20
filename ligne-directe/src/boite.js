@@ -103,15 +103,19 @@ function corpsDeLaBoite(reperes, aExtraire = reperes) {
   const haut = filets[filets.length - 2];
   if (bas - haut <= 1) return null;
 
-  const j = reperes[haut + 1].indexOf(INVITE);
-  if (j === -1) return null; // ce n'est pas la boîte de saisie : on ne l'a pas reconnue
-  // ⚠️ L'INVITE SE COUPE SUR LA LIGNE QU'ON RAPPORTE, à sa PROPRE position — jamais à celle
-  // trouvée dans les repères. Les séquences ANSI décalent tout : couper la ligne rendue à
-  // l'indice lu dans la ligne nue tronquerait le texte, ou en laisserait un morceau d'échappement.
+  // ⚠️ UN SEUL INDICE, ET C'EST DÉLIBÉRÉ. L'invite se cherche et se coupe sur la ligne qu'on
+  // RAPPORTE, jamais dans les repères : les séquences ANSI décalent tout, et couper la ligne
+  // rendue à l'indice lu dans la ligne nue tronquerait le texte ou laisserait un morceau
+  // d'échappement. Le caractère `❯` survit au retrait des séquences — les deux tableaux le
+  // portent au même endroit du texte, à un décalage près —, donc la détection n'y perd rien.
+  //
+  // La première écriture gardait les deux indices, l'un pour détecter et l'autre pour couper.
+  // Une passe de mutation a montré que les confondre ne faisait rougir AUCUN essai : deux
+  // indices dont un seul est juste sont un défaut qui attend son écran. Il n'y en a plus qu'un.
   const premiere = aExtraire[haut + 1];
   const k = premiere.indexOf(INVITE);
-  const debut = k === -1 ? premiere : premiere.slice(k + INVITE.length);
-  return [debut, ...aExtraire.slice(haut + 2, bas)].join('\n');
+  if (k === -1) return null; // ce n'est pas la boîte de saisie : on ne l'a pas reconnue
+  return [premiere.slice(k + INVITE.length), ...aExtraire.slice(haut + 2, bas)].join('\n');
 }
 
 export function contenuBoite(texteTerminal) {

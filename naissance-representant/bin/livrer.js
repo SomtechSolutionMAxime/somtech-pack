@@ -128,6 +128,26 @@ async function main() {
 
   if (!resultat.ok) {
     process.stderr.write(`${resultat.message}\n`);
+    // ⚠️ LE REFUS AUSSI REND SON ÉTAT, ET C'EST LA MOITIÉ QUI EN A LE PLUS BESOIN
+    // (relevé par une passe de mutation, E-20260819-0015).
+    //
+    // C'est au refus que le lecteur doute : il vient de s'entendre dire « je n'écris pas », il a
+    // l'écran devant les yeux, et sans l'état nommé il n'a rien pour trancher entre « l'outil se
+    // trompe » et « il a vu quelque chose que je ne sais pas lire ». Six heures ont été perdues
+    // exactement là. Le message reste sur `stderr` — la sortie lisible ne change pas —, et
+    // `stdout` porte le même objet que le succès, avec `ok: false`.
+    process.stdout.write(
+      `${JSON.stringify({
+        ok: false,
+        pane,
+        agent: ou.nom,
+        message: resultat.message,
+        statut: resultat.statut,
+        delivre: Boolean(resultat.delivre),
+        causeDelivre: resultat.causeDelivre,
+        boite: resultat.boite ?? null,
+      })}\n`
+    );
     process.exit(1);
   }
 

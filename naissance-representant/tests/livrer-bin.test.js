@@ -878,3 +878,19 @@ test('UN REFUS SUR BOÎTE PLEINE DIT LEQUEL DES DEUX TEXTES C’EST — collé o
     'le refus nomme le MODE D’ARRIVÉE du texte qui bloque — personne n’est derrière ce clavier'
   );
 });
+
+test('UN REFUS PORTE AUSSI L’ÉTAT DE LA BOÎTE — la moitié refusée des appels n’est pas muette', () => {
+  // 🔴 RELEVÉ PAR UNE PASSE DE MUTATION : retirer `boite` du retour de REFUS ne faisait rougir
+  // aucun essai — seul le chemin nominal était gardé. Or c'est précisément au refus que le
+  // lecteur doute : il vient de se faire dire « je n'écris pas », il a l'écran devant les yeux,
+  // et sans l'état nommé il n'a rien pour trancher entre « l'outil se trompe » et « il a vu
+  // quelque chose que je ne sais pas lire ». C'est « une porte sur deux », posée sur la moitié
+  // qui en a le plus besoin.
+  installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]', enterInoperant: true });
+  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
+  assert.notEqual(r.code, 0, 'la boîte n’a pas pu être libérée : le refus tient');
+  const vu = JSON.parse(r.stdout.trim().split('\n').pop() || '{}');
+  assert.equal(vu.ok, false);
+  assert.equal(vu.boite?.etat, 'collee', 'le refus dit CE QU’IL A VU, pas seulement qu’il refuse');
+  assert.equal(vu.boite?.texte, '[Pasted text #33 +12 lines]');
+});

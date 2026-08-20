@@ -198,3 +198,28 @@ test('ET UNE SEULE SESSION QUI PORTE LE PANE SE LIT NORMALEMENT — le refus ne 
   assert.equal(r.status, 0, r.stderr);
   assert.equal(JSON.parse(r.stdout.trim().split('\n').pop()).etat, 'saisie');
 });
+
+test('L’ÉCRAN EST DEMANDÉ EN ANSI — sinon la commande rejoue le défaut qu’elle existe pour fermer', () => {
+  // 🔴 RELEVÉ PAR UNE PASSE DE MUTATION : retirer `--format ansi` de cette commande NE FAISAIT
+  // ROUGIR AUCUN ESSAI. Le faux herdr du banc ignore les drapeaux et rend le même écran quoi
+  // qu'on lui demande — c'est ce qui le rend utilisable, et c'est ce qui rendait ce banc aveugle
+  // au seul défaut qui compte ici : sans les attributs, une suggestion grisée redevient
+  // indiscernable d'un texte saisi, et la commande dirait « boîte pleine » avec l'autorité d'un
+  // outil qui a l'air de savoir.
+  //
+  // ⚠️ LA PREUVE EST DONC DANS L'APPEL JOURNALISÉ, pas dans le verdict rendu. Un double ne peut
+  // pas prouver ce qu'il ne simule pas ; il peut prouver ce qu'on lui a DEMANDÉ.
+  const journal = installerFauxHerdr({ ligneDeBoite: '❯ ' });
+  lancer(['w1:p1']);
+  const lectures = readFileSync(journal, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(JSON.parse)
+    .filter((a) => a[1] === 'read');
+  assert.ok(lectures.length > 0, 'l’écran doit avoir été lu');
+  for (const l of lectures) {
+    const i = l.indexOf('--format');
+    assert.ok(i !== -1 && l[i + 1] === 'ansi', `la lecture doit demander l’ANSI — vue : ${l.join(' ')}`);
+  }
+});
