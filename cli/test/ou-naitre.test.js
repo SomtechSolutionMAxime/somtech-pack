@@ -21,7 +21,7 @@
 // elle rendrait 0 sur 0. Un test qui l'affirmerait mesurerait le poste, pas le code.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -289,4 +289,159 @@ test('le rôle traverse jusqu\'à la sonde — un rôle inconnu ne rend pas un f
   const vus = [];
   await recenserDepots([depot], { role: 'representant', sonde: (d, r) => { vus.push(r); return { source: '', complete: false, presents: [], manquants: ['x'] }; } });
   assert.deepEqual(vus, ['representant'], 'le rôle demandé doit être celui qu\'on sonde');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ⑥ LA PORTE ELLE-MÊME — argv, dispatch, code de sortie
+//
+// ⚠️ CETTE SECTION EXISTE PARCE QU'ELLE MANQUAIT, ET LA PASSE DE FOND L'A MESURÉ.
+// Le premier banc de mutation rendait « 7 points, 7 rouges, zéro survivante » — vrai, mais
+// il ne mutait QUE le moteur. La revue a muté la PORTE et trouvé QUATRE SURVIVANTS :
+//   • `--role` silencieusement ignoré ;
+//   • `--json` transformé en geste vide ;
+//   • le code de sortie forcé à 1 ;
+//   • le dispatch `agent ou-naitre` débranché (`sous === 'ou-naitre-XXX'`).
+// Les quatre passaient sans un seul rouge : le moteur et le dispatch étaient justes SÉPARÉMENT,
+// et rien ne vérifiait qu'ils se parlaient. « Zéro survivante » ne couvre jamais que ce qui
+// était gardé — c'est le dénominateur, pas le résultat, qui trompait.
+import { cmdOuNaitre } from '../src/commands/ou-naitre.js';
+import { cmdAgent } from '../src/commands/agent.js';
+
+/** Capture ce que la commande dit, pour l'interroger. */
+function silence() {
+  const dits = [];
+  const log = console.log;
+  const err = console.error;
+  console.log = (...a) => dits.push(a.join(' '));
+  console.error = (...a) => dits.push(a.join(' '));
+  return { dits, rendre: () => { console.log = log; console.error = err; } };
+}
+
+test('porte : --role traverse jusqu\'au rendu — pas seulement jusqu\'au moteur', async () => {
+  const racine = tempo();
+  poserDepot(racine, 'servi');
+  const s = silence();
+  try {
+    assert.equal(await cmdOuNaitre([racine, '--role', 'representant']), 0);
+  } finally { s.rendre(); }
+  const texte = s.dits.join('\n');
+  assert.match(texte, /representant/, 'le rôle demandé doit apparaître dans le rendu');
+  assert.doesNotMatch(
+    texte,
+    /Peut recevoir un orchestrateur/,
+    'un --role ignoré rendrait le rôle par défaut sans le dire — mutant survivant relevé en revue'
+  );
+});
+
+test('porte : --json rend du JSON analysable, pas le tableau', async () => {
+  const racine = tempo();
+  poserDepot(racine, 'servi', { version: '1.48.0' });
+  const s = silence();
+  try {
+    assert.equal(await cmdOuNaitre([racine, '--json']), 0);
+  } finally { s.rendre(); }
+  const objet = JSON.parse(s.dits.join('\n'));
+  assert.equal(objet.role, 'orchestrateur');
+  assert.equal(objet.depots.length, 1);
+  assert.equal(objet.depots[0].peutRecevoir, true);
+  assert.equal(objet.depots[0].version, '1.48.0');
+});
+
+test('porte : un dépôt qui refuse ne fait PAS échouer la commande', async () => {
+  const racine = tempo();
+  poserDepot(racine, 'en-retard', { gabarits: ['CLAUDE.md'] });
+  const s = silence();
+  let code;
+  try { code = await cmdOuNaitre([racine]); } finally { s.rendre(); }
+  assert.equal(
+    code,
+    0,
+    'la commande RÉPOND à une question, elle ne constate pas un échec. Un code non nul ferait ' +
+      'passer « des dépôts non servis » — fait connu et arbitré — pour une panne de l\'outil.'
+  );
+  assert.match(s.dits.join('\n'), /refuseraient la pose/);
+});
+
+test('porte : une option inconnue est refusée, et le refus se distingue d\'un rendu', async () => {
+  const s = silence();
+  let code;
+  try { code = await cmdOuNaitre(['--nawak']); } finally { s.rendre(); }
+  assert.equal(code, 1, 'une option inconnue doit échouer, sinon une faute de frappe passe pour une mesure');
+  assert.match(s.dits.join('\n'), /Option inconnue/);
+});
+
+test('porte : --role sans valeur est refusé plutôt que deviné', async () => {
+  const s = silence();
+  let code;
+  try { code = await cmdOuNaitre(['--role']); } finally { s.rendre(); }
+  assert.equal(code, 1);
+  assert.match(s.dits.join('\n'), /--role attend une valeur/);
+});
+
+test('porte : --help rend l\'aide et réussit', async () => {
+  const s = silence();
+  let code;
+  try { code = await cmdOuNaitre(['--help']); } finally { s.rendre(); }
+  assert.equal(code, 0);
+  assert.match(s.dits.join('\n'), /ou-naitre/);
+  assert.match(s.dits.join('\n'), /etatSource/, 'l\'aide doit dire d\'où vient la mesure');
+});
+
+test('porte : un rôle inconnu LÈVE — il ne rend pas un faux « aucun dépôt ne peut »', async () => {
+  const racine = tempo();
+  poserDepot(racine, 'servi');
+  const s = silence();
+  try {
+    await assert.rejects(
+      () => cmdOuNaitre([racine, '--role', 'nawak']),
+      /nawak|rôle|role/i,
+      'répondre « non » pour un rôle qui n\'existe pas serait une réponse bien formée à rien'
+    );
+  } finally { s.rendre(); }
+});
+
+// ⚠️ LA JOINTURE — deux étages justes séparément dont la ligne qui les relie n'était pas gardée.
+test('dispatch : `agent ou-naitre` atteint réellement la commande', async () => {
+  const racine = tempo();
+  poserDepot(racine, 'servi');
+  const s = silence();
+  let code;
+  try { code = await cmdAgent(['ou-naitre', racine]); } finally { s.rendre(); }
+  assert.equal(code, 0);
+  assert.match(
+    s.dits.join('\n'),
+    /Peut recevoir un orchestrateur/,
+    'débrancher le dispatch doit rougir ici — sinon la sous-commande est injoignable en silence'
+  );
+  assert.doesNotMatch(s.dits.join('\n'), /Sous-commande inconnue/);
+});
+
+test('dispatch : `agent nawak` reste refusé, et `naitre` n\'est pas capturé par erreur', async () => {
+  const s = silence();
+  let code;
+  try { code = await cmdAgent(['nawak']); } finally { s.rendre(); }
+  assert.equal(code, 1);
+  assert.match(s.dits.join('\n'), /Sous-commande inconnue/);
+});
+
+test('dispatch : l\'aide de `agent` annonce la sous-commande — sinon personne ne la trouve', async () => {
+  const s = silence();
+  try { await cmdAgent(['--help']); } finally { s.rendre(); }
+  assert.match(
+    s.dits.join('\n'),
+    /ou-naitre/,
+    'une commande que l\'aide ne nomme pas ne « rend pas l\'écart visible sans qu\'on le cherche »'
+  );
+});
+
+test('un lien symbolique vers un dépôt ne le compte pas deux fois', () => {
+  const racine = tempo();
+  const depot = poserDepot(racine, 'servi');
+  const lien = join(racine, 'alias');
+  symlinkSync(depot, lien, 'dir');
+  assert.equal(
+    cibles([depot, lien]).length,
+    1,
+    'compter deux fois le même dépôt rendrait « 16 sur 15 » et ferait douter du compte entier'
+  );
 });

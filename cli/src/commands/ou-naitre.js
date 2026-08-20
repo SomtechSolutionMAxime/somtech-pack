@@ -38,7 +38,7 @@
 //   La sonde est injectable (`sonde`) POUR QUE CE POINT SOIT ÉPROUVABLE : la contre-mesure lui
 //   passe une sonde fondée sur `git ls-files` et exige que le verdict BASCULE. Si le verdict ne
 //   bouge pas, le test ne teste pas ce qu'il prétend.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, realpathSync } from 'node:fs';
 import { join, resolve, basename } from 'node:path';
 
 import { racineDeLaNaissance } from './agent.js';
@@ -112,16 +112,34 @@ export function depotsSousRacine(racine, { lire = readdirSync } = {}) {
     .sort();
 }
 
-/** Développe les chemins donnés en la liste des dépôts à examiner, sans doublon. */
+/**
+ * Développe les chemins donnés en la liste des dépôts à examiner, sans doublon.
+ *
+ * ⚠️ L'IDENTITÉ EST LE CHEMIN RÉEL, PAS LE CHEMIN ÉCRIT. Un lien symbolique vers un dépôt et
+ * le dépôt lui-même désignent le MÊME dépôt : les compter deux fois rendrait « 16 sur 15 » et
+ * ferait douter du compte entier. Relevé par la passe de fond — la fonction promettait « sans
+ * doublon » et ne tenait la promesse que sur les chemins écrits à l'identique.
+ *
+ * Le chemin RENDU reste celui que l'appelant a écrit : c'est celui qu'il reconnaîtra.
+ */
 export function cibles(chemins) {
   const vus = new Set();
   const sortie = [];
+  const identite = (chemin) => {
+    try {
+      return realpathSync(chemin);
+    } catch {
+      // Illisible vaut « distinct » : on ne fusionne pas deux entrées sur une mesure ratée.
+      return chemin;
+    }
+  };
   for (const brut of chemins) {
     const chemin = resolve(brut);
     const trouves = estUnDepot(chemin) ? [chemin] : depotsSousRacine(chemin);
     for (const d of trouves) {
-      if (vus.has(d)) continue;
-      vus.add(d);
+      const cle = identite(d);
+      if (vus.has(cle)) continue;
+      vus.add(cle);
       sortie.push(d);
     }
   }
