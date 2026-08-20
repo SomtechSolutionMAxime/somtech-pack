@@ -115,6 +115,14 @@ test('inventaire : les outils viennent des modules de portée poste, pas d’une
     noms.includes('orchestrateur-rendez-vous'),
     'rendez-vous.js — l’oublier serait « une porte sur deux », ce que le ticket interdit explicitement'
   );
+  // ⚠️ `gestionnaire-etat-boite` est PRESCRIT DANS LE MÉTIER DE L'ORCHESTRATEUR (E-20260819-0015)
+  // — le gabarit lui dit de mesurer l'état d'une boîte plutôt que de lire son écran. Une consigne
+  // juste dont la commande n'est pas nommable échoue à la lettre : c'est le mode de panne exact
+  // que ce fichier existe pour fermer.
+  assert.ok(
+    noms.includes('gestionnaire-etat-boite'),
+    'etat-boite.js — la commande que le gabarit de l’orchestrateur prescrit pour ne plus confondre une suggestion grisée avec un texte saisi'
+  );
 
   // Chaque outil pointe sur un fichier qui existe vraiment dans le dépôt.
   for (const o of outils) {

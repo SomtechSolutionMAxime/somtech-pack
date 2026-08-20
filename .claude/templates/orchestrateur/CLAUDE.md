@@ -627,7 +627,7 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui do
 **Avant de conclure qu'une boîte contient quelque chose, mesure son ÉTAT** — la commande ne pose aucun geste, elle se tape sur le pane d'un autre :
 
 ```bash
-node "$HOME/.somtech/naissance-representant/bin/etat-boite.js" "$P"
+gestionnaire-etat-boite "$P"
 ```
 
 | Ce qu'elle rend | Ce que tu fais |

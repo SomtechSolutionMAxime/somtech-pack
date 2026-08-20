@@ -425,7 +425,7 @@ La commande regarde la boîte avant d'écrire (une boîte non vide est un refus,
 🔴 **Mais si ta question est « y a-t-il du texte dans sa boîte ? », la lecture d'écran ne peut PAS y répondre.** Un texte **grisé** — une suggestion que l'éditeur propose — s'y rend exactement comme un texte saisi. Mesure l'état, ne lis pas l'écran :
 
 ```bash
-node "$HOME/.somtech/naissance-representant/bin/etat-boite.js" "$P"
+gestionnaire-etat-boite "$P"
 ```
 
 Elle rend `suggestion` (rien à soumettre, rien n'est bloqué) · `collee` ou `saisie` (boîte pleine, `livrer.js` sait la délivrer sans l'écraser) · `illisible` (on n'a pas vu — ce n'est pas « vide »). **Elle ne pose aucun geste**, donc elle se tape sur le pane d'un autre.
