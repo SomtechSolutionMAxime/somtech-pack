@@ -36,6 +36,7 @@ import {
   versionInstallee,
   cheminsParDefaut,
   rendreTexte,
+  AIDE_OU_NAITRE,
 } from '../src/commands/ou-naitre.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -249,6 +250,19 @@ test('la version installée est rendue — et illisible vaut absent, jamais devi
   assert.equal(versionInstallee(casse), null, 'on n\'établit rien d\'un fichier qu\'on n\'a pas pu lire');
 
   assert.equal(versionInstallee(join(racine, 'inexistant')), null);
+
+  // ⚠️ JSON VALIDE MAIS MUET SUR LA VERSION — le cas que le test précédent ne couvrait pas, et qui
+  // laissait survivre une mutation (`?? null` → une valeur inventée). Trouvé par la contre-mesure
+  // de la passe de fond. Un fichier lisible dont le champ manque n'établit pas plus de version
+  // qu'un fichier illisible : c'est « absent », jamais une chaîne devinée qu'on afficherait.
+  const muet = join(racine, 'muet');
+  mkdirSync(join(muet, '.somtech-pack'), { recursive: true });
+  writeFileSync(join(muet, '.somtech-pack', 'version.json'), JSON.stringify({ pas_la_version: 'x' }));
+  assert.equal(
+    versionInstallee(muet),
+    null,
+    'un JSON valide sans le champ « version » vaut absent — jamais une valeur devinée'
+  );
 });
 
 test('le rendu nomme les dépôts, leur verdict, et les fichiers qui manquent', async () => {
@@ -385,6 +399,18 @@ test('porte : --help rend l\'aide et réussit', async () => {
   assert.equal(code, 0);
   assert.match(s.dits.join('\n'), /ou-naitre/);
   assert.match(s.dits.join('\n'), /etatSource/, 'l\'aide doit dire d\'où vient la mesure');
+});
+
+// ⚠️ L'AIDE PROMETTAIT `-h`, ET RIEN NE L'APPELAIT — survivant trouvé par la contre-mesure de la
+// passe de fond. Sans ce test, retirer l'alias faisait répondre « ✗ Option inconnue : -h » (code 1)
+// à quelqu'un qui suivait l'aide du texte même de la commande.
+test('porte : -h fait la même chose que --help — l\'aide le promet', async () => {
+  const s = silence();
+  let code;
+  try { code = await cmdOuNaitre(['-h']); } finally { s.rendre(); }
+  assert.equal(code, 0, 'un alias que l\'aide documente doit fonctionner');
+  assert.match(s.dits.join('\n'), /ou-naitre/);
+  assert.match(AIDE_OU_NAITRE, /-h/, 'et l\'aide doit continuer de le promettre');
 });
 
 test('porte : un rôle inconnu LÈVE — il ne rend pas un faux « aucun dépôt ne peut »', async () => {
