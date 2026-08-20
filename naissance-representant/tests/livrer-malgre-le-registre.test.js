@@ -56,7 +56,7 @@ test('LE CHEMIN NOMINAL NE BOUGE PAS — on ajoute une voie, on n’en remplace 
 
 // ───────────────────────────────────────────── le repli de la RECHERCHE, en amont des verbes
 
-import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -177,4 +177,84 @@ test('LE REFUS D’ÉCRIRE DANS UNE BOÎTE NON VIDE TIENT AUSSI QUAND ON LIVRE P
   );
   // Aucun verbe de la famille fermée n'a été tenté.
   assert.equal(vus.filter((a) => a[0] === 'agent').length, 0, 'aucun appel `agent …` : ils sont fermés à ces sessions');
+});
+
+// ─────────── LA PORTE DU BINAIRE — trouver ne suffit pas, il faut ARRIVER (survivante M7)
+
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const BIN = join(resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'bin', 'livrer.js');
+
+test('LE BINAIRE LIVRE VRAIMENT À UN PANE INVISIBLE — le drapeau traverse jusqu’aux verbes', () => {
+  // ⚠️ CET ESSAI EXISTE PARCE QU'UNE MUTATION A SURVÉCU. Remplacer, dans `bin/livrer.js`,
+  // `parLePane: Boolean(ou.parLePane)` par `parLePane: false` ne faisait rougir AUCUN des
+  // essais du lot : le module savait basculer ses verbes, la recherche savait trouver le pane,
+  // et personne ne vérifiait que les deux se parlaient. C'est exactement le mode de panne que
+  // ce lot ferme, un étage plus haut — TROUVER PUIS ÉCHOUER AU DERNIER MÈTRE, après avoir
+  // annoncé qu'on avait trouvé.
+  const bacBin = mkdtempSync(join(tmpdir(), 'livrer-bin-pane-'));
+  const socket = join(bacBin, 'seule.sock');
+  const journal = join(bacBin, 'appels.jsonl');
+  writeFileSync(journal, '');
+
+  // Le poste mesuré : le registre ne connaît personne, la famille `agent …` REFUSE TOUT,
+  // et seule la famille `pane …` répond. C'est ce qui rend l'essai concluant — un double qui
+  // accepterait `agent read` laisserait passer la mutation, comme les autres essais du lot.
+  writeFileSync(
+    join(bacBin, 'herdr'),
+    `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify(args) + '\\n');
+const cmd = args.slice(0, 2).join(' ');
+const SEP = '\\u2500'.repeat(20);
+if (cmd === 'agent list') { process.stdout.write(JSON.stringify({ result: { agents: [] } })); process.exit(0); }
+if (cmd === 'pane get') { process.stdout.write(JSON.stringify({ result: { pane: { pane_id: args[2], agent_status: 'idle' } } })); process.exit(0); }
+if (cmd === 'pane read') { process.stdout.write([SEP, '\\u276f ', SEP, '  auto mode on'].join('\\n')); process.exit(0); }
+if (cmd === 'pane send-text' || cmd === 'pane send-keys') { process.stdout.write(JSON.stringify({ result: { type: 'ok' } })); process.exit(0); }
+// TOUTE la famille \`agent …\` est fermée à ces sessions — mesuré sur le poste le 2026-08-20.
+process.stdout.write(JSON.stringify({ error: { code: 'agent_not_found', message: 'agent target not found' } }));
+process.exit(1);
+`
+  );
+  chmodSync(join(bacBin, 'herdr'), 0o755);
+
+  let code = 0;
+  let sortie = '';
+  try {
+    sortie = execFileSync(process.execPath, [BIN, 'w2D:p11', '--texte', 'mon compte rendu'], {
+      stdio: 'pipe',
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${bacBin}:${process.env.PATH}`,
+        HERDR_SESSIONS_ESSAIS: socket,
+        HERDR_SOCKET_PATH: socket,
+        LIVRAISON_ESSAIS: '2',
+        LIVRAISON_DELAI_MS: '5',
+        LIVRAISON_ATTENTE_MS: '50',
+        LIVRAISON_IMMOBILITE_MS: '5',
+      },
+    });
+  } catch (err) {
+    code = err.status ?? 1;
+    sortie = `${err.stdout ?? ''}${err.stderr ?? ''}`;
+  }
+
+  const appels = readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  const ecritures = appels.filter((a) => a[0] === 'pane' && a[1] === 'send-text');
+  const tentativesAgent = appels.filter((a) => a[0] === 'agent' && a[1] !== 'list');
+
+  assert.equal(
+    tentativesAgent.length,
+    0,
+    `aucun verbe \`agent …\` ne doit être tenté sur un pane invisible — tentés : ${JSON.stringify(tentativesAgent)}`
+  );
+  assert.equal(ecritures.length, 1, `le texte doit être réellement écrit par \`pane send-text\` — sortie : ${sortie}`);
+  assert.equal(ecritures[0][3], 'mon compte rendu', 'et c’est bien le texte demandé qui part');
+  assert.equal(code, 0, `la livraison doit aboutir : ${sortie}`);
+
+  rmSync(bacBin, { recursive: true, force: true });
 });

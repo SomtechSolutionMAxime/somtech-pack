@@ -399,6 +399,23 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
  * dans tous les cas — c'est lui qui a produit le défaut. On ne s'en contente pas pour autant :
  * ce que `--wait` rapporte est un indice de plus, jamais la preuve. La preuve se relit.
  */
+/**
+ * Le statut d'activité rendu par `agent get` OU par `pane get`.
+ *
+ * ⚠️ LES DEUX VERBES NE RANGENT PAS LEUR RÉPONSE AU MÊME ENDROIT — `agent get` la met sous
+ * `result.agent`, `pane get` sous `result.pane`. Le repli par pane (T-20260820-0022) fait
+ * passer les sessions invisibles par le second : lire la seule forme `agent` y rendait `null`,
+ * et un statut nul se lit « elle a quitté l'attente sans nous ». La livraison refusait donc au
+ * DERNIER MÈTRE, après avoir trouvé son destinataire — le mode de panne exact que ce lot ferme.
+ *
+ * Trouvé par un essai de bout en bout, pas par relecture : les deux étages étaient justes
+ * séparément, et c'est leur jointure qui manquait.
+ */
+function statutRendu(reponse) {
+  const r = reponse?.result;
+  return r?.agent?.agent_status ?? r?.pane?.agent_status ?? null;
+}
+
 export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTravail = false, parLePane = false } = {}) {
   if (!pane) throw new Error('le pane de la session à briefer est requis');
   if (!String(texte ?? '').trim()) throw new Error('un brief vide n’est pas un brief');
@@ -674,7 +691,7 @@ export async function livrerBrief({
   let obstacle = null;
   for (let i = 0; i < Math.max(1, essaisDisponible); i += 1) {
     const etatAvant = await appelHerdr(lectures.interroger, vers);
-    statutAvant = etatAvant.reponse?.result?.agent?.agent_status ?? null;
+    statutAvant = statutRendu(etatAvant.reponse);
     ecranAvant = await lireEcran(lectures.lireEcran, vers);
     // ⚠️ LE PANE EST PASSÉ ICI, ET C'EST CE QUI REND LA SORTIE UTILISABLE (T-20260816-0045).
     // Sans lui, les refus se taisent sur les commandes — ils restent justes, mais redeviennent
@@ -720,7 +737,7 @@ export async function livrerBrief({
       // travail (mesuré) et sa boîte a pu se remplir à nouveau entre-temps. Le refus se
       // re-décide sur ce qu'on voit maintenant, jamais sur le fait qu'on a agi.
       const etatApres = await appelHerdr(lectures.interroger, vers);
-      statutAvant = etatApres.reponse?.result?.agent?.agent_status ?? null;
+      statutAvant = statutRendu(etatApres.reponse);
       ecranAvant = await lireEcran(lectures.lireEcran, vers);
       obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane });
       // ⚠️ UN REFUS QUI TAIT UN GESTE DÉJÀ POSÉ EST UN REFUS QUI MENT PAR OMISSION (relevé en
@@ -794,7 +811,7 @@ export async function livrerBrief({
   // 3. VERIFIER PAR LE FAIT — la session a-t-elle quitte l'attente ?
   const prisMaintenant = async () => {
     const etat = await appelHerdr(commandes.interroger, vers);
-    const statut = etat.reponse?.result?.agent?.agent_status ?? null;
+    const statut = statutRendu(etat.reponse);
     const terminal = await lireEcran(commandes.lireEcran, vers);
     return {
       pris: briefEstPris({
