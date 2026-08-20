@@ -7,6 +7,23 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-20
 
+*Lot `T-20260818-0043` (critère 3), sous la livraison `J-20260814-0002`. **Onze dépôts sur quinze refusaient une pose d'orchestrateur, et personne ne le savait.** Le refus était propre — `etatSource` nomme les fichiers manquants — mais on ne l'apprenait **qu'en tentant une pose qui échoue**.*
+
+### Ajouté
+
+- **`somtech-pack agent ou-naitre [chemin…]`** — dit, dépôt par dépôt, s'il peut recevoir un agent et **quels fichiers lui manquent** sinon. Sans chemin : `$SOMTECH_DEPOTS`, sinon le dossier courant ; un chemin qui est un dépôt est examiné tel quel, tout autre est balayé comme **racine**. `--role`, `--json`. *Mesure réelle sur le poste : **4 servis nommés, 11 non** — conforme à la liste du ticket.*
+- **Le CLI plutôt qu'un script** : `scripts/` ne vit que dans le dépôt du pack, donc **invisible là où le besoin est**. Le CLI, lui, est déjà installé sur les postes. *Mesuré avant d'écrire : la clôture d'import de `lieu-agent.js` est de **six fichiers, zéro dépendance tierce**, et `ligne-directe/` est déjà embarqué dans le payload publié — la conception n'a pas eu à basculer.*
+
+### Technique
+
+- 🔑 **La commande N'A AUCUNE SONDE À ELLE.** Elle importe `etatSource` — la **même fonction** que la pose consulte pour refuser — depuis la racine résolue par `racineDeLaNaissance()` (source d'abord en copie de travail, payload dans un paquet publié). *Écrire une détection « équivalente » aurait fait une **deuxième sonde sur le même état**, le motif que ce dépôt paie le plus cher. Un test d'**identité de fonction** le garde : la sonde de production doit être l'objet `etatSource`, pas une copie qui s'y conforme.*
+- ⚠️ **Le DISQUE, jamais l'index git — et l'erreur ne se voit que chez les autres.** Mesuré des deux côtés : `git ls-files` rend **0 gabarit chez les dépôts qui ont REÇU le pack** (y compris les quatre qui marchent) et **4 chez la SOURCE**, où ils sont du code versionné. Un recensement fondé sur git rendrait « 15 en panne » au lieu de « 11 » — faux **seulement sur les dépôts qui fonctionnent**, donc invisible. *Et invisible pour l'auteur en particulier : chez la source, la sonde git répond juste. Un test le fige explicitement.*
+- **La population est « a reçu le pack », pas « est un dépôt git »** — un dépôt jamais servi n'est pas en panne. Le compter noierait les onze vrais écarts sous une trentaine de faux. *Il reste examinable en le nommant.*
+- **Mutation — 7 points, un à la fois** *(muter en groupe cache une survivante)*. **7 rouges, zéro survivante.** Le point prescrit — faire pointer la commande sur `git ls-files` au lieu du disque — en fait rougir **cinq**. La contre-mesure vérifie d'abord que la **fixture discrimine** : la même fixture, sondée par l'index git, doit **basculer au faux**. Sans elle, le test du disque pourrait être vert pour une mauvaise raison.
+- **Ce que le lot NE couvre PAS, et c'est dit** : le recensement réel du poste (4/11) **n'est pas dans la suite** — il dépend de la machine et rendrait `0 sur 0` en CI. *Une garde qui compte mesure la machine.* Il a servi d'**oracle** à la main, pas de test.
+
+## [Non-versionne] - 2026-08-20
+
 *Lot `T-20260820-0022`, PR #302, sous la demande `D-20260820-0001`. **Le dirigeant ne pouvait plus parler à ses agents depuis une heure.** Toute session née depuis le 18 août est absente du registre `herdr` — les 83 agents visibles vont du 19 juillet au 19 août, les 15 invisibles sont tous postérieurs au 18 à 14 h 52. Faire naître fonctionnait ; **joindre l'agent né, non**.*
 
 ### Corrigé
