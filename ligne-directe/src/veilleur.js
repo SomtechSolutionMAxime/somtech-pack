@@ -2478,6 +2478,31 @@ export class Veilleur {
       return;
     }
     const vivants = new Set(liste.map((a) => a.pane_id));
+
+    // ⚠️ LE REGISTRE NE SUFFIT PLUS À DIRE QUI EST VIVANT (T-20260820-0022). Mesuré le
+    // 2026-08-20 : toute session née depuis le 18 août est absente de `agent list`, alors que
+    // son pane répond et que son agent travaille. Cette ronde tourne AU DÉMARRAGE et balaie
+    // TOUTES les lignes d'un coup : sur le seul registre, un simple relèvement du veilleur
+    // refermait en série les lignes de toutes les sessions neuves — sans que personne n'ait
+    // rien demandé, et sans qu'aucun agent ne l'apprenne.
+    //
+    // On ne ferme donc que sur DISPARITION POSITIVE : absent du registre ET absent de la
+    // liste des panes, les deux constatés. C'est ce qui tient ENSEMBLE les deux textes —
+    // « pas de canal fantôme » du design reste vrai (un pane réellement fermé est bien clos),
+    // et la fermeture ne frappe plus un agent vivant.
+    //
+    // ⚠️ ET SI LA SECONDE MESURE ÉCHOUE, ON REPORTE TOUT. Ne pouvoir consulter qu'une des
+    // deux sources, c'est être dans l'état exact que ce correctif ferme : conclure sur une
+    // moitié de mesure. Une ronde reportée se rejoue au prochain démarrage ; une ligne close
+    // ne se rouvre pas.
+    try {
+      const { panes: listePanes } = await this.herdr.panes();
+      for (const p of listePanes) if (p.agent_session) vivants.add(p.pane_id);
+    } catch (err) {
+      journaliser(`réconciliation reportée — la liste des panes est injoignable : ${err.message}`);
+      return;
+    }
+
     let fermees = 0;
     for (const ligne of lignesOuvertes(this.registre)) {
       if (!vivants.has(ligne.pane)) {

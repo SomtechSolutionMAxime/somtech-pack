@@ -171,6 +171,48 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
         `où vit « ${vise} », donc impossible de lui parler. Vérifie que herdr tourne.`,
     };
   }
+  // ⚠️ LE REGISTRE QUI SE TAIT N'EST PAS UNE ABSENCE (T-20260820-0022). Mesuré le 2026-08-20 :
+  // TOUTE session née depuis le 18 août manque à `agent list`, alors que ses panes répondent et
+  // que ses agents travaillent. `livrer.js` refusait donc de parler à des gens qui écoutaient —
+  // « aucun agent vivant ne porte "w2D:pT" » sur un agent qui écrivait au même moment.
+  //
+  // On ne replie que sur ce qui a la FORME d'un pane : chercher `ristigouche` comme un pane
+  // enverrait son compte rendu dans le vide, et c'est la même borne qu'`estUnPane` tient déjà.
+  //
+  // ⚠️ ET LE REFUS D'HOMONYMIE TRAVERSE LE REPLI. Un identifiant de pane est INTERNE à sa
+  // session ; `w5:p3` existait dans deux sessions de ce poste au moment de la mesure. Le repli
+  // ne doit pas être la porte par laquelle la garde du chemin nominal se contourne : livrer à
+  // l'une pour l'autre remettrait un compte rendu au mauvais chantier, EN SILENCE, et
+  // l'expéditeur aurait son accusé de réception.
+  if (estUnPane(vise)) {
+    const portent = [];
+    for (const socket of sessionsDuPoste()) {
+      const r = await appel(['pane', 'get', vise], { socket });
+      if (r.ok && r.reponse?.result?.pane) portent.push({ socket, pane: r.reponse.result.pane.pane_id ?? vise });
+    }
+
+    if (portent.length > 1) {
+      return {
+        ok: false,
+        message:
+          `deux sessions ou plus portent le pane « ${vise} » (${portent.map((t) => t.socket).join(', ')}) — ` +
+          'un identifiant de pane est interne à sa session, et livrer à l’une pour l’autre remettrait ' +
+          'ton compte rendu au mauvais chantier, en silence. Rien n’a été envoyé. Désigne-le par le ' +
+          'NOM de son agent, qui est unique sur le poste.',
+      };
+    }
+
+    if (portent.length === 1) {
+      // `parLePane` n'est pas décoratif : toute la famille `agent …` est fermée à ces sessions
+      // (`agent read` rend `agent_not_found` là où `pane read` rend l'écran). Sans ce drapeau,
+      // la livraison trouverait son destinataire puis échouerait au dernier mètre.
+      //
+      // `nom: null` plutôt qu'inventé — le registre est justement ce qui ne sait pas qui c'est ;
+      // et `statut: null` parce qu'on n'a rien mesuré de son activité, seulement son existence.
+      return { ok: true, pane: portent[0].pane, socket: portent[0].socket, nom: null, statut: null, parLePane: true };
+    }
+  }
+
   return {
     ok: false,
     message:
