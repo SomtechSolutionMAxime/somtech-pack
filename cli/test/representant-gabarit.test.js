@@ -21,12 +21,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CONTROLES, lireGabarits, CHEMIN_METIER, CHEMIN_CONTEXTE, REPO } from './lib/metier-representant.js';
+import { CONTROLES, lireGabarits, GABARIT_DIR, CHEMIN_METIER, CHEMIN_CONTEXTE, REPO } from './lib/metier-representant.js';
 import { readManifest } from '../src/modules.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -59,9 +59,19 @@ test('distribution : le paquet CONSTRUIT les embarque, identiques à la source (
   const out = mkdtempSync(join(tmpdir(), 'smtk-repr-payload-'));
   execFileSync(process.execPath, [BUILD], { env: { ...process.env, PAYLOAD_OUT: out }, stdio: 'pipe' });
 
-  for (const [chemin, attendu] of [[CHEMIN_METIER, gabarits.metier], [CHEMIN_CONTEXTE, gabarits.contexte]]) {
+  // ⚠️ On compare FICHIER À FICHIER, jamais contre `gabarits.metier` : depuis que
+  // le métier est rendu, celui-ci porte le socle ET ses chapitres réunis, alors
+  // que `CLAUDE.md` ne porte que le socle. Comparer l'un à l'autre rendrait un
+  // faux « drift » — la mesure porterait sur deux objets différents.
+  const aVerifier = [CHEMIN_METIER, CHEMIN_CONTEXTE];
+  const chapitres = join(REPO, GABARIT_DIR, 'metier', 'chapitres');
+  if (existsSync(chapitres)) {
+    for (const f of readdirSync(chapitres)) aVerifier.push(join(GABARIT_DIR, 'metier', 'chapitres', f));
+  }
+  for (const chemin of aVerifier) {
     assert.ok(existsSync(join(out, chemin)), `${chemin} absent du paquet construit`);
-    assert.equal(readFileSync(join(out, chemin), 'utf8'), attendu, `${chemin} publié diverge de la source (drift)`);
+    assert.equal(readFileSync(join(out, chemin), 'utf8'), readFileSync(join(REPO, chemin), 'utf8'),
+      `${chemin} publié diverge de la source (drift)`);
   }
 });
 

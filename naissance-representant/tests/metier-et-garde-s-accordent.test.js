@@ -28,7 +28,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,6 +39,29 @@ import { ligneDuPane } from '../../ligne-directe/src/registre.js';
 import { nomDeCanal, libelleDeCanal } from '../../ligne-directe/src/nommage.js';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+/**
+ * Le métier ENTIER d'un rôle : son socle permanent, puis ses chapitres.
+ *
+ * ⚠️ Depuis que le gabarit est RENDU (P-20260820-0001), le métier n'est plus UN
+ * fichier : `CLAUDE.md` porte le socle, et `metier/chapitres/*.md` le reste.
+ * Un contrôle qui ne lirait que le socle jugerait 850 mots là où le métier en
+ * fait 25 000 : il passerait au vert sans rien garder.
+ */
+/** Un chapitre nommé du métier rendu d'un rôle. */
+function chapitre(role, nom) {
+  const f = join(REPO, '.claude', 'templates', role, 'metier', 'chapitres', `${nom}.md`);
+  assert.ok(existsSync(f), `le métier de « ${role} » doit porter un chapitre « ${nom} »`);
+  return readFileSync(f, 'utf8');
+}
+
+function metierEntier(role) {
+  const dir = join(REPO, '.claude', 'templates', role);
+  const socle = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
+  const chap = join(dir, 'metier', 'chapitres');
+  if (!existsSync(chap)) return socle;
+  return [socle, ...readdirSync(chap).sort().map((f) => readFileSync(join(chap, f), 'utf8'))].join('\n\n');
+}
+
 const METIER = join(REPO, '.claude', 'templates', 'gestionnaire-client', 'CLAUDE.md');
 
 /**
@@ -50,7 +73,15 @@ const METIER = join(REPO, '.claude', 'templates', 'gestionnaire-client', 'CLAUDE
  * disparaîtrait du métier, puisqu'il irait la chercher ailleurs.
  */
 function sequenceDuMetier() {
-  const texte = readFileSync(METIER, 'utf8');
+  // ⚠️ Depuis que le métier est RENDU (P-20260820-0001), il tient dans un socle
+  // et des chapitres. « Le premier bloc du document » ne désigne plus la séquence
+  // d'ouverture : les chapitres se lisent dans l'ordre alphabétique, et le premier
+  // bloc rencontré vient d'ailleurs.
+  //
+  // On lit donc le CHAPITRE qui porte la joignabilité, puis SON premier bloc.
+  // L'intention du contrôle est intacte — on ne choisit toujours pas un bloc par
+  // son contenu : si la séquence disparaît de ce chapitre, ce contrôle rougit.
+  const texte = chapitre('gestionnaire-client', 'joignabilite');
   const bloc = texte.match(/```bash\n([\s\S]*?)```/);
   assert.ok(bloc, 'le métier doit porter une séquence d’ouverture en bloc shell');
   return bloc[1]
@@ -124,7 +155,7 @@ test('CHAQUE « --a » DU MÉTIER DÉSIGNE UNE LIGNE QUE LE MÉTIER OUVRE — si
   // ON RÉSOUT AVEC `ligneDuPane`, LA FONCTION QUE LA COMMANDE APPELLE (T-20260813-0078).
   // Réécrire ici la règle de désignation ne prouverait que l'accord de l'essai avec lui-même —
   // c'est le piège que ce dépôt nomme, et le lot d'à côté l'a déjà payé.
-  const texte = readFileSync(METIER, 'utf8');
+  const texte = metierEntier('gestionnaire-client');
   const substituer = (s) => s.replace(/<le client>/g, 'acme').replace(/<le titre donné par CONTEXTE\.md>/g, 'Espace Acme');
 
   // Les lignes que la séquence du métier ferait naître, telles que `etat()` les rendrait.
@@ -188,7 +219,7 @@ test('LA SÉQUENCE DE L’ORCHESTRATEUR MANDATÉ PASSE SON GARDE — mot pour mo
   // l'ouverture ; si le garde ne connaissait pas ce drapeau, il refuserait la séquence QUE LE
   // GABARIT DICTE — l'agent bloqué au premier geste, exactement T-20260814-0033. Aucune des deux
   // suites d'origine ne peut le voir : l'une lit le texte, l'autre lit la décision.
-  const metier = readFileSync(join(REPO, '.claude', 'templates', 'orchestrateur', 'CLAUDE.md'), 'utf8');
+  const metier = metierEntier('orchestrateur');
   const ouvertures = [...metier.matchAll(/```bash\n([\s\S]*?)```/g)]
     .map((m) => m[1])
     .filter((b) => /ligne-directe\.js" ouvrir/.test(b))
@@ -240,7 +271,7 @@ import { estUneRiviere, jugerNomDOrchestrateur } from '../../ligne-directe/src/n
 
 /** Les exemples que le métier donne, tels qu'il les écrit : « - ✅ `nom` » / « - ❌ `nom` ». */
 function exemplesDuMetier(marque) {
-  const metier = readFileSync(join(REPO, '.claude', 'templates', 'orchestrateur', 'CLAUDE.md'), 'utf8');
+  const metier = metierEntier('orchestrateur');
   const motif = new RegExp('^- ' + marque + ' `([^`]+)`', 'gmu');
   return [...metier.matchAll(motif)].map((m) => m[1].trim());
 }

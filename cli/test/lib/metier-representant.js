@@ -46,7 +46,7 @@
 // D'où `colonneDe`, ci-dessous : aucun index de colonne n'est jamais écrit en dur.
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -59,9 +59,32 @@ export const CHEMIN_METIER = join(GABARIT_DIR, 'CLAUDE.md');
 export const CHEMIN_CONTEXTE = join(GABARIT_DIR, 'CONTEXTE.md');
 
 /** Les deux gabarits, lus depuis une racine (le dépôt par défaut, ou un paquet construit). */
+/**
+ * Le métier ENTIER d'un rôle : son socle permanent, puis ses chapitres.
+ *
+ * Un contrôle qui ne lirait que le socle jugerait un texte de 850 mots là où le
+ * métier en fait 25 000 : il passerait au vert sans rien garder.
+ */
+export function metierEntier(racine = REPO) {
+  const socle = readFileSync(join(racine, CHEMIN_METIER), 'utf8');
+  const dossier = join(racine, GABARIT_DIR, 'metier', 'chapitres');
+  if (!existsSync(dossier)) return socle;
+  const chapitres = readdirSync(dossier).sort()
+    .map((f) => readFileSync(join(dossier, f), 'utf8'));
+  return [socle, ...chapitres].join('\n\n');
+}
+
 export function lireGabarits(racine = REPO) {
   return {
-    metier: readFileSync(join(racine, CHEMIN_METIER), 'utf8'),
+    // ⚠️ Le métier n'est plus UN fichier : depuis que le gabarit est RENDU
+    // (P-20260820-0001), il tient dans un socle — `CLAUDE.md`, chargé en
+    // permanence — et des chapitres ouverts au moment d'agir. Les contrôles
+    // portent sur le métier, pas sur un fichier : ils lisent donc les deux.
+    //
+    // Sans ça, 423 contrôles cessaient de mordre en silence — le contenu qu'ils
+    // gardent avait simplement changé de fichier, et ils lisaient l'ancien.
+    // Mesuré le 2026-08-20 : c'est la moitié qui survit pendant que le lieu bouge.
+    metier: metierEntier(racine),
     contexte: readFileSync(join(racine, CHEMIN_CONTEXTE), 'utf8'),
   };
 }

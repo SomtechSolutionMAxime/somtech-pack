@@ -110,6 +110,33 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
       ...Object.keys(attendu).filter((k) => actuel[k] !== attendu[k]).map((k) => `${k} : périmé ou absent`),
       ...Object.keys(actuel).filter((k) => !(k in attendu)).map((k) => `${k} : orphelin, plus produit par le classement`),
     ];
+    // le gabarit distribué doit lui aussi correspondre au rendu
+    const gabarit = join(cwd, '.claude', 'templates', role);
+    if (existsSync(gabarit)) {
+      const socle = (attendu['L0.md'] || '') + (attendu['L1.md'] || '');
+      const lu = (f) => (existsSync(join(gabarit, f)) ? readFileSync(join(gabarit, f), 'utf8') : null);
+      if (lu('CLAUDE.md') !== socle) ecarts.push('.claude/templates/' + role + '/CLAUDE.md : périmé face au rendu');
+      for (const [chemin, contenu] of Object.entries(attendu)) {
+        if (!chemin.startsWith('chapitres/')) continue;
+        if (lu(`metier/${chemin}`) !== contenu) ecarts.push(`.claude/templates/${role}/metier/${chemin} : périmé`);
+      }
+      // Le fichier de DROITS distribué — le seul artefact qui garantisse quelque
+      // chose. Sans ce contrôle, vider `permissions.deny` du gabarit passait le
+      // gate en silence, et tout agent posé ensuite pouvait écrire.
+      if (lu('.claude/settings.json') !== (attendu['.claude/settings.json'] ?? null)) {
+        ecarts.push(`.claude/templates/${role}/.claude/settings.json : périmé ou absent`);
+      }
+      // Les chapitres ORPHELINS : `rendre` les retire, donc « verifier vert »
+      // doit impliquer « rendre ne changerait rien ». C'est le contrat du gate.
+      const dossierG = join(gabarit, 'metier', 'chapitres');
+      if (existsSync(dossierG)) {
+        for (const f of readdirSync(dossierG)) {
+          if (!(`chapitres/${f}` in attendu)) {
+            ecarts.push(`.claude/templates/${role}/metier/chapitres/${f} : orphelin, plus produit`);
+          }
+        }
+      }
+    }
     if (ecarts.length) {
       process.stderr.write(`⛔ le rendu committé ne correspond plus à sa source :\n` +
         ecarts.map((e) => `   ${e}`).join('\n') + `\n   Relance : pack metier rendre --role ${role}\n`);
@@ -128,10 +155,56 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
   }
   let retires = 0;
   for (const chemin of Object.keys(lireRenduCommitte(base))) {
-    if (!(chemin in r.artefacts)) { rmSync(join(base, chemin.split('/').join(sep))); retires++; }
+    if (!(chemin in r.artefacts)) { rmSync(join(base, chemin.split('/').join(sep)), { recursive: true, force: true }); retires++; }
   }
+  // Le GABARIT que le pack distribue EST le rendu. Sans ce maillon, `pack metier
+  // rendre` produit des artefacts à côté et `/orchestrateur` continue de poser un
+  // métier écrit à la main : le rendu existerait sans atteindre personne.
+  //
+  // ⚠️ `CONTEXTE.md` n'est jamais touché (I6) — il appartient au dépôt, pas au pack.
+  const distribues = distribuerAuGabarit(cwd, role, r.artefacts);
+
   process.stdout.write(
     `✅ ${Object.keys(r.artefacts).length} artefacts écrits dans metier/${role}/rendu/` +
-    (retires ? ` · ${retires} orphelin(s) retiré(s)` : '') + '\n');
+    (retires ? ` · ${retires} orphelin(s) retiré(s)` : '') +
+    (distribues ? ` · ${distribues} distribué(s) vers .claude/templates/${role}/` : '') + '\n');
   return 0;
+}
+
+/**
+ * Recopie le rendu dans le gabarit que le pack distribue.
+ *
+ * Le socle (L0 + L1) devient le `CLAUDE.md` du rôle ; les chapitres et le fichier
+ * de droits suivent. Ce qui n'est plus produit est retiré du gabarit aussi —
+ * un chapitre orphelin resterait distribué à jamais.
+ */
+function distribuerAuGabarit(cwd, role, artefacts) {
+  const gabarit = join(cwd, '.claude', 'templates', role);
+  if (!existsSync(gabarit)) return 0;
+
+  const socle = (artefacts['L0.md'] || '') + (artefacts['L1.md'] || '');
+  const aPoser = { 'CLAUDE.md': socle };
+  for (const [chemin, contenu] of Object.entries(artefacts)) {
+    if (chemin.startsWith('chapitres/')) aPoser[`metier/${chemin}`] = contenu;
+    else if (chemin === '.claude/settings.json') aPoser[chemin] = contenu;
+  }
+
+  for (const [chemin, contenu] of Object.entries(aPoser)) {
+    const cible = join(gabarit, chemin);
+    mkdirSync(dirname(cible), { recursive: true });
+    writeFileSync(cible, contenu);
+  }
+  // Ce que le classement ne produit plus est RETIRÉ — un artefact périmé
+  // continuerait d'être posé à chaque naissance sans que rien ne le signale.
+  const dossier = join(gabarit, 'metier', 'chapitres');
+  if (existsSync(dossier)) {
+    for (const f of readdirSync(dossier)) {
+      // ⚠️ `recursive` : `readdirSync` rend aussi les dossiers, et `rmSync` sur
+      // un dossier lève — la distribution resterait à moitié appliquée.
+      if (!(`metier/chapitres/${f}` in aPoser)) rmSync(join(dossier, f), { recursive: true, force: true });
+    }
+  }
+  const droitsG = join(gabarit, '.claude', 'settings.json');
+  if (!('.claude/settings.json' in aPoser) && existsSync(droitsG)) rmSync(droitsG, { force: true });
+  return Object.keys(aPoser).length;
 }

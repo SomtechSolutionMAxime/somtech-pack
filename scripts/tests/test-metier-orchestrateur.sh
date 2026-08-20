@@ -25,7 +25,24 @@
 set -uo pipefail
 
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-METIER="${METIER_ORCHESTRATEUR:-$RACINE/.claude/templates/orchestrateur/CLAUDE.md}"
+# ⚠️ Depuis que le gabarit est RENDU (P-20260820-0001), le métier n'est plus UN
+# fichier : « CLAUDE.md » porte le socle, et « metier/chapitres/*.md » le reste.
+# Un contrôle qui ne lirait que le socle jugerait 850 mots là où le métier en
+# fait 25 000 — il passerait au vert sans rien garder.
+GABARIT="${GABARIT_ORCHESTRATEUR:-$RACINE/.claude/templates/orchestrateur}"
+# ⚠️ Forme PORTABLE : « mktemp -t <prefixe> » n'a pas le même contrat sur macOS
+# (BSD, préfixe) et sur Linux (GNU, gabarit qui exige des X). Sans les X, il
+# réussit ici et échoue en CI — le fichier reste vide, et le banc annonce « le
+# gabarit est introuvable » sur un gabarit parfaitement présent.
+METIER="$(mktemp "${TMPDIR:-/tmp}/smtk-metier-orch.XXXXXX")" || {
+  echo "  ✗ impossible de créer le fichier de travail — le banc ne peut rien éprouver" >&2
+  exit 1
+}
+cat "$GABARIT/CLAUDE.md" > "$METIER"
+if [ -d "$GABARIT/metier/chapitres" ]; then
+  for c in "$GABARIT/metier/chapitres"/*.md; do printf '\n\n' >> "$METIER"; cat "$c" >> "$METIER"; done
+fi
+trap 'rm -f "$METIER"' EXIT
 
 echecs=0
 total=0
@@ -50,7 +67,7 @@ section() {
 }
 
 echo "── Le métier de l'orchestrateur — les huit gestes mesurés le 2026-08-18"
-echo "   fichier : ${METIER#$RACINE/}"
+echo "   métier  : ${GABARIT#$RACINE/} (socle + chapitres)"
 
 if [ ! -f "$METIER" ]; then
   echo "  ✗ le gabarit est introuvable — rien à éprouver"
@@ -690,7 +707,39 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # `SKILL.md`, la compétence ou le ServiceDesk. Un lot qui n'apporte que ① et
 # ② se fait couper ailleurs. Un lot qui n'apporte aucun des quatre se refuse
 # sans discussion, et ce paragraphe est ce sur quoi tu t'appuies pour le dire.
-BASELINE=146349
+# ── RELÈVEMENT DU 2026-08-20 — P-20260820-0001, et les quatre conditions ──────
+#
+# 146 349 → 154 339 octets (+7 990). Le métier n'est plus UN fichier : il tient
+# dans un socle chargé en permanence et des chapitres ouverts au moment d'agir.
+# Les quatre conditions ci-dessus, une par une :
+#
+# ① LE GESTE QU'IL PRESCRIT — le socle porte les SEPT RÈGLES CARDINALES avec, pour
+#    chacune, la couche qui la garantit ou la mention qu'aucune ne la porte, et la
+#    CARTE des chapitres. Sans lui, un orchestrateur ne peut ni savoir laquelle des
+#    146 règles prime, ni où trouver le reste. Ce n'est ni un rappel ni un récit :
+#    c'est ce qui rend le métier navigable quand il n'est plus lu d'un bloc.
+#
+# ② LE DÉFAUT ÉVITÉ, MESURÉ — 35 344 tokens chargés à CHAQUE geste, 146 interdits
+#    sans aucune priorité déclarée (vérifié : zéro phrase de préséance entre règles
+#    de conduite). Le socle rendu en pèse 2 091. Projet `P-20260820-0001`, epics
+#    `E-20260820-0005` à `0009`.
+#
+# ③ LE LOT A COUPÉ SA PROPRE PART, ET LE DIT CHIFFRÉ — la première mesure était
+#    +27 862. Deux coupes, dans cet ordre : les chapitres ne recopient plus
+#    l'énoncé d'ABC de leurs items (−15 127), puis ils les CITENT au lieu de les
+#    lister (−4 745). Reste +7 990, dont 2 194 d'en-têtes de chapitre — l'abrégé
+#    et la fraîcheur, qui sont ce qui permet de décider d'ouvrir sans ouvrir.
+#
+# ④ LE LIEU A ÉTÉ CONTESTÉ — pourquoi le gabarit et pas la compétence ? Parce
+#    qu'un orchestrateur ne lit PAS le `SKILL.md` : il lit le `CLAUDE.md` de son
+#    lieu, littéralement le premier fichier de son existence (arbitrage
+#    `T-20260816-0015`). Et pas le ServiceDesk : ce qui y vit se cherche, alors
+#    que le socle ARRIVE.
+#
+# ⚠️ LA MARGE RESTE À 0. Le prochain ajout se refuse par défaut, et ce paragraphe
+#    est ce sur quoi s'appuyer pour le dire — le relèvement d'aujourd'hui ne crée
+#    aucun droit pour le suivant.
+BASELINE=154339
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -c < "$METIER" | tr -d ' ')"
