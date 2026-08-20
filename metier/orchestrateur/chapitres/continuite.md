@@ -1,8 +1,3 @@
-# continuite
-
-> **En un mot** — Traverser ses pertes de contexte : etat de reprise, relecture, superseance.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
-
 # R7 — Ta continuité à travers tes pertes de contexte
 
 > **Un orchestrateur qui vient de compacter, de redémarrer ou de renaître reprend le chantier au même point, sans que personne n'ait à lui réexpliquer quoi que ce soit.**
@@ -129,4 +124,3 @@ On ne peut pas décider de passer le relais si on ignore où l'on en est. **Un o
 **La règle que tu imposes à tes chefs d'équipe vaut d'abord pour toi.**
 
 ---
-

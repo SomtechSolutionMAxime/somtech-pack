@@ -150,8 +150,9 @@ export function rendre(classement) {
       `> **En un mot** — ${c.abrege || '[abrégé manquant]'}`,
       `> **Rendu depuis la version du pack** \`${c.version_pack || '[version manquante]'}\` · ABC \`${classement?.version_abc || '[non établi]'}\``,
       '',
-      ...regles.map((i) => `- **${i.id}** — ${i.enonce}`),
-      '',
+      ...(regles.length ? ['## Ce dont ce chapitre répond', '',
+        ...regles.map((i) => `- **${i.id}** — ${i.enonce}`), ''] : []),
+      ...(c.contenu ? [c.contenu, ''] : []),
     ].join('\n');
   }
 
@@ -169,9 +170,27 @@ export function rendre(classement) {
       );
     }
   }
+  // I3 — le métier rendu ne doit pas être plus volumineux que son ABC (STD-047 §2.5).
+  // ⚠️ C'est un invariant à MESURER, pas un gate de rendu : R4 ne fait échouer que
+  // sur L0 et L1. Sans le volume de l'ABC, on le dit non mesuré plutôt que de
+  // rendre un rapport inventé.
+  const motsRendus = Object.values(artefacts).reduce((n, t) => n + t.split(/\s+/).filter(Boolean).length, 0);
+  const motsAbc = Number.isFinite(classement?.mots_abc) ? classement.mots_abc : null;
+  mesures.I3 = {
+    mots_rendus: motsRendus,
+    mots_abc: motsAbc,
+    rapport: motsAbc ? Number((motsRendus / motsAbc).toFixed(2)) : null,
+  };
+
   const avertissements = Object.entries(mesures.L2)
     .filter(([, t]) => t > BUDGETS.L2)
     .map(([n, t]) => `le chapitre « ${n} » pèse ${t} tokens (souple : ${BUDGETS.L2}) — il couvre probablement deux sujets`);
+  if (mesures.I3.rapport !== null && mesures.I3.rapport >= 1) {
+    avertissements.push(
+      `I3 non satisfait — le métier rendu pèse ${mesures.I3.mots_rendus} mots contre ${mesures.I3.mots_abc} pour l'ABC ` +
+      `(${mesures.I3.rapport}×). L'invariant demande < 1 : soit l'ABC absorbe encore, soit le métier retire encore.`,
+    );
+  }
 
   // — I5/I6 : aucun artefact ne vise un lieu d'agent
   for (const chemin of Object.keys(artefacts)) {

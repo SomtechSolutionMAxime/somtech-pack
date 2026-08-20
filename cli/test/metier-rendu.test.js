@@ -190,3 +190,46 @@ test('une règle rattachée à un chapitre n a PAS besoin d énoncé court — e
   assert.ok(!c.items[2].enonce_socle);
   assert.equal(rendre(c).ok, true);
 });
+
+test('un chapitre qui déclare un contenu le porte dans le fichier rendu, sous son en-tête', () => {
+  const c = classementValide();
+  c.chapitres[0].contenu = '## Comment tu écris\n\nDes faits, pas ton raisonnement.\n';
+  const r = rendre(c);
+  assert.equal(r.ok, true);
+  const ch = r.artefacts['chapitres/rendre-compte.md'];
+  assert.ok(ch.includes('Des faits, pas ton raisonnement.'), 'le contenu doit être dans le chapitre rendu');
+  assert.ok(ch.indexOf('Comment il parle au CTO.') < ch.indexOf('Des faits'),
+    'l en-tête (abrégé, fraîcheur) vient AVANT le contenu — c est ce qui permet de décider si on ouvre');
+});
+
+test('le budget L2 est SOUPLE : un chapitre trop gros avertit, il ne fait pas échouer', () => {
+  const c = classementValide();
+  c.chapitres[0].contenu = 'z'.repeat(BUDGETS.L2 * 5);
+  const r = rendre(c);
+  assert.equal(r.ok, true, 'un L2 trop gros ne bloque pas — il signale qu il couvre deux sujets');
+  assert.ok(r.avertissements.some((a) => a.includes('rendre-compte')));
+});
+
+test('I3 — le rendu MESURE son volume face à l ABC et avertit s il le dépasse', () => {
+  const c = classementValide();
+  c.mots_abc = 10;                                   // un ABC minuscule
+  c.chapitres[0].contenu = 'mot '.repeat(500);       // un métier bien plus gros
+  const r = rendre(c);
+  assert.ok(r.mesures.I3, 'le rendu doit rendre la mesure I3');
+  assert.ok(r.mesures.I3.rapport > 1);
+  assert.ok(r.avertissements.some((a) => a.includes('I3')),
+    `I3 dépassé doit être dit — reçu : ${JSON.stringify(r.avertissements)}`);
+});
+
+test('I3 ne fait pas échouer le rendu — c est un invariant à mesurer, pas un gate (STD-047 §2.5 vs R4)', () => {
+  const c = classementValide();
+  c.mots_abc = 1;
+  c.chapitres[0].contenu = 'mot '.repeat(2000);
+  assert.equal(rendre(c).ok, true);
+});
+
+test('sans mots_abc, I3 se dit NON MESURÉ plutôt que de rendre un rapport inventé', () => {
+  const r = rendre(classementValide());
+  assert.equal(r.mesures.I3.mots_abc, null);
+  assert.equal(r.mesures.I3.rapport, null);
+});

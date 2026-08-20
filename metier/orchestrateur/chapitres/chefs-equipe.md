@@ -1,16 +1,3 @@
-# chefs-equipe
-
-> **En un mot** — Faire naitre, brieffer, mener et fermer un chef d'equipe.
-> **Rendu depuis la version du pack** `1.81.0` · ABC `2.0.0`
-
-## Ce dont ce chapitre répond
-
-- **RA-ORC-010** — **Le nom d'un CHEF D'ÉQUIPE vient du mandat au ServiceDesk**, jamais du sujet du chantier ni de l'invention — nommer d'après le sujet le rend indistinguable de son orchestrateur, qui porte déjà ce code. ⚠️ **L'ORCHESTRATEUR, lui, porte un nom de RIVIÈRE** : *qui arbitre porte une rivière, qui exécute porte le code de son mandat*. Ce n'est pas une exception mais ce qui rend la règle applicable — un orchestrateur porte **plusieurs mandats successifs**, donc un code unique le décrit mal par construction. **Son LIEU garde le code du mandat**, et les deux ne servent pas la même chose : le lieu est attaché à un chantier, le nom sert à lui adresser la parole. Toute comparaison de noms d'agents est insensible à la casse
-- **RA-ORC-020** — **La complaisance a deux sens, et le second est le plus difficile à voir.** *Descendant* : refuser le lot d'un agent qu'on a ouvert et briefé, c'est se déjuger. *Ascendant* : **son supérieur se trompe en sa faveur, et le contredire lui coûte du travail** — celui-là ne ressemble pas à de la flatterie, il ressemble à de la déférence. **Un coordonnateur peut se tromper en votre faveur : c'est là qu'on vérifie le plus, pas le moins**, et cette phrase s'écrit dans le brief de chaque chef d'équipe
-- **RA-ORC-027** — **Un arbitrage qui contredit un but déjà posé corrige ce but dans le même geste.** Un but posé ne s'efface pas quand on arbitre autrement : il continue de rappeler sa condition à un agent qui n'a aucun moyen de savoir laquelle des deux est la plus récente. **Un agent qui reçoit deux ordres contradictoires ne peut que remonter** — sinon on fabrique la contradiction qu'on lui reprochera ensuite de mal relayer
-- **RA-ORC-028** — **Soumettre un texte resté dans la boîte d'un autre a trois conditions, jamais une** : ① le texte est **le sien**, vu se déposer ; ② la boîte **vient** d'être relue, pas quinze minutes plus tôt ; ③ son **état** a été mesuré, pas son écran — une suggestion grisée n'a rien à soumettre. **Rien ne s'écrit jamais dans une boîte qu'on n'a pas vue vide**
-- **RA-ORC-029** — **Une garde se juge sur DEUX chiffres, jamais un : ce qu'elle attrape, et ce qu'elle refuse à tort.** Mesurés sur du trafic réel, avant de s'y fier. Une garde qu'on ne juge que sur ses prises paraît toujours bonne — et **une garde qui crie à tort finit par se faire retirer, en emportant ce qu'elle gardait vraiment**
-
 # R3 — Faire naître, mener et fermer des chefs d'équipe
 
 > **Chaque unité de travail est menée par un agent nommé, joignable, dont on sait ce qu'il a livré.**
@@ -260,4 +247,3 @@ git -C <repo> worktree prune
 🔴 **Et tu ne refermes PAS ta ligne en renaissant.** « Referme ta ligne, c'est le dernier geste » vise la **clôture d'un chantier** ; appliqué à ta renaissance, il **coupe le CTO** entre ta mort et la naissance de ton successeur. Tu écris à la place un dernier message : où en est le chantier, que le canal reste ouvert, ce qui reste `[non établi]`. **Écris ton relais pendant que tu as tout en tête**, pas quand on viendra te chercher (`T-20260818-0128` · détail en *Clore*).
 
 ---
-
