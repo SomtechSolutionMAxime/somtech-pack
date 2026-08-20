@@ -473,6 +473,21 @@ export const ANTERIORITE_SUR_LE_RELEVEMENT = /avant\s+(?:même\s+)?(?:d['’]avo
  * phrase qui n'en parle pas, et elle traverse tout l'énoncé sans risque. C'est le même
  * geste que le paramètre `inverse` d'`exigePolarite`, plus haut dans ce fichier.
  *
+ * ⚠️⚠️ ET VOICI EXACTEMENT CE QU'ELLE NE FERME PAS — mesuré, pas supposé, par une cinquième
+ * passe de revue. Les TROIS gardes réunies laissent passer le contresens dès qu'il désigne le
+ * relèvement AUTREMENT QUE PAR SON NOM. Ces deux énoncés sont VERTS sur les 25 contrôles :
+ *
+ *   « …, dès que sa ligne est ouverte. Ce n'est pas vrai : ce qui existe déjà chez nous
+ *     passe en premier. »
+ *   « …, dès que sa ligne est ouverte. Son passé chez nous vient avant, toujours. »
+ *
+ * Le premier échappe à `RENVERSEMENT` parce qu'il est dans une autre phrase que la porteuse,
+ * et à celle-ci parce qu'il ne dit pas « relèvement ». Le second ne porte aucune marque de
+ * renversement du tout. **Aucun filtre de vocabulaire ne fermera cette famille** : il faudrait
+ * une garde de FORME — interdire toute phrase non reconnue dans l'énoncé de cette étape —, ce
+ * qui ferait rougir aussi toute évolution légitime du texte. C'est un arbitrage de conception,
+ * et il est remonté au dirigeant plutôt que tranché ici.
+ *
  * ⚠️ ET ELLE RESTE UN FILTRE, comme les autres. Chaque item est éprouvé par une attaque et
  * quatre textes légitimes sont prouvés indemnes ; il existera d'autres formulations. Une
  * alternative de plus — `va`, comme « le relèvement va avant » — a été RETIRÉE parce

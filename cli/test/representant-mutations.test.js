@@ -354,10 +354,15 @@ function itemsDAlternance(source) {
       continue;
     }
     if (c === '(') {
-      // ⚠️ `(?<=`, `(?<!` et `(?<nom>` font QUATRE caractères, pas trois. Le premier jet
-      // supposait 3 partout et rendait un item corrompu (« =a » au lieu de « a ») sur un
-      // lookbehind. Aucun des motifs d'ici n'en porte — c'est un piège LATENT, corrigé
-      // pendant qu'on le voyait plutôt que le jour où il mordra. Signalé en vérification.
+      // ⚠️ `(?<=` et `(?<!` font QUATRE caractères, pas trois. Le premier jet supposait 3
+      // partout et rendait un item corrompu (« =a » au lieu de « a ») sur un lookbehind.
+      // ⚠️ ET LA CORRECTION A SUR-AFFIRMÉ À SON TOUR — relevé à la passe suivante : elle
+      // écrivait « et `(?<nom>` » dans la même phrase, alors qu'un groupe NOMMÉ a un préfixe
+      // de longueur VARIABLE (`(?<nom>` en fait 7). Sur `(?<nom>chat|chien)`, cette fonction
+      // rend « om>chat » — le même item corrompu qu'elle venait de corriger ailleurs.
+      // Aucun motif de ce dépôt n'utilise de groupe nommé (vérifié) : le piège est LATENT et
+      // il est écrit ici plutôt que corrigé à l'aveugle en fin de lot, parce que le fermer
+      // demande de lire jusqu'au `>` et qu'aucune mesure ne l'atteint aujourd'hui.
       const prefixe = source.startsWith('(?<', i) ? 4 : source.startsWith('(?', i) ? 3 : 1;
       pile.push({ debut: i + prefixe, coupes: [] });
       i += prefixe - 1;
