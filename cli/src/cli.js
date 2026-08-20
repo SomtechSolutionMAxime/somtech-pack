@@ -193,6 +193,10 @@ export async function run(argv) {
   // (--depot, --role, --modele, --mode, --amorce…) appartiennent à `naitre.js`, pas au pack.
   // Les redéclarer dans `parseArgs` créerait deux descriptions d'un même contrat, qui
   // divergeraient au premier changement de l'une — le motif que ce lot existe pour fermer.
+  if (argv[0] === 'metier') {
+    const { runMetier } = await import('./commands/metier.js');
+    return runMetier(argv);
+  }
   if (argv[0] === 'agent') {
     return cmdAgent(argv.slice(1));
   }
