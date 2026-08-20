@@ -5,6 +5,26 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-20
+
+*Lot `E-20260819-0015` : PR #301, stories `T-20260819-0121` et `T-20260820-0003`, sous la demande `D-20260818-0003`. **Le code disait déjà la vérité ; c'est le mot qui manquait.** Deux orchestrateurs ont perdu ~3 h chacun sur des boîtes qui portaient une **suggestion grisée** — non parce qu'un outil se trompait, mais parce qu'aucun ne pouvait le constater sans lire le code.*
+
+### Ajouté
+
+- **`gestionnaire-etat-boite <pane>` — la commande qui MESURE l'état d'une boîte de saisie** (`T-20260819-0121`) — cinq états nommés, chacun avec sa conduite : `saisie` · `collee` (un texte réel — `livrer.js` délivre sans écraser) · `suggestion` · `file-attente` (du gris — **rien à soumettre, rien n'est bloqué**) · `illisible` (*qui n'est pas « vide »* — on va regarder soi-même). Elle ne pose aucun geste et se tape sur le pane d'un autre. **Le gabarit de l'orchestrateur prescrivait jusqu'ici le geste aveugle** : `herdr pane read` rend **le même écran** pour une suggestion et pour un texte saisi — le seul discriminant est un attribut ANSI. Une troisième condition est posée avant de soumettre la boîte d'autrui : *tu as mesuré son ÉTAT, pas lu son écran.*
+- **Le détecteur délimite la boîte AVANT de chercher le gris** — et c'est ce qui rend le chiffre publié utilisable : sur les **94 panes Claude Code du poste, 33 portaient une suggestion**, `contenuBoite` rend « vide » sur les 33 et « pleine » sur le seul vrai collage. **Chercher le gris n'importe où sur l'écran aurait déclaré une suggestion sur presque tous** : `ESC[2m` apparaît **86 fois sur 119 écrans relevés** (le bandeau « auto mode on » est grisé, les numéros de ligne d'un affichage de code aussi). La question avait été posée par un tiers qui refusait d'en tirer une conclusion sans avoir lu le code — **elle est tranchée par le code, pas par une opinion**.
+
+### Corrigé
+
+- **Le marqueur de file d'attente n'est pas une suggestion** — nommer un état par son **mécanisme** (« du gris ⇒ une suggestion ») attrape trop : les messages en attente de leur tour sont grisés eux aussi, et se faisaient rebaptiser. **C'est l'usage réel qui l'a trouvé, pas la relecture.**
+- **L'homonymie de pane se refuse aussi quand le registre répond** — un identifiant de pane est **interne à sa session** ; le poste en porte treize qui numérotent indépendamment.
+- **Sept mutations survivantes fermées** (passe de mutation indépendante : 29 tentées, 8 survivantes, 7 réelles + 1 mutant équivalent). **Toutes avaient la même cause : les doubles d'écran du banc étaient écrits à la main, donc propres.** Un dump réel ne l'est pas — ses filets portent des séquences, son invite est suivie d'un espace insécable, un écran réel porte souvent plus de deux filets. *C'est la forme la plus coûteuse d'un banc qui ne peut pas échouer : il éprouve un objet que la production ne produit jamais.* Chaque essai neuf a été re-muté **un point à la fois**.
+
+### Technique
+
+- **Le plafond de taille du gabarit est re-baseliné de `145223` à `146349`, marge ZÉRO** (`T-20260820-0003`) — **+1 126 octets**, mesurés sur le fichier livré après le dernier commit, jamais estimés. *Arbitrage rendu par le coordonnateur : « une garde à marge 0 ne dit pas "jamais plus grand", elle dit "pas sans qu'on le décide" — re-baseliner EST la décision qu'elle exige. »* **Preuve qu'elle mord toujours : +1 octet la fait rougir.** Deux voies ont été écartées, et c'est leur raison qui permet de **refuser la prochaine demande** : mettre le texte dans le `SKILL.md` — refusé, *le gabarit dit lui-même qu'un orchestrateur ne le lit pas ; mettre là ce qui doit gouverner, c'est choisir qu'il ne gouverne pas* — et couper 1 126 octets ailleurs — refusé, *le lot avait déjà coupé sa part deux fois, et couper au-delà retire du texte qui garde autre chose sans que personne sache quoi*. **Le motif est inscrit dans le fichier même, au-dessus de `BASELINE`, avec les quatre conditions qu'un futur relèvement doit réunir ENSEMBLE** : le texte prescrit un geste impossible sans lui · le défaut évité est mesuré et porte un code de ticket · le lot a d'abord coupé sa propre part et le dit chiffré · le lieu a été contesté. *Deux sur quatre → on coupe ailleurs. Zéro → on refuse.* **Une garde à marge 0 ne meurt pas d'un grand saut : elle meurt d'une suite de petits cas justifiés.**
+
+
 ## [Non-versionne] - 2026-08-19
 
 *Lot `E-20260819-0006` : PR #298, story `T-20260819-0064`, sous la demande `D-20260818-0008`. **La veille ne tournait plus en silence — elle s'arrêtait en mentant.** Un silence laisse la question ouverte ; un mensonge la ferme du mauvais côté.*
