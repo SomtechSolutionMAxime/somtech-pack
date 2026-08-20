@@ -632,7 +632,7 @@ gestionnaire-etat-boite "$P"
 
 | Ce qu'elle rend | Ce que tu fais |
 |---|---|
-| `suggestion` — l'éditeur propose, en gris | **rien** : rien à soumettre, rien n'est bloqué |
+| `suggestion` · `file-attente` — du gris : l'éditeur propose, ou tes messages attendent son tour | **rien** : rien à soumettre, rien n'est bloqué |
 | `collee` · `saisie` — un texte réel | boîte pleine — `livrer.js` la délivre sans l'écraser |
 | `illisible` | ce n'est **pas** « vide » — va regarder toi-même |
 

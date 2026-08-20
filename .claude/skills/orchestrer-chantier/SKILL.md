@@ -428,7 +428,7 @@ La commande regarde la boîte avant d'écrire (une boîte non vide est un refus,
 gestionnaire-etat-boite "$P"
 ```
 
-Elle rend `suggestion` (rien à soumettre, rien n'est bloqué) · `collee` ou `saisie` (boîte pleine, `livrer.js` sait la délivrer sans l'écraser) · `illisible` (on n'a pas vu — ce n'est pas « vide »). **Elle ne pose aucun geste**, donc elle se tape sur le pane d'un autre.
+Elle rend `suggestion` ou `file-attente` (du gris : rien à soumettre, rien n'est bloqué) · `collee` ou `saisie` (boîte pleine, `livrer.js` sait la délivrer sans l'écraser) · `illisible` (on n'a pas vu — ce n'est pas « vide »). **Elle ne pose aucun geste**, donc elle se tape sur le pane d'un autre.
 
 > **Le 2026-08-19, deux orchestrateurs ont perdu ~3 heures chacun** sur des boîtes qu'ils croyaient bloquées et qui portaient une suggestion — trois remontées au dirigeant chacun, pour un geste sans objet. **Aucun des deux ne le cherchait** : sans les attributs ANSI, les deux états rendent le même écran.
 
