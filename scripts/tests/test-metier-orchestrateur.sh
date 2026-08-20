@@ -648,7 +648,49 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # d'abord et demander ensuite rend la question décorative. Ce lot-ci a payé sa
 # part avant de demander : 2 917 octets coupés — un récapitulatif d'anti-patterns
 # qui redisait dans une liste ce que le lot pose au geste, et un hors-périmètre.
-BASELINE=145223
+#
+# ⚠️ RELEVÉ LE 2026-08-20 POUR `E-20260819-0015` / `T-20260820-0003` — la ligne
+# de base passe de 145 223 à 146349, +1 126 octets, ET LA MARGE RESTE À ZÉRO.
+# Mesuré sur le fichier livré, après le dernier commit du lot, pas estimé.
+#
+#   Arbitrage rendu par `matapedia`, 2026-08-20, INSCRIT AU FIL DE
+#   `T-20260820-0003`. Recopié mot pour mot :
+#   « Une garde à marge 0 ne dit pas "jamais plus grand", elle dit "pas sans
+#     qu'on le décide". Re-baseliner EST la décision qu'elle exige. »
+#   Deux voies ont été écartées, et savoir POURQUOI est ce qui permet de
+#   refuser la prochaine : (a) mettre ce texte dans le `SKILL.md` plutôt que
+#   dans le gabarit — refusé, car le gabarit dit lui-même qu'un orchestrateur
+#   NE LIT PAS le `SKILL.md` ; mettre là ce qui doit gouverner, c'est choisir
+#   qu'il ne gouverne pas ; (b) faire couper 1 126 octets ailleurs dans le
+#   gabarit — refusé, car ce lot avait déjà coupé sa part deux fois (2 000 →
+#   942 octets, puis la commande a perdu son chemin interne au profit de son
+#   nom), et couper au-delà retire du texte qui garde autre chose sans que
+#   personne sache quoi.
+#
+# CE QUE CES 1 126 OCTETS ACHÈTENT — c'est ça, le motif, et il est vérifiable :
+#   · la commande qui MESURE l'état d'une boîte (`gestionnaire-etat-boite`) ;
+#   · la table qui dit quoi faire de chacun des cinq états rendus ;
+#   · la ligne qui dit que `herdr pane read` NE PEUT PAS répondre à « y a-t-il
+#     du texte » — même écran pour une suggestion et pour un texte saisi, le
+#     seul discriminant est un attribut ANSI.
+# Sans cette dernière ligne, le gabarit continue de PRESCRIRE le geste qui a
+# coûté ~3 h à chacun de deux orchestrateurs le 2026-08-19 (`E-20260819-0015`).
+# Le texte ne corrige pas un défaut de lecture du balayeur — celui-là est
+# correct depuis le 14 août ; il rend VÉRIFIABLE et NOMMABLE un comportement
+# qu'aucun orchestrateur ne pouvait constater.
+#
+# ⚠️ COMMENT REFUSER LA PROCHAINE DEMANDE, et il FAUT la refuser par défaut :
+# une garde à marge 0 ne meurt pas d'un grand saut — elle meurt d'une SUITE DE
+# PETITS CAS JUSTIFIÉS. Un relèvement ne s'accorde que si les quatre tiennent
+# ENSEMBLE : ① le texte ajouté PRESCRIT UN GESTE que l'orchestrateur ne peut
+# pas poser sans lui — pas un rappel, pas un récit, pas une liste qui redit
+# ailleurs ce que le gabarit pose déjà ; ② le défaut qu'il évite est MESURÉ et
+# porte le code d'un ticket ; ③ le lot a d'abord coupé sa propre part et le
+# dit chiffré ; ④ le lieu a été contesté — pourquoi le gabarit et pas le
+# `SKILL.md`, la compétence ou le ServiceDesk. Un lot qui n'apporte que ① et
+# ② se fait couper ailleurs. Un lot qui n'apporte aucun des quatre se refuse
+# sans discussion, et ce paragraphe est ce sur quoi tu t'appuies pour le dire.
+BASELINE=146349
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -c < "$METIER" | tr -d ' ')"
