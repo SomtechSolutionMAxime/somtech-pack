@@ -120,3 +120,84 @@ test('LE REGISTRE RESTE PRIORITAIRE QUAND IL RÉPOND — le repli ne le court-ci
 
   assert.equal(await vivant('w1:p1'), true, 'le registre fait toujours foi quand il connaît le pane');
 });
+
+test("UNE PANNE DE MESURE NE SE CONCLUT PAS EN MORT — on JETTE plutôt que de rendre « mort »", async () => {
+  const { vivant } = await import('../src/herdr.js');
+  // Le registre se tait ET la liste des panes est injoignable : on n'a RIEN mesuré.
+  //
+  // ⚠️ RENDRE `false` ICI SERAIT LE PIRE DES DEUX MONDES. L'arbitrage du 2026-08-20 dit
+  // qu'on ne ferme que sur DISPARITION POSITIVE — absent du registre ET absent des panes,
+  // tous deux CONSTATÉS. Une panne de mesure n'est pas un constat d'absence : conclure
+  // « mort » ferait clore la ligne sur une question à laquelle personne n'a répondu.
+  //
+  // Jeter atteint le chemin « herdr injoignable » que le veilleur a déjà à ce site, et qui
+  // REPORTE au lieu de trancher. C'est ce que le commentaire de `agents()` réclamait déjà.
+  fauxHerdrParCommande({
+    agents: '{"id":"cli:agent:list","result":{"agents":[]}}',
+    panes: '{"error":{"code":"socket_refused","message":"session injoignable"},"id":"cli:pane:list"}',
+  });
+
+  await assert.rejects(
+    () => vivant('w2D:p11'),
+    'une liste de panes injoignable ne prouve pas une mort — il faut atteindre le chemin qui reporte'
+  );
+});
+
+test('LA RONDE DE REPRISE NE FERME PAS LES LIGNES QUE LE SEUL REGISTRE IGNORE', async (t) => {
+  // Le second site, et il est plus grave que le premier : `reconcilier()` tourne AU DÉMARRAGE
+  // du veilleur et balaie TOUTES les lignes d'un coup. Avec un registre qui ne voit plus les
+  // sessions neuves, un simple redémarrage refermait toutes leurs lignes en série — sans
+  // qu'un dirigeant ni un agent n'ait rien demandé.
+  const { mkdtempSync } = await import('node:fs');
+  const racine = mkdtempSync(join(tmpdir(), 'ld-ronde-'));
+  process.env.LIGNE_DIRECTE_RACINE = racine;
+  const { Veilleur } = await import('../src/veilleur.js');
+  const { sauverRegistre, lignesOuvertes, chargerRegistre } = await import('../src/registre.js');
+
+  sauverRegistre({
+    version: 1,
+    lignes: [
+      {
+        chantier: 'D-20260820-0001',
+        canal_id: 'C1',
+        canal_nom: 'matapedia-pack',
+        pane: 'w2D:p11',
+        worktree: '/w/a',
+        visage: '🧭',
+        ouverte_le: 'hier',
+        close_le: null,
+        herdr_socket: null,
+        nature: 'interne',
+        libelle: 'Le pack',
+        autorises: ['UMOI'],
+      },
+    ],
+  });
+
+  const v = new Veilleur({
+    cheminSocket: join(racine, 'r.sock'),
+    jetons: { robot: 'x', ecoute: 'y' },
+    identite: { equipe: 'T', utilisateur: 'UMOI' },
+    slack: { async poster() { return '1'; }, async archiverCanal() {}, async nomDeMembre() { return 'x'; } },
+    herdr: {
+      // LE REGISTRE NE LE VOIT PAS — mais il rend une liste NON VIDE, sinon la garde
+      // « aucune session joignable » couvrirait le défaut et l'essai ne prouverait rien.
+      async agents() {
+        return [{ agent: 'claude', pane_id: 'wZ:p1' }];
+      },
+      // LE PANE, LUI, EST BIEN LÀ, et il porte une session d'agent.
+      async panes() {
+        return { panes: [{ pane_id: 'w2D:p11', agent_session: { agent: 'claude' } }], sessionsInterrogees: 1, sessionsRefusees: [] };
+      },
+    },
+  });
+
+  await v.reconcilier();
+
+  const apres = chargerRegistre();
+  assert.equal(
+    lignesOuvertes(apres).length,
+    1,
+    'le pane répond et porte un agent : sa ligne ne se referme pas parce que le registre l’ignore'
+  );
+});

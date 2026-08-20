@@ -399,9 +399,35 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
  * dans tous les cas — c'est lui qui a produit le défaut. On ne s'en contente pas pour autant :
  * ce que `--wait` rapporte est un indice de plus, jamais la preuve. La preuve se relit.
  */
-export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTravail = false } = {}) {
+export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTravail = false, parLePane = false } = {}) {
   if (!pane) throw new Error('le pane de la session à briefer est requis');
   if (!String(texte ?? '').trim()) throw new Error('un brief vide n’est pas un brief');
+
+  // ⚠️ QUAND LE REGISTRE NE CONNAÎT PAS L'AGENT, C'EST TOUTE LA FAMILLE `agent …` QUI SE FERME
+  // — pas seulement la recherche (T-20260820-0022). Mesuré le 2026-08-20 sur un pane réellement
+  // invisible : `herdr agent read w2D:p11` rend `agent_not_found` là où `herdr pane read` rend
+  // l'écran. Un repli qui se contenterait de TROUVER le pane puis rappellerait `agent prompt`
+  // échouerait au dernier mètre, après avoir annoncé qu'il avait trouvé — le mode de panne que
+  // ce fichier existe pour fermer.
+  //
+  // On bascule donc les QUATRE commandes ensemble : lire, interroger, écrire, soumettre.
+  //
+  // ⚠️ ET LA GARDE DE BOÎTE TRAVERSE LE REPLI INTACTE. `--format ansi` est conservé : le gris
+  // reste la seule chose qui distingue une suggestion d'un texte réel, et le refus d'écrire
+  // dans une boîte non vide se prend sur cette lecture-là, des deux côtés.
+  //
+  // ⚠️ CE QU'ON PERD, ET IL FAUT LE DIRE : `pane send-text` n'a pas d'équivalent de
+  // `--wait --until working`. On n'en fabrique pas un faux — la preuve se relit, comme partout
+  // ici, et c'est justement la conduite que ce module tient déjà pour le chemin nominal.
+  if (parLePane) {
+    return {
+      lireEcran: ['pane', 'read', pane, '--format', 'ansi'],
+      interroger: ['pane', 'get', pane],
+      livrer: ['pane', 'send-text', pane, texte],
+      soumettre: ['pane', 'send-keys', pane, 'Enter'],
+    };
+  }
+
   return {
     // `--format ansi` — LE GRIS EST LA SEULE CHOSE QUI DISTINGUE UNE SUGGESTION D'UN RESTE.
     // Sans lui, la boîte VIDE d'une session qui propose une phrase de son historique se lit
@@ -612,6 +638,12 @@ export async function livrerBrief({
   // Voir `obstacleAvantLivraison` et `briefEstPris` — ce n'est pas la garde qu'on lève, c'est
   // le témoin qu'on change.
   pairOccupe = false,
+  // ⚠️ `parLePane` — LE DESTINATAIRE EST INVISIBLE AU REGISTRE (T-20260820-0022). Toute la
+  // famille `agent …` lui est fermée ; c'est la famille `pane …` qui lui parle. Le drapeau
+  // vient de `trouverDestinataire`, qui l'a établi en trouvant le pane là où le registre
+  // n'avait personne. Il ne change AUCUNE garde : la boîte est lue avant d'écrire, et un
+  // texte qui s'y trouve fait refuser, exactement comme sur le chemin nominal.
+  parLePane = false,
   // ⚠️ LE TEMPS LAISSÉ AU TEXTE COINCÉ POUR BOUGER avant qu'on le tienne pour immobile
   // (T-20260816-0114). `0` désarme la délivrance entièrement — et c'est le cas du BRIEF DE
   // NAISSANCE : une session qui vient de naître attend, et une boîte qui porterait déjà
@@ -621,7 +653,7 @@ export async function livrerBrief({
 }) {
   // Les commandes de LECTURE se construisent tout de suite ; celle qui ÉCRIT attend de savoir
   // si le destinataire travaille déjà — l'attente qu'elle porte n'a de sens que sinon.
-  const lectures = commandesLivraison(pane, texte, { attenteMs });
+  const lectures = commandesLivraison(pane, texte, { attenteMs, parLePane });
   const vers = { socket };
 
   // 1. REGARDER avant d'ecrire — la boite ET l'etat. Une boite non vide est un refus, jamais
@@ -751,7 +783,7 @@ export async function livrerBrief({
     texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
   }
 
-  const commandes = commandesLivraison(pane, texteALivrer, { attenteMs, dejaAuTravail: statutAvant === 'working' });
+  const commandes = commandesLivraison(pane, texteALivrer, { attenteMs, dejaAuTravail: statutAvant === 'working', parLePane });
   // ⚠️ CE SEUL APPEL PORTE UNE ATTENTE — `--wait --until working --timeout <attenteMs>`. Son
   // budget doit donc CONTENIR cette attente, sinon le plafond générique par appel tuerait une
   // livraison qui progresse et la ronde la rapporterait en « session muette » (relevé en revue

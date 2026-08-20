@@ -89,6 +89,20 @@ function agentsQuiVivent({ panes = [PANE] } = {}) {
     async agents() {
       return panes.map((p) => ({ agent: 'claude', pane_id: p, herdr_socket: null }));
     },
+    // ⚠️ LA SECONDE SOURCE DÉRIVE DE LA MÊME VÉRITÉ QUE LA PREMIÈRE (T-20260820-0022).
+    // Depuis que la ronde ne ferme que sur DISPARITION POSITIVE, elle consulte le registre ET
+    // la liste des panes : un double muet sur la seconde ferait reporter toutes les rondes, et
+    // ces essais passeraient en n'éprouvant plus rien. Un pane « disparu » de ce test l'est
+    // donc des deux côtés — le scénario est intact, le double a juste cessé d'être plus pauvre
+    // que le service qu'il remplace.
+    async panes() {
+      const vus = panes;
+      return {
+        panes: vus.map((p) => ({ pane_id: p, agent_session: { agent: 'claude' }, herdr_socket: null })),
+        sessionsInterrogees: 1,
+        sessionsRefusees: [],
+      };
+    },
   };
 }
 

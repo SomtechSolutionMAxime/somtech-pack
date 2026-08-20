@@ -112,6 +112,10 @@ async function main() {
     pane,
     texte,
     socket: ou.socket,
+    // Le repli par pane se propage jusqu'aux VERBES : `trouverDestinataire` a trouvé ce pane
+    // là où le registre n'avait personne, et `agent read`/`agent prompt` lui sont fermés.
+    // Sans cette ligne, la recherche aboutirait et la remise échouerait au dernier mètre.
+    parLePane: Boolean(ou.parLePane),
     pairOccupe: !enAttente,
     // ⚠️ LA DÉLIVRANCE NE VAUT QUE POUR UN AGENT DÉJÀ NÉ. `--en-attente` est la garde du brief
     // de naissance : la session attend, et sa boîte ne devrait rien porter. Si elle porte

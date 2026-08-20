@@ -1,0 +1,180 @@
+// livrer-malgre-le-registre.test.js — LIVRER À UN AGENT QUE LE REGISTRE NE CONNAÎT PAS.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// POURQUOI CE FICHIER EXISTE (T-20260820-0022)
+//
+// `livrer.js` refusait — « aucun agent vivant ne porte "w2D:pT" sur ce poste » — sur des
+// agents qui travaillaient et recevaient parfaitement. Mesuré le 2026-08-20 : toute session
+// née depuis le 18 août est absente de `agent list`.
+//
+// ⚠️ ET LE REPLI CHANGE DE VERBES, PAS SEULEMENT DE SOURCE. Mesuré sur le poste, sur un pane
+// réellement invisible :
+//     herdr agent read w2D:p11  ->  {"error":{"code":"agent_not_found",...}}
+//     herdr pane  read w2D:p11  ->  l'écran
+// Toute la famille `agent …` est fermée à ces sessions ; la famille `pane …` leur répond.
+// Un repli qui se contenterait de trouver le pane et rappellerait ensuite `agent prompt`
+// échouerait au dernier mètre — c'est-à-dire après avoir annoncé qu'il avait trouvé.
+//
+// ⚠️ CE QUI NE DOIT PAS BOUGER — la meilleure garantie de cet outil : le REFUS D'ÉCRIRE DANS
+// UNE BOÎTE NON VIDE. Plusieurs orchestrateurs s'en servent. Le repli lit l'écran AVANT
+// d'écrire, exactement comme le chemin nominal, et refuse pareil.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+test('LES COMMANDES DE LIVRAISON PASSENT PAR `pane` QUAND ON LIVRE PAR LE PANE', async () => {
+  const { commandesLivraison } = await import('../src/livraison.js');
+
+  const c = commandesLivraison('w2D:p11', 'coucou', { parLePane: true });
+
+  // La lecture d'écran garde `--format ansi` : le gris est la seule chose qui distingue une
+  // suggestion d'un texte réel, et la garde de boîte en dépend des deux côtés du repli.
+  assert.deepEqual(c.lireEcran, ['pane', 'read', 'w2D:p11', '--format', 'ansi']);
+  assert.deepEqual(c.interroger, ['pane', 'get', 'w2D:p11']);
+  assert.deepEqual(c.livrer, ['pane', 'send-text', 'w2D:p11', 'coucou']);
+  assert.deepEqual(c.soumettre, ['pane', 'send-keys', 'w2D:p11', 'Enter']);
+
+  // ⚠️ AUCUNE COMMANDE NE DOIT RESTER DE LA FAMILLE `agent` : c'est elle qui est fermée à ces
+  // sessions. Une seule oubliée, et le repli échoue au dernier mètre en ayant l'air d'aboutir.
+  for (const [nom, args] of Object.entries(c)) {
+    assert.notEqual(args[0], 'agent', `\`${nom}\` reste sur la famille \`agent\`, fermée aux sessions invisibles`);
+  }
+});
+
+test('LE CHEMIN NOMINAL NE BOUGE PAS — on ajoute une voie, on n’en remplace aucune', async () => {
+  const { commandesLivraison } = await import('../src/livraison.js');
+
+  // Sans le repli, TOUT reste tel quel : les sessions que le registre connaît continuent de
+  // passer par `agent`, dont `--wait --until working` que la famille `pane` ne sait pas faire.
+  const c = commandesLivraison('w1:p1', 'coucou', { attenteMs: 20000 });
+
+  assert.deepEqual(c.lireEcran, ['agent', 'read', 'w1:p1', '--format', 'ansi']);
+  assert.deepEqual(c.interroger, ['agent', 'get', 'w1:p1']);
+  assert.deepEqual(c.livrer, ['agent', 'prompt', 'w1:p1', 'coucou', '--wait', '--until', 'working', '--timeout', '20000']);
+  assert.deepEqual(c.soumettre, ['agent', 'send-keys', 'w1:p1', 'Enter']);
+});
+
+// ───────────────────────────────────────────── le repli de la RECHERCHE, en amont des verbes
+
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const bac = mkdtempSync(join(tmpdir(), 'livrer-malgre-registre-'));
+const SOCKET_A = join(bac, 'a.sock');
+const SOCKET_B = join(bac, 'b.sock');
+
+/**
+ * Un faux herdr qui reproduit LE POSTE MESURÉ : le registre ne connaît personne, mais les
+ * panes répondent — et chaque session ne voit QUE les siens.
+ *
+ * @param {Record<string,string[]>} panesParSession  socket -> panes qu'elle porte
+ */
+function fauxHerdrDesPanes(panesParSession) {
+  const script = `#!/usr/bin/env node
+const carte = ${JSON.stringify(panesParSession)};
+const args = process.argv.slice(2);
+const socket = process.env.HERDR_SOCKET_PATH || '';
+const cmd = args.slice(0, 2).join(' ');
+// LE REGISTRE EST MUET — l'état exact du poste depuis le 18 août.
+if (cmd === 'agent list') { process.stdout.write(JSON.stringify({ result: { agents: [] } })); process.exit(0); }
+const ici = carte[socket] || [];
+if (cmd === 'pane get') {
+  if (!ici.includes(args[2])) { process.stdout.write(JSON.stringify({ error: { code: 'pane_not_found', message: 'pane_not_found' } })); process.exit(1); }
+  process.stdout.write(JSON.stringify({ result: { pane: { pane_id: args[2] } } }));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ error: { code: 'agent_not_found', message: 'agent_not_found' } }));
+process.exit(1);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+  process.env.PATH = `${bac}:${process.env.PATH}`;
+  process.env.HERDR_SESSIONS_ESSAIS = [SOCKET_A, SOCKET_B].join(':');
+}
+
+test('UN PANE QUE LE REGISTRE IGNORE EST TROUVÉ, ET LA LIVRAISON SAIT QU’ELLE PASSE PAR LE PANE', async () => {
+  const { trouverDestinataire } = await import('../src/destinataire.js');
+  fauxHerdrDesPanes({ [SOCKET_A]: ['w2D:p11'], [SOCKET_B]: ['w9:p1'] });
+
+  const r = await trouverDestinataire('w2D:p11');
+
+  assert.equal(r.ok, true, `le pane répond dans une session : abandonner ici, c'est refuser de parler à quelqu'un qui écoute — ${r.message}`);
+  assert.equal(r.pane, 'w2D:p11');
+  assert.equal(r.socket, SOCKET_A, 'et dans LA session qui le porte, pas une autre');
+  assert.equal(r.parLePane, true, 'la livraison doit savoir basculer ses verbes, sinon elle échoue au dernier mètre');
+});
+
+test('L’HOMONYMIE DE PANE RESTE UN REFUS DANS LE REPLI AUSSI — on ne tire pas au sort', async () => {
+  const { trouverDestinataire } = await import('../src/destinataire.js');
+  // `w5:p3` existe dans LES DEUX sessions : un identifiant de pane est interne à sa session.
+  // Livrer à l'une pour l'autre remettrait un compte rendu au mauvais chantier, en silence,
+  // et l'expéditeur aurait son accusé de réception. C'est la garde que le chemin nominal tient
+  // déjà ; le repli ne doit pas être la porte par laquelle elle se contourne.
+  fauxHerdrDesPanes({ [SOCKET_A]: ['w5:p3'], [SOCKET_B]: ['w5:p3'] });
+
+  const r = await trouverDestinataire('w5:p3');
+
+  assert.equal(r.ok, false, 'deux sessions portent ce pane : on ne choisit pas à sa place');
+  assert.match(r.message, /deux sessions|interne à sa session/i, 'et le refus dit pourquoi');
+});
+
+test('UN NOM INCONNU RESTE UN REFUS — le repli ne s’applique qu’à ce qui a la FORME d’un pane', async () => {
+  const { trouverDestinataire } = await import('../src/destinataire.js');
+  fauxHerdrDesPanes({ [SOCKET_A]: ['w2D:p11'] });
+
+  // `ristigouche` n'est pas un pane : le chercher comme tel enverrait son compte rendu dans le
+  // vide. La forme est ce qui sépare les deux, et elle ne s'élargit pas.
+  const r = await trouverDestinataire('ristigouche');
+
+  assert.equal(r.ok, false, 'un nom que personne ne porte reste un refus');
+});
+
+test('APRÈS TOUT — le bac d’essai est retiré', () => {
+  rmSync(bac, { recursive: true, force: true });
+  assert.ok(true);
+});
+
+// ───────────────────────── LA GARDE QUI NE DOIT PAS TOMBER, éprouvée SUR LE CHEMIN DE REPLI
+
+test('LE REFUS D’ÉCRIRE DANS UNE BOÎTE NON VIDE TIENT AUSSI QUAND ON LIVRE PAR LE PANE', async () => {
+  const { livrerBrief } = await import('../src/livraison.js');
+
+  // C'est la meilleure garantie de cet outil et plusieurs orchestrateurs s'en servent : écrire
+  // par-dessus un texte qui attend livrerait UN message fait des deux textes collés. Le repli
+  // ajoute une voie ; il ne doit pas être la porte par laquelle cette garde se contourne.
+  const vus = [];
+  const r = await livrerBrief({
+    pane: 'w2D:p11',
+    texte: 'mon compte rendu',
+    parLePane: true,
+    socket: null,
+    dormir: async () => {},
+    essais: 1,
+    delaiMs: 0,
+    immobiliteMs: 0,
+    appelHerdr: async (args) => {
+      vus.push(args);
+      return { ok: true, reponse: { result: { pane: { pane_id: 'w2D:p11' }, agent_status: 'idle' } } };
+    },
+    // La boîte porte DÉJÀ le texte de quelqu'un d'autre.
+    lireEcran: async (commande) => {
+      vus.push(commande);
+      const filet = '─'.repeat(20);
+      return [filet, '❯ un texte que quelqu’un attend de soumettre', filet].join('\n');
+    },
+  });
+
+  assert.equal(r.ok, false, 'une boîte qui porte le texte d’autrui fait refuser — par le pane comme ailleurs');
+
+  // ⚠️ ET LA LECTURE A BIEN EU LIEU PAR LA VOIE DU REPLI. Sans cette moitié, l'essai passerait
+  // aussi pour un refus obtenu par accident — par exemple si le repli n'avait jamais lu l'écran.
+  const lectures = vus.filter((a) => a[0] === 'pane' && a[1] === 'read');
+  assert.ok(lectures.length >= 1, 'la garde se prend sur une lecture d’écran, et elle doit passer par `pane read`');
+  assert.ok(
+    lectures.every((a) => a.includes('--format') && a.includes('ansi')),
+    'en ANSI : sans le gris, une suggestion se lirait comme un texte réel et la garde refuserait à tort'
+  );
+  // Aucun verbe de la famille fermée n'a été tenté.
+  assert.equal(vus.filter((a) => a[0] === 'agent').length, 0, 'aucun appel `agent …` : ils sont fermés à ces sessions');
+});

@@ -835,15 +835,16 @@ export async function vivant(pane, { socket } = {}) {
   //
   // Le registre reste PRIORITAIRE : ce chemin ne s'ouvre que lorsqu'il n'a rien à dire. Il le
   // complète, il ne le remplace pas.
-  try {
-    const { panes: listePanes } = await panes({ socket });
-    return listePanes.some((p) => p.pane_id === pane && Boolean(p.agent_session));
-  } catch {
-    // Une liste de panes injoignable ne prouve rien de plus que le silence du registre.
-    // On ne conclut pas à la mort sur une panne de mesure : l'appelant a, à chaque site, un
-    // chemin « herdr injoignable » qui reporte au lieu de trancher.
-    return false;
-  }
+  //
+  // ⚠️ ET ON NE CONCLUT PAS À LA MORT SUR UNE PANNE DE MESURE. Le refus de fermer se règle
+  // sur la DISPARITION POSITIVE — absent du registre ET absent des panes, les deux CONSTATÉS.
+  // Si la liste des panes est injoignable, on n'a rien constaté du tout : rendre `false`
+  // reviendrait à répondre « mort » à une question que personne n'a posée. On laisse donc
+  // remonter, ce qui atteint le chemin « herdr injoignable » que l'appelant a déjà à chaque
+  // site et qui REPORTE au lieu de trancher — celui-là même que le commentaire de `agents()`
+  // désignait comme la bonne sortie.
+  const { panes: listePanes } = await panes({ socket });
+  return listePanes.some((p) => p.pane_id === pane && Boolean(p.agent_session));
 }
 
 /** Le pane courant — celui depuis lequel la commande locale est invoquée. */
