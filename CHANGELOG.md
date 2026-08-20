@@ -7,6 +7,35 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-20
 
+*Projet `P-20260820-0001` — phases 1, 2, 4 et 5. **Le métier d'un rôle cesse d'être un texte écrit à la main pour devenir un produit de construction dérivé de son ABC.** Le socle chargé en permanence par un orchestrateur passe de **35 344 à 1 367 tokens**.*
+
+### Ajouté
+
+- **`pack metier rendre|verifier --role <rôle>`** — produit `L0.md`, `L1.md`, les chapitres `L2` et le fichier de droits depuis un classement versionné, et **refuse** plutôt que de rendre un métier qui ne tient pas. Les budgets sont un contrôle, pas une intention : `L0 ≤ 150`, `L1 ≤ 2 500` tokens, et le rendu échoue en nommant de combien ça dépasse. Il l'a fait au premier essai réel — le socle pesait 4 306 pour un plafond de 2 500.
+- **La garde du terminal** (`gardes/terminal.js`) — première garde de hook du dispositif. Elle ferme une brèche que le classement avait nommée : `permissions.deny` interdit les outils d'édition, et le terminal écrivait des fichiers sans passer par eux. Elle refuse une redirection qui écrit, une commande qui écrit sans rediriger, et un chemin hors du dépôt du chantier. **Ses deux chiffres, mesurés sur les 53 commandes que le métier prescrit lui-même : 8/8 écritures attrapées, 0 refus à tort.**
+- **La boucle d'évolution** (`evaluerProposition`) — dit si une proposition d'amélioration est recevable, sans jamais l'adopter. Une adoption qui ferait dépasser le socle est irrecevable **tant qu'un retrait ne la compense pas** ; celui qui propose n'est jamais celui qui accepte ; et « reporter » n'est pas une issue de revue.
+- **Deux artefacts d'analyse** — `docs/metier-agents/correspondance-metier-abc.md` (les 88 sections du métier appariées à l'ABC) et `classement-couches-orchestrateur.md` (chaque garde-fou dans sa couche, mesuré sur un lieu réellement posé).
+
+### Modifié
+
+- **L'ABC de l'orchestrateur passe en `2.0.0`** — il devient la source de son métier, dont il n'était qu'un sous-ensemble. Les **sept règles cardinales** entrent en tête, chacune avec la couche qui la garantit *ou la mention qu'aucune ne la porte* ; trois étaient absentes et sont créées. Vingt-trois règles d'affaires, une mémoire et cinq activités absorbent les **39 énoncés opposables** que le métier portait sans source. La dette de vocabulaire est soldée : « registre » devient `ServiceDesk` (46 remplacements).
+- **Le représentant client est rendu depuis l'ABC qu'il avait déjà** — contrairement à ce que le cadrage affirmait. Son rapport métier ÷ ABC était **déjà à 0,63×**, meilleur que celui de l'orchestrateur.
+
+### Corrigé
+
+- **Le socle se payait en double** : les sections de `L1` ne partitionnaient pas, et sept items y figuraient deux fois — sur le budget que le module existe pour défendre. `1 675 → 1 314` tokens.
+- **Le contenu des chapitres existait en deux copies, et seule la mauvaise était lue.** Éditer le fichier lisible était un no-op silencieux. Le `.md` est désormais la seule source.
+- **La garde anti-auto-approbation était contournable en omettant un nom**, ce qui était plus facile que d'en nommer deux identiques.
+- **`metier verifier` détecte un rendu périmé** face à sa source, et le writer retire les fichiers qu'un classement ne produit plus.
+
+### Technique
+
+- 58 tests sur le lot. **24 mutations passées une à la fois, toutes rouges** — dont quatre survivantes trouvées et corrigées, toutes du même motif : le test passait par un autre chemin que la garde qu'il prétendait éprouver.
+- Ouverts en chemin : `T-20260820-0138` (un test sensible au poste, vert en CI), `T-20260820-0142` (`pack setup` n'installe pas encore les gardes de hook).
+
+
+## [Non-versionne] - 2026-08-20
+
 *Lot `T-20260818-0043` (critère 3), sous la livraison `J-20260814-0002`. **Onze dépôts sur quinze refusaient une pose d'orchestrateur, et personne ne le savait.** Le refus était propre — `etatSource` nomme les fichiers manquants — mais on ne l'apprenait **qu'en tentant une pose qui échoue**.*
 
 ### Ajouté
