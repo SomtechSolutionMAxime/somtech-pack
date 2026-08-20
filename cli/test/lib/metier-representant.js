@@ -413,12 +413,25 @@ export const RENVERSEMENT = /il n['’]est pas vrai que|ce n['’]est pas (?:vra
  *
  * ⚠️ POURQUOI CE MOTIF EXISTE, ET POURQUOI IL NE RESSEMBLE À AUCUN AUTRE ICI.
  *
- * L'arbitrage du dirigeant du 2026-08-17 (ABC v1.2.0 : `R4.7`, `GF-GCL-008`, `CT-GCL-010`)
- * dit que l'accusé part AVANT le relèvement. Dans le texte livré, le relèvement porte le
- * rang 3 et l'accusé le rang 4 : **le rang dit l'inverse de l'arbitrage**, et c'est la prose
- * qui le rétablit. Le dirigeant a tranché qu'on ne renumérote PAS — renuméroter ferait DIRE
- * le bon ordre au texte sans rien GARDER : le rang deviendrait juste, et la réécriture
- * suivante pourrait le retourner sans qu'un test rougisse.
+ * ⚠️ D'OÙ VIENT CETTE RÈGLE — vérifié à la source, parce qu'une première version de ce
+ * commentaire l'attribuait de travers, et qu'une attribution dans un commentaire de code se
+ * relit comme un fait. L'ABC du gestionnaire client (Somcraft `e4b72bc9-b7a7-43f1-812e-72f58abe50be`) dit ceci :
+ *
+ *   — la règle `R4.7` elle-même est née d'une MESURE, pas d'une décision. Un lecteur neuf, à
+ *     qui l'on n'avait donné que ce texte, a mené un relèvement complet et écrit deux
+ *     messages au dirigeant avant que le client n'entende un mot — pendant qu'un employé de
+ *     ce client s'apprêtait à relancer une commande destructrice en production (changelog
+ *     v1.1.0). Le texte disait QU'il accuse réception ; jamais QUAND.
+ *   — ce que le dirigeant a tranché le 2026-08-17, c'est une CONTRADICTION INTERNE :
+ *     `CT-GCL-010` et `CT-GCL-022` exigeaient l'inverse l'un de l'autre sur une session qui
+ *     naît avec un message du client. Il a tranché en faveur de l'accusé qui passe avant
+ *     (`GF-GCL-008`, changelog v1.2.0).
+ *
+ * L'accusé part donc AVANT le relèvement. Dans le texte livré, le relèvement porte le rang 3
+ * et l'accusé le rang 4 : **le rang dit l'inverse de la règle**, et c'est la prose qui le
+ * rétablit. Ne pas renuméroter est un arbitrage de COORDINATION de ce chantier — renuméroter
+ * ferait DIRE le bon ordre au texte sans rien GARDER : le rang deviendrait juste, et la
+ * réécriture suivante pourrait le retourner sans qu'un test rougisse.
  *
  * La garantie tient donc par l'un OU l'autre de ses deux porteurs — le rang, ou l'incise.
  * Ce motif reconnaît le second.
@@ -1024,8 +1037,8 @@ export const CONTROLES = [
       // ══ L'ANTÉRIORITÉ SUR LE RELÈVEMENT, ET ELLE NE TIENT PAS PAR LE RANG.
       //
       // Le relèvement porte le rang 3 et l'accusé le rang 4 : le rang dit l'INVERSE de
-      // l'arbitrage du 2026-08-17. Le dirigeant a tranché qu'on ne renumérote pas — un ordre
-      // qui a l'air juste ne garde rien. La garantie a donc DEUX porteurs, et il suffit qu'un
+      // l'arbitrage du 2026-08-17. Ne pas renuméroter est un arbitrage de COORDINATION de ce
+      // chantier — un ordre qui a l'air juste ne garde rien. La garantie a donc DEUX porteurs, et il suffit qu'un
       // tienne : le RANG, ou l'INCISE en toutes lettres dans l'énoncé de l'accusé. Aujourd'hui
       // c'est l'incise ; si un jour la liste est renumérotée, le rang prendra le relais sans
       // que cette garde ait à changer.
@@ -2138,12 +2151,12 @@ export const MUTATIONS = [
     // ⚠️ LA MUTATION QUI RESTAIT VERTE — c'est elle qui a démasqué D2, et elle est le seul
     // critère d'acceptation de ce lot. Posée par la revue indépendante de la PR #299 sur
     // `7926463`, elle laissait la suite ENTIÈREMENT VERTE : le texte prescrivait alors le
-    // contresens exact de l'arbitrage du dirigeant, et rien ne s'en apercevait. Elle ne
+    // contresens exact de la règle `R4.7`, et rien ne s'en apercevait. Elle ne
     // retire aucun mot-clé, ne déplace aucun rang, ne supprime aucune étape — elle retourne
     // une incise de six mots. La contre-épreuve du reviewer dit le reste : supprimer l'étape
     // 4 entière faisait rougir quatre tests. L'absence était gardée ; la modalité, non.
     id: 'accuse-attend-la-fin-du-relevement',
-    quoi: 'l’accusé attend la fin du relèvement — l’arbitrage du dirigeant retourné par une seule incise',
+    quoi: 'l’accusé attend la fin du relèvement — la règle du 2026-08-17 retournée par une seule incise',
     cible: 'accuse-precede-le-relevement',
     fichier: 'metier',
     muter: (t) => t.replace(

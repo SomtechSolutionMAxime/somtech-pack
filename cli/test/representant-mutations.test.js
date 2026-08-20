@@ -296,10 +296,13 @@ test('axe MODALITÉ : aucune tournure ne commence par \\b devant une initiale ac
 
 // ═══════════════════════ l'axe POSITION-EN-PROSE, et la même panne silencieuse
 //
-// `POSTERIORITE_SUR_LE_RELEVEMENT` garde l'arbitrage du dirigeant du 2026-08-17 : l'accusé
-// de réception part AVANT le relèvement. Le RANG ne peut pas le garder — le relèvement porte
-// le rang 3 et l'accusé le rang 4, et le dirigeant a tranché qu'on ne renumérote pas. C'est
-// donc l'incise en prose qui porte la garantie, et ce motif qui interdit son contresens.
+// `POSTERIORITE_SUR_LE_RELEVEMENT` garde la règle `R4.7` de l'ABC du gestionnaire client :
+// l'accusé de réception part AVANT le relèvement. Elle est née d'une MESURE — un lecteur neuf
+// a relevé et remonté deux fois avant que le client n'entende un mot ; ce que le dirigeant a
+// tranché le 2026-08-17, c'est la contradiction entre `CT-GCL-010` et `CT-GCL-022`, pas la
+// règle. Le RANG ne peut pas la garder — le relèvement porte le rang 3 et l'accusé le rang 4,
+// et ne pas renuméroter est un arbitrage de COORDINATION de ce chantier. C'est donc l'incise
+// en prose qui porte la garantie, et ce motif qui interdit son contresens.
 //
 // ⚠️ IL A EXACTEMENT LE MODE DE PANNE DE `PERMISSIF`, ET IL L'A SUBI DEUX FOIS AVANT D'ÊTRE
 // COMMITTÉ. Une alternative qui ne s'apparie à rien rend la garde vraie par construction :
