@@ -30,7 +30,14 @@ RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Un contrôle qui ne lirait que le socle jugerait 850 mots là où le métier en
 # fait 25 000 — il passerait au vert sans rien garder.
 GABARIT="${GABARIT_ORCHESTRATEUR:-$RACINE/.claude/templates/orchestrateur}"
-METIER="$(mktemp -t smtk-metier-orch)"
+# ⚠️ Forme PORTABLE : « mktemp -t <prefixe> » n'a pas le même contrat sur macOS
+# (BSD, préfixe) et sur Linux (GNU, gabarit qui exige des X). Sans les X, il
+# réussit ici et échoue en CI — le fichier reste vide, et le banc annonce « le
+# gabarit est introuvable » sur un gabarit parfaitement présent.
+METIER="$(mktemp "${TMPDIR:-/tmp}/smtk-metier-orch.XXXXXX")" || {
+  echo "  ✗ impossible de créer le fichier de travail — le banc ne peut rien éprouver" >&2
+  exit 1
+}
 cat "$GABARIT/CLAUDE.md" > "$METIER"
 if [ -d "$GABARIT/metier/chapitres" ]; then
   for c in "$GABARIT/metier/chapitres"/*.md; do printf '\n\n' >> "$METIER"; cat "$c" >> "$METIER"; done
