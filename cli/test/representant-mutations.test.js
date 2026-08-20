@@ -55,7 +55,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CONTROLES, MUTATIONS, PERMISSIF, exigeImperatif, lireGabarits } from './lib/metier-representant.js';
+import {
+  CONTROLES, MUTATIONS, PERMISSIF, exigeImperatif, lireGabarits,
+  ANTERIORITE_SUR_LE_RELEVEMENT, POSTERIORITE_SUR_LE_RELEVEMENT,
+  sectionDe, etapesDe,
+} from './lib/metier-representant.js';
 
 const ORIGINAL = lireGabarits();
 
@@ -288,4 +292,120 @@ test('axe MODALITÉ : aucune tournure ne commence par \\b devant une initiale ac
         + `un caractère de mot, donc le \\b qui la précède ne s'apparie jamais. Retire-le.`,
     );
   }
+});
+
+// ═══════════════════════ l'axe POSITION-EN-PROSE, et la même panne silencieuse
+//
+// `POSTERIORITE_SUR_LE_RELEVEMENT` garde l'arbitrage du dirigeant du 2026-08-17 : l'accusé
+// de réception part AVANT le relèvement. Le RANG ne peut pas le garder — le relèvement porte
+// le rang 3 et l'accusé le rang 4, et le dirigeant a tranché qu'on ne renumérote pas. C'est
+// donc l'incise en prose qui porte la garantie, et ce motif qui interdit son contresens.
+//
+// ⚠️ IL A EXACTEMENT LE MODE DE PANNE DE `PERMISSIF`, ET IL L'A SUBI DEUX FOIS AVANT D'ÊTRE
+// COMMITTÉ. Une alternative qui ne s'apparie à rien rend la garde vraie par construction :
+// l'axe est réputé couvert, la mutation qu'il existe pour attraper reste verte, et rien ne
+// le dit. Un premier jet oubliait l'espace entre l'alternance et le groupe suivant
+// (« quand » + « tu auras » ne se rejoignaient jamais) ; un second gardait `lorsqu['’]`
+// devant un `\s+`, c'est-à-dire un espace après l'apostrophe, que le français n'écrit pas.
+// Les deux ont été trouvées par la MESURE, aucune par la relecture.
+//
+// Ce test rend la panne impossible : chaque introducteur déclaré dans le motif doit avoir sa
+// sonde, le compte des deux est apparié, et deux sondes ne peuvent pas déclencher le même
+// introducteur. En ajouter un sans sa sonde fait rougir — c'est le but.
+
+/** Les introducteurs de premier niveau du motif — la source, pas une transcription. */
+function introducteursDe(motif) {
+  return motif.source.match(/^\(\?:([^)]*)\)/)[1].split('|');
+}
+
+/**
+ * Une sonde par introducteur, dans l'ordre du motif. Elles ne sont PAS dérivées du motif :
+ * une sonde fabriquée à partir de ce qu'elle teste réussirait aussi bien sur une branche
+ * morte — elle en serait la transcription.
+ */
+const SONDES_POSTERIEURES = [
+  'quand tu auras fini de relever',
+  'lorsque tu auras relevé',
+  'une fois le relèvement terminé',
+  'après le relèvement',
+  'dès que tu as relevé',
+  'sitôt le relèvement bouclé',
+];
+
+/**
+ * Des énoncés que le motif ne doit JAMAIS reconnaître — dont le texte livré lui-même.
+ *
+ * ⚠️ C'est la moitié qui manquait à `PERMISSIF` et qui lui a coûté quatre défauts d'un coup.
+ * Une garde de polarité qui rougit sur du texte correct est pire qu'absente : le premier qui
+ * la rencontre la retire, et emporte ce qu'elle gardait vraiment. « dès que sa ligne est
+ * ouverte » vit dans l'énoncé même que ce motif garde, et il ne parle pas de relèvement.
+ */
+const TEXTES_ANTERIEURS = [
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. Voir « Ta continuité ».",
+  "**Relève ce qui existe déjà** pour ce client (voir « Le relèvement »).",
+  'Le relèvement peut durer ; l’inaccessibilité, non.',
+  'dès que sa ligne est ouverte, l’accusé part avant le relèvement',
+];
+
+test('axe POSITION-EN-PROSE : chaque introducteur du motif est VIVANT, et chacun a sa sonde', () => {
+  const introducteurs = introducteursDe(POSTERIORITE_SUR_LE_RELEVEMENT);
+  assert.equal(
+    SONDES_POSTERIEURES.length, introducteurs.length,
+    `${SONDES_POSTERIEURES.length} sonde(s) pour ${introducteurs.length} introducteur(s) : un introducteur `
+      + `ajouté sans sa sonde n'est prouvé par rien, et c'est exactement ainsi qu'on en écrit un qui ne `
+      + `s'apparie jamais (${introducteurs.join('  ·  ')})`,
+  );
+
+  const vus = new Set();
+  for (const sonde of SONDES_POSTERIEURES) {
+    const trouve = sonde.match(POSTERIORITE_SUR_LE_RELEVEMENT);
+    assert.ok(trouve, `la sonde « ${sonde} » ne déclenche AUCUN introducteur — elle ne prouve donc rien`);
+    vus.add(trouve[0].toLowerCase().split(/\s+/)[0]);
+  }
+  assert.equal(
+    vus.size, SONDES_POSTERIEURES.length,
+    `deux sondes déclenchent le même introducteur : un autre n'est donc éprouvé par rien `
+      + `(déclenchés : ${[...vus].join(' · ')})`,
+  );
+});
+
+test('axe POSITION-EN-PROSE : le motif n’est pas TROP LARGE — le texte livré ne s’y reconnaît pas', () => {
+  for (const enonce of TEXTES_ANTERIEURS) {
+    const trouve = enonce.match(POSTERIORITE_SUR_LE_RELEVEMENT);
+    assert.ok(
+      !trouve,
+      `« ${enonce} » place l'accusé AVANT le relèvement, et la garde y voit le contraire `
+        + `(« ${trouve && trouve[0]} ») : elle rougirait sur du texte correct, et se ferait retirer.`,
+    );
+  }
+});
+
+test('axe POSITION-EN-PROSE : l’antériorité se reconnaît DANS L’ÉNONCÉ que le contrôle regarde', () => {
+  // ⚠️ CE TEST A D'ABORD MESURÉ LE MAUVAIS OBJET, et son échec l'a dit. Écrit sur le
+  // DOCUMENT entier, il exigeait que l'antériorité ne s'y reconnaisse qu'une fois — et le
+  // document en porte deux, la seconde parfaitement légitime (« Saluer avant d'avoir relevé »,
+  // dans les anti-patterns). Le contrôle, lui, ne regarde que l'ÉNONCÉ de l'étape d'accusé.
+  // Une mesure portée sur un objet ne conclut pas sur un autre : le test mesure désormais
+  // exactement ce que la garde regarde.
+  const s = sectionDe(ORIGINAL.metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+  const accuse = etapesDe(s.corps).find((e) => /accuse/i.test(e.libelle || ''));
+  assert.ok(accuse, 'l’étape d’accusé de réception est introuvable dans l’ordre d’ouverture');
+
+  assert.match(accuse.enonce, ANTERIORITE_SUR_LE_RELEVEMENT,
+    'l’énoncé de l’accusé ne porte plus l’antériorité sur le relèvement en toutes lettres — '
+      + 'or le RANG ne peut pas la porter : le relèvement le précède, et on ne renumérote pas');
+
+  // Et le sens inverse, sur la mutation qui existe pour ça : elle doit lui FAIRE PERDRE
+  // l'antériorité, sans quoi la garde du contrôle passerait quoi qu'on écrive.
+  const retournee = MUTATIONS.find((m) => m.id === 'accuse-attend-la-fin-du-relevement');
+  assert.ok(retournee, 'la mutation qui retourne l’incise a disparu — l’arbitrage n’est plus éprouvé');
+  const mute = retournee.muter(ORIGINAL.metier);
+  assert.notEqual(mute, ORIGINAL.metier, 'la mutation est inopérante : son motif ne mord plus');
+  const accuseMute = etapesDe(sectionDe(mute, /ordre d.ouverture/i, 'sur l’ordre d’ouverture').corps)
+    .find((e) => /accuse/i.test(e.libelle || ''));
+  assert.doesNotMatch(accuseMute.enonce, ANTERIORITE_SUR_LE_RELEVEMENT,
+    'l’énoncé retourné porte ENCORE l’antériorité : la garde du contrôle resterait verte sur lui');
+  assert.match(accuseMute.enonce, POSTERIORITE_SUR_LE_RELEVEMENT,
+    'l’énoncé retourné n’est pas reconnu comme une subordination à la fin du relèvement — '
+      + 'la garde de polarité serait alors décorative');
 });
