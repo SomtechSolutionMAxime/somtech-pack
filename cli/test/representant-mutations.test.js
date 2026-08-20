@@ -313,9 +313,28 @@ test('axe MODALITÉ : aucune tournure ne commence par \\b devant une initiale ac
 // sonde, le compte des deux est apparié, et deux sondes ne peuvent pas déclencher le même
 // introducteur. En ajouter un sans sa sonde fait rougir — c'est le but.
 
-/** Les introducteurs de premier niveau du motif — la source, pas une transcription. */
-function introducteursDe(motif) {
-  return motif.source.match(/^\(\?:([^)]*)\)/)[1].split('|');
+/**
+ * TOUTES les branches d'un motif — les alternatives de premier niveau, ET les items du groupe
+ * qui ouvre chacune d'elles.
+ *
+ * ⚠️ SA PREMIÈRE VERSION NE VOYAIT QUE LE PREMIER GROUPE, et une revue indépendante l'a
+ * démontré en cassant la troisième alternative top-level : la suite est restée ENTIÈREMENT
+ * VERTE. Le test de vivacité couvrait 6 branches sur 8 tout en se présentant comme complet —
+ * un vert qui ne touche pas ce qu'il prétend éprouver, exactement ce que ce harnais existe
+ * pour empêcher. `alternativesDe`, juste au-dessus, faisait déjà la moitié du travail : elle
+ * était là, écrite et éprouvée, et cette fonction en avait été une copie appauvrie.
+ */
+function branchesDe(motif) {
+  const branches = [];
+  for (const alt of alternativesDe(motif.source)) {
+    const tete = alt.match(/^\(\?:([^()]*)\)/);
+    if (tete && tete[1].includes('|')) {
+      for (const item of tete[1].split('|')) branches.push(item + alt.slice(tete[0].length));
+    } else {
+      branches.push(alt);
+    }
+  }
+  return branches;
 }
 
 /**
@@ -330,6 +349,10 @@ const SONDES_POSTERIEURES = [
   'après le relèvement',
   'dès que tu as relevé',
   'sitôt le relèvement bouclé',
+  // ⚠️ CES DEUX-LÀ N'ÉTAIENT ÉPROUVÉES PAR RIEN — les deux alternatives top-level que la
+  // première version de `branchesDe` ne voyait pas. Casser l'une d'elles laissait tout vert.
+  'après avoir fini de relever',
+  'à la fin du relèvement',
 ];
 
 /**
@@ -347,26 +370,53 @@ const TEXTES_ANTERIEURS = [
   'dès que sa ligne est ouverte, l’accusé part avant le relèvement',
 ];
 
-test('axe POSITION-EN-PROSE : chaque introducteur du motif est VIVANT, et chacun a sa sonde', () => {
-  const introducteurs = introducteursDe(POSTERIORITE_SUR_LE_RELEVEMENT);
-  assert.equal(
-    SONDES_POSTERIEURES.length, introducteurs.length,
-    `${SONDES_POSTERIEURES.length} sonde(s) pour ${introducteurs.length} introducteur(s) : un introducteur `
-      + `ajouté sans sa sonde n'est prouvé par rien, et c'est exactement ainsi qu'on en écrit un qui ne `
-      + `s'apparie jamais (${introducteurs.join('  ·  ')})`,
+/**
+ * Chaque branche du motif doit être PROUVÉE VIVANTE par au moins une sonde qui la déclenche,
+ * branche par branche — pas par un appariement de COMPTES.
+ *
+ * ⚠️ LE COMPTE NE SUFFIT PAS, et c'est le fond de ce qu'une revue indépendante a trouvé ici.
+ * « n sondes pour n branches » se lit comme « chaque branche est éprouvée » et ne le dit pas :
+ * il autorise deux sondes sur la même branche pendant qu'une troisième reste morte. On compile
+ * donc chaque branche SEULE et on exige qu'une sonde la déclenche — une branche qui ne
+ * s'apparie à rien tombe alors nommément, quel que soit le nombre de sondes.
+ */
+function exigeBranchesVivantes(motif, sondes, quoi) {
+  const branches = branchesDe(motif);
+  const mortes = branches.filter((b) => !sondes.some((s) => new RegExp(b, 'i').test(s)));
+  assert.deepEqual(
+    mortes, [],
+    `${quoi} : ces branches ne s'apparient à AUCUNE sonde — elles sont vraies par construction, `
+      + `l'axe est réputé couvert et il ne l'est pas : ${mortes.join('  ·  ')}`,
   );
+  return branches;
+}
 
-  const vus = new Set();
+test('axe POSITION-EN-PROSE : chaque branche du motif est VIVANTE, prouvée une par une', () => {
+  const branches = exigeBranchesVivantes(
+    POSTERIORITE_SUR_LE_RELEVEMENT, SONDES_POSTERIEURES, 'la subordination à la fin du relèvement');
+  assert.ok(branches.length >= 8,
+    `le motif ne porte plus que ${branches.length} branche(s) — si l'une a disparu, dis-le ici plutôt `
+      + `que de laisser le test se rétrécir avec elle`);
+
+  // Et symétriquement : une sonde qui ne déclenche rien ne prouve rien, et laisserait croire
+  // qu'une branche est couverte alors qu'elle ne l'est plus.
   for (const sonde of SONDES_POSTERIEURES) {
-    const trouve = sonde.match(POSTERIORITE_SUR_LE_RELEVEMENT);
-    assert.ok(trouve, `la sonde « ${sonde} » ne déclenche AUCUN introducteur — elle ne prouve donc rien`);
-    vus.add(trouve[0].toLowerCase().split(/\s+/)[0]);
+    assert.match(sonde, POSTERIORITE_SUR_LE_RELEVEMENT,
+      `la sonde « ${sonde} » ne déclenche AUCUNE branche — elle ne prouve donc rien`);
   }
-  assert.equal(
-    vus.size, SONDES_POSTERIEURES.length,
-    `deux sondes déclenchent le même introducteur : un autre n'est donc éprouvé par rien `
-      + `(déclenchés : ${[...vus].join(' · ')})`,
-  );
+});
+
+test('axe POSITION-EN-PROSE : l’ANTÉRIORITÉ aussi est vivante branche par branche', () => {
+  // ⚠️ Ce motif-ci n'était éprouvé que par la seule branche qui vit dans le texte livré : les
+  // trois autres pouvaient être mortes sans que rien ne le dise. Relevé en revue indépendante
+  // comme constat annexe — corrigé ici parce qu'un constat annexe est un défaut qui attend.
+  exigeBranchesVivantes(ANTERIORITE_SUR_LE_RELEVEMENT, [
+    "avant même d'avoir fini de relever",
+    "avant d'avoir relevé",
+    'avant de finir de relever',
+    'avant le relèvement',
+    'avant la fin du relèvement',
+  ], 'l’antériorité de l’accusé sur le relèvement');
 });
 
 test('axe POSITION-EN-PROSE : le motif n’est pas TROP LARGE — le texte livré ne s’y reconnaît pas', () => {
@@ -408,4 +458,54 @@ test('axe POSITION-EN-PROSE : l’antériorité se reconnaît DANS L’ÉNONCÉ 
   assert.match(accuseMute.enonce, POSTERIORITE_SUR_LE_RELEVEMENT,
     'l’énoncé retourné n’est pas reconnu comme une subordination à la fin du relèvement — '
       + 'la garde de polarité serait alors décorative');
+});
+
+// ═══════════════ COUPER LA SONDE, PAS SEULEMENT RETIRER LA CHOSE
+//
+// ⚠️ CE TEST MANQUAIT, ET SON ABSENCE A ÉTÉ MESURÉE, pas soupçonnée : une revue indépendante
+// a REMIS `rangUnique` dans sa version boguée — celle qui rendait le même message pour deux
+// réalités opposées — et la suite est restée ENTIÈREMENT VERTE (203/201/0). Le correctif
+// était juste, et rien ne le gardait : il aurait pu disparaître au prochain refactor sans
+// qu'un seul test s'en aperçoive. C'est la règle d'or n°6 prise en défaut par le lot qui
+// venait de la citer.
+//
+// LA GARANTIE ÉPROUVÉE ICI : une garde qui rend LA MÊME VALEUR quand l'objet est absent et
+// quand la sonde est aveugle ne garde rien — le lecteur du message ne peut pas savoir s'il
+// doit RÉÉCRIRE l'étape ou seulement la RE-GRASSER. On teste donc « quand il n'y a rien »
+// ET « quand on ne peut pas voir », et on exige que les deux se distinguent.
+
+test('sonde aveugle ≠ objet absent : les deux situations ne rendent PAS le même message', () => {
+  const ctl = CONTROLES.find((c) => c.id === 'accuse-precede-le-relevement');
+  assert.ok(ctl, 'le contrôle de l’accusé de réception a disparu — ce test ne prouve plus rien');
+
+  // L'étape est DÉRIVÉE du texte, jamais recopiée : un littéral figé ici cesserait
+  // silencieusement de mordre le jour où la phrase bouge, et ce test deviendrait décoratif.
+  const section = sectionDe(ORIGINAL.metier, /ordre d.ouverture/i, 'sur l’ordre d’ouverture');
+  const accuse = etapesDe(section.corps).find((e) => /accuse/i.test(e.libelle || ''));
+  assert.ok(accuse, 'l’étape d’accusé de réception est introuvable — la mutation serait inopérante');
+  const ligne = `${accuse.rang}. ${accuse.enonce}`;
+
+  const plainteSur = (metier) => {
+    assert.notEqual(metier, ORIGINAL.metier, 'mutation INOPÉRANTE : le texte n’a pas changé');
+    try { ctl.verifier({ ...ORIGINAL, metier }); return null; } catch (e) { return e.message; }
+  };
+
+  // (A) l'objet N'EXISTE PAS : l'étape est retirée du texte.
+  const absente = plainteSur(ORIGINAL.metier.replace(`${ligne}\n`, ''));
+  // (B) l'objet EXISTE, la SONDE est aveugle : même rang, même texte, gras retiré.
+  const aveugle = plainteSur(ORIGINAL.metier.replace(ligne, ligne.replaceAll('**', '')));
+
+  assert.ok(absente, 'l’étape supprimée ne fait rougir personne — l’absence n’est plus gardée');
+  assert.ok(aveugle, 'l’étape dégraissée ne fait rougir personne — la cécité n’est plus vue');
+  assert.notEqual(
+    absente, aveugle,
+    'l’objet absent et la sonde aveugle rendent le MÊME message, caractère pour caractère : '
+      + 'la garde ne distingue plus « ça n’existe pas » de « je ne peux pas le voir » — '
+      + `« ${absente} »`,
+  );
+  assert.match(
+    aveugle, /ne peut pas conclure à une absence|aveugle/i,
+    'le message de la sonde aveugle ne dit pas QUE la mesure est aveugle : il diffère de celui '
+      + `de l’absence, et il n’en donne pas la raison — « ${aveugle} »`,
+  );
 });

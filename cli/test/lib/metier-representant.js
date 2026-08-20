@@ -995,14 +995,33 @@ export const CONTROLES = [
 
       // ⚠️ ET LA PRÉSENCE N'EST PAS L'ABSENCE DU CONTRAIRE. Un énoncé peut porter l'incise ET
       // la subordination inverse ; et surtout, remplacer l'incise par son contresens exact
-      // laissait tout vert avant ce lot. On interdit donc la POSTÉRIORITÉ dans cet énoncé,
-      // quelle que soit la tournure qui l'amène.
+      // laissait tout vert avant ce lot. On interdit donc la POSTÉRIORITÉ dans cet énoncé.
+      //
+      // ⚠️ CE QUE CETTE LIGNE VAUT, ET CE QU'ELLE NE VAUT PAS. C'est un FILTRE DE VOCABULAIRE,
+      // comme `PERMISSIF` : elle attrape les tournures qu'on lui a apprises, jamais « toute
+      // façon de dire après ». Le premier jet de ce lot affirmait « quelle que soit la tournure
+      // qui l'amène » — c'était FAUX, et une revue indépendante l'a démontré en une mutation.
+      // La ligne suivante ferme la famille qu'elle laissait passer ; d'autres resteront.
       const subordonne = POSTERIORITE_SUR_LE_RELEVEMENT.exec(accuse.enonce);
       assert.ok(
         !subordonne,
         `l’énoncé de l’accusé subordonne le geste à la FIN du relèvement (« ${subordonne && subordonne[0]} ») `
           + `— c’est le contresens exact de l’arbitrage du 2026-08-17, et il ne coûte qu’une incise : `
           + `« ${accuse.enonce.trim()} »`,
+      );
+
+      // ⚠️ ET L'INCISE PEUT ÊTRE LÀ, INTACTE, DANS UNE PHRASE QUI LA NIE. Trouvé par la revue
+      // indépendante de ce lot, en une mutation restée VERTE : « ce n'est pas vrai que tu
+      // accuses **avant même d'avoir fini de relever** : en réalité tu accuses ensuite ».
+      // L'antériorité s'y reconnaît — c'est une sous-chaîne —, la postériorité ne s'y reconnaît
+      // pas, et le sens est exactement inversé. C'est le motif que ce fichier documente depuis
+      // le 2026-08-16 sous `RENVERSEMENT`, et que ce contrôle n'appliquait pas : la garde
+      // existait déjà, à trois cents lignes d'ici, et personne ne l'avait branchée ici.
+      const enveloppe = RENVERSEMENT.exec(accuse.enonce);
+      assert.ok(
+        !enveloppe,
+        `l’énoncé de l’accusé enveloppe sa propre consigne d’un renversement (« ${enveloppe && enveloppe[0]} ») : `
+          + `l’antériorité y est encore écrite, et le texte dit le contraire — « ${accuse.enonce.trim()} »`,
       );
 
       // LE RANG NE SUFFIT PAS : une étape peut garder sa place et cesser d'obliger.
@@ -2060,6 +2079,24 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "— **avant même d'avoir fini de relever**, dès que sa ligne est ouverte.",
       "— **quand tu auras fini de relever**, dès que sa ligne est ouverte.",
+    ),
+  },
+
+  {
+    // ⚠️ LA MUTATION QUI MANQUAIT À LA GARDE DE RENVERSEMENT — et son absence a été mesurée :
+    // retirer cette garde du contrôle ne faisait rougir AUCUN test. Une garde qu'on peut
+    // désarmer sans qu'un test s'en aperçoive n'est pas gardée, elle est seulement écrite.
+    // La mutation elle-même vient de la revue indépendante de ce lot : elle laisse l'incise
+    // d'antériorité INTACTE — c'est une sous-chaîne, elle se reconnaît toujours — et la nie
+    // dans la phrase qui la porte. Ni la garde d'antériorité ni celle de postériorité ne la
+    // voient : seul `RENVERSEMENT` la voit.
+    id: 'accuse-antériorité-enveloppée-d-une-négation',
+    quoi: 'l’antériorité de l’accusé est écrite ET niée dans la même phrase — le sens est inversé, les mots sont là',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "— **avant même d'avoir fini de relever**, dès que sa ligne est ouverte.",
+      "— ce n'est pas vrai que tu accuses **avant même d'avoir fini de relever** : en réalité tu accuses ensuite, dès que sa ligne est ouverte.",
     ),
   },
 
