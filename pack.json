@@ -69,6 +69,14 @@
       "paths": [
         "naissance-representant/"
       ]
+    },
+    "gardes": {
+      "scope": "poste",
+      "default": false,
+      "description": "Les gardes de hook des metiers rendus (STD-047). Deposees dans ~/.somtech/gardes/, c'est la que les settings.json rendus les cherchent.",
+      "paths": [
+        "gardes/"
+      ]
     }
   }
 }

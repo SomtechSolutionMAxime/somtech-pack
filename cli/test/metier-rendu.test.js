@@ -358,3 +358,40 @@ test('un item classé « refus-de-permission » exige que le refus soit réellem
   c.items[0].refus = ['NotebookEdit'];
   assert.equal(rendre(c).ok, false, 'le refus que l item nomme doit figurer dans ceux du classement');
 });
+
+test('la commande de hook rendue REFUSE quand la garde est absente du poste', () => {
+  const c = classementValide();
+  c.hooks = [{ evenement: 'PreToolUse', outil: 'Bash', garde: 'terminal' }];
+  const cmd = JSON.parse(rendre(c).artefacts['.claude/settings.json'])
+    .hooks.PreToolUse[0].hooks[0].command;
+
+  // ⚠️ `node <fichier absent>` sort en code 1 — une erreur NON BLOQUANTE pour
+  // Claude Code : le geste passerait pendant que le classement déclare l'item
+  // « porté par un hook ». La commande doit donc se défendre elle-même.
+  assert.ok(cmd.includes('-f '), 'la commande doit vérifier que la garde existe avant de l appeler');
+  assert.ok(/permissionDecision"\s*:\s*"deny"/.test(cmd),
+    'garde absente ⇒ la commande doit rendre elle-même un refus, pas laisser passer');
+  assert.ok(cmd.includes('pack setup'), 'le refus doit dire comment installer la garde');
+});
+
+test('chaque cardinale DIT ce qui la garantit — sinon l agent ne peut pas le savoir', () => {
+  // ⚠️ Trouvé par l'essai réel du 2026-08-20 : un orchestrateur né sur le métier
+  // rendu a répondu « 7 — non établi, mon socle n'annonce rien sur ce qui
+  // garantit les cardinales ». Il avait raison, et il ne l'a pas conclu de rien
+  // (RA-ORC-004). La correction du doublon en L1 avait emporté l'information :
+  // la section « refusés » portait la couche, la section « cardinales » non.
+  const c = classementValide();
+  c.items[0].cardinale = 1;                                   // portée par un refus
+  c.items[1].cardinale = 2;                                   // portée par un hook
+  c.items[2].cardinale = 3;                                   // portée par rien
+  delete c.items[2].chapitre;
+  c.items[2].enonce_socle = 'court';
+  c.items[2].nature = 'garde-fou';
+  c.items[2].sans_garantie = { motif: 'juge un énoncé', assume_par: 'le dirigeant', definitif: true };
+  const l1 = rendre(c).artefacts['L1.md'];
+  const bloc = l1.slice(l1.indexOf('cardinales'), l1.indexOf('Ce qui t'));
+  assert.match(bloc, /GF-ORC-001[^\n]*refus-de-permission/, 'la cardinale portée par un refus doit le dire');
+  assert.match(bloc, /GF-ORC-014[^\n]*hook/, 'la cardinale portée par un hook doit le dire');
+  assert.match(bloc, /RA-ORC-001[^\n]*(aucune couche|rien ne la garantit)/i,
+    'une cardinale que rien ne garantit doit le dire AUSSI — le silence se lit comme « non établi »');
+});

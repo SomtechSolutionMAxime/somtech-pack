@@ -99,7 +99,7 @@ test('une commande slash n est pas un chemin — `/goal` n est pas un répertoir
 test('la copie distribuée de la décision est identique à sa source — deux copies divergent en silence', async () => {
   const { readFileSync } = await import('node:fs');
   const source = readFileSync(new URL('../src/metier/gardes/terminal.js', import.meta.url), 'utf8');
-  const distribuee = readFileSync(new URL('../../scripts/gardes/terminal-decision.js', import.meta.url), 'utf8');
+  const distribuee = readFileSync(new URL('../../gardes/terminal-decision.js', import.meta.url), 'utf8');
   assert.equal(distribuee, source,
     'scripts/gardes/terminal-decision.js a divergé de cli/src/metier/gardes/terminal.js — ' +
     'une copie amputée laisse passer sans qu un seul essai rougisse');

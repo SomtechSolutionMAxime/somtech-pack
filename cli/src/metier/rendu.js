@@ -44,6 +44,30 @@ export function compterTokens(texte) {
   return Math.max(1, Math.ceil(String(texte).length / 3.5));
 }
 
+/**
+ * La commande d'un hook, qui REFUSE d'elle-même si la garde manque sur le poste.
+ *
+ * ⚠️ `node <fichier absent>` sort en code 1 — pour Claude Code, une erreur NON
+ * BLOQUANTE : le geste passerait pendant que le classement déclare l'item
+ * « porté par un hook ». C'est la garantie fausse que R1 existe pour empêcher,
+ * déplacée d'un cran. La commande se défend donc elle-même, comme le seul hook
+ * déjà en service (STD-047 R3bis).
+ */
+function commandeDeHook(garde) {
+  const refus = JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason:
+        `la garde « ${garde} » est introuvable sur ce poste (~/.somtech/gardes) — ` +
+        'installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : ' +
+        'un garde absent ne vaut jamais un garde permissif.',
+    },
+  }).replace(/'/g, "'\\''");
+  return `G="$HOME/.somtech/gardes/${garde}.js"; if [ -f "$G" ]; then exec node "$G"; ` +
+    `else cat >/dev/null 2>&1; printf '%s\\n' '${refus}'; fi`;
+}
+
 const cheminSur = (c) =>
   !c.startsWith('/') && !c.includes('..') && !c.includes('.orchestrateur') &&
   !c.includes('.gestionnaire') && !c.includes('CONTEXTE.md');
@@ -164,7 +188,7 @@ export function rendre(classement) {
          ...deroges.filter((i) => !dejaEnL1.has(i.id)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(aucune couche — ${i.sans_garantie.motif} · assumé par ${i.sans_garantie.assume_par})*`), '']
       : []),
     ...(cardinales.length
-      ? ['## Les règles cardinales', '', ...cardinales.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce}`), '']
+      ? ['## Les règles cardinales', '', ...cardinales.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${deroges.includes(i) ? `aucune couche ne la garantit — ${i.sans_garantie.motif}` : i.couche})*`), '']
       : []),
     '## Ce qui t\'est refusé',
     '',
@@ -207,7 +231,12 @@ export function rendre(classement) {
       for (const h of hooks) {
         (st.hooks[h.evenement] ||= []).push({
           matcher: h.outil,
-          hooks: [{ type: 'command', command: `node "$HOME/.somtech/gardes/${h.garde}.js"` }],
+          // ⚠️ La commande se DÉFEND elle-même. `node <fichier absent>` sort en
+          // code 1, qui est pour Claude Code une erreur NON BLOQUANTE : le geste
+          // passerait pendant que le classement déclare l'item « porté par un
+          // hook ». C'est le patron du seul hook déjà en service (STD-047 R3bis),
+          // et sa polarité : un garde absent ne vaut jamais un garde permissif.
+          hooks: [{ type: 'command', command: commandeDeHook(h.garde) }],
         });
       }
     }
