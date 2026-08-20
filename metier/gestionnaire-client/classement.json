@@ -47,15 +47,14 @@
       "nature": "garde-fou",
       "enonce": "**N'exécute JAMAIS et ne modifie rien chez le client.** Il fait faire, et il rend compte. Un interlocuteur qui se met à réaliser **cesse d'écouter**, et plus personne ne tient le fil du besoin. Ses droits lui refusent l'écriture de fichiers — un refus n'est pas une panne, c'est le signe que le geste appartient à quelqu'un d'autre",
       "statut_abc": "accepted",
-      "couche": "persona",
+      "couche": "refus-de-permission",
       "enonce_socle": "Tu n'exécutes jamais et ne modifies rien chez le client. Tu fais faire, et tu rends compte.",
-      "sans_garantie": {
-        "motif": "aucune couche n'est construite pour ce rôle : son lieu ne porte ni hook ni refus propre",
-        "assume_par": "Maxime Leboeuf (dirigeant)",
-        "definitif": false,
-        "echeance": "2026-09-30"
-      },
-      "cardinale": 1
+      "cardinale": 1,
+      "refus": [
+        "Write",
+        "Edit",
+        "NotebookEdit"
+      ]
     },
     {
       "id": "GF-GCL-002",
@@ -148,14 +147,8 @@
       "nature": "garde-fou",
       "enonce": "**Ne parle pas au client avant d'être joignable — et n'engage rien avant d'avoir relevé.** ⚠️ **Un accusé de réception fait exception, et c'est un arbitrage du dirigeant du 2026-08-17** : dès que sa ligne est ouverte, l'accusé part **avant** le relèvement (`R4.7`). Il ne dit rien du fond, donc il ne peut rien contredire de ce qu'il n'a pas encore lu ; et un client qui attend en silence ne distingue pas une session qui relève d'un message perdu. Ce qui reste interdit avant relèvement : **répondre sur le fond, promettre, engager**. Et **si la ligne n'est pas installée sur ce poste, il s'arrête et le dit** — un représentant muet qui croit parler est exactement le silence qu'il existe pour supprimer",
       "statut_abc": "accepted",
-      "couche": "persona",
+      "couche": "hook",
       "enonce_socle": "Tu ne parles pas au client avant d'être joignable des deux côtés, ni n'engages rien avant d'avoir relevé.",
-      "sans_garantie": {
-        "motif": "aucune couche n'est construite pour ce rôle : son lieu ne porte ni hook ni refus propre",
-        "assume_par": "Maxime Leboeuf (dirigeant)",
-        "definitif": false,
-        "echeance": "2026-09-30"
-      },
       "cardinale": 6
     },
     {
@@ -368,6 +361,20 @@
       "statut_abc": "draft",
       "couche": "persona",
       "chapitre": "reflexes"
+    }
+  ],
+  "refus": [
+    "Write",
+    "Edit",
+    "NotebookEdit",
+    "Edit(//**)",
+    "Task"
+  ],
+  "hooks": [
+    {
+      "evenement": "PreToolUse",
+      "outil": "Bash",
+      "garde": "terminal"
     }
   ]
 }

@@ -63,7 +63,12 @@
       "statut_abc": "accepted",
       "couche": "refus-de-permission",
       "cardinale": 1,
-      "enonce_socle": "Tu n'exécutes jamais. Aucun fichier écrit, aucun code, aucun script corrigé, aucun processus relancé — sauf le ServiceDesk et Somcraft."
+      "enonce_socle": "Tu n'exécutes jamais. Aucun fichier écrit, aucun code, aucun script corrigé, aucun processus relancé — sauf le ServiceDesk et Somcraft.",
+      "refus": [
+        "Write",
+        "Edit",
+        "NotebookEdit"
+      ]
     },
     {
       "id": "GF-ORC-002",
@@ -71,7 +76,10 @@
       "enonce": "**N'ouvre aucun sous-agent**, y compris pour une revue — il n'ouvre que des chefs d'équipe, qui distribuent chez eux. Et **ne desserre jamais ses propres droits** ni ne les contourne par le terminal",
       "statut_abc": "accepted",
       "couche": "refus-de-permission",
-      "enonce_socle": "Tu n'ouvres aucun sous-agent : rien que des chefs d'équipe, qui distribuent chez eux. Et tu ne desserres jamais tes propres droits."
+      "enonce_socle": "Tu n'ouvres aucun sous-agent : rien que des chefs d'équipe, qui distribuent chez eux. Et tu ne desserres jamais tes propres droits.",
+      "refus": [
+        "Task"
+      ]
     },
     {
       "id": "GF-ORC-003",
@@ -132,13 +140,7 @@
       "nature": "garde-fou",
       "enonce": "**Ne travaille que dans le dépôt de son chantier** et dans sa portée écrite — un dépôt peut porter plusieurs orchestrateurs",
       "statut_abc": "accepted",
-      "couche": "persona",
-      "sans_garantie": {
-        "motif": "couche a construire : hook sur le repertoire de travail, a construire",
-        "assume_par": "Maxime Leboeuf (dirigeant)",
-        "definitif": false,
-        "echeance": "2026-09-30"
-      },
+      "couche": "hook",
       "enonce_socle": "Tu ne travailles que dans le dépôt de ton chantier et dans ta portée écrite."
     },
     {
@@ -520,5 +522,24 @@
       "chapitre": "faire-appliquer"
     }
   ],
-  "mots_abc": 14445
+  "mots_abc": 14445,
+  "refus": [
+    "Write",
+    "Edit",
+    "NotebookEdit",
+    "Edit(//**)",
+    "Task"
+  ],
+  "hooks": [
+    {
+      "evenement": "PreToolUse",
+      "outil": "Bash",
+      "garde": "terminal"
+    },
+    {
+      "evenement": "PreToolUse",
+      "outil": "*",
+      "garde": "ouverture-ligne"
+    }
+  ]
 }

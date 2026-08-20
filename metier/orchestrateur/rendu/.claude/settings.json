@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "deny": [
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "Edit(//**)",
+      "Task"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.somtech/gardes/terminal.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.somtech/gardes/ouverture-ligne.js\""
+          }
+        ]
+      }
+    ]
+  }
+}

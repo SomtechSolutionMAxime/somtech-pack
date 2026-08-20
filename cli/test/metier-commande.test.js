@@ -12,6 +12,7 @@ function projet() {
   writeFileSync(join(d, 'metier/r/chapitres/c1.md'), '## Le geste\n\nLe comment, écrit à la main.\n');
   writeFileSync(join(d, 'metier/r/classement.json'), JSON.stringify({
     role: 'r', version_abc: '1.0.0',
+    hooks: [{ evenement: 'PreToolUse', outil: 'Bash', garde: 'terminal' }],
     items: [{ id: 'GF-R-001', nature: 'garde-fou', couche: 'hook', enonce: 'x', enonce_socle: 'court' }],
     chapitres: [{ nom: 'c1', abrege: 'a', version_pack: '1.0.0' }],
   }));

@@ -12,8 +12,13 @@ function classementValide() {
   return {
     role: 'orchestrateur',
     version_abc: '2.0.0',
+    // Une couche déclarée doit être réellement posée : un item classé « hook »
+    // exige qu'un hook existe, un « refus-de-permission » que le refus soit
+    // déclaré. Sans ça le classement dirait « garanti » sans rien garantir.
+    refus: ['Write', 'Edit', 'Task'],
+    hooks: [{ evenement: 'PreToolUse', outil: 'Bash', garde: 'ligne' }],
     items: [
-      { id: 'GF-ORC-001', nature: 'garde-fou', couche: 'refus-de-permission', enonce: 'N exécute jamais.', enonce_socle: 'Tu ne construis jamais.' },
+      { id: 'GF-ORC-001', nature: 'garde-fou', couche: 'refus-de-permission', refus: ['Write', 'Edit'], enonce: 'N exécute jamais.', enonce_socle: 'Tu ne construis jamais.' },
       { id: 'GF-ORC-014', nature: 'garde-fou', couche: 'hook', enonce: 'Ta ligne est obligatoire.', enonce_socle: 'Ta ligne est obligatoire.' },
       { id: 'RA-ORC-001', nature: 'regle', couche: 'persona', enonce: 'Des faits, jamais le raisonnement.', chapitre: 'rendre-compte' },
     ],
@@ -314,4 +319,42 @@ test('un chapitre sans nom, ou deux chapitres de même nom, sont refusés', () =
   const r = rendre(doublon);
   assert.equal(r.ok, false, 'deux chapitres de même nom s écrasent en silence');
   assert.ok(r.erreurs.some((e) => e.includes('rendre-compte')));
+});
+
+// ——— le rendu produit aussi ce qui GARANTIT (STD-047 §2.2) ———
+
+test('le rendu produit le fichier de droits, avec les refus et les hooks du classement', () => {
+  const c = classementValide();
+  c.hooks = [{ evenement: 'PreToolUse', outil: 'Bash', garde: 'terminal' }];
+  const r = rendre(c);
+  assert.equal(r.ok, true, r.erreurs?.join(' · '));
+  const s = JSON.parse(r.artefacts['.claude/settings.json']);
+  assert.deepEqual(s.permissions.deny, ['Write', 'Edit', 'Task']);
+  assert.ok(!('allow' in s.permissions), "`allow` fait naître l agent injoignable (STD-047 R3)");
+  assert.ok(s.hooks?.PreToolUse, 'le hook déclaré doit atterrir dans le fichier');
+});
+
+test('un item classé « hook » sans hook déclaré fait échouer le rendu — la couche serait un mot', () => {
+  const c = classementValide();     // GF-ORC-014 est classé « hook »
+  delete c.hooks;
+  const r = rendre(c);
+  assert.equal(r.ok, false);
+  assert.ok(r.erreurs.some((e) => e.includes('GF-ORC-014') && e.includes('hook')),
+    `classer en hook sans en déclarer un est une garantie fausse — reçu : ${JSON.stringify(r.erreurs)}`);
+
+  c.hooks = [{ evenement: 'PreToolUse', outil: 'Bash', garde: 'ligne' }];
+  assert.equal(rendre(c).ok, true);
+});
+
+test('un item classé « refus-de-permission » exige que le refus soit réellement déclaré', () => {
+  const c = classementValide();
+  delete c.refus;
+  c.items[0].refus = ['Write'];
+  assert.equal(rendre(c).ok, false, 'le classement ne déclare aucun refus : la couche est un mot');
+
+  c.refus = ['Write'];
+  assert.equal(rendre(c).ok, true);
+
+  c.items[0].refus = ['NotebookEdit'];
+  assert.equal(rendre(c).ok, false, 'le refus que l item nomme doit figurer dans ceux du classement');
 });

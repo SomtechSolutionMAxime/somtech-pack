@@ -69,7 +69,26 @@ export function rendre(classement) {
     erreurs.push('classement irrecevable : aucun garde-fou — un rôle sans garde-fou est un rôle mal décrit');
   }
 
+  // Une couche déclarée doit être RÉELLEMENT posée par le rendu. Classer un item
+  // en « hook » sans qu'aucun hook n'existe, ou en « refus-de-permission » sans
+  // que le refus soit déclaré, produit exactement ce que STD-047 interdit : une
+  // garantie fausse. Le classement dirait « garanti » et rien ne le garantirait.
+  const hooks = Array.isArray(classement?.hooks) ? classement.hooks : [];
+  const refus = new Set(Array.isArray(classement?.refus) ? classement.refus : []);
+
   for (const i of items) {
+    if (i.couche === 'hook' && hooks.length === 0) {
+      erreurs.push(`${i.id} est classé « hook », mais le classement n'en déclare aucun — la couche serait un mot.`);
+    }
+    if (i.couche === 'refus-de-permission') {
+      const exiges = Array.isArray(i.refus) ? i.refus : [];
+      const manquants = exiges.filter((x) => !refus.has(x));
+      if (exiges.length === 0) {
+        erreurs.push(`${i.id} est classé « refus-de-permission » sans nommer ce qui est refusé.`);
+      } else if (manquants.length) {
+        erreurs.push(`${i.id} s'appuie sur le refus de ${manquants.join(', ')}, que le classement ne déclare pas.`);
+      }
+    }
     if (!COUCHES.includes(i.couche)) {
       erreurs.push(`${i.id} : couche inconnue « ${i.couche} » — les couches sont ${COUCHES.join(', ')}`);
       continue;
@@ -176,10 +195,29 @@ export function rendre(classement) {
     ].join('\n');
   }
 
+  // Le fichier de droits : ce qui GARANTIT. `allow` n'y figure pas — un bloc
+  // `allow` déclenche un écran de confiance que la pré-approbation ne fait pas
+  // taire, et l'agent naît alors injoignable (STD-047 R3). `deny` est la moitié
+  // qui garantit, et elle tient dès la naissance.
+  if (refus.size || hooks.length || classement?.droits) {
+    const st = { permissions: { deny: [...refus] } };
+    if (classement?.droits) st.somtech = { droitsAccordes: classement.droits };
+    if (hooks.length) {
+      st.hooks = {};
+      for (const h of hooks) {
+        (st.hooks[h.evenement] ||= []).push({
+          matcher: h.outil,
+          hooks: [{ type: 'command', command: `node "$HOME/.somtech/gardes/${h.garde}.js"` }],
+        });
+      }
+    }
+    artefacts['.claude/settings.json'] = JSON.stringify(st, null, 2) + '\n';
+  }
+
   // — les budgets, mesurés sur ce qui a été rendu (jamais sur une intention)
   const mesures = {
     L0: compterTokens(artefacts['L0.md']),
-    L1: compterTokens(artefacts['L1.md']),
+    L1: compterTokens(artefacts['L1.md']),  // le fichier de droits n'est pas chargé en contexte
     L2: Object.fromEntries(chapitres.map((c) => [c.nom, compterTokens(artefacts[`chapitres/${c.nom}.md`])])),
   };
   for (const etage of ['L0', 'L1']) {
