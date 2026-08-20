@@ -407,11 +407,24 @@ test('le garde du gabarit est celui que fusionnerGarde produirait — aucune div
   // règle divergent au premier changement de l'un — celui-ci rougit ce jour-là.
   for (const role of ROLES) {
     const gabarit = settingsDuGabarit(role);
-    const sansHooks = { ...gabarit };
-    delete sansHooks.hooks;
+    // ⚠️ On ôte SEULEMENT le garde de la naissance, pas tous les hooks. Depuis
+    // que le gabarit est RENDU (P-20260820-0001), il en porte d'autres — la
+    // garde du terminal, par exemple —, et `fusionnerGarde` les préserve
+    // (vérifié). Les vider tous ferait rougir ce contrôle sur la PRÉSENCE d'un
+    // second garde, alors que son objet est la FORME du premier.
+    //
+    // Ce n'est pas un assouplissement : la comparaison mot pour mot du garde de
+    // la naissance reste entière, et l'ajout du terminal est vérifié juste après.
+    const autres = (gabarit.hooks?.PreToolUse || [])
+      .filter((h) => !JSON.stringify(h).includes('garde-ouverture-ligne.js'));
+    const sansLeGarde = { ...gabarit, hooks: { ...gabarit.hooks, PreToolUse: autres } };
     assert.deepEqual(
-      gabarit.hooks, fusionnerGarde(sansHooks).hooks,
+      gabarit.hooks, fusionnerGarde(sansLeGarde).hooks,
       `le bloc « hooks » du gabarit « ${role.gabarit} » a divergé de ce que la naissance pose`
+    );
+    assert.ok(
+      JSON.stringify(gabarit.hooks).includes('garde-ouverture-ligne.js'),
+      `le gabarit « ${role.gabarit} » ne porte plus le garde d'ouverture de ligne — la convergence désarmerait chaque lieu`
     );
   }
 });

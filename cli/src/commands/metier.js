@@ -120,6 +120,22 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
         if (!chemin.startsWith('chapitres/')) continue;
         if (lu(`metier/${chemin}`) !== contenu) ecarts.push(`.claude/templates/${role}/metier/${chemin} : périmé`);
       }
+      // Le fichier de DROITS distribué — le seul artefact qui garantisse quelque
+      // chose. Sans ce contrôle, vider `permissions.deny` du gabarit passait le
+      // gate en silence, et tout agent posé ensuite pouvait écrire.
+      if (lu('.claude/settings.json') !== (attendu['.claude/settings.json'] ?? null)) {
+        ecarts.push(`.claude/templates/${role}/.claude/settings.json : périmé ou absent`);
+      }
+      // Les chapitres ORPHELINS : `rendre` les retire, donc « verifier vert »
+      // doit impliquer « rendre ne changerait rien ». C'est le contrat du gate.
+      const dossierG = join(gabarit, 'metier', 'chapitres');
+      if (existsSync(dossierG)) {
+        for (const f of readdirSync(dossierG)) {
+          if (!(`chapitres/${f}` in attendu)) {
+            ecarts.push(`.claude/templates/${role}/metier/chapitres/${f} : orphelin, plus produit`);
+          }
+        }
+      }
     }
     if (ecarts.length) {
       process.stderr.write(`⛔ le rendu committé ne correspond plus à sa source :\n` +
@@ -139,7 +155,7 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
   }
   let retires = 0;
   for (const chemin of Object.keys(lireRenduCommitte(base))) {
-    if (!(chemin in r.artefacts)) { rmSync(join(base, chemin.split('/').join(sep))); retires++; }
+    if (!(chemin in r.artefacts)) { rmSync(join(base, chemin.split('/').join(sep)), { recursive: true, force: true }); retires++; }
   }
   // Le GABARIT que le pack distribue EST le rendu. Sans ce maillon, `pack metier
   // rendre` produit des artefacts à côté et `/orchestrateur` continue de poser un
@@ -178,12 +194,17 @@ function distribuerAuGabarit(cwd, role, artefacts) {
     mkdirSync(dirname(cible), { recursive: true });
     writeFileSync(cible, contenu);
   }
-  // les chapitres que le classement ne produit plus
+  // Ce que le classement ne produit plus est RETIRÉ — un artefact périmé
+  // continuerait d'être posé à chaque naissance sans que rien ne le signale.
   const dossier = join(gabarit, 'metier', 'chapitres');
   if (existsSync(dossier)) {
     for (const f of readdirSync(dossier)) {
-      if (!(`metier/chapitres/${f}` in aPoser)) rmSync(join(dossier, f));
+      // ⚠️ `recursive` : `readdirSync` rend aussi les dossiers, et `rmSync` sur
+      // un dossier lève — la distribution resterait à moitié appliquée.
+      if (!(`metier/chapitres/${f}` in aPoser)) rmSync(join(dossier, f), { recursive: true, force: true });
     }
   }
+  const droitsG = join(gabarit, '.claude', 'settings.json');
+  if (!('.claude/settings.json' in aPoser) && existsSync(droitsG)) rmSync(droitsG, { force: true });
   return Object.keys(aPoser).length;
 }

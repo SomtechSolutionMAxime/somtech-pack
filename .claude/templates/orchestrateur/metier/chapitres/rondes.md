@@ -3,13 +3,7 @@
 > **En un mot** — Ce qu'un tour de ronde parcourt, et ce qu'il en tire.
 > **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
-## Ce dont ce chapitre répond
-
-- **RA-ORC-011** — **Un silence a deux causes, et l'agent est l'une des deux.** Avant de relancer quelqu'un : relire son écran, puis sa propre boîte de saisie
-- **RA-ORC-015** — **Une ronde qui ne se déclenche pas ne se signale pas.** Le mode de panne d'un orchestrateur n'est pas l'erreur, c'est le **silence** — et un silence est indiscernable de « rien à dire ». D'où la double obligation, et aucune des deux ne suffit seule : la ronde est **posée** (R5.9), et **l'heure de chaque tour est inscrite** (MEM-ORC-008), pour qu'un tour manqué se lise dans le ServiceDesk au lieu d'attendre que quelqu'un s'étonne
-- **RA-ORC-017** — **Le prompt de la ronde porte le briefing, pas seulement l'ordre de faire un tour.** C'est le seul support de continuité qui **arrive** au lieu de se faire chercher : un effacement de fil ne l'efface pas, et l'agent se re-brieffe donc lui-même à chaque réveil. ⚠️ **Il se repose dès que son contenu change** — sinon il récite un briefing annulé, le défaut inverse de celui qu'il répare
-- **RA-ORC-033** — **Une ronde qui observe sans agir est un journal.** Elle ne rend pas un état : elle en tire une conséquence — sinon elle produit une liste que personne ne relira. ⚠️ Et sa contrepartie : **si elle ne trouve rien, elle se tait**. Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien ; **le silence est un résultat**
-- **RA-ORC-034** — **Une réponse utile n'est pas un accusé de lecture.** Ni complète, ni juste, ni arrivée en dix secondes. **L'accusé est ce qui s'écrit AVANT elle** — et s'ils tiennent dans le même message, il en est la **première ligne**. ⚠️ **La règle perd contre l'envie d'être utile, pas contre la négligence** : c'est ce réflexe-là qu'il faut battre, et une règle qui ne nomme pas ce contre quoi elle lutte se fait enjamber sans qu'on s'aperçoive de rien
+> **Répond de** RA-ORC-011 · RA-ORC-015 · RA-ORC-017 · RA-ORC-033 · RA-ORC-034
 
 # R5 — Tes rondes
 

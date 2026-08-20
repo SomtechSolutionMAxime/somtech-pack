@@ -3,15 +3,7 @@
 > **En un mot** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'écart signalé.
 > **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
 
-## Ce dont ce chapitre répond
-
-- **RA-ORC-003** — **On vérifie le fait, jamais l'indice.** Une chaîne verte n'est pas un lot fini ; un commit fusionné n'est pas un défaut réglé ; **fusionné n'est pas publié, publié n'est pas installé** ; un verrou qui se dit libre ne prouve pas que le sas l'est — c'est l'écart mesuré qui tranche
-- **RA-ORC-021** — **On ne s'évalue pas soi-même.** Un diagnostic rendu — *« la cause est X »*, *« c'est contourné »* — vaut ce que vaut ce qui l'atteste : si personne ne l'a repris, ça se dit **en même temps que lui**. Nommer un biais ne protège pas ; ce qui protège est le geste imposé là où l'acte se pose
-- **RA-ORC-030** — **On teste quand il n'y a rien ; on ne teste pas quand on ne peut pas voir.** Ce n'est pas l'absence de test qui crée le défaut, c'est que les tests couvrent l'**absence de la chose** et jamais la **panne de la mesure** — les deux produisent la même valeur, et le test ne peut pas les distinguer parce qu'il n'a jamais été écrit pour ça. **Ce qui s'exige d'une revue** : après avoir testé « quand il n'y a rien », **couper la sonde** et vérifier que le résultat **diffère**. ⚠️ Et le critère qui trie : *un test garde-t-il ce silence ?* Si oui, c'est une **décision** ; sinon, c'est un cas que personne n'a prévu
-- **RA-ORC-031** — **Deux copies d'un critère divergent en silence.** Devant un motif, une règle ou une sonde dupliquée, la question n'est pas « sont-elles justes ? » mais **« rendent-elles le même verdict sur les mêmes entrées ? »** — et le seul correctif fiable est de **n'en garder qu'une**, importée par les autres. Une suite d'essais ne peut pas détecter qu'elle a cessé de couvrir quelque chose
-- **RA-ORC-032** — **On ne rend aucun arbitrage sur un texte qu'on n'a pas sous les yeux.** Si un agent le **décrit**, l'arbitrage porte sur **sa description**, et ça se dit dans l'arbitrage même. ⚠️ **Chercher en priorité les inscriptions d'où quelqu'un tire un ORDRE, une PRIORITÉ ou une LISTE À EXÉCUTER** : un chiffre faux dans un contexte reste un chiffre faux ; dans une liste d'exécution, il devient une action manquée
-- **RA-ORC-037** — **Une hypothèse non prouvée n'est pas une hypothèse fausse.** Les deux se disent en trois mots et ne coûtent pas la même chose : déclarer fausse celle d'un autre agent a fait chercher un défaut du mauvais côté toute une soirée — **elle était juste**. Le mot, quand on n'a pas mesuré, est *« non prouvé »*
-- **RA-ORC-038** — **La panne d'un instrument de mesure n'est pas l'absence de ce qu'il mesure.** Un annuaire d'agents qui n'en trouve pas un ne dit pas qu'il est mort : il dit que **cette surface** ne le voit pas — une autre le montre au travail. C'est `RA-ORC-004` retournée sur les outils qui servent à voir, et **le porteur du défaut ne peut pas s'en apercevoir** : il n'a rien à observer
+> **Répond de** RA-ORC-003 · RA-ORC-021 · RA-ORC-030 · RA-ORC-031 · RA-ORC-032 · RA-ORC-037 · RA-ORC-038
 
 # R4 — Faire appliquer les règles et valider ce qui revient
 

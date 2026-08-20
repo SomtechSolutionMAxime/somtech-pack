@@ -411,3 +411,84 @@ test('le socle porte le PRÉAMBULE quand le classement en déclare un — L1, pa
     'le préambule ouvre le socle — il vient avant les règles');
   assert.ok(!r.artefacts['L0.md'].includes('Deux fichiers'), 'L0 reste l identité seule, dans ses 150 tokens');
 });
+
+test('un hook peut viser un chemin de garde EXISTANT, sans forcer ~/.somtech/gardes/', () => {
+  // ⚠️ La garde d'ouverture de ligne vit dans `naissance-representant/hooks/`,
+  // pas dans `gardes/`. Sans ce champ, le rendu écrivait un chemin qui n'existe
+  // pas — et la convergence DÉSARMAIT tous les lieux en silence, en écrasant
+  // leur settings.json par un gabarit qui ne portait plus le garde.
+  // Trouvé en CI le 2026-08-20 par les tests de convergence (shell-tests).
+  const c = classementValide();
+  c.hooks = [{ evenement: 'PreToolUse', outil: '*', garde: 'ouverture-ligne',
+               chemin: '$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js' }];
+  const cmd = JSON.parse(rendre(c).artefacts['.claude/settings.json']).hooks.PreToolUse[0].hooks[0].command;
+  assert.ok(cmd.includes('naissance-representant/hooks/garde-ouverture-ligne.js'),
+    'le hook doit viser le chemin déclaré, pas un chemin inventé');
+  assert.ok(cmd.includes('-f ') && /permissionDecision"\s*:\s*"deny"/.test(cmd),
+    'et il se défend toujours lui-même si la garde manque');
+});
+
+// ——— corrections de la revue indépendante du 2026-08-20 (2e passe) ———
+
+test('FINDING 1 — le renvoi de la carte pointe là où les chapitres sont DISTRIBUÉS', () => {
+  // 🔴 Le socle disait « chapitres/<nom>.md ». Distribué, il vit à la racine du
+  // gabarit et les chapitres sont sous `metier/chapitres/`. Un agent né lisait
+  // son CLAUDE.md, cherchait `chapitres/rondes.md` → ENOENT. AUCUN chapitre
+  // n'était atteignable, ce qui défait toute la raison d'être du découpage.
+  const l1 = rendre(classementValide()).artefacts['L1.md'];
+  assert.ok(l1.includes('metier/chapitres/rendre-compte.md'),
+    `la carte doit renvoyer à metier/chapitres/… — reçu : ${l1.match(/chapitres\/\S+/)?.[0]}`);
+});
+
+test('FINDING 6 — un chemin de garde qui porte un métacaractère de shell est REFUSÉ', () => {
+  for (const chemin of ['$(rm -rf /)', '`whoami`', 'a"; evil; "b', "x';id;'"]) {
+    const c = classementValide();
+    c.hooks = [{ evenement: 'PreToolUse', outil: '*', garde: 'x', chemin }];
+    const r = rendre(c);
+    assert.equal(r.ok, false, `« ${chemin} » s exécuterait à CHAQUE geste de l agent`);
+    assert.ok(r.erreurs.some((e) => e.includes('chemin')));
+  }
+  const bon = classementValide();
+  bon.hooks = [{ evenement: 'PreToolUse', outil: '*', garde: 'x',
+                 chemin: '$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js' }];
+  assert.equal(rendre(bon).ok, true);
+});
+
+test('un hook peut porter une commande DÉCLARÉE mot pour mot — on n en fabrique pas une seconde', () => {
+  // ⚠️ La garde d'ouverture de ligne a déjà sa commande, dans la naissance. En
+  // écrire une variante ici en ferait DEUX COPIES d'un même critère, qui
+  // divergeraient en silence — et la convergence, qui compare mot pour mot,
+  // désarmerait tous les lieux existants. Trouvé en CI le 2026-08-20.
+  const c = classementValide();
+  c.hooks = [{ evenement: 'PreToolUse', outil: '*', garde: 'ouverture-ligne', commande: 'CECI-EST-LA-COMMANDE-SOURCE' }];
+  const cmd = JSON.parse(rendre(c).artefacts['.claude/settings.json']).hooks.PreToolUse[0].hooks[0].command;
+  assert.equal(cmd, 'CECI-EST-LA-COMMANDE-SOURCE',
+    'une commande déclarée est reprise telle quelle — jamais réécrite');
+});
+
+test('un hook sans outil déclaré ne porte PAS de « matcher » — la forme est celle de la source', () => {
+  // ⚠️ La naissance pose son garde SANS `matcher` (il vaut pour tous les outils).
+  // En ajouter un rendait le bloc structurellement différent de ce que la
+  // convergence compare mot pour mot : elle aurait désarmé chaque lieu.
+  const c = classementValide();
+  c.hooks = [{ evenement: 'PreToolUse', garde: 'x', commande: 'CMD' },
+             { evenement: 'PreToolUse', outil: 'Bash', garde: 'y', commande: 'CMD2' }];
+  const h = JSON.parse(rendre(c).artefacts['.claude/settings.json']).hooks.PreToolUse;
+  assert.deepEqual(Object.keys(h[0]), ['hooks'], 'sans outil : aucun matcher');
+  assert.deepEqual(Object.keys(h[1]), ['matcher', 'hooks'], 'avec outil : le matcher reste');
+});
+
+test('un chapitre NOMME les items dont il répond, il ne recopie pas leur énoncé entier', () => {
+  // ⚠️ Recopier le texte d'ABC dans chaque chapitre est la duplication même que
+  // ce modèle combat : mesuré le 2026-08-20, ces sections pesaient 19 949 des
+  // 27 862 octets dont le métier rendu avait grossi. L'ABC est la source ; le
+  // chapitre dit de QUOI il répond, la forme courte suffit à le reconnaître.
+  const c = classementValide();
+  c.items[2].enonce = 'un énoncé d ABC très long qui ne doit pas être recopié ici';
+  c.items[2].enonce_socle = 'La forme courte.';
+  const ch = rendre(c).artefacts['chapitres/rendre-compte.md'];
+  assert.ok(ch.includes('RA-ORC-001'), "l item doit être CITÉ — c'est I7, la traçabilité");
+  assert.ok(!ch.includes('un énoncé d ABC très long'), "l'énoncé d'ABC ne se recopie pas");
+  assert.ok(!ch.includes('La forme courte.'),
+    "ni sa forme courte : le chapitre CITE ses items, l'ABC reste la source de leur texte");
+});

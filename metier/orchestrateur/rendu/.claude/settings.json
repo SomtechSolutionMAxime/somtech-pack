@@ -39,16 +39,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "G=\"$HOME/.somtech/gardes/terminal.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « terminal » est introuvable sur ce poste (~/.somtech/gardes) — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
+            "command": "G=\"$HOME/.somtech/gardes/terminal.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « terminal » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
           }
         ]
       },
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "G=\"$HOME/.somtech/gardes/ouverture-ligne.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ouverture-ligne » est introuvable sur ce poste (~/.somtech/gardes) — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
+            "command": "G=\"$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"le garde d’ouverture est introuvable sur ce poste (~/.somtech/naissance-representant) — installe-le avec `npx @somtech-solutions/pack setup`. Refus par défaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
           }
         ]
       }

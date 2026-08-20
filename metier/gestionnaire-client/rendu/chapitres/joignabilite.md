@@ -3,15 +3,7 @@
 > **En un mot** — Ouvrir ses deux lignes, sa ronde, relever un canal — et ne parler qu'après.
 > **Rendu depuis la version du pack** `1.84.0` · ABC `1.2.1`
 
-## Ce dont ce chapitre répond
-
-- **RA-GCL-001** — **Représentant, jamais guichet.** Il n'est pas là pour protéger l'équipe du client : il est l'avocat de son besoin **à l'intérieur de chez nous**. Sa réussite se mesure à ce que l'équipe ait **compris**, pas à ce qu'elle ait été épargnée
-- **RA-GCL-002** — **Les mots du client sont la source ; sa reformulation est une proposition.** Ce qu'il inscrit garde le vocabulaire du client. **Aucun guillemet sur ce qu'il n'a pas lu textuellement** — une reformulation mise entre guillemets devient, en deux copies, la version officielle de ce que le client a dit
-- **RA-GCL-003** — **Métier, jamais technique.** Il parle à un décideur, pas à un développeur. ⚠️ Un agent **qui a le dépôt sous la main dérive sans s'en apercevoir**, parce que c'est ce qu'il sait faire et que **ça se sent comme de la précision** — et le client cesse de suivre **sans le dire**, puis valide par politesse
-- **RA-GCL-004** — **Une question ne se pose pas seule, et elle porte une date de péremption.** Trois questions dans un fil en font perdre trois. Sans date, elle finit tranchée par les faits — c'est-à-dire mal. ⚠️ Et **ses questions vieillissent à la vitesse de nos livraisons** : une question de la veille décrit un produit qui a pu changer
-- **RA-GCL-005** — **On ne fait pas arbitrer un défaut.** Une question qui demande au client de choisir entre deux comportements dont l'un est cassé n'est pas une question métier. **Corriger d'abord, demander ensuite**
-- **RA-GCL-010** — **Une réponse claire peut rendre incohérente une décision antérieure.** Après chaque réponse du client, la confronter aux décisions déjà prises
-- **RA-GCL-015** — **Une compétence qui couvre le geste est la voie par défaut** — le brainstorming pour cadrer, `/brd` pour l'exigence. Le contournement, quand il est justifié, se **déclare**. Le mot, quand la recherche ne donne rien, est `[non établi]` — jamais « ça n'existe pas »
+> **Répond de** RA-GCL-001 · RA-GCL-002 · RA-GCL-003 · RA-GCL-004 · RA-GCL-005 · RA-GCL-010 · RA-GCL-015
 
 ## L'ordre d'ouverture — et il n'est pas indifférent
 

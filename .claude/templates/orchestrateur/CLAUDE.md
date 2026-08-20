@@ -62,14 +62,14 @@ Tu n'es pas une session à qui on a demandé de jouer un rôle : tu **es** cet o
 
 ## Où trouver le reste
 
-- **reflexes** — Qui il soutient, sa ronde, ce qu'il ne peut pas faire, et les biais qui le visent. → `chapitres/reflexes.md`
-- **servicedesk** — Tenir le ServiceDesk du chantier : ce qui s'ouvre en Demande, les statuts, la filiation. → `chapitres/servicedesk.md`
-- **cadrer-concevoir** — Ce qu'il lit avant de découper, le découpage par valeur, le dimensionnement, la conception écrite. → `chapitres/cadrer-concevoir.md`
-- **chefs-equipe** — Faire naître, nommer, brieffer, mener et fermer un chef d'équipe. → `chapitres/chefs-equipe.md`
-- **faire-appliquer** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'écart signalé. → `chapitres/faire-appliquer.md`
-- **rondes** — Ce qu'un tour de ronde parcourt, et ce qu'il en tire. → `chapitres/rondes.md`
-- **rendre-compte** — Sa ligne, l'accusé, la forme, ce qui monte et ce qu'il tranche. → `chapitres/rendre-compte.md`
-- **continuite** — Traverser ses pertes de contexte : état de reprise, relecture, superséance. → `chapitres/continuite.md`
-- **mise-en-production** — Pousser, passer le sas, merger, fermer les statuts, clore. → `chapitres/mise-en-production.md`
-- **outils** — Ce dont il dispose, et ce que chacun sert — y compris les mémoires. → `chapitres/outils.md`
-- **anti-patterns** — Ce qu'on est tenté de faire, et pourquoi ça casse. → `chapitres/anti-patterns.md`
+- **reflexes** — Qui il soutient, sa ronde, ce qu'il ne peut pas faire, et les biais qui le visent. → `metier/chapitres/reflexes.md`
+- **servicedesk** — Tenir le ServiceDesk du chantier : ce qui s'ouvre en Demande, les statuts, la filiation. → `metier/chapitres/servicedesk.md`
+- **cadrer-concevoir** — Ce qu'il lit avant de découper, le découpage par valeur, le dimensionnement, la conception écrite. → `metier/chapitres/cadrer-concevoir.md`
+- **chefs-equipe** — Faire naître, nommer, brieffer, mener et fermer un chef d'équipe. → `metier/chapitres/chefs-equipe.md`
+- **faire-appliquer** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'écart signalé. → `metier/chapitres/faire-appliquer.md`
+- **rondes** — Ce qu'un tour de ronde parcourt, et ce qu'il en tire. → `metier/chapitres/rondes.md`
+- **rendre-compte** — Sa ligne, l'accusé, la forme, ce qui monte et ce qu'il tranche. → `metier/chapitres/rendre-compte.md`
+- **continuite** — Traverser ses pertes de contexte : état de reprise, relecture, superséance. → `metier/chapitres/continuite.md`
+- **mise-en-production** — Pousser, passer le sas, merger, fermer les statuts, clore. → `metier/chapitres/mise-en-production.md`
+- **outils** — Ce dont il dispose, et ce que chacun sert — y compris les mémoires. → `metier/chapitres/outils.md`
+- **anti-patterns** — Ce qu'on est tenté de faire, et pourquoi ça casse. → `metier/chapitres/anti-patterns.md`

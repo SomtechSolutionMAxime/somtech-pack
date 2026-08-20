@@ -53,20 +53,27 @@ export function compterTokens(texte) {
  * déplacée d'un cran. La commande se défend donc elle-même, comme le seul hook
  * déjà en service (STD-047 R3bis).
  */
-function commandeDeHook(garde) {
+function commandeDeHook(garde, chemin) {
   const refus = JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
       permissionDecisionReason:
-        `la garde « ${garde} » est introuvable sur ce poste (~/.somtech/gardes) — ` +
+        `la garde « ${garde} » est introuvable sur ce poste — ` +
         'installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : ' +
         'un garde absent ne vaut jamais un garde permissif.',
     },
   }).replace(/'/g, "'\\''");
-  return `G="$HOME/.somtech/gardes/${garde}.js"; if [ -f "$G" ]; then exec node "$G"; ` +
+  return `G="${chemin || `$HOME/.somtech/gardes/${garde}.js`}"; if [ -f "$G" ]; then exec node "$G"; ` +
     `else cat >/dev/null 2>&1; printf '%s\\n' '${refus}'; fi`;
 }
+
+/** La forme courte d'un énoncé : sa première phrase, sans le gras. */
+const abreger = (t) => {
+  const plat = String(t || '').replace(/\*\*/g, '');
+  const p = plat.split(/(?<=\.)\s/)[0];
+  return p.length > 180 ? p.slice(0, 177) + '…' : p;
+};
 
 const cheminSur = (c) =>
   !c.startsWith('/') && !c.includes('..') && !c.includes('.orchestrateur') &&
@@ -98,6 +105,17 @@ export function rendre(classement) {
   // que le refus soit déclaré, produit exactement ce que STD-047 interdit : une
   // garantie fausse. Le classement dirait « garanti » et rien ne le garantirait.
   const hooks = Array.isArray(classement?.hooks) ? classement.hooks : [];
+  // ⚠️ Un chemin de garde est interpolé dans une commande de shell qui s'exécute
+  // à CHAQUE geste de l'agent. Un `$(…)`, un accent grave ou un guillemet y
+  // exécuterait n'importe quoi, dans chaque lieu posé. Le classement est un
+  // fichier versionné, mais c'est justement l'artefact dont tout le rôle est
+  // d'être une garantie : il ne s'exempte pas de sa propre discipline.
+  const CHEMIN_SUR = /^[$A-Za-z0-9_{}./-]+$/;
+  for (const h of hooks) {
+    if (h?.chemin && !CHEMIN_SUR.test(h.chemin)) {
+      erreurs.push(`le chemin de garde « ${h.chemin} » porte un caractère que le shell interprète — refusé.`);
+    }
+  }
   const refus = new Set(Array.isArray(classement?.refus) ? classement.refus : []);
 
   for (const i of items) {
@@ -201,7 +219,7 @@ export function rendre(classement) {
       : []),
     '## Où trouver le reste',
     '',
-    ...chapitres.map((c) => `- **${c.nom}** — ${c.abrege} → \`chapitres/${c.nom}.md\``),
+    ...chapitres.map((c) => `- **${c.nom}** — ${c.abrege} → \`metier/chapitres/${c.nom}.md\``),
     '',
   ].join('\n');
   artefacts['L1.md'] = l1;
@@ -214,8 +232,10 @@ export function rendre(classement) {
       `> **En un mot** — ${c.abrege || '[abrégé manquant]'}`,
       `> **Rendu depuis la version du pack** \`${c.version_pack || '[version manquante]'}\` · ABC \`${classement?.version_abc || '[non établi]'}\``,
       '',
-      ...(regles.length ? ['## Ce dont ce chapitre répond', '',
-        ...regles.map((i) => `- **${i.id}** — ${i.enonce}`), ''] : []),
+      // I7 — le chapitre CITE les items dont il répond ; il ne recopie pas leur
+      // texte. L'ABC est leur source, et le socle porte les cardinales. Recopier
+      // ici pesait 19 949 octets, la duplication même que ce modèle combat.
+      ...(regles.length ? [`> **Répond de** ${regles.map((i) => i.id).join(' · ')}`, ''] : []),
       ...(c.contenu ? [c.contenu, ''] : []),
     ].join('\n');
   }
@@ -231,13 +251,18 @@ export function rendre(classement) {
       st.hooks = {};
       for (const h of hooks) {
         (st.hooks[h.evenement] ||= []).push({
-          matcher: h.outil,
+          // `matcher` seulement s'il y a un outil à viser : un hook qui vaut pour
+          // tous n'en porte pas, et la convergence compare la forme mot pour mot.
+          ...(h.outil ? { matcher: h.outil } : {}),
           // ⚠️ La commande se DÉFEND elle-même. `node <fichier absent>` sort en
           // code 1, qui est pour Claude Code une erreur NON BLOQUANTE : le geste
           // passerait pendant que le classement déclare l'item « porté par un
           // hook ». C'est le patron du seul hook déjà en service (STD-047 R3bis),
           // et sa polarité : un garde absent ne vaut jamais un garde permissif.
-          hooks: [{ type: 'command', command: commandeDeHook(h.garde) }],
+          hooks: [{ type: 'command', // Une commande DÉCLARÉE est reprise mot pour mot : deux copies d'un même
+          // critère divergent en silence, et celle-ci est comparée à l'identique
+          // par la convergence.
+          command: h.commande || commandeDeHook(h.garde, h.chemin) }],
         });
       }
     }
