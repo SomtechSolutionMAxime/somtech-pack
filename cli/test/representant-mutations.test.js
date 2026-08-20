@@ -57,7 +57,7 @@ import assert from 'node:assert/strict';
 
 import {
   CONTROLES, MUTATIONS, PERMISSIF, exigeImperatif, lireGabarits,
-  ANTERIORITE_SUR_LE_RELEVEMENT, POSTERIORITE_SUR_LE_RELEVEMENT,
+  ANTERIORITE_SUR_LE_RELEVEMENT, POSTERIORITE_SUR_LE_RELEVEMENT, PRIORITE_DU_RELEVEMENT,
   sectionDe, etapesDe,
 } from './lib/metier-representant.js';
 
@@ -354,7 +354,11 @@ function itemsDAlternance(source) {
       continue;
     }
     if (c === '(') {
-      const prefixe = source.startsWith('(?', i) ? 3 : 1;       // `(?:` ou `(`
+      // ⚠️ `(?<=`, `(?<!` et `(?<nom>` font QUATRE caractères, pas trois. Le premier jet
+      // supposait 3 partout et rendait un item corrompu (« =a » au lieu de « a ») sur un
+      // lookbehind. Aucun des motifs d'ici n'en porte — c'est un piège LATENT, corrigé
+      // pendant qu'on le voyait plutôt que le jour où il mordra. Signalé en vérification.
+      const prefixe = source.startsWith('(?<', i) ? 4 : source.startsWith('(?', i) ? 3 : 1;
       pile.push({ debut: i + prefixe, coupes: [] });
       i += prefixe - 1;
       continue;
@@ -473,6 +477,49 @@ test('axe POSITION-EN-PROSE : chaque item du motif de POSTÉRIORITÉ sert à que
   assert.ok(items.length >= 14,
     `le motif ne porte plus que ${items.length} item(s) d'alternance — si l'un a disparu, dis-le ici `
       + `plutôt que de laisser le test se rétrécir avec lui`);
+});
+
+/**
+ * Une attaque par item pour la garde de POLARITÉ CONTRAIRE — celle qui traverse tout
+ * l'énoncé parce qu'elle est ancrée sur le relèvement, et non sur des tournures.
+ */
+const SONDES_PRIORITAIRES = [
+  'le relèvement passe en premier',
+  'le relèvement vient d’abord',
+  'le relèvement arrive avant',
+  'relève d’abord, tu accuseras ensuite',
+  'relèvement en premier',
+  'd’abord le relèvement, puis l’accusé',
+  'en premier, tu relèves',
+  'commence par relever',
+];
+
+/**
+ * Des textes du gabarit réel, où le relèvement est nommé SANS être dit prioritaire. Ils
+ * prouvent que cette garde ne mord pas ce qu'elle traverse — elle s'applique à l'énoncé
+ * ENTIER, donc son innocuité compte double.
+ */
+const RELEVEMENTS_LEGITIMES = [
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. C'est, en réalité, la toute première chose que tu fais.",
+  "**Accuse réception, si un message t'attend** — **avant même d'avoir fini de relever**, dès que sa ligne est ouverte. Au contraire de la remontée, elle n'attend pas ton relèvement.",
+  '**Relève ce qui existe déjà** pour ce client (voir « Le relèvement »). Il peut avoir chez nous une histoire que tu ne connais pas.',
+  'Le relèvement peut durer ; l’inaccessibilité, non.',
+];
+
+test('axe POLARITÉ CONTRAIRE : chaque item du motif de PRIORITÉ sert à quelque chose', () => {
+  exigeItemsUtiles(PRIORITE_DU_RELEVEMENT, SONDES_PRIORITAIRES, 'la priorité affirmée du relèvement');
+});
+
+test('axe POLARITÉ CONTRAIRE : le motif ne mord pas un relèvement nommé sans être dit prioritaire', () => {
+  for (const texte of RELEVEMENTS_LEGITIMES) {
+    const trouve = texte.match(PRIORITE_DU_RELEVEMENT);
+    assert.ok(
+      !trouve,
+      `« ${texte} » nomme le relèvement sans le dire prioritaire, et la garde y voit le contraire `
+        + `(« ${trouve && trouve[0]} ») : elle traverse tout l'énoncé, donc elle rougirait souvent, `
+        + `et se ferait retirer.`,
+    );
+  }
 });
 
 test('axe POSITION-EN-PROSE : chaque item du motif d’ANTÉRIORITÉ sert à quelque chose', () => {

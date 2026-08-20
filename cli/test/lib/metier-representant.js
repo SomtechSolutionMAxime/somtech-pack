@@ -454,6 +454,35 @@ export const ANTERIORITE_SUR_LE_RELEVEMENT = /avant\s+(?:même\s+)?(?:d['’]avo
  * qu'on croit avoir. Deux branches mortes-nées sur sept dans un motif écrit avec ce piège
  * en tête : c'est la mesure qui les a dites, pas la relecture.
  */
+/**
+ * LA POLARITÉ CONTRAIRE ELLE-MÊME : le relèvement affirmé PRIORITAIRE.
+ *
+ * ⚠️ POURQUOI CELUI-CI EXISTE EN PLUS DES DEUX AUTRES — et il a coûté un aller-retour.
+ *
+ * `RENVERSEMENT` est un filtre de tournures, et il fallait le restreindre à LA PHRASE qui
+ * porte l'incise, sans quoi il rougissait sur du français ordinaire écrit juste après
+ * (« C'est, EN RÉALITÉ, la toute première chose que tu fais »). Mais cette restriction a
+ * ROUVERT ce qu'elle fermait : le contresens écrit dans la phrase SUIVANTE y échappait —
+ * « …, dès que sa ligne est ouverte. Ce n'est pas vrai : le relèvement passe en premier. »
+ * Une vérification indépendante l'a mesuré sur le commit qui venait de « corriger » le
+ * faux positif. Élargir la portée ramenait le faux positif ; la rétrécir ouvrait le trou.
+ *
+ * ON SORT DU DILEMME EN CHANGEANT D'AXE. Les deux autres gardes cherchent des TOURNURES ;
+ * celle-ci cherche le FAIT — que le relèvement soit dit prioritaire, quels que soient les
+ * mots qui l'amènent. Elle est ancrée sur le relèvement, donc elle ne peut pas mordre une
+ * phrase qui n'en parle pas, et elle traverse tout l'énoncé sans risque. C'est le même
+ * geste que le paramètre `inverse` d'`exigePolarite`, plus haut dans ce fichier.
+ *
+ * ⚠️ ET ELLE RESTE UN FILTRE, comme les autres. Chaque item est éprouvé par une attaque et
+ * quatre textes légitimes sont prouvés indemnes ; il existera d'autres formulations. Une
+ * alternative de plus — `va`, comme « le relèvement va avant » — a été RETIRÉE parce
+ * qu'aucune attaque française plausible ne la rendait vivante : une alternative de moins vaut
+ * mieux qu'une couverture qu'on croit avoir. C'est le test de contribution qui l'a dite,
+ * pas la relecture, et il l'a dite dans la minute où elle a été écrite. Ce qui garde
+ * réellement l'arbitrage, ce sont les TROIS gardes ensemble, jamais une seule.
+ */
+export const PRIORITE_DU_RELEVEMENT = /(?:le\s+)?relèvement\s+(?:passe|vient|arrive)\s+(?:en\s+premier|d['’]abord|avant)|relèv\w*\s+(?:d['’]abord|en\s+premier)|(?:d['’]abord|en\s+premier)\s*[,:]?\s*(?:tu\s+)?(?:le\s+)?relèv|commence\s+par\s+(?:le\s+)?relev/i;
+
 export const POSTERIORITE_SUR_LE_RELEVEMENT = /(?:quand|lorsque|une\s+fois|après|dès|sitôt)\s+(?:que\s+)?(?:tu\s+(?:auras|as)\s+)?(?:fini\s+de\s+)?(?:relev|le\s+relèvement|ton\s+relèvement)|après\s+(?:avoir\s+)?(?:fini\s+de\s+)?relev|à\s+la\s+fin\s+du\s+relèvement/i;
 
 export function exigePolarite(corps, sonde, quoi, { inverse } = {}) {
@@ -1019,20 +1048,35 @@ export const CONTROLES = [
       // existait déjà, à trois cents lignes d'ici, et personne ne l'avait branchée ici.
       //
       // ⚠️ ET ON REGARDE LA PHRASE QUI PORTE L'INCISE, PAS L'ÉNONCÉ ENTIER — c'est un
-      // correctif, pas un raccourci, et il est le jumeau exact de celui d'`exigePolarite`
-      // trois cents lignes plus haut. Sur l'énoncé entier, une phrase parfaitement légitime
+      // correctif, pas un raccourci, et il reprend celui d'`exigePolarite` trois cents lignes
+      // plus haut, jusqu'à son découpage sur `[.!?]` (le premier jet coupait sur `.` seul —
+      // « jumeau exact » était écrit, ça n'en était pas un ; relevé en vérification). Sur l'énoncé entier, une phrase parfaitement légitime
       // écrite APRÈS l'incise rougissait à tort : « …, dès que sa ligne est ouverte. C'est,
       // EN RÉALITÉ, la toute première chose que tu fais. » Mesuré par une contre-vérification
       // indépendante. Une garde qui crie sur du texte correct ne survit pas : le premier qui
       // la rencontre la retire, et emporte ce qu'elle gardait vraiment.
       const porteuse = parLIncise
-        ? accuse.enonce.split(/(?<=\.)\s+/).find((p) => ANTERIORITE_SUR_LE_RELEVEMENT.test(p))
+        ? accuse.enonce.split(/(?<=[.!?])\s+/).find((p) => ANTERIORITE_SUR_LE_RELEVEMENT.test(p))
         : null;
       const enveloppe = porteuse && RENVERSEMENT.exec(porteuse);
       assert.ok(
         !enveloppe,
         `la phrase qui porte l’antériorité l’enveloppe d’un renversement (« ${enveloppe && enveloppe[0]} ») : `
           + `l’incise y est encore écrite, et la phrase dit le contraire — « ${porteuse && porteuse.trim()} »`,
+      );
+
+      // ⚠️ ET LA PHRASE D'À CÔTÉ. Restreindre la garde ci-dessus à la phrase porteuse a
+      // rouvert ce qu'elle fermait : « …, dès que sa ligne est ouverte. Ce n'est pas vrai :
+      // le relèvement passe en premier. » passait. Celle-ci traverse TOUT l'énoncé — elle
+      // le peut, parce qu'elle est ancrée sur le relèvement et non sur des tournures de
+      // français ordinaire. Les trois gardes ne se remplacent pas : chacune ferme ce que
+      // les autres laissent ouvert, et aucune ne suffit seule.
+      const prioritaire = PRIORITE_DU_RELEVEMENT.exec(accuse.enonce);
+      assert.ok(
+        !prioritaire,
+        `l’énoncé de l’accusé affirme la PRIORITÉ du relèvement (« ${prioritaire && prioritaire[0]} ») : `
+          + `c’est la polarité contraire de l’arbitrage du 2026-08-17, peu importe la tournure qui `
+          + `l’amène — « ${accuse.enonce.trim()} »`,
       );
 
       // LE RANG NE SUFFIT PAS : une étape peut garder sa place et cesser d'obliger.
@@ -2108,6 +2152,22 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "— **avant même d'avoir fini de relever**, dès que sa ligne est ouverte.",
       "— ce n'est pas vrai que tu accuses **avant même d'avoir fini de relever** : en réalité tu accuses ensuite, dès que sa ligne est ouverte.",
+    ),
+  },
+
+  {
+    // ⚠️ LE CAS QUI A ÉCHAPPÉ À LA GARDE PRÉCÉDENTE, et qui lui a coûté un aller-retour :
+    // le contresens n'est pas dans la phrase qui porte l'incise, il est dans la SUIVANTE.
+    // Trouvé par une vérification indépendante sur le commit qui venait de restreindre la
+    // portée de `RENVERSEMENT` pour supprimer un faux positif — la correction d'un défaut
+    // en avait ouvert un autre, sur le mécanisme même qu'elle réparait.
+    id: 'accuse-contredit-dans-la-phrase-suivante',
+    quoi: 'l’antériorité est écrite, puis contredite par la phrase d’à côté — la garde de la phrase porteuse ne la voit pas',
+    cible: 'accuse-precede-le-relevement',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "dès que sa ligne est ouverte. Voir « Ta continuité ».",
+      "dès que sa ligne est ouverte. Ce n'est pas vrai : le relèvement passe en premier. Voir « Ta continuité ».",
     ),
   },
 
