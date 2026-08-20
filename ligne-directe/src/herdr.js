@@ -816,7 +816,34 @@ export async function agents({ socket } = {}) {
  */
 export async function vivant(pane, { socket } = {}) {
   const liste = await agents({ socket });
-  return liste.some((a) => a.pane_id === pane);
+  if (liste.some((a) => a.pane_id === pane)) return true;
+
+  // ⚠️ LE REGISTRE QUI SE TAIT N'EST PAS UNE MORT (T-20260820-0022). Mesuré le 2026-08-20 :
+  // TOUTE session née depuis le 18 août est absente de `agent list` — les 83 agents visibles
+  // s'étalent du 19 juillet au 19 août, les 11 invisibles datés sont tous postérieurs au 18 à
+  // 14 h 52. Pendant ce temps `pane read` / `pane run` / `pane send-keys` fonctionnent
+  // parfaitement sur eux : ils travaillent, ils écrivent, et ils reçoivent.
+  //
+  // Le prix de la confusion est asymétrique, et c'est ce qui décide du repli : rendre `false`
+  // ici fait CLORE la ligne d'un agent vivant et l'annoncer au dirigeant — un avis se rattrape,
+  // une fermeture non. C'est arrivé, à un agent qui écrivait au même moment.
+  //
+  // ⚠️ ET LE REPLI NE S'ÉLARGIT PAS JUSQU'À « TOUT PANE EST VIVANT ». Un pane sans agent est un
+  // shell : y écrire, c'est parler à un terminal où personne n'écoute — on remplacerait un faux
+  // négatif par un faux positif. Le discriminant est `agent_session`, la marque qu'une session
+  // d'agent habite ce pane, que le registre l'ait inscrite ou non.
+  //
+  // Le registre reste PRIORITAIRE : ce chemin ne s'ouvre que lorsqu'il n'a rien à dire. Il le
+  // complète, il ne le remplace pas.
+  try {
+    const { panes: listePanes } = await panes({ socket });
+    return listePanes.some((p) => p.pane_id === pane && Boolean(p.agent_session));
+  } catch {
+    // Une liste de panes injoignable ne prouve rien de plus que le silence du registre.
+    // On ne conclut pas à la mort sur une panne de mesure : l'appelant a, à chaque site, un
+    // chemin « herdr injoignable » qui reporte au lieu de trancher.
+    return false;
+  }
 }
 
 /** Le pane courant — celui depuis lequel la commande locale est invoquée. */
