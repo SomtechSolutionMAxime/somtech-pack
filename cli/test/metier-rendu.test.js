@@ -157,14 +157,14 @@ test('une dérogation à R1 exige un motif ET un nom qui l assume — sinon le r
   c.items[0].sans_garantie = { assume_par: 'le dirigeant' };                   // sans motif
   assert.equal(rendre(c).ok, false, 'un nom seul ne suffit pas à déroger');
 
-  c.items[0].sans_garantie = { motif: 'porte sur le contenu d un énoncé', assume_par: 'le dirigeant' };
-  assert.equal(rendre(c).ok, true, 'motif + nom : la dérogation est recevable');
+  c.items[0].sans_garantie = { motif: 'porte sur le contenu d un énoncé', assume_par: 'le dirigeant', definitif: true };
+  assert.equal(rendre(c).ok, true, 'motif + nom + définitif : la dérogation est recevable');
 });
 
 test('un item dérogé est EXPOSÉ dans le socle rendu — une dérogation ne se cache pas', () => {
   const c = classementValide();
   c.items[0].couche = 'persona';
-  c.items[0].sans_garantie = { motif: 'aucune couche ne juge un énoncé', assume_par: 'le dirigeant' };
+  c.items[0].sans_garantie = { motif: 'aucune couche ne juge un énoncé', assume_par: 'le dirigeant', definitif: true };
   const r = rendre(c);
   assert.equal(r.ok, true);
   assert.deepEqual(r.deroges, ['GF-ORC-001']);
@@ -232,4 +232,86 @@ test('sans mots_abc, I3 se dit NON MESURÉ plutôt que de rendre un rapport inve
   const r = rendre(classementValide());
   assert.equal(r.mesures.I3.mots_abc, null);
   assert.equal(r.mesures.I3.rapport, null);
+});
+
+// ——— corrections issues de la revue indépendante du 2026-08-20 ———
+
+test('aucun item n apparaît deux fois dans L1 — le socle a un budget dur, il ne se paie pas en double', () => {
+  const c = classementValide();
+  c.items[0].cardinale = 1;                    // un garde-fou cardinal
+  c.items[1].cardinale = 2;                    // un autre
+  c.items[2].cardinale = 3;                    // une règle cardinale sans chapitre
+  delete c.items[2].chapitre;
+  c.items[2].enonce_socle = 'court';
+  const l1 = rendre(c).artefacts['L1.md'];
+  for (const id of ['GF-ORC-001', 'GF-ORC-014', 'RA-ORC-001']) {
+    const n = l1.split(id).length - 1;
+    assert.equal(n, 1, `${id} apparaît ${n} fois dans L1 — les sections doivent partitionner, pas se recouvrir`);
+  }
+});
+
+test('un dérogé cardinal n apparaît pas non plus deux fois', () => {
+  const c = classementValide();
+  c.items[0].cardinale = 1;
+  c.items[0].couche = 'persona';
+  c.items[0].sans_garantie = { motif: 'm', assume_par: 'a', definitif: true };
+  const l1 = rendre(c).artefacts['L1.md'];
+  assert.equal(l1.split('GF-ORC-001').length - 1, 1);
+});
+
+test('une dérogation NON définitive exige une échéance — sinon la dette n a pas de fin', () => {
+  const c = classementValide();
+  c.items[0].couche = 'persona';
+  c.items[0].sans_garantie = { motif: 'couche à construire', assume_par: 'le dirigeant' };
+  const r = rendre(c);
+  assert.equal(r.ok, false);
+  assert.ok(r.erreurs.some((e) => e.includes('GF-ORC-001') && e.includes('échéance')),
+    `une dérogation temporaire sans date est une permission de se taire — reçu : ${JSON.stringify(r.erreurs)}`);
+
+  c.items[0].sans_garantie.echeance = '2026-09-30';
+  assert.equal(rendre(c).ok, true);
+});
+
+test('une dérogation DÉFINITIVE n exige pas d échéance — il n y a rien à attendre', () => {
+  const c = classementValide();
+  c.items[0].couche = 'persona';
+  c.items[0].sans_garantie = { motif: 'juge le contenu d un énoncé', assume_par: 'le dirigeant', definitif: true };
+  assert.equal(rendre(c).ok, true);
+});
+
+test('le rendu MESURE ce que R1 refuse encore — une garde qui ne refuse plus rien doit se voir', () => {
+  const derogé = classementValide();
+  derogé.items[0].couche = 'persona';
+  derogé.items[0].sans_garantie = { motif: 'm', assume_par: 'a', definitif: true };
+  const rd = rendre(derogé);
+  assert.equal(rd.mesures.R1.garde_fous, 2);
+  assert.equal(rd.mesures.R1.deroges, 1);
+  assert.equal(rd.mesures.R1.refuses, 0, 'un dérogé n est pas un refusé');
+
+  // ⚠️ et le compteur doit BOUGER quand R1 refuse vraiment : un compteur figé
+  // à zéro passerait le cas ci-dessus sans rien mesurer.
+  const refusé = classementValide();
+  refusé.items[0].couche = 'persona';              // garde-fou sans dérogation
+  const rr = rendre(refusé);
+  assert.equal(rr.ok, false);
+  assert.equal(rr.mesures.R1.refuses, 1, 'R1 doit compter ce qu il refuse, pas rendre zéro en toute circonstance');
+});
+
+test('un chapitre sans nom, ou deux chapitres de même nom, sont refusés', () => {
+  // ⚠️ on AJOUTE un chapitre sans nom plutôt que d'effacer celui qui existe :
+  // l'effacer casserait le renvoi de la règle qui le vise, et c'est cette
+  // autre erreur qui ferait rougir le test — pas la garde qu'il éprouve.
+  // Mesuré par mutation le 2026-08-20.
+  const sansNom = classementValide();
+  sansNom.chapitres.push({ abrege: 'a', version_pack: '1.81.0' });
+  const rs = rendre(sansNom);
+  assert.equal(rs.ok, false, 'un chapitre sans nom rendrait chapitres/undefined.md');
+  assert.ok(rs.erreurs.some((e) => e.includes("n'a pas de nom")),
+    `c est la garde de nom qui doit refuser — reçu : ${JSON.stringify(rs.erreurs)}`);
+
+  const doublon = classementValide();
+  doublon.chapitres.push({ nom: 'rendre-compte', abrege: 'autre', version_pack: '1.81.0' });
+  const r = rendre(doublon);
+  assert.equal(r.ok, false, 'deux chapitres de même nom s écrasent en silence');
+  assert.ok(r.erreurs.some((e) => e.includes('rendre-compte')));
 });

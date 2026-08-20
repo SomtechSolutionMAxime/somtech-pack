@@ -8,6 +8,9 @@ import assert from 'node:assert/strict';
 import { evaluerProposition } from '../src/metier/boucle.js';
 import { BUDGETS } from '../src/metier/rendu.js';
 
+/** Une proposition doit désormais porter ses deux noms (revue du 2026-08-20). */
+const NOMS = { propose_par: 'la ronde', accepte_par: 'le dirigeant' };
+
 function classementDeBase() {
   return {
     role: 'orchestrateur', version_abc: '2.0.0',
@@ -20,7 +23,7 @@ function classementDeBase() {
 }
 
 test('une proposition qui tient dans le budget est recevable', () => {
-  const r = evaluerProposition(classementDeBase(), {
+  const r = evaluerProposition(classementDeBase(), { ...NOMS,
     ajout: { id: 'RA-ORC-100', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'Une phrase courte.' },
   });
   assert.equal(r.recevable, true, r.motifs?.join(' · '));
@@ -28,7 +31,7 @@ test('une proposition qui tient dans le budget est recevable', () => {
 
 test('une adoption qui ferait dépasser le socle est IRRECEVABLE tant qu elle n est pas compensée', () => {
   const enorme = { id: 'RA-ORC-101', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'w'.repeat(BUDGETS.L1 * 4) };
-  const r = evaluerProposition(classementDeBase(), { ajout: enorme });
+  const r = evaluerProposition(classementDeBase(), { ...NOMS, ajout: enorme });
   assert.equal(r.recevable, false);
   // ⚠️ chercher « retrait » ne distingue rien : le message du rendu le contient déjà.
   // Mesuré par mutation le 2026-08-20 — c'était la seule survivante de cette suite.
@@ -42,9 +45,9 @@ test('la même adoption devient recevable avec le retrait qui la compense', () =
   const enorme = { id: 'RA-ORC-101', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'w'.repeat(200) };
   const c = classementDeBase();
   c.items.push({ id: 'RA-ORC-102', nature: 'regle', couche: 'persona', enonce: 'q', enonce_socle: 'w'.repeat(BUDGETS.L1 * 4) });
-  const sansRetrait = evaluerProposition(c, { ajout: enorme });
+  const sansRetrait = evaluerProposition(c, { ...NOMS, ajout: enorme });
   assert.equal(sansRetrait.recevable, false);
-  const avecRetrait = evaluerProposition(c, { ajout: enorme, retraits: ['RA-ORC-102'] });
+  const avecRetrait = evaluerProposition(c, { ...NOMS, ajout: enorme, retraits: ['RA-ORC-102'] });
   assert.equal(avecRetrait.recevable, true, avecRetrait.motifs?.join(' · '));
 });
 
@@ -60,7 +63,7 @@ test('celui qui propose n est jamais celui qui accepte — une proposition auto-
 
 test('les trois issues sont admises, et une quatrième est refusée', () => {
   const base = classementDeBase();
-  const p = { ajout: { id: 'RA-ORC-104', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'court' } };
+  const p = { ...NOMS, ajout: { id: 'RA-ORC-104', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'court' } };
   for (const issue of ['adopter', 'fusionner', 'retirer']) {
     assert.equal(evaluerProposition(base, { ...p, issue }).recevable, true, `issue ${issue}`);
   }
@@ -70,7 +73,7 @@ test('les trois issues sont admises, et une quatrième est refusée', () => {
 });
 
 test('un retrait qui vise un item inexistant est refusé — on ne compense pas avec du vide', () => {
-  const r = evaluerProposition(classementDeBase(), {
+  const r = evaluerProposition(classementDeBase(), { ...NOMS,
     ajout: { id: 'RA-ORC-105', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'court' },
     retraits: ['RA-ORC-999'],
   });
@@ -79,7 +82,7 @@ test('un retrait qui vise un item inexistant est refusé — on ne compense pas 
 });
 
 test('une proposition qui ajoute un garde-fou sans couche est refusée comme au rendu', () => {
-  const r = evaluerProposition(classementDeBase(), {
+  const r = evaluerProposition(classementDeBase(), { ...NOMS,
     ajout: { id: 'GF-ORC-200', nature: 'garde-fou', couche: 'persona', enonce: 'z', enonce_socle: 'court' },
   });
   assert.equal(r.recevable, false);
@@ -87,9 +90,28 @@ test('une proposition qui ajoute un garde-fou sans couche est refusée comme au 
 });
 
 test('la proposition rend le coût qu elle ajoute au socle — un chiffre, pas une impression', () => {
-  const r = evaluerProposition(classementDeBase(), {
+  const r = evaluerProposition(classementDeBase(), { ...NOMS,
     ajout: { id: 'RA-ORC-106', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'w'.repeat(350) },
   });
   assert.equal(typeof r.cout_socle, 'number');
   assert.ok(r.cout_socle > 0, 'une proposition qui monte au socle coûte quelque chose');
+});
+
+// ——— correction issue de la revue indépendante du 2026-08-20 ———
+
+test('la garde de contradiction n est pas contournable par OMISSION du nom qui accepte', () => {
+  const p = { ajout: { id: 'RA-ORC-200', nature: 'regle', couche: 'persona', enonce: 'z', enonce_socle: 'court' } };
+
+  const sansAcceptant = evaluerProposition(classementDeBase(), { ...p, propose_par: 'matapedia' });
+  assert.equal(sansAcceptant.recevable, false,
+    'omettre le nom qui accepte défait la garde plus facilement que d en nommer un second');
+
+  const acceptantVide = evaluerProposition(classementDeBase(), { ...p, propose_par: 'matapedia', accepte_par: '' });
+  assert.equal(acceptantVide.recevable, false);
+
+  const sansProposant = evaluerProposition(classementDeBase(), { ...p, accepte_par: 'le dirigeant' });
+  assert.equal(sansProposant.recevable, false, 'une proposition sans auteur n est pas traçable');
+
+  const complet = evaluerProposition(classementDeBase(), { ...p, propose_par: 'matapedia', accepte_par: 'le dirigeant' });
+  assert.equal(complet.recevable, true, complet.motifs?.join(' · '));
 });

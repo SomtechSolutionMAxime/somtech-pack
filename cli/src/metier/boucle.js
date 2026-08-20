@@ -31,6 +31,15 @@ export function evaluerProposition(classement, proposition = {}) {
   }
 
   // La garde de contradiction : celui qui propose n'est jamais celui qui accepte.
+  // ⚠️ Elle EXIGE les deux noms. Ne mordre que lorsqu'ils sont tous deux présents
+  // la rendait contournable par simple omission — plus facile que d'en nommer un
+  // second. Trouvé par la revue indépendante du 2026-08-20.
+  if (!propose_par) {
+    motifs.push("garde de contradiction : la proposition ne dit pas qui la propose — sans auteur, elle n'est pas traçable.");
+  }
+  if (!accepte_par) {
+    motifs.push("garde de contradiction : la proposition ne dit pas qui l'accepte — l'omettre défait la garde plus facilement que de nommer la même personne deux fois.");
+  }
   if (propose_par && accepte_par && propose_par === accepte_par) {
     motifs.push(`garde de contradiction : « ${propose_par} » ne peut pas accepter sa propre proposition — ` +
       `celui qui propose n'est jamais le même que celui qui accepte.`);

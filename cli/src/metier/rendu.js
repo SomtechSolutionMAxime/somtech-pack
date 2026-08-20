@@ -82,8 +82,16 @@ export function rendre(classement) {
       // Elle n'efface pas le défaut, elle l'EXPOSE : un item dérogé doit porter
       // un motif ET un nom qui l'assume, et il est listé en tête du socle rendu.
       // Sans les deux, le refus de R1 tient entier.
-      if (i.sans_garantie?.motif && i.sans_garantie?.assume_par) {
+      const sg = i.sans_garantie;
+      if (sg?.motif && sg?.assume_par && (sg.definitif || sg.echeance)) {
         deroges.push(i);
+      } else if (sg?.motif && sg?.assume_par && !sg.definitif && !sg.echeance) {
+        // Une dérogation temporaire sans date est une dette qui n'a pas de fin.
+        erreurs.push(
+          `R1 — ${i.id} est dérogé sans être définitif et sans échéance. ` +
+          `Une dérogation temporaire porte la date à laquelle sa couche arrive, ` +
+          `ou se déclare définitive. Sans date, elle est une permission de se taire.`,
+        );
       } else {
         erreurs.push(
           `R1 — ${i.id} n'atterrit qu'en « ${i.couche} », qui incline sans garantir. ` +
@@ -103,7 +111,15 @@ export function rendre(classement) {
     }
   }
 
+  const nomsVus = new Set();
   for (const c of chapitres) {
+    if (!c?.nom) {
+      erreurs.push("un chapitre n'a pas de nom — il rendrait « chapitres/undefined.md »");
+    } else if (nomsVus.has(c.nom)) {
+      erreurs.push(`deux chapitres portent le nom « ${c.nom} » — le second écraserait le premier en silence`);
+    } else {
+      nomsVus.add(c.nom);
+    }
     if (!c?.abrege) erreurs.push(`I4 — le chapitre « ${c?.nom} » n'a pas d'abrégé`);
     if (!c?.version_pack) erreurs.push(`I4 — le chapitre « ${c?.nom} » ne dit pas de quelle version du pack il provient`);
   }
@@ -115,21 +131,25 @@ export function rendre(classement) {
     `# Tu es l'${role} de ce chantier\n\nTu portes ce métier sans le posséder : il est rendu depuis ton ABC.\n`;
   artefacts['L0.md'] = identite;
 
-  const cardinales = items.filter((i) => i.cardinale);
-  const sansChapitre = items.filter((i) => !i.chapitre);
+  // Les trois sections de L1 partitionnent : un item n'y paraît qu'une fois.
+  // Sans ça le socle se paie en double sur un budget qui est un plafond DUR —
+  // trouvé par la revue indépendante du 2026-08-20, visible dans le rendu livré.
+  const cardinales = items.filter((i) => i.cardinale).sort((a, b) => a.cardinale - b.cardinale);
+  const dejaEnL1 = new Set(cardinales.map((i) => i.id));
+  const sansChapitre = items.filter((i) => !i.chapitre && !dejaEnL1.has(i.id));
   const l1 = [
     '# Ce qui prime',
     '',
     ...(deroges.length
       ? ['## ⚠️ Ce que rien ne garantit — et qui ne tient donc qu\'à toi', '',
-         ...deroges.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(aucune couche — ${i.sans_garantie.motif} · assumé par ${i.sans_garantie.assume_par})*`), '']
+         ...deroges.filter((i) => !dejaEnL1.has(i.id)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(aucune couche — ${i.sans_garantie.motif} · assumé par ${i.sans_garantie.assume_par})*`), '']
       : []),
     ...(cardinales.length
       ? ['## Les règles cardinales', '', ...cardinales.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce}`), '']
       : []),
     '## Ce qui t\'est refusé',
     '',
-    ...gardeFous.filter((i) => !deroges.includes(i)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${i.couche})*`),
+    ...gardeFous.filter((i) => !deroges.includes(i) && !dejaEnL1.has(i.id)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${i.couche})*`),
     '',
     ...(sansChapitre.filter((i) => i.nature !== 'garde-fou').length
       ? ['## Règles du socle', '',
@@ -176,6 +196,11 @@ export function rendre(classement) {
   // rendre un rapport inventé.
   const motsRendus = Object.values(artefacts).reduce((n, t) => n + t.split(/\s+/).filter(Boolean).length, 0);
   const motsAbc = Number.isFinite(classement?.mots_abc) ? classement.mots_abc : null;
+  mesures.R1 = {
+    garde_fous: gardeFous.length,
+    deroges: deroges.length,
+    refuses: erreurs.filter((e) => e.startsWith('R1 —')).length,
+  };
   mesures.I3 = {
     mots_rendus: motsRendus,
     mots_abc: motsAbc,

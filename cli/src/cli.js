@@ -110,6 +110,14 @@ Commandes :
            Re-jouable = mise à jour. Préserve skills, workflows et commandes perso
            hors-pack ; un fichier du pack divergent CONVERGE vers la version du pack
            (backup .somtech.bak auto), les symlinks sont épargnés
+  metier   Rend le métier d'un rôle depuis son classement, et REFUSE plutôt que de
+           rendre un métier qui ne tient pas (STD-047) :
+             metier rendre   --role <rôle>   produit L0, L1 et les chapitres L2
+             metier verifier --role <rôle>   mesure, compare au rendu committé,
+                                             sort non nul s'il est périmé
+           Budgets durs : L0 ≤ 150, L1 ≤ 2500 tokens. Un garde-fou porté par la
+           seule persona fait échouer le rendu, sauf dérogation motivée, assumée
+           et datée — et le socle rendu l'expose alors en tête.
   brd      Projections BRD calculées à la demande (parser déterministe, zéro LLM) :
            brd project --mode index|full|graph [--file <BRD.md>] (défaut : stdin)
   agent    Fait naître un agent, du néant jusqu'à ce qu'il parle sur sa ligne :
@@ -194,6 +202,7 @@ export async function run(argv) {
   // Les redéclarer dans `parseArgs` créerait deux descriptions d'un même contrat, qui
   // divergeraient au premier changement de l'une — le motif que ce lot existe pour fermer.
   if (argv[0] === 'metier') {
+    if (argv.includes('--help') || argv.includes('-h')) { console.log(HELP); return 0; }
     const { runMetier } = await import('./commands/metier.js');
     return runMetier(argv);
   }
