@@ -7,6 +7,26 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-20
 
+*Lot `T-20260820-0022`, PR #302, sous la demande `D-20260820-0001`. **Le dirigeant ne pouvait plus parler à ses agents depuis une heure.** Toute session née depuis le 18 août est absente du registre `herdr` — les 83 agents visibles vont du 19 juillet au 19 août, les 15 invisibles sont tous postérieurs au 18 à 14 h 52. Faire naître fonctionnait ; **joindre l'agent né, non**.*
+
+### Corrigé
+
+- **Un agent que le registre ignore n'est pas un agent mort** — `vivant()` replie sur `pane list`, discriminant `agent_session`. **Une panne de mesure ne rend plus « mort »** : elle jette, ce qui atteint le chemin « herdr injoignable » qui *reporte* au lieu de trancher.
+- 🔴 **La ronde de reprise ne referme plus les lignes que le seul registre ignore** — c'était le plus grave : `reconcilier()` balaie **toutes** les lignes au démarrage, donc un simple relèvement du veilleur refermait en série celles de toutes les sessions neuves, sans que personne n'ait rien demandé. Elle ne ferme plus que sur **disparition positive** — absent du registre **et** de la liste des panes, les deux constatés — et **reporte la ronde entière** si la seconde mesure échoue. *Arbitrage : « ne jamais fermer » retirait une condition et violait le design écrit ; celle-ci en **ajoute** une et tient les deux textes.*
+- **`livrer.js` parle par le pane** — et **bascule ses quatre verbes**, pas seulement sa recherche. Mesuré sur un pane réellement invisible : `herdr agent read` rend `agent_not_found` là où `herdr pane read` rend l'écran. *Toute la famille `agent …` leur est fermée : un repli qui aurait seulement **trouvé** le pane puis rappelé `agent prompt` aurait échoué au dernier mètre, après avoir annoncé qu'il avait trouvé.*
+- 🔴 **`unknown` est la signature du cas qu'on replie, pas un état suspect** — mesuré sur les 98 panes du poste : les 83 vus du registre sont **tous** `idle`, les 15 ignorés **tous** `unknown`, séparation parfaite. Refuser `unknown` rendait le repli **inopérant sur exactement la population qu'il vise**. C'est une **conjonction**, pas une levée : arrivé *par le pane* **et** statut `unknown` **et** boîte vide. Par le NOM, `unknown` reste un refus — on ne généralise pas une levée dont on connaît la cause à un cas dont on l'ignore.
+- **La boîte est la paire de filets qui porte l'invite, pas la dernière paire de l'écran** — le défaut était rapporté comme « le multi-lignes casse » ; **la mesure dit autre chose** : trois lignes se lisent parfaitement, c'est un **pied de page encadré** qui cassait. *La corrélation trompait — un texte long fait défiler l'écran et fait apparaître un filet de plus.* Ce que ça coûtait : « illisible » fait **s'abstenir**, donc un émetteur croyait la boîte occupée devant une session qui n'attendait que ça.
+- **Deux refus décrivaient un état qui n'était pas celui de la session** — *« elle a déjà quitté l'attente sans nous »* à un pane que le registre **n'a jamais vu** (il n'en est donc jamais sorti), et *« désigne-le par son pane »* à quelqu'un qui **venait de le faire par son pane** (relevé par `ristigouche`). Un refus dit ce qu'il a **essayé**, et ne conseille jamais la voie qu'il vient d'écarter.
+
+### Technique
+
+- **Les gardes ne bougent pas, et c'est éprouvé sous le nouveau chemin** : le refus d'écrire dans une **boîte non vide** (avec la preuve que la lecture passe par `pane read --format ansi`), le refus d'**homonymie** de pane, le fait qu'un pane **sans `agent_session`** reste un shell, la **priorité du registre** quand il répond, et `agent prompt --wait --until working` sur le chemin nominal.
+- **Mutation — 9 points, un à la fois** *(muter en groupe cache une survivante)*. **Huit rougissent.** ⚠️ **Le neuvième avait d'abord survécu** : le drapeau qui relie la recherche aux verbes pouvait tomber sans un seul rouge — *les deux étages étaient justes séparément et rien ne vérifiait qu'ils se parlaient*. L'essai de bout en bout qui l'a fermé a trouvé **un second défaut invisible à la relecture** : `pane get` range le statut sous `result.pane`, `agent get` sous `result.agent`. Un dernier point est un **mutant équivalent**, déclaré comme tel : la garde qui le suit couvre la même propriété.
+- 🔴 **Ce que le plan #160 disait déjà** — la story E4 de son découpage exige *« au sens de "disparu" **établi par le spike 2** »*, et le même document listait en **NON VÉRIFIÉ** *« l'existence d'une commande d'inventaire des agents vivants »*. **Le spike n'a jamais été fait**, et le code a supposé que `agent list` = les vivants. *Le plan n'avait pas seulement la réponse : il avait nommé la question et interdit d'y répondre sans mesure.*
+
+
+## [Non-versionne] - 2026-08-20
+
 *Lot `E-20260819-0015` : PR #301, stories `T-20260819-0121` et `T-20260820-0003`, sous la demande `D-20260818-0003`. **Le code disait déjà la vérité ; c'est le mot qui manquait.** Deux orchestrateurs ont perdu ~3 h chacun sur des boîtes qui portaient une **suggestion grisée** — non parce qu'un outil se trompait, mais parce qu'aucun ne pouvait le constater sans lire le code.*
 
 ### Ajouté

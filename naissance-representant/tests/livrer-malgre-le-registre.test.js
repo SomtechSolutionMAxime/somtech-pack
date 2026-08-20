@@ -130,10 +130,6 @@ test('UN NOM INCONNU RESTE UN REFUS — le repli ne s’applique qu’à ce qui 
   assert.equal(r.ok, false, 'un nom que personne ne porte reste un refus');
 });
 
-test('APRÈS TOUT — le bac d’essai est retiré', () => {
-  rmSync(bac, { recursive: true, force: true });
-  assert.ok(true);
-});
 
 // ───────────────────────── LA GARDE QUI NE DOIT PAS TOMBER, éprouvée SUR LE CHEMIN DE REPLI
 
@@ -257,4 +253,97 @@ process.exit(1);
   assert.equal(code, 0, `la livraison doit aboutir : ${sortie}`);
 
   rmSync(bacBin, { recursive: true, force: true });
+});
+
+// ─────────────── LE TROISIÈME TROU : `unknown` EST LA SIGNATURE DU CAS QU'ON REPLIE
+
+const ECRAN_VIDE = ['─'.repeat(20), '❯ ', '─'.repeat(20)].join('\n');
+
+test('ARRIVÉ PAR LE PANE, UN STATUT `unknown` NE FAIT PLUS REFUSER — c’est la signature du cas', async () => {
+  const { causeObstacle } = await import('../src/livraison.js');
+
+  // ⚠️ MESURÉ SUR LES 98 PANES DU POSTE (2026-08-20) : les 83 vus du registre sont TOUS `idle`,
+  // les 15 invisibles TOUS `unknown` — séparation parfaite, zéro contre-exemple. Refuser
+  // `unknown` rendait donc le repli INOPÉRANT SUR EXACTEMENT LA POPULATION QU'IL VISE : un
+  // agent qu'on rejoint par son pane parce que le registre l'ignore porte, par construction,
+  // le statut que le refus écartait.
+  assert.equal(
+    causeObstacle(ECRAN_VIDE, 'unknown', { parLePane: true }),
+    null,
+    'arrivé par le pane, `unknown` dit « le registre ne me voit pas », pas « j’ai quitté l’attente »'
+  );
+});
+
+test('ET LA GARDE DE LA BOÎTE TIENT QUAND MÊME — la conjonction ne lève que le statut', async () => {
+  const { causeObstacle, CAUSES } = await import('../src/livraison.js');
+
+  // C'est LA garde à ne pas perdre : ce n'est pas le statut qui protège le texte d'autrui,
+  // c'est la boîte. On lève une condition, on ne les lève pas toutes.
+  const occupee = ['─'.repeat(20), '❯ un texte que quelqu’un attend de soumettre', '─'.repeat(20)].join('\n');
+  assert.equal(
+    causeObstacle(occupee, 'unknown', { parLePane: true }),
+    CAUSES.ENCOMBREE,
+    'une boîte pleine fait toujours refuser, même arrivé par le pane et même en `unknown`'
+  );
+
+  // Et le dialogue reste un refus lui aussi — écrire devant un choix CONFIRME l'option.
+  //
+  // ⚠️ LA MARQUE EST CELLE QUE LE CODE CHERCHE VRAIMENT. Un premier jet posait « 1. Oui /
+  // 2. Non » : `ecranAttendUnChoix` ne l'y voyait pas, l'essai rougissait, et il aurait pu se
+  // conclure « le dialogue n'est plus gardé » — un faux verdict tiré d'un double approximatif.
+  const dialogue = ['─'.repeat(20), '❯ ', '─'.repeat(20), 'Do you want to proceed? (y/n)'].join('\n');
+  assert.notEqual(causeObstacle(dialogue, 'unknown', { parLePane: true }), null, 'un dialogue reste un refus');
+});
+
+test('ARRIVÉ PAR LE NOM, `unknown` RESTE UN REFUS — la levée est bornée au chemin qui la justifie', async () => {
+  const { causeObstacle, CAUSES } = await import('../src/livraison.js');
+
+  // Par le NOM, le registre a répondu : il connaît cet agent. Un `unknown` y veut peut-être dire
+  // autre chose, et on n'a aucune mesure qui dise quoi. On ne généralise pas une levée obtenue
+  // sur un cas dont on connaît la cause à un cas dont on ne la connaît pas.
+  assert.equal(
+    causeObstacle(ECRAN_VIDE, 'unknown'),
+    CAUSES.STATUT,
+    'sans le repli, `unknown` reste un état qu’on ne sait pas expliquer'
+  );
+});
+
+test('LE REFUS SUR STATUT NE DIT PLUS « elle a quitté l’attente » À UN PANE QUE LE REGISTRE N’A JAMAIS VU', async () => {
+  const { obstacleAvantLivraison } = await import('../src/livraison.js');
+
+  // ⚠️ LE MESSAGE ÉTAIT FAUX, ET C'EST PIRE QU'UN REFUS MUET : « elle a déjà quitté l'attente
+  // sans nous » décrit une session qui a été vue puis est partie. Un pane invisible au registre
+  // n'a JAMAIS été vu. Le refus décrivait un état qui n'était pas le sien, et envoyait attendre
+  // un retour à `idle` qui ne viendra pas.
+  const m = obstacleAvantLivraison(ECRAN_VIDE, 'unknown', { pane: 'w2D:p11' });
+
+  assert.doesNotMatch(m, /quitté l’attente/, 'ce pane n’a jamais été dans l’attente : il n’en est pas sorti');
+  assert.match(m, /registre/i, 'le refus doit nommer la vraie cause — le registre ne le voit pas');
+});
+
+test('UN REFUS NE PROPOSE PAS LA VOIE QU’IL VIENT DE REFUSER (relevé par `ristigouche`)', async () => {
+  const { trouverDestinataire } = await import('../src/destinataire.js');
+  // On désigne PAR LE PANE, et ce pane n'existe nulle part — ni au registre, ni dans les panes.
+  fauxHerdrDesPanes({ [SOCKET_A]: ['w1:p1'], [SOCKET_B]: [] });
+
+  const r = await trouverDestinataire('w7:p9');
+
+  assert.equal(r.ok, false, 'ce pane n’existe nulle part : le refus est juste');
+  // ⚠️ MAIS SON CONSEIL ÉTAIT ABSURDE : « désigne-le par son pane » à quelqu'un qui VIENT de le
+  // faire par son pane. Un refus qui propose la voie qu'il vient d'écarter se fait rejouer à
+  // l'identique, et son lecteur conclut que l'outil est cassé. Un refus dit ce qu'il a ESSAYÉ.
+  assert.doesNotMatch(
+    r.message,
+    /désigne-le par son pane/i,
+    'on ne renvoie pas vers le geste qui vient d’échouer'
+  );
+  assert.match(r.message, /registre|pane/i, 'et il dit ce qui a été cherché, et où');
+});
+
+// ⚠️ CE BLOC RESTE LE DERNIER DU FICHIER. Placé plus haut, il retirait le bac SOUS les essais
+// déclarés après lui — qui échouaient alors sur un `ENOENT` sans rapport avec ce qu'ils
+// éprouvent. Un essai qui meurt de son harnais se lit comme un défaut du code.
+test('APRÈS TOUT — le bac d’essai est retiré', () => {
+  rmSync(bac, { recursive: true, force: true });
+  assert.ok(true);
 });
