@@ -20,7 +20,7 @@
 // (sa ligne se crée, mais seulement si le poste peut parler) — et un test peut en fournir
 // une autre sans monter Slack du tout. C'est ce qui tient la cloison (RA-REL-012).
 
-import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync, readdirSync } from 'node:fs';
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
 import { join, dirname } from 'node:path';
 
@@ -43,6 +43,59 @@ import { verifierFraicheur } from './fraicheur-gabarit.js';
  * précédent : une fonction inerte, derrière des tests verts qui ne regardaient pas l'effet.
  */
 export const GABARITS = ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', join('.claude', 'settings.json')];
+
+/**
+ * TOUT ce que le gabarit d'un rôle porte, en chemins relatifs — la LISTE SE DÉRIVE, elle ne
+ * s'écrit pas.
+ *
+ * DÉFAUT VÉCU ICI (T-20260821-0032), et c'est la troisième fois que ce motif frappe ce
+ * chantier : `GABARITS` ci-dessus énumérait quatre fichiers, écrits à la main. Le modèle à
+ * trois étages est arrivé APRÈS elle. Le socle rendu se termine désormais par onze renvois
+ * vers `metier/chapitres/<nom>.md` — et la pose n'en copiait aucun. Un agent né ce jour-là
+ * portait un socle correct dont TOUTE la profondeur était inatteignable.
+ *
+ * ⚠️ ET LE MODE D'ÉCHEC PENCHE DU MAUVAIS CÔTÉ : le socle ne ment pas, il annonce
+ * correctement où chercher. C'est le lieu qui est incomplet. L'agent, ne trouvant rien,
+ * conclurait que le chapitre n'existe pas — alors que la règle qu'il porte lui interdit
+ * précisément de conclure d'une absence.
+ *
+ * La leçon est dans la forme, pas dans le nombre : une liste en dur est juste jusqu'au jour
+ * où le gabarit gagne un étage, et ce jour-là elle se tait. Celle-ci lit le répertoire.
+ *
+ * `GABARITS` reste, et garde son rôle : les quatre fichiers OBLIGATOIRES, ceux dont l'absence
+ * fait qu'un répertoire n'est pas un lieu (voir `roleDuLieu`). Le gabarit peut en porter
+ * davantage ; il ne peut pas en porter moins.
+ */
+export function fichiersDuGabarit(depot, role) {
+  const source = gabaritsDir(depot, role);
+  if (!existsSync(source)) return [...GABARITS];
+  const vus = [];
+  const descendre = (rel) => {
+    for (const e of readdirSync(join(source, rel), { withFileTypes: true })) {
+      const chemin = rel ? join(rel, e.name) : e.name;
+      if (e.isDirectory()) descendre(chemin);
+      else if (e.isFile()) vus.push(chemin);
+    }
+  };
+  descendre('');
+  // ⚠️ LES OBLIGATOIRES SONT TOUJOURS DE LA LISTE, MÊME QUAND LA MARCHE NE LES A PAS VUS.
+  //
+  // DÉFAUT ATTRAPÉ PAR LA CHAÎNE, pas par le poste : la marche ne retient que les fichiers
+  // RÉGULIERS. Un gabarit dont « CONTEXTE.md » a été remplacé par un RÉPERTOIRE — le cas que
+  // les essais provoquent pour éprouver l'interruption de pose — était donc silencieusement
+  // SAUTÉ : la copie n'échouait plus, et la pose rendait « ok » sur un lieu amputé. C'est
+  // pire que l'échec qu'elle remplaçait : un crash laisse une trace, une omission non.
+  //
+  // Les nommer ici fait retomber la copie sur `EISDIR`, donc sur le retrait atomique — le
+  // comportement que ces essais gardent depuis toujours. Un fichier obligatoire qui n'est
+  // pas copiable doit faire ÉCHOUER la pose, jamais la raccourcir.
+  //
+  // ⚠️ Et ça ne s'était pas vu ici : sur ce poste, la garde de fraîcheur refusait d'abord
+  // pour une autre raison, et l'essai passait POUR LE MAUVAIS MOTIF. Vert chez l'auteur,
+  // rouge en chaîne.
+  const reste = vus.filter((f) => !GABARITS.includes(f)).sort();
+  return [...GABARITS, ...reste];
+}
 
 /**
  * CELUI DES QUATRE QUI PORTE LES DROITS — nommé une fois, pour que la garde de versionnabilité
@@ -191,9 +244,15 @@ export function aFichierEnvironnement(depot) {
  */
 export function etatLieu(depot, role, nom) {
   const racine = racineLieu(depot, role, nom);
-  if (!existsSync(racine)) return { existe: false, complet: false, racine, presents: [], manquants: [...GABARITS] };
-  const presents = GABARITS.filter((f) => existsSync(join(racine, f)));
-  const manquants = GABARITS.filter((f) => !presents.includes(f));
+  // ⚠️ CE QU'ON ATTEND EST CE QUE LE GABARIT PORTE, pas quatre noms écrits d'avance
+  // (T-20260821-0032). Un lieu privé d'un chapitre que son socle ANNONCE est partiel au même
+  // titre qu'un lieu privé de ses droits : dans les deux cas, l'agent naît amputé sans le
+  // savoir. Quand le gabarit est hors d'atteinte, on retombe sur les obligatoires — c'est le
+  // plus que l'on puisse affirmer, et on ne l'affirme pas plus fort que ça.
+  const attendus = fichiersDuGabarit(depot, role);
+  if (!existsSync(racine)) return { existe: false, complet: false, racine, presents: [], manquants: [...attendus] };
+  const presents = attendus.filter((f) => existsSync(join(racine, f)));
+  const manquants = attendus.filter((f) => !presents.includes(f));
   return { existe: true, complet: manquants.length === 0, racine, presents, manquants };
 }
 
@@ -631,9 +690,11 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
   // par un répertoire). Ce qui ne doit JAMAIS survivre à un échec, c'est le lieu à demi posé —
   // c'est lui, et lui seul, que la relance suivante lirait comme un lieu.
   const racine = racineLieu(depot, role, nom);
+  // Ce que le gabarit porte AUJOURD'HUI — relu ici plutôt que supposé (T-20260821-0032).
+  const aPoser = fichiersDuGabarit(depot, role);
   try {
     mkdirSync(racine, { recursive: true });
-    for (const fichier of GABARITS) {
+    for (const fichier of aPoser) {
       const cible = join(racine, fichier);
       mkdirSync(dirname(cible), { recursive: true }); // ex. .claude/ pour settings.json
       copyFileSync(join(source.source, fichier), cible);
@@ -727,7 +788,7 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
     role,
     nom,
     racine,
-    fichiers: [...GABARITS].sort(),
+    fichiers: [...aPoser],
     avertissements,
     ligne,
     metier_verifie: fraicheur.verifie,

@@ -145,7 +145,15 @@ test('idempotence : un lieu PARTIEL (une pose interrompue) n’est pas complét�
   const etat = etatLieu(depot, 'client-x');
   assert.equal(etat.existe, true);
   assert.deepEqual(etat.presents, ['CONTEXTE.md']);
-  assert.deepEqual(etat.manquants, GABARITS.filter((f) => f !== 'CONTEXTE.md'));
+  // ⚠️ RECIBLÉ (T-20260821-0032) : ce qui manque est tout ce que le gabarit porte et que le
+  // lieu n'a pas — chapitres compris. On vérifie donc que les obligatoires manquants sont
+  // nommés, ET que le seul présent ne l'est pas.
+  for (const f of GABARITS.filter((f) => f !== 'CONTEXTE.md')) {
+    assert.ok(etat.manquants.includes(f), `« ${f} » manque et doit être nommé`);
+  }
+  assert.ok(!etat.manquants.includes('CONTEXTE.md'), 'le seul fichier présent ne peut pas manquer');
+  assert.ok(etat.manquants.some((f) => f.startsWith('metier/')),
+    'les chapitres absents comptent aussi — un lieu sans eux porte un socle sans profondeur');
 });
 
 // ═══════════════════════════════ 4. absence de Somcraft — constatée, pas lue

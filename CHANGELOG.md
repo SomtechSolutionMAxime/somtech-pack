@@ -7,6 +7,21 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-21
 
+*Ticket `T-20260821-0032`. **La pose d'un lieu copiait quatre fichiers écrits en dur ; le socle rendu en annonce onze de plus.** Un agent né ainsi portait une carte vers rien.*
+
+### Corrigé
+
+- **Un lieu porte tout le métier, pas seulement son socle.** La liste des fichiers à poser **se dérive** du gabarit au lieu de s'écrire à la main — un étage ajouté au métier arrive désormais sans qu'aucune liste soit modifiée. `etatLieu` suit : un lieu privé d'un chapitre que son socle annonce est **partiel**, au même titre qu'un lieu privé de ses droits.
+- **Un obligatoire qui n'est pas un fichier régulier ne se saute plus en silence.** Attrapé par la chaîne, pas par le poste : la marche du gabarit ne retenait que les fichiers réguliers, et un obligatoire remplacé par un répertoire disparaissait de la liste — la pose rendait « ok » sur un lieu amputé. Un crash laisse une trace, une omission non.
+
+### Technique
+
+- La garde suit **la fonction, pas un nombre** : elle lit les renvois que le socle écrit et exige que chaque cible existe, avec une borne basse pour qu'un socle sans renvois ne la rende pas verte sur zéro vérification.
+- Un harnais d'essai fabriquait son dépôt jetable en énumérant les mêmes quatre fichiers — **quatrième instance du même motif**. Il copie désormais le gabarit entier.
+
+
+## [Non-versionne] - 2026-08-21
+
 *Projet `P-20260820-0001`, tickets `T-20260821-0016` et `T-20260821-0017`. **Un garde-fou qui n'était qu'une phrase devient un refus, et le cycle qui fera évoluer les métiers devient un workflow — parce qu'une seule session ne se contredit pas elle-même.***
 
 ### Ajouté

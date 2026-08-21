@@ -163,7 +163,15 @@ test('UN DÉPÔT SANS CE MOTIF POSE NORMALEMENT, ET EN SILENCE — la garde ne f
   const r = await preparerLieuOrchestrateur({ depot, nom: 'p-20260728-0002', verifierLigne: OUVRABLE });
 
   assert.equal(r.ok, true, r.refus?.message);
-  assert.deepEqual([...r.fichiers].sort(), [...GABARITS].sort(), 'les quatre fichiers sont posés');
+  // ⚠️ RECIBLÉ SUR LA FONCTION (T-20260821-0032) : la pose dépose ce que le GABARIT porte,
+  // pas quatre noms connus d'avance. On garde donc ce qui ne bouge pas — les obligatoires
+  // sont tous là — et on exige en plus que la profondeur du métier ait suivi, sinon le
+  // reciblage aurait béni l'affaiblissement au lieu de l'attraper.
+  for (const f of GABARITS) {
+    assert.ok(r.fichiers.includes(f), `« ${f} » est obligatoire et doit être posé`);
+  }
+  assert.ok(r.fichiers.some((f) => f.startsWith('metier/')),
+    'les chapitres du métier sont posés avec le socle — sinon ses renvois visent le vide');
   // ⚠️ ON NOMME CE QU'ON NE VEUT PAS VOIR, pas un motif qui « ressemble ». La première
   // écriture filtrait sur /version|ignor|git/ — et attrapait le nom du dossier temporaire,
   // qui contenait « versionnable ». Un essai dont le verdict dépend du nom de son bac ne
