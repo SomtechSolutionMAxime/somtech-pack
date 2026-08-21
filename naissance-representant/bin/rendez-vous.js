@@ -29,6 +29,9 @@ import { FAMILLES, ceQuiBloque, comptesParFamille, familleDeNonLivraison } from 
 import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, poserPlafond, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
+// LA PREUVE D'ACTIVITÉ QUI PEUT RÉELLEMENT SURVENIR (T-20260821-0009) — la vigie s'y branche
+// depuis T-20260821-0018 : `agent_status` ne vaut jamais `working`, et elle guettait ça.
+import { identifiantDeSession, lireActivite } from '../src/activite-session.js';
 import { RACINE, chargerRegistre, lignesOuvertes } from '../../ligne-directe/src/registre.js';
 import { lignesAuChantierDisparu, avisDHygiene } from '../../ligne-directe/src/hygiene.js';
 import { enEssais, refuser } from '../../ligne-directe/src/cloison.js';
@@ -396,6 +399,20 @@ async function tenirLeRendezVous(nom, debut) {
     for (let i = 0; i < LECTURES_MINIMALES; i += 1) {
       const r = await appelHerdr(['agent', 'get', c.pane], { socket: c.socket });
       const a = r?.reponse?.result?.agent;
+      // ═══ LE TÉMOIN QUI DÉCIDE — le statut RÉEL de session, pas `agent_status` (T-20260821-0018).
+      //
+      // ⚠️ ET IL SE PRÉLÈVE SUR LES DEUX SURFACES DE herdr, parce qu'il en a deux et qu'elles ne
+      // montrent pas la même population : `agent get` rend `agent_not_found` sur les panes que
+      // le registre ignore, pendant que `pane get` rend leur `agent_session` sans broncher.
+      // Ne lire que la surface `agent` rendrait cette sonde muette EXACTEMENT sur la population
+      // qu'elle vise. Le second appel n'a lieu que si le premier n'a rien rendu : une ronde qui
+      // doublerait son trafic se ferait couper avant d'avoir servi.
+      let sessionId = identifiantDeSession(r?.reponse);
+      if (!sessionId) {
+        const parLePane = await appelHerdr(['pane', 'get', c.pane], { socket: c.socket });
+        sessionId = identifiantDeSession(parLePane?.reponse);
+      }
+      const activite = lireActivite(sessionId);
       let ecran = null;
       try {
         ecran = await lireEcran(['agent', 'read', c.pane, '--format', 'ansi'], { socket: c.socket });
@@ -407,6 +424,10 @@ async function tenirLeRendezVous(nom, debut) {
         statut: a?.agent_status ?? null,
         revision: a?.revision ?? null,
         introuvable: !a,
+        // ⚠️ L'OBJET ENTIER, PAS SEULEMENT LE STATUT. Son `motif` est ce qui permet à la vigie de
+        // distinguer « j'ai regardé, il est au repos » de « je n'ai pas pu regarder » — et cette
+        // distinction-là EST le lot.
+        activite,
         ecran,
       });
       if (i < LECTURES_MINIMALES - 1) await dormir(DELAI_VIGIE_MS);

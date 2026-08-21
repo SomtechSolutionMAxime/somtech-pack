@@ -45,8 +45,20 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-/** Où Claude Code tient l'état de ses sessions. Injectable — les essais n'écrivent pas ici. */
-export const RACINE_SESSIONS = join(homedir(), '.claude', 'sessions');
+/**
+ * Où Claude Code tient l'état de ses sessions.
+ *
+ * Injectable par appel (`{ racine }`) — les essais n'écrivent pas ici. ET relogeable par
+ * l'environnement, comme la racine de la ligne directe : un essai BOUT EN BOUT lance la ronde
+ * dans un processus séparé et ne peut donc rien injecter. Sans ce cran, il ne restait qu'à
+ * faire lire au harnais le VRAI dossier de sessions du poste — c'est-à-dire à faire dépendre
+ * un essai de l'humeur des agents en cours, ou à ne pas éprouver le chemin réel du tout.
+ *
+ * ⚠️ UNE VALEUR FAUSSE NE REND PAS LA SONDE MUETTE EN SILENCE : elle rend
+ * `source-des-sessions-introuvable`, avec son motif, partout où la sonde est lue.
+ */
+export const RACINE_SESSIONS =
+  process.env.ACTIVITE_SESSIONS_RACINE || join(homedir(), '.claude', 'sessions');
 
 /**
  * LES TROIS ÉTATS, et le troisième est celui qui protège.

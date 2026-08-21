@@ -7,6 +7,38 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-21
 
+*Epic `E-20260821-0002`, demande `D-20260819-0004`. **La vigie du même dispositif était à moitié aveugle depuis toujours** — troisième instance du même motif, et elle échouait en SILENCE : personne n'était poussé à rien, on ne voyait simplement pas.*
+
+### Corrigé
+
+- **La vigie croise la revision avec le statut RÉEL de session, plus avec `agent_status`** — `vigie.js` testait `statut === 'working'` sur une valeur que la surface interrogée ne produit jamais. **Mesuré le même instant sur les deux surfaces : `herdr pane list` rend 229 panes, `agent_status` ∈ { `unknown` 146 · `idle` 83 } — zéro `working` ; `~/.claude/sessions/*` rend 147 fichiers, `status` ∈ { `idle` 144 · `waiting` 1 · `busy` 1 · `shell` 1 }.** La branche `fige-sans-ecran` ne pouvait pas se déclencher : la vigie ne savait rendre qu'une de ses deux formes. ⚠️ **Et le code le soupçonnait déjà** — son auteur avait écrit « cette forme n'a JAMAIS été observée sur un vrai agent figé » juste en dessous. *L'honnêteté était là, la cause manquait, et trois lecteurs ont pris cette prudence pour de la rigueur.* **Une limite documentée honnêtement est un symptôme à instruire, pas une réserve à respecter.**
+
+- **`waiting` n'est PAS rangé avec `busy`, et c'est mesuré** — le module frère `activite-session.js` compte `waiting` comme du travail, parce que sa question est « la session a-t-elle PRIS le brief ». La question de la vigie est « est-il figé », et la réponse est non : il attend un humain, **il a donc un écran, donc une preuve lisible**. C'est le parqué, que les familles de non-livraison nomment déjà. *Le seul pane du poste que la règle naïve désignait (`w26:p28`) attendait derrière un dialogue ouvert depuis plus de quarante heures — un faux positif sur 1 candidat sur 1.* **Deux juges, deux questions, deux rangements du même statut.**
+
+### Ajouté
+
+- **Une troisième forme, `activite-non-mesurable` — « je n'ai pas pu voir » cesse d'être « aucun agent figé »** — une sonde a deux façons de ne rien montrer : elle regarde et il n'y a rien (une DÉCISION), ou elle ne peut pas regarder (un SILENCE, qui ne décide rien). Les deux rendaient `null`. ⚠️ **Un essai qui couvre l'absence passe parfaitement pendant que la mesure est aveugle** — c'est le défaut corrigé, réinstallé un cran plus haut. Chaque silence porte son motif : un identifiant absent est un défaut d'annuaire `herdr`, un fichier absent une session inconnue de la source, une source absente une installation incomplète. *Elles n'appellent pas le même geste.*
+
+- **La sonde interroge les DEUX surfaces de `herdr`** — `agent get` rend `agent_not_found` sur les panes que le registre ignore, pendant que `pane get` rend leur `agent_session`. Sans ce repli, la vigie serait muette **exactement sur la population qu'elle vise**. ⚠️ *Cette ligne-là n'était gardée par rien : la mutation qui la retire laissait les 52 essais verts. Trouvée en mutant un point à la fois.*
+
+### Mesuré
+
+- **Les deux chiffres. AVANT** — journal réel du dispositif, **70 rondes, 240 suspects regardés, zéro verdict**, des deux formes. Il n'y avait rien à compter dedans : la branche ne s'était jamais déclenchée. **APRÈS** — lecture seule, même procédure de lecture, fenêtre de 40 s, sur **deux** populations : les **105 panes portant un agent** du poste, et les **9 orchestrateurs** que `orchestrateursDuPoste` sélectionne réellement. **0 vivant déclaré figé à tort** dans les deux cas ; **1** `activite-non-mesurable` au motif nommé, la même dans les deux.
+
+- ⛔ **Une affirmation retirée, parce qu'elle était fausse** — une première rédaction présentait la mesure poste-entier comme *« un sur-ensemble des suspects, donc un chiffre plus sévère »*. **Elle ne l'est pas.** La vigie ne regarde que les orchestrateurs dont la **livraison a échoué**, et cette population est corrélée **en sens inverse** avec la cause du bruit : un agent dont la livraison échoue est précisément celui dont l'identifiant de session a tourné ou dont le fichier a disparu. *Relevé en passe de fond par raisonnement, puis **mesuré** :* le seul `activite-non-mesurable` des 9 (`w7M:p2`) est aussi le pane au **plus haut taux d'échec de livraison du poste — 28 sur 48, 58 %**. Il est donc **sur**-représenté chez les suspects. Sur les 71 rondes du journal, il aurait produit une ligne dans **28** d'entre elles. ⚠️ **Une population n'est pas une borne parce qu'elle est plus grande.**
+
+- **Le bruit ajouté, chiffré** — 1 ligne par ronde où ce pane échoue, et elle nomme une **anomalie réelle** : un orchestrateur dont le fichier de session a disparu, que rien ne signalait avant. Le geste qu'elle appelle n'est pas celui du figé — c'est pour ça qu'elle porte un autre mot. *Réserve relevée en re-vérification : ce verdict **se tait** dès qu'une lecture claire réfute le figé, même si les lectures muettes restantes portaient l'anomalie. Rétrécissement de portée assumé — ce module juge le figé, pas la santé générale d'une session.*
+
+- ⚠️ **DEUX CHIFFRES QUI NE SE RELISENT PAS PAREIL** — le « 28 sur 48 » se **recompte** à tout moment depuis le journal. Le « 9 orchestrateurs / 1 muet / 0 figé » est une **capture éphémère**, prise en direct sur un poste dont l'état a changé depuis : le journal n'en porte aucune trace, puisqu'aucune ligne `vigie` n'y existe encore. *Le journal a d'ailleurs grossi entre deux de nos propres lectures — 70 rondes / 240 suspects, puis 71 / 242 — parce que le service tourne pendant qu'on le lit.* **Deux comptes du même objet à deux instants ne sont pas un désaccord ; c'est un objet à dater.**
+
+- **Le spécimen que personne n'avait su fabriquer** — un agent Claude arrêté par `SIGSTOP` en plein travail garde `busy` dans son fichier de session et cesse de redessiner : **il est attrapé**. Sur la même série, le code d'avant rend `null`. Le même agent dégelé et réellement au travail (`busy`, revision +21 en 20 s) n'est pas signalé.
+
+- ⛔ **Ce que cette mesure ne dit PAS, et c'est la moitié qui compte** — **aucune ligne de journal réelle n'a été produite.** Une vraie ronde livre un rappel dans la boîte de chaque orchestrateur, geste interdit sur ce chantier ; et installer le correctif dans `~/.somtech` avant fusion l'était aussi. *On ne sait donc rien de ce que la vigie ÉCRIT quand elle se déclenche en production : c'est une **vérification post-installation**.* Un figé **naturel** reste non observé — le seul spécimen est fabriqué. **Une mesure dont on ignore la limite se lit comme complète.**
+
+---
+
+## [Non-versionne] - 2026-08-21
+
 *Epic `E-20260821-0001`, demande `D-20260819-0004`. **Le dispositif qui réveille les orchestrateurs jugeait ses propres livraisons sur une attente que `herdr` n'observe jamais.** Il comptait des vivants pour morts — et noyait le seul vrai blocage dans ce bruit.*
 
 ### Corrigé
