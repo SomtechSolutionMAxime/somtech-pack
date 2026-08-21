@@ -31,7 +31,7 @@ import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -379,10 +379,12 @@ function depotClientJetable() {
   mkdirSync(join(depot, '.claude', 'templates'), { recursive: true });
   const source = join(REPO, '.claude', 'templates', 'gestionnaire-client');
   const cible = join(depot, '.claude', 'templates', 'gestionnaire-client');
-  mkdirSync(join(cible, '.claude'), { recursive: true });
-  for (const f of ['CLAUDE.md', 'CONTEXTE.md', '.mcp.json', join('.claude', 'settings.json')]) {
-    writeFileSync(join(cible, f), readFileSync(join(source, f)));
-  }
+  // ⚠️ LE GABARIT ENTIER, JAMAIS UNE LISTE. Ce harnais énumérait quatre fichiers à la main —
+  // la même faute que celle que T-20260821-0032 corrige dans la production. Le jour où le
+  // gabarit a gagné ses chapitres, son empreinte a divergé de celle du poste et la pose
+  // refusait « gabarit_perime » : cet essai mesurait alors ce refus-là, au lieu du refus du
+  // dirigeant qu'il prétend éprouver.
+  cpSync(source, cible, { recursive: true });
   return depot;
 }
 
