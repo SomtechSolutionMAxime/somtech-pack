@@ -18,11 +18,211 @@
 // famille. Elle vit donc ici, au niveau que les deux importent déjà, et `livraison.js` la
 // réexporte pour ne rien casser de ce qui la nommait.
 
-/** La marque de la boîte de saisie d'une session Claude Code dans un terminal. */
-const INVITE = '❯';
+/**
+ * La marque de la boîte de saisie d'une session Claude Code dans un terminal.
+ *
+ * ⚠️ EXPORTÉE — elle vivait en deux exemplaires, ici et dans `ecran.js` (T-20260821-0027).
+ */
+export const INVITE = '❯';
 
-/** Un filet — la ligne de tirets qui encadre la boîte de saisie à l'écran. */
-const FILET = /^[─-╿]{8,}\s*$/;
+/**
+ * UN FILET — la ligne de tracé qui encadre la boîte de saisie à l'écran.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 UN FILET PEUT PORTER UN TITRE, ET L'IGNORER A RENDU UN ORCHESTRATEUR INJOIGNABLE
+ * (T-20260821-0025).
+ *
+ * La première écriture exigeait une ligne faite RIEN QUE de tracé — `/^[─-╿]{8,}\s*$/`. Or une
+ * session **rattachée** (ouverte par `claude agents`) affiche le nom de son chantier DANS son
+ * filet haut, en inversé. Mesuré le 2026-08-21 sur `w7M:p2` :
+ *
+ *   ─────────…───────── CRM ActionProgex finalisation ─
+ *   ❯ Rien à signaler, silence.
+ *   ──────────────────…──────────────────────────────────
+ *
+ * **Les deux lignes font 165 caractères et sont indistinguables à l'œil.** La basse ne porte que
+ * du tracé — reconnue. La haute porte 30 caractères de titre — rejetée. Il ne restait donc qu'UN
+ * filet, la boîte n'était plus reconnue, et le verdict devenait `illisible` : c'est-à-dire
+ * injoignable, puisque tout ce dispositif refuse — à juste titre — d'écrire dans ce qu'il ne voit
+ * pas. Le dirigeant a écrit « allo » deux fois sur ce canal ; aucun des deux n'est parti.
+ *
+ * ⚠️ ET LA GARDE NE S'INVERSE PAS — c'est la moitié qui compte. Accepter n'importe quelle ligne
+ * bordée de tracé ferait découper la boîte au mauvais endroit, donc lire un morceau d'écran comme
+ * s'il était son contenu, donc écrire par-dessus le texte de quelqu'un. On exige donc trois
+ * choses ensemble, et un titre les satisfait toutes les trois :
+ *
+ *   • la ligne COMMENCE par du tracé — une bordure s'ouvre par son trait, jamais par son titre ;
+ *   • elle FINIT par du tracé — le titre est une incise, elle est refermée ;
+ *   • elle porte AU PLUS UNE INCISE de non-tracé, et cette incise est COURTE ;
+ *   • le TRACÉ DOMINE — au moins la moitié de la ligne ;
+ *   • et au moins 8 caractères de tracé en tout.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LES QUATRE CONDITIONS SONT CUMULATIVES, ET J'AI PAYÉ POUR L'APPRENDRE.
+ *
+ * Une version intermédiaire de cette sonde avait RETIRÉ la proportion, en la remplaçant par la
+ * seule règle de l'incise. Le commentaire affirmait alors qu'elle gardait « strictement plus ».
+ * **C'était faux, et une revue de fond l'a reproduit de bout en bout** :
+ *
+ *     ──── Notes de version publiees hier soir pour verification ────
+ *
+ * Cette ligne porte UNE incise de 55 caractères — sous la borne — et passait donc pour un filet,
+ * alors qu'elle n'est que 13 % de tracé. Deux lignes de ce genre dans le scrollback d'un SHELL
+ * ORDINAIRE suffisaient à faire lire une « boîte vide et prête à écrire » là où il n'y a pas de
+ * boîte du tout. Et `❯` est le prompt par défaut de thèmes de shell très répandus.
+ *
+ * > **On perd une livraison quand on refuse à tort. On écrase le message de quelqu'un quand on
+ * > accepte à tort. Les deux ne se valent pas.** L'élargissement avait échangé le premier
+ * > défaut, réparable, contre le second, qui ne l'est pas.
+ *
+ * ⚠️ CE QUE LA PROPORTION COÛTE, ET QUE J'ASSUME PLUTÔT QUE DE LE CACHER. Elle dépend de la
+ * largeur de la fenêtre : pour un titre de 31 caractères, la bordure n'est reconnue qu'à partir
+ * de ~62 colonnes. Sur ce poste, **5 panes sur 146 portent un filet plus étroit que 80
+ * colonnes** — trois à 48, deux à 60. Une session rattachée dans un de ces panes rendrait
+ * `illisible`.
+ *
+ * **`[non établi]` : je n'ai JAMAIS mesuré ce que Claude Code affiche comme bordure dans une
+ * fenêtre de 48 colonnes** — il tronque peut-être le titre, ou ne l'affiche pas. J'avais
+ * construit ce cas et bâti une garde dessus ; c'est cette garde qui a ouvert le trou ci-dessus.
+ * On ne relâche donc pas la proportion sur un cas qu'on n'a pas vu : le sens de son échec est
+ * `illisible`, donc l'abstention, et c'est le seul côté où l'on peut se tromper sans casse.
+ */
+const TRACE = /[─-╿]/;
+const TRACE_MINIMUM = 8;
+/** Le tracé doit dominer : sans ça, une ligne de prose encadrée passe pour une bordure. */
+const PROPORTION_MINIMALE_DE_TRACE = 0.5;
+/**
+ * Un titre est bref par nature. Le cas mesuré en fait 31 ; on laisse de la marge, pas un boulevard.
+ *
+ * ⚠️ CE QUE CETTE SONDE NE COUVRE PAS, ET JE LE DIS PLUTÔT QUE DE LE LAISSER CROIRE. Deux formes
+ * de bordure titrée lui échappent encore, éprouvées le 2026-08-21 :
+ *
+ *   • un titre de PLUS de 60 caractères ;
+ *   • un titre qui contiendrait lui-même un caractère de TRACÉ (`─`), ce qui le couperait en
+ *     deux incises.
+ *
+ * **Les deux sont improbables et aucune n'est attestée** — le seul titre mesuré sur ce poste en
+ * fait 31, et `─` n'est pas une ponctuation qu'on écrit dans un nom de chantier. `[non établi]`
+ * reste le mot juste pour la distribution réelle des longueurs de titre : un seul cas observé.
+ *
+ * ⚠️ ET LEUR SENS D'ÉCHEC EST LE SENS SÛR : elles font rendre `illisible`, donc REFUSER
+ * d'écrire. On perd une livraison, on n'écrase le message de personne. C'est pour ça qu'on ne
+ * relâche pas la borne « au cas où » : élargir sans mesure échangerait un refus contre une
+ * fusion, et seule la seconde est irréparable.
+ */
+const INCISE_MAXIMALE = 60;
+
+/**
+ * EST-CE UN FILET ? — la sonde, exportée, parce que DEUX modules la posaient chacun de leur côté.
+ *
+ * ⚠️ ELLE VIVAIT EN DEUX EXEMPLAIRES — ici et dans `ecran.js`, ce dernier commentant lui-même
+ * « même sonde que `boite.js` ». Une copie n'hérite jamais des corrections de l'autre, et on ne
+ * s'en aperçoit qu'au prochain incident : corriger la bordure titrée ici seulement aurait laissé
+ * l'angle mort entier chez le veilleur — c'est-à-dire sur le chemin par lequel arrive la parole
+ * du dirigeant.
+ */
+/**
+ * UN FILET **PUR** — rien que du tracé, la forme d'origine de cette sonde.
+ *
+ * ⚠️ IL SERT AU FILET **BAS**, ET C'EST UNE ASYMÉTRIE MESURÉE, pas une astuce (T-20260821-0025).
+ * Sur l'écran réel d'une session rattachée, **seul le filet HAUT porte le titre ; le bas est
+ * nu**. Un outil tiers qui encadre une bannière, lui, l'encadre des deux côtés de la même façon.
+ *
+ * 🔴 CETTE DISTINCTION FERME UN DÉFAUT RÉEL, trouvé en revue de fond. Une bannière CENTRÉE —
+ * `─────── 3 tests failed, 12 passed, done in 4.2s ───────` — satisfait la dominance (54 % de
+ * tracé) ET la règle de l'incise unique. Deux lignes de ce genre autour d'un prompt de shell
+ * faisaient lire une « boîte vide, prête à écrire » là où il n'y a pas de boîte. Exiger que le
+ * BAS soit nu ne coûte rien au cas qu'on répare, et referme celui-là.
+ */
+export function estUnFiletPur(ligne) {
+  const l = [...String(ligne ?? '').trim()];
+  // ⚠️ LA LONGUEUR N'EST PAS REDONDANTE ICI, contrairement à `estUnFilet` : `[].every(…)` est
+  // VRAI par vacuité en JavaScript, donc une chaîne vide passerait pour un filet nu. Relevé
+  // survivant en revue de fond — inerte au seul site d'appel actuel, mais cette fonction est
+  // exportée, et rien ne garantit qu'un appelant futur la filtre d'abord.
+  return l.length >= TRACE_MINIMUM && l.every((c) => TRACE.test(c));
+}
+
+/**
+ * L'ANCRE D'UNE SESSION CLAUDE CODE — le pied de page qui suit sa boîte (T-20260821-0025).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 POURQUOI LA FORME DES FILETS NE SUFFIT PAS, ET C'EST MESURÉ DANS LES DEUX SENS.
+ *
+ * Reconnaître une boîte à la seule forme de ses bordures est un cul-de-sac. Trois passes de
+ * revue l'ont montré, chacune avec un écran de shell plus plausible que le précédent — une prose
+ * encadrée, une bannière centrée, puis **un en-tête titré suivi d'une règle de clôture nue**,
+ * qui est très exactement ce qu'imprime un outil en ligne de commande ordinaire.
+ *
+ * ⚠️ ET LA MESURE INTERDIT LA SOLUTION QUI VENAIT À L'ESPRIT. En relevant les filets titrés des
+ * écrans réels de ce poste, on en trouve de **presque parfaitement centrés** (`gauche=93,
+ * droite=94`) : des bannières de transcript. Une garde fondée sur l'asymétrie d'une bordure
+ * aurait donc été fausse — elle reposait sur un seul écran observé.
+ *
+ * ✅ CE QUI EST UNIVERSEL, LUI, A ÉTÉ COMPTÉ : sur **521 boîtes réelles** relevées sur ce poste,
+ * la ligne qui suit le filet bas porte **toujours** un marqueur de mode Claude Code.
+ * **521 sur 521**, quatre libellés distincts :
+ *
+ *     ⏵⏵ auto mode on   ·   ⏸ manual mode on   ·   ⏸ plan mode on   ·   ⏵⏵ bypass permissions on
+ *
+ * On s'accroche donc aux deux GLYPHES, pas aux libellés : ce sont eux le fait, le reste est de la
+ * tournure. Aucun shell ne les imprime par accident sous une règle horizontale.
+ *
+ * ⚠️ SI CE PIED DE PAGE CHANGE UN JOUR, LA PANNE EST SILENCIEUSE — la sonde cessera de
+ * reconnaître les sessions rattachées et rendra `illisible`. C'est le sens sûr (on s'abstient),
+ * mais ça ne se signalera pas tout seul.
+ *
+ * ✅ CE QUI BORNE LE RISQUE, ET C'EST L'ARGUMENT QUI COMPTE : cette exigence ne s'applique QU'AUX
+ * FILETS TITRÉS, c'est-à-dire à des écrans qui étaient **tous** `illisible` avant ce lot. Au
+ * pire, elle ramène ce sous-cas à son état antérieur. **Elle ne peut rendre personne moins
+ * joignable qu'il ne l'était.**
+ *
+ * ⚠️ UNE REVUE A DEMANDÉ SI L'ÉTAT PAR DÉFAUT — avant tout `shift+tab` — n'afficherait PAS de
+ * glyphe, auquel cas une session jamais basculée resterait `illisible`. **Vérifié plutôt que
+ * supposé** : sur les 521 boîtes relevées, **zéro** pied de page sans glyphe, et l'état le plus
+ * proche du défaut y figure — `⏸ manual mode on · ? for shortcuts`, 8 occurrences, qui porte
+ * bien son `⏸`. La question était juste, la mesure la referme pour ce poste.
+ *
+ * ⚠️ ET UN RÉSIDU CONNU, relevé par la même revue : la sonde cherche le glyphe **n'importe où**
+ * dans la ligne. Un prompt de shell thémé affichant `⏸ Spotify: …` sous une règle nue, avec une
+ * bannière titrée plus haut, tromperait la garde. **Réel, mais d'un autre ordre** : les trois
+ * formes précédentes s'appuyaient sur des motifs qu'un terminal produit couramment (tirets en
+ * bannière, `❯` comme prompt) ; celle-ci exige un glyphe de contrôle média qu'aucun outil en
+ * ligne de commande n'imprime. Mesuré sur 786 écrans du poste : **522 portent un glyphe, et les
+ * 522 ont une invite** — aucun ne le porte hors d'une session.
+ */
+const MODE_CLAUDE_CODE = /[⏵⏸]/;
+
+export function estUnFilet(ligne) {
+  const l = [...String(ligne ?? '').trim()];
+  // Ouvrir ET refermer par du tracé : c'est ce qui distingue une bordure titrée d'une phrase.
+  // (Une ligne plus courte que le plancher est écartée par le compte de tracé, plus bas : le
+  // tracé ne peut pas dépasser la longueur. Une garde sur `l.length` y serait morte.)
+  if (!l.length || !TRACE.test(l[0]) || !TRACE.test(l[l.length - 1])) return false;
+  const trace = l.filter((c) => TRACE.test(c)).length;
+  // ⚠️ LE PLANCHER GARDE SEUL LES LIGNES COURTES : sans lui, la dominance laisse descendre le
+  // tracé effectif à 4 (« ── ab ── » est à 50 % pile). Relevé survivant en revue de fond.
+  if (trace < TRACE_MINIMUM) return false;
+  // ⚠️ LE TRACÉ DOIT DOMINER — retirer cette ligne fait passer un shell pour une boîte vide.
+  // La frontière est INCLUSIVE : à la moitié pile, le tracé domine encore.
+  if (trace / l.length < PROPORTION_MINIMALE_DE_TRACE) return false;
+
+  // Les incises : chaque suite contiguë de non-tracé. Une bordure titrée en a UNE, brève.
+  let incises = 0;
+  let courante = 0;
+  for (const c of l) {
+    if (TRACE.test(c)) {
+      courante = 0;
+      continue;
+    }
+    if (courante === 0) incises += 1;
+    courante += 1;
+    if (incises > 1 || courante > INCISE_MAXIMALE) return false;
+  }
+  return true;
+}
+
 
 /**
  * Le contenu ACTUEL de la boîte de saisie, lu dans un dump de terminal.
@@ -95,7 +295,7 @@ export function sansGris(texteTerminal) {
 function corpsDeLaBoite(reperes, aExtraire = reperes) {
   const filets = [];
   for (let i = 0; i < reperes.length; i += 1) {
-    if (FILET.test(reperes[i].trim())) filets.push(i);
+    if (estUnFilet(reperes[i])) filets.push(i);
   }
   if (filets.length < 2) return null;
 
@@ -120,6 +320,21 @@ function corpsDeLaBoite(reperes, aExtraire = reperes) {
     const b = filets[i];
     const h = filets[i - 1];
     if (b - h <= 1) continue;
+    // ⚠️ LE FILET BAS DOIT ÊTRE NU — voir `estUnFiletPur`. C'est l'asymétrie de l'écran réel, et
+    // c'est ce qui empêche deux bannières centrées d'un outil tiers de se faire prendre pour une
+    // boîte de saisie.
+    if (!estUnFiletPur(reperes[b])) continue;
+    // ⚠️ ET SI LE FILET HAUT PORTE UN TITRE, ON EXIGE L'ANCRE DE MODE — voir `MODE_CLAUDE_CODE`.
+    //
+    // C'est le périmètre EXACT de ce qui a été élargi le 2026-08-21, et rien de plus : un filet
+    // haut NU garde le comportement d'avant, au caractère près. Accepter un filet titré est ce
+    // qui a ouvert la porte aux bannières d'outils tiers ; on ne la referme donc que là.
+    //
+    // ⚠️ LE CAS « DEUX FILETS NUS AUTOUR D'UN PROMPT DE SHELL » SE LISAIT DÉJÀ « VIDE » AVANT ce
+    // lot — mesuré en rejouant le code de `main`. C'est un défaut PRÉEXISTANT, distinct, et il
+    // n'appartient pas à ce mandat : l'élargir ici reviendrait à changer un contrat que trois
+    // appelants et des centaines d'essais tiennent pour acquis.
+    if (!estUnFiletPur(reperes[h]) && !MODE_CLAUDE_CODE.test(reperes[b + 1] ?? '')) continue;
     if (aExtraire[h + 1].includes(INVITE)) {
       haut = h;
       bas = b;

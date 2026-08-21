@@ -36,13 +36,22 @@
 //      « désigne-le par son pane » à celui qui venait d'échouer par son pane est le rappel qu'un
 //      conseil faux coûte plus cher que pas de conseil du tout (T-20260816-0002).
 
-import { sansGris } from './boite.js';
-
-/** Un filet — la ligne de tirets qui encadre la boîte de saisie à l'écran. Même sonde que `boite.js`. */
-const FILET = /^[─-╿]{8,}\s*$/;
-
-/** La marque de la boîte de saisie. */
-const INVITE = '❯';
+/**
+ * ⚠️ LA SONDE DE FILET ET L'INVITE VIENNENT DE `boite.js` — ELLES NE SE REDÉFINISSENT PAS ICI
+ * (T-20260821-0027).
+ *
+ * 🔴 CE FICHIER EN PORTAIT SA PROPRE COPIE, sous le commentaire « même sonde que `boite.js` ».
+ * Elles l'étaient — jusqu'au jour où l'une a été corrigée. Le 2026-08-21, `boite.js` a appris à
+ * reconnaître un filet TITRÉ (une session rattachée affiche le nom de son chantier dans sa
+ * bordure haute) ; cette copie-ci ne l'a pas appris, et le veilleur est resté aveugle sur
+ * l'écran de `bonaventure` — **c'est-à-dire sur le chemin par lequel arrive la parole du
+ * dirigeant**, celui qui a motivé tout le chantier.
+ *
+ * **Une copie n'hérite jamais des corrections de l'autre, et on ne s'en aperçoit qu'au prochain
+ * incident.** C'est « une porte sur deux », commis dans le correctif d'un défaut de cette
+ * famille. Un essai le garde désormais par recherche : `les-trois-canaux-jugent-le-meme-ecran`.
+ */
+import { sansGris, estUnFilet, INVITE } from './boite.js';
 
 /**
  * LES ÉCRANS QU'ON SAIT NOMMER — et rien de plus.
@@ -103,7 +112,7 @@ export const ECRANS_CONNUS = [
  */
 function horsBoite(lignes) {
   const filets = [];
-  for (let i = 0; i < lignes.length; i += 1) if (FILET.test(lignes[i].trim())) filets.push(i);
+  for (let i = 0; i < lignes.length; i += 1) if (estUnFilet(lignes[i])) filets.push(i);
   if (filets.length < 2) return { texte: lignes.join('\n'), boiteLisible: false };
 
   const bas = filets[filets.length - 1];
@@ -140,7 +149,7 @@ export function resumeDeLEcran(texte) {
   const lignes = sansGris(texte)
     .split('\n')
     .map((l) => l.replace(/\s+$/, ''))
-    .filter((l) => l.trim() && !FILET.test(l.trim()));
+    .filter((l) => l.trim() && !estUnFilet(l));
   if (!lignes.length) return null;
   const resume = lignes.slice(-LIGNES_DU_RESUME).join('\n').trim();
   return resume.length > RESUME_MAX ? `${resume.slice(0, RESUME_MAX - 1)}…` : resume;

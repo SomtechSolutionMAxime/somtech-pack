@@ -77,7 +77,13 @@ async function ouEstLaBoite(cible) {
   const parAgent = await trouverDestinataire(cible);
   // Un NOM d'agent n'est pas ambigu au niveau des panes : `trouverDestinataire` a déjà refusé
   // les homonymes de nom, et il n'y a pas de second chemin à consulter.
-  if (!estUnPane(cible)) return parAgent.ok ? { ...parAgent, parPane: false } : parAgent;
+  //
+  // ⚠️ `parLePane` VIENT DE LA RÉSOLUTION — ON NE LE RÉINVENTE PAS (T-20260821-0024). Ce
+  // chemin-ci écrivait `parPane: false` en dur ; voir le commentaire du chemin par pane, plus
+  // bas, pour ce que ça coûtait.
+  if (!estUnPane(cible)) {
+    return parAgent.ok ? { ...parAgent, parPane: Boolean(parAgent.parLePane) } : parAgent;
+  }
 
   // ⚠️ ON COMPTE LES SESSIONS QUI PORTENT CE PANE **MÊME QUAND LE REGISTRE A RÉPONDU** — relevé
   // par une revue indépendante, et c'est le côté qui n'était pas gardé.
@@ -108,7 +114,28 @@ async function ouEstLaBoite(cible) {
   // Une seule session le porte : si le registre y connaît un agent, on garde son NOM — il aide
   // le lecteur à reconnaître de qui on parle. Sinon on lit le pane directement, et le nom reste
   // nul plutôt qu'inventé.
-  if (parAgent.ok) return { ...parAgent, parPane: false };
+  //
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LE VERBE SUIT LE FAIT QUE LA RÉSOLUTION A ÉTABLI — il ne se redécide pas ici
+  // (T-20260821-0024).
+  //
+  // Cette ligne écrivait `parPane: false` EN DUR. Or `trouverDestinataire` rend déjà le fait,
+  // sous un autre nom : `parLePane`. Quand il a trouvé la cible par son PANE — le cas NORMAL
+  // des agents que le registre ignore —, il rend `{ ok: true, nom: null, parLePane: true }`, et
+  // ce `ok: true` suffisait à faire écraser le fait par `false`.
+  //
+  // **Deux noms pour la même chose, et le second effaçait le premier.** La lecture partait donc
+  // en `herdr agent read` sur un pane qu'aucun agent n'occupe au registre — qui refuse, et dont
+  // le refus se faisait passer pour un écran illisible (voir `estUnRefusHerdr`).
+  //
+  // 🔴 MESURÉ : sur les 297 lectures du poste, **23 verdicts `illisible` disparaissent par ce
+  // seul choix** — dont trois des quatre cas de référence du chantier. Un `illisible` se lit
+  // « rien à signaler » : c'est ainsi qu'un orchestrateur reste injoignable sans le savoir.
+  //
+  // ⚠️ LIRE UN ÉCRAN NE DEVRAIT RIEN DEMANDER AU REGISTRE, et c'est le fond de l'affaire. Le
+  // registre sert à donner un NOM, qui aide le lecteur ; il n'a pas à décider si l'écran est
+  // lisible. Un défaut d'annuaire rendait aveugle un outil qui lit un terminal.
+  if (parAgent.ok) return { ...parAgent, parPane: Boolean(parAgent.parLePane) };
   if (trouves.length === 0) return parAgent; // le refus du registre reste le bon message
   return { ok: true, pane: trouves[0].pane, socket: trouves[0].socket, nom: null, parPane: true };
 }

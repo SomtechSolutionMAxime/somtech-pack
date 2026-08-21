@@ -235,14 +235,35 @@ export async function remettre(pane, texte, { socket } = {}) {
   // Sur le dialogue mesuré, la boîte était de surcroît illisible, donc le refus d'en dessous
   // aurait mordu — mais PAR ACCIDENT, et « protégé par accident » est le motif que ce dépôt
   // ferme partout. Un écran de choix qui laisse une boîte lisible sous lui n'était gardé par rien.
+  //
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 DEUX CONDITIONS, DEUX REFUS — ET LES CONFONDRE A FABRIQUÉ UN FAIT (T-20260821-0026).
+  //
+  // Ces deux branches étaient réunies en une disjonction rendant UN SEUL message, qui affirmait
+  // dans les deux cas « <pane> est devant un écran qui attend un choix ». La seconde mord
+  // pourtant dès qu'un écran n'est pas RECONNU — un shell, une bordure titrée, n'importe quelle
+  // forme neuve — c'est-à-dire sans qu'aucun dialogue ait été identifié.
+  //
+  // > **Un outil qui dit « je ne reconnais pas » est sain. Un outil qui dit « il attend un
+  // > choix » FABRIQUE UN FAIT.**
+  //
+  // ⚠️ ET LE FAUX MOTIF PRESCRIVAIT UN GESTE IMPOSSIBLE — « réponds au dialogue toi-même » a
+  // envoyé le dirigeant ET son orchestrateur chercher un écran qui n'existe pas. Le mode
+  // d'échec est le pire qui soit : le refus RESSEMBLE À DE LA PRUDENCE. L'émetteur lit un
+  // message rassurant, le destinataire ne sait pas qu'on lui parle, personne ne voit rien.
+  //
+  // ⚠️ LE REFUS LUI-MÊME NE BOUGE PAS, DANS AUCUNE DES DEUX BRANCHES. On ne répare pas ce qu'il
+  // empêche — on répare ce qu'il DIT. Les deux continuent de s'abstenir.
   const etatAvant = etatDeLEcran(avant.ecran);
-  if (ecranAttendUnChoix(avant.ecran) || (avant.ecran && !etatAvant.pretARecevoir)) {
+
+  // ① UN DIALOGUE A ÉTÉ IDENTIFIÉ — et celui-là, on le nomme, parce qu'on l'a vu.
+  //
+  // Mesuré le 2026-08-17 : devant « Do you want to proceed? ❯ 1. Yes », un texte ordinaire
+  // envoyé par `agent prompt` a FAIT EXÉCUTER la commande proposée. Il n'a pas été reçu comme
+  // un message : il a servi de CONFIRMATION. Ce refus-là est fondé, et son geste a un objet.
+  if (ecranAttendUnChoix(avant.ecran)) {
     throw new RemiseEchouee(
       pane,
-      // ⚠️ ON MONTRE CE QU'ON A VU, TOUJOURS. `refusDEcran` rend `null` quand l'écran est par
-      // ailleurs « prêt » — c'est le cas d'un dialogue INCONNU posé au-dessus d'une boîte
-      // lisible, donc précisément le cas le plus fréquent ici. Se rabattre alors sur une phrase
-      // générique priverait le dirigeant de la seule chose qui l'aide : ce qu'il y a à l'écran.
       `${pane} est devant un écran qui attend un choix, pas un message — ` +
         `${
           refusDEcran(etatAvant, { cible: 'la session' }) ||
@@ -251,6 +272,24 @@ export async function remettre(pane, texte, { socket } = {}) {
         `Y écrire ne livrerait pas ta parole : ça CONFIRMERAIT l'action affichée (mesuré). Je m'abstiens. ` +
         `Le geste : va voir l'écran (« herdr agent focus ${pane} »), réponds au dialogue toi-même, ` +
         `puis renvoie ton message.`
+    );
+  }
+
+  // ② L'ÉCRAN N'EST PAS RECONNU — et là, on dit exactement ça, sans rien y ajouter.
+  //
+  // ⚠️ ON MONTRE CE QU'ON A VU, TOUJOURS. C'est la seule chose qui aide celui qui reçoit le
+  // refus : un mauvais motif se croit, un aveu d'ignorance se vérifie. Et on ne prescrit AUCUN
+  // geste sur l'écran lui-même — on ne sait pas ce qu'il y a dessus, donc on ne sait pas ce
+  // qui le lève. Aller le regarder est le seul conseil qu'on ait vérifié.
+  if (avant.ecran && !etatAvant.pretARecevoir) {
+    throw new RemiseEchouee(
+      pane,
+      `je ne reconnais pas l’écran de ${pane} — je m’arrête plutôt que de tenter ma chance, ` +
+        `car y écrire par-dessus ce que je n’ai pas su lire collerait deux textes en un seul message. ` +
+        `⚠️ Je n’ai identifié AUCUN dialogue : ne va pas en chercher un. ` +
+        `Voici ce que j’ai vu :\n${etatAvant.resume || String(avant.ecran).slice(-400)}\n` +
+        `Le geste : va voir l’écran (« herdr agent focus ${pane} ») — ou bien le format a changé ` +
+        `et c’est un défaut à inscrire, ou bien il y a bien quelque chose dessus. Puis renvoie ton message.`
     );
   }
 
