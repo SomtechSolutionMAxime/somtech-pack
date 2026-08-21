@@ -150,3 +150,33 @@ test('DEUX INCISES NE SONT PAS UNE BORDURE — la garde qui remplace la proporti
     'une incise trop longue n’est pas un titre — un titre est bref par nature'
   );
 });
+
+test('UN SÉPARATEUR SUIVI D’UN TEXTE N’EST PAS UNE BORDURE — la garde de FIN, armée', () => {
+  // ⚠️ CETTE GARDE A ÉTÉ TROUVÉE SURVIVANTE, ET C'EST POURQUOI CET ESSAI EXISTE. En mutant la
+  // sonde un point à la fois, retirer l'exigence « la ligne FINIT par du tracé » ne faisait
+  // rougir AUCUN essai. Une mutation groupée l'aurait masquée : un rouge prouve qu'au moins une
+  // chose était gardée, jamais que toutes l'étaient.
+  //
+  // ⚠️ ET LE CAS EST CONSTRUIT, PAS MESURÉ — je le dis plutôt que de le laisser croire. Sur les
+  // 270 écrans réels du poste, **aucune ligne** n'est refusée par cette seule garde. Elle
+  // couvre une forme PLAUSIBLE (un séparateur de sortie d'outil suivi d'un libellé), pas une
+  // forme attestée. On la garde parce que son sens est le sens sûr : refuser fait rendre
+  // « illisible », donc s'abstenir d'écrire — jamais l'inverse.
+  assert.equal(
+    estUnFilet('──────────────────── Résultat : 3 échecs'),
+    false,
+    'une ligne qui s’ouvre par un séparateur et se termine par du texte est du CONTENU — ' +
+      'la prendre pour une bordure ferait découper la boîte au mauvais endroit'
+  );
+  // Et le contrôle positif de la même garde : refermée, c'est bien une bordure.
+  assert.equal(estUnFilet('──────────────────── Résultat ────────'), true);
+});
+
+test('UN TEXTE SUIVI D’UN SÉPARATEUR N’EST PAS UNE BORDURE — la garde de DÉBUT, armée', () => {
+  // La symétrique, armée pour la même raison : elle doit rougir si on la retire.
+  assert.equal(
+    estUnFilet('Résultat : 3 échecs ────────────────────'),
+    false,
+    'une ligne qui commence par du texte est du CONTENU, quelle que soit sa fin'
+  );
+});
