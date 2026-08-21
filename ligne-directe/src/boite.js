@@ -137,8 +137,43 @@ const INCISE_MAXIMALE = 60;
  */
 export function estUnFiletPur(ligne) {
   const l = [...String(ligne ?? '').trim()];
+  // ⚠️ LA LONGUEUR N'EST PAS REDONDANTE ICI, contrairement à `estUnFilet` : `[].every(…)` est
+  // VRAI par vacuité en JavaScript, donc une chaîne vide passerait pour un filet nu. Relevé
+  // survivant en revue de fond — inerte au seul site d'appel actuel, mais cette fonction est
+  // exportée, et rien ne garantit qu'un appelant futur la filtre d'abord.
   return l.length >= TRACE_MINIMUM && l.every((c) => TRACE.test(c));
 }
+
+/**
+ * L'ANCRE D'UNE SESSION CLAUDE CODE — le pied de page qui suit sa boîte (T-20260821-0025).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 POURQUOI LA FORME DES FILETS NE SUFFIT PAS, ET C'EST MESURÉ DANS LES DEUX SENS.
+ *
+ * Reconnaître une boîte à la seule forme de ses bordures est un cul-de-sac. Trois passes de
+ * revue l'ont montré, chacune avec un écran de shell plus plausible que le précédent — une prose
+ * encadrée, une bannière centrée, puis **un en-tête titré suivi d'une règle de clôture nue**,
+ * qui est très exactement ce qu'imprime un outil en ligne de commande ordinaire.
+ *
+ * ⚠️ ET LA MESURE INTERDIT LA SOLUTION QUI VENAIT À L'ESPRIT. En relevant les filets titrés des
+ * écrans réels de ce poste, on en trouve de **presque parfaitement centrés** (`gauche=93,
+ * droite=94`) : des bannières de transcript. Une garde fondée sur l'asymétrie d'une bordure
+ * aurait donc été fausse — elle reposait sur un seul écran observé.
+ *
+ * ✅ CE QUI EST UNIVERSEL, LUI, A ÉTÉ COMPTÉ : sur **521 boîtes réelles** relevées sur ce poste,
+ * la ligne qui suit le filet bas porte **toujours** un marqueur de mode Claude Code.
+ * **521 sur 521**, quatre libellés distincts :
+ *
+ *     ⏵⏵ auto mode on   ·   ⏸ manual mode on   ·   ⏸ plan mode on   ·   ⏵⏵ bypass permissions on
+ *
+ * On s'accroche donc aux deux GLYPHES, pas aux libellés : ce sont eux le fait, le reste est de la
+ * tournure. Aucun shell ne les imprime par accident sous une règle horizontale.
+ *
+ * ⚠️ SI CE PIED DE PAGE CHANGE UN JOUR, LA PANNE EST SILENCIEUSE — la sonde cessera de
+ * reconnaître les sessions rattachées et rendra `illisible`. C'est le sens sûr (on s'abstient),
+ * mais ça ne se signalera pas tout seul.
+ */
+const MODE_CLAUDE_CODE = /[⏵⏸]/;
 
 export function estUnFilet(ligne) {
   const l = [...String(ligne ?? '').trim()];
@@ -270,6 +305,17 @@ function corpsDeLaBoite(reperes, aExtraire = reperes) {
     // c'est ce qui empêche deux bannières centrées d'un outil tiers de se faire prendre pour une
     // boîte de saisie.
     if (!estUnFiletPur(reperes[b])) continue;
+    // ⚠️ ET SI LE FILET HAUT PORTE UN TITRE, ON EXIGE L'ANCRE DE MODE — voir `MODE_CLAUDE_CODE`.
+    //
+    // C'est le périmètre EXACT de ce qui a été élargi le 2026-08-21, et rien de plus : un filet
+    // haut NU garde le comportement d'avant, au caractère près. Accepter un filet titré est ce
+    // qui a ouvert la porte aux bannières d'outils tiers ; on ne la referme donc que là.
+    //
+    // ⚠️ LE CAS « DEUX FILETS NUS AUTOUR D'UN PROMPT DE SHELL » SE LISAIT DÉJÀ « VIDE » AVANT ce
+    // lot — mesuré en rejouant le code de `main`. C'est un défaut PRÉEXISTANT, distinct, et il
+    // n'appartient pas à ce mandat : l'élargir ici reviendrait à changer un contrat que trois
+    // appelants et des centaines d'essais tiennent pour acquis.
+    if (!estUnFiletPur(reperes[h]) && !MODE_CLAUDE_CODE.test(reperes[b + 1] ?? '')) continue;
     if (aExtraire[h + 1].includes(INVITE)) {
       haut = h;
       bas = b;

@@ -367,3 +367,66 @@ test('LE PLANCHER DE TRACÉ ET LA FRONTIÈRE DE DOMINANCE SONT GARDÉS À LEUR V
   );
   assert.equal(estUnFilet(moitie), true, 'à la moitié pile, le tracé domine encore — frontière inclusive');
 });
+
+test('UN FILET TITRÉ N’OUVRE UNE BOÎTE QUE SOUS UNE SESSION CLAUDE CODE — l’ancre de mode', () => {
+  // 🔴 TROISIÈME FORME, TROUVÉE EN CHERCHANT MOI-MÊME CE QUE LA REVUE ALLAIT TRAQUER.
+  //
+  // Exiger un filet bas NU ne suffisait pas : il suffit qu'un outil tiers pose sa bannière en
+  // HAUT et un séparateur nu en BAS. Et ce n'est pas une vue de l'esprit — en mesurant les
+  // écrans réels du poste, j'ai trouvé des filets titrés **presque parfaitement centrés**
+  // (`gauche=93 droite=94`), c'est-à-dire des bannières de transcript. La forme d'une ligne ne
+  // distingue donc PAS une bordure de session d'une bannière d'outil, dans aucun des deux sens.
+  //
+  // ✅ L'ANCRE, ELLE, EST MESURÉE ET UNIVERSELLE : sur **521 boîtes réelles** relevées sur ce
+  // poste, la ligne qui suit le filet bas porte **toujours** un marqueur de mode Claude Code —
+  // `⏵⏵ auto mode on`, `⏸ manual mode on`, `⏸ plan mode on`, `⏵⏵ bypass permissions on`.
+  // **521 sur 521.** Aucun shell ne produit ce pied de page par accident.
+  //
+  // ⚠️ ET ON NE L'EXIGE QUE POUR UN FILET TITRÉ. Un filet haut NU garde exactement le
+  // comportement d'avant ce lot : c'est le périmètre de ce qui a été élargi, et rien de plus.
+  // Le cas « deux filets nus autour d'un prompt de shell » se lisait déjà `vide` AVANT — c'est
+  // un défaut PRÉEXISTANT, mesuré, hors de ce mandat, et inscrit au ServiceDesk.
+  const banniere = (texte, largeur) => {
+    const reste = largeur - texte.length;
+    const gauche = Math.floor(reste / 2);
+    return '─'.repeat(gauche) + texte + '─'.repeat(reste - gauche);
+  };
+  const shellAvecBanniere = [
+    'maximeleboeuf@Mac % npm test',
+    banniere(' 3 tests failed, 12 passed ', 90),
+    '❯ ',
+    '─'.repeat(90),
+    'maximeleboeuf@Mac % ',
+  ].join('\n');
+  assert.equal(
+    etatDeLaBoite(shellAvecBanniere).etat,
+    ETATS_BOITE.ILLISIBLE,
+    'un shell qui pose une bannière en haut et un séparateur en bas n’est pas une boîte'
+  );
+
+  // ✅ ET LE CAS RÉEL PASSE, parce qu'il porte son pied de page — comme les 521 mesurés.
+  const sessionRattachee = [
+    '⏺ un travail au-dessus',
+    `${'─'.repeat(120)} CRM ActionProgex finalisation ─`,
+    '❯ ',
+    '─'.repeat(150),
+    '  ⏵⏵ auto mode on (shift+tab to cycle)',
+  ].join('\n');
+  assert.equal(etatDeLaBoite(sessionRattachee).etat, ETATS_BOITE.VIDE);
+
+  // Les autres modes comptent aussi — l'ancre n'est pas le mode « auto ».
+  for (const pied of ['  ⏸ manual mode on · ? for shortcuts', '  ⏸ plan mode on', '  ⏵⏵ bypass permissions on']) {
+    const ecran = [
+      '⏺ un travail',
+      `${'─'.repeat(120)} un chantier ─`,
+      '❯ ',
+      '─'.repeat(140),
+      pied,
+    ].join('\n');
+    assert.equal(
+      etatDeLaBoite(ecran).etat,
+      ETATS_BOITE.VIDE,
+      `« ${pied.trim()} » est un mode Claude Code comme un autre`
+    );
+  }
+});
