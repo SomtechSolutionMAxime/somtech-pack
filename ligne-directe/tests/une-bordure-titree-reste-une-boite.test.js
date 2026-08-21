@@ -196,3 +196,27 @@ test('QUELQUES TIRETS NE SONT PAS UNE BORDURE — la borne basse, armée', () =>
   // Le contrôle positif de la même borne, juste au-dessus du seuil.
   assert.equal(estUnFilet('────────'), true, 'huit caractères de tracé font une bordure');
 });
+
+test('LA BORNE DE L’INCISE EST GARDÉE À SA VALEUR — pas seulement « quelque part au-dessus »', () => {
+  // ⚠️ TROISIÈME SURVIVANTE, ET C'EST LA PASSE DE REVUE QUI L'A SIGNALÉE. Elle a mesuré qu'on
+  // pouvait faire glisser `INCISE_MAXIMALE` de 60 à 100 sans faire rougir un seul essai : le cas
+  // négatif voisin porte une incise de 103 caractères, donc il reste refusé des deux côtés.
+  //
+  // > **Un essai qui refuse une incise de 103 caractères ne garde pas une borne à 60. Il garde
+  // > « une borne quelque part sous 103 » — ce qui n'est pas une borne, c'est une direction.**
+  //
+  // On encadre donc la valeur des DEUX côtés, au caractère près. Une borne qu'on peut déplacer
+  // sans rien casser finit par se déplacer.
+  const bord = (incise) => `${'─'.repeat(40)}${incise}${'─'.repeat(40)}`;
+  assert.equal(
+    estUnFilet(bord(` ${'x'.repeat(58)} `)),
+    true,
+    'une incise de 60 caractères est encore un titre — la borne est inclusive'
+  );
+  assert.equal(
+    estUnFilet(bord(` ${'x'.repeat(59)} `)),
+    false,
+    'une incise de 61 caractères n’en est plus un — si cet essai ne rougit pas quand la borne ' +
+      'bouge, c’est que la borne n’était pas gardée'
+  );
+});
