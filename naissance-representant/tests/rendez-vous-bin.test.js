@@ -186,23 +186,39 @@ process.exit(0);
 }
 
 /**
- * Un faux herdr qui joue un pane FIGÉ : il répond, il se dit au travail, et sa `revision` ne
- * bouge jamais. C'est le troisième état — ni écran, ni erreur, rien qui cloche à première vue.
+ * Un faux herdr qui joue un pane FIGÉ, ET UN DOSSIER DE SESSIONS QUI DIT CE QU'IL SAIT.
+ *
+ * ⚠️ CE DOUBLE MENTAIT JUSQU'AU 2026-08-21 (T-20260821-0018). Il rendait `agent_status:
+ * 'working'` — une valeur que le vrai herdr ne produit JAMAIS (mesuré : 229 panes, `unknown`
+ * 146 · `idle` 83). L'essai était donc vert sur un spécimen introuvable dans la nature,
+ * pendant que la vigie était aveugle en production. **Un double plus complaisant que le
+ * service tient un essai au vert sur une garde qui ne peut pas se déclencher.**
+ *
+ * Il rend maintenant ce que les deux vraies surfaces rendent, et elles ne disent pas la même
+ * chose : `idle` chez herdr, `busy` dans le fichier de session. C'est cet écart-là — mesuré en
+ * flagrant délit sur `w26:p28` — qui est tout le sujet du lot.
+ *
+ * @returns {string} la racine du dossier de sessions à passer à la ronde
  */
-function fauxHerdrQuiFige(pane, lieu) {
+function fauxHerdrQuiFige(pane, lieu, { statutDeSession = 'busy' } = {}) {
+  const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const sessions = join(bac, 'sessions-claude');
+  mkdirSync(sessions, { recursive: true });
+  writeFileSync(join(sessions, 'fige.json'), JSON.stringify({ sessionId, status: statutDeSession, statusUpdatedAt: 1 }));
   const script = `#!/usr/bin/env node
 const args = process.argv.slice(2);
+const SESSION = { agent: 'claude', kind: 'id', source: 'herdr:claude', value: ${JSON.stringify(sessionId)} };
 if (args[0] === 'agent' && args[1] === 'list') {
   process.stdout.write(JSON.stringify({ result: { agents: [
-    { pane_id: ${JSON.stringify(pane)}, name: 'orch-fige', agent_status: 'working',
-      foreground_cwd: ${JSON.stringify(lieu)}, revision: 4242 },
+    { pane_id: ${JSON.stringify(pane)}, name: 'orch-fige', agent_status: 'idle',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 4242, agent_session: SESSION },
   ] } }));
   process.exit(0);
 }
 if (args[0] === 'agent' && args[1] === 'get') {
-  // TOUJOURS la même revision — c'est ça, être figé.
+  // TOUJOURS la même revision — c'est ça, être figé. Et idle chez herdr, comme les 83 du poste.
   process.stdout.write(JSON.stringify({ result: { agent: {
-    pane_id: ${JSON.stringify(pane)}, agent_status: 'working', revision: 4242 } } }));
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'idle', revision: 4242, agent_session: SESSION } } }));
   process.exit(0);
 }
 if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write('un ecran qui ne change pas'); process.exit(0); }
@@ -211,6 +227,7 @@ process.exit(0);
 `;
   writeFileSync(join(bac, 'herdr'), script);
   chmodSync(join(bac, 'herdr'), 0o755);
+  return sessions;
 }
 
 test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à rien en vrai', () => {
@@ -219,7 +236,7 @@ test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à 
   // essai, on pourrait retirer tout le branchement et la suite resterait verte — la vigie
   // existerait dans le dépôt et nulle part dans la vie du poste.
   const lieu = lieuDOrchestrateur('fige');
-  fauxHerdrQuiFige('w9:pF', lieu);
+  const sessions = fauxHerdrQuiFige('w9:pF', lieu);
   // ⚠️ UNE SÉRIE RÉELLE, PAS INSTANTANÉE. Le premier jet de cet essai espaçait les lectures de
   // 10 ms : la vigie a rendu `null`, et elle avait raison — trois lectures dans le même
   // vingtième de seconde ne prouvent pas qu'un agent est figé, elles prouvent qu'on a regardé
@@ -237,6 +254,7 @@ test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à 
     RENDEZ_VOUS_VIGIE_MS: '8000',
     RENDEZ_VOUS_ECHEANCE_MS: '60000',
     RENDEZ_VOUS_DELAI_MS: '60000',
+    ACTIVITE_SESSIONS_RACINE: sessions,
   });
   const dit = JSON.parse(r.stdout.trim().split('\n').pop());
 
@@ -246,7 +264,50 @@ test('LA RONDE VOIT UN AGENT FIGÉ ET LE RAPPORTE — sinon la vigie ne sert à 
   assert.equal(dit.vigie[0].pane, 'w9:pF');
   // La capture, parce que le spécimen a été perdu deux fois faute d'avoir été mesuré.
   assert.deepEqual(dit.vigie[0].capture.revisions, [4242, 4242, 4242]);
-  assert.match(dit.vigie[0].limite, /jamais/i, 'et la limite voyage avec le verdict');
+  // ⚠️ ET CE SUR QUOI LE VERDICT S'EST DÉCIDÉ VOYAGE AVEC LUI. Sans ça, une capture rendrait
+  // `idle` partout — le témoin qui ne décide plus — et la relecture repartirait de zéro.
+  assert.deepEqual(dit.vigie[0].capture.activites, ['busy', 'busy', 'busy']);
+  assert.match(dit.vigie[0].limite, /non\s+établi/i, 'et la limite voyage avec le verdict');
+});
+
+test('LA RONDE NE DÉCLARE PAS FIGÉ CELUI QUI ATTEND UN HUMAIN — le parqué a un écran', () => {
+  // ⚠️ LE FAUX POSITIF QUE LE BRANCHEMENT NAÏF FABRIQUAIT, ÉPROUVÉ SUR LE CHEMIN RÉEL. Ranger
+  // `waiting` avec `busy` (ce que fait `etatDeLActivite`, pour une AUTRE question) aurait
+  // désigné le seul candidat du poste — un agent en attente derrière un dialogue depuis plus de
+  // quarante heures. La ronde doit voir la MÊME série et se taire.
+  const lieu = lieuDOrchestrateur('parque');
+  const sessions = fauxHerdrQuiFige('w9:pP', lieu, { statutDeSession: 'waiting' });
+
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_VIGIE_MS: '8000',
+    RENDEZ_VOUS_ECHEANCE_MS: '60000',
+    RENDEZ_VOUS_DELAI_MS: '60000',
+    ACTIVITE_SESSIONS_RACINE: sessions,
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.equal(dit.vigie, undefined, 'aucun verdict — il attend quelqu’un, il n’est pas figé');
+});
+
+test('🔴 LA RONDE, SONDE COUPÉE, NE REND PAS « AUCUN AGENT FIGÉ » — bout en bout', () => {
+  // ⚠️ LE CRITÈRE DU LOT, SUR LE CHEMIN RÉEL ET PAS SEULEMENT SUR LE JUGE. On pointe la sonde
+  // vers un dossier qui n'existe pas : c'est la panne d'installation, ou le jour où Claude Code
+  // déplace ses fichiers d'état. Avant ce lot, les deux cas rendaient exactement le même
+  // silence qu'un poste en parfaite santé — et aucun essai n'aurait bronché.
+  const lieu = lieuDOrchestrateur('aveugle');
+  fauxHerdrQuiFige('w9:pA', lieu);
+
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_VIGIE_MS: '8000',
+    RENDEZ_VOUS_ECHEANCE_MS: '60000',
+    RENDEZ_VOUS_DELAI_MS: '60000',
+    ACTIVITE_SESSIONS_RACINE: join(bac, 'ce-dossier-nexiste-pas'),
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.ok(dit.vigie, 'le silence de la sonde est DIT, pas tu');
+  assert.equal(dit.vigie[0].forme, 'activite-non-mesurable');
+  assert.match(dit.vigie[0].motifs.join(' '), /source-des-sessions-introuvable/,
+    'et il nomme sa cause — une installation incomplète n’appelle pas le même geste qu’un figé');
 });
 
 /**

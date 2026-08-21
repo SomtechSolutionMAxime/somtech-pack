@@ -34,6 +34,45 @@
 //     statut `working` + revision immobile → rien ne bouge, c'est le figé
 //     statut `idle`/`done` + revision immobile → normal, il attend
 //
+// ⛔ ET CE CROISEMENT-LÀ ÉTAIT MORT-NÉ, corrigé le 2026-08-21 (T-20260821-0018). Le statut
+// croisé venait de `agent_status`, rendu par herdr. **Cette surface ne produit pas `working`.**
+//
+//   MESURÉ SUR CE POSTE, deux surfaces, le même instant :
+//     herdr pane list      →  229 panes,  agent_status ∈ { unknown 146 · idle 83 }.  ZÉRO `working`.
+//     ~/.claude/sessions/* →  147 fichiers, status ∈ { idle 144 · waiting 1 · busy 1 · shell 1 }
+//
+// La condition ne pouvait pas survenir : la vigie ne savait rendre qu'UNE de ses deux formes,
+// et elle échouait en SILENCE — personne n'était poussé à rien, on ne voyait simplement pas.
+// C'est la troisième instance du même motif dans ce dispositif, après `--until working` et le
+// témoin `done` qui se prouvait lui-même.
+//
+// ✅ LE TÉMOIN QUI DÉCIDE EST DÉSORMAIS LE STATUT RÉEL DE SESSION, lu dans `~/.claude/sessions`
+// par `src/activite-session.js`, et croisé à la revision comme avant :
+//
+//     session `busy`    + revision immobile → il est déclaré EN TRAIN DE CALCULER, et rien ne
+//                                             bouge : c'est le figé.
+//     session `waiting` + revision immobile → il attend un HUMAIN. Il a donc un écran, donc une
+//                                             preuve lisible : c'est le parqué, pas le figé.
+//     session `idle`/`shell` + immobile     → au repos, immobile par nature.
+//
+// ⚠️ `waiting` EST RANGÉ AILLEURS QUE DANS `activite-session.js`, ET C'EST DÉLIBÉRÉ. Là-bas il
+// compte comme du TRAVAIL, parce que la question posée est « la session a-t-elle PRIS le brief »
+// — et une session qui attend qu'on approuve un dialogue l'a pris. Ici la question est « est-il
+// figé », et la réponse est non : il attend quelqu'un. **Deux juges, deux questions, deux
+// rangements du même statut.** Comparer leurs verdicts sans comparer leurs questions ferait
+// croire à un désaccord là où il y a deux objets.
+//
+// ⚠️ ET CE RANGEMENT EST MESURÉ, PAS RAISONNÉ. Le seul pane du poste que la règle naïve
+// (`busy` OU `waiting`) désignait est `w26:p28`. Son écran a été LU : un dialogue ouvert, une
+// question à l'humain, `statusUpdatedAt` remontant à plus de quarante heures. Le ranger avec le
+// figé, c'était un faux positif sur 1 candidat sur 1.
+//
+// ⚠️ CE MODULE N'IMPORTE TOUJOURS RIEN, et ça n'est pas de la coquetterie : il reçoit des
+// lectures déjà faites — revision, statut, ET activité de session — et rend un jugement. C'est
+// ce qui lui permet de s'éprouver sans herdr ET sans toucher au disque, donc de se faire
+// mesurer la sonde COUPÉE, ce qu'un module qui lirait lui-même `~/.claude/sessions` ne pourrait
+// pas offrir aussi simplement.
+//
 // C'est un FAIT croisé à un ÉTAT, pas un seuil de temps — le piège du faux positif se ferme
 // donc par construction, au lieu d'être contourné par un réglage qu'il faudrait maintenir.
 //
@@ -61,6 +100,31 @@ export const DUREE_MINIMALE_MS = 15000;
 
 const PERDU = new Set([null, undefined, 'unknown']);
 
+/**
+ * LES DEUX STATUTS DE SESSION QUI DÉCIDENT — nommés, parce qu'ils ne veulent pas dire la même
+ * chose et que les confondre a coûté le seul faux positif que la mesure ait produit.
+ */
+export const CALCULE = 'busy';
+export const ATTEND_UN_HUMAIN = 'waiting';
+
+/**
+ * POURQUOI LA SONDE EST MUETTE — le mot que ce module ajoute aux `SILENCES` de la sonde.
+ *
+ * ⚠️ UNE LECTURE SANS CHAMP `activite` N'EST PAS UNE LECTURE OÙ L'AGENT ÉTAIT AU REPOS : c'est
+ * une lecture où PERSONNE N'A DEMANDÉ. Sans ce mot, un appelant qui oublie de sonder rendrait
+ * la vigie exactement aussi aveugle qu'avant ce correctif — en silence, et pour toujours.
+ */
+export const NON_SONDEE = 'la-ronde-n-a-pas-sonde-l-activite';
+
+/**
+ * Ce que la sonde a dit de cette lecture, ou le motif de son silence.
+ *
+ * Muette dès qu'un motif est posé : un statut qu'on ne reconnaît pas est un état NON LU, pas un
+ * état de repos. C'est la ligne où le défaut d'origine se réinstallerait.
+ */
+const motifDuSilence = (lecture) => (lecture.activite ? (lecture.activite.motif ?? null) : NON_SONDEE);
+const statutDeSession = (lecture) => lecture.activite?.statut ?? null;
+
 /** Ce qu'on a vu, rendu tel quel — parce que le spécimen a été perdu deux fois. */
 function capturer(lectures) {
   const der = lectures[lectures.length - 1];
@@ -69,6 +133,11 @@ function capturer(lectures) {
     horodatages: lectures.map((l) => l.t),
     statut: lectures[0].statut,
     statut_final: der.statut ?? null,
+    // ⚠️ CE SUR QUOI LE VERDICT S'EST DÉCIDÉ, pas seulement ce qu'il a décidé. Le spécimen a
+    // été perdu deux fois faute d'avoir été mesuré ; une capture qui tait son propre témoin
+    // fait repartir de zéro le prochain qui la relira.
+    activites: lectures.map((l) => statutDeSession(l)),
+    silences: lectures.map((l) => motifDuSilence(l)),
     ecran: der.ecran ?? null,
     duree_ms: der.t - lectures[0].t,
   };
@@ -85,10 +154,25 @@ function capturer(lectures) {
  *     (`agent_not_found`) pendant que son pane vit encore, en `unknown`, revision figée.
  *     Personne ne regardait cet état, et il est trivialement détectable.
  *
- *   • `fige-sans-ecran` — **JAMAIS OBSERVÉE DIRECTEMENT**. Le spécimen fabriqué a produit
- *     l'autre forme ; le vrai figé, vu deux fois, a été perdu les deux fois (réveillé à la
- *     main, puis fermé). Cette forme PENCHE DONC VERS LE SILENCE, délibérément : trois
- *     lectures espacées d'au moins quinze secondes, et le moindre doute rend `null`.
+ *   • `fige-sans-ecran` — **ELLE PEUT ENFIN SE DÉCLENCHER** (T-20260821-0018). Jusqu'au
+ *     2026-08-21 elle guettait `working` sur une surface qui ne le produit pas : elle était
+ *     morte, pas rare. Elle guette désormais le statut RÉEL de session (`busy`). Elle penche
+ *     toujours vers le silence — trois lectures espacées d'au moins quinze secondes — mais son
+ *     silence n'est plus une fatalité de câblage.
+ *
+ *     ⚠️ CE QUI RESTE NON PROUVÉ, ET IL FAUT LE DIRE EXACTEMENT : la règle a été mesurée sur la
+ *     population vivante du poste — 105 panes portant un agent — et elle n'y a désigné
+ *     personne, parce qu'aucun agent n'y était figé au moment de la mesure. Son taux de faux
+ *     positifs y est donc **0 sur 105**. Ce qu'aucune mesure n'a encore établi, c'est combien
+ *     de figés réels elle attrape : il n'en est pas passé un seul sous les yeux de la mesure.
+ *     **C'est une borne connue, pas une réserve sur le mécanisme** — et la capture est là pour
+ *     que la première occurrence réelle la lève.
+ *
+ *   • `activite-non-mesurable` — **LA TROISIÈME, ET ELLE EXISTE POUR NE PAS MENTIR**. Une sonde
+ *     a deux façons de ne rien montrer : elle regarde et il n'y a rien (une DÉCISION), ou elle
+ *     ne peut pas regarder (un SILENCE, qui ne décide rien). Les deux rendaient `null`, donc
+ *     « aucun agent figé » — un juge aveugle qui rend un verdict bien formé, c'est-à-dire le
+ *     défaut même que ce module corrige, réinstallé un cran plus haut. Elle nomme sa cause.
  *
  * ⚠️ POURQUOI PENCHER VERS LE SILENCE PLUTÔT QUE VERS L'ALERTE : une garde à demi prouvée qui
  * crie trop se fait retirer, **et emporte avec elle ce qu'elle gardait**. La même qui se tait
@@ -131,29 +215,64 @@ export function verdictDeVigie(lectures) {
     };
   }
 
-  // ═══ LA FORME QUI PENCHE VERS LE SILENCE.
+  // ═══ LA SONDE COUPÉE — et c'est la garde qui empêche ce module de rejouer son propre défaut.
   //
-  // Un agent AU REPOS a une revision immobile PAR NATURE : les 78 panes au repos du poste
-  // l'avaient. Les signaler ferait crier la ronde sur tout le poste au premier passage, ce qui
-  // est la façon la plus sûre de la rendre inaudible avant qu'elle ait servi une seule fois.
-  if (l.every((x) => x.statut === 'working')) {
+  // ⚠️ « JE N'AI PAS PU VOIR » N'EST PAS « IL N'Y AVAIT RIEN ». C'est la même règle que la
+  // revision illisible vingt lignes plus haut, appliquée à l'autre témoin — et c'est celle qui
+  // manquait ici : une source de sessions absente rendait un `null` indiscernable d'un poste
+  // parfaitement sain. Un essai qui couvre « quand il n'y a rien » passe alors PARFAITEMENT
+  // pendant que la mesure est aveugle.
+  //
+  // ⚠️ ET ELLE PASSE APRÈS `agent-introuvable`, JAMAIS AVANT. Un agent qui a quitté la détection
+  // n'a plus d'identifiant de session à interroger : sa sonde est muette PAR CONSTRUCTION.
+  // Devant, elle remplacerait la seule forme prouvée par un mot qui en dit moins.
+  const silences = l.map((x) => motifDuSilence(x)).filter(Boolean);
+  if (silences.length) {
     return {
-      forme: 'fige-sans-ecran',
+      forme: 'activite-non-mesurable',
       quoi:
-        'l’agent est déclaré au travail et rien ne bouge à son écran — un agent qui pense ' +
-        'redessine son compteur d’activité chaque seconde, celui-ci ne redessine rien',
-      // ⚠️ LA LIMITE VIT AVEC LE VERDICT, pas dans une note ailleurs. Un verdict qui tait ce
-      // qu'il ne sait pas se fait croire au-delà de ce qu'il a prouvé.
-      limite:
-        'cette forme n’a JAMAIS été observée sur un vrai agent figé : elle repose sur un ' +
-        'raisonnement mesuré à l’envers (un agent sain, lui, fait bouger sa revision). Le ' +
-        'spécimen fabriqué pour l’éprouver a produit l’autre forme. Prends la capture comme ' +
-        'la mesure qui manquait, pas comme une certitude.',
+        'l’activité de cet agent n’a pas pu être lue — ce n’est PAS un constat d’inactivité, ' +
+        'et surtout pas un constat qu’il va bien : rien n’a été établi sur lui',
+      // Un mot par cause, jamais un mot pour toutes : un identifiant absent est un défaut
+      // d'annuaire `herdr`, un fichier absent une session que la source ne connaît pas, une
+      // source absente une installation incomplète. Elles n'appellent pas le même geste.
+      motifs: [...new Set(silences)],
       capture: capturer(l),
     };
   }
 
-  // Tout le reste — un agent au repos, une série mixte, un statut qui a changé en cours de
-  // route — ne dit rien de certain, donc ne dit rien. C'est le penchant vers le silence.
+  // ═══ LE FIGÉ — il est DÉCLARÉ EN TRAIN DE CALCULER, et rien ne bouge.
+  //
+  // Un agent AU REPOS a une revision immobile PAR NATURE : 101 des 105 panes portant un agent
+  // l'avaient au moment de la mesure. Les signaler ferait crier la ronde sur tout le poste au
+  // premier passage, ce qui est la façon la plus sûre de la rendre inaudible avant qu'elle ait
+  // servi une seule fois.
+  if (l.every((x) => statutDeSession(x) === CALCULE)) {
+    return {
+      forme: 'fige-sans-ecran',
+      quoi:
+        'sa session est déclarée EN TRAIN DE CALCULER et rien ne bouge à son écran — un agent ' +
+        'qui pense redessine son compteur d’activité chaque seconde, celui-ci ne redessine rien',
+      // ⚠️ LA LIMITE VIT AVEC LE VERDICT, pas dans une note ailleurs. Un verdict qui tait ce
+      // qu'il ne sait pas se fait croire au-delà de ce qu'il a prouvé. Elle ne dit plus « jamais
+      // observée » — ça, c'était le symptôme du câblage mort. Elle dit ce que la mesure couvre.
+      limite:
+        'la règle a été mesurée sur 105 panes portant un agent : elle n’y a désigné personne, ' +
+        'donc zéro vivant déclaré figé à tort. Combien de figés RÉELS elle attrape reste non ' +
+        'établi — aucun n’est passé sous les yeux de la mesure. Prends la capture comme la ' +
+        'mesure qui manquait.',
+      capture: capturer(l),
+    };
+  }
+
+  // Tout le reste ne dit rien de certain, donc ne dit rien. C'est le penchant vers le silence :
+  //
+  //   • `waiting` — il attend un HUMAIN, derrière un écran. C'est le parqué : il a une preuve
+  //     lisible, et les familles de non-livraison le nomment déjà. Le seul candidat que la
+  //     règle naïve désignait sur ce poste était exactement celui-là, en attente depuis plus de
+  //     quarante heures devant un dialogue ouvert — un faux positif sur 1 sur 1.
+  //   • `idle` / `shell` — au repos, immobile par nature.
+  //   • une série mixte — un statut qui a changé en cours de route ne prouve pas l'immobilité
+  //     de l'état, seulement celle de l'écran.
   return null;
 }

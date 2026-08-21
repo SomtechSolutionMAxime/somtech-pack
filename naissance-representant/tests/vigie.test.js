@@ -41,12 +41,14 @@
 //     détection** (`agent_not_found`) pendant que son pane vit encore, en `unknown`, revision
 //     figée. Aucune garde ne regardait cet état.
 //
-//   • `fige-sans-ecran` — **JAMAIS OBSERVÉE DIRECTEMENT**. Le spécimen fabriqué a produit
-//     l'autre forme ; le vrai figé, vu deux fois, a été perdu les deux fois (réveillé à la
-//     main, puis fermé). Cette forme PENCHE DONC VERS LE SILENCE : plusieurs lectures
-//     espacées exigées, et le moindre doute rend `null`. Une garde à demi prouvée qui crie
-//     trop se fait retirer en emportant ce qu'elle gardait ; la même qui se tait trop ne coûte
-//     qu'une occasion manquée, et la ronde la rattrape.
+//   • `fige-sans-ecran` — **ELLE ÉTAIT MORTE, PAS RARE** — corrigé le 2026-08-21
+//     (T-20260821-0018). Elle guettait `working` sur `agent_status`, une valeur que cette
+//     surface ne produit jamais : la branche ne pouvait pas se déclencher, et la prudence
+//     écrite juste en dessous s'est lue comme de la rigueur pendant des mois. Elle guette
+//     désormais le statut RÉEL de session. Elle PENCHE TOUJOURS VERS LE SILENCE : plusieurs
+//     lectures espacées exigées, et le moindre doute rend un verdict de non-mesure. Une garde
+//     à demi prouvée qui crie trop se fait retirer en emportant ce qu'elle gardait ; la même
+//     qui se tait trop ne coûte qu'une occasion manquée, et la ronde la rattrape.
 //
 // ⚠️ ET QUAND ELLE SE DÉCLENCHE, ELLE CAPTURE. Le vrai figé existe et son spécimen a été perdu
 // deux fois. La garde ne se contente donc pas de crier : elle rend la série de revisions avec
@@ -67,6 +69,19 @@ import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
 const vu = (t, statut, revision, sur = {}) => ({ t, statut, revision, ecran: 'un écran', ...sur });
 
 const IMMOBILE = [vu(0, 'working', 500), vu(20000, 'working', 500), vu(40000, 'working', 500)];
+// ⚠️ CETTE SÉRIE-LÀ N'EXISTE PAS DANS LA NATURE, et c'est tout le sujet du lot du 2026-08-21 :
+// `agent_status` ne vaut jamais `working`. On la garde POUR ÇA — elle garde la mort de la
+// piste, elle ne prouve plus aucune garde.
+
+/** Une lecture telle que la ronde la prend MAINTENANT — elle porte l'activité de session. */
+const vuAvec = (t, revision, statutSession, sur = {}) =>
+  vu(t, 'idle', revision, { activite: { statut: statutSession, motif: null }, ...sur });
+
+/** La même, sonde COUPÉE — elle n'a pas pu regarder, et elle dit pourquoi. */
+const vuMuet = (t, revision, motif) =>
+  vu(t, 'idle', revision, { activite: { statut: null, motif } });
+
+const CALCULE_IMMOBILE = [vuAvec(0, 500, 'busy'), vuAvec(20000, 500, 'busy'), vuAvec(40000, 500, 'busy')];
 
 // ═════════════════ 1. LA FORME PROUVÉE — l'agent a disparu de la détection
 
@@ -96,29 +111,40 @@ test('UN AGENT QU’ON N’A JAMAIS VU DÉTECTÉ N’A PAS DISPARU — on ne sig
   // AVANT d'atteindre la garde que cet essai prétend éprouver. Relevé en mutant la garde —
   // elle restait verte. Un essai qui passe par un autre chemin que celui qu'il nomme ne
   // prouve rien de ce qu'il annonce.
-  assert.equal(
-    verdictDeVigie([
-      vu(0, null, 1, { introuvable: true }),
-      vu(20000, null, 1, { introuvable: true }),
-      vu(40000, null, 1, { introuvable: true }),
-    ]),
-    null,
-  );
+  const v = verdictDeVigie([
+    vu(0, null, 1, { introuvable: true }),
+    vu(20000, null, 1, { introuvable: true }),
+    vu(40000, null, 1, { introuvable: true }),
+  ]);
+  assert.notEqual(v?.forme, 'agent-introuvable', 'un pane vide n’a perdu personne');
+  // ⚠️ ET IL NE SE TAIT PLUS POUR AUTANT (T-20260821-0018). On n'a rien pu établir sur ce pane :
+  // le dire « non mesurable » est la seule réponse qui ne mente pas. C'est aussi la forme sous
+  // laquelle le défaut d'annuaire `herdr` se CONSTATE ici — il se corrige ailleurs.
+  assert.equal(v?.forme, 'activite-non-mesurable');
 });
 
 // ═════════════════ 2. LA FORME QUI PENCHE VERS LE SILENCE — figé sans écran
 
-test('UN AGENT « working » DONT LA REVISION NE BOUGE PLUS EST SIGNALÉ — sur plusieurs lectures', () => {
-  const v = verdictDeVigie(IMMOBILE);
-  assert.equal(v?.forme, 'fige-sans-ecran');
+test('⛔ `working` CHEZ herdr NE SIGNALE PLUS RIEN — la valeur guettée n’existait pas', () => {
+  // ⚠️ CET ESSAI DISAIT L'INVERSE JUSQU'AU 2026-08-21, et il était VERT — sur un spécimen de
+  // laboratoire introuvable dans la nature. Mesuré ce jour : `herdr pane list` rend 229 panes,
+  // `agent_status` ∈ { unknown 146 · idle 83 }. ZÉRO `working`, jamais. La garde était donc
+  // morte, et son essai la déclarait vivante. Il garde maintenant la mort de cette piste :
+  // si quelqu'un recâble la vigie sur `agent_status`, c'est ici que ça rougit.
+  assert.notEqual(verdictDeVigie(IMMOBILE)?.forme, 'fige-sans-ecran');
 });
 
-test('⚠️ ET LE VERDICT PORTE SA PROPRE LIMITE — cette forme n’a jamais été observée en vrai', () => {
+test('⚠️ LE VERDICT PORTE SA LIMITE — et elle dit ce qui A ÉTÉ MESURÉ, plus « jamais observée »', () => {
   // Une garde qui tait ce qu'elle ne sait pas se fait croire au-delà de ce qu'elle a prouvé.
-  // Celle-ci dit, dans son verdict même, qu'elle repose sur un raisonnement et pas sur un
-  // spécimen — pour que celui qui la lit sache quoi en faire.
-  const v = verdictDeVigie(IMMOBILE);
-  assert.match(v.limite, /jamais\s+(?:\S+\s+)?observ/i, 'la limite vit avec le verdict, pas dans une note ailleurs');
+  // ⚠️ MAIS UNE LIMITE PÉRIMÉE EST PIRE QUE PAS DE LIMITE : « cette forme n'a jamais été
+  // observée » sous un code corrigé fabrique la prochaine lecture rassurante — c'est
+  // exactement ce qui a laissé le défaut vivre des mois. La limite dit maintenant la
+  // population mesurée et ce qui reste non établi.
+  const v = verdictDeVigie(CALCULE_IMMOBILE);
+  assert.ok(v.limite, 'la limite vit avec le verdict, pas dans une note ailleurs');
+  assert.doesNotMatch(v.limite, /jamais\s+(?:\S+\s+)?observ/i, 'la prudence périmée est retirée');
+  assert.match(v.limite, /105/, 'elle nomme la population sur laquelle elle a été mesurée');
+  assert.match(v.limite, /non\s+établi/i, 'et ce qu’elle n’a pas pu établir');
 });
 
 test('UNE SEULE LECTURE NE SIGNALE RIEN — un point de mesure est un indice, une série est un fait', () => {
@@ -139,10 +165,13 @@ test('UN AGENT QUI PENSE N’EST PAS SIGNALÉ — la moitié qui prouve, et elle
 });
 
 test('UN AGENT AU REPOS N’EST JAMAIS SIGNALÉ — sa revision est immobile PAR NATURE', () => {
-  // Les 78 panes au repos du poste ont tous une revision figée. Les signaler ferait crier la
-  // ronde sur tout le poste au premier passage — la façon la plus sûre de la rendre inaudible.
-  assert.equal(verdictDeVigie([vu(0, 'idle', 1), vu(20000, 'idle', 1), vu(40000, 'idle', 1)]), null);
-  assert.equal(verdictDeVigie([vu(0, 'done', 12835), vu(20000, 'done', 12835), vu(40000, 'done', 12835)]), null);
+  // Les panes au repos du poste ont tous une revision figée — 101 sur 105 au moment de la
+  // dernière mesure. Les signaler ferait crier la ronde sur tout le poste au premier passage,
+  // la façon la plus sûre de la rendre inaudible.
+  // ⚠️ LE REPOS SE LIT SUR LE STATUT DE SESSION, PAS SUR `agent_status`. Cet essai portait
+  // `idle` et `done` de herdr — deux valeurs qui ne décident plus rien.
+  assert.equal(verdictDeVigie([vuAvec(0, 1, 'idle'), vuAvec(20000, 1, 'idle'), vuAvec(40000, 1, 'idle')]), null);
+  assert.equal(verdictDeVigie([vuAvec(0, 12835, 'shell'), vuAvec(20000, 12835, 'shell'), vuAvec(40000, 12835, 'shell')]), null);
 });
 
 test('UNE REVISION QU’ON N’A PAS PU LIRE NE VAUT PAS « ELLE N’A PAS BOUGÉ »', () => {
@@ -173,11 +202,11 @@ test('LE VERDICT CAPTURE CE QU’IL A VU — la série, les horodatages, le stat
   // fermé. La garde ne se contente donc pas de crier : elle rend de quoi établir après coup ce
   // que ni l'auteur ni son coordonnateur n'ont su fabriquer. La moitié non prouvée s'auto-mesure
   // sur le terrain au lieu d'attendre un laboratoire.
-  const v = verdictDeVigie(IMMOBILE);
+  const v = verdictDeVigie(CALCULE_IMMOBILE);
 
   assert.deepEqual(v.capture.revisions, [500, 500, 500], 'la série, pas seulement son verdict');
   assert.deepEqual(v.capture.horodatages, [0, 20000, 40000], 'et QUAND — sans ça la série ne se relit pas');
-  assert.equal(v.capture.statut, 'working');
+  assert.equal(v.capture.statut, 'idle', 'ce que herdr disait — gardé, mais il ne décide plus');
   assert.equal(v.capture.ecran, 'un écran', 'ce que le pane affichait, pour le prochain qui cherchera');
   assert.equal(v.capture.duree_ms, 40000, 'et depuis combien de temps rien ne bouge');
 });
@@ -226,15 +255,6 @@ test('LE VERDICT N’EST QU’UN VERDICT — aucune touche, aucun geste, aucun d
 //   `waiting` → il attend un humain. Rien qui bouge = normal, et quelqu'un doit aller devant.
 //   `idle` / `shell` → au repos. Rien qui bouge = par nature.
 
-/** Une lecture telle que la ronde la prend MAINTENANT — elle porte l'activité de session. */
-const vuAvec = (t, revision, statutSession, sur = {}) =>
-  vu(t, 'idle', revision, { activite: { statut: statutSession, motif: null }, ...sur });
-
-/** La même, sonde COUPÉE — elle n'a pas pu regarder, et elle dit pourquoi. */
-const vuMuet = (t, revision, motif) =>
-  vu(t, 'idle', revision, { activite: { statut: null, motif } });
-
-const CALCULE_IMMOBILE = [vuAvec(0, 500, 'busy'), vuAvec(20000, 500, 'busy'), vuAvec(40000, 500, 'busy')];
 
 test('UN AGENT DÉCLARÉ EN TRAIN DE CALCULER DONT RIEN NE BOUGE EST SIGNALÉ — sur le statut RÉEL', () => {
   // ⚠️ L'ESSAI QUI ROUGISSAIT AVANT LE CORRECTIF. `statut` (herdr) vaut `idle` ici, comme pour
