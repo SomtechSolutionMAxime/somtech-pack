@@ -75,6 +75,19 @@ const abreger = (t) => {
   return p.length > 180 ? p.slice(0, 177) + '…' : p;
 };
 
+/**
+ * Une puce du socle : ce que l'agent LIT, suivi de sa traçabilité en commentaire.
+ *
+ * ⚠️ L'identifiant d'ABC et la couche ne sont PAS de l'information pour agir —
+ * ce sont la traçabilité (I7) et la matière du cycle d'évolution. Les afficher
+ * fait lire à l'agent la mécanique de son propre métier au lieu de son métier.
+ * *(Arbitrage du dirigeant, 2026-08-21 : « l'ABC a été utilisé pour créer le
+ * métier, il n'est pas une référence de son opération ».)*
+ */
+const puce = (i, note) =>
+  `- ${i.enonce_socle || i.enonce}` +
+  `\n  <!-- ${i.id} · ${note || i.couche} -->`;
+
 const cheminSur = (c) =>
   !c.startsWith('/') && !c.includes('..') && !c.includes('.orchestrateur') &&
   !c.includes('.gestionnaire') && !c.includes('CONTEXTE.md');
@@ -227,19 +240,19 @@ export function rendre(classement) {
     '# Ce qui prime',
     '',
     ...(cardinales.length
-      ? ['## Les règles cardinales', '', ...cardinales.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${deroges.includes(i) ? `aucune couche ne la garantit — ${i.sans_garantie.motif}` : i.couche})*`), '']
+      ? ['## Les règles cardinales', '', ...cardinales.map((i) => puce(i, deroges.includes(i) ? `aucune couche — ${i.sans_garantie.motif}` : i.couche)), '']
       : []),
     ...(deroges.length
       ? ['## ⚠️ Ce que rien ne garantit — et qui ne tient donc qu\'à toi', '',
-         ...deroges.filter((i) => !dejaEnL1.has(i.id)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(aucune couche — ${i.sans_garantie.motif} · assumé par ${i.sans_garantie.assume_par})*`), '']
+         ...deroges.filter((i) => !dejaEnL1.has(i.id)).map((i) => puce(i, `aucune couche — ${i.sans_garantie.motif} · assumé par ${i.sans_garantie.assume_par}`)), '']
       : []),
     '## Ce qui t\'est refusé',
     '',
-    ...gardeFous.filter((i) => !deroges.includes(i) && !dejaEnL1.has(i.id)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${i.couche})*`),
+    ...gardeFous.filter((i) => !deroges.includes(i) && !dejaEnL1.has(i.id)).map((i) => puce(i)),
     '',
     ...(sansChapitre.filter((i) => i.nature !== 'garde-fou').length
       ? ['## Règles du socle', '',
-         ...sansChapitre.filter((i) => i.nature !== 'garde-fou').map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce}`), '']
+         ...sansChapitre.filter((i) => i.nature !== 'garde-fou').map((i) => puce(i)), '']
       : []),
     '## Où trouver le reste',
     '',

@@ -550,3 +550,33 @@ test("la garde des accents ne confond pas le VERBE avoir avec la préposition à
     assert.equal(rendre(c).ok, false, `« ${faux} » porte un « à » dépouillé`);
   }
 });
+
+test("le socle PARLE À l'agent — la traçabilité y est présente mais invisible", () => {
+  // ⚠️ Arbitrage du dirigeant, 2026-08-21 : « l'ABC a été utilisé pour créer le
+  // métier, il n'est pas une référence de son opération — il servira au cycle
+  // d'amélioration ». Et : « je ne sens pas qu'on organise un orchestrateur,
+  // mais qu'on lui explique comment ça marche ».
+  //
+  // Les identifiants et les couches restent — ils sont la traçabilité (I7) et
+  // la matière du cycle d'évolution — mais en COMMENTAIRE : présents pour un
+  // outil, absents de ce que l'agent lit.
+  const c = classementValide();
+  c.items[0].cardinale = 1;
+  const l1 = rendre(c).artefacts['L1.md'];
+  const visible = l1.replace(/<!--[\s\S]*?-->/g, '');
+
+  assert.ok(visible.includes('Tu ne construis jamais.'), "l'énoncé reste lisible");
+  assert.ok(!/GF-ORC-001/.test(visible), "l'identifiant d'ABC ne se lit pas");
+  assert.ok(!/\(refus-de-permission\)|\(persona\)/.test(visible), "l'étiquette de couche ne se lit pas");
+  assert.ok(l1.includes('GF-ORC-001'), "mais elle reste dans le fichier, en commentaire — I7");
+  assert.ok(l1.includes('refus-de-permission'), 'et la couche aussi, pour le cycle d évolution');
+});
+
+test("ce que rien ne garantit reste DIT — c'est opérationnel, pas de la mécanique", () => {
+  const c = classementValide();
+  c.items[0].couche = 'persona';
+  c.items[0].sans_garantie = { motif: 'juge un énoncé', assume_par: 'le dirigeant', definitif: true };
+  const visible = rendre(c).artefacts['L1.md'].replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(/rien ne garantit|ne tient qu'à toi/i.test(visible),
+    "savoir où l'on est seul est une information pour agir, pas une étiquette technique");
+});

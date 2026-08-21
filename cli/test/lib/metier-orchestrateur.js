@@ -2709,77 +2709,67 @@ export const CONTROLES = [
 
   {
     id: 'le-gabarit-fait-foi',
-    quoi: 'le gabarit se déclare source, et dit POURQUOI — un orchestrateur ne lit pas la compétence',
+    quoi: 'le gabarit se déclare source, la compétence ne gouverne rien, et une règle qui n’est que là-bas est un écart',
     verifier({ metier }) {
       // La hiérarchie est le socle des autres gardes : si la compétence pouvait l'emporter,
       // tout ce que ce fichier ajoute serait contournable en lisant l'autre.
       //
-      // ⚠️ RÉ-ANCRÉ PAR LA FONCTION (lot E, 2026-08-17), ET LE TEXTE A CHANGÉ DE FORME SANS
-      // CHANGER DE FONCTION — mesuré contre `878f9d5`, l'état d'avant la reconstruction.
+      // ⚠️ RÉANCRÉ SUR SA FONCTION — 2026-08-21, sur ARBITRAGE DU DIRIGEANT, et il faut dire
+      // lequel parce qu'une garde qu'on desserre ressemble toujours à une garde qu'on corrige.
       //
-      // La garde cherchait TROIS TOURNURES d'un encadré qui opposait DEUX textes : « fait
-      // foi », « en découle », « celui-ci qui gagne ». La reconstruction (`D-20260817-0006`)
-      // écrit la même préséance en TABLE, à trois entrées — l'ABC (ce dont il répond), ce
-      // fichier (comment il s'y prend), la compétence (un rappel). La garde lit désormais
-      // la table par le LIBELLÉ de sa colonne : permuter deux en-têtes déplacerait les rangs
-      // sans qu'une cellule bouge, et une sonde sur les mots ne le verrait pas.
+      // La garde lisait une TABLE de préséance à trois rangs — l'ABC (« il fait foi »), ce
+      // fichier (« il découle de l'ABC »), la compétence (« elle ne gouverne rien ») — et un
+      // motif écrit en toutes lettres (« un orchestrateur ne lit pas le `SKILL.md` », suivi
+      // d'un décompte de lignes de la compétence).
       //
-      // ⚠️ CE QUI S'AJOUTE N'EST PAS UN RETRAIT. « Ce fichier fait foi » est devenu « l'ABC
-      // fait foi, ce fichier en découle » : un cran d'autorité entre AU-DESSUS. Rien n'entre
-      // en dessous — la compétence passe de « elle en découle » à « elle ne gouverne rien »,
-      // ce qui est plus ferme, pas moins. La fonction gardée ici a toujours été celle-là :
-      // **la compétence ne peut pas l'emporter sur ce fichier.**
+      // Le dirigeant a retiré ces deux choses du socle, et il a dit pourquoi : *« l'ABC a été
+      // utilisé pour le créer, il n'est pas une référence à son opération »*, et *« je ne sens
+      // pas qu'on organise un orchestrateur, mais qu'on lui explique comment ça marche »*. Un
+      // agent n'a pas à connaître la mécanique qui l'a produit pour exercer son métier ; le
+      // rang de l'ABC appartient au CYCLE D'AMÉLIORATION, pas au socle qu'on lui donne.
       //
-      // ⚠️ LA POSITION EST GARDÉE STRUCTURELLEMENT PLUTÔT QUE PAR UN RANG. La version
-      // précédente lisait « les vingt premières lignes » — un compte qui se décale au premier
-      // paragraphe ajouté. `enteteDe` rend l'avertissement de tête pour ce qu'il est : ce qui
-      // est écrit AVANT la première section, donc avant tout ce qu'il gouverne.
+      // ⚠️ CE QUI NE SE RETIRE PAS, ET QUI EST TOUTE LA RAISON D'ÊTRE DE CETTE GARDE :
+      // **la compétence ne peut pas l'emporter sur ce fichier.** C'est la moitié qui porte
+      // toutes les autres — si elle gagnait, chaque règle que ce fichier ajoute se
+      // contournerait en lisant l'autre texte. Elle est donc vérifiée ici SANS la table,
+      // sur l'en-tête, avec sa POLARITÉ : les tournures qui la renversent sans en retirer
+      // un mot sont refusées au même titre que sa disparition.
       const tete = enteteDe(metier).map((l) => l.replace(/^>\s?/, '')).join('\n');
 
-      const preseance = tableDe(tete);
-      const iRang = colonneDe(preseance, /^Qui (?:gagne|l'emporte)$/, 'qui gagne en cas de divergence');
-      const rangDe = (sonde, quoi) => {
-        const trouvees = preseance.lignes.filter((l) => sonde.test(l[0]));
-        assert.equal(
-          trouvees.length, 1,
-          `la table de préséance doit nommer ${quoi} une fois exactement (${trouvees.length}) — `
-            + `un texte qu'elle ne range pas est un texte dont personne ne sait s'il gouverne`,
-        );
-        return trouvees[0][iRang];
-      };
-
-      // Un texte fait foi, et il est NOMMÉ. Une préséance qui ne dit pas qui gagne au sommet
-      // se renégocie au premier désaccord.
+      // ① Ce fichier se déclare SOURCE. Un texte qui ne dit pas ce qu'il est se renégocie.
       exigePolarite(
-        rangDe(/\bABC\b/i, 'l’ABC — le contrat dont il répond'),
-        /fait foi/i,
-        'le texte qui fait foi est nommé en tête, avant tout ce qu’il gouverne',
-        { inverse: /ne fait pas foi|ne gouverne rien|à titre indicatif/i },
+        tete, /ce fichier est ta source|est ta source/i,
+        'ce fichier se déclare la source du métier',
+        { inverse: /n'est pas ta source|parmi d'autres sources|à titre indicatif/i },
       );
 
-      // Ce fichier DÉCOULE du contrat : il dit le comment, il n'invente pas le quoi.
+      // ② LA MOITIÉ QUI PORTE TOUTES LES AUTRES : la compétence ne gouverne rien.
       exigePolarite(
-        rangDe(/ce fichier/i, 'ce fichier'),
-        /découle/i,
-        'ce fichier DÉCOULE du contrat — c’est le *comment*, il n’a pas le droit d’inventer un *quoi*',
-        { inverse: /prime sur l'ABC|l'emporte sur l'ABC|gouverne l'ABC/i },
-      );
-
-      // ET LA MOITIÉ QUI PORTE TOUTES LES AUTRES GARDES : la compétence ne gouverne rien.
-      // Si elle pouvait l'emporter, chaque règle que ce fichier ajoute serait contournable
-      // en lisant l'autre texte.
-      exigePolarite(
-        rangDe(/compétence/i, 'la compétence `/orchestrer-chantier`'),
-        /ne gouverne (?:jamais )?rien|ne fait pas foi|ne (?:l'emporte|gagne) jamais/i,
+        tete, /ne gouverne (?:jamais )?rien|ne fait pas foi|ne (?:l'emporte|gagne) jamais/i,
         'le rang de la compétence — elle ne gouverne rien, sinon tout ce que ce fichier ajoute '
           + 'se contourne en lisant l’autre',
         { inverse: /elle fait foi|elle gagne|elle l'emporte|chacun porte|à égalité|se lisent ensemble/i },
       );
 
-      // Le motif, pas seulement la règle : une hiérarchie sans sa raison se renégocie.
+      // ③ Le MOTIF, pas seulement la règle : une hiérarchie sans sa raison se renégocie.
+      //    Il a changé de forme avec le reste — ce n'est plus « il ne lit pas le SKILL.md »
+      //    mais « c'est une copie, et elle peut avoir dérivé », qui dit la même chose sans
+      //    parler de la mécanique du pack.
       exigePolarite(
-        tete, /ne lit pas le `SKILL\.md`|ne lit pas la compétence/i,
-        'le motif de la hiérarchie — c’est parce qu’un orchestrateur ne lit pas la compétence que ce fichier gagne',
+        tete, /copie de ce fichier|ne lit pas le `SKILL\.md`|ne lit pas la compétence/i,
+        'le motif de la hiérarchie — la compétence est une copie qui peut avoir dérivé',
+      );
+
+      // ④ ET LA CONSÉQUENCE OPÉRANTE : une règle trouvée là-bas et absente ici est un ÉCART,
+      //    jamais une règle de plus. Sans elle, « elle ne gouverne rien » reste un principe
+      //    dont personne ne sait quoi faire au moment où la divergence se présente.
+      exigePolarite(
+        tete, /écart à signaler/i,
+        'ce qu’on fait d’une règle qui n’est que dans la compétence : on la signale',
+        // ⚠️ « jamais une règle de plus » est la formulation LÉGITIME : sans l'exclusion,
+        //    l'inverse rougissait sur le texte correct — et une garde rouge à tort finit
+        //    par être retirée, en emportant ce qu'elle gardait.
+        { inverse: /(?<!jamais )une règle de plus|s'ajoute aux tiennes|à appliquer aussi/i },
       );
     },
   },
@@ -4624,7 +4614,7 @@ export const MUTATIONS = [
     quoi: 'l’appel au contexte devient une mention — l’orchestrateur ne sait plus à qui il répond',
     cible: 'contexte-appele-et-necessaire',
     fichier: 'metier',
-    muter: (t) => t.replace('**Avant tout : lis `CONTEXTE.md`.**', 'Un fichier `CONTEXTE.md` existe à côté de celui-ci.'),
+    muter: (t) => t.replace('**Lis `CONTEXTE.md` avant tout autre geste.**', 'Un fichier `CONTEXTE.md` existe à côté de celui-ci.'),
   },
   {
     id: 'une-rubrique-du-contexte-disparait',
