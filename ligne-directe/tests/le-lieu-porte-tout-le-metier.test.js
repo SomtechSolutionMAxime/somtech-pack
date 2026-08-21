@@ -165,3 +165,27 @@ test('⚠️ gabarit HORS D ATTEINTE : on retombe sur les obligatoires, jamais s
   const etat = etatLieu(nu, 'orchestrateur', 'vide');
   assert.equal(etat.complet, false, 'un répertoire nu ne peut jamais être déclaré complet');
 });
+
+test('⚠️ un OBLIGATOIRE qui n est pas un fichier régulier reste dans la liste — jamais sauté en silence', async () => {
+  // ATTRAPÉ PAR LA CHAÎNE, PAS PAR LE POSTE, et c'est le fait qui compte ici. La marche du
+  // gabarit ne retient que les fichiers réguliers ; un obligatoire remplacé par un RÉPERTOIRE
+  // en était donc silencieusement absent, et la pose rendait « ok » sur un lieu amputé. Un
+  // crash laisse une trace, une omission non — c'est le pire des deux.
+  //
+  // Sur le poste, l'essai qui gardait ça passait POUR LE MAUVAIS MOTIF : la garde de fraîcheur
+  // refusait d'abord, pour une autre raison. Vert chez l'auteur, rouge en chaîne. Cet essai-ci
+  // ne dépend d'aucune des deux : il interroge la dérivation directement.
+  const { fichiersDuGabarit, GABARITS } = await import('../src/lieu-agent.js');
+  const depot = depotGit(['orchestrateur']);
+  const gab = join(depot, '.claude', 'templates', 'orchestrateur');
+
+  rmSync(join(gab, 'CONTEXTE.md'));
+  mkdirSync(join(gab, 'CONTEXTE.md'));
+
+  const liste = fichiersDuGabarit(depot, 'orchestrateur');
+  for (const f of GABARITS) {
+    assert.ok(liste.includes(f),
+      `« ${f} » est obligatoire : il reste attendu même quand il n est pas copiable, ` +
+      `pour que la pose ÉCHOUE au lieu de se raccourcir`);
+  }
+});

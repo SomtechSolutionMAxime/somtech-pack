@@ -78,10 +78,23 @@ export function fichiersDuGabarit(depot, role) {
     }
   };
   descendre('');
-  // Les obligatoires d'abord, puis le reste — un ordre stable rend le « fichiers » rendu
-  // comparable d'une pose à l'autre.
+  // ⚠️ LES OBLIGATOIRES SONT TOUJOURS DE LA LISTE, MÊME QUAND LA MARCHE NE LES A PAS VUS.
+  //
+  // DÉFAUT ATTRAPÉ PAR LA CHAÎNE, pas par le poste : la marche ne retient que les fichiers
+  // RÉGULIERS. Un gabarit dont « CONTEXTE.md » a été remplacé par un RÉPERTOIRE — le cas que
+  // les essais provoquent pour éprouver l'interruption de pose — était donc silencieusement
+  // SAUTÉ : la copie n'échouait plus, et la pose rendait « ok » sur un lieu amputé. C'est
+  // pire que l'échec qu'elle remplaçait : un crash laisse une trace, une omission non.
+  //
+  // Les nommer ici fait retomber la copie sur `EISDIR`, donc sur le retrait atomique — le
+  // comportement que ces essais gardent depuis toujours. Un fichier obligatoire qui n'est
+  // pas copiable doit faire ÉCHOUER la pose, jamais la raccourcir.
+  //
+  // ⚠️ Et ça ne s'était pas vu ici : sur ce poste, la garde de fraîcheur refusait d'abord
+  // pour une autre raison, et l'essai passait POUR LE MAUVAIS MOTIF. Vert chez l'auteur,
+  // rouge en chaîne.
   const reste = vus.filter((f) => !GABARITS.includes(f)).sort();
-  return [...GABARITS.filter((f) => vus.includes(f)), ...reste];
+  return [...GABARITS, ...reste];
 }
 
 /**
