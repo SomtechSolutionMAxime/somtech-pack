@@ -288,6 +288,69 @@ test('LA RONDE NE DÉCLARE PAS FIGÉ CELUI QUI ATTEND UN HUMAIN — le parqué a
   assert.equal(dit.vigie, undefined, 'aucun verdict — il attend quelqu’un, il n’est pas figé');
 });
 
+/**
+ * Un faux herdr dont la surface `agent` NE PORTE PAS l'identifiant de session, et dont la
+ * surface `pane` le porte. Ce n'est pas une hypothèse : c'est la divergence mesurée entre les
+ * deux surfaces du même outil, documentée au chantier parent, et elle frappe EXACTEMENT la
+ * population que la vigie vise — les orchestrateurs que le registre d'agents ne montre pas.
+ */
+function fauxHerdrDontSeulLePaneSaitLaSession(pane, lieu) {
+  const sessionId = 'ffffffff-1111-2222-3333-444444444444';
+  const sessions = join(bac, 'sessions-par-le-pane');
+  mkdirSync(sessions, { recursive: true });
+  writeFileSync(join(sessions, 'fige.json'), JSON.stringify({ sessionId, status: 'busy', statusUpdatedAt: 1 }));
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+const SESSION = { agent: 'claude', kind: 'id', source: 'herdr:claude', value: ${JSON.stringify(sessionId)} };
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, name: 'orch-sans-session', agent_status: 'idle',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 77 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  // La surface agent repond, mais SANS agent_session — c'est la divergence mesuree.
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'idle', revision: 77 } } }));
+  process.exit(0);
+}
+if (args[0] === 'pane' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { pane: {
+    pane_id: ${JSON.stringify(pane)}, agent_status: 'idle', revision: 77, agent_session: SESSION } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write('un ecran qui ne change pas'); process.exit(0); }
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+  return sessions;
+}
+
+test('LA SONDE INTERROGE LES DEUX SURFACES — sinon elle est muette sur la population visée', () => {
+  // ⚠️ LA GARDE QUI MANQUAIT, TROUVÉE EN MUTANT UN POINT À LA FOIS. Retirer le repli sur
+  // `pane get` laissait les 52 essais VERTS : le branchement paraissait gardé et ne l'était
+  // pas. Or c'est le repli qui décide du sort de la population que la vigie existe pour voir —
+  // sans lui, elle rendrait `activite-non-mesurable` sur tous les orchestrateurs que le
+  // registre d'agents ignore, c'est-à-dire qu'elle échangerait un aveuglement contre un autre.
+  const lieu = lieuDOrchestrateur('deux-surfaces');
+  const sessions = fauxHerdrDontSeulLePaneSaitLaSession('w9:pD', lieu);
+
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_VIGIE_MS: '8000',
+    RENDEZ_VOUS_ECHEANCE_MS: '60000',
+    RENDEZ_VOUS_DELAI_MS: '60000',
+    ACTIVITE_SESSIONS_RACINE: sessions,
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.ok(dit.vigie, 'la vigie a quelque chose à dire');
+  assert.equal(dit.vigie[0].forme, 'fige-sans-ecran',
+    'l’identifiant se prélève sur `pane get` quand `agent get` ne le porte pas');
+});
+
 test('🔴 LA RONDE, SONDE COUPÉE, NE REND PAS « AUCUN AGENT FIGÉ » — bout en bout', () => {
   // ⚠️ LE CRITÈRE DU LOT, SUR LE CHEMIN RÉEL ET PAS SEULEMENT SUR LE JUGE. On pointe la sonde
   // vers un dossier qui n'existe pas : c'est la panne d'installation, ou le jour où Claude Code
