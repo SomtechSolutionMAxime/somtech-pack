@@ -5,6 +5,37 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-21
+
+*Epic `E-20260821-0001`, demande `D-20260819-0004`. **Le dispositif qui réveille les orchestrateurs jugeait ses propres livraisons sur une attente que `herdr` n'observe jamais.** Il comptait des vivants pour morts — et noyait le seul vrai blocage dans ce bruit.*
+
+### Corrigé
+
+- **Le juge de livraison ne demande plus une attente que `herdr` n'observe pas** — `commandesLivraison` rend un appel **nu**, sur ses deux familles de commandes. La doctrine était déjà écrite dans ce module, sur sa branche de repli (« on n'en fabrique pas un faux, la preuve se relit »), et n'était appliquée qu'à **une branche sur deux**. Mesuré sur le journal du dispositif — **69 rondes, 486 cibles, 231 non-livraisons dont 98 `agent_prompt_stalled`** que l'attente fabriquait elle-même. ⚠️ Et la cause n'est pas celle qu'on croyait : `herdr` **sait** rendre `working` (6 fois sur 486 cibles) ; c'est `--wait` qui est mort, car il guette une transition via `state_change_seq`, mesuré **figé plus de 3 h** sur un pane à une dizaine de transitions prouvées.
+
+- **Le témoin `done` se prouvait lui-même** — la garde « une preuve porte sur un état qui POUVAIT être différent » était posée sur `working`, et sur `working` seulement. Un destinataire `done` avant l'envoi et `done` après satisfaisait le témoin **avant même qu'on écrive** : boîte encore pleine, envoi refusé par l'outil, et le verdict rendait « pris ». ⚠️ Pas théorique — `done` est la **seule** valeur autre qu'`idle` que `agent_status` produise sur ce poste. Le module frère `ligne-directe` avait déjà commis et corrigé exactement ça ; la leçon n'avait pas traversé.
+
+- **`blocked` témoigne aussi** — le contrat de `herdr` donne **cinq** valeurs à `agent_status`, dont trois veulent dire « la session a quitté l'attente ». On en traitait une, puis deux. *`blocked` est documenté et non observé sur ce poste : il est traité parce que le contrat le nomme, et c'est dit.* `unknown` reste dehors — il ne décrit pas un état, il dit que `herdr` ne connaît pas ce pane.
+
+- **Un blocage réel ne se noie plus dans le bruit** — les non-livraisons sont triées en **cinq familles**, ordonnées par l'action qu'elles appellent, et le journal les compte séparément au lieu d'un total unique. Mesuré : **107 blocages réels** (57 sessions devant un dialogue, 50 boîtes occupées) étaient rangés avec 98 faux négatifs, dans 231 lignes qui se lisaient toutes pareil. Le risque que ça ferme est concret : *quelqu'un lit ce journal, conclut que la moitié du parc est morte, et relance ou fait renaître — ce qui détruit du contexte.*
+
+### Ajouté
+
+- **`naissance-representant/src/activite-session.js`** — la preuve d'activité qui **peut réellement survenir**, lue dans `~/.claude/sessions`. Là où `herdr agent list` rend `idle` pour ses 83 agents sans exception, la source rend **quatre statuts réels** (`idle` · `busy` · `waiting` · `shell`). ⚠️ **Trois états, jamais deux** : une sonde **muette** ne se lit pas comme un repos — les deux produisent « pas de preuve », et les confondre serait le défaut d'origine sous un autre nom. Chaque silence porte son motif. Sur les 9 cibles réelles du dispositif, la sonde rend un verdict sur **8**.
+
+- **`naissance-representant/src/familles-de-non-livraison.js`** — le tri, qui lit des **champs** et jamais la prose. Les motifs sont écrits pour un lecteur et changent à chaque lot qui les améliore ; un tri par mots-clés casserait en silence, en reclassant des blocages réels en bruit.
+
+- **Un avis en clair quand des sessions sont bloquées** — mesuré sur une vraie ligne du journal : **535 caractères** séparent le début de la ligne de la clé qui les nomme. Sur un terminal de 100 colonnes, personne ne la voit. L'avis sort donc sur `stderr` (qui va au même fichier), et il **détrompe** : *« elles ne sont PAS mortes, et un rappel de plus n'y changera rien »*.
+
+### Technique
+
+- **13 mutations appliquées une à une, 13 rouges, zéro survivante** — dont celle qui fait se confondre la sonde coupée avec un repos, et celle qui retire les familles **de la ronde** et non de la fonction de tri. *Muter en groupe cache une survivante : un rouge prouve qu'au moins une chose était gardée, jamais que toutes l'étaient.*
+
+- ⚠️ **Quatre essais de bout en bout de ce lot passaient à vide, et sont corrigés** — deux formes du même défaut, dans le lot écrit pour le fermer. ① la cible n'existait pas (aucun orchestrateur reconnu : la ronde rendait `0` et `[]`, et l'assertion « la somme des familles égale le nombre d'orchestrateurs » était vraie **parce que les deux valaient zéro**) ; ② la cible existait mais le code refusait de l'atteindre (écran illisible → aucune livraison, donc « aucune attente morte » trivialement vrai). **Ce n'est pas une relecture qui les a vus** — c'est un essai neuf qui a refusé de passer, après qu'une passe de revue eut rendu « rien vu ». Quatre gardes anti-vide sont posées, et **éprouvées par mutation** : retirer la cible fait rougir 7 essais.
+
+- **Quatre essais existants réécrits, reclassés par fonction et non mis au vert** — ils épinglaient la forme du défaut. Le plus délicat garde le lien entre le budget d'un appel et l'attente qu'il porte : son repère (`--wait`) est mort, sa **fonction** ne l'est pas. Le repère est rebranché sur l'appel qui **écrit**, et une garde de plus interdit le retour de l'attente morte.
+
+
 ## [Non-versionne] - 2026-08-20
 
 *Projet `P-20260820-0001` — phases 1, 2, 4 et 5. **Le métier d'un rôle cesse d'être un texte écrit à la main pour devenir un produit de construction dérivé de son ABC.** Le socle chargé en permanence par un orchestrateur passe de **35 344 à 1 367 tokens**.*
