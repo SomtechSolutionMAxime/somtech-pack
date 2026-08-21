@@ -21,8 +21,62 @@
 /** La marque de la boîte de saisie d'une session Claude Code dans un terminal. */
 const INVITE = '❯';
 
-/** Un filet — la ligne de tirets qui encadre la boîte de saisie à l'écran. */
-const FILET = /^[─-╿]{8,}\s*$/;
+/**
+ * UN FILET — la ligne de tracé qui encadre la boîte de saisie à l'écran.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 UN FILET PEUT PORTER UN TITRE, ET L'IGNORER A RENDU UN ORCHESTRATEUR INJOIGNABLE
+ * (T-20260821-0025).
+ *
+ * La première écriture exigeait une ligne faite RIEN QUE de tracé — `/^[─-╿]{8,}\s*$/`. Or une
+ * session **rattachée** (ouverte par `claude agents`) affiche le nom de son chantier DANS son
+ * filet haut, en inversé. Mesuré le 2026-08-21 sur `w7M:p2` :
+ *
+ *   ─────────…───────── CRM ActionProgex finalisation ─
+ *   ❯ Rien à signaler, silence.
+ *   ──────────────────…──────────────────────────────────
+ *
+ * **Les deux lignes font 165 caractères et sont indistinguables à l'œil.** La basse ne porte que
+ * du tracé — reconnue. La haute porte 30 caractères de titre — rejetée. Il ne restait donc qu'UN
+ * filet, la boîte n'était plus reconnue, et le verdict devenait `illisible` : c'est-à-dire
+ * injoignable, puisque tout ce dispositif refuse — à juste titre — d'écrire dans ce qu'il ne voit
+ * pas. Le dirigeant a écrit « allo » deux fois sur ce canal ; aucun des deux n'est parti.
+ *
+ * ⚠️ ET LA GARDE NE S'INVERSE PAS — c'est la moitié qui compte. Accepter n'importe quelle ligne
+ * bordée de tracé ferait découper la boîte au mauvais endroit, donc lire un morceau d'écran comme
+ * s'il était son contenu, donc écrire par-dessus le texte de quelqu'un. On exige donc trois
+ * choses ensemble, et un titre les satisfait toutes les trois :
+ *
+ *   • la ligne COMMENCE par du tracé — une bordure s'ouvre par son trait, jamais par son titre ;
+ *   • elle FINIT par du tracé — le titre est une incise, elle est refermée ;
+ *   • elle est MAJORITAIREMENT du tracé — au moins la moitié, et au moins 8 caractères en tout.
+ *
+ * Sur le cas mesuré, 134 caractères de tracé sur 165 : 81 %. Une ligne de prose bordée de quelques
+ * tirets n'y arrive pas, et c'est exactement ce qu'on lui demande.
+ */
+const TRACE = /[─-╿]/;
+const PROPORTION_MINIMALE_DE_TRACE = 0.5;
+const TRACE_MINIMUM = 8;
+
+/**
+ * EST-CE UN FILET ? — la sonde, exportée, parce que DEUX modules la posaient chacun de leur côté.
+ *
+ * ⚠️ ELLE VIVAIT EN DEUX EXEMPLAIRES — ici et dans `ecran.js`, ce dernier commentant lui-même
+ * « même sonde que `boite.js` ». Une copie n'hérite jamais des corrections de l'autre, et on ne
+ * s'en aperçoit qu'au prochain incident : corriger la bordure titrée ici seulement aurait laissé
+ * l'angle mort entier chez le veilleur — c'est-à-dire sur le chemin par lequel arrive la parole
+ * du dirigeant.
+ */
+export function estUnFilet(ligne) {
+  const l = String(ligne ?? '').trim();
+  if (l.length < TRACE_MINIMUM) return false;
+  // Ouvrir ET refermer par du tracé : c'est ce qui distingue une bordure titrée d'une phrase.
+  if (!TRACE.test(l[0]) || !TRACE.test(l[l.length - 1])) return false;
+  const trace = [...l].filter((c) => TRACE.test(c)).length;
+  if (trace < TRACE_MINIMUM) return false;
+  return trace / [...l].length >= PROPORTION_MINIMALE_DE_TRACE;
+}
+
 
 /**
  * Le contenu ACTUEL de la boîte de saisie, lu dans un dump de terminal.
@@ -95,7 +149,7 @@ export function sansGris(texteTerminal) {
 function corpsDeLaBoite(reperes, aExtraire = reperes) {
   const filets = [];
   for (let i = 0; i < reperes.length; i += 1) {
-    if (FILET.test(reperes[i].trim())) filets.push(i);
+    if (estUnFilet(reperes[i])) filets.push(i);
   }
   if (filets.length < 2) return null;
 
