@@ -160,13 +160,24 @@ function capturer(lectures) {
  *     toujours vers le silence — trois lectures espacées d'au moins quinze secondes — mais son
  *     silence n'est plus une fatalité de câblage.
  *
- *     ⚠️ CE QUI RESTE NON PROUVÉ, ET IL FAUT LE DIRE EXACTEMENT : la règle a été mesurée sur la
- *     population vivante du poste — 105 panes portant un agent — et elle n'y a désigné
- *     personne, parce qu'aucun agent n'y était figé au moment de la mesure. Son taux de faux
- *     positifs y est donc **0 sur 105**. Ce qu'aucune mesure n'a encore établi, c'est combien
- *     de figés réels elle attrape : il n'en est pas passé un seul sous les yeux de la mesure.
- *     **C'est une borne connue, pas une réserve sur le mécanisme** — et la capture est là pour
- *     que la première occurrence réelle la lève.
+ *     CE QUI A ÉTÉ MESURÉ LE 2026-08-21, et ce qui ne l'a pas été :
+ *
+ *       ✅ **0 vivant déclaré figé à tort sur 105 panes** portant un agent, fenêtre de 40 s,
+ *          lecture seule sur toute la population du poste — un SUR-ENSEMBLE des suspects que la
+ *          ronde regarde, donc un chiffre plus sévère, pas plus flatteur.
+ *       ✅ **Le spécimen que personne n'avait su fabriquer** : un agent Claude arrêté par
+ *          `SIGSTOP` en plein travail garde `busy` dans son fichier de session et cesse de
+ *          redessiner. Il est ATTRAPÉ. Sur la même série, le code d'avant rend `null`.
+ *       ✅ **Le même agent, dégelé et réellement au travail** (`busy`, revision +21 en 20 s) :
+ *          non signalé. La moitié qui prouve tient.
+ *       ⛔ **Aucune ligne de journal réelle.** Une vraie ronde livre un rappel dans la boîte de
+ *          chaque orchestrateur — le geste que le chantier interdit. On ne sait donc rien de ce
+ *          que la vigie ÉCRIT quand elle se déclenche en production : c'est une VÉRIFICATION
+ *          POST-INSTALLATION, pas une chose que ce lot a établie.
+ *       ⛔ **Un figé NATUREL** reste non observé : le seul spécimen est fabriqué.
+ *
+ *     ⚠️ UNE MESURE DONT ON IGNORE LA LIMITE SE LIT COMME COMPLÈTE — et c'est très exactement
+ *     ce qui a laissé la version morte de cette garde vivre des mois.
  *
  *   • `activite-non-mesurable` — **LA TROISIÈME, ET ELLE EXISTE POUR NE PAS MENTIR**. Une sonde
  *     a deux façons de ne rien montrer : elle regarde et il n'y a rien (une DÉCISION), ou elle
@@ -184,6 +195,18 @@ function capturer(lectures) {
  * un laboratoire, elle **s'auto-mesure sur le terrain**. La prochaine occurrence réelle rendra
  * la preuve que personne n'a su fabriquer, et elle la rendra à quelqu'un au lieu de disparaître
  * avec le pane.
+ */
+/*
+ * ⚠️ PRÉCONDITION MESURÉE : CE VERDICT SUPPOSE UN PANE QUI PORTE UN AGENT.
+ *
+ * La ronde ne l'appelle que sur des orchestrateurs qu'elle a trouvés, donc la condition est
+ * tenue par construction. Mais appliqué à TOUT le poste, il rend `activite-non-mesurable` sur
+ * les 124 panes qui sont de simples terminaux — vrai, et parfaitement inutile : un pane sans
+ * agent n'a pas d'activité à mesurer. Mesuré en produisant la baseline, pour que le prochain
+ * qui réutilise ce module hors de la ronde sache d'où vient le bruit avant de l'attribuer au
+ * mécanisme. Le filtre appartient à l'appelant : ici, on ne peut pas distinguer « aucun agent
+ * n'a jamais vécu là » de « l'annuaire de herdr ignore cet agent », et cette seconde forme,
+ * elle, doit être dite.
  */
 export function verdictDeVigie(lectures) {
   const l = Array.isArray(lectures) ? lectures : [];
@@ -257,10 +280,12 @@ export function verdictDeVigie(lectures) {
       // qu'il ne sait pas se fait croire au-delà de ce qu'il a prouvé. Elle ne dit plus « jamais
       // observée » — ça, c'était le symptôme du câblage mort. Elle dit ce que la mesure couvre.
       limite:
-        'la règle a été mesurée sur 105 panes portant un agent : elle n’y a désigné personne, ' +
-        'donc zéro vivant déclaré figé à tort. Combien de figés RÉELS elle attrape reste non ' +
-        'établi — aucun n’est passé sous les yeux de la mesure. Prends la capture comme la ' +
-        'mesure qui manquait.',
+        'mesurée le 2026-08-21 : zéro vivant déclaré figé à tort sur 105 panes portant un ' +
+        'agent, et un spécimen RÉELLEMENT gelé (agent Claude arrêté par SIGSTOP en plein ' +
+        'travail) est attrapé — là où le code d’avant rendait `null` sur la même série. Reste ' +
+        'non établi : un figé NATUREL (le seul spécimen est fabriqué) et ce que la vigie écrit ' +
+        'en production, aucune ligne de journal réelle n’ayant été produite. Prends la capture ' +
+        'comme la mesure qui manque encore.',
       capture: capturer(l),
     };
   }
