@@ -121,8 +121,40 @@ export { messagesEnFile } from '../../ligne-directe/src/boite.js';
  *
  * ⚠️ ON BORNE LE TÉMOIN, ON NE LE FERME PAS. Un destinataire passé de `idle` à `done` a bel et
  * bien quitté l'attente, et ce passage-là témoigne toujours.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ ET LA FAMILLE A CINQ MEMBRES — trouvé en PASSE DE FOND, une couche plus bas.
+ *
+ * Le contrat de herdr (`~/.claude/skills/herdr/SKILL.md`) donne à `agent_status` :
+ *
+ *     idle · working · blocked · done · unknown
+ *
+ * Trois d'entre eux veulent la même chose — **la session a quitté l'attente** :
+ *
+ *   `working`  elle travaille sur ce qu'on lui a donné
+ *   `done`     elle a fini son tour
+ *   `blocked`  elle a pris le brief, l'a exécuté, et un dialogue attend un choix
+ *
+ * Le premier lot en traitait UN. Le correctif du `done` en traitait DEUX. « Une porte sur
+ * deux », à trois reprises, sur la même énumération.
+ *
+ * ⚠️ `blocked` EST DOCUMENTÉ, PAS OBSERVÉ. Sur ce poste le 2026-08-21 — 123 agents, deux
+ * passes, trois sessions herdr — seuls `idle` et `done` sont sortis. On le traite parce que le
+ * CONTRAT le nomme, et on le dit ici plutôt que de laisser croire à une mesure.
+ *
+ * ⚠️ `unknown` RESTE DEHORS, ET C'EST LA LIGNE QUI COMPTE. Il ne décrit pas un état de la
+ * session : il dit que herdr ne connaît pas ce pane — mesuré sur l'auteur de ce lot, invisible
+ * à son propre registre. En faire un témoin ferait conclure « le brief est passé » d'une
+ * session qu'on n'a pas su regarder, ce qui est le défaut d'origine dans sa forme la plus pure.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * CE QU'ON JETTE VOLONTAIREMENT, relevé en revue de fond : un passage `working → done` ou
+ * `done → working` est un vrai changement de valeur, et il sort quand même par le repli de la
+ * boîte. **Ce n'est pas un signal perdu** : une session qui travaillait déjà a pu finir son
+ * tour précédent, et cette transition-là ne dit rien de NOTRE brief. On ne compte que les
+ * passages qui partent d'un état d'attente.
  */
-const ETATS_QUI_SE_PROUVENT_EUX_MEMES = Object.freeze(['working', 'done']);
+const ETATS_QUI_SE_PROUVENT_EUX_MEMES = Object.freeze(['working', 'done', 'blocked']);
 
 export function briefEstPris({
   statut,

@@ -337,3 +337,46 @@ test('les DEUX états de départ qui rendent le témoin muet sont traités parei
     );
   }
 });
+
+test('« blocked » témoigne aussi — la famille a CINQ membres, pas deux', () => {
+  // ⚠️ TROUVÉ EN PASSE DE FOND, ET C'EST « UNE PORTE SUR DEUX » AU CARRÉ. Le contrat de herdr
+  // (`~/.claude/skills/herdr/SKILL.md`) donne CINQ valeurs à `agent_status` :
+  //
+  //     idle · working · blocked · done · unknown
+  //
+  // Le premier lot en traitait une (`working`). Le correctif du `done` en traitait deux. Il en
+  // restait une troisième qui veut dire la même chose — **la session a quitté l'attente** :
+  // `blocked`, c'est-à-dire « elle a pris le brief, l'a exécuté, et un dialogue attend un choix ».
+  //
+  // ⚠️ ET ON DIT CE QU'ON SAIT DE SA FRÉQUENCE : `blocked` est DOCUMENTÉ, il n'a PAS été observé
+  // sur ce poste le 2026-08-21 (123 agents, deux passes, trois sessions herdr : seulement `idle`
+  // et `done`). On le traite parce que le contrat le nomme, pas parce qu'on l'a vu — et on le
+  // dit, plutôt que de laisser croire à une mesure.
+  //
+  // Le repli `boiteEstVide` rattrapait déjà la plupart de ces cas — mais par un témoin
+  // SECONDAIRE, et par accident. Un témoin direct qui existe et qu'on n'utilise pas est une
+  // porte laissée ouverte pour le jour où le repli, lui, ne rattrapera pas.
+  const ECRAN_ENCORE_PLEIN = ['❯ dis H', SEP, '❯ mon texte est là', SEP].join('\n');
+  assert.equal(
+    briefEstPris({ statut: 'blocked', terminal: ECRAN_ENCORE_PLEIN, statutAvant: 'idle', envoiAccepte: true }),
+    true,
+    'idle → blocked : la session a bien quitté l’attente, c’est notre brief qui l’y a menée'
+  );
+  // Et la garde tient sur lui comme sur les autres : déjà `blocked` avant, il ne prouve rien.
+  assert.equal(
+    briefEstPris({ statut: 'blocked', terminal: ECRAN_ENCORE_PLEIN, statutAvant: 'blocked', envoiAccepte: true }),
+    false
+  );
+});
+
+test('« unknown » ne témoigne JAMAIS — c’est « pas vu », pas un état', () => {
+  // ⚠️ LA CINQUIÈME VALEUR, ET LA SEULE QUI DOIVE RESTER DEHORS. `unknown` est ce que herdr rend
+  // quand il ne connaît pas le pane — mesuré sur l'auteur de ce lot, invisible à son propre
+  // registre. En faire un témoin ferait dire « le brief est passé » d'une session qu'on n'a pas
+  // su regarder : le défaut d'origine, dans sa forme la plus pure.
+  const ECRAN_ENCORE_PLEIN = ['❯ dis H', SEP, '❯ mon texte est là', SEP].join('\n');
+  assert.equal(
+    briefEstPris({ statut: 'unknown', terminal: ECRAN_ENCORE_PLEIN, statutAvant: 'idle', envoiAccepte: true }),
+    false
+  );
+});

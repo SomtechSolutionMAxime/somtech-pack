@@ -446,6 +446,25 @@ async function tenirLeRendezVous(nom, debut) {
   // dispositif fabriquait lui-même. La ligne qui compte doit être la PREMIÈRE qu'il voit.
   const bloques = ceQuiBloque(comptes);
   const familles = comptesParFamille(comptes);
+  // ⚠️ ET EN CLAIR, PAS SEULEMENT EN JSON (T-20260821-0011). Mesuré sur une vraie ligne de ce
+  // journal : **535 caractères** séparent le début de la ligne de la clé `bloques` — la liste
+  // des sessions muettes à elle seule en fait 400. Sur un terminal de 100 colonnes, l'humain
+  // qui ouvre ce fichier à 3 h du matin ne la voit JAMAIS.
+  //
+  // `stdout` et `stderr` du service vont au MÊME fichier (mesuré dans les deux plists) : une
+  // ligne en clair atterrit donc dans le journal, à côté du JSON, et se lit en diagonale.
+  // C'est exactement ce que ce module fait déjà pour l'hygiène du registre et pour les panes
+  // que la vigie n'a pas eu le temps de regarder — la même doctrine, appliquée au signal qui
+  // compte le plus.
+  if (bloques.length) {
+    process.stderr.write(
+      `${r.etiquette} : ⛔ ${bloques.length} session(s) BLOQUÉE(S) — leur boîte de saisie n’est ` +
+        `pas rendue, ou un dialogue y attend un choix. Elles ne sont PAS mortes, et un rappel de ` +
+        `plus n’y changera rien : quelqu’un doit aller devant.\n` +
+        bloques.map((b) => `  ${b.agent} (${b.pane})`).join('\n') +
+        '\n'
+    );
+  }
   process.stdout.write(
     `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
