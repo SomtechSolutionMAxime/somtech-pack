@@ -335,6 +335,50 @@ test('UNE SEULE LECTURE MUETTE AU MILIEU SUFFIT À CASSER LA SÉRIE — comme un
   assert.equal(v?.forme, 'activite-non-mesurable', 'ni figé, ni silence — non mesurable');
 });
 
+test('🔴 UN ACCROC DE LECTURE ENTRE DEUX « AU REPOS » NE FAIT PAS UNE ALERTE', () => {
+  // ⚠️ TROUVÉ EN PASSE DE FOND, ET C'EST LE DÉFAUT CORRIGÉ RÉINSTALLÉ À L'ENVERS. La forme du
+  // figé exige l'UNANIMITÉ (`every`), et une revision illisible ANNULE la série. La sonde
+  // muette, elle, se déclenchait sur UNE lecture sur trois — la seule des trois gardes de ce
+  // fichier à crier sur un accroc.
+  //
+  // ⚠️ ET L'ACCROC EST RÉEL, PAS THÉORIQUE : Claude Code réécrit le fichier de session à chaque
+  // changement de statut, et la ronde relit ce dossier à chaque lecture. Une lecture qui tombe
+  // pendant une réécriture rend `source-des-sessions-introuvable` sur une source parfaitement
+  // saine. Deux lectures claires disent « au repos » ; la troisième n'a rien vu. **On a
+  // regardé, et on a vu.** Crier ici, c'est le bruit qui fait retirer une garde.
+  const clair = (s) => ({ statut: s, motif: null });
+  const accroc = { statut: null, motif: 'source-des-sessions-introuvable (Unexpected end of JSON input)' };
+  const v = verdictDeVigie([
+    vu(0, 'idle', 7, { activite: clair('idle') }),
+    vu(20000, 'idle', 7, { activite: accroc }),
+    vu(40000, 'idle', 7, { activite: clair('idle') }),
+  ]);
+  assert.equal(v, null, 'une lecture claire au repos réfute le figé — l’accroc n’a rien à ajouter');
+});
+
+test('MAIS UN ACCROC ENTRE DEUX « IL CALCULE » RESTE NON MESURABLE — l’hypothèse tient encore', () => {
+  // ⚠️ LA MOITIÉ QUI EMPÊCHE LA CORRECTION PRÉCÉDENTE D'ÊTRE UN DÉSARMEMENT. Ici, aucune
+  // lecture ne réfute le figé : les deux qu'on a lues le soutiennent, et la troisième manque.
+  // Se taire reviendrait à laisser un silence de sonde se lire comme un constat — le défaut
+  // même de ce lot.
+  const v = verdictDeVigie([
+    vu(0, 'idle', 7, { activite: { statut: 'busy', motif: null } }),
+    vu(20000, 'idle', 7, { activite: { statut: null, motif: 'aucun-fichier-ne-porte-cet-identifiant' } }),
+    vu(40000, 'idle', 7, { activite: { statut: 'busy', motif: null } }),
+  ]);
+  assert.equal(v?.forme, 'activite-non-mesurable');
+});
+
+test('UN ÉTAT QUI A CHANGÉ RÉFUTE LE FIGÉ, MÊME AVEC UN TROU — il était vivant pour changer', () => {
+  // `busy` puis `idle` : la session a bougé son propre statut, donc son processus répondait.
+  const v = verdictDeVigie([
+    vu(0, 'idle', 7, { activite: { statut: 'busy', motif: null } }),
+    vu(20000, 'idle', 7, { activite: { statut: null, motif: 'source-des-sessions-introuvable (accroc)' } }),
+    vu(40000, 'idle', 7, { activite: { statut: 'idle', motif: null } }),
+  ]);
+  assert.equal(v, null);
+});
+
 test('UNE RONDE QUI N’A PAS SONDÉ DU TOUT LE DIT — l’absence de témoin porte son propre mot', () => {
   // ⚠️ Une lecture sans champ `activite` n'est pas une lecture où l'agent était au repos : c'est
   // une lecture où personne n'a demandé. Sans ce mot, un appelant qui oublie la sonde rendrait

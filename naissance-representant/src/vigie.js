@@ -162,9 +162,21 @@ function capturer(lectures) {
  *
  *     CE QUI A ÉTÉ MESURÉ LE 2026-08-21, et ce qui ne l'a pas été :
  *
- *       ✅ **0 vivant déclaré figé à tort sur 105 panes** portant un agent, fenêtre de 40 s,
- *          lecture seule sur toute la population du poste — un SUR-ENSEMBLE des suspects que la
- *          ronde regarde, donc un chiffre plus sévère, pas plus flatteur.
+ *       ✅ **0 vivant déclaré figé à tort**, fenêtre de 40 s, lecture seule — sur 105 panes
+ *          portant un agent (tout le poste), ET sur les **9 orchestrateurs** que
+ *          `orchestrateursDuPoste` sélectionne réellement.
+ *
+ *       ⛔ **ET LE « SUR-ENSEMBLE DONC PLUS SÉVÈRE » ÉTAIT FAUX — retiré.** Une première
+ *          rédaction présentait la mesure poste-entier comme une borne haute du bruit de la
+ *          ronde. Elle ne l'est pas : la vigie ne regarde que les orchestrateurs dont la
+ *          LIVRAISON A ÉCHOUÉ, et cette population est corrélée EN SENS INVERSE avec la cause
+ *          du bruit — un agent dont la livraison échoue est justement celui dont l'identifiant
+ *          de session a tourné ou dont le fichier a disparu. **Mesuré, et l'inversion est
+ *          confirmée** : le seul `activite-non-mesurable` des 9 (`w7M:p2`) est aussi le pane
+ *          au **plus haut taux d'échec de livraison du poste — 28 sur 48, 58 %**. Il est donc
+ *          SUR-représenté chez les suspects, pas sous-représenté. Sur les 71 rondes du
+ *          journal, il aurait produit une ligne dans **28** d'entre elles.
+ *          *Une population n'est pas une borne parce qu'elle est plus grande.*
  *       ✅ **Le spécimen que personne n'avait su fabriquer** : un agent Claude arrêté par
  *          `SIGSTOP` en plein travail garde `busy` dans son fichier de session et cesse de
  *          redessiner. Il est ATTRAPÉ. Sur la même série, le code d'avant rend `null`.
@@ -175,6 +187,10 @@ function capturer(lectures) {
  *          que la vigie ÉCRIT quand elle se déclenche en production : c'est une VÉRIFICATION
  *          POST-INSTALLATION, pas une chose que ce lot a établie.
  *       ⛔ **Un figé NATUREL** reste non observé : le seul spécimen est fabriqué.
+ *       ⚠️ **Le bruit ajouté, chiffré** : 1 ligne `activite-non-mesurable` sur 9
+ *          orchestrateurs, et elle nomme une anomalie RÉELLE — un orchestrateur dont le
+ *          fichier de session a disparu, que rien ne signalait avant. Le geste qu'elle appelle
+ *          n'est pas le même que celui du figé, et c'est pour ça qu'elle porte un autre mot.
  *
  *     ⚠️ UNE MESURE DONT ON IGNORE LA LIMITE SE LIT COMME COMPLÈTE — et c'est très exactement
  *     ce qui a laissé la version morte de cette garde vivre des mois.
@@ -249,7 +265,24 @@ export function verdictDeVigie(lectures) {
   // ⚠️ ET ELLE PASSE APRÈS `agent-introuvable`, JAMAIS AVANT. Un agent qui a quitté la détection
   // n'a plus d'identifiant de session à interroger : sa sonde est muette PAR CONSTRUCTION.
   // Devant, elle remplacerait la seule forme prouvée par un mot qui en dit moins.
-  const silences = l.map((x) => motifDuSilence(x)).filter(Boolean);
+  // ⚠️ MAIS UN ACCROC NE PARLE QUE SI L'HYPOTHÈSE TIENT ENCORE — relevé en passe de fond, et
+  // c'était le défaut corrigé réinstallé À L'ENVERS. La forme du figé exige l'unanimité, une
+  // revision illisible ANNULE la série ; celle-ci criait sur UNE lecture sur trois. Elle était
+  // la seule des trois gardes de ce fichier à alarmer sur un accroc.
+  //
+  // ⚠️ ET L'ACCROC EST RÉEL : Claude Code réécrit le fichier de session à chaque changement de
+  // statut, et la ronde relit ce dossier à chaque lecture. Une lecture qui tombe pendant une
+  // réécriture rend `source-des-sessions-introuvable` sur une source parfaitement saine.
+  //
+  // UNE SEULE LECTURE CLAIRE QUI N'EST PAS `busy` RÉFUTE LE FIGÉ, et un silence n'a plus rien à
+  // ajouter à une réfutation : on a regardé, et on a VU. Un statut de repos dit qu'il se repose ;
+  // un statut qui CHANGE dit que sa session était vivante pour le changer. Dans les deux cas, le
+  // silence de l'autre lecture ne décide de rien — c'est le sens même de ce mot.
+  //
+  // ⚠️ CE N'EST PAS UN DÉSARMEMENT, et la borne est exactement là : tant qu'AUCUNE lecture
+  // lisible ne réfute le figé, l'accroc parle. `[busy, trou, busy]` reste non mesurable.
+  const refute = l.some((x) => motifDuSilence(x) === null && statutDeSession(x) !== CALCULE);
+  const silences = refute ? [] : l.map((x) => motifDuSilence(x)).filter(Boolean);
   if (silences.length) {
     return {
       forme: 'activite-non-mesurable',
@@ -280,11 +313,13 @@ export function verdictDeVigie(lectures) {
       // qu'il ne sait pas se fait croire au-delà de ce qu'il a prouvé. Elle ne dit plus « jamais
       // observée » — ça, c'était le symptôme du câblage mort. Elle dit ce que la mesure couvre.
       limite:
-        'mesurée le 2026-08-21 : zéro vivant déclaré figé à tort sur 105 panes portant un ' +
-        'agent, et un spécimen RÉELLEMENT gelé (agent Claude arrêté par SIGSTOP en plein ' +
-        'travail) est attrapé — là où le code d’avant rendait `null` sur la même série. Reste ' +
-        'non établi : un figé NATUREL (le seul spécimen est fabriqué) et ce que la vigie écrit ' +
-        'en production, aucune ligne de journal réelle n’ayant été produite. Prends la capture ' +
+        'mesurée le 2026-08-21, lecture seule : zéro vivant déclaré figé à tort — sur 105 ' +
+        'panes portant un agent, et sur les 9 orchestrateurs que la ronde sélectionne. Un ' +
+        'spécimen RÉELLEMENT gelé (agent Claude arrêté par SIGSTOP en plein travail) est ' +
+        'attrapé, là où le code d’avant rendait `null` sur la même série. Le bruit ajouté est ' +
+        'de 1 `activite-non-mesurable` sur ces 9, et elle nomme une anomalie réelle. Reste non ' +
+        'établi : un figé NATUREL (le seul spécimen est fabriqué) et ce que la vigie écrit en ' +
+        'production, aucune ligne de journal réelle n’ayant été produite. Prends la capture ' +
         'comme la mesure qui manque encore.',
       capture: capturer(l),
     };
