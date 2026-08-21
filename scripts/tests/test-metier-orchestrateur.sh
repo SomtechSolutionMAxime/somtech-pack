@@ -739,18 +739,28 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ⚠️ LA MARGE RESTE À 0. Le prochain ajout se refuse par défaut, et ce paragraphe
 #    est ce sur quoi s'appuyer pour le dire — le relèvement d'aujourd'hui ne crée
 #    aucun droit pour le suivant.
-BASELINE=154339
+# ⚠️ ON COMPTE DES CARACTÈRES, PLUS DES OCTETS — et ce n'est pas un détail.
+# En UTF-8, un caractère accentué coûte DEUX octets. Une garde qui compte les
+# octets fait donc payer l'orthographe : restaurer quinze accents a coûté
+# 30 octets et l'a fait rougir, alors que le texte n'avait pas grossi d'un mot.
+# Telle quelle, elle RÉCOMPENSAIT un français dépouillé de ses accents — le
+# défaut exact qu'on venait de corriger dans le socle livré (2026-08-21).
+# Mesuré sur le métier : 154 369 octets pour 149 078 caractères, soit 5 291
+# octets qui ne sont QUE des accents et des symboles.
+#
+# La baseline est convertie dans la même unité, sur le même objet, le même jour.
+BASELINE=149078
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
-TAILLE="$(wc -c < "$METIER" | tr -d ' ')"
+TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
 
 # La marge est dérivée, jamais réécrite en dur dans le message : un banc dont
 # le compte rendu annonce une autre borne que celle qu'il applique ment sur sa
 # propre garde, et c'est le seul chiffre que personne ne pense à vérifier.
 if [ "$TAILLE" -le "$PLAFOND" ]; then
-  ok "$TAILLE octets — sous le plafond de $PLAFOND (baseline $BASELINE + marge $MARGE), écart net $((TAILLE - BASELINE))"
+  ok "$TAILLE caractères — sous le plafond de $PLAFOND (baseline $BASELINE + marge $MARGE), écart net $((TAILLE - BASELINE))"
 else
-  ko "$TAILLE octets — au-dessus du plafond de $PLAFOND (écart net $((TAILLE - BASELINE)), marge $MARGE) : chaque ajout doit REMPLACER ou PRÉCISER"
+  ko "$TAILLE caractères — au-dessus du plafond de $PLAFOND (écart net $((TAILLE - BASELINE)), marge $MARGE) : chaque ajout doit REMPLACER ou PRÉCISER"
 fi
 
 echo

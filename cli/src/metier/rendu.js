@@ -172,6 +172,29 @@ export function rendre(classement) {
     }
   }
 
+  // ⚠️ Le français de ce dispositif s'écrit avec ses accents. Un mot dépouillé
+  // se lit comme une faute d'inattention dans le PREMIER fichier qu'un agent
+  // ouvre — et il est d'autant plus difficile à voir qu'il se glisse dans un
+  // texte par ailleurs accentué. Mesuré le 2026-08-21 sur le socle livré :
+  // « ait a en tenir », « ce metier sans le posseder », « couche a construire ».
+  // ⚠️ « a » employé comme préposition est le cas qu'une liste de mots ne peut
+  // pas couvrir — et c'est celui qui a survécu à ma première passe de correction.
+  // ⚠️ « a » employé comme préposition est le cas qu'une liste de mots ne peut
+  // pas couvrir. Mais le VERBE avoir prend les mêmes compléments : « un client
+  // qui a une question » est correct, et une première version le refusait.
+  // La garde n'attrape donc que les tournures où un sujet ne peut pas précéder :
+  // après un verbe d'action, ou dans « couche a construire ».
+  const SANS_ACCENT = /\b(metier|posseder|possede|invente|declare|apres|deja|etat|etats|reponse|controle|derogation|defaut|verifie|mesure(?=r\b)|ait a|Refus par defaut)\b|\b(parle|parler|parles|monte|monter|remonte|remonter|rend|rendre|dit|dire|ecrit|ecrire|passe|passer|sert|servir|pense|penser|repond|repondre|va|aller|jamais|toujours) a (?=un |une |la |le |les |ce |cet |cette |son |sa |ses |toi\b|lui\b|moi\b)|\bcouche a construire\b/g;
+  for (const [ou, texte] of [['identité', classement?.identite], ['préambule', classement?.preambule],
+                             ...items.map((i) => [`l'énoncé de socle de ${i.id}`, i.enonce_socle]),
+                             ...items.map((i) => [`le motif de dérogation de ${i.id}`, i.sans_garantie?.motif])]) {
+    const trouves = [...new Set(String(texte || '').match(SANS_ACCENT) || [])];
+    if (trouves.length) {
+      erreurs.push(`${ou} porte des mots dépouillés de leurs accents : ${trouves.join(', ')}. ` +
+        `Le rendu les porterait jusque dans le premier fichier qu'un agent lit.`);
+    }
+  }
+
   const nomsVus = new Set();
   for (const c of chapitres) {
     if (!c?.nom) {
@@ -190,7 +213,7 @@ export function rendre(classement) {
 
   const identite = classement?.identite ||
     `# Tu es l'${role} de ce chantier\n\nTu portes ce métier sans le posséder : il est rendu depuis ton ABC.\n`;
-  artefacts['L0.md'] = identite;
+  artefacts['L0.md'] = identite.endsWith('\n') ? identite : identite + '\n';
 
   // Les trois sections de L1 partitionnent : un item n'y paraît qu'une fois.
   // Sans ça le socle se paie en double sur un budget qui est un plafond DUR —
@@ -199,15 +222,16 @@ export function rendre(classement) {
   const dejaEnL1 = new Set(cardinales.map((i) => i.id));
   const sansChapitre = items.filter((i) => !i.chapitre && !dejaEnL1.has(i.id));
   const l1 = [
+    '',
     ...(classement?.preambule ? [classement.preambule, ''] : []),
     '# Ce qui prime',
     '',
+    ...(cardinales.length
+      ? ['## Les règles cardinales', '', ...cardinales.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${deroges.includes(i) ? `aucune couche ne la garantit — ${i.sans_garantie.motif}` : i.couche})*`), '']
+      : []),
     ...(deroges.length
       ? ['## ⚠️ Ce que rien ne garantit — et qui ne tient donc qu\'à toi', '',
          ...deroges.filter((i) => !dejaEnL1.has(i.id)).map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(aucune couche — ${i.sans_garantie.motif} · assumé par ${i.sans_garantie.assume_par})*`), '']
-      : []),
-    ...(cardinales.length
-      ? ['## Les règles cardinales', '', ...cardinales.map((i) => `- **${i.id}** — ${i.enonce_socle || i.enonce} *(${deroges.includes(i) ? `aucune couche ne la garantit — ${i.sans_garantie.motif}` : i.couche})*`), '']
       : []),
     '## Ce qui t\'est refusé',
     '',
