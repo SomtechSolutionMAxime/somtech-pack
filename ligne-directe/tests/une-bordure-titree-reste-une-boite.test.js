@@ -430,3 +430,42 @@ test('UN FILET TITRÉ N’OUVRE UNE BOÎTE QUE SOUS UNE SESSION CLAUDE CODE — 
     );
   }
 });
+
+test('L’ANCRE N’EST EXIGÉE QUE DES FILETS TITRÉS — le préexistant ne change pas d’un caractère', () => {
+  // ⚠️ SURVIVANTE TROUVÉE PAR MUTATION : exiger l'ancre de mode POUR TOUS les filets, y compris
+  // les nus, ne faisait rougir aucun essai. Ce serait pourtant un changement de contrat majeur —
+  // trois appelants et des centaines d'essais tiennent pour acquis qu'une boîte encadrée de deux
+  // filets nus se lit, pied de page ou pas.
+  //
+  // > **Le périmètre de ce lot est ce qu'il a ÉLARGI. Une garde qui déborde ce périmètre doit
+  // > rougir tout autant qu'une garde qui manque.**
+  //
+  // Cet essai fixe donc la moitié qu'on n'a PAS touchée : deux filets NUS, aucun pied de page,
+  // et la boîte se lit — exactement comme avant ce lot.
+  const sansPiedDePage = ['⏺ un travail', '─'.repeat(60), '❯ ', '─'.repeat(60)].join('\n');
+  assert.equal(
+    etatDeLaBoite(sansPiedDePage).etat,
+    ETATS_BOITE.VIDE,
+    'un filet NU n’a jamais eu besoin d’ancre — le comportement d’avant ce lot est intact'
+  );
+  const pleineSansPied = ['⏺ un travail', '─'.repeat(60), '❯ un texte qui attend', '─'.repeat(60)].join('\n');
+  assert.equal(etatDeLaBoite(pleineSansPied).etat, ETATS_BOITE.SAISIE);
+});
+
+test('UN FILET PUR EXIGE DE LA MATIÈRE — la vacuité de `every` ne fait pas une bordure', () => {
+  // ⚠️ SURVIVANTE SIGNALÉE EN REVUE DE FOND : `[].every(…)` est VRAI par vacuité en JavaScript.
+  // Sans le contrôle de longueur, `estUnFiletPur('')` rendait `true` — une chaîne vide passant
+  // pour un filet nu.
+  //
+  // ⚠️ ELLE EST INERTE AU SEUL SITE D'APPEL ACTUEL (les lignes y sont déjà filtrées par
+  // `estUnFilet`), et c'est justement pourquoi aucun essai ne la voyait. Mais la fonction est
+  // EXPORTÉE : rien ne garantit qu'un appelant futur la filtre d'abord. Un piège latent dans une
+  // fonction publique se garde là où il est, pas là où il ne mord pas encore.
+  for (const rien of ['', '   ', null, undefined]) {
+    assert.equal(estUnFiletPur(rien), false, `« ${JSON.stringify(rien)} » n’est pas un filet nu`);
+  }
+  for (const court of ['─', '───────']) {
+    assert.equal(estUnFiletPur(court), false, `« ${court} » est trop court pour être un filet nu`);
+  }
+  assert.equal(estUnFiletPur('────────'), true, 'huit caractères de tracé nu font un filet');
+});
