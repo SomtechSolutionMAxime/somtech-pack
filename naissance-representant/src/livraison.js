@@ -95,6 +95,35 @@ import {
 // (T-20260815-0011). Réexporté : tout ce qui le nommait continue de le voir.
 export { messagesEnFile } from '../../ligne-directe/src/boite.js';
 
+/**
+ * LES ÉTATS QUI SE PROUVENT EUX-MÊMES — et qui ne prouvent donc RIEN s'ils étaient déjà là.
+ *
+ * ⚠️ TROUVÉ EN PASSE DE FOND SUR CE LOT, ET C'EST LE MÊME MOTIF QUE CELUI QU'IL CORRIGE
+ * (T-20260821-0009). La garde de T-20260814-0138 — « une preuve doit porter sur un état qui
+ * POUVAIT être différent » — était posée sur `working`, et sur `working` seulement.
+ *
+ * Or `done` est un état de départ tout aussi légitime : `ETATS_DISPONIBLES` l'accepte
+ * explicitement trois lignes plus bas. Un destinataire `done` avant l'envoi et `done` après
+ * satisfaisait donc le témoin `statut === 'done'` — vrai avant même qu'on écrive.
+ *
+ * ⚠️ ET CE N'EST PAS THÉORIQUE. Mesuré sur ce poste le 2026-08-21 : `done` est la SEULE valeur
+ * autre qu'`idle` que `agent_status` produise — 2 agents sur la session `cg`, 2 sur `progex`.
+ * Le trou était exactement à la taille du seul état qui pouvait y tomber.
+ *
+ * Le pire cas était celui où l'outil dit lui-même que rien n'est parti : sur `envoiAccepte`
+ * faux, boîte encore pleine du texte, `done → done` rendait « pris ».
+ *
+ * 🔑 LE MODULE FRÈRE AVAIT DÉJÀ COMMIS ET CORRIGÉ EXACTEMENT ÇA — `ligne-directe/src/boite.js`,
+ * `laPriseEstConstatee` : « La première écriture acceptait `done → done` comme une sortie de
+ * l'attente […] elle aurait donc posé le crochet sur les trois messages perdus. L'essai l'a
+ * attrapée. » La leçon n'avait pas traversé jusqu'ici — « une porte sur deux », entre deux
+ * modules cette fois, et le second importe déjà le premier.
+ *
+ * ⚠️ ON BORNE LE TÉMOIN, ON NE LE FERME PAS. Un destinataire passé de `idle` à `done` a bel et
+ * bien quitté l'attente, et ce passage-là témoigne toujours.
+ */
+const ETATS_QUI_SE_PROUVENT_EUX_MEMES = Object.freeze(['working', 'done']);
+
 export function briefEstPris({
   statut,
   terminal,
@@ -137,7 +166,7 @@ export function briefEstPris({
   //
   // `envoiAccepte` redevient vrai après une RÉPARATION réussie, et c'est juste : y arriver
   // suppose qu'on a vu notre propre texte dans la boîte, puis qu'on l'a vu en sortir.
-  if (!envoiAccepte) return statutAvant !== 'working' && (statut === 'working' || statut === 'done');
+  if (!envoiAccepte) return !ETATS_QUI_SE_PROUVENT_EUX_MEMES.includes(statutAvant) && ETATS_QUI_SE_PROUVENT_EUX_MEMES.includes(statut);
 
   // ⚠️ UN DESTINATAIRE QUI TRAVAILLAIT DÉJÀ REND LE STATUT MUET (T-20260814-0138).
   //
@@ -155,9 +184,14 @@ export function briefEstPris({
   // rien n'a jamais été écrit. Sur un destinataire occupé, on ne sait pas distinguer les deux —
   // le statut ne bouge pas, et le texte mis en file n'apparaît nulle part à l'écran. On attrape
   // le mode de panne mesuré ; on ne prétend pas prouver davantage.
-  if (statutAvant === 'working') return boiteEstVide(terminal);
+  // ⚠️ `done` EST TRAITÉ COMME `working`, ET IL NE L'ÉTAIT PAS (trouvé en PASSE DE FOND sur ce
+  // lot, T-20260821-0009). Voir `ETATS_QUI_SE_PROUVENT_EUX_MEMES` ci-dessus : la garde était
+  // posée sur une valeur sur deux.
+  if (ETATS_QUI_SE_PROUVENT_EUX_MEMES.includes(statutAvant)) return boiteEstVide(terminal);
 
-  const partie = statut === 'working' || statut === 'done';
+  // On arrive ici seulement si le départ n'était NI `working` NI `done` — donc y arriver est
+  // bien un PASSAGE, et le témoin porte sur un état qui pouvait être différent.
+  const partie = ETATS_QUI_SE_PROUVENT_EUX_MEMES.includes(statut);
   return partie || boiteEstVide(terminal);
 }
 

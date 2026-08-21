@@ -255,3 +255,85 @@ test('un fichier de session corrompu n’est pas une session au repos', () => {
   assert.equal(lireActivite('aaa-111', { racine }).etat, ACTIVITE.TRAVAIL);
   assert.equal(lireActivite('inconnu', { racine }).etat, ACTIVITE.INDETERMINEE);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ④ LE MÊME DÉFAUT, POSÉ SUR `done` — trouvé en PASSE DE FOND sur ce lot
+//
+// La garde de T-20260814-0138 dit : **un témoin vrai AVANT qu'on écrive ne prouve rien**. Elle
+// était posée sur `working` — et sur `working` SEULEMENT.
+//
+// Or `done` est un état de départ tout aussi légitime : `ETATS_DISPONIBLES = ['idle', 'done']`,
+// et la garde d'entrée de ce module l'accepte explicitement. Un destinataire qui était `done`
+// avant l'envoi et qui l'est encore après satisfaisait donc le témoin `statut === 'done'` — un
+// état vrai quoi qu'on fasse.
+//
+// ⚠️ CE N'EST PAS THÉORIQUE. Mesuré sur ce poste le 2026-08-21 : `done` est rendu par
+// `agent_status` sur DEUX sessions herdr — 2 agents sur `cg`, 2 sur `progex`. C'est la seule
+// valeur autre qu'`idle` que le registre produise, et elle tombait pile dans le trou.
+//
+// ⚠️ ET LE PIRE CAS EST CELUI OÙ L'OUTIL A DIT LUI-MÊME QUE RIEN N'ÉTAIT PARTI : sur
+// `envoiAccepte: false`, boîte encore pleine du texte, `done → done` rendait « pris ».
+//
+// 🔑 LE MODULE FRÈRE AVAIT DÉJÀ COMMIS ET CORRIGÉ EXACTEMENT ÇA — `ligne-directe/src/boite.js`,
+// `laPriseEstConstatee` : « La première écriture acceptait `done → done` comme une sortie de
+// l'attente [...] elle aurait donc posé le crochet sur les trois messages perdus. » La leçon
+// n'avait pas traversé jusqu'ici. C'est « une porte sur deux », entre deux modules cette fois.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+const ECRAN_PLEIN = ['❯ dis H', '⏺ H', SEP, '❯ mon texte est encore là', SEP, '  ⏵⏵ auto mode on'].join('\n');
+
+test('un destinataire DÉJÀ « done » ne se prouve pas lui-même — la boîte tranche, pas le statut', () => {
+  // Le témoin `statut === 'done'` serait vrai avant même qu'on écrive. Il ne peut donc rien
+  // établir : c'est la boîte qui doit trancher, exactement comme pour `working`.
+  assert.equal(
+    briefEstPris({ statut: 'done', terminal: ECRAN_PLEIN, statutAvant: 'done', envoiAccepte: true }),
+    false,
+    'la boîte porte encore le texte : rien ne prouve que le brief a été pris'
+  );
+  // Et le symétrique : la boîte VIDE témoigne, elle, parce qu'elle a pu être différente.
+  assert.equal(
+    briefEstPris({ statut: 'done', terminal: ECRAN_VIDE, statutAvant: 'done', envoiAccepte: true }),
+    true
+  );
+});
+
+test('sur un envoi que l’outil a REFUSÉ, « done → done » ne vaut surtout pas une prise', () => {
+  // ⚠️ LE PIRE CAS. L'appel d'envoi a échoué — rien n'est peut-être parti. Le témoin doit alors
+  // être POSITIF et porter sur un état qui pouvait être différent. `done` avant et après n'est
+  // ni l'un ni l'autre.
+  assert.equal(
+    briefEstPris({ statut: 'done', terminal: ECRAN_PLEIN, statutAvant: 'done', envoiAccepte: false }),
+    false
+  );
+  assert.equal(
+    briefEstPris({ statut: 'done', terminal: ECRAN_VIDE, statutAvant: 'done', envoiAccepte: false }),
+    false,
+    'une boîte vide ne prouve rien quand l’outil dit lui-même que rien n’est parti'
+  );
+});
+
+test('le PASSAGE vers « done » témoigne encore — on ne ferme pas le témoin, on le borne', () => {
+  // ⚠️ LA MOITIÉ QUI PROTÈGE. Le correctif ne doit pas rendre `done` inutilisable : un
+  // destinataire qui était `idle` et qui est passé à `done` a bel et bien quitté l'attente, et
+  // ce passage-là porte sur un état qui pouvait être différent.
+  assert.equal(
+    briefEstPris({ statut: 'done', terminal: ECRAN_PLEIN, statutAvant: 'idle', envoiAccepte: true }),
+    true
+  );
+  assert.equal(
+    briefEstPris({ statut: 'working', terminal: ECRAN_PLEIN, statutAvant: 'idle', envoiAccepte: true }),
+    true
+  );
+});
+
+test('les DEUX états de départ qui rendent le témoin muet sont traités pareil', () => {
+  // Ni `working` ni `done` ne peuvent se prouver eux-mêmes. Les traiter différemment, c'est
+  // « une porte sur deux » — le motif que ce dépôt a déjà payé six fois.
+  for (const depart of ['working', 'done']) {
+    assert.equal(
+      briefEstPris({ statut: depart, terminal: ECRAN_PLEIN, statutAvant: depart, envoiAccepte: true }),
+      false,
+      `« ${depart} → ${depart} » ne doit pas se compter comme une prise`
+    );
+  }
+});
