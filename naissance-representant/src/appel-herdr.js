@@ -112,11 +112,51 @@ export async function appelHerdr(commande, { resultatAttendu = true, executer, s
  * C'est aussi ce qui rend un `herdr` absent inoffensif ICI : `null` fait REFUSER la livraison,
  * là où « boîte vide » l'aurait autorisée par-dessus un contenu qu'on n'a jamais vu.
  */
+/**
+ * CE QUE HERDR REND QUAND IL REFUSE — et pourquoi ce n'est PAS un écran (T-20260821-0024).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 MESURÉ LE 2026-08-21. `herdr agent read w0:p24 --format ansi` rend, **sur stdout** et avec
+ * un code de sortie 1 :
+ *
+ *     {"error":{"code":"agent_not_found","message":"agent target w0:p24 not found"},"id":"cli:agent:read"}
+ *
+ * `lireEcran` interceptait l'échec, trouvait `err.stdout` non vide, et le rendait — c'est-à-dire
+ * qu'il livrait ce refus au lecteur de boîte **comme s'il s'agissait du terminal du
+ * destinataire**. Aucun filet dedans, donc `contenuBoite` rendait `null`, donc `illisible`.
+ *
+ * > **« Je n'ai pas pu lire » et « je ne reconnais pas cet écran » sont deux faits différents.
+ * > Le second est un verdict sur l'écran d'autrui ; le premier est un aveu sur soi.**
+ *
+ * Le second se lit « rien à signaler » ; le premier fait s'arrêter. C'est toute la différence
+ * entre un orchestrateur qui sait qu'il est injoignable et un qui l'apprend en parlant dans le
+ * vide.
+ *
+ * ⚠️ LA SONDE EST ÉTROITE, ET DÉLIBÉRÉMENT. Jeter tout ce qui MENTIONNE une erreur rendrait
+ * `illisible` sur les écrans de ce dépôt même — ses agents affichent constamment ces mots,
+ * puisque c'est leur sujet. On exige donc la FORME complète : du JSON, dont l'objet racine
+ * porte un `error` avec un `code`. Un écran de terminal n'est jamais du JSON entier.
+ */
+export function estUnRefusHerdr(sortie) {
+  const t = String(sortie ?? '').trim();
+  if (!t.startsWith('{') || !t.endsWith('}')) return false;
+  try {
+    const j = JSON.parse(t);
+    return Boolean(j && typeof j === 'object' && j.error && typeof j.error.code === 'string');
+  } catch {
+    return false;
+  }
+}
+
 export async function lireEcran(commande, { executer, socket = null, delaiMs = DELAI_APPEL_MS } = {}) {
   try {
     const { stdout } = await lancer(OUTILS.herdr, commande, { maxBuffer: TAILLE_MAX, timeout: delaiMs, executer, ...envDe(socket) });
-    return stdout;
+    // ⚠️ MÊME EN CAS DE SUCCÈS APPARENT. herdr a déjà rendu un refus avec un code de sortie 0
+    // sur `agent_not_found` (le piège que `remise-prouvee` documente) : lire la FORME plutôt que
+    // le code de sortie est le seul témoin qui ne dépende pas de ce détail-là.
+    return estUnRefusHerdr(stdout) ? null : stdout;
   } catch (err) {
-    return typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;
+    const sortie = typeof err?.stdout === 'string' && err.stdout ? err.stdout : null;
+    return estUnRefusHerdr(sortie) ? null : sortie;
   }
 }
