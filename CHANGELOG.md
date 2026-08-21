@@ -7,6 +7,26 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-21
 
+*Projet `P-20260820-0001`, tickets `T-20260821-0016` et `T-20260821-0017`. **Un garde-fou qui n'était qu'une phrase devient un refus, et le cycle qui fera évoluer les métiers devient un workflow — parce qu'une seule session ne se contredit pas elle-même.***
+
+### Ajouté
+
+- **La garde `ligne-cliente`** — `GF-ORC-005` (« tu ne parles jamais à un client ») vivait en persona seule, c'est-à-dire nulle part. La brèche tenait sur une ligne de terminal : `ligne-directe ouvrir <chantier> --nature client` ouvre le canal privé où parlent les gens du client. Elle est refusée à l'orchestrateur, et **laissée au représentant, dont c'est la définition de poste** — le rôle est donc mesuré au lieu où l'agent vit, jamais supposé par un défaut. Dérogés : **9 → 8** sur 13.
+- **Le workflow `cycle-amelioration-metier`** — quatre phases (Récolte · Recevabilité · Contradiction · Dossier), **lecture seule, n'écrit rien nulle part**. Un workflow ouvre des agents distincts : « celui qui propose n'est jamais celui qui accepte » devient structurel au lieu d'être prescrit. La machine propose et refuse ; elle n'adopte jamais.
+- **Le canvas du cycle** — `docs/diagrams/cycle-amelioration-metier.excalidraw`, déposé aussi dans Somcraft.
+
+### Corrigé
+
+- **Le socle organise l'orchestrateur au lieu de lui expliquer la mécanique du pack** — la table de préséance qui rangeait l'ABC au-dessus de lui, et le motif écrit en décompte de lignes de la compétence, sortent du texte. Ce qui reste est la fonction : **la compétence ne gouverne rien**, et une règle qui n'est que là-bas est un écart à signaler. Mécanique 43 % → 4 % du socle, zéro mention visible de l'ABC, traçabilité déplacée en commentaires HTML.
+- **Trois gardes ont rougi sur cette réécriture, et chacune disait une perte réelle** : l'appel au contexte était devenu une mention, la bannière fusionnait deux polarités sur une ligne, et la garde de préséance lisait une table disparue — réancrée sur sa fonction, ses deux mutations mordent toujours.
+
+### Technique
+
+- **La jointure des deux étages du hook est gardée** — le rendu écrivait le bon chemin, `pack setup` déposait le module, et **la ligne qui relie les deux ne l'était pas** : un classement qui déclare une garde absente du module rendait un hook qui refuse tout, en silence. Deux contrôles ajoutés, vérifiés rouges par mutation.
+
+
+## [Non-versionne] - 2026-08-21
+
 *Epic `E-20260821-0002`, demande `D-20260819-0004`. **La vigie du même dispositif était à moitié aveugle depuis toujours** — troisième instance du même motif, et elle échouait en SILENCE : personne n'était poussé à rien, on ne voyait simplement pas.*
 
 ### Corrigé
