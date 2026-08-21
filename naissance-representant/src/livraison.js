@@ -54,6 +54,15 @@ import {
 // correctif écrit pour la fermer : la copie n'hérite jamais des corrections de l'autre.
 import { etatDeLEcran, ecranAttendUnChoix, resumeDeLEcran } from '../../ligne-directe/src/ecran.js';
 import { budgetPourUneAttente } from './appel-herdr.js';
+// LA PREUVE D'ACTIVITÉ QUI PEUT RÉELLEMENT SURVENIR (T-20260821-0009) — le témoin sur lequel ce
+// module jugeait ses livraisons était mort ; celui-ci est mesuré vivant sur ce poste.
+import {
+  ACTIVITE,
+  identifiantDeSession,
+  laSessionSestMiseAuTravail,
+  lireActivite,
+  motDeLActivite,
+} from './activite-session.js';
 
 /**
  * Le brief a-t-il été PRIS ? La question n'est pas « l'outil a-t-il dit oui », c'est « la
@@ -86,11 +95,38 @@ import { budgetPourUneAttente } from './appel-herdr.js';
 // (T-20260815-0011). Réexporté : tout ce qui le nommait continue de le voir.
 export { messagesEnFile } from '../../ligne-directe/src/boite.js';
 
-export function briefEstPris({ statut, terminal, statutAvant = null, envoiAccepte = true, fileApparue = false }) {
+export function briefEstPris({
+  statut,
+  terminal,
+  statutAvant = null,
+  envoiAccepte = true,
+  fileApparue = false,
+  // ⚠️ LE TÉMOIN QUI PEUT RÉELLEMENT SURVENIR (T-20260821-0009). Voir `src/activite-session.js`
+  // pour la mesure qui l'a rendu nécessaire. `INDETERMINEE` par défaut, et c'est la seule
+  // valeur honnête pour un appelant qui n'a pas sondé : elle ne prouve RIEN, ni dans un sens
+  // ni dans l'autre — là où `REPOS` par défaut aurait fait dire « pas d'activité » d'un état
+  // que personne n'a regardé, c'est-à-dire le défaut d'origine réinstallé dans son correctif.
+  activiteAvant = ACTIVITE.INDETERMINEE,
+  activiteApres = ACTIVITE.INDETERMINEE,
+}) {
   // UN MESSAGE MIS EN FILE EST UN MESSAGE PRIS, quoi qu'en dise le reste. C'est le seul témoin
   // disponible sur un pair occupé — et il porte bien sur un état qui pouvait être différent,
   // puisque l'appelant a constaté son APPARITION.
   if (fileApparue) return true;
+
+  // ⚠️ LA SESSION S'EST MISE AU TRAVAIL — et c'est le seul témoin POSITIF que ce module ait
+  // jamais eu sur le chemin nominal.
+  //
+  // Il l'emporte sur tout ce qui suit, y compris sur un envoi que herdr a refusé : herdr peut
+  // parfaitement rendre `agent_prompt_stalled` sur un brief qui est bel et bien parti — mesuré
+  // ce jour, sur le vrai service, par l'agent qui écrit cette ligne (`ok:true`, `delivre:soumis`,
+  // `attendu:false` dans la même réponse). L'échec porte sur l'OBSERVATION, pas sur l'envoi.
+  //
+  // ⚠️ ET C'EST UN PASSAGE, PAS UN ÉTAT. Une session déjà au travail avant qu'on écrive serait
+  // au travail quoi qu'on fasse : c'est la garde de T-20260814-0138, appliquée au nouveau
+  // témoin le jour où on l'introduit plutôt qu'après l'avoir payée. Et une sonde muette ne
+  // franchit rien — `INDETERMINEE` n'est ni un repos ni un travail.
+  if (laSessionSestMiseAuTravail(activiteAvant, activiteApres)) return true;
 
   // ⚠️ QUAND L'OUTIL DIT LUI-MÊME QUE RIEN N'EST PARTI, LA BOÎTE VIDE NE PROUVE RIEN.
   //
@@ -450,7 +486,7 @@ function statutRendu(reponse) {
   return r?.agent?.agent_status ?? r?.pane?.agent_status ?? null;
 }
 
-export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTravail = false, parLePane = false } = {}) {
+export function commandesLivraison(pane, texte, { parLePane = false } = {}) {
   if (!pane) throw new Error('le pane de la session à briefer est requis');
   if (!String(texte ?? '').trim()) throw new Error('un brief vide n’est pas un brief');
 
@@ -470,6 +506,10 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTrava
   // ⚠️ CE QU'ON PERD, ET IL FAUT LE DIRE : `pane send-text` n'a pas d'équivalent de
   // `--wait --until working`. On n'en fabrique pas un faux — la preuve se relit, comme partout
   // ici, et c'est justement la conduite que ce module tient déjà pour le chemin nominal.
+  //
+  // ⚠️ ET DEPUIS T-20260821-0009, C'EST LE CHEMIN NOMINAL QUI EST VENU LE REJOINDRE — voir la
+  // note sous `livrer`. La doctrine était écrite ici, sur la branche de repli, et appliquée à
+  // une branche sur deux.
   if (parLePane) {
     return {
       lireEcran: ['pane', 'read', pane, '--format', 'ansi'],
@@ -485,18 +525,36 @@ export function commandesLivraison(pane, texte, { attenteMs = 20000, dejaAuTrava
     // comme une boîte pleine, et la livraison est refusée sans raison (mesuré, T-20260814-0138).
     lireEcran: ['agent', 'read', pane, '--format', 'ansi'],
     interroger: ['agent', 'get', pane],
-    // ⚠️ PAS D'ATTENTE QU'ON SAIT IMPOSSIBLE À SATISFAIRE (T-20260815-0007).
+    // ⚠️ PAS D'ATTENTE QU'ON SAIT IMPOSSIBLE À SATISFAIRE (T-20260815-0007, ÉTENDU PAR
+    // T-20260821-0009 À TOUS LES DESTINATAIRES).
     //
-    // `--wait --until working` guette une TRANSITION vers « working ». Sur un destinataire qui y
-    // est déjà, elle ne peut rien observer : elle expire, et rend un `timeout` que l'appelant
-    // prenait pour un envoi manqué — alors que le message était parti en file d'attente.
+    // LE PREMIER LOT avait vu la moitié du défaut : sur un destinataire DÉJÀ au travail,
+    // `--wait --until working` ne peut rien observer, donc on ne la demandait pas pour lui. La
+    // garde était juste, et son périmètre était faux — elle ne couvrait qu'un cas sur deux.
     //
-    // Demander une attente dont on sait qu'elle échouera, c'est fabriquer soi-même le faux
-    // négatif qu'on ira ensuite interpréter. On ne la demande donc pas ; la preuve se relit,
-    // comme partout ailleurs ici.
-    livrer: dejaAuTravail
-      ? ['agent', 'prompt', pane, texte]
-      : ['agent', 'prompt', pane, texte, '--wait', '--until', 'working', '--timeout', String(attenteMs)],
+    // ⚠️ MESURÉ LE 2026-08-21, SUR DU TRAFIC RÉEL, ce que le premier lot n'avait pas mesuré :
+    //
+    //   journal du dispositif, 69 rondes, 486 cibles :  231 non-livraisons
+    //                                                    98 d'entre elles = `agent_prompt_stalled`
+    //   herdr agent list, 123 agents, deux passes     :  agent_status ∈ { idle, done } — jamais
+    //                                                    `working`, aux deux passes
+    //
+    // Et le témoin sur lequel l'attente s'appuie est mort lui aussi : `state_change_seq`,
+    // mesuré FIGÉ plus de trois heures sur un pane à une dizaine de transitions prouvées.
+    //
+    // ⚠️ CE QU'IL FAUT DIRE EXACTEMENT, PARCE QUE LE DIRE PLUS FORT SERAIT FAUX : herdr SAIT
+    // rendre `working` — le journal le porte 6 fois comme statut lu AVANT l'envoi, soit 1,2 %
+    // des cibles. Ce n'est donc pas la valeur qui est impossible, c'est L'ATTENTE qui ne
+    // l'observe pas : elle guette une transition via `state_change_seq`, et ce compteur ne
+    // bouge pas. Le résultat est le même — 98 faux négatifs fabriqués par le dispositif
+    // lui-même, qu'il allait ensuite interpréter comme des agents morts — mais la cause n'est
+    // pas celle qu'on croyait, et un correctif posé sur la mauvaise cause se serait cassé
+    // ailleurs.
+    //
+    // On ne la demande donc plus pour PERSONNE. La preuve se relit — c'est la conduite que ce
+    // module tient déjà partout ailleurs, y compris trente lignes plus haut, et la seule ligne
+    // qui y dérogeait est celle qui a produit le défaut.
+    livrer: ['agent', 'prompt', pane, texte],
     soumettre: ['agent', 'send-keys', pane, 'Enter'],
   };
 }
@@ -701,11 +759,22 @@ export async function livrerBrief({
   // quelque chose est un état qu'on ne sait pas expliquer. On ne pose pas un geste
   // irréversible sur ce qu'on ne comprend pas.
   immobiliteMs = 0,
+  // ⚠️ LA SONDE D'ACTIVITÉ, INJECTABLE (T-20260821-0009 / T-20260821-0010). Le défaut que ce
+  // lot ferme est né d'un témoin qu'on ne pouvait pas éprouver ; celui qui le remplace doit
+  // pouvoir être COUPÉ dans un essai, sans quoi on aurait remplacé une garde non testable par
+  // une autre. Par défaut : la vraie source, `~/.claude/sessions`.
+  sonderActivite = (sessionId) => lireActivite(sessionId),
 }) {
-  // Les commandes de LECTURE se construisent tout de suite ; celle qui ÉCRIT attend de savoir
-  // si le destinataire travaille déjà — l'attente qu'elle porte n'a de sens que sinon.
-  const lectures = commandesLivraison(pane, texte, { attenteMs, parLePane });
+  // Les quatre commandes se construisent d'un coup — aucune ne porte plus d'attente depuis
+  // T-20260821-0009, donc aucune ne dépend de ce qu'on n'a pas encore lu.
+  const lectures = commandesLivraison(pane, texte, { parLePane });
   const vers = { socket };
+
+  // LA SONDE D'ACTIVITÉ — voir `src/activite-session.js`. Injectable pour que les essais
+  // puissent la COUPER : le critère qui garde ce lot exige de vérifier qu'une sonde muette et
+  // une session au repos ne rendent PAS la même chose, et une sonde qu'on ne peut pas couper
+  // laisse ce cas non éprouvé.
+  const sonder = (sessionId) => sonderActivite(sessionId);
 
   // 1. REGARDER avant d'ecrire — la boite ET l'etat. Une boite non vide est un refus, jamais
   //    une fusion ; une session qui travaille deja est un refus aussi, parce que la preuve de
@@ -723,9 +792,17 @@ export async function livrerBrief({
   let statutAvant = null;
   let ecranAvant = null;
   let obstacle = null;
+  // ⚠️ L'IDENTIFIANT DE SESSION SE PRÉLÈVE SUR L'APPEL QU'ON FAISAIT DÉJÀ — `agent get` et
+  // `pane get` portent tous deux `agent_session`. Aucun appel de plus : une ronde balaie plus
+  // de cent cinquante panes, et une sonde qui doublerait le trafic se ferait couper avant
+  // d'avoir servi.
+  let sessionId = null;
+  let activiteAvant = { etat: ACTIVITE.INDETERMINEE, motif: null };
   for (let i = 0; i < Math.max(1, essaisDisponible); i += 1) {
     const etatAvant = await appelHerdr(lectures.interroger, vers);
     statutAvant = statutRendu(etatAvant.reponse);
+    sessionId = identifiantDeSession(etatAvant.reponse);
+    activiteAvant = sonder(sessionId);
     ecranAvant = await lireEcran(lectures.lireEcran, vers);
     // ⚠️ LE PANE EST PASSÉ ICI, ET C'EST CE QUI REND LA SORTIE UTILISABLE (T-20260816-0045).
     // Sans lui, les refus se taisent sur les commandes — ils restent justes, mais redeviennent
@@ -834,18 +911,29 @@ export async function livrerBrief({
     texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
   }
 
-  const commandes = commandesLivraison(pane, texteALivrer, { attenteMs, dejaAuTravail: statutAvant === 'working', parLePane });
-  // ⚠️ CE SEUL APPEL PORTE UNE ATTENTE — `--wait --until working --timeout <attenteMs>`. Son
-  // budget doit donc CONTENIR cette attente, sinon le plafond générique par appel tuerait une
-  // livraison qui progresse et la ronde la rapporterait en « session muette » (relevé en revue
-  // de fond). Le lien est fait par construction : il ne dépend plus d'une marge que personne
-  // ne surveille entre deux constantes réglables séparément.
+  const commandes = commandesLivraison(pane, texteALivrer, { parLePane });
+  // ⚠️ LE BUDGET RESTE CELUI D'UN APPEL QUI PORTE UNE ATTENTE, ALORS QUE CELUI-CI N'EN PORTE
+  // PLUS — et c'est délibéré (T-20260821-0009).
+  //
+  // Le lien construit en T-20260818-0014 entre `attenteMs` et le plafond par appel est une
+  // GARDE : il empêche de tuer un appel qui progresse, et la ronde de rapporter en « session
+  // muette » une livraison en cours. Retirer `--wait` retire l'attente, donc le besoin
+  // immédiat — mais retirer aussi le budget dans le même geste désarmerait la garde au passage,
+  // sans qu'un seul essai rougisse. On ne fait pas ça : `attenteMs` reste le paramètre du
+  // module, `budgetPourUneAttente` reste éprouvée, et un plafond trop LARGE ne coûte rien
+  // puisque l'appel rend désormais tout de suite.
   const livraison = await appelHerdr(commandes.livrer, { ...vers, delaiMs: budgetPourUneAttente(attenteMs) });
 
   // 3. VERIFIER PAR LE FAIT — la session a-t-elle quitte l'attente ?
   const prisMaintenant = async () => {
     const etat = await appelHerdr(commandes.interroger, vers);
     const statut = statutRendu(etat.reponse);
+    // ⚠️ ON RE-PRÉLÈVE L'IDENTIFIANT PLUTÔT QUE DE RÉUTILISER CELUI D'AVANT. Un pane peut avoir
+    // changé de session entre-temps — c'est rare, et c'est précisément le cas où réutiliser
+    // l'ancien ferait juger l'activité d'une session qui n'est plus là. On retombe sur celui
+    // d'avant seulement si l'appel n'a rien rendu, pour ne pas rendre la sonde muette sur un
+    // simple hoquet de lecture.
+    const activiteApres = sonder(identifiantDeSession(etat.reponse) ?? sessionId);
     const terminal = await lireEcran(commandes.lireEcran, vers);
     return {
       pris: briefEstPris({
@@ -854,9 +942,12 @@ export async function livrerBrief({
         statutAvant,
         envoiAccepte: livraison.ok || repare,
         fileApparue: !fileAvant && messagesEnFile(terminal),
+        activiteAvant: activiteAvant.etat,
+        activiteApres: activiteApres.etat,
       }),
       statut,
       terminal,
+      activiteApres,
     };
   };
 
@@ -918,6 +1009,13 @@ export async function livrerBrief({
 
   if (!vu.pris) {
     const reste = contenuBoite(vu.terminal);
+    const apres = vu.activiteApres?.etat ?? ACTIVITE.INDETERMINEE;
+    const motActivite = motDeLActivite({
+      avant: activiteAvant.etat,
+      apres,
+      motifAvant: activiteAvant.motif,
+      motifApres: vu.activiteApres?.motif,
+    });
     return {
       ok: false,
       statut: vu.statut,
@@ -926,9 +1024,15 @@ export async function livrerBrief({
       attendu: livraison.ok,
       delivre: Boolean(delivrance?.soumis),
       causeDelivre,
+      // \u26a0\ufe0f L'\u00c9TAT DE LA SONDE SORT DANS LE VERDICT, PAS SEULEMENT DANS LA PROSE (T-20260821-0011).
+      // La ronde en a besoin pour TRIER : une non-livraison dont la sonde \u00e9tait muette n'est pas
+      // un agent bloqu\u00e9, c'est un agent qu'on n'a pas su regarder. Les confondre, c'est le
+      // d\u00e9faut d'origine \u2014 six lignes identiques dont une seule m\u00e9ritait qu'on se l\u00e8ve.
+      activite: { avant: activiteAvant.etat, apres },
       message:
         `le brief n\u2019a pas \u00e9t\u00e9 pris par la session de ${pane} \u2014 statut \u00ab ${vu.statut ?? '\u2014'} \u00bb, ` +
         `bo\u00eete ${reste === null ? 'illisible' : reste === '' ? 'vide' : `encore pleine (\u00ab ${reste.slice(0, 60)}\u2026 \u00bb)`}` +
+        (motActivite ? ` ; ${motActivite}` : '') +
         `${livraison.ok ? '' : ` ; herdr avait dit : ${livraison.message}`}` +
         (dialogueALaReparation
           ? '\n⚠️ ET JE N’AI PAS TENTÉ DE LE SOUMETTRE : un DIALOGUE qui attend un choix s’est ' +
@@ -981,6 +1085,9 @@ export async function livrerBrief({
     attendu: livraison.ok,
     delivre: Boolean(delivrance?.soumis),
     causeDelivre,
+    // Le chemin nominal porte la même sonde que le refus — sans quoi on ne saurait pas, sur une
+    // prise, laquelle des trois preuves l'a établie.
+    activite: { avant: activiteAvant.etat, apres: vu.activiteApres?.etat ?? ACTIVITE.INDETERMINEE },
     // ⚠️ L'ÉTAT DE LA BOÎTE **AVANT** L'ÉCRITURE, jamais après — c'est celui-là que le lecteur a
     // sous les yeux quand il doute. Après notre passage, la boîte porte notre texte, et le
     // rendre ici ferait dire « pleine » d'un encombrement qu'on vient de créer soi-même.

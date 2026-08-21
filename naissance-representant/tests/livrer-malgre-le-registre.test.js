@@ -44,13 +44,20 @@ test('LES COMMANDES DE LIVRAISON PASSENT PAR `pane` QUAND ON LIVRE PAR LE PANE',
 test('LE CHEMIN NOMINAL NE BOUGE PAS — on ajoute une voie, on n’en remplace aucune', async () => {
   const { commandesLivraison } = await import('../src/livraison.js');
 
-  // Sans le repli, TOUT reste tel quel : les sessions que le registre connaît continuent de
-  // passer par `agent`, dont `--wait --until working` que la famille `pane` ne sait pas faire.
-  const c = commandesLivraison('w1:p1', 'coucou', { attenteMs: 20000 });
+  // Sans le repli, TOUT reste sur la famille `agent` : c'est ÇA, la fonction que ce test garde
+  // — que l'ajout d'une voie n'ait pas déplacé le chemin nominal sur l'autre famille.
+  //
+  // ⚠️ CE QUI A BOUGÉ DEPUIS, ET IL FAUT LE DIRE (T-20260821-0009) : la ligne `livrer` portait
+  // `--wait --until working --timeout`, et le commentaire au-dessus s'en servait comme argument
+  // — « que la famille `pane` ne sait pas faire ». C'était vrai et sans portée : l'attente n'a
+  // JAMAIS été observée, et fabriquait 98 faux négatifs sur 231 non-livraisons. Les deux voies
+  // rendent donc désormais un appel nu, chacune dans SA famille — ce qui ne rapproche pas les
+  // chemins d'un pouce, et c'est la seule chose que ce test avait à garder.
+  const c = commandesLivraison('w1:p1', 'coucou');
 
   assert.deepEqual(c.lireEcran, ['agent', 'read', 'w1:p1', '--format', 'ansi']);
   assert.deepEqual(c.interroger, ['agent', 'get', 'w1:p1']);
-  assert.deepEqual(c.livrer, ['agent', 'prompt', 'w1:p1', 'coucou', '--wait', '--until', 'working', '--timeout', '20000']);
+  assert.deepEqual(c.livrer, ['agent', 'prompt', 'w1:p1', 'coucou']);
   assert.deepEqual(c.soumettre, ['agent', 'send-keys', 'w1:p1', 'Enter']);
 });
 

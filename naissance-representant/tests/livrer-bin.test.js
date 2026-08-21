@@ -227,7 +227,18 @@ test('livraison nominale : la boîte était vide, la session prend le brief', ()
   const iGet = a.findIndex((x) => x[0] === 'agent' && x[1] === 'get');
   assert.ok(iRead !== -1 && iRead < iPrompt, 'la boîte doit être regardée AVANT qu’on y écrive');
   assert.ok(iGet !== -1 && iGet < iPrompt, 'l’état de la session doit être lu AVANT qu’on y écrive');
-  assert.ok(a[iPrompt].includes('--wait'), 'l’appel nu rend un succès dans tous les cas — --wait est obligatoire');
+  // ⚠️ CETTE LIGNE EXIGEAIT `--wait`, ET ELLE GARDAIT LE DÉFAUT (T-20260821-0009). Le motif
+  // qu'elle portait — « l'appel nu rend un succès dans tous les cas » — est vrai, et n'a jamais
+  // été un argument pour `--wait` : c'est la RELECTURE qui tranche, et l'assertion juste en
+  // dessous est celle qui le garde. `--wait`, lui, fabriquait des faux négatifs (98 sur 231
+  // non-livraisons, mesuré sur le journal du dispositif).
+  //
+  // On garde donc la MÊME fonction — « la réponse de l'outil ne fait pas foi » — en l'exigeant
+  // là où elle est réellement tenue, et on interdit explicitement le retour de l'attente morte.
+  assert.ok(
+    !a[iPrompt].includes('--wait') && !a[iPrompt].includes('--until'),
+    'la livraison ne doit plus demander à herdr une attente qu’il n’observe pas'
+  );
   // Et on RELIT après : la réponse de l'outil ne fait pas foi.
   assert.ok(
     a.slice(iPrompt).some((x) => x[0] === 'agent' && x[1] === 'read'),
