@@ -122,14 +122,36 @@ const INCISE_MAXIMALE = 60;
  * l'angle mort entier chez le veilleur — c'est-à-dire sur le chemin par lequel arrive la parole
  * du dirigeant.
  */
+/**
+ * UN FILET **PUR** — rien que du tracé, la forme d'origine de cette sonde.
+ *
+ * ⚠️ IL SERT AU FILET **BAS**, ET C'EST UNE ASYMÉTRIE MESURÉE, pas une astuce (T-20260821-0025).
+ * Sur l'écran réel d'une session rattachée, **seul le filet HAUT porte le titre ; le bas est
+ * nu**. Un outil tiers qui encadre une bannière, lui, l'encadre des deux côtés de la même façon.
+ *
+ * 🔴 CETTE DISTINCTION FERME UN DÉFAUT RÉEL, trouvé en revue de fond. Une bannière CENTRÉE —
+ * `─────── 3 tests failed, 12 passed, done in 4.2s ───────` — satisfait la dominance (54 % de
+ * tracé) ET la règle de l'incise unique. Deux lignes de ce genre autour d'un prompt de shell
+ * faisaient lire une « boîte vide, prête à écrire » là où il n'y a pas de boîte. Exiger que le
+ * BAS soit nu ne coûte rien au cas qu'on répare, et referme celui-là.
+ */
+export function estUnFiletPur(ligne) {
+  const l = [...String(ligne ?? '').trim()];
+  return l.length >= TRACE_MINIMUM && l.every((c) => TRACE.test(c));
+}
+
 export function estUnFilet(ligne) {
   const l = [...String(ligne ?? '').trim()];
-  if (l.length < TRACE_MINIMUM) return false;
   // Ouvrir ET refermer par du tracé : c'est ce qui distingue une bordure titrée d'une phrase.
-  if (!TRACE.test(l[0]) || !TRACE.test(l[l.length - 1])) return false;
+  // (Une ligne plus courte que le plancher est écartée par le compte de tracé, plus bas : le
+  // tracé ne peut pas dépasser la longueur. Une garde sur `l.length` y serait morte.)
+  if (!l.length || !TRACE.test(l[0]) || !TRACE.test(l[l.length - 1])) return false;
   const trace = l.filter((c) => TRACE.test(c)).length;
+  // ⚠️ LE PLANCHER GARDE SEUL LES LIGNES COURTES : sans lui, la dominance laisse descendre le
+  // tracé effectif à 4 (« ── ab ── » est à 50 % pile). Relevé survivant en revue de fond.
   if (trace < TRACE_MINIMUM) return false;
   // ⚠️ LE TRACÉ DOIT DOMINER — retirer cette ligne fait passer un shell pour une boîte vide.
+  // La frontière est INCLUSIVE : à la moitié pile, le tracé domine encore.
   if (trace / l.length < PROPORTION_MINIMALE_DE_TRACE) return false;
 
   // Les incises : chaque suite contiguë de non-tracé. Une bordure titrée en a UNE, brève.
@@ -244,6 +266,10 @@ function corpsDeLaBoite(reperes, aExtraire = reperes) {
     const b = filets[i];
     const h = filets[i - 1];
     if (b - h <= 1) continue;
+    // ⚠️ LE FILET BAS DOIT ÊTRE NU — voir `estUnFiletPur`. C'est l'asymétrie de l'écran réel, et
+    // c'est ce qui empêche deux bannières centrées d'un outil tiers de se faire prendre pour une
+    // boîte de saisie.
+    if (!estUnFiletPur(reperes[b])) continue;
     if (aExtraire[h + 1].includes(INVITE)) {
       haut = h;
       bas = b;

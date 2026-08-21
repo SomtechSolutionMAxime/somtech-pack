@@ -27,7 +27,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { contenuBoite, etatDeLaBoite, ETATS_BOITE, estUnFilet } from '../src/boite.js';
+import { contenuBoite, etatDeLaBoite, ETATS_BOITE, estUnFilet, estUnFiletPur } from '../src/boite.js';
 import {
   BORDURE_TITREE,
   BOITE_VIDE,
@@ -284,4 +284,86 @@ test('UN SHELL DONT LE SCROLLBACK PORTE DEUX LIGNES ENCADRÉES N’EST PAS UNE B
     'ce terminal n’a aucune boîte de saisie — le lire « vide » autoriserait à y écrire'
   );
   assert.equal(etatDeLaBoite(shell).etat, ETATS_BOITE.ILLISIBLE);
+});
+
+/** Une bannière centrée, comme un test runner ou un linter en produit. */
+const banniere = (texte, largeur) => {
+  const reste = largeur - texte.length;
+  const gauche = Math.floor(reste / 2);
+  return '─'.repeat(gauche) + texte + '─'.repeat(reste - gauche);
+};
+
+test('UNE BANNIÈRE CENTRÉE D’UN AUTRE OUTIL N’EST PAS UNE BOÎTE — second bloquant de revue', () => {
+  // 🔴 SECOND BLOQUANT, MÊME FAMILLE QUE LE PREMIER, TROUVÉ PAR LA MÊME PASSE DE FOND.
+  //
+  // Mon premier correctif avait restauré la dominance du tracé. Elle ne protège que contre un
+  // padding INSUFFISANT — pas contre un padding CENTRÉ, qui atteint naturellement plus de la
+  // moitié dès que le texte est court par rapport à la largeur :
+  //
+  //     ─────────── 3 tests failed, 12 passed, done in 4.2s ───────────   ← 54 % de tracé
+  //
+  // Une seule incise, sous la borne, et le tracé domine : **mes deux gardes la laissaient
+  // passer**. Deux lignes de ce genre encadrant un prompt de shell rendaient de nouveau une
+  // « boîte vide, prête à écrire ». Et centrer son résumé dans la largeur du terminal est un
+  // motif de sortie CLI parfaitement courant.
+  //
+  // ✅ CE QUI LA SÉPARE DU CAS RÉEL EST UNE ASYMÉTRIE, ET ELLE EST MESURÉE. Sur l'écran de
+  // `bonaventure`, **seul le filet HAUT porte le titre ; le filet BAS est PUR**. Un outil qui
+  // encadre un texte, lui, le fait des deux côtés de la même façon. On exige donc un filet bas
+  // sans titre — ce qui ne coûte rien au cas qu'on répare, et ferme celui-ci.
+  const l1 = banniere(' 3 tests failed, 12 passed, done in 4.2s ', 90);
+  const l2 = banniere(' fin du rapport, rien de plus a signaler ', 90);
+  const shell = ['maximeleboeuf@Mac % npm test', l1, '❯ ', l2, 'maximeleboeuf@Mac % '].join('\n');
+
+  assert.equal(
+    contenuBoite(shell),
+    null,
+    'ce terminal n’a aucune boîte de saisie — le lire « vide » autoriserait à y écrire'
+  );
+  assert.equal(etatDeLaBoite(shell).etat, ETATS_BOITE.ILLISIBLE);
+});
+
+test('LE FILET BAS DOIT ÊTRE PUR, LE HAUT PEUT PORTER UN TITRE — l’asymétrie, gardée', () => {
+  // ⚠️ CETTE ASYMÉTRIE N'EST PAS UNE ASTUCE : elle est ce que l'écran RÉEL montre. Un essai la
+  // fixe pour qu'on ne la « simplifie » pas un jour en traitant les deux filets pareil.
+  const titre = `${'─'.repeat(120)} CRM ActionProgex finalisation ─`;
+  const pur = '─'.repeat(150);
+  assert.equal(estUnFilet(titre), true, 'le haut peut porter un titre');
+  assert.equal(estUnFiletPur(titre), false, 'mais ce n’est pas un filet PUR');
+  assert.equal(estUnFiletPur(pur), true, 'le bas, lui, est nu');
+  assert.equal(estUnFilet(pur), true, 'un filet nu satisfait les deux sondes');
+});
+
+test('LE PLANCHER DE TRACÉ ET LA FRONTIÈRE DE DOMINANCE SONT GARDÉS À LEUR VALEUR', () => {
+  // ⚠️ DEUX SURVIVANTES SIGNALÉES PAR LA PASSE DE FOND, sur la version cumulative :
+  //
+  //   • retirer le plancher de 8 caractères de tracé ne faisait rougir aucun essai — la
+  //     dominance seule laisse descendre le plancher effectif à 4 ;
+  //   • déplacer la frontière de dominance de `<` à `<=` non plus — aucun essai ne fixait le
+  //     comportement à EXACTEMENT la moitié.
+  //
+  // Une borne qu'on peut déplacer sans rien casser finit par se déplacer.
+  // ⚠️ CE CAS DOIT PASSER LA DOMINANCE pour éprouver le PLANCHER — sinon c'est la dominance
+  // qu'on mesure, et le plancher reste survivant. « ── ab ── » fait 4 tracés sur 8 : exactement
+  // la moitié, donc la dominance le laisse passer ; seul le plancher de 8 le refuse.
+  const courtMaisDominant = '── ab ──';
+  assert.equal(
+    [...courtMaisDominant].filter((c) => /[─-╿]/.test(c)).length * 2,
+    courtMaisDominant.length,
+    'le cas doit être à 50 % pile, sinon il n’éprouve pas le plancher'
+  );
+  assert.equal(
+    estUnFilet(courtMaisDominant),
+    false,
+    'huit caractères de tracé au moins — sans ce plancher, quatre suffiraient'
+  );
+  // Exactement 50 % de tracé : 8 tracés, 8 non-tracés. La dominance est INCLUSIVE, et un essai
+  // le fixe — sinon la frontière glisse de `<` à `<=` sans qu'un rouge le signale.
+  const moitie = `${'────'}12345678${'────'}`;
+  assert.equal(
+    [...moitie].filter((c) => /[─-╿]/.test(c)).length * 2,
+    moitie.length,
+    'le cas doit être à 50 % pile, sinon il n’éprouve pas la frontière'
+  );
+  assert.equal(estUnFilet(moitie), true, 'à la moitié pile, le tracé domine encore — frontière inclusive');
 });
