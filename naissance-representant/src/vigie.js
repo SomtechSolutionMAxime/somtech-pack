@@ -191,6 +191,13 @@ function capturer(lectures) {
  *          orchestrateurs, et elle nomme une anomalie RÉELLE — un orchestrateur dont le
  *          fichier de session a disparu, que rien ne signalait avant. Le geste qu'elle appelle
  *          n'est pas le même que celui du figé, et c'est pour ça qu'elle porte un autre mot.
+ *       ⚠️ **CE CHIFFRE-LÀ NE SE RELIT PAS DEPUIS LE DÉPÔT** — relevé en re-vérification. Le
+ *          « 9 / 1 / 0 » est une CAPTURE ÉPHÉMÈRE prise en direct sur un poste dont l'état a
+ *          changé depuis ; le journal n'en porte aucune trace, puisqu'aucune ligne `vigie`
+ *          n'existe encore. *Contrairement au « 28 sur 48 », lui recomptable à tout moment.*
+ *          Le journal a d'ailleurs grossi entre deux de mes propres lectures — 70 rondes /
+ *          240 suspects, puis 71 / 242 — parce que le service tourne pendant qu'on le lit.
+ *          **Deux comptes du même objet à deux instants ne sont pas un désaccord.**
  *
  *     ⚠️ UNE MESURE DONT ON IGNORE LA LIMITE SE LIT COMME COMPLÈTE — et c'est très exactement
  *     ce qui a laissé la version morte de cette garde vivre des mois.
@@ -292,6 +299,12 @@ export function verdictDeVigie(lectures) {
       // Un mot par cause, jamais un mot pour toutes : un identifiant absent est un défaut
       // d'annuaire `herdr`, un fichier absent une session que la source ne connaît pas, une
       // source absente une installation incomplète. Elles n'appellent pas le même geste.
+      // ⚠️ ET CE VERDICT SE TAIT DÈS QU'UNE LECTURE CLAIRE RÉFUTE LE FIGÉ, y compris quand les
+      // lectures muettes restantes portaient une anomalie réelle (un fichier de session
+      // disparu, par exemple). C'est un RÉTRÉCISSEMENT DE PORTÉE assumé, relevé en
+      // re-vérification : ce module juge le figé, pas la santé générale d'une session. Il ne
+      // rend jamais un verdict faux de ce fait — il en rend un moins bavard. Si un jour on
+      // veut que l'anomalie de session soit rapportée pour elle-même, c'est un autre juge.
       motifs: [...new Set(silences)],
       capture: capturer(l),
     };
