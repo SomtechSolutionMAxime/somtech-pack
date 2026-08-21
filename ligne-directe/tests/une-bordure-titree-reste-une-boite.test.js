@@ -111,3 +111,42 @@ test('UN TITRE NE PEUT PAS SERVIR À FAIRE PASSER DU CONTENU POUR UN FILET', () 
     'une ligne surtout faite de texte n’est pas un filet, même bordée de tracé'
   );
 });
+
+test('UNE FENÊTRE ÉTROITE PORTE LE MÊME TITRE — et la sonde ne doit pas y redevenir aveugle', () => {
+  // 🔴 MESURÉ LE 2026-08-21, ET CE N'EST PAS UN CAS D'ÉCOLE : sur les 146 panes du poste qui
+  // portent un filet, **5 en ont un de moins de 80 colonnes — trois à 48, deux à 60**. Ce sont
+  // des panes en division verticale, et rien n'empêche l'un d'eux d'être une session rattachée.
+  //
+  // ⚠️ UNE PREMIÈRE ÉCRITURE DE CETTE SONDE EXIGEAIT QUE LA LIGNE SOIT À MOITIÉ DU TRACÉ. Le cas
+  // mesuré la satisfaisait largement (134 tracés sur 165, soit 81 %) — mais **le même titre dans
+  // une fenêtre de 48 colonnes tombe à 35 %**, et la sonde y redevenait aveugle. Une proportion
+  // mesure la largeur de la fenêtre autant que la nature de la ligne : ce n'est pas ce qu'on veut
+  // savoir. Ce qui fait d'une bordure une bordure, c'est qu'elle porte **une seule incise, et
+  // qu'elle est courte** — pas qu'elle soit longue.
+  const titre = ' CRM ActionProgex finalisation ';
+  for (const largeur of [48, 60, 80, 100, 165, 335]) {
+    const g = '─'.repeat(Math.max(1, largeur - titre.length - 1));
+    assert.equal(
+      estUnFilet(`${g}${titre}─`),
+      true,
+      `une bordure titrée de ${largeur} colonnes reste une bordure — la largeur de la fenêtre ` +
+        `n’a rien à voir avec la nature de la ligne`
+    );
+  }
+});
+
+test('DEUX INCISES NE SONT PAS UNE BORDURE — la garde qui remplace la proportion', () => {
+  // ⚠️ CE QUI REMPLACE LE SEUIL DOIT GARDER AUTANT QUE LUI. Une bordure titrée porte UNE incise,
+  // centrée, courte. Une ligne d'écran quelconque qui aurait du tracé aux deux bouts n'a aucune
+  // raison de n'en porter qu'une seule et brève.
+  assert.equal(
+    estUnFilet(`────── un morceau ────── et un autre ──────`),
+    false,
+    'deux incises : c’est une ligne de contenu, pas une bordure'
+  );
+  assert.equal(
+    estUnFilet(`──── ${'du texte qui prend toute la place '.repeat(3)}────`),
+    false,
+    'une incise trop longue n’est pas un titre — un titre est bref par nature'
+  );
+});

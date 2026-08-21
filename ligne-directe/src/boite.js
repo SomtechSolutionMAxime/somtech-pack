@@ -53,14 +53,33 @@ export const INVITE = '❯';
  *
  *   • la ligne COMMENCE par du tracé — une bordure s'ouvre par son trait, jamais par son titre ;
  *   • elle FINIT par du tracé — le titre est une incise, elle est refermée ;
- *   • elle est MAJORITAIREMENT du tracé — au moins la moitié, et au moins 8 caractères en tout.
+ *   • elle porte AU PLUS UNE INCISE de non-tracé, et cette incise est COURTE ;
+ *   • et au moins 8 caractères de tracé en tout.
  *
- * Sur le cas mesuré, 134 caractères de tracé sur 165 : 81 %. Une ligne de prose bordée de quelques
- * tirets n'y arrive pas, et c'est exactement ce qu'on lui demande.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ POURQUOI PAS UNE PROPORTION — la première écriture en posait une, et elle avait un angle
+ * mort MESURÉ.
+ *
+ * Elle exigeait que la ligne soit à moitié du tracé. Le cas de référence la satisfaisait
+ * largement — 134 tracés sur 165, soit 81 %. Mais **le même titre dans une fenêtre de 48
+ * colonnes tombe à 35 %**, et la sonde y redevenait aveugle.
+ *
+ * 🔴 ET CE N'EST PAS UN CAS D'ÉCOLE : sur les 146 panes de ce poste qui portent un filet
+ * (mesuré le 2026-08-21), **5 en ont un de moins de 80 colonnes — trois à 48, deux à 60**. Ce
+ * sont des panes en division verticale, et rien n'empêche l'un d'eux d'être rattaché.
+ *
+ * > **Une proportion mesure la largeur de la FENÊTRE autant que la nature de la LIGNE. Ce n'est
+ * > pas ce qu'on cherche à savoir.**
+ *
+ * Ce qui fait d'une bordure une bordure, c'est qu'elle porte **une seule incise, et qu'elle est
+ * brève** — pas qu'elle soit longue. Ce critère-ci ne dépend d'aucune largeur, et il garde
+ * strictement PLUS que la proportion : une ligne de contenu à deux incises passait le seuil de
+ * 50 % et se voit refusée maintenant.
  */
 const TRACE = /[─-╿]/;
-const PROPORTION_MINIMALE_DE_TRACE = 0.5;
 const TRACE_MINIMUM = 8;
+/** Un titre est bref par nature. Le cas mesuré en fait 31 ; on laisse de la marge, pas un boulevard. */
+const INCISE_MAXIMALE = 60;
 
 /**
  * EST-CE UN FILET ? — la sonde, exportée, parce que DEUX modules la posaient chacun de leur côté.
@@ -72,13 +91,25 @@ const TRACE_MINIMUM = 8;
  * du dirigeant.
  */
 export function estUnFilet(ligne) {
-  const l = String(ligne ?? '').trim();
+  const l = [...String(ligne ?? '').trim()];
   if (l.length < TRACE_MINIMUM) return false;
   // Ouvrir ET refermer par du tracé : c'est ce qui distingue une bordure titrée d'une phrase.
   if (!TRACE.test(l[0]) || !TRACE.test(l[l.length - 1])) return false;
-  const trace = [...l].filter((c) => TRACE.test(c)).length;
-  if (trace < TRACE_MINIMUM) return false;
-  return trace / [...l].length >= PROPORTION_MINIMALE_DE_TRACE;
+  if (l.filter((c) => TRACE.test(c)).length < TRACE_MINIMUM) return false;
+
+  // Les incises : chaque suite contiguë de non-tracé. Une bordure titrée en a UNE, brève.
+  let incises = 0;
+  let courante = 0;
+  for (const c of l) {
+    if (TRACE.test(c)) {
+      courante = 0;
+      continue;
+    }
+    if (courante === 0) incises += 1;
+    courante += 1;
+    if (incises > 1 || courante > INCISE_MAXIMALE) return false;
+  }
+  return true;
 }
 
 
