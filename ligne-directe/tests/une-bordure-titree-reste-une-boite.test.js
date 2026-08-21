@@ -180,3 +180,19 @@ test('UN TEXTE SUIVI D’UN SÉPARATEUR N’EST PAS UNE BORDURE — la garde de 
     'une ligne qui commence par du texte est du CONTENU, quelle que soit sa fin'
   );
 });
+
+test('QUELQUES TIRETS NE SONT PAS UNE BORDURE — la borne basse, armée', () => {
+  // ⚠️ SECONDE SURVIVANTE TROUVÉE PAR MUTATION. Ramener `TRACE_MINIMUM` à zéro ne faisait rougir
+  // aucun essai — et un simple « ─ » serait alors devenu un filet. Or de courtes suites de
+  // tirets abondent dans une sortie de terminal ordinaire ; chacune serait devenue un bord de
+  // boîte candidat, et la boîte aurait pu se découper n'importe où.
+  //
+  // ⚠️ LES ESSAIS VOISINS NE COUVRAIENT PAS CE CAS : « ─── court » est refusé pour sa FIN, pas
+  // pour sa longueur, et une chaîne vide l'est pour son premier caractère. Aucun ne portait sur
+  // la borne elle-même. Une garde qu'on peut ramener à zéro sans un rouge n'était pas gardée.
+  for (const court of ['─', '──', '───────']) {
+    assert.equal(estUnFilet(court), false, `« ${court} » est trop court pour être une bordure`);
+  }
+  // Le contrôle positif de la même borne, juste au-dessus du seuil.
+  assert.equal(estUnFilet('────────'), true, 'huit caractères de tracé font une bordure');
+});
