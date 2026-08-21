@@ -172,6 +172,25 @@ export function estUnFiletPur(ligne) {
  * ⚠️ SI CE PIED DE PAGE CHANGE UN JOUR, LA PANNE EST SILENCIEUSE — la sonde cessera de
  * reconnaître les sessions rattachées et rendra `illisible`. C'est le sens sûr (on s'abstient),
  * mais ça ne se signalera pas tout seul.
+ *
+ * ✅ CE QUI BORNE LE RISQUE, ET C'EST L'ARGUMENT QUI COMPTE : cette exigence ne s'applique QU'AUX
+ * FILETS TITRÉS, c'est-à-dire à des écrans qui étaient **tous** `illisible` avant ce lot. Au
+ * pire, elle ramène ce sous-cas à son état antérieur. **Elle ne peut rendre personne moins
+ * joignable qu'il ne l'était.**
+ *
+ * ⚠️ UNE REVUE A DEMANDÉ SI L'ÉTAT PAR DÉFAUT — avant tout `shift+tab` — n'afficherait PAS de
+ * glyphe, auquel cas une session jamais basculée resterait `illisible`. **Vérifié plutôt que
+ * supposé** : sur les 521 boîtes relevées, **zéro** pied de page sans glyphe, et l'état le plus
+ * proche du défaut y figure — `⏸ manual mode on · ? for shortcuts`, 8 occurrences, qui porte
+ * bien son `⏸`. La question était juste, la mesure la referme pour ce poste.
+ *
+ * ⚠️ ET UN RÉSIDU CONNU, relevé par la même revue : la sonde cherche le glyphe **n'importe où**
+ * dans la ligne. Un prompt de shell thémé affichant `⏸ Spotify: …` sous une règle nue, avec une
+ * bannière titrée plus haut, tromperait la garde. **Réel, mais d'un autre ordre** : les trois
+ * formes précédentes s'appuyaient sur des motifs qu'un terminal produit couramment (tirets en
+ * bannière, `❯` comme prompt) ; celle-ci exige un glyphe de contrôle média qu'aucun outil en
+ * ligne de commande n'imprime. Mesuré sur 786 écrans du poste : **522 portent un glyphe, et les
+ * 522 ont une invite** — aucun ne le porte hors d'une session.
  */
 const MODE_CLAUDE_CODE = /[⏵⏸]/;
 
