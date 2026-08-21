@@ -492,3 +492,91 @@ test('un chapitre NOMME les items dont il répond, il ne recopie pas leur énonc
   assert.ok(!ch.includes('La forme courte.'),
     "ni sa forme courte : le chapitre CITE ses items, l'ABC reste la source de leur texte");
 });
+
+test('le rendu ne produit AUCUN mot dépouillé de ses accents', () => {
+  // ⚠️ Vu en lisant le socle rendu, pas en écrivant le classement : « ait a en
+  // tenir », « ce metier sans le posseder », « couche a construire » ×5. Ce sont
+  // MES textes, tapés sans accents dans le classement, et le rendu les a fidèlement
+  // portés jusque dans le fichier que chaque agent lit en premier.
+  const c = classementValide();
+  c.identite = "# Titre\n\nUn metier sans accent, et un agent qui doit le posseder.\n";
+  const r = rendre(c);
+  assert.equal(r.ok, false, 'un texte dépouillé de ses accents ne doit pas être rendu');
+  assert.ok(r.erreurs.some((e) => /accent/i.test(e)));
+});
+
+test('la garde des accents ne rougit pas sur un texte correct', () => {
+  const c = classementValide();
+  c.identite = "# Titre\n\nUn métier qu'il porte sans le posséder — et il doit s'y tenir.\n";
+  assert.equal(rendre(c).ok, true, rendre(c).erreurs?.join(' · '));
+});
+
+test('le socle ouvre sur ce qui PRIME, jamais sur ce qui ne marche pas', () => {
+  // ⚠️ Vu en lisant le socle livré : la section « Ce que rien ne garantit »
+  // arrivait AVANT les règles cardinales. Un agent ouvrait son métier sur la
+  // liste de ses trous. L'ordre d'un socle est un choix de ce qu'on lit d'abord.
+  const c = classementValide();
+  c.items[0].cardinale = 1;
+  c.items[1].couche = 'persona';
+  c.items[1].sans_garantie = { motif: 'juge un énoncé', assume_par: 'le dirigeant', definitif: true };
+  const l1 = rendre(c).artefacts['L1.md'];
+  assert.ok(l1.indexOf('cardinales') < l1.indexOf('rien ne garantit'),
+    'les règles qui priment viennent avant celles que rien ne porte');
+  assert.ok(l1.indexOf('rien ne garantit') < l1.indexOf('Où trouver le reste'),
+    'et ce qui ne tient qu à lui reste dans le socle — jamais caché en fin de carte');
+});
+
+test("l'identité et le préambule ne se collent pas", () => {
+  const c = classementValide();
+  c.preambule = '> Le préambule.';
+  const r = rendre(c);
+  assert.ok(r.artefacts['L0.md'].endsWith('\n'), "L0 se termine par un saut de ligne");
+  assert.ok(!/[^\n]\n> Le préambule/.test(r.artefacts['L0.md'] + r.artefacts['L1.md']),
+    'le socle assemblé ne colle pas deux paragraphes');
+});
+
+test("la garde des accents ne confond pas le VERBE avoir avec la préposition à", () => {
+  // 🔴 Mesuré le 2026-08-21 : elle refusait « un client qui a une question »,
+  // qui est parfaitement correct. Une garde qui crie à tort se fait retirer, et
+  // elle emporte ce qu'elle gardait vraiment — la règle des deux chiffres.
+  const c = classementValide();
+  for (const bon of ['un client qui a une question', 'il a le droit', "l'agent a son lieu",
+                     'ce qui a une source', 'elle a ses raisons']) {
+    c.identite = `# T\n\n${bon}, et rien de plus.\n`;
+    assert.equal(rendre(c).ok, true, `« ${bon} » est correct et doit passer`);
+  }
+  for (const faux of ['il parle a un client', 'ce qui monte a la direction', 'une couche a construire']) {
+    c.identite = `# T\n\n${faux}, et rien de plus.\n`;
+    assert.equal(rendre(c).ok, false, `« ${faux} » porte un « à » dépouillé`);
+  }
+});
+
+test("le socle PARLE À l'agent — la traçabilité y est présente mais invisible", () => {
+  // ⚠️ Arbitrage du dirigeant, 2026-08-21 : « l'ABC a été utilisé pour créer le
+  // métier, il n'est pas une référence de son opération — il servira au cycle
+  // d'amélioration ». Et : « je ne sens pas qu'on organise un orchestrateur,
+  // mais qu'on lui explique comment ça marche ».
+  //
+  // Les identifiants et les couches restent — ils sont la traçabilité (I7) et
+  // la matière du cycle d'évolution — mais en COMMENTAIRE : présents pour un
+  // outil, absents de ce que l'agent lit.
+  const c = classementValide();
+  c.items[0].cardinale = 1;
+  const l1 = rendre(c).artefacts['L1.md'];
+  const visible = l1.replace(/<!--[\s\S]*?-->/g, '');
+
+  assert.ok(visible.includes('Tu ne construis jamais.'), "l'énoncé reste lisible");
+  assert.ok(!/GF-ORC-001/.test(visible), "l'identifiant d'ABC ne se lit pas");
+  assert.ok(!/\(refus-de-permission\)|\(persona\)/.test(visible), "l'étiquette de couche ne se lit pas");
+  assert.ok(l1.includes('GF-ORC-001'), "mais elle reste dans le fichier, en commentaire — I7");
+  assert.ok(l1.includes('refus-de-permission'), 'et la couche aussi, pour le cycle d évolution');
+});
+
+test("ce que rien ne garantit reste DIT — c'est opérationnel, pas de la mécanique", () => {
+  const c = classementValide();
+  c.items[0].couche = 'persona';
+  c.items[0].sans_garantie = { motif: 'juge un énoncé', assume_par: 'le dirigeant', definitif: true };
+  const visible = rendre(c).artefacts['L1.md'].replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(/rien ne garantit|ne tient qu'à toi/i.test(visible),
+    "savoir où l'on est seul est une information pour agir, pas une étiquette technique");
+});
