@@ -153,10 +153,24 @@ test('DEUX INCISES NE SONT PAS UNE BORDURE — la garde qui remplace la proporti
   // ⚠️ CE QUI REMPLACE LE SEUIL DOIT GARDER AUTANT QUE LUI. Une bordure titrée porte UNE incise,
   // centrée, courte. Une ligne d'écran quelconque qui aurait du tracé aux deux bouts n'a aucune
   // raison de n'en porter qu'une seule et brève.
+  // ⚠️ CE CAS DOIT ÊTRE REFUSÉ PAR LA GARDE D'INCISE, PAS PAR LA PROPORTION — sinon la garde
+  // d'incise n'est pas éprouvée du tout. Une première écriture de cet essai employait une ligne
+  // à 42 % de tracé : elle était déjà refusée par la dominance, et **retirer la garde d'incise
+  // ne faisait alors rougir aucun essai**. Deux gardes dont une seule mord ne font qu'une garde.
+  //
+  // Celle-ci est à 90 % de tracé — elle passe la dominance haut la main — et ne doit être
+  // refusée que parce qu'elle porte DEUX incises. C'est la forme d'un pied de page à plusieurs
+  // libellés séparés par du tracé, qu'on rencontre dans des sorties d'outils.
+  const deuxIncises = `${'─'.repeat(18)} a ${'─'.repeat(18)} b ${'─'.repeat(18)}`;
+  const traceDeuxIncises = [...deuxIncises].filter((c) => /[─-╿]/.test(c)).length;
+  assert.ok(
+    traceDeuxIncises / deuxIncises.length > 0.5,
+    'le cas doit passer la dominance, sinon il n’éprouve pas la garde d’incise'
+  );
   assert.equal(
-    estUnFilet(`────── un morceau ────── et un autre ──────`),
+    estUnFilet(deuxIncises),
     false,
-    'deux incises : c’est une ligne de contenu, pas une bordure'
+    'deux incises : c’est une ligne de contenu, pas une bordure — même quand le tracé domine'
   );
   assert.equal(
     estUnFilet(`──── ${'du texte qui prend toute la place '.repeat(3)}────`),
