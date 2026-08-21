@@ -67,12 +67,37 @@ test('LA LIVRAISON DONNE À SON APPEL DE QUOI TENIR SON ATTENTE — mesuré sur 
     dormir: async () => {},
   });
 
-  const quiAttend = vus.filter((v) => v.commande.includes('--wait'));
-  assert.ok(quiAttend.length > 0, 'l’appel qui porte l’attente doit avoir eu lieu — sinon on ne mesure rien');
-  for (const v of quiAttend) {
+  // ⚠️ LE REPÈRE A CHANGÉ, PAS L'EXIGENCE (T-20260821-0009). Ce test cherchait l'appel par
+  // `--wait`, qui n'existe plus : l'attente demandée à herdr n'était jamais observée et
+  // fabriquait 98 faux négatifs sur 231 non-livraisons, elle a donc été retirée.
+  //
+  // ⚠️ ET LE RETIRER NE RETIRE PAS CETTE GARDE — c'est le piège de ce lot, et il fallait
+  // trancher plutôt que laisser le test mourir avec son repère. Ce qu'il garde n'est pas le
+  // drapeau `--wait` : c'est que **le budget de l'appel qui ÉCRIT reste lié à `attenteMs`**, et
+  // non figé sur une constante qu'un lot ultérieur ferait diverger sans qu'un essai bronche.
+  // Ce lien est délibérément conservé dans `livrerBrief` (voir la note au-dessus de l'appel),
+  // et une main qui le remplacerait par un nombre fixe ferait rougir ces lignes-ci.
+  //
+  // Le repère est donc l'appel qui écrit — la chose que le drapeau désignait —, ce qui rend
+  // cette garde INDÉPENDANTE de la forme exacte de la commande.
+  const quiEcrit = vus.filter(
+    (v) => v.commande[1] === 'prompt' || v.commande[1] === 'send-text'
+  );
+  assert.ok(quiEcrit.length > 0, 'l’appel qui écrit doit avoir eu lieu — sinon on ne mesure rien');
+  for (const v of quiEcrit) {
     assert.ok(
       typeof v.delaiMs === 'number' && v.delaiMs > ATTENTE,
-      `l’appel « --wait --timeout ${ATTENTE} » doit recevoir plus que ${ATTENTE} ms — reçu ${v.delaiMs}`
+      `l’appel qui écrit doit recevoir plus que l’attente de ${ATTENTE} ms — reçu ${v.delaiMs}`
+    );
+  }
+
+  // ⚠️ ET LA MOITIÉ QUI EMPÊCHE LE RETOUR EN ARRIÈRE. Sans elle, ce test resterait vert le jour
+  // où quelqu'un remettrait `--wait --until working` : le budget serait toujours lié, et
+  // l'attente morte serait de retour sans qu'un seul essai le dise.
+  for (const v of vus) {
+    assert.ok(
+      !v.commande.includes('--until'),
+      `aucun appel ne doit demander une attente que herdr n’observe pas — ${v.commande.join(' ')}`
     );
   }
 });

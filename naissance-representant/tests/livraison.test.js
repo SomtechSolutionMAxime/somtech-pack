@@ -153,11 +153,20 @@ test('un écran illisible ne témoigne de rien — il ne vaut pas une boîte vid
 
 // ── Les commandes construites.
 
-test('la livraison porte --wait : l’appel nu rend un succès dans TOUS les cas, c’est le défaut', () => {
-  const c = commandesLivraison('w9:p1', 'mon brief', { attenteMs: 12345 });
-  assert.deepEqual(c.livrer, [
-    'agent', 'prompt', 'w9:p1', 'mon brief', '--wait', '--until', 'working', '--timeout', '12345',
-  ]);
+test('la livraison est un appel NU — l’attente qu’elle portait n’était jamais observée (T-20260821-0009)', () => {
+  // ⚠️ CE TEST DISAIT L'INVERSE, ET IL GARDAIT LE DÉFAUT. Sa version d'origine s'intitulait
+  // « l'appel nu rend un succès dans TOUS les cas, c'est le défaut » et épinglait
+  // `--wait --until working --timeout`. La prémisse a été mesurée fausse le 2026-08-21 :
+  //
+  //   • `--wait` s'appuie sur `state_change_seq`, mesuré FIGÉ 3 h sur un pane à ~10 transitions
+  //   • journal du dispositif, 69 rondes, 486 cibles : 98 des 231 non-livraisons sont des
+  //     `agent_prompt_stalled` — des faux négatifs que l'attente FABRIQUAIT elle-même
+  //
+  // L'appel nu ne « rend pas un succès dans tous les cas » : il ne rend RIEN sur la prise, et
+  // c'est très bien — c'est la relecture qui tranche, comme partout ailleurs dans ce module.
+  // La preuve de prise vit désormais dans `activite-session.js`, et elle, elle peut survenir.
+  const c = commandesLivraison('w9:p1', 'mon brief');
+  assert.deepEqual(c.livrer, ['agent', 'prompt', 'w9:p1', 'mon brief']);
   // `--format ansi` depuis T-20260814-0138 : c'est le gris qui distingue une suggestion de
   // l'éditeur d'un vrai reste, et sans lui on refuse de livrer dans une boîte vide.
   assert.deepEqual(c.lireEcran, ['agent', 'read', 'w9:p1', '--format', 'ansi']);
