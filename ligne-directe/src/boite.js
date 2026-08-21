@@ -78,7 +78,25 @@ export const INVITE = '❯';
  */
 const TRACE = /[─-╿]/;
 const TRACE_MINIMUM = 8;
-/** Un titre est bref par nature. Le cas mesuré en fait 31 ; on laisse de la marge, pas un boulevard. */
+/**
+ * Un titre est bref par nature. Le cas mesuré en fait 31 ; on laisse de la marge, pas un boulevard.
+ *
+ * ⚠️ CE QUE CETTE SONDE NE COUVRE PAS, ET JE LE DIS PLUTÔT QUE DE LE LAISSER CROIRE. Deux formes
+ * de bordure titrée lui échappent encore, éprouvées le 2026-08-21 :
+ *
+ *   • un titre de PLUS de 60 caractères ;
+ *   • un titre qui contiendrait lui-même un caractère de TRACÉ (`─`), ce qui le couperait en
+ *     deux incises.
+ *
+ * **Les deux sont improbables et aucune n'est attestée** — le seul titre mesuré sur ce poste en
+ * fait 31, et `─` n'est pas une ponctuation qu'on écrit dans un nom de chantier. `[non établi]`
+ * reste le mot juste pour la distribution réelle des longueurs de titre : un seul cas observé.
+ *
+ * ⚠️ ET LEUR SENS D'ÉCHEC EST LE SENS SÛR : elles font rendre `illisible`, donc REFUSER
+ * d'écrire. On perd une livraison, on n'écrase le message de personne. C'est pour ça qu'on ne
+ * relâche pas la borne « au cas où » : élargir sans mesure échangerait un refus contre une
+ * fusion, et seule la seconde est irréparable.
+ */
 const INCISE_MAXIMALE = 60;
 
 /**
