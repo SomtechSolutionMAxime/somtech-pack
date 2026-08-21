@@ -18,8 +18,12 @@
 // famille. Elle vit donc ici, au niveau que les deux importent déjà, et `livraison.js` la
 // réexporte pour ne rien casser de ce qui la nommait.
 
-/** La marque de la boîte de saisie d'une session Claude Code dans un terminal. */
-const INVITE = '❯';
+/**
+ * La marque de la boîte de saisie d'une session Claude Code dans un terminal.
+ *
+ * ⚠️ EXPORTÉE — elle vivait en deux exemplaires, ici et dans `ecran.js` (T-20260821-0027).
+ */
+export const INVITE = '❯';
 
 /**
  * UN FILET — la ligne de tracé qui encadre la boîte de saisie à l'écran.
