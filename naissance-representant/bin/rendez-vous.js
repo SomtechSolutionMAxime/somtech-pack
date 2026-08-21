@@ -23,6 +23,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { livrerBrief } from '../src/livraison.js';
+// LE TRI DES NON-LIVRAISONS (T-20260821-0011) — 107 blocages réels étaient noyés dans 231
+// lignes qui se lisaient toutes pareil.
+import { FAMILLES, ceQuiBloque, comptesParFamille, familleDeNonLivraison } from '../src/familles-de-non-livraison.js';
 import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, poserPlafond, RENDEZ_VOUS } from '../src/rendez-vous.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
@@ -330,7 +333,19 @@ async function tenirLeRendezVous(nom, debut) {
   // seulement tant que l'échéance GLOBALE le permet. Un orchestrateur occupé ne fait donc
   // plus attendre les autres, et le rendez-vous se termine avant le suivant quel que soit
   // leur nombre.
-  const comptes = vivants.map((o) => ({ agent: o.nom, pane: o.pane, socket: o.socket, livre: false, motif: null }));
+  const comptes = vivants.map((o) => ({
+    agent: o.nom,
+    pane: o.pane,
+    socket: o.socket,
+    livre: false,
+    motif: null,
+    // ⚠️ `SONDE_MUETTE` AVANT TOUTE TENTATIVE, jamais `SANS_PREUVE` : une cible qu'on n'a pas
+    // encore touchée n'a rien prouvé NI rien refusé. La ranger d'office du côté « on a regardé,
+    // il n'y avait rien » ferait dire à ce journal un constat qu'il n'a pas fait — c'est le
+    // défaut d'origine, dans sa valeur par défaut.
+    famille: FAMILLES.SONDE_MUETTE,
+    activite: null,
+  }));
   let restants = comptes;
   while (restants.length > 0) {
     for (const c of restants) {
@@ -341,6 +356,12 @@ async function tenirLeRendezVous(nom, debut) {
       const livre = await livrerBrief({ pane: c.pane, socket: c.socket, texte: r.rappel, appelHerdr, lireEcran, dormir });
       c.livre = livre.ok;
       c.motif = livre.ok ? null : livre.message;
+      // ⚠️ LA FAMILLE EST POSÉE ICI, SUR LE RÉSULTAT QU'ON VIENT D'OBTENIR (T-20260821-0011) —
+      // pas rediagnostiquée plus bas sur le `motif`. Trier par la prose d'un message casse à la
+      // première reformulation, et le casse en SILENCE : des blocages réels se reclasseraient
+      // en bruit sans qu'un seul essai bronche.
+      c.famille = familleDeNonLivraison(livre);
+      c.activite = livre.activite ?? null;
     }
     restants = restants.filter((c) => !c.livre);
     if (restants.length === 0 || Date.now() + DELAI_MS >= fin) break;
@@ -419,14 +440,23 @@ async function tenirLeRendezVous(nom, debut) {
   if (avis) process.stderr.write(`${r.etiquette} : ${avis}\n`);
 
   const manques = comptes.filter((c) => !c.livre);
+  // ⚠️ CE QUI BLOQUE SORT EN TÊTE, AVANT LE DÉTAIL (T-20260821-0011). Le champ `famille` suffit
+  // à une machine ; il ne suffit pas à un humain qui ouvre ce journal à 3 h du matin. Mesuré sur
+  // 69 rondes : 107 blocages réels rangés au milieu de 231 lignes identiques, dont 98 que le
+  // dispositif fabriquait lui-même. La ligne qui compte doit être la PREMIÈRE qu'il voit.
+  const bloques = ceQuiBloque(comptes);
+  const familles = comptesParFamille(comptes);
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
   noterLePassage(nom, manques.length === 0 ? 'abouti' : 'partiel', debut, {
     orchestrateurs: comptes.length,
     livres: comptes.length - manques.length,
     sessions: balayage.sessions,
     muettes: balayage.muettes.length,
+    // Le passage porte le compte qui appelle une action, pas seulement le total des manques —
+    // c'est lui qui distingue une ronde saine d'une ronde où quelqu'un est coincé.
+    bloques: bloques.length,
   });
   // Aucun orchestrateur vivant n'est un SUCCÈS, pas un échec : personne n'attend de rappel.
   process.exit(manques.length === 0 ? 0 : 1);

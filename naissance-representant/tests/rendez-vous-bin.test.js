@@ -820,3 +820,86 @@ test('HORS CLOISON D’ESSAIS, LA PANNE PROVOQUÉE EST IGNORÉE — la porte n�
   assert.doesNotMatch(r.stderr, /cette panne ne doit JAMAIS/, 'la porte d’essai est CLOSE hors cloison');
   assert.equal(tracePassage('r-hors-cloison').ronde.verdict, 'abouti');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE JOURNAL DE LA RONDE TRIE CE QU'IL RAPPORTE — T-20260821-0011
+//
+// Mesuré sur le vrai journal, 69 rondes : 231 non-livraisons rangées sous un total unique, dont
+// 107 blocages réels et 98 faux négatifs que le dispositif fabriquait lui-même. Rien ne les
+// distinguait à la lecture. Ces essais lancent la VRAIE ronde et lisent SA sortie — pas un
+// double de la fonction de tri, qui pourrait être parfaite et n'être appelée par personne.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('LE JOURNAL DE LA RONDE PORTE LE COMPTE PAR FAMILLE — un total unique était le défaut', () => {
+  installerFauxHerdr({
+    agents: [{ name: 'orch-un', pane: 'w1:p1', agent_status: 'idle', cwd: '/tmp/x' }],
+  });
+  const r = lancerRonde(['essai']);
+  const lignes = r.stdout.trim().split('\n').filter(Boolean);
+  const ronde = JSON.parse(lignes[lignes.length - 1]);
+
+  assert.ok(ronde.familles, 'la ronde doit rendre son compte par famille');
+  // ⚠️ LES CINQ CLÉS, TOUJOURS. Un journal dont les clés apparaissent selon la ronde ne se
+  // compare pas d'une ronde à l'autre : « aucun blocage » et « je n'ai pas compté les
+  // blocages » s'y liraient pareil, et c'est le motif exact de tout ce lot.
+  for (const f of ['pris', 'bloque', 'injoignable', 'sonde-muette', 'sans-preuve']) {
+    assert.ok(f in ronde.familles, `la famille « ${f} » doit être comptée même à zéro`);
+  }
+  const somme = Object.values(ronde.familles).reduce((a, b) => a + b, 0);
+  assert.equal(somme, ronde.orchestrateurs, 'chaque cible tombe dans exactement une famille');
+});
+
+test('CHAQUE COMPTE PORTE SA FAMILLE — sans quoi le tri vit hors du journal', () => {
+  installerFauxHerdr({
+    agents: [{ name: 'orch-un', pane: 'w1:p1', agent_status: 'idle', cwd: '/tmp/x' }],
+  });
+  const r = lancerRonde(['essai']);
+  const lignes = r.stdout.trim().split('\n').filter(Boolean);
+  const ronde = JSON.parse(lignes[lignes.length - 1]);
+  for (const c of ronde.comptes) {
+    assert.ok(typeof c.famille === 'string' && c.famille, `« ${c.agent} » sort du journal sans famille`);
+  }
+});
+
+test('UNE RONDE SANS BLOCAGE NE CRIE PAS — la clé de tête reste absente', () => {
+  // Une garde qui crie à tort se fait couper, et elle emporte ce qu'elle gardait. Le faux herdr
+  // rend une boîte vide : il n'y a rien de coincé, donc rien ne doit remonter en tête.
+  installerFauxHerdr({
+    agents: [{ name: 'orch-un', pane: 'w1:p1', agent_status: 'idle', cwd: '/tmp/x' }],
+  });
+  const r = lancerRonde(['essai']);
+  const lignes = r.stdout.trim().split('\n').filter(Boolean);
+  const ronde = JSON.parse(lignes[lignes.length - 1]);
+  assert.equal(ronde.familles.bloque, 0, 'aucun blocage réel dans ce scénario');
+  assert.ok(!('bloques' in ronde), 'la clé de tête ne doit pas apparaître quand rien ne bloque');
+});
+
+test('LA RONDE NE DEMANDE PLUS À HERDR UNE ATTENTE QU’IL N’OBSERVE PAS — T-20260821-0009', () => {
+  // ⚠️ MESURÉ SUR LA VRAIE RONDE, pas sur `commandesLivraison` en isolation. La fonction peut
+  // être corrigée et le binaire continuer d'appeler une ancienne voie — c'est le motif dominant
+  // de ce dépôt, et c'est très exactement ce qui s'est passé ici : la garde de T-20260815-0007
+  // était juste et ne couvrait qu'un destinataire sur deux.
+  const journal = join(bac, 'appels-herdr.log');
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify(args) + '\\n');
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [{ name: 'orch-un', pane: 'w1:p1', agent_status: 'idle', cwd: '/tmp/x' }] } }));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+
+  lancerRonde(['essai']);
+
+  const appels = readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(appels.length > 0, 'la ronde doit avoir appelé herdr — sinon on ne mesure rien');
+  for (const a of appels) {
+    assert.ok(!a.includes('--until'), `la ronde demande encore une attente morte : ${a.join(' ')}`);
+    assert.ok(!a.includes('--wait'), `la ronde demande encore --wait : ${a.join(' ')}`);
+  }
+});

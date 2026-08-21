@@ -879,6 +879,16 @@ export async function livrerBrief({
       ok: false,
       message: obstacle,
       statut: statutAvant,
+      // ⚠️ LA CAUSE SORT EN CHAMP, PAS SEULEMENT EN PROSE (T-20260821-0011). Elle était DÉJÀ
+      // calculée — `causeObstacle` la nomme sur quatre branches — et elle mourait dans une
+      // variable locale, exactement comme `causeDelivre` avant T-20260818-0031.
+      //
+      // Sans elle, la ronde n'avait qu'un `message` à trier, donc elle triait par MOTS. C'est
+      // ce qui a rendu six lignes indiscernables : cinq bénignes et une session réellement
+      // bloquée depuis des heures, toutes rangées sous « non livré ». Un tri par prose est un
+      // tri qui casse au premier mot qu'on reformule.
+      cause: causeObstacle(ecranAvant, statutAvant, { pairOccupe, parLePane }),
+      activite: { avant: activiteAvant.etat, apres: ACTIVITE.INDETERMINEE },
       repare: false,
       // On n'a rien écrit : il n'y avait rien à réparer. C'est un fait DIFFÉRENT d'un échec de
       // réparation, et l'appelant ne pouvait pas les distinguer.
