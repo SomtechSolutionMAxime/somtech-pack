@@ -54,30 +54,44 @@ export const INVITE = '❯';
  *   • la ligne COMMENCE par du tracé — une bordure s'ouvre par son trait, jamais par son titre ;
  *   • elle FINIT par du tracé — le titre est une incise, elle est refermée ;
  *   • elle porte AU PLUS UNE INCISE de non-tracé, et cette incise est COURTE ;
+ *   • le TRACÉ DOMINE — au moins la moitié de la ligne ;
  *   • et au moins 8 caractères de tracé en tout.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════
- * ⚠️ POURQUOI PAS UNE PROPORTION — la première écriture en posait une, et elle avait un angle
- * mort MESURÉ.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ LES QUATRE CONDITIONS SONT CUMULATIVES, ET J'AI PAYÉ POUR L'APPRENDRE.
  *
- * Elle exigeait que la ligne soit à moitié du tracé. Le cas de référence la satisfaisait
- * largement — 134 tracés sur 165, soit 81 %. Mais **le même titre dans une fenêtre de 48
- * colonnes tombe à 35 %**, et la sonde y redevenait aveugle.
+ * Une version intermédiaire de cette sonde avait RETIRÉ la proportion, en la remplaçant par la
+ * seule règle de l'incise. Le commentaire affirmait alors qu'elle gardait « strictement plus ».
+ * **C'était faux, et une revue de fond l'a reproduit de bout en bout** :
  *
- * 🔴 ET CE N'EST PAS UN CAS D'ÉCOLE : sur les 146 panes de ce poste qui portent un filet
- * (mesuré le 2026-08-21), **5 en ont un de moins de 80 colonnes — trois à 48, deux à 60**. Ce
- * sont des panes en division verticale, et rien n'empêche l'un d'eux d'être rattaché.
+ *     ──── Notes de version publiees hier soir pour verification ────
  *
- * > **Une proportion mesure la largeur de la FENÊTRE autant que la nature de la LIGNE. Ce n'est
- * > pas ce qu'on cherche à savoir.**
+ * Cette ligne porte UNE incise de 55 caractères — sous la borne — et passait donc pour un filet,
+ * alors qu'elle n'est que 13 % de tracé. Deux lignes de ce genre dans le scrollback d'un SHELL
+ * ORDINAIRE suffisaient à faire lire une « boîte vide et prête à écrire » là où il n'y a pas de
+ * boîte du tout. Et `❯` est le prompt par défaut de thèmes de shell très répandus.
  *
- * Ce qui fait d'une bordure une bordure, c'est qu'elle porte **une seule incise, et qu'elle est
- * brève** — pas qu'elle soit longue. Ce critère-ci ne dépend d'aucune largeur, et il garde
- * strictement PLUS que la proportion : une ligne de contenu à deux incises passait le seuil de
- * 50 % et se voit refusée maintenant.
+ * > **On perd une livraison quand on refuse à tort. On écrase le message de quelqu'un quand on
+ * > accepte à tort. Les deux ne se valent pas.** L'élargissement avait échangé le premier
+ * > défaut, réparable, contre le second, qui ne l'est pas.
+ *
+ * ⚠️ CE QUE LA PROPORTION COÛTE, ET QUE J'ASSUME PLUTÔT QUE DE LE CACHER. Elle dépend de la
+ * largeur de la fenêtre : pour un titre de 31 caractères, la bordure n'est reconnue qu'à partir
+ * de ~62 colonnes. Sur ce poste, **5 panes sur 146 portent un filet plus étroit que 80
+ * colonnes** — trois à 48, deux à 60. Une session rattachée dans un de ces panes rendrait
+ * `illisible`.
+ *
+ * **`[non établi]` : je n'ai JAMAIS mesuré ce que Claude Code affiche comme bordure dans une
+ * fenêtre de 48 colonnes** — il tronque peut-être le titre, ou ne l'affiche pas. J'avais
+ * construit ce cas et bâti une garde dessus ; c'est cette garde qui a ouvert le trou ci-dessus.
+ * On ne relâche donc pas la proportion sur un cas qu'on n'a pas vu : le sens de son échec est
+ * `illisible`, donc l'abstention, et c'est le seul côté où l'on peut se tromper sans casse.
  */
 const TRACE = /[─-╿]/;
 const TRACE_MINIMUM = 8;
+/** Le tracé doit dominer : sans ça, une ligne de prose encadrée passe pour une bordure. */
+const PROPORTION_MINIMALE_DE_TRACE = 0.5;
 /**
  * Un titre est bref par nature. Le cas mesuré en fait 31 ; on laisse de la marge, pas un boulevard.
  *
@@ -113,7 +127,10 @@ export function estUnFilet(ligne) {
   if (l.length < TRACE_MINIMUM) return false;
   // Ouvrir ET refermer par du tracé : c'est ce qui distingue une bordure titrée d'une phrase.
   if (!TRACE.test(l[0]) || !TRACE.test(l[l.length - 1])) return false;
-  if (l.filter((c) => TRACE.test(c)).length < TRACE_MINIMUM) return false;
+  const trace = l.filter((c) => TRACE.test(c)).length;
+  if (trace < TRACE_MINIMUM) return false;
+  // ⚠️ LE TRACÉ DOIT DOMINER — retirer cette ligne fait passer un shell pour une boîte vide.
+  if (trace / l.length < PROPORTION_MINIMALE_DE_TRACE) return false;
 
   // Les incises : chaque suite contiguë de non-tracé. Une bordure titrée en a UNE, brève.
   let incises = 0;

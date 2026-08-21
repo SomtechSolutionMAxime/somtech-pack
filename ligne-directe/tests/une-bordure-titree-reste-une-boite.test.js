@@ -112,25 +112,39 @@ test('UN TITRE NE PEUT PAS SERVIR À FAIRE PASSER DU CONTENU POUR UN FILET', () 
   );
 });
 
-test('UNE FENÊTRE ÉTROITE PORTE LE MÊME TITRE — et la sonde ne doit pas y redevenir aveugle', () => {
-  // 🔴 MESURÉ LE 2026-08-21, ET CE N'EST PAS UN CAS D'ÉCOLE : sur les 146 panes du poste qui
-  // portent un filet, **5 en ont un de moins de 80 colonnes — trois à 48, deux à 60**. Ce sont
-  // des panes en division verticale, et rien n'empêche l'un d'eux d'être une session rattachée.
-  //
-  // ⚠️ UNE PREMIÈRE ÉCRITURE DE CETTE SONDE EXIGEAIT QUE LA LIGNE SOIT À MOITIÉ DU TRACÉ. Le cas
-  // mesuré la satisfaisait largement (134 tracés sur 165, soit 81 %) — mais **le même titre dans
-  // une fenêtre de 48 colonnes tombe à 35 %**, et la sonde y redevenait aveugle. Une proportion
-  // mesure la largeur de la fenêtre autant que la nature de la ligne : ce n'est pas ce qu'on veut
-  // savoir. Ce qui fait d'une bordure une bordure, c'est qu'elle porte **une seule incise, et
-  // qu'elle est courte** — pas qu'elle soit longue.
+test('LA BORDURE TITRÉE EST RECONNUE À TOUTES LES LARGEURS MESURÉES — et je dis où ça s’arrête', () => {
+  // ✅ CE QUI EST ATTESTÉ. Le seul écran de session rattachée mesuré sur ce poste fait 165
+  // colonnes pour un titre de 31 caractères. La médiane des filets du poste est de 335 colonnes.
   const titre = ' CRM ActionProgex finalisation ';
-  for (const largeur of [48, 60, 80, 100, 165, 335]) {
-    const g = '─'.repeat(Math.max(1, largeur - titre.length - 1));
+  const bord = (largeur) => `${'─'.repeat(Math.max(1, largeur - titre.length - 1))}${titre}─`;
+  for (const largeur of [80, 100, 165, 335]) {
+    assert.equal(estUnFilet(bord(largeur)), true, `une bordure titrée de ${largeur} colonnes est reconnue`);
+  }
+
+  // ⚠️ ET CE QUI NE L'EST PAS — je l'inscris plutôt que de le laisser croire.
+  //
+  // Sous ~62 colonnes (pour ce titre-là), le tracé ne domine plus et la sonde rend `illisible`.
+  // Sur ce poste, **5 panes sur 146 portent un filet plus étroit que 80 colonnes** — trois à 48,
+  // deux à 60. Une session rattachée dans l'un d'eux resterait donc injoignable.
+  //
+  // 🔴 J'AVAIS ÉCRIT L'INVERSE, ET ÇA A COÛTÉ. Une version de cet essai EXIGEAIT que 48 et 60
+  // colonnes soient reconnues — sur un écran que **je n'ai jamais mesuré** : je l'avais fabriqué
+  // en supposant que Claude Code y afficherait le même titre. Pour satisfaire ce cas construit,
+  // j'ai retiré l'exigence que le tracé domine — et j'ai ouvert un trou par lequel un SHELL
+  // ORDINAIRE se lisait « boîte vide, prête à écrire ». Une revue de fond l'a reproduit.
+  //
+  // > **Une garde bâtie sur un cas qu'on n'a pas vu ne garde rien : elle déplace le risque vers
+  // > un cas qu'on n'a pas regardé.**
+  //
+  // `[non établi]` : ce que Claude Code affiche réellement comme bordure à 48 colonnes — il
+  // tronque peut-être le titre, ou ne l'affiche pas. Tant qu'on ne l'a pas mesuré, le sens sûr
+  // est celui qui fait s'abstenir.
+  for (const largeur of [48, 60]) {
     assert.equal(
-      estUnFilet(`${g}${titre}─`),
-      true,
-      `une bordure titrée de ${largeur} colonnes reste une bordure — la largeur de la fenêtre ` +
-        `n’a rien à voir avec la nature de la ligne`
+      estUnFilet(bord(largeur)),
+      false,
+      `à ${largeur} colonnes le tracé ne domine plus : la sonde rend « illisible », donc on ` +
+        `s’abstient — c’est une limite CONNUE, pas un accident`
     );
   }
 });
@@ -219,4 +233,41 @@ test('LA BORNE DE L’INCISE EST GARDÉE À SA VALEUR — pas seulement « quelq
     'une incise de 61 caractères n’en est plus un — si cet essai ne rougit pas quand la borne ' +
       'bouge, c’est que la borne n’était pas gardée'
   );
+});
+
+test('UN SHELL DONT LE SCROLLBACK PORTE DEUX LIGNES ENCADRÉES N’EST PAS UNE BOÎTE', () => {
+  // 🔴 BLOQUANT TROUVÉ EN REVUE DE FOND, ET REPRODUIT DE BOUT EN BOUT. C'est le défaut le plus
+  // grave que ce dépôt connaisse : une boîte lue « vide et prête à écrire » là où il n'y a pas
+  // de boîte du tout.
+  //
+  // ⚠️ IL A ÉTÉ INTRODUIT PAR MA PROPRE CORRECTION. En remplaçant la proportion de tracé par
+  // « une seule incise, bornée », j'ai écrit dans le commentaire que le nouveau critère gardait
+  // « strictement PLUS » que l'ancien. **C'était faux.** Une ligne de prose encadrée de quatre
+  // tirets de chaque côté porte UNE incise de 55 caractères — sous la borne — et passait, là où
+  // la proportion (13 % de tracé) la refusait.
+  //
+  // ⚠️ ET LE GLYPHE `❯` EST LE PROMPT PAR DÉFAUT de thèmes de shell très répandus, tandis que les
+  // bordures Unicode abondent dans les sorties d'outils — y compris celles de ce dépôt. Le
+  // mécanisme n'est donc pas une curiosité de laboratoire.
+  //
+  // > **On perd une livraison quand on refuse à tort. On écrase le message de quelqu'un quand on
+  // > accepte à tort. Les deux ne se valent pas, et c'est ce que j'avais oublié en élargissant.**
+  const shell = [
+    'maximeleboeuf@Mac somtech-pack % cat CHANGELOG.md | head -3',
+    '──── Notes de version publiees hier soir pour verification ────',
+    '❯ ',
+    '──── Fin du rappel, rien de plus a signaler ici pour le moment ────',
+    'maximeleboeuf@Mac somtech-pack % ',
+  ].join('\n');
+  assert.equal(
+    estUnFilet('──── Notes de version publiees hier soir pour verification ────'),
+    false,
+    'une ligne de prose encadrée de quelques tirets est du CONTENU — le tracé doit DOMINER'
+  );
+  assert.equal(
+    contenuBoite(shell),
+    null,
+    'ce terminal n’a aucune boîte de saisie — le lire « vide » autoriserait à y écrire'
+  );
+  assert.equal(etatDeLaBoite(shell).etat, ETATS_BOITE.ILLISIBLE);
 });
