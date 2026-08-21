@@ -900,12 +900,23 @@ test('LA RONDE NE DEMANDE PLUS À HERDR UNE ATTENTE QU’IL N’OBSERVE PAS — 
   // était juste et ne couvrait qu'un destinataire sur deux.
   const journal = join(bac, 'appels-herdr.log');
   const lieu = lieuDOrchestrateur('appels');
+  // ⚠️ UN ÉCRAN LISIBLE AVEC UNE BOÎTE VIDE — sans lui, la ronde REFUSE de livrer (« boîte
+  // illisible ») et aucun `agent prompt` ne part. Le premier jet de cet essai faisait ça : il
+  // vérifiait qu'aucun appel ne portait `--until` alors qu'AUCUNE LIVRAISON n'avait eu lieu.
+  // C'est sa propre garde anti-vide qui l'a attrapé.
+  const SEP_E = '─'.repeat(40);
+  const ECRAN_PRET = ['❯ tour précédent', SEP_E, '❯', SEP_E, '  ⏵⏵ auto mode on'].join('\n');
   const script = `#!/usr/bin/env node
 const fs = require('fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify(args) + '\\n');
 if (args[0] === 'agent' && args[1] === 'list') {
   process.stdout.write(JSON.stringify({ result: { agents: [{ name: 'orch-un', pane_id: 'w1:p1', agent_status: 'idle', foreground_cwd: ${JSON.stringify(lieu)}, revision: 3 }] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') { process.stdout.write(${JSON.stringify(ECRAN_PRET)}); process.exit(0); }
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: { pane_id: 'w1:p1', agent_status: 'idle', revision: 3 } } }));
   process.exit(0);
 }
 process.stdout.write(JSON.stringify({ result: { ok: true } }));
@@ -917,7 +928,13 @@ process.exit(0);
   lancerRonde(['essai']);
 
   const appels = readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  assert.ok(appels.length > 0, 'la ronde doit avoir appelé herdr — sinon on ne mesure rien');
+  // ⚠️ « LA RONDE A APPELÉ HERDR » NE SUFFIT PAS, ET C'EST LE MÊME TROU QUE CELUI QUI M'A PRIS
+  // TROIS ESSAIS PLUS HAUT. Une ronde qui ne reconnaît aucun orchestrateur appelle quand même
+  // `agent list` : `appels.length > 0` serait vrai, la boucle ne verrait que des `list`, et
+  // l'assertion « aucun `--until` » passerait **sans qu'aucune livraison ait eu lieu**.
+  // Ce qu'il faut exiger est que le geste d'ÉCRITURE ait été posé.
+  const ecritures = appels.filter((a) => a[1] === 'prompt' || a[1] === 'send-text');
+  assert.ok(ecritures.length > 0, 'aucune livraison n’a eu lieu : cet essai ne mesure rien');
   for (const a of appels) {
     assert.ok(!a.includes('--until'), `la ronde demande encore une attente morte : ${a.join(' ')}`);
     assert.ok(!a.includes('--wait'), `la ronde demande encore --wait : ${a.join(' ')}`);
