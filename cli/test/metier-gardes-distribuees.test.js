@@ -47,3 +47,37 @@ test('le chemin que le rendu écrit et celui où le pack dépose sont le MÊME',
   assert.ok(cmd.includes('$HOME/.somtech/gardes/terminal.js'),
     'le rendu doit viser exactement là où le pack dépose — sinon le hook cherche au mauvais endroit');
 });
+
+test('⚠️ toute garde qu un classement DÉCLARE existe dans le module — c est la jointure des deux étages', () => {
+  // Chaque étage est juste séparément : le rendu écrit un chemin `~/.somtech/gardes/<garde>.js`
+  // (gardé plus haut), et `pack setup` dépose le module `gardes` (gardé plus haut aussi). La
+  // ligne qui les relie — que la garde NOMMÉE par un classement soit bien l'un des fichiers
+  // déposés — ne l'était par aucun des deux. Un classement qui déclare `garde: "x"` sans que
+  // `gardes/x.js` existe rend un hook qui refuse tout, en silence, chez l'agent.
+  const roles = ['orchestrateur', 'gestionnaire-client'];
+  let declarees = 0;
+  for (const role of roles) {
+    const chemin = join(RACINE, 'metier', role, 'classement.json');
+    if (!existsSync(chemin)) continue;
+    for (const h of JSON.parse(readFileSync(chemin, 'utf8')).hooks || []) {
+      // Un hook qui porte sa propre `commande` vise un autre module (la naissance) : le
+      // chemin est alors dans la commande, et il est gardé là où ce module vit.
+      if (h.commande) continue;
+      declarees++;
+      assert.ok(existsSync(join(RACINE, 'gardes', `${h.garde}.js`)),
+        `le classement de « ${role} » déclare la garde « ${h.garde} », que le module ne porte pas`);
+      assert.ok(existsSync(join(RACINE, 'gardes', `${h.garde}-decision.js`)),
+        `la garde « ${h.garde} » n a pas de module de décision — un fil sans décision ne juge rien`);
+    }
+  }
+  assert.ok(declarees >= 2, `le contrôle doit avoir vu au moins deux gardes déclarées (${declarees}) — `
+    + `un contrôle qui ne trouve rien à vérifier passe pour satisfait`);
+});
+
+test('la décision distribuée et celle que le CLI teste sont le MÊME texte — deux copies divergent en silence', () => {
+  for (const garde of ['terminal', 'ligne-cliente']) {
+    const poste = readFileSync(join(RACINE, 'gardes', `${garde}-decision.js`), 'utf8');
+    const cli = readFileSync(join(RACINE, 'cli', 'src', 'metier', 'gardes', `${garde}.js`), 'utf8');
+    assert.equal(poste, cli, `« ${garde} » : la copie déposée sur le poste a dérivé de celle que les tests exercent`);
+  }
+});

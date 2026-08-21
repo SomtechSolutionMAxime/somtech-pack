@@ -122,15 +122,9 @@
       "nature": "garde-fou",
       "enonce": "**Ne parle jamais à un client**, ni de près ni de loin. Tout ce qui doit l'atteindre passe par son représentant, qui traduit dans ses mots",
       "statut_abc": "accepted",
-      "couche": "persona",
+      "couche": "hook",
       "enonce_socle": "Tu ne parles jamais à un client. Ce qui doit l'atteindre passe par son représentant.",
-      "chapitre": "reflexes",
-      "sans_garantie": {
-        "motif": "couche à construire : hook sur l'ouverture d'un canal client, à construire",
-        "assume_par": "Maxime Leboeuf (dirigeant)",
-        "definitif": false,
-        "echeance": "2026-09-30"
-      }
+      "chapitre": "reflexes"
     },
     {
       "id": "GF-ORC-006",
@@ -590,6 +584,12 @@
       "evenement": "PreToolUse",
       "outil": "Bash",
       "garde": "terminal"
+    },
+    {
+      "evenement": "PreToolUse",
+      "outil": "Bash",
+      "garde": "ligne-cliente",
+      "source": "gardes/ligne-cliente.js — fil mince, decision pure dans ligne-cliente-decision.js"
     },
     {
       "evenement": "PreToolUse",

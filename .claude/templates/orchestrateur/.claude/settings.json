@@ -44,6 +44,15 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "G=\"$HOME/.somtech/gardes/ligne-cliente.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ligne-cliente » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",
