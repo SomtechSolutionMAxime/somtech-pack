@@ -47,13 +47,26 @@
 // Ce module LIT et REND. Il n'écrit rien, ni au ServiceDesk ni ailleurs (RA-VUE-001), et il ne
 // pilote rien (HS-VUE-001). Il hérite des trois états qui ne se replient jamais en deux :
 //
+// ⚠️ IL LIT DEUX SOURCES, PAS UNE — ET LA SECONDE EST SUR LE DISQUE. Depuis E-20260822-0003, il
+// lit aussi les LIEUX versionnés des agents (`lecteurDeLieux`), parce que le recensement seul
+// ne connaît que les terminaux VIVANTS. Cette lecture est de l'I/O, et elle est INJECTABLE
+// comme le reste : `lister` et `roleDuLieu` entrent par paramètre, `racines` aussi, et rien
+// n'est deviné. « Éprouvable sans clé et sans service » vaut donc toujours — mais il fallait
+// le dire, plutôt que de laisser cet en-tête affirmer une pureté qu'il n'a plus tout à fait.
+//
 //   « mesuré, voici la valeur »  ≠  « mesuré, il n'y a pas de valeur »  ≠  « pas pu mesurer »
 //
 // Concrètement, et chacun a son banc : `epics: null` dit « je n'ai pas pu lire les epics de ce
 // chantier », `epics: []` dit « je les ai lus, il n'y en a aucun ». Les confondre ferait
 // disparaître un chantier illisible en le présentant comme un chantier vide.
 
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
 import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
+import { rolesConnus, role as roleDe } from './roles.js';
+import { roleDuLieu as roleDuLieuReel } from './lieu-agent.js';
 
 /** La règle de conduite, écrite une fois, rendue avec la vue. */
 export const REGLE_DE_LA_VUE =
@@ -129,13 +142,190 @@ export function codePorteEnNom(agent) {
   return CODE_LISIBLE.test(code) ? code : null;
 }
 
-/** La carte d'identité rendue pour un agent sur une ligne. */
+/**
+ * La carte d'identité rendue pour un agent sur une ligne.
+ *
+ * ⚠️ `titre` EST LE TITRE DE FENÊTRE, et c'est LUI que le dirigeant reconnaît — pas `w7M:p2`
+ * (EF-VUE-006). Cas réel : le pane, la session, le dossier ET le nom lui avaient été donnés, et
+ * il a répondu « je trouve pas le pane ». Un poste porte treize sessions herdr, chacune
+ * numérotant ses panes indépendamment.
+ *
+ * ⚠️ ET LA CLÉ EST OMISE PAR LA SOURCE, PAS RENDUE À `null`. Mesuré le 2026-08-22 :
+ * `herdr pane list` rend `terminal_title` sur 73 panes sur 76 — les 3 autres n'ont PAS la clé.
+ * C'est la forme exacte du piège déjà payé sur `agent` (voir `formes-reelles.js`).
+ */
 function carteDe(agent) {
   return {
     nom: nomLisible(agent),
     pane: agent?.pane ?? null,
     session: agent?.session ?? null,
+    titre: agent?.titre ?? null,
     statut: agent?.statut ?? null,
+  };
+}
+
+/**
+ * LA CLÉ D'UN MANDAT — celle qui dit « c'est le MÊME chantier », qu'il vienne d'un lieu ou d'un pane.
+ *
+ * ⚠️ ELLE COUVRE LES MANDATS QUI NE SONT PAS DES CODES. `matapedia` et `general` sont des
+ * mandats parfaitement valides dont le chantier n'est traçable nulle part : les exclure de la
+ * clé ferait apparaître leur lieu ET leur agent comme deux lignes distinctes du même chantier.
+ */
+export function cleDuMandat(mandat) {
+  const m = String(mandat ?? '').trim();
+  return m ? codeDuMandat(m) : null;
+}
+
+/**
+ * L'AGENT VIT-IL ? — et les TROIS états ne se replient jamais en deux (EF-VUE-008).
+ *
+ * 🔴 CE QUI DÉCIDE EST LA BORNE DU RECENSEMENT, PAS L'ABSENCE D'UN PANE. Une session herdr
+ * muette veut dire que des panes existent qu'on n'a pas vus : conclure « son terminal est mort »
+ * depuis ce silence, c'est tirer un verdict d'une ABSENCE. Mesuré le 2026-08-22 — 10 sessions
+ * sur 13 muettes sur un relevé, 3 sur 3 répondantes sur un autre : l'instrument varie, donc
+ * une absence n'a pas toujours la même valeur, et la vue doit dire laquelle.
+ *
+ *   vivant: true   — un pane vivant porte ce mandat. MESURÉ.
+ *   vivant: false  — aucun pane ne le porte, ET toutes les sessions ont répondu. MESURÉ AUSSI.
+ *   vivant: null   — aucun pane ne le porte, et une session s'est tue. RIEN N'EST ÉTABLI.
+ *
+ * 🔴 À LIRE AVANT DE CHERCHER UN DÉFAUT : SUR LE POSTE DE DÉVELOPPEMENT, CETTE VUE NE DIRA
+ * JAMAIS « MORT ». Mesuré le 2026-08-22 : **11 sessions herdr sur 14 sont muettes**, donc la
+ * branche `vivant: false` est STRUCTURELLEMENT INATTEIGNABLE — les quatre lignes sans terminal
+ * du poste sortent toutes en « présence non établie », et c'est le comportement JUSTE.
+ *
+ * ⚠️ CE N'EST PAS UNE COLONNE CASSÉE, C'EST LA PRUDENCE DE L'INSTRUMENT. Sans cette note, le
+ * premier lecteur cherchera pourquoi « mort » est toujours vide et diagnostiquera une panne là
+ * où il n'y a qu'un refus de conclure — c'est le FAUX ÉCHEC D'INSTRUMENT que ce module a déjà
+ * payé une fois, sur les epics d'un mandat non-code : une absence prise pour une panne. La
+ * branche `false` s'allumera le jour où toutes les sessions répondront, et pas avant.
+ *
+ * ⚠️ ET C'EST POURQUOI LA BRANCHE `false` RESTE ÉPROUVÉE PAR UN BANC plutôt que retirée : elle
+ * est inatteignable AUJOURD'HUI, sur CE poste. Un poste dont toutes les sessions répondent la
+ * produira, et la retirer parce qu'on ne la voit pas ici serait conclure d'une absence.
+ */
+export function presenceDe({ vivant, borne }) {
+  if (vivant) {
+    return { mesure: 'lue', vivant: true, source: 'un pane vivant porte ce mandat' };
+  }
+  const muettes = borne?.sessionsRefusees ?? [];
+  if (muettes.length) {
+    return {
+      mesure: 'non établie',
+      vivant: null,
+      pourquoi:
+        `aucun pane vu ne porte ce mandat, mais ${muettes.length} session(s) herdr sont restées ` +
+        // ⚠️ PAR LEUR NOM, PAS PAR LEUR CHEMIN — défaut vu sur le rendu RÉEL du poste, jamais
+        // par relecture : onze sessions muettes crachaient onze chemins de socket complets, soit
+        // près de neuf cents caractères sur UNE ligne. Une raison qu'on ne peut pas lire ne dit
+        // rien : elle a l'apparence d'une explication et la fonction d'un mur.
+        `muettes (${muettes.map((r) => nomDeSession(r?.session) ?? 'sans socket').join(', ')}) : des panes existent ` +
+        'qu’on n’a pas vus. Ceci n’est PAS « son terminal est mort »',
+    };
+  }
+  return {
+    mesure: 'lue',
+    vivant: false,
+    source: 'toutes les sessions herdr ont répondu, et aucun pane ne porte ce mandat',
+  };
+}
+
+/**
+ * L'AGENT TRAVAILLE-T-IL ? — et `agent_status` NE RÉPOND PAS À CETTE QUESTION (EF-VUE-005).
+ *
+ * 🔴 `agent_status` EST TAUTOLOGIQUE, MESURÉ : `idle` signifie « vu au registre », pas « au
+ * repos » — zéro `working` sur 227 cas relevés. Le rendre tel quel fait lire un CONSTAT DE
+ * REPOS là où il n'y a eu aucune mesure, et c'est le défaut qui a coûté la journée du 21 août :
+ * croire qu'un travail n'avance pas parce qu'un instrument dit `idle`.
+ *
+ * Le seul témoin d'activité qui ait tenu est l'ÉCRAN (`esc to interrupt`), que le recensement
+ * mesure déjà sous `travailEnVol`. On reprend SA forme, on ne s'en invente pas une seconde.
+ */
+export function activiteDe(agent) {
+  const v = agent?.travailEnVol;
+  if (v?.mesure === 'lue') {
+    return { mesure: 'lue', enVol: Boolean(v.enVol), source: 'l’écran de l’agent' };
+  }
+  return {
+    mesure: 'non mesurée',
+    enVol: null,
+    pourquoi:
+      v?.raison ??
+      'l’écran de cet agent n’a pas été lu. Son état de session ne répond PAS à cette question : ' +
+        '« idle » y signifie « vu au registre », jamais « au repos »',
+  };
+}
+
+/**
+ * COMMENT L'ATTEINDRE — le titre de fenêtre D'ABORD, le pane avec sa session ensuite.
+ *
+ * ⚠️ ADRESSER N'EST PAS COMMANDER (HS-VUE-001) : on rend le moyen d'atteindre, on ne relance
+ * ni n'arrête rien.
+ *
+ * ⚠️ ET UN IDENTIFIANT DE PANE NE VOYAGE JAMAIS SEUL. Mesuré : `w7:p1` vit dans `somtech` ET
+ * dans `progex`, avec des agents différents. Une adresse sans sa session envoie le dirigeant
+ * chez le mauvais agent — pire qu'une absence d'adresse, parce qu'il s'y fie.
+ */
+/**
+ * QUI PORTE CE CHANTIER, ET D'OÙ ON LE TIENT — le pane, ou le lieu versionné.
+ *
+ * ⚠️ LES DEUX SONT DES MESURES, ET ELLES NE SE VALENT PAS EN DURÉE. Un pane prouve un porteur
+ * MAINTENANT ; un lieu prouve un rattachement qui SURVIT au terminal. La vue dit lequel des deux
+ * l'a établi — jamais « l'agent X », sans dire d'où ce nom vient.
+ */
+export function porteurDuPane(carte) {
+  return { mesure: 'lue', source: 'un pane vivant, dont le chemin de travail porte ce mandat', agents: [carte] };
+}
+
+/** Le porteur établi par le LIEU seul — durable, et il ne nomme aucun agent. */
+export function porteurDuLieu(chemins) {
+  return {
+    mesure: 'lue',
+    source: 'le lieu versionné de l’orchestrateur — le registre, pas un terminal',
+    // ⚠️ AUCUN NOM D'AGENT N'EST INVENTÉ ICI. Un lieu nomme un RÔLE et un MANDAT, jamais une
+    // personne : deviner le nom depuis le mandat referait le geste que `nomDeLAgent` interdit
+    // — un nom plausible fait écrire à quelqu'un qui n'existe pas.
+    agents: [],
+    lieux: chemins,
+  };
+}
+
+export function nomDeSession(session) {
+  const s = String(session ?? '').trim();
+  if (!s) return null;
+  // ⚠️ CE QUE LE RECENSEMENT PORTE EST UN CHEMIN DE SOCKET, PAS UN NOM — et ce défaut n'est
+  // sorti qu'en EXERÇANT la chaîne réelle. Le banc passait : son double écrivait `'somtech'`
+  // là où la source rend
+  // `/Users/…/.config/herdr/sessions/somtech/herdr.sock`. Le dirigeant aurait lu, sur chacune
+  // des lignes de son parc, un chemin de quatre-vingts caractères au lieu du mot `somtech` —
+  // c'est-à-dire exactement l'illisibilité que EF-VUE-006 existe pour fermer.
+  const m = /(?:^|\/)sessions\/([^/]+)\//.exec(s);
+  return m ? m[1] : s;
+}
+
+export function adresseDe(carte, presence) {
+  if (presence?.vivant === true && carte?.pane) {
+    return {
+      mesure: 'lue',
+      titre: carte.titre ?? null,
+      pane: carte.pane,
+      // Le NOM de la session, celui qu'on tape ; le chemin brut reste à côté pour qui outille.
+      session: nomDeSession(carte.session),
+      sessionBrute: carte.session ?? null,
+    };
+  }
+  return {
+    mesure: 'aucune',
+    titre: null,
+    pane: null,
+    session: null,
+    sessionBrute: null,
+    // ⚠️ AUCUN IDENTIFIANT PÉRIMÉ N'EST LAISSÉ EN PLACE (T-20260822-0017, 2ᵉ G/W/T) : un pane
+    // qui n'existe plus se lit comme une adresse, et le dirigeant y écrit.
+    pourquoi:
+      presence?.vivant === null
+        ? 'aucun terminal vivant ne porte ce mandat parmi ceux qu’on a pu voir — et on n’a pas pu tous les voir'
+        : 'aucun terminal vivant ne porte ce mandat',
   };
 }
 
@@ -176,6 +366,247 @@ export function quiPorte(code, parMandat, parNom) {
     pourquoi: 'aucun agent vivant ne porte ce code, ni comme mandat lu à son lieu, ni comme nom',
     indices: [],
   };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LE MANIFESTE DES SIGNAUX — ET IL FERME UN TROU MESURÉ, PAS UN DANGER IMAGINÉ
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * Un « signal » est un fait que le LECTEUR DE CHANTIER mesure et que le dirigeant doit lire :
+ * un filtre qui n'a pas filtré, une page plafonnée. Chacun traverse QUATRE jointures avant
+ * d'atteindre l'œil :
+ *
+ *   ① lecteur → vue     (recopie)
+ *   ② vue → compte      (agrégation)
+ *   ③ compte → résumé   (phrase)
+ *   ④ résumé → texte    (rendu)
+ *
+ * 🔴 CE QUE `e-20260822-0002` A MESURÉ SUR LE LOT PRÉCÉDENT, ET QUI EST LA CONDITION DE FIN
+ * N°5 DE CET EPIC : il a ajouté un signal NEUF au lecteur, l'a fait traverser ① correctement,
+ * et l'a laissé mourir en ②③④. **895 essais VERTS. Il passait.**
+ *
+ * > La nuance qui tranche, et qu'il a construite lui-même : lancées contre la suite entière,
+ * > les mutations de ②③④ SONT attrapées — donc ces jointures ÉTAIENT gardées, mais par des
+ * > bancs nommés, pour des signaux CONNUS. **Un signal NEUF est gardé au premier passage et à
+ * > nu sur les trois autres.** Leur garde attrape l'oubli de RECOPIE, pas l'oubli
+ * > d'AGRÉGATION ni l'oubli de RENDU.
+ *
+ * ⚠️ ET NOMMER CE DANGER NE SUFFIT PAS — c'est la leçon payée le même jour. Le piège était
+ * écrit dans le brief du lot précédent ; son porteur a CODÉ la parade, et personne ne l'a
+ * ÉPROUVÉE. On ne se fie donc pas à la vigilance : les jointures ②③④ ne sont plus écrites à la
+ * main du tout. **Elles sont DÉRIVÉES de ce tableau.** Déclarer un signal ici le fait traverser
+ * les quatre passages ; l'oublier ici le fait rougir au premier essai (garde de complétude).
+ *
+ * Chaque entrée porte :
+ *   • `cle`         — le nom du champ TEL QUE LE LECTEUR LE PRODUIT ;
+ *   • `niveau`      — `chantier` ou `epic` : à quel étage il vit ;
+ *   • `nature`      — `compte` (on SOMME) ou `drapeau` (on COMPTE les porteurs) ;
+ *   • `vide`        — la valeur qui veut dire « rien à signaler » ;
+ *   • `cleDuCompte` — son nom dans le compte, qui n'est PAS le même : `epicsPlafonnes` (un
+ *                     booléen par chantier) s'agrège en `chantiersPlafonnes` (un nombre de
+ *                     chantiers). Confondre les deux ferait lire un nombre d'epics ;
+ *   • `phrase(n)`   — ce que le résumé dit QUAND, ET SEULEMENT QUAND, le signal a servi.
+ *
+ * ⚠️ ON NE DIT « 0 » NULLE PART. Un signal répété à chaque ligne cesse d'être un signal — c'est
+ * le faux positif symétrique du défaut qu'on ferme, sur la même frontière.
+ */
+export const SIGNAUX_DU_LECTEUR = [
+  {
+    cle: 'epicsEcartes',
+    niveau: 'chantier',
+    nature: 'compte',
+    vide: 0,
+    cleDuCompte: 'epicsEcartes',
+    phrase: (n) =>
+      ` ⚠️ ${n} epic(s) écarté(s) : le ServiceDesk a rendu des epics d’autres chantiers malgré ` +
+      'son filtre — ils ont été retamisés ici.',
+  },
+  {
+    cle: 'epicsPlafonnes',
+    niveau: 'chantier',
+    nature: 'drapeau',
+    vide: false,
+    // ⚠️ LE NOM CHANGE PARCE QUE L'OBJET CHANGE. On ne sait pas combien d'epics manquent —
+    // c'est exactement ce que « plafonné » veut dire — donc on compte des CHANTIERS touchés.
+    cleDuCompte: 'chantiersPlafonnes',
+    phrase: (n) =>
+      ` ⚠️ ${n} chantier(s) dont la liste d’epics est PLAFONNÉE : il en manque peut-être, et ce ` +
+      'compte-là est un plancher de plus.',
+  },
+  {
+    cle: 'storiesPlafonnees',
+    niveau: 'epic',
+    nature: 'drapeau',
+    vide: false,
+    cleDuCompte: 'epicsAuxStoriesPlafonnees',
+    phrase: (n) => ` ⚠️ ${n} epic(s) dont la liste de stories est PLAFONNÉE : des stories manquent peut-être sous eux.`,
+  },
+  {
+    cle: 'storiesEcartees',
+    niveau: 'epic',
+    nature: 'compte',
+    vide: 0,
+    cleDuCompte: 'storiesEcartees',
+    phrase: (n) =>
+      ` ⚠️ ${n} story(s) écartée(s) : le ServiceDesk a rendu des stories d’autres epics malgré ` +
+      'son filtre — elles ont été retamisées ici.',
+  },
+];
+
+/**
+ * LES CHAMPS DE STRUCTURE D'UN CHANTIER ET D'UN EPIC — tout le reste EST un signal.
+ *
+ * ⚠️ CETTE LISTE EST LE DÉNOMINATEUR DE LA GARDE DE COMPLÉTUDE. Elle dit ce qu'un chantier lu
+ * porte QUI N'EST PAS un signal ; la garde exige alors que tout autre champ produit par le
+ * lecteur figure au manifeste. C'est ce qui rend le trou impossible à rouvrir : on ne peut pas
+ * ajouter un champ au lecteur sans le déclarer ici ou là, et l'un des deux le fait traverser.
+ */
+export const CHAMPS_DE_STRUCTURE = {
+  chantier: ['code', 'titre', 'statut', 'epics'],
+  epic: ['code', 'titre', 'statut', 'stories'],
+};
+
+/** Les signaux d'un étage donné. */
+export function signauxDe(niveau) {
+  return SIGNAUX_DU_LECTEUR.filter((s) => s.niveau === niveau);
+}
+
+/**
+ * ① LECTEUR → VUE — la recopie, DÉRIVÉE du manifeste au lieu d'être écrite à la main.
+ *
+ * ⚠️ ÉCRITE À LA MAIN, ELLE A DÉJÀ PERDU DEUX SIGNAUX. `epicsEcartes` mourait ici pendant que
+ * le lecteur le calculait « avec soin » ; son jumeau `epicsPlafonnes` est resté en arrière UN
+ * CYCLE ENTIER, dans la même expression, à une ligne près — nommé dans le commentaire du
+ * correctif qui venait de fermer le premier.
+ */
+export function recopierLesSignaux(source, niveau) {
+  const sortie = {};
+  for (const s of signauxDe(niveau)) sortie[s.cle] = source?.[s.cle] ?? s.vide;
+  return sortie;
+}
+
+/**
+ * ② VUE → COMPTE — l'agrégation, DÉRIVÉE elle aussi.
+ *
+ * `compte` (on somme) et `drapeau` (on compte les porteurs) sont deux agrégations différentes,
+ * et les confondre ferait lire un nombre pour un autre : « 3 chantiers plafonnés » n'est pas
+ * « 3 epics manquants », et personne ne peut le deviner depuis le chiffre seul.
+ */
+export function compterLesSignaux(orchestrateurs) {
+  const compte = {};
+  for (const s of SIGNAUX_DU_LECTEUR) {
+    let n = 0;
+    for (const o of orchestrateurs) {
+      const porteurs = s.niveau === 'chantier' ? [o.chantier] : (o.epics ?? []);
+      for (const p of porteurs) {
+        const v = p?.[s.cle];
+        n += s.nature === 'compte' ? Number(v ?? 0) : v ? 1 : 0;
+      }
+    }
+    compte[s.cleDuCompte] = n;
+  }
+  return compte;
+}
+
+/**
+ * ③ COMPTE → RÉSUMÉ — les phrases, DÉRIVÉES, et AUCUNE quand le signal n'a pas servi.
+ *
+ * ⚠️ LE RÉSUMÉ EST LUI-MÊME POUSSÉ DANS LE TEXTE PAR `rendreLaVue` : c'est ce qui fait que ③
+ * emporte ④ pour les signaux de chantier. Les signaux d'EPIC ont en plus leur ligne dans
+ * l'arbre — et la garde de famille exerce les deux chemins, pas un seul.
+ */
+export function phrasesDesSignaux(compte) {
+  return SIGNAUX_DU_LECTEUR.map((s) => (compte?.[s.cleDuCompte] ? s.phrase(compte[s.cleDuCompte]) : '')).join('');
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LES SIGNAUX DE NIVEAU **LIGNE** — et ce manifeste-ci ferme un trou que le premier laissait
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 CE QUI A ÉTÉ MESURÉ, ET C'EST LA FORME N°2 DANS LE LOT QUI L'A NOMMÉE. `SIGNAUX_DU_LECTEUR`
+ * dérive les quatre passages — mais SEULEMENT pour les signaux qui viennent du lecteur de
+ * chantier. Les faits de LIGNE — la présence, l'activité, l'adresse — venaient du recensement,
+ * et leur chemin vers le résumé restait **écrit à la main**.
+ *
+ * Résultat, trouvé par une passe de fond sur ce lot même : `presencesNonEtablies` était
+ * **calculé** dans le compte et **jamais poussé** au résumé ni au texte. Le bon signal existait ;
+ * il mourait au passage ③. **Un signal qui meurt en chemin, dans le module qui existe pour
+ * empêcher ça.** Ces formes ne se neutralisent pas en les connaissant.
+ *
+ * 🔴 ET LE DÉFAUT QUE CE SILENCE PRODUISAIT ÉTAIT PIRE QUE LE SILENCE. Faute du bon signal, le
+ * résumé comptait `vivant !== true` sous l'étiquette « n'ont AUCUN terminal vivant » : il
+ * FONDAIT `false` (mesuré) et `null` (non établi), et **affirmait donc une mort qu'on n'avait
+ * pas constatée**. Sur ce poste, où 11 sessions sur 14 se taisent, les quatre chantiers sans
+ * terminal sont TOUS à `null` : la phrase était fausse pour les quatre. La même sortie portait,
+ * à trois lignes d'écart, « n'ont AUCUN terminal vivant » et « ceci n'est PAS son terminal est
+ * mort ». C'est la condition de fin n°4 violée **dans la phrase que le dirigeant lit en premier**.
+ *
+ * Chaque entrée porte :
+ *   • `cle`         — son nom ;
+ *   • `predicat(o)` — la ligne est-elle « chaude » pour ce signal ? UN SEUL état à la fois :
+ *                     deux prédicats qui se recouvrent refondraient ce qu'on vient de séparer ;
+ *   • `cleDuCompte` — son nom dans le compte ;
+ *   • `phrase(n)`   — ce que le résumé dit, et SEULEMENT quand il a servi.
+ */
+export const SIGNAUX_DE_LA_LIGNE = [
+  {
+    cle: 'chantiersSansTerminal',
+    // ⚠️ `=== false`, PAS `!== true`. C'était le défaut : `!== true` avale aussi `null`.
+    predicat: (o) => o.presence?.vivant === false,
+    cleDuCompte: 'chantiersSansTerminal',
+    phrase: (n) =>
+      ` ${n} chantier(s) n’ont AUCUN terminal vivant — MESURÉ, toutes les sessions ont répondu : ` +
+      'ils sont ici parce que leur lieu versionné les porte.',
+  },
+  {
+    cle: 'presencesNonEtablies',
+    predicat: (o) => o.presence?.vivant === null,
+    cleDuCompte: 'presencesNonEtablies',
+    // ⚠️ LA PHRASE DIT CE QU'ELLE EST, ET CE QU'ELLE N'EST PAS. « on n'a pas pu établir » se
+    // relit en « ils sont partis » au bout de trois lectures si on ne l'en empêche pas — c'est
+    // la même précaution que `PHRASE_DE_LINDICE`, sur un autre fait.
+    phrase: (n) =>
+      ` ${n} chantier(s) dont on N’A PAS PU ÉTABLIR s’ils ont un terminal vivant — des sessions ` +
+      'herdr se sont tues. Ce n’est PAS « leur terminal est mort ».',
+  },
+];
+
+/**
+ * LES COMPTES DE STRUCTURE — le DÉNOMINATEUR de la garde de complétude du compte.
+ *
+ * ⚠️ ÉPINGLÉ, ET C'EST DÉLIBÉRÉ. Cette liste dit quels chiffres du compte ne sont PAS des
+ * signaux ; la garde exige alors que tout autre chiffre soit déclaré à l'un des deux manifestes.
+ * C'est ce qui rend impossible de recalculer un `presencesNonEtablies` sans le rendre.
+ *
+ * 🔴 ET C'EST LE CRITÈRE D'ARRÊT QUI DÉCIDE DE S'ARRÊTER ICI : élargir cette liste pour taire un
+ * signal est un geste VISIBLE en revue — le diff dit « j'ai ajouté un nom au dénominateur
+ * épinglé », et personne ne signe ça sans le justifier. Ajouter un nom à une liste d'exceptions
+ * non épinglée aurait été invisible, et il aurait fallu garder un étage de plus.
+ */
+export const COMPTES_DE_STRUCTURE = [
+  'orchestrateurs',
+  'horsHierarchie',
+  'epicsLus',
+  'chantiersNonMesures',
+  'chantiersNonEtablis',
+  'panesAmbigus',
+  'entreesComparees',
+];
+
+/** ② LIGNES → COMPTE — dérivée, comme celle du lecteur. */
+export function compterLesSignauxDeLigne(orchestrateurs) {
+  const compte = {};
+  for (const s of SIGNAUX_DE_LA_LIGNE) {
+    compte[s.cleDuCompte] = orchestrateurs.filter((o) => s.predicat(o)).length;
+  }
+  return compte;
+}
+
+/** ③ COMPTE → RÉSUMÉ — dérivée, et muette quand le signal n'a pas servi. */
+export function phrasesDesSignauxDeLigne(compte) {
+  return SIGNAUX_DE_LA_LIGNE.map((s) => (compte?.[s.cleDuCompte] ? s.phrase(compte[s.cleDuCompte]) : '')).join('');
 }
 
 /**
@@ -326,12 +757,143 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
 }
 
 /**
+ * LE LECTEUR DE LIEUX — le registre DURABLE, celui qui survit à la mort d'un terminal.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI CE LECTEUR EXISTE, ET CE QU'IL RÉPARE — EF-VUE-007, RA-VUE-002
+ *
+ * La vue se construisait depuis `recensement.agents`, c'est-à-dire depuis LES PANES VIVANTS.
+ * Un chantier dont l'orchestrateur avait fermé son terminal ne perdait pas une colonne : il
+ * DISPARAISSAIT, avec ses epics et ses stories.
+ *
+ * 🔴 MESURÉ À LA MAIN SUR CE POSTE LE 2026-08-22, pas supposé : **15 mandats distincts portent
+ * un lieu d'orchestrateur sur le disque**, répartis sur **116 chemins** — le même mandat vivant
+ * dans plusieurs worktrees d'un même dépôt. **9 seulement étaient portés par un pane vivant.**
+ * Six chantiers étaient donc invisibles, dont un qui porte à lui seul douze lieux.
+ *
+ * ⚠️ CE N'EST PAS UN SECOND REGISTRE (RA-VUE-004), ET CE N'EST PAS UNE INVENTION DE CE LOT.
+ * `roles.js` l'écrit déjà, au sujet des lieux d'orchestrateur : « ces lieux SONT l'inventaire :
+ * les lister, c'est voir qui vit ici — aucun registre local ne les recopie ». On les LIT à
+ * chaque demande ; rien n'est recopié, rien ne périme.
+ *
+ * @param racines     où chercher. **Ce lecteur ne devine AUCUNE racine** : un lieu posé hors
+ *                    d'elles n'a pas été vu, et la vue le dit plutôt que de présenter une
+ *                    tranche du poste comme le poste entier.
+ * @param roleDuLieu  `(repertoire) → nom-de-rôle | null` — INJECTÉ. Le rôle s'établit par le
+ *                    CONTENU du lieu, jamais par le nom du dossier : un répertoire vide au bon
+ *                    nom ne porte aucun métier, et le compter gonflerait la vue de chantiers
+ *                    qui n'existent qu'à moitié (T-20260819-0070).
+ * @param lister      `(chemin) → nom[]` — les sous-dossiers, ou une exception.
+ */
+export function lecteurDeLieux({ racines = [], roleDuLieu = roleDuLieuReel, lister = sousDossiers } = {}) {
+  return async () => {
+    const parMandat = new Map();
+    const racinesRefusees = [];
+    let racinesLues = 0;
+
+    for (const racine of racines) {
+      // ⚠️ LA RACINE ELLE-MÊME D'ABORD. Une racine qu'on ne peut pas lister n'est pas « une
+      // racine sans lieu » : c'est une part du poste qu'on n'a PAS REGARDÉE, et les deux
+      // appellent des gestes opposés — l'une ne demande rien, l'autre demande d'aller voir.
+      try {
+        lister(racine);
+      } catch (err) {
+        racinesRefusees.push({ racine, raison: err?.message || String(err) });
+        continue;
+      }
+      racinesLues += 1;
+
+      for (const nom of rolesConnus()) {
+        const dossier = join(racine, roleDe(nom).dossier);
+        let candidats;
+        try {
+          candidats = lister(dossier);
+        } catch {
+          // ⚠️ ICI, L'ABSENCE EST NORMALE ET NE SE COMPTE PAS : un dépôt sans `.orchestrateur/`
+          // n'a rien refusé. La confondre avec un refus noierait les vrais refus dans son bruit
+          // — le faux échec d'instrument que ce module a déjà payé une fois.
+          continue;
+        }
+        for (const mandat of candidats) {
+          const lieu = join(dossier, mandat);
+          // Le rôle s'établit par le fait. Un `roleDuLieu` qui rend autre chose que ce rôle-ci
+          // — ou rien — écarte le candidat : on ne compte pas un lieu à demi posé.
+          if (roleDuLieu(lieu) !== nom) continue;
+          // 🔴 LA CLÉ EST LE MANDAT, JAMAIS LE CHEMIN. Mesuré : 116 chemins pour 15 mandats sur
+          // ce poste. Compter des chemins rendrait douze chantiers là où il y en a un, et le
+          // dirigeant ne pourrait plus compter ce qu'il lit.
+          const cle = `${nom} :: ${cleDuMandat(mandat)}`;
+          const vu = parMandat.get(cle);
+          if (vu) vu.chemins.push(lieu);
+          else parMandat.set(cle, { role: nom, mandat, chemins: [lieu] });
+        }
+      }
+    }
+
+    // ⚠️ ZÉRO RACINE LUE ⇒ ON N'A RIEN MESURÉ, et `entrees: []` affirmerait « j'ai regardé, il
+    // n'y en a pas ». C'est la panne de la MESURE, pas l'absence de l'objet : repliée en zéro,
+    // elle rendrait un parc amputé avec l'apparence d'un parc complet.
+    if (!racinesLues) {
+      return {
+        mesure: 'refusée',
+        raison: racines.length
+          ? `aucune des ${racines.length} racine(s) n’a pu être lue : ` +
+            racinesRefusees.map((r) => `${r.racine} (${r.raison})`).join(' ; ')
+          : 'aucune racine ne m’a été donnée : je n’ai regardé nulle part',
+        racines,
+        racinesRefusees,
+        entrees: null,
+      };
+    }
+
+    return { mesure: 'lue', racines, racinesRefusees, entrees: [...parMandat.values()] };
+  };
+}
+
+/** Les sous-DOSSIERS d'un chemin — un fichier au bon nom n'est pas un lieu. */
+function sousDossiers(chemin) {
+  return readdirSync(chemin, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+}
+
+/**
+ * LES RACINES OÙ CE POSTE RANGE SES DÉPÔTS — et ce compte est un PLANCHER, comme tout le reste.
+ *
+ * ⚠️ ON N'EXPLORE PAS LE DISQUE. Deux emplacements sont la convention écrite du poste : le
+ * dépôt principal (`~/GitRepo.nosync/<dépôt>`) et les worktrees ouverts par le lanceur de
+ * session (`~/worktrees/<dépôt>/<horodatage>`). Un dépôt rangé ailleurs n'est PAS vu — et c'est
+ * précisément pourquoi la vue rend la liste des racines qu'elle a fouillées : sans elle, une
+ * absence ne se distinguerait pas d'un lieu hors périmètre.
+ */
+export function racinesDuPoste({ foyer = homedir(), lister = sousDossiers } = {}) {
+  const racines = [];
+  const sous = (chemin) => {
+    try {
+      return lister(chemin);
+    } catch {
+      return [];
+    }
+  };
+  for (const d of sous(join(foyer, 'GitRepo.nosync'))) racines.push(join(foyer, 'GitRepo.nosync', d));
+  const wt = join(foyer, 'worktrees');
+  for (const depot of sous(wt)) for (const t of sous(join(wt, depot))) racines.push(join(wt, depot, t));
+  return racines;
+}
+
+/**
  * LA VUE DU PARC.
  *
  * @param recensement    le rendu de `unRecensement` — `{ agents: [...] | null, borne, … }`.
  *                       ⚠️ `agents: null` veut dire « je n'ai pas su regarder », JAMAIS
  *                       « il n'y a personne » : la vue le relaie tel quel plutôt que de rendre
  *                       un parc vide, parfaitement vert, sur un poste où plus rien n'est mesuré.
+ * @param lieux          le rendu de `lecteurDeLieux` — `{ mesure, racines, entrees }` — LE
+ *                       REGISTRE DURABLE (EF-VUE-007). C'est lui, et non les panes, qui décide
+ *                       de QUELS chantiers figurent : un chantier dont le terminal est mort y
+ *                       est encore. `null` veut dire « aucun lecteur ne m'a été donné », et
+ *                       `mesure: 'refusée'` veut dire « je n'ai pas pu lire » — jamais l'un
+ *                       pour l'autre, et jamais « il n'y a aucun lieu ».
  * @param lireChantier   `async (code) → { code, titre, statut, epics: [{ code, titre,
  *                       stories: [{ code, titre }] | null }] }` — INJECTÉ. Aucun appel réseau
  *                       n'est écrit ici : c'est ce qui rend ce module éprouvable sans clé et
@@ -346,9 +908,45 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
  *                       du même fichier continuant d'affirmer autre chose.
  * @param journaliser    `(message) → void`.
  */
-export async function laVueDuParc({ recensement = null, lireChantier = null, journaliser = () => {} } = {}) {
+export async function laVueDuParc({
+  recensement = null,
+  lieux = null,
+  lireChantier = null,
+  journaliser = () => {},
+} = {}) {
   const quand = recensement?.quand ?? null;
   const liste = recensement?.agents;
+  const borne = recensement?.borne ?? null;
+
+  // ═══ LE REGISTRE DURABLE — les LIEUX, et c'est lui qui porte le travail (RA-VUE-002).
+  //
+  // 🔴 LA VUE NE SE CONSTRUIT PLUS DEPUIS LES PANES SEULS, ET C'EST TOUT L'OBJET DE CE LOT.
+  // Elle énumérait `recensement.agents` — les terminaux VIVANTS. Un chantier dont
+  // l'orchestrateur avait fermé son terminal ne perdait pas une colonne : il DISPARAISSAIT,
+  // avec ses epics et ses stories, sans qu'une ligne ne dise qu'il avait existé.
+  //
+  // ⚠️ CE N'EST PAS UNE CRAINTE, C'EST UN COMPTE — mesuré à la main sur ce poste le 2026-08-22 :
+  // **15 mandats distincts portent un lieu d'orchestrateur sur le disque** (sur 116 chemins, le
+  // même mandat vivant dans plusieurs worktrees d'un même dépôt) ; **9 seulement sont portés par
+  // un pane vivant**. Six chantiers étaient invisibles, dont un qui porte douze lieux.
+  //
+  // ⚠️ ET CE N'EST PAS UN SECOND REGISTRE (RA-VUE-004) : `roles.js` l'écrit déjà, au sujet des
+  // lieux d'orchestrateur — « ces lieux SONT l'inventaire : les lister, c'est voir qui vit ici —
+  // aucun registre local ne les recopie ». On les LIT, on n'en recopie aucun.
+  const registreDesLieux = lieux
+    ? {
+        mesure: lieux.mesure ?? 'refusée',
+        racines: lieux.racines ?? null,
+        ...(lieux.mesure === 'lue' ? {} : { raison: lieux.raison ?? 'le registre des lieux a refusé' }),
+      }
+    : {
+        // ⚠️ « aucun lecteur ne m'a été donné » ≠ « il n'y a aucun lieu ». Sans cette distinction,
+        // un câblage manquant rendrait un poste sans chantier avec l'apparence d'une mesure.
+        mesure: 'non mesurée',
+        racines: null,
+        raison: 'aucun lecteur de lieux ne m’a été donné : je n’ai regardé AUCUN lieu versionné',
+      };
+  const entreesDeLieux = lieux?.mesure === 'lue' && Array.isArray(lieux.entrees) ? lieux.entrees : [];
 
   // ⚠️ UNE PANNE DE REGISTRE N'EST PAS UN PARC VIDE — la garde du recensement, reprise ici sur
   // son propre objet. Rendre `orchestrateurs: []` afficherait une vue impeccable et déserte.
@@ -358,6 +956,9 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
     return {
       quand,
       registre: { mesure: 'refusé', raison },
+      // La borne des lieux traverse MÊME ce refus : ne pas avoir pu mesurer les vivants ne dit
+      // rien de ce qu'on a pu lire au disque, et le taire ici ferait croire à un noir complet.
+      registreDesLieux,
       orchestrateurs: null,
       horsHierarchie: null,
       panesAmbigus: null,
@@ -413,43 +1014,45 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
   // ═══ LES ORCHESTRATEURS — la tête de la vue, et l'ordre est celui du registre.
   const orchestrateurs = [];
   const dansUneHierarchie = new Set();
-  for (const a of agents) {
-    if (roleEtabli(a) !== 'orchestrateur') continue;
-    dansUneHierarchie.add(cleDeLAgent(a));
-    const code = codePorteEnMandat(a);
+  //
+  // 🔴 UNE SEULE FABRIQUE DE LIGNE POUR LES DEUX SOURCES, ET C'EST CE QUI REND LE CRITÈRE
+  // DÉCIDANT ATTEIGNABLE. T-20260822-0015 exige que la vue construite SANS AUCUN TERMINAL
+  // affiche EXACTEMENT le même travail que la vue construite avec eux. Deux chemins de
+  // construction — un pour les vivants, un pour les lieux — divergeraient au premier correctif
+  // appliqué d'un seul côté, et le banc qui compare les deux vues serait le seul à le savoir…
+  // s'il pensait à comparer ce champ-là. Une seule fabrique, et la divergence est impossible.
+  const uneLigne = async ({ mandatBrut, code, commun }) => {
 
     // ⚠️ UN MANDAT QUI N'EST PAS UN CODE N'EST PAS UNE ERREUR. `matapedia` a pour mandat
     // `matapedia`, `general` a `general` : leur lieu est valide, leur chantier n'est traçable
     // nulle part. On les garde, SANS leur inventer de chantier — et surtout sans chercher le
     // chantier « qui ressemble le plus », qui est le geste que HS-VUE-002 interdit.
     if (!code) {
-      orchestrateurs.push({
-        agent: carteDe(a),
+      return {
+        ...commun,
         chantier: {
           mesure: 'non établi',
           code: null,
-          pourquoi: `son mandat « ${a?.mandat ?? '—'} » n’est pas un code de chantier : il ne se lit nulle part`,
+          pourquoi: `son mandat « ${mandatBrut ?? '—'} » n’est pas un code de chantier : il ne se lit nulle part`,
         },
         epics: null,
-      });
-      continue;
+      };
     }
 
     if (typeof lireChantier !== 'function') {
-      orchestrateurs.push({
-        agent: carteDe(a),
+      return {
+        ...commun,
         chantier: { mesure: 'non mesurée', code, raison: 'aucun accès au ServiceDesk ne m’a été donné' },
         epics: null,
-      });
-      continue;
+      };
     }
 
     let chantier;
     try {
       chantier = await lireChantier(code);
     } catch (err) {
-      orchestrateurs.push({
-        agent: carteDe(a),
+      return {
+        ...commun,
         chantier: {
           mesure: 'non mesurée',
           code,
@@ -457,36 +1060,32 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
         },
         // ⚠️ `null`, PAS `[]` — « je n'ai pas pu lire ses epics », jamais « il n'en a aucun ».
         epics: null,
-      });
-      continue;
+      };
     }
 
     // ⚠️ ICI `[]` EST UNE MESURE, et c'est le 3ᵉ G/W/T de T-20260822-0013 : un orchestrateur
     // dont le chantier ne porte aucun epic APPARAÎT, avec son chantier et rien dessous. Il
     // n'est pas omis — un orchestrateur sans epic n'est pas un orchestrateur absent.
     const epicsLus = Array.isArray(chantier?.epics) ? chantier.epics : [];
-    orchestrateurs.push({
-      agent: carteDe(a),
+    return {
+      ...commun,
       chantier: {
         mesure: 'lue',
         code,
         titre: chantier?.titre ?? null,
         statut: chantier?.statut ?? null,
-        // 🔴 L'ÉCART TRAVERSE, IL NE MEURT PAS ICI — et il mourait ici. `lecteurDeChantier`
-        // calcule `epicsEcartes` avec soin, en écrivant « l'écart ne disparaît pas » ; cette
-        // couche ne recopiait que code/titre/statut, et le chiffre s'évanouissait juste avant
-        // l'endroit où il compte : la ligne que lit le dirigeant. Deux étages justes, et la
-        // jointure entre eux gardée par personne — la forme même que ce lot a payée deux fois.
-        epicsEcartes: chantier?.epicsEcartes ?? 0,
-        // 🔴 LE JUMEAU, ET IL EST RESTÉ EN ARRIÈRE UN CYCLE ENTIER. Le commentaire ci-dessus a
-        // été écrit pour `epicsEcartes` en nommant DEUX pannes de filtre — les intrus et les
-        // manquants — et seul le premier a traversé. `epicsPlafonnes` mourait exactement à la
-        // même jointure, dans la même expression, à une ligne près.
-        //
-        // ⚠️ C'est « une garde posée sur un fichier ne garde pas sa famille », appliqué à un
-        // champ : j'avais corrigé le défaut QUE JE VENAIS DE VOIR, pas le défaut POSSIBLE — et
-        // son jumeau était nommé dans le commentaire du correctif lui-même.
-        epicsPlafonnes: chantier?.epicsPlafonnes ?? false,
+        // 🔴 LE STATUT D'UN CHANTIER EST AFFIRMÉ, PAS MESURÉ — EF-VUE-005, et c'est le défaut
+        // qui a coûté la journée du 21 août : croire qu'un travail avance parce qu'il est ÉCRIT
+        // qu'il avance. Quelqu'un a posé `in_progress` à un moment ; rien ici ne dit quand, ni
+        // que ce soit encore vrai. La vue le rend donc avec sa NATURE collée dessus, jamais nu
+        // à côté d'une activité mesurée à l'instant — où il se lirait comme un constat.
+        natureDuStatut: 'affirmé',
+        // 🔴 LES SIGNAUX SE RECOPIENT PAR LE MANIFESTE, PLUS À LA MAIN. Écrite à la main, cette
+        // jointure a perdu `epicsEcartes` une fois, puis son jumeau `epicsPlafonnes` un cycle
+        // entier plus tard — dans la même expression, à une ligne près, et nommé dans le
+        // commentaire du correctif qui venait de fermer le premier. Corriger le défaut VU ne
+        // ferme pas le défaut POSSIBLE : c'est la dérivation qui le ferme, pas la vigilance.
+        ...recopierLesSignaux(chantier, 'chantier'),
       },
       epics: epicsLus.map((e) => {
         const codeEpic = codeDuMandat(e?.code ?? '');
@@ -509,14 +1108,73 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
                   titre: s?.titre ?? null,
                   agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
                 })),
-          // Le plafond des stories traverse, comme celui des epics : il vient du lecteur, il ne
-          // se recalcule pas ici — et il ne meurt pas à cette jointure, contrairement à son
-          // jumeau d'un étage plus haut, qui y est resté un cycle entier.
-          storiesPlafonnees: e?.storiesPlafonnees ?? false,
-          storiesEcartees: e?.storiesEcartees ?? 0,
+          // Les signaux d'epic traversent par le MÊME manifeste que ceux du chantier : un seul
+          // tableau pour les deux étages, donc aucun étage ne peut rester en arrière de l'autre.
+          ...recopierLesSignaux(e, 'epic'),
         };
       }),
-    });
+    };
+  };
+
+  // ═══ SOURCE 1 — LES ORCHESTRATEURS VIVANTS. Un pane porte le mandat : on l'a MESURÉ.
+  const mandatsVus = new Set();
+  for (const a of agents) {
+    if (roleEtabli(a) !== 'orchestrateur') continue;
+    dansUneHierarchie.add(cleDeLAgent(a));
+    const carte = carteDe(a);
+    // ⚠️ CES TROIS FAITS SE CALCULENT UNE FOIS, ET SE POSENT SUR LES QUATRE SORTIES DE LA
+    // FABRIQUE. Les recopier à la main sur chacune est la forme exacte du défaut « une porte
+    // sur deux » que ce module a déjà payé : trois sorties corrigées, la quatrième oubliée, et
+    // rien ne rougit — parce que chaque sortie est atteinte par un cas différent.
+    const presence = presenceDe({ vivant: true, borne });
+    const adresse = adresseDe(carte, presence);
+    const cle = cleDuMandat(a?.mandat);
+    if (cle) mandatsVus.add(cle);
+    orchestrateurs.push(
+      await uneLigne({
+        mandatBrut: a?.mandat ?? null,
+        code: codePorteEnMandat(a),
+        commun: {
+          agent: carte,
+          porteur: porteurDuPane(carte),
+          presence,
+          activite: activiteDe(a),
+          adresse,
+        },
+      })
+    );
+  }
+
+  // ═══ SOURCE 2 — LES LIEUX SANS TERMINAL VIVANT. EF-VUE-007, ET C'EST LE CŒUR DE CE LOT.
+  //
+  // ⚠️ « SANS TERMINAL VIVANT » SE MESURE SUR LES MANDATS DÉJÀ VUS, PAS SUR LES PANES. Un même
+  // mandat vit dans plusieurs worktrees du même dépôt — mesuré : 116 chemins pour 15 mandats.
+  // Comparer des CHEMINS ferait apparaître onze fois le chantier dont un seul worktree est
+  // ouvert ; c'est le mandat qui identifie le chantier, jamais le dossier qui le porte.
+  for (const l of entreesDeLieux) {
+    if (l?.role !== 'orchestrateur') continue;
+    const cle = cleDuMandat(l?.mandat);
+    if (!cle || mandatsVus.has(cle)) continue;
+    mandatsVus.add(cle);
+    const presence = presenceDe({ vivant: false, borne });
+    orchestrateurs.push(
+      await uneLigne({
+        mandatBrut: l?.mandat ?? null,
+        // ⚠️ MÊME RÈGLE QUE POUR UN AGENT : un mandat qui n'est pas un code n'a pas de chantier
+        // à chercher. `general` et `essai-metier-rendu` portent des lieux parfaitement valides.
+        code: CODE_LISIBLE.test(cle) ? cle : null,
+        commun: {
+          // ⚠️ `agent: null` DIT UNE CHOSE PRÉCISE : le registre nomme un LIEU, pas une personne.
+          // Y mettre le nom que la convention laisse deviner referait le geste que `nomDeLAgent`
+          // interdit — un nom plausible fait écrire à quelqu'un qui n'existe pas.
+          agent: null,
+          porteur: porteurDuLieu(Array.isArray(l?.chemins) ? l.chemins : []),
+          presence,
+          activite: activiteDe(null),
+          adresse: adresseDe(null, presence),
+        },
+      })
+    );
   }
 
   // ═══ HORS DE TOUTE HIÉRARCHIE D'ORCHESTRATEUR — EF-VUE-004.
@@ -588,21 +1246,17 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
     chantiersNonMesures: orchestrateurs.filter((o) => o.chantier.mesure === 'non mesurée').length,
     chantiersNonEtablis: orchestrateurs.filter((o) => o.chantier.mesure === 'non établi').length,
     panesAmbigus: panesAmbigus.length,
-    // ⚠️ UN FILTRE QUI N'A PAS FILTRÉ EST UN FAIT, PAS UN DÉTAIL D'IMPLÉMENTATION. S'il n'est
-    // pas nul, le ServiceDesk a rendu des epics d'autres chantiers et c'est NOUS qui les avons
-    // écartés — le lecteur doit savoir que la garde a servi, sinon personne n'ira voir pourquoi.
-    epicsEcartes: orchestrateurs.reduce((n, o) => n + (o.chantier.epicsEcartes ?? 0), 0),
-    // Le plafond se compte en CHANTIERS touchés, pas en epics : on ne sait pas combien il en
-    // manque — c'est justement ce que « plafonné » veut dire.
-    chantiersPlafonnes: orchestrateurs.filter((o) => o.chantier.epicsPlafonnes).length,
-    epicsAuxStoriesPlafonnees: orchestrateurs.reduce(
-      (n, o) => n + (o.epics ?? []).filter((e) => e.storiesPlafonnees).length,
-      0
-    ),
-    storiesEcartees: orchestrateurs.reduce(
-      (n, o) => n + (o.epics ?? []).reduce((m, e) => m + (e.storiesEcartees ?? 0), 0),
-      0
-    ),
+    // 🔴 LES CHIFFRES DE LIGNE SONT DÉRIVÉS EUX AUSSI. Écrits à la main ici, ils ont produit le
+    // défaut le plus grave du lot : `chantiersSansTerminal` comptait `vivant !== true`, donc il
+    // FONDAIT « mesuré, aucun terminal » et « on n'a pas pu établir » — et le résumé affirmait
+    // une mort qu'on n'avait pas constatée. Et `presencesNonEtablies`, le signal qui aurait dit
+    // le vrai, était calculé et n'atteignait NI le résumé NI le texte.
+    ...compterLesSignauxDeLigne(orchestrateurs),
+    // 🔴 LES QUATRE AGRÉGATIONS SONT DÉRIVÉES DU MANIFESTE. Écrites à la main, elles étaient
+    // la SECONDE des quatre jointures qu'un signal neuf devait franchir — et celle où il
+    // mourait le plus silencieusement : un signal recopié dans la vue mais jamais agrégé
+    // n'apparaît nulle part, et aucun banc nommé pour un signal CONNU ne peut le savoir.
+    ...compterLesSignaux(orchestrateurs),
     // ⚠️ LE DÉNOMINATEUR VOYAGE AVEC LE COMPTE. Voir plus haut : un nombre d'ambiguïtés sans
     // l'ensemble sur lequel il a été compté n'est pas vérifiable, et se compare à tort à un
     // autre nombre compté ailleurs.
@@ -612,11 +1266,15 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
   return {
     quand,
     registre: { mesure: 'lu' },
+    // ⚠️ IL TRAVERSE MÊME QUAND TOUT VA BIEN — c'est une BORNE, pas une alarme. Un lieu posé
+    // hors des racines qu'on a fouillées n'a pas été vu, et le taire présenterait comme le parc
+    // ce qui n'en est qu'une tranche. Même conduite que `borne` pour les sessions muettes.
+    registreDesLieux,
     orchestrateurs,
     horsHierarchie,
     panesAmbigus,
     compte,
-    resume: resumeDeLaVue(compte, recensement),
+    resume: resumeDeLaVue(compte, recensement, registreDesLieux),
     // La borne du recensement traverse la vue SANS ÊTRE RÉÉCRITE : le compte reste un PLANCHER,
     // et les sessions muettes restent nommées. Une vue qui perdrait cette borne présenterait
     // comme le parc ce qui n'en est qu'une tranche.
@@ -625,38 +1283,33 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
   };
 }
 
-function resumeDeLaVue(compte, recensement) {
+function resumeDeLaVue(compte, recensement, registreDesLieux = null) {
   const muettes = recensement?.borne?.sessionsRefusees?.length ?? 0;
+  // ⚠️ UN REGISTRE DE LIEUX QUI N'A PAS ÉTÉ LU NE SE REND PAS COMME « aucun lieu ». C'est la
+  // panne de la MESURE, pas l'absence de l'objet : repliée en zéro, elle ferait lire une vue
+  // amputée avec l'apparence d'une vue complète — sur un poste où six chantiers sur quinze
+  // n'ont aucun terminal vivant, l'amputation vaut la moitié du parc.
+  const lieuxMuets = registreDesLieux && registreDesLieux.mesure !== 'lue' ? registreDesLieux : null;
   return (
     `AU MOINS ${compte.orchestrateurs} orchestrateur(s) — ${compte.epicsLus} epic(s) lu(s), ` +
     `${compte.chantiersNonMesures} chantier(s) NON MESURÉ(s), ${compte.chantiersNonEtablis} mandat(s) ` +
     `qui ne sont pas des codes de chantier ; ${compte.horsHierarchie} agent(s) hors de toute ` +
     `hiérarchie d’orchestrateur ; ${compte.panesAmbigus} identifiant(s) de pane ambigu(s) sur ` +
     `${compte.entreesComparees} entrée(s) comparée(s).` +
-    // ⚠️ ON NE DIT « 0 écarté » NULLE PART. Un signal répété à chaque ligne cesse d'être un
-    // signal : c'est le faux positif symétrique du défaut qu'on vient de fermer, sur la même
-    // frontière. Il ne parle QUE quand la garde a réellement servi.
-    (compte.epicsEcartes
-      ? ` ⚠️ ${compte.epicsEcartes} epic(s) écarté(s) : le ServiceDesk a rendu des epics d’autres ` +
-        'chantiers malgré son filtre — ils ont été retamisés ici.'
+    // 🔴 LES PHRASES SONT DÉRIVÉES DU MANIFESTE — troisième jointure, fermée par construction.
+    // Chacune ne parle QUE quand son signal a servi : « 0 écarté » répété à chaque ligne cesse
+    // d'être un signal, et c'est le faux positif symétrique du défaut qu'on ferme, sur la même
+    // frontière. Le résumé est ensuite poussé tel quel dans le texte par `rendreLaVue` : c'est
+    // ce qui fait que la troisième jointure emporte la quatrième.
+    phrasesDesSignaux(compte) +
+    (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '') +
+    (lieuxMuets
+      ? ` ⚠️ LES LIEUX N’ONT PAS ÉTÉ LUS (${lieuxMuets.raison}) : un chantier dont plus aucun ` +
+        'terminal ne porte le mandat est donc ABSENT de cette vue, et rien d’autre ne le dirait.'
       : '') +
-    // ⚠️ DEUX PANNES, DEUX PHRASES, ET AUCUNE QUAND IL N'Y A RIEN À DIRE. « Écarté » veut dire
-    // qu'on a reçu TROP et retamisé ; « plafonné » veut dire qu'on a peut-être reçu TROP PEU et
-    // qu'on ne le saura pas d'ici. Les fondre ferait lire une panne pour l'autre, et elles
-    // appellent des gestes opposés.
-    (compte.chantiersPlafonnes
-      ? ` ⚠️ ${compte.chantiersPlafonnes} chantier(s) dont la liste d’epics est PLAFONNÉE : il en ` +
-        'manque peut-être, et ce compte-là est un plancher de plus.'
-      : '') +
-    (compte.epicsAuxStoriesPlafonnees
-      ? ` ⚠️ ${compte.epicsAuxStoriesPlafonnees} epic(s) dont la liste de stories est PLAFONNÉE : ` +
-        'des stories manquent peut-être sous eux.'
-      : '') +
-    (compte.storiesEcartees
-      ? ` ⚠️ ${compte.storiesEcartees} story(s) écartée(s) : le ServiceDesk a rendu des stories ` +
-        'd’autres epics malgré son filtre — elles ont été retamisées ici.'
-      : '') +
-    (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '')
+    // 🔴 DÉRIVÉES, comme celles du lecteur — et il y en a maintenant DEUX là où une seule phrase
+    // à la main confondait les deux états. Voir `SIGNAUX_DE_LA_LIGNE`.
+    phrasesDesSignauxDeLigne(compte)
   );
 }
 
@@ -682,6 +1335,27 @@ export function rendreAttribution(attribution) {
   //   — `PHRASE_DE_LINDICE` précède le nom : jamais un nom nu.
   const pistes = indices.map((c) => `${c.nom ?? 'ANONYME'} (${c.pane ?? '?'})`).join(', ');
   return `${MOT_NON_ETABLI} — ${PHRASE_DE_LINDICE} : ${pistes}`;
+}
+
+/**
+ * COMMENT ON ATTEINT CET AGENT, EN TEXTE — et l'ORDRE est ce qui décide de l'utilité.
+ *
+ * 🔴 LE TITRE DE FENÊTRE VIENT EN PREMIER (T-20260822-0017). Ce n'est pas une préférence de
+ * mise en page : le dirigeant avait reçu le pane, la session, le dossier ET le nom de l'agent,
+ * et il a répondu « je trouve pas le pane ». Ce qu'il reconnaît à l'œil, dans une barre
+ * d'onglets, c'est le titre. `w7M:p2` ne lui dit rien.
+ *
+ * ⚠️ ET LE PANE NE VOYAGE JAMAIS SANS SA SESSION. Mesuré : `w7:p1` existe dans `somtech` ET
+ * dans `progex`, avec deux agents différents. Un pane nu envoie chez le mauvais.
+ */
+export function rendreAdresse(adresse) {
+  if (adresse?.mesure !== 'lue') {
+    return `[aucune adresse : ${adresse?.pourquoi ?? 'son terminal n’a pas pu être atteint'}]`;
+  }
+  const ou = `${adresse.pane}${adresse.session ? ` @ ${adresse.session}` : ' @ session INCONNUE'}`;
+  // ⚠️ « sans titre de fenêtre » PLUTÔT QUE RIEN : mesuré, 3 panes sur 76 n'ont pas la clé, et
+  // un blanc à cet endroit se lit comme un oubli de rendu, pas comme un fait.
+  return adresse.titre ? `[« ${adresse.titre} » · ${ou}]` : `[${ou} — sans titre de fenêtre]`;
 }
 
 /** Le geste que la commande demande au veilleur — écrit UNE fois, ici. */
@@ -793,15 +1467,48 @@ export function rendreLaVue(vue) {
   l.push('');
 
   for (const o of vue.orchestrateurs ?? []) {
-    const nom = o.agent.nom ?? `ANONYME (${o.agent.pane})`;
+    // ⚠️ UNE LIGNE SANS AGENT N'EST PAS UNE LIGNE ANONYME. `agent: null` veut dire que le
+    // registre nomme un LIEU et pas une personne : « ANONYME » ferait croire à un agent vivant
+    // qui aurait omis de se nommer, et enverrait le dirigeant le chercher.
+    const nom = o.agent
+      ? (o.agent.nom ?? `ANONYME (${o.agent.pane})`)
+      : 'SANS TERMINAL — porté par son lieu';
     const c = o.chantier;
     const tete =
       c.mesure === 'lue'
-        ? `${c.code}${c.titre ? ` · ${c.titre}` : ''}`
+        ? // 🔴 LE STATUT PORTE SA NATURE, COLLÉE À LUI. Rendu nu à côté d'une activité mesurée
+          // à l'instant, `in_progress` se lit comme un constat d'avancement — EF-VUE-005, et le
+          // défaut exact du 21 août. `affirmé` est le mot qui empêche cette lecture.
+          `${c.code}${c.titre ? ` · ${c.titre}` : ''}` +
+          (c.statut ? ` [statut ${c.statut} — ${c.natureDuStatut ?? 'affirmé'} par le registre, pas mesuré]` : '')
         : c.mesure === 'non établi'
           ? `chantier ${MOT_NON_ETABLI} — ${c.pourquoi}`
           : `chantier ${c.code} NON MESURÉ — ${c.raison}`;
-    l.push(`${nom} — ${tete}   [${o.agent.pane}]`);
+    l.push(`${nom} — ${tete}   ${rendreAdresse(o.adresse)}`);
+
+    // ⚠️ LA PRÉSENCE ET L'ACTIVITÉ SONT DEUX QUESTIONS, ET AUCUNE DES DEUX N'EST LE STATUT DE
+    // SESSION. « il vit » ≠ « il travaille » ≠ « le registre dit que son chantier avance ».
+    // ⚠️ LE LIEU QUI PORTE SE LIT DANS LES DEUX CAS SANS TERMINAL, et il ne se lisait que dans
+    // UN. Une ligne « SANS TERMINAL — porté par son lieu » qui ne dit pas QUEL lieu est une
+    // attribution sans son objet : le dirigeant sait qu'un registre le porte, et ne peut pas
+    // aller le voir. C'est « une garde posée sur un cas ne couvre pas sa famille », appliqué au
+    // rendu — j'avais écrit la ligne pour `vivant: false`, et sur ce poste les quatre lignes
+    // réelles sont toutes à `vivant: null`. Elle n'était donc JAMAIS rendue.
+    if (o.presence?.vivant !== true && o.porteur?.lieux?.length) {
+      l.push(`     ↳ porté par le lieu ${o.porteur.lieux[0]}${o.porteur.lieux.length > 1 ? ` (et ${o.porteur.lieux.length - 1} autre(s) copie(s))` : ''}`);
+    }
+    if (o.presence?.vivant === null) {
+      l.push(`     ↳ présence ${MOT_NON_ETABLI} — ${o.presence.pourquoi}`);
+    } else if (o.presence?.vivant === false) {
+      l.push(`     ↳ ${o.presence.source ?? 'aucun terminal vivant ne porte ce mandat'}`);
+    }
+    if (o.activite) {
+      l.push(
+        o.activite.mesure === 'lue'
+          ? `     ↳ activité MESURÉE à l’écran : ${o.activite.enVol ? 'au travail' : 'rien en vol'}`
+          : `     ↳ activité NON MESURÉE — ${o.activite.pourquoi}`
+      );
+    }
 
     if (o.epics === null) {
       // ⚠️ « pas pu lire » ne se rend PAS comme « il n'y en a aucun ». Sans cette ligne, un
@@ -870,6 +1577,20 @@ export function rendreLaVue(vue) {
     }
   }
 
+  // ⚠️ OÙ L'ON A CHERCHÉ DES LIEUX SE DIT, TOUJOURS — une borne sans son périmètre n'est pas
+  // une borne. Un chantier dont le lieu vit hors de ces racines n'a pas été vu, et rien d'autre
+  // dans cette page ne pourrait l'apprendre au lecteur.
+  if (vue.registreDesLieux) {
+    l.push('');
+    l.push(
+      vue.registreDesLieux.mesure === 'lue'
+        ? `LIEUX VERSIONNÉS cherchés dans : ${(vue.registreDesLieux.racines ?? []).join(', ') || '(aucune racine)'}` +
+          ' — un lieu posé ailleurs n’a PAS été vu.'
+        : `⚠️ LES LIEUX N’ONT PAS ÉTÉ LUS — ${vue.registreDesLieux.raison}. Un chantier dont plus ` +
+          'aucun terminal ne porte le mandat est donc ABSENT de cette vue.'
+    );
+  }
+
   if (vue.borne?.phrase) {
     l.push('');
     l.push(vue.borne.phrase);
@@ -882,7 +1603,7 @@ export function rendreLaVue(vue) {
   // peut rien y faire. C'est la conduite du recensement, et elle ne se relâche pas en changeant
   // de module.
   for (const s of vue.borne?.sessionsRefusees ?? []) {
-    l.push(`  · session muette : ${s.session ?? '(sans nom)'}`);
+    l.push(`  · session muette : ${nomDeSession(s.session) ?? '(sans nom)'}`);
   }
   l.push('');
   l.push(vue.regle);

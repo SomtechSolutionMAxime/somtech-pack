@@ -807,7 +807,21 @@ export async function unRecensement({
       // lit avec `role.mesure`, qui dit POURQUOI.
       mandat,
       lieu,
+      // ⚠️ LE TITRE DE FENÊTRE — ET C'EST LA SEULE CHOSE QUE LE DIRIGEANT RECONNAÎT À L'ŒIL.
+      // EF-VUE-006 : le pane, la session, le dossier ET le nom de l'agent lui avaient été
+      // donnés, et il a répondu « je trouve pas le pane ». Ce poste porte treize sessions herdr,
+      // chacune numérotant ses panes indépendamment ; `w7M:p2` ne désigne rien pour un humain.
+      //
+      // 🔴 LA CLÉ EST OMISE PAR LA SOURCE QUAND IL N'Y EN A PAS, elle n'est pas rendue à `null`
+      // — mesuré le 2026-08-22 : `herdr pane list` porte `terminal_title` sur 73 panes sur 76.
+      // C'est la forme exacte du piège déjà payé sur `agent` (voir `formes-reelles.js`), et le
+      // `?? null` est ce qui empêche `undefined` de fuir jusque dans le texte rendu.
+      titre: p?.terminal_title ?? null,
       // L'état de la SESSION — et rien de plus. Il ne dit pas si le chantier existe encore.
+      //
+      // ⚠️ ET IL NE DIT PAS NON PLUS S'IL TRAVAILLE : `idle` signifie « vu au registre », pas
+      // « au repos » — zéro `working` sur 227 cas mesurés. La vue ne le rend jamais tel quel
+      // (EF-VUE-005) ; c'est `travailEnVol`, plus bas, qui répond à cette question-là.
       statut: p?.agent_status ?? null,
       // L'état du CHANTIER, qui est une autre question et une autre source.
       chantier,
