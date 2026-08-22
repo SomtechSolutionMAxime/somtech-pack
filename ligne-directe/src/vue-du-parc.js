@@ -579,6 +579,55 @@ export function rendreAttribution(attribution) {
  */
 export function rendreLaVue(vue) {
   const l = [];
+
+  // 🔴 CE QU'ON A REÇU EST-IL SEULEMENT UNE VUE ? — et ça ne l'était pas toujours. MESURÉ le
+  // 2026-08-22 en tapant la commande pour de vrai : le veilleur en vie ne connaissait pas le
+  // geste et rendait `{ ok: false, erreur: 'geste inconnu : vue' }`. Cet objet traversait
+  // `rendreLaVue` sans résistance — `vue.orchestrateurs ?? []` — et sortait une vue
+  // PARFAITEMENT MISE EN PAGE ET PARFAITEMENT VIDE : un en-tête, deux titres de section, et
+  // le néant. Le dirigeant y lit « personne ne travaille » ; la vérité est que personne n'a
+  // REGARDÉ.
+  //
+  // ⚠️ C'est mot pour mot le défaut que ce module dit combattre — il le gardait à l'intérieur
+  // de `laVueDuParc` (`agents: null` → registre refusé) et pas à SA PORTE. La garde ne
+  // s'appliquait qu'aux objets que la vue avait elle-même construits, jamais à ceux qui lui
+  // arrivaient d'ailleurs : la jointure entre le veilleur et le rendu n'appartenait à aucun
+  // des deux, donc personne ne la gardait.
+  //
+  // ⚠️ ET ELLE NE SE MUTE PAS, ELLE S'EXERCE. Cette arête traverse un PROCESSUS : aucune
+  // mutation du dépôt ne pouvait la révéler, parce que le code des deux côtés était juste.
+  // Il a fallu TAPER LA COMMANDE.
+  if (!vue || typeof vue !== 'object' || !('registre' in vue)) {
+    const cause = vue?.erreur ?? vue?.raison ?? 'ce qui a été reçu n’est pas une vue du parc';
+    // ⚠️ UN REFUS DIT CE QU'IL FAUT FAIRE, PAS SEULEMENT QU'IL REFUSE. « geste inconnu » tout
+    // seul envoie chercher une panne de code — alors que le code est juste des deux côtés.
+    // Ce refus-là signifie UNE chose précise et actionnable : le PROCESSUS en vie porte un code
+    // plus ancien que celui qui est installé sur le disque. Sans cette phrase, le lecteur
+    // diagnostique un défaut qui n'existe pas — le faux échec d'instrument que ce même module
+    // a déjà corrigé une fois aujourd'hui, sur les epics d'un mandat non-code.
+    const gesteInconnu = /geste inconnu/i.test(String(cause));
+    return [
+      'LA VUE DU PARC — REFUSÉE',
+      '',
+      `je n’ai pas obtenu de vue : ${cause}.`,
+      '',
+      'Ce n’est PAS « personne ne travaille » — c’est « je n’ai pas su regarder ».',
+      ...(gesteInconnu
+        ? [
+            '',
+            'CE QUE CE REFUS SIGNIFIE, précisément : le VEILLEUR EN VIE porte un code plus ancien ' +
+              'que celui qui est installé. Fusionné ≠ publié ≠ installé ≠ RECHARGÉ — le dernier ' +
+              'maillon est un processus, et il ne se recharge pas tout seul. Le code n’est pas en ' +
+              'cause : inutile de chercher une panne dans le module.',
+            'CE QU’IL FAUT FAIRE : faire recharger le veilleur du poste. Il sert plusieurs ' +
+              'chantiers à la fois — ce n’est pas un geste qu’on pose seul en passant.',
+          ]
+        : []),
+      '',
+      REGLE_DE_LA_VUE,
+    ].join('\n');
+  }
+
   if (vue?.registre?.mesure === 'refusé') {
     l.push('LA VUE DU PARC — SANS REGISTRE');
     l.push('');
