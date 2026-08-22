@@ -222,6 +222,13 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     // applications, et chacun aurait l'air d'un fait mesuré.
     const epics = tousEpics.filter((e) => e?.project_id === chantier.id);
     const epicsEcartes = tousEpics.length - epics.length;
+    // ⚠️ DEUX PANNES DE FILTRE, PAS UNE — et une seule était dite. `epicsEcartes` compte les
+    // INTRUS (le service a rendu trop) ; il ne dit rien des MANQUANTS (le service a rendu une
+    // page pleine, et les epics de ce chantier peuvent continuer derrière). Un `epicsEcartes: 0`
+    // sur une liste plafonnée se lit « rien n'a été écarté », alors qu'il manque peut-être la
+    // moitié du chantier. La troncature est déjà dite un étage plus haut, pour la recherche du
+    // chantier : ne pas la dire ici était la même incohérence, dans le même fichier.
+    const epicsPlafonnes = tousEpics.length >= limite;
 
     const avecStories = [];
     for (const e of epics) {
@@ -254,6 +261,10 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       epics: avecStories,
       // L'écart ne disparaît pas : s'il n'est pas nul, le filtre du service n'a pas filtré.
       epicsEcartes,
+      // Et la troncature non plus : `true` veut dire « il en manque peut-être », jamais « il
+      // n'y en a pas d'autre ». Les deux pannes se disent séparément parce qu'elles appellent
+      // des gestes opposés — retamiser d'un côté, lever le plafond de l'autre.
+      epicsPlafonnes,
     };
   };
 }
@@ -405,6 +416,12 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
         code,
         titre: chantier?.titre ?? null,
         statut: chantier?.statut ?? null,
+        // 🔴 L'ÉCART TRAVERSE, IL NE MEURT PAS ICI — et il mourait ici. `lecteurDeChantier`
+        // calcule `epicsEcartes` avec soin, en écrivant « l'écart ne disparaît pas » ; cette
+        // couche ne recopiait que code/titre/statut, et le chiffre s'évanouissait juste avant
+        // l'endroit où il compte : la ligne que lit le dirigeant. Deux étages justes, et la
+        // jointure entre eux gardée par personne — la forme même que ce lot a payée deux fois.
+        epicsEcartes: chantier?.epicsEcartes ?? 0,
       },
       epics: epicsLus.map((e) => {
         const codeEpic = codeDuMandat(e?.code ?? '');
@@ -446,9 +463,14 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
   // sa ligne, et l'y remettre ici le compterait deux fois.
   for (const o of orchestrateurs) {
     for (const e of o.epics ?? []) {
-      for (const c of e.agent?.agents ?? []) dansUneHierarchie.add(`${c.session ?? ''}\u0000${c.pane ?? ''}`);
+      // ⚠️ ON APPELLE `cleDeLAgent`, ON NE LA RÉÉCRIT PAS — la clé était recomposée à la main
+      // ici, deux fois. Changer le séparateur dans la fonction laissait les 25 essais VERTS, et
+      // `dansUneHierarchie` aurait cessé silencieusement de reconnaître les agents joints : ils
+      // seraient réapparus dans « hors hiérarchie », comptés deux fois. C'est « une porte sur
+      // deux », le motif que ce lot dénonce dans `mandat.js` et reproduisait ici.
+      for (const c of e.agent?.agents ?? []) dansUneHierarchie.add(cleDeLAgent(c));
       for (const s of e.stories ?? []) {
-        for (const c of s.agent?.agents ?? []) dansUneHierarchie.add(`${c.session ?? ''}\u0000${c.pane ?? ''}`);
+        for (const c of s.agent?.agents ?? []) dansUneHierarchie.add(cleDeLAgent(c));
       }
     }
   }
@@ -480,6 +502,10 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
     chantiersNonMesures: orchestrateurs.filter((o) => o.chantier.mesure === 'non mesurée').length,
     chantiersNonEtablis: orchestrateurs.filter((o) => o.chantier.mesure === 'non établi').length,
     panesAmbigus: panesAmbigus.length,
+    // ⚠️ UN FILTRE QUI N'A PAS FILTRÉ EST UN FAIT, PAS UN DÉTAIL D'IMPLÉMENTATION. S'il n'est
+    // pas nul, le ServiceDesk a rendu des epics d'autres chantiers et c'est NOUS qui les avons
+    // écartés — le lecteur doit savoir que la garde a servi, sinon personne n'ira voir pourquoi.
+    epicsEcartes: orchestrateurs.reduce((n, o) => n + (o.chantier.epicsEcartes ?? 0), 0),
     // ⚠️ LE DÉNOMINATEUR VOYAGE AVEC LE COMPTE. Voir plus haut : un nombre d'ambiguïtés sans
     // l'ensemble sur lequel il a été compté n'est pas vérifiable, et se compare à tort à un
     // autre nombre compté ailleurs.
@@ -510,6 +536,13 @@ function resumeDeLaVue(compte, recensement) {
     `qui ne sont pas des codes de chantier ; ${compte.horsHierarchie} agent(s) hors de toute ` +
     `hiérarchie d’orchestrateur ; ${compte.panesAmbigus} identifiant(s) de pane ambigu(s) sur ` +
     `${compte.entreesComparees} entrée(s) comparée(s).` +
+    // ⚠️ ON NE DIT « 0 écarté » NULLE PART. Un signal répété à chaque ligne cesse d'être un
+    // signal : c'est le faux positif symétrique du défaut qu'on vient de fermer, sur la même
+    // frontière. Il ne parle QUE quand la garde a réellement servi.
+    (compte.epicsEcartes
+      ? ` ⚠️ ${compte.epicsEcartes} epic(s) écarté(s) : le ServiceDesk a rendu des epics d’autres ` +
+        'chantiers malgré son filtre — ils ont été retamisés ici.'
+      : '') +
     (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '')
   );
 }
@@ -595,11 +628,14 @@ export function rendreLaVue(vue) {
       // dirigeant a demandée. Le trait vertical continue la fratrie de l'orchestrateur.
       o.epics.forEach((e, i) => {
         const dernierEpic = i === o.epics.length - 1;
-        l.push(`  ${dernierEpic ? '└─' : '├─'} ${e.code}${e.titre ? ` · ${e.titre}` : ''}   ${rendreAttribution(e.agent)}`);
+        // ⚠️ UN CODE ABSENT SE DIT, IL NE SE COERCE PAS. Un ticket sans `ticket_id` rendait
+        // « null · titre » en toutes lettres au dirigeant — la coercition JS qui fuit dans un
+        // texte destiné à être lu. « (sans code) » dit le même fait sans avoir l'air d'un bogue.
+        l.push(`  ${dernierEpic ? '└─' : '├─'} ${e.code ?? '(sans code)'}${e.titre ? ` · ${e.titre}` : ''}   ${rendreAttribution(e.agent)}`);
         const stories = e.stories ?? [];
         stories.forEach((st, j) => {
           const tuyau = dernierEpic ? '   ' : '  │';
-          l.push(`${tuyau}    ${j === stories.length - 1 ? '└─' : '├─'} ${st.code}${st.titre ? ` · ${st.titre}` : ''}   ${rendreAttribution(st.agent)}`);
+          l.push(`${tuyau}    ${j === stories.length - 1 ? '└─' : '├─'} ${st.code ?? '(sans code)'}${st.titre ? ` · ${st.titre}` : ''}   ${rendreAttribution(st.agent)}`);
         });
         // ⚠️ « pas pu lire » ≠ « il n'y en a aucune », JUSQUE SUR UNE STORY. Le lecteur de
         // chantier rend `stories: null` quand l'appel a échoué : le taire ferait passer un epic

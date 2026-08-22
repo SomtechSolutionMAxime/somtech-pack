@@ -241,6 +241,13 @@ test('un epic qu’aucun agent vivant ne porte est rendu SANS AGENT ÉTABLI — 
   const a = vue.orchestrateurs[0].epics[0].agent;
   assert.equal(a.mesure, 'non établi');
   assert.deepEqual(a.indices, [], 'aucun agent ne porte même ce code comme nom');
+  // ⚠️ ET LA RAISON DIT LEQUEL DES DEUX CAS C'EST — « personne, même pas comme nom » n'est pas
+  // « personne comme mandat, mais quelqu'un comme nom ». Les deux rendent `mesure: 'non établi'`
+  // et appellent des gestes opposés : chercher qui porte ce travail d'un côté, aller vérifier
+  // le lieu d'un agent identifié de l'autre. Sans cette garde, les deux formulations étaient
+  // interchangeables — mutation confirmée en revue de fond.
+  assert.match(a.pourquoi, /ni comme mandat lu à son lieu, ni comme nom/, 'la raison distingue ce cas de celui à indice');
+  assert.ok(!a.pourquoi.includes('chef d’équipe'), 'et n’emprunte pas la raison de l’autre cas');
 
   const texte = rendreLaVue(vue);
   // 🔴 LE PLUS PLAUSIBLE EST À PORTÉE : `kamouraska` est le SEUL agent vivant, il est

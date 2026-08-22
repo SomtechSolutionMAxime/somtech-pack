@@ -154,3 +154,32 @@ test('sans transport, il n’y a pas de lecteur — `null`, pour que la vue dise
   assert.equal(lecteurDeChantier({ appeler: null }), null);
   assert.equal(lecteurDeChantier({ appeler: 'pas une fonction' }), null);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// DEUX PANNES DE FILTRE, PAS UNE — les intrus et les manquants
+//
+// `epicsEcartes` compte ce que le service a rendu EN TROP. Il ne dit rien de ce qu'il a rendu
+// EN MOINS : une page pleine peut cacher la suite du chantier. Un `epicsEcartes: 0` sur une
+// liste plafonnée se lit « rien n'a été écarté », alors qu'il manque peut-être la moitié des
+// epics. Les deux pannes appellent des gestes opposés — retamiser d'un côté, lever le plafond
+// de l'autre — donc elles se disent séparément.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('une liste d’epics PLAFONNÉE est signalée — un écart nul ne veut pas dire « je les ai tous »', async () => {
+  const projets = [{ id: 'uuid-A', project_id: 'P-20260822-0001', title: 'le chantier' }];
+  // Exactement la limite : la page est pleine, donc très probablement coupée.
+  const epics = [
+    { id: 'e1', epic_id: 'E-1', project_id: 'uuid-A' },
+    { id: 'e2', epic_id: 'E-2', project_id: 'uuid-A' },
+  ];
+  const appeler = async (nom) => (nom === 'projects' ? { projects: projets } : nom === 'epics' ? { epics } : { tickets: [] });
+
+  const plein = await lecteurDeChantier({ appeler, limite: 2 })('P-20260822-0001');
+  assert.equal(plein.epicsEcartes, 0, 'aucun intrus : le service a bien filtré');
+  assert.equal(plein.epicsPlafonnes, true, 'MAIS la page est pleine — il en manque peut-être');
+
+  // Et le symétrique : une page NON pleine ne crie pas au plafond. Sinon le signal, répété
+  // partout, cesse d'en être un.
+  const large = await lecteurDeChantier({ appeler, limite: 200 })('P-20260822-0001');
+  assert.equal(large.epicsPlafonnes, false, 'une page non pleine n’invoque aucun plafond');
+});
