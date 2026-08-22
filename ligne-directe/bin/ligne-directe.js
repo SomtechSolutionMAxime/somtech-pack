@@ -21,6 +21,7 @@ import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
 import { rolesConnus } from '../src/roles.js';
+import { ecrireLaVue, GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import {
   preparerLieuRepresentant,
@@ -110,6 +111,14 @@ function usage(code = 0) {
                                                            et NE CREE RIEN si le poste ne peut pas
                                                            ouvrir de ligne (sa ligne est obligatoire)
   etat                                                     ce qui est ouvert
+  vue [--json]                                             QUI travaille sur QUOI : par orchestrateur,
+                                                           ses epics, leurs stories, et le NOM de
+                                                           l'agent sur chaque ligne. La jointure
+                                                           passe par le CODE DU MANDAT lu au lieu
+                                                           de l'agent, jamais par un libelle de
+                                                           ticket. Un travail dont l'agent n'a pas
+                                                           pu etre etabli est rendu comme tel.
+                                                           Elle LIT et REND : elle ne pilote rien.
   recensement                                              QUI est vivant (TOUS les roles), QUEL metier il porte,
                                                            et de combien il s'ecarte de la
                                                            reference du poste. L'empreinte fait
@@ -493,6 +502,13 @@ if (geste === 'relever') {
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
+} else if (geste === 'vue') {
+  // ⚠️ DEUX RENDUS, ET LE TEXTE EST LE DÉFAUT — parce que c'est le dirigeant qui lit. Toute la
+  // garde de HS-VUE-002 se joue sur la LIGNE rendue, pas sur le champ JSON : « NON ÉTABLI » y
+  // précède l'indice, et l'indice y porte sa phrase. Rendre du JSON par défaut mettrait ces
+  // trois conditions hors de portée du seul lecteur qu'elles protègent.
+  const vue = await parler({ geste: GESTE_DE_LA_VUE });
+  process.stdout.write(ecrireLaVue(vue, args));
 } else if (geste === 'recensement') {
   // ⚠️ RENDU TEL QUEL, SANS RÉSUMÉ MAISON. Le rendu porte déjà `resume`, `regle` et — quand la
   // mesure a échoué — `inventaireRefuse` avec `agents: null`. Recomposer ici une phrase
