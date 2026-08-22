@@ -1,0 +1,387 @@
+{
+ "dagr": 3,
+ "run": {
+  "id": "run-soiree-20260821",
+  "title": "soirée du 21 août : herdr 0.7.5 → 0.8.2, et le parc remis à plat",
+  "started_at": "2026-08-21T22:00:00Z"
+ },
+ "generated_at": "2026-08-22T00:30:00Z",
+ "projects": [
+  {
+   "id": "P1",
+   "title": "le métier rendu"
+  },
+  {
+   "id": "P2",
+   "title": "la montée de herdr"
+  },
+  {
+   "id": "P3",
+   "title": "le parc"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "T1",
+   "project": "P1",
+   "title": "GF-ORC-005 devient un hook",
+   "kind": "impl",
+   "state": "done",
+   "owner": "session",
+   "attempts": [
+    {
+     "id": "T1·a1",
+     "actor": "session",
+     "started_at": "2026-08-21T14:00:00Z",
+     "ended_at": "2026-08-21T22:10:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "8 mutations, 7 rouges · 0 faux refus sur 74 commandes"
+     }
+    }
+   ],
+   "deps": []
+  },
+  {
+   "id": "T2",
+   "project": "P1",
+   "title": "la pose copie tout le métier",
+   "kind": "impl",
+   "state": "done",
+   "owner": "session",
+   "deps": [
+    "T1"
+   ],
+   "attempts": [
+    {
+     "id": "T2·a1",
+     "actor": "session",
+     "started_at": "2026-08-21T22:20:00Z",
+     "ended_at": "2026-08-21T22:50:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "failed",
+     "outcome": {
+      "result": "failed",
+      "evidence": "verified",
+      "receipt": "la CI a trouvé un obligatoire sauté en silence — vert chez l'auteur, rouge en chaîne"
+     }
+    },
+    {
+     "id": "T2·a2",
+     "actor": "session",
+     "started_at": "2026-08-21T22:55:00Z",
+     "ended_at": "2026-08-21T23:10:00Z",
+     "n": 2,
+     "cause": {
+      "by": "CI",
+      "reason": "un obligatoire non régulier était sauté sans bruit",
+      "ref": "T2·a1",
+      "type": "sent_back"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "6 mutations, 6 rouges · CI 6/6"
+     }
+    }
+   ]
+  },
+  {
+   "id": "G1",
+   "project": "P1",
+   "title": "gate: v1.87.0 publiée",
+   "kind": "gate",
+   "state": "done",
+   "owner": "dirigeant",
+   "deps": [
+    "T1",
+    "T2"
+   ],
+   "attempts": [
+    {
+     "id": "G1·a1",
+     "actor": "dirigeant",
+     "started_at": "2026-08-21T23:15:00Z",
+     "ended_at": "2026-08-21T23:20:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "npm rend 1.87.0"
+     }
+    }
+   ]
+  },
+  {
+   "id": "T3",
+   "project": "P2",
+   "title": "monter herdr 0.7.5 → 0.8.2",
+   "kind": "impl",
+   "state": "done",
+   "owner": "dirigeant",
+   "attempts": [
+    {
+     "id": "T3·a1",
+     "actor": "session",
+     "started_at": "2026-08-21T23:50:00Z",
+     "ended_at": "2026-08-21T23:55:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "rejected",
+     "outcome": {
+      "result": "rejected",
+      "evidence": "verified",
+      "receipt": "protocol_mismatch — et sans --session, 0 pane rendu SANS erreur. Rétabli."
+     }
+    },
+    {
+     "id": "T3·a2",
+     "actor": "script détaché",
+     "started_at": "2026-08-22T00:25:00Z",
+     "ended_at": "2026-08-22T00:26:00Z",
+     "n": 2,
+     "cause": {
+      "by": "dirigeant",
+      "reason": "la montée ne peut pas être limitée à une session — go quand même",
+      "ref": "T3·a1",
+      "type": "sent_back"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "0.8.2 · 7 serveurs arrêtés · 58 noms encore sur disque"
+     }
+    }
+   ],
+   "deps": []
+  },
+  {
+   "id": "T4",
+   "project": "P2",
+   "title": "la détection est-elle réparée ?",
+   "kind": "test",
+   "state": "done",
+   "owner": "session",
+   "deps": [
+    "T3"
+   ],
+   "attempts": [
+    {
+     "id": "T4·a1",
+     "actor": "session",
+     "started_at": "2026-08-22T00:40:00Z",
+     "ended_at": "2026-08-22T00:45:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "working 1 · blocked 13 — en 0.7.5 : AUCUN working sur 225 panes"
+     }
+    }
+   ]
+  },
+  {
+   "id": "T5",
+   "project": "P3",
+   "title": "reposer les 57 noms perdus",
+   "kind": "impl",
+   "state": "done",
+   "owner": "session",
+   "deps": [
+    "T3"
+   ],
+   "attempts": [
+    {
+     "id": "T5·a1",
+     "actor": "session",
+     "started_at": "2026-08-22T00:50:00Z",
+     "ended_at": "2026-08-22T01:10:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "57/57 joignables par leur nom, vérifiés un par un"
+     }
+    }
+   ]
+  },
+  {
+   "id": "T6",
+   "project": "P3",
+   "title": "le ménage : 283 panes → 97",
+   "kind": "impl",
+   "state": "done",
+   "owner": "session",
+   "deps": [
+    "T5"
+   ],
+   "attempts": [
+    {
+     "id": "T6·a1",
+     "actor": "session",
+     "started_at": "2026-08-22T01:15:00Z",
+     "ended_at": "2026-08-22T01:40:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "184 panes fermés · aucun nommé perdu"
+     }
+    }
+   ]
+  },
+  {
+   "id": "T7",
+   "project": "P3",
+   "title": "halte générale : 30 agents rendent compte",
+   "kind": "impl",
+   "state": "done",
+   "owner": "session",
+   "deps": [
+    "T6"
+   ],
+   "attempts": [
+    {
+     "id": "T7·a1",
+     "actor": "session",
+     "started_at": "2026-08-22T01:45:00Z",
+     "ended_at": "2026-08-22T02:10:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "reported",
+      "receipt": "30 comptes rendus — et 3 PR dites dormantes étaient déjà fusionnées"
+     }
+    }
+   ]
+  },
+  {
+   "id": "T8",
+   "project": "P3",
+   "title": "verser les 3 lieux qui ne tenaient qu'à une branche",
+   "kind": "impl",
+   "state": "done",
+   "owner": "session",
+   "deps": [
+    "T7"
+   ],
+   "attempts": [
+    {
+     "id": "T8·a1",
+     "actor": "session",
+     "started_at": "2026-08-22T02:15:00Z",
+     "ended_at": "2026-08-22T02:30:00Z",
+     "n": 1,
+     "cause": {
+      "ref": "T7·a1",
+      "reason": "un agent a signalé que son lieu n'existait nulle part",
+      "type": "followup"
+     },
+     "state": "done",
+     "outcome": {
+      "result": "done",
+      "evidence": "verified",
+      "receipt": "PR #315 fusionnée · main porte 7 lieux"
+     }
+    }
+   ]
+  },
+  {
+   "id": "T9",
+   "project": "P3",
+   "title": "la portée des 3 orchestrateurs n'est écrite nulle part",
+   "kind": "question",
+   "state": "blocked",
+   "owner": "dirigeant",
+   "deps": [
+    "T8"
+   ],
+   "attempts": [
+    {
+     "id": "T9·a1",
+     "actor": "godbout",
+     "started_at": "2026-08-22T02:35:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "working",
+     "locator": {
+      "kind": "pane",
+      "value": "w8W:p1"
+     },
+     "liveness": {
+      "prompt_acknowledged": true,
+      "last_output_at": "2026-08-22T02:45:00Z"
+     }
+    }
+   ],
+   "unblock": "le dirigeant dicte les trois portées, ou les fait renaître"
+  },
+  {
+   "id": "T10",
+   "project": "P1",
+   "title": "essayer dagr",
+   "kind": "test",
+   "state": "working",
+   "owner": "session",
+   "deps": [
+    "T4"
+   ],
+   "attempts": [
+    {
+     "id": "T10·a1",
+     "actor": "session",
+     "started_at": "2026-08-22T02:40:00Z",
+     "n": 1,
+     "cause": {
+      "type": "initial"
+     },
+     "state": "working",
+     "locator": {
+      "kind": "pane",
+      "value": "w8H:p1"
+     },
+     "liveness": {
+      "prompt_acknowledged": true,
+      "last_output_at": "2026-08-22T02:45:00Z"
+     }
+    }
+   ]
+  }
+ ],
+ "events": []
+}

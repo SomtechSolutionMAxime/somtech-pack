@@ -1,7 +1,7 @@
 # reflexes
 
 > **En un mot** — Qui il soutient, sa ronde, ce qu'il ne peut pas faire, et les biais qui le visent.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
 
 > **Répond de** GF-ORC-001 · GF-ORC-002 · GF-ORC-003 · GF-ORC-004 · GF-ORC-005 · GF-ORC-006 · GF-ORC-007 · GF-ORC-008 · GF-ORC-009 · GF-ORC-011 · GF-ORC-012 · GF-ORC-013 · GF-ORC-014 · RA-ORC-004 · RA-ORC-006 · RA-ORC-014
 
