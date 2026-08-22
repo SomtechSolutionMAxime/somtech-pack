@@ -224,6 +224,7 @@ test('un chantier ILLISIBLE ne se rend PAS comme un chantier VIDE — « je n’
 
   const muet = vue.orchestrateurs.find((o) => o.agent.nom === 'illisible');
   const vide = vue.orchestrateurs.find((o) => o.agent.nom === 'vide');
+  assert.ok(muet && vide, 'préalable : les deux orchestrateurs sont dans la vue');
 
   // ⚠️ `null` ET `[]` NE SONT PAS INTERCHANGEABLES ICI, et c'est tout l'objet de ce banc.
   assert.equal(muet.epics, null, '« pas pu lire » se rend `null`');
@@ -396,4 +397,58 @@ test('deux entrées portant le même identifiant de pane dans des sessions diff�
     vue.panesAmbigus[0].pourquoi.includes('n’a pas été mesuré'),
     'la question reste ouverte parce qu’elle l’est'
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 DEUX SURVIVANTES DE PLUS, TROUVÉES EN REPOSANT LA MUTATION CORRECTEMENT
+//
+// La première campagne avait rendu « (d) survivante » sur le champ `epics` d'un chantier
+// illisible. **C'était un artefact** : la mutation ajoutait un champ voisin sans jamais toucher
+// `epics: null`, et le harnais ne l'a pas signalé — un motif absent y passe SANS erreur, donc
+// une mutation qui ne mute rien se lit exactement comme une garde qui tient.
+//
+// Reposée par NUMÉRO DE LIGNE, insensible aux apostrophes typographiques qui avaient fait
+// échouer le motif, la mutation a rendu son vrai verdict : le cas illisible est ATTRAPÉ, et
+// **deux AUTRES cas ne l'étaient pas** — ceux-ci, que ces deux bancs ferment.
+//
+// ⚠️ MÊME FAMILLE QUE LES QUATRE PREMIÈRES : des PERTES SILENCIEUSES. Aucune ne produit
+// d'erreur ; chacune rend quelque chose de plausible et de faux. C'est le défaut même que cet
+// outil existe pour révéler, DANS l'outil.
+
+test('un orchestrateur dont le mandat n’est pas un code garde `epics: null` — on n’a rien lu, donc on ne dit pas « il n’y en a aucun »', async (t) => {
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'matapedia');
+
+  const rendu = await recenser([unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: lieu })], [['w1:p1', 'matapedia', undefined]]);
+  const vue = await laVueDuParc({ recensement: rendu, lireChantier: async (code) => ({ code, epics: [] }) });
+
+  const o = vue.orchestrateurs[0];
+  // ⚠️ LA NUANCE EST FINE ET ELLE COMPTE : son chantier n'est pas un code, donc le ServiceDesk
+  // n'a même pas été interrogé. Rendre `[]` affirmerait « je suis allé voir, il n'a pas d'epic »
+  // pour un chantier qu'on n'a JAMAIS cherché. `null` dit la vérité : on ne sait pas.
+  assert.equal(o.epics, null, 'aucune lecture n’a eu lieu : ce n’est pas « aucun epic »');
+  const texte = rendreLaVue(vue);
+  assert.ok(!texte.includes('aucun epic'), 'et le texte ne prétend pas qu’on a compté zéro epic');
+});
+
+test('sans accès au ServiceDesk, la vue garde `epics: null` et NOMME la cause — jamais un parc sans travail', async (t) => {
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-20260822-0001');
+
+  const rendu = await recenser([unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: lieu })], [['w1:p1', 'kamouraska', undefined]]);
+  // ⚠️ LE CAS RÉEL, PAS UN CAS CONSTRUIT : `accesServiceDesk()` rend `null` dès qu'aucune clé
+  // n'est présente — c'est l'état de tout poste sans `SOMTECH_DESK_API_KEY`, et de la CI.
+  const vue = await laVueDuParc({ recensement: rendu, lireChantier: null });
+
+  const o = vue.orchestrateurs[0];
+  assert.equal(o.epics, null, '« pas d’accès » ne se rend PAS comme « aucun epic »');
+  assert.equal(o.chantier.mesure, 'non mesurée');
+  assert.ok(o.chantier.raison.includes('aucun accès'), 'et la cause est nommée, pas devinée');
+  assert.equal(vue.compte.chantiersNonMesures, 1, 'le compte le porte aussi');
+
+  const texte = rendreLaVue(vue);
+  assert.ok(texte.includes('NON MESURÉ'), 'le texte dit qu’on n’a pas mesuré');
+  assert.ok(!texte.includes('aucun epic'), 'et surtout pas qu’il n’y a pas de travail');
 });
