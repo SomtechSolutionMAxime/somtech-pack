@@ -558,12 +558,63 @@ export async function unRecensement({
       ? references?.[role.nom] ?? { refus: `aucune référence ne m’a été donnée pour le rôle « ${role.nom} »` }
       : { refus: `le rôle n’étant pas établi, aucune référence ne s’applique` };
 
-    const mesure = role.mesure === 'établi' && lieu ? mesurer(lieu) : null;
+    // ═══ « JE N'AI PAS PU MESURER » ET « IL N'Y A RIEN À MESURER » NE SE DISENT PAS PAREIL.
+    //
+    // ⚠️ DÉFAUT RÉEL, TROUVÉ EN REVUE DE FOND, ET C'EST CE REGISTRE QUI LE FABRIQUAIT. Le métier
+    // n'était mesuré que si le rôle était établi, et TOUT `null` était ensuite rendu « le métier
+    // de … ne s'est pas laissé mesurer ». Sur le parc réel : 81 des 97 entrées portaient
+    // « le métier de « null » ne s'est pas laissé mesurer » — le message qui veut dire VA VOIR,
+    // L'INSTRUMENT A ÉCHOUÉ, pour des agents qui n'ont simplement aucun lieu de rôle.
+    //
+    // Le coût n'est pas cosmétique, et il est double : on envoie chercher une panne qui n'existe
+    // pas, ET on noie le seul cas où ce message est vrai — un lieu réel dont le métier refuse la
+    // lecture — dans 81 fausses alertes de forme identique. C'est très exactement le « faux
+    // positif dans un registre dont tout l'objet est de n'en produire aucun » que ce module
+    // s'interdit trente lignes plus haut, pris à l'envers : une lecture JAMAIS ENTREPRISE se
+    // disait « je n'ai pas pu ».
+    const aQuoiMesurer = role.mesure === 'établi' && Boolean(lieu);
+    const mesure = aQuoiMesurer ? mesurer(lieu) : null;
+    const metier = mesure
+      ? { mesure: 'lue', empreinte: mesure.empreinte, octets: mesure.octets }
+      : aQuoiMesurer
+        ? { mesure: 'refusée', refus: `le métier de « ${lieu} » ne s’est pas laissé mesurer` }
+        : {
+            mesure: 'sans objet',
+            pourquoi:
+              role.mesure === 'refusée'
+                ? 'le lieu ne s’est pas laissé lire : il n’y a pas de métier à comparer, et ce n’est ' +
+                  'pas le métier qui a refusé — c’est le lieu'
+                : 'aucun lieu de rôle ne porte cet agent : il n’y a pas de métier à mesurer',
+          };
+
     // ⚠️ `idle` NE DIT RIEN DU MANDAT. Un chantier clos et une session au repos rendent tous les
     // deux `idle` — c'est écrit ici parce que c'est ici qu'on serait tenté de les confondre.
-    const chantier = etatDuMandat
-      ? await etatDuMandat(mandat)
-      : { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné' };
+    //
+    // ⚠️ ET ON N'INTERROGE PAS LE SERVICEDESK SUR CE QUI N'EST PAS UN CHANTIER — même motif que
+    // pour le métier ci-dessus. Le segment sous le dossier de rôle nomme un CODE DE CHANTIER
+    // pour un orchestrateur et un NOM DE CLIENT pour un représentant (`roles.js`,
+    // `mandat_designe`). Poser la question pour les seconds rendait « « Charles-Olivier » n'est
+    // pas un code de chantier : son état ne se lit nulle part » — la formulation d'une mesure
+    // ratée pour une question qui n'avait pas lieu d'être posée. Sans lieu du tout, c'était
+    // « « null » n'est pas un code de chantier », 81 fois.
+    const mandatDesigne = candidat ? roleDe(candidat.role).mandat_designe : null;
+    const chantier = !mandat
+      ? {
+          mesure: 'sans objet',
+          clos: null,
+          pourquoi: 'aucun lieu de rôle ne porte cet agent : il n’y a pas de mandat à lire',
+        }
+      : mandatDesigne !== 'chantier'
+        ? {
+            mesure: 'sans objet',
+            clos: null,
+            pourquoi:
+              `le mandat d’un ${roleDe(candidat.role).libelle} nomme ${mandatDesigne === 'client' ? 'son client' : 'autre chose'}, ` +
+              'pas un chantier dont l’état se lirait au ServiceDesk',
+          }
+        : etatDuMandat
+          ? await etatDuMandat(mandat)
+          : { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné' };
     const enVol = lireEcran
       ? travailEnVol(await lireEcran(p))
       : { mesure: 'non mesurée', raison: 'aucun lecteur d’écran ne m’a été donné', enVol: null };
@@ -598,9 +649,13 @@ export async function unRecensement({
       statut: p?.agent_status ?? null,
       // L'état du CHANTIER, qui est une autre question et une autre source.
       chantier,
-      metier: mesure
-        ? { empreinte: mesure.empreinte, octets: mesure.octets }
-        : { refus: `le métier de « ${lieu} » ne s’est pas laissé mesurer` },
+      metier,
+      // ⚠️ LA RÉFÉRENCE EST RENDUE SUR L'ENTRÉE, PAS SEULEMENT DANS LE JEU GLOBAL. `aJour: null`
+      // a TROIS causes qui appellent trois gestes différents — le métier n'a pas été mesuré, le
+      // rôle n'est pas établi, ou aucune référence n'existe pour ce rôle — et sans ce champ,
+      // l'entrée les rend toutes les trois comme un « je ne sais pas » muet. Mesuré en écrivant
+      // la garde du câblage des références : elle ne pouvait rien affirmer, faute de ce champ.
+      reference,
       aJour: comparable ? mesure.empreinte === reference.empreinte : null,
       ecartOctets: comparable ? mesure.octets - reference.octets : null,
       travailEnVol: enVol,
@@ -632,12 +687,22 @@ export async function unRecensement({
 
   const aJour = agents.filter((a) => a.aJour === true).length;
   const enRetard = agents.filter((a) => a.aJour === false).length;
-  const nonMesures = agents.filter((a) => a.aJour === null).length;
-  // ⚠️ LES MANDATS SE COMPTENT À PART, et leurs trois états ne se replient pas en deux : un
-  // mandat non mesuré compté avec les ouverts ferait dire au registre qu'il sait ce qu'il ignore.
+  // ⚠️ ET « SANS OBJET » SE COMPTE À PART DE « PAS SU MESURER » — jusque dans le résumé, qui est
+  // la seule ligne que le lecteur normal lit. Fondus, ils faisaient dire au registre « 81 non
+  // mesurés » là où il n'y avait rien à mesurer : le lecteur y lisait un instrument en panne sur
+  // 84 % du parc, et le seul vrai échec disparaissait dedans.
+  const metierSansObjet = agents.filter((a) => a.aJour === null && a.metier?.mesure === 'sans objet').length;
+  const nonMesures = agents.filter((a) => a.aJour === null && a.metier?.mesure !== 'sans objet').length;
+  // ⚠️ LES MANDATS SE COMPTENT À PART, et leurs états ne se replient pas les uns sur les autres :
+  // un mandat non mesuré compté avec les ouverts ferait dire au registre qu'il sait ce qu'il
+  // ignore ; un mandat SANS OBJET compté avec les non mesurés lui ferait dire qu'il a échoué là
+  // où il n'a rien tenté.
   const mandatsClos = agents.filter((a) => a.chantier?.clos === true).length;
   const mandatsOuverts = agents.filter((a) => a.chantier?.clos === false).length;
-  const mandatsNonMesures = agents.filter((a) => a.chantier?.clos == null).length;
+  const mandatsSansObjet = agents.filter((a) => a.chantier?.mesure === 'sans objet').length;
+  const mandatsNonMesures = agents.filter(
+    (a) => a.chantier?.clos == null && a.chantier?.mesure !== 'sans objet'
+  ).length;
 
   // ⚠️ UN COMPTE PAR RÔLE, ET « JE NE SAIS PAS » SE COMPTE À PART. Replier les rôles non établis
   // sur un rôle connu — même sur le plus probable — ferait dire au registre qu'il sait ce qu'il
@@ -672,8 +737,10 @@ export async function unRecensement({
     `recensement — ${liste.length} pane(s) vus, AU MOINS ${agents.length} agent(s) : ` +
       (rolesTrouves.length ? rolesTrouves.join(', ') : 'aucun rôle établi') +
       `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré ; ` +
-      `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats ` +
-      `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s) ; ` +
+      `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s), ` +
+      `${metierSansObjet} sans métier à comparer ; mandats ` +
+      `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s), ` +
+      `${mandatsSansObjet} sans mandat de chantier ; ` +
       `${anonymes} anonyme(s), ${nomsNonMesures} nom(s) non mesuré(s)` +
       (panesSansAgent ? ` ; ${panesSansAgent} pane(s) sans agent, écartés` : '') +
       (sessionsRefusees.length
@@ -700,9 +767,11 @@ export async function unRecensement({
       aJour,
       enRetard,
       nonMesures,
+      metierSansObjet,
       mandatsOuverts,
       mandatsClos,
       mandatsNonMesures,
+      mandatsSansObjet,
     },
     // ⚠️ LA BORNE VOYAGE AVEC LE CHIFFRE, dans le rendu — pas dans un compte rendu à côté.
     // C'est elle qui interdit de lire « sept orchestrateurs » comme « il y en a sept ».
@@ -731,8 +800,18 @@ export async function unRecensement({
       (rolesTrouves.length ? `${rolesTrouves.join(', ')}` : 'aucun rôle établi') +
       (roleNonEtabli ? `, ${roleNonEtabli} au rôle NON ÉTABLI` : '') +
       (roleNonMesure ? `, ${roleNonMesure} au rôle NON MESURÉ` : '') +
-      ` — ${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats : ` +
-      `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s)` +
+      ` — ${aJour} à jour, ${enRetard} en retard` +
+      // ⚠️ ON NOMME CE QUI N'A PAS PU ÊTRE MESURÉ, jamais « NON MESURÉ » tout court. Trois choses
+      // distinctes peuvent l'être dans cette phrase — le métier, le mandat, le nom — et elles
+      // appellent trois gestes différents. Un « 1 NON MESURÉ(s) » nu se lisait comme celui du
+      // NOM, l'étiquette la plus chargée de la ligne, et envoyait chercher un agent muet.
+      (nonMesures ? `, ${nonMesures} à l’écart NON MESURÉ` : '') +
+      // ⚠️ « SANS OBJET » N'EST PAS « PAS SU MESURER », et le résumé doit le dire. Les deux
+      // appellent des gestes opposés : l'un n'appelle RIEN, l'autre envoie refaire la mesure.
+      (metierSansObjet ? `, ${metierSansObjet} sans métier à comparer (rien à mesurer, pas un échec)` : '') +
+      ` ; mandats : ${mandatsOuverts} ouvert(s), ${mandatsClos} clos` +
+      (mandatsNonMesures ? `, ${mandatsNonMesures} au mandat NON MESURÉ` : '') +
+      (mandatsSansObjet ? `, ${mandatsSansObjet} sans mandat de chantier (rien à lire, pas un échec)` : '') +
       // ⚠️ LES DEUX FAÇONS DE N'AVOIR PAS DE NOM, DISTINCTES JUSQU'ICI. « anonyme » appelle à le
       // faire se nommer ; « non mesuré » appelle à refaire la mesure. Les fondre enverrait
       // corriger ce qui va bien.

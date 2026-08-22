@@ -42,6 +42,20 @@ const ROLES = {
     libelle_pluriel: 'représentants de clients',
     /** Le dossier, à la racine du dépôt, sous lequel les lieux de ce rôle se rangent. */
     dossier: '.gestionnaire',
+    /**
+     * CE QUE NOMME LE SEGMENT SOUS `dossier` — et il ne nomme PAS la même chose selon le rôle.
+     *
+     * `.orchestrateur/d-20260822-0001/` porte un CODE DE CHANTIER, dont l'état se lit au
+     * ServiceDesk. `.gestionnaire/Charles-Olivier/` porte un NOM DE CLIENT, qui ne se lit
+     * nulle part comme un chantier.
+     *
+     * ⚠️ SANS CETTE CLÉ, LE REGISTRE FABRIQUE UN ÉCHEC DE MESURE. Interroger l'état du mandat
+     * d'un représentant rendait « « Charles-Olivier » n'est pas un code de chantier : son état
+     * ne se lit nulle part » — la formulation d'une mesure RATÉE, pour une question qui n'avait
+     * simplement pas lieu d'être posée. Un faux échec d'instrument coûte plus qu'un silence :
+     * il envoie chercher une panne qui n'existe pas, et il noie les vrais échecs dans son bruit.
+     */
+    mandat_designe: 'client',
     /** Le dossier de gabarits que le pack dépose sous `.claude/templates/`. */
     gabarits: 'gestionnaire-client',
     /**
@@ -119,6 +133,9 @@ const ROLES = {
     // l'inventaire : les lister, c'est voir qui vit ici — aucun registre local ne les
     // recopie, le ServiceDesk faisant foi sur les chantiers eux-mêmes.
     dossier: '.orchestrateur',
+    // Le segment sous `.orchestrateur/` est un CODE DE CHANTIER — voir `mandat_designe` du
+    // représentant pour le pourquoi de cette clé.
+    mandat_designe: 'chantier',
     gabarits: 'orchestrateur',
     nature: 'interne',
     // UNE SEULE LIGNE, et son chantier est LIBRE : c'est le code du chantier qu'il mène, connu

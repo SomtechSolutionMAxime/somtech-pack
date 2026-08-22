@@ -275,6 +275,52 @@ test('RÔLE — « je n’ai pas pu lire » et « il n’y a pas de rôle » ne 
   }
 });
 
+test('RÔLE — un lieu dont on ne peut pas VOIR les fichiers refuse aussi, pas seulement les LIRE', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // MUTATION SURVIVANTE, TROUVÉE EN REVUE PORTAIL — et c'est la moitié oubliée du correctif.
+  //
+  // Le refus se franchit par DEUX portes : la LECTURE d'un fichier (`premiereLigne`, éprouvée
+  // par le banc au-dessus) et la PRÉSENCE d'un fichier (`fichierPresent`). Les bancs existants
+  // font tous `chmod 000` sur le FICHIER `CLAUDE.md` — or `statSync` réussit sur un fichier
+  // illisible dont le répertoire l'est : ils n'empruntent que la première porte. La seconde
+  // pouvait être supprimée en entier sans qu'un seul des 805 essais rougisse.
+  //
+  // ⚠️ ET SON CAS EST ORDINAIRE, PAS EXOTIQUE : un `.claude/` dont les droits ont été retirés.
+  // Le lieu est COMPLET ; `existsSync` répondait `false` — « il n'y est pas » — et le registre
+  // rendait « lieu à demi posé », c'est-à-dire le diagnostic faux que ce lot existe pour fermer.
+  const { roleDuLieu, roleDuLieuOuRefus } = await import('../src/lieu-agent.js');
+
+  const complet = lieu(METIER_ORCH);
+  assert.equal(roleDuLieuOuRefus(complet), 'orchestrateur', 'contrôle positif : visible, le rôle s’établit');
+
+  const sousDossier = join(complet, '.claude');
+  chmodSync(sousDossier, 0o000);
+  try {
+    let vueRefusee = false;
+    try {
+      readFileSync(join(sousDossier, 'settings.json'), 'utf8');
+    } catch {
+      vueRefusee = true;
+    }
+    assert.ok(
+      vueRefusee,
+      `le répertoire reste traversable malgré « chmod 000 » (uid ${process.getuid?.() ?? '?'}) — condition non fabriquée`,
+    );
+
+    const rendu = roleDuLieuOuRefus(complet);
+    assert.equal(
+      typeof rendu,
+      'object',
+      `un lieu dont un fichier obligatoire est INVISIBLE doit REFUSER, pas rendre « aucun rôle » (${rendu})`,
+    );
+    assert.match(rendu.refus, /settings\.json/, 'la raison nomme le fichier qu’on n’a pas pu voir');
+    assert.match(rendu.refus, /pas laissé voir/, 'et dit qu’il s’agit de la VUE, pas de la lecture');
+    assert.equal(roleDuLieu(complet), null, 'et l’ancienne porte garde son contrat, ici aussi');
+  } finally {
+    chmodSync(sousDossier, 0o700);
+  }
+});
+
 test('RÔLE — un lieu VRAIMENT incomplet reste « aucun rôle », il ne devient pas un refus', async () => {
   // Le miroir du banc précédent, et il est indispensable : une fonction qui refuserait à la
   // moindre difficulté rendrait l'autre vert en supprimant la distinction qu'il garde. Les deux

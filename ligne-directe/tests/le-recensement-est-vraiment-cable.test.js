@@ -230,6 +230,53 @@ test('le câblage RÉEL rend « refusée » sur un lieu qu’il n’a PAS PU LIR
   assert.equal(rendu.compte?.roleNonMesure, 1, 'le résumé compte les rôles qu’il n’a PAS PU mesurer');
 });
 
+test('le câblage RÉEL n’écarte PAS un agent que herdr a vu SANS nom — anonyme ≠ pas vu', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // MUTATION SURVIVANTE, TROUVÉE EN REVUE PORTAIL — et c'est le cœur déclaré de T-20260822-0011.
+  //
+  // `nomDeLAgent` distingue « vu, sans nom » (ANONYME → le faire se nommer) de « pas vu »
+  // (NON MESURÉ → refaire la mesure). Son comportement unitaire est éprouvé — mais uniquement
+  // contre un `nomsConnus` fabriqué à la main dans un banc. Le SEUL producteur réel de cette
+  // forme est le veilleur, et il n'avait aucun banc : remettre le `.filter((a) => a.name)`
+  // laissait les 805 essais VERTS.
+  //
+  // ⚠️ DEUX ÉTAGES JUSTES DONT LA JOINTURE N'EST PAS GARDÉE. Le filtre remis, les 34 agents
+  // anonymes du poste basculeraient tous en « nom NON MESURÉ » : le registre enverrait refaire
+  // une mesure qui a parfaitement réussi, et cesserait de dire qui est inadressable.
+  const p = posteHerdr(bac, [{ pane_id: 'w1:p1', foreground_cwd: '/tmp/un-projet' }], 'sans-nom');
+  p.pane('w1:p1', { boite: '' });
+  p.panes([{ pane_id: 'w1:p1', foreground_cwd: '/tmp/un-projet' }]);
+
+  const v = veilleurNu('sans-nom');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  try {
+    process.env.PATH = p.path;
+    process.env.FAUX_HERDR_ETAT = p.etat;
+    process.env.HOME = join(bac, 'foyer-jetable-sans-nom');
+    process.env.HERDR_SOCKET_PATH = join(p.etat, 'socket');
+    rendu = await v.recensementDuPoste();
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+    delete process.env.FAUX_HERDR_ETAT;
+  }
+
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  assert.equal(rendu.agents.length, 1, 'l’agent est recensé — un sans-nom n’est jamais omis');
+  const nom = rendu.agents[0].nom;
+  assert.equal(
+    nom.mesure,
+    'aucun',
+    `herdr l’a VU sans nom : c’est un ANONYME, pas une mesure ratée (rendu : ${JSON.stringify(nom)})`,
+  );
+  assert.equal(nom.valeur, null, 'et son nom n’est jamais comblé depuis son mandat ou son lieu');
+  assert.equal(rendu.compte.anonymes, 1, 'le compte le porte du bon côté…');
+  assert.equal(rendu.compte.nomsNonMesures, 0, '…et surtout pas de l’autre');
+});
+
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
   // ⚠️ CE BANC EXISTE PARCE QU'UNE MUTATION A SURVÉCU. `arreter()` retient la ronde de deux
   // façons : il pose `this.arrete`, et il libère le minuteur. Retirer l'une OU l'autre ne fait

@@ -87,6 +87,26 @@ export function copierLeDepot({ racine = racineDuDepot(), sousLaRacineSeulement 
  *   d'un import cassé le meilleur résultat possible de la campagne.
  */
 export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-directe', delaiMs = 600_000 } = {}) {
+  // ⚠️ `sousDossier` EST UNE BORNE, ET ELLE SE DÉCLARE. Une campagne lancée sur la seule suite
+  // de `ligne-directe` rendra SURVIVANTE toute mutation dont les seuls gardes vivent ailleurs
+  // — `naissance-representant` importe `lieu-agent.js` et en a 513. `lancerToutesLesSuites`
+  // existe pour ça ; qui appelle celle-ci mesure UNE suite et doit le savoir.
+  // ⚠️ UN HARNAIS QUI SE RELANCE LUI-MÊME NE S'ARRÊTE JAMAIS — mesuré, 69 copies du dépôt en dix
+  // minutes avant que la commande ne soit tuée. Les bancs de ce harnais VIVENT dans la suite
+  // qu'il lance : sans liste de fichiers, `node --test` les retrouve dans la copie, ils
+  // relancent une copie, et ainsi de suite. Le défaut est silencieux — chaque niveau a l'air de
+  // travailler — et il remplit le disque avant de rendre quoi que ce soit.
+  //
+  // La borne est une PROFONDEUR, pas une exclusion de fichiers : un banc qu'on écarterait de la
+  // copie cesserait d'être éprouvé sous mutation, ce qui est exactement le contraire du but.
+  // Ici, le premier niveau tourne entier ; le second REFUSE, en le disant.
+  if (process.env.SOUS_HARNAIS_DE_MUTATION === '1') {
+    return {
+      refus:
+        'ce lancement est DÉJÀ dans un harnais de mutation : le relancer se répéterait sans fin. ' +
+        'Une campagne se lance depuis le dépôt, jamais depuis une copie mutée.',
+    };
+  }
   // ⚠️ LE RAPPORTEUR SE FORCE, ET L'ENVIRONNEMENT DU RUNNER SE RETIRE — les deux, mesurés.
   // Lancé DEPUIS un `node --test`, l'enfant hérite de `NODE_TEST_CONTEXT` et bascule sur un
   // autre rapporteur : le résumé change de forme, le compte devient introuvable, et la campagne
@@ -95,6 +115,7 @@ export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-direc
   // mesuré — un refus juste dans sa forme et faux dans son motif.
   const env = { ...process.env };
   for (const cle of Object.keys(env)) if (cle.startsWith('NODE_TEST_')) delete env[cle];
+  env.SOUS_HARNAIS_DE_MUTATION = '1';
   const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', ...fichiers], {
     cwd: join(copie, sousDossier),
     encoding: 'utf8',
@@ -117,6 +138,37 @@ export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-direc
     return { refus: 'la suite n’a exécuté AUCUN test — un lancement qui n’exécute rien ne garde rien', sortie };
   }
   return { tests, pass, fail, sortie };
+}
+
+/**
+ * Les suites du dépôt que `lieu-agent.js` sert — TOUTES, pas seulement celle de son module.
+ *
+ * ⚠️ UNE MUTATION N'EST « SURVIVANTE » QUE PAR RAPPORT À CE QU'ON A LANCÉ. `lieu-agent.js` est
+ * importé par `naissance-representant` (513 essais, dont le garde de naissance) : une campagne
+ * qui ne lance que `ligne-directe` rendrait SURVIVANTE une mutation que l'autre suite attrape,
+ * et le rapport dirait « garde manquante » là où la garde existe, ailleurs. Le dénominateur
+ * d'un verdict de mutation, c'est l'ensemble des essais qu'on a fait tourner.
+ *
+ * @returns `{ tests, pass, fail, parSuite }` — la somme, et le détail par suite ; ou `{ refus }`
+ *   dès qu'UNE suite n'a pas rendu son compte : une somme partielle se lit comme un total.
+ */
+export function lancerToutesLesSuites(copie, { suites = ['ligne-directe', 'naissance-representant'], delaiMs } = {}) {
+  const parSuite = {};
+  let tests = 0;
+  let pass = 0;
+  let fail = 0;
+  for (const entree of suites) {
+    // Une suite se désigne par son dossier, ou par `{ sousDossier, fichiers }` quand on veut en
+    // mesurer une part nommée plutôt que le tout.
+    const { sousDossier, fichiers = [] } = typeof entree === 'string' ? { sousDossier: entree } : entree;
+    const r = lancerLaSuite(copie, { sousDossier, fichiers, delaiMs });
+    if (r.refus) return { refus: `suite « ${sousDossier} » : ${r.refus}`, parSuite };
+    parSuite[sousDossier] = { tests: r.tests, pass: r.pass, fail: r.fail };
+    tests += r.tests;
+    pass += r.pass ?? 0;
+    fail += r.fail;
+  }
+  return { tests, pass, fail, parSuite };
 }
 
 /**
@@ -166,7 +218,18 @@ export function campagne({
   for (const m of mutations) {
     // ⚠️ UNE COPIE NEUVE PAR MUTATION. Les cumuler ferait qu'un rouge dirait « au moins une des
     // n posées était gardée » — ce qui laisse passer une survivante derrière une attrapée.
-    const copie = preparer();
+    //
+    // ⚠️ ET LA PRÉPARATION EST DANS LE `try` — trouvé en revue de fond. Hors du `try`, un disque
+    // plein à la troisième copie faisait JETER la campagne, qui perdait alors les DEUX verdicts
+    // déjà acquis. S'arrêter est juste ; s'arrêter les mains vides ne l'est pas : on rend ce
+    // qu'on a mesuré, et on NOMME ce qu'on n'a pas pu poser.
+    let copie;
+    try {
+      copie = preparer();
+    } catch (err) {
+      resultats.push({ id: m.id, verdict: 'INDÉCIDABLE', pourquoi: `la copie n’a pas pu être faite (${err?.message || err})` });
+      continue;
+    }
     try {
       const posee = m.appliquer(copie);
       if (posee === false) {

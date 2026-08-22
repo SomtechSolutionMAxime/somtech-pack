@@ -515,13 +515,24 @@ test('un lieu ILLISIBLE ne se rend pas comme un lieu SANS RÔLE — la sonde cou
     panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
     roleDuLieu,
   });
+  // ⚠️ LA FORME QUE LE VRAI CODE PRODUIT — `{ refus }`, pas une exception. `roleDuLieuOuRefus`
+  // ne jette JAMAIS : un banc qui n'éprouverait que l'exception éprouverait un collaborateur
+  // imaginaire, plus bavard que le réel, et resterait vert pendant que ce chemin-ci serait mort.
+  // C'est très exactement le défaut qui a fait rejeter une version de ce lot.
   const sondeCoupee = await unRecensement({
     panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
-    // La lecture du lieu ÉCHOUE — c'est ce qui arrive sur un montage disparu ou un droit retiré.
+    roleDuLieu: () => ({ refus: 'EACCES: permission denied' }),
+  });
+  // Et la forme DÉFENSIVE, gardée à part et nommée comme telle : un collaborateur qui jetterait
+  // — un autre appelant, un futur lecteur de disque — ne doit pas faire tomber le tour ni se
+  // rendre « aucun rôle ». Ce banc-ci garde le `catch`, pas la réalité.
+  const sondeQuiJette = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
     roleDuLieu: () => {
       throw new Error('EACCES: permission denied');
     },
   });
+  assert.equal(sondeQuiJette.agents[0].role.mesure, 'refusée', 'un collaborateur qui jette REFUSE aussi');
 
   // Le contrôle positif d'abord : sans lui, « les deux diffèrent » serait vrai pour la raison
   // la plus banale du monde — le banc n'aurait rien mesuré du tout.
@@ -668,6 +679,151 @@ test('le résumé nomme la bonne ÉTIQUETTE sur le bon compte — pas seulement 
   const journal = [];
   await unRecensement({ panes, roleDuLieu, nomsConnus: nomsLus([['w1:p1', null]]), journaliser: (m) => journal.push(m) });
   assert.match(journal.join(''), /1 anonyme\(s\), 0 nom\(s\) non mesuré/, 'le battement de cœur aussi');
+});
+
+test('« RIEN À MESURER » NE SE DIT PAS « JE N’AI PAS PU MESURER » — ni sur l’entrée, ni dans le résumé', async (t) => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // REJET DE REVUE DE FOND, ET C'EST CE REGISTRE QUI FABRIQUAIT L'ÉCHEC. Le métier n'était
+  // mesuré que si le rôle était établi, et TOUT `null` se rendait ensuite « le métier de … ne
+  // s'est pas laissé mesurer ». Mesuré sur le parc réel : 81 des 97 entrées portaient
+  // « le métier de « null » ne s'est pas laissé mesurer » — le message qui veut dire VA VOIR,
+  // L'INSTRUMENT A ÉCHOUÉ, pour des agents qui n'ont simplement aucun lieu de rôle.
+  //
+  // ⚠️ ET LE COÛT EST DOUBLE. On envoie chercher une panne qui n'existe pas, ET on noie le seul
+  // cas où ce message est vrai dans 81 fausses alertes de forme identique. Sur le parc réel, les
+  // DEUX mandats réellement non mesurés étaient invisibles parmi 86.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-1');
+
+  const rendu = await unRecensement({
+    panes: [
+      { pane_id: 'w1:p1', foreground_cwd: lieu }, // un orchestrateur : tout est mesurable
+      { pane_id: 'w2:p1', foreground_cwd: join(tmp, 'un-projet', 'src') }, // un worktree ordinaire
+    ],
+    roleDuLieu,
+    etatDuMandat: async () => ({ mesure: 'lue', clos: false, statut: 'in_progress' }),
+  });
+
+  const sansLieu = rendu.agents.find((a) => a.pane === 'w2:p1');
+  assert.equal(sansLieu.metier.mesure, 'sans objet', 'rien à mesurer n’est un ÉTAT, pas un refus');
+  assert.equal(sansLieu.metier.refus, undefined, 'et surtout PAS un refus : rien n’a été tenté');
+  assert.doesNotMatch(
+    JSON.stringify(sansLieu.metier),
+    /ne s.est pas laissé mesurer/,
+    'le message d’échec d’instrument ne doit JAMAIS sortir quand la mesure n’a pas été tentée',
+  );
+  // ⚠️ ET SURTOUT PAS « null » DANS LA PHRASE. `le métier de « null »` est la trace visible que
+  // le registre a construit un message sur un objet qui n’existe pas.
+  assert.doesNotMatch(JSON.stringify(sansLieu), /« null »/, 'aucun message ne se construit sur un lieu absent');
+  assert.equal(sansLieu.chantier.mesure, 'sans objet', 'sans lieu, il n’y a pas de mandat à lire');
+
+  // Le contrôle positif : l’agent dont TOUT est mesurable ne bascule pas en « sans objet ».
+  const orch = rendu.agents.find((a) => a.pane === 'w1:p1');
+  assert.equal(orch.metier.mesure, 'lue', 'un lieu réel se mesure pour de vrai');
+  assert.ok(orch.metier.empreinte, 'et rend son empreinte');
+  assert.equal(orch.chantier.clos, false, 'et son mandat est lu au ServiceDesk');
+
+  // ⚠️ LA DISTINCTION DOIT SURVIVRE JUSQU'À LA PHRASE — c'est la seule ligne que le lecteur
+  // normal lit. Calculée puis aplatie au rendu, elle n'existe pour personne.
+  assert.equal(rendu.compte.metierSansObjet, 1);
+  // ⚠️ ET LES DEUX COEXISTENT DANS LE MÊME RENDU, c'est ce qui rend ce banc mordant. L'agent sans
+  // lieu est « sans objet » ; l'orchestrateur, lui, a un métier bien mesuré mais AUCUNE référence
+  // à quoi le comparer — son écart est vraiment NON MESURÉ. Fondre les deux compteurs ferait
+  // disparaître ce second cas, le seul des deux qui appelle un geste.
+  assert.equal(rendu.compte.nonMesures, 1, 'l’écart de l’orchestrateur, lui, est vraiment non mesuré');
+  assert.equal(rendu.agents.find((a) => a.pane === 'w1:p1').metier.mesure, 'lue', 'et ce n’est pas son métier qui manque');
+  assert.equal(rendu.compte.mandatsSansObjet, 1);
+  // ⚠️ LES DEUX ÉTIQUETTES COEXISTENT DANS LA MÊME PHRASE, ET DISENT DEUX CHOSES DIFFÉRENTES.
+  // C'est ce qui prouve qu'elles ne se sont pas fondues : « sans métier à comparer » n'appelle
+  // RIEN, « à l'écart NON MESURÉ » appelle d'aller voir pourquoi la comparaison a manqué.
+  assert.match(rendu.resume, /1 sans métier à comparer \(rien à mesurer, pas un échec\)/, 'le sans-objet se dit');
+  assert.match(rendu.resume, /1 à l’écart NON MESURÉ/, 'et le vrai non-mesuré aussi, à part');
+  assert.doesNotMatch(
+    rendu.resume,
+    /2 (à l’écart NON MESURÉ|sans métier à comparer)/,
+    'JAMAIS les deux fondus en un seul compte : c’est la fusion qui rendait « 81 non mesurés » sur un parc sain',
+  );
+  assert.match(rendu.resume, /1 sans mandat de chantier \(rien à lire, pas un échec\)/, 'idem pour le mandat');
+});
+
+test('LE MANDAT D’UN REPRÉSENTANT N’EST PAS UN CHANTIER — on ne le déclare pas « non mesurable »', async (t) => {
+  // Même défaut, autre porte, et celui-ci était nommé comme réserve non bloquante par une revue
+  // précédente : le segment sous le dossier de rôle nomme un CODE DE CHANTIER pour un
+  // orchestrateur et un NOM DE CLIENT pour un représentant. Interroger le ServiceDesk pour les
+  // seconds rendait « « Charles-Olivier » n'est pas un code de chantier : son état ne se lit
+  // nulle part » — la formulation d'une mesure RATÉE pour une question sans objet.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const rep = poserLieu(join(tmp, 'depot'), 'representant', 'Charles-Olivier');
+
+  let interroge = 0;
+  const rendu = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: rep }],
+    roleDuLieu,
+    etatDuMandat: async () => {
+      interroge += 1;
+      return { mesure: 'lue', clos: false };
+    },
+  });
+
+  const a = rendu.agents[0];
+  assert.equal(a.role.nom, 'representant');
+  assert.equal(a.mandat, 'Charles-Olivier', 'son mandat reste rendu tel quel — il nomme son client');
+  assert.equal(a.chantier.mesure, 'sans objet', 'mais ce n’est pas un chantier dont l’état se lirait');
+  // ⚠️ ET LE SERVICEDESK N'EST PAS INTERROGÉ. Sans cette ligne, on pourrait rendre le bon
+  // libellé tout en posant quand même la question — un appel réseau par représentant, à chaque
+  // tour de ronde, pour un enregistrement qui n'existe pas.
+  assert.equal(interroge, 0, 'on n’interroge pas le registre des chantiers sur ce qui n’en est pas un');
+  assert.doesNotMatch(JSON.stringify(a.chantier), /n.est pas un code de chantier/, 'pas de faux échec');
+});
+
+test('LE RÉSUMÉ NOMME LES RÔLES NON MESURÉS — la distinction ne s’arrête pas au compteur', async (t) => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE DE FOND. `compte.roleNonMesure` était gardé, mais
+  // la PHRASE — la ligne que le lecteur lit — pouvait perdre les rôles non mesurés sans qu'un
+  // banc rougisse, alors que ce module affirme que la distinction tient « jusque dans le
+  // résumé ». Un état calculé puis aplati au rendu n'existe pour personne.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-1');
+
+  const rendu = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
+    roleDuLieu: () => ({ refus: 'le lieu ne s’est pas laissé lire (EACCES)' }),
+  });
+
+  assert.equal(rendu.compte.roleNonMesure, 1, 'contrôle : le compteur le porte');
+  assert.match(rendu.resume, /1 au rôle NON MESURÉ/, 'et la PHRASE aussi — sinon personne ne le lit');
+  assert.doesNotMatch(rendu.resume, /au rôle NON ÉTABLI/, 'et jamais confondu avec « aucun rôle ne correspond »');
+});
+
+test('LES RÉFÉRENCES ARRIVENT PAR RÔLE JUSQU’AU RENDU — un jeu vide n’est pas un jeu par rôle', async (t) => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE DE FOND : remplacer le jeu de références du câblage
+  // réel par `{}` laissait toute la suite verte. Le rendu bascule alors en « aucune référence ne
+  // m'a été donnée » pour TOUS les rôles — c'est-à-dire que la colonne « à jour / en retard »
+  // meurt en silence, en rendant partout « je ne sais pas », qui est la réponse la plus
+  // rassurante possible pour un registre qui ne mesure plus rien.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const orch = poserLieu(depot, 'orchestrateur', 'p-1');
+  const foyer = poserReference(tmp, 'orchestrateur', METIER.orchestrateur);
+  const panes = [{ pane_id: 'w1:p1', foreground_cwd: orch }];
+
+  const avec = await unRecensement({
+    panes,
+    roleDuLieu,
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
+  });
+  assert.equal(avec.agents[0].aJour, true, 'contrôle positif : avec sa référence, l’écart se mesure');
+
+  const sans = await unRecensement({ panes, roleDuLieu, references: {} });
+  assert.equal(sans.agents[0].aJour, null, 'sans référence, on ne conclut rien…');
+  assert.match(
+    sans.agents[0].reference?.refus ?? '',
+    /aucune référence ne m’a été donnée pour le rôle « orchestrateur »/,
+    '…et on DIT que c’est la référence qui manque, pas que le métier va bien',
+  );
 });
 
 test('un rôle SANS sa référence ne se rabat sur AUCUNE autre — il rend « je ne sais pas »', async (t) => {

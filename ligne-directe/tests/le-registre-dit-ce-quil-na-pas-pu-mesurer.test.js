@@ -243,9 +243,24 @@ test('une référence introuvable ne fait jamais conclure « à jour »', async 
   const reference = referenceDuMetier({ foyer: join(tmp, 'foyer-vide') });
   assert.ok(reference.refus, 'la référence doit se déclarer introuvable');
 
-  const rendu = await unRecensement({ panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }], roleDuLieu, reference });
+  // ⚠️ `references`, AU PLURIEL — ET C'EST UN CORRECTIF, PAS UN DÉTAIL DE FRAPPE. Ce site a
+  // longtemps passé `reference` au singulier, nom du paramètre d'AVANT le passage à une
+  // référence PAR RÔLE. Le paramètre était donc MORT, silencieusement ignoré : ce banc, qui
+  // s'intitule « une référence introuvable ne fait jamais conclure à jour », mesurait en
+  // réalité « aucune référence donnée du tout ». Mesuré en le corrigeant : la même référence,
+  // passée au singulier, rend `aJour: null` ; passée au pluriel avec une référence VALIDE, elle
+  // rend `aJour: true`. Le banc serait resté vert quoi qu'on mette dans `reference`.
+  const rendu = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
+    roleDuLieu,
+    references: { orchestrateur: reference },
+  });
   const o = rendu.agents[0];
   assert.ok(o.metier.empreinte, 'son métier, lui, a bien été mesuré');
+  // ⚠️ ET C'EST BIEN LA RÉFÉRENCE FOURNIE QUI EST EN CAUSE, pas son absence — sans cette ligne,
+  // le banc ne distingue toujours pas « la référence dit qu'elle est introuvable » de « on ne
+  // m'a donné aucune référence », qui est exactement l'erreur qu'il portait.
+  assert.equal(o.reference?.refus, reference.refus, 'le refus rendu est celui de la référence FOURNIE');
   assert.equal(o.aJour, null);
   assert.equal(o.ecartOctets, null);
   assert.equal(o.remiseAJour, null, 'on ne propose pas un geste sur une comparaison qu’on n’a pas faite');

@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { campagne, copierLeDepot, lancerLaSuite, racineDuDepot } from './aide/harnais-de-mutation.js';
+import { campagne, copierLeDepot, lancerLaSuite, lancerToutesLesSuites, racineDuDepot } from './aide/harnais-de-mutation.js';
 
 /** Un `preparer` de laboratoire : un jeton, pas un répertoire — on n'éprouve pas la copie ici. */
 function laboratoire() {
@@ -146,6 +146,90 @@ test('UN LANCEMENT QUI N’EXÉCUTE RIEN EST UN REFUS, jamais « zéro échec »
   assert.deepEqual(r.resultats, []);
 });
 
+test('LA CAMPAGNE NE PERD PAS SES VERDICTS ACQUIS quand une copie échoue en chemin', () => {
+  // ⚠️ TROUVÉ EN REVUE DE FOND. `preparer()` vivait HORS du `try` : un disque plein à la
+  // troisième copie faisait JETER la campagne, qui perdait alors les deux verdicts déjà mesurés.
+  // S'arrêter devant ce qu'on ne peut pas mesurer est juste ; s'arrêter les mains vides ne l'est
+  // pas — d'autant qu'un rapport sans résultat se lit comme « rien trouvé ».
+  const labo = laboratoire();
+  let tour = 0;
+  const preparer = () => {
+    tour += 1;
+    if (tour === 4) throw new Error('ENOSPC: no space left on device');
+    return labo.preparer();
+  };
+  const r = campagne({
+    preparer,
+    ranger: labo.ranger,
+    lancer: () => ({ tests: 10, pass: 10, fail: 0 }),
+    mutations: [
+      { id: 'une', appliquer: () => true },
+      { id: 'deux', appliquer: () => true },
+      { id: 'trois-copie-impossible', appliquer: () => true },
+    ],
+  });
+  assert.equal(r.verdictPossible, true);
+  assert.equal(r.resultats.length, 3, 'les trois mutations sont rendues — aucune n’est effacée par l’échec');
+  assert.deepEqual(r.resultats.slice(0, 2).map((x) => x.verdict), ['SURVIVANTE', 'SURVIVANTE'], 'les acquis tiennent');
+  assert.equal(r.resultats[2].verdict, 'INDÉCIDABLE', 'et celle qu’on n’a pas pu poser est NOMMÉE, pas tue');
+  assert.match(r.resultats[2].pourquoi, /ENOSPC/, 'avec la cause');
+});
+
+test('RÉEL — `lancerLaSuite` PRODUIT vraiment un refus quand la suite ne rend aucun compte', () => {
+  // ⚠️ TROUVÉ EN REVUE PORTAIL, et c'est la moitié manquante du troisième faux témoin annoncé en
+  // tête du harnais. Le banc de laboratoire ci-dessus éprouve que `campagne` RÉAGIT à un refus —
+  // il l'injecte. Personne n'éprouvait que `lancerLaSuite` en PRODUISE un : neutraliser son
+  // parsing (`?? 0` sur le compte d'échecs) laissait tout vert. Or c'est précisément cette
+  // moitié-là qui a produit un faux « la suite n'a rendu aucun compte » sur une suite qui avait
+  // parfaitement tourné.
+  const copie = copierLeDepot();
+  try {
+    const r = lancerLaSuite(copie, { fichiers: ['tests/ce-fichier-n-existe-pas.test.js'] });
+    assert.ok(r.refus, `un lancement qui n’exécute rien doit REFUSER, jamais rendre « 0 échec » (${JSON.stringify(r)})`);
+    assert.equal(r.fail, undefined, 'et surtout ne pas rendre un compte d’échecs inventé');
+
+    // Le contrôle positif dans le même souffle : sur un vrai fichier, il rend bien un compte.
+    const bon = lancerLaSuite(copie, { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(!bon.refus, `le contrôle positif doit tourner : ${bon.refus}`);
+    assert.equal(bon.fail, 0);
+    assert.ok(bon.tests > 0);
+  } finally {
+    rmSync(copie, { recursive: true, force: true });
+  }
+});
+
+test('RÉEL — une campagne peut mesurer TOUTES les suites, pas seulement celle du module muté', () => {
+  // ⚠️ BORNE NOMMÉE PAR LA REVUE PORTAIL. `lieu-agent.js` est importé par
+  // `naissance-representant` : une campagne qui ne lance que `ligne-directe` rendrait
+  // SURVIVANTE une mutation que l'autre suite attrape, et le rapport dirait « garde manquante »
+  // là où la garde existe, ailleurs. Le dénominateur d'un verdict de mutation, c'est l'ensemble
+  // des essais qu'on a fait tourner — et il doit être RENDU, pas supposé.
+  const copie = copierLeDepot();
+  try {
+    // ⚠️ UN FICHIER TÉMOIN PAR SUITE, PAS LES DEUX SUITES ENTIÈRES. Ce banc éprouve que la
+    // fonction ATTEINT les deux et rend leur détail — pas la santé du dépôt, que la suite
+    // complète mesure déjà par ailleurs. Les lancer en entier coûterait ~140 s à chaque essai,
+    // et un banc plus lent que ce qu'il garde finit par être désarmé « en attendant ».
+    const r = lancerToutesLesSuites(copie, {
+      suites: [
+        { sousDossier: 'ligne-directe', fichiers: ['tests/canal-par-role.test.js'] },
+        { sousDossier: 'naissance-representant', fichiers: ['tests/garde-par-role.test.js'] },
+      ],
+    });
+    assert.ok(!r.refus, `les deux suites doivent tourner : ${r.refus}`);
+    assert.equal(r.fail, 0, 'contrôle négatif sur les DEUX suites');
+    assert.ok(r.parSuite['ligne-directe'].tests > 0, 'et le détail par suite est rendu…');
+    assert.ok(r.parSuite['naissance-representant'].tests > 0, '…pour les deux, sinon le total est un mystère');
+    assert.equal(
+      r.tests,
+      r.parSuite['ligne-directe'].tests + r.parSuite['naissance-representant'].tests,
+      'le total est la somme de ce qui a réellement tourné',
+    );
+  } finally {
+    rmSync(copie, { recursive: true, force: true });
+  }
+});
+
 // ═════════════════ LE RÉEL — la recette se MESURE, elle ne se déclare pas
 
 test('RÉEL — la copie de la RACINE est verte, et `ligne-directe/` SEUL est rouge', () => {
@@ -186,6 +270,38 @@ test('RÉEL — la copie de la RACINE est verte, et `ligne-directe/` SEUL est ro
     'copier `ligne-directe/` SEUL doit rendre des rouges SANS mutation — si ce n’est plus vrai, ' +
       'le motif de ce harnais a changé et ce banc doit être réécrit, pas assoupli',
   );
+});
+
+test('RÉEL — un harnais lancé DEPUIS un harnais refuse, au lieu de se répéter sans fin', () => {
+  // ⚠️ DÉFAUT MESURÉ EN ÉCRIVANT CE FICHIER, pas déduit : 69 copies du dépôt en dix minutes,
+  // jusqu'à ce que la commande soit tuée. Les bancs de ce harnais VIVENT dans la suite qu'il
+  // lance : sans liste de fichiers, `node --test` les retrouve dans la copie, ils relancent une
+  // copie, et ainsi de suite. Chaque niveau a l'air de travailler — rien ne signale la boucle.
+  //
+  // La borne est une PROFONDEUR, pas une exclusion de fichiers : écarter ces bancs de la copie
+  // les priverait d'être éprouvés sous mutation, c'est-à-dire le contraire du but.
+  const avant = process.env.SOUS_HARNAIS_DE_MUTATION;
+  process.env.SOUS_HARNAIS_DE_MUTATION = '1';
+  try {
+    const r = lancerLaSuite('/chemin/sans/importance', { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(r.refus, 'un second niveau doit REFUSER');
+    assert.match(r.refus, /DÉJÀ dans un harnais/, 'et dire pourquoi, sinon on le prend pour une panne');
+  } finally {
+    if (avant === undefined) delete process.env.SOUS_HARNAIS_DE_MUTATION;
+    else process.env.SOUS_HARNAIS_DE_MUTATION = avant;
+  }
+
+  // ⚠️ ET LE CONTRÔLE POSITIF : au PREMIER niveau, elle tourne pour de vrai. Sans lui, une garde
+  // qui refuserait TOUJOURS rendrait ce banc vert en cassant tout le harnais.
+  assert.equal(process.env.SOUS_HARNAIS_DE_MUTATION, undefined, 'la variable est bien rendue');
+  const copie = copierLeDepot();
+  try {
+    const r = lancerLaSuite(copie, { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(!r.refus, `au premier niveau, le lancement doit tourner : ${r.refus}`);
+    assert.equal(r.fail, 0);
+  } finally {
+    rmSync(copie, { recursive: true, force: true });
+  }
 });
 
 test('RÉEL — une vraie mutation du code source fait rougir la vraie suite', () => {
