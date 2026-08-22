@@ -41,8 +41,22 @@
  */
 export const ECHANTILLON_PANES = {
   releve_le: '2026-08-22T09:30:00-04:00',
-  provenance: 'herdr.panes() — 13 sessions agrégées, poste de développement',
+  /**
+   * ⚠️ « 13 SESSIONS AGRÉGÉES » ÉTAIT FAUX, ET C'ÉTAIT LA MÊME FAUTE QUE LE `jamais`.
+   *
+   * Mesuré : 13 sessions INTERROGÉES, **3 ont répondu**, 10 muettes (`server_not_running`). Le
+   * relevé couvre donc 3 sessions sur 13 — et il l'écrivait comme une couverture complète. Un
+   * relevé qui ne déclare pas ce qu'il n'a pas vu est exactement ce que ce module interdit
+   * partout ailleurs : son propre compte est un PLANCHER, pas un total.
+   */
+  provenance: 'herdr.panes() — 3 sessions ayant répondu sur 13 interrogées (10 muettes), poste de développement',
+  sessions: { interrogees: 13, repondu: 3, muettes: 10 },
+  /**
+   * Ce que ce relevé compte est un PLANCHER, comme le recensement lui-même : 10 sessions n'ont
+   * pas répondu, donc des panes existent qu'il n'a pas vus.
+   */
   total: 97,
+  nature_du_total: 'plancher',
   formes: [
     { compte: 57, agent: true, agent_session: true, agent_status: 'done' },
     { compte: 34, agent: true, agent_session: true, agent_status: 'idle' },
@@ -78,6 +92,29 @@ export const ECHANTILLON_PANES = {
    * faux « jamais ».
    */
   vu_ailleurs: {
+    /**
+     * ⚠️ LES TROIS ENTRÉES SONT TRAITÉES, PAS UNE SEULE — relevé au cycle 7, et la réserve était
+     * juste : le remède du cycle 6 n'avait été appliqué qu'à l'entrée qui l'avait déclenché. Un
+     * lecteur appliquant le raisonnement corrigé (« 0 ici, rien dans `vu_ailleurs` ») aurait
+     * conclu que les deux autres branches sont mortes — dont celle qui déclenche
+     * `panesIndecidables`, donc toute la distinction plancher / incertain.
+     */
+    'clé agent absente avec un statut ≠ unknown': {
+      ou: '[non mesurée] — aucun relevé connu ne l’a vue',
+      quoi:
+        'aucune source ne l’a produite à ce jour ; ce n’est PAS une preuve qu’elle n’existe pas, ' +
+        'c’est l’aveu qu’on n’a pas de mesure',
+      consequence:
+        'c’est elle qui déclenche `panesIndecidables`, donc `borne.nature: incertaine` — la ' +
+        'branche se garde justement parce qu’on ne peut pas prouver qu’elle est morte',
+    },
+    'agent: null': {
+      ou: '[non mesurée] — aucun relevé connu ne l’a vue',
+      quoi: 'la forme que trois bancs ont pourtant fabriquée à la main, et qui a coûté un rejet',
+      consequence:
+        'la défense `|| !p.agent` de `recensement.js` la couvre — on ne la retire pas sur la foi ' +
+        'd’un relevé qui ne l’a pas vue',
+    },
     'agent_session sans clé agent': {
       ou: 'T-20260820-0022, mesuré le 2026-08-20',
       quoi:

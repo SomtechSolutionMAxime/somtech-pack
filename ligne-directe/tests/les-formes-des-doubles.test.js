@@ -23,6 +23,64 @@ test('L’ÉCHANTILLON EST COMPLET ET DATÉ — un relevé sans provenance ne va
   assert.ok(ECHANTILLON_PANES.provenance, 'et dit d’où il vient — sinon on ne peut pas le remesurer');
   const somme = ECHANTILLON_PANES.formes.reduce((n, f) => n + f.compte, 0);
   assert.equal(somme, ECHANTILLON_PANES.total, 'les formes couvrent TOUT le relevé, sans reste tu');
+
+  // ⚠️ ET LE RELEVÉ DÉCLARE CE QU'IL N'A PAS VU — même exigence que le recensement lui-même.
+  // « 13 sessions agrégées » disait une couverture complète là où 3 avaient répondu : la faute
+  // exacte du `jamais`, commise une ligne plus bas.
+  const ses = ECHANTILLON_PANES.sessions;
+  assert.ok(ses, 'un relevé du parc dit combien de sessions il a pu interroger…');
+  assert.equal(ses.repondu + ses.muettes, ses.interrogees, '…et le compte doit fermer');
+  assert.equal(ECHANTILLON_PANES.nature_du_total, 'plancher', 'son total est un PLANCHER, jamais un total');
+  assert.match(
+    ECHANTILLON_PANES.provenance,
+    new RegExp(`${ses.repondu}[^0-9]*${ses.interrogees}`),
+    'et la provenance porte les DEUX chiffres, pas seulement le plus flatteur',
+  );
+});
+
+test('CHAQUE ZÉRO DE L’ÉCHANTILLON DIT S’IL A ÉTÉ VU AILLEURS — sinon il se relit « n’existe pas »', () => {
+  // ⚠️ RÉSERVE DU CYCLE 7, ET ELLE VISAIT LE REMÈDE LUI-MÊME : le correctif du `jamais` n'avait
+  // été appliqué qu'à l'entrée qui l'avait déclenché. Les deux autres zéros restaient nus — dont
+  // celui qui déclenche `panesIndecidables`, donc toute la distinction plancher / incertain. Un
+  // lecteur appliquant le raisonnement CORRIGÉ aurait conclu que ces branches sont mortes.
+  const zeros = Object.keys(ECHANTILLON_PANES.aucune_occurrence_dans_ce_releve);
+  assert.ok(zeros.length >= 3, 'contrôle : le relevé porte bien plusieurs comptes à zéro');
+  for (const forme of zeros) {
+    const dit = ECHANTILLON_PANES.vu_ailleurs?.[forme];
+    assert.ok(dit, `« ${forme} » est à zéro ici : l’échantillon DOIT dire si on l’a vue ailleurs`);
+    assert.ok(dit.ou, '…en nommant la mesure, ou en avouant qu’il n’y en a pas');
+    assert.ok(
+      dit.consequence,
+      `« ${forme} » doit dire ce que sa méconnaissance coûterait — sans quoi on retire la garde`,
+    );
+  }
+});
+
+test('LES LIGNES DE `formes` SONT GARDÉES UNE À UNE — pas seulement par leur somme', () => {
+  // ⚠️ MUTATION SURVIVANTE DES DEUX PASSES DU CYCLE 7. Redistribuer les comptes en préservant le
+  // total (3 terminaux → 0, 57 → 60) laissait tout vert : seule la somme était gardée. Ça efface
+  // du relevé la forme même — clé absente, pas de session, statut inconnu — qui justifie
+  // `unPaneSansAgent` et `panesSansAgent`, et c'est exactement la « correction » qu'on ferait
+  // pour justifier de retirer cette garde. Le banc annonçait pourtant attraper « un échantillon
+  // qu'on aurait corrigé pour faire passer un banc ».
+  const f = ECHANTILLON_PANES.formes;
+  const terminaux = f.find((x) => !x.agent && !x.agent_session && x.agent_status === 'unknown');
+  assert.ok(terminaux, 'le relevé DOIT porter la forme du terminal — c’est elle qui justifie `panesSansAgent`');
+  assert.ok(terminaux.compte > 0, 'et l’avoir réellement vue, sinon la garde n’a pas de cas');
+
+  const porteurs = f.filter((x) => x.agent && x.agent_session);
+  assert.ok(porteurs.length > 0, 'et la forme du pane d’agent, qui justifie tout le reste');
+  assert.equal(
+    porteurs.reduce((n, x) => n + x.compte, 0) + terminaux.compte,
+    ECHANTILLON_PANES.total,
+    'les deux familles couvrent le relevé : une troisième forme non déclarée serait un angle mort',
+  );
+  // ⚠️ ET AUCUNE LIGNE NE PORTE UNE FORME QUE LES ZÉROS DÉCLARENT ABSENTE — une falsification à
+  // somme constante se trahit là.
+  for (const x of f) {
+    assert.equal(x.agent === true && x.agent_session === false, false, 'aucune forme « agent sans session »');
+    assert.equal(x.agent === false && x.agent_session === true, false, 'aucune forme « session sans agent »');
+  }
 });
 
 test('UN PANE D’AGENT PORTE LES TROIS MARQUES — clé, session, statut connu', () => {
@@ -72,6 +130,65 @@ test('UNE SESSION PEUT HABITER UN PANE DONT herdr IGNORE LE STATUT — et ce n�
   assert.ok(ailleurs, '…mais l’échantillon DOIT dire qu’elle a été vue ailleurs');
   assert.match(ailleurs.ou, /T-\d{8}-\d{4}/, 'avec la mesure qui l’a vue, pour qu’on puisse la relire');
   assert.ok(ailleurs.consequence, 'et ce que sa méconnaissance coûterait');
+});
+
+test('LE DOUBLE RÉELLEMENT BRANCHÉ EST CONFORME — c’est lui que les bancs câblés font manger au module', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // MUTATION SURVIVANTE, TROUVÉE AU CYCLE 7, ET C'ÉTAIT LA RACINE DE DEUX DÉFAUTS À LA FOIS.
+  //
+  // Cette garde comparait les trois FABRIQUES de `formes-reelles.js` à l'échantillon — et
+  // ignorait `faux-herdr.js`, qui est le double effectivement branché sur `herdr.panes()` dans
+  // les bancs de câblage. Résultat mesuré : y injecter `agent: null` — la forme canonique
+  // interdite, celle qui a coûté un rejet et pour laquelle ce fichier existe — laissait les
+  // 1356 essais VERTS. La réponse à « peut-on encore fabriquer une forme que la source ne
+  // produit pas ? » était OUI, par la porte la plus fréquentée.
+  //
+  // ⚠️ ET SA NON-CONFORMITÉ EN PRODUISAIT UNE SECONDE. Ses panes n'ayant ni clé `agent` ni
+  // `agent_session`, ils étaient tous INDÉCIDABLES : les bancs câblés éprouvaient un parc que la
+  // borne refusait de qualifier de plancher, et l'un d'eux a fini par EXIGER que le journal
+  // annonce un plancher quand même. Un double non conforme ne fait pas que rater un défaut : il
+  // en fabrique un dans les gardes qui s'appuient dessus.
+  const { posteHerdr } = await import('./aide/faux-herdr.js');
+  const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const bac = mkdtempSync(join(tmpdir(), 'conformite-'));
+  try {
+    const p = posteHerdr(bac, [], 'conformite');
+    // Ce qu'un banc écrit d'ordinaire : le minimum. Le double doit le COMPLÉTER en forme réelle.
+    p.panes([
+      { pane_id: 'w1:p1', foreground_cwd: '/x' },
+      { pane_id: 'w1:p2', agent_status: 'unknown' }, // un terminal, demandé explicitement
+    ]);
+    const rendus = JSON.parse(readFileSync(join(p.etat, 'panes.json'), 'utf8'));
+
+    const agent = rendus.find((x) => x.pane_id === 'w1:p1');
+    assert.equal(agent.agent, 'claude', 'un pane d’agent porte la clé `agent`…');
+    assert.ok(agent.agent_session, '…et sa session, la marque qu’un agent l’habite…');
+    assert.notEqual(agent.agent_status, 'unknown', '…et un statut connu. Les trois vont ensemble.');
+
+    const terminal = rendus.find((x) => x.pane_id === 'w1:p2');
+    assert.equal(Object.hasOwn(terminal, 'agent'), false, 'un terminal n’a PAS la clé — il ne la porte pas à `null`');
+    assert.equal(Boolean(terminal.agent_session), false, 'ni session');
+    assert.equal(terminal.agent_status, 'unknown', 'et son statut dit que herdr sait qu’il n’y a personne');
+
+    // ⚠️ ET AUCUN RENDU NE PORTE `agent: null` — la forme que l'échantillon compte à zéro et que
+    // la source ne produit pas. C'est la mutation qui survivait.
+    for (const x of rendus) {
+      assert.notEqual(x.agent, null, `« ${x.pane_id} » ne doit JAMAIS porter \`agent: null\``);
+    }
+    // Ni la forme « pas de clé, statut connu » — celle qui rendait tous les bancs indécidables.
+    for (const x of rendus) {
+      assert.equal(
+        !Object.hasOwn(x, 'agent') && !x.agent_session && x.agent_status !== 'unknown',
+        false,
+        `« ${x.pane_id} » porte une forme que herdr ne rend pas : ni agent, ni session, ni statut inconnu`,
+      );
+    }
+  } finally {
+    rmSync(bac, { recursive: true, force: true });
+  }
 });
 
 test('AUCUN « JAMAIS » DANS L’ÉCHANTILLON — un compte n’est pas une propriété', () => {

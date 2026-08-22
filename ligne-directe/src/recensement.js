@@ -914,7 +914,15 @@ export async function unRecensement({
   // signale que lorsqu'il a quelque chose à dire est indiscernable d'un dispositif mort ; c'est
   // le pire cas de `balayage.js`, et il ne se rejoue pas ici.
   journaliser(
-    `recensement — ${liste.length} pane(s) vus, AU MOINS ${agents.length} agent(s) : ` +
+    // ⚠️ LA TÊTE DU JOURNAL SUIT LA BORNE, COMME CELLE DU RÉSUMÉ — et c'est le lieu qui compte
+    // le plus. `recenser()` JETTE le rendu : `resume` et `borne` ne sont lus par personne dans le
+    // système qui tourne, et cette ligne de journal est la SEULE sortie d'un tour de ronde. Le
+    // correctif précédent avait redressé les deux lieux que personne ne lit et laissé intact le
+    // seul qui l'est — où la phrase s'ouvrait sur « AU MOINS N » et se refermait sur « ce compte
+    // peut sur-compter ».
+    `recensement — ${liste.length} pane(s) vus, ` +
+      (panesIndecidables.length ? `${agents.length} agent(s)` : `AU MOINS ${agents.length} agent(s)`) +
+      ' : ' +
       (rolesTrouves.length ? rolesTrouves.join(', ') : 'aucun rôle établi') +
       `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré ; ` +
       `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s), ` +
