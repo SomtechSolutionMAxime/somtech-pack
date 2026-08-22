@@ -465,6 +465,66 @@ test('le DÉFAUT du veilleur construit un lecteur RÉEL — c’est ce chemin-l�
 
   const vue = await v.vueDuParc();
   assert.ok(vue.orchestrateurs !== null, 'et le défaut ne casse pas la vue');
+
+  // 🔴 CETTE ASSERTION-CI MANQUAIT, ET C'EST ELLE QUI A LAISSÉ PASSER LE DÉFAUT LE PLUS GRAVE DU
+  // LOT SUIVANT. Ce banc empruntait DÉJÀ le bon chemin — `vueDuParc()`, zéro argument, celui du
+  // geste réel — mais son assertion s'arrêtait aux orchestrateurs. Or quand le repli
+  // `racines ?? racinesDuPoste()` disparaît, `lecteurDeLieux` reçoit `null`, jette, et le
+  // `try/catch` transforme la panne en « lieux refusés » : `orchestrateurs` reste `[]`, donc
+  // NON-NULL, et l'assertion passe. Mesuré : 0 orchestrateur au lieu de 15, sous 957 essais
+  // VERTS. **Le bon chemin exercé, la mauvaise chose regardée.**
+  //
+  // ⚠️ ON N'ASSERTE PAS CE QUE LE DISQUE CONTIENT — ce verdict-là dépendrait de la machine. On
+  // asserte ce que le veilleur TRANSMET sur son chemin nu : une liste de racines, jamais `null`,
+  // et jamais une panne d'itération déguisée en refus.
+  assert.ok(
+    Array.isArray(vue.registreDesLieux?.racines),
+    'sur l’appel NU, le veilleur doit transmettre un TABLEAU de racines — `null` fait jeter le lecteur'
+  );
+  assert.doesNotMatch(
+    String(vue.registreDesLieux?.raison ?? ''),
+    /not iterable/,
+    'une panne d’itération ne doit jamais se rendre comme un refus du registre des lieux'
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA FAMILLE, ET PLUS LE CAS — chaque appelant RÉEL du module, avec SA signature
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 LA MÊME ARÊTE A MORDU TROIS FOIS DANS UN SEUL LOT : `titre`, puis `lieux`, puis l'appel nu.
+// Trois fois on a fermé LE DÉFAUT QU'ON VENAIT DE VOIR, jamais sa famille. La cause commune est
+// une forme à part entière :
+//
+// > **LE BANC FABRIQUE SON PROPRE APPELANT.** Il appelle avec une signature que le vrai appelant
+// > n'emploie pas. Ce n'est ni la garde vacante (mauvais endroit), ni le chemin non couvert
+// > (personne n'y passe) : c'est un usage qui **n'existe que dans le banc**. Il peut être
+// > parfait et ne rien garder.
+//
+// LA FERMETURE DE FAMILLE, mesurée par grep sur le code livré et non de mémoire — les SIX sites
+// d'appel réels du module hors de lui-même, et l'état de chacun :
+//
+//   ① `ecrireLaVue(vue, args)`                     bin/ligne-directe.js:511   ✅ deux bancs, 2 args
+//   ② `parler({ geste: GESTE_DE_LA_VUE })`         bin/ligne-directe.js:510   ✅ banc du geste servi
+//   ③ `laVueDuParc({recensement,lieux,lireChantier,journaliser})` veilleur:1889 ✅ bancs de bout en bout
+//   ④ `this.vueDuParc()` — ZÉRO argument            veilleur.js:338            ✅ CE banc-ci, renforcé ci-dessus
+//   ⑤ `lecteurDeLieux({ racines })` — seule clé     veilleur.js:1879           ✅ via le banc du lecteur par défaut
+//   ⑥ `racinesDuPoste()` — ZÉRO argument            veilleur.js:1879           ✅ le banc qui suit
+//
+// ⚠️ CE QUI RESTE À NU, ET ON LE DÉCLARE PLUTÔT QUE DE LE TAIRE : `lecteurDeChantier()` appelé
+// SANS argument (`construireLecteur()`, veilleur.js:1877) emprunte son transport par défaut
+// `transportServiceDesk()`, que tous les bancs remplacent par un `appeler` injecté. Ce chemin-là
+// exige une clé et un service : il n'est pas éprouvable ici. Il est ANTÉRIEUR à ce lot, et il
+// est nommé pour que le prochain ne croie pas la famille close.
+
+test('`racinesDuPoste()` s’appelle SANS ARGUMENT en production — et ce chemin-là est éprouvé', async () => {
+  // ⚠️ TOUS LES AUTRES BANCS LUI PASSENT UN `{ foyer }`. Le vrai appelant ne lui passe RIEN et
+  // s'en remet à `homedir()`. Un défaut dans ce repli-là ne serait vu par personne — c'est
+  // exactement la forme « le banc fabrique son propre appelant », sur la fonction voisine.
+  const { racinesDuPoste } = await import('../src/vue-du-parc.js');
+  const nu = racinesDuPoste();
+  assert.ok(Array.isArray(nu), 'sans argument, elle rend un TABLEAU — c’est ce que le veilleur transmet');
+  for (const r of nu) assert.equal(typeof r, 'string', 'et chaque racine est un chemin, jamais un objet');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
