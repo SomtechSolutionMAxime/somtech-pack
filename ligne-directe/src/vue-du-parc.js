@@ -53,7 +53,7 @@
 // chantier », `epics: []` dit « je les ai lus, il n'y en a aucun ». Les confondre ferait
 // disparaître un chantier illisible en le présentant comme un chantier vide.
 
-import { CODE_LISIBLE, codeDuMandat } from './mandat.js';
+import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
 
 /** La règle de conduite, écrite une fois, rendue avec la vue. */
 export const REGLE_DE_LA_VUE =
@@ -179,6 +179,86 @@ export function quiPorte(code, parMandat, parNom) {
 }
 
 /**
+ * LE LECTEUR DE CHANTIER RÉEL — projet → epics → stories, en trois appels par chantier.
+ *
+ * ⚠️ LA STRUCTURE NE SE DEVINE PAS, ELLE SE LIT : `projects` (ou `demands`/`deliveries` selon
+ * la famille du code) → `epics` filtrés par `project_id` → `tickets` filtrés par `epic_id`.
+ *
+ * 🔴 DEUX PIÈGES D'OUTILLAGE VÉRIFIÉS, ET LE SECOND EST SILENCIEUX :
+ *   • `tickets` action `list` **ACCEPTE `delivery_id` ET L'IGNORE** — on récupère la base
+ *     entière, d'autres applications comprises, SANS erreur ni avertissement. D'où la règle
+ *     appliquée ici : **on vérifie que le filtre a filtré.** Tout ticket dont l'`epic_id` ne
+ *     correspond pas à l'epic demandé est écarté, et l'écart est rendu plutôt que tu.
+ *   • `deliveries` action `get` **exige l'UUID**, pas le code `J-…` — contrairement à
+ *     `projects`. On passe donc par la liste, comme le fait déjà `accesServiceDesk`.
+ *
+ * @param appeler  `(nom, args) → corps` — le transport, INJECTÉ. Sans lui, pas de lecteur :
+ *                 on rend `null`, et la vue dit « aucun accès » au lieu d'inventer un parc vide.
+ */
+export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 200 } = {}) {
+  if (typeof appeler !== 'function') return null;
+
+  return async (code) => {
+    const famille = familleDuMandat(code);
+    if (!famille) throw new Error(`« ${code} » n’est pas un code de chantier`);
+
+    // ═══ LE CHANTIER LUI-MÊME — par la liste, jamais par `get` seul (voir l'en-tête).
+    const corps = await appeler(famille, { action: 'list', limit: limite });
+    const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
+    const champ = CHAMP_DU_CODE[famille];
+    const chantier = liste.find((x) => x?.[champ] === code);
+    if (!chantier) {
+      throw new Error(
+        `${code} ne figure pas dans les ${liste.length} ${famille} lus` +
+          (liste.length >= limite ? ` — et cette liste est PLAFONNÉE à ${limite} : il est peut-être juste derrière` : '')
+      );
+    }
+
+    // ═══ SES EPICS — le filtre côté service, PUIS vérifié côté nous.
+    const corpsEpics = await appeler('epics', { action: 'list', project_id: chantier.id, limit: limite });
+    const tousEpics = Object.values(corpsEpics || {}).find((v) => Array.isArray(v)) || [];
+    // 🔴 ON VÉRIFIE QUE LE FILTRE A FILTRÉ. Un filtre ignoré rend la base entière : sans ce
+    // second tamis, la vue rattacherait à cet orchestrateur les epics de TOUTES les
+    // applications, et chacun aurait l'air d'un fait mesuré.
+    const epics = tousEpics.filter((e) => e?.project_id === chantier.id);
+    const epicsEcartes = tousEpics.length - epics.length;
+
+    const avecStories = [];
+    for (const e of epics) {
+      let stories = [];
+      let storiesLues = true;
+      try {
+        const corpsT = await appeler('tickets', { action: 'list', limit: limite });
+        const tous = Object.values(corpsT || {}).find((v) => Array.isArray(v)) || [];
+        // Idem : `tickets` list n'honore pas tous ses filtres. On tamise sur `epic_id`.
+        stories = tous.filter((t) => t?.epic_id === e.id);
+      } catch {
+        // ⚠️ « pas pu lire les stories » ≠ « cet epic n'a pas de story ». Une liste vide ici
+        // ferait disparaître le travail d'un agent sans que rien ne le dise.
+        storiesLues = false;
+      }
+      avecStories.push({
+        code: e?.epic_id ?? null,
+        titre: e?.title ?? null,
+        statut: e?.status ?? null,
+        stories: storiesLues
+          ? stories.map((t) => ({ code: t?.ticket_id ?? null, titre: t?.title ?? null, statut: t?.status ?? null }))
+          : null,
+      });
+    }
+
+    return {
+      code,
+      titre: chantier?.title ?? chantier?.name ?? null,
+      statut: chantier?.status ?? null,
+      epics: avecStories,
+      // L'écart ne disparaît pas : s'il n'est pas nul, le filtre du service n'a pas filtré.
+      epicsEcartes,
+    };
+  };
+}
+
+/**
  * LA VUE DU PARC.
  *
  * @param recensement    le rendu de `unRecensement` — `{ agents: [...] | null, borne, … }`.
@@ -186,10 +266,17 @@ export function quiPorte(code, parMandat, parNom) {
  *                       « il n'y a personne » : la vue le relaie tel quel plutôt que de rendre
  *                       un parc vide, parfaitement vert, sur un poste où plus rien n'est mesuré.
  * @param lireChantier   `async (code) → { code, titre, statut, epics: [{ code, titre,
- *                       stories: [{ code, titre }] }] }` — INJECTÉ. Aucun appel réseau n'est
- *                       écrit ici : c'est ce qui rend ce module éprouvable sans clé et sans
- *                       service. **Il a le droit de JETER** : un chantier illisible rend
+ *                       stories: [{ code, titre }] | null }] }` — INJECTÉ. Aucun appel réseau
+ *                       n'est écrit ici : c'est ce qui rend ce module éprouvable sans clé et
+ *                       sans service. **Il a le droit de JETER** : un chantier illisible rend
  *                       `epics: null` et sa raison, jamais `epics: []`.
+ *
+ *                       ⚠️ ET LA MÊME RÈGLE DESCEND D'UN ÉTAGE, jusqu'aux stories : `null` dit
+ *                       « je n'ai pas pu les lire », `[]` dit « je les ai lues, il n'y en a
+ *                       aucune ». Ce `| null` a été ajouté APRÈS coup — le contrat annonçait un
+ *                       tableau nu pendant que le code repliait déjà `null` en `[]`, et c'est
+ *                       exactement le motif qu'on se garde ici : la donnée corrigée, la prose
+ *                       du même fichier continuant d'affirmer autre chose.
  * @param journaliser    `(message) → void`.
  */
 export async function laVueDuParc({ recensement = null, lireChantier = null, journaliser = () => {} } = {}) {
@@ -321,16 +408,25 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
       },
       epics: epicsLus.map((e) => {
         const codeEpic = codeDuMandat(e?.code ?? '');
-        const stories = Array.isArray(e?.stories) ? e.stories : [];
+        // ⚠️ `null` TRAVERSE, IL NE SE REPLIE PAS EN `[]` — et ce défaut a bien vécu ici : un
+        // `Array.isArray(...) ? ... : []` transformait « je n'ai pas pu lire les stories de cet
+        // epic » en « cet epic n'a aucune story ». Le lecteur de chantier prend soin de rendre
+        // `stories: null` quand l'appel aux tickets a échoué ; le replier ici jetait ce soin, et
+        // faisait disparaître le travail d'un agent sans que rien ne le dise. Même règle qu'un
+        // étage plus haut pour `epics`, au même endroit du même objet.
+        const stories = Array.isArray(e?.stories) ? e.stories : null;
         return {
           code: e?.code ?? null,
           titre: e?.titre ?? null,
           agent: quiPorte(codeEpic, parMandat, parNom),
-          stories: stories.map((s) => ({
-            code: s?.code ?? null,
-            titre: s?.titre ?? null,
-            agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
-          })),
+          stories:
+            stories === null
+              ? null
+              : stories.map((s) => ({
+                  code: s?.code ?? null,
+                  titre: s?.titre ?? null,
+                  agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
+                })),
         };
       }),
     });
@@ -478,16 +574,38 @@ export function rendreLaVue(vue) {
     if (o.epics === null) {
       // ⚠️ « pas pu lire » ne se rend PAS comme « il n'y en a aucun ». Sans cette ligne, un
       // chantier illisible aurait l'apparence exacte d'un chantier vide.
-      l.push('  └─ (ses epics n’ont pas pu être lus)');
+      //
+      // 🔴 ET `epics: null` RECOUVRE DEUX FAITS DIFFÉRENTS, qu'on ne rend surtout pas pareil —
+      // défaut vu sur le rendu RÉEL du poste, jamais par relecture. `matapedia` affichait
+      // « ses epics n'ont pas pu être lus », alors que son mandat n'est pas un code : il n'y
+      // avait RIEN à lire, aucune lecture n'a échoué, et la phrase envoyait chercher une panne
+      // qui n'existe pas. Un faux échec d'instrument coûte plus qu'un silence : il noie les
+      // vrais échecs dans son bruit.
+      l.push(
+        c.mesure === 'non établi'
+          ? '  └─ (aucun epic à chercher : son mandat n’est pas un code de chantier)'
+          : '  └─ (ses epics n’ont pas pu être lus)'
+      );
     } else if (!o.epics.length) {
       l.push('  └─ (aucun epic — mesuré, pas un trou)');
     } else {
-      for (const e of o.epics) {
-        l.push(`  └─ ${e.code}${e.titre ? ` · ${e.titre}` : ''}   ${rendreAttribution(e.agent)}`);
-        for (const s of e.stories ?? []) {
-          l.push(`       ├─ ${s.code}${s.titre ? ` · ${s.titre}` : ''}   ${rendreAttribution(s.agent)}`);
-        }
-      }
+      // ⚠️ LE DERNIER D'UNE FRATRIE SE FERME, LES AUTRES SE CONTINUENT. Un arbre où chaque
+      // branche porte « └─ » ne dit plus où une fratrie s'arrête : l'œil ne peut plus rattacher
+      // une story à son epic quand il y en a plusieurs, et c'est justement la lecture que le
+      // dirigeant a demandée. Le trait vertical continue la fratrie de l'orchestrateur.
+      o.epics.forEach((e, i) => {
+        const dernierEpic = i === o.epics.length - 1;
+        l.push(`  ${dernierEpic ? '└─' : '├─'} ${e.code}${e.titre ? ` · ${e.titre}` : ''}   ${rendreAttribution(e.agent)}`);
+        const stories = e.stories ?? [];
+        stories.forEach((st, j) => {
+          const tuyau = dernierEpic ? '   ' : '  │';
+          l.push(`${tuyau}    ${j === stories.length - 1 ? '└─' : '├─'} ${st.code}${st.titre ? ` · ${st.titre}` : ''}   ${rendreAttribution(st.agent)}`);
+        });
+        // ⚠️ « pas pu lire » ≠ « il n'y en a aucune », JUSQUE SUR UNE STORY. Le lecteur de
+        // chantier rend `stories: null` quand l'appel a échoué : le taire ferait passer un epic
+        // dont on n'a rien lu pour un epic qui n'a rien.
+        if (e.stories === null) l.push(`${dernierEpic ? '   ' : '  │'}    (ses stories n’ont pas pu être lues)`);
+      });
     }
     l.push('');
   }

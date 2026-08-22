@@ -30,6 +30,7 @@ import {
   referencesDesRoles,
   unRecensement,
 } from './recensement.js';
+import { laVueDuParc, lecteurDeChantier } from './vue-du-parc.js';
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
@@ -331,6 +332,10 @@ export class Veilleur {
         return this.designerDirigeantDuPoste(requete);
       case 'etat':
         return this.etat();
+      case 'vue':
+        // ⚠️ LA VUE S'APPUIE SUR LE RECENSEMENT DU MOMENT, elle n'en garde pas de copie.
+        // Un second registre serait une seconde source (RA-VUE-004) : elle recense, puis joint.
+        return this.vueDuParc();
       case 'recensement':
         // ⚠️ ON RECENSE À LA DEMANDE, ON NE REND PAS LE DERNIER TOUR. Un registre qui
         // rendrait la mesure d'il y a quatorze minutes répondrait « qui est à jour » avec
@@ -1830,6 +1835,22 @@ export class Veilleur {
       nomsConnus,
       journaliser,
     });
+  }
+
+  /**
+   * LA VUE DU PARC — le recensement du moment, JOINT au ServiceDesk par le code du mandat.
+   *
+   * ⚠️ ELLE NE CONSTITUE AUCUN SECOND REGISTRE (RA-VUE-004). Elle appelle le recensement, puis
+   * joint. Un cache de la vue deviendrait une seconde source qui périmerait sans le dire — le
+   * défaut même que ce chantier existe pour fermer.
+   *
+   * ⚠️ SANS CLÉ, ON NE DEVINE PAS. `lecteurDeChantier` rend `null` quand rien ne permet de
+   * joindre le service : la vue rend alors « chantier NON MESURÉ » avec sa cause, jamais un
+   * parc sans travail.
+   */
+  async vueDuParc() {
+    const recensement = await this.recensementDuPoste();
+    return laVueDuParc({ recensement, lireChantier: lecteurDeChantier(), journaliser });
   }
 
   connecterSlack() {

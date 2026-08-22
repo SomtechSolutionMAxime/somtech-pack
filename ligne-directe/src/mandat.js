@@ -163,16 +163,26 @@ export async function etatDuMandat(mandat, { appeler } = {}) {
  * ⚠️ LA CLÉ N'EST PAS INVENTÉE, ET SON ABSENCE SE DIT. Sans elle, on ne se rabat sur rien : la
  * fonction n'est simplement pas construite, et `etatDuMandat` rend « aucun accès ».
  */
-export function accesServiceDesk({
+/**
+ * LE TRANSPORT NU vers le ServiceDesk — `(nom, args) → corps`, ou `null` sans clé.
+ *
+ * ⚠️ EXTRAIT DE `accesServiceDesk` POUR ÊTRE PARTAGÉ, PAS RECOPIÉ. La vue du parc
+ * (`vue-du-parc.js`) a besoin d'appels que le résolveur de mandat ne fait pas — lister les
+ * epics d'un projet, puis les tickets d'un epic. Réécrire un second transport à côté aurait
+ * dupliqué la CLOISON D'ESSAIS ci-dessous, et une cloison dupliquée est une cloison qu'on
+ * oublie d'un côté : c'est le motif « une porte sur deux » qui a déjà coûté à ce module. Il y
+ * a donc UN transport, et deux usages.
+ *
+ * @returns `(nom, args) → corps JSON` — jette sur refus HTTP ou réponse sans contenu.
+ */
+export function transportServiceDesk({
   url = 'https://vdpuktsqrecdxbmweate.supabase.co/functions/v1/servicedesk-mcp',
   cle = process.env.SOMTECH_DESK_API_KEY || process.env.SERVICEDESK_MCP_TOKEN,
   fetcher = globalThis.fetch,
   delaiMs = 8000,
-  parPage = 200,
 } = {}) {
   if (!cle || typeof fetcher !== 'function') return null;
-
-  const appelerMcp = async (nom, args) => {
+  return async (nom, args) => {
     // ⚠️ LA CLOISON D'ESSAIS, ET ELLE MANQUAIT — relevée en passe de revue de fond, et le rejet
     // était juste. Sur un poste de développement, `SOMTECH_DESK_API_KEY` est exportée : c'est le
     // cas NORMAL de quiconque travaille dans un lieu d'agent. Un simple `npm test` faisait donc
@@ -207,6 +217,14 @@ export function accesServiceDesk({
     if (!texte) throw new Error('réponse sans contenu');
     return JSON.parse(texte);
   };
+}
+
+export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
+  const appelerMcp = transportServiceDesk(transport);
+  // ⚠️ L'ABSENCE DE CLÉ SE DIT PAR `null`, ET ELLE NE SE DEVINE PAS. C'est ce `null` qui fait
+  // rendre « aucun accès au ServiceDesk ne m'a été donné » à `etatDuMandat`, plutôt qu'un état
+  // inventé. Le contrat n'a pas bougé en extrayant le transport.
+  if (!appelerMcp) return null;
 
   /**
    * ⚠️ LA LECTURE PAR CODE PASSE PAR UNE LISTE, ET CE N'EST PAS UN CONTOURNEMENT — c'est mesuré.

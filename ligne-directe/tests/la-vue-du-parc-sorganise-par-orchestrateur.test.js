@@ -429,7 +429,15 @@ test('un orchestrateur dont le mandat n’est pas un code garde `epics: null` �
   // pour un chantier qu'on n'a JAMAIS cherché. `null` dit la vérité : on ne sait pas.
   assert.equal(o.epics, null, 'aucune lecture n’a eu lieu : ce n’est pas « aucun epic »');
   const texte = rendreLaVue(vue);
-  assert.ok(!texte.includes('aucun epic'), 'et le texte ne prétend pas qu’on a compté zéro epic');
+
+  // 🔴 TROIS FAITS, TROIS PHRASES — et `epics: null` en recouvre DEUX qu'il ne faut pas
+  // confondre. Défaut vu sur le rendu réel du poste : `matapedia` affichait « ses epics n'ont
+  // pas pu être lus » alors que RIEN n'avait échoué — son mandat n'est pas un code, il n'y
+  // avait simplement rien à chercher. Un faux échec d'instrument envoie chercher une panne
+  // inexistante et noie les vrais échecs dans son bruit.
+  assert.ok(texte.includes('aucun epic à chercher'), 'la vraie raison est dite : il n’y avait rien à chercher');
+  assert.ok(!texte.includes('n’ont pas pu être lus'), 'et surtout PAS un échec de lecture qui n’a pas eu lieu');
+  assert.ok(!/\(aucun epic — mesuré/.test(texte), 'ni « aucun epic » tout court, qui prétendrait qu’on a compté zéro');
 });
 
 test('sans accès au ServiceDesk, la vue garde `epics: null` et NOMME la cause — jamais un parc sans travail', async (t) => {
@@ -451,4 +459,44 @@ test('sans accès au ServiceDesk, la vue garde `epics: null` et NOMME la cause �
   const texte = rendreLaVue(vue);
   assert.ok(texte.includes('NON MESURÉ'), 'le texte dit qu’on n’a pas mesuré');
   assert.ok(!texte.includes('aucun epic'), 'et surtout pas qu’il n’y a pas de travail');
+});
+
+test('des stories ILLISIBLES ne se rendent pas comme un epic SANS story — et l’arbre reste lisible quand une fratrie en compte plusieurs', async (t) => {
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-20260822-0001');
+
+  const rendu = await recenser([unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: lieu })], [['w1:p1', 'kamouraska', undefined]]);
+  const vue = await laVueDuParc({
+    recensement: rendu,
+    lireChantier: async (code) => ({
+      code,
+      epics: [
+        // `stories: null` — le lecteur de chantier le rend quand l'appel aux tickets a échoué.
+        { code: 'E-20260822-0001', titre: 'stories illisibles', stories: null },
+        { code: 'E-20260822-0002', titre: 'deux stories', stories: [{ code: 'T-1' }, { code: 'T-2' }] },
+        { code: 'E-20260822-0003', titre: 'aucune story', stories: [] },
+      ],
+    }),
+  });
+
+  const texte = rendreLaVue(vue);
+  assert.ok(texte.includes('n’ont pas pu être lues'), '« pas pu lire les stories » se DIT');
+
+  // ⚠️ ET L'EPIC SANS STORY NE DIT PAS LA MÊME CHOSE — sinon les deux se confondent au rendu,
+  // qui est le seul endroit où le dirigeant les distingue.
+  const lignes = texte.split('\n');
+  const iVide = lignes.findIndex((l) => l.includes('E-20260822-0003'));
+  assert.ok(!lignes[iVide + 1]?.includes('pas pu être lues'), 'un epic sans story ne prétend pas être illisible');
+
+  // ⚠️ L'ARBRE RESTE RATTACHABLE À L'ŒIL : le dernier d'une fratrie se FERME, les autres se
+  // continuent. Sans cette distinction, une story de l'epic 2 se lit comme une story de l'epic 3.
+  const iE1 = lignes.findIndex((l) => l.includes('E-20260822-0001'));
+  const iE3 = lignes.findIndex((l) => l.includes('E-20260822-0003'));
+  assert.ok(lignes[iE1].includes('├─'), 'un epic qui n’est pas le dernier se CONTINUE');
+  assert.ok(lignes[iE3].includes('└─'), 'le dernier epic se FERME');
+  const iT1 = lignes.findIndex((l) => l.includes('T-1'));
+  const iT2 = lignes.findIndex((l) => l.includes('T-2'));
+  assert.ok(lignes[iT1].includes('├─') && lignes[iT2].includes('└─'), 'et la fratrie des stories aussi');
+  assert.ok(lignes[iT1].includes('│'), 'le trait vertical rattache la story à un epic qui n’est pas le dernier');
 });
