@@ -23,10 +23,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
-import { campagne, copierLeDepot, lancerLaSuite, lancerToutesLesSuites, racineDuDepot } from './aide/harnais-de-mutation.js';
+import {
+  campagne, copierLeDepot, lancerLaSuite, lancerToutesLesSuites, racineDuDepot, remplacerUnique,
+} from './aide/harnais-de-mutation.js';
 
 /** Un `preparer` de laboratoire : un jeton, pas un répertoire — on n'éprouve pas la copie ici. */
 function laboratoire() {
@@ -259,6 +262,39 @@ test('UN TOUR QUI EXÉCUTE MOINS D’ESSAIS QUE LE TÉMOIN EST INDÉCIDABLE, jam
     mutations: [{ id: 'vraiment-non-gardee', appliquer: () => true }],
   });
   assert.equal(egal.resultats[0].verdict, 'SURVIVANTE', 'à dénominateur égal, le verdict reste rendu');
+});
+
+test('UN MOTIF AMBIGU NE SE MUTE PAS — il rendrait un verdict sur un autre objet', () => {
+  // ⚠️ MESURÉ AU CYCLE 6, ET J'AI FAILLI EN TIRER UNE FAUSSE CONCLUSION. Une mutation posée sur
+  // `      journaliser,` a frappé la PREMIÈRE des deux occurrences de `veilleur.js` — dans une
+  // autre fonction que celle visée. Elle est sortie « SURVIVANTE », et j'allais écrire qu'une
+  // garde manquait là où elle mordait parfaitement.
+  //
+  // > Un motif AMBIGU est plus dangereux qu'un motif INTROUVABLE : l'introuvable se déclare
+  // > inopérante, l'ambigu mute quelque chose et rend un verdict sur autre chose.
+  const bac = mkdtempSync(join(tmpdir(), 'motif-'));
+  try {
+    const f = join(bac, 'code.js');
+
+    // ① Deux occurrences : on REFUSE, et le fichier n'est pas touché.
+    writeFileSync(f, 'a();\n  cible,\nb();\n  cible,\nc();\n');
+    const avant = readFileSync(f, 'utf8');
+    assert.equal(remplacerUnique(f, '  cible,', '  MUTÉ,'), false, 'un motif à 2 occurrences se refuse');
+    assert.equal(readFileSync(f, 'utf8'), avant, 'et RIEN n’est écrit — sinon on mute au hasard');
+
+    // ② Zéro occurrence : on refuse aussi (le motif ne s’applique plus au code).
+    assert.equal(remplacerUnique(f, 'motif-absent', 'x'), false, 'un motif introuvable se refuse');
+
+    // ③ Une seule : on remplace, et c’est bien CELLE-LÀ.
+    writeFileSync(f, 'a();\n  cible,\nb();\n');
+    assert.equal(remplacerUnique(f, '  cible,', '  MUTÉ,'), true, 'un motif unique se remplace');
+    assert.match(readFileSync(f, 'utf8'), /MUTÉ,/, 'et le texte a changé pour de vrai');
+
+    // ④ Un remplacement qui ne change rien est refusé — sinon « attrapée » sur du sur-place.
+    assert.equal(remplacerUnique(f, '  MUTÉ,', '  MUTÉ,'), false, 'un remplacement inerte se refuse');
+  } finally {
+    rmSync(bac, { recursive: true, force: true });
+  }
 });
 
 // ═════════════════ LE RÉEL — la recette se MESURE, elle ne se déclare pas

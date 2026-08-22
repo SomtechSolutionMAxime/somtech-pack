@@ -34,7 +34,7 @@
 //      trouve aucun fichier : le processus sort sans résumé, et « 0 échec » se lit comme un
 //      succès. → le compte se PARSE, et son absence est un REFUS, jamais un zéro.
 
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -193,6 +193,37 @@ export function lancerToutesLesSuites(copie, { suites = ['ligne-directe', 'naiss
     fail += r.fail;
   }
   return { tests, pass, fail, parSuite };
+}
+
+/**
+ * Remplacer UN motif qui n'apparaît qu'UNE fois — la fabrique d'`appliquer` qui manquait.
+ *
+ * ⚠️ MESURÉ, ET LE VERDICT PORTAIT SUR UN AUTRE OBJET QUE LA CONCLUSION. Une campagne du cycle 6
+ * a posé « décâble le battement de cœur du recensement » sur le motif `      journaliser,` — qui
+ * apparaît DEUX fois dans `veilleur.js`. Le remplacement a frappé la première occurrence, dans
+ * une autre fonction ; la mutation est sortie « SURVIVANTE », et j'ai failli en conclure qu'une
+ * garde manquait là où elle mordait parfaitement.
+ *
+ * Un motif ambigu est plus dangereux qu'un motif introuvable : l'introuvable se déclare
+ * INOPÉRANTE, l'ambigu mute quelque chose et rend un verdict sur autre chose.
+ *
+ * @returns `true` si le motif était unique et a été remplacé ; `false` sinon — ce que `campagne`
+ *   lit comme « INOPÉRANTE », donc jamais comme un verdict.
+ */
+export function remplacerUnique(chemin, avant, apres) {
+  const texte = readFileSync(chemin, 'utf8');
+  let n = 0;
+  let i = texte.indexOf(avant);
+  while (i !== -1) {
+    n += 1;
+    if (n > 1) break;
+    i = texte.indexOf(avant, i + avant.length);
+  }
+  if (n !== 1) return false;
+  const apresTexte = texte.replace(avant, apres);
+  if (apresTexte === texte) return false;
+  writeFileSync(chemin, apresTexte);
+  return true;
 }
 
 /**
