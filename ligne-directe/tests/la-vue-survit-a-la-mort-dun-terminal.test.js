@@ -51,6 +51,10 @@ function unOrchestrateurVivant({
   titre = '◐ Kamouraska orchestrateur P-20260822-0001',
   statut = 'idle',
   enVol = null,
+  // ⚠️ UN DRAPEAU, PAS `titre: undefined` — qui retombe sur le défaut du paramètre et ne produit
+  // JAMAIS la forme sans clé. La première version de cette fabrique ne pouvait pas fabriquer le
+  // cas qu'elle prétendait éprouver : le banc rougissait sur son propre double.
+  sansTitre = false,
 } = {}) {
   return {
     pane,
@@ -62,7 +66,7 @@ function unOrchestrateurVivant({
     // ⚠️ LA CLÉ EST OMISE QUAND herdr NE LA REND PAS — mesuré : 73 panes sur 76 portent
     // `terminal_title`, les 3 autres n'ont PAS la clé. Écrire `titre: null` serait inventer une
     // forme que la source ne produit pas — le défaut que `formes-reelles.js` existe pour fermer.
-    ...(titre === undefined ? {} : { titre }),
+    ...(sansTitre ? {} : { titre }),
     statut,
     travailEnVol:
       enVol === null
@@ -379,7 +383,7 @@ test('un agent vivant SANS titre de fenêtre garde son pane, et l’absence de t
     recensement: {
       quand: 'T',
       borne: borneComplete,
-      agents: [unOrchestrateurVivant({ titre: undefined })],
+      agents: [unOrchestrateurVivant({ sansTitre: true })],
     },
     lieux: desLieux(['p-20260822-0001']),
     lireChantier: unLecteur({ 'P-20260822-0001': unChantier('P-20260822-0001') }),
@@ -427,8 +431,13 @@ test('deux sessions portant LE MÊME identifiant de pane restent DEUX lignes, ch
 
   assert.equal(vue.orchestrateurs.length, 2, 'deux agents, deux lignes — rien ne les fusionne');
   const texte = rendreLaVue(vue);
-  const lignes = texte.split('\n').filter((l) => l.includes('w7:p1'));
-  assert.equal(lignes.length, 2);
+  // ⚠️ ON NE COMPTE QUE LES LIGNES D'ORCHESTRATEUR. La section « identifiants de pane ambigus »
+  // rend `w7:p1` elle aussi, et c'est son travail : la mêler au compte mesurerait un autre objet
+  // que celui dont on conclut.
+  // Les lignes d'orchestrateur commencent en colonne 0 ; les sections indentées (panes ambigus,
+  // présence, activité) sont d'autres objets, et les mêler mesurerait autre chose.
+  const lignes = texte.split('\n').filter((l) => l.includes('w7:p1') && !l.startsWith(' '));
+  assert.equal(lignes.length, 2, 'deux lignes d’orchestrateur portent ce pane, chacune avec SA session');
   assert.ok(lignes.some((l) => l.includes('somtech')) && lignes.some((l) => l.includes('progex')),
     'chacune NOMME SA SESSION : c’est ce qui les distingue');
 });
