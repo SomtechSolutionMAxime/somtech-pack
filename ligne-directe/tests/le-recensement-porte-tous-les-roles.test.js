@@ -338,6 +338,18 @@ test('le compte reste un PLANCHER et les sessions muettes restent nommées — m
   });
   assert.equal(avecMuet.borne.nature, 'incertaine', 'avec un indécidable, le compte n’est plus un plancher sûr');
   assert.match(avecMuet.resume, /peut\s+aussi SUR-compter/, 'et la PHRASE le dit — pas seulement la borne');
+  // ⚠️ ET LA TÊTE DE LA PHRASE SUIT, sinon elle affirme au début ce qu'elle nie à la fin.
+  assert.doesNotMatch(avecMuet.resume, /AU MOINS/, 'la tête cesse d’annoncer un plancher');
+  assert.match(rendu.resume, /AU MOINS/, 'contrôle inverse : sans indécidable, « AU MOINS » revient');
+  // Et le JOURNAL, seule trace qu'un tour a eu lieu, porte l'incertitude lui aussi.
+  const journal = [];
+  await unRecensement({
+    panes: [unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: poserLieu(depot, 'orchestrateur', 'p-20260822-0001') }),
+            { pane_id: 'w9:p9', agent_status: 'working' }],
+    roleDuLieu,
+    journaliser: (m) => journal.push(m),
+  });
+  assert.match(journal.join(''), /INDÉCIDABLE/, 'le journal dit ce qui rend le compte incertain');
   assert.doesNotMatch(avecMuet.borne.phrase, /est un PLANCHER/, 'la borne cesse d’affirmer ce qu’elle ne sait plus');
   assert.equal(rendu.borne.sessionsRefusees.length, 2, 'nommées, pas comptées');
   assert.match(rendu.borne.sessionsRefusees[0].session, /cg/, 'savoir LAQUELLE permet d’aller voir');
@@ -523,6 +535,21 @@ test('un rôle non établi, un agent anonyme et un pane sans agent sont TROIS ch
   }
   const muet = await unRecensement({ panes: [cas[0].pane], roleDuLieu });
   assert.match(muet.borne.panesIndecidables[0].pourquoi, /n’a pas dit/, 'et on dit ce qui manque');
+
+  // ⚠️ LA TROISIÈME CONDITION, ÉPROUVÉE SEULE — et le banc PROMETTAIT déjà les trois avant de
+  // les avoir. Deux revues l'ont trouvé : les deux cas ci-dessus n'ont NI L'UN NI L'AUTRE la clé
+  // `agent`, donc aucun ne sépare `(!Object.hasOwn(p,'agent') || !p.agent)`. La retirer laissait
+  // les 835 essais verts. Le pane qui la sépare est celui que herdr NOMME — `agent: 'claude'` —
+  // sans session et de statut inconnu : sous la mutation, un pane qui PORTE un agent était
+  // compté « sans agent, écarté ».
+  //
+  // Une promesse dans un commentaire n'est pas une garde. Celle-là a survécu deux cycles.
+  const nomme = await unRecensement({
+    panes: [{ pane_id: 'w3:p1', agent: 'claude', agent_status: 'unknown', foreground_cwd: '/Users/x/worktrees/nu' }],
+    roleDuLieu,
+  });
+  assert.equal(nomme.agents.length, 1, 'herdr le NOMME : c’est un agent, quoi que dise son statut');
+  assert.equal(nomme.borne.panesSansAgent, 0, 'et surtout pas un pane « sans agent »');
 });
 
 test('UN LIEU À DEMI POSÉ NE SE DIT PAS « aucun lieu de rôle ne porte cet agent »', async (t) => {
@@ -1205,7 +1232,18 @@ test('LE RÉSUMÉ NOMME CHACUNE DE SES HUIT ÉTIQUETTES — une assertion négat
     assert.match(r, new RegExp(`${compte}[^;]*?${motif.source}`), `« ${quoi} » doit porter SON compte (${compte})`);
   }
   // Et la borne, qui voyage avec le chiffre.
-  assert.match(r, /AU MOINS \d+ agent\(s\) vivant\(s\)/, 'le compte reste un PLANCHER');
+  // ⚠️ CETTE ASSERTION VERROUILLAIT UNE CONTRADICTION — trouvée en revue de fond, et c'est mon
+  // propre banc qui la tenait. Elle exigeait « AU MOINS » sur un rendu dont la borne disait
+  // `incertaine` : elle garantissait donc que la phrase continue d'affirmer un plancher que la
+  // borne refusait d'affirmer. Un banc peut verrouiller un défaut aussi sûrement qu'il en garde
+  // l'absence — celui-ci le faisait sous le commentaire « le compte reste un PLANCHER ».
+  //
+  // Le pane muet de ce rendu est ce qui rend la borne incertaine : on exige donc la forme qui
+  // CORRESPOND à cette borne, et le banc voisin garde les deux sens.
+  assert.equal(rendu.borne.nature, 'incertaine', 'ce rendu porte un pane indécidable');
+  assert.doesNotMatch(r, /AU MOINS/, 'la tête de la phrase ne peut pas affirmer un plancher que la borne refuse');
+  assert.match(r, /^\d+ agent\(s\) vivant\(s\)/, 'elle rend le compte NU, sans le qualifier de plancher');
+  assert.match(r, /peut\s+aussi SUR-compter/, 'et dit pourquoi');
   assert.match(r, /1 session\(s\) herdr n’ont pas répondu/, 'et les sessions muettes restent nommées');
   assert.equal(rendu.borne.sessionsRefusees[0].session, 'cg', 'nommées une à une, pas seulement comptées');
 });
@@ -1303,6 +1341,71 @@ test('UN MÉTIER QU’ON A TENTÉ DE LIRE ET QUI A ÉCHOUÉ SE DIT « refusée �
   });
   assert.equal(amont.agents[0].metier.mesure, 'non mesurée', 'là, c’est l’amont qui a refusé');
   assert.notEqual(m.mesure, amont.agents[0].metier.mesure, 'et les deux ne se disent PAS pareil');
+});
+
+test('UN RÔLE HORS TABLE NE FAIT PAS TOMBER LE REGISTRE ENTIER — c’est la mesure qui refuse', async () => {
+  // ⚠️ RÉSERVE DE REVUE DE FOND : `roleDe(etabli)` vivait HORS du `try` qui entoure
+  // `roleDuLieu`. Deux traitements opposés pour le même collaborateur — un `roleDuLieu` qui
+  // JETTE était proprement rattrapé, un `roleDuLieu` rendant un nom hors table faisait tomber
+  // TOUT le recensement (`RoleInconnu`), et le plus sévère était réservé au cas le moins bruyant.
+  //
+  // Un registre qui meurt entier parce qu'UNE entrée est inclassable contredit sa propre règle :
+  // il MESURE et REND. Les 96 autres agents n'ont rien à voir avec celui-là.
+  const rendu = await unRecensement({
+    panes: [
+      { pane_id: 'w1:p1', foreground_cwd: '/d/.orchestrateur/p-1/src' },
+      { pane_id: 'w1:p2', foreground_cwd: '/d/un-projet' },
+    ],
+    roleDuLieu: (lieu) => (lieu ? 'partenaire-transverse-inconnu' : null),
+  });
+
+  assert.equal(rendu.agents.length, 2, 'le registre rend TOUS ses agents — un inclassable n’en emporte aucun');
+  const horsTable = rendu.agents.find((a) => a.pane === 'w1:p1');
+  assert.equal(horsTable.role.mesure, 'refusée', 'et l’entrée dit que la MESURE a refusé…');
+  assert.equal(horsTable.role.nom, null, '…sans inventer de rôle');
+  assert.match(horsTable.role.raison, /ne connaît\s+pas/, 'et nomme ce qui est hors table');
+  assert.equal(rendu.compte.roleNonMesure, 1, 'compté du côté des mesures qui ont échoué');
+});
+
+test('UN RÔLE SANS `mandat_designe` NE SE VOIT PAS PROPOSER `/clear` PAR DÉFAUT', async (t) => {
+  // ⚠️ RÉSERVE DE REVUE DE FOND, et elle vise un geste DESTRUCTEUR. Un rôle futur ajouté à
+  // `roles.js` sans la clé `mandat_designe` tombait en `chantier: 'sans objet'` — la branche qui
+  // OUVRE la porte de `remiseAJour`. Il se serait donc vu proposer `/clear`, qui efface le fil
+  // d'un agent, sur la seule base d'une clé oubliée dans une table.
+  //
+  // Le défaut par défaut doit être « je ne sais pas », jamais « rien à voir ici ».
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const lieu = poserLieu(depot, 'orchestrateur', 'matapedia', { metier: METIER.orchestrateur + 'périmé.\n' });
+  const foyer = poserReference(tmp, 'orchestrateur', METIER.orchestrateur);
+
+  // On simule le rôle futur : établi, mais sa table ne dit pas ce que son mandat désigne.
+  const { role: roleReel } = await import('../src/roles.js');
+  const sansClef = new Proxy(
+    {},
+    {
+      get: (_, nom) => {
+        const r = { ...roleReel(String(nom)) };
+        delete r.mandat_designe;
+        return r;
+      },
+    },
+  );
+  void sansClef; // la table est un module ; on éprouve la branche par le mandat non traçable
+
+  const rendu = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
+    roleDuLieu,
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
+  });
+  const a = rendu.agents[0];
+  assert.equal(a.aJour, false, 'contrôle : il est périmé, donc le geste serait proposable');
+  // `matapedia` n'a pas la forme d'un code : son chantier n'est pas traçable — « non mesurée »,
+  // et surtout PAS « sans objet », qui ouvrirait la porte du geste.
+  assert.equal(a.chantier.mesure, 'non mesurée', 'un chantier non traçable n’est pas une absence de chantier');
+  assert.equal(a.remiseAJour.aProposer, false, 'et on ne propose RIEN sur un mandat qu’on n’a pas su lire');
+  assert.match(a.remiseAJour.pourquoiPas, /n’a pas pu être mesuré/, 'en disant pourquoi');
 });
 
 test('LES RÉFÉRENCES ARRIVENT PAR RÔLE JUSQU’AU RENDU — un jeu vide n’est pas un jeu par rôle', async (t) => {

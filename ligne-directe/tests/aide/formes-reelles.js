@@ -50,11 +50,43 @@ export const ECHANTILLON_PANES = {
     { compte: 2, agent: true, agent_session: true, agent_status: 'blocked' },
     { compte: 1, agent: true, agent_session: true, agent_status: 'working' },
   ],
-  /** Ce que la source ne produit JAMAIS — mesuré, pas supposé. */
-  jamais: {
+  /**
+   * Ce qui n'a AUCUNE occurrence dans CE relevé — un compte, pas une propriété.
+   *
+   * ⚠️ CE CHAMP S'EST APPELÉ `jamais`, ET C'ÉTAIT FAUX — trouvé par les deux passes du cycle 6,
+   * dans le fichier même qui existe pour empêcher de croire une forme sans l'avoir mesurée.
+   *
+   * Il déclarait « `agent_session` sans `agent` : JAMAIS ». Or c'est exactement la forme que
+   * T-20260820-0022 a MESURÉE le 2026-08-20 — toute session née après le 18 août 14 h 52 sortait
+   * ainsi — et c'est la raison d'être de la protection `agent_session` dans `recensement.js`.
+   * J'avais transformé « zéro occurrence aujourd'hui » en « jamais » : un verdict tiré d'une
+   * ABSENCE, dans la pièce posée pour interdire ce geste. Le risque n'est pas théorique — un
+   * lecteur qui croit ce « jamais » retire la protection qui empêche un agent vivant d'être
+   * effacé du registre.
+   *
+   * Le champ compte donc ce que CE relevé n'a pas vu, et nomme à côté ce qui a été vu AILLEURS.
+   */
+  aucune_occurrence_dans_ce_releve: {
     'agent: null': 0,
-    'agent_session sans agent': 0,
     'clé agent absente avec un statut ≠ unknown': 0,
+    'agent_session sans clé agent': 0,
+  },
+  /**
+   * Ce qu'un AUTRE relevé a vu, et que celui-ci n'a pas — la moitié qui manquait.
+   *
+   * Sans elle, « 0 occurrence » se lit « n'existe pas », et c'est le pas exact qui a produit le
+   * faux « jamais ».
+   */
+  vu_ailleurs: {
+    'agent_session sans clé agent': {
+      ou: 'T-20260820-0022, mesuré le 2026-08-20',
+      quoi:
+        'toute session née après le 18 août 14 h 52 sortait avec `agent_session` présent, aucune ' +
+        'clé `agent`, et `agent_status: "unknown"` — herdr ignorait son statut, pas son existence',
+      consequence:
+        'c’est la forme que `unPaneHabiteSansStatut` fabrique, et que la protection `agent_session` ' +
+        'de `recensement.js` existe pour ne pas confondre avec un terminal',
+    },
   },
 };
 

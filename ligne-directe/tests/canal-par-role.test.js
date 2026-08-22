@@ -337,6 +337,39 @@ test('RÔLE — un lieu VRAIMENT incomplet reste « aucun rôle », il ne devien
   assert.equal(roleDuLieuOuRefus(lieu({ claude: '# Un projet quelconque', contexte: '# Notes' })), null);
 });
 
+test('RÔLES — chaque rôle connu DÉCLARE ce que son mandat désigne', async () => {
+  // ⚠️ MUTATION SURVIVANTE, ET LA GARDE JUSTE EST À LA SOURCE, PAS SUR LE COMPORTEMENT PAR
+  // DÉFAUT. Une revue a relevé qu'un rôle futur ajouté sans `mandat_designe` tomberait en
+  // `chantier: 'sans objet'` — la branche qui OUVRE la porte de `remiseAJour`, c'est-à-dire qui
+  // fait PROPOSER `/clear`, un geste qui efface le fil d'un agent. Sur la seule base d'une clé
+  // oubliée dans une table.
+  //
+  // Le recensement porte désormais une ceinture (`mandatDesigne && …`), mais elle n'est pas
+  // éprouvable sans fabriquer une table de rôles que la production ne produit pas. La garde qui
+  // MORD est ici : la clé est OBLIGATOIRE, et l'oublier rougit au moment où on l'oublie.
+  const { rolesConnus, role: roleDe } = await import('../src/roles.js');
+
+  const valeurs = new Set(['chantier', 'client']);
+  for (const nom of rolesConnus()) {
+    const r = roleDe(nom);
+    assert.ok(
+      r.mandat_designe,
+      `« ${nom} » doit DÉCLARER ce que le segment sous son dossier nomme — sans quoi le registre ` +
+        'ne sait pas s’il doit lire un chantier au ServiceDesk, et se voit proposer un geste destructeur',
+    );
+    assert.ok(
+      valeurs.has(r.mandat_designe),
+      `« ${nom} » déclare « ${r.mandat_designe} », qui n’est pas une valeur connue (${[...valeurs].join(', ')}) — ` +
+        'ajouter une valeur exige de dire ici ce que le recensement doit en faire',
+    );
+  }
+
+  // ⚠️ ET LES DEUX VALEURS SONT RÉELLEMENT EMPLOYÉES : une table où tous les rôles déclareraient
+  // la même chose satisferait la boucle ci-dessus et ne distinguerait plus rien.
+  const declarees = new Set(rolesConnus().map((n) => roleDe(n).mandat_designe));
+  assert.equal(declarees.size, 2, 'les deux natures de mandat existent bel et bien dans la table');
+});
+
 // ═════════════════ 2. CHACUN NE REÇOIT QUE LE SIEN — par le fait
 
 test('DIFFUSER — l’orchestrateur et le gestionnaire reçoivent chacun SA consigne, et rien de l’autre', async () => {

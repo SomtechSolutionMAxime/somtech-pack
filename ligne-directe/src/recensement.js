@@ -590,7 +590,25 @@ export async function unRecensement({
       } else if (etabli) {
         // Le lieu porte bien un métier de rôle. On rend CELUI QU'IL PORTE, pas celui que son
         // dossier annonce : les deux peuvent diverger, et c'est le contenu qui fait foi.
-        role = { mesure: 'établi', nom: etabli, libelle: roleDe(etabli).libelle };
+        // ⚠️ `roleDe` EST DANS LE `try`, ET C'ÉTAIT UNE RÉSERVE DE REVUE. Il était hors : un
+        // `roleDuLieu` rendant un nom hors table faisait tomber TOUT le recensement
+        // (`RoleInconnu`), là où un `roleDuLieu` qui JETTE était proprement rattrapé — deux
+        // traitements opposés pour le même collaborateur, et le plus sévère réservé au cas le
+        // moins bruyant. Un registre qui meurt entier parce qu'UNE entrée est inclassable est
+        // le contraire de sa règle : il MESURE et REND, il ne présume jamais.
+        let libelle;
+        try {
+          libelle = roleDe(etabli).libelle;
+        } catch (err) {
+          role = {
+            mesure: 'refusée',
+            nom: null,
+            raison:
+              `le lieu « ${lieu} » établit un rôle « ${etabli} » que la table des rôles ne connaît ` +
+              `pas (${motDeLErreur(err)}) — c’est la MESURE qui est hors table, pas l’agent`,
+          };
+        }
+        if (libelle !== undefined) role = { mesure: 'établi', nom: etabli, libelle };
       } else {
         lieuxEcartes.push({
           pane: p?.pane_id ?? p?.pane ?? null,
@@ -730,7 +748,7 @@ export async function unRecensement({
                 `le rôle de cet agent n’est pas établi (${role.mesure}) : on ne sait pas si « ${mandat} » ` +
                 'nomme un chantier ou autre chose, donc on ne lit rien',
             }
-          : mandatDesigne !== 'chantier'
+          : mandatDesigne && mandatDesigne !== 'chantier'
             ? {
                 mesure: 'sans objet',
                 clos: null,
@@ -739,6 +757,13 @@ export async function unRecensement({
                   `et « ${mandat} » n’a pas la forme d’un code de chantier : son état ne se lit nulle part`,
               }
             : {
+                // ⚠️ ET C'EST AUSSI LA BRANCHE D'UN RÔLE FUTUR QUI N'AURAIT PAS DE
+                // `mandat_designe` — réserve de revue. Sans le test `mandatDesigne &&` ci-dessus,
+                // un rôle ajouté à `roles.js` sans cette clé tombait en « sans objet », donc se
+                // voyait PROPOSER `/clear` par défaut : un geste destructeur offert sur un rôle
+                // dont on ne sait rien. Le défaut par défaut doit être « je ne sais pas », jamais
+                // « rien à voir ici ».
+                //
                 // ⚠️ UN CHANTIER QU'ON NE PEUT PAS TRACER N'EST PAS UNE ABSENCE DE CHANTIER —
                 // attrapé par un banc préexistant, et il avait raison. Un orchestrateur PORTE un
                 // chantier par définition de son rôle ; celui-ci peut s'appeler `matapedia` ou
@@ -898,6 +923,13 @@ export async function unRecensement({
       `${mandatsSansObjet} sans mandat de chantier ; ` +
       `${anonymes} anonyme(s), ${nomsNonMesures} nom(s) non mesuré(s)` +
       (panesSansAgent ? ` ; ${panesSansAgent} pane(s) sans agent, écartés` : '') +
+      // ⚠️ LE JOURNAL AUSSI — relevé en revue de fond, et l'omission n'était pas un choix de
+      // forme : cette ligne porte déjà les panes écartés et les sessions muettes. Le journal est
+      // la SEULE trace qu'un tour a eu lieu ; y taire ce qui rend le compte incertain fait
+      // relire « AU MOINS N » comme un plancher pour toujours.
+      (panesIndecidables.length
+        ? ` ; ${panesIndecidables.length} pane(s) INDÉCIDABLE(s), recensés sans preuve — ce compte peut sur-compter`
+        : '') +
       (sessionsRefusees.length
         ? ` — ⚠️ COMPTE AMPUTÉ : ${sessionsRefusees.length} session(s) herdr muette(s) : ` +
           sessionsRefusees.map((r) => `${r.session ?? 'sans socket'} (${r.raison})`).join(' ; ')
@@ -961,7 +993,11 @@ export async function unRecensement({
       angleMort: CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
     },
     resume:
-      `AU MOINS ${agents.length} agent(s) vivant(s) — ` +
+      // ⚠️ LA TÊTE DE LA PHRASE SUIT LA BORNE — relevé en revue de fond. Elle s'ouvrait toujours
+      // sur « AU MOINS », puis se contredisait en fin de ligne (« ce compte peut aussi
+      // SUR-compter »). Un lecteur lit le début ; la contradiction n'était pas une nuance, c'était
+      // deux affirmations opposées dans la seule ligne que ce module déclare lue.
+      (panesIndecidables.length ? `${agents.length} agent(s) vivant(s) — ` : `AU MOINS ${agents.length} agent(s) vivant(s) — `) +
       (rolesTrouves.length ? `${rolesTrouves.join(', ')}` : 'aucun rôle établi') +
       (roleNonEtabli ? `, ${roleNonEtabli} au rôle NON ÉTABLI` : '') +
       (roleNonMesure ? `, ${roleNonMesure} au rôle NON MESURÉ` : '') +

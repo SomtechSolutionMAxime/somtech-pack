@@ -283,6 +283,21 @@ export function campagne({
         resultats.push({ id: m.id, verdict: 'INDÉCIDABLE', pourquoi: r.refus });
         continue;
       }
+      // ⚠️ LE DÉNOMINATEUR DU TOUR SE COMPARE À CELUI DU TÉMOIN — réserve de revue, et elle vise
+      // le cœur du harnais. Un tour qui exécuterait beaucoup MOINS d'essais avec zéro rouge
+      // sortait « SURVIVANTE » : le verdict le plus accusateur, rendu sur une mesure amputée.
+      // `lancerToutesLesSuites` refuse déjà une somme partielle un étage plus bas ; ici on
+      // refusait rien du tout.
+      if (r.tests < temoin.tests) {
+        resultats.push({
+          id: m.id,
+          verdict: 'INDÉCIDABLE',
+          pourquoi:
+            `ce tour n’a exécuté que ${r.tests} essais contre ${temoin.tests} au contrôle négatif : ` +
+            'la mutation a fait DISPARAÎTRE des essais, et « zéro rouge » ne dit rien sur ceux qui manquent',
+        });
+        continue;
+      }
       resultats.push({ id: m.id, verdict: r.fail > 0 ? 'attrapée' : 'SURVIVANTE', rouges: r.fail, tests: r.tests });
     } finally {
       ranger(copie);

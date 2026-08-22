@@ -230,6 +230,37 @@ test('RÉEL — une campagne peut mesurer TOUTES les suites, pas seulement celle
   }
 });
 
+test('UN TOUR QUI EXÉCUTE MOINS D’ESSAIS QUE LE TÉMOIN EST INDÉCIDABLE, jamais « SURVIVANTE »', () => {
+  // ⚠️ RÉSERVE DE REVUE DE FOND, et elle vise le cœur du harnais. Le dénominateur du tour muté
+  // n'était comparé à RIEN. Une mutation qui fait DISPARAÎTRE des essais — un fichier qui
+  // n'importe plus, un `describe` qui ne s'ouvre pas — sortait « SURVIVANTE » : le verdict le
+  // plus accusateur, rendu sur une mesure amputée, et qui envoie écrire une garde qui existe.
+  //
+  // `lancerToutesLesSuites` refuse déjà une somme partielle un étage plus bas ; ici on ne
+  // refusait rien.
+  const labo = laboratoire();
+  let tour = 0;
+  const r = campagne({
+    preparer: labo.preparer,
+    ranger: labo.ranger,
+    lancer: () => (tour++ === 0 ? { tests: 800, pass: 800, fail: 0 } : { tests: 40, pass: 40, fail: 0 }),
+    mutations: [{ id: 'fait-disparaitre-des-essais', appliquer: () => true }],
+  });
+  assert.equal(r.verdictPossible, true, 'le contrôle négatif est vert : la campagne tourne');
+  assert.equal(r.resultats[0].verdict, 'INDÉCIDABLE', '40 essais sur 800 ne prouvent aucune survie');
+  assert.match(r.resultats[0].pourquoi, /40 essais contre 800/, 'et le refus donne LES DEUX chiffres');
+
+  // Contrôle positif : à dénominateur égal, un vert reste bien une SURVIVANTE.
+  let t2 = 0;
+  const egal = campagne({
+    preparer: labo.preparer,
+    ranger: labo.ranger,
+    lancer: () => (t2++ === 0 ? { tests: 800, pass: 800, fail: 0 } : { tests: 800, pass: 800, fail: 0 }),
+    mutations: [{ id: 'vraiment-non-gardee', appliquer: () => true }],
+  });
+  assert.equal(egal.resultats[0].verdict, 'SURVIVANTE', 'à dénominateur égal, le verdict reste rendu');
+});
+
 // ═════════════════ LE RÉEL — la recette se MESURE, elle ne se déclare pas
 
 test('RÉEL — la copie de la RACINE est verte, et `ligne-directe/` SEUL est rouge', () => {

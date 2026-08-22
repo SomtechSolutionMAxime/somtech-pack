@@ -43,7 +43,11 @@ test('UN PANE SANS AGENT N’A PAS DE CLÉ `agent` — écrire `agent: null` est
   assert.equal(Object.hasOwn(p, 'agent'), false, 'la clé est ABSENTE, pas nulle');
   assert.equal(p.agent_status, 'unknown', 'et le statut dit que herdr sait qu’il n’y a personne');
   assert.equal(Boolean(p.agent_session), false, 'aucune session n’habite ce pane');
-  assert.equal(ECHANTILLON_PANES.jamais['agent: null'], 0, 'l’échantillon confirme : jamais rendu');
+  assert.equal(
+    ECHANTILLON_PANES.aucune_occurrence_dans_ce_releve['agent: null'],
+    0,
+    'l’échantillon confirme : aucune occurrence dans ce relevé',
+  );
 });
 
 test('UNE SESSION PEUT HABITER UN PANE DONT herdr IGNORE LE STATUT — et ce n’est pas un terminal', () => {
@@ -54,4 +58,28 @@ test('UNE SESSION PEUT HABITER UN PANE DONT herdr IGNORE LE STATUT — et ce n�
   // terminal fait disparaître un agent vivant du registre, et le compte parmi ceux qui ont
   // DÉCLARÉ n'en porter aucun.
   assert.ok(p.agent_session, 'la session est la PREUVE de présence, et elle prime sur les deux');
+
+  // ⚠️ ET LA TROISIÈME FABRIQUE EST CONFRONTÉE À L'ÉCHANTILLON, COMME LES DEUX AUTRES — c'est
+  // l'omission qui a laissé passer le faux « jamais ». Cette forme n'a AUCUNE occurrence dans le
+  // relevé du 22 août ET a été VUE ailleurs : l'échantillon doit porter les deux, sinon
+  // « 0 occurrence » se relit « n'existe pas », et quelqu'un retire la protection.
+  assert.equal(
+    ECHANTILLON_PANES.aucune_occurrence_dans_ce_releve['agent_session sans clé agent'],
+    0,
+    'ce relevé-ci n’en a vu aucune…',
+  );
+  const ailleurs = ECHANTILLON_PANES.vu_ailleurs?.['agent_session sans clé agent'];
+  assert.ok(ailleurs, '…mais l’échantillon DOIT dire qu’elle a été vue ailleurs');
+  assert.match(ailleurs.ou, /T-\d{8}-\d{4}/, 'avec la mesure qui l’a vue, pour qu’on puisse la relire');
+  assert.ok(ailleurs.consequence, 'et ce que sa méconnaissance coûterait');
+});
+
+test('AUCUN « JAMAIS » DANS L’ÉCHANTILLON — un compte n’est pas une propriété', () => {
+  // ⚠️ LA GARDE QUI EMPÊCHE LE DÉFAUT DE REVENIR SOUS UN AUTRE NOM. Le champ s'appelait `jamais`
+  // et affirmait une propriété du monde à partir d'un relevé d'un jour. Le mot est le piège : il
+  // invite à conclure d'une absence. On garde donc le NOM autant que le contenu.
+  const cles = Object.keys(ECHANTILLON_PANES);
+  assert.equal(cles.includes('jamais'), false, 'un relevé compte ce qu’il a vu ; il ne dit pas « jamais »');
+  assert.ok(cles.includes('aucune_occurrence_dans_ce_releve'), 'il dit ce que CE relevé n’a pas vu…');
+  assert.ok(cles.includes('vu_ailleurs'), '…et ce qu’un autre a vu, sans quoi zéro se relit « n’existe pas »');
 });

@@ -16,7 +16,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -504,6 +504,75 @@ test('le câblage RÉEL LIT les écrans — sans quoi tout le parc se dirait « 
   );
   assert.equal(enVol.enVol, true, 'et le repère de travail en vol doit être RECONNU dans ce que herdr rend');
   assert.equal(enVol.occupe, true);
+});
+
+test('le câblage RÉEL passe SES SEPT paramètres — trois jointures restaient nues', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // TROIS MUTATIONS SURVIVANTES, TROUVÉES PAR LES DEUX PASSES DU CYCLE 6, ET C'EST LE MÊME
+  // MOTIF QUE CE LOT A DÉJÀ FERMÉ CINQ FOIS : deux étages justes dont la JOINTURE n'est pas
+  // gardée. Le site d'appel de `unRecensement` dans le veilleur porte sept paramètres ; les
+  // cycles précédents en ont gardé quatre (`roleDuLieu`, `references`, `lireEcran`,
+  // `nomsConnus`) et en laissaient trois nus.
+  //
+  // ⚠️ ET LA PLUS COÛTEUSE ALIMENTE LE SEUL GESTE ACTIONNABLE DU REGISTRE. Décâbler
+  // `etatDuMandat` laissait les 835 essais verts, et sur le parc réel : les mandats ouverts
+  // tombaient de 9 à 0, les remises à jour proposées de 11 à 3 — les 8 orchestrateurs périmés
+  // perdaient leur geste sous le motif « son mandat n'a pas pu être mesuré », une panne
+  // d'instrument FABRIQUÉE. C'est la classe de défaut que ce lot existe pour fermer.
+  //
+  // ⚠️ ET `journaliser` EST LE BATTEMENT DE CŒUR. Décâblé, la ronde part toutes les 15 minutes
+  // et n'écrit plus rien : « un dispositif qui ne se signale que lorsqu'il a quelque chose à
+  // dire est indiscernable d'un dispositif mort » — sa propre règle, laissée sans garde.
+  const p = posteHerdr(bac, [], 'sept-parametres');
+  const depot = join(bac, 'depot-sept');
+  const lieu = join(depot, '.orchestrateur', 'd-20260822-0005');
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  writeFileSync(join(lieu, 'CLAUDE.md'), "# Tu es l'orchestrateur de ce chantier\n\nmétier.\n");
+  writeFileSync(join(lieu, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n\nrien.\n');
+  writeFileSync(join(lieu, '.mcp.json'), '{}\n');
+  writeFileSync(join(lieu, '.claude', 'settings.json'), '{}\n');
+  p.pane('w1:p1', { boite: '' });
+  p.panes([{ pane_id: 'w1:p1', foreground_cwd: lieu }]);
+
+  const v = veilleurNu('sept-parametres');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  try {
+    process.env.PATH = p.path;
+    process.env.FAUX_HERDR_ETAT = p.etat;
+    process.env.HOME = join(bac, 'foyer-jetable-sept');
+    process.env.HERDR_SOCKET_PATH = join(p.etat, 'socket');
+    rendu = await v.recensementDuPoste();
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+    delete process.env.FAUX_HERDR_ETAT;
+  }
+
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+
+  // ① `etatDuMandat` est CÂBLÉ. Sans clé ServiceDesk, il rend « non mesurée » — mais la RAISON
+  //    distingue « le lecteur a tenté et n'a pas eu d'accès » de « aucun lecteur ne m'a été
+  //    donné ». C'est ce que la mutation effaçait, et c'est mesurable sans aucun réseau.
+  const chantier = rendu.agents[0].chantier;
+  assert.doesNotMatch(
+    chantier.raison ?? '',
+    /aucun lecteur d’état de mandat/,
+    `le lecteur d’état de mandat doit être CÂBLÉ (rendu : ${JSON.stringify(chantier)})`,
+  );
+
+  // ② `journaliser` — GARDÉ AILLEURS, et il faut dire pourquoi. Sa trace va dans
+  //    `CHEMIN_JOURNAL`, figé au chargement de `registre.js` : ce fichier-ci a importé
+  //    `veilleur.js` en tête, donc la racine pointe sur le poste RÉEL, dont le journal est
+  //    alimenté en continu par le veilleur vivant. Une garde posée ici a SURVÉCU à la mutation
+  //    qui décâble le battement de cœur — la taille augmentait à cause d'un autre processus.
+  //    Elle vit désormais dans `le-battement-de-coeur-du-recensement.test.js`, qui pose une
+  //    racine jetable AVANT tout import et peut donc exiger le CONTENU.
+
+  // ③ `panes` est CÂBLÉ — gardé ailleurs, exigé ici aussi pour que les sept tiennent ensemble.
+  assert.equal(rendu.panesVus, 1, 'l’inventaire des panes est bien celui de herdr');
 });
 
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
