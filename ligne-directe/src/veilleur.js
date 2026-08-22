@@ -30,7 +30,7 @@ import {
   referencesDesRoles,
   unRecensement,
 } from './recensement.js';
-import { laVueDuParc, lecteurDeChantier } from './vue-du-parc.js';
+import { laVueDuParc, lecteurDeChantier, lecteurDeLieux, racinesDuPoste } from './vue-du-parc.js';
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
@@ -1848,7 +1848,19 @@ export class Veilleur {
    * joindre le service : la vue rend alors « chantier NON MESURÉ » avec sa cause, jamais un
    * parc sans travail.
    */
-  async vueDuParc({ construireLecteur = lecteurDeChantier } = {}) {
+  async vueDuParc({
+    construireLecteur = lecteurDeChantier,
+    // 🔴 LE LECTEUR DE LIEUX EST L'ARÊTE JUMELLE DE CELLE DU DESSUS, ET ELLE COÛTE AUSSI CHER.
+    // Sans lui, la vue redevient EXACTEMENT celle d'hier : celle qui se construit depuis les
+    // panes vivants et perd tout chantier dont le terminal est mort. Mesuré sur ce poste le
+    // 2026-08-22 — six chantiers sur quinze. Le module serait juste, le veilleur serait juste,
+    // et le parc serait amputé de moitié sans qu'une seule erreur ne s'affiche.
+    //
+    // ⚠️ INJECTÉ PAR PARAMÈTRE, comme `construireLecteur` — pas par un crochet de test dans du
+    // code livré. C'est ce qui rend le passage observable sans le dénaturer.
+    construireLecteurDeLieux = lecteurDeLieux,
+    racines = null,
+  } = {}) {
     const recensement = await this.recensementDuPoste();
     // ⚠️ LE LECTEUR EST CONSTRUIT ICI, ET C'EST UNE ARÊTE QUE PERSONNE NE GARDAIT. Mutation
     // mesurée : remplacer cet appel par `null` laissait les 886 essais VERTS — et la vue aurait
@@ -1860,7 +1872,21 @@ export class Veilleur {
     // ⚠️ INJECTÉ PAR PARAMÈTRE, comme partout ailleurs dans ce module — pas par un crochet de
     // test dans du code livré. C'est ce qui rend le passage observable sans le dénaturer.
     const lireChantier = construireLecteur();
-    return laVueDuParc({ recensement, lireChantier, journaliser });
+    // ⚠️ LES RACINES SE CALCULENT ICI, DANS LA COUCHE QUI CONNAÎT LE POSTE — jamais dans le
+    // module, qui ne doit rien deviner. Elles voyagent ensuite jusqu'au rendu : un lieu posé
+    // hors d'elles n'a pas été vu, et sans ce périmètre une absence ne se distinguerait pas
+    // d'un chantier rangé ailleurs.
+    const lireLesLieux = construireLecteurDeLieux({ racines: racines ?? racinesDuPoste() });
+    // ⚠️ UN LECTEUR QUI JETTE NE DOIT PAS EMPORTER LA VUE ENTIÈRE. La moitié « vivants » de la
+    // réponse reste valable même si le disque a refusé — et `laVueDuParc` sait déjà rendre
+    // « les lieux n'ont pas été lus » sans se replier sur « il n'y a aucun lieu ».
+    let lieux = null;
+    try {
+      lieux = await lireLesLieux();
+    } catch (err) {
+      lieux = { mesure: 'refusée', raison: `le registre des lieux a jeté (${err?.message || err})`, entrees: null };
+    }
+    return laVueDuParc({ recensement, lieux, lireChantier, journaliser });
   }
 
   connecterSlack() {

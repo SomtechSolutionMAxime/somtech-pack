@@ -53,7 +53,13 @@
 // chantier », `epics: []` dit « je les ai lus, il n'y en a aucun ». Les confondre ferait
 // disparaître un chantier illisible en le présentant comme un chantier vide.
 
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
 import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
+import { rolesConnus, role as roleDe } from './roles.js';
+import { roleDuLieu as roleDuLieuReel } from './lieu-agent.js';
 
 /** La règle de conduite, écrite une fois, rendue avec la vue. */
 export const REGLE_DE_LA_VUE =
@@ -460,6 +466,131 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       epicsPlafonnes,
     };
   };
+}
+
+/**
+ * LE LECTEUR DE LIEUX — le registre DURABLE, celui qui survit à la mort d'un terminal.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI CE LECTEUR EXISTE, ET CE QU'IL RÉPARE — EF-VUE-007, RA-VUE-002
+ *
+ * La vue se construisait depuis `recensement.agents`, c'est-à-dire depuis LES PANES VIVANTS.
+ * Un chantier dont l'orchestrateur avait fermé son terminal ne perdait pas une colonne : il
+ * DISPARAISSAIT, avec ses epics et ses stories.
+ *
+ * 🔴 MESURÉ À LA MAIN SUR CE POSTE LE 2026-08-22, pas supposé : **15 mandats distincts portent
+ * un lieu d'orchestrateur sur le disque**, répartis sur **116 chemins** — le même mandat vivant
+ * dans plusieurs worktrees d'un même dépôt. **9 seulement étaient portés par un pane vivant.**
+ * Six chantiers étaient donc invisibles, dont un qui porte à lui seul douze lieux.
+ *
+ * ⚠️ CE N'EST PAS UN SECOND REGISTRE (RA-VUE-004), ET CE N'EST PAS UNE INVENTION DE CE LOT.
+ * `roles.js` l'écrit déjà, au sujet des lieux d'orchestrateur : « ces lieux SONT l'inventaire :
+ * les lister, c'est voir qui vit ici — aucun registre local ne les recopie ». On les LIT à
+ * chaque demande ; rien n'est recopié, rien ne périme.
+ *
+ * @param racines     où chercher. **Ce lecteur ne devine AUCUNE racine** : un lieu posé hors
+ *                    d'elles n'a pas été vu, et la vue le dit plutôt que de présenter une
+ *                    tranche du poste comme le poste entier.
+ * @param roleDuLieu  `(repertoire) → nom-de-rôle | null` — INJECTÉ. Le rôle s'établit par le
+ *                    CONTENU du lieu, jamais par le nom du dossier : un répertoire vide au bon
+ *                    nom ne porte aucun métier, et le compter gonflerait la vue de chantiers
+ *                    qui n'existent qu'à moitié (T-20260819-0070).
+ * @param lister      `(chemin) → nom[]` — les sous-dossiers, ou une exception.
+ */
+export function lecteurDeLieux({ racines = [], roleDuLieu = roleDuLieuReel, lister = sousDossiers } = {}) {
+  return async () => {
+    const parMandat = new Map();
+    const racinesRefusees = [];
+    let racinesLues = 0;
+
+    for (const racine of racines) {
+      // ⚠️ LA RACINE ELLE-MÊME D'ABORD. Une racine qu'on ne peut pas lister n'est pas « une
+      // racine sans lieu » : c'est une part du poste qu'on n'a PAS REGARDÉE, et les deux
+      // appellent des gestes opposés — l'une ne demande rien, l'autre demande d'aller voir.
+      try {
+        lister(racine);
+      } catch (err) {
+        racinesRefusees.push({ racine, raison: err?.message || String(err) });
+        continue;
+      }
+      racinesLues += 1;
+
+      for (const nom of rolesConnus()) {
+        const dossier = join(racine, roleDe(nom).dossier);
+        let candidats;
+        try {
+          candidats = lister(dossier);
+        } catch {
+          // ⚠️ ICI, L'ABSENCE EST NORMALE ET NE SE COMPTE PAS : un dépôt sans `.orchestrateur/`
+          // n'a rien refusé. La confondre avec un refus noierait les vrais refus dans son bruit
+          // — le faux échec d'instrument que ce module a déjà payé une fois.
+          continue;
+        }
+        for (const mandat of candidats) {
+          const lieu = join(dossier, mandat);
+          // Le rôle s'établit par le fait. Un `roleDuLieu` qui rend autre chose que ce rôle-ci
+          // — ou rien — écarte le candidat : on ne compte pas un lieu à demi posé.
+          if (roleDuLieu(lieu) !== nom) continue;
+          // 🔴 LA CLÉ EST LE MANDAT, JAMAIS LE CHEMIN. Mesuré : 116 chemins pour 15 mandats sur
+          // ce poste. Compter des chemins rendrait douze chantiers là où il y en a un, et le
+          // dirigeant ne pourrait plus compter ce qu'il lit.
+          const cle = `${nom} :: ${cleDuMandat(mandat)}`;
+          const vu = parMandat.get(cle);
+          if (vu) vu.chemins.push(lieu);
+          else parMandat.set(cle, { role: nom, mandat, chemins: [lieu] });
+        }
+      }
+    }
+
+    // ⚠️ ZÉRO RACINE LUE ⇒ ON N'A RIEN MESURÉ, et `entrees: []` affirmerait « j'ai regardé, il
+    // n'y en a pas ». C'est la panne de la MESURE, pas l'absence de l'objet : repliée en zéro,
+    // elle rendrait un parc amputé avec l'apparence d'un parc complet.
+    if (!racinesLues) {
+      return {
+        mesure: 'refusée',
+        raison: racines.length
+          ? `aucune des ${racines.length} racine(s) n’a pu être lue : ` +
+            racinesRefusees.map((r) => `${r.racine} (${r.raison})`).join(' ; ')
+          : 'aucune racine ne m’a été donnée : je n’ai regardé nulle part',
+        racines,
+        racinesRefusees,
+        entrees: null,
+      };
+    }
+
+    return { mesure: 'lue', racines, racinesRefusees, entrees: [...parMandat.values()] };
+  };
+}
+
+/** Les sous-DOSSIERS d'un chemin — un fichier au bon nom n'est pas un lieu. */
+function sousDossiers(chemin) {
+  return readdirSync(chemin, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+}
+
+/**
+ * LES RACINES OÙ CE POSTE RANGE SES DÉPÔTS — et ce compte est un PLANCHER, comme tout le reste.
+ *
+ * ⚠️ ON N'EXPLORE PAS LE DISQUE. Deux emplacements sont la convention écrite du poste : le
+ * dépôt principal (`~/GitRepo.nosync/<dépôt>`) et les worktrees ouverts par le lanceur de
+ * session (`~/worktrees/<dépôt>/<horodatage>`). Un dépôt rangé ailleurs n'est PAS vu — et c'est
+ * précisément pourquoi la vue rend la liste des racines qu'elle a fouillées : sans elle, une
+ * absence ne se distinguerait pas d'un lieu hors périmètre.
+ */
+export function racinesDuPoste({ foyer = homedir(), lister = sousDossiers } = {}) {
+  const racines = [];
+  const sous = (chemin) => {
+    try {
+      return lister(chemin);
+    } catch {
+      return [];
+    }
+  };
+  for (const d of sous(join(foyer, 'GitRepo.nosync'))) racines.push(join(foyer, 'GitRepo.nosync', d));
+  const wt = join(foyer, 'worktrees');
+  for (const depot of sous(wt)) for (const t of sous(join(wt, depot))) racines.push(join(wt, depot, t));
+  return racines;
 }
 
 /**
