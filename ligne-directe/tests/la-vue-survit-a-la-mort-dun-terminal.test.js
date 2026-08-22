@@ -500,3 +500,35 @@ test('les sessions muettes se nomment par leur NOM — une raison qu’on ne peu
   assert.match(texte, /présence NON ÉTABLI[^\n]*cg, progex, morasse/, 'la raison nomme les sessions, brièvement');
   assert.match(texte, /session muette : cg/, 'et le pied de page aussi');
 });
+
+test('`adresseDe` REFUSE un pane quand la présence n’est pas établie — même si la carte en porte un', async () => {
+  // 🔴 SURVIVANTE D'UNE CAMPAGNE DE MUTATION, ET ELLE ÉTAIT RÉELLE. Remplacer la condition
+  // `presence?.vivant === true && carte?.pane` par `carte?.pane` seul laissait les 956 essais
+  // VERTS — parce qu'AUCUN APPELANT n'emprunte cette branche aujourd'hui : une ligne vivante
+  // reçoit toujours `vivant: true`, une ligne de lieu reçoit toujours `carte: null`. La garde
+  // était juste, et son chemin de protection non couvert.
+  //
+  // ⚠️ ON NE RETIRE PAS LA CONDITION POUR AUTANT, et c'est le choix qui compte : elle encode la
+  // règle (T-20260822-0017, 2ᵉ G/W/T — « pas un identifiant périmé laissé en place »), et cette
+  // fonction doit être juste EN TANT QUE FONCTION, pas seulement sur les chemins d'aujourd'hui.
+  // Le jour où une carte survit à son pane — un recensement gardé en mémoire, une reprise après
+  // coupure — c'est cette condition qui empêche de tendre au dirigeant une adresse morte.
+  const { adresseDe } = await import('../src/vue-du-parc.js');
+  const carteAvecPanePerime = { nom: 'un', pane: 'w9:p9', session: 'somtech', titre: 'un titre' };
+
+  for (const presence of [
+    { mesure: 'lue', vivant: false },
+    { mesure: 'non établie', vivant: null },
+    undefined,
+  ]) {
+    const ad = adresseDe(carteAvecPanePerime, presence);
+    assert.equal(ad.mesure, 'aucune', `présence ${JSON.stringify(presence)} : aucune adresse ne doit être proposée`);
+    assert.equal(ad.pane, null, 'et surtout PAS le pane de la carte — il peut ne plus exister');
+    assert.equal(ad.titre, null);
+  }
+
+  // Le symétrique, sans quoi « rend toujours aucune » passerait aussi.
+  const vivante = adresseDe(carteAvecPanePerime, { mesure: 'lue', vivant: true });
+  assert.equal(vivante.mesure, 'lue');
+  assert.equal(vivante.pane, 'w9:p9');
+});
