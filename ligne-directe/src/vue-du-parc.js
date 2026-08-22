@@ -188,6 +188,21 @@ export function cleDuMandat(mandat) {
  *   vivant: true   — un pane vivant porte ce mandat. MESURÉ.
  *   vivant: false  — aucun pane ne le porte, ET toutes les sessions ont répondu. MESURÉ AUSSI.
  *   vivant: null   — aucun pane ne le porte, et une session s'est tue. RIEN N'EST ÉTABLI.
+ *
+ * 🔴 À LIRE AVANT DE CHERCHER UN DÉFAUT : SUR LE POSTE DE DÉVELOPPEMENT, CETTE VUE NE DIRA
+ * JAMAIS « MORT ». Mesuré le 2026-08-22 : **11 sessions herdr sur 14 sont muettes**, donc la
+ * branche `vivant: false` est STRUCTURELLEMENT INATTEIGNABLE — les quatre lignes sans terminal
+ * du poste sortent toutes en « présence non établie », et c'est le comportement JUSTE.
+ *
+ * ⚠️ CE N'EST PAS UNE COLONNE CASSÉE, C'EST LA PRUDENCE DE L'INSTRUMENT. Sans cette note, le
+ * premier lecteur cherchera pourquoi « mort » est toujours vide et diagnostiquera une panne là
+ * où il n'y a qu'un refus de conclure — c'est le FAUX ÉCHEC D'INSTRUMENT que ce module a déjà
+ * payé une fois, sur les epics d'un mandat non-code : une absence prise pour une panne. La
+ * branche `false` s'allumera le jour où toutes les sessions répondront, et pas avant.
+ *
+ * ⚠️ ET C'EST POURQUOI LA BRANCHE `false` RESTE ÉPROUVÉE PAR UN BANC plutôt que retirée : elle
+ * est inatteignable AUJOURD'HUI, sur CE poste. Un poste dont toutes les sessions répondent la
+ * produira, et la retirer parce qu'on ne la voit pas ici serait conclure d'une absence.
  */
 export function presenceDe({ vivant, borne }) {
   if (vivant) {
