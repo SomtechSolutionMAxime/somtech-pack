@@ -394,10 +394,14 @@ export function nomDeLAgent(pane, cle, nomsConnus) {
  *
  * @param panes       la liste des panes, ou une fonction (éventuellement asynchrone) qui la
  *                    rend. **Elle a le droit de JETER, et c'est le cœur de ce module.**
- * @param dossier     le nom du dossier qui porte les lieux du rôle (`.orchestrateur`).
- * @param roleDuLieu  `(repertoire) → 'orchestrateur'|null` — le rôle établi PAR LE FAIT.
+ * @param roleDuLieu  `(repertoire) → '<rôle>'|null` — le rôle établi PAR LE FAIT, pour TOUS les
+ *                    rôles connus. Le dossier de chaque rôle vient de `roles.js`, jamais d'un
+ *                    paramètre : un `dossier` unique ne pouvait porter qu'un seul rôle.
  * @param mesurer     `(lieu) → { empreinte, octets }|null`.
- * @param reference   `{ empreinte, octets, chemin }` ou `{ refus: '…' }` — jamais deviné.
+ * @param references  `{ '<rôle>': { empreinte, octets, chemin } | { refus } }` — UNE PAR RÔLE, et
+ *                    jamais devinée. Un rôle absent de cet objet ne se rabat sur AUCUNE autre :
+ *                    il rend `aJour: null`. Se rabattre comparerait deux métiers qui n'ont
+ *                    aucune raison de concorder — le défaut que T-20260822-0010 ferme.
  * @param lireEcran   `(pane) → texte|null` — pour le travail en vol. Facultatif : sans lui, le
  *                    travail en vol est rendu `non mesuré`, jamais « rien en vol ».
  * @param maintenant  l'horloge en ms. Injectée : un recensement doit pouvoir être rejoué.
@@ -405,7 +409,7 @@ export function nomDeLAgent(pane, cle, nomsConnus) {
  *
  * @returns le compte rendu (voir la forme dans le corps).
  *
- * ⚠️ LA PIÈCE MAÎTRESSE : QUAND L'INVENTAIRE REFUSE, `orchestrateurs` EST `null`, PAS `[]`.
+ * ⚠️ LA PIÈCE MAÎTRESSE : QUAND L'INVENTAIRE REFUSE, `agents` EST `null`, PAS `[]`.
  * Une liste vide se lit « il n'y en a aucun » — c'est la traduction exacte qu'on refuse. Un
  * lecteur qui ne lit QUE ce rendu doit pouvoir distinguer « je n'ai pas su regarder » de « j'ai
  * regardé et il n'y a personne », sans rien savoir du code qui l'a produit.

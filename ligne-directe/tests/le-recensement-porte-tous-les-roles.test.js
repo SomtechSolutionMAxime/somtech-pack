@@ -627,3 +627,83 @@ test('le nom NON MESURÉ et le nom ABSENT ne produisent pas le même résumé no
   assert.equal(nonMesure.compte.nomsNonMesures, 1);
   assert.notEqual(anonyme.resume, nonMesure.resume, 'et les deux résumés diffèrent');
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUE LA PASSE DE REVUE PORTAIL A TROUVÉ — deux mutations qui SURVIVAIENT au banc.
+//
+// ⚠️ AUCUNE DES DEUX N'ÉTAIT UN BOGUE DU JOUR : les chemins qu'elles ouvrent ne sont pas
+// exercés par le seul appelant réel (`referencesDesRoles` peuple toujours toutes les clés, et
+// le résumé nomme les bons compteurs). Ce sont des TROUS DU FILET — et un trou du filet se
+// répare avec une garde, pas en plaidant que personne n'est encore tombé dedans.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('le résumé nomme la bonne ÉTIQUETTE sur le bon compte — pas seulement le bon nombre', async (t) => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE. Le banc « les deux résumés diffèrent » reste vert
+  // quand on ÉCHANGE les deux compteurs dans le texte : l'anonyme se dit alors « NON MESURÉ » et
+  // l'inverse — deux phrases toujours différentes, toutes deux fausses.
+  //
+  // ⚠️ ET C'EST LE PIRE ENDROIT OÙ SE TROMPER. `compte.anonymes` est lu par du code ; la PHRASE
+  // est lue par un humain pressé, qui n'ouvrira pas l'objet. Les deux étiquettes commandent des
+  // gestes opposés — faire se nommer l'agent, ou refaire la mesure. Une étiquette échangée
+  // envoie donc corriger ce qui va bien, avec un chiffre exact à l'appui.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-1');
+  const panes = [{ pane_id: 'w1:p1', foreground_cwd: lieu }];
+
+  const anonyme = await unRecensement({ panes, roleDuLieu, nomsConnus: nomsLus([['w1:p1', null]]) });
+  assert.match(anonyme.resume, /1 ANONYME/, 'un agent VU sans nom se dit ANONYME dans la phrase');
+  assert.doesNotMatch(anonyme.resume, /NON MESURÉ\(s\)/, 'et surtout PAS « nom non mesuré »');
+
+  const nonMesure = await unRecensement({
+    panes,
+    roleDuLieu,
+    nomsConnus: { mesure: 'refusée', raison: 'herdr agents() n’a pas répondu' },
+  });
+  assert.match(nonMesure.resume, /1 nom\(s\) NON MESURÉ/, 'un nom non lu se dit NON MESURÉ');
+  assert.doesNotMatch(nonMesure.resume, /ANONYME/, 'et surtout PAS « anonyme »');
+
+  // Le journal porte les deux compteurs côte à côte : l'échange s'y verrait aussi.
+  const journal = [];
+  await unRecensement({ panes, roleDuLieu, nomsConnus: nomsLus([['w1:p1', null]]), journaliser: (m) => journal.push(m) });
+  assert.match(journal.join(''), /1 anonyme\(s\), 0 nom\(s\) non mesuré/, 'le battement de cœur aussi');
+});
+
+test('un rôle SANS sa référence ne se rabat sur AUCUNE autre — il rend « je ne sais pas »', async (t) => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE. Ajouter un repli `?? references.orchestrateur` est
+  // le « correctif » que quelqu'un écrira le jour où une clé manquera — et il rouvre EXACTEMENT
+  // le défaut que T-20260822-0010 ferme : le représentant est alors comparé au gabarit
+  // d'orchestrateur, deux textes sans aucune raison de concorder, et rendu « en retard » pour
+  // toujours. Mesuré avec le repli en place : `aJour: false, ecartOctets: -27`.
+  //
+  // Le banc « la référence se résout PAR RÔLE » ne l'attrapait pas : il fournit TOUJOURS les deux
+  // clés. Celui-ci fournit un objet PARTIEL — la seule forme qui distingue les deux conduites.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const orch = poserLieu(depot, 'orchestrateur', 'p-1');
+  const rep = poserLieu(depot, 'representant', 'Frederic');
+  const foyer = poserReference(tmp, 'orchestrateur', METIER.orchestrateur);
+
+  const rendu = await unRecensement({
+    panes: [
+      { pane_id: 'w1:p1', foreground_cwd: orch },
+      { pane_id: 'w2:p1', foreground_cwd: rep },
+    ],
+    roleDuLieu,
+    // PARTIEL, à dessein : la référence de l'orchestrateur est là, celle du représentant non.
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
+  });
+
+  const o = rendu.agents.find((a) => a.role.nom === 'orchestrateur');
+  const r = rendu.agents.find((a) => a.role.nom === 'representant');
+
+  // Contrôle positif : celui QUI A sa référence est bien comparé. Sans lui, « l'autre ne conclut
+  // rien » serait vrai pour la raison la plus banale — aucune comparaison n'a eu lieu du tout.
+  assert.equal(o.aJour, true, 'l’orchestrateur, lui, a sa référence et se compare');
+
+  assert.equal(r.aJour, null, 'le représentant sans référence ne conclut RIEN — ni à jour, ni en retard');
+  assert.equal(r.ecartOctets, null, 'et surtout aucun écart, qui serait celui d’un autre métier');
+  assert.ok(r.metier?.empreinte, 'son métier A BIEN été lu — ce qui manque est la référence, pas la mesure');
+});
