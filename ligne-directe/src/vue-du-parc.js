@@ -264,15 +264,36 @@ export function porteurDuLieu(chemins) {
   };
 }
 
+export function nomDeSession(session) {
+  const s = String(session ?? '').trim();
+  if (!s) return null;
+  // ⚠️ CE QUE LE RECENSEMENT PORTE EST UN CHEMIN DE SOCKET, PAS UN NOM — et ce défaut n'est
+  // sorti qu'en EXERÇANT la chaîne réelle. Le banc passait : son double écrivait `'somtech'`
+  // là où la source rend
+  // `/Users/…/.config/herdr/sessions/somtech/herdr.sock`. Le dirigeant aurait lu, sur chacune
+  // des lignes de son parc, un chemin de quatre-vingts caractères au lieu du mot `somtech` —
+  // c'est-à-dire exactement l'illisibilité que EF-VUE-006 existe pour fermer.
+  const m = /(?:^|\/)sessions\/([^/]+)\//.exec(s);
+  return m ? m[1] : s;
+}
+
 export function adresseDe(carte, presence) {
   if (presence?.vivant === true && carte?.pane) {
-    return { mesure: 'lue', titre: carte.titre ?? null, pane: carte.pane, session: carte.session ?? null };
+    return {
+      mesure: 'lue',
+      titre: carte.titre ?? null,
+      pane: carte.pane,
+      // Le NOM de la session, celui qu'on tape ; le chemin brut reste à côté pour qui outille.
+      session: nomDeSession(carte.session),
+      sessionBrute: carte.session ?? null,
+    };
   }
   return {
     mesure: 'aucune',
     titre: null,
     pane: null,
     session: null,
+    sessionBrute: null,
     // ⚠️ AUCUN IDENTIFIANT PÉRIMÉ N'EST LAISSÉ EN PLACE (T-20260822-0017, 2ᵉ G/W/T) : un pane
     // qui n'existe plus se lit comme une adresse, et le dirigeant y écrit.
     pourquoi:

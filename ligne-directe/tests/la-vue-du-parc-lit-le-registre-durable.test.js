@@ -209,3 +209,51 @@ test('le veilleur construit un VRAI lecteur de lieux par défaut — pas `null` 
     'un lecteur par défaut EXISTE : « non mesurée » ici voudrait dire qu’aucun n’a été construit'
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ④ LA SESSION SE LIT — et ce défaut n'est sorti qu'en EXERÇANT la chaîne réelle
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('la session rendue est son NOM, pas le chemin de son socket — la forme que la source rend vraiment', async () => {
+  // 🔴 QUINZE BANCS VERTS NE L'ONT PAS VU, ET C'EST LE MÊME MOTIF QUE `formes-reelles.js` :
+  // leurs doubles écrivaient `session: 'somtech'`, quand le recensement porte
+  // `/Users/…/.config/herdr/sessions/somtech/herdr.sock`. Mesuré sur le poste réel le
+  // 2026-08-22 : le dirigeant aurait lu un chemin de quatre-vingts caractères sur CHAQUE ligne
+  // de son parc, à l'endroit précis que EF-VUE-006 existe pour rendre lisible.
+  const { laVueDuParc, rendreLaVue, nomDeSession } = await import('../src/vue-du-parc.js');
+
+  assert.equal(nomDeSession('/Users/x/.config/herdr/sessions/somtech/herdr.sock'), 'somtech');
+  assert.equal(nomDeSession('somtech'), 'somtech', 'un nom déjà court traverse tel quel');
+  assert.equal(nomDeSession(null), null, 'et l’absence reste une absence');
+
+  const vue = await laVueDuParc({
+    recensement: {
+      quand: 'T',
+      borne: { sessionsRefusees: [] },
+      agents: [
+        {
+          pane: 'w5:p8',
+          // LA FORME EXACTE DE LA SOURCE, relevée sur le poste — pas celle qu'on imagine.
+          session: '/Users/maximeleboeuf/.config/herdr/sessions/somtech/herdr.sock',
+          nom: { mesure: 'lu', valeur: 'ristigouche' },
+          role: { mesure: 'établi', nom: 'orchestrateur' },
+          mandat: 'p-20260815-0002',
+          titre: '✳ Ristigouche orchestrateur P-20260815-0002',
+          travailEnVol: { mesure: 'lue', enVol: false },
+        },
+      ],
+    },
+    lieux: { mesure: 'lue', racines: ['/r'], racinesRefusees: [], entrees: [] },
+    lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [], epicsEcartes: 0, epicsPlafonnes: false }),
+  });
+
+  assert.equal(vue.orchestrateurs[0].adresse.session, 'somtech');
+  assert.equal(
+    vue.orchestrateurs[0].adresse.sessionBrute,
+    '/Users/maximeleboeuf/.config/herdr/sessions/somtech/herdr.sock',
+    'le chemin reste disponible pour qui outille — il ne disparaît pas, il cesse d’être ce qu’on LIT'
+  );
+  const ligne = rendreLaVue(vue).split('\n').find((l) => l.includes('w5:p8'));
+  assert.ok(ligne.includes('@ somtech'), 'la ligne nomme la session');
+  assert.doesNotMatch(ligne, /herdr\.sock/, 'et ne montre PAS le chemin du socket');
+});
