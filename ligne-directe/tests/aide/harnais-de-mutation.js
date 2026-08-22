@@ -1,0 +1,187 @@
+// harnais-de-mutation.js — muter le code, exiger un rouge, et REFUSER de conclure quand
+// l'instrument ne peut pas rendre de verdict.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// POURQUOI CE FICHIER EXISTE — un harnais faux a rendu « 8 sur 8 attrapées » sur du vent
+//
+// Le 2026-08-22, une campagne de mutation sur ce module a rendu deux comptes successifs
+// (« 6/6 » puis « 2/2 »), et les DEUX ont dû être retirés. Cause exacte, mesurée après coup :
+// le harnais copiait `ligne-directe/` SEUL hors du dépôt, alors que ses bancs importent
+// `../../naissance-representant/` et lisent les gabarits de `.claude/templates/` à la RACINE.
+// La copie rendait donc 69 rouges sur 757 SANS AUCUNE MUTATION — et chaque « rouge donc
+// attrapée » l'était pour une raison sans rapport avec la mutation posée.
+//
+// > Un rouge prouve qu'au moins une chose était gardée. Il ne prouve JAMAIS que c'était la
+// > mutation. Sans contrôle négatif, un harnais de mutation confirme tout ce qu'on lui
+// > demande — et d'autant plus volontiers que la campagne est grande.
+//
+// ⚠️ ET CE N'EST PAS UNE RÉPARATION PONCTUELLE. La recette (« copier la racine ») est facile à
+// perdre : elle tient dans un filtre de trois lignes que la prochaine main peut resserrer pour
+// aller plus vite. C'est pourquoi le contrôle négatif est ici une CONDITION D'EXÉCUTION —
+// `campagne` ne pose AUCUNE mutation tant que la copie intacte n'est pas verte — et pourquoi
+// `le-harnais-de-mutation-ne-ment-pas.test.js` l'éprouve, plutôt que de compter sur l'intention
+// de celui qui lance la campagne.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LES TROIS AUTRES FAUX TÉMOINS DE CETTE FAMILLE, ET COMMENT ILS SONT FERMÉS ICI
+//
+//   ① La mutation INOPÉRANTE. Un motif qui ne s'applique plus laisse le fichier intact ; la
+//      suite reste verte, et un harnais naïf compte ce silence comme un verdict.
+//      → `appliquer` doit changer le texte, sinon la mutation est rendue « INOPÉRANTE ».
+//   ② MUTER EN GROUPE. Un rouge sur un lot dit qu'au moins UNE mutation était gardée, jamais
+//      que toutes l'étaient. → une copie NEUVE et UNE SEULE mutation par tour.
+//   ③ Un lancement QUI N'EXÉCUTE RIEN. Un import cassé, un chemin faux, un `--test` qui ne
+//      trouve aucun fichier : le processus sort sans résumé, et « 0 échec » se lit comme un
+//      succès. → le compte se PARSE, et son absence est un REFUS, jamais un zéro.
+
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * La racine du DÉPÔT, pas celle du module.
+ *
+ * ⚠️ C'EST LA LIGNE QUI PORTE LA LEÇON. Copier `ligne-directe/` seul est le geste naturel — le
+ * module qu'on éprouve est là — et c'est exactement ce qui a produit 69 faux rouges. Les bancs
+ * de ce module traversent la frontière : ils importent `../../naissance-representant/` et
+ * lisent `.claude/templates/`. Mesuré sur deux bancs témoins : `ligne-directe/` seul rend 3
+ * rouges sans aucune mutation, la racine en rend 0.
+ */
+export function racineDuDepot() {
+  return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+}
+
+/** Ce qu'on n'emporte pas : lourd, régénérable, et sans effet sur un verdict de mutation. */
+const ECARTES = new Set(['.git', 'node_modules']);
+
+/**
+ * Une copie neuve, prête à être mutée — jamais le dépôt lui-même.
+ *
+ * Le code du dépôt n'est JAMAIS modifié : une mutation laissée dans l'arbre de travail est le
+ * défaut le plus cher de cette famille — elle survit à la campagne, se commit avec le reste, et
+ * personne ne la cherche puisque le harnais s'est déclaré content.
+ *
+ * @param sousLaRacineSeulement  le sous-dossier À COPIER SEUL. N'existe QUE pour que le banc de
+ *   ce harnais puisse reproduire la copie fautive et mesurer qu'elle est rouge. Aucune campagne
+ *   réelle ne le passe.
+ */
+export function copierLeDepot({ racine = racineDuDepot(), sousLaRacineSeulement = null } = {}) {
+  const dest = mkdtempSync(join(tmpdir(), 'mutation-'));
+  const source = sousLaRacineSeulement ? join(racine, sousLaRacineSeulement) : racine;
+  const cible = sousLaRacineSeulement ? join(dest, sousLaRacineSeulement) : dest;
+  cpSync(source, cible, {
+    recursive: true,
+    dereference: false,
+    filter: (chemin) => !ECARTES.has(basename(chemin)),
+  });
+  return dest;
+}
+
+/**
+ * Lance `node --test` DANS la copie, et rend ce qu'il a réellement compté.
+ *
+ * @returns `{ tests, pass, fail, sortie }` — ou `{ refus }` quand le compte n'a pas pu être lu.
+ *   Un lancement qui ne rend pas son résumé n'a rien prouvé : le rendre comme « 0 échec » ferait
+ *   d'un import cassé le meilleur résultat possible de la campagne.
+ */
+export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-directe', delaiMs = 600_000 } = {}) {
+  // ⚠️ LE RAPPORTEUR SE FORCE, ET L'ENVIRONNEMENT DU RUNNER SE RETIRE — les deux, mesurés.
+  // Lancé DEPUIS un `node --test`, l'enfant hérite de `NODE_TEST_CONTEXT` et bascule sur un
+  // autre rapporteur : le résumé change de forme, le compte devient introuvable, et la campagne
+  // rend « la suite n'a rendu aucun compte » sur une suite qui a parfaitement tourné (code 0).
+  // Le harnais refusait alors de conclure pour une raison qui n'a rien à voir avec le code
+  // mesuré — un refus juste dans sa forme et faux dans son motif.
+  const env = { ...process.env };
+  for (const cle of Object.keys(env)) if (cle.startsWith('NODE_TEST_')) delete env[cle];
+  const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', ...fichiers], {
+    cwd: join(copie, sousDossier),
+    encoding: 'utf8',
+    timeout: delaiMs,
+    maxBuffer: 64 * 1024 * 1024,
+    env,
+  });
+  const sortie = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  const lire = (quoi) => {
+    const m = sortie.match(new RegExp(`^\\u2139 ${quoi} (\\d+)$`, 'm'));
+    return m ? Number(m[1]) : null;
+  };
+  const tests = lire('tests');
+  const pass = lire('pass');
+  const fail = lire('fail');
+  if (tests === null || fail === null) {
+    return { refus: `la suite n’a rendu aucun compte (code ${r.status}, signal ${r.signal ?? 'aucun'})`, sortie };
+  }
+  if (tests === 0) {
+    return { refus: 'la suite n’a exécuté AUCUN test — un lancement qui n’exécute rien ne garde rien', sortie };
+  }
+  return { tests, pass, fail, sortie };
+}
+
+/**
+ * Une campagne de mutation — et son PREMIER geste est de vérifier qu'elle peut conclure.
+ *
+ * @param mutations  `[{ id, appliquer(copie) → boolean }]` — `appliquer` rend `false` quand son
+ *   motif ne s'applique plus. UNE seule est posée par copie.
+ * @param preparer   `() → copie`, injecté pour que les bancs de ce harnais l'éprouvent sans
+ *   copier 16 Mo à chaque cas.
+ * @param lancer     `(copie) → { fail, tests } | { refus }`, idem.
+ * @returns `{ verdictPossible, controleNegatif, resultats }`. Quand `verdictPossible` est
+ *   `false`, `resultats` est VIDE et aucune mutation n'a été posée : l'instrument ne pouvait
+ *   rien affirmer, et une campagne qui rendrait quand même des verdicts serait pire que rien.
+ */
+export function campagne({
+  mutations = [],
+  preparer,
+  lancer,
+  ranger = (c) => rmSync(c, { recursive: true, force: true }),
+} = {}) {
+  // ═══ LE CONTRÔLE NÉGATIF, ET IL PASSE AVANT TOUT LE RESTE.
+  const intacte = preparer();
+  let temoin;
+  try {
+    temoin = lancer(intacte);
+  } finally {
+    ranger(intacte);
+  }
+  if (temoin.refus) {
+    return { verdictPossible: false, controleNegatif: temoin, resultats: [] };
+  }
+  if (temoin.fail !== 0) {
+    return {
+      verdictPossible: false,
+      controleNegatif: {
+        ...temoin,
+        refus:
+          `la copie NON MUTÉE rend déjà ${temoin.fail} rouge(s) sur ${temoin.tests} : ce harnais ne peut ` +
+          'ni confirmer ni infirmer une mutation. Le geste attendu est de réparer la COPIE (la racine du ' +
+          'dépôt, pas le seul module), jamais d’excuser ces rouges.',
+      },
+      resultats: [],
+    };
+  }
+
+  const resultats = [];
+  for (const m of mutations) {
+    // ⚠️ UNE COPIE NEUVE PAR MUTATION. Les cumuler ferait qu'un rouge dirait « au moins une des
+    // n posées était gardée » — ce qui laisse passer une survivante derrière une attrapée.
+    const copie = preparer();
+    try {
+      const posee = m.appliquer(copie);
+      if (posee === false) {
+        resultats.push({ id: m.id, verdict: 'INOPÉRANTE', pourquoi: 'le motif ne s’applique plus au code' });
+        continue;
+      }
+      const r = lancer(copie);
+      if (r.refus) {
+        resultats.push({ id: m.id, verdict: 'INDÉCIDABLE', pourquoi: r.refus });
+        continue;
+      }
+      resultats.push({ id: m.id, verdict: r.fail > 0 ? 'attrapée' : 'SURVIVANTE', rouges: r.fail, tests: r.tests });
+    } finally {
+      ranger(copie);
+    }
+  }
+  return { verdictPossible: true, controleNegatif: temoin, resultats };
+}
