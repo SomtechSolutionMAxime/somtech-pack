@@ -67,6 +67,26 @@ for (const mandat of LIEUX) {
       `« ${mandat} » renvoie vers des chapitres absents — l'agent y lit une carte vers rien (T-20260821-0032)`);
   });
 
+  test(`${mandat} — le CONTENU de chaque chapitre est celui du gabarit, à l'octet près`, () => {
+    // ⚠️ Sans cette assertion, la garde ne tenait que le ROUTEUR (CLAUDE.md) et
+    // les LIENS. Un lieu pouvait donc porter un CLAUDE.md identique à l'octet,
+    // onze renvois qui résolvent — et onze chapitres périmés dessous. Ce n'était
+    // pas une hypothèse : `p-20260820-0001` et `p-20260822-0001` étaient dans cet
+    // état exact le 2026-08-22 (11 chapitres sur 11 divergents, ABC 2.0.0 contre
+    // 2.1.0, RA-ORC-039/040/041 absents) et passaient la garde au vert.
+    // Trouvé par la passe de revue de fond, pas par l'auteur.
+    const attendus = readdirSync(join(GABARIT, 'metier', 'chapitres')).filter((f) => f.endsWith('.md')).sort();
+    const dossier = join(lieu, 'metier', 'chapitres');
+    const poses = existsSync(dossier) ? readdirSync(dossier).filter((f) => f.endsWith('.md')).sort() : [];
+    assert.deepEqual(poses, attendus,
+      `« ${mandat} » ne porte pas les mêmes chapitres que le gabarit`);
+    const divergents = attendus.filter((n) =>
+      readFileSync(join(dossier, n), 'utf8') !== readFileSync(join(GABARIT, 'metier', 'chapitres', n), 'utf8'));
+    assert.deepEqual(divergents, [],
+      `« ${mandat} » porte ${divergents.length} chapitre(s) divergent(s) du métier rendu — ` +
+      "le CLAUDE.md a beau être à jour, c'est le chapitre que l'agent lit pour travailler");
+  });
+
   test(`${mandat} — aucun chapitre orphelin : ce qui est posé est renvoyé`, () => {
     const dossier = join(lieu, 'metier', 'chapitres');
     const poses = existsSync(dossier) ? readdirSync(dossier).filter((f) => f.endsWith('.md')).sort() : [];

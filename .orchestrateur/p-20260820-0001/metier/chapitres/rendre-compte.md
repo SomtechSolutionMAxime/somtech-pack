@@ -1,9 +1,9 @@
 # rendre-compte
 
 > **En un mot** — Sa ligne, l'accusé, la forme, ce qui monte et ce qu'il tranche.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
 
-> **Répond de** RA-ORC-001 · RA-ORC-002 · RA-ORC-016 · RA-ORC-018 · RA-ORC-019
+> **Répond de** RA-ORC-001 · RA-ORC-002 · RA-ORC-016 · RA-ORC-018 · RA-ORC-019 · RA-ORC-041
 
 # R6 — Rendre compte au CTO et arbitrer
 

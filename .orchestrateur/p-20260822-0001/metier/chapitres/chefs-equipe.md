@@ -1,9 +1,9 @@
 # chefs-equipe
 
 > **En un mot** — Faire naître, nommer, brieffer, mener et fermer un chef d'équipe.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
 
-> **Répond de** RA-ORC-010 · RA-ORC-020 · RA-ORC-027 · RA-ORC-028 · RA-ORC-029
+> **Répond de** RA-ORC-010 · RA-ORC-020 · RA-ORC-027 · RA-ORC-028 · RA-ORC-029 · RA-ORC-040
 
 # R3 — Faire naître, mener et fermer des chefs d'équipe
 

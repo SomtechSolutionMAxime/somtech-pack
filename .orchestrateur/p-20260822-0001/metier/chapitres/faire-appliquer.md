@@ -1,9 +1,9 @@
 # faire-appliquer
 
 > **En un mot** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'écart signalé.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
 
-> **Répond de** RA-ORC-003 · RA-ORC-021 · RA-ORC-030 · RA-ORC-031 · RA-ORC-032 · RA-ORC-037 · RA-ORC-038
+> **Répond de** RA-ORC-003 · RA-ORC-021 · RA-ORC-030 · RA-ORC-031 · RA-ORC-032 · RA-ORC-037 · RA-ORC-038 · RA-ORC-039
 
 # R4 — Faire appliquer les règles et valider ce qui revient
 
