@@ -136,9 +136,22 @@ test('le module ne LIT `assigned_agent` nulle part — la garde est sur la sourc
   const source = readFileSync(fileURLToPath(new URL('../src/vue-du-parc.js', import.meta.url)), 'utf8');
   // Le mot apparaît dans la prose de l'en-tête, qui explique précisément pourquoi on ne s'en
   // sert pas. Ce qu'on interdit, c'est de le LIRE : un accès de propriété.
-  assert.ok(
-    !/[.\[]\s*['"]?assigned_agent/.test(source),
-    'aucun accès à `assigned_agent` ne doit exister dans le module de la vue'
+  // ⚠️ TROIS FAÇONS DE LIRE UN CHAMP, PAS UNE — et la garde n'en couvrait qu'une. Elle cherchait
+  // l'accès par point ou par crochet (`t.assigned_agent`, `t['assigned_agent']`) et laissait
+  // passer la DÉSTRUCTURATION (`const { assigned_agent } = ticket`), qui lit exactement le même
+  // champ. Angle mort relevé en revue de fond : non exploité aujourd'hui, mais une garde qui
+  // couvre deux formes sur trois se lit comme une garde qui couvre le champ.
+  //
+  // On cherche donc le NOM, partout où il pourrait être lu — et on tolère la seule occurrence
+  // légitime : la prose de l'en-tête, qui explique précisément pourquoi on ne s'en sert pas.
+  const lignesFautives = source
+    .split('\n')
+    .filter((l) => l.includes('assigned_agent'))
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l.trim()) && !l.trim().startsWith('*'));
+  assert.deepEqual(
+    lignesFautives,
+    [],
+    'aucune lecture de `assigned_agent` hors commentaire — accès par point, par crochet OU par déstructuration'
   );
 });
 

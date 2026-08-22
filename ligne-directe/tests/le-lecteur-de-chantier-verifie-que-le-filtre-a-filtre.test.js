@@ -183,3 +183,59 @@ test('une liste d’epics PLAFONNÉE est signalée — un écart nul ne veut pas
   const large = await lecteurDeChantier({ appeler, limite: 200 })('P-20260822-0001');
   assert.equal(large.epicsPlafonnes, false, 'une page non pleine n’invoque aucun plafond');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 LE JUMEAU D'UN ÉTAGE PLUS BAS — les stories, et il était PIRE que celui des epics
+//
+// Ce code lisait TOUTE la base de tickets sans filtre, puis retamisait. La raison était une
+// GÉNÉRALISATION NON MESURÉE : le brief avertissait que `tickets` action `list` « accepte
+// `delivery_id` et l'IGNORE », et j'ai étendu cet avertissement d'UN champ à TOUS les champs.
+//
+// MESURÉ contre le service réel le 2026-08-22 : `epic_id` EST honoré. Sans filtre, `limit: 5`
+// rend 5 tickets dont 0 de l'epic cherché, avec `count: 6510`. Avec `epic_id`, il rend 3
+// tickets, les 3 bons, `count: 3`.
+//
+// ⚠️ CE QUE LA GÉNÉRALISATION COÛTAIT : 6510 tickets en base, une page de 200 — les stories
+// d'un epic n'y tombaient QUE par chance. Elles sortaient `[]`, indiscernable de « cet epic
+// n'a aucune story ». **Le travail d'agents entiers disparaissait de la vue, en silence.**
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('le lecteur DEMANDE `epic_id` au service — il ne lit pas la base entière pour retamiser ensuite', async () => {
+  const vus = [];
+  const appeler = async (nom, args) => {
+    vus.push({ nom, args });
+    if (nom === 'projects') return { projects: [{ id: 'u1', project_id: 'P-20260822-0001' }] };
+    if (nom === 'epics') return { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1' }] };
+    return { tickets: [] };
+  };
+  await lecteurDeChantier({ appeler })('P-20260822-0001');
+
+  const demande = vus.find((v) => v.nom === 'tickets');
+  assert.equal(demande.args.epic_id, 'e1', 'le filtre est DEMANDÉ — mesuré honoré par le service');
+  const demandeEpics = vus.find((v) => v.nom === 'epics');
+  assert.equal(demandeEpics.args.project_id, 'u1', 'et celui des epics aussi');
+});
+
+test('une liste de stories PLAFONNÉE est signalée — sinon une story hors page se rend comme « aucune story »', async () => {
+  const troisTickets = [
+    { id: 't1', ticket_id: 'T-1', epic_id: 'e1' },
+    { id: 't2', ticket_id: 'T-2', epic_id: 'e1' },
+    { id: 't3', ticket_id: 'T-3', epic_id: 'e1' },
+  ];
+  const appeler = async (nom) =>
+    nom === 'projects'
+      ? { projects: [{ id: 'u1', project_id: 'P-20260822-0001' }] }
+      : nom === 'epics'
+        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1' }] }
+        : { tickets: troisTickets };
+
+  // Page pleine : très probablement coupée, il en manque peut-être.
+  const plein = await lecteurDeChantier({ appeler, limite: 3 })('P-20260822-0001');
+  assert.equal(plein.epics[0].storiesPlafonnees, true, 'la page est pleine — le signal est levé');
+  assert.equal(plein.epics[0].stories.length, 3, 'et les stories lues sont bien rendues');
+
+  // ⚠️ LE SYMÉTRIQUE : une page non pleine ne crie pas au plafond, sinon le signal, répété
+  // partout, cesse d'en être un.
+  const large = await lecteurDeChantier({ appeler, limite: 200 })('P-20260822-0001');
+  assert.equal(large.epics[0].storiesPlafonnees, false, 'aucun plafond invoqué quand il n’a pas joué');
+});

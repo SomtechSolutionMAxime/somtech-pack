@@ -740,3 +740,76 @@ test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue —
     'ces signaux du lecteur de chantier meurent à la jointure : calculés, jamais rendus'
   );
 });
+
+test('le plafond des STORIES traverse les quatre jointures — jusqu’à la ligne que lit le dirigeant', async () => {
+  const recensement = {
+    quand: 'T',
+    agents: [{
+      pane: 'w1:p1', session: 's', statut: 'idle',
+      role: { mesure: 'établi', nom: 'orchestrateur' },
+      nom: { mesure: 'lu', valeur: 'kamouraska' },
+      mandat: 'p-20260822-0001', lieu: '/x',
+    }],
+  };
+  const vue = await laVueDuParc({
+    recensement,
+    lireChantier: async (code) => ({
+      code,
+      epics: [{ code: 'E-1', stories: [{ code: 'T-1' }], storiesPlafonnees: true }],
+    }),
+  });
+
+  assert.equal(vue.orchestrateurs[0].epics[0].storiesPlafonnees, true, '① la vue le porte');
+  assert.equal(vue.compte.epicsAuxStoriesPlafonnees, 1, '② le compte le totalise');
+  assert.match(vue.resume, /stories est PLAFONNÉE/, '③ le résumé le dit');
+  assert.match(rendreLaVue(vue), /liste de stories PLAFONNÉE/, '④ et le texte le porte sur la ligne');
+});
+
+test('un agent joint au niveau STORY n’est pas AUSSI rendu hors hiérarchie — garde vacante trouvée en revue', async () => {
+  // 🔴 LA BOUCLE QUI RETIRE UN PORTEUR DE STORY DE « hors hiérarchie » N'ÉTAIT ÉPROUVÉE PAR
+  // PERSONNE : la supprimer laissait la suite verte. Le comportement était juste, rien ne le
+  // protégeait — et son équivalent au niveau EPIC, lui, était gardé. Une porte sur deux, dans
+  // la même boucle.
+  const recensement = {
+    quand: 'T',
+    agents: [
+      {
+        pane: 'w1:p1', session: 's', statut: 'idle',
+        role: { mesure: 'établi', nom: 'orchestrateur' },
+        nom: { mesure: 'lu', valeur: 'kamouraska' },
+        mandat: 'p-20260822-0001', lieu: '/x',
+      },
+      {
+        // Porteur d'une STORY, pas d'un epic — c'est le cas que rien ne gardait.
+        pane: 'w2:p1', session: 's', statut: 'working',
+        role: { mesure: 'établi', nom: 'orchestrateur' },
+        nom: { mesure: 'lu', valeur: 'castor' },
+        mandat: 't-20260822-0012', lieu: '/y',
+      },
+    ],
+  };
+  const vue = await laVueDuParc({
+    recensement,
+    lireChantier: async (code) => ({ code, epics: [{ code: 'E-1', stories: [{ code: 'T-20260822-0012' }] }] }),
+  });
+
+  assert.equal(vue.orchestrateurs[0].epics[0].stories[0].agent.mesure, 'lue', 'préalable : il est joint sur sa story');
+  assert.ok(
+    !vue.horsHierarchie.some((p) => p.agent.nom === 'castor'),
+    'un agent joint au niveau STORY n’est pas aussi hors hiérarchie — il serait compté deux fois'
+  );
+
+  // 🔴 CE BANC PASSE, MAIS PAS POUR LA RAISON QU'IL ANNONCE — mesuré, et il fallait le dire.
+  // `castor` est un ORCHESTRATEUR : il est déjà dans `dansUneHierarchie` par la boucle du
+  // dessus, avant que celle des stories ne s'exécute. Retirer les DEUX boucles de jointure
+  // laisse les 899 essais verts.
+  //
+  // La raison est structurelle : seul le rôle « orchestrateur » porte un mandat qui EST un code
+  // de chantier, donc `parMandat` — et donc `quiPorte` étage 1 — ne peut rendre que des
+  // orchestrateurs, tous déjà dans le Set. **Les deux boucles sont inatteignables aujourd'hui.**
+  //
+  // Elles s'allumeront quand un chef d'équipe aura un lieu (`T-20260822-0018`). D'ici là, aucun
+  // banc ne peut les éprouver — et prétendre le contraire serait une garde vacante de plus.
+  // On le DIT ici, comme on l'a dit pour la surface du `bin` et pour le périmètre de la garde
+  // de famille : ce qui n'est pas couvert se déclare, sinon le nom du banc ment.
+});

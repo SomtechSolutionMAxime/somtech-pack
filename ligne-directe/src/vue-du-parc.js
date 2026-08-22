@@ -234,9 +234,31 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     for (const e of epics) {
       let stories = [];
       let storiesLues = true;
+      let storiesPlafonnees = false;
       try {
-        const corpsT = await appeler('tickets', { action: 'list', limit: limite });
+        // 🔴 ON DEMANDE `epic_id`, ET C'EST UNE MESURE, PAS UNE SUPPOSITION. Ce code lisait
+        // TOUTE la base de tickets sans filtre, puis retamisait — parce que le brief du lot
+        // avertissait que `tickets` action `list` « accepte `delivery_id` et l'IGNORE ». J'ai
+        // généralisé cet avertissement d'UN champ à TOUS les champs sans le vérifier.
+        //
+        // MESURÉ le 2026-08-22 contre le service réel : `epic_id` EST honoré — `limit: 5` sans
+        // filtre rend 5 tickets dont 0 de l'epic et `count: 6510` ; avec `epic_id`, il rend 3
+        // tickets, les 3 bons, et `count: 3`.
+        //
+        // ⚠️ CE QUE LA GÉNÉRALISATION COÛTAIT, ET C'ÉTAIT ÉNORME : avec 6510 tickets en base et
+        // une page de 200, les stories d'un epic ne tombaient dans la page QUE par chance. Elles
+        // sortaient donc `[]` — indiscernable de « cet epic n'a aucune story ». Le travail
+        // d'agents entiers disparaissait de la vue, en silence, sur le chemin le plus fréquenté.
+        const corpsT = await appeler('tickets', { action: 'list', epic_id: e.id, limit: limite });
         const tous = Object.values(corpsT || {}).find((v) => Array.isArray(v)) || [];
+        // ⚠️ ON DEMANDE LE FILTRE **ET** ON VÉRIFIE QU'IL A FILTRÉ. Les deux : un service peut
+        // cesser de l'honorer demain, comme il le fait déjà pour `delivery_id`.
+        //
+        // ⚠️ ET LE PLAFOND SE DIT ICI AUSSI — c'est le jumeau de `epicsPlafonnes`, un étage plus
+        // bas, et il manquait. Une page pleine veut dire « il en manque peut-être », jamais
+        // « il n'y en a pas d'autre » : sans ce signal, une story tombée hors page se rend
+        // exactement comme un epic qui n'en a aucune.
+        storiesPlafonnees = tous.length >= limite;
         // Idem : `tickets` list n'honore pas tous ses filtres. On tamise sur `epic_id`.
         stories = tous.filter((t) => t?.epic_id === e.id);
       } catch {
@@ -251,6 +273,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         stories: storiesLues
           ? stories.map((t) => ({ code: t?.ticket_id ?? null, titre: t?.title ?? null, statut: t?.status ?? null }))
           : null,
+        storiesPlafonnees,
       });
     }
 
@@ -453,6 +476,10 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
                   titre: s?.titre ?? null,
                   agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
                 })),
+          // Le plafond des stories traverse, comme celui des epics : il vient du lecteur, il ne
+          // se recalcule pas ici — et il ne meurt pas à cette jointure, contrairement à son
+          // jumeau d'un étage plus haut, qui y est resté un cycle entier.
+          storiesPlafonnees: e?.storiesPlafonnees ?? false,
         };
       }),
     });
@@ -470,6 +497,22 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
   // ⚠️ ET UN AGENT QUI JOINT DANS UN ARBRE N'EST PAS HORS HIÉRARCHIE, même sans être
   // orchestrateur : le jour où un chef d'équipe aura un lieu, son mandat le fera apparaître sur
   // sa ligne, et l'y remettre ici le compterait deux fois.
+  // 🔴 CES DEUX BOUCLES SONT INATTEIGNABLES AUJOURD'HUI, ET C'EST MESURÉ, PAS SUPPOSÉ. Les
+  // retirer entièrement ne fait rougir aucun des 899 essais — parce que `quiPorte` ne peut
+  // mettre dans `agents` que des entrées de `parMandat`, que `parMandat` n'accepte qu'un mandat
+  // qui EST un code de chantier, et que seul le rôle « orchestrateur » en porte un (un
+  // représentant a pour mandat un nom de client). Or tous les orchestrateurs sont DÉJÀ dans
+  // `dansUneHierarchie`, ajoutés par la boucle du dessus.
+  //
+  // ⚠️ ON LES GARDE QUAND MÊME, et on dit pourquoi plutôt que de laisser croire qu'elles sont
+  // éprouvées : elles s'allumeront le jour où un chef d'équipe aura un lieu où lire son mandat
+  // (`T-20260822-0018`) — il portera alors un code sans être orchestrateur, et sans elles il
+  // serait compté DEUX fois : une dans l'arbre, une hors hiérarchie.
+  //
+  // ⚠️ ET LE BANC QUI SEMBLAIT LES GARDER N'EN GARDAIT RIEN : son agent porteur était un
+  // orchestrateur, donc déjà dans le Set par l'autre chemin. Il passait pour une raison qui
+  // n'était pas la sienne — une garde vacante de plus, trouvée en mutant ce qu'elle prétendait
+  // couvrir plutôt qu'en la relisant.
   for (const o of orchestrateurs) {
     for (const e of o.epics ?? []) {
       // ⚠️ ON APPELLE `cleDeLAgent`, ON NE LA RÉÉCRIT PAS — la clé était recomposée à la main
@@ -518,6 +561,10 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
     // Le plafond se compte en CHANTIERS touchés, pas en epics : on ne sait pas combien il en
     // manque — c'est justement ce que « plafonné » veut dire.
     chantiersPlafonnes: orchestrateurs.filter((o) => o.chantier.epicsPlafonnes).length,
+    epicsAuxStoriesPlafonnees: orchestrateurs.reduce(
+      (n, o) => n + (o.epics ?? []).filter((e) => e.storiesPlafonnees).length,
+      0
+    ),
     // ⚠️ LE DÉNOMINATEUR VOYAGE AVEC LE COMPTE. Voir plus haut : un nombre d'ambiguïtés sans
     // l'ensemble sur lequel il a été compté n'est pas vérifiable, et se compare à tort à un
     // autre nombre compté ailleurs.
@@ -562,6 +609,10 @@ function resumeDeLaVue(compte, recensement) {
     (compte.chantiersPlafonnes
       ? ` ⚠️ ${compte.chantiersPlafonnes} chantier(s) dont la liste d’epics est PLAFONNÉE : il en ` +
         'manque peut-être, et ce compte-là est un plancher de plus.'
+      : '') +
+    (compte.epicsAuxStoriesPlafonnees
+      ? ` ⚠️ ${compte.epicsAuxStoriesPlafonnees} epic(s) dont la liste de stories est PLAFONNÉE : ` +
+        'des stories manquent peut-être sous eux.'
       : '') +
     (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '')
   );
@@ -747,6 +798,12 @@ export function rendreLaVue(vue) {
         // chantier rend `stories: null` quand l'appel a échoué : le taire ferait passer un epic
         // dont on n'a rien lu pour un epic qui n'a rien.
         if (e.stories === null) l.push(`${dernierEpic ? '   ' : '  │'}    (ses stories n’ont pas pu être lues)`);
+        // ⚠️ TROIS ÉTATS, TROIS LIGNES : pas pu lire · lues et plafonnées · lues entièrement.
+        // Sans la ligne du milieu, un epic dont la page de stories était pleine se rend
+        // exactement comme un epic dont on a tout lu.
+        if (e.storiesPlafonnees) {
+          l.push(`${dernierEpic ? '   ' : '  │'}    (⚠️ liste de stories PLAFONNÉE : il en manque peut-être)`);
+        }
       });
     }
     l.push('');
