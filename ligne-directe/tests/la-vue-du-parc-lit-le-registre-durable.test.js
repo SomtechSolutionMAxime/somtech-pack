@@ -290,3 +290,122 @@ test('la session rendue est son NOM, pas le chemin de son socket — la forme qu
   assert.ok(ligne.includes('@ somtech'), 'la ligne nomme la session');
   assert.doesNotMatch(ligne, /herdr\.sock/, 'et ne montre PAS le chemin du socket');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑤ LES COUTURES QUE LES GARDES DU CŒUR NE COUVRENT PAS — trouvées par une passe de fond
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 LA MÊME ARÊTE, UNE TROISIÈME FOIS DANS LE MÊME LOT. Ce fichier a été écrit pour fermer deux
+// jointures veilleur→module (`titre`, `lieux`). Une passe de fond en a trouvé DEUX AUTRES, sur
+// la même arête, que ces gardes-là ne couvraient pas — parce qu'elles passaient toutes un
+// argument que **le vrai geste ne passe jamais**.
+//
+// > `case 'vue': return this.vueDuParc();` — **zéro argument.** C'est le SEUL appel de
+// > production, et aucun essai ne l'empruntait.
+
+test('le geste appelle `vueDuParc()` SANS ARGUMENT — et c’est cette voie-là qu’il faut éprouver', async () => {
+  // 🔴 DÉFAUT MESURÉ, PAS SUPPOSÉ. Retirer le repli `racines ?? racinesDuPoste()` laissait les
+  // 957 essais VERTS. En production, `racines` vaut alors `null` — et `null` n'est PAS
+  // `undefined`, donc le défaut `= []` de `lecteurDeLieux` ne s'applique pas : il itère `null`,
+  // jette, et le `try/catch` transforme la panne en « lieux refusés ». Mesuré à l'exécution :
+  // `registreDesLieux.mesure` passe de « lue » à « refusée », et **0 orchestrateur** au lieu de
+  // 15. Tous les chantiers sans terminal — la raison d'être de cet epic — redeviennent
+  // invisibles, en silence.
+  //
+  // ⚠️ ON N'ASSERTE PAS CE QUE LE DISQUE CONTIENT. Exiger des racines réelles ferait dépendre le
+  // verdict de la machine (vert chez l'auteur, rouge en CI). On mesure ce que le veilleur
+  // TRANSMET : un tableau, jamais `null`.
+  const v = new Veilleur({ cheminSocket: join(bac, 'zero-arg.sock'), identite: { equipe: 'T' } });
+  v.recensementDuPoste = async () => ({ quand: 'T', agents: [], borne: { sessionsRefusees: [] } });
+
+  let recues = 'jamais appelé';
+  const vue = await v.vueDuParc({
+    construireLecteur: () => async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+    construireLecteurDeLieux: ({ racines }) => {
+      recues = racines;
+      return async () => ({ mesure: 'lue', racines, racinesRefusees: [], entrees: [] });
+    },
+    // ⚠️ AUCUN `racines:` ICI — c'est tout l'objet de ce banc.
+  });
+
+  assert.ok(Array.isArray(recues), `le veilleur doit fournir un TABLEAU de racines, il a fourni ${JSON.stringify(recues)}`);
+  assert.notEqual(recues, null, '`null` fait jeter le lecteur, et la panne se rend « lieux refusés »');
+  assert.equal(vue.registreDesLieux.mesure, 'lue', 'et la vue ne doit pas partir en refus sur son chemin nominal');
+});
+
+test('`racinesDuPoste()` rend TOUJOURS un tableau — même sur une machine qui n’a aucun des deux dossiers', async () => {
+  const { racinesDuPoste } = await import('../src/vue-du-parc.js');
+  // Un foyer vide : ni `GitRepo.nosync`, ni `worktrees`.
+  const vide = racinesDuPoste({ foyer: join(bac, 'foyer-desert') });
+  assert.ok(Array.isArray(vide), 'jamais `null` ni `undefined` : c’est ce que le repli du veilleur transmet');
+  assert.deepEqual(vide, [], 'et un foyer sans dépôt rend une liste VIDE, pas une panne');
+});
+
+test('un lecteur de lieux qui JETTE n’emporte pas la vue entière — les vivants restent rendus', async () => {
+  // 🔴 LE COMMENTAIRE DU CODE AFFIRMAIT CETTE INTENTION, ET RIEN NE LA VÉRIFIAIT. Retirer le
+  // `try/catch` laissait les 957 essais VERTS : aucun essai ne fournissait un lecteur qui jette.
+  // Une permission refusée sur le disque aurait fait échouer `vueDuParc()` en entier — la moitié
+  // « vivants » de la réponse, parfaitement mesurable, serait partie avec.
+  const v = new Veilleur({ cheminSocket: join(bac, 'jette.sock'), identite: { equipe: 'T' } });
+  v.recensementDuPoste = async () => ({
+    quand: 'T',
+    borne: { sessionsRefusees: [] },
+    agents: [
+      {
+        pane: 'w1:p1',
+        session: '/x/sessions/somtech/herdr.sock',
+        nom: { mesure: 'lu', valeur: 'un-vivant' },
+        role: { mesure: 'établi', nom: 'orchestrateur' },
+        mandat: 'p-20260822-0001',
+        titre: 'sa fenêtre',
+        travailEnVol: { mesure: 'lue', enVol: true },
+      },
+    ],
+  });
+
+  const vue = await v.vueDuParc({
+    construireLecteur: () => async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+    construireLecteurDeLieux: () => async () => {
+      throw new Error('le disque a refusé');
+    },
+  });
+
+  assert.equal(vue.registreDesLieux.mesure, 'refusée', 'la panne du disque est RENDUE');
+  assert.match(vue.registreDesLieux.raison, /disque a refusé/, 'et sa cause est nommée, pas avalée');
+  assert.equal(vue.orchestrateurs.length, 1, 'la moitié MESURABLE de la réponse survit');
+  assert.equal(vue.orchestrateurs[0].agent.nom, 'un-vivant');
+});
+
+test('deux lieux qui ne diffèrent QUE PAR LA CASSE sont UN chantier — pas deux', async () => {
+  // 🔴 LE CAS EST DOCUMENTÉ DANS CE DÉPÔT (`skills/orchestrateur/SKILL.md`, cas `lieu_ambigu` :
+  // « Chantier » et « chantier »), et l'essai qui couvrait la fusion employait la MÊME chaîne
+  // dans les deux dossiers — il n'exerçait donc JAMAIS la normalisation. Remplacer
+  // `cleDuMandat(mandat)` par `mandat` nu laissait les 957 essais VERTS, et le second chemin
+  // disparaissait du rendu en silence.
+  //
+  // ⚠️ ON INJECTE `lister` PLUTÔT QUE D'ÉCRIRE SUR LE DISQUE : le volume de ce poste est
+  // INSENSIBLE À LA CASSE, donc les deux dossiers n'y coexistent pas. Un banc posé sur le disque
+  // mesurerait le système de fichiers, pas la normalisation — et serait vert pour la mauvaise
+  // raison ici, rouge ailleurs.
+  const lu = await lecteurDeLieux({
+    racines: ['/depot'],
+    roleDuLieu: () => 'orchestrateur',
+    lister: (chemin) => (chemin === '/depot' ? [] : chemin.endsWith('.orchestrateur') ? ['Chantier', 'chantier'] : []),
+  })();
+
+  assert.equal(lu.entrees.length, 1, 'un seul chantier : la casse du dossier ne crée pas un second mandat');
+  assert.equal(lu.entrees[0].chemins.length, 2, 'et les DEUX chemins sont gardés — aucun ne disparaît');
+});
+
+test('`porteurDuLieu` n’INVENTE aucun agent — un lieu nomme un rôle et un mandat, jamais une personne', async () => {
+  // 🔴 INVARIANT ÉCRIT DANS LE CODE, GARDÉ PAR PERSONNE. Remplacer `agents: []` par une carte
+  // fabriquée laissait les 957 essais VERTS. Le champ n'est pas encore lu par le rendu texte,
+  // mais il sort par `--json` : un nom plausible y ferait ÉCRIRE à quelqu'un qui n'existe pas —
+  // exactement ce que `nomDeLAgent` interdit ailleurs, au prix déjà payé (T-20260822-0002).
+  const { porteurDuLieu } = await import('../src/vue-du-parc.js');
+  const p = porteurDuLieu(['/depot/.orchestrateur/p-20260822-0001']);
+
+  assert.deepEqual(p.agents, [], 'aucun agent : le lieu ne nomme personne');
+  assert.deepEqual(p.lieux, ['/depot/.orchestrateur/p-20260822-0001'], 'ce qu’il nomme, c’est le LIEU');
+  assert.match(p.source, /lieu/i);
+});
