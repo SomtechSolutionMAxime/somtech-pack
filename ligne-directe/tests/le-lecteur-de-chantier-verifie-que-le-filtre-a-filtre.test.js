@@ -23,6 +23,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { lecteurDeChantier } from '../src/vue-du-parc.js';
 
 /**
@@ -238,4 +241,84 @@ test('une liste de stories PLAFONNÉE est signalée — sinon une story hors pag
   // partout, cesse d'en être un.
   const large = await lecteurDeChantier({ appeler, limite: 200 })('P-20260822-0001');
   assert.equal(large.epics[0].storiesPlafonnees, false, 'aucun plafond invoqué quand il n’a pas joué');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 LE CHAMP DE JOINTURE DÉPEND DE LA FAMILLE — mesuré sur un cas RÉEL du poste
+//
+// L'outil `epics` expose TROIS filtres parents, jamais interchangeables : `project_id`,
+// `demand_id`, `delivery_id`. Ce code les demandait tous par `project_id`.
+//
+// MESURÉ, pas construit : l'orchestrateur `batiscan` porte le mandat `J-20260814-0002`, une
+// LIVRAISON. Interrogée par `project_id` elle rend **0 epic** ; par `delivery_id`, **1**. La
+// vue affichait donc « aucun epic — mesuré, pas un trou » pour un chantier qui en portait un.
+//
+// ⚠️ DOUBLEMENT SILENCIEUX : `epicsEcartes` restait à 0, parce que le filtre demandé — le
+// mauvais champ — avait bien « filtré », sans intrus. Aucune garde du module ne pouvait le
+// savoir. Tout mandat `D-…` ou `J-…` voyait son parc amputé à zéro.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('un mandat de LIVRAISON lit ses epics par `delivery_id` — pas par `project_id`', async () => {
+  const vus = [];
+  const appeler = async (nom, args) => {
+    vus.push({ nom, args });
+    if (nom === 'deliveries') return { deliveries: [{ id: 'uuid-J', delivery_id: 'J-20260814-0002', title: 'la livraison' }] };
+    if (nom === 'epics') {
+      const tous = [{ id: 'e1', epic_id: 'E-1', delivery_id: 'uuid-J', project_id: null }];
+      // Le double se comporte comme le VRAI service : il honore le champ qu'on lui donne.
+      if (args.delivery_id) return { epics: tous.filter((e) => e.delivery_id === args.delivery_id) };
+      if (args.project_id) return { epics: tous.filter((e) => e.project_id === args.project_id) };
+      return { epics: tous };
+    }
+    return { tickets: [] };
+  };
+
+  const chantier = await lecteurDeChantier({ appeler })('J-20260814-0002');
+
+  assert.equal(vus.find((v) => v.nom === 'epics').args.delivery_id, 'uuid-J', 'le champ demandé suit la famille');
+  assert.deepEqual(chantier.epics.map((e) => e.code), ['E-1'], 'et l’epic de cette livraison est TROUVÉ');
+});
+
+test('un mandat de DEMANDE lit ses epics par `demand_id`', async () => {
+  const appeler = async (nom, args) => {
+    if (nom === 'demands') return { demands: [{ id: 'uuid-D', demand_id: 'D-20260817-0006' }] };
+    if (nom === 'epics') {
+      const tous = [{ id: 'e1', epic_id: 'E-9', demand_id: 'uuid-D', project_id: null }];
+      return { epics: args.demand_id ? tous.filter((e) => e.demand_id === args.demand_id) : [] };
+    }
+    return { tickets: [] };
+  };
+  const chantier = await lecteurDeChantier({ appeler })('D-20260817-0006');
+  assert.deepEqual(chantier.epics.map((e) => e.code), ['E-9']);
+});
+
+test('un mandat d’une famille SANS epics est REFUSÉ — on ne se rabat pas sur `project_id`', async () => {
+  // ⚠️ Se rabattre rendrait une liste sans rapport avec l'apparence d'une mesure. Un `T-…` ou
+  // un `E-…` n'a pas d'epics « en dessous » au sens de cette vue : on le DIT.
+  const appeler = async (nom) => (nom === 'tickets' ? { tickets: [{ id: 'x', ticket_id: 'T-20260822-0012' }] } : { epics: [] });
+  await assert.rejects(() => lecteurDeChantier({ appeler })('T-20260822-0012'), /ne porte pas d’epics/);
+});
+
+test('les stories ÉCARTÉES se comptent, comme les epics écartés — le jumeau du jumeau', async () => {
+  // Le retamisage existait à cet étage ; son RÉSULTAT n'était mesuré nulle part. La donnée
+  // était protégée, le signal muet. Troisième fois que ce jumeau restait en arrière.
+  const appeler = async (nom) =>
+    nom === 'projects'
+      ? { projects: [{ id: 'u1', project_id: 'P-20260822-0001' }] }
+      : nom === 'epics'
+        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1' }] }
+        : { tickets: [{ id: 't1', ticket_id: 'T-1', epic_id: 'e1' }, { id: 't2', ticket_id: 'T-2', epic_id: 'AUTRE' }] };
+
+  const chantier = await lecteurDeChantier({ appeler })('P-20260822-0001');
+
+  assert.deepEqual(chantier.epics[0].stories.map((s) => s.code), ['T-1'], 'l’intrus est écarté');
+  assert.equal(chantier.epics[0].storiesEcartees, 1, 'ET l’écart est COMPTÉ — sinon le filtre muet le reste');
+});
+
+test('sans transport injecté, le lecteur se construit sur `transportServiceDesk` — pas sur rien', async () => {
+  // ⚠️ GARDE VACANTE RELEVÉE EN REVUE : `mandat.js` éprouve que son transport refuse un appel
+  // réel sous essais, mais rien n'éprouvait que `lecteurDeChantier` emprunte CE transport-là.
+  // Un défaut câblé ailleurs contournerait la cloison d'essais sans qu'un banc ne rougisse.
+  const source = readFileSync(fileURLToPath(new URL('../src/vue-du-parc.js', import.meta.url)), 'utf8');
+  assert.match(source, /appeler = transportServiceDesk\(\)/, 'le défaut EST le transport partagé et gardé');
 });

@@ -215,12 +215,36 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     }
 
     // ═══ SES EPICS — le filtre côté service, PUIS vérifié côté nous.
-    const corpsEpics = await appeler('epics', { action: 'list', project_id: chantier.id, limit: limite });
+    // 🔴 LE CHAMP DE JOINTURE DÉPEND DE LA FAMILLE DU CHANTIER — il était câblé en dur sur
+    // `project_id`, et l'en-tête de cette fonction revendiquait pourtant le support de
+    // `demands` et `deliveries`. L'outil `epics` expose TROIS filtres parents distincts, jamais
+    // interchangeables : `project_id`, `demand_id`, `delivery_id`.
+    //
+    // MESURÉ SUR UN CAS RÉEL DU POSTE, pas construit : l'orchestrateur `batiscan` porte le
+    // mandat `J-20260814-0002`, une LIVRAISON. Interrogée par `project_id` — ce que ce code
+    // faisait — elle rend **0 epic**. Par `delivery_id`, elle en rend **1**. La vue affichait
+    // donc « aucun epic — mesuré, pas un trou » pour un chantier qui en portait un, et
+    // `epicsEcartes` restait à 0 : le filtre demandé avait bien « filtré », sans intrus, donc
+    // aucun signal ne s'allumait. **Doublement silencieux.**
+    //
+    // ⚠️ Tout orchestrateur au mandat `D-…` ou `J-…` voyait son parc amputé à zéro. C'est
+    // RA-VUE-003 violée sans qu'aucune garde du module ne puisse le savoir.
+    const CHAMP_PARENT = { projects: 'project_id', demands: 'demand_id', deliveries: 'delivery_id' };
+    const champParent = CHAMP_PARENT[famille];
+    if (!champParent) {
+      // ⚠️ ON NE DEVINE PAS. Un mandat dont la famille est `epics` ou `tickets` n'a pas d'epics
+      // « en dessous » au sens de cette vue : se rabattre sur `project_id` rendrait une liste
+      // sans rapport, avec l'apparence d'une mesure.
+      throw new Error(
+        `un mandat de la famille « ${famille} » ne porte pas d’epics : je ne sais pas quoi lire sous ${code}`
+      );
+    }
+    const corpsEpics = await appeler('epics', { action: 'list', [champParent]: chantier.id, limit: limite });
     const tousEpics = Object.values(corpsEpics || {}).find((v) => Array.isArray(v)) || [];
     // 🔴 ON VÉRIFIE QUE LE FILTRE A FILTRÉ. Un filtre ignoré rend la base entière : sans ce
     // second tamis, la vue rattacherait à cet orchestrateur les epics de TOUTES les
     // applications, et chacun aurait l'air d'un fait mesuré.
-    const epics = tousEpics.filter((e) => e?.project_id === chantier.id);
+    const epics = tousEpics.filter((e) => e?.[champParent] === chantier.id);
     const epicsEcartes = tousEpics.length - epics.length;
     // ⚠️ DEUX PANNES DE FILTRE, PAS UNE — et une seule était dite. `epicsEcartes` compte les
     // INTRUS (le service a rendu trop) ; il ne dit rien des MANQUANTS (le service a rendu une
@@ -235,6 +259,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       let stories = [];
       let storiesLues = true;
       let storiesPlafonnees = false;
+      let storiesEcartees = 0;
       try {
         // 🔴 ON DEMANDE `epic_id`, ET C'EST UNE MESURE, PAS UNE SUPPOSITION. Ce code lisait
         // TOUTE la base de tickets sans filtre, puis retamisait — parce que le brief du lot
@@ -261,6 +286,13 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         storiesPlafonnees = tous.length >= limite;
         // Idem : `tickets` list n'honore pas tous ses filtres. On tamise sur `epic_id`.
         stories = tous.filter((t) => t?.epic_id === e.id);
+        // ⚠️ ET L'ÉCART SE COMPTE ICI AUSSI. Le retamisage existait déjà à cet étage, mais son
+        // RÉSULTAT n'était mesuré nulle part — alors que le principe posé plus bas dit « un
+        // filtre qui n'a pas filtré est un FAIT, pas un détail d'implémentation ». La donnée
+        // était protégée ; le signal qui l'aurait dit était muet. Le jour où le service cesse
+        // d'honorer `epic_id` — comme il le fait déjà pour `delivery_id` — personne ne
+        // l'apprendrait. Troisième fois que ce jumeau reste en arrière : on le ferme.
+        storiesEcartees = tous.length - stories.length;
       } catch {
         // ⚠️ « pas pu lire les stories » ≠ « cet epic n'a pas de story ». Une liste vide ici
         // ferait disparaître le travail d'un agent sans que rien ne le dise.
@@ -274,6 +306,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
           ? stories.map((t) => ({ code: t?.ticket_id ?? null, titre: t?.title ?? null, statut: t?.status ?? null }))
           : null,
         storiesPlafonnees,
+        storiesEcartees,
       });
     }
 
@@ -480,6 +513,7 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
           // se recalcule pas ici — et il ne meurt pas à cette jointure, contrairement à son
           // jumeau d'un étage plus haut, qui y est resté un cycle entier.
           storiesPlafonnees: e?.storiesPlafonnees ?? false,
+          storiesEcartees: e?.storiesEcartees ?? 0,
         };
       }),
     });
@@ -565,6 +599,10 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
       (n, o) => n + (o.epics ?? []).filter((e) => e.storiesPlafonnees).length,
       0
     ),
+    storiesEcartees: orchestrateurs.reduce(
+      (n, o) => n + (o.epics ?? []).reduce((m, e) => m + (e.storiesEcartees ?? 0), 0),
+      0
+    ),
     // ⚠️ LE DÉNOMINATEUR VOYAGE AVEC LE COMPTE. Voir plus haut : un nombre d'ambiguïtés sans
     // l'ensemble sur lequel il a été compté n'est pas vérifiable, et se compare à tort à un
     // autre nombre compté ailleurs.
@@ -613,6 +651,10 @@ function resumeDeLaVue(compte, recensement) {
     (compte.epicsAuxStoriesPlafonnees
       ? ` ⚠️ ${compte.epicsAuxStoriesPlafonnees} epic(s) dont la liste de stories est PLAFONNÉE : ` +
         'des stories manquent peut-être sous eux.'
+      : '') +
+    (compte.storiesEcartees
+      ? ` ⚠️ ${compte.storiesEcartees} story(s) écartée(s) : le ServiceDesk a rendu des stories ` +
+        'd’autres epics malgré son filtre — elles ont été retamisées ici.'
       : '') +
     (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '')
   );

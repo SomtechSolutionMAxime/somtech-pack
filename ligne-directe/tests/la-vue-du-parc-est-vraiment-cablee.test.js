@@ -813,3 +813,39 @@ test('un agent joint au niveau STORY n’est pas AUSSI rendu hors hiérarchie �
   // On le DIT ici, comme on l'a dit pour la surface du `bin` et pour le périmètre de la garde
   // de famille : ce qui n'est pas couvert se déclare, sinon le nom du banc ment.
 });
+
+test('les stories ÉCARTÉES traversent les quatre jointures — le troisième jumeau, fermé', async () => {
+  // 🔴 MUTATION SURVIVANTE AU CYCLE 5 : `storiesEcartees` était calculé par le lecteur ET
+  // s'arrêtait là. Même forme que ses deux aînés, à un étage de distance chacun. Un signal
+  // calculé qui n'arrive pas au lecteur ne sert à rien — c'est le travail fait pour rien qui
+  // ressemble le plus à du travail fait.
+  const recensement = {
+    quand: 'T',
+    agents: [{
+      pane: 'w1:p1', session: 's', statut: 'idle',
+      role: { mesure: 'établi', nom: 'orchestrateur' },
+      nom: { mesure: 'lu', valeur: 'kamouraska' },
+      mandat: 'p-20260822-0001', lieu: '/x',
+    }],
+  };
+  const vue = await laVueDuParc({
+    recensement,
+    lireChantier: async (code) => ({
+      code,
+      epics: [{ code: 'E-1', stories: [{ code: 'T-1' }], storiesEcartees: 3 }],
+    }),
+  });
+
+  assert.equal(vue.orchestrateurs[0].epics[0].storiesEcartees, 3, '① la vue le porte');
+  assert.equal(vue.compte.storiesEcartees, 3, '② le compte le totalise');
+  assert.match(vue.resume, /story\(s\) écartée\(s\)/, '③ le résumé le dit');
+  assert.match(rendreLaVue(vue), /story\(s\) écartée\(s\)/, '④ et le texte le porte');
+
+  // ⚠️ LE SYMÉTRIQUE : rien n'est dit quand rien n'a été écarté, sinon le signal s'éteint par
+  // habitude — troisième fois qu'on pose cette paire, et elle vaut à chaque étage.
+  const sain = await laVueDuParc({
+    recensement,
+    lireChantier: async (code) => ({ code, epics: [{ code: 'E-1', stories: [], storiesEcartees: 0 }] }),
+  });
+  assert.ok(!/écartée/.test(sain.resume), 'aucun bruit quand le filtre a bien filtré');
+});
