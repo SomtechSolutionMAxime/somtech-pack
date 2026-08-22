@@ -45,6 +45,8 @@ import assert from 'node:assert/strict';
 
 import {
   SIGNAUX_DU_LECTEUR,
+  SIGNAUX_DE_LA_LIGNE,
+  COMPTES_DE_STRUCTURE,
   CHAMPS_DE_STRUCTURE,
   signauxDe,
   laVueDuParc,
@@ -450,4 +452,167 @@ test('DEUX signaux ne partagent jamais leur nom dans le compte — l’un écras
   assert.equal(new Set(noms).size, noms.length, 'un doublon ferait disparaître un signal dans le compte');
   const cles = SIGNAUX_DU_LECTEUR.map((s) => `${s.niveau}:${s.cle}`);
   assert.equal(new Set(cles).size, cles.length);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑥ LES SIGNAUX DE NIVEAU **LIGNE** — le trou que le premier manifeste laissait ouvert
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 LA CONDITION N°5 DEVAIT FERMER LA CLASSE, ET ELLE NE LA FERMAIT QUE POUR LE LECTEUR.
+// `SIGNAUX_DU_LECTEUR` dérive les quatre passages des signaux qui viennent du lecteur de
+// chantier. Les faits de LIGNE — présence, activité, adresse — viennent du recensement, et leur
+// chemin vers le résumé restait ÉCRIT À LA MAIN.
+//
+// **Ce que ça a coûté, mesuré par une passe de fond sur ce lot même :** `presencesNonEtablies`
+// était CALCULÉ dans le compte et JAMAIS poussé au résumé ni au texte. Le bon signal existait ;
+// il mourait au passage ③ — **la forme n°2, dans le module écrit pour l'empêcher.** Ces formes
+// ne se neutralisent pas en les connaissant.
+//
+// **Et le silence produisait pire que le silence :** faute de ce signal, le résumé comptait
+// `vivant !== true` sous l'étiquette « n'ont AUCUN terminal vivant » — il fondait `false`
+// (mesuré) et `null` (non établi), et **affirmait une mort qu'on n'avait pas constatée**. La
+// condition de fin n°4, violée dans la phrase que le dirigeant lit EN PREMIER.
+
+test('le manifeste de LIGNE n’est pas vide — une boucle sur zéro entrée passe toujours', () => {
+  assert.ok(SIGNAUX_DE_LA_LIGNE.length >= 2, `le manifeste de ligne porte ${SIGNAUX_DE_LA_LIGNE.length} signal(aux)`);
+});
+
+test('🔴 TOUT chiffre du compte est DÉCLARÉ — c’est cette garde qui interdit de calculer un signal sans le rendre', async () => {
+  // 🔴 LA GARDE QUI FERME LA CLASSE, ET PAS LE CAS. Sans elle, on peut recalculer demain un
+  // `presencesNonEtablies` bis, le mettre au compte, et ne jamais le rendre — exactement ce qui
+  // vient d'arriver. Avec elle, un chiffre au compte doit être soit STRUCTUREL (liste épinglée),
+  // soit déclaré à l'un des deux manifestes — et déclaré, il traverse ③ et ④ par construction.
+  const vue = await laVueDuParc({
+    recensement: { quand: 'T', borne: { sessionsRefusees: [] }, agents: [] },
+    lieux: {
+      mesure: 'lue',
+      racines: ['/r'],
+      racinesRefusees: [],
+      entrees: [{ role: 'orchestrateur', mandat: 'p-20260822-0001', chemins: ['/r/.o/p'] }],
+    },
+    lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+  });
+
+  const declares = new Set([
+    ...COMPTES_DE_STRUCTURE,
+    ...SIGNAUX_DU_LECTEUR.map((s) => s.cleDuCompte),
+    ...SIGNAUX_DE_LA_LIGNE.map((s) => s.cleDuCompte),
+  ]);
+  const inconnus = Object.keys(vue.compte).filter((k) => !declares.has(k));
+  assert.deepEqual(
+    inconnus,
+    [],
+    'un chiffre au compte qui n’est ni structurel ni déclaré est un signal qui n’atteindra jamais le résumé'
+  );
+});
+
+test('le dénominateur du compte est ÉPINGLÉ — on ne peut pas taire un signal en le disant structurel', () => {
+  // ⚠️ MÊME RAISON QU'AU PREMIER MANIFESTE : la garde ci-dessus SOUSTRAIT cette liste avant de
+  // comparer. Si elle est libre, il suffit d'y ajouter un nom pour qu'un signal cesse d'être
+  // exigé — un geste qui ressemble à de l'entretien. Épinglée, l'élargir coûte un rouge.
+  assert.deepEqual(COMPTES_DE_STRUCTURE, [
+    'orchestrateurs',
+    'horsHierarchie',
+    'epicsLus',
+    'chantiersNonMesures',
+    'chantiersNonEtablis',
+    'panesAmbigus',
+    'entreesComparees',
+  ]);
+});
+
+for (const signal of SIGNAUX_DE_LA_LIGNE) {
+  test(`« ${signal.cle} » (ligne) ATTEINT le résumé ET le texte quand il a servi`, async () => {
+    // La borne du recensement décide de l'état : muette ⇒ `null`, complète ⇒ `false`.
+    const muette = signal.cle === 'presencesNonEtablies';
+    const vue = await laVueDuParc({
+      recensement: {
+        quand: 'T',
+        agents: [],
+        borne: {
+          sessionsInterrogees: 14,
+          sessionsRefusees: muette ? [{ session: '/x/sessions/cg/herdr.sock', raison: 'server_not_running' }] : [],
+        },
+      },
+      lieux: {
+        mesure: 'lue',
+        racines: ['/r'],
+        racinesRefusees: [],
+        entrees: [{ role: 'orchestrateur', mandat: 'p-20260601-0094', chemins: ['/r/.o/p'] }],
+      },
+      lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+    });
+
+    assert.equal(vue.compte[signal.cleDuCompte], 1, `② le compte n’agrège pas « ${signal.cle} »`);
+    const morceau = signal.phrase(1);
+    assert.ok(vue.resume.includes(morceau), `③ le résumé ne dit rien de « ${signal.cle} »`);
+    assert.ok(rendreLaVue(vue).includes(morceau), `④ le dirigeant ne peut pas LIRE « ${signal.cle} »`);
+  });
+
+  test(`« ${signal.cle} » SE TAIT quand il n’a rien à dire`, async () => {
+    const vue = await laVueDuParc({
+      recensement: { quand: 'T', borne: { sessionsRefusees: [] }, agents: [] },
+      lieux: { mesure: 'lue', racines: ['/r'], racinesRefusees: [], entrees: [] },
+      lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+    });
+    assert.equal(vue.compte[signal.cleDuCompte], 0);
+    assert.ok(!vue.resume.includes(signal.phrase(1)), 'aucune phrase quand le signal est au repos');
+  });
+}
+
+test('🔴 UNE PRÉSENCE NON ÉTABLIE N’EST JAMAIS COMPTÉE COMME UNE MORT — les deux prédicats sont DISJOINTS', async () => {
+  // 🔴 LE DÉFAUT EXACT, GARDÉ À SA FRONTIÈRE. `!== true` avalait `null` ; `=== false` ne l'avale
+  // pas. Et on éprouve LES DEUX SENS : un état ne doit allumer qu'UN signal, jamais deux.
+  const cas = async (refusees) =>
+    (
+      await laVueDuParc({
+        recensement: { quand: 'T', agents: [], borne: { sessionsInterrogees: 14, sessionsRefusees: refusees } },
+        lieux: {
+          mesure: 'lue',
+          racines: ['/r'],
+          racinesRefusees: [],
+          entrees: [{ role: 'orchestrateur', mandat: 'p-20260601-0094', chemins: ['/r/.o/p'] }],
+        },
+        lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+      })
+    );
+
+  const nonEtablie = await cas([{ session: '/x/sessions/cg/herdr.sock', raison: 'server_not_running' }]);
+  assert.equal(nonEtablie.orchestrateurs[0].presence.vivant, null, 'le cas éprouvé est bien celui du poste');
+  assert.equal(nonEtablie.compte.chantiersSansTerminal, 0, 'une présence NON ÉTABLIE ne se compte PAS comme une mort');
+  assert.equal(nonEtablie.compte.presencesNonEtablies, 1);
+  assert.doesNotMatch(
+    nonEtablie.resume,
+    /n’ont AUCUN terminal vivant/,
+    'le résumé ne doit JAMAIS affirmer une mort qu’on n’a pas constatée — condition de fin n°4'
+  );
+
+  const morte = await cas([]);
+  assert.equal(morte.orchestrateurs[0].presence.vivant, false);
+  assert.equal(morte.compte.chantiersSansTerminal, 1, 'et le symétrique : une mort MESURÉE se dit');
+  assert.equal(morte.compte.presencesNonEtablies, 0, 'sans se compter aussi comme non établie');
+});
+
+test('le résumé ne se CONTREDIT jamais avec la ligne de détail qu’il surplombe', async () => {
+  // ⚠️ C'EST L'ASSERTION QUI AURAIT ATTRAPÉ LE DÉFAUT LA PREMIÈRE. La même sortie portait, à
+  // trois lignes d'écart, « n'ont AUCUN terminal vivant » (résumé) et « ceci n'est PAS son
+  // terminal est mort » (détail). Aucun banc ne lisait les deux ENSEMBLE.
+  const vue = await laVueDuParc({
+    recensement: {
+      quand: 'T',
+      agents: [],
+      borne: { sessionsInterrogees: 14, sessionsRefusees: [{ session: '/x/sessions/cg/herdr.sock', raison: 'r' }] },
+    },
+    lieux: {
+      mesure: 'lue',
+      racines: ['/r'],
+      racinesRefusees: [],
+      entrees: [{ role: 'orchestrateur', mandat: 'p-20260601-0094', chemins: ['/r/.o/p'] }],
+    },
+    lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+  });
+
+  const texte = rendreLaVue(vue);
+  assert.match(texte, /Ceci n’est PAS « son terminal est mort »/, 'la ligne de détail dit le doute');
+  assert.doesNotMatch(texte, /n’ont AUCUN terminal vivant/, 'et le résumé ne l’affirme pas à trois lignes de là');
 });

@@ -521,6 +521,95 @@ export function phrasesDesSignaux(compte) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LES SIGNAUX DE NIVEAU **LIGNE** — et ce manifeste-ci ferme un trou que le premier laissait
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 CE QUI A ÉTÉ MESURÉ, ET C'EST LA FORME N°2 DANS LE LOT QUI L'A NOMMÉE. `SIGNAUX_DU_LECTEUR`
+ * dérive les quatre passages — mais SEULEMENT pour les signaux qui viennent du lecteur de
+ * chantier. Les faits de LIGNE — la présence, l'activité, l'adresse — venaient du recensement,
+ * et leur chemin vers le résumé restait **écrit à la main**.
+ *
+ * Résultat, trouvé par une passe de fond sur ce lot même : `presencesNonEtablies` était
+ * **calculé** dans le compte et **jamais poussé** au résumé ni au texte. Le bon signal existait ;
+ * il mourait au passage ③. **Un signal qui meurt en chemin, dans le module qui existe pour
+ * empêcher ça.** Ces formes ne se neutralisent pas en les connaissant.
+ *
+ * 🔴 ET LE DÉFAUT QUE CE SILENCE PRODUISAIT ÉTAIT PIRE QUE LE SILENCE. Faute du bon signal, le
+ * résumé comptait `vivant !== true` sous l'étiquette « n'ont AUCUN terminal vivant » : il
+ * FONDAIT `false` (mesuré) et `null` (non établi), et **affirmait donc une mort qu'on n'avait
+ * pas constatée**. Sur ce poste, où 11 sessions sur 14 se taisent, les quatre chantiers sans
+ * terminal sont TOUS à `null` : la phrase était fausse pour les quatre. La même sortie portait,
+ * à trois lignes d'écart, « n'ont AUCUN terminal vivant » et « ceci n'est PAS son terminal est
+ * mort ». C'est la condition de fin n°4 violée **dans la phrase que le dirigeant lit en premier**.
+ *
+ * Chaque entrée porte :
+ *   • `cle`         — son nom ;
+ *   • `predicat(o)` — la ligne est-elle « chaude » pour ce signal ? UN SEUL état à la fois :
+ *                     deux prédicats qui se recouvrent refondraient ce qu'on vient de séparer ;
+ *   • `cleDuCompte` — son nom dans le compte ;
+ *   • `phrase(n)`   — ce que le résumé dit, et SEULEMENT quand il a servi.
+ */
+export const SIGNAUX_DE_LA_LIGNE = [
+  {
+    cle: 'chantiersSansTerminal',
+    // ⚠️ `=== false`, PAS `!== true`. C'était le défaut : `!== true` avale aussi `null`.
+    predicat: (o) => o.presence?.vivant === false,
+    cleDuCompte: 'chantiersSansTerminal',
+    phrase: (n) =>
+      ` ${n} chantier(s) n’ont AUCUN terminal vivant — MESURÉ, toutes les sessions ont répondu : ` +
+      'ils sont ici parce que leur lieu versionné les porte.',
+  },
+  {
+    cle: 'presencesNonEtablies',
+    predicat: (o) => o.presence?.vivant === null,
+    cleDuCompte: 'presencesNonEtablies',
+    // ⚠️ LA PHRASE DIT CE QU'ELLE EST, ET CE QU'ELLE N'EST PAS. « on n'a pas pu établir » se
+    // relit en « ils sont partis » au bout de trois lectures si on ne l'en empêche pas — c'est
+    // la même précaution que `PHRASE_DE_LINDICE`, sur un autre fait.
+    phrase: (n) =>
+      ` ${n} chantier(s) dont on N’A PAS PU ÉTABLIR s’ils ont un terminal vivant — des sessions ` +
+      'herdr se sont tues. Ce n’est PAS « leur terminal est mort ».',
+  },
+];
+
+/**
+ * LES COMPTES DE STRUCTURE — le DÉNOMINATEUR de la garde de complétude du compte.
+ *
+ * ⚠️ ÉPINGLÉ, ET C'EST DÉLIBÉRÉ. Cette liste dit quels chiffres du compte ne sont PAS des
+ * signaux ; la garde exige alors que tout autre chiffre soit déclaré à l'un des deux manifestes.
+ * C'est ce qui rend impossible de recalculer un `presencesNonEtablies` sans le rendre.
+ *
+ * 🔴 ET C'EST LE CRITÈRE D'ARRÊT QUI DÉCIDE DE S'ARRÊTER ICI : élargir cette liste pour taire un
+ * signal est un geste VISIBLE en revue — le diff dit « j'ai ajouté un nom au dénominateur
+ * épinglé », et personne ne signe ça sans le justifier. Ajouter un nom à une liste d'exceptions
+ * non épinglée aurait été invisible, et il aurait fallu garder un étage de plus.
+ */
+export const COMPTES_DE_STRUCTURE = [
+  'orchestrateurs',
+  'horsHierarchie',
+  'epicsLus',
+  'chantiersNonMesures',
+  'chantiersNonEtablis',
+  'panesAmbigus',
+  'entreesComparees',
+];
+
+/** ② LIGNES → COMPTE — dérivée, comme celle du lecteur. */
+export function compterLesSignauxDeLigne(orchestrateurs) {
+  const compte = {};
+  for (const s of SIGNAUX_DE_LA_LIGNE) {
+    compte[s.cleDuCompte] = orchestrateurs.filter((o) => s.predicat(o)).length;
+  }
+  return compte;
+}
+
+/** ③ COMPTE → RÉSUMÉ — dérivée, et muette quand le signal n'a pas servi. */
+export function phrasesDesSignauxDeLigne(compte) {
+  return SIGNAUX_DE_LA_LIGNE.map((s) => (compte?.[s.cleDuCompte] ? s.phrase(compte[s.cleDuCompte]) : '')).join('');
+}
+
+/**
  * LE LECTEUR DE CHANTIER RÉEL — projet → epics → stories, en trois appels par chantier.
  *
  * ⚠️ LA STRUCTURE NE SE DEVINE PAS, ELLE SE LIT : `projects` (ou `demands`/`deliveries` selon
@@ -1157,10 +1246,12 @@ export async function laVueDuParc({
     chantiersNonMesures: orchestrateurs.filter((o) => o.chantier.mesure === 'non mesurée').length,
     chantiersNonEtablis: orchestrateurs.filter((o) => o.chantier.mesure === 'non établi').length,
     panesAmbigus: panesAmbigus.length,
-    // Ce que ce lot rend visible, chiffré : les chantiers que la vue d'hier perdait entièrement.
-    chantiersSansTerminal: orchestrateurs.filter((o) => o.presence?.vivant !== true).length,
-    // ⚠️ ET CELUI-CI SE COMPTE À PART : « on n'a pas pu établir » n'est pas « il est parti ».
-    presencesNonEtablies: orchestrateurs.filter((o) => o.presence?.vivant === null).length,
+    // 🔴 LES CHIFFRES DE LIGNE SONT DÉRIVÉS EUX AUSSI. Écrits à la main ici, ils ont produit le
+    // défaut le plus grave du lot : `chantiersSansTerminal` comptait `vivant !== true`, donc il
+    // FONDAIT « mesuré, aucun terminal » et « on n'a pas pu établir » — et le résumé affirmait
+    // une mort qu'on n'avait pas constatée. Et `presencesNonEtablies`, le signal qui aurait dit
+    // le vrai, était calculé et n'atteignait NI le résumé NI le texte.
+    ...compterLesSignauxDeLigne(orchestrateurs),
     // 🔴 LES QUATRE AGRÉGATIONS SONT DÉRIVÉES DU MANIFESTE. Écrites à la main, elles étaient
     // la SECONDE des quatre jointures qu'un signal neuf devait franchir — et celle où il
     // mourait le plus silencieusement : un signal recopié dans la vue mais jamais agrégé
@@ -1216,10 +1307,9 @@ function resumeDeLaVue(compte, recensement, registreDesLieux = null) {
       ? ` ⚠️ LES LIEUX N’ONT PAS ÉTÉ LUS (${lieuxMuets.raison}) : un chantier dont plus aucun ` +
         'terminal ne porte le mandat est donc ABSENT de cette vue, et rien d’autre ne le dirait.'
       : '') +
-    (compte.chantiersSansTerminal
-      ? ` ${compte.chantiersSansTerminal} chantier(s) n’ont AUCUN terminal vivant : ils sont ici ` +
-        'parce que leur lieu versionné les porte, pas parce qu’un pane les a montrés.'
-      : '')
+    // 🔴 DÉRIVÉES, comme celles du lecteur — et il y en a maintenant DEUX là où une seule phrase
+    // à la main confondait les deux états. Voir `SIGNAUX_DE_LA_LIGNE`.
+    phrasesDesSignauxDeLigne(compte)
   );
 }
 
