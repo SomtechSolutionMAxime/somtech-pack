@@ -37,7 +37,7 @@ import { Veilleur } from '../src/veilleur.js';
 import { unRecensement } from '../src/recensement.js';
 import { roleDuLieu } from '../src/lieu-agent.js';
 import { role as roleDe } from '../src/roles.js';
-import { laVueDuParc, rendreLaVue, ecrireLaVue, GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
+import { laVueDuParc, rendreLaVue, ecrireLaVue, GESTE_DE_LA_VUE, lecteurDeChantier } from '../src/vue-du-parc.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -605,5 +605,118 @@ test('la branche « vue » du `bin` ne fait que DÉLÉGUER — aucune décision 
     ['const vue = await parler({ geste: GESTE_DE_LA_VUE });', 'process.stdout.write(ecrireLaVue(vue, args));'],
     'la branche « vue » du bin doit rester EXACTEMENT ces deux lignes de délégation — cet ' +
       'endroit est hors d’atteinte de tout banc, donc rien qui décide ne doit y vivre'
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 LE JUMEAU DU SIGNAL — trouvé par une passe de revue, un cycle APRÈS son frère
+//
+// `lecteurDeChantier` rend DEUX signaux sur les filtres, et son commentaire les nomme tous les
+// deux : « DEUX PANNES DE FILTRE, PAS UNE ». `epicsEcartes` dit qu'on a reçu TROP (des epics
+// d'autres chantiers, retamisés ici) ; `epicsPlafonnes` dit qu'on a peut-être reçu TROP PEU
+// (la page était pleine, il en manque peut-être).
+//
+// Le premier a été câblé jusqu'au texte. **Le second est mort à la même jointure, dans la même
+// expression, à une ligne près** — et il y est resté un cycle entier, alors que le commentaire
+// du correctif de son frère le nommait.
+//
+// ⚠️ C'est « une garde posée sur un fichier ne garde pas sa famille », appliqué à un champ :
+// on ferme le défaut QU'ON VIENT DE VOIR, pas le défaut POSSIBLE. Ce banc garde donc les DEUX,
+// et le dernier banc du fichier garde la FAMILLE elle-même.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('une liste d’epics PLAFONNÉE traverse jusqu’au texte — sinon la vue montre un parc complet là où il en manque', async () => {
+  const recensement = {
+    quand: 'T',
+    agents: [{
+      pane: 'w1:p1', session: 's', statut: 'idle',
+      role: { mesure: 'établi', nom: 'orchestrateur' },
+      nom: { mesure: 'lu', valeur: 'kamouraska' },
+      mandat: 'p-20260822-0001', lieu: '/x',
+    }],
+  };
+  const vue = await laVueDuParc({
+    recensement,
+    lireChantier: async (code) => ({ code, epics: [{ code: 'E-1', stories: [] }], epicsEcartes: 0, epicsPlafonnes: true }),
+  });
+
+  assert.equal(vue.orchestrateurs[0].chantier.epicsPlafonnes, true, 'la vue PORTE le plafond');
+  assert.equal(vue.compte.chantiersPlafonnes, 1, 'le compte le totalise');
+  assert.match(vue.resume, /PLAFONNÉE/, 'et le résumé le DIT — c’est là que le dirigeant le lit');
+  assert.match(vue.resume, /il en manque peut-être/, 'avec ce que ça signifie, pas seulement le mot');
+});
+
+test('les DEUX pannes de filtre se disent SÉPARÉMENT — « écarté » et « plafonné » appellent des gestes opposés', async () => {
+  const recensement = {
+    quand: 'T',
+    agents: [{
+      pane: 'w1:p1', session: 's', statut: 'idle',
+      role: { mesure: 'établi', nom: 'orchestrateur' },
+      nom: { mesure: 'lu', valeur: 'kamouraska' },
+      mandat: 'p-20260822-0001', lieu: '/x',
+    }],
+  };
+  const vueDe = (o) => laVueDuParc({ recensement, lireChantier: async (code) => ({ code, epics: [], ...o }) });
+
+  // Écarté seul : on a reçu trop, on a retamisé. Rien à dire du plafond.
+  const ecarte = await vueDe({ epicsEcartes: 2, epicsPlafonnes: false });
+  assert.match(ecarte.resume, /écarté/);
+  assert.ok(!/PLAFONNÉE/.test(ecarte.resume), 'aucun plafond invoqué quand il n’a pas joué');
+
+  // Plafonné seul : on a peut-être reçu trop peu. Rien à dire des intrus.
+  const plafonne = await vueDe({ epicsEcartes: 0, epicsPlafonnes: true });
+  assert.match(plafonne.resume, /PLAFONNÉE/);
+  assert.ok(!/écarté/.test(plafonne.resume), 'aucun écart invoqué quand rien n’a été écarté');
+
+  // ⚠️ ET AUCUN DES DEUX QUAND TOUT VA BIEN : un signal répété à chaque ligne cesse d'être un
+  // signal. C'est le faux positif symétrique, sur la même frontière.
+  const sain = await vueDe({ epicsEcartes: 0, epicsPlafonnes: false });
+  assert.ok(!/écarté|PLAFONNÉE/.test(sain.resume), 'rien n’est dit quand rien n’a mal tourné');
+});
+
+test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue — la garde de la FAMILLE, pas d’un champ', async () => {
+  // 🔴 CE BANC EXISTE PARCE QUE LES DEUX PRÉCÉDENTS NE SUFFISENT PAS. Ils gardent deux champs
+  // NOMMÉS ; ils ne diraient rien d'un troisième signal ajouté demain à `lecteurDeChantier` et
+  // oublié à la jointure — exactement ce qui vient d'arriver à `epicsPlafonnes`, nommé dans le
+  // commentaire du correctif de son frère et laissé en arrière un cycle entier.
+  //
+  // ⚠️ PREMIÈRE VERSION DE CE BANC : VACANTE, et sa mutation l'a prouvé. Elle comparait la vue
+  // à un objet `renduDuLecteur` ÉCRIT À LA MAIN dans le test — donc ajouter un signal neuf au
+  // vrai lecteur ne changeait rien, et la garde restait verte. Une garde qui n'examine que ce
+  // qu'elle fabrique elle-même ne garde rien. Elle interroge maintenant le VRAI
+  // `lecteurDeChantier`, avec un transport de banc, et compare ce QU'IL REND à ce que la vue
+  // en porte.
+  const appeler = async (nom) =>
+    nom === 'projects'
+      ? { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'in_progress' }] }
+      : nom === 'epics'
+        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1' }] }
+        : { tickets: [] };
+
+  const lire = lecteurDeChantier({ appeler });
+  const renduDuLecteur = await lire('P-20260822-0001');
+
+  const recensement = {
+    quand: 'T',
+    agents: [{
+      pane: 'w1:p1', session: 's', statut: 'idle',
+      role: { mesure: 'établi', nom: 'orchestrateur' },
+      nom: { mesure: 'lu', valeur: 'kamouraska' },
+      mandat: 'p-20260822-0001', lieu: '/x',
+    }],
+  };
+  const vue = await laVueDuParc({ recensement, lireChantier: lire });
+  const chantier = vue.orchestrateurs[0].chantier;
+
+  // `epics` est rendu à part (c'est l'arbre lui-même), `code` est celui du mandat : tout autre
+  // signal que le lecteur produit doit se retrouver sur le chantier de la vue.
+  const attendus = Object.keys(renduDuLecteur).filter((k) => k !== 'epics' && k !== 'code');
+  const perdus = attendus.filter((k) => !(k in chantier));
+
+  assert.ok(attendus.length >= 4, 'préalable : le lecteur rend bien plusieurs signaux à garder');
+  assert.deepEqual(
+    perdus,
+    [],
+    'ces signaux du lecteur de chantier meurent à la jointure : calculés, jamais rendus'
   );
 });

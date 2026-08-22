@@ -422,6 +422,15 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
         // l'endroit où il compte : la ligne que lit le dirigeant. Deux étages justes, et la
         // jointure entre eux gardée par personne — la forme même que ce lot a payée deux fois.
         epicsEcartes: chantier?.epicsEcartes ?? 0,
+        // 🔴 LE JUMEAU, ET IL EST RESTÉ EN ARRIÈRE UN CYCLE ENTIER. Le commentaire ci-dessus a
+        // été écrit pour `epicsEcartes` en nommant DEUX pannes de filtre — les intrus et les
+        // manquants — et seul le premier a traversé. `epicsPlafonnes` mourait exactement à la
+        // même jointure, dans la même expression, à une ligne près.
+        //
+        // ⚠️ C'est « une garde posée sur un fichier ne garde pas sa famille », appliqué à un
+        // champ : j'avais corrigé le défaut QUE JE VENAIS DE VOIR, pas le défaut POSSIBLE — et
+        // son jumeau était nommé dans le commentaire du correctif lui-même.
+        epicsPlafonnes: chantier?.epicsPlafonnes ?? false,
       },
       epics: epicsLus.map((e) => {
         const codeEpic = codeDuMandat(e?.code ?? '');
@@ -506,6 +515,9 @@ export async function laVueDuParc({ recensement = null, lireChantier = null, jou
     // pas nul, le ServiceDesk a rendu des epics d'autres chantiers et c'est NOUS qui les avons
     // écartés — le lecteur doit savoir que la garde a servi, sinon personne n'ira voir pourquoi.
     epicsEcartes: orchestrateurs.reduce((n, o) => n + (o.chantier.epicsEcartes ?? 0), 0),
+    // Le plafond se compte en CHANTIERS touchés, pas en epics : on ne sait pas combien il en
+    // manque — c'est justement ce que « plafonné » veut dire.
+    chantiersPlafonnes: orchestrateurs.filter((o) => o.chantier.epicsPlafonnes).length,
     // ⚠️ LE DÉNOMINATEUR VOYAGE AVEC LE COMPTE. Voir plus haut : un nombre d'ambiguïtés sans
     // l'ensemble sur lequel il a été compté n'est pas vérifiable, et se compare à tort à un
     // autre nombre compté ailleurs.
@@ -542,6 +554,14 @@ function resumeDeLaVue(compte, recensement) {
     (compte.epicsEcartes
       ? ` ⚠️ ${compte.epicsEcartes} epic(s) écarté(s) : le ServiceDesk a rendu des epics d’autres ` +
         'chantiers malgré son filtre — ils ont été retamisés ici.'
+      : '') +
+    // ⚠️ DEUX PANNES, DEUX PHRASES, ET AUCUNE QUAND IL N'Y A RIEN À DIRE. « Écarté » veut dire
+    // qu'on a reçu TROP et retamisé ; « plafonné » veut dire qu'on a peut-être reçu TROP PEU et
+    // qu'on ne le saura pas d'ici. Les fondre ferait lire une panne pour l'autre, et elles
+    // appellent des gestes opposés.
+    (compte.chantiersPlafonnes
+      ? ` ⚠️ ${compte.chantiersPlafonnes} chantier(s) dont la liste d’epics est PLAFONNÉE : il en ` +
+        'manque peut-être, et ce compte-là est un plancher de plus.'
       : '') +
     (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '')
   );
