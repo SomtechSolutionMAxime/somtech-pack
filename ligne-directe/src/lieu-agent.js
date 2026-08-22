@@ -176,8 +176,13 @@ function leRole(libelle) {
  * « ce lieu ne porte pas le métier » alors qu'il le porte peut-être entièrement.
  *
  * `ENOENT` garde donc l'ancien comportement, mot pour mot. Tout le reste — `EACCES`, `EISDIR`,
- * `EIO`, un lien cassé — devient un REFUS nommé, que l'appelant est libre de rendre ou de
- * réduire à « aucun rôle » (c'est ce que fait `roleDuLieu`, dont le contrat ne bouge pas).
+ * `EIO` — devient un REFUS nommé, que l'appelant est libre de rendre ou de réduire à « aucun
+ * rôle » (c'est ce que fait `roleDuLieu`, dont le contrat ne bouge pas).
+ *
+ * ⚠️ CORRECTION : cette phrase rangeait « un lien cassé » parmi les refus. MESURÉ, c'est faux —
+ * un lien symbolique cassé est intercepté EN AMONT par `fichierPresent` (`ENOENT` sur `statSync`)
+ * et rend `null`, jamais un refus. Une docstring qui promet un comportement absent est une dette
+ * du même genre que le code qu'elle décrit : quelqu'un s'y fiera plutôt que de mesurer.
  */
 function premiereLigne(chemin) {
   try {

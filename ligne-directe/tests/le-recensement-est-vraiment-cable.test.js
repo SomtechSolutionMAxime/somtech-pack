@@ -445,6 +445,67 @@ test('herdr ENTIÈREMENT injoignable : le recensement REFUSE en le disant, il ne
   assert.notDeepEqual(rendu.agents, [], 'un inventaire refusé ne rend jamais une liste VIDE');
 });
 
+test('le câblage RÉEL LIT les écrans — sans quoi tout le parc se dirait « rien en vol »', async () => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE DE FOND, ET C'EST LE MOTIF QUE CE LOT A DÉJÀ FERMÉ
+  // DEUX FOIS : deux étages justes dont la JOINTURE n'est pas gardée. `travailEnVol` est éprouvée
+  // unitairement ; couper `lireEcran` dans le veilleur faisait basculer TOUT le parc en
+  // « non mesurée » sans qu'un seul des 825 essais rougisse.
+  //
+  // ⚠️ ET CE CHAMP MÉRITE UNE GARDE PLUS QUE LES AUTRES, parce qu'il porte un consentement : le
+  // registre propose une remise à jour (`/clear`) qui EFFACE le fil d'un agent, et l'agent décide
+  // sur ce qu'on lui dit du travail en vol. Un « rien en vol » faux fait consentir à tort.
+  //
+  // ⚠️ CE QUE CE BANC NE PRÉTEND PAS : que les repères du rendu soient à jour. Une revue les a
+  // crus morts (0 occurrence sur 39 écrans) ; remesuré sur les panes que herdr dit ACTIFS,
+  // « esc to interrupt » est bien vivant — l'échantillon avait été pris à un instant où personne
+  // ne travaillait. AUCUN VERDICT TIRÉ D'UNE ABSENCE À L'ÉCRAN NE TIENT, y compris celui-là.
+  const p = posteHerdr(bac, [], 'ecrans');
+  const depot = join(bac, 'depot-ecrans');
+  const lieu = join(depot, '.orchestrateur', 'd-20260822-0004');
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  writeFileSync(join(lieu, 'CLAUDE.md'), "# Tu es l'orchestrateur de ce chantier\n\nmétier.\n");
+  writeFileSync(join(lieu, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n\nrien.\n');
+  writeFileSync(join(lieu, '.mcp.json'), '{}\n');
+  writeFileSync(join(lieu, '.claude', 'settings.json'), '{}\n');
+
+  // Un écran qui porte le repère du travail en vol — celui de la version mesurée.
+  p.pane('w1:p1', {
+    boite: '',
+    horsBoite: '⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← 1 agent',
+  });
+  p.panes([{ pane_id: 'w1:p1', foreground_cwd: lieu }]);
+
+  const v = veilleurNu('ecrans');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  try {
+    process.env.PATH = p.path;
+    process.env.FAUX_HERDR_ETAT = p.etat;
+    process.env.HOME = join(bac, 'foyer-jetable-ecrans');
+    process.env.HERDR_SOCKET_PATH = join(p.etat, 'socket');
+    rendu = await v.recensementDuPoste();
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+    delete process.env.FAUX_HERDR_ETAT;
+  }
+
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  const enVol = rendu.agents[0].travailEnVol;
+  // ⚠️ LA JOINTURE : l'écran doit avoir été LU, pas seulement le champ présent. Un `lireEcran`
+  // décâblé rendrait `mesure: 'non mesurée'` — un « je ne sais pas » qui a l'air prudent et qui
+  // masque que la sonde n'est plus branchée.
+  assert.equal(
+    enVol.mesure,
+    'lue',
+    `le câblage doit LIRE l’écran, pas rendre « non mesurée » (rendu : ${JSON.stringify(enVol)})`,
+  );
+  assert.equal(enVol.enVol, true, 'et le repère de travail en vol doit être RECONNU dans ce que herdr rend');
+  assert.equal(enVol.occupe, true);
+});
+
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
   // ⚠️ CE BANC EXISTE PARCE QU'UNE MUTATION A SURVÉCU. `arreter()` retient la ronde de deux
   // façons : il pose `this.arrete`, et il libère le minuteur. Retirer l'une OU l'autre ne fait

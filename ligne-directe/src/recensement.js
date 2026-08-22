@@ -521,8 +521,26 @@ export async function unRecensement({
     // La déclaration, c'est donc l'un OU l'autre — mais TOUJOURS confirmée par le statut, jamais
     // l'absence seule : `agent_status: 'unknown'` est ce que herdr pose quand il sait qu'il n'y a
     // personne (mesuré : les 3 sans clé l'ont, les 94 autres portent done/idle/working/blocked).
+    //
+    // ⚠️ ET `agent_session` PASSE AVANT TOUT — REJET de revue de fond, et c'est le faux négatif
+    // SYMÉTRIQUE de celui que le critère ci-dessus vient de fermer. `agent_session` est le
+    // discriminant que ce dépôt a établi il y a deux jours (`herdr.js` : « la marque qu'une
+    // session d'agent habite ce pane, QUE LE REGISTRE L'AIT INSCRITE OU NON ») et je ne le
+    // consultais pas. Or T-20260820-0022 a mesuré exactement la forme qui tombait dans le
+    // nouveau critère : toute session née après le 18 août 14 h 52 sortait avec `agent_session`
+    // PRÉSENT, aucune clé `agent`, et `agent_status: "unknown"` — parce que herdr ignorait son
+    // statut, pas parce qu'il n'y avait personne. Un agent vivant était donc écarté du registre
+    // ET compté parmi les panes qui ont DÉCLARÉ n'en porter aucun : le registre affirmait une
+    // mesure fausse sur la population même qu'il existe pour trouver.
+    //
+    // Mesuré sur le poste le 2026-08-22 : les 94 panes qui portent un agent ont TOUS
+    // `agent_session`, les 3 terminaux ne l'ont pas. Une session qui habite le pane suffit donc
+    // à interdire de le déclarer vide, quel que soit ce que le registre en dit.
     const sansAgentDeclare =
-      p && (!Object.hasOwn(p, 'agent') || !p.agent) && p.agent_status === 'unknown';
+      p &&
+      !p.agent_session &&
+      (!Object.hasOwn(p, 'agent') || !p.agent) &&
+      p.agent_status === 'unknown';
     if (sansAgentDeclare) {
       panesSansAgent += 1;
       continue;
@@ -531,7 +549,10 @@ export async function unRecensement({
     // n'est PAS `unknown` n'a rien déclaré du tout : l'écarter le ferait taire, le recenser
     // affirmerait un agent. On le recense — ne jamais omettre reste la règle — et on le NOMME
     // ici, pour que « 97 agents » ne se lise pas comme « 97 agents certains ».
-    if (p && !Object.hasOwn(p, 'agent')) {
+    // ⚠️ ET UNE SESSION QUI HABITE LE PANE N'EST PAS UN DOUTE. `agent_session` est une PREUVE de
+    // présence — le registre peut ignorer le statut sans que l'occupation soit incertaine.
+    // Compter ces panes comme « indécidables » ferait porter au rendu un doute qu'on n'a pas.
+    if (p && !Object.hasOwn(p, 'agent') && !p.agent_session) {
       panesIndecidables.push({
         pane: p?.pane_id ?? p?.pane ?? null,
         pourquoi: `la source n’a pas dit si ce pane porte un agent (statut « ${p.agent_status ?? 'absent'} ») — il est recensé, sans preuve`,
@@ -631,10 +652,25 @@ export async function unRecensement({
                 `le lieu « ${lieu} » ne s’est pas laissé lire : on n’a pas pu tenter de mesurer son ` +
                 'métier. Ce n’est pas le métier qui a refusé — c’est le lieu, et il faut refaire la mesure',
             }
-          : {
-              mesure: 'sans objet',
-              pourquoi: 'aucun lieu de rôle ne porte cet agent : il n’y a pas de métier à mesurer',
-            };
+          : lieu
+            ? {
+                // ⚠️ UN LIEU QUI EXISTE NE SE DIT PAS « IL N'Y A PAS DE LIEU » — REJET de revue de
+                // fond. Le refactor à quatre états avait laissé UNE SEULE prose pour les deux cas
+                // de « non établi » : celui sans lieu du tout, et le LIEU À DEMI POSÉ, où `lieu`
+                // est bien là. Ce second cas est T-20260819-0070, que ce module cite comme sa
+                // motivation — et il recevait « aucun lieu de rôle ne porte cet agent », c'est-à-
+                // dire « rien à faire », au lieu de « le lieu est là, va finir de le poser ». Sur
+                // le parc réel, 78 agents portent légitimement la première phrase : celui qui a un
+                // lieu s'y noyait, sous les mêmes mots.
+                mesure: 'sans objet',
+                pourquoi:
+                  `le lieu « ${lieu} » porte le dossier d’un rôle sans en porter le métier — il n’y a ` +
+                  'pas de métier à mesurer tant qu’il n’est pas achevé. Le lieu EXISTE : il est à finir de poser',
+              }
+            : {
+                mesure: 'sans objet',
+                pourquoi: 'aucun lieu de rôle ne porte cet agent : il n’y a pas de métier à mesurer',
+              };
 
     // ⚠️ `idle` NE DIT RIEN DU MANDAT. Un chantier clos et une session au repos rendent tous les
     // deux `idle` — c'est écrit ici parce que c'est ici qu'on serait tenté de les confondre.
@@ -895,9 +931,15 @@ export async function unRecensement({
     // ⚠️ LA BORNE VOYAGE AVEC LE CHIFFRE, dans le rendu — pas dans un compte rendu à côté.
     // C'est elle qui interdit de lire « sept orchestrateurs » comme « il y en a sept ».
     borne: {
-      nature: 'plancher',
-      phrase:
-        `AU MOINS ${agents.length} agent(s) — ce compte est un PLANCHER, jamais un total : chaque ` +
+      // ⚠️ « PLANCHER » N'EST PLUS INCONDITIONNEL — relevé en revue de fond, et c'est juste. Un
+      // pane INDÉCIDABLE peut être un terminal : tant qu'il y en a, le compte peut aussi
+      // SUR-compter, et affirmer « plancher » serait affirmer un sens qu'on n'a pas mesuré.
+      nature: panesIndecidables.length ? 'incertaine' : 'plancher',
+      phrase: panesIndecidables.length
+        ? `${agents.length} agent(s) — et ce compte n’est PAS un plancher sûr : ${panesIndecidables.length} pane(s) ` +
+          'n’ont rien déclaré de leur agent, donc il peut aussi SUR-compter. Les deux sens sont ouverts, ' +
+          'et c’est pourquoi ils sont nommés un à un dans « panesIndecidables ».'
+        : `AU MOINS ${agents.length} agent(s) — ce compte est un PLANCHER, jamais un total : chaque ` +
         'amélioration de l’instrument en a trouvé davantage sur un parc inchangé (3, puis 5, puis ' +
         '7 dans la même matinée du 2026-08-19 ; 13 puis tout le poste le 2026-08-22, en ouvrant ' +
         'le registre aux autres rôles). Rien ne prouve qu’on a fini de chercher.',
@@ -941,9 +983,18 @@ export async function unRecensement({
       (anonymes ? ` ; ${anonymes} ANONYME(s), inadressable(s)` : '') +
       (nomsNonMesures ? ` ; ${nomsNonMesures} nom(s) NON MESURÉ(s) — ce n’est pas « sans nom »` : '') +
       '.' +
+      // ⚠️ LES INDÉCIDABLES ATTEIGNENT LA PHRASE, PAS SEULEMENT LA BORNE — relevé en revue de
+      // fond. Vivant dans `borne` seule, ce compte n'était lu par personne, et « AU MOINS N »
+      // continuait d'annoncer un plancher alors que N pouvait aussi sur-compter.
+      (panesIndecidables.length
+        ? ` ⚠️ ${panesIndecidables.length} pane(s) n’ont rien déclaré de leur agent : ce compte peut ` +
+          'aussi SUR-compter — il n’est pas un plancher sûr.'
+        : '') +
       (sessionsRefusees.length
         ? ` ⚠️ ${sessionsRefusees.length} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.`
-        : ' (plancher, pas un total)'),
+        : panesIndecidables.length
+          ? ''
+          : ' (plancher, pas un total)'),
     regle: REGLE_DE_CONDUITE,
   };
 }
