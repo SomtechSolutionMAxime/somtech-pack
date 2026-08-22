@@ -22,12 +22,12 @@ import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
-import { roleDuLieu } from './lieu-agent.js';
+import { roleDuLieu, roleDuLieuOuRefus } from './lieu-agent.js';
 import { unTourDeBalayage } from './balayage.js';
 import {
   CADENCE_DU_RECENSEMENT_MS,
   DELAI_MAX_DUN_TOUR_MS,
-  referenceDuMetier,
+  referencesDesRoles,
   unRecensement,
 } from './recensement.js';
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
@@ -1768,15 +1768,43 @@ export class Veilleur {
       // La clé porte la session, comme partout ailleurs ici : sans elle, deux panes homonymes de
       // deux sessions différentes se prêteraient leurs noms — un nom d'affichage faux est pire
       // qu'un nom absent, parce qu'on lui parle.
-      nomsConnus = new Map(
-        (await herdr.agents())
-          .filter((a) => a.name)
-          .map((a) => [`${a.herdr_socket ?? ''}\u0000${a.pane_id}`, a.name])
-      );
-    } catch {
-      // ⚠️ UN ENRICHISSEMENT QUI REFUSE N'EST PAS UNE PANNE D'INVENTAIRE. On perd des noms
-      // d'affichage, pas des agents — et le rendu porte déjà `mandat`, qui identifie.
-      nomsConnus = null;
+      //
+      // ⚠️ ON N'ÉCARTE PLUS LES SANS-NOM, ET C'EST LE CŒUR DE T-20260822-0011. Un `.filter(a =>
+      // a.name)` faisait disparaître de cette carte les agents que le registre avait POURTANT
+      // VUS sans nom — les rendant indiscernables de ceux qu'il n'avait pas vus du tout. Les
+      // deux cas devenaient un `null` nu, alors qu'ils appellent des gestes opposés : faire se
+      // nommer l'agent d'un côté, refaire la mesure de l'autre. Mesuré le 2026-08-22 : 35 des
+      // 94 agents du poste sont dans le premier cas, et zéro dans le second ce jour-là.
+      nomsConnus = {
+        mesure: 'lue',
+        noms: new Map(
+          (await herdr.agents()).map((a) => [`${a.herdr_socket ?? ''}\u0000${a.pane_id}`, a.name ?? null])
+        ),
+      };
+    } catch (err) {
+      // ⚠️ UN ENRICHISSEMENT QUI REFUSE N'EST PAS UNE PANNE D'INVENTAIRE. On perd des noms, pas
+      // des agents — et le rendu porte déjà `mandat`, qui identifie.
+      //
+      // ⚠️ CORRECTION D'UN RÉCIT FAUX, relevée en revue portail. Cette ligne portait : « rendre
+      // `null` ferait passer *je n'ai pas pu lire les noms* pour *personne n'a de nom* ». MESURÉ :
+      // ce basculement n'a pas lieu. `nomDeLAgent` rend `mesure: 'refusée'` sur `null` COMME sur
+      // `{ mesure: 'refusée' }` — le compte et le résumé sont identiques. Ce qui se perd est plus
+      // petit, et c'est la CAUSE : la raison rendue devient « aucun lecteur de noms ne m'a été
+      // donné » au lieu de nommer herdr et son erreur. C'est réel — un diagnostic qui accuse le
+      // câblage au lieu de la source envoie chercher au mauvais endroit — mais ce n'est pas ce
+      // que la phrase annonçait. Un motif faux qui garde une conduite juste finit par la faire
+      // tomber avec lui le jour où quelqu'un le vérifie.
+      //
+      // ⚠️ ET CETTE BRANCHE EST PRESQUE INATTEIGNABLE — mesuré, et dit plutôt que gardé par un
+      // double. `herdr.agents()` sans socket AVALE l'échec de chaque session, délibérément (voir
+      // `herdr.js` : se contenter d'une session ferait conclure « cet agent est mort » pour tout
+      // agent vivant ailleurs). Une source de noms en panne rend donc `[]`, pas une exception, et
+      // le recensement le rend correctement par un AUTRE chemin — « le registre n'a pas vu ce
+      // pane », qui est un refus, jamais un « il n'a pas de nom ». C'est ce chemin-là qui est
+      // gardé (`le-recensement-est-vraiment-cable`). Ce `catch` n'est atteint que si herdr est
+      // ENTIÈREMENT injoignable — cas où `panes()` refuse aussi et où aucune entrée n'est rendue,
+      // donc où cette `raison` n'est lue par personne. Une ceinture, et elle se déclare.
+      nomsConnus = { mesure: 'refusée', raison: `herdr agents() a refusé (${err?.message || err})` };
     }
     // ⚠️ L'ÉTAT DU MANDAT VIENT DU SERVICEDESK, PAS DE herdr — et sans clé, on ne devine pas.
     // `accesServiceDesk` rend `null` quand rien ne permet de joindre le service ; `etatDuMandat`
@@ -1786,8 +1814,17 @@ export class Veilleur {
     const acces = accesServiceDesk();
     return unRecensement({
       panes: () => herdr.panes(),
-      roleDuLieu,
-      reference: referenceDuMetier({}),
+      // ⚠️ `roleDuLieuOuRefus`, PAS `roleDuLieu` — et c'est le câblage entier de l'état
+      // « refusée ». `roleDuLieu` rend `null` aussi bien pour « aucun rôle » que pour « je n'ai
+      // pas pu lire » : câblé ici, il rendait le troisième état du registre STRUCTURELLEMENT
+      // inatteignable, et un lieu complet mais illisible était rendu « lieu à demi posé » —
+      // un diagnostic faux, qui envoie re-poser un lieu qui existe. Gardé par
+      // `le-recensement-est-vraiment-cable`, sur un VRAI lieu en « chmod 000 ».
+      roleDuLieu: roleDuLieuOuRefus,
+      // ⚠️ UNE RÉFÉRENCE PAR RÔLE. Une référence unique ferait comparer le métier d'un
+      // représentant au gabarit d'orchestrateur : deux textes sans aucune raison de concorder,
+      // donc trois représentants « en retard » tous les jours, et une colonne qu'on n'ouvre plus.
+      references: referencesDesRoles({}),
       lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
       etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
       nomsConnus,

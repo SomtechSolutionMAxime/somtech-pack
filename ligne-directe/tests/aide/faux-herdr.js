@@ -172,6 +172,45 @@ dit({ error: { code: 'unsupported', message: a.join(' ') } });
  * `agents` / `vivant` restent des doubles simples et assumés : l'inventaire des sessions ne
  * porte aucune preuve, et le faire passer par le disque n'apprendrait rien à personne.
  */
+/**
+ * LA FORME QUE `herdr pane list` REND VRAIMENT — et pourquoi ce double la porte désormais.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ CE DOUBLE ÉTAIT NON CONFORME, ET C'ÉTAIT LA RACINE DE DEUX DÉFAUTS À LA FOIS.
+ *
+ * Il rendait `{ agent_status: 'idle', ...p }` — donc, pour un banc qui pose seulement
+ * `{ pane_id, foreground_cwd }` : NI clé `agent`, NI `agent_session`, et un statut `idle`.
+ * Or `herdr pane list` ne produit JAMAIS cette combinaison (mesuré, 97 panes : 94 portent
+ * `agent` + `agent_session` + un statut connu, 3 n'ont ni clé ni session et portent `unknown`).
+ *
+ * Ce que ça coûtait, mesuré :
+ *   • tous les panes des bancs câblés devenaient INDÉCIDABLES, donc `borne.nature` valait
+ *     `incertaine` dans des essais qui croyaient éprouver un parc ordinaire ;
+ *   • et un banc a fini par EXIGER que le journal annonce un plancher sur un rendu que la borne
+ *     refusait de qualifier ainsi — l'assertion verrouillait la contradiction qu'elle gardait.
+ *   • enfin, `agent: null` — la forme canonique interdite, celle qui a coûté un rejet — pouvait
+ *     être injectée ici sans qu'un seul des 1356 essais rougisse.
+ *
+ * ⚠️ LE DOUBLE EST PLUS PAUVRE QUE LE RÉEL, JAMAIS PLUS RICHE. Il ne porte que ce que la source
+ * porte, et un banc qui veut un TERMINAL le demande explicitement, par la seule forme que herdr
+ * lui donne : `agent_status: 'unknown'` sans clé `agent`.
+ */
+function formeReelleDunPane(p) {
+  const cwd = p.cwd ?? p.foreground_cwd;
+  // Un terminal, tel que herdr le rend : pas de clé `agent`, pas de session, statut inconnu.
+  if (p.agent_status === 'unknown' && !Object.hasOwn(p, 'agent') && !p.agent_session) {
+    return { ...p, agent_status: 'unknown', cwd };
+  }
+  // Un pane d'agent : les trois marques ensemble, comme la source les rend toujours.
+  return {
+    agent: 'claude',
+    agent_session: { agent: 'claude', kind: 'id', value: `session-${p.pane_id}` },
+    agent_status: 'idle',
+    ...p,
+    cwd,
+  };
+}
+
 export function posteHerdr(racine, agents, nom = 'herdr') {
   const etat = join(racine, `etat-${nom}`);
   const bin = join(racine, `bin-${nom}`);
@@ -201,7 +240,7 @@ export function posteHerdr(racine, agents, nom = 'herdr') {
     panes(liste, session = null) {
       writeFileSync(
         join(etat, session ? `panes-${session}.json` : 'panes.json'),
-        JSON.stringify(liste.map((p) => ({ agent_status: 'idle', ...p, cwd: p.cwd ?? p.foreground_cwd })))
+        JSON.stringify(liste.map(formeReelleDunPane))
       );
       return this;
     },

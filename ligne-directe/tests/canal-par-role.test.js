@@ -25,7 +25,7 @@
 
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -225,6 +225,149 @@ test('RÔLE — les DEUX en-têtes doivent concorder, pas un seul', async () => 
     'un lieu qui emprunte à deux rôles n’en établit aucun'
   );
   assert.equal(roleDuLieu(lieu({ claude: METIER_REPR.claude, contexte: METIER_ORCH.contexte })), null);
+});
+
+test('RÔLE — « je n’ai pas pu lire » et « il n’y a pas de rôle » ne se rendent pas pareil', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // DÉFAUT TROUVÉ PAR UNE PASSE DE REVUE DE FOND, et il produisait un DIAGNOSTIC FAUX.
+  //
+  // `roleDuLieu` rendait `null` aux deux questions, sur le motif « illisible vaut absent ».
+  // Un lieu COMPLET dont le métier n'est pas lisible — permissions, montage disparu, fichier
+  // remplacé par un répertoire — était donc rendu « lieu à demi posé ». Les deux états
+  // appellent des gestes OPPOSÉS : l'un envoie POSER un lieu, l'autre REFAIRE LA MESURE.
+  //
+  // ⚠️ ON ÉPROUVE LA VRAIE FONCTION SUR UN VRAI LIEU ILLISIBLE, jamais un double qui jette.
+  // Le premier banc de cet état injectait un `roleDuLieu` qui levait une erreur — un
+  // collaborateur que le vrai code ne produisait pas : il restait vert pendant que l'état
+  // était hors d'atteinte en production.
+  const { roleDuLieu, roleDuLieuOuRefus } = await import('../src/lieu-agent.js');
+
+  const complet = lieu(METIER_ORCH);
+  assert.equal(roleDuLieuOuRefus(complet), 'orchestrateur', 'contrôle positif : lisible, le rôle s’établit');
+
+  chmodSync(join(complet, 'CLAUDE.md'), 0o000);
+  try {
+    // La mise en condition se PROUVE : sous un compte privilégié, `chmod 000` n'empêche rien,
+    // et ce banc mesurerait alors autre chose que sa question sans le dire.
+    let lectureRefusee = false;
+    try {
+      readFileSync(join(complet, 'CLAUDE.md'), 'utf8');
+    } catch {
+      lectureRefusee = true;
+    }
+    assert.ok(
+      lectureRefusee,
+      `le fichier reste lisible malgré « chmod 000 » (uid ${process.getuid?.() ?? '?'}) — condition non fabriquée`,
+    );
+
+    const rendu = roleDuLieuOuRefus(complet);
+    assert.equal(typeof rendu, 'object', `un lieu illisible doit REFUSER, pas rendre « aucun rôle » (${rendu})`);
+    assert.ok(rendu.refus, 'et le refus doit dire pourquoi');
+    assert.match(rendu.refus, /CLAUDE\.md/, 'la raison nomme le fichier qui a refusé');
+
+    // ⚠️ ET LE CONTRAT DE `roleDuLieu` NE BOUGE PAS. Dix appelants en dépendent — dont le garde
+    // de naissance, qui RELÂCHE sur `!role` : lui rendre un objet (toujours vrai) le ferait
+    // entrer dans une décision de rôle avec un rôle qui n'en est pas un. Le refus se RÉCLAME,
+    // il ne s'impose pas à qui ne l'attend pas.
+    assert.equal(roleDuLieu(complet), null, 'l’ancienne porte garde son contrat : une chaîne, ou null');
+  } finally {
+    chmodSync(join(complet, 'CLAUDE.md'), 0o600);
+  }
+});
+
+test('RÔLE — un lieu dont on ne peut pas VOIR les fichiers refuse aussi, pas seulement les LIRE', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // MUTATION SURVIVANTE, TROUVÉE EN REVUE PORTAIL — et c'est la moitié oubliée du correctif.
+  //
+  // Le refus se franchit par DEUX portes : la LECTURE d'un fichier (`premiereLigne`, éprouvée
+  // par le banc au-dessus) et la PRÉSENCE d'un fichier (`fichierPresent`). Les bancs existants
+  // font tous `chmod 000` sur le FICHIER `CLAUDE.md` — or `statSync` réussit sur un fichier
+  // illisible dont le répertoire l'est : ils n'empruntent que la première porte. La seconde
+  // pouvait être supprimée en entier sans qu'un seul des 805 essais rougisse.
+  //
+  // ⚠️ ET SON CAS EST ORDINAIRE, PAS EXOTIQUE : un `.claude/` dont les droits ont été retirés.
+  // Le lieu est COMPLET ; `existsSync` répondait `false` — « il n'y est pas » — et le registre
+  // rendait « lieu à demi posé », c'est-à-dire le diagnostic faux que ce lot existe pour fermer.
+  const { roleDuLieu, roleDuLieuOuRefus } = await import('../src/lieu-agent.js');
+
+  const complet = lieu(METIER_ORCH);
+  assert.equal(roleDuLieuOuRefus(complet), 'orchestrateur', 'contrôle positif : visible, le rôle s’établit');
+
+  const sousDossier = join(complet, '.claude');
+  chmodSync(sousDossier, 0o000);
+  try {
+    let vueRefusee = false;
+    try {
+      readFileSync(join(sousDossier, 'settings.json'), 'utf8');
+    } catch {
+      vueRefusee = true;
+    }
+    assert.ok(
+      vueRefusee,
+      `le répertoire reste traversable malgré « chmod 000 » (uid ${process.getuid?.() ?? '?'}) — condition non fabriquée`,
+    );
+
+    const rendu = roleDuLieuOuRefus(complet);
+    assert.equal(
+      typeof rendu,
+      'object',
+      `un lieu dont un fichier obligatoire est INVISIBLE doit REFUSER, pas rendre « aucun rôle » (${rendu})`,
+    );
+    assert.match(rendu.refus, /settings\.json/, 'la raison nomme le fichier qu’on n’a pas pu voir');
+    assert.match(rendu.refus, /pas laissé voir/, 'et dit qu’il s’agit de la VUE, pas de la lecture');
+    assert.equal(roleDuLieu(complet), null, 'et l’ancienne porte garde son contrat, ici aussi');
+  } finally {
+    chmodSync(sousDossier, 0o700);
+  }
+});
+
+test('RÔLE — un lieu VRAIMENT incomplet reste « aucun rôle », il ne devient pas un refus', async () => {
+  // Le miroir du banc précédent, et il est indispensable : une fonction qui refuserait à la
+  // moindre difficulté rendrait l'autre vert en supprimant la distinction qu'il garde. Les deux
+  // sorties doivent rester ATTEIGNABLES, chacune sur son cas.
+  const { roleDuLieuOuRefus } = await import('../src/lieu-agent.js');
+
+  const demi = lieu(METIER_ORCH);
+  rmSync(join(demi, '.claude', 'settings.json'));
+  assert.equal(roleDuLieuOuRefus(demi), null, 'un fichier ABSENT est une mesure, pas un échec de mesure');
+
+  assert.equal(roleDuLieuOuRefus(worktreeOrdinaire()), null, 'un worktree ordinaire non plus');
+
+  // Un lieu complet et lisible dont les en-têtes ne concordent pas : mesuré, aucun rôle.
+  assert.equal(roleDuLieuOuRefus(lieu({ claude: '# Un projet quelconque', contexte: '# Notes' })), null);
+});
+
+test('RÔLES — chaque rôle connu DÉCLARE ce que son mandat désigne', async () => {
+  // ⚠️ MUTATION SURVIVANTE, ET LA GARDE JUSTE EST À LA SOURCE, PAS SUR LE COMPORTEMENT PAR
+  // DÉFAUT. Une revue a relevé qu'un rôle futur ajouté sans `mandat_designe` tomberait en
+  // `chantier: 'sans objet'` — la branche qui OUVRE la porte de `remiseAJour`, c'est-à-dire qui
+  // fait PROPOSER `/clear`, un geste qui efface le fil d'un agent. Sur la seule base d'une clé
+  // oubliée dans une table.
+  //
+  // Le recensement porte désormais une ceinture (`mandatDesigne && …`), mais elle n'est pas
+  // éprouvable sans fabriquer une table de rôles que la production ne produit pas. La garde qui
+  // MORD est ici : la clé est OBLIGATOIRE, et l'oublier rougit au moment où on l'oublie.
+  const { rolesConnus, role: roleDe } = await import('../src/roles.js');
+
+  const valeurs = new Set(['chantier', 'client']);
+  for (const nom of rolesConnus()) {
+    const r = roleDe(nom);
+    assert.ok(
+      r.mandat_designe,
+      `« ${nom} » doit DÉCLARER ce que le segment sous son dossier nomme — sans quoi le registre ` +
+        'ne sait pas s’il doit lire un chantier au ServiceDesk, et se voit proposer un geste destructeur',
+    );
+    assert.ok(
+      valeurs.has(r.mandat_designe),
+      `« ${nom} » déclare « ${r.mandat_designe} », qui n’est pas une valeur connue (${[...valeurs].join(', ')}) — ` +
+        'ajouter une valeur exige de dire ici ce que le recensement doit en faire',
+    );
+  }
+
+  // ⚠️ ET LES DEUX VALEURS SONT RÉELLEMENT EMPLOYÉES : une table où tous les rôles déclareraient
+  // la même chose satisferait la boucle ci-dessus et ne distinguerait plus rien.
+  const declarees = new Set(rolesConnus().map((n) => roleDe(n).mandat_designe));
+  assert.equal(declarees.size, 2, 'les deux natures de mandat existent bel et bien dans la table');
 });
 
 // ═════════════════ 2. CHACUN NE REÇOIT QUE LE SIEN — par le fait

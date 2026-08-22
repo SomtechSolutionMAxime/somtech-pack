@@ -20,7 +20,7 @@
 // (sa ligne se crée, mais seulement si le poste peut parler) — et un test peut en fournir
 // une autre sans monter Slack du tout. C'est ce qui tient la cloison (RA-REL-012).
 
-import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync, rmdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { OUTILS, OutilIntrouvable, lancer } from './outils.js';
 import { join, dirname } from 'node:path';
 
@@ -166,12 +166,48 @@ function leRole(libelle) {
   return `${article}${libelle}`;
 }
 
+/**
+ * La première ligne de `chemin` — `{ texte }` — ou `{ refus }` quand on n'a PAS PU la lire.
+ *
+ * ⚠️ LES DEUX SORTIES NE SE CONFONDENT PAS, ET C'EST TOUT L'OBJET DE CETTE FONCTION.
+ * Elle rendait `''` sur TOUTE erreur, avec pour motif « illisible vaut absent ». Le motif est
+ * juste pour un fichier ABSENT — il n'y a rien à établir — et faux pour un fichier PRÉSENT
+ * qu'on n'a pas eu le droit de lire : là, on ne sait pas, et rendre `''` fait dire au dépôt
+ * « ce lieu ne porte pas le métier » alors qu'il le porte peut-être entièrement.
+ *
+ * `ENOENT` garde donc l'ancien comportement, mot pour mot. Tout le reste — `EACCES`, `EISDIR`,
+ * `EIO` — devient un REFUS nommé, que l'appelant est libre de rendre ou de réduire à « aucun
+ * rôle » (c'est ce que fait `roleDuLieu`, dont le contrat ne bouge pas).
+ *
+ * ⚠️ CORRECTION : cette phrase rangeait « un lien cassé » parmi les refus. MESURÉ, c'est faux —
+ * un lien symbolique cassé est intercepté EN AMONT par `fichierPresent` (`ENOENT` sur `statSync`)
+ * et rend `null`, jamais un refus. Une docstring qui promet un comportement absent est une dette
+ * du même genre que le code qu'elle décrit : quelqu'un s'y fiera plutôt que de mesurer.
+ */
 function premiereLigne(chemin) {
   try {
-    return readFileSync(chemin, 'utf8').split('\n', 1)[0] || '';
-  } catch {
-    // Illisible vaut absent : on n'établit RIEN d'un fichier qu'on n'a pas pu lire.
-    return '';
+    return { texte: readFileSync(chemin, 'utf8').split('\n', 1)[0] || '' };
+  } catch (err) {
+    // Absent : il n'y a rien à établir, et ce n'est pas un échec de mesure.
+    if (err?.code === 'ENOENT') return { texte: '' };
+    return { refus: `« ${chemin} » ne s\u2019est pas laissé lire (${err?.code || err?.message || 'erreur inconnue'})` };
+  }
+}
+
+/**
+ * Le fichier `chemin` est-il là — `{ present: true|false }` — ou n'a-t-on PAS PU le savoir ?
+ *
+ * `existsSync` répond `false` aux deux questions à la fois : « il n'y est pas » et « je n'ai
+ * pas eu le droit de regarder » (un répertoire parent en `chmod 000` suffit). Les deux mènent à
+ * des gestes opposés, exactement comme pour la lecture ci-dessus.
+ */
+function fichierPresent(chemin) {
+  try {
+    statSync(chemin);
+    return { present: true };
+  } catch (err) {
+    if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return { present: false };
+    return { refus: `« ${chemin} » ne s\u2019est pas laissé voir (${err?.code || err?.message || 'erreur inconnue'})` };
   }
 }
 
@@ -201,13 +237,58 @@ function premiereLigne(chemin) {
  * consigne d'orchestrateur est le mode de panne mesuré dans `D-20260813-0001` §1.
  */
 export function roleDuLieu(repertoire) {
+  const r = roleDuLieuOuRefus(repertoire);
+  return typeof r === 'string' ? r : null;
+}
+
+/**
+ * Le rôle du lieu, MAIS en distinguant « il n'y a pas de rôle » de « je n'ai PAS PU le lire ».
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * POURQUOI DEUX FONCTIONS, ET POURQUOI C'EST CELLE-CI QUI PORTE LA MESURE
+ *
+ * `roleDuLieu` répondait `null` aux deux questions. Le motif inscrit était « illisible vaut
+ * absent : on n'établit RIEN d'un fichier qu'on n'a pas pu lire » — juste sur le PREMIER point
+ * (on n'établit rien), faux sur le SECOND (on rendait la même chose que pour un lieu vide).
+ *
+ * ⚠️ ET LE COÛT EST UN DIAGNOSTIC FAUX, PAS UNE IMPRÉCISION. Un lieu COMPLET dont le métier
+ * n'est pas lisible — permissions, montage disparu, fichier remplacé par un répertoire — était
+ * rendu « lieu à demi posé ». Les deux états appellent des gestes OPPOSÉS : « pas de rôle »
+ * envoie POSER un lieu, « pas pu lire » envoie REFAIRE LA MESURE. On envoyait donc re-poser un
+ * lieu qui existe, avec ce que ça écrase.
+ *
+ * ⚠️ LE CONTRAT DE `roleDuLieu` NE BOUGE PAS D'UN CARACTÈRE, et c'est délibéré. Dix appelants
+ * s'en servent — dont le garde de naissance (`naissance-representant/src/hook.js`), qui relâche
+ * sur `!role` : lui rendre un objet le ferait entrer dans une décision de rôle avec un rôle qui
+ * n'en est pas un. Un refus doit être RENDU à qui le demande, jamais imposé à qui ne l'attend
+ * pas. Ceux qui veulent la distinction appellent cette fonction-ci.
+ *
+ * @returns `'<rôle>'` · `null` (mesuré : aucun rôle connu ne correspond) · `{ refus }` (on n'a
+ *   pas pu mesurer — jamais confondu avec les deux autres).
+ */
+export function roleDuLieuOuRefus(repertoire) {
   if (!repertoire) return null;
-  if (!GABARITS.every((f) => existsSync(join(repertoire, f)))) return null;
+  for (const f of GABARITS) {
+    const vu = fichierPresent(join(repertoire, f));
+    if (vu.refus) return { refus: vu.refus };
+    // Un fichier obligatoire ABSENT est une mesure, pas un échec : ce répertoire n'est pas un
+    // lieu, et c'est exactement ce que `null` a toujours voulu dire ici.
+    if (!vu.present) return null;
+  }
   for (const nom of rolesConnus()) {
-    const attendus = roleDe(nom).entetes;
-    const concorde = Object.entries(attendus).every(([fichier, entete]) =>
-      entete.test(premiereLigne(join(repertoire, fichier)))
-    );
+    const attendus = Object.entries(roleDe(nom).entetes);
+    let concorde = true;
+    for (const [fichier, entete] of attendus) {
+      const lu = premiereLigne(join(repertoire, fichier));
+      // ⚠️ ON REFUSE DÈS LA PREMIÈRE LECTURE IMPOSSIBLE, sans essayer les autres rôles. Un
+      // fichier du métier qu'on n'a pas pu lire rend TOUS les rôles indécidables : poursuivre
+      // rendrait `null` — « aucun ne correspond » — sur une comparaison qui n'a pas eu lieu.
+      if (lu.refus) return { refus: lu.refus };
+      if (!entete.test(lu.texte)) {
+        concorde = false;
+        break;
+      }
+    }
     if (concorde) return nom;
   }
   return null;

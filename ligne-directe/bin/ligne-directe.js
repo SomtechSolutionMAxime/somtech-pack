@@ -110,7 +110,7 @@ function usage(code = 0) {
                                                            et NE CREE RIEN si le poste ne peut pas
                                                            ouvrir de ligne (sa ligne est obligatoire)
   etat                                                     ce qui est ouvert
-  recensement                                              QUI est vivant, QUEL metier il porte,
+  recensement                                              QUI est vivant (TOUS les roles), QUEL metier il porte,
                                                            et de combien il s'ecarte de la
                                                            reference du poste. L'empreinte fait
                                                            foi, jamais le numero de version.
@@ -495,8 +495,8 @@ if (geste === 'relever') {
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
 } else if (geste === 'recensement') {
   // ⚠️ RENDU TEL QUEL, SANS RÉSUMÉ MAISON. Le rendu porte déjà `resume`, `regle` et — quand la
-  // mesure a échoué — `inventaireRefuse` avec `orchestrateurs: null`. Recomposer ici une phrase
-  // d'affichage, c'est se donner l'occasion d'écrire « aucun orchestrateur » sur un tableau que
+  // mesure a échoué — `inventaireRefuse` avec `agents: null`. Recomposer ici une phrase
+  // d'affichage, c'est se donner l'occasion d'écrire « aucun agent » sur un tableau que
   // le veilleur a justement refusé de remplir : la panne se dirait alors « rien à signaler » au
   // dernier étage, après avoir été correctement nommée à tous les autres.
   const rendu = await parler({ geste: 'recensement' });
