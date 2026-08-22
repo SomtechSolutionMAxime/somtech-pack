@@ -277,6 +277,71 @@ test('le câblage RÉEL n’écarte PAS un agent que herdr a vu SANS nom — ano
   assert.equal(rendu.compte.nomsNonMesures, 0, '…et surtout pas de l’autre');
 });
 
+test('le câblage RÉEL fournit une référence PAR RÔLE — un jeu vide tuerait la colonne « à jour »', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // MUTATION SURVIVANTE, TROUVÉE EN REVUE DE FOND ET RESTÉE VIVANTE APRÈS UN PREMIER CORRECTIF.
+  //
+  // Un banc éprouvait déjà que `unRecensement` réagit correctement à `references: {}`. Mais le
+  // CÂBLAGE, lui, n'était gardé par rien : remplacer `referencesDesRoles({})` par `{}` dans le
+  // veilleur laissait les 815 essais verts. Le registre bascule alors en « aucune référence ne
+  // m'a été donnée » pour TOUS les rôles — c'est-à-dire que la colonne « à jour / en retard »
+  // meurt en silence, en rendant partout « je ne sais pas », la réponse la plus rassurante
+  // possible pour un instrument qui ne mesure plus rien.
+  //
+  // ⚠️ ÉPROUVER LA FONCTION NE GARDE PAS SON CÂBLAGE. C'est le même motif que les noms du
+  // veilleur : deux étages justes, jointure non gardée.
+  const p = posteHerdr(bac, [], 'references');
+  const depot = join(bac, 'depot-references');
+  const lieu = join(depot, '.orchestrateur', 'd-20260822-0003');
+  const METIER = "# Tu es l'orchestrateur de ce chantier\n\nle métier du jour.\n";
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  writeFileSync(join(lieu, 'CLAUDE.md'), METIER);
+  writeFileSync(join(lieu, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n\nrien.\n');
+  writeFileSync(join(lieu, '.mcp.json'), '{}\n');
+  writeFileSync(join(lieu, '.claude', 'settings.json'), '{}\n');
+
+  // Le foyer jetable porte le gabarit du pack, là où `referenceDuPoste` va RÉELLEMENT le
+  // chercher — c'est ce qui rend l'écart mesurable au lieu de « pas de référence ».
+  const foyer = join(bac, 'foyer-references');
+  const gabarits = join(foyer, '.claude', 'plugins', 'marketplaces', 'somtech-pack', '.claude', 'templates', 'orchestrateur');
+  mkdirSync(gabarits, { recursive: true });
+  writeFileSync(join(gabarits, 'CLAUDE.md'), METIER); // identique au lieu posé : donc « à jour »
+
+  p.pane('w1:p1', { boite: '' });
+  p.panes([{ pane_id: 'w1:p1', foreground_cwd: lieu }]);
+
+  const v = veilleurNu('references');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  try {
+    process.env.PATH = p.path;
+    process.env.FAUX_HERDR_ETAT = p.etat;
+    process.env.HOME = foyer;
+    process.env.HERDR_SOCKET_PATH = join(p.etat, 'socket');
+    rendu = await v.recensementDuPoste();
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+    delete process.env.FAUX_HERDR_ETAT;
+  }
+
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  assert.equal(rendu.agents.length, 1);
+  const a = rendu.agents[0];
+  assert.equal(a.role.nom, 'orchestrateur', 'contrôle : le rôle est établi');
+  // ⚠️ L'ÉCART EST RÉELLEMENT CALCULÉ — c'est ce qu'un jeu de références vide rendrait
+  // impossible, en laissant `aJour: null` partout.
+  assert.equal(a.aJour, true, `le câblage doit APPORTER la référence du rôle (reference: ${JSON.stringify(a.reference)})`);
+  assert.equal(rendu.compte.aJour, 1, 'et le compte doit le porter');
+  assert.equal(
+    a.reference?.refus,
+    undefined,
+    'la référence du câblage réel est TROUVÉE, pas « on ne m’a rien donné »',
+  );
+});
+
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
   // ⚠️ CE BANC EXISTE PARCE QU'UNE MUTATION A SURVÉCU. `arreter()` retient la ronde de deux
   // façons : il pose `this.arrete`, et il libère le minuteur. Retirer l'une OU l'autre ne fait
