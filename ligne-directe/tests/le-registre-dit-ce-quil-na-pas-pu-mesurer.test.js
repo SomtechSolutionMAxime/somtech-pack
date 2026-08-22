@@ -37,6 +37,7 @@ import {
   empreinteDuMetier,
   mandatDuChemin,
   lieuDuChemin,
+  lieuDeRoleDansLeChemin,
   travailEnVol,
   GESTE_DE_REMISE_A_JOUR,
   CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
@@ -99,18 +100,31 @@ test('une source d’inventaire RÉELLEMENT en panne se dit — et rien dans le 
 
   assert.ok(rendu.inventaireRefuse, 'le refus doit être NOMMÉ dans le rendu');
   // ⚠️ LE CŒUR DU BANC : `null`, PAS `[]`. Une liste vide se lit « il n'y en a aucun ».
-  assert.equal(rendu.orchestrateurs, null, 'un inventaire refusé ne rend JAMAIS une liste vide');
+  assert.equal(rendu.agents, null, 'un inventaire refusé ne rend JAMAIS une liste vide');
   assert.equal(rendu.panesVus, null, 'on n’a vu aucun pane, on n’en a pas COMPTÉ zéro');
   // Et le lecteur qui ne lit que la phrase doit comprendre qu'on n'a pas su regarder.
   assert.match(rendu.resume, /n’ai pas (pu|su)/, 'le résumé doit dire l’impuissance, pas le vide');
   assert.doesNotMatch(rendu.resume, /rien à signaler|aucun orchestrateur vivant/i);
 });
 
-test('un poste sans aucun lieu d’orchestrateur rend zéro SANS refus — et les deux cas se distinguent', async () => {
-  const rendu = await unRecensement({ panes: [{ pane_id: 'w1:p1', foreground_cwd: '/tmp/quelconque' }], roleDuLieu });
+test('un poste sans aucun AGENT rend zéro SANS refus — et les deux cas se distinguent', async () => {
+  // ⚠️ DEPUIS E-20260822-0001, UN PANE HORS DE TOUT LIEU DE RÔLE N'EST PLUS OMIS : il figure au
+  // registre avec un rôle « non établi ». La liste vide, elle, garde exactement le rôle qu'elle
+  // avait — dire « j'ai regardé et il n'y a personne », par opposition à « je n'ai pas su
+  // regarder ». Ce banc l'éprouve donc sur un poste RÉELLEMENT sans pane.
+  const rendu = await unRecensement({ panes: [], roleDuLieu });
   assert.equal(rendu.inventaireRefuse, null);
-  assert.deepEqual(rendu.orchestrateurs, [], 'ici la liste vide est la VRAIE réponse');
-  assert.equal(rendu.panesVus, 1, 'on a bien regardé, et on l’a compté');
+  assert.deepEqual(rendu.agents, [], 'ici la liste vide est la VRAIE réponse');
+  assert.equal(rendu.panesVus, 0, 'on a bien regardé, et on l’a compté');
+
+  // Et le pane hors lieu, lui, est VU — la distinction « rien » / « je ne sais pas » se joue
+  // maintenant sur le rôle de l'entrée, pas sur son absence du tableau.
+  const horsLieu = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: '/tmp/quelconque' }],
+    roleDuLieu,
+  });
+  assert.equal(horsLieu.agents.length, 1, 'il n’est plus effacé du registre');
+  assert.equal(horsLieu.agents[0].role.mesure, 'non établi');
 });
 
 test('le registre rend chaque orchestrateur avec l’empreinte de son métier et son écart, par le TRANSPORT réel', async (t) => {
@@ -152,23 +166,38 @@ test('le registre rend chaque orchestrateur avec l’empreinte de son métier et
     rendu = await unRecensement({
       panes: () => panesDeHerdr({ socket: join(poste.etat, 'socket') }),
       roleDuLieu,
-      reference,
+      references: { orchestrateur: reference },
     });
   } finally {
     process.env.PATH = pathAvant;
     delete process.env.FAUX_HERDR_ETAT;
   }
-  assert.ok(rendu.orchestrateurs, `l’inventaire a refusé (${rendu.inventaireRefuse}) — ce banc n’éprouve alors rien`);
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse}) — ce banc n’éprouve alors rien`);
 
-  const mandats = rendu.orchestrateurs.map((o) => o.mandat).sort();
-  assert.deepEqual(mandats, ['d-20260819-0001', 'j-20260814-0002'], 'ni la coquille ni le dépôt ordinaire n’entrent');
+  // ⚠️ LA GARDE N'A PAS BOUGÉ, SON POINT D'APPUI SI. Avant E-20260822-0001, « la coquille
+  // n'entre pas » s'éprouvait sur son ABSENCE du tableau. Depuis, elle y figure avec un rôle
+  // « non établi » — parce que l'effacer était le vrai défaut : un agent bien vivant dans un
+  // lieu à demi posé ne laissait aucune trace nulle part (T-20260819-0070). Ce qu'on garde est
+  // donc ce que l'assertion voulait dire : elle ne devient pas un ORCHESTRATEUR.
+  const orchestrateurs = rendu.agents.filter((o) => o.role.mesure === 'établi' && o.role.nom === 'orchestrateur');
+  const mandats = orchestrateurs.map((o) => o.mandat).sort();
+  assert.deepEqual(mandats, ['d-20260819-0001', 'j-20260814-0002'], 'ni la coquille ni le dépôt ordinaire ne portent le rôle');
 
-  const ajour = rendu.orchestrateurs.find((o) => o.mandat === 'd-20260819-0001');
+  // Et ils sont bien LÀ, sans le rôle — sans quoi on aurait rétabli l'effacement en croyant
+  // garder la coquille hors du compte.
+  const sansRole = rendu.agents.filter((o) => o.role.mesure !== 'établi');
+  assert.equal(sansRole.length, 2, 'la coquille et le dépôt ordinaire figurent, sans rôle établi');
+  assert.ok(
+    sansRole.every((o) => o.role.nom === null && o.aJour === null),
+    'un rôle non établi ne se compare à aucune référence — ni « à jour », ni « en retard »'
+  );
+
+  const ajour = rendu.agents.find((o) => o.mandat === 'd-20260819-0001');
   assert.equal(ajour.aJour, true);
   assert.equal(ajour.ecartOctets, 0);
   assert.equal(ajour.remiseAJour, null, 'on ne propose rien à qui est déjà à jour');
 
-  const enRetard = rendu.orchestrateurs.find((o) => o.mandat === 'j-20260814-0002');
+  const enRetard = rendu.agents.find((o) => o.mandat === 'j-20260814-0002');
   assert.equal(enRetard.aJour, false);
   assert.equal(enRetard.ecartOctets, METIER_PERIME.length - METIER_COURANT.length);
   assert.equal(enRetard.metier.empreinte, empreinteDuMetier(join(depot, '.orchestrateur', 'j-20260814-0002')).empreinte);
@@ -195,9 +224,9 @@ test('un métier illisible rend une mesure REFUSÉE — jamais un écart de zér
   const rendu = await unRecensement({
     panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
     roleDuLieu: () => 'orchestrateur', // le lieu est bien posé ; c'est SA LECTURE qui échoue
-    reference: referenceDuMetier({ foyer }),
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
   });
-  const o = rendu.orchestrateurs[0];
+  const o = rendu.agents[0];
   assert.ok(o.metier.refus, 'la mesure refusée doit se dire');
   assert.equal(o.aJour, null, '« je ne sais pas » n’est ni « à jour » ni « en retard »');
   assert.equal(o.ecartOctets, null, 'un écart de zéro dirait « identique » — on n’en sait rien');
@@ -215,7 +244,7 @@ test('une référence introuvable ne fait jamais conclure « à jour »', async 
   assert.ok(reference.refus, 'la référence doit se déclarer introuvable');
 
   const rendu = await unRecensement({ panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }], roleDuLieu, reference });
-  const o = rendu.orchestrateurs[0];
+  const o = rendu.agents[0];
   assert.ok(o.metier.empreinte, 'son métier, lui, a bien été mesuré');
   assert.equal(o.aJour, null);
   assert.equal(o.ecartOctets, null);
@@ -244,7 +273,17 @@ test('« au repos » n’est pas « sans travail en vol » — et un écran illi
   assert.equal(rate.enVol, null, 'null n’est pas false — « je ne sais pas » n’est pas « rien »');
 });
 
-test('le mandat se lit dans le CHEMIN, quel que soit le nom porté', () => {
+test('le mandat se lit dans le CHEMIN pour TOUS les rôles, quel que soit le nom porté', () => {
+  // ⚠️ LE PLUS PROFOND GAGNE. Un lieu de représentant posé dans un dépôt qui porte lui-même un
+  // `.orchestrateur/` existe réellement sur ce poste : prendre le PREMIER segment de rôle
+  // rendrait un représentant pour un orchestrateur, avec un mandat qui n'est pas le sien.
+  const imbrique = lieuDeRoleDansLeChemin('/d/.orchestrateur/p-1/.gestionnaire/Frederic');
+  assert.equal(imbrique.role, 'representant', 'le lieu où il TRAVAILLE est le dernier, pas le premier');
+  assert.equal(imbrique.mandat, 'Frederic');
+  assert.equal(lieuDeRoleDansLeChemin('/d/quelconque'), null, 'aucun lieu de rôle : on ne devine pas');
+  // Un dossier de rôle SANS lieu nommé dessous ne désigne personne — et ne doit pas passer.
+  assert.equal(lieuDeRoleDansLeChemin('/d/.orchestrateur'), null);
+
   const c = '/Users/x/worktrees/depot/.orchestrateur/j-20260814-0002';
   assert.equal(mandatDuChemin(c, '.orchestrateur'), 'j-20260814-0002');
   assert.equal(lieuDuChemin(c, '.orchestrateur'), c);
@@ -271,10 +310,10 @@ test('un mandat CLOS ne se voit rien proposer — et la raison est écrite', asy
   const rendu = await unRecensement({
     panes: [{ pane_id: 'w1:p1', agent_status: 'idle', foreground_cwd: lieu }],
     roleDuLieu,
-    reference: referenceDuMetier({ foyer }),
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
     etatDuMandat: (m) => etatDuMandat(m, { appeler: async () => ({ status: 'deployed' }) }),
   });
-  const o = rendu.orchestrateurs[0];
+  const o = rendu.agents[0];
   assert.equal(o.statut, 'idle', 'la session, elle, est bien au repos');
   assert.equal(o.chantier.clos, true, 'et son chantier, lui, est fermé — ce n’est pas la même chose');
   assert.equal(o.aJour, false, 'il est bien en retard : ce n’est pas ça qui le protège');
@@ -294,10 +333,10 @@ test('un mandat prouvé OUVERT et en retard se voit proposer le geste — sinon 
   const rendu = await unRecensement({
     panes: [{ pane_id: 'w1:p1', foreground_cwd: lieu }],
     roleDuLieu,
-    reference: referenceDuMetier({ foyer }),
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
     etatDuMandat: (m) => etatDuMandat(m, { appeler: async () => ({ status: 'in_progress' }) }),
   });
-  const o = rendu.orchestrateurs[0];
+  const o = rendu.agents[0];
   assert.equal(o.chantier.clos, false);
   assert.equal(o.remiseAJour.aProposer, true);
   assert.equal(o.remiseAJour.aImposer, false, 'proposer n’est jamais imposer');
@@ -329,7 +368,7 @@ test('un mandat NON MESURÉ ne se voit rien proposer non plus — « probablemen
       { pane_id: 'w1:p3', foreground_cwd: statutInconnu },
     ],
     roleDuLieu,
-    reference: referenceDuMetier({ foyer }),
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
     etatDuMandat: (m) =>
       etatDuMandat(m, {
         appeler: async (famille) => {
@@ -341,14 +380,14 @@ test('un mandat NON MESURÉ ne se voit rien proposer non plus — « probablemen
 
   assert.equal(rendu.compte.mandatsNonMesures, 3);
   assert.equal(rendu.compte.mandatsOuverts, 0);
-  for (const o of rendu.orchestrateurs) {
+  for (const o of rendu.agents) {
     assert.equal(o.chantier.clos, null, `${o.mandat} : « je ne sais pas » n’est ni ouvert ni clos`);
     assert.equal(o.remiseAJour.aProposer, false, `${o.mandat} : on ne propose rien sur un mandat non mesuré`);
     assert.match(o.remiseAJour.pourquoiPas, /pas pu être mesuré/);
   }
-  assert.match(rendu.orchestrateurs[0].chantier.raison, /n’est pas un code de chantier/);
-  assert.match(rendu.orchestrateurs[1].chantier.raison, /n’a pas répondu/);
-  assert.match(rendu.orchestrateurs[2].chantier.raison, /ne m’est pas connu/);
+  assert.match(rendu.agents[0].chantier.raison, /n’est pas un code de chantier/);
+  assert.match(rendu.agents[1].chantier.raison, /n’a pas répondu/);
+  assert.match(rendu.agents[2].chantier.raison, /ne m’est pas connu/);
 });
 
 test('les statuts qui ferment un chantier viennent du service, et un statut ajouté demain fait TAIRE le module', () => {
@@ -402,11 +441,11 @@ test('deux sessions herdr qui emploient le même identifiant de pane rendent DEU
     delete process.env.FAUX_HERDR_ETAT;
   }
 
-  assert.ok(rendu.orchestrateurs, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
-  const mandats = rendu.orchestrateurs.map((o) => o.mandat).sort();
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  const mandats = rendu.agents.map((o) => o.mandat).sort();
   assert.deepEqual(mandats, ['d-de-la-session-une', 'p-de-la-session-deux'], 'les deux doivent être là');
   // Et chacun porte SA session : sans elle, personne ne pourrait désigner l'un plutôt que l'autre.
-  const sessionsRendues = new Set(rendu.orchestrateurs.map((o) => o.session));
+  const sessionsRendues = new Set(rendu.agents.map((o) => o.session));
   assert.equal(sessionsRendues.size, 2, 'le registre doit dire DE QUELLE session chaque pane vient');
 });
 
@@ -478,8 +517,17 @@ test('un lieu écarté est NOMMÉ, pas effacé — c’est lui qui chiffre le pl
     roleDuLieu,
   });
 
-  assert.equal(rendu.orchestrateurs.length, 1, 'la coquille ne devient pas un orchestrateur');
-  assert.equal(rendu.borne.lieuxEcartes.length, 1, 'mais elle ne disparaît pas non plus');
+  // Deux agents recensés — la coquille en porte un, bien vivant. Ce qu'on garde est qu'elle
+  // ne prend pas le RÔLE de son dossier : le rôle s'établit par le contenu du lieu, jamais par
+  // son nom, et un répertoire vide au bon nom ne porte aucun métier.
+  assert.equal(rendu.agents.length, 2, 'les deux panes figurent : aucun agent ne s’efface');
+  const avecRole = rendu.agents.filter((o) => o.role.mesure === 'établi');
+  assert.equal(avecRole.length, 1, 'la coquille ne devient pas un orchestrateur');
+  assert.equal(avecRole[0].pane, 'w1:p1', 'et c’est le lieu VRAIMENT posé qui le porte');
+  const coq = rendu.agents.find((o) => o.pane === 'w3:p2');
+  assert.equal(coq.role.mesure, 'non établi');
+  assert.match(coq.role.pourquoi, /demi posé|sans porter le métier/, 'la raison dit ce qui manque');
+  assert.equal(rendu.borne.lieuxEcartes.length, 1, 'et l’écart au rôle est chiffré');
   assert.equal(rendu.borne.lieuxEcartes[0].pane, 'w3:p2', 'et on sait QUEL pane, pour aller voir');
   assert.match(rendu.borne.lieuxEcartes[0].lieu, /p-20260728-0002/);
 });

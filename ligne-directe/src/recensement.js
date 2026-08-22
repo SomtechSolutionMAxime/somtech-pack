@@ -60,6 +60,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { referenceDuPoste } from './fraicheur-gabarit.js';
+// ⚠️ RA-VUE-004 — LE REGISTRE DES RÔLES EST UNIQUE, ET C'EST `roles.js`. On l'IMPORTE plutôt
+// que d'en recopier ne serait-ce que la liste des dossiers : une seconde table diverge au
+// premier rôle ajouté d'un seul côté, et ce dépôt a payé cette mécanique neuf fois. Ce n'est
+// pas de l'I/O — c'est une table pure — donc l'importer n'entame pas la règle « toute l'I/O
+// entre par paramètre » qui rend ce module éprouvable loin des agents vivants.
+import { role as roleDe, rolesConnus } from './roles.js';
 
 /**
  * CE QUE CE RECENSEMENT NE PEUT PAS VOIR — par construction, et pas par accident.
@@ -272,6 +278,116 @@ function motDeLErreur(err) {
 }
 
 /**
+ * LE LIEU DE RÔLE QUE PORTE UN CHEMIN DE TRAVAIL — pour TOUS les rôles connus, pas un seul.
+ *
+ * ⚠️ CE QUI EST RENDU EST UN CANDIDAT, PAS UN RÔLE. Cette fonction ne lit que le CHEMIN : elle
+ * dit « ce chemin passe par le dossier du rôle X ». C'est `roleDuLieu` — injecté, parce qu'il
+ * touche le disque — qui établit le rôle par le CONTENU du lieu : les quatre fichiers du
+ * gabarit ET les en-têtes réels du métier. Un répertoire vide au bon nom ne porte aucun métier,
+ * et le compter gonflerait le registre de lieux qui n'existent qu'à moitié (T-20260819-0070).
+ *
+ * ⚠️ LE PLUS PROFOND GAGNE, et ce n'est pas arbitraire. Un chemin peut traverser deux dossiers
+ * de rôle — le lieu d'un représentant posé dans un dépôt qui porte lui-même un `.orchestrateur/`
+ * en est le cas réel, mesuré sur ce poste. Le lieu où l'agent TRAVAILLE est le dernier segment
+ * de rôle du chemin, jamais le premier ; prendre le premier rendrait un représentant pour un
+ * orchestrateur, avec un mandat qui n'est pas le sien.
+ *
+ * @returns `{ role, dossier, lieu, mandat }` ou `null` si le chemin ne passe par aucun lieu.
+ */
+export function lieuDeRoleDansLeChemin(chemin) {
+  if (!chemin) return null;
+  const morceaux = String(chemin).split('/');
+  let trouve = null;
+  for (const nom of rolesConnus()) {
+    const dossier = roleDe(nom).dossier;
+    const i = morceaux.lastIndexOf(dossier);
+    // `i + 1 >= length` : le dossier de rôle SANS lieu nommé dessous ne désigne personne.
+    if (i < 0 || i + 1 >= morceaux.length || !morceaux[i + 1]) continue;
+    if (!trouve || i > trouve.i) {
+      trouve = { i, role: nom, dossier, mandat: morceaux[i + 1], lieu: morceaux.slice(0, i + 2).join('/') };
+    }
+  }
+  if (!trouve) return null;
+  const { role, dossier, lieu, mandat } = trouve;
+  return { role, dossier, lieu, mandat };
+}
+
+/**
+ * LA RÉFÉRENCE DU POSTE POUR CHAQUE RÔLE — une par rôle, et c'est le fond du problème.
+ *
+ * ⚠️ UNE RÉFÉRENCE UNIQUE FERAIT RENDRE « EN RETARD » À TOUS LES REPRÉSENTANTS, TOUS LES JOURS.
+ * Le métier d'un représentant et celui d'un orchestrateur sont deux textes qui n'ont AUCUNE
+ * raison de concorder : les comparer au même gabarit ne mesure rien, et un « en retard »
+ * permanent apprend au lecteur à ne plus lire la colonne — ce qui coûte le vrai retard le jour
+ * où il arrive.
+ *
+ * ⚠️ ET LE DOSSIER DE GABARITS N'EST PAS LE NOM DU RÔLE : `representant` se sert de
+ * `gestionnaire-client`. C'est `roles.js` qui le sait, et lui seul — on ne le réécrit pas ici.
+ */
+export function referencesDesRoles({ foyer, mesurer = empreinteDuMetier } = {}) {
+  return Object.fromEntries(
+    rolesConnus().map((nom) => [nom, referenceDuMetier({ gabarit: roleDe(nom).gabarits, foyer, mesurer })])
+  );
+}
+
+/**
+ * CE QU'ON SAIT DU NOM D'UN AGENT — et les trois états ne se replient jamais en deux.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ « IL N'A PAS DE NOM » ET « JE N'AI PAS PU LIRE SON NOM » MÈNENT À DEUX CONDUITES
+ * OPPOSÉES. Sur un anonyme, il faut le faire se nommer. Sur un nom non mesuré, il faut refaire
+ * la mesure. Les confondre envoie corriger ce qui va bien — et les deux cas se produisent
+ * réellement : `herdr agents()` a été mesuré à 83 panes sur 227 un jour, et à 94 sur 94 le
+ * 2026-08-22. Un instrument dont la complétude varie ne peut pas servir de preuve d'absence.
+ *
+ * ⚠️ ET ON NE COMBLE JAMAIS UN NOM MANQUANT — ni depuis le mandat, ni depuis le lieu, ni depuis
+ * le libellé de l'onglet. Deux agents ont déjà porté le même nom sur ce poste parce qu'une
+ * naissance a attribué un nom sur une vérification qu'elle venait de déclarer manquante
+ * (T-20260822-0002). Ici le prix serait plus élevé qu'un registre mal renseigné : on ÉCRIT à
+ * un nom, donc un nom plausible fait parler à quelqu'un qui n'existe pas.
+ *
+ * @param pane        le pane, qui porte parfois son nom lui-même.
+ * @param cle         `«session» NUL «pane»` — la session voyage TOUJOURS avec le pane.
+ * @param nomsConnus  `null` · `{ mesure: 'refusée', raison }` · `{ mesure: 'lue', noms: Map }`.
+ *                    Dans la Map, une entrée à `null` dit « vu, sans nom » ; une entrée ABSENTE
+ *                    dit « pas vu ». C'est cette distinction qui porte les trois états.
+ */
+export function nomDeLAgent(pane, cle, nomsConnus) {
+  const porte = pane?.name ?? pane?.nom ?? null;
+  if (porte) return { mesure: 'lu', valeur: porte, source: 'le pane lui-même' };
+
+  if (!nomsConnus) {
+    return {
+      mesure: 'refusée',
+      valeur: null,
+      raison: 'aucun lecteur de noms ne m’a été donné — ceci n’est pas « il n’a pas de nom »',
+    };
+  }
+  if (nomsConnus.mesure === 'refusée') {
+    return { mesure: 'refusée', valeur: null, raison: nomsConnus.raison ?? 'le registre des agents a refusé' };
+  }
+  const noms = nomsConnus.noms;
+  if (!noms?.has?.(cle)) {
+    return {
+      mesure: 'refusée',
+      valeur: null,
+      raison: 'le registre des agents n’a pas vu ce pane — il SOUS-COMPTE, son silence ne dit rien',
+    };
+  }
+  const valeur = noms.get(cle);
+  if (valeur) return { mesure: 'lu', valeur, source: 'le registre des agents' };
+  return {
+    mesure: 'aucun',
+    valeur: null,
+    // ⚠️ LA CONSÉQUENCE VOYAGE AVEC LE FAIT. « nom: null » se lit comme un champ oublié ; c'est
+    // un fait mesuré, et il a un prix que le lecteur doit connaître sans lire ce fichier.
+    consequence:
+      'cet agent est ANONYME, donc inadressable : on ne peut ni le nommer sur une ligne, ni lui ' +
+      'écrire. Il doit se nommer lui-même — on ne lui en attribue aucun d’ici.',
+  };
+}
+
+/**
  * UN RECENSEMENT — qui est vivant, quel métier il porte, et de combien il s'écarte.
  *
  * L'I/O est injectée, sans exception :
@@ -296,20 +412,26 @@ function motDeLErreur(err) {
  */
 export async function unRecensement({
   panes = [],
-  dossier = '.orchestrateur',
   roleDuLieu = () => null,
-  role = 'orchestrateur',
   mesurer = empreinteDuMetier,
-  reference = { refus: 'aucune référence ne m’a été donnée' },
+  // ⚠️ UNE RÉFÉRENCE PAR RÔLE, jamais une seule. Voir `referencesDesRoles` : comparer le métier
+  // d'un représentant au gabarit d'orchestrateur rendrait « en retard » tous les représentants,
+  // tous les jours, et le retard cesserait de vouloir dire quelque chose.
+  references = {},
   lireEcran = null,
   // ⚠️ L'ÉTAT DU MANDAT, ET IL NE SE DEVINE PAS (T-20260819-0056). Injecté : sans lui, chaque
   // orchestrateur porte « non mesuré » — jamais « ouvert ». Voir `mandat.js` pour la raison, et
   // la conduite qui en découle plus bas : **on ne propose rien à un mandat qu'on n'a pas mesuré.**
   etatDuMandat = null,
-  // ⚠️ UN ENRICHISSEMENT, JAMAIS UNE SOURCE. Les noms viennent de `herdr.agents()`, qui
-  // SOUS-COMPTE (40 % mesurés le 2026-08-19) : s'en servir pour savoir QUI EXISTE ferait
-  // reculer ce module au défaut qu'il ferme. On ne lui demande donc que d'habiller un pane
-  // qu'on a déjà trouvé autrement — et son silence ne retire personne du registre.
+  // ⚠️ UN ENRICHISSEMENT, JAMAIS UNE SOURCE. Les noms viennent de `herdr.agents()`, dont la
+  // complétude VARIE : 83 panes sur 227 le 2026-08-19, 94 sur 94 le 2026-08-22. S'en servir
+  // pour savoir QUI EXISTE ferait reculer ce module au défaut qu'il ferme. On ne lui demande
+  // que d'habiller un pane trouvé autrement — et son silence ne retire personne du registre.
+  //
+  // ⚠️ ET SA FORME PORTE CE QU'IL N'A PAS VU. `{ mesure: 'lue', noms: Map }` où une entrée à
+  // `null` dit « vu, sans nom » et une entrée ABSENTE dit « pas vu » ; `{ mesure: 'refusée' }`
+  // quand il n'a pas répondu du tout. Une Map nue ne saurait pas distinguer les deux, et c'est
+  // exactement la distinction que `nomDeLAgent` doit rendre.
   nomsConnus = null,
   maintenant = Date.now(),
   journaliser = () => {},
@@ -327,18 +449,19 @@ export async function unRecensement({
     const raison = motDeLErreur(err);
     journaliser(
       `recensement — SANS INVENTAIRE : la liste des panes ne s’est pas laissé lire (${raison}). ` +
-        'Je ne sais pas qui est vivant : ceci n’est PAS « aucun orchestrateur ».'
+        'Je ne sais pas qui est vivant : ceci n’est PAS « aucun agent », ni « aucun orchestrateur ».'
     );
     return {
       quand,
       inventaireRefuse: raison,
       panesVus: null,
-      reference,
-      // ⚠️ `null`, PAS `[]`. Voir la note de la signature — c'est ici que se joue la garde.
-      orchestrateurs: null,
+      references,
+      // ⚠️ `null`, PAS `[]`. Voir la note de la signature — c'est ici que se joue la garde, et
+      // un renommage de champ est exactement l'occasion de la perdre sans qu'un banc rougisse.
+      agents: null,
       resume:
         'je n’ai pas pu mesurer qui est vivant : la liste des panes ne s’est pas laissé lire ' +
-        `(${raison}). Ce n’est pas « aucun orchestrateur » — c’est « je n’ai pas su regarder ».`,
+        `(${raison}). Ce n’est pas « aucun agent » — c’est « je n’ai pas su regarder ».`,
       regle: REGLE_DE_CONDUITE,
     };
   }
@@ -351,27 +474,87 @@ export async function unRecensement({
   const sessionsInterrogees = enveloppe?.sessionsInterrogees ?? null;
   liste = enveloppe ? enveloppe.panes : Array.isArray(liste) ? liste : [];
 
-  const orchestrateurs = [];
+  const agents = [];
   // ⚠️ CE QU'ON A ÉCARTÉ SE COMPTE, IL NE DISPARAÎT PAS. Un chemin qui porte un
-  // `.orchestrateur/<mandat>/` sans porter le métier est écarté à juste titre — le rôle
+  // `.orchestrateur/<mandat>/` sans porter le métier est écarté du RÔLE à juste titre — le rôle
   // s'établit par le fait — mais l'écart entre « candidats » et « comptés » est justement ce qui
   // chiffre le plancher. Mesuré sur ce poste le 2026-08-19 : huit candidats, sept comptés, et le
-  // huitième était un agent bien vivant dans un lieu à demi posé (T-20260819-0070). Sans ce
-  // champ, il n'aurait laissé aucune trace nulle part.
+  // huitième était un agent bien vivant dans un lieu à demi posé (T-20260819-0070).
+  //
+  // ⚠️ ET DEPUIS E-20260822-0001, ÊTRE ÉCARTÉ DU RÔLE N'EST PLUS ÊTRE ÉCARTÉ DU REGISTRE :
+  // l'agent y figure avec un rôle « non établi ». C'est EF-VUE-008 — dire ce qu'on ne sait pas —
+  // et c'est ce qui a manqué le plus longtemps : 81 des 97 panes du poste travaillaient hors de
+  // tout dossier de rôle et n'apparaissaient NULLE PART, pas même comme « je ne sais pas ».
   const lieuxEcartes = [];
+  // Les panes qui DÉCLARENT ne porter aucun agent — des terminaux, pas des agents. Mesuré :
+  // 3 sur 97 le 2026-08-22. Les rendre comme « agent au rôle non établi » affirmerait qu'un
+  // agent existe là où il n'y en a pas — un faux positif dans un registre dont tout l'objet est
+  // de n'en produire aucun. On ne les fait pas disparaître pour autant : on les compte.
+  let panesSansAgent = 0;
   for (const p of liste) {
+    // ⚠️ SEULE UNE DÉCLARATION ÉCARTE, JAMAIS UN SILENCE. `agent: null` est un fait mesuré
+    // (« ce pane ne porte pas d'agent ») ; une clé ABSENTE n'est pas une mesure. Écarter sur
+    // l'absence de la clé ferait taire un pane parce que la source ne s'est pas exprimée —
+    // c'est-à-dire présumer, ce que ce registre ne fait jamais.
+    if (p && Object.hasOwn(p, 'agent') && !p.agent) {
+      panesSansAgent += 1;
+      continue;
+    }
     // ⚠️ LE CHEMIN DE TRAVAIL, PAS LE `cwd`. Un agent né par `claude-swt` garde le dépôt
     // principal en `cwd` pendant que son lieu vit ailleurs — `herdr.js` le dit déjà de son côté.
     const chemin = p?.foreground_cwd || p?.cwd || null;
-    const lieu = lieuDuChemin(chemin, dossier);
-    if (!lieu) continue;
-    if (roleDuLieu(lieu) !== role) {
-      lieuxEcartes.push({ pane: p?.pane_id ?? p?.pane ?? null, lieu, pourquoi: `le métier du rôle « ${role} » n’y est pas établi` });
-      continue; // le rôle se reconnaît au fait, pas au nom du dossier
+    const candidat = lieuDeRoleDansLeChemin(chemin);
+    const lieu = candidat?.lieu ?? null;
+    const mandat = candidat?.mandat ?? null;
+
+    // ═══ LE RÔLE, EN TROIS ÉTATS QUI NE SE REPLIENT PAS. « établi » · « non établi » (mesuré,
+    // aucun rôle connu ne correspond) · « refusée » (le lieu ne s'est pas laissé lire). Le
+    // troisième existe parce qu'un module qui rend la même chose quand il ne sait pas et quand
+    // il n'y a rien est indiscernable d'un module qui ment.
+    let role;
+    if (!candidat) {
+      role = {
+        mesure: 'non établi',
+        nom: null,
+        pourquoi:
+          'son chemin de travail ne passe par le lieu d’aucun rôle connu — un chef d’équipe est ' +
+          'aujourd’hui dans ce cas : le geste qui le fait naître ne dépose rien dans son worktree',
+      };
+    } else {
+      let etabli;
+      try {
+        etabli = roleDuLieu(lieu);
+      } catch (err) {
+        etabli = { refus: motDeLErreur(err) };
+      }
+      if (etabli && typeof etabli === 'object' && etabli.refus) {
+        role = { mesure: 'refusée', nom: null, raison: `le lieu « ${lieu} » ne s’est pas laissé lire (${etabli.refus})` };
+      } else if (etabli) {
+        // Le lieu porte bien un métier de rôle. On rend CELUI QU'IL PORTE, pas celui que son
+        // dossier annonce : les deux peuvent diverger, et c'est le contenu qui fait foi.
+        role = { mesure: 'établi', nom: etabli, libelle: roleDe(etabli).libelle };
+      } else {
+        lieuxEcartes.push({
+          pane: p?.pane_id ?? p?.pane ?? null,
+          lieu,
+          pourquoi: `le dossier « ${candidat.dossier} » y est, mais le métier du rôle n’y est pas établi`,
+        });
+        role = {
+          mesure: 'non établi',
+          nom: null,
+          pourquoi: `son lieu porte le dossier « ${candidat.dossier} » sans porter le métier du rôle — lieu à demi posé`,
+        };
+      }
     }
 
-    const mesure = mesurer(lieu);
-    const mandat = mandatDuChemin(chemin, dossier);
+    // ═══ LA RÉFÉRENCE EST CELLE DE SON RÔLE. Sans rôle établi, il n'y a rien à quoi comparer :
+    // on ne se rabat PAS sur une référence par défaut, qui rendrait un écart entre deux métiers
+    // qui n'ont aucune raison de concorder.
+    const reference = role.mesure === 'établi'
+      ? references?.[role.nom] ?? { refus: `aucune référence ne m’a été donnée pour le rôle « ${role.nom} »` }
+      : { refus: `le rôle n’étant pas établi, aucune référence ne s’applique` };
+
+    const mesure = role.mesure === 'établi' && lieu ? mesurer(lieu) : null;
     // ⚠️ `idle` NE DIT RIEN DU MANDAT. Un chantier clos et une session au repos rendent tous les
     // deux `idle` — c'est écrit ici parce que c'est ici qu'on serait tenté de les confondre.
     const chantier = etatDuMandat
@@ -387,16 +570,24 @@ export async function unRecensement({
     const comparable = Boolean(mesure && reference?.empreinte);
     const pane = p?.pane_id ?? p?.pane ?? null;
     const socket = p?.herdr_socket ?? p?.socket ?? null;
-    orchestrateurs.push({
+    agents.push({
       pane,
       // ⚠️ LA SESSION EST RENDUE AVEC LE PANE, JAMAIS SANS. Un identifiant de pane n'est unique
       // que dans sa session : ce poste en porte treize, et deux sessions y emploient le même
       // `w5:p3`. Un registre qui ne rendrait que le pane désignerait deux agents à la fois.
       session: socket,
-      // Le nom herdr est rendu POUR L'AFFICHAGE seulement — il ne décide de rien, et il n'est
-      // pas toujours là : `pane list` ne le porte pas, et depuis la `v1.72.0` il n'a de toute
-      // façon plus de rapport avec le mandat du lieu. C'est `mandat` qui identifie.
-      nom: p?.name ?? p?.nom ?? nomsConnus?.get?.(`${socket ?? ''}\u0000${pane}`) ?? null,
+      // ⚠️ LE RÔLE SE LIT SUR L'ENTRÉE, JAMAIS DANS LE NOM DU TABLEAU QUI LA CONTIENT. Un
+      // `orchestrateurs[]` rendait le rôle implicite dans un rangement : un lecteur qui reçoit
+      // une entrée seule ne savait pas ce qu'elle est, et déduire un fait d'un rangement est
+      // exactement ce que RA-VUE-005 interdit — « le rôle se MESURE au lieu ».
+      role,
+      // ⚠️ LE NOM PORTE SA PROPRE MESURE. `pane list` ne rend JAMAIS de nom (0 sur 97, mesuré
+      // le 2026-08-22) : tout vient du registre des agents, dont la complétude varie. « Pas de
+      // nom » et « nom non lu » appellent deux gestes opposés — voir `nomDeLAgent`.
+      nom: nomDeLAgent(p, `${socket ?? ''}\u0000${pane}`, nomsConnus),
+      // Ce que le LIEU nomme : le code du chantier pour un orchestrateur, le client pour un
+      // représentant. `null` quand aucun lieu de rôle ne porte cet agent — et un `null` ici se
+      // lit avec `role.mesure`, qui dit POURQUOI.
       mandat,
       lieu,
       // L'état de la SESSION — et rien de plus. Il ne dit pas si le chantier existe encore.
@@ -435,23 +626,52 @@ export async function unRecensement({
     });
   }
 
-  const aJour = orchestrateurs.filter((o) => o.aJour === true).length;
-  const enRetard = orchestrateurs.filter((o) => o.aJour === false).length;
-  const nonMesures = orchestrateurs.filter((o) => o.aJour === null).length;
+  const aJour = agents.filter((a) => a.aJour === true).length;
+  const enRetard = agents.filter((a) => a.aJour === false).length;
+  const nonMesures = agents.filter((a) => a.aJour === null).length;
   // ⚠️ LES MANDATS SE COMPTENT À PART, et leurs trois états ne se replient pas en deux : un
   // mandat non mesuré compté avec les ouverts ferait dire au registre qu'il sait ce qu'il ignore.
-  const mandatsClos = orchestrateurs.filter((o) => o.chantier?.clos === true).length;
-  const mandatsOuverts = orchestrateurs.filter((o) => o.chantier?.clos === false).length;
-  const mandatsNonMesures = orchestrateurs.filter((o) => o.chantier?.clos == null).length;
+  const mandatsClos = agents.filter((a) => a.chantier?.clos === true).length;
+  const mandatsOuverts = agents.filter((a) => a.chantier?.clos === false).length;
+  const mandatsNonMesures = agents.filter((a) => a.chantier?.clos == null).length;
+
+  // ⚠️ UN COMPTE PAR RÔLE, ET « JE NE SAIS PAS » SE COMPTE À PART. Replier les rôles non établis
+  // sur un rôle connu — même sur le plus probable — ferait dire au registre qu'il sait ce qu'il
+  // ignore, et c'est précisément le tableau de bord « plus faux qu'une absence de tableau »
+  // (HS-VUE-002). Les trois compartiments sont donc étanches, comme ceux du mandat au-dessus.
+  const parRole = Object.fromEntries(rolesConnus().map((nom) => [nom, 0]));
+  let roleNonEtabli = 0;
+  let roleNonMesure = 0;
+  for (const a of agents) {
+    if (a.role.mesure === 'établi') parRole[a.role.nom] = (parRole[a.role.nom] ?? 0) + 1;
+    else if (a.role.mesure === 'refusée') roleNonMesure += 1;
+    else roleNonEtabli += 1;
+  }
+
+  // ⚠️ ET LES DEUX FAÇONS DE N'AVOIR PAS DE NOM SE COMPTENT SÉPARÉMENT, jusque dans le résumé.
+  // Un lecteur qui ne lit que la dernière ligne — c'est-à-dire le lecteur normal — hériterait
+  // sinon de la confusion qu'on a pris soin d'éviter sur chaque entrée. Mesuré le 2026-08-22 :
+  // 35 des 94 agents du poste sont ANONYMES (vus, sans nom), et zéro non mesuré ce jour-là.
+  const anonymes = agents.filter((a) => a.nom?.mesure === 'aucun').length;
+  const nomsNonMesures = agents.filter((a) => a.nom?.mesure === 'refusée').length;
+
+  // Les rôles réellement trouvés, nommés dans le résumé : « au moins 15 agents » ne dit pas
+  // QUELS rôles, donc ne dit toujours pas au dirigeant quelle tranche du parc il regarde.
+  const rolesTrouves = rolesConnus()
+    .filter((nom) => parRole[nom] > 0)
+    .map((nom) => `${parRole[nom]} ${roleDe(nom).libelle_pluriel}`);
 
   // ⚠️ LE BATTEMENT DE CŒUR — ÉCRIT MÊME QUAND LA RONDE N'A RIEN TROUVÉ. Un dispositif qui ne se
   // signale que lorsqu'il a quelque chose à dire est indiscernable d'un dispositif mort ; c'est
   // le pire cas de `balayage.js`, et il ne se rejoue pas ici.
   journaliser(
-    `recensement — ${liste.length} pane(s) vus, AU MOINS ${orchestrateurs.length} orchestrateur(s) : ` +
+    `recensement — ${liste.length} pane(s) vus, AU MOINS ${agents.length} agent(s) : ` +
+      (rolesTrouves.length ? rolesTrouves.join(', ') : 'aucun rôle établi') +
+      `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré ; ` +
       `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats ` +
-      `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s)` +
-      (reference?.empreinte ? ` (référence ${reference.empreinte.slice(0, 16)})` : ' (SANS référence)') +
+      `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s) ; ` +
+      `${anonymes} anonyme(s), ${nomsNonMesures} nom(s) non mesuré(s)` +
+      (panesSansAgent ? ` ; ${panesSansAgent} pane(s) sans agent, écartés` : '') +
       (sessionsRefusees.length
         ? ` — ⚠️ COMPTE AMPUTÉ : ${sessionsRefusees.length} session(s) herdr muette(s) : ` +
           sessionsRefusees.map((r) => `${r.session ?? 'sans socket'} (${r.raison})`).join(' ; ')
@@ -462,9 +682,17 @@ export async function unRecensement({
     quand,
     inventaireRefuse: null,
     panesVus: liste.length,
-    reference,
-    orchestrateurs,
+    references,
+    // ⚠️ UN SEUL TABLEAU POUR TOUS LES RÔLES — RA-VUE-004. Un tableau par rôle divergerait au
+    // premier correctif appliqué d'un seul côté ; le rôle vit SUR l'entrée, pas dans le nom du
+    // tableau qui la contient.
+    agents,
     compte: {
+      parRole,
+      roleNonEtabli,
+      roleNonMesure,
+      anonymes,
+      nomsNonMesures,
       aJour,
       enRetard,
       nonMesures,
@@ -477,9 +705,10 @@ export async function unRecensement({
     borne: {
       nature: 'plancher',
       phrase:
-        `AU MOINS ${orchestrateurs.length} orchestrateur(s) — ce compte est un PLANCHER, jamais ` +
-        'un total : chaque amélioration de l’instrument en a trouvé davantage sur un parc ' +
-        'inchangé (3, puis 5, puis 7 dans la même matinée du 2026-08-19).',
+        `AU MOINS ${agents.length} agent(s) — ce compte est un PLANCHER, jamais un total : chaque ` +
+        'amélioration de l’instrument en a trouvé davantage sur un parc inchangé (3, puis 5, puis ' +
+        '7 dans la même matinée du 2026-08-19 ; 13 puis tout le poste le 2026-08-22, en ouvrant ' +
+        'le registre aux autres rôles). Rien ne prouve qu’on a fini de chercher.',
       sessionsInterrogees,
       // Nommées, pas comptées : une session muette est une part du poste qu'on n'a pas regardée,
       // et savoir LAQUELLE est ce qui permet d'aller voir.
@@ -488,12 +717,24 @@ export async function unRecensement({
       // juste titre, mais nommés : c'est ce qui distingue « il n'y en avait pas » de « j'en ai
       // écarté un, et voici lequel ».
       lieuxEcartes,
+      // Les panes qui ont DÉCLARÉ ne porter aucun agent. Comptés, pas effacés : sans ce champ,
+      // « 94 agents sur 97 panes » se lirait comme une perte de trois agents.
+      panesSansAgent,
       angleMort: CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
     },
     resume:
-      `AU MOINS ${orchestrateurs.length} orchestrateur(s) vivant(s) — ${aJour} à jour, ` +
-      `${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats : ${mandatsOuverts} ` +
-      `ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s).` +
+      `AU MOINS ${agents.length} agent(s) vivant(s) — ` +
+      (rolesTrouves.length ? `${rolesTrouves.join(', ')}` : 'aucun rôle établi') +
+      (roleNonEtabli ? `, ${roleNonEtabli} au rôle NON ÉTABLI` : '') +
+      (roleNonMesure ? `, ${roleNonMesure} au rôle NON MESURÉ` : '') +
+      ` — ${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s) ; mandats : ` +
+      `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s)` +
+      // ⚠️ LES DEUX FAÇONS DE N'AVOIR PAS DE NOM, DISTINCTES JUSQU'ICI. « anonyme » appelle à le
+      // faire se nommer ; « non mesuré » appelle à refaire la mesure. Les fondre enverrait
+      // corriger ce qui va bien.
+      (anonymes ? ` ; ${anonymes} ANONYME(s), inadressable(s)` : '') +
+      (nomsNonMesures ? ` ; ${nomsNonMesures} nom(s) NON MESURÉ(s) — ce n’est pas « sans nom »` : '') +
+      '.' +
       (sessionsRefusees.length
         ? ` ⚠️ ${sessionsRefusees.length} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.`
         : ' (plancher, pas un total)'),

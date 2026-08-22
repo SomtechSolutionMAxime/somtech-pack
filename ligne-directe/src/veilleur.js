@@ -27,7 +27,7 @@ import { unTourDeBalayage } from './balayage.js';
 import {
   CADENCE_DU_RECENSEMENT_MS,
   DELAI_MAX_DUN_TOUR_MS,
-  referenceDuMetier,
+  referencesDesRoles,
   unRecensement,
 } from './recensement.js';
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
@@ -1768,15 +1768,24 @@ export class Veilleur {
       // La clé porte la session, comme partout ailleurs ici : sans elle, deux panes homonymes de
       // deux sessions différentes se prêteraient leurs noms — un nom d'affichage faux est pire
       // qu'un nom absent, parce qu'on lui parle.
-      nomsConnus = new Map(
-        (await herdr.agents())
-          .filter((a) => a.name)
-          .map((a) => [`${a.herdr_socket ?? ''}\u0000${a.pane_id}`, a.name])
-      );
-    } catch {
-      // ⚠️ UN ENRICHISSEMENT QUI REFUSE N'EST PAS UNE PANNE D'INVENTAIRE. On perd des noms
-      // d'affichage, pas des agents — et le rendu porte déjà `mandat`, qui identifie.
-      nomsConnus = null;
+      //
+      // ⚠️ ON N'ÉCARTE PLUS LES SANS-NOM, ET C'EST LE CŒUR DE T-20260822-0011. Un `.filter(a =>
+      // a.name)` faisait disparaître de cette carte les agents que le registre avait POURTANT
+      // VUS sans nom — les rendant indiscernables de ceux qu'il n'avait pas vus du tout. Les
+      // deux cas devenaient un `null` nu, alors qu'ils appellent des gestes opposés : faire se
+      // nommer l'agent d'un côté, refaire la mesure de l'autre. Mesuré le 2026-08-22 : 35 des
+      // 94 agents du poste sont dans le premier cas, et zéro dans le second ce jour-là.
+      nomsConnus = {
+        mesure: 'lue',
+        noms: new Map(
+          (await herdr.agents()).map((a) => [`${a.herdr_socket ?? ''}\u0000${a.pane_id}`, a.name ?? null])
+        ),
+      };
+    } catch (err) {
+      // ⚠️ UN ENRICHISSEMENT QUI REFUSE N'EST PAS UNE PANNE D'INVENTAIRE. On perd des noms, pas
+      // des agents — et le rendu porte déjà `mandat`, qui identifie. Mais le refus se DIT :
+      // rendre `null` ferait passer « je n'ai pas pu lire les noms » pour « personne n'a de nom ».
+      nomsConnus = { mesure: 'refusée', raison: `herdr agents() a refusé (${err?.message || err})` };
     }
     // ⚠️ L'ÉTAT DU MANDAT VIENT DU SERVICEDESK, PAS DE herdr — et sans clé, on ne devine pas.
     // `accesServiceDesk` rend `null` quand rien ne permet de joindre le service ; `etatDuMandat`
@@ -1787,7 +1796,10 @@ export class Veilleur {
     return unRecensement({
       panes: () => herdr.panes(),
       roleDuLieu,
-      reference: referenceDuMetier({}),
+      // ⚠️ UNE RÉFÉRENCE PAR RÔLE. Une référence unique ferait comparer le métier d'un
+      // représentant au gabarit d'orchestrateur : deux textes sans aucune raison de concorder,
+      // donc trois représentants « en retard » tous les jours, et une colonne qu'on n'ouvre plus.
+      references: referencesDesRoles({}),
       lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
       etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
       nomsConnus,

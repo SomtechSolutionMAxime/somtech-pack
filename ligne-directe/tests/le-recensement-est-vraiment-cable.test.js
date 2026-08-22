@@ -38,7 +38,7 @@ test('le geste « recensement » est servi — sans quoi personne ne pourrait in
   let appels = 0;
   v.recensementDuPoste = async () => {
     appels += 1;
-    return { orchestrateurs: [], resume: 'rien' };
+    return { agents: [], resume: 'rien' };
   };
   const rendu = await v.traiterGeste({ geste: 'recensement' });
   assert.equal(appels, 1, 'le geste doit atteindre le recensement, pas répondre « geste inconnu »');
@@ -142,8 +142,12 @@ test('le câblage RÉEL du veilleur ne pose AUCUN geste sur aucun pane — le re
 
   // Le banc doit d'abord prouver qu'il a VU quelque chose — sinon « aucun geste posé » serait
   // vrai pour la raison la plus banale du monde : le recensement n'a rien trouvé à faire.
-  assert.ok(rendu.orchestrateurs, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
-  assert.equal(rendu.orchestrateurs.length, 1, 'le câblage réel doit trouver le lieu posé');
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  assert.equal(rendu.agents.length, 1, 'le câblage réel doit trouver le lieu posé');
+  // ⚠️ ET IL DOIT L'AVOIR RECONNU, pas seulement compté. Sans cette ligne, le banc resterait
+  // vert le jour où le câblage cesserait de résoudre les rôles — il compterait un agent au rôle
+  // « non établi » et se déclarerait satisfait.
+  assert.equal(rendu.agents[0].role.nom, 'orchestrateur', 'le câblage réel ÉTABLIT le rôle');
 
   const gestes = p.appels().filter((a) => a[1] === 'prompt' || a[1] === 'send-keys' || a[1] === 'send-text');
   assert.deepEqual(gestes, [], 'AUCUN geste ne doit partir : un « /clear » spontané effacerait le fil d’un agent au travail');
