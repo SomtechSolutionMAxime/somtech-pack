@@ -66,6 +66,11 @@ import { referenceDuPoste } from './fraicheur-gabarit.js';
 // pas de l'I/O — c'est une table pure — donc l'importer n'entame pas la règle « toute l'I/O
 // entre par paramètre » qui rend ce module éprouvable loin des agents vivants.
 import { role as roleDe, rolesConnus } from './roles.js';
+// ⚠️ MÊME RAISON QUE CI-DESSUS : la FORME d'un code de chantier est écrite une seule fois, dans
+// `mandat.js`. Ce module a besoin de savoir si un mandat EN EST un — pas de le lire, ce qui reste
+// de l'I/O et entre par paramètre (`etatDuMandat`). Recopier la forme ici la ferait diverger au
+// premier préfixe ajouté.
+import { familleDuMandat } from './mandat.js';
 
 /**
  * CE QUE CE RECENSEMENT NE PEUT PAS VOIR — par construction, et pas par accident.
@@ -495,14 +500,42 @@ export async function unRecensement({
   // agent existe là où il n'y en a pas — un faux positif dans un registre dont tout l'objet est
   // de n'en produire aucun. On ne les fait pas disparaître pour autant : on les compte.
   let panesSansAgent = 0;
+  const panesIndecidables = [];
   for (const p of liste) {
-    // ⚠️ SEULE UNE DÉCLARATION ÉCARTE, JAMAIS UN SILENCE. `agent: null` est un fait mesuré
-    // (« ce pane ne porte pas d'agent ») ; une clé ABSENTE n'est pas une mesure. Écarter sur
-    // l'absence de la clé ferait taire un pane parce que la source ne s'est pas exprimée —
-    // c'est-à-dire présumer, ce que ce registre ne fait jamais.
-    if (p && Object.hasOwn(p, 'agent') && !p.agent) {
+    // ⚠️ SEULE UNE DÉCLARATION ÉCARTE, JAMAIS UN SILENCE — et ce qui suit est la DEUXIÈME forme
+    // que prend la déclaration dans la source réelle. Le principe ne bouge pas ; c'est
+    // l'attribution qui était fausse, et elle l'était dans le code ET dans son banc.
+    //
+    // 🔴 MESURÉ SUR `herdr pane list`, LE 2026-08-22, 97 panes : la clé `agent` est PRÉSENTE sur
+    // 94, et `agent: null` ne sort JAMAIS — zéro occurrence. Pour les 3 panes sans agent, herdr
+    // OMET la clé et pose `agent_status: "unknown"`. Le test « clé présente et falsy » ne pouvait
+    // donc rien écarter : `panesSansAgent` valait 0 sur un poste qui en portait 3, et trois
+    // TERMINAUX — dont un ouvert dans le répertoire personnel — étaient rendus comme des agents
+    // vivants « au rôle non établi », avec un nom « NON MESURÉ » qui envoie refaire la mesure.
+    // C'est mot pour mot le faux positif que le commentaire ci-dessus dit vouloir empêcher.
+    //
+    // ⚠️ ET LE BANC LE TENAIT VERT AVEC UNE FORME QUE LA SOURCE NE PRODUIT PAS : il injectait
+    // `{ agent: null }`. Un double plus coopératif que le réel — le motif que ce lot a déjà payé
+    // deux fois. C'est pourquoi la garde neuve est éprouvée sur la forme MESURÉE.
+    //
+    // La déclaration, c'est donc l'un OU l'autre — mais TOUJOURS confirmée par le statut, jamais
+    // l'absence seule : `agent_status: 'unknown'` est ce que herdr pose quand il sait qu'il n'y a
+    // personne (mesuré : les 3 sans clé l'ont, les 94 autres portent done/idle/working/blocked).
+    const sansAgentDeclare =
+      p && (!Object.hasOwn(p, 'agent') || !p.agent) && p.agent_status === 'unknown';
+    if (sansAgentDeclare) {
       panesSansAgent += 1;
       continue;
+    }
+    // ⚠️ ET LE TROISIÈME CAS SE DIT, IL NE SE TRANCHE PAS. Un pane sans clé `agent` dont le statut
+    // n'est PAS `unknown` n'a rien déclaré du tout : l'écarter le ferait taire, le recenser
+    // affirmerait un agent. On le recense — ne jamais omettre reste la règle — et on le NOMME
+    // ici, pour que « 97 agents » ne se lise pas comme « 97 agents certains ».
+    if (p && !Object.hasOwn(p, 'agent')) {
+      panesIndecidables.push({
+        pane: p?.pane_id ?? p?.pane ?? null,
+        pourquoi: `la source n’a pas dit si ce pane porte un agent (statut « ${p.agent_status ?? 'absent'} ») — il est recensé, sans preuve`,
+      });
     }
     // ⚠️ LE CHEMIN DE TRAVAIL, PAS LE `cwd`. Un agent né par `claude-swt` garde le dépôt
     // principal en `cwd` pendant que son lieu vit ailleurs — `herdr.js` le dit déjà de son côté.
@@ -572,20 +605,36 @@ export async function unRecensement({
     // positif dans un registre dont tout l'objet est de n'en produire aucun » que ce module
     // s'interdit trente lignes plus haut, pris à l'envers : une lecture JAMAIS ENTREPRISE se
     // disait « je n'ai pas pu ».
+    // ⚠️ QUATRE ÉTATS, PAS TROIS — et le quatrième est un REJET de revue de fond contre le
+    // correctif précédent. « Le lieu ne s'est pas laissé lire » avait été rangé avec « il n'y a
+    // rien à mesurer », donc compté dans `metierSansObjet` et rendu dans le résumé sous
+    // l'étiquette « rien à mesurer, PAS UN ÉCHEC ». C'est l'erreur exactement INVERSE de celle
+    // qu'on venait de corriger : un vrai échec de mesure silencieusement classé « rien à voir
+    // ici », pendant que `nonMesures` — la colonne qui appelle à aller voir — restait à zéro.
+    //
+    //   • « lue »          — mesurée, on a l'empreinte ;
+    //   • « refusée »      — on a TENTÉ de lire le métier et ça a échoué ;
+    //   • « non mesurée »  — on n'a pas pu tenter : un amont a refusé (le lieu est illisible) ;
+    //   • « sans objet »   — il n'y a rien à mesurer, et ça n'appelle aucun geste.
+    //
+    // Seul le dernier est « pas un échec ». Les deux du milieu se comptent avec les non-mesurés.
     const aQuoiMesurer = role.mesure === 'établi' && Boolean(lieu);
     const mesure = aQuoiMesurer ? mesurer(lieu) : null;
     const metier = mesure
       ? { mesure: 'lue', empreinte: mesure.empreinte, octets: mesure.octets }
       : aQuoiMesurer
         ? { mesure: 'refusée', refus: `le métier de « ${lieu} » ne s’est pas laissé mesurer` }
-        : {
-            mesure: 'sans objet',
-            pourquoi:
-              role.mesure === 'refusée'
-                ? 'le lieu ne s’est pas laissé lire : il n’y a pas de métier à comparer, et ce n’est ' +
-                  'pas le métier qui a refusé — c’est le lieu'
-                : 'aucun lieu de rôle ne porte cet agent : il n’y a pas de métier à mesurer',
-          };
+        : role.mesure === 'refusée'
+          ? {
+              mesure: 'non mesurée',
+              raison:
+                `le lieu « ${lieu} » ne s’est pas laissé lire : on n’a pas pu tenter de mesurer son ` +
+                'métier. Ce n’est pas le métier qui a refusé — c’est le lieu, et il faut refaire la mesure',
+            }
+          : {
+              mesure: 'sans objet',
+              pourquoi: 'aucun lieu de rôle ne porte cet agent : il n’y a pas de métier à mesurer',
+            };
 
     // ⚠️ `idle` NE DIT RIEN DU MANDAT. Un chantier clos et une session au repos rendent tous les
     // deux `idle` — c'est écrit ici parce que c'est ici qu'on serait tenté de les confondre.
@@ -607,6 +656,21 @@ export async function unRecensement({
     //   • un lieu `.orchestrateur/…` portant le métier d'un REPRÉSENTANT faisait interroger le
     //     ServiceDesk sur son nom, et le comptait parmi les mandats ouverts.
     // La branche `metier` juste au-dessus lit `role.mesure` ; celle-ci ne l'avait pas suivie.
+    //
+    // ⚠️ ET UN MANDAT QUI A LA FORME D'UN CODE DE CHANTIER SE LIT, QUEL QUE SOIT LE MÉTIER DU
+    // LIEU — second REJET contre ce même correctif, et celui-là ouvrait un geste dangereux.
+    // Indexer la question sur le seul rôle ÉTABLI faisait, pour un lieu
+    // `.orchestrateur/d-20260822-0077/` portant le métier d'un représentant — la divergence que ce
+    // module déclare supportée quinze lignes plus haut — affirmer « ce mandat ne nomme pas un
+    // chantier » d'un code que `familleDuMandat` reconnaît parfaitement, NE PAS interroger le
+    // ServiceDesk, et donc PROPOSER `/clear` sur un chantier CLOS : très exactement le réveil que
+    // la garde de `remiseAJour` existe pour retenir (T-20260819-0056). La garde s'était retrouvée
+    // indexée sur le métier écrit dans le fichier, alors que le risque vit dans le mandat porté
+    // par le chemin.
+    //
+    // On n'affirme donc « sans objet » que quand le mandat n'a PAS la forme d'un code ET que le
+    // rôle établi dit qu'il n'en porte pas. Le doute va toujours vers la LECTURE : lire pour rien
+    // coûte un appel, ne pas lire coûte un chantier réveillé.
     const mandatDesigne = role.mesure === 'établi' ? roleDe(role.nom).mandat_designe : null;
     const chantier = !mandat
       ? {
@@ -614,29 +678,44 @@ export async function unRecensement({
           clos: null,
           pourquoi: 'aucun lieu de rôle ne porte cet agent : il n’y a pas de mandat à lire',
         }
-      : role.mesure !== 'établi'
-        ? {
-            // ⚠️ « JE NE SAIS PAS CE QUE CE MANDAT DÉSIGNE » N'EST PAS « IL N'Y A RIEN À LIRE ».
-            // Sans rôle établi, on ignore si ce segment nomme un chantier ou un client : c'est un
-            // échec de mesure, et le ranger en « sans objet » le ferait disparaître du décompte
-            // des choses à aller voir.
-            mesure: 'non mesurée',
-            clos: null,
-            raison:
-              `le rôle de cet agent n’est pas établi (${role.mesure}) : on ne sait pas si « ${mandat} » ` +
-              'nomme un chantier ou autre chose, donc on ne lit rien',
-          }
-        : mandatDesigne !== 'chantier'
+      : familleDuMandat(mandat)
+        ? etatDuMandat
+          ? await etatDuMandat(mandat)
+          : { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné' }
+        : role.mesure !== 'établi'
           ? {
-              mesure: 'sans objet',
+              // ⚠️ « JE NE SAIS PAS CE QUE CE MANDAT DÉSIGNE » N'EST PAS « IL N'Y A RIEN À LIRE ».
+              // Sans rôle établi, et le mandat n'ayant pas la forme d'un code, on ignore ce que ce
+              // segment nomme : c'est un échec de mesure, et le ranger en « sans objet » le ferait
+              // disparaître du décompte des choses à aller voir.
+              mesure: 'non mesurée',
               clos: null,
-              pourquoi:
-                `le mandat d’un ${roleDe(role.nom).libelle} nomme ${mandatDesigne === 'client' ? 'son client' : 'autre chose'}, ` +
-                'pas un chantier dont l’état se lirait au ServiceDesk',
+              raison:
+                `le rôle de cet agent n’est pas établi (${role.mesure}) : on ne sait pas si « ${mandat} » ` +
+                'nomme un chantier ou autre chose, donc on ne lit rien',
             }
-          : etatDuMandat
-            ? await etatDuMandat(mandat)
-            : { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné' };
+          : mandatDesigne !== 'chantier'
+            ? {
+                mesure: 'sans objet',
+                clos: null,
+                pourquoi:
+                  `le mandat d’un ${roleDe(role.nom).libelle} nomme ${mandatDesigne === 'client' ? 'son client' : 'autre chose'}, ` +
+                  `et « ${mandat} » n’a pas la forme d’un code de chantier : son état ne se lit nulle part`,
+              }
+            : {
+                // ⚠️ UN CHANTIER QU'ON NE PEUT PAS TRACER N'EST PAS UNE ABSENCE DE CHANTIER —
+                // attrapé par un banc préexistant, et il avait raison. Un orchestrateur PORTE un
+                // chantier par définition de son rôle ; celui-ci peut s'appeler `matapedia` ou
+                // `general` (« son lieu est parfaitement valide, et son chantier n'est traçable
+                // nulle part », `mandat.js`). C'est un mandat dont l'état NE SE MESURE PAS, pas un
+                // mandat qui n'existe pas : le ranger en « sans objet » le sortirait du décompte
+                // des choses qu'on ignore, sous une étiquette qui dit « pas un échec ».
+                mesure: 'non mesurée',
+                clos: null,
+                raison:
+                  `« ${mandat} » n’est pas un code de chantier : son état ne se lit nulle part. Ce rôle ` +
+                  'en porte pourtant un — c’est un chantier NON TRAÇABLE, pas une absence de chantier',
+              };
     const enVol = lireEcran
       ? travailEnVol(await lireEcran(p))
       : { mesure: 'non mesurée', raison: 'aucun lecteur d’écran ne m’a été donné', enVol: null };
@@ -728,6 +807,9 @@ export async function unRecensement({
   // la seule ligne que le lecteur normal lit. Fondus, ils faisaient dire au registre « 81 non
   // mesurés » là où il n'y avait rien à mesurer : le lecteur y lisait un instrument en panne sur
   // 84 % du parc, et le seul vrai échec disparaissait dedans.
+  // ⚠️ SEUL « sans objet » EST « PAS UN ÉCHEC ». « refusée » (on a tenté, ça a échoué) et
+  // « non mesurée » (un amont a refusé) se comptent avec les non-mesurés : les ranger avec les
+  // sans-objet les ferait sortir sous une étiquette qui dit littéralement « pas un échec ».
   const metierSansObjet = agents.filter((a) => a.aJour === null && a.metier?.mesure === 'sans objet').length;
   const nonMesures = agents.filter((a) => a.aJour === null && a.metier?.mesure !== 'sans objet').length;
   // ⚠️ LES MANDATS SE COMPTENT À PART, et leurs états ne se replient pas les uns sur les autres :
@@ -830,6 +912,10 @@ export async function unRecensement({
       // Les panes qui ont DÉCLARÉ ne porter aucun agent. Comptés, pas effacés : sans ce champ,
       // « 94 agents sur 97 panes » se lirait comme une perte de trois agents.
       panesSansAgent,
+      // Les panes dont la source n'a RIEN dit — ni « il y a un agent », ni « il n'y en a pas ».
+      // Recensés (on n'omet jamais), mais nommés : c'est ce qui distingue un compte d'un compte
+      // certain.
+      panesIndecidables,
       angleMort: CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
     },
     resume:

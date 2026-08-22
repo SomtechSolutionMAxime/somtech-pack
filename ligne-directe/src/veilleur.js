@@ -1783,8 +1783,27 @@ export class Veilleur {
       };
     } catch (err) {
       // ⚠️ UN ENRICHISSEMENT QUI REFUSE N'EST PAS UNE PANNE D'INVENTAIRE. On perd des noms, pas
-      // des agents — et le rendu porte déjà `mandat`, qui identifie. Mais le refus se DIT :
-      // rendre `null` ferait passer « je n'ai pas pu lire les noms » pour « personne n'a de nom ».
+      // des agents — et le rendu porte déjà `mandat`, qui identifie.
+      //
+      // ⚠️ CORRECTION D'UN RÉCIT FAUX, relevée en revue portail. Cette ligne portait : « rendre
+      // `null` ferait passer *je n'ai pas pu lire les noms* pour *personne n'a de nom* ». MESURÉ :
+      // ce basculement n'a pas lieu. `nomDeLAgent` rend `mesure: 'refusée'` sur `null` COMME sur
+      // `{ mesure: 'refusée' }` — le compte et le résumé sont identiques. Ce qui se perd est plus
+      // petit, et c'est la CAUSE : la raison rendue devient « aucun lecteur de noms ne m'a été
+      // donné » au lieu de nommer herdr et son erreur. C'est réel — un diagnostic qui accuse le
+      // câblage au lieu de la source envoie chercher au mauvais endroit — mais ce n'est pas ce
+      // que la phrase annonçait. Un motif faux qui garde une conduite juste finit par la faire
+      // tomber avec lui le jour où quelqu'un le vérifie.
+      //
+      // ⚠️ ET CETTE BRANCHE EST PRESQUE INATTEIGNABLE — mesuré, et dit plutôt que gardé par un
+      // double. `herdr.agents()` sans socket AVALE l'échec de chaque session, délibérément (voir
+      // `herdr.js` : se contenter d'une session ferait conclure « cet agent est mort » pour tout
+      // agent vivant ailleurs). Une source de noms en panne rend donc `[]`, pas une exception, et
+      // le recensement le rend correctement par un AUTRE chemin — « le registre n'a pas vu ce
+      // pane », qui est un refus, jamais un « il n'a pas de nom ». C'est ce chemin-là qui est
+      // gardé (`le-recensement-est-vraiment-cable`). Ce `catch` n'est atteint que si herdr est
+      // ENTIÈREMENT injoignable — cas où `panes()` refuse aussi et où aucune entrée n'est rendue,
+      // donc où cette `raison` n'est lue par personne. Une ceinture, et elle se déclare.
       nomsConnus = { mesure: 'refusée', raison: `herdr agents() a refusé (${err?.message || err})` };
     }
     // ⚠️ L'ÉTAT DU MANDAT VIENT DU SERVICEDESK, PAS DE herdr — et sans clé, on ne devine pas.

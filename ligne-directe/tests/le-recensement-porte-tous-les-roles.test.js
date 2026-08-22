@@ -440,14 +440,22 @@ test('« il n’y a pas de nom » et « je n’ai pas pu lire le nom » ne se re
 });
 
 test('un rôle non établi, un agent anonyme et un pane sans agent sont TROIS choses distinctes', async () => {
-  // ⚠️ MESURÉ : 3 des 97 panes du poste déclarent `agent: null` — ce sont des terminaux, pas des
-  // agents. Les rendre comme « agent au rôle non établi » ferait affirmer qu'un agent existe là
-  // où il n'y en a pas : un faux positif dans un registre dont tout l'objet est de ne pas en
-  // produire. Mais on ne les fait pas DISPARAÎTRE non plus — ils sont comptés à part.
+  // ⚠️ LA FORME EST CELLE QUE `herdr pane list` PRODUIT VRAIMENT, et l'ancienne était fausse.
+  //
+  // Ce banc injectait `{ agent: null }` — une forme que la source ne rend JAMAIS. Mesuré sur les
+  // 97 panes du poste le 2026-08-22 : la clé `agent` est PRÉSENTE sur 94, `agent: null` sort
+  // ZÉRO fois, et pour les 3 panes sans agent herdr OMET la clé en posant
+  // `agent_status: "unknown"`. Le banc tenait donc vert une garde qui n'écartait rien : sur le
+  // poste réel, `panesSansAgent` valait 0 alors qu'il y en avait 3, et trois TERMINAUX — dont un
+  // ouvert dans le répertoire personnel — étaient rendus comme des agents vivants au rôle non
+  // établi, avec un nom « NON MESURÉ » qui envoie refaire la mesure.
+  //
+  // C'est le motif que ce lot a déjà payé deux fois : un double plus coopératif que le réel.
   const rendu = await unRecensement({
     panes: [
-      { pane_id: 'w1:p1', agent: 'claude', foreground_cwd: '/Users/x/worktrees/nu' },
-      { pane_id: 'w1:p2', agent: null, foreground_cwd: '/Users/x' },
+      { pane_id: 'w1:p1', agent: 'claude', agent_status: 'idle', foreground_cwd: '/Users/x/worktrees/nu' },
+      // La forme MESURÉE d'un pane sans agent : pas de clé `agent`, statut « unknown ».
+      { pane_id: 'w1:p2', agent_status: 'unknown', cwd: '/Users/x' },
     ],
     roleDuLieu,
     nomsConnus: nomsLus([['w1:p1', null]]),
@@ -457,6 +465,18 @@ test('un rôle non établi, un agent anonyme et un pane sans agent sont TROIS ch
   assert.equal(rendu.borne.panesSansAgent, 1, 'mais il ne disparaît pas : il est compté');
   assert.equal(rendu.agents[0].role.mesure, 'non établi', 'rôle : je ne sais pas');
   assert.equal(rendu.agents[0].nom.mesure, 'aucun', 'nom : il n’y en a pas — et ce n’est pas la même chose');
+
+  // ⚠️ ET LA DÉCLARATION EXIGE LES DEUX. Un pane sans clé `agent` mais dont le statut dit qu'il
+  // TRAVAILLE n'a rien déclaré : l'écarter le ferait taire. Il est recensé, et NOMMÉ comme
+  // indécidable — c'est ce qui empêche « 94 agents » de se lire « 94 agents certains ».
+  const muet = await unRecensement({
+    panes: [{ pane_id: 'w2:p1', agent_status: 'working', foreground_cwd: '/Users/x/worktrees/nu' }],
+    roleDuLieu,
+  });
+  assert.equal(muet.agents.length, 1, 'un silence n’écarte pas — on ne présume aucune absence');
+  assert.equal(muet.borne.panesSansAgent, 0, 'et il n’est pas compté comme « sans agent »');
+  assert.equal(muet.borne.panesIndecidables.length, 1, 'il est nommé comme indécidable');
+  assert.match(muet.borne.panesIndecidables[0].pourquoi, /n’a pas dit/, 'et on dit ce qui manque');
 });
 
 test('un pane qui ne DIT RIEN de son agent n’est pas écarté — on ne présume pas une absence', async () => {
@@ -694,7 +714,8 @@ test('« RIEN À MESURER » NE SE DIT PAS « JE N’AI PAS PU MESURER » — ni 
   // DEUX mandats réellement non mesurés étaient invisibles parmi 86.
   const tmp = racine();
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
-  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-1');
+  // Un VRAI code de chantier : c'est sa FORME qui décide si son état se lit au ServiceDesk.
+  const lieu = poserLieu(join(tmp, 'depot'), 'orchestrateur', 'p-20260822-0001');
 
   const rendu = await unRecensement({
     panes: [
@@ -796,7 +817,10 @@ test('UN REPRÉSENTANT PÉRIMÉ SE VOIT PROPOSER SA REMISE À JOUR — le geste 
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const depot = join(tmp, 'depot');
   const rep = poserLieu(depot, 'representant', 'Charles-Olivier');
-  const orch = poserLieu(depot, 'orchestrateur', 'p-1');
+  // ⚠️ UN VRAI CODE DE CHANTIER, pas « p-1 » : c'est la FORME du mandat qui décide si son état se
+  // lit au ServiceDesk, et un banc qui emploie une forme que la production ne produit pas éprouve
+  // un chemin que personne n'emprunte.
+  const orch = poserLieu(depot, 'orchestrateur', 'p-20260822-0001');
   // Les foyers portent un métier DIFFÉRENT de celui posé : les deux agents sont donc périmés.
   const foyer = poserReference(tmp, 'representant', METIER.representant + 'une ligne de plus.\n');
   const gab = join(foyer, '.claude', 'plugins', 'marketplaces', 'somtech-pack', '.claude', 'templates', 'orchestrateur');
@@ -858,37 +882,47 @@ test('UN REPRÉSENTANT PÉRIMÉ SE VOIT PROPOSER SA REMISE À JOUR — le geste 
   assert.match(sansRaison.remiseAJour.pourquoiPas, /sans raison dite/, 'il dit que la raison manque, au lieu de l’inventer');
 });
 
-test('LE MANDAT SE LIT SUR LE RÔLE ÉTABLI, JAMAIS SUR LE DOSSIER — les deux peuvent diverger', async (t) => {
+test('UN MANDAT QUI A LA FORME D’UN CODE SE LIT — le métier du lieu ne le fait pas taire', async (t) => {
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  // REJET DE REVUE DE FOND. Le test « ce mandat est-il un chantier ? » lisait le rôle que le
-  // CHEMIN annonce, pas celui que le CONTENU établit — alors que ce module dit lui-même que les
-  // deux peuvent diverger et que c'est le contenu qui fait foi. Il se trompait dans les DEUX
-  // sens, et les deux erreurs sont dans ce banc.
+  // REJET DE REVUE DE FOND CONTRE LE CORRECTIF PRÉCÉDENT, et celui-là ouvrait un geste dangereux.
+  //
+  // La question « ce mandat est-il un chantier ? » avait été indexée sur le seul rôle ÉTABLI.
+  // Pour un lieu `.orchestrateur/d-…/` portant le métier d'un REPRÉSENTANT — divergence que ce
+  // module déclare supportée — le registre affirmait donc « ce mandat ne nomme pas un chantier »
+  // d'un code parfaitement reconnaissable, N'INTERROGEAIT PAS le ServiceDesk, et PROPOSAIT
+  // `/clear` sur un chantier CLOS : le réveil même que cette garde existe pour retenir.
+  //
+  // La règle est donc : la FORME du mandat décide de la lecture ; le rôle ne décide que pour ce
+  // qui n'a pas la forme d'un code. Le doute va vers la lecture — lire pour rien coûte un appel,
+  // ne pas lire coûte un chantier réveillé.
   const tmp = racine();
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const depot = join(tmp, 'depot');
 
-  // ① Un dossier de représentant dont le lieu ne s'est PAS LAISSÉ LIRE. Le rôle est « refusée ».
+  // ① Un dossier de représentant dont le lieu ne s'est PAS LAISSÉ LIRE, et dont le mandat n'a
+  //    pas la forme d'un code : on ne sait pas ce qu'il nomme, donc on ne range pas en « rien ».
   const illisible = poserLieu(depot, 'representant', 'Frederic');
-  // ② Un dossier d'ORCHESTRATEUR portant le métier d'un REPRÉSENTANT — divergence déclarée
-  //    supportée par `lieuDeRoleDansLeChemin`.
+  // ② Un dossier d'ORCHESTRATEUR portant le métier d'un REPRÉSENTANT, avec un VRAI code.
   const divergent = poserLieu(depot, 'orchestrateur', 'd-20260822-0077', { metier: METIER.representant });
   writeFileSync(join(divergent, 'CONTEXTE.md'), CONTEXTE.representant);
+  // ③ Un représentant nominal : son mandat nomme un client, il n'a pas la forme d'un code.
+  const rep = poserLieu(depot, 'representant', 'Charles-Olivier');
 
   const interroges = [];
   const rendu = await unRecensement({
     panes: [
       { pane_id: 'w1:p1', foreground_cwd: illisible },
       { pane_id: 'w1:p2', foreground_cwd: divergent },
+      { pane_id: 'w1:p3', foreground_cwd: rep },
     ],
     roleDuLieu: (lieu) => (lieu === illisible ? { refus: 'EACCES' } : roleDuLieu(lieu)),
     etatDuMandat: async (m) => {
       interroges.push(m);
-      return { mesure: 'lue', clos: false, statut: 'in_progress' };
+      return { mesure: 'lue', clos: true, statut: 'completed' };
     },
   });
 
-  // ① Un lieu qu'on n'a pas su lire ne se range PAS en « rien à voir ici ».
+  // ① Un lieu qu'on n'a pas su lire, mandat sans forme de code : ni « sans objet », ni interrogé.
   const a1 = rendu.agents.find((a) => a.pane === 'w1:p1');
   assert.equal(a1.role.mesure, 'refusée', 'contrôle : le rôle a refusé');
   assert.equal(
@@ -897,13 +931,26 @@ test('LE MANDAT SE LIT SUR LE RÔLE ÉTABLI, JAMAIS SUR LE DOSSIER — les deux 
     `un échec de mesure ne se classe pas « sans objet » (rendu : ${JSON.stringify(a1.chantier)})`,
   );
   assert.match(a1.chantier.raison, /rôle .* n’est pas établi/, 'et la raison dit ce qui manque');
+  // ⚠️ ET SON MÉTIER NON PLUS. « le lieu ne s'est pas laissé lire » n'est pas « rien à mesurer » :
+  // rangé avec les sans-objet, il sortait sous l'étiquette « pas un échec », pendant que la
+  // colonne qui appelle à aller voir restait à zéro.
+  assert.equal(a1.metier.mesure, 'non mesurée', 'le métier non plus ne se dit pas « sans objet »');
+  assert.match(a1.metier.raison, /ne s’est pas laissé lire/, 'et il nomme ce qui a refusé : le LIEU');
 
-  // ② Le rôle établi est « representant » : son mandat n’est PAS un chantier, malgré le dossier.
+  // ② Le code se lit, malgré le métier divergent — et le chantier CLOS retient le geste.
   const a2 = rendu.agents.find((a) => a.pane === 'w1:p2');
   assert.equal(a2.role.nom, 'representant', 'contrôle : c’est le CONTENU qui établit le rôle');
-  assert.equal(a2.chantier.mesure, 'sans objet', 'donc son mandat n’est pas un chantier à lire');
-  assert.deepEqual(interroges, [], 'et le registre des chantiers n’est interrogé pour PERSONNE');
-  assert.equal(rendu.compte.mandatsOuverts, 0, 'aucun mandat ouvert ne se compte sur un rôle qui n’en a pas');
+  assert.equal(a2.chantier.mesure, 'lue', 'mais son MANDAT a la forme d’un code : il se lit');
+  assert.equal(a2.chantier.clos, true);
+  assert.ok(interroges.includes('d-20260822-0077'), 'le ServiceDesk EST interrogé sur un code de chantier');
+
+  // ③ Un mandat sans forme de code, sur un rôle établi qui nomme un client : sans objet.
+  const a3 = rendu.agents.find((a) => a.pane === 'w1:p3');
+  assert.equal(a3.chantier.mesure, 'sans objet', 'un nom de client n’est pas un chantier à lire');
+  assert.equal(interroges.includes('Charles-Olivier'), false, 'et on ne l’interroge pas');
+  assert.match(a3.chantier.pourquoi, /n’a pas la forme d’un code de chantier/, 'et on dit pourquoi');
+
+  assert.equal(rendu.compte.mandatsClos, 1);
   assert.equal(rendu.compte.mandatsNonMesures, 1, 'le seul échec réel se compte comme tel');
   assert.equal(rendu.compte.mandatsSansObjet, 1);
 });
@@ -925,6 +972,114 @@ test('LE RÉSUMÉ NOMME LES RÔLES NON MESURÉS — la distinction ne s’arrêt
   assert.equal(rendu.compte.roleNonMesure, 1, 'contrôle : le compteur le porte');
   assert.match(rendu.resume, /1 au rôle NON MESURÉ/, 'et la PHRASE aussi — sinon personne ne le lit');
   assert.doesNotMatch(rendu.resume, /au rôle NON ÉTABLI/, 'et jamais confondu avec « aucun rôle ne correspond »');
+});
+
+test('UN REFUS DU REGISTRE DES NOMS RAPPORTE SA CAUSE — « je n’ai pas de lecteur » n’est pas « herdr a refusé »', async () => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE PAR LES DEUX PASSES. Le câblage du veilleur a deux branches :
+  // `{ mesure: 'lue', noms }` quand herdr répond, `{ mesure: 'refusée', raison }` quand il jette.
+  // La première a reçu son banc (« deux étages justes dont la jointure n'est pas gardée ») ; la
+  // seconde est restée nue — la remettre à `null` laissait les 819 essais verts.
+  //
+  // ⚠️ ET LA CONSÉQUENCE EST PLUS PETITE QUE CE QUE LE CODE AFFIRMAIT, ce qui vaut d'être dit :
+  // `null` et `{ mesure: 'refusée' }` rendent le MÊME état (`mesure: 'refusée'`), le même compte,
+  // le même résumé. Ce qui se perd est la CAUSE. Un diagnostic qui accuse le câblage (« aucun
+  // lecteur ne m'a été donné ») au lieu de la source (« herdr agents() a refusé : … ») envoie
+  // chercher la panne au mauvais endroit — c'est réel, et c'est tout ce que c'est.
+  const cle = ['w1:p1', null];
+
+  const cable = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: '/Users/x/un-projet' }],
+    roleDuLieu,
+    nomsConnus: { mesure: 'refusée', raison: 'herdr agents() a refusé (ECONNREFUSED)' },
+  });
+  const nu = await unRecensement({
+    panes: [{ pane_id: 'w1:p1', foreground_cwd: '/Users/x/un-projet' }],
+    roleDuLieu,
+    nomsConnus: null,
+  });
+  void cle;
+
+  // Les deux rendent le même ÉTAT — c'est mesuré, et c'est pourquoi l'état ne suffit pas à garder.
+  assert.equal(cable.agents[0].nom.mesure, 'refusée');
+  assert.equal(nu.agents[0].nom.mesure, 'refusée');
+  assert.equal(cable.compte.nomsNonMesures, nu.compte.nomsNonMesures, 'même compte : l’état ne discrimine pas');
+
+  // C'est la RAISON qui discrimine, et c'est elle qu'il faut garder.
+  assert.match(cable.agents[0].nom.raison, /herdr agents\(\) a refusé/, 'la cause RÉELLE est rapportée…');
+  assert.doesNotMatch(cable.agents[0].nom.raison, /aucun lecteur/, '…et pas celle du câblage');
+  assert.match(nu.agents[0].nom.raison, /aucun lecteur/, 'sans lecteur, on dit que c’est le lecteur qui manque');
+});
+
+test('LE RÉSUMÉ NOMME CHACUNE DE SES HUIT ÉTIQUETTES — une assertion négative n’en garde aucune', async (t) => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // DEUX MUTATIONS SURVIVANTES, TROUVÉES EN REVUE PORTAIL, ET LEUR CAUSE EST UN MOTIF.
+  //
+  // « au rôle NON ÉTABLI » et « au mandat NON MESURÉ » pouvaient QUITTER le résumé sans qu'un
+  // seul des 819 essais rougisse. Les deux étiquettes existaient pourtant dans `tests/` — mais
+  // uniquement dans des `assert.doesNotMatch`, sur des rendus où leur compteur valait zéro.
+  //
+  // > UNE ASSERTION NÉGATIVE RESTE VRAIE QUAND ON SUPPRIME CE QU'ELLE CHERCHE.
+  //
+  // Le coût du premier est le défaut d'origine du lot rétabli au dernier étage : les 78 agents
+  // hors de tout lieu de rôle disparaîtraient de la SEULE ligne que le lecteur normal lit, alors
+  // que `compte.roleNonEtabli` reste juste. Un état calculé, compté, puis aplati au rendu.
+  //
+  // Ce banc construit donc UN rendu où les huit étiquettes sont simultanément non nulles, et
+  // exige chacune POSITIVEMENT. Ajouter une étiquette au résumé sans l'ajouter ici la laissera
+  // non gardée — c'est le prix, et il est visible.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const orchAJour = poserLieu(depot, 'orchestrateur', 'p-20260822-0001');
+  const orchPerime = poserLieu(depot, 'orchestrateur', 'matapedia', { metier: METIER.orchestrateur + 'périmé.\n' });
+  const rep = poserLieu(depot, 'representant', 'Charles-Olivier');
+  const foyer = poserReference(tmp, 'orchestrateur', METIER.orchestrateur);
+
+  const rendu = await unRecensement({
+    // ⚠️ L'ENVELOPPE, pas la liste nue : c'est elle qui porte les sessions muettes, et sans elle
+    // la borne serait exigée sur un rendu qui n'a aucune session à déclarer — une assertion
+    // vacante de plus.
+    panes: {
+      panes: [
+        { pane_id: 'w1:p1', foreground_cwd: orchAJour },                       // à jour + mandat ouvert
+        { pane_id: 'w1:p2', foreground_cwd: orchPerime },                      // en retard + mandat non traçable
+        { pane_id: 'w1:p3', foreground_cwd: rep },                             // mandat sans objet
+        { pane_id: 'w1:p4', foreground_cwd: join(tmp, 'un-projet') },          // rôle non établi, métier sans objet
+        { pane_id: 'w1:p5', foreground_cwd: join(depot, '.orchestrateur', 'illisible') }, // rôle refusé
+        { pane_id: 'w1:p6', agent_status: 'unknown', cwd: '/Users/x' },        // pane sans agent
+      ],
+      sessionsInterrogees: 2,
+      sessionsRefusees: [{ session: 'cg', raison: 'server_not_running' }],
+    },
+    roleDuLieu: (lieu) => (lieu.endsWith('illisible') ? { refus: 'EACCES' } : roleDuLieu(lieu)),
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
+    etatDuMandat: async (m) => (m === 'p-20260822-0001' ? { mesure: 'lue', clos: false } : { mesure: 'non mesurée', clos: null, raison: 'x' }),
+    nomsConnus: nomsLus([['w1:p1', 'kamouraska'], ['w1:p2', null], ['w1:p3', 'charles-olivier'], ['w1:p4', null]]),
+  });
+
+  const r = rendu.resume;
+  const c = rendu.compte;
+  // Chaque étiquette est exigée POSITIVEMENT, et sur le compte qu'elle porte — pas seulement sur
+  // sa présence : une étiquette juste avec un nombre échangé est le défaut qu'un banc voisin garde.
+  const attendus = [
+    [/au rôle NON ÉTABLI/, c.roleNonEtabli, 'rôle non établi'],
+    [/au rôle NON MESURÉ/, c.roleNonMesure, 'rôle non mesuré'],
+    [/à l’écart NON MESURÉ/, c.nonMesures, 'écart non mesuré'],
+    [/sans métier à comparer/, c.metierSansObjet, 'métier sans objet'],
+    [/au mandat NON MESURÉ/, c.mandatsNonMesures, 'mandat non mesuré'],
+    [/sans mandat de chantier/, c.mandatsSansObjet, 'mandat sans objet'],
+    [/ANONYME\(s\), inadressable/, c.anonymes, 'anonymes'],
+    [/nom\(s\) NON MESURÉ/, c.nomsNonMesures, 'noms non mesurés'],
+  ];
+  for (const [motif, compte, quoi] of attendus) {
+    assert.ok(compte > 0, `le banc doit CONSTRUIRE le cas « ${quoi} » — sinon il ne garde rien (compte : ${compte})`);
+    assert.match(r, motif, `l’étiquette « ${quoi} » doit être dans le résumé`);
+    assert.match(r, new RegExp(`${compte}[^;]*?${motif.source}`), `« ${quoi} » doit porter SON compte (${compte})`);
+  }
+  // Et la borne, qui voyage avec le chiffre.
+  assert.match(r, /AU MOINS \d+ agent\(s\) vivant\(s\)/, 'le compte reste un PLANCHER');
+  assert.match(r, /1 session\(s\) herdr n’ont pas répondu/, 'et les sessions muettes restent nommées');
+  assert.equal(rendu.borne.sessionsRefusees[0].session, 'cg', 'nommées une à une, pas seulement comptées');
 });
 
 test('LES RÉFÉRENCES ARRIVENT PAR RÔLE JUSQU’AU RENDU — un jeu vide n’est pas un jeu par rôle', async (t) => {

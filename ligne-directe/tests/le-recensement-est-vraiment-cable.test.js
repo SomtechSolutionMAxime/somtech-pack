@@ -342,6 +342,109 @@ test('le câblage RÉEL fournit une référence PAR RÔLE — un jeu vide tuerai
   );
 });
 
+test('le câblage RÉEL : un registre des noms EN PANNE ne fait perdre ni agents ni distinction', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // CE BANC A CHANGÉ DE SUJET EN COURS D'ÉCRITURE, ET LA MESURE QUI L'A FAIT CHANGER VAUT
+  // D'ÊTRE INSCRITE.
+  //
+  // Deux passes de revue ont relevé que la branche `catch` du câblage des noms
+  // (`veilleur.js`, `nomsConnus = { mesure: 'refusée', raison }`) n'était gardée par rien : la
+  // remettre à `null` laissait tout vert. J'ai voulu la garder par le câblage réel — et j'ai
+  // mesuré qu'elle est PRESQUE INATTEIGNABLE, pour une raison délibérée et documentée :
+  //
+  //   `herdr.agents()` sans socket AVALE l'échec de chaque session (« se contenter de la plus
+  //   récente ferait conclure *cet agent est mort* pour tout agent vivant dans une autre
+  //   session »). Une source de noms en panne rend donc `[]`, pas une exception. Le `catch` du
+  //   veilleur n'est atteint que si herdr est ENTIÈREMENT injoignable — cas où `panes()` refuse
+  //   aussi, où l'inventaire est refusé, et où aucune entrée n'est rendue : sa `raison` n'est
+  //   alors lue par personne. C'est un MUTANT ÉQUIVALENT, pas une garde manquante, et le forcer
+  //   par un double fabriquerait une garde sur un chemin que la production n'emprunte pas.
+  //
+  // Ce qui EST atteignable, et que ce banc garde : une source de noms en panne ne doit faire
+  // perdre NI les agents, NI la distinction « pas vu » / « pas de nom ». C'est la conduite que
+  // le lot revendique, et elle passe par un autre chemin que celui qu'on croyait.
+  const p = posteHerdr(bac, [], 'noms-en-panne');
+  p.pane('w1:p1', { boite: '' });
+  p.panes([{ pane_id: 'w1:p1', foreground_cwd: '/tmp/un-projet' }]);
+  // La source des noms est cassée pour de vrai : `agents.json` illisible.
+  writeFileSync(join(p.etat, 'agents.json'), '{ ceci n’est pas du JSON');
+
+  const v = veilleurNu('noms-en-panne');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  try {
+    process.env.PATH = p.path;
+    process.env.FAUX_HERDR_ETAT = p.etat;
+    process.env.HOME = join(bac, 'foyer-jetable-noms');
+    process.env.HERDR_SOCKET_PATH = join(p.etat, 'socket');
+    rendu = await v.recensementDuPoste();
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+    delete process.env.FAUX_HERDR_ETAT;
+  }
+
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  // ⚠️ LA MOITIÉ QUI COMPTE LE PLUS : on perd des NOMS, jamais des AGENTS. Un registre de noms
+  // en panne qui ferait disparaître les agents transformerait une perte d'enrichissement en
+  // perte d'inventaire — et le dirigeant lirait « personne ne travaille ».
+  assert.equal(rendu.agents.length, 1, 'une source de noms en panne ne fait perdre AUCUN agent');
+  const nom = rendu.agents[0].nom;
+  assert.equal(nom.mesure, 'refusée', 'et le nom se dit NON MESURÉ…');
+  assert.equal(nom.valeur, null, '…jamais comblé depuis le mandat ou le lieu');
+  // ⚠️ ET SURTOUT PAS « aucun ». « pas vu » et « pas de nom » appellent des gestes opposés :
+  // refaire la mesure d'un côté, faire se nommer l'agent de l'autre. C'est la distinction que
+  // tout ce lot existe pour tenir, et c'est ici qu'une source en panne pourrait la faire tomber.
+  assert.notEqual(nom.mesure, 'aucun', 'une source muette ne rend JAMAIS « il n’a pas de nom »');
+  assert.equal(rendu.compte.nomsNonMesures, 1, 'le compte le porte du bon côté…');
+  assert.equal(rendu.compte.anonymes, 0, '…et surtout pas de l’autre');
+  assert.match(nom.raison ?? '', /n’a pas vu ce pane|SOUS-COMPTE/, 'et la raison dit que la source sous-compte');
+});
+
+test('herdr ENTIÈREMENT injoignable : le recensement REFUSE en le disant, il ne JETTE pas', async () => {
+  // ⚠️ MUTATION SURVIVANTE, PUIS MESURE QUI CHANGE SON STATUT — et c'est la démarche qui compte
+  // ici. J'ai d'abord cru la branche `catch` du câblage des noms équivalente : `herdr.agents()`
+  // avale l'échec de chaque session, donc elle n'est atteinte que si herdr est ENTIÈREMENT
+  // injoignable, cas où `panes()` refuse aussi. J'ai vérifié plutôt que de conclure — et les deux
+  // rendus DIFFÈRENT :
+  //
+  //   • avec le `catch` : `recensementDuPoste()` rend `{ inventaireRefuse: "« herdr » n'a pas pu
+  //     être lancé (ENOENT)…" }` — un refus NOMMÉ, que le geste `recensement` rend tel quel ;
+  //   • sans lui : la méthode JETTE, et l'appelant reçoit une exception au lieu d'un diagnostic.
+  //
+  // Un refus qu'on peut lire et une exception ne sont pas la même chose pour celui qui interroge
+  // le registre : le premier dit CE QUI a manqué, le second dit seulement que ça a cassé. Ce
+  // n'était donc pas un mutant équivalent, et ce banc le garde.
+  const v = veilleurNu('herdr-absent');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  let jete = null;
+  try {
+    // Aucun herdr nulle part : ni dans le PATH, ni sous le foyer, ni au socket désigné.
+    process.env.PATH = '/nonexistent';
+    process.env.HOME = join(bac, 'foyer-sans-herdr');
+    process.env.HERDR_SOCKET_PATH = '/nonexistent/socket';
+    rendu = await v.recensementDuPoste();
+  } catch (err) {
+    jete = err?.message ?? String(err);
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+  }
+
+  assert.equal(jete, null, `le recensement ne doit JAMAIS jeter : l’appelant doit pouvoir LIRE le refus (${jete})`);
+  assert.ok(rendu.inventaireRefuse, 'et le refus est NOMMÉ, pas laissé vide');
+  assert.match(rendu.inventaireRefuse, /herdr/, 'il dit ce qui n’a pas répondu');
+  // ⚠️ ET RIEN DANS LE RENDU NE SE LIT « RIEN À SIGNALER ». Un inventaire refusé qui rendrait
+  // `agents: []` serait indiscernable d'un poste vide — le pire mensonge que ce registre puisse
+  // faire, puisqu'il se lit comme un succès.
+  assert.notDeepEqual(rendu.agents, [], 'un inventaire refusé ne rend jamais une liste VIDE');
+});
+
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
   // ⚠️ CE BANC EXISTE PARCE QU'UNE MUTATION A SURVÉCU. `arreter()` retient la ronde de deux
   // façons : il pose `this.arrete`, et il libère le minuteur. Retirer l'une OU l'autre ne fait

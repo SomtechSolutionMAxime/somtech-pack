@@ -341,6 +341,78 @@ test('UN CONTRÔLE NÉGATIF QUI N’A EXÉCUTÉ AUCUN ESSAI NE VAUT PAS UN CONTR
   assert.ok(vide.refus, 'aucune suite désignée : il n’y a rien à mesurer');
 });
 
+test('RÉEL — un tour MUTÉ qui n’exécute aucun essai est INDÉCIDABLE, jamais « SURVIVANTE »', () => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE PORTAIL. `lancerLaSuite` porte bien la garde
+  // « zéro essai exécuté » — mais le seul banc qui l'approchait déclenchait en réalité la garde
+  // PRÉCÉDENTE (`tests === null`, aucun compte du tout). Retirer la garde `tests === 0` laissait
+  // les 819 essais verts.
+  //
+  // ⚠️ ET LE DANGER EST DU CÔTÉ DU TOUR MUTÉ, pas du témoin. `campagne` garde son contrôle
+  // négatif ; un TOUR qui n'exécute rien rendait `{verdict: 'SURVIVANTE', rouges: 0, tests: 0}` —
+  // un verdict rendu sur ZÉRO mesure, sous le nom qui signifie « cette garde manque ». C'est mot
+  // pour mot le troisième faux témoin que l'en-tête du harnais déclare fermé.
+  const copie = copierLeDepot();
+  try {
+    // Contrôle positif : la garde ne se déclenche pas sur un lancement qui exécute vraiment.
+    const bon = lancerLaSuite(copie, { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(!bon.refus, `contrôle positif : ${bon.refus}`);
+    assert.ok(bon.tests > 0);
+
+    // Un sous-dossier réel qui ne porte AUCUN banc : `node --test` sort en 0, rend « ℹ tests 0 ».
+    const vide = lancerLaSuite(copie, { sousDossier: 'ligne-directe/src' });
+    assert.ok(vide.refus, `zéro essai exécuté doit REFUSER (rendu : ${JSON.stringify(vide)})`);
+    assert.match(vide.refus, /AUCUN test/, 'et nommer la vraie cause');
+    assert.equal(vide.fail, undefined, 'surtout pas un compte d’échecs inventé');
+
+    // Et le verdict que la campagne en tire : INDÉCIDABLE, jamais SURVIVANTE.
+    let tour = 0;
+    const c2 = campagne({
+      preparer: () => copie,
+      ranger: () => {},
+      lancer: () => (tour++ === 0 ? { tests: 10, pass: 10, fail: 0 } : { refus: 'la suite n’a exécuté AUCUN test' }),
+      mutations: [{ id: 'x', appliquer: () => true }],
+    });
+    assert.equal(c2.resultats[0].verdict, 'INDÉCIDABLE', 'un tour sans mesure ne rend PAS « SURVIVANTE »');
+  } finally {
+    rmSync(copie, { recursive: true, force: true });
+  }
+});
+
+test('RÉEL — une suite qui REFUSE arrête le total : une somme partielle n’est pas un total', () => {
+  // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE PORTAIL, et la docstring de `lancerToutesLesSuites`
+  // interdit pourtant cette conduite en toutes lettres. Remplacer le `return { refus }` par un
+  // `continue` laissait les 819 essais verts, et rendait `{tests: 819, fail: 0}` alors que la
+  // seconde suite n'avait jamais tourné.
+  //
+  // Conséquence : une mutation de `lieu-agent.js` que SEULS les 513 essais de
+  // `naissance-representant` attrapent serait rendue SURVIVANTE — et si toutes les suites
+  // refusent, `{tests: 0, fail: 0}` passerait pour un vert.
+  const copie = copierLeDepot();
+  try {
+    const partiel = lancerToutesLesSuites(copie, {
+      suites: [
+        { sousDossier: 'ligne-directe', fichiers: ['tests/canal-par-role.test.js'] },
+        'suite-qui-nexiste-pas',
+      ],
+    });
+    assert.ok(partiel.refus, `une suite qui refuse doit ARRÊTER le total (rendu : ${JSON.stringify(partiel)})`);
+    assert.match(partiel.refus, /suite-qui-nexiste-pas/, 'et nommer LAQUELLE');
+    assert.equal(partiel.tests, undefined, 'aucun total partiel ne sort — il se lirait comme un total');
+
+    // Contrôle positif : deux suites qui tournent rendent bien leur somme et leur détail.
+    const complet = lancerToutesLesSuites(copie, {
+      suites: [
+        { sousDossier: 'ligne-directe', fichiers: ['tests/canal-par-role.test.js'] },
+        { sousDossier: 'naissance-representant', fichiers: ['tests/garde-par-role.test.js'] },
+      ],
+    });
+    assert.ok(!complet.refus, `contrôle positif : ${complet.refus}`);
+    assert.equal(complet.fail, 0);
+  } finally {
+    rmSync(copie, { recursive: true, force: true });
+  }
+});
+
 test('RÉEL — une vraie mutation du code source fait rougir la vraie suite', () => {
   // Le contrôle POSITIF du harnais complet : sans lui, « la racine est verte » resterait vrai
   // le jour où `lancerLaSuite` cesserait d'atteindre le code (mauvais `cwd`, mauvais fichiers),
