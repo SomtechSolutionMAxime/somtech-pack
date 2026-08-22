@@ -713,6 +713,26 @@ test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue —
   const attendus = Object.keys(renduDuLecteur).filter((k) => k !== 'epics' && k !== 'code');
   const perdus = attendus.filter((k) => !(k in chantier));
 
+  // 🔴 CE QUE CETTE GARDE NE COUVRE PAS, ET IL FAUT LE LIRE ICI — sinon son nom ment.
+  //
+  // MESURÉ, en tuant un signal neuf à chacune des quatre jointures et en n'exécutant QUE ce
+  // banc : ① lecteur → vue ATTRAPÉE · ② vue → compte PASSE · ③ compte → résumé PASSE ·
+  // ④ résumé → texte PASSE. **Une porte sur quatre.**
+  //
+  // Les mêmes mutations contre la suite ENTIÈRE sont attrapées toutes les trois — mais par des
+  // bancs NOMMÉS, pour des signaux CONNUS. Le cas qui tranche a été construit exprès : un
+  // signal NEUF qui traverse ① correctement, donc satisfait cette garde, et meurt en ②③④.
+  // **895 verts. Il passe.**
+  //
+  // Donc, en une phrase, et c'est celle qui empêche de mal lire ce banc :
+  //
+  //   Cette garde attrape L'OUBLI DE RECOPIE, pas l'oubli d'agrégation ni l'oubli de rendu.
+  //   Un signal NEUF est gardé au premier passage et À NU sur les trois autres.
+  //   Les signaux CONNUS sont gardés partout, par des bancs nommés.
+  //
+  // ⚠️ C'est la même leçon un cran plus loin : une garde posée sur UNE arête ne garde pas sa
+  // famille. Les trois passages manquants sont une CONDITION DE FIN de `E-20260822-0003`, le
+  // lot qui ajoute justement des signaux à cette vue — pas une dette sans date.
   assert.ok(attendus.length >= 4, 'préalable : le lecteur rend bien plusieurs signaux à garder');
   assert.deepEqual(
     perdus,
