@@ -47,6 +47,13 @@
 // Ce module LIT et REND. Il n'écrit rien, ni au ServiceDesk ni ailleurs (RA-VUE-001), et il ne
 // pilote rien (HS-VUE-001). Il hérite des trois états qui ne se replient jamais en deux :
 //
+// ⚠️ IL LIT DEUX SOURCES, PAS UNE — ET LA SECONDE EST SUR LE DISQUE. Depuis E-20260822-0003, il
+// lit aussi les LIEUX versionnés des agents (`lecteurDeLieux`), parce que le recensement seul
+// ne connaît que les terminaux VIVANTS. Cette lecture est de l'I/O, et elle est INJECTABLE
+// comme le reste : `lister` et `roleDuLieu` entrent par paramètre, `racines` aussi, et rien
+// n'est deviné. « Éprouvable sans clé et sans service » vaut donc toujours — mais il fallait
+// le dire, plutôt que de laisser cet en-tête affirmer une pureté qu'il n'a plus tout à fait.
+//
 //   « mesuré, voici la valeur »  ≠  « mesuré, il n'y a pas de valeur »  ≠  « pas pu mesurer »
 //
 // Concrètement, et chacun a son banc : `epics: null` dit « je n'ai pas pu lire les epics de ce
@@ -773,6 +780,12 @@ export function racinesDuPoste({ foyer = homedir(), lister = sousDossiers } = {}
  *                       ⚠️ `agents: null` veut dire « je n'ai pas su regarder », JAMAIS
  *                       « il n'y a personne » : la vue le relaie tel quel plutôt que de rendre
  *                       un parc vide, parfaitement vert, sur un poste où plus rien n'est mesuré.
+ * @param lieux          le rendu de `lecteurDeLieux` — `{ mesure, racines, entrees }` — LE
+ *                       REGISTRE DURABLE (EF-VUE-007). C'est lui, et non les panes, qui décide
+ *                       de QUELS chantiers figurent : un chantier dont le terminal est mort y
+ *                       est encore. `null` veut dire « aucun lecteur ne m'a été donné », et
+ *                       `mesure: 'refusée'` veut dire « je n'ai pas pu lire » — jamais l'un
+ *                       pour l'autre, et jamais « il n'y a aucun lieu ».
  * @param lireChantier   `async (code) → { code, titre, statut, epics: [{ code, titre,
  *                       stories: [{ code, titre }] | null }] }` — INJECTÉ. Aucun appel réseau
  *                       n'est écrit ici : c'est ce qui rend ce module éprouvable sans clé et

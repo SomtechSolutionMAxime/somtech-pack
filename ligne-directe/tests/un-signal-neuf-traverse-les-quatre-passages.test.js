@@ -365,6 +365,31 @@ test('la ligne d’un orchestrateur ne rend JAMAIS l’état de session brut —
 // `CHAMPS_DE_STRUCTURE.chantier` pour que le signal cesse d'être exigé, sans qu'un seul essai
 // ne rougisse.** Le dénominateur d'une garde EST une garde : s'il est libre, elle ne garde rien.
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 OÙ CETTE MONTÉE S'ARRÊTE — LE CRITÈRE, ET IL EST OPPOSABLE AU PROCHAIN LECTEUR
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// On peut monter à l'infini : les passages, puis le manifeste, puis le dénominateur du
+// manifeste, puis ce qui garde le dénominateur. À chaque étage la question « qui garde le
+// gardien ? » se repose, et **elle ne s'arrête jamais toute seule.**
+//
+// **LA QUESTION QUI TRANCHE N'EST PAS « EST-CE GARDÉ ? », C'EST : À CET ÉTAGE, LE GESTE DE
+// DÉSARMEMENT EST-IL VISIBLE EN REVUE ?**
+//
+//   • Ajouter un nom à une liste d'exceptions — `CHAMPS_DE_STRUCTURE`, une allowlist, un
+//     `skip` : **INVISIBLE.** Le diff ressemble à de l'entretien normal, et personne en revue
+//     n'y verrait un problème. → IL FAUT GARDER. C'est pourquoi la garde ci-dessous existe.
+//
+//   • Changer un dénominateur ÉPINGLÉ — `assert.deepEqual(LISTE, ['a','b','c'])` : **VISIBLE.**
+//     Le diff dit « j'ai changé le nombre attendu », et personne ne signe ça sans le justifier.
+//     → ON S'ARRÊTE LÀ. Un étage de plus ne protégerait plus rien qu'un relecteur ne voie.
+//
+// ⚠️ ET C'EST UNE FORME DE DÉFAUT À PART ENTIÈRE, pire que celles qui se cachent : **une garde
+// qui porte sa propre liste d'exceptions se désarme par un geste qui a l'air d'une bonne
+// pratique.** Les autres formes se dissimulent ; celle-ci se présente comme de la maintenance.
+//
+// (Critère posé par `kamouraska`, coordonnateur de P-20260822-0001, le 2026-08-22.)
+
 test('le dénominateur de la garde est ÉPINGLÉ — on ne peut pas cacher un signal en le disant structurel', () => {
   // ⚠️ UNE LISTE ÉCRITE EN DUR, ET C'EST VOULU. C'est le seul endroit de ce fichier qui nomme
   // des champs : il FAUT qu'élargir `CHAMPS_DE_STRUCTURE` COÛTE un rouge, sinon la soustraction
