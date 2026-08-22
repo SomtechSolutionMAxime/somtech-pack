@@ -441,3 +441,62 @@ test('deux sessions portant LE MÊME identifiant de pane restent DEUX lignes, ch
   assert.ok(lignes.some((l) => l.includes('somtech')) && lignes.some((l) => l.includes('progex')),
     'chacune NOMME SA SESSION : c’est ce qui les distingue');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUE LE RENDU RÉEL A MONTRÉ, ET QUE LES BANCS CI-DESSUS NE VOYAIENT PAS
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 TROIS DÉFAUTS SORTIS EN TAPANT LA COMMANDE SUR LE POSTE, aucun par relecture, et le
+// troisième était un trou dans MA PROPRE GARDE :
+//
+//   ① la raison de « présence non établie » crachait ONZE CHEMINS DE SOCKET COMPLETS — près de
+//      neuf cents caractères sur une ligne. Une raison illisible a l'apparence d'une
+//      explication et la fonction d'un mur ;
+//   ② les sessions muettes du pied de page, idem ;
+//   ③ **la ligne « porté par le lieu » n'était rendue QUE pour `vivant: false`.** Or les quatre
+//      lignes sans terminal du poste réel sont TOUTES à `vivant: null` — onze sessions sont
+//      muettes. Elle n'était donc JAMAIS rendue. Le banc « CHAQUE fait atteint le texte »
+//      passait parce que SON double avait une borne complète : il couvrait la branche que la
+//      production n'emprunte jamais. Une garde posée sur un CAS ne couvre pas sa FAMILLE.
+
+test('le lieu porteur se lit AUSSI quand la présence n’a pas pu être établie — pas seulement quand elle est niée', async () => {
+  const vue = await laVueDuParc({
+    // ⚠️ BORNE AMPUTÉE : c'est l'état RÉEL du poste, où onze sessions sur quatorze se taisent.
+    // Le banc qui n'éprouve que la borne complète mesure un chemin que la production n'a jamais.
+    recensement: { quand: 'T', agents: [], borne: borneAmputee },
+    lieux: desLieux(['p-20260601-0094']),
+    lireChantier: unLecteur({ 'P-20260601-0094': unChantier('P-20260601-0094') }),
+  });
+
+  assert.equal(vue.orchestrateurs[0].presence.vivant, null, 'le cas éprouvé est bien celui du poste');
+  assert.match(
+    rendreLaVue(vue),
+    /porté par le lieu \/depot\/\.orchestrateur\/p-20260601-0094/,
+    'une attribution sans son objet n’en est pas une : le dirigeant doit pouvoir aller voir le lieu'
+  );
+});
+
+test('les sessions muettes se nomment par leur NOM — une raison qu’on ne peut pas lire ne dit rien', async () => {
+  const onzeMuettes = {
+    sessionsInterrogees: 14,
+    sessionsRefusees: ['cg', 'progex', 'morasse'].map((s) => ({
+      // LA FORME RÉELLE, relevée sur le poste — un chemin, jamais un nom.
+      session: `/Users/x/.config/herdr/sessions/${s}/herdr.sock`,
+      raison: 'server_not_running',
+    })),
+  };
+  const vue = await laVueDuParc({
+    recensement: {
+      quand: 'T',
+      agents: [],
+      borne: { ...onzeMuettes, phrase: 'compte amputé' },
+    },
+    lieux: desLieux(['p-20260822-0001']),
+    lireChantier: unLecteur({ 'P-20260822-0001': unChantier('P-20260822-0001') }),
+  });
+
+  const texte = rendreLaVue(vue);
+  assert.doesNotMatch(texte, /herdr\.sock/, 'aucun chemin de socket ne se lit — ni dans la raison, ni au pied de page');
+  assert.match(texte, /présence NON ÉTABLI[^\n]*cg, progex, morasse/, 'la raison nomme les sessions, brièvement');
+  assert.match(texte, /session muette : cg/, 'et le pied de page aussi');
+});

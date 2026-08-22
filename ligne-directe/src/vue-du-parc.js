@@ -200,7 +200,11 @@ export function presenceDe({ vivant, borne }) {
       vivant: null,
       pourquoi:
         `aucun pane vu ne porte ce mandat, mais ${muettes.length} session(s) herdr sont restées ` +
-        `muettes (${muettes.map((r) => r?.session ?? 'sans socket').join(', ')}) : des panes existent ` +
+        // ⚠️ PAR LEUR NOM, PAS PAR LEUR CHEMIN — défaut vu sur le rendu RÉEL du poste, jamais
+        // par relecture : onze sessions muettes crachaient onze chemins de socket complets, soit
+        // près de neuf cents caractères sur UNE ligne. Une raison qu'on ne peut pas lire ne dit
+        // rien : elle a l'apparence d'une explication et la fonction d'un mur.
+        `muettes (${muettes.map((r) => nomDeSession(r?.session) ?? 'sans socket').join(', ')}) : des panes existent ` +
         'qu’on n’a pas vus. Ceci n’est PAS « son terminal est mort »',
     };
   }
@@ -1379,10 +1383,19 @@ export function rendreLaVue(vue) {
 
     // ⚠️ LA PRÉSENCE ET L'ACTIVITÉ SONT DEUX QUESTIONS, ET AUCUNE DES DEUX N'EST LE STATUT DE
     // SESSION. « il vit » ≠ « il travaille » ≠ « le registre dit que son chantier avance ».
+    // ⚠️ LE LIEU QUI PORTE SE LIT DANS LES DEUX CAS SANS TERMINAL, et il ne se lisait que dans
+    // UN. Une ligne « SANS TERMINAL — porté par son lieu » qui ne dit pas QUEL lieu est une
+    // attribution sans son objet : le dirigeant sait qu'un registre le porte, et ne peut pas
+    // aller le voir. C'est « une garde posée sur un cas ne couvre pas sa famille », appliqué au
+    // rendu — j'avais écrit la ligne pour `vivant: false`, et sur ce poste les quatre lignes
+    // réelles sont toutes à `vivant: null`. Elle n'était donc JAMAIS rendue.
+    if (o.presence?.vivant !== true && o.porteur?.lieux?.length) {
+      l.push(`     ↳ porté par le lieu ${o.porteur.lieux[0]}${o.porteur.lieux.length > 1 ? ` (et ${o.porteur.lieux.length - 1} autre(s) copie(s))` : ''}`);
+    }
     if (o.presence?.vivant === null) {
       l.push(`     ↳ présence ${MOT_NON_ETABLI} — ${o.presence.pourquoi}`);
     } else if (o.presence?.vivant === false) {
-      l.push(`     ↳ ${o.porteur?.lieux?.length ? `porté par le lieu ${o.porteur.lieux[0]}` : 'aucun terminal vivant'} — ${o.presence.source ?? ''}`);
+      l.push(`     ↳ ${o.presence.source ?? 'aucun terminal vivant ne porte ce mandat'}`);
     }
     if (o.activite) {
       l.push(
@@ -1485,7 +1498,7 @@ export function rendreLaVue(vue) {
   // peut rien y faire. C'est la conduite du recensement, et elle ne se relâche pas en changeant
   // de module.
   for (const s of vue.borne?.sessionsRefusees ?? []) {
-    l.push(`  · session muette : ${s.session ?? '(sans nom)'}`);
+    l.push(`  · session muette : ${nomDeSession(s.session) ?? '(sans nom)'}`);
   }
   l.push('');
   l.push(vue.regle);
