@@ -1848,9 +1848,19 @@ export class Veilleur {
    * joindre le service : la vue rend alors « chantier NON MESURÉ » avec sa cause, jamais un
    * parc sans travail.
    */
-  async vueDuParc() {
+  async vueDuParc({ construireLecteur = lecteurDeChantier } = {}) {
     const recensement = await this.recensementDuPoste();
-    return laVueDuParc({ recensement, lireChantier: lecteurDeChantier(), journaliser });
+    // ⚠️ LE LECTEUR EST CONSTRUIT ICI, ET C'EST UNE ARÊTE QUE PERSONNE NE GARDAIT. Mutation
+    // mesurée : remplacer cet appel par `null` laissait les 886 essais VERTS — et la vue aurait
+    // rendu « chantier NON MESURÉ — aucun accès au ServiceDesk » pour CHAQUE orchestrateur, sur
+    // un poste parfaitement configuré. Aucune erreur, aucun symptôme, un parc entier déclaré
+    // illisible. Le module était juste, le veilleur était juste ; c'est le PASSAGE de l'un à
+    // l'autre qui n'appartenait à aucun banc.
+    //
+    // ⚠️ INJECTÉ PAR PARAMÈTRE, comme partout ailleurs dans ce module — pas par un crochet de
+    // test dans du code livré. C'est ce qui rend le passage observable sans le dénaturer.
+    const lireChantier = construireLecteur();
+    return laVueDuParc({ recensement, lireChantier, journaliser });
   }
 
   connecterSlack() {

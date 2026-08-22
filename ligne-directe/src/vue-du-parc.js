@@ -615,12 +615,29 @@ export function rendreLaVue(vue) {
       ...(gesteInconnu
         ? [
             '',
-            'CE QUE CE REFUS SIGNIFIE, précisément : le VEILLEUR EN VIE porte un code plus ancien ' +
-              'que celui qui est installé. Fusionné ≠ publié ≠ installé ≠ RECHARGÉ — le dernier ' +
-              'maillon est un processus, et il ne se recharge pas tout seul. Le code n’est pas en ' +
-              'cause : inutile de chercher une panne dans le module.',
-            'CE QU’IL FAUT FAIRE : faire recharger le veilleur du poste. Il sert plusieurs ' +
-              'chantiers à la fois — ce n’est pas un geste qu’on pose seul en passant.',
+            'CE QUE CE REFUS SIGNIFIE : le code de ce geste n’a pas atteint le processus qui ' +
+              'répond. Le module n’est PAS en cause — inutile d’y chercher une panne.',
+            '',
+            // 🔴 DEUX CAUSES, ET ON NE CHOISIT PAS. La première version de ce message
+            // n'affirmait QUE le veilleur périmé — la cause vue une fois, un matin, et retenue
+            // comme si elle était la seule. Mesuré ensuite : le geste n'était installé NULLE
+            // PART (ni dans le paquet du poste, ni sur la branche principale), et le processus,
+            // lui, était tout neuf. Le message envoyait donc recharger un veilleur à jour.
+            //
+            // ⚠️ C'est RA-VUE-003 retournée contre son propre auteur : l'absence se MONTRE, elle
+            // ne se comble pas. Ne pas savoir laquelle des deux causes s'applique est un fait —
+            // et un fait se dit. Choisir la plus plausible, c'est exactement le geste que ce
+            // module interdit partout ailleurs.
+            'DEUX CAUSES LE PRODUISENT, et d’ici on ne peut pas les départager :',
+            '  ① le geste n’est installé NULLE PART — il vit encore sur une branche, pas dans le ' +
+              'paquet du poste. → il faut le livrer, puis l’installer.',
+            '  ② le geste est installé, mais le PROCESSUS en vie porte un code plus ancien. ' +
+              'Fusionné ≠ publié ≠ installé ≠ RECHARGÉ — le dernier maillon est un processus, et ' +
+              'il ne se recharge pas tout seul. → il faut le faire recharger.',
+            '',
+            'POUR TRANCHER : cherchez ce geste dans le code INSTALLÉ du poste. S’il n’y est pas, ' +
+              'c’est ①. S’il y est, c’est ②. Et le veilleur sert plusieurs chantiers à la fois : ' +
+              'le relever n’est pas un geste qu’on pose seul en passant.',
           ]
         : []),
       '',
