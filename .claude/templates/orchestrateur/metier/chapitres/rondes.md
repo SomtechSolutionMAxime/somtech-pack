@@ -1,7 +1,7 @@
 # rondes
 
 > **En un mot** — Ce qu'un tour de ronde parcourt, et ce qu'il en tire.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
 
 > **Répond de** RA-ORC-011 · RA-ORC-015 · RA-ORC-017 · RA-ORC-033 · RA-ORC-034
 

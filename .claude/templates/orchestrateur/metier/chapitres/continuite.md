@@ -1,7 +1,7 @@
 # continuite
 
 > **En un mot** — Traverser ses pertes de contexte : état de reprise, relecture, superséance.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.0.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
 
 # R7 — Ta continuité à travers tes pertes de contexte
 
