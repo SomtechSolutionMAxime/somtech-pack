@@ -280,28 +280,65 @@ test('RÉEL — un harnais lancé DEPUIS un harnais refuse, au lieu de se répé
   //
   // La borne est une PROFONDEUR, pas une exclusion de fichiers : écarter ces bancs de la copie
   // les priverait d'être éprouvés sous mutation, c'est-à-dire le contraire du but.
+  //
+  // ⚠️ C'EST UN PLAFOND, PAS UN REFUS AU PREMIER EMBOÎTEMENT — corrigé après une revue de fond.
+  // Refuser dès la profondeur 1 rendait ROUGES, dans toute copie, les cinq bancs « RÉEL » de ce
+  // fichier : le chemin documenté du harnais (`lancerToutesLesSuites` sans liste de fichiers)
+  // rendait alors 5 rouges au contrôle négatif, et `campagne` refusait en accusant la RECETTE DE
+  // COPIE — un refus juste dans sa forme et faux dans son motif. Et ces cinq bancs n'étaient
+  // jamais éprouvés sous mutation, faute de pouvoir tourner dans une copie.
   const avant = process.env.SOUS_HARNAIS_DE_MUTATION;
-  process.env.SOUS_HARNAIS_DE_MUTATION = '1';
+  const copie = copierLeDepot();
   try {
-    const r = lancerLaSuite('/chemin/sans/importance', { fichiers: ['tests/canal-par-role.test.js'] });
-    assert.ok(r.refus, 'un second niveau doit REFUSER');
-    assert.match(r.refus, /DÉJÀ dans un harnais/, 'et dire pourquoi, sinon on le prend pour une panne');
+    // ① Au PLAFOND : on refuse, et on dit pourquoi.
+    process.env.SOUS_HARNAIS_DE_MUTATION = '2';
+    const bloque = lancerLaSuite('/chemin/sans/importance', { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(bloque.refus, 'au plafond, le lancement doit REFUSER');
+    assert.match(bloque.refus, /profondeur 2/, 'et nommer la profondeur, sinon on le prend pour une panne');
+
+    // ② SOUS le plafond : ça tourne. Sans cette moitié, une garde qui refuserait TOUJOURS
+    //    rendrait ce banc vert en cassant tout le harnais — et c'est le défaut qu'on répare ici.
+    process.env.SOUS_HARNAIS_DE_MUTATION = '1';
+    const emboite = lancerLaSuite(copie, { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(!emboite.refus, `à la profondeur 1, le lancement doit TOURNER : ${emboite.refus}`);
+    assert.equal(emboite.fail, 0);
+
+    // ③ Et au premier niveau, hors de tout harnais, évidemment aussi.
+    delete process.env.SOUS_HARNAIS_DE_MUTATION;
+    const nu = lancerLaSuite(copie, { fichiers: ['tests/canal-par-role.test.js'] });
+    assert.ok(!nu.refus, `hors harnais, le lancement doit tourner : ${nu.refus}`);
   } finally {
     if (avant === undefined) delete process.env.SOUS_HARNAIS_DE_MUTATION;
     else process.env.SOUS_HARNAIS_DE_MUTATION = avant;
-  }
-
-  // ⚠️ ET LE CONTRÔLE POSITIF : au PREMIER niveau, elle tourne pour de vrai. Sans lui, une garde
-  // qui refuserait TOUJOURS rendrait ce banc vert en cassant tout le harnais.
-  assert.equal(process.env.SOUS_HARNAIS_DE_MUTATION, undefined, 'la variable est bien rendue');
-  const copie = copierLeDepot();
-  try {
-    const r = lancerLaSuite(copie, { fichiers: ['tests/canal-par-role.test.js'] });
-    assert.ok(!r.refus, `au premier niveau, le lancement doit tourner : ${r.refus}`);
-    assert.equal(r.fail, 0);
-  } finally {
     rmSync(copie, { recursive: true, force: true });
   }
+});
+
+test('UN CONTRÔLE NÉGATIF QUI N’A EXÉCUTÉ AUCUN ESSAI NE VAUT PAS UN CONTRÔLE NÉGATIF VERT', () => {
+  // ⚠️ REJET DE REVUE DE FOND. `lancerLaSuite` porte cette garde ; les DEUX étages au-dessus —
+  // ceux qu'une campagne appelle réellement — ne l'avaient pas. Une campagne pouvait donc
+  // conclure « SURVIVANTE » sur un contrôle négatif à `{ tests: 0, fail: 0 }` : zéro rouge sur
+  // zéro essai se lit comme une copie saine.
+  //
+  // Le mensonge penche du côté prudent — il sur-déclare des gardes manquantes plutôt que d'en
+  // bénir l'absence — mais c'est un verdict rendu sans contrôle, et ce harnais est versionné
+  // comme l'instrument qui refuse précisément cela.
+  const labo = laboratoire();
+  let posees = 0;
+  const r = campagne({
+    preparer: labo.preparer,
+    ranger: labo.ranger,
+    lancer: () => ({ tests: 0, pass: 0, fail: 0 }),
+    mutations: [{ id: 'x', appliquer: () => { posees += 1; return true; } }],
+  });
+  assert.equal(r.verdictPossible, false, 'zéro rouge sur zéro essai n’est pas une copie verte');
+  assert.deepEqual(r.resultats, [], 'et surtout pas une « SURVIVANTE », qui enverrait écrire une garde existante');
+  assert.equal(posees, 0, 'aucune mutation n’est posée');
+  assert.match(r.controleNegatif.refus, /AUCUN essai/, 'le refus nomme la vraie cause');
+
+  // Et la même faille un étage plus bas : une liste de suites vide.
+  const vide = lancerToutesLesSuites('/peu/importe', { suites: [] });
+  assert.ok(vide.refus, 'aucune suite désignée : il n’y a rien à mesurer');
 });
 
 test('RÉEL — une vraie mutation du code source fait rougir la vraie suite', () => {

@@ -778,6 +778,136 @@ test('LE MANDAT D’UN REPRÉSENTANT N’EST PAS UN CHANTIER — on ne le décla
   assert.doesNotMatch(JSON.stringify(a.chantier), /n.est pas un code de chantier/, 'pas de faux échec');
 });
 
+test('UN REPRÉSENTANT PÉRIMÉ SE VOIT PROPOSER SA REMISE À JOUR — le geste n’est pas réservé aux chantiers', async (t) => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // REJET DE REVUE DE FOND, ET IL FRAPPE LE SEUL CHAMP QUI PORTE UNE ACTION.
+  //
+  // La garde exigeait `chantier.clos === false` — un chantier PROUVÉ OUVERT. Pour un
+  // représentant, dont le mandat nomme un CLIENT et non un chantier, `clos` vaut `null` par
+  // construction : `aProposer: true` était STRUCTURELLEMENT hors d'atteinte pour le rôle que ce
+  // lot ajoute. Le registre s'intitule « il porte TOUS les rôles vivants » et son unique geste
+  // actionnable était mort pour l'un des deux.
+  //
+  // ⚠️ ET LE MOTIF AFFICHÉ ÉTAIT UNE PANNE FABRIQUÉE, avec un `undefined` littéral dans la
+  // prose : « son mandat n'a pas pu être mesuré (undefined) ». La forme « sans objet » porte
+  // `pourquoi`, le message lisait `raison`. C'est la classe de défaut que ce lot ferme, laissée
+  // debout dans le champ qui décide.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const rep = poserLieu(depot, 'representant', 'Charles-Olivier');
+  const orch = poserLieu(depot, 'orchestrateur', 'p-1');
+  // Les foyers portent un métier DIFFÉRENT de celui posé : les deux agents sont donc périmés.
+  const foyer = poserReference(tmp, 'representant', METIER.representant + 'une ligne de plus.\n');
+  const gab = join(foyer, '.claude', 'plugins', 'marketplaces', 'somtech-pack', '.claude', 'templates', 'orchestrateur');
+  mkdirSync(gab, { recursive: true });
+  writeFileSync(join(gab, 'CLAUDE.md'), METIER.orchestrateur + 'une ligne de plus.\n');
+
+  const rendu = await unRecensement({
+    panes: [
+      { pane_id: 'w1:p1', foreground_cwd: rep },
+      { pane_id: 'w2:p1', foreground_cwd: orch },
+    ],
+    roleDuLieu,
+    references: {
+      representant: referenceDuMetier({ gabarit: 'gestionnaire-client', foyer }),
+      orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }),
+    },
+    // L'orchestrateur, lui, a un vrai chantier — et il est CLOS.
+    etatDuMandat: async () => ({ mesure: 'lue', clos: true, statut: 'completed' }),
+  });
+
+  const r = rendu.agents.find((a) => a.pane === 'w1:p1');
+  assert.equal(r.aJour, false, 'contrôle : le représentant est bien périmé');
+  assert.equal(
+    r.remiseAJour?.aProposer,
+    true,
+    `un représentant périmé DOIT se voir proposer le geste (rendu : ${JSON.stringify(r.remiseAJour)})`,
+  );
+
+  // ⚠️ ET LE CONTRÔLE NÉGATIF DANS LE MÊME RENDU : la garde qu'on assouplit doit continuer de
+  // mordre là où elle existe. Un chantier CLOS ne se réveille pas — c'est le risque réel qu'elle
+  // protège (deux orchestrateurs agissant sur les mêmes panes en se croyant seuls).
+  const o = rendu.agents.find((a) => a.pane === 'w2:p1');
+  assert.equal(o.aJour, false, 'contrôle : l’orchestrateur aussi est périmé');
+  assert.equal(o.remiseAJour.aProposer, false, 'mais son chantier est CLOS : on ne propose rien');
+  assert.match(o.remiseAJour.pourquoiPas, /CLOS/, 'et on dit pourquoi');
+
+  // ⚠️ AUCUN « undefined » DANS AUCUNE PROSE RENDUE. Un message construit sur un champ absent est
+  // la trace visible qu'on parle d'un objet qu'on n'a pas — et il se lit comme un fait.
+  assert.doesNotMatch(JSON.stringify(rendu), /undefined/, 'aucun message ne se construit sur un champ absent');
+
+  // ⚠️ ET LA CEINTURE, ÉPROUVÉE POUR DE VRAI. Le motif du refus lit `chantier.raison` ; un
+  // lecteur d'état de mandat qui rendrait une forme sans `raison` — c'est un paramètre injecté,
+  // n'importe quel appelant peut le faire — remettrait un `undefined` littéral dans la prose.
+  // Le double employé ici est plus PAUVRE que le réel, jamais plus riche : c'est le bon sens
+  // pour éprouver une ceinture, l'inverse fabriquerait un collaborateur imaginaire.
+  const muet = await unRecensement({
+    panes: [{ pane_id: 'w2:p1', foreground_cwd: orch }],
+    roleDuLieu,
+    references: { orchestrateur: referenceDuMetier({ gabarit: 'orchestrateur', foyer }) },
+    etatDuMandat: async () => ({ mesure: 'non mesurée', clos: null }), // ni `raison`, ni `pourquoi`
+  });
+  const sansRaison = muet.agents[0];
+  assert.equal(sansRaison.remiseAJour.aProposer, false, 'un mandat non mesuré ne se voit rien proposer');
+  assert.doesNotMatch(
+    sansRaison.remiseAJour.pourquoiPas,
+    /undefined/,
+    'et le motif ne porte JAMAIS « undefined » — un message construit sur un champ absent se lit comme un fait',
+  );
+  assert.match(sansRaison.remiseAJour.pourquoiPas, /sans raison dite/, 'il dit que la raison manque, au lieu de l’inventer');
+});
+
+test('LE MANDAT SE LIT SUR LE RÔLE ÉTABLI, JAMAIS SUR LE DOSSIER — les deux peuvent diverger', async (t) => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // REJET DE REVUE DE FOND. Le test « ce mandat est-il un chantier ? » lisait le rôle que le
+  // CHEMIN annonce, pas celui que le CONTENU établit — alors que ce module dit lui-même que les
+  // deux peuvent diverger et que c'est le contenu qui fait foi. Il se trompait dans les DEUX
+  // sens, et les deux erreurs sont dans ce banc.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+
+  // ① Un dossier de représentant dont le lieu ne s'est PAS LAISSÉ LIRE. Le rôle est « refusée ».
+  const illisible = poserLieu(depot, 'representant', 'Frederic');
+  // ② Un dossier d'ORCHESTRATEUR portant le métier d'un REPRÉSENTANT — divergence déclarée
+  //    supportée par `lieuDeRoleDansLeChemin`.
+  const divergent = poserLieu(depot, 'orchestrateur', 'd-20260822-0077', { metier: METIER.representant });
+  writeFileSync(join(divergent, 'CONTEXTE.md'), CONTEXTE.representant);
+
+  const interroges = [];
+  const rendu = await unRecensement({
+    panes: [
+      { pane_id: 'w1:p1', foreground_cwd: illisible },
+      { pane_id: 'w1:p2', foreground_cwd: divergent },
+    ],
+    roleDuLieu: (lieu) => (lieu === illisible ? { refus: 'EACCES' } : roleDuLieu(lieu)),
+    etatDuMandat: async (m) => {
+      interroges.push(m);
+      return { mesure: 'lue', clos: false, statut: 'in_progress' };
+    },
+  });
+
+  // ① Un lieu qu'on n'a pas su lire ne se range PAS en « rien à voir ici ».
+  const a1 = rendu.agents.find((a) => a.pane === 'w1:p1');
+  assert.equal(a1.role.mesure, 'refusée', 'contrôle : le rôle a refusé');
+  assert.equal(
+    a1.chantier.mesure,
+    'non mesurée',
+    `un échec de mesure ne se classe pas « sans objet » (rendu : ${JSON.stringify(a1.chantier)})`,
+  );
+  assert.match(a1.chantier.raison, /rôle .* n’est pas établi/, 'et la raison dit ce qui manque');
+
+  // ② Le rôle établi est « representant » : son mandat n’est PAS un chantier, malgré le dossier.
+  const a2 = rendu.agents.find((a) => a.pane === 'w1:p2');
+  assert.equal(a2.role.nom, 'representant', 'contrôle : c’est le CONTENU qui établit le rôle');
+  assert.equal(a2.chantier.mesure, 'sans objet', 'donc son mandat n’est pas un chantier à lire');
+  assert.deepEqual(interroges, [], 'et le registre des chantiers n’est interrogé pour PERSONNE');
+  assert.equal(rendu.compte.mandatsOuverts, 0, 'aucun mandat ouvert ne se compte sur un rôle qui n’en a pas');
+  assert.equal(rendu.compte.mandatsNonMesures, 1, 'le seul échec réel se compte comme tel');
+  assert.equal(rendu.compte.mandatsSansObjet, 1);
+});
+
 test('LE RÉSUMÉ NOMME LES RÔLES NON MESURÉS — la distinction ne s’arrête pas au compteur', async (t) => {
   // ⚠️ MUTATION SURVIVANTE, TROUVÉE EN REVUE DE FOND. `compte.roleNonMesure` était gardé, mais
   // la PHRASE — la ligne que le lecteur lit — pouvait perdre les rôles non mesurés sans qu'un

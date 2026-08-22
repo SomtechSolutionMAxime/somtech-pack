@@ -53,6 +53,15 @@ export function racineDuDepot() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 }
 
+/**
+ * Jusqu'où un harnais peut s'emboîter avant de refuser.
+ *
+ * Deux, et pas un : au premier niveau tourne la suite mutée ; au second, les bancs « RÉEL » de
+ * ce harnais, qui doivent pouvoir être éprouvés sous mutation comme n'importe quel autre code.
+ * Au troisième, on refuse — mesuré avant la borne : 69 copies du dépôt en dix minutes.
+ */
+const PROFONDEUR_MAX = 2;
+
 /** Ce qu'on n'emporte pas : lourd, régénérable, et sans effet sur un verdict de mutation. */
 const ECARTES = new Set(['.git', 'node_modules']);
 
@@ -100,11 +109,24 @@ export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-direc
   // La borne est une PROFONDEUR, pas une exclusion de fichiers : un banc qu'on écarterait de la
   // copie cesserait d'être éprouvé sous mutation, ce qui est exactement le contraire du but.
   // Ici, le premier niveau tourne entier ; le second REFUSE, en le disant.
-  if (process.env.SOUS_HARNAIS_DE_MUTATION === '1') {
+  //
+  // ⚠️ ET C'EST UN PLAFOND DE PROFONDEUR, PAS UN REFUS AU PREMIER NIVEAU — corrigé après une
+  // revue de fond. Refuser dès la profondeur 1 rendait ROUGES, dans toute copie, les cinq bancs
+  // « RÉEL » de ce harnais : une campagne lancée par le chemin documenté (`lancerToutesLesSuites`
+  // sans liste de fichiers) rendait alors 5 rouges au CONTRÔLE NÉGATIF, et `campagne` refusait
+  // en accusant la recette de copie — un refus juste dans sa forme et FAUX dans son motif,
+  // exactement le travers que ce fichier dit avoir corrigé pour `NODE_TEST_*`. Ces cinq bancs
+  // n'étaient de surcroît jamais éprouvés sous mutation.
+  //
+  // À la profondeur 2, les bancs « RÉEL » passent des fichiers témoins bornés qui ne les
+  // contiennent pas : la chaîne s'arrête d'elle-même, et le plafond la coupe de toute façon.
+  const profondeur = Number(process.env.SOUS_HARNAIS_DE_MUTATION ?? 0);
+  if (profondeur >= PROFONDEUR_MAX) {
     return {
       refus:
-        'ce lancement est DÉJÀ dans un harnais de mutation : le relancer se répéterait sans fin. ' +
-        'Une campagne se lance depuis le dépôt, jamais depuis une copie mutée.',
+        `ce lancement est DÉJÀ à la profondeur ${profondeur} d’un harnais de mutation (plafond ` +
+        `${PROFONDEUR_MAX}) : le relancer se répéterait sans fin. Une campagne se lance depuis le ` +
+        'dépôt, jamais depuis une copie déjà en cours de mesure.',
     };
   }
   // ⚠️ LE RAPPORTEUR SE FORCE, ET L'ENVIRONNEMENT DU RUNNER SE RETIRE — les deux, mesurés.
@@ -115,7 +137,7 @@ export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-direc
   // mesuré — un refus juste dans sa forme et faux dans son motif.
   const env = { ...process.env };
   for (const cle of Object.keys(env)) if (cle.startsWith('NODE_TEST_')) delete env[cle];
-  env.SOUS_HARNAIS_DE_MUTATION = '1';
+  env.SOUS_HARNAIS_DE_MUTATION = String(profondeur + 1);
   const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', ...fichiers], {
     cwd: join(copie, sousDossier),
     encoding: 'utf8',
@@ -153,6 +175,8 @@ export function lancerLaSuite(copie, { fichiers = [], sousDossier = 'ligne-direc
  *   dès qu'UNE suite n'a pas rendu son compte : une somme partielle se lit comme un total.
  */
 export function lancerToutesLesSuites(copie, { suites = ['ligne-directe', 'naissance-representant'], delaiMs } = {}) {
+  // Une liste vide rendrait `{tests: 0, fail: 0}` — un « tout va bien » qui n'a rien regardé.
+  if (!suites.length) return { refus: 'aucune suite désignée : il n’y a rien à mesurer', parSuite: {} };
   const parSuite = {};
   let tests = 0;
   let pass = 0;
@@ -199,6 +223,24 @@ export function campagne({
   }
   if (temoin.refus) {
     return { verdictPossible: false, controleNegatif: temoin, resultats: [] };
+  }
+  // ⚠️ UNE COPIE QUI N'A EXÉCUTÉ AUCUN ESSAI N'EST PAS UNE COPIE VERTE — REJET de revue de fond.
+  // `lancerLaSuite` porte cette garde ; les deux étages au-dessus ne l'avaient pas, et une
+  // campagne pouvait conclure « SURVIVANTE » sur un contrôle négatif à `{tests: 0, fail: 0}`.
+  // Le mensonge penche du côté prudent — il sur-déclare des gardes manquantes plutôt que d'en
+  // bénir l'absence — mais c'est un verdict rendu sans contrôle, et le harnais est versionné
+  // comme l'instrument qui refuse précisément cela.
+  if (!(temoin.tests > 0)) {
+    return {
+      verdictPossible: false,
+      controleNegatif: {
+        ...temoin,
+        refus:
+          `la copie NON MUTÉE n’a exécuté AUCUN essai (${temoin.tests ?? 'aucun compte'}) : « zéro rouge » ` +
+          'n’y dit rien du tout. Vérifier les suites et les fichiers désignés avant toute campagne.',
+      },
+      resultats: [],
+    };
   }
   if (temoin.fail !== 0) {
     return {

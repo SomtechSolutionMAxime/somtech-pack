@@ -597,24 +597,46 @@ export async function unRecensement({
     // pas un code de chantier : son état ne se lit nulle part » — la formulation d'une mesure
     // ratée pour une question qui n'avait pas lieu d'être posée. Sans lieu du tout, c'était
     // « « null » n'est pas un code de chantier », 81 fois.
-    const mandatDesigne = candidat ? roleDe(candidat.role).mandat_designe : null;
+    // ⚠️ C'EST LE RÔLE ÉTABLI QUI DÉCIDE, JAMAIS LE DOSSIER — et c'est un REJET de revue de fond.
+    // Lu sur `candidat.role` (le rôle que le CHEMIN annonce), ce test se trompait dans les deux
+    // sens, et le module dit lui-même trente lignes plus haut que les deux peuvent diverger :
+    //   • un lieu `.gestionnaire/…` qu'on n'a PAS PU LIRE était classé « sans objet — le mandat
+    //     d'un représentant nomme son client », c'est-à-dire qu'un vrai échec de mesure était
+    //     silencieusement rangé en « rien à voir ici », dans la même entrée qui venait de dire
+    //     « je n'ai pas pu lire ce lieu » ;
+    //   • un lieu `.orchestrateur/…` portant le métier d'un REPRÉSENTANT faisait interroger le
+    //     ServiceDesk sur son nom, et le comptait parmi les mandats ouverts.
+    // La branche `metier` juste au-dessus lit `role.mesure` ; celle-ci ne l'avait pas suivie.
+    const mandatDesigne = role.mesure === 'établi' ? roleDe(role.nom).mandat_designe : null;
     const chantier = !mandat
       ? {
           mesure: 'sans objet',
           clos: null,
           pourquoi: 'aucun lieu de rôle ne porte cet agent : il n’y a pas de mandat à lire',
         }
-      : mandatDesigne !== 'chantier'
+      : role.mesure !== 'établi'
         ? {
-            mesure: 'sans objet',
+            // ⚠️ « JE NE SAIS PAS CE QUE CE MANDAT DÉSIGNE » N'EST PAS « IL N'Y A RIEN À LIRE ».
+            // Sans rôle établi, on ignore si ce segment nomme un chantier ou un client : c'est un
+            // échec de mesure, et le ranger en « sans objet » le ferait disparaître du décompte
+            // des choses à aller voir.
+            mesure: 'non mesurée',
             clos: null,
-            pourquoi:
-              `le mandat d’un ${roleDe(candidat.role).libelle} nomme ${mandatDesigne === 'client' ? 'son client' : 'autre chose'}, ` +
-              'pas un chantier dont l’état se lirait au ServiceDesk',
+            raison:
+              `le rôle de cet agent n’est pas établi (${role.mesure}) : on ne sait pas si « ${mandat} » ` +
+              'nomme un chantier ou autre chose, donc on ne lit rien',
           }
-        : etatDuMandat
-          ? await etatDuMandat(mandat)
-          : { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné' };
+        : mandatDesigne !== 'chantier'
+          ? {
+              mesure: 'sans objet',
+              clos: null,
+              pourquoi:
+                `le mandat d’un ${roleDe(role.nom).libelle} nomme ${mandatDesigne === 'client' ? 'son client' : 'autre chose'}, ` +
+                'pas un chantier dont l’état se lirait au ServiceDesk',
+            }
+          : etatDuMandat
+            ? await etatDuMandat(mandat)
+            : { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné' };
     const enVol = lireEcran
       ? travailEnVol(await lireEcran(p))
       : { mesure: 'non mesurée', raison: 'aucun lecteur d’écran ne m’a été donné', enVol: null };
@@ -665,9 +687,22 @@ export async function unRecensement({
       // deux orchestrateurs sur les mêmes panes, chacun croyant l'autre parti, est le vrai
       // risque nommé par T-20260819-0056 — ni à un mandat NON MESURÉ, parce que se rabattre sur
       // « probablement ouvert » referait automatiquement l'écart qu'un humain a commis une fois.
+      //
+      // ⚠️ ET « PAS DE CHANTIER » N'EST PAS « CHANTIER DONT J'IGNORE L'ÉTAT » — REJET de revue de
+      // fond, et c'est le champ qui porte l'ACTION. La garde exigeait `chantier.clos === false`,
+      // c'est-à-dire un chantier PROUVÉ OUVERT. Pour un représentant, dont le mandat nomme un
+      // client et non un chantier, `clos` vaut `null` par construction : `aProposer: true` était
+      // donc STRUCTURELLEMENT hors d'atteinte pour le rôle que ce lot ajoute, et le motif affiché
+      // était `son mandat n’a pas pu être mesuré (undefined)` — une panne d'instrument fabriquée,
+      // avec un `undefined` littéral dans la prose, parce que la forme « sans objet » porte
+      // `pourquoi` et non `raison`.
+      //
+      // Le risque que cette garde protège — réveiller un chantier terminé — n'existe pas quand il
+      // n'y a pas de chantier. On propose donc, et on ne se tait que sur un mandat CLOS ou sur un
+      // mandat qu'on n'a pas su lire.
       remiseAJour:
         comparable && mesure.empreinte !== reference.empreinte
-          ? chantier.clos === false
+          ? chantier.clos === false || chantier.mesure === 'sans objet'
             ? { geste: GESTE_DE_REMISE_A_JOUR, prix: PRIX_DU_GESTE, aProposer: true, aImposer: false }
             : {
                 geste: GESTE_DE_REMISE_A_JOUR,
@@ -678,8 +713,10 @@ export async function unRecensement({
                   chantier.clos === true
                     ? `son mandat est CLOS (${chantier.statut}) : le remettre à jour réveillerait un ` +
                       'chantier terminé, et deux orchestrateurs pourraient agir sur les mêmes panes'
-                    : `son mandat n’a pas pu être mesuré (${chantier.raison}) — on ne propose rien ` +
-                      'sur un chantier dont on ignore s’il existe encore',
+                    : // ⚠️ JAMAIS `undefined` DANS LA PROSE : un message construit sur un champ
+                      // absent est la trace visible qu'on parle d'un objet qu'on n'a pas.
+                      `son mandat n’a pas pu être mesuré (${chantier.raison ?? chantier.pourquoi ?? 'sans raison dite'}) — ` +
+                      'on ne propose rien sur un chantier dont on ignore s’il existe encore',
               }
           : null,
     });
