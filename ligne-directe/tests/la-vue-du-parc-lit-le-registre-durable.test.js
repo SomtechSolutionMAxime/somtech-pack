@@ -80,12 +80,26 @@ test('un pane SANS titre de fenêtre rend `titre: null` — la clé absente ne d
 // ② LE LECTEUR DE LIEUX — le registre DURABLE, lu au disque
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-/** Pose un lieu d'orchestrateur complet (les fichiers que `roleDuLieu` exige). */
+/**
+ * Pose un lieu d'orchestrateur COMPLET — les QUATRE fichiers que `roleDuLieu` exige.
+ *
+ * ⚠️ LES QUATRE, PAS LES DEUX QU'ON REMARQUE. La première version n'écrivait que `CLAUDE.md` et
+ * `CONTEXTE.md` — les deux dont `roles.js` déclare les en-têtes — et le VRAI `roleDuLieu`
+ * écartait le lieu, à juste titre : `GABARITS` en exige quatre. Les bancs qui INJECTENT
+ * `roleDuLieu` ne le voyaient pas ; celui qui exerce le lecteur PAR DÉFAUT l'a vu tout de suite.
+ * Un double qui ne satisfait pas la vraie règle fabrique des défauts (T-20260819-0070).
+ */
 function poseUnLieu(racine, mandat) {
   const d = join(racine, '.orchestrateur', mandat);
-  mkdirSync(d, { recursive: true });
-  writeFileSync(join(d, 'CLAUDE.md'), '# Tu es l’orchestrateur de ce chantier\n');
+  mkdirSync(join(d, '.claude'), { recursive: true });
+  // ⚠️ APOSTROPHE DROITE, PAS TYPOGRAPHIQUE — l'en-tête que `roles.js` exige est
+  // `/^# Tu es l'orchestrateur de ce chantier/`, avec un `'` ASCII. Écrire `’` ici rend un
+  // fichier qui SE LIT pareil et que la règle REFUSE : le lieu est écarté, et le banc accuse
+  // le lecteur au lieu de son propre double. Vérifié en interrogeant la regex, pas à l'œil.
+  writeFileSync(join(d, 'CLAUDE.md'), "# Tu es l'orchestrateur de ce chantier\n");
   writeFileSync(join(d, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n');
+  writeFileSync(join(d, '.mcp.json'), '{}\n');
+  writeFileSync(join(d, '.claude', 'settings.json'), '{}\n');
   return d;
 }
 
@@ -194,20 +208,39 @@ test('le veilleur DONNE les lieux à la vue — sans quoi elle perd tout chantie
   assert.equal(vue.registreDesLieux.mesure, 'lue');
 });
 
-test('le veilleur construit un VRAI lecteur de lieux par défaut — pas `null` en silence', async () => {
+test('le veilleur construit par défaut un lecteur qui LIT VRAIMENT — pas seulement « un lecteur »', async () => {
   // ⚠️ C'EST L'ARÊTE JUMELLE DE CELLE QUE LE LOT PRÉCÉDENT A PAYÉE SUR `lecteurDeChantier` :
   // « remplacer cet appel par `null` laissait les 886 essais VERTS ». Un défaut par défaut se
   // rend « aucun lecteur de lieux ne m’a été donné » sur un poste parfaitement configuré.
+  //
+  // 🔴 SURVIVANTE D'UNE CAMPAGNE DE MUTATION, ET MON ASSERTION ÉTAIT LA COUPABLE. Elle exigeait
+  // seulement `mesure !== 'non mesurée'`. Un lecteur par défaut qui rend `mesure: 'refusée'` —
+  // c'est-à-dire un lecteur MORT — passait donc la garde : « refusée » n'est pas « non mesurée ».
+  // J'avais gardé contre l'ABSENCE d'un lecteur, jamais contre un lecteur QUI NE LIT RIEN, et
+  // les deux rendent exactement le même parc amputé au dirigeant.
+  //
+  // ⚠️ ON L'ÉPROUVE SUR UN DISQUE QU'ON CONTRÔLE, PAS SUR LE POSTE. Exiger `mesure: 'lue'` sur
+  // les racines réelles ferait dépendre le verdict de la machine : vert chez l'auteur, rouge en
+  // CI. On donne donc au veilleur une racine à nous, avec un vrai lieu dedans, et on exige que
+  // le lecteur PAR DÉFAUT l'y trouve.
+  const racine = join(bac, 'depot-du-veilleur');
+  poseUnLieu(racine, 'p-20260822-0001');
+
   const v = new Veilleur({ cheminSocket: join(bac, 'defaut.sock'), identite: { equipe: 'T' } });
   v.recensementDuPoste = async () => ({ quand: 'T', agents: [], borne: { sessionsRefusees: [] } });
 
-  const vue = await v.vueDuParc({ construireLecteur: () => null });
+  const vue = await v.vueDuParc({
+    construireLecteur: () => async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+    racines: [racine],
+  });
 
-  assert.notEqual(
-    vue.registreDesLieux.mesure,
-    'non mesurée',
-    'un lecteur par défaut EXISTE : « non mesurée » ici voudrait dire qu’aucun n’a été construit'
+  assert.equal(vue.registreDesLieux.mesure, 'lue', 'le lecteur par défaut doit avoir VRAIMENT lu');
+  assert.equal(
+    vue.orchestrateurs.length,
+    1,
+    'et le chantier posé au disque doit ARRIVER dans la vue — c’est la seule preuve que le lecteur a servi'
   );
+  assert.equal(vue.orchestrateurs[0].chantier.code, 'P-20260822-0001');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
