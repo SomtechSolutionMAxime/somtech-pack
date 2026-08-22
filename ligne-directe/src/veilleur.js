@@ -22,7 +22,7 @@ import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
-import { roleDuLieu } from './lieu-agent.js';
+import { roleDuLieu, roleDuLieuOuRefus } from './lieu-agent.js';
 import { unTourDeBalayage } from './balayage.js';
 import {
   CADENCE_DU_RECENSEMENT_MS,
@@ -1795,7 +1795,13 @@ export class Veilleur {
     const acces = accesServiceDesk();
     return unRecensement({
       panes: () => herdr.panes(),
-      roleDuLieu,
+      // ⚠️ `roleDuLieuOuRefus`, PAS `roleDuLieu` — et c'est le câblage entier de l'état
+      // « refusée ». `roleDuLieu` rend `null` aussi bien pour « aucun rôle » que pour « je n'ai
+      // pas pu lire » : câblé ici, il rendait le troisième état du registre STRUCTURELLEMENT
+      // inatteignable, et un lieu complet mais illisible était rendu « lieu à demi posé » —
+      // un diagnostic faux, qui envoie re-poser un lieu qui existe. Gardé par
+      // `le-recensement-est-vraiment-cable`, sur un VRAI lieu en « chmod 000 ».
+      roleDuLieu: roleDuLieuOuRefus,
       // ⚠️ UNE RÉFÉRENCE PAR RÔLE. Une référence unique ferait comparer le métier d'un
       // représentant au gabarit d'orchestrateur : deux textes sans aucune raison de concorder,
       // donc trois représentants « en retard » tous les jours, et une colonne qu'on n'ouvre plus.

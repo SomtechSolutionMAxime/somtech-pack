@@ -16,7 +16,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -151,6 +151,83 @@ test('le câblage RÉEL du veilleur ne pose AUCUN geste sur aucun pane — le re
 
   const gestes = p.appels().filter((a) => a[1] === 'prompt' || a[1] === 'send-keys' || a[1] === 'send-text');
   assert.deepEqual(gestes, [], 'AUCUN geste ne doit partir : un « /clear » spontané effacerait le fil d’un agent au travail');
+});
+
+test('le câblage RÉEL rend « refusée » sur un lieu qu’il n’a PAS PU LIRE — jamais « aucun rôle »', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // CE BANC EXISTE PARCE QU'UNE PASSE DE REVUE A TROUVÉ L'ÉTAT `refusée` INATTEIGNABLE.
+  //
+  // Le recensement rend le rôle en TROIS états : « établi », « non établi » (mesuré, aucun rôle
+  // connu ne correspond) et « refusée » (le lieu ne s'est pas laissé lire). Le troisième existe
+  // parce que les deux appellent des gestes OPPOSÉS : « non établi » envoie POSER un lieu,
+  // « refusée » envoie REFAIRE LA MESURE. Classer un lieu complet mais illisible en « lieu à
+  // demi posé » enverrait re-poser un lieu qui existe.
+  //
+  // ⚠️ ET IL PASSE PAR LE CÂBLAGE RÉEL, pas par un `roleDuLieu` injecté. Le banc de la mesure
+  // (`le-recensement-porte-tous-les-roles`) éprouve ce troisième état contre un collaborateur
+  // QUI JETTE — un double que le vrai code ne produisait pas. Il restait donc vert pendant que
+  // l'état était structurellement hors d'atteinte en production. C'est le seul banc du dépôt
+  // qui appelle la VRAIE fonction sur un VRAI lieu rendu illisible par ses permissions.
+  const p = posteHerdr(bac, [], 'illisible');
+  const depot = join(bac, 'depot-illisible');
+  const lieu = join(depot, '.orchestrateur', 'd-20260822-0002');
+  mkdirSync(join(lieu, '.claude'), { recursive: true });
+  writeFileSync(join(lieu, 'CLAUDE.md'), "# Tu es l'orchestrateur de ce chantier\n\nun métier COMPLET.\n");
+  writeFileSync(join(lieu, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n\nrien.\n');
+  writeFileSync(join(lieu, '.mcp.json'), '{}\n');
+  writeFileSync(join(lieu, '.claude', 'settings.json'), '{}\n');
+  chmodSync(join(lieu, 'CLAUDE.md'), 0o000);
+
+  // ⚠️ LA MISE EN CONDITION SE PROUVE, ELLE NE SE SUPPOSE PAS. Sous un compte privilégié,
+  // `chmod 000` n'empêche pas la lecture : le lieu redeviendrait lisible, le rôle s'établirait,
+  // et ce banc rougirait en accusant le code d'un défaut qu'il n'a pas. On échoue ici, en
+  // nommant la cause, plutôt que de laisser le verdict porter sur autre chose que sa question.
+  let lectureRefusee = false;
+  try {
+    readFileSync(join(lieu, 'CLAUDE.md'), 'utf8');
+  } catch {
+    lectureRefusee = true;
+  }
+  assert.ok(
+    lectureRefusee,
+    `le fichier reste lisible malgré « chmod 000 » (uid ${process.getuid?.() ?? '?'}) — ce banc ne peut ` +
+      'pas fabriquer sa condition sous un compte privilégié, et ne mesure donc rien',
+  );
+
+  p.pane('w1:p1', { boite: '' });
+  p.panes([{ pane_id: 'w1:p1', foreground_cwd: lieu }]);
+
+  const v = veilleurNu('illisible');
+  const avant = { PATH: process.env.PATH, HOME: process.env.HOME, HERDR_SOCKET_PATH: process.env.HERDR_SOCKET_PATH };
+  let rendu;
+  try {
+    process.env.PATH = p.path;
+    process.env.FAUX_HERDR_ETAT = p.etat;
+    process.env.HOME = join(bac, 'foyer-jetable-illisible');
+    process.env.HERDR_SOCKET_PATH = join(p.etat, 'socket');
+    rendu = await v.recensementDuPoste();
+  } finally {
+    for (const [cle, valeur] of Object.entries(avant)) {
+      if (valeur === undefined) delete process.env[cle];
+      else process.env[cle] = valeur;
+    }
+    delete process.env.FAUX_HERDR_ETAT;
+    chmodSync(join(lieu, 'CLAUDE.md'), 0o600); // pour que le bac se laisse ranger
+  }
+
+  assert.ok(rendu.agents, `l’inventaire a refusé (${rendu.inventaireRefuse})`);
+  assert.equal(rendu.agents.length, 1, 'l’agent n’est JAMAIS omis parce qu’on n’a pas su lire son lieu');
+  const role = rendu.agents[0].role;
+  assert.equal(
+    role.mesure,
+    'refusée',
+    `le câblage réel doit dire « je n’ai pas pu lire », pas « aucun rôle » (rendu : ${JSON.stringify(role)})`,
+  );
+  assert.equal(role.nom, null, 'un lieu illisible n’établit aucun rôle');
+  assert.match(role.raison ?? '', /ne s.est pas laissé lire/, 'la raison doit dire CE QUI a refusé');
+  // ⚠️ ET LE COMPTE DOIT LE PORTER. Un état atteint dans une entrée mais absent du résumé se
+  // perd : c'est le résumé qu'on lit.
+  assert.equal(rendu.compte?.roleNonMesure, 1, 'le résumé compte les rôles qu’il n’a PAS PU mesurer');
 });
 
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
