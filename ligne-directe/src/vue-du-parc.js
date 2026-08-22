@@ -343,6 +343,158 @@ export function quiPorte(code, parMandat, parNom) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LE MANIFESTE DES SIGNAUX — ET IL FERME UN TROU MESURÉ, PAS UN DANGER IMAGINÉ
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * Un « signal » est un fait que le LECTEUR DE CHANTIER mesure et que le dirigeant doit lire :
+ * un filtre qui n'a pas filtré, une page plafonnée. Chacun traverse QUATRE jointures avant
+ * d'atteindre l'œil :
+ *
+ *   ① lecteur → vue     (recopie)
+ *   ② vue → compte      (agrégation)
+ *   ③ compte → résumé   (phrase)
+ *   ④ résumé → texte    (rendu)
+ *
+ * 🔴 CE QUE `e-20260822-0002` A MESURÉ SUR LE LOT PRÉCÉDENT, ET QUI EST LA CONDITION DE FIN
+ * N°5 DE CET EPIC : il a ajouté un signal NEUF au lecteur, l'a fait traverser ① correctement,
+ * et l'a laissé mourir en ②③④. **895 essais VERTS. Il passait.**
+ *
+ * > La nuance qui tranche, et qu'il a construite lui-même : lancées contre la suite entière,
+ * > les mutations de ②③④ SONT attrapées — donc ces jointures ÉTAIENT gardées, mais par des
+ * > bancs nommés, pour des signaux CONNUS. **Un signal NEUF est gardé au premier passage et à
+ * > nu sur les trois autres.** Leur garde attrape l'oubli de RECOPIE, pas l'oubli
+ * > d'AGRÉGATION ni l'oubli de RENDU.
+ *
+ * ⚠️ ET NOMMER CE DANGER NE SUFFIT PAS — c'est la leçon payée le même jour. Le piège était
+ * écrit dans le brief du lot précédent ; son porteur a CODÉ la parade, et personne ne l'a
+ * ÉPROUVÉE. On ne se fie donc pas à la vigilance : les jointures ②③④ ne sont plus écrites à la
+ * main du tout. **Elles sont DÉRIVÉES de ce tableau.** Déclarer un signal ici le fait traverser
+ * les quatre passages ; l'oublier ici le fait rougir au premier essai (garde de complétude).
+ *
+ * Chaque entrée porte :
+ *   • `cle`         — le nom du champ TEL QUE LE LECTEUR LE PRODUIT ;
+ *   • `niveau`      — `chantier` ou `epic` : à quel étage il vit ;
+ *   • `nature`      — `compte` (on SOMME) ou `drapeau` (on COMPTE les porteurs) ;
+ *   • `vide`        — la valeur qui veut dire « rien à signaler » ;
+ *   • `cleDuCompte` — son nom dans le compte, qui n'est PAS le même : `epicsPlafonnes` (un
+ *                     booléen par chantier) s'agrège en `chantiersPlafonnes` (un nombre de
+ *                     chantiers). Confondre les deux ferait lire un nombre d'epics ;
+ *   • `phrase(n)`   — ce que le résumé dit QUAND, ET SEULEMENT QUAND, le signal a servi.
+ *
+ * ⚠️ ON NE DIT « 0 » NULLE PART. Un signal répété à chaque ligne cesse d'être un signal — c'est
+ * le faux positif symétrique du défaut qu'on ferme, sur la même frontière.
+ */
+export const SIGNAUX_DU_LECTEUR = [
+  {
+    cle: 'epicsEcartes',
+    niveau: 'chantier',
+    nature: 'compte',
+    vide: 0,
+    cleDuCompte: 'epicsEcartes',
+    phrase: (n) =>
+      ` ⚠️ ${n} epic(s) écarté(s) : le ServiceDesk a rendu des epics d’autres chantiers malgré ` +
+      'son filtre — ils ont été retamisés ici.',
+  },
+  {
+    cle: 'epicsPlafonnes',
+    niveau: 'chantier',
+    nature: 'drapeau',
+    vide: false,
+    // ⚠️ LE NOM CHANGE PARCE QUE L'OBJET CHANGE. On ne sait pas combien d'epics manquent —
+    // c'est exactement ce que « plafonné » veut dire — donc on compte des CHANTIERS touchés.
+    cleDuCompte: 'chantiersPlafonnes',
+    phrase: (n) =>
+      ` ⚠️ ${n} chantier(s) dont la liste d’epics est PLAFONNÉE : il en manque peut-être, et ce ` +
+      'compte-là est un plancher de plus.',
+  },
+  {
+    cle: 'storiesPlafonnees',
+    niveau: 'epic',
+    nature: 'drapeau',
+    vide: false,
+    cleDuCompte: 'epicsAuxStoriesPlafonnees',
+    phrase: (n) => ` ⚠️ ${n} epic(s) dont la liste de stories est PLAFONNÉE : des stories manquent peut-être sous eux.`,
+  },
+  {
+    cle: 'storiesEcartees',
+    niveau: 'epic',
+    nature: 'compte',
+    vide: 0,
+    cleDuCompte: 'storiesEcartees',
+    phrase: (n) =>
+      ` ⚠️ ${n} story(s) écartée(s) : le ServiceDesk a rendu des stories d’autres epics malgré ` +
+      'son filtre — elles ont été retamisées ici.',
+  },
+];
+
+/**
+ * LES CHAMPS DE STRUCTURE D'UN CHANTIER ET D'UN EPIC — tout le reste EST un signal.
+ *
+ * ⚠️ CETTE LISTE EST LE DÉNOMINATEUR DE LA GARDE DE COMPLÉTUDE. Elle dit ce qu'un chantier lu
+ * porte QUI N'EST PAS un signal ; la garde exige alors que tout autre champ produit par le
+ * lecteur figure au manifeste. C'est ce qui rend le trou impossible à rouvrir : on ne peut pas
+ * ajouter un champ au lecteur sans le déclarer ici ou là, et l'un des deux le fait traverser.
+ */
+export const CHAMPS_DE_STRUCTURE = {
+  chantier: ['code', 'titre', 'statut', 'epics'],
+  epic: ['code', 'titre', 'statut', 'stories'],
+};
+
+/** Les signaux d'un étage donné. */
+export function signauxDe(niveau) {
+  return SIGNAUX_DU_LECTEUR.filter((s) => s.niveau === niveau);
+}
+
+/**
+ * ① LECTEUR → VUE — la recopie, DÉRIVÉE du manifeste au lieu d'être écrite à la main.
+ *
+ * ⚠️ ÉCRITE À LA MAIN, ELLE A DÉJÀ PERDU DEUX SIGNAUX. `epicsEcartes` mourait ici pendant que
+ * le lecteur le calculait « avec soin » ; son jumeau `epicsPlafonnes` est resté en arrière UN
+ * CYCLE ENTIER, dans la même expression, à une ligne près — nommé dans le commentaire du
+ * correctif qui venait de fermer le premier.
+ */
+export function recopierLesSignaux(source, niveau) {
+  const sortie = {};
+  for (const s of signauxDe(niveau)) sortie[s.cle] = source?.[s.cle] ?? s.vide;
+  return sortie;
+}
+
+/**
+ * ② VUE → COMPTE — l'agrégation, DÉRIVÉE elle aussi.
+ *
+ * `compte` (on somme) et `drapeau` (on compte les porteurs) sont deux agrégations différentes,
+ * et les confondre ferait lire un nombre pour un autre : « 3 chantiers plafonnés » n'est pas
+ * « 3 epics manquants », et personne ne peut le deviner depuis le chiffre seul.
+ */
+export function compterLesSignaux(orchestrateurs) {
+  const compte = {};
+  for (const s of SIGNAUX_DU_LECTEUR) {
+    let n = 0;
+    for (const o of orchestrateurs) {
+      const porteurs = s.niveau === 'chantier' ? [o.chantier] : (o.epics ?? []);
+      for (const p of porteurs) {
+        const v = p?.[s.cle];
+        n += s.nature === 'compte' ? Number(v ?? 0) : v ? 1 : 0;
+      }
+    }
+    compte[s.cleDuCompte] = n;
+  }
+  return compte;
+}
+
+/**
+ * ③ COMPTE → RÉSUMÉ — les phrases, DÉRIVÉES, et AUCUNE quand le signal n'a pas servi.
+ *
+ * ⚠️ LE RÉSUMÉ EST LUI-MÊME POUSSÉ DANS LE TEXTE PAR `rendreLaVue` : c'est ce qui fait que ③
+ * emporte ④ pour les signaux de chantier. Les signaux d'EPIC ont en plus leur ligne dans
+ * l'arbre — et la garde de famille exerce les deux chemins, pas un seul.
+ */
+export function phrasesDesSignaux(compte) {
+  return SIGNAUX_DU_LECTEUR.map((s) => (compte?.[s.cleDuCompte] ? s.phrase(compte[s.cleDuCompte]) : '')).join('');
+}
+
+/**
  * LE LECTEUR DE CHANTIER RÉEL — projet → epics → stories, en trois appels par chantier.
  *
  * ⚠️ LA STRUCTURE NE SE DEVINE PAS, ELLE SE LIT : `projects` (ou `demands`/`deliveries` selon
@@ -807,21 +959,12 @@ export async function laVueDuParc({
         // que ce soit encore vrai. La vue le rend donc avec sa NATURE collée dessus, jamais nu
         // à côté d'une activité mesurée à l'instant — où il se lirait comme un constat.
         natureDuStatut: 'affirmé',
-        // 🔴 L'ÉCART TRAVERSE, IL NE MEURT PAS ICI — et il mourait ici. `lecteurDeChantier`
-        // calcule `epicsEcartes` avec soin, en écrivant « l'écart ne disparaît pas » ; cette
-        // couche ne recopiait que code/titre/statut, et le chiffre s'évanouissait juste avant
-        // l'endroit où il compte : la ligne que lit le dirigeant. Deux étages justes, et la
-        // jointure entre eux gardée par personne — la forme même que ce lot a payée deux fois.
-        epicsEcartes: chantier?.epicsEcartes ?? 0,
-        // 🔴 LE JUMEAU, ET IL EST RESTÉ EN ARRIÈRE UN CYCLE ENTIER. Le commentaire ci-dessus a
-        // été écrit pour `epicsEcartes` en nommant DEUX pannes de filtre — les intrus et les
-        // manquants — et seul le premier a traversé. `epicsPlafonnes` mourait exactement à la
-        // même jointure, dans la même expression, à une ligne près.
-        //
-        // ⚠️ C'est « une garde posée sur un fichier ne garde pas sa famille », appliqué à un
-        // champ : j'avais corrigé le défaut QUE JE VENAIS DE VOIR, pas le défaut POSSIBLE — et
-        // son jumeau était nommé dans le commentaire du correctif lui-même.
-        epicsPlafonnes: chantier?.epicsPlafonnes ?? false,
+        // 🔴 LES SIGNAUX SE RECOPIENT PAR LE MANIFESTE, PLUS À LA MAIN. Écrite à la main, cette
+        // jointure a perdu `epicsEcartes` une fois, puis son jumeau `epicsPlafonnes` un cycle
+        // entier plus tard — dans la même expression, à une ligne près, et nommé dans le
+        // commentaire du correctif qui venait de fermer le premier. Corriger le défaut VU ne
+        // ferme pas le défaut POSSIBLE : c'est la dérivation qui le ferme, pas la vigilance.
+        ...recopierLesSignaux(chantier, 'chantier'),
       },
       epics: epicsLus.map((e) => {
         const codeEpic = codeDuMandat(e?.code ?? '');
@@ -844,11 +987,9 @@ export async function laVueDuParc({
                   titre: s?.titre ?? null,
                   agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
                 })),
-          // Le plafond des stories traverse, comme celui des epics : il vient du lecteur, il ne
-          // se recalcule pas ici — et il ne meurt pas à cette jointure, contrairement à son
-          // jumeau d'un étage plus haut, qui y est resté un cycle entier.
-          storiesPlafonnees: e?.storiesPlafonnees ?? false,
-          storiesEcartees: e?.storiesEcartees ?? 0,
+          // Les signaux d'epic traversent par le MÊME manifeste que ceux du chantier : un seul
+          // tableau pour les deux étages, donc aucun étage ne peut rester en arrière de l'autre.
+          ...recopierLesSignaux(e, 'epic'),
         };
       }),
     };
@@ -988,21 +1129,11 @@ export async function laVueDuParc({
     chantiersSansTerminal: orchestrateurs.filter((o) => o.presence?.vivant !== true).length,
     // ⚠️ ET CELUI-CI SE COMPTE À PART : « on n'a pas pu établir » n'est pas « il est parti ».
     presencesNonEtablies: orchestrateurs.filter((o) => o.presence?.vivant === null).length,
-    // ⚠️ UN FILTRE QUI N'A PAS FILTRÉ EST UN FAIT, PAS UN DÉTAIL D'IMPLÉMENTATION. S'il n'est
-    // pas nul, le ServiceDesk a rendu des epics d'autres chantiers et c'est NOUS qui les avons
-    // écartés — le lecteur doit savoir que la garde a servi, sinon personne n'ira voir pourquoi.
-    epicsEcartes: orchestrateurs.reduce((n, o) => n + (o.chantier.epicsEcartes ?? 0), 0),
-    // Le plafond se compte en CHANTIERS touchés, pas en epics : on ne sait pas combien il en
-    // manque — c'est justement ce que « plafonné » veut dire.
-    chantiersPlafonnes: orchestrateurs.filter((o) => o.chantier.epicsPlafonnes).length,
-    epicsAuxStoriesPlafonnees: orchestrateurs.reduce(
-      (n, o) => n + (o.epics ?? []).filter((e) => e.storiesPlafonnees).length,
-      0
-    ),
-    storiesEcartees: orchestrateurs.reduce(
-      (n, o) => n + (o.epics ?? []).reduce((m, e) => m + (e.storiesEcartees ?? 0), 0),
-      0
-    ),
+    // 🔴 LES QUATRE AGRÉGATIONS SONT DÉRIVÉES DU MANIFESTE. Écrites à la main, elles étaient
+    // la SECONDE des quatre jointures qu'un signal neuf devait franchir — et celle où il
+    // mourait le plus silencieusement : un signal recopié dans la vue mais jamais agrégé
+    // n'apparaît nulle part, et aucun banc nommé pour un signal CONNU ne peut le savoir.
+    ...compterLesSignaux(orchestrateurs),
     // ⚠️ LE DÉNOMINATEUR VOYAGE AVEC LE COMPTE. Voir plus haut : un nombre d'ambiguïtés sans
     // l'ensemble sur lequel il a été compté n'est pas vérifiable, et se compare à tort à un
     // autre nombre compté ailleurs.
@@ -1042,29 +1173,12 @@ function resumeDeLaVue(compte, recensement, registreDesLieux = null) {
     `qui ne sont pas des codes de chantier ; ${compte.horsHierarchie} agent(s) hors de toute ` +
     `hiérarchie d’orchestrateur ; ${compte.panesAmbigus} identifiant(s) de pane ambigu(s) sur ` +
     `${compte.entreesComparees} entrée(s) comparée(s).` +
-    // ⚠️ ON NE DIT « 0 écarté » NULLE PART. Un signal répété à chaque ligne cesse d'être un
-    // signal : c'est le faux positif symétrique du défaut qu'on vient de fermer, sur la même
-    // frontière. Il ne parle QUE quand la garde a réellement servi.
-    (compte.epicsEcartes
-      ? ` ⚠️ ${compte.epicsEcartes} epic(s) écarté(s) : le ServiceDesk a rendu des epics d’autres ` +
-        'chantiers malgré son filtre — ils ont été retamisés ici.'
-      : '') +
-    // ⚠️ DEUX PANNES, DEUX PHRASES, ET AUCUNE QUAND IL N'Y A RIEN À DIRE. « Écarté » veut dire
-    // qu'on a reçu TROP et retamisé ; « plafonné » veut dire qu'on a peut-être reçu TROP PEU et
-    // qu'on ne le saura pas d'ici. Les fondre ferait lire une panne pour l'autre, et elles
-    // appellent des gestes opposés.
-    (compte.chantiersPlafonnes
-      ? ` ⚠️ ${compte.chantiersPlafonnes} chantier(s) dont la liste d’epics est PLAFONNÉE : il en ` +
-        'manque peut-être, et ce compte-là est un plancher de plus.'
-      : '') +
-    (compte.epicsAuxStoriesPlafonnees
-      ? ` ⚠️ ${compte.epicsAuxStoriesPlafonnees} epic(s) dont la liste de stories est PLAFONNÉE : ` +
-        'des stories manquent peut-être sous eux.'
-      : '') +
-    (compte.storiesEcartees
-      ? ` ⚠️ ${compte.storiesEcartees} story(s) écartée(s) : le ServiceDesk a rendu des stories ` +
-        'd’autres epics malgré son filtre — elles ont été retamisées ici.'
-      : '') +
+    // 🔴 LES PHRASES SONT DÉRIVÉES DU MANIFESTE — troisième jointure, fermée par construction.
+    // Chacune ne parle QUE quand son signal a servi : « 0 écarté » répété à chaque ligne cesse
+    // d'être un signal, et c'est le faux positif symétrique du défaut qu'on ferme, sur la même
+    // frontière. Le résumé est ensuite poussé tel quel dans le texte par `rendreLaVue` : c'est
+    // ce qui fait que la troisième jointure emporte la quatrième.
+    phrasesDesSignaux(compte) +
     (muettes ? ` ⚠️ ${muettes} session(s) herdr n’ont pas répondu : ce compte est amputé d’autant.` : '') +
     (lieuxMuets
       ? ` ⚠️ LES LIEUX N’ONT PAS ÉTÉ LUS (${lieuxMuets.raison}) : un chantier dont plus aucun ` +
