@@ -346,3 +346,83 @@ test('la ligne d’un orchestrateur ne rend JAMAIS l’état de session brut —
     assert.match(texte, /activité NON MESURÉE/, 'ce qui se lit, c’est qu’on n’a pas mesuré');
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑤ QUI GARDE LE MANIFESTE ? — la question de `kamouraska`, et elle a trouvé un trou
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 « Tu as déplacé le point unique d'un cran, tu ne l'as pas supprimé. » — et c'est exact.
+// Les quatre gardes du dessus vérifient FIDÈLEMENT ce que le manifeste déclare, et RIEN de ce
+// qu'il oublie. Si le manifeste est faux, elles sont justes ET vides.
+//
+// ⚠️ ET LE MANIFESTE EST ÉCRIT À CÔTÉ DU CODE, PAS DÉRIVÉ DE LUI. On ne le cache pas : rien
+// n'empêche `lecteurDeChantier` de produire un champ que ce tableau ignore. Ce qui l'empêche,
+// c'est que la divergence soit MESURÉE — contre le VRAI lecteur, DANS LES DEUX SENS, et sur un
+// dénominateur qu'on ne peut pas élargir en silence.
+//
+// 🔴 LE TROU QUE CETTE QUESTION A TROUVÉ, ET IL ÉTAIT RÉEL : la garde de complétude soustrait
+// `CHAMPS_DE_STRUCTURE` avant de comparer. **Il suffisait donc d'ajouter `epicsEcartes` à
+// `CHAMPS_DE_STRUCTURE.chantier` pour que le signal cesse d'être exigé, sans qu'un seul essai
+// ne rougisse.** Le dénominateur d'une garde EST une garde : s'il est libre, elle ne garde rien.
+
+test('le dénominateur de la garde est ÉPINGLÉ — on ne peut pas cacher un signal en le disant structurel', () => {
+  // ⚠️ UNE LISTE ÉCRITE EN DUR, ET C'EST VOULU. C'est le seul endroit de ce fichier qui nomme
+  // des champs : il FAUT qu'élargir `CHAMPS_DE_STRUCTURE` COÛTE un rouge, sinon la soustraction
+  // qui protège les signaux devient une porte de sortie silencieuse.
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.chantier, ['code', 'titre', 'statut', 'epics']);
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.epic, ['code', 'titre', 'statut', 'stories']);
+});
+
+test('structure et signaux sont DISJOINTS — un champ ne peut pas être les deux', () => {
+  for (const s of SIGNAUX_DU_LECTEUR) {
+    assert.ok(
+      !CHAMPS_DE_STRUCTURE[s.niveau]?.includes(s.cle),
+      `« ${s.cle} » est déclaré signal ET structurel : la soustraction l’effacerait de sa propre garde`
+    );
+  }
+});
+
+test('AUCUNE entrée du manifeste n’est un FANTÔME — chaque signal déclaré est vraiment produit', async () => {
+  // ⚠️ LE SENS INVERSE DE LA COMPLÉTUDE, ET IL MANQUAIT. Un signal déclaré que le lecteur ne
+  // produit plus reste éternellement à `vide` : sa garde des quatre passages passe — elle
+  // l'allume elle-même dans son double — le compte rend 0, le résumé se tait, et personne
+  // n'apprend que le fait a CESSÉ d'être mesuré. C'est la prose qui contredit la donnée, montée
+  // d'un étage : le manifeste affirme un signal que le code ne rend plus.
+  const lire = lecteurDeChantier({
+    appeler: async (nom) => {
+      if (nom === 'projects')
+        return { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'in_progress' }] };
+      if (nom === 'epics') return { epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'e', status: 's' }] };
+      return { tickets: [{ id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 's', status: 'new' }] };
+    },
+  });
+  const chantier = await lire('P-20260822-0001');
+
+  for (const s of signauxDe('chantier')) {
+    assert.ok(s.cle in chantier, `« ${s.cle} » est déclaré, mais le lecteur ne le produit PLUS`);
+  }
+  for (const s of signauxDe('epic')) {
+    assert.ok(s.cle in chantier.epics[0], `« ${s.cle} » est déclaré à l’étage epic, mais le lecteur ne le produit PLUS`);
+  }
+});
+
+test('CHAQUE entrée du manifeste porte tout ce que les quatre passages lui demandent', () => {
+  // Une entrée incomplète casse une jointure à l'exécution — `phrase` absente JETTE au moment
+  // du résumé — ou pire, la traverse en silence : `cleDuCompte` absente écrit `compte[undefined]`,
+  // que rien ne lit et que rien ne signale.
+  for (const s of SIGNAUX_DU_LECTEUR) {
+    assert.ok(['chantier', 'epic'].includes(s.niveau), `« ${s.cle} » : niveau inconnu`);
+    assert.ok(['compte', 'drapeau'].includes(s.nature), `« ${s.cle} » : nature inconnue`);
+    assert.ok(typeof s.cleDuCompte === 'string' && s.cleDuCompte, `« ${s.cle} » : sans nom dans le compte`);
+    assert.equal(typeof s.phrase, 'function', `« ${s.cle} » : sans phrase, le résumé jetterait`);
+    assert.ok(s.phrase(3).includes('3'), `« ${s.cle} » : sa phrase ne porte pas son nombre`);
+    assert.equal(s.vide, s.nature === 'compte' ? 0 : false, `« ${s.cle} » : sa valeur de repos ne suit pas sa nature`);
+  }
+});
+
+test('DEUX signaux ne partagent jamais leur nom dans le compte — l’un écraserait l’autre en silence', () => {
+  const noms = SIGNAUX_DU_LECTEUR.map((s) => s.cleDuCompte);
+  assert.equal(new Set(noms).size, noms.length, 'un doublon ferait disparaître un signal dans le compte');
+  const cles = SIGNAUX_DU_LECTEUR.map((s) => `${s.niveau}:${s.cle}`);
+  assert.equal(new Set(cles).size, cles.length);
+});
