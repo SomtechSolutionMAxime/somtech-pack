@@ -21,7 +21,7 @@ import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
 import { rolesConnus } from '../src/roles.js';
-import { rendreLaVue } from '../src/vue-du-parc.js';
+import { ecrireLaVue, GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import {
   preparerLieuRepresentant,
@@ -507,8 +507,8 @@ if (geste === 'relever') {
   // garde de HS-VUE-002 se joue sur la LIGNE rendue, pas sur le champ JSON : « NON ÉTABLI » y
   // précède l'indice, et l'indice y porte sa phrase. Rendre du JSON par défaut mettrait ces
   // trois conditions hors de portée du seul lecteur qu'elles protègent.
-  const vue = await parler({ geste: 'vue' });
-  process.stdout.write(args.includes('--json') ? `${JSON.stringify(vue, null, 2)}\n` : `${rendreLaVue(vue)}\n`);
+  const vue = await parler({ geste: GESTE_DE_LA_VUE });
+  process.stdout.write(ecrireLaVue(vue, args));
 } else if (geste === 'recensement') {
   // ⚠️ RENDU TEL QUEL, SANS RÉSUMÉ MAISON. Le rendu porte déjà `resume`, `regle` et — quand la
   // mesure a échoué — `inventaireRefuse` avec `agents: null`. Recomposer ici une phrase

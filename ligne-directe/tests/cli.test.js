@@ -166,3 +166,19 @@ test('COMMUN — l’usage annonce le geste, son rôle, et dit qu’il est desce
   assert.match(r.stdout, /chef d'equipe jamais/i, 'et nommer celui qui ne reçoit jamais rien');
   assert.match(r.stdout, /Descendant\s+seulement/i, 'l’usage doit dire que rien n’y remonte');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA COMMANDE « vue » — ce que le dirigeant peut DÉCOUVRIR
+//
+// ⚠️ CE QU'ON NE PEUT PAS ÉPROUVER ICI, ET POURQUOI ON LE DIT PLUTÔT QUE DE LE TAIRE : lancer
+// « vue » pour de vrai exige un veilleur, et un lancement sous `node --test` transmet le
+// contexte de test à l'enfant — qui tente alors d'en faire naître un, ce que la cloison d'essais
+// refuse à juste titre (10 s d'attente, puis échec). La sortie de la commande est donc éprouvée
+// AILLEURS, sur `ecrireLaVue` et `GESTE_DE_LA_VUE`, sortis du `bin` exprès pour ça.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('l’aide annonce le geste « vue » — un geste qu’on ne peut pas découvrir n’existe pas', async () => {
+  const r = await lancer([]);
+  assert.match(r.stdout, /vue \[--json\]/, 'le geste figure dans l’aide');
+  assert.match(r.stdout, /CODE DU MANDAT/, 'et l’aide dit par quoi la jointure passe');
+});

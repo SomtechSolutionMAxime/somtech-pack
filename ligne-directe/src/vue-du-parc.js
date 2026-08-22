@@ -571,6 +571,26 @@ export function rendreAttribution(attribution) {
   return `${MOT_NON_ETABLI} — ${PHRASE_DE_LINDICE} : ${pistes}`;
 }
 
+/** Le geste que la commande demande au veilleur — écrit UNE fois, ici. */
+export const GESTE_DE_LA_VUE = 'vue';
+
+/**
+ * CE QUE LA COMMANDE ÉCRIT — texte par défaut, JSON sur demande.
+ *
+ * 🔴 SORTI DU `bin` POUR ÊTRE ÉPROUVABLE, et c'est une survivante de la campagne des arêtes qui
+ * l'exige. Tant que ce choix vivait dans `bin/ligne-directe.js`, le muter — rendre du JSON par
+ * défaut — laissait les 889 essais VERTS : le `bin` n'est atteignable que par un vrai
+ * lancement, et un vrai lancement sous `node --test` tente de faire naître un veilleur, que la
+ * cloison d'essais refuse à juste titre. La couche était donc structurellement non gardée.
+ *
+ * ⚠️ ET C'EST LA COUCHE OÙ TOUTE LA GARDE SE JOUE. Les trois conditions de l'arbitrage portent
+ * sur le RENDU TEXTE — « NON ÉTABLI » avant l'indice, l'indice avec sa phrase. Rendre du JSON
+ * par défaut mettrait ces trois conditions hors de portée du seul lecteur qu'elles protègent.
+ */
+export function ecrireLaVue(vue, args = []) {
+  return args.includes('--json') ? `${JSON.stringify(vue, null, 2)}\n` : `${rendreLaVue(vue)}\n`;
+}
+
 /**
  * LA VUE, EN TEXTE — ce que le dirigeant lit.
  *
