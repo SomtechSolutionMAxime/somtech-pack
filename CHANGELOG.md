@@ -5,6 +5,23 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-22
+
+*Epic `E-20260822-0004`, demande `D-20260822-0001`. **Les lieux d'orchestrateurs committés portaient un métier périmé, et `git worktree add` les recopiait.** Ce n'était pas un stock : chaque worktree neuf faisait naître un orchestrateur périmé — y compris ceux créés pour réparer le reste.*
+
+### Corrigé
+
+- **Les sept lieux versionnés portent le métier rendu.** Cinq portaient un socle monolithe — jusqu'à 146 349 o et **zéro chapitre** là où le rendu en fait 7 881 avec onze. Les deux autres, réputés conformes, portaient **onze chapitres sur onze périmés d'une version d'ABC** sous un socle pourtant identique à l'octet. Aucun `CONTEXTE.md` n'est touché : les sept empreintes sont identiques avant et après.
+- **La garde qui manquait entre le gabarit et les lieux versionnés.** Le maillon *rendu → gabarit* était gardé ; **le maillon *gabarit → lieux* ne l'était pas**, et c'est par là que cinq lieux ont été versés périmés. La nouvelle garde exige des trois choses à la fois : le socle identique à l'octet, chaque renvoi qui atteint un chapitre existant, et **aucun chapitre orphelin**. Sa population est ce que git suit, jamais le disque — un lieu né localement dans un worktree ne doit pas faire rougir la chaîne d'autrui.
+- **Un critère de conformité bâti sur la forme déclarait conformes des lieux périmés.** Taille du socle, compte de chapitres et renvois résolus mesurent **le routeur et les liens** ; le métier que l'agent lit vit dans les chapitres. La garde ne tenait donc que l'aiguillage : **trouvé par la passe de revue de fond, sur une garde que son auteur croyait complète**, et fermé par une assertion qui compare le contenu de chaque chapitre. Au vrai critère — le millésime écrit en tête de chaque chapitre — le parc comptait **2 lieux à jour sur 67**, là où le critère de forme en annonçait 13.
+- **`essai-metier-rendu` renvoyait vers dix chapitres qui n'existaient pas à l'endroit annoncé.** Son socle écrivait `chapitres/x.md` quand les fichiers vivent sous `metier/chapitres/x.md` : dix renvois, **zéro résolu**, dans un lieu où un agent pouvait naître.
+
+### Technique
+
+- Chaque assertion de la garde a été **mutée une à la fois** — un rouge groupé prouve qu'au moins une chose était gardée, jamais que toutes l'étaient. Six mutations, six rouges : renvoi vers un chapitre absent, dérive d'un seul octet dans le socle, chapitre orphelin posé, chapitre renvoyé supprimé, dérive d'un seul octet dans un chapitre, contenu de chapitre remplacé.
+- La garde porte **son propre fusible** : un dépôt où aucun lieu n'est suivi la fait rougir au lieu de la laisser passer à vide sur une population nulle.
+
+
 ## [Non-versionne] - 2026-08-21
 
 *Ticket `T-20260821-0032`. **La pose d'un lieu copiait quatre fichiers écrits en dur ; le socle rendu en annonce onze de plus.** Un agent né ainsi portait une carte vers rien.*
