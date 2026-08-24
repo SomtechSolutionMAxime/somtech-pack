@@ -34,12 +34,21 @@ export const BORNE_PAR_DEFAUT = 30_000;
  * `recensement` en **9 s**, `vue` en **67 127 ms** (puis 71 797 ms au second essai). Une borne
  * unique ne peut être juste pour aucun d'eux : trop lâche pour trois, trop serrée pour un.
  *
- * ⚠️ ET LE COÛT DE LA VUE EST STRUCTUREL, PAS ACCIDENTEL — mesuré appel par appel : 9 217 ms
- * de recensement, puis 54 144 ms de jointure en **91 appels HTTP séquentiels** (1 liste par
- * mandat, 1 `epics/list` par mandat, **1 `tickets/list` par epic**). Aucun appel n'est lent :
- * médiane 624-778 ms, max 976 ms. C'est le NOMBRE qui coûte, et il croît linéairement avec le
- * nombre d'epics du parc. La borne est donc posée sur ~2,7× le coût mesuré d'un poste de
- * 99 panes et 71 epics — pas sur un chiffre rond.
+ * ⚠️ ET LE COÛT DE LA VUE EST STRUCTUREL, PAS ACCIDENTEL — mesuré appel par appel, transport
+ * instrumenté : 9 217 ms de recensement, puis 54 144 ms de jointure en **91 appels HTTP
+ * séquentiels**. Aucun appel n'est lent (médiane 624-778 ms, max 976 ms) : c'est le NOMBRE qui
+ * coûte. Sa loi, pour qui voudra reposer cette borne un jour :
+ *
+ *     T ≈ recensement + 0,7 s × (2 × mandats + epics)
+ *
+ * — une liste par mandat, un `epics/list` par mandat, **un `tickets/list` par epic**.
+ *
+ * 🔴 CETTE BORNE SE PÉRIMERA, ET IL FAUT LE DIRE PLUTÔT QUE DE LA PRÉSENTER COMME CONFORTABLE.
+ * Mesurée le matin du 2026-08-24 : **67 s pour 71 epics**. Remesurée quatre heures plus tard,
+ * même poste, même code : **84 s pour 85 epics** (89 s sous charge). Le parc grandit, et le
+ * coût avec lui — la marge réelle est donc de **2×**, pas davantage. Elle ne tient pas un parc
+ * qui double. Ce jour-là, la réponse ne sera pas une borne plus haute : ce sera le nombre
+ * d'appels, qu'aucune borne ne peut rattraper.
  *
  * ⚠️ CE N'EST PAS UNE PERMISSION D'ATTENDRE TROIS MINUTES. La sonde ci-dessous refuse dès que
  * le veilleur cesse de répondre : la borne haute n'est atteinte que par un veilleur VIVANT et
