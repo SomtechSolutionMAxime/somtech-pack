@@ -419,6 +419,72 @@ async function tempsDeSortie(nom, cheminSocket, geste, reglages) {
   return { ms: Date.now() - t0, sortie };
 }
 
+/** Le veilleur du cas limite : il rend VITE le geste demandé, et LENTEMENT son ping. */
+async function veilleurAuPingLent(nom, { gesteMs = 120, pingMs = 1_500 } = {}) {
+  const cheminSocket = join(bac, `${nom}.sock`);
+  const vivantes = new Set();
+  const srv = createServer((flux) => {
+    vivantes.add(flux);
+    flux.on('close', () => vivantes.delete(flux));
+    flux.on('error', () => {});
+    let tampon = '';
+    flux.on('data', (m) => {
+      tampon += m.toString('utf8');
+      let c = tampon.indexOf('\n');
+      while (c !== -1) {
+        const geste = JSON.parse(tampon.slice(0, c))?.geste;
+        tampon = tampon.slice(c + 1);
+        setTimeout(
+          () => flux.write(`${JSON.stringify({ ok: true, resume: 'le parc' })}\n`),
+          geste === 'ping' ? pingMs : gesteMs
+        );
+        c = tampon.indexOf('\n');
+      }
+    });
+  });
+  await new Promise((r) => srv.listen(cheminSocket, r));
+  return {
+    cheminSocket,
+    fermer: () =>
+      new Promise((r) => {
+        for (const f of vivantes) f.destroy();
+        srv.close(r);
+      }),
+  };
+}
+
+test('UN PING COUPÉ PAR NOUS-MÊMES NE DIT RIEN DU VEILLEUR — sinon on REFUSE une vue déjà rendue', async () => {
+  // 🔴 LE DÉFAUT LE PLUS GRAVE DE CE LOT, ET IL SORT DE LA CORRECTION DU PRÉCÉDENT. Couper le
+  // ping de la sonde quand la réponse arrive fait rejeter ce ping — et un rejet lu comme un
+  // silence fait REFUSER le geste. Mesuré sur la mutation : **40 essais sur 40 refusés**, avec
+  // « le veilleur NE RÉPOND PLUS — vue attendu 0.1s » pour une vue qui venait d'arriver.
+  //
+  // ⚠️ ET LE BANC VOISIN NE POUVAIT PAS LE VOIR : il chronomètre la MORT du processus, en
+  // avalant l'issue avec un `.catch()`. Refus ou réponse, il meurt aussi vite — la durée était
+  // juste, le verdict invisible. C'est l'ISSUE qu'il faut regarder ici, pas la durée.
+  const lent = await veilleurAuPingLent('ping-lent');
+  try {
+    // ⚠️ PLUSIEURS ESSAIS : ce chemin est une course entre la réponse et la sentinelle. Un seul
+    // essai vert ne dirait pas si on a raison ou si on a eu de la chance.
+    for (let essai = 0; essai < 5; essai += 1) {
+      const rendu = await parler(
+        { geste: GESTE_DE_LA_VUE },
+        {
+          reveiller: false,
+          cheminSocket: lent.cheminSocket,
+          borneParDefaut: 30_000,
+          bornesParGeste: { [GESTE_DE_LA_VUE]: 180_000 },
+          // intervalle plus court que la réponse : un ping est FORCÉMENT en vol quand elle arrive
+          sonde: { intervalle: 60, borne: 5_000 },
+        }
+      );
+      assert.equal(rendu?.resume, 'le parc', `essai ${essai + 1} : la vue est arrivée, elle doit être RENDUE`);
+    }
+  } finally {
+    await lent.fermer();
+  }
+});
+
 test('UN PING EN VOL NE RETIENT PAS LA COMMANDE — trouvé par une passe portail, mon banc l’ÉVITAIT', async () => {
   // 🔴 LE MÊME DÉFAUT QUE CE LOT CORRIGE, PAR UNE PORTE QU'IL N'AVAIT PAS FERMÉE. La réponse
   // arrive, la vue s'affiche — et la commande reste debout le temps que le ping de la sonde,
