@@ -445,6 +445,47 @@ test('AUCUNE entrée du manifeste n’est un FANTÔME — chaque signal déclar�
   }
 });
 
+test('AUCUN CHAMP DE STRUCTURE n’est un FANTÔME non plus — le jumeau qui manquait, aux TROIS étages', async () => {
+  // 🔴 CE BANC EXISTE PARCE QUE LA MUTATION A TROUVÉ CE QUE MA PREMIÈRE FERMETURE N’ATTRAPAIT
+  // PAS (2026-08-24, E-20260824-0005). Deux familles de survivante, pas une :
+  //
+  //   ① LA VUE JETTE ce que le lecteur produit → fermée par la garde de famille, qui descend
+  //     désormais aux trois étages (`la-vue-du-parc-est-vraiment-cablee`).
+  //   ② LE LECTEUR CESSE DE PRODUIRE ce que le manifeste déclare → **restait libre**. Mesuré :
+  //     retirer `statut` de l'epic dans le lecteur faisait 0 rouge sur 972 essais, AVANT comme
+  //     APRÈS la fermeture de ①. La garde de famille compare les clés du lecteur à celles de
+  //     la vue : un champ que le lecteur ne produit plus n'est perdu par personne.
+  //
+  // ⚠️ C'EST LE JUMEAU EXACT du banc au-dessus, qui existait pour les SIGNAUX et pas pour la
+  // STRUCTURE. Le motif « une porte sur deux », dans le fichier qui le dénonce.
+  const lire = lecteurDeChantier({
+    appeler: async (nom) => {
+      if (nom === 'projects')
+        return { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'in_progress', application_id: 'a1' }] };
+      if (nom === 'epics') return { epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'e', status: 's' }] };
+      if (nom === 'applications') return { applications: [{ id: 'a1', name: 'Somtech Pack' }] };
+      return { tickets: [{ id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 's', status: 'new' }] };
+    },
+  });
+  const chantier = await lire('P-20260822-0001');
+
+  const etages = [
+    { nom: 'chantier', objet: chantier },
+    { nom: 'epic', objet: chantier.epics[0] },
+    { nom: 'story', objet: chantier.epics[0].stories[0] },
+  ];
+  for (const e of etages) {
+    assert.ok(e.objet, `l’étage « ${e.nom} » doit EXISTER, sinon cette garde ne mesure rien`);
+    for (const champ of CHAMPS_DE_STRUCTURE[e.nom]) {
+      assert.ok(
+        champ in e.objet,
+        `« ${champ} » est déclaré structurel à l’étage « ${e.nom} », mais le lecteur ne le produit PLUS — ` +
+          'un champ déclaré que rien ne produit se rend éternellement `null`, et personne n’apprend que le fait a CESSÉ d’être mesuré'
+      );
+    }
+  }
+});
+
 test('CHAQUE entrée du manifeste porte tout ce que les quatre passages lui demandent', () => {
   // Une entrée incomplète casse une jointure à l'exécution — `phrase` absente JETTE au moment
   // du résumé — ou pire, la traverse en silence : `cleDuCompte` absente écrit `compte[undefined]`,
