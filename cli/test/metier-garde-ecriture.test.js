@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 import { juger, FICHIER_PERMIS } from '../src/metier/gardes/ecriture.js';
 
@@ -526,11 +527,25 @@ test('le verdict d’une garde SAINE traverse intact — sinon la validation ref
  * le `deny` de n'importe quel hook l'emporte, donc un voisin non éprouvé peut faire
  * tomber la fonction de ce lot EN SILENCE (la garde dirait oui, rien ne s'écrirait).
  */
+/**
+ * ⚠️ L'APPARIEMENT EST UNE EMPREINTE, PLUS UNE SOUS-CHAÎNE — et c'est un DÉFAUT
+ * RÉEL qui l'a imposé, trouvé par la seconde passe de fond du 2026-08-24 et
+ * mesuré deux fois : un cinquième hook sans `matcher`, répondant toujours
+ * « allow », dont la commande ne faisait qu'IMPRIMER un message contenant par
+ * hasard « gardes/ecriture.js », passait pour éprouvé. Le contrôle restait vert
+ * pendant qu'un hook non éprouvé voyait tous les `Write`.
+ *
+ * L'empreinte ferme ce cas et en ouvre un utile : une commande qui CHANGE rougit,
+ * donc doit être ré-éprouvée. C'est la bonne polarité — ce lot vient précisément
+ * de montrer qu'un durcissement peut ne pas être redistribué partout.
+ */
+const empreinte = (cmd) => createHash('sha256').update(cmd, 'utf8').digest('hex').slice(0, 16);
+
 const HOOKS_EPROUVES = [
-  { marque: 'gardes/terminal.js', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
-  { marque: 'gardes/ligne-cliente.js', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
-  { marque: 'gardes/ecriture.js', pourquoi: 'la garde de ce lot — 30 contrôles ci-dessus' },
-  { marque: 'garde-ouverture-ligne.js', pourquoi: 'éprouvée en §9 : se retire une fois la ligne ouverte' },
+  { sha: 'e52511a7320595f5', quoi: 'garde « terminal »', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
+  { sha: '027326877c5f600d', quoi: 'garde « ligne-cliente »', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
+  { sha: '5a11f09d4be1b385', quoi: 'garde « ecriture »', pourquoi: 'la garde de ce lot — éprouvée par les sections 1 à 11 ci-dessus' },
+  { sha: '006488b51d844b07', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 : se retire une fois la ligne ouverte' },
 ];
 
 test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voisin non éprouvé fait tomber ce lot en silence', () => {
@@ -547,9 +562,10 @@ test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voi
 
   for (const h of voientUnWrite) {
     const cmd = h.hooks?.[0]?.command || '';
-    const connu = HOOKS_EPROUVES.find((e) => cmd.includes(e.marque));
+    const connu = HOOKS_EPROUVES.find((e) => e.sha === empreinte(cmd));
     assert.ok(connu,
-      `un hook qui voit les « Write » n’est pas dans la table des hooks éprouvés :\n  ${cmd.slice(0, 120)}\n\n`
+      `un hook qui voit les « Write » n’est pas dans la table des hooks éprouvés `
+      + `(empreinte ${empreinte(cmd)}) :\n  ${cmd.slice(0, 120)}\n\n`
       + `🔴 Le « deny » de N'IMPORTE QUEL hook l'emporte sur le « allow » d'un autre — mesuré le `
       + `2026-08-24 dans les deux sens. Si celui-ci refuse un Write, un orchestrateur ne pourra `
       + `plus tenir son CONTEXTE.md, la garde d'écriture aura beau dire oui, et RIEN ne le dira. `
