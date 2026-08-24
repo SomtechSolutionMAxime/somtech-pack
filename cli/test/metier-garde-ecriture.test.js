@@ -112,7 +112,21 @@ test('🔴 elle REFUSE quand elle ne sait pas — ici un « oui » de repli ouvr
   assert.ok(refuse('Write', join(LIEU, FICHIER_PERMIS), { role: 'un-role-inconnu' }), 'un rôle qu elle ne garde pas');
   assert.ok(refuse('Write', ''), 'aucun chemin à juger');
   assert.ok(refuse('Write', join(LIEU, FICHIER_PERMIS), { lieu: undefined }), 'aucun lieu où se situer');
+  // ⚠️ CE CAS-CI EST UN FAUX TÉMOIN, ET C'EST VOULU DE LE DIRE. Avec un `chemin`
+  // ABSOLU, `resolve` ignore le lieu : le refus vient alors du répertoire qui ne
+  // correspond pas, PAS du garde `isAbsolute`. Retirer ce garde laisse ce cas
+  // rouge quand même — mesuré. Le cas qui l'éprouve vraiment est le suivant.
   assert.ok(refuse('Write', join(LIEU, FICHIER_PERMIS), { lieu: 'pas/absolu' }), 'un lieu qui n est pas un chemin absolu');
+  // 🔴 LE CAS QUI ÉPROUVE VRAIMENT `isAbsolute` — trouvé par la quatrième passe de
+  // fond, MESURÉ : un `lieu` relatif ET un `chemin` relatif ALIGNÉS. `resolve` les
+  // fait alors coïncider, le répertoire correspond, et plus rien ne refuse — sauf
+  // ce garde. Sans lui, la décision rend « allow » sur un lieu qu'elle n'a pas su
+  // situer. Le test d'au-dessus ne pouvait pas le voir : son entrée était protégée
+  // par un AUTRE mécanisme, qui masquait l'absence du premier.
+  assert.ok(refuse('Write', FICHIER_PERMIS, { lieu: 'un-sous-dossier' }),
+    'lieu ET chemin relatifs alignés : seul le garde « isAbsolute » refuse ici');
+  assert.match(juger({ outil: 'Write', chemin: FICHIER_PERMIS, lieu: 'un-sous-dossier' }).raison, /où est ton lieu/i,
+    'et il doit refuser POUR CETTE RAISON — sinon c est un autre mécanisme qui a répondu');
   assert.ok(refuse(undefined, join(LIEU, FICHIER_PERMIS)), 'aucun outil');
   assert.ok(refuse('Bash', join(LIEU, FICHIER_PERMIS)), 'un outil qu elle ne sait pas juger');
 });
@@ -623,3 +637,44 @@ test('🔴 le fil réel refuse les cas FINS — pas seulement les cas évidents'
   // ⑥ NotebookEdit sur le fichier permis — un carnet n'est pas un document
   assert.equal(parLeFil(FICHIER_PERMIS, 'NotebookEdit'), 'deny');
 });
+
+// ═════════════════════ 14. 🔴 MultiEdit — un chemin VIVANT et non prouvé
+
+test('🔴 MultiEdit tient AUSSI le fichier permis — le seul outil admis que rien ne prouvait', () => {
+  // Trouvé par la quatrième passe de fond, MESURÉ : `MultiEdit` figure dans
+  // `OUTILS_DU_FICHIER_PERMIS`, mais aucun contrôle ne vérifiait qu'il PASSE sur
+  // le fichier permis. La section 1 n'éprouve l'allow que pour Write et Edit ; les
+  // sections 10 et 13 n'éprouvent MultiEdit que contre un livrable, donc en refus.
+  // Le retirer du Set laissait toute la suite verte : un chemin vivant, et pas prouvé.
+  assert.ok(passe('MultiEdit', join(LIEU, FICHIER_PERMIS)), 'chemin absolu, par la décision');
+  assert.ok(passe('MultiEdit', FICHIER_PERMIS), 'et relatif depuis le lieu');
+
+  // Et par le FIL réel, qui charge la copie DÉPOSÉE — pas celle du CLI.
+  const d = JSON.parse(execFileSync(process.execPath, [join(RACINE, 'gardes', 'ecriture.js')],
+    { input: JSON.stringify({ tool_name: 'MultiEdit', cwd: LIEU, tool_input: { file_path: FICHIER_PERMIS } }),
+      encoding: 'utf8' })).hookSpecificOutput;
+  assert.equal(d.permissionDecision, 'allow', 'le fil doit le laisser passer aussi');
+});
+
+// ═════════════════════ 15. Ce que ce fichier NE prouve PAS, et pourquoi
+//
+// ⚠️ Écrit plutôt qu'espéré. La quatrième passe de fond a muté deux gardes de
+// `gardes/ecriture.js` qui ont SURVÉCU. Remesuré ici : ce ne sont pas des trous,
+// ce sont des mutations ÉQUIVALENTES — leur retrait ne change aucun comportement
+// observable. Les laisser passer pour des défauts ferait chercher un remède à un
+// problème qui n'existe pas ; les taire laisserait la prochaine passe les
+// retrouver et refaire le travail.
+//
+//   • `if (repondu) return` — l'idempotence de la réponse. MESURÉ : sans elle, la
+//     sortie reste d'UNE seule ligne, parce que `repondre` termine le processus par
+//     `process.exit(0)` avant qu'une seconde réponse puisse partir. La garde est une
+//     ceinture derrière une bretelle : correcte, et non observable.
+//
+//   • le handler `unhandledRejection` — MESURÉ dans les deux positions possibles
+//     (rejet au chargement de la décision, rejet pendant le jugement) : avec ou
+//     sans lui, le fil rend le même verdict. Node ne fait pas tomber le processus
+//     tant que la réponse est partie.
+//
+// Ces deux gardes RESTENT : elles ne coûtent rien et couvrent des états que Node
+// pourrait traiter autrement demain. Mais leur preuve n'existe pas, et ce bloc
+// est là pour que personne ne croie le contraire.
