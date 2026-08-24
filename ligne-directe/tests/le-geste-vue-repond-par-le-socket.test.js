@@ -965,6 +965,33 @@ test('LE TEMPS DU REFUS EST CELUI QU’ON A VRAIMENT ATTENDU — mesuré par le 
   }
 });
 
+test('… ET PAR LE CHEMIN DE LA SONDE AUSSI — deux refus, deux calculs, deux mutations', async () => {
+  // 🔴 SURVIVANTE DE MA PROPRE CAMPAGNE, ET C'EST LA MOITIÉ QUE LE BANC D'AU-DESSUS N'ATTEIGNAIT
+  // PAS. Il rend sa sonde inerte exprès pour éprouver le refus FINAL — il ne pouvait donc rien
+  // dire du refus que la SENTINELLE forge, qui fait son propre `Date.now() - t0`. Forcer `ms: 0`
+  // là laissait tout vert. Deux endroits calculent, deux endroits se mutent : un par un.
+  const muet = await socketMuet('temps-sonde');
+  try {
+    const err = await parler(
+      { geste: GESTE_DE_LA_VUE },
+      {
+        reveiller: false,
+        cheminSocket: muet.cheminSocket,
+        // borne large : c'est la SONDE qui doit gagner, pas elle
+        borneParDefaut: 30_000,
+        bornesParGeste: { [GESTE_DE_LA_VUE]: 30_000 },
+        sonde: { intervalle: 500, borne: 300 },
+      }
+    ).then(() => null, (e) => e);
+    assert.ok(err, 'le veilleur est muet : ce geste doit refuser');
+    assert.match(err.message, /ne répond plus/i, 'ce banc n’a de sens que si c’est bien la SONDE qui a tranché');
+    const dit = Number(err.message.match(/attendu ([\d.]+)s/)?.[1]);
+    assert.ok(dit >= 0.5, `la sonde a tranché après au moins un intervalle, le refus dit ${dit}s`);
+  } finally {
+    await muet.fermer();
+  }
+});
+
 test('LE REFUS DIT COMBIEN DE TEMPS IL A ATTENDU, AU DIXIÈME — « 0s » se lirait comme un bogue', () => {
   // 🔴 RELEVÉ EN PASSE DE FOND : les bancs n'assertaient que le VOCABULAIRE du refus, jamais le
   // nombre qu'il rend à l'humain. Mesuré : arrondir à la seconde laissait tout vert — et une
