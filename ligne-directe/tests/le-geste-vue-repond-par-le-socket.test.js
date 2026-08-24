@@ -440,6 +440,142 @@ test('UN GESTE QUI RÉPOND VITE REND LA MAIN VITE — la sonde ne retient pas le
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 quater. LA SENTINELLE S'ARRÊTE — trouvée SURVIVANTE trois fois de suite
+//
+// 🔴 SES TROIS SORTIES DE BOUCLE ÉTAIENT GARDÉES PAR PERSONNE. Neutraliser l'une quelconque
+// laissait les 984 essais VERTS — et la sentinelle sondait le veilleur **pour toujours**, toutes
+// les trois secondes, longtemps après que sa réponse était arrivée. Dans un processus qui vit
+// (un agent qui parle plusieurs fois au veilleur), chaque geste y laisse une sentinelle
+// immortelle de plus.
+//
+// ⚠️ AUCUN MESSAGE NE CHANGE, AUCUNE DURÉE NE BOUGE : la seule chose observable est le TRAFIC
+// que la sentinelle continue de produire. C'est donc lui qu'on compte, à la source.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/** Un veilleur qui COMPTE les pings reçus — la seule trace observable d'une sentinelle en vie. */
+async function veilleurQuiCompteLesPings(nom, { vue }) {
+  const cheminSocket = join(bac, `${nom}.sock`);
+  const v = new Veilleur({ cheminSocket, identite: { equipe: 'T' } });
+  const compteur = { pings: 0 };
+  const vraiTraiter = v.traiterGeste.bind(v);
+  v.traiterGeste = async (requete) => {
+    if (requete?.geste === 'ping') compteur.pings += 1;
+    return vraiTraiter(requete);
+  };
+  v.vueDuParc = vue;
+  await v.ecouterLocal();
+  return { cheminSocket, compteur, fermer: () => v.arreter().catch(() => {}) };
+}
+
+test('APRÈS UNE RÉPONSE, LA SENTINELLE S’ARRÊTE — sinon elle sonde le veilleur pour toujours', async () => {
+  const compte = await veilleurQuiCompteLesPings('sentinelle-fin', {
+    vue: async () => {
+      await dodo(150);
+      return { resume: 'le parc' };
+    },
+  });
+  try {
+    await parler(
+      { geste: GESTE_DE_LA_VUE },
+      {
+        reveiller: false,
+        cheminSocket: compte.cheminSocket,
+        borneParDefaut: 10_000,
+        bornesParGeste: { [GESTE_DE_LA_VUE]: 10_000 },
+        sonde: { intervalle: 100, borne: 500 },
+      }
+    );
+    const apresReponse = compte.compteur.pings;
+    await dodo(600); // six intervalles de sonde : largement de quoi voir une sentinelle en vie
+    assert.equal(
+      compte.compteur.pings,
+      apresReponse,
+      `la sentinelle a continué de sonder après la réponse (${apresReponse} → ${compte.compteur.pings} pings)`
+    );
+  } finally {
+    await compte.fermer();
+  }
+});
+
+test('APRÈS UN REFUS DE BORNE, LA SENTINELLE S’ARRÊTE AUSSI — l’autre sortie de la boucle', async () => {
+  // La sortie sur la borne du geste, distincte de la sortie sur « c'est fini ». Elle a survécu
+  // séparément : deux gardes voisines, deux mutations, deux fois zéro rouge.
+  const compte = await veilleurQuiCompteLesPings('sentinelle-borne', { vue: () => new Promise(() => {}) });
+  try {
+    await parler(
+      { geste: GESTE_DE_LA_VUE },
+      {
+        reveiller: false,
+        cheminSocket: compte.cheminSocket,
+        borneParDefaut: 400,
+        bornesParGeste: { [GESTE_DE_LA_VUE]: 400 },
+        sonde: { intervalle: 100, borne: 300 },
+      }
+    ).catch(() => {});
+    const apresRefus = compte.compteur.pings;
+    await dodo(600);
+    assert.equal(
+      compte.compteur.pings,
+      apresRefus,
+      `la sentinelle a continué de sonder après le refus (${apresRefus} → ${compte.compteur.pings} pings)`
+    );
+  } finally {
+    await compte.fermer();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 quinquies. ON NE REQUALIFIE QUE SA PROPRE BORNE — trouvée SURVIVANTE
+//
+// 🔴 REPEINDRE TOUTE ERREUR EN « LE VEILLEUR NE RÉPOND PLUS » EST LE DÉFAUT QU'ON CORRIGE, PAR
+// UN AUTRE CHEMIN. Une réponse illisible, un socket disparu, une connexion refusée : ce sont des
+// faits distincts, déjà nommés par qui les a vus. Les rebaptiser envoie chercher la panne à
+// côté — exactement ce que « le veilleur n'a pas répondu en 30s » a fait pendant une matinée.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('UNE RÉPONSE ILLISIBLE SE DIT ILLISIBLE — elle ne devient pas un silence du veilleur', async () => {
+  const cheminSocket = join(bac, 'charabia.sock');
+  const vivantes = new Set();
+  const srv = createServer((flux) => {
+    vivantes.add(flux);
+    flux.on('close', () => vivantes.delete(flux));
+    flux.on('error', () => {});
+    flux.on('data', () => flux.write('ceci n’est pas du JSON\n'));
+  });
+  await new Promise((r) => srv.listen(cheminSocket, r));
+  try {
+    await assert.rejects(
+      () =>
+        parler(
+          { geste: GESTE_DE_LA_VUE },
+          { reveiller: false, cheminSocket, bornesParGeste: { [GESTE_DE_LA_VUE]: 3_000 } }
+        ),
+      (err) => {
+        assert.match(err.message, /illisible/i, 'la cause vue doit survivre au passage');
+        assert.doesNotMatch(err.message, /ne répond plus|EST VIVANT/i, 'et ne pas être repeinte en silence');
+        return true;
+      }
+    );
+  } finally {
+    for (const f of vivantes) f.destroy();
+    await new Promise((r) => srv.close(r));
+  }
+});
+
+test('UN SOCKET ABSENT GARDE SON CODE — sans quoi le réveil paresseux ne le reconnaîtrait plus', async () => {
+  // ⚠️ CE N'EST PAS QU'UNE QUESTION DE MOT. `parler` décide de FAIRE NAÎTRE le veilleur sur
+  // `err.code === 'ENOENT'`. Une erreur requalifiée perd son code : le veilleur ne naîtrait
+  // plus jamais tout seul, et la commande refuserait là où elle réparait.
+  await assert.rejects(
+    () => parler({ geste: GESTE_DE_LA_VUE }, { reveiller: false, cheminSocket: join(bac, 'jamais-ne.sock') }),
+    (err) => {
+      assert.equal(err.code, 'ENOENT', 'le code doit traverser intact');
+      return true;
+    }
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // 4. « IL N'A PAS RÉPONDU » ≠ « IL A RÉPONDU QU'IL NE PEUT PAS »
 // ═══════════════════════════════════════════════════════════════════════════════════════
 

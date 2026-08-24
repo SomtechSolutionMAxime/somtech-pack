@@ -303,7 +303,12 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
       if (fini) return null;
       if (Date.now() - t0 >= borne) return null;
       if (await veilleurParleEncore(cheminSocket, sonde.borne)) continue;
-      if (fini) return null;
+      // ⚠️ PAS DE SECONDE GARDE `fini` ICI, ET C'EST DÉLIBÉRÉ. Il y en avait une : la campagne
+      // de mutation l'a trouvée SURVIVANTE, et en cherchant son banc on a compris pourquoi —
+      // elle est INOBSERVABLE. Si la réponse est arrivée, `Promise.race` a déjà été gagnée par
+      // elle ; ce que la sentinelle rend ensuite ne parvient à personne. Une garde qu'aucun
+      // banc ne peut faire rougir n'est pas une garde, c'est une consolation.
+      //
       // On coupe l'attente AVANT de rendre le refus : sinon la requête et son minuteur
       // survivent jusqu'à la borne du geste, longtemps après qu'on a répondu.
       abandon.abort();
