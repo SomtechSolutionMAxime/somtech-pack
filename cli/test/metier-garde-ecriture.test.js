@@ -394,3 +394,46 @@ test('🔴 la décision tient sous son plafond de taille — un ajout doit se ju
     `la décision est tombée à ${lignes} lignes : elle a probablement été vidée. `
     + `Un plafond seul se satisfait d'une garde supprimée.`);
 });
+
+// ═════════════════════ 9. 🔴 la jointure entre DEUX hooks du même lieu
+
+// MESURÉ le 2026-08-24, sur la vraie chaîne, dans les deux sens :
+//
+//   • un autre hook dit `allow` sur un livrable que cette garde refuse → LE REFUS TIENT
+//     (`CLAUDE.md` intact). L'exception ne s'élargit pas par un voisin permissif ;
+//   • un autre hook dit `deny` sur le `CONTEXTE.md` que cette garde autorise → LE REFUS
+//     GAGNE (`CONTEXTE.md` intact). **Le `deny` de N'IMPORTE QUEL hook l'emporte.**
+//
+// Le second sens compte, parce que le lieu d'un orchestrateur porte un hook SANS
+// `matcher` — la garde d'ouverture de ligne — qui s'exécute donc AUSSI sur `Write`.
+// Si elle refusait un `Write` en toute circonstance, la fonction de ce lot tomberait
+// en silence : la garde d'écriture dirait « oui » et rien ne s'écrirait.
+
+test('🔴 la garde d’ouverture de ligne ne refuse PAS l’écriture une fois la ligne ouverte', async () => {
+  // Ce que ce contrôle garde, c'est LA LIGNE QUI RELIE deux modules justes séparément.
+  // Chacun a sa suite ; personne ne gardait leur rencontre.
+  const { decider } = await import(join(RACINE, 'naissance-representant', 'src', 'garde.js'));
+
+  // ① Ligne ouverte — elle se retire, et cette garde-ci décide seule.
+  const ouverte = decider({
+    toolName: 'Write', toolInput: { file_path: join(LIEU, FICHIER_PERMIS) },
+    // ⚠️ « interne » — la nature RÉELLE de la ligne d'un orchestrateur, lue dans
+    // `ligne-directe/src/roles.js`, pas devinée. Une nature inventée ici rendrait
+    // ce contrôle vert pour la mauvaise raison : « rien n'est ouvert » aussi.
+    naturesOuvertes: ['interne'], role: 'orchestrateur',
+  });
+  assert.equal(ouverte.permissionDecision, 'allow',
+    'ligne ouverte, elle doit se retirer : sinon un orchestrateur ne pourrait JAMAIS tenir son '
+    + 'CONTEXTE.md, quoi que dise la garde d’écriture — le deny d’un hook l’emporte sur le allow d’un autre');
+
+  // ② Ligne PAS encore ouverte — elle refuse, et c'est voulu : l'ouverture précède tout.
+  // Ce n'est pas un défaut de ce lot, c'est un SÉQUENÇAGE, et il doit rester écrit :
+  // l'orchestrateur ouvre sa ligne, PUIS il tient sa mémoire.
+  const fermee = decider({
+    toolName: 'Write', toolInput: { file_path: join(LIEU, FICHIER_PERMIS) },
+    naturesOuvertes: [], role: 'orchestrateur',
+  });
+  assert.equal(fermee.permissionDecision, 'deny',
+    'ligne fermée, l’ouverture passe avant tout — si ce contrôle rougit, c’est que la garde '
+    + 'd’ouverture a cessé de tenir, pas que ce lot a changé');
+});
