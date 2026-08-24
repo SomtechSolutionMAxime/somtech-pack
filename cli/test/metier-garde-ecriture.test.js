@@ -373,10 +373,23 @@ test('🔴 la décision tient sous son plafond de taille — un ajout doit se ju
   // sur une mesure fausse aurait rougi à la première ligne ajoutée, pour la mauvaise
   // raison — et on l'aurait « corrigé » en le relevant.
   const lignes = codeNu().split('\n').filter((l) => l.trim() !== '').length;
+  // ⚠️ 🔴 CE QUE TU T'APPRÊTES À FAIRE EN LISANT CE ROUGE. Le jour où ce contrôle
+  // rougira sur un ajout LÉGITIME — et ce jour viendra —, le réflexe sera de relever
+  // le chiffre. **C'est exactement le geste qui désarme**, et il ressemble à de
+  // l'entretien : rien ne le distingue d'une mise à jour de routine. Le rouge n'est
+  // pas un blocage, c'est un RAPPEL — il force à relire pourquoi cette garde doit
+  // rester simple avant de décider. Le message ci-dessous le dit à celui qui le lira
+  // dans six mois, parce qu'il ne lira pas ce commentaire : il lira le rouge.
   assert.ok(lignes <= 62,
-    `la décision fait ${lignes} lignes de code pour un plafond de 62 (54 mesurées le 2026-08-24). `
-    + `Chaque ligne ajoutée augmente un risque de boucle qu'on ne sait pas mesurer. `
-    + `Ce n'est pas un chiffre à réaligner : dis ce que l'ajout achète, ou sors-le de la garde.`);
+    `la décision fait ${lignes} lignes de code pour un plafond de 62 (54 mesurées le 2026-08-24).\n\n`
+    + `🔴 RELEVER CE PLAFOND DÉSARME LA SEULE PROTECTION CONTRE UNE PANNE QU'ON NE SAIT PAS BORNER.\n`
+    + `Une boucle de calcul dans cette garde la fait PENDRE, et une garde qui pend laisse le geste `
+    + `PASSER — mesuré le 2026-08-24 sur la vraie chaîne : le fichier a été écrit. Node est `
+    + `mono-thread : ni le délai du fil, ni la commande de hook, ni rien d'autre ne ferme ce cas. `
+    + `La seule parade est que cette décision reste trop simple pour qu'une boucle y entre.\n\n`
+    + `Ce n'est donc pas un chiffre à réaligner. Trois issues, dans cet ordre : sortir l'ajout de `
+    + `la garde · le réécrire plus court · ou, si rien d'autre ne marche, relever le plafond EN `
+    + `ÉCRIVANT ICI ce que cet ajout achète et pourquoi il ne peut pas boucler.`);
   assert.ok(lignes >= 35,
     `la décision est tombée à ${lignes} lignes : elle a probablement été vidée. `
     + `Un plafond seul se satisfait d'une garde supprimée.`);
