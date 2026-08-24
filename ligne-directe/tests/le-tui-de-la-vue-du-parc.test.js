@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import { unRecensement } from '../src/recensement.js';
 import { roleDuLieu } from '../src/lieu-agent.js';
 import { role as roleDe } from '../src/roles.js';
-import { laVueDuParc, lecteurDeChantier, MOT_NON_ETABLI } from '../src/vue-du-parc.js';
+import { laVueDuParc, lecteurDeChantier, lecteurDeLieux, MOT_NON_ETABLI } from '../src/vue-du-parc.js';
 import {
   arbreDeLaVue,
   lignesVisibles,
@@ -429,6 +429,50 @@ test('« Entrée » sur ce qui n’a pas d’adresse REFUSE — et ne suit aucun
   assert.equal(effet.type, 'refus', 'un epic ne porte aucun terminal');
   assert.ok(effet.pourquoi, 'et le refus dit pourquoi');
   assert.ok(!('pane' in effet), 'aucun pane n’est rendu — il n’y en a pas');
+});
+
+test('« Entrée » sur un orchestrateur SANS terminal vivant refuse — aucun identifiant périmé n’est suivi', async (t) => {
+  // 🔴 CE BANC EST NÉ D’UNE SURVIVANTE, pas d’une relecture. La campagne a posé
+  // `if (ligne?.kind === 'orchestrateur')` à la place de la condition qui EXIGE une adresse
+  // MESURÉE : le TUI suivait alors n’importe quel orchestrateur, y compris ceux qui ne vivent
+  // que par leur lieu versionné. Mes deux bancs sur « Entrée » couvraient l’orchestrateur
+  // VIVANT et l’EPIC — jamais le cas du milieu, qui est pourtant le plus fréquent : mesuré sur
+  // ce poste, **6 chantiers sur 15 n’ont aucun pane vivant**.
+  //
+  // ⚠️ ET C’EST PIRE QU’UNE ABSENCE D’ADRESSE : le dirigeant s’y fierait. `adresseDe` rend
+  // `mesure: 'aucune'` exprès pour ça (T-20260822-0017, 2ᵉ G/W/T) — un pane qui n'existe plus
+  // se lit comme une adresse.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  poserLieu(depot, 'p-20260824-0009');
+
+  const service = unServiceDesk({
+    projets: [{ id: 'u1', project_id: 'P-20260824-0009', title: 'Un chantier sans terminal', status: 'active' }],
+  });
+  // AUCUN pane : le chantier n’existe que par son LIEU versionné — la moitié du parc réel.
+  const recensement = await unRecensement({ panes: [], roleDuLieu, nomsConnus: nomsLus([]) });
+  const lieux = await lecteurDeLieux({ racines: [depot], roleDuLieu })();
+  const vue = await laVueDuParc({
+    recensement,
+    lieux,
+    lireChantier: lecteurDeChantier({ appeler: service.appeler }),
+  });
+
+  const { lignes } = texteDeLArbre(vue, etatInitial());
+  const iOrch = lignes.findIndex((l) => l.kind === 'orchestrateur');
+  assert.ok(iOrch >= 0, 'le chantier APPARAÎT — il survit à la mort de son terminal (EF-VUE-007)');
+  assert.equal(vue.orchestrateurs[0].adresse.mesure, 'aucune', 'et il n’a AUCUNE adresse mesurée');
+
+  const { effet } = appliquerTouche({ ...etatInitial(), curseur: iOrch }, 'entree', lignes);
+  assert.equal(effet.type, 'refus', 'Entrée REFUSE — on n’envoie personne vers un terminal qui n’a pas été constaté');
+  assert.ok(!('pane' in effet), 'et aucun identifiant n’est rendu : il serait périmé');
+  assert.ok(effet.pourquoi, 'le refus dit pourquoi');
+
+  // ⚠️ ET LE DÉTAIL NE PROPOSE PAS LE GESTE : offrir « [Entrée] focus le terminal » sur une
+  // ligne où il refuse serait annoncer une porte qui n’ouvre pas.
+  const detail = detailDe(lignes[iOrch]).join('\n');
+  assert.ok(!/\[Entrée\]/.test(detail), 'le détail ne propose pas un focus qui refusera');
 });
 
 test('AUCUN geste de pilotage n’existe dans le TUI — la frontière se mesure sur l’ensemble des effets', async (t) => {
