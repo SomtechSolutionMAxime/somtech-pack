@@ -250,11 +250,15 @@ const sommeilQuiNeRetientRien = (ms) =>
  * 0 ms pendant que `vue` tourne depuis 71 s. Le socket sert plusieurs conversations à la fois ;
  * sonder sur le même flux ne mesurerait que notre propre attente.
  */
-async function veilleurParleEncore(cheminSocket, borneSonde) {
+async function veilleurParleEncore(cheminSocket, borneSonde, signal) {
   try {
-    await demander({ geste: 'ping' }, cheminSocket, { delai: borneSonde });
+    await demander({ geste: 'ping' }, cheminSocket, { delai: borneSonde, signal });
     return true;
-  } catch {
+  } catch (err) {
+    // ⚠️ UN PING QU'ON A COUPÉ SOI-MÊME NE DIT RIEN DU VEILLEUR. Il n'a pas échoué, on l'a
+    // interrompu parce que la réponse était arrivée : le lire comme un silence ferait refuser
+    // un geste déjà servi.
+    if (err?.code === 'ABANDONNEE') return true;
     return false;
   }
 }
@@ -297,8 +301,16 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
   const t0 = Date.now();
   let fini = false;
   const abandon = new AbortController();
+  // 🔴 LE PING DE LA SONDE A SON PROPRE ABANDON, ET IL LE FALLAIT — relevé en passe portail, et
+  // le rejet était juste. Sans lui, ce lot rejouait EXACTEMENT le défaut qu'il corrige, par une
+  // porte laissée ouverte : la vue s'affiche, puis la commande reste debout le temps qu'un ping
+  // parti juste avant veuille bien se régler. Mesuré par la passe — réponse à 122 ms, mort du
+  // processus à 1 646 ms. Ce n'est pas le minuteur du ping qui retient, c'est sa CONNEXION :
+  // un `unref` n'y aurait rien changé, il faut la couper.
+  const abandonDeLaSonde = new AbortController();
   const reponse = demander(requete, cheminSocket, { delai: borne, signal: abandon.signal }).finally(() => {
     fini = true;
+    abandonDeLaSonde.abort();
   });
   // ⚠️ LE REJET DE L'ATTENTE COUPÉE NE DOIT ÉCHOUER NULLE PART. Il est attendu, il est
   // provoqué par nous, et un rejet non géré tuerait le processus qui vient d'être servi.
@@ -314,7 +326,7 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
       // trouvée SURVIVANTE, et pour la même raison que sa voisine : quand la borne du geste
       // tombe, `demander` rejette et `fini` bascule — la ligne au-dessus suffit. La fenêtre
       // qu'elle prétendait couvrir dure le temps d'un `.finally`, et rien ne l'observe.
-      if (await veilleurParleEncore(cheminSocket, sonde.borne)) continue;
+      if (await veilleurParleEncore(cheminSocket, sonde.borne, abandonDeLaSonde.signal)) continue;
       // ⚠️ PAS DE SECONDE GARDE `fini` ICI, ET C'EST DÉLIBÉRÉ. Il y en avait une : la campagne
       // de mutation l'a trouvée SURVIVANTE, et en cherchant son banc on a compris pourquoi —
       // elle est INOBSERVABLE. Si la réponse est arrivée, `Promise.race` a déjà été gagnée par
@@ -341,7 +353,10 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
   const err = issue.err;
   const notreBorne = err instanceof Error && /n'a pas répondu en/.test(err.message);
   if (!notreBorne) throw err;
-  const vivant = await veilleurParleEncore(cheminSocket, sonde.borne);
+  // ⚠️ UNE SONDE NEUVE ICI, JAMAIS `abandonDeLaSonde` — il vient d'être déclenché par le
+  // `.finally` ci-dessus. Le réutiliser rendrait `ABANDONNEE` tout de suite, donc « vivant »
+  // sans avoir mesuré quoi que ce soit : le défaut exact que ce refus existe pour fermer.
+  const vivant = await veilleurParleEncore(cheminSocket, sonde.borne, new AbortController().signal);
   throw refusSansReponse({ geste, ms: Date.now() - t0, vivant });
 }
 

@@ -419,6 +419,59 @@ async function tempsDeSortie(nom, cheminSocket, geste, reglages) {
   return { ms: Date.now() - t0, sortie };
 }
 
+test('UN PING EN VOL NE RETIENT PAS LA COMMANDE — trouvé par une passe portail, mon banc l’ÉVITAIT', async () => {
+  // 🔴 LE MÊME DÉFAUT QUE CE LOT CORRIGE, PAR UNE PORTE QU'IL N'AVAIT PAS FERMÉE. La réponse
+  // arrive, la vue s'affiche — et la commande reste debout le temps que le ping de la sonde,
+  // parti juste avant, veuille bien se régler. Mesuré par la passe : réponse à 122 ms, mort du
+  // processus à 1 646 ms.
+  //
+  // ⚠️ ET LE BANC VOISIN NE POUVAIT PAS L'ATTRAPER : il règle l'intervalle de sonde PLUS LONG
+  // que la réponse, si bien qu'aucun ping n'est jamais émis. Il évitait structurellement la
+  // fenêtre de course qu'il prétendait couvrir — une assertion juste sur un chemin que le banc
+  // s'arrangeait pour ne pas emprunter.
+  //
+  // Ici l'inverse est arrangé exprès : sonde COURTE (un ping part à coup sûr), ping LENT, geste
+  // rapide. Le ping est donc forcément en vol quand la réponse arrive.
+  const cheminSocket = join(bac, 'ping-en-vol.sock');
+  const vivantes = new Set();
+  const srv = createServer((flux) => {
+    vivantes.add(flux);
+    flux.on('close', () => vivantes.delete(flux));
+    flux.on('error', () => {});
+    let tampon = '';
+    flux.on('data', (m) => {
+      tampon += m.toString('utf8');
+      let c = tampon.indexOf('\n');
+      while (c !== -1) {
+        const ligne = tampon.slice(0, c);
+        tampon = tampon.slice(c + 1);
+        const geste = JSON.parse(ligne)?.geste;
+        // le geste demandé rend VITE ; le ping traîne — un veilleur vivant, lent sur ce ping-là
+        const delai = geste === 'ping' ? 1_500 : 120;
+        setTimeout(() => flux.write(`${JSON.stringify({ ok: true, resume: 'le parc' })}\n`), delai);
+        c = tampon.indexOf('\n');
+      }
+    });
+  });
+  await new Promise((r) => srv.listen(cheminSocket, r));
+  try {
+    const { ms, sortie } = await tempsDeSortie('ping-en-vol', cheminSocket, GESTE_DE_LA_VUE, {
+      borneParDefaut: 30_000,
+      bornesParGeste: { [GESTE_DE_LA_VUE]: 180_000 },
+      // ⚠️ INTERVALLE PLUS COURT QUE LA RÉPONSE : c'est ce qui garantit qu'un ping soit parti.
+      sonde: { intervalle: 60, borne: 5_000 },
+    });
+    assert.notEqual(sortie, 'TUÉ', 'la commande doit mourir d’elle-même');
+    assert.ok(
+      ms < 1_000,
+      `la commande a rendu sa réponse à ~120 ms mais n’est morte qu’à ${ms} ms : un ping en vol la retient`
+    );
+  } finally {
+    for (const f of vivantes) f.destroy();
+    await new Promise((r) => srv.close(r));
+  }
+});
+
 test('UN GESTE QUI RÉPOND VITE REND LA MAIN VITE — la sonde ne retient pas le processus', async () => {
   const prompt = await veilleurQuiEcoute('prompt', { vue: async () => ({ resume: 'le parc' }) });
   try {
