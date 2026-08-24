@@ -43,7 +43,7 @@ import {
   raccourcisPour,
   RACCOURCIS,
 } from '../src/tui-vue-du-parc.js';
-import { decoderTouche, decoderTouches, texteDeProgression, servirLaVue } from '../src/tui-boucle.js';
+import { decoderTouche, decoderTouches, texteDeProgression, servirLaVue, mettreEnFocus } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 
 const racine = () => mkdtempSync(join(tmpdir(), 'tui-vue-du-parc-'));
@@ -581,6 +581,94 @@ test('la progression n’est JAMAIS muette, et elle n’invente aucun pourcentag
   assert.ok(!/%/.test(t), 'aucun pourcentage — il serait inventé');
   assert.match(t, /ServiceDesk/, 'et elle dit ce qu’on attend');
   assert.notEqual(texteDeProgression(1, 1), texteDeProgression(1, 2), 'elle BOUGE — un écran figé se lit comme un écran mort');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE SEUL GESTE ACTIF DU PRODUIT — et rien ne le gardait
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 CE BANC EST NÉ D'UN REJET DE PASSE PORTAIL, ET LE REJET ÉTAIT JUSTE. `mettreEnFocus` est
+// la SEULE fonction du lot qui pose le seul geste actif que le TUI ait le droit de poser
+// (HS-VUE-001). Elle n'était atteinte par AUCUN banc : la passe a remplacé la sous-commande
+// `focus` par `kill` — c'est-à-dire transformé le geste permis en geste de PILOTAGE — et
+// **62 essais sur 62 sont restés verts**.
+//
+// ⚠️ POURQUOI AUCUN BANC NE LA VOYAIT : `boucleDuTui` n'est appelée qu'une fois dans la suite,
+// avec une vue délibérément invalide — elle rend son refus à la garde de porte et ne descend
+// jamais jusqu'à l'appel du focus. La frontière était solidement gardée au niveau du MODÈLE
+// (`appliquerTouche` est balayée sur tout le clavier imprimable × toutes les positions de
+// curseur, et ne peut rendre que `quitter`/`relire`/`focus`/`refus`) — mais son EXÉCUTION
+// contre le vrai `herdr` ne l'était par personne.
+//
+// ⚠️ ET L'EXERCICE À LA MAIN NE FERMAIT PAS CE TROU. `mettreEnFocus` A ÉTÉ exercée contre un
+// vrai pane, en boucle fermée : `w5:p8` non focalisé → focalisé après l'appel → poste remis en
+// place, et un pane inexistant rendant `ok: false` avec sa cause. Le geste marche, c'est
+// mesuré. Mais un script hors du dépôt n'est ni reproductible ni relancé par personne : un code
+// JUSTE que rien ne garde reste un code que rien ne garde.
+test('le focus lance EXACTEMENT « herdr agent focus <pane> » — et sa session voyage avec lui', async () => {
+  const appels = [];
+  const executer = async (chemin, args, options) => {
+    appels.push({ chemin, args, session: options?.env?.HERDR_SOCKET_PATH ?? null });
+    return { stdout: '', stderr: '' };
+  };
+
+  const r = await mettreEnFocus('w5:p8', '/tmp/une-session/herdr.sock', { executer });
+
+  assert.deepEqual(r, { ok: true }, 'un focus qui aboutit se dit ainsi');
+  assert.equal(appels.length, 1, 'un seul lancement — jamais deux, jamais zéro');
+  assert.equal(appels[0].chemin, 'herdr', 'c’est bien herdr qu’on lance');
+  // 🔴 L'ARGV EXACT, ÉPINGLÉ. C'est la seule chose qui distingue le geste PERMIS du geste
+  // INTERDIT : `focus` regarde, `kill` tue. Un `assert.ok(args.includes('focus'))` laisserait
+  // passer `['agent','kill','focus',pane]` ; une assertion sur la longueur seule laisserait
+  // passer n'importe quelle sous-commande. On épingle la suite entière.
+  assert.deepEqual(
+    appels[0].args,
+    ['agent', 'focus', 'w5:p8'],
+    'le TUI ADRESSE et rien d’autre : aucune autre sous-commande de herdr ne doit pouvoir sortir d’ici'
+  );
+  // ⚠️ UN IDENTIFIANT DE PANE NE VOYAGE JAMAIS SEUL. Mesuré sur ce poste : `w7:p1` existe dans
+  // `somtech` ET dans `progex`, avec deux agents différents. Un focus sans sa session met le
+  // dirigeant devant le terminal de quelqu'un d'autre — et il s'y fie.
+  assert.equal(appels[0].session, '/tmp/une-session/herdr.sock', 'la session accompagne le pane');
+});
+
+test('un focus qui ÉCHOUE se dit — jamais un « ok » sur un terminal qu’on n’a pas atteint', async () => {
+  // ⚠️ MESURÉ CONTRE LE VRAI herdr, PAS IMAGINÉ : un pane inexistant fait rendre
+  // « agent target w0:p0 not found » — la forme reproduite ici.
+  const executer = async () => {
+    throw new Error('Command failed: herdr agent focus w0:p0\n{"error":{"code":"agent_not_found"}}');
+  };
+
+  const r = await mettreEnFocus('w0:p0', null, { executer });
+
+  assert.equal(r.ok, false, 'un focus qui n’a pas abouti ne se dit PAS « ok »');
+  // 🔴 LA CAUSE VOYAGE. Un `ok: false` nu enverrait chercher au hasard ; ici le refus nomme le
+  // pane et ce que herdr en a dit. C'est la même règle que partout dans ce module : une panne
+  // qui ne dit pas sa cause se lit comme une absence.
+  assert.match(r.pourquoi, /agent_not_found|not found/, 'et le refus porte ce que herdr a répondu');
+  assert.match(r.pourquoi, /w0:p0/, 'et il nomme le pane visé');
+});
+
+test('sans session désignée, le focus part quand même — mais SANS inventer de session', async () => {
+  // ⚠️ LE CAS RÉEL DU `bin` : `HERDR_SOCKET_PATH` peut être absent. On ne doit ni refuser (le
+  // pane de la session courante reste atteignable) ni fabriquer un chemin de socket — un
+  // socket inventé enverrait le geste dans une session qui n'est pas celle qu'on regarde.
+  const appels = [];
+  const executer = async (chemin, args, options) => {
+    appels.push(options ?? {});
+    return { stdout: '' };
+  };
+
+  const r = await mettreEnFocus('w1:p1', null, { executer });
+
+  assert.deepEqual(r, { ok: true });
+  assert.equal(appels.length, 1);
+  // ⚠️ ON ASSÈRE L'ABSENCE DE LA CLÉ, PAS UNE VALEUR. Première rédaction refusée par la mesure :
+  // elle notait `options?.env ?? null` puis attendait `undefined` — elle mesurait donc MON propre
+  // repli, jamais ce que le code pose. Ce qui compte ici est qu'aucun environnement ne soit
+  // FABRIQUÉ : un chemin de socket inventé enverrait le geste dans une autre session que celle
+  // qu'on regarde.
+  assert.ok(!('env' in appels[0]), 'aucun environnement n’est posé quand aucune session n’est donnée');
 });
 
 test('la barre de raccourcis se rétracte sans jamais perdre « q quitter » — et reste la maquette à pleine largeur', () => {
