@@ -301,12 +301,44 @@ export function chevron(ligne) {
   return ligne.plie ? '▶' : '▼';
 }
 
-/** Une ligne d'arbre, en texte, bornée à la largeur donnée. */
+/**
+ * UNE LIGNE D'ARBRE, EN TEXTE — et le suffixe ne mange JAMAIS le titre.
+ *
+ * 🔴 CE DÉFAUT EST SORTI DE L'ÉCRAN RÉEL, PAS D'UNE RELECTURE NI D'UNE MUTATION. Le suffixe
+ * était posé entier, et le titre recevait « ce qui reste » : quand le suffixe dépassait la
+ * colonne, `largeur - queue.length` devenait NÉGATIF, `borner` rendait la chaîne vide, et la
+ * ligne se réduisait à son suffixe — sans titre, sans indentation, donc SANS SA PLACE DANS
+ * L'ARBRE. Elle débordait par-dessus le marché.
+ *
+ * ⚠️ MESURÉ sur la vue du poste le 2026-08-24 : **2 lignes sur 457** sortaient à 133 colonnes
+ * dans un écran de 118. Leur suffixe était la phrase de l'INDICE — « NON ÉTABLI — un agent
+ * porte ce nom, son lieu ne le prouve pas : … » — c'est-à-dire la garde de HS-VUE-002
+ * elle-même. La condition de l'arbitrage cassait l'affichage qu'elle est censée servir.
+ *
+ * ⚠️ ET LE BANC QUI DISAIT « l'écran tient dans ses bornes » PASSAIT : ses données avaient des
+ * suffixes courts, donc il éprouvait la troncature du TITRE et jamais celle du SUFFIXE.
+ */
 export function texteDeLigne(ligne, largeur) {
   const indent = '   '.repeat(ligne.profondeur);
   const tete = `${indent}${chevron(ligne)} ${ligne.titre}`;
-  const queue = ligne.suffixe ? ` ${ligne.suffixe}` : '';
+  // Le suffixe ne prend jamais plus de la MOITIÉ de la colonne : au-delà, il effacerait le
+  // titre et l'indentation, c'est-à-dire ce qui rattache la ligne à l'arbre.
+  const place = ligne.suffixe ? Math.min(ligne.suffixe.length + 1, Math.floor(largeur / 2)) : 0;
+  const queue = place > 0 ? ` ${tronquer(ligne.suffixe, place - 1)}` : '';
   return borner(tete, largeur - queue.length) + queue;
+}
+
+/**
+ * TRONQUER SANS COMBLER — le jumeau de `borner`, et ils ne se remplacent pas.
+ *
+ * ⚠️ `borner` COMPLÈTE à la largeur : c'est ce qu'il faut pour une COLONNE, dont le bord droit
+ * doit tomber au même endroit à chaque ligne. Ici on veut un fragment qui s'arrête où il
+ * s’arrête — le compléter le ferait déborder de la place qu’on vient de lui réserver.
+ */
+export function tronquer(texte, largeur) {
+  const t = String(texte ?? '');
+  if (largeur <= 0) return '';
+  return t.length <= largeur ? t : `${t.slice(0, Math.max(0, largeur - 1))}…`;
 }
 
 /** Borner un texte à N colonnes, en le disant par `…` quand on coupe. */

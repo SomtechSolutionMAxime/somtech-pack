@@ -624,6 +624,77 @@ test('l’écran tient dans ses bornes — l’arbre à gauche, le détail à dr
   }
 });
 
+test('une ligne dont le SUFFIXE est plus long que sa colonne garde son titre — et ne déborde pas', async (t) => {
+  // 🔴 CE BANC EST NÉ DE L’ÉCRAN RÉEL, PAS D’UNE RELECTURE — et le banc voisin, qui dit
+  // « l’écran tient dans ses bornes », PASSAIT. Ses données avaient des suffixes courts : il
+  // éprouvait la troncature du TITRE et jamais celle du SUFFIXE. C'est un vert qui ne touchait
+  // pas ce qu’il prétendait éprouver.
+  //
+  // MESURÉ sur la vue réelle du poste (457 lignes, colonne d’arbre de 73) : **2 lignes**
+  // sortaient à 133 colonnes sur un écran de 118, et elles avaient perdu leur titre ET leur
+  // indentation — donc leur place dans l’arbre. Leur suffixe était la phrase de l’INDICE :
+  // « NON ÉTABLI — un agent porte ce nom, son lieu ne le prouve pas : … » — la phrase même que
+  // HS-VUE-002 impose. La garde de l’arbitrage cassait donc l’affichage qu’elle protège.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  const lieuOrch = poserLieu(depot, 'p-20260824-0001');
+  // ⚠️ UN AGENT QUI PORTE LE CODE COMME **NOM** SANS L’AVOIR À SON LIEU : c’est ce qui fait
+  // rendre l’indice, avec sa longue phrase. C’est le cas réel, pas un suffixe fabriqué long.
+  const lieuAutre = poserLieu(depot, 'general');
+
+  // ⚠️ ET L’EPIC EST **FERMÉ** — c’est la combinaison exacte que l’écran réel portait, et ma
+  // première rédaction ne la reproduisait pas : sur un epic OUVERT, le suffixe est le court
+  // « NON PRIS », et le banc rougissait sur son propre montage au lieu du défaut. Un statut
+  // fermé fait rendre l’ATTRIBUTION, donc la longue phrase de l’indice.
+  const service = unServiceDesk({
+    projets: [{ id: 'u1', project_id: 'P-20260824-0001', title: 'Un chantier', status: 'active' }],
+    epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-20260824-0077', title: 'Un epic au titre déjà long pour occuper la colonne', status: 'completed' }],
+  });
+  const vue = await uneVue({
+    tmp,
+    agents: [
+      { pane: 'w1:p1', lieu: lieuOrch, nom: 'kamouraska' },
+      { pane: 'w5:pB', lieu: lieuAutre, nom: 'e-20260824-0077' },
+    ],
+    service,
+  });
+
+  const etat = etatInitial();
+  const { lignes } = texteDeLArbre(vue, etat);
+  const epic = lignes.find((l) => l.kind === 'epic');
+  assert.match(epic.suffixe, /son lieu ne le prouve pas/, 'le cas construit rend bien la phrase de l’indice');
+  assert.ok(epic.suffixe.length > 40, `le suffixe est bien long (${epic.suffixe.length} colonnes)`);
+
+  // ⚠️ ON ÉPROUVE DES COLONNES ÉTROITES ET LARGES : le défaut n’apparaît que quand le suffixe
+  // mange toute la place, et une seule largeur ne le trouverait que par chance.
+  for (const colonne of [40, 55, 73, 90]) {
+    const rendu = texteDeLigne(epic, colonne);
+    assert.equal(rendu.length, colonne, `à ${colonne} colonnes, la ligne fait EXACTEMENT la colonne — ni plus, ni moins`);
+    // 🔴 LE TITRE SURVIT. Une ligne réduite à son suffixe a perdu ce qu’elle nomme ET son rang
+    // dans l’arbre : le dirigeant lit une phrase d’absence flottante, rattachée à rien.
+    // ⚠️ LA MARQUE EST CHERCHÉE DANS SON ENSEMBLE, pas dans celles que j'avais en tête : ma
+    // première rédaction oubliait « ▸ » (l'epic pris en charge) et rendait un rouge sur du code
+    // juste — la mesure portait sur mon instrument, pas sur le défaut.
+    assert.match(rendu, /^ *[▼▶▸○├?]/, `à ${colonne} colonnes, la ligne garde son indentation et sa marque`);
+    assert.ok(
+      rendu.includes(epic.titre.slice(0, 6)),
+      `à ${colonne} colonnes, la ligne a PERDU son titre — il ne reste que le suffixe : « ${rendu.trim()} »`
+    );
+  }
+
+  // ET L’ÉCRAN ENTIER TIENT, sur la même donnée.
+  for (const largeur of [60, 100, 118]) {
+    const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur: 12 });
+    const trop = ecran.filter((l) => l.texte.length > largeur);
+    assert.deepEqual(
+      trop.map((l) => l.texte.length),
+      [],
+      `${trop.length} ligne(s) débordent d’un écran de ${largeur} — un terminal les replierait et l’arbre casserait`
+    );
+  }
+});
+
 test('un orchestrateur dont les epics n’ont PAS pu être lus le dit — jamais « 0 epic »', async (t) => {
   const tmp = racine();
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
