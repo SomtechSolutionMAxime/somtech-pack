@@ -14,7 +14,7 @@
  */
 
 import { OUTILS, lancer } from './outils.js';
-import { ecrireLaVue } from './vue-du-parc.js';
+import { ecrireLaVue, rendreLaVue } from './vue-du-parc.js';
 import { rendreEcran, arbreDeLaVue, lignesVisibles, appliquerTouche, etatInitial } from './tui-vue-du-parc.js';
 
 // ⚠️ ÉCRITS EN ÉCHAPPEMENTS, JAMAIS EN CARACTÈRES BRUTS. Un octet de contrôle collé dans une
@@ -226,6 +226,30 @@ export async function boucleDuTui({
           : '') +
         'Ceci n’est PAS « personne ne travaille » — c’est « je n’ai pas su regarder ».\n'
     );
+    return { code: 1 };
+  }
+
+  // 🔴 « EST-CE UNE VUE ? » N'EST QUE LA MOITIÉ DE LA QUESTION. L'AUTRE EST « A-T-ELLE PU
+  // MESURER ? », et elle manquait — c'est le MODE DE PANNE FONDATEUR de ce chantier, laissé
+  // ouvert par le module qui existe pour le fermer.
+  //
+  // ⚠️ MESURÉ. Quand le recensement refuse (herdr injoignable), `laVueDuParc` rend
+  // `orchestrateurs: null` AVEC une clé `registre` — donc la garde du dessus la laisse passer,
+  // `arbreDeLaVue` replie ce `null` en tableau vide, et l'écran peint :
+  //     VUE DU PARC ─── par APP · ? orchestrateurs · ? epics
+  //                                       │ (rien de sélectionné)
+  // Un parc PARFAITEMENT MIS EN PAGE ET PARFAITEMENT DÉSERT. Le dirigeant y lit « personne ne
+  // travaille » ; la vérité est que personne n'a REGARDÉ.
+  //
+  // 🔴 ET LE RENDU TEXTE QUE CE TUI DOUBLE TRAITAIT DÉJÀ CE CAS MIEUX QUE LUI — il écrit « LA
+  // VUE DU PARC — SANS REGISTRE … Ce n'est pas "personne ne travaille", c'est "je n'ai pas su
+  // regarder" ». Livrer l'écran sans cette garde, c'était livrer une RÉGRESSION du produit sorti
+  // deux jours plus tôt.
+  //
+  // ⚠️ ON DÉLÈGUE LA PHRASE À `rendreLaVue`, ON NE LA RÉÉCRIT PAS. Une seconde formulation du
+  // même refus finirait par diverger de la première — et c'est la première qui porte les gardes.
+  if (!Array.isArray(vue.orchestrateurs)) {
+    sortie.write(rendreLaVue(vue));
     return { code: 1 };
   }
 

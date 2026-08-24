@@ -553,6 +553,64 @@ test('le TUI REFUSE ce qui n’est pas une vue — jamais un parc parfaitement m
   assert.match(ecrit, /Le geste : le redémarrer/, 'et il nomme le geste à poser');
 });
 
+test('quand le RECENSEMENT a refusé, le TUI n’ouvre AUCUN écran — il dit « je n’ai pas su regarder »', async () => {
+  // 🔴 LE MODE DE PANNE FONDATEUR DE CE CHANTIER, LAISSÉ OUVERT PAR LE MODULE QUI EXISTE POUR
+  // LE FERMER. Ma garde de porte demandait « est-ce une vue ? » et jamais « a-t-elle pu
+  // mesurer ? ». Quand le recensement refuse — herdr injoignable — `laVueDuParc` rend
+  // `orchestrateurs: null` AVEC une clé `registre` : la garde la laissait passer, l'arbre
+  // repliait ce `null` en tableau vide, et l'écran peignait
+  //     VUE DU PARC ─── par APP · ? orchestrateurs · ? epics
+  // un parc PARFAITEMENT MIS EN PAGE ET PARFAITEMENT DÉSERT.
+  //
+  // 🔴 ET LE RENDU TEXTE QUE CE TUI DOUBLE FAISAIT DÉJÀ MIEUX QUE LUI. Livrer l'écran sans
+  // cette garde, c'était livrer une RÉGRESSION du produit sorti deux jours plus tôt. Trouvé par
+  // une passe de revue, qui le classait « hors périmètre » — c'était vrai du diff, et faux de
+  // la gravité.
+  const vue = await laVueDuParc({ recensement: { agents: null, inventaireRefuse: 'herdr est injoignable' } });
+  assert.equal(vue.orchestrateurs, null, 'le montage produit bien la vue d’un registre REFUSÉ');
+  assert.ok('registre' in vue, 'et elle porte une clé `registre` — c’est POURQUOI l’autre garde la laissait passer');
+
+  const { boucleDuTui } = await import('../src/tui-boucle.js');
+  let ecrit = '';
+  const { code } = await boucleDuTui({
+    lireLaVue: async () => vue,
+    sortie: { write: (s) => (ecrit += s), columns: 100, rows: 12 },
+    entree: { [Symbol.asyncIterator]: async function* () {} },
+  });
+
+  assert.equal(code, 1, 'le refus se rend par un code non nul');
+  // 🔴 AUCUN ÉCRAN N'EST OUVERT. C'est le cœur : peindre un parc vide serait affirmer qu'il
+  // est vide.
+  assert.ok(!ecrit.includes('\u001b[?1049h'), 'aucun écran alternatif n’est ouvert — on ne peint AUCUN parc');
+  assert.ok(!/orchestrateurs ·/.test(ecrit), 'et surtout pas un en-tête de parc avec « ? orchestrateurs »');
+
+  // ⚠️ LA PHRASE EST CELLE DU RENDU TEXTE, PAS UNE SECONDE FORMULATION. Deux versions du même
+  // refus finiraient par diverger, et c'est la première qui porte les gardes de l'arbitrage.
+  assert.match(ecrit, /SANS REGISTRE/, 'il dit que le registre a refusé');
+  assert.match(ecrit, /herdr est injoignable/, 'et il nomme la cause');
+  assert.match(ecrit, /pas su regarder/, 'et il dit ce que ce n’est PAS : « personne ne travaille »');
+});
+
+test('une vue MESURÉE mais VIDE ouvre bien l’écran — la garde ne doit pas refuser un parc réellement vide', async () => {
+  // 🔴 LE SYMÉTRIQUE, ET SANS LUI LA GARDE POURRAIT TOUT REFUSER. « aucun orchestrateur mesuré »
+  // et « je n'ai pas pu mesurer » sont deux faits opposés : le premier s'affiche, le second se
+  // refuse. Une garde qui les fondrait rendrait le TUI inutilisable sur un poste au repos.
+  const vue = await laVueDuParc({ recensement: { quand: 'T', agents: [] } });
+  assert.deepEqual(vue.orchestrateurs, [], 'la vue est MESURÉE, et elle est vide');
+
+  const { boucleDuTui } = await import('../src/tui-boucle.js');
+  let ecrit = '';
+  const { code } = await boucleDuTui({
+    lireLaVue: async () => vue,
+    sortie: { write: (s) => (ecrit += s), columns: 100, rows: 12 },
+    entree: { [Symbol.asyncIterator]: async function* () {} },
+  });
+
+  assert.equal(code, 0, 'un parc mesuré et vide n’est pas un refus');
+  assert.ok(ecrit.includes('\u001b[?1049h'), 'l’écran S’OUVRE');
+  assert.match(ecrit, /VUE DU PARC/, 'et il porte son en-tête');
+});
+
 test('« --tui » ouvre l’écran, et son ABSENCE rend le texte — le défaut protège les lecteurs sans terminal', async () => {
   const vue = { registre: { mesure: 'lu' }, orchestrateurs: [], horsHierarchie: [], resume: 'r', regle: 'g' };
   let ecrit = '';
