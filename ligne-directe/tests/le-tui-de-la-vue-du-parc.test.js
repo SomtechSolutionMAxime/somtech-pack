@@ -671,6 +671,152 @@ test('sans session désignée, le focus part quand même — mais SANS inventer 
   assert.ok(!('env' in appels[0]), 'aucun environnement n’est posé quand aucune session n’est donnée');
 });
 
+test('un orchestrateur SANS pane vivant ne montre PAS son code dans l’arbre — le titre identifie, l’ID reste au détail', async (t) => {
+  // 🔴 CE BANC EST NÉ D'UNE PASSE DE REVUE, ET IL FERME LA DEMANDE DU DIRIGEANT MOT POUR MOT.
+  // `nomDeLOrchestrateur` retombait sur le code du chantier quand aucun pane vivant ne portait
+  // le mandat — le cas MAJORITAIRE : mesuré sur ce poste, 6 chantiers sur 15 n'ont aucun
+  // terminal. MESURÉ sur la vue réelle : 2 lignes sur 457 affichaient `P-20260820-0001` comme
+  // NOM, dans l'arbre, là où il a demandé de ne plus voir de codes.
+  //
+  // ⚠️ MON BANC « aucun identifiant dans l'arbre » PASSAIT, parce que sa donnée portait un agent
+  // VIVANT. Encore un vert qui ne touchait pas ce qu'il prétendait éprouver.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const depot = join(tmp, 'depot');
+  poserLieu(depot, 'p-20260824-0011');
+
+  const service = unServiceDesk({
+    projets: [{ id: 'u1', project_id: 'P-20260824-0011', title: 'Le métier des agents', status: 'active' }],
+  });
+  // AUCUN pane : le chantier n'existe que par son LIEU versionné.
+  const recensement = await unRecensement({ panes: [], roleDuLieu, nomsConnus: nomsLus([]) });
+  const lieux = await lecteurDeLieux({ racines: [depot], roleDuLieu })();
+  const vue = await laVueDuParc({ recensement, lieux, lireChantier: lecteurDeChantier({ appeler: service.appeler }) });
+
+  const { lignes, textes } = texteDeLArbre(vue, etatInitial());
+  const UN_CODE = /\b[DPJETdpjet]-\d{8}-\d{4}\b/;
+  assert.deepEqual(textes.filter((l) => UN_CODE.test(l)), [], 'aucune ligne de l’arbre ne porte de code');
+  assert.ok(textes.some((l) => l.includes('Le métier des agents')), 'et le TITRE du chantier, lui, est là');
+
+  // 🔴 LE SYMÉTRIQUE : le code n'a pas DISPARU, il a changé de place. Sans lui, le dirigeant ne
+  // pourrait plus retrouver la ligne au ServiceDesk.
+  const detail = detailDe(lignes.find((l) => l.kind === 'orchestrateur')).join('\n');
+  assert.match(detail, /P-20260824-0011/, 'le détail porte le code');
+});
+
+test('un chantier dont les EPICS N’ONT PAS PU ÊTRE LUS apparaît sous « n » — « je ne sais pas » n’est pas « rien à signaler »', async (t) => {
+  // 🔴 CE BANC EST NÉ D'UNE PASSE DE REVUE. `porteDuNonPris` ne regardait que les enfants ;
+  // avec `epics: null` on construit `enfants: []`, donc il rendait `false` — « aucun non-pris
+  // ici » — alors que la vérité est « je n'ai pas pu regarder ». MESURÉ sur la vue réelle :
+  // **4 orchestrateurs sur 17** étaient dans ce cas, et les 4 DISPARAISSAIENT sous `n`.
+  //
+  // ⚠️ C'est le repli que RA-VUE-003 interdit, appliqué à « epics non mesurés » — et sur le
+  // filtre qui sert PRÉCISÉMENT à décider où agir. Le taire y est plus grave qu'ailleurs.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const d = join(tmp, 'depot');
+  const lu = poserLieu(d, 'p-20260824-0012');
+  const illisible = poserLieu(d, 'p-20260824-0013');
+
+  const service = unServiceDesk({
+    // `P-…-0013` ne figure PAS dans la liste : le lecteur JETTE, la vue rend `epics: null`.
+    projets: [{ id: 'u1', project_id: 'P-20260824-0012', title: 'Chantier lisible', status: 'active' }],
+    epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'Un epic fermé', status: 'completed' }],
+  });
+  const vue = await uneVue({
+    tmp,
+    agents: [
+      { pane: 'w1:p1', lieu: lu, nom: 'kamouraska' },
+      { pane: 'w2:p1', lieu: illisible, nom: 'matapedia' },
+    ],
+    service,
+  });
+
+  const filtre = { ...etatInitial(), nonPrisSeuls: true };
+  const { lignes, textes } = texteDeLArbre(vue, filtre);
+
+  const ligneIllisible = textes.find((l) => l.includes('matapedia'));
+  assert.ok(ligneIllisible, 'le chantier dont les epics n’ont pas été lus APPARAÎT sous le filtre');
+  // 🔴 DISTINCT DU NON-PRIS, JAMAIS FONDU. Le marquer `○ NON PRIS` affirmerait qu'il attend
+  // quelqu'un — or on n'en sait rien. Il porte son propre mot.
+  assert.match(ligneIllisible, /NON LUS/, 'il dit que ses epics n’ont PAS été lus');
+  assert.ok(!/NON PRIS/.test(ligneIllisible), 'et il n’est PAS marqué NON PRIS — ce serait affirmer ce qu’on ignore');
+
+  // ⚠️ ET CELUI QU'ON A PU LIRE, ET QUI N'A QUE DU FERMÉ, RESTE ÉCARTÉ : sans ça le filtre
+  // montrerait tout le monde et cesserait d'être un filtre.
+  assert.ok(!textes.some((l) => l.includes('kamouraska')), 'un chantier LU sans non-pris reste écarté');
+
+  // Le détail explique pourquoi il est là — sinon sa présence sous « n » est inexplicable.
+  const ligne = lignes.find((l) => l.kind === 'orchestrateur' && l.titre.includes('matapedia'));
+  assert.ok(ligne, 'la ligne de ce chantier existe bien dans l’arbre filtré');
+  const detail = detailDe(ligne).join('\n');
+  // ⚠️ LE FRAGMENT CHERCHÉ NE PEUT PAS ÊTRE COUPÉ PAR UN REPLI. Le panneau fait 28 colonnes et
+  // replie ses phrases : une assertion qui enjambe un retour à la ligne rend un rouge sur un
+  // texte JUSTE. C'est la troisième fois de ce lot que mon instrument se trompe ainsi.
+  assert.match(detail, /n’ont PAS pu/, 'le détail dit la mesure qui a manqué');
+  assert.match(detail, /rien à signaler/, 'et il dit ce que ce n’est PAS');
+});
+
+test('après un « r » sur une vue RÉTRÉCIE, le curseur reste dans la liste — et « Entrée » ne vise rien d’invisible', async (t) => {
+  // 🔴 CE BANC EST NÉ D'UNE PASSE DE REVUE, ET IL PORTE SUR LE SEUL GESTE ACTIF DU PRODUIT.
+  // `relire` ne touchait ni le curseur ni les plis, et le rendu n'écrêtait pas non plus : quand
+  // la vue RÉTRÉCIT entre deux lectures — ce qui arrive vraiment sur 70 s — l'écran ne
+  // surlignait plus aucune ligne, et `Entrée` mettait quand même un terminal RÉEL en focus.
+  //
+  // ⚠️ CE N'ÉTAIT PAS UN PLANTAGE, et c'est ce qui le rendait dangereux : le geste aboutissait,
+  // sur une cible que personne n'avait vue.
+  //
+  // ⚠️ LES LIGNES VIENNENT DE LA CHAÎNE RÉELLE, PAS DE MA MAIN. Première rédaction refusée par
+  // la mesure : elle fabriquait des `lignes` à la main, sans `nonPris` — une forme que le
+  // modèle ne produit jamais — et `detailDe` jetait. Un double non conforme fabrique les
+  // défauts qu'il devrait trouver.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const d = join(tmp, 'depot');
+
+  const projets = [];
+  const agents = [];
+  for (let i = 1; i <= 12; i += 1) {
+    const code = `P-20260824-01${String(i).padStart(2, '0')}`;
+    projets.push({ id: `u${i}`, project_id: code, title: `Chantier numero ${i}`, status: 'active' });
+    agents.push({ pane: `w${i}:p1`, lieu: poserLieu(d, code.toLowerCase()), nom: `agent${i}` });
+  }
+  const vue = await uneVue({ tmp, agents, service: unServiceDesk({ projets }) });
+
+  const racines = arbreDeLaVue(vue, { parApp: true });
+  const grande = lignesVisibles(racines, etatInitial());
+  // La MÊME vue, vue plus courte — c'est ce que fait une relecture qui trouve moins de monde.
+  const petite = lignesVisibles(racines, { ...etatInitial(), recherche: 'numero 1 ' });
+  assert.ok(grande.length > petite.length && petite.length > 0, `${grande.length} lignes puis ${petite.length}`);
+
+  const loin = { ...etatInitial(), curseur: grande.length - 1 };
+  const apresR = appliquerTouche(loin, 'r', grande);
+  assert.equal(apresR.effet.type, 'relire', '« r » demande bien une relecture');
+
+  // 🔴 SUR LA LISTE RÉTRÉCIE, LE CURSEUR REVIENT DANS LA LISTE — et au MÊME endroit pour le
+  // rendu ET pour les touches, parce que les deux passent par la même fonction.
+  const surPetite = appliquerTouche(apresR.etat, 'entree', petite);
+  assert.ok(
+    surPetite.etat.curseur < petite.length,
+    `le curseur (${surPetite.etat.curseur}) est dans la liste de ${petite.length}`
+  );
+
+  const ecran = rendreEcran({ vue, etat: apresR.etat, lignes: petite, largeur: 90, hauteur: 10 });
+  const surlignees = ecran.filter((l) => l.style === 'selection');
+  assert.equal(surlignees.length, 1, 'l’écran surligne EXACTEMENT une ligne — jamais zéro');
+
+  // ⚠️ ET CE QU'ON MONTRE EST CE QU'ON VISE. C'est tout l'objet du correctif.
+  assert.ok(
+    surlignees[0].texte.includes(petite[surPetite.etat.curseur].titre.slice(0, 12)),
+    `la ligne surlignée n’est pas celle que le curseur désigne : « ${surlignees[0].texte.trim()} »`
+  );
+
+  // Une liste devenue VIDE ne fait viser personne.
+  const surVide = appliquerTouche(apresR.etat, 'entree', []);
+  assert.equal(surVide.effet.type, 'refus', 'sur une liste vide, Entrée REFUSE');
+  assert.ok(!('pane' in surVide.effet), 'et ne rend aucun identifiant');
+});
+
 test('la barre de raccourcis se rétracte sans jamais perdre « q quitter » — et reste la maquette à pleine largeur', () => {
   // 🔴 TROUVÉ EN EXERÇANT LE TUI DANS UN VRAI PTY, où la fenêtre faisait 100 colonnes. La barre
   // en fait 109 : bornée, elle coupait par la DROITE — donc le PREMIER raccourci sacrifié était
@@ -714,32 +860,83 @@ test('une RAFALE de touches arrivée en un seul bloc est décodée entière — 
   const ESC = '\u001b';
 
   assert.deepEqual(
-    decoderTouches(`${ESC}[B${ESC}[Bannq`),
+    decoderTouches(`${ESC}[B${ESC}[Bannq`).touches,
     ['bas', 'bas', 'a', 'n', 'n', 'q'],
     'un bloc de 10 octets rend les SIX touches, dans l’ordre'
   );
 
   // 🔴 UNE SÉQUENCE CSI SE LIT ENTIÈRE OU SE JETTE ENTIÈRE. La découper ferait lire son `ESC`
-  // comme Échap — donc FERMER le TUI sur une séquence que le terminal émet tout seul : souris,
-  // collage encadré, touche de fonction. Un écran qui se ferme sur un geste qu'on n'a pas fait
-  // est pire qu'une touche ignorée.
+  // comme Échap — donc agir sur une séquence que le terminal émet tout seul : souris, collage
+  // encadré, touche de fonction.
   for (const [quoi, sequence] of [
     ['collage encadré', `${ESC}[200~`],
     ['souris SGR', `${ESC}[<0;10;5M`],
     ['touche de fonction', `${ESC}[15~`],
   ]) {
-    const rendu = decoderTouches(sequence);
-    assert.ok(!rendu.includes('echap'), `${quoi} ne doit PAS être lu comme Échap`);
-    assert.ok(!rendu.includes('q'), `${quoi} ne doit PAS quitter le TUI`);
-    assert.deepEqual(rendu, [], `${quoi} est ignorée en entier`);
+    const { touches, reste } = decoderTouches(sequence);
+    assert.ok(!touches.includes('echap'), `${quoi} ne doit PAS être lu comme Échap`);
+    assert.ok(!touches.includes('q'), `${quoi} ne doit PAS quitter le TUI`);
+    assert.deepEqual(touches, [], `${quoi} est ignorée en entier`);
+    assert.equal(reste, '', `${quoi} est CONSOMMÉE — elle ne s’accumule pas dans le reste`);
   }
 
-  // ⚠️ ET ÉCHAP SEUL RESTE ÉCHAP — sinon la garde ci-dessus aurait fermé la porte de sortie.
-  assert.deepEqual(decoderTouches(ESC), ['echap']);
-  assert.deepEqual(decoderTouches(`${ESC}[Bq`), ['bas', 'q'], 'une flèche suivie d’une lettre');
-  // Une séquence coupée en deux lectures : on attend la suite plutôt que de deviner.
-  assert.deepEqual(decoderTouches(`${ESC}[`), [], 'une séquence tronquée n’invente rien');
-  assert.deepEqual(decoderTouches(''), [], 'un bloc vide ne rend rien');
+  assert.deepEqual(decoderTouches(`${ESC}[Bq`).touches, ['bas', 'q'], 'une flèche suivie d’une lettre');
+  assert.deepEqual(decoderTouches('').touches, [], 'un bloc vide ne rend rien');
+});
+
+test('une FLÈCHE COUPÉE entre deux lectures reste une flèche — elle ne devient pas Échap', () => {
+  // 🔴 CE BANC EST NÉ D'UNE PASSE DE REVUE, ET LE DÉFAUT ÉTAIT GRAVE. Le décodeur n'avait AUCUNE
+  // mémoire d'un appel à l'autre. Quand le terminal remet l'octet `ESC` seul dans une lecture,
+  // puis `[B` dans la suivante — SSH, tmux, ou simplement la latence entre deux `read()` — le
+  // `ESC` isolé était décodé `echap`, et `echap` QUITTAIT le TUI. **Une flèche fermait l'écran**,
+  // et la flèche voulue n'était jamais vue.
+  //
+  // ⚠️ LA GARDE PRÉCÉDENTE NE COUVRAIT QU'UN BORD : elle attendait la suite quand `ESC` et `[`
+  // arrivaient ENSEMBLE sans lettre finale. `ESC` arrivant SEUL n'était couvert par personne.
+  // C'est la même famille que la rafale, sur l'autre bord — un correctif ouvre son symétrique.
+  const ESC = '\u001b';
+
+  // Lecture 1 : l'octet ESC tout seul. On ne peut PAS trancher, donc on ne tranche pas.
+  const un = decoderTouches(ESC);
+  assert.deepEqual(un.touches, [], 'un ESC en fin de tampon ne rend RIEN — ni Échap, ni flèche');
+  assert.equal(un.reste, ESC, 'il est GARDÉ pour la lecture suivante');
+
+  // Lecture 2 : le reste de la flèche. Les deux moitiés se recomposent.
+  const deux = decoderTouches('[B', un.reste);
+  assert.deepEqual(deux.touches, ['bas'], 'les deux moitiés recomposent la FLÈCHE');
+  assert.equal(deux.reste, '', 'et le reste est consommé');
+
+  // ⚠️ ET ÉCHAP EXISTE TOUJOURS : `ESC` suivi d'autre chose que `[` est bien Échap.
+  assert.deepEqual(decoderTouches(`${ESC}a`).touches, ['echap', 'a'], 'ESC + une lettre : c’est Échap');
+  const tardif = decoderTouches('q', ESC);
+  assert.deepEqual(tardif.touches, ['echap', 'q'], 'un ESC gardé se rend dès que la suite le tranche');
+
+  // Une séquence CSI coupée en trois lectures se recompose aussi.
+  const a = decoderTouches(ESC);
+  const b = decoderTouches('[', a.reste);
+  assert.deepEqual(b.touches, [], 'ESC + [ sans lettre finale : toujours indécidable');
+  assert.equal(b.reste, `${ESC}[`, 'et les deux octets sont gardés ensemble');
+  assert.deepEqual(decoderTouches('C', b.reste).touches, ['droite'], 'la troisième lecture la tranche');
+});
+
+test('ÉCHAP NE FERME PLUS L’ÉCRAN — il annule ; seuls « q » et Ctrl-C quittent', () => {
+  // 🔴 LA SECONDE MOITIÉ DU MÊME CORRECTIF, et elle ne se fie pas à la première. Le décodeur
+  // garde désormais un `ESC` indécidable, mais on ne confie pas à UNE seule garde une
+  // conséquence aussi grave que fermer l'écran du dirigeant.
+  //
+  // ⚠️ ET CE N'EST PAS UN ÉCART À LA MAQUETTE : elle dit `q quitter` et ne mentionne pas Échap.
+  // Le pire d'un `ESC` mal daté devient « un filtre s'efface », jamais « l'écran se ferme ».
+  const lignes = [{ id: 'x', kind: 'app', profondeur: 0, titre: 'A', marque: '', pliable: false, plie: false, noeud: { enfants: [] } }];
+  const depart = { ...etatInitial(), nonPrisSeuls: true, recherche: 'abc', curseur: 0 };
+
+  const echap = appliquerTouche(depart, 'echap', lignes);
+  assert.equal(echap.effet, null, 'Échap ne produit AUCUN effet — surtout pas « quitter »');
+  assert.equal(echap.etat.nonPrisSeuls, false, 'il annule le filtre');
+  assert.equal(echap.etat.recherche, '', 'et la recherche');
+
+  // ⚠️ MAIS LA PORTE DE SORTIE RESTE OUVERTE — sinon on aurait fermé l'écran sur son lecteur.
+  assert.equal(appliquerTouche(depart, 'q', lignes).effet.type, 'quitter', '« q » quitte');
+  assert.equal(decoderTouche('\u0003'), 'q', 'et Ctrl-C reste une sortie');
 });
 
 test('les flèches ne sont pas Échap — les confondre rendrait la navigation impossible', () => {

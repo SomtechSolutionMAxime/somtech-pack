@@ -119,29 +119,46 @@ export function decoderTouche(donnees) {
  * Aucun banc du dépôt ne pouvait le voir : tous appellent le décodeur avec UNE touche,
  * c’est-à-dire qu’ils fabriquaient leur propre appelant.
  */
-export function decoderTouches(donnees) {
-  const s = String(donnees ?? '');
+export function decoderTouches(donnees, reste = '') {
+  // 🔴 LE RESTE TRAVERSE LES LECTURES, ET C'EST UN DÉFAUT MESURÉ QUI SE FERME ICI. Ce décodeur
+  // n'avait AUCUNE mémoire d'un appel à l'autre. Quand le terminal remet l'octet `ESC` seul
+  // dans une lecture, puis `[B` dans la suivante — SSH, tmux, ou simplement la latence entre
+  // deux `read()` — le `ESC` isolé était lu comme Échap. La flèche voulue n'était jamais vue.
+  //
+  // ⚠️ LA GARDE PRÉCÉDENTE NE COUVRAIT QU'UN BORD. Elle attendait la suite quand `ESC` et `[`
+  // arrivaient ENSEMBLE sans la lettre finale ; elle ne disait rien de `ESC` arrivant SEUL.
+  // C'est la même famille que la rafale fermée un commit plus tôt, sur l'autre bord — et
+  // c'est une passe de revue qui l'a trouvée, pas une relecture.
+  const s = String(reste ?? '') + String(donnees ?? '');
   const touches = [];
   let i = 0;
   while (i < s.length) {
-    // ⚠️ UNE SÉQUENCE CSI SE LIT ENTIÈRE OU SE JETTE ENTIÈRE. La découper ferait lire son
-    // `ESC` comme Échap — donc QUITTER le TUI sur une séquence que le terminal a émise seul
-    // (souris, collage encadré, touche de fonction). Un écran qui se ferme sur un geste
-    // qu’on n’a pas fait est pire qu’une touche ignorée.
-    if (s[i] === ESC && s[i + 1] === '[') {
-      let j = i + 2;
-      while (j < s.length && !(s.charCodeAt(j) >= 0x40 && s.charCodeAt(j) <= 0x7e)) j += 1;
-      if (j >= s.length) break; // séquence tronquée : on attend la suite plutôt que de deviner
-      const t = decoderTouche(s.slice(i, j + 1));
-      if (t !== null) touches.push(t);
-      i = j + 1;
+    if (s[i] === ESC) {
+      // ⚠️ UN `ESC` EN TOUTE FIN DE TAMPON EST INDÉCIDABLE : Échap, ou le premier octet d'une
+      // flèche coupée en deux lectures ? On ne tranche pas — on le GARDE pour la suite.
+      if (i === s.length - 1) return { touches, reste: ESC };
+      if (s[i + 1] === '[') {
+        // ⚠️ UNE SÉQUENCE CSI SE LIT ENTIÈRE OU SE JETTE ENTIÈRE. La découper ferait lire son
+        // `ESC` comme Échap — donc agir sur une séquence que le terminal a émise seul (souris,
+        // collage encadré, touche de fonction).
+        let j = i + 2;
+        while (j < s.length && !(s.charCodeAt(j) >= 0x40 && s.charCodeAt(j) <= 0x7e)) j += 1;
+        if (j >= s.length) return { touches, reste: s.slice(i) };
+        const t = decoderTouche(s.slice(i, j + 1));
+        if (t !== null) touches.push(t);
+        i = j + 1;
+        continue;
+      }
+      // `ESC` suivi d'autre chose que `[` : c'est bien Échap, et on peut le dire.
+      touches.push('echap');
+      i += 1;
       continue;
     }
     const t = decoderTouche(s[i]);
     if (t !== null) touches.push(t);
     i += 1;
   }
-  return touches;
+  return { touches, reste: '' };
 }
 
 /**
@@ -252,11 +269,18 @@ export async function boucleDuTui({
   let lignes = dessiner();
 
   try {
+    let reste = '';
     boucle: for await (const donnees of entree) {
       // 🔴 UNE RAFALE, PAS UNE TOUCHE. Le terminal remet ce qui est arrivé depuis la dernière
       // lecture — tenir ↓ enfoncé en met six ou dix dans le même bloc. Décoder le bloc comme
       // UNE touche les perdait TOUTES et figeait l’écran (mesuré en pty réel).
-      for (const touche of decoderTouches(donnees)) {
+      //
+      // 🔴 ET LE RESTE TRAVERSE LES LECTURES. Une flèche coupée entre deux `read()` laissait
+      // son `ESC` seul, lu comme Échap : la flèche faisait QUITTER. Le décodeur garde
+      // désormais ce qu'il ne peut pas trancher, et on le lui rend au tour suivant.
+      const decode = decoderTouches(donnees, reste);
+      reste = decode.reste;
+      for (const touche of decode.touches) {
         const { etat: suivant, effet } = appliquerTouche(etat, touche, lignes);
         etat = suivant;
         if (effet?.type === 'quitter') break boucle;

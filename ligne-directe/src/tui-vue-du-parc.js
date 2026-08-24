@@ -99,13 +99,24 @@ export function appDuChantier(chantier) {
   };
 }
 
-/** Le nom qu'on LIT sur une ligne d'orchestrateur : son nom d'agent, ou son mandat. */
+/**
+ * LE NOM QU'ON LIT SUR UNE LIGNE D'ORCHESTRATEUR — et JAMAIS son code de chantier.
+ *
+ * 🔴 CETTE FONCTION RENDAIT LE CODE, ET C'EST LA DEMANDE DU DIRIGEANT QU'ELLE TRAHISSAIT, mot
+ * pour mot : « P-20260822-0001 ne me dit absolument rien ». Un lieu sans pane vivant ne nomme
+ * personne — `porteurDuLieu` n'invente aucun nom, à juste titre — et le repli choisi était le
+ * code. MESURÉ sur la vue réelle du poste : **2 lignes sur 457** affichaient `P-20260820-0001`
+ * comme NOM, dans l'arbre.
+ *
+ * ⚠️ ET MON BANC NE L'AVAIT PAS VU parce que sa donnée portait un agent VIVANT : encore un vert
+ * qui ne touchait pas ce qu'il prétendait éprouver. C'est une passe de revue qui l'a trouvé.
+ *
+ * ⚠️ CE QU'ON PERD EN LE RETIRANT, ET POURQUOI CE N'EST PAS UNE PERTE : la ligne porte DÉJÀ le
+ * TITRE du chantier juste après — c'est lui qui identifie, et c'est lui qu'il a demandé. Le
+ * code reste dans le détail, à droite, où il sert à retrouver la ligne au ServiceDesk.
+ */
 function nomDeLOrchestrateur(o) {
-  const nom = o?.agent?.nom ?? null;
-  if (nom) return nom;
-  // Un lieu sans pane vivant ne nomme personne (`porteurDuLieu` n'invente aucun nom) : on
-  // affiche alors le code du chantier, seul fait dont on dispose — et on le dit tel quel.
-  return o?.chantier?.code ?? MOT_NON_ETABLI;
+  return o?.agent?.nom ?? MOT_NON_ETABLI;
 }
 
 /** La marque de présence — un caractère, et il ne dit QUE ce qui a été mesuré. */
@@ -202,6 +213,19 @@ function noeudDOrchestrateur(o, i) {
     // aucun » appellent deux gestes opposés, et les fondre a déjà fait disparaître le travail
     // d'agents entiers de cette vue.
     suffixe: epics === null ? 'epics NON LUS' : `${epics.length} epic(s)`,
+    // 🔴 « JE N'AI PAS PU LIRE » EST UN ÉTAT À PART ENTIÈRE SOUS LE FILTRE `n`, ET IL MANQUAIT.
+    // `porteDuNonPris` ne regardait que les enfants ; avec `epics: null` on construit
+    // `enfants: []`, donc il rendait `false` — c'est-à-dire « aucun non-pris ici » alors que la
+    // vérité est « je ne sais pas ». MESURÉ sur la vue réelle : **4 orchestrateurs sur 17**
+    // étaient dans ce cas, et les 4 DISPARAISSAIENT sous `n`.
+    //
+    // ⚠️ C'est le repli que RA-VUE-003 interdit, appliqué à « epics non mesurés » — et sur le
+    // filtre qui sert précisément à décider où agir : le taire y est plus grave qu'ailleurs.
+    incertain: epics === null,
+    pourquoiIncertain:
+      epics === null
+        ? 'ses epics n’ont PAS pu être lus : je ne sais pas s’il attend quelqu’un — ce n’est pas « rien à signaler »'
+        : null,
     enfants,
     app,
     ref: { orchestrateur: o },
@@ -251,6 +275,11 @@ function noeudDeStory(s, e, k) {
 /** Un nœud porte-t-il, LUI ou l'un de ses descendants, du travail non pris ? */
 export function porteDuNonPris(noeud) {
   if (noeud?.nonPris?.nonPris === true) return true;
+  // 🔴 UNE MESURE QUI A ÉCHOUÉ SE MONTRE, ELLE NE SE REPLIE PAS EN « RIEN ». Un nœud dont on
+  // n'a pas pu lire la descendance ne peut pas dire qu'il ne porte rien : il peut porter du
+  // travail non pris qu'on n'a jamais vu. Sous `n`, il APPARAÎT — et il le dit avec son propre
+  // mot (« NON LUS »), jamais avec la marque `○ NON PRIS`, qui affirmerait ce qu'on ignore.
+  if (noeud?.incertain === true) return true;
   return (noeud?.enfants ?? []).some(porteDuNonPris);
 }
 
@@ -387,6 +416,14 @@ export function detailDe(ligne) {
     l.push(`porteur : ${rendreAttribution({ mesure: o?.porteur?.mesure === 'lue' && o.porteur.agents?.length ? 'lue' : 'non établi', agents: o?.porteur?.agents ?? [], indices: [] })}`);
     l.push(`présence: ${marqueDePresence(o?.presence)} ${o?.presence?.vivant === true ? 'vivant' : o?.presence?.vivant === false ? 'aucun terminal' : MOT_NON_ETABLI}`);
     l.push('');
+    // ⚠️ CE QUE LE FILTRE A MONTRÉ, LE DÉTAIL L'EXPLIQUE. Un chantier qui apparaît sous « n »
+    // sans porter la marque `○ NON PRIS` serait autrement inexplicable : il est là parce qu'on
+    // n'a PAS PU savoir, et c'est différent de « il attend quelqu'un ».
+    if (n.incertain) {
+      l.push('');
+      l.push(...envelopper(`⚠️ ${n.pourquoiIncertain}`, 28));
+    }
+    l.push('');
     l.push('adresse :');
     l.push(...envelopper(rendreAdresse(o?.adresse), 28));
     if (o?.adresse?.mesure === 'lue') l.push('', '[Entrée] focus le terminal');
@@ -447,6 +484,20 @@ export function envelopper(texte, largeur) {
   return lignes.length ? lignes : [''];
 }
 
+/**
+ * LE CURSEUR, RAMENÉ DANS LA LISTE — un seul endroit, pour que le rendu et les touches
+ * désignent toujours LA MÊME ligne.
+ *
+ * ⚠️ DEUX ÉCRÊTAGES ÉCRITS SÉPARÉMENT FINIRAIENT PAR DIVERGER, et c'est exactement ce qui
+ * s'est produit : `appliquerTouche` bornait sa lecture locale, le rendu non. L'écran montrait
+ * donc une chose et la touche en visait une autre.
+ */
+export function curseurDansLaListe(curseur, combien) {
+  if (!Number.isFinite(curseur) || curseur < 0) return 0;
+  if (combien <= 0) return 0;
+  return Math.min(Math.trunc(curseur), combien - 1);
+}
+
 /** L'état de l'écran au premier affichage. Rien n'est plié : on voit d'abord tout. */
 export function etatInitial() {
   return { curseur: 0, plies: new Set(), parApp: true, nonPrisSeuls: false, recherche: '', mode: 'arbre', dessus: 0 };
@@ -501,9 +552,15 @@ export function raccourcisPour(largeur) {
  * l'ADRESSAGE : on met le terminal devant les yeux du dirigeant, on ne lui parle pas.
  */
 export function appliquerTouche(etat, touche, lignes) {
-  const e = { ...etat, plies: new Set(etat.plies) };
   const n = lignes.length;
-  const ligne = lignes[Math.min(e.curseur, Math.max(0, n - 1))] ?? null;
+  // 🔴 LE CURSEUR EST RAMENÉ DANS LA LISTE À CHAQUE TOUCHE, ET C'EST UN DÉFAUT MESURÉ QUI SE
+  // FERME ICI. `relire` ne touchait ni le curseur ni les plis, et le rendu ne l'écrêtait pas
+  // non plus : quand la vue RÉTRÉCIT entre deux lectures — ce qui arrive vraiment sur 70 s —
+  // l'écran ne surlignait plus aucune ligne, et `Entrée` mettait quand même un terminal réel
+  // en focus. Le seul geste ACTIF du produit se posait sur une cible que personne ne voyait.
+  const curseur = curseurDansLaListe(etat.curseur, n);
+  const e = { ...etat, curseur, plies: new Set(etat.plies) };
+  const ligne = lignes[curseur] ?? null;
 
   if (e.mode === 'recherche') {
     if (touche === 'echap') return { etat: { ...e, mode: 'arbre', recherche: '' }, effet: null };
@@ -537,8 +594,15 @@ export function appliquerTouche(etat, touche, lignes) {
     case 'r':
       return { etat: e, effet: { type: 'relire' } };
     case 'q':
-    case 'echap':
       return { etat: e, effet: { type: 'quitter' } };
+    // 🔴 ÉCHAP NE QUITTE PLUS L'ARBRE, ET C'EST LA SECONDE MOITIÉ DU MÊME CORRECTIF. Une
+    // flèche coupée entre deux lectures laisse un `ESC` seul ; le décodeur le garde désormais,
+    // mais on ne se fie pas à UNE garde pour une conséquence aussi grave que fermer l'écran.
+    // La maquette validée dit `q quitter` et ne mentionne pas Échap : Échap ANNULE (une
+    // recherche, un filtre) et ne détruit rien. Le pire d'un `ESC` mal daté devient donc « un
+    // filtre s'efface », jamais « l'écran se ferme ».
+    case 'echap':
+      return { etat: { ...e, nonPrisSeuls: false, recherche: '', curseur: 0 }, effet: null };
     case 'entree': {
       const adresse = ligne?.noeud?.ref?.orchestrateur?.adresse;
       // ⚠️ AUCUNE ADRESSE PÉRIMÉE N'EST SUIVIE. `adresseDe` rend `mesure: 'aucune'` dès que le
@@ -577,8 +641,12 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   const sortie = [];
   sortie.push({ style: 'titre', texte: borner(enTete(vue, etat), largeur) });
 
-  const detail = detailDe(lignes[etat.curseur] ?? null);
-  const dessus = fenetre(etat.curseur, lignes.length, hauteurCorps);
+  // 🔴 LE RENDU ÉCRÊTE PAR LA MÊME FONCTION QUE LES TOUCHES. Écrit séparément, il divergeait :
+  // après un `r` sur une vue rétrécie, l'écran ne surlignait plus rien pendant que `Entrée`
+  // visait encore un terminal. Ce qu'on montre et ce qu'on vise sont désormais le même indice.
+  const curseur = curseurDansLaListe(etat.curseur, lignes.length);
+  const detail = detailDe(lignes[curseur] ?? null);
+  const dessus = fenetre(curseur, lignes.length, hauteurCorps);
 
   for (let i = 0; i < hauteurCorps; i += 1) {
     const idx = dessus + i;
@@ -586,7 +654,7 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     const gauche = ligne ? texteDeLigne(ligne, largeurArbre) : ' '.repeat(largeurArbre);
     const droite = borner(detail[i] ?? '', largeurDetail);
     sortie.push({
-      style: ligne && idx === etat.curseur ? 'selection' : ligne ? `arbre:${ligne.kind}` : 'vide',
+      style: ligne && idx === curseur ? 'selection' : ligne ? `arbre:${ligne.kind}` : 'vide',
       texte: `${gauche} │ ${droite}`,
     });
   }
