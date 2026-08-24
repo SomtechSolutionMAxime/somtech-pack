@@ -207,6 +207,18 @@ const VUE_MESUREE_LE = '2026-08-24';
  * La chaîne complète, et elle se referme sur elle-même : le parc grandit → la mesure se périme →
  * l'essai de péremption rougit → on retape la commande → si le coût a dépassé la moitié de la
  * borne, il faut relever la borne → **ce qui rougit cet essai-ci**, et force à le dire.
+ *
+ * ═══ CE QUI RESTE OUVERT, DIT PLUTÔT QUE TU — mesuré, et délibérément non fermé.
+ *
+ * Diviser `VUE_A_COUTE_MS` par deux laisse encore la suite VERTE. C'est vrai, c'est mesuré, et
+ * ça reste : la borne étant épinglée, ce chiffre ne protège plus rien par lui-même — il ne sert
+ * qu'à faire rougir le jour où le coût réel dépassera la moitié de la borne. Le baisser rend
+ * donc ce signal-là plus tardif, sans jamais permettre d'abaisser la borne.
+ *
+ * ⚠️ ON NE LE FERME PAS, ET C'EST LE POINT D'ARRÊT LUI-MÊME. Y poser un plancher rouvrirait
+ * exactement la question d'un cran plus haut — qui garde ce plancher ? — et c'est l'empilement
+ * dont on vient de sortir. **Un banc ne peut pas se garder lui-même ; ce qu'il peut, c'est
+ * n'avoir qu'UN seul point où l'on triche, et le nommer.** Le voici.
  */
 const BORNE_DE_LA_VUE_EN_PRODUCTION = 180_000;
 
