@@ -595,14 +595,28 @@ export function appliquerTouche(etat, touche, lignes) {
       return { etat: e, effet: { type: 'relire' } };
     case 'q':
       return { etat: e, effet: { type: 'quitter' } };
-    // 🔴 ÉCHAP NE QUITTE PLUS L'ARBRE, ET C'EST LA SECONDE MOITIÉ DU MÊME CORRECTIF. Une
-    // flèche coupée entre deux lectures laisse un `ESC` seul ; le décodeur le garde désormais,
-    // mais on ne se fie pas à UNE garde pour une conséquence aussi grave que fermer l'écran.
-    // La maquette validée dit `q quitter` et ne mentionne pas Échap : Échap ANNULE (une
-    // recherche, un filtre) et ne détruit rien. Le pire d'un `ESC` mal daté devient donc « un
-    // filtre s'efface », jamais « l'écran se ferme ».
-    case 'echap':
+    // 🔴 ÉCHAP NE QUITTE PLUS L'ARBRE, ET C'EST LA SECONDE MOITIÉ DU CORRECTIF DE LA FLÈCHE
+    // COUPÉE. Une flèche coupée entre deux lectures laisse un `ESC` seul ; le décodeur le garde
+    // désormais, mais on ne confie pas à UNE garde une conséquence aussi grave que fermer
+    // l'écran. La maquette validée dit `q quitter` et ne mentionne pas Échap.
+    //
+    // 🔴 ET IL N'ANNULE QUE CE QUI EST ACTIF — première rédaction REJETÉE en passe de revue, et
+    // le rejet était juste. Elle remettait `curseur: 0` INCONDITIONNELLEMENT : un Échap réflexe,
+    // sans aucun filtre ni recherche à annuler, renvoyait le lecteur en tête d'un arbre de
+    // 455 lignes. MESURÉ sur la vue réelle du poste le 2026-08-24 : curseur 120 → 0, rien
+    // d'autre changé.
+    //
+    // ⚠️ ET LA PROSE DISAIT « ne détruit rien » PENDANT QUE LE CODE DÉTRUISAIT. C'est la forme
+    // que ce dépôt combat partout — une prose qui contredit la donnée — écrite ici par la même
+    // main, dans le même geste. Les deux disent la même chose à la fin.
+    //
+    // ⚠️ LE CURSEUR NE BOUGE QUE SI L'ARBRE CHANGE DE FORME. Effacer un filtre ou une recherche
+    // fait réapparaître des lignes : les indices ne désignent plus les mêmes nœuds, et revenir
+    // en tête est alors le seul repère honnête. Sans changement de forme, la place est à lui.
+    case 'echap': {
+      if (!e.nonPrisSeuls && !e.recherche) return { etat: e, effet: null };
       return { etat: { ...e, nonPrisSeuls: false, recherche: '', curseur: 0 }, effet: null };
+    }
     case 'entree': {
       const adresse = ligne?.noeud?.ref?.orchestrateur?.adresse;
       // ⚠️ AUCUNE ADRESSE PÉRIMÉE N'EST SUIVIE. `adresseDe` rend `mesure: 'aucune'` dès que le

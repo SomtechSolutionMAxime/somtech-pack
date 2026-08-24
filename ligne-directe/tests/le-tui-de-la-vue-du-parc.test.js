@@ -992,13 +992,45 @@ test('ÉCHAP NE FERME PLUS L’ÉCRAN — il annule ; seuls « q » et Ctrl-C qu
   //
   // ⚠️ ET CE N'EST PAS UN ÉCART À LA MAQUETTE : elle dit `q quitter` et ne mentionne pas Échap.
   // Le pire d'un `ESC` mal daté devient « un filtre s'efface », jamais « l'écran se ferme ».
-  const lignes = [{ id: 'x', kind: 'app', profondeur: 0, titre: 'A', marque: '', pliable: false, plie: false, noeud: { enfants: [] } }];
+  // ⚠️ LA LISTE EST ASSEZ LONGUE POUR QUE LE CURSEUR AIT UNE PLACE À PERDRE. Première rédaction
+  // refusée par la mesure : elle tenait UNE ligne, et l'écrêtage ramenait légitimement le
+  // curseur à 0 — le banc rougissait donc sur du code juste, en mesurant mon propre montage.
+  const lignes = Array.from({ length: 30 }, (_, i) => ({
+    id: `x${i}`,
+    kind: 'app',
+    profondeur: 0,
+    titre: `A${i}`,
+    marque: '',
+    suffixe: '',
+    pliable: false,
+    plie: false,
+    noeud: { enfants: [], nonPris: null, ref: {} },
+  }));
   const depart = { ...etatInitial(), nonPrisSeuls: true, recherche: 'abc', curseur: 0 };
 
   const echap = appliquerTouche(depart, 'echap', lignes);
   assert.equal(echap.effet, null, 'Échap ne produit AUCUN effet — surtout pas « quitter »');
   assert.equal(echap.etat.nonPrisSeuls, false, 'il annule le filtre');
   assert.equal(echap.etat.recherche, '', 'et la recherche');
+  // ⚠️ CE CAS-LÀ RAMÈNE EN TÊTE, ET C'EST VOULU : effacer un filtre fait RÉAPPARAÎTRE des
+  // lignes, donc les indices ne désignent plus les mêmes nœuds. Revenir en tête est le seul
+  // repère honnête quand l'arbre change de forme sous le curseur.
+  assert.equal(echap.etat.curseur, 0, 'quand l’arbre change de forme, on revient en tête');
+
+  // 🔴 ET IL N'ANNULE QUE CE QUI EST ACTIF. Ce banc partait d'un curseur à 0 : la remise à zéro
+  // y était INVISIBLE, et une passe de revue a trouvé ce que je ne pouvais pas voir — un Échap
+  // réflexe, sans rien à annuler, renvoyait le lecteur en tête d'un arbre de 455 lignes.
+  // Troisième « vert qui ne touche pas ce qu'il éprouve » de ce lot, et le troisième écrit
+  // APRÈS que j'aie nommé les deux premiers : nommer une forme ne protège pas contre elle.
+  const enPlace = { ...etatInitial(), curseur: 12, nonPrisSeuls: false, recherche: '' };
+  const rien = appliquerTouche(enPlace, 'echap', lignes);
+  assert.equal(rien.effet, null, 'sans rien à annuler, Échap ne produit toujours aucun effet');
+  assert.equal(rien.etat.curseur, 12, 'et il NE TOUCHE PAS à la place du lecteur — il n’y a rien à annuler');
+  assert.deepEqual(
+    { f: rien.etat.nonPrisSeuls, r: rien.etat.recherche },
+    { f: false, r: '' },
+    'et il ne fabrique aucun filtre non plus'
+  );
 
   // ⚠️ MAIS LA PORTE DE SORTIE RESTE OUVERTE — sinon on aurait fermé l'écran sur son lecteur.
   assert.equal(appliquerTouche(depart, 'q', lignes).effet.type, 'quitter', '« q » quitte');
