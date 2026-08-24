@@ -31,7 +31,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -191,12 +191,49 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
 const VUE_A_COUTE_MS = 89_324;
 const VUE_MESUREE_LE = '2026-08-24';
 
+/**
+ * 🔴 LA BORNE DE PRODUCTION, ÉPINGLÉE À SA VALEUR EXACTE — et c'est le point d'arrêt.
+ *
+ * `borne >= 2 × VUE_A_COUTE_MS` ne gardait rien : la campagne l'a montré en divisant
+ * `VUE_A_COUTE_MS` par deux — 180 000 ≥ 88 000, essais VERTS. Le dénominateur restait mobile, et
+ * ajouter un seuil pour le garder aurait rendu ce seuil mobile à son tour. **La récursion
+ * s'arrête en épinglant, pas en empilant.**
+ *
+ * Ce qu'on épingle est la seule chose dont le défaut d'origine dépendait : LA BORNE. La faire
+ * baisser rougit, quel que soit le chemin — et remonter le chiffre mesuré ne l'autorise pas.
+ * Le coût mesuré redevient ce qu'il aurait toujours dû être : une AFFIRMATION DATÉE, dont le
+ * rôle est de dire s'il reste de la marge, pas de servir de cadran à tourner.
+ *
+ * La chaîne complète, et elle se referme sur elle-même : le parc grandit → la mesure se périme →
+ * l'essai de péremption rougit → on retape la commande → si le coût a dépassé la moitié de la
+ * borne, il faut relever la borne → **ce qui rougit cet essai-ci**, et force à le dire.
+ */
+const BORNE_DE_LA_VUE_EN_PRODUCTION = 180_000;
+
+test('LA BORNE DE PRODUCTION EST CELLE QU’ON A POSÉE — la baisser rougit, par quelque chemin que ce soit', () => {
+  assert.equal(
+    borneDuGeste(GESTE_DE_LA_VUE),
+    BORNE_DE_LA_VUE_EN_PRODUCTION,
+    'la borne de production a bougé. Si c’est voulu, dis-le ici ET remesure le coût du geste.'
+  );
+  assert.ok(
+    BORNE_DE_LA_VUE_EN_PRODUCTION >= 2 * VUE_A_COUTE_MS,
+    `la borne (${BORNE_DE_LA_VUE_EN_PRODUCTION / 1000}s) ne garde plus 2× le coût mesuré ` +
+      `(${VUE_A_COUTE_MS / 1000}s) : le parc a grandi, il faut RELEVER LA BORNE, pas rétrécir la mesure.`
+  );
+});
+
 test('LA MESURE DE RÉFÉRENCE N’EST PAS PÉRIMÉE — sinon la borne d’aujourd’hui est celle d’hier', () => {
   // ⚠️ LE VRAI RISQUE N'EST PAS QU'ON TRUQUE CE CHIFFRE, C'EST QU'ON OUBLIE DE LE REFAIRE. Le
   // parc grandit tout seul : 71 epics le matin du 2026-08-24, 85 quatre heures plus tard. Sans
   // date, la mesure se périme en silence et la borne redevient les 30 s d'origine sans qu'un
   // seul essai ne rougisse. Datée, elle finit par réclamer qu'on retape la commande.
   const jours = Math.round((Date.now() - Date.parse(VUE_MESUREE_LE)) / 86_400_000);
+  // ⚠️ UNE DATE DANS LE FUTUR N'EST PAS UNE MESURE FRAÎCHE, C'EST UNE MESURE IMPOSSIBLE — et
+  // elle passait. La campagne l'a trouvée en repoussant la date d'un an : `jours` devient
+  // négatif, donc « ≤ 90 », donc vert pour les trois siècles à venir. Le geste le plus simple
+  // pour faire taire une péremption est de la dater de demain.
+  assert.ok(jours >= 0, `la mesure est datée du futur (${-jours} jours) : ce n’est pas une mesure.`);
   assert.ok(
     jours <= 90,
     `la mesure de référence a ${jours} jours. RETAPE LA COMMANDE — \`node bin/ligne-directe.js vue\` — ` +
@@ -944,9 +981,48 @@ test('`naitre` REMPLACE VRAIMENT LA NAISSANCE — sinon un banc ferait naître u
 
   assert.equal(appels, 1, 'la naissance injectée doit être celle qu’on appelle, exactement une fois');
   assert.ok(err, 'personne ne vient : le geste doit finir par refuser');
-  // 🔴 LA PREUVE QUI COMPTE — l'effet EMPÊCHÉ, pas l'appel compté. Si la vraie naissance avait
-  // eu lieu à côté, un socket serait apparu ici. Aucun compteur ne dit ça ; le disque, si.
-  assert.equal(existsSync(cheminSocket), false, 'aucun veilleur ne doit être né : rien ne doit occuper la place');
+  assert.equal(existsSync(cheminSocket), false, 'rien ne doit occuper la place qu’on visait');
+
+  // 🔴 ET C'EST ICI QUE LA PREUVE SE JOUE, PAS AU-DESSUS. La vraie naissance n'irait PAS sur le
+  // socket qu'on vise : `reveillerVeilleur` fait naître un veilleur sur LA RACINE DU POSTE, la
+  // sienne, pas celle qu'on lui passe. Un compteur à 1 et une place vide restent donc vrais si
+  // la vraie naissance a eu lieu À CÔTÉ — c'est exactement la mutation que la passe a posée, et
+  // qui a survécu. On regarde donc là où elle irait vraiment.
+  const racineDuPoste = join(bac, 'racine-guettee');
+  mkdirSync(racineDuPoste, { recursive: true });
+  const dehors = join(bac, 'dehors.mjs');
+  writeFileSync(
+    dehors,
+    `import { parler } from ${JSON.stringify(join(ICI_SRC, 'client.js'))};\n` +
+      `await parler({ geste: ${JSON.stringify(GESTE_DE_LA_VUE)} }, {\n` +
+      `  reveiller: true, naitre: () => 0,\n` +
+      `  cheminSocket: ${JSON.stringify(join(racineDuPoste, 'vise.sock'))},\n` +
+      `  bornesParGeste: { ${JSON.stringify(GESTE_DE_LA_VUE)}: 400 },\n` +
+      `  sonde: { intervalle: 100, borne: 200 },\n` +
+      `}).catch(() => {});\n`
+  );
+  await new Promise((resolve) => {
+    // ⚠️ LA RACINE DU POSTE EST DÉTOURNÉE VERS LE BAC : un veilleur né malgré nous laisserait
+    // donc sa trace ICI, sous nos yeux, au lieu d'aller occuper celle du poste réel.
+    const fils = spawn(process.execPath, [dehors], {
+      stdio: 'ignore',
+      env: { ...process.env, LIGNE_DIRECTE_RACINE: racineDuPoste },
+    });
+    const bourreau = setTimeout(() => {
+      fils.kill('SIGKILL');
+      resolve();
+    }, 15_000);
+    fils.on('exit', () => {
+      clearTimeout(bourreau);
+      resolve();
+    });
+  });
+  await dodo(400); // laisser à une naissance clandestine le temps de se voir
+  assert.deepEqual(
+    readdirSync(racineDuPoste).filter((f) => f !== 'vise.sock'),
+    [],
+    'la racine du poste doit rester VIDE : aucun veilleur n’a le droit de naître sous essais'
+  );
 });
 
 test('UN TOUR QUI A ÉCHOUÉ N’EMPOISONNE PAS LE SUIVANT — chaque tour a SES contrôleurs', async () => {
