@@ -6,7 +6,7 @@
 // distribuée comme les autres outils de poste. `T-20260820-0142`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -75,7 +75,20 @@ test('⚠️ toute garde qu un classement DÉCLARE existe dans le module — c e
 });
 
 test('la décision distribuée et celle que le CLI teste sont le MÊME texte — deux copies divergent en silence', () => {
-  for (const garde of ['terminal', 'ligne-cliente']) {
+  // ⚠️ LA LISTE EST DÉRIVÉE, PLUS ÉNUMÉRÉE — trouvé par la revue de fond du
+  // 2026-08-24 : elle disait `['terminal', 'ligne-cliente']`, et la garde `ecriture`,
+  // créée le même jour avec exactement la même paire de fichiers dupliqués, n'y a
+  // jamais été ajoutée. Mesuré : muter la copie déposée sans muter celle que le CLI
+  // exerce laissait 27/27 puis 1096/1096 au vert. Une liste énumérée ne garde que
+  // ce qu'on a pensé à y écrire — et on n'y pense pas le jour où l'on ajoute.
+  const gardes = readdirSync(join(RACINE, 'gardes'))
+    .filter((f) => f.endsWith('-decision.js'))
+    .map((f) => f.replace('-decision.js', ''))
+    .sort();
+  assert.ok(gardes.length >= 3,
+    `${gardes.length} garde(s) trouvée(s) : le contrôle doit en voir au moins trois — `
+    + 'un contrôle qui ne trouve rien à vérifier passe pour satisfait');
+  for (const garde of gardes) {
     const poste = readFileSync(join(RACINE, 'gardes', `${garde}-decision.js`), 'utf8');
     const cli = readFileSync(join(RACINE, 'cli', 'src', 'metier', 'gardes', `${garde}.js`), 'utf8');
     assert.equal(poste, cli, `« ${garde} » : la copie déposée sur le poste a dérivé de celle que les tests exercent`);

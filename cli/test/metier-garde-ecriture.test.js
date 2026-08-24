@@ -436,4 +436,123 @@ test('🔴 la garde d’ouverture de ligne ne refuse PAS l’écriture une fois 
   assert.equal(fermee.permissionDecision, 'deny',
     'ligne fermée, l’ouverture passe avant tout — si ce contrôle rougit, c’est que la garde '
     + 'd’ouverture a cessé de tenir, pas que ce lot a changé');
+
+  // 🔴 ET SON REFUS DOIT NOMMER LA CAUSE ET LE GESTE QUI LA LÈVE. Un agent neuf qui
+  // tente d'écrire son CONTEXTE.md avant d'ouvrir sa ligne verra CE refus-là, pas
+  // celui de la garde d'écriture. S'il ne dit pas pourquoi, l'agent conclura que la
+  // garde d'écriture est cassée et cherchera un défaut qui n'existe pas — un refus
+  // qui ne dit pas pourquoi fabrique une enquête.
+  //
+  // Le message dit aujourd'hui ce qu'il faut ; ce contrôle empêche qu'il l'oublie.
+  assert.match(fermee.permissionDecisionReason, /manque/i,
+    'le refus doit dire ce qui manque, pas seulement qu’il refuse');
+  assert.match(fermee.permissionDecisionReason, /ouvrir/,
+    'et nommer le geste EXACT qui le lève — sans lui, l’agent relance la même chose ou renonce');
+  assert.ok(!/CONTEXTE\.md|garde d.écriture/i.test(fermee.permissionDecisionReason),
+    'il ne doit pas se faire passer pour le refus de la garde d’écriture : l’agent chercherait '
+    + 'le défaut au mauvais endroit');
+});
+
+// ═════════════════════ 10. 🔴 les DEUX listes d'outils du fil et de la décision
+
+// Trouvé par la revue de fond du 2026-08-24, et mesuré : le fil porte sa PROPRE
+// liste d'outils d'écriture, distincte de celle de la décision. Retirer `MultiEdit`
+// de celle du FIL laissait 1097/1097 au vert — et un `MultiEdit` aurait alors
+// contourné `juger()` entièrement, avec un `allow` automatique. Deux listes qui
+// doivent dire la même chose, et rien ne les comparait.
+//
+// ⚠️ La liste du fil est lue dans son TEXTE, jamais par un `import` : importer
+// `gardes/ecriture.js` exécuterait son `main()`, c'est-à-dire ferait tourner la
+// garde pendant qu'on prétend seulement la lire.
+
+test('🔴 le fil et la décision jugent EXACTEMENT les mêmes outils — deux listes divergent en silence', async () => {
+  const { OUTILS_ECRITURE } = await import('../src/metier/gardes/ecriture.js');
+  const src = readFileSync(join(RACINE, 'gardes', 'ecriture.js'), 'utf8');
+  const m = /const OUTILS_ECRITURE = new Set\(\[([^\]]*)\]\)/.exec(src);
+  assert.ok(m, 'la liste du fil est introuvable dans son texte — ce contrôle ne mesurerait rien');
+  const duFil = m[1].split(',').map((x) => x.trim().replace(/^'|'$/g, '')).filter(Boolean).sort();
+  assert.deepEqual(duFil, [...OUTILS_ECRITURE].sort(),
+    'le fil ne filtre pas sur les mêmes outils que la décision : celui qui manque au fil '
+    + 'contourne « juger » entièrement, avec un « allow » automatique');
+});
+
+test('🔴 MultiEdit passe VRAIMENT par la garde — le contrôle de listes ne le prouve pas seul', () => {
+  // Une liste peut être identique des deux côtés et le fil ne rien en faire.
+  // Ce contrôle-ci exerce le fil réel, pour chacun des outils qu'il déclare juger.
+  for (const outil of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) {
+    const d = JSON.parse(execFileSync(process.execPath, [join(RACINE, 'gardes', 'ecriture.js')],
+      { input: JSON.stringify({ tool_name: outil, cwd: LIEU, tool_input: { file_path: join(LIEU, 'src', 'app.ts') } }),
+        encoding: 'utf8' })).hookSpecificOutput;
+    assert.equal(d.permissionDecision, 'deny',
+      `« ${outil} » sur un livrable doit être refusé — s'il passe, cet outil contourne la garde`);
+  }
+});
+
+// ═════════════════════ 11. 🔴 le verdict TRANSMIS, et non seulement rendu
+
+test('🔴 du bruit avant le JSON ne passe pas pour un verdict — « code 0 » et « non vide » n’en font pas un', () => {
+  // Trouvé par la revue de fond, MESURÉ : la commande ne vérifiait que le code de
+  // sortie et la non-vacuité. Une ligne de bruit sur stdout AVANT le JSON — un
+  // `npm notice`, un `console.log` oublié, un avertissement de Node — et la sortie
+  // transmise ne parse plus. Claude Code n'a alors aucun verdict et retombe sur la
+  // demande de permission : un oui sous `acceptEdits`.
+  const bidon = mkdtempSync(join(tmpdir(), 'smtk-bruit-'));
+  const bruyante = join(bidon, 'bruyante.js');
+  writeFileSync(bruyante, 'process.stdout.write("npm notice: du bruit\\n");'
+    + 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"x"}}));\n');
+  const sortie = lancerCommandeAvec(bruyante);
+  const d = JSON.parse(sortie).hookSpecificOutput;   // ⚠️ il DOIT parser : c'est la moitié du contrôle
+  assert.equal(d.permissionDecision, 'deny',
+    'un « allow » noyé dans du bruit ne doit pas être transmis — il ne parse pas, donc il ne vaut rien');
+});
+
+test('le verdict d’une garde SAINE traverse intact — sinon la validation refuserait tout le monde', () => {
+  // ⚠️ Sans ce contrôle, une commande qui refuserait TOUJOURS passerait le précédent.
+  const d = JSON.parse(lancerCommandeAvec(join(RACINE, 'gardes', 'ecriture.js'),
+    { tool_name: 'Write', cwd: LIEU, tool_input: { file_path: FICHIER_PERMIS } })).hookSpecificOutput;
+  assert.equal(d.permissionDecision, 'allow');
+  assert.match(d.permissionDecisionReason, /mémoire/i, 'et la raison traverse aussi, pas seulement la décision');
+});
+
+// ═════════════════════ 12. 🔴 la PROPRIÉTÉ, pas l'état — tout hook qui peut voir un Write
+
+/**
+ * Les hooks dont on a ÉPROUVÉ la conduite face à un `Write`, et pourquoi.
+ *
+ * ⚠️ Cette table n'est pas une liste de ce qui existe : c'est une liste de ce qui a
+ * été ÉPROUVÉ. Un hook ajouté demain sans matcher — donc actif sur `Write` — fera
+ * rougir le contrôle ci-dessous tant que personne ne l'aura éprouvé. C'est voulu :
+ * le `deny` de n'importe quel hook l'emporte, donc un voisin non éprouvé peut faire
+ * tomber la fonction de ce lot EN SILENCE (la garde dirait oui, rien ne s'écrirait).
+ */
+const HOOKS_EPROUVES = [
+  { marque: 'gardes/terminal.js', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
+  { marque: 'gardes/ligne-cliente.js', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
+  { marque: 'gardes/ecriture.js', pourquoi: 'la garde de ce lot — 30 contrôles ci-dessus' },
+  { marque: 'garde-ouverture-ligne.js', pourquoi: 'éprouvée en §9 : se retire une fois la ligne ouverte' },
+];
+
+test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voisin non éprouvé fait tomber ce lot en silence', () => {
+  const st = JSON.parse(readFileSync(
+    join(RACINE, '.claude', 'templates', 'orchestrateur', '.claude', 'settings.json'), 'utf8'));
+  const hooks = st.hooks?.PreToolUse || [];
+  assert.ok(hooks.length >= 4, `${hooks.length} hook(s) : le contrôle doit en voir au moins quatre`);
+
+  // Un hook SANS matcher s'exécute sur TOUS les outils, `Write` compris. Un hook avec
+  // matcher ne nous concerne que si ce matcher couvre `Write`.
+  const voientUnWrite = hooks.filter((h) => !h.matcher || new RegExp(`(^|\\|)Write(\\||$)`).test(h.matcher));
+  assert.ok(voientUnWrite.length >= 2,
+    'le contrôle doit voir au moins la garde d’écriture et le hook sans matcher — sinon il ne mesure rien');
+
+  for (const h of voientUnWrite) {
+    const cmd = h.hooks?.[0]?.command || '';
+    const connu = HOOKS_EPROUVES.find((e) => cmd.includes(e.marque));
+    assert.ok(connu,
+      `un hook qui voit les « Write » n’est pas dans la table des hooks éprouvés :\n  ${cmd.slice(0, 120)}\n\n`
+      + `🔴 Le « deny » de N'IMPORTE QUEL hook l'emporte sur le « allow » d'un autre — mesuré le `
+      + `2026-08-24 dans les deux sens. Si celui-ci refuse un Write, un orchestrateur ne pourra `
+      + `plus tenir son CONTEXTE.md, la garde d'écriture aura beau dire oui, et RIEN ne le dira. `
+      + `Éprouve sa conduite face à un Write, puis inscris-le dans HOOKS_EPROUVES avec la raison.`);
+  }
 });

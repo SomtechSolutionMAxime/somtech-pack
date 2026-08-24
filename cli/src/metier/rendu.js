@@ -87,8 +87,22 @@ function commandeDeHook(garde, chemin) {
     `la garde « ${garde} » est presente mais elle n a rendu aucun verdict — elle a echoue. ` +
     'Refus par defaut : une garde qui casse ne vaut jamais une garde permissive, et une ' +
     'demande de permission est un oui des que la session accepte les editions.');
+  // ⚠️ TROISIÈME MODE, TROUVÉ PAR LA REVUE DE FOND ET MESURÉ : « code 0 » et « non
+  // vide » ne font pas un verdict. Une ligne de bruit sur stdout AVANT le JSON — un
+  // `npm notice`, un `console.log` oublié, un avertissement de Node — et la sortie
+  // transmise ne parse plus. Claude Code n'a alors aucun verdict, et retombe sur la
+  // demande de permission : un oui sous `acceptEdits`. La commande VALIDE donc ce
+  // qu'elle transmet, et ré-émet un verdict canonique — ce qui écarte le bruit du
+  // même geste. Sortie vide = pas de verdict = refus, sans avoir à lire `$?` (qu'un
+  // tube rendrait de toute façon celui du dernier maillon).
+  const filtre = 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{'
+    + 'var v=JSON.parse(s).hookSpecificOutput;'
+    + 'if(v&&(v.permissionDecision==="allow"||v.permissionDecision==="deny"))'
+    + 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:v.permissionDecision,'
+    + 'permissionDecisionReason:String(v.permissionDecisionReason||"")}}))}catch(e){}})';
   return `G="${chemin || `$HOME/.somtech/gardes/${garde}.js`}"; if [ -f "$G" ]; then ` +
-    `S=$(node "$G" 2>/dev/null); if [ $? -eq 0 ] && [ -n "$S" ]; then printf '%s\\n' "$S"; ` +
+    `S=$(node "$G" 2>/dev/null | node -e '${filtre}' 2>/dev/null); if [ -n "$S" ]; then printf '%s\\n' "$S"; ` +
     `else printf '%s\\n' '${cassee}'; fi; ` +
     `else cat >/dev/null 2>&1; printf '%s\\n' '${absente}'; fi`;
 }

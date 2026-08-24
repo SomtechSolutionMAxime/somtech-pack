@@ -5125,8 +5125,13 @@ export const MUTATIONS = [
     muter: (t) => {
       const c = JSON.parse(t);
       const h = c.hooks.PreToolUse.find((x) => x.hooks?.[0]?.command?.includes('gardes/ecriture.js'));
-      h.hooks[0].command = h.hooks[0].command
-        .replace(/S=\$\(node "\$G" 2>\/dev\/null\); if .*?fi; /s, 'exec node "$G"; ');
+      // ⚠️ RÉ-ANCRÉE une seconde fois (revue de fond du 2026-08-24) : la commande a
+      // gagné un filtre de VALIDATION du verdict, et le motif d'avant a cessé de
+      // mordre. On coupe donc depuis `S=$(` jusqu'au `fi; ` qui ferme la validation,
+      // et on remet la forme `exec` — celle qui ne rattrape aucune panne.
+      const avant = h.hooks[0].command;
+      h.hooks[0].command = avant.replace(/S=\$\(node "\$G".*?\bfi; /s, 'exec node "$G"; ');
+      if (h.hooks[0].command === avant) return t;   // motif mort : la garde 1 le dira
       return JSON.stringify(c, null, 2) + '\n';
     },
   },
