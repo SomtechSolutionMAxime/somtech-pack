@@ -925,6 +925,54 @@ test('LE VEILLEUR APPARAÎT EN COURS DE ROUTE : les tours précédents n’empoi
   }
 });
 
+test('UN TOUR QUI A ÉCHOUÉ N’EMPOISONNE PAS LE SUIVANT — chaque tour a SES contrôleurs', async () => {
+  // 🔴 SURVIVANTE DE MA CAMPAGNE, ET LE BANC D'AU-DESSUS NE POUVAIT PAS L'ATTRAPER : là, le
+  // fichier de socket n'existe pas, donc `surveille` n'est appelée QU'UNE FOIS, au tour qui
+  // trouve le veilleur. Les tours d'avant ne franchissent jamais le `existsSync`.
+  //
+  // ⚠️ ICI LE FICHIER EXISTE DÈS LE DÉPART — un veilleur tué net a laissé sa place. Chaque tour
+  // appelle donc vraiment `surveille`, se prend un `ECONNREFUSED`, et recommence. Mutation
+  // mesurée : faire échouer d'office tout tour suivant le premier laissait la suite VERTE.
+  // C'est le scénario réel d'un poste qui redémarre, pas un cas construit.
+  const cheminSocket = join(bac, 'tours.sock');
+  const gardien = join(bac, 'gardien-tours.mjs');
+  writeFileSync(
+    gardien,
+    `import { createServer } from 'node:net';\n` +
+      `const s = createServer(() => {});\n` +
+      `s.listen(${JSON.stringify(cheminSocket)}, () => process.stdout.write('pret\\n'));\n`
+  );
+  const fils = spawn(process.execPath, [gardien], { stdio: ['ignore', 'pipe', 'ignore'] });
+  await new Promise((resolve) => fils.stdout.once('data', resolve));
+  fils.kill('SIGKILL');
+  await new Promise((r) => fils.once('exit', r));
+  assert.ok(existsSync(cheminSocket), 'ce banc n’a de sens que si la place est OCCUPÉE mais MORTE');
+
+  let servi = null;
+  const naissance = setTimeout(async () => {
+    const v = new Veilleur({ cheminSocket, identite: { equipe: 'T' } });
+    v.vueDuParc = async () => ({ resume: 'le parc' });
+    await v.ecouterLocal();
+    servi = v;
+  }, 900);
+  try {
+    const rendu = await parler(
+      { geste: GESTE_DE_LA_VUE },
+      {
+        reveiller: true,
+        naitre: () => 0,
+        cheminSocket,
+        bornesParGeste: { [GESTE_DE_LA_VUE]: 5_000 },
+        sonde: { intervalle: 100, borne: 400 },
+      }
+    );
+    assert.equal(rendu?.resume, 'le parc', 'le tour qui trouve le veilleur doit RENDRE malgré les tours échoués d’avant');
+  } finally {
+    clearTimeout(naissance);
+    if (servi) await servi.arreter().catch(() => {});
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // 4. « IL N'A PAS RÉPONDU » ≠ « IL A RÉPONDU QU'IL NE PEUT PAS »
 // ═══════════════════════════════════════════════════════════════════════════════════════
