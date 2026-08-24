@@ -339,11 +339,37 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
     }
   })();
 
+  // 🔴 LA SEULE GARDE QUE PERSONNE NE PEUT DÉSARMER EN ÉDITANT UN BANC — elle vit DANS LE
+  // PRODUIT, et elle parle à l'humain qui tape la commande.
+  //
+  // Mesuré en passe de fond : trois éditions coordonnées — la borne de production, son épingle
+  // dans le banc, et le coût mesuré cité à côté — ramènent la borne à 68 s, **sous le coût réel
+  // du geste**, avec 30 essais sur 30 VERTS. Chacune se lit comme de l'entretien. Le lot avait
+  // écrit « la baisser rougit, par quelque chemin que ce soit » : c'était faux.
+  //
+  // ⚠️ ET AUCUN BANC NE PEUT FERMER ÇA. Une suite compare le code à des constantes qu'elle porte
+  // elle-même ; qui édite les deux ensemble la désarme en silence, et un seuil de plus se
+  // désarme d'un cran plus haut. **Alors on sort de la suite.** Le geste qui approche sa propre
+  // borne le DIT, à l'écran, à celui qui l'a tapé — et ce signal-là ne dépend d'aucun essai :
+  // il se déclenche sur le poste, sur le vrai parc, le jour où la marge fond pour de bon.
+  const marge = (ms) => {
+    if (ms <= borne / 2) return;
+    process.stderr.write(
+      `⚠️  « ${geste} » a mis ${Math.round(ms / 100) / 10}s, soit plus de la moitié de sa borne ` +
+        `(${borne / 1000}s). La marge fond : quand elle passera, ce geste sera REFUSÉ alors qu'il ` +
+        `travaillait. Relève la borne dans ligne-directe/src/client.js (BORNES_PAR_GESTE), ` +
+        `ou fais coûter moins cher à ce geste.\n`
+    );
+  };
+
   const issue = await Promise.race([
     reponse.then((r) => ({ r }), (err) => ({ err })),
     sentinelle.then((refus) => (refus ? { err: refus } : new Promise(() => {}))),
   ]);
-  if ('r' in issue) return issue.r;
+  if ('r' in issue) {
+    marge(Date.now() - t0);
+    return issue.r;
+  }
 
   // ⚠️ ON NE REQUALIFIE QUE NOTRE PROPRE BORNE. Une connexion refusée, un socket disparu, une
   // réponse illisible : ce sont des faits distincts, déjà nommés par qui les a vus. Les

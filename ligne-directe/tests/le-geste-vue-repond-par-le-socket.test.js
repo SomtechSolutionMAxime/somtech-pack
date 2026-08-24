@@ -208,21 +208,34 @@ const VUE_MESUREE_LE = '2026-08-24';
  * l'essai de péremption rougit → on retape la commande → si le coût a dépassé la moitié de la
  * borne, il faut relever la borne → **ce qui rougit cet essai-ci**, et force à le dire.
  *
- * ═══ CE QUI RESTE OUVERT, DIT PLUTÔT QUE TU — mesuré, et délibérément non fermé.
+ * ═══ CE QUE CETTE ÉPINGLE NE FAIT PAS — et le lot a d'abord affirmé le contraire.
  *
- * Diviser `VUE_A_COUTE_MS` par deux laisse encore la suite VERTE. C'est vrai, c'est mesuré, et
- * ça reste : la borne étant épinglée, ce chiffre ne protège plus rien par lui-même — il ne sert
- * qu'à faire rougir le jour où le coût réel dépassera la moitié de la borne. Le baisser rend
- * donc ce signal-là plus tardif, sans jamais permettre d'abaisser la borne.
+ * 🔴 IL A ÉTÉ ÉCRIT ICI « la baisser rougit, par quelque chemin que ce soit ». **C'était faux**,
+ * et une passe de fond l'a mesuré : trois éditions coordonnées — la borne de production, son
+ * épingle ci-dessous, et le coût mesuré cité juste au-dessus — ramènent la borne à **68 s**,
+ * c'est-à-dire **sous le coût réel du geste** et à peine au-dessus des 67 s qui l'ont fait pendre
+ * chez le dirigeant. **30 essais sur 30 verts.** Le défaut d'origine, reproduit à l'identique,
+ * sans un rouge. Chacune des trois éditions se lit comme de l'entretien.
  *
- * ⚠️ ON NE LE FERME PAS, ET C'EST LE POINT D'ARRÊT LUI-MÊME. Y poser un plancher rouvrirait
- * exactement la question d'un cran plus haut — qui garde ce plancher ? — et c'est l'empilement
- * dont on vient de sortir. **Un banc ne peut pas se garder lui-même ; ce qu'il peut, c'est
- * n'avoir qu'UN seul point où l'on triche, et le nommer.** Le voici.
+ * ⚠️ ET AUCUN SEUIL DE PLUS NE FERMERA ÇA. L'épingle est AUTO-RÉFÉRENTIELLE : elle compare le
+ * code à une constante que ce fichier porte lui-même. Qui édite les deux ensemble la désarme en
+ * silence, et un quatrième seuil se désarmerait d'un cran plus haut. Ce qui reste vrai de la
+ * phrase d'avant, c'est seulement ceci : **un banc ne peut pas se garder lui-même.**
+ *
+ * ═══ ALORS LA GARDE EST SORTIE DE LA SUITE.
+ *
+ * Elle vit maintenant DANS LE PRODUIT (`src/client.js`, la fonction `marge`) : un geste qui
+ * dépasse la moitié de sa borne le DIT à l'écran, à celui qui vient de le taper. Ce signal-là ne
+ * dépend d'aucun essai, d'aucune constante de test, et d'aucune bonne volonté — il se déclenche
+ * sur le poste, sur le vrai parc, le jour où la marge fond pour de bon. **C'est le seul endroit
+ * où le fait mesuré est le fait réel.**
+ *
+ * Ce qui suit garde donc ce qu'un banc PEUT garder : que la valeur n'a pas bougé par accident.
+ * Pas contre quelqu'un qui la change exprès des deux côtés — ce n'est pas à sa portée.
  */
 const BORNE_DE_LA_VUE_EN_PRODUCTION = 180_000;
 
-test('LA BORNE DE PRODUCTION EST CELLE QU’ON A POSÉE — la baisser rougit, par quelque chemin que ce soit', () => {
+test('LA BORNE DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la changer exprès des deux côtés reste possible', () => {
   assert.equal(
     borneDuGeste(GESTE_DE_LA_VUE),
     BORNE_DE_LA_VUE_EN_PRODUCTION,
@@ -250,15 +263,6 @@ test('LA MESURE DE RÉFÉRENCE N’EST PAS PÉRIMÉE — sinon la borne d’aujo
     jours <= 90,
     `la mesure de référence a ${jours} jours. RETAPE LA COMMANDE — \`node bin/ligne-directe.js vue\` — ` +
       'chronomètre-la, et reporte ici ce qu’elle a coûté avec la date du jour.'
-  );
-});
-
-test('LA BORNE DE PRODUCTION GARDE 2× CE QUE LA COMMANDE A COÛTÉ — mesuré en la tapant', () => {
-  // La borne de PRODUCTION, celle que `bin/` emprunte — pas celle d'un banc.
-  const borne = borneDuGeste(GESTE_DE_LA_VUE);
-  assert.ok(
-    borne >= 2 * VUE_A_COUTE_MS,
-    `la borne de production (${borne / 1000}s) doit garder 2× le coût mesuré (${VUE_A_COUTE_MS / 1000}s)`
   );
 });
 
@@ -561,7 +565,7 @@ async function tempsDeSortie(nom, cheminSocket, geste, reglages) {
 }
 
 /** Le veilleur du cas limite : il rend VITE le geste demandé, et LENTEMENT son ping. */
-async function veilleurAuPingLent(nom, { gesteMs = 120, pingMs = 1_500 } = {}) {
+async function veilleurAuPingLent(nom, { gesteMs = 120, pingMs = 1_500, pingMuet = false } = {}) {
   const cheminSocket = join(bac, `${nom}.sock`);
   const vivantes = new Set();
   const srv = createServer((flux) => {
@@ -575,6 +579,15 @@ async function veilleurAuPingLent(nom, { gesteMs = 120, pingMs = 1_500 } = {}) {
       while (c !== -1) {
         const geste = JSON.parse(tampon.slice(0, c))?.geste;
         tampon = tampon.slice(c + 1);
+        // ⚠️ UN PING QUI RÉPOND TARD N'EST PAS UN PING QUI NE RÉPOND JAMAIS — relevé en passe de
+        // fond, et la distinction porte : avec un ping seulement LENT, échanger le signal de la
+        // sonde contre celui de la requête reste sans effet visible, parce que la réponse finit
+        // par arriver dans les deux cas. Le banc portait un nom qui promettait plus que ce qu'il
+        // attrapait ; sa couverture réelle venait d'ailleurs, par accident.
+        if (geste === 'ping' && pingMuet) {
+          c = tampon.indexOf('\n');
+          continue;
+        }
         setTimeout(
           () => flux.write(`${JSON.stringify({ ok: true, resume: 'le parc' })}\n`),
           geste === 'ping' ? pingMs : gesteMs
@@ -603,7 +616,9 @@ test('UN PING COUPÉ PAR NOUS-MÊMES NE DIT RIEN DU VEILLEUR — sinon on REFUSE
   // ⚠️ ET LE BANC VOISIN NE POUVAIT PAS LE VOIR : il chronomètre la MORT du processus, en
   // avalant l'issue avec un `.catch()`. Refus ou réponse, il meurt aussi vite — la durée était
   // juste, le verdict invisible. C'est l'ISSUE qu'il faut regarder ici, pas la durée.
-  const lent = await veilleurAuPingLent('ping-lent');
+  // ⚠️ LE PING NE RÉPOND JAMAIS — pas « tard ». C'est ce qui force la sonde à se couper elle-même
+  // sur l'abandon, donc le chemin exact que ce banc prétend éprouver.
+  const lent = await veilleurAuPingLent('ping-lent', { pingMuet: true });
   try {
     // ⚠️ PLUSIEURS ESSAIS : ce chemin est une course entre la réponse et la sentinelle. Un seul
     // essai vert ne dirait pas si on a raison ou si on a eu de la chance.
@@ -1082,6 +1097,44 @@ test('UN TOUR QUI A ÉCHOUÉ N’EMPOISONNE PAS LE SUIVANT — chaque tour a SES
   } finally {
     clearTimeout(naissance);
     if (servi) await servi.arreter().catch(() => {});
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 septies. LA GARDE QUI VIT DANS LE PRODUIT — celle qu'aucune édition de banc ne désarme
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('UN GESTE QUI MANGE SA MARGE LE DIT À CELUI QUI L’A TAPÉ — et se tait quand elle est large', async () => {
+  // 🔴 CE BANC NE GARDE PAS LA BORNE — il garde le SIGNAL qui, lui, garde la borne sur le poste.
+  // Le fait mesuré ne peut pas vivre dans une suite : elle ne connaît pas le vrai parc. Il vit
+  // donc là où il est vrai, et il parle à l'humain au moment où il tape.
+  const lent = await veilleurAuPingLent('marge', { gesteMs: 300, pingMs: 50 });
+  const dit = [];
+  const vraiStderr = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (t) => {
+    dit.push(String(t));
+    return true;
+  };
+  try {
+    // borne LARGE devant le coût : rien à dire, et un avertissement de trop serait du bruit
+    await parler(
+      { geste: GESTE_DE_LA_VUE },
+      { reveiller: false, cheminSocket: lent.cheminSocket, bornesParGeste: { [GESTE_DE_LA_VUE]: 10_000 }, sonde: { intervalle: 5_000, borne: 400 } }
+    );
+    assert.equal(dit.length, 0, `marge large : rien ne doit être dit — dit « ${dit.join('')} »`);
+
+    // borne SERRÉE devant le même coût : le geste réussit, ET il prévient
+    const rendu = await parler(
+      { geste: GESTE_DE_LA_VUE },
+      { reveiller: false, cheminSocket: lent.cheminSocket, bornesParGeste: { [GESTE_DE_LA_VUE]: 500 }, sonde: { intervalle: 5_000, borne: 400 } }
+    );
+    assert.equal(rendu?.resume, 'le parc', 'l’avertissement ne remplace pas la réponse : le geste RÉUSSIT');
+    assert.equal(dit.length, 1, 'un geste qui dépasse la moitié de sa borne doit le dire, une fois');
+    assert.match(dit[0], new RegExp(GESTE_DE_LA_VUE), 'et nommer LE GESTE dont la marge fond');
+    assert.match(dit[0], /marge/i, 'en disant de quoi il s’agit');
+  } finally {
+    process.stderr.write = vraiStderr;
+    await lent.fermer();
   }
 });
 
