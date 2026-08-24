@@ -777,8 +777,13 @@ test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue —
     nom === 'projects'
       ? { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'in_progress' }] }
       : nom === 'epics'
-        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1' }] }
-        : { tickets: [] };
+        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1', title: 'un epic', status: 'in_execution' }] }
+        : nom === 'applications'
+          ? { applications: [{ id: 'a1', name: 'Somtech Pack' }] }
+          : // ⚠️ UN TICKET, ET IL MANQUAIT : sans lui l’étage story de cette garde ne
+            // s’exécutait sur RIEN. Une garde qui descend dans une liste vide passe pour
+            // avoir couvert l’étage — c’est la couverture apparente, pas la couverture.
+            { tickets: [{ id: 't1', ticket_id: 'T-1', epic_id: 'e1', title: 'une story', status: 'new' }] };
 
   const lire = lecteurDeChantier({ appeler });
   const renduDuLecteur = await lire('P-20260822-0001');
@@ -799,6 +804,46 @@ test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue —
   // signal que le lecteur produit doit se retrouver sur le chantier de la vue.
   const attendus = Object.keys(renduDuLecteur).filter((k) => k !== 'epics' && k !== 'code');
   const perdus = attendus.filter((k) => !(k in chantier));
+
+  // 🔴 ELLE DESCEND MAINTENANT SOUS LE PREMIER ÉTAGE, ET C'EST UN TROU MESURÉ QUI SE FERME
+  // (2026-08-24, E-20260824-0005). Le `k !== 'epics'` ci-dessus excluait TOUT L’ARBRE : le
+  // contenu des epics et des stories n’était comparé par personne. Conséquence chiffrée —
+  // `statut`, pourtant DÉCLARÉ à `CHAMPS_DE_STRUCTURE.epic`, était produit par le lecteur et
+  // JETÉ par la vue aux deux étages du dessous ; le retirer du lecteur faisait **0 rouge sur
+  // 972 essais**. Un périmètre déclaré (« la garde de la FAMILLE ») se lisait comme un
+  // périmètre couvert.
+  //
+  // ⚠️ ET LA COMPARAISON EST LA MÊME À CHAQUE ÉTAGE — dérivée, pas recopiée : trois blocs
+  // écrits à la main auraient rouvert « une porte sur deux » dans la garde elle-même.
+  const etages = [
+    { nom: 'chantier', lu: renduDuLecteur, vu: chantier, aPart: ['epics', 'code'] },
+    { nom: 'epic', lu: renduDuLecteur.epics[0], vu: vue.orchestrateurs[0].epics[0], aPart: ['stories', 'code'] },
+    {
+      nom: 'story',
+      lu: renduDuLecteur.epics[0].stories[0],
+      vu: vue.orchestrateurs[0].epics[0].stories[0],
+      aPart: ['code'],
+    },
+  ];
+  for (const e of etages) {
+    assert.ok(e.lu && e.vu, `l’étage « ${e.nom} » doit EXISTER des deux côtés, sinon cette garde ne mesure rien`);
+    const manquants = Object.keys(e.lu)
+      .filter((k) => !e.aPart.includes(k))
+      .filter((k) => !(k in e.vu));
+    assert.deepEqual(
+      manquants,
+      [],
+      `l’étage « ${e.nom} » PERD ce que le lecteur produit : ${manquants.join(', ')} — un champ ` +
+        'mesuré puis jeté est indiscernable d’un champ jamais mesuré'
+    );
+  }
+
+  // ⚠️ LA NATURE DU STATUT DESCEND AUSSI, ET ELLE NE VIENT PAS DU LECTEUR — c'est la vue qui
+  // la pose. Un statut nu à côté d’une présence mesurée se lit comme un CONSTAT (EF-VUE-005).
+  // Elle ne vivait QUE sur le chantier : le seul étage où quelqu'un y avait pensé.
+  for (const [ou, objet] of [['chantier', chantier], ['epic', etages[1].vu], ['story', etages[2].vu]]) {
+    assert.equal(objet.natureDuStatut, 'affirmé', `le statut de l’étage « ${ou} » porte sa NATURE, jamais nu`);
+  }
 
   // 🔴 CE QUE CETTE GARDE NE COUVRE PAS, ET IL FAUT LE LIRE ICI — sinon son nom ment.
   //

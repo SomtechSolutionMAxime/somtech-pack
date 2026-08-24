@@ -396,8 +396,20 @@ test('le dénominateur de la garde est ÉPINGLÉ — on ne peut pas cacher un si
   // ⚠️ UNE LISTE ÉCRITE EN DUR, ET C'EST VOULU. C'est le seul endroit de ce fichier qui nomme
   // des champs : il FAUT qu'élargir `CHAMPS_DE_STRUCTURE` COÛTE un rouge, sinon la soustraction
   // qui protège les signaux devient une porte de sortie silencieuse.
-  assert.deepEqual(CHAMPS_DE_STRUCTURE.chantier, ['code', 'titre', 'statut', 'epics']);
+  // 🔴 CETTE ÉPINGLE A COÛTÉ SON ROUGE, ET C EST EXACTEMENT SON OFFICE (2026-08-24,
+  // E-20260824-0005). Deux ajouts, tous deux STRUCTURELS et aucun signal déguisé :
+  //   • `application` sur le chantier — le dirigeant veut grouper par app, et l'app se LIT
+  //     au ServiceDesk, jamais ne se devine du nom ni du dépôt (D-20260824-0003, point 1) ;
+  //   • l'étage `story`, qui n'était pas déclaré du tout — c'est pourquoi rien n'exigeait
+  //     que le statut d’une story traverse.
+  //
+  // ⚠️ ET LA SOUSTRACTION QUE CETTE ÉPINGLE PROTÈGE A ÉTÉ REFERMÉE PAR AILLEURS : figurer
+  // ici n’exempte plus de traverser. `recopierLaStructure` DÉRIVE la recopie de ce même
+  // manifeste, et la garde de famille descend désormais aux trois étages. Un champ déclaré
+  // structurel n’est donc plus un champ soustrait à toute exigence.
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.chantier, ['code', 'titre', 'statut', 'application', 'epics']);
   assert.deepEqual(CHAMPS_DE_STRUCTURE.epic, ['code', 'titre', 'statut', 'stories']);
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.story, ['code', 'titre', 'statut']);
 });
 
 test('structure et signaux sont DISJOINTS — un champ ne peut pas être les deux', () => {
