@@ -757,6 +757,51 @@ test('un chantier dont les EPICS N’ONT PAS PU ÊTRE LUS apparaît sous « n »
   assert.match(detail, /rien à signaler/, 'et il dit ce que ce n’est PAS');
 });
 
+test('un EPIC dont les STORIES n’ont pas pu être lues apparaît sous « n » AUSSI — le même repli, un étage plus bas', async (t) => {
+  // 🔴 CE BANC EST NÉ D'UN BLOQUANT DE PASSE DE FOND, ET LE DÉFAUT ÉTAIT LE MIEN. J'avais posé
+  // `incertain` sur l'ORCHESTRATEUR (`epics: null`) et laissé l'EPIC sans rien, alors qu'il
+  // porte le MÊME repli un étage plus bas (`stories: null`). Même donnée, même repli, même
+  // conséquence — disparaître sous `n` — et un seul étage corrigé.
+  //
+  // ⚠️ UN CORRECTIF DE REPLI SE POSE À TOUS LES ÉTAGES OÙ LE REPLI EXISTE, pas à celui où on
+  // l'a vu. Ici ce n'était pas le symétrique À CÔTÉ, c'était le symétrique EN DESSOUS.
+  //
+  // ⚠️ LE CAS EST CELUI QUI DISPARAISSAIT : un epic FERMÉ (donc `nonPris === false`) dont
+  // l'appel aux tickets a jeté. Sur un epic ouvert, le nœud serait déjà visible par son
+  // `○ NON PRIS` — le banc passerait sans rien prouver.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const d = join(tmp, 'depot');
+
+  const service = {
+    appeler: async (nom, args) => {
+      if (nom === 'projects') return { projects: [{ id: 'u1', project_id: 'P-20260824-0031', title: 'Un chantier', status: 'active' }] };
+      if (nom === 'applications') return { applications: [] };
+      if (nom === 'epics') return { epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'Un epic fermé aux stories illisibles', status: 'completed' }] };
+      // 🔴 L'APPEL AUX TICKETS JETTE — c'est ce que fait le vrai lecteur quand le ServiceDesk
+      // refuse, et il rend alors `stories: null`, jamais `[]`.
+      throw new Error('le ServiceDesk n’a pas répondu sur les tickets');
+    },
+  };
+  const vue = await uneVue({ tmp, agents: [{ pane: 'w1:p1', lieu: poserLieu(d, 'p-20260824-0031'), nom: 'kamouraska' }], service });
+
+  const epicLu = vue.orchestrateurs[0].epics[0];
+  assert.equal(epicLu.stories, null, 'le montage produit bien des stories NON LUES, pas une liste vide');
+  assert.equal(epicLu.statut, 'completed', 'et l’epic est FERMÉ — sans quoi il serait visible par son NON PRIS');
+
+  const { lignes, textes } = texteDeLArbre(vue, { ...etatInitial(), nonPrisSeuls: true });
+  const ligne = textes.find((l) => l.includes('aux stories illisibles'));
+  assert.ok(ligne, 'l’epic APPARAÎT sous le filtre — il ne disparaît plus');
+  // 🔴 DISTINCT DU NON-PRIS, JAMAIS FONDU : le marquer `○ NON PRIS` affirmerait qu'il attend
+  // quelqu'un, alors qu'on ne sait pas ce que ses stories portent.
+  assert.match(ligne, /NON LUES/, 'et il dit que ses stories n’ont pas été lues');
+  assert.ok(!/NON PRIS/.test(ligne), 'sans jamais affirmer qu’il est non pris');
+
+  const detail = detailDe(lignes.find((l) => l.kind === 'epic')).join('\n');
+  assert.match(detail, /n’ont PAS pu/, 'le détail dit la mesure qui a manqué');
+  assert.match(detail, /rien à signaler/, 'et il dit ce que ce n’est PAS');
+});
+
 test('après un « r » sur une vue RÉTRÉCIE, le curseur reste dans la liste — et « Entrée » ne vise rien d’invisible', async (t) => {
   // 🔴 CE BANC EST NÉ D'UNE PASSE DE REVUE, ET IL PORTE SUR LE SEUL GESTE ACTIF DU PRODUIT.
   // `relire` ne touchait ni le curseur ni les plis, et le rendu n'écrêtait pas non plus : quand
@@ -1006,7 +1051,16 @@ test('ÉCHAP NE FERME PLUS L’ÉCRAN — il annule ; seuls « q » et Ctrl-C qu
     plie: false,
     noeud: { enfants: [], nonPris: null, ref: {} },
   }));
-  const depart = { ...etatInitial(), nonPrisSeuls: true, recherche: 'abc', curseur: 0 };
+  // 🔴 LE CURSEUR PART NON NUL SUR LES **DEUX** BRANCHES, ET C'EST UN REJET DE REVUE QUI L'A
+  // EXIGÉ. J'avais NOMMÉ le défaut deux commentaires plus bas — « ce banc partait d'un curseur
+  // à 0 : la remise à zéro y était INVISIBLE » — et je n'en avais corrigé QUE LA MOITIÉ : la
+  // branche « rien à annuler » reçut son cas à curseur 12, la branche « l'arbre change de
+  // forme » resta à 0. MESURÉ par la passe : retirer `curseur: 0` de la branche réinitialisante
+  // laissait les 32 essais VERTS.
+  //
+  // ⚠️ NOMMER UNE FORME NE PROTÈGE PAS CONTRE ELLE — cinquième fois dans ce lot, et cette fois
+  // sur la phrase même qui la nommait.
+  const depart = { ...etatInitial(), nonPrisSeuls: true, recherche: 'abc', curseur: 17 };
 
   const echap = appliquerTouche(depart, 'echap', lignes);
   assert.equal(echap.effet, null, 'Échap ne produit AUCUN effet — surtout pas « quitter »');

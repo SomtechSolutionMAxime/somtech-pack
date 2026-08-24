@@ -119,6 +119,30 @@ function nomDeLOrchestrateur(o) {
   return o?.agent?.nom ?? MOT_NON_ETABLI;
 }
 
+/**
+ * CE QUI EST INCERTAIN — la descendance de ce nœud n'a PAS pu être lue.
+ *
+ * 🔴 UN CORRECTIF DE REPLI SE POSE À TOUS LES ÉTAGES OÙ LE REPLI EXISTE, pas à celui où on
+ * l'a vu. Ce champ a d'abord été posé sur l'ORCHESTRATEUR seul (`epics: null`) ; l'EPIC
+ * portait le MÊME repli un étage plus bas (`stories: null`) et n’a rien reçu. Même donnée
+ * (`null`), même repli (`false`), même conséquence — disparaître sous `n`, le filtre qui
+ * sert précisément à décider où agir. Un correctif ouvre son symétrique sur la même
+ * frontière : ici, pas le symétrique À CÔTÉ mais le symétrique EN DESSOUS.
+ *
+ * ⚠️ ET IL EST DÉRIVÉ D’UNE SEULE FABRIQUE, pour que les deux étages ne puissent plus
+ * diverger. Deux expressions écrites à la main auraient rouvert « une porte sur deux » —
+ * dans le geste même qui la ferme.
+ */
+function incertitudeDe(enfantsLus, quoi) {
+  if (enfantsLus) return { incertain: false, pourquoiIncertain: null };
+  return {
+    incertain: true,
+    pourquoiIncertain:
+      `ses ${quoi} n’ont PAS pu être lus : je ne sais pas s’il attend quelqu’un — ` +
+      'ce n’est pas « rien à signaler »',
+  };
+}
+
 /** La marque de présence — un caractère, et il ne dit QUE ce qui a été mesuré. */
 export function marqueDePresence(presence) {
   if (presence?.vivant === true) return '●';
@@ -221,11 +245,7 @@ function noeudDOrchestrateur(o, i) {
     //
     // ⚠️ C'est le repli que RA-VUE-003 interdit, appliqué à « epics non mesurés » — et sur le
     // filtre qui sert précisément à décider où agir : le taire y est plus grave qu'ailleurs.
-    incertain: epics === null,
-    pourquoiIncertain:
-      epics === null
-        ? 'ses epics n’ont PAS pu être lus : je ne sais pas s’il attend quelqu’un — ce n’est pas « rien à signaler »'
-        : null,
+    ...incertitudeDe(epics !== null, 'epics'),
     enfants,
     app,
     ref: { orchestrateur: o },
@@ -240,13 +260,25 @@ function noeudDEpic(e, o, j) {
     kind: 'epic',
     titre: e?.titre ?? '(epic sans titre)',
     marque: nonPris.nonPris === true ? '○' : nonPris.nonPris === false ? '▸' : '?',
+    // ⚠️ TROIS FAITS, UN SEUL SUFFIXE, ET UNE PRÉCÉDENCE QUI SE DIT. `NON PRIS` passe devant
+    // parce que c'est un APPEL À AGIR mesuré ; « stories NON LUES » vient ensuite parce que
+    // c'est un TROU DE MESURE. Les deux se lisent en entier dans le détail — aucun n'est perdu,
+    // seul l'ordre à l'écran est tranché.
     suffixe:
       nonPris.nonPris === true
         ? 'NON PRIS'
-        : nonPris.nonPris === null
-          ? MOT_NON_ETABLI
-          : rendreAttribution(e?.agent),
+        : stories === null
+          ? 'stories NON LUES'
+          : nonPris.nonPris === null
+            ? MOT_NON_ETABLI
+            : rendreAttribution(e?.agent),
     nonPris,
+    // 🔴 LE MÊME REPLI, UN ÉTAGE PLUS BAS — et il était resté ouvert quand j'ai fermé celui de
+    // l'orchestrateur. Un epic FERMÉ dont l'appel aux tickets a jeté rend `stories: null`, donc
+    // `enfants: []`, donc `porteDuNonPris` rendait `false` : il DISPARAISSAIT sous `n` avec tout
+    // le travail non pris que ses stories pouvaient porter. Trouvé par une passe de fond, sur le
+    // geste même où je fermais l'autre étage.
+    ...incertitudeDe(stories !== null, 'stories'),
     enfants: (stories ?? []).map((s, k) => noeudDeStory(s, e, k)),
     storiesLues: stories !== null,
     ref: { epic: e, orchestrateur: o },
@@ -441,7 +473,10 @@ export function detailDe(ligne) {
     l.push('');
     l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));
     l.push(...envelopper(n.nonPris.pourquoi, 28));
-    if (!n.storiesLues) l.push('', '⚠️ ses stories n’ont PAS pu être lues —', 'ce n’est pas « il n’en a aucune ».');
+    if (n.incertain) {
+      l.push('');
+      l.push(...envelopper(`⚠️ ${n.pourquoiIncertain}`, 28));
+    }
     return l;
   }
 
