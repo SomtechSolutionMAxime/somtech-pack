@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { juger, FICHIER_PERMIS } from '../src/metier/gardes/ecriture.js';
+import { juger, FICHIER_PERMIS, ROLES_GARDES } from '../src/metier/gardes/ecriture.js';
 
 const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -713,13 +713,39 @@ test('🔴 FICHIER_PERMIS vaut « CONTEXTE.md », et TOUS les lieux qui codent c
   assert.ok(PRESERVE.includes(FICHIER_PERMIS),
     `« ${FICHIER_PERMIS} » n'est plus préservé par la mise à jour : la convergence l'écraserait`);
 
-  // ④ ce que le rendu REFUSE de produire — le rendu ne doit jamais écrire par-dessus
-  const rendu = readFileSync(join(RACINE, 'cli', 'src', 'metier', 'rendu.js'), 'utf8');
-  assert.ok(rendu.includes(`'${FICHIER_PERMIS}'`) || rendu.includes(`"${FICHIER_PERMIS}"`),
-    `« rendu.js » ne nomme plus « ${FICHIER_PERMIS} » dans ses chemins interdits : le rendu pourrait l'écraser`);
+  // ④ ce que le rendu REFUSE de produire — le rendu ne doit jamais écrire par-dessus.
+  //
+  // ⚠️ ANCRÉ À UN COMPORTEMENT, PAS À UNE SOUS-CHAÎNE. La première version cherchait
+  // « CONTEXTE.md » dans le TEXTE de `rendu.js` — trouvé par la sixième passe de fond
+  // et MESURÉ : retirer la vraie protection tout en laissant un commentaire qui cite
+  // le nom laissait ce contrôle VERT, pendant que le rendu pouvait de nouveau écraser
+  // le fichier. Un grep prouve qu'un mot est là ; il ne prouve jamais qu'une fonction
+  // est servie. On FAIT donc rendre un artefact qui vise le fichier permis, et on
+  // exige que le rendu le refuse.
+  const { rendre } = await import('../src/metier/rendu.js');
+  const essai = rendre({
+    role: 'essai', version_abc: '1',
+    items: [{ id: 'GF-R-001', nature: 'garde-fou', couche: 'refus-de-permission', refus: ['Task'], enonce: 'x', enonce_socle: 'court' }],
+    refus: ['Task'],
+    chapitres: [{ nom: 'CONTEXTE', abrege: 'a', version_pack: '1.0.0', contenu: 'x' }],
+  });
+  assert.ok((essai.erreurs || []).some((e) => e.includes(FICHIER_PERMIS)),
+    `le rendu accepte de produire un artefact qui vise « ${FICHIER_PERMIS} » : il pourrait l'écraser, `
+    + `et l'agent perdrait à chaque rendu ce que personne n'apprend à sa place`);
 
   // ⑤ les gabarits que la pose dépose dans le lieu d'un agent
   const { GABARITS } = await import(join(RACINE, 'ligne-directe', 'src', 'lieu-agent.js'));
   assert.ok(GABARITS.includes(FICHIER_PERMIS),
     `« ${FICHIER_PERMIS} » n'est plus posé à la naissance : la garde autoriserait un fichier absent`);
+});
+
+test('🔴 ROLES_GARDES ne contient QUE « orchestrateur » — élargir la garde changerait qui elle juge', () => {
+  // Trou signalé par la sixième passe de fond, MESURÉ : élargir `ROLES_GARDES` dans
+  // les deux copies laissait toute la suite verte — aucun contrôle n'ancrait son
+  // CONTENU. Il est aujourd'hui inexploitable (aucun gabarit ne fait tourner cette
+  // garde pour un autre rôle), et c'est exactement pourquoi il fallait l'ancrer :
+  // le jour où un autre rôle câblerait cette garde, l'élargissement passerait seul,
+  // et cette garde-ci rendrait des verdicts pour un métier qu'elle ne connaît pas.
+  assert.deepEqual([...ROLES_GARDES].sort(), ['orchestrateur'],
+    'la garde d’écriture ne juge que l’orchestrateur — tout autre rôle doit être une décision, pas une dérive');
 });
