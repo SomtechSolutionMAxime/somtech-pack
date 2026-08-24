@@ -380,6 +380,66 @@ test('UNE ATTENTE ABANDONNÉE EST VRAIMENT COUPÉE — sinon la commande refuse 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 ter. LA SONDE NE DOIT RIEN COÛTER AUX GESTES QUI RÉPONDENT VITE
+//
+// 🔴 RÉGRESSION MESURÉE SUR LE POSTE RÉEL, ET AUCUN BANC NE L'AVAIT VUE. `ligne-directe etat`
+// est passé de **62 ms à 3 062 ms** — très exactement l'intervalle de la sonde. La réponse
+// arrivait bien en 60 ms ; c'est le MINUTEUR de la sentinelle, encore en vol, qui retenait le
+// processus jusqu'à son échéance.
+//
+// ⚠️ ET LES ONZE BANCS D'AU-DESSUS SONT RESTÉS VERTS. Ils mesurent quand la PROMESSE se
+// résout, dans un processus qui vit déjà par ailleurs — jamais quand la COMMANDE rend la main
+// au shell. C'est un objet mesuré pour un autre : le seul instrument qui ne peut pas se
+// tromper ici est un vrai processus, chronométré de son lancement à sa mort.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/** Lance la commande dans un VRAI processus et rend le temps qu'il a mis à MOURIR. */
+async function tempsDeSortie(nom, cheminSocket, geste, reglages) {
+  const script = join(bac, `${nom}.mjs`);
+  writeFileSync(
+    script,
+    `import { parler } from ${JSON.stringify(join(ICI_SRC, 'client.js'))};\n` +
+      `await parler({ geste: ${JSON.stringify(geste)} }, {\n` +
+      `  reveiller: false, cheminSocket: ${JSON.stringify(cheminSocket)},\n` +
+      `  ...${JSON.stringify(reglages)},\n` +
+      `}).catch(() => {});\n`
+  );
+  const t0 = Date.now();
+  const sortie = await new Promise((resolve) => {
+    const fils = spawn(process.execPath, [script], { stdio: 'ignore' });
+    const bourreau = setTimeout(() => {
+      fils.kill('SIGKILL');
+      resolve('TUÉ');
+    }, 20_000);
+    fils.on('exit', (c) => {
+      clearTimeout(bourreau);
+      resolve(c);
+    });
+  });
+  return { ms: Date.now() - t0, sortie };
+}
+
+test('UN GESTE QUI RÉPOND VITE REND LA MAIN VITE — la sonde ne retient pas le processus', async () => {
+  const prompt = await veilleurQuiEcoute('prompt', { vue: async () => ({ resume: 'le parc' }) });
+  try {
+    // La sonde est réglée BEAUCOUP plus longue que la réponse : si son minuteur retient le
+    // processus, on le verra tout de suite — c'est exactement ce qui est arrivé sur le poste.
+    const { ms, sortie } = await tempsDeSortie('vite', prompt.cheminSocket, GESTE_DE_LA_VUE, {
+      borneParDefaut: 30_000,
+      bornesParGeste: { [GESTE_DE_LA_VUE]: 180_000 },
+      sonde: { intervalle: 8_000, borne: 2_000 },
+    });
+    assert.notEqual(sortie, 'TUÉ', 'la commande doit mourir d’elle-même');
+    assert.ok(
+      ms < 4_000,
+      `la commande doit rendre la main dès la réponse (mesuré ${ms} ms) — un minuteur de sonde en vol la retient`
+    );
+  } finally {
+    await prompt.fermer();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // 4. « IL N'A PAS RÉPONDU » ≠ « IL A RÉPONDU QU'IL NE PEUT PAS »
 // ═══════════════════════════════════════════════════════════════════════════════════════
 

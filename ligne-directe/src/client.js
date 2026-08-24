@@ -212,6 +212,24 @@ export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
 }
 
 /**
+ * UN SOMMEIL QUI NE RETIENT PAS LE PROCESSUS — `unref`, et ce n'est pas un détail.
+ *
+ * 🔴 MESURÉ SUR LE POSTE, ET AUCUN BANC NE L'AVAIT VU : `ligne-directe etat` est passé de
+ * **62 ms à 3 062 ms** — très exactement l'intervalle de la sonde. La réponse arrivait bien en
+ * 60 ms ; c'est le minuteur de la sentinelle, encore en vol, qui tenait le processus debout
+ * jusqu'à son échéance. Une surveillance ne doit rien coûter à ce qu'elle surveille.
+ *
+ * ⚠️ `dodo` RESTE INTACT POUR SES AUTRES USAGES. `passerLaMain` et le réveil paresseux
+ * ATTENDENT vraiment : leur sommeil doit tenir le processus, sinon la commande meurt avant que
+ * le veilleur soit né. Deux sommeils, deux besoins opposés — les fondre casserait l'un des deux.
+ */
+const sommeilQuiNeRetientRien = (ms) =>
+  new Promise((r) => {
+    const t = setTimeout(r, ms);
+    t.unref?.();
+  });
+
+/**
  * LE VEILLEUR PARLE-T-IL ENCORE ? — mesuré, sur une connexion À PART.
  *
  * ⚠️ ON JUGE SUR « UNE RÉPONSE ARRIVE », PAS SUR `ok`. Le veilleur le dit lui-même à son
@@ -281,7 +299,7 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
   // borne haute son pouvoir de faire attendre pour rien.
   const sentinelle = (async () => {
     for (;;) {
-      await dodo(sonde.intervalle);
+      await sommeilQuiNeRetientRien(sonde.intervalle);
       if (fini) return null;
       if (Date.now() - t0 >= borne) return null;
       if (await veilleurParleEncore(cheminSocket, sonde.borne)) continue;
