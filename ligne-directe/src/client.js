@@ -301,7 +301,10 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
     for (;;) {
       await sommeilQuiNeRetientRien(sonde.intervalle);
       if (fini) return null;
-      if (Date.now() - t0 >= borne) return null;
+      // ⚠️ AUCUNE GARDE DE BORNE ICI, ET C'EST MESURÉ. Il y en avait une ; la campagne l'a
+      // trouvée SURVIVANTE, et pour la même raison que sa voisine : quand la borne du geste
+      // tombe, `demander` rejette et `fini` bascule — la ligne au-dessus suffit. La fenêtre
+      // qu'elle prétendait couvrir dure le temps d'un `.finally`, et rien ne l'observe.
       if (await veilleurParleEncore(cheminSocket, sonde.borne)) continue;
       // ⚠️ PAS DE SECONDE GARDE `fini` ICI, ET C'EST DÉLIBÉRÉ. Il y en avait une : la campagne
       // de mutation l'a trouvée SURVIVANTE, et en cherchant son banc on a compris pourquoi —

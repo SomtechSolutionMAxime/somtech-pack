@@ -31,7 +31,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,7 +39,7 @@ import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
 
 import { Veilleur } from '../src/veilleur.js';
-import { parler, borneDuGeste, BORNE_PAR_DEFAUT, BORNES_PAR_GESTE } from '../src/client.js';
+import { parler, demander, borneDuGeste, BORNE_PAR_DEFAUT, BORNES_PAR_GESTE } from '../src/client.js';
 import { GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
 
 const ICI_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
@@ -573,6 +573,83 @@ test('UN SOCKET ABSENT GARDE SON CODE — sans quoi le réveil paresseux ne le r
       return true;
     }
   );
+});
+
+test('UNE CONNEXION REFUSÉE GARDE SON CODE — sans quoi le veilleur ne renaîtrait plus jamais seul', async () => {
+  // 🔴 SURVIVANTE, ET LE BANC VOISIN NE POUVAIT PAS L'ATTRAPER. « Socket absent » est écarté par
+  // `parler` AVANT toute surveillance : il ne traverse donc jamais le code qui requalifie. Le
+  // cas qui le traverse est l'autre — le fichier de socket est LÀ, et personne n'écoute
+  // derrière : un veilleur mort qui a laissé sa place. `connect` rend alors `ECONNREFUSED`.
+  //
+  // ⚠️ ET CE N'EST PAS UN DÉTAIL DE VOCABULAIRE. `parler` décide de faire naître le veilleur
+  // sur ce code-là. Une erreur reconstruite le perd : la commande refuserait, là où elle
+  // réparait toute seule depuis toujours.
+  //
+  // ⚠️ L'ORPHELIN SE FABRIQUE PAR SIGKILL, ET LA PREMIÈRE VERSION DE CE BANC S'EST TROMPÉE :
+  // `srv.close()` RETIRE le fichier, on retombait donc sur « socket absent » — le cas voisin,
+  // pas celui-ci. C'est l'assertion de mise en place ci-dessous qui l'a dit, pas une relecture.
+  // Un veilleur tué net, lui, laisse sa place derrière lui : c'est la situation réelle.
+  const orphelin = join(bac, 'orphelin.sock');
+  const gardien = join(bac, 'gardien.mjs');
+  writeFileSync(
+    gardien,
+    `import { createServer } from 'node:net';\n` +
+      `const s = createServer(() => {});\n` +
+      `s.listen(${JSON.stringify(orphelin)}, () => process.stdout.write('pret\\n'));\n`
+  );
+  const fils = spawn(process.execPath, [gardien], { stdio: ['ignore', 'pipe', 'ignore'] });
+  await new Promise((resolve) => fils.stdout.once('data', resolve));
+  fils.kill('SIGKILL');
+  await new Promise((r) => fils.once('exit', r));
+  assert.ok(existsSync(orphelin), 'ce banc n’a de sens que si le fichier de socket SURVIT');
+  await assert.rejects(
+    () => parler({ geste: GESTE_DE_LA_VUE }, { reveiller: false, cheminSocket: orphelin }),
+    (err) => {
+      assert.equal(err.code, 'ECONNREFUSED', 'le code doit traverser la surveillance intact');
+      return true;
+    }
+  );
+});
+
+test('UN VEILLEUR QUI PARLE SANS ÊTRE PRÊT EST VIVANT — la présence, jamais la disponibilité', async () => {
+  // 🔴 SURVIVANTE, et c'est un défaut que ce dépôt a DÉJÀ payé une fois, écrit noir sur blanc à
+  // côté du geste `ping` : *« ce ping répondait ok:false tant que l'identité n'était pas
+  // chargée — un second veilleur y lisait "place libre", retirait le socket et s'installait :
+  // DEUX écoutes, chaque message remis en double. »*
+  //
+  // Faire juger la sonde sur `pret` rejouerait la même confusion par une autre porte : un
+  // veilleur en train de lire son trousseau serait déclaré MORT, et la commande refuserait un
+  // geste qu'il allait servir. Tous les bancs ci-dessus utilisent un veilleur DÉJÀ identifié —
+  // aucun ne pouvait le voir.
+  const cheminSocket = join(bac, 'pas-pret.sock');
+  const v = new Veilleur({ cheminSocket }); // AUCUNE identité : il répond, il n'est pas prêt
+  await v.ecouterLocal();
+  try {
+    const ping = await demander({ geste: 'ping' }, cheminSocket, { delai: 2_000 });
+    assert.equal(ping.pret, false, 'ce banc n’a de sens que si le veilleur se déclare NON prêt');
+
+    v.vueDuParc = () => new Promise(() => {});
+    await assert.rejects(
+      () =>
+        parler(
+          { geste: GESTE_DE_LA_VUE },
+          {
+            reveiller: false,
+            cheminSocket,
+            borneParDefaut: 500,
+            bornesParGeste: { [GESTE_DE_LA_VUE]: 500 },
+            sonde: { intervalle: 100, borne: 300 },
+          }
+        ),
+      (err) => {
+        assert.match(err.message, /EST VIVANT/i, 'il parle : il est vivant, prêt ou non');
+        assert.doesNotMatch(err.message, /ne répond plus/i, 'ne pas confondre « pas prêt » et « mort »');
+        return true;
+      }
+    );
+  } finally {
+    await v.arreter().catch(() => {});
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
