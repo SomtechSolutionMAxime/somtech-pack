@@ -31,14 +31,18 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
+import { spawn } from 'node:child_process';
 
 import { Veilleur } from '../src/veilleur.js';
 import { parler, borneDuGeste, BORNE_PAR_DEFAUT, BORNES_PAR_GESTE } from '../src/client.js';
 import { GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
+
+const ICI_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 
 let bac;
 before(() => {
@@ -256,6 +260,120 @@ test('UN VEILLEUR MUET NE FAIT PAS ATTENDRE LA BORNE HAUTE — on refuse dès qu
     ).catch(() => {});
     const ms = Date.now() - t0;
     assert.ok(ms < 5_000, `le refus doit tomber sur la SONDE (mesuré ${ms} ms), pas au bout de la borne du geste`);
+  } finally {
+    await muet.fermer();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 bis. LES DEUX CHEMINS DU REFUS — trouvés SURVIVANTS par la campagne de mutation
+//
+// 🔴 UNE GARDE JUSTE SUR UN CHEMIN NON COUVERT NE GARDE RIEN. Les bancs ci-dessus passent tous
+// par la SONDE : elle détecte le silence avant que la borne du geste ne tombe. Le refus FINAL —
+// celui qui s'écrit quand c'est la borne qui gagne — n'était exercé par personne. Mutation
+// mesurée : lui faire déclarer `vivant: true` SANS mesurer laissait les 983 essais VERTS.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('BORNE PLUS COURTE QUE LA SONDE : le refus final ÉTABLIT l’état, il ne le suppose pas', async () => {
+  // Le chemin où la sonde n'a pas eu le temps de tourner une seule fois. Il existe pour de bon :
+  // rien n'oblige un geste à avoir une borne plus longue que l'intervalle de sonde, et c'est
+  // précisément là que « le veilleur est vivant » deviendrait une affirmation gratuite.
+  const muet = await socketMuet('final');
+  try {
+    await assert.rejects(
+      () =>
+        parler(
+          { geste: GESTE_DE_LA_VUE },
+          {
+            reveiller: false,
+            cheminSocket: muet.cheminSocket,
+            borneParDefaut: 200,
+            bornesParGeste: { [GESTE_DE_LA_VUE]: 200 },
+            // ⚠️ LA SONDE NE TOURNERA JAMAIS : son intervalle dépasse la borne du geste.
+            sonde: { intervalle: 10_000, borne: 200 },
+          }
+        ),
+      (err) => {
+        assert.doesNotMatch(err.message, /est vivant/i, 'un veilleur muet ne se déclare pas vivant par défaut');
+        assert.match(err.message, /ne répond plus/i, 'le refus final doit MESURER avant de nommer');
+        return true;
+      }
+    );
+  } finally {
+    await muet.fermer();
+  }
+});
+
+test('BORNE PLUS COURTE QUE LA SONDE, VEILLEUR VIVANT : le même chemin dit l’autre vérité', async () => {
+  // La moitié symétrique. Sans elle, « ne répond plus » écrit en dur passerait aussi.
+  const pendu = await veilleurQuiEcoute('final-vivant', { vue: () => new Promise(() => {}) });
+  try {
+    await assert.rejects(
+      () =>
+        parler(
+          { geste: GESTE_DE_LA_VUE },
+          {
+            reveiller: false,
+            cheminSocket: pendu.cheminSocket,
+            borneParDefaut: 200,
+            bornesParGeste: { [GESTE_DE_LA_VUE]: 200 },
+            sonde: { intervalle: 10_000, borne: 500 },
+          }
+        ),
+      (err) => {
+        assert.match(err.message, /EST VIVANT/i, 'il répond au ping — le refus doit le dire');
+        return true;
+      }
+    );
+  } finally {
+    await pendu.fermer();
+  }
+});
+
+test('UNE ATTENTE ABANDONNÉE EST VRAIMENT COUPÉE — sinon la commande refuse puis reste debout', async () => {
+  // 🔴 SURVIVANTE DE LA CAMPAGNE, ET SON EFFET EST INVISIBLE DEPUIS L'INTÉRIEUR. Neutraliser le
+  // signal d'abandon laissait les 983 essais verts : le refus part bien, à la bonne seconde,
+  // avec le bon texte. Ce qui reste en vol, c'est la CONNEXION et son minuteur — jusqu'à la
+  // borne du geste, soit trois minutes pour la vue.
+  //
+  // ⚠️ CE N'EST DONC PAS LE MESSAGE QU'ON ÉPROUVE ICI, C'EST L'EFFET EMPÊCHÉ : le processus
+  // rend-il la main ? On le mesure de la seule façon qui ne puisse pas mentir — en LANÇANT un
+  // processus et en le chronométrant. Il n'appelle pas `process.exit` : s'il reste debout,
+  // c'est qu'un handle est encore vivant. C'est ce défaut-là qui a fait pendre ce banc même,
+  // vingt secondes par essai, avant qu'on ne coupe l'attente.
+  const muet = await socketMuet('vol');
+  const script = join(bac, 'attente-coupee.mjs');
+  writeFileSync(
+    script,
+    `import { parler } from ${JSON.stringify(join(ICI_SRC, 'client.js'))};
+` +
+      `await parler({ geste: ${JSON.stringify(GESTE_DE_LA_VUE)} }, {
+` +
+      `  reveiller: false, cheminSocket: ${JSON.stringify(muet.cheminSocket)},
+` +
+      `  borneParDefaut: 120000, bornesParGeste: { ${JSON.stringify(GESTE_DE_LA_VUE)}: 120000 },
+` +
+      `  sonde: { intervalle: 150, borne: 250 },
+` +
+      `}).catch(() => {});
+`
+  );
+  try {
+    const t0 = Date.now();
+    const code = await new Promise((resolve) => {
+      const fils = spawn(process.execPath, [script], { stdio: 'ignore' });
+      const bourreau = setTimeout(() => {
+        fils.kill('SIGKILL');
+        resolve('TUÉ');
+      }, 15_000);
+      fils.on('exit', (c) => {
+        clearTimeout(bourreau);
+        resolve(c);
+      });
+    });
+    const ms = Date.now() - t0;
+    assert.notEqual(code, 'TUÉ', `le processus est resté debout ${ms} ms : l’attente n’a pas été coupée`);
+    assert.ok(ms < 10_000, `il doit rendre la main dès le refus (mesuré ${ms} ms), pas au bout de la borne du geste`);
   } finally {
     await muet.fermer();
   }
