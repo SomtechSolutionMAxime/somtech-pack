@@ -116,6 +116,22 @@ test('🔴 elle REFUSE quand elle ne sait pas — ici un « oui » de repli ouvr
   assert.ok(refuse('Bash', join(LIEU, FICHIER_PERMIS)), 'un outil qu elle ne sait pas juger');
 });
 
+test('un outil inconnu est refusé POUR LA BONNE RAISON — sinon on cherche le défaut au mauvais endroit', () => {
+  // ⚠️ SURVIVANTE FERMÉE (campagne du 2026-08-24). Retirer la reconnaissance de l'outil
+  // laissait tous les contrôles verts : un outil inconnu visant CONTEXTE.md retombait sur
+  // le contrôle suivant et finissait refusé quand même. Le refus était juste, sa RAISON
+  // était fausse — elle parlait d'un carnet. Un exploitant qui lit « un carnet n'est pas un
+  // document » cherche du côté du fichier, alors que le défaut est que la garde a reçu un
+  // outil qu'elle ne connaît pas : c'est le signe qu'un outil d'écriture neuf est apparu et
+  // qu'elle ne le juge pas.
+  const d = juger({ outil: 'UnOutilQuiNExistePas', chemin: join(LIEU, FICHIER_PERMIS), lieu: LIEU });
+  assert.equal(d.decision, 'deny');
+  assert.match(d.raison, /outil/i, 'le refus doit nommer l outil comme la cause');
+  assert.match(d.raison, /UnOutilQuiNExistePas/, 'et le citer, pour qu on sache lequel elle ne connaît pas');
+  assert.ok(!/carnet/i.test(d.raison),
+    'la raison parle du fichier alors que la cause est l outil — le contrôle d outil a disparu');
+});
+
 test('le refus DIT ce qu il a mesuré et à qui le geste appartient', () => {
   const d = juger({ outil: 'Write', chemin: join(LIEU, 'src', 'app.ts'), lieu: LIEU });
   assert.equal(d.decision, 'deny');
