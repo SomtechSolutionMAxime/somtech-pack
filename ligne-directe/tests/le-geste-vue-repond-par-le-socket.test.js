@@ -39,7 +39,15 @@ import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
 
 import { Veilleur } from '../src/veilleur.js';
-import { parler, demander, borneDuGeste, BORNE_PAR_DEFAUT, BORNES_PAR_GESTE } from '../src/client.js';
+import {
+  parler,
+  demander,
+  borneDuGeste,
+  refusSansReponse,
+  BORNE_PAR_DEFAUT,
+  BORNES_PAR_GESTE,
+  SONDE_PAR_DEFAUT,
+} from '../src/client.js';
 import { GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
 
 const ICI_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
@@ -136,6 +144,61 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
   } finally {
     await lent.fermer();
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 1 bis. LES VALEURS QUE LA PRODUCTION EMPRUNTE — trouvées gardées par PERSONNE
+//
+// 🔴 RELEVÉ EN PASSE DE FOND, ET LE CONSTAT ÉTAIT JUSTE. `bin/ligne-directe.js` appelle
+// `parler({ geste: vue })` **sans aucune option** : il emprunte donc `BORNES_PAR_GESTE` et
+// `SONDE_PAR_DEFAUT`. Or tous les bancs de ce fichier passent LEURS PROPRES réglages, pour
+// aller vite. Mesuré par la passe : ramener la borne de production de 180 s à **68 s** laissait
+// les 20 essais VERTS — c'est-à-dire SOUS le coût mesuré du geste, le défaut d'origine rouvert.
+//
+// ⚠️ ET UN PLANCHER ROND NE GARDE PAS. Mon assertion disait `>= 67_000` : elle acceptait 68 000
+// pendant que le geste coûtait 84 à 89 s. Un plancher se calcule donc depuis la LOI mesurée et
+// le plus grand parc vu, jamais depuis un chiffre qu'on trouve rassurant.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * LE COÛT DE LA VUE, D'APRÈS LA LOI MESURÉE — recensement + 0,7 s × (2×mandats + epics).
+ *
+ * Les trois valeurs viennent du poste, le 2026-08-24 : recensement à 9,2 s (12,2 s sous charge),
+ * 10 mandats portés, 85 epics. Elles ne sont pas là pour être jolies : elles rendent le plancher
+ * RECALCULABLE le jour où le parc aura grandi.
+ */
+const PARC_MESURE = { recensementMs: 12_200, mandats: 10, epics: 85 };
+const coutDeLaVue = ({ recensementMs, mandats, epics }) => recensementMs + 700 * (2 * mandats + epics);
+
+test('LA BORNE DE PRODUCTION COUVRE LE COÛT MESURÉ — pas un plancher rond qu’on trouve rassurant', () => {
+  const cout = coutDeLaVue(PARC_MESURE);
+  assert.ok(
+    cout > 80_000 && cout < 95_000,
+    `la loi doit reproduire la mesure du poste (84-89 s), elle rend ${Math.round(cout / 1000)}s`
+  );
+  // La borne de PRODUCTION, celle que `bin/` emprunte — pas celle d'un banc.
+  const borne = borneDuGeste(GESTE_DE_LA_VUE);
+  assert.ok(
+    borne >= 2 * cout,
+    `la borne de production (${borne / 1000}s) doit garder 2× le coût mesuré (${Math.round(cout / 1000)}s)`
+  );
+});
+
+test('LA SONDE DE PRODUCTION PEUT VRAIMENT TOURNER — sinon la borne haute redevient une attente', () => {
+  // ⚠️ CE SONT SES PROPORTIONS QUI COMPTENT, ET ELLES N'ÉTAIENT ÉPROUVÉES NULLE PART. Mesuré par
+  // la passe : `{ intervalle: 60_000, borne: 200 }` laissait tout vert — une sonde qui ne
+  // tournerait que trois fois en trois minutes, c'est-à-dire aucune surveillance du tout.
+  const { intervalle, borne } = SONDE_PAR_DEFAUT;
+  assert.ok(
+    borne < intervalle,
+    `un ping (${borne}ms) plus long que l’intervalle (${intervalle}ms) empilerait les sondes`
+  );
+  const tours = Math.floor(borneDuGeste(GESTE_DE_LA_VUE) / intervalle);
+  assert.ok(tours >= 20, `la sonde doit pouvoir tourner souvent sur la borne du geste (${tours} tours seulement)`);
+  assert.ok(
+    intervalle + borne < 10_000,
+    'un veilleur mort doit être dit en secondes, pas en dizaines de secondes'
+  );
 });
 
 test('la borne des AUTRES gestes n’a pas été relevée au passage — une borne haute pour tous ne garde plus rien', async () => {
@@ -786,6 +849,14 @@ test('UN VEILLEUR QUI PARLE SANS ÊTRE PRÊT EST VIVANT — la présence, jamais
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // 4. « IL N'A PAS RÉPONDU » ≠ « IL A RÉPONDU QU'IL NE PEUT PAS »
 // ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('LE REFUS DIT COMBIEN DE TEMPS IL A ATTENDU, AU DIXIÈME — « 0s » se lirait comme un bogue', () => {
+  // 🔴 RELEVÉ EN PASSE DE FOND : les bancs n'assertaient que le VOCABULAIRE du refus, jamais le
+  // nombre qu'il rend à l'humain. Mesuré : arrondir à la seconde laissait tout vert — et une
+  // attente de 0,3 s se serait affichée « attendu 0s », un refus qui dit n'avoir rien attendu.
+  assert.match(refusSansReponse({ geste: 'vue', ms: 300, vivant: false }).message, /0\.3s/);
+  assert.match(refusSansReponse({ geste: 'vue', ms: 84_400, vivant: true }).message, /84\.4s/);
+});
 
 test('UN REFUS DU VEILLEUR REMONTE COMME RÉPONSE — jamais comme une absence de réponse', async () => {
   // Le troisième état, et il est le plus facile à confondre avec les deux autres : le veilleur

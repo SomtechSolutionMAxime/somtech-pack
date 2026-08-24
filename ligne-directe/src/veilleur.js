@@ -342,7 +342,15 @@ export class Veilleur {
         // l'état d'avant la publication qu'on vient de faire — c'est-à-dire le défaut que
         // la passe manuelle avait déjà : une photo qui périme sans le dire. La ronde sert
         // à ce que le journal porte l'historique ; la question, elle, se mesure quand on
-        // la pose. Elle coûte 408 ms sur ce poste.
+        // la pose.
+        //
+        // ⚠️ CE COMMENTAIRE A DIT « elle coûte 408 ms sur ce poste » JUSQU'AU 2026-08-24, et
+        // c'était devenu faux sans que personne ne le touche : les 408 ms datent du
+        // 2026-08-19, AVANT que la lecture du mandat au ServiceDesk n'entre dans ce chemin.
+        // Remesuré en tapant la commande — `recensement` coûte **9 à 12 secondes**, vingt-cinq
+        // fois le chiffre annoncé. Relevé en passe de fond sur le lot du geste `vue`, qui
+        // mesurait 9 217 ms au même appel : deux chiffres du même geste qui ne pouvaient pas
+        // être vrais ensemble.
         return this.recensementDuPoste();
       case 'ceder':
         // Le veilleur en place se retire pour laisser la place à une version plus récente.

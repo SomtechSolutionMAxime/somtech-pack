@@ -272,6 +272,8 @@ async function veilleurParleEncore(cheminSocket, borneSonde, signal) {
  * envoyait chercher la panne là où elle n'était pas.
  */
 export function refusSansReponse({ geste, ms, vivant }) {
+  // ⚠️ AU DIXIÈME, PAS À LA SECONDE. Une attente de 0,3 s arrondie à la seconde s'affiche « 0s »
+  // — un refus qui dit avoir attendu zéro seconde se lit comme un bogue, pas comme une mesure.
   const secondes = Math.round(ms / 100) / 10;
   if (vivant) {
     return new Error(
@@ -312,9 +314,6 @@ async function demanderSousSurveillance(requete, cheminSocket, { borne, sonde })
     fini = true;
     abandonDeLaSonde.abort();
   });
-  // ⚠️ LE REJET DE L'ATTENTE COUPÉE NE DOIT ÉCHOUER NULLE PART. Il est attendu, il est
-  // provoqué par nous, et un rejet non géré tuerait le processus qui vient d'être servi.
-  reponse.catch(() => {});
 
   // ⚠️ UNE SENTINELLE QUI NE GAGNE JAMAIS SI LE VEILLEUR PARLE. Elle ne fait que retirer à une
   // borne haute son pouvoir de faire attendre pour rien.
