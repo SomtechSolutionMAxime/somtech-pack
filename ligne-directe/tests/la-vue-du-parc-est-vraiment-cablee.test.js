@@ -566,10 +566,28 @@ test('le geste demandé est « vue » — pas « recensement », qui rendrait le
 test('le `bin` emploie la constante et la fonction — il ne réécrit ni le geste ni le choix du rendu', () => {
   // ⚠️ SORTIR LA DÉCISION NE SERT À RIEN SI LE `bin` GARDE SA PROPRE COPIE. C'est « une porte
   // sur deux » : deux chemins pour la même décision, dont un seul est gardé.
+  //
+  // 🔴 LA CHAÎNE A GAGNÉ UN MAILLON, ET LA GARDE LE SUIT AU LIEU DE SE DÉPLACER (2026-08-24,
+  // E-20260824-0005). Le rendu passe désormais par `servirLaVue`, qui choisit entre l'écran et
+  // le texte — la décision a quitté le `bin`, qu'aucun banc ne peut atteindre. Se contenter de
+  // pointer l'assertion vers le fichier neuf aurait laissé LA JOINTURE nue : un `bin` qui
+  // n'appelle plus rien, ou un `servirLaVue` qui n'écrit plus le texte, seraient chacun
+  // invisibles. On exige donc LES DEUX MAILLONS.
   const bin = readFileSync(fileURLToPath(new URL('../bin/ligne-directe.js', import.meta.url)), 'utf8');
   assert.match(bin, /geste: GESTE_DE_LA_VUE/, 'le geste vient de la constante');
-  assert.match(bin, /ecrireLaVue\(vue, args\)/, 'et le rendu de la fonction');
+  assert.match(bin, /servirLaVue\(\{ args/, 'et le `bin` DÉLÈGUE le choix du rendu, args compris');
   assert.ok(!/geste: 'vue'/.test(bin), 'aucun geste « vue » codé en dur ne subsiste');
+  // ⚠️ BORNÉ À LA BRANCHE, PAS AU FICHIER — première rédaction refusée par la mesure : `--tui`
+  // FIGURE légitimement dans le `bin`, dans son texte d'aide, et l'assertion large rendait un
+  // rejet faux sur du code juste.
+  const brancheVue = bin.slice(bin.indexOf("} else if (geste === 'vue') {"), bin.indexOf("} else if (geste === 'recensement') {"));
+  assert.ok(!/--tui/.test(brancheVue), 'aucun drapeau de rendu n’est LU dans la branche — la décision vit ailleurs');
+
+  // ⚠️ LE SECOND MAILLON : l'endroit où la décision a atterri écrit BIEN le texte, avec ses args.
+  // Sans cette ligne, `servirLaVue` pourrait cesser d'appeler le rendu — et la commande rendrait
+  // un écran vide là où le dirigeant attend son texte, sans qu'un seul banc ne rougisse.
+  const ou = readFileSync(fileURLToPath(new URL('../src/tui-boucle.js', import.meta.url)), 'utf8');
+  assert.match(ou, /ecrireLaVue\(vue, args\)/, 'et `servirLaVue` rend le texte par la fonction gardée');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -637,10 +655,16 @@ test('aucun fichier du lot ne porte d’octet NUL littéral — un fichier binai
 // naître un veilleur que la cloison refuse à juste titre. Aucune garde ne peut couvrir ces
 // lignes.
 //
-// Il n'en reste que DEUX qui décident de quelque chose :
+// Il n'en reste que DEUX, et elles ne décident RIEN :
 //
-//     const vue = await parler({ geste: GESTE_DE_LA_VUE });
-//     process.stdout.write(ecrireLaVue(vue, args));
+//     const rendu = await servirLaVue({ args, lireLaVue: () => parler({ geste: GESTE_DE_LA_VUE }) });
+//     process.exitCode = rendu.code;
+//
+// 🔴 CETTE GARDE A MORDU, ET SON REJET ÉTAIT JUSTE (2026-08-24, E-20260824-0005). Le TUI est
+// arrivé avec un `if (args.includes('--tui'))` posé ICI — c'est-à-dire une décision de rendu
+// dans le seul endroit du lot qu'aucun banc ne peut atteindre. La réponse n'a pas été
+// d'élargir la garde : la décision est SORTIE, dans `servirLaVue`, où elle se mute. La garde
+// épingle donc deux lignes NEUVES et exige toujours la même chose — que rien ne décide ici.
 //
 // Toutes deux ne font que DÉLÉGUER — le geste vient d'une constante gardée, le rendu d'une
 // fonction gardée. **Aucune décision nouvelle ne doit entrer ici** : un `if` sur un drapeau, un
@@ -662,7 +686,10 @@ test('la branche « vue » du `bin` ne fait que DÉLÉGUER — aucune décision 
 
   assert.deepEqual(
     branche,
-    ['const vue = await parler({ geste: GESTE_DE_LA_VUE });', 'process.stdout.write(ecrireLaVue(vue, args));'],
+    [
+      'const rendu = await servirLaVue({ args, lireLaVue: () => parler({ geste: GESTE_DE_LA_VUE }) });',
+      'process.exitCode = rendu.code;',
+    ],
     'la branche « vue » du bin doit rester EXACTEMENT ces deux lignes de délégation — cet ' +
       'endroit est hors d’atteinte de tout banc, donc rien qui décide ne doit y vivre'
   );
@@ -750,8 +777,13 @@ test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue —
     nom === 'projects'
       ? { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'in_progress' }] }
       : nom === 'epics'
-        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1' }] }
-        : { tickets: [] };
+        ? { epics: [{ id: 'e1', epic_id: 'E-1', project_id: 'u1', title: 'un epic', status: 'in_execution' }] }
+        : nom === 'applications'
+          ? { applications: [{ id: 'a1', name: 'Somtech Pack' }] }
+          : // ⚠️ UN TICKET, ET IL MANQUAIT : sans lui l’étage story de cette garde ne
+            // s’exécutait sur RIEN. Une garde qui descend dans une liste vide passe pour
+            // avoir couvert l’étage — c’est la couverture apparente, pas la couverture.
+            { tickets: [{ id: 't1', ticket_id: 'T-1', epic_id: 'e1', title: 'une story', status: 'new' }] };
 
   const lire = lecteurDeChantier({ appeler });
   const renduDuLecteur = await lire('P-20260822-0001');
@@ -772,6 +804,46 @@ test('TOUT signal que le lecteur de chantier rend traverse jusqu’à la vue —
   // signal que le lecteur produit doit se retrouver sur le chantier de la vue.
   const attendus = Object.keys(renduDuLecteur).filter((k) => k !== 'epics' && k !== 'code');
   const perdus = attendus.filter((k) => !(k in chantier));
+
+  // 🔴 ELLE DESCEND MAINTENANT SOUS LE PREMIER ÉTAGE, ET C'EST UN TROU MESURÉ QUI SE FERME
+  // (2026-08-24, E-20260824-0005). Le `k !== 'epics'` ci-dessus excluait TOUT L’ARBRE : le
+  // contenu des epics et des stories n’était comparé par personne. Conséquence chiffrée —
+  // `statut`, pourtant DÉCLARÉ à `CHAMPS_DE_STRUCTURE.epic`, était produit par le lecteur et
+  // JETÉ par la vue aux deux étages du dessous ; le retirer du lecteur faisait **0 rouge sur
+  // 972 essais**. Un périmètre déclaré (« la garde de la FAMILLE ») se lisait comme un
+  // périmètre couvert.
+  //
+  // ⚠️ ET LA COMPARAISON EST LA MÊME À CHAQUE ÉTAGE — dérivée, pas recopiée : trois blocs
+  // écrits à la main auraient rouvert « une porte sur deux » dans la garde elle-même.
+  const etages = [
+    { nom: 'chantier', lu: renduDuLecteur, vu: chantier, aPart: ['epics', 'code'] },
+    { nom: 'epic', lu: renduDuLecteur.epics[0], vu: vue.orchestrateurs[0].epics[0], aPart: ['stories', 'code'] },
+    {
+      nom: 'story',
+      lu: renduDuLecteur.epics[0].stories[0],
+      vu: vue.orchestrateurs[0].epics[0].stories[0],
+      aPart: ['code'],
+    },
+  ];
+  for (const e of etages) {
+    assert.ok(e.lu && e.vu, `l’étage « ${e.nom} » doit EXISTER des deux côtés, sinon cette garde ne mesure rien`);
+    const manquants = Object.keys(e.lu)
+      .filter((k) => !e.aPart.includes(k))
+      .filter((k) => !(k in e.vu));
+    assert.deepEqual(
+      manquants,
+      [],
+      `l’étage « ${e.nom} » PERD ce que le lecteur produit : ${manquants.join(', ')} — un champ ` +
+        'mesuré puis jeté est indiscernable d’un champ jamais mesuré'
+    );
+  }
+
+  // ⚠️ LA NATURE DU STATUT DESCEND AUSSI, ET ELLE NE VIENT PAS DU LECTEUR — c'est la vue qui
+  // la pose. Un statut nu à côté d’une présence mesurée se lit comme un CONSTAT (EF-VUE-005).
+  // Elle ne vivait QUE sur le chantier : le seul étage où quelqu'un y avait pensé.
+  for (const [ou, objet] of [['chantier', chantier], ['epic', etages[1].vu], ['story', etages[2].vu]]) {
+    assert.equal(objet.natureDuStatut, 'affirmé', `le statut de l’étage « ${ou} » porte sa NATURE, jamais nu`);
+  }
 
   // 🔴 CE QUE CETTE GARDE NE COUVRE PAS, ET IL FAUT LE LIRE ICI — sinon son nom ment.
   //

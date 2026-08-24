@@ -396,8 +396,20 @@ test('le dénominateur de la garde est ÉPINGLÉ — on ne peut pas cacher un si
   // ⚠️ UNE LISTE ÉCRITE EN DUR, ET C'EST VOULU. C'est le seul endroit de ce fichier qui nomme
   // des champs : il FAUT qu'élargir `CHAMPS_DE_STRUCTURE` COÛTE un rouge, sinon la soustraction
   // qui protège les signaux devient une porte de sortie silencieuse.
-  assert.deepEqual(CHAMPS_DE_STRUCTURE.chantier, ['code', 'titre', 'statut', 'epics']);
+  // 🔴 CETTE ÉPINGLE A COÛTÉ SON ROUGE, ET C EST EXACTEMENT SON OFFICE (2026-08-24,
+  // E-20260824-0005). Deux ajouts, tous deux STRUCTURELS et aucun signal déguisé :
+  //   • `application` sur le chantier — le dirigeant veut grouper par app, et l'app se LIT
+  //     au ServiceDesk, jamais ne se devine du nom ni du dépôt (D-20260824-0003, point 1) ;
+  //   • l'étage `story`, qui n'était pas déclaré du tout — c'est pourquoi rien n'exigeait
+  //     que le statut d’une story traverse.
+  //
+  // ⚠️ ET LA SOUSTRACTION QUE CETTE ÉPINGLE PROTÈGE A ÉTÉ REFERMÉE PAR AILLEURS : figurer
+  // ici n’exempte plus de traverser. `recopierLaStructure` DÉRIVE la recopie de ce même
+  // manifeste, et la garde de famille descend désormais aux trois étages. Un champ déclaré
+  // structurel n’est donc plus un champ soustrait à toute exigence.
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.chantier, ['code', 'titre', 'statut', 'application', 'epics']);
   assert.deepEqual(CHAMPS_DE_STRUCTURE.epic, ['code', 'titre', 'statut', 'stories']);
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.story, ['code', 'titre', 'statut']);
 });
 
 test('structure et signaux sont DISJOINTS — un champ ne peut pas être les deux', () => {
@@ -430,6 +442,47 @@ test('AUCUNE entrée du manifeste n’est un FANTÔME — chaque signal déclar�
   }
   for (const s of signauxDe('epic')) {
     assert.ok(s.cle in chantier.epics[0], `« ${s.cle} » est déclaré à l’étage epic, mais le lecteur ne le produit PLUS`);
+  }
+});
+
+test('AUCUN CHAMP DE STRUCTURE n’est un FANTÔME non plus — le jumeau qui manquait, aux TROIS étages', async () => {
+  // 🔴 CE BANC EXISTE PARCE QUE LA MUTATION A TROUVÉ CE QUE MA PREMIÈRE FERMETURE N’ATTRAPAIT
+  // PAS (2026-08-24, E-20260824-0005). Deux familles de survivante, pas une :
+  //
+  //   ① LA VUE JETTE ce que le lecteur produit → fermée par la garde de famille, qui descend
+  //     désormais aux trois étages (`la-vue-du-parc-est-vraiment-cablee`).
+  //   ② LE LECTEUR CESSE DE PRODUIRE ce que le manifeste déclare → **restait libre**. Mesuré :
+  //     retirer `statut` de l'epic dans le lecteur faisait 0 rouge sur 972 essais, AVANT comme
+  //     APRÈS la fermeture de ①. La garde de famille compare les clés du lecteur à celles de
+  //     la vue : un champ que le lecteur ne produit plus n'est perdu par personne.
+  //
+  // ⚠️ C'EST LE JUMEAU EXACT du banc au-dessus, qui existait pour les SIGNAUX et pas pour la
+  // STRUCTURE. Le motif « une porte sur deux », dans le fichier qui le dénonce.
+  const lire = lecteurDeChantier({
+    appeler: async (nom) => {
+      if (nom === 'projects')
+        return { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'in_progress', application_id: 'a1' }] };
+      if (nom === 'epics') return { epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'e', status: 's' }] };
+      if (nom === 'applications') return { applications: [{ id: 'a1', name: 'Somtech Pack' }] };
+      return { tickets: [{ id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 's', status: 'new' }] };
+    },
+  });
+  const chantier = await lire('P-20260822-0001');
+
+  const etages = [
+    { nom: 'chantier', objet: chantier },
+    { nom: 'epic', objet: chantier.epics[0] },
+    { nom: 'story', objet: chantier.epics[0].stories[0] },
+  ];
+  for (const e of etages) {
+    assert.ok(e.objet, `l’étage « ${e.nom} » doit EXISTER, sinon cette garde ne mesure rien`);
+    for (const champ of CHAMPS_DE_STRUCTURE[e.nom]) {
+      assert.ok(
+        champ in e.objet,
+        `« ${champ} » est déclaré structurel à l’étage « ${e.nom} », mais le lecteur ne le produit PLUS — ` +
+          'un champ déclaré que rien ne produit se rend éternellement `null`, et personne n’apprend que le fait a CESSÉ d’être mesuré'
+      );
+    }
   }
 });
 

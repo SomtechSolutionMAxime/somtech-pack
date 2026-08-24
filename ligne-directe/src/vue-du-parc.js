@@ -463,9 +463,49 @@ export const SIGNAUX_DU_LECTEUR = [
  * ajouter un champ au lecteur sans le déclarer ici ou là, et l'un des deux le fait traverser.
  */
 export const CHAMPS_DE_STRUCTURE = {
-  chantier: ['code', 'titre', 'statut', 'epics'],
+  chantier: ['code', 'titre', 'statut', 'application', 'epics'],
   epic: ['code', 'titre', 'statut', 'stories'],
+  story: ['code', 'titre', 'statut'],
 };
+
+/**
+ * CE QUI N'EST PAS RECOPIÉ TEL QUEL — le code (posé à part) et l'étage du dessous (imbriqué).
+ *
+ * 🔴 TOUT LE RESTE TRAVERSE, PAR DÉRIVATION — ET C EST UN TROU MESURÉ QUI SE FERME ICI.
+ * `statut` était DÉCLARÉ à ce manifeste depuis le premier jour, et pourtant JETÉ au passage
+ * lecteur → vue, aux DEUX étages du dessous. Mesuré le 2026-08-24 sur cet arbre : le retirer
+ * du lecteur pour un epic faisait **0 rouge sur 972 essais**.
+ *
+ * ⚠️ LA CAUSE N'ÉTAIT PAS UN OUBLI, C'ÉTAIT LA FORME DE LA GARDE. La garde de complétude
+ * SOUSTRAIT les champs de ce manifeste avant de mesurer — elle dit « déclare-le », jamais
+ * « fais-le traverser » ; et la garde de traversée exclut explicitement `epics`, donc ne
+ * descend sous aucun étage. Un périmètre déclaré s'y lisait comme un périmètre couvert.
+ *
+ * ⚠️ ON NE L'ÉLARGIT PAS D'UN CAS, ON LA REND STRUCTURELLE. La recopie est DÉRIVÉE : ajouter
+ * un champ de structure le fait traverser tout seul, et rien ne peut plus rester en arrière.
+ */
+const NON_RECOPIES = { chantier: ['code', 'epics'], epic: ['code', 'stories'], story: ['code'] };
+
+/** Les champs de structure d'un étage qui doivent traverser jusqu'à la vue. */
+export function champsQuiTraversent(niveau) {
+  return (CHAMPS_DE_STRUCTURE[niveau] ?? []).filter((c) => !(NON_RECOPIES[niveau] ?? []).includes(c));
+}
+
+/**
+ * ① LECTEUR → VUE, POUR LA STRUCTURE — le jumeau de `recopierLesSignaux`, et il manquait.
+ *
+ * 🔴 IL POSE AUSSI LA NATURE DU STATUT, AUX TROIS ÉTAGES. Un statut est AFFIRMÉ par le
+ * registre, jamais mesuré à l’instant (EF-VUE-005) : rendu nu à côté d’une présence mesurée,
+ * il se lit comme un CONSTAT — le défaut qui a coûté la journée du 21 août. La vue le posait
+ * à la main sur le chantier seul ; le poser ici le rend impossible à oublier ailleurs.
+ */
+export function recopierLaStructure(source, niveau) {
+  const champs = champsQuiTraversent(niveau);
+  const sortie = {};
+  for (const c of champs) sortie[c] = source?.[c] ?? null;
+  if (champs.includes('statut')) sortie.natureDuStatut = 'affirmé';
+  return sortie;
+}
 
 /** Les signaux d'un étage donné. */
 export function signauxDe(niveau) {
@@ -629,6 +669,37 @@ export function phrasesDesSignauxDeLigne(compte) {
 export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 200 } = {}) {
   if (typeof appeler !== 'function') return null;
 
+  // ═══ LES APPLICATIONS — LUES UNE FOIS POUR TOUT LE LECTEUR, jamais par chantier.
+  //
+  // 🔴 L'APP NE SE DEVINE NI DU NOM NI DU DÉPÔT (D-20260824-0003, point 1). Le dirigeant veut
+  // grouper par app ; ranger « au plus plausible » l'enverrait chercher son travail sous une
+  // app qui ne le porte pas — pire qu'un groupe d'absence, parce qu'il s'y fierait.
+  //
+  // ⚠️ LE COÛT EST MESURÉ, ET C EST POURQUOI LA PROMESSE EST MÉMOÏSÉE : UN appel de plus au
+  // TOTAL, pas un par chantier. Sur les quinze mandats de ce poste, la différence serait
+  // quinze allers-retours ajoutés aux ~70 s déjà mesurées.
+  let applications = null;
+  const lireLesApplications = () => {
+    if (!applications) {
+      applications = (async () => {
+        try {
+          const corps = await appeler('applications', { action: 'list' });
+          const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
+          return { mesure: 'lue', parId: new Map(liste.map((a) => [a?.id, a?.name ?? null])) };
+        } catch (err) {
+          // ⚠️ « je n'ai pas pu lire les applications » N'EST PAS « ce chantier n'en a pas ».
+          // Les deux se rendraient pareil sous « APP NON ÉTABLIE » si la cause ne voyageait
+          // pas — et elles appellent deux gestes opposés : réparer un accès, ou poser une app.
+          return {
+            mesure: 'refusée',
+            raison: 'la liste des applications n’a pas pu être lue (' + (err?.message || err) + ')',
+          };
+        }
+      })();
+    }
+    return applications;
+  };
+
   return async (code) => {
     const famille = familleDuMandat(code);
     if (!famille) throw new Error(`« ${code} » n’est pas un code de chantier`);
@@ -745,6 +816,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       code,
       titre: chantier?.title ?? chantier?.name ?? null,
       statut: chantier?.status ?? null,
+      application: await applicationDe(chantier, lireLesApplications),
       epics: avecStories,
       // L'écart ne disparaît pas : s'il n'est pas nul, le filtre du service n'a pas filtré.
       epicsEcartes,
@@ -754,6 +826,41 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       epicsPlafonnes,
     };
   };
+}
+
+/**
+ * L'APPLICATION D'UN CHANTIER — LUE, ou dite NON ÉTABLIE avec sa cause.
+ *
+ * ⚠️ TROIS ABSENCES DIFFÉRENTES, ET ELLES APPELLENT TROIS GESTES OPPOSÉS : le chantier ne
+ * porte aucune app (c'est au ServiceDesk qu'on la pose) · la liste n'a pas pu être lue (c'est
+ * l'accès qu'on répare) · l'app citée n'est pas dans la liste (c'est un renvoi mort). Les
+ * fondre en un « non établie » muet rendrait chacune indiagnosticable.
+ */
+async function applicationDe(chantier, lireLesApplications) {
+  const id = chantier?.application_id ?? null;
+  if (!id) {
+    return {
+      mesure: 'non établie',
+      code: null,
+      nom: null,
+      pourquoi: 'ce chantier ne porte aucune application au ServiceDesk',
+    };
+  }
+  const apps = await lireLesApplications();
+  if (apps.mesure !== 'lue') {
+    // Le code reste même sans nom : il est le seul fil par lequel on peut aller vérifier.
+    return { mesure: 'non établie', code: id, nom: null, pourquoi: apps.raison };
+  }
+  const nom = apps.parId.get(id);
+  if (!nom) {
+    return {
+      mesure: 'non établie',
+      code: id,
+      nom: null,
+      pourquoi: 'l’application « ' + id + ' » ne figure pas dans les ' + apps.parId.size + ' applications lues',
+    };
+  }
+  return { mesure: 'lue', code: id, nom };
 }
 
 /**
@@ -1072,14 +1179,17 @@ export async function laVueDuParc({
       chantier: {
         mesure: 'lue',
         code,
-        titre: chantier?.titre ?? null,
-        statut: chantier?.statut ?? null,
-        // 🔴 LE STATUT D'UN CHANTIER EST AFFIRMÉ, PAS MESURÉ — EF-VUE-005, et c'est le défaut
-        // qui a coûté la journée du 21 août : croire qu'un travail avance parce qu'il est ÉCRIT
-        // qu'il avance. Quelqu'un a posé `in_progress` à un moment ; rien ici ne dit quand, ni
-        // que ce soit encore vrai. La vue le rend donc avec sa NATURE collée dessus, jamais nu
-        // à côté d'une activité mesurée à l'instant — où il se lirait comme un constat.
-        natureDuStatut: 'affirmé',
+        // 🔴 DÉRIVÉ DU MANIFESTE, PLUS ÉCRIT À LA MAIN. Écrite à la main, cette recopie a
+        // perdu `statut` aux DEUX étages du dessous pendant que le manifeste le déclarait,
+        // et rien ne rougissait : mesuré, 0 rouge sur 972 essais. C’est la dérivation qui
+        // ferme le trou, pas la vigilance — la vigilance avait déjà été mise en garde.
+        ...recopierLaStructure(chantier, 'chantier'),
+        // 🔴 `natureDuStatut` EST POSÉ PAR LA DÉRIVATION, plus à la main ici — et c'est ce qui
+        // le fait exister AUSSI sur les epics et les stories. Un statut est AFFIRMÉ par le
+        // registre, jamais mesuré à l'instant (EF-VUE-005) : rendu nu à côté d'une présence
+        // mesurée, il se lit comme un constat — le défaut qui a coûté la journée du 21 août.
+        // Écrit à la main, il ne vivait QUE sur le chantier : le seul étage où quelqu'un y
+        // avait pensé. Voir `recopierLaStructure`.
         // 🔴 LES SIGNAUX SE RECOPIENT PAR LE MANIFESTE, PLUS À LA MAIN. Écrite à la main, cette
         // jointure a perdu `epicsEcartes` une fois, puis son jumeau `epicsPlafonnes` un cycle
         // entier plus tard — dans la même expression, à une ligne près, et nommé dans le
@@ -1098,14 +1208,14 @@ export async function laVueDuParc({
         const stories = Array.isArray(e?.stories) ? e.stories : null;
         return {
           code: e?.code ?? null,
-          titre: e?.titre ?? null,
+          ...recopierLaStructure(e, 'epic'),
           agent: quiPorte(codeEpic, parMandat, parNom),
           stories:
             stories === null
               ? null
               : stories.map((s) => ({
                   code: s?.code ?? null,
-                  titre: s?.titre ?? null,
+                  ...recopierLaStructure(s, 'story'),
                   agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
                 })),
           // Les signaux d'epic traversent par le MÊME manifeste que ceux du chantier : un seul
