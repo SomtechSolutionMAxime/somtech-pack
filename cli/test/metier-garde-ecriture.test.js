@@ -572,3 +572,54 @@ test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voi
       + `Éprouve sa conduite face à un Write, puis inscris-le dans HOOKS_EPROUVES avec la raison.`);
   }
 });
+
+// ═════════════════════ 13. 🔴 les cas FINS jugés par le FIL RÉEL
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POURQUOI CE BLOC EXISTE, ET CE QU'IL RÉPOND
+//
+// La garde vit en DEUX exemplaires, et ce n'est pas un accident : `gardes/
+// ecriture-decision.js` est déposé sur le poste (~/.somtech/gardes/), où
+// `cli/src/` n'existe pas ; `cli/src/metier/gardes/ecriture.js` est celui que le
+// CLI embarque et que les sections 1-3 importent. La distribution exige les deux.
+//
+// Leur identité est gardée par `metier-gardes-distribuees.test.js`, dont la liste
+// est DÉRIVÉE du contenu de `gardes/`. Mesuré le 2026-08-24, les deux sens :
+//   • muter UNE seule copie → le contrôle d'identité rougit ;
+//   • muter LES DEUX identiquement → les contrôles de fonction (§1-3) rougissent.
+//
+// ⚠️ MAIS la troisième passe de fond a relevé un angle mort réel : les cas FINS
+// — la traversée par « .. », le CONTEXTE.md d'un PAIR, NotebookEdit sur le
+// fichier permis — n'étaient éprouvés QUE par les sections 1-3, donc uniquement
+// sur la copie du CLI. Le fil réel, lui, ne voyait que des cas basiques. Ce bloc
+// porte les cas fins jusqu'au FIL, qui charge la copie DÉPOSÉE en premier.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('🔴 le fil réel refuse les cas FINS — pas seulement les cas évidents', () => {
+  const parLeFil = (chemin, outil = 'Write') => JSON.parse(execFileSync(process.execPath,
+    [join(RACINE, 'gardes', 'ecriture.js')],
+    { input: JSON.stringify({ tool_name: outil, cwd: LIEU, tool_input: { file_path: chemin } }),
+      encoding: 'utf8' })).hookSpecificOutput.permissionDecision;
+
+  // ① le fichier permis passe — sinon les refus ci-dessous ne prouveraient rien
+  assert.equal(parLeFil(FICHIER_PERMIS), 'allow', 'le fichier permis doit passer PAR LE FIL');
+
+  // ② le CONTEXTE.md d'un PAIR — même nom, autre lieu
+  assert.equal(parLeFil('/Users/x/GitRepo.nosync/un-depot/.orchestrateur/mitis/CONTEXTE.md'), 'deny',
+    'le CONTEXTE.md d’un pair ne lui appartient pas');
+
+  // ③ la traversée par « .. » — sortir du lieu en ayant l'air d'y rester
+  assert.equal(parLeFil(`../mitis/${FICHIER_PERMIS}`), 'deny', 'la traversée doit être refusée PAR LE FIL');
+
+  // ④ un sous-répertoire du lieu — le nom est bon, le répertoire non
+  assert.equal(parLeFil(`metier/${FICHIER_PERMIS}`), 'deny', 'le fichier permis est à la RACINE du lieu, pas ailleurs');
+  assert.equal(parLeFil(`metier/chapitres/${FICHIER_PERMIS}`), 'deny');
+
+  // ⑤ un nom qui ressemble
+  for (const c of ['CONTEXTE.md.bak', 'contexte.md', 'mon-CONTEXTE.md']) {
+    assert.equal(parLeFil(c), 'deny', `« ${c} » n’est pas le fichier permis`);
+  }
+
+  // ⑥ NotebookEdit sur le fichier permis — un carnet n'est pas un document
+  assert.equal(parLeFil(FICHIER_PERMIS, 'NotebookEdit'), 'deny');
+});
