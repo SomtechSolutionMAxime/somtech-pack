@@ -21,8 +21,8 @@ import * as herdr from '../src/herdr.js';
 import { trouverMembre } from '../src/slack.js';
 import { resoudreAutorises } from '../src/canal-commun.js';
 import { rolesConnus } from '../src/roles.js';
-import { ecrireLaVue, GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
-import { boucleDuTui } from '../src/tui-boucle.js';
+import { GESTE_DE_LA_VUE } from '../src/vue-du-parc.js';
+import { servirLaVue } from '../src/tui-boucle.js';
 import { lireJeton, SERVICE_ROBOT } from '../src/trousseau.js';
 import {
   preparerLieuRepresentant,
@@ -511,23 +511,8 @@ if (geste === 'relever') {
   // garde de HS-VUE-002 se joue sur la LIGNE rendue, pas sur le champ JSON : « NON ÉTABLI » y
   // précède l'indice, et l'indice y porte sa phrase. Rendre du JSON par défaut mettrait ces
   // trois conditions hors de portée du seul lecteur qu'elles protègent.
-  // 🔴 `--tui` OUVRE L'ÉCRAN, ET LE TEXTE RESTE LE DÉFAUT. Le rendu texte est lu par des
-  // scripts et par des agents qui n'ont pas de terminal : en faire un écran interactif par
-  // défaut casserait leur lecture sans qu'aucun d'eux ne puisse le dire. Le dirigeant, lui,
-  // tape le drapeau une fois — c'est le prix d'un défaut qui ne surprend personne.
-  if (args.includes('--tui')) {
-    // ⚠️ LA LECTURE EST INJECTÉE, pas appelée par la boucle. C'est ce qui rend la boucle
-    // éprouvable sans veilleur — et ce qui permet à `r` de relire par le MÊME chemin.
-    const { code } = await boucleDuTui({
-      lireLaVue: () => parler({ geste: GESTE_DE_LA_VUE }),
-      socket: process.env.HERDR_SOCKET_PATH ?? null,
-      surRefus: () => {},
-    });
-    process.exitCode = code;
-  } else {
-    const vue = await parler({ geste: GESTE_DE_LA_VUE });
-    process.stdout.write(ecrireLaVue(vue, args));
-  }
+  const rendu = await servirLaVue({ args, lireLaVue: () => parler({ geste: GESTE_DE_LA_VUE }) });
+  process.exitCode = rendu.code;
 } else if (geste === 'recensement') {
   // ⚠️ RENDU TEL QUEL, SANS RÉSUMÉ MAISON. Le rendu porte déjà `resume`, `regle` et — quand la
   // mesure a échoué — `inventaireRefuse` avec `agents: null`. Recomposer ici une phrase

@@ -14,6 +14,7 @@
  */
 
 import { OUTILS, lancer } from './outils.js';
+import { ecrireLaVue } from './vue-du-parc.js';
 import { rendreEcran, arbreDeLaVue, lignesVisibles, appliquerTouche, etatInitial } from './tui-vue-du-parc.js';
 
 // ⚠️ ÉCRITS EN ÉCHAPPEMENTS, JAMAIS EN CARACTÈRES BRUTS. Un octet de contrôle collé dans une
@@ -39,6 +40,46 @@ const COULEURS = {
   vide: '',
 };
 const FIN = `${ESC}[0m`;
+
+/**
+ * QUEL RENDU LE DIRIGEANT A DEMANDÉ — l'écran, ou le texte.
+ *
+ * 🔴 CETTE DÉCISION NE PEUT PAS VIVRE DANS LE `bin`, ET UNE GARDE L'A REFUSÉE AVANT MOI.
+ * Le `bin` est STRUCTURELLEMENT hors d'atteinte des bancs : un lancement sous `node --test`
+ * transmet le contexte de test à l'enfant, qui tente de faire naître un veilleur que la cloison
+ * refuse à juste titre. Un `if` posé là serait invisible à la mutation COMME à la relecture.
+ * C'est la même raison qui avait fait sortir `ecrireLaVue` du `bin` un lot plus tôt.
+ *
+ * ⚠️ ET LE TEXTE RESTE LE DÉFAUT. Des scripts et des agents sans terminal lisent cette sortie :
+ * en faire un écran interactif par défaut casserait leur lecture SANS QU'AUCUN D'EUX PUISSE LE
+ * DIRE — une perte silencieuse de plus, sur le chemin le plus fréquenté.
+ */
+export const DRAPEAU_DE_LECRAN = '--tui';
+
+export function veutLEcran(args) {
+  return (args ?? []).includes(DRAPEAU_DE_LECRAN);
+}
+
+/**
+ * SERVIR LA VUE — le seul point que le `bin` appelle, et il ne fait que déléguer.
+ */
+export async function servirLaVue({
+  args = [],
+  lireLaVue,
+  entree,
+  sortie = process.stdout,
+  focus,
+  socket = process.env.HERDR_SOCKET_PATH ?? null,
+  surRefus,
+  ouvrirLEcran = boucleDuTui,
+} = {}) {
+  if (!veutLEcran(args)) {
+    const vue = await lireLaVue();
+    sortie.write(ecrireLaVue(vue, args));
+    return { code: 0 };
+  }
+  return ouvrirLEcran({ lireLaVue, entree, sortie, focus, socket, surRefus });
+}
 
 /**
  * UNE SÉQUENCE DE CLAVIER → UN NOM DE TOUCHE. Pure, donc éprouvable.

@@ -179,6 +179,10 @@ test('COMMUN — l’usage annonce le geste, son rôle, et dit qu’il est desce
 
 test('l’aide annonce le geste « vue » — un geste qu’on ne peut pas découvrir n’existe pas', async () => {
   const r = await lancer([]);
-  assert.match(r.stdout, /vue \[--json\]/, 'le geste figure dans l’aide');
+  assert.match(r.stdout, /vue \[--tui\] \[--json\]/, 'le geste ET ses deux rendus figurent dans l’aide');
   assert.match(r.stdout, /CODE DU MANDAT/, 'et l’aide dit par quoi la jointure passe');
+  // ⚠️ UN DRAPEAU QU'ON NE PEUT PAS DÉCOUVRIR N'EXISTE PAS NON PLUS, et c'est le même
+  // raisonnement que pour le geste. `--tui` est le SEUL moyen d'ouvrir l'écran : muet dans
+  // l'aide, l'écran serait livré et personne ne saurait qu'il est là.
+  assert.match(r.stdout, /--tui ouvre l'ECRAN interactif/, 'et l’aide dit ce que --tui ouvre');
 });
