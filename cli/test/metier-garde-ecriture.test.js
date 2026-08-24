@@ -267,3 +267,58 @@ test('le fil REFUSE quand sa décision est illisible — il ne meurt pas en sile
     { input: JSON.stringify({ tool_name: 'Write', cwd: LIEU, tool_input: { file_path: FICHIER_PERMIS } }), encoding: 'utf8' });
   assert.equal(JSON.parse(sortie).hookSpecificOutput.permissionDecision, 'deny');
 });
+
+// ═════════════════════ 7. 🔴 les verdicts qui n'en sont pas
+
+// Un troisième mode de panne, plus discret que les deux précédents : la garde
+// RÉPOND, en code 0, avec une sortie non vide — mais ce qu'elle rend n'est pas un
+// verdict. La commande de hook le transmet alors tel quel, croyant à un verdict, et
+// Claude Code retombe sur la demande de permission : un oui sous `acceptEdits`.
+//
+// MESURÉ le 2026-08-24, et trouvé en éprouvant le fil, pas en le relisant : une
+// décision devenue asynchrone (un `juger` qui rend une Promise) donnait
+// `decision === undefined`, que `JSON.stringify` OMET. La garde émettait
+// `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}` — sans décision.
+
+/** Le fil, monté sur une décision d'essai, hors du dépôt. */
+function filAvecDecision(source, requete = { tool_name: 'Write', cwd: LIEU, tool_input: { file_path: FICHIER_PERMIS } }, env = {}) {
+  const bidon = mkdtempSync(join(tmpdir(), 'smtk-verdict-'));
+  writeFileSync(join(bidon, 'ecriture-decision.js'), source);
+  writeFileSync(join(bidon, 'ecriture.js'), readFileSync(join(RACINE, 'gardes', 'ecriture.js'), 'utf8'));
+  return JSON.parse(execFileSync(process.execPath, [join(bidon, 'ecriture.js')],
+    { input: JSON.stringify(requete), encoding: 'utf8', env: { ...process.env, ...env } })).hookSpecificOutput;
+}
+
+test('🔴 une décision devenue ASYNCHRONE ne produit pas un verdict sans décision', () => {
+  const d = filAvecDecision('export function juger(){ return new Promise(() => {}); }\n');
+  assert.equal(d.permissionDecision, 'deny',
+    'sans décision, la clé est omise du JSON et le geste dégrade en demande de permission');
+  assert.match(d.permissionDecisionReason, /ne reconnaît pas|undefined/i);
+});
+
+test('🔴 une décision INVENTÉE est refusée — « peut-être » n’est pas « allow »', () => {
+  const d = filAvecDecision('export function juger(){ return { decision: "peut-etre", raison: "x" }; }\n');
+  assert.equal(d.permissionDecision, 'deny');
+});
+
+test('🔴 une garde qui PEND rend son propre refus avant que l’hôte ne l’abandonne', () => {
+  // Le troisième mode, mesuré sur la vraie chaîne : un hook qui pend laisse le geste
+  // PASSER (`CLAUDE.md` écrit). Ni le `try` du fil ni la commande de hook ne le
+  // ferment — le shell attend `node` avec lui, et `timeout` n'existe pas sur macOS.
+  // Le seul endroit d'où l'on peut couper est l'intérieur du processus.
+  //
+  // ⚠️ CE QUE CE DÉLAI NE FERME PAS, écrit plutôt qu'espéré : une BOUCLE de calcul.
+  // Node est mono-thread — un `while` qui tourne empêche le minuteur de se déclencher.
+  // Mesuré aussi. Le délai couvre l'attente, pas le calcul.
+  const d = filAvecDecision('await new Promise(() => {});\nexport function juger(){ return { decision: "allow", raison: "" }; }\n',
+    undefined, { SOMTECH_GARDE_DELAI_MS: '700' });
+  assert.equal(d.permissionDecision, 'deny');
+  assert.match(d.permissionDecisionReason, /verdict|délai|700/i, 'le refus doit dire que le délai a été atteint');
+});
+
+test('le fil laisse passer un VRAI allow — sans quoi les trois refus ci-dessus ne prouveraient rien', () => {
+  // ⚠️ Un fil qui refuserait TOUJOURS passerait les trois contrôles précédents.
+  const d = filAvecDecision('export function juger(){ return { decision: "allow", raison: "essai" }; }\n');
+  assert.equal(d.permissionDecision, 'allow');
+  assert.equal(d.permissionDecisionReason, 'essai', 'et la raison de la décision remonte telle quelle');
+});

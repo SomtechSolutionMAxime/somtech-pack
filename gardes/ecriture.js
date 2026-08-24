@@ -12,7 +12,7 @@
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, writeSync } from 'node:fs';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -25,13 +25,38 @@ const OUTILS_ECRITURE = new Set(['Write', 'Edit', 'NotebookEdit', 'MultiEdit']);
 function repondre(decision, raison) {
   if (repondu) return;
   repondu = true;
-  process.stdout.write(JSON.stringify({
+  // ⚠️ UN VERDICT MAL FORMÉ N'EST PAS UN REFUS — et il ne ressemble pas à une panne.
+  // MESURÉ le 2026-08-24 : une décision qui rend une PROMESSE au lieu d'un objet
+  // (un `juger` devenu asynchrone) donnait `decision === undefined`. `JSON.stringify`
+  // omet les clés indéfinies, et la garde émettait
+  // `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}` — un verdict SANS décision,
+  // sorti en code 0 avec une sortie non vide. La commande de hook le transmet donc tel
+  // quel, croyant à un verdict, et Claude Code retombe sur la demande de permission :
+  // un oui sous `acceptEdits`. Le fil normalise donc lui-même ce qu'il ne reconnaît pas.
+  const connue = decision === 'allow' || decision === 'deny';
+  const verdict = JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
-      permissionDecision: decision,
-      permissionDecisionReason: raison,
+      permissionDecision: connue ? decision : 'deny',
+      permissionDecisionReason: connue ? String(raison ?? '')
+        : `La garde de l'écriture a rendu un verdict que le fil ne reconnaît pas `
+          + `(« ${String(decision)} »). Elle refuse : un verdict sans décision n'est pas `
+          + `un refus, il dégrade en demande de permission — donc en oui dès que la `
+          + `session accepte les éditions.`,
     },
-  }) + '\n');
+  }) + '\n';
+  // ⚠️ ÉCRITURE SYNCHRONE, ET CE N'EST PAS UN DÉTAIL DE STYLE. `process.stdout.write`
+  // est asynchrone sur un tube — ce qu'est toujours la sortie d'un hook — et le
+  // `process.exit(0)` qui suit COUPE le tampon. MESURÉ le 2026-08-24 : le verdict
+  // partait tronqué à `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`, sans
+  // `permissionDecision`. Un verdict sans décision n'est pas un refus : Claude Code
+  // retombe sur la demande de permission, qui sous `acceptEdits` est un oui.
+  // C'est le même défaut permissif que la garde existe pour fermer, un cran plus bas.
+  try {
+    writeSync(1, verdict);
+  } catch {
+    process.stdout.write(verdict);
+  }
   process.exit(0);
 }
 
@@ -41,6 +66,28 @@ function repondre(decision, raison) {
 // oui. La commande de hook rattrape ce cas à son tour ; ces deux filets sont
 // délibérément redondants, parce que la garde porte seule un refus qui vivait
 // dans `permissions.deny`.
+/**
+ * Le délai que la garde s'impose à elle-même.
+ *
+ * ⚠️ TROISIÈME MODE DE PANNE, MESURÉ le 2026-08-24 sur la vraie chaîne : un hook qui
+ * PEND laisse le geste PASSER — `CLAUDE.md` a été écrit alors que le hook ne rendait
+ * rien. Ni le `try` du fil ni la commande de hook ne ferment ce cas : le shell attend
+ * `node` avec lui, et `timeout` n'existe pas sur macOS. Le seul endroit d'où l'on peut
+ * couper est l'intérieur du processus.
+ *
+ * Court devant le délai de Claude Code (60 s par défaut) : la garde doit rendre SON
+ * refus avant que l'hôte n'abandonne, sinon elle ne rend rien du tout.
+ *
+ * ⚠️ CE QU'IL NE FERME PAS, écrit plutôt qu'espéré : une BOUCLE de calcul. Node est
+ * mono-thread — un `while` qui tourne empêche ce minuteur de se déclencher. Mesuré.
+ * Le délai couvre l'attente, jamais le calcul.
+ */
+const DELAI_MS = Number(process.env.SOMTECH_GARDE_DELAI_MS || 10_000);
+setTimeout(() => {
+  repondre('deny', `La garde de l'écriture n'a pas rendu de verdict en ${DELAI_MS} ms. Elle refuse `
+    + "plutôt que de laisser l'hôte l'abandonner : une garde qui pend laisse le geste PASSER.");
+}, DELAI_MS);
+
 for (const evenement of ['uncaughtException', 'unhandledRejection']) {
   process.on(evenement, (e) => {
     repondre('deny', `La garde de l'écriture est tombée en panne (${e?.message ?? evenement}). `
