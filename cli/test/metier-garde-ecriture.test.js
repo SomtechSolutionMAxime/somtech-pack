@@ -23,7 +23,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -678,3 +678,48 @@ test('🔴 MultiEdit tient AUSSI le fichier permis — le seul outil admis que r
 // Ces deux gardes RESTENT : elles ne coûtent rien et couvrent des états que Node
 // pourrait traiter autrement demain. Mais leur preuve n'existe pas, et ce bloc
 // est là pour que personne ne croie le contraire.
+
+// ═════════════════════ 16. 🔴 LA CONSTANTE ELLE-MÊME — le trou que la suite ne pouvait pas voir
+//
+// Trouvé par la cinquième passe de fond, MESURÉ : renommer `FICHIER_PERMIS` en
+// `'CONTEXTE2.md'` dans les deux copies laissait la suite ENTIÈREMENT verte.
+//
+// La cause est structurelle et elle vaut au-delà de ce fichier : **tous les
+// contrôles ci-dessus passent par le SYMBOLE importé, jamais par le littéral.**
+// La suite reste donc auto-cohérente même mutée — elle éprouve « le fichier
+// permis », quel qu'il soit, et jamais « CONTEXTE.md ».
+//
+// Or la valeur, elle, est codée en dur AILLEURS, dans des modules qui ne
+// s'importent pas les uns les autres. Une dérive de cette constante reproduirait
+// EN SILENCE le défaut exact que ce lot corrige — CONTEXTE.md redevient
+// inaccessible — pendant que tout serait vert.
+//
+// ⚠️ Ce contrôle n'ancre donc pas seulement au littéral : il ancre aux QUATRE
+// lieux qui doivent s'accorder avec lui. Ancrer au seul littéral laisserait
+// dériver n'importe lequel des autres.
+
+test('🔴 FICHIER_PERMIS vaut « CONTEXTE.md », et TOUS les lieux qui codent cette valeur en dur s’accordent', async () => {
+  // ① le littéral — sans quoi la suite entière éprouve un fichier imaginaire
+  assert.equal(FICHIER_PERMIS, 'CONTEXTE.md',
+    'la suite passe par le symbole, jamais par le littéral : elle reste verte si la constante dérive');
+
+  // ② le fichier RÉEL que le pack distribue — la constante doit désigner quelque chose qui existe
+  assert.ok(existsSync(join(RACINE, '.claude', 'templates', 'orchestrateur', FICHIER_PERMIS)),
+    `le gabarit ne porte aucun « ${FICHIER_PERMIS} » : la garde autoriserait un fichier que personne ne pose`);
+
+  // ③ ce que la mise à jour du pack PRÉSERVE — si CONTEXTE.md en sortait, la
+  // convergence l'écraserait, et l'agent perdrait à chaque màj ce qu'il a appris
+  const { PRESERVE } = await import('../src/commands/representant.js');
+  assert.ok(PRESERVE.includes(FICHIER_PERMIS),
+    `« ${FICHIER_PERMIS} » n'est plus préservé par la mise à jour : la convergence l'écraserait`);
+
+  // ④ ce que le rendu REFUSE de produire — le rendu ne doit jamais écrire par-dessus
+  const rendu = readFileSync(join(RACINE, 'cli', 'src', 'metier', 'rendu.js'), 'utf8');
+  assert.ok(rendu.includes(`'${FICHIER_PERMIS}'`) || rendu.includes(`"${FICHIER_PERMIS}"`),
+    `« rendu.js » ne nomme plus « ${FICHIER_PERMIS} » dans ses chemins interdits : le rendu pourrait l'écraser`);
+
+  // ⑤ les gabarits que la pose dépose dans le lieu d'un agent
+  const { GABARITS } = await import(join(RACINE, 'ligne-directe', 'src', 'lieu-agent.js'));
+  assert.ok(GABARITS.includes(FICHIER_PERMIS),
+    `« ${FICHIER_PERMIS} » n'est plus posé à la naissance : la garde autoriserait un fichier absent`);
+});
