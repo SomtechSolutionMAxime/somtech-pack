@@ -40,8 +40,10 @@ import {
   ETATS_FERMES,
   APP_NON_ETABLIE,
   texteDeLigne,
+  raccourcisPour,
+  RACCOURCIS,
 } from '../src/tui-vue-du-parc.js';
-import { decoderTouche, texteDeProgression, servirLaVue } from '../src/tui-boucle.js';
+import { decoderTouche, decoderTouches, texteDeProgression, servirLaVue } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 
 const racine = () => mkdtempSync(join(tmpdir(), 'tui-vue-du-parc-'));
@@ -579,6 +581,77 @@ test('la progression n’est JAMAIS muette, et elle n’invente aucun pourcentag
   assert.ok(!/%/.test(t), 'aucun pourcentage — il serait inventé');
   assert.match(t, /ServiceDesk/, 'et elle dit ce qu’on attend');
   assert.notEqual(texteDeProgression(1, 1), texteDeProgression(1, 2), 'elle BOUGE — un écran figé se lit comme un écran mort');
+});
+
+test('la barre de raccourcis se rétracte sans jamais perdre « q quitter » — et reste la maquette à pleine largeur', () => {
+  // 🔴 TROUVÉ EN EXERÇANT LE TUI DANS UN VRAI PTY, où la fenêtre faisait 100 colonnes. La barre
+  // en fait 109 : bornée, elle coupait par la DROITE — donc le PREMIER raccourci sacrifié était
+  // `q quitter`, le seul dont on a besoin quand on ne sait plus quoi faire. Le lecteur se
+  // retrouvait dans un plein écran dont l'aide ne disait plus la sortie.
+  //
+  // ⚠️ ON N'A PAS RÉORDONNÉ LA BARRE : son ordre est celui de la maquette que le dirigeant a
+  // validée, et elle fait foi. Ce qui change est la DÉGRADATION sous sa largeur.
+  assert.equal(raccourcisPour(200), RACCOURCIS, 'à pleine largeur, c’est EXACTEMENT la maquette');
+  assert.match(RACCOURCIS, /^↑↓ naviguer {2}→← plier {2}\/ chercher/, 'et l’ordre de la maquette est intact');
+
+  for (const largeur of [110, 100, 80, 60, 40, 20, 10, 1]) {
+    const barre = raccourcisPour(largeur);
+    assert.ok(barre.includes('q quitter'), `à ${largeur} colonnes, « q quitter » a DISPARU : « ${barre} »`);
+    // ⚠️ ON N'EXIGE PAS QU'ELLE TIENNE À 1 COLONNE — c'est impossible, et le prétendre serait
+    // faux. On exige qu'elle ne tienne JAMAIS au prix de la sortie.
+    if (largeur >= 20) {
+      assert.ok(barre.length <= largeur, `à ${largeur} colonnes, la barre en fait ${barre.length}`);
+    }
+  }
+
+  // ⚠️ ET LA DÉGRADATION EST MONOTONE : une barre plus étroite ne peut pas porter PLUS de
+  // raccourcis qu'une plus large. Sans ça, l'ordre de retrait serait arbitraire.
+  let precedent = Infinity;
+  for (const largeur of [200, 110, 100, 80, 60, 40, 20]) {
+    const combien = raccourcisPour(largeur).split('  ').length;
+    assert.ok(combien <= precedent, `${largeur} colonnes portent ${combien} raccourcis, plus que la largeur au-dessus`);
+    precedent = combien;
+  }
+});
+
+test('une RAFALE de touches arrivée en un seul bloc est décodée entière — tenir ↓ suffit à la produire', () => {
+  // 🔴 CE BANC EST NÉ EN TAPANT DANS UN VRAI PTY, et rien d'autre ne pouvait le trouver. La
+  // boucle décodait le bloc que le terminal lui remet comme UNE touche. Or un terminal ne remet
+  // pas les touches une par une : il remet ce qui est arrivé depuis la dernière lecture.
+  // MESURÉ : six touches en un bloc de 10 octets rendaient `null` — les six perdues, l'écran
+  // figé jusqu'à ce qu'on tue le processus.
+  //
+  // ⚠️ ET TOUS LES BANCS DU DÉPÔT PASSAIENT, PARCE QU'ILS FABRIQUAIENT LEUR PROPRE APPELANT :
+  // ils appellent le décodeur avec UNE touche, ce que la production ne fait jamais.
+  const ESC = '\u001b';
+
+  assert.deepEqual(
+    decoderTouches(`${ESC}[B${ESC}[Bannq`),
+    ['bas', 'bas', 'a', 'n', 'n', 'q'],
+    'un bloc de 10 octets rend les SIX touches, dans l’ordre'
+  );
+
+  // 🔴 UNE SÉQUENCE CSI SE LIT ENTIÈRE OU SE JETTE ENTIÈRE. La découper ferait lire son `ESC`
+  // comme Échap — donc FERMER le TUI sur une séquence que le terminal émet tout seul : souris,
+  // collage encadré, touche de fonction. Un écran qui se ferme sur un geste qu'on n'a pas fait
+  // est pire qu'une touche ignorée.
+  for (const [quoi, sequence] of [
+    ['collage encadré', `${ESC}[200~`],
+    ['souris SGR', `${ESC}[<0;10;5M`],
+    ['touche de fonction', `${ESC}[15~`],
+  ]) {
+    const rendu = decoderTouches(sequence);
+    assert.ok(!rendu.includes('echap'), `${quoi} ne doit PAS être lu comme Échap`);
+    assert.ok(!rendu.includes('q'), `${quoi} ne doit PAS quitter le TUI`);
+    assert.deepEqual(rendu, [], `${quoi} est ignorée en entier`);
+  }
+
+  // ⚠️ ET ÉCHAP SEUL RESTE ÉCHAP — sinon la garde ci-dessus aurait fermé la porte de sortie.
+  assert.deepEqual(decoderTouches(ESC), ['echap']);
+  assert.deepEqual(decoderTouches(`${ESC}[Bq`), ['bas', 'q'], 'une flèche suivie d’une lettre');
+  // Une séquence coupée en deux lectures : on attend la suite plutôt que de deviner.
+  assert.deepEqual(decoderTouches(`${ESC}[`), [], 'une séquence tronquée n’invente rien');
+  assert.deepEqual(decoderTouches(''), [], 'un bloc vide ne rend rien');
 });
 
 test('les flèches ne sont pas Échap — les confondre rendrait la navigation impossible', () => {

@@ -105,6 +105,46 @@ export function decoderTouche(donnees) {
 }
 
 /**
+ * UN BLOC D’OCTETS → UNE SUITE DE TOUCHES. Pure, donc éprouvable.
+ *
+ * 🔴 CE DÉFAUT EST SORTI EN TAPANT, ET RIEN D’AUTRE NE POUVAIT LE TROUVER. La boucle
+ * appelait `decoderTouche` sur le bloc ENTIER que le terminal lui remettait. Un terminal ne
+ * remet pas les touches une par une : il remet ce qui est arrivé depuis la dernière lecture.
+ * MESURÉ en exerçant le vrai TUI dans un vrai pty : **six touches arrivées en un bloc de 10
+ * octets rendaient `null`** — les six étaient perdues, et l’écran restait figé jusqu’à ce
+ * qu’on le tue.
+ *
+ * ⚠️ CE N’EST PAS UN CAS DE BORD : **tenir la flèche ↓ enfoncée suffit** — la répétition
+ * clavier produit exactement cette rafale. Le dirigeant l’aurait rencontré au premier écran.
+ * Aucun banc du dépôt ne pouvait le voir : tous appellent le décodeur avec UNE touche,
+ * c’est-à-dire qu’ils fabriquaient leur propre appelant.
+ */
+export function decoderTouches(donnees) {
+  const s = String(donnees ?? '');
+  const touches = [];
+  let i = 0;
+  while (i < s.length) {
+    // ⚠️ UNE SÉQUENCE CSI SE LIT ENTIÈRE OU SE JETTE ENTIÈRE. La découper ferait lire son
+    // `ESC` comme Échap — donc QUITTER le TUI sur une séquence que le terminal a émise seul
+    // (souris, collage encadré, touche de fonction). Un écran qui se ferme sur un geste
+    // qu’on n’a pas fait est pire qu’une touche ignorée.
+    if (s[i] === ESC && s[i + 1] === '[') {
+      let j = i + 2;
+      while (j < s.length && !(s.charCodeAt(j) >= 0x40 && s.charCodeAt(j) <= 0x7e)) j += 1;
+      if (j >= s.length) break; // séquence tronquée : on attend la suite plutôt que de deviner
+      const t = decoderTouche(s.slice(i, j + 1));
+      if (t !== null) touches.push(t);
+      i = j + 1;
+      continue;
+    }
+    const t = decoderTouche(s[i]);
+    if (t !== null) touches.push(t);
+    i += 1;
+  }
+  return touches;
+}
+
+/**
  * METTRE UN TERMINAL EN FOCUS — de l'ADRESSAGE, et rien d'autre (HS-VUE-001).
  *
  * ⚠️ LA SESSION VOYAGE AVEC LE PANE. Mesuré : `w7:p1` existe dans `somtech` ET dans `progex`.
@@ -189,7 +229,18 @@ export async function boucleDuTui({
 
   const brut = typeof entree.setRawMode === 'function';
   if (brut) entree.setRawMode(true);
-  entree.resume?.();
+  // 🔴 ON NE `resume()` PAS, ET C'EST UN DÉFAUT MESURÉ, PAS UN DÉTAIL DE STYLE. `resume()` met
+  // le flux en mode COURANT ; les octets qui arrivent avant qu'un consommateur soit attaché sont
+  // alors JETÉS. Entre ce `resume()` et le `for await` plus bas, il y a le premier `dessiner()` —
+  // une fenêtre pendant laquelle tout ce que le terminal a déjà remis disparaît.
+  //
+  // ⚠️ MESURÉ EN PTY RÉEL : des touches présentes dans le tampon AVANT l'ouverture de l'écran
+  // étaient perdues, et le TUI restait à attendre une entrée qu'il venait d'avaler. L'itérateur
+  // asynchrone gère lui-même le débit — il n'a besoin d'aucun `resume()`.
+  //
+  // ⚠️ ET UN HUMAIN NE L'AURAIT PRESQUE JAMAIS VU : il tape APRÈS que l'écran s'affiche. Ce sont
+  // les touches déjà en attente — un collage, une frappe pendant les ~80 s de chargement — qui
+  // tombaient. C'est-à-dire précisément l'impatience que la progression est censée soulager.
   if (typeof entree.setEncoding === 'function') entree.setEncoding('utf8');
   sortie.write(ALT_ON);
 
@@ -201,25 +252,31 @@ export async function boucleDuTui({
   let lignes = dessiner();
 
   try {
-    for await (const donnees of entree) {
-      const touche = decoderTouche(donnees);
-      if (touche === null) continue;
-      const { etat: suivant, effet } = appliquerTouche(etat, touche, lignes);
-      etat = suivant;
-      if (effet?.type === 'quitter') break;
-      if (effet?.type === 'relire') {
-        sortie.write(ALT_OFF);
-        vue = await avecProgression(lireLaVue, sortie);
-        sortie.write(ALT_ON);
+    boucle: for await (const donnees of entree) {
+      // 🔴 UNE RAFALE, PAS UNE TOUCHE. Le terminal remet ce qui est arrivé depuis la dernière
+      // lecture — tenir ↓ enfoncé en met six ou dix dans le même bloc. Décoder le bloc comme
+      // UNE touche les perdait TOUTES et figeait l’écran (mesuré en pty réel).
+      for (const touche of decoderTouches(donnees)) {
+        const { etat: suivant, effet } = appliquerTouche(etat, touche, lignes);
+        etat = suivant;
+        if (effet?.type === 'quitter') break boucle;
+        if (effet?.type === 'relire') {
+          sortie.write(ALT_OFF);
+          vue = await avecProgression(lireLaVue, sortie);
+          sortie.write(ALT_ON);
+        }
+        if (effet?.type === 'refus') surRefus(effet.pourquoi);
+        if (effet?.type === 'focus') {
+          await focus(effet.pane, socket);
+          // ⚠️ ON REND LA MAIN APRÈS UN FOCUS. Le dirigeant vient de demander à REGARDER un
+          // autre terminal : garder le TUI par-dessus lui rendrait le geste inopérant.
+          break boucle;
+        }
+        // ⚠️ ON REDESSINE À CHAQUE TOUCHE DE LA RAFALE, PAS UNE FOIS À LA FIN : `lignes` sert
+        // à la touche SUIVANTE (le curseur s’y repère), et une rafale de flèches sur des
+        // `lignes` périmées désignerait la mauvaise ligne au moment du focus.
+        lignes = dessiner();
       }
-      if (effet?.type === 'refus') surRefus(effet.pourquoi);
-      if (effet?.type === 'focus') {
-        await focus(effet.pane, socket);
-        // ⚠️ ON REND LA MAIN APRÈS UN FOCUS. Le dirigeant vient de demander à REGARDER un autre
-        // terminal : garder le TUI en plein écran par-dessus lui rendrait le geste inopérant.
-        break;
-      }
-      lignes = dessiner();
     }
   } finally {
     sortie.off?.('resize', surResize);

@@ -452,8 +452,43 @@ export function etatInitial() {
   return { curseur: 0, plies: new Set(), parApp: true, nonPrisSeuls: false, recherche: '', mode: 'arbre', dessus: 0 };
 }
 
-export const RACCOURCIS =
-  '↑↓ naviguer  →← plier  / chercher  a grouper par app/orchestrateur  n non-pris seuls  r rafraîchir  q quitter';
+/**
+ * LES RACCOURCIS, DANS L'ORDRE DE LA MAQUETTE VALIDÉE — et `q quitter` ne se perd jamais.
+ *
+ * 🔴 DÉFAUT TROUVÉ EN EXERÇANT LE TUI DANS UN VRAI PTY. La barre est plus longue que 100
+ * colonnes ; bornée, elle coupait par la DROITE — donc le premier raccourci sacrifié était
+ * `q quitter`, c'est-à-dire le seul dont on a besoin quand on ne sait plus quoi faire.
+ *
+ * ⚠️ ON NE RÉORDONNE PAS POUR AUTANT : l'ordre est celui de la maquette que le dirigeant a
+ * validée, et il fait foi. Ce qui change, c'est la DÉGRADATION — on retire des raccourcis
+ * entiers, en partant du moins vital, plutôt que de tronquer la phrase au milieu d'un mot.
+ * À pleine largeur, la barre est exactement celle de la maquette.
+ */
+export const RACCOURCIS_UN_A_UN = [
+  { texte: '↑↓ naviguer', vital: 2 },
+  { texte: '→← plier', vital: 2 },
+  { texte: '/ chercher', vital: 3 },
+  { texte: 'a grouper par app/orchestrateur', vital: 4 },
+  { texte: 'n non-pris seuls', vital: 4 },
+  { texte: 'r rafraîchir', vital: 3 },
+  // ⚠️ `vital: 1` — le dernier qu'on retire, jamais le premier. Une barre sans lui laisse le
+  // lecteur enfermé dans un plein écran dont il ne connaît pas la sortie.
+  { texte: 'q quitter', vital: 1 },
+];
+
+export const RACCOURCIS = RACCOURCIS_UN_A_UN.map((r) => r.texte).join('  ');
+
+/** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
+export function raccourcisPour(largeur) {
+  let gardes = RACCOURCIS_UN_A_UN.slice();
+  const rendre = (l) => l.map((r) => r.texte).join('  ');
+  while (gardes.length > 1 && rendre(gardes).length > largeur) {
+    // On retire le moins vital ; à vitalité égale, le dernier de la liste.
+    const pire = gardes.reduce((a, b) => (b.vital >= a.vital ? b : a));
+    gardes = gardes.filter((r) => r !== pire);
+  }
+  return rendre(gardes);
+}
 
 /**
  * UNE TOUCHE → UN NOUVEL ÉTAT, et un effet éventuel. PUR : rien n'est muté sur place.
@@ -556,7 +591,7 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     });
   }
 
-  sortie.push({ style: 'pied', texte: borner(pied(etat), largeur) });
+  sortie.push({ style: 'pied', texte: borner(pied(etat, largeur), largeur) });
   return sortie;
 }
 
@@ -573,12 +608,16 @@ function enTete(vue, etat) {
   return `VUE DU PARC ─── ${groupe} · ${c.orchestrateurs ?? '?'} orchestrateurs · ${c.epicsLus ?? '?'} epics${vue?.quand ? ` · lu ${vue.quand}` : ''}`;
 }
 
-function pied(etat) {
+function pied(etat, largeur) {
   if (etat.mode === 'recherche') return `/ ${etat.recherche}▏  (Entrée valide · Échap annule)`;
   const filtres = [];
   // 🔴 UN FILTRE ACTIF SE DIT. Sans cette ligne, un arbre vide sous « n » se lit « plus rien
   // n'attend personne » — l'exact contraire de ce que le filtre montre.
   if (etat.nonPrisSeuls) filtres.push('FILTRE : non-pris seuls');
   if (etat.recherche) filtres.push(`RECHERCHE : « ${etat.recherche} »`);
-  return filtres.length ? `${filtres.join('  ·  ')}  ─  ${RACCOURCIS}` : RACCOURCIS;
+  // ⚠️ LE FILTRE PASSE AVANT LES RACCOURCIS, ET IL PREND SA PLACE SUR EUX. Dire qu'un filtre
+  // est actif importe plus que rappeler une touche : sans lui, l'arbre ment ; sans eux, on
+  // cherche une touche. Les raccourcis se rétractent donc de ce que le filtre occupe.
+  const tete = filtres.length ? `${filtres.join('  ·  ')}  ─  ` : '';
+  return tete + raccourcisPour(Math.max(0, largeur - tete.length));
 }
