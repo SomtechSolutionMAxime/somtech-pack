@@ -322,3 +322,62 @@ test('le fil laisse passer un VRAI allow — sans quoi les trois refus ci-dessus
   assert.equal(d.permissionDecision, 'allow');
   assert.equal(d.permissionDecisionReason, 'essai', 'et la raison de la décision remonte telle quelle');
 });
+
+// ═════════════════════ 8. 🔴 la contrainte que la garde s'impose à elle-même
+
+// Apport de conception du coordonnateur, 2026-08-24, et il ne pouvait pas rester un
+// commentaire : une contrainte écrite en prose s'oublie au premier ajout.
+//
+// LE RAISONNEMENT : un mode de panne de cette garde n'est PAS bornable — une boucle
+// de calcul. Node est mono-thread, donc le délai que le fil s'impose ne peut pas se
+// déclencher pendant qu'un `while` tourne, et une garde qui pend laisse le geste
+// PASSER. Puisque ce risque ne se mesure pas, la seule parade est de ne pas le
+// créer : la décision reste la plus simple possible.
+
+/** Le code exécutable de la décision : sans commentaires, sans chaînes, sans vide. */
+function codeNu() {
+  return readFileSync(join(RACINE, 'gardes', 'ecriture-decision.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')       // les blocs de commentaire
+    .replace(/^\s*\/\/.*$/gm, ' ')           // les lignes de commentaire
+    // ⚠️ LES TROIS FORMES DE CHAÎNE EN UNE SEULE PASSE, ALTERNÉES. Les traiter l'une
+    // APRÈS l'autre était un défaut réel, attrapé par la contre-épreuve ci-dessous :
+    // une apostrophe française à l'intérieur d'une chaîne DOUBLE (« n'appartient »)
+    // était lue comme l'ouverture d'une chaîne simple, qui se refermait bien plus
+    // loin — emportant `export function juger` au passage. Le contrôle mesurait
+    // alors un texte amputé, et se serait tu sur une boucle qui s'y trouvait.
+    .replace(/`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, '""');
+}
+
+test('🔴 la décision ne contient AUCUNE construction bouclante — le seul mode de panne non bornable', () => {
+  const nu = codeNu();
+  for (const mot of ['while', 'for', 'do']) {
+    assert.ok(!new RegExp(`\\b${mot}\\s*[({]`).test(nu),
+      `« ${mot} » est apparu dans la décision. Node est mono-thread : une boucle empêche le `
+      + `délai du fil de se déclencher, et une garde qui pend laisse le geste PASSER — mesuré. `
+      + `Ce n'est pas un interdit de style : c'est le seul mode de panne qu'on ne sait pas borner. `
+      + `S'il le faut vraiment, dis ici ce que cet ajout coûte avant de lever ce contrôle.`);
+  }
+  // ⚠️ Sans cette contre-épreuve, le contrôle passerait aussi si `codeNu()` rendait du
+  // vide — par exemple si la façon de dépouiller cassait un jour en silence.
+  assert.ok(nu.includes('export function juger'),
+    'le dépouillement a mangé le code : ce contrôle mesurerait alors une chaîne vide');
+});
+
+test('🔴 la décision tient sous son plafond de taille — un ajout doit se justifier, pas se glisser', () => {
+  // ⚠️ Le plafond est ÉPINGLÉ SUR UNE MESURE, pas choisi rond : au 2026-08-24, la
+  // décision fait 54 lignes de code nu. La marge est étroite VOLONTAIREMENT — elle
+  // laisse passer un correctif, jamais un enrichissement.
+  //
+  // ⚠️ Le premier chiffre écrit ici était 41, et il était FAUX : il venait d'un
+  // dépouillement qui mangeait une partie du code (voir `codeNu`). Un plafond posé
+  // sur une mesure fausse aurait rougi à la première ligne ajoutée, pour la mauvaise
+  // raison — et on l'aurait « corrigé » en le relevant.
+  const lignes = codeNu().split('\n').filter((l) => l.trim() !== '').length;
+  assert.ok(lignes <= 62,
+    `la décision fait ${lignes} lignes de code pour un plafond de 62 (54 mesurées le 2026-08-24). `
+    + `Chaque ligne ajoutée augmente un risque de boucle qu'on ne sait pas mesurer. `
+    + `Ce n'est pas un chiffre à réaligner : dis ce que l'ajout achète, ou sors-le de la garde.`);
+  assert.ok(lignes >= 35,
+    `la décision est tombée à ${lignes} lignes : elle a probablement été vidée. `
+    + `Un plafond seul se satisfait d'une garde supprimée.`);
+});

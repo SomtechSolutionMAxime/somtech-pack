@@ -38,6 +38,25 @@
 // symbolique vers un livrable écrirait dans ce livrable. Le lieu est versionné,
 // un tel lien s'y verrait ; mais la garde, elle, ne le voit pas.
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 CONTRAINTE SUR LES ÉVOLUTIONS FUTURES — À LIRE AVANT D'AJOUTER QUOI QUE CE SOIT
+//
+// Un mode de panne de cette garde N'EST PAS BORNABLE : une BOUCLE de calcul. Node
+// est mono-thread, donc le minuteur que le fil s'impose ne peut pas se déclencher
+// pendant qu'un `while` tourne — et une garde qui pend laisse le geste PASSER
+// (mesuré le 2026-08-24 sur la vraie chaîne : `CLAUDE.md` a été écrit).
+//
+// **Conséquence de conception, et c'est une contrainte, pas une préférence : cette
+// décision doit rester LA PLUS SIMPLE POSSIBLE.** Toute logique qu'on lui ajoutera
+// augmente un risque qu'on ne sait pas mesurer. Celui qui l'enrichit dans six mois
+// achète ce risque — il doit le savoir avant, pas le découvrir après.
+//
+// Deux contrôles la tiennent mécaniquement, dans `metier-garde-ecriture.test.js` :
+// aucune construction bouclante, et un plafond de taille épinglé. Ils rougissent
+// à l'ajout. **Ce ne sont pas des chiffres à réaligner : ce sont des questions à
+// se poser.** Si l'ajout est vraiment nécessaire, il faut dire ce qu'il coûte.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { isAbsolute, normalize, resolve, dirname, basename } from 'node:path';
 
 /** Le seul fichier qu'un agent gardé écrit dans son lieu : sa propre mémoire. */
