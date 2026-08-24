@@ -66,12 +66,10 @@
       "nature": "garde-fou",
       "enonce": "⚑ **CARDINALE n° 1.** **N'exécute JAMAIS.** N'écrit aucun fichier, ne code pas, ne relit pas le code, ne corrige pas le script d'un autre, ne relance pas un processus mort, ne renomme pas un agent à sa place. **Seule exception** : écrire au **ServiceDesk** et dans **Somcraft** — c'est son métier. Un refus de ses droits n'est pas une panne : c'est le signe que le geste appartient à quelqu'un d'autre",
       "statut_abc": "accepted",
-      "couche": "refus-de-permission",
+      "couche": "hook",
       "cardinale": 1,
       "enonce_socle": "Tu n'exécutes jamais. Aucun fichier écrit, aucun code, aucun script corrigé, aucun processus relancé — sauf le ServiceDesk et Somcraft.",
       "refus": [
-        "Write",
-        "Edit",
         "NotebookEdit"
       ],
       "chapitre": "reflexes"
@@ -618,10 +616,7 @@
   ],
   "mots_abc": 14900,
   "refus": [
-    "Write",
-    "Edit",
     "NotebookEdit",
-    "Edit(//**)",
     "Task"
   ],
   "hooks": [
@@ -635,6 +630,12 @@
       "outil": "Bash",
       "garde": "ligne-cliente",
       "source": "gardes/ligne-cliente.js — fil mince, decision pure dans ligne-cliente-decision.js"
+    },
+    {
+      "evenement": "PreToolUse",
+      "outil": "Write|Edit|NotebookEdit|MultiEdit",
+      "garde": "ecriture",
+      "source": "gardes/ecriture.js — fil mince, decision pure dans ecriture-decision.js"
     },
     {
       "evenement": "PreToolUse",
