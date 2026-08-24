@@ -161,63 +161,55 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * LE COÛT DE LA VUE, D'APRÈS LA LOI MESURÉE — recensement + 0,7 s × (2×mandats + epics).
+ * ═══ CE QUE LA COMMANDE A COÛTÉ, MESURÉ EN LA TAPANT. Un fait daté, rien d'autre.
  *
- * Les trois valeurs viennent du poste, le 2026-08-24 : recensement à 9,2 s (12,2 s sous charge),
- * 10 mandats portés, 85 epics. Elles ne sont pas là pour être jolies : elles rendent le plancher
- * RECALCULABLE le jour où le parc aura grandi.
+ * 🔴 CETTE FORME EST LA TROISIÈME, ET LES DEUX PREMIÈRES SE DÉSARMAIENT — chacune trouvée en
+ * passe de fond, chacune par le même geste : déplacer le repère au lieu de la chose jugée.
+ *
+ *   1. Un plancher rond (`>= 67_000`) : il acceptait 68 s pendant que le geste en coûtait 89.
+ *   2. Une LOI et un PARC (`recensement + 0,7 s × (2×mandats + epics)`, `PARC_MESURE`), gardés
+ *      par un plancher de parc et un délai de péremption. Mesuré par la passe : mettre
+ *      `PARC_PLANCHER` à zéro, ou `JOURS_AVANT_DE_REMESURER` à 36 500, ou le coefficient de
+ *      0,7 à 0,69 — **chacun laissait les 28 essais VERTS**. Trois seuils qui jugeaient un
+ *      quatrième chiffre, et aucun qui se jugeait lui-même.
+ *
+ * ⚠️ ON N'AJOUTE PAS UN QUATRIÈME SEUIL POUR GARDER LE TROISIÈME. C'est la récursion « qui garde
+ * le gardien », et elle ne s'arrête pas par le haut : **un banc ne peut pas empêcher qu'on le
+ * modifie.** Ce qu'il peut faire, c'est n'offrir AUCUN geste qui ressemble à de l'entretien. On
+ * réduit donc la surface au minimum : **deux nombres, et les deux sont des affirmations sur le
+ * monde.** Les baisser n'est pas ranger le code, c'est déclarer autre chose.
+ *
+ * La loi vit désormais dans ce commentaire, là où elle sert — à RECALCULER — et non dans une
+ * assertion, où elle n'était qu'un troisième cadran à tourner :
+ *
+ *     T ≈ recensement + 0,7 s × (2 × mandats + epics)
+ *
+ * Le 2026-08-24, sur un poste de 99 panes, 10 mandats portés et 85 epics : recensement 9,2 à
+ * 12,6 s, vue **84 398 / 87 411 / 89 031 / 89 324 ms** sur quatre essais. On retient le plus
+ * grand — une borne ne se pose pas sur le meilleur jour.
  */
-const PARC_MESURE = { recensementMs: 12_200, mandats: 10, epics: 85, mesureLe: '2026-08-24' };
+const VUE_A_COUTE_MS = 89_324;
+const VUE_MESUREE_LE = '2026-08-24';
 
-/**
- * 🔴 CE DÉNOMINATEUR SE PÉRIME, ET IL SE DÉSARMAIT SANS UN ROUGE — relevé en passe de fond.
- *
- * Mutation mesurée : remplacer `PARC_MESURE` par `{ recensementMs: 0, mandats: 0, epics: 122 }`
- * — des valeurs physiquement impossibles (aucun recensement ne coûte 0 ms, aucun poste ne porte
- * 0 mandat) mais arithmétiquement dans la fenêtre attendue — laissait les 23 essais VERTS, **y
- * compris celui qu'elles désarment**. Un garde-fou qu'on neutralise en touchant son propre
- * dénominateur n'en est pas un : le geste ressemble à de l'entretien, et rien ne le distingue.
- *
- * Deux fermetures, parce que le trou a deux faces :
- *   — **l'ABSURDE** : un parc doit être physiquement possible, et au moins aussi grand que le
- *     plus grand qu'on ait vu. On ne rétrécit pas le parc pour faire tenir la borne.
- *   — **le PÉRIMÉ**, qui est le vrai risque : personne ne truquera ce chiffre, on OUBLIERA de le
- *     remesurer. Le parc grandira, la borne redeviendra trop courte comme les 30 s d'origine, et
- *     la suite restera verte pendant tout ce temps. Une mesure sans date se périme en silence ;
- *     datée, elle finit par rougir et réclame qu'on retape la commande.
- */
-const PARC_PLANCHER = { recensementMs: 9_000, mandats: 8, epics: 85 };
-const JOURS_AVANT_DE_REMESURER = 90;
-const coutDeLaVue = ({ recensementMs, mandats, epics }) => recensementMs + 700 * (2 * mandats + epics);
-
-test('LE PARC DE RÉFÉRENCE EST POSSIBLE ET RÉCENT — sinon le garde-fou se désarme par son dénominateur', () => {
-  for (const [champ, plancher] of Object.entries(PARC_PLANCHER)) {
-    assert.ok(
-      PARC_MESURE[champ] >= plancher,
-      `${champ} = ${PARC_MESURE[champ]} : plus petit que le plus grand parc déjà mesuré (${plancher}). ` +
-        'On ne rétrécit pas le parc de référence pour faire tenir la borne.'
-    );
-  }
-  const jours = (Date.now() - Date.parse(PARC_MESURE.mesureLe)) / 86_400_000;
+test('LA MESURE DE RÉFÉRENCE N’EST PAS PÉRIMÉE — sinon la borne d’aujourd’hui est celle d’hier', () => {
+  // ⚠️ LE VRAI RISQUE N'EST PAS QU'ON TRUQUE CE CHIFFRE, C'EST QU'ON OUBLIE DE LE REFAIRE. Le
+  // parc grandit tout seul : 71 epics le matin du 2026-08-24, 85 quatre heures plus tard. Sans
+  // date, la mesure se périme en silence et la borne redevient les 30 s d'origine sans qu'un
+  // seul essai ne rougisse. Datée, elle finit par réclamer qu'on retape la commande.
+  const jours = Math.round((Date.now() - Date.parse(VUE_MESUREE_LE)) / 86_400_000);
   assert.ok(
-    jours <= JOURS_AVANT_DE_REMESURER,
-    `le parc de référence date de ${Math.round(jours)} jours. REMESURE-LE en tapant la commande — ` +
-      '`node bin/ligne-directe.js vue` — puis reporte le coût, le nombre de mandats et d’epics ici. ' +
-      'Le parc grandit ; une borne calculée sur un parc d’il y a six mois est la borne de 30 s d’hier.'
+    jours <= 90,
+    `la mesure de référence a ${jours} jours. RETAPE LA COMMANDE — \`node bin/ligne-directe.js vue\` — ` +
+      'chronomètre-la, et reporte ici ce qu’elle a coûté avec la date du jour.'
   );
 });
 
-test('LA BORNE DE PRODUCTION COUVRE LE COÛT MESURÉ — pas un plancher rond qu’on trouve rassurant', () => {
-  const cout = coutDeLaVue(PARC_MESURE);
-  assert.ok(
-    cout > 80_000 && cout < 95_000,
-    `la loi doit reproduire la mesure du poste (84-89 s), elle rend ${Math.round(cout / 1000)}s`
-  );
+test('LA BORNE DE PRODUCTION GARDE 2× CE QUE LA COMMANDE A COÛTÉ — mesuré en la tapant', () => {
   // La borne de PRODUCTION, celle que `bin/` emprunte — pas celle d'un banc.
   const borne = borneDuGeste(GESTE_DE_LA_VUE);
   assert.ok(
-    borne >= 2 * cout,
-    `la borne de production (${borne / 1000}s) doit garder 2× le coût mesuré (${Math.round(cout / 1000)}s)`
+    borne >= 2 * VUE_A_COUTE_MS,
+    `la borne de production (${borne / 1000}s) doit garder 2× le coût mesuré (${VUE_A_COUTE_MS / 1000}s)`
   );
 });
 
@@ -923,6 +915,38 @@ test('LE VEILLEUR APPARAÎT EN COURS DE ROUTE : les tours précédents n’empoi
     clearTimeout(naissance);
     if (servi) await servi.arreter().catch(() => {});
   }
+});
+
+test('`naitre` REMPLACE VRAIMENT LA NAISSANCE — sinon un banc ferait naître un veilleur de production', async () => {
+  // 🔴 RELEVÉ EN PASSE DE FOND : aucun banc ne vérifiait que `naitre` remplace bien l'appel réel.
+  // La passe a remis `reveillerVeilleur()` au point d'appel EN PLUS de `naitre()` — les 28 essais
+  // sont restés VERTS, pendant qu'un vrai processus veilleur naissait à chaque tour.
+  //
+  // ⚠️ CE QUI SAUVAIT LA MISE N'EST PAS CE FICHIER : c'est la cloison profonde du trousseau, qui
+  // refuse de livrer le jeton sous essais. Elle tient — la passe l'a mesurée. Mais s'appuyer sur
+  // une garde qu'on ne nomme pas, c'est ne pas savoir le jour où elle bouge. Un point
+  // d'injection posé dans du code livré se prouve à l'endroit où on l'a posé.
+  const cheminSocket = join(bac, 'naissance.sock');
+  let appels = 0;
+  const err = await parler(
+    { geste: GESTE_DE_LA_VUE },
+    {
+      reveiller: true,
+      naitre: () => {
+        appels += 1;
+        return 0;
+      },
+      cheminSocket,
+      bornesParGeste: { [GESTE_DE_LA_VUE]: 400 },
+      sonde: { intervalle: 100, borne: 200 },
+    }
+  ).then(() => null, (e) => e);
+
+  assert.equal(appels, 1, 'la naissance injectée doit être celle qu’on appelle, exactement une fois');
+  assert.ok(err, 'personne ne vient : le geste doit finir par refuser');
+  // 🔴 LA PREUVE QUI COMPTE — l'effet EMPÊCHÉ, pas l'appel compté. Si la vraie naissance avait
+  // eu lieu à côté, un socket serait apparu ici. Aucun compteur ne dit ça ; le disque, si.
+  assert.equal(existsSync(cheminSocket), false, 'aucun veilleur ne doit être né : rien ne doit occuper la place');
 });
 
 test('UN TOUR QUI A ÉCHOUÉ N’EMPOISONNE PAS LE SUIVANT — chaque tour a SES contrôleurs', async () => {
