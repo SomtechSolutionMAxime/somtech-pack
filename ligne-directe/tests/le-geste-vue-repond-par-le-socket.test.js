@@ -185,10 +185,21 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
  *     T ≈ recensement + 0,7 s × (2 × mandats + epics)
  *
  * Le 2026-08-24, sur un poste de 99 panes, 10 mandats portés et 85 epics : recensement 9,2 à
- * 12,6 s, vue **84 398 / 87 411 / 89 031 / 89 324 ms** sur quatre essais. On retient le plus
- * grand — une borne ne se pose pas sur le meilleur jour.
+ * 12,6 s, vue **84 398 / 87 411 / 89 031 / 89 324 / 91 320 ms** sur cinq essais étalés sur la
+ * journée. On retient le plus grand — une borne ne se pose pas sur le meilleur jour.
+ *
+ * ═══ ET LA CHAÎNE A DÉJÀ TOURNÉ UNE FOIS, LE JOUR MÊME OÙ ON L'A POSÉE.
+ *
+ * La garde de marge (`src/client.js`, `marge`) a parlé au premier essai réel : *« vue a mis
+ * 91,3 s, soit plus de la moitié de sa borne (180 s) »*. Ce n'était pas un exercice — le parc
+ * avait grandi de 84 à 91 s pendant la journée. Reporter ce chiffre ici a fait ROUGIR l'épingle
+ * ci-dessous, ce qui a forcé à relever la borne de 180 s à 300 s au lieu de laisser filer.
+ *
+ * ⚠️ ET C'EST BIEN LA SONDE QUI REND CETTE BORNE ADMISSIBLE, pas la confiance. 300 s ne sont
+ * jamais attendues devant un veilleur mort : le ping tranche en quelques secondes. La borne
+ * haute n'est atteinte que par un veilleur VIVANT et OCCUPÉ — c'est tout ce qu'elle autorise.
  */
-const VUE_A_COUTE_MS = 89_324;
+const VUE_A_COUTE_MS = 91_320;
 const VUE_MESUREE_LE = '2026-08-24';
 
 /**
@@ -233,7 +244,7 @@ const VUE_MESUREE_LE = '2026-08-24';
  * Ce qui suit garde donc ce qu'un banc PEUT garder : que la valeur n'a pas bougé par accident.
  * Pas contre quelqu'un qui la change exprès des deux côtés — ce n'est pas à sa portée.
  */
-const BORNE_DE_LA_VUE_EN_PRODUCTION = 180_000;
+const BORNE_DE_LA_VUE_EN_PRODUCTION = 300_000;
 
 test('LA BORNE DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la changer exprès des deux côtés reste possible', () => {
   assert.equal(

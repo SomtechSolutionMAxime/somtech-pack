@@ -54,7 +54,7 @@ export const BORNE_PAR_DEFAUT = 30_000;
  * le veilleur cesse de répondre : la borne haute n'est atteinte que par un veilleur VIVANT et
  * occupé, jamais par un veilleur mort.
  */
-export const BORNES_PAR_GESTE = Object.freeze({ [GESTE_DE_LA_VUE]: 180_000 });
+export const BORNES_PAR_GESTE = Object.freeze({ [GESTE_DE_LA_VUE]: 300_000 });
 
 /**
  * LA SONDE DE VIE — ce qui rend une borne haute admissible.
