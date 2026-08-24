@@ -919,6 +919,72 @@ test('une FLÈCHE COUPÉE entre deux lectures reste une flèche — elle ne devi
   assert.deepEqual(decoderTouches('C', b.reste).touches, ['droite'], 'la troisième lecture la tranche');
 });
 
+test('la BOUCLE reporte le reste d’une lecture à l’autre — une flèche COUPÉE vaut une flèche entière', async (t) => {
+  // 🔴 CE BANC EST NÉ D'UNE SURVIVANTE DE MA PROPRE CAMPAGNE. Le décodeur était gardé ; la
+  // JOINTURE ne l'était pas. Retirer `reste = decode.reste` de la boucle — c'est-à-dire jeter
+  // ce que le décodeur venait de mettre de côté — laissait 31 essais VERTS. Deux étages justes
+  // dont la ligne qui les relie ne tient par personne.
+  //
+  // ⚠️ ET LE DISCRIMINANT N'EST PAS UN INDICE ÉCRIT EN DUR — ce serait épingler une mise en
+  // page, pas une propriété. On COMPARE trois flux : une flèche coupée en deux lectures doit
+  // rendre le MÊME écran qu'une flèche entière, et un AUTRE que pas de flèche du tout. La
+  // garde survit alors à n'importe quel changement d'arbre.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const d = join(tmp, 'depot');
+  const service = unServiceDesk({
+    projets: [
+      { id: 'u1', project_id: 'P-20260824-0021', title: 'Premier chantier', status: 'active' },
+      { id: 'u2', project_id: 'P-20260824-0022', title: 'Second chantier', status: 'active' },
+    ],
+  });
+  const vue = await uneVue({
+    tmp,
+    agents: [
+      { pane: 'w1:p1', lieu: poserLieu(d, 'p-20260824-0021'), nom: 'premier' },
+      { pane: 'w2:p1', lieu: poserLieu(d, 'p-20260824-0022'), nom: 'second' },
+    ],
+    service,
+  });
+
+  const ESC = '\u001b';
+  const { boucleDuTui } = await import('../src/tui-boucle.js');
+  const MARQUEUR = `${ESC}[48;5;240m`;
+
+  /** Ce que la boucle a peint en dernier, et QUELLE ligne y est surlignée. */
+  const jouer = async (morceaux) => {
+    let peint = '';
+    const sortie = { write: (s) => { peint += String(s); }, columns: 90, rows: 12 };
+    const entree = { [Symbol.asyncIterator]: async function* () { yield* morceaux; } };
+    await boucleDuTui({ lireLaVue: async () => vue, entree, sortie, focus: async () => ({ ok: true }) });
+    const ecrans = peint.split(`${ESC}[H${ESC}[2J`).slice(1);
+    const lignes = (ecrans[ecrans.length - 1] ?? '').split('\r\n');
+    const i = lignes.findIndex((l) => l.startsWith(MARQUEUR));
+    const sansCouleur = (l) => (l ?? '').replaceAll(new RegExp(`${ESC}\\[[0-9;?]*[a-zA-Z]`, 'g'), '').trim();
+    return { ecrans: ecrans.length, surligne: sansCouleur(lignes[i]) };
+  };
+
+  const coupee = await jouer([ESC, '[B', 'q']);
+  const entiere = await jouer([`${ESC}[B`, 'q']);
+  const aucune = await jouer(['q']);
+
+  assert.ok(coupee.surligne, 'l’écran surligne bien une ligne');
+  // 🔴 CE QUI TRANCHE : sans le report du reste, la 2ᵉ lecture rend « [ » et « B » — deux
+  // lettres sans effet — et le curseur ne bouge pas. La flèche coupée se comporterait alors
+  // comme AUCUNE flèche.
+  assert.notEqual(
+    coupee.surligne,
+    aucune.surligne,
+    'une flèche coupée en deux lectures a bien DÉPLACÉ le curseur — sinon elle a été perdue'
+  );
+  assert.equal(
+    coupee.surligne,
+    entiere.surligne,
+    'et elle le déplace exactement comme une flèche arrivée entière'
+  );
+  assert.ok(coupee.ecrans >= 2, `la seconde lecture a bien été traitée (${coupee.ecrans} écrans peints)`);
+});
+
 test('ÉCHAP NE FERME PLUS L’ÉCRAN — il annule ; seuls « q » et Ctrl-C quittent', () => {
   // 🔴 LA SECONDE MOITIÉ DU MÊME CORRECTIF, et elle ne se fie pas à la première. Le décodeur
   // garde désormais un `ESC` indécidable, mais on ne confie pas à UNE seule garde une
