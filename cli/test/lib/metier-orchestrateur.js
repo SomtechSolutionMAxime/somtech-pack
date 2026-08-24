@@ -2096,8 +2096,23 @@ export const CONTROLES = [
       const deny = config.permissions?.deny || [];
       const allow = [...(config.somtech?.droitsAccordes || []), ...(config.permissions?.allow || [])];
 
+      // ⚠️ CE QUE T-20260824-0002 A DÉPLACÉ, ET CE QU'IL N'A PAS RETIRÉ.
+      //
+      // « écrire ou modifier un fichier » n'est PLUS refusé par un outil nu. Il ne pouvait
+      // pas l'être : un outil nu refuse PARTOUT, donc aussi `CONTEXTE.md` — la propre
+      // mémoire de l'agent, que lui seul apprend et que lui seul pouvait tenir à jour.
+      //
+      // MESURÉ le 2026-08-24 (Claude Code 2.1.241), et c'est le fait qui commande toute la
+      // forme de ce contrôle : **quand un chemin tombe sous un `deny`, le hook n'est JAMAIS
+      // appelé** (trace à zéro ligne). Un `Write` ou un `Edit` qui reviendrait dans la liste
+      // ne rendrait donc pas la garde redondante — il la rendrait MUETTE, et l'exception
+      // disparaîtrait sans qu'aucun autre contrôle ne bouge. C'est pourquoi ce contrôle
+      // exige l'ABSENCE de ces entrées avec la même force qu'il exigeait leur présence.
+      //
+      // La fonction gardée n'a pas changé d'un mot : **l'agent n'a pas le MOYEN d'écrire un
+      // livrable.** Seule la couche qui la porte a changé — du refus de permission au hook.
       const REFUS = [
-        { quoi: 'écrire ou modifier un fichier', entrees: ['Write', 'Edit', 'NotebookEdit', 'Edit(//**)'] },
+        { quoi: 'écrire ou modifier un fichier', entrees: ['NotebookEdit'] },
         { quoi: 'ouvrir un sous-agent', entrees: ['Task'] },
       ];
       for (const { quoi, entrees } of REFUS) {
@@ -2109,6 +2124,43 @@ export const CONTROLES = [
           );
         }
       }
+
+      // ① Aucun outil d'édition NU ni refus À MOTIF ne revient : il rendrait la garde muette.
+      for (const outil of ['Write', 'Edit', 'MultiEdit']) {
+        assert.ok(!deny.includes(outil),
+          `« ${outil} » est revenu dans les refus : sous un refus, le hook n'est jamais appelé — `
+            + `la garde d'écriture deviendrait muette et CONTEXTE.md redeviendrait inaccessible`);
+        assert.ok(!deny.some((r) => typeof r === 'string' && r.startsWith(`${outil}(`)),
+          `un refus à motif sur « ${outil} » est revenu : il couvrirait CONTEXTE.md et rendrait la garde muette`);
+      }
+
+      // ② Et ce qui porte le refus à leur place EST LÀ, et vise bien ces outils. Sans ce
+      // second contrôle, le premier serait un désarmement : « aucun refus d'écriture » est
+      // exactement ce qu'on obtient en supprimant la garantie.
+      const hookEcriture = (config.hooks?.PreToolUse || [])
+        .find((h) => h.hooks?.[0]?.command?.includes('gardes/ecriture.js'));
+      assert.ok(hookEcriture,
+        'la garde d’écriture n’est plus branchée : plus RIEN n’empêche d’écrire un livrable, '
+          + 'puisque les outils nus ont quitté les refus');
+      for (const outil of ['Write', 'Edit']) {
+        assert.match(hookEcriture.matcher || '', new RegExp(`(^|\\|)${outil}(\\||$)`),
+          `le hook d’écriture ne vise pas « ${outil} » — cet outil ne serait gardé par rien`);
+      }
+
+      // ③ Une garde est du CODE : elle peut casser, là où un refus déclaratif est inerte.
+      // MESURÉ : une garde qui sort en erreur sans rien écrire dégrade le geste en DEMANDE
+      // de permission — et sous `--permission-mode acceptEdits`, une demande est un oui. Le
+      // fichier a été écrit pendant que la garde était morte. La commande doit donc se
+      // défendre contre sa PANNE autant que contre son ABSENCE.
+      const cmd = hookEcriture.hooks[0].command;
+      assert.match(cmd, /-f /, 'la commande doit vérifier que la garde existe avant de l’appeler');
+      assert.ok(!/exec node/.test(cmd),
+        '`exec` remplace le shell : le code de sortie de la garde devient celui du hook, et rien '
+          + 'ne rattrape sa panne. La commande doit CAPTURER sa sortie pour pouvoir refuser à sa place');
+      assert.match(cmd, /-n /, 'une garde qui sort en succès sans rien rendre laisse le geste sans verdict — il faut le refuser aussi');
+      assert.equal((cmd.match(/permissionDecision":"deny/g) || []).length, 2,
+        'il faut DEUX refus distincts — un pour la garde absente, un pour la garde qui casse — '
+          + 'sinon l’un des deux modes de panne n’est pas couvert');
 
       // Une autorisation ne rattrape jamais un refus (mesuré), mais un `allow` qui porte un
       // outil refusé se lit comme une permission par quiconque relit le fichier — et c'est le
@@ -5040,10 +5092,43 @@ export const MUTATIONS = [
 
   {
     id: 'le-refus-d-ecrire-disparait-du-fichier-de-droits',
-    quoi: 'l’outil d’écriture quitte la liste des refus — le métier promet toujours qu’il ne peut pas écrire, et c’est devenu faux',
+    quoi: 'la garde d’écriture quitte le fichier de droits — le métier promet toujours qu’il ne peut pas écrire, et c’est devenu faux',
     cible: 'les-droits-refusent-ce-que-le-metier-promet',
     fichier: 'droits',
-    muter: (t) => t.replace('      "Write",\n', ''),
+    // ⚠️ RÉ-ANCRÉE (T-20260824-0002), ET CE N'EST PAS UN DÉSARMEMENT — la fonction mutée est
+    // la MÊME : « plus rien n'empêche d'écrire un livrable ». Seule la couche qui la porte a
+    // changé. Elle visait `"Write"` dans les refus ; l'outil nu en est parti parce qu'il
+    // refusait PARTOUT, donc aussi le CONTEXTE.md qu'il fallait excepter. Ce qui porte le
+    // refus aujourd'hui est le hook — c'est donc lui qu'on retire pour éprouver la garde.
+    // ⚠️ On mute la STRUCTURE, pas le texte : un motif d'expression régulière sur du JSON
+    // indenté se désamorce au premier reformatage, et une mutation qui ne mord plus prouve
+    // exactement autant qu'un test qu'on aurait supprimé.
+    muter: (t) => {
+      const c = JSON.parse(t);
+      c.hooks.PreToolUse = c.hooks.PreToolUse.filter((h) => !h.hooks?.[0]?.command?.includes('gardes/ecriture.js'));
+      return JSON.stringify(c, null, 2) + '\n';
+    },
+  },
+  {
+    id: 'la-garde-qui-casse-redevient-permissive',
+    quoi: 'la commande rappelle la garde par « exec » — sa PANNE cesse d’être rattrapée, et une demande de permission est un oui sous acceptEdits',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'droits',
+    // ⚠️ MUTATION NEUVE (T-20260824-0002) — elle éprouve un mode de panne qu'aucune mutation
+    // ne couvrait, parce qu'il n'existait pas tant que le refus était DÉCLARATIF. Un `deny`
+    // est inerte : il ne peut pas tomber en panne. Une garde est du code.
+    //
+    // MESURÉ : `exec node "$G"` fait du code de sortie de la garde celui du hook. Une garde
+    // qui casse sort alors en erreur sans verdict, le geste dégrade en DEMANDE de permission,
+    // et sous `--permission-mode acceptEdits` une demande est un oui. Le fichier a été écrit
+    // pendant que la garde était morte. Cette mutation remet exactement cette forme.
+    muter: (t) => {
+      const c = JSON.parse(t);
+      const h = c.hooks.PreToolUse.find((x) => x.hooks?.[0]?.command?.includes('gardes/ecriture.js'));
+      h.hooks[0].command = h.hooks[0].command
+        .replace(/S=\$\(node "\$G" 2>\/dev\/null\); if .*?fi; /s, 'exec node "$G"; ');
+      return JSON.stringify(c, null, 2) + '\n';
+    },
   },
   {
     id: 'le-refus-du-sous-agent-disparait',
@@ -5054,13 +5139,17 @@ export const MUTATIONS = [
   },
   {
     id: 'le-refus-absolu-devient-le-refus-permeable',
-    quoi: 'le refus passe de la forme absolue à la forme relative — MESURÉ perméable : elle laisse écrire hors du répertoire',
+    quoi: 'le hook d’écriture cesse de viser Write — MESURÉ perméable : cet outil n’est alors gardé par rien',
     cible: 'les-droits-refusent-ce-que-le-metier-promet',
     fichier: 'droits',
-    // C'est le cœur du « à mesurer, jamais à supposer » : les deux formes se ressemblent, et
-    // une seule ferme la porte. `Edit(**)` a laissé créer `../evade.txt` ; `Edit(../**)` n'a
-    // rien borné du tout. Un fichier de droits qu'on croit contraignant est pire que rien.
-    muter: (t) => t.replace('"Edit(//**)"', '"Edit(**)"'),
+    // ⚠️ RÉ-ANCRÉE (T-20260824-0002), MÊME FONCTION. Elle éprouvait « un refus qui a l'air
+    // de fermer et qui laisse passer » : `Edit(**)` a laissé créer `../evade.txt`, `Edit(//**)`
+    // seul fermait. Cette forme a disparu avec le refus d'outil.
+    //
+    // La perméabilité a désormais un autre visage, et il est plus discret : un `matcher` qui
+    // ne nomme pas un outil laisse cet outil ENTIÈREMENT libre, pendant que le fichier porte
+    // toujours une garde d'écriture à l'air complet. C'est le même « on croit que ça ferme ».
+    muter: (t) => t.replace('"matcher": "Write|Edit|NotebookEdit|MultiEdit"', '"matcher": "Edit|NotebookEdit|MultiEdit"'),
   },
   {
     id: 'un-outil-refuse-est-aussi-autorise',
