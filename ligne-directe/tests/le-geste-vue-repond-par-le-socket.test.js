@@ -571,23 +571,35 @@ test('UN GESTE QUI RÉPOND VITE REND LA MAIN VITE — la sonde ne retient pas le
 // que la sentinelle continue de produire. C'est donc lui qu'on compte, à la source.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-/** Un veilleur qui COMPTE les pings reçus — la seule trace observable d'une sentinelle en vie. */
-async function veilleurQuiCompteLesPings(nom, { vue }) {
+/**
+ * Un veilleur qui COMPTE LES CONNEXIONS — pas les gestes reçus.
+ *
+ * 🔴 CETTE DISTINCTION EST TOUT, ET LA PREMIÈRE VERSION DE CES BANCS S'EST TROMPÉE DESSUS —
+ * relevé en passe portail, et le rejet était juste. Ils comptaient les pings qui ATTEIGNENT
+ * `traiterGeste`. Or dès que la réponse arrive, `abandonDeLaSonde` est déclenché — et un signal
+ * abandonné est PERMANENT : chaque ping suivant ouvre bien sa connexion, puis se coupe avant
+ * même que `'connect'` ne se déclenche, donc avant tout `write`. Le compteur restait à zéro
+ * **que la sentinelle se soit arrêtée ou qu'elle tourne pour toujours**.
+ *
+ * Mesuré par la passe, garde retirée : 20 essais sur 20 restaient VERTS, pendant que le socket
+ * encaissait 8 connexions en 4 secondes. Le banc regardait à l'étage où la trace n'arrive plus.
+ *
+ * ⚠️ ON COMPTE DONC À LA SOURCE — `createServer` lui-même, l'étage que rien ne filtre.
+ */
+async function veilleurQuiCompteLesConnexions(nom, { vue }) {
   const cheminSocket = join(bac, `${nom}.sock`);
   const v = new Veilleur({ cheminSocket, identite: { equipe: 'T' } });
-  const compteur = { pings: 0 };
-  const vraiTraiter = v.traiterGeste.bind(v);
-  v.traiterGeste = async (requete) => {
-    if (requete?.geste === 'ping') compteur.pings += 1;
-    return vraiTraiter(requete);
-  };
   v.vueDuParc = vue;
   await v.ecouterLocal();
+  const compteur = { connexions: 0 };
+  v.serveur.on('connection', () => {
+    compteur.connexions += 1;
+  });
   return { cheminSocket, compteur, fermer: () => v.arreter().catch(() => {}) };
 }
 
 test('APRÈS UNE RÉPONSE, LA SENTINELLE S’ARRÊTE — sinon elle sonde le veilleur pour toujours', async () => {
-  const compte = await veilleurQuiCompteLesPings('sentinelle-fin', {
+  const compte = await veilleurQuiCompteLesConnexions('sentinelle-fin', {
     vue: async () => {
       await dodo(150);
       return { resume: 'le parc' };
@@ -604,12 +616,12 @@ test('APRÈS UNE RÉPONSE, LA SENTINELLE S’ARRÊTE — sinon elle sonde le vei
         sonde: { intervalle: 100, borne: 500 },
       }
     );
-    const apresReponse = compte.compteur.pings;
+    const apresReponse = compte.compteur.connexions;
     await dodo(600); // six intervalles de sonde : largement de quoi voir une sentinelle en vie
     assert.equal(
-      compte.compteur.pings,
+      compte.compteur.connexions,
       apresReponse,
-      `la sentinelle a continué de sonder après la réponse (${apresReponse} → ${compte.compteur.pings} pings)`
+      `la sentinelle a continué de sonder après la réponse (${apresReponse} → ${compte.compteur.connexions} connexions)`
     );
   } finally {
     await compte.fermer();
@@ -619,7 +631,7 @@ test('APRÈS UNE RÉPONSE, LA SENTINELLE S’ARRÊTE — sinon elle sonde le vei
 test('APRÈS UN REFUS DE BORNE, LA SENTINELLE S’ARRÊTE AUSSI — l’autre sortie de la boucle', async () => {
   // La sortie sur la borne du geste, distincte de la sortie sur « c'est fini ». Elle a survécu
   // séparément : deux gardes voisines, deux mutations, deux fois zéro rouge.
-  const compte = await veilleurQuiCompteLesPings('sentinelle-borne', { vue: () => new Promise(() => {}) });
+  const compte = await veilleurQuiCompteLesConnexions('sentinelle-borne', { vue: () => new Promise(() => {}) });
   try {
     await parler(
       { geste: GESTE_DE_LA_VUE },
@@ -631,12 +643,12 @@ test('APRÈS UN REFUS DE BORNE, LA SENTINELLE S’ARRÊTE AUSSI — l’autre so
         sonde: { intervalle: 100, borne: 300 },
       }
     ).catch(() => {});
-    const apresRefus = compte.compteur.pings;
+    const apresRefus = compte.compteur.connexions;
     await dodo(600);
     assert.equal(
-      compte.compteur.pings,
+      compte.compteur.connexions,
       apresRefus,
-      `la sentinelle a continué de sonder après le refus (${apresRefus} → ${compte.compteur.pings} pings)`
+      `la sentinelle a continué de sonder après le refus (${apresRefus} → ${compte.compteur.connexions} connexions)`
     );
   } finally {
     await compte.fermer();
