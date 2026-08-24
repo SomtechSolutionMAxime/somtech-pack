@@ -167,8 +167,45 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
  * 10 mandats portés, 85 epics. Elles ne sont pas là pour être jolies : elles rendent le plancher
  * RECALCULABLE le jour où le parc aura grandi.
  */
-const PARC_MESURE = { recensementMs: 12_200, mandats: 10, epics: 85 };
+const PARC_MESURE = { recensementMs: 12_200, mandats: 10, epics: 85, mesureLe: '2026-08-24' };
+
+/**
+ * 🔴 CE DÉNOMINATEUR SE PÉRIME, ET IL SE DÉSARMAIT SANS UN ROUGE — relevé en passe de fond.
+ *
+ * Mutation mesurée : remplacer `PARC_MESURE` par `{ recensementMs: 0, mandats: 0, epics: 122 }`
+ * — des valeurs physiquement impossibles (aucun recensement ne coûte 0 ms, aucun poste ne porte
+ * 0 mandat) mais arithmétiquement dans la fenêtre attendue — laissait les 23 essais VERTS, **y
+ * compris celui qu'elles désarment**. Un garde-fou qu'on neutralise en touchant son propre
+ * dénominateur n'en est pas un : le geste ressemble à de l'entretien, et rien ne le distingue.
+ *
+ * Deux fermetures, parce que le trou a deux faces :
+ *   — **l'ABSURDE** : un parc doit être physiquement possible, et au moins aussi grand que le
+ *     plus grand qu'on ait vu. On ne rétrécit pas le parc pour faire tenir la borne.
+ *   — **le PÉRIMÉ**, qui est le vrai risque : personne ne truquera ce chiffre, on OUBLIERA de le
+ *     remesurer. Le parc grandira, la borne redeviendra trop courte comme les 30 s d'origine, et
+ *     la suite restera verte pendant tout ce temps. Une mesure sans date se périme en silence ;
+ *     datée, elle finit par rougir et réclame qu'on retape la commande.
+ */
+const PARC_PLANCHER = { recensementMs: 9_000, mandats: 8, epics: 85 };
+const JOURS_AVANT_DE_REMESURER = 90;
 const coutDeLaVue = ({ recensementMs, mandats, epics }) => recensementMs + 700 * (2 * mandats + epics);
+
+test('LE PARC DE RÉFÉRENCE EST POSSIBLE ET RÉCENT — sinon le garde-fou se désarme par son dénominateur', () => {
+  for (const [champ, plancher] of Object.entries(PARC_PLANCHER)) {
+    assert.ok(
+      PARC_MESURE[champ] >= plancher,
+      `${champ} = ${PARC_MESURE[champ]} : plus petit que le plus grand parc déjà mesuré (${plancher}). ` +
+        'On ne rétrécit pas le parc de référence pour faire tenir la borne.'
+    );
+  }
+  const jours = (Date.now() - Date.parse(PARC_MESURE.mesureLe)) / 86_400_000;
+  assert.ok(
+    jours <= JOURS_AVANT_DE_REMESURER,
+    `le parc de référence date de ${Math.round(jours)} jours. REMESURE-LE en tapant la commande — ` +
+      '`node bin/ligne-directe.js vue` — puis reporte le coût, le nombre de mandats et d’epics ici. ' +
+      'Le parc grandit ; une borne calculée sur un parc d’il y a six mois est la borne de 30 s d’hier.'
+  );
+});
 
 test('LA BORNE DE PRODUCTION COUVRE LE COÛT MESURÉ — pas un plancher rond qu’on trouve rassurant', () => {
   const cout = coutDeLaVue(PARC_MESURE);
@@ -847,8 +884,86 @@ test('UN VEILLEUR QUI PARLE SANS ÊTRE PRÊT EST VIVANT — la présence, jamais
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 sexies. LE RÉVEIL PARESSEUX — relevé en passe portail comme chemin non couvert
+//
+// 🔴 TOUS LES BANCS DE CE FICHIER PASSENT `reveiller: false`, pour ne pas faire naître de
+// veilleur sous essais. La boucle qui rappelle la surveillance jusqu'à quarante fois n'était
+// donc empruntée par AUCUN d'eux — et c'est la boucle qui crée un couple de contrôleurs neuf à
+// chaque tour. Un contrôleur qui survivrait d'un tour à l'autre ferait refuser au premier
+// abandon tous les tours suivants, sur un veilleur parfaitement sain.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('LE VEILLEUR APPARAÎT EN COURS DE ROUTE : les tours précédents n’empoisonnent pas le bon', async () => {
+  // Le socket n'existe pas encore : `parler` doit boucler. On le fait apparaître après quelques
+  // tours, sans jamais faire naître de vrai veilleur — c'est `reveillerVeilleur` qu'on remplace,
+  // le seul point substitué, et il est nommé.
+  const cheminSocket = join(bac, 'tardif.sock');
+  let servi = null;
+  const naissance = setTimeout(async () => {
+    const v = new Veilleur({ cheminSocket, identite: { equipe: 'T' } });
+    v.vueDuParc = async () => ({ resume: 'le parc' });
+    await v.ecouterLocal();
+    servi = v;
+  }, 900);
+  try {
+    const rendu = await parler(
+      { geste: GESTE_DE_LA_VUE },
+      {
+        reveiller: true,
+        // ⚠️ ON NE FAIT NAÎTRE PERSONNE : un veilleur né sous essais capterait les messages de
+        // production. La cloison du dépôt le refuserait, et elle a raison.
+        naitre: () => 0,
+        cheminSocket,
+        bornesParGeste: { [GESTE_DE_LA_VUE]: 5_000 },
+        sonde: { intervalle: 100, borne: 400 },
+      }
+    );
+    assert.equal(rendu?.resume, 'le parc', 'le tour qui trouve le veilleur doit RENDRE, pas hériter des refus d’avant');
+  } finally {
+    clearTimeout(naissance);
+    if (servi) await servi.arreter().catch(() => {});
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // 4. « IL N'A PAS RÉPONDU » ≠ « IL A RÉPONDU QU'IL NE PEUT PAS »
 // ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('LE TEMPS DU REFUS EST CELUI QU’ON A VRAIMENT ATTENDU — mesuré par le CHEMIN DE PRODUCTION', async () => {
+  // 🔴 RELEVÉ EN PASSE DE FOND, ET C'EST LE DÉFAUT D'ORIGINE RÉINTRODUIT PAR UNE AUTRE PORTE.
+  // Le banc voisin appelle `refusSansReponse()` en lui DONNANT le nombre : il garde le format,
+  // jamais le calcul. Mutation mesurée : forcer `ms: 0` aux deux endroits où
+  // `demanderSousSurveillance` fait `Date.now() - t0` laissait les 990 essais VERTS — et le
+  // refus rendu au dirigeant disait « attendu 0s » après trois secondes d'attente réelle.
+  //
+  // ⚠️ Un refus qui ment sur sa propre mesure est exactement ce que ce lot existe pour fermer :
+  // « le veilleur n'a pas répondu en 30s » était faux au sens propre, lui aussi.
+  const muet = await socketMuet('temps-vrai');
+  try {
+    const attendu = 700;
+    const err = await parler(
+      { geste: GESTE_DE_LA_VUE },
+      {
+        reveiller: false,
+        cheminSocket: muet.cheminSocket,
+        borneParDefaut: attendu,
+        bornesParGeste: { [GESTE_DE_LA_VUE]: attendu },
+        // sonde inerte : on veut que ce soit LA BORNE qui tombe, donc le chemin du refus final
+        sonde: { intervalle: 10_000, borne: 200 },
+      }
+    ).then(() => null, (e) => e);
+    assert.ok(err, 'le veilleur est muet : ce geste doit refuser');
+    const dit = Number(err.message.match(/attendu ([\d.]+)s/)?.[1]);
+    assert.ok(Number.isFinite(dit), `le refus doit porter un nombre de secondes : ${err.message.split('\n')[0]}`);
+    // Fourchette large — on garde le CALCUL, pas la vitesse du poste. `ms: 0` rendrait 0.
+    assert.ok(
+      dit >= attendu / 1000 - 0.15 && dit <= attendu / 1000 + 3,
+      `le refus dit avoir attendu ${dit}s, l’attente réelle était d’environ ${attendu / 1000}s`
+    );
+  } finally {
+    await muet.fermer();
+  }
+});
 
 test('LE REFUS DIT COMBIEN DE TEMPS IL A ATTENDU, AU DIXIÈME — « 0s » se lirait comme un bogue', () => {
   // 🔴 RELEVÉ EN PASSE DE FOND : les bancs n'assertaient que le VOCABULAIRE du refus, jamais le

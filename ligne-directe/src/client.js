@@ -367,6 +367,10 @@ export async function parler(
     bornesParGeste = BORNES_PAR_GESTE,
     borneParDefaut = BORNE_PAR_DEFAUT,
     sonde = SONDE_PAR_DEFAUT,
+    // ⚠️ INJECTÉ PAR PARAMÈTRE, comme partout ailleurs — c'est ce qui rend le réveil paresseux
+    // observable sans qu'un banc ait à faire naître un vrai veilleur. Un veilleur né sous essais
+    // capterait les messages de production : la cloison du dépôt le refuse, et elle a raison.
+    naitre = reveillerVeilleur,
   } = {}
 ) {
   // 🔴 LA BORNE VIENT DU GESTE, ET C'EST TOUT LE CORRECTIF. Une borne unique servait les
@@ -382,7 +386,7 @@ export async function parler(
     const absent = err.code === 'ENOENT' || err.code === 'ECONNREFUSED';
     if (!absent || !reveiller) throw err;
   }
-  reveillerVeilleur();
+  naitre();
   for (let essai = 0; essai < 40; essai += 1) {
     await dodo(250);
     try {
