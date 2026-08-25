@@ -1577,16 +1577,88 @@ export const CONTROLES = [
     id: 'gestes-de-session-existants',
     quoi: 'chaque commande de session enseignée s’adresse à un objet connu et est employée ailleurs dans le pack',
     verifier({ metier }) {
-      // L'outil de session n'est pas versionné ici : on n'admet que des formes déjà
-      // employées par une compétence éprouvée, relevées dans ses BLOCS DE COMMANDES et
-      // jamais dans sa prose — celle-ci cite nommément un contre-exemple.
-      const reference = readFileSync(join(REPO, '.claude', 'skills', 'orchestrer-chantier', 'SKILL.md'), 'utf8');
+      // L'outil de session n'est pas versionné ici : on n'admet que des formes déjà employées
+      // AILLEURS DANS LE PACK, et le contrôle doit donc relever ce que le pack emploie vraiment.
+      //
+      // ⚠️ POURQUOI LA RÉFÉRENCE A CHANGÉ (D-20260825-0002). Elle ne lisait qu'UN fichier d'un
+      // autre rôle — `orchestrer-chantier/SKILL.md` — et concluait « employé dans le pack ».
+      // Deux objets différents : le contrôle mesurait « présent dans les blocs bash de ce
+      // SKILL.md » et prononçait un verdict sur le pack entier. Le jour où ce SKILL.md a cessé
+      // de citer `herdr tab create` — la naissance d'un chef d'équipe étant devenue un geste
+      // outillé —, le contrôle a accusé le métier du représentant d'enseigner une commande
+      // inventée. Or elle ne l'est pas : mesuré, `naissance-representant/src/naissance.js:566`
+      // appelle `'tab', 'create'`. Le CODE du pack l'emploie. C'était un faux refus, produit
+      // par l'écart entre ce que le contrôle annonçait et ce qu'il regardait.
+      //
+      // La référence est donc l'UNION de deux relevés, chacun lu à sa source :
+      //   • le TEXTE d'une compétence éprouvée — ses BLOCS DE COMMANDES et jamais sa prose,
+      //     celle-ci citant nommément un contre-exemple ;
+      //   • le CODE du pack, où l'appel au binaire s'écrit en TABLEAU D'ARGUMENTS
+      //     (`['tab', 'create', …]`, `['agent', 'get', pane]`) et jamais en ligne de shell.
+      //
+      // ⚠️ AUCUNE SOURCE N'EST UN DOUBLE DE TEST NI LE GABARIT LUI-MÊME, et c'est vérifié plus
+      // bas. Un faux `herdr` de banc porte des formes que la production n'emploie pas ; et une
+      // référence qui engloberait le gabarit rendrait toute forme « connue » par construction —
+      // le contrôle serait désarmé sans qu'une seule assertion disparaisse.
+
+      /** Les objets que herdr expose — relevés dans le code, et servant AUX DEUX relevés. */
+      const OBJETS = ['pane', 'agent', 'tab', 'workspace'];
+
+      /** Les formes telles qu'un texte les écrit : `herdr <objet> <verbe>`. */
       const formes = (t) => new Set([...t.matchAll(/\bherdr ([a-z-]+ [a-z-]+)/g)].map((m) => m[1]));
-      const connues = formes(blocsBash(reference).join('\n'));
+
+      /** Les formes telles que le CODE les écrit : en tête d'un tableau d'arguments. */
+      const formesDuCode = (t) => new Set(
+        [...t.matchAll(new RegExp(`\\[\\s*'(${OBJETS.join('|')})',\\s*'([a-z-]+)'`, 'g'))]
+          .map((m) => `${m[1]} ${m[2]}`)
+      );
+
+      /** Tous les `.js` sous une racine, chemins relatifs au dépôt. */
+      const jsSous = (rel) => {
+        const racine = join(REPO, rel);
+        if (!existsSync(racine)) return [];
+        return readdirSync(racine, { recursive: true })
+          .filter((f) => String(f).endsWith('.js'))
+          .map((f) => join(rel, String(f)));
+      };
+
+      const SOURCES = [
+        {
+          quoi: 'le texte d’une compétence éprouvée',
+          fichiers: [join('.claude', 'skills', 'orchestrer-chantier', 'SKILL.md')],
+          relever: (t) => formes(blocsBash(t).join('\n')),
+        },
+        // Les quatre lieux où le pack parle au binaire `herdr`, mesurés le 2026-08-25 :
+        // 14 formes dans naissance-representant/src, 13 dans ligne-directe/src,
+        // 7 dans naissance-representant/bin, 1 dans cli/src.
+        ...['cli/src', 'ligne-directe/src', 'naissance-representant/bin', 'naissance-representant/src']
+          .map((rel) => ({ quoi: `le code de ${rel}`, fichiers: jsSous(rel), relever: formesDuCode })),
+      ];
+
+      const connues = new Set();
+      for (const source of SOURCES) {
+        for (const f of source.fichiers) {
+          // ⚠️ Ce qui rend ce contrôle désarmable, ce n'est pas de retirer une assertion :
+          // c'est d'ÉLARGIR la référence jusqu'à ce qu'elle avale ce qu'elle juge.
+          assert.ok(
+            !/(^|[\\/])tests?[\\/]/.test(f),
+            `« ${f} » est un double de banc : une forme qu'un faux herdr porte ne prouve pas que le pack l'emploie`
+          );
+          assert.ok(
+            !f.startsWith(GABARIT_DIR),
+            `« ${f} » est le gabarit jugé : une référence qui l'englobe rend toute forme « connue » par construction`
+          );
+          for (const forme of source.relever(readFileSync(join(REPO, f), 'utf8'))) connues.add(forme);
+        }
+        // Une source muette est une source qu'on a cessé de mesurer — répertoire déplacé,
+        // vidé, ou relevé qui ne mord plus. Sans ceci, elle disparaît en silence.
+        const apport = source.fichiers.some((f) => source.relever(readFileSync(join(REPO, f), 'utf8')).size > 0);
+        assert.ok(apport, `${source.quoi} n’apporte aucune forme — cette source de référence ne mesure plus rien`);
+      }
       assert.ok(connues.size >= 5, 'les formes de référence n’ont pas été relevées — le contrôle ne prouverait rien');
 
       for (const forme of formes(metier)) {
-        assert.ok(['pane', 'agent', 'tab'].includes(forme.split(' ')[0]), `« herdr ${forme} » ne s’adresse à aucun objet connu — inventé ?`);
+        assert.ok(OBJETS.includes(forme.split(' ')[0]), `« herdr ${forme} » ne s’adresse à aucun objet connu — inventé ?`);
         assert.ok(connues.has(forme), `« herdr ${forme} » n’est employé nulle part ailleurs dans le pack — inventé ?`);
       }
     },
