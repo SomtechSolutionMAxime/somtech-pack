@@ -48,13 +48,40 @@
 // de ce que le service portait déjà par ailleurs. Elle borne le choix, elle ne le prouve pas
 // pour tous les régimes.
 //
-// **D'où 8**, et les trois raisons se tiennent ensemble :
-//   1. **8 est dans la bande où la latence est au plancher** — 492 ms contre 480 ms seul. La
-//      vue ne paie aucune file d'attente, et n'en fait payer aucune.
-//   2. **8 laisse au service les sept huitièmes de la capacité qu'on lui a MESURÉE** (~64
-//      simultanés avant saturation). Un poste qui affiche sa vue ne prend pas le service.
-//   3. **8 suffit** : 118 appels à 8 de front, ~0,5 s chacun, c'est une poignée de secondes —
-//      mesuré ensuite en tapant la commande, pas calculé ici.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 D'OÙ 32 — ET LE CHIFFRE A ÉTÉ RÉVISÉ APRÈS COUP, CE QUI SE DIT PLUTÔT QUE SE MAQUILLE
+//
+// **Le premier chiffre posé était 8**, sur ce raisonnement : dans la bande de latence-plancher,
+// un huitième de la capacité mesurée laissé aux autres, « et ça suffira ». Les deux premières
+// raisons étaient mesurées. **La troisième était une supposition, et elle était fausse.**
+//
+// Mesuré en tapant la commande sur le poste réel, le 2026-08-25 (parc : 13 mandats codés, 91
+// epics, 261 stories ; huit essais par plafond) :
+//
+//     plafond    la commande rend en        critère du lot (< 15 s)
+//        8       16,0 · 16,2 · 16,4 · 17,6        NON TENU
+//       16       12,8 → 15,4 (8 essais)           deux essais sur huit AU-DESSUS
+//       32       11,8 → 13,7 (8 essais)           tenu, pire cas 13,7 s
+//
+// **C'est le résultat qui a forcé la révision, pas la sonde** — et l'écrire compte plus que de
+// reconstruire après coup une justification qui aurait précédé. Une borne se pose avant le
+// résultat ; celle-ci a été reposée après, et voici le compte-rendu.
+//
+// Ce que la sonde, elle, dit de 32 — et c'est ce qui rend le chiffre ADMISSIBLE, pas le fait
+// qu'il tienne le critère :
+//   1. **32 est encore dans la bande de latence-plancher** : 514 ms de médiane contre 480 ms
+//      à un seul appel. La file d'attente ne coûte rien, ni à nous ni aux autres.
+//   2. **La saturation est à 64**, pas à 32 : le débit servi monte encore (40/s à N=32, 71/s à
+//      N=64), donc à 32 le service n'est pas au bout de ce qu'il sait faire.
+//   3. **La rafale dure moins de quatre secondes** — la jointure ServiceDesk vaut désormais
+//      ~2,5 à 3,9 s sur les ~12 s de la commande.
+//   4. Zéro échec à TOUS les N mesurés, 1 à 128.
+//
+// ⚠️ ET CE QUI DOMINE MAINTENANT N'EST PLUS LE SERVICEDESK. Sur les 11,8 à 13,7 s de la
+// commande, **le recensement du poste en prend 8,2 à 10,1** — soit les trois quarts. Aucun
+// plafond ne fera descendre la vue sous ~11 s : le prochain gain de vitesse est là, et il est
+// HORS de ce lot. Monter à 64 prendrait la moitié de la capacité du service pour gagner une
+// seconde sur un geste qui en coûtera onze quoi qu'il arrive.
 //
 // 🔴 CE PLAFOND SE PÉRIMERA, COMME LA BORNE QU'IL REMPLACE. Le jour où le service change de
 // forme, la sonde est à refaire — elle vit dans le lot, pas dans une intuition.
@@ -68,7 +95,7 @@
  * l'autre. Le plafond porte sur ce que la sonde a mesuré — **des appels HTTP en vol** — et le
  * reste du code a le droit de demander autant qu'il veut : c'est ici que ça se borne.
  */
-export const PLAFOND_SERVICEDESK = 8;
+export const PLAFOND_SERVICEDESK = 32;
 
 /**
  * BORNER UN TRANSPORT — il sert au plus `plafond` appels à la fois, les autres attendent.

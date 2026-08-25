@@ -638,9 +638,10 @@ test('LE PLAFOND DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la sonde qui l�
   // qu'elle exige, c'est qu'on relise la sonde de `src/plafond.js` avant de toucher au chiffre.
   assert.equal(
     PLAFOND_SERVICEDESK,
-    8,
+    32,
     'le plafond a changé. Si c’est voulu : refais la sonde contre le VRAI ServiceDesk, reporte ' +
-      'le tableau dans src/plafond.js, et dis ici pourquoi le nouveau chiffre.'
+      'le tableau dans src/plafond.js, retape la commande pour dire ce qu’elle coûte, et dis ' +
+      'ici pourquoi le nouveau chiffre.'
   );
   assert.ok(PLAFOND_SERVICEDESK >= 2, 'un plafond de 1 est un retour au séquentiel, déguisé en réglage');
 });

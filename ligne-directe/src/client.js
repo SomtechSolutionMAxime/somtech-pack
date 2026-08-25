@@ -34,27 +34,44 @@ export const BORNE_PAR_DEFAUT = 30_000;
  * `recensement` en **9 s**, `vue` en **67 127 ms** (puis 71 797 ms au second essai). Une borne
  * unique ne peut être juste pour aucun d'eux : trop lâche pour trois, trop serrée pour un.
  *
- * ⚠️ ET LE COÛT DE LA VUE EST STRUCTUREL, PAS ACCIDENTEL — mesuré appel par appel, transport
+ * ⚠️ ET LE COÛT DE LA VUE ÉTAIT STRUCTUREL, PAS ACCIDENTEL — mesuré appel par appel, transport
  * instrumenté : 9 217 ms de recensement, puis 54 144 ms de jointure en **91 appels HTTP
- * séquentiels**. Aucun appel n'est lent (médiane 624-778 ms, max 976 ms) : c'est le NOMBRE qui
- * coûte. Sa loi, pour qui voudra reposer cette borne un jour :
+ * séquentiels**. Aucun appel n'était lent (médiane 624-778 ms, max 976 ms) : c'était le NOMBRE
+ * qui coûtait. Sa loi d'alors :
  *
  *     T ≈ recensement + 0,7 s × (2 × mandats + epics)
  *
  * — une liste par mandat, un `epics/list` par mandat, **un `tickets/list` par epic**.
  *
- * 🔴 CETTE BORNE SE PÉRIMERA, ET IL FAUT LE DIRE PLUTÔT QUE DE LA PRÉSENTER COMME CONFORTABLE.
- * Mesurée le matin du 2026-08-24 : **67 s pour 71 epics**. Remesurée quatre heures plus tard,
- * même poste, même code : **84 s pour 85 epics** (89 s sous charge). Le parc grandit, et le
- * coût avec lui — la marge réelle est donc de **2×**, pas davantage. Elle ne tient pas un parc
- * qui double. Ce jour-là, la réponse ne sera pas une borne plus haute : ce sera le nombre
- * d'appels, qu'aucune borne ne peut rattraper.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 LA PHRASE ÉCRITE ICI LE 2026-08-24 S'EST RÉALISÉE, ET C'EST POURQUOI CETTE BORNE A BAISSÉ
  *
- * ⚠️ CE N'EST PAS UNE PERMISSION D'ATTENDRE TROIS MINUTES. La sonde ci-dessous refuse dès que
+ * Elle disait : *« Ce jour-là, la réponse ne sera pas une borne plus haute : ce sera le nombre
+ * d'appels, qu'aucune borne ne peut rattraper. »* C'est ce qu'a fait `E-20260824-0011` : les
+ * appels partent de front, bornés à 32 en vol (`src/plafond.js`, et le chiffre y est mesuré
+ * contre le vrai service).
+ *
+ * **Remesuré en tapant la commande, poste réel, 2026-08-25** — parc de 13 mandats codés, 91
+ * epics, 261 stories, huit essais : **11,8 à 13,7 s**, contre 60,7 à 84,8 s le même jour avec
+ * le code d'avant. Et sur ces ~12 s, **le recensement du poste en prend 8,2 à 10,1** : le
+ * ServiceDesk n'est plus le poste dominant, il vaut 2,5 à 3,9 s.
+ *
+ * 🔴 ALORS 300 s NE GARDAIENT PLUS RIEN, et c'est l'argument écrit six lignes plus haut au sujet
+ * de `BORNE_PAR_DEFAUT` : une borne trop lâche fait attendre cinq minutes le jour où un geste
+ * pend VRAIMENT. On l'a donc RAMENÉE à 60 s — quatre fois et demie le coût mesuré, deux fois la
+ * marge que l'épingle du banc exige, et cinq fois moins d'attente devant un vrai blocage.
+ *
+ * ⚠️ ET LA CHAÎNE A ROUGI EN CHEMIN, comme elle devait. Baisser cette valeur a fait rougir
+ * l'épingle de `tests/le-geste-vue-repond-par-le-socket.test.js` et l'essai qui exigeait que la
+ * borne couvre le coût de 67 s. On les a SUIVIS — coût remesuré, date refaite, épingle
+ * réalignée — au lieu de les contourner. C'est la chaîne posée par `E-20260824-0001` qui a
+ * fonctionné exactement comme elle le prévoyait, dans l'autre sens.
+ *
+ * ⚠️ CE N'EST PAS UNE PERMISSION D'ATTENDRE UNE MINUTE. La sonde ci-dessous refuse dès que
  * le veilleur cesse de répondre : la borne haute n'est atteinte que par un veilleur VIVANT et
  * occupé, jamais par un veilleur mort.
  */
-export const BORNES_PAR_GESTE = Object.freeze({ [GESTE_DE_LA_VUE]: 300_000 });
+export const BORNES_PAR_GESTE = Object.freeze({ [GESTE_DE_LA_VUE]: 60_000 });
 
 /**
  * LA SONDE DE VIE — ce qui rend une borne haute admissible.

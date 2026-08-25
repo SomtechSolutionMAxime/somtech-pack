@@ -115,9 +115,14 @@ test('le geste « vue » a SA borne, et elle est plus longue que celle des geste
     'sans borne propre, la vue retombe sur les 30 s qui l’ont fait pendre'
   );
   assert.equal(borneDuGeste('etat'), BORNE_PAR_DEFAUT, 'les gestes ordinaires gardent leur borne');
+  // 🔴 LE CHIFFRE A BAISSÉ AVEC LE COÛT, ET C'EST LE SENS DE LA CHAÎNE, PAS SON CONTOURNEMENT.
+  // Il exigeait 67 000 ms — le coût du geste quand la jointure se faisait en 91 appels
+  // SÉQUENTIELS. `E-20260824-0011` a supprimé ce coût (appels de front, bornés à 32 en vol) :
+  // remesuré en tapant la commande le 2026-08-25, huit essais, **11,8 à 13,7 s**. Garder 67 000
+  // aurait fait exiger d'une borne qu'elle couvre un coût qui n'existe plus.
   assert.ok(
-    borneDuGeste(GESTE_DE_LA_VUE) >= 67_000,
-    'la borne de la vue doit couvrir son coût MESURÉ (67 127 ms au socket), pas un chiffre rond'
+    borneDuGeste(GESTE_DE_LA_VUE) >= VUE_A_COUTE_MS,
+    'la borne de la vue doit couvrir son coût MESURÉ, pas un chiffre rond'
   );
 });
 
@@ -199,8 +204,21 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
  * jamais attendues devant un veilleur mort : le ping tranche en quelques secondes. La borne
  * haute n'est atteinte que par un veilleur VIVANT et OCCUPÉ — c'est tout ce qu'elle autorise.
  */
-const VUE_A_COUTE_MS = 91_320;
-const VUE_MESUREE_LE = '2026-08-24';
+// 🔴 REMESURÉ LE 2026-08-25, APRÈS `E-20260824-0011` — et le chiffre a été divisé par près de
+// sept. Huit essais en tapant la commande sur le poste réel, veilleur isolé, parc de 13 mandats
+// codés / 91 epics / 261 stories : 11,84 · 12,48 · 12,49 · 12,83 · 12,87 · 13,13 · 13,51 ·
+// **13,71** s. On retient le plus grand, comme la fois d'avant — une borne ne se pose pas sur
+// le meilleur jour.
+//
+// ⚠️ ET LA BAISSE N'EST PAS UN RÉTRÉCISSEMENT DE LA MESURE. Le fichier d'à côté met en garde :
+// « le parc a grandi, il faut RELEVER LA BORNE, pas rétrécir la mesure ». Ici c'est le COÛT qui
+// a baissé, mesuré en tapant la commande le même jour que sa baseline (60,7 à 84,8 s avec le
+// code d'avant, sur le MÊME parc et le MÊME poste). Le rapport des deux est le lot.
+//
+// ⚠️ ET CE QUI DOMINE CES ~12 s N'EST PLUS LE SERVICEDESK : le recensement du poste en prend
+// 8,2 à 10,1. Une future baisse de ce chiffre ne viendra pas d'un plafond plus haut.
+const VUE_A_COUTE_MS = 13_710;
+const VUE_MESUREE_LE = '2026-08-25';
 
 /**
  * 🔴 LA BORNE DE PRODUCTION, ÉPINGLÉE À SA VALEUR EXACTE — et c'est le point d'arrêt.
@@ -244,7 +262,15 @@ const VUE_MESUREE_LE = '2026-08-24';
  * Ce qui suit garde donc ce qu'un banc PEUT garder : que la valeur n'a pas bougé par accident.
  * Pas contre quelqu'un qui la change exprès des deux côtés — ce n'est pas à sa portée.
  */
-const BORNE_DE_LA_VUE_EN_PRODUCTION = 300_000;
+// 🔴 ELLE A BAISSÉ DE 300 s À 60 s, ET L'ÉPINGLE A ROUGI POUR LE DIRE — c'est exactement ce que
+// la chaîne décrite ci-dessus était censée faire, dans l'autre sens.
+//
+// 300 s ont été posées le 2026-08-24 sur un geste qui coûtait 91 s. Le geste en coûte 13,7 :
+// une borne de cinq minutes ne garde plus rien, et l'argument est déjà écrit dans
+// `src/client.js` au sujet de `BORNE_PAR_DEFAUT` — trop lâche, elle fait attendre cinq minutes
+// le jour où un geste pend VRAIMENT. 60 s tiennent 4,4× le coût mesuré, donc largement le 2×
+// que l'essai ci-dessous exige, et disent un vrai blocage cinq fois plus vite.
+const BORNE_DE_LA_VUE_EN_PRODUCTION = 60_000;
 
 test('LA BORNE DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la changer exprès des deux côtés reste possible', () => {
   assert.equal(
