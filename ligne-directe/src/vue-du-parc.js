@@ -157,6 +157,36 @@ export const PHRASE_COURTE_DU_DECLARE = 'non mesuré à un lieu';
  */
 export const FRAGMENT_DU_QUALIFICATIF = 'mesuré à un lieu';
 
+/**
+ * DÉSARMER UN TEXTE LIBRE AVANT QU’IL N’ATTEIGNE UN TERMINAL.
+ *
+ * 🔴 CE LOT EST LE PREMIER À ADMETTRE COMME SOURCE RENDUE UN CHAMP QUE SON PROPRE EN-TÊTE
+ * QUALIFIE DE NON ATTESTÉ. `assigned_agent` est du texte libre : personne ne le valide, et il
+ * arrive intact jusqu’à `process.stdout` — en mode texte comme dans le TUI.
+ *
+ * ⚠️ MESURÉ, PAS CRAINT (2026-08-25, passe de fond) : un `assigned_agent` portant
+ * `ESC[2J ESC[H ESC]0;… BEL` traverse `rendreAttribution`, `suffixeDuRattachement` et
+ * `lignesDeLaSource` sans une égratignure — il EFFACE l’écran du dirigeant en plein rendu,
+ * repositionne son curseur et réécrit le titre de sa fenêtre. Code de retour 0 : rien ne le
+ * signale, puisque rien n’a échoué.
+ *
+ * ⚠️ ON REMPLACE, ON NE SUPPRIME PAS. Effacer les octets ferait disparaître le fait qu’ils
+ * étaient là : deux noms différents se rendraient identiques, et le dirigeant croirait lire
+ * un nom ordinaire. Le caractère de remplacement DIT qu’il y avait quelque chose — c’est
+ * RA-VUE-003 appliquée à un octet : une anomalie se montre, elle ne se comble pas.
+ *
+ * ⚠️ CE QUE CETTE FONCTION NE COUVRE PAS, ET C’EST DIT PLUTÔT QUE SOUS-ENTENDU : les TITRES
+ * d’epics et de stories (`e?.title`) sont eux aussi du texte libre du ServiceDesk, et ils ne
+ * sont assainis nulle part. C’est un trou ANTÉRIEUR à ce lot, sur une autre source ; il est
+ * remonté plutôt qu’élargi ici.
+ */
+export function desarmerLeTexteLibre(texte) {
+  if (typeof texte !== 'string') return texte;
+  // Les C0 (sauf rien : ni tabulation ni saut de ligne n’ont leur place dans un nom), DEL,
+  // et les C1 de la plage 0x80–0x9F, qui pilotent aussi certains terminaux.
+  return texte.replace(/[\u0000-\u001f\u007f-\u009f]/g, '\ufffd');
+}
+
 /** La phrase du prouvé — l'autre moitié de la frontière, dite avec les mêmes mots partout. */
 export const PHRASE_DU_PROUVE = 'mandat lu au lieu de l’agent';
 
@@ -541,7 +571,11 @@ export function nomsDeclares({ nomDeclare = null, nomsDesStories = [] } = {}) {
     // `codePorteEnMandat` et `codePorteEnNom` gardent déjà leur entrée sur `typeof` ; ne pas
     // le faire ici était la même discipline appliquée à une porte sur trois.
     if (typeof nom !== 'string') return;
-    const n = nom.trim();
+    // 🔴 LE DÉSARMEMENT SE FAIT ICI, À LA PORTE, ET NON À CHAQUE RENDU. Trois surfaces le
+    // rendent (texte, suffixe du TUI, panneau de détail) : assainir au rendu, c’est trois
+    // gestes dont un sera oublié — le motif « une porte sur deux » que ce module a déjà payé
+    // quatre fois sur ce seul lot. Une porte, un geste.
+    const n = desarmerLeTexteLibre(nom).trim();
     if (!n) return;
     const cle = n.toLowerCase();
     if (vus.has(cle)) return;

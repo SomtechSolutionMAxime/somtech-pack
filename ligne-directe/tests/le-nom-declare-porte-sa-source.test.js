@@ -49,6 +49,7 @@ import {
   PHRASE_DE_LINDICE,
   quiPorte,
   FRAGMENT_DU_QUALIFICATIF,
+  desarmerLeTexteLibre,
 } from '../src/vue-du-parc.js';
 import {
   arbreDeLaVue,
@@ -902,6 +903,107 @@ test('LA PHRASE DU TROU NE NOMME AUCUN MÉCANISME — c’est ce qui la rend vra
     assert.ok(p.includes('EN ENTIER'), `elle doit dire ce qui MANQUE : ${p}`);
   }
   assert.equal(phrases[0], phrases[1], 'les deux formes du même fait se disent avec les MÊMES mots');
+});
+
+test('UN NOM DÉCLARÉ NE PILOTE PAS LE TERMINAL DU DIRIGEANT — les trois surfaces, désarmées à la porte', () => {
+  // 🔴 CE BANC EXISTE PARCE QU’UNE PASSE DE FOND L’A REPRODUIT (2026-08-25). `assigned_agent`
+  // est du texte libre — l’en-tête de ce module le dit lui-même : « personne ne l’atteste ». Ce
+  // lot est le PREMIER à en faire une source RENDUE, et elle atteignait `process.stdout` intacte.
+  //
+  // Mesuré : un nom portant `ESC[2J ESC[H ESC]0;… BEL` traversait `rendreAttribution`,
+  // `suffixeDuRattachement` et `lignesDeLaSource` sans une égratignure — il EFFACE l’écran en
+  // plein rendu, repositionne le curseur, réécrit le titre de la fenêtre. Code de retour 0 :
+  // rien ne le signalait, puisque rien n’avait échoué.
+  const ESC = String.fromCharCode(27);
+  const BEL = String.fromCharCode(7);
+  const CHARGE = `${ESC}[2J${ESC}[H${ESC}]0;PWNED${BEL}`;
+
+  const attribution = {
+    mesure: 'déclarée',
+    source: PHRASE_DU_DECLARE,
+    declares: nomsDeclares({ nomDeclare: CHARGE }),
+    indices: [],
+  };
+
+  // ⚠️ LES TROIS SURFACES, ÉNUMÉRÉES — une garde posée sur un cas ne couvre pas sa famille, et
+  // ce lot s’est déjà fait prendre quatre fois par ce motif.
+  const surfaces = {
+    'rendreAttribution (vue texte)': rendreAttribution(attribution),
+    'suffixeDuRattachement (arbre du TUI)': suffixeDuRattachement(attribution),
+    'lignesDeLaSource (panneau de détail)': lignesDeLaSource(attribution).join(' '),
+  };
+  for (const [ou, rendu] of Object.entries(surfaces)) {
+    for (const octet of [ESC, BEL]) {
+      assert.ok(
+        !rendu.includes(octet),
+        `« ${ou} » laisse passer un octet de contrôle jusqu’au terminal : ${JSON.stringify(rendu)}`
+      );
+    }
+    // ⚠️ ET L’ANOMALIE RESTE VISIBLE. Effacer les octets ferait disparaître le FAIT qu’ils
+    // étaient là : deux noms différents se rendraient identiques, et le dirigeant croirait lire
+    // un nom ordinaire. C’est RA-VUE-003 appliquée à un octet.
+    assert.ok(rendu.includes('�'), `« ${ou} » EFFACE l’anomalie au lieu de la montrer : ${rendu}`);
+  }
+});
+
+test('LE DÉSARMEMENT PORTE SUR LA FAMILLE DES OCTETS DE CONTRÔLE, PAS SUR LA CHARGE QU’ON A VUE', () => {
+  // ⚠️ UNE GARDE BÂTIE SUR L’EXEMPLE QUI L’A FAIT NAÎTRE NE COUVRE QUE LUI. On énumère donc la
+  // FAMILLE : C0, DEL, et les C1 — ces derniers pilotent aussi certains terminaux, et ce sont
+  // ceux qu’un filtre écrit « contre ESC » oublie.
+  for (const code of [0x00, 0x07, 0x08, 0x0a, 0x0d, 0x1b, 0x7f, 0x84, 0x9b, 0x9d]) {
+    const rendu = desarmerLeTexteLibre(`a${String.fromCharCode(code)}b`);
+    assert.equal(rendu, 'a�b', `l’octet 0x${code.toString(16)} n’est pas désarmé : ${JSON.stringify(rendu)}`);
+  }
+  // ⚠️ ET IL NE TOUCHE À RIEN D’AUTRE — un désarmement trop large abîmerait les noms réels.
+  // Les accents et le tiret d’un code de chantier doivent traverser intacts.
+  for (const bon of ['e-20260825-0001', 'kamouraska', 'agent-à-accent', 'nom_avec_underscore']) {
+    assert.equal(desarmerLeTexteLibre(bon), bon, `« ${bon} » ne doit pas être abîmé`);
+  }
+  // Ce qui n'est pas du texte traverse tel quel : le refus de type est la porte d'à côté.
+  assert.equal(desarmerLeTexteLibre(null), null);
+  assert.equal(desarmerLeTexteLibre(42), 42);
+});
+
+test('LA VUE NE DÉPEND PAS DU PLAFOND DE CONCURRENCE, MÊME AVEC UN NOM DÉCLARÉ ET UN ÉCART', async (t) => {
+  // 🔴 LACUNE DE COUVERTURE RELEVÉE EN PASSE DE FOND, ET FERMÉE ICI PLUTÔT QUE DANS LE BANC
+  // D’UN AUTRE LOT. Le banc « LA VUE NE DÉPEND PAS DU PLAFOND — 1, 8, 32 » (lot vitesse,
+  // E-20260824-0011) ne renseigne JAMAIS `assigned_agent` dans sa fixture : sa garantie
+  // d’invariance n’était donc jamais éprouvée avec les champs de CE lot actifs.
+  //
+  // ⚠️ LA GARANTIE TIENT — vérifié, pas supposé — mais elle tenait sans être mesurée. Un fait
+  // vrai que rien n’éprouve cesse d’être vrai le jour où quelqu’un le change.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  // Un décor qui porte les DEUX états neufs : un nom déclaré pur, et un écart avec le mandat.
+  const service = unDecor({
+    tickets: [
+      { id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'une', status: 'new', assigned_agent: 'e-20260825-0001' },
+      { id: 't2', epic_id: 'e1', ticket_id: 'T-2', title: 'deux', status: 'new', assigned_agent: 'e-20260824-0011' },
+      { id: 't3', epic_id: 'e1', ticket_id: 'T-3', title: 'trois', status: 'new', assigned_agent: null },
+    ],
+  });
+  const recensement = await unRecensement({
+    panes: [unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: lieu })],
+    roleDuLieu,
+    nomsConnus: nomsLus([['w1:p1', 'kamouraska', undefined]]),
+  });
+
+  const vues = await Promise.all(
+    [1, 8, 32].map((plafond) =>
+      laVueDuParc({ recensement, lireChantier: lecteurDeChantier({ appeler: service.appeler, plafond }) })
+    )
+  );
+  // ⚠️ LE CONTRÔLE POSITIF D’ABORD : si le décor ne fait naître AUCUN nom déclaré, la
+  // comparaison serait verte sans avoir rien touché — une égalité vide.
+  const declares = (vues[0].orchestrateurs[0].epics[0].stories ?? []).filter(
+    (s) => s.agent?.mesure === 'déclarée'
+  );
+  assert.ok(declares.length >= 2, 'le décor doit faire naître des noms déclarés — sinon ce banc ne mesure rien');
+
+  assert.equal(JSON.stringify(vues[1]), JSON.stringify(vues[0]), 'plafond 8 ≠ plafond 1');
+  assert.equal(JSON.stringify(vues[2]), JSON.stringify(vues[0]), 'plafond 32 ≠ plafond 1');
 });
 
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
