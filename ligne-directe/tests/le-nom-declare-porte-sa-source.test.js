@@ -63,6 +63,7 @@ import {
   suffixeDuRattachement,
   marqueDuRattachement,
   lignesDeLaSource,
+  envelopper,
 } from '../src/tui-vue-du-parc.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 
@@ -1279,6 +1280,30 @@ test('AUCUNE LIGNE DU PANNEAU NE FOND LE DÉCLARÉ ET LE PROUVÉ — la FAMILLE,
   // contenu vit dans les lignes suivantes, enveloppées à 28 colonnes. Comparer l'étiquette
   // mesurait deux chaînes identiques et vides de sens : une assertion qui rougit pour une
   // raison qui n'est pas la sienne est le jumeau du banc qui passe pour une mauvaise raison.
+  // 🔴 ET ON RETIRE LE `pourquoi` AVANT DE COMPARER — sans quoi cette garde PASSE POUR UNE
+  // RAISON QUI N'EST PAS LA SIENNE. Mesuré : `nonPris.pourquoi` diffère TOUJOURS entre déclaré
+  // et prouvé (les deux phrases n'ont rien en commun), et il est rendu dans le même bloc que
+  // « pris en charge : ». La tranche différait donc même en fondant `etiquetteNonPris` en un
+  // « oui » nu — les quatre mutations de fusion SURVIVAIENT à ce banc.
+  //
+  // ⚠️ C'EST LE DÉFAUT QUE CE BANC PRÉTEND CHASSER, DANS LE BANC LUI-MÊME. Le retirer laisse la
+  // comparaison porter sur ce que les fonctions de SOURCE rendent, et sur rien d'autre.
+  // ⚠️ ON RETIRE DES LIGNES ENTIÈRES, PAS DES MOTS. Ma première version effaçait chaque mot de
+  // la raison partout dans le panneau — et « porte » (du pourquoi) mangeait « porteur : », donc
+  // l'étiquette elle-même disparaissait. Le banc rougissait alors pour une troisième raison,
+  // ni la sienne ni la bonne. On reconstruit le bloc TEL QUE `detailDe` le produit —
+  // `envelopper(pourquoi, 28)` — et on retire ces lignes-là, exactement.
+  const sansLePourquoi = (panneau, vue) => {
+    const raison = panneauNonPris(vue)?.pourquoi;
+    if (!raison) return panneau;
+    const duPourquoi = new Set(envelopper(raison, 28));
+    return panneau.filter((l) => !duPourquoi.has(l));
+  };
+  const panneauNonPris = (vue) => {
+    const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etatInitial());
+    return lignes.find((l) => l.kind === 'story')?.noeud?.nonPris;
+  };
+
   const ETIQUETTES = ['porteur :', 'source  :', 'pris en charge :'];
   const tranche = (panneau, etiquette) => {
     const i = panneau.findIndex((l) => l.startsWith(etiquette));
@@ -1293,9 +1318,11 @@ test('AUCUNE LIGNE DU PANNEAU NE FOND LE DÉCLARÉ ET LE PROUVÉ — la FAMILLE,
     return panneau.slice(i, fin).join(' ').replace(/\s+/g, ' ').trim();
   };
 
+  const Anet = sansLePourquoi(A, vueDeclaree);
+  const Bnet = sansLePourquoi(B, vueProuvee);
   for (const etiquette of ETIQUETTES) {
-    const a = tranche(A, etiquette);
-    const b = tranche(B, etiquette);
+    const a = tranche(Anet, etiquette);
+    const b = tranche(Bnet, etiquette);
     assert.ok(a !== null, `le panneau DÉCLARÉ n’a pas de bloc « ${etiquette} »`);
     assert.ok(b !== null, `le panneau PROUVÉ n’a pas de bloc « ${etiquette} »`);
     assert.notEqual(
