@@ -1200,6 +1200,118 @@ test('UN ÉCART PORTÉ PAR UNE STORY ALLUME LE SIGNAL DU RÉSUMÉ — le second 
   assert.ok(rendreLaVue(vue).includes(morceau), '④ le dirigeant ne peut pas LIRE l’écart d’une STORY');
 });
 
+test('AUCUNE LIGNE DU PANNEAU NE FOND LE DÉCLARÉ ET LE PROUVÉ — la FAMILLE, énumérée par le rendu et non par ma mémoire', async (t) => {
+  // 🔴 NEUVIÈME REJET DE CE LOT, ET TOUJOURS LA MÊME FORME. `nonPris.source` a QUATRE
+  // consommateurs : `marqueDuRattachement` (la marque de l'arbre), `suffixeDuRattachement` (la
+  // ligne « porteur »), `lignesDeLaSource` (le bloc « source ») — tous trois gardés — et
+  // `etiquetteNonPris` (la ligne « pris en charge »), que je n'avais JAMAIS énuméré.
+  //
+  // Mesuré : muter `etiquetteNonPris` en `return 'oui';` — la régression exacte que son propre
+  // commentaire redoute — laissait les 1088 essais VERTS.
+  //
+  // ⚠️ CE BANC NE GARDE PAS UN QUATRIÈME CAS : il garde la FAMILLE, et il l'énumère par le
+  // RENDU plutôt que par ma liste. Deux décors identiques à UNE chose près — la source — et on
+  // exige que le panneau les distingue. Un cinquième consommateur ajouté demain sera couvert
+  // sans que personne ait à y penser : c'est la seule façon de sortir d'une série de neuf
+  // rejets où j'ai fermé neuf fois un cas en croyant fermer sa famille.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+
+  // ── DÉCOR A : la story est DÉCLARÉE (nom au registre, aucun mandat qui la prouve).
+  const dA = join(tmp, 'a');
+  const lieuA = poserLieu(dA, 'p-20260822-0001');
+  const vueDeclaree = await uneVue({
+    agents: [{ pane: 'w1:p1', lieu: lieuA, nom: 'kamouraska' }],
+    service: unDecor({
+      tickets: [
+        {
+          id: 't1',
+          epic_id: 'e1',
+          ticket_id: 'T-20260825-0002',
+          title: 'une story',
+          status: 'in_progress',
+          assigned_agent: 'un-porteur',
+        },
+      ],
+    }),
+  });
+
+  // ── DÉCOR B : la MÊME story est PROUVÉE — un agent vivant porte son code comme mandat, et le
+  // registre déclare le MÊME nom (donc aucun écart : la seule différence est la SOURCE).
+  const dB = join(tmp, 'b');
+  const lieuB = poserLieu(dB, 'p-20260822-0001');
+  const lieuChef = poserLieu(dB, 't-20260825-0002');
+  const vueProuvee = await uneVue({
+    agents: [
+      { pane: 'w1:p1', lieu: lieuB, nom: 'kamouraska' },
+      { pane: 'w1:p2', lieu: lieuChef, nom: 'un-porteur' },
+    ],
+    service: unDecor({
+      tickets: [
+        {
+          id: 't1',
+          epic_id: 'e1',
+          ticket_id: 'T-20260825-0002',
+          title: 'une story',
+          status: 'in_progress',
+          assigned_agent: 'un-porteur',
+        },
+      ],
+    }),
+  });
+
+  // ⚠️ CONTRÔLE POSITIF — sans lui, ce banc serait vert sur deux décors identiques, donc sur
+  // rien du tout. C'est le défaut « une égalité vide » que ce dépôt a déjà payé.
+  assert.equal(laStory(vueDeclaree).agent.mesure, 'déclarée', 'le décor A doit être DÉCLARÉ');
+  assert.equal(laStory(vueProuvee).agent.mesure, 'lue', 'le décor B doit être PROUVÉ');
+  assert.ok(!laStory(vueProuvee).agent.ecart, 'et sans écart : la SOURCE doit être la seule différence');
+
+  const panneau = (vue) => {
+    const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etatInitial());
+    return detailDe(lignes.find((l) => l.kind === 'story'));
+  };
+  const A = panneau(vueDeclaree);
+  const B = panneau(vueProuvee);
+
+  // 🔴 CHAQUE LIGNE QUI PARLE DE RATTACHEMENT DOIT DIFFÉRER. On les repère par leur étiquette,
+  // qui est stable, plutôt que par leur contenu, qui ne l'est pas.
+  // ⚠️ ON COMPARE LA TRANCHE, PAS L'ÉTIQUETTE. `source  :` est une ligne d'EN-TÊTE seule — son
+  // contenu vit dans les lignes suivantes, enveloppées à 28 colonnes. Comparer l'étiquette
+  // mesurait deux chaînes identiques et vides de sens : une assertion qui rougit pour une
+  // raison qui n'est pas la sienne est le jumeau du banc qui passe pour une mauvaise raison.
+  const ETIQUETTES = ['porteur :', 'source  :', 'pris en charge :'];
+  const tranche = (panneau, etiquette) => {
+    const i = panneau.findIndex((l) => l.startsWith(etiquette));
+    if (i < 0) return null;
+    let fin = panneau.length;
+    for (let j = i + 1; j < panneau.length; j += 1) {
+      if (ETIQUETTES.some((e) => e !== etiquette && panneau[j].startsWith(e))) {
+        fin = j;
+        break;
+      }
+    }
+    return panneau.slice(i, fin).join(' ').replace(/\s+/g, ' ').trim();
+  };
+
+  for (const etiquette of ETIQUETTES) {
+    const a = tranche(A, etiquette);
+    const b = tranche(B, etiquette);
+    assert.ok(a !== null, `le panneau DÉCLARÉ n’a pas de bloc « ${etiquette} »`);
+    assert.ok(b !== null, `le panneau PROUVÉ n’a pas de bloc « ${etiquette} »`);
+    assert.notEqual(
+      a,
+      b,
+      `le bloc « ${etiquette} » rend la MÊME chose pour un rattachement DÉCLARÉ et pour un ` +
+        `rattachement PROUVÉ — c’est là que le dirigeant décide s’il relance quelqu’un : ${a}`
+    );
+  }
+
+  // ⚠️ ET LA MARQUE DE L'ARBRE AUSSI — quatrième consommateur, sur l'autre surface.
+  const marqueDe = (vue) =>
+    lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etatInitial()).find((l) => l.kind === 'story').marque;
+  assert.notEqual(marqueDe(vueDeclaree), marqueDe(vueProuvee), 'la marque de l’arbre fond les deux sources');
+});
+
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
   // ⚠️ DEUX SURFACES, DEUX RENDUS, ET C'EST DÉLIBÉRÉ (la colonne du TUI tronque). Ce qui ne
   // doit PAS diverger, c'est le MOT QUI DÉCIDE : le jour où l'un dirait « DÉCLARÉ » et l'autre
