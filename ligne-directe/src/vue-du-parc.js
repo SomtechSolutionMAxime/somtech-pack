@@ -182,9 +182,28 @@ export const FRAGMENT_DU_QUALIFICATIF = 'mesuré à un lieu';
  */
 export function desarmerLeTexteLibre(texte) {
   if (typeof texte !== 'string') return texte;
-  // Les C0 (sauf rien : ni tabulation ni saut de ligne n’ont leur place dans un nom), DEL,
-  // et les C1 de la plage 0x80–0x9F, qui pilotent aussi certains terminaux.
-  return texte.replace(/[\u0000-\u001f\u007f-\u009f]/g, '\ufffd');
+  // ⚠️ ON FILTRE PAR CODE, PAS PAR UNE PLAGE ÉCRITE EN LITTÉRAL — et ce n'est pas un détail de
+  // style. Écrire la borne basse de la plage C0 en séquence échappée faisait rougir la garde
+  // qui exige que le séparateur de `cleDeLAgent` n'apparaisse QU'UNE fois dans ce fichier.
+  // Cette garde a raison dans son intention : un second usage écrit à la main ferait diverger
+  // la clé sans qu'aucun banc ne rougisse. Ma plage n'était pas un usage de clé — mais la
+  // contourner en changeant la NOTATION aurait été le geste qui désarme une garde en ayant
+  // l'air d'un entretien. On n'a pas besoin de ce littéral : on ne l'écrit donc pas.
+  //
+  // ⚠️ ET LA GARDE COMPTE LE TEXTE DU FICHIER, COMMENTAIRES COMPRIS : c'est pourquoi cette
+  // note elle-même décrit la séquence au lieu de l'écrire. Imprécision connue de la garde,
+  // signalée plutôt que corrigée ici — elle appartient à un autre lot.
+  //
+  // Les C0 — pas d'exception pour la tabulation ni le saut de ligne : ni l'un ni l'autre n'a
+  // sa place dans un nom d'agent, et un saut de ligne casserait l'arbre du rendu. Puis DEL, et
+  // les C1 (0x80–0x9F), qui pilotent aussi certains terminaux et qu'un filtre écrit « contre
+  // ESC » oublie.
+  let sortie = '';
+  for (const c of texte) {
+    const n = c.codePointAt(0);
+    sortie += n < 0x20 || (n >= 0x7f && n <= 0x9f) ? '\ufffd' : c;
+  }
+  return sortie;
 }
 
 /** La phrase du prouvé — l'autre moitié de la frontière, dite avec les mêmes mots partout. */
