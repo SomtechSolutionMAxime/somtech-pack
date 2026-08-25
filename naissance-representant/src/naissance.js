@@ -221,6 +221,12 @@ const LANCEUR = [
   // écriture. Il était court, donc jamais tronqué ; mais une sortie qui n attend pas est
   // précisément le défaut corrigé deux lignes plus bas, et deux voies de sortie dont une
   // seule est sûre finissent par se rejoindre.
+  // ⚠️ `fin` EST UNE CEINTURE, ET ELLE N EST PAS GARDÉE — écrit plutôt qu espéré. Attendre
+  // la fin de l écriture avant de sortir n a d effet qu au-delà du tube (64 Ko) ; or la
+  // borne de 2000 caractères ci-dessous rend ce cas inatteignable, et c est ELLE qui est
+  // éprouvée (contrôle ⑯ bis). Mesuré par mutation : retirer `fin` ne fait rougir aucun
+  // test. On la garde parce qu une sortie qui n attend pas son écriture est un défaut en
+  // soi — mais personne ne doit croire qu un rouge la protège.
   'function rendre(r){if(fini)return;fini=true;var fin=function(){process.exit(0)};',
   'if(r)return void process.stdout.write(r,fin);',
   'var v=null;try{var o=JSON.parse(s).hookSpecificOutput;',
