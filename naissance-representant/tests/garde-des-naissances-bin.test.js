@@ -151,6 +151,17 @@ test('les deux chiffres et leur méthode franchissent la sortie du binaire', () 
   assert.match(r.stdout, /PLANCHER/i, 'la portée de la mesure doit être dite, pas supposée');
 });
 
+test('un registre des agents ENTIÈREMENT MUET ne rend pas tout le monde anonyme', () => {
+  // ⚠️ LE CHEMIN RÉEL QUE LE `catch` SUPPRIMÉ PRÉTENDAIT COUVRIR. `agents()` n'échoue pas quand
+  // les sessions refusent : il rend une liste VIDE. Traduire ce vide en « aucun de ces panes
+  // n'a de nom » ferait de chaque agent une PRISE — une garde qui accuse tout un parc parce que
+  // son instrument s'est tu. Mesuré : `agent list` a rendu 83 panes sur 227 un jour.
+  const r = lancer({ panes: [pane()], agents: [] });
+  assert.equal(r.status, SORTIES[VERDICTS.ZONES_NON_MESUREES], r.stdout + r.stderr);
+  assert.match(r.stdout, /SOUS-COMPTE|pas vu ce pane/, 'la CAUSE doit voyager avec le fait');
+  assert.doesNotMatch(r.stdout, /🔴/, 'aucun agent ne doit être ACCUSÉ sur un instrument muet');
+});
+
 test('la garde ne POSE aucun geste — elle ne fait que lire', () => {
   const r = lancer({ panes: [pane()], agents: [] });
   const appels = readFileSync(r.journal, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);

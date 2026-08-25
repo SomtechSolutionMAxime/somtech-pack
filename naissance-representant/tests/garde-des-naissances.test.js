@@ -193,6 +193,30 @@ test('la déclaration identifie aussi par le NOM — un pane qui a bougé ne per
   assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
 });
 
+test('une déclaration d’une AUTRE session n’identifie pas un homonyme de pane', () => {
+  // 🔴 SURVIVANTE DE LA CAMPAGNE DE MUTATION (M15). Apparier `d.pane === agent.pane` sans
+  // comparer la session passait toute la suite au vert.
+  //
+  // ⚠️ ET LE DÉFAUT EST RÉEL, PAS THÉORIQUE : un identifiant de pane n'est unique QUE dans sa
+  // session, et ce poste porte QUINZE sessions herdr (mesuré le 2026-08-25). Un `w1:p1` existe
+  // dans plusieurs d'entre elles. Sans la session, la déclaration d'un agent régulier couvrirait
+  // un homonyme né hors dispositif dans une autre session — un FAUX NÉGATIF, c'est-à-dire
+  // exactement ce que cette garde existe pour empêcher.
+  const r = juger({
+    panes: [agent({ pane_id: 'w1:p1', herdr_socket: '/bac/session-A.sock' })],
+    declarations: [declaration({ nom: 'un-autre-agent', pane: 'w1:p1', session_herdr: '/bac/session-B.sock' })],
+  });
+  assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF, 'l’homonyme d’une autre session ne le couvre pas');
+  assert.equal(r.prises.length, 1);
+
+  // La moitié qui prouve : la MÊME déclaration, dans LA MÊME session, l’identifie.
+  const meme = juger({
+    panes: [agent({ pane_id: 'w1:p1', herdr_socket: '/bac/session-A.sock' })],
+    declarations: [declaration({ nom: 'un-autre-agent', pane: 'w1:p1', session_herdr: '/bac/session-A.sock' })],
+  });
+  assert.equal(meme.verdict, VERDICTS.RIEN_A_SIGNALER);
+});
+
 test('le LIEU DE RÔLE sur disque identifie — un agent posé dans son lieu n’est pas un inconnu', () => {
   const r = juger({
     panes: [agent({ foreground_cwd: `${APRES}/.orchestrateur/batiscan` })],

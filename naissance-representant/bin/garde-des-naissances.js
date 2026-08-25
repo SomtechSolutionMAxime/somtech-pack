@@ -62,16 +62,19 @@ export async function main({
     return refuser(alerter, `je n’ai pas pu lire le parc herdr (${err?.message ?? err}). Je ne rends AUCUN verdict : une garde qui ne voit pas le parc et rend vert certifie ce qu’elle n’a pas regardé.`);
   }
 
-  // ⚠️ LE REGISTRE DES AGENTS PORTE LES NOMS, ET SON SILENCE NE DIT RIEN. S'il refuse, on ne
-  // traduit pas ça en « ces agents n'ont pas de nom » : `normaliserLeParc` reçoit `null`, et
-  // chaque agent devient « nom non mesuré » — ce qui le range dans les non-mesurés, jamais dans
-  // les prises. Mesuré : `agent list` a déjà rendu 83 panes sur 227.
-  let registreDAgents = null;
-  try {
-    registreDAgents = await lireLesAgents();
-  } catch {
-    registreDAgents = null;
-  }
+  // ⚠️ LE REGISTRE DES AGENTS PORTE LES NOMS, ET SON SILENCE NE DIT RIEN. Un `agent list` qui
+  // ne voit pas un pane ne prouve PAS que ce pane est anonyme : `agent list` a déjà été mesuré
+  // à 83 panes sur 227 un jour, et à 94 sur 94 un autre. `normaliserLeParc` en fait donc un
+  // « nom NON MESURÉ », qui range l'agent dans les non-mesurés — jamais dans les prises.
+  //
+  // ⚠️ ET IL N'Y A PAS DE `catch` ICI, DÉLIBÉRÉMENT. Il y en avait un, qui repliait un échec sur
+  // `null` ; une mutation l'a remplacé par `[]` et **AUCUN banc n'a rougi**. En cherchant
+  // pourquoi : `agents()` ne propage QUE `OutilIntrouvable`, et `panes()` — qui tourne trois
+  // lignes plus haut — le propage déjà. Ce `catch` ne pouvait donc jamais se déclencher. Un
+  // filet qu'aucun chemin n'atteint ne protège de rien : il déclare seulement un repli permissif
+  // comme s'il était nécessaire. Sans lui, une panne future REMONTE et devient un REFUS, ce qui
+  // est la seule polarité que ce fichier accepte.
+  const registreDAgents = await lireLesAgents();
 
   let registre;
   try {
