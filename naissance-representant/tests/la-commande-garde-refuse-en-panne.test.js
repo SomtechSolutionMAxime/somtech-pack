@@ -31,6 +31,19 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MODULE_ROOT = resolve(HERE, '..');
 const RACINE = resolve(MODULE_ROOT, '..');
 
+/**
+ * Une boucle de calcul qui BRÛLE un cœur — mais qui finit toute seule.
+ *
+ * ⚠️ ELLE EST BORNÉE, ET CE N EST PAS UN CONFORT. Un `while (true) {}` nu survit à
+ * l interruption du runner : le lanceur qui devait le tuer est mort avant lui. Mesuré sur ce
+ * poste — 61 doubles orphelins, dont un à 27 minutes de temps processeur, et une charge de
+ * 396 qui faussait toutes les mesures de durée du banc lui-même.
+ *
+ * La borne ne l affaiblit pas : ce qui est éprouvé, c est que la commande refuse et que le
+ * double MEURT en moins de trois secondes — trente fois moins que sa propre limite.
+ */
+const BOUCLE = 'const t = Date.now();\nwhile (Date.now() - t < 90000) {}\n';
+
 /** Le délai que le banc impose : assez court pour que « pend » se mesure en secondes. */
 const DELAI_ESSAI = '900';
 
@@ -166,7 +179,7 @@ test('⑥ garde qui BOUCLE : refus — le minuteur vit dans un AUTRE processus q
   // pendant qu un `while` tourne (mesuré dans T-20260824-0002, laissé NON FERMÉ). Le délai
   // de cette commande vit dans un processus DISTINCT de la garde, et il la TUE — c est ce
   // que ce test mesure, et c est la seule raison pour laquelle ce mode se ferme ici.
-  const d = verdict(posteAvecGarde('while (true) {}\n'), { timeout: 60000 });
+  const d = verdict(posteAvecGarde(BOUCLE), { timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny');
   assert.ok(d.ms < 30000, `le refus a mis ${Math.round(d.ms)} ms : la boucle n est pas coupée`);
 });
@@ -270,7 +283,7 @@ test('⑩ ter la garde qui boucle est ARRÊTÉE, pas seulement dépassée', () =
   // par motif.
   const temoin = join(temp('smtk-pid-'), 'pid');
   const home = posteAvecGarde(
-    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(temoin)}, String(process.pid));\nwhile (true) {}\n`);
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(temoin)}, String(process.pid));\n${BOUCLE}`);
   const d = verdict(home, { timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny');
 
@@ -301,7 +314,7 @@ test('⑪ un verdict déjà écrit ne survit pas au délai — une garde qui ne 
   const d = verdict(posteAvecGarde(
     'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
     + 'permissionDecision:"allow",permissionDecisionReason:"decide puis bloque"}}));\n'
-    + 'while (true) {}\n'), { timeout: 60000 });
+    + BOUCLE), { timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny',
     'le allow d une garde qui ne sort jamais a été transmis : la panne doit primer sur ce qu elle a dit avant');
   assert.match(d.permissionDecisionReason, /delai|délai/i);
