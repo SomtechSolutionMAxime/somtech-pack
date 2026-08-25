@@ -449,9 +449,18 @@ test('le veilleur CONSTRUIT un lecteur de chantier — il ne passe pas « aucun 
 // ⚠️ ON GARDE « NE SURCHARGE PAS », PAS « PASSE TELLE VALEUR ». Le plafond de production vit
 // dans `plafond.js` et se remesure là-bas ; recopier son chiffre ici ferait un SECOND réglage de
 // la même chose, que personne ne verrait jamais diverger du premier.
+//
+// 🔴 ET LA GARDE PORTE SUR TOUS LES RÉGLAGES, PAS SUR LE SEUL `plafond` — parce que fermer le
+// défaut VU ne ferme pas le défaut POSSIBLE. Sa première version n'interdisait que `plafond` :
+// une passe de revue a aussitôt trouvé que `construireLecteur({ limite: 5 })` passait au vert.
+// Ce cas-là est moins grave — une liste tronquée se DIT (`epicsPlafonnes`), là où un plafond
+// désarmé est silencieux — mais l'argument est le même pour les deux, et pour le réglage qu'on
+// ajoutera dans six mois : **le veilleur n'a rien à dire sur les réglages du lecteur.** Une
+// garde qui énumère ce qu'elle interdit se fait déborder par le suivant ; une garde qui exige
+// qu'on ne surcharge RIEN n'a rien à rattraper.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('le veilleur ne DÉSARME pas le plafond du lecteur — la jointure gardée sur ce qu’elle passe', async () => {
+test('le veilleur ne SURCHARGE aucun réglage du lecteur — la jointure gardée sur ce qu’elle passe', async () => {
   const v = veilleurNu('plafond-jointure');
   v.recensementDuPoste = async () => ({ quand: 'T', agents: [] });
 
@@ -465,13 +474,19 @@ test('le veilleur ne DÉSARME pas le plafond du lecteur — la jointure gardée 
 
   assert.equal(recus.length, 1, 'le veilleur construit le lecteur une fois');
   const [reglages] = recus[0];
-  // 🔴 LE VEILLEUR N'A RIEN À DIRE SUR LE PLAFOND. Il construit le lecteur et le laisse porter
-  // le sien — celui que la sonde a mesuré. Lui en imposer un ici, quel qu'il soit, c'est décider
-  // de la charge d'un service partagé depuis un fichier qui n'a mesuré ni le service, ni le parc.
-  assert.ok(
-    reglages === undefined || reglages?.plafond === undefined,
-    `le veilleur impose un plafond (${JSON.stringify(reglages)}) : le lecteur doit porter le sien, ` +
-      'mesuré dans src/plafond.js. Un plafond posé ici désarme la borne sans qu’un seul essai ne rougisse.'
+  // 🔴 LE VEILLEUR N'A RIEN À DIRE SUR LES RÉGLAGES DU LECTEUR. Il le construit et le laisse
+  // porter les siens — le plafond que la sonde a mesuré, la limite de page que le lecteur
+  // connaît. Lui en imposer un ici, quel qu'il soit, c'est décider de la charge d'un service
+  // partagé, ou de la complétude d'une lecture, depuis un fichier qui n'a mesuré ni l'un ni
+  // l'autre.
+  const surcharges = Object.entries(reglages ?? {}).filter(([, v]) => v !== undefined);
+  assert.deepEqual(
+    surcharges,
+    [],
+    `le veilleur surcharge ${surcharges.map(([k]) => `« ${k} »`).join(', ')} ` +
+      `(${JSON.stringify(reglages)}) : le lecteur doit porter ses propres réglages. Un plafond ` +
+      'posé ici désarme la borne du service partagé sans qu’un seul essai ne rougisse ; une ' +
+      'limite posée ici tronque les lectures. Si c’est voulu, il faut le dire ET le mesurer.'
   );
 });
 
