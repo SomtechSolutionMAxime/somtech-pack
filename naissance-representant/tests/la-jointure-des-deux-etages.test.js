@@ -537,3 +537,46 @@ test('🔴 … mais un espace VOISIN dont le CHEMIN commence pareil n’est PAS 
     rmSync(racine, { recursive: true, force: true });
   }
 });
+
+test('🔴 UNE DÉCLARATION QUI DIT TRAVAILLER À LA RACINE N’APPARIE PERSONNE — le laissez-passer en un champ', () => {
+  const racine = bac();
+  try {
+    // ⚠️ LA SURVIVANTE DE LA CAMPAGNE DE MUTATION. Retirer `if (!d) return false;` de
+    // `memeEspaceDeTravail` ne faisait rougir AUCUN essai : la branche existait, aucun cas ne
+    // l'empruntait. Or elle est atteignable — rien n'interdit à une déclaration de porter
+    // `espace: '/'`, que le nettoyage des barres finales réduit à la chaîne vide. Sans le
+    // garde-fou, `''.startsWith` n'est jamais consulté et `a.startsWith('/')` est VRAI pour
+    // tout chemin absolu : UNE déclaration suffirait alors à identifier tout le parc, et le
+    // repli redeviendrait le laissez-passer général qu'on vient de fermer — par un champ.
+    inscrireLaDeclaration({
+      nom: 't-20260825-0047',
+      role: 'chef-equipe',
+      mandat: 'T-20260825-0047',
+      coordonnateur: 'e-20260825-0002',
+      espace: '/',
+      pane: PANE,
+      session: nomDeSession(socketDe('somtech')),
+      racine,
+    });
+    const registre = lireLesDeclarations({ racine });
+
+    const v = jugerLeParc({
+      agents: unAgent({ pane: 'w12:p9', session: socketDe('cg'), espace: ESPACE, nom: 't-20260825-0047' }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.identifies, 0, `« / » n’est l’espace de travail de personne :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 1);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('LA MÉTHODE IMPRIMÉE dit la borne — un texte qui annoncerait « à défaut par nom » tout court décrirait la garde retirée', () => {
+  // ⚠️ Le rendu de cette garde est ce qu'un humain lit pour décider si elle est cassée. Il a
+  // déjà induit en erreur une fois (« 8 sur 8 identifiés par leur nom ») ; un texte qui
+  // survivrait à un changement de règle ferait exactement pareil.
+  const v = jugerLeParc({ agents: [], registre: { declarations: [], illisibles: [] } });
+  assert.match(v.methode.prises, /ESPACE DE TRAVAIL/, 'la méthode doit dire que le repli est BORNÉ');
+  assert.match(v.methode.prises, /pane-dans-sa-session/);
+});

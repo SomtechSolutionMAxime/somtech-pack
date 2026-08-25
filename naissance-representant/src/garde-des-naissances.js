@@ -42,8 +42,12 @@
 // rougir serait le faux positif symétrique). Le nom, lui, ne rend plus personne régulier.
 //
 // ⚠️ IL GARDE DEUX EMPLOIS, ET AUCUN N'IDENTIFIE. ① Il reste la **clé de repli** qui apparie une
-// déclaration à un agent dont le pane a bougé : un nom NON MESURÉ rend donc la déclaration
-// « refusée », jamais « absente ». ② Il se DIT sur la ligne de chaque prise qui en porte un —
+// déclaration à un agent dont le pane a bougé — mais SEULEMENT DANS L'ESPACE DE TRAVAIL QUE
+// CETTE DÉCLARATION INSCRIT. Sans cette borne, le correctif ci-dessus n'avait fermé qu'une
+// moitié : « nom conforme ⇒ identifié » tombait, « nom qui apparie une déclaration QUELCONQUE
+// ⇒ identifié » restait — même population, même conséquence, et un `herdr agent rename` vers un
+// nom déjà déclaré suffisait à rendre régulier n'importe quel agent né hors dispositif. Un nom
+// NON MESURÉ rend donc la déclaration « refusée », jamais « absente ». ② Il se DIT sur la ligne de chaque prise qui en porte un —
 // sans quoi un lecteur découvrant sept prises au nom conforme croirait la garde cassée.
 //
 // ⚠️ POURQUOI AUCUN BANC NE L'AVAIT VU : ils éprouvaient le retrait de déclaration sur des
