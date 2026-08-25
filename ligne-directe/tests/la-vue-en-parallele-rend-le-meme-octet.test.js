@@ -48,6 +48,28 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { laVueDuParc, lecteurDeChantier, rendreLaVue } from '../src/vue-du-parc.js';
 import { PLAFOND_SERVICEDESK, plafonner } from '../src/plafond.js';
 
+/**
+ * 🔴 CHAQUE ESSAI DE CE FICHIER EST BORNÉ EN TEMPS, ET CE N'EST PAS DU CONFORT.
+ *
+ * Le défaut que ce fichier garde le plus sérieusement — une place de plafond jamais rendue — ne
+ * se manifeste PAS par un faux résultat. Il se manifeste par RIEN : la suite attend pour
+ * toujours. Mesuré deux fois pendant ce lot :
+ *   • une campagne de mutation tuée à dix minutes sans un seul verdict, parce que la mutation
+ *     « libération de place retirée » faisait PENDRE le fichier au lieu de le faire rougir ;
+ *   • une passe de revue indépendante qui a reproduit exactement le même blocage.
+ *
+ * **Un banc qui pend ne garde rien — il consomme.** Et en intégration continue, il consomme
+ * jusqu'au plafond du job, puis rend un échec qui ne nomme pas sa cause.
+ *
+ * ⚠️ LA BORNE EST GÉNÉREUSE EXPRÈS, ET ELLE NE MESURE PAS LA VITESSE. Le comportement correct
+ * règle en quelques dizaines de millisecondes ; le comportement fautif ne règle JAMAIS. Trente
+ * secondes laissent trois ordres de grandeur de marge à une machine d'intégration chargée, sans
+ * rien concéder au défaut : ce n'est pas un chrono qu'on ajuste, c'est la frontière entre
+ * « fini » et « jamais ». Un essai de ce fichier qui s'en approcherait serait lui-même le signe
+ * d'un problème.
+ */
+const BORNE_PAR_ESSAI_MS = 30_000;
+
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(ICI, '..', 'src');
 const COPIE = join(ICI, 'pieces', 'vue-du-parc-avant-le-parallelisme.js.txt');
@@ -299,7 +321,7 @@ async function vueSequentielle(reglages = {}) {
 // 1. LE BANC CENTRAL — IDENTITÉ CHAMP À CHAMP
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('LE MÊME INSTANTANÉ REND LA MÊME VUE — champ à champ, contre le code qui tournait avant le lot', async () => {
+test('LE MÊME INSTANTANÉ REND LA MÊME VUE — champ à champ, contre le code qui tournait avant le lot', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   const avant = await vueSequentielle();
   const apres = await vueParallele();
 
@@ -340,7 +362,7 @@ test('LE MÊME INSTANTANÉ REND LA MÊME VUE — champ à champ, contre le code 
   assert.equal(JSON.stringify(apres), JSON.stringify(avant), 'les deux vues ne rendent pas les mêmes octets');
 });
 
-test('ET LE TEXTE QUE LE DIRIGEANT LIT EST LE MÊME — pas seulement le JSON', async () => {
+test('ET LE TEXTE QUE LE DIRIGEANT LIT EST LE MÊME — pas seulement le JSON', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 TOUTE LA GARDE DE HS-VUE-002 SE JOUE SUR LA LIGNE RENDUE, pas sur le champ. Comparer le
   // JSON seul laisserait passer une divergence d'ORDRE des lignes — le JSON serait égal champ à
   // champ tableau par tableau, et l'arbre affiché serait dans un autre ordre.
@@ -350,7 +372,7 @@ test('ET LE TEXTE QUE LE DIRIGEANT LIT EST LE MÊME — pas seulement le JSON', 
   assert.ok(apres.includes('P-20260820-0001'), "l'instantané doit vraiment porter le chantier à deux porteurs");
 });
 
-test('LA VUE NE DÉPEND PAS DU PLAFOND — 1, 8, 32 rendent le même octet', async () => {
+test('LA VUE NE DÉPEND PAS DU PLAFOND — 1, 8, 32 rendent le même octet', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 C'EST LA QUESTION QUE LE PRÉDÉCESSEUR NE PEUT PAS POSER : il n'a pas de plafond. Celle-ci
   // dit que le RÉSULTAT ne dépend pas du nombre d'appels en vol — donc qu'aucune part du rendu
   // n'est décidée par l'ordre où le service répond.
@@ -363,7 +385,7 @@ test('LA VUE NE DÉPEND PAS DU PLAFOND — 1, 8, 32 rendent le même octet', asy
   assert.equal(JSON.stringify(trenteDeux), JSON.stringify(un), 'plafond 32 ≠ plafond 1');
 });
 
-test('UN INSTANTANÉ QUI REFUSE REND LE MÊME REFUS DES DEUX CÔTÉS', async () => {
+test('UN INSTANTANÉ QUI REFUSE REND LE MÊME REFUS DES DEUX CÔTÉS', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 L'IDENTITÉ DOIT TENIR AUSSI QUAND ÇA CASSE, et c'est là qu'un lot de vitesse dérape : il
   // accélère en avalant les refus, la vue devient plus rapide ET plus fausse, et un
   // `deepStrictEqual` sur le seul chemin heureux ne le verrait jamais.
@@ -404,7 +426,7 @@ test('UN INSTANTANÉ QUI REFUSE REND LE MÊME REFUS DES DEUX CÔTÉS', async () 
 // 2. LA LECTURE EST PARTAGÉE — un chantier à deux porteurs se lit UNE fois, s'affiche DEUX
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('UN CHANTIER PORTÉ PAR DEUX ORCHESTRATEURS EST LU UNE FOIS — et le prédécesseur le lisait deux fois', async () => {
+test('UN CHANTIER PORTÉ PAR DEUX ORCHESTRATEURS EST LU UNE FOIS — et le prédécesseur le lisait deux fois', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   const compteurAvant = {};
   const avant = await vueSequentielle({ compteur: compteurAvant });
   const compteurApres = {};
@@ -430,7 +452,7 @@ test('UN CHANTIER PORTÉ PAR DEUX ORCHESTRATEURS EST LU UNE FOIS — et le préd
   assert.equal(avant.orchestrateurs.filter((o) => o.chantier?.code === 'P-20260820-0001').length, 2);
 });
 
-test('LE PARTAGE MEURT AVEC LA LECTURE — ce n’est pas un cache entre deux rafraîchissements', async () => {
+test('LE PARTAGE MEURT AVEC LA LECTURE — ce n’est pas un cache entre deux rafraîchissements', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 HORS-LOT N°2 DE L'EPIC : « un cache entre deux rafraîchissements est HORS LOT — le `r`
   // doit relire le réel, pas resservir l'ancien ». Un lecteur neuf ne doit RIEN savoir de ce
   // que le précédent a lu.
@@ -453,7 +475,7 @@ test('LE PARTAGE MEURT AVEC LA LECTURE — ce n’est pas un cache entre deux ra
 // 3. LE PLAFOND TIENT — et il est vraiment atteint, sinon il ne borne rien qui existe
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('LE PLAFOND N’EST JAMAIS DÉPASSÉ, ET IL EST ATTEINT', async () => {
+test('LE PLAFOND N’EST JAMAIS DÉPASSÉ, ET IL EST ATTEINT', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   for (const plafond of [1, 2, 4, 8]) {
     let max = 0;
     const espion = (enVol) => {
@@ -468,7 +490,7 @@ test('LE PLAFOND N’EST JAMAIS DÉPASSÉ, ET IL EST ATTEINT', async () => {
   }
 });
 
-test('LES STORIES D’UN MÊME CHANTIER PARTENT DE FRONT — la boucle qui coûtait 65 % du temps', async () => {
+test('LES STORIES D’UN MÊME CHANTIER PARTENT DE FRONT — la boucle qui coûtait 65 % du temps', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 CE BANC VISE UNE SEULE ARÊTE : le `tickets/list` par epic. Un banc qui regarderait
   // seulement « la vue parallélise » resterait VERT si on remettait cette boucle en séquentiel,
   // parce que les autres chantiers, eux, partiraient toujours de front. On mesure donc UN
@@ -481,7 +503,7 @@ test('LES STORIES D’UN MÊME CHANTIER PARTENT DE FRONT — la boucle qui coût
   assert.ok(max > 1, 'les tickets des 9 epics partent un par un : la boucle est restée séquentielle');
 });
 
-test('LES CHANTIERS PARTENT DE FRONT LES UNS DES AUTRES — deux lectures qui se CHEVAUCHENT', async () => {
+test('LES CHANTIERS PARTENT DE FRONT LES UNS DES AUTRES — deux lectures qui se CHEVAUCHENT', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 CE BANC A DÉJÀ SURVÉCU À LA MUTATION QU'IL PRÉTENDAIT GARDER, ET ÇA VAUT D'ÊTRE ÉCRIT.
   // Il regardait « combien d'appels en vol au maximum ». Remettre la boucle des LIGNES en
   // séquentiel le laissait VERT : les stories d'un même chantier — parallèles, elles — suffisent
@@ -562,7 +584,7 @@ async function avantDeuxSecondes(promesse, quoi) {
   }
 }
 
-test('UNE PLACE SE REND MÊME QUAND L’APPEL JETTE — sinon un parc qui refuse fige la vue', async () => {
+test('UNE PLACE SE REND MÊME QUAND L’APPEL JETTE — sinon un parc qui refuse fige la vue', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 LE DÉFAUT QUI NE SE VOIT PAS : sans libération sur erreur, `plafond` refus successifs
   // consomment toutes les places et la vue attend pour toujours. Le symptôme serait « la vue ne
   // rend plus », jamais « le ServiceDesk refuse ».
@@ -584,7 +606,7 @@ test('UNE PLACE SE REND MÊME QUAND L’APPEL JETTE — sinon un parc qui refuse
   );
 });
 
-test('UN TRANSPORT QUI JETTE AVANT DE RENDRE SA PROMESSE REND SA PLACE AUSSI', async () => {
+test('UN TRANSPORT QUI JETTE AVANT DE RENDRE SA PROMESSE REND SA PLACE AUSSI', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // Le jumeau synchrone du banc ci-dessus. Sans le `try` autour de l'appel, cette place-là est
   // perdue sans qu'aucun refus ne soit visible.
   let sert = 0;
@@ -605,7 +627,7 @@ test('UN TRANSPORT QUI JETTE AVANT DE RENDRE SA PROMESSE REND SA PLACE AUSSI', a
   );
 });
 
-test('UN PLAFOND ILLISIBLE VAUT UN, JAMAIS L’INFINI', async () => {
+test('UN PLAFOND ILLISIBLE VAUT UN, JAMAIS L’INFINI', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // ⚠️ LE CAS DÉGRADÉ NE DOIT PAS ÊTRE LE CAS LE PLUS AGRESSIF POUR UN SERVICE PARTAGÉ. Se
   // replier sur « pas de borne » quand le réglage est absurde inverse exactement ce que la
   // borne existe pour empêcher.
@@ -624,7 +646,7 @@ test('UN PLAFOND ILLISIBLE VAUT UN, JAMAIS L’INFINI', async () => {
   }
 });
 
-test('SANS TRANSPORT, LA BORNE NE FABRIQUE PAS DE TRANSPORT', async () => {
+test('SANS TRANSPORT, LA BORNE NE FABRIQUE PAS DE TRANSPORT', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // ⚠️ « aucun accès au ServiceDesk » ≠ « un accès qui refuse ». C'est ce `null` qui fait rendre
   // « aucun accès ne m'a été donné » plutôt qu'un parc inventé — le contrat ne bouge pas.
   assert.equal(plafonner(null), null);
@@ -632,7 +654,7 @@ test('SANS TRANSPORT, LA BORNE NE FABRIQUE PAS DE TRANSPORT', async () => {
   assert.equal(lecteurDeChantier({ appeler: null }), null);
 });
 
-test('LE CHEMIN PAR DÉFAUT EST PLAFONNÉ — celui que la production emprunte, et lui seul compte', async () => {
+test('LE CHEMIN PAR DÉFAUT EST PLAFONNÉ — celui que la production emprunte, et lui seul compte', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
   // 🔴 CE BANC FERME UNE LACUNE QUE CE DÉPÔT AVAIT DÉJÀ ÉCRITE, ET QUI A DÉJÀ MORDU UNE FOIS.
   //
   // En tête de `tests/le-geste-vue-repond-par-le-socket.test.js` : « `lecteurDeChantier()` sans
@@ -670,7 +692,7 @@ test('LE CHEMIN PAR DÉFAUT EST PLAFONNÉ — celui que la production emprunte, 
   );
 });
 
-test('LE PLAFOND DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la sonde qui l’a choisi est datée', () => {
+test('LE PLAFOND DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la sonde qui l’a choisi est datée', { timeout: BORNE_PAR_ESSAI_MS }, () => {
   // ⚠️ MÊME NATURE QUE L'ÉPINGLE DE LA BORNE DU GESTE, ET MÊMES LIMITES : elle garde contre un
   // changement ACCIDENTEL, pas contre quelqu'un qui change la valeur et ce banc ensemble. Ce
   // qu'elle exige, c'est qu'on relise la sonde de `src/plafond.js` avant de toucher au chiffre.
@@ -684,6 +706,6 @@ test('LE PLAFOND DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la sonde qui l�
   assert.ok(PLAFOND_SERVICEDESK >= 2, 'un plafond de 1 est un retour au séquentiel, déguisé en réglage');
 });
 
-test('LE COMMIT DU PRÉDÉCESSEUR EST DIT — sinon « avant » ne désigne rien', () => {
+test('LE COMMIT DU PRÉDÉCESSEUR EST DIT — sinon « avant » ne désigne rien', { timeout: BORNE_PAR_ESSAI_MS }, () => {
   assert.match(COMMIT_DU_PREDECESSEUR, /^[0-9a-f]{40}$/, 'la provenance de la copie doit être un commit');
 });
