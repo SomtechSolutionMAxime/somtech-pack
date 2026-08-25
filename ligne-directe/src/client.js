@@ -59,15 +59,25 @@ export const BORNE_PAR_DEFAUT = 30_000;
  *     avant   89,38 s  65,91 s  68,08 s  75,86 s  65,77 s
  *     après   15,55 s  14,30 s  14,87 s  14,97 s  13,08 s
  *
- * On retient **15,55 s**, le pire cas — une borne ne se pose pas sur le meilleur jour. Et sur
- * ces ~14 s, **le recensement du poste en prend 8,2 à 12,2** : le ServiceDesk n'est plus le
- * poste dominant.
+ * 🔴 ET UNE PASSE DE REVUE A MESURÉ BIEN PIRE, SUR UN POSTE SATURÉ (load average ~105, 242
+ * processus node) — entrelacé pareil, sept tours : 14,39 · 15,42 · 15,96 · 16,22 · 16,71 ·
+ * 20,03 · **26,51** s. C'est ce chiffre-là qu'on retient : une borne se pose sur le pire cas
+ * mesuré, jamais sur la campagne la plus favorable.
+ *
+ * ⚠️ LES DEUX CAMPAGNES SONT JUSTES — elles mesurent deux charges de poste. **Une durée absolue
+ * est une propriété de la machine autant que du code** ; ce qui mesure le LOT est le rapport
+ * avant/après, que l'entrelacement rend insensible à la charge : ×4,5 à ×5,8 sur poste calme,
+ * ×3,3 à ×5,5 sur poste saturé.
+ *
+ * ⚠️ ET LE SERVICEDESK N'EST PLUS LE POSTE DOMINANT, c'est le recensement du poste — d'autant
+ * plus net sur poste chargé, où la jointure résiduelle ne pesait plus que **0,4 s et 1,7 s**.
  *
  * 🔴 ALORS 300 s NE GARDAIENT PLUS RIEN, et c'est l'argument écrit six lignes plus haut au sujet
  * de `BORNE_PAR_DEFAUT` : une borne trop lâche fait attendre cinq minutes le jour où un geste
- * pend VRAIMENT. On l'a donc RAMENÉE à 60 s — près de quatre fois le coût mesuré (15,55 s),
- * donc au-dessus du 2× que l'épingle du banc exige, et cinq fois moins d'attente devant un vrai
- * blocage.
+ * pend VRAIMENT. On l'a donc RAMENÉE à 60 s — **2,3× le pire cas mesuré (26,51 s)**, donc
+ * au-dessus du 2× que l'épingle du banc exige, et cinq fois moins d'attente devant un vrai
+ * blocage. La marge est mince, et c'est dit : le jour où un poste plus chargé encore fera
+ * dépasser 30 s à ce geste, il faudra relever cette borne, et l'épingle le réclamera.
  *
  * ⚠️ ET LA CHAÎNE A ROUGI EN CHEMIN, comme elle devait. Baisser cette valeur a fait rougir
  * l'épingle de `tests/le-geste-vue-repond-par-le-socket.test.js` et l'essai qui exigeait que la

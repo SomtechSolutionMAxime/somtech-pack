@@ -213,8 +213,19 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
 //     avant   89,38 s  65,91 s  68,08 s  75,86 s  65,77 s
 //     après   15,55 s  14,30 s  14,87 s  14,97 s  13,08 s
 //
-// On retient **15,55 s**, le plus grand, comme la fois d'avant — une borne ne se pose pas sur le
-// meilleur jour.
+// 🔴 ET CE N'EST PAS LE PLUS GRAND — UNE PASSE DE REVUE EN A MESURÉ UN BIEN PIRE, ET C'EST LUI
+// QU'ON RETIENT. Sur un poste **saturé** (load average ~105, 242 processus node, sept sessions),
+// entrelacé de la même façon, sept tours : 14,39 · 15,42 · 15,96 · 16,22 · 16,71 · 20,03 ·
+// **26,51** s. Six sur sept au-dessus de 15 s.
+//
+// ⚠️ AUCUNE DES DEUX CAMPAGNES N'EST FAUSSE — elles mesurent la même chose sur deux charges de
+// poste différentes, et **une durée absolue est une propriété de la machine autant que du
+// code**. Mais une borne se pose sur le PIRE cas mesuré, jamais sur le plus favorable : retenir
+// 15,55 s parce que c'est ma campagne à moi serait exactement « rétrécir la mesure » — le geste
+// contre lequel le paragraphe suivant met en garde.
+//
+// 🔑 Ce qui ne dépend PAS de la machine, c'est le rapport avant/après, et c'est pour ça que les
+// deux campagnes sont entrelacées : ×4,5 à ×5,8 sur poste calme, ×3,3 à ×5,5 sur poste saturé.
 //
 // ⚠️ LE PARC, RECOMPTÉ CONTRE SON UNITÉ, parce qu'un chiffre juste mal étiqueté se fait
 // CONFIRMER là où un chiffre faux se fait attraper : 18 lignes d'orchestrateur, dont 14 portent
@@ -228,7 +239,7 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
 //
 // ⚠️ ET CE QUI DOMINE CES ~14 s N'EST PLUS LE SERVICEDESK : le recensement du poste en prend
 // 8,2 à 12,2. Une future baisse de ce chiffre ne viendra pas d'un plafond plus haut.
-const VUE_A_COUTE_MS = 15_550;
+const VUE_A_COUTE_MS = 26_510;
 const VUE_MESUREE_LE = '2026-08-25';
 
 /**
@@ -276,11 +287,15 @@ const VUE_MESUREE_LE = '2026-08-25';
 // 🔴 ELLE A BAISSÉ DE 300 s À 60 s, ET L'ÉPINGLE A ROUGI POUR LE DIRE — c'est exactement ce que
 // la chaîne décrite ci-dessus était censée faire, dans l'autre sens.
 //
-// 300 s ont été posées le 2026-08-24 sur un geste qui coûtait 91 s. Le geste en coûte 15,55 :
-// une borne de cinq minutes ne garde plus rien, et l'argument est déjà écrit dans
-// `src/client.js` au sujet de `BORNE_PAR_DEFAUT` — trop lâche, elle fait attendre cinq minutes
-// le jour où un geste pend VRAIMENT. 60 s tiennent 3,9× le coût mesuré, donc au-dessus du 2×
-// que l'essai ci-dessous exige, et disent un vrai blocage cinq fois plus vite.
+// 300 s ont été posées le 2026-08-24 sur un geste qui coûtait 91 s. Le geste en coûte 26,51 au
+// pire cas mesuré : une borne de cinq minutes ne garde plus rien, et l'argument est déjà écrit
+// dans `src/client.js` au sujet de `BORNE_PAR_DEFAUT` — trop lâche, elle fait attendre cinq
+// minutes le jour où un geste pend VRAIMENT. 60 s tiennent **2,3×** le pire cas mesuré, donc
+// au-dessus du 2× que l'essai ci-dessous exige, et disent un vrai blocage cinq fois plus vite.
+//
+// ⚠️ LA MARGE EST MINCE, ET ÇA SE DIT PLUTÔT QUE DE PRÉSENTER 60 s COMME CONFORTABLE : un poste
+// encore plus chargé, ou un parc plus gros, fera rougir l'essai ci-dessous. Ce jour-là on relève
+// la borne — c'est précisément ce que la chaîne existe pour réclamer.
 const BORNE_DE_LA_VUE_EN_PRODUCTION = 60_000;
 
 test('LA BORNE DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la changer exprès des deux côtés reste possible', () => {

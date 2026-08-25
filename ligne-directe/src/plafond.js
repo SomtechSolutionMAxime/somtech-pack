@@ -90,10 +90,38 @@
 // **Le gain est de 4,5× à 5,8×.** Mais le pire cas est à 15,55 s : le critère « moins de 15 s »
 // n'est PAS tenu de façon fiable, et il faut le dire plutôt que de citer la meilleure série.
 //
-// ⚠️ CE QUI RESTE N'EST PLUS À NOUS. Le recensement du poste — qui n'est pas ce lot — prend
-// **8,2 à 12,2 s** de ces ~14 s : les trois quarts. Aucun plafond ne fera descendre la vue sous
-// ce plancher-là, et monter à 64 prendrait la moitié de la capacité mesurée du service partagé
-// pour gagner une seconde sur un geste qui en coûtera dix quoi qu'il arrive.
+// ⚠️ CE QUI RESTE N'EST PLUS À NOUS. Le recensement du poste — qui n'est pas ce lot — prend la
+// plus grande part de ce qui reste. Aucun plafond ne fera descendre la vue sous ce plancher-là,
+// et monter à 64 prendrait la moitié de la capacité mesurée du service partagé pour gagner une
+// seconde sur un geste dont le coût est ailleurs.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 CES SECONDES DÉPENDENT DE LA CHARGE DU POSTE — LE RAPPORT, LUI, N'EN DÉPEND PAS
+//
+// La campagne ci-dessus a été prise sur un poste calme. Une passe de revue indépendante a tout
+// remesuré sur un poste **saturé** : load average ~105, 242 processus node, sept sessions. Ses
+// chiffres, également entrelacés :
+//
+//     tour        1        2        3        4        5        6        7
+//     avant   91,31 s  77,51 s  84,48 s  74,81 s  75,49 s  84,58 s  87,46 s
+//     après   16,71 s  15,42 s  15,96 s  14,39 s  16,22 s  20,03 s  26,51 s
+//
+// **Six tours sur sept au-dessus de 15 s, pire cas 26,51 s** — contre un sur cinq et 15,55 s
+// dans la campagne calme. Et le recensement seul y coûtait **14,8 à 19,0 s**, pas 8 à 12.
+//
+// ⚠️ AUCUNE DES DEUX N'EST FAUSSE : elles mesurent la même chose sur deux charges différentes.
+// **Une valeur absolue en secondes est une propriété de la machine autant que du code.** Citer
+// la campagne calme comme si elle était le comportement du geste serait le défaut ; la citer
+// sans dire sa charge l'était déjà.
+//
+// 🔑 CE QUI RÉSISTE À LA CHARGE, C'EST LE RAPPORT — et c'est pour ça que les deux campagnes sont
+// ENTRELACÉES, un tour avant, un tour après : les deux côtés subissent la même machine au même
+// instant. Le gain est de **×4,5 à ×5,8** dans l'une, **×3,3 à ×5,5** dans l'autre. C'est ce
+// nombre-là qui mesure le lot ; le nombre de secondes mesure le poste ce jour-là.
+//
+// ⚠️ ET SA MESURE EST LA PLUS PARLANTE DES DEUX : sur son poste saturé, la jointure ServiceDesk
+// résiduelle ne pesait plus que **0,4 s et 1,7 s**. Le lot fait donc son travail *mieux* que la
+// campagne calme ne le suggérait — et ce qui reste est entièrement ailleurs.
 //
 // Ce que la sonde, elle, dit de 32 — et c'est ce qui rend le chiffre ADMISSIBLE, pas le fait
 // qu'il tienne le critère :
