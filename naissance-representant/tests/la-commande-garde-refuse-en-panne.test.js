@@ -415,3 +415,43 @@ test('⑮ une apostrophe droite dans un refus ne casse pas la commande — echap
       + 'sur une fonction identité, donc il ne prouverait rien');
   }
 });
+
+// ═════════════ ⑯ ce que la sortie de la garde traverse — les octets, puis la borne
+
+test('⑯ un accent coupé entre deux paquets du tube arrive intact — pas deux points d interrogation', () => {
+  // 🔴 TROUVÉ PAR LA QUATRIÈME PASSE DE FOND, ET MESURÉ : sans `setEncoding`, chaque paquet du
+  // tube est décodé séparément. Un caractère accentué à cheval sur deux paquets se décode en
+  // deux caractères de remplacement — le JSON reste VALIDE, donc rien ne rougit, et la raison
+  // du refus arrive corrompue. Les refus de ce dépôt sont en français : « caractère » devenait
+  // « caract??re ».
+  //
+  // Le double écrit en DEUX paquets, coupés au milieu du « è » (deux octets en UTF-8).
+  const raison = 'un caractère à la frontière';
+  const octets = Buffer.from(JSON.stringify({ hookSpecificOutput: {
+    hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: raison } }), 'utf8');
+  const coupe = octets.indexOf(Buffer.from('è', 'utf8')) + 1;   // AU MILIEU du è
+  const d = verdict(posteAvecGarde(
+    'import { writeSync } from "node:fs";\n'
+    + `const o = Buffer.from(${JSON.stringify(octets.toString('base64'))}, "base64");\n`
+    + `writeSync(1, o.subarray(0, ${coupe}));\n`
+    + `setTimeout(() => { writeSync(1, o.subarray(${coupe})); process.exit(0); }, 120);\n`));
+  assert.equal(d.permissionDecision, 'deny');
+  assert.equal(d.permissionDecisionReason, raison,
+    'la raison a traversé le tube corrompue : un accent coupé entre deux paquets a été décodé deux fois');
+});
+
+test('⑯ bis une raison démesurée est BORNÉE, et le dit', () => {
+  // ⚠️ CE CONTRÔLE ÉPROUVE LA BORNE ELLE-MÊME. Deux mécanismes protègent la sortie du lanceur :
+  // cette borne, et l attente de fin d écriture avant de sortir. Mesuré par mutation : chacun
+  // SEUL suffit à faire passer ⑬ — donc aucun des deux n était gardé isolément, et l un pouvait
+  // disparaître sans qu un rouge le dise. La borne est désormais éprouvée pour elle-même ;
+  // l attente de fin d écriture reste une ceinture assumée, et c est écrit ici plutôt qu espéré.
+  const d = verdict(posteAvecGarde(
+    `process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",`
+    + `permissionDecision:"deny",permissionDecisionReason:"R".repeat(200000)}}));\n`),
+    { timeout: 60000 });
+  assert.equal(d.permissionDecision, 'deny');
+  assert.ok(d.permissionDecisionReason.length < 2200,
+    `la raison rendue fait ${d.permissionDecisionReason.length} caractères : la borne ne mord pas`);
+  assert.match(d.permissionDecisionReason, /tronqu/i, 'une raison coupée doit dire qu elle est coupée');
+});

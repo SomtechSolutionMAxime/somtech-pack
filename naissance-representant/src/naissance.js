@@ -191,6 +191,13 @@ const LANCEUR = [
   // du lanceur sans qu aucun délai n y change rien. Au-delà, on cesse d accumuler : le
   // JSON ne parsera pas, donc le verdict manquera, donc la commande refusera — la bonne
   // polarité, obtenue sans un mécanisme de plus.
+  // ⚠️ `setEncoding` AVANT d accumuler, et ce n est pas un détail de style. Sans lui, chaque
+  // paquet du tube est décodé SÉPARÉMENT : un caractère accentué coupé entre deux paquets
+  // se décode en deux caractères de remplacement, le JSON reste valide, et la raison du
+  // refus arrive corrompue — en silence. Relevé et mesuré par la quatrième passe de fond
+  // (« caractère » rendu « caract??re »). Les refus de ce dépôt sont en français : la
+  // frontière fatale est à portée de n importe quelle écriture fragmentée par l OS.
+  'g.stdout.setEncoding("utf8");',
   'g.stdout.on("data",function(c){if(s.length<1000000)s+=c});',
   'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
   'g.on("close",function(){clearTimeout(m);rendre(null)});',
