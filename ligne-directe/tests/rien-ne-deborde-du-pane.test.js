@@ -42,7 +42,7 @@ import { roleDuLieu } from '../src/lieu-agent.js';
 import { role as roleDe } from '../src/roles.js';
 import { laVueDuParc, lecteurDeChantier } from '../src/vue-du-parc.js';
 import { arbreDeLaVue, lignesVisibles, rendreEcran, etatInitial } from '../src/tui-vue-du-parc.js';
-import { texteDeProgression } from '../src/tui-boucle.js';
+import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 
 /** La largeur AFFICHÉE — en points de code. `.length` compte faux sur la roue et les accents. */
@@ -233,5 +233,191 @@ test('L’ÉCRAN GARDE SA HAUTEUR — autant de lignes que le pane, ni plus ni m
   for (const hauteur of [3, 12, 24, 77]) {
     const ecran = rendreEcran({ vue, etat, lignes, largeur: 65, hauteur });
     assert.equal(ecran.length, hauteur, `à ${hauteur} lignes de pane, l’écran en rend ${ecran.length}`);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE CHEMIN QUI ÉCRIT — et c'est lui que personne ne gardait
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 QUATRE MUTATIONS SUR SIX SURVIVAIENT À MA PREMIÈRE VERSION DE CE FICHIER. Je gardais le
+// TEXTE rendu par `texteDeProgression` ; je ne gardais pas le GESTE qui l'écrit. Retirer la
+// largeur passée au battement, ou la lire une seule fois au départ, laissait la suite entière
+// VERTE — c'est-à-dire que le correctif de l'incident n'était gardé sur aucun de ses chemins.
+//
+// ⚠️ MÊME MOTIF QUE LES ONZE REJETS DE E-20260825-0001, appliqué au CHEMIN plutôt qu'au cas.
+
+/** Une sortie de banc — elle enregistre ce qu'on lui écrit, et sa largeur peut changer. */
+function uneSortie(colonnes) {
+  const ecrits = [];
+  return {
+    get columns() {
+      return this._c;
+    },
+    _c: colonnes,
+    write(t) {
+      ecrits.push(t);
+    },
+    ecrits,
+    /** Les textes de progression seuls, sans les séquences de contrôle. */
+    progressions() {
+      return ecrits
+        .map((t) => t.replace(/^\r\[2K/, ''))
+        .filter((t) => t.includes('lecture du parc'));
+    },
+  };
+}
+
+/** Attendre que le battement ait écrit au moins `n` fois — sans dormir à l'aveugle. */
+async function attendreEcritures(sortie, n) {
+  for (let i = 0; i < 200 && sortie.progressions().length < n; i += 1) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  return sortie.progressions();
+}
+
+test('LE GESTE QUI ÉCRIT BORNE À LA LARGEUR DU PANE — pas seulement le texte qu’il rend', async () => {
+  // 🔴 LA MUTATION QUI SURVIVAIT : retirer la largeur passée au battement. Ce banc l'attrape,
+  // parce qu'il regarde ce que `avecProgression` ÉCRIT VRAIMENT, pas ce que la fonction de
+  // texte saurait rendre si on la lui demandait.
+  const sortie = uneSortie(65);
+  let fini;
+  const promesse = avecProgression(
+    () => new Promise((r) => (fini = () => r({ registre: { mesure: 'lu' }, orchestrateurs: [] }))),
+    sortie,
+    { intervalle: 5 }
+  );
+  const vus = await attendreEcritures(sortie, 3);
+  fini();
+  await promesse;
+
+  assert.ok(vus.length >= 3, `le battement doit avoir écrit — il a écrit ${vus.length} fois`);
+  for (const t of vus) {
+    assert.ok(
+      [...t].length <= 65,
+      `le geste écrit ${[...t].length} caractères dans un pane de 65 — il WRAPPE, donc il EMPILE ` +
+        `une ligne à chaque tour : ${JSON.stringify(t)}`
+    );
+  }
+});
+
+test('LA LARGEUR EST RELUE À CHAQUE TOUR — un pane redimensionné pendant le chargement', async () => {
+  // 🔴 L'AUTRE MUTATION QUI SURVIVAIT : lire la largeur UNE FOIS au départ. Redimensionner un
+  // split est précisément ce qu'on fait quand un affichage devient illisible — le trou se
+  // rouvrirait au moment exact où le dirigeant essaie de s'en sortir.
+  const sortie = uneSortie(150);
+  let fini;
+  const promesse = avecProgression(
+    () => new Promise((r) => (fini = () => r({ registre: { mesure: 'lu' }, orchestrateurs: [] }))),
+    sortie,
+    { intervalle: 5 }
+  );
+  await attendreEcritures(sortie, 2);
+  const large = sortie.progressions().length;
+
+  // Le pane rétrécit EN COURS de chargement.
+  sortie._c = 40;
+  await attendreEcritures(sortie, large + 3);
+  fini();
+  await promesse;
+
+  const apres = sortie.progressions().slice(large + 1);
+  assert.ok(apres.length >= 2, 'le battement doit avoir continué après le redimensionnement');
+  for (const t of apres) {
+    assert.ok(
+      [...t].length <= 40,
+      `après rétrécissement à 40, le geste écrit encore ${[...t].length} caractères : ${JSON.stringify(t)}`
+    );
+  }
+  // ⚠️ CONTRÔLE POSITIF : avant le rétrécissement, la ligne était bien PLUS LONGUE que 40 —
+  // sinon ce banc serait vert sur un texte qui n'a jamais dépassé, donc sur rien.
+  assert.ok(
+    [...sortie.progressions()[0]].length > 40,
+    'le décor doit partir d’une ligne plus longue que la largeur d’arrivée'
+  );
+});
+
+test('LE BATTEMENT S’ARRÊTE ET EFFACE — il ne laisse pas sa dernière ligne à l’écran', async () => {
+  // ⚠️ LE JUMEAU DE LA BORNE : une progression qui ne s'efface pas laisse une ligne morte
+  // au-dessus de l'écran du TUI. Le `finally` le fait déjà ; rien ne le gardait.
+  const sortie = uneSortie(65);
+  let fini;
+  const promesse = avecProgression(
+    () => new Promise((r) => (fini = () => r({ registre: { mesure: 'lu' }, orchestrateurs: [] }))),
+    sortie,
+    { intervalle: 5 }
+  );
+  await attendreEcritures(sortie, 2);
+  const avant = sortie.ecrits.length;
+  fini();
+  await promesse;
+
+  assert.ok(sortie.ecrits.length > avant, 'la fin doit écrire quelque chose');
+  const dernier = sortie.ecrits[sortie.ecrits.length - 1];
+  assert.ok(!dernier.includes('lecture du parc'), `la dernière écriture doit EFFACER : ${JSON.stringify(dernier)}`);
+  assert.ok(dernier.includes('[2K'), `elle doit effacer la ligne : ${JSON.stringify(dernier)}`);
+
+  // Et le battement ne bat plus : rien de neuf après la fin.
+  const fige = sortie.ecrits.length;
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(sortie.ecrits.length, fige, 'le battement continue après la fin — il tiendrait le processus');
+});
+
+test('LA BORNE COMPTE LA LARGEUR D’AFFICHAGE, PAS LES UNITÉS UTF-16', () => {
+  // 🔴 CE BANC EXISTE PARCE QUE MA PROSE MENTAIT, et la mutation l'a prouvé. J'avais écrit que
+  // « la roue et les accents seraient comptés faux par `.length` » : **c'est faux** — ⠋ (U+280B)
+  // et é sont dans le BMP. Remettre `.length` SURVIVAIT à mes bancs.
+  //
+  // ⚠️ LE VRAI CAS est un caractère HORS BMP : il pèse 2 en UTF-16 et 1 à l'écran. Aucun n'est
+  // dans le message d'aujourd'hui — c'est donc la MÉTHODE qu'on épingle, pas le texte courant :
+  // la borne protège une largeur d'AFFICHAGE, elle doit se mesurer en points de code, juste par
+  // construction et non par chance sur le texte du jour.
+  const horsBMP = '🔴';
+  assert.equal(horsBMP.length, 2, 'le décor doit vraiment porter un caractère hors BMP');
+  assert.equal([...horsBMP].length, 1, 'qui ne pèse qu’une colonne à l’écran');
+
+  // La fonction bornée doit couper en points de code : à N, exactement N points de code.
+  for (const largeur of [10, 30, 65]) {
+    const rendu = texteDeProgression(21, 3, largeur);
+    assert.equal(
+      [...rendu].length,
+      largeur,
+      `à ${largeur}, la borne rend ${[...rendu].length} points de code — elle ne compte pas l’affichage`
+    );
+  }
+});
+
+test('LES DEUX PLANCHERS DE L’ÉCRAN SE CONNAISSENT — gardé À PART de l’invariant de sortie', async (t) => {
+  // 🔴 CETTE MUTATION SURVIVAIT AUSSI, et pour une raison qui a l'air d'une bonne nouvelle :
+  // l'invariant posé à la sortie (`borner`) rattrapait le débordement. Défense en profondeur,
+  // certes — mais alors le correctif des planchers n'était gardé par RIEN, et il serait tombé
+  // au premier « nettoyage » sans qu'aucun essai ne rougisse.
+  //
+  // ⚠️ ON MESURE DONC LA FORMULE ELLE-MÊME, avant que la borne de sortie ne l'efface : la somme
+  // des deux largeurs plus le séparateur ne doit jamais dépasser le pane.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const etat = etatInitial();
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
+
+  for (let largeur = 3; largeur <= 200; largeur += 1) {
+    const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur: 6 });
+    // La ligne d'une rangée vide est faite des deux largeurs et du séparateur, sans troncature
+    // de contenu : sa longueur AVANT bornage est donc la somme que la formule a décidée.
+    const rangee = ecran[1]?.texte ?? '';
+    const separateur = rangee.indexOf(' │ ');
+    assert.ok(
+      separateur >= 0 || largeur < 4,
+      `à ${largeur}, le séparateur des deux colonnes a disparu : ${JSON.stringify(rangee)}`
+    );
+    if (separateur < 0) continue;
+    const arbre = separateur;
+    const detail = [...rangee].length - separateur - 3;
+    assert.ok(
+      arbre + 3 + detail <= largeur,
+      `à ${largeur} colonnes, la formule décide arbre=${arbre} + 3 + détail=${detail} = ` +
+        `${arbre + 3 + detail} — les deux planchers s’ignorent de nouveau`
+    );
   }
 });

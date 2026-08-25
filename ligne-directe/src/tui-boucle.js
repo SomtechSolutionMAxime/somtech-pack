@@ -213,8 +213,18 @@ export function texteDeProgression(secondes, tourne, largeur = Infinity) {
   const texte =
     `${roue[tourne % roue.length]} lecture du parc — ${secondes} s écoulées ` +
     `(le ServiceDesk est interrogé chantier par chantier ; ~80 s au premier chargement)`;
-  // ⚠️ ON COMPTE EN POINTS DE CODE, pas en unités UTF-16 : la roue et les accents seraient
-  // comptés faux par `.length`, et la borne serait donc fausse là où elle sert le plus.
+  // ⚠️ ON COMPTE EN POINTS DE CODE, pas en unités UTF-16.
+  //
+  // 🔴 CORRECTION D’UNE PROSE FAUSSE QUE J’AVAIS ÉCRITE ICI, relevée en campagne de mutation :
+  // elle disait « la roue et les accents seraient comptés faux par `.length` ». **C’est faux** —
+  // ⠋ (U+280B) et é sont dans le BMP, `.length` les compte juste, et la mutation qui remettait
+  // `.length` SURVIVAIT à mes bancs. Un motif faux qui garde une conduite juste finit par la
+  // faire tomber avec lui le jour où quelqu’un le vérifie.
+  //
+  // LE VRAI MOTIF : un caractère HORS BMP (emoji, U+1F534…) pèse 2 en UTF-16 et 1 à l’écran.
+  // Rien n’en met dans ce message aujourd’hui — mais la borne protège la LARGEUR D’AFFICHAGE,
+  // et c’est en points de code qu’elle se mesure. On compte donc juste par construction,
+  // plutôt que juste par chance sur le texte du jour.
   const points = [...texte];
   if (!Number.isFinite(largeur) || points.length <= largeur) return texte;
   return points.slice(0, Math.max(0, largeur)).join('');
@@ -361,7 +371,22 @@ export async function boucleDuTui({
   return { code: 0 };
 }
 
-async function avecProgression(lireLaVue, sortie) {
+/**
+ * LA PROGRESSION PENDANT LES ~80 s DE CHARGEMENT — ET C’EST ELLE QUI EMPILAIT.
+ *
+ * 🔴 EXPORTÉE POUR ÊTRE ÉPROUVABLE (T-20260825-0071). Elle ne l’était pas, et c’est ce qui a
+ * laissé l’incident sortir : `texteDeProgression` était testable, mais la fonction qui ÉCRIT
+ * — celle qui borne, ou pas — n’était atteinte par AUCUN banc. Mesuré en campagne : retirer
+ * la largeur passée au battement, ou la lire une seule fois au départ, laissait la suite
+ * ENTIÈREMENT VERTE.
+ *
+ * ⚠️ C’est le motif « une garde posée sur le cas, prise pour une garde sur la famille » —
+ * payé onze fois sur E-20260825-0001. Ici il portait sur le CHEMIN : je gardais le texte
+ * rendu, pas le geste qui l’écrit.
+ *
+ * @param intervalle  la période du battement, injectable : un banc ne doit pas attendre 120 ms.
+ */
+export async function avecProgression(lireLaVue, sortie, { intervalle = 120 } = {}) {
   const depart = Date.now();
   let tour = 0;
   const battement = setInterval(() => {
@@ -371,7 +396,7 @@ async function avecProgression(lireLaVue, sortie) {
     // split est précisément ce qu’on fait quand un affichage devient illisible.
     const largeur = sortie.columns || Infinity;
     sortie.write(`\r${ESC}[2K${texteDeProgression(s, (tour += 1), largeur)}`);
-  }, 120);
+  }, intervalle);
   // ⚠️ IL NE TIENT PAS LE PROCESSUS EN VIE. Sans `unref`, un battement de 120 ms empêcherait
   // node de sortir si la lecture échouait sans rejeter — un TUI qui ne rend jamais la main.
   battement.unref?.();
