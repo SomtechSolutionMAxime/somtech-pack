@@ -183,6 +183,31 @@ function laisserVivre() {
   espaceDeTravailAdefaire = null;
 }
 
+/**
+ * CE QU'UN REFUS A LAISSÉ VIVANT — rendu LÀ OÙ LE MÉTIER LE LIT, c'est-à-dire sur stdout.
+ *
+ * 🔴 LE DÉFAUT QUE CECI FERME (D-20260825-0002). Les deux refus qui appellent `laisserVivre`
+ * sortaient en 1 avec un stdout VIDE — pendant qu'un agent vivant, son worktree, sa
+ * branche-socle, l'espace herdr et SA DÉCLARATION ÉCRITE leur survivaient. Le geste que le
+ * métier prescrit — `NAISSANCE=$(… naitre …)` puis `P=$(… | jq -r .pane)` — rendait donc
+ * `P=null` : l'orchestrateur ne savait plus adresser un chef d'équipe déclaré qui travaille.
+ * Et la garde des naissances ne le rattrape pas — il EST déclaré, donc « identifié ».
+ *
+ * ⚠️ CE N'EST PAS L'ARBITRAGE QUI CHANGE, C'EST LE SILENCE. Laisser l'agent vivre reste juste :
+ * un agent prouvé bon ne se tue pas pour une amorce non prise ni pour une écriture de registre.
+ * Ce qui était faux, c'est que la commande n'en disait rien là où on la lit.
+ *
+ * ⚠️ ET CE RENDU NE RESSEMBLE PAS À UN SUCCÈS. `ok: false`, la sortie reste 1, et le vocabulaire
+ * du refus (`vivant`, `cause`) n'apparaît JAMAIS sur le chemin réussi : un appelant qui teste
+ * l'un des deux ne doit pas lire la même chose des deux côtés.
+ *
+ * ⚠️ ET IL N'INVENTE RIEN. `declaration` vaut `null` quand c'est ELLE qui a échoué — prétendre
+ * l'inverse serait le fait faux que tout ce fichier existe pour interdire.
+ */
+function rendreCeQuiSurvit(champs) {
+  process.stdout.write(`${JSON.stringify({ ok: false, vivant: true, ...champs })}\n`);
+}
+
 process.on('exit', (code) => {
   if (code === 0) return;
   if (espaceAdefaire) {
@@ -915,6 +940,18 @@ async function main() {
       // tuerait — c'est-à-dire exactement ce que l'arbitrage juste au-dessus refuse de faire,
       // par la porte d'à côté.
       laisserVivre();
+      rendreCeQuiSurvit({
+        cause: `la déclaration n’a pas pu être inscrite : ${err.message}`,
+        role,
+        nom,
+        agent: commandes.nom,
+        pane: paneId,
+        espace: commandes.lieu,
+        branche: espaceDuChef?.branche ?? null,
+        declaration: null,
+        declaration_chemin: null,
+        amorcee: false,
+      });
       process.stderr.write(
         `la session de ${paneId} est née dans son espace mais sa déclaration n’a pas pu être ` +
           `inscrite : ${err.message}\n` +
@@ -987,6 +1024,18 @@ async function main() {
       // ⚠️ MÊME ARBITRAGE QUE POUR LA DÉCLARATION : le pane reste ouvert, donc l'espace qui le
       // porte aussi. Le défaire s'applique aux naissances qui n'ont RIEN laissé de vivant.
       laisserVivre();
+      rendreCeQuiSurvit({
+        cause: `l’amorce n’a pas été prise : ${livre.message}`,
+        role,
+        nom,
+        agent: commandes.nom,
+        pane: paneId,
+        espace: commandes.lieu,
+        branche: chefEquipe ? (espaceDuChef?.branche ?? null) : null,
+        declaration,
+        declaration_chemin: declarationChemin,
+        amorcee: false,
+      });
       process.stderr.write(
         `la session de ${paneId} est née dans son lieu mais n\u2019a pas pris son amorce : ${livre.message}\n` +
           `  Le pane est laissé ouvert — briefe-la à la main plutôt que de la refaire naître.\n`

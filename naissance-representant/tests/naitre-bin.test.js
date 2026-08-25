@@ -2111,7 +2111,17 @@ test('une déclaration qui ne peut pas s’écrire fait ÉCHOUER le geste — ma
     assert.match(r.stderr, /déclaration/i, 'le message dit CE QUI a échoué');
     assert.match(r.stderr, /pane/i, 'et dit que le pane reste ouvert');
     assert.equal(aFerme(journal), false, 'l’agent né et vérifié n’est PAS tué pour une écriture de registre');
-    assert.equal(r.stdout, '', 'et rien ne ressemble à un succès');
+    // ⚠️ CETTE ASSERTION A CHANGÉ DE FORME, PAS DE FONCTION — et la distinction est celle qui
+    // empêche une garde d'être « mise au vert » par une réécriture ordonnée. Ce qu'elle gardait
+    // est : RIEN NE DOIT RESSEMBLER À UN SUCCÈS. Elle l'exprimait par « stdout est vide », ce qui
+    // était vrai tant que ce chemin ne rendait rien — et c'était précisément le défaut : un agent
+    // vivant, déclaré ou non, que la sortie ne permettait plus d'adresser (`jq -r .pane` → null).
+    // La commande rend désormais ce qu'elle a LAISSÉ ; la fonction gardée devient donc « ok est
+    // FAUX », et elle est plus forte qu'un vide : un vide passerait aussi le jour où quelqu'un
+    // rendrait `ok: true` par erreur sur une autre porte.
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.ok, false, 'et rien ne ressemble à un succès');
+    assert.equal(rendu.vivant, true, '— mais ce qui vit est DIT, plutôt que tu');
   }));
 
 test('hors dépôt git, un chef d’équipe ne naît pas — et aucun espace n’est créé', () => {
@@ -2224,4 +2234,109 @@ test('la frontière EXACTE passe — « antérieur » est strict, sinon c’est 
 
     assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
     assert.equal(JSON.parse(r.stdout).espace, espace);
+  }));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 UN REFUS QUI LAISSE UN AGENT VIVANT DOIT RENDRE DE QUOI L'ADRESSER (D-20260825-0002)
+//
+// LE DÉFAUT MESURÉ. Sur le refus d'amorce : `code = 1`, `stdout = ""` — et pourtant un agent
+// vivant, son worktree, sa branche-socle, l'espace herdr, ET SA DÉCLARATION ÉCRITE.
+//
+// Le geste que le métier prescrit trois lignes sous « un refus ne laisse rien derrière lui » :
+//     NAISSANCE=$(… pack agent naitre …)
+//     P=$(printf '%s' "$NAISSANCE" | jq -r .pane)
+// rend donc `P=null`. L'orchestrateur vient de lire que rien ne survit — pendant qu'un chef
+// d'équipe DÉCLARÉ travaille dans un arbre qu'il ne sait plus adresser. Et la garde des
+// naissances ne le rattrapera pas : il est déclaré, donc « identifié ».
+//
+// CE QUI EST TRANCHÉ, ET POURQUOI. Garder l'agent vivant reste juste — `laisserVivre()` est un
+// arbitrage écrit à deux endroits : un agent prouvé bon ne se tue pas pour une amorce non prise
+// ni pour une écriture de registre. Ce qui était faux, c'est que la commande N'EN DISAIT RIEN
+// LÀ OÙ ON LA LIT. Elle rend donc, sur stdout, ce qu'elle a LAISSÉ — `ok: false`, `vivant: true`,
+// la cause, et le pane. La sortie reste 1 : rien de ce qui distingue un échec ne bouge.
+//
+// ⚠️ POURQUOI LES BANCS NE L'AVAIENT PAS VU : le harnais possède `declarationsInscrites(poste)`
+// et AUCUN des deux essais « une amorce non prise laisse l'agent VIVANT » ne l'appelait. Ils
+// mesuraient l'arbre et l'espace herdr, JAMAIS le registre.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 une amorce non prise laisse une DÉCLARATION au registre — et la sortie rend de quoi adresser l’agent', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT', promptRefuse: true });
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: poste,
+      workspace: null,
+      horodatage,
+      amorce: 'commence par lire le registre',
+      essais: '1',
+      coordonnateur: 'matapedia',
+    });
+
+    assert.equal(r.code, 1, `l’amorce doit ÉCHOUER — stdout : ${r.stdout}`);
+
+    // ① LE REGISTRE — la moitié qu'aucun banc ne regardait. Ce n'est pas un défaut à corriger :
+    // c'est un fait à MESURER, parce que c'est lui qui rend l'agent invisible à la garde.
+    const inscrites = declarationsInscrites(poste);
+    assert.equal(inscrites.length, 1, 'la déclaration EST écrite — le refus ne l’a pas défaite');
+    assert.equal(inscrites[0].nom, code);
+
+    // ② ET LA SORTIE DIT CE QU'ELLE A LAISSÉ. C'est le geste prescrit par le métier, joué tel quel.
+    assert.notEqual(r.stdout.trim(), '', 'un refus qui laisse un agent vivant ne peut pas être MUET sur stdout');
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.ok, false, 'ce n’est PAS un succès');
+    assert.equal(rendu.vivant, true, '… mais quelque chose vit');
+    // ⚠️ ON NE COMPARE PAS À UNE CONSTANTE ÉCRITE ICI : le pane dépend de l'espace ouvert par le
+    // geste (`wOUVERT:p1` quand aucun `--workspace` n'est donné). On exige qu'il SOIT rendu, et
+    // qu'il soit CELUI QUE LE REFUS NOMME sur stderr — deux rendus du même fait qui divergeraient
+    // enverraient l'orchestrateur vers un pane qui n'est pas celui de son agent.
+    assert.match(String(rendu.pane), /^w[^:]+:p\d+$/, '🔴 `jq -r .pane` doit rendre le pane, pas « null »');
+    assert.ok(
+      r.stderr.includes(rendu.pane),
+      `stdout rend « ${rendu.pane} », stderr nomme autre chose :\n${r.stderr}`
+    );
+    assert.equal(rendu.espace, espace, 'et l’arbre où il travaille');
+    assert.equal(rendu.amorcee, false, 'le brief n’a pas été pris');
+    assert.match(String(rendu.cause), /amorce/i, 'la cause est nommée, pas devinée');
+    assert.ok(rendu.declaration, 'et la déclaration écrite voyage avec — sinon il faut aller relire un répertoire');
+  }));
+
+test('🔴 une déclaration qui ne s’écrit pas laisse elle aussi un agent vivant — et la sortie l’adresse, sans mentir sur le registre', () =>
+  avecChefDEquipe(({ code, poste, bac, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+    const barrage = join(bac, 'racine-prise-4');
+    writeFileSync(barrage, 'je ne suis pas un répertoire\n');
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: { ...poste, SOMTECH_NAISSANCES_RACINE: barrage },
+      workspace: null,
+      horodatage,
+    });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.ok, false);
+    assert.equal(rendu.vivant, true);
+    assert.match(String(rendu.pane), /^w[^:]+:p\d+$/);
+    assert.ok(r.stderr.includes(rendu.pane), 'le même pane des deux côtés');
+    // ⚠️ ET ON NE PRÉTEND PAS QU'UNE DÉCLARATION EXISTE. Sur CE chemin-ci elle a échoué : la
+    // rendre non nulle serait le fait faux que tout ce fichier existe pour interdire.
+    assert.equal(rendu.declaration, null, 'aucune déclaration n’a été inscrite, et la sortie le dit');
+    assert.match(String(rendu.cause), /déclaration/i);
+  }));
+
+test('une naissance RÉUSSIE ne porte pas ces champs — sinon un appelant ne distingue plus les deux', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    // ⚠️ LA MOITIÉ QUI EMPÊCHE LE REMÈDE DE DEVENIR LE DÉFAUT. Si `vivant`/`cause` sortaient
+    // aussi sur le succès, un appelant qui teste `.vivant` lirait la même chose des deux côtés.
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.ok, true);
+    assert.equal(rendu.vivant, undefined, 'le succès ne porte pas le vocabulaire du refus');
+    assert.equal(rendu.cause, undefined);
   }));
