@@ -46,6 +46,8 @@ import {
   MOT_ECART,
   PHRASE_DU_DECLARE,
   PHRASE_COURTE_DU_DECLARE,
+  PHRASE_DE_LINDICE,
+  quiPorte,
   FRAGMENT_DU_QUALIFICATIF,
 } from '../src/vue-du-parc.js';
 import {
@@ -680,6 +682,120 @@ test('UN `assigned_agent` QUI N’EST PAS DU TEXTE EST REFUSÉ — jamais rendu 
   }
   // Et le texte, lui, passe toujours.
   assert.deepEqual(nomsDeclares({ nomDeclare: 'e-20260825-0001' }), [{ nom: 'e-20260825-0001', dOu: 'ce ticket' }]);
+});
+
+test('LE JUMEAU À PISTES DIT LA MÊME CHOSE DU REGISTRE — la branche que mes deux bancs n’atteignaient pas', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QU'UNE TROISIÈME PASSE A REJETÉ LE CORRECTIF PRÉCÉDENT (2026-08-25),
+  // et le motif est exactement celui que ce correctif venait de fermer un étage plus bas :
+  // **une garde posée sur un cas ne couvre pas sa famille.**
+  //
+  // `quiPorte` a DEUX sorties « non établi » : celle qui n'a aucune piste, et celle où un agent
+  // porte le code comme NOM sans le porter comme mandat. Les deux posent `declarationMesuree`.
+  // Mes deux bancs n'atteignaient QUE la première — l'agent du décor s'appelle `kamouraska`,
+  // donc `parNom.get('E-…')` est toujours vide. Mesuré par la passe : forcer, ou retirer, le
+  // champ sur la branche à pistes laissait **1056 essais VERTS**.
+  //
+  // ⚠️ ET C'EST LA MÊME FRONTIÈRE QUE RA-VUE-006 GARDE : sur cette branche, rien n'empêchait la
+  // ligne d'affirmer « le registre ne déclare aucun nom » là où le registre n'a pas pu être lu.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const service = unDecor({ tickets: [] });
+  const appelerQuiJette = async (nom, args) => {
+    if (nom === 'tickets') throw new Error('le service a refusé');
+    return service.appeler(nom, args);
+  };
+
+  // ⚠️ LE SECOND AGENT PORTE LE CODE DE L'EPIC COMME **NOM**, ET N'A AUCUN LIEU QUI LE PROUVE.
+  // C'est la population réelle que le module documente : mesuré le 2026-08-22, 42 agents
+  // portent un nom qui EST un code de chantier et 41 d'entre eux ont `mandat: null`. Sans ce
+  // second agent, la branche à pistes reste structurellement inatteignable par ce décor.
+  const vue = await uneVue({
+    agents: [
+      { pane: 'w1:p1', lieu, nom: 'kamouraska' },
+      { pane: 'w1:p2', lieu: join(tmp, 'ailleurs'), nom: 'e-20260825-0001' },
+    ],
+    service: { appeler: appelerQuiJette, appels: [] },
+  });
+
+  const e = lEpic(vue);
+  assert.ok(e.agent.indices?.length, 'le décor doit produire une PISTE — sinon ce banc mesure l’autre branche');
+  assert.equal(e.stories, null, 'et des stories NON LUES — sinon il ne mesure pas le trou de mesure');
+  assert.equal(
+    e.agent.declarationMesuree,
+    false,
+    'la branche à pistes doit porter le fait, comme sa jumelle — une porte sur deux ne garde rien'
+  );
+  assert.ok(
+    !e.agent.pourquoi.includes('le registre ne déclare aucun nom'),
+    `la branche à pistes AFFIRME une absence non mesurée : ${e.agent.pourquoi}`
+  );
+  assert.ok(e.agent.pourquoi.includes('n’a PAS pu être lu'), `elle doit dire le trou : ${e.agent.pourquoi}`);
+
+  // ⚠️ ET LA PISTE RESTE UNE PISTE — le correctif ne doit pas la promouvoir en déclaration.
+  assert.equal(e.agent.mesure, 'non établi', 'un nom qui n’est pas un mandat ne devient pas une source');
+  assert.equal(e.agent.phraseDeLIndice, PHRASE_DE_LINDICE, 'et la phrase de l’indice voyage toujours avec elle');
+});
+
+test('LE SYMÉTRIQUE DE LA BRANCHE À PISTES — stories LUES et rien de déclaré : l’absence se dit comme une absence', async (t) => {
+  // ⚠️ LE FAUX POSITIF QUE LE CORRECTIF POURRAIT OUVRIR SUR CETTE BRANCHE-CI. Chaque correctif
+  // ferme un défaut nommé et ouvre son symétrique sur la même frontière ; ce lot s'y est déjà
+  // fait prendre une fois, sur la branche jumelle.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const service = unDecor({
+    tickets: [{ id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'une', status: 'new', assigned_agent: null }],
+  });
+  const vue = await uneVue({
+    agents: [
+      { pane: 'w1:p1', lieu, nom: 'kamouraska' },
+      { pane: 'w1:p2', lieu: join(tmp, 'ailleurs'), nom: 'e-20260825-0001' },
+    ],
+    service,
+  });
+
+  const e = lEpic(vue);
+  assert.ok(e.agent.indices?.length, 'toujours sur la branche à PISTES');
+  assert.ok(Array.isArray(e.stories), 'mais ici les stories ONT été lues');
+  assert.equal(e.agent.declarationMesuree, undefined, 'rien à signaler : le champ ne voyage que quand la mesure a manqué');
+  assert.ok(
+    e.agent.pourquoi.includes('le registre ne déclare aucun nom'),
+    `l’absence MESURÉE se dit comme une absence : ${e.agent.pourquoi}`
+  );
+});
+
+test('LES DEUX SORTIES « non établi » DE `quiPorte` PORTENT LE MÊME VOCABULAIRE — la garde de FAMILLE', () => {
+  // 🔴 LA GARDE QUI REND LA FAMILLE IMPOSSIBLE À ROUVRIR, plutôt que de fermer un cas de plus.
+  // Les deux bancs ci-dessus ferment le défaut VU ; celui-ci ferme le défaut POSSIBLE — une
+  // troisième sortie ajoutée demain, ou une des deux corrigée sans l'autre.
+  //
+  // ⚠️ IL N'APPELLE PAS LA CHAÎNE : il interroge `quiPorte` directement, avec et sans piste,
+  // pour que la comparaison porte sur les DEUX branches et sur rien d'autre.
+  const parMandat = new Map();
+  const avecPiste = new Map([['E-1', [{ session: 's', pane: 'w1:p2', nom: 'e-1' }]]]);
+  const sansPiste = new Map();
+
+  for (const [quoi, parNom] of [
+    ['sans piste', sansPiste],
+    ['avec piste', avecPiste],
+  ]) {
+    const pasMesure = quiPorte('E-1', parMandat, parNom, { declarationMesuree: false });
+    const mesure = quiPorte('E-1', parMandat, parNom, { declarationMesuree: true });
+
+    assert.equal(pasMesure.declarationMesuree, false, `« ${quoi} » : le fait doit voyager quand la mesure a manqué`);
+    assert.ok(
+      pasMesure.pourquoi.includes('n’a PAS pu être lu'),
+      `« ${quoi} » : sa phrase doit dire le trou de mesure : ${pasMesure.pourquoi}`
+    );
+    assert.equal(mesure.declarationMesuree, undefined, `« ${quoi} » : et ne pas voyager quand tout a été mesuré`);
+    assert.ok(
+      mesure.pourquoi.includes('le registre ne déclare aucun nom'),
+      `« ${quoi} » : l’absence mesurée se dit comme une absence : ${mesure.pourquoi}`
+    );
+  }
 });
 
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
