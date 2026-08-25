@@ -559,7 +559,15 @@ const HOOKS_EPROUVES = [
   { sha: 'e52511a7320595f5', quoi: 'garde « terminal »', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
   { sha: '027326877c5f600d', quoi: 'garde « ligne-cliente »', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
   { sha: '5a11f09d4be1b385', quoi: 'garde « ecriture »', pourquoi: 'la garde de ce lot — éprouvée par les sections 1 à 11 ci-dessus' },
-  { sha: '006488b51d844b07', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 : se retire une fois la ligne ouverte' },
+  // ⚠️ EMPREINTE CHANGÉE PAR T-20260824-0020, et le rouge était VOULU : la commande de
+  // cette garde appelait la sienne par `exec node` et transmettait sa sortie telle quelle
+  // — elle cessait de refuser dès qu’elle cassait, pendait, bouclait, ou qu’un `npm
+  // notice` précédait son JSON. Elle capture, valide et ré-émet désormais un verdict
+  // canonique, et refuse à sa place quand il n’y en a pas.
+  // RÉ-ÉPROUVÉE, et pas seulement recalculée : `naissance-representant/tests/
+  // la-commande-garde-refuse-en-panne.test.js` ⑨ la joue face à un `Write` et mesure
+  // qu’elle transmet le `allow` de sa garde au lieu de refuser d’elle-même.
+  { sha: 'd21867526edaded7', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 (elle se retire une fois la ligne ouverte) et face à un Write par le banc des six modes de panne — T-20260824-0020' },
 ];
 
 test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voisin non éprouvé fait tomber ce lot en silence', () => {

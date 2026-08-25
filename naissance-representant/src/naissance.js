@@ -83,19 +83,187 @@ export function cheminLieu(repoRoot, nom, role = 'representant') {
 // l'environnement, et `CLAUDE_PROJECT_DIR`/`PWD` y valent le répertoire de démarrage).
 const CHEMIN_GARDE_POSTE = '$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js';
 
-// Le refus servi quand le garde n'est PAS installé sur ce poste. Sans lui, l'absence est
-// muette et permissive — exactement le motif « fonction inerte derrière des tests verts ».
-// Aucune apostrophe droite dans le texte : la charge voyage entre guillemets simples de shell.
-const REFUS_GARDE_ABSENT = JSON.stringify({
+// ═══════════════════════════════ Les refus que la commande rend À LA PLACE de la garde
+//
+// T-20260824-0020. La commande appelait sa garde par `exec node "$G"` et transmettait sa
+// sortie TELLE QUELLE. Mesuré le 2026-08-24 sur Claude Code 2.1.241 (T-20260824-0002) :
+// quand une garde ne rend pas de verdict LISIBLE, Claude Code n'a aucune décision et
+// dégrade le geste en DEMANDE de permission — et sous `--permission-mode acceptEdits`,
+// une demande est un OUI. La garde d'ouverture est ce qui rend la ligne d'un agent
+// obligatoire : si elle cesse de refuser, l'agent naît sans que rien n'exige sa ligne.
+//
+// 🔴 LA POLARITÉ DE PANNE D'UNE GARDE EST LE REFUS, JAMAIS LA DEMANDE. Six modes ont été
+// mesurés (banc `tests/la-commande-garde-refuse-en-panne.test.js`), et sept rouges
+// mesurés avant ce durcissement — seule l'absence était couverte :
+//
+//   ① la garde est ABSENTE            → couvert depuis T-20260809-0032
+//   ② elle CASSE (ou se tait)         → sortie vide      → refus rendu par le shell
+//   ③ elle PEND                       → délai            → refus rendu par le lanceur
+//   ④ elle rend un verdict SANS décision (ou une décision inventée) → refus
+//   ⑤ du BRUIT précède son JSON       → ne parse plus    → refus
+//   ⑥ elle BOUCLE                     → délai + SIGKILL  → refus
+//
+// ⚠️ ⑥ EST FERMÉ ICI, ALORS QU'IL NE L'ÉTAIT PAS DANS T-20260824-0002 — et c'est la
+// SEULE raison qui le permet : là-bas, le délai que la garde s'imposait vivait DANS son
+// propre processus, et Node est mono-thread — un `while` empêche le minuteur de tirer.
+// Ici le minuteur vit dans le LANCEUR, un processus distinct qui TUE la garde. Ce n'est
+// pas de la prudence en plus : c'est un mode de panne de moins, mesuré.
+//
+// Aucune apostrophe droite ne survit dans ce qui voyage entre guillemets simples de shell —
+// les deux textes de refus ET le lanceur passent tous les trois par `echapper`.
+//
+// ⚠️ LE LANCEUR N Y PASSAIT PAS, et ce commentaire l affirmait quand même (huitième passe).
+// La correction ne change aucun octet aujourd'hui — le lanceur n'a pas d'apostrophe — mais
+// elle rend l'énoncé vrai demain. Ce qui garde ce point, si le geste disparaissait : une
+// commande devenue shell invalide fait rougir 22 des 23 contrôles du banc, mesuré.
+
+/**
+ * Une charge sûre entre guillemets simples de `/bin/sh` — la clôture, jamais l'espoir.
+ *
+ * ⚠️ EXPORTÉE POUR ÊTRE ÉPROUVÉE, et le trou qu'elle bouchait n'était gardé par RIEN.
+ * Relevé par la passe portail : aucun des deux textes de refus ne porte aujourd'hui
+ * d'apostrophe droite (convention éditoriale), donc **neutraliser cette fonction ne
+ * faisait rougir aucun test** — mesuré, banc entier vert. Le jour où une apostrophe
+ * droite entre dans un refus, la commande devient un shell invalide : `syntax error`,
+ * exit 2, AUCUNE sortie — c'est-à-dire exactement la dégradation en demande de
+ * permission que tout ce lot ferme. Une convention n'est pas une garde.
+ */
+export const echapper = (t) => t.replace(/'/g, "'\\''");
+
+const refus = (raison) => echapper(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: 'PreToolUse',
     permissionDecision: 'deny',
-    permissionDecisionReason:
-      'le garde d’ouverture est introuvable sur ce poste (~/.somtech/naissance-representant) — ' +
-      'installe-le avec `npx @somtech-solutions/pack setup`. Refus par défaut : un garde absent ' +
-      'ne vaut jamais un garde permissif.',
+    permissionDecisionReason: raison,
   },
-});
+}));
+
+const REFUS_GARDE_ABSENT = refus(
+  'le garde d’ouverture est introuvable sur ce poste (~/.somtech/naissance-representant) — ' +
+  'installe-le avec `npx @somtech-solutions/pack setup`. Refus par défaut : un garde absent ' +
+  'ne vaut jamais un garde permissif.');
+
+const REFUS_GARDE_EN_PANNE = refus(
+  'le garde d’ouverture est présent mais il n’a rendu aucun verdict lisible — il a échoué, ' +
+  'ou ce qu’il a écrit n’est pas un verdict. Refus par défaut : un garde qui casse ne vaut ' +
+  'jamais un garde permissif, et une demande de permission est un oui dès que la session ' +
+  'accepte les éditions.');
+
+/**
+ * Le délai imposé à la garde, et ses BORNES.
+ *
+ * ⚠️ Réglable par `SOMTECH_GARDE_OUVERTURE_DELAI_MS` — les tests en ont besoin pour mesurer
+ * « elle pend » en secondes plutôt qu'en minutes. Mais une valeur hors bornes ne s'applique
+ * PAS : sans ça, `SOMTECH_GARDE_OUVERTURE_DELAI_MS=99999999` désarmerait le seul contrôle
+ * qui ferme ③ et ⑥, depuis l'environnement, sans qu'aucun test ne rougisse.
+ */
+const DELAI_MS = 10000;
+const DELAI_MIN_MS = 200;
+const DELAI_MAX_MS = 30000;
+
+/**
+ * Le LANCEUR : ce qui appelle la garde à la place de `exec`, et qui refuse à sa place.
+ *
+ * Il vit en ligne dans la commande — jamais dans un fichier de plus. Un fichier de plus
+ * serait un mode de panne de plus : c'est précisément « le fichier n'est pas là » que
+ * cette commande existe pour fermer.
+ *
+ * Il CAPTURE la sortie de la garde, la VALIDE (un verdict est un `allow` ou un `deny`,
+ * rien d'autre), et RÉ-ÉMET une forme canonique — ce qui écarte le bruit du même geste.
+ * Sortie non reconnue = pas de verdict = refus, sans jamais lire `$?` (qu'un tube rendrait
+ * de toute façon celui du dernier maillon).
+ */
+const LANCEUR = [
+  'var C=require("child_process"),s="",fini=false;',
+  `var T=Number(process.env.SOMTECH_GARDE_OUVERTURE_DELAI_MS)||${DELAI_MS};`,
+  `if(!(T>=${DELAI_MIN_MS}&&T<=${DELAI_MAX_MS}))T=${DELAI_MS};`,
+  'var D=JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",',
+  'permissionDecisionReason:"le garde d ouverture n a rendu aucun verdict dans le delai imparti — ',
+  'il pend ou il boucle, et il vient d etre arrete. Refus par defaut : un garde qui ne repond pas ',
+  'ne vaut jamais un garde permissif."}});',
+  'var g=C.spawn(process.execPath,[process.argv[1]],{stdio:["pipe","pipe","ignore"]});',
+  'g.on("error",function(){rendre(null)});',
+  // ⚠️ CES DEUX FILETS-CI — les deux écouteurs d erreur, PAS le `try` de la ligne suivante —
+  // SONT GARDÉS PAR LE CONTRÔLE ⑰, et il a fallu chercher le cas qui les
+  // rend visibles (septième passe de fond : ils n étaient tenus que par l identité du
+  // gabarit, jamais par un comportement). Le cas : une garde SAINE qui décide et sort
+  // pendant que l appelant écrit encore. Son entrée se referme sous la plume du lanceur ;
+  // sans filet, l écriture suivante lève une erreur non capturée, le lanceur meurt, et son
+  // verdict est perdu — un `allow` légitime devient un refus.
+  'g.stdin.on("error",function(){});process.stdin.on("error",function(){});',
+  // 🔴 ON RELAIE SANS JAMAIS SE LAISSER BLOQUER, et c est une correction de la passe
+  // portail. Un `pipe` applique la contre-pression de la garde à l APPELANT : dès que la
+  // garde meurt ou n écoute pas, plus personne ne lit l entrée du hook, et au-delà de la
+  // taille d un tube (~256 Ko mesurés) Claude Code se bloque en écrivant puis échoue en
+  // EPIPE — AVANT tout refus. La requête d un `Write` porte le contenu du fichier : ce
+  // n est pas un cas rare. On écrit donc sans attendre, et on avale l échec.
+  // ⚠️ CE `try`-CI EST UNE REDONDANCE DONT AUCUN CAS N A ÉTÉ TROUVÉ — déclaré plutôt que
+  // laissé passer pour une garantie (neuvième passe, qui a eu raison sur l énoncé : le
+  // commentaire ci-dessus disait « les filets du tube » et n en gardait que deux).
+  // Mesuré : sans lui, une requête de 60 Mo vers une garde qui boucle, coupée au délai,
+  // rend quand même le bon verdict et la bonne raison — l échec d écriture passe par
+  // l écouteur d erreur, pas par une exception. Il reste parce qu un `write` sur un flux
+  // détruit PEUT lever de façon synchrone ; il n est gardé par aucun rouge.
+  'process.stdin.on("data",function(c){try{g.stdin.write(c)}catch(e){}});',
+  'process.stdin.on("end",function(){try{g.stdin.end()}catch(e){}});',
+  // ⚠️ L ACCUMULATION EST BORNÉE. Une garde qui crache sans fin ferait enfler la mémoire
+  // du lanceur sans qu aucun délai n y change rien. Au-delà, on cesse d accumuler : le
+  // JSON ne parsera pas, donc le verdict manquera, donc la commande refusera — la bonne
+  // polarité, obtenue sans un mécanisme de plus.
+  // ⚠️ `setEncoding` AVANT d accumuler, et ce n est pas un détail de style. Sans lui, chaque
+  // paquet du tube est décodé SÉPARÉMENT : un caractère accentué coupé entre deux paquets
+  // se décode en deux caractères de remplacement, le JSON reste valide, et la raison du
+  // refus arrive corrompue — en silence. Relevé et mesuré par la quatrième passe de fond
+  // (« caractère » rendu « caract??re »). Les refus de ce dépôt sont en français : la
+  // frontière fatale est à portée de n importe quelle écriture fragmentée par l OS.
+  'g.stdout.setEncoding("utf8");',
+  'g.stdout.on("data",function(c){if(s.length<1000000)s+=c});',
+  'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
+  'g.on("close",function(){clearTimeout(m);rendre(null)});',
+  // 🔴 LE DÉLAI PRIME SUR CE QUI EST DÉJÀ ÉCRIT — correction de la deuxième passe de fond.
+  // Sans ce `if(r)`, une garde qui écrit un verdict VALIDE puis ne se termine jamais
+  // (boucle, minuteur oublié, poignée ouverte) voyait son verdict ré-émis au délai — un
+  // `allow` compris. Mesuré : `allow` transmis intact à 1585 ms sur un délai de 1500 ms.
+  //
+  // ⚠️ CE QUE CE CHOIX COÛTE, ET IL A ÉTÉ MESURÉ AUSSI (troisième passe de fond) : une
+  // garde qui répond juste, vite, et met plus que le délai à FERMER SON PROCESSUS est
+  // refusée à tort. Les deux cas sont indiscernables à l instant du délai — on ne sait
+  // pas si la garde a fini de juger ou si elle est bloquée après avoir parlé.
+  //
+  // L arbitrage est celui de la polarité : refuser à tort coûte un refus lisible que
+  // l agent lève en ouvrant sa ligne ; accepter à tort laisse passer le `allow` d une
+  // garde bloquée, c est-à-dire la panne que tout ce lot existe pour fermer. Et le cas
+  // refusé à tort ne se produit pas dans la population réelle : la garde d ouverture
+  // sort par un `process.exit(0)` explicite dès qu elle a répondu, et le délai vaut
+  // 10 secondes. Ce n est pas « impossible » — c est nommé plutôt que couvert.
+  // ⚠️ LE REFUS DE DÉLAI SORT PAR LE MÊME CHEMIN QUE LE VERDICT — il attend la fin de son
+  // écriture. Il était court, donc jamais tronqué ; mais une sortie qui n attend pas est
+  // précisément le défaut corrigé deux lignes plus bas, et deux voies de sortie dont une
+  // seule est sûre finissent par se rejoindre.
+  // ⚠️ `fin` EST UNE CEINTURE, ET ELLE N EST PAS GARDÉE — écrit plutôt qu espéré. Attendre
+  // la fin de l écriture avant de sortir n a d effet qu au-delà du tube (64 Ko) ; or la
+  // borne de 2000 caractères ci-dessous rend ce cas inatteignable, et c est ELLE qui est
+  // éprouvée (contrôle ⑯ bis). Mesuré par mutation : retirer `fin` ne fait rougir aucun
+  // test. On la garde parce qu une sortie qui n attend pas son écriture est un défaut en
+  // soi — mais personne ne doit croire qu un rouge la protège.
+  'function rendre(r){if(fini)return;fini=true;var fin=function(){process.exit(0)};',
+  'if(r)return void process.stdout.write(r,fin);',
+  'var v=null;try{var o=JSON.parse(s).hookSpecificOutput;',
+  'if(o&&(o.permissionDecision==="allow"||o.permissionDecision==="deny"))v=o}catch(e){}',
+  // 🔴 LA RAISON EST BORNÉE, ET ON NE SORT PAS AVANT D AVOIR FINI D ÉCRIRE — correction
+  // de la passe de fond. La sortie du lanceur passe par une substitution de commande,
+  // dont le tube fait 64 Ko : au-delà, `process.exit(0)` coupait l écriture en cours et
+  // rendait un JSON tronqué — NON VIDE, donc accepté par le garde-fou `[ -n "$S" ]` du
+  // shell, qui ne sait pas juger un JSON. Claude Code n avait alors aucun verdict : la
+  // panne même que ce lot ferme, rouverte par sa propre sortie.
+  // Une raison énorme n est pas théorique — celle d un refus de `Bash` cite le segment
+  // refusé verbatim. On la borne, en le DISANT, et on laisse l écriture se terminer.
+  'if(v){var R=String(v.permissionDecisionReason||"");',
+  'if(R.length>2000)R=R.slice(0,2000)+" … (raison tronquee)";',
+  'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",',
+  'permissionDecision:v.permissionDecision,permissionDecisionReason:R}}),fin)}',
+  'else fin()}',
+].join('');
 
 /**
  * La commande de hook posée dans le `.claude/settings.json` VERSIONNÉ du lieu.
@@ -103,12 +271,14 @@ const REFUS_GARDE_ABSENT = JSON.stringify({
  * Une constante, pas une fonction d'un `repoRoot` : c'est précisément ce dont elle ne doit
  * plus dépendre. Deux naissances lancées de deux endroits écrivent le même octet.
  *
- * `cat >/dev/null` avant le refus : Claude Code écrit la requête sur l'entrée du hook, et
- * sortir sans la lire fermerait le tuyau sous sa plume.
+ * `cat >/dev/null` avant le refus d'absence : Claude Code écrit la requête sur l'entrée du
+ * hook, et sortir sans la lire fermerait le tuyau sous sa plume. (Quand la garde EST là,
+ * c'est le lanceur qui lit cette entrée et la lui passe.)
  */
 export const COMMANDE_GARDE =
   `G="${CHEMIN_GARDE_POSTE}"; ` +
-  'if [ -f "$G" ]; then exec node "$G"; ' +
+  `if [ -f "$G" ]; then S=$(node -e '${echapper(LANCEUR)}' "$G" 2>/dev/null); ` +
+  `if [ -n "$S" ]; then printf '%s\\n' "$S"; else printf '%s\\n' '${REFUS_GARDE_EN_PANNE}'; fi; ` +
   `else cat >/dev/null 2>&1; printf '%s\\n' '${REFUS_GARDE_ABSENT}'; fi`;
 
 /** Le chemin du `.claude/settings.json` posé par la commande qui pose le lieu. */
