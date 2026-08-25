@@ -177,7 +177,11 @@ const LANCEUR = [
   // n est pas un cas rare. On écrit donc sans attendre, et on avale l échec.
   'process.stdin.on("data",function(c){try{g.stdin.write(c)}catch(e){}});',
   'process.stdin.on("end",function(){try{g.stdin.end()}catch(e){}});',
-  'g.stdout.on("data",function(c){s+=c});',
+  // ⚠️ L ACCUMULATION EST BORNÉE. Une garde qui crache sans fin ferait enfler la mémoire
+  // du lanceur sans qu aucun délai n y change rien. Au-delà, on cesse d accumuler : le
+  // JSON ne parsera pas, donc le verdict manquera, donc la commande refusera — la bonne
+  // polarité, obtenue sans un mécanisme de plus.
+  'g.stdout.on("data",function(c){if(s.length<1000000)s+=c});',
   'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
   'g.on("close",function(){clearTimeout(m);rendre(null)});',
   // 🔴 LE DÉLAI PRIME SUR CE QUI EST DÉJÀ ÉCRIT, et c est une correction de la passe de
@@ -186,8 +190,13 @@ const LANCEUR = [
   // délai — un `allow` compris. Mesuré : `allow` transmis intact à 1585 ms sur un délai
   // de 1500 ms. Une garde qui ne SORT pas est en panne, quoi qu elle ait dit avant :
   // on ne peut pas savoir si ce qu elle a écrit était son dernier mot.
-  'function rendre(r){if(fini)return;fini=true;if(r){process.stdout.write(r);process.exit(0)}var v=null;',
-  'try{var o=JSON.parse(s).hookSpecificOutput;',
+  // ⚠️ LE REFUS DE DÉLAI SORT PAR LE MÊME CHEMIN QUE LE VERDICT — il attend la fin de son
+  // écriture. Il était court, donc jamais tronqué ; mais une sortie qui n attend pas est
+  // précisément le défaut corrigé deux lignes plus bas, et deux voies de sortie dont une
+  // seule est sûre finissent par se rejoindre.
+  'function rendre(r){if(fini)return;fini=true;var fin=function(){process.exit(0)};',
+  'if(r)return void process.stdout.write(r,fin);',
+  'var v=null;try{var o=JSON.parse(s).hookSpecificOutput;',
   'if(o&&(o.permissionDecision==="allow"||o.permissionDecision==="deny"))v=o}catch(e){}',
   // 🔴 LA RAISON EST BORNÉE, ET ON NE SORT PAS AVANT D AVOIR FINI D ÉCRIRE — correction
   // de la passe de fond. La sortie du lanceur passe par une substitution de commande,
@@ -197,12 +206,11 @@ const LANCEUR = [
   // panne même que ce lot ferme, rouverte par sa propre sortie.
   // Une raison énorme n est pas théorique — celle d un refus de `Bash` cite le segment
   // refusé verbatim. On la borne, en le DISANT, et on laisse l écriture se terminer.
-  'var fin=function(){process.exit(0)};',
   'if(v){var R=String(v.permissionDecisionReason||"");',
   'if(R.length>2000)R=R.slice(0,2000)+" … (raison tronquee)";',
   'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",',
   'permissionDecision:v.permissionDecision,permissionDecisionReason:R}}),fin)}',
-  'else if(r)process.stdout.write(r,fin);else fin()}',
+  'else fin()}',
 ].join('');
 
 /**
