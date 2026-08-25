@@ -590,16 +590,38 @@ test('le dénominateur du compte est ÉPINGLÉ — on ne peut pas taire un signa
 
 for (const signal of SIGNAUX_DE_LA_LIGNE) {
   test(`« ${signal.cle} » (ligne) ATTEINT le résumé ET le texte quand il a servi`, async () => {
-    // La borne du recensement décide de l'état : muette ⇒ `null`, complète ⇒ `false`.
-    const muette = signal.cle === 'presencesNonEtablies';
+    // 🔴 LE DÉCOR VIENT DU MANIFESTE, IL N’EST PLUS DEVINÉ ICI. Cette garde bâtissait UNE
+    // fixture, taillée pour les deux signaux qu’elle connaissait — tous deux de la même
+    // forme, un prédicat sur `presence`. Le premier signal d’une AUTRE forme (un fait qui
+    // vit sous les epics) la faisait rougir sans qu’aucun défaut n’existe : elle mesurait
+    // sa propre idée de ce qu’est un signal, pas le manifeste.
+    //
+    // ⚠️ CHAQUE ENTRÉE DÉCLARE DONC `allumePar`, et un banc plus bas exige que TOUTE entrée
+    // en porte un — sans quoi un signal neuf réintroduirait le devinement en silence.
+    const decor = signal.allumePar();
     const vue = await laVueDuParc({
       recensement: {
         quand: 'T',
-        agents: [],
-        borne: {
-          sessionsInterrogees: 14,
-          sessionsRefusees: muette ? [{ session: '/x/sessions/cg/herdr.sock', raison: 'server_not_running' }] : [],
-        },
+        // ⚠️ L’AGENT VIVANT N’EST LÀ QUE SI LE SIGNAL LE RÉCLAME : ajouté à tous, il
+        // éteindrait `chantiersSansTerminal`, qui exige précisément qu’il n’y en ait pas.
+        agents: decor.agentQuiPorte
+          ? [
+              {
+                pane: 'w1:p9',
+                session: '/x/sessions/s/herdr.sock',
+                nom: { mesure: 'lu', valeur: decor.agentQuiPorte.nom },
+                // ⚠️ PAS « orchestrateur » — ce rôle ferait de cet agent une LIGNE de la vue,
+                // et son chantier porterait le même epic : le compte rendrait 2 pour un seul
+                // écart. `parMandat` est alimenté par TOUS les agents, quel que soit leur
+                // rôle ; seule la boucle des lignes filtre sur « orchestrateur ». Un décor qui
+                // l'ignore mesure autre chose que ce qu'il croit.
+                role: { mesure: 'établi', nom: 'representant' },
+                mandat: decor.agentQuiPorte.mandat,
+                lieu: '/r/.o/e',
+              },
+            ]
+          : [],
+        borne: { sessionsInterrogees: 14, sessionsRefusees: decor.sessionsRefusees },
       },
       lieux: {
         mesure: 'lue',
@@ -607,7 +629,12 @@ for (const signal of SIGNAUX_DE_LA_LIGNE) {
         racinesRefusees: [],
         entrees: [{ role: 'orchestrateur', mandat: 'p-20260601-0094', chemins: ['/r/.o/p'] }],
       },
-      lireChantier: async (code) => ({ code, titre: 't', statut: 'in_progress', epics: [] }),
+      lireChantier: async (code) => ({
+        code,
+        titre: 't',
+        statut: 'in_progress',
+        epics: (decor.epics ?? []).map((e) => ({ ...e, nomDeclare: decor.nomDeclareSurLEpic ?? null })),
+      }),
     });
 
     assert.equal(vue.compte[signal.cleDuCompte], 1, `② le compte n’agrège pas « ${signal.cle} »`);
@@ -626,6 +653,24 @@ for (const signal of SIGNAUX_DE_LA_LIGNE) {
     assert.ok(!vue.resume.includes(signal.phrase(1)), 'aucune phrase quand le signal est au repos');
   });
 }
+
+test('TOUTE entrée du manifeste de ligne DÉCLARE ce qui l’allume — sans quoi sa garde se remet à DEVINER', () => {
+  // 🔴 CETTE GARDE FERME LE DÉFAUT *POSSIBLE*, PAS CELUI QU’ON A VU. La garde de traversée
+  // ci-dessus bâtissait sa fixture à la main, taillée pour les deux signaux qu’elle
+  // connaissait — tous deux de la même forme. Le premier signal d’une AUTRE forme la faisait
+  // rougir sans qu’aucun défaut n’existe : elle mesurait sa propre idée d’un signal.
+  //
+  // ⚠️ ELLE LIT MAINTENANT `allumePar`. Un signal neuf qui l’oublierait ferait jeter la garde
+  // avec un « allumePar is not a function » — un rouge, certes, mais qui accuse l’INSTRUMENT et
+  // envoie chercher un défaut dans le banc. Ce banc-ci le dit à sa place, et en un mot.
+  for (const s of SIGNAUX_DE_LA_LIGNE) {
+    assert.equal(typeof s.allumePar, 'function', `« ${s.cle} » ne déclare pas ce qui l’allume`);
+    const decor = s.allumePar();
+    assert.ok(decor && typeof decor === 'object', `« ${s.cle} » : son allumage ne rend pas un décor`);
+    assert.ok(Array.isArray(decor.sessionsRefusees), `« ${s.cle} » : son décor doit poser la borne du recensement`);
+    assert.ok(Array.isArray(decor.epics), `« ${s.cle} » : son décor doit dire ce que le chantier porte`);
+  }
+});
 
 test('🔴 UNE PRÉSENCE NON ÉTABLIE N’EST JAMAIS COMPTÉE COMME UNE MORT — les deux prédicats sont DISJOINTS', async () => {
   // 🔴 LE DÉFAUT EXACT, GARDÉ À SA FRONTIÈRE. `!== true` avalait `null` ; `=== false` ne l'avale

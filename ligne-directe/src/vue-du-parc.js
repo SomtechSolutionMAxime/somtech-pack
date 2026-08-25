@@ -776,7 +776,19 @@ export function phrasesDesSignaux(compte) {
  *   • `predicat(o)` — la ligne est-elle « chaude » pour ce signal ? UN SEUL état à la fois :
  *                     deux prédicats qui se recouvrent refondraient ce qu'on vient de séparer ;
  *   • `cleDuCompte` — son nom dans le compte ;
- *   • `phrase(n)`   — ce que le résumé dit, et SEULEMENT quand il a servi.
+ *   • `phrase(n)`   — ce que le résumé dit, et SEULEMENT quand il a servi ;
+ *   • `allumePar()` — le décor MINIMAL qui l’allume, pour que sa garde de traversée cesse
+ *                     de le DEVINER.
+ *
+ * 🔴 `allumePar` EST NÉ D’UNE GARDE QUI MESURAIT SA PROPRE IDÉE D’UN SIGNAL (2026-08-25).
+ * La garde de traversée bâtissait UNE fixture, taillée pour les deux signaux qu’elle
+ * connaissait — tous deux de la même forme, un prédicat sur `presence`. Le premier signal
+ * d’une AUTRE forme (un fait qui vit sous les epics) la faisait rougir sans qu’aucun défaut
+ * n’existe.
+ *
+ * ⚠️ C’EST LE MOTIF « une liste homogène cache l’élément d’une autre nature » : une suite
+ * auto-cohérente prouve que ses parties s’accordent ENTRE ELLES, jamais qu’elles couvrent le
+ * monde. Déclarer l’allumage rend la garde vraie de la FAMILLE, pas des deux cas connus.
  */
 export const SIGNAUX_DE_LA_LIGNE = [
   {
@@ -784,14 +796,56 @@ export const SIGNAUX_DE_LA_LIGNE = [
     // ⚠️ `=== false`, PAS `!== true`. C'était le défaut : `!== true` avale aussi `null`.
     predicat: (o) => o.presence?.vivant === false,
     cleDuCompte: 'chantiersSansTerminal',
+    // Un lieu versionné sans terminal vivant, toutes les sessions ayant répondu.
+    allumePar: () => ({ sessionsRefusees: [], epics: [] }),
     phrase: (n) =>
       ` ${n} chantier(s) n’ont AUCUN terminal vivant — MESURÉ, toutes les sessions ont répondu : ` +
       'ils sont ici parce que leur lieu versionné les porte.',
   },
   {
+    // 🔴 L'ÉCART ATTEIGNAIT LA LIGNE ET MOURAIT AVANT LE RÉSUMÉ — le défaut que ce manifeste
+    // existe pour empêcher, refait par le lot qui s’en sert (2026-08-25, passe de fond).
+    //
+    // Un écart est une CONTRADICTION entre le terrain et le registre : le fait le plus
+    // actionnable que cette vue produise. Il ne se voyait qu’en parcourant l’arbre ligne à
+    // ligne — le dirigeant qui lit le résumé en haut d’écran ne l’apprenait jamais.
+    //
+    // ⚠️ ET LA GARDE DE COMPLÉTUDE NE POUVAIT PAS L’ATTRAPER : elle compare les champs SŒURS
+    // de `code`/`titre`/`statut`, or `ecart` vit IMBRIQUÉ dans `agent.ecart`. Un fait imbriqué
+    // est hors du périmètre qu’elle inspecte — déclaré ici, il traverse ②③④ par dérivation.
+    //
+    // ⚠️ L’UNITÉ SE DIT, ET CE N’EST PAS CELLE QU’ON CROIT. Ce prédicat rend un BOOLÉEN par
+    // orchestrateur, donc ce compte est un nombre de CHANTIERS porteurs — jamais un nombre de
+    // contradictions : un chantier qui en porte trois compte pour un. La phrase le dit en
+    // toutes lettres ; un nombre juste sous une unité fausse se fait CONFIRMER, pas attraper.
+    cle: 'chantiersAvecEcart',
+    predicat: (o) =>
+      (o.epics ?? []).some(
+        (e) => Boolean(e?.agent?.ecart) || (e?.stories ?? []).some((s) => Boolean(s?.agent?.ecart))
+      ),
+    cleDuCompte: 'chantiersAvecEcart',
+    // Un epic dont le mandat PROUVÉ et le nom DÉCLARÉ se contredisent. Il faut un agent
+    // vivant qui porte le mandat de l’epic : sans lui, `quiPorte` ne descend jamais dans
+    // la branche qui mesure l’écart.
+    allumePar: () => ({
+      sessionsRefusees: [],
+      epics: [{ code: 'E-20260825-0001', titre: 'un epic', statut: 'in_execution', stories: [] }],
+      agentQuiPorte: { mandat: 'e-20260825-0001', nom: 'un-porteur' },
+      nomDeclareSurLEpic: 'quelqu-un-dautre',
+    }),
+    phrase: (n) =>
+      ` ${n} chantier(s) portent au moins une CONTRADICTION entre le mandat lu au lieu et le ` +
+      'nom déclaré au registre — la vue ne tranche pas : allez lire les lignes marquées ÉCART.',
+  },
+  {
     cle: 'presencesNonEtablies',
     predicat: (o) => o.presence?.vivant === null,
     cleDuCompte: 'presencesNonEtablies',
+    // Une session muette : on ne peut pas établir si le terminal vit.
+    allumePar: () => ({
+      sessionsRefusees: [{ session: '/x/sessions/cg/herdr.sock', raison: 'server_not_running' }],
+      epics: [],
+    }),
     // ⚠️ LA PHRASE DIT CE QU'ELLE EST, ET CE QU'ELLE N'EST PAS. « on n'a pas pu établir » se
     // relit en « ils sont partis » au bout de trois lectures si on ne l'en empêche pas — c'est
     // la même précaution que `PHRASE_DE_LINDICE`, sur un autre fait.
