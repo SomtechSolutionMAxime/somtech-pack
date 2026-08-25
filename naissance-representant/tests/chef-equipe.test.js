@@ -448,6 +448,20 @@ test('un espace déjà retiré ne fait pas rougir le défaire — mais sa branch
 
     assert.equal(defait.ok, true, `l’absence n’est pas une panne : ${defait.message}`);
     assert.equal(git(depot, 'branch', '--list', fait.branche), '', 'la branche-socle est retirée');
+    // ⚠️ L'ENREGISTREMENT, MESURÉ POUR LUI-MÊME — ET CE QUE CETTE LIGNE VAUT, EXACTEMENT.
+    // Mesuré (campagne de mutation du 2026-08-25) : neutraliser le `prune` rougit DÉJÀ, mais
+    // par un détour — git refuse `branch -D` tant qu'un enregistrement mort tient la branche,
+    // donc c'est l'assertion sur la BRANCHE qui tombe, jamais une sur l'enregistrement. Aucune
+    // mutation d'UN seul point ne peut donc rendre la ligne ci-dessous seule responsable d'un
+    // rouge : elle n'est pas porteuse aujourd'hui, et je ne prétends pas qu'elle l'est.
+    // Elle est là pour le jour où l'ordre des deux gestes change, ou `branch -D` cède la place
+    // à un `update-ref -d` que la garde de git ne couvre pas : ce jour-là le fantôme survit en
+    // silence, et cette ligne est le seul endroit qui le regarde.
+    assert.equal(
+      git(depot, 'worktree', 'list').split('\n').filter(Boolean).length,
+      1,
+      'et `git worktree list` ne garde aucun fantôme : le dépôt principal, et rien d’autre'
+    );
   } finally {
     nettoyer(bac);
   }
@@ -478,4 +492,42 @@ test('le socle rendu est le COMMIT résolu — un origin/main qui avance ne fait
   } finally {
     nettoyer(bac);
   }
+});
+
+// ⚠️ LE SURVIVANT DE LA CAMPAGNE DE MUTATION (2026-08-25). Neutraliser la garde des arguments
+// — `if (!depot || !espace || !branche || !socle)` remplacé par `if (false)` — laissait les 90
+// bancs au VERT : aucun n'appelait le défaire avec un socle manquant. C'est la forme « une
+// garde juste sur un chemin que rien n'emprunte », et elle protège deux choses à la fois :
+//
+//   ① LE JUGEMENT. Ne pas savoir d'où la branche est partie, c'est ne pas pouvoir dire si elle
+//      a bougé — donc ne pas pouvoir dire si l'arbre porte du travail. Un défaire qui devine
+//      est un défaire qui détruit.
+//   ② LE DÉFAIRE LUI-MÊME. Sans la garde, `socle` vaut `undefined` : la comparaison le lit
+//      comme « le socle a bougé », puis `socle.slice(0, 8)` JETTE — dans un `process.on('exit')`,
+//      c'est-à-dire à l'endroit du programme où une exception n'a plus personne pour l'attraper.
+test('un défaire à qui il manque le socle REFUSE — il ne devine pas, et il ne jette pas', () => {
+  const { bac, depot, racine } = unDepot();
+  try {
+    const fait = creerEspaceDeTravail({ depot, horodatage: '20260825-083616', racine });
+
+    // Le socle manque — exactement ce qu'un appelant qui aurait oublié de le porter produirait.
+    const defait = defaireEspaceDeTravail({ depot, espace: fait.espace, branche: fait.branche });
+
+    assert.equal(defait.ok, false, 'sans de quoi juger, on ne défait rien');
+    assert.match(defait.message, /socle/, 'le refus dit CE QUI MANQUE, pas seulement qu’il refuse');
+    assert.match(defait.message, /worktree remove/, 'et le geste exact, pour que l’humain tranche');
+    assert.ok(existsSync(fait.espace), '🔴 et surtout : l’arbre est INTACT');
+    assert.notEqual(git(depot, 'branch', '--list', fait.branche), '', '… sa branche-socle aussi');
+  } finally {
+    nettoyer(bac);
+  }
+});
+
+// ⚠️ ET LA MÊME GARDE PAR L'AUTRE BOUT : appelée sans le moindre argument, elle ne jette pas.
+// Elle tourne dans une sortie de processus — une exception y serait un plantage sans message,
+// juste après un refus que l'utilisateur a besoin de lire.
+test('un défaire appelé à vide REFUSE proprement — une sortie de processus ne jette pas', () => {
+  const defait = defaireEspaceDeTravail();
+  assert.equal(defait.ok, false);
+  assert.match(defait.message, /—/, 'l’espace inconnu est nommé « — », pas « undefined »');
 });
