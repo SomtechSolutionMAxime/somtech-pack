@@ -569,13 +569,6 @@ test('un `get` dont l’`id` n’est PAS un UUID est refusé — un code déguis
   assert.equal(appels.length, 1);
 });
 
-test('un mandat qui est un EPIC n’est pas deviné : on rend un refus qui le dit', async () => {
-  const { appelerMcp, appels } = unFauxDesk();
-  const r = await declarerAuServiceDesk({ mandat: 'E-20260822-0002', nom: 'matapedia', appelerMcp });
-  assert.equal(r.rempli, false);
-  assert.match(r.cause, /E-20260822-0002/);
-  assert.deepEqual(appels, [], 'aucun appel n’est parti — choisir une story parmi celles d’un epic serait inventer');
-});
 
 for (const [mandat, famille] of [
   ['D-20260825-0002', 'demands'],
@@ -635,4 +628,241 @@ test('sans clé au poste et sans transport fourni, le défaut est le transport P
     { env, encoding: 'utf8' }
   );
   assert.deepEqual(JSON.parse(sortie), { rempli: false, cause: 'aucun accès au ServiceDesk' });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 5 bis — UN MANDAT QUI EST UN EPIC : TOUTES SES STORIES, ET LE PLURIEL SE REND
+//
+// ⚠️ CE BLOC FERME LE CAS CANONIQUE, PAS UN CAS LIMITE. Un chef d'équipe mène un EPIC —
+// c'est la forme NORMALE d'un agent ouvert par l'outillage. Le module refusait alors de
+// remplir quoi que ce soit (« je ne choisis pas une story à sa place »), ce qui laissait
+// `assigned_agent` vide sur le chemin le plus fréquenté : EF-AGT-006 tenue sur les tickets
+// directs, muette sur les epics. Or les tickets du mandat d'un chef d'équipe, ce sont LES
+// STORIES DE SON EPIC — toutes. Les remplir n'est pas choisir, c'est remplir le mandat.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+const EPIC_UUID = 'a1b2c3d4-1111-4222-8333-444455556666';
+const FORME_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Des stories telles que le ServiceDesk RÉEL les rend sous un epic — mesuré le 2026-08-25. */
+function desStories(...codes) {
+  return codes.map((code, i) => ({
+    id: `d4c892fa-cc6a-4416-bac9-330f54c1462${i}`,
+    ticket_id: code,
+    status: 'new',
+    epic_id: EPIC_UUID,
+  }));
+}
+
+/**
+ * Un ServiceDesk de papier qui connaît les EPICS.
+ *
+ * ⚠️ SON DÉFAUT REPRODUIT LA MESURE, PAS UNE HYPOTHÈSE. Le 2026-08-25, `epics` action `get`
+ * avec un CODE lisible rend « Epic not found » — mesuré contre le service réel, et le schéma
+ * de l'outil le confirme (`id` y est documenté « UUID de l'epic », là où `tickets get`
+ * documente explicitement qu'il accepte le code). Un double qui répondrait au code serait un
+ * double NON CONFORME : il ferait passer un module incapable de trouver le moindre epic réel.
+ */
+function unFauxDeskEpic({
+  getParCode = new Error('Epic not found'),
+  liste = [{ id: EPIC_UUID, epic_id: 'E-20260825-0002', status: 'draft' }],
+  stories = desStories('T-20260825-0011'),
+  epicParUuid,
+  refus = {},
+} = {}) {
+  const appels = [];
+  const corpsEpic = epicParUuid ?? { epic: { id: EPIC_UUID, epic_id: 'E-20260825-0002', stories } };
+  const appelerMcp = async (outil, args) => {
+    appels.push({ outil, args });
+    if (outil === 'epics' && args?.action === 'get') {
+      if (!FORME_UUID.test(String(args.id))) {
+        if (getParCode instanceof Error) throw getParCode;
+        return getParCode;
+      }
+      if (corpsEpic instanceof Error) throw corpsEpic;
+      return corpsEpic;
+    }
+    if (outil === 'epics' && args?.action === 'list') {
+      if (liste instanceof Error) throw liste;
+      return { epics: liste.slice(0, args.limit) };
+    }
+    if (outil === 'tickets' && args?.action === 'update') {
+      const story = stories.find((s) => s.id === args.id);
+      const err = refus[story?.ticket_id];
+      if (err) throw err;
+      return { ticket: { id: args.id, assigned_agent: args.assigned_agent } };
+    }
+    throw new Error(`appel inattendu : ${outil}/${args?.action}`);
+  };
+  return { appelerMcp, appels };
+}
+
+/** Les mises à jour parties, dans l'ordre — `[uuid, nom]`. */
+const misesAJour = (appels) =>
+  appels.filter((a) => a.outil === 'tickets' && a.args.action === 'update').map((a) => [a.args.id, a.args.assigned_agent]);
+
+test('un mandat qui est un EPIC à UNE story : elle reçoit le nom, et le rendu la NOMME', async () => {
+  const { appelerMcp, appels } = unFauxDeskEpic();
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, true, `attendu rempli, reçu ${JSON.stringify(r)}`);
+  assert.equal(r.epic, 'E-20260825-0002');
+  assert.equal(r.total, 1, 'combien de stories l’epic PORTAIT — un compte nu ne dit pas sur combien');
+  assert.deepEqual(r.remplies, ['T-20260825-0011'], 'nommées par leur code, pas comptées');
+  assert.deepEqual(r.refusees, []);
+  assert.deepEqual(misesAJour(appels), [['d4c892fa-cc6a-4416-bac9-330f54c14620', 'e-20260825-0002']]);
+});
+
+test('un EPIC à TROIS stories : les TROIS sont remplies, chacune par son UUID', async () => {
+  const stories = desStories('T-20260825-0011', 'T-20260825-0012', 'T-20260825-0013');
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, true, `attendu rempli, reçu ${JSON.stringify(r)}`);
+  assert.equal(r.total, 3);
+  assert.deepEqual(r.remplies, ['T-20260825-0011', 'T-20260825-0012', 'T-20260825-0013']);
+  assert.deepEqual(
+    misesAJour(appels),
+    stories.map((s) => [s.id, 'e-20260825-0002']),
+    'chaque story est mise à jour par SON UUID — `update` rejette un code'
+  );
+});
+
+test('un EPIC SANS AUCUNE story n’est pas une panne : c’est un epic pas encore découpé, et ça se DIT', async () => {
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories: [] });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, false, 'rien n’a été rempli — le dire « rempli » serait faux');
+  assert.equal(r.total, 0, '0 = MESURÉ à zéro, jamais « pas mesuré »');
+  assert.match(r.cause, /pas de panne|n’est pas une panne|pas encore découpé/i, `cause inattendue : « ${r.cause} »`);
+  assert.match(r.cause, /E-20260825-0002/);
+  assert.deepEqual(misesAJour(appels), [], 'aucune mise à jour : il n’y avait rien dessous');
+});
+
+test('un EPIC qu’on ne trouve NULLE PART se dit — et `total` reste `null`, jamais 0', async () => {
+  const { appelerMcp, appels } = unFauxDeskEpic({ liste: [{ id: EPIC_UUID, epic_id: 'E-20260101-0001' }] });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, false);
+  // ⚠️ TROIS ÉTATS, JAMAIS DEUX — la discipline de `lireLesDeclarations`, un module plus haut.
+  // `total: 0` dit « je les ai comptées, il n’y en a aucune » ; `total: null` dit « je n’ai pas
+  // pu compter ». Les confondre ferait lire « cet epic n’a pas de story » à un epic introuvable.
+  assert.equal(r.total, null, 'un epic qu’on n’a pas lu n’a pas « zéro » story : il n’en a AUCUNE de mesurée');
+  assert.match(r.cause, /E-20260825-0002/, 'la cause nomme le mandat');
+  assert.match(r.cause, /1 epics? lus?/, 'et elle dit sur quoi on a cherché');
+  assert.deepEqual(misesAJour(appels), []);
+});
+
+test('une story qui REFUSE au milieu des autres ne perd pas les réussies — et elle est NOMMÉE avec sa cause', async () => {
+  const stories = desStories('T-20260825-0011', 'T-20260825-0012', 'T-20260825-0013');
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories, refus: { 'T-20260825-0012': new Error('HTTP 403') } });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  // 🔴 UN SUCCÈS PARTIEL N'EST PAS UN SUCCÈS — et il ne se perd pas non plus dans une exception.
+  assert.equal(r.rempli, false, '2 sur 3 ne se rend pas « rempli »');
+  assert.equal(r.total, 3);
+  assert.deepEqual(r.remplies, ['T-20260825-0011', 'T-20260825-0013'], 'les deux réussies survivent au refus de la troisième');
+  assert.deepEqual(r.refusees, [{ code: 'T-20260825-0012', cause: 'HTTP 403' }], 'LAQUELLE a refusé, et POURQUOI');
+  assert.match(r.cause, /T-20260825-0012/, 'la phrase rendue nomme la refusée — un compte nu enverrait chercher partout');
+  assert.match(r.cause, /2\D{0,40}3/, 'et elle porte le compte AVEC son dénominateur');
+  assert.equal(misesAJour(appels).length, 3, 'les trois ont bien été TENTÉES — une refusée n’interrompt pas la suite');
+});
+
+test('un transport qui JETTE partout ne fait pas tomber la naissance d’un chef d’équipe', async () => {
+  const { appelerMcp } = unFauxDeskEpic({ getParCode: new Error('HTTP 500'), liste: new Error('HTTP 500') });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+  assert.equal(r.rempli, false);
+  assert.equal(r.total, null);
+  assert.match(r.cause, /HTTP 500/, 'la cause du transport remonte telle quelle');
+});
+
+test('sans accès au ServiceDesk, un mandat EPIC rend le même refus qu’un ticket — et n’invente rien', async () => {
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp: null });
+  assert.equal(r.rempli, false);
+  assert.equal(r.cause, 'aucun accès au ServiceDesk');
+});
+
+test('`epics get` par CODE n’est PAS servi : on retombe sur la liste, puis on lit l’epic par son UUID', async () => {
+  const { appelerMcp, appels } = unFauxDeskEpic();
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, true, `attendu rempli, reçu ${JSON.stringify(r)}`);
+  // ⚠️ MESURÉ LE 2026-08-25 CONTRE LE SERVICE RÉEL : `epics get` avec « E-… » rend « Epic not
+  // found ». Un module qui s’arrêterait au premier `get` ne trouverait JAMAIS un epic réel —
+  // et le brief de ce lot affirmait pourtant que le code y était accepté.
+  assert.deepEqual(appels.map((a) => [a.outil, a.args.action]), [
+    ['epics', 'get'],
+    ['epics', 'list'],
+    ['epics', 'get'],
+    ['tickets', 'update'],
+  ]);
+  assert.equal(appels[0].args.id, 'E-20260825-0002', 'le premier `get` tente le CODE — direct le jour où le service le sert');
+  assert.equal(appels[2].args.id, EPIC_UUID, 'le second `get` part par l’UUID trouvé dans la liste');
+  assert.equal(FORME_UUID.test(String(appels[3].args.id)), true, '`update` ne reçoit QUE des UUID');
+});
+
+test('si `epics get` par CODE se met à répondre, on s’en contente — et on ne liste RIEN', async () => {
+  // La liste jette : si le module y touchait, ce banc rougirait. C'est ce qui prouve que le
+  // chemin direct est bien pris quand le service le sert.
+  const { appelerMcp, appels } = unFauxDeskEpic({
+    getParCode: { epic: { id: EPIC_UUID, epic_id: 'E-20260825-0002', stories: desStories('T-20260825-0011') } },
+    liste: new Error('la liste ne devait pas être appelée'),
+  });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, true, `attendu rempli, reçu ${JSON.stringify(r)}`);
+  assert.deepEqual(appels.map((a) => [a.outil, a.args.action]), [['epics', 'get'], ['tickets', 'update']]);
+});
+
+test('un epic dont le ServiceDesk ne rend AUCUNE liste de stories ne se lit pas « aucune story »', async () => {
+  // ⚠️ « je n'ai pas pu lire ses stories » ≠ « il n'en a aucune ». Le motif est déjà payé dans
+  // `vue-du-parc.js` : une liste vide à cet endroit faisait disparaître le travail d'agents
+  // entiers, en silence, sans qu'aucune ligne ne dise que la mesure avait manqué.
+  const { appelerMcp, appels } = unFauxDeskEpic({ epicParUuid: { epic: { id: EPIC_UUID, epic_id: 'E-20260825-0002' } } });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, false);
+  assert.equal(r.total, null, 'pas mesuré — surtout pas 0');
+  assert.doesNotMatch(r.cause, /pas encore découpé/, 'ce n’est PAS le cas « epic non découpé » : c’est une mesure manquée');
+  assert.deepEqual(misesAJour(appels), []);
+});
+
+test('une story sans identifiant exploitable est refusée NOMMÉMENT — les autres sont remplies quand même', async () => {
+  const stories = [
+    { id: 'T-20260825-0011', ticket_id: 'T-20260825-0011' }, // un code déguisé en `id` — `update` le rejetterait
+    ...desStories('T-20260825-0012'),
+  ];
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, false);
+  assert.equal(r.total, 2);
+  assert.deepEqual(r.remplies, ['T-20260825-0012']);
+  assert.deepEqual(r.refusees.map((x) => x.code), ['T-20260825-0011']);
+  assert.equal(misesAJour(appels).length, 1, 'on n’a PAS envoyé le code à `update` en espérant');
+});
+
+test('la liste d’epics PLAFONNÉE le dit — sans quoi « introuvable » enverrait chercher au mauvais endroit', async () => {
+  const liste = Array.from({ length: 200 }, (_, i) => ({ id: EPIC_UUID, epic_id: `E-20260101-${String(i).padStart(4, '0')}` }));
+  const { appelerMcp } = unFauxDeskEpic({ liste });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+
+  assert.equal(r.rempli, false);
+  assert.match(r.cause, /PLAFONN/i, `cause inattendue : « ${r.cause} »`);
+});
+
+test('la CASSE ne fait perdre ni l’epic ni ses stories — RA-AGT-004 : on compare sans elle', async () => {
+  // ⚠️ LE PIÈGE EST RÉEL DANS CE LOT : le code s'écrit « E-20260825-0002 » et le nom de l'agent
+  // « e-20260825-0002 ». Un mandat lu depuis un nom de dossier arrive en minuscules ; le
+  // ServiceDesk, lui, écrit ses codes en majuscules.
+  const { appelerMcp, appels } = unFauxDeskEpic({ liste: [{ id: EPIC_UUID, epic_id: 'e-20260825-0002' }] });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'e-20260825-0002', appelerMcp });
+  assert.equal(r.rempli, true, `un epic_id en minuscules doit rester trouvable — reçu ${JSON.stringify(r)}`);
+
+  const bas = unFauxDeskEpic();
+  const r2 = await declarerAuServiceDesk({ mandat: 'e-20260825-0002', nom: 'e-20260825-0002', appelerMcp: bas.appelerMcp });
+  assert.equal(r2.rempli, true, `un mandat en minuscules désigne le même epic — reçu ${JSON.stringify(r2)}`);
+  assert.equal(bas.appels[0].args.id, 'E-20260825-0002', 'le code part en MAJUSCULES, comme le ServiceDesk l’écrit');
+  assert.equal(r2.epic, 'E-20260825-0002');
+  assert.equal(appels.length > 0, true);
 });

@@ -332,6 +332,167 @@ function uuidDansLaReponse(corps) {
  *
  * @returns {Promise<{rempli: true, id: string, nom: string}|{rempli: false, cause: string}>}
  */
+/**
+ * Combien d'epics on lit d'un coup quand il faut retrouver un code dans la liste.
+ *
+ * Même valeur que le `parPage` d'`accesServiceDesk` : ces deux lectures interrogent le même
+ * service pour la même raison, et deux plafonds différents feraient diverger deux diagnostics
+ * du même « introuvable ».
+ */
+const PAGE_EPICS = 200;
+
+/** La cause d'une erreur, réduite à ce qu'un humain peut lire. */
+function motifDe(err) {
+  return String(err?.message ?? err).trim();
+}
+
+/**
+ * L'objet d'une réponse qui porte un tableau `stories` — la FORME, jamais la clé.
+ *
+ * Mesuré le 2026-08-25 contre le service réel : `epics` action `get` rend `{epic: {…,
+ * stories: [...]}}`. On ne câble pas `epic` en dur pour autant — l'enveloppe varie d'un outil à
+ * l'autre, et `uuidDansLaReponse` juste au-dessus cherche déjà la forme pour la même raison.
+ *
+ * ⚠️ `null` DIT « JE N'AI PAS TROUVÉ DE LISTE DE STORIES », JAMAIS « IL N'Y EN A PAS ». Les
+ * deux se rendent séparément plus bas : `vue-du-parc.js` a déjà payé ce mélange — une liste
+ * vide rendue pour une lecture manquée y faisait disparaître le travail d'agents entiers.
+ */
+function epicDansLaReponse(corps) {
+  for (const valeur of [corps, ...Object.values(corps || {})]) {
+    if (valeur && typeof valeur === 'object' && !Array.isArray(valeur) && Array.isArray(valeur.stories)) {
+      return valeur;
+    }
+  }
+  return null;
+}
+
+/**
+ * Retrouve l'epic d'un code, avec ses stories.
+ *
+ * ⚠️ `epics` action `get` N'ACCEPTE PAS LE CODE LISIBLE, ET C'EST MESURÉ — deux fois. Le
+ * 2026-08-19 (`mandat.js`) puis le 2026-08-25 contre le service réel : `{action:'get',
+ * id:'E-20260825-0002'}` rend « Epic not found ». Le schéma de l'outil dit la même chose sans
+ * l'écrire — `epics.get` documente son `id` comme « UUID de l'epic », là où `tickets.get`
+ * documente EXPLICITEMENT qu'il accepte aussi le code `T-…`. Un module qui s'arrêterait au
+ * premier `get` ne trouverait donc JAMAIS un epic réel.
+ *
+ * On garde tout de même `get` en premier — il est direct le jour où le service le sert, et
+ * c'est la forme d'`accesServiceDesk`, qui a tranché pareil sur la même mesure. La liste ne
+ * part que s'il n'a rien rendu d'exploitable.
+ *
+ * @returns `{epic}` quand il est lu, `{cause}` sinon — jamais les deux, jamais rien.
+ */
+async function lireLEpic(code, appelerMcp) {
+  try {
+    const direct = epicDansLaReponse(await appelerMcp('epics', { action: 'get', id: code }));
+    if (direct) return { epic: direct };
+  } catch {
+    /* `get` par code n'est pas servi sur les epics — la liste tranche. */
+  }
+
+  let liste;
+  try {
+    const corps = await appelerMcp('epics', { action: 'list', limit: PAGE_EPICS });
+    liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
+  } catch (err) {
+    return { cause: `lecture des epics pour ${code} : ${motifDe(err)}` };
+  }
+
+  // ⚠️ LA COMPARAISON IGNORE LA CASSE, ET CE N'EST PAS DU ZÈLE (RA-AGT-004). Dans ce lot même,
+  // le code s'écrit « E-20260825-0002 » et le nom de l'agent « e-20260825-0002 » : un mandat lu
+  // depuis un nom de dossier arrive en minuscules. `codeDuMandat` a déjà majusculé le nôtre ;
+  // on ne présume rien de celui que le service rend.
+  const trouve = liste.find((e) => String(e?.epic_id ?? '').trim().toUpperCase() === code);
+  if (!trouve) {
+    return {
+      cause:
+        `${code} ne figure pas dans les ${liste.length} epics lus` +
+        // La troncature SE DIT : une liste qui rend exactement son plafond a très probablement
+        // été coupée, et l'epic cherché peut être juste derrière. Sans cette marque, un
+        // « introuvable » parfaitement exact enverrait chercher au mauvais endroit.
+        (liste.length >= PAGE_EPICS ? ` — et cette liste est PLAFONNÉE à ${PAGE_EPICS} : il est peut-être juste derrière` : ''),
+    };
+  }
+  if (!UUID.test(String(trouve.id ?? ''))) {
+    return { cause: `${code} est là, mais sans identifiant exploitable : je ne peux pas lire ses stories` };
+  }
+
+  try {
+    const parUuid = epicDansLaReponse(await appelerMcp('epics', { action: 'get', id: trouve.id }));
+    if (!parUuid) {
+      return { cause: `${code} : le ServiceDesk n’a rendu aucune liste de stories — je n’en conclus PAS qu’il n’en a aucune` };
+    }
+    return { epic: parUuid };
+  } catch (err) {
+    return { cause: `lecture de ${code} : ${motifDe(err)}` };
+  }
+}
+
+/**
+ * Remplit `assigned_agent` sur TOUTES les stories d'un epic — et rend compte du PLURIEL.
+ *
+ * ⚠️ UN NOMBRE NU MENT. « 3 » ne dit ni 3 quoi, ni sur combien, ni lesquelles : qui le lit doit
+ * tout remesurer. Le rendu porte donc `total` (combien l'epic en PORTAIT), `remplies` et
+ * `refusees` — nommées par leur CODE, avec leur cause. Ce dépôt a déjà rendu deux fois un
+ * compte juste dans une phrase fausse ; on donne de quoi vérifier, pas de quoi croire.
+ *
+ * 🔴 UN SUCCÈS PARTIEL N'EST PAS UN SUCCÈS. 2 stories sur 3 ne rend jamais `rempli: true` — et
+ * ne jette pas non plus, ce qui perdrait les 2 réussies avec la 3ᵉ.
+ *
+ * ⚠️ ET `total` A TROIS ÉTATS, PAS DEUX. `0` = comptées, aucune (un epic pas encore découpé,
+ * qui est un état NORMAL et se dit tel) ; `null` = pas comptées (epic introuvable, lecture
+ * manquée). Les confondre ferait lire « cet epic n'a pas de story » à un epic qu'on n'a pas su
+ * joindre — le motif exact que `lireLesDeclarations` sépare un étage plus haut.
+ */
+async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
+  const { epic, cause } = await lireLEpic(code, appelerMcp);
+  if (!epic) return { rempli: false, epic: code, nom, total: null, remplies: [], refusees: [], cause };
+
+  const stories = epic.stories;
+  const remplies = [];
+  const refusees = [];
+  for (const story of stories) {
+    // On NOMME la story par son code : « une a refusé » enverrait chercher parmi toutes.
+    const sonCode =
+      typeof story?.ticket_id === 'string' && story.ticket_id.trim() ? story.ticket_id.trim() : '(story sans code)';
+    // ⚠️ MÊME GARDE QUE POUR UN TICKET DIRECT : `update` exige un UUID STRICT et rejette un
+    // code. Lui envoyer autre chose rendrait un refus qu'on rangerait en « le ServiceDesk n'a
+    // pas répondu », et la story resterait sans agent sans que la vraie cause apparaisse.
+    if (!UUID.test(String(story?.id ?? ''))) {
+      refusees.push({ code: sonCode, cause: 'le ServiceDesk n’a rendu aucun identifiant exploitable' });
+      continue;
+    }
+    try {
+      await appelerMcp('tickets', { action: 'update', id: story.id, assigned_agent: nom });
+      remplies.push(sonCode);
+    } catch (err) {
+      // Une story qui refuse n'interrompt PAS les suivantes : le mandat en porte d'autres, et
+      // les remplir vaut mieux que de tout abandonner sur le premier refus.
+      refusees.push({ code: sonCode, cause: motifDe(err) });
+    }
+  }
+
+  const compte = { epic: code, nom, total: stories.length, remplies, refusees };
+  if (stories.length === 0) {
+    // Un epic pas encore découpé est un état NORMAL du chantier, pas une panne — et la phrase
+    // le dit, pour que personne n'aille chercher un défaut qui n'existe pas.
+    return {
+      rempli: false,
+      ...compte,
+      cause: `${code} ne porte encore aucune story : il n’est pas découpé — rien à remplir, et ce n’est pas une panne`,
+    };
+  }
+  if (refusees.length === 0) return { rempli: true, ...compte };
+  return {
+    rempli: false,
+    ...compte,
+    // Le compte porte son DÉNOMINATEUR et son UNITÉ, et les refusées sont nommées une à une.
+    cause:
+      `${code} : ${remplies.length} story(s) remplie(s) sur ${stories.length} — ` +
+      refusees.map((r) => `${r.code} a refusé (${r.cause})`).join(' ; '),
+  };
+}
+
 export async function declarerAuServiceDesk({ mandat, nom, appelerMcp = transportServiceDesk() } = {}) {
   if (!renseigne(nom)) {
     // Écrire un `assigned_agent` vide EFFACERAIT celui qui s'y trouve. On ne lit même pas le
@@ -347,17 +508,23 @@ export async function declarerAuServiceDesk({ mandat, nom, appelerMcp = transpor
     // diagnostic et ce n'en est pas. `(vide)` dit la même chose sans faire fuiter l'interne.
     return { rempli: false, cause: `« ${code || '(vide)'} » n’est pas un code de chantier : aucun ticket à remplir` };
   }
-  if (famille !== 'tickets') {
-    // ⚠️ ON NE DEVINE PAS. Un epic, une demande, un projet ou une livraison n'ont pas de champ
-    // `assigned_agent` : il faudrait choisir une story parmi les leurs, et ce choix serait une
-    // invention. Un refus qui se dit vaut mieux qu'un nom posé sur le mauvais ticket.
+  if (famille !== 'tickets' && famille !== 'epics') {
+    // ⚠️ ON NE DEVINE PAS. Une demande, un projet ou une livraison ne portent pas de tickets
+    // qu'on saurait désigner sans choisir : leurs epics ont chacun leurs stories, et remplir
+    // « tout ce qui pend dessous » poserait un nom sur le travail d'autres agents. Un refus
+    // qui se dit vaut mieux qu'un nom posé sur le mauvais ticket.
     return {
       rempli: false,
-      cause: `« ${code} » désigne un ${famille}, pas un ticket : je ne choisis pas une story à sa place`,
+      cause: `« ${code} » désigne un ${famille}, pas un ticket ni un epic : je ne choisis pas de story à sa place`,
     };
   }
 
   if (typeof appelerMcp !== 'function') return { rempli: false, cause: 'aucun accès au ServiceDesk' };
+
+  // ═══ UN CHEF D'ÉQUIPE MÈNE UN EPIC — c'est le cas CANONIQUE, pas un cas limite, et il était
+  // refusé. Les tickets de son mandat sont LES STORIES DE SON EPIC, toutes : les remplir n'est
+  // pas « choisir une story à sa place », c'est remplir le mandat entier.
+  if (famille === 'epics') return remplirLesStoriesDeLEpic({ code, nom, appelerMcp });
 
   let id;
   try {

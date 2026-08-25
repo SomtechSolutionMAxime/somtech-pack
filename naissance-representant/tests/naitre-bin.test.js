@@ -1557,10 +1557,12 @@ test('un agent qui ne porte pas le nom demandé n’est PAS déclaré — et son
 
 // ── 9c — LE SERVICEDESK, QUI NE TUE PAS LA NAISSANCE
 
-// ⚠️ LE CAS CANONIQUE D'UN CHEF D'ÉQUIPE, ET IL NE PEUT PAS ABOUTIR — c'est mesuré, pas
-// supposé. Un chef d'équipe mène un EPIC (`E-…`), et `declarerAuServiceDesk` refuse toute
-// famille autre que `tickets` : un epic n'a pas de champ `assigned_agent`, et choisir une story
-// parmi les siennes serait une invention. La naissance tient quand même, et l'échec SE DIT.
+// ⚠️ CE BANC A LONGTEMPS GARDÉ UN DÉFAUT AU LIEU D'UN CONTRAT. Il exigeait que la cause parle
+// d'« epic », parce que `declarerAuServiceDesk` refusait alors toute famille autre que
+// `tickets` : le CAS CANONIQUE d'un chef d'équipe — qui mène un EPIC — ne pouvait pas aboutir,
+// et le banc l'inscrivait comme la règle. Un epic se remplit désormais par SES STORIES, toutes.
+// Ce qui reste éprouvé ici est le vrai contrat : quoi qu'il arrive au ServiceDesk, la naissance
+// TIENT et l'échec SE DIT. L'assertion négative empêche le retour de l'ancien refus.
 test('le ServiceDesk qui ne peut pas être rempli ne tue pas la naissance — l’échec se dit dans la sortie', () =>
   avecChefDEquipe(({ code, poste, horodatage, espace }) => {
     installerFauxHerdr({ repertoire: espace });
@@ -1569,15 +1571,17 @@ test('le ServiceDesk qui ne peut pas être rempli ne tue pas la naissance — l�
     assert.equal(r.code, 0, `la naissance tient — stderr : ${r.stderr}`);
     const rendu = JSON.parse(r.stdout);
     assert.equal(rendu.servicedesk.rempli, false, 'il n’a pas été rempli');
-    assert.match(rendu.servicedesk.cause, /epic/i, 'et la CAUSE est dite, pas escamotée');
+    assert.equal(typeof rendu.servicedesk.cause === 'string' && rendu.servicedesk.cause.trim().length > 0, true,
+      `la CAUSE est dite, pas escamotée — reçu ${JSON.stringify(rendu.servicedesk)}`);
+    assert.doesNotMatch(rendu.servicedesk.cause, /pas un ticket/i,
+      'un mandat EPIC n’est plus refusé sur sa FAMILLE — s’il échoue, c’est pour une autre raison');
     assert.equal(declarationsInscrites(poste).length, 1, 'la déclaration locale, elle, tient');
   }));
 
 test('sans clé ServiceDesk, la naissance tient aussi — et le geste dit qu’il n’avait aucun accès', () =>
   avecChefDEquipe(({ poste, horodatage, espace }) => {
     installerFauxHerdr({ repertoire: espace });
-    // Un mandat de la SEULE famille que le ServiceDesk sait remplir : c'est le seul cas où
-    // l'absence de clé est ce qui bloque, et donc le seul qui puisse l'éprouver.
+    // Un mandat de famille `tickets` — le chemin le plus court jusqu'à la garde de clé.
     const ticket = `t-20260825-${String(2000 + compteurChef).slice(-4)}`;
     const r = lancerNaitre(ticket, { role: 'chef-equipe', env: poste, horodatage });
 

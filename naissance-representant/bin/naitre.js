@@ -770,9 +770,12 @@ async function main() {
     // sens de RA-VUE-005. Mais il ne vaut pas une naissance : la déclaration locale a déjà eu
     // lieu, et un agent vivant et déclaré vaut mieux qu'un agent tué pour un champ distant.
     //
-    // ⚠️ ET LE CAS LE PLUS COURANT NE PEUT PAS ABOUTIR — c'est mesuré, pas supposé. Un chef
-    // d'équipe mène un EPIC, et un epic n'a pas de champ `assigned_agent` : `declarerAuServiceDesk`
-    // refuse alors plutôt que de choisir une story à sa place. L'échec SE DIT dans la sortie.
+    // ⚠️ ET LE CAS LE PLUS COURANT EST UN EPIC, PAS UN TICKET. Un chef d'équipe mène un epic ;
+    // les tickets de son mandat sont LES STORIES de cet epic, et `declarerAuServiceDesk` les
+    // remplit TOUTES. Ce commentaire disait l'inverse — « ce cas ne peut pas aboutir » — et
+    // c'était vrai du code, pas du besoin : `assigned_agent` restait vide sur le chemin le plus
+    // fréquenté. Le rendu porte alors le PLURIEL (`total`, `remplies`, `refusees`), et un
+    // succès partiel n'est pas un succès : `rempli` reste faux, la cause nomme les refusées.
     servicedesk = await declarerAuServiceDesk({ mandat, nom: commandes.nom });
     if (!servicedesk.rempli) {
       process.stderr.write(`le mandat ${mandat} n’a pas reçu le nom de son agent : ${servicedesk.cause}\n`);
