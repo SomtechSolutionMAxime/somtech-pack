@@ -107,7 +107,7 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
 P=$(printf '%s' "$NAISSANCE" | jq -r .pane)   # tout ce qui suit vise ce pane
 ```
 
-**Elle fait tout, ou rien.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, le tout **rendu en JSON**. ⚠️ **Un refus ne laisse rien derrière lui** — ce qui précède est défait, le pane refermé sans rien déclarer.
+**Elle fait tout, ou le défait.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, le tout **rendu en JSON**. ⚠️ **Un refus défait tout — sauf un agent né** : il vit, et la sortie rend `ok:false`, sa cause, son pane.
 
 ⚠️ **Vérifie par le fait, jamais par le mot.** Un `grep -q '"result"'` accepte une réponse `{"error": "...", "result": null}` parce que le mot y est présent. `jq -e` vérifie ce qui est **vrai**.
 
