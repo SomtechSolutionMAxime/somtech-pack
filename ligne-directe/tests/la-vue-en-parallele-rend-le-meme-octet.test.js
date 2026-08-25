@@ -672,18 +672,44 @@ test('LE CHEMIN PAR DÉFAUT EST PLAFONNÉ — celui que la production emprunte, 
   // ⚠️ ON SUBSTITUE UN SEUL POINT NOMMÉ : le transport. Le transport par défaut exige une clé et
   // un service — cette moitié-là reste hors de portée d'un banc, et le fichier voisin le dit
   // déjà. Mais le PLAFOND, lui, est celui de la production, et c'est lui qu'on mesure.
+  //
+  // 🔴 ET CE BANC A D'ABORD ÉTÉ VACANT, TROUVÉ PAR UNE PASSE DE REVUE INDÉPENDANTE. Il lisait UN
+  // chantier, qui porte 12 epics : `max` ne pouvait donc jamais dépasser 12, quel que soit le
+  // plafond. Un plafond par défaut de **999 999** passait sans rougir — mesuré. L'assertion
+  // `max <= 32` était vraie, et vraie pour une raison qui n'était pas la sienne : c'est
+  // l'instantané qui bornait, jamais le réglage.
+  //
+  // ⚠️ C'EST LA FORME « ASSERTION TROP FAIBLE SUR UN CHEMIN CORRECT », et elle est plus
+  // dangereuse qu'un chemin sans banc : le banc EXISTE et il PASSE, donc le chemin se lit comme
+  // couvert. Un chemin nu se voit en cherchant ; celui-là non.
+  //
+  // On lit donc TOUS les chantiers de front — assez d'appels pour que le plafond soit ce qui
+  // borne — et **on vérifie que l'instantané peut vraiment dépasser le plafond** avant de
+  // conclure quoi que ce soit de `max`. Sans ce contrôle, le banc redeviendrait vacant le jour
+  // où quelqu'un allégerait l'instantané, ou relèverait le plafond.
   let enVol = 0;
   let max = 0;
+  let appelsTotal = 0;
   const appeler = async (...args) => {
+    appelsTotal += 1;
     enVol += 1;
     max = Math.max(max, enVol);
-    await new Promise((r) => setTimeout(r, 3));
+    await new Promise((r) => setTimeout(r, 5));
     enVol -= 1;
     return repondre(...args);
   };
   // ⚠️ AUCUN `plafond` ICI — c'est tout l'objet du banc.
   const lire = lecteurDeChantier({ appeler, limite: LIMITE });
-  await lire('P-20260812-0009'); // le chantier qui porte le plus d'epics de l'instantané
+  await Promise.all(CHANTIERS.map((c) => lire(c.code).catch(() => null)));
+
+  // 🔴 LE CONTRÔLE QUI EMPÊCHE CE BANC DE REDEVENIR VACANT — il passe AVANT la mesure.
+  // Si l'instantané ne peut pas offrir plus d'appels que le plafond n'en autorise, alors `max`
+  // mesure l'instantané et non la borne, et l'assertion du dessous serait vraie par accident.
+  assert.ok(
+    appelsTotal > PLAFOND_SERVICEDESK,
+    `l’instantané n’offre que ${appelsTotal} appels pour un plafond de ${PLAFOND_SERVICEDESK} : ` +
+      '`max` mesurerait l’instantané, pas la borne. Ce banc ne garde plus rien — étoffe l’instantané.'
+  );
 
   assert.ok(max > 1, 'le chemin par défaut ne parallélise rien : la borne par défaut n’y arrive pas');
   assert.ok(
