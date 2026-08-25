@@ -946,17 +946,21 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   // L’ORDRE DE SACRIFICE, DU MOINS VITAL AU PLUS VITAL : le CORPS cède d’abord (il se
   // parcourt ligne à ligne, on peut y revenir), puis le TITRE (il dit où l’on est), et le
   // PIED reste le dernier — parce que sans lui on ne sait plus SORTIR.
+  // ⚠️ AU-DELÀ DE 2, IL N'Y A RIEN À TRONQUER — ET LE DIRE ÉVITE UNE BRANCHE MORTE QUI AURAIT
+  // L'AIR DE GARDER QUELQUE CHOSE. `hauteurCorps` vaut `max(1, hauteur - 2)`, donc le tableau
+  // fait exactement `hauteur` entrées dès que `hauteur >= 3` : mesuré à 3, 5, 10, 20 et 40.
+  // Une ligne de troncature écrite « au cas où » n'y serait jamais exécutée — deux mutations de
+  // ma campagne y ont d'ailleurs SURVÉCU, ce qui est le symptôme, pas le défaut.
   if (sortie.length <= hauteur) return sortie;
+
   // ⚠️ `laBarre`, PAS `pied` : ce nom-là appartient déjà à la FONCTION qui compose la barre,
   // quelques lignes plus haut. Le masquer faisait jeter `rendreEcran` à l'exécution — attrapé
   // à la première mesure, mais c'est le genre d'ombre qu'un `node --check` ne voit pas.
   const laTete = sortie[0];
   const laBarre = sortie[sortie.length - 1];
-  const leCorps = sortie.slice(1, -1);
   if (hauteur <= 0) return [];
   if (hauteur === 1) return [laBarre];
-  if (hauteur === 2) return [laTete, laBarre];
-  return [laTete, ...leCorps.slice(0, hauteur - 2), laBarre];
+  return [laTete, laBarre];
 }
 
 /** Quelle tranche de l'arbre montrer pour que le curseur reste visible. */
