@@ -15,7 +15,15 @@
  * PROCESSUS (le terminal, son clavier, son redraw) ne se révèle qu'en TAPANT la commande.
  */
 
-import { MOT_NON_ETABLI, rendreAttribution, rendreAdresse } from './vue-du-parc.js';
+import {
+  MOT_NON_ETABLI,
+  MOT_DECLARE,
+  MOT_ECART,
+  PHRASE_DU_DECLARE,
+  PHRASE_DU_PROUVE,
+  rendreAttribution,
+  rendreAdresse,
+} from './vue-du-parc.js';
 
 /**
  * LES ÉTATS FERMÉS, PAR FAMILLE — ÉNUMÉRÉS, jamais testés un par un.
@@ -55,25 +63,51 @@ export function estFerme(statut, niveau) {
 export function nonPrisDe({ attribution, statut, niveau }) {
   const porte = attribution?.mesure === 'lue' && (attribution.agents?.length ?? 0) > 0;
   if (porte) {
-    return { mesure: 'lue', nonPris: false, pourquoi: 'un agent vivant porte ce travail' };
+    return { mesure: 'lue', nonPris: false, source: 'prouvée', pourquoi: 'un agent vivant porte ce travail' };
+  }
+  // 🔴 UN NOM DÉCLARÉ REND « PRIS », ET IL NE REND PAS « PROUVÉ » (RA-VUE-005 amendée).
+  //
+  // ⚠️ CE N'EST PAS UN DÉTAIL DE VOCABULAIRE : le filtre `n` sert à décider OÙ AGIR. Laisser
+  // `NON PRIS` sur un travail que le registre attribue enverrait le dirigeant relancer un
+  // chef d'équipe qui l'a déjà pris — c'est le bruit qui fait abandonner un filtre.
+  //
+  // ⚠️ ET LA SOURCE VOYAGE AVEC LA RÉPONSE, parce que « pris » ne veut pas dire la même chose
+  // dans les deux cas : l'un a été MESURÉ au lieu de l'agent, l'autre a été ÉCRIT au registre
+  // par l'outillage de naissance. Le détail les dit en toutes lettres ; la marque les
+  // distingue à l'œil. Les fondre en un seul `false` referait, un cran plus bas, la confusion
+  // que `MOT_DECLARE` répare un cran plus haut.
+  const declare = attribution?.mesure === 'déclarée' && (attribution.declares?.length ?? 0) > 0;
+  if (declare) {
+    return {
+      mesure: 'lue',
+      nonPris: false,
+      source: 'déclarée',
+      pourquoi:
+        'aucun agent vivant ne le porte à un lieu, mais le registre déclare un nom sur ce ' +
+        'travail (' + PHRASE_DU_DECLARE + ')',
+    };
   }
   const ferme = estFerme(statut, niveau);
   if (ferme === null) {
     return {
       mesure: 'non établie',
       nonPris: null,
+      source: null,
       pourquoi:
-        `aucun agent vivant ne porte ce travail, mais son statut n’a pas été mesuré : ` +
-        `je ne peux pas dire s’il attend quelqu’un ou s’il est déjà fermé`,
+        `ni agent vivant à un lieu, ni nom déclaré au registre, et son statut n’a pas été ` +
+        `mesuré : je ne peux pas dire s’il attend quelqu’un ou s’il est déjà fermé`,
     };
   }
   if (ferme) {
-    return { mesure: 'lue', nonPris: false, pourquoi: `son statut « ${statut} » est un état fermé` };
+    return { mesure: 'lue', nonPris: false, source: null, pourquoi: `son statut « ${statut} » est un état fermé` };
   }
   return {
     mesure: 'lue',
     nonPris: true,
-    pourquoi: `aucun agent vivant ne le porte, et son statut « ${statut} » n’est pas un état fermé`,
+    source: null,
+    pourquoi:
+      `aucun agent vivant ne le porte à un lieu, le registre ne déclare aucun nom, et son ` +
+      `statut « ${statut} » n’est pas un état fermé`,
   };
 }
 
@@ -84,6 +118,61 @@ export function nonPrisDe({ attribution, statut, niveau }) {
  * rattachement là où il n'y a eu aucune mesure : le dirigeant chercherait ensuite son chantier
  * sous une app qui ne le porte pas.
  */
+/**
+ * LA MARQUE D'UNE LIGNE DE L'ARBRE — QUATRE ÉTATS, QUATRE SIGNES, et ils ne se confondent pas.
+ *
+ * 🔴 « PRIS » RECOUVRE DEUX FAITS DEPUIS RA-VUE-005 AMENDÉE, et un signe unique les fondrait
+ * à l'endroit le plus lu de l'écran : la colonne de gauche. Un rattachement PROUVÉ (mandat lu
+ * au lieu) et un rattachement DÉCLARÉ (nom écrit au registre) appellent deux gestes différents
+ * — on peut parler au premier, on ne peut que croire le second.
+ *
+ * ⚠️ LE SUFFIXE DIT LA SOURCE EN TOUTES LETTRES, la marque la dit à l'œil : les deux, jamais
+ * l'une SANS l'autre. Sur une ligne tronquée par une colonne étroite, la marque est ce qui
+ * survit — c'est mesuré, l'arbre du TUI coupe à 62 % de la largeur.
+ */
+export function marqueDuRattachement(nonPris, { pris }) {
+  if (nonPris?.nonPris === true) return '○';
+  if (nonPris?.nonPris === null) return '?';
+  if (nonPris?.source === 'déclarée') return '◇';
+  return pris;
+}
+
+/**
+ * LE SUFFIXE DE RATTACHEMENT DANS L'ARBRE — LE MOT QUI DÉCIDE **ET** LE NOM, DANS LA PLACE QUI
+ * RESTE.
+ *
+ * 🔴 IL NE PEUT PAS ÊTRE `rendreAttribution` TEL QUEL, ET C'EST MESURÉ, PAS SUPPOSÉ. La colonne
+ * de l'arbre réserve au suffixe **la moitié de sa largeur au plus** (`texteDeLigne`), puis
+ * TRONQUE. Le fragment du moteur — « DÉCLARÉ (non mesuré à un lieu) : e-20260818-0016 (ce
+ * ticket) », 60 caractères — sort tronqué à 45 : le mot survit, **le nom est coupé**. C'est
+ * exactement le contraire de ce que ce lot doit rendre.
+ *
+ * ⚠️ ON NE RALLONGE PAS LA COLONNE, ON RACCOURCIT LE FRAGMENT — et ce qui tombe est le
+ * qualificatif, jamais le mot ni le nom. Il n'est pas perdu : le panneau de détail le dit en
+ * toutes lettres, à côté, à chaque sélection. Le TUI a un endroit pour la phrase longue ; la
+ * vue texte, non — c'est pourquoi les deux rendus diffèrent, et c'est délibéré.
+ *
+ * ⚠️ ET LA MARQUE PORTE LA SOURCE MÊME QUAND LE SUFFIXE TOMBE ENTIER : `◇` en tête de ligne
+ * survit à toutes les troncatures, parce qu'il est du côté du titre.
+ */
+export function suffixeDuRattachement(attribution) {
+  if (attribution?.mesure === 'déclarée') {
+    const noms = (attribution.declares ?? []).map((d) => d.nom).join(' + ');
+    return `${MOT_DECLARE} : ${noms}`;
+  }
+  if (attribution?.mesure === 'lue') {
+    const noms = (attribution.agents ?? []).map((c) => c.nom ?? `ANONYME (${c.pane ?? '?'})`).join(' + ');
+    const ecart = attribution.ecart;
+    // ⚠️ L'ÉCART PASSE AVANT LE CONFORT DE LECTURE. Une contradiction entre le terrain et le
+    // registre est ce qu'il faut voir en premier ; la reléguer au seul détail la rendrait
+    // invisible à qui parcourt l'arbre — c'est-à-dire à l'usage normal du TUI.
+    const dits = (ecart?.declares ?? []).map((d) => d.nom).join(' + ');
+    return dits ? `${MOT_ECART} : ${noms} vs ${dits}` : `PROUVÉ : ${noms}`;
+  }
+  // Les autres états gardent le rendu du moteur — un seul texte pour les deux surfaces.
+  return rendreAttribution(attribution);
+}
+
 export const APP_NON_ETABLIE = 'APP NON ÉTABLIE';
 
 export function appDuChantier(chantier) {
@@ -259,7 +348,7 @@ function noeudDEpic(e, o, j) {
     id: `epic:${e?.code ?? j}:${o?.chantier?.code ?? ''}`,
     kind: 'epic',
     titre: e?.titre ?? '(epic sans titre)',
-    marque: nonPris.nonPris === true ? '○' : nonPris.nonPris === false ? '▸' : '?',
+    marque: marqueDuRattachement(nonPris, { pris: '▸' }),
     // ⚠️ TROIS FAITS, UN SEUL SUFFIXE, ET UNE PRÉCÉDENCE QUI SE DIT. `NON PRIS` passe devant
     // parce que c'est un APPEL À AGIR mesuré ; « stories NON LUES » vient ensuite parce que
     // c'est un TROU DE MESURE. Les deux se lisent en entier dans le détail — aucun n'est perdu,
@@ -271,7 +360,7 @@ function noeudDEpic(e, o, j) {
           ? 'stories NON LUES'
           : nonPris.nonPris === null
             ? MOT_NON_ETABLI
-            : rendreAttribution(e?.agent),
+            : suffixeDuRattachement(e?.agent),
     nonPris,
     // 🔴 LE MÊME REPLI, UN ÉTAGE PLUS BAS — et il était resté ouvert quand j'ai fermé celui de
     // l'orchestrateur. Un epic FERMÉ dont l'appel aux tickets a jeté rend `stories: null`, donc
@@ -291,13 +380,13 @@ function noeudDeStory(s, e, k) {
     id: `story:${s?.code ?? k}:${e?.code ?? ''}`,
     kind: 'story',
     titre: s?.titre ?? '(story sans titre)',
-    marque: nonPris.nonPris === true ? '○' : nonPris.nonPris === false ? '├' : '?',
+    marque: marqueDuRattachement(nonPris, { pris: '├' }),
     suffixe:
       nonPris.nonPris === true
         ? 'NON PRIS'
         : nonPris.nonPris === null
           ? MOT_NON_ETABLI
-          : rendreAttribution(s?.agent),
+          : suffixeDuRattachement(s?.agent),
     nonPris,
     enfants: [],
     ref: { story: s, epic: e },
@@ -470,6 +559,7 @@ export function detailDe(ligne) {
     l.push(`statut  : ${e?.statut ?? MOT_NON_ETABLI} (affirmé)`);
     l.push('');
     l.push(...envelopper(`porteur : ${rendreAttribution(e?.agent)}`, 28));
+    l.push(...lignesDeLaSource(e?.agent));
     l.push('');
     l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));
     l.push(...envelopper(n.nonPris.pourquoi, 28));
@@ -486,6 +576,7 @@ export function detailDe(ligne) {
   l.push(`statut  : ${s?.statut ?? MOT_NON_ETABLI} (affirmé)`);
   l.push('');
   l.push(...envelopper(`porteur : ${rendreAttribution(s?.agent)}`, 28));
+  l.push(...lignesDeLaSource(s?.agent));
   l.push('');
   l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));
   l.push(...envelopper(n.nonPris.pourquoi, 28));
@@ -496,9 +587,60 @@ function noeudApp(n) {
   return appDuChantier(n.ref?.orchestrateur?.chantier).nom;
 }
 
+/**
+ * D'OÙ LA VUE TIENT CE RATTACHEMENT — EN TOUTES LETTRES, dans le panneau qui a la place.
+ *
+ * 🔴 C'EST LA CONTREPARTIE DU SUFFIXE COMPACT. L'arbre doit tenir dans sa colonne, donc il rend
+ * `DÉCLARÉ : nom` — le qualificatif tombe. S'il ne se retrouvait nulle part, RA-VUE-006 serait
+ * violée : « chaque ligne dit sa source » n'est pas « chaque ligne porte un mot ». Le détail
+ * est l'endroit où la phrase entière existe, et il est à un mouvement de curseur.
+ *
+ * ⚠️ ÉCRITE UNE FOIS POUR LES DEUX ÉTAGES. Recopiée sur l'epic puis sur la story, elle serait
+ * corrigée d'un côté et pas de l'autre au premier amendement — « une porte sur deux », le motif
+ * que ce module a déjà payé trois fois.
+ */
+export function lignesDeLaSource(attribution) {
+  const l = ['', 'source  :'];
+  if (attribution?.mesure === 'lue') {
+    l.push(...envelopper(`✔ PROUVÉ — ${attribution.source ?? PHRASE_DU_PROUVE}`, 28));
+    const ecart = attribution.ecart;
+    if (ecart?.declares?.length) {
+      // ⚠️ LES DEUX NOMS, ET LE MOT « ÉCART ». Rendre le seul prouvé serait TRANCHER — et la
+      // vue ne tranche rien (RA-VUE-001/006). Le dirigeant doit savoir que son registre dit
+      // autre chose que le terrain : c'est lui qui décide lequel des deux a tort.
+      l.push('');
+      l.push(...envelopper(`⚠️ ${MOT_ECART} — ${ecart.pourquoi}`, 28));
+      l.push(...envelopper(`prouvé  : ${(ecart.prouves ?? []).join(' + ') || MOT_NON_ETABLI}`, 28));
+      l.push(...envelopper(`déclaré : ${ecart.declares.map((d) => `${d.nom} (${d.dOu})`).join(' + ')}`, 28));
+    }
+    return l;
+  }
+  if (attribution?.mesure === 'déclarée') {
+    l.push(...envelopper(`◇ ${MOT_DECLARE} — ${attribution.source ?? PHRASE_DU_DECLARE}`, 28));
+    for (const d of attribution.declares ?? []) l.push(...envelopper(`• ${d.nom} — vient de ${d.dOu}`, 28));
+    // ⚠️ LES PISTES NE DISPARAISSENT PAS SOUS LA DÉCLARATION. Un agent qui porte ce code comme
+    // NOM corrobore ; il ne prouve pas. Les taire ferait perdre le seul fait qui, un jour,
+    // permettra de confirmer une déclaration au lieu de la croire.
+    for (const c of attribution.indices ?? []) {
+      l.push(...envelopper(`~ ${c.nom ?? 'ANONYME'} — ${attribution.phraseDeLIndice ?? ''}`, 28));
+    }
+    return l;
+  }
+  l.push(...envelopper(`✘ ${MOT_NON_ETABLI} — ${attribution?.pourquoi ?? 'aucune source ne rattache ce travail'}`, 28));
+  for (const c of attribution?.indices ?? []) {
+    l.push(...envelopper(`~ ${c.nom ?? 'ANONYME'} — ${attribution.phraseDeLIndice ?? ''}`, 28));
+  }
+  return l;
+}
+
 function etiquetteNonPris(nonPris) {
   if (nonPris?.nonPris === true) return '○ NON PRIS';
-  if (nonPris?.nonPris === false) return 'oui';
+  // ⚠️ UN « oui » NU FONDRAIT LES DEUX SOURCES à l'endroit précis où le dirigeant décide s'il
+  // relance quelqu'un. « pris » parce qu'un agent le porte à son lieu et « pris » parce que le
+  // registre l'écrit ne s'actionnent pas de la même façon.
+  if (nonPris?.nonPris === false) {
+    return nonPris.source === 'déclarée' ? `oui — ◇ ${MOT_DECLARE}` : nonPris.source === 'prouvée' ? 'oui — ✔ PROUVÉ' : 'oui';
+  }
   return MOT_NON_ETABLI;
 }
 
