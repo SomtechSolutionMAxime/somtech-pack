@@ -25,7 +25,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMMANDE_GARDE } from '../src/naissance.js';
+import { COMMANDE_GARDE, echapper } from '../src/naissance.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MODULE_ROOT = resolve(HERE, '..');
@@ -371,4 +371,34 @@ test('⑭ une garde qui a répondu mais ne sort pas dans le délai est refusée 
   assert.equal(d.permissionDecision, 'deny',
     'le verdict d une garde qui n a pas fini dans le délai est écarté — arbitrage de polarité, pas un défaut');
   assert.match(d.permissionDecisionReason, /delai|délai/i);
+});
+
+// ═════════════ ⑮ l échappement de la charge — une convention n est pas une garde
+
+test('⑮ une apostrophe droite dans un refus ne casse pas la commande — echapper le tient', () => {
+  // 🔴 TROUVÉ PAR LA PASSE PORTAIL : neutraliser `echapper` ne faisait rougir AUCUN test.
+  // Les deux refus n en portent pas aujourd hui — par convention d écriture, pas par garde.
+  // Le jour où une apostrophe droite y entre (`d'ouverture` au lieu de `d’ouverture`, une
+  // faute de frappe ordinaire), la commande devient un shell invalide : `syntax error`,
+  // exit 2, AUCUNE sortie. C est la dégradation même que ce lot ferme, par la porte de
+  // derrière — et ni le contrôle ⑧ ni la table des empreintes ne la verraient : ils
+  // compareraient deux commandes également cassées.
+  const sousLeShell = (charge) =>
+    execFileSync('/bin/sh', ['-c', `printf '%s\\n' '${charge}'`], { encoding: 'utf8', stdio: 'pipe' }).trimEnd();
+
+  // ⚠️ DEUX FORMES, ET ELLES CASSENT DIFFÉREMMENT — une seule des deux ne prouverait que
+  // la moitié. Un nombre IMPAIR d apostrophes laisse la chaîne ouverte : erreur de syntaxe,
+  // aucune sortie. Un nombre PAIR referme et rouvre la chaîne : le shell ne se plaint pas,
+  // et la charge arrive DÉFORMÉE — le refus dirait autre chose que ce qu on a écrit.
+  for (const charge of [
+    `le garde d'ouverture a echoue`,                       // impair : casse
+    `l'ouverture n'est pas faite`,                          // pair : déforme en silence
+  ]) {
+    assert.equal(sousLeShell(echapper(charge)), charge, 'la charge n a pas traversé le shell intacte');
+    let sansEchappement;
+    try { sansEchappement = sousLeShell(charge); } catch { sansEchappement = null; }
+    assert.notEqual(sansEchappement, charge,
+      `« ${charge} » traverse le shell intacte SANS échappement : ce contrôle passerait aussi `
+      + 'sur une fonction identité, donc il ne prouverait rien');
+  }
 });

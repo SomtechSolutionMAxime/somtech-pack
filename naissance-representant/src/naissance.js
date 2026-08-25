@@ -112,8 +112,18 @@ const CHEMIN_GARDE_POSTE = '$HOME/.somtech/naissance-representant/hooks/garde-ou
 // Aucune apostrophe droite dans ces textes ni dans le lanceur : la charge voyage entre
 // guillemets simples de shell. `echapper` le garantit plutôt que de l'espérer.
 
-/** Une charge sûre entre guillemets simples de `/bin/sh` — la clôture, jamais l'espoir. */
-const echapper = (t) => t.replace(/'/g, "'\\''");
+/**
+ * Une charge sûre entre guillemets simples de `/bin/sh` — la clôture, jamais l'espoir.
+ *
+ * ⚠️ EXPORTÉE POUR ÊTRE ÉPROUVÉE, et le trou qu'elle bouchait n'était gardé par RIEN.
+ * Relevé par la passe portail : aucun des deux textes de refus ne porte aujourd'hui
+ * d'apostrophe droite (convention éditoriale), donc **neutraliser cette fonction ne
+ * faisait rougir aucun test** — mesuré, banc entier vert. Le jour où une apostrophe
+ * droite entre dans un refus, la commande devient un shell invalide : `syntax error`,
+ * exit 2, AUCUNE sortie — c'est-à-dire exactement la dégradation en demande de
+ * permission que tout ce lot ferme. Une convention n'est pas une garde.
+ */
+export const echapper = (t) => t.replace(/'/g, "'\\''");
 
 const refus = (raison) => echapper(JSON.stringify({
   hookSpecificOutput: {
