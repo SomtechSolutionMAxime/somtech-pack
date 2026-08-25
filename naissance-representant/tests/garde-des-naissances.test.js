@@ -33,6 +33,7 @@ import {
   jugerLeParc,
   VERDICTS,
   SORTIES,
+  SOURCES,
 } from '../src/garde-des-naissances.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -385,6 +386,30 @@ test('un FAUX REFUS se mesure par une AUTRE clé que celle qui a servi à appari
   assert.equal(r2.comptes.prises, 1);
   assert.equal(r2.comptes.fauxRefus, 1, 'une déclaration porte cet espace : l’appariement a raté');
   assert.match(r2.texte, /peut-être été à tort/i);
+});
+
+test('le vert dit SUR QUOI il repose — un vert porté par une seule source est un vert MINCE', () => {
+  // ⚠️ TROUVÉ EN MESURANT LE TRAFIC RÉEL DU 2026-08-25, et ça contredit une lecture confortable
+  // du dispositif : les 8 agents de la population du jour sont identifiés **à 8 sur 8 par leur
+  // NOM**, zéro par déclaration (le registre n'existe pas encore) et zéro par lieu de rôle.
+  //
+  // Or le nom est la source la plus FAIBLE des trois : la liste blanche du dépôt accepte à peu
+  // près n'importe quel segment de chemin. Un « rien à signaler » entièrement porté par elle ne
+  // vaut pas le même « rien à signaler » que celui d'un parc déclaré — et rien, dans un verdict
+  // nu, ne permet au lecteur de faire la différence. C'est le motif « un vert qui ne touche pas
+  // ce qu'il éprouve » : le compte est juste, la phrase qu'on en tire est fausse.
+  const r = juger({
+    panes: [agent({ pane_id: 'w1:p1' }), agent({ pane_id: 'w1:p2' })],
+    agentsHerdr: [
+      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
+      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' },
+    ],
+    declarations: [],
+  });
+  assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
+  assert.deepEqual(r.comptes.parSource, { [SOURCES.NOM]: 2 });
+  assert.match(r.texte, /son nom, conforme à la convention\s*:\s*2/);
+  assert.match(r.methode.identifies, /\S/);
 });
 
 test('sur un trafic entièrement déclaré, ZÉRO refus à tort', () => {

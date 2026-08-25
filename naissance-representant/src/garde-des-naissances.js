@@ -400,7 +400,20 @@ export function jugerLeParc({
   const espacesDeclares = new Set(declarations.map((d) => d?.espace).filter(Boolean));
   const fauxRefus = prises.filter((p) => espacesDeclares.has(p.espace));
 
+  // ⚠️ SUR QUOI LE VERT REPOSE — mesuré sur le trafic réel du 2026-08-25, et ça contredit une
+  // lecture confortable du dispositif : les 8 agents de la population du jour étaient
+  // identifiés **à 8 sur 8 par leur NOM**, zéro par déclaration, zéro par lieu de rôle.
+  //
+  // Or le nom est la source la plus FAIBLE des trois — la liste blanche du dépôt accepte à peu
+  // près n'importe quel segment de chemin. Un « rien à signaler » entièrement porté par elle ne
+  // vaut PAS le même « rien à signaler » qu'un parc déclaré, et un verdict nu ne permet pas au
+  // lecteur de faire la différence : le compte est juste, la phrase qu'on en tirerait est
+  // fausse. La ventilation voyage donc avec le verdict, toujours.
+  const parSource = {};
+  for (const i of identifies) parSource[i.source] = (parSource[i.source] ?? 0) + 1;
+
   const comptes = {
+    parSource,
     parcVivant: agents.length,
     horsPortee: horsPortee.length,
     population: identifies.length + prises.length + nonMesures.length,
@@ -437,6 +450,11 @@ export function jugerLeParc({
       'déclaration du registre — un croisement par une clé AUTRE que celle de l’appariement, ' +
       'donc capable de rendre autre chose que zéro. Un faux refus est un défaut de cette ' +
       'garde, pas un agent fautif.',
+    identifies:
+      'ventilés par la source qui les a identifiés — une seule suffit, et c’est la PREMIÈRE ' +
+      'établie dans l’ordre déclaration › lieu de rôle › nom. Un vert entièrement porté par le ' +
+      'nom est un vert MINCE : c’est la plus faible des trois, et elle ne prouve pas qu’un ' +
+      'dispositif de naissance est passé par là.',
     portee:
       `mesuré sur ${comptes.sessionsInterrogees - comptes.sessionsRefusees} session(s) herdr ` +
       `qui ont répondu, sur ${comptes.sessionsInterrogees} interrogée(s). Tous les comptes ` +
@@ -478,6 +496,12 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, comptes, m
     l.push('');
   }
 
+  if (Object.keys(comptes.parSource).length) {
+    l.push(`identifiés (${comptes.identifies}) — sur quoi ce verdict repose :`);
+    for (const [source, n] of Object.entries(comptes.parSource)) l.push(`   · ${source} : ${n}`);
+    l.push(`   ${methode.identifies}`);
+    l.push('');
+  }
   l.push(`prises : ${comptes.prises} — méthode : ${methode.prises}`);
   l.push(`refus à tort (mesurés) : ${comptes.fauxRefus} — méthode : ${methode.fauxRefus}`);
   return l.join('\n');
