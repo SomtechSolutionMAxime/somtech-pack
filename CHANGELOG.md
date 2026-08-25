@@ -5,6 +5,29 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-25
+
+*Epic `E-20260825-0006`, projet `P-20260819-0001`, rapport de mesure `T-20260825-0067`. **Trois des quatre défauts du chemin de naissance des agents, réparés avant de faire naître les neuf orchestrateurs.** Deux d'entre eux tenaient dans la même confusion : un état qu'on lit et un fait qu'on en conclut. « Au repos » n'est pas « a fini » ; une ligne de transcript n'est pas un dialogue.*
+
+### Corrigé
+
+- **La veille de déblocage ne meurt plus au premier repos** (`T-20260825-0072`). Elle concluait « l'agent a fini » — motif `agent-termine` — dès qu'il passait au repos, et mourait vers la 11ᵉ minute en laissant sans veilleur un agent qui n'avait pas fini. `agent-termine` n'est plus rendu que sur l'état terminal **explicite** `done` ; `idle` ne conclut plus jamais une fin. Mesuré sur les 85 agents réels du poste : `idle` 75, `working` 7, `done` 3 — faire de `idle` une fin, c'était se tromper trois fois sur quatre. Un repos prolongé au-delà de la borne (`VD_REPOS_TOURS`, 180 relevés ≈ 30 min) rend désormais `repos-prolonge`, avec un code de sortie distinct : elle ne sait pas qu'il a fini, elle sait qu'il ne bouge plus. Un shell ou un sous-agent en vol remet le compteur à zéro.
+
+- **La garde « écran attend un choix » ne refuse plus sur une ligne de transcript** (`T-20260825-0073`). Elle déclarait injoignables des agents au repos dont la boîte était vide, sur la seule présence d'un bandeau de limite d'usage — et elle a bloqué la remise d'un rapport à un coordonnateur, en renvoyant vers un geste humain devant un dialogue qui n'existait pas. Deux pistes ont été écartées **par la mesure** : ce n'est ni le scrollback (la garde mord identiquement en `--source visible` et `--source recent`, la ligne est bien à l'écran) ni la tournure (les deux formes vivent sur le bandeau bénin). Ce qui discrimine : **un vrai dialogue remplace la boîte de saisie, un bandeau la laisse en place**. La marque `esc…cancel` n'est pas retirée — la retirer ouvrirait le faux négatif symétrique — elle cesse de décider seule. Les deux chiffres, sur trafic réel : **8 panes refusés sur 88 (8 faux positifs, 0 vrai) → 1 sur 88 (0 faux positif, 1 vrai)**.
+
+- **Le recensement ne rend plus une version lue comme si elle était mesurée** (`T-20260825-0075`). Il affirmait « Claude Code v2.1.235 (mesuré le 2026-08-19) » sous un objet déclarant `mesure: 'lue'` — ce `lue` portant en vérité sur l'écran, jamais sur la version — alors que le poste tournait sur `2.1.245`. L'étalonnage porte désormais sa propre provenance (`mesure: 'constante'`), et la version réelle est **mesurée** par une sonde injectée qui distingue trois états ne se repliant pas l'un sur l'autre : `lue`, `refusée` (on a essayé, ça a raté) et `non mesurée` (aucune sonde n'a été donnée).
+
+### Ajouté
+
+- **Un instrument qui rend les deux chiffres d'une garde** — `ligne-directe/outils/mesurer-le-bruit-de-la-garde.mjs`. Une garde se juge sur ce qu'elle attrape **et** sur ce qu'elle refuse à tort ; le second ne se lit dans aucun test unitaire, il se mesure sur le trafic réel du poste. Il rend le nombre de panes refusés, ventilés par marque, par état de boîte et par statut d'agent, et porte en tête sa mesure de référence datée.
+
+### Technique
+
+- La sonde de version est **câblée** dans le veilleur : sans elle, le correctif du recensement était honnête mais muet — le registre disait « non mesurée » et l'avertissement d'étalonnage dépassé restait sans effet. Coût mesuré : 0,03 s par tour de recensement.
+- **Trois tests existants encodaient les défauts qu'ils étaient censés garder** (`working → idle → idle` ⇒ fin ; « le rendu **sur lequel ça a été mesuré** » pour une constante écrite en dur). Réécrits, avec la raison inscrite dans le fichier, et complétés par des contre-épreuves qui empêchent les défauts de revenir par cette porte.
+- Un commentaire de `ecran.js` **affirmait une conséquence fausse** — corrigé : on ne garde pas une prose invérifiée à côté d'une garde.
+- Passes de revue : **portail RIEN VU** (23 affirmations vérifiées, chacune rattachée à une preuve exécutable) et **fond recevable après corrections** (12 mutations, 10 attrapées, 1 équivalente, **1 survivante réelle** — une garde de coût que rien ne tenait, désormais fermée par deux essais qui comptent les appels).
+
 ## [Non-versionne] - 2026-08-22
 
 *Epic `E-20260822-0004`, demande `D-20260822-0001`. **Les lieux d'orchestrateurs committés portaient un métier périmé, et `git worktree add` les recopiait.** Ce n'était pas un stock : chaque worktree neuf faisait naître un orchestrateur périmé — y compris ceux créés pour réparer le reste.*

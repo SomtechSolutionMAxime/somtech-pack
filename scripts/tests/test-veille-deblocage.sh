@@ -342,26 +342,48 @@ case "$OUT" in *"MOTIF: agent-termine"*) ko "DÉFAUT ① : motif « agent-termin
 case "$OUT" in *"MOTIF: tours-epuises"*) ok "elle a veillé jusqu'à épuisement de ses tours" ;; *) ko "motif attendu « tours-epuises », obtenu : $OUT" ;; esac
 
 # =================================================================
-# 9. Un agent vu WORKING puis idle confirmé → elle s'arrête. Le correctif du
-#    défaut ① ne supprime PAS la détection de fin : un agent réellement
-#    terminé libère toujours sa veille.
+# 9. Un agent vu WORKING puis `done` confirmé → elle s'arrête, motif
+#    `agent-termine`, code 0. Un agent réellement terminé libère sa veille.
+#
+# ⚠️ CE SCÉNARIO A CHANGÉ DE SÉQUENCE, ET C'EST DÉLIBÉRÉ. Il éprouvait
+#    `working → idle → idle` ⇒ `agent-termine` : il ENCODAIT le défaut ①.
+#    Deux relevés `idle` séparés de 20 s ne distinguent pas « il a fini » de
+#    « il se repose entre deux gestes » — mesuré sur les 85 agents réels du
+#    poste le 2026-08-25, `idle` est l'état de 75 d'entre eux. Le mettre au
+#    vert en gardant sa séquence aurait exigé de rouvrir le défaut. La fin
+#    légitime se dit désormais par l'état terminal EXPLICITE `done` — qui,
+#    lui, SURVIENT vraiment (3 agents sur 85 le portaient au même relevé).
+#    Le cas `idle` prolongé a son propre scénario : 47c.
 # =================================================================
-echo "→ 9. working puis idle confirmé → elle s'arrête (motif agent-termine)"
+echo "→ 9. working puis done confirmé → elle s'arrête (motif agent-termine)"
 : > "$SCREEN_FILE"
-printf 'working\nidle\nidle\n' > "$SEQ_FILE"
+printf 'working\ndone\ndone\n' > "$SEQ_FILE"
 run 4
 
 case "$OUT" in *"TERMINE"*) ok "un agent qui a travaillé puis fini libère sa veille" ;; *) ko "elle ne s'arrête pas sur un agent réellement terminé : $OUT" ;; esac
 case "$OUT" in *"MOTIF: agent-termine"*) ok "motif « agent-termine » nommé" ;; *) ko "motif attendu « agent-termine », obtenu : $OUT" ;; esac
 [ "$RC" -eq 0 ] && ok "code de sortie 0 pour un agent terminé (rc=$RC)" || ko "code de sortie attendu 0, obtenu $RC"
 
+echo "→ 9b. LA CONTRE-ÉPREUVE : la même séquence avec idle au lieu de done ne conclut RIEN"
+# C'est l'assertion qui empêche le défaut ① de revenir par cette porte-ci.
+: > "$SCREEN_FILE"
+printf 'working\nidle\nidle\n' > "$SEQ_FILE"
+run 4
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ko "DÉFAUT ① REVENU : deux relevés idle suffisent de nouveau à déclarer l'agent fini : $OUT" ;;
+  *) ok "deux relevés idle ne déclarent plus la fin — seul done le fait" ;;
+esac
+
 # =================================================================
 # 10. BLOCKED arme la détection au même titre que WORKING : un agent bloqué
 #     a forcément commencé à travailler.
 # =================================================================
-echo "→ 10. blocked (donc au travail) puis idle confirmé → elle s'arrête"
+# ⚠️ SÉQUENCE CHANGÉE POUR LA MÊME RAISON QUE LE SCÉNARIO 9 : la fin se dit
+#    par `done`, jamais par deux `idle`. Ce qu'il éprouve — que `blocked`
+#    arme la détection de fin au même titre que `working` — est intact.
+echo "→ 10. blocked (donc au travail) puis done confirmé → elle s'arrête"
 printf '%s\n' "$ECRAN_PERMISSION" > "$SCREEN_FILE"
-printf 'blocked\nidle\nidle\n' > "$SEQ_FILE"
+printf 'blocked\ndone\ndone\n' > "$SEQ_FILE"
 run 4
 
 case "$OUT" in *"MOTIF: agent-termine"*) ok "blocked arme la détection de fin" ;; *) ko "blocked n'arme pas la détection : $OUT" ;; esac
@@ -1329,6 +1351,123 @@ case "$OUT46B" in
   *"MOTIF: etat-instable"*) ko "FAUX CRI : un hoquet isolé suivi d'un agent au travail fait crier à l'instabilité : $OUT46B" ;;
   *) ok "un hoquet isolé suivi d'un agent au travail ne fait pas crier" ;;
 esac
+
+
+# =================================================================
+# 47. LE DÉFAUT ① DU RAPPORT DE PHASE 0 (T-20260825-0067 / T-20260819-0094),
+#     reproduit mot pour mot : un agent qui a travaillé PUIS SE REPOSE entre
+#     deux gestes était déclaré fini. La veille rendait « TERMINE apres 0
+#     deblocages », motif « agent-termine », et l'agent qui se bloquait
+#     ensuite n'avait plus personne pour le voir.
+#
+# ⚠️ CE QU'ON ÉPROUVE EST L'EFFET EMPÊCHÉ, PAS LE MESSAGE. Un test qui se
+#    contenterait de vérifier l'absence du mot « agent-termine » survivrait à
+#    un correctif qui renomme le motif sans rien réparer. Ici la veille doit
+#    être ENCORE LÀ quand le blocage arrive, et le débloquer.
+#
+# ⚠️ « au repos » ≠ « a fini ». Mesuré sur les 85 agents réels du poste le
+#    2026-08-25 : `idle` 75, `working` 7, `done` 3. `done` est l'état terminal
+#    EXPLICITE de herdr et il SURVIENT vraiment ; `idle` est l'état de trois
+#    agents sur quatre, dont la plupart sont au milieu de leur mandat.
+# =================================================================
+echo "→ 47. DÉFAUT ① : l'agent travaille, SE REPOSE, puis se bloque → elle est encore là"
+: > "$SCREEN_FILE"
+cat > "$SCREEN_FILE" <<'ECRAN47'
+ Bash command
+
+   git status
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and always allow access
+   3. No
+
+ Esc to cancel
+ECRAN47
+# working (il travaille) → idle, idle (il se repose entre deux gestes) →
+# blocked (il demande une permission). Avec le défaut, elle meurt au 2ᵉ relevé
+# et ne voit JAMAIS le blocage.
+printf 'working\nidle\nidle\nblocked\nblocked\nblocked\n' > "$SEQ_FILE"
+run 6
+case "$OUT" in
+  *"debloque (#1)"*) ok "elle a survécu au repos et débloqué l'agent — le défaut ① est fermé" ;;
+  *) ko "DÉFAUT ① VIVANT : elle n'était plus là quand l'agent s'est bloqué. Sortie : $OUT" ;;
+esac
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ko "DÉFAUT ① : elle affirme que l'agent a FINI alors qu'il se reposait entre deux gestes : $OUT" ;;
+  *) ok "elle n'affirme pas que l'agent a fini" ;;
+esac
+
+echo "→ 47b. LA CONTRE-ÉPREUVE : l'état terminal EXPLICITE done conclut toujours"
+: > "$SCREEN_FILE"
+printf 'working\ndone\ndone\n' > "$SEQ_FILE"
+run 6
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ok "un done confirmé conclut toujours agent-termine — le correctif n'a pas emporté la fin légitime" ;;
+  *) ko "LE CORRECTIF A TROP PRIS : un done explicite et confirmé ne conclut plus : $OUT" ;;
+esac
+[ "$RC" -eq 0 ] && ok "et son code de sortie reste 0" || ko "code de sortie $RC sur une fin légitime"
+
+echo "→ 47c. Le repos PROLONGÉ s'arrête — mais en nommant ce qu'elle a vu, jamais « il a fini »"
+: > "$SCREEN_FILE"
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT47C="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-47c" VD_REPOS_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 50 --dry-run 2>&1)"
+RC47C=$?
+case "$OUT47C" in
+  *"MOTIF: agent-termine"*) ko "elle AFFIRME une fin qu'elle n'a pas mesurée — un repos n'est pas une fin : $OUT47C" ;;
+  *"MOTIF: repos-prolonge"*) ok "elle nomme ce qu'elle a réellement observé : un repos prolongé" ;;
+  *) ko "motif inattendu sur un repos prolongé : $OUT47C" ;;
+esac
+case "$OUT47C" in
+  *"MOTIF: tours-epuises"*) ko "elle brûle 50 tours sur un agent immobile au lieu de conclure" ;;
+  *) ok "elle conclut sans brûler toute sa veille" ;;
+esac
+[ "$RC47C" -ne 0 ] && ok "code de sortie DISTINCT de la fin légitime (rc=$RC47C) — un appelant machine les sépare" \
+  || ko "le repos prolongé rend le même code que « l'agent a fini » : les deux deviennent indistinguables"
+
+echo "→ 47d. Un agent au repos AVEC DU TRAVAIL EN VOL n'est jamais déclaré au repos prolongé"
+# ⚠️ Le cas le plus dangereux : `idle` alors qu'un sous-agent tourne. L'agent
+#    n'a pas fini, il ATTEND — et c'est précisément quand il redemandera une
+#    permission qu'il aura besoin d'elle.
+cat > "$SCREEN_FILE" <<'ECRAN47D'
+  Analyse en cours
+
+  · 2 shells · /tasks to see subagents
+ECRAN47D
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT47D="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-47d" VD_REPOS_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 12 --dry-run 2>&1)"
+case "$OUT47D" in
+  *"MOTIF: repos-prolonge"*) ko "elle ABANDONNE un agent qui a un sous-agent et deux shells en vol : $OUT47D" ;;
+  *"MOTIF: agent-termine"*) ko "elle déclare FINI un agent qui a du travail en vol : $OUT47D" ;;
+  *) ok "elle veille tant qu'il y a du travail en vol" ;;
+esac
+
+echo "→ 47e. La borne de repos par DÉFAUT couvre la repro du rapport (11 min de repos)"
+# ⚠️ UNE BORNE SE POSE AVANT LE RÉSULTAT, ET ELLE SE MESURE. La veille du
+#    rapport est morte vers la 11ᵉ minute de repos. Une borne par défaut plus
+#    courte que ça laisserait le défaut passer sous un correctif « vert ».
+#    VD_REPOS_TOURS est réglable pour que ce banc l'éprouve — c'est donc la
+#    VALEUR PAR DÉFAUT elle-même qu'on épingle ici, sinon le banc réglerait ce
+#    qu'il éprouve.
+DEFAUT_REPOS="$(grep -E '^VD_REPOS_TOURS_DEFAUT=' "$VEILLE" | head -1 | cut -d= -f2)"
+DEFAUT_SLEEP="$(grep -E '^VD_SLEEP_DEFAUT=' "$VEILLE" | head -1 | cut -d= -f2)"
+if [ -n "$DEFAUT_REPOS" ] && [ -n "$DEFAUT_SLEEP" ]; then
+  MINUTES=$(( DEFAUT_REPOS * DEFAUT_SLEEP / 60 ))
+  [ "$MINUTES" -ge 20 ] \
+    && ok "la borne par défaut couvre ${MINUTES} min de repos — au-delà des 11 min de la repro" \
+    || ko "la borne par défaut ne couvre que ${MINUTES} min : la repro du rapport (11 min) repasserait"
+else
+  ko "VD_REPOS_TOURS_DEFAUT introuvable dans le script — la borne n'est pas épinglable"
+fi
+
 
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
