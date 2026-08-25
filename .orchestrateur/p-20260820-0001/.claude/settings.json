@@ -1,10 +1,7 @@
 {
   "permissions": {
     "deny": [
-      "Write",
-      "Edit",
       "NotebookEdit",
-      "Edit(//**)",
       "Task"
     ]
   },
@@ -39,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "G=\"$HOME/.somtech/gardes/terminal.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « terminal » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
+            "command": "G=\"$HOME/.somtech/gardes/terminal.js\"; if [ -f \"$G\" ]; then S=$(node \"$G\" 2>/dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{var v=JSON.parse(s).hookSpecificOutput;if(v&&(v.permissionDecision===\"allow\"||v.permissionDecision===\"deny\"))process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:v.permissionDecision,permissionDecisionReason:String(v.permissionDecisionReason||\"\")}}))}catch(e){}})' 2>/dev/null); if [ -n \"$S\" ]; then printf '%s\\n' \"$S\"; else printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « terminal » est presente mais elle n a rendu aucun verdict — elle a echoue. Refus par defaut : une garde qui casse ne vaut jamais une garde permissive, et une demande de permission est un oui des que la session accepte les editions.\"}}'; fi; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « terminal » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
           }
         ]
       },
@@ -48,7 +45,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "G=\"$HOME/.somtech/gardes/ligne-cliente.js\"; if [ -f \"$G\" ]; then exec node \"$G\"; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ligne-cliente » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
+            "command": "G=\"$HOME/.somtech/gardes/ligne-cliente.js\"; if [ -f \"$G\" ]; then S=$(node \"$G\" 2>/dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{var v=JSON.parse(s).hookSpecificOutput;if(v&&(v.permissionDecision===\"allow\"||v.permissionDecision===\"deny\"))process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:v.permissionDecision,permissionDecisionReason:String(v.permissionDecisionReason||\"\")}}))}catch(e){}})' 2>/dev/null); if [ -n \"$S\" ]; then printf '%s\\n' \"$S\"; else printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ligne-cliente » est presente mais elle n a rendu aucun verdict — elle a echoue. Refus par defaut : une garde qui casse ne vaut jamais une garde permissive, et une demande de permission est un oui des que la session accepte les editions.\"}}'; fi; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ligne-cliente » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "G=\"$HOME/.somtech/gardes/ecriture.js\"; if [ -f \"$G\" ]; then S=$(node \"$G\" 2>/dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{var v=JSON.parse(s).hookSpecificOutput;if(v&&(v.permissionDecision===\"allow\"||v.permissionDecision===\"deny\"))process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:v.permissionDecision,permissionDecisionReason:String(v.permissionDecisionReason||\"\")}}))}catch(e){}})' 2>/dev/null); if [ -n \"$S\" ]; then printf '%s\\n' \"$S\"; else printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ecriture » est presente mais elle n a rendu aucun verdict — elle a echoue. Refus par defaut : une garde qui casse ne vaut jamais une garde permissive, et une demande de permission est un oui des que la session accepte les editions.\"}}'; fi; else cat >/dev/null 2>&1; printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"la garde « ecriture » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}}'; fi"
           }
         ]
       },

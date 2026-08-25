@@ -28,7 +28,7 @@ function roleValide(role) {
  * « deux copies d'un critère divergent en silence », trouvé par la revue
  * indépendante du 2026-08-20.
  */
-function lireClassement(racine, role) {
+export function lireClassement(racine, role) {
   const base = join(racine, 'metier', role);
   const p = join(base, 'classement.json');
   if (!existsSync(p)) {

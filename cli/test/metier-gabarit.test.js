@@ -136,3 +136,76 @@ test('DISTRIBUTION — un rendu REFUSÉ ne distribue rien : le gabarit garde ce 
     'un rendu refusé ne doit rien écrire — sinon il distribue un métier qu il vient de juger irrecevable');
   rmSync(d, { recursive: true, force: true });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔴 LE MAILLON QUI MANQUAIT — le rendu VERSIONNÉ contre le rendu RECALCULÉ
+//
+// Les contrôles ci-dessus comparent deux artefacts VERSIONNÉS l'un à l'autre :
+// le gabarit distribué et le rendu committé. Ils voient un ÉCART entre eux ;
+// ils ne peuvent pas voir une ERREUR PARTAGÉE.
+//
+// ⚠️ **Deux objets identiques ne se valident pas l'un l'autre.** Mesuré le
+// 2026-08-24, sur ce lot même : la fonction qui fabrique les commandes de hook a
+// été durcie, mais le rendu n'a été rejoué que pour l'orchestrateur. Le gabarit
+// du gestionnaire-client ET son rendu committé sont donc restés périmés — DE LA
+// MÊME FAÇON, donc parfaitement cohérents entre eux, donc invisibles à tout
+// contrôle d'identité. Le dépôt distribuait deux formes différentes de la même
+// commande, dont une avec un mode de panne connu, et rien ne le disait.
+//
+// Ce contrôle-ci ferme la boucle : il REJOUE le rendu depuis le classement et le
+// compare à ce qui est committé. Un changement dans `rendu.js` qui n'a pas été
+// redistribué rougit, pour TOUS les rôles à la fois.
+//
+// Il fait en CI une partie de ce que `pack metier verifier` fait à la main — et
+// que rien n'appelait (relevé par la revue de fond du 2026-08-24).
+//
+// ⚠️ ET LES DEUX SENS, PAS UN SEUL. La première version ne vérifiait que
+// « chaque artefact produit aujourd'hui existe et correspond ». Elle ne voyait
+// donc PAS un artefact ORPHELIN — présent en committé, plus produit par le
+// classement. Mesuré par la troisième passe de fond : un chapitre fantôme déposé
+// des deux côtés laissait les 17 contrôles de ce fichier au vert.
+//
+// C'est le même piège que celui dénoncé plus haut, d'un cran plus loin : la
+// comparaison était ancrée à la source, mais SEULEMENT dans le sens qui ajoute.
+// Un fichier que le classement ne produit plus reste distribué à jamais.
+
+/** Ce que le rendu committé porte réellement, à plat, chemins relatifs. */
+function renduCommitte(base) {
+  const vus = [];
+  (function marcher(d, prefixe) {
+    if (!existsSync(d)) return;
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const rel = prefixe ? `${prefixe}/${e.name}` : e.name;
+      if (e.isDirectory()) marcher(join(d, e.name), rel);
+      else vus.push(rel);
+    }
+  })(base, '');
+  return vus.sort();
+}
+
+test('🔴 le rendu committé est celui que le code produit AUJOURD’HUI — pour tous les rôles, DANS LES DEUX SENS', async () => {
+  const { rendre } = await import('../src/metier/rendu.js');
+  const { lireClassement } = await import('../src/commands/metier.js');
+
+  const perimes = [];
+  for (const role of ROLES) {
+    const artefacts = rendre(lireClassement(RACINE, role)).artefacts;
+    const base = join(RACINE, 'metier', role, 'rendu');
+    for (const [chemin, attendu] of Object.entries(artefacts)) {
+      const committe = join(base, chemin);
+      if (!existsSync(committe)) { perimes.push(`${role} · ${chemin} : ABSENT du rendu committé`); continue; }
+      if (readFileSync(committe, 'utf8') !== attendu) perimes.push(`${role} · ${chemin} : périmé`);
+    }
+    // ── LE SENS INVERSE : ce que le classement ne produit PLUS.
+    const produits = new Set(Object.keys(artefacts));
+    for (const chemin of renduCommitte(base)) {
+      if (!produits.has(chemin)) perimes.push(`${role} · ${chemin} : ORPHELIN — le classement ne le produit plus, et il reste distribué`);
+    }
+  }
+  assert.deepEqual(perimes, [],
+    'le rendu committé ne correspond plus à ce que le code produit :\n  ' + perimes.join('\n  ')
+    + '\n\n🔴 Un changement dans « rendu.js » n\'a pas été redistribué. Les contrôles d\'identité '
+    + 'ci-dessus ne peuvent PAS l\'attraper : gabarit et rendu sont alors périmés de la même façon, '
+    + 'donc cohérents entre eux. Deux objets identiques ne se valident pas l\'un l\'autre.'
+    + '\n  Relance : node cli/bin/somtech-pack.js metier rendre --role <chacun des rôles>');
+});

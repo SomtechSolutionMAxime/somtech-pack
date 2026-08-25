@@ -87,6 +87,29 @@ for (const mandat of LIEUX) {
       "le CLAUDE.md a beau être à jour, c'est le chapitre que l'agent lit pour travailler");
   });
 
+  test(`${mandat} — son FICHIER DE DROITS est celui du gabarit, à l'octet près`, () => {
+    // ⚠️ LA GARDE QUI MANQUAIT, et le trou qu'elle bouche a été MESURÉ le 2026-08-24
+    // (T-20260824-0002) : les sept lieux versionnés portaient chacun un
+    // `.claude/settings.json`, et RIEN ne le gardait. Ce fichier garde le métier
+    // (CLAUDE.md) et les chapitres — c'est-à-dire ce que l'agent LIT. Le fichier de
+    // droits est ce qu'il PEUT, et il dérivait librement.
+    //
+    // L'état trouvé ce jour-là, avant convergence : cinq lieux sur sept portaient des
+    // droits périmés, et `j-20260814-0002` — un lieu d'orchestrateur en service —
+    // n'avait AUCUN hook là où le gabarit en pose trois. Ses trois gardes, dont celle
+    // qui ferme la brèche du terminal, n'existaient pas chez lui.
+    //
+    // La conséquence est la même hémorragie que pour le métier : `git worktree add`
+    // recopie ce que `main` porte, donc tout worktree neuf faisait naître un
+    // orchestrateur aux droits périmés — et un correctif au gabarit ne l'atteignait
+    // jamais. Tarir la source demande les deux fichiers, pas un seul.
+    const attendu = readFileSync(join(GABARIT, '.claude', 'settings.json'), 'utf8');
+    const porte = readFileSync(join(lieu, '.claude', 'settings.json'), 'utf8');
+    assert.equal(porte, attendu,
+      `le fichier de droits versionné de « ${mandat} » a divergé du gabarit — tout worktree créé ` +
+      'depuis main y fera naître un orchestrateur avec des refus et des gardes périmés');
+  });
+
   test(`${mandat} — aucun chapitre orphelin : ce qui est posé est renvoyé`, () => {
     const dossier = join(lieu, 'metier', 'chapitres');
     const poses = existsSync(dossier) ? readdirSync(dossier).filter((f) => f.endsWith('.md')).sort() : [];
@@ -96,3 +119,29 @@ for (const mandat of LIEUX) {
       `« ${mandat} » porte des chapitres que rien ne renvoie — ils resteront distribués sans jamais être lus`);
   });
 }
+
+test('🔴 la convergence n\'écrase JAMAIS les CONTEXTE.md remplis — le seul fichier qui appartient à l\'agent', () => {
+  // La contrepartie des deux gardes de convergence ci-dessus, et elle est nécessaire :
+  // `CLAUDE.md` et le fichier de droits doivent CONVERGER vers le gabarit, `CONTEXTE.md`
+  // ne le doit surtout pas. Il porte ce que l'agent a appris de SON chantier — ce que
+  // personne n'apprend à sa place, et qu'un `cp` de convergence effacerait sans bruit.
+  //
+  // ⚠️ Le dénominateur est ÉPINGLÉ, et c'est ce qui empêche ce contrôle d'être décoratif.
+  // « au moins un » resterait vert après une convergence qui en écraserait six sur sept.
+  // Mesuré le 2026-08-24 : 3 lieux sur 7 portent un contexte rempli (`d-20260817-0006`,
+  // `essai-metier-rendu`, `j-20260814-0002`), les 4 autres sont encore le gabarit vierge.
+  // Une baisse de ce compte est un fait à regarder, jamais un chiffre à réaligner.
+  const vierge = readFileSync(join(GABARIT, 'CONTEXTE.md'), 'utf8');
+  const remplis = LIEUX.filter((m) => {
+    const c = join(RACINE, '.orchestrateur', m, 'CONTEXTE.md');
+    return existsSync(c) && readFileSync(c, 'utf8') !== vierge;
+  });
+  assert.ok(remplis.length >= 3,
+    `${remplis.length} lieu(x) portent un CONTEXTE.md rempli, contre 3 mesurés le 2026-08-24 : `
+    + 'une convergence a probablement écrasé ce que ses agents avaient appris — '
+    + `remplis : ${remplis.join(', ') || 'aucun'}`);
+  for (const m of LIEUX) {
+    assert.ok(existsSync(join(RACINE, '.orchestrateur', m, 'CONTEXTE.md')),
+      `« ${m} » n'a plus de CONTEXTE.md : la convergence l'a emporté`);
+  }
+});

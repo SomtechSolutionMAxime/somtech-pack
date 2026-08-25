@@ -45,27 +45,66 @@ export function compterTokens(texte) {
 }
 
 /**
- * La commande d'un hook, qui REFUSE d'elle-même si la garde manque sur le poste.
+ * La commande d'un hook, qui REFUSE d'elle-même si la garde manque sur le poste
+ * OU si elle tombe en panne.
  *
- * ⚠️ `node <fichier absent>` sort en code 1 — pour Claude Code, une erreur NON
- * BLOQUANTE : le geste passerait pendant que le classement déclare l'item
- * « porté par un hook ». C'est la garantie fausse que R1 existe pour empêcher,
- * déplacée d'un cran. La commande se défend donc elle-même, comme le seul hook
- * déjà en service (STD-047 R3bis).
+ * ⚠️ DEUX MODES DE PANNE, ET ILS ONT ÉTÉ MESURÉS SÉPARÉMENT.
+ *
+ * ① **La garde est absente.** `node <fichier absent>` sort en code 1 — pour
+ * Claude Code, une erreur NON BLOQUANTE : le geste passerait pendant que le
+ * classement déclare l'item « porté par un hook ». C'est la garantie fausse que
+ * R1 existe pour empêcher, déplacée d'un cran.
+ *
+ * ② **La garde est là et elle CASSE.** C'est le mode qui manquait, et il est
+ * pire. Mesuré le 2026-08-24 sur Claude Code 2.1.241 : une garde qui sort en
+ * erreur sans rien écrire dégrade le geste en DEMANDE de permission — et sous
+ * `--permission-mode acceptEdits`, une demande est un oui. **Le fichier a été
+ * écrit pendant que la garde était morte.** Un `deny` déclaratif, lui, est
+ * inerte : il ne peut pas tomber en panne. Depuis T-20260824-0002, une garde
+ * porte à elle seule un refus qui vivait dans `permissions.deny` — elle doit
+ * donc se défendre contre sa propre panne, pas seulement contre son absence.
+ *
+ * La commande n'appelle donc plus la garde par `exec` : elle CAPTURE sa sortie,
+ * et n'émet ce verdict que si la garde a réussi ET rendu quelque chose. Sinon,
+ * elle refuse à sa place. Patron de STD-047 R3bis, un cran plus bas.
+ *
+ * ⚠️ Ce qu'elle ne ferme PAS, et qui est écrit plutôt qu'espéré : une garde qui
+ * PEND. Le shell l'attendrait avec elle, et `timeout` n'existe pas sur macOS.
  */
 function commandeDeHook(garde, chemin) {
-  const refus = JSON.stringify({
+  const refuser = (raison) => JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason:
-        `la garde « ${garde} » est introuvable sur ce poste — ` +
-        'installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : ' +
-        'un garde absent ne vaut jamais un garde permissif.',
+      permissionDecisionReason: raison,
     },
   }).replace(/'/g, "'\\''");
-  return `G="${chemin || `$HOME/.somtech/gardes/${garde}.js`}"; if [ -f "$G" ]; then exec node "$G"; ` +
-    `else cat >/dev/null 2>&1; printf '%s\\n' '${refus}'; fi`;
+  const absente = refuser(
+    `la garde « ${garde} » est introuvable sur ce poste — ` +
+    'installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : ' +
+    'un garde absent ne vaut jamais un garde permissif.');
+  const cassee = refuser(
+    `la garde « ${garde} » est presente mais elle n a rendu aucun verdict — elle a echoue. ` +
+    'Refus par defaut : une garde qui casse ne vaut jamais une garde permissive, et une ' +
+    'demande de permission est un oui des que la session accepte les editions.');
+  // ⚠️ TROISIÈME MODE, TROUVÉ PAR LA REVUE DE FOND ET MESURÉ : « code 0 » et « non
+  // vide » ne font pas un verdict. Une ligne de bruit sur stdout AVANT le JSON — un
+  // `npm notice`, un `console.log` oublié, un avertissement de Node — et la sortie
+  // transmise ne parse plus. Claude Code n'a alors aucun verdict, et retombe sur la
+  // demande de permission : un oui sous `acceptEdits`. La commande VALIDE donc ce
+  // qu'elle transmet, et ré-émet un verdict canonique — ce qui écarte le bruit du
+  // même geste. Sortie vide = pas de verdict = refus, sans avoir à lire `$?` (qu'un
+  // tube rendrait de toute façon celui du dernier maillon).
+  const filtre = 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{'
+    + 'var v=JSON.parse(s).hookSpecificOutput;'
+    + 'if(v&&(v.permissionDecision==="allow"||v.permissionDecision==="deny"))'
+    + 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:v.permissionDecision,'
+    + 'permissionDecisionReason:String(v.permissionDecisionReason||"")}}))}catch(e){}})';
+  return `G="${chemin || `$HOME/.somtech/gardes/${garde}.js`}"; if [ -f "$G" ]; then ` +
+    `S=$(node "$G" 2>/dev/null | node -e '${filtre}' 2>/dev/null); if [ -n "$S" ]; then printf '%s\\n' "$S"; ` +
+    `else printf '%s\\n' '${cassee}'; fi; ` +
+    `else cat >/dev/null 2>&1; printf '%s\\n' '${absente}'; fi`;
 }
 
 /** La forme courte d'un énoncé : sa première phrase, sans le gras. */
