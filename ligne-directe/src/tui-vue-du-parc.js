@@ -743,7 +743,15 @@ export function raccourcisPour(largeur) {
     const pire = gardes.reduce((a, b) => (b.vital >= a.vital ? b : a));
     gardes = gardes.filter((r) => r !== pire);
   }
-  return rendre(gardes);
+  // ⚠️ LA BOUCLE S’ARRÊTE AU DERNIER RACCOURCI **SANS VÉRIFIER QU’IL TIENT** — c’est la
+  // moitié qui manquait. `borner` en aval le coupait par la droite (« q qu… »), donc la
+  // barre annonçait une sortie inutilisable au lieu de dire honnêtement qu’elle ne tient pas.
+  //
+  // ⚠️ ON REND LE DERNIER **ENTIER OU RIEN**. Un « q » seul serait deviné par un habitué et
+  // incompréhensible pour les autres — et c’est précisément quelqu’un de coincé qui lit
+  // cette barre. Rien du tout est un fait ; un fragment est un piège.
+  const rendu = rendre(gardes);
+  return rendu.length <= largeur ? rendu : '';
 }
 
 /**
@@ -987,5 +995,36 @@ function pied(etat, largeur) {
   // est actif importe plus que rappeler une touche : sans lui, l'arbre ment ; sans eux, on
   // cherche une touche. Les raccourcis se rétractent donc de ce que le filtre occupe.
   const tete = filtres.length ? `${filtres.join('  ·  ')}  ─  ` : '';
+
+  // 🔴 LA SORTIE PASSE AVANT LE FILTRE — ET C’EST L’INVERSE DE CE QUE FAISAIT CETTE LIGNE.
+  //
+  // L’entête de filtre se servait EN PREMIER et laissait aux raccourcis « ce qui reste ».
+  // Mesuré (revue portail) : avec le filtre `n` actif, « q quitter » était ABSENT de la barre
+  // pour TOUTE largeur de 1 à 36 colonnes — une largeur de split parfaitement plausible. Sans
+  // filtre, de 1 à 8.
+  //
+  // ⚠️ ET J’AVAIS ÉCRIT, DANS CE MÊME FICHIER, QUE « CE FICHIER PORTAIT DÉJÀ LA RÈGLE POUR
+  // L’AUTRE DIMENSION ». C’était faux : `RACCOURCIS_UN_A_UN` classe bien les raccourcis du
+  // moins vital au plus vital, mais `raccourcisPour` s’arrête au dernier SANS vérifier qu’il
+  // tient — et `borner` le coupait alors par la droite, en plein mot.
+  //
+  // ⚠️ CE QU’ON N’A PAS FAIT : tronquer l’entête de filtre. Un filtre à demi lisible
+  // (« FILTRE : non-pr… ») est pire que pas d’entête du tout — il ne se comprend pas et il
+  // mange quand même la place. On le RETIRE entièrement quand la sortie ne tiendrait pas.
+  // ⚠️ ON DEMANDE LA SORTIE **SEULE**, PAS « LA LARGEUR ZÉRO ». Ma première version appelait
+  // `raccourcisPour(0)`, qui rend une chaîne VIDE — la condition ne se déclenchait donc jamais,
+  // et le correctif ne mordait pas. Mesuré, pas relu : les largeurs fautives étaient
+  // identiques avant et après. On lit le raccourci vital dans le manifeste lui-même.
+  const laSortie = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
+  if (tete.length + laSortie.length > largeur) {
+    // ⚠️ ET ON NE REND PAS UN FRAGMENT — `raccourcisPour` s’en charge : il rend le raccourci
+    // ENTIER ou RIEN. Ma première correction appelait `borner(laSortie, largeur)` ici, ce qui
+    // reproduisait « q quitt… » — le piège que j’avais nommé trois lignes plus haut et posé
+    // moi-même. Mesuré : la barre rendait « q qu… » de 2 à 8 colonnes.
+    //
+    // Sous 9 colonnes, aucune barre ne peut dire comment sortir. Une barre vide est un fait ;
+    // un « q qu… » est une promesse que l’écran ne tient pas.
+    return raccourcisPour(largeur);
+  }
   return tete + raccourcisPour(Math.max(0, largeur - tete.length));
 }

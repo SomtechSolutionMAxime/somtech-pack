@@ -471,14 +471,43 @@ test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plan
   // la LARGEUR — `RACCOURCIS_UN_A_UN` marque `q quitter` « le dernier qu'on retire, jamais le
   // premier ». Mon invariant de hauteur se disait « la jumelle verticale » de celui de largeur,
   // et il violait le principe qu'il jumelait.
-  for (let hauteur = 1; hauteur <= 40; hauteur += 1) {
-    for (const largeur of [20, 40, 65, 120]) {
-      const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur });
-      assert.ok(
-        ecran.some((l) => l.texte.includes('q quitter')),
-        `à ${largeur}x${hauteur}, « q quitter » n’est nulle part — le dirigeant est enfermé dans ` +
-          'un écran alternatif dont il ne connaît pas la sortie'
-      );
+  // 🔴 CE BALAYAGE NE PRENAIT QUE `[20, 40, 65, 120]` ET LE FILTRE INACTIF — deux choix commodes,
+  // et le défaut vivait précisément dans ce qu'ils excluaient. Mesuré en revue portail : avec le
+  // filtre `n` ACTIF, « q quitter » était absent de la barre pour TOUTE largeur de 1 à 36
+  // colonnes. L'entête de filtre se servait en premier et laissait « ce qui reste » à la sortie.
+  //
+  // ⚠️ ON BALAIE DONC LA LARGEUR EN CONTINU **ET** LES ÉTATS DE FILTRE — c'est le produit des
+  // deux qui casse, jamais l'un des deux seul.
+  const etats = [
+    { quoi: 'sans filtre', etat },
+    { quoi: 'filtre « non-pris seuls »', etat: { ...etat, nonPrisSeuls: true } },
+    { quoi: 'recherche active', etat: { ...etat, recherche: 'somcraft' } },
+  ];
+  // 9 = longueur de « q quitter ». En dessous, AUCUNE barre ne peut le dire : c'est une borne
+  // physique, pas un choix — et le banc l'épingle pour qu'elle ne dérive pas en silence.
+  const MINIMUM = 'q quitter'.length;
+
+  for (const { quoi, etat: e } of etats) {
+    const l2 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
+    for (let largeur = 1; largeur <= 130; largeur += 1) {
+      for (const hauteur of [1, 2, 5, 24]) {
+        const barre = rendreEcran({ vue, etat: e, lignes: l2, largeur, hauteur }).at(-1).texte;
+        if (largeur >= MINIMUM) {
+          assert.ok(
+            barre.includes('q quitter'),
+            `${quoi}, ${largeur}x${hauteur} : « q quitter » n’est nulle part — le dirigeant est ` +
+              'enfermé dans un écran alternatif dont il ne connaît pas la sortie'
+          );
+        }
+        // ⚠️ ET SOUS LE MINIMUM, LA BARRE EST VIDE — JAMAIS UN FRAGMENT. « q quitt… » est une
+        // promesse que l'écran ne tient pas : un habitué la devine, les autres non, et c'est
+        // précisément quelqu'un de coincé qui lit cette barre. Ma propre première correction
+        // produisait ce fragment ; le banc le refuse maintenant.
+        assert.ok(
+          barre.includes('q quitter') || barre.trim() === '',
+          `${quoi}, ${largeur}x${hauteur} : la barre rend un FRAGMENT trompeur : ${JSON.stringify(barre)}`
+        );
+      }
     }
   }
 });
