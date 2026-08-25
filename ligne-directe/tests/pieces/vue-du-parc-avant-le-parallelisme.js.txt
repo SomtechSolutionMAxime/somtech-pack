@@ -65,7 +65,6 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
-import { borner, PLAFOND_SERVICEDESK } from './plafond.js';
 import { rolesConnus, role as roleDe } from './roles.js';
 import { roleDuLieu as roleDuLieuReel } from './lieu-agent.js';
 
@@ -667,17 +666,8 @@ export function phrasesDesSignauxDeLigne(compte) {
  * @param appeler  `(nom, args) → corps` — le transport, INJECTÉ. Sans lui, pas de lecteur :
  *                 on rend `null`, et la vue dit « aucun accès » au lieu d'inventer un parc vide.
  */
-export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 200, plafond = PLAFOND_SERVICEDESK } = {}) {
+export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 200 } = {}) {
   if (typeof appeler !== 'function') return null;
-
-  // ═══ TOUT PASSE PAR LA BORNE, ET C'EST LE SEUL ENDROIT OÙ ELLE EST POSÉE.
-  //
-  // 🔴 CE LECTEUR EST LA PORTE UNIQUE DE LA VUE VERS LE SERVICEDESK — les applications, la
-  // famille du chantier, ses epics, les stories de chaque epic. Border ICI, c'est border TOUT
-  // ce que la vue demande au service, quelle que soit la façon dont les étages du dessus
-  // choisissent de s'éventer. Le plafond ne se redouble donc jamais plus haut : voir
-  // `src/plafond.js`, qui dit pourquoi un second réglage serait un défaut et non une prudence.
-  const demander = borner(appeler, { plafond });
 
   // ═══ LES APPLICATIONS — LUES UNE FOIS POUR TOUT LE LECTEUR, jamais par chantier.
   //
@@ -693,7 +683,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     if (!applications) {
       applications = (async () => {
         try {
-          const corps = await demander('applications', { action: 'list' });
+          const corps = await appeler('applications', { action: 'list' });
           const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
           return { mesure: 'lue', parId: new Map(liste.map((a) => [a?.id, a?.name ?? null])) };
         } catch (err) {
@@ -710,34 +700,12 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     return applications;
   };
 
-  // ═══ UN CHANTIER SE LIT UNE FOIS, MÊME QUAND DEUX ORCHESTRATEURS LE PORTENT.
-  //
-  // 🔴 MESURÉ SUR CE POSTE, PAS CONSTRUIT : le 2026-08-25, `P-20260820-0001` est porté par
-  // **deux** orchestrateurs. Le lecteur relisait donc tout le chantier deux fois — sa famille,
-  // ses epics, et un `tickets/list` par epic — pour rendre deux fois la même chose.
-  //
-  // ⚠️ CE N'EST PAS UN CACHE, ET LA NUANCE PORTE TOUT LE LOT (`E-20260824-0011`, hors-lot n°2).
-  // Un cache SURVIT à la lecture et resservirait de l'ancien au `r` suivant. Cette mémoire-ci
-  // naît avec le lecteur et meurt avec lui : chaque construction de la vue en fabrique un neuf
-  // (`veilleur.js`, `construireLecteur()`), donc chaque `r` relit le réel. Elle ne partage
-  // qu'À L'INTÉRIEUR d'une même lecture, ce qui est exactement « lu une fois ».
-  //
-  // ⚠️ ON MÉMORISE LA PROMESSE, PAS SON RÉSULTAT — sans quoi deux porteurs partis en même temps
-  // (ce qui est désormais le cas normal) ne se trouveraient ni l'un ni l'autre, et relanceraient
-  // chacun la lecture. Et un chantier ILLISIBLE se partage comme un autre : les deux porteurs
-  // doivent voir le même refus, pas deux refus mesurés séparément.
-  //
-  // ⚠️ ET LE PARTAGE N'EST PAS UN DÉDOUBLONNAGE D'AFFICHAGE. Les deux orchestrateurs gardent
-  // chacun leur ligne — c'est la réalité du parc, et `laVueDuParc` ne sait même pas que la
-  // lecture a été partagée. Un banc le garde.
-  const enCours = new Map();
-
-  const lireVraiment = async (code) => {
+  return async (code) => {
     const famille = familleDuMandat(code);
     if (!famille) throw new Error(`« ${code} » n’est pas un code de chantier`);
 
     // ═══ LE CHANTIER LUI-MÊME — par la liste, jamais par `get` seul (voir l'en-tête).
-    const corps = await demander(famille, { action: 'list', limit: limite });
+    const corps = await appeler(famille, { action: 'list', limit: limite });
     const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
     const champ = CHAMP_DU_CODE[famille];
     const chantier = liste.find((x) => x?.[champ] === code);
@@ -773,7 +741,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         `un mandat de la famille « ${famille} » ne porte pas d’epics : je ne sais pas quoi lire sous ${code}`
       );
     }
-    const corpsEpics = await demander('epics', { action: 'list', [champParent]: chantier.id, limit: limite });
+    const corpsEpics = await appeler('epics', { action: 'list', [champParent]: chantier.id, limit: limite });
     const tousEpics = Object.values(corpsEpics || {}).find((v) => Array.isArray(v)) || [];
     // 🔴 ON VÉRIFIE QUE LE FILTRE A FILTRÉ. Un filtre ignoré rend la base entière : sans ce
     // second tamis, la vue rattacherait à cet orchestrateur les epics de TOUTES les
@@ -788,24 +756,8 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     // chantier : ne pas la dire ici était la même incohérence, dans le même fichier.
     const epicsPlafonnes = tousEpics.length >= limite;
 
-    // ═══ LES STORIES DE CHAQUE EPIC — TOUTES DEMANDÉES DE FRONT, l'ordre rendu intact.
-    //
-    // 🔴 C'EST ICI QUE LES 65 % PARTAIENT. Mesuré le 2026-08-24 : les `tickets/list` coûtaient
-    // **41 s sur 63**, dans une boucle `for` avec un `await` dedans — 91 attentes de ~0,45 s
-    // mises bout à bout alors qu'aucune ne dépend de la précédente.
-    //
-    // ⚠️ `Promise.all` REND DANS L'ORDRE DES ENTRÉES, jamais dans l'ordre des réponses — c'est
-    // ce qui rend l'identité au séquentiel atteignable, et c'est ce qu'un banc compare champ à
-    // champ. Rien d'autre n'a changé de ce que chaque tour fait : le filtre demandé, le tamis
-    // qui vérifie qu'il a filtré, le plafond dit, l'écart compté, et `stories: null` quand
-    // l'appel a refusé.
-    //
-    // ⚠️ ET LE NOMBRE D'APPELS EN VOL N'EST PAS BORNÉ ICI — il l'est sur le transport, une fois
-    // pour tout le lecteur (voir `demander` plus haut). Une seconde borne à cet étage
-    // s'appliquerait à un objet différent (des epics, pas des appels) tout en portant le même
-    // nom, et la mesure faite pour l'une servirait de caution à l'autre.
-    const avecStories = await Promise.all(
-      epics.map(async (e) => {
+    const avecStories = [];
+    for (const e of epics) {
       let stories = [];
       let storiesLues = true;
       let storiesPlafonnees = false;
@@ -824,7 +776,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         // une page de 200, les stories d'un epic ne tombaient dans la page QUE par chance. Elles
         // sortaient donc `[]` — indiscernable de « cet epic n'a aucune story ». Le travail
         // d'agents entiers disparaissait de la vue, en silence, sur le chemin le plus fréquenté.
-        const corpsT = await demander('tickets', { action: 'list', epic_id: e.id, limit: limite });
+        const corpsT = await appeler('tickets', { action: 'list', epic_id: e.id, limit: limite });
         const tous = Object.values(corpsT || {}).find((v) => Array.isArray(v)) || [];
         // ⚠️ ON DEMANDE LE FILTRE **ET** ON VÉRIFIE QU'IL A FILTRÉ. Les deux : un service peut
         // cesser de l'honorer demain, comme il le fait déjà pour `delivery_id`.
@@ -848,7 +800,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         // ferait disparaître le travail d'un agent sans que rien ne le dise.
         storiesLues = false;
       }
-      return {
+      avecStories.push({
         code: e?.epic_id ?? null,
         titre: e?.title ?? null,
         statut: e?.status ?? null,
@@ -857,9 +809,8 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
           : null,
         storiesPlafonnees,
         storiesEcartees,
-      };
-      })
-    );
+      });
+    }
 
     return {
       code,
@@ -874,14 +825,6 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       // des gestes opposés — retamiser d'un côté, lever le plafond de l'autre.
       epicsPlafonnes,
     };
-  };
-
-  return (code) => {
-    // ⚠️ LA CLÉ EST LE CODE TEL QU'IL A ÉTÉ DEMANDÉ. Deux porteurs du même chantier le
-    // demandent par le même code — c'est ce que `cleDuMandat` a déjà normalisé un étage plus
-    // haut. Normaliser une seconde fois ici ferait un second réglage de la même chose.
-    if (!enCours.has(code)) enCours.set(code, lireVraiment(code));
-    return enCours.get(code);
   };
 }
 
@@ -1176,6 +1119,7 @@ export async function laVueDuParc({
   }
 
   // ═══ LES ORCHESTRATEURS — la tête de la vue, et l'ordre est celui du registre.
+  const orchestrateurs = [];
   const dansUneHierarchie = new Set();
   //
   // 🔴 UNE SEULE FABRIQUE DE LIGNE POUR LES DEUX SOURCES, ET C'EST CE QUI REND LE CRITÈRE
@@ -1282,21 +1226,6 @@ export async function laVueDuParc({
     };
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════════════════
-  // ON CHOISIT LES LIGNES D'ABORD, ON LES LIT ENSUITE — ET CE DÉCOUPAGE EST LA CONDITION DE
-  // L'IDENTITÉ AU SÉQUENTIEL, pas un rangement.
-  //
-  // 🔴 LE CHOIX DES LIGNES EST SÉQUENTIEL PARCE QU'IL PORTE UN ÉTAT QUI SE PROPAGE : `mandatsVus`
-  // est rempli par la source 1 et LU par la source 2 (« ce mandat a-t-il déjà un terminal
-  // vivant ? »). Choisir en parallèle ferait dépendre le contenu de la vue de l'ordre où les
-  // lectures rendent — deux mêmes parcs rendraient deux vues différentes, et le banc d'identité
-  // ne s'en apercevrait qu'un jour sur deux.
-  //
-  // ⚠️ CE CHOIX NE FAIT AUCUNE ENTRÉE-SORTIE. Il lit le recensement et les lieux DÉJÀ en
-  // mémoire ; il ne coûte rien à paralléliser et il coûterait la justesse. C'est la LECTURE des
-  // chantiers — la seule chose qui parle au ServiceDesk — qui part de front, juste après, dans
-  // l'ordre exact où le choix les a rangés.
-  const aLire = [];
   // ═══ SOURCE 1 — LES ORCHESTRATEURS VIVANTS. Un pane porte le mandat : on l'a MESURÉ.
   const mandatsVus = new Set();
   for (const a of agents) {
@@ -1311,17 +1240,19 @@ export async function laVueDuParc({
     const adresse = adresseDe(carte, presence);
     const cle = cleDuMandat(a?.mandat);
     if (cle) mandatsVus.add(cle);
-    aLire.push({
-      mandatBrut: a?.mandat ?? null,
-      code: codePorteEnMandat(a),
-      commun: {
-        agent: carte,
-        porteur: porteurDuPane(carte),
-        presence,
-        activite: activiteDe(a),
-        adresse,
-      },
-    });
+    orchestrateurs.push(
+      await uneLigne({
+        mandatBrut: a?.mandat ?? null,
+        code: codePorteEnMandat(a),
+        commun: {
+          agent: carte,
+          porteur: porteurDuPane(carte),
+          presence,
+          activite: activiteDe(a),
+          adresse,
+        },
+      })
+    );
   }
 
   // ═══ SOURCE 2 — LES LIEUX SANS TERMINAL VIVANT. EF-VUE-007, ET C'EST LE CŒUR DE CE LOT.
@@ -1336,35 +1267,25 @@ export async function laVueDuParc({
     if (!cle || mandatsVus.has(cle)) continue;
     mandatsVus.add(cle);
     const presence = presenceDe({ vivant: false, borne });
-    aLire.push({
-      mandatBrut: l?.mandat ?? null,
+    orchestrateurs.push(
+      await uneLigne({
+        mandatBrut: l?.mandat ?? null,
         // ⚠️ MÊME RÈGLE QUE POUR UN AGENT : un mandat qui n'est pas un code n'a pas de chantier
         // à chercher. `general` et `essai-metier-rendu` portent des lieux parfaitement valides.
         code: CODE_LISIBLE.test(cle) ? cle : null,
-      commun: {
-        // ⚠️ `agent: null` DIT UNE CHOSE PRÉCISE : le registre nomme un LIEU, pas une personne.
-        // Y mettre le nom que la convention laisse deviner referait le geste que `nomDeLAgent`
-        // interdit — un nom plausible fait écrire à quelqu'un qui n'existe pas.
-        agent: null,
-        porteur: porteurDuLieu(Array.isArray(l?.chemins) ? l.chemins : []),
-        presence,
-        activite: activiteDe(null),
-        adresse: adresseDe(null, presence),
-      },
-    });
+        commun: {
+          // ⚠️ `agent: null` DIT UNE CHOSE PRÉCISE : le registre nomme un LIEU, pas une personne.
+          // Y mettre le nom que la convention laisse deviner referait le geste que `nomDeLAgent`
+          // interdit — un nom plausible fait écrire à quelqu'un qui n'existe pas.
+          agent: null,
+          porteur: porteurDuLieu(Array.isArray(l?.chemins) ? l.chemins : []),
+          presence,
+          activite: activiteDe(null),
+          adresse: adresseDe(null, presence),
+        },
+      })
+    );
   }
-
-  // ═══ ET MAINTENANT LES LIGNES SE LISENT, TOUTES DE FRONT.
-  //
-  // ⚠️ `Promise.all` REND DANS L'ORDRE DES ENTRÉES, jamais dans celui des réponses : la vue
-  // garde l'ordre du registre — les vivants d'abord, les lieux sans terminal ensuite — quelle
-  // que soit la vitesse à laquelle le ServiceDesk répond sur chacun.
-  //
-  // ⚠️ ET LE NOMBRE D'APPELS EN VOL RESTE BORNÉ, sans qu'un plafond soit posé ici : chaque
-  // ligne passe par le `lireChantier` qu'on lui a donné, et c'est LUI qui borne (voir
-  // `lecteurDeChantier` et `src/plafond.js`). Poser une seconde borne à cet étage compterait
-  // des LIGNES là où la mesure a compté des APPELS — même mot, autre objet.
-  const orchestrateurs = await Promise.all(aLire.map((c) => uneLigne(c)));
 
   // ═══ HORS DE TOUTE HIÉRARCHIE D'ORCHESTRATEUR — EF-VUE-004.
   //
