@@ -1,0 +1,40 @@
+# herdr-plugin.toml — la vue du parc, ouverte d'un raccourci depuis n'importe où dans herdr.
+#
+# Ce plugin N'IMPLÉMENTE PAS la vue : il l'OUVRE. Le TUI vit dans le module de poste
+# `ligne-directe` (`ligne-directe vue --tui`), et c'est lui qui lit le parc, dessine
+# l'arbre et écoute le clavier et la souris. Le plugin n'est que la porte : un pane,
+# et le raccourci qui l'ouvre.
+#
+# 🔴 LE RACCOURCI NE SE DÉCLARE PAS ICI, ET CE N'EST PAS UN OUBLI. herdr lie les touches
+# dans `~/.config/herdr/config.toml`, jamais dans le manifeste d'un plugin — un plugin
+# expose une ACTION, l'utilisateur décide de la touche. Le bloc à coller est dans le
+# README, et `scripts/lier-la-touche.sh` le pose pour celui qui ne veut pas le faire à
+# la main.
+#
+# ⚠️ PAS DE [[build]] : rien à construire. Ce plugin est trois scripts shell, et c'est
+# délibéré — la leçon du canvas, dont la page construite peut manquer au paquet et rendre
+# une installation « réussie » inutilisable. Ici il n'y a aucun artefact à perdre.
+
+id = "somtech.vue-du-parc"
+name = "Vue du parc"
+version = "0.1.0"
+description = "La vue du parc Somtech — qui travaille sur quoi — dans un pane herdr, ouverte d'un raccourci."
+min_herdr_version = "0.8.0"
+platforms = ["linux", "macos"]
+
+# Le pane. herdr résout `command` depuis la racine du plugin, mais on passe par bash
+# plutôt que d'appeler node directement : la résolution de `ligne-directe` (poste, dépôt,
+# ou PATH) est un choix qui doit pouvoir se DIRE quand il échoue, pas planter en silence.
+[[panes]]
+id = "vue-du-parc"
+title = "Vue du parc"
+command = ["bash", "scripts/pane.sh"]
+
+# L'action que le raccourci invoque. Elle ne fait qu'ouvrir le pane ci-dessus : herdr
+# n'a pas de champ déclaratif « ouvre ce pane », une action est toujours une commande.
+[[actions]]
+id = "ouvrir"
+title = "Vue du parc"
+description = "Ouvre la vue du parc — qui travaille sur quoi — dans un pane."
+contexts = ["workspace"]
+command = ["bash", "scripts/ouvrir.sh"]
