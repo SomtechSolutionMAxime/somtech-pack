@@ -827,11 +827,24 @@ export const SIGNAUX_DE_LA_LIGNE = [
     // Un epic dont le mandat PROUVÉ et le nom DÉCLARÉ se contredisent. Il faut un agent
     // vivant qui porte le mandat de l’epic : sans lui, `quiPorte` ne descend jamais dans
     // la branche qui mesure l’écart.
+    // 🔴 DEUX EPICS, UN SEUL EN ÉCART — ET C'EST CE QUI REND LE PRÉDICAT ÉPROUVABLE. Avec un
+    // seul epic, `.some` et `.every` sont INDISCERNABLES : le décor ne pouvait pas distinguer
+    // « au moins un epic porte un écart » de « tous en portent un ». Relevé en revue portail
+    // (2026-08-25) : muter `.some` en `.every` survivait au banc de traversée, et n'était
+    // rattrapé que par un AUTRE fichier — une garantie qui tient par accident n'est pas gardée.
+    //
+    // ⚠️ LE SECOND EPIC NE DÉCLARE RIEN : c'est lui qui fait la différence entre les deux
+    // quantificateurs, et son absence rendait l'assertion trop faible sur un chemin correct.
     allumePar: () => ({
       sessionsRefusees: [],
-      epics: [{ code: 'E-20260825-0001', titre: 'un epic', statut: 'in_execution', stories: [] }],
+      epics: [
+        { code: 'E-20260825-0001', titre: 'un epic en écart', statut: 'in_execution', stories: [] },
+        { code: 'E-20260825-0002', titre: 'un epic sans écart', statut: 'in_execution', stories: [] },
+      ],
       agentQuiPorte: { mandat: 'e-20260825-0001', nom: 'un-porteur' },
       nomDeclareSurLEpic: 'quelqu-un-dautre',
+      // Seul le PREMIER epic porte le nom déclaré qui contredit le mandat prouvé.
+      nomDeclareSurLePremierSeulement: true,
     }),
     phrase: (n) =>
       ` ${n} chantier(s) portent au moins une CONTRADICTION entre le mandat lu au lieu et le ` +

@@ -633,7 +633,13 @@ for (const signal of SIGNAUX_DE_LA_LIGNE) {
         code,
         titre: 't',
         statut: 'in_progress',
-        epics: (decor.epics ?? []).map((e) => ({ ...e, nomDeclare: decor.nomDeclareSurLEpic ?? null })),
+        // ⚠️ LE NOM DÉCLARÉ NE SE POSE QUE LÀ OÙ LE DÉCOR LE DEMANDE. Le poser sur TOUS les
+        // epics rendrait `.some` et `.every` indiscernables à nouveau — le décor porte deux
+        // epics précisément pour les départager.
+        epics: (decor.epics ?? []).map((e, i) => ({
+          ...e,
+          nomDeclare: decor.nomDeclareSurLePremierSeulement && i > 0 ? null : decor.nomDeclareSurLEpic ?? null,
+        })),
       }),
     });
 
