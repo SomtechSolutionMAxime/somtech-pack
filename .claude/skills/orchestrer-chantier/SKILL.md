@@ -95,10 +95,11 @@ Ce n'est pas une optimisation, c'est une correction d'un piège :
 **Le lanceur de session ne relaie pas le modèle** — il refuse les drapeaux qu'il ne connaît pas, `--model` compris. Il faut donc **décomposer son geste** : faire naître le worktree, puis lancer l'agent dedans avec son modèle.
 
 ```bash
-npx @somtech-solutions/pack agent naitre e-20260727-0010 \
+NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
   --role chef-equipe \
   --depot <repo-principal> \
-  --coordonnateur <ton-nom-d-agent>
+  --coordonnateur <ton-nom-d-agent>)
+P=$(printf '%s' "$NAISSANCE" | jq -r .pane)   # le pane de l'agent, que tout le reste vise
 ```
 
 C'est la seule voie qui tienne à la fois la règle d'or n°11 — le worktree naît **avant** l'agent — et la déclaration explicite du modèle. Le worktree se retire ensuite à la main (§4f), le lanceur ne le connaissant pas.
@@ -364,10 +365,13 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 # vérifie par le fait qu'il porte ce nom et tourne dans son espace, puis INSCRIT sa naissance
 # — rôle, mandat, coordonnateur, worktree, pane, session — hors du dépôt, et remplit
 # `assigned_agent` sur le mandat au registre. Un refus ne laisse rien derrière lui.
-npx @somtech-solutions/pack agent naitre e-20260727-0010 \
+NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
   --role chef-equipe \
   --depot <repo-principal> \
-  --coordonnateur <ton-nom-d-agent>
+  --coordonnateur <ton-nom-d-agent>)
+
+# Le pane est dans sa sortie JSON : tout ce qui suit — brief, /goal, wait, close — le vise.
+P=$(printf '%s' "$NAISSANCE" | jq -r .pane)
 ```
 
 **Pourquoi ce geste est décomposé** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Voir la section sur la déclaration du modèle.
