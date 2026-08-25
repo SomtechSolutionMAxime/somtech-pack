@@ -65,7 +65,16 @@ const CHAMPS_OBLIGATOIRES = ['nom', 'role', 'mandat', 'espace'];
 /** Ce que `pose_par` porte — le geste qui a inscrit, pour qu'un fait ait toujours un auteur. */
 export const POSE_PAR = 'pack agent naitre';
 
-/** Le suffixe des voisins provisoires — nommé ici parce que la LECTURE doit le reconnaître. */
+/**
+ * Le suffixe des voisins provisoires — employé À L'ÉCRITURE seulement (une seule fois, plus bas).
+ *
+ * ⚠️ LA LECTURE NE LE CONNAÎT PAS, et le commentaire qui vivait ici affirmait l'inverse (« nommé
+ * ici parce que la LECTURE doit le reconnaître »). `lireLesDeclarations` ne le cherche nulle
+ * part : elle ne retient QUE ce qui finit par `.json`. Ce qui rend le provisoire invisible n'est
+ * donc pas ce suffixe-ci, c'est qu'il s'ajoute APRÈS le `.json` du nom final — `…json.somtech-<pid>.tmp`
+ * ne finit plus par `.json`. Le suffixe reste utile (il dit à un humain ce qu'est ce résidu), il
+ * n'est simplement pas un contrat entre les deux moitiés.
+ */
 const SUFFIXE_PROVISOIRE = '.tmp';
 
 /**
