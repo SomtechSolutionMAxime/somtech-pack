@@ -99,7 +99,13 @@ function unServiceDesk({ projets = [], epics = [], tickets = [], applications = 
     if (nom === 'projects') return { projects: projets };
     if (nom === 'applications') return { applications };
     if (nom === 'epics') return { epics: epics.filter((e) => e.project_id === args?.project_id) };
-    return { tickets: tickets.filter((t) => t.epic_id === args?.epic_id) };
+    // ⚠️ LA BORNE `limit` EST HONORÉE, COMME LE SERVICE L'HONORE. Un double qui la reçoit et
+    // rend TOUT est plus généreux que le service : il signale la page pleine ET rend la page
+    // entière, ce qui n'arrive jamais en production. Un double non conforme ne rate pas
+    // seulement un défaut — les gardes bâties dessus finissent par exiger le comportement
+    // fautif. Trouvé en écrivant le banc du plafond, sur ce fichier même.
+    const retenus = tickets.filter((t) => t.epic_id === args?.epic_id);
+    return { tickets: args?.limit ? retenus.slice(0, args.limit) : retenus };
   };
   return { appeler, appels };
 }
@@ -796,6 +802,106 @@ test('LES DEUX SORTIES « non établi » DE `quiPorte` PORTENT LE MÊME VOCABULA
       `« ${quoi} » : l’absence mesurée se dit comme une absence : ${mesure.pourquoi}`
     );
   }
+});
+
+test('UNE PAGE DE STORIES PLEINE NE VAUT PAS « tout lu » — la SECONDE forme de « je n’ai pas tout lu »', async (t) => {
+  // 🔴 TROISIÈME FOIS QUE CE LOT FERME UN CAS EN CROYANT FERMER SA FAMILLE (2026-08-25, passe
+  // de fond). Un epic sans nom propre ne déclare que ce que ses stories déclarent — affirmer
+  // « le registre ne déclare aucun nom » exige donc de les avoir TOUTES lues. On peut n'avoir
+  // pas tout lu de DEUX façons :
+  //
+  //   ① l'appel a JETÉ       → `stories === null`      (fermé au commit 878a986)
+  //   ② la page était PLEINE → `storiesPlafonnees`     (restait OUVERT)
+  //
+  // ⚠️ LA CAUSE EST DANS LE NOM QUE J'AVAIS DONNÉ AU FAIT. La phrase disait « l'appel à ses
+  // stories a échoué » — un MÉCANISME. Nommer le mécanisme fait rater l'autre mécanisme qui
+  // produit le même fait. La question qui décide est « ai-je lu TOUT ce que cet epic
+  // déclare ? », et c'est elle que le code pose désormais.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  // ⚠️ LE DÉCOR REPRODUIT LA PAGE PLEINE PAR LA BORNE RÉELLE DU LECTEUR, pas par un drapeau
+  // posé à la main : `limite: 1` sur deux tickets. Le second — celui qui déclare un nom —
+  // reste hors page, exactement comme sur le service quand un epic dépasse la page.
+  const service = unDecor({
+    tickets: [
+      { id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'lu', status: 'new', assigned_agent: null },
+      { id: 't2', epic_id: 'e1', ticket_id: 'T-2', title: 'hors page', status: 'new', assigned_agent: 'e-99999999-0001' },
+    ],
+  });
+  const recensement = await unRecensement({
+    panes: [unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: lieu })],
+    roleDuLieu,
+    nomsConnus: nomsLus([['w1:p1', 'kamouraska', undefined]]),
+  });
+  const vue = await laVueDuParc({
+    recensement,
+    lireChantier: lecteurDeChantier({ appeler: service.appeler, limite: 1 }),
+  });
+
+  const e = lEpic(vue);
+  assert.equal(e.storiesPlafonnees, true, 'le décor doit produire une PAGE PLEINE — sinon ce banc ne mesure rien');
+  assert.equal(e.stories.length, 1, 'et une seule story vue : la seconde est hors page');
+  assert.equal(
+    e.agent.declarationMesuree,
+    false,
+    'une page pleine ne vaut pas « tout lu » — le fait doit voyager'
+  );
+  assert.ok(
+    !e.agent.pourquoi.includes('le registre ne déclare aucun nom'),
+    `la ligne AFFIRME une absence alors qu’un nom est déclaré hors page : ${e.agent.pourquoi}`
+  );
+  assert.ok(
+    e.agent.pourquoi.includes('EN ENTIER'),
+    `elle doit dire que la lecture est INCOMPLÈTE, pas qu’elle a échoué : ${e.agent.pourquoi}`
+  );
+});
+
+test('LA PHRASE DU TROU NE NOMME AUCUN MÉCANISME — c’est ce qui la rend vraie des DEUX formes', async (t) => {
+  // 🔴 LA GARDE QUI FERME LE DÉFAUT *POSSIBLE*, pas seulement celui qu'on a vu. Une troisième
+  // façon de n'avoir pas tout lu apparaîtra un jour (un filtre du service qui cesse d'être
+  // honoré, une page suivante jamais demandée). Si la phrase nomme un mécanisme, elle
+  // redeviendra fausse ce jour-là — en silence, comme elle l'a été pour la page pleine.
+  //
+  // ⚠️ ON ÉPINGLE DONC CE QU'ELLE NE DOIT PAS DIRE : aucun mécanisme nommé. Le diff qui
+  // ajouterait « l'appel a échoué » rougit, et son auteur devra expliquer pourquoi il restreint
+  // une phrase qui vaut pour toute la famille.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  // Les DEUX formes, atteintes par deux décors, et la MÊME phrase attendue des deux.
+  const service = unDecor({
+    tickets: [
+      { id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'lu', status: 'new', assigned_agent: null },
+      { id: 't2', epic_id: 'e1', ticket_id: 'T-2', title: 'hors page', status: 'new', assigned_agent: 'x' },
+    ],
+  });
+  const recensement = await unRecensement({
+    panes: [unPaneDAgent({ pane_id: 'w1:p1', foreground_cwd: lieu })],
+    roleDuLieu,
+    nomsConnus: nomsLus([['w1:p1', 'kamouraska', undefined]]),
+  });
+
+  const pagePleine = await laVueDuParc({
+    recensement,
+    lireChantier: lecteurDeChantier({ appeler: service.appeler, limite: 1 }),
+  });
+  const appelQuiJette = async (nom, args) => {
+    if (nom === 'tickets') throw new Error('le service a refusé');
+    return service.appeler(nom, args);
+  };
+  const aJete = await laVueDuParc({ recensement, lireChantier: lecteurDeChantier({ appeler: appelQuiJette }) });
+
+  const phrases = [lEpic(pagePleine).agent.pourquoi, lEpic(aJete).agent.pourquoi];
+  for (const p of phrases) {
+    for (const mecanisme of ['a échoué', 'a jeté', 'a refusé', 'plafonn', 'page pleine']) {
+      assert.ok(!p.includes(mecanisme), `la phrase nomme le mécanisme « ${mecanisme} » : ${p}`);
+    }
+    assert.ok(p.includes('EN ENTIER'), `elle doit dire ce qui MANQUE : ${p}`);
+  }
+  assert.equal(phrases[0], phrases[1], 'les deux formes du même fait se disent avec les MÊMES mots');
 });
 
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {

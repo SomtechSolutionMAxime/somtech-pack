@@ -488,10 +488,13 @@ export function quiPorte(code, parMandat, parNom, declaration = {}) {
 
   // ⚠️ CE QUE LA PHRASE DIT DU REGISTRE DÉPEND DE CE QU'ON A PU EN LIRE — écrit UNE fois, pour
   // les deux sorties qui suivent. Recopié, il serait corrigé sur l'une et pas sur l'autre.
+  // ⚠️ ELLE NE NOMME PLUS LE MÉCANISME, ELLE NOMME CE QUI MANQUE. « l'appel a échoué » était
+  // vrai d'UNE des deux façons de n'avoir pas tout lu, et cette précision-là a fait rater
+  // l'autre : une page pleine ne « rate » pas, elle s'arrête — et le résultat est le même.
   const duRegistre = declarationMesuree
     ? 'et le registre ne déclare aucun nom sur ce travail'
-    : 'et ce que le registre déclare n’a PAS pu être lu (l’appel à ses stories a échoué) — ' +
-      'ceci n’est donc PAS « personne n’y est déclaré »';
+    : 'et ce que le registre déclare n’a PAS pu être lu EN ENTIER — ceci n’est donc PAS ' +
+      '« personne n’y est déclaré »';
 
   const pistes = parNom.get(code);
   if (pistes?.length) {
@@ -1471,9 +1474,25 @@ export async function laVueDuParc({
           agent: quiPorte(codeEpic, parMandat, parNom, {
             nomDeclare: e?.nomDeclare ?? null,
             nomsDesStories,
-            // 🔴 LE FAIT QUI MANQUAIT. Un epic sans nom propre dont les stories n'ont pas pu
-            // être lues n'a RIEN de mesurable côté registre : le dire « vide » serait combler.
-            declarationMesuree: stories !== null || Boolean(e?.nomDeclare),
+            // 🔴 LE FAIT QUI MANQUAIT, ET IL A DEUX FORMES — j'en avais fermé UNE.
+            //
+            // Un epic sans nom propre ne déclare que ce que ses stories déclarent. Dire « le
+            // registre ne déclare aucun nom » exige donc de les avoir **TOUTES** lues. Or on
+            // peut n'avoir pas tout lu de DEUX façons, et elles n'ont rien en commun à part
+            // leur conséquence :
+            //
+            //   ① l'appel a JETÉ            → `stories === null`      (fermé au commit 878a986)
+            //   ② la page était PLEINE      → `storiesPlafonnees`     (restait OUVERT)
+            //
+            // ⚠️ ET C'EST LA TROISIÈME FOIS QUE CE LOT FERME UN CAS EN CROYANT FERMER SA
+            // FAMILLE. Le correctif de ① nommait « l'appel à ses stories a échoué » — un
+            // MÉCANISME. Nommer le mécanisme fait rater l'autre mécanisme qui produit le même
+            // fait. La question qui décide n'est pas « comment ça a raté », c'est **« ai-je lu
+            // TOUT ce que cet epic déclare ? »** — et c'est elle qu'on écrit ici.
+            //
+            // ⚠️ `storiesPlafonnees` EST DÉJÀ MESURÉ ET DÉJÀ RENDU par le lecteur (c'est un
+            // signal du manifeste) : on le LIT, on n'ajoute aucune mesure ni aucun appel.
+            declarationMesuree: Boolean(e?.nomDeclare) || (stories !== null && !e?.storiesPlafonnees),
           }),
           stories:
             stories === null
