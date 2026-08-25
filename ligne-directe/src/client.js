@@ -51,15 +51,23 @@ export const BORNE_PAR_DEFAUT = 30_000;
  * appels partent de front, bornés à 32 en vol (`src/plafond.js`, et le chiffre y est mesuré
  * contre le vrai service).
  *
- * **Remesuré en tapant la commande, poste réel, 2026-08-25** — parc de 13 mandats codés, 91
- * epics, 261 stories, huit essais : **11,8 à 13,7 s**, contre 60,7 à 84,8 s le même jour avec
- * le code d'avant. Et sur ces ~12 s, **le recensement du poste en prend 8,2 à 10,1** : le
- * ServiceDesk n'est plus le poste dominant, il vaut 2,5 à 3,9 s.
+ * **Remesuré en tapant la commande, poste réel, 2026-08-25**, l'avant et l'après ENTRELACÉS tour
+ * par tour pour qu'ils portent le même parc au même instant — 18 lignes d'orchestrateur dont 14
+ * codées (13 codes distincts), 91 lignes d'epic (86 epics distincts), 265 lignes de story :
+ *
+ *     tour        1        2        3        4        5
+ *     avant   89,38 s  65,91 s  68,08 s  75,86 s  65,77 s
+ *     après   15,55 s  14,30 s  14,87 s  14,97 s  13,08 s
+ *
+ * On retient **15,55 s**, le pire cas — une borne ne se pose pas sur le meilleur jour. Et sur
+ * ces ~14 s, **le recensement du poste en prend 8,2 à 12,2** : le ServiceDesk n'est plus le
+ * poste dominant.
  *
  * 🔴 ALORS 300 s NE GARDAIENT PLUS RIEN, et c'est l'argument écrit six lignes plus haut au sujet
  * de `BORNE_PAR_DEFAUT` : une borne trop lâche fait attendre cinq minutes le jour où un geste
- * pend VRAIMENT. On l'a donc RAMENÉE à 60 s — quatre fois et demie le coût mesuré, deux fois la
- * marge que l'épingle du banc exige, et cinq fois moins d'attente devant un vrai blocage.
+ * pend VRAIMENT. On l'a donc RAMENÉE à 60 s — près de quatre fois le coût mesuré (15,55 s),
+ * donc au-dessus du 2× que l'épingle du banc exige, et cinq fois moins d'attente devant un vrai
+ * blocage.
  *
  * ⚠️ ET LA CHAÎNE A ROUGI EN CHEMIN, comme elle devait. Baisser cette valeur a fait rougir
  * l'épingle de `tests/le-geste-vue-repond-par-le-socket.test.js` et l'essai qui exigeait que la

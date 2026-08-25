@@ -118,7 +118,8 @@ test('le geste « vue » a SA borne, et elle est plus longue que celle des geste
   // 🔴 LE CHIFFRE A BAISSÉ AVEC LE COÛT, ET C'EST LE SENS DE LA CHAÎNE, PAS SON CONTOURNEMENT.
   // Il exigeait 67 000 ms — le coût du geste quand la jointure se faisait en 91 appels
   // SÉQUENTIELS. `E-20260824-0011` a supprimé ce coût (appels de front, bornés à 32 en vol) :
-  // remesuré en tapant la commande le 2026-08-25, huit essais, **11,8 à 13,7 s**. Garder 67 000
+  // remesuré en tapant la commande le 2026-08-25, cinq tours entrelacés, **13,1 à 15,6 s** (voir
+  // `VUE_A_COUTE_MS` ci-dessous pour la série complète et le parc). Garder 67 000
   // aurait fait exiger d'une borne qu'elle couvre un coût qui n'existe plus.
   assert.ok(
     borneDuGeste(GESTE_DE_LA_VUE) >= VUE_A_COUTE_MS,
@@ -205,19 +206,29 @@ test('UN GESTE PLUS LONG QUE LA BORNE ORDINAIRE EST RENDU — par le socket, com
  * haute n'est atteinte que par un veilleur VIVANT et OCCUPÉ — c'est tout ce qu'elle autorise.
  */
 // 🔴 REMESURÉ LE 2026-08-25, APRÈS `E-20260824-0011` — et le chiffre a été divisé par près de
-// sept. Huit essais en tapant la commande sur le poste réel, veilleur isolé, parc de 13 mandats
-// codés / 91 epics / 261 stories : 11,84 · 12,48 · 12,49 · 12,83 · 12,87 · 13,13 · 13,51 ·
-// **13,71** s. On retient le plus grand, comme la fois d'avant — une borne ne se pose pas sur
-// le meilleur jour.
+// cinq. La commande tapée sur le poste réel, l'avant et l'après ENTRELACÉS tour par tour pour
+// qu'ils portent le même parc au même instant :
+//
+//     tour        1        2        3        4        5
+//     avant   89,38 s  65,91 s  68,08 s  75,86 s  65,77 s
+//     après   15,55 s  14,30 s  14,87 s  14,97 s  13,08 s
+//
+// On retient **15,55 s**, le plus grand, comme la fois d'avant — une borne ne se pose pas sur le
+// meilleur jour.
+//
+// ⚠️ LE PARC, RECOMPTÉ CONTRE SON UNITÉ, parce qu'un chiffre juste mal étiqueté se fait
+// CONFIRMER là où un chiffre faux se fait attraper : 18 lignes d'orchestrateur, dont 14 portent
+// un code de chantier pour **13 codes distincts** · 91 lignes d'epic pour **86 epics distincts**
+// · 265 lignes de story.
 //
 // ⚠️ ET LA BAISSE N'EST PAS UN RÉTRÉCISSEMENT DE LA MESURE. Le fichier d'à côté met en garde :
 // « le parc a grandi, il faut RELEVER LA BORNE, pas rétrécir la mesure ». Ici c'est le COÛT qui
-// a baissé, mesuré en tapant la commande le même jour que sa baseline (60,7 à 84,8 s avec le
-// code d'avant, sur le MÊME parc et le MÊME poste). Le rapport des deux est le lot.
+// a baissé — et l'entrelacement est ce qui le prouve : les deux chiffres de chaque tour ont été
+// pris à une minute d'intervalle, sur le même parc et le même poste.
 //
-// ⚠️ ET CE QUI DOMINE CES ~12 s N'EST PLUS LE SERVICEDESK : le recensement du poste en prend
-// 8,2 à 10,1. Une future baisse de ce chiffre ne viendra pas d'un plafond plus haut.
-const VUE_A_COUTE_MS = 13_710;
+// ⚠️ ET CE QUI DOMINE CES ~14 s N'EST PLUS LE SERVICEDESK : le recensement du poste en prend
+// 8,2 à 12,2. Une future baisse de ce chiffre ne viendra pas d'un plafond plus haut.
+const VUE_A_COUTE_MS = 15_550;
 const VUE_MESUREE_LE = '2026-08-25';
 
 /**
@@ -265,10 +276,10 @@ const VUE_MESUREE_LE = '2026-08-25';
 // 🔴 ELLE A BAISSÉ DE 300 s À 60 s, ET L'ÉPINGLE A ROUGI POUR LE DIRE — c'est exactement ce que
 // la chaîne décrite ci-dessus était censée faire, dans l'autre sens.
 //
-// 300 s ont été posées le 2026-08-24 sur un geste qui coûtait 91 s. Le geste en coûte 13,7 :
+// 300 s ont été posées le 2026-08-24 sur un geste qui coûtait 91 s. Le geste en coûte 15,55 :
 // une borne de cinq minutes ne garde plus rien, et l'argument est déjà écrit dans
 // `src/client.js` au sujet de `BORNE_PAR_DEFAUT` — trop lâche, elle fait attendre cinq minutes
-// le jour où un geste pend VRAIMENT. 60 s tiennent 4,4× le coût mesuré, donc largement le 2×
+// le jour où un geste pend VRAIMENT. 60 s tiennent 3,9× le coût mesuré, donc au-dessus du 2×
 // que l'essai ci-dessous exige, et disent un vrai blocage cinq fois plus vite.
 const BORNE_DE_LA_VUE_EN_PRODUCTION = 60_000;
 

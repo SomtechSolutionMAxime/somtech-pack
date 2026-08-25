@@ -7,7 +7,16 @@
 // Mesuré appel par appel le 2026-08-24, puis remesuré le 2026-08-25 : la vue coûtait ~90 s, et
 // **86 % de ce temps était la jointure ServiceDesk faite en appels SÉQUENTIELS** — une liste
 // par mandat, un `epics/list` par mandat, **un `tickets/list` par epic**. Sur le parc du
-// 2026-08-25 (13 mandats codés, 91 epics), cela fait **118 appels à la queue leu leu**.
+// 2026-08-25, cela fait **120 appels à la queue leu leu** : 1 pour la liste des applications,
+// puis pour chacune des **14 lignes d'orchestrateur portant un code** une liste de famille et un
+// `epics/list` (28), puis un `tickets/list` pour chacune des **91 lignes d'epic** rendues.
+//
+// ⚠️ LES UNITÉS SONT DITES PARCE QU'ELLES NE COÏNCIDENT PAS, et un chiffre juste mal étiqueté se
+// fait CONFIRMER là où un chiffre faux se fait attraper. Ces 14 lignes portent **13 codes de
+// chantier distincts** (un chantier est tenu par deux orchestrateurs) et ces 91 lignes d'epic
+// portent **86 epics distincts**. C'est bien le nombre de LIGNES qui décide du nombre d'appels,
+// pas le nombre d'objets distincts — sauf pour le chantier à deux porteurs, que ce lot fait
+// justement lire une seule fois.
 //
 // 🔴 AUCUN DE CES APPELS N'EST LENT. Médiane 624-778 ms, max 976 ms, zéro délai dépassé. C'est
 // le NOMBRE qui coûte, et il croît LINÉAIREMENT avec le parc : un parc qui double, deux minutes.
@@ -55,17 +64,36 @@
 // un huitième de la capacité mesurée laissé aux autres, « et ça suffira ». Les deux premières
 // raisons étaient mesurées. **La troisième était une supposition, et elle était fausse.**
 //
-// Mesuré en tapant la commande sur le poste réel, le 2026-08-25 (parc : 13 mandats codés, 91
-// epics, 261 stories ; huit essais par plafond) :
+// Mesuré en tapant la commande sur le poste réel, le 2026-08-25. **Le parc, recompté contre son
+// unité** : 18 lignes d'orchestrateur, dont 14 portent un code de chantier pour 13 codes
+// distincts · 91 lignes d'epic pour 86 epics distincts · 265 lignes de story.
 //
 //     plafond    la commande rend en        critère du lot (< 15 s)
 //        8       16,0 · 16,2 · 16,4 · 17,6        NON TENU
 //       16       12,8 → 15,4 (8 essais)           deux essais sur huit AU-DESSUS
-//       32       11,8 → 13,7 (8 essais)           tenu, pire cas 13,7 s
+//       32       11,8 → 13,7 (8 essais)           tenu ce jour-là
 //
 // **C'est le résultat qui a forcé la révision, pas la sonde** — et l'écrire compte plus que de
 // reconstruire après coup une justification qui aurait précédé. Une borne se pose avant le
 // résultat ; celle-ci a été reposée après, et voici le compte-rendu.
+//
+// 🔴 ET CES TROIS SÉRIES ONT ÉTÉ PRISES SUR UN POSTE QUE JE SALISSAIS MOI-MÊME. Chaque socle de
+// mesure isolé faisait naître un veilleur qui ne se couchait jamais : **six tournaient en même
+// temps** que je chronométrais. Une passe de revue les a trouvés. Refaite sur un poste sain, et
+// surtout en ENTRELAÇANT l'avant et l'après tour par tour — pour que les deux chiffres portent
+// le même parc au même instant, ce que les séries ci-dessus ne garantissaient pas :
+//
+//     tour        1        2        3        4        5
+//     avant   89,38 s  65,91 s  68,08 s  75,86 s  65,77 s
+//     après   15,55 s  14,30 s  14,87 s  14,97 s  13,08 s
+//
+// **Le gain est de 4,5× à 5,8×.** Mais le pire cas est à 15,55 s : le critère « moins de 15 s »
+// n'est PAS tenu de façon fiable, et il faut le dire plutôt que de citer la meilleure série.
+//
+// ⚠️ CE QUI RESTE N'EST PLUS À NOUS. Le recensement du poste — qui n'est pas ce lot — prend
+// **8,2 à 12,2 s** de ces ~14 s : les trois quarts. Aucun plafond ne fera descendre la vue sous
+// ce plancher-là, et monter à 64 prendrait la moitié de la capacité mesurée du service partagé
+// pour gagner une seconde sur un geste qui en coûtera dix quoi qu'il arrive.
 //
 // Ce que la sonde, elle, dit de 32 — et c'est ce qui rend le chiffre ADMISSIBLE, pas le fait
 // qu'il tienne le critère :
@@ -77,11 +105,8 @@
 //      ~2,5 à 3,9 s sur les ~12 s de la commande.
 //   4. Zéro échec à TOUS les N mesurés, 1 à 128.
 //
-// ⚠️ ET CE QUI DOMINE MAINTENANT N'EST PLUS LE SERVICEDESK. Sur les 11,8 à 13,7 s de la
-// commande, **le recensement du poste en prend 8,2 à 10,1** — soit les trois quarts. Aucun
-// plafond ne fera descendre la vue sous ~11 s : le prochain gain de vitesse est là, et il est
-// HORS de ce lot. Monter à 64 prendrait la moitié de la capacité du service pour gagner une
-// seconde sur un geste qui en coûtera onze quoi qu'il arrive.
+// ⚠️ CE QUI DOMINE MAINTENANT N'EST PLUS LE SERVICEDESK — chiffres détaillés plus bas, avec la
+// campagne entrelacée qui les a établis.
 //
 // 🔴 CE PLAFOND SE PÉRIMERA, COMME LA BORNE QU'IL REMPLACE. Le jour où le service change de
 // forme, la sonde est à refaire — elle vit dans le lot, pas dans une intuition.
