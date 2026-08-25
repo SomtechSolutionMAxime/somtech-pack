@@ -363,6 +363,28 @@ test('LE BATTEMENT S’ARRÊTE ET EFFACE — il ne laisse pas sa dernière ligne
   assert.equal(sortie.ecrits.length, fige, 'le battement continue après la fin — il tiendrait le processus');
 });
 
+test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle cesse de l’être en silence', () => {
+  // 🔴 UNE MUTATION SURVIVANTE QUI N’EN EST PAS UNE, ET LE DIRE VAUT MIEUX QUE DE LA MASQUER.
+  // Remplacer le comptage en points de code par `.length` laisse la suite verte — non pas
+  // parce qu’un banc manque, mais parce que **le texte du jour est entièrement dans le BMP** :
+  // les deux comptes rendent 116. Verdict : mutation ÉQUIVALENTE, pas survivante.
+  //
+  // ⚠️ MAIS L’ÉQUIVALENCE REPOSE SUR UN FAIT, PAS SUR UNE PROPRIÉTÉ. Le jour où quelqu’un met un
+  // emoji dans ce message — un ✅, un 🔴, exactement ce que ce dépôt met partout ailleurs — la
+  // mutation redevient mordante, et RIEN ne le dirait. Une équivalence non gardée est une
+  // survivante en attente.
+  //
+  // Ce banc ne garde donc pas l’équivalence : il garde CE QUI LA REND VRAIE.
+  const message = texteDeProgression(21, 3);
+  assert.equal(
+    message.length,
+    [...message].length,
+    'le message de progression est sorti du BMP : la borne DOIT désormais compter en points de ' +
+      'code, et la mutation `.length` cesse d’être équivalente — vérifiez que le banc de la ' +
+      'largeur d’affichage l’attrape encore'
+  );
+});
+
 test('LA BORNE COMPTE LA LARGEUR D’AFFICHAGE, PAS LES UNITÉS UTF-16', () => {
   // 🔴 CE BANC EXISTE PARCE QUE MA PROSE MENTAIT, et la mutation l'a prouvé. J'avais écrit que
   // « la roue et les accents seraient comptés faux par `.length` » : **c'est faux** — ⠋ (U+280B)
