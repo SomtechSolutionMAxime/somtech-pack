@@ -300,7 +300,12 @@ export function designationDe(agent) {
  * c'est une mesure manquée (`agent list` a déjà été mesuré à 83 panes sur 227).
  */
 export function normaliserLeParc({ panes = [], agentsHerdr = null } = {}) {
-  const cle = (p) => `${p?.herdr_socket ?? ''} ${p?.pane_id}`;
+  // ⚠️ LE SÉPARATEUR EST ÉCRIT ÉCHAPPÉ, ET C’EST LA MÊME VALEUR — un NUL. L’octet BRUT était
+  // dans le fichier : `file` rendait `data` pour ce module (le seul des 23 de `src/` et `bin/`)
+  // et `grep -n export` dessus rendait ZÉRO ligne. Toute revue qui relève des formes par `grep`
+  // sautait donc EN SILENCE le module qui porte la garde. On garde le NUL — aucun chemin de
+  // socket ni identifiant de pane ne peut en contenir un — mais on l’écrit lisible.
+  const cle = (p) => `${p?.herdr_socket ?? ''}\u0000${p?.pane_id}`;
   const nomsConnus = agentsHerdr
     ? { mesure: 'lue', noms: new Map(agentsHerdr.map((a) => [cle(a), a?.name ?? null])) }
     : { mesure: 'refusée', raison: 'le registre des agents ne m’a pas été donné' };
