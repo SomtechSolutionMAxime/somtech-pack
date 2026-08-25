@@ -122,6 +122,12 @@ test('③ garde qui PEND : refus rendu par le délai, pas par l abandon de l hô
   const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { timeout: 15000 });
   assert.equal(d.permissionDecision, 'deny');
   assert.ok(d.ms < 10000, `le refus a mis ${Math.round(d.ms)} ms : le délai ne mord pas`);
+  // ⚠️ ET LE REFUS DOIT NOMMER SA CAUSE. Sans cette assertion, retirer le refus du délai est
+  // INDOLORE : la sortie devient vide, le shell rend son refus de panne, et le verdict reste
+  // « deny » — mesuré. L agent lirait alors « elle a échoué » là où elle PEND, et chercherait
+  // un défaut qui n existe pas.
+  assert.match(d.permissionDecisionReason, /delai|délai/i,
+    'un refus de délai qui se fait passer pour un refus de panne envoie chercher au mauvais endroit');
 });
 
 // ═════════════ ④ un verdict SANS décision — sortie non vide, code 0, et rien à décider
@@ -212,4 +218,57 @@ test('⑨ l enveloppe ne refuse pas un Write par elle-même — elle transmet le
     { requete: { cwd: '/x', tool_name: 'Write', tool_input: { file_path: '/x/CONTEXTE.md' } } });
   assert.equal(d.permissionDecision, 'allow');
   assert.equal(d.permissionDecisionReason, 'ligne ouverte — je me retire');
+});
+
+// ═════════════ ⑩ le DÉLAI lui-même — la borne, et le fait qu il ARRÊTE
+
+test('⑩ une valeur d environnement démesurée NE DÉSARME PAS le délai', () => {
+  // 🔴 TROUVÉ PAR LA PASSE PORTAIL, ET LE TROU ÉTAIT RÉEL. Le bornage était écrit, commenté
+  // — et gardé par RIEN : le retirer laissait le banc entièrement vert. Il n était « tué »
+  // que par la table des empreintes de hooks, c est-à-dire par une garde d IDENTITÉ, qui
+  // disparaît dès qu on met la table à jour. Une garde d identité ne prouve jamais une
+  // fonction.
+  //
+  // Ce que ce contrôle empêche : `SOMTECH_GARDE_OUVERTURE_DELAI_MS=99999999` dans un
+  // environnement de session, et le SEUL mécanisme qui ferme « elle pend » et « elle
+  // boucle » ne mord plus — sans qu aucun test ne rougisse.
+  const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { delai: '99999999', timeout: 20000 });
+  assert.equal(d.permissionDecision, 'deny');
+  assert.ok(d.ms < 15000,
+    `le refus a mis ${Math.round(d.ms)} ms : la valeur hors bornes a été appliquée telle quelle, `
+    + 'donc le délai est désarmable depuis l environnement');
+});
+
+test('⑩ bis une valeur trop PETITE ne tue pas une garde saine — la borne basse sert aussi', () => {
+  // La borne a deux côtés, et le second n est pas décoratif : un délai de 50 ms couperait
+  // une garde parfaitement saine (la vraie met ~60 à 100 ms rien qu à démarrer), et TOUT
+  // serait refusé — une garde qui refuse tout finit par être désactivée à la main.
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"ligne ouverte"}}));\n'), { delai: '50' });
+  assert.equal(d.permissionDecision, 'allow',
+    'une valeur sous la borne basse a été appliquée : la garde saine a été tuée avant de répondre');
+});
+
+test('⑩ ter la garde qui boucle est ARRÊTÉE, pas seulement dépassée', () => {
+  // ⚠️ Mesuré : sans le `kill`, ③ et ⑥ restent VERTS — le refus arrive quand même, parce
+  // que le lanceur sort de son côté. Le verdict est donc juste et le processus survit :
+  // une garde qui boucle continuerait à brûler un cœur, à CHAQUE appel d outil, sans que
+  // rien ne le dise. Le refus dit « il vient d etre arrete » ; ce contrôle l établit.
+  const home = posteAvecGarde('while (true) {}\n');
+  const marque = join(home, '.somtech', 'naissance-representant', 'hooks', 'garde-ouverture-ligne.js');
+  const d = verdict(home, { timeout: 15000 });
+  assert.equal(d.permissionDecision, 'deny');
+
+  // La marque est le CHEMIN du double, unique à ce test : aucun autre processus du poste ne
+  // peut le porter. On sonde plutôt qu on ne lit une fois — un SIGKILL n est pas instantané.
+  let vivants = 'inconnu';
+  for (let i = 0; i < 20; i += 1) {
+    vivants = execFileSync('/bin/sh', ['-c', `pgrep -f ${marque} | wc -l`], { encoding: 'utf8' }).trim();
+    if (vivants === '0') break;
+    execFileSync('/bin/sh', ['-c', 'sleep 0.1']);
+  }
+  assert.equal(vivants, '0',
+    'la garde qui boucle a survécu au refus : elle brûlera un cœur jusqu à la fin de la session, '
+    + 'et il y en aura une de plus à chaque appel d outil');
 });
