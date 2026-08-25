@@ -1421,6 +1421,64 @@ test('LA PISTE SURVIT AU RENDU DU PANNEAU — sous DÉCLARÉ comme sous NON ÉTA
   }
 });
 
+test('L’ÉCART SE MESURE CONTRE TOUS LES PORTEURS, PAS CONTRE LE PREMIER — deux agents portent le même mandat', () => {
+  // 🔴 ONZIÈME DÉFAUT DE CE LOT, ET LE DERNIER TOUR DE REVUE L'A TROUVÉ AVANT DE MOURIR SUR UNE
+  // LIMITE D'API — sa mutation était encore dans l'arbre, je l'ai mesurée moi-même : elle
+  // SURVIVAIT. Remplacer `agents.some((a) => memeNom(a.nom, d.nom))` par une comparaison au
+  // SEUL premier porteur laissait les 1095 essais VERTS.
+  //
+  // ⚠️ CE N'EST PAS UN CAS THÉORIQUE : le module le mesure lui-même quelques lignes plus haut —
+  // « Deux agents peuvent porter le même mandat — mesuré : `w8W:p1` et `w8W:p2` portent tous
+  // deux `p-20260820-0001` ». `quiPorte` rend donc une LISTE de porteurs, délibérément.
+  //
+  // ⚠️ CE QUE ÇA COÛTERAIT : un ÉCART affiché à tort. Le registre déclare le SECOND porteur ;
+  // en ne comparant que le premier, la vue annoncerait au dirigeant une contradiction entre le
+  // terrain et le registre là où les deux s'accordent. Un faux écart est pire qu'un écart tu :
+  // il envoie arbitrer un désaccord qui n'existe pas.
+  const parMandat = new Map([
+    [
+      'E-1',
+      [
+        { session: 's', pane: 'w8W:p1', nom: { mesure: 'lu', valeur: 'premier-porteur' }, mandat: 'e-1' },
+        { session: 's', pane: 'w8W:p2', nom: { mesure: 'lu', valeur: 'second-porteur' }, mandat: 'e-1' },
+      ],
+    ],
+  ]);
+
+  // ── Le registre déclare le SECOND porteur : les deux sources s'accordent, aucun écart.
+  const accord = quiPorte('E-1', parMandat, new Map(), { nomDeclare: 'second-porteur' });
+  assert.equal(accord.mesure, 'lue', 'le rattachement reste PROUVÉ');
+  assert.deepEqual(
+    accord.agents.map((a) => a.nom),
+    ['premier-porteur', 'second-porteur'],
+    'les DEUX porteurs sont rendus — c’est ce que `quiPorte` promet'
+  );
+  assert.equal(
+    accord.ecart,
+    undefined,
+    'AUCUN écart ne doit être annoncé : le registre déclare l’un des porteurs mesurés — ' +
+      'un faux écart envoie le dirigeant arbitrer un désaccord qui n’existe pas'
+  );
+
+  // ── Contrôle positif, et il est la moitié qui compte : un nom qui n’est AUCUN des deux
+  // porteurs doit toujours produire l’écart. Sans lui, ce banc serait vert sur un code qui
+  // n’annoncerait plus jamais d’écart du tout.
+  const desaccord = quiPorte('E-1', parMandat, new Map(), { nomDeclare: 'quelqu-un-dautre' });
+  assert.deepEqual(
+    desaccord.ecart?.declares?.map((d) => d.nom),
+    ['quelqu-un-dautre'],
+    'un nom étranger aux porteurs doit TOUJOURS produire l’écart'
+  );
+
+  // ── Et le premier porteur aussi, évidemment : la garde doit valoir des DEUX côtés de la
+  // liste, sinon elle ne ferme qu’une moitié de ce qu’elle prétend fermer.
+  assert.equal(
+    quiPorte('E-1', parMandat, new Map(), { nomDeclare: 'premier-porteur' }).ecart,
+    undefined,
+    'le PREMIER porteur déclaré ne doit pas produire d’écart non plus'
+  );
+});
+
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
   // ⚠️ DEUX SURFACES, DEUX RENDUS, ET C'EST DÉLIBÉRÉ (la colonne du TUI tronque). Ce qui ne
   // doit PAS diverger, c'est le MOT QUI DÉCIDE : le jour où l'un dirait « DÉCLARÉ » et l'autre
