@@ -82,9 +82,9 @@ export function nonPrisDe({ attribution, statut, niveau }) {
       mesure: 'lue',
       nonPris: false,
       source: 'déclarée',
-      pourquoi:
-        'aucun agent vivant ne le porte à un lieu, mais le registre déclare un nom sur ce ' +
-        'travail (' + PHRASE_DU_DECLARE + ')',
+      // ⚠️ SANS LA PHRASE LONGUE : le bloc « source » du panneau la dit juste au-dessus, et
+      // trois répétitions dans 28 colonnes chassent le reste de l'écran.
+      pourquoi: 'aucun agent vivant ne le porte à un lieu, mais le registre déclare un nom sur ce travail',
     };
   }
   const ferme = estFerme(statut, niveau);
@@ -558,7 +558,7 @@ export function detailDe(ligne) {
     l.push(`chantier: ${o?.chantier?.titre ?? MOT_NON_ETABLI}`);
     l.push(`statut  : ${e?.statut ?? MOT_NON_ETABLI} (affirmé)`);
     l.push('');
-    l.push(...envelopper(`porteur : ${rendreAttribution(e?.agent)}`, 28));
+    l.push(...envelopper(`porteur : ${suffixeDuRattachement(e?.agent)}`, 28));
     l.push(...lignesDeLaSource(e?.agent));
     l.push('');
     l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));
@@ -575,7 +575,7 @@ export function detailDe(ligne) {
   l.push(`epic    : ${e?.titre ?? MOT_NON_ETABLI}`);
   l.push(`statut  : ${s?.statut ?? MOT_NON_ETABLI} (affirmé)`);
   l.push('');
-  l.push(...envelopper(`porteur : ${rendreAttribution(s?.agent)}`, 28));
+  l.push(...envelopper(`porteur : ${suffixeDuRattachement(s?.agent)}`, 28));
   l.push(...lignesDeLaSource(s?.agent));
   l.push('');
   l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));

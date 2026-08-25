@@ -409,7 +409,16 @@ test('LE FILTRE « non pris » NE RAPPELLE PLUS UN TRAVAIL QUE LE REGISTRE ATTRI
   });
   assert.equal(declare.nonPris, false, 'un travail déclaré n’est pas « non pris »');
   assert.equal(declare.source, 'déclarée', 'et la SOURCE voyage — « pris » ne veut pas dire la même chose des deux côtés');
-  assert.ok(declare.pourquoi.includes('jamais mesuré'), `la raison dit ce qui manque : ${declare.pourquoi}`);
+  // ⚠️ LA RAISON DIT LES DEUX MOITIÉS : ce qui MANQUE (aucun lieu ne le prouve) et ce qui
+  // EXISTE (le registre le déclare). N'en dire qu'une ferait lire soit un refus, soit un fait.
+  assert.ok(
+    declare.pourquoi.includes('aucun agent vivant ne le porte à un lieu'),
+    `la raison doit dire ce qui MANQUE : ${declare.pourquoi}`
+  );
+  assert.ok(
+    declare.pourquoi.includes('le registre déclare un nom'),
+    `et ce qui EXISTE : ${declare.pourquoi}`
+  );
 
   const prouve = nonPrisDe({
     attribution: { mesure: 'lue', agents: [{ nom: 'kamouraska', pane: 'w1:p1' }] },
