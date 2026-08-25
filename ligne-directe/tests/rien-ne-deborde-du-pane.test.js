@@ -230,9 +230,23 @@ test('L’ÉCRAN GARDE SA HAUTEUR — autant de lignes que le pane, ni plus ni m
   const etat = etatInitial();
   const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
 
-  for (const hauteur of [3, 12, 24, 77]) {
+  // 🔴 CE BANC BALAYAIT `[3, 12, 24, 77]`, ET C’EST EXACTEMENT CE QUI A LAISSÉ PASSER LE DÉFAUT.
+  // Son jumeau sur la LARGEUR balaie 1 à 200 en continu, avec un commentaire qui explique
+  // pourquoi — « la largeur 1 est incluse exprès : c’est la seule qui ne pardonne aucune erreur
+  // d’arrondi ». Je n’ai pas appliqué la même discipline à la hauteur, et la borne basse (0, 1,
+  // 2) n’était donc jamais éprouvée pour l’EXACTITUDE DU COMPTE : mesuré, l’écran rendait 3
+  // lignes pour un pane de 0, 1 ou 2. Relevé en revue portail.
+  //
+  // ⚠️ UNE GARDE DISCRÈTE GARDE LES POINTS QU’ON A EN TÊTE ; le dirigeant, lui, redimensionne
+  // son split comme il veut — et il le fait précisément quand l’affichage devient illisible.
+  for (let hauteur = 0; hauteur <= 120; hauteur += 1) {
     const ecran = rendreEcran({ vue, etat, lignes, largeur: 65, hauteur });
-    assert.equal(ecran.length, hauteur, `à ${hauteur} lignes de pane, l’écran en rend ${ecran.length}`);
+    assert.equal(
+      ecran.length,
+      hauteur,
+      `à ${hauteur} ligne(s) de pane, l’écran en rend ${ecran.length} — une ligne de trop pousse ` +
+        `la première hors du pane et fait DÉFILER : le symptôme de l’incident, par l’autre dimension`
+    );
   }
 });
 
@@ -361,6 +375,51 @@ test('LE BATTEMENT S’ARRÊTE ET EFFACE — il ne laisse pas sa dernière ligne
   const fige = sortie.ecrits.length;
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(sortie.ecrits.length, fige, 'le battement continue après la fin — il tiendrait le processus');
+});
+
+test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l’une puis l’autre', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QUE J’AI FERMÉ UNE DIMENSION EN CROYANT FERMER LA FAMILLE.
+  //
+  // J’ai borné la LARGEUR — celle où le symptôme avait été observé — et laissé la HAUTEUR
+  // ouverte : `hauteurCorps` portait un plancher inconditionnel, et l’écran rendait 3 lignes
+  // pour un pane de 0, 1 ou 2. Relevé en revue portail, sur le lot qui venait de corriger la
+  // dimension jumelle.
+  //
+  // ⚠️ DEUX BANCS SÉPARÉS NE VALENT PAS UN BANC CROISÉ : chacun fixe l’autre dimension à une
+  // valeur commode, et c’est exactement là que l’angle mort se loge. On balaie donc le PLAN,
+  // pas deux axes.
+  //
+  // ⚠️ ET ON ÉPROUVE LES TROIS PROPRIÉTÉS À CHAQUE POINT : le compte de lignes, la largeur de
+  // chacune, et l’absence de jet. Une seule des trois laisserait passer les deux autres.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const etat = etatInitial();
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
+
+  // ⚠️ CONTRÔLE POSITIF : sans arbre à rendre, ce balayage serait vert sur du vide.
+  assert.ok(lignes.length >= 3, 'le décor doit produire un arbre — sinon ce banc ne mesure rien');
+
+  for (let largeur = 0; largeur <= 130; largeur += 1) {
+    for (let hauteur = 0; hauteur <= 40; hauteur += 1) {
+      let ecran;
+      assert.doesNotThrow(() => {
+        ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur });
+      }, `l’écran jette à ${largeur}x${hauteur} — un TUI qui meurt au redimensionnement est pire que le défaut`);
+
+      assert.equal(
+        ecran.length,
+        hauteur,
+        `à ${largeur}x${hauteur}, l’écran rend ${ecran.length} lignes — il DÉFILE`
+      );
+      for (const l of ecran) {
+        assert.ok(
+          largeurAffichee(l.texte) <= largeur,
+          `à ${largeur}x${hauteur}, une ligne écrit ${largeurAffichee(l.texte)} caractères : ${JSON.stringify(l.texte)}`
+        );
+      }
+    }
+  }
 });
 
 test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle cesse de l’être en silence', () => {

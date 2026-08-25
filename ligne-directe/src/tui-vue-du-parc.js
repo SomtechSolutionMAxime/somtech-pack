@@ -910,7 +910,22 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   }
 
   sortie.push({ style: 'pied', texte: borner(pied(etat, largeur), largeur) });
-  return sortie;
+
+  // 🔴 LA JUMELLE VERTICALE DE L’INVARIANT DE LARGEUR — ET ELLE MANQUAIT (T-20260825-0071).
+  //
+  // `hauteurCorps` porte un plancher inconditionnel (`max(1, hauteur - 2)`), exactement comme
+  // `largeurArbre` avant ce lot : sous 3 lignes de pane, l’écran en rendait 3. Mesuré —
+  // hauteur 0 → 3 lignes, hauteur 1 → 3, hauteur 2 → 3. Une ligne de trop pousse la première
+  // hors du pane et fait DÉFILER : le même symptôme que l’incident, par l’autre dimension.
+  //
+  // ⚠️ RELEVÉ EN REVUE PORTAIL, ET C’EST LA MÊME FAUTE QUE CELLE QUE JE VENAIS DE FERMER : j’ai
+  // posé la garde sur la LARGEUR — la dimension où le symptôme avait été observé — et j’ai
+  // laissé sa famille ouverte. Mon propre banc de hauteur balayait `[3, 12, 24, 77]` quand
+  // celui de largeur balaie 1 à 200 en continu, avec un commentaire qui dit pourquoi.
+  //
+  // ⚠️ ON BORNE À LA SORTIE, comme pour la largeur : la garantie ne dépend plus d’une
+  // arithmétique juste, et toute recomposition future du corps reste couverte.
+  return sortie.slice(0, Math.max(0, hauteur));
 }
 
 /** Quelle tranche de l'arbre montrer pour que le curseur reste visible. */
