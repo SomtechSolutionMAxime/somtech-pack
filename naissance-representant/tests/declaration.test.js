@@ -1000,3 +1000,80 @@ test('la CASSE ne fait perdre ni l’epic ni ses stories — RA-AGT-004 : on com
   assert.equal(r2.epic, 'E-20260825-0002');
   assert.equal(appels.length > 0, true);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 6 — LA REPRISE SUR LE CHEMIN TICKET DIRECT — la moitié VIVANTE, que rien ne gardait
+//
+// 🔴 DEUX MUTATIONS SURVIVAIENT À LA SUITE ENTIÈRE (738/738 verts) :
+//   • `if (porteDeja && porteDeja !== nom) {` → `if (false && …) {`
+//   • `non_mesure: porteDeja === undefined ? [ASSIGNED_AGENT_NON_LU] : []` → `non_mesure: []`
+//
+// Ce qui casse si le code régresse là : un mandat `T-…` VIVANT qui porte déjà le nom d'un
+// autre agent est réécrit et rendu `rempli: true`, sans `reprises` et sans `cause`. Or
+// `bin/naitre.js` teste `if (!servicedesk.rempli)` — donc RIEN ne s'imprime, et le JSON du
+// geste annonce un SUCCÈS PLEIN sur un nom effacé.
+//
+// ⚠️ POURQUOI AUCUN BANC NE LES TUAIT. Le double `unFauxDesk` rend par défaut un `get` SANS
+// `assigned_agent` — donc `nomDejaPorte` rend `undefined`, donc ni la branche de reprise ni
+// celle de `non_mesure` n'est empruntée. Et le seul banc du chemin direct qui porte ce champ
+// est celui du ticket `completed`, c'est-à-dire la moitié TERMINALE. **Aucun banc ne conduisait
+// `declarerAuServiceDesk` sur un ticket direct VIVANT déjà attribué.**
+//
+// 🔴 ET LE CODE DIT LUI-MÊME QUE C'EST LA MOITIÉ QUI COMPTE : « LA MÊME RÈGLE QUE SUR LES
+// STORIES — et la SYMÉTRIE n'est pas du zèle […] laisser le chemin direct rouvrirait le même
+// défaut par l'autre porte ». La moitié terminale était gardée ; la moitié reprise, non —
+// alors que côté epic, elle l'est.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/** Un ticket DIRECT, VIVANT, tel que le ServiceDesk le rend — avec ce qu'il porte, ou pas. */
+const unTicketVivant = (sur = {}) => ({
+  get: { ticket: { id: UUID, ticket_id: 'T-20260825-0001', status: 'in_progress', ...sur } },
+});
+
+test('🔴 UN TICKET DIRECT VIVANT DÉJÀ ATTRIBUÉ EST UNE REPRISE — jamais un succès plein', async () => {
+  const { appelerMcp, appels } = unFauxDesk(unTicketVivant({ assigned_agent: 'bonaventure' }));
+  const r = await declarerAuServiceDesk({ mandat: 'T-20260825-0001', nom: 'matapedia', appelerMcp });
+
+  // ⚠️ `rempli: false` EST LE POINT DUR. `bin/naitre.js` n'imprime QUE `if (!servicedesk.rempli)` :
+  // un `true` ici rend le remplacement d'un nom parfaitement muet à l'écran ET dans le JSON.
+  assert.equal(r.rempli, false, 'un nom remplacé n’est pas un succès plein');
+  assert.deepEqual(r.reprises, [{ code: 'T-20260825-0001', de: 'bonaventure' }], 'la reprise est NOMMÉE, avec le nom effacé');
+  assert.match(r.cause, /bonaventure/, 'la cause dit DE QUI on a repris');
+  assert.match(r.cause, /matapedia/, 'et À QUI');
+  assert.match(r.cause, /T-20260825-0001/, 'et sur quel ticket');
+  // La reprise ABOUTIT — on ne perd pas le travail, on le DIT.
+  assert.deepEqual(appels.map((a) => a.args.action), ['get', 'update'], 'l’`update` part quand même');
+});
+
+test('🔴 UN TICKET DIRECT VIVANT DONT LA CHARGE NE PORTE PAS LE CHAMP LE DIT — « pas vu » n’est pas « personne »', async () => {
+  // ⚠️ LA SECONDE MUTATION SURVIVANTE. Sans ce relevé, une charge muette se lit « aucun nom
+  // n'a été remplacé » — une présence satisfaisante là où il n'y a eu AUCUNE mesure.
+  const { appelerMcp } = unFauxDesk(unTicketVivant());
+  const r = await declarerAuServiceDesk({ mandat: 'T-20260825-0001', nom: 'matapedia', appelerMcp });
+
+  assert.equal(r.rempli, true, 'le remplissage a bien eu lieu');
+  assert.ok(Array.isArray(r.non_mesure) && r.non_mesure.length > 0, 'mais ce qu’on n’a pas pu voir est DIT');
+  assert.match(r.non_mesure.join(' '), /assigned_agent/, 'nommément — pas « une mesure a manqué »');
+});
+
+test('UN TICKET DIRECT VIVANT QUI NE PORTE AUCUN NOM EST UN SUCCÈS PLEIN — et ne relève RIEN', async () => {
+  // ⚠️ LA MOITIÉ SYMÉTRIQUE : `assigned_agent` PRÉSENT et vide est une mesure, pas une lacune.
+  // La confondre avec « pas vu » ferait relever une zone d'ombre sur un ticket parfaitement lu.
+  for (const vide of [null, '', '   ']) {
+    const { appelerMcp } = unFauxDesk(unTicketVivant({ assigned_agent: vide }));
+    const r = await declarerAuServiceDesk({ mandat: 'T-20260825-0001', nom: 'matapedia', appelerMcp });
+    assert.equal(r.rempli, true, `« ${JSON.stringify(vide)} » : personne ne le portait`);
+    assert.deepEqual(r.non_mesure, [], 'le champ a été LU — il n’y a aucune zone d’ombre à relever');
+    assert.equal(r.reprises, undefined, 'et rien n’a été repris');
+  }
+});
+
+test('UN TICKET DIRECT VIVANT QUI PORTE DÉJÀ LE MÊME NOM N’EST PAS UNE REPRISE', async () => {
+  // Se redéclarer sur son propre mandat n'efface le nom de personne.
+  const { appelerMcp } = unFauxDesk(unTicketVivant({ assigned_agent: 'matapedia' }));
+  const r = await declarerAuServiceDesk({ mandat: 'T-20260825-0001', nom: 'matapedia', appelerMcp });
+
+  assert.equal(r.rempli, true, 'reprendre son propre nom n’est pas une reprise');
+  assert.equal(r.reprises, undefined);
+  assert.deepEqual(r.non_mesure, []);
+});
