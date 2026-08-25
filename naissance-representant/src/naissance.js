@@ -178,6 +178,12 @@ const LANCEUR = [
   'ne vaut jamais un garde permissif."}});',
   'var g=C.spawn(process.execPath,[process.argv[1]],{stdio:["pipe","pipe","ignore"]});',
   'g.on("error",function(){rendre(null)});',
+  // ⚠️ CES DEUX FILETS SONT GARDÉS PAR LE CONTRÔLE ⑰, et il a fallu chercher le cas qui les
+  // rend visibles (septième passe de fond : ils n étaient tenus que par l identité du
+  // gabarit, jamais par un comportement). Le cas : une garde SAINE qui décide et sort
+  // pendant que l appelant écrit encore. Son entrée se referme sous la plume du lanceur ;
+  // sans filet, l écriture suivante lève une erreur non capturée, le lanceur meurt, et son
+  // verdict est perdu — un `allow` légitime devient un refus.
   'g.stdin.on("error",function(){});process.stdin.on("error",function(){});',
   // 🔴 ON RELAIE SANS JAMAIS SE LAISSER BLOQUER, et c est une correction de la passe
   // portail. Un `pipe` applique la contre-pression de la garde à l APPELANT : dès que la

@@ -455,3 +455,28 @@ test('⑯ bis une raison démesurée est BORNÉE, et le dit', () => {
     `la raison rendue fait ${d.permissionDecisionReason.length} caractères : la borne ne mord pas`);
   assert.match(d.permissionDecisionReason, /tronqu/i, 'une raison coupée doit dire qu elle est coupée');
 });
+
+// ═════════════ ⑰ la garde répond AVANT la fin de l écriture — le verdict ne doit pas se perdre
+
+test('⑰ un ALLOW rendu avant la fin de l écriture survit — sinon le lot refuserait à tort', () => {
+  // 🔴 CE CONTRÔLE FERME UN TROU RELEVÉ PAR LA SEPTIÈME PASSE : le filet qui avale les erreurs
+  // du tube n était gardé QUE par l identité octet-à-octet du gabarit — jamais par le
+  // comportement. Le cas qui le rend visible : une garde qui décide et SORT pendant que
+  // l appelant écrit encore. Son tube d entrée se referme sous la plume du lanceur ; sans
+  // filet, l écriture suivante lève une erreur non capturée, le lanceur meurt, son verdict
+  // est perdu — et un `allow` légitime devient un refus.
+  //
+  // ⚠️ Ce n est pas le symétrique de ⑫ : là, la garde était EN PANNE et le refus était juste.
+  // Ici la garde est SAINE, et refuser serait faux.
+  const gros = 'y'.repeat(512 * 1024);
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"decide sans tout lire"}}));\n'
+    + 'process.exit(0);\n'), {
+    requete: { cwd: '/x', tool_name: 'Write', tool_input: { file_path: '/x/gros.md', content: gros } },
+    timeout: 60000,
+  });
+  assert.equal(d.permissionDecision, 'allow',
+    'le verdict d une garde saine a été perdu parce qu elle est sortie avant la fin de l écriture');
+  assert.equal(d.permissionDecisionReason, 'decide sans tout lire');
+});
