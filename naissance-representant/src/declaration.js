@@ -48,7 +48,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { nomDeLieuValide, NomDeLieuInvalide } from '../../ligne-directe/src/lieu-nom.js';
-import { transportServiceDesk, familleDuMandat, codeDuMandat } from '../../ligne-directe/src/mandat.js';
+import { transportServiceDesk, familleDuMandat, codeDuMandat, STATUTS_CLOS } from '../../ligne-directe/src/mandat.js';
 
 /**
  * OÙ VIVENT LES DÉCLARATIONS — même forme que `ligne-directe/src/registre.js`, et pour la même
@@ -362,6 +362,21 @@ export function lireLesDeclarations({ racine = RACINE } = {}) {
  * alors on cherche la FORME plutôt que la clé — même geste que `accesServiceDesk`, qui cherche
  * l'objet portant `status` sans présumer sous quel nom il arrive.
  */
+/**
+ * L'ENREGISTREMENT que porte une réponse de ticket — celui dont l'`id` est l'UUID qu'on vient d'y
+ * trouver. On ne câble pas `ticket` en dur : l'enveloppe varie d'un outil à l'autre, exactement
+ * comme pour `uuidDansLaReponse`, dont ceci est la moitié qui manquait.
+ */
+function enregistrementDuTicket(corps, id) {
+  const candidats = [corps, ...Object.values(corps || {})];
+  for (const valeur of candidats) {
+    if (valeur && typeof valeur === 'object' && !Array.isArray(valeur) && String(valeur.id ?? '') === String(id)) {
+      return valeur;
+    }
+  }
+  return null;
+}
+
 function uuidDansLaReponse(corps) {
   const candidats = [corps, ...Object.values(corps || {})];
   for (const valeur of candidats) {
@@ -494,6 +509,67 @@ async function lireLEpic(code, appelerMcp) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * CE QU'ON N'ÉCRASE PAS — et pourquoi la règle n'est PAS « ne jamais écraser » (défaut ②)
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 LE DÉFAUT MESURÉ. Un epic à deux stories, `T-1` `completed` et attribuée à « bonaventure ».
+ * La boucle écrivait « matapedia » sur les DEUX et rendait `rempli: true`, `remplies: [T-1, T-2]`.
+ * Le nom d'un autre agent effacé sur un travail FINI, et rien dans le rendu ne le disait.
+ *
+ * ⚠️ ET LE MODULE GARDAIT DÉJÀ LE CAS SYMÉTRIQUE, avec son motif écrit : « écrire un
+ * `assigned_agent` vide effacerait celui d'un autre » (voir `declarerAuServiceDesk`). Le même
+ * risque, sur le chemin que ce lot ouvre, et sur le champ que ce lot élève au rang de SOURCE
+ * (RA-VUE-005), n'était pas gardé.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * LA RÈGLE, ET LE CAS QU'ELLE NE DOIT PAS FERMER
+ *
+ *   • une story TERMINALE n'est jamais touchée. Son `assigned_agent` n'est plus une affectation :
+ *     c'est le registre de QUI L'A FAITE. Le nouveau chef n'y travaillera pas — la réécrire ne
+ *     lui sert à rien et détruit un fait que rien d'autre ne porte.
+ *
+ *   • une story VIVANTE portant le nom d'un autre est REPRISE. ⚠️ Refuser ici serait le
+ *     correctif qui ouvre son symétrique : un chef qui hérite légitimement d'un epic dont
+ *     l'agent est mort ne pourrait plus s'y inscrire, c'est-à-dire que le geste cesserait de
+ *     servir là où il sert le plus. On écrit — mais on le DIT, nommément, avec le nom remplacé.
+ *
+ *   • et `rempli: true` ne survit ni à une reprise ni à une story sautée. Un succès plein annoncé
+ *     sur un nom remplacé est exactement le rendu que le défaut produisait.
+ *
+ * ⚠️ CE QU'ON NE PEUT PAS MESURER SE DIT, ET NE SE DEVINE PAS. La charge mesurée des stories
+ * sous un epic (`id`, `ticket_id`, `status`, `epic_id`) NE PORTE PAS `assigned_agent`. Quand la
+ * clé est absente, on n'en conclut PAS « personne dessus » : on écrit, et `non_mesure` nomme ce
+ * qu'on n'a pas pu voir. Le taire ferait lire « rien n'a été pris » à une mesure qui n'a jamais
+ * eu lieu.
+ */
+
+/**
+ * Ce ticket est-il dans un état TERMINAL ?
+ *
+ * ⚠️ LA TABLE VIENT DE `mandat.js`, RELEVÉE DU SERVICE (2026-08-19), jamais réécrite ici. Une
+ * seconde liste d'états divergerait au premier statut que le ServiceDesk ajoute, et celle qui
+ * divergerait serait celle-ci — dont aucune garde ne relit la population.
+ *
+ * ⚠️ ET UN STATUT ABSENT OU INCONNU N'EST PAS « TERMINAL ». C'est un état NON LU : le traduire
+ * en « fermé » ferait sauter des stories vivantes en silence, ce qui est le défaut inverse.
+ */
+function estTerminal(statut) {
+  return STATUTS_CLOS.tickets.includes(String(statut ?? '').trim());
+}
+
+/** Le nom que porte DÉJÀ un enregistrement — `undefined` quand la charge ne le porte pas du tout. */
+function nomDejaPorte(enregistrement) {
+  if (!enregistrement || typeof enregistrement !== 'object' || !('assigned_agent' in enregistrement)) return undefined;
+  const brut = enregistrement.assigned_agent;
+  return typeof brut === 'string' && brut.trim() ? brut.trim() : null;
+}
+
+/** Ce que `non_mesure` dit quand la charge ne porte pas le champ — écrit UNE fois, employé deux. */
+const ASSIGNED_AGENT_NON_LU =
+  'assigned_agent : la charge rendue ne le porte pas — je ne peux pas dire si un nom a été remplacé';
+
+/**
  * Remplit `assigned_agent` sur TOUTES les stories d'un epic — et rend compte du PLURIEL.
  *
  * ⚠️ UN NOMBRE NU MENT. « 3 » ne dit ni 3 quoi, ni sur combien, ni lesquelles : qui le lit doit
@@ -516,6 +592,9 @@ async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
   const stories = epic.stories;
   const remplies = [];
   const refusees = [];
+  const reprises = [];
+  const ignorees = [];
+  let uneChargeMuette = false;
   for (const story of stories) {
     // On NOMME la story par son code : « une a refusé » enverrait chercher parmi toutes.
     const sonCode =
@@ -527,9 +606,25 @@ async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
       refusees.push({ code: sonCode, cause: 'le ServiceDesk n’a rendu aucun identifiant exploitable' });
       continue;
     }
+    // ═══ CE QU'ON NE RÉÉCRIT PAS — voir le pavé au-dessus de `estTerminal`.
+    if (estTerminal(story?.status)) {
+      ignorees.push({
+        code: sonCode,
+        cause:
+          `elle est « ${String(story?.status ?? '').trim()} » — sur une story terminée, ` +
+          `\`assigned_agent\` dit QUI L'A FAITE${nomDejaPorte(story) ? ` (${nomDejaPorte(story)})` : ''}, ` +
+          `et le réécrire effacerait ce fait`,
+      });
+      continue;
+    }
+    const porte = nomDejaPorte(story);
+    if (porte === undefined) uneChargeMuette = true;
     try {
       await appelerMcp('tickets', { action: 'update', id: story.id, assigned_agent: nom });
-      remplies.push(sonCode);
+      // ⚠️ APRÈS L'ÉCRITURE, ET C'EST VOULU : une reprise qui aurait échoué n'est pas une reprise.
+      // La ranger avant ferait annoncer un nom pris à quelqu'un qui le porte toujours.
+      if (porte && porte !== nom) reprises.push({ code: sonCode, de: porte });
+      else remplies.push(sonCode);
     } catch (err) {
       // Une story qui refuse n'interrompt PAS les suivantes : le mandat en porte d'autres, et
       // les remplir vaut mieux que de tout abandonner sur le premier refus.
@@ -537,7 +632,17 @@ async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
     }
   }
 
-  const compte = { epic: code, nom, total: stories.length, remplies, refusees };
+  const compte = {
+    epic: code,
+    nom,
+    total: stories.length,
+    remplies,
+    reprises,
+    ignorees,
+    refusees,
+    // On relève ce qu'on atteint, on NOMME ce qu'on n'atteint pas, et on ne conclut rien du second.
+    non_mesure: uneChargeMuette ? [ASSIGNED_AGENT_NON_LU] : [],
+  };
   if (stories.length === 0) {
     // Un epic pas encore découpé est un état NORMAL du chantier, pas une panne — et la phrase
     // le dit, pour que personne n'aille chercher un défaut qui n'existe pas.
@@ -547,15 +652,42 @@ async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
       cause: `${code} ne porte encore aucune story : il n’est pas découpé — rien à remplir, et ce n’est pas une panne`,
     };
   }
-  if (refusees.length === 0) return { rempli: true, ...compte };
+  // 🔴 `rempli: true` NE SURVIT NI À UNE REPRISE NI À UNE STORY SAUTÉE. Un succès plein annoncé
+  // sur un nom remplacé est très exactement le rendu que le défaut ② produisait : le lecteur y
+  // lisait « tout est en ordre » là où un agent venait d'en effacer un autre.
+  if (refusees.length === 0 && reprises.length === 0 && ignorees.length === 0) return { rempli: true, ...compte };
+  // Le compte porte son DÉNOMINATEUR et son UNITÉ, et chaque cas est nommé par son CODE.
+  const dits = [
+    ...refusees.map((r) => `${r.code} a refusé (${r.cause})`),
+    ...reprises.map((r) => `${r.code} portait « ${r.de} » — REPRISE au nom de « ${nom} »`),
+    ...ignorees.map((r) => `${r.code} n’a PAS été touchée : ${r.cause}`),
+  ];
   return {
     rempli: false,
     ...compte,
-    // Le compte porte son DÉNOMINATEUR et son UNITÉ, et les refusées sont nommées une à une.
     cause:
-      `${code} : ${remplies.length} story(s) remplie(s) sur ${stories.length} — ` +
-      refusees.map((r) => `${r.code} a refusé (${r.cause})`).join(' ; '),
+      `${code} : ${remplies.length} story(s) remplie(s) sur ${stories.length} — ` + dits.join(' ; '),
   };
+}
+
+/**
+ * CE QU'ON DIT À L'ÉCRAN QUAND `rempli` EST FAUX — et pourquoi ce n'est pas une seule phrase.
+ *
+ * 🔴 « le mandat n'a pas reçu le nom de son agent » SERAIT FAUX SUR UNE REPRISE : le nom est bel
+ * et bien parti, il a même remplacé celui d'un autre. `rempli: false` recouvre trois états qui
+ * n'appellent pas le même geste — rien n'a abouti, un nom a été REMPLACÉ, une story a été
+ * SAUTÉE — et une formule qui les recouvre tous fait chercher au mauvais endroit.
+ *
+ * ⚠️ ELLE VIT ICI, PAS DANS LA COMMANDE, pour être éprouvable : une phrase écrite au fil d'un
+ * `process.stderr.write` n'a pour garde que la relecture, et c'est ce qui a laissé passer les
+ * quatre vérifications affirmées d'un chef d'équipe (défaut ③).
+ */
+export function phraseDuMandatIncomplet(mandat, resultat) {
+  const aEcrit = (resultat?.reprises?.length ?? 0) > 0 || (resultat?.remplies?.length ?? 0) > 0;
+  const tete = aEcrit
+    ? `le mandat ${mandat} n’a pas été rempli entièrement`
+    : `le mandat ${mandat} n’a pas reçu le nom de son agent`;
+  return `${tete} : ${resultat?.cause ?? '(aucune cause rendue)'}`;
 }
 
 export async function declarerAuServiceDesk({ mandat, nom, appelerMcp = transportServiceDesk() } = {}) {
@@ -591,20 +723,57 @@ export async function declarerAuServiceDesk({ mandat, nom, appelerMcp = transpor
   // pas « choisir une story à sa place », c'est remplir le mandat entier.
   if (famille === 'epics') return remplirLesStoriesDeLEpic({ code, nom, appelerMcp });
 
-  let id;
+  let lu;
   try {
-    id = uuidDansLaReponse(await appelerMcp('tickets', { action: 'get', id: code }));
+    lu = await appelerMcp('tickets', { action: 'get', id: code });
   } catch (err) {
     return { rempli: false, cause: `lecture de ${code} : ${String(err?.message ?? err).trim()}` };
   }
+  const id = uuidDansLaReponse(lu);
   if (!id) {
     return { rempli: false, cause: `${code} : le ServiceDesk n’a rendu aucun identifiant exploitable` };
   }
+
+  // ═══ LA MÊME RÈGLE QUE SUR LES STORIES — et la SYMÉTRIE n'est pas du zèle (défaut ②).
+  //
+  // Corriger le fan-out d'un epic et laisser le chemin direct réécrire un ticket fini rouvrirait
+  // le même défaut par l'autre porte, sur le même champ, élevé au rang de SOURCE par ce lot.
+  // La charge d'un `tickets get` PORTE `status` — c'est mesuré, et c'est ce que le double rend.
+  const enregistrement = enregistrementDuTicket(lu, id);
+  if (estTerminal(enregistrement?.status)) {
+    const porte = nomDejaPorte(enregistrement);
+    return {
+      rempli: false,
+      id,
+      nom,
+      cause:
+        `${code} est « ${String(enregistrement?.status ?? '').trim()} » : je ne le réattribue pas — ` +
+        `sur un ticket terminé, \`assigned_agent\` dit QUI L'A FAIT` +
+        `${porte ? ` (${porte})` : ''}, et le réécrire effacerait ce fait`,
+    };
+  }
+  const porteDeja = nomDejaPorte(enregistrement);
 
   try {
     await appelerMcp('tickets', { action: 'update', id, assigned_agent: nom });
   } catch (err) {
     return { rempli: false, cause: `mise à jour de ${code} : ${String(err?.message ?? err).trim()}` };
   }
-  return { rempli: true, id, nom };
+  // Une REPRISE aboutit, mais elle ne se rend pas « rempli » : un nom a été remplacé, et le
+  // lecteur doit le savoir sans avoir à comparer deux états du ServiceDesk.
+  if (porteDeja && porteDeja !== nom) {
+    return {
+      rempli: false,
+      id,
+      nom,
+      reprises: [{ code, de: porteDeja }],
+      cause: `${code} portait « ${porteDeja} » — REPRIS au nom de « ${nom} »`,
+    };
+  }
+  return {
+    rempli: true,
+    id,
+    nom,
+    non_mesure: porteDeja === undefined ? [ASSIGNED_AGENT_NON_LU] : [],
+  };
 }

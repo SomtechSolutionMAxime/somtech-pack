@@ -27,6 +27,7 @@ import {
   inscrireLaDeclaration,
   lireLesDeclarations,
   declarerAuServiceDesk,
+  phraseDuMandatIncomplet,
   RACINE,
   ChampManquant,
   DeclarationDejaInscrite,
@@ -849,6 +850,139 @@ test('la liste d’epics PLAFONNÉE le dit — sans quoi « introuvable » enver
 
   assert.equal(r.rempli, false);
   assert.match(r.cause, /PLAFONN/i, `cause inattendue : « ${r.cause} »`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 5-bis — CE QU'ON N'ÉCRASE PAS (défaut ②)
+//
+// 🔴 CE QUE LA REVUE A MESURÉ. Un epic à deux stories, `T-1` `completed` et déjà attribuée à
+// « bonaventure ». Le module écrivait « matapedia » sur les DEUX et rendait
+// `{"rempli":true,"total":2,"remplies":["T-1","T-2"],"refusees":[]}` : le nom d'un autre agent
+// effacé sur un travail FINI, et rien dans le rendu qui le dise.
+//
+// ⚠️ LE MODULE GARDAIT DÉJÀ LE CAS SYMÉTRIQUE, et son motif est écrit noir sur blanc plus haut :
+// « écrire un `assigned_agent` vide effacerait celui d'un autre ». Le même risque, sur le chemin
+// que ce lot OUVRE, et sur le champ que ce lot élève au rang de SOURCE (RA-VUE-005).
+//
+// ─────────────────────────────────────────────────────────────────────────────────────
+// LA RÈGLE RETENUE, ET POURQUOI ELLE N'EST PAS « NE JAMAIS ÉCRASER »
+//
+//   • une story TERMINALE n'est jamais touchée — son `assigned_agent` n'est plus une affectation,
+//     c'est le REGISTRE DE QUI L'A FAITE. Le nouveau chef n'y travaillera pas ; la réécrire ne
+//     lui sert à rien et détruit un fait ;
+//   • une story VIVANTE portant le nom d'un autre est REPRISE — c'est le cas légitime que le
+//     brief nomme : un chef qui hérite d'un epic dont l'agent est mort doit pouvoir s'y inscrire.
+//     Refuser ici rendrait le geste inutilisable là où il sert le plus ;
+//   • mais une reprise SE DIT : la story est nommée, avec le nom qu'elle portait.
+//
+// Et `rempli: true` ne survit ni à une reprise ni à une story sautée : un succès plein annoncé
+// sur un nom remplacé est très exactement le rendu que ce défaut produisait.
+
+/** Des stories dont on choisit le statut et le porteur — la forme mesurée, plus ce qu'on éprouve. */
+function desStoriesDetaillees(...specs) {
+  return specs.map((spec, i) => ({
+    id: `d4c892fa-cc6a-4416-bac9-330f54c1462${i}`,
+    ticket_id: spec.code,
+    status: spec.status ?? 'new',
+    epic_id: EPIC_UUID,
+    ...('agent' in spec ? { assigned_agent: spec.agent } : {}),
+  }));
+}
+
+test('🔴 une story TERMINALE n’est PAS touchée — son nom dit qui l’a faite, pas qui la mène', async () => {
+  const stories = desStoriesDetaillees(
+    { code: 'T-20260825-0011', status: 'completed', agent: 'bonaventure' },
+    { code: 'T-20260825-0012', status: 'in_progress' }
+  );
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  assert.deepEqual(
+    misesAJour(appels),
+    [['d4c892fa-cc6a-4416-bac9-330f54c14621', 'matapedia']],
+    'la terminale ne reçoit AUCUN update — c’est le fait, pas seulement le rendu'
+  );
+  assert.deepEqual(r.remplies, ['T-20260825-0012']);
+  assert.deepEqual(r.ignorees.map((x) => x.code), ['T-20260825-0011'], 'nommée par son CODE, jamais comptée');
+  assert.match(r.ignorees[0].cause, /completed|terminée|fermée/i, 'et la cause dit POURQUOI');
+  assert.equal(r.rempli, false, '🔴 un succès plein annoncé sur une story sautée est le défaut lui-même');
+  assert.match(r.cause, /T-20260825-0011/, 'la phrase rendue la nomme');
+});
+
+test('🔴 une story VIVANTE portant le nom d’un AUTRE est reprise — mais la reprise est DITE', async () => {
+  const stories = desStoriesDetaillees(
+    { code: 'T-20260825-0011', status: 'in_progress', agent: 'bonaventure' },
+    { code: 'T-20260825-0012', status: 'new', agent: '' }
+  );
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  // LA MOITIÉ QUI PROTÈGE LE CAS LÉGITIME : reprendre un epic dont l’agent est mort reste possible.
+  assert.equal(misesAJour(appels).length, 2, 'les deux sont bien écrites — on ne bloque pas la reprise');
+  assert.deepEqual(r.reprises, [{ code: 'T-20260825-0011', de: 'bonaventure' }], 'LAQUELLE, et à QUI');
+  assert.deepEqual(r.remplies, ['T-20260825-0012'], 'une story sans nom n’est pas une reprise');
+  assert.equal(r.rempli, false, '🔴 un nom remplacé n’est pas un succès plein');
+  assert.match(r.cause, /T-20260825-0011/);
+  assert.match(r.cause, /bonaventure/, 'et le nom qu’on a remplacé — sans lui, on ne peut pas le rendre');
+});
+
+test('reprendre son PROPRE nom n’est pas une reprise — une renaissance ne doit pas rendre un faux signal', async () => {
+  const stories = desStoriesDetaillees({ code: 'T-20260825-0011', status: 'in_progress', agent: 'matapedia' });
+  const { appelerMcp } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  assert.deepEqual(r.reprises, []);
+  assert.deepEqual(r.remplies, ['T-20260825-0011']);
+  assert.equal(r.rempli, true, 'rien n’a été pris à personne — c’est un succès plein');
+});
+
+test('quand la charge des stories ne PORTE PAS `assigned_agent`, on ne conclut pas « libre » — on le NOMME', async () => {
+  // ⚠️ CE QUE CE BANC FERME. La forme mesurée du service (`desStories`) ne porte PAS ce champ :
+  // on ne peut donc pas dire qu’aucun nom n’a été remplacé. Le taire ferait lire « rien n’a été
+  // pris » à une mesure qui n’a jamais eu lieu — le motif « une présence satisfaisante » que ce
+  // dépôt a déjà payé. On relève ce qu’on atteint, on nomme ce qu’on n’atteint pas.
+  const { appelerMcp } = unFauxDeskEpic({ stories: desStories('T-20260825-0011') });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  assert.deepEqual(r.remplies, ['T-20260825-0011']);
+  assert.deepEqual(r.reprises, [], 'rien de MESURÉ comme repris');
+  assert.ok(Array.isArray(r.non_mesure) && r.non_mesure.length > 0, 'et ce qu’on n’a pas pu voir est DIT');
+  assert.match(r.non_mesure.join(' '), /assigned_agent/, 'nommément — pas « une mesure a manqué »');
+});
+
+test('un mandat TICKET terminal n’est pas réécrit non plus — la règle ne vaut pas que pour les epics', async () => {
+  // ⚠️ LA SYMÉTRIE. Corriger le fan-out et laisser le chemin direct écraser un ticket fini
+  // rouvrirait le même défaut par l’autre porte, sur un champ que ce lot élève en SOURCE.
+  const { appelerMcp, appels } = unFauxDesk({
+    get: { ticket: { id: UUID, ticket_id: 'T-20260825-0001', status: 'completed', assigned_agent: 'bonaventure' } },
+  });
+  const r = await declarerAuServiceDesk({ mandat: 'T-20260825-0001', nom: 'matapedia', appelerMcp });
+
+  assert.equal(r.rempli, false, 'un ticket fini ne se réattribue pas en silence');
+  assert.match(r.cause, /T-20260825-0001/);
+  assert.match(r.cause, /completed|terminé|fermé/i, 'et la cause dit POURQUOI');
+  assert.deepEqual(appels.map((a) => a.args.action), ['get'], 'aucun `update` n’est parti');
+});
+
+test('🔴 la phrase à l’écran ne dit pas « n’a pas reçu le nom » quand un nom a été REMPLACÉ', async () => {
+  const stories = desStoriesDetaillees({ code: 'T-20260825-0011', status: 'in_progress', agent: 'bonaventure' });
+  const { appelerMcp } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  const dit = phraseDuMandatIncomplet('E-20260825-0002', r);
+  assert.doesNotMatch(
+    dit,
+    /n’a pas reçu le nom/,
+    `le nom EST parti — il a même remplacé celui d’un autre. Reçu : « ${dit} »`
+  );
+  assert.match(dit, /pas été rempli entièrement/);
+  assert.match(dit, /bonaventure/, 'et la phrase porte la cause, qui nomme la story et son ancien porteur');
+});
+
+test('mais quand RIEN n’a été écrit, elle le dit toujours — la moitié qui protège l’autre cas', async () => {
+  const { appelerMcp } = unFauxDeskEpic({ stories: [] });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+  assert.match(phraseDuMandatIncomplet('E-20260825-0002', r), /n’a pas reçu le nom de son agent/);
 });
 
 test('la CASSE ne fait perdre ni l’epic ni ses stories — RA-AGT-004 : on compare sans elle', async () => {

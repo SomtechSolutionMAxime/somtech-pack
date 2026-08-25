@@ -66,7 +66,7 @@ import {
   HorodatageHorsForme,
   BASE_PAR_DEFAUT,
 } from '../src/chef-equipe.js';
-import { inscrireLaDeclaration, declarerAuServiceDesk } from '../src/declaration.js';
+import { inscrireLaDeclaration, declarerAuServiceDesk, phraseDuMandatIncomplet } from '../src/declaration.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -793,11 +793,22 @@ async function main() {
     // les tickets de son mandat sont LES STORIES de cet epic, et `declarerAuServiceDesk` les
     // remplit TOUTES. Ce commentaire disait l'inverse — « ce cas ne peut pas aboutir » — et
     // c'était vrai du code, pas du besoin : `assigned_agent` restait vide sur le chemin le plus
-    // fréquenté. Le rendu porte alors le PLURIEL (`total`, `remplies`, `refusees`), et un
-    // succès partiel n'est pas un succès : `rempli` reste faux, la cause nomme les refusées.
+    // fréquenté. Le rendu porte alors le PLURIEL (`total`, `remplies`, `reprises`, `ignorees`,
+    // `refusees`), et un succès partiel n'est pas un succès : `rempli` reste faux, la cause
+    // nomme chaque story par son CODE.
     servicedesk = await declarerAuServiceDesk({ mandat, nom: commandes.nom });
     if (!servicedesk.rempli) {
-      process.stderr.write(`le mandat ${mandat} n’a pas reçu le nom de son agent : ${servicedesk.cause}\n`);
+      // ⚠️ « N'A PAS REÇU LE NOM » SERAIT FAUX SUR UNE REPRISE — et un message faux dans un
+      // geste qui corrige des messages faux serait le défaut rejoué. `rempli: false` couvre
+      // trois états différents : rien n'a abouti, un nom a été REMPLACÉ, une story a été
+      // SAUTÉE. On dit lequel, plutôt qu'une formule qui les recouvre tous.
+      process.stderr.write(`${phraseDuMandatIncomplet(mandat, servicedesk)}\n`);
+    }
+    // ⚠️ ET CE QU'ON N'A PAS PU MESURER NE SE MÊLE PAS AUX CAUSES. Un `rempli: true` peut cacher
+    // une cécité — la charge des stories ne porte pas toujours `assigned_agent` — et la taire
+    // ferait lire « rien n'a été pris à personne » à une mesure qui n'a jamais eu lieu.
+    if (servicedesk.non_mesure?.length) {
+      process.stderr.write(`sur le mandat ${mandat}, non mesuré : ${servicedesk.non_mesure.join(' · ')}.\n`);
     }
   }
 
