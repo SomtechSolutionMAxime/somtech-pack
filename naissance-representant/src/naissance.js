@@ -169,7 +169,14 @@ const LANCEUR = [
   'var g=C.spawn(process.execPath,[process.argv[1]],{stdio:["pipe","pipe","ignore"]});',
   'g.on("error",function(){rendre(null)});',
   'g.stdin.on("error",function(){});process.stdin.on("error",function(){});',
-  'process.stdin.pipe(g.stdin);',
+  // 🔴 ON RELAIE SANS JAMAIS SE LAISSER BLOQUER, et c est une correction de la passe
+  // portail. Un `pipe` applique la contre-pression de la garde à l APPELANT : dès que la
+  // garde meurt ou n écoute pas, plus personne ne lit l entrée du hook, et au-delà de la
+  // taille d un tube (~256 Ko mesurés) Claude Code se bloque en écrivant puis échoue en
+  // EPIPE — AVANT tout refus. La requête d un `Write` porte le contenu du fichier : ce
+  // n est pas un cas rare. On écrit donc sans attendre, et on avale l échec.
+  'process.stdin.on("data",function(c){try{g.stdin.write(c)}catch(e){}});',
+  'process.stdin.on("end",function(){try{g.stdin.end()}catch(e){}});',
   'g.stdout.on("data",function(c){s+=c});',
   'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
   'g.on("close",function(){clearTimeout(m);rendre(null)});',
@@ -182,11 +189,20 @@ const LANCEUR = [
   'function rendre(r){if(fini)return;fini=true;if(r){process.stdout.write(r);process.exit(0)}var v=null;',
   'try{var o=JSON.parse(s).hookSpecificOutput;',
   'if(o&&(o.permissionDecision==="allow"||o.permissionDecision==="deny"))v=o}catch(e){}',
-  'if(v)process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",',
-  'permissionDecision:v.permissionDecision,',
-  'permissionDecisionReason:String(v.permissionDecisionReason||"")}}));',
-  'else if(r)process.stdout.write(r);',
-  'process.exit(0)}',
+  // 🔴 LA RAISON EST BORNÉE, ET ON NE SORT PAS AVANT D AVOIR FINI D ÉCRIRE — correction
+  // de la passe de fond. La sortie du lanceur passe par une substitution de commande,
+  // dont le tube fait 64 Ko : au-delà, `process.exit(0)` coupait l écriture en cours et
+  // rendait un JSON tronqué — NON VIDE, donc accepté par le garde-fou `[ -n "$S" ]` du
+  // shell, qui ne sait pas juger un JSON. Claude Code n avait alors aucun verdict : la
+  // panne même que ce lot ferme, rouverte par sa propre sortie.
+  // Une raison énorme n est pas théorique — celle d un refus de `Bash` cite le segment
+  // refusé verbatim. On la borne, en le DISANT, et on laisse l écriture se terminer.
+  'var fin=function(){process.exit(0)};',
+  'if(v){var R=String(v.permissionDecisionReason||"");',
+  'if(R.length>2000)R=R.slice(0,2000)+" … (raison tronquee)";',
+  'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",',
+  'permissionDecision:v.permissionDecision,permissionDecisionReason:R}}),fin)}',
+  'else if(r)process.stdout.write(r,fin);else fin()}',
 ].join('');
 
 /**

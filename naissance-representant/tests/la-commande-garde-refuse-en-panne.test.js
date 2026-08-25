@@ -306,3 +306,45 @@ test('⑪ un verdict déjà écrit ne survit pas au délai — une garde qui ne 
     'le allow d une garde qui ne sort jamais a été transmis : la panne doit primer sur ce qu elle a dit avant');
   assert.match(d.permissionDecisionReason, /delai|délai/i);
 });
+
+// ═════════════ ⑫ le VOLUME — une requête qui ne tient pas dans un tube
+
+test('⑫ une requête volumineuse ne fait pas échouer le hook — le refus arrive quand même', () => {
+  // 🔴 TROUVÉ PAR LA PASSE PORTAIL, ET MESURÉ : au-delà d environ 256 Ko de requête, quand la
+  // garde meurt ou n écoute pas, PLUS PERSONNE ne lit l entrée du hook. L appelant se bloque
+  // en écrivant, puis échoue en EPIPE — AVANT que le refus soit émis. Il n y a alors ni
+  // verdict ni refus : exactement le trou que ce lot existe pour fermer, sous une autre forme.
+  //
+  // ⚠️ CE N EST PAS UN CAS DE LABORATOIRE : la requête d un `Write` ou d un `Edit` porte le
+  // CONTENU du fichier. 256 Ko de contenu, c est un fichier ordinaire.
+  const gros = 'x'.repeat(512 * 1024);
+  for (const [quoi, double] of [
+    ['qui casse', 'process.exit(1);\n'],
+    ['qui pend', 'setInterval(() => {}, 1000);\n'],
+  ]) {
+    const d = verdict(posteAvecGarde(double), {
+      requete: { cwd: '/x', tool_name: 'Write', tool_input: { file_path: '/x/gros.md', content: gros } },
+      timeout: 60000,
+    });
+    assert.equal(d.permissionDecision, 'deny', `garde ${quoi} + grosse requête : aucun verdict rendu`);
+  }
+});
+
+test('⑬ une RAISON énorme ne corrompt pas le verdict — il reste lisible', () => {
+  // 🔴 TROUVÉ PAR LA PASSE DE FOND, ET MESURÉ : la sortie du lanceur passe par une
+  // substitution de commande, dont le tube fait 64 Ko sur ce poste — et le lanceur sortait
+  // AVANT d avoir fini d écrire. Au-delà, la sortie était tronquée à 65 537 octets : un JSON
+  // invalide, NON VIDE, que le garde-fou `[ -n "$S" ]` laissait passer tel quel. Claude Code
+  // n avait alors aucun verdict — la panne même que ce lot ferme.
+  //
+  // ⚠️ Et la raison peut vraiment être énorme : celle d un refus de `Bash` cite le segment de
+  // commande refusé, verbatim. Un blob base64 sur une seule ligne suffit.
+  const raison = 'R'.repeat(200 * 1024);
+  const d = verdict(posteAvecGarde(
+    `process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",`
+    + `permissionDecision:"deny",permissionDecisionReason:${JSON.stringify(raison)}}}));\n`),
+    { timeout: 60000 });
+  assert.equal(d.permissionDecision, 'deny',
+    'le verdict a été perdu : sa raison ne tenait pas dans le tube et le JSON est arrivé tronqué');
+  assert.ok(d.permissionDecisionReason.length > 0, 'un refus sans raison envoie chercher à l aveugle');
+});

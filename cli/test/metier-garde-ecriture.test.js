@@ -567,7 +567,7 @@ const HOOKS_EPROUVES = [
   // RÉ-ÉPROUVÉE, et pas seulement recalculée : `naissance-representant/tests/
   // la-commande-garde-refuse-en-panne.test.js` ⑨ la joue face à un `Write` et mesure
   // qu’elle transmet le `allow` de sa garde au lieu de refuser d’elle-même.
-  { sha: 'bbe3d45f21963c68', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 (elle se retire une fois la ligne ouverte) et face à un Write par le banc des six modes de panne — T-20260824-0020' },
+  { sha: '9b9b854ebda4cc86', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 (elle se retire une fois la ligne ouverte) et face à un Write par le banc des six modes de panne — T-20260824-0020' },
 ];
 
 test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voisin non éprouvé fait tomber ce lot en silence', () => {
