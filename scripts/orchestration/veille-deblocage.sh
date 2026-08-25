@@ -49,7 +49,11 @@
 #
 #   6. ELLE NE S'ARRÊTE JAMAIS EN SILENCE. Tout chemin d'arrêt écrit une
 #      ligne « MOTIF: <code> — <phrase> » et sort sur un code propre :
-#        agent-termine ......... 0   l'agent a travaillé puis fini
+#        agent-termine ......... 0   l'agent a atteint l'état terminal
+#                                    EXPLICITE `done` (jamais `idle` seul)
+#        repos-prolonge ....... 12   il s'est reposé au-delà de la borne,
+#                                    sans travail en vol — CE N'EST PAS
+#                                    une fin, c'est ce qu'elle a VU
 #        (arguments invalides) . 1   option `--…` inconnue, ou pane/agent
 #                                    manquant — refusé tout de suite, jamais
 #                                    interprété comme positionnel
@@ -148,6 +152,9 @@
 #   VD_SLEEP                  attente entre deux tours              (10s)
 #   VD_SLEEP_CONFIRM          attente avant confirmation done/idle  (20s)
 #   VD_SLEEP_APRES_DEBLOCAGE  attente après un déblocage envoyé      (3s)
+#   VD_REPOS_TOURS            relevés de repos continu, sans travail
+#                              en vol, avant de cesser de veiller   (180,
+#                              soit ~30 min à 10 s le tour)
 #   VD_SLEEP_POSE             attente entre les 2 relevés du contrôle
 #                              de pane À LA POSE (avant tout tour)   (0.3s)
 #   VD_REGISTRE_DIR           registre des veilles  ($HOME/.somtech/veilles)
@@ -163,9 +170,27 @@
 VD_TOURS_DEFAUT=2000
 VD_SLEEP_DEFAUT=10
 
+# ⚠️ COMBIEN DE RELEVÉS DE REPOS AVANT DE CESSER DE VEILLER — et pourquoi ce
+#    nombre-là. Un agent AU REPOS n'a pas fini : il se repose entre deux
+#    gestes. Le défaut ① (T-20260819-0094, reproduit le 2026-08-25 par le
+#    rapport T-20260825-0067) tenait entier dans la confusion des deux — la
+#    veille mourait vers la 11ᵉ MINUTE de repos en annonçant « l'agent a fini »,
+#    et l'agent qui se bloquait ensuite n'avait plus personne.
+#
+#    180 relevés × 10 s = 30 MINUTES de repos continu, soit près du triple de
+#    la repro. La borne est en RELEVÉS et non en secondes pour rester
+#    éprouvable : un banc qui accélère `VD_SLEEP` à 0 ne doit pas fabriquer
+#    une marge qui n'existe pas sur le poste.
+#
+#    ⚠️ ET ELLE NE SUFFIT PAS SEULE. Un agent peut se reposer bien au-delà de
+#    30 min en attendant un sous-agent. C'est `travail_en_vol` qui le rattrape :
+#    tant qu'il y a quelque chose en vol, le compteur retombe à zéro.
+VD_REPOS_TOURS_DEFAUT=180
+
 VD_SLEEP="${VD_SLEEP:-$VD_SLEEP_DEFAUT}"
 VD_SLEEP_CONFIRM="${VD_SLEEP_CONFIRM:-20}"
 VD_SLEEP_APRES_DEBLOCAGE="${VD_SLEEP_APRES_DEBLOCAGE:-3}"
+VD_REPOS_TOURS="${VD_REPOS_TOURS:-$VD_REPOS_TOURS_DEFAUT}"
 VD_REGISTRE_DIR="${VD_REGISTRE_DIR:-$HOME/.somtech/veilles}"
 
 # Lit une clé d'un fichier de registre. Jamais `source` : un fichier de
@@ -212,6 +237,27 @@ else:
     res = d.get('result') or {}
     print((res.get('agent') or {}).get('agent_status', ''))
 " 2>/dev/null
+}
+
+# CET AGENT A-T-IL QUELQUE CHOSE EN VOL ? — lu à l'écran, parce que rien
+# d'autre ne le dit.
+#
+# ⚠️ « AU REPOS » N'EST PAS « SANS TRAVAIL EN VOL », et c'est la moitié du
+# correctif du défaut ①. Un agent `idle` peut avoir un shell d'arrière-plan qui
+# tourne et un sous-agent en vol — mesuré. Il n'a rien fini : il ATTEND. Et
+# c'est justement au retour de ce qu'il attend qu'il redemandera une permission,
+# donc qu'il aura besoin d'elle.
+#
+# ⚠️ CES TROIS MARQUES APPARTIENNENT AU RENDU DE CLAUDE CODE, PAS À UN CONTRAT.
+# Elles sont les mêmes que celles de `travailEnVol` dans
+# ligne-directe/src/recensement.js — et pour la même raison : le jour où le
+# libellé changera, cette sonde rendra « rien en vol » pour un agent qui en a.
+# Le sens sûr de cette panne-là est le bon : elle ferait cesser la veille PLUS
+# TÔT, jamais répondre à un dialogue. C'est pourquoi elle n'est qu'une des deux
+# conditions, et jamais celle qui décide seule.
+travail_en_vol() {
+  ECRAN_VOL=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
+  printf '%s' "$ECRAN_VOL" | grep -qE 'esc to interrupt|/tasks to see subagents|·[[:space:]]*[1-9][0-9]*[[:space:]]+shells?\b'
 }
 
 # Le PANE existe-t-il ? — et c'est une question DIFFÉRENTE de « un agent y
@@ -471,6 +517,7 @@ ILLISIBLES=0
 # Discriminant du défaut ① : tant qu'il vaut 0, un `idle` veut dire « il
 # attend qu'on lui parle », jamais « il a fini ».
 VU_TRAVAILLER=0
+REPOS=0
 PREAVIS_EMIS=0
 DERNIER_ETAT=""
 # Un pane peut être fermé SOUS la veille. Sans ce compteur, elle continue de
@@ -534,6 +581,11 @@ code_motif() {
     # lot ferme, deux choses différentes qui rendent le même signal.
     agent-invisible)   echo 10 ;;
     etat-instable)     echo 11 ;;
+    # ⚠️ 12, ET SURTOUT PAS 0. Un repos prolongé n'est PAS « l'agent a
+    # fini » : la veille n'a mesuré qu'une immobilité. Leur donner le
+    # même code rendrait les deux indistinguables pour l'appelant
+    # machine — c'est le défaut ① lui-même, déplacé dans la table.
+    repos-prolonge)    echo 12 ;;
     *)                 echo 5 ;;
   esac
 }
@@ -695,6 +747,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ILLISIBLES=0
       INVISIBLES=0
       ABSENT_TOTAL=0
+      REPOS=0
       # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
       # ce reset, trois écrans bizarres espacés dans le temps coupaient la
       # veille sur un agent vivant — d'autant plus probable que ce lot
@@ -707,6 +760,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ILLISIBLES=0
       INVISIBLES=0
       ABSENT_TOTAL=0
+      REPOS=0
       # Un agent bloqué a forcément commencé à travailler.
       VU_TRAVAILLER=1
       ECRAN=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
@@ -753,6 +807,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       ILLISIBLES=0
       INVISIBLES=0
       ABSENT_TOTAL=0
+      REPOS=0
       INCONNUES=0
       # `done` est un état terminal EXPLICITE : il ne survient pas à la
       # naissance, contrairement à `idle`. Il arme donc la détection.
@@ -770,21 +825,47 @@ for i in $(seq 1 "$VD_TOURS"); do
       INVISIBLES=0
       ABSENT_TOTAL=0
       INCONNUES=0
-      # ⚠️ LE DÉFAUT ① EST ICI. Un agent qui vient de naître est `idle`
-      # PARCE QU'IL ATTEND SON BRIEF. Les deux relevés de la garantie n°4
-      # avaient raison sur l'état et tort sur le sens. Tant qu'on ne l'a
-      # jamais vu au travail, `idle` n'est pas une fin — on veille.
+      # ⚠️ UN AGENT AU REPOS N'A PAS FINI — c'est tout le défaut ①.
+      #
+      # Deux confusions ont vécu ici, l'une après l'autre. La première :
+      # un agent qui vient de naître est `idle` PARCE QU'IL ATTEND SON BRIEF
+      # (`VU_TRAVAILLER`, fermée par T-20260818-0154). La seconde, qui a
+      # survécu à la première et qu'on ferme ici : un agent qui a travaillé
+      # puis SE REPOSE ENTRE DEUX GESTES était déclaré fini sur deux relevés
+      # séparés de 20 s. La veille mourait vers la 11ᵉ minute en annonçant
+      # « l'agent a fini » (T-20260819-0094, reproduit mot pour mot par le
+      # rapport T-20260825-0067), et l'agent qui se bloquait ensuite n'avait
+      # plus personne pour le voir.
+      #
+      # ⚠️ `idle` NE CONCLUT PLUS JAMAIS UNE FIN. Mesuré sur les 85 agents
+      # réels du poste le 2026-08-25 : `idle` 75, `working` 7, `done` 3.
+      # `done` est l'état terminal EXPLICITE de herdr, et il SURVIENT
+      # vraiment — c'est lui qui porte désormais `agent-termine`, seul.
+      # `idle` est l'état de trois agents sur quatre, dont la plupart sont au
+      # milieu de leur mandat : en faire une fin, c'est se tromper trois fois
+      # sur quatre.
+      #
+      # Ce qu'elle fait à la place : elle COMPTE le repos, et quand il dépasse
+      # la borne sans rien en vol, elle s'arrête en NOMMANT ce qu'elle a vu —
+      # `repos-prolonge`, jamais `agent-termine`. Elle ne sait pas qu'il a
+      # fini ; elle sait qu'il ne bouge plus. Les deux ont des codes de sortie
+      # distincts, pour que l'appelant machine ne les confonde pas non plus.
       if [ "$VU_TRAVAILLER" = "0" ]; then
         if [ "$i" = "1" ]; then
           echo "[$i] agent idle sans avoir jamais travaillé — il attend son brief, je veille"
         fi
+      elif travail_en_vol; then
+        # Un shell d'arrière-plan ou un sous-agent en vol : il ATTEND, il n'a
+        # pas fini. Le repos ne compte pas, et il repart de zéro.
+        if [ "$REPOS" != "0" ]; then
+          echo "[$i] au repos, mais du travail en vol — je veille"
+        fi
+        REPOS=0
       else
-        # done/idle peut être transitoire ; confirmer sur deux relevés
-        sleep "$VD_SLEEP_CONFIRM"
-        ETAT2="$(etat_courant)"
-        if [ "$ETAT2" = "done" ] || [ "$ETAT2" = "idle" ]; then
-          echo "TERMINE apres $DEBLOQUES deblocages"
-          terminer agent-termine "l'agent a travaillé puis fini (confirmé sur deux relevés)"
+        REPOS=$((REPOS+1))
+        if [ "$REPOS" -ge "$VD_REPOS_TOURS" ]; then
+          terminer repos-prolonge \
+            "$REPOS relevés de repos continu sans travail en vol (~$(( REPOS * VD_SLEEP / 60 )) min) — je ne sais PAS s'il a fini, je sais qu'il ne bouge plus ; il n'est plus protégé"
         fi
       fi
       ;;
