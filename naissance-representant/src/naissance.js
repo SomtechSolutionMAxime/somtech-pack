@@ -184,12 +184,22 @@ const LANCEUR = [
   'g.stdout.on("data",function(c){if(s.length<1000000)s+=c});',
   'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
   'g.on("close",function(){clearTimeout(m);rendre(null)});',
-  // 🔴 LE DÉLAI PRIME SUR CE QUI EST DÉJÀ ÉCRIT, et c est une correction de la passe de
-  // fond. Sans ce `if(r)`, une garde qui écrit un verdict VALIDE puis ne se termine
-  // jamais (boucle, minuteur oublié, poignée ouverte) voyait son verdict ré-émis au
-  // délai — un `allow` compris. Mesuré : `allow` transmis intact à 1585 ms sur un délai
-  // de 1500 ms. Une garde qui ne SORT pas est en panne, quoi qu elle ait dit avant :
-  // on ne peut pas savoir si ce qu elle a écrit était son dernier mot.
+  // 🔴 LE DÉLAI PRIME SUR CE QUI EST DÉJÀ ÉCRIT — correction de la deuxième passe de fond.
+  // Sans ce `if(r)`, une garde qui écrit un verdict VALIDE puis ne se termine jamais
+  // (boucle, minuteur oublié, poignée ouverte) voyait son verdict ré-émis au délai — un
+  // `allow` compris. Mesuré : `allow` transmis intact à 1585 ms sur un délai de 1500 ms.
+  //
+  // ⚠️ CE QUE CE CHOIX COÛTE, ET IL A ÉTÉ MESURÉ AUSSI (troisième passe de fond) : une
+  // garde qui répond juste, vite, et met plus que le délai à FERMER SON PROCESSUS est
+  // refusée à tort. Les deux cas sont indiscernables à l instant du délai — on ne sait
+  // pas si la garde a fini de juger ou si elle est bloquée après avoir parlé.
+  //
+  // L arbitrage est celui de la polarité : refuser à tort coûte un refus lisible que
+  // l agent lève en ouvrant sa ligne ; accepter à tort laisse passer le `allow` d une
+  // garde bloquée, c est-à-dire la panne que tout ce lot existe pour fermer. Et le cas
+  // refusé à tort ne se produit pas dans la population réelle : la garde d ouverture
+  // sort par un `process.exit(0)` explicite dès qu elle a répondu, et le délai vaut
+  // 10 secondes. Ce n est pas « impossible » — c est nommé plutôt que couvert.
   // ⚠️ LE REFUS DE DÉLAI SORT PAR LE MÊME CHEMIN QUE LE VERDICT — il attend la fin de son
   // écriture. Il était court, donc jamais tronqué ; mais une sortie qui n attend pas est
   // précisément le défaut corrigé deux lignes plus bas, et deux voies de sortie dont une

@@ -348,3 +348,27 @@ test('⑬ une RAISON énorme ne corrompt pas le verdict — il reste lisible', (
     'le verdict a été perdu : sa raison ne tenait pas dans le tube et le JSON est arrivé tronqué');
   assert.ok(d.permissionDecisionReason.length > 0, 'un refus sans raison envoie chercher à l aveugle');
 });
+
+// ═════════════ ⑭ le PRIX de ⑪, fixé plutôt que découvert
+
+test('⑭ une garde qui a répondu mais ne sort pas dans le délai est refusée — c est le prix de ⑪, et il est voulu', () => {
+  // 🔴 CE CONTRÔLE FIXE UN FAUX POSITIF ASSUMÉ, il ne le corrige pas. Trouvé par la troisième
+  // passe de fond : depuis ⑪, une garde qui rend un verdict juste puis met plus que le délai
+  // à FERMER SON PROCESSUS est refusée. À l instant du délai, ce cas est indiscernable de
+  // « elle a parlé puis s est bloquée ».
+  //
+  // L arbitrage : refuser à tort coûte un refus lisible que l agent lève en ouvrant sa ligne ;
+  // accepter à tort laisse passer le `allow` d une garde bloquée — la panne que ce lot ferme.
+  // Et le cas refusé à tort ne se produit pas en vrai : la garde d ouverture sort par un
+  // `process.exit(0)` explicite dès qu elle a répondu, et le délai vaut 10 secondes.
+  //
+  // ⚠️ Si ce test rougit un jour, ça ne veut PAS dire « remets le verdict avant le délai » :
+  // ça veut dire que quelqu un a changé cet arbitrage. Qu il le dise ici, avec son motif.
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"repond vite, sort tard"}}));\n'
+    + 'setTimeout(() => process.exit(0), 5000);\n'), { delai: '400', timeout: 60000 });
+  assert.equal(d.permissionDecision, 'deny',
+    'le verdict d une garde qui n a pas fini dans le délai est écarté — arbitrage de polarité, pas un défaut');
+  assert.match(d.permissionDecisionReason, /delai|délai/i);
+});
