@@ -34,7 +34,7 @@
 
 **⚠️ TON LIEU, LUI, GARDE LE CODE DU MANDAT.** `.orchestrateur/j-20260814-0001/` reste `.orchestrateur/j-20260814-0001/` même quand l'agent qui l'habite s'appelle `bonaventure`. Les deux ne servent pas la même chose : **le lieu est attaché à un chantier** — il est versé dans le dépôt de ce chantier, et son `CONTEXTE.md` décrit *ce* chantier ; **le nom sert à t'adresser la parole**. La naissance te le dit à voix haute quand les deux diffèrent, et c'est normal, pas une incohérence.
 
-**Ce que ça ne change pas** : ta traçabilité. Le code du mandat reste lisible dans le chemin de ton lieu — et c'est ce chemin, seul, qui t'y rattache. ⚠️ **Ta propre naissance, elle, n'inscrit rien nulle part** : seul un **chef d'équipe** reçoit une déclaration et une trace au ServiceDesk.
+**Ce que ça ne change pas** : ta traçabilité. Le code du mandat reste lisible dans le chemin de ton lieu — ce chemin, seul, t'y rattache. ⚠️ **Ta propre naissance n'inscrit rien nulle part** : seul un **chef d'équipe** est déclaré.
 
 **Un orchestrateur vivant qui porte encore un code ne se renomme pas** — renommer appartient à l'agent. Il recevra sa rivière **à sa renaissance**.
 
@@ -49,7 +49,7 @@ d-20260807-0005 orchestration et veille
 
 Pas le domaine, pas le rôle, pas l'état. « e-20260807-0006 orchestration » ne distingue rien d'un onglet voisin.
 
-**Te nommer toi-même, en naissant** — toi seul : ceux que tu fais naître, le geste les nomme.
+**Te nommer toi-même, en naissant** — toi seul : ceux que tu ouvres, le geste les nomme.
 
 ```bash
 herdr pane current                                  # ton pane (result.pane.pane_id)
@@ -107,17 +107,17 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
 P=$(printf '%s' "$NAISSANCE" | jq -r .pane)   # tout ce qui suit vise ce pane
 ```
 
-**Elle fait tout, ou rien.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), et jamais un arbre réutilisé. Onglet dedans, session avec **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait** — nom porté et répertoire — sinon le pane est refermé sans rien déclarer. Enfin la naissance est **inscrite hors dépôt**, `assigned_agent` **rempli** au ServiceDesk, et tout est **rendu en JSON**. Un nom qui n'est pas un code de chantier est refusé **sans que rien soit créé**.
+**Elle fait tout, ou rien.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, le tout **rendu en JSON**. ⚠️ **Un refus ne laisse rien derrière lui** — ce qui précède est défait, le pane refermé sans rien déclarer.
 
 ⚠️ **Vérifie par le fait, jamais par le mot.** Un `grep -q '"result"'` accepte une réponse `{"error": "...", "result": null}` parce que le mot y est présent. `jq -e` vérifie ce qui est **vrai**.
 
-**Les autres options** : `--modele`, `--mode` (défauts `opus`, `acceptEdits`) ; `--base <ref>` part d'ailleurs qu'`origin/main` ; `--workspace <id>` vise un espace HERDR existant (**≠** l'espace de travail ci-dessus) ; `--amorce-texte '…'` livre le brief dans le même geste, avec la même vérification.
+**Les autres options** : `--modele`, `--mode` (défauts `opus`, `acceptEdits`) ; `--base <ref>` part d'ailleurs qu'`origin/main` ; `--workspace <id>` vise un espace HERDR existant (**≠** l'espace de travail) ; `--amorce-texte '…'` livre le brief dans le même geste, avec la même vérification.
 
-⚠️ **`--coordonnateur`, c'est TOI** : sans lui, la déclaration ne dira pas qui a ouvert l'agent.
+⚠️ **`--coordonnateur`, c'est TOI** : sans lui, la déclaration tait qui a ouvert l'agent.
 
-⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket, un `E-…` sur **toutes** ses stories ; un epic non découpé n'a rien à remplir ; une demande, un projet ou une livraison sont **refusés**. La cause est dite dans la sortie.
+⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket, un `E-…` sur ses stories **encore ouvertes** — une story finie garde le nom de qui l'a faite ; une story vivante au nom d'un autre est **reprise**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein quand une story a été reprise ou sautée.
 
-⚠️ **L'onglet porte le nom de l'agent** — le geste ne pose pas le libellé « code + deux à quatre mots » ci-dessus.
+⚠️ **L'onglet porte le nom de l'agent** — pas le libellé « code + deux à quatre mots » ci-dessus.
 
 ⚠️ **La veille ne se pose pas ici**, mais une fois le brief **PRIS** (plus bas) : ici l'agent est `idle` sans rien à faire, et elle lisait cette attente comme un travail fini — « TERMINE apres 0 deblocages », code 0 (`T-20260818-0109`).
 
