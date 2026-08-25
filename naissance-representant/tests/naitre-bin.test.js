@@ -167,6 +167,9 @@ function installerFauxHerdr(scenario = {}) {
     creationRefusee: false,
     fermetureRefusee: false,
     promptRefuse: false,
+    // ⚠️ L'AGENT QUI A DÉJÀ ÉCRIT. Sans lui, aucun essai bout-en-bout ne peut atteindre l'état
+    // « un refus tombe sur un arbre qui porte du travail » — celui où un défaire aveugle détruit.
+    travailEcrit: null,
     ...scenario,
   };
   writeFileSync(journal, '');
@@ -221,6 +224,8 @@ if (cmd === 'tab create') {
 // ═══ \`agent start\` — la forme EXACTE mesurée contre le vrai service le 2026-08-16.
 if (cmd === 'agent start') {
   const pane = apres('--pane');
+  // L'agent naît et se met au travail : ce qu'il écrit est là avant que la suite refuse.
+  if (sc.travailEcrit) fs.writeFileSync(sc.travailEcrit, 'trois heures de travail\\n');
   // ⚠️ UN PANE QUI VIENT DE NAÎTRE N'EST PAS ENCORE UN SHELL — mesuré : herdr refuse
   // « agent_pane_busy … is not an available shell » sur un onglet créé une fraction de seconde
   // plus tôt. C'est un état TRANSITOIRE, et le seul que la commande ait le droit d'attendre.
@@ -366,6 +371,7 @@ function lancerNaitre(
     coordonnateur = null,
     base = null,
     horodatage = null,
+    session = null,
     // ⚠️ UNE SEULE PORTE POUR L'ENVIRONNEMENT, jamais un second lanceur à côté. Les essais du
     // chef d'équipe doivent mettre trois racines du poste hors de portée (`~/worktrees`,
     // `~/.somtech/naissances`, `~/.claude.json`) ; leur donner leur propre lanceur ferait deux
@@ -387,6 +393,7 @@ function lancerNaitre(
   if (coordonnateur) args.push('--coordonnateur', coordonnateur);
   if (base) args.push('--base', base);
   if (horodatage) args.push('--horodatage', horodatage);
+  if (session) args.push('--session', session);
   // UNE seule session désignée : le cas non ambigu, celui qui doit continuer à marcher sans
   // que l'appelant précise quoi que ce soit. Les cas à plusieurs sessions sont éprouvés sur
   // la résolution elle-même (`tests/session.test.js`), sans faire naître personne.
@@ -1781,6 +1788,148 @@ test('🔴 un échec APRÈS l’ouverture REFERME l’espace ouvert — l’ordr
       `la fermeture devait aboutir — stderr : ${r.stderr}`
     );
     assert.equal(declarationsInscrites(poste).length, 0, 'et rien n’a été déclaré');
+  }));
+
+// ── 9c-ter — L'ESPACE DE TRAVAIL, SUR LA POPULATION QU'AUCUN BANC N'ÉPROUVAIT (défaut ①)
+//
+// 🔴 CE QUE LA REVUE A MESURÉ. « Un refus ne laisse rien derrière lui » est écrit dans trois
+// textes opposables. C'était FAUX de l'objet le plus lourd du geste : DIX refus tombent APRÈS
+// `creerEspaceDeTravail`, et le seul filet de sortie ne connaissait que l'espace HERDR. Mesuré
+// sur un dépôt jetable, avec `--session` inconnue :
+//
+//     <bac>/worktrees/depot/20260825-152006   ← l'arbre
+//     wt/20260825-152006                       ← la branche, dans le dépôt du chantier
+//     git worktree list → 2 entrées            ← l'enregistrement
+//
+// ⚠️ POURQUOI LES QUATRE ASSERTIONS « AUCUN ESPACE DE TRAVAIL » N'ONT RIEN VU : elles visent
+// toutes un refus qui tombe AVANT la création. Une assertion juste sur un chemin correct, qui
+// laisse la vraie population non gardée. Ces essais-ci provoquent des refus POSTÉRIEURS.
+
+/** L'espace de travail, tel qu'un lecteur le verrait : l'arbre, la branche, l'enregistrement. */
+const cequiResteDeLEspace = (depot, espace, horodatage) => ({
+  arbre: existsSync(espace),
+  branche: gitDit(depot, 'branch', '--list', `wt/${horodatage}`) !== '',
+  enregistrements: gitDit(depot, 'worktree', 'list').split('\n').filter(Boolean).length,
+});
+
+test('🔴 un refus APRÈS la création de l’espace de travail le DÉFAIT — l’arbre, la branche, l’enregistrement', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    // `agent start` refuse : l'espace de travail existe déjà, l'onglet aussi. C'est l'un des
+    // dix refus postérieurs — celui que le banc voisin éprouvait déjà pour l'espace HERDR, et
+    // qui ne regardait pas l'arbre.
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT', demarrage: 'refus' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.deepEqual(
+      cequiResteDeLEspace(depot, espace, horodatage),
+      { arbre: false, branche: false, enregistrements: 1 },
+      'rien ne reste : ni l’arbre, ni sa branche-socle, ni son entrée dans `git worktree list`'
+    );
+    // ⚠️ ET LE DÉFAIRE A ABOUTI — pas seulement été tenté. Sans cette ligne, un défaire qui
+    // échoue en silence rendrait ce banc vert le jour où il cesse de retirer quoi que ce soit.
+    assert.doesNotMatch(r.stderr, /n’a PAS pu être défait/, `le défaire devait aboutir — stderr : ${r.stderr}`);
+  }));
+
+test('🔴 un refus qui tombe AVANT le moindre onglet le défait aussi — la session que le poste ne connaît pas', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    // La session nommée n'existe pas : le refus tombe entre la création de l'espace de travail
+    // et l'ouverture de l'espace herdr. C'est le refus EXACT que la revue a mesuré, et le seul
+    // endroit où AUCUN autre filet n'est armé.
+    installerFauxHerdr({ repertoire: espace });
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: poste,
+      workspace: null,
+      horodatage,
+      session: 'session-qui-nexiste-pas',
+    });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /session-qui-nexiste-pas/, 'le refus mesuré, et pas un autre');
+    assert.deepEqual(
+      cequiResteDeLEspace(depot, espace, horodatage),
+      { arbre: false, branche: false, enregistrements: 1 },
+      'et cette fois « rien n’a été créé » est VRAI'
+    );
+  }));
+
+// ⚠️ LES DEUX MOITIÉS D'UN DÉFAIRE : ce qu'il retire, ET ce à quoi il ne touche JAMAIS.
+// Un défaire qui peut détruire du travail est PIRE que l'orphelin qu'il nettoie.
+
+test('🔴 un arbre qui porte du TRAVAIL n’est pas détruit — le refus le nomme, et le geste est laissé à l’humain', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    // L'agent est né et a écrit ; c'est le contrôle du NOM qui refuse ensuite. Le pane est
+    // refermé, la commande sort en 1 — et l'arbre porte trois heures de travail.
+    installerFauxHerdr({
+      repertoire: espace,
+      espaceCree: 'wOUVERT',
+      nomPorte: 'quelquun-dautre',
+      travailEcrit: join(espace, 'ce-que-lagent-a-ecrit.txt'),
+    });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, essais: '1' });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.ok(existsSync(join(espace, 'ce-que-lagent-a-ecrit.txt')), '🔴 le travail est INTACT');
+    assert.equal(existsSync(espace), true, '… et l’arbre aussi');
+    assert.match(r.stderr, new RegExp(horodatage), 'l’espace resté est NOMMÉ — un orphelin tu est pire que pas de ménage');
+    assert.match(r.stderr, /worktree remove/, 'et le geste exact qui le retire, une fois qu’un humain a jugé');
+  }));
+
+test('🔴 une amorce non prise laisse l’agent VIVANT — donc son espace de travail sous ses pieds', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT', promptRefuse: true });
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: poste,
+      workspace: null,
+      horodatage,
+      amorce: 'commence par lire le registre',
+      essais: '1',
+    });
+
+    assert.equal(r.code, 1, `l’amorce doit ÉCHOUER pour que ce banc mesure quoi que ce soit — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /pane est laissé ouvert/i, 'la commande dit qu’elle laisse l’agent vivre');
+    assert.deepEqual(
+      cequiResteDeLEspace(depot, espace, horodatage),
+      { arbre: true, branche: true, enregistrements: 2 },
+      '… et elle ne le tue pas en retirant l’arbre où il travaille'
+    );
+  }));
+
+test('🔴 une déclaration qui ne s’écrit pas laisse l’agent VIVANT — donc son espace de travail aussi', () =>
+  avecChefDEquipe(({ code, depot, poste, bac, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+    const barrage = join(bac, 'racine-prise-3');
+    writeFileSync(barrage, 'je ne suis pas un répertoire\n');
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: { ...poste, SOMTECH_NAISSANCES_RACINE: barrage },
+      workspace: null,
+      horodatage,
+    });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.deepEqual(
+      cequiResteDeLEspace(depot, espace, horodatage),
+      { arbre: true, branche: true, enregistrements: 2 },
+      'l’agent travaille : son arbre lui survit'
+    );
+  }));
+
+test('une naissance RÉUSSIE ne défait évidemment rien — la moitié sans laquelle le défaire tuerait tout le monde', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.deepEqual(cequiResteDeLEspace(depot, espace, horodatage), { arbre: true, branche: true, enregistrements: 2 });
   }));
 
 test('🔴 mais un espace DONNÉ n’est JAMAIS refermé — on ne détruit pas ce qu’on n’a pas ouvert', () =>

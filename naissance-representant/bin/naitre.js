@@ -59,6 +59,7 @@ import {
   estChefDEquipe,
   horodatageDEspace,
   creerEspaceDeTravail,
+  defaireEspaceDeTravail,
   exigerUnMandatDeChantier,
   exigerUnHorodatageDEspace,
   EspaceDeTravailImpossible,
@@ -142,25 +143,63 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 let espaceAdefaire = null;
 let socketDeLEspace = null;
+/**
+ * 🔴 ET L'ESPACE DE TRAVAIL, QUI EST L'OBJET LE PLUS LOURD DU GESTE (défaut ① de la revue de
+ * fond, D-20260825-0002). La promesse ci-dessus ne couvrait que l'espace HERDR : DIX refus
+ * tombent APRÈS `creerEspaceDeTravail` — session inconnue, espace herdr refusé, `tab create`,
+ * pane sans identifiant, agent non détecté, écran jamais prêt, nom non porté, mauvais
+ * répertoire, déclaration impossible — et AUCUN ne retirait le worktree ni sa branche-socle.
+ * Mesuré sur un dépôt jetable : l'arbre, `wt/<horodatage>` et l'entrée de `git worktree list`
+ * survivaient tous les trois, pendant que trois textes opposables écrivaient l'inverse.
+ *
+ * ⚠️ LE MÊME FILET, PAS UN SECOND. Deux gestionnaires de sortie divergent au premier changement
+ * de l'un — et celui qui divergerait serait celui qu'on relit le moins. Une seule sortie, deux
+ * choses à défaire, et `laisserVivre` les désarme ENSEMBLE : les rares cas où quelque chose de
+ * vivant doit survivre (l'amorce non prise, la déclaration non écrite) laissent un agent DANS
+ * cet arbre — lui retirer l'arbre sous les pieds serait le tuer par la porte d'à côté, c'est-à-dire
+ * faire exactement ce que l'arbitrage du pane refuse de faire.
+ */
+let espaceDeTravailAdefaire = null;
 
 function armerLeDefaire(id, socket) {
   espaceAdefaire = id;
   socketDeLEspace = socket;
 }
 
+/**
+ * ⚠️ ET ON NE DÉFAIT QUE CE QU'ON A CRÉÉ — même règle que pour l'espace herdr donné par
+ * `--workspace`. Ici elle est tenue par construction : `creerEspaceDeTravail` REFUSE un arbre
+ * qui existe déjà (« deux agents dans le même arbre partagent branche, index et statut »), donc
+ * tout espace armé ici est né vide, de ce geste, à la seconde précédente.
+ */
+function armerLeDefaireDeLEspaceDeTravail(depot, fait) {
+  espaceDeTravailAdefaire = { depot, espace: fait.espace, branche: fait.branche, socle: fait.socle };
+}
+
 /** Ce qui vit dans l'espace doit lui survivre — et la raison est dite, jamais implicite. */
 function laisserVivre() {
   espaceAdefaire = null;
+  espaceDeTravailAdefaire = null;
 }
 
 process.on('exit', (code) => {
-  if (code === 0 || !espaceAdefaire) return;
-  const fermeture = fermerLEspaceHerdr(espaceAdefaire, { socket: socketDeLEspace });
-  if (!fermeture.ok) {
-    process.stderr.write(
-      `⚠️  l’espace herdr « ${espaceAdefaire} », ouvert par ce geste, n’a PAS pu être refermé ` +
-        `(${fermeture.message}) — retire-le à la main : \`herdr workspace close ${espaceAdefaire}\`\n`
-    );
+  if (code === 0) return;
+  if (espaceAdefaire) {
+    const fermeture = fermerLEspaceHerdr(espaceAdefaire, { socket: socketDeLEspace });
+    if (!fermeture.ok) {
+      process.stderr.write(
+        `⚠️  l’espace herdr « ${espaceAdefaire} », ouvert par ce geste, n’a PAS pu être refermé ` +
+          `(${fermeture.message}) — retire-le à la main : \`herdr workspace close ${espaceAdefaire}\`\n`
+      );
+    }
+  }
+  // ⚠️ L'ARBRE APRÈS L'ESPACE HERDR, jamais avant : le pane qui vient d'être refermé tourne
+  // DEDANS, et retirer un arbre sous un shell vivant laisse un worktree à moitié démonté.
+  if (espaceDeTravailAdefaire) {
+    const defait = defaireEspaceDeTravail(espaceDeTravailAdefaire);
+    // Un défaire qui échoue en SILENCE serait pire que pas de défaire : on croirait le ménage
+    // fait. Le message porte déjà l'espace resté ET le geste exact qui le retire.
+    if (!defait.ok) process.stderr.write(`⚠️  ${defait.message}\n`);
   }
 });
 
@@ -378,6 +417,11 @@ async function main() {
   if (chefEquipe) {
     try {
       espaceDuChef = creerEspaceDeTravail({ depot: REPO_ROOT, horodatage, base });
+      // 🔴 ARMÉ À LA SECONDE OÙ IL EXISTE — le défaut ① tenait tout entier dans cette ligne
+      // absente. L'ordre ne peut PAS fermer cette moitié : dix refus tombent plus bas, et
+      // l'espace de travail est la seule chose qu'on ne puisse pas créer après eux (l'agent
+      // doit naître dedans).
+      armerLeDefaireDeLEspaceDeTravail(REPO_ROOT, espaceDuChef);
     } catch (err) {
       if (err instanceof EspaceDeTravailImpossible) {
         process.stderr.write(`${err.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni onglet, ni agent, ni d\u00e9claration.\n`);

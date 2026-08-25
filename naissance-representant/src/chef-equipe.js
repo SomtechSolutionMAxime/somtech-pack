@@ -212,8 +212,14 @@ export function creerEspaceDeTravail({ depot, horodatage, racine = racineDesEspa
   // sur `HEAD` — donc sur la branche courante du dépôt, qui porte peut-être le travail non
   // poussé de quelqu'un d'autre. Un espace né « quelque part » est pire qu'un refus : il a
   // l'air normal, et le lot en sortira greffé sur une base que personne n'a choisie.
+  let socle;
   try {
-    git(depot, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`]);
+    // ⚠️ ON GARDE LE COMMIT, PAS LE NOM. `origin/main` peut avancer entre la naissance de
+    // l'espace et son défaire (un `fetch` d'un autre worktree suffit) : comparer la branche à
+    // `origin/main` lirait alors « elle a bougé », donc « elle porte du travail », sur un arbre
+    // où personne n'a rien fait — et l'orphelin resterait pour toujours. Le socle est le commit
+    // RÉSOLU au moment où l'espace naît, c'est-à-dire le seul point fixe de la comparaison.
+    socle = git(depot, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`]);
   } catch {
     throw new EspaceDeTravailImpossible(
       `« ${base} » est introuvable dans ${depot} — je ne sais pas d’où faire partir l’espace de ` +
@@ -251,5 +257,118 @@ export function creerEspaceDeTravail({ depot, horodatage, racine = racineDesEspa
     );
   }
 
-  return { espace, branche, base, depot_principal: nomDepot };
+  return { espace, branche, base, socle, depot_principal: nomDepot };
+}
+
+/**
+ * DÉFAIRE L'ESPACE DE TRAVAIL — l'arbre, sa branche-socle, et son enregistrement.
+ *
+ * 🔴 LE DÉFAUT QUE CECI FERME. « Un refus ne laisse rien derrière lui » est écrit dans trois
+ * textes opposables (`chefs-equipe.md`, `orchestrer-chantier/SKILL.md`, `cli/src/commands/
+ * agent.js`), et c'était FAUX de l'objet le plus lourd du geste. DIX refus de `naitre.js`
+ * tombent APRÈS `creerEspaceDeTravail`, et le seul filet de sortie ne connaissait que l'espace
+ * HERDR. Mesuré : l'arbre, `wt/<horodatage>` et l'entrée de `git worktree list` restaient tous
+ * les trois. C'est la MÊME forme, un cran plus haut, que le défaut déjà fermé sur l'espace herdr.
+ *
+ * ⚠️ ET CE GESTE EST PLUS DANGEREUX QUE L'ORPHELIN QU'IL NETTOIE, si on le pose aveugle : un
+ * arbre qui porte du travail est le travail de quelqu'un. Deux gardes le bornent, et elles ne
+ * mesurent PAS la même chose :
+ *
+ *   ① LE SOCLE A-T-IL BOUGÉ ? Un arbre dont tout est commité est PROPRE au sens de
+ *      `git status` — `worktree remove` l'emporterait sans un mot, et le travail ne vivrait
+ *      plus que dans une branche que ce geste s'apprête à supprimer. On compare donc la
+ *      branche à son socle AVANT de toucher à l'arbre, et un socle bougé arrête TOUT.
+ *   ② `git worktree remove` SANS `--force`. C'est la garde de git contre l'arbre sale
+ *      (modifié, ou porteur de fichiers non suivis) — on la relaie, on ne la contourne pas.
+ *      `--force` ici serait rendre au dispositif le pouvoir de détruire ce qu'il ne comprend pas.
+ *
+ * ⚠️ ET LA BRANCHE NE PART QU'APRÈS L'ARBRE. Une branche supprimée sur un arbre qui reste
+ * laisse un worktree détaché que plus rien ne nomme : la moitié du ménage est pire que rien.
+ *
+ * ⚠️ UN ESPACE DÉJÀ ABSENT N'EST PAS UNE PANNE. Retiré à la main entre-temps, il rend `ok` —
+ * traiter l'absence comme un échec ferait écrire un avertissement d'orphelin là où il n'y en a
+ * pas, et le bruit finit par faire ignorer le vrai.
+ *
+ * @param {object} entree
+ * @param {string} entree.depot      le dépôt du chantier
+ * @param {string} entree.espace     l'arbre, tel que `creerEspaceDeTravail` l'a rendu
+ * @param {string} entree.branche    sa branche-socle
+ * @param {string} [entree.socle]    le commit d'où elle est partie — absent, on ne défait RIEN
+ * @returns {{ok: boolean, message: string}}  ne jette jamais : il tourne dans une sortie
+ */
+export function defaireEspaceDeTravail({ depot, espace, branche, socle } = {}) {
+  const geste = `\`git -C ${depot} worktree remove ${espace}\``;
+
+  // ⚠️ SANS SOCLE, ON NE DÉFAIT PAS. C'est la moitié qui refuse de deviner : ne pas savoir d'où
+  // la branche est partie, c'est ne pas pouvoir dire si elle a bougé — donc ne pas pouvoir dire
+  // si l'arbre porte du travail. Un défaire qui devine est un défaire qui détruit.
+  if (!depot || !espace || !branche || !socle) {
+    return {
+      ok: false,
+      message:
+        `l’espace de travail « ${espace ?? '—'} » n’a PAS pu être défait : il manque de quoi ` +
+        `prouver qu’il ne porte rien (dépôt, arbre, branche et socle sont tous requis) — ` +
+        `retire-le à la main après avoir regardé : ${geste}`,
+    };
+  }
+
+  // ① LE SOCLE — mesuré avant tout geste, sur la branche, jamais sur l'arbre.
+  let tete;
+  try {
+    tete = git(depot, ['rev-parse', '--verify', '--quiet', `${branche}^{commit}`]);
+  } catch {
+    // La branche n'existe plus : il ne reste peut-être que l'arbre. On le dit, on ne devine pas.
+    tete = null;
+  }
+  if (tete && tete !== socle) {
+    return {
+      ok: false,
+      message:
+        `l’espace de travail « ${espace} » porte des commits que « ${branche} » n’avait pas en ` +
+        `naissant (${socle.slice(0, 8)} → ${tete.slice(0, 8)}) — je n’y touche PAS : c’est du ` +
+        `travail, et un ménage qui détruit du travail est pire que l’orphelin qu’il nettoie.\n` +
+        `  Regarde ce qu’il porte, puis retire-le toi-même : ${geste} && ` +
+        `\`git -C ${depot} branch -D ${branche}\``,
+    };
+  }
+
+  // ② L'ARBRE — et c'est git qui refuse s'il est sale, pas une seconde mesure écrite ici.
+  if (existsSync(espace)) {
+    try {
+      git(depot, ['worktree', 'remove', espace]);
+    } catch (err) {
+      const dit = String(err?.stderr || err?.message || err).trim();
+      return {
+        ok: false,
+        message:
+          `l’espace de travail « ${espace} », créé par ce geste, n’a PAS pu être défait :\n  ${dit}\n` +
+          `  Il porte quelque chose — et je ne force pas. Regarde, puis retire-le : ${geste}`,
+      };
+    }
+  } else {
+    // L'arbre est parti sans que git le sache : son enregistrement, lui, peut rester.
+    try {
+      git(depot, ['worktree', 'prune']);
+    } catch {
+      /* un `prune` qui échoue ne laisse rien de destructeur derrière lui — on continue. */
+    }
+  }
+
+  // ③ LA BRANCHE-SOCLE — seulement maintenant, et seulement si elle n'a rien porté.
+  if (tete) {
+    try {
+      git(depot, ['branch', '-D', branche]);
+    } catch (err) {
+      const dit = String(err?.stderr || err?.message || err).trim();
+      return {
+        ok: false,
+        message:
+          `l’arbre « ${espace} » est retiré, mais sa branche-socle « ${branche} » reste :\n  ${dit}\n` +
+          `  Retire-la à la main : \`git -C ${depot} branch -D ${branche}\` — sinon la prochaine ` +
+          `naissance du même horodatage sera refusée par git.`,
+      };
+    }
+  }
+
+  return { ok: true, message: `espace de travail « ${espace} » défait, avec « ${branche} »` };
 }

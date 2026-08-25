@@ -21,6 +21,7 @@ import {
   horodatageDEspace,
   nomDuDepotPrincipal,
   creerEspaceDeTravail,
+  defaireEspaceDeTravail,
   exigerUnMandatDeChantier,
   exigerUnHorodatageDEspace,
   EspaceDeTravailImpossible,
@@ -348,5 +349,133 @@ test('le défaut, sans surcharge, est bien ~/worktrees — la convention du post
     assert.equal(racineDesEspaces(), resolve(process.env.HOME, 'worktrees'));
   } finally {
     if (avant !== undefined) process.env.SOMTECH_WORKTREES_RACINE = avant;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 — DÉFAIRE L'ESPACE DE TRAVAIL — et refuser de le faire dès qu'il porte quelque chose.
+//
+// 🔴 CE QUE CES ESSAIS FERMENT. « Un refus ne laisse rien derrière lui » est écrit dans trois
+// textes opposables, et c'était FAUX de l'objet le plus lourd du geste : dix refus tombent
+// APRÈS `creerEspaceDeTravail`, et aucun ne retirait l'arbre ni sa branche-socle. Mesuré sur un
+// dépôt jetable : l'espace, `wt/<horodatage>`, et l'entrée dans `git worktree list` restaient.
+//
+// ⚠️ ET LE DÉFAIRE EST PLUS DANGEREUX QUE L'ORPHELIN QU'IL NETTOIE, si on le pose aveugle. Un
+// arbre qui porte du travail — non suivi, modifié, ou commité — est du travail de quelqu'un.
+// Les trois essais qui suivent le mesurent : le défaire refuse, et ne touche à RIEN.
+
+test('un espace propre est DÉFAIT en entier — l’arbre, la branche-socle, et l’enregistrement', () => {
+  const { bac, depot, racine } = unDepot();
+  try {
+    const fait = creerEspaceDeTravail({ depot, horodatage: '20260825-083616', racine });
+    assert.ok(existsSync(fait.espace), 'l’espace doit exister pour qu’il y ait quelque chose à défaire');
+
+    const defait = defaireEspaceDeTravail({ depot, ...fait });
+
+    assert.equal(defait.ok, true, `le défaire devait aboutir : ${defait.message}`);
+    assert.equal(existsSync(fait.espace), false, 'l’arbre est retiré');
+    assert.equal(
+      git(depot, 'branch', '--list', fait.branche),
+      '',
+      'la branche-socle aussi — sans quoi le prochain `worktree add` du même horodatage refuserait'
+    );
+    assert.equal(
+      git(depot, 'worktree', 'list').split('\n').length,
+      1,
+      'et l’enregistrement ne garde aucune trace : le dépôt principal, et rien d’autre'
+    );
+  } finally {
+    nettoyer(bac);
+  }
+});
+
+// ⚠️ LE PIÈGE QU'UN DÉFAIRE OUVRE. `git worktree remove` sans `--force` refuse un arbre sale —
+// c'est la garde de git, et on ne la contourne pas. L'essai le PROUVE par l'effet : le fichier
+// est encore là après.
+test('un arbre qui porte du travail NON SUIVI n’est pas détruit — et le refus le dit', () => {
+  const { bac, depot, racine } = unDepot();
+  try {
+    const fait = creerEspaceDeTravail({ depot, horodatage: '20260825-083616', racine });
+    const trouvaille = join(fait.espace, 'ce-que-lagent-a-ecrit.txt');
+    writeFileSync(trouvaille, 'trois heures de travail\n');
+
+    const defait = defaireEspaceDeTravail({ depot, ...fait });
+
+    assert.equal(defait.ok, false, 'un arbre qui porte quelque chose ne se défait pas');
+    assert.ok(existsSync(trouvaille), '… et le travail est encore là');
+    assert.ok(existsSync(fait.espace), '… et l’arbre aussi');
+    assert.match(defait.message, /20260825-083616/, 'le refus nomme l’espace resté');
+    assert.match(defait.message, /worktree remove/, 'et le geste exact qui le retire quand on l’a jugé');
+  } finally {
+    nettoyer(bac);
+  }
+});
+
+// ⚠️ ET LE CAS QUE `worktree remove` NE VOIT PAS. Un arbre dont tout est COMMITÉ est PROPRE au
+// sens de `git status` : `worktree remove` l'emporterait sans un mot, et le travail ne vivrait
+// plus que dans une branche que le geste s'apprête à supprimer. On mesure donc la branche
+// AVANT de toucher à l'arbre : socle bougé ⇒ on ne défait RIEN.
+test('un arbre dont le travail est COMMITÉ n’est pas détruit non plus — ni l’arbre, ni la branche', () => {
+  const { bac, depot, racine } = unDepot();
+  try {
+    const fait = creerEspaceDeTravail({ depot, horodatage: '20260825-083616', racine });
+    writeFileSync(join(fait.espace, 'le-lot.txt'), 'le lot livré\n');
+    git(fait.espace, 'add', '-A');
+    git(fait.espace, 'commit', '-qm', 'le travail du chef d’équipe');
+    assert.equal(git(fait.espace, 'status', '--porcelain'), '', 'l’arbre est PROPRE — c’est tout le piège');
+
+    const defait = defaireEspaceDeTravail({ depot, ...fait });
+
+    assert.equal(defait.ok, false, 'un socle qui a bougé porte du travail — on ne défait rien');
+    assert.ok(existsSync(join(fait.espace, 'le-lot.txt')), 'l’arbre est intact');
+    assert.equal(git(depot, 'rev-parse', fait.branche), git(fait.espace, 'rev-parse', 'HEAD'), 'la branche aussi');
+    assert.match(defait.message, /commit/i, 'et le refus dit POURQUOI : il y a des commits');
+  } finally {
+    nettoyer(bac);
+  }
+});
+
+// ⚠️ LA MOITIÉ QUI PROTÈGE LE DÉFAIRE LUI-MÊME : il ne rougit pas sur ce qui n'existe plus. Un
+// espace déjà retiré à la main est un état ORDINAIRE, pas une panne — et le traiter comme une
+// panne ferait écrire un avertissement d'orphelin là où il n'y a pas d'orphelin.
+test('un espace déjà retiré ne fait pas rougir le défaire — mais sa branche-socle part quand même', () => {
+  const { bac, depot, racine } = unDepot();
+  try {
+    const fait = creerEspaceDeTravail({ depot, horodatage: '20260825-083616', racine });
+    rmSync(fait.espace, { recursive: true, force: true });
+
+    const defait = defaireEspaceDeTravail({ depot, ...fait });
+
+    assert.equal(defait.ok, true, `l’absence n’est pas une panne : ${defait.message}`);
+    assert.equal(git(depot, 'branch', '--list', fait.branche), '', 'la branche-socle est retirée');
+  } finally {
+    nettoyer(bac);
+  }
+});
+
+// ⚠️ LE SOCLE EST UN COMMIT, PAS UN NOM DE RÉFÉRENCE. Entre la création et le défaire, un
+// `fetch` peut faire avancer `origin/main` : comparer la branche à `origin/main` lirait alors
+// « elle a bougé » sur un espace où personne n'a rien fait, et l'orphelin resterait pour
+// toujours. `creerEspaceDeTravail` rend donc le commit RÉSOLU, et c'est lui qu'on compare.
+test('le socle rendu est le COMMIT résolu — un origin/main qui avance ne fait pas croire à du travail', () => {
+  const { bac, depot, racine } = unDepot();
+  try {
+    const fait = creerEspaceDeTravail({ depot, horodatage: '20260825-083616', racine });
+    assert.equal(fait.socle, git(depot, 'rev-parse', 'origin/main'), 'le socle est le commit, pas « origin/main »');
+
+    // origin/main avance — exactement ce qu'un `fetch` d'un autre worktree produit.
+    writeFileSync(join(depot, 'ailleurs.txt'), 'le travail d’un autre\n');
+    git(depot, 'add', '-A');
+    git(depot, 'commit', '-qm', 'un commit poussé par quelqu’un d’autre');
+    git(depot, 'push', '-q', 'origin', 'main');
+    git(depot, 'fetch', '-q', 'origin');
+    assert.notEqual(git(depot, 'rev-parse', 'origin/main'), fait.socle, 'la base a bel et bien bougé');
+
+    const defait = defaireEspaceDeTravail({ depot, ...fait });
+
+    assert.equal(defait.ok, true, `l’espace n’a rien fait : il doit se défaire — ${defait.message}`);
+    assert.equal(existsSync(fait.espace), false);
+  } finally {
+    nettoyer(bac);
   }
 });
