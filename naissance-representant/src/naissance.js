@@ -83,19 +83,105 @@ export function cheminLieu(repoRoot, nom, role = 'representant') {
 // l'environnement, et `CLAUDE_PROJECT_DIR`/`PWD` y valent le répertoire de démarrage).
 const CHEMIN_GARDE_POSTE = '$HOME/.somtech/naissance-representant/hooks/garde-ouverture-ligne.js';
 
-// Le refus servi quand le garde n'est PAS installé sur ce poste. Sans lui, l'absence est
-// muette et permissive — exactement le motif « fonction inerte derrière des tests verts ».
-// Aucune apostrophe droite dans le texte : la charge voyage entre guillemets simples de shell.
-const REFUS_GARDE_ABSENT = JSON.stringify({
+// ═══════════════════════════════ Les refus que la commande rend À LA PLACE de la garde
+//
+// T-20260824-0020. La commande appelait sa garde par `exec node "$G"` et transmettait sa
+// sortie TELLE QUELLE. Mesuré le 2026-08-24 sur Claude Code 2.1.241 (T-20260824-0002) :
+// quand une garde ne rend pas de verdict LISIBLE, Claude Code n'a aucune décision et
+// dégrade le geste en DEMANDE de permission — et sous `--permission-mode acceptEdits`,
+// une demande est un OUI. La garde d'ouverture est ce qui rend la ligne d'un agent
+// obligatoire : si elle cesse de refuser, l'agent naît sans que rien n'exige sa ligne.
+//
+// 🔴 LA POLARITÉ DE PANNE D'UNE GARDE EST LE REFUS, JAMAIS LA DEMANDE. Six modes ont été
+// mesurés (banc `tests/la-commande-garde-refuse-en-panne.test.js`), et sept rouges
+// mesurés avant ce durcissement — seule l'absence était couverte :
+//
+//   ① la garde est ABSENTE            → couvert depuis T-20260809-0032
+//   ② elle CASSE (ou se tait)         → sortie vide      → refus rendu par le shell
+//   ③ elle PEND                       → délai            → refus rendu par le lanceur
+//   ④ elle rend un verdict SANS décision (ou une décision inventée) → refus
+//   ⑤ du BRUIT précède son JSON       → ne parse plus    → refus
+//   ⑥ elle BOUCLE                     → délai + SIGKILL  → refus
+//
+// ⚠️ ⑥ EST FERMÉ ICI, ALORS QU'IL NE L'ÉTAIT PAS DANS T-20260824-0002 — et c'est la
+// SEULE raison qui le permet : là-bas, le délai que la garde s'imposait vivait DANS son
+// propre processus, et Node est mono-thread — un `while` empêche le minuteur de tirer.
+// Ici le minuteur vit dans le LANCEUR, un processus distinct qui TUE la garde. Ce n'est
+// pas de la prudence en plus : c'est un mode de panne de moins, mesuré.
+//
+// Aucune apostrophe droite dans ces textes ni dans le lanceur : la charge voyage entre
+// guillemets simples de shell. `echapper` le garantit plutôt que de l'espérer.
+
+/** Une charge sûre entre guillemets simples de `/bin/sh` — la clôture, jamais l'espoir. */
+const echapper = (t) => t.replace(/'/g, "'\\''");
+
+const refus = (raison) => echapper(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: 'PreToolUse',
     permissionDecision: 'deny',
-    permissionDecisionReason:
-      'le garde d’ouverture est introuvable sur ce poste (~/.somtech/naissance-representant) — ' +
-      'installe-le avec `npx @somtech-solutions/pack setup`. Refus par défaut : un garde absent ' +
-      'ne vaut jamais un garde permissif.',
+    permissionDecisionReason: raison,
   },
-});
+}));
+
+const REFUS_GARDE_ABSENT = refus(
+  'le garde d’ouverture est introuvable sur ce poste (~/.somtech/naissance-representant) — ' +
+  'installe-le avec `npx @somtech-solutions/pack setup`. Refus par défaut : un garde absent ' +
+  'ne vaut jamais un garde permissif.');
+
+const REFUS_GARDE_EN_PANNE = refus(
+  'le garde d’ouverture est présent mais il n’a rendu aucun verdict lisible — il a échoué, ' +
+  'ou ce qu’il a écrit n’est pas un verdict. Refus par défaut : un garde qui casse ne vaut ' +
+  'jamais un garde permissif, et une demande de permission est un oui dès que la session ' +
+  'accepte les éditions.');
+
+/**
+ * Le délai imposé à la garde, et ses BORNES.
+ *
+ * ⚠️ Réglable par `SOMTECH_GARDE_OUVERTURE_DELAI_MS` — les tests en ont besoin pour mesurer
+ * « elle pend » en secondes plutôt qu'en minutes. Mais une valeur hors bornes ne s'applique
+ * PAS : sans ça, `SOMTECH_GARDE_OUVERTURE_DELAI_MS=99999999` désarmerait le seul contrôle
+ * qui ferme ③ et ⑥, depuis l'environnement, sans qu'aucun test ne rougisse.
+ */
+const DELAI_MS = 10000;
+const DELAI_MIN_MS = 200;
+const DELAI_MAX_MS = 30000;
+
+/**
+ * Le LANCEUR : ce qui appelle la garde à la place de `exec`, et qui refuse à sa place.
+ *
+ * Il vit en ligne dans la commande — jamais dans un fichier de plus. Un fichier de plus
+ * serait un mode de panne de plus : c'est précisément « le fichier n'est pas là » que
+ * cette commande existe pour fermer.
+ *
+ * Il CAPTURE la sortie de la garde, la VALIDE (un verdict est un `allow` ou un `deny`,
+ * rien d'autre), et RÉ-ÉMET une forme canonique — ce qui écarte le bruit du même geste.
+ * Sortie non reconnue = pas de verdict = refus, sans jamais lire `$?` (qu'un tube rendrait
+ * de toute façon celui du dernier maillon).
+ */
+const LANCEUR = [
+  'var C=require("child_process"),s="",fini=false;',
+  `var T=Number(process.env.SOMTECH_GARDE_OUVERTURE_DELAI_MS)||${DELAI_MS};`,
+  `if(!(T>=${DELAI_MIN_MS}&&T<=${DELAI_MAX_MS}))T=${DELAI_MS};`,
+  'var D=JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",',
+  'permissionDecisionReason:"le garde d ouverture n a rendu aucun verdict dans le delai imparti — ',
+  'il pend ou il boucle, et il vient d etre arrete. Refus par defaut : un garde qui ne repond pas ',
+  'ne vaut jamais un garde permissif."}});',
+  'var g=C.spawn(process.execPath,[process.argv[1]],{stdio:["pipe","pipe","ignore"]});',
+  'g.on("error",function(){rendre(null)});',
+  'g.stdin.on("error",function(){});process.stdin.on("error",function(){});',
+  'process.stdin.pipe(g.stdin);',
+  'g.stdout.on("data",function(c){s+=c});',
+  'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
+  'g.on("close",function(){clearTimeout(m);rendre(null)});',
+  'function rendre(r){if(fini)return;fini=true;var v=null;',
+  'try{var o=JSON.parse(s).hookSpecificOutput;',
+  'if(o&&(o.permissionDecision==="allow"||o.permissionDecision==="deny"))v=o}catch(e){}',
+  'if(v)process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",',
+  'permissionDecision:v.permissionDecision,',
+  'permissionDecisionReason:String(v.permissionDecisionReason||"")}}));',
+  'else if(r)process.stdout.write(r);',
+  'process.exit(0)}',
+].join('');
 
 /**
  * La commande de hook posée dans le `.claude/settings.json` VERSIONNÉ du lieu.
@@ -103,12 +189,14 @@ const REFUS_GARDE_ABSENT = JSON.stringify({
  * Une constante, pas une fonction d'un `repoRoot` : c'est précisément ce dont elle ne doit
  * plus dépendre. Deux naissances lancées de deux endroits écrivent le même octet.
  *
- * `cat >/dev/null` avant le refus : Claude Code écrit la requête sur l'entrée du hook, et
- * sortir sans la lire fermerait le tuyau sous sa plume.
+ * `cat >/dev/null` avant le refus d'absence : Claude Code écrit la requête sur l'entrée du
+ * hook, et sortir sans la lire fermerait le tuyau sous sa plume. (Quand la garde EST là,
+ * c'est le lanceur qui lit cette entrée et la lui passe.)
  */
 export const COMMANDE_GARDE =
   `G="${CHEMIN_GARDE_POSTE}"; ` +
-  'if [ -f "$G" ]; then exec node "$G"; ' +
+  `if [ -f "$G" ]; then S=$(node -e '${LANCEUR}' "$G" 2>/dev/null); ` +
+  `if [ -n "$S" ]; then printf '%s\\n' "$S"; else printf '%s\\n' '${REFUS_GARDE_EN_PANNE}'; fi; ` +
   `else cat >/dev/null 2>&1; printf '%s\\n' '${REFUS_GARDE_ABSENT}'; fi`;
 
 /** Le chemin du `.claude/settings.json` posé par la commande qui pose le lieu. */

@@ -193,3 +193,23 @@ test('⑧ les gabarits des DEUX rôles portent exactement cette commande — le 
       + 'les tests ci-dessus ne mesureraient alors rien de ce qui est distribué');
   }
 });
+
+// ═════════════ ⑨ face à un WRITE — ce que la table des hooks éprouvés garde
+
+test('⑨ l enveloppe ne refuse pas un Write par elle-même — elle transmet le verdict de la garde', () => {
+  // ⚠️ POURQUOI CE CONTRÔLE, ET POURQUOI ICI. Ce hook est posé SANS `matcher` : il voit
+  // donc AUSSI les `Write`. Et le `deny` de N IMPORTE QUEL hook l emporte sur le `allow`
+  // d un autre (mesuré le 2026-08-24, T-20260824-0002, dans les deux sens). Si cette
+  // enveloppe refusait un Write de son propre chef, un orchestrateur ne pourrait plus
+  // tenir son CONTEXTE.md — la garde d écriture aurait beau dire oui, et RIEN ne le dirait.
+  //
+  // C est précisément ce que la table `HOOKS_EPROUVES` de `cli/test/metier-garde-ecriture.
+  // test.js` exige d avoir mesuré avant d inscrire une empreinte. Ce lot a changé la
+  // commande, donc l empreinte : cette ré-épreuve est la contrepartie de la nouvelle ligne.
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"ligne ouverte — je me retire"}}));\n'),
+    { requete: { cwd: '/x', tool_name: 'Write', tool_input: { file_path: '/x/CONTEXTE.md' } } });
+  assert.equal(d.permissionDecision, 'allow');
+  assert.equal(d.permissionDecisionReason, 'ligne ouverte — je me retire');
+});
