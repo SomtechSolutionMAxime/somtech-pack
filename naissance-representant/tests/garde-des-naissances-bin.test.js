@@ -255,3 +255,13 @@ test('`--json` rend la structure entière, pour qu’une chaîne puisse s’en s
   assert.ok(Object.hasOwn(lu, 'comptes'));
   assert.ok(Object.hasOwn(lu, 'methode'), 'un chiffre sans sa méthode est un fait invérifiable');
 });
+
+test('la commande est DÉCLARÉE — un binaire que rien ne déclare n’est atteignable par personne', () => {
+  // ⚠️ « ÉCRIT » N'EST PAS « ATTEIGNABLE ». Le fichier peut être parfait et sa garde parfaite :
+  // tant qu'aucun manifeste ne le nomme, il n'existe que pour qui connaît son chemin. C'est la
+  // moitié qui manque le plus souvent — le motif « fusionné, publié, installé ».
+  const manifeste = JSON.parse(readFileSync(join(resolve(ICI, '..'), 'package.json'), 'utf8'));
+  const declaree = Object.entries(manifeste.bin ?? {}).find(([, c]) => c === 'bin/garde-des-naissances.js');
+  assert.ok(declaree, 'la garde des naissances n’est déclarée dans aucun `bin` du manifeste');
+  assert.match(declaree[0], /garde/, 'le nom de la commande doit dire qu’elle garde');
+});
