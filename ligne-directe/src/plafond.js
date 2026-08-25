@@ -98,24 +98,40 @@
 export const PLAFOND_SERVICEDESK = 32;
 
 /**
- * BORNER UN TRANSPORT — il sert au plus `plafond` appels à la fois, les autres attendent.
+ * PLAFONNER UN TRANSPORT — il sert au plus `plafond` appels à la fois, les autres attendent.
+ *
+ * ⚠️ ELLE NE S'APPELLE PAS `borner`, ET CE N'EST PAS UN DÉTAIL DE GOÛT. Le module voisin
+ * `tui-vue-du-parc.js` EXPORTE DÉJÀ un `borner(texte, largeur)` qui tronque une chaîne — une
+ * sémantique sans aucun rapport. Aucun fichier n'importe les deux aujourd'hui ; le jour où l'un
+ * le ferait, il prendrait l'un pour l'autre sans qu'aucun essai ne rougisse, parce que les deux
+ * acceptent deux arguments et rendent quelque chose. On ne laisse pas ce nom en double.
  *
  * ⚠️ LA BORNE EST SUR L'APPEL, PAS SUR LE TRAVAIL QUI L'ENTOURE. Un appelant ne détient jamais
  * de place pendant qu'il attend AUTRE CHOSE — il en prend une au moment de l'appel, la rend au
  * retour. C'est ce qui rend l'interblocage impossible : aucune place n'est jamais tenue par
  * quelqu'un qui attend une place.
  *
+ * 🔴 ET CETTE PROMESSE A UNE LIMITE, RELEVÉE EN REVUE ET ÉPROUVÉE PAR ELLE : **deux plafonds
+ * imbriqués s'interbloquent.** Si un transport plafonné rappelait, DEPUIS SON PROPRE APPEL, le
+ * même plafond, il tiendrait une place en attendant une place — et à `plafond: 1` il attendrait
+ * pour toujours (mesuré par la passe de fond, sur un cas construit).
+ *
+ * ⚠️ AUCUN APPEL RÉEL NE FAIT ÇA AUJOURD'HUI — vérifié : `demander` n'est jamais rappelé depuis
+ * l'intérieur d'un `appeler`, et `lecteurDeChantier` est le seul lieu qui plafonne. C'est donc
+ * une propriété LATENTE, pas un défaut. On l'écrit ici plutôt que de la laisser se découvrir :
+ * **ne plafonne pas un transport déjà plafonné.**
+ *
  * ⚠️ ET LA PLACE SE REND MÊME QUAND L'APPEL JETTE. Un transport qui refuse — HTTP 500, délai
  * dépassé, service muet — doit libérer sa place comme un autre. Sans ça, un parc qui refuse
  * huit fois fige la vue pour toujours, et le symptôme serait « la vue ne rend plus », jamais
  * « le ServiceDesk refuse ». Un banc mute cette libération.
  *
- * @param appeler  `(nom, args) → corps` — le transport à borner. `null` traverse tel quel :
+ * @param appeler  `(nom, args) → corps` — le transport à plafonner. `null` traverse tel quel :
  *                 « aucun transport » n'est pas « un transport qui refuse », et cette
  *                 distinction porte tout le rendu « aucun accès au ServiceDesk » de la vue.
  * @param plafond  le nombre d'appels simultanés. Par défaut celui que la sonde a mesuré.
  */
-export function borner(appeler, { plafond = PLAFOND_SERVICEDESK } = {}) {
+export function plafonner(appeler, { plafond = PLAFOND_SERVICEDESK } = {}) {
   if (typeof appeler !== 'function') return appeler;
   // ⚠️ UN PLAFOND ILLISIBLE VAUT UN, PAS L'INFINI. Se replier sur « pas de borne » quand le
   // réglage est absurde, c'est faire du cas dégradé le cas le plus agressif pour le service

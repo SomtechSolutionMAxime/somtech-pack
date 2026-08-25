@@ -46,7 +46,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { laVueDuParc, lecteurDeChantier, rendreLaVue } from '../src/vue-du-parc.js';
-import { PLAFOND_SERVICEDESK, borner } from '../src/plafond.js';
+import { PLAFOND_SERVICEDESK, plafonner } from '../src/plafond.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(ICI, '..', 'src');
@@ -531,7 +531,7 @@ test('LES CHANTIERS PARTENT DE FRONT LES UNS DES AUTRES — deux lectures qui se
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// 4. LA BORNE ELLE-MÊME — ce que `borner` promet, éprouvé sans passer par la vue
+// 4. LA BORNE ELLE-MÊME — ce que `plafonner` promet, éprouvé sans passer par la vue
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -572,7 +572,7 @@ test('UNE PLACE SE REND MÊME QUAND L’APPEL JETTE — sinon un parc qui refuse
     if (n <= 4) throw new Error('refus');
     return n;
   };
-  const borne = borner(appeler, { plafond: 4 });
+  const borne = plafonner(appeler, { plafond: 4 });
   const issues = await avantDeuxSecondes(
     Promise.allSettled([1, 2, 3, 4, 5, 6, 7, 8].map((n) => borne(n))),
     'quatre refus puis quatre appels'
@@ -593,7 +593,7 @@ test('UN TRANSPORT QUI JETTE AVANT DE RENDRE SA PROMESSE REND SA PLACE AUSSI', a
     if (n <= 2) throw new Error('refus synchrone');
     return Promise.resolve(n);
   };
-  const borne = borner(appeler, { plafond: 2 });
+  const borne = plafonner(appeler, { plafond: 2 });
   const issues = await avantDeuxSecondes(
     Promise.allSettled([1, 2, 3, 4].map((n) => borne(n))),
     'deux refus synchrones puis deux appels'
@@ -618,7 +618,7 @@ test('UN PLAFOND ILLISIBLE VAUT UN, JAMAIS L’INFINI', async () => {
       await new Promise((r) => setTimeout(r, 3));
       enVol -= 1;
     };
-    const borne = borner(appeler, { plafond: absurde });
+    const borne = plafonner(appeler, { plafond: absurde });
     await Promise.all([1, 2, 3, 4, 5, 6].map(() => borne()));
     assert.equal(max, 1, `un plafond « ${String(absurde)} » doit valoir 1, il a laissé passer ${max}`);
   }
@@ -627,9 +627,47 @@ test('UN PLAFOND ILLISIBLE VAUT UN, JAMAIS L’INFINI', async () => {
 test('SANS TRANSPORT, LA BORNE NE FABRIQUE PAS DE TRANSPORT', async () => {
   // ⚠️ « aucun accès au ServiceDesk » ≠ « un accès qui refuse ». C'est ce `null` qui fait rendre
   // « aucun accès ne m'a été donné » plutôt qu'un parc inventé — le contrat ne bouge pas.
-  assert.equal(borner(null), null);
-  assert.equal(borner(undefined), undefined);
+  assert.equal(plafonner(null), null);
+  assert.equal(plafonner(undefined), undefined);
   assert.equal(lecteurDeChantier({ appeler: null }), null);
+});
+
+test('LE CHEMIN PAR DÉFAUT EST PLAFONNÉ — celui que la production emprunte, et lui seul compte', async () => {
+  // 🔴 CE BANC FERME UNE LACUNE QUE CE DÉPÔT AVAIT DÉJÀ ÉCRITE, ET QUI A DÉJÀ MORDU UNE FOIS.
+  //
+  // En tête de `tests/le-geste-vue-repond-par-le-socket.test.js` : « `lecteurDeChantier()` sans
+  // argument : seul des 6 appelants sans banc de même signature. » Le lot d'alors l'avait
+  // DÉCLARÉ avant de livrer, honnêtement. Personne ne l'a exercé, et `vue` a pendu chez le
+  // dirigeant au premier usage réel.
+  //
+  // La production appelle `construireLecteur()` (`veilleur.js`), c'est-à-dire
+  // `lecteurDeChantier()` **sans plafond**. Tous les autres bancs de ce fichier passent un
+  // plafond EXPLICITE : ils prouvent que `plafonner` respecte le chiffre qu'on lui donne, jamais
+  // que le chiffre PAR DÉFAUT arrive jusqu'au transport. Retirer `{ plafond }` de l'appel à
+  // `plafonner` dans `lecteurDeChantier`, ou mettre `plafond = Infinity` dans sa signature, les
+  // laisserait TOUS verts.
+  //
+  // ⚠️ ON SUBSTITUE UN SEUL POINT NOMMÉ : le transport. Le transport par défaut exige une clé et
+  // un service — cette moitié-là reste hors de portée d'un banc, et le fichier voisin le dit
+  // déjà. Mais le PLAFOND, lui, est celui de la production, et c'est lui qu'on mesure.
+  let enVol = 0;
+  let max = 0;
+  const appeler = async (...args) => {
+    enVol += 1;
+    max = Math.max(max, enVol);
+    await new Promise((r) => setTimeout(r, 3));
+    enVol -= 1;
+    return repondre(...args);
+  };
+  // ⚠️ AUCUN `plafond` ICI — c'est tout l'objet du banc.
+  const lire = lecteurDeChantier({ appeler, limite: LIMITE });
+  await lire('P-20260812-0009'); // le chantier qui porte le plus d'epics de l'instantané
+
+  assert.ok(max > 1, 'le chemin par défaut ne parallélise rien : la borne par défaut n’y arrive pas');
+  assert.ok(
+    max <= PLAFOND_SERVICEDESK,
+    `le chemin par défaut a laissé ${max} appels en vol pour un plafond de ${PLAFOND_SERVICEDESK}`
+  );
 });
 
 test('LE PLAFOND DE PRODUCTION N’A PAS BOUGÉ PAR ACCIDENT — la sonde qui l’a choisi est datée', () => {

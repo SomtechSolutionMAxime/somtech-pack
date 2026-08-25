@@ -65,7 +65,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
-import { borner, PLAFOND_SERVICEDESK } from './plafond.js';
+import { plafonner, PLAFOND_SERVICEDESK } from './plafond.js';
 import { rolesConnus, role as roleDe } from './roles.js';
 import { roleDuLieu as roleDuLieuReel } from './lieu-agent.js';
 
@@ -677,7 +677,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
   // ce que la vue demande au service, quelle que soit la façon dont les étages du dessus
   // choisissent de s'éventer. Le plafond ne se redouble donc jamais plus haut : voir
   // `src/plafond.js`, qui dit pourquoi un second réglage serait un défaut et non une prudence.
-  const demander = borner(appeler, { plafond });
+  const demander = plafonner(appeler, { plafond });
 
   // ═══ LES APPLICATIONS — LUES UNE FOIS POUR TOUT LE LECTEUR, jamais par chantier.
   //
