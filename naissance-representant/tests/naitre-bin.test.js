@@ -317,13 +317,35 @@ const aFerme = (journal, pane = 'w9:p1') =>
 let depotCourant = null; // le dépôt jetable du test en cours — voir `avecLieu`
 let sessionsDesEssais = '/tmp/faux-poste/.config/herdr/sessions/essai/herdr.sock';
 
-function lancerNaitre(client, { workspace = 'w9', amorce = null, modele = null, mode = null, role = null, essais = '3' } = {}) {
+function lancerNaitre(
+  client,
+  {
+    workspace = 'w9',
+    amorce = null,
+    modele = null,
+    mode = null,
+    role = null,
+    essais = '3',
+    coordonnateur = null,
+    base = null,
+    horodatage = null,
+    // ⚠️ UNE SEULE PORTE POUR L'ENVIRONNEMENT, jamais un second lanceur à côté. Les essais du
+    // chef d'équipe doivent mettre trois racines du poste hors de portée (`~/worktrees`,
+    // `~/.somtech/naissances`, `~/.claude.json`) ; leur donner leur propre lanceur ferait deux
+    // cloisons pour une seule chaîne, et une cloison dupliquée est une cloison qu'on oublie
+    // d'un côté — le motif « une porte sur deux » que ce fichier documente déjà.
+    env = {},
+  } = {}
+) {
   const args = [BIN, client, '--workspace', workspace];
   if (depotCourant) args.push('--depot', depotCourant);
   if (amorce) args.push('--amorce-texte', amorce);
   if (modele) args.push('--modele', modele);
   if (mode) args.push('--mode', mode);
   if (role) args.push('--role', role);
+  if (coordonnateur) args.push('--coordonnateur', coordonnateur);
+  if (base) args.push('--base', base);
+  if (horodatage) args.push('--horodatage', horodatage);
   // UNE seule session désignée : le cas non ambigu, celui qui doit continuer à marcher sans
   // que l'appelant précise quoi que ce soit. Les cas à plusieurs sessions sont éprouvés sur
   // la résolution elle-même (`tests/session.test.js`), sans faire naître personne.
@@ -334,6 +356,7 @@ function lancerNaitre(client, { workspace = 'w9', amorce = null, modele = null, 
       NAISSANCE_DELAI_MS: '5',
       HERDR_SESSIONS_ESSAIS: sessionsDesEssais,
       HERDR_SOCKET_PATH: '',
+      ...env,
     },
   });
   return {
@@ -1317,3 +1340,370 @@ test('un « .nom-agent » que herdr refuserait est un refus QUI NOMME SA CAUSE �
     'riv',
     { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}f` },
   ));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 9 — LE CHEF D'ÉQUIPE : UN AGENT SANS LIEU, DÉCLARÉ (D-20260825-0002)
+//
+// ⚠️ CES ESSAIS METTENT TROIS RACINES DU POSTE HORS DE PORTÉE, et il en faut trois parce que
+// la naissance en touche trois : `~/worktrees` (l'espace), `~/.somtech/naissances` (la
+// déclaration) et `~/.claude.json` (l'approbation du répertoire). En oublier une ferait écrire
+// un essai dans le poste du dirigeant, en paraissant vert.
+//
+// ⚠️ MESURÉ EN ÉCRIVANT CE LOT : le reste de ce fichier ne pose PAS `HOME`, et `approuverLieu`
+// écrit donc dans le VRAI `~/.claude.json`. Il y portait 25 553 entrées de répertoires
+// temporaires sur 27 685 le 2026-08-25. Ce n'est pas le sujet de ce lot — c'est signalé, pas
+// corrigé ici, parce que le corriger toucherait des essais qui ne sont pas de ma zone.
+
+/**
+ * Un dépôt de chantier AVEC son `origin/main` — la base dont l'espace de travail se tire.
+ * Aucun lieu n'y est posé : un chef d'équipe n'en a pas, et c'est précisément ce qu'on éprouve.
+ */
+let compteurChef = 0;
+function avecChefDEquipe(faire, { avecOrigin = true } = {}) {
+  compteurChef += 1;
+  const bac = mkdtempSync(join(tmpdir(), 'smtk-chef-bin-'));
+  const depot = join(bac, 'le-chantier');
+  mkdirSync(depot, { recursive: true });
+  const git = (...args) => execFileSync('git', ['-C', depot, ...args], { stdio: 'ignore' });
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'essai@somtech.ca');
+  git('config', 'user.name', 'essai');
+  writeFileSync(join(depot, 'LISEZMOI.md'), 'un chantier d’essai\n');
+  git('add', '-A');
+  git('commit', '-qm', 'le premier commit');
+  if (avecOrigin) {
+    const distant = join(bac, 'origin.git');
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', distant], { stdio: 'ignore' });
+    git('remote', 'add', 'origin', distant);
+    git('push', '-q', 'origin', 'main');
+    git('fetch', '-q', 'origin');
+  }
+
+  const poste = {
+    SOMTECH_WORKTREES_RACINE: join(bac, 'worktrees'),
+    SOMTECH_NAISSANCES_RACINE: join(bac, 'naissances'),
+    HOME: join(bac, 'faux-home'),
+    // Sans clé, `declarerAuServiceDesk` rend « aucun accès » plutôt que de partir dehors.
+    SOMTECH_DESK_API_KEY: '',
+    SERVICEDESK_MCP_TOKEN: '',
+  };
+  mkdirSync(poste.HOME, { recursive: true });
+
+  // Un code de mandat DIFFÉRENT à chaque essai : la déclaration refuse d'écraser un fait, et
+  // deux essais du même nom dans la même milliseconde se disputeraient le même fichier.
+  const code = `e-20260825-${String(1000 + compteurChef).slice(-4)}`;
+
+  // ⚠️ L'HORODATAGE EST DICTÉ, ET C'EST CE QUI REND CES ESSAIS MESURABLES. Sans lui, l'espace
+  // porte l'heure de la seconde où il naît : le faux herdr ne pourrait pas rapporter le
+  // répertoire RÉEL de la session, et la commande — qui vérifie par le fait qu'elle tourne dans
+  // son espace — refuserait toute naissance. Le drapeau existe pour de vraies raisons (rejouer
+  // un refus, reprendre une session par son nom) ; ce n'est pas une porte d'essais.
+  const horodatage = '20260825-083616';
+  const espace = join(bac, 'worktrees', 'le-chantier', horodatage);
+
+  depotCourant = depot;
+  try {
+    return faire({ code, depot, bac, poste, git, horodatage, espace });
+  } finally {
+    depotCourant = null;
+    // ⚠️ ON RETIRE LES WORKTREES AVANT LE DÉPÔT. `rm -rf` sur le bac laisserait le dépôt
+    // principal croire qu'ils existent — mais le dépôt part avec, donc rien ne survit. Ce qui
+    // survivrait, en revanche, ce sont des worktrees pointant vers un `.git` disparu si la
+    // racine était hors du bac : c'est pourquoi elle est DEDANS.
+    rmSync(bac, { recursive: true, force: true });
+  }
+}
+
+/** Les déclarations inscrites — lues comme un lecteur les lira, jamais depuis la mémoire. */
+function declarationsInscrites(poste) {
+  const racine = poste.SOMTECH_NAISSANCES_RACINE;
+  if (!existsSync(racine)) return [];
+  return execFileSync('/bin/ls', [racine], { encoding: 'utf8' })
+    .trim()
+    .split('\n')
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => JSON.parse(readFileSync(join(racine, f), 'utf8')));
+}
+
+const lancerChef = ({ code, poste, horodatage, ...reste }) =>
+  lancerNaitre(code, { role: 'chef-equipe', env: poste, horodatage, ...reste });
+
+// ── 9a — LE GESTE COMPLET, EN UNE FOIS
+
+test('UN SEUL GESTE fait naître un chef d’équipe : son espace, son agent, sa déclaration', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ repertoire: espace });
+
+    const r = lancerChef({ code, poste, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.ok(existsSync(espace), `l’espace n’existe pas : ${espace}`);
+    assert.equal(
+      execFileSync('git', ['-C', espace, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim(),
+      `wt/${horodatage}`,
+      'sur sa branche-socle'
+    );
+    assert.equal(
+      execFileSync('git', ['-C', espace, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      execFileSync('git', ['-C', depot, 'rev-parse', 'origin/main'], { encoding: 'utf8' }).trim(),
+      'tiré de origin/main'
+    );
+
+    // ⚠️ L'ONGLET NAÎT DANS L'ESPACE, PAR CONSTRUCTION — `--cwd`, pas un `cd` écrit dans un shell
+    // qui vient de démarrer (une ligne écrite avant que le shell soit prêt est perdue en entier).
+    const creation = appelsJournalises(journal).find((a) => a[0] === 'tab' && a[1] === 'create');
+    assert.equal(creation[creation.indexOf('--cwd') + 1], espace);
+
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.espace, espace);
+    assert.equal(rendu.branche, `wt/${horodatage}`);
+    assert.equal(rendu.base, 'origin/main');
+    assert.equal(rendu.mandat, code.toUpperCase());
+    assert.equal(rendu.coordonnateur, 'matapedia');
+  }));
+
+// ⚠️ LE CRITÈRE 5 DE L'EPIC, MESURÉ PAR `git status` DANS L'ESPACE CRÉÉ — pas par l'absence
+// d'un chemin qu'on aurait choisi de regarder. Une garde qui vérifie « pas de .orchestrateur »
+// se défait en posant un fichier ailleurs ; `git status --porcelain` voit TOUT ce qui a été
+// posé, y compris ce à quoi on n'a pas pensé.
+test('un chef d’équipe ne pose AUCUN fichier dans son espace — mesuré par le git status de l’espace', () =>
+  avecChefDEquipe(({ code, depot, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+    const r = lancerChef({ code, poste, horodatage });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    const statut = execFileSync('git', ['-C', espace, 'status', '--porcelain'], { encoding: 'utf8' });
+    assert.equal(statut, '', `l’espace doit être PROPRE — git status dit :\n${statut}`);
+    assert.equal(existsSync(join(espace, '.orchestrateur')), false, 'aucun lieu d’orchestrateur');
+    assert.equal(existsSync(join(espace, '.gestionnaire')), false, 'aucun lieu de représentant');
+    assert.equal(existsSync(join(espace, FICHIER_NOM_AGENT)), false, 'et pas même le fichier du nom');
+    assert.equal(existsSync(join(espace, '.claude', 'settings.json')), false, 'aucune garde d’ouverture');
+
+    // Et RIEN N'A ÉTÉ VERSÉ DANS LE DÉPÔT DU CHANTIER non plus. Le versement est le geste qui
+    // suit la pose d'un lieu ; un chef d'équipe n'en pose aucun, donc il ne commite rien à sa
+    // naissance. Le dépôt d'essai porte UN commit — celui que le harnais y a mis.
+    assert.equal(nombreDeCommits(depot), 1, 'la naissance n’a versé aucun lieu dans le dépôt');
+    assert.equal(JSON.parse(r.stdout).garde, null, 'et le geste le DIT : aucune garde posée');
+  }));
+
+test('le chef d’équipe porte le CODE DE SON MANDAT en minuscules — jamais une rivière', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ repertoire: espace });
+    const r = lancerChef({ code, poste, horodatage });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.agent, code, 'le nom EST le code du mandat, abaissé');
+    assert.equal(estUneRiviere(rendu.agent), false, 'et surtout PAS une rivière — elle est réservée aux orchestrateurs');
+
+    const demarrage = appelsJournalises(journal).find((a) => a[0] === 'agent' && a[1] === 'start');
+    assert.equal(demarrage[2], code, 'c’est bien ce nom-là que herdr reçoit');
+  }));
+
+// ── 9b — LA DÉCLARATION
+
+test('la déclaration est inscrite, complète, et rendue dans la sortie du geste', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ repertoire: espace });
+    const r = lancerChef({ code, poste, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    const inscrites = declarationsInscrites(poste);
+    assert.equal(inscrites.length, 1, 'une déclaration, et une seule');
+    const d = inscrites[0];
+    assert.equal(d.nom, code);
+    assert.equal(d.role, 'chef-equipe', 'le rôle vit DANS la déclaration — il n’a pas de lieu où s’écrire');
+    assert.equal(d.mandat, code.toUpperCase(), 'le mandat, tel que le ServiceDesk l’écrit');
+    assert.equal(d.coordonnateur, 'matapedia', 'qui l’a ouvert');
+    assert.equal(d.pane, 'w9:p1');
+    assert.equal(d.pose_par, 'pack agent naitre');
+    assert.match(d.ne_le, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(d.espace, /worktrees\/le-chantier\/\d{8}-\d{6}$/, 'son espace de travail, celui qu’on ne retrouve nulle part ailleurs');
+    assert.equal(typeof d.session_herdr, 'string');
+
+    // ⚠️ RENDUE DANS LA SORTIE, pas seulement écrite : l'appelant qui vient d'ouvrir un chef
+    // d'équipe doit pouvoir consigner la filiation sans aller relire un répertoire.
+    const rendu = JSON.parse(r.stdout);
+    assert.deepEqual(rendu.declaration, d, 'ce qui est rendu EST ce qui est écrit');
+    assert.ok(rendu.declaration_chemin.endsWith('.json'), 'et son chemin est dit');
+    assert.equal(rendu.ok, true);
+    assert.equal(rendu.role, 'chef-equipe');
+    // Les champs du contrat de sortie d'origine ne bougent pas — des appelants les lisent.
+    assert.equal(rendu.pane, 'w9:p1');
+    assert.equal(rendu.modele, MODELE_PAR_DEFAUT);
+    assert.equal(rendu.mode, MODE_PAR_DEFAUT);
+    assert.ok(Array.isArray(rendu.verifie));
+
+    assert.ok(
+      appelsJournalises(journal).some((a) => a[0] === 'agent' && a[1] === 'get'),
+      'et elle vient APRÈS la vérification par le fait'
+    );
+  }));
+
+// ⚠️ L'ORDRE EST LE CONTRAT : déclarer un agent dont on n'a pas prouvé qu'il porte son nom
+// inscrirait un FAIT FAUX — et un fait faux se croit, là où un refus se voit.
+test('un agent qui ne porte pas le nom demandé n’est PAS déclaré — et son pane est refermé', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ nomPorte: 'quelquun-dautre', repertoire: espace });
+
+    const r = lancerChef({ code, poste, horodatage });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /ne porte pas le nom/, 'le refus dit ce qui n’a pas pu être prouvé');
+    assert.equal(declarationsInscrites(poste).length, 0, 'AUCUNE déclaration : le fait n’a pas été établi');
+    assert.ok(aFerme(journal), 'et le pane ne reste pas derrière');
+    assert.equal(r.stdout, '', 'rien qui ressemblerait à un succès');
+  }));
+
+// ── 9c — LE SERVICEDESK, QUI NE TUE PAS LA NAISSANCE
+
+// ⚠️ LE CAS CANONIQUE D'UN CHEF D'ÉQUIPE, ET IL NE PEUT PAS ABOUTIR — c'est mesuré, pas
+// supposé. Un chef d'équipe mène un EPIC (`E-…`), et `declarerAuServiceDesk` refuse toute
+// famille autre que `tickets` : un epic n'a pas de champ `assigned_agent`, et choisir une story
+// parmi les siennes serait une invention. La naissance tient quand même, et l'échec SE DIT.
+test('le ServiceDesk qui ne peut pas être rempli ne tue pas la naissance — l’échec se dit dans la sortie', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+    const r = lancerChef({ code, poste, horodatage });
+
+    assert.equal(r.code, 0, `la naissance tient — stderr : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.servicedesk.rempli, false, 'il n’a pas été rempli');
+    assert.match(rendu.servicedesk.cause, /epic/i, 'et la CAUSE est dite, pas escamotée');
+    assert.equal(declarationsInscrites(poste).length, 1, 'la déclaration locale, elle, tient');
+  }));
+
+test('sans clé ServiceDesk, la naissance tient aussi — et le geste dit qu’il n’avait aucun accès', () =>
+  avecChefDEquipe(({ poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+    // Un mandat de la SEULE famille que le ServiceDesk sait remplir : c'est le seul cas où
+    // l'absence de clé est ce qui bloque, et donc le seul qui puisse l'éprouver.
+    const ticket = `t-20260825-${String(2000 + compteurChef).slice(-4)}`;
+    const r = lancerNaitre(ticket, { role: 'chef-equipe', env: poste, horodatage });
+
+    assert.equal(r.code, 0, `la naissance tient — stderr : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.servicedesk.rempli, false);
+    assert.match(rendu.servicedesk.cause, /aucun accès/i, 'l’absence d’accès est NOMMÉE, pas confondue avec un refus');
+  }));
+
+// ── 9d — CE QUI EST REFUSÉ, ET CE QUE LE REFUS NE LAISSE PAS DERRIÈRE LUI
+
+test('un chef d’équipe dont le nom n’est pas un code de chantier est REFUSÉ — rien n’est créé', () =>
+  avecChefDEquipe(({ poste }) => {
+    const journal = installerFauxHerdr();
+
+    const r = lancerNaitre('revue-pr180', { role: 'chef-equipe', env: poste, horodatage: '20260825-083616' });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /code de chantier/i, 'le refus dit ce qui manque');
+    assert.match(r.stderr, /E-\d{8}-\d{4}/, 'et MONTRE la forme attendue');
+    assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr : le refus tombe avant tout');
+    assert.equal(existsSync(poste.SOMTECH_WORKTREES_RACINE), false, 'aucun espace de travail');
+    assert.equal(declarationsInscrites(poste).length, 0, 'aucune déclaration');
+  }));
+
+test('sans base à partir de quoi partir, le refus tombe AVANT le moindre onglet', () =>
+  avecChefDEquipe(
+    ({ code, poste, horodatage }) => {
+      const journal = installerFauxHerdr();
+
+      const r = lancerChef({ code, poste, horodatage });
+
+      assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+      assert.match(r.stderr, /origin\/main/, 'la base cherchée est nommée');
+      assert.equal(appelsJournalises(journal).length, 0, 'aucun onglet, aucun agent');
+      assert.equal(declarationsInscrites(poste).length, 0);
+    },
+    { avecOrigin: false }
+  ));
+
+test('un espace de travail déjà occupé fait REFUSER — sans y toucher, et sans ouvrir d’onglet', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace: occupe }) => {
+    const journal = installerFauxHerdr();
+    mkdirSync(occupe, { recursive: true });
+    writeFileSync(join(occupe, 'le-travail-dun-autre.txt'), 'ne me touche pas\n');
+
+    const r = lancerChef({ code, poste, horodatage });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /existe déjà/i);
+    assert.match(r.stderr, /même arbre|deux agents/i, 'et POURQUOI on ne réutilise pas');
+    assert.ok(existsSync(join(occupe, 'le-travail-dun-autre.txt')), 'le refus n’a rien effacé');
+    assert.equal(appelsJournalises(journal).length, 0, 'aucun onglet');
+    assert.equal(declarationsInscrites(poste).length, 0);
+  }));
+
+// ⚠️ CE QU'ON NE FAIT PAS : REFERMER LE PANE. L'agent est né, vérifié, dans son espace — le
+// tuer pour un fichier de registre détruirait un travail prouvé bon au profit d'une écriture
+// comptable. Mais la commande ÉCHOUE, exactement comme pour une amorce non prise : une
+// naissance qu'on ne peut pas inscrire n'est pas une naissance réussie, et rendre `ok: true`
+// serait le succès muet que tout ce fichier existe pour fermer.
+test('une déclaration qui ne peut pas s’écrire fait ÉCHOUER le geste — mais ne tue pas l’agent né', () =>
+  avecChefDEquipe(({ code, poste, bac, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ repertoire: espace });
+    // La racine des naissances est un FICHIER : `mkdirSync` échouera (ENOTDIR), et c'est un
+    // vrai mode de panne — un montage qui décroche, un chemin pris par autre chose.
+    const barrage = join(bac, 'racine-prise');
+    writeFileSync(barrage, 'je ne suis pas un répertoire\n');
+
+    const r = lancerChef({ code, poste: { ...poste, SOMTECH_NAISSANCES_RACINE: barrage }, horodatage });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /déclaration/i, 'le message dit CE QUI a échoué');
+    assert.match(r.stderr, /pane/i, 'et dit que le pane reste ouvert');
+    assert.equal(aFerme(journal), false, 'l’agent né et vérifié n’est PAS tué pour une écriture de registre');
+    assert.equal(r.stdout, '', 'et rien ne ressemble à un succès');
+  }));
+
+test('hors dépôt git, un chef d’équipe ne naît pas — et aucun espace n’est créé', () => {
+  const bac = mkdtempSync(join(tmpdir(), 'smtk-chef-nogit-'));
+  const poste = {
+    SOMTECH_WORKTREES_RACINE: join(bac, 'worktrees'),
+    SOMTECH_NAISSANCES_RACINE: join(bac, 'naissances'),
+    HOME: join(bac, 'faux-home'),
+    SOMTECH_DESK_API_KEY: '',
+    SERVICEDESK_MCP_TOKEN: '',
+  };
+  mkdirSync(poste.HOME, { recursive: true });
+  depotCourant = bac;
+  try {
+    const journal = installerFauxHerdr();
+    const r = lancerNaitre('e-20260825-0099', { role: 'chef-equipe', env: poste, horodatage: '20260825-083616' });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /dépôt git/i, 'le refus dit CE QUI manque');
+    assert.equal(appelsJournalises(journal).length, 0);
+    assert.equal(existsSync(poste.SOMTECH_WORKTREES_RACINE), false);
+  } finally {
+    depotCourant = null;
+    rmSync(bac, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ LA MOITIÉ QUI PROTÈGE LES AUTRES RÔLES. Un rôle neuf branché avant la validation de rôle
+// pourrait, s'il était mal branché, avaler aussi les rôles qui ONT un lieu — et un
+// orchestrateur naîtrait alors sans son lieu, sans sa garde et sans son versement, en silence.
+test('les rôles qui ONT un lieu ne passent PAS par le chemin du chef d’équipe', () =>
+  avecLieu(
+    (code, lieu) => {
+      installerFauxHerdr({ repertoire: lieu });
+      const r = lancerNaitre(code, { role: 'orchestrateur' });
+      assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+      const rendu = JSON.parse(r.stdout);
+      assert.equal(rendu.lieu, lieu, 'un orchestrateur naît TOUJOURS dans son lieu');
+      assert.ok(rendu.garde, 'et sa garde d’ouverture est posée');
+      assert.equal(rendu.declaration, undefined, 'la déclaration reste au chef d’équipe — ce lot ne la lui donne pas');
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260825-${String(process.pid).slice(-4)}z` }
+  ));
+
+test('un rôle qui n’existe pas reste refusé — le rôle neuf n’a pas ouvert la porte à n’importe quoi', () =>
+  avecLieu((client) => {
+    const journal = installerFauxHerdr();
+    const r = lancerNaitre(client, { role: 'chef-dorchestre' });
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /rôle inconnu/i);
+    assert.equal(appelsJournalises(journal).length, 0);
+  }, 'inconnu'));

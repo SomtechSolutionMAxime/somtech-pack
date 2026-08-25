@@ -54,6 +54,17 @@ import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-dire
 import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
 import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
 import { chargerRegistre } from '../../ligne-directe/src/registre.js';
+import {
+  ROLE_CHEF_EQUIPE,
+  estChefDEquipe,
+  horodatageDEspace,
+  creerEspaceDeTravail,
+  exigerUnMandatDeChantier,
+  EspaceDeTravailImpossible,
+  MandatSansChantier,
+  BASE_PAR_DEFAUT,
+} from '../src/chef-equipe.js';
+import { inscrireLaDeclaration, declarerAuServiceDesk } from '../src/declaration.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -89,7 +100,8 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 function usage(code) {
   process.stderr.write(
     'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>]\n' +
-      '                         [--role representant|orchestrateur] [--depot <chemin>]\n' +
+      '                         [--role representant|orchestrateur|chef-equipe] [--depot <chemin>]\n' +
+      '                         [--coordonnateur <nom>] [--base <ref>] [--horodatage <AAAAMMJJ-HHMMSS>]\n' +
       '                         [--amorce <fichier> | --amorce-texte "…"]\n' +
       '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n' +
       '                         [--nom-agent <nom>]\n'
@@ -133,6 +145,26 @@ async function main() {
   const modele = option(args, '--modele') || MODELE_PAR_DEFAUT;
   const mode = option(args, '--mode') || MODE_PAR_DEFAUT;
   const REPO_ROOT = depotDe(args);
+
+  // ═══ LE RÔLE QUI N'A PAS DE LIEU — tranché ICI, avant la validation de rôle (D-20260825-0002).
+  //
+  // ⚠️ `chef-equipe` N'EST PAS DANS LA TABLE `ROLES`, ET C'EST MESURÉ, PAS UNE COMMODITÉ. Une
+  // entrée sans le champ `entetes` fait tomber `roleDuLieuOuRefus` sur `Object.entries(undefined)`
+  // (`lieu-agent.js:279`), dont le contrat est gelé et dont dépend le garde de naissance de TOUS
+  // les autres rôles. `ROLES` est la table des rôles QUI ONT UN LIEU ; le rôle d'un chef d'équipe
+  // vit dans sa DÉCLARATION. La branche doit donc tomber avant `roleDe(role)`, qui jetterait
+  // `RoleInconnu` — et elle ne déborde sur rien : un rôle qui n'est ni celui-ci ni un rôle connu
+  // continue d'être refusé par la même porte qu'avant.
+  const chefEquipe = estChefDEquipe(role);
+  // Qui l'a ouvert. Le champ existe pour l'attache que RIEN d'autre ne porte : la structure du
+  // chantier est au ServiceDesk, l'ID de traçabilité est dans le nom des branches, mais le lien
+  // « cet agent, ce coordonnateur » ne vit nulle part une fois le pane fermé.
+  const coordonnateur = option(args, '--coordonnateur');
+  const base = option(args, '--base') || BASE_PAR_DEFAUT;
+  // ⚠️ L'HORODATAGE EST DICTABLE, ET CE N'EST PAS UNE PORTE D'ESSAIS. Il nomme l'espace ET sa
+  // branche-socle : pouvoir le dire, c'est pouvoir rejouer un refus à l'identique et reprendre
+  // une session par son nom (`claude-swt <horodatage>`). Par défaut, l'instant de la naissance.
+  const horodatage = option(args, '--horodatage') || horodatageDEspace();
   if (!nom || nom.startsWith('--') || !workspace) usage(1);
 
   // L'amorce est lue AVANT qu'un pane existe : un fichier illisible doit arrêter la commande
@@ -191,6 +223,25 @@ async function main() {
     process.exit(1);
   }
 
+  // ═══ UN CHEF D'ÉQUIPE PORTE LE CODE DE SON MANDAT — exigé ICI, avant le moindre appel herdr.
+  //
+  // ⚠️ POURQUOI UN REFUS ET PAS UN AVERTISSEMENT. Son nom EST son mandat : c'est par là qu'on le
+  // rattache à ce qu'il livre, et sa déclaration inscrit ce mandat comme un FAIT. Un nom inventé
+  // (« revue-pr180 ») ferait naître un agent que rien ne raccorde à un chantier, et inscrirait
+  // un mandat qui ne désigne rien — le métier de l'orchestrateur le nomme déjà comme une faute.
+  let mandat = null;
+  if (chefEquipe) {
+    try {
+      mandat = exigerUnMandatDeChantier(nom);
+    } catch (err) {
+      if (err instanceof MandatSansChantier) {
+        process.stderr.write(`${err.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni espace de travail, ni onglet, ni agent.\n`);
+        process.exit(1);
+      }
+      throw err;
+    }
+  }
+
   // ═══ QUEL NOM PORTERA-T-IL ? — tranché ICI, avant que quoi que ce soit existe.
   //
   // ⚠️ C'EST LE CŒUR DU LOT B (E-20260818-0017). Jusqu'ici le nom d'un agent était SIMPLEMENT
@@ -209,7 +260,12 @@ async function main() {
   const nomAgentPropose = option(args, '--nom-agent');
   const bapteme = nomDeLAgentQuiNait({
     role,
-    lieu: cheminLieu(REPO_ROOT, nom, role),
+    // ⚠️ `null` POUR UN CHEF D'ÉQUIPE, ET LE CALCULER SERAIT UNE ERREUR : `cheminLieu` passe par
+    // la table des rôles et jetterait `RoleInconnu`. `nomDeLAgentQuiNait` n'en a de toute façon
+    // pas l'usage ici — sa première branche (« un rôle qui n'est pas orchestrateur ») rend le
+    // code du mandat abaissé sans jamais regarder le lieu. C'est de là que vient le nom d'un chef
+    // d'équipe : le code de son mandat, jamais une rivière (elle est réservée aux orchestrateurs).
+    lieu: chefEquipe ? null : cheminLieu(REPO_ROOT, nom, role),
     code: nom,
     propose: nomAgentPropose,
     depot: REPO_ROOT,
@@ -238,9 +294,39 @@ async function main() {
   //
   // On ne redit pas la règle de herdr ici — elle reste à son seul endroit. On ATTACHE le refus
   // à sa cause, que seul cet appelant connaît.
+  // ═══ L'ESPACE DE TRAVAIL D'UN CHEF D'ÉQUIPE — le geste que l'orchestrateur faisait à la main.
+  //
+  // ⚠️ IL NAÎT AVANT L'AGENT, et l'ordre n'est pas négociable (règle d'or n°11) : un worktree
+  // créé PENDANT une session déjà démarrée fait dériver son contexte. Ici, l'espace existe avant
+  // que le moindre onglet soit ouvert — la règle est respectée par construction.
+  //
+  // ⚠️ ET IL TOMBE AVANT TOUT APPEL HERDR. Un refus — pas de base, espace déjà occupé, git qui
+  // dit non — ne doit laisser derrière lui ni onglet, ni agent, ni déclaration. C'est la même
+  // promesse que le refus de versement tient un cran plus haut : rien à moitié.
+  let espaceDuChef = null;
+  if (chefEquipe) {
+    try {
+      espaceDuChef = creerEspaceDeTravail({ depot: REPO_ROOT, horodatage, base });
+    } catch (err) {
+      if (err instanceof EspaceDeTravailImpossible) {
+        process.stderr.write(`${err.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni onglet, ni agent, ni d\u00e9claration.\n`);
+        process.exit(1);
+      }
+      throw err;
+    }
+  }
+
   let commandes;
   try {
-    commandes = commandesNaissance(REPO_ROOT, nom, { workspace, role, modele, mode, nomAgent: bapteme.nom });
+    commandes = commandesNaissance(REPO_ROOT, nom, {
+      workspace,
+      role,
+      modele,
+      mode,
+      nomAgent: bapteme.nom,
+      // Le seul rôle qui apporte son propre répertoire — voir `commandesNaissance`.
+      lieu: espaceDuChef?.espace ?? null,
+    });
   } catch (err) {
     if (bapteme.source === 'inscrit_dans_le_lieu') {
       process.stderr.write(
@@ -265,160 +351,167 @@ async function main() {
   // de ne pas franchir. On s'arrête donc, et on NOMME le geste — c'est l'autre moitié de la
   // promesse : ne pas intervenir ne veut pas dire deviner.
   let poseFaite = false;
-  if (!existsSync(commandes.lieu)) {
-    if (role !== 'orchestrateur') {
-      process.stderr.write(
-        `aucun lieu de ${role} pour « ${nom} » dans ${REPO_ROOT} — et cette commande ne pose pas ` +
-          `les lieux de représentant : ils se branchent sur un canal que le client voit, et leur ` +
-          `pose garde sa revue.\n` +
-          `  Le geste qui lève le blocage : la compétence /gestionnaire-client, qui demande le canal ` +
-          `et le dirigeant que la pose exige.\n`
-      );
-      process.exit(1);
+  let cheminGarde = null;
+  // ═══ CE QUI SUIT NE CONCERNE QUE LES RÔLES QUI ONT UN LIEU — pose, versement, garde,
+  // exposition, inscription du nom. Un chef d'équipe N'EN POSE AUCUN : son espace est un arbre
+  // jetable qu'on retirera à la fin de l'epic, et y verser un lieu ferait naître, dans le dépôt
+  // du chantier, un dossier versionné par agent d'un jour que personne ne relirait — et le gate
+  // de versement (T-20260814-0139) exigerait un commit pour chacun.
+  if (!chefEquipe) {
+    if (!existsSync(commandes.lieu)) {
+      if (role !== 'orchestrateur') {
+        process.stderr.write(
+          `aucun lieu de ${role} pour « ${nom} » dans ${REPO_ROOT} — et cette commande ne pose pas ` +
+            `les lieux de représentant : ils se branchent sur un canal que le client voit, et leur ` +
+            `pose garde sa revue.\n` +
+            `  Le geste qui lève le blocage : la compétence /gestionnaire-client, qui demande le canal ` +
+            `et le dirigeant que la pose exige.\n`
+        );
+        process.exit(1);
+      }
+      let pose;
+      try {
+        pose = await preparerLieuOrchestrateur({ depot: REPO_ROOT, nom });
+      } catch (err) {
+        process.stderr.write(`la pose du lieu a échoué : ${err.message}\n`);
+        process.exit(1);
+      }
+      if (!pose.ok) {
+        // La pose refuse avec un motif nommé et, quand elle le sait, la portée du blocage. On
+        // relaie SON message : le réécrire ici ferait diverger deux textes qui décrivent le même
+        // refus, et c'est comme ça qu'on se retrouve avec un conseil qui ne marche plus.
+        process.stderr.write(
+          `le lieu de l’orchestrateur « ${nom} » n’a pas pu être posé (${pose.refus?.motif ?? 'motif inconnu'}) :\n` +
+            `  ${pose.refus?.message ?? JSON.stringify(pose.refus)}\n`
+        );
+        process.exit(1);
+      }
+      poseFaite = pose.cree === true;
+      for (const a of pose.avertissements || []) process.stderr.write(`${a}\n`);
+      // CE QU'ON N'A PAS PU ÉTABLIR SUR LE MÉTIER SE DIT ICI (E-20260818-0014). La pose le rend
+      // dans un champ à part — `avertissements` porte ce qui manquera au LIEU, jamais ce qu'on
+      // n'a pas su mesurer DU GABARIT. Cette commande n'affiche que les avertissements : sans
+      // cette ligne, un orchestrateur naîtrait sur un métier non vérifié en silence, et c'est
+      // très exactement le succès muet que ce lot ferme.
+      if (pose.metier_verifie === false && pose.metier_non_verifie) {
+        process.stderr.write(`${pose.metier_non_verifie}\n`);
+      }
     }
-    let pose;
-    try {
-      pose = await preparerLieuOrchestrateur({ depot: REPO_ROOT, nom });
-    } catch (err) {
-      process.stderr.write(`la pose du lieu a échoué : ${err.message}\n`);
-      process.exit(1);
-    }
-    if (!pose.ok) {
-      // La pose refuse avec un motif nommé et, quand elle le sait, la portée du blocage. On
-      // relaie SON message : le réécrire ici ferait diverger deux textes qui décrivent le même
-      // refus, et c'est comme ça qu'on se retrouve avec un conseil qui ne marche plus.
-      process.stderr.write(
-        `le lieu de l’orchestrateur « ${nom} » n’a pas pu être posé (${pose.refus?.motif ?? 'motif inconnu'}) :\n` +
-          `  ${pose.refus?.message ?? JSON.stringify(pose.refus)}\n`
-      );
-      process.exit(1);
-    }
-    poseFaite = pose.cree === true;
-    for (const a of pose.avertissements || []) process.stderr.write(`${a}\n`);
-    // CE QU'ON N'A PAS PU ÉTABLIR SUR LE MÉTIER SE DIT ICI (E-20260818-0014). La pose le rend
-    // dans un champ à part — `avertissements` porte ce qui manquera au LIEU, jamais ce qu'on
-    // n'a pas su mesurer DU GABARIT. Cette commande n'affiche que les avertissements : sans
-    // cette ligne, un orchestrateur naîtrait sur un métier non vérifié en silence, et c'est
-    // très exactement le succès muet que ce lot ferme.
-    if (pose.metier_verifie === false && pose.metier_non_verifie) {
-      process.stderr.write(`${pose.metier_non_verifie}\n`);
-    }
-  }
 
-  // ═══ VERSER LE LIEU — le second des gestes qu'un humain faisait à la main.
-  //
-  // ⚠️ LA GARANTIE NE BOUGE PAS, SEUL L'HUMAIN PART. `avisDeVersionnement` continue de refuser
-  // juste en dessous, et pour la raison mesurée qui l'a fait naître : 3 lieux clients sur 5
-  // portaient une garde qu'aucun commit ne contenait (T-20260814-0139). Ce que la revue de
-  // phase 1 a établi, c'est que ce gate n'a JAMAIS été une revue de code — il n'interroge que
-  // `HEAD`. Un commit local le satisfait, et la commande sait le faire seule.
-  // ═══ CE LIEU PEUT-IL ÊTRE RETIRÉ SOUS LUI ? — dit ICI, à la naissance (T-20260814-0014).
-  //
-  // ⚠️ LE PLUS TÔT POSSIBLE PLUTÔT QUE LE PLUS RÉGULIÈREMENT POSSIBLE. Une ronde passerait
-  // après : l'agent serait né, aurait travaillé, aurait peut-être écrit dans un lieu qu'un
-  // `git checkout` d'un tiers emporte. Ici, personne n'a encore rien perdu.
-  //
-  // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE, et le geste nommé n'est JAMAIS de rétablir une
-  // branche — ce réflexe écrase le travail de la session qui y a commité depuis.
-  const expose = expositionAlaNaissance(REPO_ROOT, nom, role, {
-    branchesQuiPortent: branchesQuiPortent(REPO_ROOT, commandes.lieu),
-  });
-  if (expose) {
-    process.stderr.write(`⚠️  ${expose.quoi}\n    → ${expose.geste}\n`);
-  }
+    // ═══ VERSER LE LIEU — le second des gestes qu'un humain faisait à la main.
+    //
+    // ⚠️ LA GARANTIE NE BOUGE PAS, SEUL L'HUMAIN PART. `avisDeVersionnement` continue de refuser
+    // juste en dessous, et pour la raison mesurée qui l'a fait naître : 3 lieux clients sur 5
+    // portaient une garde qu'aucun commit ne contenait (T-20260814-0139). Ce que la revue de
+    // phase 1 a établi, c'est que ce gate n'a JAMAIS été une revue de code — il n'interroge que
+    // `HEAD`. Un commit local le satisfait, et la commande sait le faire seule.
+    // ═══ CE LIEU PEUT-IL ÊTRE RETIRÉ SOUS LUI ? — dit ICI, à la naissance (T-20260814-0014).
+    //
+    // ⚠️ LE PLUS TÔT POSSIBLE PLUTÔT QUE LE PLUS RÉGULIÈREMENT POSSIBLE. Une ronde passerait
+    // après : l'agent serait né, aurait travaillé, aurait peut-être écrit dans un lieu qu'un
+    // `git checkout` d'un tiers emporte. Ici, personne n'a encore rien perdu.
+    //
+    // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE, et le geste nommé n'est JAMAIS de rétablir une
+    // branche — ce réflexe écrase le travail de la session qui y a commité depuis.
+    const expose = expositionAlaNaissance(REPO_ROOT, nom, role, {
+      branchesQuiPortent: branchesQuiPortent(REPO_ROOT, commandes.lieu),
+    });
+    if (expose) {
+      process.stderr.write(`⚠️  ${expose.quoi}\n    → ${expose.geste}\n`);
+    }
 
-  const verse = (quoi) => {
+    const verse = (quoi) => {
+      try {
+        return verserLeLieu(REPO_ROOT, commandes.lieu, { quoi, role, nom });
+      } catch (err) {
+        if (err instanceof VersementImpossible) {
+          process.stderr.write(`${err.message}\n`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    };
+    // ═══ INSCRIRE LE NOM DANS LE LIEU — AVANT de verser, pour qu'il parte dans le commit.
+    //
+    // ⚠️ SANS CE FICHIER, LE NOM DÉRIVE. L'attribution est déterministe, mais elle enjambe ce qui
+    // est déjà pris : un orchestrateur qui redémarre après qu'une autre rivière a été prise
+    // recevrait un AUTRE nom, et le dirigeant l'appellerait par un nom qu'il ne porte plus.
+    //
+    // ⚠️ ET SA PLACE ICI A ÉTÉ TROUVÉE PAR LA PREUVE RÉELLE, PAS PAR LA SUITE. Écrit plus bas —
+    // après le versement — le fichier existait sur le disque et n'était dans AUCUN commit :
+    // mesuré sur la première naissance réelle de ce lot, `git log --name-only` ne le portait pas.
+    // Un clone frais, un `git checkout`, un nettoyage d'arbre, et le nom était perdu **sans un
+    // mot** — le lieu restant par ailleurs parfaitement valide. C'est exactement le mode de
+    // panne de T-20260814-0139, où la garde d'ouverture vivait hors de git sur trois lieux
+    // clients sur cinq. Les essais ne pouvaient pas le voir : ils lisent le fichier, pas
+    // l'historique.
+    if (bapteme.attribue) {
+      try {
+        inscrireNomDansLeLieu(commandes.lieu, commandes.nom);
+      } catch (err) {
+        // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE. Le nom est décidé et l'agent le portera ; ce
+        // qui se perd est la FIDÉLITÉ de la prochaine renaissance, pas celle-ci. Refuser ici
+        // détruirait une naissance valide pour un fichier d'une ligne.
+        process.stderr.write(
+          `le nom « ${commandes.nom} » n’a pas pu être inscrit dans le lieu (${err.message}) — ` +
+            `il naîtra sous ce nom, mais sa prochaine renaissance pourra en recevoir un autre.\n`
+        );
+      }
+    }
+
+    verse('le lieu de');
+
+    // REFUSER UN LIEU QUE GIT NE PORTE PAS — la garantie, inchangée (T-20260814-0139).
+    const refusGit = avisDeVersionnement(REPO_ROOT, nom, role);
+    if (refusGit) {
+      process.stderr.write(`${refusGit}\n`);
+      process.exit(1);
+    }
+
     try {
-      return verserLeLieu(REPO_ROOT, commandes.lieu, { quoi, role, nom });
+      cheminGarde = poserGarde(REPO_ROOT, nom, role);
     } catch (err) {
-      if (err instanceof VersementImpossible) {
+      if (err instanceof LieuAbsent) {
         process.stderr.write(`${err.message}\n`);
         process.exit(1);
       }
       throw err;
     }
-  };
-  // ═══ INSCRIRE LE NOM DANS LE LIEU — AVANT de verser, pour qu'il parte dans le commit.
-  //
-  // ⚠️ SANS CE FICHIER, LE NOM DÉRIVE. L'attribution est déterministe, mais elle enjambe ce qui
-  // est déjà pris : un orchestrateur qui redémarre après qu'une autre rivière a été prise
-  // recevrait un AUTRE nom, et le dirigeant l'appellerait par un nom qu'il ne porte plus.
-  //
-  // ⚠️ ET SA PLACE ICI A ÉTÉ TROUVÉE PAR LA PREUVE RÉELLE, PAS PAR LA SUITE. Écrit plus bas —
-  // après le versement — le fichier existait sur le disque et n'était dans AUCUN commit :
-  // mesuré sur la première naissance réelle de ce lot, `git log --name-only` ne le portait pas.
-  // Un clone frais, un `git checkout`, un nettoyage d'arbre, et le nom était perdu **sans un
-  // mot** — le lieu restant par ailleurs parfaitement valide. C'est exactement le mode de
-  // panne de T-20260814-0139, où la garde d'ouverture vivait hors de git sur trois lieux
-  // clients sur cinq. Les essais ne pouvaient pas le voir : ils lisent le fichier, pas
-  // l'historique.
-  if (bapteme.attribue) {
-    try {
-      inscrireNomDansLeLieu(commandes.lieu, commandes.nom);
-    } catch (err) {
-      // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE. Le nom est décidé et l'agent le portera ; ce
-      // qui se perd est la FIDÉLITÉ de la prochaine renaissance, pas celle-ci. Refuser ici
-      // détruirait une naissance valide pour un fichier d'une ligne.
+
+    // ═══ VERSER LA GARDE QU'ON VIENT DE POSER — le troisième geste, et celui qu'on oubliait.
+    //
+    // Personne ne pouvait la verser d'avance : elle n'existait pas. Elle était donc signalée par
+    // un avertissement, que le prochain lancement transformait en refus. C'est exactement l'état
+    // dans lequel trois lieux clients sur cinq ont été trouvés. On la verse.
+    verse('la garde d’ouverture de');
+
+    // Dire, AVANT que quoi que ce soit existe, que l'agent ne portera pas le nom du lieu
+    // (T-20260814-0143). L'écart était déjà dans l'objet rendu — dans un champ que personne
+    // ne relit. On le dit donc là où un humain regarde, et seulement quand il y a un écart.
+    //
+    // On lui DONNE `commandes.nom` — le nom que herdr recevra réellement, calculé par
+    // `nomAgentHerdr` juste au-dessus. L'avis ne recalcule pas la règle de casse : deux
+    // endroits qui portent la même règle divergent au premier changement de l'un (motif de
+    // T-20260814-0101, refermé un cran plus haut le jour même).
+    // ⚠️ CE QU'ON N'A PAS PU MESURER SE DIT — et il ne se mêle JAMAIS aux noms qu'on a relevés.
+    // L'unicité d'un nom ne se mesure pas dans sa seule famille : un nom libre chez les agents
+    // peut être pris par un chantier, un canal ou un BRD. On relève ce qu'on atteint, on NOMME ce
+    // qu'on n'atteint pas, et on ne conclut rien du second.
+    if (bapteme.attribue && bapteme.nonVerifie?.length) {
       process.stderr.write(
-        `le nom « ${commandes.nom} » n’a pas pu être inscrit dans le lieu (${err.message}) — ` +
-          `il naîtra sous ce nom, mais sa prochaine renaissance pourra en recevoir un autre.\n`
+        `l’unicité de « ${commandes.nom} » n’a pas pu être vérifiée partout — non mesuré : ` +
+          `${bapteme.nonVerifie.join(' · ')}.\n`
       );
     }
-  }
 
-  verse('le lieu de');
+    const avis = avisDeCasse(nom, commandes.nom);
+    if (avis) process.stderr.write(`${avis}\n`);
 
-  // REFUSER UN LIEU QUE GIT NE PORTE PAS — la garantie, inchangée (T-20260814-0139).
-  const refusGit = avisDeVersionnement(REPO_ROOT, nom, role);
-  if (refusGit) {
-    process.stderr.write(`${refusGit}\n`);
-    process.exit(1);
-  }
-
-  let cheminGarde;
-  try {
-    cheminGarde = poserGarde(REPO_ROOT, nom, role);
-  } catch (err) {
-    if (err instanceof LieuAbsent) {
-      process.stderr.write(`${err.message}\n`);
-      process.exit(1);
-    }
-    throw err;
-  }
-
-  // ═══ VERSER LA GARDE QU'ON VIENT DE POSER — le troisième geste, et celui qu'on oubliait.
-  //
-  // Personne ne pouvait la verser d'avance : elle n'existait pas. Elle était donc signalée par
-  // un avertissement, que le prochain lancement transformait en refus. C'est exactement l'état
-  // dans lequel trois lieux clients sur cinq ont été trouvés. On la verse.
-  verse('la garde d’ouverture de');
-
-  // Dire, AVANT que quoi que ce soit existe, que l'agent ne portera pas le nom du lieu
-  // (T-20260814-0143). L'écart était déjà dans l'objet rendu — dans un champ que personne
-  // ne relit. On le dit donc là où un humain regarde, et seulement quand il y a un écart.
-  //
-  // On lui DONNE `commandes.nom` — le nom que herdr recevra réellement, calculé par
-  // `nomAgentHerdr` juste au-dessus. L'avis ne recalcule pas la règle de casse : deux
-  // endroits qui portent la même règle divergent au premier changement de l'un (motif de
-  // T-20260814-0101, refermé un cran plus haut le jour même).
-  // ⚠️ CE QU'ON N'A PAS PU MESURER SE DIT — et il ne se mêle JAMAIS aux noms qu'on a relevés.
-  // L'unicité d'un nom ne se mesure pas dans sa seule famille : un nom libre chez les agents
-  // peut être pris par un chantier, un canal ou un BRD. On relève ce qu'on atteint, on NOMME ce
-  // qu'on n'atteint pas, et on ne conclut rien du second.
-  if (bapteme.attribue && bapteme.nonVerifie?.length) {
-    process.stderr.write(
-      `l’unicité de « ${commandes.nom} » n’a pas pu être vérifiée partout — non mesuré : ` +
-        `${bapteme.nonVerifie.join(' · ')}.\n`
-    );
-  }
-
-  const avis = avisDeCasse(nom, commandes.nom);
-  if (avis) process.stderr.write(`${avis}\n`);
-
-  // Après versement, plus rien ne devrait manquer. Si quelque chose manque encore, on le dit —
-  // et cette fois c'est un vrai signal, pas le bruit de fond qu'il était devenu.
-  const gardeAVerser = avisDeVersionnement(REPO_ROOT, nom, role);
-  if (gardeAVerser) process.stderr.write(`${gardeAVerser}\n`);
+    // Après versement, plus rien ne devrait manquer. Si quelque chose manque encore, on le dit —
+    // et cette fois c'est un vrai signal, pas le bruit de fond qu'il était devenu.
+    const gardeAVerser = avisDeVersionnement(REPO_ROOT, nom, role);
+    if (gardeAVerser) process.stderr.write(`${gardeAVerser}\n`);
+  } // ═══ fin de ce qui n'appartient qu'aux rôles qui ont un lieu
 
   // À QUELLE SESSION HERDR ON PARLE — tranché AVANT que le moindre onglet existe
   // (T-20260814-0120).
@@ -604,10 +697,86 @@ async function main() {
   const repertoire = repertoireDeLaSession(final);
   if (!memeRepertoire(repertoire, commandes.lieu)) {
     await echouer(
-      `la session de ${paneId} ne tourne pas dans le lieu du représentant : ` +
-        `${repertoire ?? '—'} au lieu de ${commandes.lieu} — née ailleurs, ` +
-        'elle n’est pas représentante, c’est une session ordinaire'
+      chefEquipe
+        ? `la session de ${paneId} ne tourne pas dans son espace de travail : ` +
+          `${repertoire ?? '—'} au lieu de ${commandes.lieu} — née ailleurs, elle commiterait ` +
+          'dans l’arbre d’un autre, sur la branche d’un autre'
+        // ⚠️ TEXTE INCHANGÉ POUR LES RÔLES QUI ONT UN LIEU. Le reformuler « lieu du ${role} »
+        // a fait rougir trois essais d'un coup : ils cherchent « lieu du représentant », accent
+        // compris, et l'interpolation rendait « representant ». Un rôle neuf n'a pas à réécrire
+        // le refus des autres.
+        : `la session de ${paneId} ne tourne pas dans le lieu du représentant : ` +
+          `${repertoire ?? '—'} au lieu de ${commandes.lieu} — née ailleurs, ` +
+          'elle n’est pas représentante, c’est une session ordinaire'
     );
+  }
+
+  // ═══ LA DÉCLARATION DE NAISSANCE — APRÈS la vérification par le fait, JAMAIS avant.
+  //
+  // 🔴 L'ORDRE EST LE CONTRAT. Déclarer un agent dont on n'a pas prouvé qu'il porte son nom et
+  // qu'il tourne dans son espace inscrirait un FAIT FAUX — et un fait faux se croit, là où un
+  // refus se voit. Les deux vérifications juste au-dessus referment le pane quand elles
+  // échouent : à ce point-ci, l'agent EST là, nommé, au bon endroit.
+  //
+  // ⚠️ ELLE VIENT AVANT L'AMORCE, et c'est délibéré : l'amorce peut échouer en laissant le pane
+  // OUVERT (voir plus bas). Un agent vivant et non déclaré est exactement l'état que ce lot
+  // ferme — un agent que plus rien ne relie à son mandat ni à son coordonnateur.
+  let declaration = null;
+  let declarationChemin = null;
+  let servicedesk = null;
+  if (chefEquipe) {
+    if (!coordonnateur) {
+      // ⚠️ ON SIGNALE, ON N'EMPÊCHE PAS DE NAÎTRE. C'est l'attache que rien d'autre ne porte,
+      // mais la refuser tuerait une naissance valide pour un champ qu'on peut encore inscrire.
+      process.stderr.write(
+        'aucun coordonnateur n’a été nommé (`--coordonnateur <nom>`) — la déclaration dira qui est ' +
+          'né et pour quel mandat, mais pas qui l’a ouvert.\n'
+      );
+    }
+    try {
+      const inscrit = inscrireLaDeclaration({
+        nom: commandes.nom,
+        role: ROLE_CHEF_EQUIPE,
+        mandat,
+        coordonnateur,
+        // ⚠️ `espace` PORTE LE WORKTREE, pas l'identifiant d'espace herdr — et le choix est
+        // mesuré. L'espace herdr est déjà lisible dans le `pane` (« w9:p1 » le préfixe) ; ce qui
+        // n'existe NULLE PART ailleurs une fois le pane fermé, c'est l'arbre où le travail a été
+        // fait. C'est très exactement ce que /orchestrer-chantier §4b-bis dit qui se perd.
+        espace: commandes.lieu,
+        pane: paneId,
+        session: session.nom,
+      });
+      declaration = inscrit.declaration;
+      declarationChemin = inscrit.chemin;
+    } catch (err) {
+      // ⚠️ ON NE REFERME PAS LE PANE, ET C'EST UN ARBITRAGE. L'agent est né, vérifié, dans son
+      // espace : le tuer pour une écriture de registre détruirait un travail prouvé bon au
+      // profit d'une écriture comptable. Mais la commande ÉCHOUE — même règle que l'amorce non
+      // prise : une naissance qu'on ne peut pas inscrire n'est pas une naissance réussie, et
+      // rendre `ok: true` serait le succès muet que cette commande existe pour fermer.
+      process.stderr.write(
+        `la session de ${paneId} est née dans son espace mais sa déclaration n’a pas pu être ` +
+          `inscrite : ${err.message}\n` +
+          `  Le pane est laissé ouvert — l’agent travaille. Lève la cause, puis inscris la ` +
+          `naissance à la main plutôt que de le refaire naître.\n`
+      );
+      process.exit(1);
+    }
+
+    // ═══ ET LE NOM SUR LE TICKET DU MANDAT — dont l'échec ne défait RIEN.
+    //
+    // ⚠️ CE N'EST PAS UNE COURTOISIE : `assigned_agent` rempli à la naissance est une SOURCE au
+    // sens de RA-VUE-005. Mais il ne vaut pas une naissance : la déclaration locale a déjà eu
+    // lieu, et un agent vivant et déclaré vaut mieux qu'un agent tué pour un champ distant.
+    //
+    // ⚠️ ET LE CAS LE PLUS COURANT NE PEUT PAS ABOUTIR — c'est mesuré, pas supposé. Un chef
+    // d'équipe mène un EPIC, et un epic n'a pas de champ `assigned_agent` : `declarerAuServiceDesk`
+    // refuse alors plutôt que de choisir une story à sa place. L'échec SE DIT dans la sortie.
+    servicedesk = await declarerAuServiceDesk({ mandat, nom: commandes.nom });
+    if (!servicedesk.rempli) {
+      process.stderr.write(`le mandat ${mandat} n’a pas reçu le nom de son agent : ${servicedesk.cause}\n`);
+    }
   }
 
   // ═══ L'AMORCE — le sixième des sept défauts : une session « née correctement, qui ne fait
@@ -670,6 +839,25 @@ async function main() {
       approuve: approbation.deja ? 'déjà' : 'maintenant',
       lieu: commandes.lieu,
       repertoire,
+      // ═══ CE QU'UN CHEF D'ÉQUIPE AJOUTE — et rien de ce qui précède ne bouge : des appelants
+      // lisent déjà ces clés, et un contrat de sortie qui change sous eux est une panne qu'on
+      // découvre chez quelqu'un d'autre.
+      //
+      // ⚠️ LA DÉCLARATION EST RENDUE, pas seulement écrite. L'orchestrateur qui vient d'ouvrir un
+      // chef d'équipe doit pouvoir consigner la filiation sans aller relire un répertoire — et
+      // c'est ce qui rend le geste utilisable dans un script, sans second appel.
+      ...(chefEquipe
+        ? {
+            mandat,
+            coordonnateur: coordonnateur ?? null,
+            espace: commandes.lieu,
+            branche: espaceDuChef.branche,
+            base: espaceDuChef.base,
+            declaration,
+            declaration_chemin: declarationChemin,
+            servicedesk,
+          }
+        : {}),
     })}\n`
   );
 }

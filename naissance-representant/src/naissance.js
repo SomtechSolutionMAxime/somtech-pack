@@ -526,24 +526,49 @@ export const ATTENTE_NAISSANCE_MS = 120000;
 export function commandesNaissance(
   repoRoot,
   quiVientAuMonde,
-  { workspace, role = 'representant', modele = MODELE_PAR_DEFAUT, mode = MODE_PAR_DEFAUT, nomAgent = null } = {}
+  {
+    workspace,
+    role = 'representant',
+    modele = MODELE_PAR_DEFAUT,
+    mode = MODE_PAR_DEFAUT,
+    nomAgent = null,
+    /**
+     * LE RÉPERTOIRE OÙ LA SESSION NAÎT, quand il ne se déduit PAS du rôle (D-20260825-0002).
+     *
+     * ⚠️ IL EXISTE POUR LE SEUL RÔLE QUI N'A PAS DE LIEU — le chef d'équipe, qui naît dans un
+     * worktree jetable plutôt que dans un dossier versionné. Sans lui, il faudrait un second
+     * constructeur de commandes herdr à côté de celui-ci, et ce dépôt a déjà payé ce qu'il en
+     * coûte : deux jeux de commandes pour un seul service divergent, et le second à diverger
+     * est celui qu'on ne relit pas.
+     *
+     * ⚠️ ET LE DONNER VAUT DÉCLARATION « CE RÔLE N'A PAS DE LIEU ». Sans lui, le rôle doit être
+     * dans la table de `roles.js`, et un rôle inventé échoue ici — avant qu'un pane existe.
+     */
+    lieu = null,
+  } = {}
 ) {
   if (!workspace) {
     throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
   }
-  roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
-  const lieu = cheminLieu(repoRoot, quiVientAuMonde, role);
+  if (lieu === null) roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
+  const repertoireDeNaissance = lieu ?? cheminLieu(repoRoot, quiVientAuMonde, role);
   // ⚠️ LE NOM PASSE PAR `nomAgentHerdr` DANS LES DEUX CAS, et c'est ce qui garde la règle en un
   // seul endroit : une rivière qui ne serait pas nommable par herdr doit échouer ICI, avant
   // qu'un pane existe, exactement comme un nom de lieu trop long échouait déjà.
   const nom = nomAgentHerdr(nomAgent ?? quiVientAuMonde);
   return {
-    lieu,
+    lieu: repertoireDeNaissance,
     nom,
     role,
     modele,
     mode,
-    tabCreate: ['tab', 'create', '--workspace', workspace, '--cwd', lieu, '--label', quiVientAuMonde, '--no-focus'],
+    tabCreate: [
+      'tab', 'create',
+      '--workspace', workspace,
+      '--cwd', repertoireDeNaissance,
+      '--label', quiVientAuMonde,
+      '--no-focus',
+    ],
     /**
      * ⚠️ `agent start` REMPLACE `pane run` + la boucle d'attente (T-20260816-0038).
      *
