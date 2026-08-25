@@ -51,7 +51,7 @@
  * incident.** C'est « une porte sur deux », commis dans le correctif d'un défaut de cette
  * famille. Un essai le garde désormais par recherche : `les-trois-canaux-jugent-le-meme-ecran`.
  */
-import { sansGris, estUnFilet, INVITE } from './boite.js';
+import { sansGris, estUnFilet, INVITE, contenuBoite } from './boite.js';
 
 /**
  * LES ÉCRANS QU'ON SAIT NOMMER — et rien de plus.
@@ -290,15 +290,58 @@ export function ressembleAUnChoix(texte) {
 const MARQUES_DE_DIALOGUE_ACTIF = [
   /❯\s*[1-9]\.\s/,
   /\b(?:enter|entrée)\b[^\n]{0,20}\b(?:to )?confirm/i,
-  /\besc\b[^\n]{0,20}\b(?:to )?cancel/i,
   /\(y\/n\)/i,
   /\bdo you want to\b/i,
 ];
 
+/**
+ * LA CINQUIÈME MARQUE, ET POURQUOI ELLE NE DÉCIDE PLUS SEULE — T-20260825-0073.
+ *
+ * ⚠️ ELLE A RENDU UN AGENT INJOIGNABLE ET BLOQUÉ LA REMISE D'UN RAPPORT. Le 2026-08-25,
+ * `livrer.js` a refusé d'écrire à un coordonnateur `idle`, boîte vide, en affirmant qu'il était
+ * « devant un DIALOGUE qui attend un choix ». Le refus renvoyait vers un geste humain devant un
+ * dialogue qui n'existait pas. Ce qui mordait : la ligne de transcript
+ * « ⏺ Usage limit reached · continuing automatically at 1:10pm · esc or type to cancel ».
+ *
+ * ⚠️ DEUX EXPLICATIONS PLAUSIBLES ONT ÉTÉ ÉCARTÉES PAR LA MESURE, et il faut les laisser
+ * écartées ici, sinon on les réessaiera.
+ *   1. « Elle lit le scrollback au lieu de l'écran courant. » Mesuré sur les 85 panes réels du
+ *      poste : elle mord sur 4 panes avec `--source visible` **exactement comme** avec
+ *      `--source recent`. La ligne est bel et bien à l'écran courant — ligne 26, 43, 44 ou 54
+ *      d'un écran de 79. Restreindre la source ne répare rien.
+ *   2. « Le remplissage de la regex est trop lâche : exigeons `esc to cancel` collé. » Mesuré
+ *      sur 87 panes : les DEUX tournures vivent sur le bandeau bénin — « esc or type to cancel »
+ *      ET « esc to cancel », cette dernière au mot près celle du vrai dialogue. La tournure ne
+ *      discrimine rien.
+ *
+ * ⚠️ CE QUI DISCRIMINE, MESURÉ DES DEUX CÔTÉS : **un vrai dialogue REMPLACE la boîte de
+ * saisie ; un bandeau la laisse en place.** Le vrai dialogue de permission du 2026-08-17 rend
+ * une boîte `illisible` — il n'y a plus de boîte, il a pris sa place. Les 8 panes réels où la
+ * garde mordait le 2026-08-25 rendaient tous une boîte `vide` — 8 sur 8. C'est précisément ce
+ * que `etat-boite.js` disait déjà, le jour même du faux refus, pendant que ce chemin-ci disait
+ * le contraire : le dispositif détenait la réponse, elle n'était pas branchée ici.
+ *
+ * Elle n'est donc pas RETIRÉE — un écran qui ne porte que « Esc to cancel · Tab to amend »
+ * reste un dialogue, et le retirer ouvrirait le faux négatif symétrique : écrire un message
+ * ordinaire devant un dialogue CONFIRME l'option affichée et lance l'action. Elle devient
+ * CORROBORANTE : elle ne compte que là où aucune boîte ordinaire n'est rendue.
+ *
+ * ⚠️ ET LES QUATRE AUTRES GARDENT LEUR POUVOIR DE DÉCIDER SEULES. Sur les mêmes 87 panes, elles
+ * n'ont produit AUCUN faux positif — zéro. Les rendre conditionnelles elles aussi ouvrirait des
+ * faux négatifs sur des marques qui n'ont jamais fauté : un correctif qui coûterait plus qu'il
+ * ne rapporte.
+ */
+const MARQUE_CORROBORANTE = /\besc\b[^\n]{0,20}\b(?:to )?cancel/i;
+
 export function ecranAttendUnChoix(texteTerminal) {
   const t = sansGris(texteTerminal);
   if (!t) return false;
-  return MARQUES_DE_DIALOGUE_ACTIF.some((m) => m.test(t));
+  if (MARQUES_DE_DIALOGUE_ACTIF.some((m) => m.test(t))) return true;
+  if (!MARQUE_CORROBORANTE.test(t)) return false;
+  // ⚠️ SUR LE TEXTE BRUT, PAS SUR `sansGris` : la boîte se reconnaît à ses filets et à son
+  // invite, que le dégrisage ne conserve pas. Passer `t` ici rendrait `null` sur tous les écrans
+  // et la marque redeviendrait décisive en silence — le défaut, remis en place par le correctif.
+  return contenuBoite(texteTerminal) === null;
 }
 
 /** Le geste mesuré qui franchit cet écran, s'il en existe un. Aucun par défaut. */
