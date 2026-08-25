@@ -399,10 +399,37 @@ function declarationDe(agent, declarations) {
   const nom = agent.nom?.mesure === 'lu' ? agent.nom.valeur : null;
   const session = identiteDeSession(agent.session);
   return (
+    // 🔴 LA CLÉ PRIMAIRE EST BORNÉE PAR L'ESPACE, ELLE AUSSI — et elle ne l'était par RIEN.
+    // Elle appariait sur `pane === pane && session === session`, sans l'espace, ni la date, ni
+    // le rôle, ni le mandat. C'est la CINQUIÈME fois dans ce lot qu'une correction ne ferme
+    // qu'une moitié : le repli par le nom a reçu sa borne, la clé primaire est restée nue.
+    //
+    // ⚠️ ET LE CAS NE DEMANDE AUCUN RECYCLAGE D'IDENTIFIANT — il suffit de REPRENDRE LE PANE,
+    // ce à quoi un terminal sert. Un chef d'équipe naît par le geste ; son travail fini, on
+    // relance un `claude` À LA MAIN dans le même pane, sur un worktree NEUF. Cet agent n'a
+    // aucune déclaration, aucun lieu de rôle, il est dans la population — et la garde le
+    // rangeait en « identifié » par la déclaration de son PRÉDÉCESSEUR.
+    //
+    // ⚠️ `fauxRefus` NE POUVAIT PAS LE VOIR : il ne croise l'espace que sur les PRISES, jamais
+    // sur les identifiés. Le contre-contrôle est aveugle dans cette direction PAR CONSTRUCTION.
+    //
+    // ⚠️ LA MÊME BORNE QUE LE REPLI, ET LA MÊME FONCTION — pas une variante écrite ici. Deux
+    // copies d'une même règle divergent au premier changement de l'une, et celle qui divergerait
+    // ici rouvrirait le trou qu'on ferme. C'est aussi ce qui interdit l'égalité stricte : un
+    // agent qui descend dans un dossier de son arbre travaille toujours dans son espace, et
+    // l'exiger identique ferait de lui une prise pour un `cd`.
+    //
+    // ⚠️ LE PRIX MESURÉ SUR LE TRAFIC RÉEL (2026-08-25, 5 sessions sur 15) : 14 agents dans la
+    // population, 1 identifié — par cette clé-ci — et son `foreground_cwd` est EXACTEMENT
+    // l'espace que sa déclaration inscrit. La borne ne coûte donc aucun faux refus mesurable.
     (session === null
       ? null
       : declarations.find(
-          (d) => d?.pane && d.pane === agent.pane && identiteDeSession(d.session_herdr) === session
+          (d) =>
+            d?.pane &&
+            d.pane === agent.pane &&
+            identiteDeSession(d.session_herdr) === session &&
+            memeEspaceDeTravail(agent.espace, d.espace)
         )) ||
     // 🔴 LE REPLI EST BORNÉ PAR L'ESPACE DE TRAVAIL, et il ne l'était par RIEN. Il appariait
     // n'importe quelle déclaration portant ce nom — ni le pane, ni la session, ni l'espace, ni
@@ -488,6 +515,41 @@ function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
 }
 
 /**
+ * LE CODE QUE HERDR REND QUAND IL N'Y A PLUS DE SERVEUR DERRIÈRE UN SOCKET.
+ *
+ * ⚠️ C'EST UN IDENTIFIANT DE MACHINE, PAS UNE TOURNURE. Il arrive dans la charge JSON du refus
+ * (`{"error":{"code":"server_not_running",…}}`) et `panes()` le recopie tel quel dans la raison.
+ * On apparie donc un CODE, jamais une phrase — énumérer des tournures ne rejoint jamais la langue.
+ */
+const SERVEUR_ABSENT = 'server_not_running';
+
+/**
+ * UNE SESSION QUI A REFUSÉ ÉTAIT-ELLE ABSENTE, OU MUETTE ?
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 C'EST CE PARTAGE QUI DÉCIDE SI LE VERT EST PERMIS, et sans lui la garde certifiait un
+ * parc qu'elle n'avait pas regardé : `sessionsRefusees` entrait dans les comptes et dans la
+ * prose, jamais dans le verdict ni dans la sortie. Mesuré le 2026-08-25 : **15 sessions
+ * interrogées, 10 refusent** — le `0` que lit une machine portait sur un tiers du poste.
+ *
+ * ⚠️ MAIS « UNE SESSION QUI REFUSE ⇒ ROUGE » AURAIT ÉTÉ IGNORÉ EN TROIS JOURS, et une garde
+ * qu'on ignore ne garde rien. Le trafic réel tranche : les **10 refus sur 10** du poste portent
+ * le code `server_not_running`. Une session dont le serveur ne tourne pas n'a NI pane NI agent —
+ * il n'y a rien qu'on ait manqué de mesurer. C'est un socket qui a survécu à sa session, pas une
+ * zone d'ombre. C'est le partage que ce dispositif fait déjà entre un registre ABSENT (le cas
+ * normal, parfaitement jugeable) et un registre LÀ MAIS ILLISIBLE (un refus), une couche plus bas.
+ *
+ * 🔴 ET LA POLARITÉ DE SA PROPRE PANNE EST LE POINT. Reconnaître l'absence est ce qui rend cette
+ * garde silencieuse ; le jour où herdr change ce code, la reconnaissance cesse de mordre. Cet
+ * échec-là doit donc rendre la garde **PLUS BRUYANTE, jamais plus aveugle** : ce qu'on ne sait
+ * pas classer est MUET, et le vert tombe. L'inverse — présumer l'absence — ferait de ce code un
+ * interrupteur de désarmement logé chez un outil tiers.
+ */
+export function sessionAbsente(refus) {
+  return String(refus?.raison ?? '').includes(SERVEUR_ABSENT);
+}
+
+/**
  * LE JUGEMENT DU PARC.
  *
  * @param {object[]} agents          le parc normalisé — `normaliserLeParc`
@@ -560,6 +622,10 @@ export function jugerLeParc({
   const espacesDeclares = new Set(declarations.map((d) => d?.espace).filter(Boolean));
   const fauxRefus = prises.filter((p) => espacesDeclares.has(p.espace));
 
+  // ── LES SESSIONS QU'ON N'A PAS SU REGARDER — voir `sessionAbsente`. Une session dont le
+  // serveur ne tourne pas n'avait rien à montrer ; toute autre était là et s'est tue.
+  const sessionsMuettes = (portee?.sessionsRefusees ?? []).filter((r) => !sessionAbsente(r));
+
   // ⚠️ SUR QUOI LE VERT REPOSE — mesuré sur le trafic réel du 2026-08-25, et ça contredit une
   // lecture confortable du dispositif : les 8 agents de la population du jour étaient
   // identifiés **à 8 sur 8 par leur NOM**, zéro par déclaration, zéro par lieu de rôle.
@@ -588,6 +654,10 @@ export function jugerLeParc({
     fauxRefus: fauxRefus.length,
     sessionsInterrogees: portee?.sessionsInterrogees ?? 0,
     sessionsRefusees: (portee?.sessionsRefusees ?? []).length,
+    // ⚠️ LES MUETTES SONT UN SOUS-ENSEMBLE DES REFUSÉES, PAS UN PANIER — elles ne touchent pas
+    // l'équilibre des comptes, qui ne parle que d'AGENTS. Ce qu'elles portent est d'un autre
+    // ordre : non pas « quel agent », mais « quelle part du poste ai-je pu regarder ».
+    sessionsMuettes: sessionsMuettes.length,
   };
 
   // ── ② LES COMPTES BALANCENT — voir l'en-tête. C'est ici qu'une exception muette se casse.
@@ -598,9 +668,19 @@ export function jugerLeParc({
     throw new ComptesQuiNeBalancentPas(comptes);
   }
 
+  // ⚠️ UNE SESSION MUETTE EST UNE ZONE NON MESURÉE AU MÊME TITRE QU'UN AGENT NON MESURÉ, et
+  // c'est la moitié qui manquait. Le fil se donne pour contrat de « ne JAMAIS rendre vert sur
+  // une mesure qu'il n'a pas faite » ; `sessionsRefusees` n'entrait pourtant ni dans le verdict
+  // ni dans la sortie. Le vocabulaire existait déjà — `ZONES_NON_MESUREES`, sortie 2 — et ne
+  // servait pas. Le texte disait la limite ; le contrat machine disait vert.
+  //
+  // ⚠️ LA PRISE PASSE AVANT, DÉLIBÉRÉMENT. Les deux appellent des gestes opposés — aller voir un
+  // agent / refaire la mesure — et le plus urgent des deux est celui qui nomme un fautif. Les
+  // deux sont non-verts, donc le contrat tient dans les deux cas, et la portée voyage de toute
+  // façon sur chaque rendu.
   const verdict = prises.length
     ? VERDICTS.NES_HORS_DISPOSITIF
-    : nonMesures.length
+    : nonMesures.length || sessionsMuettes.length
       ? VERDICTS.ZONES_NON_MESUREES
       : VERDICTS.RIEN_A_SIGNALER;
 
@@ -608,8 +688,10 @@ export function jugerLeParc({
     prises:
       'un agent VIVANT dont l’espace de travail porte un horodatage de naissance postérieur à ' +
       `« ${miseEnService} », et qu’AUCUNE des DEUX sources n’identifie — ni une déclaration ` +
-      '(appariée par pane-dans-sa-session, ou à défaut par nom DANS L’ESPACE DE TRAVAIL QUE LA ' +
-      'DÉCLARATION INSCRIT — un nom seul apparierait la naissance de n’importe qui ; la session se compare par son ' +
+      '(appariée par pane-dans-sa-session ET DANS L’ESPACE DE TRAVAIL QUE LA DÉCLARATION ' +
+      'INSCRIT — reprendre un pane n’est pas naître, et un terminal se réutilise ; ' +
+      'ou à défaut par nom, dans ce MÊME espace ' +
+      '— un nom seul apparierait la naissance de n’importe qui ; la session se compare par son ' +
       'NOM, celui que la déclaration inscrit et que le socket du pane porte dans son chemin — ' +
       'une session que rien ne nomme n’apparie personne par le pane), ni un lieu de rôle ' +
       'établi sur disque. ' +
@@ -631,14 +713,19 @@ export function jugerLeParc({
     portee:
       `mesuré sur ${comptes.sessionsInterrogees - comptes.sessionsRefusees} session(s) herdr ` +
       `qui ont répondu, sur ${comptes.sessionsInterrogees} interrogée(s). Tous les comptes ` +
-      'ci-dessus sont donc des PLANCHERS, jamais des totaux.',
+      'ci-dessus sont donc des PLANCHERS, jamais des totaux. Sur les ' +
+      `${comptes.sessionsRefusees} qui ont refusé, ${comptes.sessionsRefusees - comptes.sessionsMuettes} ` +
+      'n’avaient plus de serveur derrière leur socket — un socket qui a survécu à sa session ' +
+      'n’a ni pane ni agent, il n’y a rien qu’on ait manqué de voir — et ' +
+      `${comptes.sessionsMuettes} étaient là sans répondre : celles-là, on ne les a PAS mesurées, ` +
+      'et le verdict le dit plutôt que de les couvrir d’un vert.',
   };
 
-  return { verdict, sortie: SORTIES[verdict], prises, nonMesures, identifies, horsPortee, fauxRefus, comptes, methode, texte: rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, comptes, methode, miseEnService }) };
+  return { verdict, sortie: SORTIES[verdict], prises, nonMesures, identifies, horsPortee, fauxRefus, sessionsMuettes, comptes, methode, texte: rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMuettes, comptes, methode, miseEnService }) };
 }
 
 /** Le compte rendu, tel qu'un humain le lit. Chaque fautif y est NOMMÉ, jamais compté. */
-function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, comptes, methode, miseEnService }) {
+function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMuettes = [], comptes, methode, miseEnService }) {
   const l = [];
   l.push(`GARDE DES NAISSANCES — ${verdict}`);
   l.push(`frontière : ${miseEnService} · parc vivant : ${comptes.parcVivant} · dans la population : ${comptes.population}`);
@@ -668,6 +755,15 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, comptes, m
   if (nonMesures.length) {
     l.push(`⚠️ ${nonMesures.length} agent(s) que je n’ai PAS PU mesurer — ce n’est pas « rien à signaler » :`);
     for (const n of nonMesures) l.push(`   • ${n.designation} — ${n.raisons.join(' ; ')}`);
+    l.push('');
+  }
+  if (sessionsMuettes.length) {
+    // ⚠️ NOMMÉES, COMME LES AGENTS. Un compte ne se refait pas : on relance une mesure sur une
+    // session précise. Le lecteur doit savoir LAQUELLE, et pourquoi elle n'a pas répondu.
+    l.push(`⚠️ ${sessionsMuettes.length} session(s) herdr étaient LÀ sans répondre — ce n’est pas « rien à signaler » :`);
+    for (const s of sessionsMuettes) {
+      l.push(`   • ${s?.session ?? '(session sans nom)'} — ${String(s?.raison ?? 'refus sans raison donnée').split('\n')[0]}`);
+    }
     l.push('');
   }
   if (horsPortee.length) {

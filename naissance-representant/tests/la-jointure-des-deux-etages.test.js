@@ -580,3 +580,138 @@ test('LA MÉTHODE IMPRIMÉE dit la borne — un texte qui annoncerait « à déf
   assert.match(v.methode.prises, /ESPACE DE TRAVAIL/, 'la méthode doit dire que le repli est BORNÉ');
   assert.match(v.methode.prises, /pane-dans-sa-session/);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑦ LA CLÉ PRIMAIRE — « pane-dans-sa-session » N'EST PAS UNE IDENTITÉ DURABLE
+//
+// 🔴 LE TROU QUE LES CINQ ESSAIS CI-DESSUS NE POUVAIENT PAS VOIR. Ils éprouvent tous la borne
+// d'espace sur le chemin de REPLI : chacun pose un pane DIFFÉRENT de celui de la déclaration
+// (`w12:p9`, `w9:p9`, `w4:p1`), donc chacun contourne la clé primaire avant de l'atteindre. La
+// clé primaire, elle, appariait sur `pane === pane && session === session` et RIEN D'AUTRE —
+// ni l'espace, ni la date, ni le rôle, ni le mandat. Le correctif de la borne n'avait donc
+// fermé QU'UNE MOITIÉ, pour la cinquième fois dans ce lot.
+//
+// ⚠️ ET LE CAS NE DEMANDE AUCUN RECYCLAGE D'IDENTIFIANT — il suffit de REPRENDRE LE PANE, ce à
+// quoi un terminal sert. Un chef d'équipe naît par le geste ; son travail fini, on relance un
+// `claude` À LA MAIN dans le même pane, sur un worktree NEUF. Cet agent n'a aucune déclaration,
+// aucun lieu de rôle, il est dans la population — et la garde le rangeait en « identifié » par
+// la déclaration de son PRÉDÉCESSEUR.
+//
+// ⚠️ `fauxRefus` NE POUVAIT PAS LE VOIR : il ne croise l'espace que sur les PRISES, jamais sur
+// les identifiés. Le contre-contrôle est aveugle dans cette direction PAR CONSTRUCTION.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 LE PANE EST REPRIS — même pane, même session, worktree NEUF : la déclaration du prédécesseur ne le couvre pas', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    const registre = lireLesDeclarations({ racine });
+
+    // ⚠️ ANONYME, DÉLIBÉRÉMENT. Le repli par le nom est déjà borné ; le laisser jouer ici
+    // mesurerait la borne du repli une sixième fois au lieu de la clé primaire. Sans nom, la
+    // SEULE clé qui peut identifier cet agent est « pane-dans-sa-session ».
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: PANE,
+        session: socketDe('somtech'),
+        espace: '/bac/worktrees/un-depot/20260826-140000',
+        nom: null,
+      }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+
+    assert.equal(v.comptes.identifies, 0, `reprendre un pane n’est pas naître :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 1, 'il doit être PRIS');
+    assert.equal(v.verdict, VERDICTS.NES_HORS_DISPOSITIF);
+    assert.equal(v.sortie, 1, 'et la sortie doit le dire');
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('🔴 … et le même, NOMMÉ d’un nom quelconque, n’est pas davantage couvert', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: PANE,
+        session: socketDe('somtech'),
+        espace: '/bac/worktrees/un-depot/20260826-140000',
+        nom: 'un-nom-qui-ne-figure-dans-aucune-declaration',
+      }),
+      registre: lireLesDeclarations({ racine }),
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.prises, 1, `ni la clé primaire ni le repli ne doivent l’atteindre :\n${v.texte}`);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('LA SYMÉTRIE DE LA CLÉ PRIMAIRE — l’agent DÉCLARÉ, à son pane, dans SON espace, reste identifié', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    // ⚠️ LE NOM EST NEUTRALISÉ : seule la clé primaire peut le sauver. Un banc qui laisserait
+    // le repli jouer ici passerait au vert même si la clé primaire était bornée à mort.
+    const v = jugerLeParc({
+      agents: unAgent({ pane: PANE, session: socketDe('somtech'), espace: ESPACE, nom: 'sans-rapport' }),
+      registre: lireLesDeclarations({ racine }),
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.parSource[SOURCES.DECLARATION], 1, `la clé primaire doit encore mordre :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 0);
+    assert.equal(v.sortie, 0);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('🔴 LA SYMÉTRIE QUI INTERDIT L’ÉGALITÉ STRICTE — l’agent déclaré a fait `cd` DANS son worktree', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    // ⚠️ LA MOITIÉ QU'UNE BORNE TROP DURE CASSERAIT. `foreground_cwd` est le répertoire du
+    // SHELL : un chef d'équipe qui descend dans un dossier de son arbre travaille toujours dans
+    // son espace. Borner la clé primaire par une ÉGALITÉ ferait de lui une prise pour un `cd` —
+    // le faux refus symétrique de celui qu'on vient de fermer. Le nom est neutralisé pour que
+    // ce soit bien la clé primaire, et elle seule, que cet essai mesure.
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: PANE,
+        session: socketDe('somtech'),
+        espace: `${ESPACE}/naissance-representant/src`,
+        nom: 'sans-rapport',
+      }),
+      registre: lireLesDeclarations({ racine }),
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.parSource[SOURCES.DECLARATION], 1, `un sous-dossier reste le même espace :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 0);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('LA MÉTHODE IMPRIMÉE dit que la clé PRIMAIRE est bornée elle aussi', () => {
+  // ⚠️ Le texte a déjà décrit une garde qu'il n'avait pas — « à défaut par nom » tout court
+  // pendant que le repli était non borné. Un texte qui annoncerait « pane-dans-sa-session »
+  // tout court décrirait à nouveau une clé plus large que celle qui juge.
+  const v = jugerLeParc({ agents: [], registre: { declarations: [], illisibles: [] } });
+
+  // ⚠️ ON COUPE AVANT LE REPLI, ET C'EST TOUT L'ESSAI. Écrit d'abord en cherchant
+  // `/pane-dans-sa-session[^.]*ESPACE DE TRAVAIL/` sur la phrase ENTIÈRE, il passait AVANT
+  // le correctif : la borne que le motif trouvait était celle du REPLI, quelques mots plus
+  // loin. Une assertion juste sur un chemin correct, qui ne mesurait pas la moitié visée —
+  // le motif même que ce lot ferme. On isole donc la moitié qui décrit la clé primaire.
+  const [cléPrimaire, repli] = v.methode.prises.split('ou à défaut');
+  assert.ok(repli, 'la méthode doit toujours décrire les DEUX clés');
+  assert.match(cléPrimaire, /pane-dans-sa-session/);
+  assert.match(
+    cléPrimaire,
+    /ESPACE DE TRAVAIL/,
+    'la borne d’espace doit être annoncée SUR la clé primaire, pas seulement sur le repli'
+  );
+});

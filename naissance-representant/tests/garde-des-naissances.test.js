@@ -623,3 +623,100 @@ test('designationDe rend un nom quand il y en a un, une adresse quand il n’y e
   assert.equal(designationDe({ nom: { mesure: 'lu', valeur: 'batiscan' }, pane: 'w1:p1' }), 'batiscan');
   assert.match(designationDe({ nom: { mesure: 'aucun', valeur: null }, pane: 'w1:p1', session: '/s.sock', espace: APRES }), /w1:p1/);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 8. UNE SESSION MUETTE EST UNE ZONE NON MESURÉE — le vert ne la couvre pas
+//
+// 🔴 LE CONTRAT QUE LE FIL SE DONNE, ET QUE LE VERDICT NE TENAIT PAS. `bin/` s'ouvre sur
+// « CE FIL NE REND JAMAIS VERT SUR UNE MESURE QU'IL N'A PAS FAITE » — et `sessionsRefusees`
+// entrait dans `comptes` et dans la prose de `methode.portee` SANS entrer ni dans le verdict
+// ni dans le code de sortie. Mesuré sur le poste le 2026-08-25 : 15 sessions interrogées,
+// 10 refusent. Le `0` que lit une machine certifiait un parc amputé des deux tiers.
+//
+// ⚠️ ET LE SEUL ESSAI QUI REGARDAIT CE CHIFFRE N'ASSERTAIT QUE DU TEXTE (« 15 », « 2 »,
+// « plancher »). Le texte disait la limite ; le contrat machine disait vert. C'est
+// exactement « une assertion juste sur un chemin correct, qui laisse la vraie population
+// non gardée ».
+//
+// ⚠️ POURQUOI CE N'EST PAS « UNE SESSION QUI REFUSE ⇒ ROUGE ». Une garde qui sortirait
+// non-zéro dès qu'un socket périmé traîne sur le poste serait ignorée en trois jours — et
+// une garde qu'on ignore ne garde rien. Le trafic réel tranche : les 10 refus du poste
+// portent TOUS le code `server_not_running` de herdr, c'est-à-dire « aucun serveur ici ».
+// Une session dont le serveur ne tourne pas n'a NI pane NI agent : il n'y a rien qu'on ait
+// manqué de mesurer. C'est le socket qui a survécu à sa session, pas une zone d'ombre — le
+// même partage que ce module fait déjà entre un registre ABSENT (cas normal, jugeable) et
+// un registre LÀ MAIS ILLISIBLE (refus). Une session qui refuse pour TOUTE AUTRE raison est
+// là et se tait : elle, on ne l'a pas mesurée.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/** Le refus tel que `panes()` le pousse — mesuré mot pour mot sur le poste le 2026-08-25. */
+const refusServeurMort = (nom) => ({
+  session: `/Users/qui-que-ce-soit/.config/herdr/sessions/${nom}/herdr.sock`,
+  raison:
+    'Command failed: herdr pane list\n{"id":"cli:pane:list","error":{"code":"server_not_running",' +
+    `"message":"no herdr server is running at /Users/qui-que-ce-soit/.config/herdr/sessions/${nom}/herdr.sock; run \`herdr\` to start or attach it"}}\n`,
+});
+
+test('🔴 UNE SESSION MUETTE INTERDIT LE VERT — la garde ne certifie pas ce qu’elle n’a pas regardé', () => {
+  // Un parc parfaitement propre : aucun vivant à juger. Le SEUL fait qui reste est qu’une
+  // session interrogée n’a pas répondu, et qu’elle n’a pas dit que son serveur était mort.
+  const r = juger({
+    panes: [],
+    portee: { sessionsInterrogees: 15, sessionsRefusees: [{ session: '/…/sessions/cg/herdr.sock', raison: 'délai dépassé' }] },
+  });
+  assert.equal(r.verdict, VERDICTS.ZONES_NON_MESUREES, `un parc à moitié regardé n’est pas « rien à signaler » :\n${r.texte}`);
+  assert.equal(r.sortie, SORTIES[VERDICTS.ZONES_NON_MESUREES], 'et la SORTIE le dit — c’est elle que lit une machine');
+  assert.notEqual(r.sortie, 0, 'le contrat du fil : jamais vert sur une mesure non faite');
+});
+
+test('UNE SESSION DONT LE SERVEUR NE TOURNE PAS N’EST PAS UNE ZONE D’OMBRE — le socket a survécu à sa session', () => {
+  // ⚠️ LA MOITIÉ QUI EMPÊCHE LA GARDE D'ÊTRE IGNORÉE. Les 10 refus du poste sont de cette
+  // forme-là. Les traiter en zones non mesurées rendrait la garde ROUGE en permanence sur un
+  // poste parfaitement sain — et une garde toujours rouge est une garde qu'on désarme.
+  const r = juger({
+    panes: [],
+    portee: {
+      sessionsInterrogees: 15,
+      sessionsRefusees: ['somtechj', 'sibelnager', 'morasse', 'caribou'].map(refusServeurMort),
+    },
+  });
+  assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER, `un serveur absent n’a ni pane ni agent :\n${r.texte}`);
+  assert.equal(r.sortie, 0);
+  assert.equal(r.comptes.sessionsRefusees, 4, 'le refus reste COMPTÉ et dit — il n’est pas effacé');
+  assert.equal(r.comptes.sessionsMuettes, 0, 'mais aucune n’est muette');
+});
+
+test('🔴 UN REFUS QU’ON NE SAIT PAS CLASSER COMPTE COMME MUET — l’incertitude tombe du côté BRUYANT', () => {
+  // ⚠️ LA POLARITÉ DE LA PANNE, ET ELLE EST LE POINT. Reconnaître « serveur absent » est ce
+  // qui rend cette garde silencieuse ; si herdr change ce code demain, la reconnaissance
+  // cesse de mordre. Il faut donc que cet échec-là rende la garde PLUS BRUYANTE, jamais plus
+  // aveugle : un refus non classé est muet, et le vert tombe. Un classement qui se
+  // tromperait dans l’autre sens serait un interrupteur de désarmement chez herdr.
+  for (const raison of ['', null, undefined, 'connection reset by peer', 'permission denied', 'server_not_runnin']) {
+    const r = juger({ panes: [], portee: { sessionsInterrogees: 15, sessionsRefusees: [{ session: 's', raison }] } });
+    assert.equal(r.verdict, VERDICTS.ZONES_NON_MESUREES, `raison « ${raison} » : elle doit compter comme muette`);
+    assert.equal(r.comptes.sessionsMuettes, 1);
+  }
+});
+
+test('UNE PRISE PASSE AVANT UNE SESSION MUETTE — les deux gestes sont opposés, la sortie les distingue', () => {
+  // Aller voir un agent / refaire la mesure : une chaîne qui les confondrait enverrait
+  // corriger ce qui va bien. La prise est le fait le plus urgent, et le texte porte de toute
+  // façon la portée sur chaque rendu.
+  const r = juger({
+    portee: { sessionsInterrogees: 15, sessionsRefusees: [{ session: 's', raison: 'délai dépassé' }] },
+  });
+  assert.equal(r.comptes.prises, 1);
+  assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF);
+  assert.equal(r.sortie, 1);
+  assert.equal(r.comptes.sessionsMuettes, 1, 'muette quand même — comptée, et dite dans le texte');
+});
+
+test('LA SESSION MUETTE SE NOMME DANS LE TEXTE — un compte ne se va pas voir', () => {
+  const r = juger({
+    panes: [],
+    portee: { sessionsInterrogees: 15, sessionsRefusees: [{ session: '/…/sessions/cg/herdr.sock', raison: 'délai dépassé' }] },
+  });
+  assert.match(r.texte, /cg/, 'le lecteur doit savoir LAQUELLE refaire');
+  assert.match(r.texte, /délai dépassé/, 'et pourquoi elle n’a pas répondu');
+});
