@@ -155,7 +155,8 @@ const APPORTS_POSTERIEURS = [
  * péremption d'exister. Une normalisation muette ne peut pas prouver qu'elle a servi.
  */
 function auPerimetreDuParallelisme(valeur, rencontres = new Set()) {
-  if (Array.isArray(valeur)) return { v: valeur.map((x) => auPerimetreDuParallelisme(x, rencontres).v), rencontres };
+  if (Array.isArray(valeur))
+    return { v: valeur.map((x) => auPerimetreDuParallelisme(x, rencontres).v), rencontres };
   if (!valeur || typeof valeur !== 'object') return { v: valeur, rencontres };
 
   const sortie = {};
@@ -469,17 +470,48 @@ test('LE MÊME INSTANTANÉ REND LA MÊME VUE — champ à champ, contre le code 
   const { v: apresBorne, rencontres } = auPerimetreDuParallelisme(apres);
   const { v: avantBorne } = auPerimetreDuParallelisme(avant);
 
-  // 🔴 LE CONTRÔLE DE PÉREMPTION — condition n°2 de l’arbitrage. Une entrée qui ne sert plus
-  // rougit ici : sans lui, la liste ne ferait que grossir, en couvrant des écarts que plus
-  // personne ne produit. C’est ce qui l’empêche de devenir une allowlist muette.
-  const jamaisVues = APPORTS_POSTERIEURS.filter(
-    (a) => !rencontres.has(a.quoi === 'suffixe' ? a.texte : a.nom)
-  ).map((a) => `${a.lot} · ${a.quoi === 'suffixe' ? a.texte : a.nom}`);
+  // 🔴 LE CONTRÔLE DE L’ARBITRAGE — ET IL VÉRIFIE LA **DÉFINITION**, PAS UNE PRÉSENCE.
+  //
+  // ⚠️ PREMIÈRE VERSION REJETÉE EN REVUE PORTAIL, ET LE MOTIF ÉTAIT GRAVE. Elle exigeait
+  // seulement qu’une entrée soit RENCONTRÉE dans la vue d’aujourd’hui. Or un champ
+  // PRÉEXISTANT est rencontré lui aussi — donc on pouvait l’exempter, avec un `lot` et un
+  // `pourquoi` parfaitement plausibles, et le contrôle ne mordait pas.
+  //
+  // MESURÉ : `nom: 'BUG_INJECTE'` posé dans `applicationDe()` fait rougir 1 essai. En
+  // ajoutant UNE entrée exemptant `application` — un champ du lot d’AVANT — la suite
+  // repassait à 16/16 VERTS, la régression réelle devenue invisible. La protection ne
+  // tenait que par la redondance ACCIDENTELLE du modèle (`titre` et `epicsEcartes` sont
+  // rattrapés ailleurs ; `application` n’est nulle part ailleurs).
+  //
+  // 🔴 CE QU’EST UN APPORT POSTÉRIEUR, ÉCRIT COMME UNE DÉFINITION : quelque chose que le
+  // moteur d’AUJOURD’HUI produit **et que le PRÉDÉCESSEUR ne produisait PAS**. Les deux
+  // moitiés, jamais une seule. Exempter un champ préexistant devient impossible : il est
+  // rencontré des DEUX côtés, donc il rougit ici.
+  const { rencontres: dansLePredecesseur } = auPerimetreDuParallelisme(avant);
+  const nomDe = (a) => (a.quoi === 'suffixe' ? a.texte : a.nom);
+
+  const jamaisVues = APPORTS_POSTERIEURS.filter((a) => !rencontres.has(nomDe(a))).map(
+    (a) => `${a.lot} · ${nomDe(a)}`
+  );
   assert.deepEqual(
     jamaisVues,
     [],
     `ces apports sont déclarés mais le moteur ne les produit plus — la liste est périmée, ` +
       `et une exception qui ne sert plus couvre des écarts que personne ne produit`
+  );
+
+  // ⚠️ ET LA MOITIÉ QUI MANQUAIT : `remplace` est la SEULE catégorie dont le prédécesseur
+  // porte déjà la clé — c’est sa définition même (une valeur qui change, pas un champ qui
+  // naît). Les deux autres catégories doivent être ABSENTES du prédécesseur.
+  const dejaLaAvant = APPORTS_POSTERIEURS.filter(
+    (a) => a.quoi !== 'remplace' && dansLePredecesseur.has(nomDe(a))
+  ).map((a) => `${a.lot} · ${nomDe(a)}`);
+  assert.deepEqual(
+    dejaLaAvant,
+    [],
+    `ces entrées exemptent quelque chose que le PRÉDÉCESSEUR produisait DÉJÀ : ce ne sont pas ` +
+      `des apports postérieurs, et les exempter aveugle ce banc sur du code que la ` +
+      `parallélisation peut casser`
   );
 
   assert.deepStrictEqual(apresBorne, avantBorne, 'la vue parallèle diffère de la vue séquentielle');
