@@ -38,7 +38,11 @@ import { homedir } from 'node:os';
 import { familleDuMandat, codeDuMandat } from '../../ligne-directe/src/mandat.js';
 // ⚠️ LA FORME VIENT DE CELLE QUI JUGE, jamais d'une seconde expression écrite ici — voir
 // `exigerUnHorodatageDEspace` plus bas pour ce que la divergence rouvrirait.
-import { estUnHorodatageDeNaissance } from './garde-des-naissances.js';
+import {
+  estUnHorodatageDeNaissance,
+  instantDeLHorodatage,
+  MISE_EN_SERVICE,
+} from './garde-des-naissances.js';
 
 /** Le nom du rôle, écrit UNE fois — un rôle épelé à deux endroits diverge au premier changement. */
 export const ROLE_CHEF_EQUIPE = 'chef-equipe';
@@ -141,6 +145,34 @@ export class HorodatageHorsForme extends Error {
 }
 
 /**
+ * Levée quand un horodatage dicté est bien formé mais nomme un espace ANTÉRIEUR à la frontière.
+ *
+ * 🔴 CE N'EST PAS UN SECOND CAS DE `HorodatageHorsForme`, ET LES CONFONDRE COÛTERAIT LE MOTIF.
+ * L'un se voit à l'œil (`mon-essai`), l'autre non : `20260824-235959` a la forme exacte que
+ * `claude-swt` pose, et c'est très précisément la valeur que l'usage PRESCRIT de l'option amène
+ * à taper — « rejouer un refus à l'identique », « reprendre une session par son nom ». Deux
+ * causes distinctes, deux refus qui ne disent pas la même chose à celui qui les lit.
+ */
+export class HorodatageAvantLaMiseEnService extends Error {
+  constructor(brut, miseEnService) {
+    super(
+      `« ${brut} » est bien formé, mais il nomme un espace de travail NÉ AVANT la mise en ` +
+        `service du dispositif (« ${miseEnService} »).\n` +
+        `  ⚠️ LA FORME NE SUFFIT PAS, ET C'EST LE MÊME MOTIF QU'ELLE. Cet horodatage nomme le ` +
+        `dernier segment du chemin où l'agent travaillera — et la GARDE DES NAISSANCES borne sa ` +
+        `population sur DEUX termes : la forme, et l'INSTANT. Un espace daté d'avant la ` +
+        `frontière est rangé en « hors portée » : l'agent qui y naîtrait ne serait JAMAIS jugé, ` +
+        `et rien ne le dirait.\n` +
+        `  Ça ne retire rien à l'usage de l'option : rejouer un refus ou reprendre une session ` +
+        `par son nom vise une naissance du dispositif, donc postérieure à sa mise en service.`
+    );
+    this.name = 'HorodatageAvantLaMiseEnService';
+    this.brut = brut;
+    this.miseEnService = miseEnService;
+  }
+}
+
+/**
  * L'horodatage d'un espace, exigé sous la forme que la GARDE sait lire.
  *
  * ⚠️ LA FORME N'EST PAS RÉÉCRITE ICI. Elle vit chez `garde-des-naissances.js`, qui juge sur elle ;
@@ -148,11 +180,30 @@ export class HorodatageHorsForme extends Error {
  * la version qui divergerait serait celle-ci, celle qui produit, dont aucune garde ne relit la
  * population. On importe donc son verdict, on n'imite pas son expression.
  *
+ * ⚠️ ET IL Y A DEUX TERMES, PAS UN. La forme était gardée, l'INSTANT non — alors que la garde
+ * borne sa population sur les deux : ce qu'elle ne sait pas lire devient `horsPortee` (« aucun
+ * horodatage »), ce qu'elle date d'avant sa frontière AUSSI (« né avant la mise en service »).
+ * Le producteur n'en gardait que la moitié, et la moitié qui manquait est celle que l'usage
+ * PRESCRIT de l'option amène à taper — un horodatage d'hier, bien formé, qui ne se voit pas.
+ *
+ * ⚠️ NI LA FORME NI LA FRONTIÈRE NE SONT RÉÉCRITES ICI. Les deux vivent chez celle qui juge ;
+ * en poser une copie ici garantirait qu'un jour l'une accepte ce que l'autre refuse — et la
+ * version qui divergerait serait celle-ci, celle qui produit, dont aucune garde ne relit la
+ * population.
+ *
  * @returns {string} l'horodatage, RENDU TEL QUEL — on ne réécrit pas ce qu'on a accepté
  * @throws  {HorodatageHorsForme}
+ * @throws  {HorodatageAvantLaMiseEnService}
  */
-export function exigerUnHorodatageDEspace(brut) {
+export function exigerUnHorodatageDEspace(brut, miseEnService = MISE_EN_SERVICE) {
   if (!estUnHorodatageDeNaissance(brut)) throw new HorodatageHorsForme(brut);
+  // ⚠️ STRICTEMENT ANTÉRIEUR, et la borne est celle de la garde au caractère près : elle range
+  // en `horsPortee` ce qui est `< frontiere`, donc la frontière elle-même est DANS la
+  // population. Un `<=` ici refuserait une naissance que la garde jugerait très bien — le faux
+  // refus symétrique, sur la seule seconde où les deux se touchent.
+  if (instantDeLHorodatage(brut).getTime() < instantDeLHorodatage(miseEnService).getTime()) {
+    throw new HorodatageAvantLaMiseEnService(brut, miseEnService);
+  }
   return brut;
 }
 

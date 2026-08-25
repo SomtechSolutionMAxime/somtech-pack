@@ -2165,3 +2165,63 @@ test('un rôle qui n’existe pas reste refusé — le rôle neuf n’a pas ouve
     assert.match(r.stderr, /rôle inconnu/i);
     assert.equal(appelsJournalises(journal).length, 0);
   }, 'inconnu'));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 L'HORODATAGE DICTÉ, BIEN FORMÉ, MAIS D'AVANT LA MISE EN SERVICE (D-20260825-0002)
+//
+// Le banc voisin (`chef-equipe.test.js`) éprouve la porte ; celui-ci éprouve qu'elle est
+// RÉELLEMENT DANS LA CHAÎNE. Une porte exportée que le binaire n'appellerait pas sur ce cas-là
+// ne garde rien — c'est le motif « le détecteur existait dans le dépôt et nulle part dans la
+// vie d'un agent », déjà payé sur ce fichier.
+//
+// Mesuré AVANT le correctif, sur ce même harnais : `--horodatage 20260824-235959` allait
+// jusqu'à `workspace create`, sans un mot, et faisait naître un agent que la garde rangerait
+// en « hors portée » — jamais jugé.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 un horodatage BIEN FORMÉ mais d’AVANT la mise en service est refusé par la COMMANDE — et rien n’est créé', () =>
+  avecChefDEquipe(({ code, depot, poste }) => {
+    const horodatage = '20260824-235959';
+    const espace = join(poste.SOMTECH_WORKTREES_RACINE, 'le-chantier', horodatage);
+    const journal = installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /20260824-235959/, 'le refus cite la valeur reçue');
+    assert.match(r.stderr, /hors portée|jamais jugé/i, 'et dit la conséquence : cet agent échapperait à la garde');
+    // 🔴 LE REFUS EST DÉLIBÉRÉ, PAS UNE PANNE QUI TOMBE DANS LE FILET GLOBAL. Sans cette
+    // assertion le banc est VERT AVANT LE CORRECTIF : `main().catch` imprime déjà `err.message`
+    // et sort en 1, donc code et message ne distinguent pas les deux. Cette ligne-ci est la
+    // seule que la branche voulue écrit — et c'est elle qui porte la garantie mesurée en
+    // dessous. Un banc qui ne la demande pas mesure le filet, pas le câblage.
+    assert.match(
+      r.stderr,
+      /Rien n’a été créé/,
+      'le refus DIT ce qu’il garantit — sinon il n’est qu’une exception tombée dans le filet global'
+    );
+    assert.equal(r.stdout, '', 'rien qui ressemblerait à un succès');
+    // ⚠️ « RIEN N'A ÉTÉ CRÉÉ » SE MESURE, il ne se lit pas dans le message.
+    assert.equal(existsSync(espace), false, 'aucun arbre');
+    assert.deepEqual(
+      cequiResteDeLEspace(depot, espace, horodatage),
+      { arbre: false, branche: false, enregistrements: 1 },
+      'ni arbre, ni branche-socle, ni enregistrement'
+    );
+    assert.equal(appelsJournalises(journal).length, 0, 'et herdr n’a JAMAIS été appelé');
+    assert.equal(declarationsInscrites(poste).length, 0, 'ni déclaration');
+  }));
+
+test('la frontière EXACTE passe — « antérieur » est strict, sinon c’est le faux refus symétrique', () =>
+  avecChefDEquipe(({ code, poste }) => {
+    // ⚠️ SANS CETTE MOITIÉ, le correctif se paierait d'une naissance refusée que la garde
+    // jugerait très bien : elle range en hors portée ce qui est `< frontière`, pas `<=`.
+    const horodatage = '20260825-000000';
+    const espace = join(poste.SOMTECH_WORKTREES_RACINE, 'le-chantier', horodatage);
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).espace, espace);
+  }));

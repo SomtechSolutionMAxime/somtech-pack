@@ -27,8 +27,14 @@ import {
   EspaceDeTravailImpossible,
   MandatSansChantier,
   HorodatageHorsForme,
+  HorodatageAvantLaMiseEnService,
 } from '../src/chef-equipe.js';
-import { horodatageDuChemin, estUnHorodatageDeNaissance } from '../src/garde-des-naissances.js';
+import {
+  horodatageDuChemin,
+  estUnHorodatageDeNaissance,
+  instantDeLHorodatage,
+  MISE_EN_SERVICE,
+} from '../src/garde-des-naissances.js';
 
 const git = (ou, ...args) => execFileSync('git', ['-C', ou, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
@@ -530,4 +536,69 @@ test('un défaire appelé à vide REFUSE proprement — une sortie de processus 
   const defait = defaireEspaceDeTravail();
   assert.equal(defait.ok, false);
   assert.match(defait.message, /—/, 'l’espace inconnu est nommé « — », pas « undefined »');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 LA MOITIÉ QUI MANQUAIT À LA PORTE DU PRODUCTEUR — LA FORME ÉTAIT GARDÉE, L'INSTANT NON
+//
+// `estUnHorodatageDeNaissance` ne juge que la FORME. Or la garde borne sa population sur DEUX
+// termes : la forme (sinon `horodatageDuChemin` rend `null`) ET l'instant (sinon `horsPortee`,
+// raison « né avant la mise en service »). Le producteur n'en gardait qu'un.
+//
+// Mesuré avant le correctif, sur les fonctions pures — un agent SANS AUCUNE DÉCLARATION dans
+// `…/worktrees/d/20260824-235959` : `verdict: rien à signaler | prises: 0 | horsPortee: 1`.
+// Et de bout en bout sur le vrai binaire : `--horodatage 20260824-235959` allait jusqu'au bout.
+//
+// ⚠️ LE DÉSARMEMENT PASSAIT PAR L'USAGE PRESCRIT, pas par une frappe fautive : l'option existe
+// pour « rejouer un refus à l'identique » et « reprendre une session par son nom », c'est-à-dire
+// pour REDONNER UN HORODATAGE D'HIER. Un `2026-08-25` se voyait ; un `20260824-235959` non.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 un horodatage BIEN FORMÉ mais ANTÉRIEUR à la mise en service est REFUSÉ — la forme ne suffit pas', () => {
+  assert.throws(
+    () => exigerUnHorodatageDEspace('20260824-235959'),
+    (err) => {
+      assert.ok(
+        err instanceof HorodatageAvantLaMiseEnService,
+        `attendu HorodatageAvantLaMiseEnService, reçu ${err?.name} (${err?.message})`
+      );
+      assert.match(err.message, /20260824-235959/, 'le refus cite la valeur reçue');
+      assert.match(err.message, new RegExp(MISE_EN_SERVICE), 'et la frontière qu’elle franchit');
+      assert.match(err.message, /garde/i, 'et POURQUOI : cet agent ne serait JAMAIS jugé');
+      return true;
+    }
+  );
+});
+
+test('🔴 LA FERMETURE, PAR VARIATION : tout ce que le producteur ACCEPTE tombe dans la population de la garde', () => {
+  // ⚠️ CE BANC NE PINGLE AUCUNE VALEUR — il éprouve l'IMPLICATION sur un jeu qui traverse la
+  // frontière dans les deux sens. Un banc qui n'aurait épinglé que « 20260824-235959 rougit »
+  // survivrait au jour où quelqu'un décale la frontière d'une seconde.
+  const cas = [
+    '20260825-083616', // le canonique du jour — accepté, et jugé
+    '20260825-000000', // la frontière EXACTE : « antérieur » est STRICT, elle passe
+    '20260824-235959', // une seconde avant — hors population
+    '20260101-000000', // franchement avant
+    '20270101-000000', // franchement après
+    '2026-08-25',      // hors forme
+    'mon-essai',       // hors forme
+  ];
+  for (const valeur of cas) {
+    let accepte = true;
+    try {
+      exigerUnHorodatageDEspace(valeur);
+    } catch {
+      accepte = false;
+    }
+    // Ce que la garde ferait de l'espace ainsi nommé : est-il dans sa population ?
+    const dansLaPopulation =
+      horodatageDuChemin(`/Users/x/worktrees/depot/${valeur}`) !== null &&
+      instantDeLHorodatage(valeur).getTime() >= instantDeLHorodatage(MISE_EN_SERVICE).getTime();
+    assert.equal(
+      accepte,
+      dansLaPopulation,
+      `« ${valeur} » : le producteur ${accepte ? 'ACCEPTE' : 'refuse'} un espace que la garde ` +
+        `${dansLaPopulation ? 'jugerait' : 'ne jugerait JAMAIS'} — un agent naîtrait hors de toute garde`
+    );
+  }
 });

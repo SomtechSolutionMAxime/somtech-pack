@@ -65,6 +65,7 @@ import {
   EspaceDeTravailImpossible,
   MandatSansChantier,
   HorodatageHorsForme,
+  HorodatageAvantLaMiseEnService,
   BASE_PAR_DEFAUT,
 } from '../src/chef-equipe.js';
 import { inscrireLaDeclaration, declarerAuServiceDesk, phraseDuMandatIncomplet } from '../src/declaration.js';
@@ -263,7 +264,13 @@ async function main() {
   try {
     horodatage = exigerUnHorodatageDEspace(option(args, '--horodatage') || horodatageDEspace());
   } catch (err) {
-    if (err instanceof HorodatageHorsForme) {
+    // ⚠️ LES DEUX PORTES DE L'HORODATAGE PASSENT PAR ICI, et il en manquait une. La forme se
+    // voyait (`mon-essai`) ; l'INSTANT non — `20260824-235959` a la forme exacte que
+    // `claude-swt` pose, et c'est la valeur que l'usage PRESCRIT de l'option amène à taper.
+    // Sans cette branche, le refus tombait dans `main().catch` : même message, même sortie —
+    // mais SANS la ligne qui dit ce qui est garanti, et sans qu'aucun banc puisse distinguer un
+    // refus voulu d'une exception échappée.
+    if (err instanceof HorodatageHorsForme || err instanceof HorodatageAvantLaMiseEnService) {
       process.stderr.write(`${err.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni espace de travail, ni onglet, ni agent.\n`);
       process.exit(1);
     }
