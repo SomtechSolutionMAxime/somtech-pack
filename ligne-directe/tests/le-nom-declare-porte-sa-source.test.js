@@ -1357,6 +1357,70 @@ test('AUCUNE LIGNE DU PANNEAU NE FOND LE DÉCLARÉ ET LE PROUVÉ — la FAMILLE,
   assert.notEqual(marqueDe(vueDeclaree), marqueDe(vueProuvee), 'la marque de l’arbre fond les deux sources');
 });
 
+test('LA PISTE SURVIT AU RENDU DU PANNEAU — sous DÉCLARÉ comme sous NON ÉTABLI, les DEUX branches', () => {
+  // 🔴 DIXIÈME REJET DE CE LOT, ET TOUJOURS LA MÊME FORME. `lignesDeLaSource` rend les pistes
+  // (`indices`) dans DEUX branches — sous la déclaration et sous le repli « non établi ». Les
+  // deux étaient couvertes au niveau de la DONNÉE (`agent.indices`) et par les autres surfaces
+  // de rendu, mais AUCUN banc n'appelait `lignesDeLaSource` sur un cas à pistes. Mesuré :
+  // supprimer chaque boucle séparément laissait 1094 essais VERTS.
+  //
+  // ⚠️ CE N'EST PAS UNE BRANCHE MORTE : `quiPorte` peuple réellement `indices` sur l'étage
+  // DÉCLARÉ, depuis `parNom` — un agent vivant qui porte le code comme NOM sans le porter comme
+  // mandat corrobore une déclaration. Le module documente ce cas comme fréquent : 42 agents
+  // mesurés le 2026-08-22 portent un nom-code sans mandat.
+  //
+  // ⚠️ CE QUE ÇA COÛTERAIT : le panneau perdrait en silence la ligne « ~ nom — un agent porte ce
+  // nom, son lieu ne le prouve pas » — le seul fait qui, un jour, permettra de CONFIRMER une
+  // déclaration au lieu de la croire.
+  const piste = { nom: 'un-porteur', pane: 'w1:p2' };
+
+  const cas = [
+    {
+      quoi: 'sous DÉCLARÉ',
+      attribution: {
+        mesure: 'déclarée',
+        source: PHRASE_DU_DECLARE,
+        declares: [{ nom: 'e-20260825-0001', dOu: 'ce ticket' }],
+        indices: [piste],
+        phraseDeLIndice: PHRASE_DE_LINDICE,
+      },
+    },
+    {
+      quoi: 'sous NON ÉTABLI',
+      attribution: {
+        mesure: 'non établi',
+        pourquoi: 'aucune des deux sources',
+        indices: [piste],
+        phraseDeLIndice: PHRASE_DE_LINDICE,
+      },
+    },
+  ];
+
+  for (const c of cas) {
+    const rendu = lignesDeLaSource(c.attribution).join(' ').replace(/\s+/g, ' ');
+    assert.ok(rendu.includes(piste.nom), `la piste DISPARAÎT du panneau ${c.quoi} : ${rendu}`);
+    // ⚠️ ET JAMAIS UN NOM NU : la phrase voyage AVEC lui, sinon la piste se relit comme une
+    // attribution en trois lectures. C'est la condition 2 de l'arbitrage du 22 août, appliquée
+    // à la surface que personne n'exerçait.
+    assert.ok(
+      rendu.includes(PHRASE_DE_LINDICE),
+      `la piste est rendue SANS sa phrase ${c.quoi} — un nom nu redevient un rattachement : ${rendu}`
+    );
+  }
+
+  // 🔴 ET LA GARDE QUI FERME LA FAMILLE PLUTÔT QUE LES DEUX CAS : sans pistes, aucune ligne
+  // « ~ » ne doit apparaître. Sans ce contre-cas, les assertions ci-dessus passeraient sur un
+  // rendu qui afficherait la phrase de l'indice en toutes circonstances — vert pour une raison
+  // qui n'est pas la sienne, le défaut que ce lot a payé dix fois.
+  for (const c of cas) {
+    const sansPistes = lignesDeLaSource({ ...c.attribution, indices: [] }).join(' ');
+    assert.ok(
+      !sansPistes.includes(PHRASE_DE_LINDICE),
+      `la phrase de l’indice est rendue ${c.quoi} SANS qu’aucune piste n’existe : ${sansPistes}`
+    );
+  }
+});
+
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
   // ⚠️ DEUX SURFACES, DEUX RENDUS, ET C'EST DÉLIBÉRÉ (la colonne du TUI tronque). Ce qui ne
   // doit PAS diverger, c'est le MOT QUI DÉCIDE : le jour où l'un dirait « DÉCLARÉ » et l'autre
