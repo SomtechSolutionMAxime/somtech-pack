@@ -50,6 +50,7 @@ import {
   quiPorte,
   FRAGMENT_DU_QUALIFICATIF,
   desarmerLeTexteLibre,
+  ecrireLaVue,
 } from '../src/vue-du-parc.js';
 import {
   arbreDeLaVue,
@@ -1004,6 +1005,99 @@ test('LA VUE NE DÉPEND PAS DU PLAFOND DE CONCURRENCE, MÊME AVEC UN NOM DÉCLAR
 
   assert.equal(JSON.stringify(vues[1]), JSON.stringify(vues[0]), 'plafond 8 ≠ plafond 1');
   assert.equal(JSON.stringify(vues[2]), JSON.stringify(vues[0]), 'plafond 32 ≠ plafond 1');
+});
+
+test('AUCUNE SURFACE DE SORTIE NE PORTE UN OCTET DE CONTRÔLE — `--json` COMPRIS, et c’est par là que ça fuyait', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QUE MA « PORTE UNIQUE » N’EN ÉTAIT PAS UNE (2026-08-25, revue
+  // portail). Le désarmement était posé dans `nomsDeclares`, l’AGRÉGATEUR. Or `nomDeclare` est
+  // un champ STRUCTUREL : `recopierLaStructure` le copie BRUT du lecteur jusqu’à la vue, sans
+  // jamais passer par l’agrégateur. Le chemin texte et le TUI étaient propres ; `--json` ne
+  // l’était pas.
+  //
+  // ⚠️ ET LE CAS QUI FUYAIT EST PRÉCISÉMENT CELUI QUI AVAIT MOTIVÉ D’ÉLARGIR LE FILTRE :
+  // `JSON.stringify` échappe les C0 (ESC devient `\\u001b`), **pas les C1** (0x80–0x9F). Un banc
+  // écrit avec ESC serait passé au vert sans rien prouver sur ce chemin — c'est pourquoi
+  // celui-ci porte les DEUX familles.
+  //
+  // ⚠️ CINQUIÈME FOIS QUE CE LOT FERME UN CAS EN CROYANT FERMER SA FAMILLE. La règle qui s'en
+  // dégage, et que ce banc grave : **on désarme là où la donnée ENTRE**, jamais là où elle est
+  // mise en forme. Un champ a un seul point d'entrée et autant de sorties qu'on en ajoutera.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const ESC = String.fromCharCode(0x1b); // C0 — échappé par JSON.stringify
+  const CSI1 = String.fromCharCode(0x9b); // C1 — PAS échappé par JSON.stringify
+  const service = unDecor({
+    tickets: [
+      {
+        id: 't1',
+        epic_id: 'e1',
+        ticket_id: 'T-1',
+        title: 'une',
+        status: 'new',
+        assigned_agent: `Alice${CSI1}31mDANGER${ESC}[2J`,
+      },
+    ],
+  });
+  const vue = await uneVue({ agents: [{ pane: 'w1:p1', lieu, nom: 'kamouraska' }], service });
+
+  // ⚠️ CONTRÔLE POSITIF : sans nom déclaré, ce banc serait vert sans rien toucher.
+  const s = laStory(vue);
+  assert.ok(s.nomDeclare, 'le décor doit faire naître un nom déclaré — sinon ce banc ne mesure rien');
+
+  // ⚠️ LES DEUX SURFACES DE SORTIE, ÉNUMÉRÉES — c'est la famille, pas le cas qui a fui.
+  const surfaces = {
+    'ecrireLaVue (texte, le défaut)': ecrireLaVue(vue, []),
+    'ecrireLaVue (--json)': ecrireLaVue(vue, ['--json']),
+  };
+  for (const [ou, rendu] of Object.entries(surfaces)) {
+    for (const [nom, octet] of [
+      ['C0 (ESC)', ESC],
+      ['C1 (0x9B)', CSI1],
+    ]) {
+      assert.ok(
+        !rendu.includes(octet),
+        `« ${ou} » laisse passer un octet ${nom} jusqu’à stdout — il pilote le terminal du dirigeant`
+      );
+    }
+    assert.ok(rendu.includes('Alice'), `« ${ou} » doit toujours rendre le nom lisible`);
+  }
+
+  // ⚠️ ET LE CHAMP STRUCTUREL LUI-MÊME, pas seulement ce qu’on en imprime : c’est lui qui
+  // voyageait brut, et un consommateur du JSON le lit directement.
+  assert.ok(!s.nomDeclare.includes(CSI1), `le champ structurel porte encore un C1 : ${JSON.stringify(s.nomDeclare)}`);
+  assert.ok(!s.nomDeclare.includes(ESC), `le champ structurel porte encore un C0 : ${JSON.stringify(s.nomDeclare)}`);
+});
+
+test('LE DÉSARMEMENT A LIEU À LA LECTURE — pas seulement dans l’agrégateur qui met en forme', async () => {
+  // 🔴 LA GARDE QUI FERME LA FAMILLE PLUTÔT QUE LA SORTIE. Le banc ci-dessus énumère DEUX
+  // surfaces ; une troisième s’ajoutera un jour, et elle ne serait gardée par personne. Ici on
+  // exige que le champ soit propre DÈS LE LECTEUR — avant toute mise en forme, donc pour toute
+  // sortie présente ou future.
+  //
+  // ⚠️ ON INTERROGE `lecteurDeChantier` DIRECTEMENT : le passer par la vue mesurerait aussi
+  // l’agrégateur, et ne dirait pas lequel des deux a désarmé.
+  const CSI1 = String.fromCharCode(0x9b);
+  const lire = lecteurDeChantier({
+    appeler: async (nom) => {
+      if (nom === 'projects')
+        return { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'a' }] };
+      if (nom === 'applications') return { applications: [] };
+      if (nom === 'epics') return { epics: [{ id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'e', status: 's' }] };
+      return {
+        tickets: [
+          { id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 's', status: 'new', assigned_agent: `A${CSI1}B` },
+        ],
+      };
+    },
+  });
+  const chantier = await lire('P-20260822-0001');
+  assert.equal(
+    chantier.epics[0].stories[0].nomDeclare,
+    'A�B',
+    'le LECTEUR doit rendre le champ déjà désarmé — sinon toute sortie future rouvre le trou'
+  );
 });
 
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {

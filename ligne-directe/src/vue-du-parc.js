@@ -590,10 +590,12 @@ export function nomsDeclares({ nomDeclare = null, nomsDesStories = [] } = {}) {
     // `codePorteEnMandat` et `codePorteEnNom` gardent déjà leur entrée sur `typeof` ; ne pas
     // le faire ici était la même discipline appliquée à une porte sur trois.
     if (typeof nom !== 'string') return;
-    // 🔴 LE DÉSARMEMENT SE FAIT ICI, À LA PORTE, ET NON À CHAQUE RENDU. Trois surfaces le
-    // rendent (texte, suffixe du TUI, panneau de détail) : assainir au rendu, c’est trois
-    // gestes dont un sera oublié — le motif « une porte sur deux » que ce module a déjà payé
-    // quatre fois sur ce seul lot. Une porte, un geste.
+    // ⚠️ CEINTURE ET BRETELLES, ASSUMÉES. Le désarmement a lieu à la LECTURE (voir
+    // `lecteurDeChantier`), donc ce que reçoit cet agrégateur est déjà propre par le chemin
+    // de production. On le refait ici parce que `nomsDeclares` est EXPORTÉ et éprouvé
+    // directement : un appelant futur qui lui passerait du texte non lu par le lecteur ne
+    // doit pas rouvrir le trou. Le geste est idempotent, il ne coûte rien, et il ne
+    // remplace PAS celui de la lecture — c’est justement l’erreur qu’on vient de corriger.
     const n = desarmerLeTexteLibre(nom).trim();
     if (!n) return;
     const cle = n.toLowerCase();
@@ -1164,13 +1166,25 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         // `tickets` action `list` rend `assigned_agent` sur chaque ticket ; `epics` action
         // `list` ne rend PAS la clé du tout. On lit donc le champ de l'epic pour le jour où il
         // existera — il vaut `null` aujourd'hui — sans jamais aller le chercher ailleurs.
-        nomDeclare: e?.assigned_agent ?? null,
+        // 🔴 LE DÉSARMEMENT EST ICI, À LA LECTURE — ET C’EST LA VRAIE PORTE.
+        //
+        // Il était posé dans `nomsDeclares`, l’agrégateur, et je l’avais annoncé comme « la
+        // porte unique ». Il ne l’était pas : `nomDeclare` est un champ STRUCTUREL
+        // (`CHAMPS_DE_STRUCTURE`), donc `recopierLaStructure` le copie BRUT jusqu’à la vue,
+        // sans jamais passer par l’agrégateur. Mesuré (2026-08-25, revue portail) : un C1
+        // (0x9B) survivait à `--json` et atteignait stdout — `JSON.stringify` échappe les C0,
+        // pas les C1, et ce sont précisément eux qui ont motivé d’élargir le filtre.
+        //
+        // ⚠️ CINQUIÈME FOIS QUE CE LOT CROIT FERMER UNE FAMILLE EN FERMANT UN CAS. La règle
+        // qui s’en dégage : on désarme là où la donnée ENTRE, jamais là où elle est mise en
+        // forme — un champ a un seul point d’entrée et autant de sorties qu’on en ajoutera.
+        nomDeclare: desarmerLeTexteLibre(e?.assigned_agent) ?? null,
         stories: storiesLues
           ? stories.map((t) => ({
               code: t?.ticket_id ?? null,
               titre: t?.title ?? null,
               statut: t?.status ?? null,
-              nomDeclare: t?.assigned_agent ?? null,
+              nomDeclare: desarmerLeTexteLibre(t?.assigned_agent) ?? null,
             }))
           : null,
         storiesPlafonnees,
