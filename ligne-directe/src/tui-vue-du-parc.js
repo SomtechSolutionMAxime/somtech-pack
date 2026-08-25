@@ -932,7 +932,31 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   //
   // ⚠️ ON BORNE À LA SORTIE, comme pour la largeur : la garantie ne dépend plus d’une
   // arithmétique juste, et toute recomposition future du corps reste couverte.
-  return sortie.slice(0, Math.max(0, hauteur));
+  //
+  // 🔴 MAIS ON NE TRONQUE PAS PAR LA FIN — LE PIED EST LE DERNIER POUSSÉ, DONC IL SERAIT LE
+  // PREMIER SACRIFIÉ. C’est le défaut qu’une passe de fond a trouvé sur ma première version :
+  // à hauteur 1 ou 2, « q quitter » disparaissait, et le dirigeant se retrouvait enfermé dans
+  // un écran alternatif dont il ne connaît pas la sortie.
+  //
+  // ⚠️ ET CE FICHIER PORTAIT DÉJÀ LA RÈGLE, POUR L’AUTRE DIMENSION : `RACCOURCIS_UN_A_UN`
+  // retire les raccourcis du moins vital au plus vital, et `q quitter` y est marqué « le
+  // dernier qu’on retire, jamais le premier ». Mon invariant de hauteur se présentait comme
+  // « la jumelle verticale » de celui de largeur — et il violait le principe qu’il jumelait.
+  //
+  // L’ORDRE DE SACRIFICE, DU MOINS VITAL AU PLUS VITAL : le CORPS cède d’abord (il se
+  // parcourt ligne à ligne, on peut y revenir), puis le TITRE (il dit où l’on est), et le
+  // PIED reste le dernier — parce que sans lui on ne sait plus SORTIR.
+  if (sortie.length <= hauteur) return sortie;
+  // ⚠️ `laBarre`, PAS `pied` : ce nom-là appartient déjà à la FONCTION qui compose la barre,
+  // quelques lignes plus haut. Le masquer faisait jeter `rendreEcran` à l'exécution — attrapé
+  // à la première mesure, mais c'est le genre d'ombre qu'un `node --check` ne voit pas.
+  const laTete = sortie[0];
+  const laBarre = sortie[sortie.length - 1];
+  const leCorps = sortie.slice(1, -1);
+  if (hauteur <= 0) return [];
+  if (hauteur === 1) return [laBarre];
+  if (hauteur === 2) return [laTete, laBarre];
+  return [laTete, ...leCorps.slice(0, hauteur - 2), laBarre];
 }
 
 /** Quelle tranche de l'arbre montrer pour que le curseur reste visible. */

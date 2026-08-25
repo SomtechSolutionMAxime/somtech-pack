@@ -445,18 +445,42 @@ test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plan
   const stylesA = (hauteur) =>
     rendreEcran({ vue, etat, lignes, largeur: 65, hauteur }).map((l) => l.style.split(':')[0]);
 
-  assert.deepEqual(stylesA(1), ['titre'], 'une ligne de pane : le TITRE, qui dit où l’on est');
-  assert.deepEqual(stylesA(2), ['titre', 'selection'], 'deux lignes : le titre et la ligne SÉLECTIONNÉE');
+  // 🔴 CE BANC VERROUILLAIT LE MAUVAIS ORDRE, et il le disait lui-même sans le voir : son
+  // assertion à 3 lignes portait le commentaire « le pied apparaît — c'est lui qui porte les
+  // raccourcis pour sortir », pendant que ses assertions à 1 et 2 lignes ENTÉRINAIENT son
+  // absence. Relevé par une passe de fond.
+  //
+  // ⚠️ L'ORDRE DE SACRIFICE VA DU MOINS VITAL AU PLUS VITAL : le CORPS cède d'abord (il se
+  // parcourt ligne à ligne, on peut y revenir), puis le TITRE (il dit où l'on est), et le PIED
+  // reste le dernier — sans lui, le dirigeant ne sait plus SORTIR d'un écran alternatif.
+  assert.deepEqual(stylesA(1), ['pied'], 'une ligne de pane : la SORTIE, pas le titre');
+  assert.deepEqual(stylesA(2), ['titre', 'pied'], 'deux lignes : où l’on est, et comment sortir');
   assert.deepEqual(
     stylesA(3),
     ['titre', 'selection', 'pied'],
-    'trois lignes : le pied apparaît — c’est lui qui porte les raccourcis pour sortir'
+    'trois lignes : la ligne sélectionnée s’intercale entre les deux bandeaux'
   );
   assert.deepEqual(
     stylesA(5),
     ['titre', 'selection', 'arbre', 'arbre', 'pied'],
     'au-delà, le corps grandit entre les deux bandeaux'
   );
+
+  // 🔴 ET LA GARANTIE QUI COMPTE VRAIMENT, ÉNONCÉE COMME TELLE PLUTÔT QUE DÉDUITE DE L'ORDRE :
+  // « q quitter » est visible à TOUTE hauteur non nulle. Le fichier porte déjà cette règle pour
+  // la LARGEUR — `RACCOURCIS_UN_A_UN` marque `q quitter` « le dernier qu'on retire, jamais le
+  // premier ». Mon invariant de hauteur se disait « la jumelle verticale » de celui de largeur,
+  // et il violait le principe qu'il jumelait.
+  for (let hauteur = 1; hauteur <= 40; hauteur += 1) {
+    for (const largeur of [20, 40, 65, 120]) {
+      const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur });
+      assert.ok(
+        ecran.some((l) => l.texte.includes('q quitter')),
+        `à ${largeur}x${hauteur}, « q quitter » n’est nulle part — le dirigeant est enfermé dans ` +
+          'un écran alternatif dont il ne connaît pas la sortie'
+      );
+    }
+  }
 });
 
 test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle cesse de l’être en silence', () => {
