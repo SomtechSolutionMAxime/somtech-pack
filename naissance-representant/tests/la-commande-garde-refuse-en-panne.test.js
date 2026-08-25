@@ -1,0 +1,195 @@
+// la-commande-garde-refuse-en-panne.test.js — T-20260824-0020.
+//
+// CE QUE CE BANC ÉPROUVE, ET POURQUOI IL EXISTE
+//
+// `COMMANDE_GARDE` est la commande de hook posée dans le `.claude/settings.json` de TOUS
+// les lieux — orchestrateurs ET représentants, y compris chez des clients. C'est elle qui
+// rend la ligne d'un agent obligatoire.
+//
+// Avant ce lot, elle appelait sa garde par `exec node "$G"` et transmettait la sortie TELLE
+// QUELLE. Mesuré le 2026-08-24 sur Claude Code 2.1.241 (T-20260824-0002) : quand une garde
+// ne rend pas de verdict lisible, Claude Code n'a AUCUNE décision et dégrade le geste en
+// DEMANDE de permission — et sous `--permission-mode acceptEdits`, une demande est un OUI.
+//
+// 🔴 LA POLARITÉ DE PANNE D'UNE GARDE EST LE REFUS, JAMAIS LA DEMANDE. Chacun des modes
+// ci-dessous a donc son test, et chacun a été mesuré ROUGE sur la commande d'avant.
+//
+// LA MÉTHODE : la chaîne RÉELLE moins UN point nommé. On joue la vraie commande dans
+// `/bin/sh` (le shell le plus strict que Claude Code puisse employer), avec un faux `$HOME`
+// dont le seul écart au poste réel est le FICHIER de la garde — remplacé par un double qui
+// reproduit la CAUSE (elle casse, elle pend, elle boucle, elle bruite), jamais l'état.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { COMMANDE_GARDE } from '../src/naissance.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const MODULE_ROOT = resolve(HERE, '..');
+const RACINE = resolve(MODULE_ROOT, '..');
+
+/** Le délai que le banc impose : assez court pour que « pend » se mesure en secondes. */
+const DELAI_ESSAI = '900';
+
+const aJeter = [];
+const temp = (p) => { const d = mkdtempSync(join(tmpdir(), p)); aJeter.push(d); return d; };
+test.after(() => { for (const d of aJeter) rmSync(d, { recursive: true, force: true }); });
+
+/**
+ * Un faux poste : `$HOME/.somtech/naissance-representant/` porte le VRAI module (par lien),
+ * sauf `hooks/garde-ouverture-ligne.js` — le seul point substitué.
+ *
+ * ⚠️ Le lien porte `src/`, `bin/` et tout le reste : le double vit dans la vraie arborescence,
+ * donc un double qui `import`erait `../src/hook.js` le trouverait. On ne mesure pas un module
+ * amputé.
+ */
+function posteAvecGarde(sourceDuDouble) {
+  const home = temp('smtk-poste-panne-');
+  const modu = join(home, '.somtech', 'naissance-representant');
+  mkdirSync(join(modu, 'hooks'), { recursive: true });
+  for (const e of ['src', 'bin', 'package.json']) symlinkSync(join(MODULE_ROOT, e), join(modu, e));
+  writeFileSync(join(modu, 'hooks', 'garde-ouverture-ligne.js'), sourceDuDouble);
+  return home;
+}
+
+/** Le poste RÉEL, sans aucune substitution — pour les contre-épreuves. */
+function posteReel() {
+  const home = temp('smtk-poste-reel-');
+  mkdirSync(join(home, '.somtech'), { recursive: true });
+  symlinkSync(MODULE_ROOT, join(home, '.somtech', 'naissance-representant'));
+  return home;
+}
+
+/** Un poste SANS le module — la garde absente. */
+function posteNu() {
+  const home = temp('smtk-poste-nu-');
+  mkdirSync(join(home, '.somtech'), { recursive: true });
+  return home;
+}
+
+/**
+ * Joue la commande RÉELLE. Rend `{ sortie, ms }` — la durée compte : un refus qui n'arrive
+ * qu'après que l'hôte a renoncé ne refuse rien.
+ */
+function jouer(home, { commande = COMMANDE_GARDE, cwd, requete, delai = DELAI_ESSAI, timeout = 20000 } = {}) {
+  const ou = cwd || temp('smtk-ailleurs-');
+  const t0 = process.hrtime.bigint();
+  const sortie = execFileSync('/bin/sh', ['-c', commande], {
+    input: JSON.stringify(requete || { cwd: ou, tool_name: 'Bash', tool_input: { command: 'git status' } }),
+    cwd: ou,
+    env: { ...process.env, HOME: home, SOMTECH_GARDE_OUVERTURE_DELAI_MS: delai },
+    encoding: 'utf8',
+    timeout,
+  });
+  return { sortie, ms: Number(process.hrtime.bigint() - t0) / 1e6 };
+}
+
+/** Le verdict, tel que Claude Code le lirait — un parse strict, comme le sien. */
+function verdict(home, options) {
+  const { sortie, ms } = jouer(home, options);
+  return { ...JSON.parse(sortie).hookSpecificOutput, ms };
+}
+
+// ═════════════ ① la garde ABSENTE — le cas déjà couvert, qui ne doit pas se perdre
+
+test('① garde ABSENTE du poste : refus, et il se distingue du refus pour panne', () => {
+  const d = verdict(posteNu());
+  assert.equal(d.permissionDecision, 'deny');
+  assert.match(d.permissionDecisionReason, /introuvable/i);
+});
+
+// ═════════════ ② la garde CASSE — sortie vide, code non nul
+
+test('② garde qui CASSE : refus — pas une demande de permission', () => {
+  const d = verdict(posteAvecGarde('process.stderr.write("boum\\n"); process.exit(1);\n'));
+  assert.equal(d.permissionDecision, 'deny',
+    'une garde morte laissait le geste dégrader en DEMANDE de permission — un oui sous acceptEdits');
+  assert.doesNotMatch(d.permissionDecisionReason, /introuvable/i,
+    'le refus pour panne ne doit pas se faire passer pour une absence : on ne réinstalle pas une garde présente');
+});
+
+test('② bis garde MUETTE — code 0, aucune sortie : refus', () => {
+  // Ce que « le code de sortie est bon » laisserait passer.
+  assert.equal(verdict(posteAvecGarde('process.exit(0);\n')).permissionDecision, 'deny');
+});
+
+// ═════════════ ③ la garde PEND — le mode que le shell attendrait avec elle
+
+test('③ garde qui PEND : refus rendu par le délai, pas par l abandon de l hôte', () => {
+  const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { timeout: 15000 });
+  assert.equal(d.permissionDecision, 'deny');
+  assert.ok(d.ms < 10000, `le refus a mis ${Math.round(d.ms)} ms : le délai ne mord pas`);
+});
+
+// ═════════════ ④ un verdict SANS décision — sortie non vide, code 0, et rien à décider
+
+test('④ verdict SANS décision : refus — une clé omise n est pas un oui', () => {
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse"}}));\n'));
+  assert.equal(d.permissionDecision, 'deny');
+});
+
+test('④ bis une décision INVENTÉE est refusée — « peut-etre » n est pas « allow »', () => {
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"peut-etre"}}));\n'));
+  assert.equal(d.permissionDecision, 'deny');
+});
+
+// ═════════════ ⑤ du BRUIT avant le JSON — le mode qui ne demande aucune erreur d auteur
+
+test('⑤ BRUIT avant le JSON : refus — il suffit d un jour où npm parle', () => {
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write("npm notice New major version available\\n");'
+    + 'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"ligne ouverte"}}));\n'));
+  assert.equal(d.permissionDecision, 'deny',
+    'la sortie ne parse plus : Claude Code n aurait aucun verdict, donc la commande doit refuser elle-même');
+});
+
+// ═════════════ ⑥ une BOUCLE de calcul — le mode que le lot précédent n a pas pu fermer
+
+test('⑥ garde qui BOUCLE : refus — le minuteur vit dans un AUTRE processus que la boucle', () => {
+  // ⚠️ Node est mono-thread : un délai que la garde s impose à elle-même ne peut pas tirer
+  // pendant qu un `while` tourne (mesuré dans T-20260824-0002, laissé NON FERMÉ). Le délai
+  // de cette commande vit dans un processus DISTINCT de la garde, et il la TUE — c est ce
+  // que ce test mesure, et c est la seule raison pour laquelle ce mode se ferme ici.
+  const d = verdict(posteAvecGarde('while (true) {}\n'), { timeout: 15000 });
+  assert.equal(d.permissionDecision, 'deny');
+  assert.ok(d.ms < 10000, `le refus a mis ${Math.round(d.ms)} ms : la boucle n est pas coupée`);
+});
+
+// ═════════════ ⑦ les contre-épreuves — sans elles, une commande qui refuse TOUT passerait
+
+test('⑦ un vrai ALLOW remonte, avec sa raison — sinon les six refus ci-dessus ne prouvent rien', () => {
+  const ailleurs = temp('smtk-ailleurs-');
+  const d = verdict(posteReel(), { cwd: ailleurs, requete: { cwd: ailleurs, tool_name: 'Bash', tool_input: { command: 'git status' } } });
+  assert.equal(d.permissionDecision, 'allow');
+  assert.match(d.permissionDecisionReason, /hors du lieu/,
+    'la raison de la VRAIE garde doit remonter telle quelle, pas une forme vidée');
+});
+
+test('⑦ bis un vrai DENY remonte, avec sa raison', () => {
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"deny",permissionDecisionReason:"ouvre ta ligne dabord"}}));\n'));
+  assert.equal(d.permissionDecision, 'deny');
+  assert.equal(d.permissionDecisionReason, 'ouvre ta ligne dabord');
+});
+
+// ═════════════ ⑧ la commande DÉPOSÉE dans les lieux versionnés est bien celle-ci
+
+test('⑧ les gabarits des DEUX rôles portent exactement cette commande — le lieu versionné n est pas la constante', () => {
+  for (const role of ['orchestrateur', 'gestionnaire-client']) {
+    const st = JSON.parse(readFileSync(
+      join(RACINE, '.claude', 'templates', role, '.claude', 'settings.json'), 'utf8'));
+    const cmds = (st.hooks?.PreToolUse || []).flatMap((b) => (b.hooks || []).map((h) => h.command || ''));
+    const garde = cmds.filter((c) => c.includes('garde-ouverture-ligne.js'));
+    assert.equal(garde.length, 1, `${role} : un seul garde d ouverture, jamais deux`);
+    assert.equal(garde[0], COMMANDE_GARDE,
+      `${role} : le gabarit porte une AUTRE commande que celle qu on vient d éprouver — `
+      + 'les tests ci-dessus ne mesureraient alors rien de ce qui est distribué');
+  }
+});
