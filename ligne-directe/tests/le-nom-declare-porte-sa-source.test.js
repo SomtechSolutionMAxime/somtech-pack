@@ -592,6 +592,96 @@ test('LES DEUX FORMULATIONS DU QUALIFICATIF PARTAGENT BIEN LE FRAGMENT QU’ON C
   assert.notEqual(PHRASE_COURTE_DU_DECLARE, PHRASE_DU_DECLARE);
 });
 
+test('UN EPIC DONT LES STORIES ONT REFUSÉ NE DIT PAS « le registre ne déclare aucun nom » — il n’a pas pu regarder', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QU'UNE PASSE DE FOND A TROUVÉ CE DÉFAUT DANS CE LOT (2026-08-25),
+  // et il était RÉEL : un epic ne porte pas `assigned_agent` (le service ne rend pas la clé),
+  // donc tout ce qu'il déclare vient de ses stories. Quand l'appel aux tickets échoue,
+  // `stories` vaut `null` — on n'a RIEN pu lire du registre pour cet epic. La phrase rendue
+  // affirmait pourtant « et le registre ne déclare aucun nom sur ce travail ».
+  //
+  // ⚠️ C'EST RA-VUE-003 VIOLÉE PAR LE LOT QUI LA CITE : une absence COMBLÉE là où il fallait
+  // montrer un trou de mesure. « il n'y a personne » et « je n'ai pas pu voir » appellent deux
+  // gestes opposés — réassigner d'un côté, réparer un accès de l'autre.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const service = unDecor({ tickets: [] });
+  const appelerQuiJette = async (nom, args) => {
+    if (nom === 'tickets') throw new Error('le service a refusé');
+    return service.appeler(nom, args);
+  };
+  const vue = await uneVue({
+    agents: [{ pane: 'w1:p1', lieu, nom: 'kamouraska' }],
+    service: { appeler: appelerQuiJette, appels: [] },
+  });
+
+  const e = lEpic(vue);
+  assert.equal(e.stories, null, 'le décor doit bien produire « stories non lues » — sinon ce banc ne mesure rien');
+  assert.equal(e.agent.declarationMesuree, false, 'la vue doit PORTER le fait que la déclaration n’a pas pu être lue');
+  assert.ok(
+    !e.agent.pourquoi.includes('le registre ne déclare aucun nom'),
+    `la phrase AFFIRME une absence qu’on n’a pas mesurée : ${e.agent.pourquoi}`
+  );
+  assert.ok(
+    e.agent.pourquoi.includes('n’a PAS pu être lu'),
+    `elle doit dire le trou de MESURE : ${e.agent.pourquoi}`
+  );
+
+  // ⚠️ ET JUSQU'AU PANNEAU QUE LE DIRIGEANT LIT — la donnée juste et le rendu muet seraient le
+  // même défaut, un passage plus loin.
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etatInitial());
+  const detail = detailDe(lignes.find((l) => l.kind === 'epic')).join(' ').replace(/\s+/g, ' ');
+  assert.ok(!detail.includes('le registre ne déclare aucun nom'), `le panneau affirme l’absence : ${detail}`);
+  assert.ok(detail.includes('n’a PAS pu être lu'), `le panneau doit dire le trou de mesure : ${detail}`);
+});
+
+test('MAIS UN EPIC DONT LES STORIES ONT ÉTÉ LUES ET NE DÉCLARENT RIEN DIT BIEN L’ABSENCE — le symétrique', async (t) => {
+  // 🔴 LE JUMEAU, ET IL FERME LE FAUX POSITIF QUE LE CORRECTIF CI-DESSUS POURRAIT OUVRIR. Un
+  // correctif ferme un défaut nommé et ouvre son symétrique sur la même frontière : dire
+  // « je n'ai pas pu lire » alors qu'on A lu et qu'il n'y a rien serait la faute inverse, et
+  // elle enverrait réparer un accès qui fonctionne.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const service = unDecor({
+    tickets: [{ id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'une', status: 'new', assigned_agent: null }],
+  });
+  const vue = await uneVue({ agents: [{ pane: 'w1:p1', lieu, nom: 'kamouraska' }], service });
+
+  const e = lEpic(vue);
+  assert.ok(Array.isArray(e.stories), 'ici les stories ONT été lues');
+  assert.equal(e.agent.declarationMesuree, undefined, 'rien à signaler : le champ ne voyage que quand la mesure a manqué');
+  assert.ok(
+    e.agent.pourquoi.includes('le registre ne déclare aucun nom'),
+    `l’absence MESURÉE se dit comme une absence : ${e.agent.pourquoi}`
+  );
+  assert.ok(
+    !e.agent.pourquoi.includes('n’a PAS pu être lu'),
+    `et jamais comme un trou de mesure : ${e.agent.pourquoi}`
+  );
+});
+
+test('UN `assigned_agent` QUI N’EST PAS DU TEXTE EST REFUSÉ — jamais rendu « [object Object] »', () => {
+  // ⚠️ `String(x)` NE REFUSE RIEN : un objet y devient « [object Object] », qui se rendrait à
+  // l'écran comme un nom d'agent — un nom d'affichage faux est pire qu'un nom absent, parce
+  // qu'on lui PARLE. `codePorteEnMandat` et `codePorteEnNom` gardent déjà leur entrée sur
+  // `typeof` ; ne pas le faire ici était la même discipline appliquée à une porte sur trois.
+  //
+  // ⚠️ NON DÉMONTRÉ SUR LE SERVICE (le champ est documenté texte libre) — c'est une garde de
+  // discipline, et elle est dite comme telle plutôt que présentée comme un défaut mesuré.
+  for (const pas_du_texte of [{}, [], 42, true, () => {}]) {
+    assert.deepEqual(
+      nomsDeclares({ nomDeclare: pas_du_texte, nomsDesStories: [pas_du_texte] }),
+      [],
+      `« ${typeof pas_du_texte} » ne doit produire AUCUN nom déclaré`
+    );
+  }
+  // Et le texte, lui, passe toujours.
+  assert.deepEqual(nomsDeclares({ nomDeclare: 'e-20260825-0001' }), [{ nom: 'e-20260825-0001', dOu: 'ce ticket' }]);
+});
+
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
   // ⚠️ DEUX SURFACES, DEUX RENDUS, ET C'EST DÉLIBÉRÉ (la colonne du TUI tronque). Ce qui ne
   // doit PAS diverger, c'est le MOT QUI DÉCIDE : le jour où l'un dirait « DÉCLARÉ » et l'autre

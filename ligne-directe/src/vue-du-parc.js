@@ -440,6 +440,15 @@ export function adresseDe(carte, presence) {
  * la mesure ne départage les deux.
  */
 export function quiPorte(code, parMandat, parNom, declaration = {}) {
+  // 🔴 « LE REGISTRE NE DÉCLARE RIEN » ≠ « JE N'AI PAS PU LIRE CE QU'IL DÉCLARE » — et les
+  // confondre était un défaut RÉEL de ce lot, trouvé en passe de fond (2026-08-25).
+  //
+  // Un epic ne porte pas `assigned_agent` (le service ne rend pas la clé) : tout ce qu'il
+  // déclare vient de ses stories. Quand l'appel aux tickets a échoué, `stories` vaut `null` —
+  // on n'a donc RIEN pu lire du registre pour cet epic. La phrase rendue affirmait pourtant
+  // « et le registre ne déclare aucun nom sur ce travail ». C'est RA-VUE-003 violée par le
+  // lot qui la cite : une absence COMBLÉE, là où il fallait montrer un trou de mesure.
+  const declarationMesuree = declaration?.declarationMesuree !== false;
   // ⚠️ LA DÉCLARATION ENTRE PAR PARAMÈTRE, ELLE NE SE RELIT PAS ICI. Ce module ne parle à
   // aucun service : le lecteur de chantier a déjà la valeur dans la charge qu'il a reçue, et
   // la faire redescendre coûte ZÉRO appel de plus (condition de fin n°4 de E-20260825-0001).
@@ -477,24 +486,31 @@ export function quiPorte(code, parMandat, parNom, declaration = {}) {
     };
   }
 
+  // ⚠️ CE QUE LA PHRASE DIT DU REGISTRE DÉPEND DE CE QU'ON A PU EN LIRE — écrit UNE fois, pour
+  // les deux sorties qui suivent. Recopié, il serait corrigé sur l'une et pas sur l'autre.
+  const duRegistre = declarationMesuree
+    ? 'et le registre ne déclare aucun nom sur ce travail'
+    : 'et ce que le registre déclare n’a PAS pu être lu (l’appel à ses stories a échoué) — ' +
+      'ceci n’est donc PAS « personne n’y est déclaré »';
+
   const pistes = parNom.get(code);
   if (pistes?.length) {
     return {
       mesure: 'non établi',
       pourquoi:
-        'aucun agent vivant ne porte ce code comme mandat lu à son lieu, et le registre ne ' +
-        'déclare aucun nom sur ce travail — un chef d’équipe n’a aujourd’hui aucun lieu où le ' +
-        'lire (T-20260822-0018)',
+        'aucun agent vivant ne porte ce code comme mandat lu à son lieu, ' +
+        duRegistre +
+        ' — un chef d’équipe n’a aujourd’hui aucun lieu où le lire (T-20260822-0018)',
       indices: pistes.map(carteDe),
       phraseDeLIndice: PHRASE_DE_LINDICE,
+      ...(declarationMesuree ? {} : { declarationMesuree: false }),
     };
   }
   return {
     mesure: 'non établi',
-    pourquoi:
-      'aucun agent vivant ne porte ce code, ni comme mandat lu à son lieu, ni comme nom, et le ' +
-      'registre ne déclare aucun nom sur ce travail',
+    pourquoi: 'aucun agent vivant ne porte ce code, ni comme mandat lu à son lieu, ni comme nom, ' + duRegistre,
     indices: [],
+    ...(declarationMesuree ? {} : { declarationMesuree: false }),
   };
 }
 
@@ -517,7 +533,12 @@ export function nomsDeclares({ nomDeclare = null, nomsDesStories = [] } = {}) {
   const sortie = [];
   const vus = new Set();
   const ajouter = (nom, dOu) => {
-    const n = nom === null || nom === undefined ? '' : String(nom).trim();
+    // ⚠️ UN CHAMP DE TEXTE LIBRE PEUT N'ÊTRE PAS DU TEXTE, et `String()` ne refuse rien : un
+    // objet y devient « [object Object] », qui se rendrait à l'écran comme un nom d'agent.
+    // `codePorteEnMandat` et `codePorteEnNom` gardent déjà leur entrée sur `typeof` ; ne pas
+    // le faire ici était la même discipline appliquée à une porte sur trois.
+    if (typeof nom !== 'string') return;
+    const n = nom.trim();
     if (!n) return;
     const cle = n.toLowerCase();
     if (vus.has(cle)) return;
@@ -1447,7 +1468,13 @@ export async function laVueDuParc({
         return {
           code: e?.code ?? null,
           ...recopierLaStructure(e, 'epic'),
-          agent: quiPorte(codeEpic, parMandat, parNom, { nomDeclare: e?.nomDeclare ?? null, nomsDesStories }),
+          agent: quiPorte(codeEpic, parMandat, parNom, {
+            nomDeclare: e?.nomDeclare ?? null,
+            nomsDesStories,
+            // 🔴 LE FAIT QUI MANQUAIT. Un epic sans nom propre dont les stories n'ont pas pu
+            // être lues n'a RIEN de mesurable côté registre : le dire « vide » serait combler.
+            declarationMesuree: stories !== null || Boolean(e?.nomDeclare),
+          }),
           stories:
             stories === null
               ? null

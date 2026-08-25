@@ -101,12 +101,21 @@ export function nonPrisDe({ attribution, statut, niveau }) {
   if (ferme) {
     return { mesure: 'lue', nonPris: false, source: null, pourquoi: `son statut « ${statut} » est un état fermé` };
   }
+  // ⚠️ CE QU'ON DIT DU REGISTRE DÉPEND DE CE QU'ON A PU EN LIRE — la seconde porte de la
+  // famille, et elle répétait l'affirmation que le moteur venait de corriger. Corriger
+  // `vue-du-parc.js` seul laissait celle-ci retomber sur le même faux : « le registre ne déclare
+  // aucun nom » sur un epic dont les stories ont refusé, c'est-à-dire dont le registre n'a
+  // jamais été consulté. Une porte sur deux, dans le geste même qui fermait l'autre.
+  const duRegistre =
+    attribution?.declarationMesuree === false
+      ? 'ce que le registre déclare n’a PAS pu être lu'
+      : 'le registre ne déclare aucun nom';
   return {
     mesure: 'lue',
     nonPris: true,
     source: null,
     pourquoi:
-      `aucun agent vivant ne le porte à un lieu, le registre ne déclare aucun nom, et son ` +
+      `aucun agent vivant ne le porte à un lieu, ${duRegistre}, et son ` +
       `statut « ${statut} » n’est pas un état fermé`,
   };
 }
