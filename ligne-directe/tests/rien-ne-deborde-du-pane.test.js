@@ -186,6 +186,15 @@ test('AUCUNE LIGNE DE L’ÉCRAN NE DÉPASSE LE PANE — à TOUTE largeur, sur u
   for (let largeur = 1; largeur <= 200; largeur += 1) {
     const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur: 12 });
     for (const l of ecran) {
+      // 🔴 UNE SEULE EXCEPTION, NOMMÉE : la BARRE de raccourcis. Sous 9 colonnes, « q quitter »
+      // ne peut pas tenir — et un contrat ANTÉRIEUR à ce lot exige qu'il soit rendu ENTIER
+      // plutôt que tronqué, parce qu'un écran alternatif sans sortie enferme son lecteur.
+      // L'arbitrage est écrit dans `rendreEcran`. Ce débordement ne peut PAS empiler : il vit
+      // dans l'écran alternatif, repeint entier à chaque frame.
+      //
+      // ⚠️ L'EXCEPTION EST BORNÉE À CE CAS : elle ne vaut que pour le style `pied`, et
+      // seulement sous la largeur où le raccourci vital tient.
+      if (l.style === 'pied' && largeur < 'q quitter'.length) continue;
       assert.ok(
         largeurAffichee(l.texte) <= largeur,
         `à ${largeur} colonnes, une ligne en écrit ${largeurAffichee(l.texte)} : ${JSON.stringify(l.texte)}`
@@ -413,6 +422,8 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
         `à ${largeur}x${hauteur}, l’écran rend ${ecran.length} lignes — il DÉFILE`
       );
       for (const l of ecran) {
+        // Même exception nommée que ci-dessus — la barre, sous la largeur de « q quitter ».
+        if (l.style === 'pied' && largeur < 'q quitter'.length) continue;
         assert.ok(
           largeurAffichee(l.texte) <= largeur,
           `à ${largeur}x${hauteur}, une ligne écrit ${largeurAffichee(l.texte)} caractères : ${JSON.stringify(l.texte)}`
@@ -499,13 +510,18 @@ test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plan
               'enfermé dans un écran alternatif dont il ne connaît pas la sortie'
           );
         }
-        // ⚠️ ET SOUS LE MINIMUM, LA BARRE EST VIDE — JAMAIS UN FRAGMENT. « q quitt… » est une
-        // promesse que l'écran ne tient pas : un habitué la devine, les autres non, et c'est
-        // précisément quelqu'un de coincé qui lit cette barre. Ma propre première correction
-        // produisait ce fragment ; le banc le refuse maintenant.
+        // 🔴 ET « q quitter » EST LÀ MÊME SOUS LE MINIMUM — c'est un arbitrage assumé entre deux
+        // invariants de ce dépôt qui se contredisent (voir `rendreEcran`) : la barre est la
+        // SEULE ligne autorisée à déborder, parce qu'un écran alternatif dont l'aide ne dit
+        // plus la sortie ENFERME son lecteur, alors qu'un débordement sur un pane de moins de
+        // 9 colonnes se voit et se répare d'un coup d'œil.
+        //
+        // ⚠️ CE QUI RESTE FERMÉ — l'objet du rejet portail : le FRAGMENT. « q quitt… » ne dit
+        // rien à qui ne connaît pas déjà la touche, c'est-à-dire exactement la personne coincée
+        // qui lit cette barre. Ma propre première correction en produisait un.
         assert.ok(
-          barre.includes('q quitter') || barre.trim() === '',
-          `${quoi}, ${largeur}x${hauteur} : la barre rend un FRAGMENT trompeur : ${JSON.stringify(barre)}`
+          barre.includes('q quitter'),
+          `${quoi}, ${largeur}x${hauteur} : « q quitter » manque ou est tronqué : ${JSON.stringify(barre)}`
         );
       }
     }

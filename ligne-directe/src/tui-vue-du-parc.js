@@ -743,15 +743,20 @@ export function raccourcisPour(largeur) {
     const pire = gardes.reduce((a, b) => (b.vital >= a.vital ? b : a));
     gardes = gardes.filter((r) => r !== pire);
   }
-  // ⚠️ LA BOUCLE S’ARRÊTE AU DERNIER RACCOURCI **SANS VÉRIFIER QU’IL TIENT** — c’est la
-  // moitié qui manquait. `borner` en aval le coupait par la droite (« q qu… »), donc la
-  // barre annonçait une sortie inutilisable au lieu de dire honnêtement qu’elle ne tient pas.
+  // ⚠️ ON REND LE DERNIER RACCOURCI **ENTIER, MÊME S’IL DÉBORDE** — et c’est un contrat
+  // ANTÉRIEUR à ce lot, que j’ai failli casser.
   //
-  // ⚠️ ON REND LE DERNIER **ENTIER OU RIEN**. Un « q » seul serait deviné par un habitué et
-  // incompréhensible pour les autres — et c’est précisément quelqu’un de coincé qui lit
-  // cette barre. Rien du tout est un fait ; un fragment est un piège.
-  const rendu = rendre(gardes);
-  return rendu.length <= largeur ? rendu : '';
+  // Le banc `la barre de raccourcis se rétracte sans jamais perdre « q quitter »` l’exige à
+  // TOUTE largeur, y compris 1, avec sa raison écrite : « on n’exige pas qu’elle tienne à 1
+  // colonne — c’est impossible, et le prétendre serait faux. On exige qu’elle ne tienne JAMAIS
+  // au prix de la sortie. » Mesuré sur `origin/main` : `raccourcisPour(1)` y rend bien
+  // « q quitter » entier.
+  //
+  // ⚠️ J’AVAIS ÉCRIT ICI « entier ou RIEN », ce qui rendait une barre VIDE sous 9 colonnes —
+  // le banc a rougi, et il avait raison. Entre un mot qui déborde d’un pane minuscule et un
+  // écran qui ne dit plus comment sortir, le premier est réparable d’un coup d’œil ; le second
+  // enferme. Ce qui est fermé par ce lot, c’est le FRAGMENT (« q qu… ») — jamais le mot entier.
+  return rendre(gardes);
 }
 
 /**
@@ -924,7 +929,25 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     });
   }
 
-  sortie.push({ style: 'pied', texte: borner(pied(etat, largeur), largeur) });
+  // 🔴 LA BARRE EST LA SEULE LIGNE QUI PEUT DÉBORDER, ET C'EST UN ARBITRAGE ASSUMÉ.
+  //
+  // Deux invariants de ce dépôt se contredisent sous 9 colonnes :
+  //   ① « rien de ce que le TUI écrit ne dépasse la largeur » (ce lot, T-20260825-0071) ;
+  //   ② « la barre ne tient JAMAIS au prix de la sortie » — contrat ANTÉRIEUR, gardé par
+  //      `le-tui-de-la-vue-du-parc.test.js`, qui exige « q quitter » ENTIER même à 1 colonne.
+  //
+  // ② L'EMPORTE, parce que le pire des deux maux est asymétrique : une barre qui déborde d'un
+  // pane minuscule se voit et se répare d'un coup d'œil ; un écran alternatif dont l'aide ne
+  // dit plus la sortie ENFERME son lecteur. Et `borner` produisait « q quitt… » — un fragment
+  // qui ne dit rien à qui ne connaît pas déjà la touche, c'est-à-dire exactement la personne
+  // qui lit cette barre.
+  //
+  // ⚠️ CE DÉBORDEMENT NE PEUT PAS EMPILER, contrairement à l'incident : il est écrit dans
+  // l'écran alternatif, repeint entier à chaque frame (`ESC[H` + `ESC[2J`), et non réécrit au
+  // fil de l'eau avec `\r`. Il coûte un wrap visuel sur un pane de moins de 9 colonnes ; il ne
+  // coûte pas la multiplication de lignes que ce lot ferme.
+  const barre = pied(etat, largeur);
+  sortie.push({ style: 'pied', texte: barre.length <= largeur ? borner(barre, largeur) : barre });
 
   // 🔴 LA JUMELLE VERTICALE DE L’INVARIANT DE LARGEUR — ET ELLE MANQUAIT (T-20260825-0071).
   //
@@ -1017,13 +1040,10 @@ function pied(etat, largeur) {
   // identiques avant et après. On lit le raccourci vital dans le manifeste lui-même.
   const laSortie = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
   if (tete.length + laSortie.length > largeur) {
-    // ⚠️ ET ON NE REND PAS UN FRAGMENT — `raccourcisPour` s’en charge : il rend le raccourci
-    // ENTIER ou RIEN. Ma première correction appelait `borner(laSortie, largeur)` ici, ce qui
-    // reproduisait « q quitt… » — le piège que j’avais nommé trois lignes plus haut et posé
-    // moi-même. Mesuré : la barre rendait « q qu… » de 2 à 8 colonnes.
-    //
-    // Sous 9 colonnes, aucune barre ne peut dire comment sortir. Une barre vide est un fait ;
-    // un « q qu… » est une promesse que l’écran ne tient pas.
+    // ⚠️ ET ON NE REND PAS UN FRAGMENT — `raccourcisPour` rend le raccourci ENTIER, quitte à
+    // déborder d’un pane minuscule (contrat antérieur, voir sa note). Ma première correction
+    // appelait `borner(laSortie, largeur)` ici, ce qui reproduisait « q quitt… » : le piège que
+    // j’avais nommé trois lignes plus haut et posé moi-même. Mesuré : de 2 à 8 colonnes.
     return raccourcisPour(largeur);
   }
   return tete + raccourcisPour(Math.max(0, largeur - tete.length));
