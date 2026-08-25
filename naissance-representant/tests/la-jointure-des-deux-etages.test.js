@@ -36,6 +36,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { inscrireLaDeclaration, lireLesDeclarations } from '../src/declaration.js';
+import { identiteDeSession } from '../src/declaration.js';
 import { nomDeSession } from '../src/session.js';
 import { normaliserLeParc, jugerLeParc, VERDICTS, SOURCES } from '../src/garde-des-naissances.js';
 
@@ -202,6 +203,32 @@ test('ÉPINGLE : `bin/naitre.js` inscrit bien le NOM de la session visée, pas s
     !/session:\s*session\.socket/.test(source),
     'le socket est une ADRESSE d’exécution ; la déclaration est un fait durable — elle porte le nom'
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ④bis — LA FONCTION QUI PORTE LA JOINTURE, ÉPROUVÉE SUR SES DEUX CONTRATS
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('`identiteDeSession` est IDEMPOTENTE sur un nom et n’invente rien sur un chemin hors forme', () => {
+  // ⚠️ C'EST CE QUI LA REND POSABLE DES DEUX CÔTÉS DE LA JOINTURE. Si elle rendait `null` sur un
+  // nom, le côté producteur deviendrait muet ; si elle rendait le chemin brut sur une forme
+  // inconnue, deux sockets posés à la main s'apparieraient comme une même session.
+  assert.equal(identiteDeSession('somtech'), 'somtech', 'appliquée à un nom, elle le rend inchangé');
+  assert.equal(identiteDeSession('  cg  '), 'cg');
+  assert.equal(identiteDeSession(socketDe('somtech')), 'somtech', 'appliquée à un socket, elle en tire le nom');
+  assert.equal(identiteDeSession('/tmp/pose/a/la/main.sock'), null, 'un chemin hors forme ne porte AUCUN nom');
+  for (const rien of [null, undefined, '', '   ']) assert.equal(identiteDeSession(rien), null);
+});
+
+test('`nomDeSession` prend un SOCKET — une chaîne sans séparateur n’est pas un nom de session à ses yeux', () => {
+  // ⚠️ LE SEUL ÉCART DE CONTRAT ENTRE LES DEUX, ET IL EST DÉLIBÉRÉ — une mutation y a SURVÉCU
+  // avant que cet essai n'existe. `HERDR_SOCKET_PATH` est une variable d'environnement :
+  // n'importe qui peut y poser `somtech`, qui est un nom de FICHIER relatif, pas une session.
+  // `sessionVisee` en tirerait un « nom de session » que rien n'a jamais mesuré — et
+  // l'inscrirait dans une déclaration, qui est un fait durable.
+  assert.equal(nomDeSession('somtech'), null, 'un jeton nu n’est pas un socket');
+  assert.equal(nomDeSession(socketDe('somtech')), 'somtech');
+  assert.equal(nomDeSession('/un/chemin/sans/forme'), null);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
