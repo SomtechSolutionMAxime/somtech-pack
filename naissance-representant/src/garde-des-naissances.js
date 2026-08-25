@@ -19,6 +19,39 @@
 // naître hors dispositif EST ce qu'on veut attraper.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⓿ POURQUOI LE NOM N'IDENTIFIE PLUS — mesuré sur le poste le 2026-08-25, par le FAIT
+//
+// Le critère de ce module dit : « un agent né PAR LE DISPOSITIF dont la déclaration a été
+// retirée → la garde rougit et le NOMME ». Fait pour de vrai : chef d'équipe `t-20260825-0047`,
+// né par le geste, sa déclaration retirée du registre, garde relancée → **`prises : 0`**.
+//
+// La cause : les sources étaient TROIS, et il suffisait d'une. Retirer la déclaration en enlève
+// UNE sur trois — l'agent restait identifié par son NOM. Or **le nom d'un chef d'équipe est
+// TOUJOURS conforme** : c'est le code de son mandat, imposé par le geste de naissance lui-même.
+// Pour la population que cette garde vise en premier, la branche « déclaration retirée » ne
+// pouvait donc STRUCTURELLEMENT jamais rougir.
+//
+// 🔴 ET LE NOM NE POUVAIT PAS TENIR CE RÔLE. `T-20260822-0018` l'avait déjà établi : **le nom
+// identifie, il ne CLASSE pas.** Il ne porte ni le rôle, ni le coordonnateur, ni l'espace — un
+// orchestrateur d'avant la convention porte lui aussi un code. Une garde qui accepte le nom
+// seul laisse passer exactement le défaut d'origine du chantier.
+//
+// LA RÈGLE, DEPUIS : après la mise en service, tout agent de la population doit avoir une
+// **DÉCLARATION** — ou occuper un **LIEU DE RÔLE** sur disque, qui est l'identification propre
+// d'un orchestrateur ou d'un représentant (ils ont un lieu, pas une déclaration ; les faire
+// rougir serait le faux positif symétrique). Le nom, lui, ne rend plus personne régulier.
+//
+// ⚠️ IL GARDE DEUX EMPLOIS, ET AUCUN N'IDENTIFIE. ① Il reste la **clé de repli** qui apparie une
+// déclaration à un agent dont le pane a bougé : un nom NON MESURÉ rend donc la déclaration
+// « refusée », jamais « absente ». ② Il se DIT sur la ligne de chaque prise qui en porte un —
+// sans quoi un lecteur découvrant sept prises au nom conforme croirait la garde cassée.
+//
+// ⚠️ POURQUOI AUCUN BANC NE L'AVAIT VU : ils éprouvaient le retrait de déclaration sur des
+// agents ANONYMES ou au nom NON conforme. Le chemin existait, il passait, il se lisait donc
+// comme couvert — « une assertion trop faible sur un chemin correct ». Et la campagne de
+// mutation ne pouvait pas le trouver : elle mutait le CODE, pas la POPULATION.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // LE DÉNOMINATEUR EST ÉPINGLÉ — IL N'Y A AUCUNE LISTE D'EXCEPTIONS, ET C'EST DÉLIBÉRÉ
 //
 // Motif mesuré dans ce dépôt : **une garde qui porte sa propre liste d'exceptions est
@@ -99,12 +132,32 @@ export const SORTIES = {
 /** La sortie d'un refus global — la garde n'a pas pu se prononcer du tout. */
 export const SORTIE_REFUS = 3;
 
-/** Le nom des trois sources, tel qu'il sort — le lecteur doit savoir CE QUI l'a identifié. */
+/**
+ * LES DEUX SOURCES QUI IDENTIFIENT — le lecteur doit savoir CE QUI a identifié un agent.
+ *
+ * 🔴 ELLES ÉTAIENT TROIS. La troisième était le nom, et elle est tombée le 2026-08-25 : voir
+ * l'en-tête, section ⓿. Ce qui reste au nom vit dans `NOM_CONFORME`, qui n'identifie personne.
+ *
+ * ⚠️ LES DEUX QUI RESTENT NE SONT PAS INTERCHANGEABLES AVEC ELLE. Toutes deux sont un ACTE :
+ * quelqu'un a inscrit une déclaration, ou quelqu'un a posé un lieu de rôle sur le disque. Le
+ * nom, lui, se porte — il ne s'obtient pas.
+ */
 export const SOURCES = {
   DECLARATION: 'sa déclaration de naissance',
   LIEU: 'le lieu de rôle qu’il occupe',
-  NOM: 'son nom, conforme à la convention',
 };
+
+/**
+ * CE QUE LE NOM VAUT ENCORE — le mot que porte une PRISE qui en a un de conforme.
+ *
+ * ⚠️ IL SE DIT SUR LA LIGNE DE LA PRISE, PAS DANS UNE NOTE. Mesuré sur le trafic du 2026-08-25 :
+ * 7 des 8 agents de la population ont un nom conforme et AUCUNE déclaration. Un lecteur qui
+ * découvre sept prises toutes bien nommées, sans qu'on lui dise pourquoi le nom ne compte pas,
+ * conclura que la garde est cassée — et la désarmera pour de bonnes raisons apparentes.
+ */
+export const NOM_CONFORME =
+  'son nom est conforme à la convention — mais un nom n’est pas une naissance : il n’atteste ' +
+  'ni le rôle, ni le coordonnateur, ni l’espace';
 
 /** L'horodatage tel que `claude-swt` le pose : `YYYYMMDD-HHMMSS`, et rien d'autre. */
 const HORODATAGE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
@@ -276,7 +329,7 @@ function declarationDe(agent, declarations) {
 }
 
 /**
- * LES TROIS SOURCES, chacune dans le vocabulaire à trois états de `roleDuLieuOuRefus` :
+ * LES DEUX SOURCES, chacune dans le vocabulaire à trois états de `roleDuLieuOuRefus` :
  * `'établi'` · `'non établi'` · `'refusée'`.
  *
  * ⚠️ AUCUNE NE SE RABAT SUR UNE AUTRE. Une source qu'on n'a pas pu mesurer ne devient pas
@@ -286,6 +339,11 @@ function declarationDe(agent, declarations) {
  */
 function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
   const decl = declarationDe(agent, declarations);
+  // ⚠️ LE NOM EST LA CLÉ DE REPLI DE L'APPARIEMENT (voir `declarationDe`) : un agent dont le
+  // pane a bougé n'est retrouvé que par lui. Un nom NON MESURÉ rend donc la déclaration
+  // « refusée », jamais « absente » — sinon `agent list`, mesuré à 83 panes sur 227 un jour,
+  // suffirait à transformer des agents déclarés en prises par simple panne de lecture.
+  const nomNonMesure = agent.nom?.mesure === 'refusée';
   const source1 = decl
     ? { etat: 'établi', quoi: SOURCES.DECLARATION, detail: decl }
     : illisibles.length
@@ -297,7 +355,14 @@ function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
           raison: `le registre porte ${illisibles.length} déclaration(s) illisible(s) : ` +
             illisibles.map((i) => `${i.fichier} (${i.cause})`).join(', '),
         }
-      : { etat: 'non établi', quoi: SOURCES.DECLARATION };
+      : nomNonMesure
+        ? {
+            etat: 'refusée',
+            quoi: SOURCES.DECLARATION,
+            raison: `${agent.nom.raison} — or le nom est la clé de repli de l’appariement : ` +
+              `sans lui, « pas trouvée » ne vaut pas « absente »`,
+          }
+        : { etat: 'non établi', quoi: SOURCES.DECLARATION };
 
   const candidat = lieuDeRoleDansLeChemin(agent.espace);
   let source2 = { etat: 'non établi', quoi: SOURCES.LIEU };
@@ -314,17 +379,13 @@ function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
     }
   }
 
-  // ⚠️ LE NOM SE JUGE, IL NE SE CONSTATE PAS. Le libellé d'un pane peut venir du titre du
-  // terminal ; l'accepter sans le passer par la LISTE BLANCHE du dépôt ferait de n'importe quel
-  // shell un agent régulier. On importe `nomDeLieuValide` — on n'en réécrit pas une variante.
-  const source3 =
-    agent.nom?.mesure === 'refusée'
-      ? { etat: 'refusée', quoi: SOURCES.NOM, raison: agent.nom.raison }
-      : agent.nom?.mesure === 'lu' && nomDeLieuValide(agent.nom.valeur)
-        ? { etat: 'établi', quoi: SOURCES.NOM, detail: agent.nom.valeur }
-        : { etat: 'non établi', quoi: SOURCES.NOM };
+  // ⚠️ LE NOM SE JUGE, IL NE SE CONSTATE PAS — et depuis le 2026-08-25 il n'IDENTIFIE PLUS.
+  // Ce qu'on en tire n'est plus une source : c'est ce qu'on DIRA sur la ligne de la prise. On
+  // importe toujours `nomDeLieuValide` — on n'en réécrit pas une variante — parce que « nom
+  // conforme » doit vouloir dire la même chose ici que partout ailleurs dans le dépôt.
+  const nomConforme = agent.nom?.mesure === 'lu' && nomDeLieuValide(agent.nom.valeur);
 
-  return [source1, source2, source3];
+  return { sources: [source1, source2], nomConforme };
 }
 
 /**
@@ -372,7 +433,7 @@ export function jugerLeParc({
       continue;
     }
 
-    const sources = sourcesDe(a, { declarations, illisibles, roleDuLieu });
+    const { sources, nomConforme } = sourcesDe(a, { declarations, illisibles, roleDuLieu });
     const etablie = sources.find((s) => s.etat === 'établi');
     if (etablie) {
       identifies.push({ designation, source: etablie.quoi });
@@ -387,7 +448,7 @@ export function jugerLeParc({
       });
       continue;
     }
-    prises.push({ designation, espace: a.espace, ne_le: horodatage });
+    prises.push({ designation, espace: a.espace, ne_le: horodatage, nomConforme });
   }
 
   // ── LE FAUX REFUS, MESURÉ PAR UNE AUTRE CLÉ QUE CELLE DE L'APPARIEMENT.
@@ -419,6 +480,11 @@ export function jugerLeParc({
     population: identifies.length + prises.length + nonMesures.length,
     identifies: identifies.length,
     prises: prises.length,
+    // ⚠️ LE PRIX DE LA CORRECTION, RENDU EN CHIFFRE. Ces prises-là, l'ancienne règle les tenait
+    // pour identifiées. C'est le seul endroit où le lecteur voit ce que le changement a
+    // basculé — et le seul chiffre à surveiller si quelqu'un croit la garde trop bruyante.
+    // Ce n'est PAS un panier : un sous-ensemble des prises, il ne touche pas l'équilibre.
+    prisesAuNomConforme: prises.filter((p) => p.nomConforme).length,
     nonMesures: nonMesures.length,
     fauxRefus: fauxRefus.length,
     sessionsInterrogees: portee?.sessionsInterrogees ?? 0,
@@ -442,9 +508,12 @@ export function jugerLeParc({
   const methode = {
     prises:
       'un agent VIVANT dont l’espace de travail porte un horodatage de naissance postérieur à ' +
-      `« ${miseEnService} », et qu’AUCUNE des trois sources n’identifie — ni une déclaration ` +
-      '(appariée par pane-dans-sa-session, ou par nom), ni un lieu de rôle établi sur disque, ' +
-      'ni un nom conforme à la convention de nommage du dépôt.',
+      `« ${miseEnService} », et qu’AUCUNE des DEUX sources n’identifie — ni une déclaration ` +
+      '(appariée par pane-dans-sa-session, ou par nom), ni un lieu de rôle établi sur disque. ' +
+      'Son NOM n’entre pas dans ce jugement, si conforme soit-il : le nom d’un agent né par le ' +
+      'dispositif est le code de son mandat, donc toujours conforme — l’accepter comme preuve ' +
+      'rendait la branche « déclaration retirée » incapable de rougir pour la population même ' +
+      'que cette garde vise.',
     fauxRefus:
       'parmi les prises, ceux dont l’espace de travail figure comme « espace » dans une ' +
       'déclaration du registre — un croisement par une clé AUTRE que celle de l’appariement, ' +
@@ -452,9 +521,10 @@ export function jugerLeParc({
       'garde, pas un agent fautif.',
     identifies:
       'ventilés par la source qui les a identifiés — une seule suffit, et c’est la PREMIÈRE ' +
-      'établie dans l’ordre déclaration › lieu de rôle › nom. Un vert entièrement porté par le ' +
-      'nom est un vert MINCE : c’est la plus faible des trois, et elle ne prouve pas qu’un ' +
-      'dispositif de naissance est passé par là.',
+      'établie dans l’ordre déclaration › lieu de rôle. Les deux sont un ACTE POSÉ : une ' +
+      'déclaration inscrite, ou un lieu de rôle posé sur le disque. La ventilation reste ' +
+      'affichée parce que c’est elle qui a rendu le défaut lisible — un « rien à signaler » ' +
+      'entièrement porté par une source faible ne vaut pas celui d’un parc déclaré.',
     portee:
       `mesuré sur ${comptes.sessionsInterrogees - comptes.sessionsRefusees} session(s) herdr ` +
       `qui ont répondu, sur ${comptes.sessionsInterrogees} interrogée(s). Tous les comptes ` +
@@ -475,7 +545,21 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, comptes, m
   if (prises.length) {
     l.push(`🔴 ${prises.length} agent(s) né(s) APRÈS la mise en service et identifiable(s) par AUCUNE source :`);
     // ⚠️ UN PAR LIGNE, NOMMÉ. Un compte ne se corrige pas : on va voir un agent, pas un nombre.
-    for (const p of prises) l.push(`   • ${p.designation} — worktree né le ${p.ne_le} — ${p.espace}`);
+    for (const p of prises) {
+      l.push(`   • ${p.designation} — worktree né le ${p.ne_le} — ${p.espace}`);
+      // ⚠️ SUR SA PROPRE LIGNE, PAS EN NOTE DE BAS DE PAGE. Celui-là, l'ancienne règle le
+      // laissait passer ; qui ne saurait pas pourquoi son beau nom ne le sauve plus prendrait
+      // la garde pour cassée — et la désarmerait avec les meilleures raisons du monde.
+      if (p.nomConforme) l.push(`     ↳ ${NOM_CONFORME}`);
+    }
+    if (comptes.prisesAuNomConforme) {
+      l.push(
+        `   ⚠️ ${comptes.prisesAuNomConforme} de ces ${prises.length} prise(s) portent un nom CONFORME — ` +
+          `et c'est justement la population visée : le nom d'un agent né par le dispositif EST le ` +
+          `code de son mandat. Tant qu'il valait preuve, retirer une déclaration ne pouvait pas ` +
+          `faire rougir cette garde.`
+      );
+    }
     l.push('');
   }
   if (nonMesures.length) {

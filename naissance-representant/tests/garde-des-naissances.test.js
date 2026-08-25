@@ -114,6 +114,53 @@ function juger({
 // 1. LE CRITÈRE N°1 — la déclaration retirée fait ROUGIR, et la garde NOMME
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 🔴 LE CAS RÉEL DU CRITÈRE, ET IL A UN NOM CONFORME — mesuré sur le poste le 2026-08-25.
+ *
+ * Le critère de `T-20260825-0013` dit « un agent né PAR LE DISPOSITIF dont la déclaration a été
+ * retirée ». Or **le dispositif ne fait naître que des agents au nom conforme** : le nom d'un
+ * chef d'équipe EST le code de son mandat, imposé par le geste lui-même. La population que ce
+ * critère vise en premier a donc TOUJOURS un nom conforme.
+ *
+ * Les bancs, eux, éprouvaient le retrait de déclaration sur des agents au nom NON conforme
+ * (« Agent Infra-Ops ») ou anonymes. Le chemin existait, il passait, et il se lisait donc comme
+ * couvert — c'est le motif « une assertion trop faible sur un chemin correct » : le banc SURVIT
+ * à l'énumération des appelants, parce qu'il appelle avec une population que le réel n'a pas.
+ *
+ * Mesuré POUR DE VRAI le 2026-08-25 : un chef d'équipe `t-20260825-0047` né par le dispositif,
+ * déclaration retirée du registre, garde relancée → `prises : 0`. Elle ne rougissait pas.
+ * Elle ne le nommait pas. La branche « déclaration retirée » ne pouvait STRUCTURELLEMENT jamais
+ * rougir pour la population qu'elle vise.
+ */
+test('🔴 LE CAS RÉEL — un chef d’équipe au nom CONFORME dont la déclaration est retirée fait ROUGIR et est NOMMÉ', () => {
+  const ESPACE = `${WT}/20260825-101721`;
+  const chef = agent({ pane_id: 'w97:p2', foreground_cwd: ESPACE });
+  const vuNomme = [{ pane_id: 'w97:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 't-20260825-0047' }];
+  const saDeclaration = declaration({
+    nom: 't-20260825-0047',
+    role: 'chef-equipe',
+    mandat: 'T-20260825-0047',
+    pane: 'w97:p2',
+    espace: ESPACE,
+  });
+
+  // ── LA MOITIÉ QUI PROUVE : avec sa déclaration, il ne rougit pas — et c'est ELLE qui l'a
+  // identifié, pas son nom. Sans cette assertion, un module qui n'identifierait plus RIEN
+  // passerait la moitié rouge du critère sans jamais rendre le service.
+  const avec = juger({ panes: [chef], agentsHerdr: vuNomme, declarations: [saDeclaration] });
+  assert.equal(avec.verdict, VERDICTS.RIEN_A_SIGNALER, 'déclaré, il ne doit pas rougir');
+  assert.equal(avec.identifies[0].source, SOURCES.DECLARATION);
+
+  // ── LE GESTE DU CRITÈRE : on retire la déclaration, RIEN D'AUTRE. Son nom reste conforme,
+  // son espace reste le même, il est toujours vivant.
+  const sans = juger({ panes: [chef], agentsHerdr: vuNomme, declarations: [] });
+  assert.equal(sans.verdict, VERDICTS.NES_HORS_DISPOSITIF, 'un nom conforme n’est PAS une naissance');
+  assert.equal(sans.sortie, SORTIES[VERDICTS.NES_HORS_DISPOSITIF]);
+  assert.equal(sans.prises.length, 1);
+  assert.equal(sans.prises[0].designation, 't-20260825-0047', 'un NOM, pas un compte');
+  assert.match(sans.texte, /t-20260825-0047/, 'le nom doit franchir la SORTIE, pas rester dans la structure');
+});
+
 test('un agent né par le dispositif dont la déclaration a été RETIRÉE fait rougir la garde', () => {
   // D'abord la moitié qui prouve : avec sa déclaration, il ne rougit pas.
   const avec = juger({ declarations: [declaration()] });
@@ -139,13 +186,18 @@ test('elle NOMME l’agent — pas un compte, un nom', () => {
   assert.equal(prises[0].designation, 'Agent Infra-Ops');
   assert.match(texte, /Agent Infra-Ops/, 'le nom doit franchir la SORTIE, pas seulement la structure');
 
-  // Et la moitié qui prouve : le MÊME agent, nom conforme, cesse d'être une prise.
-  const conforme = juger({
+  // ── LA MOITIÉ QUI PROUVE — elle empêche un module qui ne rendrait QUE des prises de passer.
+  //
+  // ⚠️ ELLE S'APPUYAIT SUR LE NOM CONFORME, ET C'ÉTAIT LE DÉFAUT LUI-MÊME (voir la section ⓿ du
+  // module). Sa FONCTION est intacte — prouver que la garde sait encore ne pas rougir — mais
+  // elle s'appuie désormais sur une identification qui en est une : le même agent, DÉCLARÉ.
+  const declare = juger({
     panes: [agent()],
     agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' }],
-    declarations: [],
+    declarations: [declaration({ nom: 'ristigouche' })],
   });
-  assert.equal(conforme.prises.length, 0);
+  assert.equal(declare.prises.length, 0);
+  assert.equal(declare.identifies[0].source, SOURCES.DECLARATION);
 });
 
 test('un agent ANONYME est nommé par son adresse — un anonyme reste ADRESSABLE', () => {
@@ -228,13 +280,46 @@ test('le LIEU DE RÔLE sur disque identifie — un agent posé dans son lieu n�
   assert.equal(r.identifies[0].source, 'le lieu de rôle qu’il occupe');
 });
 
-test('un NOM conforme à la convention identifie', () => {
+test('un NOM conforme n’identifie RIEN — et la prise le DIT sur sa propre ligne', () => {
+  // ⚠️ CE BANC AFFIRMAIT L'INVERSE JUSQU'AU 2026-08-25, et c'est ce qui rendait le critère n°1
+  // décoratif : le nom d'un agent né par le dispositif EST le code de son mandat, donc toujours
+  // conforme. Tant que le nom valait preuve, retirer une déclaration ne pouvait rien faire
+  // rougir. `T-20260822-0018` l'avait établi en toutes lettres : le nom identifie, il ne CLASSE
+  // pas — il ne porte ni le rôle, ni le coordonnateur, ni l'espace.
   const r = juger({
     agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' }],
     declarations: [],
   });
-  assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
-  assert.equal(r.identifies[0].source, 'son nom, conforme à la convention');
+  assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF);
+  assert.equal(r.prises.length, 1);
+  assert.equal(r.prises[0].designation, 'batiscan');
+  assert.equal(r.prises[0].nomConforme, true);
+  assert.equal(r.comptes.prisesAuNomConforme, 1, 'le prix du changement se voit en chiffre');
+
+  // ⚠️ ET LE POURQUOI FRANCHIT LA SORTIE. Un lecteur qui découvre une prise au nom impeccable
+  // sans qu'on lui dise pourquoi ce nom ne la sauve plus prendra la garde pour cassée — et la
+  // désarmera avec les meilleures raisons du monde.
+  assert.match(r.texte, /un nom n’est pas une naissance/);
+});
+
+test('le CHIFFRE du bascule franchit la SORTIE — pas seulement la structure', () => {
+  // ⚠️ TROUVÉ PAR UNE MUTATION SURVIVANTE. Retirer la ligne de synthèse du compte rendu ne
+  // faisait rougir AUCUN banc : `prisesAuNomConforme` existait dans la structure, et personne
+  // ne vérifiait qu'un humain devant son terminal le voyait. C'est le motif que ce fichier
+  // garde déjà pour les méthodes — « elle franchit la sortie, elle ne reste pas dans la
+  // structure » — et il valait pour le seul chiffre qui mesure ce que la correction a basculé.
+  //
+  // Deux prises, pas une : la ligne doit porter le COMPTE, pas seulement exister.
+  const r = juger({
+    panes: [agent({ pane_id: 'w1:p1' }), agent({ pane_id: 'w1:p2' })],
+    agentsHerdr: [
+      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
+      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' },
+    ],
+    declarations: [],
+  });
+  assert.equal(r.comptes.prisesAuNomConforme, 2);
+  assert.match(r.texte, /2 de ces 2 prise\(s\) portent un nom CONFORME/);
 });
 
 test('un nom qui n’est PAS conforme n’identifie rien — « bash » n’est pas une naissance', () => {
@@ -245,6 +330,14 @@ test('un nom qui n’est PAS conforme n’identifie rien — « bash » n’est 
     declarations: [],
   });
   assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF);
+
+  // ⚠️ SANS CECI, CE BANC NE DISTINGUE PLUS RIEN. Depuis que le nom n'identifie plus, conforme
+  // ou pas, l'agent est pris : l'assertion ci-dessus passerait même si `nomDeLieuValide`
+  // disparaissait du module. Ce qui reste discriminant, c'est la MENTION : une prise au nom non
+  // conforme ne doit PAS porter la note réservée aux noms conformes.
+  assert.equal(r.prises[0].nomConforme, false);
+  assert.equal(r.comptes.prisesAuNomConforme, 0);
+  assert.doesNotMatch(r.texte, /un nom n’est pas une naissance/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -370,12 +463,17 @@ test('un FAUX REFUS se mesure par une AUTRE clé que celle qui a servi à appari
   // un chiffre juste, tautologique, et donc invérifiable. On croise par l'ESPACE de travail :
   // une déclaration qui porte cet espace prouve qu'une naissance a eu lieu ici, même si ni le
   // pane ni le nom n'ont concordé. C'est un défaut d'APPARIEMENT, et il doit se voir.
+  // Le témoin : un agent VRAIMENT identifié — déclaration appariée par son pane — ne produit ni
+  // prise ni faux refus. (Il s'adossait au nom conforme jusqu'au 2026-08-25 ; le nom n'identifie
+  // plus, mais la fonction de ce témoin — un chiffre qui peut valoir zéro pour une BONNE raison
+  // — est inchangée.)
   const r = juger({
     panes: [agent({ pane_id: 'w7:p7' })],
     agentsHerdr: [{ pane_id: 'w7:p7', herdr_socket: '/bac/s1.sock', agent: true, name: 'un-autre' }],
-    declarations: [declaration({ nom: 'ristigouche', pane: 'w1:p1', session_herdr: '/autre.sock', espace: APRES })],
+    declarations: [declaration({ nom: 'un-autre', pane: 'w7:p7', espace: APRES })],
   });
-  assert.equal(r.comptes.prises, 0, 'le nom conforme l’identifie');
+  assert.equal(r.comptes.prises, 0, 'sa déclaration l’identifie');
+  assert.equal(r.comptes.fauxRefus, 0);
 
   // Le même, sans nom du tout : il est pris, ET le croisement par l'espace le signale.
   const r2 = juger({
@@ -398,17 +496,25 @@ test('le vert dit SUR QUOI il repose — un vert porté par une seule source est
   // vaut pas le même « rien à signaler » que celui d'un parc déclaré — et rien, dans un verdict
   // nu, ne permet au lecteur de faire la différence. C'est le motif « un vert qui ne touche pas
   // ce qu'il éprouve » : le compte est juste, la phrase qu'on en tire est fausse.
+  // ⚠️ CE BANC VENTILAIT DEUX AGENTS IDENTIFIÉS PAR LEUR NOM — la source qui a été retirée. Sa
+  // FONCTION est intacte : la ventilation doit franchir la SORTIE, pas rester dans la structure.
+  // Elle porte désormais les deux sources qui identifient encore, et elles se distinguent.
   const r = juger({
-    panes: [agent({ pane_id: 'w1:p1' }), agent({ pane_id: 'w1:p2' })],
-    agentsHerdr: [
-      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
-      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' },
+    panes: [
+      agent({ pane_id: 'w1:p1' }),
+      agent({ pane_id: 'w1:p2', foreground_cwd: `${APRES}/.orchestrateur/batiscan` }),
     ],
-    declarations: [],
+    agentsHerdr: [
+      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' },
+      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
+    ],
+    declarations: [declaration({ nom: 'ristigouche', pane: 'w1:p1' })],
+    roleDuLieu: lieuEtabli,
   });
   assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
-  assert.deepEqual(r.comptes.parSource, { [SOURCES.NOM]: 2 });
-  assert.match(r.texte, /son nom, conforme à la convention\s*:\s*2/);
+  assert.deepEqual(r.comptes.parSource, { [SOURCES.DECLARATION]: 1, [SOURCES.LIEU]: 1 });
+  assert.match(r.texte, /sa déclaration de naissance\s*:\s*1/);
+  assert.match(r.texte, /le lieu de rôle qu’il occupe\s*:\s*1/);
   assert.match(r.methode.identifies, /\S/);
 });
 
@@ -442,9 +548,12 @@ test('parc vivant = hors portée + population, et population = identifiés + pri
       { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: null },
       { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: null },
       { pane_id: 'w1:p3', herdr_socket: '/bac/s1.sock', agent: true, name: null },
+      // ⚠️ IDENTIFIÉ PAR SA DÉCLARATION, plus par son nom : `w1:p4` portait `batiscan` et
+      // basculait dans les prises depuis que le nom n'identifie plus. Les deux assertions
+      // d'ÉQUILIBRE ci-dessous — la fonction de ce banc — n'ont jamais bougé.
       { pane_id: 'w1:p4', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
     ],
-    declarations: [],
+    declarations: [declaration({ nom: 'batiscan', pane: 'w1:p4' })],
   });
   const c = r.comptes;
   assert.equal(c.parcVivant, c.horsPortee + c.population);

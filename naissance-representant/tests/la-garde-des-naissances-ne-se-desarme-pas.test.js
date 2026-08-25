@@ -225,8 +225,19 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
           });
 
           // ── L'ORACLE, écrit une fois, en une phrase — et à part du code jugé.
+          //
+          // ⚠️ LE 2026-08-25, UN TERME EST SORTI D'ICI : `|| nom === 'conforme'`. C'est
+          // précisément la vertu de la forme FORMULE — le diff nomme le terme retiré, là où une
+          // table de résultats attendus aurait laissé glisser des cellules une à une. Le nom
+          // n'identifie plus (module, section ⓿) : il ne porte ni le rôle, ni le coordonnateur,
+          // ni l'espace, et celui d'un agent né par le dispositif est TOUJOURS conforme.
+          //
+          // ⚠️ IL RESTE DANS `uneSourceRefusee`, ET CE N'EST PAS UN RELIQUAT. Un nom NON MESURÉ
+          // prive l'appariement de sa clé de repli : « déclaration pas trouvée » cesse alors de
+          // valoir « déclaration absente ». Ne pas le refuser transformerait une panne de
+          // lecture d'`agent list` en prises.
           const dansLaPopulation = naissance === 'après';
-          const uneSourceEtablie = decl === 'déclaré' || lieu === 'établi' || nom === 'conforme';
+          const uneSourceEtablie = decl === 'déclaré' || lieu === 'établi';
           const uneSourceRefusee = lieu === 'refusé' || nom === 'non mesuré';
           const attendu = !dansLaPopulation
             ? VERDICTS.RIEN_A_SIGNALER
@@ -241,6 +252,19 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
             r.verdict, attendu,
             `[naissance=${naissance} · déclaration=${decl} · lieu=${lieu} · nom=${nom}] ` +
               'la garde et l’oracle divergent : un terme a été ajouté ou retiré au jugement.'
+          );
+
+          // ⚠️ SANS CETTE SECONDE CELLULE, L'AXE DU NOM CESSERAIT DE DISCRIMINER SUR TROIS DE
+          // SES QUATRE VALEURS. Depuis que le nom n'identifie plus, « conforme », « non
+          // conforme » et « absent » rendent le MÊME verdict : le produit croisé continuerait
+          // de tourner sur 72 cellules en n'éprouvant plus qu'une seule d'entre elles. Ce que
+          // le nom décide encore, c'est ce que la garde DIT de la prise — et donc le chiffre
+          // qui mesure ce que l'ancienne règle absolvait en silence.
+          const attenduNomConforme = attendu === VERDICTS.NES_HORS_DISPOSITIF && nom === 'conforme' ? 1 : 0;
+          assert.equal(
+            r.comptes.prisesAuNomConforme, attenduNomConforme,
+            `[naissance=${naissance} · déclaration=${decl} · lieu=${lieu} · nom=${nom}] ` +
+              'le compte des prises au nom conforme diverge de l’oracle.'
           );
         }
       }
