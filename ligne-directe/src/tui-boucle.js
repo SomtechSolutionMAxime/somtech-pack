@@ -293,6 +293,14 @@ export async function boucleDuTui({
   const dessiner = () => {
     const racines = arbreDeLaVue(vue, { parApp: etat.parApp });
     const lignes = lignesVisibles(racines, etat);
+    // ⚠️ DEUX REPLIS DIFFÉRENTS DANS CE FICHIER, ET C’EST VOULU — mais ça ne se voyait nulle
+    // part (relevé en revue portail). ICI, sans TTY, on doit quand même DESSINER quelque
+    // chose : un écran de 100×30 est un défaut raisonnable. Dans `avecProgression`, le repli
+    // est `Infinity` — voir la note là-bas : ne rien borner y est le bon geste, parce qu’il
+    // n’y a alors aucun terminal pour wrapper.
+    //
+    // ⚠️ NE PAS LES FONDRE : appliquer 100 à la progression la tronquerait sans raison dans
+    // un journal, et appliquer `Infinity` ici demanderait un écran de largeur infinie.
     const largeur = sortie.columns || 100;
     const hauteur = sortie.rows || 30;
     const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur });
@@ -394,6 +402,16 @@ export async function avecProgression(lireLaVue, sortie, { intervalle = 120 } = 
     // ⚠️ LA LARGEUR SE RELIT À CHAQUE TOUR. Lue une seule fois au départ, un pane redimensionné
     // pendant les 80 s de chargement rouvrirait le trou en silence — et redimensionner un
     // split est précisément ce qu’on fait quand un affichage devient illisible.
+    // ⚠️ REPLI `Infinity`, ET IL DIFFÈRE DE CELUI DE `dessiner()` (100) — les deux sont justes
+    // pour leur chemin, et le dire ici évite qu’on les « harmonise » un jour.
+    //
+    // Sans TTY (`columns` absent), la sortie n’est pas un terminal : personne ne wrappe, donc
+    // rien à borner — et tronquer priverait un journal du message entier. Le défaut ne se
+    // produit QUE devant un vrai terminal, qui annonce toujours sa largeur.
+    //
+    // ⚠️ `|| Infinity` ATTRAPE AUSSI `columns === 0`, qui ne se produit pas sur un terminal
+    // réel. Si un jour ça arrivait, ne rien borner serait le pire choix — mais borner à 0
+    // effacerait la progression entière. Cas non mesuré : signalé, pas comblé à l’aveugle.
     const largeur = sortie.columns || Infinity;
     sortie.write(`\r${ESC}[2K${texteDeProgression(s, (tour += 1), largeur)}`);
   }, intervalle);
