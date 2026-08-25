@@ -20,6 +20,14 @@ import { dirname } from 'node:path';
 import { lireJetons } from './trousseau.js';
 import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
+import { execFileSync } from 'node:child_process';
+
+/**
+ * ⚠️ LE NOM DE L'OUTIL, PAS UN CHEMIN. Résolu par le PATH du veilleur, comme `herdr` l'est
+ * ailleurs dans ce dépôt. Un chemin absolu figé ici deviendrait faux à la première mise à jour
+ * de Claude Code — c'est-à-dire exactement l'événement que la sonde existe pour détecter.
+ */
+const OUTILS_VERSION = Object.freeze({ claude: 'claude' });
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu, roleDuLieuOuRefus } from './lieu-agent.js';
@@ -1841,6 +1849,15 @@ export class Veilleur {
       lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
       etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
       nomsConnus,
+      // ⚠️ SANS CETTE LIGNE, LE REGISTRE DIT « non mesurée » — honnêtement, mais sans jamais
+      // mordre. `ETALONNAGE_DU_LECTEUR` existe pour qu'un « rien en vol » devenu faux se relie
+      // à un changement de version de Claude Code ; il ne peut le faire que si quelqu'un mesure
+      // la version RÉELLE. C'est ici, et seulement ici, que le dispositif touche le système :
+      // `travailEnVol` reste pure, la sonde est résolue UNE fois par tour et non une fois par
+      // pane. Coût mesuré le 2026-08-25 : 0,03 s par tour, contre une borne de recensement de
+      // 30 s dont 16,1 s étaient déjà consommées — un pour mille de la marge.
+      versionCourante: () =>
+        execFileSync(OUTILS_VERSION.claude, ['--version'], { encoding: 'utf8', timeout: 5000 }),
       journaliser,
     });
   }
