@@ -45,6 +45,8 @@ import {
   MOT_DECLARE,
   MOT_ECART,
   PHRASE_DU_DECLARE,
+  PHRASE_COURTE_DU_DECLARE,
+  FRAGMENT_DU_QUALIFICATIF,
 } from '../src/vue-du-parc.js';
 import {
   arbreDeLaVue,
@@ -486,6 +488,108 @@ test('LE DÉTAIL DIT LA SOURCE AUX DEUX ÉTAGES — un epic ET une story, jamais
       `l’étage « ${kind} » ne rend pas le nom déclaré :\n${detail}`
     );
   }
+});
+
+test('LE QUALIFICATIF NE SE DIT QU’UNE FOIS PAR PANNEAU — le fix du 2026-08-25 est GARDÉ, pas seulement fait', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QU'UNE PASSE PORTAIL A REJETÉ LE LOT SANS LUI (2026-08-25). Le
+  // commit qui a dégraissé le panneau remplaçait `rendreAttribution` par
+  // `suffixeDuRattachement` sur la ligne « porteur », aux deux étages. **Le reverser laissait
+  // les 1050 essais VERTS.**
+  //
+  // 🔴 ET MA PREMIÈRE TENTATIVE DE GARDE N'A PAS MORDU NON PLUS — elle comptait
+  // `PHRASE_DU_DECLARE`, la phrase LONGUE, quand la ligne « porteur » portait la phrase
+  // COURTE. Deux textes différents pour la même idée : la garde cherchait un objet, le défaut
+  // vivait dans un autre. Mesuré ensuite pour de vrai, sur le panneau recomposé :
+  //
+  //   AVANT le fix : « mesuré à un lieu » ×2   ·   APRÈS : ×1
+  //
+  // ⚠️ ON COMPTE DONC LE FRAGMENT QUE LES DEUX FORMULATIONS PARTAGENT, pas l'une des deux.
+  // « non mesuré à un lieu » (courte) et « jamais mesuré à un lieu » (longue) disent la même
+  // chose au lecteur ; ce qui le fatigue est de la relire, pas de la relire à l'identique.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const service = unDecor({
+    tickets: [
+      { id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'une', status: 'new', assigned_agent: 'e-20260825-0001' },
+    ],
+  });
+  const vue = await uneVue({ agents: [{ pane: 'w1:p1', lieu, nom: 'kamouraska' }], service });
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etatInitial());
+
+  for (const kind of ['epic', 'story']) {
+    const panneau = detailDe(lignes.find((l) => l.kind === kind)).join(' ').replace(/\s+/g, ' ');
+    const combien = panneau.split(FRAGMENT_DU_QUALIFICATIF).length - 1;
+    assert.equal(
+      combien,
+      1,
+      `l’étage « ${kind} » dit « ${FRAGMENT_DU_QUALIFICATIF} » ${combien} fois au lieu d’une — ` +
+        `dans 28 colonnes, chaque passage coûte plusieurs lignes et chasse ce qui suit :\n${panneau}`
+    );
+  }
+});
+
+test('LA LIGNE « porteur » PORTE LE MOT ET LE NOM, ET LAISSE LE QUALIFICATIF AU BLOC « source »', async (t) => {
+  // ⚠️ LE JUMEAU DU BANC AU-DESSUS, ET IL GARDE L'AUTRE MOITIÉ. Le compte tomberait aussi si
+  // quelqu'un retirait le bloc « source » au lieu de dégraisser « porteur » — la correction
+  // INVERSE, qui ferait perdre au panneau la seule phrase entière qu'il porte (RA-VUE-006 :
+  // « chaque ligne dit sa source » n'est pas « chaque ligne porte un mot »). Ce banc épingle
+  // donc QUI porte quoi.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  const service = unDecor({
+    tickets: [
+      { id: 't1', epic_id: 'e1', ticket_id: 'T-1', title: 'une', status: 'new', assigned_agent: 'e-20260825-0001' },
+    ],
+  });
+  const vue = await uneVue({ agents: [{ pane: 'w1:p1', lieu, nom: 'kamouraska' }], service });
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etatInitial());
+
+  for (const kind of ['epic', 'story']) {
+    const panneau = detailDe(lignes.find((l) => l.kind === kind));
+    const iPorteur = panneau.findIndex((l) => l.startsWith('porteur :'));
+    const iSource = panneau.findIndex((l) => l.startsWith('source  :'));
+    assert.ok(iPorteur >= 0, `l’étage « ${kind} » doit avoir une ligne « porteur »`);
+    assert.ok(iSource > iPorteur, `l’étage « ${kind} » doit avoir un bloc « source » APRÈS elle`);
+
+    // La tranche « porteur » s'arrête où commence « source » — c'est elle qu'on mesure.
+    const porteur = panneau.slice(iPorteur, iSource).join(' ').replace(/\s+/g, ' ');
+    assert.ok(porteur.includes('e-20260825-0001'), `« porteur » rend le NOM à l’étage « ${kind} » : ${porteur}`);
+    assert.ok(porteur.includes(MOT_DECLARE), `et son mot qui décide à l’étage « ${kind} » : ${porteur}`);
+    assert.ok(
+      !porteur.includes(FRAGMENT_DU_QUALIFICATIF),
+      `mais PAS le qualificatif — il appartient au bloc « source », à l’étage « ${kind} » : ${porteur}`
+    );
+
+    // Et « source » le porte, lui, en entier : sans quoi le panneau ne dirait la source nulle part.
+    const source = panneau.slice(iSource).join(' ').replace(/\s+/g, ' ');
+    assert.ok(
+      source.includes(PHRASE_DU_DECLARE),
+      `le bloc « source » doit porter la phrase ENTIÈRE à l’étage « ${kind} » : ${source}`
+    );
+  }
+});
+
+test('LES DEUX FORMULATIONS DU QUALIFICATIF PARTAGENT BIEN LE FRAGMENT QU’ON COMPTE', () => {
+  // 🔴 SANS CE BANC, LES DEUX CI-DESSUS PEUVENT DEVENIR VACANTS EN SILENCE. Ils comptent un
+  // fragment ; le jour où l'une des deux phrases est reformulée sans lui, ils cesseraient de
+  // mesurer quoi que ce soit — et passeraient, puisqu'ils comptent alors zéro… non : ils
+  // exigent EXACTEMENT une occurrence, donc ils rougiraient. C'est justement pour que ce rouge
+  // accuse la BONNE cause qu'on épingle ici le lien entre le fragment et ses deux phrases.
+  assert.ok(
+    PHRASE_COURTE_DU_DECLARE.includes(FRAGMENT_DU_QUALIFICATIF),
+    `la phrase COURTE ne porte plus « ${FRAGMENT_DU_QUALIFICATIF} » : ${PHRASE_COURTE_DU_DECLARE}`
+  );
+  assert.ok(
+    PHRASE_DU_DECLARE.includes(FRAGMENT_DU_QUALIFICATIF),
+    `la phrase LONGUE ne porte plus « ${FRAGMENT_DU_QUALIFICATIF} » : ${PHRASE_DU_DECLARE}`
+  );
+  // ⚠️ ET ELLES RESTENT DEUX TEXTES DIFFÉRENTS — c'est tout l'objet du dégraissage : la
+  // colonne étroite prend la courte, le panneau prend l'entière.
+  assert.notEqual(PHRASE_COURTE_DU_DECLARE, PHRASE_DU_DECLARE);
 });
 
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {

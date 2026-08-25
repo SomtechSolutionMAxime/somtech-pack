@@ -142,6 +142,21 @@ export const PHRASE_DU_DECLARE = 'déclaré au registre à sa naissance, jamais 
  */
 export const PHRASE_COURTE_DU_DECLARE = 'non mesuré à un lieu';
 
+/**
+ * CE QUE LES DEUX FORMULATIONS DISENT EN COMMUN — et c'est ce qu'une garde COMPTE.
+ *
+ * 🔴 IL EST NOMMÉ ICI PARCE QU'UNE GARDE A ÉCHOUÉ FAUTE DE LUI (2026-08-25). Le panneau de
+ * détail répétait le qualificatif — « non mesuré à un lieu » sur la ligne du porteur, « jamais
+ * mesuré à un lieu » dans le bloc « source » : DEUX TEXTES pour UNE idée. Une garde qui
+ * comptait l'une des deux phrases ne voyait pas la redondance de l'autre, et la mutation qui
+ * ramenait le défaut passait VERTE.
+ *
+ * ⚠️ CE QUI FATIGUE LE LECTEUR EST DE RELIRE LA MÊME CHOSE, pas de la relire à l'identique.
+ * On compte donc ce que les deux partagent — et un banc épingle qu'elles le partagent encore,
+ * pour qu'une reformulation ne vide pas la garde en silence.
+ */
+export const FRAGMENT_DU_QUALIFICATIF = 'mesuré à un lieu';
+
 /** La phrase du prouvé — l'autre moitié de la frontière, dite avec les mêmes mots partout. */
 export const PHRASE_DU_PROUVE = 'mandat lu au lieu de l’agent';
 
