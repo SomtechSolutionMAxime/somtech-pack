@@ -51,6 +51,7 @@ import {
   FRAGMENT_DU_QUALIFICATIF,
   desarmerLeTexteLibre,
   ecrireLaVue,
+  SIGNAUX_DE_LA_LIGNE,
 } from '../src/vue-du-parc.js';
 import {
   arbreDeLaVue,
@@ -1136,6 +1137,67 @@ test('LE CHAMP DE L’EPIC EST DÉSARMÉ AUSSI — le jour où le service le ren
     'A\ufffdB',
     'l’etage epic doit desarmer comme l’etage story — une porte sur deux ne garde rien'
   );
+});
+
+test('UN ÉCART PORTÉ PAR UNE STORY ALLUME LE SIGNAL DU RÉSUMÉ — le second producteur, que rien n’atteignait', async (t) => {
+  // 🔴 HUITIÈME REJET DE CE LOT, ET C’EST LA MÊME FORME QUE LES SEPT AUTRES : une garde posée
+  // sur le cas CONNU (l’écart au niveau epic) prise pour une garde sur sa FAMILLE.
+  //
+  // `quiPorte` est appelé à l’identique pour les epics ET pour les stories : les deux étages
+  // produisent `agent.ecart`. Le prédicat de `chantiersAvecEcart` regarde bien les deux — mais
+  // AUCUN banc n’exerçait le second. Mesuré : retirer la clause `stories` du prédicat laissait
+  // les 1092 essais VERTS, y compris le banc qui charge un instantané réel.
+  //
+  // ⚠️ CE QUE ÇA COÛTAIT AU DIRIGEANT : la ligne de la story affiche bien ÉCART (le rendu est
+  // juste des deux côtés), mais le résumé en tête d’écran reste MUET — la phrase « N chantier(s)
+  // portent au moins une CONTRADICTION… allez lire les lignes marquées ÉCART » ne s’affiche pas.
+  // Il ne l’apprendrait qu’en parcourant l’arbre au hasard. C’est RA-VUE-006 servie sur une
+  // surface et pas sur l’autre.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const lieu = poserLieu(join(tmp, 'depot'), 'p-20260822-0001');
+
+  // ⚠️ L’ÉCART EST POSÉ SUR LA STORY, ET SUR ELLE SEULE. L’epic n’en porte aucun : c’est ce qui
+  // isole le second producteur. Un décor où les deux en portent rendrait les deux clauses du
+  // prédicat indiscernables — exactement le défaut que ce banc ferme.
+  //
+  // Pour qu’une story porte un écart, il faut un agent VIVANT dont le mandat lu au lieu EST le
+  // code de la story, ET un `assigned_agent` qui désigne quelqu’un d’autre.
+  const lieuChef = poserLieu(join(tmp, 'depot'), 't-20260825-0002');
+  const service = unDecor({
+    tickets: [
+      {
+        id: 't1',
+        epic_id: 'e1',
+        ticket_id: 'T-20260825-0002',
+        title: 'une story en écart',
+        status: 'in_progress',
+        assigned_agent: 'quelqu-un-dautre',
+      },
+    ],
+  });
+  const vue = await uneVue({
+    agents: [
+      { pane: 'w1:p1', lieu, nom: 'kamouraska' },
+      { pane: 'w1:p2', lieu: lieuChef, nom: 'un-porteur' },
+    ],
+    service,
+  });
+
+  // ⚠️ CONTRÔLE POSITIF, ET IL EST LA MOITIÉ QUI COMPTE : si le décor ne fait naître AUCUN écart
+  // au niveau story, ce banc serait vert sans rien mesurer.
+  const s = laStory(vue);
+  assert.equal(s.agent.mesure, 'lue', 'la story doit être PROUVÉE par le mandat lu au lieu');
+  assert.ok(s.agent.ecart, 'et porter un ÉCART avec le nom déclaré — sinon ce banc ne mesure rien');
+
+  const e = lEpic(vue);
+  assert.ok(!e.agent?.ecart, 'l’EPIC ne doit porter AUCUN écart — c’est ce qui isole le cas story');
+
+  // ═══ ET LE SIGNAL DU RÉSUMÉ S’ALLUME QUAND MÊME — les quatre passages, depuis l’étage story.
+  assert.equal(vue.compte.chantiersAvecEcart, 1, '② le compte n’agrège pas l’écart d’une STORY');
+  const morceau = SIGNAUX_DE_LA_LIGNE.find((x) => x.cle === 'chantiersAvecEcart').phrase(1);
+  assert.ok(vue.resume.includes(morceau), '③ le résumé ne dit rien de l’écart d’une STORY');
+  assert.ok(rendreLaVue(vue).includes(morceau), '④ le dirigeant ne peut pas LIRE l’écart d’une STORY');
 });
 
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
