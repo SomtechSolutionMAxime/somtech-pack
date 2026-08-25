@@ -156,6 +156,21 @@ function instantane({ compteur = null, espion = null, retard = 0, refuser = null
     enVol += 1;
     if (espion) espion(enVol);
     try {
+      // 🔴 LES RÉPONSES N'ARRIVENT PAS DANS L'ORDRE OÙ ELLES ONT ÉTÉ DEMANDÉES, ET C'EST LE
+      // BANC QUI DOIT LE GARANTIR — pas le hasard.
+      //
+      // Mesuré en campagne : rendre les epics dans leur ORDRE D'ARRIVÉE au lieu de l'ordre des
+      // entrées laissait les quinze essais VERTS. Pas parce que le rendu était juste — parce
+      // que l'instantané répondait à latence UNIFORME : l'ordre d'arrivée était l'ordre d'entrée,
+      // et la mutation ne pouvait rien déranger. Le banc gardait un ordre qu'il n'avait aucun
+      // moyen de voir bousculer.
+      //
+      // ⚠️ ET LE DÉCALAGE SE FAIT EN MICRO-TOURS, JAMAIS EN MILLISECONDES. Une latence d'horloge
+      // rendrait ce banc dépendant de la charge du poste : vert chez l'auteur, capricieux en
+      // intégration continue. Des micro-tours s'ordonnent de façon déterministe, quelle que soit
+      // la machine — la réponse qui en attend vingt arrive TOUJOURS après celle qui en attend
+      // deux.
+      for (let i = tours(nom, args); i > 0; i -= 1) await null;
       if (retard) await new Promise((r) => setTimeout(r, retard));
       // 🔴 UN REFUS SE DÉCIDE SUR LA QUESTION, JAMAIS SUR LE RANG DE L'APPEL — et ce banc a
       // d'abord refusé « les trois premiers ». Il rougissait, et il accusait le lot : le lot
@@ -169,6 +184,18 @@ function instantane({ compteur = null, espion = null, retard = 0, refuser = null
       if (espion) espion(enVol);
     }
   };
+}
+
+/**
+ * COMBIEN DE MICRO-TOURS AVANT DE RÉPONDRE — dérivé de LA QUESTION, donc stable d'une lecture
+ * à l'autre, et volontairement DÉCROISSANT avec le rang : les dernières questions posées sont
+ * celles qui répondent le plus vite. Sans ça, l'ordre d'arrivée resterait l'ordre d'entrée.
+ */
+function tours(nom, args) {
+  const sujet = String(args?.epic_id ?? args?.project_id ?? args?.demand_id ?? args?.delivery_id ?? nom);
+  let h = 0;
+  for (const c of sujet) h = (h * 31 + c.charCodeAt(0)) % 41;
+  return h;
 }
 
 function repondre(nom, args) {
