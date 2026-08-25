@@ -422,6 +422,43 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
   }
 });
 
+test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plancher de corps inobservable', async (t) => {
+  // 🔴 UNE SECONDE MUTATION ÉQUIVALENTE, ET ELLE MÉRITE LE MÊME TRAITEMENT QUE LA PREMIÈRE.
+  // Élargir le plancher de `hauteurCorps` (`max(1, …)` → `max(3, …)`) laisse la suite verte :
+  // la borne de sortie tronque l’excédent, donc le plancher est INOBSERVABLE de l’extérieur.
+  // Verdict : ÉQUIVALENTE, pas survivante.
+  //
+  // ⚠️ MAIS L’ÉQUIVALENCE REPOSE SUR LA TRONCATURE, PAS SUR UNE PROPRIÉTÉ DU PLANCHER. Le jour
+  // où quelqu’un retire ou déplace cette troncature — un « nettoyage » qui a l’air d’une
+  // simplification — le plancher redevient mordant, et le défaut du rejet portail se rouvre.
+  //
+  // ⚠️ CE BANC NE GARDE DONC PAS LE PLANCHER : il garde ce que le dirigeant VOIT aux petites
+  // hauteurs, c’est-à-dire l’ORDRE dans lequel l’écran sacrifie ses parties. Une ligne de pane
+  // montre le titre ; deux montrent le titre et une ligne d’arbre ; trois y ajoutent le pied.
+  // C’est cet ordre qui rend le plancher sans effet, et c’est lui qui doit rougir s’il change.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const etat = etatInitial();
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
+
+  const stylesA = (hauteur) =>
+    rendreEcran({ vue, etat, lignes, largeur: 65, hauteur }).map((l) => l.style.split(':')[0]);
+
+  assert.deepEqual(stylesA(1), ['titre'], 'une ligne de pane : le TITRE, qui dit où l’on est');
+  assert.deepEqual(stylesA(2), ['titre', 'selection'], 'deux lignes : le titre et la ligne SÉLECTIONNÉE');
+  assert.deepEqual(
+    stylesA(3),
+    ['titre', 'selection', 'pied'],
+    'trois lignes : le pied apparaît — c’est lui qui porte les raccourcis pour sortir'
+  );
+  assert.deepEqual(
+    stylesA(5),
+    ['titre', 'selection', 'arbre', 'arbre', 'pied'],
+    'au-delà, le corps grandit entre les deux bandeaux'
+  );
+});
+
 test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle cesse de l’être en silence', () => {
   // 🔴 UNE MUTATION SURVIVANTE QUI N’EN EST PAS UNE, ET LE DIRE VAUT MIEUX QUE DE LA MASQUER.
   // Remplacer le comptage en points de code par `.length` laisse la suite verte — non pas
