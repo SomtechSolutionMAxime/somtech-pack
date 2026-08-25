@@ -95,8 +95,10 @@ Ce n'est pas une optimisation, c'est une correction d'un piège :
 **Le lanceur de session ne relaie pas le modèle** — il refuse les drapeaux qu'il ne connaît pas, `--model` compris. Il faut donc **décomposer son geste** : faire naître le worktree, puis lancer l'agent dedans avec son modèle.
 
 ```bash
-TS=$(date +%Y%m%d-%H%M%S)
-herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS && claude --model opus"
+npx @somtech-solutions/pack agent naitre e-20260727-0010 \
+  --role chef-equipe \
+  --depot <repo-principal> \
+  --coordonnateur <ton-nom-d-agent>
 ```
 
 C'est la seule voie qui tienne à la fois la règle d'or n°11 — le worktree naît **avant** l'agent — et la déclaration explicite du modèle. Le worktree se retire ensuite à la main (§4f), le lanceur ne le connaissant pas.
@@ -357,22 +359,15 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 **b. Faire naître le chef d'équipe — le worktree avant lui, le modèle avec lui.**
 
 ```bash
-# Le libellé porte le code, puis 2 à 4 mots sur ce que l'agent FABRIQUE (§1-ter).
-P=$(herdr tab create --workspace <ws> --label "e-20260727-0010 lecteur du journal" --no-focus \
-    | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['root_pane']['pane_id'])")
-
-# Le worktree naît AVANT l'agent (règle d'or n°11), et le modèle se déclare AU lancement.
-TS=$(date +%Y%m%d-%H%M%S)
-herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS && claude --model opus"
-
-# Attendre que l'agent soit réellement détecté, plutôt que de parier sur un délai.
-for _ in $(seq 1 30); do
-  herdr agent get "$P" 2>/dev/null | jq -e '.result != null and .error == null' >/dev/null && break
-  sleep 2
-done
-
-# Poser la veille de déblocage, pour ne jamais avoir à débloquer toi-même.
-scripts/orchestration/veille-deblocage.sh "$P" e-20260727-0010 &
+# Un seul geste : il crée le worktree AVANT l'agent (règle d'or n°11), ouvre l'onglet dedans,
+# lance la session en DÉCLARANT son modèle et son mode, NOMME l'agent du code de son mandat,
+# vérifie par le fait qu'il porte ce nom et tourne dans son espace, puis INSCRIT sa naissance
+# — rôle, mandat, coordonnateur, worktree, pane, session — hors du dépôt, et remplit
+# `assigned_agent` sur le mandat au registre. Un refus ne laisse rien derrière lui.
+npx @somtech-solutions/pack agent naitre e-20260727-0010 \
+  --role chef-equipe \
+  --depot <repo-principal> \
+  --coordonnateur <ton-nom-d-agent>
 ```
 
 **Pourquoi ce geste est décomposé** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Voir la section sur la déclaration du modèle.
