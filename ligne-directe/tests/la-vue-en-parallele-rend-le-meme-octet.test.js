@@ -411,25 +411,53 @@ test('LES STORIES D’UN MÊME CHANTIER PARTENT DE FRONT — la boucle qui coût
   assert.ok(max > 1, 'les tickets des 9 epics partent un par un : la boucle est restée séquentielle');
 });
 
-test('LES CHANTIERS PARTENT DE FRONT LES UNS DES AUTRES', async () => {
-  // Le jumeau du banc ci-dessus, un étage plus haut. Sans lui, remettre la boucle des LIGNES en
-  // séquentiel resterait vert : les stories d'un même chantier suffiraient à croiser des appels.
-  let max = 0;
-  const appeler = instantane({ espion: (n) => (max = Math.max(max, n)), retard: 5 });
-  // Un seul epic par chantier serait l'idéal ; ici on prend le lecteur tel quel et on regarde
-  // le PREMIER moment de la lecture : les listes de familles doivent déjà se croiser.
-  const vues = [];
+test('LES CHANTIERS PARTENT DE FRONT LES UNS DES AUTRES — deux lectures qui se CHEVAUCHENT', async () => {
+  // 🔴 CE BANC A DÉJÀ SURVÉCU À LA MUTATION QU'IL PRÉTENDAIT GARDER, ET ÇA VAUT D'ÊTRE ÉCRIT.
+  // Il regardait « combien d'appels en vol au maximum ». Remettre la boucle des LIGNES en
+  // séquentiel le laissait VERT : les stories d'un même chantier — parallèles, elles — suffisent
+  // à croiser plusieurs appels. Le banc mesurait un chiffre juste, sur un autre objet que le
+  // sien. C'est une assertion trop faible sur un chemin correct : elle existe, elle passe, et
+  // elle survit à l'énumération des choses qu'on croyait couvertes.
+  //
+  // Ce qu'il faut mesurer est **le chevauchement de DEUX CHANTIERS DISTINCTS** : la lecture de
+  // l'un commence avant que celle de l'autre soit finie. C'est ça, « les lignes partent de
+  // front », et rien d'autre ne le dit.
+  const appeler = instantane({ retard: 5 });
   const lire = lecteurDeChantier({ appeler, limite: LIMITE, plafond: 8 });
+  // ⚠️ ON NE COMPTE QUE DES CHANTIERS DISTINCTS. Les deux porteurs de `P-20260820-0001` partagent
+  // la MÊME promesse : les voir « se chevaucher » serait un artefact du partage de lecture, pas
+  // une preuve de parallélisme — le banc se féliciterait de l'autre correctif.
+  const dejaOuverts = new Set();
+  let ouvertes = 0;
+  let ouvertesQuandLaPremiereSEstClose = null;
+  let distincts = 0;
   await laVueDuParc({
     recensement: RECENSEMENT,
     lieux: LIEUX,
-    lireChantier: (c) => {
-      vues.push(c);
-      return lire(c);
+    lireChantier: (code) => {
+      const neuf = !dejaOuverts.has(code);
+      if (neuf) {
+        dejaOuverts.add(code);
+        distincts += 1;
+        ouvertes += 1;
+      }
+      return lire(code).finally(() => {
+        if (!neuf) return;
+        if (ouvertesQuandLaPremiereSEstClose === null) ouvertesQuandLaPremiereSEstClose = ouvertes;
+        ouvertes -= 1;
+      });
     },
   });
-  assert.ok(vues.length >= 7, 'l’instantané doit porter plusieurs chantiers');
-  assert.ok(max > 1, 'les chantiers se lisent un par un : la boucle des lignes est restée séquentielle');
+
+  assert.ok(distincts >= 6, `il faut plusieurs chantiers DISTINCTS pour mesurer un chevauchement (${distincts})`);
+  // 🔴 LA MESURE, ET ELLE NE SE SATISFAIT PAS D'UN CHIFFRE VOISIN : au moment où la PREMIÈRE
+  // lecture se termine, combien d'autres étaient déjà commencées ? En séquentiel, exactement
+  // une — la sienne. En parallèle, toutes celles qui étaient parties avec elle.
+  assert.ok(
+    ouvertesQuandLaPremiereSEstClose >= 2,
+    'les chantiers se lisent un par un : la boucle des lignes est restée séquentielle ' +
+      `(${ouvertesQuandLaPremiereSEstClose} lecture(s) ouverte(s) quand la première s’est close)`
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
