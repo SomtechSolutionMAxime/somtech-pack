@@ -183,7 +183,8 @@ const LANCEUR = [
   'ne vaut jamais un garde permissif."}});',
   'var g=C.spawn(process.execPath,[process.argv[1]],{stdio:["pipe","pipe","ignore"]});',
   'g.on("error",function(){rendre(null)});',
-  // ⚠️ CES DEUX FILETS SONT GARDÉS PAR LE CONTRÔLE ⑰, et il a fallu chercher le cas qui les
+  // ⚠️ CES DEUX FILETS-CI — les deux écouteurs d erreur, PAS le `try` de la ligne suivante —
+  // SONT GARDÉS PAR LE CONTRÔLE ⑰, et il a fallu chercher le cas qui les
   // rend visibles (septième passe de fond : ils n étaient tenus que par l identité du
   // gabarit, jamais par un comportement). Le cas : une garde SAINE qui décide et sort
   // pendant que l appelant écrit encore. Son entrée se referme sous la plume du lanceur ;
@@ -196,6 +197,13 @@ const LANCEUR = [
   // taille d un tube (~256 Ko mesurés) Claude Code se bloque en écrivant puis échoue en
   // EPIPE — AVANT tout refus. La requête d un `Write` porte le contenu du fichier : ce
   // n est pas un cas rare. On écrit donc sans attendre, et on avale l échec.
+  // ⚠️ CE `try`-CI EST UNE REDONDANCE DONT AUCUN CAS N A ÉTÉ TROUVÉ — déclaré plutôt que
+  // laissé passer pour une garantie (neuvième passe, qui a eu raison sur l énoncé : le
+  // commentaire ci-dessus disait « les filets du tube » et n en gardait que deux).
+  // Mesuré : sans lui, une requête de 60 Mo vers une garde qui boucle, coupée au délai,
+  // rend quand même le bon verdict et la bonne raison — l échec d écriture passe par
+  // l écouteur d erreur, pas par une exception. Il reste parce qu un `write` sur un flux
+  // détruit PEUT lever de façon synchrone ; il n est gardé par aucun rouge.
   'process.stdin.on("data",function(c){try{g.stdin.write(c)}catch(e){}});',
   'process.stdin.on("end",function(){try{g.stdin.end()}catch(e){}});',
   // ⚠️ L ACCUMULATION EST BORNÉE. Une garde qui crache sans fin ferait enfler la mémoire
