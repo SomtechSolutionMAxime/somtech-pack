@@ -428,6 +428,68 @@ test('le veilleur CONSTRUIT un lecteur de chantier — il ne passe pas « aucun 
   assert.equal(construit, 1, 'le veilleur construit le lecteur — il ne passe pas null');
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ET IL LE CONSTRUIT SANS DÉSARMER SON PLAFOND — la jointure, gardée sur ce qu'elle PASSE
+//
+// 🔴 LE BANC CI-DESSUS COMPTE LES CONSTRUCTIONS, IL N'A JAMAIS REGARDÉ LES ARGUMENTS. C'est la
+// forme « assertion trop faible sur un chemin correct » : le banc EXISTE, il PASSE, donc la
+// jointure se lit comme couverte — et un chemin sans banc se voit en cherchant, celui-là non.
+//
+// TROUVÉ PAR UNE PASSE DE REVUE INDÉPENDANTE, PAR MUTATION, pas par relecture : remplacer
+// `construireLecteur()` par `construireLecteur({ plafond: Infinity })` dans `veilleur.js`
+// désarme ENTIÈREMENT le plafond du ServiceDesk — sans toucher une ligne de `plafond.js`, ni de
+// `vue-du-parc.js`. Mesuré sur la suite complète : **1054 essais, pas un rouge de plus.**
+//
+// ⚠️ CE QUE ÇA COÛTERAIT : la vue lâcherait ses ~120 appels d'un seul coup sur un service
+// PARTAGÉ, que la sonde de `plafond.js` a mesuré saturé à 64 simultanés. Le module serait juste,
+// la borne serait juste, et le service prendrait la charge — c'est la forme « deux étages justes
+// dont la jointure n'appartient à personne », que ce fichier a DÉJÀ payée une fois, dix lignes
+// plus haut, sur le même appel.
+//
+// ⚠️ ON GARDE « NE SURCHARGE PAS », PAS « PASSE TELLE VALEUR ». Le plafond de production vit
+// dans `plafond.js` et se remesure là-bas ; recopier son chiffre ici ferait un SECOND réglage de
+// la même chose, que personne ne verrait jamais diverger du premier.
+//
+// 🔴 ET LA GARDE PORTE SUR TOUS LES RÉGLAGES, PAS SUR LE SEUL `plafond` — parce que fermer le
+// défaut VU ne ferme pas le défaut POSSIBLE. Sa première version n'interdisait que `plafond` :
+// une passe de revue a aussitôt trouvé que `construireLecteur({ limite: 5 })` passait au vert.
+// Ce cas-là est moins grave — une liste tronquée se DIT (`epicsPlafonnes`), là où un plafond
+// désarmé est silencieux — mais l'argument est le même pour les deux, et pour le réglage qu'on
+// ajoutera dans six mois : **le veilleur n'a rien à dire sur les réglages du lecteur.** Une
+// garde qui énumère ce qu'elle interdit se fait déborder par le suivant ; une garde qui exige
+// qu'on ne surcharge RIEN n'a rien à rattraper.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('le veilleur ne SURCHARGE aucun réglage du lecteur — la jointure gardée sur ce qu’elle passe', async () => {
+  const v = veilleurNu('plafond-jointure');
+  v.recensementDuPoste = async () => ({ quand: 'T', agents: [] });
+
+  const recus = [];
+  await v.vueDuParc({
+    construireLecteur: (...args) => {
+      recus.push(args);
+      return async (code) => ({ code, epics: [] });
+    },
+  });
+
+  assert.equal(recus.length, 1, 'le veilleur construit le lecteur une fois');
+  const [reglages] = recus[0];
+  // 🔴 LE VEILLEUR N'A RIEN À DIRE SUR LES RÉGLAGES DU LECTEUR. Il le construit et le laisse
+  // porter les siens — le plafond que la sonde a mesuré, la limite de page que le lecteur
+  // connaît. Lui en imposer un ici, quel qu'il soit, c'est décider de la charge d'un service
+  // partagé, ou de la complétude d'une lecture, depuis un fichier qui n'a mesuré ni l'un ni
+  // l'autre.
+  const surcharges = Object.entries(reglages ?? {}).filter(([, v]) => v !== undefined);
+  assert.deepEqual(
+    surcharges,
+    [],
+    `le veilleur surcharge ${surcharges.map(([k]) => `« ${k} »`).join(', ')} ` +
+      `(${JSON.stringify(reglages)}) : le lecteur doit porter ses propres réglages. Un plafond ` +
+      'posé ici désarme la borne du service partagé sans qu’un seul essai ne rougisse ; une ' +
+      'limite posée ici tronque les lectures. Si c’est voulu, il faut le dire ET le mesurer.'
+  );
+});
+
 test('le lecteur construit ARRIVE jusqu’à la vue : un chantier lisible n’est pas rendu « non mesuré »', async () => {
   const v = veilleurNu('arrive');
   v.recensementDuPoste = async () => ({
