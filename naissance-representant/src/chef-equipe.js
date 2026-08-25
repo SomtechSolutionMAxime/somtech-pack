@@ -36,6 +36,9 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 import { familleDuMandat, codeDuMandat } from '../../ligne-directe/src/mandat.js';
+// ⚠️ LA FORME VIENT DE CELLE QUI JUGE, jamais d'une seconde expression écrite ici — voir
+// `exigerUnHorodatageDEspace` plus bas pour ce que la divergence rouvrirait.
+import { estUnHorodatageDeNaissance } from './garde-des-naissances.js';
 
 /** Le nom du rôle, écrit UNE fois — un rôle épelé à deux endroits diverge au premier changement. */
 export const ROLE_CHEF_EQUIPE = 'chef-equipe';
@@ -119,6 +122,38 @@ export function horodatageDEspace(quand = new Date()) {
     `${quand.getFullYear()}${d(quand.getMonth() + 1)}${d(quand.getDate())}` +
     `-${d(quand.getHours())}${d(quand.getMinutes())}${d(quand.getSeconds())}`
   );
+}
+
+/** Levée quand un horodatage dicté n'a pas la forme que la garde des naissances sait lire. */
+export class HorodatageHorsForme extends Error {
+  constructor(brut) {
+    super(
+      `« ${brut || '(vide)'} » n’est pas un horodatage d’espace de travail.\n` +
+        `  Attendu : AAAAMMJJ-HHMMSS (par exemple 20260825-083616) — la forme que \`claude-swt\` pose.\n` +
+        `  ⚠️ CE N’EST PAS DU ZÈLE DE FORME. Cet horodatage nomme l’espace, donc le dernier segment ` +
+        `du chemin où l’agent travaillera — et c’est ce segment que la GARDE DES NAISSANCES lit pour ` +
+        `savoir qui elle a le droit de juger. Un nom qu’elle ne sait pas lire fait naître un agent ` +
+        `qu’elle rangera en « hors portée » : il ne sera jamais jugé, et rien ne le dira.`
+    );
+    this.name = 'HorodatageHorsForme';
+    this.brut = brut;
+  }
+}
+
+/**
+ * L'horodatage d'un espace, exigé sous la forme que la GARDE sait lire.
+ *
+ * ⚠️ LA FORME N'EST PAS RÉÉCRITE ICI. Elle vit chez `garde-des-naissances.js`, qui juge sur elle ;
+ * en poser une seconde copie ici garantirait qu'un jour l'une accepte ce que l'autre refuse — et
+ * la version qui divergerait serait celle-ci, celle qui produit, dont aucune garde ne relit la
+ * population. On importe donc son verdict, on n'imite pas son expression.
+ *
+ * @returns {string} l'horodatage, RENDU TEL QUEL — on ne réécrit pas ce qu'on a accepté
+ * @throws  {HorodatageHorsForme}
+ */
+export function exigerUnHorodatageDEspace(brut) {
+  if (!estUnHorodatageDeNaissance(brut)) throw new HorodatageHorsForme(brut);
+  return brut;
 }
 
 function git(depot, args) {

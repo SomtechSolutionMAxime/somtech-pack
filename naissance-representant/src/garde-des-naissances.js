@@ -167,6 +167,24 @@ export const NOM_CONFORME =
 const HORODATAGE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
 
 /**
+ * LA FORME D'UN HORODATAGE DE NAISSANCE — exportée pour que le PRODUCTEUR la réutilise.
+ *
+ * 🔴 POURQUOI CETTE FONCTION EXISTE. Cette forme borne la POPULATION de la garde : `horodatageDuChemin`
+ * la cherche dans le dernier segment du chemin de travail, et ce qu'elle ne reconnaît pas devient
+ * `horsPortee` — donc jamais jugé. Or le producteur (`--horodatage` de la naissance) NOMME ce
+ * segment. Tant qu'il ne validait rien, une frappe non canonique (`2026-08-25`, `mon-essai`)
+ * faisait naître, par le dispositif lui-même, un agent que le dispositif ne jugerait jamais — sans
+ * un mot. Un désarmement par le côté naissance.
+ *
+ * ⚠️ ET LE PRODUCTEUR NE RECOPIE PAS L'EXPRESSION. Deux copies d'une même forme divergent au
+ * premier changement de l'une, et celle qui divergerait ici rouvrirait exactement le trou qu'on
+ * ferme. Il n'y a donc qu'un `HORODATAGE` dans ce dépôt, et il est ici, chez celle qui juge.
+ */
+export function estUnHorodatageDeNaissance(valeur) {
+  return typeof valeur === 'string' && HORODATAGE.test(valeur);
+}
+
+/**
  * Levée quand la frontière de la garde est postérieure à un fait déjà inscrit.
  *
  * ⚠️ C'EST UN REFUS, PAS UN AVERTISSEMENT. Une garde dont la frontière est démentie par le
@@ -224,7 +242,9 @@ export function horodatageDuChemin(chemin) {
   if (!chemin) return null;
   const morceaux = String(chemin).split('/');
   for (let i = morceaux.length - 1; i >= 0; i -= 1) {
-    if (HORODATAGE.test(morceaux[i])) return morceaux[i];
+    // ⚠️ PAR LA MÊME PORTE QUE LE PRODUCTEUR, et c'est ce qui les tient ensemble : une mutation
+    // de la forme fait bouger les DEUX, donc rougir des deux côtés.
+    if (estUnHorodatageDeNaissance(morceaux[i])) return morceaux[i];
   }
   return null;
 }

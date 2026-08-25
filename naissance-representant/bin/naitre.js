@@ -60,8 +60,10 @@ import {
   horodatageDEspace,
   creerEspaceDeTravail,
   exigerUnMandatDeChantier,
+  exigerUnHorodatageDEspace,
   EspaceDeTravailImpossible,
   MandatSansChantier,
+  HorodatageHorsForme,
   BASE_PAR_DEFAUT,
 } from '../src/chef-equipe.js';
 import { inscrireLaDeclaration, declarerAuServiceDesk } from '../src/declaration.js';
@@ -164,7 +166,24 @@ async function main() {
   // ⚠️ L'HORODATAGE EST DICTABLE, ET CE N'EST PAS UNE PORTE D'ESSAIS. Il nomme l'espace ET sa
   // branche-socle : pouvoir le dire, c'est pouvoir rejouer un refus à l'identique et reprendre
   // une session par son nom (`claude-swt <horodatage>`). Par défaut, l'instant de la naissance.
-  const horodatage = option(args, '--horodatage') || horodatageDEspace();
+  //
+  // 🔴 ET IL EST VALIDÉ, DEPUIS D-20260825-0002. Il était pris tel quel : une frappe non
+  // canonique (`2026-08-25`, `mon-essai`) nommait l'espace, donc le dernier segment du chemin de
+  // travail — c'est-à-dire très exactement ce que la GARDE DES NAISSANCES lit pour borner sa
+  // population. Mesuré : `horodatageDuChemin('…/worktrees/d/mon-essai')` rend `null`, et le même
+  // agent SANS AUCUNE DÉCLARATION rend « rien à signaler », `prises: 0`, `horsPortee: 1`. Le
+  // dispositif faisait donc naître, par son propre geste, un agent qu'il ne jugerait jamais — et
+  // il le faisait EN SILENCE. La forme n'est pas réécrite ici : elle vient de la garde.
+  let horodatage;
+  try {
+    horodatage = exigerUnHorodatageDEspace(option(args, '--horodatage') || horodatageDEspace());
+  } catch (err) {
+    if (err instanceof HorodatageHorsForme) {
+      process.stderr.write(`${err.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni espace de travail, ni onglet, ni agent.\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
   if (!nom || nom.startsWith('--') || !workspace) usage(1);
 
   // L'amorce est lue AVANT qu'un pane existe : un fichier illisible doit arrêter la commande

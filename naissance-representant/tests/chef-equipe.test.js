@@ -22,9 +22,12 @@ import {
   nomDuDepotPrincipal,
   creerEspaceDeTravail,
   exigerUnMandatDeChantier,
+  exigerUnHorodatageDEspace,
   EspaceDeTravailImpossible,
   MandatSansChantier,
+  HorodatageHorsForme,
 } from '../src/chef-equipe.js';
+import { horodatageDuChemin, estUnHorodatageDeNaissance } from '../src/garde-des-naissances.js';
 
 const git = (ou, ...args) => execFileSync('git', ['-C', ou, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
@@ -100,6 +103,74 @@ test('les cinq familles de chantier sont acceptées, et le code est rendu comme 
 test('l’horodatage a la forme que la compétence ordonne — `date +%Y%m%d-%H%M%S`, en heure locale', () => {
   const quand = new Date(2026, 7, 25, 8, 36, 16); // heure LOCALE, comme `date` la rend
   assert.equal(horodatageDEspace(quand), '20260825-083616');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 2-bis — UN HORODATAGE DICTÉ QUE LA GARDE NE SAURA PAS LIRE EST REFUSÉ (défaut ⑥)
+//
+// 🔴 CE QUE CE TROU LAISSAIT PASSER. `--horodatage` était pris TEL QUEL : il nomme l'espace,
+// donc le dernier segment du chemin de travail de l'agent. Or la garde des naissances BORNE sa
+// population sur ce segment (`horodatageDuChemin`, `garde-des-naissances.js`) : un agent né
+// sous « mon-essai » ou « 2026-08-25 » sort de la population jugée — `horsPortee`, `prises: 0`,
+// « rien à signaler » — SANS un mot. Une frappe non canonique désarmait la garde par le côté
+// naissance, et le module qui définit la forme valide est dans le même lot.
+//
+// ⚠️ L'ORACLE DE CES ESSAIS EST LA GARDE ELLE-MÊME, jamais une seconde liste écrite ici. Deux
+// copies de la forme divergent au premier changement de l'une, et c'est très exactement le
+// défaut qu'on ferme : on demande donc à `horodatageDuChemin` ce qu'elle sait lire, et on exige
+// que le producteur soit d'accord avec elle, cas par cas.
+
+/** Ce que la GARDE sait lire d'un dernier segment — l'oracle, mesuré et non recopié. */
+const laGardeSaitLire = (valeur) => horodatageDuChemin(`/Users/x/worktrees/depot/${valeur}`) !== null;
+
+test('🔴 le producteur et la garde s’accordent sur CE QU’EST un horodatage — cas par cas', () => {
+  const cas = [
+    '20260825-083616', // le canonique, celui que `claude-swt` pose
+    '2026-08-25',      // la frappe humaine — mesurée par la revue
+    'mon-essai',       // un nom parlant, qui n'est pas une date
+    '20260825',        // la date sans l'heure
+    '20260825-08361',  // une seconde manquante
+    '20260825_083616', // le mauvais séparateur
+    '20260825-083616 ',// une espace au bout, comme un copier-coller en laisse
+    '',                // rien du tout
+  ];
+  for (const valeur of cas) {
+    const attendu = laGardeSaitLire(valeur);
+    assert.equal(
+      estUnHorodatageDeNaissance(valeur),
+      attendu,
+      `« ${valeur} » : la garde ${attendu ? 'SAIT' : 'NE SAIT PAS'} le lire — le producteur doit dire pareil`
+    );
+  }
+});
+
+test('🔴 un horodatage que la garde ne saura pas lire est REFUSÉ, et le refus nomme la conséquence', () => {
+  assert.throws(
+    () => exigerUnHorodatageDEspace('2026-08-25'),
+    (err) => {
+      assert.ok(err instanceof HorodatageHorsForme, `attendu HorodatageHorsForme, reçu ${err?.name}`);
+      assert.match(err.message, /2026-08-25/, 'le refus cite la valeur reçue');
+      assert.match(err.message, /AAAAMMJJ-HHMMSS|20260825-083616/, 'et la forme attendue');
+      assert.match(
+        err.message,
+        /garde/i,
+        'et POURQUOI : ce n’est pas du zèle de forme, c’est la population de la garde'
+      );
+      return true;
+    }
+  );
+});
+
+test('l’horodatage canonique passe, et il est rendu tel quel — on ne le réécrit pas', () => {
+  assert.equal(exigerUnHorodatageDEspace('20260825-083616'), '20260825-083616');
+});
+
+test('celui que le producteur fabrique lui-même passe sa propre porte — sinon le défaut par défaut', () => {
+  // ⚠️ LA MOITIÉ QUI MANQUERAIT. Une porte qui refuserait le défaut ferait échouer TOUTE
+  // naissance qui ne dicte pas son horodatage — c'est-à-dire le chemin le plus fréquenté.
+  const sien = horodatageDEspace();
+  assert.equal(exigerUnHorodatageDEspace(sien), sien);
+  assert.ok(laGardeSaitLire(sien), 'et la garde sait le lire — les deux moitiés de la boucle');
 });
 
 // ⚠️ LE DÉFAUT QUE CET ESSAI FERME, ET IL EST RÉEL SUR CE POSTE. `git rev-parse --show-toplevel`

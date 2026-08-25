@@ -1607,6 +1607,39 @@ test('un chef d’équipe dont le nom n’est pas un code de chantier est REFUS�
     assert.equal(declarationsInscrites(poste).length, 0, 'aucune déclaration');
   }));
 
+// 🔴 DÉFAUT ⑥ — UN HORODATAGE DICTÉ SORTAIT LE NOUVEAU-NÉ DE LA POPULATION DE LA GARDE.
+//
+// `--horodatage` était pris TEL QUEL. Il nomme l'espace, donc le DERNIER SEGMENT du chemin où
+// l'agent travaille — et c'est ce segment que `horodatageDuChemin` lit pour borner la population
+// de la garde des naissances. Mesuré : `horodatageDuChemin('…/worktrees/d/mon-essai')` rend
+// `null`, et le même agent sans aucune déclaration rend « rien à signaler », `prises: 0`,
+// `horsPortee: 1`. Une frappe non canonique faisait naître, PAR LE DISPOSITIF, un agent que le
+// dispositif ne jugerait jamais — sans un mot. Un désarmement par le côté naissance.
+test('🔴 un horodatage que la garde ne saura pas lire est REFUSÉ — rien n’est créé', () =>
+  avecChefDEquipe(({ code, poste }) => {
+    const journal = installerFauxHerdr();
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, horodatage: 'mon-essai' });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /mon-essai/, 'le refus cite la valeur reçue');
+    assert.match(r.stderr, /AAAAMMJJ-HHMMSS|20260825-083616/, 'et montre la forme attendue');
+    assert.match(r.stderr, /garde/i, 'et dit POURQUOI : sinon on lirait un refus de zèle');
+    assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr : le refus tombe avant tout');
+    assert.equal(existsSync(poste.SOMTECH_WORKTREES_RACINE), false, 'aucun espace de travail');
+    assert.equal(declarationsInscrites(poste).length, 0, 'aucune déclaration');
+  }));
+
+// ⚠️ LA MOITIÉ QUI PROTÈGE LE CHEMIN NORMAL. Une porte qui refuserait aussi la valeur que la
+// commande FABRIQUE elle-même tuerait toute naissance qui ne dicte pas son horodatage.
+test('un horodatage canonique dicté passe, et l’espace porte exactement ce nom', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+    const r = lancerChef({ code, poste, horodatage });
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.ok(existsSync(espace), `l’espace n’existe pas : ${espace}`);
+  }));
+
 test('sans base à partir de quoi partir, le refus tombe AVANT le moindre onglet', () =>
   avecChefDEquipe(
     ({ code, poste, horodatage }) => {
