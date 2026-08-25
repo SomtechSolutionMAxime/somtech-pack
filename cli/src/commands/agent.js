@@ -58,7 +58,7 @@ somtech-pack agent ou-naitre [chemin…] [--role <rôle>] [--json]
 
 Options :
   --depot <chemin>        le dépôt du chantier (obligatoire)
-  --role <role>           orchestrateur (défaut) | representant
+  --role <role>           orchestrateur (défaut) | representant | chef-equipe
   --workspace <id>        un espace herdr existant ; sans lui, elle en crée un
   --session <nom>         la session herdr visée, quand le poste en porte plusieurs
   --modele <alias>        le modèle déclaré au lancement (défaut : opus)
@@ -69,6 +69,22 @@ Options :
                           SANS LUI, un orchestrateur reçoit une rivière ; c'est le cas normal,
                           et le seul qui ne dépende de personne. Le LIEU garde toujours le code
                           du mandat — seul le nom d'agent change.
+
+Un CHEF D'ÉQUIPE (--role chef-equipe) — le rôle qui n'a PAS de lieu :
+  Il reçoit son propre WORKTREE — ~/worktrees/<dépôt>/<horodatage>, sur une branche-socle
+  wt/<horodatage> tirée de origin/main — et RIEN d'autre : aucun dossier posé, aucun gabarit,
+  aucun commit dans le dépôt du chantier. Son nom est le code de son mandat (jamais une
+  rivière : elle est réservée aux orchestrateurs), et sa naissance est INSCRITE — qui il est,
+  pour quel mandat, qui l'a ouvert, où il travaille.
+
+  ⚠️ « worktree » et non « espace de travail » : ce dernier désigne déjà l'espace HERDR, celui
+  de --workspace. Les deux existent pour un chef d'équipe, et ce ne sont pas les mêmes.
+
+  --coordonnateur <nom>   qui l'ouvre. C'est l'attache que rien d'autre ne porte : la structure
+                          du chantier est au registre, l'ID de traçabilité est dans les branches,
+                          mais le lien « cet agent, ce coordonnateur » disparaît avec le pane.
+  --base <ref>            d'où part son worktree (défaut : origin/main)
+  --horodatage <ts>       ce qui nomme son worktree et sa branche (défaut : l'instant présent)
 `;
 
 const ICI = dirname(fileURLToPath(import.meta.url)); // cli/src/commands
@@ -148,7 +164,10 @@ export function espaceDeTravail({ depot, code, workspace }) {
 }
 
 /** Les arguments qu'on relaie à la naissance, dans l'ordre qu'elle attend. */
-export function argumentsDeNaissance(code, { depot, workspace, role, session, modele, mode, amorce, amorceTexte, nomAgent }) {
+export function argumentsDeNaissance(
+  code,
+  { depot, workspace, role, session, modele, mode, amorce, amorceTexte, nomAgent, coordonnateur, base, horodatage }
+) {
   const a = [code, '--workspace', workspace, '--depot', resolve(depot), '--role', role || 'orchestrateur'];
   if (session) a.push('--session', session);
   if (modele) a.push('--modele', modele);
@@ -156,6 +175,14 @@ export function argumentsDeNaissance(code, { depot, workspace, role, session, mo
   if (amorce) a.push('--amorce', amorce);
   if (amorceTexte) a.push('--amorce-texte', amorceTexte);
   if (nomAgent) a.push('--nom-agent', nomAgent);
+  // ⚠️ RELAYÉS, PAS INTERPRÉTÉS — et surtout pas conditionnés au rôle. Cette porte ne connaît
+  // pas la table des rôles et n'a pas à la connaître : filtrer ici sur « chef-equipe » ferait
+  // vivre la règle à DEUX endroits, et le second à diverger serait celui-ci, qui ne rougit
+  // nulle part. La naissance, elle, sait quoi en faire — et ce qu'elle n'attend pas, elle
+  // l'ignore, comme tous les autres drapeaux depuis toujours.
+  if (coordonnateur) a.push('--coordonnateur', coordonnateur);
+  if (base) a.push('--base', base);
+  if (horodatage) a.push('--horodatage', horodatage);
   return a;
 }
 
@@ -227,6 +254,9 @@ export async function cmdAgent(argv, { lancer = spawnSync } = {}) {
     amorce: opt('--amorce'),
     amorceTexte: opt('--amorce-texte'),
     nomAgent: opt('--nom-agent'),
+    coordonnateur: opt('--coordonnateur'),
+    base: opt('--base'),
+    horodatage: opt('--horodatage'),
   });
 
   const r = lancer(process.execPath, [naitre, ...args], { stdio: 'inherit' });

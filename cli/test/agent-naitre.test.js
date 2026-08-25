@@ -236,3 +236,70 @@ test('un --source explicite reste souverain — il sert aux essais et aux cas to
   assert.equal(cheminDeLaNaissance({ source: d }), join(resolve(d), 'naissance-representant', 'bin', 'naitre.js'));
   rmSync(d, { recursive: true, force: true });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 6 — LE CHEF D'ÉQUIPE PASSE LA PORTE (D-20260825-0002)
+//
+// ⚠️ CE QUE CES ESSAIS FERMENT. La porte RELAIE les options plutôt que de les redéclarer, et
+// c'est sa qualité — mais un drapeau qu'elle ne relaie PAS est perdu en silence : la naissance
+// reçoit alors une commande valide, à laquelle il manque justement ce que l'appelant a demandé.
+// C'est le défaut mesuré sur `--nom-agent` (E-20260818-0017), relayé et éprouvé par personne.
+
+test('le rôle chef-equipe passe la porte tel quel — elle ne connaît pas la table des rôles, et n’a pas à la connaître', () => {
+  const a = argumentsDeNaissance('e-20260825-0002', { depot: '/d', workspace: 'w1', role: 'chef-equipe' });
+  assert.equal(a[a.indexOf('--role') + 1], 'chef-equipe');
+});
+
+test('les trois options du chef d’équipe sont RELAYÉES — coordonnateur, base, horodatage', () => {
+  const a = argumentsDeNaissance('e-20260825-0002', {
+    depot: '/depot',
+    workspace: 'w7',
+    role: 'chef-equipe',
+    coordonnateur: 'matapedia',
+    base: 'origin/staging',
+    horodatage: '20260825-083616',
+  });
+  assert.equal(a[a.indexOf('--coordonnateur') + 1], 'matapedia', 'sans lui, la filiation n’est inscrite qu’à moitié');
+  assert.equal(a[a.indexOf('--base') + 1], 'origin/staging');
+  assert.equal(a[a.indexOf('--horodatage') + 1], '20260825-083616');
+});
+
+test('et elles ne s’inventent pas — non demandées, elles n’apparaissent pas', () => {
+  const a = argumentsDeNaissance('e-1', { depot: '/d', workspace: 'w1', role: 'chef-equipe' });
+  for (const absente of ['--coordonnateur', '--base', '--horodatage']) {
+    assert.ok(!a.includes(absente), `${absente} ne doit pas apparaître quand personne ne l’a demandée`);
+  }
+});
+
+test('la ligne de commande réelle les fait arriver jusqu’à la naissance — pas seulement le constructeur', async () => {
+  const d = payload(bac());
+  const { lancer, appels } = lanceurFactice(0);
+  const s = silence();
+  await cmdAgent(
+    [
+      'naitre', 'e-20260825-0002',
+      '--depot', d, '--workspace', 'w7', '--source', d,
+      '--role', 'chef-equipe',
+      '--coordonnateur', 'matapedia',
+      '--base', 'origin/staging',
+      '--horodatage', '20260825-083616',
+    ],
+    { lancer }
+  );
+  s.rendre();
+  const args = appels[0].args;
+  assert.equal(args[args.indexOf('--role') + 1], 'chef-equipe');
+  assert.equal(args[args.indexOf('--coordonnateur') + 1], 'matapedia');
+  assert.equal(args[args.indexOf('--base') + 1], 'origin/staging');
+  assert.equal(args[args.indexOf('--horodatage') + 1], '20260825-083616');
+  rmSync(d, { recursive: true, force: true });
+});
+
+// ⚠️ L'AIDE EST LE SEUL ENDROIT OÙ UN OPÉRATEUR APPREND QU'UN RÔLE EXISTE. Un rôle joignable et
+// non documenté est un rôle que personne n'emploie — et le geste continue d'être fait à la main,
+// ce qui est très exactement ce que ce lot ferme.
+test('l’aide nomme le rôle chef-equipe et ce qui le distingue — un espace de travail, aucun lieu', () => {
+  assert.match(AIDE_AGENT, /chef-equipe/, 'le rôle doit être nommé là où l’opérateur lit');
+  assert.match(AIDE_AGENT, /--coordonnateur/, 'et l’option qui porte la filiation');
+  assert.match(AIDE_AGENT, /worktree|espace de travail/i, 'et ce qu’il reçoit à la place d’un lieu');
+});
