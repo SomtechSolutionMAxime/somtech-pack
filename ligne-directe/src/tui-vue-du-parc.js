@@ -876,6 +876,13 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     // redimensionnement est pire que le défaut qu’on ferme.
     Math.max(0, largeur - 3)
   );
+  // ⚠️ CE `max(0, …)` EST UNE CEINTURE, ET C’EST DIT PLUTÔT QUE SOUS-ENTENDU (revue portail).
+  // `largeurArbre` est déjà borné par `largeur - 3`, donc cette différence ne peut pas être
+  // négative aujourd’hui : le retirer ne fait rougir aucun essai, et c’est normal — mutation
+  // ÉQUIVALENTE, pas survivante. On la garde parce que l’équivalence dépend de la borne du
+  // VOISIN : si `largeurArbre` cesse un jour d’être plafonné, cette ligne devient la seule
+  // à empêcher une largeur négative — et `borner` en aval rendrait alors une colonne vide
+  // au lieu de jeter, ce qui est un défaut silencieux plutôt qu’un rouge.
   const largeurDetail = Math.max(0, largeur - largeurArbre - 3);
   const hauteurCorps = Math.max(1, hauteur - 2);
 

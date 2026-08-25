@@ -471,14 +471,24 @@ test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle ces
   // survivante en attente.
   //
   // Ce banc ne garde donc pas l’équivalence : il garde CE QUI LA REND VRAIE.
-  const message = texteDeProgression(21, 3);
-  assert.equal(
-    message.length,
-    [...message].length,
-    'le message de progression est sorti du BMP : la borne DOIT désormais compter en points de ' +
-      'code, et la mutation `.length` cesse d’être équivalente — vérifiez que le banc de la ' +
-      'largeur d’affichage l’attrape encore'
-  );
+  // ⚠️ ON BALAIE LA ROUE ENTIÈRE, ET C'EST UN ANGLE MORT RELEVÉ EN REVUE PORTAIL. Ce banc
+  // figeait `tourne = 3` : il ne voyait qu'UN caractère sur les dix de la roue. Un emoji glissé
+  // dans n'importe lequel des neuf autres serait passé sans qu'aucun essai ne bouge — la garde
+  // annonçait une famille et gardait un point.
+  //
+  // ⚠️ ET LES SECONDES AUSSI VARIENT : leur nombre de chiffres change la longueur du message.
+  for (let tourne = 0; tourne < 10; tourne += 1) {
+    for (const secondes of [0, 9, 99, 999]) {
+      const message = texteDeProgression(secondes, tourne);
+      assert.equal(
+        message.length,
+        [...message].length,
+        `le message de progression est sorti du BMP (roue ${tourne}, ${secondes} s) : la borne ` +
+          'DOIT désormais compter en points de code, et la mutation `.length` cesse d’être ' +
+          'équivalente — vérifiez que le banc de la largeur d’affichage l’attrape encore'
+      );
+    }
+  }
 });
 
 test('LA BORNE COMPTE LA LARGEUR D’AFFICHAGE, PAS LES UNITÉS UTF-16', () => {
@@ -495,13 +505,17 @@ test('LA BORNE COMPTE LA LARGEUR D’AFFICHAGE, PAS LES UNITÉS UTF-16', () => {
   assert.equal([...horsBMP].length, 1, 'qui ne pèse qu’une colonne à l’écran');
 
   // La fonction bornée doit couper en points de code : à N, exactement N points de code.
-  for (const largeur of [10, 30, 65]) {
-    const rendu = texteDeProgression(21, 3, largeur);
-    assert.equal(
-      [...rendu].length,
-      largeur,
-      `à ${largeur}, la borne rend ${[...rendu].length} points de code — elle ne compte pas l’affichage`
-    );
+  // ⚠️ TOUTE LA ROUE, PAS `tourne = 3` : même angle mort que ci-dessus, relevé en revue portail.
+  for (let tourne = 0; tourne < 10; tourne += 1) {
+    for (const largeur of [10, 30, 65]) {
+      const rendu = texteDeProgression(21, tourne, largeur);
+      assert.equal(
+        [...rendu].length,
+        largeur,
+        `à ${largeur} (roue ${tourne}), la borne rend ${[...rendu].length} points de code — ` +
+          'elle ne compte pas l’affichage'
+      );
+    }
   }
 });
 
