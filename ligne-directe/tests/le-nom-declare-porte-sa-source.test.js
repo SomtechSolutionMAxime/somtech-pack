@@ -52,6 +52,7 @@ import {
   desarmerLeTexteLibre,
   ecrireLaVue,
   SIGNAUX_DE_LA_LIGNE,
+  MOT_PROUVE,
 } from '../src/vue-du-parc.js';
 import {
   arbreDeLaVue,
@@ -1330,6 +1331,23 @@ test('AUCUNE LIGNE DU PANNEAU NE FOND LE DÉCLARÉ ET LE PROUVÉ — la FAMILLE,
       b,
       `le bloc « ${etiquette} » rend la MÊME chose pour un rattachement DÉCLARÉ et pour un ` +
         `rattachement PROUVÉ — c’est là que le dirigeant décide s’il relance quelqu’un : ${a}`
+    );
+
+    // 🔴 ET « DIFFÉRENT » NE SUFFIT PAS — c'est la leçon de la campagne qui a suivi. Fondre UNE
+    // SEULE des deux branches laisse les deux panneaux différents (l'autre garde sa marque),
+    // donc `notEqual` passe pendant que la source fondue a perdu la sienne. Mesuré : deux des
+    // quatre mutations de fusion SURVIVAIENT à l'assertion ci-dessus.
+    //
+    // ⚠️ ON EXIGE DONC QUE CHAQUE BLOC PORTE LE MOT DE SA PROPRE SOURCE. C'est la garantie de
+    // RA-VUE-006 énoncée telle qu'elle est — « chaque ligne DIT sa source » — et non sa
+    // conséquence affaiblie, « les deux lignes ne se ressemblent pas ».
+    assert.ok(
+      a.includes(MOT_DECLARE),
+      `le bloc « ${etiquette} » du panneau DÉCLARÉ ne porte pas le mot « ${MOT_DECLARE} » : ${a}`
+    );
+    assert.ok(
+      b.includes(MOT_PROUVE),
+      `le bloc « ${etiquette} » du panneau PROUVÉ ne porte pas le mot « ${MOT_PROUVE} » : ${b}`
     );
   }
 
