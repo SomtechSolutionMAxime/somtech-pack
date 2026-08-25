@@ -464,6 +464,34 @@ test('LES CHANTIERS PARTENT DE FRONT LES UNS DES AUTRES — deux lectures qui se
 // 4. LA BORNE ELLE-MÊME — ce que `borner` promet, éprouvé sans passer par la vue
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 🔴 UNE ATTENTE BORNÉE, PARCE QUE LE DÉFAUT GARDÉ ICI NE SE MANIFESTE PAS PAR UN FAUX
+ * RÉSULTAT — IL SE MANIFESTE PAR RIEN.
+ *
+ * Mesuré en campagne de mutation : retirer la libération de place sur erreur ne fait pas rougir
+ * ce banc, **il le fait PENDRE**. La suite ne rend jamais la main ; la campagne a été tuée à dix
+ * minutes sans un seul verdict. Un banc qui pend ne garde rien — il consomme.
+ *
+ * ⚠️ ET LA BORNE EST GÉNÉREUSE EXPRÈS. Le comportement correct règle en une poignée de
+ * millisecondes ; le comportement fautif ne règle JAMAIS. Deux secondes laissent trois ordres de
+ * grandeur de marge à un poste chargé, sans rien concéder au défaut : ce n'est pas un chrono
+ * qu'on ajuste, c'est la frontière entre « fini » et « jamais ».
+ */
+async function avantDeuxSecondes(promesse, quoi) {
+  let minuteur;
+  const borne = new Promise((_, refuser) => {
+    minuteur = setTimeout(
+      () => refuser(new Error(`${quoi} : rien n’est revenu en 2 s — une place n’a pas été rendue`)),
+      2_000
+    );
+  });
+  try {
+    return await Promise.race([promesse, borne]);
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
 test('UNE PLACE SE REND MÊME QUAND L’APPEL JETTE — sinon un parc qui refuse fige la vue', async () => {
   // 🔴 LE DÉFAUT QUI NE SE VOIT PAS : sans libération sur erreur, `plafond` refus successifs
   // consomment toutes les places et la vue attend pour toujours. Le symptôme serait « la vue ne
@@ -475,7 +503,10 @@ test('UNE PLACE SE REND MÊME QUAND L’APPEL JETTE — sinon un parc qui refuse
     return n;
   };
   const borne = borner(appeler, { plafond: 4 });
-  const issues = await Promise.allSettled([1, 2, 3, 4, 5, 6, 7, 8].map((n) => borne(n)));
+  const issues = await avantDeuxSecondes(
+    Promise.allSettled([1, 2, 3, 4, 5, 6, 7, 8].map((n) => borne(n))),
+    'quatre refus puis quatre appels'
+  );
   assert.equal(sert, 8, 'les huit appels doivent être servis : quatre refus n’immobilisent pas les places');
   assert.deepEqual(
     issues.map((i) => i.status),
@@ -493,7 +524,10 @@ test('UN TRANSPORT QUI JETTE AVANT DE RENDRE SA PROMESSE REND SA PLACE AUSSI', a
     return Promise.resolve(n);
   };
   const borne = borner(appeler, { plafond: 2 });
-  const issues = await Promise.allSettled([1, 2, 3, 4].map((n) => borne(n)));
+  const issues = await avantDeuxSecondes(
+    Promise.allSettled([1, 2, 3, 4].map((n) => borne(n))),
+    'deux refus synchrones puis deux appels'
+  );
   assert.equal(sert, 4, 'un refus synchrone ne doit pas garder sa place');
   assert.deepEqual(
     issues.map((i) => i.status),
