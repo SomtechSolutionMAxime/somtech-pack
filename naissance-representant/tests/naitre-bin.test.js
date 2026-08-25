@@ -1772,6 +1772,14 @@ test('🔴 un échec APRÈS l’ouverture REFERME l’espace ouvert — l’ordr
 
     assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
     assert.deepEqual(espacesFermes(journal), ['wOUVERT'], 'l’espace ouvert par ce geste est refermé');
+    // ⚠️ ET LA FERMETURE A ABOUTI. Sans cette ligne, le banc ne prouvait que l’APPEL : muté — le
+    // double cessant de connaître `workspace close` — il restait vert alors que l’espace
+    // survivait. Un appel journalisé n’est pas un effet obtenu ; c’est la MOITIÉ qui manquait.
+    assert.doesNotMatch(
+      r.stderr,
+      /n’a PAS pu être refermé/,
+      `la fermeture devait aboutir — stderr : ${r.stderr}`
+    );
     assert.equal(declarationsInscrites(poste).length, 0, 'et rien n’a été déclaré');
   }));
 
