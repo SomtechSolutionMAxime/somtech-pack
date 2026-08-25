@@ -1,0 +1,119 @@
+#!/usr/bin/env node
+// garde-des-naissances.js — LE FIL MINCE de la garde. (T-20260825-0013.)
+//
+// Patron de `gardes/ecriture.js` et de STD-047 R3bis : ici, UNIQUEMENT de l'I/O réelle — parler
+// à herdr, lire le registre du poste, lire les lieux sur disque, écrire le compte rendu, sortir.
+// Toute la décision vit dans un module PUR (`jugerLeParc`), qui est ce que les bancs exercent.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 CE FIL NE REND JAMAIS VERT SUR UNE MESURE QU'IL N'A PAS FAITE.
+//
+// Une garde qui ne peut pas mesurer et rend « rien à signaler » est PIRE QUE PAS DE GARDE : son
+// vert se cite, se colle dans un rapport, et certifie un parc que personne n'a regardé. Les
+// quatre pannes qui l'empêchent de se prononcer sortent donc toutes par la même porte,
+// distincte du vert ET distincte d'une prise :
+//
+//   ① herdr injoignable — aucune session n'a répondu (`panes()` lève, et c'est voulu chez lui) ;
+//   ② `herdr` absent du PATH — `OutilIntrouvable`, qui ferait rendre « aucun agent vivant » ;
+//   ③ le registre des naissances est là mais illisible — À NE PAS CONFONDRE avec absent, qui
+//      est le cas NORMAL d'un poste où personne n'est encore né et se juge très bien ;
+//   ④ la frontière de la garde est démentie par le registre — le désarmement le plus discret.
+//
+// ⚠️ ET LE SUCCÈS PARTIEL SE DIT. Une session herdr qui refuse ne fait pas tomber les autres,
+// mais son prix se voit : le compte rendu porte toujours combien de sessions ont répondu sur
+// combien ont été interrogées. Mesuré le 2026-08-25 : **5 sessions répondent sur 15**. Un compte
+// tiré de cinq sessions présenté comme un total serait amputé des deux tiers.
+
+import { panes, agents } from '../../ligne-directe/src/herdr.js';
+import { roleDuLieuOuRefus } from '../../ligne-directe/src/lieu-agent.js';
+import { lireLesDeclarations } from '../src/declaration.js';
+import {
+  jugerLeParc,
+  normaliserLeParc,
+  MISE_EN_SERVICE,
+  SORTIE_REFUS,
+} from '../src/garde-des-naissances.js';
+
+/**
+ * Le corps de la commande, avec ses quatre points de substitution NOMMÉS.
+ *
+ * ⚠️ LES DÉFAUTS SONT LA VRAIE CHAÎNE. Le banc du binaire ne s'en sert pas : il substitue
+ * l'exécutable `herdr` lui-même et laisse tout ceci tourner pour de bon. Ces paramètres existent
+ * pour qu'un appelant Node puisse composer la garde sans passer par un processus — pas pour
+ * qu'un banc se fabrique un monde plus commode que le vrai.
+ */
+export async function main({
+  lireLeParc = () => panes({}),
+  lireLesAgents = () => agents({}),
+  lireLeRegistre = () => lireLesDeclarations({}),
+  roleDuLieu = roleDuLieuOuRefus,
+  miseEnService = MISE_EN_SERVICE,
+  ecrire = (t) => process.stdout.write(`${t}\n`),
+  alerter = (t) => process.stderr.write(`${t}\n`),
+  json = process.argv.includes('--json'),
+} = {}) {
+  let parc;
+  let portee;
+  try {
+    const vu = await lireLeParc();
+    parc = vu.panes;
+    portee = { sessionsInterrogees: vu.sessionsInterrogees, sessionsRefusees: vu.sessionsRefusees };
+  } catch (err) {
+    return refuser(alerter, `je n’ai pas pu lire le parc herdr (${err?.message ?? err}). Je ne rends AUCUN verdict : une garde qui ne voit pas le parc et rend vert certifie ce qu’elle n’a pas regardé.`);
+  }
+
+  // ⚠️ LE REGISTRE DES AGENTS PORTE LES NOMS, ET SON SILENCE NE DIT RIEN. S'il refuse, on ne
+  // traduit pas ça en « ces agents n'ont pas de nom » : `normaliserLeParc` reçoit `null`, et
+  // chaque agent devient « nom non mesuré » — ce qui le range dans les non-mesurés, jamais dans
+  // les prises. Mesuré : `agent list` a déjà rendu 83 panes sur 227.
+  let registreDAgents = null;
+  try {
+    registreDAgents = await lireLesAgents();
+  } catch {
+    registreDAgents = null;
+  }
+
+  let registre;
+  try {
+    registre = await lireLeRegistre();
+  } catch (err) {
+    // `RegistreDeNaissancesIllisible` — le répertoire est LÀ mais fermé. Un registre ABSENT,
+    // lui, ne lève pas : il rend un parc vide, et c'est un cas parfaitement jugeable.
+    return refuser(alerter, `${err?.message ?? err}`);
+  }
+
+  let verdict;
+  try {
+    verdict = jugerLeParc({
+      agents: normaliserLeParc({ panes: parc, agentsHerdr: registreDAgents }),
+      registre,
+      roleDuLieu,
+      portee,
+      miseEnService,
+    });
+  } catch (err) {
+    // `FrontiereContredite` et `ComptesQuiNeBalancentPas` passent par ici. Les deux sont des
+    // refus de se prononcer, pas des pannes : leur message porte déjà tout ce qu'il faut.
+    return refuser(alerter, `${err?.message ?? err}`);
+  }
+
+  ecrire(json ? JSON.stringify(verdict, null, 2) : verdict.texte);
+  return verdict.sortie;
+}
+
+function refuser(alerter, message) {
+  alerter(`GARDE DES NAISSANCES — REFUS : ${message}`);
+  return SORTIE_REFUS;
+}
+
+// ⚠️ LA PANNE QUI TOMBE HORS DU `try` SORT PAR LE REFUS, JAMAIS PAR LE VERT. Un `process.exit`
+// implicite à 0 sur une exception non rattrapée ferait exactement ce que tout ce fichier
+// interdit : rendre un succès sans avoir mesuré.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main()
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      process.stderr.write(`GARDE DES NAISSANCES — REFUS : panne avant tout verdict (${err?.message ?? err})\n`);
+      process.exit(SORTIE_REFUS);
+    });
+}
