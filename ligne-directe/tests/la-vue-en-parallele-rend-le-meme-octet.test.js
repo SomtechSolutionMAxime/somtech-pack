@@ -93,6 +93,8 @@ async function chargerLePredecesseur() {
 // L'INSTANTANÉ
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+const LIMITE = 12; // petit exprès : le plafond de liste doit être ATTEIGNABLE dans l'instantané
+
 const CHANTIERS = [
   // code, famille, champ parent, epics, cas particulier
   { code: 'P-20260820-0001', famille: 'projects', epics: 6 },
@@ -102,11 +104,13 @@ const CHANTIERS = [
   { code: 'P-20260819-0001', famille: 'projects', epics: 5, appInconnue: true },
   { code: 'D-20260822-0001', famille: 'demands', epics: 0 },
   { code: 'P-20260815-0002', famille: 'projects', epics: 7, intrus: 2 },
+  // 🔴 UNE LISTE D'EPICS PLEINE — `epicsPlafonnes: true`, c'est-à-dire « il en manque
+  // peut-être », qui n'est PAS « il n'y en a pas d'autre ». Le lot n'a pas le droit d'y toucher.
+  { code: 'P-20260812-0009', famille: 'projects', epics: LIMITE },
 ];
 const CHAMP_DU_CODE = { projects: 'project_id', demands: 'demand_id', deliveries: 'delivery_id' };
 const CHAMP_PARENT = { projects: 'project_id', demands: 'demand_id', deliveries: 'delivery_id' };
 const APP = '2098c2fd-5448-46a3-bd98-83778e7a064d';
-const LIMITE = 12; // petit exprès : le plafond de liste doit être ATTEIGNABLE dans l'instantané
 
 const idDe = (code) => `id-${code}`;
 const epicsDe = (c) =>
@@ -130,6 +134,10 @@ const storiesDe = (epic, n) =>
 const combienDeStories = (epic) => (epic.id.charCodeAt(epic.id.length - 1) % 5) + (epic.id.endsWith('e0') ? 0 : 1);
 /** Un epic dont les stories REFUSENT — `stories: null`, jamais `[]`. */
 const storiesRefusent = (epic) => epic.epic_id.endsWith('012');
+/** Un epic dont le service rend des tickets D'AILLEURS — le filtre n'a pas filtré. */
+const storiesEcartees = (epic) => epic.epic_id.endsWith('011');
+/** Un epic dont la page de tickets est PLEINE — « il en manque peut-être », jamais « il n'y en a pas ». */
+const storiesPlafonnees = (epic) => epic.epic_id.endsWith('013');
 
 /**
  * L'INSTANTANÉ GELÉ. Il répond à la QUESTION, jamais au moment où elle arrive.
@@ -171,7 +179,15 @@ function repondre(nom, args) {
     const epic = CHANTIERS.flatMap(epicsDe).find((e) => e.id === args.epic_id);
     if (!epic) return { tickets: [] };
     if (storiesRefusent(epic)) throw new Error('les tickets de cet epic ne se lisent pas');
-    return { tickets: storiesDe(epic, combienDeStories(epic)) };
+    // 🔴 LE SERVICE REND PARFOIS TROP, ET PARFOIS UNE PAGE PLEINE — les deux pannes de filtre
+    // que la vue distingue (`storiesEcartees`, `storiesPlafonnees`). Sans elles dans
+    // l'instantané, les champs restent à leur valeur par défaut des deux côtés, et la
+    // comparaison champ à champ passerait sans jamais les toucher. **Mesuré** : mettre
+    // `storiesEcartees: 0` en dur dans le rendu laissait les 15 essais VERTS.
+    if (storiesPlafonnees(epic)) return { tickets: storiesDe(epic, LIMITE) };
+    const miens = storiesDe(epic, combienDeStories(epic));
+    const intrus = storiesEcartees(epic) ? storiesDe({ id: `${epic.id}-ailleurs` }, 2) : [];
+    return { tickets: [...miens, ...intrus] };
   }
   if (nom === 'epics') {
     const champ = ['project_id', 'demand_id', 'delivery_id'].find((k) => args[k]);
@@ -230,6 +246,7 @@ const LIEUX = {
     { role: 'orchestrateur', mandat: 'D-20260824-0003', chemins: ['/lieux/a', '/lieux/b'] },
     { role: 'orchestrateur', mandat: 'P-20260819-0001', chemins: ['/lieux/c'] },
     { role: 'orchestrateur', mandat: 'P-20260815-0002', chemins: ['/lieux/d'] },
+    { role: 'orchestrateur', mandat: 'P-20260812-0009', chemins: ['/lieux/h'] },
     // Déjà vu vivant : il ne doit PAS réapparaître.
     { role: 'orchestrateur', mandat: 'P-20260822-0001', chemins: ['/lieux/e'] },
     // Un mandat qui n'est pas un code.
@@ -262,6 +279,32 @@ test('LE MÊME INSTANTANÉ REND LA MÊME VUE — champ à champ, contre le code 
   // ⚠️ `deepStrictEqual` D'ABORD — c'est LUI qui compare champ à champ, y compris les
   // déclarations d'incomplétude (`epics: null`, `stories: null`, `storiesPlafonnees`,
   // `epicsEcartes`) que le lot n'a pas le droit de toucher.
+  // 🔴 AVANT DE COMPARER, ON VÉRIFIE QUE L'INSTANTANÉ TOUCHE VRAIMENT CE QU'ON PRÉTEND GARDER.
+  //
+  // Mesuré en campagne : mettre `storiesEcartees: 0` EN DUR dans le rendu laissait les quinze
+  // essais VERTS — parce que l'instantané ne produisait jamais autre chose que 0 sur ce champ.
+  // Une comparaison champ à champ ne vaut que par les VALEURS que l'instantané fait naître :
+  // sur un champ toujours à sa valeur par défaut, elle est verte sans rien avoir touché.
+  //
+  // Ces cinq compteurs sont donc le contrôle POSITIF de ce banc. Aplatir l'instantané rougit
+  // ici, avant que la comparaison ne se félicite d'une égalité vide.
+  for (const [signal, attendu] of [
+    ['epicsEcartes', 2],
+    ['chantiersPlafonnes', 1],
+    ['epicsAuxStoriesPlafonnees', 1],
+    ['storiesEcartees', 2],
+    ['chantiersNonMesures', 0],
+  ]) {
+    assert.ok(
+      attendu === 0 ? apres.compte[signal] === 0 : apres.compte[signal] >= attendu,
+      `l’instantané ne fait plus naître « ${signal} » (${apres.compte[signal]}) : la comparaison ` +
+        `champ à champ passerait sur ce champ sans jamais le toucher`
+    );
+  }
+  // Et les deux formes d'incomplétude qui ne se comptent pas : `stories: null` doit exister.
+  const epicsMuets = apres.orchestrateurs.flatMap((o) => o.epics ?? []).filter((e) => e.stories === null);
+  assert.ok(epicsMuets.length >= 1, 'l’instantané doit porter au moins un epic dont les stories REFUSENT');
+
   assert.deepStrictEqual(apres, avant, 'la vue parallèle diffère de la vue séquentielle');
 
   // ⚠️ ET L'ÉGALITÉ DES OCTETS ENSUITE, parce que `deepStrictEqual` ne regarde PAS l'ordre des
