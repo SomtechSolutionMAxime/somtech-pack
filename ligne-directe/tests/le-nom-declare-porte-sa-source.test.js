@@ -1100,6 +1100,44 @@ test('LE DÉSARMEMENT A LIEU À LA LECTURE — pas seulement dans l’agrégateu
   );
 });
 
+test('LE CHAMP DE L’EPIC EST DÉSARMÉ AUSSI — le jour où le service le rendra, pas après', async () => {
+  // 🔴 CETTE MUTATION SURVIVAIT, ET LA RAISON EST STRUCTURELLE : le service ne rend PAS
+  // `assigned_agent` sur un epic (mesuré le 2026-08-25 — la clé est ABSENTE de la charge, pas
+  // vide). Aucun décor CONFORME ne peut donc allumer ce chemin, et le désarmement posé dessus
+  // n'était gardé par rien.
+  //
+  // ⚠️ CE BANC POSE DÉLIBÉRÉMENT UN CHAMP QUE LE SERVICE NE REND PAS, ET CE N'EST PAS UN DOUBLE
+  // NON CONFORME. La distinction : un double non conforme fait passer pour gardé un chemin que
+  // le réel emprunte AUTREMENT. Ici le réel n'emprunte ce chemin PAS ENCORE — le lecteur lit ce
+  // champ explicitement « pour le jour où il existera » (voir `lecteurDeChantier`). Ce banc
+  // garde ce jour-là, et il le dit plutôt que de laisser croire à une couverture d'aujourd'hui.
+  //
+  // ⚠️ SANS LUI, LE JOUR OÙ LE SERVICE RENDRA CE CHAMP, LE TROU S'OUVRIRA EN SILENCE — personne
+  // ne relie une évolution du service à une ligne de désarmement écrite des mois plus tôt.
+  const CSI1 = String.fromCharCode(0x9b);
+  const lire = lecteurDeChantier({
+    appeler: async (nom) => {
+      if (nom === 'projects')
+        return { projects: [{ id: 'u1', project_id: 'P-20260822-0001', title: 't', status: 'a' }] };
+      if (nom === 'applications') return { applications: [] };
+      if (nom === 'epics')
+        return {
+          epics: [
+            // Le champ que le service ne rend pas AUJOURD'HUI — voir l'en-tête de ce banc.
+            { id: 'e1', project_id: 'u1', epic_id: 'E-1', title: 'e', status: 's', assigned_agent: `A${CSI1}B` },
+          ],
+        };
+      return { tickets: [] };
+    },
+  });
+  const chantier = await lire('P-20260822-0001');
+  assert.equal(
+    chantier.epics[0].nomDeclare,
+    'A\ufffdB',
+    'l’etage epic doit desarmer comme l’etage story — une porte sur deux ne garde rien'
+  );
+});
+
 test('LE RENDU DU MOTEUR ET CELUI DU TUI DISENT LA MÊME SOURCE — deux textes, jamais deux vérités', () => {
   // ⚠️ DEUX SURFACES, DEUX RENDUS, ET C'EST DÉLIBÉRÉ (la colonne du TUI tronque). Ce qui ne
   // doit PAS diverger, c'est le MOT QUI DÉCIDE : le jour où l'un dirait « DÉCLARÉ » et l'autre
