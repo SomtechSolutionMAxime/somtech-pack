@@ -217,6 +217,12 @@ test('`identiteDeSession` est IDEMPOTENTE sur un nom et n’invente rien sur un 
   assert.equal(identiteDeSession('  cg  '), 'cg');
   assert.equal(identiteDeSession(socketDe('somtech')), 'somtech', 'appliquée à un socket, elle en tire le nom');
   assert.equal(identiteDeSession('/tmp/pose/a/la/main.sock'), null, 'un chemin hors forme ne porte AUCUN nom');
+  // ⚠️ LE SOCKET EST LE FILS DIRECT DE `sessions/<nom>/`, PAS UN DESCENDANT QUELCONQUE. Une
+  // mutation a SURVÉCU ici avant cet essai : en perdant son ancre de fin, la lecture acceptait
+  // `…/sessions/<nom>/…/…/x.sock` et en tirait `<nom>` — c'est-à-dire qu'elle INVENTAIT une
+  // session à partir d'un chemin qui n'en désigne aucune.
+  assert.equal(identiteDeSession('/x/sessions/somtech/plus/loin/herdr.sock'), null, 'un descendant n’est pas le socket de la session');
+  assert.equal(identiteDeSession('/x/sessions/somtech/'), null, 'et un répertoire n’est pas un socket');
   for (const rien of [null, undefined, '', '   ']) assert.equal(identiteDeSession(rien), null);
 });
 
