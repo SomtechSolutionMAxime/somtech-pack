@@ -338,9 +338,20 @@ export function ecranAttendUnChoix(texteTerminal) {
   if (!t) return false;
   if (MARQUES_DE_DIALOGUE_ACTIF.some((m) => m.test(t))) return true;
   if (!MARQUE_CORROBORANTE.test(t)) return false;
-  // ⚠️ SUR LE TEXTE BRUT, PAS SUR `sansGris` : la boîte se reconnaît à ses filets et à son
-  // invite, que le dégrisage ne conserve pas. Passer `t` ici rendrait `null` sur tous les écrans
-  // et la marque redeviendrait décisive en silence — le défaut, remis en place par le correctif.
+  // ⚠️ ON LUI PASSE LE TEXTE BRUT PARCE QU'ELLE FAIT SON PROPRE DÉGRISAGE : `contenuBoite`
+  // ouvre par `sansGris(texteTerminal)` (boite.js). Lui donner `t`, déjà dégrisé, est
+  // AUJOURD'HUI un no-op — `sansGris` est idempotente, une seconde passe ne trouve plus de
+  // séquence à retirer. Une passe de fond l'a mesuré en appliquant la mutation : elle survit,
+  // et c'est un mutant ÉQUIVALENT, pas une garde manquante.
+  //
+  // ⚠️ CE COMMENTAIRE A AFFIRMÉ LE CONTRAIRE, ET C'ÉTAIT FAUX. Il disait que passer `t`
+  // « rendrait `null` sur tous les écrans » — une conséquence qui ne se produit pas avec
+  // l'implémentation actuelle. On ne garde pas une prose invérifiée à côté d'une garde : le
+  // lecteur qui la croit se fait une idée fausse de ce que le code tolère.
+  //
+  // Ce qui reste vrai et qui décide : la boîte se reconnaît à ses FILETS et à son INVITE, que
+  // le dégrisage conserve. C'est ce que `contenuBoite` sait faire, et c'est pourquoi cette
+  // ligne l'appelle au lieu de refaire le découpage ici.
   return contenuBoite(texteTerminal) === null;
 }
 

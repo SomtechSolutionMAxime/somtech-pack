@@ -201,3 +201,77 @@ test('(c) quand la version réelle ne se laisse PAS établir, le rendu le dit �
     '« on ne m’a rien donné » n’est pas « j’ai essayé et ça a raté »'
   );
 });
+
+test('(d) la sonde de version est appelée UNE fois par tour, jamais une fois par pane', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // ⚠️ CE BANC EXISTE PARCE QU'UNE MUTATION A SURVÉCU. Une passe de fond a retiré
+  // `uneSeuleFois(versionCourante)` — la sonde était donc rappelée à CHAQUE pane — et les
+  // 19 essais des deux bancs du recensement sont restés VERTS. L'invariant était affirmé en
+  // prose, chiffré dans un commentaire (« 0,03 s par tour » contre trois cents processus), et
+  // gardé par rien.
+  //
+  // ⚠️ ET C'EST UNE GARDE DE COÛT, PAS DE COMPORTEMENT — il faut le dire, sinon on la croira
+  // plus forte qu'elle n'est. La version rendue reste JUSTE si la mémoïsation tombe ; seul le
+  // prix change. Mais c'est précisément ce prix qui a décidé l'architecture retenue (une sonde
+  // injectée, résolue une fois par tour plutôt qu'une fonction impure appelée partout) : un
+  // invariant qui porte une décision de conception et que rien ne garde se rompt en silence,
+  // et la décision devient fausse sans que personne ne l'apprenne.
+  //
+  // ⚠️ ON COMPTE LES APPELS, ON NE MESURE PAS UNE DURÉE. Un banc qui chronométrerait dépendrait
+  // de la charge du poste ; un compte dépend du code. Et il faut PLUSIEURS panes, sinon
+  // « une fois par tour » et « une fois par pane » rendent le même chiffre — le banc serait
+  // vert des deux côtés de la frontière qu'il prétend garder.
+  let appels = 0;
+  const panes = Array.from({ length: 5 }, (_, i) => ({
+    pane_id: `w1:p${i + 1}`,
+    foreground_cwd: `/d/.orchestrateur/p-${i + 1}`,
+  }));
+  const rendu = await unRecensement({
+    panes,
+    lireEcran: () => ECRAN_EN_VOL,
+    versionCourante: () => {
+      appels += 1;
+      return SORTIE_REELLE_DE_CLAUDE_VERSION;
+    },
+  });
+
+  assert.equal(rendu.agents.length, 5, 'il faut PLUSIEURS panes pour que la question se pose');
+  assert.equal(
+    appels,
+    1,
+    `la sonde de version doit être résolue UNE seule fois par tour — elle a été appelée ${appels} ` +
+      `fois pour ${panes.length} panes. Sur le parc réel (~300 panes), c'est autant de processus.`
+  );
+
+  // ⚠️ ET LA MÉMOÏSATION NE DOIT PAS AVOIR COÛTÉ LA MESURE. Une garde de coût qui ferait perdre
+  // le fait qu'elle économise serait pire que la dépense — chaque pane porte bien la version.
+  for (const agent of rendu.agents) {
+    assert.equal(agent.travailEnVol.versionDuPoste.mesure, 'lue');
+    assert.equal(agent.travailEnVol.versionDuPoste.version, '2.1.245');
+  }
+});
+
+test('(e) une sonde qui JETTE ne se rejoue pas non plus — le refus est mémoïsé comme le succès', async () => {
+  // ⚠️ LE CHEMIN D'ÉCHEC EST L'AUTRE MOITIÉ, et c'est celui qui coûte le plus cher : une sonde
+  // qui jette sur un poste sans `claude` jetterait TROIS CENTS fois par tour si le refus
+  // n'était pas retenu lui aussi. `uneSeuleFois` retient l'erreur et la relance — on éprouve
+  // que ce chemin-là est bien celui qui est pris.
+  let appels = 0;
+  const rendu = await unRecensement({
+    panes: Array.from({ length: 4 }, (_, i) => ({
+      pane_id: `w2:p${i + 1}`,
+      foreground_cwd: `/d/.orchestrateur/p-${i + 1}`,
+    })),
+    lireEcran: () => ECRAN_EN_VOL,
+    versionCourante: () => {
+      appels += 1;
+      throw new Error('spawn claude ENOENT');
+    },
+  });
+
+  assert.equal(appels, 1, `une sonde qui jette a été rappelée ${appels} fois — le refus doit être retenu`);
+  for (const agent of rendu.agents) {
+    assert.equal(agent.travailEnVol.versionDuPoste.mesure, 'refusée', 'et chaque pane porte le refus');
+    assert.match(agent.travailEnVol.versionDuPoste.raison, /ENOENT/);
+  }
+});
