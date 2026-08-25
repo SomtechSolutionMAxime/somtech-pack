@@ -109,8 +109,13 @@ const CHEMIN_GARDE_POSTE = '$HOME/.somtech/naissance-representant/hooks/garde-ou
 // Ici le minuteur vit dans le LANCEUR, un processus distinct qui TUE la garde. Ce n'est
 // pas de la prudence en plus : c'est un mode de panne de moins, mesuré.
 //
-// Aucune apostrophe droite dans ces textes ni dans le lanceur : la charge voyage entre
-// guillemets simples de shell. `echapper` le garantit plutôt que de l'espérer.
+// Aucune apostrophe droite ne survit dans ce qui voyage entre guillemets simples de shell —
+// les deux textes de refus ET le lanceur passent tous les trois par `echapper`.
+//
+// ⚠️ LE LANCEUR N Y PASSAIT PAS, et ce commentaire l affirmait quand même (huitième passe).
+// La correction ne change aucun octet aujourd'hui — le lanceur n'a pas d'apostrophe — mais
+// elle rend l'énoncé vrai demain. Ce qui garde ce point, si le geste disparaissait : une
+// commande devenue shell invalide fait rougir 22 des 23 contrôles du banc, mesuré.
 
 /**
  * Une charge sûre entre guillemets simples de `/bin/sh` — la clôture, jamais l'espoir.
@@ -264,7 +269,7 @@ const LANCEUR = [
  */
 export const COMMANDE_GARDE =
   `G="${CHEMIN_GARDE_POSTE}"; ` +
-  `if [ -f "$G" ]; then S=$(node -e '${LANCEUR}' "$G" 2>/dev/null); ` +
+  `if [ -f "$G" ]; then S=$(node -e '${echapper(LANCEUR)}' "$G" 2>/dev/null); ` +
   `if [ -n "$S" ]; then printf '%s\\n' "$S"; else printf '%s\\n' '${REFUS_GARDE_EN_PANNE}'; fi; ` +
   `else cat >/dev/null 2>&1; printf '%s\\n' '${REFUS_GARDE_ABSENT}'; fi`;
 
