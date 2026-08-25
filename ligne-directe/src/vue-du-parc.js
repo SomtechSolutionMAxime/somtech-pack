@@ -127,7 +127,20 @@ export const MOT_ECART = 'ÉCART';
  * synonyme d'« assigné », donc comme un fait ; « jamais mesuré à un lieu » est la moitié que le
  * dirigeant doit garder en tête quand il agit dessus.
  */
-export const PHRASE_DU_DECLARE = 'déclaré au registre à la naissance, jamais mesuré à un lieu';
+export const PHRASE_DU_DECLARE = 'déclaré au registre à sa naissance, jamais mesuré à un lieu';
+
+/**
+ * LA MÊME CHOSE, EN QUATRE MOTS — parce qu'elle se répète sur CHAQUE ligne de l'arbre.
+ *
+ * ⚠️ ELLE NE S'EFFACE PAS POUR AUTANT, ET C'EST TOUT L'ARBITRAGE. Un nom rendu nu redevient un
+ * rattachement en trois relectures (leçon de `PHRASE_DE_LINDICE`) : le qualificatif voyage donc
+ * AVEC le nom, sur la même ligne, toujours. Ce qui se raccourcit est sa longueur, jamais sa
+ * présence — la version longue vit dans le panneau de détail du TUI, où il y a la place.
+ *
+ * ⚠️ ET ELLE DIT CE QUI MANQUE, pas d'où ça vient : « déclaré » répété après le mot `DÉCLARÉ`
+ * n'apprend rien au lecteur ; « non mesuré à un lieu » est la moitié qu'il doit garder en tête.
+ */
+export const PHRASE_COURTE_DU_DECLARE = 'non mesuré à un lieu';
 
 /** La phrase du prouvé — l'autre moitié de la frontière, dite avec les mêmes mots partout. */
 export const PHRASE_DU_PROUVE = 'mandat lu au lieu de l’agent';
@@ -1693,7 +1706,7 @@ export function rendreAttribution(attribution) {
     const dits = (attribution.declares ?? [])
       .map((d) => `${d.nom} (${d.dOu})`)
       .join(' + ');
-    return `${MOT_DECLARE} — ${attribution.source ?? PHRASE_DU_DECLARE} : ${dits}`;
+    return `${MOT_DECLARE} (${PHRASE_COURTE_DU_DECLARE}) : ${dits}`;
   }
   const indices = attribution?.indices ?? [];
   if (!indices.length) return MOT_NON_ETABLI;

@@ -407,9 +407,23 @@ test('le dénominateur de la garde est ÉPINGLÉ — on ne peut pas cacher un si
   // ici n’exempte plus de traverser. `recopierLaStructure` DÉRIVE la recopie de ce même
   // manifeste, et la garde de famille descend désormais aux trois étages. Un champ déclaré
   // structurel n’est donc plus un champ soustrait à toute exigence.
+  // 🔴 TROISIÈME ROUGE DE CETTE ÉPINGLE, ET IL EST JUSTIFIÉ ICI (2026-08-25, E-20260825-0001).
+  // `nomDeclare` est ajouté aux étages `epic` et `story`. Ce n'est PAS un signal déguisé :
+  //
+  //   • un SIGNAL compte une panne de lecture (un filtre qui n'a pas filtré, une page pleine)
+  //     et se rend agrégé dans le résumé ; `nomDeclare` porte une VALEUR du registre, ligne
+  //     par ligne, et ne s'agrège nulle part ;
+  //   • le banc « structure et signaux sont DISJOINTS » le vérifie en face, sur le manifeste
+  //     des signaux : `nomDeclare` n'y figure pas ;
+  //   • et la soustraction que cette épingle protège ne l'exempte de RIEN : la garde
+  //     « aucun champ de structure n'est un FANTÔME » exige que le lecteur le produise aux
+  //     deux étages, et la garde de famille exige qu'il traverse jusqu'à la vue.
+  //
+  // Ce que ça sert : RA-VUE-005 amendée (BRD v0.11.0) admet `assigned_agent` comme source
+  // DÉCLARÉE. Sans ce champ au manifeste, la valeur voyagerait sans qu'aucune garde ne l'exige.
   assert.deepEqual(CHAMPS_DE_STRUCTURE.chantier, ['code', 'titre', 'statut', 'application', 'epics']);
-  assert.deepEqual(CHAMPS_DE_STRUCTURE.epic, ['code', 'titre', 'statut', 'stories']);
-  assert.deepEqual(CHAMPS_DE_STRUCTURE.story, ['code', 'titre', 'statut']);
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.epic, ['code', 'titre', 'statut', 'stories', 'nomDeclare']);
+  assert.deepEqual(CHAMPS_DE_STRUCTURE.story, ['code', 'titre', 'statut', 'nomDeclare']);
 });
 
 test('structure et signaux sont DISJOINTS — un champ ne peut pas être les deux', () => {
