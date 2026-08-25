@@ -853,8 +853,30 @@ export function appliquerTouche(etat, touche, lignes) {
  * coloré assère sur des codes d'échappement, et finit par passer pour la mauvaise raison.
  */
 export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) {
-  const largeurArbre = Math.max(28, Math.floor(largeur * 0.62));
-  const largeurDetail = Math.max(20, largeur - largeurArbre - 3);
+  // 🔴 LES DEUX PLANCHERS S’IGNORAIENT, ET LEUR SOMME DÉPASSAIT LE PANE (T-20260825-0071).
+  //
+  // `max(28, …)` pour l’arbre et `max(20, …)` pour le détail étaient calculés chacun dans son
+  // coin. Sous 58 colonnes leur somme franchit la largeur disponible — mesuré : 51 caractères
+  // écrits dans un pane de 40, 54 dans un pane de 50, 58 dans un pane de 57.
+  //
+  // ⚠️ CE DÉFAUT PRÉEXISTE AUX LOTS #327 ET #328 : la formule est identique au tag v1.91.0,
+  // vérifié par `git archive`. Il n’a PAS été observé produire l’empilement du dirigeant —
+  // l’écran est repeint entier (`ESC[H` + `ESC[2J`) à chaque frame, donc le wrap ne
+  // s’accumule pas comme celui de la ligne de progression. Il est corrigé quand même : c’est
+  // la MÊME règle enfreinte — rien de ce que le TUI écrit ne doit dépasser la largeur du pane.
+  //
+  // ⚠️ ORDRE DE SACRIFICE, ET IL SE DIT : quand la place manque, c’est le DÉTAIL qui cède, pas
+  // l’arbre. L’arbre porte la marque de rattachement et le début du titre — ce qui permet de
+  // se repérer ; le détail est consultable ligne par ligne, l’arbre non. Le plancher du détail
+  // peut donc tomber jusqu’à 0 : un panneau vide reste lisible, un écran qui défile, non.
+  const largeurArbre = Math.min(
+    Math.max(28, Math.floor(largeur * 0.62)),
+    // ⚠️ `max(0, …)` : sur un pane absurdement étroit, l’arbre prend tout ce qui reste plutôt
+    // que de rendre une largeur négative — `repeat(-1)` jetterait, et un TUI qui jette au
+    // redimensionnement est pire que le défaut qu’on ferme.
+    Math.max(0, largeur - 3)
+  );
+  const largeurDetail = Math.max(0, largeur - largeurArbre - 3);
   const hauteurCorps = Math.max(1, hauteur - 2);
 
   const sortie = [];
@@ -874,7 +896,16 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     const droite = borner(detail[i] ?? '', largeurDetail);
     sortie.push({
       style: ligne && idx === curseur ? 'selection' : ligne ? `arbre:${ligne.kind}` : 'vide',
-      texte: `${gauche} │ ${droite}`,
+      // 🔴 L’INVARIANT EST POSÉ ICI, À LA SORTIE — PAS DÉDUIT DE LA FORMULE (T-20260825-0071).
+      //
+      // Corriger les deux planchers ferme le défaut MESURÉ ; le borner ici ferme la FAMILLE.
+      // Toute largeur future, toute recomposition de la ligne, tout séparateur qu’on change :
+      // rien ne peut plus dépasser le pane, et personne n’a besoin de refaire le calcul.
+      //
+      // ⚠️ C’EST LA LEÇON DE E-20260825-0001, PAYÉE ONZE FOIS : fermer le cas qu’on a vu laisse
+      // la famille ouverte. Ici la garantie ne dépend plus d’une arithmétique juste — elle est
+      // structurelle.
+      texte: borner(`${gauche} │ ${droite}`, largeur),
     });
   }
 

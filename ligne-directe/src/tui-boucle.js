@@ -186,12 +186,38 @@ export async function mettreEnFocus(pane, socket, { executer } = {}) {
  * jalon : une barre qui avancerait affirmerait une progression qu'on ne mesure pas. On rend
  * donc ce qu'on MESURE — le temps écoulé — et ce qu'on ATTEND, en toutes lettres.
  */
-export function texteDeProgression(secondes, tourne) {
+/**
+ * LE TEXTE DE PROGRESSION — ET IL SE BORNE À LA LARGEUR DU PANE (T-20260825-0071).
+ *
+ * 🔴 SANS LA BORNE, IL EMPILE UNE LIGNE TOUTES LES 120 ms. C’est l’incident que le dirigeant
+ * a rapporté en usage réel : « j’ai des lignes qui se multiplient sans arrêt », dans un split
+ * herdr. Reproduit dans un vrai pane de 65 colonnes, écran lu par `herdr pane read` :
+ * **+21 lignes en 8 secondes**, pendant les ~80 s de chargement.
+ *
+ * LE MÉCANISME, MESURÉ : `avecProgression` réécrit cette ligne avec `\r` + effacement de
+ * ligne. Le texte fait **116 caractères, longueur fixe**. Sous 116 colonnes il WRAPPE — le
+ * curseur passe à la ligne suivante, donc le `\r` du tour d’après revient au début de la
+ * NOUVELLE ligne et l’effacement porte sur celle-là. La précédente reste, définitivement.
+ *
+ * ⚠️ ET C’EST POURQUOI PERSONNE NE L’AVAIT VU : en pane plein écran (> 116 colonnes) la ligne
+ * tient, et rien ne s’empile. Le symptôme n’existe QUE dans un pane étroit — c’est-à-dire
+ * exactement l’écran que le dirigeant regardait.
+ *
+ * ⚠️ ON TRONQUE, ON NE RACCOURCIT PAS LE MESSAGE. Le texte dit ce que le lecteur doit savoir
+ * pendant 80 s d’attente : que ça interroge chantier par chantier, et combien de temps ça
+ * prend. Le réécrire plus court le priverait de cette information sur un écran LARGE, pour
+ * un défaut qui n’existe que sur un écran ÉTROIT.
+ */
+export function texteDeProgression(secondes, tourne, largeur = Infinity) {
   const roue = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  return (
+  const texte =
     `${roue[tourne % roue.length]} lecture du parc — ${secondes} s écoulées ` +
-    `(le ServiceDesk est interrogé chantier par chantier ; ~80 s au premier chargement)`
-  );
+    `(le ServiceDesk est interrogé chantier par chantier ; ~80 s au premier chargement)`;
+  // ⚠️ ON COMPTE EN POINTS DE CODE, pas en unités UTF-16 : la roue et les accents seraient
+  // comptés faux par `.length`, et la borne serait donc fausse là où elle sert le plus.
+  const points = [...texte];
+  if (!Number.isFinite(largeur) || points.length <= largeur) return texte;
+  return points.slice(0, Math.max(0, largeur)).join('');
 }
 
 const ALT_ON = `${ESC}[?1049h${ESC}[?25l`;
@@ -340,7 +366,11 @@ async function avecProgression(lireLaVue, sortie) {
   let tour = 0;
   const battement = setInterval(() => {
     const s = Math.round((Date.now() - depart) / 1000);
-    sortie.write(`\r${ESC}[2K${texteDeProgression(s, (tour += 1))}`);
+    // ⚠️ LA LARGEUR SE RELIT À CHAQUE TOUR. Lue une seule fois au départ, un pane redimensionné
+    // pendant les 80 s de chargement rouvrirait le trou en silence — et redimensionner un
+    // split est précisément ce qu’on fait quand un affichage devient illisible.
+    const largeur = sortie.columns || Infinity;
+    sortie.write(`\r${ESC}[2K${texteDeProgression(s, (tour += 1), largeur)}`);
   }, 120);
   // ⚠️ IL NE TIENT PAS LE PROCESSUS EN VIE. Sans `unref`, un battement de 120 ms empêcherait
   // node de sortir si la lecture échouait sans rejeter — un TUI qui ne rend jamais la main.
