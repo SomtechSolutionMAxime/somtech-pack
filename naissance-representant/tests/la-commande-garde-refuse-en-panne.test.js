@@ -74,13 +74,13 @@ function posteNu() {
  * Joue la commande RÉELLE. Rend `{ sortie, ms }` — la durée compte : un refus qui n'arrive
  * qu'après que l'hôte a renoncé ne refuse rien.
  */
-function jouer(home, { commande = COMMANDE_GARDE, cwd, requete, delai = DELAI_ESSAI, timeout = 20000 } = {}) {
+function jouer(home, { commande = COMMANDE_GARDE, cwd, requete, delai = DELAI_ESSAI, timeout = 20000, env = {} } = {}) {
   const ou = cwd || temp('smtk-ailleurs-');
   const t0 = process.hrtime.bigint();
   const sortie = execFileSync('/bin/sh', ['-c', commande], {
     input: JSON.stringify(requete || { cwd: ou, tool_name: 'Bash', tool_input: { command: 'git status' } }),
     cwd: ou,
-    env: { ...process.env, HOME: home, SOMTECH_GARDE_OUVERTURE_DELAI_MS: delai },
+    env: { ...process.env, HOME: home, SOMTECH_GARDE_OUVERTURE_DELAI_MS: delai, ...env },
     encoding: 'utf8',
     timeout,
   });
@@ -119,9 +119,13 @@ test('② bis garde MUETTE — code 0, aucune sortie : refus', () => {
 // ═════════════ ③ la garde PEND — le mode que le shell attendrait avec elle
 
 test('③ garde qui PEND : refus rendu par le délai, pas par l abandon de l hôte', () => {
-  const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { timeout: 15000 });
+  // ⚠️ LA BORNE EST LARGE, ET C EST VOULU. Un seuil serré mesurerait la CHARGE DU POSTE :
+  // ce banc a rendu un faux rouge une fois, sous une charge de 212. Sans le délai, ce test
+  // ne finit pas du tout (l attente est infinie, et c est `timeout` qui coupe) — n importe
+  // quelle borne finie prouve donc le mécanisme, et une borne large ne prouve pas moins.
+  const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny');
-  assert.ok(d.ms < 10000, `le refus a mis ${Math.round(d.ms)} ms : le délai ne mord pas`);
+  assert.ok(d.ms < 30000, `le refus a mis ${Math.round(d.ms)} ms : le délai ne mord pas`);
   // ⚠️ ET LE REFUS DOIT NOMMER SA CAUSE. Sans cette assertion, retirer le refus du délai est
   // INDOLORE : la sortie devient vide, le shell rend son refus de panne, et le verdict reste
   // « deny » — mesuré. L agent lirait alors « elle a échoué » là où elle PEND, et chercherait
@@ -162,9 +166,9 @@ test('⑥ garde qui BOUCLE : refus — le minuteur vit dans un AUTRE processus q
   // pendant qu un `while` tourne (mesuré dans T-20260824-0002, laissé NON FERMÉ). Le délai
   // de cette commande vit dans un processus DISTINCT de la garde, et il la TUE — c est ce
   // que ce test mesure, et c est la seule raison pour laquelle ce mode se ferme ici.
-  const d = verdict(posteAvecGarde('while (true) {}\n'), { timeout: 15000 });
+  const d = verdict(posteAvecGarde('while (true) {}\n'), { timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny');
-  assert.ok(d.ms < 10000, `le refus a mis ${Math.round(d.ms)} ms : la boucle n est pas coupée`);
+  assert.ok(d.ms < 30000, `le refus a mis ${Math.round(d.ms)} ms : la boucle n est pas coupée`);
 });
 
 // ═════════════ ⑦ les contre-épreuves — sans elles, une commande qui refuse TOUT passerait
@@ -232,9 +236,11 @@ test('⑩ une valeur d environnement démesurée NE DÉSARME PAS le délai', () 
   // Ce que ce contrôle empêche : `SOMTECH_GARDE_OUVERTURE_DELAI_MS=99999999` dans un
   // environnement de session, et le SEUL mécanisme qui ferme « elle pend » et « elle
   // boucle » ne mord plus — sans qu aucun test ne rougisse.
-  const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { delai: '99999999', timeout: 20000 });
+  // La valeur démesurée vaut 27 HEURES : toute borne finie tranche, et une borne large ne
+  // mesure plus la charge du poste (voir ③).
+  const d = verdict(posteAvecGarde('setInterval(() => {}, 1000);\n'), { delai: '99999999', timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny');
-  assert.ok(d.ms < 15000,
+  assert.ok(d.ms < 30000,
     `le refus a mis ${Math.round(d.ms)} ms : la valeur hors bornes a été appliquée telle quelle, `
     + 'donc le délai est désarmable depuis l environnement');
 });
@@ -255,20 +261,48 @@ test('⑩ ter la garde qui boucle est ARRÊTÉE, pas seulement dépassée', () =
   // que le lanceur sort de son côté. Le verdict est donc juste et le processus survit :
   // une garde qui boucle continuerait à brûler un cœur, à CHAQUE appel d outil, sans que
   // rien ne le dise. Le refus dit « il vient d etre arrete » ; ce contrôle l établit.
-  const home = posteAvecGarde('while (true) {}\n');
-  const marque = join(home, '.somtech', 'naissance-representant', 'hooks', 'garde-ouverture-ligne.js');
-  const d = verdict(home, { timeout: 15000 });
+  //
+  // 🔴 LA PREMIÈRE FORME DE CE CONTRÔLE MESURAIT SON PROPRE INSTRUMENT. Elle comptait les
+  // processus par `pgrep -f <chemin du double>` : sous Linux, le `sh -c` qui exécute ce
+  // pgrep porte le chemin dans SA PROPRE ligne de commande et se compte lui-même — vert
+  // sur macOS, rouge en CI, et pour une raison qui n avait rien à voir avec la garde.
+  // Le double déclare donc son PID, et on interroge CE processus-là, jamais une recherche
+  // par motif.
+  const temoin = join(temp('smtk-pid-'), 'pid');
+  const home = posteAvecGarde(
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(temoin)}, String(process.pid));\nwhile (true) {}\n`);
+  const d = verdict(home, { timeout: 60000 });
   assert.equal(d.permissionDecision, 'deny');
 
-  // La marque est le CHEMIN du double, unique à ce test : aucun autre processus du poste ne
-  // peut le porter. On sonde plutôt qu on ne lit une fois — un SIGKILL n est pas instantané.
-  let vivants = 'inconnu';
-  for (let i = 0; i < 20; i += 1) {
-    vivants = execFileSync('/bin/sh', ['-c', `pgrep -f ${marque} | wc -l`], { encoding: 'utf8' }).trim();
-    if (vivants === '0') break;
-    execFileSync('/bin/sh', ['-c', 'sleep 0.1']);
+  const pid = Number(readFileSync(temoin, 'utf8'));
+  assert.ok(Number.isInteger(pid) && pid > 0, 'le double n a pas déclaré son PID : le contrôle ne mesurerait rien');
+
+  // On SONDE : un SIGKILL n est pas instantané, et le processus reste brièvement zombie
+  // tant que personne ne l a récolté.
+  let vivant = true;
+  for (let i = 0; i < 30 && vivant; i += 1) {
+    try { process.kill(pid, 0); execFileSync('/bin/sh', ['-c', 'sleep 0.1']); } catch { vivant = false; }
   }
-  assert.equal(vivants, '0',
-    'la garde qui boucle a survécu au refus : elle brûlera un cœur jusqu à la fin de la session, '
-    + 'et il y en aura une de plus à chaque appel d outil');
+  assert.equal(vivant, false,
+    `la garde qui boucle (pid ${pid}) a survécu au refus : elle brûlera un cœur jusqu à la fin de `
+    + 'la session, et il y en aura une de plus à chaque appel d outil');
+});
+
+// ═════════════ ⑪ elle a DÉCIDÉ, puis elle n est jamais sortie
+
+test('⑪ un verdict déjà écrit ne survit pas au délai — une garde qui ne SORT pas est en panne', () => {
+  // 🔴 TROUVÉ PAR LA PASSE DE FOND, ET MESURÉ : la garde écrivait un `allow` valide puis
+  // bouclait ; au délai, le lanceur re-parsait ce qu elle avait déjà écrit et ré-émettait
+  // son `allow` — verdict transmis intact, aucune mention de panne. Le texte du lot
+  // promettait « pend → refus » et « boucle → refus » : la promesse dépassait le code.
+  //
+  // Pourquoi le refus est le bon verdict : rien ne dit que ce qu une garde a écrit avant de
+  // se bloquer était son DERNIER mot. Une garde qui ne se termine pas n a pas fini de juger.
+  const d = verdict(posteAvecGarde(
+    'process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",'
+    + 'permissionDecision:"allow",permissionDecisionReason:"decide puis bloque"}}));\n'
+    + 'while (true) {}\n'), { timeout: 60000 });
+  assert.equal(d.permissionDecision, 'deny',
+    'le allow d une garde qui ne sort jamais a été transmis : la panne doit primer sur ce qu elle a dit avant');
+  assert.match(d.permissionDecisionReason, /delai|délai/i);
 });

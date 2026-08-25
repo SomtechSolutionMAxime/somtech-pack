@@ -173,7 +173,13 @@ const LANCEUR = [
   'g.stdout.on("data",function(c){s+=c});',
   'var m=setTimeout(function(){try{g.kill("SIGKILL")}catch(e){}rendre(D)},T);',
   'g.on("close",function(){clearTimeout(m);rendre(null)});',
-  'function rendre(r){if(fini)return;fini=true;var v=null;',
+  // 🔴 LE DÉLAI PRIME SUR CE QUI EST DÉJÀ ÉCRIT, et c est une correction de la passe de
+  // fond. Sans ce `if(r)`, une garde qui écrit un verdict VALIDE puis ne se termine
+  // jamais (boucle, minuteur oublié, poignée ouverte) voyait son verdict ré-émis au
+  // délai — un `allow` compris. Mesuré : `allow` transmis intact à 1585 ms sur un délai
+  // de 1500 ms. Une garde qui ne SORT pas est en panne, quoi qu elle ait dit avant :
+  // on ne peut pas savoir si ce qu elle a écrit était son dernier mot.
+  'function rendre(r){if(fini)return;fini=true;if(r){process.stdout.write(r);process.exit(0)}var v=null;',
   'try{var o=JSON.parse(s).hookSpecificOutput;',
   'if(o&&(o.permissionDecision==="allow"||o.permissionDecision==="deny"))v=o}catch(e){}',
   'if(v)process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",',
