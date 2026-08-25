@@ -1573,7 +1573,11 @@ test('la déclaration est inscrite, complète, et rendue dans la sortie du geste
     assert.equal(rendu.pane, 'w9:p1');
     assert.equal(rendu.modele, MODELE_PAR_DEFAUT);
     assert.equal(rendu.mode, MODE_PAR_DEFAUT);
-    assert.ok(Array.isArray(rendu.verifie));
+    // ⚠️ CETTE ASSERTION ÉTAIT UNE ASSERTION DE FORME, ET C'EST CE QUI A LAISSÉ PASSER LE
+    // DÉFAUT ③ : `Array.isArray(rendu.verifie)` reste vrai quel que soit le contenu, y compris
+    // « le lieu est versé » sur un rôle QUI N'A PAS DE LIEU. Le champ voisin `garde`, lui, était
+    // ÉPINGLÉ (`assert.equal(…, null)`) et n'a jamais menti. On épingle donc celui-ci aussi.
+    assert.deepEqual(rendu.verifie, VERIFIE_DUN_CHEF, 'ce qu’un chef d’équipe a réellement fait vérifier');
 
     assert.ok(
       appelsJournalises(journal).some((a) => a[0] === 'agent' && a[1] === 'get'),
@@ -1631,6 +1635,70 @@ test('sans clé ServiceDesk, la naissance tient aussi — et le geste dit qu’i
     assert.equal(rendu.servicedesk.rempli, false);
     assert.match(rendu.servicedesk.cause, /aucun accès/i, 'l’absence d’accès est NOMMÉE, pas confondue avec un refus');
   }));
+
+// ── 9c-ter — CE QUE LA SORTIE AFFIRME D'UN CHEF D'ÉQUIPE (défaut ③)
+//
+// 🔴 CE QUE LA REVUE A MESURÉ, dans le contrat MACHINE que le métier fait lire par `jq` :
+//
+//     "pose":"déjà","verifie":["le lieu est versé","l'agent porte son nom",
+//                              "il tourne dans son lieu","son écran est prêt à recevoir"]
+//
+// Un chef d'équipe N'A PAS DE LIEU. Rien n'a été versé, rien n'a été « déjà posé », il ne tourne
+// pas « dans son lieu » — il tourne dans un worktree jetable. Trois faits faux sur cinq, dans
+// une sortie que des scripts lisent.
+//
+// ⚠️ POURQUOI RIEN NE L'A ATTRAPÉ : le champ voisin `garde` est ÉPINGLÉ (`assert.equal(…, null)`)
+// et n'a jamais menti ; celui-ci n'avait qu'une assertion de FORME (`Array.isArray`), vraie quel
+// que soit le contenu. Une assertion trop faible sur un chemin correct — elle passe, elle donne
+// l'illusion de la couverture, et elle SURVIT à toute relecture.
+
+/** Ce qu'un rôle QUI A UN LIEU fait vérifier — inchangé : des appelants le lisent. */
+const VERIFIE_DUN_LIEU = [
+  'le lieu est versé',
+  'l’agent porte son nom',
+  'il tourne dans son lieu',
+  'son écran est prêt à recevoir',
+];
+
+/** Ce qu'un CHEF D'ÉQUIPE fait vérifier — chaque ligne correspond à un geste réellement exécuté. */
+const VERIFIE_DUN_CHEF = [
+  'son espace de travail est né sur sa branche-socle',
+  'l’agent porte son nom',
+  'il tourne dans son espace de travail',
+  'son écran est prêt à recevoir',
+];
+
+test('🔴 la sortie d’un chef d’équipe n’affirme AUCUNE vérification qui n’a pas eu lieu', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+
+    // La ligne que les textes prescrivent : sans `--workspace`.
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+
+    assert.deepEqual(rendu.verifie, VERIFIE_DUN_CHEF, `reçu : ${JSON.stringify(rendu.verifie)}`);
+    // Les trois affirmations fausses, nommées une à une — pour qu’un retour en arrière se voie.
+    assert.ok(!rendu.verifie.some((v) => /versé/.test(v)), 'rien n’a été versé : il n’a pas de lieu');
+    assert.ok(!rendu.verifie.some((v) => /dans son lieu/.test(v)), 'il ne tourne pas « dans son lieu »');
+    assert.equal(rendu.pose, null, '« déjà » dirait qu’un lieu était déjà posé — il n’y en a aucun');
+    assert.equal(rendu.garde, null, 'et sa garde d’ouverture reste nulle, comme avant');
+  }));
+
+test('… tandis qu’un rôle QUI A UN LIEU affirme exactement ce qu’il affirmait — le contrat ne bouge pas', () =>
+  avecLieu(
+    (client, lieu) => {
+      installerFauxHerdr({ repertoire: lieu });
+      const r = lancerNaitre(client, { role: 'orchestrateur' });
+      assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+      const rendu = JSON.parse(r.stdout);
+      assert.deepEqual(rendu.verifie, VERIFIE_DUN_LIEU, 'aucun rôle neuf ne réécrit la sortie des autres');
+      assert.ok(rendu.pose === 'maintenant' || rendu.pose === 'déjà', `pose inattendue : ${rendu.pose}`);
+    },
+    'riv',
+    { role: 'orchestrateur', nom: `d-20260825-${String(process.pid).slice(-4)}v` }
+  ));
 
 // ── 9c-bis — L'ESPACE HERDR, SUR LA POPULATION RÉELLE (défaut ①)
 //

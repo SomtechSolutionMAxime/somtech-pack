@@ -957,10 +957,38 @@ async function main() {
       pane: paneId,
       modele: commandes.modele,
       mode: commandes.mode,
-      pose: poseFaite ? 'maintenant' : 'déjà',
+      // 🔴 « DÉJÀ » DIRAIT QU'UN LIEU ÉTAIT DÉJÀ POSÉ — un chef d'équipe N'EN A AUCUN (défaut ③).
+      // Le champ vivait hors de tout conditionnel alors que la pose entière vit dans
+      // `if (!chefEquipe)` : la sortie affirmait « déjà » sur un rôle qui ne pose rien. `null`,
+      // comme `garde` juste en dessous, qui dit la même absence depuis toujours.
+      pose: chefEquipe ? null : poseFaite ? 'maintenant' : 'déjà',
       // CE QUI A ÉTÉ VÉRIFIÉ, et pas seulement ce qui a été fait — c'est la ligne que le ticket
       // réclame. « L'écran est prêt » n'est pas une formule : c'est la lecture qui a eu lieu.
-      verifie: ['le lieu est versé', 'l’agent porte son nom', 'il tourne dans son lieu', 'son écran est prêt à recevoir'],
+      //
+      // 🔴 ET CHAQUE LIGNE DOIT CORRESPONDRE À UN GESTE RÉELLEMENT EXÉCUTÉ (défaut ③). Cette
+      // liste était UNIQUE, hors conditionnel : un chef d'équipe rendait « le lieu est versé »
+      // et « il tourne dans son lieu » alors qu'il n'a pas de lieu, que rien n'a été versé, et
+      // qu'il tourne dans un worktree jetable. Trois faits faux dans le contrat MACHINE que le
+      // métier fait lire par `jq` — et un fait faux se croit, là où un refus se voit.
+      //
+      // ⚠️ CE QUI A LAISSÉ PASSER ÇA : le champ voisin `garde` est ÉPINGLÉ dans les essais et
+      // n'a jamais menti ; celui-ci n'avait qu'un `Array.isArray`, vrai quel que soit le contenu.
+      // Une assertion trop faible sur un chemin correct — elle passe, elle a l'air d'une
+      // couverture, et elle survit à toute relecture. Les deux listes sont désormais épinglées.
+      //
+      // ⚠️ ET LA LISTE DES RÔLES QUI ONT UN LIEU NE BOUGE PAS D'UN MOT : des appelants la lisent,
+      // et un rôle neuf n'a pas à réécrire la sortie des autres.
+      verifie: chefEquipe
+        ? [
+            // Il est né, sur sa branche-socle, dans un arbre qui n'existait pas — c'est le geste
+            // que `creerEspaceDeTravail` a fait et que git a confirmé en le créant.
+            'son espace de travail est né sur sa branche-socle',
+            'l’agent porte son nom',
+            // Le même contrôle que pour les autres (`memeRepertoire`), sur l'objet qui est le sien.
+            'il tourne dans son espace de travail',
+            'son écran est prêt à recevoir',
+          ]
+        : ['le lieu est versé', 'l’agent porte son nom', 'il tourne dans son lieu', 'son écran est prêt à recevoir'],
       garde: cheminGarde,
       approuve: approbation.deja ? 'déjà' : 'maintenant',
       lieu: commandes.lieu,
