@@ -341,6 +341,28 @@ function verifierLaFrontiere(declarations, miseEnService) {
 }
 
 /**
+ * L'AGENT TRAVAILLE-T-IL DANS L'ESPACE QUE CETTE DÉCLARATION INSCRIT ? — la borne du repli.
+ *
+ * ⚠️ LE SÉPARATEUR EST LA FRONTIÈRE, PAS LE PRÉFIXE. `…/20260825-101721-bis` commence par
+ * `…/20260825-101721` sans être dedans : un `startsWith` nu rendrait deux worktrees voisins
+ * indiscernables, c'est-à-dire rouvrirait le trou par la porte d'à côté.
+ *
+ * ⚠️ ET LE SOUS-DOSSIER COMPTE. `foreground_cwd` est le répertoire du SHELL, pas la racine de
+ * l'arbre : un chef d'équipe qui descend dans un dossier de son worktree travaille toujours
+ * dans son espace. Exiger l'égalité stricte ferait de lui une prise pour un `cd` — le faux
+ * refus symétrique de celui qu'on ferme.
+ */
+export function memeEspaceDeTravail(espaceDeLAgent, espaceDeclare) {
+  if (!espaceDeLAgent || !espaceDeclare) return false;
+  const net = (c) => String(c).replace(/\/+$/, '');
+  const a = net(espaceDeLAgent);
+  const d = net(espaceDeclare);
+  // Un espace déclaré vide après nettoyage — « / » — apparierait tout le poste.
+  if (!d) return false;
+  return a === d || a.startsWith(`${d}/`);
+}
+
+/**
  * L'agent est-il couvert par une déclaration ? Par son pane DANS sa session, ou par son nom.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════
@@ -373,7 +395,25 @@ function declarationDe(agent, declarations) {
       : declarations.find(
           (d) => d?.pane && d.pane === agent.pane && identiteDeSession(d.session_herdr) === session
         )) ||
-    (nom ? declarations.find((d) => d?.nom === nom) : null) ||
+    // 🔴 LE REPLI EST BORNÉ PAR L'ESPACE DE TRAVAIL, et il ne l'était par RIEN. Il appariait
+    // n'importe quelle déclaration portant ce nom — ni le pane, ni la session, ni l'espace, ni
+    // la date n'entraient. La section ⓿ a fermé « nom conforme ⇒ identifié » et laissé ouvert
+    // « nom qui apparie une déclaration QUELCONQUE ⇒ identifié » : même population, même
+    // conséquence, une moitié sur deux. Mesuré : un agent ouvert à la main, sans déclaration,
+    // dans un worktree NEUF, portant un nom déjà au registre → `identifies: 1`, sortie 0.
+    //
+    // ⚠️ ET C'EST L'ESPACE, PAS LE PANE. Le repli EXISTE parce que le pane a bougé : le borner
+    // par le pane le supprimerait. L'espace est le seul fait que la déclaration inscrit à la
+    // naissance ET que l'agent porte encore pendant qu'il travaille — le module le lisait déjà
+    // pour `fauxRefus`, sans jamais s'en servir là où il identifie.
+    //
+    // ⚠️ LE PRIX MESURÉ SUR LE TRAFIC RÉEL (2026-08-25, 5 sessions sur 15) : 14 agents dans la
+    // population, 1 identifié — et par la clé PANE-DANS-SA-SESSION, pas par ce repli. Zéro
+    // identification passait par ici. La borne ne coûte donc aucun faux refus mesurable, et le
+    // jour où le registre grossit, elle est ce qui empêche le repli de devenir un laissez-passer.
+    (nom
+      ? declarations.find((d) => d?.nom === nom && memeEspaceDeTravail(agent.espace, d.espace))
+      : null) ||
     null
   );
 }
@@ -559,7 +599,8 @@ export function jugerLeParc({
     prises:
       'un agent VIVANT dont l’espace de travail porte un horodatage de naissance postérieur à ' +
       `« ${miseEnService} », et qu’AUCUNE des DEUX sources n’identifie — ni une déclaration ` +
-      '(appariée par pane-dans-sa-session, ou à défaut par nom ; la session se compare par son ' +
+      '(appariée par pane-dans-sa-session, ou à défaut par nom DANS L’ESPACE DE TRAVAIL QUE LA ' +
+      'DÉCLARATION INSCRIT — un nom seul apparierait la naissance de n’importe qui ; la session se compare par son ' +
       'NOM, celui que la déclaration inscrit et que le socket du pane porte dans son chemin — ' +
       'une session que rien ne nomme n’apparie personne par le pane), ni un lieu de rôle ' +
       'établi sur disque. ' +

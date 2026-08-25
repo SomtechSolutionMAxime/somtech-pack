@@ -363,3 +363,177 @@ test('LA MÉTHODE ANNONCE DEUX CLÉS — et chacune apparie SEULE, sans l’autr
     rmSync(racine, { recursive: true, force: true });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑧ 🔴 LE REPLI PAR LE NOM EST BORNÉ — il appariait N'IMPORTE QUELLE déclaration de ce nom
+//
+// La section ⓿ de `garde-des-naissances.js` retire au nom son statut de SOURCE, parce que « le
+// nom d'un chef d'équipe est TOUJOURS conforme ». Le correctif a fermé « nom conforme ⇒
+// identifié » et laissé ouvert « nom qui apparie une déclaration QUELCONQUE ⇒ identifié » —
+// même population, même conséquence. Une moitié sur deux.
+//
+// Mesuré avant : une déclaration régulière (pane `w97:p2`, espace `…/20260825-101721`), puis un
+// SECOND agent ouvert à la main, aucune déclaration, pane `w9:p9`, worktree NEUF
+// `…/20260826-100000`, portant le même nom → `prises: 0`, `identifies: 1`, source « sa
+// déclaration de naissance ». Vert, sortie 0.
+//
+// TROIS ENTRÉES QUE ÇA OUVRAIT :
+//   • le successeur que le lot décrit lui-même (`declaration.js` : « un chef qui hérite
+//     légitimement d'un epic dont l'agent est mort ») — même code de mandat, donc même nom ;
+//   • `herdr agent rename <pane> <un-nom-déjà-déclaré>` — un désarmement en UNE commande ;
+//   • et ça EMPIRE avec l'adoption : le jour où tout nom régulier est au registre, le repli
+//     devient un laissez-passer général.
+//
+// ⚠️ POURQUOI L'ESPACE DE TRAVAIL, ET PAS LE PANE NI LA DATE. Le pane ne peut pas borner ce
+// repli : le repli EXISTE parce que le pane a bougé. L'espace, lui, est le fait que la
+// déclaration inscrit à la naissance ET que l'agent porte encore pendant qu'il travaille — le
+// module le lisait déjà pour `fauxRefus`, sans jamais s'en servir pour les identifiés.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/** Un agent ouvert à la main : son pane, sa session, son espace — et le nom qu'on lui donne. */
+const unAgent = ({ pane, session, espace, nom }) =>
+  normaliserLeParc({
+    panes: [{ pane_id: pane, agent_session: { agent: 'claude' }, foreground_cwd: espace, herdr_socket: session }],
+    agentsHerdr: [{ pane_id: pane, herdr_socket: session, name: nom }],
+  });
+
+test('🔴 LE REPLI PAR LE NOM N’APPARIE PLUS UNE DÉCLARATION D’AILLEURS — autre espace, autre pane, même nom', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    const registre = lireLesDeclarations({ racine });
+
+    // Le second agent : ouvert à la main, AUCUNE déclaration, worktree NEUF, pane et session
+    // qui ne sont pas ceux de la déclaration — et le même nom.
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: 'w9:p9',
+        session: socketDe('cg'),
+        espace: '/bac/worktrees/un-depot/20260826-100000',
+        nom: 't-20260825-0047',
+      }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+
+    assert.equal(v.comptes.identifies, 0, `un nom n’est pas une naissance — texte :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 1, 'il doit être PRIS');
+    assert.equal(v.verdict, VERDICTS.NES_HORS_DISPOSITIF);
+    assert.equal(v.sortie, 1, 'et la sortie doit le dire');
+    // ⚠️ ET LE FAUX REFUS RESTE À ZÉRO : son espace ne figure dans aucune déclaration. Un
+    // chiffre qui monterait ici dirait que c'est la garde qui a raté, pas l'agent.
+    assert.equal(v.comptes.fauxRefus, 0);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('🔴 LE SUCCESSEUR — un chef qui hérite d’un epic porte le MÊME nom, et sa naissance n’est pas celle de son prédécesseur', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    const registre = lireLesDeclarations({ racine });
+
+    // Le cas que `declaration.js` décrit nommément : le prédécesseur est mort, le successeur
+    // reprend l'epic, donc le code du mandat, donc le nom. Ouvert à la main, dans SON arbre.
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: 'w4:p1',
+        session: socketDe('somtech'),
+        espace: '/bac/worktrees/un-depot/20260827-090000',
+        nom: 't-20260825-0047',
+      }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.prises, 1, `le successeur n’est pas couvert par la naissance d’un autre :\n${v.texte}`);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('LE REPLI SERT ENCORE — le pane a bougé, l’espace non : la déclaration apparie', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    const registre = lireLesDeclarations({ racine });
+
+    // ⚠️ LA MOITIÉ SANS LAQUELLE LE CORRECTIF EST UN FAUX REFUS. Le repli a été écrit pour ce
+    // cas-ci : `agent list` a rendu le nom, le pane n'est plus celui de la naissance. Le borner
+    // trop rouvrirait très exactement le défaut qu'il ferme — un agent DÉCLARÉ devenu prise.
+    const v = jugerLeParc({
+      agents: unAgent({ pane: 'w12:p9', session: socketDe('cg'), espace: ESPACE, nom: 't-20260825-0047' }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.parSource[SOURCES.DECLARATION], 1, `le repli doit encore mordre :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 0);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('… et il sert AUSSI quand l’agent a changé de répertoire DANS son espace de travail', () => {
+  const racine = bac();
+  try {
+    leProducteurInscrit(racine, socketDe('somtech'));
+    const registre = lireLesDeclarations({ racine });
+
+    // `foreground_cwd` est le répertoire du shell, pas la racine de l'arbre : un chef d'équipe
+    // qui descend dans un sous-dossier de son worktree travaille toujours dans SON espace.
+    // Exiger l'égalité stricte ferait de lui une prise pour un `cd`.
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: 'w12:p9',
+        session: socketDe('cg'),
+        espace: `${ESPACE}/naissance-representant/src`,
+        nom: 't-20260825-0047',
+      }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.parSource[SOURCES.DECLARATION], 1, `un sous-dossier reste le même espace :\n${v.texte}`);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('🔴 … mais un espace VOISIN dont le CHEMIN commence pareil n’est PAS le même espace', () => {
+  const racine = bac();
+  try {
+    // ⚠️ LE FAUX POSITIF QU'UN `startsWith` NU LAISSERAIT PASSER, et il est réel : deux dépôts
+    // dont l'un nomme l'autre en préfixe (`un-depot` / `un-depot-bis`). La déclaration porte le
+    // premier ; l'agent travaille dans un worktree du second. Le chemin de l'un commence par
+    // celui de l'autre sans être dedans. La frontière est le SÉPARATEUR, pas le préfixe.
+    //
+    // ⚠️ ET LE VOISIN EST DANS LA POPULATION — son dernier segment est un horodatage lisible,
+    // postérieur à la frontière. Un banc dont le cas tombe en « hors portée » ne mesurerait pas
+    // l'appariement, il mesurerait la borne : la première écriture de cet essai s'y est trompée.
+    inscrireLaDeclaration({
+      nom: 't-20260825-0047',
+      role: 'chef-equipe',
+      mandat: 'T-20260825-0047',
+      coordonnateur: 'e-20260825-0002',
+      espace: '/bac/worktrees/un-depot',
+      pane: PANE,
+      session: nomDeSession(socketDe('somtech')),
+      racine,
+    });
+    const registre = lireLesDeclarations({ racine });
+
+    const v = jugerLeParc({
+      agents: unAgent({
+        pane: 'w12:p9',
+        session: socketDe('cg'),
+        espace: '/bac/worktrees/un-depot-bis/20260825-101721',
+        nom: 't-20260825-0047',
+      }),
+      registre,
+      portee: { sessionsInterrogees: 5, sessionsRefusees: [] },
+    });
+    assert.equal(v.comptes.horsPortee, 0, `le voisin doit être JUGÉ, pas écarté :\n${v.texte}`);
+    assert.equal(v.comptes.prises, 1, `un voisin n’est pas un sous-dossier :\n${v.texte}`);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
