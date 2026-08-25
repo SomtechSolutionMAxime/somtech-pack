@@ -161,6 +161,12 @@ function installerFauxHerdr(scenario = {}) {
     // LE PARC DES NOMS que `agent list` rend — vide par défaut, c'est-à-dire un poste où
     // aucune rivière n'est prise. Les essais qui éprouvent la renaissance le peuplent.
     agents: [],
+    // L'espace que `workspace create` rend, et les deux façons dont herdr peut refuser d'ouvrir
+    // ou de refermer — les deux moitiés dont dépend la promesse « un refus ne laisse rien ».
+    espaceCree: 'wNEUF',
+    creationRefusee: false,
+    fermetureRefusee: false,
+    promptRefuse: false,
     ...scenario,
   };
   writeFileSync(journal, '');
@@ -185,7 +191,32 @@ if (cmd === 'workspace list') {
   sortir({ result: { workspaces: (sc.espaces || []).map((w) => ({ workspace_id: w, label: 'essai ' + w })) } }, 0);
 }
 
-if (cmd === 'tab create') sortir({ result: { root_pane: { pane_id: 'w9:p1' } } }, 0);
+// ═══ \`workspace create\` / \`workspace close\` — la naissance les fait elle-même depuis
+// D-20260825-0002 (elle ouvre son espace APRÈS ses refus, et le referme si elle échoue ensuite).
+//
+// ⚠️ FORMES PRISES DU SCHÉMA D'API EMBARQUÉ (\`herdr api schema --json\`, protocole 20), pas de
+// mémoire : \`workspace_created\` porte un \`workspace\`, un \`tab\` et un \`root_pane\` ; aucune
+// variante \`workspace_closed\` n'existe côté RÉPONSE (elle n'existe qu'en ÉVÉNEMENT), la
+// fermeture retombe donc sur la variante générique \`ok\`. Ce qui n'a PAS été mesuré contre le
+// service vivant est dit ici plutôt que présenté comme un fait : ouvrir puis fermer un espace
+// sur le poste du dirigeant serait un effet de bord visible, et ces essais n'en produisent aucun.
+if (cmd === 'workspace create') {
+  if (sc.creationRefusee) sortir(refus('workspace_create_failed'), 1);
+  const id = sc.espaceCree || 'wNEUF';
+  sortir({ result: { type: 'workspace_created', workspace: { workspace_id: id, label: apres('--label') }, tab: { tab_id: id + ':t1' }, root_pane: { pane_id: id + ':p1', workspace_id: id } } }, 0);
+}
+if (cmd === 'workspace close') {
+  if (sc.fermetureRefusee) sortir(refus('workspace_not_found'), 1);
+  sortir({ result: { type: 'ok' } }, 0);
+}
+
+// ⚠️ LE PANE NAÎT DANS L'ESPACE QU'ON LUI DONNE — et pas dans un « w9 » écrit en dur. Sans ça,
+// un essai qui laisse la naissance OUVRIR son espace verrait quand même un pane de « w9 » : le
+// double serait plus indulgent que le vrai, et prouverait le contraire de ce qu'il mesure.
+if (cmd === 'tab create') {
+  const ws = apres('--workspace');
+  sortir({ result: { root_pane: { pane_id: ws + ':p1', workspace_id: ws } } }, 0);
+}
 
 // ═══ \`agent start\` — la forme EXACTE mesurée contre le vrai service le 2026-08-16.
 if (cmd === 'agent start') {
@@ -249,7 +280,7 @@ if (cmd === 'agent get') {
     result: {
       type: 'agent_info',
       agent: {
-        pane_id: 'w9:p1',
+        pane_id: args[2],
         agent_status: 'idle',
         name: sc.nomPorte || (ne ? ne[2] : null),
         cwd: sc.repertoire,
@@ -266,7 +297,13 @@ if (cmd === 'agent list') {
   sortir({ id: 'cli:agent:list', result: { agents: (sc.agents || []).map((n) => ({ agent: 'claude', name: n, pane_id: 'w9:pX' })) } }, 0);
 }
 
-if (cmd === 'agent prompt') sortir({ result: { type: 'agent_prompted' } }, 0);
+// ⚠️ UN REFUS DE \`agent prompt\` EST UN VRAI MODE DE PANNE — une session qui a perdu son agent
+// entre le moment où on l'a vue prête et celui où on lui parle. Sans lui, aucun essai ne peut
+// atteindre le chemin « née, vivante, mais qui n'a pas pris son amorce ».
+if (cmd === 'agent prompt') {
+  if (sc.promptRefuse) sortir(refus('agent_not_found'), 1);
+  sortir({ result: { type: 'agent_prompted' } }, 0);
+}
 if (cmd === 'agent send-keys') sortir({ result: { type: 'keys_sent' } }, 0);
 if (cmd === 'pane close') sortir({ result: { type: 'pane_closed' } }, 0);
 
@@ -337,7 +374,11 @@ function lancerNaitre(
     env = {},
   } = {}
 ) {
-  const args = [BIN, client, '--workspace', workspace];
+  // ⚠️ `workspace: null` OMET LE DRAPEAU — c'est LA POPULATION RÉELLE, celle que le métier
+  // prescrit (`pack agent naitre <code> --role chef-equipe --depot <d> --coordonnateur <n>`).
+  // Tous les essais de ce fichier passaient `--workspace w9`, ce qui court-circuitait le chemin
+  // où l'espace herdr est ouvert — et c'est très exactement pour ça que le défaut ① a survécu.
+  const args = [BIN, client, ...(workspace ? ['--workspace', workspace] : [])];
   if (depotCourant) args.push('--depot', depotCourant);
   if (amorce) args.push('--amorce-texte', amorce);
   if (modele) args.push('--modele', modele);
@@ -1589,6 +1630,161 @@ test('sans clé ServiceDesk, la naissance tient aussi — et le geste dit qu’i
     const rendu = JSON.parse(r.stdout);
     assert.equal(rendu.servicedesk.rempli, false);
     assert.match(rendu.servicedesk.cause, /aucun accès/i, 'l’absence d’accès est NOMMÉE, pas confondue avec un refus');
+  }));
+
+// ── 9c-bis — L'ESPACE HERDR, SUR LA POPULATION RÉELLE (défaut ①)
+//
+// 🔴 CE QUE LA REVUE A MESURÉ, et pourquoi aucun banc ne l'avait vu. La ligne que les textes
+// prescrivent ne porte PAS `--workspace` :
+//
+//     pack agent naitre revue-pr180 --role chef-equipe --depot <d> --coordonnateur moi
+//
+// La porte d'entrée ouvrait alors `herdr workspace create --cwd <d> --label revue-pr180
+// --no-focus` AVANT de lancer la naissance — qui refusait le mandat en écrivant « Rien n'a été
+// créé : ni espace de travail, ni onglet, ni agent. » L'espace restait. Tous les essais
+// bout-en-bout de ce chemin passaient `--workspace w7` ou `w9`, ce qui court-circuitait
+// exactement l'appel non gardé : le banc éprouvait une population qui n'était pas la vraie.
+//
+// Ces essais-ci lancent la commande SANS `--workspace`. Elle ouvre alors son espace elle-même,
+// après tous ses refus, et le referme quand elle échoue ensuite.
+
+/** Les espaces ouverts et refermés, dans l'ordre — lus du journal, jamais de la mémoire. */
+const espacesOuverts = (journal) =>
+  appelsJournalises(journal).filter((a) => a[0] === 'workspace' && a[1] === 'create');
+const espacesFermes = (journal) =>
+  appelsJournalises(journal).filter((a) => a[0] === 'workspace' && a[1] === 'close').map((a) => a[2]);
+
+test('🔴 SANS --workspace, un mandat refusé ne fait ouvrir AUCUN espace herdr — le refus dit vrai', () =>
+  avecChefDEquipe(({ poste }) => {
+    const journal = installerFauxHerdr();
+
+    const r = lancerNaitre('revue-pr180', { role: 'chef-equipe', env: poste, workspace: null, horodatage: '20260825-083616' });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /Rien n’a été créé/, 'le refus AFFIRME que rien n’a été créé');
+    assert.deepEqual(
+      appelsJournalises(journal),
+      [],
+      '… et c’est VRAI : pas même un `workspace create`. C’est le défaut ① mesuré à l’envers.'
+    );
+    assert.equal(existsSync(poste.SOMTECH_WORKTREES_RACINE), false, 'aucun espace de travail non plus');
+    assert.equal(declarationsInscrites(poste).length, 0);
+  }));
+
+test('SANS --workspace, une naissance complète OUVRE son espace — et l’onglet naît DEDANS', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.equal(espacesOuverts(journal).length, 1, 'un seul espace, pas un par relance');
+    const ouverture = espacesOuverts(journal)[0];
+    assert.equal(ouverture[ouverture.indexOf('--label') + 1], code, 'l’espace porte le code du mandat');
+    assert.ok(ouverture.includes('--no-focus'), 'et il ne vole pas l’écran du dirigeant');
+    // ⚠️ SUR LA SESSION VISÉE, pas sur celle qu'on hérite. La porte d'entrée appelait `herdr` NU :
+    // l'espace naissait dans la session par défaut — c'est-à-dire dans rien, depuis un terminal
+    // ordinaire —, puis la naissance résolvait SA session et refusait l'espace pour non-appartenance.
+    const socketDeLOuverture = entreesJournalisees(journal).find((e) => e.a[0] === 'workspace' && e.a[1] === 'create').s;
+    assert.equal(socketDeLOuverture, sessionsDesEssais, 'l’espace naît sur la session que la commande a résolue');
+    // Et l'onglet part DANS celui-là — pas dans un espace écrit en dur.
+    const onglet = appelsJournalises(journal).find((a) => a[0] === 'tab' && a[1] === 'create');
+    assert.equal(onglet[onglet.indexOf('--workspace') + 1], 'wOUVERT');
+    assert.equal(JSON.parse(r.stdout).pane, 'wOUVERT:p1');
+    assert.deepEqual(espacesFermes(journal), [], 'une naissance réussie ne défait rien');
+  }));
+
+test('🔴 un échec APRÈS l’ouverture REFERME l’espace ouvert — l’ordre seul ne couvre pas cette moitié', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    // `agent start` refuse : le pane existe déjà, l'espace aussi. C'est le cas que déplacer la
+    // création ne peut PAS fermer — et sans le défaire, l'espace resterait vide et orphelin.
+    const journal = installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT', demarrage: 'refus' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.deepEqual(espacesFermes(journal), ['wOUVERT'], 'l’espace ouvert par ce geste est refermé');
+    assert.equal(declarationsInscrites(poste).length, 0, 'et rien n’a été déclaré');
+  }));
+
+test('🔴 mais un espace DONNÉ n’est JAMAIS refermé — on ne détruit pas ce qu’on n’a pas ouvert', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    // Le même échec, avec un espace nommé par l'appelant : le refermer emporterait le travail
+    // d'un tiers pour une naissance ratée. C'est la moitié qui protège le geste du défaire.
+    const journal = installerFauxHerdr({ repertoire: espace, demarrage: 'refus' });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: 'w9', horodatage });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.deepEqual(espacesFermes(journal), [], 'aucun `workspace close` : cet espace appartient à qui l’a nommé');
+    assert.equal(espacesOuverts(journal).length, 0, 'et aucun n’a été ouvert');
+  }));
+
+test('🔴 une amorce non prise laisse l’agent VIVANT — donc son espace aussi', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    // ⚠️ LE CAS QUI REND UN DÉFAIRE AVEUGLE DANGEREUX. La commande sort en 1 ET laisse
+    // délibérément le pane ouvert : l'agent est né, vérifié, dans son espace. Refermer l'espace
+    // ici le tuerait — c'est-à-dire ferait, par la porte d'à côté, exactement ce que l'arbitrage
+    // du pane refuse de faire.
+    const journal = installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT', promptRefuse: true });
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: poste,
+      workspace: null,
+      horodatage,
+      amorce: 'commence par lire le registre',
+      essais: '1',
+    });
+
+    // ⚠️ PAS D'ÉCHAPPATOIRE : un banc qui se tairait quand la livraison aboutit serait un banc
+    // qui ne peut pas échouer — il passerait aussi bien le jour où ce chemin cesse d'exister.
+    assert.equal(r.code, 1, `l’amorce doit ÉCHOUER pour que ce banc mesure quoi que ce soit — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /pane est laissé ouvert/i, 'la commande dit qu’elle laisse l’agent vivre');
+    assert.deepEqual(espacesFermes(journal), [], '… et elle ne le tue pas par l’espace');
+  }));
+
+test('🔴 une déclaration qui ne s’écrit pas laisse l’agent VIVANT — donc son espace aussi', () =>
+  avecChefDEquipe(({ code, poste, bac, horodatage, espace }) => {
+    const journal = installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+    const barrage = join(bac, 'racine-prise-2');
+    writeFileSync(barrage, 'je ne suis pas un répertoire\n');
+
+    const r = lancerNaitre(code, {
+      role: 'chef-equipe',
+      env: { ...poste, SOMTECH_NAISSANCES_RACINE: barrage },
+      workspace: null,
+      horodatage,
+    });
+
+    assert.equal(r.code, 1, `échec attendu — stdout : ${r.stdout}`);
+    assert.equal(aFerme(journal, 'wOUVERT:p1'), false, 'le pane n’est pas refermé');
+    assert.deepEqual(espacesFermes(journal), [], 'et l’espace qui le porte non plus');
+  }));
+
+test('quand herdr refuse d’OUVRIR l’espace, le refus le dit — et il n’y a rien à défaire', () =>
+  avecChefDEquipe(({ code, poste, horodatage }) => {
+    const journal = installerFauxHerdr({ creationRefusee: true });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage });
+
+    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
+    assert.match(r.stderr, /espace de travail/i);
+    assert.match(r.stderr, /herdr status|--workspace/, 'et le geste qui lève le blocage');
+    assert.deepEqual(espacesFermes(journal), [], 'rien à refermer : rien n’a été ouvert');
+  }));
+
+test('et quand herdr refuse de le REFERMER, l’orphelin est NOMMÉ — jamais tu', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    // ⚠️ UN DÉFAIRE QUI ÉCHOUE EN SILENCE SERAIT PIRE QUE PAS DE DÉFAIRE : on croirait le
+    // ménage fait. On dit l'identifiant ET la commande qui le retire.
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT', demarrage: 'refus', fermetureRefusee: true });
+
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage });
+
+    assert.equal(r.code, 1);
+    assert.match(r.stderr, /wOUVERT/, 'l’espace resté est nommé');
+    assert.match(r.stderr, /herdr workspace close wOUVERT/, 'et le geste exact qui le retire');
   }));
 
 // ── 9d — CE QUI EST REFUSÉ, ET CE QUE LE REFUS NE LAISSE PAS DERRIÈRE LUI

@@ -1628,10 +1628,26 @@ export const CONTROLES = [
           fichiers: [join('.claude', 'skills', 'orchestrer-chantier', 'SKILL.md')],
           relever: (t) => formes(blocsBash(t).join('\n')),
         },
-        // Les quatre lieux où le pack parle au binaire `herdr`, mesurés le 2026-08-25 :
-        // 14 formes dans naissance-representant/src, 13 dans ligne-directe/src,
-        // 7 dans naissance-representant/bin, 1 dans cli/src.
-        ...['cli/src', 'ligne-directe/src', 'naissance-representant/bin', 'naissance-representant/src']
+        // Les TROIS lieux où le pack parle au binaire `herdr`, RECOMPTÉS le 2026-08-25 :
+        // 14 formes dans naissance-representant/src, 8 dans ligne-directe/src,
+        // 6 dans naissance-representant/bin.
+        //
+        // ⚠️ `cli/src` A ÉTÉ RETIRÉ, ET C'EST UNE CORRECTION QUI SE MESURE (défaut ①). La porte
+        // d'entrée y appelait `herdr workspace create` AVANT de lancer la naissance : chacun des
+        // refus de celle-ci laissait donc un espace orphelin pendant qu'il écrivait « rien n'a
+        // été créé ». Le geste est descendu dans `naissance-representant/src/espace-herdr.js`,
+        // qui l'ouvre APRÈS les refus et sait le défaire. La porte ne parle plus à herdr du
+        // tout — la garde « une source muette est une source qu'on a cessé de mesurer » l'a
+        // signalé au premier passage, et elle avait raison : c'est la liste qui devait suivre.
+        //
+        // ⚠️ ET LE SENS DU RETRAIT COMPTE. Ce qui désarmerait ce contrôle est d'ÉLARGIR la
+        // référence jusqu'à ce qu'elle avale ce qu'elle juge ; retirer une source la RESSERRE —
+        // moins de formes admises, donc un métier plus exigeant, jamais moins.
+        //
+        // ⚠️ LES TROIS COMPTES ONT ÉTÉ REFAITS, et deux étaient faux avant ce lot : le
+        // commentaire disait 13 et 7 là où le code en portait 8 et 6. Un compte juste dans une
+        // phrase fausse oblige le lecteur suivant à tout remesurer ; celui-ci a été remesuré.
+        ...['ligne-directe/src', 'naissance-representant/bin', 'naissance-representant/src']
           .map((rel) => ({ quoi: `le code de ${rel}`, fichiers: jsSous(rel), relever: formesDuCode })),
       ];
 

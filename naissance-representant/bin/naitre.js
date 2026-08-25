@@ -67,6 +67,7 @@ import {
   BASE_PAR_DEFAUT,
 } from '../src/chef-equipe.js';
 import { inscrireLaDeclaration, declarerAuServiceDesk, phraseDuMandatIncomplet } from '../src/declaration.js';
+import { ouvrirUnEspaceHerdr, fermerLEspaceHerdr } from '../src/espace-herdr.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -117,6 +118,51 @@ function option(args, nom) {
 }
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * CE QU'ON DÉFAIT EN SORTANT — l'espace herdr que CETTE commande a ouvert (D-20260825-0002).
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 LE DÉFAUT QUE CECI FERME, POUR LA MOITIÉ QUE L'ORDRE NE FERME PAS. L'espace naît désormais
+ * APRÈS tous les refus (voir plus bas) : aucun refus ne le laisse derrière lui. Mais des échecs
+ * subsistent APRÈS sa création — l'onglet que herdr refuse, l'agent qui ne se laisse pas nommer,
+ * l'écran qui ne cède jamais. Le fichier referme déjà le pane dans ces cas ; sans ceci, l'espace
+ * qui le contenait resterait, vide.
+ *
+ * ⚠️ POURQUOI UN GESTIONNAIRE DE SORTIE ET PAS N APPELS. Une liste de sorties à corriger est une
+ * liste qu'on complète — et celle qu'on ajoutera dans six mois n'y sera pas. Ici, TOUTE sortie
+ * non nulle défait, y compris celle d'une exception non rattrapée. Ce qui reste à décider est
+ * l'inverse : les rares cas où quelque chose de VIVANT doit survivre, et ils sont NOMMÉS par
+ * `laisserVivre`.
+ *
+ * ⚠️ ET ON NE FERME QUE CE QU'ON A OUVERT. Un espace donné par `--workspace` appartient à celui
+ * qui l'a nommé : le refermer sur un échec détruirait le travail d'un tiers pour une naissance
+ * ratée. `armerLeDefaire` n'est appelé que sur le chemin de la création.
+ */
+let espaceAdefaire = null;
+let socketDeLEspace = null;
+
+function armerLeDefaire(id, socket) {
+  espaceAdefaire = id;
+  socketDeLEspace = socket;
+}
+
+/** Ce qui vit dans l'espace doit lui survivre — et la raison est dite, jamais implicite. */
+function laisserVivre() {
+  espaceAdefaire = null;
+}
+
+process.on('exit', (code) => {
+  if (code === 0 || !espaceAdefaire) return;
+  const fermeture = fermerLEspaceHerdr(espaceAdefaire, { socket: socketDeLEspace });
+  if (!fermeture.ok) {
+    process.stderr.write(
+      `⚠️  l’espace herdr « ${espaceAdefaire} », ouvert par ce geste, n’a PAS pu être refermé ` +
+        `(${fermeture.message}) — retire-le à la main : \`herdr workspace close ${espaceAdefaire}\`\n`
+    );
+  }
+});
 
 /** Deux chemins désignent-ils le même répertoire ? (`/tmp` → `/private/tmp` sur macOS). */
 function memeRepertoire(a, b) {
@@ -184,7 +230,13 @@ async function main() {
     }
     throw err;
   }
-  if (!nom || nom.startsWith('--') || !workspace) usage(1);
+  // ⚠️ `--workspace` N'EST PLUS EXIGÉ ICI, ET C'EST LE CŒUR DU CORRECTIF ① (D-20260825-0002).
+  // Quand personne n'en donne, la commande en OUVRE UN — mais tout en bas, après tous ses
+  // refus. C'est la porte d'entrée (`pack agent naitre`) qui le faisait, AVANT le lancement :
+  // chacun de ses refus laissait alors un espace orphelin pendant qu'il écrivait « rien n'a
+  // été créé ». L'exigence, elle, n'a pas disparu : `commandes.tabCreate` refuse toujours de
+  // composer un onglet sans espace, et toujours avant qu'un pane existe.
+  if (!nom || nom.startsWith('--')) usage(1);
 
   // L'amorce est lue AVANT qu'un pane existe : un fichier illisible doit arrêter la commande
   // ici, pas après avoir fait naître une session qu'on n'aura rien à dire.
@@ -547,17 +599,50 @@ async function main() {
   }
   const socket = session.socket;
 
-  // ⚠️ ET L'ESPACE DOIT APPARTENIR À CETTE SESSION-LÀ. C'est le contrôle qui ferme la panne
-  // silencieuse : les identifiants d'espace ne sont PAS globalement uniques — `w2W` de la
-  // session `somtech` a été donné pour une naissance dans `sibelanger`. Sans ce refus, la
-  // naissance ne rate pas : elle RÉUSSIT, au mauvais endroit, et personne ne le voit.
+  // ═══ L'ESPACE HERDR — DONNÉ, OU OUVERT ICI ; et « ici » est le dernier endroit possible.
   //
-  // Il tombe ici, avant `tab create` : un espace refusé ne laisse aucun onglet nulle part.
-  const espaces = await appelHerdr(['workspace', 'list'], { socket });
-  const appartenance = espaceDeLaSession(espaces.reponse, { espace: workspace, session: session.nom });
-  if (!appartenance.ok) {
-    process.stderr.write(`${espaces.ok ? '' : `${espaces.message}\n`}${appartenance.message}\n`);
-    process.exit(1);
+  // 🔴 C'EST LE CORRECTIF ①. Ce geste vivait dans la porte d'entrée, AVANT le lancement de cette
+  // commande. Mesuré sur la ligne que le métier prescrit — sans `--workspace` :
+  //
+  //     herdr workspace create --cwd <depot> --label revue-pr180 --no-focus   ← la porte
+  //     « Rien n'a été créé : ni espace de travail, ni onglet, ni agent. »     ← ici, sortie 1
+  //
+  // L'espace restait. Et pas seulement sur ce refus : le mandat invalide, la base introuvable,
+  // l'espace de travail occupé, le nom que herdr refuse, la session ambiguë — TOUS tombent
+  // au-dessus de cette ligne. Les déplacer ici ne coûte rien et rend vraie une promesse que deux
+  // textes opposables portaient déjà.
+  //
+  // ⚠️ POURQUOI PAS SIMPLEMENT « DÉFAIRE APRÈS ». Un `workspace close` après coup laisse le
+  // message « rien n'a été créé » faux à l'instant où on le lit, et dépend d'un second appel qui
+  // peut échouer — auquel cas l'orphelin reste ET la promesse est écrite. Créer après les refus
+  // rend la promesse vraie par construction. (Le défaire existe quand même, pour la moitié que
+  // l'ordre ne couvre pas : voir `armerLeDefaire` en tête de fichier.)
+  let espaceHerdr = workspace;
+  if (workspace) {
+    // ⚠️ ET L'ESPACE DONNÉ DOIT APPARTENIR À CETTE SESSION-LÀ. C'est le contrôle qui ferme la
+    // panne silencieuse : les identifiants d'espace ne sont PAS globalement uniques — `w2W` de la
+    // session `somtech` a été donné pour une naissance dans `sibelanger`. Sans ce refus, la
+    // naissance ne rate pas : elle RÉUSSIT, au mauvais endroit, et personne ne le voit.
+    //
+    // Il tombe ici, avant `tab create` : un espace refusé ne laisse aucun onglet nulle part.
+    //
+    // ⚠️ IL NE VAUT QUE POUR L'ESPACE DONNÉ. Celui qu'on ouvre soi-même sur `socket` appartient à
+    // cette session par construction ; le vérifier serait mesurer le résultat de son propre geste.
+    const espaces = await appelHerdr(['workspace', 'list'], { socket });
+    const appartenance = espaceDeLaSession(espaces.reponse, { espace: workspace, session: session.nom });
+    if (!appartenance.ok) {
+      process.stderr.write(`${espaces.ok ? '' : `${espaces.message}\n`}${appartenance.message}\n`);
+      process.exit(1);
+    }
+  } else {
+    const ouvert = await ouvrirUnEspaceHerdr({ cwd: REPO_ROOT, label: nom, socket, appeler: appelHerdr });
+    if (!ouvert.ok) {
+      // L'ouverture a échoué : il n'y a rien à défaire, et le refus peut le dire sans mentir.
+      process.stderr.write(`${ouvert.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni onglet, ni agent.\n`);
+      process.exit(1);
+    }
+    espaceHerdr = ouvert.id;
+    armerLeDefaire(ouvert.id, socket);
   }
 
   // APPROUVER LE LIEU AVANT DE LANCER LA SESSION — sans quoi elle s'arrête sur l'écran de
@@ -576,7 +661,7 @@ async function main() {
     throw err;
   }
 
-  const creation = await appelHerdr(commandes.tabCreate, { socket });
+  const creation = await appelHerdr(commandes.tabCreate(espaceHerdr), { socket });
 
   if (!creation.ok) {
     process.stderr.write(`${creation.message}\n`);
@@ -774,6 +859,11 @@ async function main() {
       // profit d'une écriture comptable. Mais la commande ÉCHOUE — même règle que l'amorce non
       // prise : une naissance qu'on ne peut pas inscrire n'est pas une naissance réussie, et
       // rendre `ok: true` serait le succès muet que cette commande existe pour fermer.
+      // ⚠️ ET L'ESPACE SURVIT AVEC LUI. Le défaire est armé pour TOUTE sortie non nulle ; ici,
+      // une sortie non nulle recouvre un agent VIVANT dans son espace. Refermer l'espace le
+      // tuerait — c'est-à-dire exactement ce que l'arbitrage juste au-dessus refuse de faire,
+      // par la porte d'à côté.
+      laisserVivre();
       process.stderr.write(
         `la session de ${paneId} est née dans son espace mais sa déclaration n’a pas pu être ` +
           `inscrite : ${err.message}\n` +
@@ -843,6 +933,9 @@ async function main() {
       essaisDisponible: ESSAIS,
     });
     if (!livre.ok) {
+      // ⚠️ MÊME ARBITRAGE QUE POUR LA DÉCLARATION : le pane reste ouvert, donc l'espace qui le
+      // porte aussi. Le défaire s'applique aux naissances qui n'ont RIEN laissé de vivant.
+      laisserVivre();
       process.stderr.write(
         `la session de ${paneId} est née dans son lieu mais n\u2019a pas pris son amorce : ${livre.message}\n` +
           `  Le pane est laissé ouvert — briefe-la à la main plutôt que de la refaire naître.\n`

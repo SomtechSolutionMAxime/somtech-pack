@@ -547,9 +547,6 @@ export function commandesNaissance(
     lieu = null,
   } = {}
 ) {
-  if (!workspace) {
-    throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
-  }
   if (lieu === null) roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
   const repertoireDeNaissance = lieu ?? cheminLieu(repoRoot, quiVientAuMonde, role);
   // ⚠️ LE NOM PASSE PAR `nomAgentHerdr` DANS LES DEUX CAS, et c'est ce qui garde la règle en un
@@ -562,13 +559,29 @@ export function commandesNaissance(
     role,
     modele,
     mode,
-    tabCreate: [
-      'tab', 'create',
-      '--workspace', workspace,
-      '--cwd', repertoireDeNaissance,
-      '--label', quiVientAuMonde,
-      '--no-focus',
-    ],
+    /**
+     * L'ONGLET — UNE FONCTION DE L'ESPACE, ET PLUS UN TABLEAU TOUT FAIT (D-20260825-0002).
+     *
+     * 🔴 CE QUE CE CHANGEMENT PERMET, ET IL N'EST PAS COSMÉTIQUE. L'espace herdr était créé par
+     * la PORTE D'ENTRÉE, avant même que la naissance démarre : tous ses refus — mandat invalide,
+     * base introuvable, espace de travail occupé, nom que herdr refuse — le laissaient derrière
+     * eux, orphelin, pendant que le refus écrivait « rien n'a été créé ». L'espace naît donc
+     * maintenant DANS la naissance, après ses refus ; mais ces commandes-ci se construisent bien
+     * plus tôt (c'est là qu'un rôle inconnu et un nom innommable doivent échouer, avant qu'un
+     * pane existe). Les deux instants ne coïncident plus : l'onglet reçoit son espace au moment
+     * de partir.
+     *
+     * ⚠️ ET L'EXIGENCE N'A PAS DISPARU, ELLE A SUIVI SON OBJET. Elle vivait en tête de
+     * `commandesNaissance` (« --workspace est requis ») ; elle vit ici, là où l'espace sert
+     * réellement. Un onglet sans espace continue d'échouer AVANT qu'un pane existe — c'est la
+     * même garantie, posée à l'endroit où la valeur est enfin connue.
+     */
+    tabCreate: (espace = workspace) => {
+      if (!espace) {
+        throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
+      }
+      return ['tab', 'create', '--workspace', espace, '--cwd', repertoireDeNaissance, '--label', quiVientAuMonde, '--no-focus'];
+    },
     /**
      * ⚠️ `agent start` REMPLACE `pane run` + la boucle d'attente (T-20260816-0038).
      *

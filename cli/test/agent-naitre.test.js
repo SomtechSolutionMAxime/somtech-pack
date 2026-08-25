@@ -7,13 +7,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  cmdAgent, cheminDeLaNaissance, racineDeLaNaissance, argumentsDeNaissance, espaceDeTravail, AIDE_AGENT,
+  cmdAgent, cheminDeLaNaissance, racineDeLaNaissance, argumentsDeNaissance, AIDE_AGENT,
 } from '../src/commands/agent.js';
 
 /** La racine de ce dépôt — cli/test → cli → racine. */
@@ -135,15 +135,24 @@ test('les options de la naissance sont relayées telles quelles — la porte ne 
   });
   assert.deepEqual(a, [
     'p-20260815-0002',
-    '--workspace', 'w7',
     '--depot', resolve('/depot'),
     '--role', 'orchestrateur',
+    // ⚠️ L'ESPACE EST DÉSORMAIS EN FIN DE LIGNE, ET IL EST CONDITIONNEL (D-20260825-0002) : la
+    // porte n'en ouvre plus, et n'en invente pas. C'est son absence qui dit à la naissance
+    // « ouvre-le toi-même, après tes refus ».
+    '--workspace', 'w7',
     '--session', 'somtech',
     '--modele', 'sonnet',
     '--mode', 'acceptEdits',
     '--amorce-texte', 'commence par lire le registre',
     '--nom-agent', 'bonaventure',
   ]);
+});
+
+test('🔴 sans espace donné, AUCUN `--workspace` ne part — c’est l’absence qui porte le message', () => {
+  const a = argumentsDeNaissance('p-20260815-0002', { depot: '/depot', role: 'chef-equipe' });
+  assert.ok(!a.includes('--workspace'), `un espace inventé : ${a.join(' ')}`);
+  assert.ok(!a.includes(undefined), 'et surtout pas un `undefined` relayé, qui vaudrait « il y en a un »');
 });
 
 test('le rôle par défaut est ORCHESTRATEUR, à l’inverse de la commande sous-jacente', () => {
@@ -195,11 +204,86 @@ test('un lanceur qui meurt sans code de sortie compte comme un ÉCHEC, jamais co
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// 3-bis — 🔴 CE QUE LA PORTE NE DOIT PAS CRÉER AVANT QUE LA NAISSANCE AIT REFUSÉ (défaut ①)
+//
+// 🔴 CE QUE LA REVUE A MESURÉ, sur la ligne EXACTE que les textes prescrivent — sans `--workspace` :
+//
+//     pack agent naitre revue-pr180 --role chef-equipe --depot <d> --coordonnateur moi
+//
+// La porte appelait `herdr workspace create --cwd <d> --label revue-pr180 --no-focus`, PUIS
+// lançait la naissance, qui refusait le mandat en écrivant « Rien n'a été créé : ni espace de
+// travail, ni onglet, ni agent. » L'espace herdr restait, orphelin — et le message mentait.
+// Vaut pour TOUS les refus du chemin : mandat invalide, `--base` introuvable, espace occupé, nom
+// refusé par herdr, session ambiguë. Ils tombent tous après le lancement.
+//
+// ⚠️ POURQUOI AUCUN BANC NE L'A VU : le seul essai bout-en-bout de ce chemin passait
+// `--workspace w7`, ce qui COURT-CIRCUITE l'appel non gardé. Le banc éprouvait une population
+// qui n'était pas celle que les textes prescrivent — le motif même que ce lot ferme ailleurs.
+//
+// LA CORRECTION : la création DESCEND dans la naissance, qui l'ouvre après tous ses refus et
+// sait la défaire quand un échec survient ensuite. La porte, elle, n'ouvre plus rien.
+
+/** Un faux `herdr` en tête de PATH — il journalise, et ne crée rien nulle part. */
+async function avecFauxHerdr(faire) {
+  const d = mkdtempSync(join(tmpdir(), 'agent-naitre-herdr-'));
+  const journal = join(d, 'appels.jsonl');
+  writeFileSync(journal, '');
+  writeFileSync(
+    join(d, 'herdr'),
+    `#!/usr/bin/env node
+const fs = require('fs');
+fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+process.stdout.write(JSON.stringify({ result: { type: 'workspace_created', workspace: { workspace_id: 'wCREE' }, root_pane: { pane_id: 'wCREE:p1', workspace_id: 'wCREE' } } }));
+`
+  );
+  chmodSync(join(d, 'herdr'), 0o755);
+  const avant = process.env.PATH;
+  process.env.PATH = `${d}:${avant}`;
+  try {
+    return await faire(() => readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse));
+  } finally {
+    process.env.PATH = avant;
+    rmSync(d, { recursive: true, force: true });
+  }
+}
+
+test('🔴 sans --workspace, la PORTE n’ouvre aucun espace herdr — c’est la naissance qui le fait, après ses refus', async () =>
+  avecFauxHerdr(async (appels) => {
+    const d = payload(bac());
+    const { lancer } = lanceurFactice(1); // la naissance REFUSE le mandat « revue-pr180 »
+    const s = silence();
+    const code = await cmdAgent(
+      ['naitre', 'revue-pr180', '--depot', d, '--source', d, '--role', 'chef-equipe', '--coordonnateur', 'moi'],
+      { lancer }
+    );
+    s.rendre();
+
+    assert.equal(code, 1, 'le refus de la naissance est relayé');
+    assert.deepEqual(
+      appels(),
+      [],
+      'la porte ne parle PAS à herdr : un espace créé ici survivrait au refus, et le refus dit « rien n’a été créé »'
+    );
+    rmSync(d, { recursive: true, force: true });
+  }));
+
+test('et elle ne relaie pas un --workspace que personne n’a donné — la naissance doit voir qu’il manque', async () =>
+  avecFauxHerdr(async () => {
+    const d = payload(bac());
+    const { lancer, appels } = lanceurFactice(0);
+    const s = silence();
+    await cmdAgent(['naitre', 'e-20260825-0002', '--depot', d, '--source', d, '--role', 'chef-equipe'], { lancer });
+    s.rendre();
+    assert.ok(!appels[0].args.includes('--workspace'), `--workspace inventé : ${appels[0].args.join(' ')}`);
+    rmSync(d, { recursive: true, force: true });
+  }));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // 4 — L'ESPACE DE TRAVAIL
 
-test('un espace donné est réutilisé — on n’en fabrique pas un à chaque relance', () => {
-  const r = espaceDeTravail({ depot: '/d', code: 'j-1', workspace: 'w26' });
-  assert.deepEqual(r, { id: 'w26', cree: false });
+test('un espace donné est RELAYÉ tel quel — on n’en fabrique pas un à chaque relance', () => {
+  const a = argumentsDeNaissance('j-1', { depot: '/d', workspace: 'w26' });
+  assert.equal(a[a.indexOf('--workspace') + 1], 'w26');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
