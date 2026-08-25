@@ -143,6 +143,62 @@ function horodatageCompact(quand) {
   return quand.toISOString().replace(/[-:.]/g, '');
 }
 
+/**
+ * CE QUE `session_herdr` NOMME — l'identité DURABLE d'une session herdr, et rien d'autre.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 CETTE FONCTION EXISTE PARCE QUE DEUX ÉTAGES N'Y METTAIENT PAS LA MÊME CHOSE.
+ *
+ * `session_herdr` est ÉCRIT ici (via `bin/naitre.js`) et LU par `garde-des-naissances.js`. Le
+ * producteur y inscrivait le NOM de la session (« somtech ») ; le consommateur le comparait au
+ * `herdr_socket` du pane, qui est un CHEMIN
+ * (« /Users/…/.config/herdr/sessions/somtech/herdr.sock »). La comparaison était donc TOUJOURS
+ * fausse, et la clé d'appariement « pane-dans-sa-session » n'a jamais pu mordre : la garde ne
+ * tenait que par sa clé de repli, le nom. Chaque module avait son banc, chacun passait — la
+ * jointure n'appartenait à personne.
+ *
+ * 🔴 C'EST LE CONSOMMATEUR QUI CÈDE, ET LA RAISON EST MESURÉE.
+ *
+ *   ① **Une déclaration est un FAIT DURABLE, pas une adresse d'exécution.** Elle survit au
+ *      pane, à la session et au redémarrage du poste. Un chemin de socket y grave un `$HOME` et
+ *      la disposition de la config d'une version de herdr ; le jour où l'une des deux bouge, un
+ *      fait déjà écrit cesse d'apparier — et rien ne le signale.
+ *   ② **Le nom est l'identité que le dispositif emploie DÉJÀ partout ailleurs** : c'est ce que
+ *      l'humain tape (`--session <nom>`), et ce que TOUS les refus de `session.js` nomment.
+ *   ③ **Le nom se dérive du socket, l'inverse est faux.** Le socket porte le nom dans son
+ *      chemin (`sessionsDuPoste` ne trouve les sessions que sous `…/sessions/<nom>/herdr.sock`,
+ *      mesuré sur les 5 sessions qui répondent parmi les 15 du poste le 2026-08-25). Faire
+ *      céder le producteur aurait donc perdu de l'information ET rendu inappariable la
+ *      déclaration DÉJÀ inscrite sur le poste, qui porte « somtech ».
+ *
+ * ⚠️ ELLE N'INVENTE AUCUN NOM. Un socket hors de la forme `…/sessions/<nom>/…` — ce que
+ * `HERDR_SOCKET_PATH` autorise — rend `null`, exactement comme `nomDeSession`. « Je ne sais pas
+ * de quelle session il s'agit » ne doit jamais se replier sur une chaîne qui se comparera
+ * ensuite comme une identité.
+ *
+ * ⚠️ ET ELLE EST IDEMPOTENTE : appliquée à un nom, elle le rend inchangé. C'est ce qui la rend
+ * posable des DEUX côtés de la jointure — un seul endroit à lire pour savoir ce que ce champ
+ * veut dire, donc un seul endroit où une divergence future doit passer.
+ */
+export function identiteDeSession(session) {
+  if (!renseigne(session)) return null;
+  const brut = String(session).trim();
+  // Pas de séparateur ⇒ c'est déjà un nom de session, tel que `--session` l'accepte.
+  if (!/[/\\]/.test(brut)) return brut;
+  const nomme = brut.match(SESSION_DANS_LE_SOCKET);
+  return nomme ? nomme[1] : null;
+}
+
+/**
+ * Là où herdr pose le nom d'une session : `…/sessions/<nom>/herdr.sock`.
+ *
+ * ⚠️ UNE SEULE FOIS DANS LE DÉPÔT. `session.js` s'en sert par `identiteDeSession` plutôt que
+ * d'en garder une copie : deux expressions du même format, c'est deux endroits qui peuvent
+ * diverger — et la divergence de deux lectures du même champ est très exactement le défaut que
+ * cette fonction ferme.
+ */
+const SESSION_DANS_LE_SOCKET = /[/\\]sessions[/\\]([^/\\]+)[/\\][^/\\]+$/;
+
 /** Une valeur fournie, non blanche — `0` ou `false` n'ont pas de sens pour ces champs-ci. */
 function renseigne(valeur) {
   return typeof valeur === 'string' ? valeur.trim().length > 0 : valeur !== undefined && valeur !== null;

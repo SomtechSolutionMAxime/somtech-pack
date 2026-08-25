@@ -59,6 +59,19 @@ import {
 const ICI = dirname(fileURLToPath(import.meta.url));
 const DECISION = resolve(ICI, '..', 'src', 'garde-des-naissances.js');
 
+/**
+ * LE SOCKET D'UNE SESSION, DANS LA FORME EXACTE OÙ HERDR LE DÉPOSE — mesuré le 2026-08-25 sur
+ * les 5 sessions du poste qui répondent.
+ *
+ * 🔴 CE HARNAIS FABRIQUAIT AUTREFOIS `'/bac/s1.sock'` DES DEUX CÔTÉS, et c'est ce qui a caché
+ * le défaut de la jointure : la déclaration recevait la forme du CONSOMMATEUR (un chemin) alors
+ * que le producteur y inscrit un NOM. Les deux côtés se comparaient donc égaux dans le banc et
+ * jamais dans le monde. Depuis : le pane porte le CHEMIN (ce que `herdr pane list` rend), la
+ * déclaration porte le NOM (ce que `bin/naitre.js` inscrit) — chacun sa forme réelle.
+ */
+const socketDe = (nom) => `/bac/.config/herdr/sessions/${nom}/herdr.sock`;
+const SOCKET_S1 = socketDe('s1');
+
 const WT = '/bac/worktrees/un-depot';
 const APRES = `${WT}/20260825-093000`;
 
@@ -86,7 +99,7 @@ const FAUTIF = Object.freeze({
   terminal_title: 'claude',
   terminal_title_stripped: 'claude',
   workspace_id: 'ws1',
-  herdr_socket: '/bac/s1.sock',
+  herdr_socket: SOCKET_S1,
 });
 
 /**
@@ -172,7 +185,7 @@ test('un agent INVENTÉ à l’essai traverse la machinerie sans qu’on touche 
     agent_session: 'session-jamais-vue',
     foreground_cwd: `${WT}/20261231-235959`,
     pane_id: 'z99:p42',
-    herdr_socket: '/bac/inconnue.sock',
+    herdr_socket: socketDe('inconnue'),
     name: null,
     quelque_chose: { de: 'nouveau' },
   };
@@ -207,7 +220,7 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
 
           const pane = {
             agent: true, agent_session: 'ses', pane_id: 'w1:p1',
-            herdr_socket: '/bac/s1.sock', foreground_cwd: espace,
+            herdr_socket: SOCKET_S1, foreground_cwd: espace,
             name: nom === 'conforme' ? 'batiscan' : nom === 'non conforme' ? 'Agent Infra-Ops' : null,
           };
           const agentsHerdr = nom === 'non mesuré' ? [] : [{ ...pane }];
@@ -216,7 +229,7 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
             agents: normaliserLeParc({ panes: [pane], agentsHerdr }),
             registre: {
               declarations: decl === 'déclaré'
-                ? [{ nom: 'peu-importe', pane: 'w1:p1', session_herdr: '/bac/s1.sock', espace, ne_le: '2026-08-25T13:30:00.000Z' }]
+                ? [{ nom: 'peu-importe', pane: 'w1:p1', session_herdr: 's1', espace, ne_le: '2026-08-25T13:30:00.000Z' }]
                 : [],
               illisibles: [],
             },

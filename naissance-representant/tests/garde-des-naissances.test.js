@@ -40,6 +40,19 @@ import {
 // LE HARNAIS — tout ce qui parle au monde entre par paramètre (patron de `recensement.js`)
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * LE SOCKET D'UNE SESSION, DANS LA FORME EXACTE OÙ HERDR LE DÉPOSE — mesuré le 2026-08-25 sur
+ * les 5 sessions du poste qui répondent.
+ *
+ * 🔴 CE HARNAIS FABRIQUAIT AUTREFOIS `'/bac/s1.sock'` DES DEUX CÔTÉS, et c'est ce qui a caché
+ * le défaut de la jointure : la déclaration recevait la forme du CONSOMMATEUR (un chemin) alors
+ * que le producteur y inscrit un NOM. Les deux côtés se comparaient donc égaux dans le banc et
+ * jamais dans le monde. Depuis : le pane porte le CHEMIN (ce que `herdr pane list` rend), la
+ * déclaration porte le NOM (ce que `bin/naitre.js` inscrit) — chacun sa forme réelle.
+ */
+const socketDe = (nom) => `/bac/.config/herdr/sessions/${nom}/herdr.sock`;
+const SOCKET_S1 = socketDe('s1');
+
 /** Un poste dont les worktrees vivent là — jamais le vrai `~/worktrees`. */
 const WT = '/bac/worktrees/un-depot';
 
@@ -54,7 +67,7 @@ const NON_DATABLE = `${WT}/t-0043`;
 
 const agent = (sur = {}) => ({
   pane_id: 'w1:p1',
-  herdr_socket: '/bac/s1.sock',
+  herdr_socket: SOCKET_S1,
   agent_session: 'ses-1',
   foreground_cwd: APRES,
   ...sur,
@@ -67,7 +80,7 @@ const declaration = (sur = {}) => ({
   mandat: 'T-20260825-0013',
   espace: APRES,
   pane: 'w1:p1',
-  session_herdr: '/bac/s1.sock',
+  session_herdr: 's1',
   ne_le: '2026-08-25T13:30:00.000Z',
   pose_par: 'pack agent naitre',
   ...sur,
@@ -135,7 +148,7 @@ function juger({
 test('🔴 LE CAS RÉEL — un chef d’équipe au nom CONFORME dont la déclaration est retirée fait ROUGIR et est NOMMÉ', () => {
   const ESPACE = `${WT}/20260825-101721`;
   const chef = agent({ pane_id: 'w97:p2', foreground_cwd: ESPACE });
-  const vuNomme = [{ pane_id: 'w97:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 't-20260825-0047' }];
+  const vuNomme = [{ pane_id: 'w97:p2', herdr_socket: SOCKET_S1, agent: true, name: 't-20260825-0047' }];
   const saDeclaration = declaration({
     nom: 't-20260825-0047',
     role: 'chef-equipe',
@@ -179,7 +192,7 @@ test('elle NOMME l’agent — pas un compte, un nom', () => {
   // un espace dans le nom, donc hors de la liste blanche du dépôt.
   const { prises, texte } = juger({
     panes: [agent()],
-    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'Agent Infra-Ops' }],
+    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: 'Agent Infra-Ops' }],
     declarations: [],
   });
   assert.equal(prises.length, 1);
@@ -193,7 +206,7 @@ test('elle NOMME l’agent — pas un compte, un nom', () => {
   // elle s'appuie désormais sur une identification qui en est une : le même agent, DÉCLARÉ.
   const declare = juger({
     panes: [agent()],
-    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' }],
+    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: 'ristigouche' }],
     declarations: [declaration({ nom: 'ristigouche' })],
   });
   assert.equal(declare.prises.length, 0);
@@ -206,7 +219,7 @@ test('un agent ANONYME est nommé par son adresse — un anonyme reste ADRESSABL
   // exactement ceux qui manquent le plus au dispositif.
   const { prises, texte } = juger({
     panes: [agent()],
-    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: null }],
+    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: null }],
     declarations: [],
   });
   assert.match(prises[0].designation, /w1:p1/);
@@ -240,8 +253,8 @@ test('la déclaration identifie par le PANE — un anonyme déclaré ne rougit p
 test('la déclaration identifie aussi par le NOM — un pane qui a bougé ne perd pas son agent', () => {
   const r = juger({
     panes: [agent({ pane_id: 'w9:p9' })],
-    agentsHerdr: [{ pane_id: 'w9:p9', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' }],
-    declarations: [declaration({ pane: 'w1:p1', session_herdr: '/autre.sock' })],
+    agentsHerdr: [{ pane_id: 'w9:p9', herdr_socket: SOCKET_S1, agent: true, name: 'ristigouche' }],
+    declarations: [declaration({ pane: 'w1:p1', session_herdr: 'une-autre-session' })],
   });
   assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
 });
@@ -256,16 +269,16 @@ test('une déclaration d’une AUTRE session n’identifie pas un homonyme de pa
   // un homonyme né hors dispositif dans une autre session — un FAUX NÉGATIF, c'est-à-dire
   // exactement ce que cette garde existe pour empêcher.
   const r = juger({
-    panes: [agent({ pane_id: 'w1:p1', herdr_socket: '/bac/session-A.sock' })],
-    declarations: [declaration({ nom: 'un-autre-agent', pane: 'w1:p1', session_herdr: '/bac/session-B.sock' })],
+    panes: [agent({ pane_id: 'w1:p1', herdr_socket: socketDe('session-A') })],
+    declarations: [declaration({ nom: 'un-autre-agent', pane: 'w1:p1', session_herdr: 'session-B' })],
   });
   assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF, 'l’homonyme d’une autre session ne le couvre pas');
   assert.equal(r.prises.length, 1);
 
   // La moitié qui prouve : la MÊME déclaration, dans LA MÊME session, l’identifie.
   const meme = juger({
-    panes: [agent({ pane_id: 'w1:p1', herdr_socket: '/bac/session-A.sock' })],
-    declarations: [declaration({ nom: 'un-autre-agent', pane: 'w1:p1', session_herdr: '/bac/session-A.sock' })],
+    panes: [agent({ pane_id: 'w1:p1', herdr_socket: socketDe('session-A') })],
+    declarations: [declaration({ nom: 'un-autre-agent', pane: 'w1:p1', session_herdr: 'session-A' })],
   });
   assert.equal(meme.verdict, VERDICTS.RIEN_A_SIGNALER);
 });
@@ -287,7 +300,7 @@ test('un NOM conforme n’identifie RIEN — et la prise le DIT sur sa propre li
   // rougir. `T-20260822-0018` l'avait établi en toutes lettres : le nom identifie, il ne CLASSE
   // pas — il ne porte ni le rôle, ni le coordonnateur, ni l'espace.
   const r = juger({
-    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' }],
+    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: 'batiscan' }],
     declarations: [],
   });
   assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF);
@@ -313,8 +326,8 @@ test('le CHIFFRE du bascule franchit la SORTIE — pas seulement la structure', 
   const r = juger({
     panes: [agent({ pane_id: 'w1:p1' }), agent({ pane_id: 'w1:p2' })],
     agentsHerdr: [
-      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
-      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' },
+      { pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: 'batiscan' },
+      { pane_id: 'w1:p2', herdr_socket: SOCKET_S1, agent: true, name: 'ristigouche' },
     ],
     declarations: [],
   });
@@ -326,7 +339,7 @@ test('un nom qui n’est PAS conforme n’identifie rien — « bash » n’est 
   // ⚠️ Le nom du pane peut venir du titre du terminal, pas du dispositif. L'accepter sans le
   // juger ferait de n'importe quel shell un agent régulier.
   const r = juger({
-    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: '../evil' }],
+    agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: '../evil' }],
     declarations: [],
   });
   assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF);
@@ -469,7 +482,7 @@ test('un FAUX REFUS se mesure par une AUTRE clé que celle qui a servi à appari
   // — est inchangée.)
   const r = juger({
     panes: [agent({ pane_id: 'w7:p7' })],
-    agentsHerdr: [{ pane_id: 'w7:p7', herdr_socket: '/bac/s1.sock', agent: true, name: 'un-autre' }],
+    agentsHerdr: [{ pane_id: 'w7:p7', herdr_socket: SOCKET_S1, agent: true, name: 'un-autre' }],
     declarations: [declaration({ nom: 'un-autre', pane: 'w7:p7', espace: APRES })],
   });
   assert.equal(r.comptes.prises, 0, 'sa déclaration l’identifie');
@@ -478,8 +491,8 @@ test('un FAUX REFUS se mesure par une AUTRE clé que celle qui a servi à appari
   // Le même, sans nom du tout : il est pris, ET le croisement par l'espace le signale.
   const r2 = juger({
     panes: [agent({ pane_id: 'w7:p7' })],
-    agentsHerdr: [{ pane_id: 'w7:p7', herdr_socket: '/bac/s1.sock', agent: true, name: null }],
-    declarations: [declaration({ nom: 'ristigouche', pane: 'w1:p1', session_herdr: '/autre.sock', espace: APRES })],
+    agentsHerdr: [{ pane_id: 'w7:p7', herdr_socket: SOCKET_S1, agent: true, name: null }],
+    declarations: [declaration({ nom: 'ristigouche', pane: 'w1:p1', session_herdr: 'une-autre-session', espace: APRES })],
   });
   assert.equal(r2.comptes.prises, 1);
   assert.equal(r2.comptes.fauxRefus, 1, 'une déclaration porte cet espace : l’appariement a raté');
@@ -505,8 +518,8 @@ test('le vert dit SUR QUOI il repose — un vert porté par une seule source est
       agent({ pane_id: 'w1:p2', foreground_cwd: `${APRES}/.orchestrateur/batiscan` }),
     ],
     agentsHerdr: [
-      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: 'ristigouche' },
-      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
+      { pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: 'ristigouche' },
+      { pane_id: 'w1:p2', herdr_socket: SOCKET_S1, agent: true, name: 'batiscan' },
     ],
     declarations: [declaration({ nom: 'ristigouche', pane: 'w1:p1' })],
     roleDuLieu: lieuEtabli,
@@ -545,13 +558,13 @@ test('parc vivant = hors portée + population, et population = identifiés + pri
       agent({ pane_id: 'w1:p4' }),                                   // identifié
     ],
     agentsHerdr: [
-      { pane_id: 'w1:p1', herdr_socket: '/bac/s1.sock', agent: true, name: null },
-      { pane_id: 'w1:p2', herdr_socket: '/bac/s1.sock', agent: true, name: null },
-      { pane_id: 'w1:p3', herdr_socket: '/bac/s1.sock', agent: true, name: null },
+      { pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: null },
+      { pane_id: 'w1:p2', herdr_socket: SOCKET_S1, agent: true, name: null },
+      { pane_id: 'w1:p3', herdr_socket: SOCKET_S1, agent: true, name: null },
       // ⚠️ IDENTIFIÉ PAR SA DÉCLARATION, plus par son nom : `w1:p4` portait `batiscan` et
       // basculait dans les prises depuis que le nom n'identifie plus. Les deux assertions
       // d'ÉQUILIBRE ci-dessous — la fonction de ce banc — n'ont jamais bougé.
-      { pane_id: 'w1:p4', herdr_socket: '/bac/s1.sock', agent: true, name: 'batiscan' },
+      { pane_id: 'w1:p4', herdr_socket: SOCKET_S1, agent: true, name: 'batiscan' },
     ],
     declarations: [declaration({ nom: 'batiscan', pane: 'w1:p4' })],
   });

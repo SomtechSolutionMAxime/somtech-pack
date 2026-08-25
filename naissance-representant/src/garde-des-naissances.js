@@ -93,6 +93,10 @@
 // de garde est un INTERRUPTEUR DE DÉSARMEMENT qu'on actionne sans diff. Un banc l'interdit.
 
 import { nomDeLieuValide } from '../../ligne-directe/src/lieu-nom.js';
+// ⚠️ LA JOINTURE A UN SEUL ENDROIT OÙ VIVRE, ET C'EST LE MODULE QUI DÉFINIT LE CHAMP. Lire
+// `session_herdr` avec une expression écrite ICI recréerait, à un fichier de distance, la
+// divergence exacte que ce lot ferme — deux étages qui n'y mettent pas la même chose.
+import { identiteDeSession } from './declaration.js';
 import { lieuDeRoleDansLeChemin, nomDeLAgent } from '../../ligne-directe/src/recensement.js';
 
 /**
@@ -316,13 +320,39 @@ function verifierLaFrontiere(declarations, miseEnService) {
   return frontiere;
 }
 
-/** L'agent est-il couvert par une déclaration ? Par son pane DANS sa session, ou par son nom. */
+/**
+ * L'agent est-il couvert par une déclaration ? Par son pane DANS sa session, ou par son nom.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 LES DEUX CÔTÉS DE LA SESSION PASSENT PAR `identiteDeSession`, ET C'EST LE CORRECTIF.
+ *
+ * Ils ne parlaient pas la même langue : la déclaration porte le NOM de la session (« somtech »,
+ * ce que `bin/naitre.js` inscrit), l'agent porte le CHEMIN de son socket
+ * (« /Users/…/.config/herdr/sessions/somtech/herdr.sock », ce que `herdr pane list` rend). La
+ * comparaison directe était donc TOUJOURS fausse sur une déclaration écrite par le vrai geste :
+ * **cette clé-ci n'a jamais mordu**, et le vert de cette garde ne tenait que par le repli sur
+ * le nom — alors que la méthode imprimée annonçait les deux.
+ *
+ * Le prix se payait sur la population que la garde vise : quand `agent list` ne rend pas le nom
+ * d'un agent — mesuré à 83 panes sur 227 un jour — un agent parfaitement DÉCLARÉ devenait une
+ * PRISE. Un faux refus, sur le seul agent régulier du poste.
+ *
+ * ⚠️ UNE SESSION INCONNUE N'APPARIE RIEN. `identiteDeSession` rend `null` sur un socket hors de
+ * la forme `…/sessions/<nom>/…` — elle n'invente aucun nom. Laisser deux `null` se comparer
+ * égaux apparierait sur le SEUL pane, c'est-à-dire le défaut que cette clé existe pour fermer :
+ * un identifiant de pane n'est unique que dans sa session, et ce poste en porte quinze. On
+ * exige donc les deux côtés NOMMÉS, et l'incertitude tombe du côté prudent — le repli par le
+ * nom reste disponible, et un agent qu'aucune des deux clés n'atteint reste une prise.
+ */
 function declarationDe(agent, declarations) {
   const nom = agent.nom?.mesure === 'lu' ? agent.nom.valeur : null;
+  const session = identiteDeSession(agent.session);
   return (
-    declarations.find(
-      (d) => d?.pane && d.pane === agent.pane && (d.session_herdr ?? null) === (agent.session ?? null)
-    ) ||
+    (session === null
+      ? null
+      : declarations.find(
+          (d) => d?.pane && d.pane === agent.pane && identiteDeSession(d.session_herdr) === session
+        )) ||
     (nom ? declarations.find((d) => d?.nom === nom) : null) ||
     null
   );
@@ -509,7 +539,10 @@ export function jugerLeParc({
     prises:
       'un agent VIVANT dont l’espace de travail porte un horodatage de naissance postérieur à ' +
       `« ${miseEnService} », et qu’AUCUNE des DEUX sources n’identifie — ni une déclaration ` +
-      '(appariée par pane-dans-sa-session, ou par nom), ni un lieu de rôle établi sur disque. ' +
+      '(appariée par pane-dans-sa-session, ou à défaut par nom ; la session se compare par son ' +
+      'NOM, celui que la déclaration inscrit et que le socket du pane porte dans son chemin — ' +
+      'une session que rien ne nomme n’apparie personne par le pane), ni un lieu de rôle ' +
+      'établi sur disque. ' +
       'Son NOM n’entre pas dans ce jugement, si conforme soit-il : le nom d’un agent né par le ' +
       'dispositif est le code de son mandat, donc toujours conforme — l’accepter comme preuve ' +
       'rendait la branche « déclaration retirée » incapable de rougir pour la population même ' +

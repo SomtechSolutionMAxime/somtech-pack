@@ -87,13 +87,19 @@ function lancer({ panes = [], agents = [], declarations = [], casse = false, env
       ...process.env,
       HOME: bac,
       PATH: `${abri}:${process.env.PATH}`,
-      HERDR_SOCKET_PATH: join(bac, 'faux.sock'),
+      HERDR_SOCKET_PATH: SOCKET_DU_BANC,
       SOMTECH_NAISSANCES_RACINE: registre,
       ...env,
     },
   });
   return { ...r, journal, registre };
 }
+
+// 🔴 LA FORME RÉELLE D'UN SOCKET HERDR — `…/sessions/<nom>/herdr.sock`. Ce banc posait
+// autrefois `<bac>/faux.sock`, un chemin qui ne porte AUCUN nom de session : la déclaration
+// qu'il écrivait à côté portait ce même chemin, si bien que la jointure se comparait égale ici
+// et jamais dans le monde. Le pane porte le CHEMIN, la déclaration porte le NOM.
+const SOCKET_DU_BANC = join(bac, '.config', 'herdr', 'sessions', 'faux', 'herdr.sock');
 
 const WT = '/bac/worktrees/un-depot';
 const APRES = `${WT}/20260825-093000`;
@@ -127,15 +133,15 @@ test('LE CRITÈRE N°1 PAR LE BINAIRE : déclaration retirée ⇒ rouge, et le f
   // La moitié qui prouve, d'abord — avec sa déclaration, le binaire sort en 0.
   const avec = lancer({
     panes: [pane()],
-    agents: [{ ...pane(), herdr_socket: join(bac, 'faux.sock') }],
-    declarations: [declaration({ session_herdr: join(bac, 'faux.sock') })],
+    agents: [{ ...pane(), herdr_socket: SOCKET_DU_BANC }],
+    declarations: [declaration({ session_herdr: 'faux' })],
   });
   assert.equal(avec.status, SORTIES[VERDICTS.RIEN_A_SIGNALER], avec.stdout + avec.stderr);
 
   // Puis le geste du critère : on retire la déclaration, rien d'autre.
   const sans = lancer({
     panes: [pane()],
-    agents: [{ ...pane(), herdr_socket: join(bac, 'faux.sock') }],
+    agents: [{ ...pane(), herdr_socket: SOCKET_DU_BANC }],
     declarations: [],
   });
   assert.equal(sans.status, SORTIES[VERDICTS.NES_HORS_DISPOSITIF], sans.stdout + sans.stderr);
@@ -144,7 +150,7 @@ test('LE CRITÈRE N°1 PAR LE BINAIRE : déclaration retirée ⇒ rouge, et le f
 });
 
 test('les deux chiffres et leur méthode franchissent la sortie du binaire', () => {
-  const r = lancer({ panes: [pane()], agents: [{ ...pane(), herdr_socket: join(bac, 'faux.sock') }] });
+  const r = lancer({ panes: [pane()], agents: [{ ...pane(), herdr_socket: SOCKET_DU_BANC }] });
   assert.match(r.stdout, /prises\s*:\s*1/);
   assert.match(r.stdout, /refus à tort \(mesurés\)\s*:\s*0/);
   assert.match(r.stdout, /méthode/);
@@ -184,7 +190,7 @@ test('herdr INJOIGNABLE fait REFUSER — jamais « rien à signaler »', () => {
 });
 
 test('un registre de naissances ILLISIBLE fait REFUSER — et ce n’est pas un registre absent', () => {
-  const parc = { panes: [pane()], agents: [{ ...pane(), herdr_socket: join(bac, 'faux.sock') }] };
+  const parc = { panes: [pane()], agents: [{ ...pane(), herdr_socket: SOCKET_DU_BANC }] };
 
   // Absent : le poste où personne n'est né. La garde JUGE, et l'agent récent est une prise.
   const absent = lancer(parc);
@@ -200,7 +206,7 @@ test('un registre de naissances ILLISIBLE fait REFUSER — et ce n’est pas un 
     const bloque = spawnSync(process.execPath, [BIN], {
       encoding: 'utf8',
       env: { ...process.env, HOME: bac, PATH: `${join(bac, 'bin')}:${process.env.PATH}`,
-        HERDR_SOCKET_PATH: join(bac, 'faux.sock'), SOMTECH_NAISSANCES_RACINE: ferme.registre },
+        HERDR_SOCKET_PATH: SOCKET_DU_BANC, SOMTECH_NAISSANCES_RACINE: ferme.registre },
     });
     assert.equal(bloque.status, SORTIE_REFUS, bloque.stdout + bloque.stderr);
     assert.doesNotMatch(bloque.stdout, /rien à signaler/);
@@ -222,8 +228,8 @@ test('la borne se VOIT dans la sortie — les hors-portée sont comptés et nomm
   const r = lancer({
     panes: [vieux, indatable],
     agents: [
-      { ...vieux, herdr_socket: join(bac, 'faux.sock') },
-      { ...indatable, herdr_socket: join(bac, 'faux.sock') },
+      { ...vieux, herdr_socket: SOCKET_DU_BANC },
+      { ...indatable, herdr_socket: SOCKET_DU_BANC },
     ],
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -237,7 +243,7 @@ test('une FRONTIÈRE contredite par le registre fait REFUSER le binaire', () => 
   // à la frontière prouve que le dispositif tournait déjà, donc la garde ne se prononce pas.
   const r = lancer({
     panes: [pane()],
-    agents: [{ ...pane(), herdr_socket: join(bac, 'faux.sock') }],
+    agents: [{ ...pane(), herdr_socket: SOCKET_DU_BANC }],
     declarations: [declaration({ ne_le: '2026-08-01T10:00:00.000Z', nom: 'temiscouata' })],
   });
   assert.equal(r.status, SORTIE_REFUS, r.stdout + r.stderr);
@@ -248,7 +254,7 @@ test('`--json` rend la structure entière, pour qu’une chaîne puisse s’en s
   const r = spawnSync(process.execPath, [BIN, '--json'], {
     encoding: 'utf8',
     env: { ...process.env, HOME: bac, PATH: `${join(bac, 'bin')}:${process.env.PATH}`,
-      HERDR_SOCKET_PATH: join(bac, 'faux.sock'), SOMTECH_NAISSANCES_RACINE: join(bac, 'vide') },
+      HERDR_SOCKET_PATH: SOCKET_DU_BANC, SOMTECH_NAISSANCES_RACINE: join(bac, 'vide') },
   });
   const lu = JSON.parse(r.stdout);
   assert.ok(Object.hasOwn(lu, 'verdict'));
