@@ -76,6 +76,115 @@ const COPIE = join(ICI, 'pieces', 'vue-du-parc-avant-le-parallelisme.js.txt');
 
 /** L'empreinte du prédécesseur, épinglée. La copie dérive → ce banc rougit. */
 const EMPREINTE_DU_PREDECESSEUR = '65acbedd824e5d1fc8521a2a0c1b8cf21a4d9236d3af9e7714f76cce45d41c98';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LES APPORTS DES LOTS POSTÉRIEURS — LA LISTE ÉPINGLÉE, ET CHAQUE LIGNE PORTE SON LOT
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 POURQUOI CE BANC A CESSÉ DE COMPARER « PAS UN OCTET » (arbitrage de `kamouraska`,
+ * 2026-08-25, inscrit en commentaire de T-20260825-0002).
+ *
+ * Ce banc gèle un ÉTAT — le rendu du moteur au commit `1492aa0` — pour prouver une PROPRIÉTÉ :
+ * que la parallélisation n'a rien changé. Cette preuve est **ACQUISE** à la tête mergée de
+ * #327. Ce que le banc continue de geler ensuite, c'est l'état, pas la propriété : tout lot
+ * postérieur qui touche au rendu le fait rougir, et il rougirait pour une raison qui n'est pas
+ * la sienne.
+ *
+ * ⚠️ CE QU'ON NE FAIT PAS, ET POURQUOI. Mettre à jour la copie figée avec le moteur du jour
+ * ferait comparer le code à lui-même : le banc ne prouverait plus rien, et c'est le geste qui
+ * ressemble à de l'entretien tout en désarmant la garde. Fabriquer « le moteur du jour moins la
+ * parallélisation » ferait naître un double non conforme, le motif que ce dépôt paie le plus
+ * cher. On BORNE donc la comparaison au périmètre de la parallélisation.
+ *
+ * ⚠️ ET LA BORNE EST TRACÉE : chaque entrée dit QUEL LOT l'a ajoutée et POURQUOI. Une liste
+ * d'exceptions anonyme se désarme par un geste qui a l'air d'un entretien — on y ajoute un nom,
+ * personne en revue n'y voit rien. Nommer le lot rend l'ajout discutable.
+ *
+ * ⚠️ ET ELLE NE PEUT PAS SE PÉRIMER EN SILENCE : un contrôle plus bas exige que CHAQUE entrée
+ * soit RÉELLEMENT rencontrée dans la vue courante. Une entrée qui ne sert plus rougit — sinon
+ * la liste ne ferait que grossir, en couvrant des écarts que plus personne ne produit.
+ */
+const APPORTS_POSTERIEURS = [
+  {
+    quoi: 'champ',
+    nom: 'nomDeclare',
+    lot: 'E-20260825-0001',
+    pourquoi: 'le nom déclaré au registre (`assigned_agent`), source admise par RA-VUE-005 amendée',
+  },
+  {
+    quoi: 'champ',
+    nom: 'declarationMesuree',
+    lot: 'E-20260825-0001',
+    pourquoi: 'dit qu’on n’a pas pu lire EN ENTIER ce que le registre déclare — l’absence ne se comble pas',
+  },
+  {
+    quoi: 'champ',
+    nom: 'chantiersAvecEcart',
+    lot: 'E-20260825-0001',
+    pourquoi: 'le compte des chantiers portant une contradiction mandat↔registre, au résumé',
+  },
+  {
+    quoi: 'suffixe',
+    sur: 'pourquoi',
+    texte: ', et le registre ne déclare aucun nom sur ce travail',
+    lot: 'E-20260825-0001',
+    pourquoi: 'la phrase dit désormais ce que le registre porte, en plus du mandat',
+  },
+  {
+    quoi: 'suffixe',
+    sur: 'pourquoi',
+    texte:
+      ', et ce que le registre déclare n’a PAS pu être lu EN ENTIER — ceci n’est donc PAS ' +
+      '« personne n’y est déclaré »',
+    lot: 'E-20260825-0001',
+    pourquoi: 'le trou de mesure sur la déclaration, quand les stories ont refusé ou que la page était pleine',
+  },
+  {
+    quoi: 'remplace',
+    nom: 'regle',
+    lot: 'E-20260825-0001',
+    pourquoi: 'la règle rendue avec la vue nomme les deux sources depuis l’amendement du BRD',
+  },
+];
+
+/**
+ * LA VUE, RAMENÉE AU PÉRIMÈTRE DE LA PARALLÉLISATION — et elle DIT ce qu'elle a rencontré.
+ *
+ * ⚠️ ELLE REND `rencontres` PLUTÔT QUE DE SE TAIRE : c'est ce qui permet au contrôle de
+ * péremption d'exister. Une normalisation muette ne peut pas prouver qu'elle a servi.
+ */
+function auPerimetreDuParallelisme(valeur, rencontres = new Set()) {
+  if (Array.isArray(valeur)) return { v: valeur.map((x) => auPerimetreDuParallelisme(x, rencontres).v), rencontres };
+  if (!valeur || typeof valeur !== 'object') return { v: valeur, rencontres };
+
+  const sortie = {};
+  for (const [cle, val] of Object.entries(valeur)) {
+    const champ = APPORTS_POSTERIEURS.find((a) => a.quoi === 'champ' && a.nom === cle);
+    if (champ) {
+      rencontres.add(champ.nom);
+      continue;
+    }
+    const remplace = APPORTS_POSTERIEURS.find((a) => a.quoi === 'remplace' && a.nom === cle);
+    if (remplace) {
+      rencontres.add(remplace.nom);
+      continue;
+    }
+    if (typeof val === 'string') {
+      let texte = val;
+      for (const s of APPORTS_POSTERIEURS.filter((a) => a.quoi === 'suffixe' && a.sur === cle)) {
+        if (texte.includes(s.texte)) {
+          rencontres.add(s.texte);
+          texte = texte.split(s.texte).join('');
+        }
+      }
+      sortie[cle] = texte;
+      continue;
+    }
+    sortie[cle] = auPerimetreDuParallelisme(val, rencontres).v;
+  }
+  return { v: sortie, rencontres };
+}
 const COMMIT_DU_PREDECESSEUR = '1492aa0b43cd3b22970194c9b2dbf7641b971ca4';
 
 /**
@@ -354,12 +463,35 @@ test('LE MÊME INSTANTANÉ REND LA MÊME VUE — champ à champ, contre le code 
   const epicsMuets = apres.orchestrateurs.flatMap((o) => o.epics ?? []).filter((e) => e.stories === null);
   assert.ok(epicsMuets.length >= 1, 'l’instantané doit porter au moins un epic dont les stories REFUSENT');
 
-  assert.deepStrictEqual(apres, avant, 'la vue parallèle diffère de la vue séquentielle');
+  // ⚠️ LA COMPARAISON SE BORNE AU PÉRIMÈTRE DE LA PARALLÉLISATION — voir `APPORTS_POSTERIEURS`.
+  // Ce que ce banc doit prouver est que la parallélisation ne change rien ; il ne peut pas
+  // aussi geler le rendu contre tout lot futur, sinon il rougit pour la raison d’un autre.
+  const { v: apresBorne, rencontres } = auPerimetreDuParallelisme(apres);
+  const { v: avantBorne } = auPerimetreDuParallelisme(avant);
+
+  // 🔴 LE CONTRÔLE DE PÉREMPTION — condition n°2 de l’arbitrage. Une entrée qui ne sert plus
+  // rougit ici : sans lui, la liste ne ferait que grossir, en couvrant des écarts que plus
+  // personne ne produit. C’est ce qui l’empêche de devenir une allowlist muette.
+  const jamaisVues = APPORTS_POSTERIEURS.filter(
+    (a) => !rencontres.has(a.quoi === 'suffixe' ? a.texte : a.nom)
+  ).map((a) => `${a.lot} · ${a.quoi === 'suffixe' ? a.texte : a.nom}`);
+  assert.deepEqual(
+    jamaisVues,
+    [],
+    `ces apports sont déclarés mais le moteur ne les produit plus — la liste est périmée, ` +
+      `et une exception qui ne sert plus couvre des écarts que personne ne produit`
+  );
+
+  assert.deepStrictEqual(apresBorne, avantBorne, 'la vue parallèle diffère de la vue séquentielle');
 
   // ⚠️ ET L'ÉGALITÉ DES OCTETS ENSUITE, parce que `deepStrictEqual` ne regarde PAS l'ordre des
   // clés d'un objet ni ne distingue un `undefined` absent d'un `undefined` présent — or c'est
   // du JSON qui part au socket, et le dirigeant lit ce JSON-là.
-  assert.equal(JSON.stringify(apres), JSON.stringify(avant), 'les deux vues ne rendent pas les mêmes octets');
+  assert.equal(
+    JSON.stringify(apresBorne),
+    JSON.stringify(avantBorne),
+    'les deux vues ne rendent pas les mêmes octets'
+  );
 });
 
 test('ET LE TEXTE QUE LE DIRIGEANT LIT EST LE MÊME — pas seulement le JSON', { timeout: BORNE_PAR_ESSAI_MS }, async () => {
@@ -368,7 +500,25 @@ test('ET LE TEXTE QUE LE DIRIGEANT LIT EST LE MÊME — pas seulement le JSON', 
   // champ tableau par tableau, et l'arbre affiché serait dans un autre ordre.
   const avant = rendreLaVue(await vueSequentielle());
   const apres = rendreLaVue(await vueParallele());
-  assert.equal(apres, avant, 'le texte rendu diffère');
+  // ⚠️ MÊME BORNE QUE POUR LE JSON, sur le texte : les suffixes et la règle rendue viennent
+  // de lots postérieurs. Ce qui reste comparé — l’ORDRE des lignes, l’arbre, les marques —
+  // est exactement ce que la parallélisation pourrait casser.
+  const borner = (t) => {
+    let s = t;
+    for (const a of APPORTS_POSTERIEURS.filter((x) => x.quoi === 'suffixe')) s = s.split(a.texte).join('');
+    // ⚠️ LA RÈGLE RENDUE EN PIED SE BORNE AUSSI — elle est déclarée `remplace` pour le JSON, et
+    // le texte la porte en toutes lettres. L'oublier ici bornait une surface sur deux. On
+    // retire la LIGNE, repérée par son ouverture stable plutôt que par son texte exact : sinon
+    // la borne se périmerait à chaque amendement du BRD.
+    if (APPORTS_POSTERIEURS.some((x) => x.quoi === 'remplace' && x.nom === 'regle')) {
+      s = s
+        .split('\n')
+        .filter((l) => !l.startsWith('cette vue LIT et REND'))
+        .join('\n');
+    }
+    return s;
+  };
+  assert.equal(borner(apres), borner(avant), 'le texte rendu diffère');
   assert.ok(apres.includes('P-20260820-0001'), "l'instantané doit vraiment porter le chantier à deux porteurs");
 });
 
@@ -401,8 +551,14 @@ test('UN INSTANTANÉ QUI REFUSE REND LE MÊME REFUS DES DEUX CÔTÉS', { timeout
 
   const avant = await vueSequentielle({ refuser });
   const apres = await vueParallele({ refuser });
-  assert.deepStrictEqual(apres, avant, 'le refus ne se rend pas pareil');
-  assert.equal(JSON.stringify(apres), JSON.stringify(avant), 'le refus ne rend pas les mêmes octets');
+  const { v: apresBorne } = auPerimetreDuParallelisme(apres);
+  const { v: avantBorne } = auPerimetreDuParallelisme(avant);
+  assert.deepStrictEqual(apresBorne, avantBorne, 'le refus ne se rend pas pareil');
+  assert.equal(
+    JSON.stringify(apresBorne),
+    JSON.stringify(avantBorne),
+    'le refus ne rend pas les mêmes octets'
+  );
 
   // ⚠️ ET ON VÉRIFIE QUE LE BANC A VRAIMENT FAIT REFUSER QUELQUE CHOSE. Deux vues identiquement
   // intactes seraient vertes ici sans avoir rien éprouvé — c'est la forme « une étape verte
