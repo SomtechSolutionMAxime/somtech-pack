@@ -57,6 +57,9 @@ export const COMPETENCES = {
 export const CHEMIN_LIGNE = join('ligne-directe', 'bin', 'ligne-directe.js');
 export const CHEMIN_NAISSANCE = join('naissance-representant', 'bin', 'naitre.js');
 export const CHEMIN_CLI = join('cli', 'src', 'cli.js');
+
+/** Le registre des rôles du CLI — la table que la forme `<rôle>-update` résout. */
+export const CHEMIN_REGISTRE_CLI = join('cli', 'src', 'commands', 'representant.js');
 /** Les deux modules dont les motifs de refus sont RENDUS à l'appelant d'une pose. */
 export const CHEMINS_REFUS = [join('ligne-directe', 'src', 'lieu-agent.js'), join('ligne-directe', 'src', 'orchestrateur.js')];
 
@@ -108,7 +111,34 @@ export function sousCommandesDuPack(racine = REPO) {
   // texte juste — et c'est comme ça qu'on désarme une garde.
   const parLeSwitch = [...src.matchAll(/case '([a-z][a-z-]*)':\s*return await cmd/g)].map((m) => m[1]);
   const relayees = [...src.matchAll(/argv\[0\]\s*===\s*'([a-z][a-z-]*)'/g)].map((m) => m[1]);
-  return new Set([...parLeSwitch, ...relayees]);
+
+  // ⚠️ TROISIÈME FAÇON DE DISPATCHER, ET ELLE N'A PAS DE `case` À LIRE (T-20260826-0083).
+  //
+  // `<rôle>-update` ne s'énumère plus dans le `switch` : le `default` reconnaît la forme et
+  // résout le rôle au REGISTRE DU CLI (`ROLES`, dans commands/representant.js). Deux `case`
+  // littéraux y vivaient — `representant-update`, `orchestrateur-update` — et ils laissaient
+  // tout rôle ajouté au registre SANS commande de mise à jour, derrière un « commande
+  // inconnue » qui ne désignait pas le manque.
+  //
+  // Ce relevé a rougi au moment exact où ces deux `case` sont partis, en accusant une
+  // compétence d'enseigner « pack orchestrateur-update ». La commande, elle, marchait
+  // toujours — mesuré : elle rend « ce orchestrateur n'a jamais été posé », pas « commande
+  // inconnue ». C'était donc le RELEVÉ qui était incomplet, pas le texte : très exactement ce
+  // que l'avertissement ci-dessus décrit, une deuxième fois et sur la même fonction.
+  //
+  // On lit le registre SOUS `racine`, jamais par un `import` : cette fonction mesure le CLI
+  // de l'arbre qu'on lui désigne — un import rendrait toujours celui de ce dépôt-ci, et le
+  // contrôle mesurerait un autre objet que celui qu'on lui demande.
+  const registre = readFileSync(join(racine, CHEMIN_REGISTRE_CLI), 'utf8');
+  const corps = registre.match(/export const ROLES = \{([\s\S]*?)\n\};/);
+  // Un registre qu'on ne sait pas lire n'est PAS un registre vide : on le dit plutôt que de
+  // rendre une surface amputée, qui ferait accuser à tort la première compétence venue.
+  if (!corps) throw new Error(`le registre des rôles du CLI n'a pas pu être lu sous « ${racine} » (${CHEMIN_REGISTRE_CLI})`);
+  const roles = [...corps[1].matchAll(/^\s{2}([a-z][a-z-]*):\s*\{/gm)].map((m) => m[1]);
+  if (roles.length === 0) throw new Error(`aucun rôle relevé dans le registre du CLI sous « ${racine} » — le relevé ne prouverait rien`);
+  const parLeRegistre = roles.map((r) => `${r}-update`);
+
+  return new Set([...parLeSwitch, ...relayees, ...parLeRegistre]);
 }
 
 /**

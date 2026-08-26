@@ -8,7 +8,7 @@ import { cmdSetup } from './commands/setup.js';
 import { cmdBrd } from './commands/brd.js';
 import { cmdArchi, isArchiCommand } from './commands/archi.js';
 import { cmdAgent } from './commands/agent.js';
-import { cmdRepresentantUpdate, cmdOrchestrateurUpdate } from './commands/representant.js';
+import { cmdLieuUpdate, ROLES } from './commands/representant.js';
 // L'aide CITE la règle, elle ne la décrit pas (T-20260814-0101, relevé en revue) : deux
 // textes qui disent la même chose divergent, c'est mécanique — et ici le texte périmé était
 // le PREMIER que l'opérateur lisait avant d'agir.
@@ -232,12 +232,32 @@ export async function run(argv) {
       case 'update': return await cmdUpdate(flags);
       case 'setup': return await cmdSetup(flags);
       case 'brd': return await cmdBrd(positionals, flags);
-      case 'representant-update': return await cmdRepresentantUpdate(flags);
-      case 'orchestrateur-update': return await cmdOrchestrateurUpdate(flags);
-      default:
+      default: {
+        // ═══ « <rôle>-update » SE RÉSOUT AU REGISTRE, IL NE S'ÉNUMÈRE PLUS.
+        //
+        // Deux `case` littéraux vivaient ici — `representant-update`, `orchestrateur-update` —
+        // alors que `cmdLieuUpdate(flags, rôle)` est générique depuis toujours : le rôle n'y
+        // décide que du gabarit source et du dossier cible. Les deux enveloppes ne faisaient
+        // que fixer une chaîne.
+        //
+        // ⚠️ CE QUE L'ÉNUMÉRATION COÛTAIT, ET CE N'EST PAS THÉORIQUE : un rôle inscrit au
+        // registre sans son `case` ici n'avait PAS de commande de mise à jour, et le `default`
+        // rendait 1 — le même code qu'une commande inconnue. Un appelant qui ne lit que le code
+        // de sortie voyait un refus ordinaire là où il manquait une ligne. Mesuré en fermant
+        // T-20260826-0083 : ajouter un rôle au registre faisait rougir six contrôles de
+        // `fraicheur-a-la-mise-a-jour`, tous pointant ce `switch`.
+        //
+        // Le registre du CLI (`ROLES`, dans commands/representant.js) est la seule table
+        // consultée. Un rôle qu'il ne porte pas retombe sur « commande inconnue » — on ne
+        // devine pas un rôle à partir de la forme de son nom.
+        const cible = /^(.+)-update$/.exec(command);
+        if (cible && Object.prototype.hasOwnProperty.call(ROLES, cible[1])) {
+          return await cmdLieuUpdate(flags, cible[1]);
+        }
         console.error(`✗ Commande inconnue : ${command}\n`);
         console.log(HELP);
         return 1;
+      }
     }
   } catch (e) {
     console.error(`✗ ${e.message}`);
