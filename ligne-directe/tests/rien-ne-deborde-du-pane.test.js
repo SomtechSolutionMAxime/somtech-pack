@@ -1219,3 +1219,42 @@ test('LE DOUBLE REPRODUIT ENCORE L’INCIDENT — un double qui ne reproduit plu
     );
   }
 });
+
+test('TOUT CE QUE LE DOUBLE EXPORTE A UN APPELANT — un orphelin a l’air d’un garde et n’en est pas', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 TROIS FONCTIONS EXPORTÉES SANS AUCUN APPELANT ONT VÉCU DANS CE FICHIER, ET LEUR LÉGENDE
+  // LES DÉCLARAIT ACTIVES. Trouvé par une revue, jamais en relisant.
+  //
+  // Elles n’étaient pas mortes à l’écriture : elles servaient sur le chemin de `rendreEcran`.
+  // Elles le sont devenues quand ce qu’elles faisaient a DÉMÉNAGÉ — le double a été déplacé sur
+  // la ligne de progression. Une affirmation ne devient pas fausse seulement en étant mal
+  // écrite : elle le devient aussi quand ce qu’elle décrit bouge et qu’on ne relit pas ce qu’on
+  // laisse derrière.
+  //
+  // ⚠️ CE BANC EST LE GESTE MÉCANIQUE QUI FERME ÇA : déplacer quelque chose se termine par
+  // COMPTER LES APPELANTS de ce qu’on laisse. Zéro appelant = un garde qui n’en est pas.
+  //
+  // ⚠️ IL NE COUVRE QUE CE FICHIER, ET C’EST DÉLIBÉRÉ. Le même comptage sur tout le module rend
+  // sept exports sans appelant externe — mais ils sont utilisés CHEZ EUX, aucun n’a été touché
+  // par ce lot, et une surface d’export trop large n’est pas un garde qui ment. Élargir ce banc
+  // à eux, c’est élargir le lot ; le dire ici sans le faire, c’est le laisser trouvable.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const source = readFileSync(new URL('./aide/terminal.js', import.meta.url), 'utf8');
+  const banc = readFileSync(new URL('./rien-ne-deborde-du-pane.test.js', import.meta.url), 'utf8');
+
+  const exportes = [...source.matchAll(/^export function ([A-Za-z_][A-Za-z0-9_]*)/gm)].map((m) => m[1]);
+  assert.ok(exportes.length > 0, 'ce banc doit trouver des exports — sinon il ne mesure rien');
+
+  for (const nom of exportes) {
+    // ⚠️ ON CHERCHE L’APPEL, PAS LA MENTION : `nom(` et non `nom`. Une fonction citée dans un
+    // commentaire n’a pas d’appelant — c’est exactement ce qui rendait les trois orphelines
+    // invisibles, puisque leur légende les nommait.
+    const appels = [...banc.matchAll(new RegExp(`\\b${nom}\\s*\\(`, 'g'))].length;
+    assert.ok(
+      appels > 0,
+      `\`${nom}\` est exporté par le double et n’est APPELÉ nulle part dans le banc — un export ` +
+        'sans appelant a l’air d’un garde et n’en est pas. Branche-le, ou supprime-le avec la ' +
+        'prose qui l’annonce.'
+    );
+  }
+});

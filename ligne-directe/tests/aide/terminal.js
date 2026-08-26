@@ -27,46 +27,31 @@
 // à côté du code n'est pas faible : elle est AUTORITAIRE. Elle ne laisse pas un doute que le
 // lecteur ira lever — elle FERME la question, et personne ne remesure jamais.
 //
-// ⚠️ CE QUI GARDE LA PROPRIÉTÉ NE DÉPEND PAS DE CE FICHIER. L'invariant « rien de ce que le TUI
-// écrit ne dépasse la largeur du pane » est gardé par une mesure DIRECTE — `largeurAffichee(texte)
-// <= largeur` — à quatre endroits de `rien-ne-deborde-du-pane.test.js`. Ce modèle est un SECOND
-// instrument, indépendant du premier : il attrape le même défaut par une autre route (une ligne
-// plus longue que `cols` occupe plus d'une rangée, donc la somme dépasse `rows`). Deux
-// instruments indépendants valent mieux qu'un, même en disant honnêtement de l'un ce qu'il est.
+// ⚠️ CE QUI GARDE LA PROPRIÉTÉ DES LARGEURS NE DÉPEND PAS DE CE FICHIER. L'invariant « rien de
+// ce que le TUI écrit ne dépasse la largeur du pane » est gardé par une mesure DIRECTE —
+// `largeurAffichee(texte) <= largeur` — à quatre endroits de `rien-ne-deborde-du-pane.test.js`.
+// Ce fichier ne s'en mêle plus.
 //
-// ⚠️ CE QU'IL MODÉLISE, ET RIEN D'AUTRE : l'auto-wrap (une ligne de n points de code sur `cols`
-// colonnes occupe ⌈n/cols⌉ rangées) et le défilement (seules les `rows` dernières rangées
-// restent visibles). Il ne modélise ni les couleurs, ni le curseur, ni les modes — le TUI
-// repeint l'écran entier à chaque frame, donc rien de tout cela n'entre dans la propriété.
-
-/** Les rangées PHYSIQUES qu'un écran logique occupe une fois écrit sur `cols` colonnes. */
-export function rangeesPhysiques(lignes, cols) {
-  return lignes.reduce((n, l) => {
-    const long = [...String(l?.texte ?? l ?? '')].length;
-    return n + Math.max(1, Math.ceil(long / cols));
-  }, 0);
-}
-
-/**
- * CE QUE LE LECTEUR VOIT ENCORE — les `rows` dernières rangées, le reste ayant défilé.
- *
- * ⚠️ C'EST LA SEULE FORME QUI RÉVÈLE LE DÉFAUT. Une ligne trop longue ne se contente pas de
- * dépasser : elle POUSSE ce qui la précède hors de l'écran.
- */
-export function ecranVisible(lignes, cols, rows) {
-  const rangees = [];
-  for (const l of lignes) {
-    const pts = [...String(l?.texte ?? l ?? '')];
-    if (pts.length === 0) rangees.push('');
-    for (let i = 0; i < pts.length; i += cols) rangees.push(pts.slice(i, i + cols).join(''));
-  }
-  return rangees.slice(-rows);
-}
-
-/** Le texte que le lecteur voit, toutes rangées visibles confondues. */
-export function texteVisible(lignes, cols, rows) {
-  return ecranVisible(lignes, cols, rows).join('\n');
-}
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 UN MODÈLE D'AUTO-WRAP SIMPLE A VÉCU ICI. IL EST SUPPRIMÉ, ET SA DISPARITION EST UN
+// CORRECTIF — mesuré par une revue, pas trouvé en relisant.
+//
+// `rangeesPhysiques`, `ecranVisible`, `texteVisible` : trois fonctions exportées, **zéro
+// appelant dans tout le dépôt**. Et la prose qui tenait cette place les annonçait comme « un
+// SECOND instrument, indépendant du premier, qui attrape le même défaut par une autre route ».
+// Elles n'attrapaient rien : elles n'étaient branchées nulle part.
+//
+// ⚠️ CE N'EST PAS LA MÊME FAUTE QUE LES AUTRES PROSES FAUSSES DE CE LOT, ET LE REMÈDE DIFFÈRE.
+// Une note qui décrit l'intention d'un banc au lieu de ce qu'il asserte est fausse À L'ÉCRITURE.
+// Celle-ci était VRAIE quand elle a été écrite : le modèle servait alors sur le chemin de
+// `rendreEcran`. Elle s'est périmée toute seule quand ce qu'elle décrivait a DÉMÉNAGÉ — le
+// modèle a été déplacé sur la ligne de progression, où c'est `ecranApresEcritures` qui travaille.
+// Une affirmation ne devient pas fausse seulement en étant mal écrite : elle le devient aussi
+// quand ce qu'elle décrit bouge et qu'on ne relit pas ce qu'on laisse derrière.
+//
+// LA FORME QUI FERME ÇA : déplacer quelque chose se termine par COMPTER LES APPELANTS de ce
+// qu'on laisse derrière. Zéro appelant = un garde qui n'en est pas, et sa légende ment.
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
 /**
  * UN TERMINAL QUI SAIT REVENIR EN ARRIÈRE ET EFFACER — le sous-ensemble VT100 que l'incident
