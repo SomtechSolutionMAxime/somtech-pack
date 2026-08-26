@@ -897,8 +897,32 @@ export function jugerLeParc({
   // ⚠️ IL RESTE UN CROISEMENT PAR UNE CLÉ AUTRE, et c'est ce qui l'empêche de redevenir nul par
   // construction : l'appariement exige (pane-dans-sa-session ET espace) OU (nom ET espace) ;
   // celui-ci n'exige QUE l'espace. C'est la RÈGLE DE COMPARAISON qui s'aligne, pas la clé.
+  //
+  // 🔴 ET IL NE CROISAIT QUE LES PRISES — pendant que la règle temporelle en écartait un.
+  // `couvertureDeLaDeclaration` a la bonne polarité : une déclaration plus jeune que l'agent
+  // qu'elle apparie n'identifie pas, et l'agent tombe chez les NON MESURÉS, jamais chez les
+  // prises. Mais le contre-contrôle ne regardait pas ce panier-là. Mesuré sur le parc réel le
+  // 2026-08-25, dans la MÊME page de sortie : « t-20260825-0047 — … inscrite 13999 s AVANT sa
+  // naissance … je ne l'identifie pas là-dessus » et, douze lignes plus bas, « refus à tort
+  // (mesurés) : 0 ». La ligne de l'agent le dit, le chiffre le nie.
+  //
+  // ⚠️ DEUX CHIFFRES, PAS UN SEUL ÉLARGI — les deux natures n'appellent pas le même geste.
+  // Parmi les PRISES, la garde ACCUSE à tort : on va voir l'agent, on répare l'APPARIEMENT.
+  // Parmi les NON MESURÉS, elle AVOUE ne pas savoir alors qu'une déclaration porte son espace :
+  // personne n'est accusé, c'est la MESURE qu'on va réparer. Sur le trafic du 2026-08-25 la
+  // répartition est 0 / 1 — tout le signal du jour est de la seconde nature, et un chiffre
+  // unique aurait envoyé l'opérateur chercher un fautif parmi 17 prises où il n'y en a aucun.
+  //
+  // ⚠️ UNE SEULE RÈGLE DE CROISEMENT POUR LES DEUX, écrite une fois. Deux copies divergeraient
+  // au premier changement de l'une — c'est déjà ce qui avait rendu ce contre-contrôle PLUS
+  // STRICT que la clé qu'il audite.
+  //
+  // ⚠️ ET IL RESTE UN DÉTECTEUR, JAMAIS UN CORRECTIF. Il filtre des paniers déjà constitués :
+  // il ne fait d'un non mesuré ni une prise, ni l'inverse, et ne touche pas l'équilibre.
   const espacesDeclares = declarations.map((d) => d?.espace).filter(Boolean);
-  const fauxRefus = prises.filter((p) => espacesDeclares.some((e) => memeEspaceDeTravail(p.espace, e)));
+  const uneDeclarationPorteSonEspace = (x) => espacesDeclares.some((e) => memeEspaceDeTravail(x.espace, e));
+  const fauxRefus = prises.filter(uneDeclarationPorteSonEspace);
+  const fauxRefusNonMesures = nonMesures.filter(uneDeclarationPorteSonEspace);
 
   // ── LES SESSIONS QU'ON N'A PAS SU REGARDER — voir `sessionAbsente`. Une session dont le
   // serveur ne tourne pas n'avait rien à montrer ; toute autre était là et s'est tue.
@@ -929,7 +953,10 @@ export function jugerLeParc({
     // Ce n'est PAS un panier : un sous-ensemble des prises, il ne touche pas l'équilibre.
     prisesAuNomConforme: prises.filter((p) => p.nomConforme).length,
     nonMesures: nonMesures.length,
+    // ⚠️ DEUX CHIFFRES NOMMÉS, JAMAIS UN SEUL. Aucun des deux n'est un panier : ce sont des
+    // sous-ensembles des prises et des non mesurés, et ils ne touchent pas l'équilibre.
     fauxRefus: fauxRefus.length,
+    fauxRefusNonMesures: fauxRefusNonMesures.length,
     sessionsInterrogees: portee?.sessionsInterrogees ?? 0,
     sessionsRefusees: (portee?.sessionsRefusees ?? []).length,
     // ⚠️ LES MUETTES SONT UN SOUS-ENSEMBLE DES REFUSÉES, PAS UN PANIER — elles ne touchent pas
@@ -985,10 +1012,21 @@ export function jugerLeParc({
       'rendait la branche « déclaration retirée » incapable de rougir pour la population même ' +
       'que cette garde vise.',
     fauxRefus:
-      'parmi les prises, ceux dont l’espace de travail figure comme « espace » dans une ' +
-      'déclaration du registre — un croisement par une clé AUTRE que celle de l’appariement, ' +
-      'donc capable de rendre autre chose que zéro. Un faux refus est un défaut de cette ' +
-      'garde, pas un agent fautif.',
+      'parmi les prises, et parmi elles SEULEMENT : ceux dont l’espace de travail figure comme ' +
+      '« espace » dans une déclaration du registre — un croisement par une clé AUTRE que celle ' +
+      'de l’appariement, donc capable de rendre autre chose que zéro. Ceux-là, la garde les ' +
+      'ACCUSE peut-être à tort : le geste est d’aller voir l’agent et de réparer l’APPARIEMENT. ' +
+      'Un faux refus est un défaut de cette garde, pas un agent fautif. Ceux qu’elle n’a pas su ' +
+      'mesurer ont leur PROPRE chiffre, sur la ligne suivante — un chiffre unique mêlerait deux ' +
+      'natures qui n’appellent pas le même geste.',
+    fauxRefusNonMesures:
+      'parmi les NON MESURÉS, et parmi eux SEULEMENT : ceux dont l’espace de travail figure ' +
+      'comme « espace » dans une déclaration du registre — MÊME croisement, MÊME règle de ' +
+      'comparaison de l’espace que la ligne au-dessus. Ceux-là, la garde n’accuse personne : ' +
+      'elle AVOUE ne pas savoir alors qu’une déclaration porte leur espace. Le geste est de ' +
+      'réparer la MESURE, pas l’agent. Sans ce chiffre, un agent écarté par la couverture ' +
+      'temporelle ne se voyait dans AUCUN compte : la garde en mal classait un pendant que son ' +
+      'seul compteur de refus à tort rendait zéro.',
     identifies:
       'ventilés par la source qui les a identifiés — une seule suffit, et c’est la PREMIÈRE ' +
       'établie dans l’ordre déclaration › lieu de rôle. Les deux sont un ACTE POSÉ : une ' +
@@ -1006,11 +1044,11 @@ export function jugerLeParc({
       'et le verdict le dit plutôt que de les couvrir d’un vert.',
   };
 
-  return { verdict, sortie: SORTIES[verdict], prises, nonMesures, identifies, horsPortee, fauxRefus, sessionsMuettes, comptes, methode, texte: rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMuettes, comptes, methode, miseEnService }) };
+  return { verdict, sortie: SORTIES[verdict], prises, nonMesures, identifies, horsPortee, fauxRefus, fauxRefusNonMesures, sessionsMuettes, comptes, methode, texte: rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, fauxRefusNonMesures, sessionsMuettes, comptes, methode, miseEnService }) };
 }
 
 /** Le compte rendu, tel qu'un humain le lit. Chaque fautif y est NOMMÉ, jamais compté. */
-function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMuettes = [], comptes, methode, miseEnService }) {
+function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, fauxRefusNonMesures = [], sessionsMuettes = [], comptes, methode, miseEnService }) {
   const l = [];
   l.push(`GARDE DES NAISSANCES — ${verdict}`);
   l.push(`frontière : ${miseEnService} · parc vivant : ${comptes.parcVivant} · dans la population : ${comptes.population}`);
@@ -1065,6 +1103,14 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMu
     for (const f of fauxRefus) l.push(`   • ${f.designation} — ${f.espace}`);
     l.push('');
   }
+  // ⚠️ NOMMÉS, EUX AUSSI, ET DANS LEUR PROPRE BLOC. La garde ne les accuse pas — elle a dit ne
+  // pas savoir alors qu'une déclaration porte leur espace. Un compte ne se répare pas : on va
+  // voir une MESURE précise, sur un agent précis.
+  if (fauxRefusNonMesures.length) {
+    l.push(`⚠️ ${fauxRefusNonMesures.length} de ces agents NON MESURÉS l’ont peut-être été À TORT — une déclaration porte leur espace de travail :`);
+    for (const f of fauxRefusNonMesures) l.push(`   • ${f.designation} — ${f.espace}`);
+    l.push('');
+  }
 
   if (Object.keys(comptes.parSource).length) {
     l.push(`identifiés (${comptes.identifies}) — sur quoi ce verdict repose :`);
@@ -1073,6 +1119,11 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMu
     l.push('');
   }
   l.push(`prises : ${comptes.prises} — méthode : ${methode.prises}`);
-  l.push(`refus à tort (mesurés) : ${comptes.fauxRefus} — méthode : ${methode.fauxRefus}`);
+  // 🔴 CHAQUE CHIFFRE PORTE SA POPULATION DANS SON ÉTIQUETTE. « refus à tort (mesurés) : 0 »
+  // se lisait « la garde n'en fait aucun » — alors qu'il ne comptait que les prises, et qu'un
+  // agent mal classé chez les NON MESURÉS était nommé douze lignes plus haut. Un chiffre juste
+  // dans une phrase fausse : le lecteur devait tout remesurer pour s'en apercevoir.
+  l.push(`refus à tort — parmi les PRISES, que la garde ACCUSE : ${comptes.fauxRefus} — méthode : ${methode.fauxRefus}`);
+  l.push(`refus à tort — parmi les NON MESURÉS, sur qui elle SE TAIT : ${comptes.fauxRefusNonMesures} — méthode : ${methode.fauxRefusNonMesures}`);
   return l.join('\n');
 }

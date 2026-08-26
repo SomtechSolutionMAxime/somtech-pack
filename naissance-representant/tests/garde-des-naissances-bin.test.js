@@ -218,10 +218,15 @@ test('LE CRITÈRE N°1 PAR LE BINAIRE : déclaration retirée ⇒ rouge, et le f
   assert.match(sans.stdout, /20260825-093000/);
 });
 
-test('les deux chiffres et leur méthode franchissent la sortie du binaire', () => {
+test('les chiffres et leur méthode franchissent la sortie du binaire — chacun avec sa population', () => {
+  // ⚠️ LES REFUS À TORT SORTENT EN DEUX LIGNES DEPUIS LE 2026-08-25, et l'étiquette de chacune
+  // nomme le panier qu'elle compte. « refus à tort (mesurés) : 0 » se lisait « la garde n'en
+  // fait aucun » alors qu'il ne croisait que les PRISES : un agent mal classé chez les non
+  // mesurés était nommé dans la même page pendant que le chiffre le niait.
   const r = lancer({ panes: [pane()], agents: [{ ...pane(), herdr_socket: SOCKET_DU_BANC }] });
   assert.match(r.stdout, /prises\s*:\s*1/);
-  assert.match(r.stdout, /refus à tort \(mesurés\)\s*:\s*0/);
+  assert.match(r.stdout, /refus à tort — parmi les PRISES[^\n]*:\s*0/);
+  assert.match(r.stdout, /refus à tort — parmi les NON MESURÉS[^\n]*:\s*0/);
   assert.match(r.stdout, /méthode/);
   assert.match(r.stdout, /PLANCHER/i, 'la portée de la mesure doit être dite, pas supposée');
 });
