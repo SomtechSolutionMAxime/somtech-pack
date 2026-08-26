@@ -115,7 +115,7 @@ P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok).pane') || printf '%s\n' "$N
 
 ⚠️ **`--coordonnateur`, c'est TOI** : sans lui, la déclaration tait qui a ouvert l'agent.
 
-⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket, un `E-…` sur ses stories **encore ouvertes** — une story finie garde le nom de qui l'a faite ; une story vivante au nom d'un autre est **reprise**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein quand une story a été reprise ou sautée.
+⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket **encore ouvert**, un `E-…` sur ses stories **encore ouvertes** — un fini garde le nom de qui l'a fait ; un vivant au nom d'un autre est **repris**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein quand une story a été reprise ou sautée.
 
 ⚠️ **L'onglet porte le nom de l'agent** — pas le libellé « code + deux à quatre mots » ci-dessus.
 
