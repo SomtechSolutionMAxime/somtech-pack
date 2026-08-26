@@ -874,3 +874,78 @@ test('LA SESSION MUETTE SE NOMME DANS LE TEXTE — un compte ne se va pas voir',
   assert.match(r.texte, /cg/, 'le lecteur doit savoir LAQUELLE refaire');
   assert.match(r.texte, /délai dépassé/, 'et pourquoi elle n’a pas répondu');
 });
+
+/**
+ * 🔴 ⑤ LA CLÉ D'APPARIEMENT DU NOM — elle porte sa justification en toutes lettres, et RIEN ne
+ * la tenait.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * `normaliserLeParc` écrit au-dessus d'elle : « L'appariement entre un pane et son nom se fait
+ * par «session» NUL «pane», jamais par le seul pane : un identifiant de pane n'est unique QUE
+ * dans sa session, et ce poste en porte quinze. »
+ *
+ * MESURÉ : la clé mutée pour ne porter QUE `pane_id` — SURVIVANTE sur les neuf fichiers de banc
+ * de la garde. Et le poste dit que les identifiants de pane sont ambigus entre sessions : ce
+ * n'est pas un cas de laboratoire.
+ *
+ * ⚠️ CE QUE LA CHUTE COÛTERAIT, ET POURQUOI C'EST LA PROMESSE MÊME DU LOT. Deux panes homonymes
+ * dans deux sessions : l'un hérite du nom de l'autre, et `designationDe` — qui rend précisément
+ * un nom quand `nom.mesure === 'lu'` — NOMME LE MAUVAIS AGENT. Une garde qui « rougit EN
+ * NOMMANT » et qui nomme le mauvais est pire qu'une garde muette : elle envoie chercher
+ * quelqu'un qui n'a rien fait, et innocente celui qu'elle visait.
+ *
+ * ⚠️ CE N'EST PAS LA MUTATION `identiteDeSession` FERMÉE PAR LE BANC VOISIN. Celle-là porte sur
+ * l'étage de la DÉCLARATION (`declarationDe`) ; celle-ci porte sur l'étage du REGISTRE DES NOMS
+ * (`normaliserLeParc`). Deux étages, deux clés, et corriger l'un laissait l'autre nu — le motif
+ * « une moitié sur deux » que ce lot a déjà payé cinq fois.
+ */
+test('🔴 ⑤ DEUX PANES DE MÊME IDENTIFIANT DANS DEUX SESSIONS — le nom de l’un NE DESCEND PAS sur l’autre', () => {
+  // Le cas discriminant, et il n'y en a pas d'autre : MÊME `pane_id`, sessions DIFFÉRENTES.
+  const MEME = 'w1:p1';
+  const enS1 = {
+    pane_id: MEME,
+    herdr_socket: socketDe('s1'),
+    foreground_cwd: `${WT}/en-s1`,
+    agent_session: { agent: 'claude', kind: 'id', value: 'session-a' },
+  };
+  const enS2 = {
+    pane_id: MEME,
+    herdr_socket: socketDe('s2'),
+    foreground_cwd: `${WT}/en-s2`,
+    agent_session: { agent: 'claude', kind: 'id', value: 'session-b' },
+  };
+
+  const parc = normaliserLeParc({
+    panes: [enS1, enS2],
+    // Le registre ne connaît QUE celui de s1. Sur la clé juste, celui de s2 n'y est pas.
+    agentsHerdr: [{ pane_id: MEME, herdr_socket: socketDe('s1'), agent: true, name: 'ristigouche' }],
+  });
+
+  assert.equal(parc.length, 2, 'contrôle du banc : les deux panes sont bien dans le parc');
+  const [a, b] = parc;
+
+  // LA MOITIÉ QUI PROTÈGE LE CAS LÉGITIME : celui que le registre a vu garde son nom.
+  assert.equal(a.nom.mesure, 'lu', 'le pane que le registre A vu doit garder son nom');
+  assert.equal(a.nom.valeur, 'ristigouche');
+
+  // 🔴 LA MOITIÉ QUI GARDE : l'autre session ne l'hérite pas.
+  assert.notEqual(
+    b.nom.valeur,
+    'ristigouche',
+    'le pane de l’AUTRE session a hérité du nom — la clé a apparié sur le seul identifiant de pane'
+  );
+  assert.notEqual(
+    b.nom.mesure,
+    'lu',
+    'le registre n’a pas vu ce pane-là : son nom n’est pas « lu », c’est une mesure MANQUÉE'
+  );
+
+  // ⚠️ ET LA CONSÉQUENCE, PAS SEULEMENT LA STRUCTURE : c'est `designationDe` qui va dans un
+  // refus, et c'est elle qui nommerait le mauvais agent.
+  assert.doesNotMatch(
+    designationDe(b),
+    /ristigouche/,
+    `un refus sur ce pane-ci nommerait « ristigouche », qui travaille dans une AUTRE session. Reçu : « ${designationDe(b)} »`
+  );
+  assert.match(designationDe(b), /sans nom/, 'il se désigne par son adresse, faute de nom mesuré');
+});
