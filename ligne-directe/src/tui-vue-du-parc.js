@@ -743,46 +743,22 @@ export const RACCOURCIS = RACCOURCIS_UN_A_UN.map((r) => r.texte).join('  ');
  */
 export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
 
-/**
- * ═══════════════════════════════════════════════════════════════════════════════════════
- * L’INVARIANT DE LARGEUR — ET IL PORTE SON EXCEPTION, elle ne vit pas à côté
- * ═══════════════════════════════════════════════════════════════════════════════════════
- *
- * **Rien de ce que le TUI écrit ne dépasse la largeur du pane. Sans exception.**
- *
- * 🔴 DÉCISION `00a7b645`, ACCEPTÉE au journal de P-20260822-0001 — elle SUPERSÈDE `f05bc613`,
- * qui disait l’inverse et que la mesure a renversée.
- *
- * `f05bc613` faisait DÉBORDER la barre plutôt que de perdre la sortie, sur la prémisse qu’un
- * débordement « coûte un wrap visuel et rien de plus ». **Mesuré au VT100 sur le flux exact de
- * `dessiner()` : un wrap dans un écran alternatif d’une ou deux lignes ne coûte pas un wrap —
- * il fait DÉFILER.** À 3×1 le lecteur voit `'ter'` ; à 8×2 il voit `'q quitte'` / `'r'` **et le
- * TITRE a disparu**. L’option retenue produisait LES DEUX maux qu’elle devait éviter.
- *
- * ⚠️ ET LE CONTRAT ② N’EST PAS RENVERSÉ, IL EST BORNÉ. « La barre ne tient jamais au prix de la
- * sortie » garde toute sa force **là où la sortie est MONTRABLE**. Sous le seuil, aucun rendu
- * ne peut la montrer : ② n’est pas violé, il est SANS OBJET — et le choix se fait alors sur un
- * autre critère, *lequel abîme le moins le reste de l’écran*. La troncature laisse l’écran
- * stable et le titre en place ; le débordement emporte les deux.
- *
- * ⚠️ LE MOTIF N’EST PAS CELUI QUE J’AVAIS AVANCÉ, et la nuance décide de ce qui est codé.
- * J’avais écrit « l’écran enferme son lecteur » — c’est FAUX : `q` et Ctrl-C fonctionnent que
- * la barre les affiche ou non. Le lecteur est mal informé, pas enfermé.
- *
- * CE QUI TRANCHE EST DANS LA MESURE DE REPRODUCTION : le défaut du dirigeant était
- * l’ACCUMULATION (+21 lignes en 8 s, cause `\r` sur une ligne qui wrappe), et l’écran
- * alternatif ne s’accumule PAS — mesuré, 0 ligne de delta sur 5 flèches, à 57 et à 27
- * colonnes. **Le débordement et l’accumulation ne sont pas la même chose, et c’est
- * l’accumulation qui a mordu.** Mon invariant avait été formulé plus large que le défaut
- * qu’il devait fermer.
- */
-export function depasseLaLargeurAutorisee(ligne, largeur) {
-  // ⚠️ PLUS AUCUNE EXCEPTION — et c’est ce qui rend cette fonction sûre. Trois écritures
-  // successives de l’exception ont été trop larges (le style seul · une sous-chaîne que le
-  // lecteur pouvait TAPER · un drapeau non gardé), et chacune rouvrait la classe de défaut du
-  // ticket. Une règle sans exception ne peut pas être élargie.
-  return [...String(ligne?.texte ?? '')].length > largeur;
-}
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 IL N'Y A PLUS D'INVARIANT DE LARGEUR ICI, ET SA DISPARITION EST LE CORRECTIF
+//
+// `depasseLaLargeurAutorisee` a vécu ici : une fonction qui décidait quelles lignes avaient le
+// droit de dépasser le pane. Elle est SUPPRIMÉE par la décision `00a7b645` — plus aucune ligne
+// n'a ce droit, `borner` s'applique à toutes, y compris la barre de raccourcis.
+//
+// ⚠️ POURQUOI LA SUPPRIMER PLUTÔT QUE LA GARDER SANS EXCEPTION : sous B, la production n'a plus
+// de condition à évaluer. Une fonction sans appelant en production a l'air d'un garde et n'en
+// est pas un — et elle offre à un banc un oracle avec lequel se mettre d'accord. Mesuré par
+// mutation : la remplacer par `return false` laissait la suite ENTIÈREMENT VERTE.
+//
+// ⚠️ CE QUI GARDE LA PROPRIÉTÉ DÉSORMAIS : `tests/rien-ne-deborde-du-pane.test.js`, qui mesure
+// ce que le TERMINAL rend — l'auto-wrap et le défilement — et non ce qu'une fonction déclare.
+// Retirer le `borner` de la barre y fait rougir 4 essais.
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
 /** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
 export function raccourcisPour(largeur) {
@@ -1115,7 +1091,9 @@ function pied(etat, largeur) {
   // `raccourcisPour(0)`, qui rend une chaîne VIDE — la condition ne se déclenchait donc jamais,
   // et le correctif ne mordait pas. Mesuré, pas relu : les largeurs fautives étaient
   // identiques avant et après. On lit le raccourci vital dans le manifeste lui-même.
-  const laSortie = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
+  // ⚠️ ON LIT LA CONSTANTE, ON NE RECALCULE PAS. La même expression vivait ici en double :
+  // deux sources pour un seul fait, dont l'une pouvait dériver sans que rien ne rougisse.
+  const laSortie = RACCOURCI_VITAL;
   if (tete.length + laSortie.length > largeur) {
     // ⚠️ ET ON NE REND PAS UN FRAGMENT — `raccourcisPour` rend le raccourci ENTIER, quitte à
     // déborder d’un pane minuscule (contrat antérieur, voir sa note). Ma première correction

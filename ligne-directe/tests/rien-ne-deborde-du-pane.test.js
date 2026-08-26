@@ -46,7 +46,6 @@ import {
   lignesVisibles,
   rendreEcran,
   etatInitial,
-  depasseLaLargeurAutorisee,
   RACCOURCI_VITAL,
   RACCOURCIS_UN_A_UN,
   raccourcisPour,
@@ -203,14 +202,14 @@ test('AUCUNE LIGNE DE L’ÉCRAN NE DÉPASSE LE PANE — à TOUTE largeur, sur u
       // dans l'écran alternatif, repeint entier à chaque frame.
       //
       // ⚠️ L'EXCEPTION EST BORNÉE À CE CAS : elle ne vaut que pour le style `pied`, et
-      // seulement sous la largeur où le raccourci vital tient.
-      // 🔴 ON INTERROGE L'INVARIANT, ON NE RECOPIE PAS SON EXCEPTION (décision `f05bc613`,
-      // condition n°1). Ce banc portait sa propre copie de la condition — donc l'exception
-      // vivait à CÔTÉ de la règle, et quatre élargissements la désarmaient sans qu'un seul
-      // essai ne bouge : borne supprimée, étendue au titre, étendue à toutes les lignes,
-      // seuil porté de 9 à 40 — quatre fois VERT.
+      // 🔴 LA MESURE EST DIRECTE, ET C'EST UNE CORRECTION. Ce banc a interrogé un invariant —
+      // `depasseLaLargeurAutorisee` — parce qu'en recopier la condition la laissait s'élargir à
+      // côté de la règle (quatre élargissements, quatre fois VERT). Sous la décision `00a7b645`
+      // il n'y a plus de condition du tout : plus aucune ligne n'a le droit de dépasser. Un
+      // oracle qui répond toujours « non » n'est plus un garde — il est SUPPRIMÉ, et ce qui
+      // reste est la seule chose qui ne peut pas mentir : la longueur du texte rendu.
       assert.ok(
-        !depasseLaLargeurAutorisee(l, largeur),
+        largeurAffichee(l.texte) <= largeur,
         `à ${largeur} colonnes, une ligne en écrit ${largeurAffichee(l.texte)} : ${JSON.stringify(l.texte)}`
       );
     }
@@ -436,10 +435,10 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
         `à ${largeur}x${hauteur}, l’écran rend ${ecran.length} lignes — il DÉFILE`
       );
       for (const l of ecran) {
-        // Même exception nommée que ci-dessus — la barre, sous la largeur de « q quitter ».
-        // Même invariant interrogé, jamais recopié — voir la note ci-dessus.
+        // Même mesure directe que ci-dessus, et pour la même raison : il n'y a plus d'exception
+        // à nommer, donc plus d'oracle à interroger. Voir la note ci-dessus.
         assert.ok(
-          !depasseLaLargeurAutorisee(l, largeur),
+          largeurAffichee(l.texte) <= largeur,
           `à ${largeur}x${hauteur}, une ligne écrit ${largeurAffichee(l.texte)} caractères : ${JSON.stringify(l.texte)}`
         );
       }
@@ -483,13 +482,11 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — et plus RIEN ne déborde, s
           `${quoi}, à ${largeur} colonnes : ${largeurAffichee(ligne.texte)} caractères de style ` +
             `« ${ligne.style} » : ${JSON.stringify(ligne.texte)}`
         );
-        // ⚠️ ET L’INVARIANT DIT LA MÊME CHOSE — s’ils divergent, l’un des deux ment, et c’est
-        // ce désaccord (jamais l’accord) qui révèle une règle qu’on aurait affaiblie d’un côté.
-        assert.equal(
-          depasseLaLargeurAutorisee(ligne, largeur),
-          false,
-          `${quoi}, à ${largeur} colonnes : l’invariant contredit le rendu sur ${JSON.stringify(ligne.texte)}`
-        );
+        // ⚠️ ON NE CONFRONTE PLUS LE RENDU À UN ORACLE. Il en existait un —
+        // `depasseLaLargeurAutorisee` — et le banc s’accordait avec lui : une tautologie, deux
+        // faces d’un même calcul qui se seraient trompées ENSEMBLE. Mesuré par mutation : le
+        // remplacer par `return false` laissait la suite verte. Il est supprimé du moteur ;
+        // ce qui garde la propriété est la mesure ci-dessus, faite sur le texte rendu.
       }
     }
   }
