@@ -812,7 +812,7 @@ test('LES DEUX PLANCHERS DE L’ÉCRAN SE CONNAISSENT — gardé À PART de l’
   }
 });
 
-test('LA SORTIE SURVIT À TOUTE ENTÊTE DE PIED — mesuré sur l’écran, à toutes les largeurs', async (t) => {
+test('LE PIED TIENT SES DEUX SENS — la sortie ne cède jamais, ET l’entête reste quand elle tient', async (t) => {
   // 🔴 TROUVÉ PAR MUTATION, PAS PAR RELECTURE — et le code disait déjà, en toutes lettres, que
   // c'était ce qu'il fallait éviter. Neutraliser le retrait de l'entête de filtre laissait la
   // suite VERTE. Mesuré sur le mutant, en mode filtre :
@@ -836,6 +836,24 @@ test('LA SORTIE SURVIT À TOUTE ENTÊTE DE PIED — mesuré sur l’écran, à t
     { quoi: 'les DEUX entêtes ensemble', etat: { ...etatInitial(), nonPrisSeuls: true, recherche: 'somcraft-cowork-espace-client' } },
   ];
 
+  // ⚠️ ON DEMANDE AU PIED À PARTIR DE QUELLE LARGEUR IL PORTE SON ENTÊTE — on ne le calcule pas
+  // à sa place. Refaire ici l'arithmétique de `pied()` recopierait la règle à côté d'elle-même :
+  // le banc et le code se tromperaient ENSEMBLE, et c'est la faute que ce fichier a déjà payée.
+  const largeursOuLEnteteTient = new Map();
+  for (const { quoi, etat: e } of avecEntete) {
+    const marque = e.nonPrisSeuls ? 'FILTRE' : 'RECHERCHE';
+    const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
+    for (let largeur = SEUIL; largeur <= 140; largeur += 1) {
+      const pied = rendreEcran({ vue, etat: e, lignes, largeur, hauteur: 8 }).at(-1).texte;
+      if (pied.includes(marque)) { largeursOuLEnteteTient.set(quoi, largeur); break; }
+    }
+  }
+  assert.equal(
+    largeursOuLEnteteTient.size,
+    avecEntete.length,
+    'un état à entête ne montre son entête à AUCUNE largeur du balayage — le second sens serait muet'
+  );
+
   let mesurees = 0;
   for (const { quoi, etat: e } of avecEntete) {
     const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
@@ -843,14 +861,50 @@ test('LA SORTIE SURVIT À TOUTE ENTÊTE DE PIED — mesuré sur l’écran, à t
       const ecran = rendreEcran({ vue, etat: e, lignes, largeur, hauteur: 8 });
       const pied = ecran[ecran.length - 1].texte;
       mesurees += 1;
+      // ═══ SENS ① — LA SORTIE NE CÈDE JAMAIS. C'est le défaut d'origine : l'entête se servait
+      // en premier et laissait « ce qui reste » à la sortie.
       assert.ok(
         pied.includes(RACCOURCI_VITAL),
         `${quoi}, à ${largeur} colonnes : « ${RACCOURCI_VITAL} » TIENDRAIT et le pied ne le porte pas — ` +
           `l’entête a pris la place de la sortie : ${JSON.stringify(pied)}`
       );
+
+      // ═══ SENS ② — ET L'ENTÊTE RESTE QUAND ELLE TIENT. C'est le sens que ce banc NE GARDAIT PAS.
+      //
+      // 🔴 SON NOM DISAIT DÉJÀ LEQUEL DES DEUX IL GARDAIT : « la sortie survit à toute entête ».
+      // Il n'a jamais promis plus que son titre — c'est nous qui avons lu « la frontière est
+      // gardée ». Une garde dont le nom porte UN sens annonce elle-même que l'autre est ouvert.
+      //
+      // ⚠️ MESURÉ : à la largeur PIVOT — celle où l'entête et la sortie tiennent tout juste —
+      // muter la comparaison de `pied()` de `>` en `>=` efface l'entête alors qu'elle TIENT, et
+      // la suite entière restait VERTE. Le lecteur garde sa sortie, l'arbre continue de filtrer,
+      // et plus rien ne le dit — ce que le code déclare inacceptable trois lignes plus haut.
+      if (e.nonPrisSeuls || e.recherche) {
+        const marque = e.nonPrisSeuls ? 'FILTRE' : 'RECHERCHE';
+        // ⚠️ LE PIVOT SE DÉRIVE, IL NE S'ÉCRIT PAS EN CHIFFRE. Écrit `37`, il devient faux en
+        // silence le jour où le libellé du filtre ou le raccourci vital changent d'un caractère.
+        // On demande au pied lui-même à partir d'où il porte l'entête, plutôt que de le supposer.
+        const pivot = largeursOuLEnteteTient.get(quoi);
+        if (pivot !== undefined && largeur >= pivot) {
+          assert.ok(
+            pied.includes(marque),
+            `${quoi}, à ${largeur} colonnes : l’entête TIENT (elle apparaît dès ${pivot}) et elle ` +
+              `n’est PAS là — la sortie a pris sa place, et l’arbre filtre sans le dire : ${JSON.stringify(pied)}`
+          );
+        }
+      }
     }
   }
   assert.ok(mesurees > 300, `ce banc doit balayer les largeurs — il n’en a vu que ${mesurees}`);
+
+  // ⚠️ ET LE PIVOT EST BIEN DANS LE BALAYAGE — sinon le sens ② ne se déclencherait jamais, et on
+  // aurait ajouté une assertion morte pour fermer une assertion unilatérale.
+  for (const [quoi, pivot] of largeursOuLEnteteTient) {
+    assert.ok(
+      pivot >= SEUIL && pivot <= 140,
+      `le pivot de « ${quoi} » vaut ${pivot}, hors du balayage — le second sens ne s’éprouve jamais`
+    );
+  }
 });
 
 test('L’ORDRE DE SACRIFICE AUX HAUTEURS MINUSCULES — ce que la réécriture d’un banc avait laissé tomber', async (t) => {
