@@ -560,6 +560,13 @@ test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle ces
   // survivante en attente.
   //
   // Ce banc ne garde donc pas l’équivalence : il garde CE QUI LA REND VRAIE.
+  //
+  // ⚠️ RECONFIRMÉ EN CAMPAGNE LE 2026-08-25, SUR UNE AUTRE ÉCRITURE DE LA MÊME MUTATION :
+  // `[...texte]` → `texte.split('')` survit aussi, et pour la même raison. J'ai commencé par
+  // écrire un banc de plus — il figeait `tourne = 3`, donc il gardait MOINS que celui-ci. La
+  // bonne conduite quand une survivante retombe sur une équivalence déjà gardée n'est pas
+  // d'ajouter une garde : c'est de vérifier que celle qui existe couvre la FAMILLE, et de le
+  // dire ici. Mesuré : un 🔴 glissé dans le message fait rougir ce banc.
   // ⚠️ ON BALAIE LA ROUE ENTIÈRE, ET C'EST UN ANGLE MORT RELEVÉ EN REVUE PORTAIL. Ce banc
   // figeait `tourne = 3` : il ne voyait qu'UN caractère sur les dix de la roue. Un emoji glissé
   // dans n'importe lequel des neuf autres serait passé sans qu'aucun essai ne bouge — la garde
@@ -641,4 +648,45 @@ test('LES DEUX PLANCHERS DE L’ÉCRAN SE CONNAISSENT — gardé À PART de l’
         `${arbre + 3 + detail} — les deux planchers s’ignorent de nouveau`
     );
   }
+});
+
+test('LA SORTIE SURVIT À TOUTE ENTÊTE DE PIED — mesuré sur l’écran, à toutes les largeurs', async (t) => {
+  // 🔴 TROUVÉ PAR MUTATION, PAS PAR RELECTURE — et le code disait déjà, en toutes lettres, que
+  // c'était ce qu'il fallait éviter. Neutraliser le retrait de l'entête de filtre laissait la
+  // suite VERTE. Mesuré sur le mutant, en mode filtre :
+  //     20 col → 'FILTRE : non-pris s…'      · 24 → 'FILTRE : non-pris seuls…'
+  //     30 col → 'FILTRE : non-pris seuls  ─  q…'
+  // Le lecteur perd la sortie entre 20 et 34 colonnes, remplacée par une entête à demi lisible
+  // qui ne se comprend pas ET mange la place. C'est le cas nommé dans la note de `pied()` — la
+  // conduite était juste, elle n'était gardée par RIEN.
+  //
+  // ⚠️ ON MESURE SUR LE PIED RENDU, PAS SUR LA RÈGLE QUI LE COMPOSE. La règle a déjà changé
+  // trois fois de forme ; la propriété que le dirigeant vit, elle, n'a pas bougé : au-dessus du
+  // seuil, il voit comment sortir.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const SEUIL = [...RACCOURCI_VITAL].length;
+
+  const avecEntete = [
+    { quoi: 'filtre « non-pris seuls »', etat: { ...etatInitial(), nonPrisSeuls: true } },
+    { quoi: 'recherche active', etat: { ...etatInitial(), recherche: 'somcraft' } },
+    { quoi: 'les DEUX entêtes ensemble', etat: { ...etatInitial(), nonPrisSeuls: true, recherche: 'somcraft-cowork-espace-client' } },
+  ];
+
+  let mesurees = 0;
+  for (const { quoi, etat: e } of avecEntete) {
+    const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
+    for (let largeur = SEUIL; largeur <= 140; largeur += 1) {
+      const ecran = rendreEcran({ vue, etat: e, lignes, largeur, hauteur: 8 });
+      const pied = ecran[ecran.length - 1].texte;
+      mesurees += 1;
+      assert.ok(
+        pied.includes(RACCOURCI_VITAL),
+        `${quoi}, à ${largeur} colonnes : « ${RACCOURCI_VITAL} » TIENDRAIT et le pied ne le porte pas — ` +
+          `l’entête a pris la place de la sortie : ${JSON.stringify(pied)}`
+      );
+    }
+  }
+  assert.ok(mesurees > 300, `ce banc doit balayer les largeurs — il n’en a vu que ${mesurees}`);
 });
