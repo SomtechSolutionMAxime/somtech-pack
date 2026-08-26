@@ -1333,11 +1333,12 @@ test('un « .nom-agent » que herdr refuserait est un refus QUI NOMME SA CAUSE �
 // jamais par le texte du message seul.
 
 /** Le gabarit du rôle, écrit dans le dépôt d'essai là où `gabaritsDir` va le chercher. */
-function poserGabaritDuRole(depot, role, contenu) {
+function poserGabaritDuRole(depot, role, contenu, { ronde = null } = {}) {
   const dossier = role === 'orchestrateur' ? 'orchestrateur' : 'gestionnaire-client';
   const dir = join(depot, '.claude', 'templates', dossier);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'CONTEXTE.md'), contenu);
+  if (ronde !== null) writeFileSync(join(dir, 'RONDE.md'), ronde);
   return dir;
 }
 
@@ -1466,3 +1467,50 @@ test('UN LIEU D’ORCHESTRATEUR RENSEIGNÉ NE SE FAIT RIEN REPROCHER', () =>
       `rien ne devait être reproché — dit : ${r.stderr.slice(0, 200)}`,
     );
   }, 'orch-rempli', { role: 'orchestrateur', nom: `d-20260826-${String(process.pid).slice(-4)}h` }));
+
+// ⚠️ LE SECOND FICHIER ÉCRIT À LA MAIN N'ÉTAIT PAS EXERCÉ PAR LA CHAÎNE — relevé en revue.
+//
+// Le module de jugement a ses propres essais pour `RONDE.md`, tous verts. Mais aucun essai du
+// BINAIRE ne posait un gabarit qui le porte : la chaîne réelle ne l'avait jamais rencontré.
+// C'est exactement la forme de trou que ce dépôt a déjà payé — un module juste, éprouvé, et
+// rien qui prouve que la production le traverse pour ce cas-là.
+test('LE BRIEFING RESTÉ AU GABARIT FAIT REFUSER LA NAISSANCE, contexte rempli ou non', () =>
+  avecLieu((client, lieu, depot) => {
+    const RONDE_GABARIT = '# Le briefing de ta ronde\n\n`<Un tour toutes les combien de temps.>`\n';
+    poserGabaritDuRole(depot, 'representant', CONTEXTE_GABARIT, { ronde: RONDE_GABARIT });
+    // Le contexte est RENSEIGNÉ — seul le briefing est resté au gabarit.
+    writeFileSync(
+      join(lieu, 'CONTEXTE.md'),
+      "# Ce qu'on sait de ce client\n\n| **Le destinataire** | **le dirigeant** |\n\nAcme, D-20260819-0002.\n",
+    );
+    writeFileSync(join(lieu, 'RONDE.md'), RONDE_GABARIT);
+    const journal = installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 1, 'refus attendu');
+    assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr — rien n’a été créé');
+    assert.match(r.stderr, /RONDE\.md/, 'le briefing est nommé');
+    assert.match(r.stderr, /Un tour toutes les combien de temps/, 'la rubrique restée est CITÉE');
+    assert.ok(!/Le destinataire/.test(r.stderr), 'le contexte rempli n’est pas reproché');
+  }, 'ronde-gabarit'));
+
+test('LES DEUX RENSEIGNÉS : la naissance ne reproche plus rien', () =>
+  avecLieu((client, lieu, depot) => {
+    poserGabaritDuRole(depot, 'representant', CONTEXTE_GABARIT, {
+      ronde: '# Le briefing de ta ronde\n\n`<Un tour toutes les combien de temps.>`\n',
+    });
+    writeFileSync(
+      join(lieu, 'CONTEXTE.md'),
+      "# Ce qu'on sait de ce client\n\n| **Le destinataire** | **le dirigeant** |\n\nAcme.\n",
+    );
+    writeFileSync(join(lieu, 'RONDE.md'), '# Le briefing de ta ronde\n\nUn tour par heure.\n');
+    installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.ok(
+      !/rest[ée]|au gabarit|remplis les rubriques/i.test(r.stderr),
+      `rien ne devait être reproché — dit : ${r.stderr.slice(0, 200)}`,
+    );
+  }, 'ronde-remplie'));
