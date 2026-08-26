@@ -15,6 +15,8 @@ import { join } from 'node:path';
 import {
   verifierLieuRenseigne,
   FICHIERS_A_RENSEIGNER,
+  chevronsDuGabarit,
+  rubriquesNonRenseignees,
 } from '../src/lieu-renseigne.js';
 
 const GABARIT_CONTEXTE = [
@@ -201,4 +203,97 @@ test('les deux renseignés : rien à reprocher', () => {
 
 test('la liste porte bien les DEUX fichiers écrits à la main', () => {
   assert.deepEqual([...FICHIERS_A_RENSEIGNER].sort(), ['CONTEXTE.md', 'RONDE.md']);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUE LA PASSE DE FOND A TROUVÉ, ET QU'AUCUNE DES SEIZE MUTATIONS DE L'AUTEUR N'AVAIT VU
+
+// ⚠️ D1 — LE FAUX NÉGATIF : VIDER UN FICHIER LE FAISAIT PASSER POUR RENSEIGNÉ.
+//
+// La garde ne cherchait que l'ABSENCE des chevrons du gabarit. Un fichier VIDE n'en porte
+// aucun : il passait. Or vider un fichier n'est pas le remplir — c'est le cas « personne n'a
+// rien écrit », le mode de panne exact que cette garde existe pour fermer, atteint par le
+// geste le plus simple qui soit.
+//
+// ⚠️ CE QUE CETTE GARDE NE JUGE TOUJOURS PAS, ET C'EST DÉLIBÉRÉ : la PERTINENCE du contenu.
+// Un fichier qui porte « oops » passe, et doit passer — juger qu'un texte répond vraiment à la
+// question posée n'est pas mesurable, et une garde qui le prétendrait inventerait son verdict.
+// Ce qui se mesure ici est ce qui est resté du gabarit, et l'absence de tout contenu.
+test('un fichier VIDÉ ne passe pas pour renseigné — vider n’est pas remplir', () => {
+  for (const vide of ['', '   ', '\n\n', '\t \n']) {
+    const b = bancDEssai({ contexteDuLieu: vide });
+    try {
+      const v = verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu });
+      assert.equal(v.renseigne, false, `« ${JSON.stringify(vide)} » ne doit pas passer`);
+      assert.equal(v.manquant[0].fichier, 'CONTEXTE.md');
+      assert.match(v.message, /vide/i, 'et le refus dit que le fichier est vide, pas qu’il est au gabarit');
+    } finally { b.defaire(); }
+  }
+});
+
+test('un contenu que la garde ne sait pas juger passe — elle ne mesure pas la pertinence', () => {
+  const b = bancDEssai({ contexteDuLieu: '# Ce qui est propre à ce dépôt\n\noops\n' });
+  try {
+    assert.equal(
+      verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu }).renseigne,
+      true,
+      'juger la pertinence n’est pas mesurable — une garde qui le prétendrait inventerait',
+    );
+  } finally { b.defaire(); }
+});
+
+// ⚠️ D2 — LE MESSAGE SE CONTREDISAIT LUI-MÊME. `intact` était un booléen GLOBAL : dès qu'UN
+// fichier était vierge, l'en-tête affirmait « le lieu n'a jamais été renseigné », juste
+// au-dessus d'une liste qui ne citait que ce fichier-là. Un message qui ment sur ce qu'il a
+// mesuré est ce que ce dépôt refuse partout ailleurs.
+test('le message ne dit « jamais renseigné » que si RIEN ne l’a été', () => {
+  const b = bancDEssai({ contexteDuLieu: CONTEXTE_REMPLI, rondeDuLieu: GABARIT_RONDE, rondeAuGabarit: true });
+  try {
+    const v = verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu });
+    assert.equal(v.renseigne, false);
+    assert.ok(
+      !/n’a jamais été renseigné/.test(v.message),
+      `CONTEXTE.md EST renseigné — le message ne peut pas dire le contraire : ${v.message.split('\n')[0]}`,
+    );
+    assert.match(v.message, /RONDE\.md/);
+  } finally { b.defaire(); }
+});
+
+test('quand TOUT est resté au gabarit, le message le dit bien', () => {
+  const b = bancDEssai({ contexteDuLieu: GABARIT_CONTEXTE, rondeDuLieu: GABARIT_RONDE, rondeAuGabarit: true });
+  try {
+    const v = verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu });
+    assert.match(v.message, /n’a jamais été renseigné/);
+  } finally { b.defaire(); }
+});
+
+// ⚠️ D3 — LE MESSAGE AFFIRMAIT CE QU'IL NE POUVAIT PAS SAVOIR. Il finissait par « Rien n'a été
+// créé, et rien n'a été touché ». Mesuré le 2026-08-26 : sur le chemin d'auto-pose, la commande
+// POSE le lieu puis appelle cette garde — le lieu vient donc d'être créé, et le refus le niait.
+// C'est le motif exact que `fraicheur-gabarit.js` avait déjà fermé : « ce message dit ce qu'il a
+// MESURÉ ; chaque appelant ajoute ce qu'il n'a pas touché, parce que lui seul le sait ».
+test('le refus ne prétend RIEN sur ce qui a été créé — il ne peut pas le savoir', () => {
+  const b = bancDEssai({ contexteDuLieu: GABARIT_CONTEXTE });
+  try {
+    const { message } = verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu });
+    assert.ok(
+      !/[Rr]ien n’a été créé|rien n’a été touché/.test(message),
+      `ce module ne sait pas si l’appelant vient de poser le lieu : ${message}`,
+    );
+  } finally { b.defaire(); }
+});
+
+// ⚠️ M1 / M2 — DEUX PROTECTIONS QUE RIEN N'EXERÇAIT (survivantes de la passe de fond).
+// Les vider laissait la suite verte. Une protection que rien n'éprouve est une protection dont
+// personne ne saura le jour où elle tombe.
+test('un commentaire HTML n’est jamais compté comme une rubrique à remplir', () => {
+  const gabarit = '# T\n\n<!-- GF-ORC-001 · hook -->\n\n`<Ta portée>`\n';
+  assert.deepEqual(chevronsDuGabarit(gabarit), ['<Ta portée>']);
+  assert.deepEqual(rubriquesNonRenseignees(gabarit, gabarit), ['<Ta portée>']);
+});
+
+test('un même intitulé répété ne fait qu’UNE rubrique', () => {
+  const gabarit = '# T\n\n`<Ta portée>`\n\nplus loin : `<Ta portée>`\n';
+  assert.deepEqual(chevronsDuGabarit(gabarit), ['<Ta portée>'], 'dédoublonné');
+  assert.equal(rubriquesNonRenseignees(gabarit, gabarit).length, 1, 'une rubrique, pas deux');
 });

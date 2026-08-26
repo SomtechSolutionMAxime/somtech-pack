@@ -116,3 +116,43 @@ test('les deux listes disent chacune ce qu’elle garde, et ne se confondent pas
     assert.ok(PRESERVE.includes(f), `« ${f} » doit être préservé aussi — déposer sans protéger écraserait`);
   }
 });
+
+// ⚠️ SURVIVANTE RELEVÉE EN PASSE DE FOND : retirer `!aDeposer.has(rel)` du calcul de
+// `report.preserved` laissait TOUTE la suite verte. Le rapport console annonçait alors
+// « 🔒 préservés (écrits à la main, jamais écrasés) : RONDE.md » pour un fichier que la commande
+// venait de DÉPOSER vierge. Rien sur le disque, mais un rapport qui ment sur ce qu'il a fait —
+// et c'est par un rapport qu'on croit savoir ce qui s'est passé.
+test('le rapport ne dit pas « préservé » d’un fichier qu’il vient de DÉPOSER', async () => {
+  const payload = payloadAvecRonde();
+  const { repo, lieu } = lieuAncien();
+  const lignes = [];
+  const vrai = console.log;
+  console.log = (...a) => lignes.push(a.join(' '));
+  try {
+    await run(['representant-update', '--client', 'acme', '--source', payload, '--target', repo]);
+  } finally { console.log = vrai; }
+
+  const rapport = lignes.join('\n');
+  const preserves = (rapport.match(/préservés[^\n]*/) || [''])[0];
+  assert.ok(
+    !preserves.includes('RONDE.md'),
+    `« RONDE.md » vient d’être déposé, pas préservé — le rapport dit : ${preserves}`,
+  );
+  assert.ok(rapport.includes('RONDE.md'), 'il doit tout de même être annoncé — parmi les créés');
+  assert.ok(existsSync(join(lieu, 'RONDE.md')));
+});
+
+// La moitié qui protège : un briefing DÉJÀ là est bien annoncé comme préservé.
+test('le rapport dit « préservé » d’un briefing qui était déjà là', async () => {
+  const payload = payloadAvecRonde();
+  const { repo } = lieuAncien({ ronde: '# Le briefing de ta ronde\n\nUn tour par heure.\n' });
+  const lignes = [];
+  const vrai = console.log;
+  console.log = (...a) => lignes.push(a.join(' '));
+  try {
+    await run(['representant-update', '--client', 'acme', '--source', payload, '--target', repo]);
+  } finally { console.log = vrai; }
+
+  const preserves = (lignes.join('\n').match(/préservés[^\n]*/) || [''])[0];
+  assert.ok(preserves.includes('RONDE.md'), `il était là et n’a pas bougé — dit : ${preserves}`);
+});

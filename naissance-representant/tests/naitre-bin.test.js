@@ -45,7 +45,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { poserGarde, MODELE_PAR_DEFAUT, MODE_PAR_DEFAUT } from '../src/naissance.js';
+import { poserGarde, MODELE_PAR_DEFAUT, MODE_PAR_DEFAUT, avisSurLeLieuNonRenseigne } from '../src/naissance.js';
 import { estUneRiviere, FICHIER_NOM_AGENT, nomInscritDansLeLieu } from '../../ligne-directe/src/nom-de-riviere.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1514,3 +1514,57 @@ test('LES DEUX RENSEIGNÉS : la naissance ne reproche plus rien', () =>
       `rien ne devait être reproché — dit : ${r.stderr.slice(0, 200)}`,
     );
   }, 'ronde-remplie'));
+
+// ⚠️ LE CHEMIN D'AUTO-POSE, ET LE DÉFAUT BLOQUANT QU'IL PORTAIT (relevé en passe de fond).
+//
+// La commande POSE le lieu d'un orchestrateur quand il manque, puis vérifie qu'il est renseigné.
+// Un lieu qu'on vient de poser est PAR CONSTRUCTION resté mot pour mot son gabarit : le refus
+// tombait donc à la PREMIÈRE naissance de tout orchestrateur — en affirmant « Rien n'a été
+// créé », alors qu'un répertoire entier venait de l'être, non versé. Le diagnostic envoyait
+// chercher un lieu qu'on croyait inexistant, alors qu'il était là, à remplir.
+//
+// ⚠️ CE BOUT-EN-BOUT N'EST PAS ÉPROUVABLE ICI, ET ON NE LE CONTOURNE PAS. La cloison d'essais
+// (`ligne-directe/src/cloison.js`) refuse toute lecture du trousseau à un processus descendant
+// du lanceur — délibérément : un veilleur né sous tests se connecterait à l'espace de
+// production. L'auto-pose ne peut donc pas aboutir dans un banc, et la contourner échangerait
+// une garde éprouvée contre un banc qui ment.
+//
+// Ce qui est décidable est donc décidé dans une fonction PURE, éprouvée ici. La MOITIÉ
+// atteignable — « le lieu n'a PAS été posé par cette commande » — reste éprouvée par la chaîne
+// réelle, dans les essais plus haut.
+
+test('AVIS D’AUTO-POSE : quand la commande VIENT de poser le lieu, elle le dit — jamais l’inverse', () => {
+  const avis = avisSurLeLieuNonRenseigne({
+    message: 'le lieu « /d/.orchestrateur/x » n’est renseigné qu’en partie.',
+    poseFaite: true,
+    lieu: '/d/.orchestrateur/x',
+  });
+  assert.match(avis, /VIENT D'ÊTRE POSÉ/, 'il dit ce qui vient d’être fait');
+  assert.ok(avis.includes('/d/.orchestrateur/x'), 'et où');
+  assert.match(avis, /pas versé/, 'et que ce lieu n’est pas encore versé');
+  assert.ok(
+    !/Rien n'a été créé|rien n'a été touché/.test(avis),
+    `un lieu VIENT d’être créé — l’avis ne peut pas dire le contraire : ${avis}`,
+  );
+  assert.match(avis, /rien n'est à défaire/, 'et il rassure sans mentir');
+});
+
+test('AVIS SANS POSE : quand la commande n’a rien posé, elle peut le dire', () => {
+  const avis = avisSurLeLieuNonRenseigne({
+    message: 'le lieu « /d/.gestionnaire/y » n’est renseigné qu’en partie.',
+    poseFaite: false,
+    lieu: '/d/.gestionnaire/y',
+  });
+  assert.match(avis, /Rien n'a été créé par cette commande/);
+  assert.ok(!/VIENT D'ÊTRE POSÉ/.test(avis), 'rien n’a été posé — l’avis ne peut pas l’affirmer');
+});
+
+test('L’AVIS RELAIE LE REFUS TEL QUEL — il ne le reformule jamais', () => {
+  const refus = 'CONTEXTE.md — 3 rubrique(s) encore au gabarit :\n      `<qui décide>`';
+  for (const poseFaite of [true, false]) {
+    assert.ok(
+      avisSurLeLieuNonRenseigne({ message: refus, poseFaite, lieu: '/d/x' }).includes(refus),
+      'deux textes qui décrivent le même refus divergent au premier correctif',
+    );
+  }
+});

@@ -129,7 +129,6 @@ export function verifierLieuRenseigne({ gabaritDir, racine } = {}) {
   }
 
   const manquant = [];
-  let intact = false;
   let mesures = 0;
   const muets = [];
 
@@ -144,10 +143,27 @@ export function verifierLieuRenseigne({ gabaritDir, racine } = {}) {
       texteLieu = readFileSync(auLieu, 'utf8');
     } catch { muets.push(fichier); continue; }
     mesures += 1;
+
+    // ⚠️ D1 — VIDER N'EST PAS REMPLIR, et c'était le trou le plus facile à emprunter.
+    // La garde ne cherchait que l'ABSENCE des chevrons du gabarit ; un fichier VIDE n'en porte
+    // aucun, donc il passait. Or un fichier vide EST le cas « personne n'a rien écrit » — le
+    // mode de panne exact que cette garde ferme — atteint par le geste le plus simple qui soit.
+    // Relevé par la passe de fond ; aucune des seize mutations de l'auteur ne l'avait vu.
+    if (texteLieu.trim() === '') {
+      manquant.push({ fichier, chemin: auLieu, rubriques: [], vide: true });
+      continue;
+    }
+
     const rubriques = rubriquesNonRenseignees(texteGabarit, texteLieu);
     if (rubriques.length > 0) {
-      manquant.push({ fichier, chemin: auLieu, rubriques });
-      if (GABARIT_EN_ENTIER(texteGabarit, texteLieu)) intact = true;
+      // ⚠️ D2 — `intact` EST PAR FICHIER, JAMAIS GLOBAL. Un seul booléen pour tout le lieu
+      // faisait dire au message « le lieu n'a jamais été renseigné » alors qu'un `CONTEXTE.md`
+      // rempli à la main était juste à côté — et la ligne du dessous ne citait pourtant que
+      // l'autre fichier. Un message qui se contredit lui-même est ce que ce dépôt refuse.
+      manquant.push({
+        fichier, chemin: auLieu, rubriques,
+        intact: GABARIT_EN_ENTIER(texteGabarit, texteLieu),
+      });
     }
   }
 
@@ -166,6 +182,9 @@ export function verifierLieuRenseigne({ gabaritDir, racine } = {}) {
   // tester ne doit pas tomber selon le verdict rendu.
   if (manquant.length === 0) return { renseigne: true, verifie: true, manquant: [] };
 
+  // « le lieu n'a JAMAIS été renseigné » n'est vrai que si RIEN ne l'a été : tous les fichiers
+  // mesurés sont en cause, et chacun est resté mot pour mot son gabarit (ou est vide).
+  const intact = manquant.length === mesures && manquant.every((m) => m.intact === true || m.vide === true);
   return { renseigne: false, verifie: true, manquant, intact, message: messageDeRefus({ racine, manquant, intact }) };
 }
 
@@ -173,23 +192,34 @@ export function verifierLieuRenseigne({ gabaritDir, racine } = {}) {
  * ⚠️ IL DIT CE QU'IL A MESURÉ, JAMAIS CE QU'IL EN CONCLUT — et il ne met AUCUNE commande
  * destructrice dans la bouche de personne. Celui qui lit un message de refus a déjà un
  * problème : il fait confiance, et il colle. Le seul geste nommé ici est d'écrire.
+ *
+ * ⚠️ ET IL NE DIT PLUS « RIEN N'A ÉTÉ CRÉÉ » — IL NE PEUT PAS LE SAVOIR. Relevé par la passe de
+ * fond : sur le chemin d'AUTO-POSE, la commande POSE le lieu, puis appelle cette garde. Le lieu
+ * venait donc d'être créé, et le refus le niait — un message faux, sur le seul chemin par lequel
+ * un orchestrateur naît sans qu'un humain touche un écran. C'est le motif que
+ * `fraicheur-gabarit.js` avait déjà fermé, mot pour mot : « ce message dit ce qu'il a MESURÉ ;
+ * chaque appelant ajoute ce qu'il n'a pas touché, parce que lui seul le sait ».
  */
 function messageDeRefus({ racine, manquant, intact }) {
   const lignes = [];
   lignes.push(
     intact
       ? `le lieu « ${racine} » n’a jamais été renseigné : son gabarit y est resté mot pour mot.`
-      : `le lieu « ${racine} » n’est renseigné qu’à moitié.`,
+      : `le lieu « ${racine} » n’est renseigné qu’en partie.`,
   );
   for (const m of manquant) {
+    if (m.vide) {
+      lignes.push(`  ${m.fichier} — VIDE. Il a été effacé plutôt que rempli : vider n’est pas remplir.`);
+      continue;
+    }
     lignes.push(`  ${m.fichier} — ${m.rubriques.length} rubrique(s) encore au gabarit :`);
     for (const r of m.rubriques) lignes.push(`      ${r}`);
   }
   lignes.push(
     `  Un agent né là ne saurait ni à qui il répond, ni quelle est sa portée : son métier est le`,
-    `  même pour tous, et c’est ce fichier — et lui seul — qui porte ce que le métier ne sait pas.`,
-    `  Le geste qui lève ce refus : remplis les rubriques ci-dessus dans « ${manquant[0].chemin} »,`,
-    `  puis relance. Rien n’a été créé, et rien n’a été touché.`,
+    `  même pour tous, et ce sont ces fichiers — et eux seuls — qui portent ce que le métier ne`,
+    `  sait pas.`,
+    `  Le geste qui lève ce refus : remplis ce qui est nommé ci-dessus, puis relance.`,
   );
   return lignes.join('\n');
 }

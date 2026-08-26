@@ -43,6 +43,7 @@ import {
   repertoireDeLaSession,
   cheminLieu,
   LieuAbsent,
+  avisSurLeLieuNonRenseigne,
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
@@ -331,7 +332,18 @@ async function main() {
     racine: commandes.lieu,
   });
   if (renseigne.renseigne === false) {
-    process.stderr.write(`${renseigne.message}\n`);
+    // ⚠️ CE QUE LA COMMANDE AJOUTE, ET QUE LA GARDE NE PEUT PAS SAVOIR (relevé en passe de fond).
+    //
+    // Sur le chemin d'AUTO-POSE, le lieu vient d'être posé QUELQUES LIGNES PLUS HAUT : ses
+    // fichiers sont, par construction, restés mot pour mot le gabarit — personne n'a encore eu
+    // le temps de les remplir. Le refus est juste, mais il ne doit pas laisser croire que rien
+    // n'existe : un répertoire entier vient d'être créé, et il n'est pas versé.
+    //
+    // C'est le seul chemin par lequel un orchestrateur naît sans qu'un humain touche un écran.
+    // Un refus qui s'y trompe de diagnostic y est plus coûteux qu'ailleurs.
+    process.stderr.write(
+      avisSurLeLieuNonRenseigne({ message: renseigne.message, poseFaite, lieu: commandes.lieu }),
+    );
     process.exit(1);
   }
 
