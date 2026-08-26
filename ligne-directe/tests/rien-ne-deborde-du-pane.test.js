@@ -654,8 +654,8 @@ test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — balayage COMPLE
       // 🔴 CE BANC PASSAIT PAR LE MODÈLE DE TERMINAL, ET C’ÉTAIT INUTILE — mesuré, pas relu.
       // `rendreEcran` fait passer CHAQUE ligne par `borner`, qui rend exactement `largeur`
       // caractères. Donc `ceil(longueur / colonnes)` vaut 1 par construction, et le nombre de
-      // rangées physiques ÉGALE le nombre de lignes, identiquement : zéro divergence sur 80
-      // couples, 8×2 compris — le cas même que ce banc citait comme sa justification.
+      // rangées physiques ÉGALE le nombre de lignes, identiquement : zéro divergence sur ses
+      // 96 couples, 8×2 compris — le cas même que ce banc citait comme sa justification.
       //
       // ⚠️ C’ÉTAIT UNE QUATRIÈME FORME DE FAUSSE GARDE : ni inerte (elle s’exécutait), ni
       // complice (elle ne suivait aucune valeur déplacée) — un double bâti pour une classe de
@@ -1715,64 +1715,90 @@ test('L’ORDRE DE RETRAIT EST ANCRÉ — pas les chiffres qui le produisent, l�
 });
 
 
-test('LES COMPTES DE LA PROSE DÉSIGNENT LEUR OBJET — un chiffre juste peut vivre dans une phrase fausse', () => {
+test('LES COMPTES DE LA PROSE DÉSIGNENT LEUR OBJET — toutes les tournures, pas celle qu’on m’a montrée', () => {
   // ═══════════════════════════════════════════════════════════════════════════════════════
   // 🔴 UN COMPTE EXACT, UN RÉFÉRENT FAUX — ET AUCUN CONTRÔLE NATUREL NE LE VOIT.
   //
-  // La note du double a dit « zéro divergence sur 80 couples ». Le chiffre était VRAI : il
-  // venait d'une sonde ad hoc, 10 largeurs × 8 hauteurs. Mais la phrase désigne le balayage du
-  // banc `AUCUNE LIGNE DE L'ÉCRAN NE DÉPASSE LE PANE`, qui en fait 96 (12 × 8).
+  // La note du double a dit « zéro divergence sur 80 couples ». Le chiffre était VRAI : il venait
+  // d'une sonde ad hoc, 10 largeurs × 8 hauteurs. Mais la phrase désigne le balayage du banc
+  // `CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS`, qui en fait 96 (12 × 8).
   //
   // ⚠️ CETTE FAMILLE EST IMMUNISÉE CONTRE LE CONTRÔLE NATUREL. On vérifie un chiffre en le
-  // recomptant, et il se recompte. Il faut recompter contre l'UNITÉ QUE LA PHRASE DÉSIGNE —
-  // un autre geste. J'avais balayé mes sept affirmations chiffrées et vérifié chacune : j'ai
-  // vérifié les FAITS, jamais les RÉFÉRENTS. Le trou était exactement là où le chiffre est juste.
+  // recomptant, et il se recompte. Il faut recompter contre l'UNITÉ QUE LA PHRASE DÉSIGNE.
   //
-  // ⚠️ ET LA LEÇON ÉTAIT DÉJÀ NOMMÉE — je porte ce motif sous le nom « un compte juste dans une
-  // phrase fausse », et je l'ai refait en le connaissant. Une leçon nommée fait reconnaître le
-  // défaut quand on le montre ; elle n'empêche pas de l'écrire. Le remède n'est pas de mieux se
-  // souvenir, c'est CE BANC.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 ET LA PREMIÈRE VERSION DE CE BANC ÉTAIT UNE ÉNUMÉRATION À UNE ENTRÉE.
   //
-  // ⚠️ CE QU'IL GARDE, ET SA LIMITE : il ancre les comptes que la prose attribue au balayage du
-  // banc, contre le balayage lui-même. Il ne peut pas garder un compte dont l'objet vit hors du
-  // dépôt (une sonde de session, un pane réel) — pour ceux-là, la note doit dire QUEL objet a
-  // été mesuré, et ce banc ne remplace pas cette exigence.
+  // Elle cherchait `/zéro divergence sur ses (\d+) couples/` — la tournure EXACTE du site qu'une
+  // revue m'avait montré. Le même énoncé vivait 1065 lignes plus loin dans CE fichier, écrit
+  // « sur 80 couples » sans le mot « ses », et coupé en deux lignes de commentaire. La garde
+  // censée fermer la famille ne pouvait attraper que le cas déjà attrapé.
+  //
+  // ⚠️ ET J'AVAIS FAIT LE GESTE JUSTE DEUX HEURES PLUS TÔT, sur `L'ORDRE DE RETRAIT EST ANCRÉ` :
+  // ancrer contre le MANIFESTE et non contre la liste du jour. Même lot, même journée, et je ne
+  // l'ai pas transporté ici. Une leçon appliquée à un endroit n'est pas une leçon apprise ; elle
+  // l'est quand elle traverse.
+  //
+  // LA FORME QUI TIENT : on balaie TOUT le lot, on JOINT les lignes de commentaire (le texte se
+  // coupe en deux et un balayage ligne à ligne le rate — c'est ce qui m'a échappé), et on
+  // reconnaît toute annonce de compte, quelle que soit sa tournure.
   // ═══════════════════════════════════════════════════════════════════════════════════════
   const SEUIL = [...RACCOURCI_VITAL].length;
   const COLONNES = [1, 2, 3, 5, 8, SEUIL - 1, SEUIL, SEUIL + 1, 12, 20, 40, 65];
   const RANGEES = [1, 2, 3, 4, 5, 8, 12, 24];
-
-  // ═══ ① LE BALAYAGE DÉCRIT DANS LA PROSE EST CELUI QUI EXISTE. Si quelqu'un ajoute une largeur
-  // au banc, le compte inscrit dans la note du double devient faux — et c'est ICI que ça rougit,
-  // pas dans la tête d'un relecteur.
   const couples = COLONNES.length * RANGEES.length;
-  const note = readFileSync(new URL('./aide/terminal.js', import.meta.url), 'utf8');
-  const annonce = note.match(/zéro divergence sur ses (\d+) couples/);
-  assert.ok(
-    annonce,
-    'la note du double n’annonce plus de compte de couples — si la phrase a changé, mets ce banc ' +
-      'à jour ; si le compte a disparu, retire cette assertion plutôt que de la laisser chercher un fantôme'
-  );
-  assert.equal(
-    Number(annonce[1]),
-    couples,
-    `la note du double annonce ${annonce[1]} couples, le balayage du banc en fait ${couples}. ` +
-      'Le compte et son objet ont divergé — recompte contre l’unité que la phrase DÉSIGNE, pas ' +
-      'contre le nombre que tu te rappelles avoir mesuré.'
-  );
 
-  // ═══ ② ET LES DEUX LISTES SONT BIEN CELLES DU BANC — sinon on ancrerait un compte contre une
+  const FICHIERS = ['./aide/terminal.js', './rien-ne-deborde-du-pane.test.js', './le-tui-de-la-vue-du-parc.test.js'];
+
+  // ⚠️ ON JOINT LES LIGNES DE COMMENTAIRE AVANT DE CHERCHER. Une phrase coupée entre deux lignes
+  // (« sur 80 » / « couples ») échappe à tout balayage ligne à ligne — et c'est exactement
+  // comme ça que la seconde occurrence a survécu à la première version de ce banc.
+  const proseDe = (chemin) =>
+    readFileSync(new URL(chemin, import.meta.url), 'utf8')
+      .split('\n')
+      .map((l) => l.replace(/^\s*(\/\/|\*)\s?/, ''))
+      .join(' ')
+      .replace(/\s+/g, ' ');
+
+  let annonces = 0;
+  for (const chemin of FICHIERS) {
+    const prose = proseDe(chemin);
+    // Toute tournure : « sur N couples », « sur ses N couples », « N couples » — le mot compte,
+    // pas la formule qui l'entoure.
+    for (const m of prose.matchAll(/(\d+)\s+couples/g)) {
+      const avant = prose.slice(Math.max(0, m.index - 120), m.index);
+      // ⚠️ UNE CITATION D'ERREUR PASSÉE N'EST PAS UNE ANNONCE. On la reconnaît au fait qu'elle
+      // est rapportée entre guillemets — et si ce marqueur devient faux, ce banc rougira sur
+      // elle, ce qui est le bon sens de l'erreur : il vaut mieux vérifier une citation que
+      // laisser passer une annonce.
+      if (/«[^»]*$/.test(avant)) continue;
+      annonces += 1;
+      assert.equal(
+        Number(m[1]),
+        couples,
+        `dans ${chemin}, la prose annonce « ${m[0]} » et le balayage du banc en fait ${couples}. ` +
+          'Le compte et son objet ont divergé — recompte contre l’unité que la phrase DÉSIGNE, ' +
+          'pas contre le nombre que tu te rappelles avoir mesuré. Si le compte parle d’un AUTRE ' +
+          'objet (une sonde, un pane réel), dis lequel dans la phrase et cite-le entre guillemets.'
+      );
+    }
+  }
+  assert.ok(annonces > 0, 'aucune annonce de couples trouvée — ce banc ne mesure plus rien');
+
+  // ═══ ET LES DEUX LISTES SONT BIEN CELLES DU BANC — sinon on ancrerait un compte contre une
   // copie qui dérive, ce qui est la faute d'à côté : deux sources pour un seul fait.
   const source = readFileSync(new URL('./rien-ne-deborde-du-pane.test.js', import.meta.url), 'utf8');
   for (const [nom, liste] of [['COLONNES', COLONNES], ['RANGEES', RANGEES]]) {
     const decl = source.match(new RegExp(`const ${nom} = \\[([^\\]]*)\\];`));
     assert.ok(decl, `le banc ne déclare plus \`${nom}\` — ce contrôle vise un objet qui n’existe plus`);
-    const combien = decl[1].split(',').length;
     assert.equal(
-      combien,
+      decl[1].split(',').length,
       liste.length,
-      `\`${nom}\` porte ${combien} entrées dans le banc et ${liste.length} dans ce contrôle — ` +
-        'les deux ont dérivé, et le compte ancré ne vaut plus rien'
+      `\`${nom}\` a dérivé entre le banc et ce contrôle — le compte ancré ne vaut plus rien`
     );
   }
+
+  // ⚠️ CE QU'IL NE PEUT PAS GARDER, ÉCRIT PLUTÔT QUE SOUS-ENTENDU : un compte dont l'objet vit
+  // HORS du dépôt — une sonde de session, un pane réel. Pour ceux-là, la note doit dire QUEL
+  // objet a été mesuré, et ce banc ne remplace pas cette exigence.
 });

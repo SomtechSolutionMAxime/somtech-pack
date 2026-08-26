@@ -1103,7 +1103,8 @@ function pied(etat, largeur) {
   //   là avant ce lot ;
   //
   //   les deux formes rendent la MÊME chaîne, donc la même longueur, donc la même condition —
-  //   mesuré : ZÉRO largeur de divergence sur 200, tous filtres confondus. Le « correctif »
+  //   mesuré : AUCUNE largeur divergente de 0 à 200 colonnes, sur les trois états de filtre —
+  //   soit 201 largeurs par état, 603 mesures. Le « correctif »
   //   était SANS EFFET ;
   //
   //   et « mesuré, pas relu » était faux. Mesurer aurait rendu les deux formes identiques —
