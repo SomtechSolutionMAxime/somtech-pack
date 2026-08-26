@@ -836,23 +836,56 @@ test('LE PIED TIENT SES DEUX SENS — la sortie ne cède jamais, ET l’entête 
     { quoi: 'les DEUX entêtes ensemble', etat: { ...etatInitial(), nonPrisSeuls: true, recherche: 'somcraft-cowork-espace-client' } },
   ];
 
-  // ⚠️ ON DEMANDE AU PIED À PARTIR DE QUELLE LARGEUR IL PORTE SON ENTÊTE — on ne le calcule pas
-  // à sa place. Refaire ici l'arithmétique de `pied()` recopierait la règle à côté d'elle-même :
-  // le banc et le code se tromperaient ENSEMBLE, et c'est la faute que ce fichier a déjà payée.
-  const largeursOuLEnteteTient = new Map();
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CE PIVOT ÉTAIT DÉRIVÉ, DONC COMPLICE — ET LA MUTATION L'A PROUVÉ, PAS MA PROSE.
+  //
+  // Ma version précédente DEMANDAIT au pied à partir de quelle largeur il porte son entête :
+  // elle balayait jusqu'à la première où l'entête apparaît, et appelait ça le pivot. Le motif
+  // avait l'air excellent — refaire l'arithmétique de `pied()` à côté de lui recopie la règle,
+  // et le banc et le code se trompent alors ENSEMBLE.
+  //
+  // Mais lire le pivot dans la sortie qu'on juge est PIRE : si le code déplace sa frontière, le
+  // pivot mesuré se déplace AVEC elle, et l'assertion tient toujours. Mesuré : muter la
+  // comparaison de `pied()` de `>` en `>=` restait SURVIVANTE dans le commit même qui prétendait
+  // fermer cette frontière.
+  //
+  // ⚠️ LA SOUS-FORME QUE ÇA M'A APPRISE : j'avais gardé le DÉCLENCHEMENT, pas la VALEUR. Mon
+  // contrôle vérifiait que le pivot tombe DANS le balayage — donc que la branche s'exécute — et
+  // rien de plus. Une assertion peut être vraie, se déclencher, porter sur le rendu réel, et
+  // SUIVRE le code quand il bouge.
+  //
+  // LA FORME QUI TIENT : le pivot se COMPOSE de faits ancrés, chacun écrit ici, à sa source.
+  // Si quelqu'un change le libellé du filtre ou le raccourci vital, CE BANC rougit — et c'est
+  // voulu : un tel changement doit passer par quelqu'un qui décide, pas glisser.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const ENTETE_ATTENDUE = {
+    'filtre « non-pris seuls »': 'FILTRE : non-pris seuls',
+    'recherche active': 'RECHERCHE : « somcraft »',
+  };
+  const SEPARATEUR_DENTETE = '  ─  ';
+
+  const pivotDe = (quoi) => {
+    const libelle = ENTETE_ATTENDUE[quoi];
+    if (libelle === undefined) return undefined;
+    // ⚠️ ON COMPOSE : l'entête entière (libellé + son séparateur) PLUS le raccourci vital, lu à
+    // sa source. Aucun des deux nombres n'est écrit ici — ils sont mesurés sur les textes eux-mêmes.
+    return libelle.length + SEPARATEUR_DENTETE.length + RACCOURCI_VITAL.length;
+  };
+
+  // ⚠️ CONTRÔLE : les libellés que ce banc ancre doivent être CEUX QUE LE PIED REND. Sans ça,
+  // l'ancrage porterait sur un texte imaginaire et le banc mesurerait à côté — juste, déclenché,
+  // et hors sujet.
   for (const { quoi, etat: e } of avecEntete) {
-    const marque = e.nonPrisSeuls ? 'FILTRE' : 'RECHERCHE';
+    const libelle = ENTETE_ATTENDUE[quoi];
+    if (libelle === undefined) continue;
     const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
-    for (let largeur = SEUIL; largeur <= 140; largeur += 1) {
-      const pied = rendreEcran({ vue, etat: e, lignes, largeur, hauteur: 8 }).at(-1).texte;
-      if (pied.includes(marque)) { largeursOuLEnteteTient.set(quoi, largeur); break; }
-    }
+    const large = rendreEcran({ vue, etat: e, lignes, largeur: 130, hauteur: 8 }).at(-1).texte;
+    assert.ok(
+      large.includes(libelle),
+      `ce banc ancre l’entête « ${libelle} » pour « ${quoi} », et le pied ne la rend pas : ` +
+        `${JSON.stringify(large.trimEnd())} — l’ancrage vise un texte qui n’existe pas`
+    );
   }
-  assert.equal(
-    largeursOuLEnteteTient.size,
-    avecEntete.length,
-    'un état à entête ne montre son entête à AUCUNE largeur du balayage — le second sens serait muet'
-  );
 
   let mesurees = 0;
   for (const { quoi, etat: e } of avecEntete) {
@@ -879,17 +912,24 @@ test('LE PIED TIENT SES DEUX SENS — la sortie ne cède jamais, ET l’entête 
       // muter la comparaison de `pied()` de `>` en `>=` efface l'entête alors qu'elle TIENT, et
       // la suite entière restait VERTE. Le lecteur garde sa sortie, l'arbre continue de filtrer,
       // et plus rien ne le dit — ce que le code déclare inacceptable trois lignes plus haut.
-      if (e.nonPrisSeuls || e.recherche) {
-        const marque = e.nonPrisSeuls ? 'FILTRE' : 'RECHERCHE';
-        // ⚠️ LE PIVOT SE DÉRIVE, IL NE S'ÉCRIT PAS EN CHIFFRE. Écrit `37`, il devient faux en
-        // silence le jour où le libellé du filtre ou le raccourci vital changent d'un caractère.
-        // On demande au pied lui-même à partir d'où il porte l'entête, plutôt que de le supposer.
-        const pivot = largeursOuLEnteteTient.get(quoi);
-        if (pivot !== undefined && largeur >= pivot) {
+      const pivot = pivotDe(quoi);
+      if (pivot !== undefined) {
+        const libelle = ENTETE_ATTENDUE[quoi];
+        // ⚠️ ON ASSERTE LES DEUX CÔTÉS DU PIVOT, et c'est ça qui met la frontière en cause. Un
+        // seul côté laisse la frontière libre de glisser d'un cran : c'est exactement ce qui
+        // survivait. Au pivot EXACT, l'entête et la sortie tiennent tout juste — donc les deux
+        // doivent être là.
+        if (largeur >= pivot) {
           assert.ok(
-            pied.includes(marque),
-            `${quoi}, à ${largeur} colonnes : l’entête TIENT (elle apparaît dès ${pivot}) et elle ` +
-              `n’est PAS là — la sortie a pris sa place, et l’arbre filtre sans le dire : ${JSON.stringify(pied)}`
+            pied.includes(libelle),
+            `${quoi}, à ${largeur} colonnes : l’entête TIENT (pivot ancré à ${pivot}) et elle n’est ` +
+              `PAS là — la sortie a pris sa place, et l’arbre filtre sans le dire : ${JSON.stringify(pied.trimEnd())}`
+          );
+        } else {
+          assert.ok(
+            !pied.includes(libelle),
+            `${quoi}, à ${largeur} colonnes : l’entête NE TIENT PAS (pivot ancré à ${pivot}) et elle ` +
+              `est là quand même — elle mange la place de la sortie : ${JSON.stringify(pied.trimEnd())}`
           );
         }
       }
@@ -897,12 +937,14 @@ test('LE PIED TIENT SES DEUX SENS — la sortie ne cède jamais, ET l’entête 
   }
   assert.ok(mesurees > 300, `ce banc doit balayer les largeurs — il n’en a vu que ${mesurees}`);
 
-  // ⚠️ ET LE PIVOT EST BIEN DANS LE BALAYAGE — sinon le sens ② ne se déclencherait jamais, et on
-  // aurait ajouté une assertion morte pour fermer une assertion unilatérale.
-  for (const [quoi, pivot] of largeursOuLEnteteTient) {
+  // ⚠️ ET LES DEUX CÔTÉS SE DÉCLENCHENT VRAIMENT — sinon on aurait remplacé une assertion
+  // unilatérale par une assertion morte, ce que ce fichier a déjà payé une fois.
+  for (const { quoi } of avecEntete) {
+    const pivot = pivotDe(quoi);
+    if (pivot === undefined) continue;
     assert.ok(
-      pivot >= SEUIL && pivot <= 140,
-      `le pivot de « ${quoi} » vaut ${pivot}, hors du balayage — le second sens ne s’éprouve jamais`
+      pivot > SEUIL && pivot < 140,
+      `le pivot ancré de « ${quoi} » vaut ${pivot} : hors du balayage, un des deux côtés ne s’éprouve jamais`
     );
   }
 });
