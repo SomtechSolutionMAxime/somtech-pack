@@ -7,13 +7,25 @@
 // herdr. Reproduit dans un vrai pane de 65 colonnes, écran lu par `herdr pane read` :
 // **+21 lignes en 8 secondes**, pendant les ~80 s de chargement.
 //
-// LA CAUSE, MESURÉE : `texteDeProgression` rend **116 caractères, longueur fixe**, et
-// `avecProgression` le réécrit toutes les 120 ms avec `\r` + effacement de ligne. Sous 116
-// colonnes le texte WRAPPE : le curseur passe à la ligne suivante, donc le `\r` du tour d'après
-// revient au début de la NOUVELLE ligne et l'effacement porte sur celle-là. La précédente reste.
+// LA CAUSE, MESURÉE : `avecProgression` réécrit la ligne toutes les 120 ms avec `\r` +
+// effacement de ligne. Sous la longueur du texte, il WRAPPE : le curseur passe à la ligne
+// suivante, donc le `\r` du tour d'après revient au début de la NOUVELLE ligne et l'effacement
+// porte sur celle-là. La précédente reste.
 //
-// ⚠️ POURQUOI PERSONNE NE L'AVAIT VU : en pane plein écran (> 116 colonnes) la ligne tient. Le
-// symptôme n'existe QUE dans un pane étroit — c'est-à-dire exactement l'écran du dirigeant.
+// ⚠️ ET LE SEUIL EST UNE PLAGE, PAS UN NOMBRE — c'est ce qui rend ce défaut coûteux à chercher.
+// La longueur varie avec le NOMBRE DE CHIFFRES du compteur : 115 caractères de 0 à 9 secondes,
+// 116 de 10 à 99, 117 au-delà. Sous 115 colonnes ça empile systématiquement ; entre 115 et 117,
+// ça se met à empiler EN COURS DE ROUTE, quand le compteur passe à deux chiffres puis à trois.
+//
+// 🔴 QUELQU'UN QUI TESTE À 116 COLONNES PENDANT LES NEUF PREMIÈRES SECONDES NE VOIT RIEN, et
+// conclut que le défaut n'existe pas. Un défaut qu'on ne voit pas quand on le cherche mal coûte
+// plus cher qu'un défaut franc.
+//
+// ⚠️ CETTE PROSE A DIT « 116 caractères, longueur fixe » — une constante INVENTÉE, dans un
+// commentaire qu'aucune garde ne peut atteindre. Deuxième fois dans ce lot.
+//
+// ⚠️ POURQUOI PERSONNE NE L'AVAIT VU : en pane large la ligne tient. Le symptôme n'existe QUE
+// dans un pane étroit — c'est-à-dire exactement l'écran du dirigeant.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // CE QUE CES BANCS GARDENT, ET POURQUOI ILS NE GARDENT PAS « LE BUG »
@@ -1165,7 +1177,9 @@ test('LA PROGRESSION N’EMPILE PAS — l’incident du dirigeant, reproduit pui
   // split herdr. Mesuré alors dans un vrai pane : **+21 lignes en 8 secondes** à 65 colonnes.
   //
   // La cause : `avecProgression` écrit DROIT au terminal — retour chariot, effacement de rangée,
-  // puis 116 caractères de longueur FIXE. Sous 116 colonnes le texte wrappe ; le retour chariot
+  // puis un texte de 115 à 117 caractères selon le compteur — le seuil de wrap est une PLAGE, pas
+  // un nombre, et entre 115 et 117 l'écran se met à empiler EN COURS DE ROUTE. Sous sa longueur
+  // le texte wrappe ; le retour chariot
   // du tour suivant revient au début de la rangée physique COURANTE (la seconde) et l’effacement
   // ne nettoie que celle-là. La première reste, définitivement. Une de plus toutes les 120 ms.
   //

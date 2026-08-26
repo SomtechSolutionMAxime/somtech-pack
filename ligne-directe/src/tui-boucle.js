@@ -195,13 +195,28 @@ export async function mettreEnFocus(pane, socket, { executer } = {}) {
  * **+21 lignes en 8 secondes**, pendant les ~80 s de chargement.
  *
  * LE MÉCANISME, MESURÉ : `avecProgression` réécrit cette ligne avec `\r` + effacement de
- * ligne. Le texte fait **116 caractères, longueur fixe**. Sous 116 colonnes il WRAPPE — le
- * curseur passe à la ligne suivante, donc le `\r` du tour d’après revient au début de la
- * NOUVELLE ligne et l’effacement porte sur celle-là. La précédente reste, définitivement.
+ * ligne. Sous la longueur du texte, il WRAPPE — le curseur passe à la ligne suivante, donc le
+ * `\r` du tour d’après revient au début de la NOUVELLE ligne et l’effacement porte sur celle-là.
+ * La précédente reste, définitivement.
  *
- * ⚠️ ET C’EST POURQUOI PERSONNE NE L’AVAIT VU : en pane plein écran (> 116 colonnes) la ligne
- * tient, et rien ne s’empile. Le symptôme n’existe QUE dans un pane étroit — c’est-à-dire
- * exactement l’écran que le dirigeant regardait.
+ * ⚠️ ET LE SEUIL EST UNE PLAGE, PAS UN NOMBRE — c'est ce qui rend ce défaut coûteux à chercher.
+ * La longueur varie avec le NOMBRE DE CHIFFRES du compteur : 115 caractères de 0 à 9 secondes,
+ * 116 de 10 à 99, 117 au-delà. Donc sous 115 colonnes ça empile systématiquement ; entre 115 et
+ * 117, ça se met à empiler EN COURS DE ROUTE, quand le compteur passe à deux chiffres puis à
+ * trois.
+ *
+ * 🔴 QUELQU'UN QUI TESTE À 116 COLONNES PENDANT LES NEUF PREMIÈRES SECONDES NE VOIT RIEN, et
+ * conclut que le défaut n'existe pas. Un défaut qu'on ne voit pas quand on le cherche mal coûte
+ * plus cher qu'un défaut franc.
+ *
+ * ⚠️ CETTE PROSE A DIT « 116 caractères, longueur fixe » — une constante INVENTÉE pour expliquer
+ * le mécanisme, dans un commentaire qu'aucune garde ne peut atteindre. C'est la deuxième fois
+ * dans ce lot. Le code, lui, n'a jamais dépendu du chiffre : il mesure `[...texte].length` à
+ * l'exécution.
+ *
+ * ⚠️ ET C’EST POURQUOI PERSONNE NE L’AVAIT VU : en pane large la ligne tient, et rien ne
+ * s’empile. Le symptôme n’existe QUE dans un pane étroit — c’est-à-dire exactement l’écran que
+ * le dirigeant regardait.
  *
  * ⚠️ ON TRONQUE, ON NE RACCOURCIT PAS LE MESSAGE. Le texte dit ce que le lecteur doit savoir
  * pendant 80 s d’attente : que ça interroge chantier par chantier, et combien de temps ça

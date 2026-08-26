@@ -60,11 +60,26 @@
  * 🔴 CE QU'IL EXISTE POUR REPRODUIRE, ET QU'AUCUN AUTRE INSTRUMENT DU DÉPÔT N'ATTEINT :
  * la ligne de progression est écrite DROIT AU TERMINAL par `avecProgression`, pas composée par
  * `rendreEcran`. Elle ne passe donc PAS par `borner`. C'est elle qui a produit l'incident :
- * 116 caractères fixes, réécrits toutes les 120 ms avec un retour chariot et un effacement de
- * ligne. Sous 116 colonnes le texte WRAPPE ; le retour chariot du tour suivant revient au début
+ * un texte de 115 à 117 caractères selon le compteur, réécrit toutes les 120 ms avec un retour
+ * chariot et un effacement de ligne. Sous sa longueur, il WRAPPE ; le retour chariot revient au début
  * de la rangée PHYSIQUE COURANTE — la seconde — et l'effacement ne nettoie que celle-là. La
  * première reste. Une ligne de plus toutes les 120 ms : +21 lignes en 8 secondes, mesuré dans
  * un vrai pane herdr.
+ *
+ * ⚠️ ET LE SEUIL EST UNE PLAGE, PAS UN NOMBRE — c'est ce qui rend ce défaut coûteux à chercher.
+ * La longueur varie avec le NOMBRE DE CHIFFRES du compteur : 115 caractères de 0 à 9 secondes,
+ * 116 de 10 à 99, 117 au-delà. Donc sous 115 colonnes ça empile systématiquement ; entre 115 et
+ * 117, ça se met à empiler EN COURS DE ROUTE, quand le compteur passe à deux chiffres puis à
+ * trois.
+ *
+ * 🔴 QUELQU'UN QUI TESTE À 116 COLONNES PENDANT LES NEUF PREMIÈRES SECONDES NE VOIT RIEN, et
+ * conclut que le défaut n'existe pas. Un défaut qu'on ne voit pas quand on le cherche mal coûte
+ * plus cher qu'un défaut franc.
+ *
+ * ⚠️ CETTE PROSE A DIT « 116 caractères, longueur fixe » — une constante INVENTÉE pour expliquer
+ * le mécanisme, dans un commentaire qu'aucune garde ne peut atteindre. C'est la deuxième fois
+ * dans ce lot. Le code, lui, n'a jamais dépendu du chiffre : il mesure `[...texte].length` à
+ * l'exécution.
  *
  * ⚠️ POURQUOI IL FALLAIT L'ÉCRIRE : le modèle d'auto-wrap seul ne peut pas voir ça. Il calcule
  * combien de rangées un écran OCCUPE ; l'incident est une histoire de CURSEUR — où le retour
