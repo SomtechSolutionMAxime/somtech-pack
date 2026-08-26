@@ -12,8 +12,24 @@
 // et REFUS PAR DÉFAUT quand on ne comprend pas — un garde absent ne vaut jamais
 // un garde permissif.
 
-/** Les rôles à qui cette garde s'applique. Elle ne décide pas pour les autres. */
-export const ROLES_GARDES = new Set(['orchestrateur', 'gestionnaire-client']);
+import { ROLES_CONNUS } from './roles-connus.js';
+
+// ⚠️ `ROLES_GARDES` A DISPARU D'ICI, ET SON NOM AVEC — T-20260826-0079.
+//
+// Il valait `{orchestrateur, gestionnaire-client}` et se lisait « les rôles à qui cette
+// garde s'applique ; elle ne décide pas pour les autres ». Ce n'était pas une réserve de
+// compétence, c'était un TROU : tout rôle absent de ces deux entrées repartait avec un
+// `allow()` sans qu'une seule ligne de sa commande soit examinée. L'en-tête ci-dessus
+// prescrit littéralement l'inverse, et les deux autres gardes du dispositif l'appliquent
+// déjà — `ecriture.js` refuse un rôle inconnu, `ligne-cliente.js` aussi. Le rôle était le
+// seul point où celle-ci disait « d'accord » à ce qu'elle n'avait pas compris.
+//
+// Le nom n'a pas été conservé parce qu'il ne veut plus dire la même chose : la garde ne
+// choisit plus à qui elle s'applique, elle s'applique à tout ce qu'elle sait lire et
+// refuse le reste. Garder l'ancien mot sur le nouveau sens est précisément ce qui avait
+// fait diverger cette table de celle de `ligne-cliente.js`.
+//
+// Ce qu'elle sait lire vit désormais dans `roles-connus.js`, en un seul exemplaire.
 
 /** Chemins toujours ouverts : sans eux la garde empêche de travailler. */
 const HORS_PORTEE = [/^\/private\/tmp\/claude-/, /^\/tmp\/claude-/, /^\/dev\/(null|stdout|stderr)$/];
@@ -55,9 +71,20 @@ const allow = () => ({ decision: 'allow', raison: '' });
  * @returns {{decision:'allow'|'deny', raison:string}}
  */
 export function juger(req = {}) {
+  // Le défaut reste `orchestrateur`, et il n'est PAS le trou : un appelant muet se fait
+  // alors juger au plus dur, ce qui est le bon côté de l'erreur. Le trou était un rôle
+  // AUTRE — celui qu'aucune des deux entrées ne nommait.
   const { commande, depot, role = 'orchestrateur' } = req;
 
-  if (!ROLES_GARDES.has(role)) return allow();
+  if (!ROLES_CONNUS.has(role)) {
+    return deny(
+      `La garde n'a pas su établir à quel rôle elle avait affaire (« ${role} »). Elle ne sait ` +
+      `donc pas ce que ce rôle a le droit de faire au terminal, et elle refuse plutôt que de le ` +
+      `supposer : un garde absent ne vaut jamais un garde permissif. Le geste qui lève ce blocage ` +
+      `n'est pas de contourner la garde, c'est de déclarer ce rôle dans « roles-connus.js » — puis ` +
+      `de rejouer « npx @somtech-solutions/pack setup » pour que le poste reçoive la table à jour.`,
+    );
+  }
 
   if (typeof commande !== 'string' || commande.trim() === '') {
     return deny(
