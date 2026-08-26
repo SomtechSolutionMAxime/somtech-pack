@@ -480,10 +480,32 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production
     for (let largeur = 1; largeur <= 130; largeur += 1) {
       for (const ligne of rendreEcran({ vue, etat: e, lignes: l2, largeur, hauteur: 10 })) {
         mesurees += 1;
+        // 🔴 CETTE ASSERTION ÉTAIT TAUTOLOGIQUE, ET UNE REVUE L'A DIT : elle comparait le rendu
+        // à `depasseLaLargeurAutorisee`, c'est-à-dire l'oracle à lui-même. Quand l'exception de
+        // l'invariant était trop large, le rendu ET l'oracle se trompaient ENSEMBLE, et le banc
+        // restait vert. C'est ainsi qu'un débordement de 61 caractères dans un pane de 3 est
+        // passé.
+        //
+        // ⚠️ ON MESURE DONC CONTRE UNE RÈGLE ÉCRITE ICI, indépendante de l'invariant : une ligne
+        // ne dépasse que si elle PORTE le raccourci vital ET que celui-ci ne tiendrait pas.
+        // C'est la décision `f05bc613` récitée par le banc, pas déléguée au code qu'il juge.
+        const trop = largeurAffichee(ligne.texte) > largeur;
+        const justifiee =
+          ligne.style === 'pied' &&
+          ligne.texte.includes(RACCOURCI_VITAL) &&
+          largeur < [...RACCOURCI_VITAL].length;
         assert.ok(
-          !depasseLaLargeurAutorisee(ligne, largeur),
-          `${quoi}, à ${largeur} colonnes : le rendu viole l’invariant que le code prétend suivre — ` +
-            `${largeurAffichee(ligne.texte)} caractères de style « ${ligne.style} » : ${JSON.stringify(ligne.texte)}`
+          !trop || justifiee,
+          `${quoi}, à ${largeur} colonnes : ${largeurAffichee(ligne.texte)} caractères de style ` +
+            `« ${ligne.style} » — et cette ligne ne porte pas la sortie : ${JSON.stringify(ligne.texte)}`
+        );
+        // ⚠️ ET L'INVARIANT DOIT DIRE LA MÊME CHOSE QUE LA RÈGLE. S'ils divergent, l'un des deux
+        // ment — et c'est ce désaccord, pas l'accord, qui révèle l'exception trop large.
+        assert.equal(
+          depasseLaLargeurAutorisee(ligne, largeur),
+          trop && !justifiee,
+          `${quoi}, à ${largeur} colonnes : l’invariant et la décision ne disent pas la même chose ` +
+            `sur ${JSON.stringify(ligne.texte)}`
         );
       }
     }
