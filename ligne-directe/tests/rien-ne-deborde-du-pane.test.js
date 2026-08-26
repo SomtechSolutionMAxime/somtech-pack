@@ -444,6 +444,98 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
   }
 });
 
+test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et elle ne s’élargit pas sans rougir', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QUE L’EXCEPTION ÉTAIT DÉSARMABLE, ET QUE LA DÉPLACER N’A PAS SUFFI.
+  //
+  // Décision `f05bc613`, condition n°3 : « une exception qu’on peut élargir sans rougir n’est
+  // pas une exception, c’est un trou avec un commentaire. » Mesuré AVANT ce banc — six
+  // élargissements de `depasseLaLargeurAutorisee`, CINQ verts : l’exception étendue à toute
+  // largeur, au titre, à toutes les lignes, avec un seuil écrit en dur à 40, ou décrochée du
+  // manifeste. Rien ne bougeait.
+  //
+  // ⚠️ POURQUOI LES AUTRES BANCS NE POUVAIENT PAS L’ATTRAPER : ils demandent « aucune ligne ne
+  // dépasse », et l’invariant leur répond « non » — plus l’exception est large, plus il répond
+  // « non ». **Élargir une exception ne fait jamais rougir une garde qui l’interroge.** Il faut
+  // une garde qui mesure l’exception ELLE-MÊME, sur les deux bords.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const etat = etatInitial();
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
+  const MINIMUM = [...RACCOURCI_VITAL].length;
+
+  // ═══ BORD 1 — TOUT CE QUI EST EXCEPTÉ EST BIEN CE QUE LA RÈGLE NOMME.
+  // Une ligne qui dépasse sans rougir DOIT être la barre, ET la largeur DOIT être sous le
+  // seuil dérivé. Élargir l’exception (au titre, à toutes les lignes, à toute largeur) fait
+  // apparaître ici une ligne exceptée qui ne remplit pas ces deux conditions.
+  let exceptees = 0;
+  for (let largeur = 1; largeur <= 130; largeur += 1) {
+    for (const l of rendreEcran({ vue, etat, lignes, largeur, hauteur: 12 })) {
+      if (largeurAffichee(l.texte) <= largeur) continue;
+      exceptees += 1;
+      assert.equal(
+        l.style,
+        'pied',
+        `à ${largeur} colonnes, une ligne de style « ${l.style} » dépasse sans rougir — ` +
+          'l’exception ne couvre QUE la barre de raccourcis'
+      );
+      assert.ok(
+        largeur < MINIMUM,
+        `à ${largeur} colonnes, la barre dépasse alors que le raccourci vital (${MINIMUM} ` +
+          'caractères) y tiendrait — l’exception déborde de son seuil'
+      );
+      assert.ok(
+        l.texte.includes(RACCOURCI_VITAL),
+        `à ${largeur} colonnes, une ligne dépasse SANS porter le raccourci vital : ${JSON.stringify(l.texte)}`
+      );
+    }
+  }
+
+  // ⚠️ CONTRÔLE POSITIF — sans lui, tout ce qui précède serait vert sur un écran où RIEN ne
+  // dépasse, c’est-à-dire sur rien du tout. C’est le défaut « une égalité vide », et il aurait
+  // rendu ce banc inutile exactement comme les précédents.
+  assert.ok(
+    exceptees > 0,
+    'aucune ligne n’a jamais été exceptée : ce banc ne mesure rien, et l’exception n’est pas gardée'
+  );
+
+  // ═══ BORD 2 — L’EXCEPTION NE S’APPLIQUE PAS LÀ OÙ ELLE N’A PAS LIEU D’ÊTRE.
+  // Au-dessus du seuil, la barre est une ligne comme les autres : elle doit être refusée si
+  // elle dépasse. Sans ce bord, « l’exception vaut pour TOUTE largeur » resterait vert.
+  const barreTropLongue = { style: 'pied', texte: 'x'.repeat(200) };
+  assert.ok(
+    depasseLaLargeurAutorisee(barreTropLongue, MINIMUM),
+    `à ${MINIMUM} colonnes (le seuil), une barre trop longue doit être REFUSÉE — l’exception ` +
+      'ne vaut que STRICTEMENT en dessous'
+  );
+  assert.ok(
+    depasseLaLargeurAutorisee(barreTropLongue, 120),
+    'à 120 colonnes, une barre trop longue doit être refusée comme n’importe quelle ligne'
+  );
+
+  // ═══ BORD 3 — LES AUTRES STYLES NE SONT JAMAIS EXCEPTÉS, MÊME SOUS LE SEUIL.
+  for (const style of ['titre', 'selection', 'arbre:epic', 'vide']) {
+    assert.ok(
+      depasseLaLargeurAutorisee({ style, texte: 'x'.repeat(50) }, 1),
+      `une ligne de style « ${style} » qui dépasse doit être refusée, même à 1 colonne`
+    );
+  }
+
+  // ═══ BORD 4 — LE SEUIL SUIT LE MANIFESTE, il n’est pas figé.
+  // Si quelqu’un décroche le seuil du raccourci vital (littéral, ou autre nombre), la barre
+  // cesse d’être exceptée à la bonne largeur — et c’est ce que cette assertion mesure.
+  assert.equal(
+    depasseLaLargeurAutorisee({ style: 'pied', texte: RACCOURCI_VITAL }, MINIMUM - 1),
+    false,
+    'juste sous le seuil, la barre portant le raccourci vital est exceptée'
+  );
+  assert.equal(
+    depasseLaLargeurAutorisee({ style: 'pied', texte: RACCOURCI_VITAL + ' de trop' }, MINIMUM),
+    true,
+    'exactement au seuil, elle ne l’est plus'
+  );
+});
+
 test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plancher de corps inobservable', async (t) => {
   // 🔴 UNE SECONDE MUTATION ÉQUIVALENTE, ET ELLE MÉRITE LE MÊME TRAITEMENT QUE LA PREMIÈRE.
   // Élargir le plancher de `hauteurCorps` (`max(1, …)` → `max(3, …)`) laisse la suite verte :
