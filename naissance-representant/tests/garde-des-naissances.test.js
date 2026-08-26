@@ -304,6 +304,52 @@ test('la déclaration identifie aussi par le NOM — un pane qui a bougé ne per
   assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
 });
 
+/**
+ * 🔴 « UNE SESSION INCONNUE N'APPARIE RIEN » — LA GARANTIE ÉTAIT ÉCRITE, ET RIEN NE LA TENAIT.
+ *
+ * `declarationDe` déclare en toutes lettres : « `identiteDeSession` rend `null` sur un socket
+ * hors de la forme `…/sessions/<nom>/…` — elle n'invente aucun nom. Laisser deux `null` se
+ * comparer égaux apparierait sur le SEUL pane, c'est-à-dire le défaut que cette clé existe pour
+ * fermer. » Le garde-fou est le `session === null ? null :` en tête de la clé primaire.
+ *
+ * Mesuré : le retirer (`false ? null :`) laissait la suite ENTIÈRE au vert — 757 pass / 0 fail,
+ * identique au témoin. La moitié voisine (la comparaison des deux noms de session) est gardée,
+ * elle : la muter fait rougir deux bancs. **Encore une moitié sur deux.**
+ *
+ * ⚠️ LA MUTATION N'EST PAS VIDE : sur ce cas-ci, elle fait passer la sortie de 1 à 0 et les
+ * identifiés de 0 à 1. Le trou n'était pas dans le code, il était dans ce qui l'éprouve.
+ *
+ * ⚠️ EXPOSITION RÉELLE MESURÉE : 0 socket non nommable sur 121 aujourd'hui. C'est un trou de
+ * BANC, pas un trou vivant — et c'est justement pourquoi il fallait le construire : un
+ * dénominateur épinglé ne se garde pas avec la population du jour.
+ */
+test('🔴 DEUX SESSIONS QUE RIEN NE NOMME NE S’APPARIENT PAS — un `null` n’est pas une identité', () => {
+  // Un socket hors de la forme `…/sessions/<nom>/herdr.sock` : `identiteDeSession` rend `null`.
+  // Des DEUX côtés — c'est le seul cas où « null === null » pourrait tenir lieu d'appariement.
+  const SANS_NOM = '/bac/un/chemin/sans/le/mot/attendu/herdr.sock';
+  const r = juger({
+    panes: [agent({ pane_id: 'w1:p1', herdr_socket: SANS_NOM })],
+    declarations: [declaration({ pane: 'w1:p1', session_herdr: SANS_NOM, espace: APRES, nom: 'ristigouche' })],
+  });
+  assert.equal(
+    r.comptes.identifies, 0,
+    'la clé primaire a apparié sur le SEUL pane — or un identifiant de pane n’est unique que dans sa session'
+  );
+  assert.equal(r.comptes.prises, 1);
+  assert.equal(r.sortie, SORTIES[VERDICTS.NES_HORS_DISPOSITIF]);
+});
+
+test('LE CONTRÔLE POSITIF DE LA MÊME CLÉ : deux sessions NOMMÉES et égales apparient bien', () => {
+  // ⚠️ SANS LUI, LA GARDE CI-DESSUS SERAIT VERTE LE JOUR OÙ LA CLÉ PRIMAIRE CESSERAIT
+  // D'APPARIER TOUT LE MONDE. Une assertion négative non appariée se satisfait de la panne.
+  const r = juger({
+    panes: [agent({ pane_id: 'w1:p1' })],
+    declarations: [declaration({ pane: 'w1:p1', session_herdr: 's1', espace: APRES })],
+  });
+  assert.equal(r.comptes.identifies, 1);
+  assert.equal(r.identifies[0].source, SOURCES.DECLARATION);
+});
+
 test('une déclaration d’une AUTRE session n’identifie pas un homonyme de pane', () => {
   // 🔴 SURVIVANTE DE LA CAMPAGNE DE MUTATION (M15). Apparier `d.pane === agent.pane` sans
   // comparer la session passait toute la suite au vert.
