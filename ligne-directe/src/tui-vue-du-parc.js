@@ -1092,10 +1092,32 @@ function pied(etat, largeur) {
   // ⚠️ CE QU’ON N’A PAS FAIT : tronquer l’entête de filtre. Un filtre à demi lisible
   // (« FILTRE : non-pr… ») est pire que pas d’entête du tout — il ne se comprend pas et il
   // mange quand même la place. On le RETIRE entièrement quand la sortie ne tiendrait pas.
-  // ⚠️ ON DEMANDE LA SORTIE **SEULE**, PAS « LA LARGEUR ZÉRO ». Ma première version appelait
-  // `raccourcisPour(0)`, qui rend une chaîne VIDE — la condition ne se déclenchait donc jamais,
-  // et le correctif ne mordait pas. Mesuré, pas relu : les largeurs fautives étaient
-  // identiques avant et après. On lit le raccourci vital dans le manifeste lui-même.
+  // 🔴 UNE PROSE FAUSSE A VÉCU ICI PENDANT DIX TOURS DE REVUE, ET ELLE REVENDIQUAIT UNE MESURE.
+  //
+  // Elle disait : « ma première version appelait `raccourcisPour(0)`, qui rend une chaîne VIDE —
+  // la condition ne se déclenchait donc jamais, et le correctif ne mordait pas. Mesuré, pas
+  // relu. » Trois affirmations, les trois fausses :
+  //
+  //   `raccourcisPour(0)` rend « q quitter », jamais une chaîne vide — la garde
+  //   `while (gardes.length > 1 …)` interdit de retirer le dernier élément, et elle était déjà
+  //   là avant ce lot ;
+  //
+  //   les deux formes rendent la MÊME chaîne, donc la même longueur, donc la même condition —
+  //   mesuré : ZÉRO largeur de divergence sur 200, tous filtres confondus. Le « correctif »
+  //   était SANS EFFET ;
+  //
+  //   et « mesuré, pas relu » était faux. Mesurer aurait rendu les deux formes identiques —
+  //   ce qu'elles sont. J'ai emprunté l'autorité de l'instrument pour une chose que je n'avais
+  //   pas mesurée, dans une phrase qui servait à en disqualifier une autre.
+  //
+  // ⚠️ POURQUOI ELLE A SURVÉCU À DIX REVUES : elle vit dans une PROSE. Aucune assertion ne peut
+  // rougir dessus. La prose d'un fichier de gardes est le seul endroit qu'aucune garde ne garde —
+  // et c'est ici, dans le fichier qui dénonce partout ailleurs les mécanismes inventés.
+  //
+  // LE MOTIF QUI TIENT, ET C'EST LE SEUL : on lit `RACCOURCI_VITAL` parce qu'un fait doit avoir
+  // UNE source. La même expression a vécu ici en double, et deux sources d'un seul fait peuvent
+  // dériver l'une de l'autre sans que rien ne rougisse. Ce n'est pas un correctif de
+  // comportement — c'est une réduction du nombre d'endroits où la vérité peut se contredire.
   // ⚠️ ON LIT LA CONSTANTE, ON NE RECALCULE PAS. La même expression vivait ici en double :
   // deux sources pour un seul fait, dont l'une pouvait dériver sans que rien ne rougisse.
   const laSortie = RACCOURCI_VITAL;
