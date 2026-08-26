@@ -1728,6 +1728,57 @@ N48H=$(printf '%s\n' "$OUT48H" | grep -c "(1/3)")
 [ "$N48H" -eq 3 ] && ok "le compteur repart de 1 à chaque reprise (3 fois « (1/3) »)" \
   || ko "le compteur n'est pas remis à zéro par la reprise : « (1/3) » vu $N48H fois au lieu de 3"
 
+echo "→ 48i. UN DÉBLOCAGE EST UNE REPRISE — le compteur du but repart de zéro"
+# ⚠️ TROUVÉ PAR LA PASSE DE FOND ADVERSARIALE, et c'est une assertion qui ne se
+#    déclenchait jamais : le reset `BUT_INACHEVE=0` de la branche `blocked)`
+#    pouvait être RETIRÉ sans qu'un seul des 169 cas rougisse (mesuré : bilan
+#    identique). Les resets voisins — `working)` et le sinon de `idle)` — étaient
+#    gardés ; celui-ci était mort.
+#
+#    Ce qu'il garde vraiment : un agent qui répond à une demande de permission
+#    VIENT DE PROUVER qu'il est vivant, au même titre qu'un `working`. Sans le
+#    reset, des états terminaux trompeurs séparés par de vrais déblocages
+#    s'accumulent vers la borne, et la veille finit par lâcher un agent qu'elle a
+#    elle-même vu travailler entre deux.
+#
+#    L'écran porte les DEUX marques à la fois — la demande de permission (pour que
+#    le déblocage soit réel, pas un écran non reconnu) et le but actif (pour que le
+#    compteur ait de quoi s'incrémenter). C'est aussi ce que porte un vrai écran.
+cat > "$SCREEN_FILE" <<'ECRAN48I'
+  ⎿  Login successful
+
+Do you want to proceed?
+❯ 1. Yes
+  2. No
+
+                                               ◎ /goal active (2h)
+ECRAN48I
+# done→idle (compte 1) · blocked (déblocage RÉEL) · done→idle (doit RECOMPTER de 1)
+printf 'working\ndone\nidle\nblocked\ndone\nidle\nworking\nworking\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT48I="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-48i" VD_BUT_TOURS=2 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 8 --dry-run 2>&1)"
+case "$OUT48I" in
+  *"MOTIF: but-inacheve"*) ko "elle LÂCHE un agent qu'elle vient de débloquer — le déblocage n'a pas remis le compteur à zéro : $OUT48I" ;;
+  *"MOTIF: agent-termine"*) ko "elle déclare fini un agent dont le but est actif : $OUT48I" ;;
+  *) ok "un déblocage réel remet le compteur du but à zéro — elle veille toujours" ;;
+esac
+# Le motif seul ne suffirait pas : il faut que le compteur ait VRAIMENT recompté
+# depuis 1 des deux côtés du déblocage, sinon un simple « elle ne conclut pas »
+# passerait aussi avec un compteur figé.
+N48I=$(printf '%s\n' "$OUT48I" | grep -c "(1/2)")
+[ "$N48I" -eq 2 ] && ok "le compteur repart de 1 après le déblocage (2 fois « (1/2) »)" \
+  || ko "le déblocage ne remet pas le compteur du but à zéro : « (1/2) » vu $N48I fois au lieu de 2"
+# Et le déblocage a bien EU LIEU — sans quoi ce cas mesurerait autre chose que ce
+# qu'il annonce : un écran non reconnu remettrait aussi le compteur, mais pour une
+# raison qui n'a rien à voir.
+case "$OUT48I" in
+  *"debloque"*) ok "le déblocage a réellement eu lieu — c'est bien une reprise qui est mesurée" ;;
+  *) ko "aucun déblocage dans ce scénario : il ne mesure pas ce qu'il annonce : $OUT48I" ;;
+esac
+
 echo "→ 48e. La borne du but est ÉPINGLÉE dans le script, et elle est VISIBLE"
 # ⚠️ VD_BUT_TOURS est réglable pour que 48d soit éprouvable en un instant ; sans
 #    cette assertion, le banc réglerait ce qu'il éprouve et la valeur RÉELLE du
