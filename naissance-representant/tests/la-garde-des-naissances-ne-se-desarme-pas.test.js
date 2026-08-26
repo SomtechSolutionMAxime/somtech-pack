@@ -423,6 +423,115 @@ test('une frontière ILLISIBLE refuse aussi — la vider n’est pas une façon 
   }
 });
 
+/**
+ * UN RECUL EXPRIMÉ DANS LA FORME DE LA FRONTIÈRE — dérivé de `MISE_EN_SERVICE`, jamais écrit à
+ * la main, et relu par la MÊME porte que le module (`instantDeLHorodatage`, heure LOCALE).
+ *
+ * ⚠️ UN RECUL EN DUR NE PEUT PAS ENCADRER DEUX DÉCLARATIONS DÉRIVÉES. Les `ne_le` portent un ISO
+ * absolu ; la frontière se lit en heure locale. Écrire « 20260904-000000 » ferait tomber
+ * l'encadrement du bon côté chez l'auteur et du mauvais sous un fuseau lointain — c'est le motif
+ * « vert chez l'auteur, rouge en CI » que ce fichier a déjà payé. Passer par les COMPOSANTES
+ * LOCALES d'un instant calculé rend l'aller-retour exact sous tout fuseau, et le test le
+ * VÉRIFIE avant de mesurer quoi que ce soit.
+ */
+const deuxChiffres = (n) => String(n).padStart(2, '0');
+const horodatageDeLInstant = (ms) => {
+  const d = new Date(ms);
+  return (
+    `${d.getFullYear()}${deuxChiffres(d.getMonth() + 1)}${deuxChiffres(d.getDate())}-` +
+    `${deuxChiffres(d.getHours())}${deuxChiffres(d.getMinutes())}${deuxChiffres(d.getSeconds())}`
+  );
+};
+
+const EN_SERVICE_MS = instantDeLHorodatage(MISE_EN_SERVICE).getTime();
+const UN_JOUR = 24 * 3_600_000;
+
+/** La première naissance du dispositif — une heure après la mise en service. */
+const LA_PLUS_ANCIENNE = Object.freeze({
+  nom: 'bonaventure',
+  pane: 'w0:p0',
+  espace: APRES,
+  ne_le: new Date(EN_SERVICE_MS + 3_600_000).toISOString(),
+});
+/** Un chef d'équipe né un mois plus tard — le registre GROSSIT à chaque naissance. */
+const LA_PLUS_RECENTE = Object.freeze({
+  nom: 'ristigouche',
+  pane: 'w0:p1',
+  espace: APRES,
+  ne_le: new Date(EN_SERVICE_MS + 30 * UN_JOUR).toISOString(),
+});
+/** Un recul qui tombe ENTRE les deux : après l'ancienne, avant la récente. */
+const RECUL_ENTRE_LES_DEUX = horodatageDeLInstant(EN_SERVICE_MS + 10 * UN_JOUR);
+
+test('sur un registre à PLUSIEURS voix, UNE SEULE déclaration antérieure suffit à démentir', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CE QUE CE BANC SOLLICITE ET QU'AUCUN AUTRE NE SOLLICITAIT : le terme qui RETIENT LA
+  // PLUS ANCIENNE. Tous les bancs de frontière ci-dessus passent un registre de ZÉRO OU UNE
+  // déclaration — et sur un registre de taille 1, « la plus ancienne » et « la plus récente »
+  // sont le MÊME objet. Le comparateur pouvait donc être inversé sans qu'un seul essai bouge.
+  //
+  // Inversé, l'épingle change de sens : « la frontière n'est démentie que si TOUTES les
+  // déclarations la précèdent » au lieu de « UNE SEULE suffit ». Le geste d'entretien que ce
+  // fichier nomme — « la garde fait du bruit sur les vieux worktrees, je recule la date » —
+  // repasserait dès que le registre porte une déclaration récente. C'est-à-dire dès demain :
+  // le registre grossit d'une déclaration à CHAQUE naissance de chef d'équipe.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+
+  // Le harnais AVANT la mesure. Si l'encadrement ne tient pas, le terme n'est pas sollicité et
+  // le vert qui suivrait ne prouverait rien — on veut alors rougir ICI, pour la bonne raison.
+  const frontiere = instantDeLHorodatage(RECUL_ENTRE_LES_DEUX);
+  assert.ok(frontiere, `le recul dérivé doit se relire par la porte du module : ${RECUL_ENTRE_LES_DEUX}`);
+  assert.ok(
+    Date.parse(LA_PLUS_ANCIENNE.ne_le) < frontiere.getTime(),
+    `la plus ancienne (${LA_PLUS_ANCIENNE.ne_le}) doit PRÉCÉDER le recul ${RECUL_ENTRE_LES_DEUX}`
+  );
+  assert.ok(
+    Date.parse(LA_PLUS_RECENTE.ne_le) > frontiere.getTime(),
+    `la plus récente (${LA_PLUS_RECENTE.ne_le}) doit SUIVRE le recul ${RECUL_ENTRE_LES_DEUX} — ` +
+      'sinon les deux déclarations démentent, et retenir l’une ou l’autre revient au même'
+  );
+
+  // Les DEUX ordres d'arrivée. L'ordre du registre ne doit rien décider : une boucle qui
+  // retiendrait « la première vue » passerait sur un seul des deux.
+  for (const declarations of [
+    [LA_PLUS_ANCIENNE, LA_PLUS_RECENTE],
+    [LA_PLUS_RECENTE, LA_PLUS_ANCIENNE],
+  ]) {
+    const ordre = declarations.map((d) => d.nom).join(' puis ');
+    assert.throws(
+      () =>
+        verdictDe([{ ...FAUTIF }], {
+          registre: { declarations, illisibles: [] },
+          miseEnService: RECUL_ENTRE_LES_DEUX,
+        }),
+      (e) => {
+        assert.ok(e instanceof FrontiereContredite, `reculer à ${RECUL_ENTRE_LES_DEUX} doit REFUSER (${ordre})`);
+        // ⚠️ ET LE REFUS NOMME LAQUELLE. Sans cette moitié, un refus rendu pour la RÉCENTE
+        // passerait pour bon : c'est le fait retenu qu'on épingle, pas seulement le fait qu'on
+        // refuse.
+        assert.ok(
+          e.message.includes(LA_PLUS_ANCIENNE.ne_le),
+          `le refus doit citer LA PLUS ANCIENNE (${LA_PLUS_ANCIENNE.ne_le}) — reçu (${ordre}) : ${e.message}`
+        );
+        return true;
+      }
+    );
+  }
+});
+
+test('un registre à plusieurs voix ne fait PAS refuser une frontière que personne ne dément', () => {
+  // La moitié symétrique : les deux déclarations naissent APRÈS la mise en service réelle. Sans
+  // ce contrôle, un module qui refuserait TOUJOURS dès qu'il y a deux voix ferait passer le
+  // banc ci-dessus au vert sans rien garder.
+  for (const declarations of [
+    [LA_PLUS_ANCIENNE, LA_PLUS_RECENTE],
+    [LA_PLUS_RECENTE, LA_PLUS_ANCIENNE],
+  ]) {
+    const r = verdictDe([{ ...FAUTIF }], { registre: { declarations, illisibles: [] } });
+    assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF, 'la frontière en service n’est démentie par aucune des deux');
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ④ LES COMPTES BALANCENT — le panier muet n'a nulle part où se mettre
 // ═══════════════════════════════════════════════════════════════════════════════════════
