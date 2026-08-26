@@ -29,17 +29,30 @@ const GABARIT_CONTEXTE = [
   '`<Le chantier dont tu réponds : son code au registre — D-…, P-… ou J-…>`',
 ].join('\n');
 
+const GABARIT_RONDE = [
+  '# Le briefing de ta ronde',
+  '',
+  '`<Un tour toutes les combien de minutes.>`',
+].join('\n');
+
 /** Un dépôt jetable qui porte un gabarit et un lieu. Rendu avec de quoi le défaire. */
-function bancDEssai({ contexteDuLieu }) {
+function bancDEssai({ contexteDuLieu, rondeDuLieu = null, rondeAuGabarit = false }) {
   const racineTmp = mkdtempSync(join(tmpdir(), 'lieu-renseigne-'));
   const gabaritDir = join(racineTmp, '.claude', 'templates', 'orchestrateur');
   const lieu = join(racineTmp, '.orchestrateur', 'essai');
   mkdirSync(gabaritDir, { recursive: true });
   mkdirSync(lieu, { recursive: true });
   writeFileSync(join(gabaritDir, 'CONTEXTE.md'), GABARIT_CONTEXTE);
+  if (rondeAuGabarit) writeFileSync(join(gabaritDir, 'RONDE.md'), GABARIT_RONDE);
   if (contexteDuLieu !== null) writeFileSync(join(lieu, 'CONTEXTE.md'), contexteDuLieu);
+  if (rondeDuLieu !== null) writeFileSync(join(lieu, 'RONDE.md'), rondeDuLieu);
   return { racineTmp, gabaritDir, lieu, defaire: () => rmSync(racineTmp, { recursive: true, force: true }) };
 }
+
+/** Un contexte pleinement renseigné, pour isoler ce qu'un autre fichier reproche. */
+const CONTEXTE_REMPLI = GABARIT_CONTEXTE
+  .replace('`<qui décide sur ce dépôt — le dirigeant, ou quelqu’un d’autre>`', '**Maxime Leboeuf**, le dirigeant')
+  .replace('`<Le chantier dont tu réponds : son code au registre — D-…, P-… ou J-…>`', 'P-20260819-0001.');
 
 test('un lieu dont le contexte est resté au gabarit intégral est REFUSÉ', () => {
   const b = bancDEssai({ contexteDuLieu: GABARIT_CONTEXTE });
@@ -141,4 +154,51 @@ test('le message de refus nomme le fichier, les rubriques et le geste qui déblo
 test('la liste des fichiers à renseigner n’est pas vide', () => {
   assert.ok(FICHIERS_A_RENSEIGNER.length >= 1);
   assert.ok(FICHIERS_A_RENSEIGNER.includes('CONTEXTE.md'));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ LA SECONDE ENTRÉE DE `FICHIERS_A_RENSEIGNER` N'ÉTAIT EXERCÉE PAR AUCUN ESSAI.
+//
+// Tous les essais ci-dessus n'écrivent qu'un `CONTEXTE.md` : `RONDE.md` était absent des deux
+// côtés, donc compté parmi les fichiers qu'on n'a pas su mesurer. La boucle aurait pu traiter
+// son second tour de travers — ne jamais le lire, écraser le verdict du premier, ne nommer que
+// le dernier — sans qu'un seul essai rougisse. Un contrôle qui ne se déclenche jamais ne garde
+// rien, et c'est le motif qui a coûté le plus cher à ce dépôt.
+
+test('le briefing resté au gabarit fait refuser, MÊME quand le contexte est rempli', () => {
+  const b = bancDEssai({ contexteDuLieu: CONTEXTE_REMPLI, rondeDuLieu: GABARIT_RONDE, rondeAuGabarit: true });
+  try {
+    const v = verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu });
+    assert.equal(v.renseigne, false, 'un lieu sans ronde renseignée n’est pas prêt');
+    assert.equal(v.manquant.length, 1, 'seul le briefing est en cause');
+    assert.equal(v.manquant[0].fichier, 'RONDE.md');
+    assert.match(v.message, /RONDE\.md/, 'le message nomme le fichier en cause, pas l’autre');
+    assert.ok(!/qui décide sur ce dépôt/.test(v.message), 'le contexte rempli n’est pas reproché');
+  } finally { b.defaire(); }
+});
+
+test('les DEUX fichiers restés au gabarit sont nommés — le second n’écrase pas le premier', () => {
+  const b = bancDEssai({ contexteDuLieu: GABARIT_CONTEXTE, rondeDuLieu: GABARIT_RONDE, rondeAuGabarit: true });
+  try {
+    const v = verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu });
+    assert.equal(v.renseigne, false);
+    assert.deepEqual(v.manquant.map((m) => m.fichier).sort(), ['CONTEXTE.md', 'RONDE.md']);
+    assert.match(v.message, /CONTEXTE\.md/);
+    assert.match(v.message, /RONDE\.md/);
+  } finally { b.defaire(); }
+});
+
+test('les deux renseignés : rien à reprocher', () => {
+  const b = bancDEssai({
+    contexteDuLieu: CONTEXTE_REMPLI,
+    rondeDuLieu: '# Le briefing de ta ronde\n\nUn tour toutes les 20 minutes.\n',
+    rondeAuGabarit: true,
+  });
+  try {
+    assert.equal(verifierLieuRenseigne({ gabaritDir: b.gabaritDir, racine: b.lieu }).renseigne, true);
+  } finally { b.defaire(); }
+});
+
+test('la liste porte bien les DEUX fichiers écrits à la main', () => {
+  assert.deepEqual([...FICHIERS_A_RENSEIGNER].sort(), ['CONTEXTE.md', 'RONDE.md']);
 });

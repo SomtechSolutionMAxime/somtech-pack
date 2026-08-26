@@ -1417,3 +1417,52 @@ test('UN DÉPÔT SANS GABARIT NE FAIT REFUSER PERSONNE — la mesure impossible 
       `aucun reproche possible sans gabarit — dit : ${r.stderr.slice(0, 200)}`,
     );
   }, 'gabarit-absent'));
+
+// ⚠️ LA JOINTURE, ET ELLE N'ÉTAIT GARDÉE PAR RIEN. Les quatre essais ci-dessus passent tous par
+// le rôle par DÉFAUT (`representant`). La garde reçoit pourtant `gabaritsDir(REPO_ROOT, role)` :
+// c'est le rôle qui décide de QUEL gabarit on compare. Un `role` mal transmis — ou un défaut
+// codé en dur — rendrait la garde muette pour l'orchestrateur sans qu'un seul essai rougisse,
+// et l'orchestrateur est précisément celui dont le lot a mesuré cinq contextes vides sur le parc.
+test('LA GARDE MORD AUSSI POUR L’ORCHESTRATEUR — le rôle décide du gabarit comparé', () =>
+  avecLieu((code, lieu, depot) => {
+    const GABARIT_ORCH = [
+      '# Ce qui est propre à ce dépôt\n',
+      '',
+      '| **Le destinataire** | `<qui décide sur ce dépôt — le dirigeant, ou quelqu’un d’autre>` |',
+    ].join('\n');
+    poserGabaritDuRole(depot, 'orchestrateur', GABARIT_ORCH);
+    writeFileSync(join(lieu, 'CONTEXTE.md'), GABARIT_ORCH);
+    const journal = installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(code, { role: 'orchestrateur' });
+
+    assert.equal(r.code, 1, 'refus attendu');
+    assert.match(r.stderr, /qui décide sur ce dépôt/, 'la rubrique du gabarit de l’ORCHESTRATEUR est citée');
+    // ⚠️ CE QUI SE MESURE ICI EST « AUCUN PANE », PAS « AUCUN APPEL ». Faire naître un
+    // orchestrateur commence par RÉSOUDRE sa session herdr, ce qui est une LECTURE et part
+    // avant tout le reste. Exiger zéro appel ferait rougir ce contrôle pour une raison qui
+    // n'a rien à voir avec ce qu'il garde — et un contrôle qui rougit à tort se fait retirer.
+    const gestes = appelsJournalises(journal).map((a) => a.join(' '));
+    for (const geste of gestes) {
+      assert.ok(
+        !/^(tab create|pane |agent start|agent rename)/.test(geste),
+        `rien ne devait être créé, et « ${geste} » l'a fait`,
+      );
+    }
+  }, 'orch-gabarit', { role: 'orchestrateur', nom: `d-20260826-${String(process.pid).slice(-4)}g` }));
+
+// ⚠️ ET SA MOITIÉ : un lieu d'orchestrateur renseigné passe. Sans elle, on ne saurait pas si le
+// refus ci-dessus vient de la garde ou du simple fait qu'un orchestrateur ne naît jamais ici.
+test('UN LIEU D’ORCHESTRATEUR RENSEIGNÉ NE SE FAIT RIEN REPROCHER', () =>
+  avecLieu((code, lieu, depot) => {
+    poserGabaritDuRole(depot, 'orchestrateur', '# Ce qui est propre à ce dépôt\n\n`<Ta portée>`\n');
+    writeFileSync(join(lieu, 'CONTEXTE.md'), '# Ce qui est propre à ce dépôt\n\nP-20260819-0001, le parc d’agents.\n');
+    installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(code, { role: 'orchestrateur' });
+
+    assert.ok(
+      !/rest[ée]|au gabarit|remplis les rubriques/i.test(r.stderr),
+      `rien ne devait être reproché — dit : ${r.stderr.slice(0, 200)}`,
+    );
+  }, 'orch-rempli', { role: 'orchestrateur', nom: `d-20260826-${String(process.pid).slice(-4)}h` }));
