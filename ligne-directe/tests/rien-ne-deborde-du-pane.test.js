@@ -41,7 +41,14 @@ import { unRecensement } from '../src/recensement.js';
 import { roleDuLieu } from '../src/lieu-agent.js';
 import { role as roleDe } from '../src/roles.js';
 import { laVueDuParc, lecteurDeChantier } from '../src/vue-du-parc.js';
-import { arbreDeLaVue, lignesVisibles, rendreEcran, etatInitial } from '../src/tui-vue-du-parc.js';
+import {
+  arbreDeLaVue,
+  lignesVisibles,
+  rendreEcran,
+  etatInitial,
+  depasseLaLargeurAutorisee,
+  RACCOURCI_VITAL,
+} from '../src/tui-vue-du-parc.js';
 import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 
@@ -194,9 +201,13 @@ test('AUCUNE LIGNE DE L’ÉCRAN NE DÉPASSE LE PANE — à TOUTE largeur, sur u
       //
       // ⚠️ L'EXCEPTION EST BORNÉE À CE CAS : elle ne vaut que pour le style `pied`, et
       // seulement sous la largeur où le raccourci vital tient.
-      if (l.style === 'pied' && largeur < 'q quitter'.length) continue;
+      // 🔴 ON INTERROGE L'INVARIANT, ON NE RECOPIE PAS SON EXCEPTION (décision `f05bc613`,
+      // condition n°1). Ce banc portait sa propre copie de la condition — donc l'exception
+      // vivait à CÔTÉ de la règle, et quatre élargissements la désarmaient sans qu'un seul
+      // essai ne bouge : borne supprimée, étendue au titre, étendue à toutes les lignes,
+      // seuil porté de 9 à 40 — quatre fois VERT.
       assert.ok(
-        largeurAffichee(l.texte) <= largeur,
+        !depasseLaLargeurAutorisee(l, largeur),
         `à ${largeur} colonnes, une ligne en écrit ${largeurAffichee(l.texte)} : ${JSON.stringify(l.texte)}`
       );
     }
@@ -423,9 +434,9 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
       );
       for (const l of ecran) {
         // Même exception nommée que ci-dessus — la barre, sous la largeur de « q quitter ».
-        if (l.style === 'pied' && largeur < 'q quitter'.length) continue;
+        // Même invariant interrogé, jamais recopié — voir la note ci-dessus.
         assert.ok(
-          largeurAffichee(l.texte) <= largeur,
+          !depasseLaLargeurAutorisee(l, largeur),
           `à ${largeur}x${hauteur}, une ligne écrit ${largeurAffichee(l.texte)} caractères : ${JSON.stringify(l.texte)}`
         );
       }
@@ -496,7 +507,10 @@ test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plan
   ];
   // 9 = longueur de « q quitter ». En dessous, AUCUNE barre ne peut le dire : c'est une borne
   // physique, pas un choix — et le banc l'épingle pour qu'elle ne dérive pas en silence.
-  const MINIMUM = 'q quitter'.length;
+  // ⚠️ LE SEUIL SE DÉRIVE, IL NE S'ÉCRIT PAS (décision `f05bc613`, condition n°2) : le jour où
+  // le raccourci vital est renommé, un `9` codé en dur devient faux EN SILENCE et cette garde
+  // reste verte.
+  const MINIMUM = [...RACCOURCI_VITAL].length;
 
   for (const { quoi, etat: e } of etats) {
     const l2 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);

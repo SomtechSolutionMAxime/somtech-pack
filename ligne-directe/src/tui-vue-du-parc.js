@@ -734,6 +734,47 @@ export const RACCOURCIS_UN_A_UN = [
 
 export const RACCOURCIS = RACCOURCIS_UN_A_UN.map((r) => r.texte).join('  ');
 
+/**
+ * LE RACCOURCI VITAL — celui qu’on ne retire jamais. DÉRIVÉ du manifeste, jamais recopié.
+ *
+ * ⚠️ SON TEXTE EST LA SOURCE DU SEUIL DE L’EXCEPTION (décision `f05bc613`, condition n°2) : le
+ * jour où « q quitter » est renommé, un seuil écrit `9` deviendrait faux EN SILENCE et la
+ * garde continuerait de passer au vert. Le seuil se lit ici, il ne se compte pas à la main.
+ */
+export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * L’INVARIANT DE LARGEUR — ET IL PORTE SON EXCEPTION, elle ne vit pas à côté
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * **Rien de ce que le TUI écrit ne dépasse la largeur du pane, À LA SEULE EXCEPTION de la
+ * barre de raccourcis quand le raccourci vital ne peut pas y tenir.**
+ *
+ * 🔴 DÉCISION `f05bc613`, ACCEPTÉE au journal de P-20260822-0001 — opposable, et les passes
+ * la jugent comme telle. L’exception est inscrite DANS la règle, condition n°1 : une exception
+ * rangée dans une liste voisine se désarme sans que personne relise la règle.
+ *
+ * ⚠️ LE MOTIF N’EST PAS CELUI QUE J’AVAIS AVANCÉ, et la nuance décide de ce qui est codé.
+ * J’avais écrit « l’écran enferme son lecteur » — c’est FAUX : `q` et Ctrl-C fonctionnent que
+ * la barre les affiche ou non. Le lecteur est mal informé, pas enfermé.
+ *
+ * CE QUI TRANCHE EST DANS LA MESURE DE REPRODUCTION : le défaut du dirigeant était
+ * l’ACCUMULATION (+21 lignes en 8 s, cause `\r` sur une ligne qui wrappe), et l’écran
+ * alternatif ne s’accumule PAS — mesuré, 0 ligne de delta sur 5 flèches, à 57 et à 27
+ * colonnes. **Le débordement et l’accumulation ne sont pas la même chose, et c’est
+ * l’accumulation qui a mordu.** Mon invariant avait été formulé plus large que le défaut
+ * qu’il devait fermer.
+ */
+export function depasseLaLargeurAutorisee(ligne, largeur) {
+  const trop = [...String(ligne?.texte ?? '')].length > largeur;
+  if (!trop) return false;
+  // L’EXCEPTION, ET ELLE EST BORNÉE PAR SA PROPRE DÉFINITION : la barre, et seulement quand
+  // le raccourci vital n’y tiendrait pas. Le seuil est DÉRIVÉ (condition n°2).
+  const exceptee = ligne?.style === 'pied' && largeur < [...RACCOURCI_VITAL].length;
+  return !exceptee;
+}
+
 /** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
 export function raccourcisPour(largeur) {
   let gardes = RACCOURCIS_UN_A_UN.slice();
