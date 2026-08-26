@@ -1,4 +1,5 @@
 // setup.js — configure le poste : skills globaux + claude-swt, en une commande.
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -11,6 +12,7 @@ import { installGlobalCommands } from '../globalcommands.js';
 import { installPosteModules } from '../posteonly.js';
 import { installPosteBin } from '../postebin.js';
 import { installGlobalVersionHook, installGraphifyShareHook, installGlobalRegistreHook } from '../userhooks.js';
+import { cheminDuMiroir, rafraichirMiroirMarketplace } from '../miroir-marketplace.js';
 
 /** True si un binaire est sur le PATH (best-effort, jamais fatal). */
 function hasBinary(name) {
@@ -77,9 +79,14 @@ export async function cmdSetup(flags) {
   // Hook « registre injoignable » (E-20260807-0009) : installé par défaut. C'est la
   // garantie de dernier recours — l'agent qui naît sans registre le sait tout de suite.
   const doRegistreHook = !flags.noRegistreHook;
+  // Rattrapage du clone marketplace : la RÉFÉRENCE contre laquelle la garde de fraîcheur juge
+  // les gabarits (T-20260826-0069). `setup` mettait le code du poste à niveau et laissait sa
+  // référence en arrière — au lendemain d'une publication, la garde comparait un dépôt à jour
+  // à un pack vieux et refusait toute pose de lieu. Par défaut, donc, comme le reste.
+  const doMiroir = !flags.noMiroir;
 
-  if (!doSkills && !doWorkflows && !doCommands && !doPoste && !doSwt && !doVersionHook && !doGraphify && !doRegistreHook) {
-    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-naissance-representant, --no-claude-swt, --no-version-hook, --no-graphify et --no-registre-hook).');
+  if (!doSkills && !doWorkflows && !doCommands && !doPoste && !doSwt && !doVersionHook && !doGraphify && !doRegistreHook && !doMiroir) {
+    console.log('Rien à faire (--no-skills, --no-workflows, --no-commands, --no-canvas, --no-ligne-directe, --no-naissance-representant, --no-claude-swt, --no-version-hook, --no-graphify, --no-registre-hook et --no-miroir).');
     return 0;
   }
 
@@ -95,6 +102,14 @@ export async function cmdSetup(flags) {
   if (doRegistreHook && !consentTargets.includes(settingsFile)) consentTargets.push(settingsFile);
   if (doRegistreHook && !consentTargets.includes(hooksDir)) consentTargets.push(hooksDir);
   if (doGraphify && !consentTargets.includes(destDir)) consentTargets.push(destDir);
+  // ⚠️ LE CLONE N'ENTRE DANS LE CONSENTEMENT QUE S'IL EXISTE, et ce n'est pas de la cosmétique :
+  // sur un poste qui n'a pas de marketplace, le rattrapage ne touche RIEN (on ne clone pas —
+  // voir `miroir-marketplace.js`). Annoncer un chemin qu'on ne va pas écrire ferait mentir la
+  // demande de consentement, qui est la liste de ce qu'on va MODIFIER.
+  const cheminMiroir = doMiroir ? cheminDuMiroir({}) : null;
+  if (cheminMiroir && existsSync(cheminMiroir) && !consentTargets.includes(cheminMiroir)) {
+    consentTargets.push(cheminMiroir);
+  }
   if (!(await consent(flags, consentTargets))) return 1;
 
   console.log(`Setup poste${flags.dryRun ? ' [dry-run]' : ''} :`);
@@ -296,6 +311,28 @@ export async function cmdSetup(flags) {
         console.log('        uv tool install "graphifyy[mcp]"');
         console.log('        (sans l\'extra [mcp], graphify-mcp lève ImportError: mcp not installed)');
       }
+    }
+  }
+
+  if (doMiroir) {
+    // LA RÉFÉRENCE DE LA GARDE DE FRAÎCHEUR, remise à niveau en même temps que le code qu'elle
+    // juge (T-20260826-0069). Sans ce geste, les deux avançaient séparément : `setup` installait
+    // la v1.76 pendant que le clone marketplace restait à la v1.74, et la pose d'un lieu depuis
+    // un dépôt IRRÉPROCHABLE rendait `rc=1, motif gabarit_perime`. Le message de refus conseille
+    // « pack update » dans le dépôt cible — un geste qui ne pouvait rien y faire, puisque ce
+    // n'était pas le dépôt qui retardait.
+    //
+    // ⚠️ IL NE DÉCIDE JAMAIS DU CODE DE RETOUR. Un poste hors réseau doit pouvoir se configurer :
+    // échanger une référence en retard (bruyante, rattrapable à la main) contre un `setup` qui
+    // refuse de finir serait un mauvais marché. Mais il ne se tait pas non plus — un rattrapage
+    // muet qui échoue reconduit exactement le défaut qu'on ferme.
+    const m = rafraichirMiroirMarketplace({ dryRun: flags.dryRun });
+    if (m.etat === 'dry-run') {
+      console.log(`  référence de la garde de fraîcheur → ${m.message} [dry-run]`);
+    } else if (m.ok) {
+      console.log(`  référence de la garde de fraîcheur → ${m.chemin} : ${m.message}`);
+    } else {
+      console.log(`  ⚠️  référence de la garde de fraîcheur non rattrapée : ${m.message}`);
     }
   }
 

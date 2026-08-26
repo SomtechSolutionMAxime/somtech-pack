@@ -20,11 +20,27 @@
 //
 // ⚠️ Module PUR : il ne lit rien, n'écrit rien, ne connaît pas le monde.
 
-/** Les rôles à qui l'ouverture d'une ligne cliente est refusée. */
-export const ROLES_GARDES = new Set(['orchestrateur']);
+import { ROLES_CONNUS } from './roles-connus.js';
 
-/** Les rôles pour qui ouvrir une ligne cliente EST le métier — jamais refusés. */
+/**
+ * Les rôles pour qui ouvrir une ligne cliente EST le métier — jamais refusés.
+ *
+ * ⚠️ C'EST UN VERDICT, ET IL RESTE ICI (T-20260826-0079). La question « quels rôles
+ * est-ce que je sais lire ? » a été mise en commun avec `terminal.js` ; celle-ci, non.
+ * Mettre les deux dans la même table effacerait ce que cette garde a de particulier :
+ * le geste qu'elle refuse à l'un est le métier de l'autre.
+ */
 export const ROLES_AUTORISES = new Set(['gestionnaire-client', 'representant']);
+
+// ⚠️ `ROLES_GARDES` A DISPARU D'ICI. Il valait `{orchestrateur}` et servait à poser la
+// question « ai-je su mesurer ce rôle ? » — un ensemble de VERDICT employé comme un
+// ensemble de CONNAISSANCE. Tant qu'il n'y avait que trois noms de rôles au monde, les
+// deux coïncidaient ; au premier rôle de plus ils se séparaient, et c'est le refus « je
+// n'ai pas su établir » qui serait tombé sur un rôle parfaitement établi — un refus qui
+// nomme la mauvaise cause envoie son lecteur chercher une panne qui n'existe pas.
+//
+// La connaissance se lit maintenant dans `roles-connus.js`, et le refus par la règle
+// tombe en creux : tout rôle connu qui n'est pas celui du représentant.
 
 /**
  * L'appel de la ligne directe, sous ses deux formes vues sur le terrain :
@@ -70,7 +86,7 @@ export function juger(req = {}) {
 
   // ② Le geste est là. C'est maintenant que le rôle décide de quel côté on est.
   if (ROLES_AUTORISES.has(role)) return allow();
-  if (!ROLES_GARDES.has(role)) {
+  if (!ROLES_CONNUS.has(role)) {
     return deny(
       `Cette commande ouvre un canal CLIENT, et la garde n'a pas su établir à quel rôle elle ` +
       `avait affaire (« ${role ?? 'aucun'} »). Ouvrir une ligne cliente appartient au représentant ` +

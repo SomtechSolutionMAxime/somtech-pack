@@ -58,6 +58,50 @@ const ROLES = {
     mandat_designe: 'client',
     /** Le dossier de gabarits que le pack dépose sous `.claude/templates/`. */
     gabarits: 'gestionnaire-client',
+
+    /**
+     * `naitre` PEUT-IL POSER CE LIEU D'AUTORITÉ QUAND IL MANQUE ?
+     *
+     * ⚠️ CE `false` EST UNE RAISON DE RESTER, PAS UNE PARESSE — ET C'EST POURQUOI ELLE EST ICI.
+     *
+     * La décision vivait dans `naissance-representant/bin/naitre.js:272`, sous la forme
+     * `if (role !== 'orchestrateur')`. Elle y était juste et parfaitement invisible du registre :
+     * ajouter un rôle, c'était donc aller éditer une commande qui ne parle pas des rôles — très
+     * exactement ce que l'en-tête de ce fichier interdit (« ajouter un rôle, c'est ajouter une
+     * ligne, jamais un module »). Le cœur de la pose, lui, n'a JAMAIS été en dur : `preparerLieu`
+     * (`lieu-agent.js`) prend le rôle en argument depuis toujours.
+     *
+     * ⚠️ ET LE REPLI PENCHE DU CÔTÉ QUI N'ÉCRIT PAS : un rôle qui ne déclare rien ne se fait pas
+     * poser d'autorité (`poseAutomatique` exige `true` explicite). Se tromper en refusant coûte
+     * une commande à relancer ; se tromper en posant écrit un lieu que personne n'a demandé.
+     */
+    pose_automatique: false,
+    /**
+     * QUAND LA POSE EST REFUSÉE : POURQUOI, ET OÙ ALLER.
+     *
+     * ⚠️ SANS CETTE CLÉ, ON DÉPLACE LE LITTÉRAL AU LIEU DE L'ENLEVER. Le refus de `naitre.js`
+     * portait ces deux phrases en dur ; un rôle neuf à pose manuelle aurait hérité du motif du
+     * représentant et du geste du représentant, tous les deux faux pour lui.
+     *
+     * Le motif est celui que le dirigeant a tranché le 2026-08-16, recopié du commentaire qu'il
+     * remplace : ne pas intervenir ne veut pas dire deviner — le refus NOMME le geste.
+     */
+    pose_manuelle: {
+      motif: 'ils se branchent sur un canal que le client voit, et leur pose garde sa revue',
+      geste: 'la compétence /gestionnaire-client, qui demande le canal et le dirigeant que la pose exige',
+    },
+    /**
+     * COMMENT CE RÔLE EST NOMMÉ À SA NAISSANCE — `riviere` ou `code`.
+     *
+     * `code` : le segment de son lieu fait son nom. Un gestionnaire porte le prénom de la
+     * personne qu'il représente (`charles-olivier`) — c'est légitime et distinct, et c'est ce
+     * que `nom-de-riviere.js` faisait déjà sous la forme `role !== 'orchestrateur'`.
+     *
+     * ⚠️ LE REPLI PENCHE ENCORE DU CÔTÉ ÉCONOME : un rôle muet est nommé par son code. Les
+     * rivières sont une liste FINIE et partagée — en attribuer une à un rôle dont personne n'a
+     * décidé qu'il en portait une, c'est retirer un nom du parc sans qu'on l'ait voulu.
+     */
+    bapteme: 'code',
     /**
      * La nature de la ligne que ce rôle ouvre — `client` (canal privé, où le client parle)
      * ou `interne` (canal public, entre nous). Elle décide de la séquence d'ouverture que le
@@ -138,6 +182,14 @@ const ROLES = {
     mandat_designe: 'chantier',
     gabarits: 'orchestrateur',
     nature: 'interne',
+    // SA POSE EST AUTOMATIQUE — c'est le seul chemin par lequel un agent naît sans qu'un humain
+    // touche un écran, et il existe depuis E-20260813-0002. Sa ligne est INTERNE : rien de ce
+    // qu'elle ouvre n'est visible d'un client, donc rien à faire relire avant de poser.
+    pose_automatique: true,
+    // SON BAPTÊME EST UNE RIVIÈRE (C1, tranché par `matapedia` le 2026-08-18) : il vit longtemps
+    // et porte plusieurs mandats successifs — un code unique le décrirait mal par construction,
+    // et son lieu porte déjà ce code.
+    bapteme: 'riviere',
     // UNE SEULE LIGNE, et son chantier est LIBRE : c'est le code du chantier qu'il mène, connu
     // de lui seul au moment d'ouvrir. La fixer ici l'empêcherait d'ouvrir la sienne.
     lignes: [{ cle: 'chantier', nature: 'interne', titreRequis: false }],
@@ -204,4 +256,43 @@ export function libellePluriel(nom) {
 export function lignesDuRole(nom) {
   const r = role(nom);
   return r.lignes?.length ? r.lignes : [{ cle: 'ligne', nature: r.nature, titreRequis: r.nature === 'client' }];
+}
+
+/**
+ * `naitre` peut-il poser le lieu de ce rôle d'autorité quand il manque ?
+ *
+ * ⚠️ LES TROIS ACCESSEURS CI-DESSOUS PASSENT PAR `role()`, DONC ILS REFUSENT UN RÔLE INCONNU —
+ * contrairement à `libellePluriel`, qui ne fait que NOMMER. La règle est écrite juste au-dessus
+ * et elle vaut ici plus qu'ailleurs : deux de ces trois décisions décident d'écrire sur le
+ * disque. Décider sur un rôle qu'on ne connaît pas, ce serait poser un lieu pour personne.
+ *
+ * ⚠️ ET LE REPLI EST ICI, EN UN SEUL ENDROIT — même raison que `lignesDuRole`. Un `?? true`
+ * oublié chez un lecteur ferait poser d'autorité le lieu d'un rôle qui n'a rien demandé ; on
+ * exige donc un `true` EXPLICITE, et tout le reste — clé absente, valeur douteuse — refuse.
+ */
+export function poseAutomatique(nom) {
+  return role(nom).pose_automatique === true;
+}
+
+/**
+ * Quand la pose n'est pas automatique : POURQUOI, et OÙ ALLER.
+ *
+ * ⚠️ LE REPLI N'INVENTE AUCUN GESTE. Un rôle qui refuse la pose sans dire où aller laisse
+ * l'opérateur sur place ; lui servir le geste d'un autre rôle l'enverrait au mauvais endroit
+ * avec l'assurance d'un texte écrit. On rend donc ce qu'on a mesuré — « ce rôle ne le dit
+ * pas » — et on nomme le fichier où l'inscrire. Un essai rend ce repli inatteignable pour les
+ * rôles déclarés ; il reste pour celui qu'on ajoutera en oubliant la clé.
+ */
+export function poseManuelle(nom) {
+  const dit = role(nom).pose_manuelle;
+  if (dit?.motif && dit?.geste) return dit;
+  return {
+    motif: `le registre ne dit pas ce qui garde la revue de la pose d’un ${role(nom).libelle}`,
+    geste: `aucun geste n’est inscrit pour ce rôle — il s’ajoute dans « ligne-directe/src/roles.js » (clé « pose_manuelle »)`,
+  };
+}
+
+/** Comment ce rôle est NOMMÉ à sa naissance — `riviere` ou `code`. Voir le repli au registre. */
+export function baptemeDuRole(nom) {
+  return role(nom).bapteme === 'riviere' ? 'riviere' : 'code';
 }

@@ -47,6 +47,7 @@ import { fileURLToPath } from 'node:url';
 
 import { poserGarde, MODELE_PAR_DEFAUT, MODE_PAR_DEFAUT, avisSurLeLieuNonRenseigne } from '../src/naissance.js';
 import { estUneRiviere, FICHIER_NOM_AGENT, nomInscritDansLeLieu } from '../../ligne-directe/src/nom-de-riviere.js';
+import { role as roleDe, rolesConnus, poseAutomatique, poseManuelle } from '../../ligne-directe/src/roles.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_NAISSANCE = resolve(HERE, '..');
@@ -405,10 +406,24 @@ function avecLieu(faire, prefixe = 'smoke', { verser = true, git: avecGit = true
   // qu'il CONTIENT, pas seulement par son chemin. Un lieu d'orchestrateur portant l'en-tête du
   // représentant serait un lieu que la garde ne reconnaîtrait pas — le double serait alors plus
   // indulgent que le vrai, motif que ce fichier documente en tête et refuse.
-  const dossier = role === 'orchestrateur' ? '.orchestrateur' : '.gestionnaire';
+  //
+  // ⚠️ LE DOSSIER VIENT DU REGISTRE, PLUS D'UN TERNAIRE. Il était écrit
+  // `role === 'orchestrateur' ? '.orchestrateur' : '.gestionnaire'` — donc TOUT rôle qui n'est
+  // pas l'orchestrateur voyait son lieu posé sous `.gestionnaire`. Avec neuf rôles à venir, ce
+  // banc aurait posé huit lieux au mauvais endroit et rendu vert : un double plus indulgent que
+  // le vrai, le motif que ce fichier documente en tête et refuse.
+  const dossier = roleDe(role).dossier;
   const enTetes = role === 'orchestrateur'
     ? ["# Tu es l'orchestrateur de ce chantier\n", '# Ce qui est propre à ce dépôt\n']
     : ['# Tu es le représentant de ce client\n', "# Ce qu'on sait de ce client\n"];
+  // ⚠️ ET LES EN-TÊTES SONT APPARIÉS AU REGISTRE, PAS SEULEMENT ÉCRITS. Ils restent littéraux
+  // — un gabarit se recopie, il ne se dérive pas d'une expression régulière —, mais on exige
+  // qu'ils satisfassent la reconnaissance RÉELLE du rôle. Sans ça, un en-tête qui dérive du
+  // registre ferait naître un lieu que la garde ne reconnaît plus, en silence.
+  for (const [fichier, motif] of Object.entries(roleDe(role).entetes)) {
+    const ecrit = fichier === 'CLAUDE.md' ? enTetes[0] : enTetes[1];
+    assert.match(ecrit, motif, `l’en-tête que ce banc écrit dans ${fichier} n’est plus celui que « ${role} » reconnaît`);
+  }
   const lieu = join(depot, dossier, client);
   if (poser) {
     mkdirSync(join(lieu, '.claude'), { recursive: true });
@@ -500,6 +515,122 @@ test('sans lieu, un REPRÉSENTANT n’est pas posé d’autorité — le refus n
     'smoke',
     { poser: false }
   ));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA DÉCISION DE POSER SE LIT AU REGISTRE, PLUS DANS UNE COMPARAISON LITTÉRALE
+// (T-20260826-0076, point 1)
+//
+// MESURÉ AVANT CE LOT, `bin/naitre.js:272` : `if (role !== 'orchestrateur') { … exit(1) }`.
+// La pose d'un lieu absent n'existait QUE pour l'orchestrateur, alors que le cœur de la pose
+// — `preparerLieu` — prend le rôle en argument depuis toujours. Seul le TEST était en dur.
+//
+// ⚠️ CES DEUX ESSAIS PARCOURENT LE REGISTRE, jamais une liste recopiée. Le chantier en cours
+// porte neuf rôles : celui qui les écrira n'aura pas à revenir ici, et s'il inscrit un rôle
+// sans dire comment il se pose, c'est ici que ça rougira.
+
+test('LE REFUS DE POSE EST COMPOSÉ DEPUIS LE REGISTRE — son libellé, son motif, son geste', () =>
+  avecLieu(
+    (client, lieu, depot) => {
+      const journal = installerFauxHerdr();
+      const r = roleDe('representant');
+
+      const sortie = lancerNaitre(client);
+
+      assert.equal(sortie.code, 1, `refus attendu — stderr: ${sortie.stderr}`);
+      // ⚠️ CE QUI ROUGISSAIT AVANT LE CORRECTIF : la commande écrivait « aucun lieu de
+      // representant » — la CLÉ brute du registre, sans accent — puis répétait « les lieux de
+      // représentant » en dur. Exiger le LIBELLÉ prouve que la phrase est composée depuis le
+      // registre et non recopiée : c'est la seule différence observable tant que le registre
+      // ne porte que deux rôles.
+      assert.match(
+        sortie.stderr,
+        new RegExp(`aucun lieu de ${r.libelle}`),
+        `le refus doit nommer le rôle par son LIBELLÉ de registre (« ${r.libelle} ») — dit : ${sortie.stderr.slice(0, 160)}`,
+      );
+      // Le motif et le geste viennent du registre, et le test les y lit lui aussi : deux textes
+      // recopiés divergent au premier correctif, et le second à diverger est celui qu'on ne
+      // relit pas.
+      assert.ok(
+        sortie.stderr.includes(poseManuelle('representant').motif),
+        `le refus doit dire POURQUOI, mot pour mot ce que le registre déclare — dit : ${sortie.stderr.slice(0, 300)}`,
+      );
+      assert.ok(
+        sortie.stderr.includes(poseManuelle('representant').geste),
+        `le refus doit dire OÙ ALLER, mot pour mot ce que le registre déclare — dit : ${sortie.stderr.slice(0, 300)}`,
+      );
+
+      // Et la garantie ne bouge pas : le refus ne laisse rien derrière lui.
+      assert.equal(existsSync(lieu), false, 'aucun lieu ne doit avoir été créé par un refus');
+      assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr : le refus tombe avant tout');
+      assert.equal(nombreDeCommits(depot), 0, 'et aucun commit');
+    },
+    'registre-refus',
+    { poser: false },
+  ));
+
+// ⚠️ L'ESSAI QUI OUVRE LE CHEMIN AUX NEUF RÔLES, et le seul qui puisse le prouver aujourd'hui.
+//
+// Il n'affirme PAS que la pose aboutit — elle ne le peut pas dans un banc, et c'est dit noir
+// sur blanc plus bas dans ce fichier : la cloison d'essais (`ligne-directe/src/cloison.js`)
+// refuse le trousseau à tout processus descendant du lanceur de tests, donc `verifierLigne`
+// ne rendra jamais « joignable » ici. Ce qui EST décidable, et qui était le défaut, c'est
+// QUI a le droit d'entrer dans la pose.
+//
+// Les deux moitiés sont mesurées, et la seconde est celle qui manquait :
+//   • `pose_automatique: false` → le refus de pose, et RIEN n'est entré dans la pose ;
+//   • `pose_automatique: true`  → la commande ENTRE dans la pose (son vocabulaire à elle,
+//     « n'a pas pu être posé », le prouve) et n'oppose jamais le refus de pose.
+test('POUR CHAQUE RÔLE DU REGISTRE, C’EST `pose_automatique` QUI DÉCIDE — jamais le nom du rôle', () => {
+  for (const nom of rolesConnus()) {
+    const r = roleDe(nom);
+    avecLieu(
+      (code, lieu, depot) => {
+        const journal = installerFauxHerdr();
+
+        const sortie = lancerNaitre(code, { role: nom });
+
+        assert.equal(sortie.code, 1, `« ${nom} » : refus attendu (aucune pose ne peut aboutir sous la cloison d’essais)`);
+
+        const refusDePose = /cette commande ne pose pas/.test(sortie.stderr);
+        if (poseAutomatique(nom)) {
+          assert.equal(
+            refusDePose,
+            false,
+            `« ${nom} » déclare la pose automatique et s’est vu opposer le refus de pose — dit : ${sortie.stderr.slice(0, 200)}`,
+          );
+          assert.match(
+            sortie.stderr,
+            /n’a pas pu être posé/,
+            `« ${nom} » déclare la pose automatique : la commande doit ENTRER dans la pose — dit : ${sortie.stderr.slice(0, 200)}`,
+          );
+          assert.ok(
+            sortie.stderr.includes(r.libelle),
+            `et l’échec de pose doit nommer le rôle par son libellé de registre (« ${r.libelle} ») — dit : ${sortie.stderr.slice(0, 200)}`,
+          );
+        } else {
+          assert.equal(
+            refusDePose,
+            true,
+            `« ${nom} » déclare la pose manuelle et n’a pas été arrêté — dit : ${sortie.stderr.slice(0, 200)}`,
+          );
+        }
+
+        // ⚠️ DANS LES DEUX CAS, RIEN N'A ÉTÉ CRÉÉ. On mesure « aucun pane » plutôt que « aucun
+        // appel » : le baptême d'un rôle à rivière RELÈVE le parc herdr (une lecture), et exiger
+        // zéro appel ferait rougir ce contrôle pour une raison sans rapport avec ce qu'il garde.
+        assert.equal(existsSync(join(depot, r.dossier, code)), false, `« ${nom} » : aucun lieu ne survit à un refus`);
+        for (const geste of appelsJournalises(journal).map((a) => a.join(' '))) {
+          assert.ok(
+            !/^(tab create|pane |agent start|agent rename)/.test(geste),
+            `« ${nom} » : rien ne devait être créé, et « ${geste} » l’a fait`,
+          );
+        }
+      },
+      `decide-${nom}`,
+      { poser: false, role: nom },
+    );
+  }
+});
 
 // ⚠️ LE GATE DU COMMIT RESTE ENTIER (T-20260814-0139) — c'est le geste HUMAIN qui le satisfaisait
 // qui disparaît (T-20260816-0038). Quand la commande ne PEUT PAS verser, elle refuse, et son

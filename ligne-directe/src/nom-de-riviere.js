@@ -41,6 +41,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { baptemeDuRole } from './roles.js';
+
 /**
  * LES RIVIÈRES — la liste, et elle est ÉCRITE plutôt que dérivée.
  *
@@ -278,9 +280,9 @@ export function inscrireNomDansLeLieu(lieu, nom) {
  *
  * Quatre chemins, dans cet ordre, et il compte :
  *
- *   1. **un rôle qui n'est pas orchestrateur** → le nom de son lieu, comme avant ce lot. La
- *      règle ne déborde pas sur qui exécute, et un gestionnaire de client porte le prénom de
- *      la personne qu'il représente — c'est légitime et distinct (`charles-olivier`).
+ *   1. **un rôle que le registre baptise par son CODE** → le nom de son lieu, comme avant ce
+ *      lot. La règle ne déborde pas sur qui exécute, et un gestionnaire de client porte le
+ *      prénom de la personne qu'il représente — c'est légitime et distinct (`charles-olivier`).
  *   2. **un nom PROPOSÉ** → jugé. Hors convention, c'est un refus, et l'appelant n'a encore
  *      rien créé.
  *   3. **un nom DÉJÀ INSCRIT dans le lieu** → repris tel quel. ⚠️ Il est repris MÊME s'il est
@@ -299,7 +301,22 @@ export function inscrireNomDansLeLieu(lieu, nom) {
  *          plutôt que de laisser deux messages sans fil entre eux (relevé en revue de fond).
  */
 export function nomDeLAgentQuiNait({ role, lieu, code, propose = null, depot, listerAgents, lireRegistre } = {}) {
-  if (role !== 'orchestrateur') {
+  // ⚠️ C'EST LE REGISTRE QUI TRANCHE, PLUS UNE COMPARAISON LITTÉRALE (T-20260826-0076, point 2).
+  //
+  // MESURÉ AVANT CE LOT : `if (role !== 'orchestrateur')`. Le baptême par rivière était réservé
+  // EN DUR à un seul rôle, et le registre — dont l'en-tête promet qu'« ajouter un rôle, c'est
+  // ajouter une ligne, jamais un module » — n'avait aucun moyen de le dire. Les neuf rôles du
+  // chantier en cours auraient tous été nommés par leur code, sans qu'une ligne de registre
+  // puisse y changer quoi que ce soit.
+  //
+  // ⚠️ ET `baptemeDuRole` REFUSE UN RÔLE INCONNU, LÀ OÙ LA COMPARAISON LE RANGEAIT AVEC LES
+  // AUTRES. Un rôle qu'on ne connaît pas repartait EN SILENCE avec son code. MESURÉ : le seul
+  // appelant de production (`bin/naitre.js`) l'arrête déjà plus haut, parce que `cheminLieu`
+  // lève sur un rôle inconnu — le défaut n'a donc jamais mordu en production. Mais cette
+  // fonction DÉCIDAIT quand même, sur un rôle qu'elle ne connaissait pas, et l'appelant suivant
+  // n'aura pas forcément la garde du premier. Le registre l'écrit : nommer est permis, décider
+  // sur un rôle inconnu ne l'est pas. On lève.
+  if (baptemeDuRole(role) !== 'riviere') {
     return { nom: String(code ?? '').toLowerCase(), source: 'lieu_du_role', attribue: false, avis: null, nonVerifie: [] };
   }
 

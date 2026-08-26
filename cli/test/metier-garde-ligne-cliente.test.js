@@ -104,3 +104,38 @@ test('⚠️ les DEUX refus ne disent pas la même chose — un refus dit ce qu 
     'un orchestrateur est refusé par la RÈGLE, pas parce qu on ignore qui il est');
   assert.notEqual(parRegle, parPrudence);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA TABLE DES RÔLES CONNUS EST DÉSORMAIS COMMUNE AUX DEUX GARDES (T-20260826-0079).
+// Ce qui suit garde la frontière que la mise en commun ne doit PAS franchir : ce que
+// chaque garde SAIT LIRE est partagé, ce qu'elle DÉCIDE ne l'est pas.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('⚠️ un rôle CONNU mais non autorisé est refusé PAR LA RÈGLE, pas par prudence', async () => {
+  // Le cas ne se produit pas encore : `orchestrateur` est aujourd'hui le seul rôle connu
+  // qui ne soit pas celui du représentant, et son refus est déjà gardé plus haut. Il se
+  // produira au premier des neuf rôles arbitrés (P-20260819-0001). On l'éprouve donc en
+  // déclarant un rôle à la table le temps de l'essai — c'est le seul moyen d'exercer la
+  // branche sans ouvrir le registre, et sans elle le refus dirait « je n'ai pas su qui tu
+  // es » à propos d'un rôle parfaitement établi.
+  const { ROLES_CONNUS } = await import('../src/metier/gardes/roles-connus.js');
+  ROLES_CONNUS.add('chef-equipe');
+  try {
+    const r = juger({ commande: OUVRE_CLIENT, role: 'chef-equipe' });
+    assert.equal(r.decision, 'deny', 'ouvrir une ligne cliente n appartient qu au représentant');
+    assert.doesNotMatch(r.raison, /n a pas su établir|n'a pas su établir/,
+      'un rôle que la table connaît est refusé par la RÈGLE : dire le contraire envoie chercher une panne qui n existe pas');
+    assert.match(r.raison, /représentant/, 'le refus doit nommer par qui ce geste passe');
+  } finally {
+    ROLES_CONNUS.delete('chef-equipe');
+  }
+});
+
+test('⚠️ les rôles AUTORISÉS sont tous connus de la table commune — sinon les deux ont dérivé', async () => {
+  const { ROLES_CONNUS } = await import('../src/metier/gardes/roles-connus.js');
+  const { ROLES_AUTORISES } = await import('../src/metier/gardes/ligne-cliente.js');
+  const inconnus = [...ROLES_AUTORISES].filter((r) => !ROLES_CONNUS.has(r));
+  assert.deepEqual(inconnus, [],
+    `« ${inconnus.join(', ')} » est autorisé ici mais absent de la table commune : les deux copies `
+    + 'du critère ont dérivé, et la garde du terminal bloquerait ce rôle sur tous ses gestes');
+});

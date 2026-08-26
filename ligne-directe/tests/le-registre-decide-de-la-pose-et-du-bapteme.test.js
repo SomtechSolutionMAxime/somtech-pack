@@ -1,0 +1,253 @@
+// le-registre-decide-de-la-pose-et-du-bapteme.test.js — DEUX DÉCISIONS QUI VIVAIENT AILLEURS
+// QUE DANS LE REGISTRE (T-20260826-0076, points 1 et 2).
+//
+// ─────────────────────────────────────────────────────────────────────────────────────
+// CE QUI A ÉTÉ MESURÉ, ET OÙ
+//
+//   • `naissance-representant/bin/naitre.js:272` — `if (role !== 'orchestrateur')`. La pose
+//     d'un lieu absent n'existait QUE pour l'orchestrateur ; tout autre rôle du registre
+//     sortait en `exit(1)`. Le cœur de la pose n'était pourtant PAS en dur : `preparerLieu`
+//     (`lieu-agent.js:532`) prend le rôle en argument depuis toujours, et
+//     `preparerLieuOrchestrateur` n'en est qu'une enveloppe de deux lignes.
+//   • `ligne-directe/src/nom-de-riviere.js:302` — `if (role !== 'orchestrateur')`. Le baptême
+//     par nom de rivière était réservé en dur ; tout autre rôle était nommé par son code.
+//
+// Le registre porte déjà l'en-tête qui condamne ces deux lignes : « Ajouter un rôle, c'est
+// ajouter une ligne — jamais un module ». Ces deux comparaisons littérales faisaient de
+// l'ajout d'un rôle un travail de MODULE : il fallait aller éditer deux fichiers qui ne
+// parlent pas des rôles pour qu'un rôle neuf puisse naître.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ⚠️ CE QUE CES ESSAIS GARDENT VRAIMENT — ET C'EST L'AUTRE MOITIÉ, LA PLUS DURABLE.
+//
+// Fermer les deux littéraux d'aujourd'hui ne garde rien de ce qu'on ajoutera demain. Le
+// chantier en cours (P-20260819-0001) porte NEUF rôles : le premier d'entre eux inscrit sans
+// dire comment il se pose ni comment il se nomme retomberait, en silence, sur un repli que
+// personne n'a choisi pour lui. Ces essais PARCOURENT donc le registre — jamais une liste
+// recopiée — et exigent de CHAQUE rôle qu'il déclare les deux. Un rôle ajouté sans elles fait
+// rougir ce fichier avant d'atteindre un poste.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { role as roleDe, rolesConnus, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
+import { nomDeLAgentQuiNait, estUneRiviere } from '../src/nom-de-riviere.js';
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 1 — LE REGISTRE DIT LES DEUX CHOSES, POUR CHAQUE RÔLE
+
+test('CHAQUE rôle du registre dit si sa pose est automatique — sinon la décision vit ailleurs', () => {
+  const muets = rolesConnus().filter((nom) => typeof roleDe(nom).pose_automatique !== 'boolean');
+  assert.deepEqual(
+    muets,
+    [],
+    'ces rôles ne disent pas si « naitre » peut poser leur lieu d’autorité : ' +
+      `${muets.join(', ')}. Tant qu’ils se taisent, la décision se prend hors du registre — ` +
+      'c’était la comparaison littérale « role !== \'orchestrateur\' » de naitre.js:272.',
+  );
+});
+
+test('CHAQUE rôle du registre dit comment il est NOMMÉ à sa naissance', () => {
+  const permis = ['riviere', 'code'];
+  const muets = rolesConnus().filter((nom) => !permis.includes(roleDe(nom).bapteme));
+  assert.deepEqual(
+    muets,
+    [],
+    'ces rôles ne disent pas comment ils sont baptisés (« riviere » ou « code ») : ' +
+      `${muets.join(', ')}. C’était la comparaison littérale de nom-de-riviere.js:302.`,
+  );
+});
+
+// ⚠️ UN « false » N'EST PAS UNE PARESSE — ET SA RAISON DOIT VIVRE AU REGISTRE, PAS DANS UN
+// COMMENTAIRE DE `naitre.js`. Le représentant garde sa pose manuelle pour un motif tranché par
+// le dirigeant le 2026-08-16 ; si ce motif et le geste qui lève le blocage restent en dur dans
+// la commande, on a DÉPLACÉ le littéral au lieu de l'enlever.
+test('UN RÔLE QUI REFUSE LA POSE AUTOMATIQUE DIT POURQUOI, ET OÙ ALLER', () => {
+  const manuels = rolesConnus().filter((nom) => roleDe(nom).pose_automatique === false);
+  assert.ok(manuels.length > 0, 'le registre doit porter au moins un rôle à pose manuelle — sinon cet essai ne garde rien');
+
+  for (const nom of manuels) {
+    const dit = roleDe(nom).pose_manuelle;
+    assert.ok(dit, `« ${nom} » refuse la pose automatique sans dire pourquoi`);
+    assert.ok(
+      typeof dit.motif === 'string' && dit.motif.trim().length > 20,
+      `« ${nom} » doit NOMMER ce qui garde sa revue — sinon son refus passe pour un caprice (lu : ${JSON.stringify(dit.motif)})`,
+    );
+    assert.ok(
+      typeof dit.geste === 'string' && dit.geste.trim().length > 10,
+      `« ${nom} » doit dire OÙ ALLER quand sa pose est refusée — un refus sans geste laisse l’opérateur sur place (lu : ${JSON.stringify(dit.geste)})`,
+    );
+  }
+});
+
+// ⚠️ LES VALEURS D'AUJOURD'HUI SONT ÉPINGLÉES. Sans ça, les trois essais ci-dessus resteraient
+// verts si quelqu'un mettait `pose_automatique: true` au représentant — c'est-à-dire si on
+// posait d'autorité un lieu branché sur un canal que le client voit, la seule frontière que le
+// dirigeant a demandé de ne pas franchir (2026-08-16).
+test('LES VALEURS MESURÉES DES DEUX RÔLES EXISTANTS SONT ÉPINGLÉES', () => {
+  assert.equal(roleDe('orchestrateur').pose_automatique, true, 'l’orchestrateur naît sans qu’un humain touche un écran');
+  assert.equal(roleDe('orchestrateur').bapteme, 'riviere', 'il vit longtemps et porte plusieurs mandats : une rivière');
+  assert.equal(roleDe('representant').pose_automatique, false, 'sa pose garde sa revue — arbitrage du dirigeant, 2026-08-16');
+  assert.equal(roleDe('representant').bapteme, 'code', 'il porte le prénom de la personne qu’il représente');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 2 — LES REPLIS SONT AU REGISTRE, EN UN SEUL ENDROIT
+//
+// Même raison que `lignesDuRole` : un `?? false` oublié chez un lecteur rendrait un rôle SANS
+// repli, et le repli qui compte ici décide de poser ou non un lieu d'autorité.
+
+test('UN RÔLE QUI NE DIT RIEN NE SE FAIT PAS POSER D’AUTORITÉ — le repli penche du côté qui n’écrit pas', () => {
+  // La question se pose sur un rôle réel — le registre refuse de décider sur un inconnu.
+  assert.equal(poseAutomatique('orchestrateur'), true);
+  assert.equal(poseAutomatique('representant'), false);
+});
+
+test('LE REPLI DE `poseManuelle` NE FABRIQUE AUCUN GESTE — il dit qu’il n’en a pas', () => {
+  const dit = poseManuelle('representant');
+  assert.match(dit.geste, /gestionnaire-client/, 'le geste réel vient du registre');
+  assert.match(dit.motif, /canal/i, 'et le motif aussi');
+});
+
+// ⚠️ LES DEUX REPLIS SONT ÉPROUVÉS, PAS SEULEMENT ÉCRITS. Aucun rôle déclaré ne les atteint —
+// un essai plus haut s'en assure — donc sans ceci ils seraient du code jamais exécuté, dont on
+// ne saurait qu'au neuvième rôle s'il tient ce que son commentaire promet. On retire la
+// déclaration en mémoire, dans ce seul processus, et on la remet.
+test('UN RÔLE QUI OUBLIE `pose_automatique` NE SE FAIT PAS POSER — le repli est éprouvé, pas supposé', () => {
+  const r = roleDe('orchestrateur');
+  const declare = r.pose_automatique;
+  try {
+    delete r.pose_automatique;
+    assert.equal(poseAutomatique('orchestrateur'), false, 'clé absente : le repli doit refuser, pas poser');
+    r.pose_automatique = 'oui'; // une valeur qui a l'air d'un « vrai » sans en être un
+    assert.equal(poseAutomatique('orchestrateur'), false, 'seul un `true` explicite autorise une écriture sur le disque');
+  } finally {
+    r.pose_automatique = declare;
+  }
+  assert.equal(poseAutomatique('orchestrateur'), true, 'la déclaration est remise telle qu’elle était');
+});
+
+test('UN RÔLE QUI OUBLIE `pose_manuelle` REÇOIT UN REPLI QUI N’INVENTE RIEN', () => {
+  const r = roleDe('representant');
+  const declare = r.pose_manuelle;
+  try {
+    delete r.pose_manuelle;
+    const dit = poseManuelle('representant');
+    assert.ok(!/gestionnaire-client/.test(dit.geste), 'le repli ne sert PAS le geste d’un autre rôle');
+    assert.match(dit.geste, /roles\.js/, 'il nomme le fichier où le geste manquant s’inscrit');
+    assert.match(dit.motif, /ne dit pas/, 'et le motif dit qu’on ne sait pas, plutôt que d’en inventer un');
+  } finally {
+    r.pose_manuelle = declare;
+  }
+  assert.match(poseManuelle('representant').geste, /gestionnaire-client/, 'la déclaration est remise telle qu’elle était');
+});
+
+test('`baptemeDuRole` rend ce que le registre déclare', () => {
+  assert.equal(baptemeDuRole('orchestrateur'), 'riviere');
+  assert.equal(baptemeDuRole('representant'), 'code');
+});
+
+test('LES TROIS ACCESSEURS REFUSENT DE DÉCIDER SUR UN RÔLE INCONNU', () => {
+  // Le registre l'écrit déjà : « DÉCIDER sur un rôle qu'on ne connaît pas reste interdit ».
+  // Ces trois-là décident — deux d'entre eux décident d'écrire sur le disque.
+  for (const accesseur of [poseAutomatique, poseManuelle, baptemeDuRole]) {
+    assert.throws(() => accesseur('cuisinier'), RoleInconnu, `${accesseur.name} a décidé sur un rôle inconnu`);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 3 — LE BAPTÊME SUIT LE REGISTRE, POUR CHAQUE RÔLE
+
+let bacs = [];
+const bacNeuf = () => {
+  const d = mkdtempSync(join(tmpdir(), 'smtk-bapteme-'));
+  bacs.push(d);
+  return d;
+};
+test.after(() => {
+  for (const d of bacs) rmSync(d, { recursive: true, force: true });
+  bacs = [];
+});
+
+test('LE BAPTÊME DE CHAQUE RÔLE EST CELUI QUE SON REGISTRE DÉCLARE — jamais celui d’un littéral', () => {
+  for (const nom of rolesConnus()) {
+    const attendu = roleDe(nom).bapteme;
+    const r = nomDeLAgentQuiNait({
+      role: nom,
+      lieu: bacNeuf(), // un lieu vide : aucun `.nom-agent` inscrit, donc c'est le rôle qui tranche
+      code: 'd-20260826-0001',
+      // Le parc est VIDE et la mesure est complète : rien ne doit détourner le tirage.
+      depot: bacNeuf(),
+      listerAgents: () => [],
+      lireRegistre: () => ({ lignes: {}, communs: {} }),
+    });
+
+    assert.ok(r.nom, `« ${nom} » n’a reçu aucun nom : ${r.message ?? ''}`);
+    if (attendu === 'riviere') {
+      assert.ok(
+        estUneRiviere(r.nom),
+        `« ${nom} » déclare le baptême par rivière et a reçu « ${r.nom} » (source : ${r.source})`,
+      );
+      assert.equal(r.attribue, true, `« ${nom} » déclare la rivière : elle doit être ATTRIBUÉE, pas subie`);
+    } else {
+      assert.equal(
+        r.nom,
+        'd-20260826-0001',
+        `« ${nom} » déclare le baptême ${JSON.stringify(attendu)} et a reçu « ${r.nom} » (source : ${r.source})`,
+      );
+      assert.equal(r.attribue, false, `« ${nom} » déclare le code : rien n’est tiré du parc des rivières`);
+    }
+  }
+});
+
+// ⚠️ L'INSTRUMENT QUI DISCRIMINE VRAIMENT — ET IL EST LE SEUL, TANT QUE LE REGISTRE N'A QUE
+// DEUX RÔLES.
+//
+// L'essai ci-dessus est VERT même sur le code d'avant le correctif : avec deux rôles dont un
+// seul est l'orchestrateur, la comparaison littérale `role !== 'orchestrateur'` rend exactement
+// ce que le registre déclare. Il ne prouve donc RIEN sur l'origine de la décision — il ne
+// mordra qu'au troisième rôle. C'est un essai qui garde l'avenir, pas un essai qui a trouvé le
+// défaut, et le dire ici évite de compter deux fois la même preuve.
+//
+// Ce qui discrimine, c'est de DÉPLACER LA DÉFINITION et de regarder si la décision suit. On
+// change ce que le registre déclare, en mémoire, dans ce seul processus, et on le remet —
+// `node --test` isole chaque fichier dans son processus, et le `finally` couvre l'échec.
+// Sur le code d'avant, la décision ne bougeait pas : elle ne lisait pas le registre.
+test('DÉPLACER LA DÉCLARATION DÉPLACE LA DÉCISION — c’est ce qui prouve que le littéral est parti', () => {
+  const orchestrateur = roleDe('orchestrateur');
+  const declare = orchestrateur.bapteme;
+  try {
+    orchestrateur.bapteme = 'code';
+    const r = nomDeLAgentQuiNait({
+      role: 'orchestrateur',
+      lieu: bacNeuf(),
+      code: 'd-20260826-0002',
+      depot: bacNeuf(),
+      listerAgents: () => [],
+      lireRegistre: () => ({ lignes: {}, communs: {} }),
+    });
+    assert.equal(
+      r.nom,
+      'd-20260826-0002',
+      `le registre déclare « code » et l’orchestrateur a reçu « ${r.nom} » : la décision ne vient pas du registre`,
+    );
+  } finally {
+    orchestrateur.bapteme = declare;
+  }
+  assert.equal(roleDe('orchestrateur').bapteme, 'riviere', 'la déclaration est remise telle qu’elle était');
+});
+
+// ⚠️ ET LA MOITIÉ QUI PROTÈGE LES RIVIÈRES. Avant ce lot, un rôle qu'on ne connaît pas était
+// nommé par son code EN SILENCE — la comparaison littérale rangeait « inconnu » avec
+// « représentant ». Un rôle qui n'existe pas n'a pas de convention de nom : on ne lui en
+// invente pas une, on refuse.
+test('UN RÔLE INCONNU NE SE FAIT PLUS NOMMER EN SILENCE', () => {
+  assert.throws(
+    () => nomDeLAgentQuiNait({ role: 'cuisinier', lieu: bacNeuf(), code: 'peu-importe' }),
+    RoleInconnu,
+    'un rôle inconnu était rangé avec « pas orchestrateur » et repartait avec son code',
+  );
+});

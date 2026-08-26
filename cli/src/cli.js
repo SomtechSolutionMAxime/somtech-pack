@@ -32,6 +32,7 @@ export function parseArgs(argv) {
     noSkills: false, noWorkflows: false, noCommands: false, noCanvas: false, noLigneDirecte: false,
     noNaissanceRepresentant: false,
     settings: null, hooksDir: null, noVersionHook: false, noGraphify: false,
+    noMiroir: false,
     mode: null, file: null, id: null, patch: null, client: null,
     help: false, version: false,
   };
@@ -70,6 +71,7 @@ export function parseArgs(argv) {
       case '--no-naissance-representant': flags.noNaissanceRepresentant = true; break;
       case '--no-version-hook': flags.noVersionHook = true; break;
       case '--no-graphify': flags.noGraphify = true; break;
+      case '--no-miroir': flags.noMiroir = true; break;
       case '--no-registre-hook': flags.noRegistreHook = true; break;
       case '--yes': case '-y': flags.yes = true; break;
       case '--force': flags.force = true; break;
@@ -177,6 +179,7 @@ Options (setup) :
   --no-ligne-directe  Ne pas installer la ligne directe (outil de poste, ~/.somtech)
   --no-naissance-representant  Ne pas installer la naissance du représentant (outil de poste, ~/.somtech)
   --no-claude-swt   Ne pas installer claude-swt
+  --no-miroir       Ne pas rattraper le clone marketplace (référence de la garde de fraîcheur)
   --no-version-hook Ne pas installer le hook de version global
   --no-graphify     Ne pas installer le hook graphify (dossier de sortie partagé)
   --no-registre-hook  Ne pas installer le hook « registre injoignable » (dit à la

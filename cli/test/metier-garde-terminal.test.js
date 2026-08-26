@@ -67,9 +67,47 @@ test('devant une commande qu elle ne comprend pas, la garde REFUSE — un garde 
   assert.ok(juger({ commande: 'ls', depot: undefined }).decision === 'deny', 'dépôt inconnu');
 });
 
-test('la garde ne s applique QU AU rôle qui la porte — elle ne décide pas pour les autres', () => {
-  assert.equal(juger({ commande: 'echo x > f.md', depot: DEPOT, role: 'chef-equipe' }).decision, 'allow');
+test('🔴 un rôle que la garde ne CONNAÎT pas est refusé — et cet essai disait le contraire', () => {
+  // ⚠️ CET ESSAI GARDAIT LE DÉFAUT (T-20260826-0079). Il exigeait `allow` sur
+  // `role: 'chef-equipe'`, au nom de « elle ne décide pas pour les autres ». Mais un rôle
+  // absent de la table ne repartait pas neutre : il repartait AUTORISÉ, sans qu'une seule
+  // ligne de sa commande soit examinée. Neuf rôles arbitrés (P-20260819-0001) allaient
+  // passer par là, chacun sans garde de terminal, et la garde ne se serait pas tue — elle
+  // aurait dit « d'accord ».
+  //
+  // L'en-tête de `terminal.js` prescrivait déjà l'inverse, et les deux autres gardes du
+  // dispositif l'appliquaient : `ecriture.js` refuse un rôle inconnu, `ligne-cliente.js`
+  // aussi. Celle-ci était la seule à ne pas le faire.
+  assert.equal(juger({ commande: 'echo x > f.md', depot: DEPOT, role: 'chef-equipe' }).decision, 'deny');
   assert.equal(juger({ commande: 'echo x > f.md', depot: DEPOT, role: 'orchestrateur' }).decision, 'deny');
+});
+
+test('le refus par rôle inconnu NOMME sa cause et le geste qui débloque', () => {
+  // Les deux refusent : l'issue seule ne les distingue pas, et c'est la cause que lit
+  // celui qui est bloqué. « La règle te l'interdit » et « je n'ai pas su qui tu es »
+  // n'appellent pas le même geste — sans cette garde, effacer la distinction ne
+  // rougirait rien.
+  const parRole = juger({ commande: 'echo x > f.md', depot: DEPOT, role: 'chef-equipe' }).raison;
+  const parRegle = juger({ commande: 'echo x > f.md', depot: DEPOT, role: 'orchestrateur' }).raison;
+
+  assert.match(parRole, /n'a pas su établir à quel rôle/,
+    'le refus par prudence doit dire que le rôle n a pas été mesuré');
+  assert.match(parRole, /roles-connus/,
+    'un refus qui ne dit pas le geste qui le lève renvoie son lecteur à lui-même');
+  assert.doesNotMatch(parRegle, /n'a pas su établir à quel rôle/,
+    'un orchestrateur est refusé par la RÈGLE, pas parce qu on ignore qui il est');
+  assert.notEqual(parRole, parRegle);
+});
+
+test('les deux noms du représentant sont jugés, jamais bloqués en bloc — le lieu et le registre ne le nomment pas pareil', () => {
+  // MESURÉ : `lieu-agent.roleDuLieu()` rend la clé de registre (« representant »),
+  // `gardes/ligne-cliente.js` rend le nom de gabarit (« gestionnaire-client »). La table
+  // ne connaissait que le second. Sous le refus par défaut, le premier aurait fait
+  // refuser TOUTES les commandes d un représentant correctement né.
+  for (const role of ['representant', 'gestionnaire-client']) {
+    assert.ok(permis('git status', { role }), `« ${role} » doit pouvoir travailler`);
+    assert.ok(refuse('echo x > f.md', { role }), `« ${role} » n écrit pas plus qu un autre`);
+  }
 });
 
 // ——— les deux faux refus mesurés sur du trafic réel, le 2026-08-20 ———
