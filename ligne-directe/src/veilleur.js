@@ -206,6 +206,21 @@ export class Veilleur {
     }
   }
 
+  /**
+   * LA PLACE EST-ELLE TENUE ? — question DIFFÉRENTE de « quelqu'un répond-il ? », et c'est
+   * la confusion des deux qui a fait vivre deux veilleurs (T-20260825-0101).
+   *
+   * ⚠️ UNE SEULE ÉCRITURE DE LA RÈGLE, ET ELLE N'EST PAS ICI. La sonde vit dans `client.js`
+   * — le module qui parle au socket — parce que la relève pose exactement la même question,
+   * pour exactement la même raison. Ce qu'elle mesure, ce qu'elle refuse de lire, et ce
+   * qu'elle ne voit pas, y est écrit une fois. Deux copies dériveraient, et c'est toujours
+   * celle qu'on ne relit pas qui reste fausse.
+   */
+  static async placeTenue(cheminSocket = CHEMIN_SOCKET, options = {}) {
+    const { placeTenue } = await import('./client.js');
+    return placeTenue(cheminSocket, options);
+  }
+
   static async demarrer(options = {}) {
     // La place D'ABORD, le reste ensuite. Lire le trousseau puis interroger Slack prend
     // quelques centaines de millisecondes : assez pour qu'un second veilleur naisse en
@@ -302,6 +317,25 @@ export class Veilleur {
           const occupe = new Error('Un veilleur tourne déjà sur ce poste — celui-ci se retire.');
           occupe.code = 'DEJA_VIVANT';
           return reject(occupe);
+        }
+        // 🔴 IL N'A PAS RÉPONDU. IL N'EST PAS MORT POUR AUTANT — et c'est ici que le double
+        // naissait (T-20260825-0101). Le sondage ci-dessus a une borne de 2 s ; un veilleur
+        // occupé la dépasse sans peine (`vue` a pendu 67 s au socket du poste). Ce qui suit
+        // effaçait alors le socket d'un vivant, et ce démarrage s'installait à côté de lui.
+        //
+        // La question n'est donc pas « répond-il ? » mais « quelqu'un tient-il encore la
+        // poignée ? » — et un socket dont le processus est mort refuse la connexion, lui.
+        if (await Veilleur.placeTenue(this.cheminSocket)) {
+          const tenue = new Error(
+            'Un veilleur tient déjà la place sans répondre — celui-ci se retire plutôt que de le doubler. ' +
+              `Nomme-le si besoin : lsof -t ${this.cheminSocket}`
+          );
+          // Le MÊME code que ci-dessus, et c'est voulu : pour le point d'entrée, le fait est
+          // identique — un veilleur est déjà là, ce démarrage se retire SANS erreur, sinon le
+          // gestionnaire de services le relancerait en boucle. Seul le motif diffère, et il
+          // part au journal.
+          tenue.code = 'DEJA_VIVANT';
+          return reject(tenue);
         }
         try {
           unlinkSync(this.cheminSocket);
