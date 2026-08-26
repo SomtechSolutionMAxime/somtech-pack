@@ -46,6 +46,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { poserGarde, MODELE_PAR_DEFAUT, MODE_PAR_DEFAUT } from '../src/naissance.js';
+// ⚠️ LA PHRASE EST IMPORTÉE, JAMAIS RECOPIÉE. Ce qu'on éprouve plus bas n'est pas une tournure —
+// c'est que CE QUE CETTE FONCTION PRODUIT parvienne à l'humain. Recopier son texte ici en ferait
+// un banc qui rougit à la première reformulation légitime, et qui reste vert le jour où la ligne
+// disparaît du binaire : l'inverse exact de ce qu'on veut garder.
+import { phraseDuMandatIncomplet } from '../src/declaration.js';
 import { estUneRiviere, FICHIER_NOM_AGENT, nomInscritDansLeLieu } from '../../ligne-directe/src/nom-de-riviere.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -378,13 +383,18 @@ function lancerNaitre(
     // cloisons pour une seule chaîne, et une cloison dupliquée est une cloison qu'on oublie
     // d'un côté — le motif « une porte sur deux » que ce fichier documente déjà.
     env = {},
+    // ⚠️ UN MODULE CHARGÉ AVANT LE BINAIRE, et une seule raison de s'en servir : remplacer une
+    // frontière que le sous-processus ne partage pas avec le banc. Le PATH remplace déjà `herdr` ;
+    // ceci remplace `globalThis.fetch`, c'est-à-dire le ServiceDesk. Rien d'autre ne passe par
+    // là — ce n'est pas une porte pour changer le comportement de la commande.
+    preload = null,
   } = {}
 ) {
   // ⚠️ `workspace: null` OMET LE DRAPEAU — c'est LA POPULATION RÉELLE, celle que le métier
   // prescrit (`pack agent naitre <code> --role chef-equipe --depot <d> --coordonnateur <n>`).
   // Tous les essais de ce fichier passaient `--workspace w9`, ce qui court-circuitait le chemin
   // où l'espace herdr est ouvert — et c'est très exactement pour ça que le défaut ① a survécu.
-  const args = [BIN, client, ...(workspace ? ['--workspace', workspace] : [])];
+  const args = [...(preload ? ['--import', preload] : []), BIN, client, ...(workspace ? ['--workspace', workspace] : [])];
   if (depotCourant) args.push('--depot', depotCourant);
   if (amorce) args.push('--amorce-texte', amorce);
   if (modele) args.push('--modele', modele);
@@ -1641,6 +1651,205 @@ test('sans clé ServiceDesk, la naissance tient aussi — et le geste dit qu’i
     const rendu = JSON.parse(r.stdout);
     assert.equal(rendu.servicedesk.rempli, false);
     assert.match(rendu.servicedesk.cause, /aucun accès/i, 'l’absence d’accès est NOMMÉE, pas confondue avec un refus');
+  }));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 9c-quater — LE DIAGNOSTIC PARVIENT À L'HUMAIN, ET C'EST LE *LIEU* QU'ON GARDE ICI
+//
+// 🔴 CE QU'UNE PASSE DE REVUE A MESURÉ, ET QUI TENAIT DEBOUT DEPUIS LE DÉBUT DU LOT.
+//
+// `phraseDuMandatIncomplet` a été SORTIE du binaire pour être éprouvable — son propre docblock
+// le dit en toutes lettres :
+//
+//     « ELLE VIT ICI, PAS DANS LA COMMANDE, pour être éprouvable : une phrase écrite au fil
+//       d'un `process.stderr.write` n'a pour garde que la relecture, et c'est ce qui a laissé
+//       passer les quatre vérifications affirmées d'un chef d'équipe. »
+//
+// Le CONTENU est donc passé sous garde (`declaration.test.js`). Le LIEU, non. Les trois
+// `process.stderr.write` du chemin chef d'équipe — le coordonnateur qui manque, le mandat
+// incomplet, ce qu'on n'a pas pu mesurer — n'avaient pour garde que la relecture, c'est-à-dire
+// EXACTEMENT la condition que ce docblock désigne comme la cause d'un défaut déjà payé.
+//
+// ⚠️ CE QUE LA MUTATION A MONTRÉ : vider le corps de chacun de ces trois `if`, un à la fois,
+// laissait la suite entière VERTE. Les trois branches se supprimaient sans qu'une seule
+// assertion rougisse — et le geste qui les efface a l'allure d'un entretien.
+//
+// ⚠️ POURQUOI AUCUN BANC EXISTANT NE LES TUAIT. Toutes les observations de ces phrases vivent
+// dans `declaration.test.js`, qui appelle la FONCTION PURE. Aucune ne lance le binaire. Un banc
+// qui se contenterait d'appeler la fonction pure ici referait le même trou : ce qui manque n'est
+// pas une seconde mesure du contenu, c'est une mesure du LIEU où il est écrit.
+//
+// ⚠️ ET CE QUI CASSE QUAND LA LIGNE PART : la sortie standard ne porte que du JSON. L'humain qui
+// tape la commande n'a plus AUCUN signal lisible qu'un mandat a été repris, sauté, ou pas rempli
+// du tout. Le fait reste dans `stdout` pour un script ; il disparaît pour la personne.
+//
+// ⚠️ CES BANCS PORTENT LA FONCTION, PAS LA TOURNURE. Ils exigent que le diagnostic PARVIENNE
+// (la phrase que produit la fonction, l'option qui lève le manque, la zone d'ombre nommée) —
+// jamais une formulation. Une reformulation légitime de l'une de ces phrases les laisse verts.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/** Ce que la sortie d'erreur d'un chef d'équipe a dit, sans la ligne du versement ni le bruit git. */
+const surLaSortieDErreur = (r, quoi) => r.stderr.includes(quoi);
+
+test('🔴 LE COORDONNATEUR QUI MANQUE SE DIT À L’HUMAIN — et la ligne porte le geste qui le lève', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+
+    // La ligne réelle d'un coordonnateur pressé : il oublie l'attache.
+    const r = lancerChef({ code, poste, horodatage });
+
+    assert.equal(r.code, 0, `la naissance TIENT — on signale, on n’empêche pas de naître : ${r.stderr}`);
+    assert.match(r.stderr, /coordonnateur/i, 'l’humain doit APPRENDRE que l’attache manque');
+    // ⚠️ LE DRAPEAU, PAS UNE FORMULE. Ce fichier exige déjà ailleurs qu’un refus « NOMME le geste
+    // qui le lève » : un diagnostic sans son geste ne débloque personne. C’est le contrat de
+    // sortie de ce module, pas une tournure de phrase.
+    assert.ok(surLaSortieDErreur(r, '--coordonnateur'), `le geste qui pose l’attache doit être NOMMÉ — stderr : ${r.stderr}`);
+    // Et le fait est bien celui-là, pas un autre : la déclaration n’a pas de coordonnateur.
+    assert.equal(JSON.parse(r.stdout).coordonnateur, null);
+  }));
+
+test('… et quand le coordonnateur EST nommé, rien ne se dit — sinon ce banc ne discrimine pas', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+
+    const r = lancerChef({ code, poste, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.ok(
+      !surLaSortieDErreur(r, '--coordonnateur'),
+      `rien ne devait être signalé : l’attache est là — stderr : ${r.stderr}`
+    );
+    assert.equal(JSON.parse(r.stdout).coordonnateur, 'matapedia');
+  }));
+
+test('🔴 LE MANDAT INCOMPLET SE DIT À L’HUMAIN — la phrase de `declaration.js` atteint la sortie d’erreur', () =>
+  avecChefDEquipe(({ code, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+
+    const r = lancerChef({ code, poste, horodatage, coordonnateur: 'matapedia' });
+
+    assert.equal(r.code, 0, `la naissance TIENT — le ServiceDesk ne la tue pas : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.servicedesk.rempli, false, 'le cas éprouvé est bien celui d’un mandat non rempli');
+
+    // ⚠️ L'ORACLE EST LA FONCTION ELLE-MÊME, nourrie de ce que le binaire vient de RENDRE. Il ne
+    // réécrit pas la règle : il exige que la production et la sortie d'erreur disent LA MÊME
+    // chose. C'est la jointure des deux étages — chacun juste de son côté, la ligne qui les
+    // relie gardée par personne.
+    const attendu = phraseDuMandatIncomplet(rendu.mandat, rendu.servicedesk);
+
+    // ⚠️ ET L'ORACLE N'EST PAS VIDE. Sans ce contrôle-ci, vider `phraseDuMandatIncomplet`
+    // rendrait `stderr.includes('')` — vrai partout, y compris sur un binaire muet.
+    assert.ok(attendu.includes(rendu.mandat), `l’oracle doit nommer le mandat — reçu : « ${attendu} »`);
+    assert.ok(attendu.includes(rendu.servicedesk.cause), `l’oracle doit porter la cause — reçu : « ${attendu} »`);
+
+    assert.ok(
+      surLaSortieDErreur(r, attendu),
+      `le diagnostic n’est pas parvenu à l’humain.\n  attendu : « ${attendu} »\n  stderr  : ${r.stderr}`
+    );
+  }));
+
+// ── LA TROISIÈME BRANCHE — ce qu'on n'a PAS PU MESURER, sur un mandat qui a RÉUSSI
+//
+// ⚠️ ELLE NE S'ATTEINT PAS SANS SERVICEDESK, et c'est ce qui la rendait invisible. Les deux
+// branches précédentes se voient sur un poste sans clé ; celle-ci demande un `rempli: true`
+// PORTEUR d'une zone d'ombre — donc un service qui répond. Le double est chargé AVANT le
+// binaire (voir `tests/aide/faux-servicedesk-en-sous-processus.mjs`) : c'est la chaîne réelle
+// moins UNE chose, nommée — le réseau.
+
+const PRELOAD_DESK = join(REPO_NAISSANCE, 'tests', 'aide', 'faux-servicedesk-en-sous-processus.mjs');
+
+/**
+ * Un ticket DIRECT, VIVANT, tel que le ServiceDesk le rend.
+ *
+ * ⚠️ MÊME FORME QUE `unTicketVivant` DE `declaration.test.js` — mesurée sur le service, pas
+ * écrite de mémoire. Elle n'est pas importée de là-bas : importer un fichier d'essais LE FAIT
+ * TOURNER. Ce qui empêche les deux de diverger en silence n'est donc pas le partage, c'est que
+ * ce banc-ci refuse de conclure sans que le binaire ait RENDU la zone d'ombre qu'il attend :
+ * une forme qui dériverait ferait rougir l'assertion `non_mesure`, pas passer l'essai.
+ */
+const unTicketQueLeDeskRend = (sur = {}) => ({
+  'tickets:get': { ticket: { id: '11111111-2222-4333-8444-555555555555', ticket_id: 'T-20260825-0001', status: 'in_progress', ...sur } },
+  'tickets:update': { ok: true },
+});
+
+/** Lance un chef d'équipe dont le ServiceDesk répond — et rend aussi ce que le double a VU. */
+function avecUnDeskQuiRepond({ bac, poste, horodatage, scenario }) {
+  const fichier = join(bac, `desk-${Math.random().toString(36).slice(2)}.json`);
+  const journal = join(bac, `desk-appels-${Math.random().toString(36).slice(2)}.jsonl`);
+  writeFileSync(fichier, JSON.stringify(scenario));
+  compteurChef += 1;
+  const ticket = `t-20260825-${String(3000 + compteurChef).slice(-4)}`;
+  const r = lancerNaitre(ticket, {
+    role: 'chef-equipe',
+    horodatage,
+    preload: PRELOAD_DESK,
+    env: {
+      ...poste,
+      // ⚠️ UNE CLÉ EST NÉCESSAIRE : sans elle `transportServiceDesk` rend `null` et la commande
+      // n'appelle personne. Elle ne peut atteindre aucun service réel — la cloison d'essais
+      // refuserait tout appel dont le transport n'aurait pas été remplacé, et il l'est.
+      SOMTECH_DESK_API_KEY: 'une-clé-d-essai',
+      FAUX_DESK_SCENARIO: fichier,
+      FAUX_DESK_JOURNAL: journal,
+    },
+  });
+  const appels = existsSync(journal)
+    ? readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
+    : [];
+  return { r, appels, ticket };
+}
+
+test('🔴 CE QU’ON N’A PAS PU MESURER SE DIT À L’HUMAIN — sur un mandat pourtant REMPLI', () =>
+  avecChefDEquipe(({ bac, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+
+    // La charge NE PORTE PAS `assigned_agent` : le nom est écrit, mais on ne peut pas dire si
+    // on a remplacé celui de quelqu'un. C'est un `rempli: true` avec une zone d'ombre — la
+    // seule combinaison où la ligne 988 se tait et où celle-ci doit parler.
+    const { r, appels } = avecUnDeskQuiRepond({ bac, poste, horodatage, scenario: unTicketQueLeDeskRend() });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    // ⚠️ LE DOUBLE A ÉTÉ TOUCHÉ. Un essai vert dont le service n'a jamais été appelé mesurerait
+    // le silence d'un chemin jamais emprunté.
+    assert.deepEqual(appels.map((a) => a.args.action), ['get', 'update'], `le binaire a parlé au double : ${JSON.stringify(appels)}`);
+
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.servicedesk.rempli, true, 'le remplissage a bien eu lieu — c’est la moitié où l’autre ligne se TAIT');
+    assert.ok(
+      Array.isArray(rendu.servicedesk.non_mesure) && rendu.servicedesk.non_mesure.length > 0,
+      `le cas éprouvé exige une zone d’ombre — reçu : ${JSON.stringify(rendu.servicedesk)}`
+    );
+
+    for (const zone of rendu.servicedesk.non_mesure) {
+      assert.ok(
+        surLaSortieDErreur(r, zone),
+        `« ${zone} » est resté dans le JSON et n’a jamais atteint l’humain — stderr : ${r.stderr}`
+      );
+    }
+    assert.ok(surLaSortieDErreur(r, rendu.mandat), `la ligne doit dire SUR QUEL mandat — stderr : ${r.stderr}`);
+  }));
+
+test('… et quand le champ A ÉTÉ LU, rien ne se dit — une zone d’ombre annoncée sur une mesure faite ferait chercher un défaut inexistant', () =>
+  avecChefDEquipe(({ bac, poste, horodatage, espace }) => {
+    installerFauxHerdr({ repertoire: espace });
+
+    // ⚠️ LA MOITIÉ SYMÉTRIQUE : `assigned_agent` PRÉSENT et vide est une MESURE, pas une lacune.
+    const { r } = avecUnDeskQuiRepond({
+      bac,
+      poste,
+      horodatage,
+      scenario: unTicketQueLeDeskRend({ assigned_agent: null }),
+    });
+
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    const rendu = JSON.parse(r.stdout);
+    assert.equal(rendu.servicedesk.rempli, true);
+    assert.deepEqual(rendu.servicedesk.non_mesure, [], 'le champ a été LU — il n’y a rien à relever');
+    assert.ok(
+      !surLaSortieDErreur(r, 'non mesuré'),
+      `rien ne devait être relevé — stderr : ${r.stderr}`
+    );
   }));
 
 // ── 9c-ter — CE QUE LA SORTIE AFFIRME D'UN CHEF D'ÉQUIPE (défaut ③)
