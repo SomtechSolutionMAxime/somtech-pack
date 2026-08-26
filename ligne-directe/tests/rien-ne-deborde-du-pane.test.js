@@ -150,7 +150,8 @@ import {
 } from '../src/tui-vue-du-parc.js';
 import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
-import { rangeesNonVides } from './aide/terminal.js';
+import { readFileSync } from 'node:fs';
+import { rangeesNonVides, ecranApresEcritures } from './aide/terminal.js';
 
 /** La largeur AFFICHÉE — en points de code. `.length` compte faux sur la roue et les accents. */
 const largeurAffichee = (texte) => [...String(texte ?? '')].length;
@@ -1105,6 +1106,116 @@ test('LA PROGRESSION N’EMPILE PAS — l’incident du dirigeant, reproduit pui
       1,
       `à ${largeur} colonnes, ${TOURS} tours de progression laissent ${vues} rangées écrites — ` +
         'elles S’EMPILENT, exactement l’incident rapporté par le dirigeant'
+    );
+  }
+});
+
+test('LE DOUBLE DU TERMINAL EST CONFRONTÉ À UN VRAI ÉMULATEUR — et chaque capacité qu’il déclare a son cas', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CE BANC EXISTE PARCE QUE LE DOUBLE A DIVERGÉ DEUX FOIS, MESURÉES.
+  //
+  //   ① il descendait d’une rangée dès la dernière colonne atteinte — il affirmait donc que la
+  //      progression CORRIGÉE empilait encore, alors qu’un vrai pane herdr en montre UNE ligne.
+  //      Le double contredisait le réel, et c’est LUI qui avait tort.
+  //   ② il traitait l’effacement `[K` (de la colonne courante à la fin) comme `[2K` (la rangée
+  //      entière), donc il emportait le texte à gauche du curseur.
+  //
+  // ⚠️ NI L’UN NI L’AUTRE N’A ÉTÉ TROUVÉ PAR RELECTURE. Le second est sorti d’un TIRAGE
+  // DIFFÉRENTIEL contre un vrai émulateur — 400 séquences aléatoires mêlant texte, retours
+  // chariot, sauts de ligne et effacements. Mes propres cas, choisis à la main, contenaient
+  // ceux auxquels j’avais pensé ; le défaut était dans ceux auxquels je n’avais pas pensé.
+  // C’est la MÉTHODE qui a trouvé, pas l’attention.
+  //
+  // ⚠️ POURQUOI CE DOUBLE DOIT ÊTRE GARDÉ SI SÉVÈREMENT, alors qu’un autre ne le serait pas :
+  // sur le chemin de `rendreEcran` il n’était qu’un SECOND instrument — la mesure directe des
+  // largeurs tenait sans lui. Sur la ligne de progression, il n’y a PAS de mesure directe : elle
+  // n’est pas bornée par `borner`, elle est écrite droit au terminal. **Il y est le seul
+  // instrument.** Un instrument unique qui a divergé deux fois ne se garde pas sur parole.
+  //
+  // ⚠️ LES PAIRES SONT CAPTURÉES DEPUIS L’ÉMULATEUR ET VERSIONNÉES — `terminal-cas-pyte.json`.
+  // Elles se rejouent ici SANS dépendance : la suite reste éprouvable sur un poste nu. Les
+  // regénérer demande l’émulateur ; les vérifier, non.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const cas = JSON.parse(readFileSync(new URL('./aide/terminal-cas-pyte.json', import.meta.url), 'utf8'));
+
+  // ═══ ① CE QUE LA NOTE DU DOUBLE DÉCLARE COMPRENDRE — et rien ne peut y entrer sans son cas.
+  //
+  // 🔴 MA NOTE A DÉJÀ MENTI, ET DEUX FOIS DE SUITE SUR LE MÊME MODE. Elle énumérait le saut de
+  // ligne parmi ce qu’elle comprenait ; il était FAUX. Une capacité listée sans cas en regard se
+  // lit comme vérifiée par quelqu’un — c’est la forme la plus discrète de ce chantier : une
+  // description juste d’intention, fausse de fait, dans un document écrit pour protéger.
+  //
+  // LA FORME QUI FERME ÇA : **ce qu’une note énumère, un cas l’éprouve.** Ajouter une ligne à
+  // cette liste sans capturer son cas fait ROUGIR ce banc.
+  const DECLARE = [
+    'auto-wrap',
+    'ligne vide',
+    'retour chariot',
+    'retour chariot désarme le report',
+    'saut de ligne',
+    'le report survit au saut de ligne',
+    'report armé puis imprimable',
+    'effacement de rangée',
+    'séquence inconnue ignorée',
+    'défilement',
+  ];
+  const couverts = new Set(cas.map((c) => c.quoi));
+  for (const capacite of DECLARE) {
+    assert.ok(
+      couverts.has(capacite),
+      `la note du double déclare comprendre « ${capacite} » et AUCUN cas ne l’éprouve — ` +
+        'une capacité annoncée sans cas se lit comme vérifiée par quelqu’un. Capture-la depuis ' +
+        'l’émulateur, ou retire-la de la liste.'
+    );
+  }
+
+  // ═══ ② ET LE TIRAGE EST LÀ, EN NOMBRE. Sans lui, ce banc ne couvrirait que ce à quoi j’ai
+  // pensé — c’est-à-dire pas le défaut.
+  const tirages = cas.filter((c) => c.quoi === 'tirage').length;
+  assert.ok(
+    tirages >= 200,
+    `le corpus ne porte que ${tirages} tirages différentiels — c’est le tirage qui a trouvé le ` +
+      'second défaut, pas les cas choisis à la main'
+  );
+
+  // ═══ ③ AUCUN ÉCART. Une seule divergence et le double est suspect, pas le code.
+  const ecarts = [];
+  for (const c of cas) {
+    const rendu = ecranApresEcritures(c.ecrits, c.cols, c.rows).map((l) => l.replace(/\s+$/, ''));
+    const attendu = c.attendu.map((l) => l.replace(/\s+$/, ''));
+    if (JSON.stringify(rendu) !== JSON.stringify(attendu)) {
+      ecarts.push(`${c.quoi} · ${c.cols}×${c.rows} · ${JSON.stringify(c.ecrits)}\n` +
+        `      émulateur : ${JSON.stringify(attendu)}\n      double    : ${JSON.stringify(rendu)}`);
+    }
+  }
+  assert.deepEqual(
+    ecarts,
+    [],
+    `le double diverge de l’émulateur sur ${ecarts.length} cas sur ${cas.length} :\n    ` +
+      ecarts.slice(0, 3).join('\n    ')
+  );
+});
+
+test('LE DOUBLE REPRODUIT ENCORE L’INCIDENT — un double qui ne reproduit plus ne prouve plus rien', () => {
+  // 🔴 LA MOITIÉ QU’ON OUBLIE. Un double corrigé jusqu’à ne plus rien voir rend vert pour rien.
+  // Ce banc garde la capacité de REPRODUIRE le défaut connu, séparément de la propriété qui le
+  // ferme — parce que les deux peuvent se perdre indépendamment.
+  //
+  // Mesuré dans un vrai pane herdr, à 65 colonnes : +21 lignes en 8 secondes avant le correctif.
+  const ESC = String.fromCharCode(27);
+  const sansBorne = Array.from({ length: 20 }, (_, i) => `\r${ESC}[2K${texteDeProgression(20 + i, i)}`);
+
+  // Au-dessus de la longueur du message, rien ne wrappe : une seule rangée, avant comme après.
+  assert.equal(rangeesNonVides(sansBorne, 150, 300), 1, 'à 150 colonnes le message tient — rien ne devrait empiler');
+
+  // ⚠️ ET EN DESSOUS, ÇA EMPILE — c’est l’incident. Si cette assertion cesse de rougir, le double
+  // a perdu ce qui le rend capable de voir quoi que ce soit.
+  for (const largeur of [100, 80, 65, 40, 20]) {
+    const vues = rangeesNonVides(sansBorne, largeur, 300);
+    assert.ok(
+      vues > 1,
+      `à ${largeur} colonnes, le double ne voit que ${vues} rangée(s) pour une progression NON ` +
+        'bornée — il ne reproduit plus l’incident, donc son vert sur la version corrigée ne prouve rien'
     );
   }
 });

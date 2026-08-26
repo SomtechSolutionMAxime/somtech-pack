@@ -91,11 +91,27 @@ export function texteVisible(lignes, cols, rows) {
  * Un double bâti pour une classe de défaut que le correctif voisin avait rendue irreproductible
  * là où on le branchait. Ici, le défaut est atteignable, et lui seul l'atteint.
  *
- * ⚠️ CE QU'IL COMPREND, ET RIEN D'AUTRE : l'écriture de texte avec auto-wrap, le retour chariot,
- * le saut de ligne, et l'effacement de la rangée courante. Toute autre séquence de contrôle est
- * IGNORÉE plutôt que devinée — un double qui devine fabrique les défauts qu'il devrait trouver.
- * Il ne modélise ni couleurs, ni écran alternatif, ni curseur adressable : rien de tout cela
- * n'entre dans la propriété qu'on mesure ici.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * CE QU'IL COMPREND — ET CHAQUE LIGNE DE CETTE LISTE A SON CAS, CAPTURÉ DEPUIS L'ÉMULATEUR
+ *
+ * 🔴 CETTE LISTE A DÉJÀ MENTI. Elle annonçait le saut de ligne ; le modèle le traitait mal, et
+ * une revue l'a mesuré. Une capacité énumérée sans cas en regard se lit comme vérifiée par
+ * quelqu'un — c'est une description juste d'intention, fausse de fait, dans un document écrit
+ * pour protéger. Elle est désormais GARDÉE : le banc « LE DOUBLE DU TERMINAL EST CONFRONTÉ À UN
+ * VRAI ÉMULATEUR » porte la même liste et ROUGIT si l'une de ses entrées n'a pas de cas.
+ * Ajouter une capacité ici sans capturer son cas fait rougir la suite.
+ *
+ *     auto-wrap · ligne vide · retour chariot · retour chariot désarme le report ·
+ *     saut de ligne · le report survit au saut de ligne · report armé puis imprimable ·
+ *     effacement de rangée (`[K`, `[1K`, `[2K` — trois portées distinctes) ·
+ *     séquence inconnue ignorée · défilement
+ *
+ * ⚠️ CE QU'IL NE COMPREND PAS, ET NE PRÉTEND PAS COMPRENDRE : les couleurs, l'écran alternatif,
+ * le curseur adressable, et les caractères HORS BMP — l'émulateur de référence rompt sur ces
+ * derniers, donc aucun cas ne peut les couvrir, donc ils ne sont pas dans la liste. Toute autre
+ * séquence de contrôle est IGNORÉE plutôt que devinée : un double qui devine fabrique les
+ * défauts qu'il devrait trouver.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
  */
 export function ecranApresEcritures(ecrits, cols, rows) {
   const ESC = String.fromCharCode(27);
@@ -113,28 +129,53 @@ export function ecranApresEcritures(ecrits, cols, rows) {
   // UNE, mesuré. Le double contredisait le terminal. Une ligne bornée à EXACTEMENT la largeur
   // du pane remplit la dernière colonne sans descendre : c'est précisément ce qui fait que le
   // correctif fonctionne, et un modèle sans report ne peut pas le voir.
-  let report = false;
+  // 🔴 LE REPORT DE RETOUR À LA LIGNE, MODÉLISÉ COMME LE FAIT UN VRAI TERMINAL : la colonne
+  // avance JUSQU'À `cols` — une position hors de l'écran — et le retour à la ligne ne se produit
+  // qu'au caractère imprimable SUIVANT. Écrire dans la dernière colonne ne descend donc pas.
+  //
+  // ⚠️ MA PREMIÈRE VERSION DESCENDAIT IMMÉDIATEMENT, et elle affirmait que la progression
+  // CORRIGÉE empilait encore — alors qu'un vrai pane herdr en montre UNE ligne, mesuré. Le
+  // double contredisait le réel, et c'est LUI qui avait tort. Ce détail n'en est pas un : c'est
+  // la RAISON pour laquelle le correctif fonctionne — une ligne bornée à la largeur exacte
+  // remplit la dernière colonne SANS descendre, donc le retour chariot suivant la retrouve.
+  //
+  // ⚠️ MA DEUXIÈME VERSION FIGEAIT LA COLONNE à `cols - 1` derrière un drapeau. C'était juste
+  // pour l'écriture et FAUX pour l'effacement : `[K` efface à partir de la colonne courante, et
+  // avec la colonne figée il emportait le dernier caractère. Trouvé par tirage différentiel, pas
+  // par relecture. Laisser la colonne sortir de l'écran rend les deux justes d'un seul coup.
   const poser = (c) => {
-    if (report) { ligne += 1; col = 0; report = false; }
+    if (col >= cols) { ligne += 1; col = 0; }
     while (rangees.length <= ligne) rangees.push('');
     const r = [...rangees[ligne]];
     while (r.length < col) r.push(' ');
     r[col] = c;
     rangees[ligne] = r.join('');
-    if (col + 1 >= cols) report = true;
-    else col += 1;
+    col += 1;
   };
 
   for (const brut of ecrits) {
     const t = String(brut ?? '');
     for (let i = 0; i < t.length; ) {
-      if (t[i] === '\r') { col = 0; report = false; i += 1; continue; }
-      if (t[i] === '\n') { ligne += 1; report = false; while (rangees.length <= ligne) rangees.push(''); i += 1; continue; }
+      if (t[i] === '\r') { col = 0; i += 1; continue; }
+      if (t[i] === '\n') {
+        // ⚠️ LA COLONNE NE BOUGE PAS sur un saut de ligne, et un report en cours SURVIT —
+        // il est porté par la colonne elle-même, qui reste hors de l'écran.
+        ligne += 1; while (rangees.length <= ligne) rangees.push(''); i += 1; continue; }
       if (t[i] === ESC) {
         // ⚠️ ON NE RECONNAÎT QUE L'EFFACEMENT DE RANGÉE. Le reste est SAUTÉ, pas interprété.
         const m = /^\[([0-9;?]*)([A-Za-z])/.exec(t.slice(i + 1));
         if (m) {
-          if (m[2] === 'K' && (m[1] === '2' || m[1] === '')) rangees[ligne] = '';
+          // 🔴 `[K` N'EST PAS `[2K`, ET LES CONFONDRE EFFACE TROP. Trouvé par tirage différentiel
+          // contre un vrai émulateur — jamais par relecture, et jamais par les cas que j'aurais
+          // choisis moi-même : `[K` efface DE LA COLONNE COURANTE À LA FIN de la rangée, `[1K`
+          // du DÉBUT jusqu'à la colonne courante, `[2K` la rangée ENTIÈRE. Mon modèle traitait
+          // `[K` comme `[2K` et emportait le texte à gauche du curseur.
+          if (m[2] === 'K') {
+            const r = [...(rangees[ligne] ?? '')];
+            if (m[1] === '2') rangees[ligne] = '';
+            else if (m[1] === '1') rangees[ligne] = r.map((c, k) => (k <= col ? ' ' : c)).join('');
+            else rangees[ligne] = r.slice(0, col).join('');
+          }
           i += m[0].length + 1;
           continue;
         }
@@ -147,6 +188,11 @@ export function ecranApresEcritures(ecrits, cols, rows) {
       i += pt.length;
     }
   }
+  // ⚠️ UN ÉCRAN A TOUJOURS `rows` RANGÉES, même si rien n'y a été écrit — un terminal ne rend
+  // pas un écran plus court parce qu'on ne l'a pas rempli. Sans ce complément, ce modèle rendait
+  // moins de rangées que l'émulateur sur le MÊME contenu, et la confrontation accusait le modèle
+  // là où seul le comparateur était en cause.
+  while (rangees.length < rows) rangees.push('');
   return rangees.slice(-rows);
 }
 
