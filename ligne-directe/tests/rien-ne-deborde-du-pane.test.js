@@ -534,6 +534,23 @@ test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et ell
     true,
     'exactement au seuil, elle ne l’est plus'
   );
+
+  // 🔴 ET CE QUI REND « ÉQUIVALENTE » LA DERNIÈRE MUTATION DE LA CAMPAGNE SE GARDE ICI.
+  //
+  // Réécrire le seuil en littéral (`'q quitter'.length` au lieu de `RACCOURCI_VITAL`) laisse la
+  // suite verte — non par lacune de garde, mais parce que les deux valent le même nombre
+  // AUJOURD'HUI. Verdict : mutation ÉQUIVALENTE, pas survivante.
+  //
+  // ⚠️ L'ÉQUIVALENCE REPOSE SUR UN FAIT, PAS SUR UNE PROPRIÉTÉ — c'est exactement ce que la
+  // condition n°2 de la décision `f05bc613` refuse : « le jour où `q quitter` est renommé, un
+  // seuil codé en dur devient faux EN SILENCE ». Ce banc rougit ce jour-là, et son message dit
+  // au lecteur futur ce qu'il doit aller vérifier.
+  assert.equal(
+    RACCOURCI_VITAL,
+    'q quitter',
+    'le raccourci vital a été renommé : tout seuil écrit en littéral ailleurs dans le dépôt est ' +
+      'désormais FAUX en silence — cherchez les copies et dérivez-les de `RACCOURCI_VITAL`'
+  );
 });
 
 test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plancher de corps inobservable', async (t) => {
