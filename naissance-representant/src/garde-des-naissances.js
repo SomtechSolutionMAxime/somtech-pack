@@ -9,14 +9,57 @@
 // se débarrasse en effaçant la preuve qu'elle cherche est décorative.
 //
 // Il faut donc savoir qu'un agent AURAIT DÛ être déclaré, par un fait qui ne vit pas dans les
-// déclarations. Ce fait existe : `claude-swt` inscrit l'horodatage de naissance dans le NOM du
-// répertoire de travail (`~/worktrees/<dépôt>/20260825-083616`). Il survit au retrait de la
-// déclaration, il ne se lit dans aucun registre, et il ne peut pas être « oublié » — l'agent
-// travaille dedans.
+// déclarations. Ce fait est sa DATE DE NAISSANCE.
 //
-// **La population de la garde est donc : les agents vivants dont l'espace de travail porte un
-// horodatage de naissance postérieur à la MISE EN SERVICE du dispositif.** Après cette date,
-// naître hors dispositif EST ce qu'on veut attraper.
+// **La population de la garde est donc : les agents vivants NÉS après la MISE EN SERVICE du
+// dispositif.** Après cette date, naître hors dispositif EST ce qu'on veut attraper.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 ET CETTE DATE N'EST PAS CELLE QUE PORTE LE NOM DU RÉPERTOIRE DE TRAVAIL.
+//
+// Ce module l'a cru, et l'écrivait : « `claude-swt` inscrit l'horodatage de naissance dans le
+// NOM du répertoire de travail ; il ne peut pas être oublié — l'agent travaille dedans. » C'est
+// vrai à la PREMIÈRE naissance. C'est FAUX sur la REPRISE — et la reprise est le geste que le
+// pack prescrit lui-même : règle d'or n°11, « réentrant via `claude-swt <timestamp>` ».
+// `scripts/shell/claude-swt.sh` : `if [ -d "$wt" ]; then echo "↻ reprise de la session"`, puis
+// il lance un `claude` NEUF dedans. **L'agent naît aujourd'hui dans un répertoire d'hier.**
+//
+// Ce que ça cassait : un agent né aujourd'hui HORS DISPOSITIF par `claude-swt 20260819-005653`
+// travaille dans `~/worktrees/<dépôt>/20260819-005653`. La garde y lisait `20260819-005653`,
+// le rangeait « né avant la mise en service », et il n'entrait NI dans `population`, NI dans
+// `prises`, NI dans `nonMesures` ; `fauxRefus` ne pouvait pas le voir. Verdict « rien à
+// signaler », sortie 0.
+//
+// C'est la forme que ce lot venait de fermer sur le pane — « reprendre un pane n'est pas
+// naître » — laissée ouverte sur la reprise de worktree, et STRICTEMENT PIRE : le cas du pane
+// laissait l'agent DANS la population, mal identifié ; celui-ci l'en SORTAIT.
+//
+// Mesuré sur le parc du 2026-08-25 : **59 des 124 agents vivants** étaient dans le panier « né
+// avant la mise en service », et la garde ne pouvait pas dire lesquels étaient des reprises.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA NAISSANCE D'UN AGENT EST LA NAISSANCE DE SA CONVERSATION — et elle se lit
+//
+// Claude Code ouvre un transcript par session : `~/.claude/projects/<projet>/<session>.jsonl`.
+// Sa date de création EST la naissance de cet agent-là. Mesuré : **123 des 124 agents vivants
+// du poste y sont datables**, et une reprise par `claude-swt` ouvre un transcript NEUF — elle
+// se date donc du jour, pas du worktree.
+//
+// ⚠️ ET PAS `~/.claude/sessions/<pid>.json`, qui porte pourtant `sessionId` + `startedAt` et que
+// ce dépôt lit déjà par ailleurs (`activite-session.js`). Mesuré le 2026-08-25 : `startedAt` est
+// le démarrage du PROCESSUS — **93 des 123 agents vivants le portent à la même seconde**
+// (2026-08-22T15:05), un redémarrage en masse, pendant que leurs conversations ont des jours.
+// Le prendre pour une naissance ferait entrer tout le parc dans la population au premier reboot
+// postérieur à la frontière : une garde qui hurle sur le poste entier est une garde qu'on
+// désarme dans la semaine.
+//
+// ⚠️ ET QUAND ON NE SAIT PAS DATER, ÇA SE DIT. Un agent qu'on n'a pas pu dater n'est PAS « né
+// avant » : il est **NON MESURÉ**. C'est la distinction que ce module tient déjà partout
+// ailleurs (`établi` / `non établi` / `refusée`), et la seule polarité qu'il accepte — un
+// répertoire de transcrits fermé rend la garde plus BRUYANTE, jamais plus aveugle.
+//
+// ⚠️ L'HORODATAGE DU CHEMIN N'A PAS DISPARU : il ne DÉCIDE plus, il se DIT. Le rendu d'une prise
+// porte toujours le worktree où l'agent travaille, parce que c'est là qu'on va le voir.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ⓿ POURQUOI LE NOM N'IDENTIFIE PLUS — mesuré sur le poste le 2026-08-25, par le FAIT
@@ -65,10 +108,12 @@
 //
 // Trois choses tiennent ce dénominateur, et aucune n'est une liste :
 //
-//   ① **UN SEUL PRÉDICAT, TOTAL.** Être dans la population ne dépend que de l'horodatage porté
-//      par le chemin de travail. Ni le nom, ni le rôle, ni le mandat, ni la session, ni le
-//      statut n'entrent dans ce jugement. Un banc le prouve par VARIATION : il fait varier
-//      CHAQUE autre champ du dossier d'un agent et exige que le verdict ne bouge pas.
+//   ① **UN SEUL PRÉDICAT, TOTAL.** Être dans la population ne dépend que de la DATE DE
+//      NAISSANCE de l'agent. Ni le nom, ni le rôle, ni le mandat, ni le statut, **ni son
+//      répertoire de travail** n'entrent dans ce jugement. Un banc le prouve par VARIATION : il
+//      fait varier CHAQUE autre champ du dossier d'un agent et exige que le verdict ne bouge
+//      pas — et `foreground_cwd` est désormais dans les champs qu'il fait varier, alors qu'il
+//      était le champ qui décidait. C'est là que le défaut de la reprise vivait.
 //
 //   ② **LES COMPTES BALANCENT, ET LE MODULE LE VÉRIFIE LUI-MÊME.**
 //        parc vivant = hors portée + population
@@ -156,6 +201,16 @@ export const SOURCES = {
 };
 
 /**
+ * CE QUI DATE UN AGENT — le mot du panier « non mesuré » quand c'est la NAISSANCE qui manque.
+ *
+ * ⚠️ CE N'EST PAS UNE SOURCE D'IDENTIFICATION, et il ne rejoint pas `SOURCES` : les deux
+ * sources disent QUI est un agent, celle-ci dit S'IL EST DANS LA POPULATION. Les confondre
+ * ferait apparaître la naissance dans la ventilation des identifiés, où elle n'a jamais
+ * identifié personne — un compte juste dans une phrase fausse.
+ */
+export const DATATION = 'sa date de naissance';
+
+/**
  * CE QUE LE NOM VAUT ENCORE — le mot que porte une PRISE qui en a un de conforme.
  *
  * ⚠️ IL SE DIT SUR LA LIGNE DE LA PRISE, PAS DANS UNE NOTE. Mesuré sur le trafic du 2026-08-25 :
@@ -237,10 +292,11 @@ export class ComptesQuiNeBalancentPas extends Error {
  * ⚠️ LE PLUS PROFOND GAGNE, pour la même raison que `lieuDeRoleDansLeChemin` : un worktree peut
  * en contenir un autre, et c'est le dernier segment qui dit où l'agent travaille vraiment.
  *
- * ⚠️ ET `null` NE VEUT PAS DIRE « ANCIEN ». Mesuré sur le parc réel le 2026-08-25 : 13 agents
- * vivants sur 80 travaillent dans un worktree que son nom ne date pas (`t-0043`, `20260818-e3`),
- * et 32 de plus ne sont dans aucun worktree. Les traduire en « né avant » les ferait passer au
- * vert par un chemin que rien n'annonce — la borne deviendrait un trou.
+ * 🔴 IL NE DÉCIDE PLUS DE RIEN, ET C'EST LE CORRECTIF. Cet horodatage a longtemps borné la
+ * population ; il datait le RÉPERTOIRE, pas l'agent, et une reprise (`claude-swt <horodatage>`,
+ * le geste que le pack prescrit) fait naître aujourd'hui dans un répertoire d'hier. Voir
+ * l'en-tête. Ce qu'il reste : le rendu d'une prise dit le worktree où l'agent travaille, parce
+ * que c'est là qu'on va le voir. Un fait qu'on IMPRIME, jamais un fait qui JUGE.
  */
 export function horodatageDuChemin(chemin) {
   if (!chemin) return null;
@@ -303,7 +359,7 @@ export function designationDe(agent) {
  * On ne les replie pas : un pane que le registre des agents n'a pas vu n'est pas un anonyme,
  * c'est une mesure manquée (`agent list` a déjà été mesuré à 83 panes sur 227).
  */
-export function normaliserLeParc({ panes = [], agentsHerdr = null } = {}) {
+export function normaliserLeParc({ panes = [], agentsHerdr = null, naissances = null } = {}) {
   // ⚠️ LE SÉPARATEUR EST ÉCRIT ÉCHAPPÉ, ET C’EST LA MÊME VALEUR — un NUL. L’octet BRUT était
   // dans le fichier : `file` rendait `data` pour ce module (le seul des 23 de `src/` et `bin/`)
   // et `grep -n export` dessus rendait ZÉRO ligne. Toute revue qui relève des formes par `grep`
@@ -324,7 +380,64 @@ export function normaliserLeParc({ panes = [], agentsHerdr = null } = {}) {
       // dépôt principal en `cwd` pendant que son travail vit ailleurs.
       espace: p.foreground_cwd || p.cwd || null,
       nom: nomDeLAgent(p, cle(p), nomsConnus),
+      // La NAISSANCE, dans le même vocabulaire à deux états que le nom — et pour la même
+      // raison : ne pas savoir dater n'est pas une date. Voir `naissanceDeLAgent`.
+      naissance: naissanceDeLAgent(p, naissances),
     }));
+}
+
+/**
+ * L'IDENTIFIANT DE LA SESSION CLAUDE D'UN PANE — le seul endroit du module qui lise ce champ.
+ *
+ * ⚠️ LA FORME EST CELLE DU MONDE, relevée sur les 5 sessions qui répondent le 2026-08-25 :
+ * `agent_session: { agent: 'claude', kind: 'id', source: 'herdr:claude', value: '<uuid>' }`.
+ * C'est `value` qui porte l'identifiant, et rien d'autre. Un pane dont `agent_session` n'a pas
+ * de `value` — herdr en rend — n'est pas datable, et ça se DIT (« non mesuré »), ça ne
+ * s'invente pas.
+ *
+ * ⚠️ UNE SEULE FOIS DANS LE DÉPÔT, comme `identiteDeSession`. Le fil de la garde s'en sert pour
+ * savoir QUELS transcrits chercher ; ce module s'en sert pour retrouver la date. Deux
+ * expressions du même champ à un fichier de distance divergeraient au premier changement de
+ * herdr — c'est le motif « deux étages qui n'y mettent pas la même chose », déjà payé ici.
+ */
+export function identifiantDeSessionDuPane(pane) {
+  const v = pane?.agent_session?.value;
+  return typeof v === 'string' && v ? v : null;
+}
+
+/**
+ * QUAND CET AGENT EST-IL NÉ ? — `{ mesure: 'lu', instant }` ou `{ mesure: 'refusée', raison }`.
+ *
+ * 🔴 IL N'Y A PAS DE TROISIÈME ÉTAT, ET SURTOUT PAS « ANCIEN PAR DÉFAUT ». Un agent qu'on n'a
+ * pas su dater n'est pas né avant la frontière : on ne sait pas quand il est né. Le ranger hors
+ * portée le ferait passer au vert par un chemin que rien n'annonce — exactement le trou que ce
+ * correctif ferme.
+ *
+ * ⚠️ ET L'ABSENCE DE SOURCE EST UN REFUS, PAS UN VIDE. `naissances = null` (le défaut) ne veut
+ * pas dire « aucun agent n'est né » : il veut dire « personne ne m'a donné les naissances ».
+ * Le défaut d'un paramètre absent est donc BRUYANT — tout le parc devient non mesuré, le
+ * verdict tombe en `ZONES_NON_MESUREES`, sortie 2. C'est la seule polarité que ce fichier
+ * accepte : ce qu'on ne sait pas classer est muet, et le vert tombe.
+ */
+export function naissanceDeLAgent(pane, naissances) {
+  if (!naissances || naissances.mesure !== 'lue') {
+    return {
+      mesure: 'refusée',
+      raison: naissances?.raison ?? 'les naissances des sessions ne m’ont pas été données',
+    };
+  }
+  const session = identifiantDeSessionDuPane(pane);
+  if (!session) {
+    return { mesure: 'refusée', raison: 'son pane ne porte aucun identifiant de session Claude' };
+  }
+  const instant = naissances.instants?.get(session);
+  if (!Number.isFinite(instant)) {
+    return {
+      mesure: 'refusée',
+      raison: `aucun transcrit ne date la session ${session}`,
+    };
+  }
+  return { mesure: 'lu', instant };
 }
 
 /**
@@ -581,15 +694,24 @@ export function jugerLeParc({
     const designation = designationDe(a);
     const horodatage = horodatageDuChemin(a.espace);
 
-    // ── ① LE PRÉDICAT DE POPULATION, ET IL N'A QU'UN SEUL TERME.
-    // Rien d'autre que l'horodatage du chemin n'entre ici. Pas le nom, pas le rôle, pas le
-    // mandat, pas la session, pas le statut. C'est ce qui rend le dénominateur épinglé plutôt
-    // qu'ouvert : il n'y a aucun endroit où glisser « sauf celui-là ».
-    if (!horodatage) {
-      horsPortee.push({ designation, espace: a.espace, raison: 'aucun horodatage de naissance dans son espace de travail' });
+    // ── ① LE PRÉDICAT DE POPULATION, ET IL N'A QU'UN SEUL TERME : LA NAISSANCE DE L'AGENT.
+    // Pas le nom, pas le rôle, pas le mandat, pas le statut, ET PAS SON RÉPERTOIRE DE TRAVAIL —
+    // qui était le terme qui décidait, et qui date le worktree, pas l'agent (voir l'en-tête :
+    // une reprise `claude-swt <horodatage>` naît aujourd'hui dans un répertoire d'hier). C'est
+    // ce qui rend le dénominateur épinglé plutôt qu'ouvert : il n'y a aucun endroit où glisser
+    // « sauf celui-là ».
+    //
+    // ⚠️ ET « JE N'AI PAS PU LE DATER » N'EST PAS « NÉ AVANT ». Il sort par les NON MESURÉS,
+    // qui ne sont pas verts — jamais par la borne, qui l'est.
+    if (a.naissance?.mesure !== 'lu') {
+      nonMesures.push({
+        designation,
+        espace: a.espace,
+        raisons: [`${DATATION} : ${a.naissance?.raison ?? 'sans raison donnée'}`],
+      });
       continue;
     }
-    if (instantDeLHorodatage(horodatage).getTime() < frontiere.getTime()) {
+    if (a.naissance.instant < frontiere.getTime()) {
       horsPortee.push({ designation, espace: a.espace, raison: 'né avant la mise en service du dispositif' });
       continue;
     }
@@ -609,7 +731,16 @@ export function jugerLeParc({
       });
       continue;
     }
-    prises.push({ designation, espace: a.espace, ne_le: horodatage, nomConforme });
+    // ⚠️ `ne_le` EST LA NAISSANCE DE L'AGENT, pas celle de son répertoire. `worktree` porte
+    // l'horodatage du chemin quand il y en a un — une information pour aller le voir, plus un
+    // fait qui juge.
+    prises.push({
+      designation,
+      espace: a.espace,
+      ne_le: new Date(a.naissance.instant).toISOString(),
+      worktree: horodatage,
+      nomConforme,
+    });
   }
 
   // ── LE FAUX REFUS, MESURÉ PAR UNE AUTRE CLÉ QUE CELLE DE L'APPARIEMENT.
@@ -736,7 +867,9 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, sessionsMu
     l.push(`🔴 ${prises.length} agent(s) né(s) APRÈS la mise en service et identifiable(s) par AUCUNE source :`);
     // ⚠️ UN PAR LIGNE, NOMMÉ. Un compte ne se corrige pas : on va voir un agent, pas un nombre.
     for (const p of prises) {
-      l.push(`   • ${p.designation} — worktree né le ${p.ne_le} — ${p.espace}`);
+      l.push(
+        `   • ${p.designation} — né le ${p.ne_le}${p.worktree ? ` — worktree ${p.worktree}` : ''} — ${p.espace}`
+      );
       // ⚠️ SUR SA PROPRE LIGNE, PAS EN NOTE DE BAS DE PAGE. Celui-là, l'ancienne règle le
       // laissait passer ; qui ne saurait pas pourquoi son beau nom ne le sauve plus prendrait
       // la garde pour cassée — et la désarmerait avec les meilleures raisons du monde.

@@ -60,17 +60,30 @@ const LA_FRONTIERE = MISE_EN_SERVICE;
 const UNE_SECONDE_AVANT = horodatageDe(new Date(instantDeLHorodatage(MISE_EN_SERVICE).getTime() - 1000));
 const UNE_SECONDE_APRES = horodatageDe(new Date(instantDeLHorodatage(MISE_EN_SERVICE).getTime() + 1000));
 
-/** LE JUGE, sur un espace de travail nommé par cet horodatage-là. */
+/**
+ * LE JUGE, sur un agent NÉ à cet horodatage-là.
+ *
+ * 🔴 CE HARNAIS NOURRISSAIT LE JUGE PAR LE NOM DU RÉPERTOIRE DE TRAVAIL, parce que c'est là
+ * qu'il lisait la naissance. Il la lit désormais sur la SESSION de l'agent — le répertoire date
+ * le worktree, pas l'agent, et une reprise naît aujourd'hui dans un répertoire d'hier.
+ *
+ * ⚠️ CE QUE CE BANC GARDE N'A PAS BOUGÉ D'UN POUCE : les deux côtés se comparent-ils à la MÊME
+ * seconde, et du même côté de `<` ? Le producteur juge l'horodatage qu'il va écrire, le juge
+ * juge la naissance qui en découle. On dérive donc l'instant de la MÊME chaîne, par la MÊME
+ * fonction — sans quoi ce banc comparerait deux frontières au lieu d'une.
+ */
 function leJugeRange(horodatage) {
+  const ne = instantDeLHorodatage(horodatage);
   const v = jugerLeParc({
     agents: normaliserLeParc({
       panes: [{
         pane_id: 'w1:p1',
-        agent_session: { agent: 'claude' },
+        agent_session: { agent: 'claude', kind: 'id', source: 'herdr:claude', value: 'sess-frontiere' },
         foreground_cwd: `/bac/worktrees/un-depot/${horodatage}`,
         herdr_socket: '/bac/.config/herdr/sessions/s1/herdr.sock',
       }],
       agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: '/bac/.config/herdr/sessions/s1/herdr.sock', name: null }],
+      naissances: { mesure: 'lue', illisibles: 0, instants: new Map([['sess-frontiere', ne.getTime()]]) },
     }),
     registre: { declarations: [], illisibles: [] },
     portee: { sessionsInterrogees: 1, sessionsRefusees: [] },

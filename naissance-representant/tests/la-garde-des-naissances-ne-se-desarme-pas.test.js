@@ -85,7 +85,11 @@ const APRES = `${WT}/20260825-093000`;
  */
 const FAUTIF = Object.freeze({
   agent: true,
-  agent_session: 'ses-1',
+  // ⚠️ LA FORME DU MONDE : herdr rend un OBJET dont `value` porte l'identifiant. Ce banc
+  // écrivait une chaîne ; depuis que la garde DATE l'agent par sa session, un double plus
+  // pauvre que le vrai rendrait le fautif de référence non datable, donc « non mesuré » — et le
+  // contrôle négatif passerait au vert sans rien éprouver.
+  agent_session: { agent: 'claude', kind: 'id', source: 'herdr:claude', value: 'ses-1' },
   agent_status: 'working',
   cwd: '/Users/x/GitRepo.nosync/un-depot',
   focused: false,
@@ -111,7 +115,21 @@ const FAUTIF = Object.freeze({
  * grandissant ET personne ne le voit ; celle-ci se désarme en grandissant et le diff dit
  * exactement ce qu'il retire de la couverture.
  */
-const CLES_QUI_DECIDENT = ['name', 'foreground_cwd', 'cwd', 'pane_id', 'herdr_socket', 'agent_session'];
+const CLES_QUI_DECIDENT = ['name', 'pane_id', 'herdr_socket', 'agent_session'];
+
+/**
+ * 🔴 `foreground_cwd` ET `cwd` SONT SORTIS DE CETTE LISTE LE 2026-08-25, ET C'EST UN
+ * DURCISSEMENT — le seul sens dans lequel cette liste-ci a le droit de bouger.
+ *
+ * Ils y étaient parce que le répertoire de travail DÉCIDAIT de la population : la garde se
+ * bornait sur l'horodatage porté par son nom. C'était le défaut — une reprise
+ * (`claude-swt <horodatage>`, le geste que le pack prescrit) fait naître aujourd'hui dans un
+ * répertoire d'hier, et la garde la rangeait « née avant la mise en service », au vert.
+ *
+ * La population se borne désormais sur la NAISSANCE de l'agent. Le répertoire est donc devenu
+ * un champ comme les autres, que ce banc fait varier sur les 19 appâts — et c'était le champ
+ * qui décidait. Si un jour il redécide, cette boucle rougit.
+ */
 
 /**
  * Des valeurs qui ressemblent à ce qu'une exception viserait — « c'est juste un essai »,
@@ -126,13 +144,32 @@ const APPATS = [
 const registreQuiAVu = (panes) =>
   panes.map((p) => ({ pane_id: p.pane_id, herdr_socket: p.herdr_socket, agent: true, name: p.name ?? null }));
 
+/**
+ * LES NAISSANCES QUE LE FIL AURAIT LUES. Par défaut chaque agent du banc naît APRÈS la
+ * frontière — c'est la population que cette garde vise, donc le cas normal ici.
+ *
+ * ⚠️ EN UTC, ET À TREIZE HEURES DE LA FRONTIÈRE. `MISE_EN_SERVICE` se lit en heure LOCALE : un
+ * instant choisi trop près tomberait du bon côté chez l'auteur et du mauvais en CI.
+ */
+const NE_APRES = Date.parse('2026-08-25T17:30:00.000Z');
+const NE_AVANT = Date.parse('2026-07-24T20:46:45.000Z');
+
+const naissancesDe = (panes, quand = NE_APRES) => ({
+  mesure: 'lue',
+  illisibles: 0,
+  instants: new Map(
+    panes.map((p) => [p?.agent_session?.value, quand]).filter(([id]) => Boolean(id))
+  ),
+});
+
 function verdictDe(panes, extra = {}) {
+  const { naissances = naissancesDe(panes), ...reste } = extra;
   return jugerLeParc({
-    agents: normaliserLeParc({ panes, agentsHerdr: registreQuiAVu(panes) }),
+    agents: normaliserLeParc({ panes, agentsHerdr: registreQuiAVu(panes), naissances }),
     registre: { declarations: [], illisibles: [] },
     roleDuLieu: () => null,
     portee: { sessionsInterrogees: 1, sessionsRefusees: [] },
-    ...extra,
+    ...reste,
   });
 }
 
@@ -182,7 +219,7 @@ test('un agent INVENTÉ à l’essai traverse la machinerie sans qu’on touche 
   // échouerait ici, parce que ce cas-là n'y figure pas.
   const invente = {
     agent: true,
-    agent_session: 'session-jamais-vue',
+    agent_session: { agent: 'claude', kind: 'id', source: 'herdr:claude', value: 'session-jamais-vue' },
     foreground_cwd: `${WT}/20261231-235959`,
     pane_id: 'z99:p42',
     herdr_socket: socketDe('inconnue'),
@@ -212,21 +249,29 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
     for (const decl of axeDeclaration) {
       for (const lieu of axeLieu) {
         for (const nom of axeNom) {
-          const espace = {
-            'après': `${WT}/20260825-093000`,
-            'avant': `${WT}/20260724-204645`,
-            'non datable': `${WT}/t-0043`,
-          }[naissance] + (lieu === 'non établi' ? '' : '/.orchestrateur/batiscan');
+          // ⚠️ L'AXE DE LA NAISSANCE PORTE DÉSORMAIS DES NAISSANCES, PAS DES CHEMINS. Il
+          // encodait « né après / né avant / non datable » dans le NOM du répertoire de
+          // travail, parce que c'est là que la garde le lisait — et c'était le défaut. La
+          // troisième valeur y était d'ailleurs muette : « non datable » rendait le même
+          // verdict que « avant » (au vert). Elle discrimine maintenant, et du bon côté :
+          // ne pas savoir dater un agent est un NON MESURÉ, jamais un laissez-passer.
+          const espace = `${WT}/20260825-093000`
+            + (lieu === 'non établi' ? '' : '/.orchestrateur/batiscan');
 
           const pane = {
-            agent: true, agent_session: 'ses', pane_id: 'w1:p1',
+            agent: true,
+            agent_session: { agent: 'claude', kind: 'id', source: 'herdr:claude', value: 'ses' },
+            pane_id: 'w1:p1',
             herdr_socket: SOCKET_S1, foreground_cwd: espace,
             name: nom === 'conforme' ? 'batiscan' : nom === 'non conforme' ? 'Agent Infra-Ops' : null,
           };
           const agentsHerdr = nom === 'non mesuré' ? [] : [{ ...pane }];
+          const naissances = naissance === 'non datable'
+            ? { mesure: 'lue', instants: new Map(), illisibles: 0 }
+            : naissancesDe([pane], naissance === 'après' ? NE_APRES : NE_AVANT);
 
           const r = jugerLeParc({
-            agents: normaliserLeParc({ panes: [pane], agentsHerdr }),
+            agents: normaliserLeParc({ panes: [pane], agentsHerdr, naissances }),
             registre: {
               declarations: decl === 'déclaré'
                 ? [{ nom: 'peu-importe', pane: 'w1:p1', session_herdr: 's1', espace, ne_le: '2026-08-25T13:30:00.000Z' }]
@@ -249,10 +294,17 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
           // prive l'appariement de sa clé de repli : « déclaration pas trouvée » cesse alors de
           // valoir « déclaration absente ». Ne pas le refuser transformerait une panne de
           // lecture d'`agent list` en prises.
+          // ⚠️ « NON DATABLE » A CHANGÉ DE CÔTÉ, ET C'EST LE CORRECTIF EN UNE LIGNE D'ORACLE.
+          // Il rendait `RIEN_A_SIGNALER` — un agent qu'on ne sait pas dater passait au vert par
+          // la borne. Il rend maintenant `ZONES_NON_MESUREES`, avant même qu'on regarde ses
+          // sources : ne pas savoir SI un agent est dans la population n'est pas savoir qu'il
+          // n'y est pas.
           const dansLaPopulation = naissance === 'après';
           const uneSourceEtablie = decl === 'déclaré' || lieu === 'établi';
           const uneSourceRefusee = lieu === 'refusé' || nom === 'non mesuré';
-          const attendu = !dansLaPopulation
+          const attendu = naissance === 'non datable'
+            ? VERDICTS.ZONES_NON_MESUREES
+            : !dansLaPopulation
             ? VERDICTS.RIEN_A_SIGNALER
             : uneSourceEtablie
               ? VERDICTS.RIEN_A_SIGNALER

@@ -16,7 +16,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,8 +73,9 @@ function installerFauxHerdr({ panes = [], agents = [], casse = false } = {}) {
  * les QUINZE sessions réelles du poste (avec le faux herdr, certes, mais en multipliant le parc
  * par quinze — un compte faux, et une mesure qui change selon la machine).
  */
-function lancer({ panes = [], agents = [], declarations = [], casse = false, env = {} } = {}) {
+function lancer({ panes = [], agents = [], declarations = [], casse = false, env = {}, sansTranscrit = [] } = {}) {
   const { abri, journal } = installerFauxHerdr({ panes, agents, casse });
+  poserLesTranscrits(panes, { sans: sansTranscrit });
   const registre = join(bac, 'naissances');
   rmSync(registre, { recursive: true, force: true });
   if (declarations.length) {
@@ -104,15 +105,57 @@ const SOCKET_DU_BANC = join(bac, '.config', 'herdr', 'sessions', 'faux', 'herdr.
 const WT = '/bac/worktrees/un-depot';
 const APRES = `${WT}/20260825-093000`;
 
-const pane = (sur = {}) => ({
-  agent: true,
-  agent_session: 'ses-1',
-  agent_status: 'idle',
-  pane_id: 'w1:p1',
-  foreground_cwd: APRES,
-  name: null,
-  ...sur,
-});
+/**
+ * LA SESSION CLAUDE D'UN PANE, DANS LA FORME QUE HERDR REND — un OBJET dont `value` porte
+ * l'identifiant. Ce banc écrivait la chaîne `'ses-1'` ; depuis que la garde DATE l'agent par sa
+ * session, un double plus pauvre que le vrai rendrait tout le parc non datable, et chaque
+ * assertion de population ci-dessous éprouverait un monde qui n'existe pas.
+ *
+ * Une session PAR PANE : c'est ce qui permet d'en dater un et pas l'autre.
+ */
+const sessionDe = (pane) => ({ agent: 'claude', kind: 'id', source: 'herdr:claude', value: `sess-${pane}` });
+
+const pane = (sur = {}) => {
+  const dossier = {
+    agent: true,
+    agent_status: 'idle',
+    pane_id: 'w1:p1',
+    foreground_cwd: APRES,
+    name: null,
+    ...sur,
+  };
+  return { agent_session: sessionDe(dossier.pane_id), ...dossier };
+};
+
+/**
+ * LE TRANSCRIT D'UNE SESSION, POSÉ POUR DE VRAI SOUS LE `HOME` DU BAC.
+ *
+ * 🔴 C'EST LA CHAÎNE RÉELLE, PAS UN POINT DE SUBSTITUTION DE PLUS. Le fil lit les naissances
+ * dans `~/.claude/projects/<projet>/<session>.jsonl` ; `HOME` étant déjà redirigé vers le bac,
+ * poser le fichier là le fait passer par la MÊME porte que le monde réel emprunte —
+ * `readdirSync`, `statSync`, tout compris. Injecter un second point ici aurait fabriqué un
+ * appelant que la production n'a pas.
+ *
+ * ⚠️ LE NOM DU RÉPERTOIRE DE PROJET EST ARBITRAIRE, ET C'EST LE POINT. L'encodage du chemin de
+ * travail a changé de version de Claude Code (mesuré : le point survit dans un répertoire,
+ * disparaît dans l'autre) ; le fil cherche donc PAR IDENTIFIANT, à travers les répertoires. Un
+ * banc qui rangerait le transcrit là où une règle devinée l'attend ne l'éprouverait pas.
+ */
+function poserLesTranscrits(panes, { sans = [] } = {}) {
+  const projets = join(bac, '.claude', 'projects');
+  rmSync(projets, { recursive: true, force: true });
+  const poses = [];
+  panes.forEach((p, i) => {
+    const id = p?.agent_session?.value;
+    if (!id || sans.includes(p.pane_id)) return;
+    const projet = join(projets, `-un-projet-quelconque-${i}`);
+    mkdirSync(projet, { recursive: true });
+    const f = join(projet, `${id}.jsonl`);
+    writeFileSync(f, `${JSON.stringify({ type: 'summary', sessionId: id })}\n`);
+    poses.push(f);
+  });
+  return poses;
+}
 
 const declaration = (sur = {}) => ({
   version: 1,
@@ -128,6 +171,27 @@ const declaration = (sur = {}) => ({
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 🔴 LE CONTRÔLE DE PLATEFORME — SANS LUI, RIEN DE CE QUI SUIT N'ÉPROUVE LA POPULATION.
+ *
+ * La garde date un agent par la date de CRÉATION du transcrit de sa session. Un système de
+ * fichiers qui ne la tient pas rendrait chaque agent NON DATABLE, donc « non mesuré » — et
+ * chaque assertion de prise ci-dessous rougirait pour une raison qui n'a rien à voir avec ce
+ * qu'elle croit éprouver. On le dit ICI, en un seul message clair, plutôt que de le laisser se
+ * traduire en huit rouges obscurs. C'est aussi une vraie information : là où ce contrôle
+ * rougit, la garde ne peut pas travailler.
+ */
+test('le système de fichiers de ce banc DATE les fichiers qu’il crée — le socle de tout le reste', () => {
+  const [f] = poserLesTranscrits([pane({ pane_id: 'w0:p0' })]);
+  const ne = statSync(f).birthtimeMs;
+  assert.ok(
+    Number.isFinite(ne) && ne > 0,
+    'ce système de fichiers ne tient aucune date de création : la garde des naissances ne peut ' +
+      'dater personne dessus, et les assertions de population de ce fichier n’éprouvent rien.'
+  );
+  assert.ok(Math.abs(Date.now() - ne) < 60_000, 'un fichier créé à l’instant n’est pas daté de l’instant');
+});
 
 test('LE CRITÈRE N°1 PAR LE BINAIRE : déclaration retirée ⇒ rouge, et le fautif est NOMMÉ à l’écran', () => {
   // La moitié qui prouve, d'abord — avec sa déclaration, le binaire sort en 0.
@@ -222,20 +286,53 @@ test('un parc SANS agent vivant sort en 0 et le dit — un vert honnête reste u
   assert.match(r.stdout, /rien à signaler/);
 });
 
-test('la borne se VOIT dans la sortie — les hors-portée sont comptés et nommés', () => {
-  const vieux = pane({ pane_id: 'w2:p2', foreground_cwd: `${WT}/20260724-204645` });
+/**
+ * CE QUE LA BORNE EST DEVENUE, ET POURQUOI CE BANC-CI L'ÉPROUVE PAR L'AUTRE BOUT.
+ *
+ * Ce test posait deux agents dans des répertoires anciens et exigeait « hors portée (2) ». Le
+ * répertoire ne décide plus : la population se borne sur la NAISSANCE de l'agent (voir
+ * `une-reprise-nait-aujourdhui`). Or **ce banc-ci ne peut pas FABRIQUER une naissance
+ * ancienne** : il pose de vrais fichiers, et reculer une date de création n'est pas portable
+ * (APFS l'accepte par `utimes`, ext4 la tient immuable). Un banc qui prétendrait le faire
+ * rendrait vert sur la moitié des machines sans rien éprouver.
+ *
+ * Ce qu'il peut fabriquer, et qui garde la MÊME fonction — « une catégorie NON VERTE est
+ * comptée et NOMMÉE à la sortie du binaire » — c'est l'agent qu'on ne sait pas dater : il
+ * suffit de ne pas poser son transcrit. Et il garde une chose de plus, qui est le correctif
+ * lui-même : **ne pas savoir dater ne sort PAS en 0.**
+ *
+ * Le rendu de « hors portée » reste gardé là où il se fabrique sans dépendre d'une machine —
+ * `garde-des-naissances.test.js`, sur la décision pure.
+ */
+test('un agent qu’on ne sait pas DATER est compté, NOMMÉ, et ne sort pas en 0', () => {
+  const date = pane({ pane_id: 'w2:p2' });
   const indatable = pane({ pane_id: 'w3:p3', foreground_cwd: `${WT}/t-0043` });
   const r = lancer({
-    panes: [vieux, indatable],
+    panes: [date, indatable],
     agents: [
-      { ...vieux, herdr_socket: SOCKET_DU_BANC },
+      { ...date, herdr_socket: SOCKET_DU_BANC },
       { ...indatable, herdr_socket: SOCKET_DU_BANC },
     ],
+    sansTranscrit: ['w3:p3'],
   });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /hors portée \(2\)/);
-  assert.match(r.stdout, /w2:p2/);
-  assert.match(r.stdout, /t-0043/);
+  assert.equal(r.status, SORTIES[VERDICTS.NES_HORS_DISPOSITIF], r.stdout + r.stderr);
+  assert.match(r.stdout, /n’ai PAS PU mesurer/, 'le non-mesuré ne franchit pas la sortie du binaire');
+  assert.match(r.stdout, /w3:p3/, 'l’agent qu’on n’a pas su dater n’est pas NOMMÉ');
+  assert.match(r.stdout, /aucun transcrit ne date la session/, 'la raison du non-mesuré est tue');
+  assert.match(r.stdout, /w2:p2/, 'l’agent daté, lui, est bien jugé — le contrôle positif du même écran');
+});
+
+test('un parc ENTIÈREMENT indatable sort en « zones non mesurées », jamais en 0', () => {
+  const p = pane({ pane_id: 'w4:p4' });
+  const r = lancer({
+    panes: [p],
+    agents: [{ ...p, herdr_socket: SOCKET_DU_BANC }],
+    sansTranscrit: ['w4:p4'],
+  });
+  assert.equal(
+    r.status, SORTIES[VERDICTS.ZONES_NON_MESUREES],
+    'une garde qui ne peut dater personne et rend vert certifie un parc qu’elle n’a pas regardé'
+  );
 });
 
 test('une FRONTIÈRE contredite par le registre fait REFUSER le binaire', () => {

@@ -40,6 +40,22 @@ import { identiteDeSession } from '../src/declaration.js';
 import { nomDeSession } from '../src/session.js';
 import { normaliserLeParc, jugerLeParc, VERDICTS, SOURCES } from '../src/garde-des-naissances.js';
 
+/**
+ * TOUTES LES SESSIONS DE CE BANC NAISSENT APRÈS LA FRONTIÈRE.
+ *
+ * ⚠️ CE FICHIER N'ÉPROUVE PAS LA BORNE DE POPULATION — il éprouve la JOINTURE entre ce que le
+ * producteur inscrit dans `session_herdr` et ce que le consommateur lit sur un pane. Les
+ * agents doivent donc TOUS être dans la population, sans quoi la jointure ne serait jamais
+ * atteinte et ce banc rendrait vert sans rien apparier. La borne, elle, est gardée ailleurs
+ * (`une-reprise-nait-aujourdhui`, `la-garde-des-naissances-ne-se-desarme-pas`).
+ *
+ * ⚠️ `instants` EST CANARD, PAS UNE `Map` : « quelle que soit la session, elle est née le
+ * 2026-08-25 à 17h30 UTC ». Une vraie carte obligerait ce fichier à répéter l'identifiant de
+ * chaque pane à côté de chaque pane — du bruit qui n'éprouve rien, et une occasion de plus de
+ * les désaccorder.
+ */
+const NES_APRES = { mesure: 'lue', illisibles: 0, instants: { get: () => Date.parse('2026-08-25T17:30:00.000Z') } };
+
 const ICI = dirname(fileURLToPath(import.meta.url));
 const PRODUCTEUR = resolve(ICI, '..', 'bin', 'naitre.js');
 
@@ -86,7 +102,7 @@ function leConsommateurJuge(registre, socket, { nomRendu = 't-20260825-0047' } =
     herdr_socket: socket,
   };
   return jugerLeParc({
-    agents: normaliserLeParc({
+    agents: normaliserLeParc({ naissances: NES_APRES,
       panes: [pane],
       agentsHerdr: [{ pane_id: PANE, herdr_socket: socket, name: nomRendu }],
     }),
@@ -315,8 +331,8 @@ test('UNE DÉCLARATION DÉJÀ INSCRITE (format du 2026-08-25) reste appariée �
   };
   const socket = '/Users/maximeleboeuf/.config/herdr/sessions/somtech/herdr.sock';
   const v = jugerLeParc({
-    agents: normaliserLeParc({
-      panes: [{ pane_id: 'w97:p2', agent_session: { agent: 'claude' }, foreground_cwd: dejaEcrite.espace, herdr_socket: socket }],
+    agents: normaliserLeParc({ naissances: NES_APRES,
+      panes: [{ pane_id: 'w97:p2', agent_session: { agent: 'claude', value: 'sess-du-banc' }, foreground_cwd: dejaEcrite.espace, herdr_socket: socket }],
       agentsHerdr: [{ pane_id: 'w97:p2', herdr_socket: socket, name: null }],
     }),
     registre: { declarations: [dejaEcrite], illisibles: [] },
@@ -343,11 +359,11 @@ test('LA MÉTHODE ANNONCE DEUX CLÉS — et chacune apparie SEULE, sans l’autr
 
     // ② Le nom SEUL — le pane a bougé, et la session avec.
     const paneQuiABouge = {
-      pane_id: 'w12:p9', agent_session: { agent: 'claude' }, foreground_cwd: ESPACE,
+      pane_id: 'w12:p9', agent_session: { agent: 'claude', value: 'sess-du-banc' }, foreground_cwd: ESPACE,
       herdr_socket: socketDe('cg'),
     };
     const parLeNom = jugerLeParc({
-      agents: normaliserLeParc({
+      agents: normaliserLeParc({ naissances: NES_APRES,
         panes: [paneQuiABouge],
         agentsHerdr: [{ pane_id: 'w12:p9', herdr_socket: socketDe('cg'), name: 't-20260825-0047' }],
       }),
@@ -392,8 +408,8 @@ test('LA MÉTHODE ANNONCE DEUX CLÉS — et chacune apparie SEULE, sans l’autr
 
 /** Un agent ouvert à la main : son pane, sa session, son espace — et le nom qu'on lui donne. */
 const unAgent = ({ pane, session, espace, nom }) =>
-  normaliserLeParc({
-    panes: [{ pane_id: pane, agent_session: { agent: 'claude' }, foreground_cwd: espace, herdr_socket: session }],
+  normaliserLeParc({ naissances: NES_APRES,
+    panes: [{ pane_id: pane, agent_session: { agent: 'claude', value: 'sess-du-banc' }, foreground_cwd: espace, herdr_socket: session }],
     agentsHerdr: [{ pane_id: pane, herdr_socket: session, name: nom }],
   });
 

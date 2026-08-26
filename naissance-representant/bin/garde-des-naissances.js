@@ -27,6 +27,7 @@
 import { panes, agents } from '../../ligne-directe/src/herdr.js';
 import { roleDuLieuOuRefus } from '../../ligne-directe/src/lieu-agent.js';
 import { lireLesDeclarations } from '../src/declaration.js';
+import { lireLesNaissances } from '../src/naissances-des-sessions.js';
 import {
   jugerLeParc,
   normaliserLeParc,
@@ -46,6 +47,7 @@ export async function main({
   lireLeParc = () => panes({}),
   lireLesAgents = () => agents({}),
   lireLeRegistre = () => lireLesDeclarations({}),
+  lireLesDates = (panesVus) => lireLesNaissances(panesVus),
   roleDuLieu = roleDuLieuOuRefus,
   miseEnService = MISE_EN_SERVICE,
   ecrire = (t) => process.stdout.write(`${t}\n`),
@@ -76,6 +78,18 @@ export async function main({
   // est la seule polarité que ce fichier accepte.
   const registreDAgents = await lireLesAgents();
 
+  // ⚠️ LA DATE DE NAISSANCE EST CE QUI BORNE LA POPULATION — voir l'en-tête du module de
+  // décision. Elle se lit dans les transcrits de Claude Code, PAS dans le nom du répertoire de
+  // travail : une reprise (`claude-swt <horodatage>`, le geste que le pack prescrit) fait naître
+  // aujourd'hui dans un répertoire d'hier.
+  //
+  // ⚠️ ET SON ÉCHEC NE SORT PAS PAR UN REFUS GLOBAL, DÉLIBÉRÉMENT. `lireLesNaissances` ne lève
+  // pas : elle rend « refusée », et chaque agent devient NON MESURÉ — verdict
+  // `ZONES_NON_MESUREES`, sortie 2. C'est plus BRUYANT qu'un vert et plus PRÉCIS qu'un refus
+  // global : le compte rendu nomme alors chaque agent qu'on n'a pas su dater, et le lecteur
+  // sait quelle mesure refaire. Un refus global, lui, ne dirait pas sur qui il porte.
+  const naissances = await lireLesDates(parc);
+
   let registre;
   try {
     registre = await lireLeRegistre();
@@ -88,7 +102,7 @@ export async function main({
   let verdict;
   try {
     verdict = jugerLeParc({
-      agents: normaliserLeParc({ panes: parc, agentsHerdr: registreDAgents }),
+      agents: normaliserLeParc({ panes: parc, agentsHerdr: registreDAgents, naissances }),
       registre,
       roleDuLieu,
       portee,

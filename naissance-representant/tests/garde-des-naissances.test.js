@@ -65,13 +65,56 @@ const AVANT = `${WT}/20260724-204645`;
 /** Un espace de travail qu'aucun nom ne date. Mesuré : 13 agents vivants sont dans ce cas. */
 const NON_DATABLE = `${WT}/t-0043`;
 
-const agent = (sur = {}) => ({
-  pane_id: 'w1:p1',
-  herdr_socket: SOCKET_S1,
-  agent_session: 'ses-1',
-  foreground_cwd: APRES,
-  ...sur,
-});
+/**
+ * LA SESSION CLAUDE D'UN PANE, DANS LA FORME EXACTE OÙ HERDR LA REND — relevée le 2026-08-25.
+ *
+ * 🔴 CE HARNAIS ÉCRIVAIT `agent_session: 'ses-1'`, UNE CHAÎNE. herdr rend un OBJET, et c'est
+ * `value` qui porte l'identifiant. Tant que le module ne lisait que la présence du champ, la
+ * différence ne se voyait pas ; depuis qu'il DATE l'agent par sa session, un double plus pauvre
+ * que le vrai rendrait tout le parc non datable — « un double non conforme fabrique des
+ * défauts ». Une session PAR PANE, aussi : sans ça, on ne peut pas donner deux naissances
+ * différentes à deux agents du même banc.
+ */
+const sessionDe = (pane) => ({ agent: 'claude', kind: 'id', source: 'herdr:claude', value: `sess-${pane}` });
+
+/**
+ * LES DEUX INSTANTS DE LA BORNE — en UTC, et c'est ce qui les rend PORTABLES.
+ *
+ * `MISE_EN_SERVICE` se lit en heure LOCALE (voir `instantDeLHorodatage`). Un instant d'essai
+ * choisi à quelques heures de la frontière tomberait donc du bon côté chez l'auteur et du
+ * mauvais en CI — le motif « un rendu qui dépend de la machine ». Ces deux-ci sont à un mois et
+ * à treize heures de la frontière : aucun fuseau ne les fait changer de côté.
+ */
+const NE_APRES = Date.parse('2026-08-25T17:30:00.000Z');
+const NE_AVANT = Date.parse('2026-07-24T20:46:45.000Z');
+
+const agent = (sur = {}) => {
+  const dossier = {
+    pane_id: 'w1:p1',
+    herdr_socket: SOCKET_S1,
+    foreground_cwd: APRES,
+    ...sur,
+  };
+  return { agent_session: sessionDe(dossier.pane_id), ...dossier };
+};
+
+/**
+ * LES NAISSANCES QUE LE FIL AURAIT LUES — une carte session → instant.
+ *
+ * Par défaut chaque agent du banc naît APRÈS la frontière : c'est la population que cette garde
+ * vise, donc le cas normal ici. `nes` en redate un par son pane ; `null` veut dire « celui-là,
+ * on n'a pas su le dater », qui est un NON MESURÉ, jamais un « né avant ».
+ */
+function naissancesDe(panes, nes = {}) {
+  const instants = new Map();
+  for (const p of panes) {
+    const id = p?.agent_session?.value;
+    if (!id) continue;
+    const quand = Object.prototype.hasOwnProperty.call(nes, p.pane_id) ? nes[p.pane_id] : NE_APRES;
+    if (quand !== null) instants.set(id, quand);
+  }
+  return { mesure: 'lue', instants, illisibles: 0 };
+}
 
 const declaration = (sur = {}) => ({
   version: 1,
@@ -112,10 +155,12 @@ function juger({
   declarations = [],
   illisibles = [],
   roleDuLieu = aucunLieu,
+  nes = {},
+  naissances = naissancesDe(panes, nes),
   ...reste
 } = {}) {
   return jugerLeParc({
-    agents: normaliserLeParc({ panes, agentsHerdr }),
+    agents: normaliserLeParc({ panes, agentsHerdr, naissances }),
     registre: { declarations, illisibles },
     roleDuLieu,
     portee: portee(),
@@ -357,25 +402,35 @@ test('un nom qui n’est PAS conforme n’identifie rien — « bash » n’est 
 // 3. LA BORNE — ce que la garde ne juge pas, elle le DIT
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('un agent d’AVANT la mise en service ne rougit pas — et il est compté hors portée', () => {
-  const r = juger({ panes: [agent({ foreground_cwd: AVANT })], declarations: [] });
+test('un agent NÉ AVANT la mise en service ne rougit pas — et il est compté hors portée', () => {
+  const r = juger({ nes: { 'w1:p1': NE_AVANT }, declarations: [] });
   assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
   assert.equal(r.prises.length, 0);
   assert.equal(r.horsPortee.length, 1);
   assert.equal(r.horsPortee[0].raison, 'né avant la mise en service du dispositif');
 });
 
-test('un espace de travail que RIEN ne date est hors portée, nommé, et sa raison est dite', () => {
+/**
+ * 🔴 CES DEUX-CI ÉPROUVAIENT LA BORNE PAR LE CHEMIN, ET LA BORNE N'EST PLUS LÀ.
+ *
+ * Un espace que rien ne date, un agent sans espace du tout : la garde les rangeait hors portée
+ * — c'est-à-dire au VERT — sur le nom de leur répertoire. C'est le trou que le correctif de la
+ * reprise ferme. Ils gardent donc désormais la propriété INVERSE, qui est celle qui compte :
+ * **le répertoire ne décide plus**, et un agent né après la frontière est jugé quel que soit
+ * l'endroit où il travaille. Mesuré sur le parc du 2026-08-25 : 52 des 124 agents vivants
+ * n'avaient aucun horodatage dans leur espace, dont 9 nés APRÈS la mise en service.
+ */
+test('un espace de travail que RIEN ne date ne met plus personne hors portée — le chemin ne juge pas', () => {
   const r = juger({ panes: [agent({ foreground_cwd: NON_DATABLE })], declarations: [] });
-  assert.equal(r.horsPortee.length, 1);
-  assert.equal(r.horsPortee[0].raison, 'aucun horodatage de naissance dans son espace de travail');
-  assert.match(r.texte, /t-0043/, 'la borne se VOIT — une borne silencieuse est un trou');
+  assert.equal(r.horsPortee.length, 0, 'le nom du répertoire décide encore de la population');
+  assert.equal(r.prises.length, 1);
+  assert.match(r.texte, /t-0043/, 'la prise ne dit pas OÙ aller voir l’agent');
 });
 
-test('un agent sans aucun espace de travail est hors portée, pas vert en silence', () => {
+test('un agent sans aucun espace de travail est jugé sur sa NAISSANCE, pas écarté en silence', () => {
   const r = juger({ panes: [agent({ foreground_cwd: null, cwd: null })], declarations: [] });
-  assert.equal(r.horsPortee.length, 1);
-  assert.equal(r.prises.length, 0);
+  assert.equal(r.horsPortee.length, 0, 'un agent sans espace repassait au vert par la borne');
+  assert.equal(r.prises.length, 1);
 });
 
 test('un pane SANS agent n’entre pas dans le parc — c’est un shell, pas un agent', () => {
@@ -553,10 +608,11 @@ test('parc vivant = hors portée + population, et population = identifiés + pri
   const r = juger({
     panes: [
       agent({ pane_id: 'w1:p1' }),                                   // pris
-      agent({ pane_id: 'w1:p2', foreground_cwd: AVANT }),            // hors portée
-      agent({ pane_id: 'w1:p3', foreground_cwd: NON_DATABLE }),      // hors portée
+      agent({ pane_id: 'w1:p2', foreground_cwd: AVANT }),            // hors portée — NÉ avant
+      agent({ pane_id: 'w1:p3', foreground_cwd: NON_DATABLE }),      // hors portée — NÉ avant
       agent({ pane_id: 'w1:p4' }),                                   // identifié
     ],
+    nes: { 'w1:p2': NE_AVANT, 'w1:p3': NE_AVANT },
     agentsHerdr: [
       { pane_id: 'w1:p1', herdr_socket: SOCKET_S1, agent: true, name: null },
       { pane_id: 'w1:p2', herdr_socket: SOCKET_S1, agent: true, name: null },
