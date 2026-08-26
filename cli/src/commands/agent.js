@@ -60,7 +60,7 @@ Options :
   --depot <chemin>        le dépôt du chantier (obligatoire)
   --role <role>           orchestrateur (défaut) | representant | chef-equipe
   --workspace <id>        un espace herdr existant ; sans lui, la naissance en ouvre un
-                          elle-même, APRÈS tous ses refus — un refus ne laisse donc rien
+                          elle-même, APRÈS ses refus — qui défont tout, sauf un agent né
   --session <nom>         la session herdr visée, quand le poste en porte plusieurs
   --modele <alias>        le modèle déclaré au lancement (défaut : opus)
   --mode <mode>           le mode de permission déclaré (défaut : acceptEdits)

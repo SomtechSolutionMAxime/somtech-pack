@@ -99,7 +99,11 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
   --role chef-equipe \
   --depot <repo-principal> \
   --coordonnateur <ton-nom-d-agent>)
-P=$(printf '%s' "$NAISSANCE" | jq -r .pane)   # le pane de l'agent, que tout le reste vise
+# ⚠️ `jq -e` — PAS `jq -r .pane` seul : le pane est rendu à l'identique sur un succès et sur un
+# refus qui laisse un agent vivant. Tu enchaînerais brief et veille sans savoir que sa
+# déclaration n'a pas pu s'écrire.
+P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
+  || { printf '%s' "$NAISSANCE" | jq -r '"REFUS — \(.cause) · pane \(.pane) · vivant \(.vivant)"'; }
 ```
 
 C'est la seule voie qui tienne à la fois la règle d'or n°11 — le worktree naît **avant** l'agent — et la déclaration explicite du modèle. Le worktree se retire ensuite à la main (§4f), le lanceur ne le connaissant pas.
@@ -364,14 +368,18 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 # lance la session en DÉCLARANT son modèle et son mode, NOMME l'agent du code de son mandat,
 # vérifie par le fait qu'il porte ce nom et tourne dans son espace, puis INSCRIT sa naissance
 # — rôle, mandat, coordonnateur, worktree, pane, session — hors du dépôt, et remplit
-# `assigned_agent` sur le mandat au registre. Un refus ne laisse rien derrière lui.
+# `assigned_agent` sur le mandat au registre. Un refus défait tout — sauf un agent né.
 NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
   --role chef-equipe \
   --depot <repo-principal> \
   --coordonnateur <ton-nom-d-agent>)
 
 # Le pane est dans sa sortie JSON : tout ce qui suit — brief, /goal, wait, close — le vise.
-P=$(printf '%s' "$NAISSANCE" | jq -r .pane)
+# ⚠️ `jq -e`, jamais `jq -r .pane` seul : le pane sort à l'identique d'un succès et d'un refus
+# qui laisse un agent vivant. Sans `select(.ok)`, tu brieffes un agent dont la déclaration a
+# échoué — et la garde ne le rattrapera pas, puisqu'il est déclaré.
+P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
+  || { printf '%s' "$NAISSANCE" | jq -r '"REFUS — \(.cause) · pane \(.pane) · vivant \(.vivant)"'; }
 ```
 
 **Pourquoi ce geste est décomposé** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Voir la section sur la déclaration du modèle.
