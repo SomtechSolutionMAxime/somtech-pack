@@ -1713,3 +1713,66 @@ test('L’ORDRE DE RETRAIT EST ANCRÉ — pas les chiffres qui le produisent, l�
       'manifeste n’apparaît ni dans l’ordre de retrait ni dans ce qui reste'
   );
 });
+
+
+test('LES COMPTES DE LA PROSE DÉSIGNENT LEUR OBJET — un chiffre juste peut vivre dans une phrase fausse', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 UN COMPTE EXACT, UN RÉFÉRENT FAUX — ET AUCUN CONTRÔLE NATUREL NE LE VOIT.
+  //
+  // La note du double a dit « zéro divergence sur 80 couples ». Le chiffre était VRAI : il
+  // venait d'une sonde ad hoc, 10 largeurs × 8 hauteurs. Mais la phrase désigne le balayage du
+  // banc `AUCUNE LIGNE DE L'ÉCRAN NE DÉPASSE LE PANE`, qui en fait 96 (12 × 8).
+  //
+  // ⚠️ CETTE FAMILLE EST IMMUNISÉE CONTRE LE CONTRÔLE NATUREL. On vérifie un chiffre en le
+  // recomptant, et il se recompte. Il faut recompter contre l'UNITÉ QUE LA PHRASE DÉSIGNE —
+  // un autre geste. J'avais balayé mes sept affirmations chiffrées et vérifié chacune : j'ai
+  // vérifié les FAITS, jamais les RÉFÉRENTS. Le trou était exactement là où le chiffre est juste.
+  //
+  // ⚠️ ET LA LEÇON ÉTAIT DÉJÀ NOMMÉE — je porte ce motif sous le nom « un compte juste dans une
+  // phrase fausse », et je l'ai refait en le connaissant. Une leçon nommée fait reconnaître le
+  // défaut quand on le montre ; elle n'empêche pas de l'écrire. Le remède n'est pas de mieux se
+  // souvenir, c'est CE BANC.
+  //
+  // ⚠️ CE QU'IL GARDE, ET SA LIMITE : il ancre les comptes que la prose attribue au balayage du
+  // banc, contre le balayage lui-même. Il ne peut pas garder un compte dont l'objet vit hors du
+  // dépôt (une sonde de session, un pane réel) — pour ceux-là, la note doit dire QUEL objet a
+  // été mesuré, et ce banc ne remplace pas cette exigence.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const SEUIL = [...RACCOURCI_VITAL].length;
+  const COLONNES = [1, 2, 3, 5, 8, SEUIL - 1, SEUIL, SEUIL + 1, 12, 20, 40, 65];
+  const RANGEES = [1, 2, 3, 4, 5, 8, 12, 24];
+
+  // ═══ ① LE BALAYAGE DÉCRIT DANS LA PROSE EST CELUI QUI EXISTE. Si quelqu'un ajoute une largeur
+  // au banc, le compte inscrit dans la note du double devient faux — et c'est ICI que ça rougit,
+  // pas dans la tête d'un relecteur.
+  const couples = COLONNES.length * RANGEES.length;
+  const note = readFileSync(new URL('./aide/terminal.js', import.meta.url), 'utf8');
+  const annonce = note.match(/zéro divergence sur ses (\d+) couples/);
+  assert.ok(
+    annonce,
+    'la note du double n’annonce plus de compte de couples — si la phrase a changé, mets ce banc ' +
+      'à jour ; si le compte a disparu, retire cette assertion plutôt que de la laisser chercher un fantôme'
+  );
+  assert.equal(
+    Number(annonce[1]),
+    couples,
+    `la note du double annonce ${annonce[1]} couples, le balayage du banc en fait ${couples}. ` +
+      'Le compte et son objet ont divergé — recompte contre l’unité que la phrase DÉSIGNE, pas ' +
+      'contre le nombre que tu te rappelles avoir mesuré.'
+  );
+
+  // ═══ ② ET LES DEUX LISTES SONT BIEN CELLES DU BANC — sinon on ancrerait un compte contre une
+  // copie qui dérive, ce qui est la faute d'à côté : deux sources pour un seul fait.
+  const source = readFileSync(new URL('./rien-ne-deborde-du-pane.test.js', import.meta.url), 'utf8');
+  for (const [nom, liste] of [['COLONNES', COLONNES], ['RANGEES', RANGEES]]) {
+    const decl = source.match(new RegExp(`const ${nom} = \\[([^\\]]*)\\];`));
+    assert.ok(decl, `le banc ne déclare plus \`${nom}\` — ce contrôle vise un objet qui n’existe plus`);
+    const combien = decl[1].split(',').length;
+    assert.equal(
+      combien,
+      liste.length,
+      `\`${nom}\` porte ${combien} entrées dans le banc et ${liste.length} dans ce contrôle — ` +
+        'les deux ont dérivé, et le compte ancré ne vaut plus rien'
+    );
+  }
+});

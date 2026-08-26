@@ -87,7 +87,17 @@
  *
  * ⚠️ ET C'EST ICI QUE CE DOUBLE GAGNE SA PLACE. Sur le chemin de `rendreEcran`, il ne pouvait
  * PLUS RIEN attraper : `borner` y rend chaque ligne d'exactement la largeur du pane, donc
- * `ceil(longueur / colonnes)` vaut 1 par construction — mesuré, zéro divergence sur 80 couples.
+ * `ceil(longueur / colonnes)` vaut 1 par construction — mesuré sur le balayage du banc
+ * `AUCUNE LIGNE DE L'ÉCRAN NE DÉPASSE LE PANE` : **zéro divergence sur ses 96 couples**.
+ *
+ * ⚠️ CETTE PHRASE A DIT « 80 couples », ET LE CHIFFRE ÉTAIT VRAI — POUR UN AUTRE OBJET. Il venait
+ * d'une sonde ad hoc écrite pour prouver cette redondance (10 largeurs × 8 hauteurs = 80) ; la
+ * phrase, elle, désigne le balayage du BANC (12 × 8 = 96). Compte exact, référent faux.
+ *
+ * ⚠️ ET C'EST POURQUOI CETTE FAMILLE DURE : elle est immunisée contre le contrôle naturel. On
+ * vérifie un chiffre en le recomptant, et il se recompte. Il faut recompter contre l'UNITÉ QUE
+ * LA PHRASE DÉSIGNE — un autre geste. Un balayage des affirmations qui vérifie les FAITS et non
+ * les RÉFÉRENTS a son trou exactement là où le chiffre est juste.
  * Un double bâti pour une classe de défaut que le correctif voisin avait rendue irreproductible
  * là où on le branchait. Ici, le défaut est atteignable, et lui seul l'atteint.
  *
