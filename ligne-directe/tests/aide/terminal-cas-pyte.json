@@ -6544,5 +6544,53 @@
 "",
 "b"
 ]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"ab\u001bXcd"
+],
+"cols": 8,
+"rows": 2,
+"attendu": [
+"abcd",
+""
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"ab\u001b"
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"ab",
+""
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"\u001b7abc"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"abc",
+""
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"ab\u001b["
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"ab",
+""
+]
 }
 ]

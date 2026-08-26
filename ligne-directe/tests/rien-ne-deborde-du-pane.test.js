@@ -1255,6 +1255,7 @@ test('LE DOUBLE DU TERMINAL EST CONFRONTÉ À UN VRAI ÉMULATEUR — et chaque c
     'report armé puis imprimable',
     'effacement de rangée',
     'défilement',
+    'ESC avalé avec son caractère',
   ];
   const couverts = new Set(cas.map((c) => c.quoi));
   for (const capacite of DECLARE) {
