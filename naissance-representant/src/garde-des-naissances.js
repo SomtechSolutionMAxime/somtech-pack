@@ -839,8 +839,10 @@ export function jugerLeParc({
 
   const methode = {
     prises:
-      'un agent VIVANT dont l’espace de travail porte un horodatage de naissance postérieur à ' +
-      `« ${miseEnService} », et qu’AUCUNE des DEUX sources n’identifie — ni une déclaration ` +
+      'un agent VIVANT dont la SESSION est née après ' +
+      `« ${miseEnService} » — sa naissance à LUI, lue au transcrit de sa session, jamais ` +
+      'l’horodatage de son répertoire : `claude-swt <horodatage>` REPREND un vieil espace pour ' +
+      'y faire naître un agent neuf — et qu’AUCUNE des DEUX sources n’identifie — ni une déclaration ' +
       '(appariée par pane-dans-sa-session ET DANS L’ESPACE DE TRAVAIL QUE LA DÉCLARATION ' +
       'INSCRIT — reprendre un pane n’est pas naître, et un terminal se réutilise ; ' +
       'ou à défaut par nom, dans ce MÊME espace ' +

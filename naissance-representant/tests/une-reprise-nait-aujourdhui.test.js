@@ -42,6 +42,7 @@ import assert from 'node:assert/strict';
 import {
   jugerLeParc,
   normaliserLeParc,
+  instantDeLHorodatage,
   MISE_EN_SERVICE,
   VERDICTS,
   SORTIES,
@@ -53,7 +54,16 @@ const SOCKET_S1 = socketDe('s1');
 /** Un worktree né BIEN AVANT la mise en service — celui qu'on REPREND. */
 const VIEUX_WORKTREE = '/bac/worktrees/un-depot/20260819-005653';
 
-const FRONTIERE = Date.UTC(2026, 7, 25, 4, 0, 0); // 2026-08-25 00:00:00, heure locale du poste
+// ⚠️ LA FRONTIÈRE SE DÉRIVE, ELLE NE S'ÉPINGLE PAS — mesuré le 2026-08-26.
+//
+// Elle valait `Date.UTC(2026, 7, 25, 4, 0, 0)` : l'heure locale du poste de l'auteur (UTC-4)
+// écrite en dur. `instantDeLHorodatage` parse `20260825-000000` en heure LOCALE — donc 04:00Z
+// ici, 00:00Z sur la CI (ubuntu, UTC). Un instant « une heure avant la frontière » y tombait
+// APRÈS elle, et l'essai rougissait : VERT chez l'auteur, ROUGE en CI.
+//
+// Le champ qui varie avec la machine ne se recopie pas à la main — il se demande à celui qui
+// le calcule. On appelle donc la MÊME fonction que le code jugé.
+const FRONTIERE = instantDeLHorodatage(MISE_EN_SERVICE).getTime();
 
 const pane = (sur = {}) => ({
   agent: true,
@@ -106,6 +116,46 @@ test('UN AGENT NÉ AVANT LA FRONTIÈRE RESTE HORS PORTÉE — même dans un rép
   assert.equal(r.comptes.horsPortee, 1);
   assert.equal(r.horsPortee[0].raison, 'né avant la mise en service du dispositif');
   assert.equal(r.verdict, VERDICTS.RIEN_A_SIGNALER);
+});
+
+// 🔴 CE QUE CET ESSAI FERME, ET IL A ÉTÉ TROUVÉ PAR UNE PASSE DE REVUE, PAS PAR UN BANC.
+//
+// La méthode imprimée décrivait le prédicat que ce lot venait d'ABOLIR : « un agent dont
+// l'ESPACE DE TRAVAIL porte un horodatage postérieur à … ». Le rendu se contredisait alors
+// SUR UN ÉCRAN — il nommait `worktree 20260820-101500` et jurait dans la même phrase n'avoir
+// pris cet agent que parce que son espace était postérieur au 25.
+//
+// Ce n'est pas une coquille : la ligne part sur CHAQUE rendu. Le lecteur qui vérifie
+// l'accusation contre le critère annoncé conclut que la garde accuse à faux — et la désarme,
+// avec les meilleures raisons du monde. C'est le risque que le module redoute nommément
+// quatre lignes plus haut, à propos de `nomConforme`.
+//
+// ⚠️ AUCUN BANC NE L'A VU : les six assertions sur `methode.prises` visaient toutes la moitié
+// APPARIEMENT ; la clause de POPULATION n'était gardée que par `assert.match(…, /\S/)` —
+// c'est-à-dire « non vide ». Une assertion juste sur un chemin correct, qui laisse la vraie
+// population non gardée. Dixième occurrence de cette forme sur ce lot.
+test('🔴 LA MÉTHODE IMPRIMÉE dit ce qui BORNE VRAIMENT la population — la session, pas le répertoire', () => {
+  const r = juger({
+    panes: [pane({ foreground_cwd: '/bac/worktrees/un-depot/20260820-101500' })],
+    naissances: naissancesLues([['sess-de-la-reprise', FRONTIERE + 9 * 3600 * 1000]]),
+  });
+
+  assert.equal(r.comptes.prises, 1, 'le cas fondateur du lot : vieux répertoire, session neuve');
+
+  // La moitié qui accuse : la méthode nomme la source de date qui décide réellement.
+  assert.match(
+    r.methode.prises,
+    /SESSION est née|transcrit de sa session/,
+    'la méthode ne nomme pas ce qui borne la population — un lecteur ne peut pas vérifier l’accusation',
+  );
+
+  // La moitié qui interdit : elle ne doit plus décrire le prédicat aboli. Sans cette assertion,
+  // la phrase peut redevenir fausse pendant que la précédente reste verte.
+  assert.doesNotMatch(
+    r.methode.prises,
+    /espace de travail porte un horodatage/,
+    'la méthode décrit encore le prédicat que ce lot a aboli — le rendu se contredit sur un écran',
+  );
 });
 
 test('🔴 UN AGENT QU’ON N’A PAS PU DATER EST « NON MESURÉ », JAMAIS « NÉ AVANT »', () => {
