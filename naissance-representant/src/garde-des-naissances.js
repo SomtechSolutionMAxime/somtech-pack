@@ -558,6 +558,11 @@ export function couvertureDeLaDeclaration(
         `pour CET agent-ci ou pour celui qui occupait ce pane avant lui`,
     };
   }
+  // ⚠️ CE CAS-CI NE SE PRODUIT PAS DANS LA CHAÎNE DU MODULE, ET ON LE DIT PLUTÔT QUE DE LAISSER
+  // CROIRE QU'IL GARDE QUELQUE CHOSE. `jugerLeParc` range un agent non datable chez les NON
+  // MESURÉS AVANT d'appeler `sourcesDe` : la naissance y est toujours lue. La branche existe
+  // parce que cette fonction est EXPORTÉE et que son contrat est total — trois états, jamais
+  // deux, quel que soit l'appelant. Ce qui la garde est un essai, pas le trafic.
   if (!Number.isFinite(instantDeNaissance)) {
     return {
       etat: 'indécidable',
