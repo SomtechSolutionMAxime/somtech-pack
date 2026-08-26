@@ -388,15 +388,65 @@ test('un JSON cassé au milieu de fichiers valides est mis À PART — il ne fai
   }
 });
 
-test('un JSON valide mais qui n’est PAS un objet compte comme illisible — un tableau n’est pas une déclaration', () => {
-  const racine = racineJetable();
-  try {
-    writeFileSync(join(racine, '20260825T100000000Z-tableau.json'), '[1,2,3]');
-    const { declarations, illisibles } = lireLesDeclarations({ racine });
-    assert.deepEqual(declarations, [], 'un tableau qui se glisserait dans les déclarations ferait planter tout lecteur');
-    assert.equal(illisibles.length, 1);
-  } finally {
-    rmSync(racine, { recursive: true, force: true });
+/**
+ * CE QUI PASSE `JSON.parse` SANS ÊTRE UNE DÉCLARATION — une ligne par TERME de la garde.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 CE TABLEAU NE COUVRE PAS « DES CAS », IL COUVRE LES TROIS TERMES D'UNE CONDITION, et
+ * chaque ligne est attrapée par UN SEUL d'entre eux. C'est ce qui le rend capable de tuer une
+ * mutation d'UN SEUL POINT — un tableau de valeurs choisies au hasard aurait des lignes
+ * doublement gardées, et une mutation y survivrait sans qu'aucune ne rougisse.
+ *
+ *   `null`   → `!lu` seul l'attrape (`typeof null === 'object'`, et ce n'est pas un tableau).
+ *   `42`     → `typeof lu !== 'object'` seul (`!42` est faux).
+ *   `"…"`    → idem, l'autre moitié du même terme.
+ *   `[1,2,3]`→ `Array.isArray(lu)` seul (un tableau est un objet vérace et non vide).
+ *
+ * ⚠️ SEUL LE TABLEAU ÉTAIT ÉPROUVÉ — une moitié gardée sur deux dans la même condition.
+ * `!lu || …` muté en `!lu && …` laissait un fichier contenant littéralement `null` entrer dans
+ * `declarations` au lieu d'`illisibles`, et aucun essai ne bougeait. Ce n'est pas un détail de
+ * forme : `illisibles.length` est ce qui fait rendre « refusée » à `sourcesDe`. Un fait abîmé
+ * qu'on compte pour valide ne rend pas seulement un lecteur fragile — il fait retomber au VERT
+ * la polarité que ce module s'impose partout, « ce qu'on ne sait pas classer est MUET ».
+ *
+ * ⚠️ ET LA GRAVITÉ RESTE FAIBLE, on le dit plutôt que de le taire : `inscrireLaDeclaration`
+ * n'écrit jamais `null`, il faut une édition à la main pour produire ce fichier. Ce qu'on ferme
+ * est la moitié manquante d'une garde, pas un chemin que le dispositif emprunte.
+ */
+const PAS_DES_OBJETS = [
+  { quoi: 'null', brut: 'null', terme: '!lu' },
+  { quoi: 'un nombre', brut: '42', terme: 'typeof lu !== «object»' },
+  { quoi: 'une chaîne', brut: '"ristigouche"', terme: 'typeof lu !== «object»' },
+  { quoi: 'un tableau', brut: '[1,2,3]', terme: 'Array.isArray(lu)' },
+];
+
+test('un JSON valide mais qui n’est PAS un objet compte comme illisible — null, scalaire ou tableau', () => {
+  for (const { quoi, brut, terme } of PAS_DES_OBJETS) {
+    const racine = racineJetable();
+    try {
+      const fichier = '20260825T100000000Z-pas-un-objet.json';
+      writeFileSync(join(racine, fichier), brut);
+      const { declarations, illisibles } = lireLesDeclarations({ racine });
+      assert.deepEqual(
+        declarations,
+        [],
+        `${quoi} (${brut}) qui se glisserait dans les déclarations ferait tomber le premier lecteur ` +
+          `qui fait « d.nom » — c’est-à-dire loin d’ici, sur une cause qui n’évoquerait plus ce fichier`
+      );
+      assert.equal(
+        illisibles.length,
+        1,
+        `${quoi} (${brut}) doit être compté ILLISIBLE — terme « ${terme} ». C’est « illisibles.length » ` +
+          `qui fait rendre « refusée » à sourcesDe : le laisser entrer chez les valides remet la garde au vert`
+      );
+      assert.equal(illisibles[0].fichier, fichier);
+      assert.ok(
+        typeof illisibles[0].cause === 'string' && illisibles[0].cause.length > 0,
+        `l’illisible DIT pourquoi (${quoi}) — sans cause, personne n’ira le réparer`
+      );
+    } finally {
+      rmSync(racine, { recursive: true, force: true });
+    }
   }
 });
 
