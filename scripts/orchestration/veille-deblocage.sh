@@ -52,8 +52,16 @@
 #        agent-termine ......... 0   l'agent a atteint l'état terminal
 #                                    EXPLICITE `done` (jamais `idle` seul)
 #        repos-prolonge ....... 12   il s'est reposé au-delà de la borne,
-#                                    sans travail en vol — CE N'EST PAS
-#                                    une fin, c'est ce qu'elle a VU
+#                                    sans travail en vol NI but actif — CE
+#                                    N'EST PAS une fin, c'est ce qu'elle a VU ;
+#                                    c'est l'immobilité ORDINAIRE
+#        but-inacheve ......... 13   il ne bouge plus (état terminal OU repos)
+#                                    mais son BUT est encore actif à l'écran,
+#                                    au-delà de la borne — mandat non clos
+#                                    (session coupée ? limite atteinte ?), CE
+#                                    N'EST PAS une fin non plus, et ce n'est
+#                                    pas la même chose qu'un repos ordinaire :
+#                                    un message suffit peut-être à le relancer
 #        (arguments invalides) . 1   option `--…` inconnue, ou pane/agent
 #                                    manquant — refusé tout de suite, jamais
 #                                    interprété comme positionnel
@@ -126,6 +134,32 @@
 #      concordants, rapprochés plutôt qu'espacés d'un tour entier), au même
 #      titre que le nom de l'agent (bloc Usage, refusé tout de suite).
 #
+#  13. ELLE LIT LE BUT, PAS SEULEMENT L'ÉTAT (T-20260826-0064, mesuré le
+#      2026-08-26 sur l'agent réel `e-20260826-0007`, pane w31:pA). La limite
+#      de session claude.ai coupe un agent EN PLEIN TRAVAIL : herdr rend
+#      `done`, la confirmation rend `idle`, l'écran est au repos — la
+#      signature EXACTE d'un agent qui a fini. La veille concluait
+#      « agent-termine » et libérait de toute protection un agent qui n'avait
+#      rendu aucun compte rendu (et qui a repris son lot 8 s après qu'on lui a
+#      parlé). Aucun ÉTAT ne sépare ces deux cas ; le MANDAT, lui, les sépare.
+#      Tant que la marque `/goal active` est à l'écran, `agent-termine` n'est
+#      plus prononçable — et si l'agent reste ainsi au-delà de `VD_BUT_TOURS`,
+#      elle s'arrête sur `but-inacheve` (code 13), qui nomme ce qu'elle a VU
+#      au lieu d'affirmer une fin qu'elle n'a pas mesurée.
+#      Les garanties 4 et 6 restent entières : deux relevés d'abord, motif
+#      nommé toujours.
+#
+#      ⚠️ ET LA GARDE PORTE SUR LES DEUX CHEMINS, PAS SEULEMENT SUR `done)`.
+#      Le premier correctif ne fermait que la branche `done)`. Or l'écran
+#      MESURÉ du ticket portait le statut `idle` : un agent coupé par la limite
+#      peut rester `idle` sans JAMAIS passer par l'état terminal. Le chemin
+#      `idle)` le lâchait donc sur `repos-prolonge` au bout de la borne de
+#      repos — vrai, mais muet sur le mandat resté ouvert. Fermer une seule des
+#      deux portes fermait celle d'à côté de celle par laquelle il est passé.
+#      Les deux chemins partagent désormais compteur, borne et motif ;
+#      `repos-prolonge` ne garde plus que l'immobilité ORDINAIRE, ce qui est
+#      exactement le sens d'avoir deux motifs.
+#
 #   9. LES DEUX CHIFFRES SONT MESURABLES. Une garde se juge sur ce qu'elle
 #      débloque à raison ET sur ce qu'elle refuse à tort. Le journal porte
 #      donc les DEUX populations : chaque déblocage avec l'écran qui l'a
@@ -155,6 +189,9 @@
 #   VD_REPOS_TOURS            relevés de repos continu, sans travail
 #                              en vol, avant de cesser de veiller   (180,
 #                              soit ~30 min à 10 s le tour)
+#   VD_BUT_TOURS              relevés d'état TERMINAL avec un but encore
+#                              actif à l'écran avant de cesser de
+#                              veiller                              (180)
 #   VD_SLEEP_POSE             attente entre les 2 relevés du contrôle
 #                              de pane À LA POSE (avant tout tour)   (0.3s)
 #   VD_REGISTRE_DIR           registre des veilles  ($HOME/.somtech/veilles)
@@ -187,10 +224,26 @@ VD_SLEEP_DEFAUT=10
 #    tant qu'il y a quelque chose en vol, le compteur retombe à zéro.
 VD_REPOS_TOURS_DEFAUT=180
 
+# ⚠️ COMBIEN DE RELEVÉS D'ÉTAT TERMINAL AVEC UN BUT ENCORE ACTIF avant de
+#    lâcher l'agent — et pourquoi une borne SÉPARÉE de celle du repos.
+#    Le défaut ② (T-20260826-0064, mesuré le 2026-08-26 sur l'agent réel
+#    `e-20260826-0007`, pane w31:pA) : la limite de session claude.ai coupe un
+#    agent EN PLEIN TRAVAIL. herdr rend alors `done`, la confirmation rend
+#    `idle`, et la veille concluait « agent-termine » sur un agent qui n'avait
+#    rendu aucun compte rendu. Un message l'a fait repasser `working` en 8 s.
+#
+#    Cette borne et `VD_REPOS_TOURS` valent le même nombre AUJOURD'HUI, et
+#    elles restent DEUX réglages distincts, chacun nommé et documenté : elles
+#    gardent deux chemins différents (`done` avec but actif / `idle` au repos)
+#    et rien ne dit qu'elles bougeront ensemble. Les fondre appliquerait à un
+#    chemin la mesure de l'autre.
+VD_BUT_TOURS_DEFAUT=180
+
 VD_SLEEP="${VD_SLEEP:-$VD_SLEEP_DEFAUT}"
 VD_SLEEP_CONFIRM="${VD_SLEEP_CONFIRM:-20}"
 VD_SLEEP_APRES_DEBLOCAGE="${VD_SLEEP_APRES_DEBLOCAGE:-3}"
 VD_REPOS_TOURS="${VD_REPOS_TOURS:-$VD_REPOS_TOURS_DEFAUT}"
+VD_BUT_TOURS="${VD_BUT_TOURS:-$VD_BUT_TOURS_DEFAUT}"
 VD_REGISTRE_DIR="${VD_REGISTRE_DIR:-$HOME/.somtech/veilles}"
 
 # Lit une clé d'un fichier de registre. Jamais `source` : un fichier de
@@ -258,6 +311,54 @@ else:
 travail_en_vol() {
   ECRAN_VOL=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
   printf '%s' "$ECRAN_VOL" | grep -qE 'esc to interrupt|/tasks to see subagents|·[[:space:]]*[1-9][0-9]*[[:space:]]+shells?\b'
+}
+
+# SON BUT EST-IL ENCORE ACTIF ? — la question que la veille ne posait pas.
+#
+# ⚠️ ELLE LISAIT UN ÉTAT ; IL FALLAIT LIRE LE BUT. Un agent coupé par la limite
+# de session claude.ai présente EXACTEMENT l'état d'un agent qui a fini :
+# `done`, puis `idle` à la confirmation, écran au repos. Rien dans l'état ne
+# les sépare — mesuré le 2026-08-26 sur l'agent réel `e-20260826-0007`
+# (pane w31:pA, 10h12 EDT) : la veille a conclu « motif=agent-termine » sur un
+# agent qui n'avait rendu aucun compte rendu, et qui a repris son lot 8
+# secondes après qu'on lui a parlé. Ce qui les sépare est le MANDAT : un but
+# encore actif dit que le travail n'est pas clos, quelle que soit l'apparence
+# de repos.
+#
+# ⚠️ LA MARQUE EST CELLE QU'ON A MESURÉE, PAS UNE CONVENTION INVENTÉE. Relevée
+# en lecture seule sur les 119 panes réels du poste le 2026-08-26
+# (`herdr pane read <id> --lines 40`), quatre écrans la portaient :
+#     « ◎ /goal active (9m) »  et  « ◎ /goal active (5h) »   (seules sur leur ligne)
+#     « … /clear to save 598.7k tokens · ◎ /goal active (4d) »
+#     « ✔ Update installed · Restart to update◎ /goal active (1d) »   ← COLLÉE
+# La dernière interdit toute ancre de début de ligne : on cherche la marque
+# N'IMPORTE OÙ dans le relevé.
+#
+# ⚠️ ON CHERCHE `/goal active`, JAMAIS `goal`. Le même relevé a trouvé des
+# lignes qui parlent de `goal` sans être la marque — « ◯ Goal not yet met…
+# continuing » (6 fois), « En attente : A, C, ou /goal clear. » : chercher le
+# mot rendrait « but actif » sur un agent qui n'en a pas.
+#
+# 🛑 LE `◎` N'EST DÉLIBÉRÉMENT PAS EXIGÉ — NE PAS « RESSERRER » CE MOTIF.
+# C'est le genre de choix qu'un futur lot durcira en croyant bien faire : le
+# glyphe était là sur 4 relevés sur 4, donc l'exiger paraît plus rigoureux.
+# CE SERAIT UNE RÉGRESSION, et voici pourquoi, en une phrase : les deux pannes
+# possibles de cette sonde n'ont pas le même prix.
+#   • Elle rate la marque (trop stricte) → elle prononce `agent-termine` sur un
+#     agent vivant et le laisse sans protection. C'EST LE DÉFAUT ② LUI-MÊME.
+#   • Elle voit une marque absente (trop large) → elle veille un peu trop
+#     longtemps, puis s'arrête en le disant (`but-inacheve`). Coût : quelques
+#     appels herdr.
+# On choisit donc systématiquement la panne de gauche à droite : plus permissif
+# sur la MARQUE, jamais sur le MOT (voir l'avertissement ci-dessus : chercher
+# `goal` seul refuserait des agents réellement finis — mesuré). Le glyphe est
+# un détail de rendu de Claude Code ; le texte `/goal active` est ce qui porte
+# le sens. Décision validée par le chef d'équipe du lot T-20260826-0064.
+# Le scénario 48f du banc garde la borne basse (pas trop large) ; les scénarios
+# 48/48c/48g gardent la borne haute (pas trop stricte).
+but_actif() {
+  ECRAN_BUT=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
+  printf '%s' "$ECRAN_BUT" | grep -qF '/goal active'
 }
 
 # Le PANE existe-t-il ? — et c'est une question DIFFÉRENTE de « un agent y
@@ -518,6 +619,11 @@ ILLISIBLES=0
 # attend qu'on lui parle », jamais « il a fini ».
 VU_TRAVAILLER=0
 REPOS=0
+# Discriminant du défaut ② : combien de relevés d'affilée l'agent a présenté un
+# état TERMINAL alors que son but était encore actif à l'écran. Remis à zéro par
+# tout signe de travail réel (`working`, `blocked`) — c'est-à-dire par la reprise
+# elle-même, qui est le fait que ce compteur attend.
+BUT_INACHEVE=0
 PREAVIS_EMIS=0
 DERNIER_ETAT=""
 # Un pane peut être fermé SOUS la veille. Sans ce compteur, elle continue de
@@ -586,6 +692,12 @@ code_motif() {
     # même code rendrait les deux indistinguables pour l'appelant
     # machine — c'est le défaut ① lui-même, déplacé dans la table.
     repos-prolonge)    echo 12 ;;
+    # ⚠️ 13, ET SURTOUT PAS 0 NI 12. « Son but est encore actif et il ne bouge
+    # plus » n'est ni « il a fini » (0) ni « il s'est reposé » (12) : c'est un
+    # TROISIÈME fait. Le confondre avec 0 est le défaut ② lui-même, déplacé
+    # dans la table ; le confondre avec 12 dirait un repos là où on a mesuré un
+    # mandat resté ouvert.
+    but-inacheve)      echo 13 ;;
     *)                 echo 5 ;;
   esac
 }
@@ -748,6 +860,10 @@ for i in $(seq 1 "$VD_TOURS"); do
       INVISIBLES=0
       ABSENT_TOTAL=0
       REPOS=0
+      # Il a REPRIS : l'état terminal qu'on a vu n'était pas une fin. C'est
+      # exactement ce qui s'est produit dans la repro du défaut ② — 8 secondes
+      # après qu'on lui a parlé.
+      BUT_INACHEVE=0
       # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
       # ce reset, trois écrans bizarres espacés dans le temps coupaient la
       # veille sur un agent vivant — d'autant plus probable que ce lot
@@ -761,6 +877,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       INVISIBLES=0
       ABSENT_TOTAL=0
       REPOS=0
+      BUT_INACHEVE=0
       # Un agent bloqué a forcément commencé à travailler.
       VU_TRAVAILLER=1
       ECRAN=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
@@ -815,8 +932,23 @@ for i in $(seq 1 "$VD_TOURS"); do
       sleep "$VD_SLEEP_CONFIRM"
       ETAT2="$(etat_courant)"
       if [ "$ETAT2" = "done" ] || [ "$ETAT2" = "idle" ]; then
-        echo "TERMINE apres $DEBLOQUES deblocages"
-        terminer agent-termine "l'agent a fini (confirmé sur deux relevés)"
+        # ⚠️ DEUX RELEVÉS CONCORDANTS NE DISENT QUE « IL NE BOUGE PLUS » — c'est
+        # tout le défaut ② (T-20260826-0064). L'état d'un agent COUPÉ PAR LA
+        # LIMITE DE SESSION est mot pour mot celui d'un agent qui a fini. Avant
+        # de libérer l'agent de toute protection, on lit donc son MANDAT :
+        # tant que son but est actif à l'écran, il n'a pas fini, et on ne le
+        # dit pas. Elle ne conclut pas — et elle ne se tait pas non plus.
+        if but_actif; then
+          BUT_INACHEVE=$((BUT_INACHEVE+1))
+          echo "[$i] état terminal ($ETAT), mais son BUT est encore actif à l'écran ($BUT_INACHEVE/$VD_BUT_TOURS) — je ne conclus pas qu'il a fini, je veille"
+          if [ "$BUT_INACHEVE" -ge "$VD_BUT_TOURS" ]; then
+            terminer but-inacheve \
+              "$BUT_INACHEVE relevés d'état terminal alors que son but est TOUJOURS actif à l'écran (~$(( BUT_INACHEVE * VD_SLEEP / 60 )) min) — je ne sais PAS s'il a fini, je sais que son mandat n'est pas clos et qu'il ne bouge plus (session coupée ? limite atteinte ?). Va le voir : un message suffit peut-être à le faire repartir ; il n'est plus protégé"
+          fi
+        else
+          echo "TERMINE apres $DEBLOQUES deblocages"
+          terminer agent-termine "l'agent a fini (confirmé sur deux relevés, aucun but actif à l'écran)"
+        fi
       fi
       ;;
     idle)
@@ -861,11 +993,40 @@ for i in $(seq 1 "$VD_TOURS"); do
           echo "[$i] au repos, mais du travail en vol — je veille"
         fi
         REPOS=0
+      elif but_actif; then
+        # ⚠️ LE SYMÉTRIQUE DU CORRECTIF DE LA BRANCHE `done)`, ET LA PORTE PAR
+        # LAQUELLE LE TICKET EST RÉELLEMENT ENTRÉ. L'écran mesuré le 2026-08-26
+        # portait le statut `idle`, pas `done` : un agent coupé par la limite de
+        # session peut rester `idle` SANS JAMAIS passer par l'état terminal.
+        # Fermer la seule branche `done)` fermait la porte d'à côté de celle par
+        # laquelle il est passé — les deux donnent sur la même pièce.
+        #
+        # Ce chemin lâchait alors l'agent sur `repos-prolonge`, un motif qui dit
+        # « il ne bouge plus » sans jamais dire que son MANDAT était resté
+        # ouvert. C'est vrai, et c'est insuffisant : l'orchestrateur qui le lit
+        # ne sait pas qu'un simple message ferait repartir l'agent.
+        #
+        # MÊME COMPTEUR, MÊME BORNE, MÊME MOTIF que la branche `done)` : un but
+        # actif sur un agent immobile est UN SEUL fait, quel que soit le mot par
+        # lequel herdr décrit son immobilité. `repos-prolonge` ne garde plus que
+        # l'immobilité ORDINAIRE — c'est ce qui rend les deux motifs réellement
+        # différents, et c'est le sens de leur séparation.
+        REPOS=0
+        BUT_INACHEVE=$((BUT_INACHEVE+1))
+        echo "[$i] au repos, mais son BUT est encore actif à l'écran ($BUT_INACHEVE/$VD_BUT_TOURS) — ce n'est pas une immobilité ordinaire, je veille"
+        if [ "$BUT_INACHEVE" -ge "$VD_BUT_TOURS" ]; then
+          terminer but-inacheve \
+            "$BUT_INACHEVE relevés d'immobilité alors que son but est TOUJOURS actif à l'écran (~$(( BUT_INACHEVE * VD_SLEEP / 60 )) min) — je ne sais PAS s'il a fini, je sais que son mandat n'est pas clos et qu'il ne bouge plus (session coupée ? limite atteinte ?). Va le voir : un message suffit peut-être à le faire repartir ; il n'est plus protégé"
+        fi
       else
+        # Immobilité ORDINAIRE : pas de but actif à l'écran. Le compteur du
+        # mandat retombe — un agent qui a rangé son but n'est plus « inachevé »,
+        # et sans ce reset il le resterait pour toujours.
+        BUT_INACHEVE=0
         REPOS=$((REPOS+1))
         if [ "$REPOS" -ge "$VD_REPOS_TOURS" ]; then
           terminer repos-prolonge \
-            "$REPOS relevés de repos continu sans travail en vol (~$(( REPOS * VD_SLEEP / 60 )) min) — je ne sais PAS s'il a fini, je sais qu'il ne bouge plus ; il n'est plus protégé"
+            "$REPOS relevés de repos continu sans travail en vol NI but actif à l'écran (~$(( REPOS * VD_SLEEP / 60 )) min) — je ne sais PAS s'il a fini, je sais qu'il ne bouge plus ; il n'est plus protégé"
         fi
       fi
       ;;

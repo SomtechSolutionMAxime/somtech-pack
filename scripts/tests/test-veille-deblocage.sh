@@ -94,8 +94,41 @@ case "${1:-}" in
   pane)
     case "${2:-}" in
       read)
-        if [ -n "${FAKE_HERDR_SCREEN_FILE:-}" ] && [ -f "${FAKE_HERDR_SCREEN_FILE:-}" ]; then
-          cat "$FAKE_HERDR_SCREEN_FILE"
+        # ⚠️ CE DOUBLE HONORE `--lines`, COMME LE SERVICE. Il rendait l'écran
+        # ENTIER quel que soit le nombre demandé : la fenêtre de lecture des
+        # sondes n'était donc éprouvée par rien, et `--lines 40` → `--lines 1`
+        # SURVIVAIT à toute la suite (mesuré par mutation). Un double plus
+        # complaisant que le service ne rate pas seulement un défaut : il rend
+        # invérifiable tout ce qui dépend de ce qu'il simplifie.
+        # L'écran peut CHANGER en cours de veille — une marque qui disparaît
+        # puis revient, un dialogue qui s'ouvre. On le simule par une SÉQUENCE
+        # DE RELEVÉS (un chemin de fichier par ligne, le n-ième relevé lit la
+        # n-ième ligne, clampé à la dernière), même mécanique que la séquence de
+        # statuts d'`agent get`. JAMAIS par une horloge : un test qui bascule
+        # sur `sleep 0.4` mesure la charge du poste, pas le comportement du
+        # script — vert chez l'auteur, rouge en CI un jour de charge.
+        f_ecran="${FAKE_HERDR_SCREEN_FILE:-}"
+        if [ -n "${FAKE_HERDR_SCREEN_SEQ_FILE:-}" ] && [ -f "${FAKE_HERDR_SCREEN_SEQ_FILE:-}" ]; then
+          ridx_file="${FAKE_HERDR_SCREEN_SEQ_FILE}.ridx"
+          ridx=1
+          [ -f "$ridx_file" ] && ridx=$(( $(cat "$ridx_file") + 1 ))
+          echo "$ridx" > "$ridx_file"
+          rtotal=$(wc -l < "$FAKE_HERDR_SCREEN_SEQ_FILE" | tr -d ' ')
+          ruse="$ridx"
+          [ "$ruse" -gt "$rtotal" ] && ruse="$rtotal"
+          f_ecran="$(sed -n "${ruse}p" "$FAKE_HERDR_SCREEN_SEQ_FILE")"
+        fi
+        if [ -n "$f_ecran" ] && [ -f "$f_ecran" ]; then
+          n_lignes=""
+          prec=""
+          for arg in "$@"; do
+            [ "$prec" = "--lines" ] && n_lignes="$arg"
+            prec="$arg"
+          done
+          case "$n_lignes" in
+            ''|*[!0-9]*) cat "$f_ecran" ;;
+            *) tail -n "$n_lignes" "$f_ecran" ;;
+          esac
         fi
         exit 0
         ;;
@@ -717,7 +750,7 @@ case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "motif « ecran-non-reconnu » s
 # la même séquence, sans tour de travail intercalé.
 printf 'blocked\nblocked\nblocked\nblocked\n' > "$SEQ_FILE"
 run 6
-case "$OUT" in *"ARRET : blocage non reconnu"*) ok "trois relevés RÉELLEMENT consécutifs l'arrêtent toujours" ;; *) ko "G2 AFFAIBLIE : elle ne s'arrête plus sur 3 relevés consécutifs : $OUT" ;; esac
+case "$OUT" in *"ARRET : blocage non reconnu"*) ok "trois relevés RÉELLEMENT consécutifs l'arrêtent toujours" ;; *) ko "G3 AFFAIBLIE : elle ne s'arrête plus sur 3 relevés consécutifs : $OUT" ;; esac
 
 # =================================================================
 # 28. `kill -0` ne prouve pas que le pid est LA veille : un pid recyclé par
@@ -1469,6 +1502,460 @@ else
 fi
 
 
+
+# =================================================================
+# 48. LE DÉFAUT ② DU 2026-08-26 (T-20260826-0064), mesuré sur l'agent réel
+#     `e-20260826-0007` (pane w31:pA, 10h12 EDT) : la limite de session
+#     claude.ai a coupé l'agent EN PLEIN TRAVAIL. Son écran portait
+#     « ⎿ Login successful » puis une boîte vide, et la marque « ◎ /goal
+#     active (2h) ». herdr rendait `done`, puis `idle` à la confirmation.
+#     La veille a conclu « ○ terminée · motif=agent-termine » — alors que
+#     l'agent n'avait rendu AUCUN compte rendu et que son but n'était pas
+#     atteint. Preuve que ce n'était pas fini : un message l'a fait repasser
+#     `working` en 8 secondes et il a repris son lot.
+#
+# ⚠️ CE QUE LA VEILLE LISAIT NE SUFFISAIT PAS. Elle lisait un ÉTAT (`done`,
+#    `idle`) ; l'état d'un agent coupé par la limite de session est
+#    exactement celui d'un agent qui a fini. Ce qui les sépare est le BUT :
+#    un but encore actif à l'écran dit que le mandat n'est PAS clos, quelle
+#    que soit l'apparence de repos.
+#
+# ⚠️ LA MARQUE EST CELLE QU'ON A MESURÉE, pas une convention inventée.
+#    Relevée sur les 119 panes réels du poste le 2026-08-26 (lecture seule,
+#    `herdr pane read <id> --lines 40`), quatre écrans la portaient, sous
+#    quatre durées différentes et deux mises en page :
+#      « ◎ /goal active (9m) »   (seule sur sa ligne, alignée à droite)
+#      « ◎ /goal active (5h) »   (idem)
+#      « … /clear to save 598.7k tokens · ◎ /goal active (4d) »
+#      « ✔ Update installed · Restart to update◎ /goal active (1d) »  ← COLLÉE
+#    La dernière interdit toute ancre de début de ligne. Le même relevé a
+#    aussi trouvé des lignes qui parlent de `goal` SANS être la marque
+#    (« ◯ Goal not yet met… continuing », « En attente : A, C, ou /goal
+#    clear. ») : c'est pourquoi la sonde cherche `/goal active`, pas `goal`.
+# =================================================================
+echo "→ 48. DÉFAUT ② : coupé par la limite de session (but ACTIF) → elle ne conclut PAS la fin"
+cat > "$SCREEN_FILE" <<'ECRAN48'
+  ⎿  Login successful
+
+                                               ◎ /goal active (2h)
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle)
+ECRAN48
+# La signature EXACTE du ticket : l'état terminal `done`, confirmé par un
+# `idle` au second relevé — la porte que la branche `done)` laissait ouverte.
+printf 'working\ndone\nidle\nidle\nidle\nidle\n' > "$SEQ_FILE"
+run 6
+
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ko "DÉFAUT ② VIVANT : elle déclare FINI un agent dont le but est encore actif — il n'a rendu aucun compte rendu : $OUT" ;;
+  *) ok "un but encore actif empêche de conclure la fin" ;;
+esac
+case "$OUT" in
+  *"TERMINE apres"*) ko "DÉFAUT ② VIVANT : « TERMINE » annoncé sur un agent coupé par la limite de session : $OUT" ;;
+  *) ok "elle n'annonce pas « TERMINE »" ;;
+esac
+
+echo "→ 48b. LA CONTRE-ÉPREUVE : le MÊME écran SANS la marque du but conclut toujours"
+# Sans elle, un correctif qui cesserait purement et simplement de conclure
+# passerait le scénario 48. C'est l'assertion qui mesure ce que le correctif
+# a PRIS en plus de ce qu'il a fermé.
+cat > "$SCREEN_FILE" <<'ECRAN48B'
+  ⎿  Login successful
+
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle)
+ECRAN48B
+printf 'working\ndone\nidle\nidle\nidle\nidle\n' > "$SEQ_FILE"
+run 6
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ok "sans but actif, done+idle conclut toujours la fin — le correctif n'a pas emporté la fin légitime" ;;
+  *) ko "LE CORRECTIF A TROP PRIS : plus aucune fin n'est conclue, même sans but actif : $OUT" ;;
+esac
+[ "$RC" -eq 0 ] && ok "et son code de sortie reste 0" || ko "code de sortie $RC sur une fin légitime"
+
+echo "→ 48c. L'EFFET EMPÊCHÉ : elle est ENCORE LÀ quand l'agent reprend et se bloque"
+# ⚠️ On éprouve l'effet, pas le message. Un correctif qui renommerait le motif
+#    sans rien réparer survivrait à 48 et 48b ; il ne survit pas à celui-ci.
+#    C'est la reprise réelle du ticket : un message a fait repasser l'agent
+#    `working` en 8 s, et il a repris son lot. Avec le défaut, la veille était
+#    déjà morte à ce moment-là.
+cat > "$SCREEN_FILE" <<'ECRAN48C'
+ Bash command
+
+   git status
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and always allow access
+   3. No
+
+                                               ◎ /goal active (2h)
+ECRAN48C
+printf 'working\ndone\nidle\nblocked\nblocked\nblocked\n' > "$SEQ_FILE"
+run 6
+case "$OUT" in
+  *"debloque (#1)"*) ok "elle a survécu à l'état terminal trompeur et débloqué l'agent qui reprenait" ;;
+  *) ko "DÉFAUT ② VIVANT : elle n'était plus là quand l'agent a repris et s'est bloqué. Sortie : $OUT" ;;
+esac
+
+echo "→ 48d. Elle ne veille pas indéfiniment : un but actif immobile s'arrête sur un motif NOMMÉ"
+# ⚠️ Elle ne s'arrête jamais en silence (garantie n°6) et elle NOMME ce qu'elle
+#    a vu (leçon du défaut ①). « Son but est actif et il ne bouge plus » n'est
+#    ni « il a fini » ni « il s'est reposé » : c'est un troisième fait, avec son
+#    propre code de sortie, pour que l'appelant machine ne les confonde pas.
+cat > "$SCREEN_FILE" <<'ECRAN48D'
+  ⎿  Login successful
+
+                                               ◎ /goal active (2h)
+ECRAN48D
+printf 'working\ndone\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT48D="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-48d" VD_BUT_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 50 --dry-run 2>&1)"
+RC48D=$?
+case "$OUT48D" in
+  *"MOTIF: agent-termine"*) ko "elle AFFIRME une fin qu'elle n'a pas mesurée — le but était encore actif : $OUT48D" ;;
+  *"MOTIF: but-inacheve"*) ok "elle nomme ce qu'elle a réellement observé : un but encore actif, et un agent qui ne bouge plus" ;;
+  *) ko "motif inattendu sur un but actif immobile : $OUT48D" ;;
+esac
+case "$OUT48D" in
+  *"MOTIF: tours-epuises"*) ko "elle brûle 50 tours sur un agent immobile au lieu de conclure" ;;
+  *) ok "elle conclut sans brûler toute sa veille" ;;
+esac
+[ "$RC48D" -ne 0 ] && ok "code de sortie DISTINCT de la fin légitime (rc=$RC48D) — un appelant machine les sépare" \
+  || ko "un but inachevé rend le même code que « l'agent a fini » : les deux deviennent indistinguables"
+[ "$RC48D" -ne 12 ] && ok "…et DISTINCT du repos prolongé (rc=$RC48D ≠ 12) — trois faits, trois signaux" \
+  || ko "un but inachevé rend le code du repos prolongé : deux faits différents confondus"
+
+# ⚠️ ET LA BORNE VAUT EXACTEMENT CE NOMBRE-LÀ. Sans cette assertion, `-ge`
+#    remplacé par `-gt` SURVIVAIT (mesuré par mutation) : la veille concluait au
+#    4ᵉ relevé au lieu du 3ᵉ et tous les tests restaient verts. « Elle finit par
+#    conclure » n'est pas « elle conclut où on l'a posée » — une borne qui glisse
+#    sans qu'un test rougisse n'est plus une borne, c'est une tendance.
+N48D=$(printf '%s\n' "$OUT48D" | grep -c "son BUT est encore actif")
+[ "$N48D" -eq 3 ] && ok "elle conclut au relevé EXACT où la borne est posée (3 relevés, obtenu $N48D)" \
+  || ko "borne décalée : attendu 3 relevés avant de conclure, obtenu $N48D"
+case "$OUT48D" in
+  *"(3/3)"*) ok "le dernier relevé annoncé est bien le 3ᵉ sur 3" ;;
+  *) ko "le compte annoncé ne finit pas sur (3/3) : $OUT48D" ;;
+esac
+
+echo "→ 48f. PARLER du but n'est PAS avoir un but actif — la sonde cherche la MARQUE, pas le mot"
+# ⚠️ MESURÉ, PAS IMAGINÉ. Le relevé du 2026-08-26 sur les 119 panes réels a
+#    trouvé des lignes qui contiennent « goal » SANS être la marque du but :
+#    « ◯ Goal not yet met… continuing » (6 occurrences) et « ⏺ En attente : A,
+#    C, ou /goal clear. ». Une sonde qui chercherait le mot refuserait de
+#    conclure sur un agent réellement fini qui a simplement écrit le mot — et
+#    cette faute-là SURVIVAIT à tous les autres scénarios (mesuré par mutation :
+#    `grep -qF '/goal active'` → `grep -qF 'goal'`, 150 verts).
+cat > "$SCREEN_FILE" <<'ECRAN48F'
+  ⏺ En attente : A, C, ou /goal clear.
+  ◯ Goal not yet met… continuing
+  ⏺ Rapport rendu. Terminé.
+────────────────────────────────────────────────────────────────────
+❯
+ECRAN48F
+printf 'working\ndone\ndone\ndone\n' > "$SEQ_FILE"
+run 4
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ok "un écran qui PARLE de goal sans porter la marque conclut toujours la fin" ;;
+  *) ko "SONDE TROP LARGE : elle refuse de conclure sur un agent fini qui a seulement écrit le mot « goal » : $OUT" ;;
+esac
+[ "$RC" -eq 0 ] && ok "et son code de sortie reste 0" || ko "code de sortie $RC sur une fin légitime"
+
+echo "→ 48g. La FENÊTRE de lecture est assez large pour atteindre la marque"
+# ⚠️ LA MARQUE N'EST PAS LA DERNIÈRE LIGNE DE L'ÉCRAN. Mesuré le 2026-08-26 sur
+#    les panes réels : sous la marque viennent la boîte de saisie, la barre
+#    « auto mode », puis autant de lignes que l'agent a de sous-agents en vol —
+#    onze lignes sous la marque sur w31:pD, huit sur w8X:pC. Une sonde qui ne
+#    lirait que les dernières lignes rendrait « pas de but » sur un agent qui en
+#    a, c'est-à-dire rouvrirait le défaut. Sans ce scénario, `--lines 40` →
+#    `--lines 1` SURVIVAIT à toute la suite (mesuré par mutation).
+cat > "$SCREEN_FILE" <<'ECRAN48G'
+  ⎿  Login successful
+
+                                               ◎ /goal active (2h)
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · PR #336
+                                                               /rc
+
+  ⏺ main
+  ◯ backend  Measuring lsof and connect o… 2m 40s · ↓ 86.1k tokens
+  ◯ backend  Grepping across pane output … 1m 59s · ↓ 94.5k tokens
+  ◯ backend  Reading test-naissance-orche… 1m 15s · ↓ 97.9k tokens
+  ◯ backend  Writing the report ………………………… 0m 41s · ↓ 12.2k tokens
+  ◯ general-purpose  Backing up the tree … 3m 13s · ↓ 109.9k tokens
+ECRAN48G
+printf 'working\ndone\nidle\nidle\nidle\nidle\n' > "$SEQ_FILE"
+run 6
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ko "FENÊTRE TROP COURTE : la marque du but était à l'écran, la sonde ne l'a pas atteinte : $OUT" ;;
+  *) ok "elle atteint la marque même quand douze lignes la surmontent" ;;
+esac
+
+echo "→ 48h. UNE REPRISE REMET LE COMPTEUR À ZÉRO — sinon un agent vivant est lâché"
+# ⚠️ C'EST LA REPRO ELLE-MÊME QUI L'EXIGE : l'agent coupé est reparti `working`
+#    en 8 secondes. Un agent qui alterne « état terminal trompeur » et « travail
+#    réel » ne doit JAMAIS accumuler vers la borne : sans le reset, trois faux
+#    départs espacés d'une heure suffiraient à l'abandonner alors qu'il travaille.
+cat > "$SCREEN_FILE" <<'ECRAN48H'
+  ⎿  Login successful
+
+                                               ◎ /goal active (2h)
+ECRAN48H
+# working / done→idle / working / done→idle / working / done→idle : trois états
+# terminaux trompeurs, mais séparés par du travail RÉEL à chaque fois.
+printf 'working\ndone\nidle\nworking\ndone\nidle\nworking\ndone\nidle\nworking\nworking\nworking\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT48H="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-48h" VD_BUT_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 8 --dry-run 2>&1)"
+case "$OUT48H" in
+  *"MOTIF: but-inacheve"*) ko "elle LÂCHE un agent qui a repris le travail entre chaque état terminal : $OUT48H" ;;
+  *"MOTIF: agent-termine"*) ko "elle déclare fini un agent dont le but est actif : $OUT48H" ;;
+  *) ok "une reprise réelle remet le compteur à zéro — elle veille toujours" ;;
+esac
+N48H=$(printf '%s\n' "$OUT48H" | grep -c "(1/3)")
+[ "$N48H" -eq 3 ] && ok "le compteur repart de 1 à chaque reprise (3 fois « (1/3) »)" \
+  || ko "le compteur n'est pas remis à zéro par la reprise : « (1/3) » vu $N48H fois au lieu de 3"
+
+echo "→ 48e. La borne du but est ÉPINGLÉE dans le script, et elle est VISIBLE"
+# ⚠️ VD_BUT_TOURS est réglable pour que 48d soit éprouvable en un instant ; sans
+#    cette assertion, le banc réglerait ce qu'il éprouve et la valeur RÉELLE du
+#    poste ne serait garantie par rien. Deux réglages voisins (repos / but) qui
+#    ne se voient jamais ensemble sont le vrai défaut : ils sont documentés et
+#    épinglés tous les deux.
+DEFAUT_BUT="$(grep -E '^VD_BUT_TOURS_DEFAUT=' "$VEILLE" | head -1 | cut -d= -f2)"
+DEFAUT_SLEEP2="$(grep -E '^VD_SLEEP_DEFAUT=' "$VEILLE" | head -1 | cut -d= -f2)"
+if [ -n "$DEFAUT_BUT" ] && [ -n "$DEFAUT_SLEEP2" ]; then
+  MIN_BUT=$(( DEFAUT_BUT * DEFAUT_SLEEP2 / 60 ))
+  [ "$MIN_BUT" -ge 20 ] \
+    && ok "la borne du but par défaut couvre ${MIN_BUT} min d'immobilité avant de lâcher l'agent" \
+    || ko "la borne du but par défaut ne couvre que ${MIN_BUT} min : trop courte pour une coupure de session"
+else
+  ko "VD_BUT_TOURS_DEFAUT introuvable dans le script — la borne n'est pas épinglable"
+fi
+grep -qE 'VD_BUT_TOURS' "$VEILLE" && ok "VD_BUT_TOURS est un réglage nommé du script" || ko "VD_BUT_TOURS n'existe pas"
+
+
+# =================================================================
+# 49. LE SYMÉTRIQUE DU CORRECTIF 48, trouvé par la revue du chef d'équipe.
+#     Le scénario 48 ferme la porte par laquelle le défaut ② est passé le
+#     2026-08-26 : `done` puis `idle`. Mais un agent coupé par la limite de
+#     session peut rester `idle` SANS JAMAIS PASSER `done` — et c'est
+#     LITTÉRALEMENT l'écran du ticket : « ⎿ Login successful », boîte vide,
+#     statut herdr `idle`, marque « ◎ /goal active ». Ce chemin-là ne
+#     consultait pas le but : il lâchait l'agent au bout de la borne de repos
+#     avec le motif `repos-prolonge`, qui dit « il ne bouge plus » sans jamais
+#     dire que son MANDAT était resté ouvert.
+#
+# ⚠️ DEUX MOTIFS QUI DISENT DEUX CHOSES VRAIMENT DIFFÉRENTES — c'est le sens
+#    de les avoir séparés. `repos-prolonge` (12) = immobilité ORDINAIRE, sans
+#    but actif ; `but-inacheve` (13) = immobilité avec un mandat resté ouvert
+#    (session coupée ? limite atteinte ?). Le premier dit « va peut-être le
+#    voir » ; le second dit « un message suffit peut-être à le faire repartir ».
+# =================================================================
+echo "→ 49. Agent IDLE (jamais done) + but ACTIF → mandat ouvert, jamais « repos ordinaire »"
+cat > "$SCREEN_FILE" <<'ECRAN49'
+  ⎿  Login successful
+
+                                               ◎ /goal active (2h)
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle)
+ECRAN49
+# L'agent travaille, puis reste `idle` — SANS jamais passer `done`. C'est la
+# porte d'à côté de celle du scénario 48, et elle donne sur la même pièce.
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT49="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+         VD_REGISTRE_DIR="${WORK}/registre-49" VD_REPOS_TOURS=3 VD_BUT_TOURS=3 \
+         VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+         bash "$VEILLE" test-pane test-agent 50 --dry-run 2>&1)"
+RC49=$?
+case "$OUT49" in
+  *"MOTIF: repos-prolonge"*) ko "SYMÉTRIQUE OUVERT : elle lâche comme une immobilité ORDINAIRE un agent dont le but est encore actif — c'est l'écran exact du ticket : $OUT49" ;;
+  *"MOTIF: but-inacheve"*) ok "le chemin idle nomme lui aussi le mandat resté ouvert" ;;
+  *"MOTIF: agent-termine"*) ko "elle déclare FINI un agent idle au but actif : $OUT49" ;;
+  *) ko "motif inattendu sur un idle au but actif : $OUT49" ;;
+esac
+[ "$RC49" -eq 13 ] && ok "et il porte le MÊME code que le chemin done (rc=$RC49)" \
+  || ko "code attendu 13 (but-inacheve) sur le chemin idle, obtenu $RC49"
+case "$OUT49" in
+  *"MOTIF: tours-epuises"*) ko "elle brûle 50 tours au lieu de conclure" ;;
+  *) ok "elle conclut sans brûler toute sa veille" ;;
+esac
+
+# ⚠️ ET LA BORNE DE CE CHEMIN-CI VAUT EXACTEMENT CE NOMBRE-LÀ, comme celle du
+#    chemin `done` (scénario 48d). Les deux gardes portent le même compteur mais
+#    passent par DEUX comparaisons distinctes dans le fichier : épingler l'une
+#    ne dit rien de l'autre. Mesuré par mutation — `-ge` → `-gt` sur la seule
+#    comparaison du chemin idle SURVIVAIT à toute la suite.
+N49=$(printf '%s\n' "$OUT49" | grep -c "au repos, mais son BUT est encore actif")
+[ "$N49" -eq 3 ] && ok "elle conclut au relevé EXACT où la borne est posée (3 relevés, obtenu $N49)" \
+  || ko "borne décalée sur le chemin idle : attendu 3 relevés avant de conclure, obtenu $N49"
+case "$OUT49" in
+  *"(3/3)"*) ok "le dernier relevé annoncé est bien le 3ᵉ sur 3" ;;
+  *) ko "le compte annoncé ne finit pas sur (3/3) : $OUT49" ;;
+esac
+
+echo "→ 49b. LA CONTRE-ÉPREUVE : le MÊME repos SANS but actif reste « repos-prolonge »"
+# ⚠️ C'est l'assertion qui mesure ce que le correctif a PRIS. Sans elle, faire
+#    porter `but-inacheve` à TOUT repos passerait le scénario 49 — et le motif
+#    `repos-prolonge` deviendrait inatteignable, c'est-à-dire que les deux faits
+#    redeviendraient un seul, ce que ce lot cherche précisément à éviter.
+cat > "$SCREEN_FILE" <<'ECRAN49B'
+  ⎿  Login successful
+
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle)
+ECRAN49B
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT49B="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-49b" VD_REPOS_TOURS=3 VD_BUT_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 50 --dry-run 2>&1)"
+RC49B=$?
+case "$OUT49B" in
+  *"MOTIF: repos-prolonge"*) ok "une immobilité ORDINAIRE garde son motif — les deux faits restent distincts" ;;
+  *"MOTIF: but-inacheve"*) ko "LE CORRECTIF A TROP PRIS : tout repos devient un « mandat ouvert », repos-prolonge est inatteignable : $OUT49B" ;;
+  *) ko "motif inattendu sur un repos ordinaire : $OUT49B" ;;
+esac
+[ "$RC49B" -eq 12 ] && ok "et son code reste 12, distinct de 13 (rc=$RC49B)" \
+  || ko "code attendu 12 sur un repos ordinaire, obtenu $RC49B"
+
+echo "→ 49c. Le but qui DISPARAÎT en cours de repos rebascule vers « repos-prolonge »"
+# ⚠️ La symétrie complète : si la marque s'en va (l'agent a clos son but), on
+#    n'est plus devant un mandat ouvert. Sans ce reset, un agent qui a rangé son
+#    but resterait éternellement compté comme « inachevé » et ne recevrait
+#    jamais le motif qui décrit sa vraie situation.
+ECRAN_BUT_ON="${WORK}/49-but-actif.txt"
+ECRAN_BUT_OFF="${WORK}/49-but-clos.txt"
+SEQ_ECRAN="${WORK}/49-seq-ecrans.txt"
+cat > "$ECRAN_BUT_ON" <<'ECRAN49CA'
+  ⎿  Login successful
+
+                                               ◎ /goal active (2h)
+ECRAN49CA
+cat > "$ECRAN_BUT_OFF" <<'ECRAN49CB'
+  ⎿  Login successful
+
+  ⏺ But atteint, rapport rendu.
+ECRAN49CB
+# 2 relevés d'écran par tour idle (travail_en_vol, puis but_actif) : la marque
+# est là aux tours 2-3, puis disparaît pour de bon.
+printf '%s\n%s\n%s\n%s\n%s\n' "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" "$ECRAN_BUT_OFF" > "$SEQ_ECRAN"
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx" "${SEQ_ECRAN}.ridx"
+# VD_BUT_TOURS=99 : si le compteur du mandat n'était PAS remis à zéro, elle
+# n'atteindrait jamais sa borne. Le seul chemin vers `repos-prolonge` passe par
+# le reset ET par le retour au comptage de repos ordinaire.
+OUT49C="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$ECRAN_BUT_ON" \
+          FAKE_HERDR_SCREEN_SEQ_FILE="$SEQ_ECRAN" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-49c" VD_REPOS_TOURS=3 VD_BUT_TOURS=99 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 12 --dry-run 2>&1)"
+RC49C=$?
+case "$OUT49C" in
+  *"MOTIF: repos-prolonge"*) ok "la disparition de la marque rebascule vers l'immobilité ordinaire" ;;
+  *"MOTIF: but-inacheve"*) ko "le but a disparu de l'écran et elle le compte encore comme inachevé : $OUT49C" ;;
+  *) ko "motif inattendu après disparition de la marque : $OUT49C" ;;
+esac
+[ "$RC49C" -eq 12 ] && ok "et son code redevient 12 (rc=$RC49C)" || ko "code attendu 12, obtenu $RC49C"
+
+echo "→ 49e. Une marque qui S'INTERROMPT puis revient REPART DE ZÉRO"
+# ⚠️ C'EST LE SEUL SCÉNARIO QUI ÉPROUVE LE RESET LUI-MÊME. Le 49c ne le
+#    discriminait pas : avec ou sans reset, il finissait pareil (mesuré par
+#    mutation — « BUT_INACHEVE=0 » supprimé du repos ordinaire SURVIVAIT). Ce
+#    qui distingue les deux est le MOMENT de la conclusion : sans reset, deux
+#    passages de la marque séparés par une accalmie s'ADDITIONNENT, et la veille
+#    lâche l'agent une accalmie trop tôt.
+#    On l'éprouve en comptant les « (1/3) » : le compteur doit repartir de 1
+#    APRÈS l'accalmie, donc l'annoncer DEUX fois.
+printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+  "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" \
+  "$ECRAN_BUT_OFF" "$ECRAN_BUT_OFF" "$ECRAN_BUT_ON" > "$SEQ_ECRAN"
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx" "${SEQ_ECRAN}.ridx"
+# VD_REPOS_TOURS=99 : le repos ordinaire ne doit jamais conclure ici, sinon on
+# mesurerait l'autre borne en croyant mesurer celle-ci.
+OUT49E="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$ECRAN_BUT_ON" \
+          FAKE_HERDR_SCREEN_SEQ_FILE="$SEQ_ECRAN" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-49e" VD_REPOS_TOURS=99 VD_BUT_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 12 --dry-run 2>&1)"
+N49E=$(printf '%s\n' "$OUT49E" | grep -c "son BUT est encore actif à l'écran (1/3)")
+[ "$N49E" -eq 2 ] && ok "le compteur du mandat repart de 1 après l'accalmie (« (1/3) » annoncé $N49E fois)" \
+  || ko "le compteur ADDITIONNE deux passages séparés de la marque : « (1/3) » vu $N49E fois au lieu de 2 — elle lâchera l'agent une accalmie trop tôt"
+case "$OUT49E" in
+  *"MOTIF: but-inacheve"*) ok "et elle finit tout de même par nommer le mandat resté ouvert" ;;
+  *) ko "elle ne conclut jamais sur le mandat ouvert : $OUT49E" ;;
+esac
+
+echo "→ 49f. Un repos INTERROMPU par une phase de mandat actif ne s'additionne pas"
+# ⚠️ SYMÉTRIQUE DU 49e, ET MÊME PRINCIPE QUE LE SCÉNARIO 31 : « 180 relevés de
+#    repos CONTINU » doit vouloir dire continu. Sans le reset du repos, deux
+#    plages d'immobilité SÉPARÉES par une phase où le but était actif
+#    s'additionnent — et le motif `repos-prolonge` affirme alors une continuité
+#    qui n'a pas eu lieu. Mesuré par mutation : « REPOS=0 » supprimé du chemin
+#    du mandat SURVIVAIT à toute la suite.
+#    Ici : 2 relevés de repos, une phase de mandat actif, puis 2 relevés de
+#    repos. Avec le reset, la borne de 3 n'est pas atteinte en 6 tours ; sans
+#    lui, elle l'est au 5ᵉ et la veille lâche l'agent.
+printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+  "$ECRAN_BUT_OFF" "$ECRAN_BUT_OFF" "$ECRAN_BUT_OFF" "$ECRAN_BUT_OFF" \
+  "$ECRAN_BUT_ON" "$ECRAN_BUT_ON" "$ECRAN_BUT_OFF" > "$SEQ_ECRAN"
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx" "${SEQ_ECRAN}.ridx"
+OUT49F="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$ECRAN_BUT_OFF" \
+          FAKE_HERDR_SCREEN_SEQ_FILE="$SEQ_ECRAN" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-49f" VD_REPOS_TOURS=3 VD_BUT_TOURS=99 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 6 --dry-run 2>&1)"
+# La phase de mandat actif a bien eu lieu — sans cette assertion, le scénario
+# passerait aussi si la séquence d'écrans ne marchait pas du tout.
+case "$OUT49F" in
+  *"au repos, mais son BUT est encore actif"*) ok "la phase de mandat actif a bien été vue (le scénario n'est pas creux)" ;;
+  *) ko "la phase de mandat actif n'a jamais été observée — ce scénario ne mesure rien : $OUT49F" ;;
+esac
+case "$OUT49F" in
+  *"MOTIF: repos-prolonge"*) ko "elle ADDITIONNE deux plages de repos séparées par une phase de mandat actif — « repos continu » est alors un mensonge : $OUT49F" ;;
+  *) ok "une plage de repos interrompue par un mandat actif repart de zéro" ;;
+esac
+
+echo "→ 49d. Un agent au repos avec un but actif ET du travail en vol n'est jamais lâché"
+# ⚠️ L'ordre des deux sondes compte : `travail_en_vol` prime. Un sous-agent qui
+#    tourne suffit à ne rien conclure du tout — ni repos, ni mandat ouvert.
+cat > "$SCREEN_FILE" <<'ECRAN49D'
+  Analyse en cours
+
+  · 2 shells · /tasks to see subagents
+                                               ◎ /goal active (2h)
+ECRAN49D
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT49D="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+          FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+          VD_REGISTRE_DIR="${WORK}/registre-49d" VD_REPOS_TOURS=3 VD_BUT_TOURS=3 \
+          VD_SLEEP=0 VD_SLEEP_CONFIRM=0 VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 \
+          bash "$VEILLE" test-pane test-agent 12 --dry-run 2>&1)"
+case "$OUT49D" in
+  *"MOTIF: repos-prolonge"*) ko "elle abandonne un agent qui a du travail en vol : $OUT49D" ;;
+  *"MOTIF: but-inacheve"*) ko "elle abandonne un agent qui a du travail en vol : $OUT49D" ;;
+  *) ok "le travail en vol prime : elle ne conclut rien du tout" ;;
+esac
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
