@@ -53,6 +53,7 @@ import {
 } from '../src/tui-vue-du-parc.js';
 import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
+import { rangeesPhysiques, texteVisible } from './aide/terminal.js';
 
 /** La largeur AFFICHÉE — en points de code. `.length` compte faux sur la roue et les accents. */
 const largeurAffichee = (texte) => [...String(texte ?? '')].length;
@@ -446,41 +447,29 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
   }
 });
 
-test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production n’appelle pas ne garde rien', async (t) => {
+test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — et plus RIEN ne déborde, sur tous les états', async (t) => {
   // 🔴 CE BANC EXISTE PARCE QUE J’AVAIS UN INVARIANT JUSTE, ÉPROUVÉ, ET JAMAIS CONSULTÉ.
-  //
-  // `depasseLaLargeurAutorisee` répondait correctement `true` sur le pied en mode recherche —
-  // et `rendreEcran` recalculait sa PROPRE condition, plus large, qui laissait passer tout ce
-  // que `pied()` rend. Mesuré (revue portail) : en mode recherche, sur un pane de 30 colonnes,
-  // la barre écrivait 43 caractères et wrappait. C’était une RÉGRESSION de mon lot : sur
+  // `rendreEcran` recalculait sa propre condition, plus large, et laissait passer le pied en
+  // mode RECHERCHE (43 caractères sur un pane de 30) — une régression de ce lot : sur
   // `origin/main`, `borner` s’appliquait sans condition.
   //
-  // ⚠️ « L’exception vit DANS l’invariant » (décision `f05bc613`, condition n°1) était vrai dans
-  // les bancs et FAUX dans le produit. Les deux oracles divergeaient, et seul celui que
-  // personne n’appelait était gardé.
-  //
-  // ⚠️ ON MESURE DONC LE RENDU RÉEL CONTRE L’INVARIANT, sur TOUS les états de l’écran — c’est
-  // la seule formulation qui ne peut pas diverger : si la production cesse d’interroger
-  // l’invariant, les deux réponses se séparent et ce banc rougit.
+  // ⚠️ DEPUIS LA DÉCISION `00a7b645` (option B), IL N’Y A PLUS D’EXCEPTION DU TOUT : la barre
+  // se tronque comme toute autre ligne. Ce banc mesure donc une règle sans réserve — et c’est
+  // ce qui le rend impossible à affaiblir : il n’y a pas de justification à élargir.
   const tmp = racine();
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
 
-  // ⚠️ LE MODE RECHERCHE EST LÀ PARCE QU’IL MANQUAIT — c’est l’état par lequel la régression est
-  // passée. `pied()` y rend une branche entièrement indépendante de `raccourcisPour`.
   const etats = [
     { quoi: 'arbre', etat: etatInitial() },
     { quoi: 'filtre « non-pris seuls »', etat: { ...etatInitial(), nonPrisSeuls: true } },
     { quoi: 'mode RECHERCHE, terme court', etat: { ...etatInitial(), mode: 'recherche', recherche: 'a' } },
     { quoi: 'mode RECHERCHE, terme long', etat: { ...etatInitial(), mode: 'recherche', recherche: 'somcraft-cowork-espace-client' } },
     { quoi: 'mode RECHERCHE, terme vide', etat: { ...etatInitial(), mode: 'recherche', recherche: '' } },
-    // 🔴 LA CONTREFAÇON : le lecteur tape le raccourci vital DANS la recherche. Tant que la barre
-    // était reconnue à une sous-chaîne, ce texte se faisait passer pour elle et échappait au
-    // bornage — 44 caractères non tronqués dans un pane de 3 (revue portail).
-    {
-      quoi: 'mode RECHERCHE contenant le raccourci vital (contrefaçon)',
-      etat: { ...etatInitial(), mode: 'recherche', recherche: RACCOURCI_VITAL },
-    },
+    // ⚠️ LA CONTREFAÇON : le lecteur tape le raccourci vital DANS la recherche. Tant que
+    // l’exception reconnaissait la barre à une sous-chaîne, ce texte se faisait passer pour
+    // elle. L’exception a disparu ; le cas reste gardé, parce qu’il ne coûte rien de le garder.
+    { quoi: 'mode RECHERCHE contenant le raccourci vital', etat: { ...etatInitial(), mode: 'recherche', recherche: RACCOURCI_VITAL } },
   ];
 
   let mesurees = 0;
@@ -489,335 +478,78 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production
     for (let largeur = 1; largeur <= 130; largeur += 1) {
       for (const ligne of rendreEcran({ vue, etat: e, lignes: l2, largeur, hauteur: 10 })) {
         mesurees += 1;
-        // 🔴 CETTE ASSERTION ÉTAIT TAUTOLOGIQUE, ET UNE REVUE L'A DIT : elle comparait le rendu
-        // à `depasseLaLargeurAutorisee`, c'est-à-dire l'oracle à lui-même. Quand l'exception de
-        // l'invariant était trop large, le rendu ET l'oracle se trompaient ENSEMBLE, et le banc
-        // restait vert. C'est ainsi qu'un débordement de 61 caractères dans un pane de 3 est
-        // passé.
-        //
-        // ⚠️ ON MESURE DONC CONTRE UNE RÈGLE ÉCRITE ICI, indépendante de l'invariant : une ligne
-        // ne dépasse que si elle PORTE le raccourci vital ET que celui-ci ne tiendrait pas.
-        // C'est la décision `f05bc613` récitée par le banc, pas déléguée au code qu'il juge.
-        const trop = largeurAffichee(ligne.texte) > largeur;
-        // 🔴 CE BANC NE LIT PAS `porteLaSortie` — ET C'EST TOUT SON OFFICE. Le drapeau est ce
-        // que le code AFFIRME ; ce banc juge si cette affirmation est vraie. Le lire ici
-        // rendrait la garde tautologique une seconde fois : mal poser le drapeau (en mode
-        // recherche, ou inconditionnellement) rouvrait un débordement de 58 caractères sans
-        // qu'un seul essai ne bouge — mesuré.
-        //
-        // ⚠️ IL RÉCITE DONC LA DÉCISION `f05bc613` DANS SES PROPRES TERMES : seule la barre qui
-        // rend VRAIMENT les raccourcis peut déborder, et seulement quand le raccourci vital n'y
-        // tiendrait pas. Le mode recherche ne rend pas de raccourcis — il rend un champ de
-        // saisie — donc il n'a droit à aucune exception, quoi que le lecteur ait tapé dedans.
-        const justifiee =
-          e.mode !== 'recherche' &&
-          ligne.style === 'pied' &&
-          largeur < [...RACCOURCI_VITAL].length;
         assert.ok(
-          !trop || justifiee,
+          largeurAffichee(ligne.texte) <= largeur,
           `${quoi}, à ${largeur} colonnes : ${largeurAffichee(ligne.texte)} caractères de style ` +
-            `« ${ligne.style} » — et cette ligne ne porte pas la sortie : ${JSON.stringify(ligne.texte)}`
+            `« ${ligne.style} » : ${JSON.stringify(ligne.texte)}`
         );
-        // ⚠️ ET L'INVARIANT DOIT DIRE LA MÊME CHOSE QUE LA RÈGLE. S'ils divergent, l'un des deux
-        // ment — et c'est ce désaccord, pas l'accord, qui révèle l'exception trop large.
-        // ⚠️ ET LE DRAPEAU LUI-MÊME EST JUGÉ : `porteLaSortie` est une AFFIRMATION du code, et
-        // une affirmation se vérifie. Mal posée, elle ferait exempter n'importe quoi.
-        if (ligne.style === 'pied') {
-          assert.equal(
-            ligne.porteLaSortie === true,
-            e.mode !== 'recherche' && ligne.texte.includes(RACCOURCI_VITAL),
-            `${quoi}, à ${largeur} colonnes : le code AFFIRME porteLaSortie=${ligne.porteLaSortie} ` +
-              `sur une ligne qui ne le justifie pas : ${JSON.stringify(ligne.texte)}`
-          );
-        }
+        // ⚠️ ET L’INVARIANT DIT LA MÊME CHOSE — s’ils divergent, l’un des deux ment, et c’est
+        // ce désaccord (jamais l’accord) qui révèle une règle qu’on aurait affaiblie d’un côté.
         assert.equal(
           depasseLaLargeurAutorisee(ligne, largeur),
-          trop && !justifiee,
-          `${quoi}, à ${largeur} colonnes : l’invariant et la décision ne disent pas la même chose ` +
-            `sur ${JSON.stringify(ligne.texte)}`
+          false,
+          `${quoi}, à ${largeur} colonnes : l’invariant contredit le rendu sur ${JSON.stringify(ligne.texte)}`
         );
       }
     }
   }
   assert.ok(mesurees > 1000, `ce banc doit mesurer un vrai écran — il n’a vu que ${mesurees} lignes`);
-
-  // ⚠️ ET LE CAS QUI A FUI, NOMMÉ À PART : sans lui, un décor futur qui perdrait le mode
-  // recherche ferait retomber ce banc sur les seuls états déjà gardés, sans que rien ne le dise.
-  const enRecherche = { ...etatInitial(), mode: 'recherche', recherche: 'somcraft' };
-  const l3 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), enRecherche);
-  const barre = rendreEcran({ vue, etat: enRecherche, lignes: l3, largeur: 30, hauteur: 10 }).at(-1);
-  assert.equal(barre.style, 'pied', 'la dernière ligne est bien la barre');
-  assert.ok(barre.texte.includes('/'), `en mode recherche, la barre montre le champ : ${JSON.stringify(barre.texte)}`);
-  assert.ok(
-    largeurAffichee(barre.texte) <= 30,
-    `en mode recherche à 30 colonnes, la barre écrit ${largeurAffichee(barre.texte)} caractères — ` +
-      'elle wrappe, et le champ de recherche n’a AUCUN lien avec le raccourci vital'
-  );
 });
 
-test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et elle ne s’élargit pas sans rougir', async (t) => {
-  // 🔴 CE BANC EXISTE PARCE QUE L’EXCEPTION ÉTAIT DÉSARMABLE, ET QUE LA DÉPLACER N’A PAS SUFFI.
+
+test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — mesuré sur l’ÉCRAN, pas sur la chaîne', async (t) => {
+  // 🔴 CONDITION N°2 DE LA DÉCISION `00a7b645`, ET C’EST ELLE QUI A PERMIS AU DÉFAUT DE
+  // TRAVERSER TROIS CORRECTIONS : un banc qui fait `includes()` sur la chaîne LOGIQUE ne peut
+  // pas voir qu’un terminal wrappe et fait défiler. Un vert qui ne touche pas ce qu’il éprouve.
   //
-  // Décision `f05bc613`, condition n°3 : « une exception qu’on peut élargir sans rougir n’est
-  // pas une exception, c’est un trou avec un commentaire. » Mesuré AVANT ce banc — six
-  // élargissements de `depasseLaLargeurAutorisee`, CINQ verts : l’exception étendue à toute
-  // largeur, au titre, à toutes les lignes, avec un seuil écrit en dur à 40, ou décrochée du
-  // manifeste. Rien ne bougeait.
+  // Ce banc passe par `tests/aide/terminal.js` — un modèle d’auto-wrap et de défilement,
+  // confronté à `pyte` (émulateur VT100/xterm) sur les cas mêmes qui ont révélé le défaut :
+  // 0 écart sur 7.
   //
-  // ⚠️ POURQUOI LES AUTRES BANCS NE POUVAIENT PAS L’ATTRAPER : ils demandent « aucune ligne ne
-  // dépasse », et l’invariant leur répond « non » — plus l’exception est large, plus il répond
-  // « non ». **Élargir une exception ne fait jamais rougir une garde qui l’interroge.** Il faut
-  // une garde qui mesure l’exception ELLE-MÊME, sur les deux bords.
+  // ⚠️ CE QUE B GARANTIT, ET CE QU’ELLE NE GARANTIT PAS :
+  //   • au-dessus du seuil, la sortie ne se sacrifie JAMAIS ;
+  //   • sous le seuil, elle n’est montrable par AUCUN rendu — et ce qui se joue alors est
+  //     « lequel abîme le moins le reste de l’écran ». La troncature garde l’écran stable et
+  //     le titre en place ; le débordement emportait les deux (mesuré : à 8×2, `'q quitte'` /
+  //     `'r'`, titre disparu).
   const tmp = racine();
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
   const etat = etatInitial();
   const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
-  const MINIMUM = [...RACCOURCI_VITAL].length;
+  const SEUIL = [...RACCOURCI_VITAL].length;
 
-  // ═══ BORD 1 — TOUT CE QUI EST EXCEPTÉ EST BIEN CE QUE LA RÈGLE NOMME.
-  // Une ligne qui dépasse sans rougir DOIT être la barre, ET la largeur DOIT être sous le
-  // seuil dérivé. Élargir l’exception (au titre, à toutes les lignes, à toute largeur) fait
-  // apparaître ici une ligne exceptée qui ne remplit pas ces deux conditions.
-  let exceptees = 0;
-  for (let largeur = 1; largeur <= 130; largeur += 1) {
-    for (const l of rendreEcran({ vue, etat, lignes, largeur, hauteur: 12 })) {
-      if (largeurAffichee(l.texte) <= largeur) continue;
-      exceptees += 1;
-      assert.equal(
-        l.style,
-        'pied',
-        `à ${largeur} colonnes, une ligne de style « ${l.style} » dépasse sans rougir — ` +
-          'l’exception ne couvre QUE la barre de raccourcis'
-      );
+  for (const [cols, rows] of [[3, 1], [5, 1], [8, 2], [9, 1], [12, 3], [20, 3], [40, 8], [65, 12]]) {
+    const ecran = rendreEcran({ vue, etat, lignes, largeur: cols, hauteur: rows });
+
+    // ═══ ① L’ÉCRAN NE DÉFILE PAS : ce qu’on écrit tient dans les rangées du pane.
+    assert.equal(
+      rangeesPhysiques(ecran, cols),
+      rows,
+      `à ${cols}×${rows}, l’écran occupe ${rangeesPhysiques(ecran, cols)} rangées physiques — ` +
+        'il DÉFILE, et ce qui précède est poussé hors de vue'
+    );
+
+    // ═══ ② LE TITRE SURVIT — c’est ce que le débordement emportait.
+    const vu = texteVisible(ecran, cols, rows);
+    assert.ok(vu.length > 0, `à ${cols}×${rows}, l’écran est vide`);
+    if (rows >= 2) {
       assert.ok(
-        largeur < MINIMUM,
-        `à ${largeur} colonnes, la barre dépasse alors que le raccourci vital (${MINIMUM} ` +
-          'caractères) y tiendrait — l’exception déborde de son seuil'
-      );
-      // ⚠️ ON LIT LE FAIT POSÉ, on ne cherche plus une sous-chaîne : le lecteur peut TAPER
-      // « q quitter » dans la recherche, et une reconnaissance par ressemblance se ferait imiter.
-      assert.equal(
-        l.porteLaSortie,
-        true,
-        `à ${largeur} colonnes, une ligne dépasse sans PORTER la sortie : ${JSON.stringify(l.texte)}`
+        vu.split('\n')[0].trim() !== '',
+        `à ${cols}×${rows}, la première rangée visible est vide — le titre a été poussé dehors`
       );
     }
-  }
 
-  // ⚠️ CONTRÔLE POSITIF — sans lui, tout ce qui précède serait vert sur un écran où RIEN ne
-  // dépasse, c’est-à-dire sur rien du tout. C’est le défaut « une égalité vide », et il aurait
-  // rendu ce banc inutile exactement comme les précédents.
-  assert.ok(
-    exceptees > 0,
-    'aucune ligne n’a jamais été exceptée : ce banc ne mesure rien, et l’exception n’est pas gardée'
-  );
-
-  // ═══ BORD 2 — L’EXCEPTION NE S’APPLIQUE PAS LÀ OÙ ELLE N’A PAS LIEU D’ÊTRE.
-  // Au-dessus du seuil, la barre est une ligne comme les autres : elle doit être refusée si
-  // elle dépasse. Sans ce bord, « l’exception vaut pour TOUTE largeur » resterait vert.
-  // Une barre qui NE porte pas la sortie : elle n'a droit à aucune exception.
-  const barreTropLongue = { style: 'pied', texte: 'x'.repeat(200), porteLaSortie: false };
-  assert.ok(
-    depasseLaLargeurAutorisee(barreTropLongue, MINIMUM),
-    `à ${MINIMUM} colonnes (le seuil), une barre trop longue doit être REFUSÉE — l’exception ` +
-      'ne vaut que STRICTEMENT en dessous'
-  );
-  assert.ok(
-    depasseLaLargeurAutorisee(barreTropLongue, 120),
-    'à 120 colonnes, une barre trop longue doit être refusée comme n’importe quelle ligne'
-  );
-
-  // ═══ BORD 2bis — UNE LIGNE QUI *RESSEMBLE* À LA BARRE N'EST PAS LA BARRE.
-  // 🔴 Le lecteur peut TAPER « q quitter » dans la recherche : tant que l'exception reconnaissait
-  // la barre à une sous-chaîne, ce texte se faisait passer pour elle et échappait au bornage.
-  // Un rôle ne se devine pas d'un texte — le texte est une donnée, et toute reconnaissance par
-  // ressemblance finit par être imitée.
-  assert.ok(
-    depasseLaLargeurAutorisee({ style: 'pied', texte: `/ ${RACCOURCI_VITAL}▏  (Entrée valide)` }, 3),
-    'un champ de recherche contenant le raccourci vital NE doit PAS être excepté'
-  );
-
-  // ═══ BORD 3 — LES AUTRES STYLES NE SONT JAMAIS EXCEPTÉS, MÊME SOUS LE SEUIL.
-  for (const style of ['titre', 'selection', 'arbre:epic', 'vide']) {
-    assert.ok(
-      depasseLaLargeurAutorisee({ style, texte: 'x'.repeat(50) }, 1),
-      `une ligne de style « ${style} » qui dépasse doit être refusée, même à 1 colonne`
-    );
-  }
-
-  // ═══ BORD 4 — LE SEUIL SUIT LE MANIFESTE, il n’est pas figé.
-  // Si quelqu’un décroche le seuil du raccourci vital (littéral, ou autre nombre), la barre
-  // cesse d’être exceptée à la bonne largeur — et c’est ce que cette assertion mesure.
-  assert.equal(
-    depasseLaLargeurAutorisee({ style: 'pied', texte: RACCOURCI_VITAL, porteLaSortie: true }, MINIMUM - 1),
-    false,
-    'juste sous le seuil, la barre qui PORTE la sortie est exceptée'
-  );
-  assert.equal(
-    depasseLaLargeurAutorisee(
-      { style: 'pied', texte: RACCOURCI_VITAL + ' de trop', porteLaSortie: true },
-      MINIMUM
-    ),
-    true,
-    'exactement au seuil, elle ne l’est plus'
-  );
-
-  // 🔴 ET CE QUI REND « ÉQUIVALENTE » LA DERNIÈRE MUTATION DE LA CAMPAGNE SE GARDE ICI.
-  //
-  // Réécrire le seuil en littéral (`'q quitter'.length` au lieu de `RACCOURCI_VITAL`) laisse la
-  // suite verte — non par lacune de garde, mais parce que les deux valent le même nombre
-  // AUJOURD'HUI. Verdict : mutation ÉQUIVALENTE, pas survivante.
-  //
-  // ⚠️ L'ÉQUIVALENCE REPOSE SUR UN FAIT, PAS SUR UNE PROPRIÉTÉ — c'est exactement ce que la
-  // condition n°2 de la décision `f05bc613` refuse : « le jour où `q quitter` est renommé, un
-  // seuil codé en dur devient faux EN SILENCE ». Ce banc rougit ce jour-là, et son message dit
-  // au lecteur futur ce qu'il doit aller vérifier.
-  assert.equal(
-    RACCOURCI_VITAL,
-    'q quitter',
-    'le raccourci vital a été renommé : tout seuil écrit en littéral ailleurs dans le dépôt est ' +
-      'désormais FAUX en silence — cherchez les copies et dérivez-les de `RACCOURCI_VITAL`'
-  );
-});
-
-test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plancher de corps inobservable', async (t) => {
-  // 🔴 UNE SECONDE MUTATION ÉQUIVALENTE, ET ELLE MÉRITE LE MÊME TRAITEMENT QUE LA PREMIÈRE.
-  // Élargir le plancher de `hauteurCorps` (`max(1, …)` → `max(3, …)`) laisse la suite verte :
-  // la borne de sortie tronque l’excédent, donc le plancher est INOBSERVABLE de l’extérieur.
-  // Verdict : ÉQUIVALENTE, pas survivante.
-  //
-  // ⚠️ MAIS L’ÉQUIVALENCE REPOSE SUR LA TRONCATURE, PAS SUR UNE PROPRIÉTÉ DU PLANCHER. Le jour
-  // où quelqu’un retire ou déplace cette troncature — un « nettoyage » qui a l’air d’une
-  // simplification — le plancher redevient mordant, et le défaut du rejet portail se rouvre.
-  //
-  // ⚠️ CE BANC NE GARDE DONC PAS LE PLANCHER : il garde ce que le dirigeant VOIT aux petites
-  // hauteurs, c’est-à-dire l’ORDRE dans lequel l’écran sacrifie ses parties. Une ligne de pane
-  // montre le titre ; deux montrent le titre et une ligne d’arbre ; trois y ajoutent le pied.
-  // C’est cet ordre qui rend le plancher sans effet, et c’est lui qui doit rougir s’il change.
-  const tmp = racine();
-  t.after(() => rmSync(tmp, { recursive: true, force: true }));
-  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
-  const etat = etatInitial();
-  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
-
-  const stylesA = (hauteur) =>
-    rendreEcran({ vue, etat, lignes, largeur: 65, hauteur }).map((l) => l.style.split(':')[0]);
-
-  // 🔴 CE BANC VERROUILLAIT LE MAUVAIS ORDRE, et il le disait lui-même sans le voir : son
-  // assertion à 3 lignes portait le commentaire « le pied apparaît — c'est lui qui porte les
-  // raccourcis pour sortir », pendant que ses assertions à 1 et 2 lignes ENTÉRINAIENT son
-  // absence. Relevé par une passe de fond.
-  //
-  // ⚠️ L'ORDRE DE SACRIFICE VA DU MOINS VITAL AU PLUS VITAL : le CORPS cède d'abord (il se
-  // parcourt ligne à ligne, on peut y revenir), puis le TITRE (il dit où l'on est), et le PIED
-  // reste le dernier — sans lui, le dirigeant ne sait plus SORTIR d'un écran alternatif.
-  assert.deepEqual(stylesA(1), ['pied'], 'une ligne de pane : la SORTIE, pas le titre');
-  assert.deepEqual(stylesA(2), ['titre', 'pied'], 'deux lignes : où l’on est, et comment sortir');
-  assert.deepEqual(
-    stylesA(3),
-    ['titre', 'selection', 'pied'],
-    'trois lignes : la ligne sélectionnée s’intercale entre les deux bandeaux'
-  );
-  assert.deepEqual(
-    stylesA(5),
-    ['titre', 'selection', 'arbre', 'arbre', 'pied'],
-    'au-delà, le corps grandit entre les deux bandeaux'
-  );
-
-  // 🔴 ET LA GARANTIE QUI COMPTE VRAIMENT, ÉNONCÉE COMME TELLE PLUTÔT QUE DÉDUITE DE L'ORDRE :
-  // « q quitter » est visible à TOUTE hauteur non nulle. Le fichier porte déjà cette règle pour
-  // la LARGEUR — `RACCOURCIS_UN_A_UN` marque `q quitter` « le dernier qu'on retire, jamais le
-  // premier ». Mon invariant de hauteur se disait « la jumelle verticale » de celui de largeur,
-  // et il violait le principe qu'il jumelait.
-  // 🔴 CE BALAYAGE NE PRENAIT QUE `[20, 40, 65, 120]` ET LE FILTRE INACTIF — deux choix commodes,
-  // et le défaut vivait précisément dans ce qu'ils excluaient. Mesuré en revue portail : avec le
-  // filtre `n` ACTIF, « q quitter » était absent de la barre pour TOUTE largeur de 1 à 36
-  // colonnes. L'entête de filtre se servait en premier et laissait « ce qui reste » à la sortie.
-  //
-  // ⚠️ ON BALAIE DONC LA LARGEUR EN CONTINU **ET** LES ÉTATS DE FILTRE — c'est le produit des
-  // deux qui casse, jamais l'un des deux seul.
-  const etats = [
-    { quoi: 'sans filtre', etat },
-    { quoi: 'filtre « non-pris seuls »', etat: { ...etat, nonPrisSeuls: true } },
-    { quoi: 'recherche active', etat: { ...etat, recherche: 'somcraft' } },
-  ];
-  // 9 = longueur de « q quitter ». En dessous, AUCUNE barre ne peut le dire : c'est une borne
-  // physique, pas un choix — et le banc l'épingle pour qu'elle ne dérive pas en silence.
-  // ⚠️ LE SEUIL SE DÉRIVE, IL NE S'ÉCRIT PAS (décision `f05bc613`, condition n°2) : le jour où
-  // le raccourci vital est renommé, un `9` codé en dur devient faux EN SILENCE et cette garde
-  // reste verte.
-  const MINIMUM = [...RACCOURCI_VITAL].length;
-
-  for (const { quoi, etat: e } of etats) {
-    const l2 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
-    for (let largeur = 1; largeur <= 130; largeur += 1) {
-      for (const hauteur of [1, 2, 5, 24]) {
-        const barre = rendreEcran({ vue, etat: e, lignes: l2, largeur, hauteur }).at(-1).texte;
-        if (largeur >= MINIMUM) {
-          assert.ok(
-            barre.includes('q quitter'),
-            `${quoi}, ${largeur}x${hauteur} : « q quitter » n’est nulle part — le dirigeant est ` +
-              'enfermé dans un écran alternatif dont il ne connaît pas la sortie'
-          );
-        }
-        // 🔴 ET « q quitter » EST LÀ MÊME SOUS LE MINIMUM — c'est un arbitrage assumé entre deux
-        // invariants de ce dépôt qui se contredisent (voir `rendreEcran`) : la barre est la
-        // SEULE ligne autorisée à déborder, parce qu'un écran alternatif dont l'aide ne dit
-        // plus la sortie ENFERME son lecteur, alors qu'un débordement sur un pane de moins de
-        // 9 colonnes se voit et se répare d'un coup d'œil.
-        //
-        // ⚠️ CE QUI RESTE FERMÉ — l'objet du rejet portail : le FRAGMENT. « q quitt… » ne dit
-        // rien à qui ne connaît pas déjà la touche, c'est-à-dire exactement la personne coincée
-        // qui lit cette barre. Ma propre première correction en produisait un.
-        assert.ok(
-          barre.includes('q quitter'),
-          `${quoi}, ${largeur}x${hauteur} : « q quitter » manque ou est tronqué : ${JSON.stringify(barre)}`
-        );
-      }
+    // ═══ ③ LA SORTIE, SELON LE SEUIL — la garantie de B, énoncée telle qu’elle est.
+    if (cols >= SEUIL) {
+      assert.ok(
+        vu.includes(RACCOURCI_VITAL),
+        `à ${cols}×${rows}, « ${RACCOURCI_VITAL} » tiendrait et n’est pas à l’écran : ${JSON.stringify(vu)}`
+      );
     }
   }
 });
 
-test('CE QUI REND LE SOUS-TEST DU DRAPEAU REDONDANT SE GARDE — sinon il cesse de l’être en silence', () => {
-  // 🔴 DEUX MUTATIONS SURVIVENT À LA CAMPAGNE, ET LA REVUE LES QUALIFIE D’ÉQUIVALENCES. J’ai
-  // vérifié moi-même plutôt que de la croire — « équivalent par construction » est exactement
-  // ce que j’ai cru trois fois de suite sur cette même exception.
-  //
-  //   ① `porteLaSortie === true` → truthy : mesuré, le champ ne prend QUE `true`, `false` ou
-  //      `undefined` sur les quatre états et les 130 largeurs. Équivalence réelle.
-  //   ② le sous-test `raccourcisPour(largeur).includes(RACCOURCI_VITAL)` dans la pose du
-  //      drapeau : mesuré, `raccourcisPour` porte le raccourci vital à TOUTE largeur de 0 à 200.
-  //      Le sous-test est donc redondant — aujourd’hui.
-  //
-  // ⚠️ MAIS ② REPOSE SUR UNE PROPRIÉTÉ D’UN AUTRE CODE : `raccourcisPour` s’arrête au dernier
-  // raccourci et ne le retire jamais. Le jour où cette boucle change — ou où `q quitter` cesse
-  // d’être le `vital` minimum — le sous-test redevient MORDANT, et rien ne le dirait. Une
-  // équivalence non gardée est une survivante en attente.
-  //
-  // Ce banc ne garde donc pas l’équivalence : il garde CE QUI LA REND VRAIE.
-  for (let largeur = 0; largeur <= 200; largeur += 1) {
-    assert.ok(
-      raccourcisPour(largeur).includes(RACCOURCI_VITAL),
-      `à ${largeur} colonnes, la barre a PERDU le raccourci vital — le sous-test du drapeau ` +
-        'cesse d’être redondant, et le drapeau peut désormais être posé sur une barre sans sortie'
-    );
-  }
-
-  // ⚠️ ET LE RACCOURCI VITAL EST BIEN UN MINIMUM STRICT — c’est ce qui garantit que la boucle
-  // de retrait ne peut pas le choisir. Deux raccourcis à `vital: 1` rendraient le « dernier
-  // retiré » indéterminé, et la propriété ci-dessus deviendrait affaire de hasard d’ordre.
-  const minima = RACCOURCIS_UN_A_UN.filter(
-    (r) => r.vital === Math.min(...RACCOURCIS_UN_A_UN.map((x) => x.vital))
-  );
-  assert.equal(
-    minima.length,
-    1,
-    `${minima.length} raccourcis partagent la vitalité minimale — lequel survit devient un hasard ` +
-      `d’ordre : ${minima.map((r) => r.texte).join(', ')}`
-  );
-  assert.equal(minima[0].texte, RACCOURCI_VITAL, 'et c’est bien celui que `RACCOURCI_VITAL` dérive');
-});
 
 test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle cesse de l’être en silence', () => {
   // 🔴 UNE MUTATION SURVIVANTE QUI N’EN EST PAS UNE, ET LE DIRE VAUT MIEUX QUE DE LA MASQUER.

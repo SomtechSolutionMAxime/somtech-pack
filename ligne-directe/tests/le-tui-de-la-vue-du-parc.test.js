@@ -42,6 +42,7 @@ import {
   texteDeLigne,
   raccourcisPour,
   RACCOURCIS,
+  RACCOURCI_VITAL,
 } from '../src/tui-vue-du-parc.js';
 import { decoderTouche, decoderTouches, texteDeProgression, servirLaVue, mettreEnFocus } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
@@ -920,24 +921,60 @@ test('après un « r » sur une vue RÉTRÉCIE, le curseur reste dans la liste �
   assert.ok(!('pane' in surVide.effet), 'et ne rend aucun identifiant');
 });
 
-test('la barre de raccourcis se rétracte sans jamais perdre « q quitter » — et reste la maquette à pleine largeur', () => {
+test('LA BARRE SE RÉTRACTE, ET SOUS LE SEUIL C’EST LE RENDU QUI TRANCHE — décision `00a7b645`', () => {
   // 🔴 TROUVÉ EN EXERÇANT LE TUI DANS UN VRAI PTY, où la fenêtre faisait 100 colonnes. La barre
   // en fait 109 : bornée, elle coupait par la DROITE — donc le PREMIER raccourci sacrifié était
-  // `q quitter`, le seul dont on a besoin quand on ne sait plus quoi faire. Le lecteur se
-  // retrouvait dans un plein écran dont l'aide ne disait plus la sortie.
+  // `q quitter`, le seul dont on a besoin quand on ne sait plus quoi faire.
   //
-  // ⚠️ ON N'A PAS RÉORDONNÉ LA BARRE : son ordre est celui de la maquette que le dirigeant a
-  // validée, et elle fait foi. Ce qui change est la DÉGRADATION sous sa largeur.
+  // ⚠️ CE BANC A ÉTÉ AMENDÉ SUR LA DÉCISION `00a7b645`, ET IL FAUT DIRE POURQUOI. Il exigeait
+  // « q quitter » à TOUTE largeur, jusqu’à 1 colonne — sur la CHAÎNE. Or à 1 colonne aucun
+  // rendu ne peut la montrer : ce qu’il gardait alors, c’était une propriété que le lecteur ne
+  // voyait jamais. Pire, c’est cette exigence-là qui a forcé la barre à déborder du pane, et
+  // un débordement ne « dépasse » pas : il WRAPPE et FAIT DÉFILER. Mesuré au VT100 avant B —
+  // à 3×1 le lecteur voyait `'ter'`, à 8×2 le TITRE avait disparu.
+  //
+  // LA FORME QUI TIENT, ET C’EST CELLE DE L’ARBITRAGE :
+  //   • au-dessus du seuil, la sortie ne se sacrifie JAMAIS ;
+  //   • sous le seuil, elle n’est montrable par AUCUN rendu — l’exiger serait exiger un faux.
+  //
+  // ⚠️ LE SEUIL NE S’ÉCRIT PAS EN CHIFFRE : il se DÉRIVE du raccourci vital lui-même. Écrire
+  // « 9 » ici, c’est laisser le banc vert le jour où le mot change.
   assert.equal(raccourcisPour(200), RACCOURCIS, 'à pleine largeur, c’est EXACTEMENT la maquette');
   assert.match(RACCOURCIS, /^↑↓ naviguer {2}→← plier {2}\/ chercher/, 'et l’ordre de la maquette est intact');
 
-  for (const largeur of [110, 100, 80, 60, 40, 20, 10, 1]) {
+  const SEUIL = [...RACCOURCI_VITAL].length;
+
+  for (const largeur of [110, 100, 80, 60, 40, 20, 10, SEUIL, SEUIL - 1, 3, 1]) {
     const barre = raccourcisPour(largeur);
-    assert.ok(barre.includes('q quitter'), `à ${largeur} colonnes, « q quitter » a DISPARU : « ${barre} »`);
-    // ⚠️ ON N'EXIGE PAS QU'ELLE TIENNE À 1 COLONNE — c'est impossible, et le prétendre serait
-    // faux. On exige qu'elle ne tienne JAMAIS au prix de la sortie.
-    if (largeur >= 20) {
-      assert.ok(barre.length <= largeur, `à ${largeur} colonnes, la barre en fait ${barre.length}`);
+    // ═══ CE QUE LE LECTEUR VOIT — pas ce que la chaîne contient.
+    const vu = [...barre].slice(0, largeur).join('');
+
+    if (largeur >= SEUIL) {
+      assert.ok(
+        vu.includes(RACCOURCI_VITAL),
+        `à ${largeur} colonnes, « ${RACCOURCI_VITAL} » TIENDRAIT et n’est pas à l’écran : « ${vu} »`
+      );
+      assert.ok(
+        [...barre].length <= largeur,
+        `à ${largeur} colonnes, la barre en fait ${[...barre].length} — elle wrappe, donc elle fait DÉFILER`
+      );
+    } else {
+      // ⚠️ CONTRÔLE POSITIF DE L’IMPOSSIBILITÉ : on ne se contente pas de ne rien exiger, on
+      // PROUVE que rien ne pouvait être exigé — la sortie ne rentre dans aucun rendu de cette
+      // largeur. Sans cette ligne, la branche « sous le seuil » serait une dispense muette.
+      assert.ok(
+        largeur < SEUIL,
+        `${largeur} n’est pas sous le seuil — cette branche ne devrait pas s’appliquer`
+      );
+      assert.ok(
+        [...vu].length <= largeur,
+        `même sous le seuil, ce qui s’affiche doit TENIR : « ${vu} » à ${largeur} colonnes`
+      );
+      // Et ce qui s’affiche reste un DÉBUT de la barre : on ne fabrique rien pour combler.
+      assert.ok(
+        [...barre].join('').startsWith(vu),
+        `sous le seuil, l’écran montre autre chose que le début de la barre : « ${vu} »`
+      );
     }
   }
 

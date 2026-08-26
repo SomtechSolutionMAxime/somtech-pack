@@ -748,12 +748,22 @@ export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.
  * L’INVARIANT DE LARGEUR — ET IL PORTE SON EXCEPTION, elle ne vit pas à côté
  * ═══════════════════════════════════════════════════════════════════════════════════════
  *
- * **Rien de ce que le TUI écrit ne dépasse la largeur du pane, À LA SEULE EXCEPTION de la
- * barre de raccourcis quand le raccourci vital ne peut pas y tenir.**
+ * **Rien de ce que le TUI écrit ne dépasse la largeur du pane. Sans exception.**
  *
- * 🔴 DÉCISION `f05bc613`, ACCEPTÉE au journal de P-20260822-0001 — opposable, et les passes
- * la jugent comme telle. L’exception est inscrite DANS la règle, condition n°1 : une exception
- * rangée dans une liste voisine se désarme sans que personne relise la règle.
+ * 🔴 DÉCISION `00a7b645`, ACCEPTÉE au journal de P-20260822-0001 — elle SUPERSÈDE `f05bc613`,
+ * qui disait l’inverse et que la mesure a renversée.
+ *
+ * `f05bc613` faisait DÉBORDER la barre plutôt que de perdre la sortie, sur la prémisse qu’un
+ * débordement « coûte un wrap visuel et rien de plus ». **Mesuré au VT100 sur le flux exact de
+ * `dessiner()` : un wrap dans un écran alternatif d’une ou deux lignes ne coûte pas un wrap —
+ * il fait DÉFILER.** À 3×1 le lecteur voit `'ter'` ; à 8×2 il voit `'q quitte'` / `'r'` **et le
+ * TITRE a disparu**. L’option retenue produisait LES DEUX maux qu’elle devait éviter.
+ *
+ * ⚠️ ET LE CONTRAT ② N’EST PAS RENVERSÉ, IL EST BORNÉ. « La barre ne tient jamais au prix de la
+ * sortie » garde toute sa force **là où la sortie est MONTRABLE**. Sous le seuil, aucun rendu
+ * ne peut la montrer : ② n’est pas violé, il est SANS OBJET — et le choix se fait alors sur un
+ * autre critère, *lequel abîme le moins le reste de l’écran*. La troncature laisse l’écran
+ * stable et le titre en place ; le débordement emporte les deux.
  *
  * ⚠️ LE MOTIF N’EST PAS CELUI QUE J’AVAIS AVANCÉ, et la nuance décide de ce qui est codé.
  * J’avais écrit « l’écran enferme son lecteur » — c’est FAUX : `q` et Ctrl-C fonctionnent que
@@ -767,36 +777,11 @@ export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.
  * qu’il devait fermer.
  */
 export function depasseLaLargeurAutorisee(ligne, largeur) {
-  const trop = [...String(ligne?.texte ?? '')].length > largeur;
-  if (!trop) return false;
-  // L’EXCEPTION, BORNÉE PAR SA PROPRE DÉFINITION — ET ELLE PORTE SUR LE CONTENU, PAS SUR LE
-  // STYLE.
-  //
-  // 🔴 J’AI ÉCRIT DEUX FOIS CETTE EXCEPTION TROP LARGE, DE DEUX FAÇONS DIFFÉRENTES. D’abord
-  // dans `rendreEcran`, qui recalculait sa propre condition ; puis ici, indexée sur
-  // `style === 'pied'` seul. Or `pied()` rend DEUX contenus sous ce même style : la barre de
-  // raccourcis — le cas que la décision `f05bc613` excepte — et le champ de RECHERCHE, qui
-  // n’a aucun rapport avec le raccourci vital et dont la longueur suit ce que le lecteur tape.
-  //
-  // Mesuré (revue portail) : en mode recherche sur un pane de 3 colonnes, la ligne écrivait
-  // **61 caractères** — sans même porter le raccourci vital. C’est la classe de défaut du
-  // ticket, rouverte par l’exception censée la refermer.
-  //
-  // 🔴 TROISIÈME ÉCRITURE DE CETTE EXCEPTION, ET LES DEUX PREMIÈRES ÉTAIENT TROP LARGES.
-  //   ① indexée sur le STYLE seul → le champ de recherche passait (61 car. dans un pane de 3) ;
-  //   ② indexée sur le CONTENU par sous-chaîne → **l’utilisateur pouvait la fabriquer** : taper
-  //      « q quitter » dans la recherche rendait 44 caractères non tronqués (revue portail).
-  //
-  // ⚠️ LA LEÇON : un rôle ne se DEVINE pas d’un texte. Le texte est une donnée — ici,
-  // littéralement ce que le lecteur tape — et toute reconnaissance par ressemblance finit par
-  // être imitée. `rendreEcran` SAIT laquelle de ses lignes est la barre de raccourcis : il le
-  // POSE (`porteLaSortie`), et l’invariant le LIT. Un fait constaté à la source, jamais
-  // reconstitué à l’arrivée.
-  //
-  // ⚠️ ET LE DRAPEAU N’EST PAS FALSIFIABLE PAR LE CONTENU : il ne peut naître que là où la
-  // barre est composée, sur la branche qui rend vraiment les raccourcis.
-  const exceptee = ligne?.porteLaSortie === true && largeur < [...RACCOURCI_VITAL].length;
-  return !exceptee;
+  // ⚠️ PLUS AUCUNE EXCEPTION — et c’est ce qui rend cette fonction sûre. Trois écritures
+  // successives de l’exception ont été trop larges (le style seul · une sous-chaîne que le
+  // lecteur pouvait TAPER · un drapeau non gardé), et chacune rouvrait la classe de défaut du
+  // ticket. Une règle sans exception ne peut pas être élargie.
+  return [...String(ligne?.texte ?? '')].length > largeur;
 }
 
 /** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
@@ -1028,22 +1013,18 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   // jamais consulté par le code qui écrit. Un oracle que la production n’appelle pas ne garde
   // rien : « l’exception vit DANS l’invariant » (décision `f05bc613`, condition n°1) était
   // vrai dans les bancs et faux dans le produit.
-  // Une seule question, posée à l'invariant : cette ligne a-t-elle le droit de dépasser ?
-  //   — NON  → on la borne, comme n'importe quelle ligne de l'écran ;
-  //   — OUI  → on la laisse entière (c'est l'exception, et elle seule).
-  // `borner` complète aussi à la largeur, ce qui garde la colonne alignée.
-  // ⚠️ `porteLaSortie` EST POSÉ ICI, où l’on SAIT ce qu’on compose — et seulement quand la
-  // barre rend vraiment les raccourcis. En mode recherche, `pied()` rend le champ de saisie :
-  // cette ligne ne porte alors AUCUNE sortie, quoi que le lecteur ait tapé dedans.
-  const texteDuPied = pied(etat, largeur);
-  const barre = {
-    style: 'pied',
-    texte: texteDuPied,
-    porteLaSortie: etat.mode !== 'recherche' && raccourcisPour(largeur).includes(RACCOURCI_VITAL),
-  };
-  sortie.push(
-    depasseLaLargeurAutorisee(barre, largeur) ? { ...barre, texte: borner(barre.texte, largeur) } : barre
-  );
+  // 🔴 LA BARRE SE TRONQUE COMME TOUTE AUTRE LIGNE — décision `00a7b645`, option B.
+  //
+  // Elle DÉBORDAIT (`f05bc613`), sur la prémisse qu’un débordement coûte un wrap visuel et rien
+  // de plus. Mesuré au VT100 : dans un écran alternatif d’une ou deux lignes, un wrap ne coûte
+  // pas un wrap — il fait DÉFILER. À 3×1 le lecteur voyait `'ter'` ; à 8×2, `'q quitte'` / `'r'`
+  // **et le titre avait disparu**. L’exception perdait la sortie ET le reste de l’écran.
+  //
+  // ⚠️ IL N’Y A PLUS D’EXCEPTION À ÉCRIRE, DONC PLUS D’EXCEPTION À ÉLARGIR. Trois écritures
+  // successives de celle-ci étaient trop larges ; la quatrième version est de n’en avoir aucune.
+  // Ce que ② protégeait au-dessus du seuil est intact : `raccourcisPour` retire toujours les
+  // raccourcis du moins vital au plus vital, donc la sortie survit tant qu’elle est MONTRABLE.
+  sortie.push({ style: 'pied', texte: borner(pied(etat, largeur), largeur) });
 
   // 🔴 LA JUMELLE VERTICALE DE L’INVARIANT DE LARGEUR — ET ELLE MANQUAIT (T-20260825-0071).
   //
