@@ -201,7 +201,11 @@ export function messagesDesMotifs(racine = REPO) {
     // de ce que l'humain voit, ce qui est exactement le défaut fermé par ce lot.
     nom_invalide: fonction(nomDeLieu, 'messageNomInvalide'),
     lieu_ambigu: fonction(nomDeLieu, 'messageLieuAmbigu'),
-    lieu_partiel: blocApres(lieu, 'lieu_partiel'),
+    // T-20260826-0042. Comme les deux refus de nommage ci-dessus : le TEXTE que l'humain lit
+    // est composé dans une fonction, parce qu'il n'est plus unique — un lieu à qui il ne manque
+    // QUE ce que le gabarit a gagné depuis sa pose ne s'écarte pas, il se met à jour. Récolter
+    // le bloc `motif:` ne rendait plus que l'aiguillage, sans un mot de ce que le refus dit.
+    lieu_partiel: fonction(lieu, 'messageLieuPartiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
     // E-20260818-0014. Le refus qui garde que le gabarit servi est le BON, pas seulement qu'il
     // est là. Son bloc dans le module de pose ne fait que relayer les champs de la garde : le
@@ -962,7 +966,7 @@ export const MUTATIONS = [
     quoi: 'la table des refus renvoie à `rm -rf` — le geste exact que le lot jumeau a payé',
     competence: 'orchestrateur',
     cible: 'aucun-geste-qui-detruit@orchestrateur',
-    muter: (t) => remplacer(t, 'Écarte ce reste (`mv .orchestrateur', 'Supprime ce reste (`rm -rf .orchestrateur'),
+    muter: (t) => remplacer(t, 'écarte ce reste (`mv .orchestrateur', 'supprime ce reste (`rm -rf .orchestrateur'),
   },
   {
     id: 'refus-qui-envoie-ecraser-le-jeton',
@@ -981,7 +985,7 @@ export const MUTATIONS = [
     quoi: 'la compétence jumelle renvoie de nouveau à `rm -rf` — le défaut que cette garde a trouvé',
     competence: 'gestionnaire',
     cible: 'aucun-geste-qui-detruit@gestionnaire',
-    muter: (t) => remplacer(t, 'Écarte ce reste (`mv .gestionnaire', 'Retire ce reste (`rm -rf .gestionnaire'),
+    muter: (t) => remplacer(t, 'écarte ce reste (`mv .gestionnaire', 'retire ce reste (`rm -rf .gestionnaire'),
   },
   {
     id: 'pr-ouverte-en-pret',

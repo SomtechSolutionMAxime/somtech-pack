@@ -67,6 +67,33 @@ export const GABARIT_DIR = join('.claude', 'templates', ROLES.representant.gabar
 export const PRESERVE = ['CONTEXTE.md', 'RONDE.md'];
 
 /**
+ * CEUX DES PRÉSERVÉS QU'ON DÉPOSE QUAND ILS MANQUENT — et il n'y en a qu'un.
+ *
+ * ⚠️ `PRESERVE` NE VEUT PAS DIRE « JAMAIS ÉCRASÉ », IL VEUT DIRE « JAMAIS TOUCHÉ » : ses
+ * entrées sont retirées de la liste AVANT `applyFiles`, donc la seule porte d'écriture ne les
+ * voit passer dans aucun sens. C'est voulu pour `CONTEXTE.md` (RA-REL-014) et ça le reste.
+ *
+ * ⚠️ MAIS APPLIQUÉ TEL QUEL À `RONDE.md`, ÇA RENDAIT SON LOT INERTE (T-20260826-0042).
+ * Le briefing n'aurait atteint AUCUN des dix-huit lieux vivants : ni par la pose, qui refuse
+ * un lieu incomplet plutôt que de le compléter, ni par ici, qui ne crée pas un préservé. Un
+ * cinquième élément du cycle présent dans le dépôt et absent de la vie de tous les agents.
+ *
+ * LA DISTINCTION SE MESURE, elle n'est pas une exception de confort :
+ *
+ *   • `CONTEXTE.md` a TOUJOURS fait partie du gabarit. Absent d'un lieu, il SIGNALE une pose
+ *     partielle — un symptôme, que la pose attrape déjà par `lieu_partiel`. Le fabriquer ici
+ *     masquerait ce qu'elle attrape.
+ *   • `RONDE.md` n'existait pas avant ce lot. Absent, il ne signale rien : aucun lieu du parc
+ *     n'a jamais pu l'avoir. Le déposer vierge n'écrase rien et ne masque rien.
+ *
+ * ⚠️ ET IL RESTE PRÉSERVÉ : déposé s'il manque, JAMAIS touché s'il est là. Un briefing écrasé
+ * ne se voit pas — il se constate à ce que l'agent ne se réveille plus, et une ronde éteinte
+ * ne produit aucune erreur. Un essai exige que tout `CREE_SI_ABSENT` soit aussi dans
+ * `PRESERVE` : déposer sans protéger serait pire que ne rien déposer.
+ */
+export const CREE_SI_ABSENT = ['RONDE.md'];
+
+/**
  * CE QUI ARME UN LIEU — le fichier de droits, et le fichier que son garde appelle.
  *
  * T-20260818-0034 : rafraîchir un lieu le DÉSARMAIT en silence. `.claude/settings.json` porte
@@ -233,14 +260,17 @@ export async function cmdLieuUpdate(flags, roleNom) {
 
   const { files: tous } = collectFiles(sourceDir, ['']);
   const preserveSet = new Set(PRESERVE);
-  const files = tous.filter((rel) => !preserveSet.has(rel));
+  // Un préservé de `CREE_SI_ABSENT` qui n'est PAS sur le disque passe la porte d'écriture —
+  // une seule fois, pour naître. Dès qu'il existe, il redevient intouchable comme les autres.
+  const aDeposer = new Set(CREE_SI_ABSENT.filter((rel) => !existsSync(join(target, rel))));
+  const files = tous.filter((rel) => !preserveSet.has(rel) || aDeposer.has(rel));
   const report = applyFiles({
     payloadRoot: sourceDir,
     target,
     files,
     dryRun: flags.dryRun,
   });
-  report.preserved = tous.filter((rel) => preserveSet.has(rel) && existsSync(join(target, rel)));
+  report.preserved = tous.filter((rel) => preserveSet.has(rel) && !aDeposer.has(rel) && existsSync(join(target, rel)));
 
   const converged = flags.dryRun ? 'à converger' : 'convergés (version du pack)';
   console.log(`${role.libelle} « ${nom} » → ${target}${flags.dryRun ? ' [dry-run]' : ''}`);
