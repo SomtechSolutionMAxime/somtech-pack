@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   MISE_EN_SERVICE,
+  instantDeLHorodatage,
   FrontiereContredite,
   ComptesQuiNeBalancentPas,
   normaliserLeParc,
@@ -355,8 +356,31 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
 // ③ LA FRONTIÈRE — le désarmement le plus discret, et le seul vérifié contre le monde
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * L'INSTANT D'UNE DÉCLARATION QUI DÉMENT UN RECUL — DÉRIVÉ DE CE QUI CALCULE LA FRONTIÈRE.
+ *
+ * 🔴 CE QU'IL REMPLACE, ET POURQUOI. Ces deux essais portaient « 2026-08-25T13:30:00.000Z »
+ * écrit à la main. Un ISO est un instant ABSOLU ; la frontière, elle, se lit en HEURE LOCALE
+ * (`instantDeLHorodatage`). Les deux ne se rencontraient donc au bon endroit que sur les postes
+ * dont le décalage arrangeait la comparaison : mesuré vert à UTC−12, UTC−11, UTC, Asia/Tokyo,
+ * et ROUGE dès UTC+11 (Guadalcanal, Auckland, Kiritimati), où `20260826-000000` en heure locale
+ * tombe AVANT 13:30Z et où plus rien ne dément le recul.
+ *
+ * ⚠️ C'EST LE MOTIF QUE CE LOT A DÉJÀ FERMÉ UNE FOIS (« la frontière du banc était épinglée au
+ * fuseau de l'auteur », e20d05f) — il avait survécu un banc plus loin. Un littéral recopié ne
+ * suit pas la frontière ; une DÉRIVÉE, si.
+ *
+ * Ce que la dérivée dit, et que le littéral ne disait qu'ici : la déclaration naît DANS le
+ * dispositif — après la frontière réelle, donc elle ne la dément pas — et à moins d'un jour
+ * d'elle, donc AVANT le plus petit des reculs (`20260826-000000`). Les deux propriétés tiennent
+ * sous tout fuseau, parce que les deux côtés passent par la même porte.
+ */
+const NE_LE_DANS_LE_DISPOSITIF = new Date(
+  instantDeLHorodatage(MISE_EN_SERVICE).getTime() + 13 * 3_600_000 + 30 * 60_000
+).toISOString();
+
 test('reculer la frontière fait REFUSER la garde dès qu’une déclaration la dément', () => {
-  const declarations = [{ nom: 'ristigouche', pane: 'w0:p0', espace: APRES, ne_le: '2026-08-25T13:30:00.000Z' }];
+  const declarations = [{ nom: 'ristigouche', pane: 'w0:p0', espace: APRES, ne_le: NE_LE_DANS_LE_DISPOSITIF }];
 
   // Le geste d'entretien : « la garde fait du bruit sur les vieux worktrees, je recule la date ».
   for (const recul of ['20260826-000000', '20260901-000000', '20270101-000000']) {
@@ -371,14 +395,21 @@ test('reculer la frontière fait REFUSER la garde dès qu’une déclaration la 
 test('le refus de frontière NOMME la déclaration qui la dément — sinon il est indiscutable', () => {
   try {
     verdictDe([{ ...FAUTIF }], {
-      registre: { declarations: [{ nom: 'ristigouche', ne_le: '2026-08-25T13:30:00.000Z' }], illisibles: [] },
+      registre: { declarations: [{ nom: 'ristigouche', ne_le: NE_LE_DANS_LE_DISPOSITIF }], illisibles: [] },
       miseEnService: '20260901-000000',
     });
     assert.fail('la garde a laissé passer une frontière contredite');
   } catch (e) {
     assert.ok(e instanceof FrontiereContredite);
     assert.match(e.message, /ristigouche/);
-    assert.match(e.message, /2026-08-25/);
+    // ⚠️ L'INSTANT RÉELLEMENT DÉMENTI, pas une date recopiée. L'assertion portait « 2026-08-25 »
+    // en dur : dérivée, la déclaration peut tomber la veille en UTC sur un poste très à l'est,
+    // et l'ancienne forme aurait rougi pour la mauvaise raison. Exiger le `ne_le` EXACT dit
+    // mieux ce qu'on veut : le refus nomme LA déclaration qui le dément, pas une date voisine.
+    assert.ok(
+      e.message.includes(NE_LE_DANS_LE_DISPOSITIF),
+      `le refus doit citer « ${NE_LE_DANS_LE_DISPOSITIF} » — reçu : ${e.message}`
+    );
   }
 });
 

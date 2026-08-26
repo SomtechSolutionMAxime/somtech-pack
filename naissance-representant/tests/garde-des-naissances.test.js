@@ -744,12 +744,17 @@ test('une mise en service POSTÉRIEURE à la plus ancienne déclaration fait REF
   // liste ne bouge. La garde se compare donc au REGISTRE RÉEL du poste : une déclaration
   // antérieure à sa propre frontière PROUVE que le dispositif était déjà en service à cette
   // date-là. La référence est une donnée du monde, pas une constante que ce banc porte.
+  // ⚠️ LA DÉCLARATION EST CELLE DU FICHIER, PAS UN INSTANT RECOPIÉ ICI. Cet essai portait
+  // « 2026-08-25T13:30:00.000Z » écrit à la main — c'est-à-dire la forme même que le commentaire
+  // de `declaration()` refuse quinze lignes plus haut (« `ne_le` SE DÉRIVE DE LA NAISSANCE, IL
+  // NE SE CHOISIT PAS »), et la forme qui vient de rendre un banc voisin ROUGE dès UTC+11 : un
+  // ISO absolu confronté à une frontière lue en heure LOCALE ne se rencontre au bon endroit que
+  // sur les postes dont le décalage l'arrange. Le défaut ici n'était pas mordant — six jours de
+  // marge — mais c'est le même geste, et il se reproduit en se recopiant.
+  const dement = declaration();
   assert.throws(
-    () => juger({
-      miseEnService: '20260901-000000',
-      declarations: [declaration({ ne_le: '2026-08-25T13:30:00.000Z' })],
-    }),
-    (e) => e instanceof FrontiereContredite && /2026-08-25/.test(e.message),
+    () => juger({ miseEnService: '20260901-000000', declarations: [dement] }),
+    (e) => e instanceof FrontiereContredite && e.message.includes(dement.ne_le),
   );
 });
 
