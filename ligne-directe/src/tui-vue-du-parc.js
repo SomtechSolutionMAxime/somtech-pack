@@ -769,9 +769,27 @@ export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.
 export function depasseLaLargeurAutorisee(ligne, largeur) {
   const trop = [...String(ligne?.texte ?? '')].length > largeur;
   if (!trop) return false;
-  // L’EXCEPTION, ET ELLE EST BORNÉE PAR SA PROPRE DÉFINITION : la barre, et seulement quand
-  // le raccourci vital n’y tiendrait pas. Le seuil est DÉRIVÉ (condition n°2).
-  const exceptee = ligne?.style === 'pied' && largeur < [...RACCOURCI_VITAL].length;
+  // L’EXCEPTION, BORNÉE PAR SA PROPRE DÉFINITION — ET ELLE PORTE SUR LE CONTENU, PAS SUR LE
+  // STYLE.
+  //
+  // 🔴 J’AI ÉCRIT DEUX FOIS CETTE EXCEPTION TROP LARGE, DE DEUX FAÇONS DIFFÉRENTES. D’abord
+  // dans `rendreEcran`, qui recalculait sa propre condition ; puis ici, indexée sur
+  // `style === 'pied'` seul. Or `pied()` rend DEUX contenus sous ce même style : la barre de
+  // raccourcis — le cas que la décision `f05bc613` excepte — et le champ de RECHERCHE, qui
+  // n’a aucun rapport avec le raccourci vital et dont la longueur suit ce que le lecteur tape.
+  //
+  // Mesuré (revue portail) : en mode recherche sur un pane de 3 colonnes, la ligne écrivait
+  // **61 caractères** — sans même porter le raccourci vital. C’est la classe de défaut du
+  // ticket, rouverte par l’exception censée la refermer.
+  //
+  // ⚠️ CE QUI EST EXCEPTÉ EST CE QUI PORTE LA SORTIE, PAS CE QUI PORTE UNE ÉTIQUETTE. Le
+  // style dit d’où vient la ligne ; seul le contenu dit ce qu’elle fait pour le lecteur. Une
+  // exception nommée par la décision (« quand le raccourci vital ne peut pas tenir ») se code
+  // en cherchant le raccourci vital, jamais en faisant confiance à l’étiquette.
+  const exceptee =
+    ligne?.style === 'pied' &&
+    largeur < [...RACCOURCI_VITAL].length &&
+    String(ligne?.texte ?? '').includes(RACCOURCI_VITAL);
   return !exceptee;
 }
 
