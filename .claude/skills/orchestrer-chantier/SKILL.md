@@ -376,8 +376,9 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
 
 # Le pane est dans sa sortie JSON : tout ce qui suit — brief, /goal, wait, close — le vise.
 # ⚠️ `jq -e`, jamais `jq -r .pane` seul : le pane sort à l'identique d'un succès et d'un refus
-# qui laisse un agent vivant. Sans `select(.ok)`, tu brieffes un agent dont la déclaration a
-# échoué — et la garde ne le rattrapera pas, puisqu'il est déclaré.
+# qui laisse un agent vivant. Sans `select(.ok)`, tu brieffes un agent que le geste a refusé —
+# soit sa déclaration a échoué (la garde le prendra, il n'est déclaré nulle part), soit elle est
+# écrite mais son amorce n'a pas été prise : celui-là, la garde le croit régulier, et il attend.
 P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
   || { printf '%s' "$NAISSANCE" | jq -r '"REFUS — \(.cause) · pane \(.pane) · vivant \(.vivant)"'; }
 ```
