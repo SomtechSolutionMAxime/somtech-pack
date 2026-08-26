@@ -497,11 +497,20 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production
         // ne dépasse que si elle PORTE le raccourci vital ET que celui-ci ne tiendrait pas.
         // C'est la décision `f05bc613` récitée par le banc, pas déléguée au code qu'il juge.
         const trop = largeurAffichee(ligne.texte) > largeur;
-        // 🔴 CE BANC PORTAIT LA MÊME FAILLE QUE LE CODE QU'IL JUGE : il reconnaissait la barre à
-        // une SOUS-CHAÎNE, donc l'utilisateur pouvait la fabriquer en tapant « q quitter » dans
-        // la recherche. Une garde qui devine par ressemblance finit toujours par être imitée.
-        // Elle lit désormais le fait POSÉ par `rendreEcran`, comme l'invariant.
-        const justifiee = ligne.porteLaSortie === true && largeur < [...RACCOURCI_VITAL].length;
+        // 🔴 CE BANC NE LIT PAS `porteLaSortie` — ET C'EST TOUT SON OFFICE. Le drapeau est ce
+        // que le code AFFIRME ; ce banc juge si cette affirmation est vraie. Le lire ici
+        // rendrait la garde tautologique une seconde fois : mal poser le drapeau (en mode
+        // recherche, ou inconditionnellement) rouvrait un débordement de 58 caractères sans
+        // qu'un seul essai ne bouge — mesuré.
+        //
+        // ⚠️ IL RÉCITE DONC LA DÉCISION `f05bc613` DANS SES PROPRES TERMES : seule la barre qui
+        // rend VRAIMENT les raccourcis peut déborder, et seulement quand le raccourci vital n'y
+        // tiendrait pas. Le mode recherche ne rend pas de raccourcis — il rend un champ de
+        // saisie — donc il n'a droit à aucune exception, quoi que le lecteur ait tapé dedans.
+        const justifiee =
+          e.mode !== 'recherche' &&
+          ligne.style === 'pied' &&
+          largeur < [...RACCOURCI_VITAL].length;
         assert.ok(
           !trop || justifiee,
           `${quoi}, à ${largeur} colonnes : ${largeurAffichee(ligne.texte)} caractères de style ` +
@@ -509,6 +518,16 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production
         );
         // ⚠️ ET L'INVARIANT DOIT DIRE LA MÊME CHOSE QUE LA RÈGLE. S'ils divergent, l'un des deux
         // ment — et c'est ce désaccord, pas l'accord, qui révèle l'exception trop large.
+        // ⚠️ ET LE DRAPEAU LUI-MÊME EST JUGÉ : `porteLaSortie` est une AFFIRMATION du code, et
+        // une affirmation se vérifie. Mal posée, elle ferait exempter n'importe quoi.
+        if (ligne.style === 'pied') {
+          assert.equal(
+            ligne.porteLaSortie === true,
+            e.mode !== 'recherche' && ligne.texte.includes(RACCOURCI_VITAL),
+            `${quoi}, à ${largeur} colonnes : le code AFFIRME porteLaSortie=${ligne.porteLaSortie} ` +
+              `sur une ligne qui ne le justifie pas : ${JSON.stringify(ligne.texte)}`
+          );
+        }
         assert.equal(
           depasseLaLargeurAutorisee(ligne, largeur),
           trop && !justifiee,
