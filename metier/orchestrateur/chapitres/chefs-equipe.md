@@ -100,15 +100,15 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
 P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok).pane') || printf '%s\n' "$NAISSANCE" >&2
 ```
 
-**Elle fait tout, ou le défait.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, le tout **rendu en JSON**. ⚠️ **Un refus défait tout — sauf un agent né** : il vit, et la sortie rend `ok:false`, sa cause, son pane.
+**Elle fait tout, ou le défait.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, le tout **en JSON**. ⚠️ **Un refus défait tout — sauf un agent né** : il vit, et la sortie rend `ok:false`, sa cause, son pane.
 
-⚠️ **Vérifie par le fait** — ici, `ok`. Le pane sort **à l'identique** d'un succès et d'un refus qui laisse un agent vivant : sans `select(.ok)`, tu brieffes un agent non déclaré.
+⚠️ **Vérifie par le fait** — ici `ok` : le pane sort **à l'identique** d'un succès et d'un refus. Sans `select(.ok)` tu brieffes un refusé : non déclaré (la garde le prend) ou déclaré sans amorce (elle le croit bon).
 
-**Les autres options** : `--modele`, `--mode` (défauts `opus`, `acceptEdits`) ; `--base <ref>` part d'ailleurs qu'`origin/main` ; `--workspace <id>` vise un espace HERDR existant (**≠** l'espace de travail) ; `--amorce-texte '…'` livre le brief dans le même geste, avec la même vérification.
+**Les autres options** : `--modele`, `--mode` (défauts `opus`, `acceptEdits`) ; `--base <ref>` part d'ailleurs qu'`origin/main` ; `--workspace <id>` vise un espace HERDR existant (**≠** l'espace de travail) ; `--amorce-texte '…'` livre le brief dans le même geste, même vérification.
 
-⚠️ **`--coordonnateur`, c'est TOI** : sans lui, la déclaration tait qui a ouvert l'agent.
+⚠️ **`--coordonnateur`, c'est TOI** : sans lui, la déclaration tait qui l'ouvre.
 
-⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket **encore ouvert**, un `E-…` sur ses stories **encore ouvertes** — un fini garde le nom de qui l'a fait ; un vivant au nom d'un autre est **repris**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein quand une story a été reprise ou sautée.
+⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket **encore ouvert**, un `E-…` sur ses stories **encore ouvertes** — un fini garde le nom de qui l'a fait, un vivant au nom d'un autre est **repris**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein sur une reprise ou un saut.
 
 ⚠️ **L'onglet porte le nom de l'agent** — pas le libellé « code + deux à quatre mots » ci-dessus.
 

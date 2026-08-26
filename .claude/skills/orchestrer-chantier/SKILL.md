@@ -100,8 +100,9 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
   --depot <repo-principal> \
   --coordonnateur <ton-nom-d-agent>)
 # ⚠️ `jq -e` — PAS `jq -r .pane` seul : le pane est rendu à l'identique sur un succès et sur un
-# refus qui laisse un agent vivant. Tu enchaînerais brief et veille sans savoir que sa
-# déclaration n'a pas pu s'écrire.
+# refus qui laisse un agent vivant. Sans lui tu brieffes un agent que le geste a refusé — soit
+# sa déclaration a échoué (la garde le prendra, il n'est déclaré nulle part), soit elle est
+# écrite mais son amorce n'a pas été prise : celui-là, la garde le croit régulier, et il attend.
 P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
   || { printf '%s' "$NAISSANCE" | jq -r '"REFUS — \(.cause) · pane \(.pane) · vivant \(.vivant)"'; }
 ```
