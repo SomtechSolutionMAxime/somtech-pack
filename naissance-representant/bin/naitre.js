@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 // naitre.js — la commande qui fait naître une session dans le lieu d'un agent.
 //
-//   gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur]
+//   gestionnaire-naitre <nom> [--workspace <espace herdr>] [--role representant|orchestrateur]
 //                             [--depot <chemin>]
+//
+// ⚠️ `--workspace` EST FACULTATIF, et c'est le défaut que ce lot a fermé : sans lui, la
+// naissance ouvre elle-même son espace herdr. L'écrire sans crochets envoyait le lecteur en
+// chercher un qui n'a pas à exister.
 //
 // Elle ne pose jamais le lieu (E-20260807-0002 pour le représentant, E-20260813-0002 pour
 // l'orchestrateur) : elle le vérifie, y repose le garde d'ouverture (à chaque appel —
@@ -104,12 +108,12 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 
 function usage(code) {
   process.stderr.write(
-    'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>]\n' +
+    'gestionnaire-naitre <nom> [--workspace <espace herdr>] [--session <session herdr>]\n' +
       '                         [--role representant|orchestrateur|chef-equipe] [--depot <chemin>]\n' +
       '                         [--coordonnateur <nom>] [--base <ref>] [--horodatage <AAAAMMJJ-HHMMSS>]\n' +
       '                         [--amorce <fichier> | --amorce-texte "…"]\n' +
       '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n' +
-      '                         [--nom-agent <nom>]\n'
+      '                         [--nom-agent <nom> — orchestrateur SEULEMENT]\n'
   );
   process.exit(code);
 }

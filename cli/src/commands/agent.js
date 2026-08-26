@@ -66,10 +66,13 @@ Options :
   --mode <mode>           le mode de permission déclaré (défaut : acceptEdits)
   --amorce <fichier>      le brief à livrer dès la naissance
   --amorce-texte "…"      le même, en clair
-  --nom-agent <nom>       le nom que l'agent portera, quand il diffère du code du mandat.
-                          SANS LUI, un orchestrateur reçoit une rivière ; c'est le cas normal,
-                          et le seul qui ne dépende de personne. Le LIEU garde toujours le code
-                          du mandat — seul le nom d'agent change.
+  --nom-agent <nom>       ORCHESTRATEUR SEULEMENT. Le nom que l'agent portera, quand il
+                          diffère du code du mandat. SANS LUI, un orchestrateur reçoit une
+                          rivière ; c'est le cas normal, et le seul qui ne dépende de personne.
+                          Le LIEU garde toujours le code du mandat — seul le nom d'agent change.
+                          Sur --role representant et --role chef-equipe, l'option est SANS EFFET
+                          et le nom reste le code du mandat : un chef d'équipe doit le porter,
+                          c'est ce qui le rattache à son ticket.
 
 Un CHEF D'ÉQUIPE (--role chef-equipe) — le rôle qui n'a PAS de lieu :
   Il reçoit son propre WORKTREE — ~/worktrees/<dépôt>/<horodatage>, sur une branche-socle

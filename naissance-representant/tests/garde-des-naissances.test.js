@@ -554,6 +554,51 @@ test('un FAUX REFUS se mesure par une AUTRE clé que celle qui a servi à appari
   assert.match(r2.texte, /peut-être été à tort/i);
 });
 
+/**
+ * 🔴 LE CONTRE-CONTRÔLE ÉTAIT PLUS STRICT QUE LA CLÉ QU'IL AUDITE — et donc aveugle au cas
+ * PRÉCIS pour lequel la règle de préfixe a été écrite.
+ *
+ * L'appariement identifie par PRÉFIXE (`memeEspaceDeTravail`) : un chef d'équipe qui descend
+ * dans un dossier de son worktree travaille toujours dans son espace, et exiger l'égalité
+ * ferait de lui une prise pour un `cd`. `fauxRefus`, lui, croisait par ÉGALITÉ STRICTE
+ * (`espacesDeclares.has(p.espace)`).
+ *
+ * Conséquence : un agent déclaré, descendu d'un cran, dont le pane a bougé et qui n'a pas de
+ * nom, devient une prise — et le SEUL chiffre censé mesurer les refus à tort rend `0`. Le
+ * contre-contrôle certifiait « aucun refus à tort » sur le cas qu'il existe pour attraper.
+ *
+ * ⚠️ IL RESTE UN CROISEMENT PAR UNE CLÉ AUTRE, et c'est ce qui l'empêche de devenir nul par
+ * construction : l'appariement exige (pane-dans-sa-session ET espace) OU (nom ET espace) ;
+ * celui-ci n'exige QUE l'espace. C'est la RÈGLE DE COMPARAISON de l'espace qui s'aligne — pas
+ * la clé.
+ */
+test('🔴 UN REFUS À TORT SUR UN SOUS-DOSSIER SE MESURE — la règle d’espace est la MÊME des deux côtés', () => {
+  const r = juger({
+    // Le pane a bougé (`w9:p9` ≠ `w1:p1` de la déclaration) et l'agent est ANONYME : aucune des
+    // deux clés d'appariement ne l'atteint. Il est donc une prise — c'est le cas de base.
+    panes: [agent({ pane_id: 'w9:p9', foreground_cwd: `${APRES}/naissance-representant/src` })],
+    declarations: [declaration({ espace: APRES, pane: 'w1:p1' })],
+  });
+  assert.equal(r.comptes.prises, 1, 'le cas de base a changé : ce banc n’éprouve plus le contre-contrôle');
+  assert.equal(
+    r.comptes.fauxRefus, 1,
+    'le seul chiffre qui mesure les refus à tort est aveugle au cas pour lequel la règle de préfixe existe'
+  );
+  assert.match(r.texte, /peut-être été À TORT/);
+});
+
+test('un espace déclaré VOISIN n’est pas le même — `…-bis` ne mesure aucun refus à tort', () => {
+  // ⚠️ LA MOITIÉ SYMÉTRIQUE. Aligner la règle sur le préfixe NU rendrait `…/20260825-093000-bis`
+  // indiscernable de `…/20260825-093000` : le contre-contrôle se mettrait à voir des refus à
+  // tort qui n'en sont pas, et le chiffre cesserait de vouloir dire quelque chose.
+  const r = juger({
+    panes: [agent({ pane_id: 'w9:p9', foreground_cwd: `${APRES}-bis` })],
+    declarations: [declaration({ espace: APRES, pane: 'w1:p1' })],
+  });
+  assert.equal(r.comptes.prises, 1);
+  assert.equal(r.comptes.fauxRefus, 0, 'un worktree voisin a été compté comme un refus à tort');
+});
+
 test('le vert dit SUR QUOI il repose — un vert porté par une seule source est un vert MINCE', () => {
   // ⚠️ TROUVÉ EN MESURANT LE TRAFIC RÉEL DU 2026-08-25, et ça contredit une lecture confortable
   // du dispositif : les 8 agents de la population du jour sont identifiés **à 8 sur 8 par leur

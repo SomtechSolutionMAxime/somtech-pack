@@ -376,8 +376,18 @@ export function normaliserLeParc({ panes = [], agentsHerdr = null, naissances = 
     .map((p) => ({
       pane: p.pane_id,
       session: p.herdr_socket ?? null,
-      // Le worktree est `foreground_cwd`, pas `cwd` : un agent né par `claude-swt` garde le
-      // dépôt principal en `cwd` pendant que son travail vit ailleurs.
+      // 🔴 LE MOTIF QU'ON INVOQUAIT ICI N'EST PAS CELUI QUE LE POSTE MONTRE. On écrivait
+      // « un agent né par `claude-swt` garde le dépôt principal en `cwd` pendant que son
+      // travail vit ailleurs ». Mesuré le 2026-08-25 sur le parc réel : **0 des 170 panes** —
+      // 124 agents vivants compris — n'ont `cwd` différent de `foreground_cwd`. Le cas invoqué
+      // ne se produit pas ici. Une justification que la mesure contredit se cite ensuite comme
+      // un fait, et fait garder une branche que le réel n'emprunte pas.
+      //
+      // CE QUI RESTE VRAI, ET QUI SUFFIT : `foreground_cwd` est le répertoire du SHELL — donc
+      // celui où l'agent travaille EN CE MOMENT — quand `cwd` est celui où le pane a été
+      // ouvert. Les deux coïncident aujourd'hui ; le jour où ils divergeront, c'est le premier
+      // qui dira où aller voir l'agent. `cwd` reste le repli, et `null` le dernier : un espace
+      // absent ne s'invente pas.
       espace: p.foreground_cwd || p.cwd || null,
       nom: nomDeLAgent(p, cle(p), nomsConnus),
       // La NAISSANCE, dans le même vocabulaire à deux états que le nom — et pour la même
@@ -750,8 +760,20 @@ export function jugerLeParc({
   // une déclaration qui porte l'espace d'un agent pris prouve qu'une naissance a bien eu lieu
   // là, et que c'est l'APPARIEMENT qui a raté. C'est un défaut de cette garde, et il doit se
   // voir dans sa propre sortie plutôt que d'attendre qu'un humain le trouve.
-  const espacesDeclares = new Set(declarations.map((d) => d?.espace).filter(Boolean));
-  const fauxRefus = prises.filter((p) => espacesDeclares.has(p.espace));
+  //
+  // 🔴 ET IL CROISE PAR LA MÊME RÈGLE D'ESPACE QUE LA CLÉ QU'IL AUDITE — il était PLUS STRICT.
+  // L'appariement identifie par PRÉFIXE (`memeEspaceDeTravail`), parce qu'un agent qui descend
+  // dans un dossier de son arbre travaille toujours dans son espace. Ce contre-contrôle, lui,
+  // croisait par ÉGALITÉ (`new Set(...).has`). Un agent déclaré, descendu d'un cran, dont le
+  // pane a bougé et qui n'a pas de nom devenait une prise — et le seul chiffre censé mesurer
+  // les refus à tort rendait ZÉRO. Il certifiait « aucun refus à tort » précisément sur le cas
+  // pour lequel la règle de préfixe a été écrite.
+  //
+  // ⚠️ IL RESTE UN CROISEMENT PAR UNE CLÉ AUTRE, et c'est ce qui l'empêche de redevenir nul par
+  // construction : l'appariement exige (pane-dans-sa-session ET espace) OU (nom ET espace) ;
+  // celui-ci n'exige QUE l'espace. C'est la RÈGLE DE COMPARAISON qui s'aligne, pas la clé.
+  const espacesDeclares = declarations.map((d) => d?.espace).filter(Boolean);
+  const fauxRefus = prises.filter((p) => espacesDeclares.some((e) => memeEspaceDeTravail(p.espace, e)));
 
   // ── LES SESSIONS QU'ON N'A PAS SU REGARDER — voir `sessionAbsente`. Une session dont le
   // serveur ne tourne pas n'avait rien à montrer ; toute autre était là et s'est tue.
