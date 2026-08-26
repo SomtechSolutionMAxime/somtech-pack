@@ -31,6 +31,47 @@
 // peuvent pas prouver ce que le terminal en fait. Cette arête-là s'EXERCE, et elle l'a été :
 // dans un vrai split herdr, avant et après le correctif.
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUE LES BANCS RETIRÉS OU RÉÉCRITS GARDAIENT — ÉNUMÉRÉ, ET PROUVÉ PAR MUTATION
+//
+// 🔴 CE TABLEAU EXISTE PARCE QU'UNE RÉÉCRITURE A PERDU TROIS PROPRIÉTÉS EN SILENCE, et que la
+// première mesure n'en avait trouvé qu'une. « J'ai vérifié que le remplaçant garde la même
+// chose » est une lecture ; seule une mutation le prouve. Chaque ligne ci-dessous a été mutée
+// une par une, contrôle négatif vert d'abord, sur la suite ENTIÈRE.
+//
+// ── `L'ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS` (réécrit, pas supprimé) ──────────────
+//   stylesA(1) = ['pied']                     → gardé : « L'ORDRE DE SACRIFICE… » ① et ③
+//   stylesA(2) = ['titre','pied']             → PERDU, restauré : ② et ③   ⚠️ survivait
+//   stylesA(3), stylesA(5)                    → gardé : « L'ORDRE DE SACRIFICE… » ② (la barre
+//                                               reste dernière ; on ne fige plus la composition
+//                                               exacte du corps, qui rougissait pour rien)
+//   balayage « q quitter » × filtres          → gardé : « LA SORTIE SURVIT À TOUTE ENTÊTE… »
+//   « q quitter » SOUS le minimum             → SANS OBJET — c'était la décision `f05bc613`,
+//                                               supersédée par `00a7b645` : sous le seuil la
+//                                               sortie n'est montrable par aucun rendu.
+//
+// ── `LE CODE QUI ÉCRIT INTERROGE L'INVARIANT` (réécrit sous le même nom) ───────────────────
+//   !depasseLaLargeurAutorisee(l, largeur)    → SANS OBJET (l'oracle est supprimé) et REMPLACÉ
+//                                               par la mesure directe, plus forte
+//   mesurees > 1000                           → gardé, même assertion
+//   barre.style === 'pied' (mode recherche)   → gardé : « LA BARRE MONTRE LE CHAMP… »
+//   barre.texte contient '/'                  → PERDU, restauré : idem   ⚠️ survivait
+//   largeurAffichee(barre) <= 30              → gardé : idem, et la mesure directe le couvre
+//
+// ── `L'EXCEPTION DE L'INVARIANT NE COUVRE QUE CE QU'ELLE NOMME` (supprimé) ─────────────────
+//   toutes ses assertions                     → SANS OBJET : elles mesuraient la PORTÉE d'une
+//                                               exception qui n'existe plus (`00a7b645`).
+//
+// ── `CE QUI REND LE SOUS-TEST DU DRAPEAU REDONDANT SE GARDE` (supprimé) ────────────────────
+//   toutes ses assertions                     → SANS OBJET : elles mesuraient le drapeau
+//                                               `porteLaSortie`, absent du dépôt (0 occurrence).
+//
+// ⚠️ UNE PROPRIÉTÉ DE PLUS, PERDUE ET RESTAURÉE, QUI N'EST DANS AUCUN DES QUATRE : à hauteur 2,
+// rien n'empêchait de rendre le TITRE DEUX FOIS — donc d'effacer entièrement la sortie. Aucun
+// banc ancien ne la gardait explicitement ; l'ancien `stylesA(2)` la gardait par ricochet, en
+// figeant la liste. Elle est désormais gardée pour elle-même.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -195,13 +236,6 @@ test('AUCUNE LIGNE DE L’ÉCRAN NE DÉPASSE LE PANE — à TOUTE largeur, sur u
   for (let largeur = 1; largeur <= 200; largeur += 1) {
     const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur: 12 });
     for (const l of ecran) {
-      // 🔴 UNE SEULE EXCEPTION, NOMMÉE : la BARRE de raccourcis. Sous 9 colonnes, « q quitter »
-      // ne peut pas tenir — et un contrat ANTÉRIEUR à ce lot exige qu'il soit rendu ENTIER
-      // plutôt que tronqué, parce qu'un écran alternatif sans sortie enferme son lecteur.
-      // L'arbitrage est écrit dans `rendreEcran`. Ce débordement ne peut PAS empiler : il vit
-      // dans l'écran alternatif, repeint entier à chaque frame.
-      //
-      // ⚠️ L'EXCEPTION EST BORNÉE À CE CAS : elle ne vaut que pour le style `pied`, et
       // 🔴 LA MESURE EST DIRECTE, ET C'EST UNE CORRECTION. Ce banc a interrogé un invariant —
       // `depasseLaLargeurAutorisee` — parce qu'en recopier la condition la laissait s'élargir à
       // côté de la règle (quatre élargissements, quatre fois VERT). Sous la décision `00a7b645`
@@ -494,21 +528,38 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — et plus RIEN ne déborde, s
 });
 
 
-test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — mesuré sur l’ÉCRAN, pas sur la chaîne', async (t) => {
+test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — balayage COMPLET, et chaque assertion compte ses déclenchements', async (t) => {
   // 🔴 CONDITION N°2 DE LA DÉCISION `00a7b645`, ET C’EST ELLE QUI A PERMIS AU DÉFAUT DE
   // TRAVERSER TROIS CORRECTIONS : un banc qui fait `includes()` sur la chaîne LOGIQUE ne peut
   // pas voir qu’un terminal wrappe et fait défiler. Un vert qui ne touche pas ce qu’il éprouve.
   //
-  // Ce banc passe par `tests/aide/terminal.js` — un modèle d’auto-wrap et de défilement,
-  // confronté à `pyte` (émulateur VT100/xterm) sur les cas mêmes qui ont révélé le défaut :
-  // 0 écart sur 7.
+  // Ce banc passe par `tests/aide/terminal.js`, un modèle d’auto-wrap et de défilement. ⚠️ C’est
+  // un DOUBLE, et sa fidélité n’est pas éprouvée dans ce dépôt — sa note le dit, et elle nomme
+  // l’instrument qui ne dépend pas de lui.
+  //
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CE BANC A ÉTÉ REFAIT PARCE QU’IL AVAIT UNE ASSERTION QUI NE SE DÉCLENCHAIT JAMAIS.
+  //
+  // Sa première version prenait un échantillon de dimensions ÉCRIT À LA MAIN :
+  //     [[3,1],[5,1],[8,2],[9,1],[12,3],[20,3],[40,8],[65,12]]
+  // Son assertion sur la sortie ne vaut qu’au-dessus du seuil ; son seul cas à `rows = 2` était
+  // `8×2`, SOUS le seuil. **Elle ne s’est donc jamais déclenchée pour une hauteur de 2.** Le banc
+  // était vert, l’assertion était morte, et l’ordre de sacrifice à hauteur 2 n’était plus gardé —
+  // on pouvait effacer entièrement la sortie de l’écran sans qu’un essai bouge.
+  //
+  // ⚠️ DEUX REMÈDES, ET IL FAUT LES DEUX :
+  //   ① le balayage est un PRODUIT CARTÉSIEN, plus un échantillon choisi. Un échantillon écrit à
+  //      la main omet toujours le couple auquel on ne pense pas — et c’est celui-là qui casse.
+  //   ② chaque assertion COMPTE ses déclenchements, et le banc rougit si un compte est à ZÉRO.
+  //      Sans ce compte, une assertion morte est indiscernable d’une assertion satisfaite.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
   //
   // ⚠️ CE QUE B GARANTIT, ET CE QU’ELLE NE GARANTIT PAS :
   //   • au-dessus du seuil, la sortie ne se sacrifie JAMAIS ;
   //   • sous le seuil, elle n’est montrable par AUCUN rendu — et ce qui se joue alors est
-  //     « lequel abîme le moins le reste de l’écran ». La troncature garde l’écran stable et
-  //     le titre en place ; le débordement emportait les deux (mesuré : à 8×2, `'q quitte'` /
-  //     `'r'`, titre disparu).
+  //     « lequel abîme le moins le reste de l’écran ». La troncature garde l’écran stable et le
+  //     titre en place ; le débordement emportait les deux (mesuré : à 8×2, `'q quitte'` / `'r'`,
+  //     titre disparu).
   const tmp = racine();
   t.after(() => rmSync(tmp, { recursive: true, force: true }));
   const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
@@ -516,35 +567,70 @@ test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — mesuré sur l�
   const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
   const SEUIL = [...RACCOURCI_VITAL].length;
 
-  for (const [cols, rows] of [[3, 1], [5, 1], [8, 2], [9, 1], [12, 3], [20, 3], [40, 8], [65, 12]]) {
-    const ecran = rendreEcran({ vue, etat, lignes, largeur: cols, hauteur: rows });
+  // ⚠️ PRODUIT CARTÉSIEN, ET IL COUVRE LES DEUX CÔTÉS DU SEUIL DANS LES DEUX DIMENSIONS.
+  const COLONNES = [1, 2, 3, 5, 8, SEUIL - 1, SEUIL, SEUIL + 1, 12, 20, 40, 65];
+  const RANGEES = [1, 2, 3, 4, 5, 8, 12, 24];
 
-    // ═══ ① L’ÉCRAN NE DÉFILE PAS : ce qu’on écrit tient dans les rangées du pane.
-    assert.equal(
-      rangeesPhysiques(ecran, cols),
-      rows,
-      `à ${cols}×${rows}, l’écran occupe ${rangeesPhysiques(ecran, cols)} rangées physiques — ` +
-        'il DÉFILE, et ce qui précède est poussé hors de vue'
-    );
+  const declenche = { hauteur: 0, titre: 0, sortie: 0, sousLeSeuil: 0 };
 
-    // ═══ ② LE TITRE SURVIT — c’est ce que le débordement emportait.
-    const vu = texteVisible(ecran, cols, rows);
-    assert.ok(vu.length > 0, `à ${cols}×${rows}, l’écran est vide`);
-    if (rows >= 2) {
-      assert.ok(
-        vu.split('\n')[0].trim() !== '',
-        `à ${cols}×${rows}, la première rangée visible est vide — le titre a été poussé dehors`
+  for (const cols of COLONNES) {
+    for (const rows of RANGEES) {
+      const ecran = rendreEcran({ vue, etat, lignes, largeur: cols, hauteur: rows });
+
+      // ═══ ① L’ÉCRAN NE DÉFILE PAS : ce qu’on écrit tient dans les rangées du pane.
+      declenche.hauteur += 1;
+      assert.equal(
+        rangeesPhysiques(ecran, cols),
+        rows,
+        `à ${cols}×${rows}, l’écran occupe ${rangeesPhysiques(ecran, cols)} rangées physiques — ` +
+          'il DÉFILE, et ce qui précède est poussé hors de vue'
       );
-    }
 
-    // ═══ ③ LA SORTIE, SELON LE SEUIL — la garantie de B, énoncée telle qu’elle est.
-    if (cols >= SEUIL) {
-      assert.ok(
-        vu.includes(RACCOURCI_VITAL),
-        `à ${cols}×${rows}, « ${RACCOURCI_VITAL} » tiendrait et n’est pas à l’écran : ${JSON.stringify(vu)}`
-      );
+      const vu = texteVisible(ecran, cols, rows);
+      assert.ok(vu.length > 0, `à ${cols}×${rows}, l’écran est vide`);
+
+      // ═══ ② LE TITRE SURVIT — c’est ce que le débordement emportait.
+      if (rows >= 2) {
+        declenche.titre += 1;
+        assert.ok(
+          vu.split('\n')[0].trim() !== '',
+          `à ${cols}×${rows}, la première rangée visible est vide — le titre a été poussé dehors`
+        );
+      }
+
+      // ═══ ③ LA SORTIE, SELON LE SEUIL — la garantie de B, énoncée telle qu’elle est.
+      if (cols >= SEUIL) {
+        declenche.sortie += 1;
+        assert.ok(
+          vu.includes(RACCOURCI_VITAL),
+          `à ${cols}×${rows}, « ${RACCOURCI_VITAL} » tiendrait et n’est pas à l’écran : ${JSON.stringify(vu)}`
+        );
+      } else {
+        // ⚠️ CONTRÔLE POSITIF DE L’IMPOSSIBILITÉ : on ne se contente pas de ne rien exiger, on
+        // prouve que rien ne pouvait l’être. Sans ça, la branche serait une dispense muette.
+        declenche.sousLeSeuil += 1;
+        assert.ok(
+          [...RACCOURCI_VITAL].length > cols,
+          `à ${cols} colonnes, « ${RACCOURCI_VITAL} » TIENDRAIT — cette branche n’aurait pas dû s’appliquer`
+        );
+      }
     }
   }
+
+  // ═══ ④ AUCUNE ASSERTION MORTE. C’est le défaut qui a coûté ce banc : une assertion qui ne se
+  // déclenche jamais est verte pour rien, et indiscernable d’une assertion satisfaite.
+  for (const [quoi, combien] of Object.entries(declenche)) {
+    assert.ok(combien > 0, `l’assertion « ${quoi} » ne s’est JAMAIS déclenchée — elle est morte, verte pour rien`);
+  }
+
+  // ⚠️ ET LE COUPLE QUI MANQUAIT SE NOMME, pour qu’un futur rétrécissement du balayage le fasse
+  // rougir plutôt que de le reperdre en silence : au-dessus du seuil, à HAUTEUR 2 exactement.
+  const aHauteurDeux = COLONNES.filter((c) => c >= SEUIL).length * RANGEES.filter((r) => r === 2).length;
+  assert.ok(
+    aHauteurDeux > 0,
+    'le balayage ne contient AUCUN couple (colonnes ≥ seuil, hauteur 2) — c’est exactement le ' +
+      'trou par lequel l’ordre de sacrifice a cessé d’être gardé'
+  );
 });
 
 
@@ -689,4 +775,110 @@ test('LA SORTIE SURVIT À TOUTE ENTÊTE DE PIED — mesuré sur l’écran, à t
     }
   }
   assert.ok(mesurees > 300, `ce banc doit balayer les largeurs — il n’en a vu que ${mesurees}`);
+});
+
+test('L’ORDRE DE SACRIFICE AUX HAUTEURS MINUSCULES — ce que la réécriture d’un banc avait laissé tomber', async (t) => {
+  // 🔴 TROUVÉ PAR UNE PASSE DE FOND, ET LE DÉFAUT RÉEL ÉTAIT PIRE QUE CE QU’ELLE DÉCRIVAIT.
+  //
+  // Un banc gardait ces propriétés en comparant les STYLES rendus : `stylesA(2)` devait valoir
+  // exactement `['titre','pied']`. Je l’ai RÉÉCRIT en un banc de rendu — meilleur sur la largeur,
+  // et qui ne passait plus par ce point. Mesuré par mutation, sur la suite ENTIÈRE :
+  //
+  //     hauteur 1, rendre le titre au lieu de la sortie  → ROUGE   (encore gardé)
+  //     hauteur 2, barre AVANT titre                     → SURVIVANTE
+  //     hauteur 2, le titre DEUX FOIS (plus de sortie)   → SURVIVANTE   ← le pire
+  //
+  // La seconde survivante efface ENTIÈREMENT la sortie d’un écran de 2 lignes, et la suite reste
+  // verte à 1119/1119. C’est le défaut que ce lot avait fermé deux jours plus tôt, rouvert par
+  // une réécriture qui améliorait autre chose.
+  //
+  // ⚠️ LA LEÇON, ET ELLE EST DE FORME : mon message de commit disait « deux bancs devenus sans
+  // objet retirés ». C’était VRAI des deux supprimés, et MUET sur le troisième — réécrit, qui a
+  // laissé tomber une propriété. Un message doit nommer ce que la réécriture a PERDU, pas
+  // seulement ce qu’elle a supprimé. Une suppression se voit au diff ; une réécriture, non.
+  //
+  // ⚠️ ON GARDE LA PROPRIÉTÉ, PAS LA LISTE DES STYLES. L’ancien banc figeait la composition
+  // exacte à chaque hauteur, donc il rougissait sur tout remaniement innocent du corps. Ce qui
+  // compte pour le dirigeant tient en deux phrases : à toute hauteur non nulle il voit COMMENT
+  // SORTIR, et le titre ne passe jamais devant la sortie.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const etat = etatInitial();
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
+  const LARGE = 65; // au-dessus du seuil : la sortie TIENT, donc son absence est un défaut
+
+  for (const hauteur of [1, 2, 3, 4, 5, 8, 20]) {
+    const ecran = rendreEcran({ vue, etat, lignes, largeur: LARGE, hauteur });
+    assert.equal(ecran.length, hauteur, `à ${hauteur} lignes de pane, l’écran en rend ${ecran.length}`);
+
+    // ═══ ① LA SORTIE EST LÀ, À TOUTE HAUTEUR NON NULLE.
+    const barre = ecran[ecran.length - 1];
+    assert.ok(
+      barre.texte.includes(RACCOURCI_VITAL),
+      `à ${hauteur} lignes, « ${RACCOURCI_VITAL} » n’est pas sur la dernière ligne : ` +
+        `${JSON.stringify(ecran.map((l) => l.texte))} — le dirigeant est enfermé dans un écran ` +
+        'alternatif dont il ne connaît plus la sortie'
+    );
+
+    // ═══ ② ET ELLE EST LA DERNIÈRE — l’ordre de sacrifice va du moins vital au plus vital :
+    // le CORPS cède d’abord, puis le TITRE, et le PIED reste. Une barre remontée au-dessus du
+    // titre inverse silencieusement l’écran.
+    assert.equal(barre.style, 'pied', `à ${hauteur} lignes, la dernière ligne est « ${barre.style} », pas le pied`);
+    assert.equal(
+      ecran.filter((l) => l.style === 'pied').length,
+      1,
+      `à ${hauteur} lignes, il y a ${ecran.filter((l) => l.style === 'pied').length} pieds`
+    );
+
+    // ═══ ③ LE TITRE CÈDE AVANT LA SORTIE, JAMAIS APRÈS.
+    const titres = ecran.filter((l) => l.style === 'titre').length;
+    if (hauteur === 1) {
+      assert.equal(titres, 0, 'à 1 ligne, c’est la SORTIE qu’on garde, pas le titre');
+    } else {
+      assert.equal(titres, 1, `à ${hauteur} lignes, le titre doit être là une fois (il y en a ${titres})`);
+      assert.equal(ecran[0].style, 'titre', `à ${hauteur} lignes, la PREMIÈRE ligne n’est pas le titre`);
+    }
+  }
+});
+
+test('LA BARRE MONTRE LE CHAMP DE RECHERCHE — le cas qu’une revue avait nommé À PART, et que j’ai laissé tomber', async (t) => {
+  // 🔴 SECONDE PROPRIÉTÉ PERDUE PAR LA MÊME RÉÉCRITURE, et celle-ci est plus grave que l’autre :
+  // elle avait été posée par une revue PRÉCÉDENTE, avec sa propre note — « ET LE CAS QUI A FUI,
+  // NOMMÉ À PART : sans lui, un décor futur qui perdrait le mode recherche ferait retomber ce
+  // banc sur les seuls états déjà gardés, sans que rien ne le dise. » J’ai retiré une garde
+  // qu’une revue avait installée, et le commentaire qui expliquait pourquoi elle existait.
+  //
+  // Mesuré : neutraliser la branche `recherche` de `pied()` SURVIVAIT à la suite entière. Le
+  // lecteur taperait « / », verrait la barre normale, et n’aurait aucun retour de ce qu’il tape.
+  //
+  // ⚠️ CE N’EST PAS UN DÉTAIL D’AFFICHAGE — c’est le SEUL retour visuel du mode recherche. Sans
+  // lui, le mode est indiscernable d’un écran figé, et les touches semblent perdues.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const enRecherche = { ...etatInitial(), mode: 'recherche', recherche: 'somcraft' };
+  const l3 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), enRecherche);
+
+  for (const largeur of [30, 40, 65, 120]) {
+    const barre = rendreEcran({ vue, etat: enRecherche, lignes: l3, largeur, hauteur: 10 }).at(-1);
+    assert.equal(barre.style, 'pied', `à ${largeur} colonnes, la dernière ligne n’est pas la barre`);
+    assert.ok(
+      barre.texte.includes('/'),
+      `à ${largeur} colonnes, en mode recherche, la barre ne montre PAS le champ : ${JSON.stringify(barre.texte)}`
+    );
+    // ⚠️ ET ELLE MONTRE CE QUI EST TAPÉ, pas seulement la barre oblique — sinon un champ vidé
+    // de son contenu passerait, et le lecteur ne verrait toujours pas ce qu’il écrit.
+    if (largeur >= 40) {
+      assert.ok(
+        barre.texte.includes(enRecherche.recherche),
+        `à ${largeur} colonnes, le terme tapé n’est pas à l’écran : ${JSON.stringify(barre.texte)}`
+      );
+    }
+    // ⚠️ ET ELLE RESTE BORNÉE — c’est ce cas précis qui écrivait 43 caractères sur un pane de 30.
+    assert.ok(
+      largeurAffichee(barre.texte) <= largeur,
+      `à ${largeur} colonnes, la barre de recherche écrit ${largeurAffichee(barre.texte)} caractères`
+    );
+  }
 });

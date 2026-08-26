@@ -737,7 +737,7 @@ export const RACCOURCIS = RACCOURCIS_UN_A_UN.map((r) => r.texte).join('  ');
 /**
  * LE RACCOURCI VITAL — celui qu’on ne retire jamais. DÉRIVÉ du manifeste, jamais recopié.
  *
- * ⚠️ SON TEXTE EST LA SOURCE DU SEUIL DE L’EXCEPTION (décision `f05bc613`, condition n°2) : le
+ * ⚠️ SON TEXTE EST LA SOURCE DU SEUIL, ET LE SEUIL NE S’ÉCRIT PAS EN CHIFFRE : le
  * jour où « q quitter » est renommé, un seuil écrit `9` deviendrait faux EN SILENCE et la
  * garde continuerait de passer au vert. Le seuil se lit ici, il ne se compte pas à la main.
  */
@@ -955,23 +955,18 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     });
   }
 
-  // 🔴 LA BARRE EST LA SEULE LIGNE QUI PEUT DÉBORDER, ET C'EST UN ARBITRAGE ASSUMÉ.
+  // 🔴 IL N'Y A PLUS AUCUNE LIGNE QUI PEUT DÉBORDER — Y COMPRIS LA BARRE.
   //
-  // Deux invariants de ce dépôt se contredisent sous 9 colonnes :
-  //   ① « rien de ce que le TUI écrit ne dépasse la largeur » (ce lot, T-20260825-0071) ;
-  //   ② « la barre ne tient JAMAIS au prix de la sortie » — contrat ANTÉRIEUR, gardé par
-  //      `le-tui-de-la-vue-du-parc.test.js`, qui exige « q quitter » ENTIER même à 1 colonne.
+  // ⚠️ UN BLOC ENTIER VIVAIT ICI ET AFFIRMAIT L'INVERSE, longtemps après que la décision qui le
+  // fondait ait été supersédée. Il disait « la barre est la seule ligne qui peut déborder » et
+  // « ② l'emporte » ; le code sous lui faisait déjà le contraire, et le bloc SUIVANT le disait.
+  // Un lecteur qui ne lisait pas jusqu'au bout repartait avec une décision morte. Relevé en
+  // revue portail — **la relecture ne l'avait pas vu trois fois de suite**.
   //
-  // ② L'EMPORTE, parce que le pire des deux maux est asymétrique : une barre qui déborde d'un
-  // pane minuscule se voit et se répare d'un coup d'œil ; un écran alternatif dont l'aide ne
-  // dit plus la sortie ENFERME son lecteur. Et `borner` produisait « q quitt… » — un fragment
-  // qui ne dit rien à qui ne connaît pas déjà la touche, c'est-à-dire exactement la personne
-  // qui lit cette barre.
+  // La leçon est de forme : une supersédance laisse des traces PARTOUT, et celle qu'on ne
+  // cherche pas est celle qui reste. On cherche la prose périmée par sa FONCTION (ce qu'elle
+  // affirme), jamais par le seul bloc qu'on vient de trouver.
   //
-  // ⚠️ CE DÉBORDEMENT NE PEUT PAS EMPILER, contrairement à l'incident : il est écrit dans
-  // l'écran alternatif, repeint entier à chaque frame (`ESC[H` + `ESC[2J`), et non réécrit au
-  // fil de l'eau avec `\r`. Il coûte un wrap visuel sur un pane de moins de 9 colonnes ; il ne
-  // coûte pas la multiplication de lignes que ce lot ferme.
   // 🔴 LE CODE DE PRODUCTION INTERROGE L’INVARIANT — IL NE RECALCULE PAS SA PROPRE CONDITION.
   //
   // Ma version précédente écrivait ici `barre.length <= largeur ? borner(...) : barre` : une
@@ -1095,8 +1090,10 @@ function pied(etat, largeur) {
   // deux sources pour un seul fait, dont l'une pouvait dériver sans que rien ne rougisse.
   const laSortie = RACCOURCI_VITAL;
   if (tete.length + laSortie.length > largeur) {
-    // ⚠️ ET ON NE REND PAS UN FRAGMENT — `raccourcisPour` rend le raccourci ENTIER, quitte à
-    // déborder d’un pane minuscule (contrat antérieur, voir sa note). Ma première correction
+    // ⚠️ ET ON NE REND PAS UN FRAGMENT **ICI** — `raccourcisPour` rend le raccourci ENTIER ;
+    // c'est `rendreEcran` qui borne, une seule fois, à la sortie. Tronquer aux deux endroits
+    // couperait deux fois. (Ce commentaire disait « quitte à déborder d'un pane minuscule,
+    // contrat antérieur » : périmé par `00a7b645`, plus rien ne déborde.) Ma première correction
     // appelait `borner(laSortie, largeur)` ici, ce qui reproduisait « q quitt… » : le piège que
     // j’avais nommé trois lignes plus haut et posé moi-même. Mesuré : de 2 à 8 colonnes.
     return raccourcisPour(largeur);

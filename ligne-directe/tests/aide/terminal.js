@@ -17,13 +17,22 @@
 // mais le TUI vit hors de herdr, et n'importe quel terminal peut être à 3 colonnes.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// CE MODÈLE EST PROUVÉ CONFORME AVANT D'ÊTRE UTILISÉ
+// 🔴 CECI EST UN DOUBLE DU TERMINAL. SA FIDÉLITÉ N'EST PAS ÉPROUVÉE DANS CE DÉPÔT.
 //
 // Un double non conforme ne rate pas seulement un défaut : il en FABRIQUE dans les gardes qui
-// s'appuient dessus. Celui-ci a été confronté à `pyte` (émulateur VT100/xterm complet) sur les
-// cas mêmes qui ont révélé le défaut — 3×1, 5×1, 8×1, 8×2, 9×1, 20×3, et un cas multi-lignes :
-// **0 écart sur 7**. La confrontation vit dans le scratchpad de la session, pas ici — ce fichier
-// ne dépend d'aucun paquet externe, pour que la suite reste éprouvable sans installation.
+// s'appuient dessus. Celui-ci a été confronté à un vrai émulateur VT100 hors du dépôt — mais
+// cette confrontation n'est rejouable par personne ici, donc **elle ne compte pas comme preuve**.
+//
+// ⚠️ UN CHIFFRE PRÉCIS TENAIT CETTE PLACE, ET IL EN A ÉTÉ RETIRÉ. Une mesure invérifiable posée
+// à côté du code n'est pas faible : elle est AUTORITAIRE. Elle ne laisse pas un doute que le
+// lecteur ira lever — elle FERME la question, et personne ne remesure jamais.
+//
+// ⚠️ CE QUI GARDE LA PROPRIÉTÉ NE DÉPEND PAS DE CE FICHIER. L'invariant « rien de ce que le TUI
+// écrit ne dépasse la largeur du pane » est gardé par une mesure DIRECTE — `largeurAffichee(texte)
+// <= largeur` — à quatre endroits de `rien-ne-deborde-du-pane.test.js`. Ce modèle est un SECOND
+// instrument, indépendant du premier : il attrape le même défaut par une autre route (une ligne
+// plus longue que `cols` occupe plus d'une rangée, donc la somme dépasse `rows`). Deux
+// instruments indépendants valent mieux qu'un, même en disant honnêtement de l'un ce qu'il est.
 //
 // ⚠️ CE QU'IL MODÉLISE, ET RIEN D'AUTRE : l'auto-wrap (une ligne de n points de code sur `cols`
 // colonnes occupe ⌈n/cols⌉ rangées) et le défilement (seules les `rows` dernières rangées
