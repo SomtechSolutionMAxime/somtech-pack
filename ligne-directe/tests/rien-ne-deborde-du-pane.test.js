@@ -1578,3 +1578,55 @@ test('CHAQUE MÉCANISME DU DOUBLE EST ATTEINT PAR LE CORPUS — un nom rassure, 
     console.log(`    ⚠️ mécanismes faiblement couverts : ${faibles.join(' · ')}`);
   }
 });
+
+
+test('LA BARRE GARDE LE MAXIMUM — entre « ça tient » et « ça ne se vide pas », le milieu était libre', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 UN SOUS-USAGE, ET C'EST L'INVERSE DE LA CLASSE QUE CE LOT FERME.
+  //
+  // Muter la borne de retrait de `raccourcisPour` (`>` en `>=`) change le rendu à SIX largeurs,
+  // et la suite entière restait VERTE :
+  //
+  //     22 col   sain « ↑↓ naviguer  q quitter »              muté « q quitter »
+  //     32 col   sain « ↑↓ naviguer  →← plier  q quitter »    muté sans « →← plier »
+  //     44 col   sain « …  / chercher  q quitter »            muté sans « / chercher »
+  //
+  // La barre retire un raccourci qu'elle avait EXACTEMENT la place d'afficher. Ce n'est pas un
+  // débordement — c'est de la place perdue, en silence, à la largeur de palier.
+  //
+  // ⚠️ POURQUOI AUCUN BANC NE LE VOYAIT : ils gardaient les deux BORDS. « Rien ne dépasse le
+  // pane » d'un côté, « la barre ne se vide jamais » de l'autre. Entre les deux, personne ne
+  // demandait qu'elle en garde le PLUS possible. Garder deux bords ne garde pas ce qu'il y a
+  // entre eux.
+  //
+  // ⚠️ ET ON NE RÉIMPLÉMENTE PAS LA RÈGLE POUR LA VÉRIFIER — ce serait la recopier à côté
+  // d'elle-même, et les deux se tromperaient ensemble. On énonce une propriété de PALIER qui
+  // n'a besoin d'aucune arithmétique : là où la barre gagne un raccourci en passant de `c` à
+  // `c + 1`, ce raccourci de plus ne pouvait PAS tenir dans `c`.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  let paliers = 0;
+  for (let c = 1; c <= 200; c += 1) {
+    const ici = raccourcisPour(c);
+    const apres = raccourcisPour(c + 1);
+    if (ici === apres) continue;
+
+    // ═══ ① UN PALIER : la barre a changé. Ce qu'elle porte en plus doit être IMPOSSIBLE à `c`.
+    paliers += 1;
+    assert.ok(
+      [...apres].length > c,
+      `à ${c + 1} colonnes la barre devient ${JSON.stringify(apres)} (${[...apres].length} car.) — ` +
+        `elle TENAIT déjà dans ${c} colonnes, donc à ${c} on a retiré un raccourci pour rien : ` +
+        `${JSON.stringify(ici)}`
+    );
+
+    // ═══ ② ET ELLE NE PERD JAMAIS EN S'ÉLARGISSANT — la monotonie, dans le sens du gain.
+    assert.ok(
+      [...apres].length >= [...ici].length,
+      `à ${c + 1} colonnes la barre RÉTRÉCIT : ${JSON.stringify(ici)} → ${JSON.stringify(apres)}`
+    );
+  }
+
+  // ⚠️ ET LES PALIERS EXISTENT VRAIMENT — sans eux, tout le corps de la boucle serait sauté et ce
+  // banc serait vert sans rien avoir mesuré. C'est le défaut qu'on vient de fermer ailleurs.
+  assert.ok(paliers >= 4, `le balayage ne traverse que ${paliers} palier(s) — il n’éprouve presque rien`);
+});
