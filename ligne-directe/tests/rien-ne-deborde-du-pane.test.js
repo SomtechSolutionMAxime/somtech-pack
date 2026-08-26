@@ -48,6 +48,8 @@ import {
   etatInitial,
   depasseLaLargeurAutorisee,
   RACCOURCI_VITAL,
+  RACCOURCIS_UN_A_UN,
+  raccourcisPour,
 } from '../src/tui-vue-du-parc.js';
 import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
@@ -775,6 +777,46 @@ test('L’ÉCRAN GARDE SES BANDEAUX AUX PETITES HAUTEURS — ce qui rend le plan
       }
     }
   }
+});
+
+test('CE QUI REND LE SOUS-TEST DU DRAPEAU REDONDANT SE GARDE — sinon il cesse de l’être en silence', () => {
+  // 🔴 DEUX MUTATIONS SURVIVENT À LA CAMPAGNE, ET LA REVUE LES QUALIFIE D’ÉQUIVALENCES. J’ai
+  // vérifié moi-même plutôt que de la croire — « équivalent par construction » est exactement
+  // ce que j’ai cru trois fois de suite sur cette même exception.
+  //
+  //   ① `porteLaSortie === true` → truthy : mesuré, le champ ne prend QUE `true`, `false` ou
+  //      `undefined` sur les quatre états et les 130 largeurs. Équivalence réelle.
+  //   ② le sous-test `raccourcisPour(largeur).includes(RACCOURCI_VITAL)` dans la pose du
+  //      drapeau : mesuré, `raccourcisPour` porte le raccourci vital à TOUTE largeur de 0 à 200.
+  //      Le sous-test est donc redondant — aujourd’hui.
+  //
+  // ⚠️ MAIS ② REPOSE SUR UNE PROPRIÉTÉ D’UN AUTRE CODE : `raccourcisPour` s’arrête au dernier
+  // raccourci et ne le retire jamais. Le jour où cette boucle change — ou où `q quitter` cesse
+  // d’être le `vital` minimum — le sous-test redevient MORDANT, et rien ne le dirait. Une
+  // équivalence non gardée est une survivante en attente.
+  //
+  // Ce banc ne garde donc pas l’équivalence : il garde CE QUI LA REND VRAIE.
+  for (let largeur = 0; largeur <= 200; largeur += 1) {
+    assert.ok(
+      raccourcisPour(largeur).includes(RACCOURCI_VITAL),
+      `à ${largeur} colonnes, la barre a PERDU le raccourci vital — le sous-test du drapeau ` +
+        'cesse d’être redondant, et le drapeau peut désormais être posé sur une barre sans sortie'
+    );
+  }
+
+  // ⚠️ ET LE RACCOURCI VITAL EST BIEN UN MINIMUM STRICT — c’est ce qui garantit que la boucle
+  // de retrait ne peut pas le choisir. Deux raccourcis à `vital: 1` rendraient le « dernier
+  // retiré » indéterminé, et la propriété ci-dessus deviendrait affaire de hasard d’ordre.
+  const minima = RACCOURCIS_UN_A_UN.filter(
+    (r) => r.vital === Math.min(...RACCOURCIS_UN_A_UN.map((x) => x.vital))
+  );
+  assert.equal(
+    minima.length,
+    1,
+    `${minima.length} raccourcis partagent la vitalité minimale — lequel survit devient un hasard ` +
+      `d’ordre : ${minima.map((r) => r.texte).join(', ')}`
+  );
+  assert.equal(minima[0].texte, RACCOURCI_VITAL, 'et c’est bien celui que `RACCOURCI_VITAL` dérive');
 });
 
 test('CE QUI REND LA MUTATION `.length` ÉQUIVALENTE SE GARDE — sinon elle cesse de l’être en silence', () => {
