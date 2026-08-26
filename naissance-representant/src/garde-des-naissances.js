@@ -896,7 +896,7 @@ function declarationDe(agent, declarations) {
  * l'agent est « non mesuré », jamais « hors dispositif ». Les deux appellent des gestes
  * opposés.
  */
-function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
+function sourcesDe(agent, { declarations, illisibles, roleDuLieu, tolerance = TOLERANCE_DE_DATATION_MS }) {
   const decl = declarationDe(agent, declarations);
   // 🔴 L'APPARIEMENT EST STRUCTUREL ; LA COUVERTURE EST TEMPORELLE — ET IL FALLAIT LES DEUX.
   // `declarationDe` dit QUELLE déclaration désigne cette place (ce pane dans cette session, cet
@@ -904,7 +904,7 @@ function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
   // Une place se reprend — c'est à ça qu'un terminal sert — et la reprise est le geste que le
   // pack PRESCRIT. Voir `couvertureDeLaDeclaration`.
   const naissance = agent.naissance?.mesure === 'lu' ? agent.naissance.instant : null;
-  const couverture = decl ? couvertureDeLaDeclaration(decl, naissance) : null;
+  const couverture = decl ? couvertureDeLaDeclaration(decl, naissance, tolerance) : null;
   // ⚠️ LE NOM EST LA CLÉ DE REPLI DE L'APPARIEMENT (voir `declarationDe`) : un agent dont le
   // pane a bougé n'est retrouvé que par lui. Un nom NON MESURÉ rend donc la déclaration
   // « refusée », jamais « absente » — sinon `agent list`, mesuré à 83 panes sur 227 un jour,
@@ -1014,6 +1014,17 @@ export function jugerLeParc({
   roleDuLieu = () => null,
   portee = { sessionsInterrogees: 1, sessionsRefusees: [] },
   miseEnService = MISE_EN_SERVICE,
+  // ⚠️ LE SEUL POINT DE SUBSTITUTION, ET IL N'ÉLARGIT RIEN. Il existe parce que l'épingle de la
+  // tolérance n'était branchée que par un `grep` sur le source — deux caractères de commentaire
+  // devant l'appel la débranchaient sans qu'un seul essai rougisse (le motif « chercher un mot
+  // et conclure sur la fonction »). Une garde ne se prouve pas branchée en lisant son propre
+  // fichier : elle se prouve en REFUSANT. Ce paramètre laisse un essai reproduire la CAUSE —
+  // une tolérance hors de sa bande — sur la chaîne RÉELLE, moins cette seule chose nommée.
+  //
+  // ⚠️ IL NE PEUT PAS SERVIR À DÉSARMER : `verifierLaTolerance` s'applique à LUI. Un appelant
+  // qui passerait une tolérance élargie ne fait pas juger la garde plus mollement — il la fait
+  // REFUSER de se prononcer. La seule valeur qui traverse est une valeur que le relevé soutient.
+  tolerance = TOLERANCE_DE_DATATION_MS,
 } = {}) {
   const declarations = registre?.declarations ?? [];
   const illisibles = registre?.illisibles ?? [];
@@ -1022,7 +1033,7 @@ export function jugerLeParc({
   // central de la couverture temporelle ne se déplace pas sans que sa mesure le suive : voir
   // `verifierLaTolerance`. Une tolérance sortie de sa bande fait REFUSER la garde, elle ne la
   // fait pas juger plus mollement.
-  verifierLaTolerance();
+  verifierLaTolerance(tolerance);
 
   const horsPortee = [];
   const identifies = [];
@@ -1055,7 +1066,7 @@ export function jugerLeParc({
       continue;
     }
 
-    const { sources, nomConforme } = sourcesDe(a, { declarations, illisibles, roleDuLieu });
+    const { sources, nomConforme } = sourcesDe(a, { declarations, illisibles, roleDuLieu, tolerance });
     const etablie = sources.find((s) => s.etat === 'établi');
     if (etablie) {
       // ⚠️ L'ÉCART VOYAGE AVEC L'IDENTIFICATION. Sans lui, un identifié à −2 s (le régulier)

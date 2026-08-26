@@ -388,13 +388,22 @@ test('🔴 LA BANDE N’EST PAS VACANTE — elle exclut les DEUX valeurs par les
   }
 });
 
-test('🔴 L’ÉPINGLE EST BRANCHÉE SUR LE CHEMIN QUI JUGE — une porte que personne n’appelle ne garde rien', () => {
-  // ⚠️ LE MOTIF DÉJÀ PAYÉ ICI : « le détecteur existait dans le dépôt et nulle part dans la vie
-  // d'un agent ». On éprouve donc que `jugerLeParc` la traverse, pas seulement qu'elle existe.
-  const source = readFileSync(new URL('../src/garde-des-naissances.js', import.meta.url), 'utf8');
-  const corps = source.slice(source.indexOf('export function jugerLeParc'));
-  assert.match(corps, /verifierLaTolerance\(\)/, 'jugerLeParc n’appelle pas l’épingle de la tolérance');
-});
+/**
+ * 🔴 CE BANC A ÉTÉ UN `grep`, ET UN `grep` NE PROUVE PAS UN BRANCHEMENT.
+ *
+ * Il lisait le source de `jugerLeParc` et y cherchait `/verifierLaTolerance\(\)/`. Mesuré :
+ * COMMENTER l'appel — deux caractères, un geste d'allure d'entretien — laissait la suite
+ * ENTIÈRE au vert, épingle comprise, parce que le motif se trouve aussi dans un commentaire.
+ * La SUPPRESSION de la ligne, elle, était bien attrapée : la garde tenait le geste maladroit et
+ * laissait passer celui qui a l'air normal. C'est le motif « chercher un mot et conclure sur la
+ * fonction », déjà payé dans ce dépôt.
+ *
+ * ⚠️ ON NE L'A PAS ÉLARGI, ON L'A REMPLACÉ — élargir le motif (`verifierLaTolerance\(`) aurait
+ * laissé le trou du commentaire intact. Le branchement se prouve désormais par le REFUS, sur la
+ * chaîne réelle de `jugerLeParc`, moins UNE chose nommée : la tolérance qu'elle emploie. Un
+ * appel commenté ne peut pas faire lever `ToleranceHorsDeSaMesure` ; aucune mise en forme du
+ * source ne peut simuler ça. Voir le banc de l'épingle, plus bas.
+ */
 
 test('🔴 LE RELEVÉ PORTE SA DATE ET SON EFFECTIF — un chiffre sans sa méthode est invérifiable', () => {
   // Sans eux, personne ne peut re-mesurer, donc personne ne peut contester la bande — et une
@@ -628,4 +637,83 @@ test('🔴 ④ LE COÛT DE LA TOLÉRANCE EST IMPRIMÉ SUR CHAQUE RENDU — il n�
     new RegExp(RETARD_DE_MESURE_OBSERVE.leJour),
     'et porter la date du relevé qui la justifie — un chiffre sans sa méthode est invérifiable'
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// L'ÉPINGLE DE LA TOLÉRANCE — CE QUE SA PROPRE CAMPAGNE DE MUTATION A LAISSÉ DEBOUT
+//
+// 🔴 TROIS MUTATIONS D'UN SEUL POINT SURVIVAIENT À LA SUITE ENTIÈRE. L'épingle avait été posée
+// pour que « le geste de désarmement devienne VISIBLE EN REVUE ». Elle l'était — et elle
+// restait désarmable sans qu'un seul essai rougisse.
+//
+//   · `verifierLaTolerance();` COMMENTÉ dans `jugerLeParc`. Le banc qui garde le branchement
+//     lit le SOURCE et y cherche `/verifierLaTolerance\(\)/` : un commentaire satisfait le
+//     `grep`. Deux caractères débranchaient l'épingle. La SUPPRESSION de la ligne, elle, était
+//     bien attrapée — c'est-à-dire que la garde tenait le geste maladroit et laissait passer
+//     celui qui a l'air d'un entretien. Motif déjà payé ici : « chercher un mot et conclure sur
+//     la fonction ». Une garde ne se prouve pas branchée en lisant son propre fichier ; elle se
+//     prouve en REFUSANT, sur la chaîne réelle, moins UNE chose nommée.
+//
+//   · `MARGE_SUR_LE_RETARD_OBSERVE.minimale` de 1 à 0. Le plancher de la bande tombait à zéro —
+//     une tolérance d'une milliseconde serait passée. Rien ne rougissait, parce que le banc
+//     DÉRIVAIT son plancher de la constante qu'il éprouvait : un système auto-cohérent prouve
+//     que ses parties s'accordent entre elles, jamais qu'elles s'accordent au monde. Le plancher
+//     se pince donc désormais au RELEVÉ, pas à la marge.
+//
+//   · Le contrôle de finitude retiré de `verifierLaTolerance`. `NaN` et `Infinity` traversaient
+//     la bande sans la toucher — deux comparaisons fausses ne font pas un refus.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 L’ÉPINGLE REFUSE POUR DE BON SUR LA CHAÎNE QUI JUGE — commenter son appel ne suffit plus', () => {
+  // ⚠️ ON REPRODUIT LA CAUSE, PAS L'ÉTAT : la chaîne RÉELLE de `jugerLeParc`, moins UNE chose
+  // nommée — la tolérance qu'elle emploie. Aucun double, aucun faux module : le seul point
+  // substitué est celui dont la valeur est en cause.
+  for (const [tolerance, quoi] of [
+    [4 * 3_600_000, 'quatre heures — la première valeur par laquelle le désarmement est passé'],
+    [8 * 3_600_000, 'huit heures — la seconde'],
+    [1_000, 'une seconde — sous le pire retard que le poste ait montré'],
+  ]) {
+    assert.throws(
+      () => jugerLeParc({ agents: [], registre: { declarations: [], illisibles: [] }, tolerance }),
+      ToleranceHorsDeSaMesure,
+      `${quoi} : la garde a rendu un verdict au lieu de REFUSER de se prononcer`
+    );
+  }
+
+  // LA MOITIÉ QUI PROTÈGE : la tolérance en service traverse, elle, et rend un verdict.
+  assert.doesNotThrow(() =>
+    jugerLeParc({ agents: [], registre: { declarations: [], illisibles: [] }, tolerance: TOLERANCE_DE_DATATION_MS })
+  );
+});
+
+test('🔴 LE PLANCHER DE LA BANDE SE PINCE AU RELEVÉ, PAS À LA MARGE — sinon il tombe à zéro sans rougir', () => {
+  // ⚠️ CE BANC NE DEMANDE RIEN À `MARGE_SUR_LE_RETARD_OBSERVE` — c'est tout l'objet. Le dériver
+  // d'elle, c'est éprouver la constante par elle-même : `minimale` passait de 1 à 0 et le banc
+  // suivait. La PROPRIÉTÉ défendue n'est pas un nombre, c'est une conséquence : une tolérance
+  // plus courte que le pire retard DÉJÀ observé ferait refuser des agents réguliers.
+  const pireRetard = RETARD_DE_MESURE_OBSERVE.maximumMs;
+
+  assert.throws(
+    () => verifierLaTolerance(pireRetard - 1),
+    ToleranceHorsDeSaMesure,
+    'une tolérance plus courte que le pire retard mesuré passe : la garde refusera des réguliers'
+  );
+  // Et la moitié symétrique, qui empêche de fermer en serrant : le pire retard observé lui-même
+  // doit rester ADMISSIBLE, sans quoi le plancher refuserait la mesure qui le justifie.
+  assert.doesNotThrow(
+    () => verifierLaTolerance(pireRetard),
+    'le plancher a dépassé le relevé qui le fonde — il refuse ce que le poste a montré'
+  );
+});
+
+test('🔴 CE QUI N’EST PAS UN NOMBRE N’EST PAS UNE TOLÉRANCE — deux comparaisons fausses ne font pas un refus', () => {
+  // `NaN < plancher` et `NaN > plafond` sont TOUTES DEUX fausses : sans le contrôle de finitude,
+  // `NaN` traverse la bande sans la toucher, et la garde juge sur une tolérance qui n'en est pas.
+  for (const pas of [NaN, Infinity, -Infinity]) {
+    assert.throws(
+      () => verifierLaTolerance(pas),
+      ToleranceHorsDeSaMesure,
+      `« ${pas} » a traversé la bande — une valeur qui n’est pas finie n’est pas une tolérance`
+    );
+  }
 });
