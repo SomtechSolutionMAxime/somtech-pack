@@ -5,6 +5,36 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-26
+
+*Epic `E-20260826-0007`, projet `P-20260819-0001`, constat du parc `T-20260826-0044`. **La pose de lieu, mesurée pour la première fois après neuf usages — puis réparée.** Le geste qui pose le lieu d'un agent n'avait jamais été éprouvé. Il l'a été sur un lieu d'essai jetable, droits compris, et ce qu'il omettait se paie neuf fois en Phase 2-3.*
+
+### Ajouté
+
+- **`RONDE.md` — le cinquième élément du cycle de naissance** (`T-20260826-0042`). Le cycle arbitré par le CTO le 24/08 nomme **cinq** choses qu'un lieu porte ; la pose n'en connaissait que **quatre**. Le mot `loop` n'apparaissait nulle part dans le code de pose ni de naissance, et **dix-sept lieux vivants sur dix-huit** n'avaient aucun briefing de ronde — le seul qui en portait un l'avait écrit à la main. Ce que ça coûte est dans le métier lui-même : la ronde est *« le seul outil dont l'absence est **muette** »*. Un agent né sans elle ne se réveille jamais, et rien ne le signale — ni à lui, ni à personne. Le briefing est désormais un gabarit à chevrons pour les deux rôles, préservé des mises à jour comme `CONTEXTE.md`.
+
+- **La naissance exige un lieu RENSEIGNÉ** (`T-20260826-0043`). La pose dépose `CONTEXTE.md` avec ses chevrons, délibérément ; rien ne faisait respecter le « remplis-le avant la naissance » que la compétence prescrit — ni la pose ni la naissance ne lisaient le **contenu**. Mesuré sur le parc : **cinq lieux vivants sur dix-huit** portent un `CONTEXTE.md` resté au gabarit intégral, aucun ne disant à qui son agent répond. Le discriminant est la comparaison **au gabarit**, jamais un motif `<…>` cherché à l'aveugle : un lieu renseigné du parc porte `fly deploy -a <app>` dans sa prose, et un grep naïf le rejetterait à tort. Le faux positif est fermé **par construction**, pas par une liste d'exceptions.
+
+### Corrigé
+
+- **Un lieu vivant ne s'écarte plus parce que le gabarit a grandi** (`T-20260826-0042`). Défaut introduit par le lot lui-même : la liste de ce qu'un lieu doit porter se **dérive** du répertoire de gabarits — dès que `RONDE.md` y entre, les dix-huit lieux vivants ont un fichier « manquant » qu'aucun d'eux n'a jamais pu avoir. Le refus `lieu_partiel` proposait alors `mv <lieu> <lieu>.ecarte`, un geste qui emporte le `CONTEXTE.md` rempli à la main — la seule chose du lieu que personne ne peut reconstituer. Le message distingue désormais deux cas, **mesurés** : un obligatoire manque → pose interrompue, écarter reste juste ; tous les obligatoires sont là → le lieu est vivant, on le **met à jour**. Aucune commande destructrice dans la seconde branche.
+
+- **Le briefing atteint enfin les lieux déjà posés** (`T-20260826-0042`). `PRESERVE` ne veut pas dire « jamais écrasé » mais « **jamais touché** » (RA-REL-014) : ses entrées sont retirées avant la porte d'écriture. `RONDE.md` n'aurait donc atteint **aucun** des dix-huit lieux — ni par la pose, qui refuse, ni par la mise à jour, qui ne crée pas un préservé. Le correctif serait resté inerte, présent dans le dépôt et absent de la vie de tous les agents. `CREE_SI_ABSENT` le dépose **une fois**, vierge ; dès qu'il existe il redevient intouchable. `CONTEXTE.md` n'en est pas : absent, il **signale** une pose partielle que la pose attrape déjà.
+
+- **🔴 La première naissance de tout orchestrateur échouait, avec un diagnostic faux** (`T-20260826-0043`). Le défaut le plus grave du lot, introduit par sa propre garde, et qu'**aucune des seize mutations de l'auteur n'avait vu** — c'est la passe de revue de fond qui l'a sorti. Le geste sanctionné **pose** le lieu quand il manque, puis vérifie qu'il est renseigné ; or un lieu qu'on vient de poser est **par construction** resté mot pour mot son gabarit. Le refus tombait donc systématiquement, en affirmant *« Rien n'a été créé »* — faux : un répertoire de quinze fichiers venait de l'être, **non versé**. Le message envoyait chercher un lieu qu'on croyait inexistant, alors qu'il était là, à remplir. C'est le seul chemin par lequel un orchestrateur naît sans qu'un humain touche un écran. Le module ne conclut plus rien sur ce qui a été créé — il ne peut pas le savoir ; l'appelant, seul à le savoir, l'ajoute. Même motif que `fraicheur-gabarit.js` avait déjà fermé : *« ce message dit ce qu'il a MESURÉ ; chaque appelant ajoute ce qu'il n'a pas touché »*.
+
+- **Vider un fichier ne le fait plus passer pour renseigné** (`T-20260826-0043`). La garde ne cherchait que l'**absence** des chevrons du gabarit ; un fichier vide n'en porte aucun, donc il passait. Le geste le plus simple qui soit ouvrait la porte que la garde existe pour fermer. Ce qu'elle ne juge toujours pas, délibérément : la **pertinence** du contenu — « oops » passe, et doit passer, parce que juger qu'un texte répond vraiment à la question n'est pas mesurable.
+
+- **Le message de refus ne se contredit plus lui-même** (`T-20260826-0043`). `intact` était un booléen **global** : un seul fichier vierge faisait dire « le lieu n'a jamais été renseigné », juste au-dessus d'une liste qui ne citait que ce fichier-là. Il est désormais par fichier.
+
+### Technique
+
+- **`architecture.yaml`** : sans objet — ce lot n'ajoute ni service, ni endpoint, ni table, ni interface. Le dépôt n'en porte pas.
+- **Ce que la chaîne n'éprouve pas, et qu'on ne contourne pas** : la cloison d'essais refuse toute lecture du trousseau à un processus descendant du lanceur — délibérément, un veilleur né sous tests se connecterait à l'espace de production. L'auto-pose ne peut donc pas aboutir dans un banc. Ce qui est décidable est décidé dans une fonction pure et éprouvé ; le fait est **nommé dans le code** plutôt qu'escamoté.
+- **Un banc qui dépend de la machine, mesuré et isolé** : toute modification de gabarit fait rougir 19 essais de `ligne-directe` sur un poste dont le miroir `~/.claude/plugins/marketplaces/` est en retard — c'est la garde de fraîcheur qui fait son travail, pas une régression. Foyer neutre (= CI) : vert. À savoir avant la Phase 1.
+- **24 mutations**, toutes tuées, appliquées **une à une** sur copie hors dépôt. Deux passes de revue : portail (`RIEN VU` — sa première exécution avait rendu un `REJET` dont les trois griefs se sont révélés faux, venus du miroir périmé du poste) puis fond adversariale (4 défauts réels, dont le bloquant ci-dessus).
+
+
 ## [Non-versionne] - 2026-08-25
 
 *Epic `E-20260825-0006`, projet `P-20260819-0001`, rapport de mesure `T-20260825-0067`. **Trois des quatre défauts du chemin de naissance des agents, réparés avant de faire naître les neuf orchestrateurs.** Deux d'entre eux tenaient dans la même confusion : un état qu'on lit et un fait qu'on en conclut. « Au repos » n'est pas « a fini » ; une ligne de transcript n'est pas un dialogue.*
