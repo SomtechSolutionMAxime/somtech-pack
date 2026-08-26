@@ -444,6 +444,66 @@ test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l�
   }
 });
 
+test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production n’appelle pas ne garde rien', async (t) => {
+  // 🔴 CE BANC EXISTE PARCE QUE J’AVAIS UN INVARIANT JUSTE, ÉPROUVÉ, ET JAMAIS CONSULTÉ.
+  //
+  // `depasseLaLargeurAutorisee` répondait correctement `true` sur le pied en mode recherche —
+  // et `rendreEcran` recalculait sa PROPRE condition, plus large, qui laissait passer tout ce
+  // que `pied()` rend. Mesuré (revue portail) : en mode recherche, sur un pane de 30 colonnes,
+  // la barre écrivait 43 caractères et wrappait. C’était une RÉGRESSION de mon lot : sur
+  // `origin/main`, `borner` s’appliquait sans condition.
+  //
+  // ⚠️ « L’exception vit DANS l’invariant » (décision `f05bc613`, condition n°1) était vrai dans
+  // les bancs et FAUX dans le produit. Les deux oracles divergeaient, et seul celui que
+  // personne n’appelait était gardé.
+  //
+  // ⚠️ ON MESURE DONC LE RENDU RÉEL CONTRE L’INVARIANT, sur TOUS les états de l’écran — c’est
+  // la seule formulation qui ne peut pas diverger : si la production cesse d’interroger
+  // l’invariant, les deux réponses se séparent et ce banc rougit.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+
+  // ⚠️ LE MODE RECHERCHE EST LÀ PARCE QU’IL MANQUAIT — c’est l’état par lequel la régression est
+  // passée. `pied()` y rend une branche entièrement indépendante de `raccourcisPour`.
+  const etats = [
+    { quoi: 'arbre', etat: etatInitial() },
+    { quoi: 'filtre « non-pris seuls »', etat: { ...etatInitial(), nonPrisSeuls: true } },
+    { quoi: 'mode RECHERCHE, terme court', etat: { ...etatInitial(), mode: 'recherche', recherche: 'a' } },
+    { quoi: 'mode RECHERCHE, terme long', etat: { ...etatInitial(), mode: 'recherche', recherche: 'somcraft-cowork-espace-client' } },
+    { quoi: 'mode RECHERCHE, terme vide', etat: { ...etatInitial(), mode: 'recherche', recherche: '' } },
+  ];
+
+  let mesurees = 0;
+  for (const { quoi, etat: e } of etats) {
+    const l2 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), e);
+    for (let largeur = 1; largeur <= 130; largeur += 1) {
+      for (const ligne of rendreEcran({ vue, etat: e, lignes: l2, largeur, hauteur: 10 })) {
+        mesurees += 1;
+        assert.ok(
+          !depasseLaLargeurAutorisee(ligne, largeur),
+          `${quoi}, à ${largeur} colonnes : le rendu viole l’invariant que le code prétend suivre — ` +
+            `${largeurAffichee(ligne.texte)} caractères de style « ${ligne.style} » : ${JSON.stringify(ligne.texte)}`
+        );
+      }
+    }
+  }
+  assert.ok(mesurees > 1000, `ce banc doit mesurer un vrai écran — il n’a vu que ${mesurees} lignes`);
+
+  // ⚠️ ET LE CAS QUI A FUI, NOMMÉ À PART : sans lui, un décor futur qui perdrait le mode
+  // recherche ferait retomber ce banc sur les seuls états déjà gardés, sans que rien ne le dise.
+  const enRecherche = { ...etatInitial(), mode: 'recherche', recherche: 'somcraft' };
+  const l3 = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), enRecherche);
+  const barre = rendreEcran({ vue, etat: enRecherche, lignes: l3, largeur: 30, hauteur: 10 }).at(-1);
+  assert.equal(barre.style, 'pied', 'la dernière ligne est bien la barre');
+  assert.ok(barre.texte.includes('/'), `en mode recherche, la barre montre le champ : ${JSON.stringify(barre.texte)}`);
+  assert.ok(
+    largeurAffichee(barre.texte) <= 30,
+    `en mode recherche à 30 colonnes, la barre écrit ${largeurAffichee(barre.texte)} caractères — ` +
+      'elle wrappe, et le champ de recherche n’a AUCUN lien avec le raccourci vital'
+  );
+});
+
 test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et elle ne s’élargit pas sans rougir', async (t) => {
   // 🔴 CE BANC EXISTE PARCE QUE L’EXCEPTION ÉTAIT DÉSARMABLE, ET QUE LA DÉPLACER N’A PAS SUFFI.
   //

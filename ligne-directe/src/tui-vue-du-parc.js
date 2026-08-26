@@ -987,8 +987,31 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   // l'écran alternatif, repeint entier à chaque frame (`ESC[H` + `ESC[2J`), et non réécrit au
   // fil de l'eau avec `\r`. Il coûte un wrap visuel sur un pane de moins de 9 colonnes ; il ne
   // coûte pas la multiplication de lignes que ce lot ferme.
-  const barre = pied(etat, largeur);
-  sortie.push({ style: 'pied', texte: barre.length <= largeur ? borner(barre, largeur) : barre });
+  // 🔴 LE CODE DE PRODUCTION INTERROGE L’INVARIANT — IL NE RECALCULE PAS SA PROPRE CONDITION.
+  //
+  // Ma version précédente écrivait ici `barre.length <= largeur ? borner(...) : barre` : une
+  // condition PLUS LARGE que l’exception qu’elle prétendait appliquer. Elle laissait passer
+  // **tout** ce que `pied()` rend — dont le champ de RECHERCHE, qui n’a aucun lien avec le
+  // raccourci vital. Mesuré (revue portail) : en mode recherche, sur un pane de 30 colonnes,
+  // la barre écrivait 43 caractères et wrappait — la classe de défaut exacte que ce lot ferme.
+  //
+  // ⚠️ ET C’ÉTAIT UNE RÉGRESSION DE MON FAIT : sur `origin/main`, `borner` s’appliquait SANS
+  // condition. En ajoutant l’exception pour le raccourci vital, j’ai supprimé la troncature
+  // pour tout le reste.
+  //
+  // ⚠️ LA LEÇON, ET ELLE VAUT AU-DELÀ D’ICI : mon invariant répondait DÉJÀ correctement
+  // (`depasseLaLargeurAutorisee` rendait `true` sur ce cas). Il était juste, éprouvé — et
+  // jamais consulté par le code qui écrit. Un oracle que la production n’appelle pas ne garde
+  // rien : « l’exception vit DANS l’invariant » (décision `f05bc613`, condition n°1) était
+  // vrai dans les bancs et faux dans le produit.
+  // Une seule question, posée à l'invariant : cette ligne a-t-elle le droit de dépasser ?
+  //   — NON  → on la borne, comme n'importe quelle ligne de l'écran ;
+  //   — OUI  → on la laisse entière (c'est l'exception, et elle seule).
+  // `borner` complète aussi à la largeur, ce qui garde la colonne alignée.
+  const barre = { style: 'pied', texte: pied(etat, largeur) };
+  sortie.push(
+    depasseLaLargeurAutorisee(barre, largeur) ? { ...barre, texte: borner(barre.texte, largeur) } : barre
+  );
 
   // 🔴 LA JUMELLE VERTICALE DE L’INVARIANT DE LARGEUR — ET ELLE MANQUAIT (T-20260825-0071).
   //
