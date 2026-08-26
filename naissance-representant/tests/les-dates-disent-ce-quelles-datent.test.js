@@ -30,7 +30,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readdirSync, statSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readdirSync, readFileSync, statSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,6 +43,10 @@ import {
   jugerLeParc,
   couvertureDeLaDeclaration,
   TOLERANCE_DE_DATATION_MS,
+  RETARD_DE_MESURE_OBSERVE,
+  MARGE_SUR_LE_RETARD_OBSERVE,
+  ToleranceHorsDeSaMesure,
+  verifierLaTolerance,
   VERDICTS,
   SOURCES,
 } from '../src/garde-des-naissances.js';
@@ -333,28 +337,75 @@ test('🔴 ① … ET LE RETARD DE LA MESURE EST ABSORBÉ — un transcrit naît
 });
 
 /**
- * L'ÉPINGLE DE LA TOLÉRANCE — contre le MONDE MESURÉ, pas contre une constante recopiée.
+ * L'ÉPINGLE DE LA TOLÉRANCE — ET ELLE NE VIT PLUS DANS CE FICHIER.
  *
- * ⚠️ Une épingle qui compare le module à une valeur que le banc porte lui-même ne garde rien :
- * qui édite les deux ensemble la désarme en silence. Les deux bornes ci-dessous viennent de
- * mesures du poste, et elles encadrent : trop petite, la tolérance refuse les agents réguliers
- * dont le transcrit tarde ; trop grande, elle couvre la journée entière d'un chef d'équipe et
- * rouvre exactement le trou qu'on ferme.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 CE QUI ÉTAIT ÉCRIT ICI, ET CE QUE ÇA GARDAIT : RIEN.
+ *
+ * Le docblock disait : « contre le MONDE MESURÉ, pas contre une constante recopiée. ⚠️ Une
+ * épingle qui compare le module à une valeur que le banc porte lui-même ne garde rien. » Les
+ * deux bornes qu'il posait ÉTAIENT des littéraux de ce fichier — `2_209_000` et
+ * `4 * 3600 * 1000`.
+ *
+ * MESURÉ, copie hors dépôt : `TOLERANCE_DE_DATATION_MS` de 1 h à 4 h, UNE ligne —
+ * 797 essais, 797 verts, cette épingle comprise. À 8 h : un seul rouge, celui de l'épingle,
+ * qu'une seconde édition d'allure d'entretien (`4 * 3600 * 1000` → `8 * 3600 * 1000`, ICI)
+ * remettait au vert. La fenêtre où « reprendre un pane n'est pas naître » ne mord pas passait
+ * de 60 minutes à la journée de travail d'un chef d'équipe, sans un rouge qui tienne.
+ *
+ * L'épingle vit désormais dans le MODULE — `verifierLaTolerance`, appelée par `jugerLeParc` au
+ * même endroit et dans la même polarité que `verifierLaFrontiere` — et elle mord sur un relevé
+ * daté du poste que ce banc NE PORTE PAS (`RETARD_DE_MESURE_OBSERVE`). Ce fichier ne fait plus
+ * que deux choses : éprouver que le refus EXISTE et qu'il est branché, et éprouver que la bande
+ * n'est pas vacante.
+ *
+ * ⚠️ CE QUE ÇA NE FAIT PAS, DIT PLUTÔT QUE TU : le relevé reste ENREGISTRÉ, pas relu du monde à
+ * chaque tour. Deux éditions coordonnées restent possibles — mais la seconde n'est plus « un
+ * chiffre de banc qu'on élargit » : c'est falsifier une mesure datée dans le module de décision.
+ * On a déplacé la VISIBILITÉ du désarmement, pas fabriqué une impossibilité, et le module le dit
+ * sur place.
  */
-test('🔴 ① LA TOLÉRANCE EST ENCADRÉE PAR CE QUE LE POSTE MONTRE — ni assez petite pour refuser un régulier, ni assez grande pour couvrir un successeur', () => {
-  // Mesuré le 2026-08-25 : retard maximum de la mesure sur les 121 transcrits du poste qui
-  // datent une vraie conversation — 2 208,8 s. En deçà, la garde refuserait des réguliers.
-  assert.ok(
-    TOLERANCE_DE_DATATION_MS >= 2_209_000,
-    'la tolérance est plus courte que le retard de mesure DÉJÀ observé sur le poste'
-  );
-  // Un chef d'équipe travaille des heures. Une tolérance qui couvre un quart de journée rend
-  // la clé primaire aussi permissive qu'avant pour la reprise du même terminal.
-  assert.ok(
-    TOLERANCE_DE_DATATION_MS <= 4 * 3600 * 1000,
-    'la tolérance couvre le temps de travail d’un chef d’équipe : le successeur hérite à nouveau'
-  );
+test('🔴 LA TOLÉRANCE VIT DANS SA BANDE, ET C’EST LE MODULE QUI LE VÉRIFIE — aucun nombre ici', () => {
+  // ⚠️ AUCUNE VALEUR N'EST RECOPIÉE : la bande se DEMANDE au relevé, elle ne se réécrit pas.
+  const plancher = RETARD_DE_MESURE_OBSERVE.maximumMs * MARGE_SUR_LE_RETARD_OBSERVE.minimale;
+  const plafond = RETARD_DE_MESURE_OBSERVE.maximumMs * MARGE_SUR_LE_RETARD_OBSERVE.maximale;
+
+  assert.doesNotThrow(() => verifierLaTolerance(), 'la tolérance en service sort de sa propre bande');
+  assert.throws(() => verifierLaTolerance(plancher - 1), ToleranceHorsDeSaMesure, 'sous le plancher, rien ne refuse');
+  assert.throws(() => verifierLaTolerance(plafond + 1), ToleranceHorsDeSaMesure, 'au-dessus du plafond, rien ne refuse');
 });
+
+test('🔴 LA BANDE N’EST PAS VACANTE — elle exclut les DEUX valeurs par lesquelles le désarmement est passé', () => {
+  // ⚠️ CES DEUX NOMBRES NE SONT PAS LA BORNE, CE SONT LES ATTAQUES MESURÉES. Une bande qui les
+  // laisserait passer serait large au point de ne rien garder ; les épingler ici ne recopie
+  // aucune borne — la borne, elle, vit dans le module et se dérive du relevé.
+  for (const heures of [4, 8]) {
+    assert.throws(
+      () => verifierLaTolerance(heures * 3_600_000),
+      ToleranceHorsDeSaMesure,
+      `${heures} h passe : c’est la valeur par laquelle la tolérance a été portée à la journée d’un chef d’équipe`
+    );
+  }
+});
+
+test('🔴 L’ÉPINGLE EST BRANCHÉE SUR LE CHEMIN QUI JUGE — une porte que personne n’appelle ne garde rien', () => {
+  // ⚠️ LE MOTIF DÉJÀ PAYÉ ICI : « le détecteur existait dans le dépôt et nulle part dans la vie
+  // d'un agent ». On éprouve donc que `jugerLeParc` la traverse, pas seulement qu'elle existe.
+  const source = readFileSync(new URL('../src/garde-des-naissances.js', import.meta.url), 'utf8');
+  const corps = source.slice(source.indexOf('export function jugerLeParc'));
+  assert.match(corps, /verifierLaTolerance\(\)/, 'jugerLeParc n’appelle pas l’épingle de la tolérance');
+});
+
+test('🔴 LE RELEVÉ PORTE SA DATE ET SON EFFECTIF — un chiffre sans sa méthode est invérifiable', () => {
+  // Sans eux, personne ne peut re-mesurer, donc personne ne peut contester la bande — et une
+  // borne qu'on ne peut pas contester se déplace sans qu'on ait à la justifier.
+  assert.match(RETARD_DE_MESURE_OBSERVE.leJour, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(RETARD_DE_MESURE_OBSERVE.transcrits > 0);
+  assert.ok(RETARD_DE_MESURE_OBSERVE.maximumMs > RETARD_DE_MESURE_OBSERVE.p99Ms);
+  assert.ok(RETARD_DE_MESURE_OBSERVE.p99Ms > RETARD_DE_MESURE_OBSERVE.p90Ms);
+  assert.ok(RETARD_DE_MESURE_OBSERVE.p90Ms > RETARD_DE_MESURE_OBSERVE.medianeMs);
+});
+
 
 /**
  * LA PHRASE IMPRIMÉE DIT-ELLE CE QUE LE CODE FAIT ? — le sens de la règle temporelle.

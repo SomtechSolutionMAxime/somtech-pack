@@ -109,8 +109,9 @@ export async function main({
       miseEnService,
     });
   } catch (err) {
-    // `FrontiereContredite` et `ComptesQuiNeBalancentPas` passent par ici. Les deux sont des
-    // refus de se prononcer, pas des pannes : leur message porte déjà tout ce qu'il faut.
+    // `FrontiereContredite`, `ToleranceHorsDeSaMesure` et `ComptesQuiNeBalancentPas` passent
+    // par ici. Les trois sont des refus de se prononcer, pas des pannes : leur message porte
+    // déjà tout ce qu'il faut.
     return refuser(alerter, `${err?.message ?? err}`);
   }
 

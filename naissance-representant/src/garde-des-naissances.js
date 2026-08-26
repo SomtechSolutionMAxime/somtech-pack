@@ -527,6 +527,111 @@ function verifierLaFrontiere(declarations, miseEnService) {
  * tolérance ; l'agrandir pour le cacher reviendrait à laisser une mesure cassée régler la
  * sensibilité de la garde.
  */
+/**
+ * LE RETARD DE LA MESURE, TEL QUE LE POSTE L'A MONTRÉ — la donnée contre laquelle la tolérance
+ * est épinglée.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 POURQUOI CE RELEVÉ EST DU CODE ET NON DE LA PROSE. Il ne l'était pas : ces chiffres
+ * vivaient dans le commentaire ci-dessus, et l'épingle qui devait les faire mordre les
+ * RECOPIAIT dans le banc — `2_209_000` et `4 * 3600 * 1000`, deux littéraux du fichier d'essai.
+ * Son propre docblock avertissait pourtant : « Une épingle qui compare le module à une valeur
+ * que le banc porte lui-même ne garde rien. »
+ *
+ * MESURÉ, copie hors dépôt : `TOLERANCE_DE_DATATION_MS` portée de 1 h à 4 h — UNE ligne —
+ * 797 essais, 797 verts, épingle comprise. Portée à 8 h : un seul rouge, celui de l'épingle,
+ * qu'une SECONDE édition d'allure d'entretien (`4 * 3600 * 1000` → `8 * 3600 * 1000`, dans le
+ * banc) remettait au vert. Deux gestes anodins portaient la tolérance à la journée de travail
+ * d'un chef d'équipe — ce que le texte ci-dessus désigne lui-même comme « rouvre exactement le
+ * trou qu'on ferme ».
+ *
+ * ⚠️ CE QUE CE DÉPLACEMENT GAGNE, ET CE QU'IL NE GAGNE PAS — dit plutôt que tu. Le banc ne
+ * porte plus AUCUN de ces nombres : une mutation d'un seul point sur la tolérance est désormais
+ * impossible à faire passer. Mais la référence reste un relevé ENREGISTRÉ, pas une donnée que
+ * la garde relit du monde à chaque tour — elle est donc plus faible que celle de
+ * `verifierLaFrontiere`, qui compare sa frontière au registre RÉEL du poste. Ce qu'on a déplacé
+ * est la VISIBILITÉ du désarmement : élargir la tolérance oblige maintenant à falsifier, dans
+ * le module de décision et sous ce bloc, une mesure datée du poste. C'est le critère d'arrêt
+ * que l'en-tête se donne — « le geste de désarmement doit devenir VISIBLE EN REVUE » — et non
+ * une impossibilité.
+ *
+ * ⚠️ ET AUCUNE DONNÉE VIVANTE NE PEUT BORNER CETTE TOLÉRANCE PAR LE HAUT. Par le bas, le monde
+ * parle : une tolérance trop courte fait tomber des réguliers chez les NON MESURÉS, et le
+ * module le COMPTE déjà (`fauxRefusNonMesures`, rendu sur chaque page). Par le haut, rien — le
+ * cas qu'une tolérance trop large laisse passer est un successeur qui a repris la place, et la
+ * garde ne peut PAS le distinguer d'une mesure en retard : c'est très exactement ce pour quoi
+ * la tolérance existe. Le relevé est donc le seul appui disponible, et on le dit.
+ */
+export const RETARD_DE_MESURE_OBSERVE = Object.freeze({
+  /** Le pire retard observé, en ms — 2 208,8 s (36,8 min). En deçà, la garde refuse des réguliers. */
+  maximumMs: 2_208_800,
+  /** Sur combien de transcrits qui datent une VRAIE conversation. */
+  transcrits: 121,
+  /** Quand. Un relevé sans sa date ne se re-mesure pas. */
+  leJour: '2026-08-25',
+  /** Les quantiles du même relevé — ils disent que le maximum est une QUEUE, pas le régime. */
+  medianeMs: 19_500,
+  p90Ms: 118_000,
+  p99Ms: 964_000,
+});
+
+/**
+ * LA BANDE OÙ LA TOLÉRANCE A LE DROIT DE SE TENIR — en multiples du retard observé.
+ *
+ * ⚠️ LES DEUX BOUTS SONT DES DÉCISIONS, ET ILS N'ONT PAS LA MÊME NATURE.
+ *
+ *   · `minimale` — en dessous, la garde refuserait des agents réguliers dont le transcrit tarde
+ *     comme le poste a déjà montré qu'il tarde. C'est une conséquence MESURÉE.
+ *
+ *   · `maximale` — au-dessus, la tolérance cesse d'être courte devant la durée de vie d'un
+ *     agent, et la clé primaire redevient aussi permissive qu'avant pour la reprise d'un même
+ *     terminal. C'est un JUGEMENT, appuyé sur ce que le module dit de lui-même — « une heure
+ *     couvre cet observé avec 1,6× de marge » — et aucune mesure vivante ne peut le remplacer
+ *     (voir le bloc ci-dessus). 2,5× laisse la marge du relevé respirer sans l'ouvrir à l'heure
+ *     et demie près d'une session de travail.
+ */
+export const MARGE_SUR_LE_RETARD_OBSERVE = Object.freeze({ minimale: 1, maximale: 2.5 });
+
+/**
+ * Levée quand la tolérance de datation sort de la bande que le relevé du poste soutient.
+ *
+ * ⚠️ C'EST UN REFUS, PAS UN AVERTISSEMENT — même polarité que `FrontiereContredite`. Une garde
+ * dont le seuil central n'est plus soutenu par sa propre mesure ne rend pas un verdict affaibli :
+ * elle refuse d'en rendre un. Rendre vert là-dessus serait exactement le désarmement qu'on ferme.
+ */
+export class ToleranceHorsDeSaMesure extends Error {
+  constructor(tolerance, plancher, plafond) {
+    super(
+      `garde des naissances : ma tolérance de datation est ${Math.round(tolerance / 1000)} s, ` +
+        `mais le relevé du ${RETARD_DE_MESURE_OBSERVE.leJour} ` +
+        `(${RETARD_DE_MESURE_OBSERVE.transcrits} transcrits, pire retard ` +
+        `${Math.round(RETARD_DE_MESURE_OBSERVE.maximumMs / 1000)} s) ne soutient que ` +
+        `[${Math.round(plancher / 1000)} s ; ${Math.round(plafond / 1000)} s]. Trop courte, je ` +
+        `refuse des agents réguliers ; trop longue, je rends la clé primaire aussi permissive ` +
+        `qu’avant pour la reprise d’un même terminal. Je REFUSE de rendre un verdict : ` +
+        `re-mesurer le poste est le geste, pas élargir la bande.`
+    );
+    this.name = 'ToleranceHorsDeSaMesure';
+    this.tolerance = tolerance;
+    this.plancher = plancher;
+    this.plafond = plafond;
+  }
+}
+
+/**
+ * LA TOLÉRANCE EST-ELLE SOUTENUE PAR SON RELEVÉ ? — l'épingle, et elle ne vit pas dans le banc.
+ *
+ * @throws {ToleranceHorsDeSaMesure}
+ */
+export function verifierLaTolerance(tolerance = TOLERANCE_DE_DATATION_MS) {
+  const plancher = RETARD_DE_MESURE_OBSERVE.maximumMs * MARGE_SUR_LE_RETARD_OBSERVE.minimale;
+  const plafond = RETARD_DE_MESURE_OBSERVE.maximumMs * MARGE_SUR_LE_RETARD_OBSERVE.maximale;
+  if (!Number.isFinite(tolerance) || tolerance < plancher || tolerance > plafond) {
+    throw new ToleranceHorsDeSaMesure(tolerance, plancher, plafond);
+  }
+  return tolerance;
+}
+
 export const TOLERANCE_DE_DATATION_MS = 60 * 60 * 1000;
 
 /**
@@ -861,6 +966,11 @@ export function jugerLeParc({
   const declarations = registre?.declarations ?? [];
   const illisibles = registre?.illisibles ?? [];
   const frontiere = verifierLaFrontiere(declarations, miseEnService);
+  // ⚠️ LA SECONDE ÉPINGLE, AU MÊME ENDROIT QUE LA PREMIÈRE, ET DE LA MÊME POLARITÉ. Le seuil
+  // central de la couverture temporelle ne se déplace pas sans que sa mesure le suive : voir
+  // `verifierLaTolerance`. Une tolérance sortie de sa bande fait REFUSER la garde, elle ne la
+  // fait pas juger plus mollement.
+  verifierLaTolerance();
 
   const horsPortee = [];
   const identifies = [];
