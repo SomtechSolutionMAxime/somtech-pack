@@ -367,7 +367,23 @@ test('RÔLES — chaque rôle connu DÉCLARE ce que son mandat désigne', async 
   // ⚠️ ET LES DEUX VALEURS SONT RÉELLEMENT EMPLOYÉES : une table où tous les rôles déclareraient
   // la même chose satisferait la boucle ci-dessus et ne distinguerait plus rien.
   const declarees = new Set(rolesConnus().map((n) => roleDe(n).mandat_designe));
-  assert.equal(declarees.size, 2, 'les deux natures de mandat existent bel et bien dans la table');
+  assert.ok(
+    declarees.size >= 2,
+    `tous les rôles déclarent le même mandat (« ${[...declarees]} ») — la boucle ci-dessus serait ` +
+      'satisfaite par une table qui ne distingue plus rien',
+  );
+  // ⚠️ ET DANS L'AUTRE SENS, QUI EST CELUI QU'ON OUBLIE : une valeur admise ici que PLUS AUCUN
+  // rôle ne porte est une porte ouverte qui ne sert plus. Elle ne fait rien rougir, elle élargit
+  // seulement ce que la garde laisse passer — et c'est comme ça qu'une liste d'admis se vide de
+  // son sens par accumulation, sans qu'un seul essai ne le signale.
+  const orphelines = [...valeurs].filter((v) => !declarees.has(v));
+  assert.deepEqual(
+    orphelines,
+    [],
+    `ces valeurs de mandat sont ADMISES et portées par aucun rôle : ${orphelines.join(', ')} — ` +
+      'une admission qui ne sert plus élargit la garde sans que rien ne le dise. La retirer, ou ' +
+      'nommer ici le rôle qui la portera.',
+  );
 });
 
 // ═════════════════ 2. CHACUN NE REÇOIT QUE LE SIEN — par le fait
@@ -901,9 +917,41 @@ test('GABARITS — les en-têtes de `roles.js` concordent avec les fichiers que 
   const { role: roleDe, rolesConnus } = await import('../src/roles.js');
   const templates = join(import.meta.dirname, '..', '..', '.claude', 'templates');
 
+  // ⚠️ TROIS MANQUES DE CETTE GARDE, RELEVÉS EN LA REFAISANT PAR ERREUR (E-20260826-0011).
+  //
+  // J'ai écrit un second fichier qui éprouvait la même chose, avant de constater que celui-ci
+  // existait — et qu'il est meilleur, puisqu'il fait en plus l'aller-retour complet. Le second
+  // a été supprimé : deux sources d'un même critère divergent, c'est mécanique. Ce qui suit est
+  // le seul apport réel de cette tentative, versé ici plutôt que gardé à côté.
+  //
+  // Ce que la boucle ci-dessous ne voyait pas :
+  //   ① un rôle qui ne déclare AUCUN en-tête — `Object.entries({})` ne tourne pas, et son lieu
+  //     n'est alors rattaché à aucun rôle : ni garde du terminal, ni vue du parc, ni réveil ne
+  //     s'y appliquent. Un lieu hors de toute règle, en silence ;
+  //   ② un motif NON ANCRÉ, qui reconnaîtrait la phrase n'importe où dans la ligne — donc un
+  //     fichier qui la CITE sans être ce lieu ;
+  //   ③ une énumération vide : si `rolesConnus()` rendait `[]`, la boucle ne s'exécuterait pas
+  //     et ce contrôle passerait au vert SANS AVOIR RIEN MESURÉ.
+  assert.ok(
+    rolesConnus().length >= 2,
+    `le registre n'a rendu que ${rolesConnus().length} rôle(s) — ce contrôle ne prouverait rien`,
+  );
+  let compares = 0;
+
   for (const nom of rolesConnus()) {
     const r = roleDe(nom);
+    assert.ok(
+      r.entetes && Object.keys(r.entetes).length >= 1,
+      `« ${nom} » ne déclare AUCUN en-tête de reconnaissance : son lieu ne serait rattaché à aucun `
+        + 'rôle, et aucune garde ne s’y appliquerait — sans qu’une seule erreur ne le dise.',
+    );
     for (const [fichier, entete] of Object.entries(r.entetes)) {
+      assert.ok(
+        entete.source.startsWith('^'),
+        `« ${nom} » déclare pour ${fichier} un motif NON ANCRÉ (${entete.source}) — il reconnaîtrait `
+          + 'cette phrase n’importe où dans la ligne, donc un fichier qui la cite sans être ce lieu.',
+      );
+      compares += 1;
       const chemin = join(templates, r.gabarits, fichier);
       const premiere = readFileSync(chemin, 'utf8').split('\n', 1)[0];
       assert.match(
@@ -915,6 +963,10 @@ test('GABARITS — les en-têtes de `roles.js` concordent avec les fichiers que 
       );
     }
   }
+
+  // Le témoin de l'énumération dit qu'il y avait des rôles ; celui-ci dit qu'une COMPARAISON a
+  // bien eu lieu. Les deux ne disent pas la même chose — un rôle peut exister et ne rien déclarer.
+  assert.ok(compares >= 1, 'aucune comparaison d’en-tête n’a eu lieu — vert sans avoir rien mesuré');
 
   // Et l'aller-retour COMPLET : un lieu posé depuis les vrais gabarits établit bien son rôle.
   // C'est ce que ni les preuves d'ici (qui recopient) ni celles de la pose (qui vérifient
