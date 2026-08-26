@@ -357,6 +357,76 @@ test('🔴 ① LA TOLÉRANCE EST ENCADRÉE PAR CE QUE LE POSTE MONTRE — ni ass
 });
 
 /**
+ * LA PHRASE IMPRIMÉE DIT-ELLE CE QUE LE CODE FAIT ? — le sens de la règle temporelle.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 ELLE ÉTAIT À L'ENVERS, DANS LES DEUX SENS, SUR CHAQUE RENDU DE LA GARDE.
+ *
+ * `methode.prises` posait comme condition d'IDENTIFICATION qu'une déclaration soit « INSCRITE
+ * AVANT SA NAISSANCE À LUI », et ajoutait qu'« une déclaration plus JEUNE que l'agent qu'elle
+ * apparie couvre peut-être son prédécesseur : elle n'identifie pas ». Le code exige l'inverse :
+ * `ecart = naissance − inscrite ; if (ecart <= tolerance) → couvre`.
+ *
+ * MESURÉ :
+ *   décl. 13 h · agent né 22 h  (déclaration plus VIEILLE) -> périmée
+ *   décl. 22 h · agent né 13 h  (déclaration plus JEUNE)   -> couvre
+ *
+ * La phrase était fausse deux fois. Une déclaration plus JEUNE que l'agent est le cas NORMAL du
+ * régulier — le geste vérifie par le fait, puis inscrit, deux secondes après la naissance — et
+ * elle ne peut pas appartenir à son PRÉDÉCESSEUR, qui est par définition antérieur.
+ *
+ * ⚠️ AUCUNE GARDE NE POUVAIT LE VOIR : les six assertions sur `methode.prises` visent
+ * `pane-dans-sa-session`, `par nom`, `ESPACE DE TRAVAIL`, `la SESSION est née après`. Aucune ne
+ * touchait la phrase temporelle.
+ *
+ * ⚠️ CE BANC EST APPARIÉ AU COMPORTEMENT, PAS À UNE TOURNURE. Il MESURE d'abord les deux sens,
+ * ce qui épingle la direction dans l'absolu ; il DÉRIVE ensuite de cette mesure le mot que la
+ * phrase doit porter. Inverser le code fait rougir les deux premières assertions ; réécrire la
+ * phrase à la main fait rougir les suivantes. Et le module ne l'écrit plus à la main non plus :
+ * il JOUE sa propre règle pour savoir quel sens elle refuse (`sensQueLaRegleTemporelleRefuse`).
+ */
+test('🔴 LE SENS DE LA RÈGLE TEMPORELLE — mesuré, puis exigé de la phrase que chaque rendu imprime', () => {
+  const t = (h) => Date.parse(`2026-08-25T${h}:00:00.000Z`);
+  const plusVieille = couvertureDeLaDeclaration({ ne_le: new Date(t('13')).toISOString() }, t('22'));
+  const plusJeune = couvertureDeLaDeclaration({ ne_le: new Date(t('22')).toISOString() }, t('13'));
+
+  // ── LA DIRECTION, ÉPINGLÉE DANS L'ABSOLU. C'est elle qui empêche ce banc de suivre une
+  // inversion du code : sans ces deux lignes, le mot dérivé plus bas basculerait avec lui.
+  assert.equal(
+    plusVieille.etat,
+    'périmée',
+    'une déclaration inscrite AVANT la naissance, au-delà de la tolérance, n’identifie PAS'
+  );
+  assert.equal(
+    plusJeune.etat,
+    'couvre',
+    'une déclaration inscrite APRÈS la naissance identifie — c’est le cas NORMAL du régulier'
+  );
+
+  // ── LE MOT QUE LA PHRASE DOIT PORTER, DÉRIVÉ DE LA MESURE CI-DESSUS.
+  const refuse = plusVieille.etat === 'couvre' ? 'APRÈS' : 'AVANT';
+  const accepte = refuse === 'AVANT' ? 'APRÈS' : 'AVANT';
+
+  const methode = jugerLeParc({ agents: [], registre: { declarations: [], illisibles: [] } }).methode.prises;
+
+  assert.match(
+    methode,
+    new RegExp(`INSCRITE ${accepte} SA NAISSANCE`),
+    `la phrase imprimée doit poser « inscrite ${accepte} sa naissance » comme ce qui IDENTIFIE`
+  );
+  assert.doesNotMatch(
+    methode,
+    new RegExp(`INSCRITE ${refuse} SA NAISSANCE`),
+    `elle pose « inscrite ${refuse} sa naissance » comme condition d’identification — le code refuse ce sens-là`
+  );
+  assert.doesNotMatch(
+    methode,
+    /plus JEUNE/,
+    'et elle ne peut plus dire qu’une déclaration plus JEUNE n’identifie pas : c’est le cas normal du régulier'
+  );
+});
+
+/**
  * LA COUVERTURE A TROIS ÉTATS, ET LE TROISIÈME N'EST PAS UN VIDE.
  *
  * Une déclaration dont la date est illisible ne prouve NI qu'elle couvre cet agent, NI qu'elle

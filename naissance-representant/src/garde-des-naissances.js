@@ -590,6 +590,42 @@ export function couvertureDeLaDeclaration(
 }
 
 /**
+ * LE SENS QUE LA RÈGLE TEMPORELLE REFUSE — obtenu EN LA JOUANT, jamais recopié à la main.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 POURQUOI CETTE FONCTION EXISTE. La phrase que `methode.prises` imprime sur CHAQUE rendu
+ * décrivait cette règle — et elle la décrivait À L'ENVERS, dans les deux sens. Elle posait
+ * comme condition d'IDENTIFICATION qu'une déclaration soit « INSCRITE AVANT SA NAISSANCE À
+ * LUI », et ajoutait qu'« une déclaration plus JEUNE que l'agent qu'elle apparie couvre
+ * peut-être son prédécesseur : elle n'identifie pas ». Le code fait l'inverse — et une
+ * déclaration plus jeune que l'agent est le cas NORMAL du régulier (le geste vérifie par le
+ * fait, PUIS inscrit, deux secondes plus tard), qui ne peut par définition appartenir à aucun
+ * PRÉDÉCESSEUR.
+ *
+ * Ce qui l'a laissée passer : elle était une SECONDE EXPRESSION de la règle, écrite à la main à
+ * six cents lignes de celle qui décide. Aucune des six assertions posées sur `methode.prises`
+ * ne la touchait — elles visent le pane, la session, l'espace, la frontière.
+ *
+ * ⚠️ ON NE LA RÉÉCRIT DONC PAS : ON LA DEMANDE. Cette fonction fabrique une déclaration dont
+ * l'écart dépasse franchement la tolérance et demande à `couvertureDeLaDeclaration` ce qu'elle
+ * en fait. Le mot imprimé est un RÉSULTAT de la décision, pas une opinion sur elle : inverser
+ * la comparaison fait basculer la phrase avec le code, sans qu'aucune main ne s'en mêle.
+ *
+ * @returns {'AVANT'|'APRÈS'} de quel côté de sa naissance une déclaration cesse de l'identifier
+ */
+export function sensQueLaRegleTemporelleRefuse(tolerance = TOLERANCE_DE_DATATION_MS) {
+  // Un instant fixe : la règle ne parle que d'ÉCARTS, l'origine n'entre pas dans son verdict.
+  const naissance = Date.UTC(2026, 0, 1);
+  const loin = 10 * tolerance;
+  const inscriteAvant = couvertureDeLaDeclaration(
+    { ne_le: new Date(naissance - loin).toISOString() },
+    naissance,
+    tolerance
+  );
+  return inscriteAvant.etat === 'couvre' ? 'APRÈS' : 'AVANT';
+}
+
+/**
  * L'AGENT TRAVAILLE-T-IL DANS L'ESPACE QUE CETTE DÉCLARATION INSCRIT ? — la borne du repli.
  *
  * ⚠️ LE SÉPARATEUR EST LA FRONTIÈRE, PAS LE PRÉFIXE. `…/20260825-101721-bis` commence par
@@ -905,9 +941,11 @@ export function jugerLeParc({
   // celui-ci n'exige QUE l'espace. C'est la RÈGLE DE COMPARAISON qui s'aligne, pas la clé.
   //
   // 🔴 ET IL NE CROISAIT QUE LES PRISES — pendant que la règle temporelle en écartait un.
-  // `couvertureDeLaDeclaration` a la bonne polarité : une déclaration plus jeune que l'agent
-  // qu'elle apparie n'identifie pas, et l'agent tombe chez les NON MESURÉS, jamais chez les
-  // prises. Mais le contre-contrôle ne regardait pas ce panier-là. Mesuré sur le parc réel le
+  // `couvertureDeLaDeclaration` a la bonne polarité : une déclaration inscrite AVANT la
+  // naissance de l'agent qu'elle apparie, de plus que la tolérance, ne l'identifie pas — elle
+  // couvre peut-être celui qui occupait sa place avant lui — et l'agent tombe chez les NON
+  // MESURÉS, jamais chez les prises. (Ce commentaire disait « plus jeune », c'est-à-dire
+  // exactement l'inverse : le cas NORMAL du régulier, inscrit deux secondes APRÈS sa naissance.) Mais le contre-contrôle ne regardait pas ce panier-là. Mesuré sur le parc réel le
   // 2026-08-25, dans la MÊME page de sortie : « t-20260825-0047 — … inscrite 13999 s AVANT sa
   // naissance … je ne l'identifie pas là-dessus » et, douze lignes plus bas, « refus à tort
   // (mesurés) : 0 ». La ligne de l'agent le dit, le chiffre le nie.
@@ -1004,11 +1042,16 @@ export function jugerLeParc({
       '(appariée par pane-dans-sa-session ET DANS L’ESPACE DE TRAVAIL QUE LA DÉCLARATION ' +
       'INSCRIT — reprendre un pane n’est pas naître, et un terminal se réutilise ; ' +
       'ou à défaut par nom, dans ce MÊME espace ' +
-      '— et INSCRITE AVANT SA NAISSANCE À LUI : reprendre le worktree reprend l’espace, le ' +
-      'reprendre depuis son terminal reprend le pane, donc les trois termes de la clé ' +
-      'coïncident sur le geste même que le pack prescrit. Une déclaration plus JEUNE que ' +
-      'l’agent qu’elle apparie couvre peut-être son prédécesseur : elle n’identifie pas, et ' +
-      'l’agent tombe chez les NON MESURÉS, pas chez les prises ' +
+      // 🔴 LE SENS N'EST PAS ÉCRIT ICI, IL EST JOUÉ. Cette phrase a été imprimée À L'ENVERS sur
+      // chaque rendu — voir `sensQueLaRegleTemporelleRefuse`. Une seconde expression de la
+      // règle, à six cents lignes de celle qui décide, ne peut que diverger d'elle un jour.
+      `— et INSCRITE ${sensQueLaRegleTemporelleRefuse() === 'AVANT' ? 'APRÈS' : 'AVANT'} SA ` +
+      'NAISSANCE À LUI, au retard de la mesure près : reprendre le worktree reprend l’espace, ' +
+      'le reprendre depuis son terminal reprend le pane, donc les trois termes de la clé ' +
+      'coïncident sur le geste même que le pack prescrit. Une déclaration inscrite ' +
+      `${sensQueLaRegleTemporelleRefuse()} sa naissance de plus que cette tolérance couvre ` +
+      'peut-être celui qui occupait sa place AVANT lui : elle ne l’identifie pas, et l’agent ' +
+      'tombe chez les NON MESURÉS, pas chez les prises ' +
       '— un nom seul apparierait la naissance de n’importe qui ; la session se compare par son ' +
       'NOM, celui que la déclaration inscrit et que le socket du pane porte dans son chemin — ' +
       'une session que rien ne nomme n’apparie personne par le pane), ni un lieu de rôle ' +

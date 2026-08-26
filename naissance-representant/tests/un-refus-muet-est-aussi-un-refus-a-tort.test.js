@@ -5,8 +5,15 @@
 // 🔴 LE DÉFAUT QUE CE BANC FERME — MESURÉ SUR LE PARC RÉEL, LE 2026-08-25
 //
 // La couverture temporelle (`couvertureDeLaDeclaration`) a la bonne polarité : une déclaration
-// plus jeune que l'agent qu'elle apparie n'identifie plus, et l'agent tombe chez les NON
-// MESURÉS — jamais chez les prises. On n'accuse pas sur une mesure qui ne tranche pas.
+// inscrite AVANT la naissance de l'agent qu'elle apparie, de plus que la tolérance, ne
+// l'identifie plus — elle couvre peut-être celui qui occupait sa place avant lui — et l'agent
+// tombe chez les NON MESURÉS, jamais chez les prises. On n'accuse pas sur une mesure qui ne
+// tranche pas.
+//
+// ⚠️ CE PAVÉ DISAIT « PLUS JEUNE », c'est-à-dire l'inverse exact — et il le disait DOUZE LIGNES
+// AU-DESSUS de la mesure qui le contredit (« inscrite 13999 s AVANT sa naissance »). Une
+// déclaration plus jeune que l'agent est le cas NORMAL du régulier : le geste vérifie par le
+// fait, puis inscrit, deux secondes après la naissance.
 //
 // Mais `fauxRefus` ne croisait QUE LES PRISES. Un agent que la règle temporelle écarte tombe
 // donc dans un panier que le contre-contrôle ne regarde pas — et le compteur rend `0` pendant
