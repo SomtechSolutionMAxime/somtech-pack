@@ -54,8 +54,10 @@
 //   ─────────────────────────  ───────────────────────────  ────────────────────────────────────
 //   largeurAffichee            définie DANS ce banc (l.~99)  ANCRÉE — la production ne la fournit
 //                                                            pas, donc rien ne peut la déplacer
-//   rangeesPhysiques,          `tests/aide/terminal.js`      ANCRÉES — écrites côté banc ; c'est
-//   texteVisible                                             un double, et sa note le dit
+//   rangeesNonVides            `tests/aide/terminal.js`      ANCRÉE — écrite côté banc. C'est un
+//                                                            double, et sa note dit ce qu'il est ;
+//                                                            il n'est plus branché que sur la
+//                                                            progression, où le défaut existe
 //   RACCOURCI_VITAL            production, DÉRIVÉ            était COMPLICE ; ancré depuis par
 //                                                            « LE FAIT EST ANCRÉ, PAS DÉRIVÉ »
 //   SEUIL                      dérivé de RACCOURCI_VITAL     ancré par transitivité — et il DOIT
@@ -107,8 +109,19 @@
 //                                               exception qui n'existe plus (`00a7b645`).
 //
 // ── `CE QUI REND LE SOUS-TEST DU DRAPEAU REDONDANT SE GARDE` (supprimé) ────────────────────
-//   toutes ses assertions                     → SANS OBJET : elles mesuraient le drapeau
-//                                               `porteLaSortie`, absent du dépôt (0 occurrence).
+//   🔴 CETTE LIGNE ÉTAIT FAUSSE, ET SA FAUSSETÉ A COÛTÉ DEUX PROPRIÉTÉS. Elle disait « toutes
+//   ses assertions → SANS OBJET : elles mesuraient le drapeau `porteLaSortie` ». J'avais écrit
+//   ce que je croyais être l'INTENTION du banc au lieu de ce qu'il ASSERTAIT. Ouvert et relu,
+//   il n'asserte le drapeau NULLE PART — il asserte ceci, et les deux vivent encore :
+//     raccourcisPour(l).includes(RACCOURCI_VITAL), l de 0 à 200
+//                                               → PERDU, restauré : « LA BARRE NE SE VIDE JAMAIS »
+//     minima.length === 1                       → PERDU, restauré : « LE FAIT EST ANCRÉ… »
+//     minima[0].texte === RACCOURCI_VITAL       → idem
+//
+//   ⚠️ D'OÙ LA RÈGLE DE CE TABLEAU : chaque ligne n'affirme que ce qui est VÉRIFIABLE EN
+//   OUVRANT LE BANC CITÉ — son nom, son fichier, ce qu'il asserte LITTÉRALEMENT. Jamais ce
+//   qu'il « mesure » au sens de son intention : c'est exactement là que je me suis trompé, et
+//   une ligne de tableau fausse se lit comme une ligne vraie.
 //
 // ⚠️ UNE PROPRIÉTÉ DE PLUS, PERDUE ET RESTAURÉE, QUI N'EST DANS AUCUN DES QUATRE : à hauteur 2,
 // rien n'empêchait de rendre le TITRE DEUX FOIS — donc d'effacer entièrement la sortie. Aucun
@@ -137,7 +150,7 @@ import {
 } from '../src/tui-vue-du-parc.js';
 import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
-import { rangeesPhysiques, texteVisible } from './aide/terminal.js';
+import { rangeesNonVides } from './aide/terminal.js';
 
 /** La largeur AFFICHÉE — en points de code. `.length` compte faux sur la roue et les accents. */
 const largeurAffichee = (texte) => [...String(texte ?? '')].length;
@@ -622,15 +635,33 @@ test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — balayage COMPLE
       const ecran = rendreEcran({ vue, etat, lignes, largeur: cols, hauteur: rows });
 
       // ═══ ① L’ÉCRAN NE DÉFILE PAS : ce qu’on écrit tient dans les rangées du pane.
+      //
+      // 🔴 CE BANC PASSAIT PAR LE MODÈLE DE TERMINAL, ET C’ÉTAIT INUTILE — mesuré, pas relu.
+      // `rendreEcran` fait passer CHAQUE ligne par `borner`, qui rend exactement `largeur`
+      // caractères. Donc `ceil(longueur / colonnes)` vaut 1 par construction, et le nombre de
+      // rangées physiques ÉGALE le nombre de lignes, identiquement : zéro divergence sur 80
+      // couples, 8×2 compris — le cas même que ce banc citait comme sa justification.
+      //
+      // ⚠️ C’ÉTAIT UNE QUATRIÈME FORME DE FAUSSE GARDE : ni inerte (elle s’exécutait), ni
+      // complice (elle ne suivait aucune valeur déplacée) — un double bâti pour une classe de
+      // défaut que le correctif voisin avait rendue IRREPRODUCTIBLE là où on le branchait.
+      // Le modèle n’a pas été retiré du dépôt : il a été DÉPLACÉ là où le défaut est encore
+      // atteignable — la ligne de progression, qui ne passe pas par `borner`. Voir
+      // « LA PROGRESSION N’EMPILE PAS », qui reproduit l’incident du dirigeant.
       declenche.hauteur += 1;
       assert.equal(
-        rangeesPhysiques(ecran, cols),
+        ecran.length,
         rows,
-        `à ${cols}×${rows}, l’écran occupe ${rangeesPhysiques(ecran, cols)} rangées physiques — ` +
-          'il DÉFILE, et ce qui précède est poussé hors de vue'
+        `à ${cols}×${rows}, l’écran rend ${ecran.length} lignes`
       );
+      for (const l of ecran) {
+        assert.ok(
+          largeurAffichee(l.texte) <= cols,
+          `à ${cols}×${rows}, une ligne écrit ${largeurAffichee(l.texte)} caractères : ${JSON.stringify(l.texte)}`
+        );
+      }
 
-      const vu = texteVisible(ecran, cols, rows);
+      const vu = ecran.map((l) => l.texte).join('\n');
       assert.ok(vu.length > 0, `à ${cols}×${rows}, l’écran est vide`);
 
       // ═══ ② LE TITRE SURVIT — c’est ce que le débordement emportait.
@@ -1023,6 +1054,57 @@ test('LA BARRE NE SE VIDE JAMAIS — sous le seuil B dit TRONQUER, elle n’a ja
     assert.ok(
       pied.texte.trim().length > 0,
       `à ${largeur} colonnes, la ligne du pied est vide à l’écran : ${JSON.stringify(pied.texte)}`
+    );
+  }
+});
+
+test('LA PROGRESSION N’EMPILE PAS — l’incident du dirigeant, reproduit puis fermé', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 C’EST L’INCIDENT LUI-MÊME, ET C’EST LE SEUL BANC DU DÉPÔT QUI L’ATTEINT.
+  //
+  // Rapporté en usage réel : « j’ai des lignes qui se multiplient sans arrêt », TUI dans un
+  // split herdr. Mesuré alors dans un vrai pane : **+21 lignes en 8 secondes** à 65 colonnes.
+  //
+  // La cause : `avecProgression` écrit DROIT au terminal — retour chariot, effacement de rangée,
+  // puis 116 caractères de longueur FIXE. Sous 116 colonnes le texte wrappe ; le retour chariot
+  // du tour suivant revient au début de la rangée physique COURANTE (la seconde) et l’effacement
+  // ne nettoie que celle-là. La première reste, définitivement. Une de plus toutes les 120 ms.
+  //
+  // ⚠️ CE CHEMIN NE PASSE PAS PAR `borner`. C’est ce qui le distingue de tout le reste de ce
+  // fichier, et c’est pourquoi le modèle de terminal y est IRREMPLAÇABLE : le défaut est une
+  // histoire de CURSEUR — où le retour chariot atterrit, ce que l’effacement nettoie — et aucun
+  // compte de longueurs ne peut le voir. Sur le chemin de `rendreEcran`, à l’inverse, ce même
+  // modèle ne pouvait plus rien attraper (`borner` y rend la largeur exacte) : il y a été retiré.
+  //
+  // ⚠️ ET LE DOUBLE A DÛ ÊTRE CORRIGÉ POUR ÇA. Sa première version descendait d’une rangée dès
+  // la dernière colonne atteinte ; elle affirmait donc que la version CORRIGÉE empilait encore.
+  // Un vrai terminal ARME un report et ne descend qu’au caractère imprimable suivant — un retour
+  // chariot le désarme. Sans ce détail, le double contredisait le pane réel : il aurait fabriqué
+  // un défaut au lieu d’en trouver un.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const ESC = String.fromCharCode(27);
+  const TOURS = 20;
+  const battement = (largeur) =>
+    Array.from({ length: TOURS }, (_, i) => `\r${ESC}[2K${texteDeProgression(20 + i, i, largeur)}`);
+
+  // ═══ ① CONTRÔLE POSITIF — SANS LA BORNE, LE DÉFAUT SE REPRODUIT. Sans cette moitié, ce banc
+  // serait vert sur un instrument incapable de voir quoi que ce soit.
+  const sansBorne = Array.from({ length: TOURS }, (_, i) => `\r${ESC}[2K${texteDeProgression(20 + i, i)}`);
+  assert.ok(
+    rangeesNonVides(sansBorne, 65, 300) > TOURS,
+    'le décor doit REPRODUIRE l’incident : sans borne, à 65 colonnes, la progression doit empiler ' +
+      `— ce modèle n’en voit que ${rangeesNonVides(sansBorne, 65, 300)} rangées, il ne mesure rien`
+  );
+
+  // ═══ ② ET AVEC LA BORNE, À TOUTE LARGEUR, UNE SEULE RANGÉE. C’est la propriété que le
+  // dirigeant voit : l’écran ne se remplit pas pendant les ~80 s de chargement.
+  for (const largeur of [200, 150, 120, 116, 115, 100, 80, 65, 57, 40, 27, 20, 12, 5, 1]) {
+    const vues = rangeesNonVides(battement(largeur), largeur, 300);
+    assert.equal(
+      vues,
+      1,
+      `à ${largeur} colonnes, ${TOURS} tours de progression laissent ${vues} rangées écrites — ` +
+        'elles S’EMPILENT, exactement l’incident rapporté par le dirigeant'
     );
   }
 });
