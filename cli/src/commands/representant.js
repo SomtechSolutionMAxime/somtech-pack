@@ -59,7 +59,12 @@ export const GABARIT_DIR = join('.claude', 'templates', ROLES.representant.gabar
  * commande qui pose. On l'exclut donc de la liste des fichiers avant même d'appeler
  * `applyFiles` : la seule porte d'écriture ne le voit jamais passer, dans un sens ou l'autre.
  */
-export const PRESERVE = ['CONTEXTE.md'];
+// ⚠️ `RONDE.md` L'A REJOINT (T-20260826-0042), et pour la même raison exactement : il porte le
+// chantier de l'agent, pas le métier du pack. Un briefing de ronde écrasé par une mise à jour
+// ne se voit pas — il se constate à ce que l'agent ne se réveille plus, et une ronde éteinte ne
+// produit aucune erreur. La liste est tenue en miroir de `FICHIERS_A_RENSEIGNER`
+// (`ligne-directe/src/lieu-renseigne.js`), qu'un essai compare à celle-ci.
+export const PRESERVE = ['CONTEXTE.md', 'RONDE.md'];
 
 /**
  * CE QUI ARME UN LIEU — le fichier de droits, et le fichier que son garde appelle.

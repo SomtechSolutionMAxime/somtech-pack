@@ -22,6 +22,7 @@ Le résultat, quand tout va bien :
     └── <client>/
         ├── CLAUDE.md               ← le métier, copié du pack — généré, jamais édité à la main
         ├── CONTEXTE.md             ← ce qui est propre à ce client — à la main, jamais écrasé
+        ├── RONDE.md                ← le briefing qu'il pose en `/loop` — à la main, jamais écrasé
         ├── .mcp.json               ← le ServiceDesk SEUL — Somcraft en est exclu, délibérément
         └── .claude/
             └── settings.json       ← lecture du dépôt, sa ligne, le registre — rien d'autre
@@ -88,7 +89,7 @@ refusé. Sur un refus, le motif est aussi écrit en clair sur la sortie d'erreur
 nomme le geste qui débloque.
 
 **Elle est idempotente, et l'idempotence ne vaut que pour un lieu COMPLET.** Relancée sur un
-client déjà installé — ses quatre fichiers présents — elle ne retouche à rien, le dit
+client déjà installé — **tous les fichiers de son gabarit** présents — elle ne retouche à rien, le dit
 (`deja_installe`) et s'arrête là ; sur cette voie elle ne fait même pas l'aller-retour vers
 Slack, il n'y a rien à vérifier pour ne rien faire.
 
@@ -167,6 +168,23 @@ bloquant — le lieu est créé quand même — mais un représentant né sans a
 découvrira en pleine conversation si personne ne l'a prévenu à l'installation. C'est
 exactement le silence que cette compétence existe pour éviter, et le taire ici le
 réintroduirait par un autre chemin.
+
+## Avant de le faire naître — son contexte et sa ronde
+
+**Deux fichiers du lieu sont posés AVEC leurs chevrons, et ce sont les deux que tu remplis** :
+
+| `CONTEXTE.md` | ce que le métier ne peut pas savoir de ce client — son nom entre nous, le canal où on lui parle, son application au registre |
+| `RONDE.md` | **le briefing qu'il pose en `/loop` à sa naissance** — sa cadence, son client en une ligne, ce que chaque tour doit regarder en plus, et ce qu'il a promis à quelle échéance |
+
+> ⚠️ **Sans ronde, un représentant ne se réveille jamais — et personne ne s'en aperçoit.** Son
+> sommeil ressemble trait pour trait à « rien à signaler » : une ronde éteinte ne produit aucune
+> erreur. Mesuré le 2026-08-26 sur le parc : **un seul lieu vivant sur dix-huit** portait un
+> briefing de ronde, et son représentant l'avait écrit lui-même à la main.
+
+**Remplis-les, ou fais-les remplir, avant la naissance — la naissance les exige désormais.** Un
+lieu dont l'un des deux est resté mot pour mot le gabarit **fait refuser la naissance**, qui
+nomme les rubriques restées et n'ouvre aucun pane. Le refus se borne à ce que le gabarit a
+déposé : un chevron de ta prose n'est jamais compté.
 
 ## Ce que le représentant dira, une fois installé (non-régression EF-AGT-003 / RA-AGT-007)
 

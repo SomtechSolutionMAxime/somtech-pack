@@ -52,6 +52,8 @@ import { verserLeLieu, exigerUnDepotGit, VersementImpossible, branchesQuiPortent
 import { expositionAlaNaissance, ATTENTE_NAISSANCE_MS } from '../src/naissance.js';
 import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
 import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
+import { verifierLieuRenseigne } from '../../ligne-directe/src/lieu-renseigne.js';
+import { gabaritsDir } from '../../ligne-directe/src/lieu-agent.js';
 import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
 import { chargerRegistre } from '../../ligne-directe/src/registre.js';
 
@@ -303,6 +305,34 @@ async function main() {
     if (pose.metier_verifie === false && pose.metier_non_verifie) {
       process.stderr.write(`${pose.metier_non_verifie}\n`);
     }
+  }
+
+  // ═══ CE LIEU A-T-IL ÉTÉ RENSEIGNÉ ? — ICI, avant qu'un seul pane existe (T-20260826-0043).
+  //
+  // La pose dépose `CONTEXTE.md` et `RONDE.md` AVEC leurs chevrons, délibérément : ils portent
+  // ce que le métier ne peut pas savoir — à qui l'agent répond, sa portée, ce que sa ronde doit
+  // regarder. La compétence dit « remplis-les avant la naissance » ; rien ne le faisait
+  // respecter, et personne ne lisait leur CONTENU.
+  //
+  // ⚠️ CE QUE ÇA A COÛTÉ, MESURÉ SUR LE PARC LE 2026-08-26 : cinq lieux vivants sur dix-huit
+  // portent un `CONTEXTE.md` resté au gabarit intégral. Aucun ne dit à qui son agent répond.
+  // La pose avait rendu `ok`, la naissance avait réussi — le mode de panne est parfaitement
+  // silencieux, et l'agent le découvre en plein chantier, ou ne le découvre jamais.
+  //
+  // ⚠️ ON REFUSE, ON N'AVERTIT PAS, et c'est la différence avec l'exposition de branche juste
+  // en dessous. Un lieu exposé reste utilisable ; un lieu qui ne dit pas à qui son agent répond
+  // ne l'est pas — le cycle arbitré par le CTO exige un lieu COMPLET avant chaque naissance,
+  // et un avertissement de plus dans un flot d'avertissements ne se lit pas.
+  //
+  // ⚠️ ET IL TOMBE ICI, avant le versement et avant le pane : rien n'a encore été créé, donc
+  // rien n'est à défaire. Un refus qui laisse un pane derrière lui est doublement trompeur.
+  const renseigne = verifierLieuRenseigne({
+    gabaritDir: gabaritsDir(REPO_ROOT, role),
+    racine: commandes.lieu,
+  });
+  if (renseigne.renseigne === false) {
+    process.stderr.write(`${renseigne.message}\n`);
+    process.exit(1);
   }
 
   // ═══ VERSER LE LIEU — le second des gestes qu'un humain faisait à la main.

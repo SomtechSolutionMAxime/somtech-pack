@@ -1317,3 +1317,103 @@ test('un « .nom-agent » que herdr refuserait est un refus QUI NOMME SA CAUSE �
     'riv',
     { role: 'orchestrateur', nom: `d-20260818-${String(process.pid).slice(-4)}f` },
   ));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// UN LIEU QUI N'A PAS ÉTÉ RENSEIGNÉ NE FAIT NAÎTRE PERSONNE (T-20260826-0043)
+//
+// La pose dépose `CONTEXTE.md` et `RONDE.md` AVEC leurs chevrons, délibérément : ils portent ce
+// que le métier ne peut pas savoir — à qui l'agent répond, sa portée, ce que sa ronde regarde.
+// La compétence dit « remplis-les avant la naissance ». Rien ne le faisait respecter.
+//
+// ⚠️ MESURÉ SUR LE PARC LE 2026-08-26 : cinq lieux vivants sur dix-huit portent un CONTEXTE.md
+// resté au gabarit intégral. La pose avait rendu « ok », la naissance avait réussi, et aucun
+// des cinq ne dit à qui son agent répond.
+//
+// ⚠️ CHAQUE REFUS EST PROUVÉ PAR CE QU'IL EMPÊCHE — le journal des appels herdr est VIDE —
+// jamais par le texte du message seul.
+
+/** Le gabarit du rôle, écrit dans le dépôt d'essai là où `gabaritsDir` va le chercher. */
+function poserGabaritDuRole(depot, role, contenu) {
+  const dossier = role === 'orchestrateur' ? 'orchestrateur' : 'gestionnaire-client';
+  const dir = join(depot, '.claude', 'templates', dossier);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'CONTEXTE.md'), contenu);
+  return dir;
+}
+
+const CONTEXTE_GABARIT = [
+  "# Ce qu'on sait de ce client\n",
+  '',
+  '| **Le destinataire** | `<qui décide sur ce dépôt — le dirigeant, ou quelqu’un d’autre>` |',
+  '',
+  '`<Le chantier dont tu réponds : son code au registre.>`',
+].join('\n');
+
+test('UN LIEU RESTÉ AU GABARIT NE FAIT NAÎTRE PERSONNE — et aucun appel herdr ne part', () =>
+  avecLieu((client, lieu, depot) => {
+    poserGabaritDuRole(depot, 'representant', CONTEXTE_GABARIT);
+    // Le lieu porte le gabarit MOT POUR MOT : personne ne l'a rempli.
+    writeFileSync(join(lieu, 'CONTEXTE.md'), CONTEXTE_GABARIT);
+    const journal = installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 1, 'refus attendu');
+    assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr n’est parti — rien n’a été créé');
+    assert.match(r.stderr, /CONTEXTE\.md/, 'le fichier est nommé');
+    assert.match(r.stderr, /qui décide sur ce dépôt/, 'la rubrique restée est CITÉE, pas résumée');
+    assert.match(r.stderr, /remplis/i, 'et le geste qui lève le refus');
+  }, 'gabarit-intact'));
+
+test('UN LIEU À MOITIÉ RENSEIGNÉ EST REFUSÉ AUSSI, et ne cite QUE ce qui reste', () =>
+  avecLieu((client, lieu, depot) => {
+    poserGabaritDuRole(depot, 'representant', CONTEXTE_GABARIT);
+    writeFileSync(
+      join(lieu, 'CONTEXTE.md'),
+      CONTEXTE_GABARIT.replace('`<qui décide sur ce dépôt — le dirigeant, ou quelqu’un d’autre>`', '**le dirigeant**'),
+    );
+    const journal = installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.equal(r.code, 1, 'refus attendu');
+    assert.equal(appelsJournalises(journal).length, 0);
+    assert.ok(!/qui décide sur ce dépôt/.test(r.stderr), 'la rubrique REMPLIE n’est pas reprochée');
+    assert.match(r.stderr, /Le chantier dont tu réponds/, 'celle qui reste, oui');
+  }, 'gabarit-moitie'));
+
+// ⚠️ LA MOITIÉ QUI PROTÈGE — sans elle, la garde refuserait tout le parc. Un lieu renseigné
+// passe, MÊME quand sa prose porte des chevrons libres : mesuré sur le lieu de `portneuf`, qui
+// documente « fly deploy -a <app> » et n'a rien fait de mal.
+test('UN LIEU RENSEIGNÉ PASSE — même quand sa prose porte des chevrons LIBRES', () =>
+  avecLieu((client, lieu, depot) => {
+    poserGabaritDuRole(depot, 'representant', CONTEXTE_GABARIT);
+    writeFileSync(
+      join(lieu, 'CONTEXTE.md'),
+      "# Ce qu'on sait de ce client\n\n| **Le destinataire** | **le dirigeant** |\n\n" +
+        'D-20260819-0002. Mise en ligne : `fly deploy -a <app> --build-secret github_token=<PAT>`.\n',
+    );
+    installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.ok(
+      !/rest[ée]|au gabarit|remplis les rubriques/i.test(r.stderr),
+      `rien ne devait être reproché — dit : ${r.stderr.slice(0, 200)}`,
+    );
+  }, 'gabarit-rempli'));
+
+// ⚠️ CE QU'ON N'A PAS SU MESURER NE REFUSE JAMAIS. Un dépôt qui ne porte pas le gabarit — le
+// cas de TOUS les lieux posés avant ce lot — n'a rien fait de mal. Une garde qui crierait là
+// serait retirée en une semaine, en emportant ce qu'elle gardait vraiment.
+test('UN DÉPÔT SANS GABARIT NE FAIT REFUSER PERSONNE — la mesure impossible ne décide pas', () =>
+  avecLieu((client, lieu) => {
+    installerFauxHerdr({ repertoire: lieu });
+
+    const r = lancerNaitre(client);
+
+    assert.ok(
+      !/rest[ée]|au gabarit|remplis les rubriques/i.test(r.stderr),
+      `aucun reproche possible sans gabarit — dit : ${r.stderr.slice(0, 200)}`,
+    );
+  }, 'gabarit-absent'));

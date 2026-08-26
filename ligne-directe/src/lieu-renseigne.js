@@ -50,7 +50,7 @@ import { join } from 'node:path';
  * chose et vivent dans deux paquets qui ne peuvent pas s'importer ; un essai miroir côté CLI
  * fait rougir la divergence plutôt que de la laisser s'installer.
  */
-export const FICHIERS_A_RENSEIGNER = ['CONTEXTE.md'];
+export const FICHIERS_A_RENSEIGNER = ['CONTEXTE.md', 'RONDE.md'];
 
 /**
  * Ce qui, dans un gabarit, reste à renseigner : les segments entre chevrons.

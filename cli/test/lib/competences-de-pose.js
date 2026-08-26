@@ -825,13 +825,19 @@ export const CONTROLES_ORCHESTRATEUR = [
 
   {
     id: 'le-contexte-se-remplit-avant-la-naissance',
-    quoi: 'la consigne de remplir CONTEXTE.md précède la naissance, et elle oblige',
+    quoi: 'la consigne de remplir les fichiers écrits à la main précède la naissance, et elle oblige',
     verifier({ texte }) {
       // Sondes DISJOINTES, et ce n'est pas un détail d'écriture : la section du contexte
       // parle de la naissance dans son titre même (« Avant de le faire naître »). Deux sondes
       // qui reconnaissent la même section rendent deux fois la même position, et la
       // comparaison d'ordre devient une tautologie qui ne garde plus rien.
-      const contexte = sectionDe(texte, /son contexte$/i, 'sur le contexte à remplir');
+      //
+      // ⚠️ LA SONDE SUIT LE TITRE, LA GARANTIE NE BOUGE PAS (T-20260826-0042). La section a
+      // gagné le second fichier écrit à la main — le briefing de ronde — et son titre avec.
+      // Ce qui est gardé reste ce qui l'était : la consigne PRÉCÈDE la naissance et OBLIGE.
+      // Elle porte en plus, désormais, que le briefing en fait partie : un lieu sans ronde
+      // fait naître un agent qui ne se réveille jamais, et rien ne le signale.
+      const contexte = sectionDe(texte, /son contexte( et sa ronde)?$/i, 'sur le contexte à remplir');
       const naissance = sectionDe(texte, /^L.y faire naître/i, 'sur la naissance');
       const iContexte = texte.indexOf(contexte.titre);
       const iNaissance = texte.indexOf(naissance.titre);
@@ -842,6 +848,12 @@ export const CONTROLES_ORCHESTRATEUR = [
           + 'marche sur le chantier d’un autre, et rien ne le lui dit',
       );
       exigeImperatif(contexte.corps, 'la consigne de remplir le contexte');
+      assert.match(
+        contexte.corps,
+        /RONDE\.md/,
+        'la section doit nommer le briefing de ronde : c’est le second fichier écrit à la main, '
+          + 'et le seul dont l’absence est MUETTE — un agent né sans ronde ne se réveille jamais',
+      );
     },
   },
 ];
@@ -1212,7 +1224,11 @@ export const MUTATIONS = [
     quoi: 'remplir le contexte cesse d’obliger',
     competence: 'orchestrateur',
     cible: 'le-contexte-se-remplit-avant-la-naissance@orchestrateur',
-    muter: (t) => remplacer(t, '**Remplis-le, ou fais-le remplir, avant la naissance.**', 'Tu peux le remplir avant la naissance.'),
+    muter: (t) => remplacer(
+      t,
+      '**Remplis-les, ou fais-les remplir, avant la naissance — la naissance les exige désormais.**',
+      'Tu peux les remplir avant la naissance.',
+    ),
   },
 ];
 

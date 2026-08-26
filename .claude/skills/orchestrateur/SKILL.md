@@ -22,6 +22,7 @@ Le résultat, quand tout va bien :
     └── <nom>/
         ├── CLAUDE.md               ← le métier, copié du pack — généré, jamais édité à la main
         ├── CONTEXTE.md             ← ce qui est propre à ce dépôt — à la main, jamais écrasé
+        ├── RONDE.md                ← le briefing qu'il pose en `/loop` — à la main, jamais écrasé
         ├── .mcp.json               ← le ServiceDesk et Somcraft
         └── .claude/
             └── settings.json       ← ce qu'il peut : lire le dépôt, sa ligne, herdr, les deux
@@ -177,7 +178,7 @@ risque. Un des cinq n'en propose aucun, délibérément — remplacer une entré
 suppose de détruire celle qui est en place, et ce refus-là ne met pas ce geste dans ta bouche.
 
 **Elle est idempotente, et l'idempotence ne vaut que pour un lieu COMPLET.** Relancée sur un
-orchestrateur déjà posé — ses quatre fichiers présents — elle ne retouche à rien, le dit
+orchestrateur déjà posé — **tous les fichiers de son gabarit** présents — elle ne retouche à rien, le dit
 (`deja_installe`) et s'arrête là ; sur cette voie elle ne lit même pas le trousseau, il n'y a
 rien à vérifier pour ne rien faire.
 
@@ -283,16 +284,30 @@ variables d'environnement, le ServiceDesk et Somcraft. Sans elles, il naîtra sa
 le découvrira en plein chantier — c'est exactement le silence que cette compétence existe pour
 éviter, et le taire ici le réintroduirait par un autre chemin.
 
-## Avant de le faire naître — son contexte
+## Avant de le faire naître — son contexte et sa ronde
 
-`CONTEXTE.md` est posé **avec ses chevrons** : ce qui reste entre `<…>` n'a pas encore été
-renseigné. Il porte ce que le métier ne peut pas savoir — **à qui il répond**, **qui est le
-gestionnaire client de ce projet**, et **sa portée** : le chantier dont il répond, et ce dont
-il ne s'occupe pas.
+**Deux fichiers du lieu sont posés AVEC leurs chevrons, et ce sont les deux que tu remplis** :
 
-**Remplis-le, ou fais-le remplir, avant la naissance.** Un orchestrateur qui trouve un chevron
-le dit plutôt que de deviner — mais un dépôt qui porte plus d'un orchestrateur n'a que cette
-portée écrite pour les empêcher de se marcher dessus, et elle ne se devine pas du tout.
+| `CONTEXTE.md` | ce que le métier ne peut pas savoir — **à qui il répond**, **qui est le gestionnaire client de ce projet**, et **sa portée** : le chantier dont il répond, et ce dont il ne s'occupe pas |
+| `RONDE.md` | **le briefing qu'il pose en `/loop` à sa naissance** — sa cadence, son chantier en une ligne, ses priorités, ce qu'il ne doit PAS attendre, où vit son état à jour |
+
+Ce qui reste entre `<…>` n'a pas encore été renseigné.
+
+> ⚠️ **`RONDE.md` n'est pas une note de confort : sans ronde, un orchestrateur ne se réveille
+> jamais — et rien ne le signale.** C'est le seul de ses outils dont l'absence est **muette** :
+> son sommeil ressemble trait pour trait à « rien à signaler ». Mesuré le 2026-08-26 sur le
+> parc : **dix-sept lieux vivants sur dix-huit** n'en portaient aucun.
+
+**Remplis-les, ou fais-les remplir, avant la naissance — la naissance les exige désormais.**
+Un lieu dont l'un des deux est resté mot pour mot le gabarit **fait refuser la naissance**, qui
+nomme les rubriques restées et n'ouvre aucun pane. Ce n'est pas une contrariété à contourner :
+un orchestrateur qui trouve un chevron le dit plutôt que de deviner, mais un dépôt qui porte
+plus d'un orchestrateur n'a que cette portée écrite pour les empêcher de se marcher dessus, et
+elle ne se devine pas du tout.
+
+> **Le refus se borne à ce que le gabarit a déposé** : un chevron de ta prose — un
+> `fly deploy -a <app>` dans une note — n'est jamais compté. Ce qui est reproché est ce qui est
+> resté **mot pour mot** ce que le pack avait écrit.
 
 ## L'y faire naître — et le rôle ne se laisse jamais deviner
 
