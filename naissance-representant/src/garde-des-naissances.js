@@ -442,9 +442,27 @@ export function naissanceDeLAgent(pane, naissances) {
   }
   const instant = naissances.instants?.get(session);
   if (!Number.isFinite(instant)) {
+    // 🔴 « PAS TROUVÉ » N'EST PAS « ABSENT » QUAND LE BALAYAGE A DES ANGLES MORTS, ET LA RAISON
+    // DOIT LE DIRE. `lireLesNaissances` COMPTE les répertoires de projet qu'il n'a pas su
+    // ouvrir — son propre commentaire dit « on le compte pour que la raison le dise » — et ce
+    // compte n'était consommé NULLE PART. La raison affirmait donc invariablement une absence
+    // qu'elle n'avait pas mesurée : le transcrit cherché pouvait être dans le répertoire fermé,
+    // et l'opérateur était envoyé chercher un fichier manquant pour une cause qui n'a rien à
+    // voir avec lui.
+    //
+    // ⚠️ C'EST LE MÊME PARTAGE QUE CE MODULE TIENT UNE COUCHE PLUS BAS pour le registre des
+    // déclarations (« un fait abîmé peut être celui de cet agent-ci ») — et qu'il n'avait pas
+    // tenu pour le sien. La polarité ne change pas : dans les deux cas l'agent est NON MESURÉ.
+    // Ce qui change est ce qu'on envoie faire — rouvrir un répertoire, ou chercher un agent.
+    const angles = Number.isFinite(naissances.illisibles) ? naissances.illisibles : 0;
     return {
       mesure: 'refusée',
-      raison: `aucun transcrit ne date la session ${session}`,
+      raison:
+        `aucun transcrit ne date la session ${session}` +
+        (angles
+          ? ` — mais ${angles} zone(s) du balayage n’ont pas pu être lues : le transcrit que je ` +
+            `cherche peut être là. « Pas trouvé » n’y vaut pas « absent ».`
+          : ''),
     };
   }
   return { mesure: 'lu', instant };
@@ -470,6 +488,94 @@ function verifierLaFrontiere(declarations, miseEnService) {
     throw new FrontiereContredite(miseEnService, plusAncienne);
   }
   return frontiere;
+}
+
+/**
+ * CE QUE LE RETARD DE LA MESURE PEUT VALOIR — la tolérance de la couverture temporelle.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 CE QU'ELLE ABSORBE N'EST PAS LE DÉLAI D'INSCRIPTION, C'EST LE RETARD DE LA MESURE.
+ *
+ * Une déclaration est écrite QUELQUES SECONDES APRÈS la naissance de l'agent — le geste vérifie
+ * par le fait, puis inscrit. Mesuré sur la déclaration du poste le 2026-08-25 : le premier
+ * événement de la session de l'agent déclaré précède son `ne_le` de **2,0 secondes**. Ce
+ * délai-là ne demande aucune tolérance : il va dans le SENS qui identifie.
+ *
+ * Ce qui en demande une est la MESURE. La naissance d'un agent se lit à la date de création de
+ * son transcrit, et un transcrit naît APRÈS le premier événement de sa session. Mesuré le
+ * 2026-08-25 sur les **121 transcrits du poste qui datent une vraie conversation** :
+ * médiane **19,5 s**, p90 **118 s**, p99 **964 s**, **maximum 2 208,8 s (36,8 min)**.
+ * Une heure couvre cet observé avec 1,6× de marge.
+ *
+ * ⚠️ ET LE PLAFOND EST AUSSI UN CHOIX. Un chef d'équipe travaille des heures ; une tolérance
+ * qui couvrirait sa journée rendrait la clé primaire aussi permissive qu'avant pour la reprise
+ * d'un terminal. La tolérance doit rester COURTE devant la durée de vie d'un agent — c'est ce
+ * que le banc épingle, par les deux bouts, contre les mesures ci-dessus.
+ *
+ * ⚠️ UN CAS MESURÉ SORT DE CETTE PLAGE, ET IL SORT PAR LE BON CÔTÉ. Le 122ᵉ transcrit du poste
+ * — celui de l'unique agent DÉCLARÉ — porte un retard de **14 001 s (3 h 53)** : son fichier
+ * ne contient aucun tour de conversation (il est « bridgé ») et a été RECRÉÉ en fin de course.
+ * `birthtimeMs` n'y date donc pas la session. Avec cette tolérance, cet agent-là devient NON
+ * MESURÉ — pas une prise. C'est la polarité que ce module tient partout : ce qu'on ne sait pas
+ * classer est muet, et le vert tombe. La cause vraie est un défaut de la SONDE, pas de la
+ * tolérance ; l'agrandir pour le cacher reviendrait à laisser une mesure cassée régler la
+ * sensibilité de la garde.
+ */
+export const TOLERANCE_DE_DATATION_MS = 60 * 60 * 1000;
+
+/**
+ * CETTE DÉCLARATION COUVRE-T-ELLE UN AGENT NÉ À CET INSTANT ? — trois états, jamais deux.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 POURQUOI CETTE FONCTION EXISTE. La clé primaire de l'appariement — pane-dans-sa-session,
+ * dans l'espace déclaré — n'a AUCUN terme temporel. Or reprendre le worktree, c'est reprendre
+ * l'espace ; le reprendre depuis le terminal où l'on était, c'est reprendre le pane. Les trois
+ * termes coïncident donc EXACTEMENT sur `claude-swt <horodatage>`, le geste que le pack
+ * PRESCRIT — et le successeur recevait la déclaration de son prédécesseur.
+ *
+ * La garde tenait pourtant les DEUX dates — `a.naissance.instant` d'un côté, `d.ne_le` de
+ * l'autre — et ne les comparait jamais. Mesuré : déclaration du prédécesseur à 13 h 00,
+ * successeur au même pane, même session, même espace, transcrit daté 22 h 00 — neuf heures
+ * après la déclaration qui le couvre — verdict « rien à signaler », sortie 0.
+ *
+ * ⚠️ ET LE TROISIÈME ÉTAT N'EST PAS UN VIDE. Une déclaration dont la date est illisible ne
+ * prouve NI qu'elle couvre cet agent, NI qu'elle ne le couvre pas. Les deux replis sont
+ * commodes — l'un identifie à tort, l'autre accuse à tort. On rend « indécidable », et
+ * l'appelant en fait un refus de mesure, jamais un verdict.
+ */
+export function couvertureDeLaDeclaration(
+  declaration,
+  instantDeNaissance,
+  tolerance = TOLERANCE_DE_DATATION_MS
+) {
+  const inscrite = Date.parse(declaration?.ne_le ?? '');
+  if (!Number.isFinite(inscrite)) {
+    return {
+      etat: 'indécidable',
+      raison:
+        `une déclaration l’apparie, mais sa date d’inscription est illisible ` +
+        `(« ${declaration?.ne_le ?? 'absente'} ») : je ne peux pas dire si elle a été écrite ` +
+        `pour CET agent-ci ou pour celui qui occupait ce pane avant lui`,
+    };
+  }
+  if (!Number.isFinite(instantDeNaissance)) {
+    return {
+      etat: 'indécidable',
+      raison:
+        `une déclaration l’apparie, mais je n’ai pas su dater sa naissance : je ne peux pas ` +
+        `dire si elle a été écrite pour lui ou pour son prédécesseur sur ce pane`,
+    };
+  }
+  const ecart = instantDeNaissance - inscrite;
+  if (ecart <= tolerance) return { etat: 'couvre', ecart };
+  return {
+    etat: 'périmée',
+    ecart,
+    raison:
+      `la déclaration qui l’apparie a été inscrite ${Math.round(ecart / 1000)} s AVANT sa ` +
+      `naissance — reprendre un pane dans son propre espace n’est pas naître. Elle couvre ` +
+      `peut-être celui qui l’occupait avant lui ; je ne l’identifie pas là-dessus`,
+  };
 }
 
 /**
@@ -588,14 +694,28 @@ function declarationDe(agent, declarations) {
  */
 function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
   const decl = declarationDe(agent, declarations);
+  // 🔴 L'APPARIEMENT EST STRUCTUREL ; LA COUVERTURE EST TEMPORELLE — ET IL FALLAIT LES DEUX.
+  // `declarationDe` dit QUELLE déclaration désigne cette place (ce pane dans cette session, cet
+  // espace, ce nom) ; elle ne peut pas dire si elle désigne CET occupant-ci ou le précédent.
+  // Une place se reprend — c'est à ça qu'un terminal sert — et la reprise est le geste que le
+  // pack PRESCRIT. Voir `couvertureDeLaDeclaration`.
+  const naissance = agent.naissance?.mesure === 'lu' ? agent.naissance.instant : null;
+  const couverture = decl ? couvertureDeLaDeclaration(decl, naissance) : null;
   // ⚠️ LE NOM EST LA CLÉ DE REPLI DE L'APPARIEMENT (voir `declarationDe`) : un agent dont le
   // pane a bougé n'est retrouvé que par lui. Un nom NON MESURÉ rend donc la déclaration
   // « refusée », jamais « absente » — sinon `agent list`, mesuré à 83 panes sur 227 un jour,
   // suffirait à transformer des agents déclarés en prises par simple panne de lecture.
   const nomNonMesure = agent.nom?.mesure === 'refusée';
-  const source1 = decl
+  const source1 = couverture?.etat === 'couvre'
     ? { etat: 'établi', quoi: SOURCES.DECLARATION, detail: decl }
-    : illisibles.length
+    // ⚠️ UNE DÉCLARATION QUI NE LE COUVRE PAS REND LA SOURCE « REFUSÉE », JAMAIS « ABSENTE » —
+    // et surtout pas une PRISE. Les deux lectures restent ouvertes : un successeur qui a repris
+    // la place, ou l'agent déclaré dont la MESURE de naissance retarde (mesuré : un transcrit
+    // du poste retarde de 3 h 53). Nommer un fautif là-dessus serait accuser sur une mesure qui
+    // ne tranche pas ; l'identifier est le défaut qu'on ferme. Il reste NON MESURÉ, sortie 2.
+    : couverture
+      ? { etat: 'refusée', quoi: SOURCES.DECLARATION, raison: couverture.raison }
+      : illisibles.length
       // ⚠️ UN FAIT ABÎMÉ PEUT ÊTRE CELUI DE CET AGENT-CI. Le registre ne sait pas dire de qui
       // parlait un fichier qu'il n'a pas su lire — donc « pas trouvé » n'y vaut pas « absent ».
       ? {
@@ -846,6 +966,11 @@ export function jugerLeParc({
       '(appariée par pane-dans-sa-session ET DANS L’ESPACE DE TRAVAIL QUE LA DÉCLARATION ' +
       'INSCRIT — reprendre un pane n’est pas naître, et un terminal se réutilise ; ' +
       'ou à défaut par nom, dans ce MÊME espace ' +
+      '— et INSCRITE AVANT SA NAISSANCE À LUI : reprendre le worktree reprend l’espace, le ' +
+      'reprendre depuis son terminal reprend le pane, donc les trois termes de la clé ' +
+      'coïncident sur le geste même que le pack prescrit. Une déclaration plus JEUNE que ' +
+      'l’agent qu’elle apparie couvre peut-être son prédécesseur : elle n’identifie pas, et ' +
+      'l’agent tombe chez les NON MESURÉS, pas chez les prises ' +
       '— un nom seul apparierait la naissance de n’importe qui ; la session se compare par son ' +
       'NOM, celui que la déclaration inscrit et que le socket du pane porte dans son chemin — ' +
       'une session que rien ne nomme n’apparie personne par le pane), ni un lieu de rôle ' +

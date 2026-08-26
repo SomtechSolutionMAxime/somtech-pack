@@ -165,7 +165,12 @@ const declaration = (sur = {}) => ({
   espace: APRES,
   pane: 'w1:p1',
   session_herdr: null,
-  ne_le: '2026-08-25T13:30:00.000Z',
+  // 🔴 `ne_le` SUIT LA NAISSANCE, ET ICI LES AGENTS NAISSENT POUR DE VRAI. Les transcrits de ce
+  // banc sont créés sur le disque à l'instant où il tourne ; une déclaration figée au
+  // « 2026-08-25T13:30:00.000Z » était donc inscrite des heures AVANT l'agent qu'elle couvre —
+  // un monde que le geste de naissance ne produit pas (il vérifie par le fait, PUIS inscrit).
+  // On prend donc l'heure du banc, comme le producteur prend celle du poste.
+  ne_le: new Date().toISOString(),
   pose_par: 'pack agent naitre',
   ...sur,
 });

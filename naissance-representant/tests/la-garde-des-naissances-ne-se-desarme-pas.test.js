@@ -274,7 +274,19 @@ test('sur TOUTES les combinaisons des axes, la garde s’accorde à un oracle é
             agents: normaliserLeParc({ panes: [pane], agentsHerdr, naissances }),
             registre: {
               declarations: decl === 'déclaré'
-                ? [{ nom: 'peu-importe', pane: 'w1:p1', session_herdr: 's1', espace, ne_le: '2026-08-25T13:30:00.000Z' }]
+                // ⚠️ `ne_le` SUIT LA NAISSANCE DE LA CELLULE — il ne la précède pas de quatre
+                // heures, comme le faisait la valeur figée qui vivait ici. Une déclaration
+                // s'inscrit quelques secondes APRÈS l'agent qu'elle couvre ; la lui donner
+                // plus VIEILLE fabriquait un monde où le dispositif déclare des agents qui ne
+                // sont pas encore nés, et l'oracle finissait par exiger ce comportement-là.
+                //
+                // ⚠️ ET TOUJOURS DÉRIVÉE DE `NE_APRES`, MÊME SUR LA CELLULE « né avant ». Une
+                // déclaration ne peut pas être plus ancienne que la mise en service — le
+                // dispositif n'existait pas — et la garde REFUSE de se prononcer quand le
+                // registre dément sa frontière. L'agent « né avant » est de toute façon HORS
+                // PORTÉE : sa déclaration n'est jamais atteinte.
+                ? [{ nom: 'peu-importe', pane: 'w1:p1', session_herdr: 's1', espace,
+                     ne_le: new Date(NE_APRES + 2_000).toISOString() }]
                 : [],
               illisibles: [],
             },

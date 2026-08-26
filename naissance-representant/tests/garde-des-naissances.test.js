@@ -124,7 +124,14 @@ const declaration = (sur = {}) => ({
   espace: APRES,
   pane: 'w1:p1',
   session_herdr: 's1',
-  ne_le: '2026-08-25T13:30:00.000Z',
+  // 🔴 `ne_le` SE DÉRIVE DE LA NAISSANCE, IL NE SE CHOISIT PAS. Ce banc portait
+  // « 2026-08-25T13:30:00.000Z » pendant que ses agents naissaient à 17:30Z — une déclaration
+  // inscrite QUATRE HEURES AVANT l'agent qu'elle couvre. Ce monde-là ne se produit pas : le
+  // geste de naissance vérifie par le fait, PUIS inscrit, donc `ne_le` suit la naissance de
+  // quelques secondes (2,0 s mesurés sur la déclaration du poste). Un double non conforme ne
+  // rate pas seulement un défaut : les gardes bâties dessus finissent par exiger le
+  // comportement fautif — ici, qu'une déclaration identifie un agent né APRÈS elle.
+  ne_le: new Date(NE_APRES + 2_000).toISOString(),
   pose_par: 'pack agent naitre',
   ...sur,
 });

@@ -49,12 +49,20 @@ import { normaliserLeParc, jugerLeParc, VERDICTS, SOURCES } from '../src/garde-d
  * atteinte et ce banc rendrait vert sans rien apparier. La borne, elle, est gardée ailleurs
  * (`une-reprise-nait-aujourdhui`, `la-garde-des-naissances-ne-se-desarme-pas`).
  *
- * ⚠️ `instants` EST CANARD, PAS UNE `Map` : « quelle que soit la session, elle est née le
- * 2026-08-25 à 17h30 UTC ». Une vraie carte obligerait ce fichier à répéter l'identifiant de
- * chaque pane à côté de chaque pane — du bruit qui n'éprouve rien, et une occasion de plus de
- * les désaccorder.
+ * ⚠️ `instants` EST CANARD, PAS UNE `Map` : « quelle que soit la session, elle est née deux
+ * secondes avant qu'on l'inscrive ». Une vraie carte obligerait ce fichier à répéter
+ * l'identifiant de chaque pane à côté de chaque pane — du bruit qui n'éprouve rien, et une
+ * occasion de plus de les désaccorder.
+ *
+ * 🔴 ET LA NAISSANCE SE PLACE PAR RAPPORT À L'INSCRIPTION, PAS SUR UNE HEURE ÉCRITE ICI. Ce
+ * fichier fait inscrire ses déclarations par la chaîne RÉELLE du producteur, qui les date de
+ * l'heure du poste ; les agents, eux, naissaient à une heure figée dans cette ligne. Les deux
+ * dérivaient l'une de l'autre au fil du temps, et depuis qu'une déclaration ne couvre plus un
+ * agent né APRÈS elle, ce désaccord décide du verdict. On tient donc la relation VRAIE — le
+ * geste vérifie par le fait, PUIS inscrit — au lieu d'une heure qui dépend du jour où le banc
+ * tourne. C'est aussi ce qui le rend indifférent au fuseau du poste.
  */
-const NES_APRES = { mesure: 'lue', illisibles: 0, instants: { get: () => Date.parse('2026-08-25T17:30:00.000Z') } };
+const NES_APRES = { mesure: 'lue', illisibles: 0, instants: { get: () => Date.now() - 2_000 } };
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const PRODUCTEUR = resolve(ICI, '..', 'bin', 'naitre.js');
@@ -330,8 +338,18 @@ test('UNE DÉCLARATION DÉJÀ INSCRITE (format du 2026-08-25) reste appariée �
     pose_par: 'pack agent naitre',
   };
   const socket = '/Users/maximeleboeuf/.config/herdr/sessions/somtech/herdr.sock';
+  // ⚠️ LA NAISSANCE SE DÉRIVE DE CE FAIT-LÀ, PAS DE L'HEURE DU BANC. Ce que cet essai éprouve
+  // est le FORMAT d'une déclaration déjà écrite, pas la datation : son agent doit donc être né
+  // juste avant elle, comme le geste le produit. Lui donner l'heure générique du fichier le
+  // ferait naître des heures APRÈS sa propre déclaration — et cet essai mesurerait alors la
+  // couverture temporelle au lieu du format, en rougissant pour la mauvaise raison.
+  const neJusteAvant = {
+    mesure: 'lue',
+    illisibles: 0,
+    instants: { get: () => Date.parse(dejaEcrite.ne_le) - 2_000 },
+  };
   const v = jugerLeParc({
-    agents: normaliserLeParc({ naissances: NES_APRES,
+    agents: normaliserLeParc({ naissances: neJusteAvant,
       panes: [{ pane_id: 'w97:p2', agent_session: { agent: 'claude', value: 'sess-du-banc' }, foreground_cwd: dejaEcrite.espace, herdr_socket: socket }],
       agentsHerdr: [{ pane_id: 'w97:p2', herdr_socket: socket, name: null }],
     }),
