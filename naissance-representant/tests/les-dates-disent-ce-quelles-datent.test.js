@@ -439,7 +439,13 @@ test('🔴 LE RELEVÉ PORTE SA DATE ET SON EFFECTIF — un chiffre sans sa méth
 test('🔴 LE SENS DE LA RÈGLE TEMPORELLE — mesuré, puis exigé de la phrase que chaque rendu imprime', () => {
   const t = (h) => Date.parse(`2026-08-25T${h}:00:00.000Z`);
   const plusVieille = couvertureDeLaDeclaration({ ne_le: new Date(t('13')).toISOString() }, t('22'));
-  const plusJeune = couvertureDeLaDeclaration({ ne_le: new Date(t('22')).toISOString() }, t('13'));
+  // ⚠️ DEUX SECONDES, ET C'EST MESURÉ, PAS CHOISI. Ce banc éprouvait le côté « plus jeune » à
+  // NEUF HEURES — et il épinglait par là, comme une PROPRIÉTÉ, que la couverture n'était bornée
+  // que d'un seul côté. C'était le défaut ④, tenu au vert par le banc censé le trouver. Le cas
+  // NORMAL du régulier est celui que le pavé ci-dessus décrit et que le poste montre : le geste
+  // vérifie par le fait, PUIS inscrit — 2,043 s après la naissance sur l'unique déclaration
+  // réelle du poste (2026-08-25). C'est cette magnitude-là qui doit identifier, pas neuf heures.
+  const plusJeune = couvertureDeLaDeclaration({ ne_le: new Date(t('13') + 2_043).toISOString() }, t('13'));
 
   // ── LA DIRECTION, ÉPINGLÉE DANS L'ABSOLU. C'est elle qui empêche ce banc de suivre une
   // inversion du code : sans ces deux lignes, le mot dérivé plus bas basculerait avec lui.
@@ -496,4 +502,130 @@ test('🔴 ① UNE DÉCLARATION SANS DATE LISIBLE NE COUVRE RIEN — et ne conda
 
   const sansNaissance = couvertureDeLaDeclaration({ ne_le: new Date().toISOString() }, null);
   assert.equal(sansNaissance.etat, 'indécidable');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ④ — LA COUVERTURE N'ÉTAIT BORNÉE QUE D'UN CÔTÉ, ET SON COÛT N'ÉTAIT DIT NULLE PART
+//
+// 🔴 DEUX DÉFAUTS D'UNE MÊME RACINE — la tolérance était traitée comme une garantie sans prix.
+//
+//   · `ecart <= tolerance` laissait passer un écart NÉGATIF de n'importe quelle ampleur. Une
+//     déclaration inscrite TRENTE JOURS après la naissance rendait « couvre », et la mutation
+//     `ecart` → `Math.abs(ecart)` SURVIVAIT à la suite entière. Pire : le banc du sens de la
+//     règle temporelle mesurait le côté « plus jeune » à NEUF HEURES et exigeait `couvre` — il
+//     tenait donc le défaut au vert. Il a été ramené à la magnitude du régulier (2,043 s).
+//
+//   · Soixante minutes pendant lesquelles la garantie centrale du lot est OUVERTE — la garde ne
+//     sait pas séparer « la mesure de la naissance retarde » de « c'est le successeur du
+//     déclaré » — n'étaient nommées ni dans le module, ni dans la méthode imprimée, ni ailleurs.
+//     Et le rendu comptait dans le même chiffre le régulier à −2 s et le seul cas douteux.
+//
+// ⚠️ POURQUOI UN ÉCART NÉGATIF EST UN RISQUE RÉEL, ET C'EST LE MODULE QUI L'ÉCRIT. Il veut dire
+// que la déclaration a été inscrite APRÈS la naissance de l'agent jugé : elle peut donc avoir
+// été écrite pour un SUCCESSEUR qui a repris sa place ou son NOM. Le repli par le nom
+// (`declarationDe`) atteint ce cas, et `designationDe` écrit en toutes lettres que « deux agents
+// ont déjà porté le même nom sur ce poste parce qu'une naissance en a comblé un ».
+//
+// ⚠️ POURQUOI LA MÊME BORNE DES DEUX CÔTÉS ALORS QUE LES BESOINS DIFFÈRENT. Le côté APRÈS
+// demande infiniment moins : le geste prescrit vérifie par le fait PUIS inscrit, et l'unique
+// déclaration réelle du poste (2026-08-25) porte un écart de −2,043 s. Une borne taillée sur
+// N = 1 refuserait des réguliers pour économiser des minutes ; on prend la LARGE, la direction
+// prudente ici — refuser à tort coûte une livraison. Elle mord quand même : ce qu'elle ferme est
+// GROSSIER (des heures, des jours), pas fin.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 ④ UNE DÉCLARATION INSCRITE BIEN APRÈS LA NAISSANCE NE COUVRE PAS NON PLUS — la borne de l’autre côté', () => {
+  const naissance = Date.parse('2026-08-25T13:00:00.000Z');
+  const apres = (ms) => couvertureDeLaDeclaration({ ne_le: new Date(naissance + ms).toISOString() }, naissance);
+
+  // LA MOITIÉ QUI PROTÈGE LE RÉGULIER : le geste inscrit dans la foulée, et ça identifie.
+  assert.equal(apres(2_043).etat, 'couvre', 'le cas NORMAL du régulier doit rester identifié');
+  assert.equal(apres(TOLERANCE_DE_DATATION_MS).etat, 'couvre', 'la borne elle-même est encore dedans');
+
+  // 🔴 LA MOITIÉ QUI GARDE, ET ELLE N'EXISTAIT PAS.
+  for (const [combien, quoi] of [
+    [TOLERANCE_DE_DATATION_MS + 1_000, 'une seconde au-delà de la tolérance'],
+    [9 * 3_600_000, 'neuf heures — la magnitude que le banc voisin exigeait de COUVRIR'],
+    [30 * 24 * 3_600_000, 'trente jours — le cas mesuré qui rendait « couvre »'],
+  ]) {
+    const r = apres(combien);
+    assert.equal(r.etat, 'périmée', `${quoi} : la déclaration ne peut pas être celle de cet agent-ci`);
+    assert.match(
+      r.raison,
+      /APRÈS sa naissance/,
+      `${quoi} : le refus doit dire de quel CÔTÉ il refuse — les deux n’appellent pas le même geste`
+    );
+    assert.match(r.raison, /SUCCESSEUR/, `${quoi} : et nommer la confusion qu’il refuse`);
+  }
+});
+
+test('🔴 ④ LES DEUX REFUS NE SE CONFONDENT PAS — chacun nomme la confusion qu’il écarte', () => {
+  // ⚠️ UN SEUL MOT POUR LES DEUX CÔTÉS ENVERRAIT CHERCHER AU MAUVAIS ENDROIT : d'un côté c'est
+  // le PRÉDÉCESSEUR sur ce pane, de l'autre un SUCCESSEUR qui a repris la place ou le nom.
+  const naissance = Date.parse('2026-08-25T13:00:00.000Z');
+  const loin = 9 * 3_600_000;
+  const avant = couvertureDeLaDeclaration({ ne_le: new Date(naissance - loin).toISOString() }, naissance);
+  const apres = couvertureDeLaDeclaration({ ne_le: new Date(naissance + loin).toISOString() }, naissance);
+
+  assert.equal(avant.etat, 'périmée');
+  assert.equal(apres.etat, 'périmée');
+  assert.match(avant.raison, /AVANT sa naissance/);
+  assert.doesNotMatch(avant.raison, /SUCCESSEUR/, 'ce côté-ci refuse le PRÉDÉCESSEUR, pas un successeur');
+  assert.match(apres.raison, /APRÈS sa naissance/);
+  assert.doesNotMatch(apres.raison, /celui qui l’occupait avant lui/, 'ce côté-là ne parle pas du prédécesseur');
+  // Les deux durées rendues sont POSITIVES : « inscrite −32400 s APRÈS » ne se lit pas.
+  for (const r of [avant, apres]) {
+    assert.doesNotMatch(r.raison, /-\d+ s/, `une durée négative dans la phrase : « ${r.raison} »`);
+  }
+});
+
+test('🔴 ④ L’IDENTIFIÉ QUE LA TOLÉRANCE SEULE RETIENT EST NOMMÉ — le régulier, lui, ne l’est pas', () => {
+  // ⚠️ SUR LA VRAIE CHAÎNE : la déclaration est écrite par le producteur, et on ne recopie pas
+  // sa date — on la lui DEMANDE. Le seuil du doute n'est pas inventé non plus : c'est
+  // `RETARD_DE_MESURE_OBSERVE`, le relevé daté du poste. Un nombre choisi à la main ici
+  // rouvrirait le défaut que `verifierLaTolerance` vient de fermer.
+  const racine = bacDeclarations();
+  try {
+    const registre = leProducteurInscrit(racine);
+    const inscrite = Date.parse(registre.declarations[0].ne_le);
+
+    // DANS la tolérance, mais AU-DELÀ de ce que le relevé du poste explique : le cas douteux.
+    const douteux = jugerUnAgentNeA(registre, inscrite + RETARD_DE_MESURE_OBSERVE.maximumMs + 60_000);
+    assert.equal(douteux.comptes.identifies, 1, `contrôle du banc : la tolérance le couvre bien\n${douteux.texte}`);
+    assert.equal(douteux.comptes.identifiesInexpliques, 1, 'le relevé du poste n’explique PAS son écart');
+    assert.match(douteux.texte, /n’est PAS expliqué par le relevé du poste/, 'l’écran doit le distinguer');
+    assert.match(douteux.texte, /né APRÈS sa déclaration/, 'et dire de quel côté penche le doute');
+
+    // 🔴 LA MOITIÉ QUI PROTÈGE : le régulier à deux secondes n’est PAS montré du doigt.
+    const regulier = jugerUnAgentNeA(registre, inscrite - 2_043);
+    assert.equal(regulier.comptes.identifies, 1, `contrôle du banc\n${regulier.texte}`);
+    assert.equal(
+      regulier.comptes.identifiesInexpliques,
+      0,
+      'un écart de deux secondes est EXPLIQUÉ — le désigner ferait du bruit sur le cas NORMAL'
+    );
+    assert.doesNotMatch(regulier.texte, /n’est PAS expliqué par le relevé du poste/);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+test('🔴 ④ LE COÛT DE LA TOLÉRANCE EST IMPRIMÉ SUR CHAQUE RENDU — il n’était écrit nulle part', () => {
+  // ⚠️ ET IL EST DÉRIVÉ, PAS RECOPIÉ : la phrase demande sa durée à la constante. Une garde qui
+  // épinglerait « 60 min » à la main se désarmerait avec le module — le motif que ce lot a déjà
+  // payé sur l'épingle de la tolérance elle-même.
+  const dit = jugerLeParc({ agents: [], registre: { declarations: [], illisibles: [] } }).methode.couvertureTemporelle;
+  assert.ok(dit, 'la méthode ne porte AUCUNE ligne sur la couverture temporelle');
+  assert.match(
+    dit,
+    new RegExp(`${Math.round(TOLERANCE_DE_DATATION_MS / 60000)}\\s*min`),
+    'la fenêtre laissée ouverte doit être CHIFFRÉE, pas évoquée'
+  );
+  assert.match(dit, /DES DEUX CÔTÉS/, 'et dire qu’elle vaut des deux côtés — c’est ce qui manquait');
+  assert.match(dit, /successeur/i, 'et nommer ce qu’elle ne sait pas séparer');
+  assert.match(
+    dit,
+    new RegExp(RETARD_DE_MESURE_OBSERVE.leJour),
+    'et porter la date du relevé qui la justifie — un chiffre sans sa méthode est invérifiable'
+  );
 });

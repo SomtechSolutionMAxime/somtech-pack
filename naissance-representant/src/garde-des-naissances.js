@@ -632,6 +632,23 @@ export function verifierLaTolerance(tolerance = TOLERANCE_DE_DATATION_MS) {
   return tolerance;
 }
 
+/**
+ * CET ÉCART DE DATATION EST-IL EXPLIQUÉ PAR LE RELEVÉ DU POSTE ? — le seul seuil du module qui
+ * ne soit pas une décision, mais une mesure.
+ *
+ * ⚠️ IL NE DÉCIDE RIEN, IL QUALIFIE. La tolérance décide (couvre / ne couvre pas) ; celui-ci dit
+ * si l'écart observé tombe dans ce que le poste a DÉJÀ montré (`RETARD_DE_MESURE_OBSERVE`) ou
+ * s'il est plus grand que tout ce qu'on a mesuré. Un identifié à −2 s et un identifié à +59 min
+ * se lisaient d'une seule façon dans le rendu ; seul le second est douteux, et le lecteur ne
+ * pouvait pas les distinguer.
+ *
+ * ⚠️ LE SEUIL N'EST PAS INVENTÉ : c'est le relevé lui-même. Écrire ici un nombre choisi à la
+ * main rouvrirait très exactement le défaut que `verifierLaTolerance` vient de fermer.
+ */
+export function ecartExpliqueParLeReleve(ecart) {
+  return Number.isFinite(ecart) && Math.abs(ecart) <= RETARD_DE_MESURE_OBSERVE.maximumMs;
+}
+
 export const TOLERANCE_DE_DATATION_MS = 60 * 60 * 1000;
 
 /**
@@ -683,14 +700,49 @@ export function couvertureDeLaDeclaration(
     };
   }
   const ecart = instantDeNaissance - inscrite;
-  if (ecart <= tolerance) return { etat: 'couvre', ecart };
+  // 🔴 LES DEUX CÔTÉS, ET ILS NE REFUSENT PAS LA MÊME CONFUSION. La borne n'existait que d'UN
+  // côté : `ecart <= tolerance` laissait passer un écart négatif de n'importe quelle ampleur.
+  // Mesuré : une déclaration inscrite TRENTE JOURS après la naissance rendait « couvre », et la
+  // mutation `ecart` → `Math.abs(ecart)` SURVIVAIT à la suite entière.
+  //
+  //   · `ecart > 0` — l'agent est né APRÈS l'inscription. Risque : la déclaration est celle de
+  //     son PRÉDÉCESSEUR sur ce pane. C'est le côté que la tolérance a été taillée pour
+  //     absorber (le retard de la MESURE, relevé jusqu'à 36,8 min sur ce poste).
+  //
+  //   · `ecart < 0` — l'agent est né AVANT l'inscription. Risque SYMÉTRIQUE, et il n'est pas
+  //     théorique : la déclaration est celle d'un SUCCESSEUR, et l'agent jugé est le
+  //     prédécesseur encore vivant. Le repli par le NOM (`declarationDe`) l'atteint — et ce
+  //     module écrit lui-même, sous `designationDe`, que « deux agents ont déjà porté le même
+  //     nom sur ce poste parce qu'une naissance en a comblé un ».
+  //
+  // ⚠️ POURQUOI LA MÊME BORNE DES DEUX CÔTÉS ALORS QUE LES BESOINS DIFFÈRENT. Le côté APRÈS
+  // demande infiniment moins : le geste prescrit vérifie par le fait PUIS inscrit, et l'unique
+  // déclaration réelle du poste (2026-08-25) porte un écart de −2,043 s — ce que le module
+  // affirme déjà plus haut (« précède son `ne_le` de 2,0 secondes »). Une borne taillée sur
+  // N = 1 refuserait des réguliers pour économiser des minutes ; on prend donc la LARGE, qui
+  // est la direction prudente ici — refuser à tort coûte une livraison, et ce que cette borne
+  // ferme est GROSSIER (des jours, des semaines), pas fin. Elle mord, elle n'est pas décorative.
+  if (Math.abs(ecart) <= tolerance) {
+    return { etat: 'couvre', ecart, explique: ecartExpliqueParLeReleve(ecart) };
+  }
+  if (ecart > 0) {
+    return {
+      etat: 'périmée',
+      ecart,
+      raison:
+        `la déclaration qui l’apparie a été inscrite ${Math.round(ecart / 1000)} s AVANT sa ` +
+        `naissance — reprendre un pane dans son propre espace n’est pas naître. Elle couvre ` +
+        `peut-être celui qui l’occupait avant lui ; je ne l’identifie pas là-dessus`,
+    };
+  }
   return {
     etat: 'périmée',
     ecart,
     raison:
-      `la déclaration qui l’apparie a été inscrite ${Math.round(ecart / 1000)} s AVANT sa ` +
-      `naissance — reprendre un pane dans son propre espace n’est pas naître. Elle couvre ` +
-      `peut-être celui qui l’occupait avant lui ; je ne l’identifie pas là-dessus`,
+      `la déclaration qui l’apparie a été inscrite ${Math.round(-ecart / 1000)} s APRÈS sa ` +
+      `naissance — le geste qui fait naître inscrit dans la foulée, pas des heures plus tard. ` +
+      `Elle a peut-être été écrite pour un SUCCESSEUR qui a repris sa place ou son nom ; je ne ` +
+      `l’identifie pas là-dessus`,
   };
 }
 
@@ -859,7 +911,7 @@ function sourcesDe(agent, { declarations, illisibles, roleDuLieu }) {
   // suffirait à transformer des agents déclarés en prises par simple panne de lecture.
   const nomNonMesure = agent.nom?.mesure === 'refusée';
   const source1 = couverture?.etat === 'couvre'
-    ? { etat: 'établi', quoi: SOURCES.DECLARATION, detail: decl }
+    ? { etat: 'établi', quoi: SOURCES.DECLARATION, detail: decl, ecart: couverture.ecart, explique: couverture.explique }
     // ⚠️ UNE DÉCLARATION QUI NE LE COUVRE PAS REND LA SOURCE « REFUSÉE », JAMAIS « ABSENTE » —
     // et surtout pas une PRISE. Les deux lectures restent ouvertes : un successeur qui a repris
     // la place, ou l'agent déclaré dont la MESURE de naissance retarde (mesuré : un transcrit
@@ -1006,7 +1058,15 @@ export function jugerLeParc({
     const { sources, nomConforme } = sourcesDe(a, { declarations, illisibles, roleDuLieu });
     const etablie = sources.find((s) => s.etat === 'établi');
     if (etablie) {
-      identifies.push({ designation, source: etablie.quoi });
+      // ⚠️ L'ÉCART VOYAGE AVEC L'IDENTIFICATION. Sans lui, un identifié à −2 s (le régulier)
+      // et un identifié à +59 min (le seul cas douteux) se lisaient d'une seule façon.
+      identifies.push({
+        designation,
+        espace: a.espace,
+        source: etablie.quoi,
+        ecart: etablie.ecart ?? null,
+        explique: etablie.ecart === undefined ? true : Boolean(etablie.explique),
+      });
       continue;
     }
     const refusees = sources.filter((s) => s.etat === 'refusée');
@@ -1094,12 +1154,23 @@ export function jugerLeParc({
   const parSource = {};
   for (const i of identifies) parSource[i.source] = (parSource[i.source] ?? 0) + 1;
 
+  // 🔴 LES IDENTIFIÉS QUE LA TOLÉRANCE SEULE RETIENT — le coût de cette tolérance, RENDU.
+  // Le rendu ne distinguait pas un identifié à −2 s (le régulier : le geste inscrit deux
+  // secondes après la naissance) d'un identifié à +59 min, alors que le SECOND est le seul cas
+  // douteux : dans cette bande, la garde ne peut pas séparer « la mesure retarde » de « c'est
+  // le successeur du déclaré ». Ceux-ci sont donc identifiés sur un écart que le relevé du
+  // poste N'EXPLIQUE PAS — la garde les compte comme identifiés, et le DIT.
+  //
+  // ⚠️ CE N'EST PAS UN PANIER : un sous-ensemble des identifiés, il ne touche pas l'équilibre.
+  const identifiesInexpliques = identifies.filter((i) => i.ecart !== null && !i.explique);
+
   const comptes = {
     parSource,
     parcVivant: agents.length,
     horsPortee: horsPortee.length,
     population: identifies.length + prises.length + nonMesures.length,
     identifies: identifies.length,
+    identifiesInexpliques: identifiesInexpliques.length,
     prises: prises.length,
     // ⚠️ LE PRIX DE LA CORRECTION, RENDU EN CHIFFRE. Ces prises-là, l'ancienne règle les tenait
     // pour identifiées. C'est le seul endroit où le lecteur voit ce que le changement a
@@ -1192,6 +1263,20 @@ export function jugerLeParc({
       'déclaration inscrite, ou un lieu de rôle posé sur le disque. La ventilation reste ' +
       'affichée parce que c’est elle qui a rendu le défaut lisible — un « rien à signaler » ' +
       'entièrement porté par une source faible ne vaut pas celui d’un parc déclaré.',
+    // 🔴 CE QUE LA TOLÉRANCE LAISSE PASSER — et ce n'était dit NULLE PART : ni dans le module,
+    // ni ici, ni ailleurs. Une garantie centrale dont le prix n'est écrit nulle part se lit
+    // comme une garantie sans prix.
+    couvertureTemporelle:
+      `une déclaration identifie un agent tant que les deux dates ne s’écartent pas de plus de ` +
+      `${Math.round(TOLERANCE_DE_DATATION_MS / 60000)} min, DES DEUX CÔTÉS. Pendant cette ` +
+      'fenêtre, la garde ne sait PAS séparer « la mesure de la naissance retarde » de « c’est ' +
+      'le successeur de celui qui est déclaré » : c’est le prix de la tolérance, et il est payé ' +
+      'sciemment — sans elle, la garde refuserait les agents réguliers dont le transcrit tarde ' +
+      `(relevé du ${RETARD_DE_MESURE_OBSERVE.leJour} : jusqu’à ` +
+      `${Math.round(RETARD_DE_MESURE_OBSERVE.maximumMs / 1000)} s sur ` +
+      `${RETARD_DE_MESURE_OBSERVE.transcrits} transcrits). La ligne « dont l’écart n’est pas ` +
+      'expliqué » nomme ceux qui tombent DANS la fenêtre sans que le relevé les explique — ' +
+      'les seuls sur qui ce doute porte réellement.',
     portee:
       `mesuré sur ${comptes.sessionsInterrogees - comptes.sessionsRefusees} session(s) herdr ` +
       `qui ont répondu, sur ${comptes.sessionsInterrogees} interrogée(s). Tous les comptes ` +
@@ -1203,11 +1288,11 @@ export function jugerLeParc({
       'et le verdict le dit plutôt que de les couvrir d’un vert.',
   };
 
-  return { verdict, sortie: SORTIES[verdict], prises, nonMesures, identifies, horsPortee, fauxRefus, fauxRefusNonMesures, sessionsMuettes, comptes, methode, texte: rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, fauxRefusNonMesures, sessionsMuettes, comptes, methode, miseEnService }) };
+  return { verdict, sortie: SORTIES[verdict], prises, nonMesures, identifies, identifiesInexpliques, horsPortee, fauxRefus, fauxRefusNonMesures, sessionsMuettes, comptes, methode, texte: rendre({ verdict, prises, nonMesures, identifiesInexpliques, horsPortee, fauxRefus, fauxRefusNonMesures, sessionsMuettes, comptes, methode, miseEnService }) };
 }
 
 /** Le compte rendu, tel qu'un humain le lit. Chaque fautif y est NOMMÉ, jamais compté. */
-function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, fauxRefusNonMesures = [], sessionsMuettes = [], comptes, methode, miseEnService }) {
+function rendre({ verdict, prises, nonMesures, identifiesInexpliques = [], horsPortee, fauxRefus, fauxRefusNonMesures = [], sessionsMuettes = [], comptes, methode, miseEnService }) {
   const l = [];
   l.push(`GARDE DES NAISSANCES — ${verdict}`);
   l.push(`frontière : ${miseEnService} · parc vivant : ${comptes.parcVivant} · dans la population : ${comptes.population}`);
@@ -1275,6 +1360,19 @@ function rendre({ verdict, prises, nonMesures, horsPortee, fauxRefus, fauxRefusN
     l.push(`identifiés (${comptes.identifies}) — sur quoi ce verdict repose :`);
     for (const [source, n] of Object.entries(comptes.parSource)) l.push(`   · ${source} : ${n}`);
     l.push(`   ${methode.identifies}`);
+    // 🔴 LE SEUL SOUS-ENSEMBLE DOUTEUX DES IDENTIFIÉS, ET IL EST NOMMÉ — pas compté. Un chiffre
+    // seul enverrait chercher dans tout le parc ; ces agents-là sont adressables.
+    if (identifiesInexpliques.length) {
+      l.push(
+        `   dont l’écart de datation n’est PAS expliqué par le relevé du poste ` +
+          `(${identifiesInexpliques.length}) — la tolérance seule les retient :`
+      );
+      for (const i of identifiesInexpliques) {
+        const sens = i.ecart > 0 ? 'né APRÈS sa déclaration' : 'né AVANT sa déclaration';
+        l.push(`      • ${i.designation} — ${Math.round(Math.abs(i.ecart) / 1000)} s, ${sens}${i.espace ? ` — ${i.espace}` : ''}`);
+      }
+    }
+    l.push(`   ${methode.couvertureTemporelle}`);
     l.push('');
   }
   l.push(`prises : ${comptes.prises} — méthode : ${methode.prises}`);
