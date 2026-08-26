@@ -306,13 +306,27 @@ test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, et elle rend 
   // ⚠️ ET C'EST LE SEUL BANC DE CE FICHIER QUI SUBSTITUE QUOI QUE CE SOIT À LA PRISE. Les six
   // autres passent par le vrai `connect` — vérifié par mutation : remplacer le transport par
   // DÉFAUT par cette même prise muette les fait rougir.
+  // ⚠️ CE DOUBLE RETIENT LA BOUCLE, ET C'EST OBLIGATOIRE POUR QU'IL SOIT CONFORME.
+  // 🔴 MESURÉ EN CI, PAS SUR LE POSTE : sans ce minuteur, ce banc rendait
+  // `cancelledByParent` — « Promise resolution is still pending but the event loop has
+  // already resolved » — en 0,96 ms au lieu des 60 attendues. Le poste ne pouvait pas le
+  // montrer : d'autres bancs y tenaient la boucle debout.
+  // La cause n'était PAS dans `placeTenue` : le minuteur y est `unref`, donc il ne retient
+  // rien, et c'est le VRAI socket en vol qui tient la boucle le temps de la prise. Un double
+  // sans aucun handle ne tient rien — il fabriquait donc une situation que la production ne
+  // connaît pas, et aurait fait accuser le code. Un double doit être conforme au service
+  // qu'il remplace, y compris sur ce qu'il retient.
   let ferme = 0;
-  const priseQuiNeConclutJamais = () => ({
-    on() {}, // ni « connect », ni « error » : rien ne viendra jamais de ce côté-là
-    destroy() {
-      ferme += 1;
-    },
-  });
+  const priseQuiNeConclutJamais = () => {
+    const enVol = setTimeout(() => {}, 60_000); // ce qu'un socket en vol retient
+    return {
+      on() {}, // ni « connect », ni « error » : rien ne viendra jamais de ce côté-là
+      destroy() {
+        ferme += 1;
+        clearTimeout(enVol);
+      },
+    };
+  };
 
   const debut = Date.now();
   const verdict = await placeTenue(join(racine, 'peu-importe.sock'), { borne: 60, brancher: priseQuiNeConclutJamais });
