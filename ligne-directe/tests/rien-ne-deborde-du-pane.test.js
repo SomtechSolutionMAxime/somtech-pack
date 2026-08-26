@@ -32,6 +32,50 @@
 // dans un vrai split herdr, avant et après le correctif.
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// CE CONTRE QUOI CES BANCS MESURENT — ANCRÉ OU DÉRIVÉ, ET CHAQUE LIGNE MESURÉE
+//
+// 🔴 UNE GARDE QUI MESURE CONTRE UNE VALEUR DÉRIVÉE DE LA PRODUCTION SUIT LA MUTATION AU LIEU
+// DE L'ATTRAPER. Mesuré : poser `vital: 1` sur un second raccourci déplaçait `RACCOURCI_VITAL`
+// vers « ↑↓ naviguer » ; la barre l'affichait, la SORTIE DISPARAISSAIT DE L'ÉCRAN, et la suite
+// restait verte — parce que toutes mes assertions cherchaient `RACCOURCI_VITAL`, donc la chose
+// déplacée. Elles prouvaient que le code s'accorde avec lui-même.
+//
+// ⚠️ C'EST LA TROISIÈME FORME DU MÊME MOTIF SUR CE LOT, ET LA PLUS DURE À VOIR :
+//     l'oracle sans appelant     → garde INERTE    (elle ne mesure plus rien)
+//     l'assertion non déclenchée → garde MUETTE    (elle ne s'exécute pas)
+//     la dérivation              → garde COMPLICE  (elle s'exécute, passe, et bénit la mutation)
+// Les deux premières se trouvent en cherchant du vert suspect ; la troisième ressemble en tout
+// point à une garde qui travaille.
+//
+// LA QUESTION QUI TRANCHE, pour chaque valeur contre laquelle on mesure : **si je déplace sa
+// définition dans la production, est-ce que l'assertion suit ?** Si oui, elle n'ancre rien.
+//
+//   valeur                     d'où elle vient              verdict, MESURÉ PAR MUTATION
+//   ─────────────────────────  ───────────────────────────  ────────────────────────────────────
+//   largeurAffichee            définie DANS ce banc (l.~99)  ANCRÉE — la production ne la fournit
+//                                                            pas, donc rien ne peut la déplacer
+//   rangeesPhysiques,          `tests/aide/terminal.js`      ANCRÉES — écrites côté banc ; c'est
+//   texteVisible                                             un double, et sa note le dit
+//   RACCOURCI_VITAL            production, DÉRIVÉ            était COMPLICE ; ancré depuis par
+//                                                            « LE FAIT EST ANCRÉ, PAS DÉRIVÉ »
+//   SEUIL                      dérivé de RACCOURCI_VITAL     ancré par transitivité — et il DOIT
+//                                                            rester dérivé : écrit `9`, il
+//                                                            deviendrait faux en silence
+//   RACCOURCIS (la maquette)   production, DÉRIVÉ            ANCRÉE par le `assert.match` littéral
+//                                                            de `le-tui-de-la-vue-du-parc.test.js`
+//                                                            — mesuré : changer le séparateur rougit
+//   RACCOURCIS_UN_A_UN         production                    lu contre un littéral dans le banc
+//                                                            d'ancrage — c'est là que le fait vit
+//   etatInitial()              production                    non ancré, mais NON COMPLICE : le
+//                                                            déplacer rougit largement (mesuré)
+//   styles 'titre' / 'pied'    littéraux dans les bancs      ANCRÉS
+//
+// ⚠️ DÉRIVER N'EST PAS LE DÉFAUT — c'est ce qui évite qu'un seuil écrit en chiffre pourrisse. Le
+// défaut est une chaîne de dérivations qui n'est ANCRÉE NULLE PART. Il faut un point, un seul,
+// où le fait s'écrit en toutes lettres : c'est « LE FAIT EST ANCRÉ, PAS DÉRIVÉ ».
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // CE QUE LES BANCS RETIRÉS OU RÉÉCRITS GARDAIENT — ÉNUMÉRÉ, ET PROUVÉ PAR MUTATION
 //
 // 🔴 CE TABLEAU EXISTE PARCE QU'UNE RÉÉCRITURE A PERDU TROIS PROPRIÉTÉS EN SILENCE, et que la
@@ -788,9 +832,9 @@ test('L’ORDRE DE SACRIFICE AUX HAUTEURS MINUSCULES — ce que la réécriture 
   //     hauteur 2, barre AVANT titre                     → SURVIVANTE
   //     hauteur 2, le titre DEUX FOIS (plus de sortie)   → SURVIVANTE   ← le pire
   //
-  // La seconde survivante efface ENTIÈREMENT la sortie d’un écran de 2 lignes, et la suite reste
-  // verte à 1119/1119. C’est le défaut que ce lot avait fermé deux jours plus tôt, rouvert par
-  // une réécriture qui améliorait autre chose.
+  // La seconde survivante efface ENTIÈREMENT la sortie d’un écran de 2 lignes, et la suite restait
+  // verte. C’est le défaut que ce lot avait fermé deux jours plus tôt, rouvert par une réécriture
+  // qui améliorait autre chose.
   //
   // ⚠️ LA LEÇON, ET ELLE EST DE FORME : mon message de commit disait « deux bancs devenus sans
   // objet retirés ». C’était VRAI des deux supprimés, et MUET sur le troisième — réécrit, qui a
@@ -879,6 +923,106 @@ test('LA BARRE MONTRE LE CHAMP DE RECHERCHE — le cas qu’une revue avait nomm
     assert.ok(
       largeurAffichee(barre.texte) <= largeur,
       `à ${largeur} colonnes, la barre de recherche écrit ${largeurAffichee(barre.texte)} caractères`
+    );
+  }
+});
+
+test('LE FAIT EST ANCRÉ, PAS DÉRIVÉ — sinon les gardes suivent la mutation au lieu de l’attraper', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LE DÉFAUT LE PLUS DUR À VOIR DE TOUT CE CHANTIER, ET SA FORME EST NEUVE.
+  //
+  // Tous mes bancs vérifiaient la présence de `RACCOURCI_VITAL`. Il est **DÉRIVÉ** de la
+  // production : `RACCOURCIS_UN_A_UN.reduce(…)`. Mesuré par mutation — poser `vital: 1` sur un
+  // SECOND raccourci :
+  //
+  //     RACCOURCI_VITAL devient « ↑↓ naviguer »
+  //     la barre à 12 colonnes affiche « ↑↓ naviguer »
+  //     LA SORTIE A DISPARU DE L'ÉCRAN
+  //     suite : 0 fail
+  //
+  // La mutation DÉPLACE la définition, et toutes mes assertions la SUIVENT. Elles prouvaient que
+  // le code s'accorde avec lui-même — jamais que la sortie est « q quitter ».
+  //
+  // ⚠️ C'EST LA TROISIÈME FORME DU MÊME MOTIF SUR CE LOT, ET LA PIRE :
+  //   • l'oracle sans appelant laissait une garde INERTE (elle ne mesurait plus rien) ;
+  //   • l'assertion jamais déclenchée laissait une garde MUETTE (elle ne s'exécutait pas) ;
+  //   • la dérivation laisse une garde ACTIVE ET COMPLICE — elle s'exécute, elle passe, et elle
+  //     bénit la mutation. Les deux premières se voient en cherchant du vert suspect. Celle-ci
+  //     ressemble en tout point à une garde qui fait son travail.
+  //
+  // ⚠️ CE BANC EST DONC LE SEUL DU FICHIER QUI A LE DROIT D'ÉCRIRE LE TEXTE EN TOUTES LETTRES.
+  // Partout ailleurs, dériver reste juste — c'est ce qui évite qu'un seuil écrit `9` devienne
+  // faux en silence. Mais une chaîne de dérivations doit être ANCRÉE quelque part, une fois,
+  // ou elle ne dit rien. Ici est cet endroit.
+  //
+  // ⚠️ ET IL DOIT ROUGIR SI ON RENOMME LE RACCOURCI — c'est voulu, pas un inconvénient. Un
+  // renommage légitime passe par ce banc, donc par quelqu'un qui décide sciemment que la sortie
+  // du dirigeant s'appelle désormais autrement. Ce qu'on ne veut pas, c'est que ça glisse.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  assert.equal(
+    RACCOURCI_VITAL,
+    'q quitter',
+    'la sortie du dirigeant a changé de nom. Si c’est voulu, mets-la à jour ICI — c’est le seul ' +
+      'endroit du fichier qui l’écrit, et c’est exprès. Si ce n’est pas voulu, quelqu’un a ' +
+      'déplacé la vitalité minimale dans `RACCOURCIS_UN_A_UN` et la sortie a disparu de l’écran.'
+  );
+
+  // ⚠️ ET LA DÉRIVATION DOIT ÊTRE DÉTERMINISTE : deux raccourcis à vitalité minimale égale, et
+  // « lequel survit » devient l’ordre de la liste, c’est-à-dire un hasard. C’est exactement la
+  // mutation ci-dessus. Le banc supprimé du lot gardait ce point ; je l’avais classé « sans
+  // objet » à tort, et il a fallu le remesurer pour s’en apercevoir.
+  const plancher = Math.min(...RACCOURCIS_UN_A_UN.map((r) => r.vital));
+  const minima = RACCOURCIS_UN_A_UN.filter((r) => r.vital === plancher);
+  assert.equal(
+    minima.length,
+    1,
+    `${minima.length} raccourcis partagent la vitalité minimale (${JSON.stringify(minima.map((r) => r.texte))}) — ` +
+      'lequel survit devient l’ordre de la liste, donc un hasard, et `RACCOURCI_VITAL` peut ' +
+      'désigner autre chose que la sortie'
+  );
+  assert.equal(minima[0].texte, RACCOURCI_VITAL, 'et c’est bien celui que `RACCOURCI_VITAL` dérive');
+});
+
+test('LA BARRE NE SE VIDE JAMAIS — sous le seuil B dit TRONQUER, elle n’a jamais dit EFFACER', async (t) => {
+  // 🔴 SECONDE PROPRIÉTÉ QUE J’AVAIS CLASSÉE « SANS OBJET » À TORT. Mesuré : passer la borne de
+  // la boucle de retrait de `> 1` à `> 0` vide la barre entièrement — à 5 colonnes,
+  // `raccourcisPour(5)` rend la chaîne VIDE. Suite verte, 0 fail.
+  //
+  // ⚠️ POURQUOI AUCUN BANC NE LE VOYAIT : au-dessus du seuil ils exigent la sortie, et elle y
+  // est encore (à 9 colonnes la barre rend toujours « q quitter »). SOUS le seuil ils n’exigent
+  // que l’impossibilité de la montrer entière. Entre les deux, personne ne demandait qu’il reste
+  // QUELQUE CHOSE. Un trou entre deux gardes justes — la jointure, pas les étages.
+  //
+  // ⚠️ ET LA DÉCISION NE L’AUTORISE PAS : `00a7b645` dit que la barre se TRONQUE. Une barre
+  // effacée n’est pas une barre tronquée — le lecteur d’un pane minuscule passe de « q qu… »,
+  // dont il peut deviner la touche, à une ligne vide qui ne dit rien du tout.
+  const tmp = racine();
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vue = await uneVue(poserLieu(join(tmp, 'depot'), 'p-20260822-0001'));
+  const etat = etatInitial();
+  const lignes = lignesVisibles(arbreDeLaVue(vue, { parApp: true }), etat);
+
+  for (let largeur = 1; largeur <= 40; largeur += 1) {
+    // ═══ ① LA COMPOSITION garde toujours au moins un raccourci, entier.
+    const barre = raccourcisPour(largeur);
+    assert.ok(
+      barre.length > 0,
+      `à ${largeur} colonnes, \`raccourcisPour\` rend une chaîne VIDE — la barre s’efface au lieu ` +
+        'de se tronquer, et le lecteur n’a plus rien du tout'
+    );
+
+    // ═══ ② ET CE QUI RESTE EST LE PLUS VITAL, pas n’importe lequel.
+    assert.ok(
+      barre.includes(RACCOURCI_VITAL),
+      `à ${largeur} colonnes, ce qui reste de la barre est ${JSON.stringify(barre)} — ce n’est pas la sortie`
+    );
+
+    // ═══ ③ ET À L’ÉCRAN, LA LIGNE DU PIED N’EST JAMAIS VIDE NON PLUS — la troncature de
+    // `rendreEcran` ne doit pas produire ce que la composition refuse de produire.
+    const pied = rendreEcran({ vue, etat, lignes, largeur, hauteur: 6 }).at(-1);
+    assert.ok(
+      pied.texte.trim().length > 0,
+      `à ${largeur} colonnes, la ligne du pied est vide à l’écran : ${JSON.stringify(pied.texte)}`
     );
   }
 });

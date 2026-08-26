@@ -757,7 +757,12 @@ export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.
 //
 // ⚠️ CE QUI GARDE LA PROPRIÉTÉ DÉSORMAIS : `tests/rien-ne-deborde-du-pane.test.js`, qui mesure
 // ce que le TERMINAL rend — l'auto-wrap et le défilement — et non ce qu'une fonction déclare.
-// Retirer le `borner` de la barre y fait rougir 4 essais.
+// Retirer le `borner` de la barre FAIT ROUGIR — et on n'écrit pas combien.
+//
+// ⚠️ CE COMMENTAIRE PORTAIT « 4 essais ». Il en fait 5 aujourd'hui : des bancs ont été ajoutés
+// depuis. Le chiffre n'était pas faux, il a ROUILLI — et un chiffre rouillé se lit comme une
+// mesure fraîche. C'est le même défaut qu'un chiffre invérifiable : il ferme la question au
+// lieu de l'ouvrir. On énonce la propriété ; qui veut le compte le remesure.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 /** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
@@ -769,19 +774,24 @@ export function raccourcisPour(largeur) {
     const pire = gardes.reduce((a, b) => (b.vital >= a.vital ? b : a));
     gardes = gardes.filter((r) => r !== pire);
   }
-  // ⚠️ ON REND LE DERNIER RACCOURCI **ENTIER, MÊME S’IL DÉBORDE** — et c’est un contrat
-  // ANTÉRIEUR à ce lot, que j’ai failli casser.
+  // ⚠️ CETTE FONCTION REND LE DERNIER RACCOURCI **ENTIER** — et c'est `rendreEcran` qui borne.
   //
-  // Le banc `la barre de raccourcis se rétracte sans jamais perdre « q quitter »` l’exige à
-  // TOUTE largeur, y compris 1, avec sa raison écrite : « on n’exige pas qu’elle tienne à 1
-  // colonne — c’est impossible, et le prétendre serait faux. On exige qu’elle ne tienne JAMAIS
-  // au prix de la sortie. » Mesuré sur `origin/main` : `raccourcisPour(1)` y rend bien
-  // « q quitter » entier.
+  // 🔴 UN BLOC VIVAIT ICI ET INTERDISAIT CE QUE LE CODE FAIT PAR CONSTRUCTION. Il disait :
+  // « ce qui est fermé par ce lot, c'est le FRAGMENT (« q qu… ») — jamais le mot entier ».
+  // Sous `00a7b645`, le fragment est EXACTEMENT ce que le lecteur voit : à 5 colonnes il lit
+  // « q qu… », à 3 « q … ». Il citait en plus le banc de l'invariant par un nom qu'il n'a plus,
+  // et lui prêtait une exigence — « q quitter » entier à TOUTE largeur, y compris 1 — que ce
+  // lot a lui-même amendée. C'était le CINQUIÈME site périmé, trouvé par une passe de fond
+  // après que j'aie déclaré avoir cherché par la fonction.
   //
-  // ⚠️ J’AVAIS ÉCRIT ICI « entier ou RIEN », ce qui rendait une barre VIDE sous 9 colonnes —
-  // le banc a rougi, et il avait raison. Entre un mot qui déborde d’un pane minuscule et un
-  // écran qui ne dit plus comment sortir, le premier est réparable d’un coup d’œil ; le second
-  // enferme. Ce qui est fermé par ce lot, c’est le FRAGMENT (« q qu… ») — jamais le mot entier.
+  // ⚠️ ET C'ÉTAIT LE PLUS DANGEREUX DES CINQ, POUR UNE RAISON DE FORME : les quatre autres
+  // DÉCRIVAIENT un état périmé — ils désinforment. Celui-ci INTERDISAIT un comportement voulu :
+  // un lecteur qui le croit va corriger du code juste. La prose qui interdit se cherche AVANT
+  // celle qui décrit.
+  //
+  // CE QUI RESTE VRAI, ET QUI EST LA SEULE RAISON DE CE COMMENTAIRE : on ne tronque pas ICI.
+  // Une troncature à cet endroit ET une à la sortie couperaient deux fois — ma première
+  // correction appelait `borner` ici et rendait « q quitt… » amputé une seconde fois.
   return rendre(gardes);
 }
 
