@@ -2028,14 +2028,17 @@ test('un chef d’équipe dont le nom n’est pas un code de chantier est REFUS�
     assert.equal(declarationsInscrites(poste).length, 0, 'aucune déclaration');
   }));
 
-// 🔴 DÉFAUT ⑥ — UN HORODATAGE DICTÉ SORTAIT LE NOUVEAU-NÉ DE LA POPULATION DE LA GARDE.
+// 🔴 UN HORODATAGE DICTÉ HORS FORME EST REFUSÉ — POUR SON MOTIF VIVANT.
 //
-// `--horodatage` était pris TEL QUEL. Il nomme l'espace, donc le DERNIER SEGMENT du chemin où
-// l'agent travaille — et c'est ce segment que `horodatageDuChemin` lit pour borner la population
-// de la garde des naissances. Mesuré : `horodatageDuChemin('…/worktrees/d/mon-essai')` rend
-// `null`, et le même agent sans aucune déclaration rend « rien à signaler », `prises: 0`,
-// `horsPortee: 1`. Une frappe non canonique faisait naître, PAR LE DISPOSITIF, un agent que le
-// dispositif ne jugerait jamais — sans un mot. Un désarmement par le côté naissance.
+// `--horodatage` était pris TEL QUEL. Le motif d'origine de cette porte — « ce segment borne la
+// population de la garde, un nom hors forme fait naître un agent jamais jugé » — est ABOLI : la
+// garde borne sur la NAISSANCE de l'agent, lue au transcrit de sa session. Remesuré : un agent
+// sans aucune déclaration né après la frontière dans `…/mon-essai` rend `horsPortee: 0,
+// population: 1, prises: 1` — il est jugé comme les autres.
+//
+// La porte reste, pour ce qui n'a jamais eu besoin de la garde : cet horodatage nomme l'espace
+// ET sa branche-socle `wt/<horodatage>`, c'est par LUI qu'on reprend une session
+// (`claude-swt <horodatage>`) et c'est lui qui la rend unique à la seconde.
 test('🔴 un horodatage que la garde ne saura pas lire est REFUSÉ — rien n’est créé', () =>
   avecChefDEquipe(({ code, poste }) => {
     const journal = installerFauxHerdr();
@@ -2045,7 +2048,11 @@ test('🔴 un horodatage que la garde ne saura pas lire est REFUSÉ — rien n�
     assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
     assert.match(r.stderr, /mon-essai/, 'le refus cite la valeur reçue');
     assert.match(r.stderr, /AAAAMMJJ-HHMMSS|20260825-083616/, 'et montre la forme attendue');
-    assert.match(r.stderr, /garde/i, 'et dit POURQUOI : sinon on lirait un refus de zèle');
+    // ⚠️ CETTE ASSERTION EXIGEAIT LE MOT « garde » — le prédicat ainsi invoqué est aboli. Elle
+    // garde la même FONCTION : un refus de forme doit dire POURQUOI, sinon il se lit comme du
+    // zèle et se contourne. Elle vise désormais le motif que la mesure soutient.
+    assert.match(r.stderr, /reprend|claude-swt/i, 'et dit POURQUOI : on reprend la session par cet horodatage');
+    assert.doesNotMatch(r.stderr, /jamais jugé|hors portée/i, 'et n’invoque plus le prédicat aboli');
     assert.equal(appelsJournalises(journal).length, 0, 'aucun appel herdr : le refus tombe avant tout');
     assert.equal(existsSync(poste.SOMTECH_WORKTREES_RACINE), false, 'aucun espace de travail');
     assert.equal(declarationsInscrites(poste).length, 0, 'aucune déclaration');
@@ -2179,53 +2186,35 @@ test('un rôle qui n’existe pas reste refusé — le rôle neuf n’a pas ouve
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // 🔴 L'HORODATAGE DICTÉ, BIEN FORMÉ, MAIS D'AVANT LA MISE EN SERVICE (D-20260825-0002)
 //
-// Le banc voisin (`chef-equipe.test.js`) éprouve la porte ; celui-ci éprouve qu'elle est
-// RÉELLEMENT DANS LA CHAÎNE. Une porte exportée que le binaire n'appellerait pas sur ce cas-là
-// ne garde rien — c'est le motif « le détecteur existait dans le dépôt et nulle part dans la
-// vie d'un agent », déjà payé sur ce fichier.
+// Ce banc éprouvait ici le REFUS d'un tel horodatage, et le motif imprimé était : « cet agent
+// naîtrait hors portée / ne serait jamais jugé ». Ce prédicat est ABOLI — la garde borne sur la
+// NAISSANCE de l'agent, lue au transcrit de sa session, plus sur le nom de son répertoire.
+// Remesuré : agent sans aucune déclaration né après la frontière dans `…/mon-essai`,
+// `…/2026-08-25`, `…/20260819-005653` → `horsPortee: 0, population: 1, prises: 1` les trois fois.
 //
-// Mesuré AVANT le correctif, sur ce même harnais : `--horodatage 20260824-235959` allait
-// jusqu'à `workspace create`, sans un mot, et faisait naître un agent que la garde rangerait
-// en « hors portée » — jamais jugé.
+// Le refus ne protégeait donc plus rien, et il coûtait un faux refus SUR L'USAGE PRESCRIT de
+// l'option — « rejouer un refus à l'identique », « reprendre une session par son nom », qui
+// redonnent tous deux un horodatage d'HIER. Ce banc éprouve désormais que la commande le mène
+// jusqu'au bout : une porte retirée dont on ne mesure pas le passage se referme à la première
+// réécriture, sans qu'un rouge le dise.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('🔴 un horodatage BIEN FORMÉ mais d’AVANT la mise en service est refusé par la COMMANDE — et rien n’est créé', () =>
-  avecChefDEquipe(({ code, depot, poste }) => {
+test('🔴 un horodatage BIEN FORMÉ mais d’AVANT la mise en service va JUSQU’AU BOUT — le nom de l’espace ne décide plus de rien', () =>
+  avecChefDEquipe(({ code, poste }) => {
     const horodatage = '20260824-235959';
     const espace = join(poste.SOMTECH_WORKTREES_RACINE, 'le-chantier', horodatage);
-    const journal = installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
+    installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });
 
-    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage });
+    const r = lancerNaitre(code, { role: 'chef-equipe', env: poste, workspace: null, horodatage, coordonnateur: 'matapedia' });
 
-    assert.equal(r.code, 1, `refus attendu — stdout : ${r.stdout}`);
-    assert.match(r.stderr, /20260824-235959/, 'le refus cite la valeur reçue');
-    assert.match(r.stderr, /hors portée|jamais jugé/i, 'et dit la conséquence : cet agent échapperait à la garde');
-    // 🔴 LE REFUS EST DÉLIBÉRÉ, PAS UNE PANNE QUI TOMBE DANS LE FILET GLOBAL. Sans cette
-    // assertion le banc est VERT AVANT LE CORRECTIF : `main().catch` imprime déjà `err.message`
-    // et sort en 1, donc code et message ne distinguent pas les deux. Cette ligne-ci est la
-    // seule que la branche voulue écrit — et c'est elle qui porte la garantie mesurée en
-    // dessous. Un banc qui ne la demande pas mesure le filet, pas le câblage.
-    assert.match(
-      r.stderr,
-      /Rien n’a été créé/,
-      'le refus DIT ce qu’il garantit — sinon il n’est qu’une exception tombée dans le filet global'
-    );
-    assert.equal(r.stdout, '', 'rien qui ressemblerait à un succès');
-    // ⚠️ « RIEN N'A ÉTÉ CRÉÉ » SE MESURE, il ne se lit pas dans le message.
-    assert.equal(existsSync(espace), false, 'aucun arbre');
-    assert.deepEqual(
-      cequiResteDeLEspace(depot, espace, horodatage),
-      { arbre: false, branche: false, enregistrements: 1 },
-      'ni arbre, ni branche-socle, ni enregistrement'
-    );
-    assert.equal(appelsJournalises(journal).length, 0, 'et herdr n’a JAMAIS été appelé');
-    assert.equal(declarationsInscrites(poste).length, 0, 'ni déclaration');
+    assert.equal(r.code, 0, `naissance attendue — stderr : ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).espace, espace, 'et l’espace porte exactement le nom dicté');
+    assert.ok(existsSync(espace), `l’arbre n’existe pas : ${espace}`);
+    assert.equal(declarationsInscrites(poste).length, 1, 'la naissance est inscrite comme n’importe quelle autre');
   }));
 
-test('la frontière EXACTE passe — « antérieur » est strict, sinon c’est le faux refus symétrique', () =>
+test('la frontière EXACTE passe elle aussi — aucune date n’est plus une porte', () =>
   avecChefDEquipe(({ code, poste }) => {
-    // ⚠️ SANS CETTE MOITIÉ, le correctif se paierait d'une naissance refusée que la garde
-    // jugerait très bien : elle range en hors portée ce qui est `< frontière`, pas `<=`.
     const horodatage = '20260825-000000';
     const espace = join(poste.SOMTECH_WORKTREES_RACINE, 'le-chantier', horodatage);
     installerFauxHerdr({ repertoire: espace, espaceCree: 'wOUVERT' });

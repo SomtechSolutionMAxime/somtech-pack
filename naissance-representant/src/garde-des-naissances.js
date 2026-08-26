@@ -228,16 +228,22 @@ const HORODATAGE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
 /**
  * LA FORME D'UN HORODATAGE DE NAISSANCE — exportée pour que le PRODUCTEUR la réutilise.
  *
- * 🔴 POURQUOI CETTE FONCTION EXISTE. Cette forme borne la POPULATION de la garde : `horodatageDuChemin`
- * la cherche dans le dernier segment du chemin de travail, et ce qu'elle ne reconnaît pas devient
- * `horsPortee` — donc jamais jugé. Or le producteur (`--horodatage` de la naissance) NOMME ce
- * segment. Tant qu'il ne validait rien, une frappe non canonique (`2026-08-25`, `mon-essai`)
- * faisait naître, par le dispositif lui-même, un agent que le dispositif ne jugerait jamais — sans
- * un mot. Un désarmement par le côté naissance.
+ * 🔴 ELLE NE BORNE PLUS AUCUNE POPULATION, ET LE MOTIF QU'ON ÉCRIVAIT ICI EST MORT. On lisait :
+ * « cette forme borne la POPULATION de la garde … ce qu'elle ne reconnaît pas devient
+ * `horsPortee` — donc jamais jugé ». C'était vrai du prédicat que ce lot a ABOLI ; voir
+ * `horodatageDuChemin`, soixante lignes plus bas, qui dit « IL NE DÉCIDE PLUS DE RIEN, ET C'EST
+ * LE CORRECTIF ». Remesuré : un agent sans aucune déclaration né après la frontière dans
+ * `…/mon-essai`, `…/2026-08-25` ou `…/20260819-005653` rend les trois fois `horsPortee: 0,
+ * population: 1, prises: 1`.
+ *
+ * CE QU'ELLE FAIT ENCORE, ET QUI SUFFIT : ① elle dit ce qu'un rendu peut IMPRIMER comme
+ * worktree d'une prise ; ② le producteur (`exigerUnHorodatageDEspace`) s'en sert pour refuser
+ * un nom d'espace qui ne se reprend pas — `claude-swt <horodatage>` retrouve une session PAR ce
+ * nom, et lui seul rend l'espace et sa branche-socle uniques à la seconde. Ce motif-là n'a
+ * jamais eu besoin de la garde, et c'est pourquoi le refus lui survit.
  *
  * ⚠️ ET LE PRODUCTEUR NE RECOPIE PAS L'EXPRESSION. Deux copies d'une même forme divergent au
- * premier changement de l'une, et celle qui divergerait ici rouvrirait exactement le trou qu'on
- * ferme. Il n'y a donc qu'un `HORODATAGE` dans ce dépôt, et il est ici, chez celle qui juge.
+ * premier changement de l'une. Il n'y a donc qu'un `HORODATAGE` dans ce dépôt, et il est ici.
  */
 export function estUnHorodatageDeNaissance(valeur) {
   return typeof valeur === 'string' && HORODATAGE.test(valeur);

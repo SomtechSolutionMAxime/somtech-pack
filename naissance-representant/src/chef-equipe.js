@@ -38,11 +38,7 @@ import { homedir } from 'node:os';
 import { familleDuMandat, codeDuMandat } from '../../ligne-directe/src/mandat.js';
 // ⚠️ LA FORME VIENT DE CELLE QUI JUGE, jamais d'une seconde expression écrite ici — voir
 // `exigerUnHorodatageDEspace` plus bas pour ce que la divergence rouvrirait.
-import {
-  estUnHorodatageDeNaissance,
-  instantDeLHorodatage,
-  MISE_EN_SERVICE,
-} from './garde-des-naissances.js';
+import { estUnHorodatageDeNaissance } from './garde-des-naissances.js';
 
 /** Le nom du rôle, écrit UNE fois — un rôle épelé à deux endroits diverge au premier changement. */
 export const ROLE_CHEF_EQUIPE = 'chef-equipe';
@@ -128,16 +124,34 @@ export function horodatageDEspace(quand = new Date()) {
   );
 }
 
-/** Levée quand un horodatage dicté n'a pas la forme que la garde des naissances sait lire. */
+/**
+ * Levée quand un horodatage dicté n'a pas la forme que `claude-swt` pose.
+ *
+ * 🔴 SON MOTIF A CHANGÉ, ET L'ANCIEN EST MORT. Ce refus disait : « c'est ce segment que la
+ * GARDE DES NAISSANCES lit pour savoir qui elle a le droit de juger … il ne sera jamais jugé ».
+ * C'était vrai tant que la garde bornait sa population sur le nom du répertoire de travail.
+ * Elle la borne désormais sur la NAISSANCE DE L'AGENT, lue au transcrit de sa session
+ * (`garde-des-naissances.js`, en-tête), et `horodatageDuChemin` le dit lui-même : « IL NE DÉCIDE
+ * PLUS DE RIEN, ET C'EST LE CORRECTIF ». Mesuré, agent sans aucune déclaration né après la
+ * frontière : `…/mon-essai`, `…/2026-08-25` et `…/20260819-005653` rendent tous les trois
+ * `horsPortee: 0, population: 1, prises: 1`. Aucun n'échappe à quoi que ce soit.
+ *
+ * ⚠️ LE REFUS RESTE, PARCE QUE SON AUTRE MOTIF EST VIVANT — et il n'a jamais eu besoin de la
+ * garde. Cet horodatage nomme l'espace ET sa branche-socle `wt/<horodatage>` : c'est par lui
+ * qu'on REPREND une session (`claude-swt <horodatage>`, règle d'or n°11) et c'est lui qui rend
+ * l'espace unique À LA SECONDE. Un nom hors forme ne se retrouve plus par ce qu'on lit à
+ * l'écran, et deux `mon-essai` se marchent dessus là où deux horodatages ne le peuvent pas.
+ */
 export class HorodatageHorsForme extends Error {
   constructor(brut) {
     super(
       `« ${brut || '(vide)'} » n’est pas un horodatage d’espace de travail.\n` +
         `  Attendu : AAAAMMJJ-HHMMSS (par exemple 20260825-083616) — la forme que \`claude-swt\` pose.\n` +
-        `  ⚠️ CE N’EST PAS DU ZÈLE DE FORME. Cet horodatage nomme l’espace, donc le dernier segment ` +
-        `du chemin où l’agent travaillera — et c’est ce segment que la GARDE DES NAISSANCES lit pour ` +
-        `savoir qui elle a le droit de juger. Un nom qu’elle ne sait pas lire fait naître un agent ` +
-        `qu’elle rangera en « hors portée » : il ne sera jamais jugé, et rien ne le dira.`
+        `  ⚠️ CE N’EST PAS DU ZÈLE DE FORME. Cet horodatage nomme l’espace de travail ET sa ` +
+        `branche-socle \`wt/<horodatage>\` : c’est par LUI qu’on reprend la session ` +
+        `(\`claude-swt <horodatage>\`), et c’est lui qui rend l’espace unique à la seconde. Un nom ` +
+        `hors forme ne se reprend plus par ce qu’on lit à l’écran, et deux naissances qui le ` +
+        `porteraient se marcheraient dessus.`
     );
     this.name = 'HorodatageHorsForme';
     this.brut = brut;
@@ -145,65 +159,47 @@ export class HorodatageHorsForme extends Error {
 }
 
 /**
- * Levée quand un horodatage dicté est bien formé mais nomme un espace ANTÉRIEUR à la frontière.
+ * 🔴 IL Y AVAIT ICI UN SECOND REFUS, ET IL EST TOMBÉ AVEC LE PRÉDICAT QU'IL SERVAIT.
  *
- * 🔴 CE N'EST PAS UN SECOND CAS DE `HorodatageHorsForme`, ET LES CONFONDRE COÛTERAIT LE MOTIF.
- * L'un se voit à l'œil (`mon-essai`), l'autre non : `20260824-235959` a la forme exacte que
- * `claude-swt` pose, et c'est très précisément la valeur que l'usage PRESCRIT de l'option amène
- * à taper — « rejouer un refus à l'identique », « reprendre une session par son nom ». Deux
- * causes distinctes, deux refus qui ne disent pas la même chose à celui qui les lit.
+ * `HorodatageAvantLaMiseEnService` refusait un horodatage bien formé mais antérieur à
+ * `MISE_EN_SERVICE`. Son motif — le seul qu'il ait jamais eu — était que la garde bornait sa
+ * population sur le nom du répertoire de travail : « l'agent qui y naîtrait ne serait JAMAIS
+ * jugé ». Ce lot a remplacé ce prédicat par la naissance de l'agent, lue au transcrit de sa
+ * session. Mesuré à la tête du lot, agent sans aucune déclaration né une heure après la
+ * frontière : `…/mon-essai`, `…/2026-08-25`, `…/20260819-005653` — les trois rendent
+ * `horsPortee: 0, population: 1, prises: 1`. Le motif était mort ; le refus, lui, vivait.
+ *
+ * ⚠️ ET IL COÛTAIT, sur l'usage PRESCRIT de l'option. `--horodatage` existe pour « rejouer un
+ * refus à l'identique » et « reprendre une session par son nom » : les deux redonnent un
+ * horodatage d'HIER. Le poste porte de vrais espaces d'avant la frontière — l'en-tête de la
+ * garde en cite un, `20260819-005653` — et refuser au dispositif de les employer pousse à
+ * faire naître À LA MAIN, hors dispositif, ce que tout ce lot existe pour empêcher.
+ *
+ * ⚠️ CE QUE LE RETRAIT ROUVRE, DIT PLUTÔT QUE TU : on peut désormais nommer un espace NEUF
+ * d'une date antérieure au dispositif. L'agent y est jugé exactement comme les autres — c'est
+ * mesuré ci-dessus — et la collision reste fermée ailleurs : `creerEspaceDeTravail` refuse un
+ * arbre qui existe déjà, et git refuse une branche-socle du même nom. Ce qui reste est une
+ * question de LISIBILITÉ du parc, pas un trou dans la garde.
  */
-export class HorodatageAvantLaMiseEnService extends Error {
-  constructor(brut, miseEnService) {
-    super(
-      `« ${brut} » est bien formé, mais il nomme un espace de travail NÉ AVANT la mise en ` +
-        `service du dispositif (« ${miseEnService} »).\n` +
-        `  ⚠️ LA FORME NE SUFFIT PAS, ET C'EST LE MÊME MOTIF QU'ELLE. Cet horodatage nomme le ` +
-        `dernier segment du chemin où l'agent travaillera — et la GARDE DES NAISSANCES borne sa ` +
-        `population sur DEUX termes : la forme, et l'INSTANT. Un espace daté d'avant la ` +
-        `frontière est rangé en « hors portée » : l'agent qui y naîtrait ne serait JAMAIS jugé, ` +
-        `et rien ne le dirait.\n` +
-        `  Ça ne retire rien à l'usage de l'option : rejouer un refus ou reprendre une session ` +
-        `par son nom vise une naissance du dispositif, donc postérieure à sa mise en service.`
-    );
-    this.name = 'HorodatageAvantLaMiseEnService';
-    this.brut = brut;
-    this.miseEnService = miseEnService;
-  }
-}
 
 /**
- * L'horodatage d'un espace, exigé sous la forme que la GARDE sait lire.
+ * L'horodatage d'un espace, exigé sous la forme que `claude-swt` pose.
  *
- * ⚠️ LA FORME N'EST PAS RÉÉCRITE ICI. Elle vit chez `garde-des-naissances.js`, qui juge sur elle ;
+ * ⚠️ LA FORME N'EST PAS RÉÉCRITE ICI. Elle vit chez `garde-des-naissances.js`, qui l'exporte ;
  * en poser une seconde copie ici garantirait qu'un jour l'une accepte ce que l'autre refuse — et
- * la version qui divergerait serait celle-ci, celle qui produit, dont aucune garde ne relit la
- * population. On importe donc son verdict, on n'imite pas son expression.
+ * la version qui divergerait serait celle-ci, celle qui produit. On importe donc son verdict,
+ * on n'imite pas son expression.
  *
- * ⚠️ ET IL Y A DEUX TERMES, PAS UN. La forme était gardée, l'INSTANT non — alors que la garde
- * borne sa population sur les deux : ce qu'elle ne sait pas lire devient `horsPortee` (« aucun
- * horodatage »), ce qu'elle date d'avant sa frontière AUSSI (« né avant la mise en service »).
- * Le producteur n'en gardait que la moitié, et la moitié qui manquait est celle que l'usage
- * PRESCRIT de l'option amène à taper — un horodatage d'hier, bien formé, qui ne se voit pas.
- *
- * ⚠️ NI LA FORME NI LA FRONTIÈRE NE SONT RÉÉCRITES ICI. Les deux vivent chez celle qui juge ;
- * en poser une copie ici garantirait qu'un jour l'une accepte ce que l'autre refuse — et la
- * version qui divergerait serait celle-ci, celle qui produit, dont aucune garde ne relit la
- * population.
+ * ⚠️ ET IL N'Y A PLUS QU'UN TERME. Il y en a eu deux — la forme et l'INSTANT — parce que la
+ * garde bornait sa population sur les deux. Elle ne borne plus que sur la naissance de l'agent :
+ * le terme de l'instant refusait sur un motif mort, et sur la valeur même que l'usage prescrit
+ * de l'option amène à taper. Voir le bloc ci-dessus.
  *
  * @returns {string} l'horodatage, RENDU TEL QUEL — on ne réécrit pas ce qu'on a accepté
  * @throws  {HorodatageHorsForme}
- * @throws  {HorodatageAvantLaMiseEnService}
  */
-export function exigerUnHorodatageDEspace(brut, miseEnService = MISE_EN_SERVICE) {
+export function exigerUnHorodatageDEspace(brut) {
   if (!estUnHorodatageDeNaissance(brut)) throw new HorodatageHorsForme(brut);
-  // ⚠️ STRICTEMENT ANTÉRIEUR, et la borne est celle de la garde au caractère près : elle range
-  // en `horsPortee` ce qui est `< frontiere`, donc la frontière elle-même est DANS la
-  // population. Un `<=` ici refuserait une naissance que la garde jugerait très bien — le faux
-  // refus symétrique, sur la seule seconde où les deux se touchent.
-  if (instantDeLHorodatage(brut).getTime() < instantDeLHorodatage(miseEnService).getTime()) {
-    throw new HorodatageAvantLaMiseEnService(brut, miseEnService);
-  }
   return brut;
 }
 

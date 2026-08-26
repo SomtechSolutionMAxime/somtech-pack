@@ -27,12 +27,13 @@ import {
   EspaceDeTravailImpossible,
   MandatSansChantier,
   HorodatageHorsForme,
-  HorodatageAvantLaMiseEnService,
 } from '../src/chef-equipe.js';
 import {
   horodatageDuChemin,
   estUnHorodatageDeNaissance,
   instantDeLHorodatage,
+  normaliserLeParc,
+  jugerLeParc,
   MISE_EN_SERVICE,
 } from '../src/garde-des-naissances.js';
 
@@ -151,7 +152,13 @@ test('🔴 le producteur et la garde s’accordent sur CE QU’EST un horodatage
   }
 });
 
-test('🔴 un horodatage que la garde ne saura pas lire est REFUSÉ, et le refus nomme la conséquence', () => {
+test('🔴 un horodatage hors forme est REFUSÉ, et le refus nomme la conséquence VIVANTE', () => {
+  // ⚠️ CETTE ASSERTION EXIGEAIT LE MOT « garde », et le refus le disait : « c'est ce segment
+  // que la GARDE DES NAISSANCES lit pour savoir qui elle a le droit de juger ». Le prédicat
+  // ainsi invoqué est ABOLI — le nom du répertoire ne décide plus de rien. On ne met pas
+  // l'assertion au vert en la retirant : elle garde la même FONCTION — un refus de forme doit
+  // dire pourquoi, sinon il se lit comme du zèle et se contourne — et elle vise désormais le
+  // motif que la mesure soutient : reprendre la session par son nom, et l'unicité de l'espace.
   assert.throws(
     () => exigerUnHorodatageDEspace('2026-08-25'),
     (err) => {
@@ -160,8 +167,18 @@ test('🔴 un horodatage que la garde ne saura pas lire est REFUSÉ, et le refus
       assert.match(err.message, /AAAAMMJJ-HHMMSS|20260825-083616/, 'et la forme attendue');
       assert.match(
         err.message,
-        /garde/i,
-        'et POURQUOI : ce n’est pas du zèle de forme, c’est la population de la garde'
+        /reprend|claude-swt/i,
+        'et POURQUOI : c’est par cet horodatage qu’on reprend la session'
+      );
+      assert.match(
+        err.message,
+        /unique|marcher/i,
+        'et l’autre moitié du motif : il rend l’espace et sa branche-socle uniques'
+      );
+      assert.doesNotMatch(
+        err.message,
+        /jamais jugé|hors portée/i,
+        'et il n’invoque PLUS le prédicat aboli : le nom du répertoire ne décide plus de rien'
       );
       return true;
     }
@@ -539,66 +556,119 @@ test('un défaire appelé à vide REFUSE proprement — une sortie de processus 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// 🔴 LA MOITIÉ QUI MANQUAIT À LA PORTE DU PRODUCTEUR — LA FORME ÉTAIT GARDÉE, L'INSTANT NON
+// 🔴 CE QUE LE NOM DE L'ESPACE NE DÉCIDE PLUS — DONC CE QUE LE PRODUCTEUR NE REFUSE PLUS
 //
-// `estUnHorodatageDeNaissance` ne juge que la FORME. Or la garde borne sa population sur DEUX
-// termes : la forme (sinon `horodatageDuChemin` rend `null`) ET l'instant (sinon `horsPortee`,
-// raison « né avant la mise en service »). Le producteur n'en gardait qu'un.
+// Ce lot a remplacé le prédicat de population de la garde : elle bornait sur l'horodatage du
+// RÉPERTOIRE, elle borne désormais sur la NAISSANCE DE L'AGENT, lue au transcrit de sa session
+// (`garde-des-naissances.js`, en-tête ; `horodatageDuChemin` le dit lui-même : « IL NE DÉCIDE
+// PLUS DE RIEN, ET C'EST LE CORRECTIF »).
 //
-// Mesuré avant le correctif, sur les fonctions pures — un agent SANS AUCUNE DÉCLARATION dans
-// `…/worktrees/d/20260824-235959` : `verdict: rien à signaler | prises: 0 | horsPortee: 1`.
-// Et de bout en bout sur le vrai binaire : `--horodatage 20260824-235959` allait jusqu'au bout.
+// La porte du producteur gardait DEUX termes — la forme ET l'instant — parce que la garde
+// bornait sur les deux. LE SECOND EST MORT AVEC LE PRÉDICAT QU'IL SERVAIT. Mesuré, agent SANS
+// AUCUNE DÉCLARATION, né une heure après la frontière :
 //
-// ⚠️ LE DÉSARMEMENT PASSAIT PAR L'USAGE PRESCRIT, pas par une frappe fautive : l'option existe
-// pour « rejouer un refus à l'identique » et « reprendre une session par son nom », c'est-à-dire
-// pour REDONNER UN HORODATAGE D'HIER. Un `2026-08-25` se voyait ; un `20260824-235959` non.
+//   /bac/worktrees/un-depot/mon-essai        => horsPortee: 0  population: 1  prises: 1
+//   /bac/worktrees/un-depot/2026-08-25       => horsPortee: 0  population: 1  prises: 1
+//   /bac/worktrees/un-depot/20260819-005653  => horsPortee: 0  population: 1  prises: 1
+//
+// AUCUN des trois n'est « jamais jugé ». Refuser un horodatage antérieur à la mise en service
+// ne protégeait donc plus rien — et coûtait un FAUX REFUS sur l'usage PRESCRIT de l'option :
+// « rejouer un refus à l'identique », « reprendre une session par son nom ». Un espace d'avant
+// la frontière existe pour de vrai sur ce poste — l'en-tête de la garde en cite un,
+// `20260819-005653` — et refuser de l'employer pousse à faire naître HORS DISPOSITIF, ce que
+// tout ce lot existe pour empêcher.
+//
+// ⚠️ CE QUI RESTE GARDÉ, ET POUR UN MOTIF VIVANT : LA FORME. Elle ne borne plus aucune
+// population, mais elle nomme l'espace ET sa branche-socle `wt/<horodatage>` — c'est par elle
+// qu'on reprend une session (`claude-swt <horodatage>`, règle d'or n°11) et c'est elle qui rend
+// l'espace unique à la seconde. Deux `mon-essai` se marchent dessus ; deux horodatages, jamais.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-test('🔴 un horodatage BIEN FORMÉ mais ANTÉRIEUR à la mise en service est REFUSÉ — la forme ne suffit pas', () => {
-  assert.throws(
-    () => exigerUnHorodatageDEspace('20260824-235959'),
-    (err) => {
-      assert.ok(
-        err instanceof HorodatageAvantLaMiseEnService,
-        `attendu HorodatageAvantLaMiseEnService, reçu ${err?.name} (${err?.message})`
-      );
-      assert.match(err.message, /20260824-235959/, 'le refus cite la valeur reçue');
-      assert.match(err.message, new RegExp(MISE_EN_SERVICE), 'et la frontière qu’elle franchit');
-      assert.match(err.message, /garde/i, 'et POURQUOI : cet agent ne serait JAMAIS jugé');
-      return true;
-    }
-  );
+/**
+ * CE QUE LA GARDE FAIT D'UN AGENT DONT L'ESPACE PORTE CE SEGMENT — l'oracle, JOUÉ, pas récrit.
+ *
+ * 🔴 CE BANC PORTAIT ICI UNE SECONDE EXPRESSION DU PRÉDICAT — `horodatageDuChemin(…) !== null
+ * && instantDeLHorodatage(valeur) >= instantDeLHorodatage(MISE_EN_SERVICE)` — c'est-à-dire une
+ * copie, écrite dans le banc, du prédicat que ce lot venait d'ABOLIR. Son propre docblock
+ * annonçait pourtant « L'ORACLE DE CES ESSAIS EST LA GARDE ELLE-MÊME, jamais une seconde liste
+ * écrite ici ». Il était vert, et prouvait une implication dont le membre de droite n'existait
+ * plus. On appelle donc `jugerLeParc`.
+ *
+ * ⚠️ SUR LE CAS QUE LA CHAÎNE PRODUIT, pas sur une coïncidence fabriquée. `naitre --horodatage H`
+ * crée un espace nommé H et fait naître un agent MAINTENANT : la naissance ne vaut donc pas
+ * l'instant de H. On date l'agent d'APRÈS la frontière — comme toute naissance d'aujourd'hui —
+ * et l'instant se DÉRIVE de la constante réelle, jamais recopié.
+ */
+const laGardeJuge = (segment) => {
+  const sock = '/bac/.config/herdr/sessions/s1/herdr.sock';
+  const ne = instantDeLHorodatage(MISE_EN_SERVICE).getTime() + 3_600_000;
+  const v = jugerLeParc({
+    agents: normaliserLeParc({
+      panes: [{
+        pane_id: 'w1:p1',
+        herdr_socket: sock,
+        foreground_cwd: `/Users/x/worktrees/depot/${segment}`,
+        agent_session: { agent: 'claude', kind: 'id', source: 'herdr:claude', value: 'sess-1' },
+      }],
+      agentsHerdr: [{ pane_id: 'w1:p1', herdr_socket: sock, name: null }],
+      naissances: { mesure: 'lue', illisibles: 0, instants: new Map([['sess-1', ne]]) },
+    }),
+    registre: { declarations: [], illisibles: [] },
+    portee: { sessionsInterrogees: 1, sessionsRefusees: [] },
+  });
+  return v.comptes.horsPortee === 0 && v.comptes.population === 1;
+};
+
+/** Les sept noms d'espace de la fermeture — canoniques, hors forme, des deux côtés de la frontière. */
+const SEGMENTS = [
+  '20260825-083616', // le canonique du jour
+  '20260825-000000', // la frontière EXACTE
+  '20260824-235959', // une seconde avant la frontière
+  '20260101-000000', // franchement avant
+  '20270101-000000', // franchement après
+  '2026-08-25',      // hors forme
+  'mon-essai',       // hors forme
+];
+
+test('🔴 LA GARDE JUGE L’AGENT QUEL QUE SOIT LE NOM DE SON ESPACE — c’est ce qui retire son motif au second terme', () => {
+  // ⚠️ C'EST LA MESURE QUI FONDE LE RETRAIT, et elle est jouée ici plutôt que citée. Tant que
+  // ces sept-là sont tous jugés, un refus fondé sur « il ne serait jamais jugé » est un refus
+  // sur un motif mort. Le jour où l'un d'eux ressortirait de la population, ce banc rougit
+  // AVANT qu'on s'appuie encore sur la phrase.
+  for (const segment of SEGMENTS) {
+    assert.equal(
+      laGardeJuge(segment),
+      true,
+      `« ${segment} » : la garde ne juge PAS l’agent qui y travaille — le nom de l’espace ` +
+        `déciderait donc à nouveau, et la porte du producteur retrouverait son second terme`
+    );
+  }
 });
 
-test('🔴 LA FERMETURE, PAR VARIATION : tout ce que le producteur ACCEPTE tombe dans la population de la garde', () => {
-  // ⚠️ CE BANC NE PINGLE AUCUNE VALEUR — il éprouve l'IMPLICATION sur un jeu qui traverse la
-  // frontière dans les deux sens. Un banc qui n'aurait épinglé que « 20260824-235959 rougit »
-  // survivrait au jour où quelqu'un décale la frontière d'une seconde.
-  const cas = [
-    '20260825-083616', // le canonique du jour — accepté, et jugé
-    '20260825-000000', // la frontière EXACTE : « antérieur » est STRICT, elle passe
-    '20260824-235959', // une seconde avant — hors population
-    '20260101-000000', // franchement avant
-    '20270101-000000', // franchement après
-    '2026-08-25',      // hors forme
-    'mon-essai',       // hors forme
-  ];
-  for (const valeur of cas) {
+test('🔴 LE PRODUCTEUR N’A PLUS QU’UN TERME : LA FORME — accepté ⟺ la forme est canonique', () => {
+  // ⚠️ CE N'EST PLUS UNE ÉQUIVALENCE AVEC LA GARDE, et c'est le point. « Accepté ⟺ jugé » était
+  // vrai quand le nom de l'espace décidait ; il est FAUX depuis — la garde juge `mon-essai`
+  // aussi bien que le reste. Le producteur refuse encore la forme, mais pour SON motif à lui :
+  // reprendre la session par son nom, et l'unicité de l'espace et de sa branche-socle.
+  for (const valeur of SEGMENTS) {
     let accepte = true;
     try {
       exigerUnHorodatageDEspace(valeur);
     } catch {
       accepte = false;
     }
-    // Ce que la garde ferait de l'espace ainsi nommé : est-il dans sa population ?
-    const dansLaPopulation =
-      horodatageDuChemin(`/Users/x/worktrees/depot/${valeur}`) !== null &&
-      instantDeLHorodatage(valeur).getTime() >= instantDeLHorodatage(MISE_EN_SERVICE).getTime();
     assert.equal(
       accepte,
-      dansLaPopulation,
-      `« ${valeur} » : le producteur ${accepte ? 'ACCEPTE' : 'refuse'} un espace que la garde ` +
-        `${dansLaPopulation ? 'jugerait' : 'ne jugerait JAMAIS'} — un agent naîtrait hors de toute garde`
+      estUnHorodatageDeNaissance(valeur),
+      `« ${valeur} » : le producteur ${accepte ? 'ACCEPTE' : 'refuse'} un horodatage que la ` +
+        `forme dit ${estUnHorodatageDeNaissance(valeur) ? 'canonique' : 'hors forme'}`
     );
   }
+});
+
+test('🔴 un horodatage BIEN FORMÉ mais ANTÉRIEUR à la mise en service est ACCEPTÉ, et rendu tel quel', () => {
+  // Le geste que l'option existe pour servir : rejouer un refus à l'identique, reprendre une
+  // session par son nom. Les deux redonnent un horodatage d'HIER.
+  assert.equal(exigerUnHorodatageDEspace('20260824-235959'), '20260824-235959');
+  assert.equal(exigerUnHorodatageDEspace('20260101-000000'), '20260101-000000');
 });
