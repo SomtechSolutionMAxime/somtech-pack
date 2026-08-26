@@ -765,3 +765,39 @@ export function commandesNaissance(
     fermer: (paneId) => ['pane', 'close', paneId],
   };
 }
+
+/**
+ * CE QUE LA COMMANDE AJOUTE AU REFUS D'UN LIEU NON RENSEIGNÉ — et que la garde ne peut pas savoir.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ * LE DÉFAUT BLOQUANT QUE CETTE FONCTION FERME (relevé en passe de fond, T-20260826-0043)
+ *
+ * Sur le chemin d'AUTO-POSE, la commande POSE le lieu quand il manque, puis vérifie qu'il est
+ * renseigné. Un lieu qu'on vient de poser est, PAR CONSTRUCTION, resté mot pour mot son
+ * gabarit : le refus tombait donc à la PREMIÈRE naissance de tout orchestrateur — en affirmant
+ * « Rien n'a été créé », alors qu'un répertoire entier venait de l'être, non versé.
+ *
+ * C'est le seul chemin par lequel un orchestrateur naît sans qu'un humain touche un écran. Un
+ * diagnostic faux y envoie chercher un lieu qu'on croit inexistant, alors qu'il est là, à
+ * remplir. Le motif est celui que `fraicheur-gabarit.js` avait déjà fermé : un message dit ce
+ * qu'il a MESURÉ ; chaque appelant ajoute ce qu'il n'a pas touché, parce que lui seul le sait.
+ *
+ * ⚠️ ELLE EST PURE ET EXPORTÉE PARCE QUE LE CHEMIN RÉEL N'EST PAS ÉPROUVABLE SOUS TESTS. La
+ * cloison d'essais (`ligne-directe/src/cloison.js`) refuse toute lecture du trousseau à un
+ * processus descendant du lanceur — délibérément : un veilleur né sous tests se connecterait à
+ * l'espace de production. L'auto-pose ne peut donc pas aboutir dans un banc, et la contourner
+ * serait échanger une garde éprouvée contre un banc qui ment. Ce qui est décidable est donc
+ * décidé ici, et éprouvé ici.
+ *
+ * @param {string}  message    le refus rendu par la garde — relayé tel quel, jamais reformulé
+ * @param {boolean} poseFaite  cette commande vient-elle de poser ce lieu ?
+ * @param {string}  lieu       la racine du lieu
+ */
+export function avisSurLeLieuNonRenseigne({ message, poseFaite, lieu }) {
+  return poseFaite
+    ? `${message}\n` +
+      `  ⚠️ Le lieu VIENT D'ÊTRE POSÉ par cette commande, à « ${lieu} » — c'est pourquoi il porte\n` +
+      `     encore son gabarit. Il n'est pas versé.\n` +
+      `     Remplis-le, verse-le, puis relance : rien n'est à défaire.\n`
+    : `${message}\n  Rien n'a été créé par cette commande, et rien n'a été touché.\n`;
+}

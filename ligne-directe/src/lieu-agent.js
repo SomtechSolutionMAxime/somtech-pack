@@ -108,6 +108,57 @@ export function fichiersDuGabarit(depot, role) {
 export const GABARITS_DROITS = join('.claude', 'settings.json');
 
 /**
+ * CE QU'ON DIT D'UN LIEU INCOMPLET — et ce n'est PAS le même geste selon ce qui manque.
+ *
+ * ⚠️ LE DÉFAUT QUE CETTE FONCTION FERME A ÉTÉ INTRODUIT PAR LE LOT QUI L'ÉCRIT
+ * (T-20260826-0042). La liste de ce qu'un lieu doit porter se DÉRIVE du répertoire de
+ * gabarits : le jour où le gabarit gagne un fichier, TOUS les lieux déjà posés en manquent
+ * — dix-huit lieux vivants, mesurés le 2026-08-26 — et aucun d'eux n'a jamais pu l'avoir.
+ *
+ * Le message envoyait alors « mv <lieu> <lieu>.ecarte ». Sur un lieu VIVANT, ce geste emporte
+ * le `CONTEXTE.md` rempli à la main : la seule chose du lieu que personne ne peut
+ * reconstituer. Le message était exact sur ce qu'il avait mesuré, et il envoyait détruire —
+ * exactement le motif que ce dépôt a déjà payé avec un refus qui disait « dépose un jeton »
+ * sur un jeton en service.
+ *
+ * LA DISTINCTION SE MESURE, elle ne se devine pas :
+ *
+ *   • un OBLIGATOIRE manque → ce répertoire n'a jamais été un lieu, ou une pose a été
+ *     interrompue. Il n'y a rien à sauver : écarter reste le geste juste, et le retirer
+ *     rouvrirait le défaut d'origine (un répertoire vide relu comme un lieu posé) ;
+ *   • les obligatoires sont tous là → le gabarit a grandi depuis la pose. Le lieu est vivant,
+ *     son contexte est rempli, et le geste est de le METTRE À JOUR.
+ *
+ * ⚠️ ET AUCUNE COMMANDE DESTRUCTRICE NE FIGURE DANS LA SECONDE BRANCHE. Celui qui lit un
+ * message de refus a déjà un problème : il fait confiance, et il colle.
+ */
+export function messageLieuPartiel(etat, r) {
+  const manquants = etat.manquants.join(', ');
+  const obligatoiresManquants = GABARITS.filter((f) => etat.manquants.includes(f));
+
+  if (obligatoiresManquants.length === 0) {
+    return (
+      `« ${etat.racine} » a été posé par une version du pack qui ne portait pas encore ` +
+      `${manquants}. Tout ce qu'un lieu doit porter d'obligatoire y est ; ce qui manque a été ` +
+      `ajouté au gabarit depuis.\n` +
+      `  ⚠️ N'ÉCARTE PAS CE LIEU : il est vivant, et son « CONTEXTE.md » a été rempli à la ` +
+      `main — c'est la seule chose ici que personne ne peut reconstituer.\n` +
+      `  Le geste qui débloque : mets le lieu à jour (« npx @somtech-solutions/pack agent maj ` +
+      `${etat.racine.split('/').pop()} »), ce qui y dépose ce qui manque sans toucher à ce ` +
+      `qu'un humain y a écrit. Puis relance.`
+    );
+  }
+
+  return (
+    `« ${etat.racine} » existe mais n'est pas un lieu : il manque ${manquants}. ` +
+    `Un ${r.libelle} ouvert là n'aurait ni métier, ni moyens, ni permissions bornées. ` +
+    `Écarte ce reste (« mv ${etat.racine} ${etat.racine}.ecarte »), puis relance — cette commande ` +
+    `ne complète jamais un lieu à demi posé, elle ne saurait pas ce qu'un humain y a déjà changé. ` +
+    `On l'écarte plutôt qu'on ne le supprime, pour cette raison exacte : ce message ne sait pas non plus.`
+  );
+}
+
+/**
  * Fichiers d'environnement connus à la racine d'un dépôt.
  *
  * ⚠️ LEUR PRÉSENCE N'ATTESTE PLUS RIEN — c'est très exactement ce que T-20260815-0023 a fermé.
@@ -565,12 +616,7 @@ export async function preparerLieu({ depot, role, nom, verifierLigne, verifierVe
         racine: etat.racine,
         presents: etat.presents,
         manquants: etat.manquants,
-        message:
-          `« ${etat.racine} » existe mais n'est pas un lieu : il manque ${etat.manquants.join(', ')}. ` +
-          `Un ${r.libelle} ouvert là n'aurait ni métier, ni moyens, ni permissions bornées. ` +
-          `Écarte ce reste (« mv ${etat.racine} ${etat.racine}.ecarte »), puis relance — cette commande ` +
-          `ne complète jamais un lieu à demi posé, elle ne saurait pas ce qu'un humain y a déjà changé. ` +
-          `On l'écarte plutôt qu'on ne le supprime, pour cette raison exacte : ce message ne sait pas non plus.`,
+        message: messageLieuPartiel(etat, r),
       },
     };
   }
