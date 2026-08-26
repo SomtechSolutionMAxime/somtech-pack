@@ -42,7 +42,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,6 +57,11 @@ import {
   VERDICTS,
   SORTIES,
 } from '../src/garde-des-naissances.js';
+// ⚠️ LE VRAI LECTEUR DU REGISTRE, ET IL EST ICI POUR UNE RAISON — voir le banc du `ne_le`
+// ILLISIBLE en ③ : ce qui rend ce cas-là atteignable n'est pas une valeur, c'est une POSITION,
+// et la position est décidée par le TRI de ce lecteur-ci. Un tableau rangé à la main
+// prouverait un ordre que le monde ne produit pas.
+import { lireLesDeclarations } from '../src/declaration.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const DECISION = resolve(ICI, '..', 'src', 'garde-des-naissances.js');
@@ -530,6 +536,116 @@ test('un registre à plusieurs voix ne fait PAS refuser une frontière que perso
     const r = verdictDe([{ ...FAUTIF }], { registre: { declarations, illisibles: [] } });
     assert.equal(r.verdict, VERDICTS.NES_HORS_DISPOSITIF, 'la frontière en service n’est démentie par aucune des deux');
   }
+});
+
+/**
+ * ⚠️ UN REGISTRE FABRIQUÉ PAR SON VRAI LECTEUR, ET ÉCRIT À LA MAIN LÀ OÙ LE MONDE L’EXIGE.
+ *
+ * `inscrireLaDeclaration` est le SEUL écrivain de `ne_le` du dépôt, et il n’écrit que
+ * `quand.toISOString()` : un `ne_le` illisible demande une édition manuelle du fichier. On la
+ * fait donc à la main — et on le dit. C’est la gravité que ce lot a déjà choisi de fermer pour
+ * le fichier non-objet ; le standard appliqué ici est celui du lot lui-même.
+ *
+ * La LECTURE, elle, passe par la porte réelle. Ce n’est pas un détail de forme : ce qui rend le
+ * cas ci-dessous atteignable n’est pas la valeur du `ne_le`, c’est sa POSITION dans le registre,
+ * et la position est décidée par le tri de `lireLesDeclarations`.
+ */
+const registreReel = (fichiers) => {
+  const racine = mkdtempSync(join(tmpdir(), 'smtk-frontiere-'));
+  try {
+    for (const [nom, contenu] of fichiers) writeFileSync(join(racine, nom), JSON.stringify(contenu));
+    const lu = lireLesDeclarations({ racine });
+    assert.deepEqual(lu.illisibles, [], 'ces fichiers-ci sont des FAITS lisibles — un illégitime fausserait la mesure');
+    assert.equal(lu.declarations.length, fichiers.length, 'toutes les déclarations doivent être lues');
+    return lu.declarations;
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+};
+
+/** Un `ne_le` non vide et non analysable — la seule forme qui remonte EN TÊTE du registre. */
+const LILLISIBLE = Object.freeze({ nom: 'illisible', pane: 'w0:p9', espace: APRES, ne_le: 'zzz-pas-une-date' });
+
+test('🔴 UNE DÉCLARATION AU `ne_le` ILLISIBLE NE DEVIENT PAS « LA PLUS ANCIENNE » — sinon elle emporte l’épingle avec elle', () => {
+  // ════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LE TERME GARDÉ ICI, ET CE QU’IL COÛTE QUAND IL TOMBE. L’épingle ci-dessus retient la plus
+  // ancienne déclaration du registre et refuse si elle précède la frontière. Le terme qui ÉCARTE
+  // une déclaration non datable — `if (Number.isNaN(quand)) continue;` — n’était sollicité par
+  // AUCUN essai. Retiré, ou changé en `break`, la garde CESSE DE REFUSER : `NaN` s’installe comme
+  // « plus ancienne » (rien ne le remplace, `NaN < x` étant faux), puis `NaN < frontiere` est faux
+  // à son tour. Le geste d’entretien que ce fichier nomme — reculer `MISE_EN_SERVICE` « parce que
+  // la garde fait du bruit » — repasse en silence, au VERT.
+  //
+  // ⚠️ ET C’EST LA MOITIÉ NON GARDÉE D’UN MÊME CAS. `couvertureDeLaDeclaration`, l’AUTRE lecteur
+  // de `ne_le` du module, écarte exactement la même donnée (`!Number.isFinite(inscrite)`) et rend
+  // « indécidable » — tenu par un banc nommé. Deux lecteurs, un même cas : celui-ci échouait
+  // OUVERT là où l’autre échoue en refus de mesure. C’est la polarité qui compte, pas la symétrie.
+  // ════════════════════════════════════════════════════════════════════════════════════
+  const declarations = registreReel([
+    ['illisible.json', LILLISIBLE],
+    ['bonaventure.json', LA_PLUS_ANCIENNE],
+  ]);
+
+  // LE HARNAIS AVANT LA MESURE. Si l’illisible ne sort pas EN TÊTE, le terme n’est pas sollicité
+  // et le vert qui suivrait ne prouverait rien — on veut alors rougir ICI, pour la bonne raison.
+  assert.equal(
+    declarations[0].ne_le,
+    LILLISIBLE.ne_le,
+    'le tri décroissant doit placer le `ne_le` illisible EN TÊTE — c’est la POSITION qui rend le cas atteignable'
+  );
+
+  assert.throws(
+    () =>
+      verdictDe([{ ...FAUTIF }], {
+        registre: { declarations, illisibles: [] },
+        miseEnService: RECUL_ENTRE_LES_DEUX,
+      }),
+    (e) => {
+      assert.ok(
+        e instanceof FrontiereContredite,
+        `une déclaration au « ${LILLISIBLE.ne_le} » ne doit pas désarmer le recul à ${RECUL_ENTRE_LES_DEUX}`
+      );
+      // ⚠️ ET LE REFUS NOMME LA PLUS ANCIENNE DATABLE, pas l’illisible. Sans cette moitié, un
+      // refus rendu POUR l’illisible passerait pour bon.
+      assert.ok(
+        e.message.includes(LA_PLUS_ANCIENNE.ne_le),
+        `le refus doit citer la plus ancienne DATABLE (${LA_PLUS_ANCIENNE.ne_le}) — reçu : ${e.message}`
+      );
+      return true;
+    }
+  );
+});
+
+test('un `ne_le` illisible ne FABRIQUE pas de refus non plus — et vide ou absent trie en QUEUE, hors d’atteinte', () => {
+  // La moitié symétrique. Sans elle, un module qui refuserait DÈS QU’un `ne_le` est illisible
+  // ferait passer le banc ci-dessus au vert sans rien garder.
+  const declarations = registreReel([
+    ['illisible.json', LILLISIBLE],
+    ['vide.json', { nom: 'vide', pane: 'w0:p8', espace: APRES, ne_le: '' }],
+    ['absent.json', { nom: 'absent', pane: 'w0:p7', espace: APRES }],
+    ['bonaventure.json', LA_PLUS_ANCIENNE],
+    ['ristigouche.json', LA_PLUS_RECENTE],
+  ]);
+
+  // ⚠️ LA NUANCE MESURÉE, ET ELLE DIT POURQUOI CE BANC-CI PORTE « zzz… » ET PAS UN VIDE. Le tri
+  // est DÉCROISSANT sur la chaîne : un `ne_le` non vide et non analysable passe devant tout ISO
+  // et devient candidat « plus ancienne » ; vide et absent se comparent à la chaîne vide, tombent
+  // en QUEUE, et n’ont jamais pu emporter l’épingle. Qui remplacerait la valeur de ce banc par un
+  // vide croirait mesurer la même chose et ne mesurerait plus rien.
+  assert.equal(declarations[0].nom, 'illisible', 'un `ne_le` non vide et non analysable trie EN TÊTE');
+  assert.deepEqual(
+    declarations.slice(-2).map((d) => d.nom).sort(),
+    ['absent', 'vide'],
+    'un `ne_le` vide ou absent trie en QUEUE — il ne peut pas devenir « la plus ancienne »'
+  );
+
+  // … et la frontière EN SERVICE n’est démentie par aucune de ces cinq voix.
+  const r = verdictDe([{ ...FAUTIF }], { registre: { declarations, illisibles: [] } });
+  assert.equal(
+    r.verdict,
+    VERDICTS.NES_HORS_DISPOSITIF,
+    'un `ne_le` illisible ne DÉMENT rien : il ne doit pas faire refuser une frontière que personne ne conteste'
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
