@@ -90,6 +90,13 @@
 # SAUTÉ proprement quand il ne peut pas être honnête. Forcer le saut :
 # SOMTECH_SKIP_E2E=1
 #
+# ⚠️ ET UN BRAS PEUT SAUTER SEUL. Ce banc tourne aussi sur la chaîne d'intégration
+# (`.github/workflows/tests.yml` lance TOUS les `scripts/tests/*.sh`, sans liste
+# blanche, sur `ubuntu-latest`). `security` y est absent : le BRAS 2 — le seul qui
+# consulte le vrai binaire — se saute alors en le disant, et les bras 1, 3, 4 et 5
+# continuent de garder. Faire sauter le banc ENTIER là-dessus reviendrait à ne plus
+# rien garder à l'endroit qui compte le plus. Les sauts se comptent à part du vert.
+#
 # Usage : bash scripts/tests/test-auto-pose-reel.sh
 # ============================================================
 set -uo pipefail
@@ -109,9 +116,13 @@ NODE="$(command -v node)"
 [ -f "$ROLES" ]  || skip "ligne-directe/src/roles.js absent — pas de registre des rôles à lire"
 [ -d "${ROOT}/.claude/templates" ] || skip "aucun gabarit dans ce dépôt"
 
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SAUTS=0
 ok() { echo "  ✅ $1"; PASS=$((PASS+1)); }
 ko() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
+# ⚠️ UN BRAS SAUTÉ NE SE COMPTE PAS COMME RÉUSSI, et il se compte quand même.
+# Le noyer dans les ✅ ferait lire « tout est gardé » là où une garde ne s'est pas
+# exécutée — c'est ce qui laisse une couverture fondre sans qu'un chiffre bouge.
+saute() { echo "  ⏭️  $1"; SAUTS=$((SAUTS+1)); }
 
 # ⚠️ AUCUN PROCESSUS NE DOIT SURVIVRE À CE BANC — surtout pas un veilleur, qui est
 # l'incident même qui a fait poser la cloison. La mesure ne passe JAMAIS par le CLI
@@ -214,6 +225,32 @@ registre() {
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
+# LE MÉCANISME DONT TOUT LE BANC DÉPEND — ÉPROUVÉ, PAS SUPPOSÉ.
+#
+# La substitution passe par `--import` dans `NODE_OPTIONS` (node ≥ 20.6). Un node
+# plus ancien la REFUSE et sort aussitôt : chaque bras rougirait alors pour une
+# raison qui n'a aucun rapport avec le code éprouvé — le pire des rouges, celui
+# qui accuse l'objet quand c'est l'instrument qui a lâché.
+#
+# ⚠️ ON NE COMPARE AUCUN NUMÉRO DE VERSION : on fait le geste et on regarde s'il a
+# porté. Une borne de version dit ce qu'on croit du monde ; un essai dit ce que ce
+# node-ci fait.
+SONDE="${BAC}/sonde-import.mjs"
+printf 'process.env.SONDE_IMPORT_A_PORTE = "1";\n' > "$SONDE"
+if ! NODE_OPTIONS="--import file://${SONDE}" "$NODE" -e 'process.exit(process.env.SONDE_IMPORT_A_PORTE === "1" ? 0 : 3)' 2>/dev/null; then
+  skip "ce node ne porte pas « --import » dans NODE_OPTIONS ($("$NODE" --version)) — la substitution du trousseau serait inerte, et le banc ne peut pas être honnête sans elle"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OÙ LE CODE CHERCHE `security` — DEMANDÉ AU CODE, JAMAIS ÉCRIT ICI.
+#
+# ⚠️ UN LITTÉRAL « /usr/bin/security » DANS CE FICHIER SERAIT UNE SECONDE ÉCRITURE
+# DE LA RÈGLE. Le jour où `OUTILS` change de chemin, le banc mesurerait la présence
+# d'un binaire que le code n'appelle plus — et rendrait un verdict sur un objet
+# pour conclure sur un autre.
+CHEMIN_SECURITY="$("$NODE" --input-type=module -e "import {OUTILS} from '${ROOT}/ligne-directe/src/outils.js'; process.stdout.write(OUTILS.security.chemin);" 2>/dev/null)"
+
+# ═════════════════════════════════════════════════════════════════════════════
 echo "== Ce que le REGISTRE DES RÔLES dit, et c'est lui qui choisit les bras =="
 ROLES_AUTO="$(registre "import {rolesConnus, poseAutomatique} from '${ROLES}';
 process.stdout.write(rolesConnus().filter((r) => poseAutomatique(r)).join(' '));")"
@@ -283,15 +320,51 @@ fi
 # jetable — il cherche donc pour de vrai, et ne trouve rien pour de vrai. C'est
 # la vraie cause, pas un état simulé.
 echo "== BRAS 2 — le poste ne peut pas ouvrir de ligne : refus, et RIEN n'existe =="
-SORTIE="$(naitre nu "$NOM" --workspace w-inexistant --role "$ROLE_AUTO" --depot "$DEPOT")"
-CODE=$?
-[ "$CODE" -ne 0 ] && ok "la pose échoue (code ${CODE}, jamais 0)" || ko "🚨 la pose rend 0 sans ligne possible"
-case "$SORTIE" in
-  *"trousseau de ce poste"*) ok "le refus vient bien du TROUSSEAU, mesuré par le vrai « security »" ;;
-  *) ko "🚨 le refus ne parle pas du trousseau : $(printf '%s' "$SORTIE" | tr '\n' ' ' | cut -c1-200)" ;;
-esac
-[ ! -e "${DEPOT}/${DOSSIER_AUTO}" ] && ok "RIEN n'a été créé : « ${DOSSIER_AUTO} » n'existe pas" \
-  || ko "🚨 un lieu a été posé alors que la ligne ne pouvait pas s'ouvrir"
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# CE BRAS EST LE SEUL À CONSULTER LE VRAI BINAIRE, ET IL EST LE SEUL À SAUTER.
+#
+# `security` est un outil macOS. Sur la chaîne d'intégration (ubuntu-latest,
+# `.github/workflows/tests.yml`, qui lance TOUS les `scripts/tests/*.sh` sans
+# liste blanche), il n'existe pas au chemin fixe que `OUTILS` désigne.
+#
+# ⚠️ ET LE DANGER N'EST PAS UN ROUGE — C'EST UN VERT POUR LE MAUVAIS MOTIF.
+# MESURÉ le 2026-08-26, en faisant pointer `OUTILS.security.chemin` sur un chemin
+# inexistant (la CAUSE de la CI, pas une imitation de son état) : le banc rendait
+# 30/30. `chercherJeton` enveloppe l'`OutilIntrouvable` dans un `JetonIllisible`,
+# dont le message porte lui aussi « trousseau de ce poste ». Le bras passait donc
+# — en affirmant « mesuré par le vrai security » alors qu'aucun binaire n'avait
+# été lancé, et sur `jeton_illisible` là où il croit prouver `jeton_absent`.
+#
+# Deux conduites en découlent, et les deux sont nécessaires :
+#   1. quand le binaire n'est pas là, on SAUTE, et le saut se compte à part —
+#      une garde qui ne s'est pas exécutée n'est pas une garde qui a réussi ;
+#   2. quand il est là, on exige LE MOTIF et LE TÉMOIN — l'absence PROUVÉE, avec
+#      ce que `security` a effectivement répondu. Un `jeton_illisible` ne peut
+#      plus satisfaire ce bras, sur aucune plateforme.
+if [ ! -x "$CHEMIN_SECURITY" ]; then
+  saute "« ${CHEMIN_SECURITY:-le binaire du trousseau} » est absent de ce poste — l'absence PROUVÉE d'un jeton ne peut pas être mesurée ici, et un refus « je n'ai pas pu lancer l'outil » ne prouve pas la même chose"
+  saute "  (les bras 1, 3, 4 et 5 ne consultent pas ce binaire : ils passent par la substitution, ou refusent en amont)"
+else
+  SORTIE="$(naitre nu "$NOM" --workspace w-inexistant --role "$ROLE_AUTO" --depot "$DEPOT")"
+  CODE=$?
+  [ "$CODE" -ne 0 ] && ok "la pose échoue (code ${CODE}, jamais 0)" || ko "🚨 la pose rend 0 sans ligne possible"
+  # LE MOTIF, et pas seulement le sujet. `jeton_absent` est le verdict qui exige
+  # une preuve POSITIVE d'absence (code 44) ; `jeton_illisible` est le fourre-tout
+  # prudent. Les confondre ferait passer ce bras là où rien n'a été mesuré.
+  case "$SORTIE" in
+    *"(jeton_absent)"*) ok "le refus est « jeton_absent » — l'absence a été PROUVÉE, pas supposée" ;;
+    *) ko "🚨 le refus n'est pas « jeton_absent » : $(printf '%s' "$SORTIE" | tr '\n' ' ' | cut -c1-200)" ;;
+  esac
+  # LE TÉMOIN : le refus rapporte ce que le binaire a DIT. C'est ce qui distingue
+  # « security a répondu » de « security n'a jamais été lancé ».
+  case "$SORTIE" in
+    *"Ce que « security » a répondu"*) ok "et il rapporte ce que le vrai « ${CHEMIN_SECURITY} » a répondu — il a donc bien été lancé" ;;
+    *) ko "🚨 le refus ne rapporte rien du binaire : il n'a peut-être jamais été consulté" ;;
+  esac
+  [ ! -e "${DEPOT}/${DOSSIER_AUTO}" ] && ok "RIEN n'a été créé : « ${DOSSIER_AUTO} » n'existe pas" \
+    || ko "🚨 un lieu a été posé alors que la ligne ne pouvait pas s'ouvrir"
+fi
 
 # ═════════════════════════════════════════════════════════════════════════════
 # BRAS 3 — L'AUTO-POSE ABOUTIT. C'est la jointure que rien ne gardait.
@@ -417,5 +490,9 @@ echo "== Veilleurs vivants APRÈS le banc : ${VEILLEURS_APRES} (avant : ${VEILLE
   || ko "🚨 ${VEILLEURS_AVANT} → ${VEILLEURS_APRES} veilleur(s) : c'est l'incident même qui a fait poser la cloison"
 
 echo
-echo "Résultat : ${PASS} réussis, ${FAIL} échoués"
+if [ "$SAUTS" -gt 0 ]; then
+  echo "Résultat : ${PASS} réussis, ${FAIL} échoués, ${SAUTS} sautés (non mesurés — voir les ⏭️ ci-dessus)"
+else
+  echo "Résultat : ${PASS} réussis, ${FAIL} échoués"
+fi
 [ "$FAIL" -eq 0 ]
