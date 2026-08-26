@@ -666,8 +666,37 @@ async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
     rempli: false,
     ...compte,
     cause:
-      `${code} : ${remplies.length} story(s) remplie(s) sur ${stories.length} — ` + dits.join(' ; '),
+      `${code} : ${storiesQuiPortentLeNom(compte)} story(s) sur ${stories.length} portent désormais ` +
+      `le nom — ` +
+      dits.join(' ; '),
   };
+}
+
+/**
+ * LES STORIES QUI PORTENT DÉSORMAIS LE NOM — la seule définition, et elle sert DEUX fois.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 POURQUOI ELLE EXISTE. `remplies` EXCLUT les reprises ; or une reprise est poussée dans
+ * `reprises` APRÈS que l'`update` a abouti — le nom est bel et bien écrit. Deux endroits
+ * décidaient chacun de leur côté ce que « rempli » voulait dire, et ils ne disaient pas la
+ * même chose :
+ *
+ *   · le compte imprimait `remplies.length` sur `stories.length` — un numérateur qui exclut
+ *     les reprises sur un dénominateur qui les inclut. Une story vivante reprise donnait
+ *     « 0 story(s) remplie(s) sur 1 » alors qu'UNE écriture était partie. La ligne juste
+ *     au-dessus affirmait pourtant que « le compte porte son DÉNOMINATEUR et son UNITÉ ».
+ *
+ *   · `phraseDuMandatIncomplet` réunissait les deux termes à la main — et le terme `remplies`
+ *     n'était gardé par personne : retiré, l'écran disait « le mandat n'a pas reçu le nom de
+ *     son agent » sur un epic où des stories venaient de le recevoir.
+ *
+ * ⚠️ UNE SEULE DÉFINITION, PAS DEUX EXPRESSIONS COHÉRENTES. Deux copies d'une même règle
+ * divergent au premier changement de l'une — c'est très exactement ce qui vient de se produire
+ * ici. Le compte et la phrase demandent maintenant la même chose au même endroit, et un banc
+ * relie le chiffre imprimé aux `update` RÉELLEMENT partis (jamais à un nombre recopié).
+ */
+export function storiesQuiPortentLeNom(resultat) {
+  return (resultat?.remplies?.length ?? 0) + (resultat?.reprises?.length ?? 0);
 }
 
 /**
@@ -683,7 +712,7 @@ async function remplirLesStoriesDeLEpic({ code, nom, appelerMcp }) {
  * quatre vérifications affirmées d'un chef d'équipe (défaut ③).
  */
 export function phraseDuMandatIncomplet(mandat, resultat) {
-  const aEcrit = (resultat?.reprises?.length ?? 0) > 0 || (resultat?.remplies?.length ?? 0) > 0;
+  const aEcrit = storiesQuiPortentLeNom(resultat) > 0;
   const tete = aEcrit
     ? `le mandat ${mandat} n’a pas été rempli entièrement`
     : `le mandat ${mandat} n’a pas reçu le nom de son agent`;

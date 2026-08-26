@@ -1077,3 +1077,98 @@ test('UN TICKET DIRECT VIVANT QUI PORTE DÉJÀ LE MÊME NOM N’EST PAS UNE REPR
   assert.equal(r.reprises, undefined);
   assert.deepEqual(r.non_mesure, []);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 8 — LE COMPTE DIT-IL CE QUI EST PARTI ? — le numérateur et le dénominateur, sur la même
+//     population, et la phrase d'écran qui en dépend.
+//
+// 🔴 DEUX DÉFAUTS D'UNE MÊME RACINE : `remplies` EXCLUT les reprises, or une reprise est
+// poussée dans `reprises` APRÈS que l'`update` a abouti — le nom est bel et bien écrit.
+//
+//   ⑥ `${remplies.length} story(s) remplie(s) sur ${stories.length}` porte le dénominateur de
+//      l'AUTRE : 1 story vivante reprise rendait « 0 story(s) remplie(s) sur 1 » alors qu'UNE
+//      écriture était partie. La ligne juste au-dessus affirmait pourtant « Le compte porte son
+//      DÉNOMINATEUR et son UNITÉ ». Muté en `remplies.length + reprises.length`, la suite
+//      restait VERTE : aucun essai ne reliait le chiffre imprimé aux écritures réelles.
+//
+//   ⑦ `phraseDuMandatIncomplet` nomme TROIS états, dont « une story a été SAUTÉE ». Le terme
+//      `remplies.length > 0` de son prédicat n'était gardé par personne : retiré, la suite
+//      restait verte, et l'écran disait « le mandat n'a pas reçu le nom de son agent » sur un
+//      epic où deux stories venaient de le recevoir. Les deux seuls bancs qui l'appelaient
+//      portaient sur « reprise seule » et « rien écrit » — la population INTERMÉDIAIRE, le cas
+//      canonique, n'y arrivait jamais.
+//
+// ⚠️ CE QUE CES BANCS ÉPINGLENT N'EST PAS UN NOMBRE ÉCRIT À LA MAIN : c'est l'ÉGALITÉ entre le
+// chiffre rendu et les `update` RÉELLEMENT partis, mesurés sur le faux desk. Un banc qui
+// recopierait « 2 » se désarmerait avec le code ; celui-ci diverge dès que les deux divergent.
+
+/** Le premier nombre de la phrase de compte — ce que l'opérateur LIT, pas ce que la structure porte. */
+const compteLu = (cause) => {
+  const m = /:\s*(\d+)\s+story/.exec(String(cause ?? ''));
+  return m ? Number(m[1]) : null;
+};
+
+test('🔴 ⑥ LE CHIFFRE IMPRIMÉ EST LE NOMBRE D’ÉCRITURES PARTIES — pas le sous-ensemble qui exclut les reprises', async () => {
+  // Une seule story, vivante, portant le nom d'un autre : l'`update` PART, le nom EST écrit.
+  const stories = desStoriesDetaillees({ code: 'T-20260825-0011', status: 'in_progress', agent: 'bonaventure' });
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  const parties = misesAJour(appels).length;
+  assert.equal(parties, 1, 'contrôle du banc : une écriture est bien partie');
+  assert.equal(
+    compteLu(r.cause),
+    parties,
+    `le chiffre lu à l’écran doit être le nombre d’écritures parties (${parties}). Reçu : « ${r.cause} »`
+  );
+});
+
+test('🔴 ⑥ SUR TROIS STORIES — une reprise, une terminale, une libre : deux écritures, et l’écran doit dire deux', async () => {
+  const stories = desStoriesDetaillees(
+    { code: 'T-20260825-0011', status: 'in_progress', agent: 'bonaventure' }, // reprise → update
+    { code: 'T-20260825-0012', status: 'completed', agent: 'gaspesie' },      // terminale → sautée
+    { code: 'T-20260825-0013', status: 'new' }                                 // libre → update
+  );
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  const parties = misesAJour(appels).length;
+  assert.equal(parties, 2, 'contrôle du banc : deux écritures sont bien parties, la terminale n’est pas touchée');
+  assert.equal(
+    compteLu(r.cause),
+    parties,
+    `« ${r.cause} » — le lecteur doit y lire ${parties}, le nombre de noms RÉELLEMENT inscrits`
+  );
+  // ⚠️ ET LE DÉNOMINATEUR PORTE LA MÊME POPULATION que le numérateur : les stories du mandat.
+  assert.match(
+    r.cause,
+    new RegExp(`${parties}\\s+story\\(s\\)[^;]*?\\b${stories.length}\\b`),
+    `le dénominateur doit être les ${stories.length} stories du mandat. Reçu : « ${r.cause} »`
+  );
+});
+
+test('🔴 ⑦ DES STORIES REMPLIES ET UNE SAUTÉE — l’écran ne dit PAS « n’a pas reçu le nom »', async () => {
+  // ⚠️ LE CAS CANONIQUE, ET IL N'ARRIVAIT DANS AUCUN DES DEUX BANCS QUI APPELAIENT CETTE
+  // FONCTION : des noms sont PARTIS, et une story a été sautée. Dire « n'a pas reçu le nom de
+  // son agent » là-dessus est exactement la phrase que cette fonction existe pour empêcher.
+  const stories = desStoriesDetaillees(
+    { code: 'T-20260825-0011', status: 'new' },
+    { code: 'T-20260825-0012', status: 'in_progress' },
+    { code: 'T-20260825-0013', status: 'completed', agent: 'gaspesie' }
+  );
+  const { appelerMcp, appels } = unFauxDeskEpic({ stories });
+  const r = await declarerAuServiceDesk({ mandat: 'E-20260825-0002', nom: 'matapedia', appelerMcp });
+
+  assert.equal(misesAJour(appels).length, 2, 'contrôle du banc : deux noms sont bien partis');
+  assert.deepEqual(r.remplies, ['T-20260825-0011', 'T-20260825-0012']);
+  assert.deepEqual(r.reprises, [], 'AUCUNE reprise ici — c’est ce qui distingue ce cas du banc voisin');
+  assert.equal(r.rempli, false, 'une story sautée empêche le succès plein');
+
+  const dit = phraseDuMandatIncomplet('E-20260825-0002', r);
+  assert.doesNotMatch(
+    dit,
+    /n’a pas reçu le nom/,
+    `DEUX stories viennent de le recevoir. Reçu : « ${dit} »`
+  );
+  assert.match(dit, /pas été rempli entièrement/, 'l’état est « incomplet », pas « rien n’est parti »');
+});
