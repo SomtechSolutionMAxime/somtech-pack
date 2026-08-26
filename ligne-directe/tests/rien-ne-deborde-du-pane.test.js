@@ -1644,3 +1644,72 @@ test('LA BARRE GARDE LE MAXIMUM — entre « ça tient » et « ça ne se vide p
   // banc serait vert sans rien avoir mesuré. C'est le défaut qu'on vient de fermer ailleurs.
   assert.ok(paliers >= 4, `le balayage ne traverse que ${paliers} palier(s) — il n’éprouve presque rien`);
 });
+
+
+test('L’ORDRE DE RETRAIT EST ANCRÉ — pas les chiffres qui le produisent, l’ordre qu’ils produisent', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 J’AVAIS ANCRÉ LE BORD, PAS LA SUITE — et c’est la DEUXIÈME fois sur le même objet.
+  //
+  // `LE FAIT EST ANCRÉ, PAS DÉRIVÉ` ancre le MINIMUM de vitalité : son unicité, et son texte
+  // (« q quitter »). Il ne dit rien des AUTRES vitalités. L’ordre qu’elles décident était donc
+  // libre, et rien ne rougissait quand il changeait.
+  //
+  // ⚠️ MESURÉ : changer la vitalité de « / chercher » de 3 à 9 ne fait rougir AUCUN banc, et le
+  // raccourci DISPARAÎT de la barre à deux largeurs :
+  //
+  //     45 col   sain « ↑↓ naviguer  →← plier  / chercher  q quitter »
+  //              muté « ↑↓ naviguer  →← plier  q quitter »
+  //     60 col   sain « …  / chercher  r rafraîchir  q quitter »
+  //              muté « …  r rafraîchir  q quitter »
+  //
+  // C’est l’ordre de la maquette que le dirigeant a validée, décidé par un chiffre que rien ne
+  // garde. Même motif que les bancs qui gardaient les deux bords de la barre en laissant le
+  // milieu libre — un cran plus loin, sur le même objet.
+  //
+  // ⚠️ ON ANCRE L’ORDRE, PAS LES CHIFFRES. Une garde sur les vitalités se périmerait au premier
+  // réglage ; une garde sur l’ordre tient tant que la maquette tient. Les chiffres ne sont que
+  // le MOYEN — l’ordre est ce qui a été validé.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const ORDRE_DE_RETRAIT = [
+    'n non-pris seuls',
+    'a grouper par app/orchestrateur',
+    'r rafraîchir',
+    '/ chercher',
+    '→← plier',
+    '↑↓ naviguer',
+  ];
+
+  // ═══ ① CE QUI PART, DANS L’ORDRE — observé sur le rendu, en descendant en largeur.
+  const tous = RACCOURCIS_UN_A_UN.map((r) => r.texte);
+  const reste = new Set(tous);
+  const observe = [];
+  for (let largeur = 200; largeur >= 1; largeur -= 1) {
+    const barre = raccourcisPour(largeur);
+    for (const t of [...reste]) {
+      if (!barre.includes(t)) {
+        observe.push(t);
+        reste.delete(t);
+      }
+    }
+  }
+  assert.deepEqual(
+    observe,
+    ORDRE_DE_RETRAIT,
+    'l’ordre de retrait des raccourcis a changé. Si c’est voulu, mets-le à jour ICI — c’est le ' +
+      'seul endroit qui l’écrit, et c’est exprès : cet ordre est la maquette validée, pas un ' +
+      'effet de bord des vitalités.'
+  );
+
+  // ═══ ② ET LA SORTIE EST LA SEULE QUI RESTE — le bout de la suite, déjà ancré ailleurs, mais
+  // c’est ici qu’on voit qu’elle EST le dernier terme et pas un cas à part.
+  assert.deepEqual([...reste], [RACCOURCI_VITAL], 'la sortie n’est plus le dernier raccourci debout');
+
+  // ═══ ③ ET L’ORDRE COUVRE TOUT LE MANIFESTE — sinon un raccourci ajouté demain échapperait à
+  // cette garde sans que rien ne le dise, et on aurait ancré une suite incomplète.
+  assert.equal(
+    observe.length + reste.size,
+    tous.length,
+    `${observe.length + reste.size} raccourcis suivis sur ${tous.length} — un raccourci du ` +
+      'manifeste n’apparaît ni dans l’ordre de retrait ni dans ce qui reste'
+  );
+});

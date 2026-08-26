@@ -944,10 +944,40 @@ test('LA BARRE SE RÉTRACTE, ET SOUS LE SEUIL C’EST LE RENDU QUI TRANCHE — d
 
   const SEUIL = [...RACCOURCI_VITAL].length;
 
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LA BRANCHE « SOUS LE SEUIL » ÉTAIT UNE TAUTOLOGIE, ET C'ÉTAIT MON CONTRÔLE POSITIF.
+  //
+  // Elle découpait sa valeur dans l'objet qu'elle jugeait :
+  //
+  //     const vu = [...barre].slice(0, largeur).join('');
+  //
+  // Puis elle assertait sur `vu` que sa longueur tient dans `largeur` (vrai : c'est un slice de
+  // cette longueur), et que `barre` commence par `vu` (vrai : `vu` en est le début). Aucune ne
+  // pouvait échouer, quoi que `raccourcisPour` produise — Y COMPRIS RIEN.
+  //
+  // ⚠️ MESURÉ : en vidant la barre (borne de retrait `> 1` → `> 0`), elle rend la chaîne VIDE à
+  // 3, 5 et 8 colonnes. `rien-ne-deborde-du-pane.test.js` l'attrape ; CE BANC survivait. Deux
+  // instruments, le même défaut injecté, deux verdicts opposés.
+  //
+  // ⚠️ ET C'ÉTAIT LE CONTRÔLE QUE J'AVAIS ÉCRIT POUR QUE CETTE BRANCHE NE SOIT PAS UNE DISPENSE
+  // MUETTE. Je m'en suis prémuni en écrivant une dispense qui A L'AIR DE MESURER — pire que la
+  // muette, parce qu'elle se donne pour tenue.
+  //
+  // ⚠️ LE COÛT RÉEL EST UNE FAUSSE REDONDANCE : un lecteur voit le rendu sous le seuil gardé à
+  // DEUX endroits ; un seul instrument le garde. Deux gardes dont une est morte sont plus
+  // dangereuses qu'une seule — la seconde justifie de ne pas remplacer la première.
+  //
+  // LA FORME QUI TIENT : la valeur vient de l'AUTRE BOUT DE LA CHAÎNE — `rendreEcran`, qui
+  // compose et borne le pied — au lieu d'être découpée dans ce qu'on mesure.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const vueVide = { registre: { mesure: 'lu' }, orchestrateurs: [] };
+  const pieceRendue = (largeur) =>
+    rendreEcran({ vue: vueVide, etat: etatInitial(), lignes: [], largeur, hauteur: 4 }).at(-1).texte;
+
   for (const largeur of [110, 100, 80, 60, 40, 20, 10, SEUIL, SEUIL - 1, 3, 1]) {
     const barre = raccourcisPour(largeur);
-    // ═══ CE QUE LE LECTEUR VOIT — pas ce que la chaîne contient.
-    const vu = [...barre].slice(0, largeur).join('');
+    // ═══ CE QUE LE LECTEUR VOIT VRAIMENT — rendu par `rendreEcran`, pas découpé dans `barre`.
+    const vu = pieceRendue(largeur);
 
     if (largeur >= SEUIL) {
       assert.ok(
@@ -959,21 +989,41 @@ test('LA BARRE SE RÉTRACTE, ET SOUS LE SEUIL C’EST LE RENDU QUI TRANCHE — d
         `à ${largeur} colonnes, la barre en fait ${[...barre].length} — elle wrappe, donc elle fait DÉFILER`
       );
     } else {
-      // ⚠️ CONTRÔLE POSITIF DE L’IMPOSSIBILITÉ : on ne se contente pas de ne rien exiger, on
-      // PROUVE que rien ne pouvait être exigé — la sortie ne rentre dans aucun rendu de cette
-      // largeur. Sans cette ligne, la branche « sous le seuil » serait une dispense muette.
+      // ═══ CONTRÔLE POSITIF DE L'IMPOSSIBILITÉ — refait sur des valeurs INDÉPENDANTES.
+      //
+      // ⚠️ CELLE-CI PEUT ÊTRE FAUSSE, et c'est ce qui la distingue de celle qu'elle remplace :
+      // le raccourci vital ne rentre pas dans cette largeur. On le mesure sur le mot lui-même,
+      // pas sur ce que la barre en a fait.
       assert.ok(
-        largeur < SEUIL,
-        `${largeur} n’est pas sous le seuil — cette branche ne devrait pas s’appliquer`
+        [...RACCOURCI_VITAL].length > largeur,
+        `à ${largeur} colonnes, « ${RACCOURCI_VITAL} » TIENDRAIT — cette branche n’aurait pas dû s’appliquer`
       );
+
+      // ⚠️ ET L'ÉCRAN MONTRE QUAND MÊME QUELQUE CHOSE. C'est exactement ce que la tautologie ne
+      // gardait pas : une barre VIDE satisfaisait ses trois assertions.
       assert.ok(
-        [...vu].length <= largeur,
-        `même sous le seuil, ce qui s’affiche doit TENIR : « ${vu} » à ${largeur} colonnes`
+        vu.trim().length > 0,
+        `à ${largeur} colonnes, le pied est VIDE à l’écran — sous le seuil B dit TRONQUER, ` +
+          'jamais effacer, et le lecteur n’a plus rien du tout'
       );
-      // Et ce qui s’affiche reste un DÉBUT de la barre : on ne fabrique rien pour combler.
+
+      // ⚠️ ET CE QU'IL MONTRE VIENT DE LA BARRE — on ne fabrique rien pour combler. La
+      // comparaison porte sur DEUX objets calculés séparément : le pied rendu et la barre
+      // composée. Si l'un dérive de l'autre, ce banc redevient une tautologie.
+      //
+      // ⚠️ ON RETIRE LA MARQUE DE TRONCATURE AVANT DE COMPARER — `borner` remplace le dernier
+      // caractère par un point de suspension, donc le pied rendu (« q quitt… ») n'est PAS un
+      // préfixe littéral de la barre (« q quitter »). Mon premier jet l'exigeait quand même et
+      // a rougi ; c'est le rouge qui l'a dit, pas ma relecture.
+      const sansMarque = vu.trimEnd().replace(/…$/, '');
       assert.ok(
-        [...barre].join('').startsWith(vu),
-        `sous le seuil, l’écran montre autre chose que le début de la barre : « ${vu} »`
+        // ⚠️ ET ON N'EXIGE PAS QUE `sansMarque` SOIT NON VIDE : à 1 colonne le pied rend « … »
+        // et rien d'autre — il ne RESTE que la marque. C'est le cas limite, pas un défaut, et
+        // le prétendre serait exiger un faux. Ce qui garde ce cas-là est l'assertion du dessus :
+        // le pied n'est jamais vide.
+        barre.startsWith(sansMarque),
+        `à ${largeur} colonnes, le pied rendu (« ${vu.trimEnd()} ») n’est pas un début de la barre ` +
+          `composée (« ${barre} ») — l’écran montre autre chose que ce que la barre a décidé`
       );
     }
   }
