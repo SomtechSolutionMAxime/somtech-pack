@@ -2022,6 +2022,32 @@ export class Veilleur {
       });
   }
 
+  /**
+   * UNE RECONNEXION N'EST PAS UNE PANNE — et le journal ne le disait pas.
+   *
+   * 🔴 MESURÉ SUR LE JOURNAL DU POSTE (T-20260825-0101, 217 occurrences depuis le 5 août).
+   * Comptées en bloc, elles ressemblaient à une boucle. Séparées selon qu'elles suivent la
+   * précédente de plus ou de moins d'une minute, elles se rangent en DEUX RÉGIMES, et un
+   * seul est un défaut :
+   *
+   *   ISOLÉES — 2 à 8 par jour, tous les jours, quoi qu'il arrive. Les horodatages du
+   *   2026-08-26 (veilleur né à 00:49:15Z) : 05:49:26, 10:49:42, 15:49:54. TOUTES LES
+   *   5 HEURES PILE, à partir de la naissance. C'est le rafraîchissement périodique de
+   *   Slack Socket Mode : le protocole ferme, le client rouvre. RIEN À CORRIGER.
+   *
+   *   EN RAFALE — 5 à 7 en moins d'une minute. Elles n'apparaissent QUE les jours où
+   *   plusieurs veilleurs connectés coexistent : 53 le 11/08, 11 le 24/08, 12 le 25/08,
+   *   et ZÉRO le 26/08, premier jour à veilleur unique. Deux clients Socket Mode sur la
+   *   même app se coupent mutuellement — c'est le défaut, et il se répare en amont, dans
+   *   l'unicité (voir `placeTenue` et `occupantsDeLaPlace`, client.js), jamais ici.
+   *
+   * ⚠️ Ce n'est pas une preuve : l'établir demanderait de faire coexister deux veilleurs
+   * CONNECTÉS À SLACK, ce qui est un geste de production. La corrélation joue dans les deux
+   * sens (elle apparaît avec la coexistence, elle disparaît sans), et c'est tout.
+   *
+   * C'est écrit ici pour qu'un régime normal ne soit pas re-diagnostiqué comme une panne —
+   * il l'a déjà été une fois, et le compte en bloc est ce qui l'a permis.
+   */
   reconnecter(raison) {
     if (this.arrete) return;
     journaliser(`reconnexion dans ${Math.round(this.attente / 1000)}s — ${raison}`);
