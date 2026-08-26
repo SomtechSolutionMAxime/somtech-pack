@@ -147,6 +147,8 @@ import {
   RACCOURCI_VITAL,
   RACCOURCIS_UN_A_UN,
   raccourcisPour,
+  tronquer,
+  texteDeLigne,
 } from '../src/tui-vue-du-parc.js';
 import { texteDeProgression, avecProgression } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
@@ -1252,7 +1254,6 @@ test('LE DOUBLE DU TERMINAL EST CONFRONTÉ À UN VRAI ÉMULATEUR — et chaque c
     'le report survit au saut de ligne',
     'report armé puis imprimable',
     'effacement de rangée',
-    'séquence inconnue ignorée',
     'défilement',
   ];
   const couverts = new Set(cas.map((c) => c.quoi));
@@ -1352,5 +1353,227 @@ test('TOUT CE QUE LE DOUBLE EXPORTE A UN APPELANT — un orphelin a l’air d’
         'sans appelant a l’air d’un garde et n’en est pas. Branche-le, ou supprime-le avec la ' +
         'prose qui l’annonce.'
     );
+  }
+});
+
+
+test('LES FRONTIÈRES DU RENDU SONT INTERROGÉES, PAS SEULEMENT TRAVERSÉES', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 TROIS DÉFAUTS QUE HUIT TOURS DE REVUES N'AVAIENT PAS VUS, ET LE GESTE QUI LES A SORTIS.
+  //
+  // Une campagne de mutation ordinaire balaie des VALEURS : elle traverse une frontière sans
+  // jamais la mettre en cause. Muter le COMPARATEUR — `>` en `>=`, `<` en `<=` — est le seul
+  // geste qui l'interroge. Aucune mutation de ce lot ne l'avait fait ; quand on l'a fait,
+  // treize frontières sont ressorties, dont celles-ci.
+  //
+  // ⚠️ CHACUNE A ÉTÉ INSTRUITE SUR LE RENDU, PAS SUR LA SUITE : la mutation appliquée, les
+  // 10 788 sorties recalculées et comparées une à une. Une mutation qui ne change AUCUN rendu
+  // est une équivalence ; une qui en change un est un défaut, que la suite le voie ou non.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+
+  // ═══ ① RIEN NE S'ÉCRIT DANS ZÉRO COLONNE. `tronquer(texte, 0)` rendait `'…'` une fois muté —
+  // UN caractère là où il n'y a aucune place. C'est la classe de défaut du ticket, à l'endroit
+  // le plus extrême. Deux rendus changés, et rien ne les gardait.
+  for (const texte of ['abcdef', '', 'x', '🔴 rouge']) {
+    assert.equal(
+      tronquer(texte, 0),
+      '',
+      `\`tronquer(${JSON.stringify(texte)}, 0)\` écrit quelque chose dans ZÉRO colonne`
+    );
+    // ⚠️ ET LE VOISIN IMMÉDIAT NE CÈDE PAS NON PLUS : à 1 colonne, exactement 1 point de code.
+    if (texte !== '') {
+      assert.equal([...tronquer(texte, 1)].length, 1, `à 1 colonne, \`tronquer\` n’en rend pas un seul`);
+    }
+  }
+
+  // ═══ ② LA QUEUE D'UNE LIGNE NE S'ÉCRIT PAS QUAND IL N'Y A PAS LA PLACE. Muté, `texteDeLigne`
+  // ajoutait une espace de queue sous 2 colonnes — 26 rendus changés.
+  //
+  // ⚠️ ON MESURE LA LARGEUR RENDUE, pas la présence de la queue : c'est la propriété que le
+  // lecteur voit, et elle survit à toute recomposition future de la ligne.
+  for (const li of [
+    { titre: 'un chantier', profondeur: 0, suffixe: 'DÉCLARÉ' },
+    { titre: 'x', profondeur: 2, suffixe: 'y' },
+    { titre: 'sans suffixe', profondeur: 0 },
+  ]) {
+    for (let largeur = 0; largeur <= 40; largeur += 1) {
+      assert.ok(
+        [...texteDeLigne(li, largeur)].length <= largeur,
+        `à ${largeur} colonnes, la ligne écrit ${[...texteDeLigne(li, largeur)].length} caractères : ` +
+          JSON.stringify(texteDeLigne(li, largeur))
+      );
+    }
+  }
+
+  // ═══ ③ L'ORDRE DE RETRAIT À VITALITÉ ÉGALE — voulu, DOCUMENTÉ en toutes lettres, et gardé
+  // par rien. 1495 rendus changés par la mutation.
+  //
+  // Le code dit : « On retire le moins vital ; à vitalité égale, LE DERNIER de la liste. » Le
+  // dernier est donc RETIRÉ EN PREMIER — c'est le PREMIER des ex æquo qui survit. Muté, l'ordre
+  // s'inverse, et la barre affiche autre chose à toutes les largeurs intermédiaires. L'ordre de
+  // la maquette est celui que le dirigeant a validé ; il ne se décide pas par un accident de
+  // comparateur.
+  //
+  // ⚠️ J'AI ÉCRIT CETTE ASSERTION À L'ENVERS DU PREMIER COUP, et c'est le rouge qui l'a dit. Je
+  // lisais « à vitalité égale, le dernier de la liste » comme « le dernier RESTE », alors que la
+  // phrase porte sur ce qu'on RETIRE. Encore une intention supposée à la place du comportement :
+  // la mesure a tranché en une ligne ce que ma lecture avait inversé.
+  //
+  // ⚠️ ON N'ÉCRIT PAS LA BARRE ATTENDUE EN DUR — elle changerait à chaque retouche de maquette.
+  // On énonce la RÈGLE : à vitalité égale, celui qui reste est le plus loin dans le manifeste.
+  const parVitalite = new Map();
+  for (const r of RACCOURCIS_UN_A_UN) {
+    if (!parVitalite.has(r.vital)) parVitalite.set(r.vital, []);
+    parVitalite.get(r.vital).push(r);
+  }
+  const exAequo = [...parVitalite.values()].filter((g) => g.length > 1);
+  assert.ok(
+    exAequo.length > 0,
+    'le manifeste ne porte plus AUCUN ex æquo de vitalité — cette règle n’a plus d’objet, et ce ' +
+      'banc ne mesure plus rien : retire-le ou retrouve un cas'
+  );
+
+  for (const groupe of exAequo) {
+    const dernier = groupe[groupe.length - 1];
+    const avantDernier = groupe[groupe.length - 2];
+    // La largeur où le groupe se fait retirer : on la CHERCHE, en descendant.
+    let vueAvecAvantDernier = false;
+    let vueSansDernier = false;
+    for (let largeur = 200; largeur >= 1; largeur -= 1) {
+      const barre = raccourcisPour(largeur);
+      const aDernier = barre.includes(dernier.texte);
+      const aAvant = barre.includes(avantDernier.texte);
+      // ⚠️ LA RÈGLE, ÉNONCÉE COMME UNE IMPLICATION : si le DERNIER des ex æquo est encore là,
+      // l'avant-dernier l'est forcément — puisque le dernier part EN PREMIER.
+      assert.ok(
+        !aDernier || aAvant,
+        `à ${largeur} colonnes, « ${dernier.texte} » est là et « ${avantDernier.texte} » ne l’est ` +
+          `pas — à vitalité égale (${groupe[0].vital}), c’est le DERNIER de la liste qui est retiré ` +
+          `EN PREMIER : ${JSON.stringify(barre)}`
+      );
+      if (aAvant && !aDernier) vueSansDernier = true;
+      if (aAvant) vueAvecAvantDernier = true;
+    }
+    // ⚠️ ET LES DEUX ÉTATS SE PRODUISENT VRAIMENT dans le balayage — sinon l'implication
+    // ci-dessus serait vraie par vacuité, et on aurait écrit une assertion morte.
+    assert.ok(
+      vueAvecAvantDernier,
+      `« ${avantDernier.texte} » n’apparaît à AUCUNE largeur — l’implication est vraie par vacuité`
+    );
+    assert.ok(
+      vueSansDernier,
+      `« ${dernier.texte} » n’est retiré à AUCUNE largeur avant « ${avantDernier.texte} » — ` +
+        'le balayage ne traverse jamais le moment où la règle s’applique'
+    );
+  }
+});
+
+
+test('LA PRODUCTION N’ÉMET QUE DES SÉQUENCES BIEN FORMÉES — la frontière de ce que le double couvre', () => {
+  // 🔴 CE BANC REMPLACE UNE CAPACITÉ QUE LE DOUBLE NE SAIT PAS TENIR. Il ne modélise pas les
+  // séquences CSI TRONQUÉES : un vrai terminal les garde en attente, lui imprime leurs
+  // paramètres. J’ai essayé de le corriger et j’ai inventé un mécanisme dont je n’avais pas la
+  // spec — 45 écarts sur un tirage.
+  //
+  // ⚠️ PLUTÔT QUE DE MODÉLISER À L’AVEUGLE, ON GARDE LA FRONTIÈRE : tout ce que le TUI écrit
+  // reste dans le sous-ensemble que le double a été confronté à tenir. Le jour où quelqu’un
+  // ajoute une séquence tronquée ou exotique, c’est ICI que ça rougit — avant que le double ne
+  // se mette à mentir en silence.
+  const source = readFileSync(new URL('../src/tui-boucle.js', import.meta.url), 'utf8');
+  const ESC = String.fromCharCode(27);
+
+  // Toutes les séquences que le module écrit, telles qu’elles sont ÉCRITES dans la source.
+  const sequences = [...source.matchAll(/\$\{ESC\}(\[[^`$'"\\]*)/g)].map((m) => m[1]);
+  assert.ok(sequences.length > 0, 'ce banc doit trouver des séquences — sinon il ne mesure rien');
+
+  for (const seq of sequences) {
+    // ⚠️ BIEN FORMÉE = `[`, des paramètres, PUIS un caractère final alphabétique. C’est ce que
+    // le double sait reconnaître, et le seul sous-ensemble éprouvé contre l’émulateur.
+    assert.match(
+      seq,
+      /^\[[0-9;?]*[A-Za-z]/,
+      `le module écrit ${JSON.stringify(ESC + seq)} — cette séquence n’est pas une CSI bien formée, ` +
+        'et le double du terminal n’a jamais été confronté à elle. Soit tu la ramènes dans le ' +
+        'sous-ensemble éprouvé, soit tu étends le double ET son corpus AVANT de l’écrire.'
+    );
+  }
+
+  // ⚠️ ET AUCUN `ESC` NU : un ESC qui n’ouvre pas une séquence sort du sous-ensemble.
+  const nus = [...source.matchAll(/\$\{ESC\}(?!\[)/g)].length;
+  assert.equal(nus, 0, `le module écrit ${nus} ESC qui n’ouvrent aucune séquence`);
+});
+
+test('CHAQUE MÉCANISME DU DOUBLE EST ATTEINT PAR LE CORPUS — un nom rassure, un passage se compte', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 DEUX ÉTAGES DU MÊME DÉFAUT, TROUVÉS DANS LE MÊME GESTE — ET DANS LES DEUX, CE QUI
+  // RASSURAIT ÉTAIT UN NOM.
+  //
+  //   ① la garde de la liste comptait les NOMS DE CAPACITÉ. « effacement de rangée » en
+  //      recouvrait TROIS (`[K`, `[1K`, `[2K`) ; un seul cas suffisait à faire passer la ligne,
+  //      et `[1K` n’a JAMAIS été confronté — zéro cas sur 412.
+  //   ② le corpus portait un cas NOMMÉ « séquence inconnue ignorée » qui n’éprouvait pas ce
+  //      mécanisme : son `ESC[31m` matche la regex, donc il passait par le chemin RECONNUE. Le
+  //      nom du cas mentait sur ce qu’il éprouve.
+  //
+  // ⚠️ UN COMPTEUR DE PASSAGES NE PEUT PAS ÊTRE TROMPÉ PAR UN NOM. C’est pourquoi ce banc
+  // compte ce que le corpus fait TOURNER, et non ce qu’il prétend couvrir.
+  //
+  // ⚠️ ET IL RAPPORTE LES BRANCHES FAIBLES SANS LES FAIRE ROUGIR : un mécanisme à un seul
+  // passage n’est pas beaucoup mieux qu’à zéro — il est éprouvé par un cas dont rien ne dit
+  // qu’il est représentatif. Le seuil de rougissement reste ZÉRO ; le rapport dit combien
+  // chacun en a, pour qu’on voie venir le prochain.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const cas = JSON.parse(readFileSync(new URL('./aide/terminal-cas-pyte.json', import.meta.url), 'utf8'));
+  const source = readFileSync(new URL('./aide/terminal.js', import.meta.url), 'utf8');
+
+  // Les MÉCANISMES, reconnus dans la source du double par ce qui les distingue les uns des
+  // autres — pas par un nom qu’on leur donnerait à côté.
+  const MECANISMES = [
+    ['écriture imprimable', /String\.fromCodePoint/],
+    ['report de retour à la ligne', /if \(col >= cols\)/],
+    ['retour chariot', /t\[i\] === '\\r'/],
+    ['saut de ligne', /t\[i\] === '\\n'/],
+    ['effacement [2K', /m\[1\] === '2'/],
+    ['effacement [1K', /m\[1\] === '1'/],
+    ['effacement [K', /else rangees\[ligne\] = r\.slice\(0, col\)/],
+    ['complément de rangées', /rangees\.length < rows/],
+    ['défilement', /slice\(-rows\)/],
+  ];
+  for (const [nom, motif] of MECANISMES) {
+    assert.match(source, motif, `le mécanisme « ${nom} » n’existe plus dans le double — ce banc le cherche encore`);
+  }
+
+  // ═══ ON COMPTE LES PASSAGES, en rejouant le corpus à travers une copie instrumentée.
+  const compte = Object.fromEntries(MECANISMES.map(([n]) => [n, 0]));
+  for (const c of cas) {
+    const ESC = String.fromCharCode(27);
+    const flux = c.ecrits.join('');
+    // ⚠️ ON N’INSTRUMENTE PAS LE DOUBLE : on reconnaît, sur le FLUX, ce qu’il devra faire. Un
+    // compteur posé DANS le double se désarmerait avec lui ; celui-ci vit à côté.
+    if (/[^\u0000-\u001f]/.test(flux.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, ''))) compte['écriture imprimable'] += 1;
+    if (flux.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '').replace(/[\r\n]/g, '').length > c.cols) compte['report de retour à la ligne'] += 1;
+    if (flux.includes('\r')) compte['retour chariot'] += 1;
+    if (flux.includes('\n')) compte['saut de ligne'] += 1;
+    if (flux.includes(`${ESC}[2K`)) compte['effacement [2K'] += 1;
+    if (flux.includes(`${ESC}[1K`)) compte['effacement [1K'] += 1;
+    if (/\u001b\[K/.test(flux)) compte['effacement [K'] += 1;
+    const rendu = ecranApresEcritures(c.ecrits, c.cols, c.rows);
+    if (rendu.filter((l) => l === '').length > 0) compte['complément de rangées'] += 1;
+    if (c.rows < 6) compte['défilement'] += 1;
+  }
+
+  const faibles = [];
+  for (const [nom, n] of Object.entries(compte)) {
+    if (n > 0 && n < 5) faibles.push(`${nom} (${n})`);
+    assert.ok(
+      n > 0,
+      `le mécanisme « ${nom} » n’est atteint par AUCUN des ${cas.length} cas du corpus — il est ` +
+        'déclaré, jamais confronté à l’émulateur, et son nom seul le fait passer pour éprouvé. ' +
+        'Capture des cas qui le font tourner, ou retire-le du double.'
+    );
+  }
+  // ⚠️ LES FAIBLES NE FONT PAS ROUGIR — elles s’écrivent, pour qu’on voie venir le prochain zéro.
+  if (faibles.length > 0) {
+    console.log(`    ⚠️ mécanismes faiblement couverts : ${faibles.join(' · ')}`);
   }
 });

@@ -88,8 +88,18 @@
  *
  *     auto-wrap · ligne vide · retour chariot · retour chariot désarme le report ·
  *     saut de ligne · le report survit au saut de ligne · report armé puis imprimable ·
- *     effacement de rangée (`[K`, `[1K`, `[2K` — trois portées distinctes) ·
- *     séquence inconnue ignorée · défilement
+ *     effacement de rangée (`[K`, `[1K`, `[2K` — trois portées distinctes) · défilement
+ *
+ * 🔴 « SÉQUENCE INCONNUE IGNORÉE » A ÉTÉ RETIRÉE DE CETTE LISTE, ET C'EST UN CORRECTIF.
+ * Le double sait avaler un `ESC` suivi d'un caractère — mesuré conforme. Il ne sait PAS traiter
+ * une séquence CSI **tronquée** (`ESC[12` sans caractère final) : un vrai terminal la garde en
+ * attente, ce double imprime ses paramètres. J'ai essayé de le modéliser et j'ai INVENTÉ un
+ * mécanisme (« une CSI tronquée avale tout le reste ») qui a produit 45 écarts sur un tirage.
+ *
+ * ⚠️ ON NE MODÉLISE PAS CE DONT ON N'A PAS LA SPEC, et on ne prétend pas le comprendre. La
+ * frontière est GARDÉE à la place : le banc `LA PRODUCTION N'ÉMET QUE DES SÉQUENCES BIEN
+ * FORMÉES` vérifie que rien de ce que le TUI écrit ne sort du sous-ensemble éprouvé ici.
+ * Le jour où la production émettrait une CSI tronquée, c'est ce banc-là qui rougirait.
  *
  * ⚠️ CE QU'IL NE COMPREND PAS, ET NE PRÉTEND PAS COMPRENDRE : les couleurs, l'écran alternatif,
  * le curseur adressable, et les caractères HORS BMP — l'émulateur de référence rompt sur ces
@@ -164,7 +174,23 @@ export function ecranApresEcritures(ecrits, cols, rows) {
           i += m[0].length + 1;
           continue;
         }
-        i += 1;
+        // 🔴 UNE SÉQUENCE QUE LA REGEX NE RECONNAÎT PAS ÉTAIT À MOITIÉ IMPRIMÉE — mesuré contre
+        // l'émulateur, sur un geste que mon corpus ne produisait JAMAIS :
+        //
+        //     `ab` ESC `Xcd`   émulateur « abcd »   ce double « abXcd »
+        //     `ab` ESC `[`     émulateur « ab »     ce double « ab[  »
+        //
+        // Il n'avalait que l'ESC et imprimait la suite. Un vrai terminal avale ESC + le
+        // caractère qui le suit ; et une séquence CSI TRONQUÉE reste EN ATTENTE — rien de ce
+        // qui la compose n'atteint l'écran.
+        //
+        // ⚠️ ET MA NOTE DÉCLARAIT « séquence inconnue IGNORÉE ». Elle ne l'était pas : elle
+        // était à moitié imprimée. Une capacité annoncée que le corpus n'atteignait pas.
+        // ⚠️ ESC + LE CARACTÈRE QUI LE SUIT, AVALÉS — et rien de plus. Ma première correction
+        // ajoutait « une CSI tronquée avale tout le reste du flux » : une INVENTION, dont je
+        // n'avais pas la spec. Elle a produit 45 écarts sur un tirage élargi. Retirer la
+        // reconstruction suffit : les deux cas mesurés tombent juste sans elle.
+        i += 2;
         continue;
       }
       // Points de code, pas unités UTF-16 — un hors-BMP occupe UNE colonne.
