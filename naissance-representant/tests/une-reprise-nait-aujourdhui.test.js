@@ -132,3 +132,35 @@ test('LA NAISSANCE NON DONNÉE VAUT REFUS — le défaut d’un paramètre absen
   assert.equal(r.comptes.nonMesures, 1, 'l’absence de source s’est lue comme « rien à signaler »');
   assert.equal(r.verdict, VERDICTS.ZONES_NON_MESUREES);
 });
+
+/**
+ * 🔴 UN PANE DONT LA SESSION N'A PAS D'IDENTIFIANT N'EN REÇOIT PAS UN INVENTÉ.
+ *
+ * herdr rend des panes dont `agent_session` existe SANS porter de `value` — les harnais de ce
+ * dépôt en fabriquaient encore récemment. Si `identifiantDeSessionDuPane` leur donnait une
+ * valeur de repli, tous la partageraient : dater UNE session daterait TOUS les agents sans
+ * identifiant, avec la naissance de quelqu'un d'autre. Un agent né hier passerait pour né
+ * aujourd'hui, ou l'inverse — et l'inverse est vert.
+ *
+ * ⚠️ TROUVÉ PAR MUTATION, PAS PAR RELECTURE : remplacer `?.value` par `?.value ?? 'x'` laissait
+ * la suite entière au vert. Le chemin existait, il passait, il se lisait donc comme couvert.
+ */
+test('🔴 UN PANE SANS IDENTIFIANT DE SESSION N’EMPRUNTE PAS LA NAISSANCE D’UN AUTRE', () => {
+  const sansIdentifiant = pane({
+    pane_id: 'w7:p7',
+    agent_session: { agent: 'claude' }, // herdr en rend : présent, mais sans `value`
+  });
+  const r = juger({
+    panes: [pane({ pane_id: 'w1:p1' }), sansIdentifiant],
+    naissances: naissancesLues([['sess-de-la-reprise', FRONTIERE + 9 * 3600 * 1000]]),
+  });
+
+  assert.equal(r.comptes.parcVivant, 2);
+  assert.equal(r.comptes.nonMesures, 1, 'un pane sans identifiant a reçu une date qui n’est pas la sienne');
+  assert.equal(r.comptes.prises, 1, 'seul l’agent RÉELLEMENT daté devait être jugé');
+  assert.match(
+    r.texte, /w7:p7/,
+    'l’agent qu’on n’a pas su dater n’est pas nommé — un compte ne se corrige pas, on va voir un agent'
+  );
+  assert.match(r.texte, /aucun identifiant de session Claude/);
+});
