@@ -48,7 +48,7 @@ import { spawn } from 'node:child_process';
 
 import { aucunGesteQuiDetruit } from './aide/gestes-qui-detruisent.js';
 
-let Veilleur, passerLaMain;
+let Veilleur, passerLaMain, placeTenue;
 let racine;
 let compteur = 0;
 
@@ -59,7 +59,7 @@ before(async () => {
   racine = mkdtempSync(join(tmpdir(), 'ld-unicite-'));
   process.env.LIGNE_DIRECTE_RACINE = racine;
   ({ Veilleur } = await import('../src/veilleur.js'));
-  ({ passerLaMain } = await import('../src/client.js'));
+  ({ passerLaMain, placeTenue } = await import('../src/client.js'));
 });
 
 after(() => {
@@ -294,4 +294,36 @@ test('QUAND LE COMPTE EST IMPOSSIBLE, LA RELÈVE LE DIT — elle n’invente ni 
     process.env.PATH = cheminReel;
     if (neuf) await tuer(neuf);
   }
+});
+
+test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, et elle rend « tenue »', { timeout: 5000 }, async () => {
+  // ⚠️ CE BANC FERME UNE ISSUE, IL NE REJOUE PAS LA CHAÎNE. Substituer le TEMPS ne marche
+  // pas : mesuré, la prise tranche 30 fois sur 30 avant le minuteur, même réglé à zéro — un
+  // banc qui baisserait la borne serait vert sans jamais toucher la branche qu'il prétend
+  // éprouver. On substitue donc UN point nommé, le transport de la prise, et la seule issue
+  // restante devient le minuteur.
+  //
+  // ⚠️ ET C'EST LE SEUL BANC DE CE FICHIER QUI SUBSTITUE QUOI QUE CE SOIT À LA PRISE. Les six
+  // autres passent par le vrai `connect` — vérifié par mutation : remplacer le transport par
+  // DÉFAUT par cette même prise muette les fait rougir.
+  let ferme = 0;
+  const priseQuiNeConclutJamais = () => ({
+    on() {}, // ni « connect », ni « error » : rien ne viendra jamais de ce côté-là
+    destroy() {
+      ferme += 1;
+    },
+  });
+
+  const debut = Date.now();
+  const verdict = await placeTenue(join(racine, 'peu-importe.sock'), { borne: 60, brancher: priseQuiNeConclutJamais });
+  const ecoule = Date.now() - debut;
+
+  // 1. ELLE REND. Sans le minuteur, la promesse ne se résoudrait jamais : `placeTenue`
+  // pendrait, et `passerLaMain` avec elle. Une étape qui pend ne rougit jamais — c'est la
+  // borne de ce banc (`timeout`) qui transforme cette attente-là en échec visible.
+  // 2. ELLE REND « TENUE ». Le doute penche du côté prudent : « je n'ai pas pu savoir » ne
+  // doit JAMAIS autoriser un second veilleur à effacer le socket d'un vivant.
+  assert.equal(verdict, true, 'un doute non résolu doit pencher du côté « la place est tenue », jamais du côté qui ouvre la porte à un double');
+  assert.ok(ecoule >= 60, `le verdict doit venir DU MINUTEUR, pas d'un raccourci — rendu en ${ecoule} ms pour une borne de 60 ms`);
+  assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte, même quand c’est le minuteur qui tranche');
 });

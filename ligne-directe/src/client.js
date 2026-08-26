@@ -212,12 +212,24 @@ const dodo = (ms) => new Promise((r) => setTimeout(r, ms));
  * que par une saturation dépendante de la machine, et une garde qu'on ne peut pas éprouver
  * ne garde rien.
  *
- * ⚠️ ET LA BRANCHE DU MINUTEUR CI-DESSOUS EST, DE FAIT, INATTEIGNABLE — l'épreuve par
- * mutation le dit : la retourner ne fait rougir aucun banc. Mesuré, la prise tranche 30 fois
- * sur 30 avant le minuteur, même réglé à zéro. Elle reste comme filet, et son sens est écrit
- * juste au-dessus ; elle n'est PAS gardée.
+ * ⚠️ LE MINUTEUR S'ÉPROUVE, MAIS PAS PAR LE TEMPS. Mesuré, la prise tranche **30 fois sur
+ * 30** avant lui, même réglé à zéro : un banc qui jouerait sur la borne serait vert sans
+ * jamais toucher la branche. Ce qui la rend atteignable, c'est de fermer l'AUTRE issue — une
+ * prise qui ne conclut jamais. D'où `brancher`, ci-dessous.
+ *
+ * ⚠️ ET LA SUPPRIMER SERAIT PIRE QUE DE LA LAISSER NON GARDÉE : sans elle, si ni la prise ni
+ * l'erreur ne survient, la promesse ne se résout jamais — `placeTenue` PEND, et `passerLaMain`
+ * avec elle. On échangerait une branche muette contre une ATTENTE muette, et une étape qui
+ * pend ne rougit jamais. Le banc exige donc les deux faits : qu'elle RENDE, et qu'elle rende
+ * « tenue » — le doute ne doit jamais pencher du côté qui autorise un second veilleur.
  */
-export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000 } = {}) {
+export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000, brancher = connect } = {}) {
+  // ⚠️ `brancher` EXISTE POUR QUE LA BRANCHE DU MINUTEUR SOIT ÉPROUVABLE, et pour rien
+  // d'autre — le vrai transport est le défaut, et c'est lui que prennent tous les appels du
+  // dépôt. Même raison que `reveiller` dans `passerLaMain` : sans joint, le seul moyen
+  // d'atteindre ce chemin serait de saturer une file d'attente, c'est-à-dire de faire
+  // dépendre une garde de la machine qui l'exécute. Un banc substitue UN point nommé — la
+  // prise qui ne conclut jamais — et la seule issue restante devient le minuteur.
   // ⚠️ PAS DE RACCOURCI « le fichier n'existe pas, donc personne » — il y en avait un, et
   // l'épreuve par mutation l'a rendu SURVIVANT : le retirer ne faisait rougir aucun banc,
   // parce que la connexion échoue de toute façon (`ENOENT`) et rend le même verdict. Une
@@ -236,7 +248,7 @@ export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000 } = {}) 
       }
       resolve(verdict);
     };
-    const flux = connect(cheminSocket);
+    const flux = brancher(cheminSocket);
     const minuteur = setTimeout(() => trancher(true), borne);
     minuteur.unref?.();
     flux.on('connect', () => trancher(true));
