@@ -84,7 +84,7 @@ import { homedir } from 'node:os';
 
 import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
 import { plafonner, PLAFOND_SERVICEDESK } from './plafond.js';
-import { rolesConnus, role as roleDe } from './roles.js';
+import { rolesConnus, role as roleDe, meneUnChantier } from './roles.js';
 import { roleDuLieu as roleDuLieuReel } from './lieu-agent.js';
 
 /** La règle de conduite, écrite une fois, rendue avec la vue. */
@@ -258,6 +258,32 @@ export function roleEtabli(agent) {
   const r = agent?.role;
   if (r && typeof r === 'object') return r.mesure === 'établi' && r.nom ? r.nom : null;
   return typeof r === 'string' && r ? r : null;
+}
+
+/**
+ * CE RÔLE EST-IL UNE TÊTE DE HIÉRARCHIE DANS CETTE VUE — c'est-à-dire mène-t-il un chantier,
+ * sous le code duquel des epics et des stories se rangent ?
+ *
+ * ⚠️ C'EST LE REGISTRE QUI TRANCHE, PLUS UNE COMPARAISON LITTÉRALE (T-20260826-0076, point 6).
+ * MESURÉ AVANT CE LOT : `roleEtabli(a) !== 'orchestrateur'` et `l?.role !== 'orchestrateur'`,
+ * deux fois. Le module ÉCRIVAIT pourtant déjà la vraie règle, quelques lignes plus bas : « seul
+ * le rôle « orchestrateur » en porte un [un code de chantier] (un représentant a pour mandat un
+ * nom de client) ». C'est `mandat_designe` — aucune clé n'a été ajoutée pour ces deux sites.
+ *
+ * ⚠️ ET ELLE NE LÈVE PAS SUR UN RÔLE QU'ELLE NE CONNAÎT PAS, contrairement à `meneUnChantier`
+ * qu'elle enveloppe. C'est la leçon déjà payée par `recensement.js` : « un registre qui meurt
+ * entier parce qu'UNE entrée est inclassable est le contraire de sa règle ». Cette vue est en
+ * LECTURE SEULE ; un rôle hors table n'est pas une tête de hiérarchie, et il n'y a rien à
+ * décider d'autre. Le fait qu'il soit hors table est déjà rendu par le recensement, qui le
+ * mesure et le dit — on ne le remesure pas ici pour en mourir.
+ */
+function teteDeHierarchie(nomDuRole) {
+  if (!nomDuRole) return false;
+  try {
+    return meneUnChantier(nomDuRole);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1664,7 +1690,7 @@ export async function laVueDuParc({
   // ═══ SOURCE 1 — LES ORCHESTRATEURS VIVANTS. Un pane porte le mandat : on l'a MESURÉ.
   const mandatsVus = new Set();
   for (const a of agents) {
-    if (roleEtabli(a) !== 'orchestrateur') continue;
+    if (!teteDeHierarchie(roleEtabli(a))) continue;
     dansUneHierarchie.add(cleDeLAgent(a));
     const carte = carteDe(a);
     // ⚠️ CES TROIS FAITS SE CALCULENT UNE FOIS, ET SE POSENT SUR LES QUATRE SORTIES DE LA
@@ -1695,7 +1721,7 @@ export async function laVueDuParc({
   // Comparer des CHEMINS ferait apparaître onze fois le chantier dont un seul worktree est
   // ouvert ; c'est le mandat qui identifie le chantier, jamais le dossier qui le porte.
   for (const l of entreesDeLieux) {
-    if (l?.role !== 'orchestrateur') continue;
+    if (!teteDeHierarchie(l?.role)) continue;
     const cle = cleDuMandat(l?.mandat);
     if (!cle || mandatsVus.has(cle)) continue;
     mandatsVus.add(cle);

@@ -103,6 +103,42 @@ const ROLES = {
      */
     bapteme: 'code',
     /**
+     * PEUT-IL ÊTRE ATTACHÉ COMME PAIR À LA LIGNE D'UN CHANTIER QUI N'EST PAS LE SIEN ?
+     *
+     * ⚠️ C'EST UNE PERMISSION, PAS UNE DESCRIPTION — ET C'EST POURQUOI ELLE EST DÉCLARÉE PLUTÔT
+     * QUE DÉRIVÉE. Ce qu'elle ouvre est le fil TECHNIQUE d'un chantier mené par quelqu'un
+     * d'autre : `--au-gestionnaire` attache un pair, et tout ce qui se dit sur cette ligne lui
+     * est ensuite remis. `veilleur.js` le dit déjà de son côté — si le pair est le représentant
+     * d'un AUTRE client, c'est la fuite que le lot T-20260814-0093 ferme partout ailleurs.
+     *
+     * ⚠️ ON A MESURÉ LES CLÉS EXISTANTES AVANT D'EN AJOUTER UNE, et aucune ne dit CELLE-CI.
+     * `mandat_designe: 'client'` dit de quoi son mandat porte le nom ; `lignes` dit ce qu'il
+     * ouvre POUR LUI. Dériver la permission de l'une des deux la donnerait, en silence, à tout
+     * rôle futur qui leur ressemble — un conseiller au client aurait un mandat « client » sans
+     * avoir à lire le fil technique d'un chantier. Une permission qui s'accorde par ressemblance
+     * n'est pas une permission.
+     *
+     * ⚠️ ET LE REPLI REFUSE, comme celui de `pose_automatique` : un rôle muet n'est pas un pair.
+     * Se tromper en refusant coûte une ligne à rouvrir ; se tromper en acceptant livre un
+     * chantier à quelqu'un qu'il ne regarde pas.
+     */
+    pair_de_chantier: true,
+    /**
+     * COMMENT SA PAROLE EST ANNONCÉE quand elle tombe dans le pane de son pair.
+     *
+     * ⚠️ ÉCRIT AVEC SON ARTICLE, comme `libelle_pluriel` et pour la même raison : l'élision se
+     * tient par du code (« de l’orchestrateur »), le genre non (« du conseillère »). Le registre
+     * le dit déjà — une règle d'accord tenue par du code se trompe au premier rôle qu'elle n'a
+     * pas prévu.
+     *
+     * ⚠️ ET CE N'EST PAS `libelle`. Le cadre d'un pair a UNE fonction : dire que la parole ne
+     * vient NI du client NI du dirigeant (T-20260814-0093). « du gestionnaire client » la
+     * remplit ; « du représentant » — ce que `libelle` rendrait — la remplit moins bien pour un
+     * lecteur qui a un client au bout de sa propre ligne. Le texte reste donc celui qui a été
+     * écrit pour ce cadre, mot pour mot.
+     */
+    libelle_de_pair: 'du gestionnaire client',
+    /**
      * La nature de la ligne que ce rôle ouvre — `client` (canal privé, où le client parle)
      * ou `interne` (canal public, entre nous). Elle décide de la séquence d'ouverture que le
      * garde laisse passer : un orchestrateur qui ouvrirait une ligne `client` créerait un
@@ -190,6 +226,13 @@ const ROLES = {
     // et porte plusieurs mandats successifs — un code unique le décrirait mal par construction,
     // et son lieu porte déjà ce code.
     bapteme: 'riviere',
+    // IL N'EST PAS UN PAIR — il est le PORTEUR de la ligne d'un chantier, celui à qui on en
+    // attache un. `pair_de_chantier` est donc absent, et le repli refuse (voir la clé chez le
+    // représentant). Mesuré : `resoudrePair` refusait déjà un orchestrateur nommé par erreur en
+    // `--au-gestionnaire`, sous la forme littérale `role !== 'representant'`.
+    //
+    // Sa parole, elle, est annoncée quand elle arrive chez son pair.
+    libelle_de_pair: 'de l’orchestrateur du chantier',
     // UNE SEULE LIGNE, et son chantier est LIBRE : c'est le code du chantier qu'il mène, connu
     // de lui seul au moment d'ouvrir. La fixer ici l'empêcherait d'ouvrir la sienne.
     lignes: [{ cle: 'chantier', nature: 'interne', titreRequis: false }],
@@ -295,4 +338,81 @@ export function poseManuelle(nom) {
 /** Comment ce rôle est NOMMÉ à sa naissance — `riviere` ou `code`. Voir le repli au registre. */
 export function baptemeDuRole(nom) {
   return role(nom).bapteme === 'riviere' ? 'riviere' : 'code';
+}
+
+/**
+ * CE RÔLE MÈNE-T-IL UN CHANTIER — c'est-à-dire son mandat EST-IL un code de chantier ?
+ *
+ * ⚠️ AUCUNE CLÉ NEUVE : `mandat_designe` répond déjà à cette question depuis qu'elle existe, et
+ * `vue-du-parc.js` l'écrivait en toutes lettres tout en décidant par un littéral — « seul le
+ * rôle « orchestrateur » en porte un (un représentant a pour mandat un nom de client) ». Le
+ * commentaire disait le registre ; le code disait `!== 'orchestrateur'`.
+ *
+ * C'est ce prédicat qui fait d'un rôle une TÊTE DE HIÉRARCHIE dans la vue du parc : c'est sous
+ * un code de chantier, et sous rien d'autre, que des epics et des stories se rangent.
+ */
+export function meneUnChantier(nom) {
+  return role(nom).mandat_designe === 'chantier';
+}
+
+/**
+ * CE RÔLE TIENT-IL UNE LIGNE QUE SON CLIENT VOIT ?
+ *
+ * ⚠️ AUCUNE CLÉ NEUVE NON PLUS, et c'est `lignes` qu'on lit — pas `nature`. Le registre le dit
+ * lui-même à propos de `nature` : « CONSERVÉE, MAIS CE N'EST PLUS ELLE QUI DÉCIDE […] cette clé
+ * ne nomme que la première [ligne] ». Un rôle dont la ligne cliente ne serait pas la première
+ * serait déclaré sans client par `nature`, et l'avertissement qui protège ce client sauterait.
+ *
+ * C'est ce prédicat qui décide de l'avertissement « RIEN DE CE FIL NE DESCEND AU CLIENT » du
+ * cadre d'un pair : il ne vaut d'être dit qu'à celui qui a effectivement un client au bout
+ * d'une de ses lignes.
+ */
+export function tientUneLigneCliente(nom) {
+  return lignesDuRole(nom).some((l) => l?.nature === 'client');
+}
+
+/**
+ * CE RÔLE PEUT-IL ÊTRE ATTACHÉ COMME PAIR À LA LIGNE D'UN CHANTIER ?
+ *
+ * ⚠️ MÊME REPLI QUE `poseAutomatique`, ET POUR UN RISQUE DE MÊME NATURE : on exige un `true`
+ * EXPLICITE. Un rôle qui ne dit rien n'est pas un pair. Ce que le repli protège n'est pas un
+ * fichier sur le disque, c'est le fil technique d'un chantier — dont le destinataire par erreur
+ * peut être le représentant d'un autre client.
+ */
+export function pairDeChantier(nom) {
+  return role(nom).pair_de_chantier === true;
+}
+
+/**
+ * « du gestionnaire client », « de l’orchestrateur du chantier » — COMMENT LA PAROLE DE CE RÔLE
+ * EST ANNONCÉE quand elle tombe dans le pane de son pair.
+ *
+ * ⚠️ LE REPLI N'ATTRIBUE JAMAIS LA PAROLE À UN AUTRE RÔLE. C'est le défaut exact que ce lot
+ * ferme : `cadre.js` portait `deRole === 'representant' ? … : …`, donc TOUT rôle qui n'était pas
+ * le représentant était annoncé comme l'orchestrateur du chantier. Une attribution fausse se lit
+ * exactement comme une vraie — et celle-ci donne à une demande l'autorité de celui qui mène.
+ *
+ * On compose donc depuis `libelle`, qui existe pour tout rôle. L'élision est tenue par du code ;
+ * le genre ne l'est pas, et c'est pourquoi les rôles déclarent leur formule (même raison que
+ * `libelle_pluriel`). ⚠️ Cette règle d'élision existe AUSSI dans `naissance-representant/bin/
+ * naitre.js` — deux copies, mesurées, que ce lot n'avait pas mandat de fondre.
+ */
+export function libelleDePair(nom) {
+  const r = role(nom);
+  const dit = r.libelle_de_pair;
+  if (typeof dit === 'string' && dit.trim()) return dit;
+  return /^[aeiouyàâäéèêëîïôöùûü]/i.test(r.libelle) ? `de l’${r.libelle}` : `du ${r.libelle}`;
+}
+
+/**
+ * TOUS LES DOSSIERS sous lesquels des lieux d'agents se rangent, dédoublonnés.
+ *
+ * ⚠️ CE QUE SON ABSENCE COÛTAIT EST UN DOUBLON DE NOM, ET IL EST MUET. `nom-de-riviere.js`
+ * relevait les noms DÉJÀ PRIS d'un dépôt en balayant `['.orchestrateur', '.gestionnaire']`,
+ * écrits à la main. Les lieux d'un troisième rôle n'auraient pas été vus : le nom d'un agent
+ * vivant aurait été rendu « libre », et deux agents du même dépôt auraient porté le même nom —
+ * donc auraient été inadressables l'un comme l'autre, sans qu'aucune erreur ne le dise.
+ */
+export function dossiersDesLieux() {
+  return [...new Set(rolesConnus().map((nom) => ROLES[nom].dossier).filter(Boolean))];
 }

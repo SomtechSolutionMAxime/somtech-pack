@@ -41,7 +41,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { baptemeDuRole } from './roles.js';
+import { baptemeDuRole, dossiersDesLieux } from './roles.js';
 
 /**
  * LES RIVIÈRES — la liste, et elle est ÉCRITE plutôt que dérivée.
@@ -172,7 +172,13 @@ export function parcDesNoms({ depot, listerAgents, lireRegistre } = {}) {
   }
 
   if (depot) {
-    for (const dossier of ['.orchestrateur', '.gestionnaire']) {
+    // ⚠️ LES DOSSIERS VIENNENT DU REGISTRE, PLUS D'UNE LISTE ÉCRITE À LA MAIN (T-20260826-0076,
+    // point 6). MESURÉ AVANT CE LOT : `['.orchestrateur', '.gestionnaire']`. Les lieux d'un
+    // troisième rôle n'étaient pas balayés — et ce que ça coûte est MUET : le nom d'un agent
+    // vivant serait rendu « libre », deux agents du même dépôt porteraient le même nom, et les
+    // deux deviendraient inadressables sans qu'aucune erreur ne le dise. Or ce fichier existe
+    // très exactement pour empêcher ça (« un nom sert à adresser », T-20260818-0124).
+    for (const dossier of dossiersDesLieux()) {
       try {
         for (const e of readdirSync(join(depot, dossier), { withFileTypes: true })) {
           if (e.isDirectory()) pris.add(e.name.toLowerCase());

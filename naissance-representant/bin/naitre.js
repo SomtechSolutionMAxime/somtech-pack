@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 // naitre.js — la commande qui fait naître une session dans le lieu d'un agent.
 //
-//   gestionnaire-naitre <nom> --workspace <espace herdr> [--role representant|orchestrateur]
+//   gestionnaire-naitre <nom> --workspace <espace herdr> [--role <un rôle du registre>]
 //                             [--depot <chemin>]
+//
+// ⚠️ LES RÔLES NE SONT PLUS ÉNUMÉRÉS ICI, ET L'AIDE LES COMPOSE (T-20260826-0076, point 6).
+// Elle annonçait « representant|orchestrateur » en dur : elle aurait menti dès le troisième rôle
+// inscrit au registre — et les neuf du chantier en cours (P-20260819-0001) arrivent. Une aide
+// qui ne nomme pas un rôle utilisable est indiscernable, pour qui la lit, d'un rôle refusé.
 //
 // Elle ne pose jamais le lieu (E-20260807-0002 pour le représentant, E-20260813-0002 pour
 // l'orchestrateur) : elle le vérifie, y repose le garde d'ouverture (à chaque appel —
@@ -58,7 +63,7 @@ import { verifierLieuRenseigne } from '../../ligne-directe/src/lieu-renseigne.js
 import { gabaritsDir, preparerLieu } from '../../ligne-directe/src/lieu-agent.js';
 import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
 import { chargerRegistre } from '../../ligne-directe/src/registre.js';
-import { role as roleDe, poseAutomatique, poseManuelle } from '../../ligne-directe/src/roles.js';
+import { role as roleDe, rolesConnus, poseAutomatique, poseManuelle } from '../../ligne-directe/src/roles.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -94,7 +99,7 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 function usage(code) {
   process.stderr.write(
     'gestionnaire-naitre <nom> --workspace <espace herdr> [--session <session herdr>]\n' +
-      '                         [--role representant|orchestrateur] [--depot <chemin>]\n' +
+      `                         [--role ${rolesConnus().join('|')}] [--depot <chemin>]\n` +
       '                         [--amorce <fichier> | --amorce-texte "…"]\n' +
       '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n' +
       '                         [--nom-agent <nom>]\n'

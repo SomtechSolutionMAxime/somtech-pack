@@ -322,6 +322,25 @@ export function arbreDeLaVue(vue, { parApp = true } = {}) {
   return racines;
 }
 
+/**
+ * ⚠️ `kind: 'orchestrateur'` N'EST PAS UNE COMPARAISON DE RÔLE, ET C'EST POURQUOI CE LITTÉRAL
+ * RESTE (T-20260826-0076, point 6).
+ *
+ * MESURÉ : les trois `kind === 'orchestrateur'` de ce fichier lisent une ÉTIQUETTE DE NŒUD,
+ * posée deux lignes plus bas par cette fabrique-ci, et membre d'une énumération fermée que ce
+ * module se donne à lui-même — `app` · `section` · `agent-hors` · `orchestrateur` · `epic` ·
+ * `story`. Aucune d'elles ne touche au vocabulaire de `roleDuLieu` : rien de ce que le TUI
+ * affiche ne compare un rôle établi. Dériver l'étiquette du registre obligerait à en dériver
+ * AUSSI son unique producteur — et on aurait déplacé le littéral au lieu de l'enlever.
+ *
+ * ⚠️ CE QUI EST UNE VRAIE DETTE EST UN CRAN PLUS HAUT, ET IL EST NOMMÉ PLUTÔT QUE CORRIGÉ : le
+ * NOM du champ que `vue-du-parc.js` rend (`vue.orchestrateurs`) et les phrases qui le suivent
+ * (« N orchestrateur(s) sous cette app », « seul un orchestrateur vivant porte un terminal »).
+ * Depuis ce lot, ce champ contient les têtes de hiérarchie — c'est-à-dire tout rôle dont le
+ * mandat est un code de chantier. Un second rôle de ce genre y entrerait sous une étiquette qui
+ * ne le nomme pas. Renommer un champ rendu est un changement de contrat, avec ses lecteurs et
+ * ses essais ; ce n'est pas un de-harcodage, et ça ne se fait pas en passant.
+ */
 function noeudDOrchestrateur(o, i) {
   const app = appDuChantier(o?.chantier);
   const epics = Array.isArray(o?.epics) ? o.epics : null;

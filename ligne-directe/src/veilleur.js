@@ -42,7 +42,7 @@ import { laVueDuParc, lecteurDeChantier, lecteurDeLieux, racinesDuPoste } from '
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
-import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
+import { role as roleDe, rolesConnus, libellePluriel, pairDeChantier, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune, cadrerPourPair } from './cadre.js';
 import { etrangersParmi, nouveauxVenus, photographier, referenceComparable, NOUS } from './cloisonnement.js';
 import { reponse } from './langage.js';
@@ -920,13 +920,39 @@ export class Veilleur {
       return { ok: false, erreur: `« ${nom} », c'est toi — une ligne ne se partage pas avec soi-même.` };
     }
     const role = roleDuLieu(a.foreground_cwd || a.cwd);
-    if (role !== 'representant') {
+    // ⚠️ C'EST LE REGISTRE QUI DIT QUI PEUT ÊTRE UN PAIR, PLUS UNE COMPARAISON LITTÉRALE
+    // (T-20260826-0076, point 6).
+    //
+    // MESURÉ AVANT CE LOT : `if (role !== 'representant')`. La permission d'être attaché à la
+    // ligne d'un chantier — donc de recevoir tout son fil technique — vivait ici, dans le
+    // veilleur, invisible du registre dont l'en-tête promet qu'« ajouter un rôle, c'est ajouter
+    // une ligne, jamais un module ». Les neuf rôles du chantier en cours (P-20260819-0001)
+    // auraient tous été refusés sans qu'une ligne de registre puisse y changer quoi que ce soit.
+    //
+    // ⚠️ LE SENS DU REFUS NE BOUGE PAS D'UN CRAN : `pair_de_chantier` doit être un `true`
+    // EXPLICITE, et seul le représentant le déclare aujourd'hui. Ce qui change est le LIEU de la
+    // décision, jamais son résultat — un de-harcodage qui élargirait une permission au passage
+    // serait un changement de comportement déguisé en rangement.
+    //
+    // ⚠️ ET UN RÔLE NON ÉTABLI NE SE PRÉSENTE PAS AU REGISTRE. `roleDuLieu` rend `null` pour un
+    // répertoire qui n'est le lieu de personne — c'est le cas le plus fréquent de ce refus — et
+    // `pairDeChantier(null)` LÈVERAIT (le registre refuse de décider sur un rôle inconnu). Un
+    // refus doit rester un refus, jamais devenir un plantage du veilleur.
+    if (!role || !pairDeChantier(role)) {
+      // Le refus NOMME qui aurait le droit, et il le lit au registre. ⚠️ Le repli couvre le
+      // registre où PLUS PERSONNE ne le déclare : « Seul un  posé par… » se lirait comme un
+      // message tronqué et enverrait chercher un bogue d'affichage là où il y a une décision.
+      const admis = rolesConnus().filter(pairDeChantier).map((n) => roleDe(n).libelle);
       return {
         ok: false,
         erreur:
           `« ${nom} » n'est pas un gestionnaire client : son lieu de travail n'en porte pas le métier — la ` +
-          `ligne n'est PAS ouverte. Seul un représentant posé par « ligne-directe representant » partage la ` +
-          `ligne d'un chantier ; y attacher quelqu'un d'autre lui livrerait ce qui ne le regarde pas.`,
+          `ligne n'est PAS ouverte. ` +
+          (admis.length
+            ? `Seul un ${admis.join(' ou un ')} posé par « ligne-directe representant » partage la ` +
+              `ligne d'un chantier ; y attacher quelqu'un d'autre lui livrerait ce qui ne le regarde pas.`
+            : `Aucun rôle du registre ne partage la ligne d'un chantier (« pair_de_chantier » n'est déclaré ` +
+              `nulle part dans « ligne-directe/src/roles.js ») — ce n'est pas cet agent qui est en cause.`),
       };
     }
     return { ok: true, pair: { role, nom, pane: a.pane_id, herdr_socket: a.herdr_socket || null } };
@@ -1041,6 +1067,14 @@ export class Veilleur {
           : `plus aucun agent ne travaille dans ce pane`,
       };
     }
+    // ⚠️ CE `'orchestrateur'` EST LE SEPTIÈME SITE, ET IL EST NOMMÉ PLUTÔT QUE CORRIGÉ
+    // (T-20260826-0076, point 6). Il désigne le PORTEUR de la ligne — pas le pair — et le
+    // registre des lignes n'inscrit NULLE PART son rôle : il n'y a rien à lire. Le déduire
+    // serait pire que le littéral. Mesuré : `--au-gestionnaire` est accepté sur toute ligne
+    // INTERNE, donc un gestionnaire pourrait en attacher un sur sa ligne du dirigeant — sa
+    // parole serait alors annoncée « de l'orchestrateur du chantier », ce qu'elle n'est pas.
+    // Le fermer demande d'inscrire le rôle du porteur à l'ouverture, donc de toucher au
+    // registre des lignes et à ce qui le lit : c'est un lot, pas un de-harcodage.
     const cadre = cadrerPourPair({
       chantier: ligne.chantier,
       texte,
