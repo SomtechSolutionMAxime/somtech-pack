@@ -472,6 +472,13 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production
     { quoi: 'mode RECHERCHE, terme court', etat: { ...etatInitial(), mode: 'recherche', recherche: 'a' } },
     { quoi: 'mode RECHERCHE, terme long', etat: { ...etatInitial(), mode: 'recherche', recherche: 'somcraft-cowork-espace-client' } },
     { quoi: 'mode RECHERCHE, terme vide', etat: { ...etatInitial(), mode: 'recherche', recherche: '' } },
+    // 🔴 LA CONTREFAÇON : le lecteur tape le raccourci vital DANS la recherche. Tant que la barre
+    // était reconnue à une sous-chaîne, ce texte se faisait passer pour elle et échappait au
+    // bornage — 44 caractères non tronqués dans un pane de 3 (revue portail).
+    {
+      quoi: 'mode RECHERCHE contenant le raccourci vital (contrefaçon)',
+      etat: { ...etatInitial(), mode: 'recherche', recherche: RACCOURCI_VITAL },
+    },
   ];
 
   let mesurees = 0;
@@ -490,10 +497,11 @@ test('LE CODE QUI ÉCRIT INTERROGE L’INVARIANT — un oracle que la production
         // ne dépasse que si elle PORTE le raccourci vital ET que celui-ci ne tiendrait pas.
         // C'est la décision `f05bc613` récitée par le banc, pas déléguée au code qu'il juge.
         const trop = largeurAffichee(ligne.texte) > largeur;
-        const justifiee =
-          ligne.style === 'pied' &&
-          ligne.texte.includes(RACCOURCI_VITAL) &&
-          largeur < [...RACCOURCI_VITAL].length;
+        // 🔴 CE BANC PORTAIT LA MÊME FAILLE QUE LE CODE QU'IL JUGE : il reconnaissait la barre à
+        // une SOUS-CHAÎNE, donc l'utilisateur pouvait la fabriquer en tapant « q quitter » dans
+        // la recherche. Une garde qui devine par ressemblance finit toujours par être imitée.
+        // Elle lit désormais le fait POSÉ par `rendreEcran`, comme l'invariant.
+        const justifiee = ligne.porteLaSortie === true && largeur < [...RACCOURCI_VITAL].length;
         assert.ok(
           !trop || justifiee,
           `${quoi}, à ${largeur} colonnes : ${largeurAffichee(ligne.texte)} caractères de style ` +
@@ -566,9 +574,12 @@ test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et ell
         `à ${largeur} colonnes, la barre dépasse alors que le raccourci vital (${MINIMUM} ` +
           'caractères) y tiendrait — l’exception déborde de son seuil'
       );
-      assert.ok(
-        l.texte.includes(RACCOURCI_VITAL),
-        `à ${largeur} colonnes, une ligne dépasse SANS porter le raccourci vital : ${JSON.stringify(l.texte)}`
+      // ⚠️ ON LIT LE FAIT POSÉ, on ne cherche plus une sous-chaîne : le lecteur peut TAPER
+      // « q quitter » dans la recherche, et une reconnaissance par ressemblance se ferait imiter.
+      assert.equal(
+        l.porteLaSortie,
+        true,
+        `à ${largeur} colonnes, une ligne dépasse sans PORTER la sortie : ${JSON.stringify(l.texte)}`
       );
     }
   }
@@ -584,7 +595,8 @@ test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et ell
   // ═══ BORD 2 — L’EXCEPTION NE S’APPLIQUE PAS LÀ OÙ ELLE N’A PAS LIEU D’ÊTRE.
   // Au-dessus du seuil, la barre est une ligne comme les autres : elle doit être refusée si
   // elle dépasse. Sans ce bord, « l’exception vaut pour TOUTE largeur » resterait vert.
-  const barreTropLongue = { style: 'pied', texte: 'x'.repeat(200) };
+  // Une barre qui NE porte pas la sortie : elle n'a droit à aucune exception.
+  const barreTropLongue = { style: 'pied', texte: 'x'.repeat(200), porteLaSortie: false };
   assert.ok(
     depasseLaLargeurAutorisee(barreTropLongue, MINIMUM),
     `à ${MINIMUM} colonnes (le seuil), une barre trop longue doit être REFUSÉE — l’exception ` +
@@ -593,6 +605,16 @@ test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et ell
   assert.ok(
     depasseLaLargeurAutorisee(barreTropLongue, 120),
     'à 120 colonnes, une barre trop longue doit être refusée comme n’importe quelle ligne'
+  );
+
+  // ═══ BORD 2bis — UNE LIGNE QUI *RESSEMBLE* À LA BARRE N'EST PAS LA BARRE.
+  // 🔴 Le lecteur peut TAPER « q quitter » dans la recherche : tant que l'exception reconnaissait
+  // la barre à une sous-chaîne, ce texte se faisait passer pour elle et échappait au bornage.
+  // Un rôle ne se devine pas d'un texte — le texte est une donnée, et toute reconnaissance par
+  // ressemblance finit par être imitée.
+  assert.ok(
+    depasseLaLargeurAutorisee({ style: 'pied', texte: `/ ${RACCOURCI_VITAL}▏  (Entrée valide)` }, 3),
+    'un champ de recherche contenant le raccourci vital NE doit PAS être excepté'
   );
 
   // ═══ BORD 3 — LES AUTRES STYLES NE SONT JAMAIS EXCEPTÉS, MÊME SOUS LE SEUIL.
@@ -607,12 +629,15 @@ test('L’EXCEPTION DE L’INVARIANT NE COUVRE QUE CE QU’ELLE NOMME — et ell
   // Si quelqu’un décroche le seuil du raccourci vital (littéral, ou autre nombre), la barre
   // cesse d’être exceptée à la bonne largeur — et c’est ce que cette assertion mesure.
   assert.equal(
-    depasseLaLargeurAutorisee({ style: 'pied', texte: RACCOURCI_VITAL }, MINIMUM - 1),
+    depasseLaLargeurAutorisee({ style: 'pied', texte: RACCOURCI_VITAL, porteLaSortie: true }, MINIMUM - 1),
     false,
-    'juste sous le seuil, la barre portant le raccourci vital est exceptée'
+    'juste sous le seuil, la barre qui PORTE la sortie est exceptée'
   );
   assert.equal(
-    depasseLaLargeurAutorisee({ style: 'pied', texte: RACCOURCI_VITAL + ' de trop' }, MINIMUM),
+    depasseLaLargeurAutorisee(
+      { style: 'pied', texte: RACCOURCI_VITAL + ' de trop', porteLaSortie: true },
+      MINIMUM
+    ),
     true,
     'exactement au seuil, elle ne l’est plus'
   );

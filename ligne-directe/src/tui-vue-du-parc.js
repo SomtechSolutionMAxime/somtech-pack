@@ -782,14 +782,20 @@ export function depasseLaLargeurAutorisee(ligne, largeur) {
   // **61 caractères** — sans même porter le raccourci vital. C’est la classe de défaut du
   // ticket, rouverte par l’exception censée la refermer.
   //
-  // ⚠️ CE QUI EST EXCEPTÉ EST CE QUI PORTE LA SORTIE, PAS CE QUI PORTE UNE ÉTIQUETTE. Le
-  // style dit d’où vient la ligne ; seul le contenu dit ce qu’elle fait pour le lecteur. Une
-  // exception nommée par la décision (« quand le raccourci vital ne peut pas tenir ») se code
-  // en cherchant le raccourci vital, jamais en faisant confiance à l’étiquette.
-  const exceptee =
-    ligne?.style === 'pied' &&
-    largeur < [...RACCOURCI_VITAL].length &&
-    String(ligne?.texte ?? '').includes(RACCOURCI_VITAL);
+  // 🔴 TROISIÈME ÉCRITURE DE CETTE EXCEPTION, ET LES DEUX PREMIÈRES ÉTAIENT TROP LARGES.
+  //   ① indexée sur le STYLE seul → le champ de recherche passait (61 car. dans un pane de 3) ;
+  //   ② indexée sur le CONTENU par sous-chaîne → **l’utilisateur pouvait la fabriquer** : taper
+  //      « q quitter » dans la recherche rendait 44 caractères non tronqués (revue portail).
+  //
+  // ⚠️ LA LEÇON : un rôle ne se DEVINE pas d’un texte. Le texte est une donnée — ici,
+  // littéralement ce que le lecteur tape — et toute reconnaissance par ressemblance finit par
+  // être imitée. `rendreEcran` SAIT laquelle de ses lignes est la barre de raccourcis : il le
+  // POSE (`porteLaSortie`), et l’invariant le LIT. Un fait constaté à la source, jamais
+  // reconstitué à l’arrivée.
+  //
+  // ⚠️ ET LE DRAPEAU N’EST PAS FALSIFIABLE PAR LE CONTENU : il ne peut naître que là où la
+  // barre est composée, sur la branche qui rend vraiment les raccourcis.
+  const exceptee = ligne?.porteLaSortie === true && largeur < [...RACCOURCI_VITAL].length;
   return !exceptee;
 }
 
@@ -1026,7 +1032,15 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
   //   — NON  → on la borne, comme n'importe quelle ligne de l'écran ;
   //   — OUI  → on la laisse entière (c'est l'exception, et elle seule).
   // `borner` complète aussi à la largeur, ce qui garde la colonne alignée.
-  const barre = { style: 'pied', texte: pied(etat, largeur) };
+  // ⚠️ `porteLaSortie` EST POSÉ ICI, où l’on SAIT ce qu’on compose — et seulement quand la
+  // barre rend vraiment les raccourcis. En mode recherche, `pied()` rend le champ de saisie :
+  // cette ligne ne porte alors AUCUNE sortie, quoi que le lecteur ait tapé dedans.
+  const texteDuPied = pied(etat, largeur);
+  const barre = {
+    style: 'pied',
+    texte: texteDuPied,
+    porteLaSortie: etat.mode !== 'recherche' && raccourcisPour(largeur).includes(RACCOURCI_VITAL),
+  };
   sortie.push(
     depasseLaLargeurAutorisee(barre, largeur) ? { ...barre, texte: borner(barre.texte, largeur) } : barre
   );
