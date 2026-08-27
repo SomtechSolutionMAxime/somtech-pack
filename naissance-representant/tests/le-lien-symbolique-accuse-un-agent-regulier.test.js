@@ -80,4 +80,37 @@ describe("la jointure : le chemin déclaré et le chemin vu par le shell", () =>
       rmSync(racine, { recursive: true, force: true });
     }
   });
+
+  test("🔴 LE REPLI SUR LES FORMES BRUTES, ATTEINT PAR LE SEUL CAS QUI L'ATTEINT", () => {
+    // ⚠️ CE BANC EXISTE PARCE QUE LE PRÉCÉDENT NE L'ATTEIGNAIT PAS, et le disait pourtant.
+    // « un espace déclaré DISPARU » comparait le fantôme DES DEUX CÔTÉS : `realpathSync`
+    // échouait alors identiquement pour les deux, donc `ar === a` et `dr === d`, et les deux
+    // termes de `apparie(ar, dr) || apparie(a, d)` devenaient LA MÊME comparaison. Retirer le
+    // second terme laissait ce fichier à 3/3 et `garde-des-naissances.test.js` à 45/45.
+    // Trouvé par une passe de revue, prouvé par mutation, pas supposé.
+    //
+    // LE CAS QUI REND LES DEUX TERMES DIFFÉRENTS est l'asymétrie inverse de celle qu'on
+    // imaginait : c'est l'espace de l'AGENT qui ne se résout plus, pendant que le DÉCLARÉ vit.
+    // Il est réel — `foreground_cwd` est le répertoire du shell, et un shell survit à la
+    // suppression du répertoire où il se trouve : herdr rapporte alors un chemin que le disque
+    // ne porte plus, pour un agent dont le worktree, lui, est intact.
+    const racine = mkdtempSync(join(realpathSync(tmpdir()), 'asym-'));
+    try {
+      const reel = join(racine, 'reel');
+      mkdirSync(reel);
+      const alias = join(racine, 'alias');
+      symlinkSync(reel, alias);                      // le déclaré passera par l'alias
+
+      const disparu = join(alias, 'sous-dossier-efface');   // jamais créé : ne se résout pas
+      assert.equal(memeEspaceDeTravail(disparu, alias), true,
+        "l'agent est dans un sous-dossier de l'espace déclaré que le disque ne porte plus — " +
+        'le refuser accuse un chef d\'équipe régulier pour un `cd` dans un dossier effacé');
+
+      // ⚠️ ET CE QUE CE REPLI NE DOIT PAS ÉLARGIR : un voisin reste étranger, résolu ou non.
+      assert.equal(memeEspaceDeTravail(join(`${alias}-voisin`, 'x'), alias), false,
+        'le repli sur les formes brutes ne doit apparier aucun espace étranger');
+    } finally {
+      rmSync(racine, { recursive: true, force: true });
+    }
+  });
 });
