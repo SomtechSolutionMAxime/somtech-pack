@@ -1,0 +1,6596 @@
+[
+{
+"quoi": "auto-wrap",
+"ecrits": [
+"abcdefghij"
+],
+"cols": 4,
+"rows": 4,
+"attendu": [
+"abcd",
+"efgh",
+"ij",
+""
+]
+},
+{
+"quoi": "auto-wrap",
+"ecrits": [
+"ab"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"ab",
+"",
+""
+]
+},
+{
+"quoi": "ligne vide",
+"ecrits": [
+""
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "retour chariot",
+"ecrits": [
+"abcd",
+"\ref"
+],
+"cols": 6,
+"rows": 3,
+"attendu": [
+"efcd",
+"",
+""
+]
+},
+{
+"quoi": "retour chariot désarme le report",
+"ecrits": [
+"abc",
+"\rd"
+],
+"cols": 3,
+"rows": 4,
+"attendu": [
+"dbc",
+"",
+"",
+""
+]
+},
+{
+"quoi": "saut de ligne",
+"ecrits": [
+"ab",
+"\n",
+"cd"
+],
+"cols": 4,
+"rows": 4,
+"attendu": [
+"ab",
+"  cd",
+"",
+""
+]
+},
+{
+"quoi": "le report survit au saut de ligne",
+"ecrits": [
+"abc",
+"\n",
+"d"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"abc",
+"",
+"d",
+"",
+""
+]
+},
+{
+"quoi": "effacement de rangée",
+"ecrits": [
+"abcdef",
+"\r\u001b[2Kxy"
+],
+"cols": 6,
+"rows": 3,
+"attendu": [
+"xy",
+"",
+""
+]
+},
+{
+"quoi": "effacement de rangée",
+"ecrits": [
+"abc\u001b[2K"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "report armé puis imprimable",
+"ecrits": [
+"abc",
+"d"
+],
+"cols": 3,
+"rows": 4,
+"attendu": [
+"abc",
+"d",
+"",
+""
+]
+},
+{
+"quoi": "défilement",
+"ecrits": [
+"a\nb\nc\nd\ne"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"   d",
+"",
+"e"
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"abcdef",
+"\r",
+"ab",
+"\u001b[1K"
+],
+"cols": 8,
+"rows": 2,
+"attendu": [
+"   def",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"\u001b[1Kab"
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"ab",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"abcdefgh",
+"\r",
+"abc",
+"\u001b[1K"
+],
+"cols": 4,
+"rows": 4,
+"attendu": [
+"abcd",
+"",
+"",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"abcd",
+"\r",
+"ab",
+"\u001b[1K",
+"Z"
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"  Zd",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"abcdef",
+"\r",
+"ab",
+"\u001b[1K"
+],
+"cols": 8,
+"rows": 2,
+"attendu": [
+"   def",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"\u001b[1Kab"
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"ab",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"abcdefgh",
+"\r",
+"abc",
+"\u001b[1K"
+],
+"cols": 4,
+"rows": 4,
+"attendu": [
+"abcd",
+"",
+"",
+""
+]
+},
+{
+"quoi": "effacement [1K",
+"ecrits": [
+"abcd",
+"\r",
+"ab",
+"\u001b[1K",
+"Z"
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"  Zd",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m",
+"\u001b[Ky",
+"\nxc",
+" b",
+"b\u001b[2K\u001b[0m"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"y",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ca"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"c",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[0m",
+"\n\u001b[31m\r\r\u001b[Kb\u001b[2K\u001b[0my\u001b[31m\n"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"",
+" y",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[Kb\u001b[31m\u001b[31m\nyb\n",
+"yz\u001b[?25l",
+"\r\rz\u001b[0mc\u001b[31my\u001b[?25lc",
+"c\u001b[31m\u001b[1Kx\r\u001b[0m ",
+"\r\rb\u001b[1K \u001b[2K"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l x\u001b[1K\u001b[1K\u001b[31m\r\na \u001b[0m\n",
+"y\u001b[2K\u001b[31m\u001b[0m\u001b[0maca",
+"x\u001b[1K\r\r\u001b[0mc\u001b[K\u001b[2K\u001b[0m"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"ca",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[31my\u001b[2Kb\u001b[0my\u001b[?25lb\nc",
+"\u001b[K",
+"\u001b[0my\u001b[K",
+"\r"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Ky\u001b[?25l\u001b[31m\u001b[?25lc\u001b[0m\u001b[K\r",
+"\n\u001b[1Kaz\u001b[K\u001b[31mb\u001b[2K\nza\u001b[31m",
+"b\u001b[?25l\u001b[1K\u001b[Kz",
+" \nz\u001b[31ma\u001b[K\u001b[?25l"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"yc",
+"",
+"   z",
+"  z",
+"",
+"za",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\nb\u001b[K",
+"c\u001b[1Ky\u001b[1Kyx\ryb",
+"za\u001b[?25l c\ncx",
+"\u001b[K\u001b[1Ka "
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\rxz",
+"\u001b[1K\u001b[2Kx\n\u001b[1K\nb\u001b[1K",
+"aax\u001b[?25lyb\u001b[?25l\u001b[0macb",
+"\rbz\u001b[31m\u001b[K\u001b[2K\rx\u001b[?25l\u001b[0mzb"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"axyba",
+"xzb"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[1Kc",
+" "
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"c",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[0m\u001b[K\u001b[31m\u001b[?25lx \r\u001b[?25l\u001b[2Kb",
+"b\u001b[31m\u001b[?25l",
+" xbx\nc"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l",
+" a",
+"\u001b[2Kbb\rx\u001b[0m\u001b[1Ka",
+"\u001b[1Ky",
+"\u001b[31m"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"  yb",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[2K\u001b[K",
+"\u001b[31mc\u001b[31m",
+"\u001b[1Kbc\u001b[0m\u001b[2Ky\n\u001b[0mx\n",
+" ca\u001b[K\u001b[31mc\u001b[0mb",
+"b\nca"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+" c",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zab\n\u001b[31mab\r\u001b[31m",
+" a",
+"\u001b[31m\u001b[K\u001b[2K\u001b[K\nz\u001b[?25l\r\u001b[Ky\u001b[0m\u001b[?25l"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"za",
+"b",
+" a",
+"",
+"",
+"y",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"yc\u001b[31m\u001b[1Kc\u001b[0m\u001b[K\u001b[1K\rb",
+"\u001b[Kxxz\n\r",
+"\rxxb\u001b[K\r\u001b[1K\u001b[2K \u001b[31m"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+"bxx",
+"z",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z",
+"\u001b[0m\u001b[31mc\u001b[?25l\u001b[2K",
+" \u001b[0mc \u001b[0m\u001b[K\u001b[Kx",
+"b\u001b[Ky",
+"\r\r\rz\rz\u001b[?25lb\u001b[2K\u001b[31m"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"   c xb",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31my\u001b[2K\u001b[Ka\r\u001b[K"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[2K\nxz",
+"\u001b[K\nax\u001b[0m\u001b[31ma \r\u001b[0m",
+"\u001b[1K\u001b[31m\r\u001b[2K z \rc ",
+" a\u001b[?25l\r\u001b[1K\n \u001b[1K\r",
+"\u001b[K\u001b[31m\u001b[1Kyxza\u001b[2K"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"   a",
+"   a",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"  \u001b[?25l\u001b[K",
+" \n\u001b[?25l\u001b[2K\nc\u001b[K",
+"zc\u001b[2Kc\u001b[K\u001b[1Ka\u001b[31m\u001b[2Ky\n",
+"\u001b[0m\u001b[0m\u001b[2K\u001b[0maabz\nzb",
+"\u001b[31mz\r\u001b[2Kby\u001b[?25l"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"",
+"",
+"        y",
+"         aabz",
+"by",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kb\r\u001b[K \nc\u001b[?25l \u001b[0mb",
+"aa\u001b[Ky\u001b[?25ly\n\r\n",
+"\u001b[1K\u001b[?25lcx",
+"b\u001b[1K\u001b[K\n"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"",
+" c baayy",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kc\u001b[0myx"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"cyx",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[K\ry \u001b[0m\u001b[2K \r\n\u001b[?25la",
+" \u001b[1K",
+"b\u001b[31m\u001b[31m"
+],
+"cols": 1,
+"rows": 3,
+"attendu": [
+"a",
+"",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[31m\u001b[31mz\rcy\u001b[0m\u001b[2K"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rz",
+"x\u001b[?25lx\r",
+"\n\u001b[31my\u001b[0m",
+"c\u001b[?25l\u001b[2K\u001b[?25l\u001b[2Kb"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zx\n"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"zx",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bz\r\n\u001b[1K\u001b[2Kxaac\u001b[?25l\u001b[0m"
+],
+"cols": 1,
+"rows": 5,
+"attendu": [
+"z",
+"x",
+"a",
+"a",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[31m\u001b[31m\u001b[?25l",
+"\u001b[1K\n\u001b[2K",
+"\rxbxc\u001b[31mb\r\r",
+"xb\n\u001b[?25lax",
+"\u001b[31mc"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"xbxcb",
+"  axc"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25lz\r\u001b[1K\u001b[2Kx b",
+"caa\u001b[K\u001b[0m\ra ",
+"\u001b[2K\r",
+"a\u001b[?25l\u001b[31mc\u001b[0m\u001b[2K\u001b[1Kb\u001b[1Kz",
+"\r"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"x",
+"bc",
+"",
+" z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"aa\r zxa\u001b[K",
+"\u001b[?25l\u001b[2Ka\u001b[2K\nb\n",
+"\u001b[2Kx\u001b[1K\u001b[1K\u001b[1K\u001b[31m\u001b[?25l"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\r"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[?25l",
+"\u001b[?25l\u001b[?25l\n\u001b[?25la",
+"a\u001b[2K\u001b[?25l",
+"ac\u001b[?25l\nx\u001b[0m",
+"cc \u001b[0mzc\u001b[1Kyx\r\u001b[31m"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+" yx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\r\u001b[K"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kc\u001b[31m\n\u001b[0m\u001b[31mb\r \u001b[31m",
+"a z\u001b[1K\u001b[0mc\nb\u001b[K\u001b[1K\u001b[0m\u001b[1K"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"c",
+"    c",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kb\u001b[0ma\u001b[1K\u001b[K\u001b[1Ka\u001b[0m\u001b[2K"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ybcc\u001b[2Kx\u001b[1K\u001b[Kxby"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+"",
+" xby",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[2K \u001b[1K"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"aa\u001b[2K\u001b[1K\u001b[0m\u001b[K\u001b[0m\n\rx\u001b[2Ky",
+" \u001b[0mcc",
+"c\r",
+"\n\u001b[2K\u001b[31m\u001b[?25l \u001b[?25lbz\u001b[0m"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+" y",
+"ccc",
+" bz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b \u001b[K zz\nb\nx\u001b[?25l",
+"\u001b[0m"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"     b",
+"      x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"z",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mx",
+"bb\n",
+"b\u001b[K\u001b[?25la\u001b[1K\u001b[0mx\u001b[?25l\u001b[1K\u001b[1Kz",
+"zycb\n",
+"bb"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+"   b",
+"  zz",
+"ycb",
+"   b",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m",
+"\u001b[31m\u001b[1K",
+"y \u001b[2Kcb\u001b[1Ky\u001b[1K ",
+"\u001b[31ma"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+"      a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K \u001b[2K\u001b[0m\nc\u001b[0mx\u001b[2K"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\n cc",
+"\n\u001b[?25lb\nz\u001b[0mb \r\u001b[2K x"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"    b",
+" x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z",
+"z",
+"z\u001b[0m\u001b[1K\u001b[0mya",
+"\rzz\u001b[2K",
+"b\u001b[1K"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kc",
+"\u001b[K\u001b[?25l\u001b[2K",
+"\u001b[0mb",
+"b"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+" bb",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kzzbb\u001b[1Kx",
+"\u001b[2K\u001b[K\u001b[2Kz",
+"\u001b[31m\rx\u001b[0m\u001b[?25lz\u001b[K",
+"ya\u001b[0maaa\u001b[31m y\u001b[2K\u001b[0m",
+"y\nc\u001b[K\u001b[31m\u001b[31m\r\r"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"zzb",
+"xzy",
+"aaa",
+"",
+"y",
+" c",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[2Kx\u001b[K\u001b[K\u001b[2K\u001b[?25lx \r\n\u001b[?25l",
+"\u001b[1Kc\u001b[2Kc\u001b[?25lcc\u001b[2Kca\u001b[K"
+],
+"cols": 7,
+"rows": 8,
+"attendu": [
+" x",
+"    ca",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[K",
+"\u001b[1Kzyz\u001b[2K\u001b[31mz xczz",
+"\r\r\u001b[31my\u001b[1K\u001b[0my x\u001b[2K",
+"\u001b[2Kb\u001b[31m\u001b[2K\u001b[?25l\r"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\r\u001b[?25la\u001b[2K\u001b[?25l\n\rx\u001b[0mx",
+" x",
+"\u001b[1K\u001b[2Kx\u001b[?25l\u001b[0mycz",
+"\u001b[K\n\u001b[31m\n"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K",
+"\u001b[2Ky",
+"\u001b[1K\u001b[2K",
+"\n\u001b[?25ly\rba\u001b[31m\u001b[31m\r\na",
+"\n"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25ly\u001b[1K \n\u001b[K",
+"a\u001b[31mc\u001b[?25l\n\u001b[?25l\u001b[0mz\u001b[?25l\r\r\u001b[2K",
+"\u001b[K\u001b[K\n\u001b[2Kxzzy\u001b[0ma",
+"yc\u001b[1K\u001b[1K\u001b[0mzb\u001b[2K c\n\u001b[1K",
+"\u001b[K\nb\rc ax"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+"c ax       b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[Kz\ny\u001b[2Kb\u001b[K\u001b[0m\rx\n",
+"\n \u001b[1Kxzbz\u001b[?25lb\r ",
+"c\u001b[2Kx\u001b[2Ka\u001b[0my",
+"\u001b[0mb\rc\r\u001b[?25l\ny"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+" z",
+"x  b",
+"",
+"c  ayb",
+"y",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c",
+"\r",
+"cc\u001b[1K\u001b[0mzy\n\u001b[2K yc\u001b[2K"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"y",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Ka b\r\u001b[1K\u001b[K\u001b[0mb",
+"\n\rxx\u001b[31m\u001b[31m \rb\u001b[K\u001b[?25l"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"b",
+"b",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mx\n\u001b[1K\u001b[0m"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kz\u001b[?25l\u001b[?25l\u001b[?25l\r\u001b[?25l",
+" cb",
+"c\u001b[?25l\nxc",
+"by",
+"y\n"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+" cbc",
+"    xcb",
+"yy",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[?25l\u001b[K\r",
+"\r\u001b[1Kza\u001b[0m\u001b[1K\n",
+"zz",
+"\u001b[K\u001b[1Kb\u001b[?25l\u001b[?25l c",
+"ba"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"",
+"  z",
+" b",
+"cba",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y",
+"a\u001b[2K\u001b[1K\n\u001b[1K\u001b[Kb"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"",
+"  b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[1K\r"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[2K\u001b[2K\u001b[?25l\u001b[2K",
+"c\r\r\u001b[?25lz",
+"x\u001b[31m\u001b[31mc\n"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"zxc",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[1K\u001b[?25l\u001b[0mx\u001b[?25l",
+"\u001b[31m\u001b[2Kx\u001b[Kz\u001b[2K\u001b[K",
+"\u001b[?25l\u001b[1Kz \u001b[31mz\n"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\r\u001b[0myxzz\u001b[Kc\u001b[?25l"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"yxzzc",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a y\n"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"a y",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"cb\n b\u001b[2K",
+"\u001b[1K\nbz\n\u001b[1Kc"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\r\u001b[0m\u001b[K\u001b[0my bz",
+"xy\u001b[2Kz\u001b[2Kba",
+"yz\u001b[31m\u001b[2K\u001b[1K\u001b[2K  ",
+"\u001b[2K\u001b[2Kzb\u001b[2Ka",
+"x\u001b[1K\u001b[Ka"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+"                 a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[1Kb",
+"\u001b[K\u001b[0m\u001b[1Kxbb\u001b[31mxzyz",
+"\u001b[1K\u001b[31m\u001b[2K\u001b[0m\u001b[0m \u001b[2K\u001b[1K",
+"\u001b[K\u001b[2K\u001b[31my\u001b[2K\u001b[Kz\u001b[K\r "
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[1K\rxc\u001b[31m\nz x\u001b[Kx",
+"y\u001b[31mc\u001b[Kx",
+"\u001b[1K\ra\u001b[2K\u001b[31m\u001b[0mxy\u001b[0m\u001b[31m",
+"\r\u001b[2Kc\u001b[2K\u001b[?25la\n\na\u001b[Kx\u001b[1K"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mz\n\u001b[?25la\u001b[0mc\u001b[0ma\u001b[0mb",
+"yza",
+"a\u001b[0m\u001b[?25l\u001b[?25lcx\u001b[2K\u001b[0mzcy",
+"xz\u001b[1Kx\u001b[Kca",
+"\u001b[1K\u001b[2Ka"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"z",
+"                   a",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[1K\u001b[?25l\u001b[K\nxa \ny\u001b[1K"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"",
+"",
+"x",
+"a",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K",
+"a\u001b[1K\u001b[2K\u001b[31myc \n\u001b[K\u001b[0mc ",
+"\rb\rx\u001b[2K",
+"a\r\u001b[?25lb\u001b[?25lyy\u001b[1K\nz\u001b[?25l"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K",
+"a yb\u001b[31m\r b\u001b[2K ",
+"zc\r \ra\u001b[?25lz\u001b[K\u001b[0m\u001b[2K",
+"x\u001b[1Kc",
+"\u001b[?25lyza\u001b[0mz\u001b[?25l\u001b[0mba"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+"zba"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\ny",
+"\r\u001b[2Kyy\u001b[2Kazyxyx\u001b[31m",
+"\ry\u001b[1Kxy \u001b[31m  a",
+"x\r\nb",
+"a\r\u001b[0m\u001b[31mx"
+],
+"cols": 9,
+"rows": 1,
+"attendu": [
+"xa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zz\u001b[K \r\u001b[31my\u001b[Kcc\u001b[2K",
+"\u001b[2K\n\u001b[Kb\n \u001b[2K\u001b[0m\u001b[0m\u001b[?25l",
+"\u001b[K\ny"
+],
+"cols": 4,
+"rows": 1,
+"attendu": [
+" y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[2K",
+" az\u001b[31m\u001b[?25l\u001b[?25l\u001b[1K",
+"zz"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"   zz",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z",
+"\u001b[2K\u001b[K\u001b[0m\u001b[1K\r \u001b[2K",
+"\u001b[0mzxyx\n",
+"\u001b[?25l "
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+" zxyx",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[31m\u001b[?25lzc\u001b[1Kb\n",
+"y\u001b[0m\u001b[K "
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"   b",
+"    y",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" a\r\u001b[0m\ncy\u001b[?25lc\nx",
+"\ra\u001b[31m"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+" a",
+"cyc",
+"a  x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\r\u001b[?25l\u001b[2Kyzb\r\n \n",
+"\u001b[?25l\u001b[K\r\u001b[K\r  \r",
+"\u001b[K \u001b[2Kbz\u001b[?25lc\u001b[K\u001b[?25l ",
+"\nb\u001b[0ma"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"",
+" bzc",
+"     ba"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[0m\u001b[31m\u001b[31m b\u001b[1K\u001b[0mc\u001b[0m\u001b[K",
+"x\n\u001b[?25l\u001b[2Kz\n\u001b[2K\r"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"  cx",
+"    z",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[K\u001b[31m\u001b[Kbzb\u001b[0m\u001b[2K\r\n",
+"\u001b[1K\r \u001b[?25lc\u001b[2K\ncx\u001b[0maa",
+"\rabxxc"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"",
+"",
+"  cxa",
+"abxxc",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"azyz"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+"azyz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[0m\u001b[?25la\u001b[2K\u001b[0mcb\u001b[1Kbb\u001b[K",
+"a\u001b[31m\u001b[31m\u001b[?25lb\u001b[Ka",
+"\u001b[2K\u001b[2Ka\u001b[K",
+"\u001b[2Ky\u001b[0mzx\u001b[31m\u001b[31m\r\u001b[1K",
+"y\u001b[2Kc\u001b[1K c\u001b[2K\u001b[2Kc"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[2Kac\u001b[?25l\u001b[31mb \u001b[?25l"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Ka\u001b[?25lcx\u001b[1Kc ",
+"acc \u001b[Kza\ry\u001b[K",
+"c\u001b[?25l",
+"\u001b[1K\u001b[31m \rxx\u001b[?25l"
+],
+"cols": 2,
+"rows": 5,
+"attendu": [
+" a",
+"cc",
+" z",
+"",
+"xx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[2Kaa\u001b[0m"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+" a",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nz\u001b[2K\u001b[1K\u001b[31my\u001b[K\u001b[31m\u001b[K",
+"\u001b[2Kx\u001b[?25l\u001b[2Kc\u001b[2Ky",
+"c\u001b[K\nx\u001b[1Kzy\r",
+"ccc",
+"\u001b[1K a\n\u001b[2K\u001b[K\n\u001b[0mc"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"a",
+"",
+" c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c",
+"a",
+"\u001b[2K\u001b[K\u001b[?25lbcay\u001b[0m\u001b[2K\n\u001b[2K"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"",
+"bc",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[?25l\u001b[31m\u001b[Ka",
+"\u001b[?25l",
+"\u001b[K\rx\u001b[31mab",
+"\u001b[?25lccx\u001b[1K"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"yz\u001b[0m\n\r\rc y\u001b[?25l\u001b[2K"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"yz",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[K\u001b[0my\u001b[0m\na \nb\u001b[1K\u001b[2K",
+"y",
+"\u001b[1K\u001b[0m\u001b[K\u001b[K"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"y",
+" a",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[K\u001b[?25lb\u001b[0my\u001b[31m c",
+"\u001b[2K\u001b[K\u001b[1Kxz\u001b[K\u001b[2K",
+"z\u001b[K\u001b[K\u001b[K\n\u001b[2K \u001b[1K\r\u001b[?25l",
+"zc\u001b[0m\u001b[K\u001b[Kzx\u001b[K ",
+"\u001b[Kxb\u001b[31mb"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"yby",
+"   z",
+"",
+"zczx",
+" xbb",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\u001b[?25lzx\u001b[K",
+"x\u001b[1K\u001b[K\r",
+"a\nz\u001b[2K\u001b[?25l\u001b[31m\n",
+"a\u001b[1Kxz\r\r\n\u001b[?25ly\u001b[2K\n",
+"\u001b[Kyc"
+],
+"cols": 1,
+"rows": 3,
+"attendu": [
+"",
+"y",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[?25lxz\u001b[0m\u001b[1K\u001b[?25l\u001b[31m\u001b[1Kx",
+"\rz\u001b[1Kx\u001b[31m\n"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+"",
+" xx",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[?25l\r",
+"c\u001b[2K\u001b[2K\u001b[?25l\u001b[31ma\u001b[31m\u001b[0m\u001b[0myxc",
+"cy \u001b[K\r",
+"a"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+" ayxccy",
+"a",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[0mac\r\n\nc"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"ac",
+"",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[2K\u001b[Kca"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+" ca"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mb\r\u001b[2K\u001b[1Kzx",
+"z\u001b[0mb\u001b[1K\r"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"zx",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[0mby \r",
+"\rx\u001b[?25lbay"
+],
+"cols": 12,
+"rows": 3,
+"attendu": [
+"xbay",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rz\nac\u001b[?25ly\u001b[K",
+"\u001b[K\nx\u001b[31mb\u001b[31ma "
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"a",
+"c",
+"y",
+"",
+"x",
+"b",
+"a",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\r",
+"\u001b[?25l\u001b[1K\u001b[?25la",
+"\u001b[0mcx\u001b[31m \r\n\u001b[?25lb"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"acx",
+"b",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25ly\u001b[31mbz\u001b[0m "
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"ybz",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b zc",
+"x",
+"cxb\u001b[31m",
+"\u001b[2K\u001b[1K\u001b[2K\u001b[1K y \u001b[2K\u001b[31m\u001b[K\u001b[2K",
+"\u001b[K\u001b[Kycb\u001b[?25lax\u001b[2K"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[31mazc\u001b[31my\u001b[0m\u001b[0m\u001b[2Kzb"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"zb",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[2Kx\u001b[31m\u001b[31m\u001b[?25l",
+"czb\u001b[K\u001b[1K"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"",
+"xcz",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[Kcb\u001b[?25l\r\u001b[Kz\u001b[2K",
+"z\u001b[Kc",
+"\u001b[K\u001b[K\u001b[1K\r\u001b[2K",
+"a\u001b[K",
+"xb\u001b[0m\u001b[0m\u001b[1K"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" a\r\u001b[K z\n"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+" z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mx a\nc zc",
+"z",
+"\r\u001b[0m\n\u001b[?25l",
+"\u001b[K\u001b[2K\u001b[0mybxxc"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+" zcz",
+"ybxx",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mzxbzyczz",
+"a y",
+"bb",
+"\ncayz\u001b[31m\r\u001b[2Kza"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"ybb",
+"   ca",
+"za"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\r\rcxx\u001b[K",
+"y",
+"\u001b[31ma\u001b[31m\u001b[31m\rcc\u001b[2K\nax\u001b[1K",
+"\u001b[?25l\u001b[0m\u001b[0mya\u001b[0m\u001b[2K\r",
+"cb\u001b[?25l\u001b[2Ka\u001b[31m"
+],
+"cols": 9,
+"rows": 1,
+"attendu": [
+"  a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ybz\r\u001b[0m\u001b[1Kb ",
+"c\r",
+"\u001b[?25ly\u001b[?25l\n\nc\u001b[0m\u001b[2K\u001b[0m\u001b[31m\u001b[2K",
+"\u001b[0mzy\u001b[31m\u001b[Kb\u001b[1K\r",
+"\r\u001b[2Kz\u001b[1K\u001b[Kb\u001b[31m"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"zy",
+" b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n \u001b[31mxyz\u001b[31my acc",
+"\u001b[2K\u001b[1K \n\u001b[?25l\u001b[31mya\u001b[0m\n\u001b[K",
+"\n\u001b[2Kcb\r\u001b[2Ka\u001b[0m\u001b[31m\u001b[K\u001b[?25la",
+"y\u001b[31mz"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"",
+"aayz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\ny y \n\u001b[0m\n\u001b[1Kcx\u001b[?25l",
+"x\u001b[31m\nb\u001b[0m",
+"\n"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"",
+"    cxx",
+"",
+"b",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kbb \n",
+"a\u001b[1Kyz\u001b[K\u001b[K",
+"\u001b[2K"
+],
+"cols": 20,
+"rows": 3,
+"attendu": [
+"bb",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m",
+"\r\u001b[0m",
+"y\r\r",
+"yy\u001b[?25l\u001b[2Kzc"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"  zc",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zc\r\u001b[2K\u001b[2K\u001b[1K\n\u001b[1K\u001b[?25lcx\r",
+" \u001b[?25l\n",
+" z \u001b[1K b\r\rz\u001b[31m\u001b[31m"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"",
+"zb"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r",
+"\nzzzz\u001b[?25l\u001b[2Ka\u001b[K"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"",
+"    a",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[K\u001b[Ka",
+"\u001b[0ma",
+" y\u001b[K\u001b[0m\u001b[?25l b\n\n\u001b[31m",
+"x\u001b[Kx\u001b[31m\u001b[31m\u001b[0m",
+"\u001b[?25l\u001b[?25lz z xza\u001b[0m\u001b[?25la"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"aa y b",
+"",
+"      xxz z xzaa",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\nb\u001b[2K\nc\n\u001b[0m\u001b[31m",
+"\u001b[31m\ra b"
+],
+"cols": 1,
+"rows": 5,
+"attendu": [
+"",
+"c",
+"a",
+"",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[?25lz"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"bz",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[0m\u001b[2K",
+" x\u001b[31m",
+"\u001b[0m\r\u001b[1K\u001b[Ky"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"y",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"axya\u001b[0m\u001b[2Kx\u001b[0mb\r\u001b[31m",
+"\u001b[?25labx \u001b[31m \u001b[1Kb\u001b[0m\r\u001b[1K"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"     b",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ycy\u001b[31m",
+"c\u001b[Ka",
+"\u001b[1K\u001b[?25l\u001b[Kbz\u001b[?25lx\u001b[2K\n\u001b[31mx",
+" \u001b[2K\u001b[K\u001b[Kx\u001b[Kz"
+],
+"cols": 9,
+"rows": 1,
+"attendu": [
+" xz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kc\u001b[1K\u001b[0m\u001b[0mb"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+" b",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\r\u001b[0m\u001b[2K\u001b[Kxza\u001b[0ma",
+"bxb\u001b[0m"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\r\n\u001b[1Kyx "
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+"yx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\n\ra\u001b[31m\u001b[?25l\u001b[31maxx\n",
+"\u001b[K\u001b[1K\u001b[0mc\u001b[?25l\u001b[31m",
+"xyc",
+"\u001b[?25lxa"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"xycxa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mc\r\u001b[2K\u001b[1K "
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kab\n\u001b[1Ka \u001b[0m\u001b[?25l\u001b[0m\rx",
+"zz\u001b[?25l"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+"xzz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ybc",
+"\u001b[0mc\n\u001b[1Ky\u001b[1K\u001b[31mx\u001b[?25l"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"ybcc",
+"     x",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mz\u001b[Kz\u001b[2Ky"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"  y",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"acz\u001b[1K\u001b[31mcc\u001b[K \rc\u001b[1K"
+],
+"cols": 1,
+"rows": 5,
+"attendu": [
+"c",
+"",
+"c",
+"c",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\ny\u001b[2K",
+"\u001b[0m\u001b[2Kc\u001b[0m\u001b[?25l\u001b[?25lxx \u001b[31m"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+" cx",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K",
+"\u001b[Kc\u001b[0m \u001b[0m"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"c",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[K\u001b[31m\u001b[0m\u001b[31m\u001b[Kaac\n",
+"\u001b[2K \u001b[Kc\n \u001b[K",
+" c\r\u001b[2K\u001b[31m"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[31mc \r\u001b[0mybxx",
+"\r",
+"\u001b[?25l",
+"\u001b[1K\u001b[2Kbb\u001b[0mb",
+"\u001b[0mx\u001b[0m \u001b[1K\u001b[0m"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[?25lx\u001b[0m\u001b[31mac\r",
+"\u001b[2K\u001b[?25l\u001b[1Kzcby\u001b[2K",
+"\u001b[Kzayx\u001b[Kcc\u001b[31m\n\u001b[0m ",
+"\n"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kaza",
+"x\u001b[2K\u001b[2K\u001b[K\u001b[0m \ny\r",
+"c\u001b[?25lc\u001b[31my\u001b[1K\u001b[31m\r\u001b[31m\n \u001b[?25l"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[31ma\r\r\u001b[?25l"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"ca",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[?25l\r\u001b[?25l",
+"\nc\u001b[?25l",
+"\r\u001b[31m\u001b[31m\u001b[0m\u001b[Kyx\u001b[0mx\u001b[1K\n"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\n\r\u001b[0mxxz\u001b[Ka",
+"\r\u001b[0m\rb\u001b[1K\u001b[Ka\u001b[1K\n",
+"yxzac \ra",
+"\r\u001b[31m\u001b[Kyzxya"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"yzxya"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zaxx\u001b[31m\u001b[Ky",
+"x\n\u001b[0mz\u001b[Ky\u001b[1K"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"za",
+"xx",
+"yx",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\n\u001b[31m\u001b[?25l  a",
+"\u001b[31ma\u001b[K\u001b[?25lxc"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"y",
+"   aaxc"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kc\u001b[1Ka\u001b[0mz\u001b[2Kxbb\rb",
+"aa\u001b[2K\u001b[?25la\u001b[0m\u001b[Ky\u001b[1K\u001b[2K",
+"za\u001b[?25l\u001b[1K\u001b[?25layxb",
+"xyy"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"bx",
+"yy"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[31my z ",
+" ",
+"a\u001b[Kba"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"y",
+"",
+"z",
+"",
+"",
+"a",
+"b",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kby\u001b[K\u001b[?25l\u001b[1K\u001b[?25l",
+"\u001b[1Kac\n\u001b[Kb ",
+"a"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"  a",
+"c",
+" b",
+"a",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[?25l"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"z",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kx\u001b[?25l\u001b[?25l\n\u001b[31m\u001b[K"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"x",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nxba\u001b[K\u001b[K\u001b[K",
+"x \n\u001b[2K\u001b[31mybz",
+"c\u001b[0m\u001b[2K\u001b[2Kb\nc\u001b[Kb\u001b[?25la",
+"x\u001b[2K\racb\u001b[K"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+"acb"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mzaay\u001b[1Kb",
+"\nb\u001b[K\u001b[1Kcz\u001b[31mcz",
+"zx\n\u001b[31m \u001b[K \u001b[1K\u001b[0m\u001b[K\u001b[1K\n"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"zx",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zx",
+"\u001b[2K\u001b[31mcb\n\u001b[?25l",
+"y\u001b[?25l\u001b[1K\u001b[K\u001b[K\u001b[2Kb a\rb",
+"\r\rbz\u001b[Kb",
+"\n\rz"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"  cb",
+"",
+"bzb",
+"z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\rbb"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"bb",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mz\u001b[2Kc\u001b[31m\u001b[?25l ",
+"ayz\u001b[1K\n\u001b[0maacz\u001b[?25l",
+"\u001b[31mb\u001b[?25lya\u001b[1Kyx by",
+"\u001b[0m\nb\u001b[1Kb\u001b[2K\u001b[K y\r\u001b[2K\u001b[K"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"      a",
+"      y",
+"x by",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" b\u001b[31myx\u001b[31m\u001b[?25l\u001b[?25l",
+"yya \u001b[?25l ",
+"cb\r\u001b[0mb",
+"ycc\u001b[1K\u001b[?25l\u001b[Kx",
+" \u001b[2K"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+" byx",
+"yya",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bb\u001b[1K\n\u001b[31mb\u001b[0m\u001b[1K",
+"\u001b[Kb",
+"\n\u001b[1Kc\u001b[K\u001b[2K\n y\u001b[1Kb\u001b[31m",
+"\u001b[31m\u001b[1Kzc\rzz",
+"\u001b[0m \u001b[Kcx\u001b[2Kc\u001b[1Kaa\u001b[2K"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"",
+"   b",
+"",
+"        z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"aby\n",
+"\u001b[0m\n\u001b[1K\n  bbx \r\u001b[?25l"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"aby",
+"",
+"",
+"     bbx",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[?25lyx\u001b[0m\u001b[2Ka"
+],
+"cols": 20,
+"rows": 3,
+"attendu": [
+"  a",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[31m\u001b[0m\u001b[0mb\u001b[31mz",
+"\r\u001b[2K "
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"bb",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\r\u001b[K",
+"\u001b[0may\rz \u001b[31mx\n\u001b[0m",
+"ybcz x\u001b[2K\u001b[?25lbab",
+"\u001b[1K\u001b[31mb\u001b[0mx"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"   ybcz",
+"     bx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[Kx",
+"\u001b[Kbcb \n\r\r",
+"\u001b[0m\r \u001b[2K\u001b[0m\u001b[K\u001b[2Kya\u001b[Kb "
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"zxbcb",
+" yab",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \n\u001b[31m\u001b[31m\u001b[K \r"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bx \r\u001b[1K\u001b[2Kay\u001b[?25lbzz"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+"aybzz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\r\u001b[0m",
+"c\u001b[K\u001b[31m \u001b[2K "
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bx\u001b[0my\ra",
+"\u001b[K\nxz\u001b[31ma",
+"c\u001b[31m\u001b[1Kzb\u001b[1K\u001b[0m\rb\u001b[31m\u001b[?25l"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"a",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K",
+"\u001b[K\u001b[31m\r\ryaa\u001b[0my\u001b[1K ",
+"ya",
+"b\u001b[0m\u001b[1K b\u001b[2K"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"     ya",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\r\u001b[K\u001b[1K\u001b[1K"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\ny\u001b[K\u001b[2K\n\u001b[K\u001b[1K\rx\n\u001b[1K",
+"\u001b[?25l",
+"yz\n\nc\u001b[0m \u001b[?25l"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"",
+"x",
+" yz",
+"",
+"   c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\r\u001b[K\u001b[1K\nz\u001b[?25l\u001b[?25l\u001b[31m\u001b[2K\u001b[1K"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"xa\u001b[2K\u001b[1K\u001b[31m"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[?25l\u001b[2Kx\u001b[2Kz a\r\u001b[31m",
+"x\u001b[1K \u001b[?25l"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+"   a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\nyxxyy\u001b[1K\u001b[0mc",
+"\u001b[0mc\u001b[1Kcc\u001b[2K\r\u001b[0m",
+"b\n\u001b[0mb\u001b[2K",
+"x\u001b[31mzy",
+"\n x\nx"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[?25l\u001b[K\u001b[31mc\u001b[31m\u001b[2K "
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r \u001b[?25lc\n",
+"a\u001b[?25lzzxc\n\r"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[1Ky",
+"y bzy",
+"\r\r\u001b[2K zca\u001b[31m\u001b[K",
+"ac a\n\r"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K\rxx\nacy\u001b[Ka",
+"\u001b[1K\u001b[0m",
+"axy\u001b[K\r\u001b[0m\u001b[K",
+"\n \u001b[1K\u001b[?25l\u001b[1K\u001b[0m ",
+"xxaz\u001b[31mc"
+],
+"cols": 2,
+"rows": 5,
+"attendu": [
+"",
+"",
+"xx",
+"az",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[?25l",
+"\u001b[?25lc zz\u001b[1K\ry"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"y",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mc\r",
+"\u001b[1Kx\u001b[K\u001b[2K\u001b[31ma",
+"ac\n\u001b[1Ky\u001b[1K\u001b[?25l\u001b[1K",
+"ca\u001b[?25lcbxb\rbc\u001b[1K"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"",
+" cac",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[0m\u001b[2K\u001b[31m\u001b[?25l\u001b[2Kx \r",
+"aza\u001b[0mx \u001b[0m\r\u001b[K\u001b[2K",
+"\u001b[0mzzz"
+],
+"cols": 7,
+"rows": 8,
+"attendu": [
+"zzz",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kzc\u001b[K\u001b[?25lcyyyca",
+"c  \u001b[?25lx\n\u001b[31mc \u001b[2K\u001b[1Kx",
+"\u001b[31m x"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"cac",
+"  x",
+"",
+"  x",
+" x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[0ma\u001b[K\u001b[1Kz"
+],
+"cols": 4,
+"rows": 1,
+"attendu": [
+"  z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nxx\u001b[1Kzz\n\nx",
+"\n c\u001b[31mxc\u001b[1Kx\u001b[?25l"
+],
+"cols": 20,
+"rows": 3,
+"attendu": [
+"",
+"    x",
+"         x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"x",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rzb\u001b[?25lz\u001b[31mb\u001b[2Kxbb",
+"\u001b[Kxzcbyaa\u001b[0m",
+"\u001b[1Kb\n\u001b[31m\u001b[2K\u001b[1K\u001b[1K\u001b[0m\rzz",
+"\r\u001b[1K\u001b[0mz\u001b[Ka\u001b[1K",
+"xxb\u001b[1K\u001b[31m\u001b[0m\u001b[K\r\u001b[2Kc\u001b[?25l\n"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"              b",
+"c",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[1K"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[31mc\u001b[2Kaz\r\n",
+"\r\n\r"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+" az",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kb\u001b[?25l\n\u001b[2K"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"b",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n",
+"\u001b[0m\u001b[Kbzx \rc y\u001b[31m",
+"z\u001b[31m\u001b[?25l \r"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"",
+"bzx",
+"c y",
+"z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nazc\r\u001b[31mzz",
+"a\u001b[?25ly",
+"\u001b[K\u001b[2Kby\u001b[K",
+"\u001b[1K\u001b[2Kyy\u001b[2Kzbb",
+"\u001b[0m"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"",
+"        zbb",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[1K\u001b[1Kz\rz\r\u001b[K\u001b[2K\r\u001b[0m",
+"x\u001b[1K",
+"ca x\u001b[Kby\u001b[1Kb",
+"\nxbb\u001b[31m\u001b[0m\u001b[?25l\u001b[0m"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"cz\u001b[?25l\u001b[0m\r\u001b[K\rzcab\r",
+"x\u001b[2K",
+"\u001b[0mxycb\u001b[K\u001b[31max\u001b[K"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"ba",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kc\u001b[?25l\u001b[31m",
+"\u001b[2K\u001b[?25lx"
+],
+"cols": 4,
+"rows": 1,
+"attendu": [
+" x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\n\u001b[2Kb"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\n",
+"\u001b[1Kbbx\r\u001b[Kaz\u001b[1K\r"
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c",
+"y\u001b[Ka\u001b[31m\u001b[?25lx",
+"\u001b[?25lbxcxxc\u001b[Kb\u001b[1Kx\u001b[0m",
+"\u001b[31mx\u001b[K bycy",
+"\u001b[?25la"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[0m z\u001b[2Kx",
+"\r\u001b[1K"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"   x",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[31ma\u001b[2Kb\n",
+"\u001b[Kzy\u001b[K",
+"ca y\u001b[?25lc",
+" \u001b[31mb\r\u001b[1Kya ",
+"x\ry"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"  b",
+"   z",
+"yca",
+"ya x",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n",
+"\r \u001b[?25lx"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"",
+" x",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mz\u001b[2K",
+"azz\r\u001b[?25la\u001b[?25lca\r\rz",
+"\u001b[31m\u001b[?25l\nxy",
+"x\u001b[Kxx\u001b[0m\u001b[2Ka\u001b[0mb\u001b[31m\u001b[31m\r",
+" c\u001b[K\u001b[0mxazz\u001b[31m \r\u001b[1K"
+],
+"cols": 1,
+"rows": 3,
+"attendu": [
+"z",
+"z",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[31m\u001b[31m\n\u001b[?25lz",
+"c",
+"\u001b[31mx",
+"\u001b[2Ka\u001b[0m\u001b[31mcz\u001b[31m\u001b[K\u001b[Kz\u001b[?25l\u001b[0m",
+"\u001b[31myz\u001b[1Kx\ncb"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"",
+"",
+"acz",
+"",
+"x",
+" cb",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\n\u001b[31maz \u001b[31mac\u001b[0m\u001b[K",
+"xx"
+],
+"cols": 1,
+"rows": 3,
+"attendu": [
+"c",
+"x",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rzxz\u001b[K\u001b[31m",
+"a\r \u001b[31m\u001b[?25l\u001b[0m",
+"\u001b[?25l\u001b[K\u001b[?25l\r\u001b[1Kb",
+"z\u001b[K\u001b[0mz\u001b[1K\u001b[0m\nbx\u001b[K",
+"y\u001b[31m\u001b[2K\r\u001b[1Kya\u001b[2Kxa"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"  xa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" x\u001b[31mxy",
+"\u001b[?25l\r\u001b[K\u001b[K\n\r\u001b[2K\u001b[1Ky ",
+"\u001b[?25l\u001b[?25l\u001b[K\u001b[31m\n\u001b[0m\u001b[Kz\u001b[2K\u001b[2K\u001b[?25l"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"",
+"y",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K \nyyz",
+"\u001b[2Kyz\u001b[2Kb\u001b[?25l\u001b[0m",
+"\n\u001b[2Ky\u001b[Ka",
+"bzcyx\u001b[31m\rx\u001b[2K"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"",
+"    y",
+" b",
+"  yab",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\n\u001b[1Ka \u001b[?25l\u001b[?25l\u001b[0m y\u001b[2K"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[2K"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rc\u001b[K\u001b[31m\u001b[2K a\nc",
+"z \u001b[2K\rx\u001b[2K\u001b[0m",
+"\u001b[0m\u001b[?25l\u001b[0my\r",
+"aab\u001b[1K \u001b[?25l\u001b[1K",
+"c\r\u001b[31ma\ra\u001b[31myxb"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"ayxbc"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[?25la\u001b[0m\u001b[31mcbb",
+" \u001b[1K\n\u001b[K",
+"x\u001b[1Kz\u001b[Kyx\u001b[K\u001b[0m",
+"a",
+"ab\u001b[1K"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"",
+"",
+" zy",
+"xaa",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[1Kx\n\u001b[31m\u001b[K ",
+"\u001b[0m\u001b[0m\u001b[1Kz\u001b[1K",
+"a\u001b[2K\u001b[2Kz\u001b[1K\u001b[?25lz\u001b[31m\u001b[1K"
+],
+"cols": 20,
+"rows": 3,
+"attendu": [
+" x",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\u001b[?25lbx \u001b[1K\u001b[?25lcy\ry\u001b[31m",
+"cz \u001b[2K\u001b[1K\u001b[2K\nc\u001b[K x",
+"\u001b[0mby\u001b[1K\u001b[1K \u001b[0m\r\u001b[31m xx"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"x",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mxz\u001b[1Kyx \u001b[2K",
+"y\u001b[31mz\n\u001b[0m\u001b[31m",
+"\nayxcy\n \u001b[0m\n\u001b[1K\u001b[?25l",
+"\n\u001b[0mx\u001b[1K\u001b[2Kz\u001b[0m\u001b[1K\u001b[?25lz\u001b[Ky",
+"\u001b[?25lx\u001b[0m"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+" z",
+"yx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\r\r\u001b[2K\u001b[1K\ryc",
+"\u001b[31m",
+"\n",
+"b z\n\ra\u001b[?25la\u001b[?25lz",
+"a\u001b[?25l\u001b[31ma\u001b[31m"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"",
+"yc",
+"  b z",
+"aazaa",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[0mx\u001b[?25lx\n\u001b[31mc\n\u001b[K\u001b[1K",
+"\u001b[Ky\n\u001b[0m \u001b[K yaza",
+"\u001b[0my\u001b[31m\u001b[0m \u001b[2K"
+],
+"cols": 1,
+"rows": 5,
+"attendu": [
+"a",
+"z",
+"a",
+"y",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K",
+"y\u001b[2Kz\r\u001b[0m\u001b[?25l\u001b[1K\u001b[0m\u001b[?25lx"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"yb\u001b[Kyy \u001b[?25l\u001b[2Ky",
+"\u001b[?25l\u001b[?25lb\r\u001b[Kbcy",
+"y",
+"\u001b[Ka \na\u001b[31m\u001b[0m",
+"ay"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"  y",
+"bcy",
+"ya",
+"",
+"aay"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25lz"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kxac\rzb\u001b[31m\r"
+],
+"cols": 12,
+"rows": 2,
+"attendu": [
+"zbc",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bx\u001b[K\u001b[1K\u001b[1Ka\u001b[?25lz\u001b[31m\u001b[1Kz\u001b[2K",
+"bb",
+"z\n\r\rc zx\u001b[0m"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"z",
+"c zx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\nb\u001b[?25lc\u001b[0m"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"x",
+"",
+"b",
+"c",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[?25l\u001b[Kac\n"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"ac",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[1K\u001b[0ma\u001b[2K\u001b[0m\r\u001b[31mbx"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"bx",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[1Ky\u001b[31m\u001b[?25lx\u001b[0m\u001b[K\u001b[?25la",
+"cx \r\u001b[31m za\u001b[1K",
+"\r\u001b[1K\rcc",
+"\u001b[?25l\u001b[2K\u001b[2K\u001b[31mb",
+"\n\u001b[31mb"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"yb\u001b[Kb\u001b[0m\u001b[2K \u001b[2K\u001b[31m",
+"x\ryy\u001b[1K"
+],
+"cols": 20,
+"rows": 3,
+"attendu": [
+"    x",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a",
+"\r\u001b[2K\u001b[31m\r\u001b[?25l\u001b[31m\u001b[?25l\u001b[?25l",
+" \u001b[31m\u001b[K\u001b[0m\r\r\u001b[31m\u001b[1K\u001b[K\nz",
+"b\r",
+"yby \u001b[2Ka"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"",
+"    a",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kxy \n \r\u001b[K cz\n"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"z",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"a",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K\u001b[?25l\u001b[?25l\u001b[2Kz",
+"yay\u001b[K\u001b[31m\u001b[31m\u001b[2K\u001b[Kxxb",
+"\nc\u001b[1K\u001b[2K \u001b[1K",
+" c\u001b[1K\u001b[0m",
+"\u001b[1K\u001b[?25lcza "
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"    xxb",
+"           cza",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\n\u001b[2K",
+"\u001b[1K\u001b[0m \u001b[?25l\ry\u001b[0m\u001b[0m\u001b[31ma\r"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"ya",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\r\u001b[1K\r"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\n\u001b[31mbcc\u001b[?25l\r",
+"\u001b[0m\na\n\r\u001b[?25lb",
+"x\u001b[0mx\rcx\u001b[31m\nc\u001b[?25l\u001b[31m\r",
+"\u001b[0m\r\nc"
+],
+"cols": 12,
+"rows": 3,
+"attendu": [
+"cxx",
+"  c",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[K ",
+"  y\u001b[1Kyy\u001b[2Kzxb\u001b[?25l\u001b[1K",
+"\u001b[31mx\u001b[?25l\u001b[1K \r\u001b[K\r\r\u001b[31m"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+" zx",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m",
+"y\n\n\u001b[?25l"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"y",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n \n\u001b[31m\u001b[2K\u001b[1Kya\u001b[2K"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[31m\u001b[31m\u001b[K\u001b[?25l"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rb\u001b[1K\u001b[2K\n\n"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"aa\u001b[1Ka\u001b[31m\u001b[2Kb\u001b[31m\n ",
+"\u001b[K\u001b[31m\u001b[1Kc \u001b[?25lb\u001b[?25l",
+"\u001b[0m a\nb\u001b[0m",
+"\r\u001b[Kb \r\u001b[0m\u001b[Kz\u001b[31mb"
+],
+"cols": 20,
+"rows": 3,
+"attendu": [
+"   b",
+"     c b a",
+"zb"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\r\u001b[31mz\u001b[?25l\n\nb",
+"\n\u001b[K\n\u001b[K\n",
+"\u001b[31mb\u001b[?25l\u001b[0m\u001b[1K yx",
+"\u001b[1Ky c\ry\r \u001b[?25lx"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"",
+" b",
+"",
+"",
+" x    y c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[K\u001b[?25l\u001b[K\u001b[31mbb\u001b[1K\u001b[?25l\u001b[1K",
+"b\u001b[0mc\u001b[K\u001b[0mc\u001b[1K\u001b[Ka",
+"\u001b[?25l",
+"\u001b[Kz\u001b[1K\n\u001b[2K",
+"a\u001b[K\u001b[2Kxz\rz"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"x",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \n\u001b[2K\n\u001b[31m \u001b[2K\ry\u001b[1K",
+"bxc\u001b[Kz\u001b[0m \u001b[1K\u001b[0m"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25lc"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"c",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[31m",
+"x\u001b[?25l \u001b[31m",
+"y\rz \u001b[1Kz\u001b[K\u001b[31m\n"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"  z",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kzy\u001b[?25l",
+"\u001b[?25l",
+"\u001b[31m\n "
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+"zy",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mx\u001b[2K\ra\r\u001b[?25la\u001b[?25lz",
+"\u001b[K\u001b[0m\rx\rcz\r",
+"\u001b[0m\u001b[Kay\u001b[?25l\u001b[1K\u001b[2Kb",
+"\u001b[0m\u001b[2K\u001b[?25l",
+" "
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[2K\rzba\u001b[1K",
+"cx\u001b[K\u001b[1K\u001b[?25l\u001b[?25l c\r\u001b[31ma",
+"\u001b[?25lc\u001b[K\u001b[0m\u001b[0mz\u001b[0m ",
+"\n\n"
+],
+"cols": 1,
+"rows": 5,
+"attendu": [
+"c",
+"z",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[?25l\u001b[0m",
+"\u001b[1Kz\u001b[?25l\u001b[2K yx\u001b[31m\r\u001b[?25la\u001b[0m"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"a  yx",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\n\u001b[31mb ",
+"\r\u001b[?25l\u001b[2K"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bybc\r\u001b[0m",
+"a\u001b[?25l\n",
+"b",
+"\u001b[?25l\u001b[31my",
+"by"
+],
+"cols": 4,
+"rows": 1,
+"attendu": [
+"y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mzza x\u001b[1K\u001b[K\u001b[0myzy",
+"\u001b[1K\u001b[K"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ac\u001b[31m c\u001b[31m\u001b[2Ky\u001b[2K",
+"\u001b[0mz\n\ny\u001b[K\u001b[K\u001b[1K",
+" ybba\u001b[0m\u001b[1Kc \u001b[2K"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"",
+"",
+"  y",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x",
+"\u001b[?25l\u001b[1K",
+"c\u001b[?25lyc",
+"\rx\u001b[1K\n\u001b[0m"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"abaz\u001b[0m\u001b[0mcc\u001b[2Kay\u001b[K",
+"\r\u001b[31m\u001b[1Ka\u001b[1K\u001b[31mz\r"
+],
+"cols": 1,
+"rows": 3,
+"attendu": [
+"a",
+"",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mxx"
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+"xx",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mx\u001b[1K\u001b[K",
+"\u001b[0mxy\u001b[0my",
+"\u001b[31m x b"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+" xyy x b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Ky\u001b[1K\r\u001b[K\u001b[0m b",
+"y\u001b[31m\u001b[2K",
+"zb"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[0m\u001b[0mz"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mz",
+"c\u001b[K\n\u001b[2K\u001b[31m"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"z",
+"c",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[?25l\u001b[31mc\u001b[31ma",
+"\u001b[0m\u001b[1Kxa\u001b[Kc\u001b[2K\nzz\u001b[0m",
+"\u001b[0ma\nx\u001b[?25l\u001b[1K\rz\n\u001b[0m\u001b[31my",
+"c\nc\n"
+],
+"cols": 12,
+"rows": 3,
+"attendu": [
+" yc",
+"   c",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ac\u001b[31mx\u001b[1K\u001b[31mc\u001b[0m",
+"bzc\u001b[1Kz\u001b[31ma\u001b[?25l\u001b[K\u001b[0m ",
+"b\u001b[31mb\u001b[?25lyy\u001b[0m"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"       za bb",
+"yy",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[31m \n\u001b[2K\u001b[K\u001b[2Kcx",
+"czzc\u001b[31m\u001b[31m",
+"\u001b[2Kb\r\u001b[2K \u001b[0m\u001b[2K\r \u001b[31mx",
+"\u001b[31mya",
+"\r\n\u001b[1K\u001b[31m"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[2K\u001b[2K ",
+"\u001b[31m\u001b[1Ka\u001b[Kz\u001b[31m\u001b[0mc\u001b[0mcyb"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+" azcc",
+"yb",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[?25l\u001b[31m\u001b[31mx",
+"z\u001b[Ky\u001b[2K\r",
+"\nc ",
+"\u001b[1Kz\u001b[?25l\n\u001b[Kay\r\n\u001b[2K \r",
+"\u001b[0m\u001b[31max"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"ax"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\nac \u001b[?25lbcb\u001b[0ma",
+"\u001b[2K\n\u001b[2Ky\u001b[1Ka \u001b[2K\u001b[K\u001b[0mz\r",
+"cczx",
+"c\u001b[31mx\n\u001b[31m\u001b[2K "
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"cczxcx    z",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"  z\u001b[?25l\u001b[1K\u001b[?25l\u001b[?25lx\u001b[31m",
+"\u001b[0m",
+"c\nc  \u001b[0m",
+"\u001b[2K\u001b[0m",
+"\rbayz"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"   xc",
+"bayz",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" bb\n \n\u001b[?25lb\u001b[0my\u001b[0m",
+"\u001b[31m",
+"  a",
+"\u001b[?25lzz"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+" bb",
+"",
+"",
+" by",
+"  a",
+"zz",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"yz\u001b[2K\n",
+"\u001b[2K\n\n\r\n\na"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[31m\u001b[K\u001b[0m",
+"b\u001b[Ky\r\u001b[1Kxy\r\u001b[?25l\u001b[0mb\u001b[0m",
+"bxy\u001b[1K\na\u001b[?25ly\u001b[31m\u001b[1Kby"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"b",
+"y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\rxb \u001b[?25lc\r\u001b[2K\r\r\u001b[?25l",
+"\u001b[2K\u001b[31m",
+"\u001b[31m\u001b[?25l\r\n\u001b[?25lz",
+"\n"
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+"",
+"",
+"z",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nb\u001b[Kcabyz\r",
+"cc"
+],
+"cols": 9,
+"rows": 1,
+"attendu": [
+"ccabyz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ccb\u001b[0mxz y"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"ccbxz",
+" y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"yc",
+"y",
+"y\u001b[?25l\u001b[2K\nyb\u001b[0m\nc\u001b[?25l\n",
+"yz\r\u001b[0mxa\u001b[0m x \u001b[2K",
+" \u001b[Ky\u001b[0mybbc"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[0m\u001b[1K",
+"a\u001b[?25l",
+"\u001b[1Kx \u001b[K\u001b[2K\u001b[31m abxz",
+"x\r\rxa",
+" b\u001b[K"
+],
+"cols": 12,
+"rows": 3,
+"attendu": [
+"xa b",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\r",
+"\u001b[?25l\u001b[31m\u001b[31m\rxc\rcyz",
+"  \n\u001b[1Kzb\u001b[K\ra",
+"\r \u001b[K\u001b[2K\u001b[31m\u001b[?25l\u001b[?25la\n"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"cyz",
+" a",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[0m\u001b[1Ky\u001b[31m\u001b[?25lb\u001b[K"
+],
+"cols": 2,
+"rows": 5,
+"attendu": [
+"",
+"yb",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[K\u001b[?25lb \r",
+"ybbc",
+"x\u001b[0m"
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+"ybbcx",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[K\r\u001b[1K\u001b[31m",
+"\u001b[?25l\u001b[2K cx\u001b[31m\rx\u001b[?25lxy"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+"xxy"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\rc\u001b[31m\r",
+"b\n\u001b[2K",
+"aya"
+],
+"cols": 9,
+"rows": 1,
+"attendu": [
+" aya"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kyb\u001b[31m"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"yb",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\ryx\r\u001b[2K \u001b[1K\u001b[?25l\n\u001b[1Kx",
+"  \ncb cb\u001b[?25l\u001b[0m",
+"z\u001b[1K\u001b[2Kcz ",
+"\u001b[2Kzc ",
+"b\u001b[31m"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"",
+" x",
+"",
+" cb",
+" cb",
+" cz",
+" zc",
+" b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"xb\r  \u001b[?25lz\u001b[1Kb",
+"\r\n\u001b[Kz  \r\n\n\r\u001b[1K",
+"\u001b[Kx\nc\u001b[1K\r\r",
+" \ra"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"",
+" b",
+"z",
+"",
+"",
+"x",
+"a",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[?25lcy",
+"b \u001b[?25l \n\r\u001b[0m"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"b",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[2K a\u001b[K\r",
+"xyccbbaa\u001b[?25l"
+],
+"cols": 9,
+"rows": 1,
+"attendu": [
+"xyccbbaa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"aay\u001b[2K\u001b[31myxa",
+"x\u001b[2Kz\u001b[?25l\u001b[1Kzb",
+"yaz\u001b[0m\u001b[2K\r\u001b[?25lcx\u001b[1K\u001b[0m",
+"c\r\r\u001b[31mz\u001b[?25l\r"
+],
+"cols": 12,
+"rows": 2,
+"attendu": [
+"        zbya",
+"z c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Ka\u001b[31m \u001b[?25l\n\u001b[31mc\u001b[?25l",
+"\u001b[2K\r \u001b[2K\u001b[2K \u001b[2Kyb\rz\u001b[0m",
+"\u001b[?25lyc\u001b[Ka"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"a",
+"zyca",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[0m\u001b[K",
+"\u001b[2Kxbz\u001b[?25l\r"
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+" xbz",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nbc\ry\u001b[2Kzycb\n",
+" z\r\u001b[0m\u001b[1Kx\u001b[31m\u001b[?25l\u001b[0mc\u001b[31m"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+" zycb",
+"xc    z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"xb\u001b[Kz\r\r\u001b[2K"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[2K\u001b[31mzb ",
+"\u001b[2K\nyc\r \u001b[?25l\u001b[1Ky\nx"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"   y",
+" y",
+"  x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\n\u001b[1K\u001b[K\u001b[0m",
+"c\ncy \u001b[K\nx\u001b[31m"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"x",
+" c",
+"  cy",
+"     x",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[?25l ",
+"ca\u001b[0m\u001b[K \rc",
+"\ny\u001b[?25lzc\u001b[31m\n ",
+"y\u001b[2K\u001b[2Kz\u001b[Ky\u001b[K",
+"\n\u001b[31mz\u001b[1Kc\u001b[1K\u001b[1K\u001b[K\r"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"z",
+"y",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[?25l\u001b[1K y\u001b[?25l",
+"azy\u001b[?25l\u001b[2K ab\u001b[2K\rac",
+"bb",
+"\u001b[1K\u001b[0myza\u001b[Kzb"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+" y",
+"az",
+"",
+"ac",
+"",
+"yz",
+"az",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Ky\u001b[1K\u001b[31mzy\u001b[1K\u001b[0m\u001b[0mz\u001b[1K",
+"bc\u001b[31m\nc"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ca  aa"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"ca  aa",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\n x\u001b[K",
+"\u001b[?25ly",
+"b\u001b[31m",
+"yby"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"x",
+"  xy",
+"byby",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[K",
+" cx \rc",
+"\u001b[0m\u001b[2Kzc\u001b[2K\u001b[?25l",
+"\u001b[0m\u001b[K\u001b[0m\u001b[1K y\u001b[Kyac\r"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"    yyac",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\nbx\u001b[K\u001b[2Kx\u001b[Ky",
+"\r",
+"cb\u001b[2K\r\u001b[0m\u001b[31m\u001b[0m\u001b[?25ly\u001b[0mcz",
+"\u001b[2Kb\u001b[2K\r\n\u001b[Kxyca"
+],
+"cols": 1,
+"rows": 3,
+"attendu": [
+"y",
+"c",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K\u001b[31ma\u001b[2K",
+"\u001b[?25la\u001b[2Kx\u001b[?25l\u001b[31m\u001b[?25l",
+"\u001b[K \u001b[K\u001b[1Kab\u001b[Kb"
+],
+"cols": 2,
+"rows": 5,
+"attendu": [
+"",
+"",
+"ab",
+"b",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\r\u001b[1K\u001b[Ky\u001b[1Kb\u001b[2Kzyc\n",
+"x\u001b[?25lz"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+" x",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rzz\u001b[K",
+"b",
+"y",
+"\u001b[31mz\u001b[0mx \u001b[2K\u001b[2K\u001b[K\u001b[1K"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"x",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ac\u001b[2Kcy\u001b[0m\u001b[?25l y"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"  c",
+"y y",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31mc\u001b[0may\u001b[1K"
+],
+"cols": 2,
+"rows": 5,
+"attendu": [
+"ca",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25lxy\u001b[1K\u001b[0m\n \u001b[0m"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0myz\ray\u001b[1K\u001b[Kcy",
+"\u001b[1K \u001b[K\u001b[?25la\u001b[?25lc"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"     ac",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l\u001b[K\u001b[K\r",
+"x\ny\u001b[?25lc\u001b[0my\n\r",
+"\u001b[31ma",
+"cz\u001b[31m z\n",
+"\u001b[1Ka\r\u001b[2K\u001b[1Kb\u001b[?25l"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"x",
+" ycy",
+"acz z",
+"b",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[?25lx\nx\r\n\u001b[2Ky\u001b[1K",
+" x\u001b[Kz\u001b[?25l\u001b[0mz\u001b[1K\n"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"x",
+" x",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r \n\u001b[2K",
+"\rac"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"",
+"ac",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K\u001b[31m\n\nc",
+"y\u001b[K\u001b[?25l\r\nx"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+"",
+"cy",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\nyx",
+"\u001b[2K\u001b[K\rb\u001b[?25ly\u001b[Kya\u001b[?25l"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+"byya"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[0m"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"y",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\ra c\u001b[2K\u001b[2K\u001b[0myz"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+"   yz"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[K",
+"\nxy\n",
+"\u001b[2K\r"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"a",
+"",
+"x",
+"y",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[31m\u001b[2K  \u001b[Kb\u001b[?25l"
+],
+"cols": 20,
+"rows": 5,
+"attendu": [
+"   b",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+"a",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[0mca\r"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+"bca"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\u001b[2K\u001b[2K\u001b[31m\nc"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"",
+" c",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+"x",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"xc"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"xc",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K\u001b[Kbz\r",
+"\u001b[31m",
+"\u001b[0mz",
+"\u001b[31m"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+"zz",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[?25l\u001b[2K\n\u001b[31m\r",
+"\u001b[1K \u001b[K\u001b[0m\u001b[0m\u001b[1K\u001b[31m\u001b[31m",
+" y\u001b[31mzb\n\u001b[1Kc\u001b[1K\u001b[0m\r",
+"\u001b[K\u001b[1Ka\u001b[1K\u001b[1K\u001b[?25l"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[2K\u001b[Kzxy\u001b[?25l\u001b[31m\u001b[K",
+" y\u001b[K\u001b[2K",
+"c",
+"yy\u001b[1K",
+"z"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+"  z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[2K\u001b[2Ky\u001b[?25l\u001b[K\n\rb\u001b[1K\u001b[K",
+"b\rb",
+" bx\u001b[K",
+"\u001b[31m\u001b[0mcx\u001b[1K\u001b[2K"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+" y",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" ",
+"x\u001b[K\u001b[1K "
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\r x\n\u001b[2Kzz"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"  z",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[K ",
+"\u001b[Kc\u001b[Ky\u001b[Kz\u001b[0mb"
+],
+"cols": 4,
+"rows": 5,
+"attendu": [
+"",
+" cyz",
+"b",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[?25l\u001b[K\u001b[?25l\u001b[0mzy\u001b[1K\u001b[K\u001b[?25lc",
+"yx\u001b[2Ky\u001b[31m\u001b[1K\rc\r\n  ",
+"\u001b[2Kczz\u001b[0mb\r",
+"\u001b[31m\u001b[?25l\rba",
+"\u001b[0m\r\u001b[?25l\r\u001b[0m\u001b[1K\u001b[?25l\u001b[K\u001b[K\u001b[0m "
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"c",
+"  czz",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bc",
+"\u001b[31m\u001b[?25lb\u001b[1K\u001b[1Kbza",
+" \u001b[31mb"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"   b",
+"za b",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[2K\u001b[31m a\rxaza",
+"\u001b[?25lxy z \u001b[2K\u001b[31m\n\u001b[31mac",
+"b\u001b[1Kb\u001b[K\r\r\r\u001b[31mabc",
+"\u001b[31mzx\u001b[K\u001b[0mz\u001b[1Kc\u001b[1Kc"
+],
+"cols": 5,
+"rows": 3,
+"attendu": [
+"    a",
+"abczx",
+"  c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kz ",
+"\u001b[0m\u001b[?25l \u001b[1K\r\u001b[Ky\u001b[0mya",
+"x \u001b[K\u001b[K\r",
+" \u001b[?25l\r\u001b[31m\n\u001b[?25l\u001b[K"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+" yax",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1Kc \rxcy\u001b[?25lb",
+"\u001b[31m\u001b[2K\u001b[31m",
+"\u001b[?25l\n\u001b[2Kaz b\u001b[2K"
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[K\u001b[1Kzb\u001b[1K \u001b[1K\u001b[K"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[2K\u001b[2Kaa\u001b[K\u001b[?25l\u001b[Kyzz",
+"\u001b[0m xx\u001b[Ka",
+"\rx\ny",
+"zzaby\u001b[?25l\u001b[2K\u001b[?25l",
+"\u001b[?25l\u001b[2Kxc\u001b[0my\u001b[0m"
+],
+"cols": 1,
+"rows": 8,
+"attendu": [
+"z",
+"z",
+"a",
+"b",
+"",
+"x",
+"c",
+"y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[31mcy\u001b[31maa",
+"c",
+"\u001b[K\u001b[0m\r\u001b[?25lc\u001b[K\r\u001b[?25l"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"cya",
+"c"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[2K  yxc c",
+" b\u001b[0m\nybx\u001b[31m\u001b[0mb"
+],
+"cols": 7,
+"rows": 8,
+"attendu": [
+"   yxc",
+"c b",
+"   ybxb",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25lz\r\u001b[?25l\r\u001b[Kay",
+"y \u001b[0m\r\r ya \u001b[2K "
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\n\u001b[Kzbx\u001b[K",
+"\r "
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"",
+" bx",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a",
+"x bb\u001b[31m",
+"\u001b[2K\n",
+"y\u001b[?25l\u001b[1Kcy\u001b[2Kb"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+"b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[1K\u001b[2K\r\u001b[?25l",
+"yzxa\u001b[?25l\r\u001b[0m"
+],
+"cols": 9,
+"rows": 3,
+"attendu": [
+"yzxa",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[1K\u001b[1Ka\u001b[31m\u001b[31mxz\rx x",
+"\u001b[0m\u001b[K ccxz\u001b[0mx\u001b[?25lx",
+"c\u001b[1Kc\u001b[K\nb\u001b[K\n"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25l",
+"zx\u001b[2Ka\u001b[1K \n\u001b[?25lyy\u001b[1K"
+],
+"cols": 2,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[1K\u001b[2Kc\u001b[2K\u001b[31m\u001b[K\u001b[2Kz\u001b[2K\u001b[?25l\u001b[31m",
+"\nc",
+"a \n",
+"\u001b[1Kb\u001b[?25la\u001b[31my\nx\u001b[K\n",
+"\u001b[2K"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0mc\u001b[?25la\u001b[2K\u001b[2Ky\u001b[2K",
+"y\u001b[?25ly\r\u001b[31m\u001b[0mc\u001b[31m\u001b[2K\u001b[2K\u001b[0m",
+"xy\u001b[0m\u001b[K\u001b[Kab\u001b[1Kyy",
+"\u001b[0mb\rb\u001b[K \u001b[?25l  \u001b[?25l\u001b[K",
+"\ncaa\rx"
+],
+"cols": 3,
+"rows": 3,
+"attendu": [
+"",
+" ca",
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" xba\u001b[31mc",
+"\n\u001b[?25l\u001b[K \u001b[0m"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+" xbac",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[31m\u001b[1K x b\u001b[31mx\u001b[31m\u001b[31my",
+"ca\u001b[2K\u001b[K\n\u001b[0mc\u001b[31m\u001b[?25l\r\u001b[?25l\r",
+"a\u001b[31m\u001b[1K\u001b[0my \n"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"  x b",
+"",
+" y  c",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"x\u001b[1Ka\u001b[1K\u001b[2K\u001b[2K\u001b[1Kb\n"
+],
+"cols": 12,
+"rows": 8,
+"attendu": [
+"  b",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" ",
+"\u001b[1Kcaa"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+" caa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[?25lyb\u001b[?25lb\u001b[?25l\u001b[31m",
+"bz\u001b[0m\u001b[?25l\r",
+"\u001b[0mc\u001b[31m\nc\u001b[0m",
+"x\rc\u001b[?25lb"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"cbbbz",
+"cbx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kbzy\u001b[31m",
+"y\u001b[2K\u001b[K\r\n\u001b[1Ky",
+"c\n",
+"x \r\u001b[2K\u001b[0m\u001b[1K\r\u001b[K\nba",
+"z\nb\u001b[31m\u001b[?25ly"
+],
+"cols": 4,
+"rows": 1,
+"attendu": [
+"y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"xa\u001b[1K a\u001b[2K\u001b[K\u001b[31m\u001b[K\u001b[K\u001b[2K",
+"z\u001b[?25l\u001b[Kb\u001b[0ma\r\u001b[?25l",
+"\u001b[2Kbyx\r\u001b[?25l\u001b[2Kx"
+],
+"cols": 4,
+"rows": 8,
+"attendu": [
+"",
+"x",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[K\u001b[2Ky\u001b[2K\u001b[31m\u001b[?25lcz\u001b[2Kac",
+"\u001b[2K\u001b[2K\u001b[K\u001b[2Kx"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[0m\u001b[1K\u001b[31m\u001b[31m"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r",
+"\u001b[?25la",
+" a\u001b[K c\u001b[2K\u001b[31m",
+"\u001b[1K\u001b[1K\r\u001b[31m\ny\u001b[K\u001b[1K"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"cb\rcc\u001b[0m\n\u001b[0m\u001b[0m "
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K\u001b[1K\u001b[0mx",
+"\u001b[1Kxaa\u001b[?25l\u001b[0m\u001b[?25l\u001b[2K",
+"az\u001b[?25l"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"a",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[31m\n\u001b[31m\nzzb",
+"b\u001b[?25l\u001b[1K\rx\u001b[31m",
+"\u001b[1K\u001b[1K\u001b[0m\u001b[1Kacba z"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"ba",
+"z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" \u001b[K\r\u001b[1K\u001b[2K\u001b[1Kcy\u001b[0m \u001b[1K",
+"ac\nzxxa\u001b[K",
+"\u001b[Kzyx",
+"xxz\rxx\n\u001b[K\u001b[K",
+"\u001b[0m"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bz\u001b[2Kc  c\u001b[31m",
+"\r\ry\u001b[?25l\u001b[31m\n",
+" \u001b[2K",
+"y\u001b[2K\u001b[K b\rb"
+],
+"cols": 20,
+"rows": 2,
+"attendu": [
+"y c  c",
+"b   b"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"a\u001b[0mbb",
+"\u001b[?25lb \u001b[0m",
+"\u001b[31mc\u001b[K \u001b[0myxb",
+"\u001b[?25l\n\n\u001b[K\n\n",
+"\u001b[31m\u001b[1K"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"abbb c yxb",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[2K\nc\u001b[1Ka\u001b[31mz"
+],
+"cols": 7,
+"rows": 3,
+"attendu": [
+"",
+" az",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\u001b[2K\u001b[?25l\u001b[K\n\u001b[2K\n",
+"y\u001b[1K",
+"z\u001b[2K\u001b[2Kz\n\u001b[31mzby \u001b[?25l\n"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"",
+"",
+"",
+"  z",
+"   zby",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"y\u001b[?25l\u001b[31mx\ry\u001b[1K",
+"\u001b[31m\u001b[2Kzzz",
+"y\u001b[K\u001b[2K\u001b[K\u001b[2K",
+"c\nb\u001b[31m\u001b[2Kyx",
+"\nyxc\u001b[0m\rx"
+],
+"cols": 4,
+"rows": 3,
+"attendu": [
+"   y",
+"x",
+"xyxc"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"zb",
+"\u001b[0mx",
+"\u001b[?25l\n\u001b[0m\u001b[2Kxa",
+"\u001b[0m\u001b[?25l"
+],
+"cols": 20,
+"rows": 1,
+"attendu": [
+"   xa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\r\u001b[0m"
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+"b",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2Kzbcybbbb\u001b[31m \u001b[1K",
+"\n\u001b[0mx\u001b[31mc\u001b[K ",
+"yc\r\u001b[1K\u001b[K\u001b[0mz",
+"\r\u001b[2K\rzc ",
+"\n a "
+],
+"cols": 12,
+"rows": 3,
+"attendu": [
+"         xc",
+"zc",
+"    a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[?25l\u001b[1K\u001b[31m\r acc\n\u001b[1Kz",
+"xb\u001b[2K\r z\u001b[Kb\u001b[K "
+],
+"cols": 9,
+"rows": 5,
+"attendu": [
+" acc",
+" zb",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\ny\n\r \u001b[1Kxc\u001b[31mbx "
+],
+"cols": 7,
+"rows": 1,
+"attendu": [
+" xcbx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[0m\u001b[2K\n\u001b[1K\u001b[K\u001b[2K",
+"\u001b[2Ky\u001b[0m\r\u001b[?25l\u001b[1Ka",
+"\r\r\u001b[K\u001b[?25l\u001b[2K",
+"x\rzzyaxx\n\n"
+],
+"cols": 7,
+"rows": 8,
+"attendu": [
+"",
+"zzyaxx",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ya\u001b[K\r\u001b[31myc",
+"\u001b[?25l\u001b[1K ",
+"x",
+"\u001b[K"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"   x",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rcacxzyb",
+"c\u001b[K\n\u001b[31mbc a\u001b[?25lx\u001b[0mz",
+"\u001b[1Kb\u001b[Ky"
+],
+"cols": 4,
+"rows": 1,
+"attendu": [
+"  by"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[2K\u001b[31m"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[1K",
+"\u001b[?25l\u001b[Kcxczy\nc\r",
+" \u001b[31m\u001b[K\n\u001b[31mb\u001b[0ma",
+"bz\u001b[2Kz"
+],
+"cols": 7,
+"rows": 5,
+"attendu": [
+"cxczy",
+"",
+"     z",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"ay"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"ay",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m \u001b[?25l\u001b[0mcb\u001b[1K\u001b[31m",
+"\n\u001b[Ky\rb",
+"\u001b[0m\u001b[K"
+],
+"cols": 9,
+"rows": 8,
+"attendu": [
+"",
+"b",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[2K\u001b[?25l\u001b[1Kzz\nc",
+"x\u001b[31m\u001b[1K",
+"aa\u001b[1K",
+"\u001b[2K\r\u001b[1Kyba\rba\u001b[0m"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"zz",
+"  c",
+"baa",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[1K\u001b[K\u001b[2K\u001b[2Kyc\u001b[31mxb"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+" ycxb",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K "
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[?25l\u001b[?25l\u001b[0m a"
+],
+"cols": 4,
+"rows": 2,
+"attendu": [
+"z a",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[K",
+"\u001b[K",
+"bc\u001b[1K\u001b[0m\u001b[?25l"
+],
+"cols": 2,
+"rows": 3,
+"attendu": [
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\rx",
+"\u001b[K\u001b[0m ",
+"\u001b[1Kz\u001b[1K\n\n \r\u001b[31mayy",
+"\nc\u001b[31m\u001b[?25l\u001b[?25lzxy"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"x",
+"y"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[2K\u001b[2K\u001b[0m\u001b[K",
+"\u001b[2Kc\u001b[0m\u001b[0mz",
+"\u001b[Kyxby",
+"\nb\u001b[31mx\n\u001b[1K",
+"\rb \u001b[?25lx\u001b[?25la\u001b[31m"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+"xa"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r \u001b[31m\rz",
+"\u001b[1K\u001b[?25l\u001b[1Ka\u001b[1K"
+],
+"cols": 12,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"xc\u001b[Kz",
+"c abyy\u001b[1K",
+"\u001b[?25l\u001b[1Kx"
+],
+"cols": 5,
+"rows": 1,
+"attendu": [
+"    x"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\rx\u001b[1K\u001b[0m\u001b[1Kzx",
+"\u001b[1Ka",
+"  \r\u001b[1K\u001b[Kc\u001b[K\u001b[?25lza"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[Kz\r\u001b[0ma\u001b[Ky",
+"\nz\u001b[31m\u001b[0m\u001b[Kx\n\u001b[31m ",
+" \u001b[0m\u001b[31m\u001b[K\u001b[0mbbx\n"
+],
+"cols": 7,
+"rows": 2,
+"attendu": [
+"bx",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"by\u001b[2K",
+" x"
+],
+"cols": 3,
+"rows": 5,
+"attendu": [
+"",
+"x",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"bxy",
+"\n\u001b[?25lzx\u001b[2K\r\n",
+"\u001b[2K",
+"\u001b[31mb\u001b[Kyx\u001b[0mz\u001b[31mx"
+],
+"cols": 9,
+"rows": 2,
+"attendu": [
+"",
+"byxzx"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[31mb y\u001b[0m\r",
+"yc\u001b[31m\u001b[1Kx\u001b[0m\u001b[1Kx\u001b[?25l\u001b[1Ky"
+],
+"cols": 20,
+"rows": 8,
+"attendu": [
+"    y",
+"",
+"",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[1Ka\r\u001b[K\u001b[2K\u001b[K\r\u001b[K\n\r",
+"\u001b[1K\u001b[2Kya\u001b[K",
+"z",
+"\nx\r\n c ",
+"bbzx\u001b[1Kx z"
+],
+"cols": 2,
+"rows": 2,
+"attendu": [
+" x",
+" z"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\ny\u001b[1K \u001b[0m\r\u001b[2Ka\n\u001b[31my\r",
+"\u001b[2K\u001b[31m\u001b[0m\u001b[31m\u001b[Kya\u001b[?25l\r\u001b[0m\r\r"
+],
+"cols": 3,
+"rows": 2,
+"attendu": [
+"a",
+"ya"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[31m\u001b[0m",
+"\u001b[1K\rc",
+"xyb\u001b[K\n \u001b[2K\u001b[?25la",
+"\u001b[1K\u001b[?25l\u001b[31mcac\u001b[K\n\u001b[0m\u001b[31m\n"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+"cxyb",
+"      cac",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\n\r\u001b[31m\r\u001b[Kz\u001b[Kayx\u001b[1K",
+"cab\u001b[?25l\u001b[1K\u001b[0mb\u001b[?25l y"
+],
+"cols": 5,
+"rows": 8,
+"attendu": [
+"",
+"    c",
+"  b y",
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r\u001b[Kz\u001b[Kxx",
+"\u001b[Kbb\u001b[2K\u001b[31ma"
+],
+"cols": 1,
+"rows": 2,
+"attendu": [
+"",
+"a"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"z\u001b[2Kx\rx \u001b[0m\n\u001b[0m",
+"\u001b[2Kz",
+"\u001b[0mzy"
+],
+"cols": 3,
+"rows": 1,
+"attendu": [
+"zy"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" ",
+"y y\u001b[1K\rx",
+" \u001b[K",
+"\u001b[0m\u001b[?25l\n\n\r"
+],
+"cols": 1,
+"rows": 1,
+"attendu": [
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" y\n\r\rx\u001b[1K\u001b[31mzc\u001b[0m\u001b[0m",
+"\u001b[?25lxyyzy\u001b[0m\ra\nb\u001b[0m",
+"y\r\u001b[1Kb\r\r",
+"z\u001b[31mc\n\u001b[31m"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"zcy",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\r z\u001b[?25l\u001b[2K\u001b[?25lc\u001b[?25l\u001b[2K",
+"cb cx\n",
+" x\u001b[K\u001b[0m\u001b[1Kc",
+"\u001b[2K",
+"bb"
+],
+"cols": 3,
+"rows": 8,
+"attendu": [
+"",
+"cb",
+"cx",
+"",
+"  b",
+"b",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"c\u001b[K\u001b[K\u001b[0m\r",
+"\u001b[2Kz\u001b[2K\u001b[31m\u001b[31myyb\u001b[0m\u001b[1K",
+"c",
+"\u001b[K\u001b[31my\u001b[1K\u001b[?25l\u001b[1K\n\u001b[?25l\u001b[?25l",
+"za"
+],
+"cols": 2,
+"rows": 1,
+"attendu": [
+"za"
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+" ccbz ",
+"\u001b[0m\u001b[31maz\u001b[Ka y\n",
+"a",
+"c\r\u001b[2Kx"
+],
+"cols": 12,
+"rows": 5,
+"attendu": [
+" ccbz aza y",
+"           a",
+"x",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"\u001b[0m\u001b[31m"
+],
+"cols": 5,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+""
+]
+},
+{
+"quoi": "tirage",
+"ecrits": [
+"b\ra",
+"\u001b[1K",
+"\u001b[K\u001b[2K\u001b[1Ky\u001b[1K \u001b[1K \u001b[K",
+"b"
+],
+"cols": 1,
+"rows": 5,
+"attendu": [
+"",
+"",
+"",
+"",
+"b"
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"ab\u001bXcd"
+],
+"cols": 8,
+"rows": 2,
+"attendu": [
+"abcd",
+""
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"ab\u001b"
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"ab",
+""
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"\u001b7abc"
+],
+"cols": 5,
+"rows": 2,
+"attendu": [
+"abc",
+""
+]
+},
+{
+"quoi": "ESC avalé avec son caractère",
+"ecrits": [
+"ab\u001b["
+],
+"cols": 6,
+"rows": 2,
+"attendu": [
+"ab",
+""
+]
+}
+]

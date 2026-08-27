@@ -186,12 +186,63 @@ export async function mettreEnFocus(pane, socket, { executer } = {}) {
  * jalon : une barre qui avancerait affirmerait une progression qu'on ne mesure pas. On rend
  * donc ce qu'on MESURE — le temps écoulé — et ce qu'on ATTEND, en toutes lettres.
  */
-export function texteDeProgression(secondes, tourne) {
+/**
+ * LE TEXTE DE PROGRESSION — ET IL SE BORNE À LA LARGEUR DU PANE (T-20260825-0071).
+ *
+ * 🔴 SANS LA BORNE, IL EMPILE UNE LIGNE TOUTES LES 120 ms. C’est l’incident que le dirigeant
+ * a rapporté en usage réel : « j’ai des lignes qui se multiplient sans arrêt », dans un split
+ * herdr. Reproduit dans un vrai pane de 65 colonnes, écran lu par `herdr pane read` :
+ * **+21 lignes en 8 secondes**, pendant les ~80 s de chargement.
+ *
+ * LE MÉCANISME, MESURÉ : `avecProgression` réécrit cette ligne avec `\r` + effacement de
+ * ligne. Sous la longueur du texte, il WRAPPE — le curseur passe à la ligne suivante, donc le
+ * `\r` du tour d’après revient au début de la NOUVELLE ligne et l’effacement porte sur celle-là.
+ * La précédente reste, définitivement.
+ *
+ * ⚠️ ET LE SEUIL EST UNE PLAGE, PAS UN NOMBRE — c'est ce qui rend ce défaut coûteux à chercher.
+ * La longueur varie avec le NOMBRE DE CHIFFRES du compteur : 115 caractères de 0 à 9 secondes,
+ * 116 de 10 à 99, 117 au-delà. Donc sous 115 colonnes ça empile systématiquement ; entre 115 et
+ * 117, ça se met à empiler EN COURS DE ROUTE, quand le compteur passe à deux chiffres puis à
+ * trois.
+ *
+ * 🔴 QUELQU'UN QUI TESTE À 116 COLONNES PENDANT LES NEUF PREMIÈRES SECONDES NE VOIT RIEN, et
+ * conclut que le défaut n'existe pas. Un défaut qu'on ne voit pas quand on le cherche mal coûte
+ * plus cher qu'un défaut franc.
+ *
+ * ⚠️ CETTE PROSE A DIT « 116 caractères, longueur fixe » — une constante INVENTÉE pour expliquer
+ * le mécanisme, dans un commentaire qu'aucune garde ne peut atteindre. C'est la deuxième fois
+ * dans ce lot. Le code, lui, n'a jamais dépendu du chiffre : il mesure `[...texte].length` à
+ * l'exécution.
+ *
+ * ⚠️ ET C’EST POURQUOI PERSONNE NE L’AVAIT VU : en pane large la ligne tient, et rien ne
+ * s’empile. Le symptôme n’existe QUE dans un pane étroit — c’est-à-dire exactement l’écran que
+ * le dirigeant regardait.
+ *
+ * ⚠️ ON TRONQUE, ON NE RACCOURCIT PAS LE MESSAGE. Le texte dit ce que le lecteur doit savoir
+ * pendant 80 s d’attente : que ça interroge chantier par chantier, et combien de temps ça
+ * prend. Le réécrire plus court le priverait de cette information sur un écran LARGE, pour
+ * un défaut qui n’existe que sur un écran ÉTROIT.
+ */
+export function texteDeProgression(secondes, tourne, largeur = Infinity) {
   const roue = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  return (
+  const texte =
     `${roue[tourne % roue.length]} lecture du parc — ${secondes} s écoulées ` +
-    `(le ServiceDesk est interrogé chantier par chantier ; ~80 s au premier chargement)`
-  );
+    `(le ServiceDesk est interrogé chantier par chantier ; ~80 s au premier chargement)`;
+  // ⚠️ ON COMPTE EN POINTS DE CODE, pas en unités UTF-16.
+  //
+  // 🔴 CORRECTION D’UNE PROSE FAUSSE QUE J’AVAIS ÉCRITE ICI, relevée en campagne de mutation :
+  // elle disait « la roue et les accents seraient comptés faux par `.length` ». **C’est faux** —
+  // ⠋ (U+280B) et é sont dans le BMP, `.length` les compte juste, et la mutation qui remettait
+  // `.length` SURVIVAIT à mes bancs. Un motif faux qui garde une conduite juste finit par la
+  // faire tomber avec lui le jour où quelqu’un le vérifie.
+  //
+  // LE VRAI MOTIF : un caractère HORS BMP (emoji, U+1F534…) pèse 2 en UTF-16 et 1 à l’écran.
+  // Rien n’en met dans ce message aujourd’hui — mais la borne protège la LARGEUR D’AFFICHAGE,
+  // et c’est en points de code qu’elle se mesure. On compte donc juste par construction,
+  // plutôt que juste par chance sur le texte du jour.
+  const points = [...texte];
+  if (!Number.isFinite(largeur) || points.length <= largeur) return texte;
+  return points.slice(0, Math.max(0, largeur)).join('');
 }
 
 const ALT_ON = `${ESC}[?1049h${ESC}[?25l`;
@@ -257,6 +308,14 @@ export async function boucleDuTui({
   const dessiner = () => {
     const racines = arbreDeLaVue(vue, { parApp: etat.parApp });
     const lignes = lignesVisibles(racines, etat);
+    // ⚠️ DEUX REPLIS DIFFÉRENTS DANS CE FICHIER, ET C’EST VOULU — mais ça ne se voyait nulle
+    // part (relevé en revue portail). ICI, sans TTY, on doit quand même DESSINER quelque
+    // chose : un écran de 100×30 est un défaut raisonnable. Dans `avecProgression`, le repli
+    // est `Infinity` — voir la note là-bas : ne rien borner y est le bon geste, parce qu’il
+    // n’y a alors aucun terminal pour wrapper.
+    //
+    // ⚠️ NE PAS LES FONDRE : appliquer 100 à la progression la tronquerait sans raison dans
+    // un journal, et appliquer `Infinity` ici demanderait un écran de largeur infinie.
     const largeur = sortie.columns || 100;
     const hauteur = sortie.rows || 30;
     const ecran = rendreEcran({ vue, etat, lignes, largeur, hauteur });
@@ -335,13 +394,42 @@ export async function boucleDuTui({
   return { code: 0 };
 }
 
-async function avecProgression(lireLaVue, sortie) {
+/**
+ * LA PROGRESSION PENDANT LES ~80 s DE CHARGEMENT — ET C’EST ELLE QUI EMPILAIT.
+ *
+ * 🔴 EXPORTÉE POUR ÊTRE ÉPROUVABLE (T-20260825-0071). Elle ne l’était pas, et c’est ce qui a
+ * laissé l’incident sortir : `texteDeProgression` était testable, mais la fonction qui ÉCRIT
+ * — celle qui borne, ou pas — n’était atteinte par AUCUN banc. Mesuré en campagne : retirer
+ * la largeur passée au battement, ou la lire une seule fois au départ, laissait la suite
+ * ENTIÈREMENT VERTE.
+ *
+ * ⚠️ C’est le motif « une garde posée sur le cas, prise pour une garde sur la famille » —
+ * payé onze fois sur E-20260825-0001. Ici il portait sur le CHEMIN : je gardais le texte
+ * rendu, pas le geste qui l’écrit.
+ *
+ * @param intervalle  la période du battement, injectable : un banc ne doit pas attendre 120 ms.
+ */
+export async function avecProgression(lireLaVue, sortie, { intervalle = 120 } = {}) {
   const depart = Date.now();
   let tour = 0;
   const battement = setInterval(() => {
     const s = Math.round((Date.now() - depart) / 1000);
-    sortie.write(`\r${ESC}[2K${texteDeProgression(s, (tour += 1))}`);
-  }, 120);
+    // ⚠️ LA LARGEUR SE RELIT À CHAQUE TOUR. Lue une seule fois au départ, un pane redimensionné
+    // pendant les 80 s de chargement rouvrirait le trou en silence — et redimensionner un
+    // split est précisément ce qu’on fait quand un affichage devient illisible.
+    // ⚠️ REPLI `Infinity`, ET IL DIFFÈRE DE CELUI DE `dessiner()` (100) — les deux sont justes
+    // pour leur chemin, et le dire ici évite qu’on les « harmonise » un jour.
+    //
+    // Sans TTY (`columns` absent), la sortie n’est pas un terminal : personne ne wrappe, donc
+    // rien à borner — et tronquer priverait un journal du message entier. Le défaut ne se
+    // produit QUE devant un vrai terminal, qui annonce toujours sa largeur.
+    //
+    // ⚠️ `|| Infinity` ATTRAPE AUSSI `columns === 0`, qui ne se produit pas sur un terminal
+    // réel. Si un jour ça arrivait, ne rien borner serait le pire choix — mais borner à 0
+    // effacerait la progression entière. Cas non mesuré : signalé, pas comblé à l’aveugle.
+    const largeur = sortie.columns || Infinity;
+    sortie.write(`\r${ESC}[2K${texteDeProgression(s, (tour += 1), largeur)}`);
+  }, intervalle);
   // ⚠️ IL NE TIENT PAS LE PROCESSUS EN VIE. Sans `unref`, un battement de 120 ms empêcherait
   // node de sortir si la lecture échouait sans rejeter — un TUI qui ne rend jamais la main.
   battement.unref?.();

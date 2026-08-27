@@ -734,6 +734,37 @@ export const RACCOURCIS_UN_A_UN = [
 
 export const RACCOURCIS = RACCOURCIS_UN_A_UN.map((r) => r.texte).join('  ');
 
+/**
+ * LE RACCOURCI VITAL — celui qu’on ne retire jamais. DÉRIVÉ du manifeste, jamais recopié.
+ *
+ * ⚠️ SON TEXTE EST LA SOURCE DU SEUIL, ET LE SEUIL NE S’ÉCRIT PAS EN CHIFFRE : le
+ * jour où « q quitter » est renommé, un seuil écrit `9` deviendrait faux EN SILENCE et la
+ * garde continuerait de passer au vert. Le seuil se lit ici, il ne se compte pas à la main.
+ */
+export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 IL N'Y A PLUS D'INVARIANT DE LARGEUR ICI, ET SA DISPARITION EST LE CORRECTIF
+//
+// `depasseLaLargeurAutorisee` a vécu ici : une fonction qui décidait quelles lignes avaient le
+// droit de dépasser le pane. Elle est SUPPRIMÉE par la décision `00a7b645` — plus aucune ligne
+// n'a ce droit, `borner` s'applique à toutes, y compris la barre de raccourcis.
+//
+// ⚠️ POURQUOI LA SUPPRIMER PLUTÔT QUE LA GARDER SANS EXCEPTION : sous B, la production n'a plus
+// de condition à évaluer. Une fonction sans appelant en production a l'air d'un garde et n'en
+// est pas un — et elle offre à un banc un oracle avec lequel se mettre d'accord. Mesuré par
+// mutation : la remplacer par `return false` laissait la suite ENTIÈREMENT VERTE.
+//
+// ⚠️ CE QUI GARDE LA PROPRIÉTÉ DÉSORMAIS : `tests/rien-ne-deborde-du-pane.test.js`, qui mesure
+// ce que le TERMINAL rend — l'auto-wrap et le défilement — et non ce qu'une fonction déclare.
+// Retirer le `borner` de la barre FAIT ROUGIR — et on n'écrit pas combien.
+//
+// ⚠️ CE COMMENTAIRE PORTAIT « 4 essais ». Il en fait 5 aujourd'hui : des bancs ont été ajoutés
+// depuis. Le chiffre n'était pas faux, il a ROUILLI — et un chiffre rouillé se lit comme une
+// mesure fraîche. C'est le même défaut qu'un chiffre invérifiable : il ferme la question au
+// lieu de l'ouvrir. On énonce la propriété ; qui veut le compte le remesure.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
 /** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
 export function raccourcisPour(largeur) {
   let gardes = RACCOURCIS_UN_A_UN.slice();
@@ -743,6 +774,24 @@ export function raccourcisPour(largeur) {
     const pire = gardes.reduce((a, b) => (b.vital >= a.vital ? b : a));
     gardes = gardes.filter((r) => r !== pire);
   }
+  // ⚠️ CETTE FONCTION REND LE DERNIER RACCOURCI **ENTIER** — et c'est `rendreEcran` qui borne.
+  //
+  // 🔴 UN BLOC VIVAIT ICI ET INTERDISAIT CE QUE LE CODE FAIT PAR CONSTRUCTION. Il disait :
+  // « ce qui est fermé par ce lot, c'est le FRAGMENT (« q qu… ») — jamais le mot entier ».
+  // Sous `00a7b645`, le fragment est EXACTEMENT ce que le lecteur voit : à 5 colonnes il lit
+  // « q qu… », à 3 « q … ». Il citait en plus le banc de l'invariant par un nom qu'il n'a plus,
+  // et lui prêtait une exigence — « q quitter » entier à TOUTE largeur, y compris 1 — que ce
+  // lot a lui-même amendée. C'était le CINQUIÈME site périmé, trouvé par une passe de fond
+  // après que j'aie déclaré avoir cherché par la fonction.
+  //
+  // ⚠️ ET C'ÉTAIT LE PLUS DANGEREUX DES CINQ, POUR UNE RAISON DE FORME : les quatre autres
+  // DÉCRIVAIENT un état périmé — ils désinforment. Celui-ci INTERDISAIT un comportement voulu :
+  // un lecteur qui le croit va corriger du code juste. La prose qui interdit se cherche AVANT
+  // celle qui décrit.
+  //
+  // CE QUI RESTE VRAI, ET QUI EST LA SEULE RAISON DE CE COMMENTAIRE : on ne tronque pas ICI.
+  // Une troncature à cet endroit ET une à la sortie couperaient deux fois — ma première
+  // correction appelait `borner` ici et rendait « q quitt… » amputé une seconde fois.
   return rendre(gardes);
 }
 
@@ -853,8 +902,37 @@ export function appliquerTouche(etat, touche, lignes) {
  * coloré assère sur des codes d'échappement, et finit par passer pour la mauvaise raison.
  */
 export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) {
-  const largeurArbre = Math.max(28, Math.floor(largeur * 0.62));
-  const largeurDetail = Math.max(20, largeur - largeurArbre - 3);
+  // 🔴 LES DEUX PLANCHERS S’IGNORAIENT, ET LEUR SOMME DÉPASSAIT LE PANE (T-20260825-0071).
+  //
+  // `max(28, …)` pour l’arbre et `max(20, …)` pour le détail étaient calculés chacun dans son
+  // coin. Sous 58 colonnes leur somme franchit la largeur disponible — mesuré : 51 caractères
+  // écrits dans un pane de 40, 54 dans un pane de 50, 58 dans un pane de 57.
+  //
+  // ⚠️ CE DÉFAUT PRÉEXISTE AUX LOTS #327 ET #328 : la formule est identique au tag v1.91.0,
+  // vérifié par `git archive`. Il n’a PAS été observé produire l’empilement du dirigeant —
+  // l’écran est repeint entier (`ESC[H` + `ESC[2J`) à chaque frame, donc le wrap ne
+  // s’accumule pas comme celui de la ligne de progression. Il est corrigé quand même : c’est
+  // la MÊME règle enfreinte — rien de ce que le TUI écrit ne doit dépasser la largeur du pane.
+  //
+  // ⚠️ ORDRE DE SACRIFICE, ET IL SE DIT : quand la place manque, c’est le DÉTAIL qui cède, pas
+  // l’arbre. L’arbre porte la marque de rattachement et le début du titre — ce qui permet de
+  // se repérer ; le détail est consultable ligne par ligne, l’arbre non. Le plancher du détail
+  // peut donc tomber jusqu’à 0 : un panneau vide reste lisible, un écran qui défile, non.
+  const largeurArbre = Math.min(
+    Math.max(28, Math.floor(largeur * 0.62)),
+    // ⚠️ `max(0, …)` : sur un pane absurdement étroit, l’arbre prend tout ce qui reste plutôt
+    // que de rendre une largeur négative — `repeat(-1)` jetterait, et un TUI qui jette au
+    // redimensionnement est pire que le défaut qu’on ferme.
+    Math.max(0, largeur - 3)
+  );
+  // ⚠️ CE `max(0, …)` EST UNE CEINTURE, ET C’EST DIT PLUTÔT QUE SOUS-ENTENDU (revue portail).
+  // `largeurArbre` est déjà borné par `largeur - 3`, donc cette différence ne peut pas être
+  // négative aujourd’hui : le retirer ne fait rougir aucun essai, et c’est normal — mutation
+  // ÉQUIVALENTE, pas survivante. On la garde parce que l’équivalence dépend de la borne du
+  // VOISIN : si `largeurArbre` cesse un jour d’être plafonné, cette ligne devient la seule
+  // à empêcher une largeur négative — et `borner` en aval rendrait alors une colonne vide
+  // au lieu de jeter, ce qui est un défaut silencieux plutôt qu’un rouge.
+  const largeurDetail = Math.max(0, largeur - largeurArbre - 3);
   const hauteurCorps = Math.max(1, hauteur - 2);
 
   const sortie = [];
@@ -874,12 +952,104 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     const droite = borner(detail[i] ?? '', largeurDetail);
     sortie.push({
       style: ligne && idx === curseur ? 'selection' : ligne ? `arbre:${ligne.kind}` : 'vide',
-      texte: `${gauche} │ ${droite}`,
+      // 🔴 L’INVARIANT EST POSÉ ICI, À LA SORTIE — PAS DÉDUIT DE LA FORMULE (T-20260825-0071).
+      //
+      // Corriger les deux planchers ferme le défaut MESURÉ ; le borner ici ferme la FAMILLE.
+      // Toute largeur future, toute recomposition de la ligne, tout séparateur qu’on change :
+      // rien ne peut plus dépasser le pane, et personne n’a besoin de refaire le calcul.
+      //
+      // ⚠️ C’EST LA LEÇON DE E-20260825-0001, PAYÉE ONZE FOIS : fermer le cas qu’on a vu laisse
+      // la famille ouverte. Ici la garantie ne dépend plus d’une arithmétique juste — elle est
+      // structurelle.
+      texte: borner(`${gauche} │ ${droite}`, largeur),
     });
   }
 
+  // 🔴 IL N'Y A PLUS AUCUNE LIGNE QUI PEUT DÉBORDER — Y COMPRIS LA BARRE.
+  //
+  // ⚠️ UN BLOC ENTIER VIVAIT ICI ET AFFIRMAIT L'INVERSE, longtemps après que la décision qui le
+  // fondait ait été supersédée. Il disait « la barre est la seule ligne qui peut déborder » et
+  // « ② l'emporte » ; le code sous lui faisait déjà le contraire, et le bloc SUIVANT le disait.
+  // Un lecteur qui ne lisait pas jusqu'au bout repartait avec une décision morte. Relevé en
+  // revue portail — **la relecture ne l'avait pas vu trois fois de suite**.
+  //
+  // La leçon est de forme : une supersédance laisse des traces PARTOUT, et celle qu'on ne
+  // cherche pas est celle qui reste. On cherche la prose périmée par sa FONCTION (ce qu'elle
+  // affirme), jamais par le seul bloc qu'on vient de trouver.
+  //
+  // 🔴 LE CODE DE PRODUCTION INTERROGE L’INVARIANT — IL NE RECALCULE PAS SA PROPRE CONDITION.
+  //
+  // Ma version précédente écrivait ici `barre.length <= largeur ? borner(...) : barre` : une
+  // condition PLUS LARGE que l’exception qu’elle prétendait appliquer. Elle laissait passer
+  // **tout** ce que `pied()` rend — dont le champ de RECHERCHE, qui n’a aucun lien avec le
+  // raccourci vital. Mesuré (revue portail) : en mode recherche, sur un pane de 30 colonnes,
+  // la barre écrivait 43 caractères et wrappait — la classe de défaut exacte que ce lot ferme.
+  //
+  // ⚠️ ET C’ÉTAIT UNE RÉGRESSION DE MON FAIT : sur `origin/main`, `borner` s’appliquait SANS
+  // condition. En ajoutant l’exception pour le raccourci vital, j’ai supprimé la troncature
+  // pour tout le reste.
+  //
+  // ⚠️ LA LEÇON, ET ELLE VAUT AU-DELÀ D’ICI : mon invariant répondait DÉJÀ correctement
+  // (`depasseLaLargeurAutorisee` rendait `true` sur ce cas). Il était juste, éprouvé — et
+  // jamais consulté par le code qui écrit. Un oracle que la production n’appelle pas ne garde
+  // rien : « l’exception vit DANS l’invariant » (décision `f05bc613`, condition n°1) était
+  // vrai dans les bancs et faux dans le produit.
+  // 🔴 LA BARRE SE TRONQUE COMME TOUTE AUTRE LIGNE — décision `00a7b645`, option B.
+  //
+  // Elle DÉBORDAIT (`f05bc613`), sur la prémisse qu’un débordement coûte un wrap visuel et rien
+  // de plus. Mesuré au VT100 : dans un écran alternatif d’une ou deux lignes, un wrap ne coûte
+  // pas un wrap — il fait DÉFILER. À 3×1 le lecteur voyait `'ter'` ; à 8×2, `'q quitte'` / `'r'`
+  // **et le titre avait disparu**. L’exception perdait la sortie ET le reste de l’écran.
+  //
+  // ⚠️ IL N’Y A PLUS D’EXCEPTION À ÉCRIRE, DONC PLUS D’EXCEPTION À ÉLARGIR. Trois écritures
+  // successives de celle-ci étaient trop larges ; la quatrième version est de n’en avoir aucune.
+  // Ce que ② protégeait au-dessus du seuil est intact : `raccourcisPour` retire toujours les
+  // raccourcis du moins vital au plus vital, donc la sortie survit tant qu’elle est MONTRABLE.
   sortie.push({ style: 'pied', texte: borner(pied(etat, largeur), largeur) });
-  return sortie;
+
+  // 🔴 LA JUMELLE VERTICALE DE L’INVARIANT DE LARGEUR — ET ELLE MANQUAIT (T-20260825-0071).
+  //
+  // `hauteurCorps` porte un plancher inconditionnel (`max(1, hauteur - 2)`), exactement comme
+  // `largeurArbre` avant ce lot : sous 3 lignes de pane, l’écran en rendait 3. Mesuré —
+  // hauteur 0 → 3 lignes, hauteur 1 → 3, hauteur 2 → 3. Une ligne de trop pousse la première
+  // hors du pane et fait DÉFILER : le même symptôme que l’incident, par l’autre dimension.
+  //
+  // ⚠️ RELEVÉ EN REVUE PORTAIL, ET C’EST LA MÊME FAUTE QUE CELLE QUE JE VENAIS DE FERMER : j’ai
+  // posé la garde sur la LARGEUR — la dimension où le symptôme avait été observé — et j’ai
+  // laissé sa famille ouverte. Mon propre banc de hauteur balayait `[3, 12, 24, 77]` quand
+  // celui de largeur balaie 1 à 200 en continu, avec un commentaire qui dit pourquoi.
+  //
+  // ⚠️ ON BORNE À LA SORTIE, comme pour la largeur : la garantie ne dépend plus d’une
+  // arithmétique juste, et toute recomposition future du corps reste couverte.
+  //
+  // 🔴 MAIS ON NE TRONQUE PAS PAR LA FIN — LE PIED EST LE DERNIER POUSSÉ, DONC IL SERAIT LE
+  // PREMIER SACRIFIÉ. C’est le défaut qu’une passe de fond a trouvé sur ma première version :
+  // à hauteur 1 ou 2, « q quitter » disparaissait, et le dirigeant se retrouvait enfermé dans
+  // un écran alternatif dont il ne connaît pas la sortie.
+  //
+  // ⚠️ ET CE FICHIER PORTAIT DÉJÀ LA RÈGLE, POUR L’AUTRE DIMENSION : `RACCOURCIS_UN_A_UN`
+  // retire les raccourcis du moins vital au plus vital, et `q quitter` y est marqué « le
+  // dernier qu’on retire, jamais le premier ». Mon invariant de hauteur se présentait comme
+  // « la jumelle verticale » de celui de largeur — et il violait le principe qu’il jumelait.
+  //
+  // L’ORDRE DE SACRIFICE, DU MOINS VITAL AU PLUS VITAL : le CORPS cède d’abord (il se
+  // parcourt ligne à ligne, on peut y revenir), puis le TITRE (il dit où l’on est), et le
+  // PIED reste le dernier — parce que sans lui on ne sait plus SORTIR.
+  // ⚠️ AU-DELÀ DE 2, IL N'Y A RIEN À TRONQUER — ET LE DIRE ÉVITE UNE BRANCHE MORTE QUI AURAIT
+  // L'AIR DE GARDER QUELQUE CHOSE. `hauteurCorps` vaut `max(1, hauteur - 2)`, donc le tableau
+  // fait exactement `hauteur` entrées dès que `hauteur >= 3` : mesuré à 3, 5, 10, 20 et 40.
+  // Une ligne de troncature écrite « au cas où » n'y serait jamais exécutée — deux mutations de
+  // ma campagne y ont d'ailleurs SURVÉCU, ce qui est le symptôme, pas le défaut.
+  if (sortie.length <= hauteur) return sortie;
+
+  // ⚠️ `laBarre`, PAS `pied` : ce nom-là appartient déjà à la FONCTION qui compose la barre,
+  // quelques lignes plus haut. Le masquer faisait jeter `rendreEcran` à l'exécution — attrapé
+  // à la première mesure, mais c'est le genre d'ombre qu'un `node --check` ne voit pas.
+  const laTete = sortie[0];
+  const laBarre = sortie[sortie.length - 1];
+  if (hauteur <= 0) return [];
+  if (hauteur === 1) return [laBarre];
+  return [laTete, laBarre];
 }
 
 /** Quelle tranche de l'arbre montrer pour que le curseur reste visible. */
@@ -906,5 +1076,60 @@ function pied(etat, largeur) {
   // est actif importe plus que rappeler une touche : sans lui, l'arbre ment ; sans eux, on
   // cherche une touche. Les raccourcis se rétractent donc de ce que le filtre occupe.
   const tete = filtres.length ? `${filtres.join('  ·  ')}  ─  ` : '';
+
+  // 🔴 LA SORTIE PASSE AVANT LE FILTRE — ET C’EST L’INVERSE DE CE QUE FAISAIT CETTE LIGNE.
+  //
+  // L’entête de filtre se servait EN PREMIER et laissait aux raccourcis « ce qui reste ».
+  // Mesuré (revue portail) : avec le filtre `n` actif, « q quitter » était ABSENT de la barre
+  // pour TOUTE largeur de 1 à 36 colonnes — une largeur de split parfaitement plausible. Sans
+  // filtre, de 1 à 8.
+  //
+  // ⚠️ ET J’AVAIS ÉCRIT, DANS CE MÊME FICHIER, QUE « CE FICHIER PORTAIT DÉJÀ LA RÈGLE POUR
+  // L’AUTRE DIMENSION ». C’était faux : `RACCOURCIS_UN_A_UN` classe bien les raccourcis du
+  // moins vital au plus vital, mais `raccourcisPour` s’arrête au dernier SANS vérifier qu’il
+  // tient — et `borner` le coupait alors par la droite, en plein mot.
+  //
+  // ⚠️ CE QU’ON N’A PAS FAIT : tronquer l’entête de filtre. Un filtre à demi lisible
+  // (« FILTRE : non-pr… ») est pire que pas d’entête du tout — il ne se comprend pas et il
+  // mange quand même la place. On le RETIRE entièrement quand la sortie ne tiendrait pas.
+  // 🔴 UNE PROSE FAUSSE A VÉCU ICI PENDANT DIX TOURS DE REVUE, ET ELLE REVENDIQUAIT UNE MESURE.
+  //
+  // Elle disait : « ma première version appelait `raccourcisPour(0)`, qui rend une chaîne VIDE —
+  // la condition ne se déclenchait donc jamais, et le correctif ne mordait pas. Mesuré, pas
+  // relu. » Trois affirmations, les trois fausses :
+  //
+  //   `raccourcisPour(0)` rend « q quitter », jamais une chaîne vide — la garde
+  //   `while (gardes.length > 1 …)` interdit de retirer le dernier élément, et elle était déjà
+  //   là avant ce lot ;
+  //
+  //   les deux formes rendent la MÊME chaîne, donc la même longueur, donc la même condition —
+  //   mesuré : AUCUNE largeur divergente de 0 à 200 colonnes, sur les trois états de filtre —
+  //   soit 201 largeurs par état, 603 mesures. Le « correctif »
+  //   était SANS EFFET ;
+  //
+  //   et « mesuré, pas relu » était faux. Mesurer aurait rendu les deux formes identiques —
+  //   ce qu'elles sont. J'ai emprunté l'autorité de l'instrument pour une chose que je n'avais
+  //   pas mesurée, dans une phrase qui servait à en disqualifier une autre.
+  //
+  // ⚠️ POURQUOI ELLE A SURVÉCU À DIX REVUES : elle vit dans une PROSE. Aucune assertion ne peut
+  // rougir dessus. La prose d'un fichier de gardes est le seul endroit qu'aucune garde ne garde —
+  // et c'est ici, dans le fichier qui dénonce partout ailleurs les mécanismes inventés.
+  //
+  // LE MOTIF QUI TIENT, ET C'EST LE SEUL : on lit `RACCOURCI_VITAL` parce qu'un fait doit avoir
+  // UNE source. La même expression a vécu ici en double, et deux sources d'un seul fait peuvent
+  // dériver l'une de l'autre sans que rien ne rougisse. Ce n'est pas un correctif de
+  // comportement — c'est une réduction du nombre d'endroits où la vérité peut se contredire.
+  // ⚠️ ON LIT LA CONSTANTE, ON NE RECALCULE PAS. La même expression vivait ici en double :
+  // deux sources pour un seul fait, dont l'une pouvait dériver sans que rien ne rougisse.
+  const laSortie = RACCOURCI_VITAL;
+  if (tete.length + laSortie.length > largeur) {
+    // ⚠️ ET ON NE REND PAS UN FRAGMENT **ICI** — `raccourcisPour` rend le raccourci ENTIER ;
+    // c'est `rendreEcran` qui borne, une seule fois, à la sortie. Tronquer aux deux endroits
+    // couperait deux fois. (Ce commentaire disait « quitte à déborder d'un pane minuscule,
+    // contrat antérieur » : périmé par `00a7b645`, plus rien ne déborde.) Ma première correction
+    // appelait `borner(laSortie, largeur)` ici, ce qui reproduisait « q quitt… » : le piège que
+    // j’avais nommé trois lignes plus haut et posé moi-même. Mesuré : de 2 à 8 colonnes.
+    return raccourcisPour(largeur);
+  }
   return tete + raccourcisPour(Math.max(0, largeur - tete.length));
 }
