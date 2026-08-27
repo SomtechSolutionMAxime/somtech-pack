@@ -1168,7 +1168,9 @@ test('un parc MÊLÉ sépare les rôles mesurés des rôles déclarés, dans la 
 // établi, donc le fragment qui tombait dans la tranche n'existait pas chez lui.
 test('la tranche déclarée FERME le groupe des rôles — rien ne tombe dedans après elle', async () => {
   const orch = '/depot/.orchestrateur/p-20260822-0001';
+  const lignes = [];
   const rendu = await recenser({
+    journaliser: (m) => lignes.push(m),
     panes: [
       pane({ pane_id: 'w1:p1', cwd: orch }),
       pane({ pane_id: 'w2:p2', cwd: '/arbre/a' }),
@@ -1195,6 +1197,69 @@ test('la tranche déclarée FERME le groupe des rôles — rien ne tombe dedans 
   const apres = rendu.resume.split('; DÉCLARÉS (jamais mesurés au lieu) : ')[1].split(' — ')[0];
   assert.equal(apres, '1 chefs d’équipe');
   assert.doesNotMatch(apres, /NON ÉTABLI|NON MESURÉ/);
+
+  // 🔴 ET LE JOURNAL AUSSI — REJET DE REVUE PORTAIL, et il était juste. Le module ÉCRIT que les
+  // deux sorties partagent cet ordre (« c'est le journal qui divergerait EN SILENCE »), et seul
+  // le résumé était gardé : inverser l'ordre dans le SEUL journal laissait les 1 092 essais
+  // verts. Or le journal est, au dire même de ce fichier, la SEULE sortie d'un tour de ronde du
+  // veilleur en production — le résumé, lui, est jeté. On gardait donc le côté qui ne se lit pas.
+  const apresJournal = lignes.join('\n').split('; déclarés (jamais mesurés au lieu) : ')[1].split(' ; ')[0];
+  assert.equal(apresJournal, '1 chefs d’équipe');
+  assert.doesNotMatch(apresJournal, /non établi|non mesuré/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-sexdecies UN RÔLE REFUSÉ SANS LIEU N'ENVOIE PAS ROUVRIR UN LIEU QUI N'EXISTE PAS.
+//
+// 🔴 J'AI AJOUTÉ UN SECOND PRODUCTEUR DE « RÔLE REFUSÉ » SANS TOUCHER À CE QUI LE CONSOMME. La
+// branche `metier` avait été écrite pour l'unique producteur d'alors — le lieu ÉTABLI mais
+// ILLISIBLE, où `lieu` est une vraie chaîne. Les quatre voies de `declarationDuPane` vivent, elles,
+// dans la branche `!candidat` : `lieu` y vaut `null` par construction. La même entrée rendait donc :
+//
+//     chantier : « aucun lieu de rôle ne porte cet agent »
+//     metier   : « le lieu « null » ne s’est pas laissé lire … il faut refaire la mesure »
+//
+// Un `null` littéral dans une prose destinée à un humain — ce que ce module s'interdit mot pour
+// mot — et un geste à faire qui n'existe pas.
+test('un rôle refusé SANS lieu rend un métier « sans objet », pas un lieu à rouvrir', async () => {
+  const rendu = await recenser({
+    panes: [pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' })],
+    nomsConnus: nomsDe([['w9:p9', 'bonaventure']]),
+    declarations: {
+      declarations: [],
+      illisibles: [{ fichier: '(le registre entier)', cause: 'EACCES: permission denied' }],
+      refusGlobal: 'EACCES: permission denied',
+    },
+  });
+
+  const agent = rendu.agents[0];
+  assert.equal(agent.role.mesure, 'refusée');
+  // Le métier n'a pas ÉCHOUÉ : il n'avait pas d'objet. Et la prose ne nomme aucun lieu.
+  assert.equal(agent.metier.mesure, 'sans objet');
+  assert.match(agent.metier.pourquoi, /aucun lieu de rôle ne porte cet agent/);
+  // ⚠️ JAMAIS `null` DANS UNE PROSE HUMAINE — la garde qui vaut pour toute l'entrée.
+  for (const champ of [agent.metier, agent.chantier, agent.role]) {
+    assert.doesNotMatch(JSON.stringify(champ), /« null »|« undefined »/);
+  }
+  // Et les deux voisins disent la même chose : rien à mesurer, rien à rouvrir.
+  assert.equal(agent.chantier.mesure, 'sans objet');
+  assert.equal(agent.aJour, null);
+  assert.equal(agent.remiseAJour, null);
+});
+
+// ⚠️ ET LE CAS D'ORIGINE RESTE JUSTE — un lieu qui EXISTE et refuse la lecture doit toujours
+// envoyer le rouvrir, sans quoi le correctif aurait éteint le seul cas où ce message est vrai.
+test('un rôle refusé AVEC un lieu envoie toujours rouvrir ce lieu, nommément', async () => {
+  const lieu = '/depot/.orchestrateur/p-20260822-0001';
+  const rendu = await recenser({
+    panes: [pane({ cwd: lieu })],
+    nomsConnus: nomsDe([['w1:p1', 'matapedia']]),
+    roleDuLieu: () => ({ refus: 'EACCES' }),
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+  assert.equal(rendu.agents[0].metier.mesure, 'non mesurée');
+  assert.match(rendu.agents[0].metier.raison, new RegExp(`le lieu « ${lieu} » ne s’est pas laissé lire`));
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

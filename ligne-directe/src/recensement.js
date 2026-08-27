@@ -931,7 +931,24 @@ export async function unRecensement({
       ? { mesure: 'lue', empreinte: mesure.empreinte, octets: mesure.octets }
       : aQuoiMesurer
         ? { mesure: 'refusée', refus: `le métier de « ${lieu} » ne s’est pas laissé mesurer` }
-        : role.mesure === 'refusée'
+        : // 🔴 « RÔLE REFUSÉ » A DEUX PRODUCTEURS DEPUIS CE LOT, ET CETTE BRANCHE N'EN CONNAISSAIT
+          // QU'UN. Elle a été écrite pour le lieu ÉTABLI mais ILLISIBLE — où `lieu` est toujours
+          // une vraie chaîne. Ce lot a ajouté un second producteur, `declarationDuPane`, dont les
+          // quatre voies vivent TOUTES dans la branche `!candidat` : `lieu` y vaut `null` par
+          // construction. Le rendu affirmait donc, sur la ligne suivant un `chantier` qui dit
+          // « aucun lieu de rôle ne porte cet agent » :
+          //
+          //     « le lieu « null » ne s'est pas laissé lire … il faut refaire la mesure »
+          //
+          // Un `null` littéral dans une prose destinée à un humain — le motif que ce module
+          // s'interdit ailleurs mot pour mot — et un geste à faire qui n'existe pas : il n'y a
+          // aucun lieu à rouvrir.
+          //
+          // ⚠️ ON DISCRIMINE SUR LE LIEU, PAS SUR LE RÔLE. C'est le lieu qui décide s'il y avait
+          // quelque chose à mesurer ; le rôle dit seulement pourquoi on ne l'a pas fait. Sans
+          // lieu, la mesure du métier est SANS OBJET — elle n'a pas échoué, elle n'avait pas
+          // d'objet — et c'est le cas que la dernière branche traite déjà.
+          role.mesure === 'refusée' && lieu
           ? {
               mesure: 'non mesurée',
               raison:
