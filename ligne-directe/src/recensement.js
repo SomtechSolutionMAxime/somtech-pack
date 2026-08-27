@@ -457,6 +457,29 @@ function declarationDuPane(p, chemin, registre, nom) {
   // existait et ne portait simplement pas de rôle. Un lecteur était alors envoyé chercher un
   // fichier étranger (« la sienne peut être dedans »), ou soupçonner un nom qui n'avait jamais
   // été nécessaire, alors que la déclaration était là, sous ses yeux, et muette sur le rôle.
+  // ⚠️ ET LES REPLIS DE `nom.raison`, JUSTE EN DESSOUS, NE SONT PAS CE QUE J'AI ÉCRIT D'ABORD.
+  // J'avais déclaré « les trois se couvrent MUTUELLEMENT ; seul le retrait des TROIS rougit » —
+  // une affirmation combinatoire tirée de DEUX essais. Les HUIT combinaisons, mesurées :
+  //
+  //     amont │ aval① │ aval② │ rouge          amont = `nomsConnus.raison ?? …` (nomDeLAgent)
+  //     ──────┼───────┼───────┼───────         aval① / aval② = les deux `nom.raison ?? …`
+  //       ·   │   ·   │   ·   │   non              (un par branche de la phrase)
+  //       ✗   │   ·   │   ·   │   non
+  //       ·   │   ✗   │   ✗   │   non
+  //       ✗   │   ✗   │   ·   │   OUI
+  //       ✗   │   ·   │   ✗   │   OUI
+  //       ✗   │   ✗   │   ✗   │   OUI
+  //
+  // 🔴 LA STRUCTURE RÉELLE N'EST PAS SYMÉTRIQUE. L'AMONT couvre tout : il rend la raison non vide
+  // pour toutes les formes de refus, et tant qu'il est là, les deux avals sont INERTES. Les avals,
+  // eux, sont des filets à SENS UNIQUE — chacun ne protège que SA branche de la phrase — donc
+  // retirer l'amont ET la branche empruntée suffit à faire fuir « undefined ». DEUX, pas trois.
+  //
+  // ⚠️ CE QUI EST GARDABLE ICI EST LA PROPRIÉTÉ, ET ELLE SEULE : aucune de ces trois lignes ne
+  // rougit seule. Un banc énumère les formes de refus et exige qu'aucune prose ne porte
+  // « undefined » ; c'est ce qu'un banc peut tenir, et une affirmation plus forte serait une
+  // garantie écrite au-delà de ce qui est mesuré — la faute que ce lot a déjà payée trois fois.
+
   // ⚠️ LE SIXIÈME REPLI DU LOT, ET IL VIVAIT HORS DE LA LISTE DES CINQ. Ceux du bloc `role` sont
   // désormais éprouvés un par un ; celui-ci compose une PROSE, et c'est ce qui l'a fait échapper
   // au recensement — un `ne_le` absent y ferait fuir un `undefined` littéral dans une phrase
@@ -933,6 +956,22 @@ export async function unRecensement({
     //   • « sans objet »   — il n'y a rien à mesurer, et ça n'appelle aucun geste.
     //
     // Seul le dernier est « pas un échec ». Les deux du milieu se comptent avec les non-mesurés.
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // 📌 DETTE NOMMÉE, ET CE LOT EN A ADMINISTRÉ LA PREUVE — pour la prochaine main.
+    //
+    // Le ternaire qui suit porte QUATRE états sur une cinquantaine de lignes, prose intercalée.
+    // Tant qu'un seul producteur alimentait `role.mesure === 'refusée'`, il tenait. Ce lot en a
+    // ajouté un second (`declarationDuPane`), dont toutes les voies vivent dans la branche
+    // `!candidat` — où `lieu` vaut `null` — et la branche préexistante, écrite pour l'ancien
+    // producteur, a composé « le lieu « null » ne s'est pas laissé lire ». Le défaut a été trouvé
+    // en revue, pas en l'écrivant.
+    //
+    // 🔴 CE N'EST PAS UN REPROCHE DE STYLE : l'extension de ce ternaire a produit un vrai bug DANS
+    // CE LOT MÊME. Un cinquième état de rôle devrait donc le faire devenir une TABLE (état → ce
+    // qu'on rend), où l'oubli d'un cas se voit à l'œil, plutôt qu'un ternaire de plus. On ne le
+    // fait pas ici — ce serait refondre un chemin que ce lot ne vient pas corriger, et la règle du
+    // dépôt est de ne pas élargir un lot en cours de revue. On le NOMME, à l'endroit où quelqu'un
+    // le lira au moment d'y toucher.
     const aQuoiMesurer = role.mesure === 'établi' && Boolean(lieu);
     const mesure = aQuoiMesurer ? mesurer(lieu) : null;
     const metier = mesure

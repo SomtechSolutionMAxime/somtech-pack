@@ -1418,11 +1418,15 @@ test('une déclaration sans date ne fait pas fuir « undefined » dans la prose'
 // qu'elles n'avaient pas causé. Un rouge prouve qu'au moins une chose était gardée ; jamais que
 // c'était la mutation. C'est le contrôle négatif, refait APRÈS l'ajout du banc, qui l'a dit.
 //
-// 🔴 ET LA MESURE A ENCORE CORRIGÉ CE QUE JE CROYAIS : les DEUX replis se couvrent MUTUELLEMENT.
-// Retirer celui d'amont survit (l'aval rattrape) ; retirer un des deux avals survit aussi (l'amont
-// a déjà nommé). Mesuré : seul le retrait des TROIS ENSEMBLE fait rougir. Aucune de ces lignes
-// n'est donc gardable seule — et c'est l'inverse exact du piège « muter en groupe cache une
-// survivante » : ici, muter SÉPARÉMENT cachait la redondance.
+// 🔴 ET J'AI ÉCRIT DEUX FOIS UNE STRUCTURE QUE JE N'AVAIS PAS MESURÉE. D'abord « les trois se
+// couvrent MUTUELLEMENT ; seul le retrait des TROIS rougit » — une affirmation sur huit
+// combinaisons, tirée de deux essais. Une revue l'a démentie, puis les HUIT ont été énumérées :
+// il faut l'AMONT **et** la branche empruntée. DEUX, pas trois. La matrice est au module.
+//
+// 🔴 L'ÉNUMÉRATION EST UN GESTE DE MESURE, PAS UNE CONCLUSION QU'ON TIRE. Deux essais bien choisis
+// ressemblent à une preuve quand on sait déjà ce qu'on veut montrer ; ils n'en sont une que si
+// l'on a énuméré ce qu'ils laissent de côté. C'est la troisième fois dans ce lot qu'une
+// affirmation dépasse sa mesure, et la première où ce n'est pas un chiffre mais une STRUCTURE.
 //
 // ⚠️ CE BANC TIENT DONC LA PROPRIÉTÉ, jamais une ligne : quelle que soit la forme du refus de nom,
 // aucune prose de l'entrée ne porte « undefined » et la cause est toujours nommée. C'est ce qu'on
