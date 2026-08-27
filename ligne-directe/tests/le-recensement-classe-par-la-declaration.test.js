@@ -358,9 +358,11 @@ test('le résumé et le journal nomment les rôles déclarés, distincts des ét
     journaliser: (m) => lignes.push(m),
   });
 
-  assert.match(rendu.resume, /1 chefs? d’équipe DÉCLARÉ/);
+  // ⚠️ LA FRONTIÈRE EST DEVANT LA TRANCHE, PAS APRÈS. Un « … DÉCLARÉ(s) » en queue semblait ne
+  // porter que sur le dernier poste d'une liste plate — voir le banc du parc MÊLÉ plus bas.
+  assert.match(rendu.resume, /; DÉCLARÉS \(jamais mesurés au lieu\) : 1 chefs? d’équipe/);
   assert.match(rendu.resume, /1 au rôle NON ÉTABLI/);
-  assert.match(lignes.join('\n'), /1 chefs? d’équipe déclaré/);
+  assert.match(lignes.join('\n'), /; déclarés \(jamais mesurés au lieu\) : 1 chefs? d’équipe/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -546,7 +548,7 @@ test('deux rôles déclarés se rendent dans un ordre stable, quel que soit celu
   // ⚠️ ON COMPARE LES DEUX RÉSUMÉS ENTRE EUX, pas à une chaîne recopiée : un oracle écrit à la
   // main ici se corrigerait d'un même geste que le code, et ne garderait plus rien.
   assert.equal(rendus[0].resume, rendus[1].resume);
-  assert.match(rendus[0].resume, /1 chefs d’équipe, 1 partenaire-transverse DÉCLARÉ\(s\)/);
+  assert.match(rendus[0].resume, /; DÉCLARÉS \(jamais mesurés au lieu\) : 1 chefs d’équipe, 1 partenaire-transverse/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -859,7 +861,7 @@ test('un rôle déclaré que la table des rôles connaît se nomme par SON pluri
   assert.equal(rendu.agents[0].role.libelle, roleDe('orchestrateur').libelle);
   assert.deepEqual(rendu.compte.parRoleDeclare, { orchestrateur: 2 });
   // Le PLURIEL, dans la seule ligne qu'un humain lit.
-  assert.match(rendu.resume, new RegExp(`2 ${roleDe('orchestrateur').libelle_pluriel} DÉCLARÉ`));
+  assert.match(rendu.resume, new RegExp(`DÉCLARÉS \\(jamais mesurés au lieu\\) : 2 ${roleDe('orchestrateur').libelle_pluriel}`));
   // ⚠️ ET IL N'EST PAS COMPTÉ COMME ÉTABLI : déclaré reste déclaré, même pour un rôle qui A un lieu.
   assert.equal(rendu.compte.parRole.orchestrateur, 0);
 });
@@ -1087,6 +1089,71 @@ test('la plus récente l’emporte — éprouvé contre le tri RÉEL du producte
   } finally {
     rmSync(racine, { recursive: true, force: true });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-quindecies UN PARC MÊLÉ — la seule phrase que le dirigeant lit, sur le cas que cette story
+// existe pour produire.
+//
+// 🔴 CE BANC MANQUAIT, ET SON ABSENCE A COÛTÉ NEUF TOURS DE REVUE. Les deux listes étaient
+// jointes par le MÊME séparateur, et le mot qui distingue le déclaré du mesuré ne venait qu'À LA
+// FIN. Mesuré :
+//
+//     1 représentants de clients, 1 orchestrateurs, 1 chefs d’équipe, 1 partenaire-transverse DÉCLARÉ(s)
+//
+// Quatre postes en liste plate, avec un qualificatif qui semble ne porter que sur le dernier :
+// rien n'empêche d'y lire « 1 chefs d'équipe » comme un rôle ÉTABLI. C'est RA-VUE-006 violée par
+// le module qui porte cette règle en commentaire.
+//
+// ⚠️ ET AUCUN BANC NE POUVAIT LE VOIR — c'est ce qui rend celui-ci nécessaire, et pas seulement
+// utile. Tous ceux qui lisent la phrase posent `roleDuLieu: () => null` : elle s'ouvrait donc
+// toujours sur le littéral « aucun rôle établi », qui lève l'ambiguïté par construction. Ceux qui
+// font coexister établi et déclaré, eux, ne lisent que `compte`. Le défaut vivait dans
+// l'INTERVALLE entre deux familles de bancs, chacune juste de son côté.
+test('un parc MÊLÉ sépare les rôles mesurés des rôles déclarés, dans la phrase même', async () => {
+  const orch = '/depot/.orchestrateur/p-20260822-0001';
+  const repr = '/depot/.gestionnaire/Charles-Olivier';
+  const lignes = [];
+  const rendu = await recenser({
+    panes: [
+      pane({ pane_id: 'w1:p1', cwd: orch }),
+      pane({ pane_id: 'w2:p2', cwd: repr }),
+      pane({ pane_id: 'w3:p3', cwd: '/arbre/a' }),
+      pane({ pane_id: 'w4:p4', cwd: '/arbre/b' }),
+    ],
+    roleDuLieu: (l) => (l === orch ? 'orchestrateur' : l === repr ? 'representant' : null),
+    nomsConnus: nomsDe([
+      ['w1:p1', 'matapedia'],
+      ['w2:p2', 'bonaventure'],
+      ['w3:p3', 't-20260825-0012'],
+      ['w4:p4', 'p-20260822-0001'],
+    ]),
+    declarations: {
+      declarations: [
+        declaration({ nom: 't-20260825-0012', espace: '/arbre/a', paneDeclare: 'w3:p3' }),
+        declaration({ nom: 'p-20260822-0001', role: 'partenaire-transverse', espace: '/arbre/b', paneDeclare: 'w4:p4' }),
+      ],
+      illisibles: [],
+    },
+    journaliser: (m) => lignes.push(m),
+  });
+
+  // Les quatre agents sont bien là, deux mesurés au lieu, deux déclarés.
+  assert.equal(rendu.compte.parRole.orchestrateur, 1);
+  assert.equal(rendu.compte.parRole.representant, 1);
+  assert.equal(rendu.compte.roleDeclare, 2);
+
+  // ⚠️ LE CŒUR : la frontière se lit AVANT les rôles qu'elle couvre, dans les DEUX sorties.
+  const tranche = /; DÉCLARÉS \(jamais mesurés au lieu\) : 1 chefs d’équipe, 1 partenaire-transverse/;
+  assert.match(rendu.resume, tranche);
+  assert.match(lignes.join('\n'), /; déclarés \(jamais mesurés au lieu\) : 1 chefs d’équipe, 1 partenaire-transverse/);
+
+  // ⚠️ ET AUCUN RÔLE DÉCLARÉ N'APPARAÎT DANS LA TRANCHE DES MESURÉS. C'est l'assertion qui tue la
+  // liste plate : on découpe la phrase à la frontière et on regarde ce qu'il y a AVANT.
+  const avantLaFrontiere = rendu.resume.split(' ; DÉCLARÉS')[0];
+  assert.match(avantLaFrontiere, /1 représentants de clients, 1 orchestrateurs/);
+  assert.doesNotMatch(avantLaFrontiere, /chefs d’équipe/);
+  assert.doesNotMatch(avantLaFrontiere, /partenaire-transverse/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

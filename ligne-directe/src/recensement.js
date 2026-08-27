@@ -1208,6 +1208,27 @@ export async function unRecensement({
     .filter((nom) => parRole[nom] > 0)
     .map((nom) => `${parRole[nom]} ${roleDe(nom).libelle_pluriel}`);
 
+  // ⚠️ LA FRONTIÈRE ENTRE MESURÉ ET DÉCLARÉ SE POSE DEVANT LA LISTE, PAS APRÈS ELLE.
+  //
+  // 🔴 LES DEUX LISTES ÉTAIENT JOINTES PAR LE MÊME SÉPARATEUR, et le mot qui les distingue ne
+  // venait qu'À LA FIN. Mesuré sur un parc mêlé — celui que cette story existe pour produire :
+  //
+  //     1 représentants de clients, 1 orchestrateurs, 1 chefs d’équipe, 1 partenaire-transverse DÉCLARÉ(s)
+  //
+  // Quatre postes en liste plate, avec un qualificatif qui semble ne porter que sur le dernier.
+  // Rien n'empêche d'y lire « 1 chefs d'équipe » comme un rôle ÉTABLI, c'est-à-dire mesuré au
+  // lieu — la confusion exacte que RA-VUE-006 interdit, produite par le module qui porte cette
+  // règle en commentaire dix lignes plus haut.
+  //
+  // ⚠️ ET AUCUN BANC NE POUVAIT LE VOIR : tous ceux qui lisent la phrase posent
+  // `roleDuLieu: () => null`, donc elle s'ouvrait toujours sur le littéral « aucun rôle établi »,
+  // qui lève l'ambiguïté par construction. Les bancs qui font coexister établi et déclaré, eux,
+  // ne lisent que `compte`. Le défaut vivait dans l'intervalle entre les deux familles de bancs.
+  //
+  // ⚠️ ÉCRIT UNE SEULE FOIS, EMPLOYÉ AUX DEUX ENDROITS. Le résumé et le journal sont les deux
+  // seules sorties lues ; deux compositions de la même phrase divergeraient au premier
+  // changement de l'une, et c'est le journal — la seule trace d'un tour de ronde — qui
+  // divergerait en silence.
   // Les rôles DÉCLARÉS, nommés de la même façon — « 2 au rôle déclaré » ne dit pas quels rôles,
   // donc ne dit toujours pas au dirigeant quelle tranche du parc il regarde.
   //
@@ -1217,6 +1238,18 @@ export async function unRecensement({
   const rolesDeclares = Object.keys(parRoleDeclare)
     .sort()
     .map((nom) => `${parRoleDeclare[nom]} ${libellesDuRoleDeclare(nom).pluriel}`);
+
+  /**
+   * La tranche DÉCLARÉE de la phrase — vide quand il n'y en a aucun.
+   *
+   * ⚠️ LE SÉPARATEUR N'EST PAS UNE VIRGULE. Une virgule prolonge la liste des établis ; ce qu'il
+   * faut ici est une FRONTIÈRE, et elle doit se voir avant qu'on lise les rôles qu'elle couvre.
+   * Le mot « DÉCLARÉ » est donc en TÊTE de sa tranche, jamais en queue.
+   */
+  const trancheDeclaree = (majuscule) =>
+    rolesDeclares.length
+      ? ` ; ${majuscule ? 'DÉCLARÉS' : 'déclarés'} (jamais mesurés au lieu) : ${rolesDeclares.join(', ')}`
+      : '';
 
   // ⚠️ LE BATTEMENT DE CŒUR — ÉCRIT MÊME QUAND LA RONDE N'A RIEN TROUVÉ. Un dispositif qui ne se
   // signale que lorsqu'il a quelque chose à dire est indiscernable d'un dispositif mort ; c'est
@@ -1236,7 +1269,7 @@ export async function unRecensement({
       // rendu : cette ligne est la SEULE sortie d'un tour de ronde du veilleur. Un compte qui ne
       // vivrait que dans le rendu ne serait lu par personne — et le mot « déclaré » y est ce qui
       // empêche de relire ces agents comme mesurés.
-      (rolesDeclares.length ? `, ${rolesDeclares.join(', ')} déclaré(s)` : '') +
+      trancheDeclaree(false) +
       `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré ; ` +
       `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s), ` +
       `${metierSansObjet} sans métier à comparer ; mandats ` +
@@ -1327,7 +1360,7 @@ export async function unRecensement({
       // ⚠️ « DÉCLARÉ » EST ÉCRIT À CÔTÉ DU CHIFFRE, comme « plancher » l'est du compte des agents,
       // et pour la même raison : c'est le seul mot qui empêche de lire ces rôles comme mesurés.
       // Le retirer rendrait la phrase plus courte et le registre plus faux (RA-VUE-006).
-      (rolesDeclares.length ? `, ${rolesDeclares.join(', ')} DÉCLARÉ(s)` : '') +
+      trancheDeclaree(true) +
       (roleNonEtabli ? `, ${roleNonEtabli} au rôle NON ÉTABLI` : '') +
       (roleNonMesure ? `, ${roleNonMesure} au rôle NON MESURÉ` : '') +
       ` — ${aJour} à jour, ${enRetard} en retard` +
