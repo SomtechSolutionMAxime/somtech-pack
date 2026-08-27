@@ -222,6 +222,11 @@ export function roleDeclareDe(declaration) {
     // indiscernable d'un fait prouvé, ce que RA-VUE-006 interdit.
     mandat: declaration.mandat ?? null,
     coordonnateur: declaration.coordonnateur ?? null,
+    // ⚠️ CE REPLI-CI EST INATTEIGNABLE, ET ON LE DIT — les DEUX clés d'appariement passent par
+    // l'espace : une déclaration qui n'en porte pas n'apparie personne, donc on n'arrive jamais
+    // ici sans lui. C'est un mutant ÉQUIVALENT, comme la branche du vide de
+    // `libellesDuRoleDeclare` ; il reste pour que le contrat du bloc soit total, et un banc tient
+    // la PROPRIÉTÉ (« sans espace, rien n'apparie »), jamais cette ligne.
     espace: declaration.espace ?? null,
     declaree_le: declaration.ne_le ?? null,
     pose_par: declaration.pose_par ?? null,

@@ -661,7 +661,9 @@ test('un coordonnateur ou un mandat absent se rend « null », et survit au JSON
 });
 
 // ⚠️ ET LES DEUX CHAMPS VOISINS AUSSI — SURVIVANTE. Le correctif `?? null` avait été posé sur
-// QUATRE champs ; le banc n'en gardait que deux. Mesuré : remplacer `espace` ou `pose_par` par une
+// CINQ champs — `mandat`, `coordonnateur`, `espace`, `declaree_le`, `pose_par` — et ce commentaire
+// en annonçait QUATRE : le compte était faux dans le texte même qui reproche un compte faux. Le
+// banc n'en gardait que deux. Mesuré : remplacer `espace` ou `pose_par` par une
 // valeur bidon laissait les 1 072 essais VERTS. Or `espace` est ce qui permet d'aller voir l'agent,
 // et `pose_par` est ce qui donne un AUTEUR au fait — sans lui, une déclaration ne se distingue plus
 // d'un fichier déposé à la main dans le registre.
@@ -676,16 +678,81 @@ test('le bloc déclaré rend l’espace et l’auteur du geste, tels que la déc
   assert.equal(role.espace, '/Users/qui/worktrees/depot/20260827-000000');
   assert.equal(role.pose_par, 'pack agent naitre');
 
-  // Et absents, ils se disent `null` plutôt que de disparaître du JSON — même règle que ci-dessus.
+  // ⚠️ ET ABSENTS, ILS SE DISENT `null` — LES CINQ, UN PAR UN. Le corps de ce banc n'en retirait
+  // qu'UN (`pose_par`) pendant que son commentaire annonçait « les deux » : la garantie était
+  // écrite au pluriel et mesurée au singulier. C'est la forme que ce lot a payée trois fois ;
+  // ici elle vivait dans le banc qui la dénonce.
+  //
+  // ⚠️ ON ÉNUMÈRE PLUTÔT QUE D'EN CHOISIR UN. Un champ ajouté demain au bloc sans son repli
+  // n'entrera pas dans cette liste — mais le compte, lui, rougira : `CHAMPS_A_REPLI` est
+  // confronté aux clés RÉELLEMENT rendues, plus bas.
+  // ⚠️ `espace` N'EST PAS DANS CETTE LISTE, ET CE N'EST PAS UN OUBLI — voir le banc juste après :
+  // son absence DÉFAIT l'appariement, donc son repli est inatteignable. Écrit ici parce qu'un
+  // lecteur qui compte cinq champs et quatre lignes doit trouver la raison sans chercher.
+  for (const [champDeclare, champRendu] of [
+    ['mandat', 'mandat'],
+    ['coordonnateur', 'coordonnateur'],
+    ['ne_le', 'declaree_le'],
+    ['pose_par', 'pose_par'],
+  ]) {
+    const nu = declaration();
+    delete nu[champDeclare];
+    const sans = await recenser({
+      panes: [pane()],
+      nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+      declarations: { declarations: [nu], illisibles: [] },
+    });
+
+    assert.equal(sans.agents[0].role.mesure, 'déclarée', `« ${champDeclare} » absent ne défait pas la déclaration`);
+    assert.equal(sans.agents[0].role[champRendu], null, `« ${champRendu} » absent doit se dire « null »`);
+    // ⚠️ `undefined` DISPARAÎT de `JSON.stringify`, et ce registre est rendu en JSON : le champ
+    // cesserait d'exister au lieu d'être dit absent.
+    assert.ok(
+      champRendu in JSON.parse(JSON.stringify(sans.agents[0].role)),
+      `« ${champRendu} » doit SURVIVRE au JSON, dit absent plutôt qu’effacé`,
+    );
+  }
+});
+
+// 🔴 LE CINQUIÈME CHAMP EST UN CAS À PART, ET LE MESURER L'A RÉVÉLÉ. Une revue a rapporté que le
+// repli `espace ?? null` n'était « jamais éprouvé » ; en l'éprouvant, on découvre mieux : il est
+// INATTEIGNABLE. Les DEUX clés d'appariement passent par l'espace — une déclaration qui n'en
+// porte pas n'apparie personne, donc on n'arrive jamais à `roleDeclareDe` avec un espace absent.
+// Son `?? null` est un mutant ÉQUIVALENT, comme celui de `libellesDuRoleDeclare`, et le taire
+// aurait laissé croire qu'un banc le tient.
+test('une déclaration SANS espace n’apparie personne — son repli est donc inatteignable', async () => {
   const nu = declaration();
-  delete nu.pose_par;
-  const sans = await recenser({
+  delete nu.espace;
+  const rendu = await recenser({
     panes: [pane()],
     nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    // Tout le reste concorde : pane, session, nom.
     declarations: { declarations: [nu], illisibles: [] },
   });
-  assert.equal(sans.agents[0].role.pose_par, null);
-  assert.ok('pose_par' in JSON.parse(JSON.stringify(sans.agents[0].role)));
+
+  assert.equal(rendu.agents[0].role.mesure, 'non établi');
+  assert.equal(rendu.compte.roleDeclare, 0);
+});
+
+// ⚠️ ET LE COMPTE DES CHAMPS À REPLI SE DÉRIVE DU RENDU, il ne se recopie pas. Une liste écrite à
+// la main dans un banc se désaccorde du code au premier champ ajouté — et c'est très exactement
+// ce qui vient d'arriver au commentaire au-dessus, qui annonçait quatre champs pour cinq.
+test('tout champ du bloc déclaré venu de la déclaration porte son repli — aucun n’échappe', async () => {
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: [declaration()], illisibles: [] },
+  });
+
+  // Ce que le bloc rend, moins ce qu'il compose lui-même (mesure, nom, libellé, source, prose).
+  const composesParLeModule = new Set(['mesure', 'nom', 'libelle', 'source', 'pourquoi']);
+  const venusDeLaDeclaration = Object.keys(rendu.agents[0].role).filter((c) => !composesParLeModule.has(c));
+
+  assert.deepEqual(
+    venusDeLaDeclaration.sort(),
+    ['coordonnateur', 'declaree_le', 'espace', 'mandat', 'pose_par'],
+    'un champ venu de la déclaration a été ajouté ou retiré : son repli est-il éprouvé au banc du dessus ?',
+  );
 });
 
 // ⚠️ ET LA BORNE NE PRÉSUME PAS DE LA FORME DU REGISTRE — SURVIVANTE. `ceQueDitLaSourceDeclaree`
@@ -1260,6 +1327,53 @@ test('un rôle refusé AVEC un lieu envoie toujours rouvrir ce lieu, nommément'
   assert.equal(rendu.agents[0].role.mesure, 'refusée');
   assert.equal(rendu.agents[0].metier.mesure, 'non mesurée');
   assert.match(rendu.agents[0].metier.raison, new RegExp(`le lieu « ${lieu} » ne s’est pas laissé lire`));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-septendecies UN RÔLE DÉCLARÉ SE NETTOIE — SURVIVANTE.
+//
+// 🔴 RETIRER LE `.trim()` LAISSAIT LES 1 094 ESSAIS VERTS. Ce module traite pourtant déjà le
+// registre comme potentiellement malformé — il a un banc entier pour ça. Un `role: " chef-equipe"`
+// produisait alors un nom non nettoyé : la double résolution de libellé échoue (ni la table, ni
+// `roles.js` ne connaissent ce mot), et `parRoleDeclare` ouvre un SECOND compartiment pour le même
+// rôle. Deux « 1 chefs d'équipe » au lieu d'un « 2 » — un sous-comptage silencieux dans la ligne
+// que le dirigeant lit.
+test('un rôle déclaré entouré d’espaces se nettoie — un seul compartiment, un seul libellé', async () => {
+  const rendu = await recenser({
+    panes: [pane(), pane({ pane_id: 'w2:p2', cwd: '/Users/qui/autre-arbre' })],
+    nomsConnus: nomsDe([
+      ['w1:p1', 't-20260825-0012'],
+      ['w2:p2', 'p-20260822-0001'],
+    ]),
+    declarations: {
+      declarations: [
+        declaration({ role: ' chef-equipe\n' }),
+        declaration({ nom: 'p-20260822-0001', espace: '/Users/qui/autre-arbre', paneDeclare: 'w2:p2' }),
+      ],
+      illisibles: [],
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.nom, 'chef-equipe');
+  assert.equal(rendu.agents[0].role.libelle, 'chef d’équipe');
+  // 🔴 UN SEUL COMPARTIMENT POUR LES DEUX — c'est ce que le nettoyage protège.
+  assert.deepEqual(rendu.compte.parRoleDeclare, { 'chef-equipe': 2 });
+  assert.match(rendu.resume, /DÉCLARÉS \(jamais mesurés au lieu\) : 2 chefs d’équipe/);
+});
+
+// ⚠️ ET UN RÔLE QUI N'EST QUE DES ESPACES N'EST PAS UN RÔLE. Sans le nettoyage, `'  '` est
+// « vrai » : il ouvrirait un compartiment nommé par du vide, et le résumé porterait un libellé
+// invisible à côté d'un chiffre.
+test('un rôle fait d’espaces seuls n’identifie pas — l’absence se montre', async () => {
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: [declaration({ role: '   ' })], illisibles: [] },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'non établi');
+  assert.equal(rendu.compte.roleDeclare, 0);
+  assert.deepEqual(rendu.compte.parRoleDeclare, {});
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
