@@ -317,18 +317,33 @@ test('un espace voisin au nom préfixe n’est pas le même espace', async () =>
 // passer » — est de sortir un agent d'un compartiment sans le remettre dans un autre. L'égalité
 // l'attrape mécaniquement, y compris pour une exception qu'on n'a pas encore imaginée.
 test('les quatre compartiments du rôle couvrent le parc, sans recouvrement', async () => {
+  // 🔴 CE BANC A ÉTÉ REJETÉ EN REVUE, ET LE REPROCHE ÉTAIT JUSTE : il n'exerçait QUE TROIS de ses
+  // quatre compartiments. Sa fixture ne portait aucun agent « refusée », donc `roleNonMesure`
+  // valait 0 dans le code sain COMME dans un code où ce compartiment perd silencieusement ses
+  // agents. L'égalité était satisfaite TRIVIALEMENT — vrai, et sans rien mesurer.
+  //
+  // Mesuré : un « panier muet » posé exactement sur ce compartiment — l'exception que le
+  // commentaire prétendait attraper « mécaniquement » — laissait ce banc VERT.
+  //
+  // ⚠️ UNE ÉQUATION NE PROUVE RIEN SUR UN TERME NUL. La correction n'est donc pas d'ajouter une
+  // assertion : c'est d'exiger que CHAQUE compartiment soit NON VIDE avant de sommer. Sans quoi
+  // l'équation reste vraie en ne parlant que d'une partie du parc.
   const lieu = '/Users/qui/depot/.orchestrateur/p-20260822-0001';
   const rendu = await recenser({
     panes: [
       pane({ pane_id: 'w1:p1' }), // déclaré
       pane({ pane_id: 'w2:p2', cwd: '/Users/qui/ailleurs' }), // non établi
       pane({ pane_id: 'w3:p3', cwd: lieu }), // établi
+      pane({ pane_id: 'w4:p4', cwd: '/Users/qui/encore-ailleurs' }), // REFUSÉ — le 4e, qui manquait
     ],
     roleDuLieu: (ou) => (ou === lieu ? 'orchestrateur' : null),
     nomsConnus: nomsDe([
       ['w1:p1', 't-20260825-0012'],
       ['w2:p2', 'bonaventure'],
       ['w3:p3', 'matapedia'],
+      // ⚠️ `w4:p4` EST ABSENT DE LA CARTE — le registre ne l'a pas vu, donc son nom est « refusée »,
+      // et sans la clé de repli « pas trouvée » ne vaut pas « absente » : son rôle devient
+      // « refusée ». C'est ainsi qu'on atteint le quatrième compartiment sans rien simuler.
     ]),
     declarations: { declarations: [declaration()], illisibles: [] },
   });
@@ -336,10 +351,27 @@ test('les quatre compartiments du rôle couvrent le parc, sans recouvrement', as
   const c = rendu.compte;
   const etablis = Object.values(c.parRole).reduce((a, b) => a + b, 0);
   const declares = Object.values(c.parRoleDeclare).reduce((a, b) => a + b, 0);
+
+  // 🔴 D'ABORD : LES QUATRE SONT HABITÉS. C'est ce qui rend la somme d'après signifiante.
+  assert.ok(etablis > 0, 'aucun agent ÉTABLI : l’équation ne mesurerait pas ce compartiment');
+  assert.ok(c.roleDeclare > 0, 'aucun agent DÉCLARÉ : idem');
+  assert.ok(c.roleNonEtabli > 0, 'aucun agent NON ÉTABLI : idem');
+  assert.ok(c.roleNonMesure > 0, 'aucun agent REFUSÉ : c’est le trou que ce banc avait');
+
+  // Puis l'équation : rien ne se perd, rien ne se compte deux fois.
   assert.equal(declares, c.roleDeclare);
   assert.equal(etablis + c.roleDeclare + c.roleNonEtabli + c.roleNonMesure, rendu.agents.length);
-  assert.equal(rendu.agents.length, 3);
+  assert.equal(rendu.agents.length, 4);
+
+  // ⚠️ ET LA VENTILATION CORRESPOND AUX ENTRÉES, pas seulement à elle-même : un compte juste sur
+  // une population fausse resterait juste.
+  const parMesure = (quoi) => rendu.agents.filter((a) => a.role.mesure === quoi).length;
+  assert.equal(parMesure('établi'), etablis);
+  assert.equal(parMesure('déclarée'), c.roleDeclare);
+  assert.equal(parMesure('non établi'), c.roleNonEtabli);
+  assert.equal(parMesure('refusée'), c.roleNonMesure);
 });
+
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑨ LE RÉSUMÉ ET LE JOURNAL LES NOMMENT — parce que ce sont les deux seules sorties lues.
