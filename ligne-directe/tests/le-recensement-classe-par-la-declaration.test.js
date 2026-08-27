@@ -760,6 +760,34 @@ test('un registre dont la lecture a ENTIÈREMENT échoué se rend « refusée »
   assert.equal(rendu.agents[0].role.mesure, 'refusée');
 });
 
+// ⚠️ ET MÊME S'IL PORTE DES FAITS. Les deux moitiés du rendu se lisaient chacune son champ : la
+// borne regardait `refusGlobal`, le classement regardait `declarations`. Un registre qui porte
+// les deux faisait donc dire à la MÊME page « rien n'a pu être lu » et « 1 chef d'équipe
+// DÉCLARÉ », avec son mandat et son coordonnateur. Aucun producteur ne rend cette forme
+// aujourd'hui — mais la cohérence d'un rendu ne peut pas dépendre de la discipline de son
+// appelant, et `unRecensement` est exporté.
+test('un registre en refus global n’identifie personne, même s’il porte des faits', async () => {
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: {
+      // Un fait qui apparie PARFAITEMENT cet agent — pane, session, espace et nom.
+      declarations: [declaration()],
+      illisibles: [{ fichier: '(le registre entier)', cause: 'EACCES: permission denied' }],
+      refusGlobal: 'EACCES: permission denied',
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+  assert.match(rendu.agents[0].role.raison, /n’a pas pu être lu du tout/);
+  // Les deux moitiés du rendu disent la même chose : rien n'a été établi.
+  assert.equal(rendu.borne.sourceDeclaree.mesure, 'refusée');
+  assert.equal(rendu.compte.roleDeclare, 0);
+  assert.deepEqual(rendu.compte.parRoleDeclare, {});
+  assert.doesNotMatch(rendu.resume, /DÉCLARÉ/);
+  assert.equal(rendu.compte.roleNonMesure, 1);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {

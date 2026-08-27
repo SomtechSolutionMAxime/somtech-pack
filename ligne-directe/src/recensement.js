@@ -379,6 +379,31 @@ function ceQueDitLaSourceDeclaree(registre) {
 function declarationDuPane(p, chemin, registre, nom) {
   if (!registre) return null;
 
+  // 🔴 UN REGISTRE QUI A REFUSÉ EN BLOC N'IDENTIFIE PERSONNE — MÊME S'IL PORTE DES FAITS.
+  //
+  // `ceQueDitLaSourceDeclaree`, dix lignes plus haut, lit `refusGlobal` EN PREMIER et rend
+  // « refusée » ; cette fonction-ci ne le regardait pas. Les deux moitiés du MÊME rendu pouvaient
+  // donc se contredire : la borne annonçant « le registre n'a pas pu être lu du tout », et le
+  // résumé, dans la même page, « 1 chef d'équipe DÉCLARÉ » avec son mandat et son coordonnateur.
+  // C'est la confusion que RA-VUE-006 interdit, servie au lecteur en une seule vue.
+  //
+  // ⚠️ AUCUN CHEMIN DE PRODUCTION N'Y MÈNE AUJOURD'HUI — `lesDeclarationsDuPoste` force
+  // `declarations: []` dans sa branche de refus. Mais la cohérence d'un rendu ne peut pas
+  // dépendre de la discipline de son appelant : `unRecensement` est EXPORTÉ, et le jour où un
+  // second producteur rend les deux à la fois, rien ici ne l'arrêterait. On refuse donc au même
+  // endroit que la borne, sur le même champ, et on le DIT — « je n'ai pas pu lire » n'est jamais
+  // « il n'a pas de déclaration ».
+  if (registre.refusGlobal) {
+    return {
+      mesure: 'refusée',
+      nom: null,
+      raison:
+        `le registre des déclarations n’a pas pu être lu du tout (${String(registre.refusGlobal)}) : ` +
+        `je n’identifie personne dessus, même s’il porte des faits — ils ne sont pas ceux d’une ` +
+        `lecture aboutie`,
+    };
+  }
+
   const trouvee = declarationDeLAgent(
     {
       pane: p?.pane_id ?? p?.pane ?? null,
