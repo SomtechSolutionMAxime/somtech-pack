@@ -168,6 +168,31 @@ export function refusLigneMuette(nature, autorises, chantier) {
  * 🔴 CE QU'ON NE FAIT PAS : laisser l'exception remonter. Le registre des naissances est une
  * source d'APPOINT du recensement ; un répertoire hors dépôt qui se ferme ferait alors
  * disparaître les 83 agents du poste d'un registre dont tout l'objet est de dire qui est vivant.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ CETTE LECTURE EST SYNCHRONE, ET ELLE ÉCHAPPE À LA GARDE D'ABANDON — relevé en revue de fond.
+ *
+ * `recensementDuPoste` est protégé par `DELAI_MAX_DUN_TOUR_MS` (120 s), mais cette garde arbitre
+ * entre PROMESSES : une opération synchrone qui bloque la pile empêche structurellement son
+ * minuteur de se déclencher. `lireLesDeclarations` lit le répertoire puis CHAQUE fichier en
+ * synchrone, et c'est la première lecture de ce module dont le coût suit la taille HISTORIQUE du
+ * registre plutôt que le nombre d'agents vivants — or rien ne purge ce registre aujourd'hui.
+ *
+ * 🔴 ON NE POSE PAS DE BORNE POUR AUTANT, ET LE CHIFFRE DIT POURQUOI. Mesuré le 2026-08-27 sur ce
+ * poste, registre synthétique :
+ *
+ *        2 déclarations →     6 ms          10 000 déclarations →   170 ms
+ *    1 000 déclarations →    15 ms          50 000 déclarations → 1 032 ms
+ *
+ * Le coût est LINÉAIRE et il faudrait de l'ordre de six millions de fichiers pour approcher les
+ * 120 s de l'abandon. Le registre réel en porte DEUX, et le dispositif inscrit une déclaration
+ * par naissance d'agent. Borner ici garderait un cas que le monde ne produit pas — et ce dépôt a
+ * déjà payé le fait de garder ce qui n'arrive pas.
+ *
+ * ⚠️ CE QUI EST INSCRIT EST DONC LA MESURE, pas une garde : le jour où quelqu'un se demande si ce
+ * point coûte, il a le chiffre et la méthode plutôt qu'une intuition. La vraie réponse — purger
+ * le registre, ou le lire sans bloquer la pile — appartient au module qui l'ÉCRIT
+ * (`naissance-representant/`), et elle est remontée comme telle.
  */
 export function lesDeclarationsDuPoste({ lire = lireLesDeclarations } = {}) {
   try {

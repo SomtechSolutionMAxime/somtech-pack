@@ -457,6 +457,14 @@ function declarationDuPane(p, chemin, registre, nom) {
   // existait et ne portait simplement pas de rôle. Un lecteur était alors envoyé chercher un
   // fichier étranger (« la sienne peut être dedans »), ou soupçonner un nom qui n'avait jamais
   // été nécessaire, alors que la déclaration était là, sous ses yeux, et muette sur le rôle.
+  // ⚠️ LE SIXIÈME REPLI DU LOT, ET IL VIVAIT HORS DE LA LISTE DES CINQ. Ceux du bloc `role` sont
+  // désormais éprouvés un par un ; celui-ci compose une PROSE, et c'est ce qui l'a fait échapper
+  // au recensement — un `ne_le` absent y ferait fuir un `undefined` littéral dans une phrase
+  // destinée à un dirigeant, le motif que ce lot interdit mot pour mot ailleurs.
+  //
+  // ⚠️ ET LE CAS N'EST PAS THÉORIQUE : ce module écrit lui-même, du champ `role`, qu'« un fait
+  // inscrit par une version antérieure du geste peut ne pas le porter ». `ne_le` est un champ de
+  // registre du même genre.
   const tete = trouvee
     ? `une déclaration l’apparie mais ne porte AUCUN rôle (inscrite le ${trouvee.ne_le ?? 'sans date'})`
     : 'aucune déclaration de naissance ne l’apparie';

@@ -1377,6 +1377,83 @@ test('un rôle fait d’espaces seuls n’identifie pas — l’absence se montr
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-octodecies LE SIXIÈME REPLI — celui qui vit dans la PROSE, et qui a échappé au recensement
+// des cinq.
+//
+// 🔴 J'AVAIS DÉNOMBRÉ LES REPLIS DU BLOC `role` ET CRU LES AVOIR TOUS. Celui-ci compose une
+// PHRASE, pas un champ : il n'était dans aucune de mes listes, et le retirer laissait les 1 098
+// essais verts. Un `ne_le` absent faisait alors fuir « inscrite le undefined » dans une prose
+// destinée à un dirigeant — le motif que ce lot interdit mot pour mot deux bancs plus haut.
+//
+// ⚠️ ET LE CAS N'EST PAS THÉORIQUE : ce module écrit lui-même, du champ `role`, qu'« un fait
+// inscrit par une version antérieure du geste peut ne pas le porter ». `ne_le` est du même genre.
+test('une déclaration sans date ne fait pas fuir « undefined » dans la prose', async () => {
+  const nu = declaration();
+  delete nu.role;
+  delete nu.ne_le;
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: {
+      declarations: [nu],
+      illisibles: [{ fichier: '20260101T000000000Z-un-autre.json', cause: 'Unexpected token' }],
+    },
+  });
+
+  const raison = rendu.agents[0].role.raison;
+  assert.match(raison, /inscrite le sans date/);
+  // ⚠️ LA GARDE QUI VAUT POUR TOUTE L'ENTRÉE, et pas seulement pour ce champ-ci.
+  assert.doesNotMatch(JSON.stringify(rendu.agents[0]), /undefined|« null »/);
+});
+
+// ⚠️ ET LES DEUX DERNIERS REPLIS DE PROSE — trouvés en BALAYANT le fichier plutôt qu'en relisant
+// mes propres listes. Le balayage aurait dû venir en premier : trois fois dans ce lot, j'ai
+// dénombré des replis de mémoire et j'en ai oublié un.
+//
+// 🔴 ET LES MESURER A CORRIGÉ CE QUE JE CROYAIS. Les deux `nom.raison ?? '…'` sont ÉQUIVALENTS
+// par la chaîne réelle : `nomDeLAgent` pose DÉJÀ son propre repli en amont
+// (`nomsConnus.raison ?? 'le registre des agents a refusé'`), donc un refus sans raison arrive ici
+// déjà nommé. Ma première version de ce banc attendait une prose que le code ne produit pas — elle
+// rougissait AVANT toute mutation, et les deux mutations « tuées » l'étaient donc par un rouge
+// qu'elles n'avaient pas causé. Un rouge prouve qu'au moins une chose était gardée ; jamais que
+// c'était la mutation. C'est le contrôle négatif, refait APRÈS l'ajout du banc, qui l'a dit.
+//
+// 🔴 ET LA MESURE A ENCORE CORRIGÉ CE QUE JE CROYAIS : les DEUX replis se couvrent MUTUELLEMENT.
+// Retirer celui d'amont survit (l'aval rattrape) ; retirer un des deux avals survit aussi (l'amont
+// a déjà nommé). Mesuré : seul le retrait des TROIS ENSEMBLE fait rougir. Aucune de ces lignes
+// n'est donc gardable seule — et c'est l'inverse exact du piège « muter en groupe cache une
+// survivante » : ici, muter SÉPARÉMENT cachait la redondance.
+//
+// ⚠️ CE BANC TIENT DONC LA PROPRIÉTÉ, jamais une ligne : quelle que soit la forme du refus de nom,
+// aucune prose de l'entrée ne porte « undefined » et la cause est toujours nommée. C'est ce qu'on
+// peut garder, et c'est ce qui compte pour qui lit le rendu.
+test('quelle que soit la forme d’un refus de nom, aucune prose ne porte « undefined »', async () => {
+  const formes = [
+    ['refus nommé', { mesure: 'refusée', raison: 'herdr agents() a refusé' }],
+    // ⚠️ LA FORME QU'ON CRAINT : « refusée », sans raison. Le repli AMONT la rattrape.
+    ['refus muet', { mesure: 'refusée' }],
+    ['aucun lecteur', null],
+  ];
+  const registres = [
+    ['rien trouvé', { declarations: [], illisibles: [] }],
+    ['trouvée sans rôle', { declarations: [(() => { const d = declaration(); delete d.role; return d; })()], illisibles: [] }],
+  ];
+
+  for (const [quelNom, nomsConnus] of formes) {
+    for (const [quelRegistre, declarations] of registres) {
+      const rendu = await recenser({ panes: [pane()], nomsConnus, declarations });
+      const entree = JSON.stringify(rendu.agents[0]);
+      const cas = `${quelNom} / ${quelRegistre}`;
+      assert.doesNotMatch(entree, /undefined/, cas);
+      // ⚠️ ET LA PROSE NOMME TOUJOURS UNE CAUSE — un refus muet ne rend pas une phrase creuse.
+      // (Ce banc a d'abord exigé `\S{20,}` : vingt non-espaces CONSÉCUTIFS, que nulle phrase
+      // française ne porte. Une assertion trop précise sur la forme rougit sur du code sain.)
+      assert.ok((rendu.agents[0].role.raison ?? '').trim().length > 30, cas);
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({
