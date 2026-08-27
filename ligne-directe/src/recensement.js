@@ -376,6 +376,16 @@ function ceQueDitLaSourceDeclaree(registre) {
   };
 }
 
+/**
+ * COMBIEN D'ILLISIBLES ON NOMME DANS LA RAISON D'UN AGENT — et pourquoi ce n'est pas « tous ».
+ *
+ * Cette raison se compose PAR AGENT. Nommer les mille fichiers abîmés d'un registre malade sur
+ * chacun des soixante agents sans lieu ferait un rendu que personne ne peut lire — et la ligne
+ * de résumé, qui est ce qu'un humain lit, s'y noierait. Trois suffisent à reconnaître de quoi on
+ * parle ; la liste INTÉGRALE vit dans `borne.sourceDeclaree.illisibles`, calculée une seule fois.
+ */
+const ILLISIBLES_NOMMES = 3;
+
 function declarationDuPane(p, chemin, registre, nom) {
   if (!registre) return null;
 
@@ -424,10 +434,26 @@ function declarationDuPane(p, chemin, registre, nom) {
     return {
       mesure: 'refusée',
       nom: null,
+      // ⚠️ LA LISTE EST BORNÉE ICI, ET ELLE NE L'ÉTAIT PAS. Cette raison se compose PAR AGENT :
+      // sur le parc réel, 63 des 83 agents sont sans lieu, et chacun recevait la liste ENTIÈRE
+      // des illisibles. Vingt fichiers abîmés faisaient donc plus de mille fragments répétés
+      // dans un rendu dont la ligne de résumé est ce qu'un humain lit. Le module borne déjà de
+      // la même façon partout ailleurs — `lieuxEcartes`, `panesIndecidables`,
+      // `sessionsRefusees` sont calculés UNE fois, dans `borne`.
+      //
+      // ⚠️ ET CE QU'ON COUPE SE DIT. Un « … » muet ferait croire à une liste complète ; le
+      // compte total reste en tête de phrase, et `borne.sourceDeclaree.illisibles` porte la
+      // liste intégrale pour qui veut aller voir.
       raison:
         `aucune déclaration de naissance ne l’apparie, mais le registre en porte ` +
         `${illisibles.length} d’ILLISIBLE(s) — la sienne peut être dedans : ` +
-        illisibles.map((i) => `${i.fichier} (${i.cause})`).join(', '),
+        illisibles
+          .slice(0, ILLISIBLES_NOMMES)
+          .map((i) => `${i.fichier} (${i.cause})`)
+          .join(', ') +
+        (illisibles.length > ILLISIBLES_NOMMES
+          ? ` … et ${illisibles.length - ILLISIBLES_NOMMES} autre(s) — tous nommés dans « borne.sourceDeclaree.illisibles »`
+          : ''),
     };
   }
   if (nom?.mesure === 'refusée') {

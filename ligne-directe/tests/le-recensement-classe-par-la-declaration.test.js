@@ -478,6 +478,10 @@ test('sans registre, la borne DIT que la source n’a pas été lue — ce n’e
 
   assert.equal(rendu.borne.sourceDeclaree.mesure, 'non donnée');
   assert.equal(rendu.borne.sourceDeclaree.faits, null);
+  // ⚠️ `null`, PAS `[]` — SURVIVANTE. `[]` affirme « j'ai mesuré, zéro illisible » ; `null` dit
+  // « je n'ai pas mesuré ». C'est la règle de conduite que ce module revendique partout ailleurs,
+  // et elle n'était tenue par aucune assertion sur ce champ-ci.
+  assert.equal(rendu.borne.sourceDeclaree.illisibles, null);
   // ⚠️ LA CONSÉQUENCE VOYAGE AVEC LE FAIT. Un lecteur qui voit « 0 déclaré » doit apprendre ici,
   // sans lire le code, que ce zéro ne dit rien du parc.
   assert.match(rendu.borne.sourceDeclaree.consequence, /n’est PAS « aucun agent n’est déclaré »/);
@@ -789,6 +793,73 @@ test('un registre en refus global n’identifie personne, même s’il porte des
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-octies UN REGISTRE MALADE NE NOIE PAS LE RENDU — la raison se compose PAR AGENT.
+//
+// 🔴 LA LISTE N'ÉTAIT BORNÉE PAR RIEN, et aucun banc n'en exerçait plus d'UN. Sur le parc réel,
+// 63 des 83 agents sont sans lieu : chacun recevait la liste ENTIÈRE des illisibles. Vingt
+// fichiers abîmés faisaient donc plus de mille fragments répétés — dans un rendu dont la ligne
+// de résumé est ce qu'un humain lit. Le module borne déjà de la même façon partout ailleurs.
+test('cent illisibles ne noient pas la raison d’un agent — trois sont nommés, le reste se compte', async () => {
+  const beaucoup = Array.from({ length: 100 }, (_, i) => ({
+    fichier: `2026082${i % 10}T000000000Z-abime-${i}.json`,
+    cause: 'Unexpected end of JSON input',
+  }));
+  const rendu = await recenser({
+    panes: [pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' })],
+    nomsConnus: nomsDe([['w9:p9', 'bonaventure']]),
+    declarations: { declarations: [], illisibles: beaucoup },
+  });
+
+  const raison = rendu.agents[0].role.raison;
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+  // Le COMPTE total reste en tête : on ne cache pas l'ampleur, on cesse de la recopier.
+  assert.match(raison, /porte 100 d’ILLISIBLE\(s\)/);
+  // Trois nommés, pas cent — mesuré sur le texte, pas sur une constante recopiée du module.
+  assert.equal(raison.match(/-abime-\d+\.json/g).length, 3);
+  assert.match(raison, /et 97 autre\(s\)/);
+  // ⚠️ ET LA COUPE SE DIT, avec l'endroit où la liste entière vit — sans quoi un lecteur croirait
+  // avoir tout vu.
+  assert.match(raison, /borne\.sourceDeclaree\.illisibles/);
+  // La liste INTÉGRALE est là, calculée une seule fois pour tout le rendu.
+  assert.equal(rendu.borne.sourceDeclaree.illisibles.length, 100);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-nonies UN RÔLE DÉCLARÉ QUE `roles.js` CONNAÎT SE NOMME PAR SON PLURIEL — SURVIVANTE.
+//
+// 🔴 LA BRANCHE DU MILIEU DE `libellesDuRoleDeclare` N'ÉTAIT EXERCÉE PAR RIEN. Les bancs ne
+// déclaraient que `chef-equipe` (table figée) et un rôle hors table (le repli) : celle qui
+// interroge `roles.js` — pour un rôle qui A un lieu mais se trouve déclaré — était nue. Muter
+// `libelle_pluriel` en `libelle` laissait les 1 080 essais verts, et le résumé aurait rendu
+// « 3 orchestrateur DÉCLARÉ(s) ».
+test('un rôle déclaré que la table des rôles connaît se nomme par SON pluriel', async () => {
+  const rendu = await recenser({
+    panes: [pane(), pane({ pane_id: 'w2:p2', cwd: '/Users/qui/autre-arbre' })],
+    nomsConnus: nomsDe([
+      ['w1:p1', 't-20260825-0012'],
+      ['w2:p2', 'p-20260822-0001'],
+    ]),
+    declarations: {
+      declarations: [
+        declaration({ role: 'orchestrateur' }),
+        declaration({ nom: 'p-20260822-0001', role: 'orchestrateur', espace: '/Users/qui/autre-arbre', paneDeclare: 'w2:p2' }),
+      ],
+      illisibles: [],
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'déclarée');
+  // ⚠️ LE LIBELLÉ VIENT DE `roles.js`, PAS D'UNE CHAÎNE RECOPIÉE ICI : un oracle écrit à la main
+  // se corrigerait du même geste que le code, et ne garderait plus rien.
+  assert.equal(rendu.agents[0].role.libelle, roleDe('orchestrateur').libelle);
+  assert.deepEqual(rendu.compte.parRoleDeclare, { orchestrateur: 2 });
+  // Le PLURIEL, dans la seule ligne qu'un humain lit.
+  assert.match(rendu.resume, new RegExp(`2 ${roleDe('orchestrateur').libelle_pluriel} DÉCLARÉ`));
+  // ⚠️ ET IL N'EST PAS COMPTÉ COMME ÉTABLI : déclaré reste déclaré, même pour un rôle qui A un lieu.
+  assert.equal(rendu.compte.parRole.orchestrateur, 0);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({
@@ -811,25 +882,32 @@ test('un inventaire refusé rend « agents: null » même avec un registre de d�
 // que de le croire.
 test('la fabrique de déclarations de ce banc porte les mêmes clés que le vrai geste', async () => {
   const racine = mkdtempSync(join(tmpdir(), 'declaration-forme-'));
-  const { inscrireLaDeclaration } = await import('../../naissance-representant/src/declaration.js');
-  const { declaration: vraie } = inscrireLaDeclaration({
-    nom: 't-20260825-0012',
-    role: 'chef-equipe',
-    mandat: 'T-20260825-0012',
-    coordonnateur: 'e-20260825-0002',
-    espace: '/Users/qui/worktrees/depot/20260827-000000',
-    pane: 'w1:p1',
-    session: 'somtech',
-    racine,
-    quand: new Date('2026-08-27T01:42:50.192Z'),
-  });
+  // ⚠️ `try/finally` DÈS LE `mkdtempSync` — et l'omettre ici était une garantie ÉCRITE mais non
+  // VÉRIFIÉE : le commit qui a posé le `finally` du banc voisin affirmait avoir fermé LES DEUX
+  // bacs. Un seul l'avait reçu. Un `rmSync` en dernière instruction ne s'exécute pas quand une
+  // assertion jette — c'est-à-dire précisément quand la suite tourne le plus souvent.
+  try {
+    const { inscrireLaDeclaration } = await import('../../naissance-representant/src/declaration.js');
+    const { declaration: vraie } = inscrireLaDeclaration({
+      nom: 't-20260825-0012',
+      role: 'chef-equipe',
+      mandat: 'T-20260825-0012',
+      coordonnateur: 'e-20260825-0002',
+      espace: '/Users/qui/worktrees/depot/20260827-000000',
+      pane: 'w1:p1',
+      session: 'somtech',
+      racine,
+      quand: new Date('2026-08-27T01:42:50.192Z'),
+    });
 
-  assert.deepEqual(Object.keys(declaration()).sort(), Object.keys(vraie).sort());
-  assert.deepEqual(declaration(), vraie);
-  // Et le fichier écrit se relit — la lecture est bien celle que le recensement consommera.
-  const { lireLesDeclarations } = await import('../../naissance-representant/src/declaration.js');
-  const relu = lireLesDeclarations({ racine });
-  assert.deepEqual(relu.declarations, [vraie]);
-  assert.deepEqual(relu.illisibles, []);
-  rmSync(racine, { recursive: true, force: true });
+    assert.deepEqual(Object.keys(declaration()).sort(), Object.keys(vraie).sort());
+    assert.deepEqual(declaration(), vraie);
+    // Et le fichier écrit se relit — la lecture est bien celle que le recensement consommera.
+    const { lireLesDeclarations } = await import('../../naissance-representant/src/declaration.js');
+    const relu = lireLesDeclarations({ racine });
+    assert.deepEqual(relu.declarations, [vraie]);
+    assert.deepEqual(relu.illisibles, []);
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
 });
