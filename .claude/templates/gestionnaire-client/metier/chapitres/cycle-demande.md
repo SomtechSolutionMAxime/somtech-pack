@@ -1,7 +1,7 @@
 # cycle-demande
 
 > **En un mot** — Accueillir, ouvrir, enrichir, faire valider, lancer, tenir informé — et ce que le client dépose.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `1.2.1`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `1.4.0`
 
 ## Le cycle d'une demande
 

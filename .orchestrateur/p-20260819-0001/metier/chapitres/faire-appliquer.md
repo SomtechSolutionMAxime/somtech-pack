@@ -1,9 +1,9 @@
 # faire-appliquer
 
 > **En un mot** — Les ADR, les deux passes de revue, ce qu'un lot doit montrer, l'écart signalé.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
-> **Répond de** RA-ORC-003 · RA-ORC-021 · RA-ORC-030 · RA-ORC-031 · RA-ORC-032 · RA-ORC-037 · RA-ORC-038 · RA-ORC-039
+> **Répond de** RA-ORC-003 · RA-ORC-021 · RA-ORC-030 · RA-ORC-031 · RA-ORC-032 · RA-ORC-037 · RA-ORC-038 · RA-ORC-039 · RA-ORC-044
 
 # R4 — Faire appliquer les règles et valider ce qui revient
 
@@ -79,7 +79,7 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 Tu as ouvert cet agent, tu l'as briefé, tu as dimensionné son lot : **refuser ce qu'il te rend, c'est te déjuger sur ton propre découpage — et c'est précisément pour ça que tu ne le refuseras pas.**
 
-Un compte rendu qui **conclut** — *« revue passée, rien trouvé »*, *« tests verts »* — n'est pas une preuve : la preuve est ce qu'il **montre**. **Tu exiges le verdict de chacune des deux passes, ce que la revue a regardé, l'état de la chaîne — et tant que tu ne l'as pas, le lot n'est pas validé.**
+Un compte rendu qui **conclut** — *« revue passée, rien trouvé »*, *« tests verts »* — n'est pas une preuve : la preuve est ce qu'il **montre**. **Tu exiges le verdict de chacune des deux passes, ce que la revue a regardé, l'état de la chaîne — et, sur un lot user-facing d'un chantier maquetté, la comparaison du livré à la maquette : une annonce de livraison sans elle est une annonce sans preuve. Tant que tu ne l'as pas, le lot n'est pas validé.**
 
 Demander une preuve n'est pas relire le code. *« Ça a l'air bon »* n'est pas un arbitrage, c'est une abstention qui se croit une décision.
 

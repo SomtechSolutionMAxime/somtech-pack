@@ -749,7 +749,33 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # octets qui ne sont QUE des accents et des symboles.
 #
 # La baseline est convertie dans la même unité, sur le même objet, le même jour.
-BASELINE=149078
+#
+# ── RELÈVEMENT DU 2026-08-27 — D-20260826-0010, ABC orchestrateur 3.0.0 ───────
+#
+# 149 078 → 151 037 caractères (+1 959). Arbitrage rendu par la session
+# `somtech-pack-f6` sur délégation du dirigeant (« je te laisse choisir »,
+# 2026-08-26), CONSIGNÉ MOT POUR MOT au fil de `D-20260826-0010` (2026-08-27)
+# avec son canal — comme le précédent E-20260819-0013 l'exige : « re-baseline
+# sur la taille FINALE et EXACTE du lot, AUCUNE MARGE ». Les quatre conditions :
+#
+# ① LE GESTE PRESCRIT — le refus des sous-agents recentré sur construction/revue
+#    (les sous-agents d'analyse deviennent des moyens propres, GF-ORC-002/R2.6),
+#    le delta de ronde (RA-ORC-043), la maquette opposable (RA-ORC-044) : trois
+#    conduites que l'orchestrateur ne peut pas tenir sans leur texte.
+# ② LE DÉFAUT ÉVITÉ, MESURÉ — P-20260822-0001 : quatre jours, sept epics, un
+#    complété, zéro livraison ; et la première livraison de la vue du parc non
+#    conforme aux maquettes. Les deux sont cités dans le texte ajouté.
+# ③ LA PART COUPÉE — aucune : le texte est la recopie canonique de l'ABC 3.0.0
+#    adopté nominativement par le dirigeant ; couper ailleurs pour compenser
+#    aurait raboté du texte adopté pour une contrainte comptable (motif de
+#    l'arbitrage, recopié).
+# ④ LE LIEU CONTESTÉ — le gabarit, parce que c'est l'ABC qui y descend
+#    (INV-ABC-2 : l'ABC précède, le code suit) ; la compétence et le harnais
+#    ont reçu leur part propre dans le même lot.
+#
+# ⚠️ LA MARGE RESTE À 0 — la taille est celle MESURÉE du rendu final, pas un
+#    chiffre rond : une marge gratuite désarmerait le gate (mot de l'arbitrage).
+BASELINE=151037
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

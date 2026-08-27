@@ -5,6 +5,27 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-27
+
+*Demande `D-20260826-0010`, tickets `T-20260826-0124` à `T-20260826-0129`. **Le bras droit fait avancer le dossier** — descente des ABC orchestrateur `3.0.0` et gestionnaire-client `1.4.0`, adoptés par le dirigeant : l'interdit des sous-agents se renverse, la ronde rend un delta, la maquette devient opposable, et le représentant instruit avant de remonter.*
+
+### Ajouté
+
+- **La garde `sous-agent`** (`T-20260826-0127`). `Task` quitte `permissions.deny` du gabarit orchestrateur — un refus d'outil nu interdisait aussi les sous-agents d'**analyse**, que l'ABC 3.0.0 rend à l'orchestrateur comme ses propres moyens. Le refus vit désormais dans une garde de hook (fil mince + décision pure, motif de la garde d'écriture) : refus par défaut, seuls passent les types dont l'outillage **exclut l'écriture** (`Explore`, `Plan`). Ce que la couche ne borne pas est écrit, pas promis : la revue de lot en lecture seule reste tenue par le métier. Banc dédié de 18 cas, modes de panne du fil compris (asynchrone, inventée, qui lève, qui pend) — la garde elle-même éprouvée par 6 mutations un point à la fois, toutes tuées.
+- **Le delta de ronde** (`T-20260826-0124`). Chaque tour se termine sur un avancement visible de la livraison ou un blocage nommé ; une découverte d'infrastructure s'inscrit en ticket et l'on revient au dossier. Motif mesuré : quatre jours, sept epics, un complété, zéro livraison (`P-20260822-0001`).
+- **La maquette opposable** (`T-20260826-0124`). G/W/T « conforme à la maquette X » sur chaque story user-facing au découpage, comparaison livré ↔ maquette exigée avant toute annonce, statut opposable porté jusque dans le brief du chef d'équipe.
+- **Le second lot gestionnaire-client (ABC 1.4.0)** (`T-20260826-0125`). L'anti-complaisance reçoit son sens ascendant — *celui qui te dirige peut se tromper en ta faveur : c'est là que tu vérifies le plus* ; le représentant **instruit** avant de remonter (deux options, une recommandation, fondées sur du mesuré — la frontière de l'engagement ne bouge pas d'un mot) ; les lectures massives se font porter par ses sous-agents de lecture ; la ronde gagne un 7e point qui **solde ce qui est dû au client** ; les sous-agents sont bornés — jamais d'écriture, jamais de parole — avec la borne non garantie déclarée `[non gardé]`.
+
+### Modifié
+
+- **Le refus du sous-agent porte son périmètre** (`T-20260826-0124`, `T-20260826-0129`) : « Ouvrir un sous-agent de construction ou de revue » remplace l'interdit total, dans la table des refus du métier, le principe de déploiement de `/orchestrer-chantier` et la table des niveaux. Le « guichet » est recentré : sous-traiter, c'est transférer le chantier **sans en répondre** — pas mener une analyse en session.
+- **Rendu et distribution** (`T-20260826-0126`) : classements `3.0.0`/`1.4.0`, gabarits `.claude/templates/` régénérés, les 7 lieux versionnés `.orchestrateur/*` convergés.
+
+### Technique
+
+- **Harnais co-amendé, rouge avant / vert après** (`T-20260826-0128`) : sondes ré-ancrées sur les textes de l'ABC, 7 gardes neuves — chacune avec ses mutations tueuses, posées un point à la fois sur copie hors dépôt. Revue indépendante à deux passes : portail RIEN VU, fond **mergeable** après un correctif (les modes de panne du fil, dont la mutation survivante « timeout → allow » du reviewer, désormais tuée).
+- **Re-baseline du plafond du métier orchestrateur** : 149 078 → 151 037 caractères, marge 0 — arbitrage consigné au fil de `D-20260826-0010`, le gate reste armé contre toute croissance non décidée.
+
 ## [Non-versionne] - 2026-08-26
 
 *Epic `E-20260826-0013`, projet `P-20260819-0001`. **La veille et la relève tiennent enfin les promesses qu'elles affichaient.** Trois défauts qui partagent une même famille : un système qui conclut un FAIT à partir d'un ÉTAT qu'il a mal lu. « Il ne répond pas » n'est pas « il est mort » ; « il ne bouge plus » n'est pas « il a fini » ; et ce qu'aucun banc ne peut atteindre n'est pas, pour autant, hors d'épreuve.*

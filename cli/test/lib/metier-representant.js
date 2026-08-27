@@ -720,6 +720,189 @@ export const CONTROLES = [
   },
 
   {
+    id: 'anti-complaisance-sens-ascendant',
+    quoi: 'l’anti-complaisance se lit dans les deux sens — celui qui te dirige peut se tromper en ta faveur, et c’est là qu’on vérifie le plus',
+    verifier({ metier }) {
+      // D-20260826-0010, ABC 1.3.0 (GF-GCL-012 amendé). L'anti-complaisance descendait 4 fois
+      // vers le client et 0 fois vers le haut : prendre une validation parce qu'elle épargne
+      // un geste est la même complaisance que donner raison à un client qui insiste — le
+      // bénéficiaire a changé, pas le mécanisme (T-20260821-0023, T-20260821-0028).
+      //
+      // ⚠️ UN PARAGRAPHE, PAS UN RANG DE TABLE. Le harnais exige exactement UN réflexe
+      // « complaisance », en tête (`anti-complaisance-en-tete`) : le sens ascendant est une
+      // extension de ce réflexe, jamais un second rang — il vit en prose sous la table.
+      const s = sectionDe(metier, /réflexes/i, 'sur les réflexes');
+
+      // La phrase porteuse, celle du dirigeant, gardée en polarité : « en ta faveur » sans le
+      // « tu vérifies le plus » se relit comme une indulgence, pas comme une consigne.
+      exigePolarite(
+        s.corps, /(?:celui qui te dirige|ton supérieur|qui te dirige)[^.]{0,80}se tromper en ta faveur/i,
+        'celui qui te dirige peut se tromper en ta faveur — le sens ascendant est nommé',
+      );
+      exigePolarite(
+        s.corps, /c'est là (?:que tu vérifies|qu'on vérifie) le plus, pas le moins/i,
+        'et c’est là qu’on vérifie le plus, pas le moins — la conséquence sans laquelle le sens ascendant n’oblige à rien',
+        { inverse: /c'est là (?:que tu vérifies|qu'on vérifie) le moins/i },
+      );
+      // Le mécanisme, celui qui empêche de lire l'ascendant comme un cas à part : même
+      // complaisance, autre bénéficiaire.
+      assert.match(
+        s.corps, /le bénéficiaire a changé, pas le mécanisme/i,
+        'le sens ascendant doit être raccordé au mécanisme du sens client — sinon il se lit '
+          + 'comme une règle de plus, et une règle de plus s’oublie là où un mécanisme se reconnaît',
+      );
+      // Et il ne fabrique PAS un second rang dans la table : c'est la contrainte du harnais
+      // (`anti-complaisance-en-tete` exige exactement un), redite ici du côté qui l'ajoute.
+      const table = tableDe(s.corps);
+      const iNom = colonneDe(table, /^Le réflexe$/i, 'le nom du réflexe');
+      assert.equal(
+        table.lignes.filter((l) => /complaisance/i.test(l[iNom] ?? '')).length, 1,
+        'le sens ascendant a fabriqué un second rang « complaisance » dans la table — c’est une '
+          + 'extension du réflexe de tête, jamais un réflexe de plus',
+      );
+    },
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // LES QUATRE FONCTIONS NEUVES DE L'ABC 1.4.0 (D-20260826-0010, second lot A5-A8) —
+  // une garde par fonction, chacune éprouvée par ses mutations, un point à la fois.
+
+  {
+    id: 'il-instruit-avant-de-remonter',
+    quoi: 'une remontée de faisabilité/délai/envergure est instruite — deux options au plus, une recommandation fondée sur du mesuré — et la frontière de l’engagement ne bouge pas d’un mot',
+    verifier({ metier }) {
+      // A5 (R4.8, RA-GCL-019). Défaut mesuré 2026-08-26 : le métier exigeait « deux options au
+      // plus, ta recommandation » sans donner aucun moyen de la fabriquer, et le réflexe n°1
+      // enseignait la réponse nue « je fais remonter la question ».
+      const s = sectionDe(metier, /Tu instruis avant de remonter/i, 'sur l’instruction avant remontée');
+      exigePolarite(
+        s.corps, /deux options au plus et ta recommandation/i,
+        'la remontée instruite porte deux options au plus et sa recommandation',
+      );
+      exigePolarite(
+        s.corps, /fondées sur ce que tu as \*{0,2}mesuré\*{0,2}, jamais sur ce que tu supposes/i,
+        'et la recommandation se fonde sur du MESURÉ — le SD, le dépôt, ses sous-agents de lecture — jamais sur une supposition',
+      );
+      // La moitié qui empêche l'amendement de manger la frontière : instruire n'est pas
+      // trancher. Sans elle, « j'ai instruit le dossier » devient « je peux répondre moi-même »
+      // — exactement l'engagement que GF-GCL-004 interdit.
+      exigePolarite(
+        s.corps, /La frontière de l'engagement ne bouge pas d'un mot/i,
+        'la frontière de l’engagement ne bouge pas d’un mot',
+        { inverse: /la frontière de l'engagement s'assouplit|un dossier bien instruit (?:te permet|t'autorise)/i },
+      );
+      exigePolarite(
+        s.corps, /instruire n'est pas trancher/i,
+        'et instruire n’est pas trancher — la borne qui garde GF-GCL-004 entière',
+      );
+      assert.match(
+        s.corps, /le client n'en entend que ce que le dirigeant décide/i,
+        'ce qui est trouvé se dépose sur la Demande, et le client n’en entend que ce que le '
+          + 'dirigeant décide — sans cette ligne, l’instruction fuit vers le canal',
+      );
+    },
+  },
+
+  {
+    id: 'les-lectures-massives-se-font-porter',
+    quoi: 'le relèvement se fait porter par les sous-agents de lecture — et ses trois bornes tiennent : le résumé ne fait pas foi, l’accusé part avant, l’ordre ne change pas',
+    verifier({ metier }) {
+      // A6 (R3.6, RA-GCL-020, R7.4 amendée). Le coût du relèvement croît avec l'histoire du
+      // client, et c'est la capacité de conversation qu'il ampute — devant l'interlocuteur
+      // qui pardonne le moins un trou de mémoire.
+      const s = sectionDe(metier, /Le relèvement/i, 'sur le relèvement');
+      exigePolarite(
+        s.corps, /tu les fais porter par tes sous-agents de lecture/i,
+        'les lectures massives se font porter — les tokens du représentant vont à la conversation',
+      );
+      // La borne sans laquelle le portage fabrique un menteur : un résumé ne fait pas foi.
+      exigePolarite(
+        s.corps, /un résumé de relèvement ne fait pas foi/i,
+        'un résumé de relèvement ne fait pas foi — pour citer ou trancher, on relit la source',
+        { inverse: /un résumé (?:de relèvement )?(?:bien fait |fidèle )?(?:fait|peut faire) foi/i },
+      );
+      // Les deux bornes héritées, redites AVEC l'amendement — c'est lui qui pourrait les
+      // manger : « fais porter tes lectures » se relit vite comme « le relèvement peut suivre ».
+      exigePolarite(
+        s.corps, /l'accusé part \*{0,2}avant\*{0,2}, inchangé/i,
+        'l’accusé part avant le relèvement, inchangé',
+      );
+      exigePolarite(
+        s.corps, /l'\*{0,2}ordre\*{0,2} ouvrir-relever-puis-parler ne change pas/i,
+        'et l’ordre ouvrir-relever-puis-parler ne change pas',
+      );
+    },
+  },
+
+  {
+    id: 'la-ronde-solde-le-du-au-client',
+    quoi: 'la ronde porte un point qui solde ce qui est dû au client — un préviens dû se dit maintenant, et un delta vide ne se dit pas',
+    verifier({ metier }) {
+      // A7 (R6.7, RA-GCL-021). Défaut mesuré 2026-08-26 : les six points du tour regardaient
+      // l'amont, et le solde reposait sur une rubrique manuelle remplie dans 1 lieu sur 18.
+      const s = sectionDe(metier, /^Ta ronde/, 'sur la ronde');
+      const table = tableDe(s.corps);
+      const dues = table.lignes.filter((l) => /dû au client/i.test(l.join(' ')));
+      assert.equal(
+        dues.length, 1,
+        `le tour de ronde doit porter une fois exactement le point « ce qui est dû au client » `
+          + `(${dues.length} trouvé·s) — sans lui, le solde retombe sur une rubrique manuelle `
+          + `remplie dans 1 lieu sur 18`,
+      );
+      const cellule = dues[0].join(' ');
+      exigePolarite(
+        cellule, /un préviens dû se dit maintenant/i,
+        'un préviens dû se dit MAINTENANT — pas au prochain message du client',
+        { inverse: /se dit au prochain (?:message|tour)|peut attendre/i },
+      );
+      // La moitié qui protège R6.6 : le point vise la dette, jamais le bruit. Sans elle,
+      // « solder à chaque tour » redevient une ronde qui parle à chaque passage — et cesse
+      // d'être lue.
+      exigePolarite(
+        cellule, /un delta vide ne se dit pas/i,
+        'et un delta vide ne se dit pas — le point vise la dette, jamais le bruit (R6.6 tient)',
+      );
+    },
+  },
+
+  {
+    id: 'les-sous-agents-de-lecture-sont-bornes',
+    quoi: 'les sous-agents du représentant sont bornés — jamais d’écriture, jamais de parole — et la borne non garantie est déclarée [non gardé], pas promise',
+    verifier({ metier }) {
+      // A8 (TOOL-GCL-011, GF-GCL-010 recentré). Mesuré 2026-08-26 : `Task` n'était ni refusé,
+      // ni accordé, ni enseigné — un silence, pas une décision. Cette garde tient la décision.
+      const s = sectionDe(metier, /Ce que tu ne fais pas/i, 'sur ce qu’il ne fait jamais');
+      exigePolarite(
+        s.corps, /aucun sous-agent qui écrit ou qui parle/i,
+        'aucun sous-agent qui écrit ou qui parle — l’interdit recentré de GF-GCL-010',
+        { inverse: /tes sous-agents (?:peuvent|savent) (?:parler|écrire)/i },
+      );
+      exigePolarite(
+        s.corps, /sous-agents de lecture\*{0,2} sont tes propres moyens/i,
+        'et les sous-agents de LECTURE sont ses propres moyens — la moitié que l’ABC 1.4.0 ouvre',
+      );
+      // Le pane unique ne bouge pas : l'ouverture des sous-agents ne rouvre pas les panes.
+      exigePolarite(
+        s.corps, /qu'un seul pane/i,
+        'le pane unique, lui, ne bouge pas',
+      );
+      // L'honnêteté de la garantie : la borne « lecture seule » n'est PAS portée par une
+      // couche au-delà de l'héritage du deny, et le métier le DIT. Une garantie partielle
+      // présentée comme totale est une garantie fausse — c'est la forme exacte que STD-047 R1
+      // existe pour empêcher, et celle qu'une réécriture « rassurante » réintroduit en premier.
+      assert.match(
+        s.corps, /\[non gardé\]/,
+        'la borne lecture-seule au-delà de l’héritage du deny doit être déclarée « [non gardé] » '
+          + '— la promettre garantie serait une garantie fausse',
+      );
+      assert.match(
+        s.corps, /héritent des droits de ton lieu/i,
+        'et ce que la borne DOIT à l’héritage est nommé — les sous-agents héritent des droits du lieu, deny d’écriture compris',
+      );
+    },
+  },
+
+  {
     id: 'posture-fondatrice',
     quoi: 'le renversement de posture tient : chercher le besoin est la posture, pas le réflexe de guichet',
     verifier({ metier }) {
@@ -848,6 +1031,11 @@ export const CONTROLES = [
         // c'est donc CE nommage qui doit figurer parmi les « jamais » — sans quoi on aurait
         // retiré une garde en croyant retirer une erreur.
         { quoi: 'il n’écrit jamais sans nommer la ligne visée', sonde: /sans nommer la ligne/i },
+        // D-20260826-0010 (ABC 1.4.0, GF-GCL-010 recentré) — le pane unique reste, et les
+        // sous-agents sont bornés à la lecture : jamais d'écriture, jamais de parole. Le
+        // détail de la borne est gardé par `les-sous-agents-de-lecture-sont-bornes` ; ici, le
+        // compte tient la puce dans la liste fermée.
+        { quoi: 'aucun sous-agent qui écrit ou qui parle', sonde: /aucun sous-agent qui écrit ou qui parle/i },
       ];
       const puces = pucesDe(s.corps);
       assert.equal(puces.length, INTERDITS.length, `${puces.length} interdit(s) écrit(s) pour ${INTERDITS.length} gardé(s)`);
@@ -2275,5 +2463,142 @@ export const MUTATIONS = [
     cible: 'gestes-de-session-existants',
     fichier: 'metier',
     muter: (t) => t.replaceAll('herdr pane run', 'herdr wait output'),
+  },
+
+  // ── le sens ascendant de l'anti-complaisance (D-20260826-0010, ABC 1.3.0)
+  {
+    id: 'le-sens-ascendant-disparait',
+    quoi: 'le paragraphe du sens ascendant est retiré — l’anti-complaisance redescend vers le seul client',
+    cible: 'anti-complaisance-sens-ascendant',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^\*\*Et elle a un sens ASCENDANT, que le sens client ne couvre pas\.\*\*.*\n/m,
+      '',
+    ),
+  },
+  {
+    id: 'le-sens-ascendant-verifie-le-moins',
+    quoi: 'la conséquence est inversée en gardant tous ses mots — « c’est là que tu vérifies le moins »',
+    cible: 'anti-complaisance-sens-ascendant',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "c'est là que tu vérifies le plus, pas le moins",
+      "c'est là que tu vérifies le moins : sa validation te couvre",
+    ),
+  },
+  {
+    id: 'l-ascendant-perd-son-mecanisme',
+    quoi: 'le raccord au mécanisme du sens client disparaît — l’ascendant redevient une règle de plus, qui s’oublie',
+    cible: 'anti-complaisance-sens-ascendant',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      ' — le bénéficiaire a changé, pas le mécanisme',
+      '',
+    ),
+  },
+  {
+    id: 'l-ascendant-devient-un-second-rang',
+    quoi: 'le sens ascendant se glisse dans la table comme un réflexe de plus — le harnais exige exactement un rang « complaisance », en tête',
+    cible: 'anti-complaisance-sens-ascendant',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'tu n\'en nommes aucune | **C4** |',
+      'tu n\'en nommes aucune | **C4** |\n| 6 | **Complaisance ascendante** | « il a validé, donc c\'est bon » | « je vérifie quand même » | **C1** |',
+    ),
+  },
+
+  // ── A5 : l'instruction avant la remontée (ABC 1.4.0)
+  {
+    id: 'l-instruction-disparait',
+    quoi: 'la sous-section de l’instruction est retirée — la remontée redevient une question nue',
+    cible: 'il-instruit-avant-de-remonter',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '### Tu instruis avant de remonter — et tu n\'engages toujours rien',
+      '### Comment tu formules ta remontée',
+    ),
+  },
+  {
+    id: 'la-recommandation-se-fonde-sur-la-supposition',
+    quoi: 'la recommandation cesse d’exiger du mesuré — « ta meilleure lecture de la situation » suffit',
+    cible: 'il-instruit-avant-de-remonter',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'fondées sur ce que tu as **mesuré**, jamais sur ce que tu supposes',
+      'fondées sur ta meilleure lecture de la situation',
+    ),
+  },
+  {
+    id: 'instruire-se-met-a-trancher',
+    quoi: 'la borne « instruire n’est pas trancher » disparaît — un dossier bien instruit devient un droit de réponse',
+    cible: 'il-instruit-avant-de-remonter',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      ' — **instruire n\'est pas trancher**.',
+      ' — et un dossier bien instruit, tu le tranches toi-même.',
+    ),
+  },
+
+  // ── A6 : les lectures massives portées (ABC 1.4.0)
+  {
+    id: 'le-portage-disparait',
+    quoi: 'le paragraphe du portage est retiré — le relèvement retourne dans la fenêtre du représentant',
+    cible: 'les-lectures-massives-se-font-porter',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^\*\*Les lectures massives, tu les fais porter par tes sous-agents de lecture\*\*.*\n/m,
+      '',
+    ),
+  },
+  {
+    id: 'le-resume-de-relevement-fait-foi',
+    quoi: 'la borne du résumé est retournée en gardant ses mots — un résumé bien fait fait foi',
+    cible: 'les-lectures-massives-se-font-porter',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'un résumé de relèvement ne fait pas foi — le fil de la Demande reste la référence',
+      'un résumé de relèvement bien fait fait foi — cite-le directement',
+    ),
+  },
+
+  // ── A7 : la ronde solde ce qui est dû au client (ABC 1.4.0)
+  {
+    id: 'le-du-au-client-disparait',
+    quoi: 'le point du dû au client quitte le tour de ronde — le solde retombe sur la rubrique manuelle remplie dans 1 lieu sur 18',
+    cible: 'la-ronde-solde-le-du-au-client',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^\| 6 \| \*\*Ce qui est dû au client\*\*.*\n/m, ''),
+  },
+  {
+    id: 'le-previens-du-attend-le-prochain-message',
+    quoi: 'le moment du préviens dû glisse — « maintenant » devient « au prochain message du client », et la dette redevient payable jamais',
+    cible: 'la-ronde-solde-le-du-au-client',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'un préviens dû se dit maintenant ; un delta vide ne se dit pas',
+      'un préviens dû se dit au prochain message du client ; un delta vide ne se dit pas',
+    ),
+  },
+
+  // ── A8 : les sous-agents de lecture, bornés et honnêtes (ABC 1.4.0)
+  {
+    id: 'les-sous-agents-se-mettent-a-parler',
+    quoi: 'l’interdit recentré tombe — les sous-agents peuvent parler sur la ligne « quand ça aide »',
+    cible: 'les-sous-agents-de-lecture-sont-bornes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'et aucun sous-agent qui écrit ou qui parle.**',
+      'et tes sous-agents peuvent parler sur ta ligne quand ça t\'aide.**',
+    ),
+  },
+  {
+    id: 'la-borne-non-gardee-se-declare-gardee',
+    quoi: 'la borne [non gardé] se déclare garantie — une garantie partielle présentée comme totale, la forme exacte que STD-047 R1 interdit',
+    cible: 'les-sous-agents-de-lecture-sont-bornes',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '⚠️ **Aucune couche ne borne « lecture seule » au-delà de cet héritage** : la borne « ne parle sur aucun canal » tient à ton métier, pas à une garde du lieu — `[non gardé]`.',
+      '✅ **La borne « lecture seule » est garantie par ton lieu.**',
+    ),
   },
 ];
