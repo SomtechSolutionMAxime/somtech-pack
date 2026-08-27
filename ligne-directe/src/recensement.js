@@ -406,6 +406,24 @@ function declarationDuPane(p, chemin, registre, nom) {
   // ⚠️ ET ELLE NE MASQUE AUCUN DOUTE RÉEL : dès qu'UNE déclaration, UN illisible ou UN refus
   // global existe, toutes les voies retrouvent leur mordant — c'est ce que les bancs exigent des
   // deux côtés, voie par voie.
+  // 📌 CE QUE CETTE GARDE NE COUVRE PAS, ET QUI EST UN ARBITRAGE — pas un défaut caché.
+  //
+  // Elle tient le 3e critère de la story dans sa version ÉTROITE : « tant que le registre est
+  // vide, rien ne bouge ». Sa version LARGE — « aucun agent non déclaré ne change de rendu,
+  // jamais » — n'est PAS tenue, et ne peut pas l'être : dès qu'UNE déclaration circule, un agent
+  // dont le nom n'a pas été mesuré passe de « non établi » à « refusée », parce qu'on ne peut
+  // pas prouver que ce nom manquant n'était pas le sien. Le doute est réel ; le taire serait le
+  // faux négatif que ce module refuse partout.
+  //
+  // ⚠️ L'AMPLEUR EST MESURÉE, PAS SUPPOSÉE. Sur le parc réel du 2026-08-27 — 86 agents,
+  // 2 déclarations inscrites — **ZÉRO agent bascule** : tous les noms sont mesurés et tous les
+  // chemins lus. L'effet existe en droit, il est nul en fait sur ce poste. Il grandirait si
+  // `herdr agents()` sous-comptait (mesuré à 83 panes sur 227 un jour) — et c'est cela qu'il
+  // faudrait alors regarder, pas cette garde.
+  //
+  // 📌 REMONTÉ AU COORDONNATEUR : le libellé du G/W/T ③ dit la version large. Il devrait dire
+  // celle qui est livrée, ou l'assumer en note de fermeture — sans quoi la prochaine lecture
+  // rouvrira ce point en croyant trouver un défaut neuf.
   const registreMuet =
     (registre.declarations?.length ?? 0) === 0 &&
     (registre.illisibles?.length ?? 0) === 0 &&
