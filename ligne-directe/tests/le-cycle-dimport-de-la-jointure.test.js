@@ -1,27 +1,42 @@
-// LE CYCLE D'IMPORT ENTRE LA JOINTURE ET LA GARDE — éprouvé, jamais raisonné.
-// (T-20260825-0012, sous E-20260825-0002, D-20260825-0002.)
+// LE CYCLE D'IMPORT ENTRE LA JOINTURE ET LA GARDE — éprouvé par TOUTES ses portes, jamais par
+// une liste écrite à la main. (T-20260825-0012, sous E-20260825-0002, D-20260825-0002.)
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// 🔴 CE QUE CE BANC GARDE, ET POURQUOI UN RAISONNEMENT NE SUFFIT PAS
+// 🔴 CE BANC EXISTE SOUS CETTE FORME PARCE QUE SA PREMIÈRE FORME A LAISSÉ PASSER UN CRASH TOTAL
 //
-// `garde-des-naissances.js` importe `recensement.js` (`lieuDeRoleDansLeChemin`, `nomDeLAgent`).
-// Depuis T-20260825-0012, `recensement.js` importe `declaration-des-agents.js`, qui importe
-// `memeEspaceDeTravail` de la garde. Le graphe est donc un CYCLE, et il est délibéré : la
-// jointure d'espace ne doit exister qu'à UN endroit — celui qui l'a payée (9dfad89) — et la
-// recopier ferait porter à un agent le rôle et le coordonnateur d'un autre au premier correctif
-// appliqué d'un seul côté.
+// `garde-des-naissances.js` importe `recensement.js`. Depuis T-20260825-0012, `recensement.js`
+// importe `declaration-des-agents.js`, qui importe `memeEspaceDeTravail` de la garde. Le graphe
+// est donc un CYCLE, et il est délibéré : la jointure d'espace ne doit exister qu'à UN endroit —
+// celui qui l'a payée (9dfad89) — et la recopier ferait porter à un agent le rôle et le
+// coordonnateur d'un autre au premier correctif appliqué d'un seul côté.
 //
-// Un cycle ESM ne casse pas TANT QUE les deux côtés ne s'échangent que des DÉCLARATIONS DE
-// FONCTION, qui sont hoistées avant toute évaluation. Il casse dès qu'un `const` d'un module
-// est lu pendant que l'autre s'évalue encore — et les deux modules en portent (`ROLES`,
-// `RETARD_DE_MESURE_OBSERVE`, `TOLERANCE_DE_DATATION_MS`, `LIBELLES_DECLARES`…).
+// Un cycle ESM tient TANT QUE rien n'est LU pendant l'évaluation : les déclarations de fonction
+// sont hoistées, un `const` importé ne l'est pas. La première version de la jointure lisait
+// `ROLE_CHEF_EQUIPE` — importé de `chef-equipe.js` — pour composer une table AU NIVEAU MODULE.
+// Résultat, en entrant par la porte de `naitre.js` :
 //
-// ⚠️ ET LE SENS DE LA PANNE DÉPEND DE QUI ENTRE LE PREMIER. C'est ce qui rend ce cycle
-// dangereux sans être visible : la suite d'essais du recensement entre par `recensement.js`,
-// celle de la garde par `garde-des-naissances.js`, et un seul des deux ordres peut rougir. Le
-// jour où quelqu'un déplace une constante, le banc qu'il lance ne sera peut-être pas celui qui
-// tombe. On éprouve donc les DEUX ordres, dans des processus SÉPARÉS — un `import()` dans le
-// même processus rendrait le module déjà chargé par le banc précédent, et ne mesurerait rien.
+//     $ node naissance-representant/bin/naitre.js --help
+//     ReferenceError: Cannot access 'ROLE_CHEF_EQUIPE' before initialization
+//
+// **Plus aucun agent ne pouvait naître.** Les 1 067 essais du dépôt restaient verts : aucun
+// n'entre par là. Et la première version de CE banc était verte aussi — elle éprouvait TROIS
+// portes, choisies à la main, et la quatrième était la seule qui soit un binaire de production.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE DÉNOMINATEUR EST DÉRIVÉ, PAS ÉCRIT — c'est tout l'objet de la réécriture
+//
+// Une liste de portes est désarmable par ENTRETIEN : le jour où le cycle gagne un module, on ne
+// pense pas à l'ajouter, et le banc reste vert en couvrant une population qui a rétréci. Ce banc
+// SUIT donc les `import` depuis la jointure, transitivement, et éprouve CHAQUE module atteint
+// comme porte d'entrée. Un module ajouté au cycle est éprouvé sans qu'on y pense ; un module
+// retiré disparaît du dénominateur de lui-même.
+//
+// ⚠️ ET LES BINAIRES SONT AJOUTÉS EN PLUS, parce qu'ils ne sont importés par personne. Ce sont
+// les portes RÉELLES — celles qu'un humain tape — et c'est par l'une d'elles que le défaut est
+// entré. Les éprouver par `--help` charge toute la chaîne sans rien faire naître.
+//
+// ⚠️ CHAQUE PORTE DANS UN PROCESSUS NEUF. Un `import()` dans le même processus rendrait le
+// module déjà chargé par la porte précédente, et ne mesurerait plus rien.
 //
 // 📌 LE VRAI CORRECTIF EST AILLEURS, ET IL EST REMONTÉ : `memeEspaceDeTravail` ne dépend que de
 // `realpathSync` — c'est une feuille garée chez la garde. La sortir dans son propre module
@@ -31,43 +46,106 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
-const RECENSEMENT = join(ICI, '..', 'src', 'recensement.js');
-const JOINTURE = join(ICI, '..', 'src', 'declaration-des-agents.js');
-const GARDE = join(ICI, '..', '..', 'naissance-representant', 'src', 'garde-des-naissances.js');
+const JOINTURE = resolve(ICI, '..', 'src', 'declaration-des-agents.js');
+const GARDE = resolve(ICI, '..', '..', 'naissance-representant', 'src', 'garde-des-naissances.js');
 
 /**
- * Entre par UN module, dans un processus NEUF, et rend ce qu'il en obtient.
- *
- * ⚠️ `execFileSync` JETTE sur une sortie non nulle : un `ReferenceError: Cannot access '…'
- * before initialization` — la panne exacte d'un cycle mal formé — fait donc rougir le banc avec
- * son message, plutôt que de rendre une chaîne vide qu'une assertion faible laisserait passer.
+ * LES PORTES QU'UN HUMAIN TAPE — elles ne sont importées par personne, donc le graphe ne les
+ * trouve pas. `naitre.js` est celle par laquelle le défaut est entré.
  */
-function parLaPorte(module, expression) {
+const BINAIRES = [
+  resolve(ICI, '..', '..', 'naissance-representant', 'bin', 'naitre.js'),
+  resolve(ICI, '..', 'bin', 'ligne-directe.js'),
+];
+
+/**
+ * TOUS LES MODULES QUE LA JOINTURE ATTEINT — suivis par leurs `import`, transitivement.
+ *
+ * ⚠️ ON NE SUIT QUE LES CHEMINS RELATIFS. `node:fs` et consorts ne participent à aucun cycle du
+ * dépôt, et les suivre ferait tenter d'ouvrir des fichiers qui n'existent pas.
+ */
+function modulesAtteints(depuis) {
+  const vus = new Set();
+  const aVoir = [depuis];
+  while (aVoir.length) {
+    const fichier = aVoir.pop();
+    if (vus.has(fichier) || !existsSync(fichier)) continue;
+    vus.add(fichier);
+    const source = readFileSync(fichier, 'utf8');
+    for (const m of source.matchAll(/^\s*(?:import|export)[^'"\n]*from\s+['"](\.[^'"]+)['"]/gm)) {
+      aVoir.push(resolve(dirname(fichier), m[1]));
+    }
+    // Les imports dynamiques comptent autant : ils chargent la même chaîne, plus tard.
+    for (const m of source.matchAll(/import\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
+      aVoir.push(resolve(dirname(fichier), m[1]));
+    }
+  }
+  return [...vus];
+}
+
+/** Entre par UN fichier, dans un processus NEUF, et rend sa sortie — ou jette avec sa cause. */
+function parLaPorte(fichier, expression = "''") {
   return execFileSync(
     process.execPath,
-    ['--input-type=module', '-e', `const m = await import(${JSON.stringify(module)}); process.stdout.write(String(${expression}));`],
-    { encoding: 'utf8' }
+    [
+      '--input-type=module',
+      '-e',
+      `const m = await import(${JSON.stringify(fichier)}); process.stdout.write(String(${expression}));`,
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
   );
 }
 
-test('entrer par le recensement charge la chaîne entière', () => {
-  assert.equal(parLaPorte(RECENSEMENT, 'typeof m.unRecensement'), 'function');
+test('CHAQUE module que la jointure atteint tient comme porte d’entrée', () => {
+  const portes = modulesAtteints(JOINTURE);
+  // ⚠️ LE DÉNOMINATEUR SE DIT. Un graphe qui rétrécit en silence — parce qu'un import a été
+  // retiré, ou parce que l'expression qui les lit a cessé d'apparier — rendrait ce banc vert sur
+  // une population d'une seule porte. Le plancher est mesuré : la jointure, la garde, le
+  // recensement, `chef-equipe.js`, `declaration.js`, `roles.js` en font partie le 2026-08-27.
+  assert.ok(portes.length >= 6, `le graphe n’a rendu que ${portes.length} module(s) : ${portes.join(', ')}`);
+  assert.ok(portes.includes(GARDE), 'la garde doit être dans le graphe de la jointure');
+  assert.ok(
+    portes.some((f) => f.endsWith('chef-equipe.js')),
+    'chef-equipe.js doit être dans le graphe — c’est par lui que le crash est entré',
+  );
+
+  const tombees = [];
+  for (const porte of portes) {
+    try {
+      parLaPorte(porte);
+    } catch (err) {
+      tombees.push(`${porte} → ${String(err?.stderr || err?.message).trim().split('\n')[0]}`);
+    }
+  }
+  assert.deepEqual(tombees, [], `des portes du cycle ne tiennent pas :\n${tombees.join('\n')}`);
 });
 
-test('entrer par la garde charge la chaîne entière, constantes comprises', () => {
-  // ⚠️ ON LIT UNE CONSTANTE, PAS SEULEMENT UNE FONCTION. Les fonctions sont hoistées : les
-  // interroger seules rendrait ce banc vert sur un cycle qui casse en production. Les `const`
-  // sont ce qui tombe, et `TOLERANCE_DE_DATATION_MS` est lue par la garde à chaque tour.
+test('les binaires démarrent — ce sont les portes qu’un humain tape', () => {
+  const tombes = [];
+  for (const binaire of BINAIRES) {
+    try {
+      execFileSync(process.execPath, [binaire, '--help'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      // ⚠️ UN `--help` PEUT SORTIR NON NUL SANS ÊTRE CASSÉ — certains rendent 1 par convention.
+      // Ce qu'on refuse est une panne de CHARGEMENT, et elle se nomme.
+      const cause = String(err?.stderr || err?.message);
+      if (/ReferenceError|SyntaxError|Cannot access|before initialization|ERR_MODULE/.test(cause)) {
+        tombes.push(`${binaire} → ${cause.trim().split('\n').slice(0, 3).join(' | ')}`);
+      }
+    }
+  }
+  assert.deepEqual(tombes, [], `des binaires ne chargent plus :\n${tombes.join('\n')}`);
+});
+
+test('les constantes du cycle sont lisibles quelle que soit la porte', () => {
+  // ⚠️ ON LIT DES `const`, PAS SEULEMENT DES FONCTIONS. Les fonctions sont hoistées : les
+  // interroger seules rendrait ce banc vert sur le cycle même qui vient de casser en production.
   assert.equal(parLaPorte(GARDE, 'm.TOLERANCE_DE_DATATION_MS'), String(60 * 60 * 1000));
-});
-
-test('entrer par la jointure charge la chaîne entière, table des libellés comprise', () => {
-  // `LIBELLES_DECLARES` est un `const` du module de jointure, lu par `libellesDuRoleDeclare` :
-  // si le cycle le laissait dans sa zone morte, cet appel jetterait au lieu de rendre un nom.
   assert.equal(parLaPorte(JOINTURE, "m.libellesDuRoleDeclare('chef-equipe').libelle"), 'chef d’équipe');
 });
 

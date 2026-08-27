@@ -497,6 +497,47 @@ test('avec registre, la borne compte les faits lus et NOMME les illisibles', asy
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-ter DEUX RÔLES DÉCLARÉS SE RENDENT DANS UN ORDRE STABLE — trouvé par une mutation SURVIVANTE.
+//
+// 🔴 AUCUN BANC NE CONSTRUISAIT DEUX RÔLES DÉCLARÉS DISTINCTS À LA FOIS. Retirer le `.sort()`
+// qui ordonne `parRoleDeclare` laissait donc les 43 essais de ce lot verts, alors que l'ordre
+// rendu suit celui des panes que herdr renvoie — c'est-à-dire qu'il change d'un tour à l'autre.
+// Le résumé est la ligne que le dirigeant lit : deux tours du MÊME parc s'y liraient différemment,
+// et ce dépôt a déjà payé « un rendu qui dépend de la machine ».
+test('deux rôles déclarés se rendent dans un ordre stable, quel que soit celui des panes', async () => {
+  const parcs = [
+    [pane({ pane_id: 'w1:p1' }), pane({ pane_id: 'w2:p2', cwd: '/Users/qui/autre-arbre' })],
+    [pane({ pane_id: 'w2:p2', cwd: '/Users/qui/autre-arbre' }), pane({ pane_id: 'w1:p1' })],
+  ];
+  const rendus = [];
+  for (const panes of parcs) {
+    rendus.push(
+      await recenser({
+        panes,
+        nomsConnus: nomsDe([
+          ['w1:p1', 't-20260825-0012'],
+          ['w2:p2', 'p-20260822-0001'],
+        ]),
+        declarations: {
+          declarations: [
+            declaration(),
+            declaration({ nom: 'p-20260822-0001', role: 'partenaire-transverse', espace: '/Users/qui/autre-arbre', paneDeclare: 'w2:p2' }),
+          ],
+          illisibles: [],
+        },
+      })
+    );
+  }
+
+  assert.equal(rendus[0].compte.roleDeclare, 2);
+  assert.deepEqual(rendus[0].compte.parRoleDeclare, { 'chef-equipe': 1, 'partenaire-transverse': 1 });
+  // ⚠️ ON COMPARE LES DEUX RÉSUMÉS ENTRE EUX, pas à une chaîne recopiée : un oracle écrit à la
+  // main ici se corrigerait d'un même geste que le code, et ne garderait plus rien.
+  assert.equal(rendus[0].resume, rendus[1].resume);
+  assert.match(rendus[0].resume, /1 chefs d’équipe, 1 partenaire-transverse DÉCLARÉ\(s\)/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({

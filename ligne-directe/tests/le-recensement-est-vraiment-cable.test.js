@@ -589,13 +589,24 @@ test('le câblage RÉEL passe SES HUIT paramètres — trois jointures restaient
   //    déclaré que quand la source n'a pas été consultée — l'assertion aurait été trop faible
   //    sur un chemin correct, c'est-à-dire verte sur la mutation même qu'elle prétend tuer.
   //    C'est `borne.sourceDeclaree` qui porte la différence, et elle seule.
+  //
+  // 🔴 ET CE BANC NE PEUT PAS ISOLER LE REGISTRE — RELEVÉ EN PASSE PORTAIL, ET C'EST JUSTE.
+  //    `RACINE` (`declaration.js`) est une `const` de MODULE, résolue à l'import — or ce
+  //    fichier importe `veilleur.js` en tête, donc bien avant que le corps du test ne pose son
+  //    `HOME` jetable. Le registre lu est celui du POSTE RÉEL, partagé et mutable. Le fichier
+  //    voisin `chef-equipe.js` nomme pourtant ce piège mot pour mot (`racineDesEspaces`, « une
+  //    FONCTION, pas une constante… l'essai écrirait dans le vrai ~/worktrees en paraissant
+  //    réussir ») — `declaration.js` a gardé la constante. 📌 Remonté au lot voisin.
+  //
+  //    CE BANC N'AFFIRME DONC QUE CE QUI NE DÉPEND PAS DU CONTENU DE CE RÉPERTOIRE : que la
+  //    source a été LUE. `roleDeclare` et `parRoleDeclare`, eux, dépendraient de ce qu'un autre
+  //    agent a fait naître sur cette machine — un banc vert chez l'auteur et rouge ailleurs.
+  //    Le CONTENU est éprouvé là où il s'injecte : `le-recensement-classe-par-la-declaration`.
   assert.equal(
     rendu.borne.sourceDeclaree.mesure,
     'lue',
     `le registre des déclarations doit être CÂBLÉ (borne : ${JSON.stringify(rendu.borne.sourceDeclaree)})`,
   );
-  assert.equal(rendu.compte.roleDeclare, 0);
-  assert.deepEqual(rendu.compte.parRoleDeclare, {});
 });
 
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {

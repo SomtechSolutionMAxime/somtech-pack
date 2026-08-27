@@ -78,10 +78,32 @@ export const SOURCE_DECLAREE = 'déclarée';
  * ⚠️ LA CLÉ EST IMPORTÉE, JAMAIS ÉPELÉE. C'est la seule chose qui tient ce tableau accordé au
  * producteur : un `'chef-equipe'` écrit à la main ici cesserait d'apparier le jour où le mot
  * change chez lui, et le registre rendrait le nom brut sans que rien ne rougisse.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 C'EST UNE FONCTION, ET PAS UN OBJET DE MODULE — ET ÇA A COÛTÉ LE GESTE DE NAISSANCE.
+ *
+ * Écrit `const LIBELLES_DECLARES = { [ROLE_CHEF_EQUIPE]: … }`, ce tableau LISAIT une constante
+ * IMPORTÉE au moment où ce module s'évalue. Dans le cycle que ce fichier ferme, cela suffit à
+ * tout casser dès qu'on entre par le bon côté : `naitre.js` importe `chef-equipe.js`, qui
+ * importe `garde-des-naissances.js` → `recensement.js` → ce module — lequel lisait alors
+ * `ROLE_CHEF_EQUIPE` AVANT que `chef-equipe.js` n'ait atteint la ligne qui le pose.
+ *
+ *     $ node naissance-representant/bin/naitre.js --help
+ *     ReferenceError: Cannot access 'ROLE_CHEF_EQUIPE' before initialization
+ *
+ * **Plus aucun agent ne pouvait naître**, et les 1 067 essais du dépôt restaient VERTS : aucun
+ * n'entre par là. Le banc du cycle éprouvait trois portes choisies à la main — il en manquait
+ * une, et c'était la seule qui soit un binaire de production.
+ *
+ * ⚠️ CE QUI REND LE CYCLE SÛR N'EST DONC PAS « il n'y a pas de cycle » : c'est que rien n'y soit
+ * LU pendant l'évaluation. Les déclarations de fonction sont hoistées ; un `const` importé, non.
+ * Le corps d'une fonction, lui, ne s'exécute qu'une fois tous les modules évalués. Le tableau
+ * vit donc DANS la fonction, et le banc du cycle dérive désormais ses portes du GRAPHE plutôt
+ * que d'une liste, pour qu'un module ajouté au cycle soit éprouvé sans qu'on y pense.
  */
-const LIBELLES_DECLARES = {
-  [ROLE_CHEF_EQUIPE]: { libelle: 'chef d’équipe', pluriel: 'chefs d’équipe' },
-};
+function libellesDeclares() {
+  return { [ROLE_CHEF_EQUIPE]: { libelle: 'chef d’équipe', pluriel: 'chefs d’équipe' } };
+}
 
 /**
  * COMMENT ON NOMME UN RÔLE DÉCLARÉ — et NOMMER NE DÉCIDE DE RIEN.
@@ -96,7 +118,8 @@ const LIBELLES_DECLARES = {
 export function libellesDuRoleDeclare(nom) {
   const brut = nom ? String(nom) : null;
   if (!brut) return { libelle: null, pluriel: null };
-  if (LIBELLES_DECLARES[brut]) return LIBELLES_DECLARES[brut];
+  const connus = libellesDeclares();
+  if (connus[brut]) return connus[brut];
   try {
     const r = roleDe(brut);
     return { libelle: r.libelle, pluriel: r.libelle_pluriel };
