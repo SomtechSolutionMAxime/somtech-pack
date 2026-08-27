@@ -813,8 +813,12 @@ test('cent illisibles ne noient pas la raison d’un agent — trois sont nommé
 
   const raison = rendu.agents[0].role.raison;
   assert.equal(rendu.agents[0].role.mesure, 'refusée');
-  // Le COMPTE total reste en tête : on ne cache pas l'ampleur, on cesse de la recopier.
-  assert.match(raison, /porte 100 d’ILLISIBLE\(s\)/);
+  // Le COMPTE total reste dit : on ne cache pas l'ampleur, on cesse de la recopier.
+  assert.match(raison, /100 déclaration\(s\) ILLISIBLE\(s\)/);
+  // ⚠️ ET ICI RIEN N'A ÉTÉ TROUVÉ POUR CET AGENT : la queue « la sienne peut être dedans » est
+  // donc VRAIE. C'est le contrôle négatif du correctif des queues — sans lui, on pourrait le
+  // « corriger » jusqu'à supprimer une phrase qui est juste dans ce cas-ci.
+  assert.match(raison, /la sienne peut être dedans/);
   // Trois nommés, pas cent — mesuré sur le texte, pas sur une constante recopiée du module.
   assert.equal(raison.match(/-abime-\d+\.json/g).length, 3);
   assert.match(raison, /et 97 autre\(s\)/);
@@ -950,6 +954,11 @@ test('une déclaration trouvée mais sans rôle se DIT — on n’envoie pas che
   assert.match(raison, /une déclaration l’apparie mais ne porte AUCUN rôle/);
   assert.match(raison, /inscrite le 2026-08-27T01:42:50\.192Z/);
   assert.doesNotMatch(raison, /aucune déclaration de naissance ne l’apparie/);
+  // 🔴 ET LA QUEUE SUIT LA TÊTE. Le correctif précédent n'avait redressé que la tête : dessous
+  // vivait encore « la sienne peut être dedans », affirmé juste après avoir dit qu'on venait de
+  // la LIRE. La phrase se contredisait en son milieu, et envoyait ouvrir un fichier ÉTRANGER.
+  assert.doesNotMatch(raison, /la sienne peut être dedans/);
+  assert.match(raison, /sans rapport avec la sienne, qui a été lue/);
 });
 
 // ⚠️ ET LE MÊME MENSONGE PAR L'AUTRE PORTE : quand la PLACE a suffi à trouver la déclaration, on
@@ -967,6 +976,11 @@ test('une déclaration trouvée par la PLACE ne fait pas accuser le nom non mesu
   const raison = rendu.agents[0].role.raison;
   assert.match(raison, /une déclaration l’apparie mais ne porte AUCUN rôle/);
   assert.doesNotMatch(raison, /aucune déclaration de naissance ne l’apparie/);
+  // 🔴 MÊME MOITIÉ, MÊME PORTE. « Le nom est la clé de repli » explique pourquoi une absence ne
+  // conclut rien — un motif qui n'a de sens que si l'on n'a RIEN trouvé. Ici la PLACE a suffi :
+  // le citer envoie soupçonner un instrument qui n'a joué aucun rôle.
+  assert.doesNotMatch(raison, /le nom est la clé de repli/);
+  assert.match(raison, /trouvée par sa PLACE, sans passer par son nom/);
 });
 
 // ⚠️ ET LA PROSE D'ORIGINE RESTE JUSTE QUAND ON N'A VRAIMENT RIEN TROUVÉ — sans quoi le
@@ -982,6 +996,22 @@ test('quand rien n’apparie vraiment, la raison le dit encore', async () => {
   });
 
   assert.match(rendu.agents[0].role.raison, /aucune déclaration de naissance ne l’apparie/);
+  // Contrôle négatif de la queue : rien trouvé ⇒ « la sienne peut être dedans » est JUSTE.
+  assert.match(rendu.agents[0].role.raison, /la sienne peut être dedans/);
+});
+
+// ⚠️ ET LA SECONDE QUEUE AUSSI — sans quoi le correctif aurait pu la supprimer partout.
+test('quand rien n’apparie et que le nom a refusé, la justification du repli revient', async () => {
+  const rendu = await recenser({
+    panes: [pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' })],
+    nomsConnus: { mesure: 'refusée', raison: 'herdr agents() a refusé' },
+    declarations: { declarations: [declaration()], illisibles: [] },
+  });
+
+  const raison = rendu.agents[0].role.raison;
+  assert.match(raison, /aucune déclaration de naissance ne l’apparie/);
+  assert.match(raison, /le nom est la clé de repli/);
+  assert.doesNotMatch(raison, /trouvée par sa PLACE/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

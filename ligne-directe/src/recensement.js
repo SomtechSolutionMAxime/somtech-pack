@@ -476,9 +476,19 @@ function declarationDuPane(p, chemin, registre, nom) {
       // ⚠️ ET CE QU'ON COUPE SE DIT. Un « … » muet ferait croire à une liste complète ; le
       // compte total reste en tête de phrase, et `borne.sourceDeclaree.illisibles` porte la
       // liste intégrale pour qui veut aller voir.
+      // ⚠️ LA QUEUE SUIT LA TÊTE — et elle ne la suivait pas. Le correctif précédent a redressé
+      // la TÊTE (« aucune ne l'apparie » était faux quand on en avait trouvé une) et laissé
+      // dessous une clause écrite pour le cas où rien n'est trouvé : « la sienne peut être
+      // dedans », affirmée juste après avoir dit qu'on venait de la LIRE. La phrase se
+      // contredisait en son milieu, et l'opérateur était envoyé ouvrir un fichier étranger
+      // alors que la déclaration de cet agent ne manque que d'un rôle.
+      //
+      // 🔴 UNE MOITIÉ CORRIGÉE EST UN DÉFAUT QUI SE RELIT COMME UN CORRECTIF : le banc de la
+      // tête passait, l'état était couvert, et la queue fausse vivait dessous.
       raison:
-        `${tete}, et le registre en porte ` +
-        `${illisibles.length} d’ILLISIBLE(s) — la sienne peut être dedans : ` +
+        `${tete}, et le registre porte par ailleurs ` +
+        `${illisibles.length} déclaration(s) ILLISIBLE(s)` +
+        (trouvee ? ' — sans rapport avec la sienne, qui a été lue : ' : ' — la sienne peut être dedans : ') +
         illisibles
           .slice(0, ILLISIBLES_NOMMES)
           .map((i) => `${i.fichier} (${i.cause})`)
@@ -495,9 +505,15 @@ function declarationDuPane(p, chemin, registre, nom) {
     return {
       mesure: 'refusée',
       nom: null,
-      raison:
-        `${tete}, et ${nom.raison ?? 'son nom n’a pas été mesuré'} ` +
-        `— or le nom est la clé de repli de l’appariement : sans lui, « pas trouvée » ne vaut pas « absente »`,
+      // ⚠️ MÊME MOITIÉ, MÊME PORTE. « Le nom est la clé de repli » explique pourquoi une absence
+      // ne conclut rien — un motif qui n'a de sens que si l'on n'a RIEN trouvé. Quand la PLACE a
+      // suffi à trouver la déclaration, le nom n'a jamais été nécessaire : le citer envoie
+      // soupçonner un instrument qui n'a joué aucun rôle.
+      raison: trouvee
+        ? `${tete} — et ${nom.raison ?? 'son nom n’a pas été mesuré'}, ce qui n’y change rien : ` +
+          `sa déclaration a été trouvée par sa PLACE, sans passer par son nom`
+        : `${tete}, et ${nom.raison ?? 'son nom n’a pas été mesuré'} ` +
+          `— or le nom est la clé de repli de l’appariement : sans lui, « pas trouvée » ne vaut pas « absente »`,
     };
   }
   return null;
