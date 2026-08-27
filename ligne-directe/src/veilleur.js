@@ -206,6 +206,21 @@ export class Veilleur {
     }
   }
 
+  /**
+   * LA PLACE EST-ELLE TENUE ? — question DIFFÉRENTE de « quelqu'un répond-il ? », et c'est
+   * la confusion des deux qui a fait vivre deux veilleurs (T-20260825-0101).
+   *
+   * ⚠️ UNE SEULE ÉCRITURE DE LA RÈGLE, ET ELLE N'EST PAS ICI. La sonde vit dans `client.js`
+   * — le module qui parle au socket — parce que la relève pose exactement la même question,
+   * pour exactement la même raison. Ce qu'elle mesure, ce qu'elle refuse de lire, et ce
+   * qu'elle ne voit pas, y est écrit une fois. Deux copies dériveraient, et c'est toujours
+   * celle qu'on ne relit pas qui reste fausse.
+   */
+  static async placeTenue(cheminSocket = CHEMIN_SOCKET, options = {}) {
+    const { placeTenue } = await import('./client.js');
+    return placeTenue(cheminSocket, options);
+  }
+
   static async demarrer(options = {}) {
     // La place D'ABORD, le reste ensuite. Lire le trousseau puis interroger Slack prend
     // quelques centaines de millisecondes : assez pour qu'un second veilleur naisse en
@@ -302,6 +317,25 @@ export class Veilleur {
           const occupe = new Error('Un veilleur tourne déjà sur ce poste — celui-ci se retire.');
           occupe.code = 'DEJA_VIVANT';
           return reject(occupe);
+        }
+        // 🔴 IL N'A PAS RÉPONDU. IL N'EST PAS MORT POUR AUTANT — et c'est ici que le double
+        // naissait (T-20260825-0101). Le sondage ci-dessus a une borne de 2 s ; un veilleur
+        // occupé la dépasse sans peine (`vue` a pendu 67 s au socket du poste). Ce qui suit
+        // effaçait alors le socket d'un vivant, et ce démarrage s'installait à côté de lui.
+        //
+        // La question n'est donc pas « répond-il ? » mais « quelqu'un tient-il encore la
+        // poignée ? » — et un socket dont le processus est mort refuse la connexion, lui.
+        if (await Veilleur.placeTenue(this.cheminSocket)) {
+          const tenue = new Error(
+            'Un veilleur tient déjà la place sans répondre — celui-ci se retire plutôt que de le doubler. ' +
+              `Nomme-le si besoin : lsof -t ${this.cheminSocket}`
+          );
+          // Le MÊME code que ci-dessus, et c'est voulu : pour le point d'entrée, le fait est
+          // identique — un veilleur est déjà là, ce démarrage se retire SANS erreur, sinon le
+          // gestionnaire de services le relancerait en boucle. Seul le motif diffère, et il
+          // part au journal.
+          tenue.code = 'DEJA_VIVANT';
+          return reject(tenue);
         }
         try {
           unlinkSync(this.cheminSocket);
@@ -1988,6 +2022,32 @@ export class Veilleur {
       });
   }
 
+  /**
+   * UNE RECONNEXION N'EST PAS UNE PANNE — et le journal ne le disait pas.
+   *
+   * 🔴 MESURÉ SUR LE JOURNAL DU POSTE (T-20260825-0101, 217 occurrences depuis le 5 août).
+   * Comptées en bloc, elles ressemblaient à une boucle. Séparées selon qu'elles suivent la
+   * précédente de plus ou de moins d'une minute, elles se rangent en DEUX RÉGIMES, et un
+   * seul est un défaut :
+   *
+   *   ISOLÉES — 2 à 8 par jour, tous les jours, quoi qu'il arrive. Les horodatages du
+   *   2026-08-26 (veilleur né à 00:49:15Z) : 05:49:26, 10:49:42, 15:49:54. TOUTES LES
+   *   5 HEURES PILE, à partir de la naissance. C'est le rafraîchissement périodique de
+   *   Slack Socket Mode : le protocole ferme, le client rouvre. RIEN À CORRIGER.
+   *
+   *   EN RAFALE — 5 à 7 en moins d'une minute. Elles n'apparaissent QUE les jours où
+   *   plusieurs veilleurs connectés coexistent : 53 le 11/08, 11 le 24/08, 12 le 25/08,
+   *   et ZÉRO le 26/08, premier jour à veilleur unique. Deux clients Socket Mode sur la
+   *   même app se coupent mutuellement — c'est le défaut, et il se répare en amont, dans
+   *   l'unicité (voir `placeTenue` et `occupantsDeLaPlace`, client.js), jamais ici.
+   *
+   * ⚠️ Ce n'est pas une preuve : l'établir demanderait de faire coexister deux veilleurs
+   * CONNECTÉS À SLACK, ce qui est un geste de production. La corrélation joue dans les deux
+   * sens (elle apparaît avec la coexistence, elle disparaît sans), et c'est tout.
+   *
+   * C'est écrit ici pour qu'un régime normal ne soit pas re-diagnostiqué comme une panne —
+   * il l'a déjà été une fois, et le compte en bloc est ce qui l'a permis.
+   */
   reconnecter(raison) {
     if (this.arrete) return;
     journaliser(`reconnexion dans ${Math.round(this.attente / 1000)}s — ${raison}`);
