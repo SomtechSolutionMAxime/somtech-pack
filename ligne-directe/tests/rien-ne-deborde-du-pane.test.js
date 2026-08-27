@@ -514,6 +514,63 @@ test('LE GESTE QUI ÉCRIT BORNE À LA LARGEUR DU PANE — pas seulement le texte
   }
 });
 
+test('SANS TTY, LA PROGRESSION N’EST PAS TRONQUÉE — la branche que la prose donne pour raison d’être', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LE MOTIF ÉCRIT DE LA DÉCISION ÉTAIT CELUI QUE RIEN N’ÉPROUVAIT.
+  //
+  // `avecProgression` borne à `sortie.columns || Infinity`, et le commentaire au-dessus dit
+  // pourquoi : « sans TTY, la sortie n’est pas un terminal — personne ne wrappe, donc rien à
+  // borner, et tronquer priverait un journal du message entier ».
+  //
+  // ⚠️ MESURÉ : remplacer `Infinity` par `65` laisse la SUITE COMPLÈTE verte. La branche « pas
+  // de TTY » n’était atteinte par AUCUN banc du dépôt — les trois décors passaient 65 ou 150,
+  // jamais un `columns` absent. La décision tenait parce que personne n’avait jamais lancé la
+  // progression sans terminal, pas parce qu’une garde la tenait.
+  //
+  // ⚠️ C’EST LA MÊME FORME QUE L’ASSERTION MORTE VOISINE, un cran plus grave : là-bas une
+  // propriété vraie était gardée par une assertion qui ne mesurait rien ; ici le MOTIF ÉCRIT de
+  // la décision n’est éprouvé par rien du tout. Une propriété qu’on croit tenue parce qu’on l’a
+  // mesurée tenue — alors que rien ne la TIENT.
+  //
+  // ⚠️ ET LA MISE EN GARDE DU CODE DEVIENT OPPOSABLE : `dessiner()` se replie sur `100`, celui-ci
+  // sur `Infinity`, et le commentaire dit de ne PAS les « harmoniser ». Ce banc est ce qui
+  // empêche l’harmonisation de passer en silence.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  for (const colonnes of [undefined, 0, null]) {
+    const sortie = uneSortie(colonnes);
+    let fini;
+    const promesse = avecProgression(
+      () => new Promise((r) => (fini = () => r({ registre: { mesure: 'lu' }, orchestrateurs: [] }))),
+      sortie,
+      { intervalle: 5 }
+    );
+    const vus = await attendreEcritures(sortie, 2);
+    fini();
+    await promesse;
+
+    assert.ok(vus.length >= 2, `sans TTY (columns=${colonnes}), le battement n’a écrit que ${vus.length} fois`);
+    for (const t of vus) {
+      // ⚠️ ON COMPARE À L'ENSEMBLE DES LONGUEURS QUE LE MESSAGE ENTIER PEUT PRENDRE, jamais à
+      // une longueur unique — et j'ai écrit cette assertion à l'envers du premier coup, en
+      // supposant une longueur FIXE. Le rouge l'a dit : le message fait 115 caractères de 0 à
+      // 9 secondes, 116 de 10 à 99, 117 au-delà. C'est le seuil FLOU que ce lot a documenté
+      // ailleurs, et j'ai buté dessus dans le banc qui le documente.
+      //
+      // L'ensemble se DÉRIVE du message lui-même : aucun chiffre écrit ici ne se périme quand
+      // le texte change.
+      const entieres = new Set([0, 10, 100].map((sec) => [...texteDeProgression(sec, 3)].length));
+      assert.ok(
+        entieres.has([...t].length),
+        `sans TTY (columns=${colonnes}), la progression écrit ${[...t].length} caractères — le ` +
+          `message ENTIER en fait ${[...entieres].sort((x, y) => x - y).join(' ou ')}. Elle a été ` +
+          'TRONQUÉE alors que personne ne wrappe, et un journal perd la fin de chaque ligne : ' +
+          JSON.stringify(t)
+      );
+      assert.ok(!t.includes('…'), `sans TTY, la progression porte une marque de troncature : ${JSON.stringify(t)}`);
+    }
+  }
+});
+
 test('LA LARGEUR EST RELUE À CHAQUE TOUR — un pane redimensionné pendant le chargement', async () => {
   // 🔴 L'AUTRE MUTATION QUI SURVIVAIT : lire la largeur UNE FOIS au départ. Redimensionner un
   // split est précisément ce qu'on fait quand un affichage devient illisible — le trou se
@@ -570,10 +627,53 @@ test('LE BATTEMENT S’ARRÊTE ET EFFACE — il ne laisse pas sa dernière ligne
   assert.ok(!dernier.includes('lecture du parc'), `la dernière écriture doit EFFACER : ${JSON.stringify(dernier)}`);
   assert.ok(dernier.includes('[2K'), `elle doit effacer la ligne : ${JSON.stringify(dernier)}`);
 
-  // Et le battement ne bat plus : rien de neuf après la fin.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CETTE ASSERTION ÉTAIT MORTE, ET UNE ASSERTION VIVANTE VOISINE LA PROTÉGEAIT.
+  //
+  // Elle attendait 40 ms sur un intervalle de 5, puis constatait que rien de neuf n'avait été
+  // écrit. Mesuré : en réduisant l'attente de 40 ms à **1 ms**, LE BANC RESTE VERT. Elle ne
+  // prouvait pas que le battement s'arrête — elle constatait qu'il ne bat pas pendant qu'on
+  // regarde, et elle l'aurait constaté sans regarder.
+  //
+  // ⚠️ ET AUCUNE MUTATION DU CODE NE POUVAIT LA TROUVER. Retirer le `clearInterval` fait bien
+  // rougir ce banc — mais par son assertion sur l'EFFACEMENT, pas par celle-ci. Le banc a l'air
+  // de tenir, la mutation est attrapée, et l'assertion morte reste invisible : elle est
+  // COUVERTE PAR SA VOISINE. Le cas de rupture : retirer le `clearInterval` ET garder
+  // l'effacement ferait passer ce banc au VERT sur un battement qui tourne toujours.
+  //
+  // ⚠️ CE QUI L'A TROUVÉE EST UNE MUTATION DE L'INSTRUMENT, PAS DU PRODUIT. On mute le code
+  // pour savoir si le banc voit ; il faut aussi muter le BANC pour savoir si son assertion
+  // mesure. Réduire l'attente est le geste ; le vert qui suit est le verdict.
+  //
+  // LA FORME QUI TIENT : on n'attend pas un DÉLAI, on attend plusieurs INTERVALLES — dérivés de
+  // l'intervalle lui-même, jamais d'un chiffre qui le suppose. Une valeur en dur se périme
+  // quand la constante dont elle dépend bouge, et le banc redevient vrai par chance.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
   const fige = sortie.ecrits.length;
-  await new Promise((r) => setTimeout(r, 40));
-  assert.equal(sortie.ecrits.length, fige, 'le battement continue après la fin — il tiendrait le processus');
+  const INTERVALLE = 5;
+  const TOURS_SANS_ECRITURE = 6;
+  for (let tour = 0; tour < TOURS_SANS_ECRITURE; tour += 1) {
+    await new Promise((r) => setTimeout(r, INTERVALLE));
+    assert.equal(
+      sortie.ecrits.length,
+      fige,
+      `le battement a écrit ${sortie.ecrits.length - fige} fois après la fin, au tour ${tour + 1} sur ` +
+        `${TOURS_SANS_ECRITURE} — il continue de battre, donc il tiendrait le processus en vie`
+    );
+  }
+
+  // ⚠️ UN CONTRÔLE DE L'ATTENTE A VÉCU ICI, ET IL M'A INDUIT EN ERREUR. Il vérifiait que
+  // `TOURS_SANS_ECRITURE * INTERVALLE >= 6 * INTERVALLE` — vrai par construction, et surtout :
+  // quand j'ai réduit les tours pour éprouver l'assertion ci-dessus, c'est LUI qui a rougi.
+  // J'ai lu ce rouge comme « l'assertion mesure », alors qu'il venait d'ailleurs. Retiré : il ne
+  // gardait rien et il masquait d'où venait le verdict.
+  //
+  // ⚠️ ET LE GESTE QUI ÉPROUVE VRAIMENT CETTE ASSERTION N'EST PAS DE RACCOURCIR L'ATTENTE.
+  // Raccourcir rend le banc PLUS PERMISSIF : une borne satisfaite le reste quand on l'élargit,
+  // donc ça ne peut pas rougir pour la bonne raison. Un délai s'éprouve en rendant le DOUBLE
+  // LENT — ici, en différant le `clearInterval` : le battement tourne encore après la fin, et
+  // l'assertion rougit sur SON propre message (« a écrit 1 fois après la fin, au tour 1 sur 6 »).
+  // Mesuré.
 });
 
 test('L’ÉCRAN TIENT DANS LE PANE — LES DEUX DIMENSIONS ENSEMBLE, et pas l’une puis l’autre', async (t) => {
