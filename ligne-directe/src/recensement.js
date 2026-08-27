@@ -389,6 +389,29 @@ const ILLISIBLES_NOMMES = 3;
 function declarationDuPane(p, chemin, registre, nom) {
   if (!registre) return null;
 
+  // 🔴 UN ESPACE NON MESURÉ N'EST PAS UN ESPACE QUI NE CORRESPOND PAS — et c'était le seul champ
+  // du module sans son troisième état. Les DEUX clés d'appariement passent par l'espace ; quand
+  // `foreground_cwd` et `cwd` manquent tous les deux, `memeEspaceDeTravail(null, …)` rend `false`
+  // inconditionnellement, et un agent dont le pane, la session ET le nom concordent EXACTEMENT
+  // avec sa propre déclaration recevait la prose d'un agent JAMAIS DÉCLARÉ. Le repli par le nom
+  // — conçu précisément pour rattraper ce genre de cas — ne pouvait pas le sauver : il est borné
+  // par le même espace.
+  //
+  // ⚠️ ON NE DEVINE PAS L'ESPACE POUR AUTANT. Le retirer de l'appariement ferait de la déclaration
+  // d'un homonyme un laissez-passer — c'est la borne que ce lot a posée deux fois. On rend donc
+  // « refusée » : « je n'ai pas pu mesurer où il travaille », qui envoie refaire la mesure, là où
+  // « non établi » envoie le faire déclarer.
+  if (!chemin) {
+    return {
+      mesure: 'refusée',
+      nom: null,
+      raison:
+        'je n’ai pas pu lire où cet agent travaille (ni « foreground_cwd » ni « cwd ») — or les ' +
+        'deux clés d’appariement d’une déclaration passent par son espace. « Pas trouvée » ne ' +
+        'vaut donc pas « absente » : sa déclaration existe peut-être',
+    };
+  }
+
   // 🔴 UN REGISTRE QUI A REFUSÉ EN BLOC N'IDENTIFIE PERSONNE — MÊME S'IL PORTE DES FAITS.
   //
   // `ceQueDitLaSourceDeclaree`, dix lignes plus haut, lit `refusGlobal` EN PREMIER et rend
@@ -429,6 +452,15 @@ function declarationDuPane(p, chemin, registre, nom) {
     if (declare) return declare;
   }
 
+  // ⚠️ CE QU'ON A TROUVÉ CHANGE CE QU'ON A LE DROIT DE DIRE. Les deux raisons ci-dessous
+  // s'ouvraient toutes deux sur « aucune déclaration ne l'apparie » — faux quand `trouvee`
+  // existait et ne portait simplement pas de rôle. Un lecteur était alors envoyé chercher un
+  // fichier étranger (« la sienne peut être dedans »), ou soupçonner un nom qui n'avait jamais
+  // été nécessaire, alors que la déclaration était là, sous ses yeux, et muette sur le rôle.
+  const tete = trouvee
+    ? `une déclaration l’apparie mais ne porte AUCUN rôle (inscrite le ${trouvee.ne_le ?? 'sans date'})`
+    : 'aucune déclaration de naissance ne l’apparie';
+
   const illisibles = Array.isArray(registre.illisibles) ? registre.illisibles : [];
   if (illisibles.length) {
     return {
@@ -445,12 +477,15 @@ function declarationDuPane(p, chemin, registre, nom) {
       // compte total reste en tête de phrase, et `borne.sourceDeclaree.illisibles` porte la
       // liste intégrale pour qui veut aller voir.
       raison:
-        `aucune déclaration de naissance ne l’apparie, mais le registre en porte ` +
+        `${tete}, et le registre en porte ` +
         `${illisibles.length} d’ILLISIBLE(s) — la sienne peut être dedans : ` +
         illisibles
           .slice(0, ILLISIBLES_NOMMES)
           .map((i) => `${i.fichier} (${i.cause})`)
           .join(', ') +
+        // ⚠️ `>` ET NON `>=` — SURVIVANTE. À EXACTEMENT trois illisibles, `>=` faisait rendre
+        // « … et 0 autre(s) », une phrase qui se contredit elle-même. Aucun banc n'employait ce
+        // nombre-là : la frontière d'une coupe se mesure SUR sa frontière, jamais à côté.
         (illisibles.length > ILLISIBLES_NOMMES
           ? ` … et ${illisibles.length - ILLISIBLES_NOMMES} autre(s) — tous nommés dans « borne.sourceDeclaree.illisibles »`
           : ''),
@@ -461,7 +496,7 @@ function declarationDuPane(p, chemin, registre, nom) {
       mesure: 'refusée',
       nom: null,
       raison:
-        `aucune déclaration de naissance ne l’apparie, mais ${nom.raison ?? 'son nom n’a pas été mesuré'} ` +
+        `${tete}, et ${nom.raison ?? 'son nom n’a pas été mesuré'} ` +
         `— or le nom est la clé de repli de l’appariement : sans lui, « pas trouvée » ne vaut pas « absente »`,
     };
   }

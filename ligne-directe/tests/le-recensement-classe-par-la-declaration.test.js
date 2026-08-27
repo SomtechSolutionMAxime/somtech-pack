@@ -887,6 +887,179 @@ test('un rôle vide ne se NOMME pas — deux « null », jamais une chaîne qui 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-undecies UN ESPACE NON MESURÉ NE DÉFAIT PAS UN LIEN — c'était le seul champ sans 3e état.
+//
+// 🔴 LES DEUX CLÉS PASSENT PAR L'ESPACE. Quand `foreground_cwd` ET `cwd` manquent,
+// `memeEspaceDeTravail(null, …)` rend `false` inconditionnellement : un agent dont le pane, la
+// session ET le nom concordent EXACTEMENT avec sa propre déclaration recevait la prose d'un
+// agent JAMAIS DÉCLARÉ. Le repli par le nom — fait pour rattraper ce genre de cas — est borné
+// par le même espace, donc il ne pouvait pas le sauver.
+//
+// ⚠️ ET LES 21 FABRIQUES DE PANE DU BANC FOURNISSENT TOUJOURS UN `cwd` : le chemin existait, il
+// passait, il se lisait donc comme couvert.
+test('un agent dont l’espace n’a pas pu être lu rend « refusée », jamais « non établi »', async () => {
+  const sock = '/Users/qui/.config/herdr/sessions/somtech/herdr.sock';
+  const sansEspace = {
+    pane_id: 'w1:p1',
+    agent: 'claude',
+    agent_session: { agent: 'claude', kind: 'id', value: 'session-w1:p1' },
+    agent_status: 'working',
+    herdr_socket: sock,
+    // ni `foreground_cwd`, ni `cwd` — herdr OMET les clés qu'il n'a pas.
+  };
+  const rendu = await recenser({
+    panes: [sansEspace],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    // La déclaration concorde sur TOUT le reste : pane, session, nom.
+    declarations: { declarations: [declaration()], illisibles: [] },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+  assert.match(rendu.agents[0].role.raison, /je n’ai pas pu lire où cet agent travaille/);
+  // ⚠️ ET LA CONDUITE QUI EN DÉCOULE SE DIT : « pas trouvée » ne vaut pas « absente ».
+  assert.match(rendu.agents[0].role.raison, /ne \s*vaut donc pas « absente »|ne vaut donc pas « absente »/);
+  assert.equal(rendu.compte.roleNonMesure, 1);
+  assert.equal(rendu.compte.roleNonEtabli, 0);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-duodecies ON NE DIT PAS « AUCUNE NE L'APPARIE » QUAND ON EN A TROUVÉ UNE.
+//
+// 🔴 LES DEUX RAISONS S'OUVRAIENT SUR CETTE PHRASE, y compris quand une déclaration avait été
+// trouvée et ne portait simplement pas de rôle. Le lecteur était alors envoyé chercher un
+// fichier ÉTRANGER (« la sienne peut être dedans »), ou soupçonner un nom qui n'avait jamais été
+// nécessaire — alors que sa déclaration était là, sous ses yeux, et muette sur le rôle.
+//
+// ⚠️ LE BANC QUI COUVRAIT CET ÉTAT NE REGARDAIT QUE `mesure` ET `/ILLISIBLE/` : l'état était
+// atteint, la prose fausse passait dessous.
+test('une déclaration trouvée mais sans rôle se DIT — on n’envoie pas chercher ailleurs', async () => {
+  const nu = declaration();
+  delete nu.role;
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: {
+      declarations: [nu],
+      // Un illisible SANS RAPPORT avec cet agent — c'est vers lui qu'on l'envoyait.
+      illisibles: [{ fichier: '20260101T000000000Z-un-autre.json', cause: 'Unexpected token' }],
+    },
+  });
+
+  const raison = rendu.agents[0].role.raison;
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+  assert.match(raison, /une déclaration l’apparie mais ne porte AUCUN rôle/);
+  assert.match(raison, /inscrite le 2026-08-27T01:42:50\.192Z/);
+  assert.doesNotMatch(raison, /aucune déclaration de naissance ne l’apparie/);
+});
+
+// ⚠️ ET LE MÊME MENSONGE PAR L'AUTRE PORTE : quand la PLACE a suffi à trouver la déclaration, on
+// ne blâme pas un nom qui n'a jamais été nécessaire.
+test('une déclaration trouvée par la PLACE ne fait pas accuser le nom non mesuré', async () => {
+  const nu = declaration();
+  delete nu.role;
+  const rendu = await recenser({
+    panes: [pane()],
+    // Le nom a refusé — mais la place a suffi.
+    nomsConnus: { mesure: 'refusée', raison: 'herdr agents() a refusé' },
+    declarations: { declarations: [nu], illisibles: [] },
+  });
+
+  const raison = rendu.agents[0].role.raison;
+  assert.match(raison, /une déclaration l’apparie mais ne porte AUCUN rôle/);
+  assert.doesNotMatch(raison, /aucune déclaration de naissance ne l’apparie/);
+});
+
+// ⚠️ ET LA PROSE D'ORIGINE RESTE JUSTE QUAND ON N'A VRAIMENT RIEN TROUVÉ — sans quoi le
+// correctif aurait remplacé un mensonge par son symétrique.
+test('quand rien n’apparie vraiment, la raison le dit encore', async () => {
+  const rendu = await recenser({
+    panes: [pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' })],
+    nomsConnus: nomsDe([['w9:p9', 'bonaventure']]),
+    declarations: {
+      declarations: [declaration()],
+      illisibles: [{ fichier: '20260101T000000000Z-x.json', cause: 'Unexpected token' }],
+    },
+  });
+
+  assert.match(rendu.agents[0].role.raison, /aucune déclaration de naissance ne l’apparie/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-terdecies LA FRONTIÈRE DE LA COUPE SE MESURE SUR SA FRONTIÈRE — SURVIVANTE.
+//
+// 🔴 `>` MUTÉ EN `>=` SURVIVAIT. Les bancs employaient 1 et 100 illisibles ; à EXACTEMENT trois,
+// le rendu disait « … et 0 autre(s) — tous nommés dans borne » : une phrase qui se contredit.
+test('exactement trois illisibles se nomment tous, sans « et 0 autre »', async () => {
+  const trois = Array.from({ length: 3 }, (_, i) => ({
+    fichier: `20260827T00000000${i}Z-abime-${i}.json`,
+    cause: 'Unexpected end of JSON input',
+  }));
+  const rendu = await recenser({
+    panes: [pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' })],
+    nomsConnus: nomsDe([['w9:p9', 'bonaventure']]),
+    declarations: { declarations: [], illisibles: trois },
+  });
+
+  const raison = rendu.agents[0].role.raison;
+  assert.equal(raison.match(/-abime-\d\.json/g).length, 3, 'les trois se nomment');
+  assert.doesNotMatch(raison, /et 0 autre/);
+  assert.doesNotMatch(raison, /borne\.sourceDeclaree\.illisibles/, 'rien n’a été coupé : on n’y renvoie pas');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-quaterdecies « LA PLUS RÉCENTE L'EMPORTE » SE VÉRIFIE CONTRE LE VRAI TRI, PAS UN TABLEAU
+// RANGÉ À LA MAIN.
+//
+// 🔴 LE BANC QUI L'ÉPROUVAIT CONSTRUISAIT SA LISTE DÉJÀ TRIÉE. Il prouvait donc que
+// `declarationDeLAgent` prend le PREMIER élément — pas que cet élément est le plus récent. Le tri
+// vit chez le producteur (`lireLesDeclarations`, lot voisin) : un changement légitime de son
+// comparateur ferait rendre un mandat PÉRIMÉ pour une place reprise, sans aucun rouge ici.
+//
+// ⚠️ ON ÉCRIT DONC DE VRAIS FICHIERS, DANS LE DÉSORDRE, et on laisse le VRAI producteur les
+// relire. C'est la jointure entre les deux lots, et elle n'appartenait à personne.
+test('la plus récente l’emporte — éprouvé contre le tri RÉEL du producteur', async () => {
+  const racine = mkdtempSync(join(tmpdir(), 'declaration-tri-'));
+  try {
+    const { inscrireLaDeclaration, lireLesDeclarations } = await import(
+      '../../naissance-representant/src/declaration.js'
+    );
+    const espace = '/Users/qui/worktrees/depot/20260827-000000';
+    // Écrites dans le DÉSORDRE : la plus ancienne en dernier, pour que l'ordre du système de
+    // fichiers ne puisse pas produire le bon résultat par accident.
+    for (const [mandat, quand] of [
+      ['T-DU-MILIEU', '2026-08-26T10:00:00.000Z'],
+      ['T-LA-PLUS-RECENTE', '2026-08-27T10:00:00.000Z'],
+      ['T-LA-PLUS-ANCIENNE', '2026-08-25T10:00:00.000Z'],
+    ]) {
+      inscrireLaDeclaration({
+        nom: 't-20260825-0012',
+        role: 'chef-equipe',
+        mandat,
+        coordonnateur: 'e-20260825-0002',
+        espace,
+        pane: 'w1:p1',
+        session: 'somtech',
+        racine,
+        quand: new Date(quand),
+      });
+    }
+
+    const rendu = await recenser({
+      panes: [pane({ cwd: espace })],
+      nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+      // Le VRAI lecteur, avec son VRAI tri — pas un tableau rangé ici.
+      declarations: lireLesDeclarations({ racine }),
+    });
+
+    assert.equal(rendu.agents[0].role.mesure, 'déclarée');
+    assert.equal(rendu.agents[0].role.mandat, 'T-LA-PLUS-RECENTE');
+    assert.equal(rendu.agents[0].role.declaree_le, '2026-08-27T10:00:00.000Z');
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({
