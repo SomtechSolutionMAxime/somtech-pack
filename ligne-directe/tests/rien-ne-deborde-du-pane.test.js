@@ -1966,3 +1966,105 @@ test('LES COMPTES DE LA PROSE DÉSIGNENT LEUR OBJET — toutes les tournures, pa
   // HORS du dépôt — une sonde de session, un pane réel. Pour ceux-là, la note doit dire QUEL
   // objet a été mesuré, et ce banc ne remplace pas cette exigence.
 });
+
+
+test('LE PLANCHER DE LA COLONNE ARBRE TIENT SA VALEUR — pas seulement son existence', () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CINQUIÈME VARIATION DE LA MÊME LOI, SUR UNE LIGNE QUE CE LOT A RÉÉCRITE.
+  //
+  // `largeurArbre` porte un plancher — la colonne de gauche ne descend pas sous une certaine
+  // largeur, parce qu'elle porte la marque de rattachement ET le début du titre. Ce lot a
+  // réécrit cette ligne (pour empêcher la somme des deux colonnes de dépasser le pane), et le
+  // plancher lui-même n'était gardé par RIEN.
+  //
+  // ⚠️ MESURÉ : le déplacer d'un facteur — ÷2 comme ×1,4 — laisse la suite entière verte. Les
+  // gardes voisines tiennent que la ligne ne DÉBORDE jamais (5 essais rougissent si on touche à
+  // la borne haute) ; aucune ne tient ce que la colonne VAUT.
+  //
+  // ⚠️ ET C'EST LA LOI PAYÉE QUATRE FOIS AVANT LUI : bord sans suite, taille sans couverture,
+  // compte sans traversée, existence sans magnitude. À chaque fois on garde QU'UNE CHOSE EST,
+  // jamais CE QU'ELLE VAUT. La mutation qui l'attrape n'est pas celle qui SUPPRIME la valeur,
+  // c'est celle qui la DÉPLACE.
+  //
+  // ⚠️ CE QUE LE PLANCHER TIENT, MESURÉ SUR LE RENDU : entre ~45 et ~29 colonnes de pane, il
+  // maintient la colonne arbre à sa valeur au lieu de la laisser fondre avec le pane. Sous 29,
+  // la borne haute (`largeur - 3`) reprend la main pour ne jamais dépasser. C'est exactement la
+  // plage d'un split.
+  //
+  // ON GARDE LA PROPRIÉTÉ, PAS LE CHIFFRE : la colonne doit porter la marque de rattachement et
+  // un début de titre lisible. La borne se dérive de ce que la ligne DOIT montrer.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const tmp = racine();
+  const vue = { registre: { mesure: 'lu' }, orchestrateurs: [] };
+  const colonneArbre = (largeur) => {
+    const ecran = rendreEcran({ vue, etat: etatInitial(), lignes: [], largeur, hauteur: 5 });
+    return ecran[1].texte.indexOf(' │ ');
+  };
+
+  // ⚠️ ON GARDE LA PROPRIÉTÉ QUE LE PLANCHER CRÉE, PAS SA VALEUR — et j'ai écrit cette garde à
+  // l'envers du premier coup. Ma première version dérivait un minimum (marque + indentation +
+  // titre lisible) qui tombait SOUS le plancher réel : l'assertion était alors vraie par la
+  // PROPORTION seule, et le plancher pouvait disparaître sans qu'elle bouge. C'est mon propre
+  // contrôle anti-vacuité qui l'a dit — il était là pour ça.
+  //
+  // LA PROPRIÉTÉ, ÉNONCÉE SANS RECOPIER LE CHIFFRE : sous une certaine largeur de pane, la
+  // colonne arbre CESSE DE SUIVRE la proportion et se tient au-dessus d'elle. C'est exactement
+  // ce qu'un plancher fait — et le supprimer, ou le déplacer, change l'endroit où ça se produit.
+  const proportion = (largeur) => Math.floor(largeur * 0.62);
+
+  // ⚠️ ON COMMENCE LÀ OÙ LE PLANCHER DOMINE. Sous ~31 colonnes, c'est la borne HAUTE
+  // (`largeur - 3`) qui reprend la main pour ne jamais dépasser le pane — et la colonne descend
+  // alors sous le plancher, légitimement. Mesuré : à 30 colonnes elle vaut 27, pas 28. Une
+  // assertion qui supposait le plancher dominant partout rougissait sur un comportement JUSTE.
+  const OU_LE_PLANCHER_DOMINE = 35;
+  let auDessusDeLaProportion = 0;
+  let plusPetite = Infinity;
+  for (let largeur = OU_LE_PLANCHER_DOMINE; largeur <= 200; largeur += 1) {
+    const arbre = colonneArbre(largeur);
+    if (arbre > proportion(largeur)) auDessusDeLaProportion += 1;
+    plusPetite = Math.min(plusPetite, arbre);
+
+    // ⚠️ ET ELLE NE DESCEND JAMAIS SOUS CE QU'ELLE PORTE : la marque de rattachement, une
+    // indentation d'arbre, et un début de titre. Dérivé des textes eux-mêmes.
+    const MARQUE = [...'▼ '].length;
+    const INDENT = [...'   '].length * 2;
+    assert.ok(
+      arbre >= MARQUE + INDENT,
+      `à ${largeur} colonnes de pane, la colonne arbre n’en fait que ${arbre} — elle ne porte plus ` +
+        'la marque de rattachement et son indentation, donc la ligne ne se rattache plus à l’arbre'
+    );
+  }
+
+  // ═══ LE PLANCHER MORD : il existe des largeurs où la colonne est AU-DESSUS de la proportion.
+  // Le déplacer d'un facteur — ÷2 comme ×1,4 — change ce compte. C'est la mesure qui manquait.
+  assert.ok(
+    auDessusDeLaProportion > 0,
+    'la colonne arbre suit la proportion à TOUTES les largeurs — le plancher ne s’applique nulle ' +
+      'part, il a été rétréci ou supprimé, et l’arbre fond avec le pane'
+  );
+
+  // ⚠️ ET SA VALEUR EST TENUE — ANCRÉE LITTÉRALEMENT, ET C'EST VOULU.
+  //
+  // 🔴 MA PREMIÈRE VERSION COMPARAIT `plusPetite` À `colonneArbre(45)` : DEUX VALEURS QUI
+  // BOUGENT ENSEMBLE. Mesuré — déplacer le plancher d'un seul cran (28 → 27 ou 29) laissait
+  // l'égalité vraie, donc SURVIVAIT. C'est la garde complice : l'assertion lit sa référence
+  // dans le code qu'elle juge, et suit la mutation au lieu de l'attraper.
+  //
+  // ⚠️ LA RÈGLE QUI TRANCHE : si je déplace la définition, l'assertion doit-elle SUIVRE ? Pour
+  // une RELATION, oui — on passe par la constante (c'est le cas du seuil du raccourci vital).
+  // Pour une VALEUR, non — on l'ancre littéralement, ici, une fois. C'est la seule façon qu'un
+  // déplacement d'un cran rougisse.
+  //
+  // Si ce nombre change volontairement, il se met à jour ICI — et c'est exprès : quelqu'un doit
+  // décider que la colonne qui porte le rattachement et le titre vaut désormais autre chose.
+  const PLANCHER_ATTENDU = 28;
+  assert.equal(
+    plusPetite,
+    PLANCHER_ATTENDU,
+    `la plus petite colonne arbre du balayage vaut ${plusPetite}, le plancher attendu est ` +
+      `${PLANCHER_ATTENDU}. Si le changement est voulu, mets-le à jour ici — c'est le seul ` +
+      'endroit qui l’écrit. Sinon, le plancher a bougé et l’arbre se lit moins bien.'
+  );
+
+  rmSync(tmp, { recursive: true, force: true });
+});
