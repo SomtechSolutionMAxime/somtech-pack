@@ -117,6 +117,21 @@ function libellesDeclares() {
  */
 export function libellesDuRoleDeclare(nom) {
   const brut = nom ? String(nom) : null;
+  // ⚠️ CETTE LIGNE NE GARDE RIEN, ET C'EST MESURÉ — deux fois plutôt qu'une.
+  //
+  //   ① Elle n'est ATTEINTE par aucun essai : ses deux appelants ont déjà écarté le vide en
+  //      amont (`roleDeclareDe` refuse `!nom` ; le recensement ne l'invoque que sur des clés de
+  //      `parRoleDeclare`, qui viennent de `roleDeclareDe`).
+  //   ② Et surtout, elle est ÉQUIVALENTE au repli, ce qui est plus fort : `brut` valant `null`
+  //      pour toute valeur vide, `roleDe(null)` jette, et le `catch` rend `{ libelle: brut,
+  //      pluriel: brut }` — soit exactement `{ null, null }`. La retirer ne change RIEN au
+  //      comportement, et un banc ne peut donc pas la tenir.
+  //
+  // 🔴 CE QUI EST GARDÉ EST DONC LE CONTRAT, PAS CETTE LIGNE — et c'est la seule chose honnête à
+  // écrire ici. La fonction est EXPORTÉE : son contrat vaut pour l'appelant qu'elle n'a pas
+  // encore, et il est total — un nom rendu, ou deux `null`, jamais une chaîne qui se comparera
+  // ensuite comme une identité. La ligne reste parce qu'elle DIT ce contrat à qui lit, là où le
+  // repli le produit par accident de mécanique.
   if (!brut) return { libelle: null, pluriel: null };
   const connus = libellesDeclares();
   if (connus[brut]) return connus[brut];

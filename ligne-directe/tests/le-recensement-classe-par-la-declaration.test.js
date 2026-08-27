@@ -43,6 +43,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { unRecensement } from '../src/recensement.js';
+import { libellesDuRoleDeclare } from '../src/declaration-des-agents.js';
 import { role as roleDe } from '../src/roles.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
 
@@ -857,6 +858,32 @@ test('un rôle déclaré que la table des rôles connaît se nomme par SON pluri
   assert.match(rendu.resume, new RegExp(`2 ${roleDe('orchestrateur').libelle_pluriel} DÉCLARÉ`));
   // ⚠️ ET IL N'EST PAS COMPTÉ COMME ÉTABLI : déclaré reste déclaré, même pour un rôle qui A un lieu.
   assert.equal(rendu.compte.parRole.orchestrateur, 0);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-decies LE CONTRAT DE `libellesDuRoleDeclare` EST TOTAL — gardé par un essai, pas par le trafic.
+//
+// 🔴 SURVIVANTE. Sa branche du vide ne s'imprime JAMAIS sur les 1 082 essais : ses deux appelants
+// ont déjà écarté le vide en amont. La remplacer par n'importe quoi laissait tout vert.
+//
+// ⚠️ ET LA RETIRER SURVIT AUSSI — mesuré. La branche est ÉQUIVALENTE au repli : `brut` valant
+// `null`, `roleDe(null)` jette et le `catch` rend déjà `{ null, null }`. AUCUN banc ne peut donc
+// tenir cette LIGNE, et prétendre le contraire serait la garantie non mesurée que ce lot a déjà
+// payée une fois.
+//
+// 🔴 CE BANC TIENT LE CONTRAT, PAS LA LIGNE — c'est ce qu'il peut garder, et c'est ce qui compte :
+// la fonction est EXPORTÉE, donc son contrat vaut pour l'appelant qu'elle n'a pas encore. Le jour
+// où quelqu'un « simplifie » le repli, c'est lui qui rougira.
+test('un rôle vide ne se NOMME pas — deux « null », jamais une chaîne qui se comparera', () => {
+  for (const rien of [null, undefined, '', 0, false]) {
+    assert.deepEqual(
+      libellesDuRoleDeclare(rien),
+      { libelle: null, pluriel: null },
+      `« ${String(rien)} » ne nomme aucun rôle : rendre autre chose donnerait une valeur qui se compare`,
+    );
+  }
+  // Et le contraire tient : un nom, même inconnu, se rend — nommer ne décide de rien.
+  assert.deepEqual(libellesDuRoleDeclare('un-role-futur'), { libelle: 'un-role-futur', pluriel: 'un-role-futur' });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
