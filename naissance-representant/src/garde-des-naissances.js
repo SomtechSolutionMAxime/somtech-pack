@@ -141,6 +141,7 @@
 // (patron de `recensement.js`). Ce n'est pas de l'élégance : un `process.env` dans une décision
 // de garde est un INTERRUPTEUR DE DÉSARMEMENT qu'on actionne sans diff. Un banc l'interdit.
 
+import { realpathSync } from 'node:fs';
 import { nomDeLieuValide } from '../../ligne-directe/src/lieu-nom.js';
 // ⚠️ LA JOINTURE A UN SEUL ENDROIT OÙ VIVRE, ET C'EST LE MODULE QUI DÉFINIT LE CHAMP. Lire
 // `session_herdr` avec une expression écrite ICI recréerait, à un fichier de distance, la
@@ -801,7 +802,24 @@ export function memeEspaceDeTravail(espaceDeLAgent, espaceDeclare) {
   const d = net(espaceDeclare);
   // Un espace déclaré vide après nettoyage — « / » — apparierait tout le poste.
   if (!d) return false;
-  return a === d || a.startsWith(`${d}/`);
+  // 🔴 LES DEUX CÔTÉS N'ARRIVENT PAS PAR LE MÊME CHEMIN. Le déclaré est celui que
+  // le geste a COMPOSÉ (`bin/naitre.js` : `espace: commandes.lieu`) ; celui de
+  // l'agent est celui que le SHELL voit (`foreground_cwd`). Sur macOS, `/tmp/x`
+  // et `/private/tmp/x` désignent le même répertoire — `/tmp` est un lien
+  // symbolique. Comparer les chaînes brutes accusait donc un chef d'équipe
+  // RÉGULIER d'être né hors dispositif, sans qu'aucun compteur ne le montre :
+  // les deux compteurs de faux refus comptent ce que la garde SAIT injuste.
+  // Le repli sur le chemin brut est atteint par le réel : un worktree supprimé
+  // laisse sa déclaration vivante (elle vit hors du dépôt) et `realpathSync`
+  // jette alors ENOENT — un plantage n'est pas un verdict.
+  const reel = (c) => { try { return net(realpathSync(c)); } catch { return c; } };
+  const [ar, dr] = [reel(a), reel(d)];
+  const apparie = (x, y) => x === y || x.startsWith(`${y}/`);
+  // On apparie sur la forme RÉSOLUE **ou** sur la forme brute : quand un seul des
+  // deux côtés se résout (déclaré disparu, agent bien vivant), les deux formes
+  // ne se rejoignent dans aucune des deux seules. Aucune des deux n'apparie deux
+  // espaces réellement distincts — c'est ce qui rend l'élargissement sûr.
+  return apparie(ar, dr) || apparie(a, d);
 }
 
 /**
