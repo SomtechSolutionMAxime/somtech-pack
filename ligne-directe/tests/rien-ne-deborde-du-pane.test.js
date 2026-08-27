@@ -237,6 +237,77 @@ async function uneVue(lieu) {
 // LA LIGNE DE PROGRESSION — la cause OBSERVÉE de l'incident
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE BALAYAGE DES DIMENSIONS — DÉCLARÉ UNE FOIS, LU PAR TOUS CEUX QUI EN PARLENT.
+//
+// 🔴 IL A VÉCU EN DOUBLE, ET LE CONTRÔLE CENSÉ ATTRAPER LA DÉRIVE NE POUVAIT PAS LE FAIRE.
+// Deux bancs déclaraient ces listes chacun de leur côté, et un contrôle vérifiait qu'elles
+// « sont bien celles du banc » — en comparant leurs LONGUEURS, jamais leurs valeurs, avec une
+// regex qui attrapait la PREMIÈRE occurrence du fichier au lieu de la locale. Mesuré : changer
+// `24` en `25` dans l'une des deux SURVIVAIT.
+//
+// ⚠️ C'ÉTAIT « DEUX SOURCES POUR UN SEUL FAIT » — la classe que ce lot nomme onze fois —
+// REPRODUITE DANS LE CONTRÔLE CHARGÉ DE LA TRAQUER.
+//
+// ⚠️ ET LE REMÈDE N'EST PAS DE MIEUX COMPARER LES DEUX COPIES. Comparer des valeurs au lieu des
+// longueurs, ancrer la regex sur la bonne occurrence : deux corrections qui ferment l'instance
+// et laissent la cause. La cause est la DUPLICATION. Une seule déclaration, et le contrôle de
+// dérive devient sans objet — il n'y a plus deux listes à faire diverger.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+const SEUIL_DU_BALAYAGE = [...RACCOURCI_VITAL].length;
+const COLONNES_DU_BALAYAGE = [1, 2, 3, 5, 8, SEUIL_DU_BALAYAGE - 1, SEUIL_DU_BALAYAGE, SEUIL_DU_BALAYAGE + 1, 12, 20, 40, 65];
+const RANGEES_DU_BALAYAGE = [1, 2, 3, 4, 5, 8, 12, 24];
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CE QUE CE BALAYAGE PROMET DE TRAVERSER — le MINIMUM REQUIS, exprimé par la CONSTANTE.
+//
+// 🔴 LA PROSE PROMETTAIT « IL COUVRE LES DEUX CÔTÉS DU SEUIL DANS LES DEUX DIMENSIONS », et rien
+// ne le gardait. Mesuré : remplacer `SEUIL - 1, SEUIL, SEUIL + 1` par `6, 7` dans les colonnes
+// laisse le compte à 96, tous les bancs verts — et le balayage devient AVEUGLE À LA FRONTIÈRE
+// QU'IL EXISTE POUR ÉPROUVER. J'avais gardé le NOMBRE de dimensions, pas ce qu'elles doivent
+// COUVRIR : bord sans suite, taille sans couverture, compte sans traversée.
+//
+// ⚠️ CE N'EST PAS L'ÉNUMÉRATION QU'ON DÉNONCE AILLEURS, ET LA DIFFÉRENCE EST DANS LA PROMESSE.
+// Énumérer des CAS est un échantillon — rien ne promet l'exhaustivité, et les listes ci-dessus
+// en sont un, légitimement. Énumérer une POPULATION sous promesse d'exhaustivité est le défaut.
+// Ici on énumère un MINIMUM REQUIS : ce que le balayage doit contenir pour tenir sa promesse.
+//
+// ⚠️ ET ON L'EXPRIME PAR LA CONSTANTE, JAMAIS PAR SA VALEUR. On exige `SEUIL`, `SEUIL - 1` et
+// `SEUIL + 1` — pas 8, 9 et 10. Ce qu'on garde n'est pas la valeur du seuil, c'est la RELATION
+// « le balayage traverse la frontière ». Si le seuil bouge à 12 demain, le balayage doit
+// traverser 12 ; une garde écrite en chiffres resterait verte sur un balayage devenu aveugle.
+//
+// Le test qui tranche entre les deux formes est celui de l'ancrage : si je déplace la définition,
+// l'assertion doit-elle suivre ? Pour une VALEUR, non — on l'ancre littéralement. Pour une
+// RELATION à cette valeur, oui — on passe par la constante.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+test('LE BALAYAGE TRAVERSE CE QU’IL PROMET DE TRAVERSER — la frontière, pas une taille', () => {
+  // ═══ ① LES DEUX CÔTÉS DU SEUIL, EN COLONNES. C'est la promesse écrite du banc de rendu.
+  for (const attendu of [SEUIL_DU_BALAYAGE - 1, SEUIL_DU_BALAYAGE, SEUIL_DU_BALAYAGE + 1]) {
+    assert.ok(
+      COLONNES_DU_BALAYAGE.includes(attendu),
+      `le balayage ne contient plus ${attendu} colonnes — il ne traverse plus la frontière du ` +
+        `raccourci vital (${SEUIL_DU_BALAYAGE}), et les bancs qui en dépendent deviennent aveugles ` +
+        'à ce qu’ils existent pour éprouver, sans changer de taille'
+    );
+  }
+
+  // ═══ ② LA HAUTEUR 2 — le couple qui manquait quand l'ordre de sacrifice a cessé d'être gardé.
+  // Elle a sa propre histoire : un banc l'avait perdue en gardant tout le reste.
+  assert.ok(
+    RANGEES_DU_BALAYAGE.includes(2),
+    'le balayage ne contient plus la hauteur 2 — c’est exactement le couple par lequel l’ordre ' +
+      'de sacrifice a cessé d’être gardé, et il avait fallu une revue pour le retrouver'
+  );
+
+  // ═══ ③ ET LES DEUX CÔTÉS EXISTENT VRAIMENT — un seuil à 1 rendrait `SEUIL - 1` égal à 0, donc
+  // une exigence qu'aucun balayage sensé ne tiendrait. On garde la relation, pas un absurde.
+  assert.ok(
+    SEUIL_DU_BALAYAGE > 1,
+    `le raccourci vital fait ${SEUIL_DU_BALAYAGE} caractère(s) — cette garde n’a plus de sens`
+  );
+});
+
 test('LA LIGNE DE PROGRESSION TIENT DANS LE PANE — à TOUTE largeur, c’est elle qui empilait', () => {
   // ⚠️ ON BALAIE, ON NE CHOISIT PAS TROIS LARGEURS. Un banc écrit sur les largeurs qu'on a en
   // tête garde les largeurs qu'on a en tête ; le dirigeant, lui, redimensionne son split comme
@@ -640,8 +711,8 @@ test('CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS — balayage COMPLE
   const SEUIL = [...RACCOURCI_VITAL].length;
 
   // ⚠️ PRODUIT CARTÉSIEN, ET IL COUVRE LES DEUX CÔTÉS DU SEUIL DANS LES DEUX DIMENSIONS.
-  const COLONNES = [1, 2, 3, 5, 8, SEUIL - 1, SEUIL, SEUIL + 1, 12, 20, 40, 65];
-  const RANGEES = [1, 2, 3, 4, 5, 8, 12, 24];
+  const COLONNES = COLONNES_DU_BALAYAGE;
+  const RANGEES = RANGEES_DU_BALAYAGE;
 
   const declenche = { hauteur: 0, titre: 0, sortie: 0, sousLeSeuil: 0 };
 
@@ -1744,8 +1815,8 @@ test('LES COMPTES DE LA PROSE DÉSIGNENT LEUR OBJET — toutes les tournures, pa
   // reconnaît toute annonce de compte, quelle que soit sa tournure.
   // ═══════════════════════════════════════════════════════════════════════════════════════
   const SEUIL = [...RACCOURCI_VITAL].length;
-  const COLONNES = [1, 2, 3, 5, 8, SEUIL - 1, SEUIL, SEUIL + 1, 12, 20, 40, 65];
-  const RANGEES = [1, 2, 3, 4, 5, 8, 12, 24];
+  const COLONNES = COLONNES_DU_BALAYAGE;
+  const RANGEES = RANGEES_DU_BALAYAGE;
   const couples = COLONNES.length * RANGEES.length;
 
   const FICHIERS = ['./aide/terminal.js', './rien-ne-deborde-du-pane.test.js', './le-tui-de-la-vue-du-parc.test.js'];
@@ -1785,18 +1856,11 @@ test('LES COMPTES DE LA PROSE DÉSIGNENT LEUR OBJET — toutes les tournures, pa
   }
   assert.ok(annonces > 0, 'aucune annonce de couples trouvée — ce banc ne mesure plus rien');
 
-  // ═══ ET LES DEUX LISTES SONT BIEN CELLES DU BANC — sinon on ancrerait un compte contre une
-  // copie qui dérive, ce qui est la faute d'à côté : deux sources pour un seul fait.
-  const source = readFileSync(new URL('./rien-ne-deborde-du-pane.test.js', import.meta.url), 'utf8');
-  for (const [nom, liste] of [['COLONNES', COLONNES], ['RANGEES', RANGEES]]) {
-    const decl = source.match(new RegExp(`const ${nom} = \\[([^\\]]*)\\];`));
-    assert.ok(decl, `le banc ne déclare plus \`${nom}\` — ce contrôle vise un objet qui n’existe plus`);
-    assert.equal(
-      decl[1].split(',').length,
-      liste.length,
-      `\`${nom}\` a dérivé entre le banc et ce contrôle — le compte ancré ne vaut plus rien`
-    );
-  }
+  // ⚠️ IL N'Y A PLUS DE CONTRÔLE DE DÉRIVE ENTRE DEUX LISTES, ET C'EST LE CORRECTIF. Un tel
+  // contrôle a vécu ici : il comparait les LONGUEURS de deux déclarations, avec une regex qui
+  // lisait la mauvaise. Changer une valeur dans l'une SURVIVAIT. Les deux listes sont désormais
+  // UNE — `COLONNES_DU_BALAYAGE` / `RANGEES_DU_BALAYAGE`, déclarées une fois en tête de fichier.
+  // On ne garde pas une duplication, on la supprime.
 
   // ⚠️ CE QU'IL NE PEUT PAS GARDER, ÉCRIT PLUTÔT QUE SOUS-ENTENDU : un compte dont l'objet vit
   // HORS du dépôt — une sonde de session, un pane réel. Pour ceux-là, la note doit dire QUEL
