@@ -538,6 +538,115 @@ test('deux rôles déclarés se rendent dans un ordre stable, quel que soit celu
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-quater DEUX SESSIONS QU'ON N'A PAS SU NOMMER NE S'APPARIENT PAS ENTRE ELLES.
+//
+// 🔴 CE BANC FERME UNE SURVIVANTE, PAS UN DÉFAUT — le code était JUSTE, c'est sa garde qui était
+// nue. `identiteDeSession` rend `null` sur un socket hors de la forme `…/sessions/<nom>/…`, ce
+// que `HERDR_SOCKET_PATH` autorise ; le module refuse donc d'apparier tant que les DEUX côtés ne
+// sont pas nommés. Retirer ce refus laissait les 1 068 essais du dépôt VERTS.
+//
+// ⚠️ ET LE PRIX EST CELUI QUE CE MODULE EXISTE POUR ÉVITER. Deux `null` qui se comparent égaux,
+// c'est un appariement sur le SEUL pane — or un identifiant de pane n'est unique que dans sa
+// session. Mesuré ci-dessous : sans le refus, un agent vivant hérite du mandat ET du
+// coordonnateur d'un agent parti.
+//
+// ⚠️ LES DEUX ESSAIS QUI EXISTAIENT NE POUVAIENT PAS L'ATTRAPER : ils comparaient deux sessions
+// VALIDES et différentes (`somtech` contre `progex`). Le chemin passait, il se lisait donc comme
+// couvert — « une assertion trop faible sur un chemin correct ».
+test('deux sessions IMPARSABLES ne s’apparient pas — sinon le pane seul déciderait', async () => {
+  const opaque = '/un/chemin/de/socket/sans/le/mot/attendu';
+  const rendu = await recenser({
+    panes: [unPaneDAgent({ pane_id: 'w1:p1', statut: 'working', herdr_socket: opaque, foreground_cwd: '/Users/qui/arbre' })],
+    // Le nom du vivant DIFFÈRE de celui de la déclaration : le repli par le nom ne peut pas
+    // rattraper l'appariement, donc ce banc ne mesure QUE la clé primaire.
+    nomsConnus: { mesure: 'lue', noms: new Map([[`${opaque}${String.fromCharCode(0)}w1:p1`, 'le-vivant']]) },
+    declarations: {
+      declarations: [
+        declaration({
+          nom: 'agent-parti',
+          mandat: 'D-OLD-0001',
+          coordonnateur: 'quelquun-dautre',
+          espace: '/Users/qui/arbre',
+          paneDeclare: 'w1:p1',
+          session: '/un/autre/chemin/tout/aussi/opaque',
+        }),
+      ],
+      illisibles: [],
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'non établi');
+  assert.equal(rendu.compte.roleDeclare, 0);
+});
+
+// ⚠️ ET DEUX PANES QU'ON N'A PAS SU LIRE NON PLUS. `pane_id` peut manquer, et une déclaration
+// porte `pane: null` quand le geste ne l'a pas connu : sans le terme `d?.pane &&`, deux absences
+// s'appariaient, et l'espace seul suffisait alors à identifier — un arbre partagé par deux agents
+// leur donnerait le même rôle.
+test('deux panes ABSENTS ne s’apparient pas — une absence n’est pas une identité', async () => {
+  const sock = '/Users/qui/.config/herdr/sessions/somtech/herdr.sock';
+  const sansPane = { agent: 'claude', agent_session: { agent: 'claude', kind: 'id', value: 's' }, agent_status: 'working', herdr_socket: sock, foreground_cwd: '/Users/qui/arbre' };
+  const rendu = await recenser({
+    panes: [sansPane],
+    nomsConnus: { mesure: 'lue', noms: new Map([[`${sock}${String.fromCharCode(0)}null`, 'le-vivant']]) },
+    declarations: {
+      declarations: [declaration({ nom: 'agent-parti', espace: '/Users/qui/arbre', paneDeclare: null })],
+      illisibles: [],
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'non établi');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-quinquies UNE DÉCLARATION TROUVÉE MAIS SANS RÔLE, SUR UN REGISTRE ABÎMÉ — le doute gagne.
+//
+// ⚠️ LES DEUX CAS ÉTAIENT ÉPROUVÉS SÉPARÉMENT, JAMAIS ENSEMBLE, et c'est leur RENCONTRE qui
+// décide. Une déclaration appariée qui ne porte pas de rôle ne dit rien — mais si le registre
+// porte par ailleurs des illisibles, l'un d'eux peut être une déclaration PLUS RÉCENTE pour ce
+// même agent. On ne conclut donc pas « non établi » (« il n'en a pas ») : on rend « refusée »
+// (« je n'ai pas pu savoir »). Sortir tôt sur la déclaration muette perdait cette distinction.
+test('une déclaration sans rôle, sur un registre abîmé, rend « refusée » — pas « non établi »', async () => {
+  const nu = declaration();
+  delete nu.role;
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: {
+      declarations: [nu],
+      illisibles: [{ fichier: '20260827T235959000Z-t-20260825-0012.json', cause: 'Unexpected end of JSON input' }],
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+  assert.match(rendu.agents[0].role.raison, /ILLISIBLE/);
+  assert.equal(rendu.compte.roleNonMesure, 1);
+});
+
+// ⚠️ ET UN CHAMP ABSENT SE REND `null`, JAMAIS `undefined`. Ce n'est pas du style : `undefined`
+// DISPARAÎT de `JSON.stringify`, et le recensement est rendu en JSON. Le coordonnateur d'un
+// agent cesserait donc d'exister dans le rendu au lieu d'y être dit absent — un champ oublié
+// plutôt qu'un fait mesuré.
+test('un coordonnateur ou un mandat absent se rend « null », et survit au JSON', async () => {
+  const sansCoordonnateur = declaration();
+  delete sansCoordonnateur.coordonnateur;
+  delete sansCoordonnateur.mandat;
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: [sansCoordonnateur], illisibles: [] },
+  });
+
+  const role = rendu.agents[0].role;
+  assert.equal(role.mesure, 'déclarée');
+  assert.equal(role.coordonnateur, null);
+  assert.equal(role.mandat, null);
+  const relu = JSON.parse(JSON.stringify(role));
+  assert.ok('coordonnateur' in relu, 'le champ doit SURVIVRE au JSON, dit absent plutôt qu’effacé');
+  assert.ok('mandat' in relu);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({
