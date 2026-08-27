@@ -7,6 +7,21 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-27
 
+*Epic `E-20260827-0002`, tickets `T-20260827-0011` à `T-20260827-0014`, constat `T-20260826-0044` fermé. **Le briefing de ronde atteint enfin des agents** — cinquième élément du cycle, présent au gabarit depuis `v1.96.0` et jusqu'ici dans aucun lieu du parc.*
+
+### Ajouté
+
+- **`RONDE.md` dans les 8 lieux versionnés de `somtech-pack`** (`T-20260827-0014`). Le briefing de ronde manquait à **26 identités de lieu sur 26** — ni sur disque, ni sur `origin/main`, aucune exception. `T-20260826-0042` avait ouvert la porte (`CREE_SI_ABSENT`) sans que personne ne la franchisse : la pose refuse un lieu déjà posé, et la mise à jour ne créait pas un préservé. Geste **outillé** (`orchestrateur-update` ×7, `representant-update` ×1), `rc=0` partout, preuve d'empreinte avant/après par lieu. `.gestionnaire/maxime`, seul lieu réellement périmé du dépôt, reçoit en plus le métier courant et ses 6 chapitres.
+- **Le `CONTEXTE.md` renseigné de `kamouraska`** (`T-20260827-0014`). **Transporté depuis son propre commit, jamais rédigé** — il renaissait dans l'heure, `main` portait le gabarit vierge, et sa successeure serait née sans savoir qu'elle porte aussi `somtechextension`. Sa branche étant en retard de 13 fichiers du métier, il ne pouvait pas le verser lui-même. Un seul fichier porté, ses 10 chevrons restants **non comblés** : les remplir aurait fabriqué de la portée à sa place.
+
+### Technique
+
+- **L'unité de compte du parc, corrigée** (`T-20260827-0011`). Un checkout ne montre pas le dépôt : il montre sa branche. Le « 18 lieux vivants » du 26/08 était un artefact de l'état des branches. Le parc réel : **26 identités de lieu, 255 copies physiques, 13 occupées** par un agent vivant. Conséquence de conception : on corrige l'identité **versionnée**, jamais les copies — et le correctif atteint chaque agent à sa **renaissance**.
+- **La voie outillée de mise à jour, éprouvée sur lieu jetable** (`T-20260827-0012`). Dépose `RONDE.md`, ne touche pas au contexte rempli (empreinte identique), ne réécrit pas un briefing déjà écrit, idempotente, réarme le lieu. **Et elle converge aussi `.mcp.json`** — un moyen propre au projet y serait perdu (sauvegardé en `.bak`) ; risque nul sur ce parc aujourd'hui, fait daté à revérifier.
+- **Trois constats ouverts** : `T-20260827-0022` (deux orphelins de banc d'essai versionnés sur `main`, survivants à leur `trap cleanup`), `T-20260827-0023` (**15 identités sur 26 ont des droits différents entre leurs propres copies** — les droits d'un agent dépendent de la copie où il est né, et ça se lit comme un parc homogène), et le renvoi des six points de `T-20260826-0044` à des porteurs nommés.
+
+## [Non-versionne] - 2026-08-27
+
 *Demande `D-20260826-0010`, tickets `T-20260826-0124` à `T-20260826-0129`. **Le bras droit fait avancer le dossier** — descente des ABC orchestrateur `3.0.0` et gestionnaire-client `1.4.0`, adoptés par le dirigeant : l'interdit des sous-agents se renverse, la ronde rend un delta, la maquette devient opposable, et le représentant instruit avant de remonter.*
 
 ### Ajouté
