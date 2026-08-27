@@ -169,13 +169,19 @@ export function refusLigneMuette(nature, autorises, chantier) {
  * source d'APPOINT du recensement ; un répertoire hors dépôt qui se ferme ferait alors
  * disparaître les 83 agents du poste d'un registre dont tout l'objet est de dire qui est vivant.
  */
-function lesDeclarationsDuPoste() {
+export function lesDeclarationsDuPoste({ lire = lireLesDeclarations } = {}) {
   try {
-    return lireLesDeclarations();
+    return lire();
   } catch (err) {
     return {
       declarations: [],
       illisibles: [{ fichier: '(le registre entier)', cause: err?.message || String(err) }],
+      // 🔴 CE CHAMP EXISTE PARCE QUE « QUELQUES FAITS ABÎMÉS » ET « JE N'AI RIEN PU LIRE DU TOUT »
+      // NE SE DISENT PAS PAREIL. Sans lui, la borne du recensement rendait `mesure: 'lue'` sur un
+      // registre dont la lecture avait ENTIÈREMENT échoué : l'étiquette affirmait une mesure qui
+      // n'avait pas eu lieu. Les deux appellent des gestes opposés — aller voir un fichier, ou
+      // aller voir un répertoire — et c'est la distinction que ce module tient partout ailleurs.
+      refusGlobal: err?.message || String(err),
     };
   }
 }

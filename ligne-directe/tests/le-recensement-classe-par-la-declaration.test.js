@@ -698,6 +698,62 @@ test('un registre malformé borne le rendu, il ne fait pas tomber le tour', asyn
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-sexies LA PLACE PRIME LE NOM — SURVIVANTE. Inverser les deux clés laissait tout vert.
+//
+// 🔴 AUCUN BANC NE CONSTRUISAIT DEUX DÉCLARATIONS qui apparient chacune par une clé DIFFÉRENTE
+// vers des faits différents. Chacune des deux clés était éprouvée seule ; leur ORDRE, jamais.
+// Mesuré : essayer le nom AVANT la place laissait les 1 075 essais VERTS.
+//
+// ⚠️ ET L'ORDRE EST CE QUI DÉCIDE DU MANDAT RENDU. La place — ce pane, dans cette session, dans
+// cet espace — est un fait que l'agent OCCUPE en ce moment ; le nom, lui, se PORTE, et un
+// `herdr agent rename` le déplace. Quand les deux désignent des déclarations différentes, c'est
+// donc la place qui dit qui travaille là, et le nom qui peut mentir.
+test('quand la place et le nom désignent deux déclarations, la PLACE l’emporte', async () => {
+  const espace = '/Users/qui/worktrees/depot/20260827-000000';
+  const rendu = await recenser({
+    panes: [pane({ pane_id: 'w1:p1', cwd: espace })],
+    nomsConnus: nomsDe([['w1:p1', 'le-nom-porte']]),
+    declarations: {
+      declarations: [
+        // ① celle du NOM — même espace, mais un AUTRE pane : elle n'apparie que par le nom.
+        declaration({ nom: 'le-nom-porte', mandat: 'T-PAR-LE-NOM', paneDeclare: 'w8:p8', espace }),
+        // ② celle de la PLACE — ce pane, cette session, cet espace ; un autre nom.
+        declaration({ nom: 'un-autre-nom', mandat: 'T-PAR-LA-PLACE', paneDeclare: 'w1:p1', espace }),
+      ],
+      illisibles: [],
+    },
+  });
+
+  assert.equal(rendu.agents[0].role.mesure, 'déclarée');
+  assert.equal(rendu.agents[0].role.mandat, 'T-PAR-LA-PLACE');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-septies « RIEN LU DU TOUT » N'EST PAS « LU, ET IL N'Y AVAIT RIEN » — la borne le disait.
+//
+// 🔴 `mesure: 'lue'` SORTAIT MÊME QUAND LE RÉPERTOIRE ENTIER AVAIT REFUSÉ LA LECTURE. Le champ
+// qui existe pour dire ce que le compte vaut affirmait donc une mesure qui n'avait pas eu lieu.
+test('un registre dont la lecture a ENTIÈREMENT échoué se rend « refusée », pas « lue »', async () => {
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: {
+      declarations: [],
+      illisibles: [{ fichier: '(le registre entier)', cause: 'EACCES: permission denied' }],
+      refusGlobal: 'EACCES: permission denied',
+    },
+  });
+
+  assert.equal(rendu.borne.sourceDeclaree.mesure, 'refusée');
+  // ⚠️ `faits: null`, PAS `0` — on n'a rien compté, on n'a pas compté zéro.
+  assert.equal(rendu.borne.sourceDeclaree.faits, null);
+  assert.match(rendu.borne.sourceDeclaree.raison, /EACCES/);
+  assert.match(rendu.borne.sourceDeclaree.consequence, /n’est PAS « aucun agent n’est déclaré »/);
+  // Et l'agent est « refusée », jamais « non établi » : sa déclaration est peut-être là.
+  assert.equal(rendu.agents[0].role.mesure, 'refusée');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({

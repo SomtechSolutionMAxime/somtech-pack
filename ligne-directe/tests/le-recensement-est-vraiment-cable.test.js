@@ -20,7 +20,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Veilleur } from '../src/veilleur.js';
+import { Veilleur, lesDeclarationsDuPoste } from '../src/veilleur.js';
 import { posteHerdr } from './aide/faux-herdr.js';
 
 let bac;
@@ -607,6 +607,42 @@ test('le câblage RÉEL passe SES HUIT paramètres — trois jointures restaient
     'lue',
     `le registre des déclarations doit être CÂBLÉ (borne : ${JSON.stringify(rendu.borne.sourceDeclaree)})`,
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE REGISTRE DES DÉCLARATIONS QUI REFUSE NE COÛTE PAS LE RECENSEMENT ENTIER
+//
+// 🔴 CE CHEMIN ÉTAIT DU CODE MORT POUR LA SUITE. `~/.somtech/naissances` se lit sur ce poste,
+// donc `lireLesDeclarations()` ne jetait jamais en essai, et `RACINE` — une `const` de module —
+// n'est pas déplaçable depuis le site d'appel. Mutation mesurée : retirer TOUT le `try/catch`
+// laissait les 1 075 essais verts. Le lecteur est donc INJECTÉ, uniquement pour être éprouvable.
+//
+// ⚠️ CE QUI SE JOUE N'EST PAS UN DÉTAIL DE ROBUSTESSE. Le registre des naissances est une source
+// d'APPOINT ; laisser son exception remonter ferait perdre le recensement ENTIER — 85 agents
+// disparaîtraient du seul registre qui dit qui est vivant, parce qu'un répertoire hors dépôt
+// s'est fermé.
+test('un registre de naissances ILLISIBLE ne fait pas tomber la ronde — il se dit', () => {
+  const registre = lesDeclarationsDuPoste({
+    lire: () => {
+      throw new Error('EACCES: permission denied, scandir');
+    },
+  });
+
+  // Le recensement sait déjà lire cette forme : le rôle devient « refusée », jamais « absente ».
+  assert.deepEqual(registre.declarations, []);
+  assert.equal(registre.illisibles.length, 1);
+  assert.match(registre.illisibles[0].cause, /EACCES/);
+  // ⚠️ ET LE REFUS GLOBAL SE MARQUE : « je n'ai rien pu lire du tout » n'est pas « j'ai lu, et
+  // quelques faits étaient abîmés ». Sans ce champ, la borne du recensement rendrait « lue ».
+  assert.match(registre.refusGlobal, /EACCES/);
+});
+
+test('un registre qui se lit passe TEL QUEL — le catch n’intercepte rien d’autre', () => {
+  const attendu = { declarations: [{ nom: 'a' }], illisibles: [] };
+  const registre = lesDeclarationsDuPoste({ lire: () => attendu });
+
+  assert.equal(registre, attendu, 'le lecteur qui réussit doit passer sans être recomposé');
+  assert.equal(registre.refusGlobal, undefined, 'aucun refus ne se marque sur une lecture réussie');
 });
 
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {

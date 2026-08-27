@@ -351,6 +351,23 @@ function ceQueDitLaSourceDeclaree(registre) {
   }
   const faits = Array.isArray(registre.declarations) ? registre.declarations.length : 0;
   const illisibles = Array.isArray(registre.illisibles) ? registre.illisibles : [];
+  // ⚠️ « QUELQUES FAITS ABÎMÉS » ET « JE N'AI RIEN PU LIRE DU TOUT » NE SE DISENT PAS PAREIL —
+  // et l'étiquette disait « lue » dans les deux cas. Un registre dont le RÉPERTOIRE a refusé la
+  // lecture n'a rien été mesuré : rendre « lue » y affirmait une mesure qui n'a pas eu lieu, sur
+  // le champ même qui existe pour dire ce que le compte vaut. Le producteur marque ce refus
+  // (`refusGlobal`, posé par `lesDeclarationsDuPoste`) ; on le rend, on ne le devine pas.
+  if (registre.refusGlobal) {
+    return {
+      mesure: 'refusée',
+      faits: null,
+      illisibles,
+      raison: String(registre.refusGlobal),
+      consequence:
+        'le registre des déclarations n’a pas pu être lu du tout : les agents SANS lieu de rôle ' +
+        'sont rendus « refusée », jamais « non établi ». Ce n’est PAS « aucun agent n’est ' +
+        'déclaré » — c’est un répertoire qu’il faut aller rouvrir.',
+    };
+  }
   return {
     mesure: 'lue',
     faits,

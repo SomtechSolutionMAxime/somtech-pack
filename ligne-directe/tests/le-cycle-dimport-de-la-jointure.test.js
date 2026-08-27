@@ -55,14 +55,41 @@ const JOINTURE = resolve(ICI, '..', 'src', 'declaration-des-agents.js');
 const RECENSEMENT = resolve(ICI, '..', 'src', 'recensement.js');
 const GARDE = resolve(ICI, '..', '..', 'naissance-representant', 'src', 'garde-des-naissances.js');
 
-/**
- * LES PORTES QU'UN HUMAIN TAPE — elles ne sont importées par personne, donc le graphe ne les
- * trouve pas. `naitre.js` est celle par laquelle le défaut est entré.
- */
-const BINAIRES = [
-  resolve(ICI, '..', '..', 'naissance-representant', 'bin', 'naitre.js'),
-  resolve(ICI, '..', 'bin', 'ligne-directe.js'),
+/** Les `package.json` du dépôt qui déclarent des binaires — les deux modules de ce cycle. */
+const PAQUETS = [
+  resolve(ICI, '..', 'package.json'),
+  resolve(ICI, '..', '..', 'naissance-representant', 'package.json'),
 ];
+
+/**
+ * LES PORTES QU'UN HUMAIN TAPE — DÉRIVÉES DES `package.json`, jamais listées à la main.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 C'ÉTAIT UNE LISTE DE DEUX ENTRÉES, ET ELLE ÉTAIT DÉJÀ INCOMPLÈTE. `naissance-representant`
+ * déclare CINQ binaires ; deux figuraient ici. L'un des absents —
+ * `bin/garde-des-naissances.js` — atteint pourtant ce cycle
+ * (`naissances-des-sessions.js` → `garde-des-naissances.js` → `recensement.js` → la jointure).
+ * Il ne plantait pas le jour du défaut, mais par ACCIDENT d'ordre d'import : il ne charge jamais
+ * `chef-equipe.js`. Une liste écrite à la main au milieu d'un dispositif qui se veut dérivé est
+ * le « désarmable par entretien » que ce fichier déclare fermer — on n'ajoute pas la porte
+ * manquante, on retire la liste.
+ *
+ * ⚠️ ON N'ÉPROUVE QUE CEUX QUI ATTEIGNENT LE CYCLE. Un binaire qui n'y touche pas ne dit rien de
+ * sa santé, et le lancer coûterait un processus pour rien.
+ */
+function binairesQuiAtteignentLeCycle() {
+  const trouves = [];
+  for (const paquet of PAQUETS) {
+    if (!existsSync(paquet)) continue;
+    const racine = dirname(paquet);
+    const bin = JSON.parse(readFileSync(paquet, 'utf8')).bin ?? {};
+    for (const chemin of Object.values(bin)) {
+      const fichier = resolve(racine, chemin);
+      if (existsSync(fichier) && modulesAtteints(fichier).includes(JOINTURE)) trouves.push(fichier);
+    }
+  }
+  return trouves;
+}
 
 /**
  * LES ARÊTES QUE PORTE UN FICHIER — les chemins RELATIFS qu'il importe, statiquement ou non.
@@ -180,8 +207,19 @@ test('CHAQUE module que la jointure atteint tient comme porte d’entrée', () =
 });
 
 test('les binaires démarrent — ce sont les portes qu’un humain tape', () => {
+  const binaires = binairesQuiAtteignentLeCycle();
+  // ⚠️ LE DÉNOMINATEUR SE DIT, comme celui des modules. Un `package.json` illisible, un `bin`
+  // renommé, une traversée qui cesse d'atteindre la jointure : ce banc rendrait alors vert sur
+  // une population VIDE. Le plancher est mesuré — `naitre.js`, `ligne-directe.js` et
+  // `garde-des-naissances.js` atteignent ce cycle le 2026-08-27.
+  assert.ok(binaires.length >= 3, `seuls ${binaires.length} binaire(s) atteignent le cycle : ${binaires.join(', ')}`);
+  assert.ok(
+    binaires.some((f) => f.endsWith('naitre.js')),
+    'naitre.js doit en être — c’est la porte par laquelle le crash est entré',
+  );
+
   const tombes = [];
-  for (const binaire of BINAIRES) {
+  for (const binaire of binaires) {
     try {
       execFileSync(process.execPath, [binaire, '--help'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
