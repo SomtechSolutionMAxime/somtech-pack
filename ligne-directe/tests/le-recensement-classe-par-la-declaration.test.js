@@ -646,6 +646,57 @@ test('un coordonnateur ou un mandat absent se rend « null », et survit au JSON
   assert.ok('mandat' in relu);
 });
 
+// ⚠️ ET LES DEUX CHAMPS VOISINS AUSSI — SURVIVANTE. Le correctif `?? null` avait été posé sur
+// QUATRE champs ; le banc n'en gardait que deux. Mesuré : remplacer `espace` ou `pose_par` par une
+// valeur bidon laissait les 1 072 essais VERTS. Or `espace` est ce qui permet d'aller voir l'agent,
+// et `pose_par` est ce qui donne un AUTEUR au fait — sans lui, une déclaration ne se distingue plus
+// d'un fichier déposé à la main dans le registre.
+test('le bloc déclaré rend l’espace et l’auteur du geste, tels que la déclaration les porte', async () => {
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: [declaration()], illisibles: [] },
+  });
+
+  const role = rendu.agents[0].role;
+  assert.equal(role.espace, '/Users/qui/worktrees/depot/20260827-000000');
+  assert.equal(role.pose_par, 'pack agent naitre');
+
+  // Et absents, ils se disent `null` plutôt que de disparaître du JSON — même règle que ci-dessus.
+  const nu = declaration();
+  delete nu.pose_par;
+  const sans = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: [nu], illisibles: [] },
+  });
+  assert.equal(sans.agents[0].role.pose_par, null);
+  assert.ok('pose_par' in JSON.parse(JSON.stringify(sans.agents[0].role)));
+});
+
+// ⚠️ ET LA BORNE NE PRÉSUME PAS DE LA FORME DU REGISTRE — SURVIVANTE. `ceQueDitLaSourceDeclaree`
+// vérifie que ce qu'on lui donne porte bien des TABLEAUX ; retirer ces vérifications laissait les
+// 1 072 essais verts. Aucun producteur réel ne rend autre chose aujourd'hui — mais `unRecensement`
+// est EXPORTÉ, et un registre malformé ferait alors tomber le tour entier sur un `.length` de
+// `undefined` : 85 agents perdus parce qu'une source d'appoint est mal formée.
+test('un registre malformé borne le rendu, il ne fait pas tomber le tour', async () => {
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: 'trois', illisibles: 'pas un tableau' },
+  });
+
+  assert.equal(rendu.agents.length, 1);
+  assert.equal(rendu.borne.sourceDeclaree.mesure, 'lue');
+  // ⚠️ `0`, PAS `5` : une chaîne PORTE un `.length`, et le lire compterait cinq « faits » qui
+  // n'existent pas. C'est ce que `Array.isArray` refuse — et `null` ne l'aurait pas montré,
+  // puisque `null?.length` rend déjà `undefined` : le mutant aurait été ÉQUIVALENT.
+  assert.equal(rendu.borne.sourceDeclaree.faits, 0);
+  assert.deepEqual(rendu.borne.sourceDeclaree.illisibles, []);
+  // Et l'agent reste « non établi » : un registre qu'on ne sait pas lire n'identifie personne.
+  assert.equal(rendu.agents[0].role.mesure, 'non établi');
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {

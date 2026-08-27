@@ -52,6 +52,7 @@ import { dirname, join, resolve } from 'node:path';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const JOINTURE = resolve(ICI, '..', 'src', 'declaration-des-agents.js');
+const RECENSEMENT = resolve(ICI, '..', 'src', 'recensement.js');
 const GARDE = resolve(ICI, '..', '..', 'naissance-representant', 'src', 'garde-des-naissances.js');
 
 /**
@@ -64,11 +65,39 @@ const BINAIRES = [
 ];
 
 /**
- * TOUS LES MODULES QUE LA JOINTURE ATTEINT — suivis par leurs `import`, transitivement.
+ * LES ARÊTES QUE PORTE UN FICHIER — les chemins RELATIFS qu'il importe, statiquement ou non.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 ON APPARIE `from '<chemin>'`, PAS LA TÊTE DE L'INSTRUCTION — ET C'EST UN CORRECTIF.
+ *
+ * La première expression était ancrée sur `^\s*(?:import|export)[^'"\n]*from` : le `[^'"\n]*`
+ * exclut le saut de ligne, donc elle ne pouvait apparier AUCUN import multi-lignes. Or
+ * `recensement.js` en porte un, et c'est très exactement l'arête qui REFERME le cycle que ce
+ * banc existe pour couvrir :
+ *
+ *     import {
+ *       declarationDeLAgent, roleDeclareDe, libellesDuRoleDeclare, SOURCE_DECLAREE,
+ *     } from './declaration-des-agents.js';
+ *
+ * Le dénominateur ne rétrécissait pas AUJOURD'HUI — cette arête pointe vers la racine de la
+ * traversée, déjà vue — mais un futur import multi-lignes vers un module qu'aucun autre chemin
+ * n'atteint le ferait disparaître du graphe sans qu'aucun rouge ne le dise. C'est le
+ * « désarmable par entretien » que ce fichier déclare fermer, logé dans l'instrument qui le ferme.
  *
  * ⚠️ ON NE SUIT QUE LES CHEMINS RELATIFS. `node:fs` et consorts ne participent à aucun cycle du
- * dépôt, et les suivre ferait tenter d'ouvrir des fichiers qui n'existent pas.
+ * dépôt. Et ce qu'on trouve dans un commentaire ou une chaîne coûte un `existsSync` de trop,
+ * jamais un faux verdict — la traversée ignore ce qui n'existe pas.
  */
+function aretesDe(source) {
+  const chemins = [];
+  // `from '<relatif>'` — couvre l'import et l'export, sur une ligne comme sur dix.
+  for (const m of source.matchAll(/\bfrom\s*['"](\.[^'"]+)['"]/g)) chemins.push(m[1]);
+  // Les imports dynamiques comptent autant : ils chargent la même chaîne, plus tard.
+  for (const m of source.matchAll(/\bimport\(\s*['"](\.[^'"]+)['"]\s*\)/g)) chemins.push(m[1]);
+  return chemins;
+}
+
+/** Tous les modules que la jointure atteint — suivis par leurs arêtes, transitivement. */
 function modulesAtteints(depuis) {
   const vus = new Set();
   const aVoir = [depuis];
@@ -76,13 +105,8 @@ function modulesAtteints(depuis) {
     const fichier = aVoir.pop();
     if (vus.has(fichier) || !existsSync(fichier)) continue;
     vus.add(fichier);
-    const source = readFileSync(fichier, 'utf8');
-    for (const m of source.matchAll(/^\s*(?:import|export)[^'"\n]*from\s+['"](\.[^'"]+)['"]/gm)) {
-      aVoir.push(resolve(dirname(fichier), m[1]));
-    }
-    // Les imports dynamiques comptent autant : ils chargent la même chaîne, plus tard.
-    for (const m of source.matchAll(/import\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
-      aVoir.push(resolve(dirname(fichier), m[1]));
+    for (const chemin of aretesDe(readFileSync(fichier, 'utf8'))) {
+      aVoir.push(resolve(dirname(fichier), chemin));
     }
   }
   return [...vus];
@@ -100,6 +124,36 @@ function parLaPorte(fichier, expression = "''") {
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⓪ L'INSTRUMENT AVANT LA MESURE — un graphe qui rate une arête ment sur son dénominateur.
+//
+// ⚠️ CE BANC ÉPROUVE `aretesDe`, PAS LE CYCLE. Il existe parce que la première version de
+// l'extracteur ratait EN SILENCE l'arête qui referme le cycle (import multi-lignes), et que le
+// banc du cycle restait vert : son dénominateur avait rétréci sans que rien ne le dise. Une
+// mesure ne se croit pas — surtout celle qui décide de ce qu'on va mesurer.
+test('l’extracteur d’arêtes voit un import MULTI-LIGNES — l’arête qui referme le cycle', () => {
+  const arêtes = aretesDe(readFileSync(RECENSEMENT, 'utf8'));
+  assert.ok(
+    arêtes.includes('./declaration-des-agents.js'),
+    `l’arête qui referme le cycle est absente du graphe : ${arêtes.join(', ')}`,
+  );
+
+  // Et les trois formes se lisent, sur une source écrite ici — pas sur un fichier du dépôt, qui
+  // pourrait cesser de les porter sans que ce banc s'en aperçoive.
+  const formes = [
+    "import { a } from './sur-une-ligne.js';",
+    "import {\n  a,\n  b,\n} from './sur-plusieurs-lignes.js';",
+    "export { c } from './reexporte.js';",
+    "const m = await import('./dynamique.js');",
+  ].join('\n');
+  assert.deepEqual(aretesDe(formes), [
+    './sur-une-ligne.js',
+    './sur-plusieurs-lignes.js',
+    './reexporte.js',
+    './dynamique.js',
+  ]);
+});
 
 test('CHAQUE module que la jointure atteint tient comme porte d’entrée', () => {
   const portes = modulesAtteints(JOINTURE);
