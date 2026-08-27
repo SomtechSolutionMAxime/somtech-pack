@@ -2010,18 +2010,15 @@ test('LE PLANCHER DE LA COLONNE ARBRE TIENT SA VALEUR — pas seulement son exis
   // LA PROPRIÉTÉ, ÉNONCÉE SANS RECOPIER LE CHIFFRE : sous une certaine largeur de pane, la
   // colonne arbre CESSE DE SUIVRE la proportion et se tient au-dessus d'elle. C'est exactement
   // ce qu'un plancher fait — et le supprimer, ou le déplacer, change l'endroit où ça se produit.
-  const proportion = (largeur) => Math.floor(largeur * 0.62);
 
   // ⚠️ ON COMMENCE LÀ OÙ LE PLANCHER DOMINE. Sous ~31 colonnes, c'est la borne HAUTE
   // (`largeur - 3`) qui reprend la main pour ne jamais dépasser le pane — et la colonne descend
   // alors sous le plancher, légitimement. Mesuré : à 30 colonnes elle vaut 27, pas 28. Une
   // assertion qui supposait le plancher dominant partout rougissait sur un comportement JUSTE.
   const OU_LE_PLANCHER_DOMINE = 35;
-  let auDessusDeLaProportion = 0;
   let plusPetite = Infinity;
   for (let largeur = OU_LE_PLANCHER_DOMINE; largeur <= 200; largeur += 1) {
     const arbre = colonneArbre(largeur);
-    if (arbre > proportion(largeur)) auDessusDeLaProportion += 1;
     plusPetite = Math.min(plusPetite, arbre);
 
     // ⚠️ ET ELLE NE DESCEND JAMAIS SOUS CE QU'ELLE PORTE : la marque de rattachement, une
@@ -2035,13 +2032,20 @@ test('LE PLANCHER DE LA COLONNE ARBRE TIENT SA VALEUR — pas seulement son exis
     );
   }
 
-  // ═══ LE PLANCHER MORD : il existe des largeurs où la colonne est AU-DESSUS de la proportion.
-  // Le déplacer d'un facteur — ÷2 comme ×1,4 — change ce compte. C'est la mesure qui manquait.
-  assert.ok(
-    auDessusDeLaProportion > 0,
-    'la colonne arbre suit la proportion à TOUTES les largeurs — le plancher ne s’applique nulle ' +
-      'part, il a été rétréci ou supprimé, et l’arbre fond avec le pane'
-  );
+  // ⚠️ UNE ASSERTION A VÉCU ICI ET NE GARDAIT RIEN — retirée, pas reformulée.
+  //
+  // Elle exigeait `auDessusDeLaProportion > 0` et sa prose disait être « la mesure qui manquait »
+  // pour attraper un déplacement de facteur du plancher. Mesuré : en la neutralisant, l'égalité
+  // littérale trois lignes plus bas attrape TOUT — 14, 27, 29, 40 — et même un rétrécissement du
+  // balayage à 150. Elle criait la première par simple ordre d'exécution, ce qui lui donnait
+  // l'air de mordre.
+  //
+  // 🔴 C'EST L'ASSERTION PROTÉGÉE PAR SA VOISINE — la classe que ce banc existe pour fermer, et
+  // que j'ai écrite DANS LE GESTE MÊME où je la fermais. Sixième fois sur ce lot, et la seule
+  // qui soit née de sa propre correction.
+  //
+  // ⚠️ ON NE REFORMULE PAS UNE REDONDANCE, ON LA SUPPRIME. Deux gardes dont une est morte sont
+  // plus dangereuses qu'une seule : la seconde justifie de ne pas remplacer la première.
 
   // ⚠️ ET SA VALEUR EST TENUE — ANCRÉE LITTÉRALEMENT, ET C'EST VOULU.
   //
