@@ -612,6 +612,64 @@ test('une vue MESURÉE mais VIDE ouvre bien l’écran — la garde ne doit pas 
   assert.match(ecrit, /VUE DU PARC/, 'et il porte son en-tête');
 });
 
+test('SANS TTY, L’ÉCRAN SE DESSINE QUAND MÊME — le repli de `dessiner`, jumeau de celui de la progression', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LE JUMEAU DU DÉFAUT D'À CÔTÉ, ET IL EST TOMBÉ AU TOUR SUIVANT.
+  //
+  // `dessiner()` se replie sur `sortie.columns || 100`, `avecProgression` sur `|| Infinity`. Le
+  // code explique longuement pourquoi les deux DIFFÈRENT et met en garde de ne pas les
+  // « harmoniser ». Un banc garde le repli de la progression depuis le tour précédent ; CELUI-CI
+  // n'était gardé par rien.
+  //
+  // ⚠️ MESURÉ : remplacer `100` par `1` laisse la SUITE ENTIÈRE verte — 1164 pass, 0 fail. Les
+  // quatre appels réels à `boucleDuTui` passent tous un `columns` explicite ; aucun ne fait
+  // jamais tomber `dessiner()` sur son repli.
+  //
+  // ⚠️ ET LA MUTATION POUVAIT ROUGIR — ce n'est pas une mesure vide. Mesuré sur le rendu : à 1
+  // colonne l'écran rend « … » et rien d'autre ; à 100, la barre entière. Le chemin n'est
+  // simplement jamais emprunté.
+  //
+  // ⚠️ CE CHEMIN EST RÉEL : `sortie.columns` est absent chaque fois que la sortie n'est pas un
+  // terminal — redirection vers un fichier, pipe, exécution sans pty. L'incident d'origine a
+  // justement été trouvé hors d'un usage synthétique.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const vue = await laVueDuParc({ recensement: { quand: 'T', agents: [] } });
+  const { boucleDuTui } = await import('../src/tui-boucle.js');
+
+  for (const sansTty of [{}, { columns: undefined, rows: undefined }, { columns: 0, rows: 0 }]) {
+    let ecrit = '';
+    const { code } = await boucleDuTui({
+      lireLaVue: async () => vue,
+      sortie: { write: (s) => (ecrit += s), ...sansTty },
+      entree: { [Symbol.asyncIterator]: async function* () {} },
+    });
+
+    assert.equal(code, 0, `sans TTY (${JSON.stringify(sansTty)}), la boucle refuse au lieu de dessiner`);
+
+    // ═══ ① L'ÉCRAN S'OUVRE ET PORTE SON EN-TÊTE — donc `dessiner` a bien tourné.
+    assert.match(ecrit, /VUE DU PARC/, `sans TTY (${JSON.stringify(sansTty)}), l’écran ne porte pas son en-tête`);
+
+    // ═══ ② ET IL EST LISIBLE. C'est ce que le repli existe pour tenir : sans terminal on doit
+    // « quand même DESSINER quelque chose », dit le code. Un repli à 1 colonne rendrait un écran
+    // réduit à des points de suspension — le lecteur d'un journal n'aurait rien.
+    //
+    // ⚠️ LA BORNE SE DÉRIVE, elle ne s'écrit pas en chiffre : l'écran doit être au moins assez
+    // large pour porter la barre de raccourcis ENTIÈRE, sinon le repli ne tient pas sa promesse.
+    const lignes = ecrit.split('\r\n');
+    const barre = lignes[lignes.length - 1] ?? '';
+    assert.ok(
+      barre.includes(RACCOURCI_VITAL),
+      `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne porte même pas « ${RACCOURCI_VITAL} » : ` +
+        `${JSON.stringify(barre.slice(-60))} — le repli a été rétréci et un journal ne reçoit plus rien de lisible`
+    );
+    assert.ok(
+      lignes.length > 2,
+      `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne fait que ${lignes.length} ligne(s) — ` +
+        'le repli de HAUTEUR a été rétréci lui aussi'
+    );
+  }
+});
+
 test('« --tui » ouvre l’écran, et son ABSENCE rend le texte — le défaut protège les lecteurs sans terminal', async () => {
   const vue = { registre: { mesure: 'lu' }, orchestrateurs: [], horsHierarchie: [], resume: 'r', regle: 'g' };
   let ecrit = '';
