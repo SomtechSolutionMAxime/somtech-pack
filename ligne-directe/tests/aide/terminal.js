@@ -88,7 +88,25 @@
  * ⚠️ ET C'EST ICI QUE CE DOUBLE GAGNE SA PLACE. Sur le chemin de `rendreEcran`, il ne pouvait
  * PLUS RIEN attraper : `borner` y rend chaque ligne d'exactement la largeur du pane, donc
  * `ceil(longueur / colonnes)` vaut 1 par construction — mesuré sur le balayage du banc
- * `AUCUNE LIGNE DE L'ÉCRAN NE DÉPASSE LE PANE` : **zéro divergence sur ses 96 couples**.
+ * `CE QUE LE LECTEUR VOIT VRAIMENT AUX PETITES DIMENSIONS` : **zéro divergence sur ses 96
+ * couples**.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 QUAND UNE PROSE CITE QUELQUE CHOSE, LE CONTRÔLE EST D'OUVRIR LA CHOSE CITÉE.
+ * Pas de recompter ce qu'elle en dit : vérifier une valeur ne dit rien de son ÉMETTEUR.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ⚠️ CETTE PHRASE A NOMMÉ `AUCUNE LIGNE DE L'ÉCRAN NE DÉPASSE LE PANE`. Chiffre juste, compte
+ * juste, NOM faux : ce banc-là balaie 200 largeurs à hauteur FIXE — il n'a pas de couples du
+ * tout. Trois tours de suite, le même motif, une couche plus fine à chaque fois : le chiffre
+ * faux, puis le chiffre juste sur un autre objet, puis le chiffre ET le compte justes avec un
+ * nom qui désigne un autre banc.
+ *
+ * ⚠️ ET AUCUNE GARDE N'EST POSÉE ICI, DÉLIBÉRÉMENT. Mesuré : 12 citations de nom dans tout le
+ * lot, une seule fausse — celle-ci. Mais surtout, une garde qui vérifierait que le nom EXISTE
+ * rendrait VERT sur ce défaut précis : le nom cité existait. C'est ce qu'on lui PRÊTAIT qui
+ * était faux, et ça ne s'automatise pas. Le remède évident aurait reproduit la famille qu'il
+ * prétend fermer — un troisième étage de fausse couverture après le chiffre et le compte.
  *
  * ⚠️ CETTE PHRASE A DIT « 80 couples », ET LE CHIFFRE ÉTAIT VRAI — POUR UN AUTRE OBJET. Il venait
  * d'une sonde ad hoc écrite pour prouver cette redondance (10 largeurs × 8 hauteurs = 80) ; la
