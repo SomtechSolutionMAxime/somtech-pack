@@ -1269,8 +1269,11 @@ export async function unRecensement({
       // rendu : cette ligne est la SEULE sortie d'un tour de ronde du veilleur. Un compte qui ne
       // vivrait que dans le rendu ne serait lu par personne — et le mot « déclaré » y est ce qui
       // empêche de relire ces agents comme mesurés.
+      // ⚠️ MÊME ORDRE QUE LE RÉSUMÉ — voir la raison là-bas. Deux ordres différents rendraient
+      // la même mesure de deux façons, et c'est le journal qui divergerait en silence.
+      `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré` +
       trancheDeclaree(false) +
-      `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré ; ` +
+      ' ; ' +
       `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s), ` +
       `${metierSansObjet} sans métier à comparer ; mandats ` +
       `${mandatsOuverts} ouvert(s), ${mandatsClos} clos, ${mandatsNonMesures} non mesuré(s), ` +
@@ -1360,9 +1363,20 @@ export async function unRecensement({
       // ⚠️ « DÉCLARÉ » EST ÉCRIT À CÔTÉ DU CHIFFRE, comme « plancher » l'est du compte des agents,
       // et pour la même raison : c'est le seul mot qui empêche de lire ces rôles comme mesurés.
       // Le retirer rendrait la phrase plus courte et le registre plus faux (RA-VUE-006).
-      trancheDeclaree(true) +
+      // ⚠️ LA TRANCHE DÉCLARÉE VIENT EN DERNIER DU GROUPE DES RÔLES — et l'y mettre en deuxième
+      // a rouvert le défaut par l'autre bout. Mesuré sur le poste réel, juste après le correctif :
+      //
+      //     … 17 orchestrateurs ; DÉCLARÉS (jamais mesurés au lieu) : 2 chefs d’équipe,
+      //     63 au rôle NON ÉTABLI — …
+      //
+      // « 63 au rôle NON ÉTABLI » tombait DANS la tranche des déclarés. La liste plate avait
+      // simplement changé de côté : un correctif qui ouvre son symétrique, la forme que ce lot a
+      // déjà payée. Les fragments « NON ÉTABLI » et « NON MESURÉ » portent chacun leur propre
+      // qualificatif et se lisent donc bien à la suite des mesurés ; la tranche déclarée, elle,
+      // ouvre un groupe et doit le FERMER.
       (roleNonEtabli ? `, ${roleNonEtabli} au rôle NON ÉTABLI` : '') +
       (roleNonMesure ? `, ${roleNonMesure} au rôle NON MESURÉ` : '') +
+      trancheDeclaree(true) +
       ` — ${aJour} à jour, ${enRetard} en retard` +
       // ⚠️ ON NOMME CE QUI N'A PAS PU ÊTRE MESURÉ, jamais « NON MESURÉ » tout court. Trois choses
       // distinctes peuvent l'être dans cette phrase — le métier, le mandat, le nom — et elles

@@ -1156,6 +1156,47 @@ test('un parc MÊLÉ sépare les rôles mesurés des rôles déclarés, dans la 
   assert.doesNotMatch(avantLaFrontiere, /partenaire-transverse/);
 });
 
+// ⚠️ ET LA TRANCHE FERME LE GROUPE — l'autre bout, et il a été rouvert une fois.
+//
+// 🔴 MESURÉ SUR LE POSTE RÉEL, juste après le premier correctif : posée en DEUXIÈME, la tranche
+// déclarée laissait « 63 au rôle NON ÉTABLI » tomber DEDANS —
+//
+//     … 17 orchestrateurs ; DÉCLARÉS (jamais mesurés au lieu) : 2 chefs d’équipe, 63 au rôle NON ÉTABLI
+//
+// — c'est-à-dire la même liste plate, de l'autre côté de la frontière. Un correctif qui ouvre son
+// symétrique. Le banc précédent ne pouvait pas l'attraper : son parc n'a AUCUN agent au rôle non
+// établi, donc le fragment qui tombait dans la tranche n'existait pas chez lui.
+test('la tranche déclarée FERME le groupe des rôles — rien ne tombe dedans après elle', async () => {
+  const orch = '/depot/.orchestrateur/p-20260822-0001';
+  const rendu = await recenser({
+    panes: [
+      pane({ pane_id: 'w1:p1', cwd: orch }),
+      pane({ pane_id: 'w2:p2', cwd: '/arbre/a' }),
+      // Un agent au rôle NON ÉTABLI, et un au rôle NON MESURÉ : les deux fragments qui suivaient.
+      pane({ pane_id: 'w3:p3', cwd: '/ailleurs' }),
+      pane({ pane_id: 'w4:p4', cwd: '/ailleurs-aussi' }),
+    ],
+    roleDuLieu: (l) => (l === orch ? 'orchestrateur' : null),
+    nomsConnus: nomsDe([
+      ['w1:p1', 'matapedia'],
+      ['w2:p2', 't-20260825-0012'],
+      ['w3:p3', 'bonaventure'],
+      ['w4:p4', null],
+    ]),
+    declarations: {
+      declarations: [declaration({ espace: '/arbre/a', paneDeclare: 'w2:p2' })],
+      illisibles: [{ fichier: 'x.json', cause: 'abîmé' }],
+    },
+  });
+
+  assert.ok(rendu.compte.roleNonEtabli > 0 || rendu.compte.roleNonMesure > 0, 'le parc doit porter les fragments qui suivaient');
+
+  // 🔴 APRÈS la frontière, il n'y a QUE des rôles déclarés — jusqu'au tiret qui clôt le groupe.
+  const apres = rendu.resume.split('; DÉCLARÉS (jamais mesurés au lieu) : ')[1].split(' — ')[0];
+  assert.equal(apres, '1 chefs d’équipe');
+  assert.doesNotMatch(apres, /NON ÉTABLI|NON MESURÉ/);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
