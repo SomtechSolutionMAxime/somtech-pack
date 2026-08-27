@@ -1471,7 +1471,11 @@ test('quelle que soit la forme d’un refus de nom, aucune prose ne porte « und
     ['aucun lecteur', null],
   ];
   const registres = [
-    ['rien trouvé', { declarations: [], illisibles: [] }],
+    // ⚠️ « RIEN TROUVÉ » PORTE MAINTENANT UNE DÉCLARATION SANS RAPPORT, et ce n'est pas un
+    // habillage : sur un registre VIDE, un nom non mesuré ne rend plus « refusée » — il n'y a
+    // rien qu'il puisse cacher (voir le banc du 3e G/W/T juste après). Garder un registre vide
+    // ici mesurerait donc l'autre branche, sous le nom de celle-ci.
+    ['rien trouvé', { declarations: [declaration({ nom: 'quelquun-dautre', espace: '/ailleurs' })], illisibles: [] }],
     ['trouvée sans rôle', { declarations: [(() => { const d = declaration(); delete d.role; return d; })()], illisibles: [] }],
   ];
 
@@ -1481,12 +1485,59 @@ test('quelle que soit la forme d’un refus de nom, aucune prose ne porte « und
       const entree = JSON.stringify(rendu.agents[0]);
       const cas = `${quelNom} / ${quelRegistre}`;
       assert.doesNotMatch(entree, /undefined/, cas);
+      // La prose vit sous `raison` (refus) ou `pourquoi` (non établi) : on lit celle qui est là.
+      const prose = rendu.agents[0].role.raison ?? rendu.agents[0].role.pourquoi ?? '';
       // ⚠️ ET LA PROSE NOMME TOUJOURS UNE CAUSE — un refus muet ne rend pas une phrase creuse.
       // (Ce banc a d'abord exigé `\S{20,}` : vingt non-espaces CONSÉCUTIFS, que nulle phrase
       // française ne porte. Une assertion trop précise sur la forme rougit sur du code sain.)
-      assert.ok((rendu.agents[0].role.raison ?? '').trim().length > 30, cas);
+      assert.ok(prose.trim().length > 30, cas);
     }
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-novodecies LE TROISIÈME G/W/T, MESURÉ SUR CE QU'IL DIT — et le lot le violait.
+//
+// 🔴 « SEULS LES AGENTS DÉCLARÉS ONT CHANGÉ DE RENDU. » Un agent SANS aucun rapport avec une
+// déclaration basculait pourtant de « non établi » à « refusée » dès que son nom n'avait pas été
+// mesuré — et cela même avec ZÉRO déclaration au monde. Mesuré :
+//
+//     sans le paramètre (pré-lot)              → non établi
+//     registre VIDE, zéro déclaration          → refusée      ← le rendu changeait
+//
+// Or le module dit lui-même que ce nom manque COURAMMENT (83 panes sur 227 un jour) : le lot
+// faisait donc changer de rendu une large part du parc qu'il n'était pas censé toucher.
+//
+// ⚠️ ET LE BANC QUI COUVRAIT CETTE COMBINAISON NE LISAIT PAS `role.mesure` — il n'assertait que
+// l'absence d'« undefined » et la longueur de la prose. Le trou était traversé, jamais regardé.
+test('un agent sans rapport ne change pas de rendu quand le registre est VIDE', async () => {
+  const sansRapport = pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' });
+  // Le nom N'A PAS ÉTÉ MESURÉ : le pane est absent de la carte que herdr rend.
+  const nomNonVu = nomsDe([]);
+
+  const avant = await recenser({ panes: [sansRapport], nomsConnus: nomNonVu });
+  const avecRegistreVide = await recenser({
+    panes: [sansRapport],
+    nomsConnus: nomNonVu,
+    declarations: { declarations: [], illisibles: [] },
+  });
+
+  // 🔴 LE CŒUR : le rendu est IDENTIQUE, champ par champ, avec ou sans le registre.
+  assert.equal(avecRegistreVide.agents[0].role.mesure, 'non établi');
+  assert.deepEqual(avecRegistreVide.agents[0].role, avant.agents[0].role);
+  assert.equal(avecRegistreVide.compte.roleNonMesure, 0);
+  assert.equal(avecRegistreVide.compte.roleNonEtabli, 1);
+
+  // ⚠️ ET LA BORNE NE FERME PAS LE CAS D'ORIGINE : dès qu'UNE déclaration circule, le nom non
+  // mesuré redevient une raison de douter — c'est le faux négatif que cette branche existe pour
+  // empêcher, et le supprimer serait le correctif qui ouvre son symétrique.
+  const avecUneDeclaration = await recenser({
+    panes: [sansRapport],
+    nomsConnus: nomNonVu,
+    declarations: { declarations: [declaration({ nom: 'quelquun-dautre', espace: '/ailleurs' })], illisibles: [] },
+  });
+  assert.equal(avecUneDeclaration.agents[0].role.mesure, 'refusée');
+  assert.match(avecUneDeclaration.agents[0].role.raison, /clé de repli/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

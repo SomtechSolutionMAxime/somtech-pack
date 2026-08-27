@@ -532,7 +532,21 @@ function declarationDuPane(p, chemin, registre, nom) {
           : ''),
     };
   }
-  if (nom?.mesure === 'refusée') {
+  // 🔴 « PAS TROUVÉE » NE PEUT RIEN CACHER QUAND IL N'Y A RIEN À TROUVER — et sans cette borne,
+  // ce lot violait son propre troisième critère : « seuls les agents déclarés ont changé de
+  // rendu ». Mesuré, sur un agent SANS aucun rapport avec une déclaration :
+  //
+  //     sans le paramètre (pré-lot) → « non établi »
+  //     registre VIDE, zéro déclaration au monde → « refusée »   ← le rendu changeait
+  //
+  // Le nom est la clé de REPLI de l'appariement : son absence ne devient une raison de douter que
+  // s'il y avait quelque chose à apparier. Sur un registre vide, aucun nom manquant ne peut
+  // dissimuler une déclaration — et le module dit lui-même que ce nom manque COURAMMENT (83 panes
+  // sur 227 un jour). La borne fait donc la différence entre « je doute » et « je bruis ».
+  //
+  // ⚠️ ET ELLE NE FERME PAS LE CAS D'ORIGINE : dès qu'UNE déclaration circule, un nom non mesuré
+  // rend toujours « refusée » — c'est le faux négatif que cette branche existe pour empêcher.
+  if (nom?.mesure === 'refusée' && (registre.declarations?.length ?? 0) > 0) {
     return {
       mesure: 'refusée',
       nom: null,
