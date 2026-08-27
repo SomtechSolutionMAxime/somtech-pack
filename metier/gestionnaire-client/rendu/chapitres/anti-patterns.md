@@ -1,7 +1,7 @@
 # anti-patterns
 
 > **En un mot** — Ce qu'on est tenté de faire, et pourquoi ça casse.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `1.2.1`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `1.4.0`
 
 | Ce qu'on est tenté de faire | Pourquoi ça casse |
 |---|---|

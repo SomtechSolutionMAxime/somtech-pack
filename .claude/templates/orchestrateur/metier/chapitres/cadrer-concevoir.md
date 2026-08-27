@@ -1,7 +1,7 @@
 # cadrer-concevoir
 
 > **En un mot** — Ce qu'il lit avant de découper, le découpage par valeur, le dimensionnement, la conception écrite.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
 > **Répond de** RA-ORC-007 · RA-ORC-008 · RA-ORC-013 · RA-ORC-024 · RA-ORC-036
 
@@ -30,6 +30,8 @@ Ce n'est pas une lecture de courtoisie. **C'est là que vivent les consignes aux
 ## Découper par valeur pour l'utilisateur
 
 Jamais par couche technique. Chaque epic porte son problème, son résultat attendu, son hors-scope, ses contraintes, ses critères de succès. Pose les `sequence_order` et `depends_on_ids`.
+
+**Et quand le chantier a des maquettes, chaque story user-facing porte un G/W/T « conforme à la maquette X ».** La maquette est un **critère d'acceptation opposable** — le contrat visuel du lot, pas une inspiration : la QA comparera le livré à la maquette **avant toute annonce de livraison** (voir R4). Motif payé : la première livraison de la vue du parc, non conforme aux maquettes fournies — parce qu'aucun G/W/T ne les nommait.
 
 **Ce qui ne bloque pas un epic ne doit pas y être accroché.** La dette découverte en le relisant va dans un epic de dette dédié, sinon le ServiceDesk affiche « en cours » pour un travail terminé.
 

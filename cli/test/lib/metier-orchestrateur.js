@@ -217,7 +217,11 @@ export const PHRASE_RETIREE = 'continue sans elle';
  * et pas un de plus. Le nombre est écrit ici pour qu'en ajouter un sixième demande d'éditer
  * cette ligne : la liste des ajouts est fermée, et une idée de plus se voit alors en revue.
  */
-export const NB_ANTI_PATTERNS = 78;
+export const NB_ANTI_PATTERNS = 81;
+// 78 → 81 (D-20260826-0010, ABC 3.0.0) : trois fautes neuves, chacune payée et mesurée —
+// « Ouvrir un chef d'équipe pour une analyse bornée » (RA-ORC-042), « Partir en excursion
+// d'infrastructure au milieu du chantier » (RA-ORC-043, P-20260822-0001), « Annoncer une
+// livraison user-facing sans la comparaison livré ↔ maquette » (RA-ORC-044).
 // ⚠️ CE NOMBRE A CHANGÉ DE NATURE LE 2026-08-17 (lot 2), ET LE MOTIF EST ICI.
 //
 // Il s'appelait `NB_ANTI_PATTERNS_AJOUTES` et valait 29 : le nombre de lignes que le gabarit
@@ -1502,7 +1506,11 @@ export const CONTROLES = [
         // d'équipe » ; le texte écrit « n'ouvre aucun agent qui ne soit chef d'équipe ».
         // C'est le même interdit, à un mot de grammaire près — et la garde criait dessus.
         // Ce qu'on garde est la RESTRICTION (aucun agent hors chef d'équipe), jamais sa forme.
-        [/n'ouvre aucun agent qui ne soit\b[^|]*chef d'équipe|n'ouvre que des chefs d'équipe/i, 'n’ouvrir que des chefs d’équipe'],
+        // ⚠️ RÉ-ANCRÉE (D-20260826-0010, ABC 3.0.0) : la restriction porte désormais sur les
+        // PANES — l'orchestrateur a des sous-agents d'analyse à lui (R2.6), donc « aucun
+        // agent » est devenu faux par ordre. Ce qu'on garde suit R3.1 : tout agent ouvert en
+        // pane est un chef d'équipe.
+        [/n'ouvre en pane que des chefs d'équipe|n'ouvre aucun agent herdr qui ne soit\b[^|]*chef d'équipe/i, 'n’ouvrir en pane que des chefs d’équipe'],
       ]) {
         assert.match(jamais, sonde, `« ${quoi} » doit figurer du côté de ce qu’il ne fait jamais`);
         assert.ok(!sonde.test(fait), `« ${quoi} » figure du côté de ce qu’il fait — la table est inversée`);
@@ -1551,23 +1559,42 @@ export const CONTROLES = [
         // écrit ici pourquoi la voie B est absente, plutôt que de la poser fausse.
       );
 
-      const rSousAgent = rangDuRefus(/Ouvrir un sous-agent/i);
+      // ⚠️ RÉ-ANCRÉE (D-20260826-0010, ABC 3.0.0) : le refus a changé de PÉRIMÈTRE par ordre
+      // du dirigeant — il porte sur les sous-agents de CONSTRUCTION ET DE REVUE, plus sur tout
+      // sous-agent : les sous-agents d'analyse (lecture seule, R2.6) sont désormais ses propres
+      // moyens. La sonde exige le périmètre dans le LIBELLÉ même : un refus redevenu « Ouvrir
+      // un sous-agent » tout court serait l'ancien métier, un refus élargi en silence.
+      const rSousAgent = rangDuRefus(/Ouvrir un sous-agent de construction ou de revue/i);
       assert.ok(
         rSousAgent >= 0,
-        'le second principe — il n’ouvre que des chefs d’équipe — n’est plus refusé nulle part : '
-          + 'l’orchestrateur ouvre alors ce qu’il veut, et fait du travail de chef d’équipe sans le nommer',
+        'le second principe — la construction et les revues vivent chez les chefs d’équipe — '
+          + 'n’est plus refusé nulle part : l’orchestrateur ouvre alors ce qu’il veut, et fait '
+          + 'du travail de chef d’équipe sans le nommer',
       );
       exigePolarite(
-        ferme[rSousAgent], /tu n'ouvres (?:que|rien d'autre que) des chefs d'équipe/i,
-        'le second principe — il n’ouvre que des chefs d’équipe',
-        { inverse: /tu (?:peux|pourras) ouvrir (?:aussi |également )?(?:un|des) sous-agents?/i },
+        ferme[rSousAgent], /la construction et les revues de lot vivent chez les chefs d'équipe/i,
+        'le second principe — la construction et les revues de lot vivent chez les chefs d’équipe',
+        { inverse: /tu (?:peux|pourras) ouvrir (?:aussi |également )?(?:un|des) sous-agents? de construction/i },
       );
       // Et la moitié du principe qu'on perd en premier : ce sont EUX qui distribuent. Sans
-      // elle, « n'ouvre que des chefs d'équipe » se lit comme une règle de nommage, et le
-      // niveau des sous-agents remonte chez l'orchestrateur sans qu'une phrase change.
+      // elle, le refus se lit comme une règle de nommage, et le niveau des sous-agents de
+      // construction remonte chez l'orchestrateur sans qu'une phrase change.
       exigePolarite(
         ferme[rSousAgent], /qui (?:distribuent|répartissent|confient)[^|]*(?:à|entre) leurs sous-agents/i,
         'et ce sont EUX qui distribuent à leurs sous-agents — la moitié qui empêche le niveau de remonter',
+      );
+      // La moitié NEUVE de GF-ORC-002, et sa borne : les sous-agents d'analyse sont SES moyens
+      // — jamais des porteurs de lot. Sans la borne, « propres moyens » se relit comme « fais
+      // mener tes lots par tes sous-agents », c'est-à-dire du travail de chef d'équipe sans le
+      // nommer — exactement ce que le refus existe pour fermer.
+      exigePolarite(
+        ferme[rSousAgent], /sous-agents d'analyse[^|]*(?:sont )?tes propres moyens/i,
+        'les sous-agents d’analyse (lecture seule) sont ses propres moyens — la moitié que l’ABC 3.0.0 renverse',
+      );
+      exigePolarite(
+        ferme[rSousAgent], /ils ne portent jamais un lot/i,
+        'et ils ne portent jamais un lot — la borne sans laquelle « propres moyens » rouvre le niveau',
+        { inverse: /ils (?:peuvent|savent) porter (?:un|des) lots?/i },
       );
     },
   },
@@ -2111,9 +2138,16 @@ export const CONTROLES = [
       //
       // La fonction gardée n'a pas changé d'un mot : **l'agent n'a pas le MOYEN d'écrire un
       // livrable.** Seule la couche qui la porte a changé — du refus de permission au hook.
+      // ⚠️ CE QUE D-20260826-0010 A DÉPLACÉ, PAR LE MÊME MÉCANISME QUE T-20260824-0002.
+      //
+      // « ouvrir un sous-agent » n'est PLUS refusé par l'outil nu. Il ne pouvait plus
+      // l'être : un `deny` sur `Task` refuse TOUT sous-agent, donc aussi les sous-agents
+      // d'ANALYSE (lecture seule) que l'ABC 3.0.0 rend à l'orchestrateur comme ses propres
+      // moyens (GF-ORC-002, R2.6, TOOL-ORC-010). Le refus vit désormais dans la garde
+      // « sous-agent » (hook PreToolUse sur Task), qui n'admet que les types dont
+      // l'outillage exclut l'écriture — la construction reste impossible, l'analyse passe.
       const REFUS = [
         { quoi: 'écrire ou modifier un fichier', entrees: ['NotebookEdit'] },
-        { quoi: 'ouvrir un sous-agent', entrees: ['Task'] },
       ];
       for (const { quoi, entrees } of REFUS) {
         for (const e of entrees) {
@@ -2133,6 +2167,35 @@ export const CONTROLES = [
         assert.ok(!deny.some((r) => typeof r === 'string' && r.startsWith(`${outil}(`)),
           `un refus à motif sur « ${outil} » est revenu : il couvrirait CONTEXTE.md et rendrait la garde muette`);
       }
+      // ①bis — et `Task` non plus, pour la même raison mesurée : sous un refus, le hook n'est
+      // JAMAIS appelé. `Task` de retour dans les refus rendrait la garde « sous-agent » muette
+      // — et l'exception d'analyse disparaîtrait sans qu'aucun autre contrôle ne bouge.
+      assert.ok(!deny.includes('Task'),
+        '« Task » est revenu dans les refus : sous un refus, le hook n\'est jamais appelé — la '
+          + 'garde « sous-agent » deviendrait muette et les sous-agents d\'analyse (ABC 3.0.0, '
+          + 'R2.6) redeviendraient inaccessibles');
+      assert.ok(!deny.some((r) => typeof r === 'string' && r.startsWith('Task(')),
+        'un refus à motif sur « Task » est revenu : il rendrait la garde « sous-agent » muette');
+
+      // ①ter — ce qui porte le refus du sous-agent à la place du `deny` EST LÀ, et vise Task.
+      // Sans ce contrôle, ①bis serait un désarmement : « Task absent des refus » est
+      // exactement ce qu'on obtient en supprimant la garantie.
+      const hookSousAgent = (config.hooks?.PreToolUse || [])
+        .find((h) => h.hooks?.[0]?.command?.includes('gardes/sous-agent.js'));
+      assert.ok(hookSousAgent,
+        'la garde « sous-agent » n’est plus branchée : plus RIEN ne refuse d’ouvrir un '
+          + 'sous-agent de construction, puisque « Task » a quitté les refus');
+      assert.match(hookSousAgent.matcher || '', /(^|\|)Task(\||$)/,
+        'le hook « sous-agent » ne vise pas « Task » — cet outil ne serait gardé par rien');
+      // Et sa commande se défend contre ses propres pannes, comme celle de l'écriture :
+      // garde absente, garde qui casse — deux refus distincts, jamais un `exec`.
+      const cmdSA = hookSousAgent.hooks[0].command;
+      assert.match(cmdSA, /-f /, 'la commande doit vérifier que la garde « sous-agent » existe avant de l’appeler');
+      assert.ok(!/exec node/.test(cmdSA),
+        '`exec` remplace le shell : le code de sortie de la garde « sous-agent » devient celui du hook, et rien ne rattrape sa panne');
+      assert.match(cmdSA, /-n /, 'une garde « sous-agent » qui sort en succès sans rien rendre laisse le geste sans verdict — il faut le refuser aussi');
+      assert.equal((cmdSA.match(/permissionDecision":"deny/g) || []).length, 2,
+        'il faut DEUX refus distincts pour la garde « sous-agent » — un pour la garde absente, un pour la garde qui casse');
 
       // ② Et ce qui porte le refus à leur place EST LÀ, et vise bien ces outils. Sans ce
       // second contrôle, le premier serait un désarmement : « aucun refus d'écriture » est
@@ -2179,9 +2242,15 @@ export const CONTROLES = [
       const table = tableDe(s.corps);
       const cellules = colonne(table, /^Ce qui t'est refusé$/i, 'ce qui t’est refusé');
       const refuse = cellules.join(' ');
-      assert.equal(table.lignes.length, REFUS.length, `${table.lignes.length} refus décrit(s) pour ${REFUS.length} posé(s) dans le fichier`);
+      // ⚠️ LE DÉNOMINATEUR N'EST PLUS `REFUS.length` (D-20260826-0010). La table du métier
+      // décrit les refus MÉCANIQUES du lieu — ceux du `deny` ET ceux que les gardes de hook
+      // portent à sa place (écriture depuis T-20260824-0002, sous-agent depuis ce lot). Le
+      // compte est épinglé à part : le prendre sur `REFUS` ferait tomber la ligne du
+      // sous-agent de la table le jour où son refus a changé de couche, sans qu'un mot bouge.
+      assert.equal(table.lignes.length, 2, `${table.lignes.length} refus décrit(s) pour 2 attendus — écrire, et ouvrir un sous-agent de construction ou de revue`);
       assert.match(refuse, /écrire ou modifier un fichier/i, 'le métier doit nommer le refus d’écrire');
-      assert.match(refuse, /ouvrir un sous-agent/i, 'le métier doit nommer le refus d’ouvrir un sous-agent');
+      assert.match(refuse, /ouvrir un sous-agent de construction ou de revue/i,
+        'le métier doit nommer le refus d’ouvrir un sous-agent de construction ou de revue — le périmètre de l’ABC 3.0.0, pas l’ancien refus total');
 
       // ⚠️ RELEVÉ PAR LA PASSE 1 DE LA REVUE, et c'est le motif dominant du dépôt appliqué à
       // ce lot même : les deux lignes ci-dessus cherchent une SOUS-CHAÎNE. Une cellule
@@ -4105,6 +4174,93 @@ export const CONTROLES = [
       );
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // LES FONCTIONS NEUVES DE L'ABC 3.0.0 (D-20260826-0010) — une garde par fonction.
+
+  {
+    id: 'la-ronde-rend-un-delta',
+    quoi: 'chaque tour de ronde se termine sur un delta visible du chantier ou un arbitrage nommé — et une découverte d’infrastructure s’inscrit puis l’on revient au dossier',
+    verifier({ metier }) {
+      // RA-ORC-043. Mesuré avant d'écrire la règle : quatre jours sur un projet, sept epics,
+      // un complété, zéro livraison, zéro trace de travail liée — l'énergie de la semaine
+      // était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
+      const s = sectionDe(
+        metier, /Ta ronde rend un delta du chantier, ou un arbitrage/i,
+        'sur le delta que chaque ronde doit rendre',
+      );
+      // Les DEUX sorties admises, ensemble : un tour qui ne rend ni l'une ni l'autre est une
+      // excursion. Retirer une des deux ferait de l'autre la seule issue — « toujours un
+      // avancement » interdit de se déclarer bloqué, « toujours un arbitrage » dispense
+      // d'avancer.
+      exigePolarite(
+        s.corps, /un avancement visible de la livraison[\s\S]{0,120}ou un blocage nommé/i,
+        'les deux sorties d’un tour — l’avancement visible, ou le blocage nommé avec sa décision',
+      );
+      // La conduite devant une découverte hors chantier, avec sa borne : inscrire N'EST PAS
+      // exécuter, et l'on REVIENT. Sans le retour, « inscrire en ticket » se lit comme une
+      // permission d'aller le traiter.
+      exigePolarite(
+        s.corps, /s'inscrit en \*{0,2}ticket\*{0,2}[\s\S]{0,80}revient au dossier/i,
+        'une découverte d’infrastructure s’inscrit en ticket et l’on revient au dossier',
+        { inverse: /le tour suivant peut lui être consacré|tu peux (?:aller )?(?:la|le) (?:traiter|corriger)/i },
+      );
+      exigePolarite(
+        s.corps, /jamais une excursion qui remplace la livraison/i,
+        'et jamais une excursion qui remplace la livraison — la borne que P-20260822-0001 a coûtée',
+      );
+      // Le motif MESURÉ reste attaché à la règle : une règle sans son chiffre se relit comme
+      // une préférence, et c'est la première moitié qu'une réécriture perd.
+      assert.match(
+        s.corps, /P-20260822-0001/,
+        'le motif mesuré (P-20260822-0001 : quatre jours, sept epics, un complété, zéro '
+          + 'livraison) a quitté la règle — sans lui, le delta de ronde redevient un conseil',
+      );
+    },
+  },
+
+  {
+    id: 'la-maquette-est-opposable',
+    quoi: 'la maquette est un critère d’acceptation opposable — nommée dans les G/W/T au découpage, comparée au livré avant toute annonce, portée au brief du chef d’équipe',
+    verifier({ metier }) {
+      // RA-ORC-044, et sa fonction traverse TROIS moments du métier : le découpage (R2.3), la
+      // validation (R4.3) et le brief (R3). Une garde par moment — la fonction tombe si un
+      // seul des trois manque : un G/W/T sans comparaison ne prouve rien, une comparaison
+      // qu'aucun G/W/T n'exige n'arrive jamais, et un chef d'équipe qui reçoit des
+      // « wireframes » sans opposabilité livre ce qu'il comprend.
+      const decoupage = sectionDe(metier, /Découper par valeur pour l'utilisateur/i, 'sur le découpage');
+      exigePolarite(
+        decoupage.corps, /chaque story user-facing porte un G\/W\/T « conforme à la maquette X »/i,
+        'au découpage : chaque story user-facing d’un chantier maquetté porte son G/W/T « conforme à la maquette X »',
+        { inverse: /(?:la maquette|le G\/W\/T) (?:est|reste) (?:une inspiration|indicati)/i },
+      );
+      assert.match(
+        decoupage.corps, /critère d'acceptation opposable/i,
+        'le découpage doit nommer la maquette pour ce qu’elle est — un critère d’acceptation '
+          + 'opposable, pas une inspiration',
+      );
+      const validation = sectionDe(metier, /ce qu'un lot montre/i, 'sur ce qu’un lot doit montrer');
+      exigePolarite(
+        validation.corps, /la comparaison du livré à la maquette/i,
+        'à la validation : sur un lot user-facing d’un chantier maquetté, la comparaison du livré à la maquette est exigée',
+      );
+      exigePolarite(
+        validation.corps, /une annonce de livraison sans elle est une annonce sans preuve/i,
+        'et une annonce de livraison sans cette comparaison est une annonce sans preuve — le motif de la première livraison de la vue du parc',
+        { inverse: /l'annonce peut partir avant la comparaison|la comparaison (?:peut|pourra) suivre/i },
+      );
+      const brief = sectionDe(metier, /Écrire le brief au ServiceDesk/i, 'sur le brief du chef d’équipe');
+      assert.match(
+        brief.corps, /\*{0,2}maquettes\*{0,2}/i,
+        'le brief du chef d’équipe doit porter les maquettes parmi ce qu’il lit lui-même',
+      );
+      assert.match(
+        brief.corps, /critère d'acceptation opposable/i,
+        'et dire au chef d’équipe que la maquette est opposable — un brief qui la donne en '
+          + 'référence sans son statut fait livrer ce que l’agent comprend, pas ce qui est dessiné',
+      );
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -4270,7 +4426,8 @@ export const MUTATIONS = [
     // « Ce que tu ne peux pas faire », où il est REFUSÉ plutôt qu'affirmé. Elle retire donc
     // désormais la rangée qui porte ce refus. Ce qu'elle FAIT est identique : le second
     // principe fondateur disparaît du gabarit, et l'orchestrateur ouvre ce qu'il veut.
-    muter: (t) => t.replace(/^\| \*\*Ouvrir un sous-agent\*\* \|.*\n/m, ''),
+    // ⚠️ RÉ-ANCRÉE de nouveau (D-20260826-0010) : la rangée porte le périmètre de l'ABC 3.0.0.
+    muter: (t) => t.replace(/^\| \*\*Ouvrir un sous-agent de construction ou de revue\*\* \|.*\n/m, ''),
   },
 
   // ── ajout 3 : la ligne obligatoire (le retrait)
@@ -5140,7 +5297,19 @@ export const MUTATIONS = [
     quoi: 'l’ouverture de sous-agents redevient possible — le second principe fondateur retombe au rang de consigne',
     cible: 'les-droits-refusent-ce-que-le-metier-promet',
     fichier: 'droits',
-    muter: (t) => t.replace('      "Task"\n', '      "Read"\n'),
+    // ⚠️ RÉ-ANCRÉE (D-20260826-0010) : « Task » a quitté `permissions.deny` par ordre — le
+    // refus vit dans la garde « sous-agent ». La perméabilité a donc changé de visage, le
+    // même que celui de la garde d'écriture : un `matcher` qui cesse de viser l'outil laisse
+    // cet outil ENTIÈREMENT libre, pendant que le fichier porte toujours une garde à l'air
+    // complet. Ce que la mutation FAIT est inchangé : l'orchestrateur ouvre ce qu'il veut.
+    muter: (t) => t.replace('"matcher": "Task"', '"matcher": "Talk"'),
+  },
+  {
+    id: 'le-refus-de-task-revient-et-rend-la-garde-muette',
+    quoi: '« Task » revient dans les refus — sous un refus le hook n’est jamais appelé : la garde « sous-agent » devient muette et l’analyse redevient interdite',
+    cible: 'les-droits-refusent-ce-que-le-metier-promet',
+    fichier: 'droits',
+    muter: (t) => t.replace('      "NotebookEdit"\n', '      "NotebookEdit",\n      "Task"\n'),
   },
   {
     id: 'le-refus-absolu-devient-le-refus-permeable',
@@ -5168,7 +5337,28 @@ export const MUTATIONS = [
     quoi: 'la table des refus perd la ligne du sous-agent — le texte et le fichier divergent',
     cible: 'les-droits-refusent-ce-que-le-metier-promet',
     fichier: 'metier',
-    muter: (t) => t.replace(/^\| \*\*Ouvrir un sous-agent\*\* \|.*\n/m, ''),
+    // ⚠️ Ré-ancrée (D-20260826-0010) : la rangée porte le périmètre de l'ABC 3.0.0.
+    muter: (t) => t.replace(/^\| \*\*Ouvrir un sous-agent de construction ou de revue\*\* \|.*\n/m, ''),
+  },
+  {
+    id: 'le-refus-du-sous-agent-perd-son-perimetre',
+    quoi: 'le libellé du refus redevient « Ouvrir un sous-agent » tout court — l’ancien métier, où l’analyse aussi était refusée',
+    cible: 'il-orchestre-il-n-execute-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '| **Ouvrir un sous-agent de construction ou de revue** |',
+      '| **Ouvrir un sous-agent** |',
+    ),
+  },
+  {
+    id: 'les-sous-agents-d-analyse-portent-des-lots',
+    quoi: 'la borne des sous-agents d’analyse est retournée — « ils peuvent porter un lot » rouvre le niveau que le refus fermait',
+    cible: 'il-orchestre-il-n-execute-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'tes propres moyens — ils ne portent jamais un lot |',
+      'tes propres moyens — et au besoin ils peuvent porter un lot |',
+    ),
   },
 
   {
@@ -5193,9 +5383,10 @@ export const MUTATIONS = [
     // tenue que sur la colonne des refus, pas sur celle qui les explique.
     // ⚠️ Ré-ancrée (lot 2) : la cellule a perdu son « le second principe : » à la
     // reconstruction. Le motif ne mordait plus.
+    // ⚠️ Ré-ancrée (D-20260826-0010) : la cellule porte le texte de l'ABC 3.0.0.
     muter: (t) => t.replace(
-      '| **Ouvrir un sous-agent** | tu n\'ouvres que des chefs d\'équipe',
-      '| **Ouvrir un sous-agent** | tu n\'ouvres que des chefs d\'équipe, sauf pour la revue à deux passes,',
+      '| **Ouvrir un sous-agent de construction ou de revue** | la construction et les revues de lot vivent chez les chefs d\'équipe',
+      '| **Ouvrir un sous-agent de construction ou de revue** | la construction et les revues de lot vivent chez les chefs d\'équipe, sauf la revue à deux passes que tu lances toi-même,',
     ),
   },
   {
@@ -5351,9 +5542,12 @@ export const MUTATIONS = [
     quoi: 'l’exigence de preuve perd sa conséquence — sans conséquence, une exigence n’en est pas une',
     cible: 'un-compte-rendu-se-verifie-avant-d-etre-valide',
     fichier: 'metier',
+    // ⚠️ Ré-ancrée (D-20260826-0010) : la phrase porteuse a grandi — elle exige aussi la
+    // comparaison livré ↔ maquette (RA-ORC-044) — et « et tant que » est devenu « Tant que ».
+    // Ce que la mutation FAIT est inchangé : elle retire la conséquence de l'exigence.
     muter: (t) => t.replace(
-      'et tant que tu ne l\'as pas, le lot n\'est pas validé.**',
-      'et tant que tu ne l\'as pas, tu peux quand même avancer si le compte rendu paraît sérieux.**',
+      'Tant que tu ne l\'as pas, le lot n\'est pas validé.**',
+      'Tant que tu ne l\'as pas, tu peux quand même avancer si le compte rendu paraît sérieux.**',
     ),
   },
   {
@@ -6154,6 +6348,67 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "⚠️ **Ceci ne dit pas d'arrêter d'ouvrir des tickets — ça dit d'où ils viennent.**",
       "⚠️ **Ceci dit d'arrêter d'ouvrir des tickets.**",
+    ),
+  },
+
+  // ── LE DELTA DE RONDE (RA-ORC-043, D-20260826-0010) — un point retourné à la fois.
+  {
+    id: 'la-ronde-cesse-de-rendre-un-delta',
+    quoi: 'la sous-section du delta disparaît entière — une ronde redevient un tour qui peut ne rien rendre',
+    cible: 'la-ronde-rend-un-delta',
+    fichier: 'metier',
+    muter: (t) => t.replace('### Ta ronde rend un delta du chantier, ou un arbitrage', '### Ta ronde fait le tour'),
+  },
+  {
+    id: 'l-excursion-remplace-la-livraison',
+    quoi: 'la conduite devant une découverte d’infrastructure est retournée — le tour suivant lui est consacré, exactement P-20260822-0001',
+    cible: 'la-ronde-rend-un-delta',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**et l\'on revient au dossier** — jamais une excursion qui remplace la livraison.',
+      '**et le tour suivant peut lui être consacré** — un défaut du parc sert tous les chantiers à la fois.',
+    ),
+  },
+  {
+    id: 'le-motif-mesure-du-delta-disparait',
+    quoi: 'la règle du delta perd son chiffre — sans P-20260822-0001, elle se relit comme une préférence',
+    cible: 'la-ronde-rend-un-delta',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^⚠️ \*\*Mesuré, et c'est le motif de cette règle\*\*.*\n/m,
+      '',
+    ),
+  },
+
+  // ── LA MAQUETTE OPPOSABLE (RA-ORC-044, D-20260826-0010) — les trois moments, un à la fois.
+  {
+    id: 'le-gwt-perd-sa-maquette',
+    quoi: 'le G/W/T « conforme à la maquette X » redevient facultatif au découpage — le défaut exact de la première livraison de la vue du parc',
+    cible: 'la-maquette-est-opposable',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Et quand le chantier a des maquettes, chaque story user-facing porte un G/W/T « conforme à la maquette X ».**',
+      '**Et quand le chantier a des maquettes, les stories peuvent les nommer dans leurs G/W/T quand c\'est utile.**',
+    ),
+  },
+  {
+    id: 'l-annonce-se-passe-de-la-comparaison',
+    quoi: 'la comparaison livré ↔ maquette quitte l’exigence de validation — une annonce sans preuve redevient une annonce',
+    cible: 'la-maquette-est-opposable',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      ' — et, sur un lot user-facing d\'un chantier maquetté, la comparaison du livré à la maquette : une annonce de livraison sans elle est une annonce sans preuve.',
+      ' —',
+    ),
+  },
+  {
+    id: 'le-brief-perd-ses-maquettes-opposables',
+    quoi: 'le brief du chef d’équipe redonne des « wireframes » sans statut — l’agent livre ce qu’il comprend, pas ce qui est dessiné',
+    cible: 'la-maquette-est-opposable',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**maquettes** ; la maquette est un **critère d\'acceptation opposable** : chaque story user-facing porte son G/W/T « conforme à la maquette X », et son annonce de livraison porte le verdict de la comparaison livré ↔ maquette.',
+      'wireframes.',
     ),
   },
 ];

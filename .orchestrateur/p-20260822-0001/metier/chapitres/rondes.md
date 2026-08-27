@@ -1,9 +1,9 @@
 # rondes
 
 > **En un mot** — Ce qu'un tour de ronde parcourt, et ce qu'il en tire.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
-> **Répond de** RA-ORC-011 · RA-ORC-015 · RA-ORC-017 · RA-ORC-033 · RA-ORC-034
+> **Répond de** RA-ORC-011 · RA-ORC-015 · RA-ORC-017 · RA-ORC-033 · RA-ORC-034 · RA-ORC-043
 
 # R5 — Tes rondes
 
@@ -74,6 +74,14 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 > **Une ronde ne rend pas un état : elle en tire une conséquence. Sinon elle est un journal, et un journal que personne ne lit n'a rien dit.**
 
 C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Ce n'est pas une maxime en l'air — elle a été payée** : voir le cas mesuré du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*, où une ronde a correctement listé trois agents `done` et n'en a rien conclu. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
+
+### Ta ronde rend un delta du chantier, ou un arbitrage
+
+> **Chaque tour se termine sur l'un des deux : un avancement visible de la livraison — une story complétée, une livraison qui a bougé — ou un blocage nommé, avec la décision demandée au CTO.**
+
+Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 : inscrire n'est pas exécuter) **et l'on revient au dossier** — jamais une excursion qui remplace la livraison.
+
+⚠️ **Mesuré, et c'est le motif de cette règle** : quatre jours sur un projet, sept epics, un complété, **zéro livraison enregistrée, zéro trace de travail liée** — l'énergie de la semaine était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
 
 ## 2 — Ta propre ligne et ta propre boîte de saisie
 

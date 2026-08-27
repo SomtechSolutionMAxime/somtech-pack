@@ -1,7 +1,7 @@
 # servicedesk
 
 > **En un mot** — Tenir le ServiceDesk du chantier : ce qui s'ouvre en Demande, les statuts, la filiation.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
 > **Répond de** RA-ORC-005 · RA-ORC-009 · RA-ORC-022 · RA-ORC-023 · RA-ORC-025 · RA-ORC-026 · RA-ORC-035
 

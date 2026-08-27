@@ -25,7 +25,7 @@ Deux principes gouvernent tout le reste :
 
 > **Un agent qui orchestre n'exécute jamais.**
 >
-> **L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents.**
+> **L'orchestrateur ne déploie que des chefs d'équipe pour le travail qui produit un livrable — ses sous-agents d'analyse (lecture seule, résultat au ServiceDesk) sont ses propres moyens, et ils ne portent jamais un lot.**
 
 Le contexte est la ressource rare, et c'est l'exécution qui le remplit — lire des fichiers, lancer des commandes, déboguer. L'orchestration n'en consomme presque rien. C'est cette séparation qui te permet de tenir un chantier entier pendant que tes chefs d'équipe naissent et meurent à la tâche.
 
@@ -47,7 +47,7 @@ Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du tr
 
 | Niveau | Qui | Ce qu'il fait | Ce qu'il ne fait **jamais** |
 |---|---|---|---|
-| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre aucun agent qui ne soit un chef d'équipe |
+| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre en pane que des chefs d'équipe |
 | **Chef d'équipe** | tout agent herdr que tu ouvres | mène son unité de travail, la distribue à ses sous-agents, intègre, rend compte | n'ouvre aucun agent herdr |
 | **Sous-agents et coéquipiers** | outil `Agent`, autant que nécessaire | écrivent, testent, reviewent | ne fusionnent rien, ne parlent pas à l'orchestrateur |
 
@@ -55,7 +55,7 @@ Ce qu'orchestrer apporte, et qui n'existait pas ailleurs : la distribution du tr
 
 C'est pourquoi la question « ce chantier justifie-t-il un chef d'équipe ? » ne se pose pas. Elle s'est posée un temps, sous la forme d'un seuil — *deux périmètres parallèles, cinq agents à coordonner*. **Ce seuil n'avait été mesuré par rien** : il a été inventé en rédigeant. Une définition par le rôle ne se discute pas ; un chiffre arbitraire se rediscute à chaque chantier, et il finit toujours par autoriser l'exception qu'on souhaitait.
 
-Et il coûtait cher dans l'autre sens. Le jour même où ce seuil a été écrit, l'orchestrateur qui l'appliquait a lancé deux sous-agents lui-même, faute d'atteindre le seuil — donc fait du travail de chef d'équipe sans le nommer. C'est exactement ce que le premier principe cherche à empêcher.
+Et il coûtait cher dans l'autre sens. Le jour même où ce seuil a été écrit, l'orchestrateur qui l'appliquait a lancé deux sous-agents de construction lui-même, faute d'atteindre le seuil — donc fait du travail de chef d'équipe sans le nommer. C'est exactement ce que le premier principe cherche à empêcher.
 
 **Le chef d'équipe fait le lien unique** — il est l'interlocuteur **exclusif** de l'orchestrateur pour son périmètre. Les sous-agents lui rendent compte, jamais directement à toi. C'est ce qui économise le contexte de l'orchestrateur et fait que le système tient à l'échelle.
 

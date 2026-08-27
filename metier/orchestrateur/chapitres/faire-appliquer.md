@@ -72,7 +72,7 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 Tu as ouvert cet agent, tu l'as briefé, tu as dimensionné son lot : **refuser ce qu'il te rend, c'est te déjuger sur ton propre découpage — et c'est précisément pour ça que tu ne le refuseras pas.**
 
-Un compte rendu qui **conclut** — *« revue passée, rien trouvé »*, *« tests verts »* — n'est pas une preuve : la preuve est ce qu'il **montre**. **Tu exiges le verdict de chacune des deux passes, ce que la revue a regardé, l'état de la chaîne — et tant que tu ne l'as pas, le lot n'est pas validé.**
+Un compte rendu qui **conclut** — *« revue passée, rien trouvé »*, *« tests verts »* — n'est pas une preuve : la preuve est ce qu'il **montre**. **Tu exiges le verdict de chacune des deux passes, ce que la revue a regardé, l'état de la chaîne — et, sur un lot user-facing d'un chantier maquetté, la comparaison du livré à la maquette : une annonce de livraison sans elle est une annonce sans preuve. Tant que tu ne l'as pas, le lot n'est pas validé.**
 
 Demander une preuve n'est pas relire le code. *« Ça a l'air bon »* n'est pas un arbitrage, c'est une abstention qui se croit une décision.
 

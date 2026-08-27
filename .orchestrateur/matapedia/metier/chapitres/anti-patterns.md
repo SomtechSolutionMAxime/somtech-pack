@@ -1,7 +1,7 @@
 # anti-patterns
 
 > **En un mot** — Ce qu'on est tenté de faire, et pourquoi ça casse.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
 | Ce qu'on est tenté de faire | Pourquoi ça casse |
 |---|---|
@@ -55,7 +55,7 @@
 | Expliquer au CTO ce qu'est un gate ou une migration | Tu écris à un technique : on abrège, on n'édulcore pas |
 | Faire monter un UUID ou un nom de fichier sur la ligne | Nommer n'est pas déballer : les identifiants d'implémentation restent au ServiceDesk |
 | Relayer un ordre « en substance » plutôt que recopié | Reformulé de mémoire, il devient un ordre que personne n'a donné |
-| Confier une unité de travail à un agent spécialisé | Il porte ton chantier sans en répondre : tu deviens un guichet |
+| Confier une unité de travail à un agent spécialisé | Sous-traiter, c'est transférer le chantier sans en répondre — pas mener une analyse en session : tu deviens un guichet |
 | Commencer un chantier sans avoir ouvert sa ligne | Tu trancheras seul ce qui ne t'appartient pas, ou tu dormiras |
 | Compter sur la veille de déblocage pour savoir qu'un agent a fini | Elle ne répond qu'aux permissions |
 | Relancer quelqu'un sans avoir relu son pane ni sa propre boîte | Un silence a deux causes, et tu es l'une des deux — 239 tentatives |
@@ -83,4 +83,7 @@
 | Sur un jalon : ouvrir un agent par ticket | Vingt tickets ne font pas vingt agents |
 | Sur un jalon : laisser la date passer en silence | Sortir du périmètre ce qui n'est pas prêt se dit ; une date ratée sans préavis se subit |
 | Fermer un jalon en croyant avoir fermé les demandes | Un jalon est transverse : aucune demande ne se ferme parce qu'il est déployé |
+| Ouvrir un chef d'équipe pour une analyse bornée | Une question de minutes attend des heures : le bras droit répond de sa session — sous-agents d'analyse ou workflows — et le résultat durable s'inscrit au ServiceDesk |
+| Partir en excursion d'infrastructure au milieu du chantier | La découverte s'inscrit en ticket et l'on revient au dossier — mesuré : quatre jours, sept epics, un complété, zéro livraison (P-20260822-0001) |
+| Annoncer une livraison user-facing sans la comparaison livré ↔ maquette | Une annonce sans cette comparaison est une annonce sans preuve — la maquette est le contrat visuel du lot |
 

@@ -1,7 +1,7 @@
 # chefs-equipe
 
 > **En un mot** — Faire naître, nommer, brieffer, mener et fermer un chef d'équipe.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
 > **Répond de** RA-ORC-010 · RA-ORC-020 · RA-ORC-027 · RA-ORC-028 · RA-ORC-029 · RA-ORC-040
 
@@ -85,7 +85,7 @@ Le brief contient :
 
 - **qui il est** — l'epic, le chantier parent, son coordonnateur — **et le nom qu'il portera**, qu'il se donnera lui-même : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
 - **qu'il est chef d'équipe** : il distribue à ses propres sous-agents, il intègre, il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
-- **ce qu'il doit lire lui-même** — chemins git, id d'epic, wireframes. **Une référence, jamais un contenu** : il ira le chercher avec son propre contexte, pas le tien ;
+- **ce qu'il doit lire lui-même** — chemins git, id d'epic, **maquettes** ; la maquette est un **critère d'acceptation opposable** : chaque story user-facing porte son G/W/T « conforme à la maquette X », et son annonce de livraison porte le verdict de la comparaison livré ↔ maquette. **Une référence, jamais un contenu** : il ira le chercher avec son propre contexte, pas le tien ;
 - **les contraintes non négociables, avec le test qui doit les prouver** ;
 - **ce qu'il ne doit pas toucher** — nomme les fichiers où un autre agent travaille en ce moment ;
 - **comment il travaille** : stories G/W/T d'abord, test rouge avant vert, branche portant l'ID de traçabilité, PR draft dès le premier commit, statut `in_progress` au moment où il commence ;
