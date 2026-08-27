@@ -139,7 +139,7 @@ Ce ne sont pas des interdits de plus : ce sont des **symptômes**. Quand tu te s
 
 | Le geste | À qui il appartient | Ce qu'il révèle, et ce qu'on corrige à la source |
 |---|---|---|
-| **Renommer** un agent | à lui-même | Son brief ne lui a pas dit son nom. Écris-le dedans — *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* — comme tu t'es nommé toi-même (§1). Toi, tu **vérifies** qu'il l'a fait ; lire n'est pas exécuter |
+| **Renommer** un agent | **personne — le geste l'a nommé** | `pack agent naitre` le nomme du code de son mandat et **vérifie par le fait** ; il referme le pane si le nom n'est pas porté. Ne le lui redemande pas dans son brief : il se renommerait par-dessus, son nom cesserait d'apparier sa déclaration, et la garde le prendrait pour un agent né hors dispositif |
 | **Débloquer** une permission | à la veille, jamais à ta main | Deux causes : l'agent est né sur le mauvais modèle (voir la déclaration du modèle), ou personne n'a posé la veille de déblocage à sa naissance. Répare la naissance, pas l'instance |
 | **Corriger** un script qui échoue chez lui | à lui | Tu es en train de déboguer — c'est de l'exécution, la plus coûteuse qui soit en contexte. Renvoie-lui le constat, pas le correctif |
 | **Relancer** un processus mort | à lui | Un agent qui ne se relève pas seul est un agent dont le but ne dit pas quand il a fini (§4c-bis), ou dont le brief ne dit pas quoi faire en cas d'échec |
@@ -350,7 +350,7 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 
 **a. Écrire le brief au registre.** Jamais dans le terminal — un retour à la ligne soumet le prompt et coupe le message en deux — et **jamais dans un fichier** : si tu es né d'un lieu posé, écrire t'est refusé par tes droits, et un brief déposé dans un worktree disparaît avec lui. Il va donc là où vit déjà l'unité de travail : la **description de l'epic** (`epics` action `update`), ou le **ticket** quand le lot n'a pas d'epic (`tickets` action `add_comment`). Il y survit à ta session, celui qui reprendra le lit, et la filiation de §4b-bis s'écrit au même endroit. Le brief contient :
 
-- qui il est (l'epic, le chantier parent, son coordonnateur) — **et le nom qu'il porte**, qu'il se donnera lui-même en naissant : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
+- qui il est (l'epic, le chantier parent, son coordonnateur). ⚠️ **Pas son nom** : le geste l'a déjà nommé et vérifié — le lui redemander le ferait se renommer par-dessus, et la garde le prendrait pour un agent né hors dispositif ;
 - **qu'il est chef d'équipe** : il distribue à ses propres sous-agents ce qui se distribue, il intègre, et il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
 - **ce qu'il doit lire lui-même** — chemins git, id d'epic, wireframes. *Une référence, jamais un contenu* : il ira le chercher avec son propre contexte, pas le tien ;
 - les contraintes non négociables, avec **le test qui doit les prouver** ;
@@ -386,7 +386,7 @@ P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
 
 **Pourquoi ce geste est décomposé** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Voir la section sur la déclaration du modèle.
 
-**Le nom, c'est lui qui se le donne** : son brief le lui dit (*« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »*), et c'est à lui de faire le geste — pas à toi (voir « Ce que tu ne fais pas de tes mains »). Toi, tu **vérifies** :
+**Le nom, c'est le geste qui le donne** : `pack agent naitre` nomme l'agent du code de son mandat, puis **vérifie par le fait** et referme le pane si le nom n'est pas porté. ⚠️ **Ne le lui redemande pas dans son brief** : il se renommerait par-dessus, son nom cesserait d'apparier sa déclaration, et la garde le prendrait pour un agent né hors dispositif. Toi, tu **vérifies** — lire n'est pas exécuter : Toi, tu **vérifies** :
 
 ```bash
 herdr agent get "$P" | jq -e '.result.agent.name == "e-20260727-0010"' \

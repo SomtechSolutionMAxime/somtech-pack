@@ -27,7 +27,7 @@
 
 **⚠️ TON LIEU, LUI, GARDE LE CODE DU MANDAT.** `.orchestrateur/j-20260814-0001/` reste `.orchestrateur/j-20260814-0001/` même quand l'agent qui l'habite s'appelle `bonaventure`. Les deux ne servent pas la même chose : **le lieu est attaché à un chantier** — il est versé dans le dépôt de ce chantier, et son `CONTEXTE.md` décrit *ce* chantier ; **le nom sert à t'adresser la parole**. La naissance te le dit à voix haute quand les deux diffèrent, et c'est normal, pas une incohérence.
 
-**Ce que ça ne change pas** : ta traçabilité. Le code du mandat reste lisible dans le chemin de ton lieu — ce chemin, seul, t'y rattache. ⚠️ **Ta propre naissance n'inscrit rien nulle part** : seul un **chef d'équipe** est déclaré.
+**Ce que ça ne change pas** : ta traçabilité. Le code du mandat reste lisible dans le chemin de ton lieu — ce chemin, seul, t'y rattache. ⚠️ **Ta naissance n'inscrit rien nulle part** : seul un **chef d'équipe** est déclaré.
 
 **Un orchestrateur vivant qui porte encore un code ne se renomme pas** — renommer appartient à l'agent. Il recevra sa rivière **à sa renaissance**.
 
@@ -42,7 +42,7 @@ d-20260807-0005 orchestration et veille
 
 Pas le domaine, pas le rôle, pas l'état. « e-20260807-0006 orchestration » ne distingue rien d'un onglet voisin.
 
-**Te nommer toi-même, en naissant** — toi seul : ceux que tu ouvres, le geste les nomme.
+**Te nommer toi-même, en naissant** — toi seul : le geste nomme les autres.
 
 ```bash
 herdr pane current                                  # ton pane (result.pane.pane_id)
@@ -76,7 +76,7 @@ Il va donc où vit l'unité de travail : la **description de l'epic** (`epics` a
 
 Le brief contient :
 
-- **qui il est** — l'epic, le chantier parent, son coordonnateur — **et le nom qu'il portera**, qu'il se donnera lui-même : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
+- **qui il est** — l'epic, le chantier parent, le coordonnateur. ⚠️ **Pas son nom** : le geste l'a nommé et vérifié. Le redemander le ferait se renommer par-dessus — sa déclaration ne l'apparierait plus, et la garde l'accuserait ;
 - **qu'il est chef d'équipe** : il distribue à ses propres sous-agents, il intègre, il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
 - **ce qu'il doit lire lui-même** — chemins git, id d'epic, wireframes. **Une référence, jamais un contenu** : il ira le chercher avec son propre contexte, pas le tien ;
 - **les contraintes non négociables, avec le test qui doit les prouver** ;
@@ -100,7 +100,7 @@ NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
 P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok).pane') || printf '%s\n' "$NAISSANCE" >&2
 ```
 
-**Elle fait tout, ou le défait.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant le moindre appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, le tout **en JSON**. ⚠️ **Un refus défait tout — sauf un agent né** : il vit, et la sortie rend `ok:false`, sa cause, son pane.
+**Elle fait tout, ou le défait.** Espace de travail — `~/worktrees/<dépôt>/<horodatage>`, branche-socle `wt/<horodatage>` sur `origin/main` — **avant tout appel à herdr** (règle d'or n°11), jamais un arbre réutilisé. Onglet dedans, **modèle et mode déclarés**, agent **nommé du code de son mandat** puis **vérifié par le fait**. Puis la naissance **inscrite hors dépôt**, `assigned_agent` **rempli**, **en JSON**. ⚠️ **Un refus défait tout — sauf un agent né** : il vit, et la sortie rend `ok:false`, sa cause, son pane.
 
 ⚠️ **Vérifie par le fait** — ici `ok` : le pane sort **à l'identique** d'un succès et d'un refus. Sans `select(.ok)` tu brieffes un refusé : non déclaré (la garde le prend) ou déclaré sans amorce (elle le croit bon).
 
@@ -108,7 +108,7 @@ P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok).pane') || printf '%s\n' "$N
 
 ⚠️ **`--coordonnateur`, c'est TOI** : sans lui, la déclaration tait qui l'ouvre.
 
-⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket **encore ouvert**, un `E-…` sur ses stories **encore ouvertes** — un fini garde le nom de qui l'a fait, un vivant au nom d'un autre est **repris**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein sur une reprise ou un saut.
+⚠️ **`assigned_agent` n'aboutit pas partout, et son échec ne tue jamais la naissance** : un `T-…` le reçoit sur son ticket **encore ouvert**, un `E-…` sur ses stories **ouvertes** — un fini garde le nom de qui l'a fait, un vivant au nom d'un autre est **repris**, et ça se dit. Un epic non découpé n'a rien à remplir ; demande, projet et livraison sont **refusés**. La sortie dit la cause, et n'annonce jamais un succès plein sur une reprise ou un saut.
 
 ⚠️ **L'onglet porte le nom de l'agent** — pas le libellé « code + deux à quatre mots » ci-dessus.
 
