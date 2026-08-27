@@ -662,10 +662,28 @@ test('SANS TTY, L’ÉCRAN SE DESSINE QUAND MÊME — le repli de `dessiner`, ju
       `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne porte même pas « ${RACCOURCI_VITAL} » : ` +
         `${JSON.stringify(barre.slice(-60))} — le repli a été rétréci et un journal ne reçoit plus rien de lisible`
     );
+    // ═══ ③ ET LE REPLI DE HAUTEUR TIENT SA MAGNITUDE, PAS SEULEMENT SON EXISTENCE.
+    //
+    // 🔴 CETTE ASSERTION EXIGEAIT `> 2`, ET C'ÉTAIT LE JUMEAU VERTICAL DU DÉFAUT D'À CÔTÉ.
+    // Mesuré : `rows || 30` remplacé par 3, 5 ou 10 — AUCUN rouge sur la suite entière. Le seuil
+    // réellement gardé était « ≥ 3 », pas 30 : un facteur DIX entre ce que la prose affirme
+    // (« un écran de 100×30 est un défaut raisonnable ») et ce qu'un banc pouvait détecter.
+    //
+    // À 3 lignes, `hauteurCorps = max(1, 3 - 2)` vaut 1 : le lecteur d'un journal reçoit UNE
+    // ligne d'arbre au lieu de 28, en silence. La moitié horizontale du couple était gardée par
+    // l'assertion d'en-tête ; la verticale ne l'était pas.
+    //
+    // ⚠️ ON PINCE LA MAGNITUDE PAR CE QUE L'ÉCRAN DOIT PORTER, pas par un chiffre : le repli
+    // doit laisser au CORPS de quoi montrer plusieurs lignes d'arbre — sinon il ne tient pas sa
+    // promesse de « dessiner quelque chose » d'utile. La borne se dérive des deux bandeaux
+    // (titre + pied) que `rendreEcran` retranche toujours.
+    const BANDEAUX = 2;
+    const CORPS_MINIMAL = 10;
     assert.ok(
-      lignes.length > 2,
-      `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne fait que ${lignes.length} ligne(s) — ` +
-        'le repli de HAUTEUR a été rétréci lui aussi'
+      lignes.length - BANDEAUX >= CORPS_MINIMAL,
+      `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne laisse que ` +
+        `${lignes.length - BANDEAUX} ligne(s) d’arbre entre ses deux bandeaux — le repli de HAUTEUR ` +
+        `a été rétréci, et un journal ne reçoit plus qu’un fragment du parc`
     );
   }
 });
