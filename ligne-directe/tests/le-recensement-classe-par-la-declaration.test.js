@@ -1541,6 +1541,90 @@ test('un agent sans rapport ne change pas de rendu quand le registre est VIDE', 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑫-vicies LE 3e G/W/T SUR LES QUATRE VOIES — parce qu'en fermer UNE ne le tient pas.
+//
+// 🔴 SIXIÈME MOITIÉ DE CE LOT. Une revue a trouvé que la voie du NOM REFUSÉ violait le critère ;
+// je l'ai bornée là où elle était. La revue suivante a trouvé son JUMEAU STRUCTUREL — la voie du
+// CHEMIN ABSENT, non bornée, celle qui s'exécute EN PREMIER — et le banc que je venais d'écrire
+// ne pouvait pas la voir : sa fixture donne toujours un `cwd`.
+//
+// ⚠️ LA GARDE EST DONC UNIQUE ET EN TÊTE, pas une borne par voie : un registre où il n'y a NI
+// fait, NI fichier abîmé, NI refus de lecture n'a rien qui puisse concerner qui que ce soit. Ce
+// banc éprouve LES VOIES, pas la garde — c'est ce qui le rend valable pour la voie que quelqu'un
+// ajoutera demain.
+test('sur un registre VIDE, AUCUNE voie ne fait bouger un agent sans rapport', async () => {
+  const sansEspace = {
+    pane_id: 'w9:p9',
+    agent: 'claude',
+    agent_session: { agent: 'claude', kind: 'id', value: 's' },
+    agent_status: 'working',
+    herdr_socket: SESSION,
+    // ni `foreground_cwd`, ni `cwd` — la voie que le premier correctif n'atteignait pas.
+  };
+  const voies = [
+    ['chemin absent', sansEspace, nomsDe([['w9:p9', 'bonaventure']])],
+    ['nom refusé', pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' }), nomsDe([])],
+    ['nom refusé en bloc', pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' }), { mesure: 'refusée', raison: 'herdr a refusé' }],
+    ['agent ordinaire', pane({ pane_id: 'w9:p9', cwd: '/Users/qui/ailleurs' }), nomsDe([['w9:p9', 'bonaventure']])],
+  ];
+
+  for (const [quelle, unPane, nomsConnus] of voies) {
+    const sans = await recenser({ panes: [unPane], nomsConnus });
+    const vide = await recenser({ panes: [unPane], nomsConnus, declarations: { declarations: [], illisibles: [] } });
+
+    // 🔴 CHAMP PAR CHAMP, pas seulement `mesure` : c'est ce que « rendu identique » veut dire.
+    assert.deepEqual(vide.agents[0], sans.agents[0], `voie « ${quelle} » : le rendu a bougé`);
+    assert.equal(vide.agents[0].role.mesure, 'non établi', `voie « ${quelle} »`);
+  }
+});
+
+// ⚠️ ET LE MORDANT REVIENT DÈS QU'IL Y A QUELQUE CHOSE À CACHER — les trois formes, une par une.
+// Sans ce contre-sens, la garde d'entrée pourrait être élargie jusqu'à tout taire.
+test('dès que le registre porte QUELQUE CHOSE, les voies retrouvent leur mordant', async () => {
+  const sansEspace = {
+    pane_id: 'w9:p9',
+    agent: 'claude',
+    agent_session: { agent: 'claude', kind: 'id', value: 's' },
+    agent_status: 'working',
+    herdr_socket: SESSION,
+  };
+  const porteurs = [
+    ['un fait', { declarations: [declaration({ nom: 'quelquun-dautre', espace: '/ailleurs' })], illisibles: [] }],
+    ['un illisible', { declarations: [], illisibles: [{ fichier: 'x.json', cause: 'abîmé' }] }],
+    ['un refus global', { declarations: [], illisibles: [], refusGlobal: 'EACCES' }],
+  ];
+
+  for (const [quoi, declarations] of porteurs) {
+    const rendu = await recenser({
+      panes: [sansEspace],
+      nomsConnus: nomsDe([['w9:p9', 'bonaventure']]),
+      declarations,
+    });
+    assert.equal(rendu.agents[0].role.mesure, 'refusée', `le registre porte ${quoi} : la voie doit mordre`);
+  }
+});
+
+// ⚠️ ET UNE DÉCLARATION TROUVÉE SANS RÔLE NE S'EFFACE PLUS. La fonction composait déjà la phrase
+// pour ce cas, mais seules deux de ses branches l'employaient : nom mesuré et aucun illisible, on
+// rendait `null`, et l'appelant affirmait « son chemin ne passe par le lieu d'aucun rôle connu »
+// — la prose d'un agent dont on n'a RIEN trouvé, alors qu'on venait de lire sa déclaration.
+test('une déclaration trouvée sans rôle se DIT, même sans illisible ni nom refusé', async () => {
+  const nu = declaration();
+  delete nu.role;
+  const rendu = await recenser({
+    panes: [pane()],
+    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+    declarations: { declarations: [nu], illisibles: [] },
+  });
+
+  // La MESURE reste « non établi » : on n'a pas raté une mesure, on a constaté une absence.
+  assert.equal(rendu.agents[0].role.mesure, 'non établi');
+  // Ce qui change est qu'on dit LAQUELLE.
+  assert.match(rendu.agents[0].role.pourquoi, /une déclaration l’apparie mais ne porte AUCUN rôle/);
+  assert.doesNotMatch(rendu.agents[0].role.pourquoi, /ne passe par le lieu d’aucun rôle connu/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⑬ UN INVENTAIRE QUI REFUSE RESTE UN REFUS — le registre des déclarations ne le recouvre pas.
 test('un inventaire refusé rend « agents: null » même avec un registre de déclarations', async () => {
   const rendu = await recenser({

@@ -389,6 +389,29 @@ const ILLISIBLES_NOMMES = 3;
 function declarationDuPane(p, chemin, registre, nom) {
   if (!registre) return null;
 
+  // 🔴 UN REGISTRE TOTALEMENT VIDE NE PEUT RIEN CACHER — ET CETTE GARDE EST UNIQUE, PAS UNE
+  // QUATRIÈME BORNE DISPERSÉE.
+  //
+  // Le G/W/T ③ de cette story dit « seuls les agents déclarés ont changé de rendu ». Une revue a
+  // trouvé une voie qui le violait (le nom refusé) ; je l'ai bornée là où elle était — et la
+  // revue suivante a trouvé son JUMEAU STRUCTUREL, la voie `!chemin`, non bornée, celle qui
+  // s'exécute EN PREMIER. Sixième fois que ce lot corrige une moitié.
+  //
+  // ⚠️ ON NE POSE DONC PAS UNE TROISIÈME BORNE : on formule la propriété UNE fois, à l'entrée.
+  // Un registre où il n'y a NI fait, NI fichier abîmé, NI refus de lecture n'a rien qui puisse
+  // concerner qui que ce soit — aucune de ses voies ne doit alors faire bouger un rendu. Une
+  // borne par voie laisse le prochain qui en ajoutera une la reproduire ou l'oublier ; celle-ci
+  // vaut d'avance pour les voies qui n'existent pas encore.
+  //
+  // ⚠️ ET ELLE NE MASQUE AUCUN DOUTE RÉEL : dès qu'UNE déclaration, UN illisible ou UN refus
+  // global existe, toutes les voies retrouvent leur mordant — c'est ce que les bancs exigent des
+  // deux côtés, voie par voie.
+  const registreMuet =
+    (registre.declarations?.length ?? 0) === 0 &&
+    (registre.illisibles?.length ?? 0) === 0 &&
+    !registre.refusGlobal;
+  if (registreMuet) return null;
+
   // 🔴 UN ESPACE NON MESURÉ N'EST PAS UN ESPACE QUI NE CORRESPOND PAS — et c'était le seul champ
   // du module sans son troisième état. Les DEUX clés d'appariement passent par l'espace ; quand
   // `foreground_cwd` et `cwd` manquent tous les deux, `memeEspaceDeTravail(null, …)` rend `false`
@@ -546,7 +569,11 @@ function declarationDuPane(p, chemin, registre, nom) {
   //
   // ⚠️ ET ELLE NE FERME PAS LE CAS D'ORIGINE : dès qu'UNE déclaration circule, un nom non mesuré
   // rend toujours « refusée » — c'est le faux négatif que cette branche existe pour empêcher.
-  if (nom?.mesure === 'refusée' && (registre.declarations?.length ?? 0) > 0) {
+  // ⚠️ PLUS DE BORNE LOCALE ICI : la garde d'entrée l'a absorbée, et deux expressions de la même
+  // règle divergeraient au premier correctif appliqué d'un seul côté. Ce qui reste vrai — un nom
+  // non mesuré retire la clé de repli, donc « pas trouvée » ne vaut pas « absente » — ne vaut
+  // que parce qu'il y a quelque chose à trouver, ce que l'entrée a déjà établi.
+  if (nom?.mesure === 'refusée') {
     return {
       mesure: 'refusée',
       nom: null,
@@ -561,6 +588,23 @@ function declarationDuPane(p, chemin, registre, nom) {
           `— or le nom est la clé de repli de l’appariement : sans lui, « pas trouvée » ne vaut pas « absente »`,
     };
   }
+  // ⚠️ UNE DÉCLARATION TROUVÉE MAIS SANS RÔLE NE S'EFFACE PAS — relevé en revue de fond. La
+  // fonction composait déjà `tete` pour ce cas, mais seules deux de ses branches l'employaient :
+  // quand ni un illisible ni un nom refusé ne s'appliquait, elle rendait `null` et l'appelant
+  // affirmait « son chemin ne passe par le lieu d'aucun rôle connu » — la prose d'un agent dont
+  // on n'a RIEN trouvé, alors qu'on a lu sa déclaration.
+  //
+  // ⚠️ ET LA MESURE RESTE « NON ÉTABLI », PAS « REFUSÉE » : on n'a pas raté une mesure, on a
+  // constaté une absence. C'est RA-VUE-003 — l'absence se montre — et ce qui change est
+  // seulement qu'on dit LAQUELLE.
+  if (trouvee) {
+    return {
+      mesure: 'non établi',
+      nom: null,
+      pourquoi: `${tete} — il n’y a donc pas de rôle à en tirer, et rien d’autre ne le classe`,
+    };
+  }
+
   return null;
 }
 
