@@ -12,6 +12,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -112,4 +114,59 @@ test('un outil qui n est pas Task passe SANS être jugé — la garde ne garde q
 test('🔴 une requête ILLISIBLE est refusée — la garde ne laisse pas passer ce qu elle n a pas vu', () => {
   const v = fil('ceci n est pas du JSON {');
   assert.equal(v.permissionDecision, 'deny');
+});
+
+// ═════════════════════ les modes de panne du fil — hérités de la garde d'écriture
+//
+// L'en-tête du fil revendique les garanties mesurées le 2026-08-24 sur la garde
+// jumelle (écriture) : verdict mal formé normalisé en refus, décision asynchrone,
+// décision qui lève, garde qui PEND. Un code identique ne suffit pas — sans ces
+// essais, rien ne garde qu'il le RESTE. Relevé par la revue de fond de PR #337 :
+// sa mutation « le timeout du fil passe de deny à allow » avait survécu à toute
+// la suite. Chacun des cas ci-dessous la tue, ou tue sa voisine.
+
+/** Le fil, monté sur une décision d'essai, hors du dépôt. */
+function filAvecDecision(source, requete = { tool_name: 'Task', tool_input: { subagent_type: 'Explore' } }, env = {}) {
+  const bidon = mkdtempSync(join(tmpdir(), 'smtk-sagent-'));
+  writeFileSync(join(bidon, 'sous-agent-decision.js'), source);
+  writeFileSync(join(bidon, 'sous-agent.js'), readFileSync(join(RACINE, 'gardes', 'sous-agent.js'), 'utf8'));
+  return JSON.parse(execFileSync(process.execPath, [join(bidon, 'sous-agent.js')],
+    { input: JSON.stringify(requete), encoding: 'utf8', env: { ...process.env, ...env } })).hookSpecificOutput;
+}
+
+test('🔴 une décision devenue ASYNCHRONE ne produit pas un verdict sans décision', () => {
+  // `decision === undefined` est OMIS par JSON.stringify : le verdict partirait sans
+  // décision, et Claude Code retomberait sur la demande de permission — un oui sous
+  // `acceptEdits`. Le fil normalise lui-même ce qu'il ne reconnaît pas.
+  const d = filAvecDecision('export function juger(){ return new Promise(() => {}); }\n');
+  assert.equal(d.permissionDecision, 'deny');
+  assert.match(d.permissionDecisionReason, /ne reconnaît pas|undefined/i);
+});
+
+test('🔴 une décision INVENTÉE est refusée — « peut-être » n est pas « allow »', () => {
+  const d = filAvecDecision('export function juger(){ return { decision: "peut-etre", raison: "x" }; }\n');
+  assert.equal(d.permissionDecision, 'deny');
+});
+
+test('🔴 une décision qui LÈVE est refusée — la garde ne rend pas un verdict qu elle n a pas calculé', () => {
+  const d = filAvecDecision('export function juger(){ throw new Error("panne d essai"); }\n');
+  assert.equal(d.permissionDecision, 'deny');
+  assert.match(d.permissionDecisionReason, /panne d essai|échoué/i);
+});
+
+test('🔴 une garde qui PEND rend son propre refus avant que l hôte ne l abandonne', () => {
+  // Un hook qui pend laisse le geste PASSER — le shell attend `node` avec lui, et
+  // `timeout` n'existe pas sur macOS. Le seul endroit d'où couper est l'intérieur du
+  // processus. ⚠️ Ce que ce délai ne ferme pas : une BOUCLE de calcul (Node est
+  // mono-thread). C'est pourquoi la décision reste la plus simple possible.
+  const d = filAvecDecision('await new Promise(() => {});\nexport function juger(){ return { decision: "allow", raison: "" }; }\n',
+    undefined, { SOMTECH_GARDE_DELAI_MS: '700' });
+  assert.equal(d.permissionDecision, 'deny');
+  assert.match(d.permissionDecisionReason, /verdict|700/i, 'le refus doit dire que le délai a été atteint');
+});
+
+test('le fil laisse passer un VRAI allow de décision d essai — sans quoi les refus ci-dessus ne prouveraient rien', () => {
+  const d = filAvecDecision('export function juger(){ return { decision: "allow", raison: "essai" }; }\n');
+  assert.equal(d.permissionDecision, 'allow');
+  assert.equal(d.permissionDecisionReason, 'essai', 'et la raison de la décision remonte telle quelle');
 });
