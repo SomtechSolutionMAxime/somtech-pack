@@ -32,6 +32,10 @@ import {
 } from './recensement.js';
 import { laVueDuParc, lecteurDeChantier, lecteurDeLieux, racinesDuPoste } from './vue-du-parc.js';
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
+// ⚠️ LE REGISTRE DES DÉCLARATIONS VIT HORS DÉPÔT (`~/.somtech/naissances`) et son lecteur est
+// celui qui l'écrit — on n'en écrit pas un second ici. C'est de l'I/O : le recensement, lui, le
+// reçoit par paramètre, comme toute son I/O.
+import { lireLesDeclarations } from '../../naissance-representant/src/declaration.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
 import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
@@ -147,6 +151,33 @@ export function refusLigneMuette(nature, autorises, chantier) {
       'destinée. Désigne le dirigeant une fois (« ligne-directe dirigeant <courriel> ») puis ' +
       'rouvre avec --au-dirigeant, ou nomme un invité avec --inviter <courriel>.',
   };
+}
+
+/**
+ * LE REGISTRE DES DÉCLARATIONS DU POSTE — et son refus ne coûte JAMAIS le recensement entier.
+ *
+ * ⚠️ TROIS ÉTATS, ET LES DEUX QUI SE RESSEMBLENT N'APPELLENT PAS LE MÊME GESTE.
+ *   • le répertoire n'existe pas — le cas NORMAL d'un poste où personne n'est encore né par le
+ *     dispositif. `lireLesDeclarations` rend un parc vide, et le recensement rend « non établi »
+ *     comme avant : l'absence se montre (RA-VUE-003) ;
+ *   • le répertoire est LÀ mais refuse la lecture — une mesure MANQUÉE. Elle arrive ici en
+ *     exception, et on la range en `illisibles`, forme que le recensement sait déjà lire : le
+ *     rôle devient « refusée », c'est-à-dire « va voir », jamais « il n'a pas de déclaration » ;
+ *   • un fichier abîmé parmi d'autres — `lireLesDeclarations` le range déjà lui-même.
+ *
+ * 🔴 CE QU'ON NE FAIT PAS : laisser l'exception remonter. Le registre des naissances est une
+ * source d'APPOINT du recensement ; un répertoire hors dépôt qui se ferme ferait alors
+ * disparaître les 83 agents du poste d'un registre dont tout l'objet est de dire qui est vivant.
+ */
+function lesDeclarationsDuPoste() {
+  try {
+    return lireLesDeclarations();
+  } catch (err) {
+    return {
+      declarations: [],
+      illisibles: [{ fichier: '(le registre entier)', cause: err?.message || String(err) }],
+    };
+  }
 }
 
 export class Veilleur {
@@ -1841,6 +1872,19 @@ export class Veilleur {
       lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
       etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
       nomsConnus,
+      // ⚠️ LE REGISTRE DES DÉCLARATIONS DE NAISSANCE — sans ce câblage, le correctif de
+      // T-20260825-0012 est inerte : `unRecensement` sans registre rend EXACTEMENT ce qu'il
+      // rendait avant, et c'est voulu. C'est donc ici, et nulle part ailleurs, que le poste réel
+      // gagne de classer ses chefs d'équipe.
+      //
+      // ⚠️ ET UN REGISTRE ILLISIBLE NE FAIT PAS TOMBER LA RONDE. `lireLesDeclarations` JETTE
+      // quand le répertoire est là mais refuse la lecture (permissions, montage qui décroche) —
+      // un état qu'elle sépare exprès de l'absence, qui est le cas NORMAL d'un poste où personne
+      // n'est encore né. Laisser cette exception remonter ferait perdre le recensement ENTIER
+      // pour une source d'appoint : 83 agents disparaîtraient du registre parce qu'un répertoire
+      // hors dépôt s'est fermé. On la range donc en `illisibles`, ce que le recensement sait
+      // déjà lire comme un refus de mesure — et le rôle devient « refusée », jamais « absente ».
+      declarations: lesDeclarationsDuPoste(),
       journaliser,
     });
   }

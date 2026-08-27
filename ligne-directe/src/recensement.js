@@ -71,6 +71,18 @@ import { role as roleDe, rolesConnus } from './roles.js';
 // de l'I/O et entre par paramètre (`etatDuMandat`). Recopier la forme ici la ferait diverger au
 // premier préfixe ajouté.
 import { familleDuMandat } from './mandat.js';
+// ⚠️ MÊME RAISON ENCORE : l'appariement d'une déclaration à un agent vivant est une RÈGLE, pas
+// une donnée — et elle est déjà écrite (`declaration-des-agents.js`, qui emprunte lui-même la
+// jointure d'espace à la garde qui l'a payée). La recopier ici la ferait diverger au premier
+// correctif appliqué d'un seul côté, et celle qui divergerait ferait porter à un agent le rôle
+// et le coordonnateur d'un autre. Ce n'est pas de l'I/O — les déclarations, elles, entrent par
+// paramètre, comme tout le reste.
+import {
+  declarationDeLAgent,
+  roleDeclareDe,
+  libellesDuRoleDeclare,
+  SOURCE_DECLAREE,
+} from './declaration-des-agents.js';
 
 /**
  * CE QUE CE RECENSEMENT NE PEUT PAS VOIR — par construction, et pas par accident.
@@ -283,6 +295,112 @@ function motDeLErreur(err) {
 }
 
 /**
+ * CE QUE LA DÉCLARATION DE NAISSANCE DIT D'UN AGENT SANS LIEU — ou `null` quand elle ne dit rien.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ TROIS SORTIES, ET LA TROISIÈME EST CELLE QUI COÛTE.
+ *
+ *   • un bloc `role` en `mesure: 'déclarée'` — une déclaration l'apparie et porte un rôle ;
+ *   • un bloc `role` en `mesure: 'refusée'` — ON N'A PAS PU CONCLURE, et l'appelant NE DOIT PAS
+ *     le lire comme une absence ;
+ *   • `null` — on a regardé, il n'y a rien : l'appelant rend « non établi », inchangé.
+ *
+ * 🔴 « PAS TROUVÉE » NE VAUT PAS « ABSENTE », ET DEUX CHOSES LE RENDENT VRAI ICI.
+ *
+ *   ① **Un fait ABÎMÉ peut être celui de cet agent-ci.** Le registre ne sait pas dire de qui
+ *      parlait un fichier qu'il n'a pas su lire. C'est mot pour mot la règle que
+ *      `garde-des-naissances.js` tient sur le même registre, un étage plus haut.
+ *   ② **Un nom NON MESURÉ retire la clé de repli.** Le nom retrouve un agent dont le pane a
+ *      bougé ; sans lui, l'appariement peut échouer sur un agent parfaitement déclaré. Et
+ *      `herdr agents()` a déjà été mesuré à 83 panes sur 227 un jour : une panne de lecture
+ *      suffirait, sinon, à faire retomber des agents déclarés dans « non établi ».
+ *
+ * ⚠️ ET UN REGISTRE ABSENT NE REFUSE PAS. `declarations = null` veut dire « on ne me l'a pas
+ * donné » : l'appelant rend alors EXACTEMENT ce qu'il rendait avant ce lot, prose comprise.
+ * C'est ce qui rend vérifiable « seuls les agents déclarés ont changé de rendu ».
+ */
+/**
+ * CE QUE LE REGISTRE DIT DE SA SOURCE DÉCLARÉE — et « on ne me l'a pas donnée » se DIT.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 CE CHAMP EXISTE PARCE QU'UNE MUTATION A SURVÉCU. Retirer le câblage du veilleur —
+ * `declarations: lesDeclarationsDuPoste()` — laissait les 1 065 essais du dépôt VERTS. C'est
+ * même une propriété VOULUE du paramètre : sans registre, le rendu est exactement celui d'avant
+ * T-20260825-0012. Le correctif devenait donc inerte sur le poste réel sans que rien ne rougisse,
+ * et les chefs d'équipe déclarés y redevenaient « rôle non établi » en silence.
+ *
+ * ⚠️ ET LE COMPTE NE POUVAIT PAS L'ATTRAPER : `roleDeclare` vaut 0 quand personne n'est déclaré
+ * COMME quand la source n'a pas été consultée. Un zéro qui recouvre deux états est très
+ * exactement ce que ce module refuse partout ailleurs — « je n'ai pas su regarder » n'est pas
+ * « j'ai regardé et il n'y a personne ».
+ *
+ * C'est donc au RENDU de porter la différence, dans `borne`, où vivent déjà les sessions muettes
+ * et les angles morts — c'est-à-dire tout ce qui borne ce que ce compte vaut.
+ */
+function ceQueDitLaSourceDeclaree(registre) {
+  if (!registre) {
+    return {
+      mesure: 'non donnée',
+      faits: null,
+      illisibles: null,
+      consequence:
+        'aucun registre de déclarations de naissance ne m’a été donné : les agents SANS lieu de ' +
+        'rôle sont tous rendus « rôle non établi », y compris ceux qui sont parfaitement ' +
+        'déclarés. Ce n’est PAS « aucun agent n’est déclaré » — c’est une source que je n’ai pas lue.',
+    };
+  }
+  const faits = Array.isArray(registre.declarations) ? registre.declarations.length : 0;
+  const illisibles = Array.isArray(registre.illisibles) ? registre.illisibles : [];
+  return {
+    mesure: 'lue',
+    faits,
+    // Nommés, pas comptés : un fait abîmé peut être celui de n'importe quel agent de ce rendu.
+    illisibles,
+  };
+}
+
+function declarationDuPane(p, chemin, registre, nom) {
+  if (!registre) return null;
+
+  const trouvee = declarationDeLAgent(
+    {
+      pane: p?.pane_id ?? p?.pane ?? null,
+      session: p?.herdr_socket ?? p?.socket ?? null,
+      espace: chemin,
+      nom,
+    },
+    registre.declarations
+  );
+  if (trouvee) {
+    // Une déclaration SANS rôle n'en invente pas un : on retombe sur ce qu'on rendait avant.
+    const declare = roleDeclareDe(trouvee);
+    if (declare) return declare;
+  }
+
+  const illisibles = Array.isArray(registre.illisibles) ? registre.illisibles : [];
+  if (illisibles.length) {
+    return {
+      mesure: 'refusée',
+      nom: null,
+      raison:
+        `aucune déclaration de naissance ne l’apparie, mais le registre en porte ` +
+        `${illisibles.length} d’ILLISIBLE(s) — la sienne peut être dedans : ` +
+        illisibles.map((i) => `${i.fichier} (${i.cause})`).join(', '),
+    };
+  }
+  if (nom?.mesure === 'refusée') {
+    return {
+      mesure: 'refusée',
+      nom: null,
+      raison:
+        `aucune déclaration de naissance ne l’apparie, mais ${nom.raison ?? 'son nom n’a pas été mesuré'} ` +
+        `— or le nom est la clé de repli de l’appariement : sans lui, « pas trouvée » ne vaut pas « absente »`,
+    };
+  }
+  return null;
+}
+
+/**
  * LE LIEU DE RÔLE QUE PORTE UN CHEMIN DE TRAVAIL — pour TOUS les rôles connus, pas un seul.
  *
  * ⚠️ CE QUI EST RENDU EST UN CANDIDAT, PAS UN RÔLE. Cette fonction ne lit que le CHEMIN : elle
@@ -432,6 +550,20 @@ export async function unRecensement({
   // orchestrateur porte « non mesuré » — jamais « ouvert ». Voir `mandat.js` pour la raison, et
   // la conduite qui en découle plus bas : **on ne propose rien à un mandat qu'on n'a pas mesuré.**
   etatDuMandat = null,
+  // ⚠️ LE REGISTRE DES DÉCLARATIONS DE NAISSANCE — INJECTÉ, et `null` VEUT DIRE « ON NE ME L'A
+  // PAS DONNÉ », jamais « personne n'est né ». C'est de l'I/O (il vit hors dépôt, dans
+  // `~/.somtech/naissances`) : il entre donc par paramètre comme tout le reste, ce qui garde ce
+  // module éprouvable loin du poste réel.
+  //
+  // ⚠️ SANS LUI, LE RENDU EST STRICTEMENT CELUI D'AVANT. Ce n'est pas de la prudence de style :
+  // c'est ce qui rend vérifiable la promesse « seuls les agents déclarés ont changé de rendu »
+  // (T-20260825-0012). Un appelant qui ne le passe pas ne voit RIEN bouger, pas même une prose.
+  //
+  // ⚠️ ET SA FORME PORTE CE QU'ON N'A PAS SU LIRE. `{ declarations, illisibles }` — un fait
+  // abîmé peut être celui de CET agent-ci, donc « pas trouvée » n'y vaut pas « absente » : un
+  // registre qui porte des illisibles rend le rôle « refusée », jamais « non établi ». C'est la
+  // règle que `garde-des-naissances.js` tient déjà sur le même registre, un étage plus haut.
+  declarations = null,
   // ⚠️ UN ENRICHISSEMENT, JAMAIS UNE SOURCE. Les noms viennent de `herdr.agents()`, dont la
   // complétude VARIE : 83 panes sur 227 le 2026-08-19, 94 sur 94 le 2026-08-22. S'en servir
   // pour savoir QUI EXISTE ferait reculer ce module au défaut qu'il ferme. On ne lui demande
@@ -564,6 +696,15 @@ export async function unRecensement({
     const candidat = lieuDeRoleDansLeChemin(chemin);
     const lieu = candidat?.lieu ?? null;
     const mandat = candidat?.mandat ?? null;
+    const pane = p?.pane_id ?? p?.pane ?? null;
+    // ⚠️ LA SESSION VOYAGE AVEC LE PANE, TOUJOURS. Un identifiant de pane n'est unique que dans
+    // sa session : ce poste en porte quinze, et deux y emploient le même `w5:p3`.
+    const socket = p?.herdr_socket ?? p?.socket ?? null;
+    // ⚠️ LE NOM SE MESURE ICI PLUTÔT QU'AU MOMENT DE RENDRE L'ENTRÉE, ET C'EST UN DÉPLACEMENT,
+    // PAS UN CALCUL DE PLUS. Il est la clé de REPLI de l'appariement d'une déclaration — un
+    // agent dont le pane a bougé n'est retrouvé que par lui — donc le rôle en dépend, et le
+    // rôle se décide avant. Une seconde mesure du nom ici en ferait deux qui peuvent diverger.
+    const nomDeCetAgent = nomDeLAgent(p, `${socket ?? ''}\u0000${pane}`, nomsConnus);
 
     // ═══ LE RÔLE, EN TROIS ÉTATS QUI NE SE REPLIENT PAS. « établi » · « non établi » (mesuré,
     // aucun rôle connu ne correspond) · « refusée » (le lieu ne s'est pas laissé lire). Le
@@ -571,7 +712,15 @@ export async function unRecensement({
     // il n'y a rien est indiscernable d'un module qui ment.
     let role;
     if (!candidat) {
-      role = {
+      // ═══ AUCUN LIEU NE LE PORTE — ON DEMANDE ALORS À SA DÉCLARATION DE NAISSANCE.
+      //
+      // ⚠️ ET SEULEMENT ICI. Un agent qui occupe un lieu de rôle passe par la branche du dessous,
+      // où le rôle se MESURE au lieu : le PROUVÉ prime le DÉCLARÉ (RA-VUE-006), et ajouter cette
+      // source ne peut donc pas dégrader une ligne qui était déjà juste. Un lieu à DEMI POSÉ y
+      // reste « non établi » avec sa prose — « va finir de le poser » est le geste à faire, et
+      // le recouvrir d'un rôle déclaré le ferait disparaître.
+      const declaree = declarationDuPane(p, chemin, declarations, nomDeCetAgent);
+      role = declaree ?? {
         mesure: 'non établi',
         nom: null,
         pourquoi:
@@ -785,8 +934,6 @@ export async function unRecensement({
     // métier illisible ne font JAMAIS conclure « à jour » : ils rendent `null`, qui se lit
     // « je ne sais pas » et ne se compte ni dans les à-jour ni dans les en-retard.
     const comparable = Boolean(mesure && reference?.empreinte);
-    const pane = p?.pane_id ?? p?.pane ?? null;
-    const socket = p?.herdr_socket ?? p?.socket ?? null;
     agents.push({
       pane,
       // ⚠️ LA SESSION EST RENDUE AVEC LE PANE, JAMAIS SANS. Un identifiant de pane n'est unique
@@ -801,7 +948,11 @@ export async function unRecensement({
       // ⚠️ LE NOM PORTE SA PROPRE MESURE. `pane list` ne rend JAMAIS de nom (0 sur 97, mesuré
       // le 2026-08-22) : tout vient du registre des agents, dont la complétude varie. « Pas de
       // nom » et « nom non lu » appellent deux gestes opposés — voir `nomDeLAgent`.
-      nom: nomDeLAgent(p, `${socket ?? ''}\u0000${pane}`, nomsConnus),
+      // ⚠️ MESURÉ UNE SEULE FOIS, PLUS HAUT — le rôle en dépend (il est la clé de repli de
+      // l'appariement d'une déclaration), donc il se mesure avant lui. Deux mesures du même nom
+      // sont deux choses qui peuvent diverger, et celle qui divergerait ferait rendre au registre
+      // un nom qui n'est pas celui sur lequel il a classé.
+      nom: nomDeCetAgent,
       // Ce que le LIEU nomme : le code du chantier pour un orchestrateur, le client pour un
       // représentant. `null` quand aucun lieu de rôle ne porte cet agent — et un `null` ici se
       // lit avec `role.mesure`, qui dit POURQUOI.
@@ -903,11 +1054,25 @@ export async function unRecensement({
   // ignore, et c'est précisément le tableau de bord « plus faux qu'une absence de tableau »
   // (HS-VUE-002). Les trois compartiments sont donc étanches, comme ceux du mandat au-dessus.
   const parRole = Object.fromEntries(rolesConnus().map((nom) => [nom, 0]));
+  // ⚠️ UN QUATRIÈME COMPARTIMENT, ET IL EST ÉTANCHE COMME LES TROIS AUTRES. Verser les rôles
+  // DÉCLARÉS dans `parRole` ferait dire au registre qu'il a MESURÉ ce qu'on lui a déclaré — la
+  // confusion exacte que RA-VUE-006 interdit. Les compter avec les « non établis » ferait
+  // l'inverse : il tairait ce qu'il sait. Un compte à part, donc, avec sa ventilation.
+  //
+  // ⚠️ ET `parRoleDeclare` N'EST PAS PRÉ-REMPLI depuis `rolesConnus()`. Les rôles déclarés ne
+  // sont PAS ceux de cette table (un chef d'équipe n'y est pas, et `chef-equipe.js` mesure ce
+  // que l'y forcer casse) : la pré-remplir afficherait des rôles à zéro qui ne se déclarent
+  // jamais, et tairait ceux qui se déclarent.
+  const parRoleDeclare = {};
+  let roleDeclare = 0;
   let roleNonEtabli = 0;
   let roleNonMesure = 0;
   for (const a of agents) {
     if (a.role.mesure === 'établi') parRole[a.role.nom] = (parRole[a.role.nom] ?? 0) + 1;
-    else if (a.role.mesure === 'refusée') roleNonMesure += 1;
+    else if (a.role.mesure === SOURCE_DECLAREE) {
+      roleDeclare += 1;
+      parRoleDeclare[a.role.nom] = (parRoleDeclare[a.role.nom] ?? 0) + 1;
+    } else if (a.role.mesure === 'refusée') roleNonMesure += 1;
     else roleNonEtabli += 1;
   }
 
@@ -924,6 +1089,16 @@ export async function unRecensement({
     .filter((nom) => parRole[nom] > 0)
     .map((nom) => `${parRole[nom]} ${roleDe(nom).libelle_pluriel}`);
 
+  // Les rôles DÉCLARÉS, nommés de la même façon — « 2 au rôle déclaré » ne dit pas quels rôles,
+  // donc ne dit toujours pas au dirigeant quelle tranche du parc il regarde.
+  //
+  // ⚠️ ET LE LIBELLÉ NE PASSE PAS PAR `roleDe`, QUI JETTE sur un rôle inconnu. Un registre qui
+  // mourrait entier parce qu'UNE déclaration porte un rôle futur serait le contraire de sa
+  // conduite : NOMMER ne décide de rien — c'est la règle que `libellePluriel` écrit déjà.
+  const rolesDeclares = Object.keys(parRoleDeclare)
+    .sort()
+    .map((nom) => `${parRoleDeclare[nom]} ${libellesDuRoleDeclare(nom).pluriel}`);
+
   // ⚠️ LE BATTEMENT DE CŒUR — ÉCRIT MÊME QUAND LA RONDE N'A RIEN TROUVÉ. Un dispositif qui ne se
   // signale que lorsqu'il a quelque chose à dire est indiscernable d'un dispositif mort ; c'est
   // le pire cas de `balayage.js`, et il ne se rejoue pas ici.
@@ -938,6 +1113,11 @@ export async function unRecensement({
       (panesIndecidables.length ? `${agents.length} agent(s)` : `AU MOINS ${agents.length} agent(s)`) +
       ' : ' +
       (rolesTrouves.length ? rolesTrouves.join(', ') : 'aucun rôle établi') +
+      // ⚠️ LES DÉCLARÉS ATTEIGNENT LE JOURNAL, PAS SEULEMENT `compte`. `recenser()` JETTE le
+      // rendu : cette ligne est la SEULE sortie d'un tour de ronde du veilleur. Un compte qui ne
+      // vivrait que dans le rendu ne serait lu par personne — et le mot « déclaré » y est ce qui
+      // empêche de relire ces agents comme mesurés.
+      (rolesDeclares.length ? `, ${rolesDeclares.join(', ')} déclaré(s)` : '') +
       `, ${roleNonEtabli} au rôle non établi, ${roleNonMesure} au rôle non mesuré ; ` +
       `${aJour} à jour, ${enRetard} en retard, ${nonMesures} non mesuré(s), ` +
       `${metierSansObjet} sans métier à comparer ; mandats ` +
@@ -969,6 +1149,8 @@ export async function unRecensement({
     agents,
     compte: {
       parRole,
+      parRoleDeclare,
+      roleDeclare,
       roleNonEtabli,
       roleNonMesure,
       anonymes,
@@ -1012,6 +1194,8 @@ export async function unRecensement({
       // Recensés (on n'omet jamais), mais nommés : c'est ce qui distingue un compte d'un compte
       // certain.
       panesIndecidables,
+      // Ce que vaut le compte des rôles DÉCLARÉS — « lue » ou « non donnée », jamais un zéro nu.
+      sourceDeclaree: ceQueDitLaSourceDeclaree(declarations),
       angleMort: CE_QUE_LE_RECENSEMENT_NE_VOIT_PAS,
     },
     resume:
@@ -1021,6 +1205,10 @@ export async function unRecensement({
       // deux affirmations opposées dans la seule ligne que ce module déclare lue.
       (panesIndecidables.length ? `${agents.length} agent(s) vivant(s) — ` : `AU MOINS ${agents.length} agent(s) vivant(s) — `) +
       (rolesTrouves.length ? `${rolesTrouves.join(', ')}` : 'aucun rôle établi') +
+      // ⚠️ « DÉCLARÉ » EST ÉCRIT À CÔTÉ DU CHIFFRE, comme « plancher » l'est du compte des agents,
+      // et pour la même raison : c'est le seul mot qui empêche de lire ces rôles comme mesurés.
+      // Le retirer rendrait la phrase plus courte et le registre plus faux (RA-VUE-006).
+      (rolesDeclares.length ? `, ${rolesDeclares.join(', ')} DÉCLARÉ(s)` : '') +
       (roleNonEtabli ? `, ${roleNonEtabli} au rôle NON ÉTABLI` : '') +
       (roleNonMesure ? `, ${roleNonMesure} au rôle NON MESURÉ` : '') +
       ` — ${aJour} à jour, ${enRetard} en retard` +

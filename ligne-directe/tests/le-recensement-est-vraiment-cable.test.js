@@ -506,7 +506,7 @@ test('le câblage RÉEL LIT les écrans — sans quoi tout le parc se dirait « 
   assert.equal(enVol.occupe, true);
 });
 
-test('le câblage RÉEL passe SES SEPT paramètres — trois jointures restaient nues', async () => {
+test('le câblage RÉEL passe SES HUIT paramètres — trois jointures restaient nues, puis une quatrième', async () => {
   // ═══════════════════════════════════════════════════════════════════════════════════════
   // TROIS MUTATIONS SURVIVANTES, TROUVÉES PAR LES DEUX PASSES DU CYCLE 6, ET C'EST LE MÊME
   // MOTIF QUE CE LOT A DÉJÀ FERMÉ CINQ FOIS : deux étages justes dont la JOINTURE n'est pas
@@ -573,6 +573,29 @@ test('le câblage RÉEL passe SES SEPT paramètres — trois jointures restaient
 
   // ③ `panes` est CÂBLÉ — gardé ailleurs, exigé ici aussi pour que les sept tiennent ensemble.
   assert.equal(rendu.panesVus, 1, 'l’inventaire des panes est bien celui de herdr');
+
+  // ④ `declarations` EST CÂBLÉ — LE HUITIÈME, et la mutation qui le retire a SURVÉCU à la suite
+  //    entière (1 065 essais, mesuré le 2026-08-27). C'est le même motif que ① : deux étages
+  //    justes dont la jointure n'appartient à personne. Décâblé, `unRecensement` rend
+  //    EXACTEMENT ce qu'il rendait avant T-20260825-0012 — c'est même une propriété VOULUE du
+  //    paramètre — donc tous les bancs du registre restent verts pendant que le correctif est
+  //    INERTE sur le poste réel : les chefs d'équipe déclarés y redeviennent « rôle non établi »,
+  //    et personne ne l'apprend.
+  //
+  // ⚠️ CE QU'ON MESURE N'EST PAS « UN CHEF D'ÉQUIPE EST CLASSÉ » — il n'y en a aucun dans ce
+  //    bac, et en fabriquer un mesurerait le CLASSEMENT, pas le CÂBLAGE.
+  //
+  // ⚠️ ET SURTOUT PAS `compte.roleDeclare === 0` : ce zéro vaut AUTANT quand personne n'est
+  //    déclaré que quand la source n'a pas été consultée — l'assertion aurait été trop faible
+  //    sur un chemin correct, c'est-à-dire verte sur la mutation même qu'elle prétend tuer.
+  //    C'est `borne.sourceDeclaree` qui porte la différence, et elle seule.
+  assert.equal(
+    rendu.borne.sourceDeclaree.mesure,
+    'lue',
+    `le registre des déclarations doit être CÂBLÉ (borne : ${JSON.stringify(rendu.borne.sourceDeclaree)})`,
+  );
+  assert.equal(rendu.compte.roleDeclare, 0);
+  assert.deepEqual(rendu.compte.parRoleDeclare, {});
 });
 
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
