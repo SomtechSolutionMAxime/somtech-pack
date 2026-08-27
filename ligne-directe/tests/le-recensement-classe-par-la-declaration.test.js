@@ -38,7 +38,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -267,15 +267,22 @@ test('un lien symbolique ne sépare pas l’agent de sa déclaration', async () 
   const lien = join(dur, 'raccourci');
   symlinkSync(arbre, lien);
 
-  const rendu = await recenser({
-    // L'agent travaille dans un SOUS-DOSSIER du chemin réel…
-    panes: [pane({ cwd: arbre })],
-    nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
-    // …et sa déclaration inscrit le chemin qui passe par le lien.
-    declarations: { declarations: [declaration({ espace: lien })], illisibles: [] },
-  });
+  try {
+    const rendu = await recenser({
+      // L'agent travaille dans un SOUS-DOSSIER du chemin réel…
+      panes: [pane({ cwd: arbre })],
+      nomsConnus: nomsDe([['w1:p1', 't-20260825-0012']]),
+      // …et sa déclaration inscrit le chemin qui passe par le lien.
+      declarations: { declarations: [declaration({ espace: lien })], illisibles: [] },
+    });
 
-  assert.equal(rendu.agents[0].role.mesure, 'déclarée');
+    assert.equal(rendu.agents[0].role.mesure, 'déclarée');
+  } finally {
+    // ⚠️ `finally` : un bac laissé derrière par un banc ROUGE s'accumule à chaque tour de suite,
+    // et un lien symbolique abandonné dans `/tmp` est le genre de résidu qu'un tour ultérieur
+    // finit par apparier.
+    rmSync(dur, { recursive: true, force: true });
+  }
 });
 
 // ⚠️ ET LE SOUS-DOSSIER COMPTE. `foreground_cwd` est le répertoire du SHELL : un chef d'équipe
@@ -796,5 +803,5 @@ test('la fabrique de déclarations de ce banc porte les mêmes clés que le vrai
   const relu = lireLesDeclarations({ racine });
   assert.deepEqual(relu.declarations, [vraie]);
   assert.deepEqual(relu.illisibles, []);
-  writeFileSync(join(racine, 'temoin.txt'), 'lu');
+  rmSync(racine, { recursive: true, force: true });
 });
