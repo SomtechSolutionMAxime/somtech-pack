@@ -7,6 +7,21 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-08-29
 
+*Ticket `T-20260827-0033`. **Un successeur né ailleurs peut enfin reprendre le canal de son prédécesseur** — l'ordre « même channel » du 2026-08-26 n'avait pas pu être tenu.*
+
+### Corrigé
+
+- **Une ligne s'apparie au LIEU de l'agent, plus à la copie de travail** (`T-20260827-0033`). L'identité d'une ligne retenait le chemin complet du pane ; or un successeur ne naît presque jamais dans la copie de travail de son prédécesseur. Mesuré sur `P-20260815-0002` : le mort sous `~/worktrees/somcraft/20260817-210120/.orchestrateur/p-20260815-0002`, le vivant sous `~/GitRepo.nosync/somcraft/.orchestrateur/p-20260815-0002` — **même chantier, même rôle, même lieu, deux clés**. Résultat : un second canal créé sous un « -2 », et le canal d'origine (libre, ouvert, non archivé, celui où le dirigeant écrivait) **hors d'atteinte**, sans aucun geste de contournement. La clé retient désormais `.orchestrateur/<code>` / `.gestionnaire/<client>`, **lu au registre des rôles** — un troisième rôle sera couvert le jour où il naîtra, pas le jour où quelqu'un pensera à l'ajouter.
+- **Le parc existant se rattache sans migration** (`T-20260827-0033`). L'ancre se calcule à la **lecture**, jamais à l'écriture : les lignes déjà au registre portent leur chemin complet, écrit par la version qui a mordu. Une ancre inscrite n'aurait corrigé que les lignes à venir — c'est-à-dire personne, dont le seul cas mesuré.
+
+### Technique
+
+- **Le remède naïf reste écarté** (`T-20260827-0033`). Un chemin **sans** lieu de rôle est rendu tel quel : deux agents ordinaires du même chantier, dans deux copies de travail, ne se confondent pas — c'est ce que la clé séparait, et elle le sépare encore.
+- **La reprise réinscrit la copie de travail du vivant** (`T-20260827-0033`). Sans ça, `hygiene.js` dénoncerait à chaque ronde une ligne bien vivante — « chantier disparu » — avec le geste pour la couper.
+- **Une prise de ligne sur un pane encore vivant s'annonce** (`T-20260827-0033`, relevé en revue indépendante). La reprise aboutit, mais l'avis **nomme le pane qui perd la ligne**. On avertit et on ne refuse pas : `herdr.vivant` penche du côté « vivant » quand il ne sait pas, et refuser sur ce signal fermerait au successeur la ligne que son métier lui **impose** d'ouvrir — l'incident même qu'on ferme.
+
+## [Non-versionne] - 2026-08-29
+
 *Ticket `T-20260829-0004`. **La chaîne était rouge sur `main` depuis #320**, et la publication du pack bloquée avec elle.*
 
 ### Corrigé

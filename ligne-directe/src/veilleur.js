@@ -553,10 +553,51 @@ export class Veilleur {
       const vusDeja = await this.membresPhotographies(deja.canal_id);
       if (vusDeja) deja.membres_vus = vusDeja;
 
-      // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans le
-      // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
+      // ⚠️ ET SI LE PORTEUR D'AVANT EST ENCORE LÀ, ON LE DIT — relevé en revue indépendante.
+      //
+      // Depuis que l'ancre réunit les copies de travail d'un même lieu, deux agents nés au même
+      // endroit dans deux copies partagent une clé : le second PREND la ligne du premier, le
+      // canal ne route plus que vers lui, et le premier n'entend plus rien. C'est le prix
+      // assumé du correctif — mais il ne doit pas se payer en silence, parce qu'une ligne qui
+      // se tait sans qu'on le dise est le mode de panne le plus cher de ce dispositif.
+      //
+      // ⚠️ ON AVERTIT, ON NE REFUSE PAS. `herdr.vivant` penche du côté « vivant » quand il ne
+      // sait pas — un registre muet n'est pas une mort, et c'est écrit là-bas à ses dépens.
+      // Refuser sur ce signal-là fermerait au successeur la ligne que son métier lui IMPOSE
+      // d'ouvrir : très exactement l'incident T-20260827-0033 qu'on est en train de fermer. Un
+      // avis se rattrape ; un agent qui ne peut pas ouvrir sa ligne est bloqué.
+      //
+      // ⚠️ ET UNE MESURE QUI ÉCHOUE NE PROUVE RIEN : herdr injoignable, on se tait. Crier sur
+      // une panne d'instrument userait l'avis avant le jour où il aurait raison.
+      if (deja.pane && deja.pane !== pane) {
+        let porteurEncoreLa = false;
+        try {
+          porteurEncoreLa = await this.herdr.vivant(deja.pane, { socket: deja.herdr_socket || null });
+        } catch {
+          porteurEncoreLa = false;
+        }
+        if (porteurEncoreLa) {
+          const avis =
+            `le pane ${deja.pane} portait déjà cette ligne et il est ENCORE VIVANT — à partir de ` +
+            `maintenant, #${deja.canal_nom} arrive dans ${pane} et plus chez lui. Si ce n'est pas ` +
+            `une renaissance, l'un de vous parle au nom d'un chantier qui n'est pas le sien.`;
+          avertissementsAvant.push(avis);
+          journaliser(`reprise d'une ligne vivante — ${deja.chantier} : ${deja.pane} → ${pane}`);
+        }
+      }
+
+      // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé AU MÊME LIEU
+      // retrouve son canal, fût-il né dans une autre copie de travail (T-20260827-0033). On
+      // rafraîchit ce qui a changé : son pane, sa session, et sa copie de travail.
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
+      // ⚠️ LA COPIE DE TRAVAIL SE RÉÉCRIT, ET CE N'EST PAS COSMÉTIQUE. `hygiene.js` signale les
+      // lignes ouvertes dont le worktree a disparu du disque et propose de les refermer. Depuis
+      // qu'un successeur peut naître ailleurs, garder le chemin du mort ferait dénoncer à chaque
+      // ronde la ligne de l'agent VIVANT, avec le geste pour la couper. Le registre dit où est
+      // celui qui porte la ligne. Un `ouvrir` sans worktree connu n'efface rien : on ne remplace
+      // pas un renseignement par une ignorance.
+      if (worktree) deja.worktree = worktree;
       deja.autorises = autorisesFinaux;
       // LE PAIR S'ATTACHE AUSSI À LA REPRISE, et c'est le cas nominal, pas un extra : un
       // orchestrateur EXISTE DÉJÀ quand un gestionnaire ouvre la demande qui le concerne

@@ -12,6 +12,8 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, chmodSy
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
+import { dossiersDesLieux } from './roles.js';
+
 export const RACINE = process.env.LIGNE_DIRECTE_RACINE || join(homedir(), '.somtech', 'ligne-directe');
 export const CHEMIN_REGISTRE = join(RACINE, 'registre.json');
 export const CHEMIN_SOCKET = join(RACINE, 'veilleur.sock');
@@ -172,9 +174,57 @@ export function sauverRegistre(registre, chemin = CHEMIN_REGISTRE) {
   return chemin;
 }
 
-/** Clé d'identité d'une ligne : le couple chantier + copie de travail. */
+/**
+ * CE QUI, DANS UN CHEMIN, IDENTIFIE UN AGENT D'UNE RENAISSANCE À L'AUTRE — SON LIEU.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * POURQUOI CE N'EST PLUS LA COPIE DE TRAVAIL (T-20260827-0033).
+ *
+ * L'identité d'une ligne retenait le chemin COMPLET du pane. Or un successeur ne naît presque
+ * jamais dans la copie de travail de son prédécesseur : mesuré le 2026-08-26 sur
+ * `P-20260815-0002`, le mort vivait dans `~/worktrees/somcraft/20260817-210120/.orchestrateur/
+ * p-20260815-0002`, le vivant est né dans `~/GitRepo.nosync/somcraft/.orchestrateur/
+ * p-20260815-0002`. Même chantier, même rôle, même lieu — deux clés. Aucune reprise possible,
+ * un second canal créé sous un `-2`, et le canal d'origine — libre, ouvert, non archivé, celui
+ * où le dirigeant écrivait — hors d'atteinte. L'ordre reçu ce soir-là était « même channel ».
+ *
+ * ⚠️ CE QUI DEVAIT SURVIVRE AU CORRECTIF. Retirer la copie de travail sans rien mettre à la
+ * place confondrait deux agents ORDINAIRES du même chantier travaillant dans deux copies —
+ * exactement ce que la clé sépare, et un routage croisé. On ne retire donc rien : on remonte
+ * du chemin au LIEU quand il y en a un, et un chemin sans lieu de rôle reste distinctif de
+ * bout en bout. Ce qui n'est pas mesuré n'est pas aplati.
+ *
+ * ⚠️ ET ELLE SE CALCULE À LA LECTURE, JAMAIS À L'ÉCRITURE. Le registre survit aux versions et
+ * RIEN NE MIGRE : les lignes déjà ouvertes sur le poste portent leur chemin complet, écrit par
+ * la version qui a mordu — dont le seul cas mesuré. Une ancre inscrite au registre n'aurait
+ * corrigé que les lignes à venir, c'est-à-dire personne.
+ *
+ * ⚠️ LES DOSSIERS DE RÔLE VIENNENT DU REGISTRE DES RÔLES, jamais d'une liste écrite ici. Une
+ * liste recopiée ignore le troisième rôle le jour où il naît : ses agents perdraient la reprise
+ * sans qu'aucune erreur ne le dise — la panne muette que ce fichier passe son temps à fermer.
+ *
+ * La casse du segment de lieu est aplatie pour la raison qui vaut déjà pour le chantier : elle
+ * n'identifie rien. Le chemin rendu tel quel, lui, n'est pas touché — sur un système de
+ * fichiers qui distingue la casse, deux chemins distincts le restent.
+ */
+export function ancreDeLigne(worktree) {
+  const chemin = String(worktree ?? '').trim();
+  if (!chemin) return '';
+  const segments = chemin.split('/');
+  const dossiers = dossiersDesLieux();
+  // On cherche depuis la FIN : c'est le lieu le plus profond qui porte l'agent. Et il faut un
+  // segment DERRIÈRE le dossier — `.orchestrateur` seul ne nomme aucun agent, c'est un rangement.
+  for (let i = segments.length - 2; i >= 0; i -= 1) {
+    if (dossiers.includes(segments[i]) && segments[i + 1]) {
+      return `${segments[i]}/${segments[i + 1]}`.toLowerCase();
+    }
+  }
+  return chemin;
+}
+
+/** Clé d'identité d'une ligne : le couple chantier + lieu de l'agent (voir `ancreDeLigne`). */
 export function cleDeLigne(chantier, worktree) {
-  return `${String(chantier).toLowerCase()}::${worktree || ''}`;
+  return `${String(chantier).toLowerCase()}::${ancreDeLigne(worktree)}`;
 }
 
 export function lignesOuvertes(registre) {
@@ -285,8 +335,9 @@ export function ligneOuverteParCle(registre, chantier, worktree) {
  *
  * ⚠️ ET UNE LIGNE CLOSE CLIENTE NE RETIENT RIEN NON PLUS — c'est LE RELÈVEMENT, et il ne doit
  * pas être pris pour une collision. Le canal d'un client lui appartient : quand notre session
- * meurt, une session NEUVE (autre copie de travail, donc autre clé) doit pouvoir s'y rattacher
- * et reprendre la relation. Retenir son nom l'aurait envoyée sur un « -2 », c'est-à-dire un
+ * meurt, une session NEUVE doit pouvoir s'y rattacher et reprendre la relation — qu'elle porte
+ * la même clé que la morte (même lieu d'agent, depuis T-20260827-0033) ou une autre (lieu
+ * refait ailleurs). Les deux chemins mènent ici, et aucun ne doit buter sur un nom retenu. Retenir son nom l'aurait envoyée sur un « -2 », c'est-à-dire un
  * canal vide à côté de celui où le client parle — la panne qu'on est en train de fermer,
  * rejouée sur le seul canal qui n'est pas à nous. La première écriture de cette garde a fait
  * exactement ça, et l'essai du relèvement l'a arrêtée.
