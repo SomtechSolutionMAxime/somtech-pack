@@ -5,6 +5,14 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-29
+
+*Ticket `T-20260829-0004`. **La chaîne était rouge sur `main` depuis #320**, et la publication du pack bloquée avec elle.*
+
+### Corrigé
+
+- **Le lieu `.orchestrateur/d-20260822-0001/` converge vers le métier rendu** (`T-20260829-0004`). Versé sur `main` par #320 **déjà périmé** : `CLAUDE.md` à 7 580 o contre 7 653, les **11 chapitres sur 11** divergents, un fichier de droits sans `Write` / `Edit` / `NotebookEdit` / `Edit(//**)`, et aucun `RONDE.md` là où #338 l'avait posé dans les huit autres lieux **la veille**. Les gardes disent le prix mot pour mot : *« tout worktree créé depuis main y fera naître un orchestrateur périmé »*, *« avec des refus et des gardes périmés »*. S'y ajoutait ce qu'aucune ne dit : `cli-tests` **et `publish`** rougissaient dessus, donc **aucun correctif du pack ne se publiait** — un correctif fusionné et non publié ne corrige personne. Convergé par le geste **outillé** (`orchestrateur-update`, `rc=0`), `CONTEXTE.md` préservé, sauvegardes de dérive non versées.
+
 ## [Non-versionne] - 2026-08-27
 
 *Epic `E-20260827-0002`, tickets `T-20260827-0011` à `T-20260827-0014`, constat `T-20260826-0044` fermé. **Le briefing de ronde atteint enfin des agents** — cinquième élément du cycle, présent au gabarit depuis `v1.96.0` et jusqu'ici dans aucun lieu du parc.*
