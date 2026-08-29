@@ -237,7 +237,56 @@ test('LA REPRISE INSCRIT LA COPIE DE TRAVAIL DU VIVANT — sinon l’hygiène d�
   });
 });
 
-// ═════════════════ 2. CE QUE L'ANCRE NE DOIT PAS CONFONDRE
+// ═════════════════ 2. CE QUE LA REPRISE EMPORTE — ET QUI DOIT LE SAVOIR
+
+test('REPRENDRE LA LIGNE D’UN PANE ENCORE VIVANT LE DIT — une prise de ligne ne se fait pas en silence', async () => {
+  // ⚠️ RELEVÉ EN REVUE INDÉPENDANTE, ET C'EST LE PRIX DU CORRECTIF. Deux agents peuvent naître
+  // au même lieu dans deux copies de travail — mesuré en prod : 15 mandats pour 116 chemins
+  // (`vue-du-parc.js`). Depuis que l'ancre les réunit, le second PREND la ligne du premier :
+  // le canal ne route plus que vers lui, et le premier n'entend plus rien.
+  //
+  // ⚠️ ON AVERTIT, ON NE REFUSE PAS, et l'asymétrie est celle que `herdr.vivant` documente
+  // déjà : il penche du côté « vivant » quand il ne sait pas (un registre muet n'est pas une
+  // mort). Refuser sur ce signal-là, c'est fermer au successeur la ligne que son métier lui
+  // IMPOSE d'ouvrir — le ticket T-20260827-0033 lui-même. Un avis se rattrape ; un agent qui
+  // ne peut pas ouvrir sa ligne est bloqué.
+  await avecPoste({ panes: ['w1:p1', 'w2:p7'] }, async ({ ld }) => {
+    await ld(['ouvrir', 'P-20260815-0002', '--titre', 'espace client somcraft', '--au-dirigeant'], {
+      pane: 'w1:p1',
+      wt: WT_PREDECESSEUR,
+    });
+    const second = await ld(['ouvrir', 'P-20260815-0002', '--titre', 'espace client somcraft', '--au-dirigeant'], {
+      pane: 'w2:p7',
+      wt: WT_SUCCESSEUR,
+    });
+    assert.equal(second.code, 0, second.stderr);
+    const rendu = JSON.parse(second.stdout);
+    assert.equal(rendu.reprise, true, 'la reprise aboutit — on avertit, on ne bloque pas');
+    const avis = (rendu.avertissements || []).join(' ');
+    assert.match(avis, /w1:p1/, 'l’avis NOMME le pane qui perd la ligne — sans lui, personne ne sait qui s’est tu');
+  });
+});
+
+test('UNE REPRISE ORDINAIRE N’AVERTIT DE RIEN — l’avis ne se déclenche que sur un pane vivant', async () => {
+  // ⚠️ LA MOITIÉ QUI MANQUE À LA PLUPART DES GARDES DE CE DÉPÔT : la preuve qu'elle ne crie
+  // pas tout le temps. Un avertissement rendu à chaque reprise — le cas nominal d'un agent
+  // relancé — ne serait plus lu le jour où il aurait raison.
+  await avecPoste({ panes: ['w2:p7'] }, async ({ ld }) => {
+    await ld(['ouvrir', 'P-20260815-0002', '--titre', 'espace client somcraft', '--au-dirigeant'], {
+      pane: 'w1:p1',
+      wt: WT_PREDECESSEUR,
+    });
+    const second = await ld(['ouvrir', 'P-20260815-0002', '--titre', 'espace client somcraft', '--au-dirigeant'], {
+      pane: 'w2:p7',
+      wt: WT_SUCCESSEUR,
+    });
+    const rendu = JSON.parse(second.stdout);
+    assert.equal(rendu.reprise, true);
+    assert.equal(rendu.avertissements, undefined, 'le prédécesseur est mort : il n’y a rien à signaler');
+  });
+});
+
+// ═════════════════ 3. CE QUE L'ANCRE NE DOIT PAS CONFONDRE
 
 test('DEUX COPIES DE TRAVAIL SANS LIEU D’AGENT RESTENT DEUX LIGNES — le remède naïf est écarté', async () => {
   // Le ticket le dit : confondre deux agents ordinaires du même chantier produirait un routage
@@ -260,7 +309,7 @@ test('DEUX COPIES DE TRAVAIL SANS LIEU D’AGENT RESTENT DEUX LIGNES — le rem�
   });
 });
 
-// ═════════════════ 3. L'ANCRE, SEULE
+// ═════════════════ 4. L'ANCRE, SEULE
 
 test('L’ANCRE D’UNE LIGNE EST LE LIEU DE L’AGENT — pas le chemin qui le porte', () => {
   assert.equal(ancreDeLigne(WT_PREDECESSEUR), '.orchestrateur/p-20260815-0002');
@@ -278,6 +327,10 @@ test('UN CHEMIN SANS LIEU DE RÔLE EST RENDU TEL QUEL — on n’invente pas une
   assert.equal(ancreDeLigne(null), '');
   // Un dossier de rôle SANS segment derrière lui ne nomme aucun agent : ce n'est pas un lieu.
   assert.equal(ancreDeLigne('/Users/x/depot/.orchestrateur'), '/Users/x/depot/.orchestrateur');
+  assert.equal(ancreDeLigne('/Users/x/depot/.orchestrateur/'), '/Users/x/depot/.orchestrateur/');
+  // Un chemin RELATIF porte son lieu comme un autre — herdr rend un chemin absolu, mais rien
+  // ici n'en dépend, et une ancre qui exigerait la barre de tête serait une garde de forme.
+  assert.equal(ancreDeLigne('.orchestrateur/d-1'), '.orchestrateur/d-1');
 });
 
 test('DEUX LIEUX DIFFÉRENTS DU MÊME DÉPÔT NE PARTAGENT PAS DE CLÉ', () => {
