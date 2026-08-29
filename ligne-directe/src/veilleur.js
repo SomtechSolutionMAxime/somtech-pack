@@ -553,10 +553,18 @@ export class Veilleur {
       const vusDeja = await this.membresPhotographies(deja.canal_id);
       if (vusDeja) deja.membres_vus = vusDeja;
 
-      // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans le
-      // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
+      // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé AU MÊME LIEU
+      // retrouve son canal, fût-il né dans une autre copie de travail (T-20260827-0033). On
+      // rafraîchit ce qui a changé : son pane, sa session, et sa copie de travail.
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
+      // ⚠️ LA COPIE DE TRAVAIL SE RÉÉCRIT, ET CE N'EST PAS COSMÉTIQUE. `hygiene.js` signale les
+      // lignes ouvertes dont le worktree a disparu du disque et propose de les refermer. Depuis
+      // qu'un successeur peut naître ailleurs, garder le chemin du mort ferait dénoncer à chaque
+      // ronde la ligne de l'agent VIVANT, avec le geste pour la couper. Le registre dit où est
+      // celui qui porte la ligne. Un `ouvrir` sans worktree connu n'efface rien : on ne remplace
+      // pas un renseignement par une ignorance.
+      if (worktree) deja.worktree = worktree;
       deja.autorises = autorisesFinaux;
       // LE PAIR S'ATTACHE AUSSI À LA REPRISE, et c'est le cas nominal, pas un extra : un
       // orchestrateur EXISTE DÉJÀ quand un gestionnaire ouvre la demande qui le concerne
