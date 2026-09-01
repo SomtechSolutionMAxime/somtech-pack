@@ -304,10 +304,45 @@ export function rolesSansLieu() {
  *
  * ⚠️ ELLE NE LÈVE PAS, ET C'EST VOULU : `role()` reste la seule porte qui décide. Celle-ci
  * ne sert qu'à REGARDER, jamais à trancher — un appelant qui déciderait sur son retour
- * contournerait la porte, et le banc `qui-garde-le-gardien` de ce fichier le dirait.
+ * contournerait la porte.
+ *
+ * 🔴 ET CETTE PHRASE EST TENUE PAR UN BANC, PLUS PAR UNE PROMESSE. La version précédente de ce
+ * commentaire disait « le banc `qui-garde-le-gardien` de ce fichier le dirait » — CE BANC
+ * N'EXISTAIT PAS. Une passe de fond l'a mesuré : elle a importé cette fonction dans
+ * `bin/naitre.js`, lui a fait DÉCIDER une branche, et les 2 085 essais du dépôt sont restés
+ * VERTS. Un commentaire qui promet une garde absente est pire que pas de commentaire : il
+ * arrête la personne qui allait vérifier. Le banc s'appelle « `roleSansLieu` NE DÉCIDE NULLE
+ * PART EN PRODUCTION » et vit dans `tests/le-registre-decide-de-la-pose-et-du-bapteme.test.js`.
  */
 export function roleSansLieu(nom) {
   return ROLES_SANS_LIEU[nom];
+}
+
+/**
+ * LES CLÉS BRUTES DE LA TABLE — `Reflect.ownKeys`, jamais `Object.keys`. Réservé aux bancs.
+ *
+ * 🔴 POURQUOI CETTE FONCTION EXISTE : UN TROU MESURÉ. `rolesSansLieu()` rend `Object.keys()`,
+ * qui NE VOIT PAS une propriété non énumérable — alors que `baptemeDuRole` lit la table par
+ * INDEXATION (`ROLES_SANS_LIEU[nom]`), qui la voit parfaitement. Une entrée posée par
+ * `Object.defineProperty(…, { enumerable: false })` aurait donc eu TOUTE l'autorité de la
+ * table en restant invisible à la garde qui l'épingle.
+ *
+ * ⚠️ LA MÊME LAME COUPE UN CRAN PLUS BAS : un CHAMP non énumérable ajouté à une entrée
+ * (`dossier`, `pose_automatique`) se lit en production (`entree.dossier`, `'dossier' in entree`)
+ * et échappait au filtre des champs permis. Mesuré : `Object.keys` rendait `[libelle, bapteme]`
+ * pendant que `entree.dossier` valait `.chef-equipe`.
+ *
+ * ⚠️ ON NE CHANGE PAS `rolesSansLieu()` POUR AUTANT : `Object.keys` y est la bonne sémantique
+ * de production — on énumère ce qui est DÉCLARÉ. C'est le BANC qui doit regarder plus loin que
+ * la production, pas la production qui doit regarder comme le banc.
+ */
+export function clesBrutesDesRolesSansLieu() {
+  return {
+    table: Reflect.ownKeys(ROLES_SANS_LIEU),
+    entrees: Object.fromEntries(
+      Reflect.ownKeys(ROLES_SANS_LIEU).map((k) => [k, Reflect.ownKeys(ROLES_SANS_LIEU[k])])
+    ),
+  };
 }
 
 /**

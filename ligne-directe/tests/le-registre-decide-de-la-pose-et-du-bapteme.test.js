@@ -29,11 +29,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { role as roleDe, rolesConnus, rolesSansLieu, roleSansLieu, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
+import { role as roleDe, rolesConnus, rolesSansLieu, roleSansLieu, clesBrutesDesRolesSansLieu, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
 import { nomDeLAgentQuiNait, estUneRiviere } from '../src/nom-de-riviere.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -304,7 +305,13 @@ test('🔴 UNE ENTRÉE SANS LIEU NE DÉCLARE QUE `libelle` ET `bapteme` — elle
   for (const nom of rolesSansLieu()) {
     const entree = roleSansLieu(nom);
     assert.ok(entree, `« ${nom} » est énuméré mais son entrée est introuvable`);
-    const interdits = Object.keys(entree).filter((c) => !PERMIS.includes(c));
+    // 🔴 `Reflect.ownKeys` ET PAS `Object.keys` — la garde était aveugle, et c'est mesuré.
+    // `Object.defineProperty(entree, 'dossier', { enumerable: false })` posait un champ que
+    // la production lit parfaitement (`entree.dossier`, `'dossier' in entree`) et que
+    // `Object.keys` ne rendait pas : le « ROLES fantôme » que cet essai prétend interdire
+    // passait sous lui, 0 rouge sur 2 085 essais. Une garde qui énumère doit énumérer comme
+    // celui qui LIT, jamais comme celui qui DÉCLARE.
+    const interdits = Reflect.ownKeys(entree).map(String).filter((c) => !PERMIS.includes(c));
     assert.deepEqual(
       interdits, [],
       `« ${nom} » déclare ${interdits.map((c) => `\`${c}\``).join(', ')} — un rôle SANS lieu qui ` +
@@ -321,4 +328,65 @@ test('🔴 UNE ENTRÉE SANS LIEU NE DÉCLARE QUE `libelle` ET `bapteme` — elle
         `sans quoi il retombe sur un repli que personne n'a choisi pour lui, exactement comme un rôle de \`ROLES\``
     );
   }
+});
+
+test('🔴 LA TABLE ELLE-MÊME N’A AUCUNE ENTRÉE CACHÉE — les clés BRUTES, pas les énumérables', () => {
+  // Un cran au-dessus du champ caché : une ENTRÉE posée non énumérable aurait toute
+  // l'autorité de la table — `baptemeDuRole` lit par indexation, qui la voit — en restant
+  // invisible à `rolesSansLieu()`, donc à l'épingle qui la garde.
+  const brut = clesBrutesDesRolesSansLieu();
+  assert.deepEqual(
+    brut.table.map(String).sort(), ['chef-equipe'],
+    `la table porte des clés que \`rolesSansLieu()\` ne rend pas (brut : ${brut.table.map(String).join(', ')}) — ` +
+      `une entrée cachée décide autant qu'une entrée déclarée, et aucune épingle ne la voit`
+  );
+  for (const [nom, cles] of Object.entries(brut.entrees)) {
+    assert.deepEqual(
+      cles.map(String).sort(), ['bapteme', 'libelle'],
+      `« ${nom} » porte des champs bruts que l'énumération ne rend pas : ${cles.map(String).join(', ')}`
+    );
+  }
+});
+
+test('🔴 `roleSansLieu` NE DÉCIDE NULLE PART EN PRODUCTION — le banc que le commentaire promettait', () => {
+  // 🔴 CE BANC N'EXISTAIT PAS, ET LE COMMENTAIRE DE `roleSansLieu` AFFIRMAIT LE CONTRAIRE.
+  // Mesuré par une passe de fond : elle a importé la fonction dans `bin/naitre.js`, lui a fait
+  // décider une branche, et les 2 085 essais du dépôt sont restés VERTS. Une garantie écrite
+  // au-delà de ce qui est mesuré arrête la personne qui allait vérifier — c'est le mode
+  // d'erreur le plus cher de ce dépôt, et il venait d'être commis dans le geste qui en fermait
+  // un autre.
+  //
+  // ⚠️ ON GARDE L'APPEL, PAS LE MOT. Chercher la chaîne « roleSansLieu » dans les sources
+  // rendrait vrai un banc qu'un renommage désarme. On liste les fichiers de PRODUCTION et on
+  // refuse l'IMPORT — la seule façon d'atteindre la fonction depuis un autre module.
+  const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const PRODUCTION = ['ligne-directe/src', 'naissance-representant/src', 'naissance-representant/bin', 'cli/src'];
+
+  const fichiers = [];
+  const balayer = (dir) => {
+    let entrees;
+    try { entrees = readdirSync(dir); } catch { return; }
+    for (const e of entrees) {
+      const chemin = join(dir, e);
+      if (statSync(chemin).isDirectory()) balayer(chemin);
+      else if (e.endsWith('.js')) fichiers.push(chemin);
+    }
+  };
+  for (const d of PRODUCTION) balayer(join(RACINE, d));
+
+  // ⚠️ CONTRÔLE DE L'INSTRUMENT : un balayage qui ne trouve rien rendrait ce banc vert pour
+  // la mauvaise raison. On exige d'avoir vraiment lu du code de production.
+  assert.ok(fichiers.length > 50, `le balayage n'a trouvé que ${fichiers.length} fichier(s) de production — l'instrument est cassé, pas le lot`);
+
+  const coupables = fichiers.filter((f) => {
+    if (f.endsWith(`${'/'}roles.js`)) return false; // sa propre définition
+    const src = readFileSync(f, 'utf8');
+    return /import\s*\{[^}]*\broleSansLieu\b[^}]*\}\s*from/.test(src)
+        || /\bclesBrutesDesRolesSansLieu\b/.test(src);
+  });
+  assert.deepEqual(
+    coupables.map((f) => f.slice(RACINE.length)), [],
+    `ces fichiers de PRODUCTION importent un accesseur réservé aux bancs — ils contourneraient ` +
+      `\`role()\`, la seule porte qui doit décider d'un rôle`
+  );
 });
