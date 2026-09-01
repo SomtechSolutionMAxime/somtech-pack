@@ -299,6 +299,18 @@ export function rolesSansLieu() {
 }
 
 /**
+ * L'entrée d'un rôle SANS LIEU, ou `undefined`. Elle existe pour que le banc puisse éprouver
+ * la FORME de ce qui est inscrit ici — pas seulement les noms.
+ *
+ * ⚠️ ELLE NE LÈVE PAS, ET C'EST VOULU : `role()` reste la seule porte qui décide. Celle-ci
+ * ne sert qu'à REGARDER, jamais à trancher — un appelant qui déciderait sur son retour
+ * contournerait la porte, et le banc `qui-garde-le-gardien` de ce fichier le dirait.
+ */
+export function roleSansLieu(nom) {
+  return ROLES_SANS_LIEU[nom];
+}
+
+/**
  * Comment NOMMER un rôle au pluriel, même s'il n'est plus connu.
  *
  * ⚠️ CE REPLI N'EST PAS DE LA COURTOISIE — il évite une panne muette. LE REGISTRE SURVIT AUX

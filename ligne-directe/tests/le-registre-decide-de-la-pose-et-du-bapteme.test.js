@@ -33,7 +33,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { role as roleDe, rolesConnus, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
+import { role as roleDe, rolesConnus, rolesSansLieu, roleSansLieu, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
 import { nomDeLAgentQuiNait, estUneRiviere } from '../src/nom-de-riviere.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -250,4 +250,75 @@ test('UN RÔLE INCONNU NE SE FAIT PLUS NOMMER EN SILENCE', () => {
     RoleInconnu,
     'un rôle inconnu était rangé avec « pas orchestrateur » et repartait avec son code',
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA SECONDE TABLE DU REGISTRE — `ROLES_SANS_LIEU`, ET QUI LA GARDE (2026-09-01)
+//
+// 🔴 CE QUE CES ESSAIS FERMENT, ET COMMENT LE TROU A ÉTÉ MESURÉ. `ROLES_SANS_LIEU` est née à
+// la fusion de `E-20260825-0002` : un chef d'équipe est un rôle CONNU qui n'a pas de lieu, et
+// qui ne peut pas entrer dans `ROLES` (une entrée sans `entetes` fait tomber
+// `roleDuLieuOuRefus` sur `Object.entries(undefined)`). Elle décide de `baptemeDuRole` et
+// nourrit l'aide en ligne : elle a donc L'AUTORITÉ d'une table du registre.
+//
+// ⚠️ ELLE N'EN AVAIT PAS LA GARDE, et les deux moitiés n'étaient PAS symétriques. Mesuré par
+// mutation, contrôle négatif vert (0 · 0), les trois suites :
+//
+//   • RETIRER `chef-equipe` de la table   →  33 rouges. La table EST lue, elle EST vivante.
+//   • AJOUTER un rôle bidon à la table    →   0 rouge. Personne ne regarde.
+//   • AJOUTER le même rôle bidon à `ROLES` → 162 rouges. La PREMIÈRE table, elle, est gardée.
+//
+// Une seconde porte, la même autorité que la première, et aucune de sa garde. Le trou n'est
+// pas « la table est fausse » : c'est que sa moitié « ce qu'on ne doit PAS y ajouter » n'était
+// gardée par rien, à côté d'une moitié « ce qui doit y être » qui l'était.
+//
+// ⚠️ ET CE N'EST PAS UNE LISTE D'EXCEPTIONS QU'ON ÉLARGIT. Le troisième essai ci-dessous est
+// celui qui mord vraiment : une entrée sans lieu n'a le droit de déclarer QUE `libelle` et
+// `bapteme`. Elle ne peut donc pas se doter d'un `dossier` en douce et devenir un `ROLES`
+// fantôme — le registre se mettrait à balayer des lieux qui n'existent pas. Épingler les noms
+// se contourne en éditant l'épingle ; épingler la FORME oblige à dire ce qu'on veut faire.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('LA TABLE DES RÔLES SANS LIEU EST ÉPINGLÉE — l’y ajouter est un arbitrage, pas de l’entretien', () => {
+  assert.deepEqual(
+    rolesSansLieu().sort(), ['chef-equipe'],
+    'un rôle a été ajouté ou retiré de `ROLES_SANS_LIEU` — cette table dit qui échappe à la ' +
+      'table des lieux, et son contenu est une décision, pas une commodité de passage'
+  );
+});
+
+test('AUCUN RÔLE N’EST DANS LES DEUX TABLES À LA FOIS — sinon la question « a-t-il un lieu ? » a deux réponses', () => {
+  const deuxFois = rolesSansLieu().filter((nom) => rolesConnus().includes(nom));
+  assert.deepEqual(
+    deuxFois, [],
+    `« ${deuxFois.join(', ')} » est déclaré dans ROLES et dans ROLES_SANS_LIEU — selon la ` +
+      `fonction interrogée, il aurait un lieu ou n’en aurait pas, et rien ne dirait laquelle a raison`
+  );
+});
+
+test('🔴 UNE ENTRÉE SANS LIEU NE DÉCLARE QUE `libelle` ET `bapteme` — elle ne devient pas un `ROLES` fantôme', () => {
+  // Le champ qui compte est `dossier` : l'ajouter ici ferait balayer par le registre des lieux
+  // qui n'existent pas. Mais on n'énumère pas les champs INTERDITS — une liste d'interdits
+  // s'oublie au premier champ neuf. On énumère les champs PERMIS, et tout le reste tombe.
+  const PERMIS = ['libelle', 'bapteme'];
+  for (const nom of rolesSansLieu()) {
+    const entree = roleSansLieu(nom);
+    assert.ok(entree, `« ${nom} » est énuméré mais son entrée est introuvable`);
+    const interdits = Object.keys(entree).filter((c) => !PERMIS.includes(c));
+    assert.deepEqual(
+      interdits, [],
+      `« ${nom} » déclare ${interdits.map((c) => `\`${c}\``).join(', ')} — un rôle SANS lieu qui ` +
+        `porte les clés d'un rôle QUI EN A UN est la moitié d'une entrée de \`ROLES\`, et le ` +
+        `registre la traitera comme telle sans que personne l'ait décidé`
+    );
+    assert.ok(
+      typeof entree.libelle === 'string' && entree.libelle.length > 0,
+      `« ${nom} » n'a pas de libellé lisible`
+    );
+    assert.ok(
+      ['riviere', 'code'].includes(entree.bapteme),
+      `« ${nom} » ne dit pas comment il est nommé à sa naissance (\`bapteme\` = ${JSON.stringify(entree.bapteme)}) — ` +
+        `sans quoi il retombe sur un repli que personne n'a choisi pour lui, exactement comme un rôle de \`ROLES\``
+    );
+  }
 });
