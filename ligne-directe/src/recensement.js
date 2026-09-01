@@ -366,7 +366,6 @@ function motDeLErreur(err) {
 }
 
 /**
-/**
  * CE QUE LA DÉCLARATION DE NAISSANCE DIT D'UN AGENT SANS LIEU — ou `null` quand elle ne dit rien.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════
