@@ -472,6 +472,32 @@ test('🔴 LA TABLE SANS LIEU EST GELÉE ET SANS PROTOTYPE — on ne garde plus 
   // s'il répond sur un rôle qui n'existe pas, la table invente — quel que soit le mécanisme,
   // et quoi que le module atteste de lui-même. Une seconde écriture de la même vérité, prise
   // à l'autre bout.
+  // 🔴 DES NOMS TIRÉS AU HASARD, PAS UNE LISTE ÉCRITE DANS CE FICHIER — REJET d'une passe de
+  // fond. Trois littéraux fixes (`'__aucun-role-ne-porte-ce-nom__'`, `'zorglub'`,
+  // `'chef-equipe-bis'`) sont RESTÉS LISIBLES par quiconque triche : un `Proxy` dont le trap
+  // répond honnêtement à ces trois-là précisément, et invente pour tout le reste, traversait
+  // la suite ENTIÈRE (1226/1226) sans rougir. La garde testait des VALEURS que le code trichant
+  // pouvait lire, pas une PROPRIÉTÉ qu'il ne peut pas anticiper.
+  //
+  // ⚠️ ET UNE LISTE PLUS LONGUE NE FERME RIEN — elle déplace juste la frontière d'un cran, et
+  // le prochain contournement l'apprend par cœur comme celui-ci a appris les trois premiers
+  // noms. La clé n'est donc plus ÉCRITE : elle est GÉNÉRÉE, à l'exécution, imprévisible au
+  // moment où le module trichant se charge — rien dans le dépôt ne peut la connaître d'avance.
+  const nomsAleatoires = Array.from(
+    { length: 8 },
+    () => `__genere-${Math.random().toString(36).slice(2)}-${Date.now()}__`
+  );
+  for (const invente of nomsAleatoires) {
+    assert.throws(
+      () => baptemeDuRole(invente),
+      RoleInconnu,
+      `\`baptemeDuRole('${invente}')\` a RÉPONDU sur un nom généré au hasard, qu'aucune source ` +
+        `de ce dépôt n'a pu prévoir — la porte de production invente`
+    );
+  }
+
+  // ⚠️ ET LES TROIS ANCIENS NOMS RESTENT ÉPROUVÉS — retirer un cas qu'on a fait rougir une fois
+  // n'est pas un ménage, c'est un recul. Ils vivent maintenant à côté du hasard, pas à sa place.
   for (const invente of ['__aucun-role-ne-porte-ce-nom__', 'zorglub', 'chef-equipe-bis']) {
     assert.throws(
       () => baptemeDuRole(invente),

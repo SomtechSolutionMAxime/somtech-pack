@@ -321,14 +321,18 @@ const ROLES_SANS_LIEU = Object.freeze(
  * une table saine ne répond rien. Un mécanisme qu'on n'a pas eu à nommer tombe avec.
  */
 export function tableSansLieuVerrouillee() {
-  // Une clé qu'aucun registre ne portera jamais. Une table saine rend `undefined` ; une table
-  // qui répond invente, quel que soit le mécanisme par lequel elle le fait.
-  const CLE_QUI_N_EXISTE_PAS = '__aucun-role-ne-porte-ce-nom__';
+  // 🔴 LA CLÉ N'EST PLUS FIXE — ELLE EST TIRÉE AU HASARD À CHAQUE APPEL, ET C'EST LE POINT.
+  // Une passe de fond a trouvé qu'un `Proxy` peut répondre honnêtement à un ENSEMBLE connu de
+  // noms (ceux que le banc interroge) et n'inventer que pour tout le reste : la garde testait
+  // des VALEURS, pas une PROPRIÉTÉ. Aucune liste, si longue soit-elle, ne ferme ce trou — elle
+  // ne fait que déplacer la frontière. Une clé imprévisible au moment où le module se charge ne
+  // peut pas être anticipée par un ensemble figé écrit dans le code qui triche.
+  const CLE_IMPREDICTIBLE = `__aucun-role-ne-porte-ce-nom-${Math.random().toString(36).slice(2)}__`;
   return {
     gelee: Object.isFrozen(ROLES_SANS_LIEU),
     sansPrototype: Object.getPrototypeOf(ROLES_SANS_LIEU) === null,
     entreesGelees: Reflect.ownKeys(ROLES_SANS_LIEU).every((k) => Object.isFrozen(ROLES_SANS_LIEU[k])),
-    inventeUneEntree: ROLES_SANS_LIEU[CLE_QUI_N_EXISTE_PAS] !== undefined,
+    inventeUneEntree: ROLES_SANS_LIEU[CLE_IMPREDICTIBLE] !== undefined,
   };
 }
 
