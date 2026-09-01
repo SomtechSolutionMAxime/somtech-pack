@@ -5,6 +5,27 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-09-01
+
+*Epic `E-20260825-0002`. **Un agent né par l'outillage déclare son rôle** — un chef d'équipe (`pack agent naitre --role chef-equipe`) inscrit son mandat et son coordonnateur dans le même geste, sans lieu versionné, et un agent né hors dispositif et identifiable par aucune source est nommé, plutôt que refusé en silence.*
+
+### Ajoute
+
+- **`pack agent naitre --role chef-equipe`** (`T-20260825-0011`). Le rôle sans lieu vit dans un espace de travail jetable — un worktree sur une branche-socle, retiré à la fin de l'epic — et n'écrit rien dans le dépôt du chantier. Il porte le code de son mandat comme nom, jamais une rivière.
+- **La garde de l'anonymat** (`T-20260825-0013`, `naissance-representant/src/garde-des-naissances.js`) — un agent né par le dispositif et identifiable par aucune source est nommé, pas seulement compté.
+- **`ROLES_SANS_LIEU` au registre des rôles** (`ligne-directe/src/roles.js`) — la table des rôles qui n'ont pas de lieu, distincte de `ROLES`. « Inconnu » et « sans lieu » cessent d'être le même fait.
+
+### Corrigé
+
+- **La branche était en conflit avec `main`** (`T-20260827-0037`) — fusionnée plutôt que rebasée pour préserver le socle des travaux empilés dessus. Le défaut n'était dans aucun conflit textuel : deux règles justes, dans deux fichiers que git n'avait aucune raison de rapprocher, se contredisaient une fois réunies.
+- **`ROLES_SANS_LIEU` a résisté à plusieurs tours de contournement en revue**, chacun par un mécanisme distinct — fermée en cessant de garder des cas connus pour garder une propriété : la table est verrouillée contre l'ajout, et la garde interroge la porte de production réelle avec des noms imprévisibles d'avance. Détail des tours et de leurs mutations : `T-20260827-0037`.
+- **La garde `quatre-gestes-hors-orchestrateur` accepte un geste qui n'appartient à personne, quand la case le dit** (`T-20260901-0027`) — le texte du métier avait changé sous elle sans que personne n'y touche.
+
+### Technique
+
+- Le plafond de taille du métier de l'orchestrateur re-baseliné (`scripts/tests/test-metier-orchestrateur.sh`), arbitré par le coordonnateur plutôt que relevé de la main de l'auteur.
+- Le banc anti-import de `roleSansLieu` balaye désormais tout le dépôt (hors exclusions nommées) plutôt qu'une liste de répertoires en dur.
+
 ## [Non-versionne] - 2026-08-29
 
 *Ticket `T-20260827-0033`. **Un successeur né ailleurs peut enfin reprendre le canal de son prédécesseur** — l'ordre « même channel » du 2026-08-26 n'avait pas pu être tenu.*
