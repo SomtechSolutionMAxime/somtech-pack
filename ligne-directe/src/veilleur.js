@@ -40,6 +40,10 @@ import {
 } from './recensement.js';
 import { laVueDuParc, lecteurDeChantier, lecteurDeLieux, racinesDuPoste } from './vue-du-parc.js';
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
+// ⚠️ LE REGISTRE DES DÉCLARATIONS VIT HORS DÉPÔT (`~/.somtech/naissances`) et son lecteur est
+// celui qui l'écrit — on n'en écrit pas un second ici. C'est de l'I/O : le recensement, lui, le
+// reçoit par paramètre, comme toute son I/O.
+import { lireLesDeclarations } from '../../naissance-representant/src/declaration.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
 import { role as roleDe, rolesConnus, libellePluriel, pairDeChantier, RoleInconnu } from './roles.js';
@@ -155,6 +159,64 @@ export function refusLigneMuette(nature, autorises, chantier) {
       'destinée. Désigne le dirigeant une fois (« ligne-directe dirigeant <courriel> ») puis ' +
       'rouvre avec --au-dirigeant, ou nomme un invité avec --inviter <courriel>.',
   };
+}
+
+/**
+ * LE REGISTRE DES DÉCLARATIONS DU POSTE — et son refus ne coûte JAMAIS le recensement entier.
+ *
+ * ⚠️ TROIS ÉTATS, ET LES DEUX QUI SE RESSEMBLENT N'APPELLENT PAS LE MÊME GESTE.
+ *   • le répertoire n'existe pas — le cas NORMAL d'un poste où personne n'est encore né par le
+ *     dispositif. `lireLesDeclarations` rend un parc vide, et le recensement rend « non établi »
+ *     comme avant : l'absence se montre (RA-VUE-003) ;
+ *   • le répertoire est LÀ mais refuse la lecture — une mesure MANQUÉE. Elle arrive ici en
+ *     exception, et on la range en `illisibles`, forme que le recensement sait déjà lire : le
+ *     rôle devient « refusée », c'est-à-dire « va voir », jamais « il n'a pas de déclaration » ;
+ *   • un fichier abîmé parmi d'autres — `lireLesDeclarations` le range déjà lui-même.
+ *
+ * 🔴 CE QU'ON NE FAIT PAS : laisser l'exception remonter. Le registre des naissances est une
+ * source d'APPOINT du recensement ; un répertoire hors dépôt qui se ferme ferait alors
+ * disparaître les 83 agents du poste d'un registre dont tout l'objet est de dire qui est vivant.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ CETTE LECTURE EST SYNCHRONE, ET ELLE ÉCHAPPE À LA GARDE D'ABANDON — relevé en revue de fond.
+ *
+ * `recensementDuPoste` est protégé par `DELAI_MAX_DUN_TOUR_MS` (120 s), mais cette garde arbitre
+ * entre PROMESSES : une opération synchrone qui bloque la pile empêche structurellement son
+ * minuteur de se déclencher. `lireLesDeclarations` lit le répertoire puis CHAQUE fichier en
+ * synchrone, et c'est la première lecture de ce module dont le coût suit la taille HISTORIQUE du
+ * registre plutôt que le nombre d'agents vivants — or rien ne purge ce registre aujourd'hui.
+ *
+ * 🔴 ON NE POSE PAS DE BORNE POUR AUTANT, ET LE CHIFFRE DIT POURQUOI. Mesuré le 2026-08-27 sur ce
+ * poste, registre synthétique :
+ *
+ *        2 déclarations →     6 ms          10 000 déclarations →   170 ms
+ *    1 000 déclarations →    15 ms          50 000 déclarations → 1 032 ms
+ *
+ * Le coût est LINÉAIRE et il faudrait de l'ordre de six millions de fichiers pour approcher les
+ * 120 s de l'abandon. Le registre réel en porte DEUX, et le dispositif inscrit une déclaration
+ * par naissance d'agent. Borner ici garderait un cas que le monde ne produit pas — et ce dépôt a
+ * déjà payé le fait de garder ce qui n'arrive pas.
+ *
+ * ⚠️ CE QUI EST INSCRIT EST DONC LA MESURE, pas une garde : le jour où quelqu'un se demande si ce
+ * point coûte, il a le chiffre et la méthode plutôt qu'une intuition. La vraie réponse — purger
+ * le registre, ou le lire sans bloquer la pile — appartient au module qui l'ÉCRIT
+ * (`naissance-representant/`), et elle est remontée comme telle.
+ */
+export function lesDeclarationsDuPoste({ lire = lireLesDeclarations } = {}) {
+  try {
+    return lire();
+  } catch (err) {
+    return {
+      declarations: [],
+      illisibles: [{ fichier: '(le registre entier)', cause: err?.message || String(err) }],
+      // 🔴 CE CHAMP EXISTE PARCE QUE « QUELQUES FAITS ABÎMÉS » ET « JE N'AI RIEN PU LIRE DU TOUT »
+      // NE SE DISENT PAS PAREIL. Sans lui, la borne du recensement rendait `mesure: 'lue'` sur un
+      // registre dont la lecture avait ENTIÈREMENT échoué : l'étiquette affirmait une mesure qui
+      // n'avait pas eu lieu. Les deux appellent des gestes opposés — aller voir un fichier, ou
+      // aller voir un répertoire — et c'est la distinction que ce module tient partout ailleurs.
+      refusGlobal: err?.message || String(err),
+    };
+  }
 }
 
 export class Veilleur {
@@ -1958,6 +2020,19 @@ export class Veilleur {
       lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
       etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
       nomsConnus,
+      // ⚠️ LE REGISTRE DES DÉCLARATIONS DE NAISSANCE — sans ce câblage, le correctif de
+      // T-20260825-0012 est inerte : `unRecensement` sans registre rend EXACTEMENT ce qu'il
+      // rendait avant, et c'est voulu. C'est donc ici, et nulle part ailleurs, que le poste réel
+      // gagne de classer ses chefs d'équipe.
+      //
+      // ⚠️ ET UN REGISTRE ILLISIBLE NE FAIT PAS TOMBER LA RONDE. `lireLesDeclarations` JETTE
+      // quand le répertoire est là mais refuse la lecture (permissions, montage qui décroche) —
+      // un état qu'elle sépare exprès de l'absence, qui est le cas NORMAL d'un poste où personne
+      // n'est encore né. Laisser cette exception remonter ferait perdre le recensement ENTIER
+      // pour une source d'appoint : 83 agents disparaîtraient du registre parce qu'un répertoire
+      // hors dépôt s'est fermé. On la range donc en `illisibles`, ce que le recensement sait
+      // déjà lire comme un refus de mesure — et le rôle devient « refusée », jamais « absente ».
+      declarations: lesDeclarationsDuPoste(),
       // ⚠️ SANS CETTE LIGNE, LE REGISTRE DIT « non mesurée » — honnêtement, mais sans jamais
       // mordre. `ETALONNAGE_DU_LECTEUR` existe pour qu'un « rien en vol » devenu faux se relie
       // à un changement de version de Claude Code ; il ne peut le faire que si quelqu'un mesure

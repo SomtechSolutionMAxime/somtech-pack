@@ -20,7 +20,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Veilleur } from '../src/veilleur.js';
+import { Veilleur, lesDeclarationsDuPoste } from '../src/veilleur.js';
 import { posteHerdr } from './aide/faux-herdr.js';
 
 let bac;
@@ -506,7 +506,7 @@ test('le câblage RÉEL LIT les écrans — sans quoi tout le parc se dirait « 
   assert.equal(enVol.occupe, true);
 });
 
-test('le câblage RÉEL passe SES HUIT paramètres — une jointure de plus, gardée à sa naissance', async () => {
+test('le câblage RÉEL passe SES NEUF paramètres — deux jointures nues, fermées dans la même fusion', async () => {
   // ═══════════════════════════════════════════════════════════════════════════════════════
   // TROIS MUTATIONS SURVIVANTES, TROUVÉES PAR LES DEUX PASSES DU CYCLE 6, ET C'EST LE MÊME
   // MOTIF QUE CE LOT A DÉJÀ FERMÉ CINQ FOIS : deux étages justes dont la JOINTURE n'est pas
@@ -571,10 +571,44 @@ test('le câblage RÉEL passe SES HUIT paramètres — une jointure de plus, gar
   //    Elle vit désormais dans `le-battement-de-coeur-du-recensement.test.js`, qui pose une
   //    racine jetable AVANT tout import et peut donc exiger le CONTENU.
 
-  // ③ `panes` est CÂBLÉ — gardé ailleurs, exigé ici aussi pour que les huit tiennent ensemble.
+  // ③ `panes` est CÂBLÉ — gardé ailleurs, exigé ici aussi pour que les neuf tiennent ensemble — les deux dernières fermées dans la même fusion.
   assert.equal(rendu.panesVus, 1, 'l’inventaire des panes est bien celui de herdr');
 
-  // ④ `versionCourante` est CÂBLÉ — la huitième jointure, gardée le jour où elle est née.
+  // ④ `declarations` EST CÂBLÉ — LE HUITIÈME, et la mutation qui le retire a SURVÉCU à la suite
+  //    entière (1 065 essais, mesuré le 2026-08-27). C'est le même motif que ① : deux étages
+  //    justes dont la jointure n'appartient à personne. Décâblé, `unRecensement` rend
+  //    EXACTEMENT ce qu'il rendait avant T-20260825-0012 — c'est même une propriété VOULUE du
+  //    paramètre — donc tous les bancs du registre restent verts pendant que le correctif est
+  //    INERTE sur le poste réel : les chefs d'équipe déclarés y redeviennent « rôle non établi »,
+  //    et personne ne l'apprend.
+  //
+  // ⚠️ CE QU'ON MESURE N'EST PAS « UN CHEF D'ÉQUIPE EST CLASSÉ » — il n'y en a aucun dans ce
+  //    bac, et en fabriquer un mesurerait le CLASSEMENT, pas le CÂBLAGE.
+  //
+  // ⚠️ ET SURTOUT PAS `compte.roleDeclare === 0` : ce zéro vaut AUTANT quand personne n'est
+  //    déclaré que quand la source n'a pas été consultée — l'assertion aurait été trop faible
+  //    sur un chemin correct, c'est-à-dire verte sur la mutation même qu'elle prétend tuer.
+  //    C'est `borne.sourceDeclaree` qui porte la différence, et elle seule.
+  //
+  // 🔴 ET CE BANC NE PEUT PAS ISOLER LE REGISTRE — RELEVÉ EN PASSE PORTAIL, ET C'EST JUSTE.
+  //    `RACINE` (`declaration.js`) est une `const` de MODULE, résolue à l'import — or ce
+  //    fichier importe `veilleur.js` en tête, donc bien avant que le corps du test ne pose son
+  //    `HOME` jetable. Le registre lu est celui du POSTE RÉEL, partagé et mutable. Le fichier
+  //    voisin `chef-equipe.js` nomme pourtant ce piège mot pour mot (`racineDesEspaces`, « une
+  //    FONCTION, pas une constante… l'essai écrirait dans le vrai ~/worktrees en paraissant
+  //    réussir ») — `declaration.js` a gardé la constante. 📌 Remonté au lot voisin.
+  //
+  //    CE BANC N'AFFIRME DONC QUE CE QUI NE DÉPEND PAS DU CONTENU DE CE RÉPERTOIRE : que la
+  //    source a été LUE. `roleDeclare` et `parRoleDeclare`, eux, dépendraient de ce qu'un autre
+  //    agent a fait naître sur cette machine — un banc vert chez l'auteur et rouge ailleurs.
+  //    Le CONTENU est éprouvé là où il s'injecte : `le-recensement-classe-par-la-declaration`.
+  assert.equal(
+    rendu.borne.sourceDeclaree.mesure,
+    'lue',
+    `le registre des déclarations doit être CÂBLÉ (borne : ${JSON.stringify(rendu.borne.sourceDeclaree)})`,
+  );
+
+  // ⑤ `versionCourante` est CÂBLÉ — la neuvième jointure, gardée le jour où elle est née.
   //
   // ⚠️ CE QU'ELLE PORTE. `ETALONNAGE_DU_LECTEUR` existe pour qu'un « rien en vol » devenu faux
   //    se relie à un changement de version de Claude Code. Il ne peut le faire que si la
@@ -606,6 +640,42 @@ test('le câblage RÉEL passe SES HUIT paramètres — une jointure de plus, gar
     `la sonde de version doit être CÂBLÉE — « non mesurée » signifie qu'aucune ne lui a été ` +
       `donnée (rendu : ${JSON.stringify(version)})`,
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE REGISTRE DES DÉCLARATIONS QUI REFUSE NE COÛTE PAS LE RECENSEMENT ENTIER
+//
+// 🔴 CE CHEMIN ÉTAIT DU CODE MORT POUR LA SUITE. `~/.somtech/naissances` se lit sur ce poste,
+// donc `lireLesDeclarations()` ne jetait jamais en essai, et `RACINE` — une `const` de module —
+// n'est pas déplaçable depuis le site d'appel. Mutation mesurée : retirer TOUT le `try/catch`
+// laissait les 1 075 essais verts. Le lecteur est donc INJECTÉ, uniquement pour être éprouvable.
+//
+// ⚠️ CE QUI SE JOUE N'EST PAS UN DÉTAIL DE ROBUSTESSE. Le registre des naissances est une source
+// d'APPOINT ; laisser son exception remonter ferait perdre le recensement ENTIER — 85 agents
+// disparaîtraient du seul registre qui dit qui est vivant, parce qu'un répertoire hors dépôt
+// s'est fermé.
+test('un registre de naissances ILLISIBLE ne fait pas tomber la ronde — il se dit', () => {
+  const registre = lesDeclarationsDuPoste({
+    lire: () => {
+      throw new Error('EACCES: permission denied, scandir');
+    },
+  });
+
+  // Le recensement sait déjà lire cette forme : le rôle devient « refusée », jamais « absente ».
+  assert.deepEqual(registre.declarations, []);
+  assert.equal(registre.illisibles.length, 1);
+  assert.match(registre.illisibles[0].cause, /EACCES/);
+  // ⚠️ ET LE REFUS GLOBAL SE MARQUE : « je n'ai rien pu lire du tout » n'est pas « j'ai lu, et
+  // quelques faits étaient abîmés ». Sans ce champ, la borne du recensement rendrait « lue ».
+  assert.match(registre.refusGlobal, /EACCES/);
+});
+
+test('un registre qui se lit passe TEL QUEL — le catch n’intercepte rien d’autre', () => {
+  const attendu = { declarations: [{ nom: 'a' }], illisibles: [] };
+  const registre = lesDeclarationsDuPoste({ lire: () => attendu });
+
+  assert.equal(registre, attendu, 'le lecteur qui réussit doit passer sans être recomposé');
+  assert.equal(registre.refusGlobal, undefined, 'aucun refus ne se marque sur une lecture réussie');
 });
 
 test('les DEUX ceintures d’arrêt ne peuvent pas tomber ensemble — mesuré, chacune est invisible seule', async () => {
