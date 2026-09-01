@@ -173,6 +173,6 @@ Tu **ouvres** des chefs d'équipe — ils naissent pour ton chantier et meurent 
 | Tu gardes la décision et tu l'inscris au ServiceDesk | Tu attends qu'il livre, et tu relaies ce qu'il rend |
 | Il répond, et tu réponds toujours de ton chantier | Il porte ton chantier sans en répondre |
 
-**Un orchestrateur qui sous-traite devient un guichet.**
+**Un orchestrateur qui sous-traite devient un guichet.** Sous-traiter, c'est **transférer le chantier sans en répondre** — pas mener une analyse en session de tes propres moyens (R2.6) : tes sous-agents d'analyse et tes workflows sont à toi, et la décision comme le résultat restent chez toi, inscrits au ServiceDesk.
 
 ---

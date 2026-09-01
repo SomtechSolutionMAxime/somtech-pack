@@ -31,14 +31,28 @@ const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = resolve(ICI, '..');
 
 /** Toute la source livrée — `src/` et `bin/`, énumérés, jamais listés à la main. */
+/**
+ * Tout le `.js` que le MANIFESTE déclare livré — pas une liste de répertoires.
+ *
+ * `pack.json` déclare `naissance-representant/` : le module entier. `package.json`
+ * ne porte aucun champ `files` qui le restreindrait. La population de cette revue
+ * est donc tout ce qui part dans le paquet, y compris `hooks/` et les bancs — non
+ * parce qu'ils comptent, mais parce que le manifeste les livre. Une liste écrite
+ * ici, si longue soit-elle, laisserait le prochain répertoire naître hors balayage.
+ */
+const HORS_PAQUET = new Set(['node_modules', '.git']);
+
 function lesSources() {
   const vus = [];
-  for (const dossier of ['src', 'bin']) {
-    const ou = join(RACINE, dossier);
-    for (const f of readdirSync(ou)) {
-      if (f.endsWith('.js')) vus.push(join(ou, f));
+  const descendre = (ou) => {
+    for (const e of readdirSync(ou, { withFileTypes: true })) {
+      if (HORS_PAQUET.has(e.name)) continue;
+      const chemin = join(ou, e.name);
+      if (e.isDirectory()) descendre(chemin);
+      else if (e.name.endsWith('.js')) vus.push(chemin);
     }
-  }
+  };
+  descendre(RACINE);
   return vus;
 }
 
@@ -70,4 +84,52 @@ test('🔴 aucun fichier source ne porte d’octet de contrôle BRUT — sinon `
     'un octet de contrôle brut dans la source rend le fichier invisible à `grep` — ' +
       'écris-le ÉCHAPPÉ (`\\u0000`), la valeur produite est la même'
   );
+});
+
+/**
+ * 🔴 LA POPULATION SE DEMANDE AU MANIFESTE, PAS À UNE LISTE ÉCRITE ICI.
+ *
+ * `lesSources` énumérait `src` et `bin`, et son commentaire promettait « TOUTE
+ * la source livrée du module ». Écart mesuré : 48 fichiers `.js` livrés que le
+ * balayage ne voyait pas — dont `hooks/garde-ouverture-ligne.js`, qui est
+ * lui-même une garde de sécurité, posée dans les `settings.json` distribués et
+ * installée chez les clients.
+ *
+ * PROUVÉ PAR INJECTION, sur copie hors dépôt : un octet NUL déposé dans ce hook
+ * rend le fichier illisible à `grep` (qui le déclare binaire et se tait) — et le
+ * banc RESTAIT VERT. Le même octet dans `src/declaration.js` le faisait rougir.
+ * Un fichier invisible à `grep` échappait donc à toute revue par recherche, dans
+ * le seul répertoire que ce banc ne regardait pas.
+ *
+ * ⚠️ ET LA POPULATION N'EST PAS « TROIS RÉPERTOIRES AU LIEU DE DEUX ». Remplacer
+ * une liste en dur par une autre laisse le même défaut : le prochain répertoire
+ * ajouté au module naîtra hors balayage, en silence. La population est ce que le
+ * MANIFESTE DÉCLARE LIVRÉ — `pack.json` déclare `naissance-representant/`, le
+ * module entier, et `package.json` ne porte aucun champ `files` qui le
+ * restreindrait. Les bancs sont donc dedans : non parce qu'ils comptent, mais
+ * parce que le manifeste les livre.
+ */
+test('la population balayée est TOUT ce que le manifeste déclare livré', () => {
+  const manifeste = JSON.parse(readFileSync(resolve(RACINE, '..', 'pack.json'), 'utf8'));
+  const chemins = manifeste?.modules?.['naissance-representant']?.paths ?? [];
+  assert.deepEqual(chemins, ['naissance-representant/'],
+    'le manifeste a changé de forme : ce banc lit une clé qui ne décrit plus ce qui est livré');
+
+  // Ce que npm laisse hors du paquet sans qu'on ait à le déclarer.
+  const livres = [];
+  const descendre = (ou) => {
+    for (const e of readdirSync(ou, { withFileTypes: true })) {
+      if (HORS_PAQUET.has(e.name)) continue;
+      const chemin = join(ou, e.name);
+      if (e.isDirectory()) descendre(chemin);
+      else if (e.name.endsWith('.js')) livres.push(chemin);
+    }
+  };
+  descendre(RACINE);
+
+  const balayes = new Set(lesSources());
+  const echappes = livres.filter((f) => !balayes.has(f)).map((f) => f.slice(RACINE.length + 1)).sort();
+  assert.deepEqual(echappes, [],
+    `${echappes.length} fichier(s) .js sont LIVRÉS par le manifeste et ne sont balayés par aucune ` +
+    "revue de ce banc — un octet NUL y passerait sans qu'aucun `grep` ne le voie");
 });

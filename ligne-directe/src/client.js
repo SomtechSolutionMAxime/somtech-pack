@@ -5,7 +5,7 @@
 // savoir si le veilleur tourne — il ouvre sa ligne, c'est tout.
 
 import { connect } from 'node:net';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -34,27 +34,62 @@ export const BORNE_PAR_DEFAUT = 30_000;
  * `recensement` en **9 s**, `vue` en **67 127 ms** (puis 71 797 ms au second essai). Une borne
  * unique ne peut être juste pour aucun d'eux : trop lâche pour trois, trop serrée pour un.
  *
- * ⚠️ ET LE COÛT DE LA VUE EST STRUCTUREL, PAS ACCIDENTEL — mesuré appel par appel, transport
+ * ⚠️ ET LE COÛT DE LA VUE ÉTAIT STRUCTUREL, PAS ACCIDENTEL — mesuré appel par appel, transport
  * instrumenté : 9 217 ms de recensement, puis 54 144 ms de jointure en **91 appels HTTP
- * séquentiels**. Aucun appel n'est lent (médiane 624-778 ms, max 976 ms) : c'est le NOMBRE qui
- * coûte. Sa loi, pour qui voudra reposer cette borne un jour :
+ * séquentiels**. Aucun appel n'était lent (médiane 624-778 ms, max 976 ms) : c'était le NOMBRE
+ * qui coûtait. Sa loi d'alors :
  *
  *     T ≈ recensement + 0,7 s × (2 × mandats + epics)
  *
  * — une liste par mandat, un `epics/list` par mandat, **un `tickets/list` par epic**.
  *
- * 🔴 CETTE BORNE SE PÉRIMERA, ET IL FAUT LE DIRE PLUTÔT QUE DE LA PRÉSENTER COMME CONFORTABLE.
- * Mesurée le matin du 2026-08-24 : **67 s pour 71 epics**. Remesurée quatre heures plus tard,
- * même poste, même code : **84 s pour 85 epics** (89 s sous charge). Le parc grandit, et le
- * coût avec lui — la marge réelle est donc de **2×**, pas davantage. Elle ne tient pas un parc
- * qui double. Ce jour-là, la réponse ne sera pas une borne plus haute : ce sera le nombre
- * d'appels, qu'aucune borne ne peut rattraper.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 LA PHRASE ÉCRITE ICI LE 2026-08-24 S'EST RÉALISÉE, ET C'EST POURQUOI CETTE BORNE A BAISSÉ
  *
- * ⚠️ CE N'EST PAS UNE PERMISSION D'ATTENDRE TROIS MINUTES. La sonde ci-dessous refuse dès que
+ * Elle disait : *« Ce jour-là, la réponse ne sera pas une borne plus haute : ce sera le nombre
+ * d'appels, qu'aucune borne ne peut rattraper. »* C'est ce qu'a fait `E-20260824-0011` : les
+ * appels partent de front, bornés à 32 en vol (`src/plafond.js`, et le chiffre y est mesuré
+ * contre le vrai service).
+ *
+ * **Remesuré en tapant la commande, poste réel, 2026-08-25**, l'avant et l'après ENTRELACÉS tour
+ * par tour pour qu'ils portent le même parc au même instant — 18 lignes d'orchestrateur dont 14
+ * codées (13 codes distincts), 91 lignes d'epic (86 epics distincts), 265 lignes de story :
+ *
+ *     tour        1        2        3        4        5
+ *     avant   89,38 s  65,91 s  68,08 s  75,86 s  65,77 s
+ *     après   15,55 s  14,30 s  14,87 s  14,97 s  13,08 s
+ *
+ * 🔴 ET UNE PASSE DE REVUE A MESURÉ BIEN PIRE, SUR UN POSTE SATURÉ (load average ~105, 242
+ * processus node) — entrelacé pareil, sept tours : 14,39 · 15,42 · 15,96 · 16,22 · 16,71 ·
+ * 20,03 · **26,51** s. C'est ce chiffre-là qu'on retient : une borne se pose sur le pire cas
+ * mesuré, jamais sur la campagne la plus favorable.
+ *
+ * ⚠️ LES DEUX CAMPAGNES SONT JUSTES — elles mesurent deux charges de poste. **Une durée absolue
+ * est une propriété de la machine autant que du code** ; ce qui mesure le LOT est le rapport
+ * avant/après, que l'entrelacement rend insensible à la charge : ×4,5 à ×5,8 sur poste calme,
+ * ×3,3 à ×5,5 sur poste saturé.
+ *
+ * ⚠️ ET LE SERVICEDESK N'EST PLUS LE POSTE DOMINANT, c'est le recensement du poste — d'autant
+ * plus net sur poste chargé, où la jointure résiduelle ne pesait plus que **0,4 s et 1,7 s**.
+ *
+ * 🔴 ALORS 300 s NE GARDAIENT PLUS RIEN, et c'est l'argument écrit six lignes plus haut au sujet
+ * de `BORNE_PAR_DEFAUT` : une borne trop lâche fait attendre cinq minutes le jour où un geste
+ * pend VRAIMENT. On l'a donc RAMENÉE à 60 s — **2,3× le pire cas mesuré (26,51 s)**, donc
+ * au-dessus du 2× que l'épingle du banc exige, et cinq fois moins d'attente devant un vrai
+ * blocage. La marge est mince, et c'est dit : le jour où un poste plus chargé encore fera
+ * dépasser 30 s à ce geste, il faudra relever cette borne, et l'épingle le réclamera.
+ *
+ * ⚠️ ET LA CHAÎNE A ROUGI EN CHEMIN, comme elle devait. Baisser cette valeur a fait rougir
+ * l'épingle de `tests/le-geste-vue-repond-par-le-socket.test.js` et l'essai qui exigeait que la
+ * borne couvre le coût de 67 s. On les a SUIVIS — coût remesuré, date refaite, épingle
+ * réalignée — au lieu de les contourner. C'est la chaîne posée par `E-20260824-0001` qui a
+ * fonctionné exactement comme elle le prévoyait, dans l'autre sens.
+ *
+ * ⚠️ CE N'EST PAS UNE PERMISSION D'ATTENDRE UNE MINUTE. La sonde ci-dessous refuse dès que
  * le veilleur cesse de répondre : la borne haute n'est atteinte que par un veilleur VIVANT et
  * occupé, jamais par un veilleur mort.
  */
-export const BORNES_PAR_GESTE = Object.freeze({ [GESTE_DE_LA_VUE]: 300_000 });
+export const BORNES_PAR_GESTE = Object.freeze({ [GESTE_DE_LA_VUE]: 60_000 });
 
 /**
  * LA SONDE DE VIE — ce qui rend une borne haute admissible.
@@ -138,6 +173,155 @@ const dodo = (ms) => new Promise((r) => setTimeout(r, ms));
  * dans son journal, dont on donne le chemin.
  */
 /**
+ * LA PLACE EST-ELLE TENUE ? — question DIFFÉRENTE de « quelqu'un répond-il ? ».
+ *
+ * 🔴 C'EST LA CONFUSION QUI A FAIT VIVRE DEUX VEILLEURS (T-20260825-0101). Mesuré sur le
+ * poste le 2026-08-25 : deux processus sur `veilleur.sock` (22215 et 67661), le second né la
+ * veille et sourd au geste `ceder` ; le journal du poste porte deux « veilleur démarré » à
+ * **77 secondes d'écart**, et celui du début vivait encore 28 h plus tard. Deux écoutes
+ * Slack, donc chaque parole du dirigeant remise en double.
+ *
+ * La cause tient en une ligne : « il ne répond pas » était lu comme « il est mort ». Or un
+ * veilleur dont la boucle d'événements est occupée TIENT toujours sa place et son écoute —
+ * il est vivant, il est muet. Et ce n'est pas un cas d'école : mesuré au socket du poste, le
+ * geste `vue` a pendu **67 127 ms**, soit trente-trois fois la borne du sondage de présence.
+ *
+ * ⚠️ ON NE DEMANDE RIEN — ON PREND LA POIGNÉE. Un socket UNIX dont le processus est mort
+ * refuse la connexion (`ECONNREFUSED`, mesuré) ; un socket tenu par un processus vivant
+ * l'accepte MÊME SI SA BOUCLE EST BLOQUÉE — le noyau la met en file d'attente sans que
+ * l'application ait à lever le petit doigt (mesuré sur une boucle bloquée 6 s : la connexion
+ * aboutit). C'est la seule sonde qui distingue « muet » de « mort ».
+ *
+ * ⚠️ ET ON NE LIT PAS LA RÉPONSE, EXPRÈS. Attendre un `ok` ferait déclarer libre une place
+ * tenue par un veilleur qui n'a pas fini de charger son identité — le veilleur le dit
+ * lui-même de son `ping` : *« un ping répond la PRÉSENCE, jamais la disponibilité »*.
+ *
+ * ⚠️ SON DOUTE PENCHE DU CÔTÉ DE LA PRUDENCE, délibérément. Si rien ne se conclut à temps,
+ * on rend « tenue » : refuser à tort de prendre la place laisse le poste sans veilleur —
+ * bruyant, réparable — là où prendre à tort la place d'un vivant remet chaque parole en
+ * double, en silence.
+ *
+ * 🔴 CE QUE CETTE SONDE NE VOIT PAS, ET C'EST MESURÉ, PAS SUPPOSÉ. Un socket UNIX dont la
+ * FILE D'ATTENTE EST PLEINE **refuse** la connexion au lieu de la faire attendre : mesuré,
+ * 200 connexions simultanées sur une file de 1 avec la boucle du serveur bloquée rendent
+ * 199 `ECONNREFUSED` et une seule prise. Un veilleur vivant dont la file serait saturée
+ * serait donc lu comme mort. Ce qu'il faudrait pour y arriver : **511 connexions locales en
+ * attente** (la file par défaut de Node) pendant que sa boucle est bloquée — soit cinq cents
+ * commandes simultanées sur un poste. La limite est nommée ici parce qu'un trou tu est un
+ * trou qui revient ; elle n'est pas fermée parce qu'on ne sait pas la reproduire autrement
+ * que par une saturation dépendante de la machine, et une garde qu'on ne peut pas éprouver
+ * ne garde rien.
+ *
+ * ⚠️ LE MINUTEUR S'ÉPROUVE, MAIS PAS PAR LE TEMPS. Mesuré, la prise tranche **30 fois sur
+ * 30** avant lui, même réglé à zéro : un banc qui jouerait sur la borne serait vert sans
+ * jamais toucher la branche. Ce qui la rend atteignable, c'est de fermer l'AUTRE issue — une
+ * prise qui ne conclut jamais. D'où `brancher`, ci-dessous.
+ *
+ * ⚠️ ET LA SUPPRIMER SERAIT PIRE QUE DE LA LAISSER NON GARDÉE : sans elle, si ni la prise ni
+ * l'erreur ne survient, la promesse ne se résout jamais — `placeTenue` PEND, et `passerLaMain`
+ * avec elle. On échangerait une branche muette contre une ATTENTE muette, et une étape qui
+ * pend ne rougit jamais. Le banc exige donc les deux faits : qu'elle RENDE, et qu'elle rende
+ * « tenue » — le doute ne doit jamais pencher du côté qui autorise un second veilleur.
+ */
+export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000, brancher = connect } = {}) {
+  // ⚠️ `brancher` EXISTE POUR QUE LA BRANCHE DU MINUTEUR SOIT ÉPROUVABLE, et pour rien
+  // d'autre — le vrai transport est le défaut, et c'est lui que prennent tous les appels du
+  // dépôt. Même raison que `reveiller` dans `passerLaMain` : sans joint, le seul moyen
+  // d'atteindre ce chemin serait de saturer une file d'attente, c'est-à-dire de faire
+  // dépendre une garde de la machine qui l'exécute. Un banc substitue UN point nommé — la
+  // prise qui ne conclut jamais — et la seule issue restante devient le minuteur.
+  // ⚠️ PAS DE RACCOURCI « le fichier n'existe pas, donc personne » — il y en avait un, et
+  // l'épreuve par mutation l'a rendu SURVIVANT : le retirer ne faisait rougir aucun banc,
+  // parce que la connexion échoue de toute façon (`ENOENT`) et rend le même verdict. Une
+  // ligne que rien ne garde est une ligne qui dérivera sans qu'on le voie ; ici, la laisser
+  // partir REND en plus la branche d'erreur porteuse du cas « il n'y a rien ».
+  return new Promise((resolve) => {
+    let rendu = false;
+    const trancher = (verdict) => {
+      if (rendu) return;
+      rendu = true;
+      clearTimeout(minuteur);
+      try {
+        flux.destroy();
+      } catch {
+        /* déjà fermé */
+      }
+      resolve(verdict);
+    };
+    const flux = brancher(cheminSocket);
+    const minuteur = setTimeout(() => trancher(true), borne);
+    minuteur.unref?.();
+    flux.on('connect', () => trancher(true));
+    flux.on('error', () => trancher(false));
+  });
+}
+
+/**
+ * QUI TIENT LA PLACE — comptés un par un, jamais déduits d'une réponse.
+ *
+ * 🔴 UNE RÉPONSE NE VIENT QUE D'UN SEUL. C'est ce qui a laissé `passerLaMain()` rendre
+ * `{"ok":true,"ancien_cede":true}` pendant que deux veilleurs vivaient : elle avait la parole
+ * d'un occupant, elle n'a jamais demandé combien ils étaient. Ce geste-ci pose la question au
+ * système, pas à un interlocuteur.
+ *
+ * ⚠️ `lsof -t <chemin>` APPARIE PAR NOM, PAS PAR INODE — vérifié sur ce poste : après un
+ * `unlink` suivi d'un `listen` par un autre processus, il rend **les deux** (mesuré : 47387
+ * et 47491). C'est ce qui le rend capable de voir le revenant, celui qui tient encore un
+ * socket dont le chemin a été effacé sous lui. Et il ne compte QUE les occupants : un client
+ * simplement connecté n'y figure pas (mesuré).
+ *
+ * ⚠️ « AUCUN OCCUPANT » ET « JE N'AI PAS PU COMPTER » NE SONT PAS LE MÊME FAIT, et les
+ * confondre serait refaire le défaut d'un cran plus haut. `lsof` sort en 1 avec une sortie
+ * vide quand il n'a rien trouvé — c'est une réponse, on rend `[]`. S'il est introuvable, tué
+ * ou expiré, on n'a rien mesuré du tout — on rend `null`, et l'appelant devra le dire.
+ */
+export function occupantsDeLaPlace(cheminSocket = CHEMIN_SOCKET) {
+  let sortie;
+  try {
+    sortie = execFileSync('lsof', ['-t', '--', cheminSocket], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+    });
+  } catch (err) {
+    // Un code de sortie NUMÉRIQUE veut dire que l'outil a tourné et s'est prononcé ; sans
+    // lui (`ENOENT`, `SIGTERM` d'expiration), la question n'a pas été posée.
+    if (typeof err?.status !== 'number') return null;
+    sortie = err.stdout || '';
+  }
+  return sortie
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map(Number)
+    .filter(Number.isInteger);
+}
+
+/**
+ * Le refus rendu quand PLUSIEURS processus tiennent encore la place.
+ *
+ * 🔴 « UN VEILLEUR NEUF RÉPOND » N'EST PAS « UN SEUL VEILLEUR TOURNE ». La relève a beau
+ * avoir eu lieu, un revenant d'avant peut vivre à côté — c'est l'état exact mesuré le
+ * 2026-08-25. Rendre « ok » là-dessus, c'est signer l'unicité qu'on vient de ne pas vérifier.
+ *
+ * ⚠️ LE GESTE PROPOSÉ NOMME SES CIBLES ET NE FRAPPE PAS PAR MOTIF. `pkill -f` a déjà coûté
+ * onze lignes de discussion vivantes sur ce poste (T-20260811-0087) : il tue tout ce qui
+ * ressemble au motif, jusqu'à un `tail` ouvert sur le fichier. On montre donc d'abord QUI
+ * est là et depuis quand, et on n'arrête que le pid désigné.
+ */
+export function refusPlacePartagee(occupants, { cheminSocket = CHEMIN_SOCKET } = {}) {
+  return new Error(
+    `La relève a eu lieu, mais ${occupants.length} occupants tiennent encore la place — un veilleur de trop, ` +
+      'et chaque parole du dirigeant sera remise en double.\n' +
+      `  Ils sont nommés, pas à chercher : ${occupants.join(', ')}\n` +
+      '  Regarde lequel est le revenant (le plus ancien), puis arrête CELUI-LÀ, par son pid :\n' +
+      `    ps -o pid=,lstart=,args= ${occupants.map((p) => `-p ${p}`).join(' ')}\n` +
+      '    kill <le pid le plus ancien>\n' +
+      `  La place en cause : ${cheminSocket}`
+  );
+}
+
+/**
  * Le refus rendu quand le veilleur en place ne cède pas la main.
  *
  * CE REFUS PROPOSAIT `pkill -f demarrer-veilleur.js`, et c'est le même défaut que celui du
@@ -148,14 +332,20 @@ const dodo = (ms) => new Promise((r) => setTimeout(r, ms));
  *
  * On nomme donc le processus AVANT de l'arrêter : `lsof` rend le seul qui tient la place.
  */
-export function refusVeilleurTetu(refus, { cheminSocket = CHEMIN_SOCKET } = {}) {
+export function refusVeilleurTetu(refus, { cheminSocket = CHEMIN_SOCKET, occupants = null } = {}) {
+  // ⚠️ QUAND ON SAIT QUI C'EST, ON LE DIT. Envoyer chercher un pid qu'on a déjà mesuré une
+  // seconde plus tôt, c'est faire refaire à la main un travail déjà fait — et c'est pendant
+  // ce travail-là qu'on tape `pkill` par lassitude.
+  const nommes = occupants?.length
+    ? `  La place est tenue par : ${occupants.join(', ')} — arrête CELUI-LÀ, par son pid.\n`
+    : `  Sinon, nomme d'abord le seul processus qui tient la place, puis arrête CELUI-LÀ :\n    lsof -t ${cheminSocket}\n`;
   return new Error(
     `Le veilleur en place n'a pas cédé la main${refus ? ` (${refus})` : ''}.\n` +
-      `  C'est le cas d'une version antérieure à celle qui sait céder — une seule fois, il faut l'arrêter.\n` +
+      `  C'est le cas d'une version antérieure à celle qui sait céder — ou d'un veilleur occupé au point de ne plus répondre.\n` +
       `  S'il vient du service du poste, un redémarrage suffit et ne touche à rien d'autre :\n` +
       `    launchctl kickstart -k gui/$(id -u)/${ETIQUETTE_SERVICE}\n` +
-      `  Sinon, nomme d'abord le seul processus qui tient la place, puis arrête CELUI-LÀ :\n` +
-      `    lsof -t ${cheminSocket}\n` +
+      nommes +
+      `  La place en cause : ${cheminSocket}\n` +
       `  Les relèves suivantes se feront toutes seules.`
   );
 }
@@ -168,7 +358,7 @@ export function refusVeilleurTetu(refus, { cheminSocket = CHEMIN_SOCKET } = {}) 
  * et se retirait, donc une version fraîchement publiée restait sans effet — sans que rien
  * ne le signale. Il fallait chercher un identifiant de processus et le tuer à la main.
  */
-export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
+export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET, reveiller = reveillerVeilleur } = {}) {
   let cede = false;
   let refus = null;
   try {
@@ -181,6 +371,12 @@ export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
   }
 
   // La place se libère-t-elle VRAIMENT ? On ne se fie pas à la réponse, on regarde.
+  //
+  // 🔴 ET « REGARDER » N'EST PAS « REDEMANDER ». Ce qui vivait ici concluait « la place est
+  // libre » dès qu'un `ping` restait sans réponse — le MÊME verdict pour un veilleur mort et
+  // pour un veilleur seulement occupé. On faisait donc naître un veilleur par-dessus un
+  // vivant, et c'est la moitié du double mesuré le 2026-08-25 (T-20260825-0101). La question
+  // se pose désormais à la place elle-même : quelqu'un tient-il encore la poignée ?
   let libre = false;
   for (let essai = 0; essai < 20; essai += 1) {
     await dodo(250);
@@ -188,10 +384,8 @@ export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
       libre = true;
       break;
     }
-    try {
-      await demander({ geste: 'ping' }, cheminSocket, { delai: 1000 });
-    } catch {
-      libre = true; // le socket ne répond plus : la place est libre
+    if (!(await placeTenue(cheminSocket, { borne: 1000 }))) {
+      libre = true; // plus personne à la poignée : la place est vraiment libre
       break;
     }
   }
@@ -204,18 +398,35 @@ export async function passerLaMain({ cheminSocket = CHEMIN_SOCKET } = {}) {
   if (!libre) {
     // Le socket EN CAUSE, pas celui du poste : un message qui nomme la mauvaise place
     // envoie regarder à côté — c'est la même faute que celle qu'on corrige ici.
-    throw refusVeilleurTetu(refus, { cheminSocket });
+    throw refusVeilleurTetu(refus, { cheminSocket, occupants: occupantsDeLaPlace(cheminSocket) });
   }
 
-  reveillerVeilleur();
+  reveiller();
   for (let essai = 0; essai < 40; essai += 1) {
     await dodo(250);
+    let r = null;
     try {
-      const r = await demander({ geste: 'ping' }, cheminSocket, { delai: 2000 });
-      if (r?.ok) return { ok: true, ancien_cede: cede };
+      r = await demander({ geste: 'ping' }, cheminSocket, { delai: 2000 });
     } catch {
-      /* pas encore prêt */
+      continue; // pas encore prêt
     }
+    if (!r?.ok) continue;
+
+    // 🔴 UN VEILLEUR NEUF QUI RÉPOND N'EST PAS « UN SEUL VEILLEUR TOURNE ». C'est le
+    // mensonge exact du 2026-08-25 : `{"ok":true,"ancien_cede":true}` rendu pendant que deux
+    // processus tenaient le socket. La réponse ne vient QUE d'un occupant ; elle ne dit rien
+    // de ceux qui se taisent. On compte donc, au lieu de conclure.
+    //
+    // ⚠️ LE REFUS EST HORS DU `try`, ET C'EST STRUCTUREL : à l'intérieur, le `catch` du
+    // sondage l'avalerait et la boucle repartirait comme si de rien n'était — un refus qui
+    // n'empêche rien.
+    const occupants = occupantsDeLaPlace(cheminSocket);
+    if (occupants && occupants.length > 1) throw refusPlacePartagee(occupants, { cheminSocket });
+
+    // `occupants` remonte tel quel, `null` compris : « je n'ai pas pu compter » est un fait
+    // que l'appelant a le droit de connaître. Le taire rendrait cette relève-là
+    // indiscernable d'une relève vérifiée.
+    return { ok: true, ancien_cede: cede, occupants };
   }
   throw new Error(`Le veilleur n'a pas repris la main en 10s. Regarde pourquoi : tail -20 ${CHEMIN_JOURNAL}`);
 }

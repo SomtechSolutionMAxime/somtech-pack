@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 import { resolvePayloadRoot, readManifest, defaultModules } from '../src/modules.js';
 import { collectFiles } from '../src/engine.js';
+// La table RÉELLE des rôles dont le CLI sait rafraîchir le lieu, importée — jamais recopiée.
+import { ROLES as REGISTRE_DU_CLI } from '../src/commands/representant.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_DIR = resolve(HERE, '..');
@@ -97,6 +99,44 @@ function fichiersDe(racine, prefixe = '') {
   return out;
 }
 
+/**
+ * LES GABARITS DE RÔLE QUE LE PAQUET DOIT EMBARQUER — MESURÉS, PLUS ÉCRITS À LA MAIN
+ * (T-20260826-0083).
+ *
+ * La liste valait `['gestionnaire-client', 'orchestrateur']`, en toutes lettres, dans le test
+ * ci-dessous. C'est le même défaut que celui dont ce test porte déjà la cicatrice, d'un cran
+ * plus haut : il avait cessé d'énumérer les FICHIERS d'un gabarit, il énumérait toujours les
+ * RÔLES. Mesuré le 2026-08-26 : un troisième rôle déposé sous `.claude/templates/developpeur/`,
+ * réellement rendu et distribué, portant un fichier que `npm pack` retire du tarball, laissait
+ * les CINQ contrôles de ce fichier au vert. Le gabarit était amputé dans le paquet publié et
+ * rien ne le disait — l'agent naîtrait chez le client sans son métier.
+ *
+ * ⚠️ LA POPULATION EST L'UNION DE DEUX DÉCLARATIONS, ET C'EST MESURÉ :
+ *
+ *   • le REGISTRE du CLI (`ROLES` de `src/commands/representant.js`) → les rôles dont un lieu
+ *     se pose et se rafraîchit, par leur nom de gabarit ;
+ *   • `metier/*` → les rôles dont un métier est rendu, donc distribué à un gabarit.
+ *
+ * Prendre l'un seul laisserait un trou dans le sens de l'autre : un rôle rendu mais pas encore
+ * inscrit au registre, ou inscrit mais pas encore rendu, est PRÉCISÉMENT l'état d'un rôle en
+ * cours de naissance — celui des neuf rôles arbitrés (P-20260819-0001).
+ *
+ * ⚠️ ET `bootstrap` EN SORT PAR SA NATURE, JAMAIS PAR SON NOM. Énumérer `.claude/templates/*`
+ * rendrait TROIS répertoires (mesuré) : `bootstrap` s'y ajoute, alors qu'il est un gabarit de
+ * sources de vérité — le lieu de personne, sans métier rendu ni entrée au registre, et sans les
+ * quatre fichiers qu'un lieu porte. L'écarter demanderait une liste d'exceptions, et une liste
+ * d'exceptions se désarme par un geste qui ressemble à de l'entretien. Ici il n'est déclaré
+ * nulle part comme rôle : il n'entre pas.
+ */
+function gabaritsDeRole(racine) {
+  const duRegistre = Object.values(REGISTRE_DU_CLI).map((r) => r.gabarit);
+  const base = join(racine, 'metier');
+  const rendus = existsSync(base)
+    ? readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+    : [];
+  return [...new Set([...duRegistre, ...rendus])].sort();
+}
+
 test('paquet npm : le canvas et les gabarits du représentant survivent à la fabrication du tarball', () => {
   // Le test précédent inspecte le RÉPERTOIRE payload. Ça ne prouve rien sur ce que npm
   // met réellement dans le tarball : npm applique les fichiers d'ignore imbriqués au
@@ -158,14 +198,38 @@ test('paquet npm : le canvas et les gabarits du représentant survivent à la fa
   // et le test qui perd la course accuse un fichier d'ignore imaginaire. Un seul fichier
   // touche donc à `cli/payload`, celui-ci.
   //
-  // LA LISTE EST ÉNUMÉRÉE DEPUIS LA SOURCE, jamais écrite en dur — et c'est le correctif d'un
-  // motif qui a déjà mordu quatre fois sur ce dépôt. Elle l'était : quand le gabarit de
-  // l'orchestrateur a gagné son `.mcp.json` et son `settings.json`, la garde ne couvrait
-  // toujours que ses deux premiers fichiers. Un orchestrateur serait né sans ses outils ni
-  // ses permissions, derrière un test vert. Énumérer rend la garde juste par construction :
+  // LA LISTE DES FICHIERS EST ÉNUMÉRÉE DEPUIS LA SOURCE, jamais écrite en dur — et c'est le
+  // correctif d'un motif qui a déjà mordu quatre fois sur ce dépôt. Elle l'était : quand le
+  // gabarit de l'orchestrateur a gagné son `.mcp.json` et son `settings.json`, la garde ne
+  // couvrait toujours que ses deux premiers fichiers. Un orchestrateur serait né sans ses outils
+  // ni ses permissions, derrière un test vert. Énumérer rend la garde juste par construction :
   // un fichier ajouté demain au gabarit est couvert sans que personne y pense.
-  for (const role of ['gestionnaire-client', 'orchestrateur']) {
+  //
+  // ⚠️ ET LA LISTE DES RÔLES L'EST DEPUIS LE 2026-08-26 (T-20260826-0083) : elle disait
+  // `['gestionnaire-client', 'orchestrateur']`. Le même défaut, d'un cran plus haut — les
+  // fichiers étaient énumérés, les rôles non. Voir `gabaritsDeRole` pour ce qui est mesuré,
+  // pourquoi c'est l'UNION du registre et de `metier/`, et pourquoi `bootstrap` en sort par sa
+  // nature.
+  const gabarits = gabaritsDeRole(REPO);
+
+  // ⚠️ SANS CE CONTRÔLE, LA GARDE SE DÉSARME TOUTE SEULE. Ce qui suit est une boucle : une
+  // énumération VIDE la traverse sans une assertion, et le test passe au vert en n'ayant rien
+  // mesuré. « Un test qui attend RIEN ne peut pas distinguer *rien trouvé* de *rien cherché* »
+  // (feed du 2026-08-25).
+  assert.ok(
+    gabarits.length > 0,
+    'aucun gabarit de rôle énuméré : le registre du CLI est vide et « metier/ » ne porte aucun '
+      + 'sous-dossier. Les contrôles qui suivent ne sont pas verts — ils n\'existent pas.',
+  );
+
+  for (const role of gabarits) {
     const source = join(REPO, '.claude', 'templates', role);
+    assert.ok(
+      existsSync(source),
+      `le rôle « ${role} » est déclaré (registre du CLI ou metier/) mais ne porte aucun gabarit `
+        + `sous .claude/templates/ — le paquet ne peut rien embarquer pour lui, et un lieu posé `
+        + `sur ce rôle naîtrait vide`,
+    );
     const attendus = fichiersDe(source).map((rel) => `payload/.claude/templates/${role}/${rel}`);
     assert.ok(
       attendus.length >= 4,

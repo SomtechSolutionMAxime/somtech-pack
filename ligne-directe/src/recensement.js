@@ -158,15 +158,69 @@ export const REGLE_DE_CONDUITE =
   'ce registre MESURE et REND, il ne PRÉSUME jamais ; et il PROPOSE, il n’IMPOSE pas.';
 
 /**
- * SUR QUEL RENDU L'INDICE DE TRAVAIL EN VOL A ÉTÉ MESURÉ — et pourquoi cette ligne existe.
+ * L'ÉTALONNAGE DU LECTEUR D'ÉCRAN — une valeur ÉCRITE, qui se déclare telle.
  *
  * Le travail en vol ne se lit pas dans une interface : il se lit dans la BARRE D'ÉTAT que
  * Claude Code dessine au bas du pane. Ce libellé appartient au rendu, pas à un contrat. Le jour
  * où il changera, `travailEnVol` rendra « rien en vol » pour un agent qui en a — un faux
- * négatif silencieux, c'est-à-dire le motif exact que ce dépôt traque partout. Cette constante
+ * négatif silencieux, c'est-à-dire le motif exact que ce dépôt traque partout. Cet étalonnage
  * existe pour qu'on puisse relier ce jour-là à un changement de version sans refaire l'enquête.
+ * **Cette fonction-là est la raison d'être de ces deux valeurs, et elle doit leur survivre.**
+ *
+ * ⚠️ ELLE PORTE SA PROPRE PROVENANCE, ET C'EST LE CORRECTIF. Elle valait autrefois la phrase
+ * « Claude Code v2.1.235 (mesuré le 2026-08-19) », rendue sous un objet qui déclare par ailleurs
+ * `mesure: 'lue'` — ce `lue` portant en vérité sur l'ÉCRAN, jamais sur la version. Le lecteur du
+ * registre lisait donc une constante écrite en dur comme une mesure du poste, alors que le poste
+ * tournait réellement sur `2.1.245` (mesuré le 2026-08-25). `mesure: 'constante'` ferme ça : une
+ * valeur écrite ne se rend jamais habillée en mesurée. La règle de conduite de ce fichier —
+ * « il MESURE et REND, il ne PRÉSUME jamais » — vaut aussi pour ce que le fichier dit de lui-même.
+ *
+ * ⚠️ ET LE NUMÉRO N'EST PAS LA MESURE : c'est `versionDuPoste`, plus bas, qui mesure — quand on
+ * lui donne de quoi mesurer, et qui dit `refusée` ou `non mesurée` sinon.
  */
-export const RENDU_MESURE_SUR = 'Claude Code v2.1.235 (mesuré le 2026-08-19)';
+export const ETALONNAGE_DU_LECTEUR = Object.freeze({
+  version: '2.1.235',
+  date: '2026-08-19',
+  mesure: 'constante',
+});
+
+/**
+ * LA VERSION RÉELLEMENT INSTALLÉE SUR LE POSTE — mesurée, refusée, ou non mesurée. Jamais devinée.
+ *
+ * ⚠️ LA SONDE EST INJECTÉE, PARCE QU'ELLE TOUCHE LE SYSTÈME. `travailEnVol` est une fonction
+ * PURE qui prend un écran ; y glisser un `execFileSync('claude', ['--version'])` la rendrait
+ * impure en douce, et ferait payer un processus par pane — trois cents sur ce poste. Le défaut
+ * de l'injection est donc de NE RIEN MESURER, et de le dire.
+ *
+ * ⚠️ ET LES TROIS ÉTATS SE DISTINGUENT, parce qu'ils appellent trois conduites. « on ne m'a rien
+ * donné » (`non mesurée`) n'est pas « j'ai essayé et ça a raté » (`refusée`), et aucun des deux
+ * ne se replie sur la valeur d'étalonnage — ce repli-là serait la présomption, déguisée en
+ * prudence.
+ */
+function versionDuPoste(versionCourante) {
+  if (typeof versionCourante !== 'function') {
+    return {
+      mesure: 'non mesurée',
+      version: null,
+      raison: 'aucune sonde de version ne m’a été donnée — je ne sais pas sur quoi ce poste tourne',
+    };
+  }
+  let brut;
+  try {
+    brut = versionCourante();
+  } catch (err) {
+    return { mesure: 'refusée', version: null, raison: motDeLErreur(err) };
+  }
+  const trouve = String(brut ?? '').match(/\d+\.\d+\.\d+/);
+  if (!trouve) {
+    return {
+      mesure: 'refusée',
+      version: null,
+      raison: `la sonde a répondu sans numéro de version (« ${String(brut ?? '').trim().slice(0, 80)} »)`,
+    };
+  }
+  return { mesure: 'lue', version: trouve[0] };
+}
 
 /**
  * LE FICHIER QUI PORTE LE MÉTIER, ET LUI SEUL.
@@ -263,16 +317,26 @@ export function lieuDuChemin(chemin, dossier) {
  * Claude Code annonce « N shell » quand un shell d'arrière-plan tourne et « /tasks to see
  * subagents » quand des sous-agents existent. Contre-épreuve faite sur un même agent le
  * 2026-08-19 : la mention est ABSENTE avant qu'il ne lance quoi que ce soit, PRÉSENTE ensuite.
- * Mais ce libellé appartient au rendu (`RENDU_MESURE_SUR`), pas à une interface.
+ * Mais ce libellé appartient au rendu (`ETALONNAGE_DU_LECTEUR`), pas à une interface.
  *
  * ⚠️ ET « AU REPOS » N'EST PAS « SANS TRAVAIL EN VOL ». Un agent `idle` peut avoir un shell qui
  * tourne et un sous-agent en vol — mesuré. C'est exactement le cas qu'un `/clear` proposé « à un
  * agent au repos » raterait, et c'est pourquoi les deux se rendent séparément.
  *
+ * ⚠️ ET LE `mesure: 'lue'` PORTE SUR L'ÉCRAN, RIEN D'AUTRE. Ce qu'on sait de la VERSION voyage
+ * séparément, sous sa propre provenance : `etalonnage` pour la valeur écrite en dur,
+ * `versionDuPoste` pour ce qu'on a — ou n'a pas — mesuré. Les mêler faisait lire une constante
+ * comme une mesure, et c'est le défaut que E-20260825-0006 ferme.
+ *
+ * @param ecran          le texte du pane, ou `null` s'il ne s'est pas laissé lire.
+ * @param versionCourante `() → texte` — la sonde de version, INJECTÉE parce qu'elle touche le
+ *                        système. Facultative : sans elle, la version est `non mesurée`, jamais
+ *                        présumée égale à l'étalonnage.
+ *
  * @returns `{ mesure: 'lue'|'refusée', ... }` — un écran illisible rend `refusée`, JAMAIS
  *          « rien en vol ».
  */
-export function travailEnVol(ecran) {
+export function travailEnVol(ecran, { versionCourante = null } = {}) {
   if (ecran === null || ecran === undefined) {
     return { mesure: 'refusée', raison: "l'écran du pane ne s'est pas laissé lire", enVol: null };
   }
@@ -280,13 +344,20 @@ export function travailEnVol(ecran) {
   const shells = texte.match(/·\s*(\d+)\s+shells?\b/);
   const sousAgents = /\/tasks to see subagents/.test(texte);
   const occupe = /esc to interrupt/.test(texte);
+  const version = versionDuPoste(versionCourante);
   return {
     mesure: 'lue',
     shells: shells ? Number(shells[1]) : 0,
     sousAgents,
     occupe,
     enVol: Boolean((shells && Number(shells[1]) > 0) || sousAgents || occupe),
-    rendu: RENDU_MESURE_SUR,
+    // La valeur ÉCRITE, qui se déclare écrite — et la valeur MESURÉE, qui se déclare mesurée.
+    etalonnage: ETALONNAGE_DU_LECTEUR,
+    versionDuPoste: version,
+    // ⚠️ ET VOICI CE À QUOI L'ÉTALONNAGE SERT : `true` avertit que l'écran qu'on vient de lire
+    // n'a pas été étalonné sur la version qui l'a dessiné — donc qu'un « rien en vol » peut être
+    // un faux négatif. `null` quand rien n'a été mesuré : on ne conclut pas d'une non-mesure.
+    etalonnageDepasse: version.mesure === 'lue' ? version.version !== ETALONNAGE_DU_LECTEUR.version : null,
   };
 }
 
@@ -294,6 +365,7 @@ function motDeLErreur(err) {
   return err?.message || String(err);
 }
 
+/**
 /**
  * CE QUE LA DÉCLARATION DE NAISSANCE DIT D'UN AGENT SANS LIEU — ou `null` quand elle ne dit rien.
  *
@@ -627,6 +699,30 @@ function declarationDuPane(p, chemin, registre, nom) {
 }
 
 /**
+ * UNE SONDE QU'ON NE PAIE QU'UNE FOIS — et dont l'ÉCHEC se rejoue à l'identique.
+ *
+ * ⚠️ LE REFUS EST MÉMORISÉ COMME LE SUCCÈS. Ne retenir que le succès ferait rappeler une sonde
+ * en panne à chaque pane — trois cents échecs pour un seul fait — et, pire, laisserait deux
+ * entrées du même tour rendre deux réponses différentes pour une question qui n'en a qu'une.
+ */
+function uneSeuleFois(sonde) {
+  let fait = false;
+  let issue;
+  return () => {
+    if (!fait) {
+      fait = true;
+      try {
+        issue = { valeur: sonde() };
+      } catch (err) {
+        issue = { err };
+      }
+    }
+    if (issue.err) throw issue.err;
+    return issue.valeur;
+  };
+}
+
+/**
  * LE LIEU DE RÔLE QUE PORTE UN CHEMIN DE TRAVAIL — pour TOUS les rôles connus, pas un seul.
  *
  * ⚠️ CE QUI EST RENDU EST UN CANDIDAT, PAS UN RÔLE. Cette fonction ne lit que le CHEMIN : elle
@@ -800,10 +896,16 @@ export async function unRecensement({
   // quand il n'a pas répondu du tout. Une Map nue ne saurait pas distinguer les deux, et c'est
   // exactement la distinction que `nomDeLAgent` doit rendre.
   nomsConnus = null,
+  // ⚠️ LA SONDE DE VERSION, INJECTÉE — et RÉSOLUE UNE SEULE FOIS pour tout le tour. La version
+  // installée est une propriété du POSTE, pas d'un pane : la redemander à chaque entrée ferait
+  // payer trois cents processus pour trois cents fois la même réponse. Sans elle, chaque agent
+  // porte une version `non mesurée` — jamais l'étalonnage présenté comme une mesure.
+  versionCourante = null,
   maintenant = Date.now(),
   journaliser = () => {},
 } = {}) {
   const quand = new Date(maintenant).toISOString();
+  const versionUneSeuleFois = versionCourante ? uneSeuleFois(versionCourante) : null;
 
   // ═══ UNE PANNE D'INVENTAIRE N'EST PAS « AUCUN AGENT » — la prudence de `balayage.js`, reprise
   // ici sur son propre objet. `herdr.panes()` jette quand l'outil est introuvable ou qu'aucune
@@ -1186,7 +1288,7 @@ export async function unRecensement({
                   'en porte pourtant un — c’est un chantier NON TRAÇABLE, pas une absence de chantier',
               };
     const enVol = lireEcran
-      ? travailEnVol(await lireEcran(p))
+      ? travailEnVol(await lireEcran(p), { versionCourante: versionUneSeuleFois })
       : { mesure: 'non mesurée', raison: 'aucun lecteur d’écran ne m’a été donné', enVol: null };
 
     // ⚠️ L'ÉCART N'EXISTE QUE SI LES DEUX CÔTÉS ONT ÉTÉ MESURÉS. Une référence absente ou un

@@ -48,17 +48,69 @@ test('le chemin que le rendu écrit et celui où le pack dépose sont le MÊME',
     'le rendu doit viser exactement là où le pack dépose — sinon le hook cherche au mauvais endroit');
 });
 
+/**
+ * LES RÔLES DONT ON LIT LE CLASSEMENT — MESURÉS SUR LE DISQUE, PLUS ÉCRITS À LA MAIN
+ * (T-20260826-0083).
+ *
+ * La liste valait `['orchestrateur', 'gestionnaire-client']`, en toutes lettres. Mesuré le
+ * 2026-08-26 : un TROISIÈME rôle déposé sous `metier/developpeur/`, réellement rendu et
+ * distribué, dont le classement déclarait `garde: "garde-qui-nexiste-pas"` — une garde que
+ * `gardes/` ne porte pas — laissait les SIX contrôles de ce fichier au vert. Le rôle n'était
+ * pas dans la liste, donc rien ne lisait son classement : l'agent serait né avec un hook qui
+ * refuse tous ses gestes de terminal, exactement le mode de panne que ce fichier prétend
+ * fermer.
+ *
+ * ⚠️ POURQUOI `metier/*` ET NON LE REGISTRE DES RÔLES (`cli/src/commands/representant.js`) —
+ * les deux ont été mesurées, et le SUJET tranche : ce contrôle lit un CLASSEMENT, et un
+ * classement ne vit que sous `metier/<rôle>/classement.json`. Un rôle inscrit au registre mais
+ * sans dossier de métier ne déclare aucune garde : il n'a rien à mesurer ici. C'est
+ * l'énumération qui coïncide avec ce qu'on lit, pas avec ce qu'on aimerait couvrir.
+ *
+ * ⚠️ AUCUN FILTRE À L'ENTRÉE, ET C'EST DÉLIBÉRÉ. On prend TOUS les sous-dossiers de `metier/`.
+ * Le `if (!existsSync(chemin)) continue;` d'avant était un filtre silencieux : un rôle dont le
+ * classement a disparu sortait du dénominateur sans un mot, au moment précis où il fallait le
+ * signaler. Ce qui manque à un rôle est désormais NOMMÉ (voir le contrôle juste dessous).
+ */
+function rolesDuMetier(racine) {
+  const base = join(racine, 'metier');
+  if (!existsSync(base)) return { roles: [], raison: `« ${base} » n’existe pas` };
+  const roles = readdirSync(base, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  return { roles, raison: roles.length ? null : `« ${base} » ne porte aucun sous-dossier de rôle` };
+}
+
+test('🔴 le dénominateur de ce fichier est MESURÉ, il n’est pas vide, et chaque rôle a son classement', () => {
+  // ⚠️ SANS CE CONTRÔLE, LA GARDE SE DÉSARME TOUTE SEULE. Le contrôle ci-dessous parcourt
+  // `ROLES` : si l’énumération rend une liste VIDE — répertoire déplacé, renommé, filtre
+  // resserré — la boucle ne lit AUCUN classement et le test passe au vert en n’ayant rien
+  // mesuré. « Un test qui attend RIEN ne peut pas distinguer *rien trouvé* de *rien cherché* »
+  // (feed du 2026-08-25). Celui-ci fait la différence, et il rougit du côté de « rien cherché ».
+  const { roles, raison } = rolesDuMetier(RACINE);
+  assert.equal(raison, null,
+    `l’énumération des rôles n’a rien rendu : ${raison}. La jointure des deux étages n’est alors `
+    + 'pas verte — elle n’existe pas.');
+  assert.ok(roles.length > 0, 'aucun rôle énuméré — voir le message ci-dessus');
+
+  const sansClassement = roles.filter((r) => !existsSync(join(RACINE, 'metier', r, 'classement.json')));
+  assert.deepEqual(sansClassement, [],
+    'un rôle de metier/ n’a pas de classement.json — il ne déclare donc aucune garde, et rien ne '
+    + `dirait qu’il en déclarait une hier : ${sansClassement.join(', ')}`);
+});
+
 test('⚠️ toute garde qu un classement DÉCLARE existe dans le module — c est la jointure des deux étages', () => {
   // Chaque étage est juste séparément : le rendu écrit un chemin `~/.somtech/gardes/<garde>.js`
   // (gardé plus haut), et `pack setup` dépose le module `gardes` (gardé plus haut aussi). La
   // ligne qui les relie — que la garde NOMMÉE par un classement soit bien l'un des fichiers
   // déposés — ne l'était par aucun des deux. Un classement qui déclare `garde: "x"` sans que
   // `gardes/x.js` existe rend un hook qui refuse tout, en silence, chez l'agent.
-  const roles = ['orchestrateur', 'gestionnaire-client'];
+  const { roles, raison } = rolesDuMetier(RACINE);
+  assert.equal(raison, null, `rien à mesurer : ${raison}`);
   let declarees = 0;
   for (const role of roles) {
     const chemin = join(RACINE, 'metier', role, 'classement.json');
-    if (!existsSync(chemin)) continue;
+    if (!existsSync(chemin)) continue;   // NOMMÉ en rouge par le contrôle ci-dessus, pas ignoré
     for (const h of JSON.parse(readFileSync(chemin, 'utf8')).hooks || []) {
       // Un hook qui porte sa propre `commande` vise un autre module (la naissance) : le
       // chemin est alors dans la commande, et il est gardé là où ce module vit.
@@ -70,8 +122,12 @@ test('⚠️ toute garde qu un classement DÉCLARE existe dans le module — c e
         `la garde « ${h.garde} » n a pas de module de décision — un fil sans décision ne juge rien`);
     }
   }
+  // ⚠️ CE CHIFFRE EST UNE BORNE D'ANTI-VACUITÉ, PAS UN DÉNOMINATEUR. Il ne dit pas « combien de
+  // rôles il y a » — un rôle peut légitimement ne déclarer aucun hook. Il dit qu'un parcours qui
+  // ne trouve RIEN à vérifier ne doit pas passer pour satisfait : c'est le second filet, sous
+  // celui qui mesure l'énumération elle-même.
   assert.ok(declarees >= 2, `le contrôle doit avoir vu au moins deux gardes déclarées (${declarees}) — `
-    + `un contrôle qui ne trouve rien à vérifier passe pour satisfait`);
+    + `un contrôle qui ne trouve rien à vérifier passe pour satisfait. Rôles parcourus : ${roles.join(', ')}`);
 });
 
 test('la décision distribuée et celle que le CLI teste sont le MÊME texte — deux copies divergent en silence', () => {

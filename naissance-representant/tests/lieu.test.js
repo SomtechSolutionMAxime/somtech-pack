@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { estUnLieuDeRepresentant } from '../src/lieu.js';
+import { rolesConnus } from '../../ligne-directe/src/roles.js';
 
 function dirTemp() {
   return mkdtempSync(join(tmpdir(), 'smtk-lieu-'));
@@ -79,4 +80,24 @@ test('les quatre gabarits, avec leur en-tête réel, reconnaissent le lieu', () 
   } finally {
     rmSync(d, { recursive: true, force: true });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA GARDE DU LITTÉRAL QUI RESTE (T-20260826-0076, point 6)
+//
+// `estUnLieuDeRepresentant` compare à `'representant'` EN DUR, et ce littéral a été CONSERVÉ :
+// il ne décide pas, il définit — le nom de la fonction nomme le rôle, et il n'existe aucune
+// propriété de registre à dériver pour répondre « est-ce CE rôle-ci ».
+//
+// ⚠️ MAIS SON UNIQUE MODE DE PANNE EST MUET, et c'est lui qu'on ferme ici. Le jour où la clé
+// « representant » changerait de nom au registre, ce prédicat rendrait `false` POUR TOUJOURS,
+// sans qu'une erreur ne parte : le garde d'origine cesserait de reconnaître le lieu qu'il
+// existe pour reconnaître. Les cinq essais ci-dessus resteraient verts — ils posent leurs
+// gabarits eux-mêmes et ne consultent jamais le registre.
+test('« representant » est un rôle CONNU du registre — sinon ce prédicat est mort en silence', () => {
+  assert.ok(
+    rolesConnus().includes('representant'),
+    'le registre ne connaît plus la clé « representant » : `estUnLieuDeRepresentant` rend désormais ' +
+      `false pour tout répertoire, sans le dire. Les rôles connus sont : ${rolesConnus().join(', ')}.`,
+  );
 });

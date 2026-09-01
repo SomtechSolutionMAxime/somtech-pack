@@ -57,6 +57,9 @@ export const COMPETENCES = {
 export const CHEMIN_LIGNE = join('ligne-directe', 'bin', 'ligne-directe.js');
 export const CHEMIN_NAISSANCE = join('naissance-representant', 'bin', 'naitre.js');
 export const CHEMIN_CLI = join('cli', 'src', 'cli.js');
+
+/** Le registre des rôles du CLI — la table que la forme `<rôle>-update` résout. */
+export const CHEMIN_REGISTRE_CLI = join('cli', 'src', 'commands', 'representant.js');
 /** Les deux modules dont les motifs de refus sont RENDUS à l'appelant d'une pose. */
 export const CHEMINS_REFUS = [join('ligne-directe', 'src', 'lieu-agent.js'), join('ligne-directe', 'src', 'orchestrateur.js')];
 
@@ -108,7 +111,34 @@ export function sousCommandesDuPack(racine = REPO) {
   // texte juste — et c'est comme ça qu'on désarme une garde.
   const parLeSwitch = [...src.matchAll(/case '([a-z][a-z-]*)':\s*return await cmd/g)].map((m) => m[1]);
   const relayees = [...src.matchAll(/argv\[0\]\s*===\s*'([a-z][a-z-]*)'/g)].map((m) => m[1]);
-  return new Set([...parLeSwitch, ...relayees]);
+
+  // ⚠️ TROISIÈME FAÇON DE DISPATCHER, ET ELLE N'A PAS DE `case` À LIRE (T-20260826-0083).
+  //
+  // `<rôle>-update` ne s'énumère plus dans le `switch` : le `default` reconnaît la forme et
+  // résout le rôle au REGISTRE DU CLI (`ROLES`, dans commands/representant.js). Deux `case`
+  // littéraux y vivaient — `representant-update`, `orchestrateur-update` — et ils laissaient
+  // tout rôle ajouté au registre SANS commande de mise à jour, derrière un « commande
+  // inconnue » qui ne désignait pas le manque.
+  //
+  // Ce relevé a rougi au moment exact où ces deux `case` sont partis, en accusant une
+  // compétence d'enseigner « pack orchestrateur-update ». La commande, elle, marchait
+  // toujours — mesuré : elle rend « ce orchestrateur n'a jamais été posé », pas « commande
+  // inconnue ». C'était donc le RELEVÉ qui était incomplet, pas le texte : très exactement ce
+  // que l'avertissement ci-dessus décrit, une deuxième fois et sur la même fonction.
+  //
+  // On lit le registre SOUS `racine`, jamais par un `import` : cette fonction mesure le CLI
+  // de l'arbre qu'on lui désigne — un import rendrait toujours celui de ce dépôt-ci, et le
+  // contrôle mesurerait un autre objet que celui qu'on lui demande.
+  const registre = readFileSync(join(racine, CHEMIN_REGISTRE_CLI), 'utf8');
+  const corps = registre.match(/export const ROLES = \{([\s\S]*?)\n\};/);
+  // Un registre qu'on ne sait pas lire n'est PAS un registre vide : on le dit plutôt que de
+  // rendre une surface amputée, qui ferait accuser à tort la première compétence venue.
+  if (!corps) throw new Error(`le registre des rôles du CLI n'a pas pu être lu sous « ${racine} » (${CHEMIN_REGISTRE_CLI})`);
+  const roles = [...corps[1].matchAll(/^\s{2}([a-z][a-z-]*):\s*\{/gm)].map((m) => m[1]);
+  if (roles.length === 0) throw new Error(`aucun rôle relevé dans le registre du CLI sous « ${racine} » — le relevé ne prouverait rien`);
+  const parLeRegistre = roles.map((r) => `${r}-update`);
+
+  return new Set([...parLeSwitch, ...relayees, ...parLeRegistre]);
 }
 
 /**
@@ -201,7 +231,11 @@ export function messagesDesMotifs(racine = REPO) {
     // de ce que l'humain voit, ce qui est exactement le défaut fermé par ce lot.
     nom_invalide: fonction(nomDeLieu, 'messageNomInvalide'),
     lieu_ambigu: fonction(nomDeLieu, 'messageLieuAmbigu'),
-    lieu_partiel: blocApres(lieu, 'lieu_partiel'),
+    // T-20260826-0042. Comme les deux refus de nommage ci-dessus : le TEXTE que l'humain lit
+    // est composé dans une fonction, parce qu'il n'est plus unique — un lieu à qui il ne manque
+    // QUE ce que le gabarit a gagné depuis sa pose ne s'écarte pas, il se met à jour. Récolter
+    // le bloc `motif:` ne rendait plus que l'aiguillage, sans un mot de ce que le refus dit.
+    lieu_partiel: fonction(lieu, 'messageLieuPartiel'),
     gabarits_absents: blocApres(lieu, 'gabarits_absents'),
     // E-20260818-0014. Le refus qui garde que le gabarit servi est le BON, pas seulement qu'il
     // est là. Son bloc dans le module de pose ne fait que relayer les champs de la garde : le
@@ -825,13 +859,19 @@ export const CONTROLES_ORCHESTRATEUR = [
 
   {
     id: 'le-contexte-se-remplit-avant-la-naissance',
-    quoi: 'la consigne de remplir CONTEXTE.md précède la naissance, et elle oblige',
+    quoi: 'la consigne de remplir les fichiers écrits à la main précède la naissance, et elle oblige',
     verifier({ texte }) {
       // Sondes DISJOINTES, et ce n'est pas un détail d'écriture : la section du contexte
       // parle de la naissance dans son titre même (« Avant de le faire naître »). Deux sondes
       // qui reconnaissent la même section rendent deux fois la même position, et la
       // comparaison d'ordre devient une tautologie qui ne garde plus rien.
-      const contexte = sectionDe(texte, /son contexte$/i, 'sur le contexte à remplir');
+      //
+      // ⚠️ LA SONDE SUIT LE TITRE, LA GARANTIE NE BOUGE PAS (T-20260826-0042). La section a
+      // gagné le second fichier écrit à la main — le briefing de ronde — et son titre avec.
+      // Ce qui est gardé reste ce qui l'était : la consigne PRÉCÈDE la naissance et OBLIGE.
+      // Elle porte en plus, désormais, que le briefing en fait partie : un lieu sans ronde
+      // fait naître un agent qui ne se réveille jamais, et rien ne le signale.
+      const contexte = sectionDe(texte, /son contexte( et sa ronde)?$/i, 'sur le contexte à remplir');
       const naissance = sectionDe(texte, /^L.y faire naître/i, 'sur la naissance');
       const iContexte = texte.indexOf(contexte.titre);
       const iNaissance = texte.indexOf(naissance.titre);
@@ -842,6 +882,12 @@ export const CONTROLES_ORCHESTRATEUR = [
           + 'marche sur le chantier d’un autre, et rien ne le lui dit',
       );
       exigeImperatif(contexte.corps, 'la consigne de remplir le contexte');
+      assert.match(
+        contexte.corps,
+        /RONDE\.md/,
+        'la section doit nommer le briefing de ronde : c’est le second fichier écrit à la main, '
+          + 'et le seul dont l’absence est MUETTE — un agent né sans ronde ne se réveille jamais',
+      );
     },
   },
 ];
@@ -950,7 +996,7 @@ export const MUTATIONS = [
     quoi: 'la table des refus renvoie à `rm -rf` — le geste exact que le lot jumeau a payé',
     competence: 'orchestrateur',
     cible: 'aucun-geste-qui-detruit@orchestrateur',
-    muter: (t) => remplacer(t, 'Écarte ce reste (`mv .orchestrateur', 'Supprime ce reste (`rm -rf .orchestrateur'),
+    muter: (t) => remplacer(t, 'écarte ce reste (`mv .orchestrateur', 'supprime ce reste (`rm -rf .orchestrateur'),
   },
   {
     id: 'refus-qui-envoie-ecraser-le-jeton',
@@ -969,7 +1015,7 @@ export const MUTATIONS = [
     quoi: 'la compétence jumelle renvoie de nouveau à `rm -rf` — le défaut que cette garde a trouvé',
     competence: 'gestionnaire',
     cible: 'aucun-geste-qui-detruit@gestionnaire',
-    muter: (t) => remplacer(t, 'Écarte ce reste (`mv .gestionnaire', 'Retire ce reste (`rm -rf .gestionnaire'),
+    muter: (t) => remplacer(t, 'écarte ce reste (`mv .gestionnaire', 'retire ce reste (`rm -rf .gestionnaire'),
   },
   {
     id: 'pr-ouverte-en-pret',
@@ -1212,7 +1258,11 @@ export const MUTATIONS = [
     quoi: 'remplir le contexte cesse d’obliger',
     competence: 'orchestrateur',
     cible: 'le-contexte-se-remplit-avant-la-naissance@orchestrateur',
-    muter: (t) => remplacer(t, '**Remplis-le, ou fais-le remplir, avant la naissance.**', 'Tu peux le remplir avant la naissance.'),
+    muter: (t) => remplacer(
+      t,
+      '**Remplis-les, ou fais-les remplir, avant la naissance — la naissance les exige désormais.**',
+      'Tu peux les remplir avant la naissance.',
+    ),
   },
 ];
 

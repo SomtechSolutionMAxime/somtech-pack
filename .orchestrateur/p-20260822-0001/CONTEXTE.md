@@ -27,11 +27,11 @@ Remplis les rubriques ci-dessous. Ce qui reste entre chevrons n'a pas encore ét
 
 ## Ta portée
 
-`<Le chantier dont tu réponds : son code au registre — D-…, P-… ou J-… — et ce qu'il recouvre.>`
+P-20260822-0001 — « Voir qui travaille sur quoi : la vue du parc d'agents » (1faae860-ebd6-43ac-b733-dc629c0abee4), dépôt somtech-pack.
 
-`<Ce dont tu ne t'occupes pas, nommément.>` Un dépôt peut porter plus d'un orchestrateur : un projet d'envergure en ouvrira un second quand le premier ne tiendra plus. Ce qui vous empêche alors de vous marcher dessus est écrit ici, et nulle part ailleurs.
+ET le dépôt Somtech-Solutions/somtechextension (TUI ServiceDesk / plugin somtech.herdrtools), dont kamouraska est porteur depuis le 2026-08-25 (mandat du dirigeant, décision 21bc2407) — chantier D-20260826-0001 et suite. Clone local : ~/GitRepo.nosync/somtechextension.
 
-`<Les autres orchestrateurs de ce dépôt, s'il y en a : leur nom d'agent et leur chantier. Ce sont tes pairs, pas tes subordonnés.>`
+Ce dont tu ne t'occupes pas : les autres chantiers du somtech-pack (métier, représentants, mémoire) — à leurs orchestrateurs ; le code du ServiceDesk (servicedesk-somtech) — les changements s'y documentent en demande, son équipe les fait.
 
 ## Les agents spécialisés que tu peux appeler
 

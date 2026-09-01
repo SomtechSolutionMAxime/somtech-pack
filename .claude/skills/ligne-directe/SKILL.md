@@ -35,7 +35,7 @@ $LD renommer --titre "le nouveau titre"
 $LD etat
 ```
 
-- **`ouvrir`** — une fois, en naissant. Crée le canal du chantier et y invite le dirigeant. Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans la même copie de travail retrouve son canal.
+- **`ouvrir`** — une fois, en naissant. Crée le canal du chantier et y invite le dirigeant. Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé **au même lieu** — `.orchestrateur/<code>`, `.gestionnaire/<client>` — retrouve son canal, **même s'il renaît dans une autre copie de travail** (dépôt principal après un worktree, par exemple). Redonne simplement le même chantier et le même `--titre` : la reprise est rendue par `"reprise": true`.
   - **Donne toujours `--titre`** : c'est lui qui nomme le canal. `#refonte-du-tableau-de-bord` se lit ; `#d-20260805-0004` ne dit rien à personne. Le code, lui, part dans le sujet du canal — il ne se perd pas, il change de place. Sans titre, le canal porte le code : ça marche sur une ligne interne, mais personne ne saura de quoi il s'agit — et sur une ligne **client**, c'est refusé (voir plus bas).
 - **`dire`** — un jalon franchi, un fait qui change la donne.
 - **`demander`** — un arbitrage. Le message est marqué comme attendant une réponse. **Tu ne te bloques pas** : tu continues ce qui ne dépend pas de la réponse.

@@ -672,3 +672,47 @@ test('🔴 un horodatage BIEN FORMÉ mais ANTÉRIEUR à la mise en service est A
   assert.equal(exigerUnHorodatageDEspace('20260824-235959'), '20260824-235959');
   assert.equal(exigerUnHorodatageDEspace('20260101-000000'), '20260101-000000');
 });
+
+/**
+ * 🔴 LA BRANCHE « DÉPÔT BARE » DE `nomDuDepotPrincipal`, QUE RIEN NE GARDAIT.
+ *
+ * `nomDuDepotPrincipal` a deux branches, et une seule était éprouvée. La muter en
+ * une constante arbitraire laissait ce fichier à 27/27 — trouvé par une passe de
+ * revue de fond, mutation à l'appui, pas supposé.
+ *
+ * ⚠️ ET LE CAS N'EST PAS ACADÉMIQUE. `exigerUnDepotGit` n'exclut pas un dépôt
+ * `--bare` : `git rev-parse --git-dir` y réussit. Or « un bare + ses worktrees »
+ * est la façon normale d'héberger plusieurs chantiers sans checkout central. Un
+ * chef d'équipe dont le dépôt est bare emprunte donc cette branche EN PRODUCTION.
+ *
+ * Ce que ce banc ferme n'est pas un code faux — il est juste aujourd'hui — mais
+ * un code NON GARDÉ : une régression y passerait sans que rien ne rougisse, et
+ * l'espace de travail naîtrait sous un nom de dépôt faux, donc introuvable à
+ * l'inventaire du poste.
+ */
+test('un dépôt BARE donne son propre nom, sans le « .git » — la branche que rien n’éprouvait', () => {
+  const racine = mkdtempSync(join(tmpdir(), 'smtk-bare-'));
+  try {
+    // ── le cas gardé : un dépôt ordinaire, dont le nom est celui du PARENT de son `.git`
+    const ordinaire = join(racine, 'mon-chantier');
+    mkdirSync(ordinaire);
+    execFileSync('git', ['init', '-q'], { cwd: ordinaire });
+    assert.equal(nomDuDepotPrincipal(ordinaire), 'mon-chantier',
+      "un dépôt ordinaire se nomme par le parent de son `.git`");
+
+    // ── la branche non gardée : un bare n'a pas de parent porteur de sens
+    const bare = join(racine, 'mon-depot.git');
+    execFileSync('git', ['init', '--bare', '-q', bare]);
+    assert.equal(nomDuDepotPrincipal(bare), 'mon-depot',
+      "un dépôt bare se nomme par LUI-MÊME, débarrassé du « .git » — " +
+      'sinon l’espace de travail naît sous un nom faux et sort de l’inventaire du poste');
+
+    // ── et le suffixe ne se retire QUE s'il est là : un bare sans « .git » garde son nom entier
+    const bareSansSuffixe = join(racine, 'depot-nu');
+    execFileSync('git', ['init', '--bare', '-q', bareSansSuffixe]);
+    assert.equal(nomDuDepotPrincipal(bareSansSuffixe), 'depot-nu',
+      'le retrait du suffixe ne doit pas amputer un nom qui n’en porte pas');
+  } finally {
+    rmSync(racine, { recursive: true, force: true });
+  }
+});

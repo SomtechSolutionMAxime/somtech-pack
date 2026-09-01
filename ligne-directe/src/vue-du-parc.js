@@ -9,12 +9,23 @@
 //   le recensement  →  QUI est vivant : nom, rôle, mandat, lieu, statut
 //   le ServiceDesk  →  QUOI est en cours : projets, epics, stories
 //
-// **La clé qui les joint est le CODE DU MANDAT que l'agent tient de son LIEU.** Pas
-// `assigned_agent` : ce champ existe sur les tickets, c'est du TEXTE LIBRE saisi à la main, et
-// il est souvent vide. Un libellé se rédige, diverge et vieillit ; un mandat se mesure. Ce
-// module ne lit `assigned_agent` NULLE PART, et le banc `la-vue-du-parc-joint-par-le-mandat`
-// le garde en lui faisant manger un ticket dont l'`assigned_agent` désigne quelqu'un d'autre
-// que le porteur mesuré.
+// **DEUX SOURCES, ET ELLES NE SE VALENT PAS** — RA-VUE-005 AMENDÉE (BRD v0.11.0, 2026-08-25) :
+//
+//   ① le CODE DU MANDAT que l'agent tient de son LIEU  →  **PROUVÉ**. Il se mesure.
+//   ② le champ `assigned_agent` du ticket, rempli à la naissance de l'agent  →  **DÉCLARÉ**.
+//      C'est du texte libre : il se rédige, il diverge, il vieillit, et rien ne l'atteste.
+//
+// 🔴 CE QUI A CHANGÉ, ET POURQUOI — le dirigeant a contesté l'écran du 2026-08-25 : « c'est
+// impossible que ce soit ça le résultat, aucun ticket pris par un agent ». Il avait raison, et
+// la mesure du même jour le dit : **105 agents vivants, 13 seulement avec un mandat prouvable
+// par le lieu, 76 anonymes** — les chefs d'équipe, porteurs réels des tickets, n'ont pas de lieu
+// durable et ferment après leurs lots (T-20260822-0018). Joindre par le seul mandat prouvé
+// rendait donc un écran de `NON ÉTABLI` sur un parc où **71 tickets sur 200** portaient un nom.
+//
+// ⚠️ CET EN-TÊTE A DIT LE CONTRAIRE, ET CE TEXTE-LÀ EST PÉRIMÉ : « ce module ne lit
+// `assigned_agent` NULLE PART ». Il le lit désormais — et RA-VUE-006 en pose la contrepartie
+// stricte : **chaque ligne dit sa source**, un DÉCLARÉ ne se rend jamais comme un PROUVÉ, et un
+// écart entre les deux **se montre** au lieu d'être arbitré en silence.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // LES DEUX ÉTAGES DE L'ATTRIBUTION, ET POURQUOI ILS NE SE REPLIENT JAMAIS L'UN DANS L'AUTRE
@@ -27,9 +38,16 @@
 // epic et chaque story. Vrai, conforme, et inutile à qui demande qui travaille sur quoi.
 //
 //   ÉTAGE 1 — `mesure: 'lue'`.  L'agent porte ce code comme MANDAT, lu à son LIEU. FAIT FOI.
-//   ÉTAGE 2 — `mesure: 'non établi'` + `indices`.  Aucun agent ne porte ce code comme mandat,
-//             mais un agent porte ce code comme NOM. Ce n'est PAS une jointure : c'est une
-//             piste, et le champ continue de dire « non établi ».
+//   ÉTAGE 2 — `mesure: 'déclarée'`.  Aucun mandat ne le prouve, mais le REGISTRE porte un nom
+//             sur ce travail (`assigned_agent`). Ce n'est pas une mesure : c'est une
+//             DÉCLARATION, et le mot `DÉCLARÉ` voyage avec le nom, en tête, toujours.
+//   ÉTAGE 3 — `mesure: 'non établi'` + `indices`.  Ni mandat, ni déclaration ; tout au plus un
+//             agent porte ce code comme NOM. Ce n'est PAS une jointure : c'est une piste, et le
+//             champ continue de dire « non établi ».
+//
+// ⚠️ ILS NE SE REPLIENT JAMAIS L'UN DANS L'AUTRE, ET L'ÉCART NE SE TRANCHE PAS. Quand l'étage 1
+// répond ET que le registre déclare un AUTRE nom, la ligne rend **les deux** et nomme l'écart :
+// choisir lequel a raison serait un arbitrage, et la vue n'arbitre rien (RA-VUE-001/006).
 //
 // 🔴 CE QUI SE JOUE AU RENDU, PAS DANS LA DONNÉE. HS-VUE-002 interdit un lien deviné « qui SE
 // LIT comme un lien constaté » — le dirigeant lit une LIGNE, pas un champ JSON. D'où les trois
@@ -65,13 +83,15 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { CODE_LISIBLE, codeDuMandat, familleDuMandat, CHAMP_DU_CODE, transportServiceDesk } from './mandat.js';
-import { rolesConnus, role as roleDe } from './roles.js';
+import { plafonner, PLAFOND_SERVICEDESK } from './plafond.js';
+import { rolesConnus, role as roleDe, meneUnChantier } from './roles.js';
 import { roleDuLieu as roleDuLieuReel } from './lieu-agent.js';
 
 /** La règle de conduite, écrite une fois, rendue avec la vue. */
 export const REGLE_DE_LA_VUE =
-  'cette vue LIT et REND : elle ne joint que par le mandat lu au lieu, elle ne pilote rien, ' +
-  'et elle n’écrit nulle part.';
+  'cette vue LIT et REND : elle joint par le mandat lu au lieu (PROUVÉ) et par le nom déclaré ' +
+  'au registre (DÉCLARÉ), sans jamais confondre les deux ni trancher un écart ; elle ne pilote ' +
+  'rien, et elle n’écrit nulle part.';
 
 /**
  * LA PHRASE DE L'INDICE — écrite ICI, une seule fois, et rendue TELLE QUELLE.
@@ -85,6 +105,133 @@ export const PHRASE_DE_LINDICE = 'un agent porte ce nom, son lieu ne le prouve p
 
 /** Le mot qui décide, et il se lit EN PREMIER sur la ligne (condition 1 de l'arbitrage). */
 export const MOT_NON_ETABLI = 'NON ÉTABLI';
+
+/**
+ * LES TROIS MOTS QUI DÉCIDENT — RA-VUE-006, ET ILS SE LISENT EN PREMIER, TOUJOURS.
+ *
+ * 🔴 UN NOM NU EST LE DÉFAUT, PAS LA COMMODITÉ. C'est la leçon déjà payée par
+ * `PHRASE_DE_LINDICE` : le lecteur retient le nom et oublie d'où il vient. Trois sources qui
+ * se rendraient toutes « nom de l'agent » seraient trois faits différents à l'œil identique —
+ * et le seul qui fait foi (le mandat lu au lieu) perdrait tout ce qui le distingue.
+ *
+ * ⚠️ ILS SONT EN TÊTE DE FRAGMENT, jamais en queue : ce qu'on lit en premier est ce qui décide.
+ */
+export const MOT_PROUVE = 'PROUVÉ';
+export const MOT_DECLARE = 'DÉCLARÉ';
+export const MOT_ECART = 'ÉCART';
+
+/**
+ * LA PHRASE DU DÉCLARÉ — le jumeau de `PHRASE_DE_LINDICE`, pour la source déclarée.
+ *
+ * ⚠️ ELLE DIT CE QUI MANQUE, pas seulement d'où ça vient. « déclaré » seul se lit comme un
+ * synonyme d'« assigné », donc comme un fait ; « jamais mesuré à un lieu » est la moitié que le
+ * dirigeant doit garder en tête quand il agit dessus.
+ */
+export const PHRASE_DU_DECLARE = 'déclaré au registre à sa naissance, jamais mesuré à un lieu';
+
+/**
+ * LA MÊME CHOSE, EN QUATRE MOTS — parce qu'elle se répète sur CHAQUE ligne de l'arbre.
+ *
+ * ⚠️ ELLE NE S'EFFACE PAS POUR AUTANT, ET C'EST TOUT L'ARBITRAGE. Un nom rendu nu redevient un
+ * rattachement en trois relectures (leçon de `PHRASE_DE_LINDICE`) : le qualificatif voyage donc
+ * AVEC le nom, sur la même ligne, toujours. Ce qui se raccourcit est sa longueur, jamais sa
+ * présence — la version longue vit dans le panneau de détail du TUI, où il y a la place.
+ *
+ * ⚠️ ET ELLE DIT CE QUI MANQUE, pas d'où ça vient : « déclaré » répété après le mot `DÉCLARÉ`
+ * n'apprend rien au lecteur ; « non mesuré à un lieu » est la moitié qu'il doit garder en tête.
+ */
+export const PHRASE_COURTE_DU_DECLARE = 'non mesuré à un lieu';
+
+/**
+ * CE QUE LES DEUX FORMULATIONS DISENT EN COMMUN — et c'est ce qu'une garde COMPTE.
+ *
+ * 🔴 IL EST NOMMÉ ICI PARCE QU'UNE GARDE A ÉCHOUÉ FAUTE DE LUI (2026-08-25). Le panneau de
+ * détail répétait le qualificatif — « non mesuré à un lieu » sur la ligne du porteur, « jamais
+ * mesuré à un lieu » dans le bloc « source » : DEUX TEXTES pour UNE idée. Une garde qui
+ * comptait l'une des deux phrases ne voyait pas la redondance de l'autre, et la mutation qui
+ * ramenait le défaut passait VERTE.
+ *
+ * ⚠️ CE QUI FATIGUE LE LECTEUR EST DE RELIRE LA MÊME CHOSE, pas de la relire à l'identique.
+ * On compte donc ce que les deux partagent — et un banc épingle qu'elles le partagent encore,
+ * pour qu'une reformulation ne vide pas la garde en silence.
+ */
+export const FRAGMENT_DU_QUALIFICATIF = 'mesuré à un lieu';
+
+/**
+ * DÉSARMER UN TEXTE LIBRE AVANT QU’IL N’ATTEIGNE UN TERMINAL.
+ *
+ * 🔴 CE LOT EST LE PREMIER À ADMETTRE COMME SOURCE RENDUE UN CHAMP QUE SON PROPRE EN-TÊTE
+ * QUALIFIE DE NON ATTESTÉ. `assigned_agent` est du texte libre : personne ne le valide, et il
+ * arrive intact jusqu’à `process.stdout` — en mode texte comme dans le TUI.
+ *
+ * ⚠️ MESURÉ, PAS CRAINT (2026-08-25, passe de fond) : un `assigned_agent` portant
+ * `ESC[2J ESC[H ESC]0;… BEL` traverse `rendreAttribution`, `suffixeDuRattachement` et
+ * `lignesDeLaSource` sans une égratignure — il EFFACE l’écran du dirigeant en plein rendu,
+ * repositionne son curseur et réécrit le titre de sa fenêtre. Code de retour 0 : rien ne le
+ * signale, puisque rien n’a échoué.
+ *
+ * ⚠️ ON REMPLACE, ON NE SUPPRIME PAS. Effacer les octets ferait disparaître le fait qu’ils
+ * étaient là : deux noms différents se rendraient identiques, et le dirigeant croirait lire
+ * un nom ordinaire. Le caractère de remplacement DIT qu’il y avait quelque chose — c’est
+ * RA-VUE-003 appliquée à un octet : une anomalie se montre, elle ne se comble pas.
+ *
+ * ⚠️ CE QUE CETTE FONCTION NE COUVRE PAS, ET C’EST DIT PLUTÔT QUE SOUS-ENTENDU : les TITRES
+ * d’epics et de stories (`e?.title`) sont eux aussi du texte libre du ServiceDesk, et ils ne
+ * sont assainis nulle part. C’est un trou ANTÉRIEUR à ce lot, sur une autre source ; il est
+ * remonté plutôt qu’élargi ici.
+ */
+export function desarmerLeTexteLibre(texte) {
+  if (typeof texte !== 'string') return texte;
+  // ⚠️ ON FILTRE PAR CODE, PAS PAR UNE PLAGE ÉCRITE EN LITTÉRAL — et ce n'est pas un détail de
+  // style. Écrire la borne basse de la plage C0 en séquence échappée faisait rougir la garde
+  // qui exige que le séparateur de `cleDeLAgent` n'apparaisse QU'UNE fois dans ce fichier.
+  // Cette garde a raison dans son intention : un second usage écrit à la main ferait diverger
+  // la clé sans qu'aucun banc ne rougisse. Ma plage n'était pas un usage de clé — mais la
+  // contourner en changeant la NOTATION aurait été le geste qui désarme une garde en ayant
+  // l'air d'un entretien. On n'a pas besoin de ce littéral : on ne l'écrit donc pas.
+  //
+  // ⚠️ ET LA GARDE COMPTE LE TEXTE DU FICHIER, COMMENTAIRES COMPRIS : c'est pourquoi cette
+  // note elle-même décrit la séquence au lieu de l'écrire. Imprécision connue de la garde,
+  // signalée plutôt que corrigée ici — elle appartient à un autre lot.
+  //
+  // Les C0 — pas d'exception pour la tabulation ni le saut de ligne : ni l'un ni l'autre n'a
+  // sa place dans un nom d'agent, et un saut de ligne casserait l'arbre du rendu. Puis DEL, et
+  // les C1 (0x80–0x9F), qui pilotent aussi certains terminaux et qu'un filtre écrit « contre
+  // ESC » oublie.
+  let sortie = '';
+  for (const c of texte) {
+    const n = c.codePointAt(0);
+    sortie += n < 0x20 || (n >= 0x7f && n <= 0x9f) ? '\ufffd' : c;
+  }
+  return sortie;
+}
+
+/** La phrase du prouvé — l'autre moitié de la frontière, dite avec les mêmes mots partout. */
+export const PHRASE_DU_PROUVE = 'mandat lu au lieu de l’agent';
+
+/**
+ * LA PHRASE DE L'ÉCART — quand les deux sources se contredisent, la vue N'ARBITRE PAS.
+ *
+ * 🔴 C'EST LA CONTREPARTIE EXACTE DE L'AMENDEMENT. Admettre une seconde source crée un cas
+ * neuf : les deux répondent, et pas la même chose. Le repli naturel — garder le prouvé et
+ * taire le déclaré — est un ARBITRAGE rendu en silence, et RA-VUE-006 l'interdit : c'est au
+ * dirigeant de savoir que le registre dit autre chose que le terrain.
+ */
+export const PHRASE_DE_LECART =
+  'le mandat lu au lieu et le nom déclaré au registre se contredisent — la vue ne tranche pas';
+
+/**
+ * DEUX NOMS DÉSIGNENT-ILS LA MÊME PERSONNE ? — comparaison SOBRE, et elle se dit.
+ *
+ * ⚠️ ON NORMALISE LA CASSE ET LES BORDS, RIEN DE PLUS. Rapprocher `e-20260825-0001` de
+ * `e20260825-0001` ou d'un préfixe commun serait deviner une identité — le geste exact que
+ * HS-VUE-002 interdit, ici retourné contre la détection d'écart : un faux « pas d'écart » TAIT
+ * une contradiction réelle, et c'est plus grave qu'un écart affiché de trop.
+ */
+export function memeNom(a, b) {
+  const n = (x) => (x === null || x === undefined ? '' : String(x).trim().toLowerCase());
+  return n(a) !== '' && n(a) === n(b);
+}
 
 /**
  * L'IDENTITÉ D'UNE ENTRÉE DU RECENSEMENT — la session VOYAGE avec le pane, toujours.
@@ -111,6 +258,32 @@ export function roleEtabli(agent) {
   const r = agent?.role;
   if (r && typeof r === 'object') return r.mesure === 'établi' && r.nom ? r.nom : null;
   return typeof r === 'string' && r ? r : null;
+}
+
+/**
+ * CE RÔLE EST-IL UNE TÊTE DE HIÉRARCHIE DANS CETTE VUE — c'est-à-dire mène-t-il un chantier,
+ * sous le code duquel des epics et des stories se rangent ?
+ *
+ * ⚠️ C'EST LE REGISTRE QUI TRANCHE, PLUS UNE COMPARAISON LITTÉRALE (T-20260826-0076, point 6).
+ * MESURÉ AVANT CE LOT : `roleEtabli(a) !== 'orchestrateur'` et `l?.role !== 'orchestrateur'`,
+ * deux fois. Le module ÉCRIVAIT pourtant déjà la vraie règle, quelques lignes plus bas : « seul
+ * le rôle « orchestrateur » en porte un [un code de chantier] (un représentant a pour mandat un
+ * nom de client) ». C'est `mandat_designe` — aucune clé n'a été ajoutée pour ces deux sites.
+ *
+ * ⚠️ ET ELLE NE LÈVE PAS SUR UN RÔLE QU'ELLE NE CONNAÎT PAS, contrairement à `meneUnChantier`
+ * qu'elle enveloppe. C'est la leçon déjà payée par `recensement.js` : « un registre qui meurt
+ * entier parce qu'UNE entrée est inclassable est le contraire de sa règle ». Cette vue est en
+ * LECTURE SEULE ; un rôle hors table n'est pas une tête de hiérarchie, et il n'y a rien à
+ * décider d'autre. Le fait qu'il soit hors table est déjà rendu par le recensement, qui le
+ * mesure et le dit — on ne le remesure pas ici pour en mourir.
+ */
+function teteDeHierarchie(nomDuRole) {
+  if (!nomDuRole) return false;
+  try {
+    return meneUnChantier(nomDuRole);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -341,31 +514,124 @@ export function adresseDe(carte, presence) {
  * Rendre le premier en écartant le second choisirait, et choisir ici c'est mentir : rien dans
  * la mesure ne départage les deux.
  */
-export function quiPorte(code, parMandat, parNom) {
+export function quiPorte(code, parMandat, parNom, declaration = {}) {
+  // 🔴 « LE REGISTRE NE DÉCLARE RIEN » ≠ « JE N'AI PAS PU LIRE CE QU'IL DÉCLARE » — et les
+  // confondre était un défaut RÉEL de ce lot, trouvé en passe de fond (2026-08-25).
+  //
+  // Un epic ne porte pas `assigned_agent` (le service ne rend pas la clé) : tout ce qu'il
+  // déclare vient de ses stories. Quand l'appel aux tickets a échoué, `stories` vaut `null` —
+  // on n'a donc RIEN pu lire du registre pour cet epic. La phrase rendue affirmait pourtant
+  // « et le registre ne déclare aucun nom sur ce travail ». C'est RA-VUE-003 violée par le
+  // lot qui la cite : une absence COMBLÉE, là où il fallait montrer un trou de mesure.
+  const declarationMesuree = declaration?.declarationMesuree !== false;
+  // ⚠️ LA DÉCLARATION ENTRE PAR PARAMÈTRE, ELLE NE SE RELIT PAS ICI. Ce module ne parle à
+  // aucun service : le lecteur de chantier a déjà la valeur dans la charge qu'il a reçue, et
+  // la faire redescendre coûte ZÉRO appel de plus (condition de fin n°4 de E-20260825-0001).
+  const declares = nomsDeclares(declaration);
+
   const portes = parMandat.get(code);
   if (portes?.length) {
+    const agents = portes.map(carteDe);
+    // 🔴 L'ÉCART SE MESURE ICI, ET IL NE SE TRANCHE PAS (RA-VUE-006). Le prouvé fait foi sur
+    // le RATTACHEMENT ; il ne fait pas taire ce que le registre dit d'autre. Rendre le seul
+    // prouvé serait choisir — et le dirigeant ne saurait jamais que son registre le contredit.
+    const contredits = declares.filter((d) => !agents.some((a) => memeNom(a.nom, d.nom)));
     return {
       mesure: 'lue',
-      source: 'le mandat lu au lieu de l’agent',
-      agents: portes.map(carteDe),
+      source: PHRASE_DU_PROUVE,
+      agents,
+      ...(contredits.length
+        ? { ecart: { declares: contredits, prouves: agents.map((a) => a.nom ?? null), pourquoi: PHRASE_DE_LECART } }
+        : {}),
     };
   }
+
+  // ═══ ÉTAGE 2 — LE REGISTRE DÉCLARE UN NOM. Ce n'est pas une mesure, et le mot le dit.
+  if (declares.length) {
+    const pistesDuNom = parNom.get(code);
+    return {
+      mesure: 'déclarée',
+      source: PHRASE_DU_DECLARE,
+      declares,
+      // ⚠️ LES PISTES NE DISPARAISSENT PAS SOUS LA DÉCLARATION — deux faits faibles restent
+      // deux faits, et les fondre en ferait perdre un. Un agent qui porte ce code comme NOM
+      // corrobore la déclaration ; il ne la prouve pas davantage.
+      indices: (pistesDuNom ?? []).map(carteDe),
+      phraseDeLIndice: PHRASE_DE_LINDICE,
+    };
+  }
+
+  // ⚠️ CE QUE LA PHRASE DIT DU REGISTRE DÉPEND DE CE QU'ON A PU EN LIRE — écrit UNE fois, pour
+  // les deux sorties qui suivent. Recopié, il serait corrigé sur l'une et pas sur l'autre.
+  // ⚠️ ELLE NE NOMME PLUS LE MÉCANISME, ELLE NOMME CE QUI MANQUE. « l'appel a échoué » était
+  // vrai d'UNE des deux façons de n'avoir pas tout lu, et cette précision-là a fait rater
+  // l'autre : une page pleine ne « rate » pas, elle s'arrête — et le résultat est le même.
+  const duRegistre = declarationMesuree
+    ? 'et le registre ne déclare aucun nom sur ce travail'
+    : 'et ce que le registre déclare n’a PAS pu être lu EN ENTIER — ceci n’est donc PAS ' +
+      '« personne n’y est déclaré »';
+
   const pistes = parNom.get(code);
   if (pistes?.length) {
     return {
       mesure: 'non établi',
       pourquoi:
-        'aucun agent vivant ne porte ce code comme mandat lu à son lieu — un chef d’équipe ' +
-        'n’a aujourd’hui aucun lieu où le lire (T-20260822-0018)',
+        'aucun agent vivant ne porte ce code comme mandat lu à son lieu, ' +
+        duRegistre +
+        ' — un chef d’équipe n’a aujourd’hui aucun lieu où le lire (T-20260822-0018)',
       indices: pistes.map(carteDe),
       phraseDeLIndice: PHRASE_DE_LINDICE,
+      ...(declarationMesuree ? {} : { declarationMesuree: false }),
     };
   }
   return {
     mesure: 'non établi',
-    pourquoi: 'aucun agent vivant ne porte ce code, ni comme mandat lu à son lieu, ni comme nom',
+    pourquoi: 'aucun agent vivant ne porte ce code, ni comme mandat lu à son lieu, ni comme nom, ' + duRegistre,
     indices: [],
+    ...(declarationMesuree ? {} : { declarationMesuree: false }),
   };
+}
+
+/**
+ * LES NOMS DÉCLARÉS SUR UNE LIGNE — le sien, ET ceux que ses stories déclarent.
+ *
+ * 🔴 UN EPIC NE PORTE PAS `assigned_agent`, ET C'EST MESURÉ, PAS SUPPOSÉ (2026-08-25) : la
+ * charge de `epics` action `list` ne contient PAS la clé — pas « vide », ABSENTE. L'étage epic
+ * n'a donc rien à déclarer de lui-même aujourd'hui ; ce qu'il montre vient de ses stories.
+ *
+ * ⚠️ ET ON N'INVENTE AUCUN AGRÉGAT (contrainte de E-20260825-0001) : deux stories, deux noms
+ * = **deux noms rendus**. Ni « le premier », ni « le plus fréquent », ni « plusieurs » — chacun
+ * de ces replis choisirait, et choisir ici c'est affirmer ce que personne n'a mesuré.
+ *
+ * ⚠️ LA PROVENANCE VOYAGE AVEC LE NOM. Un nom venu des stories rendu comme un nom déclaré SUR
+ * L'EPIC prêterait à l'epic une déclaration qu'il ne porte pas — la même faute d'un cran plus
+ * fine que celle que `MOT_DECLARE` répare.
+ */
+export function nomsDeclares({ nomDeclare = null, nomsDesStories = [] } = {}) {
+  const sortie = [];
+  const vus = new Set();
+  const ajouter = (nom, dOu) => {
+    // ⚠️ UN CHAMP DE TEXTE LIBRE PEUT N'ÊTRE PAS DU TEXTE, et `String()` ne refuse rien : un
+    // objet y devient « [object Object] », qui se rendrait à l'écran comme un nom d'agent.
+    // `codePorteEnMandat` et `codePorteEnNom` gardent déjà leur entrée sur `typeof` ; ne pas
+    // le faire ici était la même discipline appliquée à une porte sur trois.
+    if (typeof nom !== 'string') return;
+    // ⚠️ CEINTURE ET BRETELLES, ASSUMÉES. Le désarmement a lieu à la LECTURE (voir
+    // `lecteurDeChantier`), donc ce que reçoit cet agrégateur est déjà propre par le chemin
+    // de production. On le refait ici parce que `nomsDeclares` est EXPORTÉ et éprouvé
+    // directement : un appelant futur qui lui passerait du texte non lu par le lecteur ne
+    // doit pas rouvrir le trou. Le geste est idempotent, il ne coûte rien, et il ne
+    // remplace PAS celui de la lecture — c’est justement l’erreur qu’on vient de corriger.
+    const n = desarmerLeTexteLibre(nom).trim();
+    if (!n) return;
+    const cle = n.toLowerCase();
+    if (vus.has(cle)) return;
+    vus.add(cle);
+    sortie.push({ nom: n, dOu });
+  };
+  ajouter(nomDeclare, 'ce ticket');
+  for (const n of nomsDesStories ?? []) ajouter(n, 'ses stories');
+  return sortie;
 }
 
 /**
@@ -464,8 +730,11 @@ export const SIGNAUX_DU_LECTEUR = [
  */
 export const CHAMPS_DE_STRUCTURE = {
   chantier: ['code', 'titre', 'statut', 'application', 'epics'],
-  epic: ['code', 'titre', 'statut', 'stories'],
-  story: ['code', 'titre', 'statut'],
+  // ⚠️ `nomDeclare` EST STRUCTUREL, PAS UN SIGNAL — il porte une VALEUR du registre, pas le
+  // compte d'une panne de lecture. Déclaré ici, il traverse ①②③④ par dérivation, et la garde
+  // « aucun champ de structure n'est un FANTÔME » exige que le lecteur continue de le produire.
+  epic: ['code', 'titre', 'statut', 'stories', 'nomDeclare'],
+  story: ['code', 'titre', 'statut', 'nomDeclare'],
 };
 
 /**
@@ -588,7 +857,19 @@ export function phrasesDesSignaux(compte) {
  *   • `predicat(o)` — la ligne est-elle « chaude » pour ce signal ? UN SEUL état à la fois :
  *                     deux prédicats qui se recouvrent refondraient ce qu'on vient de séparer ;
  *   • `cleDuCompte` — son nom dans le compte ;
- *   • `phrase(n)`   — ce que le résumé dit, et SEULEMENT quand il a servi.
+ *   • `phrase(n)`   — ce que le résumé dit, et SEULEMENT quand il a servi ;
+ *   • `allumePar()` — le décor MINIMAL qui l’allume, pour que sa garde de traversée cesse
+ *                     de le DEVINER.
+ *
+ * 🔴 `allumePar` EST NÉ D’UNE GARDE QUI MESURAIT SA PROPRE IDÉE D’UN SIGNAL (2026-08-25).
+ * La garde de traversée bâtissait UNE fixture, taillée pour les deux signaux qu’elle
+ * connaissait — tous deux de la même forme, un prédicat sur `presence`. Le premier signal
+ * d’une AUTRE forme (un fait qui vit sous les epics) la faisait rougir sans qu’aucun défaut
+ * n’existe.
+ *
+ * ⚠️ C’EST LE MOTIF « une liste homogène cache l’élément d’une autre nature » : une suite
+ * auto-cohérente prouve que ses parties s’accordent ENTRE ELLES, jamais qu’elles couvrent le
+ * monde. Déclarer l’allumage rend la garde vraie de la FAMILLE, pas des deux cas connus.
  */
 export const SIGNAUX_DE_LA_LIGNE = [
   {
@@ -596,14 +877,69 @@ export const SIGNAUX_DE_LA_LIGNE = [
     // ⚠️ `=== false`, PAS `!== true`. C'était le défaut : `!== true` avale aussi `null`.
     predicat: (o) => o.presence?.vivant === false,
     cleDuCompte: 'chantiersSansTerminal',
+    // Un lieu versionné sans terminal vivant, toutes les sessions ayant répondu.
+    allumePar: () => ({ sessionsRefusees: [], epics: [] }),
     phrase: (n) =>
       ` ${n} chantier(s) n’ont AUCUN terminal vivant — MESURÉ, toutes les sessions ont répondu : ` +
       'ils sont ici parce que leur lieu versionné les porte.',
   },
   {
+    // 🔴 L'ÉCART ATTEIGNAIT LA LIGNE ET MOURAIT AVANT LE RÉSUMÉ — le défaut que ce manifeste
+    // existe pour empêcher, refait par le lot qui s’en sert (2026-08-25, passe de fond).
+    //
+    // Un écart est une CONTRADICTION entre le terrain et le registre : le fait le plus
+    // actionnable que cette vue produise. Il ne se voyait qu’en parcourant l’arbre ligne à
+    // ligne — le dirigeant qui lit le résumé en haut d’écran ne l’apprenait jamais.
+    //
+    // ⚠️ ET LA GARDE DE COMPLÉTUDE NE POUVAIT PAS L’ATTRAPER : elle compare les champs SŒURS
+    // de `code`/`titre`/`statut`, or `ecart` vit IMBRIQUÉ dans `agent.ecart`. Un fait imbriqué
+    // est hors du périmètre qu’elle inspecte — déclaré ici, il traverse ②③④ par dérivation.
+    //
+    // ⚠️ L’UNITÉ SE DIT, ET CE N’EST PAS CELLE QU’ON CROIT. Ce prédicat rend un BOOLÉEN par
+    // orchestrateur, donc ce compte est un nombre de CHANTIERS porteurs — jamais un nombre de
+    // contradictions : un chantier qui en porte trois compte pour un. La phrase le dit en
+    // toutes lettres ; un nombre juste sous une unité fausse se fait CONFIRMER, pas attraper.
+    cle: 'chantiersAvecEcart',
+    predicat: (o) =>
+      (o.epics ?? []).some(
+        (e) => Boolean(e?.agent?.ecart) || (e?.stories ?? []).some((s) => Boolean(s?.agent?.ecart))
+      ),
+    cleDuCompte: 'chantiersAvecEcart',
+    // Un epic dont le mandat PROUVÉ et le nom DÉCLARÉ se contredisent. Il faut un agent
+    // vivant qui porte le mandat de l’epic : sans lui, `quiPorte` ne descend jamais dans
+    // la branche qui mesure l’écart.
+    // 🔴 DEUX EPICS, UN SEUL EN ÉCART — ET C'EST CE QUI REND LE PRÉDICAT ÉPROUVABLE. Avec un
+    // seul epic, `.some` et `.every` sont INDISCERNABLES : le décor ne pouvait pas distinguer
+    // « au moins un epic porte un écart » de « tous en portent un ». Relevé en revue portail
+    // (2026-08-25) : muter `.some` en `.every` survivait au banc de traversée, et n'était
+    // rattrapé que par un AUTRE fichier — une garantie qui tient par accident n'est pas gardée.
+    //
+    // ⚠️ LE SECOND EPIC NE DÉCLARE RIEN : c'est lui qui fait la différence entre les deux
+    // quantificateurs, et son absence rendait l'assertion trop faible sur un chemin correct.
+    allumePar: () => ({
+      sessionsRefusees: [],
+      epics: [
+        { code: 'E-20260825-0001', titre: 'un epic en écart', statut: 'in_execution', stories: [] },
+        { code: 'E-20260825-0002', titre: 'un epic sans écart', statut: 'in_execution', stories: [] },
+      ],
+      agentQuiPorte: { mandat: 'e-20260825-0001', nom: 'un-porteur' },
+      nomDeclareSurLEpic: 'quelqu-un-dautre',
+      // Seul le PREMIER epic porte le nom déclaré qui contredit le mandat prouvé.
+      nomDeclareSurLePremierSeulement: true,
+    }),
+    phrase: (n) =>
+      ` ${n} chantier(s) portent au moins une CONTRADICTION entre le mandat lu au lieu et le ` +
+      'nom déclaré au registre — la vue ne tranche pas : allez lire les lignes marquées ÉCART.',
+  },
+  {
     cle: 'presencesNonEtablies',
     predicat: (o) => o.presence?.vivant === null,
     cleDuCompte: 'presencesNonEtablies',
+    // Une session muette : on ne peut pas établir si le terminal vit.
+    allumePar: () => ({
+      sessionsRefusees: [{ session: '/x/sessions/cg/herdr.sock', raison: 'server_not_running' }],
+      epics: [],
+    }),
     // ⚠️ LA PHRASE DIT CE QU'ELLE EST, ET CE QU'ELLE N'EST PAS. « on n'a pas pu établir » se
     // relit en « ils sont partis » au bout de trois lectures si on ne l'en empêche pas — c'est
     // la même précaution que `PHRASE_DE_LINDICE`, sur un autre fait.
@@ -666,8 +1002,17 @@ export function phrasesDesSignauxDeLigne(compte) {
  * @param appeler  `(nom, args) → corps` — le transport, INJECTÉ. Sans lui, pas de lecteur :
  *                 on rend `null`, et la vue dit « aucun accès » au lieu d'inventer un parc vide.
  */
-export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 200 } = {}) {
+export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 200, plafond = PLAFOND_SERVICEDESK } = {}) {
   if (typeof appeler !== 'function') return null;
+
+  // ═══ TOUT PASSE PAR LA BORNE, ET C'EST LE SEUL ENDROIT OÙ ELLE EST POSÉE.
+  //
+  // 🔴 CE LECTEUR EST LA PORTE UNIQUE DE LA VUE VERS LE SERVICEDESK — les applications, la
+  // famille du chantier, ses epics, les stories de chaque epic. Border ICI, c'est border TOUT
+  // ce que la vue demande au service, quelle que soit la façon dont les étages du dessus
+  // choisissent de s'éventer. Le plafond ne se redouble donc jamais plus haut : voir
+  // `src/plafond.js`, qui dit pourquoi un second réglage serait un défaut et non une prudence.
+  const demander = plafonner(appeler, { plafond });
 
   // ═══ LES APPLICATIONS — LUES UNE FOIS POUR TOUT LE LECTEUR, jamais par chantier.
   //
@@ -683,7 +1028,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     if (!applications) {
       applications = (async () => {
         try {
-          const corps = await appeler('applications', { action: 'list' });
+          const corps = await demander('applications', { action: 'list' });
           const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
           return { mesure: 'lue', parId: new Map(liste.map((a) => [a?.id, a?.name ?? null])) };
         } catch (err) {
@@ -700,12 +1045,34 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     return applications;
   };
 
-  return async (code) => {
+  // ═══ UN CHANTIER SE LIT UNE FOIS, MÊME QUAND DEUX ORCHESTRATEURS LE PORTENT.
+  //
+  // 🔴 MESURÉ SUR CE POSTE, PAS CONSTRUIT : le 2026-08-25, `P-20260820-0001` est porté par
+  // **deux** orchestrateurs. Le lecteur relisait donc tout le chantier deux fois — sa famille,
+  // ses epics, et un `tickets/list` par epic — pour rendre deux fois la même chose.
+  //
+  // ⚠️ CE N'EST PAS UN CACHE, ET LA NUANCE PORTE TOUT LE LOT (`E-20260824-0011`, hors-lot n°2).
+  // Un cache SURVIT à la lecture et resservirait de l'ancien au `r` suivant. Cette mémoire-ci
+  // naît avec le lecteur et meurt avec lui : chaque construction de la vue en fabrique un neuf
+  // (`veilleur.js`, `construireLecteur()`), donc chaque `r` relit le réel. Elle ne partage
+  // qu'À L'INTÉRIEUR d'une même lecture, ce qui est exactement « lu une fois ».
+  //
+  // ⚠️ ON MÉMORISE LA PROMESSE, PAS SON RÉSULTAT — sans quoi deux porteurs partis en même temps
+  // (ce qui est désormais le cas normal) ne se trouveraient ni l'un ni l'autre, et relanceraient
+  // chacun la lecture. Et un chantier ILLISIBLE se partage comme un autre : les deux porteurs
+  // doivent voir le même refus, pas deux refus mesurés séparément.
+  //
+  // ⚠️ ET LE PARTAGE N'EST PAS UN DÉDOUBLONNAGE D'AFFICHAGE. Les deux orchestrateurs gardent
+  // chacun leur ligne — c'est la réalité du parc, et `laVueDuParc` ne sait même pas que la
+  // lecture a été partagée. Un banc le garde.
+  const enCours = new Map();
+
+  const lireVraiment = async (code) => {
     const famille = familleDuMandat(code);
     if (!famille) throw new Error(`« ${code} » n’est pas un code de chantier`);
 
     // ═══ LE CHANTIER LUI-MÊME — par la liste, jamais par `get` seul (voir l'en-tête).
-    const corps = await appeler(famille, { action: 'list', limit: limite });
+    const corps = await demander(famille, { action: 'list', limit: limite });
     const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
     const champ = CHAMP_DU_CODE[famille];
     const chantier = liste.find((x) => x?.[champ] === code);
@@ -741,7 +1108,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         `un mandat de la famille « ${famille} » ne porte pas d’epics : je ne sais pas quoi lire sous ${code}`
       );
     }
-    const corpsEpics = await appeler('epics', { action: 'list', [champParent]: chantier.id, limit: limite });
+    const corpsEpics = await demander('epics', { action: 'list', [champParent]: chantier.id, limit: limite });
     const tousEpics = Object.values(corpsEpics || {}).find((v) => Array.isArray(v)) || [];
     // 🔴 ON VÉRIFIE QUE LE FILTRE A FILTRÉ. Un filtre ignoré rend la base entière : sans ce
     // second tamis, la vue rattacherait à cet orchestrateur les epics de TOUTES les
@@ -756,8 +1123,24 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
     // chantier : ne pas la dire ici était la même incohérence, dans le même fichier.
     const epicsPlafonnes = tousEpics.length >= limite;
 
-    const avecStories = [];
-    for (const e of epics) {
+    // ═══ LES STORIES DE CHAQUE EPIC — TOUTES DEMANDÉES DE FRONT, l'ordre rendu intact.
+    //
+    // 🔴 C'EST ICI QUE LES 65 % PARTAIENT. Mesuré le 2026-08-24 : les `tickets/list` coûtaient
+    // **41 s sur 63**, dans une boucle `for` avec un `await` dedans — 91 attentes de ~0,45 s
+    // mises bout à bout alors qu'aucune ne dépend de la précédente.
+    //
+    // ⚠️ `Promise.all` REND DANS L'ORDRE DES ENTRÉES, jamais dans l'ordre des réponses — c'est
+    // ce qui rend l'identité au séquentiel atteignable, et c'est ce qu'un banc compare champ à
+    // champ. Rien d'autre n'a changé de ce que chaque tour fait : le filtre demandé, le tamis
+    // qui vérifie qu'il a filtré, le plafond dit, l'écart compté, et `stories: null` quand
+    // l'appel a refusé.
+    //
+    // ⚠️ ET LE NOMBRE D'APPELS EN VOL N'EST PAS BORNÉ ICI — il l'est sur le transport, une fois
+    // pour tout le lecteur (voir `demander` plus haut). Une seconde borne à cet étage
+    // s'appliquerait à un objet différent (des epics, pas des appels) tout en portant le même
+    // nom, et la mesure faite pour l'une servirait de caution à l'autre.
+    const avecStories = await Promise.all(
+      epics.map(async (e) => {
       let stories = [];
       let storiesLues = true;
       let storiesPlafonnees = false;
@@ -776,7 +1159,7 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         // une page de 200, les stories d'un epic ne tombaient dans la page QUE par chance. Elles
         // sortaient donc `[]` — indiscernable de « cet epic n'a aucune story ». Le travail
         // d'agents entiers disparaissait de la vue, en silence, sur le chemin le plus fréquenté.
-        const corpsT = await appeler('tickets', { action: 'list', epic_id: e.id, limit: limite });
+        const corpsT = await demander('tickets', { action: 'list', epic_id: e.id, limit: limite });
         const tous = Object.values(corpsT || {}).find((v) => Array.isArray(v)) || [];
         // ⚠️ ON DEMANDE LE FILTRE **ET** ON VÉRIFIE QU'IL A FILTRÉ. Les deux : un service peut
         // cesser de l'honorer demain, comme il le fait déjà pour `delivery_id`.
@@ -800,17 +1183,41 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
         // ferait disparaître le travail d'un agent sans que rien ne le dise.
         storiesLues = false;
       }
-      avecStories.push({
+      return {
         code: e?.epic_id ?? null,
         titre: e?.title ?? null,
         statut: e?.status ?? null,
+        // 🔴 LU DANS LA CHARGE DÉJÀ REÇUE — ZÉRO APPEL HTTP AJOUTÉ, et c'est la condition de
+        // fin n°4. Vérifié contre le service RÉEL le 2026-08-25 avant d'écrire une ligne :
+        // `tickets` action `list` rend `assigned_agent` sur chaque ticket ; `epics` action
+        // `list` ne rend PAS la clé du tout. On lit donc le champ de l'epic pour le jour où il
+        // existera — il vaut `null` aujourd'hui — sans jamais aller le chercher ailleurs.
+        // 🔴 LE DÉSARMEMENT EST ICI, À LA LECTURE — ET C’EST LA VRAIE PORTE.
+        //
+        // Il était posé dans `nomsDeclares`, l’agrégateur, et je l’avais annoncé comme « la
+        // porte unique ». Il ne l’était pas : `nomDeclare` est un champ STRUCTUREL
+        // (`CHAMPS_DE_STRUCTURE`), donc `recopierLaStructure` le copie BRUT jusqu’à la vue,
+        // sans jamais passer par l’agrégateur. Mesuré (2026-08-25, revue portail) : un C1
+        // (0x9B) survivait à `--json` et atteignait stdout — `JSON.stringify` échappe les C0,
+        // pas les C1, et ce sont précisément eux qui ont motivé d’élargir le filtre.
+        //
+        // ⚠️ CINQUIÈME FOIS QUE CE LOT CROIT FERMER UNE FAMILLE EN FERMANT UN CAS. La règle
+        // qui s’en dégage : on désarme là où la donnée ENTRE, jamais là où elle est mise en
+        // forme — un champ a un seul point d’entrée et autant de sorties qu’on en ajoutera.
+        nomDeclare: desarmerLeTexteLibre(e?.assigned_agent) ?? null,
         stories: storiesLues
-          ? stories.map((t) => ({ code: t?.ticket_id ?? null, titre: t?.title ?? null, statut: t?.status ?? null }))
+          ? stories.map((t) => ({
+              code: t?.ticket_id ?? null,
+              titre: t?.title ?? null,
+              statut: t?.status ?? null,
+              nomDeclare: desarmerLeTexteLibre(t?.assigned_agent) ?? null,
+            }))
           : null,
         storiesPlafonnees,
         storiesEcartees,
-      });
-    }
+      };
+      })
+    );
 
     return {
       code,
@@ -825,6 +1232,14 @@ export function lecteurDeChantier({ appeler = transportServiceDesk(), limite = 2
       // des gestes opposés — retamiser d'un côté, lever le plafond de l'autre.
       epicsPlafonnes,
     };
+  };
+
+  return (code) => {
+    // ⚠️ LA CLÉ EST LE CODE TEL QU'IL A ÉTÉ DEMANDÉ. Deux porteurs du même chantier le
+    // demandent par le même code — c'est ce que `cleDuMandat` a déjà normalisé un étage plus
+    // haut. Normaliser une seconde fois ici ferait un second réglage de la même chose.
+    if (!enCours.has(code)) enCours.set(code, lireVraiment(code));
+    return enCours.get(code);
   };
 }
 
@@ -1119,7 +1534,6 @@ export async function laVueDuParc({
   }
 
   // ═══ LES ORCHESTRATEURS — la tête de la vue, et l'ordre est celui du registre.
-  const orchestrateurs = [];
   const dansUneHierarchie = new Set();
   //
   // 🔴 UNE SEULE FABRIQUE DE LIGNE POUR LES DEUX SOURCES, ET C'EST CE QUI REND LE CRITÈRE
@@ -1206,17 +1620,49 @@ export async function laVueDuParc({
         // faisait disparaître le travail d'un agent sans que rien ne le dise. Même règle qu'un
         // étage plus haut pour `epics`, au même endroit du même objet.
         const stories = Array.isArray(e?.stories) ? e.stories : null;
+        // ⚠️ CE QUE LES STORIES DÉCLARENT MONTE À L'EPIC, ET RIEN D'AUTRE NE MONTE. Pas un
+        // compte, pas un « plusieurs », pas le premier : la liste des noms distincts, chacun
+        // rendu, chacun marqué comme venant des stories (voir `nomsDeclares`).
+        //
+        // ⚠️ `stories: null` NE SE REPLIE PAS EN `[]` ICI NON PLUS. « je n'ai pas pu lire ses
+        // stories » donnerait alors « aucun nom déclaré sous cet epic » — une absence COMBLÉE,
+        // au lieu d'une absence montrée (RA-VUE-003).
+        const nomsDesStories = stories === null ? [] : stories.map((s) => s?.nomDeclare ?? null);
         return {
           code: e?.code ?? null,
           ...recopierLaStructure(e, 'epic'),
-          agent: quiPorte(codeEpic, parMandat, parNom),
+          agent: quiPorte(codeEpic, parMandat, parNom, {
+            nomDeclare: e?.nomDeclare ?? null,
+            nomsDesStories,
+            // 🔴 LE FAIT QUI MANQUAIT, ET IL A DEUX FORMES — j'en avais fermé UNE.
+            //
+            // Un epic sans nom propre ne déclare que ce que ses stories déclarent. Dire « le
+            // registre ne déclare aucun nom » exige donc de les avoir **TOUTES** lues. Or on
+            // peut n'avoir pas tout lu de DEUX façons, et elles n'ont rien en commun à part
+            // leur conséquence :
+            //
+            //   ① l'appel a JETÉ            → `stories === null`      (fermé au commit 878a986)
+            //   ② la page était PLEINE      → `storiesPlafonnees`     (restait OUVERT)
+            //
+            // ⚠️ ET C'EST LA TROISIÈME FOIS QUE CE LOT FERME UN CAS EN CROYANT FERMER SA
+            // FAMILLE. Le correctif de ① nommait « l'appel à ses stories a échoué » — un
+            // MÉCANISME. Nommer le mécanisme fait rater l'autre mécanisme qui produit le même
+            // fait. La question qui décide n'est pas « comment ça a raté », c'est **« ai-je lu
+            // TOUT ce que cet epic déclare ? »** — et c'est elle qu'on écrit ici.
+            //
+            // ⚠️ `storiesPlafonnees` EST DÉJÀ MESURÉ ET DÉJÀ RENDU par le lecteur (c'est un
+            // signal du manifeste) : on le LIT, on n'ajoute aucune mesure ni aucun appel.
+            declarationMesuree: Boolean(e?.nomDeclare) || (stories !== null && !e?.storiesPlafonnees),
+          }),
           stories:
             stories === null
               ? null
               : stories.map((s) => ({
                   code: s?.code ?? null,
                   ...recopierLaStructure(s, 'story'),
-                  agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom),
+                  agent: quiPorte(codeDuMandat(s?.code ?? ''), parMandat, parNom, {
+                    nomDeclare: s?.nomDeclare ?? null,
+                  }),
                 })),
           // Les signaux d'epic traversent par le MÊME manifeste que ceux du chantier : un seul
           // tableau pour les deux étages, donc aucun étage ne peut rester en arrière de l'autre.
@@ -1226,10 +1672,25 @@ export async function laVueDuParc({
     };
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // ON CHOISIT LES LIGNES D'ABORD, ON LES LIT ENSUITE — ET CE DÉCOUPAGE EST LA CONDITION DE
+  // L'IDENTITÉ AU SÉQUENTIEL, pas un rangement.
+  //
+  // 🔴 LE CHOIX DES LIGNES EST SÉQUENTIEL PARCE QU'IL PORTE UN ÉTAT QUI SE PROPAGE : `mandatsVus`
+  // est rempli par la source 1 et LU par la source 2 (« ce mandat a-t-il déjà un terminal
+  // vivant ? »). Choisir en parallèle ferait dépendre le contenu de la vue de l'ordre où les
+  // lectures rendent — deux mêmes parcs rendraient deux vues différentes, et le banc d'identité
+  // ne s'en apercevrait qu'un jour sur deux.
+  //
+  // ⚠️ CE CHOIX NE FAIT AUCUNE ENTRÉE-SORTIE. Il lit le recensement et les lieux DÉJÀ en
+  // mémoire ; il ne coûte rien à paralléliser et il coûterait la justesse. C'est la LECTURE des
+  // chantiers — la seule chose qui parle au ServiceDesk — qui part de front, juste après, dans
+  // l'ordre exact où le choix les a rangés.
+  const aLire = [];
   // ═══ SOURCE 1 — LES ORCHESTRATEURS VIVANTS. Un pane porte le mandat : on l'a MESURÉ.
   const mandatsVus = new Set();
   for (const a of agents) {
-    if (roleEtabli(a) !== 'orchestrateur') continue;
+    if (!teteDeHierarchie(roleEtabli(a))) continue;
     dansUneHierarchie.add(cleDeLAgent(a));
     const carte = carteDe(a);
     // ⚠️ CES TROIS FAITS SE CALCULENT UNE FOIS, ET SE POSENT SUR LES QUATRE SORTIES DE LA
@@ -1240,19 +1701,17 @@ export async function laVueDuParc({
     const adresse = adresseDe(carte, presence);
     const cle = cleDuMandat(a?.mandat);
     if (cle) mandatsVus.add(cle);
-    orchestrateurs.push(
-      await uneLigne({
-        mandatBrut: a?.mandat ?? null,
-        code: codePorteEnMandat(a),
-        commun: {
-          agent: carte,
-          porteur: porteurDuPane(carte),
-          presence,
-          activite: activiteDe(a),
-          adresse,
-        },
-      })
-    );
+    aLire.push({
+      mandatBrut: a?.mandat ?? null,
+      code: codePorteEnMandat(a),
+      commun: {
+        agent: carte,
+        porteur: porteurDuPane(carte),
+        presence,
+        activite: activiteDe(a),
+        adresse,
+      },
+    });
   }
 
   // ═══ SOURCE 2 — LES LIEUX SANS TERMINAL VIVANT. EF-VUE-007, ET C'EST LE CŒUR DE CE LOT.
@@ -1262,30 +1721,40 @@ export async function laVueDuParc({
   // Comparer des CHEMINS ferait apparaître onze fois le chantier dont un seul worktree est
   // ouvert ; c'est le mandat qui identifie le chantier, jamais le dossier qui le porte.
   for (const l of entreesDeLieux) {
-    if (l?.role !== 'orchestrateur') continue;
+    if (!teteDeHierarchie(l?.role)) continue;
     const cle = cleDuMandat(l?.mandat);
     if (!cle || mandatsVus.has(cle)) continue;
     mandatsVus.add(cle);
     const presence = presenceDe({ vivant: false, borne });
-    orchestrateurs.push(
-      await uneLigne({
-        mandatBrut: l?.mandat ?? null,
+    aLire.push({
+      mandatBrut: l?.mandat ?? null,
         // ⚠️ MÊME RÈGLE QUE POUR UN AGENT : un mandat qui n'est pas un code n'a pas de chantier
         // à chercher. `general` et `essai-metier-rendu` portent des lieux parfaitement valides.
         code: CODE_LISIBLE.test(cle) ? cle : null,
-        commun: {
-          // ⚠️ `agent: null` DIT UNE CHOSE PRÉCISE : le registre nomme un LIEU, pas une personne.
-          // Y mettre le nom que la convention laisse deviner referait le geste que `nomDeLAgent`
-          // interdit — un nom plausible fait écrire à quelqu'un qui n'existe pas.
-          agent: null,
-          porteur: porteurDuLieu(Array.isArray(l?.chemins) ? l.chemins : []),
-          presence,
-          activite: activiteDe(null),
-          adresse: adresseDe(null, presence),
-        },
-      })
-    );
+      commun: {
+        // ⚠️ `agent: null` DIT UNE CHOSE PRÉCISE : le registre nomme un LIEU, pas une personne.
+        // Y mettre le nom que la convention laisse deviner referait le geste que `nomDeLAgent`
+        // interdit — un nom plausible fait écrire à quelqu'un qui n'existe pas.
+        agent: null,
+        porteur: porteurDuLieu(Array.isArray(l?.chemins) ? l.chemins : []),
+        presence,
+        activite: activiteDe(null),
+        adresse: adresseDe(null, presence),
+      },
+    });
   }
+
+  // ═══ ET MAINTENANT LES LIGNES SE LISENT, TOUTES DE FRONT.
+  //
+  // ⚠️ `Promise.all` REND DANS L'ORDRE DES ENTRÉES, jamais dans celui des réponses : la vue
+  // garde l'ordre du registre — les vivants d'abord, les lieux sans terminal ensuite — quelle
+  // que soit la vitesse à laquelle le ServiceDesk répond sur chacun.
+  //
+  // ⚠️ ET LE NOMBRE D'APPELS EN VOL RESTE BORNÉ, sans qu'un plafond soit posé ici : chaque
+  // ligne passe par le `lireChantier` qu'on lui a donné, et c'est LUI qui borne (voir
+  // `lecteurDeChantier` et `src/plafond.js`). Poser une seconde borne à cet étage compterait
+  // des LIGNES là où la mesure a compté des APPELS — même mot, autre objet.
+  const orchestrateurs = await Promise.all(aLire.map((c) => uneLigne(c)));
 
   // ═══ HORS DE TOUTE HIÉRARCHIE D'ORCHESTRATEUR — EF-VUE-004.
   //
@@ -1430,12 +1899,35 @@ function resumeDeLaVue(compte, recensement, registreDesLieux = null) {
 // « E-20260822-0002 · Le recensement … e-20260822-0002 » lui a menti : la colonne de droite se
 // lit comme la colonne de droite d'à côté, celle qui est mesurée.
 
-/** Le fragment d'attribution rendu à droite d'une ligne — le mot qui décide vient EN PREMIER. */
+/**
+ * Le fragment d'attribution rendu à droite d'une ligne — le mot qui décide vient EN PREMIER.
+ *
+ * 🔴 LES TROIS ÉTATS SE LISENT DIFFÉREMMENT À L'ŒIL, et c'est la condition de fin n°3 de
+ * E-20260825-0001. `PROUVÉ`, `DÉCLARÉ` et `NON ÉTABLI` ouvrent chacun leur fragment : le
+ * dirigeant lit une LIGNE dans une colonne, pas un champ JSON, et deux sources qui se rendraient
+ * toutes deux « un nom » seraient indiscernables — exactement HS-VUE-002, sur la source cette
+ * fois plutôt que sur le lien.
+ */
 export function rendreAttribution(attribution) {
   if (attribution?.mesure === 'lue') {
     // ⚠️ TOUS LES PORTEURS, séparés — jamais le premier seul. Voir `quiPorte`.
     const noms = attribution.agents.map((c) => c.nom ?? `ANONYME (${c.pane ?? '?'})`);
-    return noms.join(' + ');
+    const base = `${MOT_PROUVE} : ${noms.join(' + ')}`;
+    // 🔴 L'ÉCART SE REND SUR LA MÊME LIGNE, jamais dans un repli qu'il faut aller ouvrir. Le
+    // taire ici reviendrait à arbitrer au rendu ce que la donnée refuse d'arbitrer.
+    const ecart = attribution.ecart;
+    if (!ecart?.declares?.length) return base;
+    const dits = ecart.declares.map((d) => `« ${d.nom} » (${d.dOu})`).join(', ');
+    return `${base}   ${MOT_ECART} — ${ecart.pourquoi} : le registre déclare ${dits}`;
+  }
+  if (attribution?.mesure === 'déclarée') {
+    // ⚠️ LE MOT EN TÊTE, SA PHRASE ENSUITE, LE NOM EN DERNIER — l'ordre est la garde. Un nom
+    // en tête se retient ; le doute qui le suit s'oublie en trois relectures. C'est la
+    // condition 2 de l'arbitrage du 22 août, appliquée à la source déclarée.
+    const dits = (attribution.declares ?? [])
+      .map((d) => `${d.nom} (${d.dOu})`)
+      .join(' + ');
+    return `${MOT_DECLARE} (${PHRASE_COURTE_DU_DECLARE}) : ${dits}`;
   }
   const indices = attribution?.indices ?? [];
   if (!indices.length) return MOT_NON_ETABLI;

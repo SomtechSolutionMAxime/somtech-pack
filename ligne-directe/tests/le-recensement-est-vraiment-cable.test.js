@@ -506,7 +506,7 @@ test('le câblage RÉEL LIT les écrans — sans quoi tout le parc se dirait « 
   assert.equal(enVol.occupe, true);
 });
 
-test('le câblage RÉEL passe SES HUIT paramètres — trois jointures restaient nues, puis une quatrième', async () => {
+test('le câblage RÉEL passe SES NEUF paramètres — deux jointures nues, fermées dans la même fusion', async () => {
   // ═══════════════════════════════════════════════════════════════════════════════════════
   // TROIS MUTATIONS SURVIVANTES, TROUVÉES PAR LES DEUX PASSES DU CYCLE 6, ET C'EST LE MÊME
   // MOTIF QUE CE LOT A DÉJÀ FERMÉ CINQ FOIS : deux étages justes dont la JOINTURE n'est pas
@@ -571,7 +571,7 @@ test('le câblage RÉEL passe SES HUIT paramètres — trois jointures restaient
   //    Elle vit désormais dans `le-battement-de-coeur-du-recensement.test.js`, qui pose une
   //    racine jetable AVANT tout import et peut donc exiger le CONTENU.
 
-  // ③ `panes` est CÂBLÉ — gardé ailleurs, exigé ici aussi pour que les sept tiennent ensemble.
+  // ③ `panes` est CÂBLÉ — gardé ailleurs, exigé ici aussi pour que les neuf tiennent ensemble — les deux dernières fermées dans la même fusion.
   assert.equal(rendu.panesVus, 1, 'l’inventaire des panes est bien celui de herdr');
 
   // ④ `declarations` EST CÂBLÉ — LE HUITIÈME, et la mutation qui le retire a SURVÉCU à la suite
@@ -606,6 +606,39 @@ test('le câblage RÉEL passe SES HUIT paramètres — trois jointures restaient
     rendu.borne.sourceDeclaree.mesure,
     'lue',
     `le registre des déclarations doit être CÂBLÉ (borne : ${JSON.stringify(rendu.borne.sourceDeclaree)})`,
+  );
+
+  // ⑤ `versionCourante` est CÂBLÉ — la neuvième jointure, gardée le jour où elle est née.
+  //
+  // ⚠️ CE QU'ELLE PORTE. `ETALONNAGE_DU_LECTEUR` existe pour qu'un « rien en vol » devenu faux
+  //    se relie à un changement de version de Claude Code. Il ne peut le faire que si la
+  //    version RÉELLE est mesurée : décâblée, la sonde rend `non mesurée`, `etalonnageDepasse`
+  //    reste `null`, et le registre perd exactement le signal qu'on vient de lui donner — sans
+  //    qu'aucun essai unitaire de `travailEnVol` ne rougisse, puisqu'ils injectent tous leur
+  //    propre sonde. C'est la forme que ce banc existe pour fermer : deux étages justes dont la
+  //    jointure n'est pas gardée.
+  //
+  // ⚠️ ON EXIGE « PAS `non mesurée` », ET PAS « `lue` ». Les trois états disent trois choses :
+  //    `non mesurée` = aucune sonde ne m'a été donnée (LE DÉCÂBLAGE) ; `refusée` = on m'en a
+  //    donné une et elle a raté ; `lue` = j'ai la version. Ce banc tourne avec un PATH fabriqué
+  //    où `claude` peut ne pas exister — exiger `lue` ferait dépendre le verdict de la machine
+  //    plutôt que du code, et rougirait en CI pour une raison qui n'est pas le défaut.
+  // ⚠️ LE CHEMIN EST NOMMÉ, PAS CHERCHÉ. Une chaîne de replis (`a ?? b ?? l'agent entier`)
+  //    rendrait ce banc vert le jour où le champ se déplace — il trouverait autre chose et
+  //    n'aurait plus rien mesuré. `recensement.js` rend l'entrée sous `travailEnVol` : c'est là
+  //    qu'on regarde, et nulle part ailleurs.
+  const vol = rendu.agents[0].travailEnVol;
+  assert.ok(
+    vol && typeof vol === 'object',
+    `l’entrée d’agent doit porter « travailEnVol » (rendu : ${JSON.stringify(rendu.agents[0])?.slice(0, 300)})`,
+  );
+  const version = vol.versionDuPoste;
+  assert.ok(version, `« travailEnVol » doit porter versionDuPoste (rendu : ${JSON.stringify(vol)?.slice(0, 300)})`);
+  assert.notEqual(
+    version.mesure,
+    'non mesurée',
+    `la sonde de version doit être CÂBLÉE — « non mesurée » signifie qu'aucune ne lui a été ` +
+      `donnée (rendu : ${JSON.stringify(version)})`,
   );
 });
 

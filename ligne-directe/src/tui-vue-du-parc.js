@@ -15,7 +15,15 @@
  * PROCESSUS (le terminal, son clavier, son redraw) ne se révèle qu'en TAPANT la commande.
  */
 
-import { MOT_NON_ETABLI, rendreAttribution, rendreAdresse } from './vue-du-parc.js';
+import {
+  MOT_NON_ETABLI,
+  MOT_DECLARE,
+  MOT_ECART,
+  PHRASE_DU_DECLARE,
+  PHRASE_DU_PROUVE,
+  rendreAttribution,
+  rendreAdresse,
+} from './vue-du-parc.js';
 
 /**
  * LES ÉTATS FERMÉS, PAR FAMILLE — ÉNUMÉRÉS, jamais testés un par un.
@@ -55,25 +63,60 @@ export function estFerme(statut, niveau) {
 export function nonPrisDe({ attribution, statut, niveau }) {
   const porte = attribution?.mesure === 'lue' && (attribution.agents?.length ?? 0) > 0;
   if (porte) {
-    return { mesure: 'lue', nonPris: false, pourquoi: 'un agent vivant porte ce travail' };
+    return { mesure: 'lue', nonPris: false, source: 'prouvée', pourquoi: 'un agent vivant porte ce travail' };
+  }
+  // 🔴 UN NOM DÉCLARÉ REND « PRIS », ET IL NE REND PAS « PROUVÉ » (RA-VUE-005 amendée).
+  //
+  // ⚠️ CE N'EST PAS UN DÉTAIL DE VOCABULAIRE : le filtre `n` sert à décider OÙ AGIR. Laisser
+  // `NON PRIS` sur un travail que le registre attribue enverrait le dirigeant relancer un
+  // chef d'équipe qui l'a déjà pris — c'est le bruit qui fait abandonner un filtre.
+  //
+  // ⚠️ ET LA SOURCE VOYAGE AVEC LA RÉPONSE, parce que « pris » ne veut pas dire la même chose
+  // dans les deux cas : l'un a été MESURÉ au lieu de l'agent, l'autre a été ÉCRIT au registre
+  // par l'outillage de naissance. Le détail les dit en toutes lettres ; la marque les
+  // distingue à l'œil. Les fondre en un seul `false` referait, un cran plus bas, la confusion
+  // que `MOT_DECLARE` répare un cran plus haut.
+  const declare = attribution?.mesure === 'déclarée' && (attribution.declares?.length ?? 0) > 0;
+  if (declare) {
+    return {
+      mesure: 'lue',
+      nonPris: false,
+      source: 'déclarée',
+      // ⚠️ SANS LA PHRASE LONGUE : le bloc « source » du panneau la dit juste au-dessus, et
+      // trois répétitions dans 28 colonnes chassent le reste de l'écran.
+      pourquoi: 'aucun agent vivant ne le porte à un lieu, mais le registre déclare un nom sur ce travail',
+    };
   }
   const ferme = estFerme(statut, niveau);
   if (ferme === null) {
     return {
       mesure: 'non établie',
       nonPris: null,
+      source: null,
       pourquoi:
-        `aucun agent vivant ne porte ce travail, mais son statut n’a pas été mesuré : ` +
-        `je ne peux pas dire s’il attend quelqu’un ou s’il est déjà fermé`,
+        `ni agent vivant à un lieu, ni nom déclaré au registre, et son statut n’a pas été ` +
+        `mesuré : je ne peux pas dire s’il attend quelqu’un ou s’il est déjà fermé`,
     };
   }
   if (ferme) {
-    return { mesure: 'lue', nonPris: false, pourquoi: `son statut « ${statut} » est un état fermé` };
+    return { mesure: 'lue', nonPris: false, source: null, pourquoi: `son statut « ${statut} » est un état fermé` };
   }
+  // ⚠️ CE QU'ON DIT DU REGISTRE DÉPEND DE CE QU'ON A PU EN LIRE — la seconde porte de la
+  // famille, et elle répétait l'affirmation que le moteur venait de corriger. Corriger
+  // `vue-du-parc.js` seul laissait celle-ci retomber sur le même faux : « le registre ne déclare
+  // aucun nom » sur un epic dont les stories ont refusé, c'est-à-dire dont le registre n'a
+  // jamais été consulté. Une porte sur deux, dans le geste même qui fermait l'autre.
+  const duRegistre =
+    attribution?.declarationMesuree === false
+      ? 'ce que le registre déclare n’a PAS pu être lu'
+      : 'le registre ne déclare aucun nom';
   return {
     mesure: 'lue',
     nonPris: true,
-    pourquoi: `aucun agent vivant ne le porte, et son statut « ${statut} » n’est pas un état fermé`,
+    source: null,
+    pourquoi:
+      `aucun agent vivant ne le porte à un lieu, ${duRegistre}, et son ` +
+      `statut « ${statut} » n’est pas un état fermé`,
   };
 }
 
@@ -84,6 +127,61 @@ export function nonPrisDe({ attribution, statut, niveau }) {
  * rattachement là où il n'y a eu aucune mesure : le dirigeant chercherait ensuite son chantier
  * sous une app qui ne le porte pas.
  */
+/**
+ * LA MARQUE D'UNE LIGNE DE L'ARBRE — QUATRE ÉTATS, QUATRE SIGNES, et ils ne se confondent pas.
+ *
+ * 🔴 « PRIS » RECOUVRE DEUX FAITS DEPUIS RA-VUE-005 AMENDÉE, et un signe unique les fondrait
+ * à l'endroit le plus lu de l'écran : la colonne de gauche. Un rattachement PROUVÉ (mandat lu
+ * au lieu) et un rattachement DÉCLARÉ (nom écrit au registre) appellent deux gestes différents
+ * — on peut parler au premier, on ne peut que croire le second.
+ *
+ * ⚠️ LE SUFFIXE DIT LA SOURCE EN TOUTES LETTRES, la marque la dit à l'œil : les deux, jamais
+ * l'une SANS l'autre. Sur une ligne tronquée par une colonne étroite, la marque est ce qui
+ * survit — c'est mesuré, l'arbre du TUI coupe à 62 % de la largeur.
+ */
+export function marqueDuRattachement(nonPris, { pris }) {
+  if (nonPris?.nonPris === true) return '○';
+  if (nonPris?.nonPris === null) return '?';
+  if (nonPris?.source === 'déclarée') return '◇';
+  return pris;
+}
+
+/**
+ * LE SUFFIXE DE RATTACHEMENT DANS L'ARBRE — LE MOT QUI DÉCIDE **ET** LE NOM, DANS LA PLACE QUI
+ * RESTE.
+ *
+ * 🔴 IL NE PEUT PAS ÊTRE `rendreAttribution` TEL QUEL, ET C'EST MESURÉ, PAS SUPPOSÉ. La colonne
+ * de l'arbre réserve au suffixe **la moitié de sa largeur au plus** (`texteDeLigne`), puis
+ * TRONQUE. Le fragment du moteur — « DÉCLARÉ (non mesuré à un lieu) : e-20260818-0016 (ce
+ * ticket) », 60 caractères — sort tronqué à 45 : le mot survit, **le nom est coupé**. C'est
+ * exactement le contraire de ce que ce lot doit rendre.
+ *
+ * ⚠️ ON NE RALLONGE PAS LA COLONNE, ON RACCOURCIT LE FRAGMENT — et ce qui tombe est le
+ * qualificatif, jamais le mot ni le nom. Il n'est pas perdu : le panneau de détail le dit en
+ * toutes lettres, à côté, à chaque sélection. Le TUI a un endroit pour la phrase longue ; la
+ * vue texte, non — c'est pourquoi les deux rendus diffèrent, et c'est délibéré.
+ *
+ * ⚠️ ET LA MARQUE PORTE LA SOURCE MÊME QUAND LE SUFFIXE TOMBE ENTIER : `◇` en tête de ligne
+ * survit à toutes les troncatures, parce qu'il est du côté du titre.
+ */
+export function suffixeDuRattachement(attribution) {
+  if (attribution?.mesure === 'déclarée') {
+    const noms = (attribution.declares ?? []).map((d) => d.nom).join(' + ');
+    return `${MOT_DECLARE} : ${noms}`;
+  }
+  if (attribution?.mesure === 'lue') {
+    const noms = (attribution.agents ?? []).map((c) => c.nom ?? `ANONYME (${c.pane ?? '?'})`).join(' + ');
+    const ecart = attribution.ecart;
+    // ⚠️ L'ÉCART PASSE AVANT LE CONFORT DE LECTURE. Une contradiction entre le terrain et le
+    // registre est ce qu'il faut voir en premier ; la reléguer au seul détail la rendrait
+    // invisible à qui parcourt l'arbre — c'est-à-dire à l'usage normal du TUI.
+    const dits = (ecart?.declares ?? []).map((d) => d.nom).join(' + ');
+    return dits ? `${MOT_ECART} : ${noms} vs ${dits}` : `PROUVÉ : ${noms}`;
+  }
+  // Les autres états gardent le rendu du moteur — un seul texte pour les deux surfaces.
+  return rendreAttribution(attribution);
+}
+
 export const APP_NON_ETABLIE = 'APP NON ÉTABLIE';
 
 export function appDuChantier(chantier) {
@@ -224,6 +322,25 @@ export function arbreDeLaVue(vue, { parApp = true } = {}) {
   return racines;
 }
 
+/**
+ * ⚠️ `kind: 'orchestrateur'` N'EST PAS UNE COMPARAISON DE RÔLE, ET C'EST POURQUOI CE LITTÉRAL
+ * RESTE (T-20260826-0076, point 6).
+ *
+ * MESURÉ : les trois `kind === 'orchestrateur'` de ce fichier lisent une ÉTIQUETTE DE NŒUD,
+ * posée deux lignes plus bas par cette fabrique-ci, et membre d'une énumération fermée que ce
+ * module se donne à lui-même — `app` · `section` · `agent-hors` · `orchestrateur` · `epic` ·
+ * `story`. Aucune d'elles ne touche au vocabulaire de `roleDuLieu` : rien de ce que le TUI
+ * affiche ne compare un rôle établi. Dériver l'étiquette du registre obligerait à en dériver
+ * AUSSI son unique producteur — et on aurait déplacé le littéral au lieu de l'enlever.
+ *
+ * ⚠️ CE QUI EST UNE VRAIE DETTE EST UN CRAN PLUS HAUT, ET IL EST NOMMÉ PLUTÔT QUE CORRIGÉ : le
+ * NOM du champ que `vue-du-parc.js` rend (`vue.orchestrateurs`) et les phrases qui le suivent
+ * (« N orchestrateur(s) sous cette app », « seul un orchestrateur vivant porte un terminal »).
+ * Depuis ce lot, ce champ contient les têtes de hiérarchie — c'est-à-dire tout rôle dont le
+ * mandat est un code de chantier. Un second rôle de ce genre y entrerait sous une étiquette qui
+ * ne le nomme pas. Renommer un champ rendu est un changement de contrat, avec ses lecteurs et
+ * ses essais ; ce n'est pas un de-harcodage, et ça ne se fait pas en passant.
+ */
 function noeudDOrchestrateur(o, i) {
   const app = appDuChantier(o?.chantier);
   const epics = Array.isArray(o?.epics) ? o.epics : null;
@@ -259,7 +376,7 @@ function noeudDEpic(e, o, j) {
     id: `epic:${e?.code ?? j}:${o?.chantier?.code ?? ''}`,
     kind: 'epic',
     titre: e?.titre ?? '(epic sans titre)',
-    marque: nonPris.nonPris === true ? '○' : nonPris.nonPris === false ? '▸' : '?',
+    marque: marqueDuRattachement(nonPris, { pris: '▸' }),
     // ⚠️ TROIS FAITS, UN SEUL SUFFIXE, ET UNE PRÉCÉDENCE QUI SE DIT. `NON PRIS` passe devant
     // parce que c'est un APPEL À AGIR mesuré ; « stories NON LUES » vient ensuite parce que
     // c'est un TROU DE MESURE. Les deux se lisent en entier dans le détail — aucun n'est perdu,
@@ -271,7 +388,7 @@ function noeudDEpic(e, o, j) {
           ? 'stories NON LUES'
           : nonPris.nonPris === null
             ? MOT_NON_ETABLI
-            : rendreAttribution(e?.agent),
+            : suffixeDuRattachement(e?.agent),
     nonPris,
     // 🔴 LE MÊME REPLI, UN ÉTAGE PLUS BAS — et il était resté ouvert quand j'ai fermé celui de
     // l'orchestrateur. Un epic FERMÉ dont l'appel aux tickets a jeté rend `stories: null`, donc
@@ -291,13 +408,13 @@ function noeudDeStory(s, e, k) {
     id: `story:${s?.code ?? k}:${e?.code ?? ''}`,
     kind: 'story',
     titre: s?.titre ?? '(story sans titre)',
-    marque: nonPris.nonPris === true ? '○' : nonPris.nonPris === false ? '├' : '?',
+    marque: marqueDuRattachement(nonPris, { pris: '├' }),
     suffixe:
       nonPris.nonPris === true
         ? 'NON PRIS'
         : nonPris.nonPris === null
           ? MOT_NON_ETABLI
-          : rendreAttribution(s?.agent),
+          : suffixeDuRattachement(s?.agent),
     nonPris,
     enfants: [],
     ref: { story: s, epic: e },
@@ -469,7 +586,8 @@ export function detailDe(ligne) {
     l.push(`chantier: ${o?.chantier?.titre ?? MOT_NON_ETABLI}`);
     l.push(`statut  : ${e?.statut ?? MOT_NON_ETABLI} (affirmé)`);
     l.push('');
-    l.push(...envelopper(`porteur : ${rendreAttribution(e?.agent)}`, 28));
+    l.push(...envelopper(`porteur : ${suffixeDuRattachement(e?.agent)}`, 28));
+    l.push(...lignesDeLaSource(e?.agent));
     l.push('');
     l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));
     l.push(...envelopper(n.nonPris.pourquoi, 28));
@@ -485,7 +603,8 @@ export function detailDe(ligne) {
   l.push(`epic    : ${e?.titre ?? MOT_NON_ETABLI}`);
   l.push(`statut  : ${s?.statut ?? MOT_NON_ETABLI} (affirmé)`);
   l.push('');
-  l.push(...envelopper(`porteur : ${rendreAttribution(s?.agent)}`, 28));
+  l.push(...envelopper(`porteur : ${suffixeDuRattachement(s?.agent)}`, 28));
+  l.push(...lignesDeLaSource(s?.agent));
   l.push('');
   l.push(...envelopper(`pris en charge : ${etiquetteNonPris(n.nonPris)}`, 28));
   l.push(...envelopper(n.nonPris.pourquoi, 28));
@@ -496,9 +615,60 @@ function noeudApp(n) {
   return appDuChantier(n.ref?.orchestrateur?.chantier).nom;
 }
 
+/**
+ * D'OÙ LA VUE TIENT CE RATTACHEMENT — EN TOUTES LETTRES, dans le panneau qui a la place.
+ *
+ * 🔴 C'EST LA CONTREPARTIE DU SUFFIXE COMPACT. L'arbre doit tenir dans sa colonne, donc il rend
+ * `DÉCLARÉ : nom` — le qualificatif tombe. S'il ne se retrouvait nulle part, RA-VUE-006 serait
+ * violée : « chaque ligne dit sa source » n'est pas « chaque ligne porte un mot ». Le détail
+ * est l'endroit où la phrase entière existe, et il est à un mouvement de curseur.
+ *
+ * ⚠️ ÉCRITE UNE FOIS POUR LES DEUX ÉTAGES. Recopiée sur l'epic puis sur la story, elle serait
+ * corrigée d'un côté et pas de l'autre au premier amendement — « une porte sur deux », le motif
+ * que ce module a déjà payé trois fois.
+ */
+export function lignesDeLaSource(attribution) {
+  const l = ['', 'source  :'];
+  if (attribution?.mesure === 'lue') {
+    l.push(...envelopper(`✔ PROUVÉ — ${attribution.source ?? PHRASE_DU_PROUVE}`, 28));
+    const ecart = attribution.ecart;
+    if (ecart?.declares?.length) {
+      // ⚠️ LES DEUX NOMS, ET LE MOT « ÉCART ». Rendre le seul prouvé serait TRANCHER — et la
+      // vue ne tranche rien (RA-VUE-001/006). Le dirigeant doit savoir que son registre dit
+      // autre chose que le terrain : c'est lui qui décide lequel des deux a tort.
+      l.push('');
+      l.push(...envelopper(`⚠️ ${MOT_ECART} — ${ecart.pourquoi}`, 28));
+      l.push(...envelopper(`prouvé  : ${(ecart.prouves ?? []).join(' + ') || MOT_NON_ETABLI}`, 28));
+      l.push(...envelopper(`déclaré : ${ecart.declares.map((d) => `${d.nom} (${d.dOu})`).join(' + ')}`, 28));
+    }
+    return l;
+  }
+  if (attribution?.mesure === 'déclarée') {
+    l.push(...envelopper(`◇ ${MOT_DECLARE} — ${attribution.source ?? PHRASE_DU_DECLARE}`, 28));
+    for (const d of attribution.declares ?? []) l.push(...envelopper(`• ${d.nom} — vient de ${d.dOu}`, 28));
+    // ⚠️ LES PISTES NE DISPARAISSENT PAS SOUS LA DÉCLARATION. Un agent qui porte ce code comme
+    // NOM corrobore ; il ne prouve pas. Les taire ferait perdre le seul fait qui, un jour,
+    // permettra de confirmer une déclaration au lieu de la croire.
+    for (const c of attribution.indices ?? []) {
+      l.push(...envelopper(`~ ${c.nom ?? 'ANONYME'} — ${attribution.phraseDeLIndice ?? ''}`, 28));
+    }
+    return l;
+  }
+  l.push(...envelopper(`✘ ${MOT_NON_ETABLI} — ${attribution?.pourquoi ?? 'aucune source ne rattache ce travail'}`, 28));
+  for (const c of attribution?.indices ?? []) {
+    l.push(...envelopper(`~ ${c.nom ?? 'ANONYME'} — ${attribution.phraseDeLIndice ?? ''}`, 28));
+  }
+  return l;
+}
+
 function etiquetteNonPris(nonPris) {
   if (nonPris?.nonPris === true) return '○ NON PRIS';
-  if (nonPris?.nonPris === false) return 'oui';
+  // ⚠️ UN « oui » NU FONDRAIT LES DEUX SOURCES à l'endroit précis où le dirigeant décide s'il
+  // relance quelqu'un. « pris » parce qu'un agent le porte à son lieu et « pris » parce que le
+  // registre l'écrit ne s'actionnent pas de la même façon.
+  if (nonPris?.nonPris === false) {
+    return nonPris.source === 'déclarée' ? `oui — ◇ ${MOT_DECLARE}` : nonPris.source === 'prouvée' ? 'oui — ✔ PROUVÉ' : 'oui';
+  }
   return MOT_NON_ETABLI;
 }
 
@@ -564,6 +734,37 @@ export const RACCOURCIS_UN_A_UN = [
 
 export const RACCOURCIS = RACCOURCIS_UN_A_UN.map((r) => r.texte).join('  ');
 
+/**
+ * LE RACCOURCI VITAL — celui qu’on ne retire jamais. DÉRIVÉ du manifeste, jamais recopié.
+ *
+ * ⚠️ SON TEXTE EST LA SOURCE DU SEUIL, ET LE SEUIL NE S’ÉCRIT PAS EN CHIFFRE : le
+ * jour où « q quitter » est renommé, un seuil écrit `9` deviendrait faux EN SILENCE et la
+ * garde continuerait de passer au vert. Le seuil se lit ici, il ne se compte pas à la main.
+ */
+export const RACCOURCI_VITAL = RACCOURCIS_UN_A_UN.reduce((a, b) => (b.vital < a.vital ? b : a)).texte;
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 IL N'Y A PLUS D'INVARIANT DE LARGEUR ICI, ET SA DISPARITION EST LE CORRECTIF
+//
+// `depasseLaLargeurAutorisee` a vécu ici : une fonction qui décidait quelles lignes avaient le
+// droit de dépasser le pane. Elle est SUPPRIMÉE par la décision `00a7b645` — plus aucune ligne
+// n'a ce droit, `borner` s'applique à toutes, y compris la barre de raccourcis.
+//
+// ⚠️ POURQUOI LA SUPPRIMER PLUTÔT QUE LA GARDER SANS EXCEPTION : sous B, la production n'a plus
+// de condition à évaluer. Une fonction sans appelant en production a l'air d'un garde et n'en
+// est pas un — et elle offre à un banc un oracle avec lequel se mettre d'accord. Mesuré par
+// mutation : la remplacer par `return false` laissait la suite ENTIÈREMENT VERTE.
+//
+// ⚠️ CE QUI GARDE LA PROPRIÉTÉ DÉSORMAIS : `tests/rien-ne-deborde-du-pane.test.js`, qui mesure
+// ce que le TERMINAL rend — l'auto-wrap et le défilement — et non ce qu'une fonction déclare.
+// Retirer le `borner` de la barre FAIT ROUGIR — et on n'écrit pas combien.
+//
+// ⚠️ CE COMMENTAIRE PORTAIT « 4 essais ». Il en fait 5 aujourd'hui : des bancs ont été ajoutés
+// depuis. Le chiffre n'était pas faux, il a ROUILLI — et un chiffre rouillé se lit comme une
+// mesure fraîche. C'est le même défaut qu'un chiffre invérifiable : il ferme la question au
+// lieu de l'ouvrir. On énonce la propriété ; qui veut le compte le remesure.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
 /** La barre de raccourcis qui TIENT dans la largeur — en retirant le moins vital d'abord. */
 export function raccourcisPour(largeur) {
   let gardes = RACCOURCIS_UN_A_UN.slice();
@@ -573,6 +774,24 @@ export function raccourcisPour(largeur) {
     const pire = gardes.reduce((a, b) => (b.vital >= a.vital ? b : a));
     gardes = gardes.filter((r) => r !== pire);
   }
+  // ⚠️ CETTE FONCTION REND LE DERNIER RACCOURCI **ENTIER** — et c'est `rendreEcran` qui borne.
+  //
+  // 🔴 UN BLOC VIVAIT ICI ET INTERDISAIT CE QUE LE CODE FAIT PAR CONSTRUCTION. Il disait :
+  // « ce qui est fermé par ce lot, c'est le FRAGMENT (« q qu… ») — jamais le mot entier ».
+  // Sous `00a7b645`, le fragment est EXACTEMENT ce que le lecteur voit : à 5 colonnes il lit
+  // « q qu… », à 3 « q … ». Il citait en plus le banc de l'invariant par un nom qu'il n'a plus,
+  // et lui prêtait une exigence — « q quitter » entier à TOUTE largeur, y compris 1 — que ce
+  // lot a lui-même amendée. C'était le CINQUIÈME site périmé, trouvé par une passe de fond
+  // après que j'aie déclaré avoir cherché par la fonction.
+  //
+  // ⚠️ ET C'ÉTAIT LE PLUS DANGEREUX DES CINQ, POUR UNE RAISON DE FORME : les quatre autres
+  // DÉCRIVAIENT un état périmé — ils désinforment. Celui-ci INTERDISAIT un comportement voulu :
+  // un lecteur qui le croit va corriger du code juste. La prose qui interdit se cherche AVANT
+  // celle qui décrit.
+  //
+  // CE QUI RESTE VRAI, ET QUI EST LA SEULE RAISON DE CE COMMENTAIRE : on ne tronque pas ICI.
+  // Une troncature à cet endroit ET une à la sortie couperaient deux fois — ma première
+  // correction appelait `borner` ici et rendait « q quitt… » amputé une seconde fois.
   return rendre(gardes);
 }
 
@@ -683,8 +902,37 @@ export function appliquerTouche(etat, touche, lignes) {
  * coloré assère sur des codes d'échappement, et finit par passer pour la mauvaise raison.
  */
 export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) {
-  const largeurArbre = Math.max(28, Math.floor(largeur * 0.62));
-  const largeurDetail = Math.max(20, largeur - largeurArbre - 3);
+  // 🔴 LES DEUX PLANCHERS S’IGNORAIENT, ET LEUR SOMME DÉPASSAIT LE PANE (T-20260825-0071).
+  //
+  // `max(28, …)` pour l’arbre et `max(20, …)` pour le détail étaient calculés chacun dans son
+  // coin. Sous 58 colonnes leur somme franchit la largeur disponible — mesuré : 51 caractères
+  // écrits dans un pane de 40, 54 dans un pane de 50, 58 dans un pane de 57.
+  //
+  // ⚠️ CE DÉFAUT PRÉEXISTE AUX LOTS #327 ET #328 : la formule est identique au tag v1.91.0,
+  // vérifié par `git archive`. Il n’a PAS été observé produire l’empilement du dirigeant —
+  // l’écran est repeint entier (`ESC[H` + `ESC[2J`) à chaque frame, donc le wrap ne
+  // s’accumule pas comme celui de la ligne de progression. Il est corrigé quand même : c’est
+  // la MÊME règle enfreinte — rien de ce que le TUI écrit ne doit dépasser la largeur du pane.
+  //
+  // ⚠️ ORDRE DE SACRIFICE, ET IL SE DIT : quand la place manque, c’est le DÉTAIL qui cède, pas
+  // l’arbre. L’arbre porte la marque de rattachement et le début du titre — ce qui permet de
+  // se repérer ; le détail est consultable ligne par ligne, l’arbre non. Le plancher du détail
+  // peut donc tomber jusqu’à 0 : un panneau vide reste lisible, un écran qui défile, non.
+  const largeurArbre = Math.min(
+    Math.max(28, Math.floor(largeur * 0.62)),
+    // ⚠️ `max(0, …)` : sur un pane absurdement étroit, l’arbre prend tout ce qui reste plutôt
+    // que de rendre une largeur négative — `repeat(-1)` jetterait, et un TUI qui jette au
+    // redimensionnement est pire que le défaut qu’on ferme.
+    Math.max(0, largeur - 3)
+  );
+  // ⚠️ CE `max(0, …)` EST UNE CEINTURE, ET C’EST DIT PLUTÔT QUE SOUS-ENTENDU (revue portail).
+  // `largeurArbre` est déjà borné par `largeur - 3`, donc cette différence ne peut pas être
+  // négative aujourd’hui : le retirer ne fait rougir aucun essai, et c’est normal — mutation
+  // ÉQUIVALENTE, pas survivante. On la garde parce que l’équivalence dépend de la borne du
+  // VOISIN : si `largeurArbre` cesse un jour d’être plafonné, cette ligne devient la seule
+  // à empêcher une largeur négative — et `borner` en aval rendrait alors une colonne vide
+  // au lieu de jeter, ce qui est un défaut silencieux plutôt qu’un rouge.
+  const largeurDetail = Math.max(0, largeur - largeurArbre - 3);
   const hauteurCorps = Math.max(1, hauteur - 2);
 
   const sortie = [];
@@ -704,12 +952,104 @@ export function rendreEcran({ vue, etat, lignes, largeur = 100, hauteur = 30 }) 
     const droite = borner(detail[i] ?? '', largeurDetail);
     sortie.push({
       style: ligne && idx === curseur ? 'selection' : ligne ? `arbre:${ligne.kind}` : 'vide',
-      texte: `${gauche} │ ${droite}`,
+      // 🔴 L’INVARIANT EST POSÉ ICI, À LA SORTIE — PAS DÉDUIT DE LA FORMULE (T-20260825-0071).
+      //
+      // Corriger les deux planchers ferme le défaut MESURÉ ; le borner ici ferme la FAMILLE.
+      // Toute largeur future, toute recomposition de la ligne, tout séparateur qu’on change :
+      // rien ne peut plus dépasser le pane, et personne n’a besoin de refaire le calcul.
+      //
+      // ⚠️ C’EST LA LEÇON DE E-20260825-0001, PAYÉE ONZE FOIS : fermer le cas qu’on a vu laisse
+      // la famille ouverte. Ici la garantie ne dépend plus d’une arithmétique juste — elle est
+      // structurelle.
+      texte: borner(`${gauche} │ ${droite}`, largeur),
     });
   }
 
+  // 🔴 IL N'Y A PLUS AUCUNE LIGNE QUI PEUT DÉBORDER — Y COMPRIS LA BARRE.
+  //
+  // ⚠️ UN BLOC ENTIER VIVAIT ICI ET AFFIRMAIT L'INVERSE, longtemps après que la décision qui le
+  // fondait ait été supersédée. Il disait « la barre est la seule ligne qui peut déborder » et
+  // « ② l'emporte » ; le code sous lui faisait déjà le contraire, et le bloc SUIVANT le disait.
+  // Un lecteur qui ne lisait pas jusqu'au bout repartait avec une décision morte. Relevé en
+  // revue portail — **la relecture ne l'avait pas vu trois fois de suite**.
+  //
+  // La leçon est de forme : une supersédance laisse des traces PARTOUT, et celle qu'on ne
+  // cherche pas est celle qui reste. On cherche la prose périmée par sa FONCTION (ce qu'elle
+  // affirme), jamais par le seul bloc qu'on vient de trouver.
+  //
+  // 🔴 LE CODE DE PRODUCTION INTERROGE L’INVARIANT — IL NE RECALCULE PAS SA PROPRE CONDITION.
+  //
+  // Ma version précédente écrivait ici `barre.length <= largeur ? borner(...) : barre` : une
+  // condition PLUS LARGE que l’exception qu’elle prétendait appliquer. Elle laissait passer
+  // **tout** ce que `pied()` rend — dont le champ de RECHERCHE, qui n’a aucun lien avec le
+  // raccourci vital. Mesuré (revue portail) : en mode recherche, sur un pane de 30 colonnes,
+  // la barre écrivait 43 caractères et wrappait — la classe de défaut exacte que ce lot ferme.
+  //
+  // ⚠️ ET C’ÉTAIT UNE RÉGRESSION DE MON FAIT : sur `origin/main`, `borner` s’appliquait SANS
+  // condition. En ajoutant l’exception pour le raccourci vital, j’ai supprimé la troncature
+  // pour tout le reste.
+  //
+  // ⚠️ LA LEÇON, ET ELLE VAUT AU-DELÀ D’ICI : mon invariant répondait DÉJÀ correctement
+  // (`depasseLaLargeurAutorisee` rendait `true` sur ce cas). Il était juste, éprouvé — et
+  // jamais consulté par le code qui écrit. Un oracle que la production n’appelle pas ne garde
+  // rien : « l’exception vit DANS l’invariant » (décision `f05bc613`, condition n°1) était
+  // vrai dans les bancs et faux dans le produit.
+  // 🔴 LA BARRE SE TRONQUE COMME TOUTE AUTRE LIGNE — décision `00a7b645`, option B.
+  //
+  // Elle DÉBORDAIT (`f05bc613`), sur la prémisse qu’un débordement coûte un wrap visuel et rien
+  // de plus. Mesuré au VT100 : dans un écran alternatif d’une ou deux lignes, un wrap ne coûte
+  // pas un wrap — il fait DÉFILER. À 3×1 le lecteur voyait `'ter'` ; à 8×2, `'q quitte'` / `'r'`
+  // **et le titre avait disparu**. L’exception perdait la sortie ET le reste de l’écran.
+  //
+  // ⚠️ IL N’Y A PLUS D’EXCEPTION À ÉCRIRE, DONC PLUS D’EXCEPTION À ÉLARGIR. Trois écritures
+  // successives de celle-ci étaient trop larges ; la quatrième version est de n’en avoir aucune.
+  // Ce que ② protégeait au-dessus du seuil est intact : `raccourcisPour` retire toujours les
+  // raccourcis du moins vital au plus vital, donc la sortie survit tant qu’elle est MONTRABLE.
   sortie.push({ style: 'pied', texte: borner(pied(etat, largeur), largeur) });
-  return sortie;
+
+  // 🔴 LA JUMELLE VERTICALE DE L’INVARIANT DE LARGEUR — ET ELLE MANQUAIT (T-20260825-0071).
+  //
+  // `hauteurCorps` porte un plancher inconditionnel (`max(1, hauteur - 2)`), exactement comme
+  // `largeurArbre` avant ce lot : sous 3 lignes de pane, l’écran en rendait 3. Mesuré —
+  // hauteur 0 → 3 lignes, hauteur 1 → 3, hauteur 2 → 3. Une ligne de trop pousse la première
+  // hors du pane et fait DÉFILER : le même symptôme que l’incident, par l’autre dimension.
+  //
+  // ⚠️ RELEVÉ EN REVUE PORTAIL, ET C’EST LA MÊME FAUTE QUE CELLE QUE JE VENAIS DE FERMER : j’ai
+  // posé la garde sur la LARGEUR — la dimension où le symptôme avait été observé — et j’ai
+  // laissé sa famille ouverte. Mon propre banc de hauteur balayait `[3, 12, 24, 77]` quand
+  // celui de largeur balaie 1 à 200 en continu, avec un commentaire qui dit pourquoi.
+  //
+  // ⚠️ ON BORNE À LA SORTIE, comme pour la largeur : la garantie ne dépend plus d’une
+  // arithmétique juste, et toute recomposition future du corps reste couverte.
+  //
+  // 🔴 MAIS ON NE TRONQUE PAS PAR LA FIN — LE PIED EST LE DERNIER POUSSÉ, DONC IL SERAIT LE
+  // PREMIER SACRIFIÉ. C’est le défaut qu’une passe de fond a trouvé sur ma première version :
+  // à hauteur 1 ou 2, « q quitter » disparaissait, et le dirigeant se retrouvait enfermé dans
+  // un écran alternatif dont il ne connaît pas la sortie.
+  //
+  // ⚠️ ET CE FICHIER PORTAIT DÉJÀ LA RÈGLE, POUR L’AUTRE DIMENSION : `RACCOURCIS_UN_A_UN`
+  // retire les raccourcis du moins vital au plus vital, et `q quitter` y est marqué « le
+  // dernier qu’on retire, jamais le premier ». Mon invariant de hauteur se présentait comme
+  // « la jumelle verticale » de celui de largeur — et il violait le principe qu’il jumelait.
+  //
+  // L’ORDRE DE SACRIFICE, DU MOINS VITAL AU PLUS VITAL : le CORPS cède d’abord (il se
+  // parcourt ligne à ligne, on peut y revenir), puis le TITRE (il dit où l’on est), et le
+  // PIED reste le dernier — parce que sans lui on ne sait plus SORTIR.
+  // ⚠️ AU-DELÀ DE 2, IL N'Y A RIEN À TRONQUER — ET LE DIRE ÉVITE UNE BRANCHE MORTE QUI AURAIT
+  // L'AIR DE GARDER QUELQUE CHOSE. `hauteurCorps` vaut `max(1, hauteur - 2)`, donc le tableau
+  // fait exactement `hauteur` entrées dès que `hauteur >= 3` : mesuré à 3, 5, 10, 20 et 40.
+  // Une ligne de troncature écrite « au cas où » n'y serait jamais exécutée — deux mutations de
+  // ma campagne y ont d'ailleurs SURVÉCU, ce qui est le symptôme, pas le défaut.
+  if (sortie.length <= hauteur) return sortie;
+
+  // ⚠️ `laBarre`, PAS `pied` : ce nom-là appartient déjà à la FONCTION qui compose la barre,
+  // quelques lignes plus haut. Le masquer faisait jeter `rendreEcran` à l'exécution — attrapé
+  // à la première mesure, mais c'est le genre d'ombre qu'un `node --check` ne voit pas.
+  const laTete = sortie[0];
+  const laBarre = sortie[sortie.length - 1];
+  if (hauteur <= 0) return [];
+  if (hauteur === 1) return [laBarre];
+  return [laTete, laBarre];
 }
 
 /** Quelle tranche de l'arbre montrer pour que le curseur reste visible. */
@@ -736,5 +1076,60 @@ function pied(etat, largeur) {
   // est actif importe plus que rappeler une touche : sans lui, l'arbre ment ; sans eux, on
   // cherche une touche. Les raccourcis se rétractent donc de ce que le filtre occupe.
   const tete = filtres.length ? `${filtres.join('  ·  ')}  ─  ` : '';
+
+  // 🔴 LA SORTIE PASSE AVANT LE FILTRE — ET C’EST L’INVERSE DE CE QUE FAISAIT CETTE LIGNE.
+  //
+  // L’entête de filtre se servait EN PREMIER et laissait aux raccourcis « ce qui reste ».
+  // Mesuré (revue portail) : avec le filtre `n` actif, « q quitter » était ABSENT de la barre
+  // pour TOUTE largeur de 1 à 36 colonnes — une largeur de split parfaitement plausible. Sans
+  // filtre, de 1 à 8.
+  //
+  // ⚠️ ET J’AVAIS ÉCRIT, DANS CE MÊME FICHIER, QUE « CE FICHIER PORTAIT DÉJÀ LA RÈGLE POUR
+  // L’AUTRE DIMENSION ». C’était faux : `RACCOURCIS_UN_A_UN` classe bien les raccourcis du
+  // moins vital au plus vital, mais `raccourcisPour` s’arrête au dernier SANS vérifier qu’il
+  // tient — et `borner` le coupait alors par la droite, en plein mot.
+  //
+  // ⚠️ CE QU’ON N’A PAS FAIT : tronquer l’entête de filtre. Un filtre à demi lisible
+  // (« FILTRE : non-pr… ») est pire que pas d’entête du tout — il ne se comprend pas et il
+  // mange quand même la place. On le RETIRE entièrement quand la sortie ne tiendrait pas.
+  // 🔴 UNE PROSE FAUSSE A VÉCU ICI PENDANT DIX TOURS DE REVUE, ET ELLE REVENDIQUAIT UNE MESURE.
+  //
+  // Elle disait : « ma première version appelait `raccourcisPour(0)`, qui rend une chaîne VIDE —
+  // la condition ne se déclenchait donc jamais, et le correctif ne mordait pas. Mesuré, pas
+  // relu. » Trois affirmations, les trois fausses :
+  //
+  //   `raccourcisPour(0)` rend « q quitter », jamais une chaîne vide — la garde
+  //   `while (gardes.length > 1 …)` interdit de retirer le dernier élément, et elle était déjà
+  //   là avant ce lot ;
+  //
+  //   les deux formes rendent la MÊME chaîne, donc la même longueur, donc la même condition —
+  //   mesuré : AUCUNE largeur divergente de 0 à 200 colonnes, sur les trois états de filtre —
+  //   soit 201 largeurs par état, 603 mesures. Le « correctif »
+  //   était SANS EFFET ;
+  //
+  //   et « mesuré, pas relu » était faux. Mesurer aurait rendu les deux formes identiques —
+  //   ce qu'elles sont. J'ai emprunté l'autorité de l'instrument pour une chose que je n'avais
+  //   pas mesurée, dans une phrase qui servait à en disqualifier une autre.
+  //
+  // ⚠️ POURQUOI ELLE A SURVÉCU À DIX REVUES : elle vit dans une PROSE. Aucune assertion ne peut
+  // rougir dessus. La prose d'un fichier de gardes est le seul endroit qu'aucune garde ne garde —
+  // et c'est ici, dans le fichier qui dénonce partout ailleurs les mécanismes inventés.
+  //
+  // LE MOTIF QUI TIENT, ET C'EST LE SEUL : on lit `RACCOURCI_VITAL` parce qu'un fait doit avoir
+  // UNE source. La même expression a vécu ici en double, et deux sources d'un seul fait peuvent
+  // dériver l'une de l'autre sans que rien ne rougisse. Ce n'est pas un correctif de
+  // comportement — c'est une réduction du nombre d'endroits où la vérité peut se contredire.
+  // ⚠️ ON LIT LA CONSTANTE, ON NE RECALCULE PAS. La même expression vivait ici en double :
+  // deux sources pour un seul fait, dont l'une pouvait dériver sans que rien ne rougisse.
+  const laSortie = RACCOURCI_VITAL;
+  if (tete.length + laSortie.length > largeur) {
+    // ⚠️ ET ON NE REND PAS UN FRAGMENT **ICI** — `raccourcisPour` rend le raccourci ENTIER ;
+    // c'est `rendreEcran` qui borne, une seule fois, à la sortie. Tronquer aux deux endroits
+    // couperait deux fois. (Ce commentaire disait « quitte à déborder d'un pane minuscule,
+    // contrat antérieur » : périmé par `00a7b645`, plus rien ne déborde.) Ma première correction
+    // appelait `borner(laSortie, largeur)` ici, ce qui reproduisait « q quitt… » : le piège que
+    // j’avais nommé trois lignes plus haut et posé moi-même. Mesuré : de 2 à 8 colonnes.
+    return raccourcisPour(largeur);
+  }
   return tete + raccourcisPour(Math.max(0, largeur - tete.length));
 }

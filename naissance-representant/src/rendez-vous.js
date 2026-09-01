@@ -113,6 +113,30 @@ export function rendezVous(nom) {
  * Un agent SANS pane est écarté : on ne peut rien lui livrer, et le retenir ferait échouer un
  * réveil pour une raison qui n'en est pas une.
  */
+/**
+ * ⚠️ CE `'orchestrateur'` LITTÉRAL RESTE, ET VOICI SA RAISON (T-20260826-0076, point 6).
+ *
+ * Le lot qui a sorti les comparaisons de rôle du code vivant s'est arrêté ici, à dessein. Ce
+ * n'est PAS une décision qui se dérive d'une propriété de rôle : c'est le PÉRIMÈTRE d'un
+ * dispositif écrit pour un métier nommé. Tout ce module l'est — ses deux rendez-vous sont ceux
+ * « que le métier de l'orchestrateur lui impose » (en-tête), leurs étiquettes launchd sont
+ * `ca.somtech.orchestrateur-ronde` et `ca.somtech.orchestrateur-topo`, et leurs rappels
+ * TUTOIENT ce métier (« fais le tour de tes agents », « ton topo du matin, sur ta ligne »).
+ *
+ * ⚠️ ET LE REMPLACER PAR UN PRÉDICAT SERAIT UN CHANGEMENT DE COMPORTEMENT DÉGUISÉ EN RANGEMENT.
+ * Réveiller un rôle qui ne l'était pas, c'est INTERROMPRE des sessions vivantes — mesuré le
+ * 2026-08-26 : `ca.somtech.orchestrateur-ronde` et `-topo` sont tous deux CHARGÉS sur ce poste.
+ * Un de-harcodage n'ajoute jamais un destinataire ; s'il faut en ajouter un, c'est un arbitrage,
+ * pas un nettoyage.
+ *
+ * ⚠️ CE QUI A ÉTÉ MESURÉ AU PASSAGE, ET QUI N'EST PAS LE TROU QU'ON CRAIGNAIT : `RONDE.md` est
+ * bien distribué aux DEUX gabarits, mais il ne dépend pas de ce module. C'est « le texte que tu
+ * poses en `/loop` à ta naissance » (les deux gabarits, mot pour mot) — la ronde d'un agent
+ * part de SA propre `/loop`, pas d'ici. Le gestionnaire n'a donc pas un briefing que personne ne
+ * déclenche : il a le sien, et son métier écrit que « ta ronde est une boucle `/loop`, que tu
+ * poses en naissant » (`joignabilite.md`). Ce module est un réveil EN PLUS, propre à
+ * l'orchestrateur.
+ */
 export function orchestrateursVivants(reponse, { estUnLieu = roleDuLieu } = {}) {
   const agents = reponse?.result?.agents;
   if (!Array.isArray(agents)) return [];

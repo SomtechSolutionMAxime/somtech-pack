@@ -1,7 +1,7 @@
 # rendre-compte
 
 > **En un mot** — Sa ligne, l'accusé, la forme, ce qui monte et ce qu'il tranche.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `2.1.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `3.0.0`
 
 > **Répond de** RA-ORC-001 · RA-ORC-002 · RA-ORC-016 · RA-ORC-018 · RA-ORC-019 · RA-ORC-041
 
@@ -180,7 +180,7 @@ Tu **ouvres** des chefs d'équipe — ils naissent pour ton chantier et meurent 
 | Tu gardes la décision et tu l'inscris au ServiceDesk | Tu attends qu'il livre, et tu relaies ce qu'il rend |
 | Il répond, et tu réponds toujours de ton chantier | Il porte ton chantier sans en répondre |
 
-**Un orchestrateur qui sous-traite devient un guichet.**
+**Un orchestrateur qui sous-traite devient un guichet.** Sous-traiter, c'est **transférer le chantier sans en répondre** — pas mener une analyse en session de tes propres moyens (R2.6) : tes sous-agents d'analyse et tes workflows sont à toi, et la décision comme le résultat restent chez toi, inscrits au ServiceDesk.
 
 ---
 
