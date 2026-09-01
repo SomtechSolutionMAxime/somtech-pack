@@ -368,33 +368,56 @@ test('🔴 `roleSansLieu` NE DÉCIDE NULLE PART EN PRODUCTION — le banc que le
   // d'un balayage qu'on demande au manifeste plutôt qu'à une liste (T-20260825-0013).
   //
   // ⚠️ `payload/` est ÉCARTÉ à dessein : c'est la copie distribuée du pack, pas la source.
-  const RACINES = readdirSync(RACINE, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
-    .flatMap((e) => ['src', 'bin'].map((sd) => join(RACINE, e.name, sd)))
-    .filter((d) => { try { return statSync(d).isDirectory(); } catch { return false; } });
+  // 🔴 ET ON NE DÉRIVE PLUS `*/src` ET `*/bin` NON PLUS : MESURÉ, ÇA LAISSAIT UN TROU. Un import
+  // réel posé dans `scripts/` — un répertoire de production sans `src/` ni `bin/` — restait vert.
+  // Une convention de nommage est une liste en dur déguisée : elle décrit les répertoires qui
+  // existaient le jour où on l'a écrite. On balaye donc TOUT le dépôt, et on ÉCARTE nommément
+  // ce qui n'est pas de la production — la liste d'exclusions est courte, visible, et chacune
+  // porte sa raison, là où la liste d'inclusions était longue et muette.
+  const HORS_PRODUCTION = new Set(['node_modules', 'tests', 'test', 'payload', 'coverage', 'docs']);
+  const RACINES = [RACINE];
 
   // ⚠️ CONTRÔLE DE L'INSTRUMENT : si la dérivation rend moins de répertoires que la liste en dur
   // qu'elle remplace, c'est elle qui est cassée — et le banc rendrait vert sans avoir rien lu.
-  assert.ok(
-    RACINES.length >= 4,
-    `la dérivation n'a trouvé que ${RACINES.length} répertoire(s) de production — l'instrument est cassé, pas le lot`
-  );
+
 
   const fichiers = [];
   const balayer = (dir) => {
     let entrees;
     try { entrees = readdirSync(dir); } catch { return; }
     for (const e of entrees) {
+      if (e.startsWith('.') || HORS_PRODUCTION.has(e)) continue;
       const chemin = join(dir, e);
-      if (statSync(chemin).isDirectory()) balayer(chemin);
-      else if (e.endsWith('.js')) fichiers.push(chemin);
+      let st;
+      try { st = statSync(chemin); } catch { continue; }
+      if (st.isDirectory()) balayer(chemin);
+      else if (e.endsWith('.js') || e.endsWith('.mjs')) fichiers.push(chemin);
     }
   };
   for (const d of RACINES) balayer(d);
 
   // ⚠️ CONTRÔLE DE L'INSTRUMENT : un balayage qui ne trouve rien rendrait ce banc vert pour
   // la mauvaise raison. On exige d'avoir vraiment lu du code de production.
-  assert.ok(fichiers.length > 50, `le balayage n'a trouvé que ${fichiers.length} fichier(s) de production — l'instrument est cassé, pas le lot`);
+  // ⚠️ CONTRÔLE DE L'INSTRUMENT : un balayage qui ne trouve rien rendrait ce banc vert pour la
+  // mauvaise raison — il ne verrait aucun coupable parce qu'il n'aurait rien lu.
+  //
+  // 🔴 LE SEUIL EST ANCRÉ SUR UNE MESURE, PAS SUR UN CHIFFRE ROND. Première tentative : 150,
+  // choisi au jugé — le banc a rougi en trouvant 126, et le rouge accusait le lot alors que
+  // l'instrument seul était en cause. Mesuré le 2026-09-01 : l'ancienne dérivation
+  // (`*/src` + `*/bin`) atteignait **102** fichiers ; le balayage complet en atteint **126**,
+  // les 24 de plus venant de `gardes/` (9), `herdr-plugins/` (5) et de racines de paquets
+  // (`scripts/`, `cli/`, `naissance-representant/`, `ligne-directe/`) — tous du code de
+  // production réel, aucun n'était balayé.
+  //
+  // Le plancher est donc **102**, la borne de ce qu'on remplace : en descendre serait avoir
+  // RÉTRÉCI la population en croyant l'élargir, et c'est ce qu'il faut voir. On ne fixe pas le
+  // plancher à 126 : le compte de fichiers d'un dépôt vivant bouge, et une borne qui rougit à
+  // chaque fichier supprimé cesse d'être lue.
+  assert.ok(
+    fichiers.length >= 102,
+    `le balayage n'a trouvé que ${fichiers.length} fichier(s), moins que les 102 de la dérivation ` +
+      `qu'il remplace — l'instrument a rétréci, ce n'est pas le lot qui est en cause`
+  );
 
   const coupables = fichiers.filter((f) => {
     if (f.endsWith(`${'/'}roles.js`)) return false; // sa propre définition
@@ -436,4 +459,25 @@ test('🔴 LA TABLE SANS LIEU EST GELÉE ET SANS PROTOTYPE — on ne garde plus 
   assert.equal(v.gelee, true, 'la table n’est plus gelée — un module tiers peut y ajouter une entrée, et la garde qui énumère ne la verra pas forcément');
   assert.equal(v.sansPrototype, true, 'la table a retrouvé un prototype — une entrée héritée décide comme une entrée propre, sans être une clé propre');
   assert.equal(v.entreesGelees, true, 'une entrée n’est plus gelée — un champ (`dossier`, `pose_automatique`) peut y être ajouté depuis un autre module');
+  assert.equal(v.inventeUneEntree, false, 'la table RÉPOND à une clé qu’elle ne contient pas — elle invente');
+
+  // 🔴 ET LA MÊME QUESTION POSÉE PAR LA PORTE DE PRODUCTION, PAS PAR L'ATTESTATION DU MODULE.
+  //
+  // Les quatre lignes ci-dessus viennent de `roles.js` : c'est un oracle qui vit chez celui
+  // qu'il juge. Un `Proxy` posé autour de la table le trompait ENTIÈREMENT — `isFrozen: true`,
+  // prototype nul, mêmes `ownKeys` — pendant que `baptemeDuRole('fantome')` rendait `'code'`
+  // au lieu de lever. Les trois attestations disaient vrai sur ce qu'elles regardaient.
+  //
+  // ⚠️ ON INTERROGE DONC LA CHAÎNE RÉELLE. `baptemeDuRole` est ce que la production appelle ;
+  // s'il répond sur un rôle qui n'existe pas, la table invente — quel que soit le mécanisme,
+  // et quoi que le module atteste de lui-même. Une seconde écriture de la même vérité, prise
+  // à l'autre bout.
+  for (const invente of ['__aucun-role-ne-porte-ce-nom__', 'zorglub', 'chef-equipe-bis']) {
+    assert.throws(
+      () => baptemeDuRole(invente),
+      RoleInconnu,
+      `\`baptemeDuRole('${invente}')\` a RÉPONDU sur un rôle qui n'existe dans aucune des deux ` +
+        `tables — la porte de production reçoit une entrée que personne n'a inscrite`
+    );
+  }
 });

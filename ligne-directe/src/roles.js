@@ -305,12 +305,30 @@ const ROLES_SANS_LIEU = Object.freeze(
 // C'est voulu — un registre s'amende. Ce qui est fermé, c'est l'ajout SILENCIEUX depuis un
 // autre module, celui que personne ne voit passer en revue.
 
-/** Le verrou est-il en place ? Rendu pour que le banc l'éprouve, jamais pour décider. */
+/**
+ * Le verrou est-il en place ? Rendu pour que le banc l'éprouve, jamais pour décider.
+ *
+ * 🔴 `inventeUneEntree` EST LE SEUL DES QUATRE QUI ÉPROUVE UN EFFET — les trois autres attestent
+ * une FORME, et une forme se simule. Mesuré : un `Proxy` autour de la table gelée rend
+ * `isFrozen: true`, `getPrototypeOf: null` et les mêmes `ownKeys`, pendant que son trap `get`
+ * fabrique une entrée pour n'importe quelle clé absente. Les trois attestations disaient vrai
+ * sur ce qu'elles regardaient et mentaient sur ce que la production LIT — `baptemeDuRole`
+ * accède par indexation, donc par le trap.
+ *
+ * ⚠️ C'EST LA MÊME LEÇON QUE LE GEL, ENCORE UN CRAN PLUS LOIN. Garder les mécanismes d'ajout a
+ * échoué trois fois ; fermer l'objet a échoué une quatrième, parce qu'un Proxy n'ajoute rien —
+ * il RÉPOND. On cesse donc de décrire la table : on lui demande ce qu'elle ne contient pas, et
+ * une table saine ne répond rien. Un mécanisme qu'on n'a pas eu à nommer tombe avec.
+ */
 export function tableSansLieuVerrouillee() {
+  // Une clé qu'aucun registre ne portera jamais. Une table saine rend `undefined` ; une table
+  // qui répond invente, quel que soit le mécanisme par lequel elle le fait.
+  const CLE_QUI_N_EXISTE_PAS = '__aucun-role-ne-porte-ce-nom__';
   return {
     gelee: Object.isFrozen(ROLES_SANS_LIEU),
     sansPrototype: Object.getPrototypeOf(ROLES_SANS_LIEU) === null,
     entreesGelees: Reflect.ownKeys(ROLES_SANS_LIEU).every((k) => Object.isFrozen(ROLES_SANS_LIEU[k])),
+    inventeUneEntree: ROLES_SANS_LIEU[CLE_QUI_N_EXISTE_PAS] !== undefined,
   };
 }
 
