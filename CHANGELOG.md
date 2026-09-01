@@ -5,6 +5,144 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-08-29
+
+*Ticket `T-20260827-0033`. **Un successeur né ailleurs peut enfin reprendre le canal de son prédécesseur** — l'ordre « même channel » du 2026-08-26 n'avait pas pu être tenu.*
+
+### Corrigé
+
+- **Une ligne s'apparie au LIEU de l'agent, plus à la copie de travail** (`T-20260827-0033`). L'identité d'une ligne retenait le chemin complet du pane ; or un successeur ne naît presque jamais dans la copie de travail de son prédécesseur. Mesuré sur `P-20260815-0002` : le mort sous `~/worktrees/somcraft/20260817-210120/.orchestrateur/p-20260815-0002`, le vivant sous `~/GitRepo.nosync/somcraft/.orchestrateur/p-20260815-0002` — **même chantier, même rôle, même lieu, deux clés**. Résultat : un second canal créé sous un « -2 », et le canal d'origine (libre, ouvert, non archivé, celui où le dirigeant écrivait) **hors d'atteinte**, sans aucun geste de contournement. La clé retient désormais `.orchestrateur/<code>` / `.gestionnaire/<client>`, **lu au registre des rôles** — un troisième rôle sera couvert le jour où il naîtra, pas le jour où quelqu'un pensera à l'ajouter.
+- **Le parc existant se rattache sans migration** (`T-20260827-0033`). L'ancre se calcule à la **lecture**, jamais à l'écriture : les lignes déjà au registre portent leur chemin complet, écrit par la version qui a mordu. Une ancre inscrite n'aurait corrigé que les lignes à venir — c'est-à-dire personne, dont le seul cas mesuré.
+
+### Technique
+
+- **Le remède naïf reste écarté** (`T-20260827-0033`). Un chemin **sans** lieu de rôle est rendu tel quel : deux agents ordinaires du même chantier, dans deux copies de travail, ne se confondent pas — c'est ce que la clé séparait, et elle le sépare encore.
+- **La reprise réinscrit la copie de travail du vivant** (`T-20260827-0033`). Sans ça, `hygiene.js` dénoncerait à chaque ronde une ligne bien vivante — « chantier disparu » — avec le geste pour la couper.
+- **Une prise de ligne sur un pane encore vivant s'annonce** (`T-20260827-0033`, relevé en revue indépendante). La reprise aboutit, mais l'avis **nomme le pane qui perd la ligne**. On avertit et on ne refuse pas : `herdr.vivant` penche du côté « vivant » quand il ne sait pas, et refuser sur ce signal fermerait au successeur la ligne que son métier lui **impose** d'ouvrir — l'incident même qu'on ferme.
+
+## [Non-versionne] - 2026-08-29
+
+*Ticket `T-20260829-0004`. **La chaîne était rouge sur `main` depuis #320**, et la publication du pack bloquée avec elle.*
+
+### Corrigé
+
+- **Le lieu `.orchestrateur/d-20260822-0001/` converge vers le métier rendu** (`T-20260829-0004`). Versé sur `main` par #320 **déjà périmé** : `CLAUDE.md` à 7 580 o contre 7 653, les **11 chapitres sur 11** divergents, un fichier de droits sans `Write` / `Edit` / `NotebookEdit` / `Edit(//**)`, et aucun `RONDE.md` là où #338 l'avait posé dans les huit autres lieux **la veille**. Les gardes disent le prix mot pour mot : *« tout worktree créé depuis main y fera naître un orchestrateur périmé »*, *« avec des refus et des gardes périmés »*. S'y ajoutait ce qu'aucune ne dit : `cli-tests` **et `publish`** rougissaient dessus, donc **aucun correctif du pack ne se publiait** — un correctif fusionné et non publié ne corrige personne. Convergé par le geste **outillé** (`orchestrateur-update`, `rc=0`), `CONTEXTE.md` préservé, sauvegardes de dérive non versées.
+
+## [Non-versionne] - 2026-08-27
+
+*Epic `E-20260827-0002`, tickets `T-20260827-0011` à `T-20260827-0014`, constat `T-20260826-0044` fermé. **Le briefing de ronde atteint enfin des agents** — cinquième élément du cycle, présent au gabarit depuis `v1.96.0` et jusqu'ici dans aucun lieu du parc.*
+
+### Ajouté
+
+- **`RONDE.md` dans les 8 lieux versionnés de `somtech-pack`** (`T-20260827-0014`). Le briefing de ronde manquait à **26 identités de lieu sur 26** — ni sur disque, ni sur `origin/main`, aucune exception. `T-20260826-0042` avait ouvert la porte (`CREE_SI_ABSENT`) sans que personne ne la franchisse : la pose refuse un lieu déjà posé, et la mise à jour ne créait pas un préservé. Geste **outillé** (`orchestrateur-update` ×7, `representant-update` ×1), `rc=0` partout, preuve d'empreinte avant/après par lieu. `.gestionnaire/maxime`, seul lieu réellement périmé du dépôt, reçoit en plus le métier courant et ses 6 chapitres.
+- **Le `CONTEXTE.md` renseigné de `kamouraska`** (`T-20260827-0014`). **Transporté depuis son propre commit, jamais rédigé** — il renaissait dans l'heure, `main` portait le gabarit vierge, et sa successeure serait née sans savoir qu'elle porte aussi `somtechextension`. Sa branche étant en retard de 13 fichiers du métier, il ne pouvait pas le verser lui-même. Un seul fichier porté, ses 10 chevrons restants **non comblés** : les remplir aurait fabriqué de la portée à sa place.
+
+### Technique
+
+- **L'unité de compte du parc, corrigée** (`T-20260827-0011`). Un checkout ne montre pas le dépôt : il montre sa branche. Le « 18 lieux vivants » du 26/08 était un artefact de l'état des branches. Le parc réel : **26 identités de lieu, 255 copies physiques, 13 occupées** par un agent vivant. Conséquence de conception : on corrige l'identité **versionnée**, jamais les copies — et le correctif atteint chaque agent à sa **renaissance**.
+- **La voie outillée de mise à jour, éprouvée sur lieu jetable** (`T-20260827-0012`). Dépose `RONDE.md`, ne touche pas au contexte rempli (empreinte identique), ne réécrit pas un briefing déjà écrit, idempotente, réarme le lieu. **Et elle converge aussi `.mcp.json`** — un moyen propre au projet y serait perdu (sauvegardé en `.bak`) ; risque nul sur ce parc aujourd'hui, fait daté à revérifier.
+- **Trois constats ouverts** : `T-20260827-0022` (deux orphelins de banc d'essai versionnés sur `main`, survivants à leur `trap cleanup`), `T-20260827-0023` (**15 identités sur 26 ont des droits différents entre leurs propres copies** — les droits d'un agent dépendent de la copie où il est né, et ça se lit comme un parc homogène), et le renvoi des six points de `T-20260826-0044` à des porteurs nommés.
+
+## [Non-versionne] - 2026-08-27
+
+*Demande `D-20260826-0010`, tickets `T-20260826-0124` à `T-20260826-0129`. **Le bras droit fait avancer le dossier** — descente des ABC orchestrateur `3.0.0` et gestionnaire-client `1.4.0`, adoptés par le dirigeant : l'interdit des sous-agents se renverse, la ronde rend un delta, la maquette devient opposable, et le représentant instruit avant de remonter.*
+
+### Ajouté
+
+- **La garde `sous-agent`** (`T-20260826-0127`). `Task` quitte `permissions.deny` du gabarit orchestrateur — un refus d'outil nu interdisait aussi les sous-agents d'**analyse**, que l'ABC 3.0.0 rend à l'orchestrateur comme ses propres moyens. Le refus vit désormais dans une garde de hook (fil mince + décision pure, motif de la garde d'écriture) : refus par défaut, seuls passent les types dont l'outillage **exclut l'écriture** (`Explore`, `Plan`). Ce que la couche ne borne pas est écrit, pas promis : la revue de lot en lecture seule reste tenue par le métier. Banc dédié de 18 cas, modes de panne du fil compris (asynchrone, inventée, qui lève, qui pend) — la garde elle-même éprouvée par 6 mutations un point à la fois, toutes tuées.
+- **Le delta de ronde** (`T-20260826-0124`). Chaque tour se termine sur un avancement visible de la livraison ou un blocage nommé ; une découverte d'infrastructure s'inscrit en ticket et l'on revient au dossier. Motif mesuré : quatre jours, sept epics, un complété, zéro livraison (`P-20260822-0001`).
+- **La maquette opposable** (`T-20260826-0124`). G/W/T « conforme à la maquette X » sur chaque story user-facing au découpage, comparaison livré ↔ maquette exigée avant toute annonce, statut opposable porté jusque dans le brief du chef d'équipe.
+- **Le second lot gestionnaire-client (ABC 1.4.0)** (`T-20260826-0125`). L'anti-complaisance reçoit son sens ascendant — *celui qui te dirige peut se tromper en ta faveur : c'est là que tu vérifies le plus* ; le représentant **instruit** avant de remonter (deux options, une recommandation, fondées sur du mesuré — la frontière de l'engagement ne bouge pas d'un mot) ; les lectures massives se font porter par ses sous-agents de lecture ; la ronde gagne un 7e point qui **solde ce qui est dû au client** ; les sous-agents sont bornés — jamais d'écriture, jamais de parole — avec la borne non garantie déclarée `[non gardé]`.
+
+### Modifié
+
+- **Le refus du sous-agent porte son périmètre** (`T-20260826-0124`, `T-20260826-0129`) : « Ouvrir un sous-agent de construction ou de revue » remplace l'interdit total, dans la table des refus du métier, le principe de déploiement de `/orchestrer-chantier` et la table des niveaux. Le « guichet » est recentré : sous-traiter, c'est transférer le chantier **sans en répondre** — pas mener une analyse en session.
+- **Rendu et distribution** (`T-20260826-0126`) : classements `3.0.0`/`1.4.0`, gabarits `.claude/templates/` régénérés, les 7 lieux versionnés `.orchestrateur/*` convergés.
+
+### Technique
+
+- **Harnais co-amendé, rouge avant / vert après** (`T-20260826-0128`) : sondes ré-ancrées sur les textes de l'ABC, 7 gardes neuves — chacune avec ses mutations tueuses, posées un point à la fois sur copie hors dépôt. Revue indépendante à deux passes : portail RIEN VU, fond **mergeable** après un correctif (les modes de panne du fil, dont la mutation survivante « timeout → allow » du reviewer, désormais tuée).
+- **Re-baseline du plafond du métier orchestrateur** : 149 078 → 151 037 caractères, marge 0 — arbitrage consigné au fil de `D-20260826-0010`, le gate reste armé contre toute croissance non décidée.
+
+## [Non-versionne] - 2026-08-26
+
+*Epic `E-20260826-0013`, projet `P-20260819-0001`. **La veille et la relève tiennent enfin les promesses qu'elles affichaient.** Trois défauts qui partagent une même famille : un système qui conclut un FAIT à partir d'un ÉTAT qu'il a mal lu. « Il ne répond pas » n'est pas « il est mort » ; « il ne bouge plus » n'est pas « il a fini » ; et ce qu'aucun banc ne peut atteindre n'est pas, pour autant, hors d'épreuve.*
+
+### Corrigé
+
+- **🔴 Un veilleur muet n'est plus pris pour une place libre** (`T-20260825-0101`). Deux veilleurs ont vécu **28 heures** sur le poste pendant que `relever` rendait `{ok:true,ancien_cede:true}` — le journal en porte la trace directe : deux `veilleur démarré` à **77 secondes d'écart** le 24/08, et le premier était encore vivant le lendemain. La même méprise vivait **aux deux bouts** : `ecouterLocal()` concluait « socket orphelin » après un ping de 2 s sans réponse, **effaçait** le fichier et s'installait par-dessus un vivant occupé ; `passerLaMain()` lisait ce même timeout comme une place libre, puis rendait `ok` sur la parole d'**un seul** occupant — une réponse ne dit jamais rien de ceux qui se taisent. Ce qui sépare vraiment les deux a été **mesuré avant d'être choisi** : `connect()` rend `ECONNREFUSED` sur un processus mort, mais **aboutit** sur un vivant à boucle bloquée 6 s. C'est la prise de la poignée qui tranche, jamais la réponse. La relève **échoue désormais plutôt que de mentir** (`refusPlacePartagee`), en **nommant** les occupants — jamais un `pkill -f`, que ce dépôt proscrit déjà. Le compte remonte jusqu'au CLI : le 25/08, la sortie aurait porté `occupants:[22215,67661]`.
+
+- **🔴 « Coupé par la limite » n'est plus lu comme « a fini »** (`T-20260826-0064`). La veille a conclu `agent-termine` sur un chef d'équipe coupé en plein lot par la limite de session : écran `Login successful`, boîte vide, but actif — et aucun compte rendu rendu. Un message l'a fait repasser `working` en 8 secondes. Elle lit maintenant le **but**, pas seulement l'état. Et **les deux portes donnaient sur la même pièce** : l'écran de la mesure porte `idle`, pas `done` — ne fermer que la branche `done)` aurait laissé ouvert le chemin réellement emprunté, où l'agent était lâché après 30 minutes en `repos-prolonge`, mandat ouvert. Trois motifs distincts désormais, avec des codes de sortie que l'appelant machine ne confond pas : `agent-termine` (0), `repos-prolonge` (12, immobilité **ordinaire**), `but-inacheve` (13, **mandat non clos**).
+
+### Ajouté
+
+- **L'auto-pose devient éprouvable hors du lanceur** (`T-20260826-0089`). La cloison d'essais refuse le trousseau à toute la descendance de `node --test`, **sans porte de sortie et délibérément** — deux veilleurs orphelins nés sous tests ont déjà tenu une connexion de production des heures durant. L'auto-pose, seul chemin par lequel un agent naît sans humain, n'avait donc **jamais** été prouvée de bout en bout, pour aucun rôle. `scripts/tests/test-auto-pose-reel.sh` joue la chaîne réelle **moins un point nommé** — `OUTILS.security.chemin`, substitué par `--import` — pour ne jamais lire le trousseau du poste. Cinq bras, dont le cinquième rejoue le troisième sous `NODE_TEST_CONTEXT` et vérifie que **la cloison mord toujours** : elle n'est pas touchée d'une ligne. Le banc **refuse d'être vert** si sa propre substitution est inerte.
+
+- **Les deux régimes de reconnexion Slack, inscrits dans le code** (`T-20260825-0101`). Les 217 reconnexions du journal, comptées en bloc, ressemblaient à une boucle. Séparées, elles se rangent en deux : **2 à 8 isolées par jour, toutes les 5 heures pile** depuis la naissance du veilleur — c'est le rafraîchissement Socket Mode, **rien à corriger** ; et des **rafales** (< 60 s) qui n'apparaissent **que** les jours de coexistence : 53 le 11/08, 11 le 24, 12 le 25, **zéro** le 26 depuis que le veilleur est seul. Écrit au-dessus de `reconnecter()` pour qu'un régime normal ne soit pas re-diagnostiqué comme une panne — le comptage en bloc l'avait déjà permis une fois.
+
+### Technique
+
+- **`architecture.yaml`** : sans objet — ce lot n'ajoute ni service, ni endpoint, ni table, ni interface.
+- **Ce que la CI a attrapé et que le poste ne pouvait pas montrer** : `ligne-directe-tests` a rougi sur Linux là où macOS rendait vert — `Promise resolution is still pending but the event loop has already resolved`, en 0,96 ms au lieu de 60. **La cause n'était pas dans le code mais dans le double** : un vrai socket en vol retient la boucle d'événements, celui du banc non. Il fabriquait une situation que la production ne connaît pas et aurait fait accuser le code. Un double doit être conforme au service qu'il remplace, **y compris sur ce qu'il retient**.
+- **Deux passes de revue.** Portail : **REJET** sur la branche du minuteur de `placeTenue`, que rien ne gardait — la supprimer aurait été pire (sans elle la fonction **pend**, et une étape qui pend ne rougit jamais), et elle ne s'éprouve pas par le temps : la prise tranche 30 fois sur 30 avant le minuteur. Ce qui la rend atteignable est de fermer l'**autre** issue. Fond adversariale : un défaut réel — le reset `BUT_INACHEVE=0` de la branche `blocked)` était une **assertion morte**, supprimable sans qu'aucun des 169 cas rougisse, alors que ses deux voisins étaient gardés.
+- **Chaque rouge-avant a été reproduit par le chef d'équipe** contre le code de `HEAD`, empreinte vérifiée, et chaque lot a reçu **une mutation que son auteur n'avait pas faite**. Bilans : `ligne-directe` 1167→**1175** essais (0 échec), veille 137→**172**, auto-pose **31** (macOS) / 27 + 2 sautés nommément (CI Linux, le bras qui exige `/usr/bin/security`).
+- **Aucun veilleur d'essai n'a survécu** — 1 avant, 1 après, le même pid, y compris après les bancs qui font naître deux écoutes. La sonde `pgrep -f demarrer-veilleur.js` employée jusqu'ici **comptait ses propres mesureurs** (3 pour 1 réel) : même famille que le `pkill -f` proscrit.
+- **Trois trous nommés et inscrits plutôt que gardés en réserve** : `T-20260826-0112` (masquage de `security` par le `PATH` devenu inerte dans un autre banc), `T-20260826-0114` (un veilleur à file d'accueil saturée serait lu comme mort — non fermé faute de savoir l'éprouver sans mesurer la machine), `T-20260826-0115` (la jointure « auto-pose → naissance » reste la seule non gardée).
+
+
+## [Non-versionne] - 2026-08-26
+
+*Epic `E-20260826-0007`, projet `P-20260819-0001`, constat du parc `T-20260826-0044`. **La pose de lieu, mesurée pour la première fois après neuf usages — puis réparée.** Le geste qui pose le lieu d'un agent n'avait jamais été éprouvé. Il l'a été sur un lieu d'essai jetable, droits compris, et ce qu'il omettait se paie neuf fois en Phase 2-3.*
+
+### Ajouté
+
+- **`RONDE.md` — le cinquième élément du cycle de naissance** (`T-20260826-0042`). Le cycle arbitré par le CTO le 24/08 nomme **cinq** choses qu'un lieu porte ; la pose n'en connaissait que **quatre**. Le mot `loop` n'apparaissait nulle part dans le code de pose ni de naissance, et **dix-sept lieux vivants sur dix-huit** n'avaient aucun briefing de ronde — le seul qui en portait un l'avait écrit à la main. Ce que ça coûte est dans le métier lui-même : la ronde est *« le seul outil dont l'absence est **muette** »*. Un agent né sans elle ne se réveille jamais, et rien ne le signale — ni à lui, ni à personne. Le briefing est désormais un gabarit à chevrons pour les deux rôles, préservé des mises à jour comme `CONTEXTE.md`.
+
+- **La naissance exige un lieu RENSEIGNÉ** (`T-20260826-0043`). La pose dépose `CONTEXTE.md` avec ses chevrons, délibérément ; rien ne faisait respecter le « remplis-le avant la naissance » que la compétence prescrit — ni la pose ni la naissance ne lisaient le **contenu**. Mesuré sur le parc : **cinq lieux vivants sur dix-huit** portent un `CONTEXTE.md` resté au gabarit intégral, aucun ne disant à qui son agent répond. Le discriminant est la comparaison **au gabarit**, jamais un motif `<…>` cherché à l'aveugle : un lieu renseigné du parc porte `fly deploy -a <app>` dans sa prose, et un grep naïf le rejetterait à tort. Le faux positif est fermé **par construction**, pas par une liste d'exceptions.
+
+### Corrigé
+
+- **Un lieu vivant ne s'écarte plus parce que le gabarit a grandi** (`T-20260826-0042`). Défaut introduit par le lot lui-même : la liste de ce qu'un lieu doit porter se **dérive** du répertoire de gabarits — dès que `RONDE.md` y entre, les dix-huit lieux vivants ont un fichier « manquant » qu'aucun d'eux n'a jamais pu avoir. Le refus `lieu_partiel` proposait alors `mv <lieu> <lieu>.ecarte`, un geste qui emporte le `CONTEXTE.md` rempli à la main — la seule chose du lieu que personne ne peut reconstituer. Le message distingue désormais deux cas, **mesurés** : un obligatoire manque → pose interrompue, écarter reste juste ; tous les obligatoires sont là → le lieu est vivant, on le **met à jour**. Aucune commande destructrice dans la seconde branche.
+
+- **Le briefing atteint enfin les lieux déjà posés** (`T-20260826-0042`). `PRESERVE` ne veut pas dire « jamais écrasé » mais « **jamais touché** » (RA-REL-014) : ses entrées sont retirées avant la porte d'écriture. `RONDE.md` n'aurait donc atteint **aucun** des dix-huit lieux — ni par la pose, qui refuse, ni par la mise à jour, qui ne crée pas un préservé. Le correctif serait resté inerte, présent dans le dépôt et absent de la vie de tous les agents. `CREE_SI_ABSENT` le dépose **une fois**, vierge ; dès qu'il existe il redevient intouchable. `CONTEXTE.md` n'en est pas : absent, il **signale** une pose partielle que la pose attrape déjà.
+
+- **🔴 La première naissance de tout orchestrateur échouait, avec un diagnostic faux** (`T-20260826-0043`). Le défaut le plus grave du lot, introduit par sa propre garde, et qu'**aucune des seize mutations de l'auteur n'avait vu** — c'est la passe de revue de fond qui l'a sorti. Le geste sanctionné **pose** le lieu quand il manque, puis vérifie qu'il est renseigné ; or un lieu qu'on vient de poser est **par construction** resté mot pour mot son gabarit. Le refus tombait donc systématiquement, en affirmant *« Rien n'a été créé »* — faux : un répertoire de quinze fichiers venait de l'être, **non versé**. Le message envoyait chercher un lieu qu'on croyait inexistant, alors qu'il était là, à remplir. C'est le seul chemin par lequel un orchestrateur naît sans qu'un humain touche un écran. Le module ne conclut plus rien sur ce qui a été créé — il ne peut pas le savoir ; l'appelant, seul à le savoir, l'ajoute. Même motif que `fraicheur-gabarit.js` avait déjà fermé : *« ce message dit ce qu'il a MESURÉ ; chaque appelant ajoute ce qu'il n'a pas touché »*.
+
+- **Vider un fichier ne le fait plus passer pour renseigné** (`T-20260826-0043`). La garde ne cherchait que l'**absence** des chevrons du gabarit ; un fichier vide n'en porte aucun, donc il passait. Le geste le plus simple qui soit ouvrait la porte que la garde existe pour fermer. Ce qu'elle ne juge toujours pas, délibérément : la **pertinence** du contenu — « oops » passe, et doit passer, parce que juger qu'un texte répond vraiment à la question n'est pas mesurable.
+
+- **Le message de refus ne se contredit plus lui-même** (`T-20260826-0043`). `intact` était un booléen **global** : un seul fichier vierge faisait dire « le lieu n'a jamais été renseigné », juste au-dessus d'une liste qui ne citait que ce fichier-là. Il est désormais par fichier.
+
+### Technique
+
+- **`architecture.yaml`** : sans objet — ce lot n'ajoute ni service, ni endpoint, ni table, ni interface. Le dépôt n'en porte pas.
+- **Ce que la chaîne n'éprouve pas, et qu'on ne contourne pas** : la cloison d'essais refuse toute lecture du trousseau à un processus descendant du lanceur — délibérément, un veilleur né sous tests se connecterait à l'espace de production. L'auto-pose ne peut donc pas aboutir dans un banc. Ce qui est décidable est décidé dans une fonction pure et éprouvé ; le fait est **nommé dans le code** plutôt qu'escamoté.
+- **Un banc qui dépend de la machine, mesuré et isolé** : toute modification de gabarit fait rougir 19 essais de `ligne-directe` sur un poste dont le miroir `~/.claude/plugins/marketplaces/` est en retard — c'est la garde de fraîcheur qui fait son travail, pas une régression. Foyer neutre (= CI) : vert. À savoir avant la Phase 1.
+- **24 mutations**, toutes tuées, appliquées **une à une** sur copie hors dépôt. Deux passes de revue : portail (`RIEN VU` — sa première exécution avait rendu un `REJET` dont les trois griefs se sont révélés faux, venus du miroir périmé du poste) puis fond adversariale (4 défauts réels, dont le bloquant ci-dessus).
+
+
+## [Non-versionne] - 2026-08-25
+
+*Epic `E-20260825-0006`, projet `P-20260819-0001`, rapport de mesure `T-20260825-0067`. **Trois des quatre défauts du chemin de naissance des agents, réparés avant de faire naître les neuf orchestrateurs.** Deux d'entre eux tenaient dans la même confusion : un état qu'on lit et un fait qu'on en conclut. « Au repos » n'est pas « a fini » ; une ligne de transcript n'est pas un dialogue.*
+
+### Corrigé
+
+- **La veille de déblocage ne meurt plus au premier repos** (`T-20260825-0072`). Elle concluait « l'agent a fini » — motif `agent-termine` — dès qu'il passait au repos, et mourait vers la 11ᵉ minute en laissant sans veilleur un agent qui n'avait pas fini. `agent-termine` n'est plus rendu que sur l'état terminal **explicite** `done` ; `idle` ne conclut plus jamais une fin. Mesuré sur les 85 agents réels du poste : `idle` 75, `working` 7, `done` 3 — faire de `idle` une fin, c'était se tromper trois fois sur quatre. Un repos prolongé au-delà de la borne (`VD_REPOS_TOURS`, 180 relevés ≈ 30 min) rend désormais `repos-prolonge`, avec un code de sortie distinct : elle ne sait pas qu'il a fini, elle sait qu'il ne bouge plus. Un shell ou un sous-agent en vol remet le compteur à zéro.
+
+- **La garde « écran attend un choix » ne refuse plus sur une ligne de transcript** (`T-20260825-0073`). Elle déclarait injoignables des agents au repos dont la boîte était vide, sur la seule présence d'un bandeau de limite d'usage — et elle a bloqué la remise d'un rapport à un coordonnateur, en renvoyant vers un geste humain devant un dialogue qui n'existait pas. Deux pistes ont été écartées **par la mesure** : ce n'est ni le scrollback (la garde mord identiquement en `--source visible` et `--source recent`, la ligne est bien à l'écran) ni la tournure (les deux formes vivent sur le bandeau bénin). Ce qui discrimine : **un vrai dialogue remplace la boîte de saisie, un bandeau la laisse en place**. La marque `esc…cancel` n'est pas retirée — la retirer ouvrirait le faux négatif symétrique — elle cesse de décider seule. Les deux chiffres, sur trafic réel : **8 panes refusés sur 88 (8 faux positifs, 0 vrai) → 1 sur 88 (0 faux positif, 1 vrai)**.
+
+- **Le recensement ne rend plus une version lue comme si elle était mesurée** (`T-20260825-0075`). Il affirmait « Claude Code v2.1.235 (mesuré le 2026-08-19) » sous un objet déclarant `mesure: 'lue'` — ce `lue` portant en vérité sur l'écran, jamais sur la version — alors que le poste tournait sur `2.1.245`. L'étalonnage porte désormais sa propre provenance (`mesure: 'constante'`), et la version réelle est **mesurée** par une sonde injectée qui distingue trois états ne se repliant pas l'un sur l'autre : `lue`, `refusée` (on a essayé, ça a raté) et `non mesurée` (aucune sonde n'a été donnée).
+
+### Ajouté
+
+- **Un instrument qui rend les deux chiffres d'une garde** — `ligne-directe/outils/mesurer-le-bruit-de-la-garde.mjs`. Une garde se juge sur ce qu'elle attrape **et** sur ce qu'elle refuse à tort ; le second ne se lit dans aucun test unitaire, il se mesure sur le trafic réel du poste. Il rend le nombre de panes refusés, ventilés par marque, par état de boîte et par statut d'agent, et porte en tête sa mesure de référence datée.
+
+### Technique
+
+- La sonde de version est **câblée** dans le veilleur : sans elle, le correctif du recensement était honnête mais muet — le registre disait « non mesurée » et l'avertissement d'étalonnage dépassé restait sans effet. Coût mesuré : 0,03 s par tour de recensement.
+- **Trois tests existants encodaient les défauts qu'ils étaient censés garder** (`working → idle → idle` ⇒ fin ; « le rendu **sur lequel ça a été mesuré** » pour une constante écrite en dur). Réécrits, avec la raison inscrite dans le fichier, et complétés par des contre-épreuves qui empêchent les défauts de revenir par cette porte.
+- Un commentaire de `ecran.js` **affirmait une conséquence fausse** — corrigé : on ne garde pas une prose invérifiée à côté d'une garde.
+- Passes de revue : **portail RIEN VU** (23 affirmations vérifiées, chacune rattachée à une preuve exécutable) et **fond recevable après corrections** (12 mutations, 10 attrapées, 1 équivalente, **1 survivante réelle** — une garde de coût que rien ne tenait, désormais fermée par deux essais qui comptent les appels).
+
 ## [Non-versionne] - 2026-08-22
 
 *Epic `E-20260822-0004`, demande `D-20260822-0001`. **Les lieux d'orchestrateurs committés portaient un métier périmé, et `git worktree add` les recopiait.** Ce n'était pas un stock : chaque worktree neuf faisait naître un orchestrateur périmé — y compris ceux créés pour réparer le reste.*

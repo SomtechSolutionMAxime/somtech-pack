@@ -20,6 +20,14 @@ import { dirname } from 'node:path';
 import { lireJetons } from './trousseau.js';
 import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
+import { execFileSync } from 'node:child_process';
+
+/**
+ * ⚠️ LE NOM DE L'OUTIL, PAS UN CHEMIN. Résolu par le PATH du veilleur, comme `herdr` l'est
+ * ailleurs dans ce dépôt. Un chemin absolu figé ici deviendrait faux à la première mise à jour
+ * de Claude Code — c'est-à-dire exactement l'événement que la sonde existe pour détecter.
+ */
+const OUTILS_VERSION = Object.freeze({ claude: 'claude' });
 import * as herdr from './herdr.js';
 import { nomDeCanal, visageDe, libelleDeCanal } from './nommage.js';
 import { roleDuLieu, roleDuLieuOuRefus } from './lieu-agent.js';
@@ -34,7 +42,7 @@ import { laVueDuParc, lecteurDeChantier, lecteurDeLieux, racinesDuPoste } from '
 import { accesServiceDesk, etatDuMandat } from './mandat.js';
 import { sousBail } from './baux.js';
 import { CADENCE_DU_BALAYAGE_MS } from './delivrance.js';
-import { role as roleDe, rolesConnus, libellePluriel, RoleInconnu } from './roles.js';
+import { role as roleDe, rolesConnus, libellePluriel, pairDeChantier, RoleInconnu } from './roles.js';
 import { cadrerPourAgent, cadrerConsigneCommune, cadrerPourPair } from './cadre.js';
 import { etrangersParmi, nouveauxVenus, photographier, referenceComparable, NOUS } from './cloisonnement.js';
 import { reponse } from './langage.js';
@@ -198,6 +206,21 @@ export class Veilleur {
     }
   }
 
+  /**
+   * LA PLACE EST-ELLE TENUE ? — question DIFFÉRENTE de « quelqu'un répond-il ? », et c'est
+   * la confusion des deux qui a fait vivre deux veilleurs (T-20260825-0101).
+   *
+   * ⚠️ UNE SEULE ÉCRITURE DE LA RÈGLE, ET ELLE N'EST PAS ICI. La sonde vit dans `client.js`
+   * — le module qui parle au socket — parce que la relève pose exactement la même question,
+   * pour exactement la même raison. Ce qu'elle mesure, ce qu'elle refuse de lire, et ce
+   * qu'elle ne voit pas, y est écrit une fois. Deux copies dériveraient, et c'est toujours
+   * celle qu'on ne relit pas qui reste fausse.
+   */
+  static async placeTenue(cheminSocket = CHEMIN_SOCKET, options = {}) {
+    const { placeTenue } = await import('./client.js');
+    return placeTenue(cheminSocket, options);
+  }
+
   static async demarrer(options = {}) {
     // La place D'ABORD, le reste ensuite. Lire le trousseau puis interroger Slack prend
     // quelques centaines de millisecondes : assez pour qu'un second veilleur naisse en
@@ -294,6 +317,25 @@ export class Veilleur {
           const occupe = new Error('Un veilleur tourne déjà sur ce poste — celui-ci se retire.');
           occupe.code = 'DEJA_VIVANT';
           return reject(occupe);
+        }
+        // 🔴 IL N'A PAS RÉPONDU. IL N'EST PAS MORT POUR AUTANT — et c'est ici que le double
+        // naissait (T-20260825-0101). Le sondage ci-dessus a une borne de 2 s ; un veilleur
+        // occupé la dépasse sans peine (`vue` a pendu 67 s au socket du poste). Ce qui suit
+        // effaçait alors le socket d'un vivant, et ce démarrage s'installait à côté de lui.
+        //
+        // La question n'est donc pas « répond-il ? » mais « quelqu'un tient-il encore la
+        // poignée ? » — et un socket dont le processus est mort refuse la connexion, lui.
+        if (await Veilleur.placeTenue(this.cheminSocket)) {
+          const tenue = new Error(
+            'Un veilleur tient déjà la place sans répondre — celui-ci se retire plutôt que de le doubler. ' +
+              `Nomme-le si besoin : lsof -t ${this.cheminSocket}`
+          );
+          // Le MÊME code que ci-dessus, et c'est voulu : pour le point d'entrée, le fait est
+          // identique — un veilleur est déjà là, ce démarrage se retire SANS erreur, sinon le
+          // gestionnaire de services le relancerait en boucle. Seul le motif diffère, et il
+          // part au journal.
+          tenue.code = 'DEJA_VIVANT';
+          return reject(tenue);
         }
         try {
           unlinkSync(this.cheminSocket);
@@ -511,10 +553,51 @@ export class Veilleur {
       const vusDeja = await this.membresPhotographies(deja.canal_id);
       if (vusDeja) deja.membres_vus = vusDeja;
 
-      // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé dans le
-      // même worktree retrouve son canal. On rafraîchit seulement son pane, qui a changé.
+      // ⚠️ ET SI LE PORTEUR D'AVANT EST ENCORE LÀ, ON LE DIT — relevé en revue indépendante.
+      //
+      // Depuis que l'ancre réunit les copies de travail d'un même lieu, deux agents nés au même
+      // endroit dans deux copies partagent une clé : le second PREND la ligne du premier, le
+      // canal ne route plus que vers lui, et le premier n'entend plus rien. C'est le prix
+      // assumé du correctif — mais il ne doit pas se payer en silence, parce qu'une ligne qui
+      // se tait sans qu'on le dise est le mode de panne le plus cher de ce dispositif.
+      //
+      // ⚠️ ON AVERTIT, ON NE REFUSE PAS. `herdr.vivant` penche du côté « vivant » quand il ne
+      // sait pas — un registre muet n'est pas une mort, et c'est écrit là-bas à ses dépens.
+      // Refuser sur ce signal-là fermerait au successeur la ligne que son métier lui IMPOSE
+      // d'ouvrir : très exactement l'incident T-20260827-0033 qu'on est en train de fermer. Un
+      // avis se rattrape ; un agent qui ne peut pas ouvrir sa ligne est bloqué.
+      //
+      // ⚠️ ET UNE MESURE QUI ÉCHOUE NE PROUVE RIEN : herdr injoignable, on se tait. Crier sur
+      // une panne d'instrument userait l'avis avant le jour où il aurait raison.
+      if (deja.pane && deja.pane !== pane) {
+        let porteurEncoreLa = false;
+        try {
+          porteurEncoreLa = await this.herdr.vivant(deja.pane, { socket: deja.herdr_socket || null });
+        } catch {
+          porteurEncoreLa = false;
+        }
+        if (porteurEncoreLa) {
+          const avis =
+            `le pane ${deja.pane} portait déjà cette ligne et il est ENCORE VIVANT — à partir de ` +
+            `maintenant, #${deja.canal_nom} arrive dans ${pane} et plus chez lui. Si ce n'est pas ` +
+            `une renaissance, l'un de vous parle au nom d'un chantier qui n'est pas le sien.`;
+          avertissementsAvant.push(avis);
+          journaliser(`reprise d'une ligne vivante — ${deja.chantier} : ${deja.pane} → ${pane}`);
+        }
+      }
+
+      // Rouvrir une ligne déjà ouverte n'est pas une erreur : un agent relancé AU MÊME LIEU
+      // retrouve son canal, fût-il né dans une autre copie de travail (T-20260827-0033). On
+      // rafraîchit ce qui a changé : son pane, sa session, et sa copie de travail.
       deja.pane = pane;
       if (herdrSocket) deja.herdr_socket = herdrSocket;
+      // ⚠️ LA COPIE DE TRAVAIL SE RÉÉCRIT, ET CE N'EST PAS COSMÉTIQUE. `hygiene.js` signale les
+      // lignes ouvertes dont le worktree a disparu du disque et propose de les refermer. Depuis
+      // qu'un successeur peut naître ailleurs, garder le chemin du mort ferait dénoncer à chaque
+      // ronde la ligne de l'agent VIVANT, avec le geste pour la couper. Le registre dit où est
+      // celui qui porte la ligne. Un `ouvrir` sans worktree connu n'efface rien : on ne remplace
+      // pas un renseignement par une ignorance.
+      if (worktree) deja.worktree = worktree;
       deja.autorises = autorisesFinaux;
       // LE PAIR S'ATTACHE AUSSI À LA REPRISE, et c'est le cas nominal, pas un extra : un
       // orchestrateur EXISTE DÉJÀ quand un gestionnaire ouvre la demande qui le concerne
@@ -912,13 +995,39 @@ export class Veilleur {
       return { ok: false, erreur: `« ${nom} », c'est toi — une ligne ne se partage pas avec soi-même.` };
     }
     const role = roleDuLieu(a.foreground_cwd || a.cwd);
-    if (role !== 'representant') {
+    // ⚠️ C'EST LE REGISTRE QUI DIT QUI PEUT ÊTRE UN PAIR, PLUS UNE COMPARAISON LITTÉRALE
+    // (T-20260826-0076, point 6).
+    //
+    // MESURÉ AVANT CE LOT : `if (role !== 'representant')`. La permission d'être attaché à la
+    // ligne d'un chantier — donc de recevoir tout son fil technique — vivait ici, dans le
+    // veilleur, invisible du registre dont l'en-tête promet qu'« ajouter un rôle, c'est ajouter
+    // une ligne, jamais un module ». Les neuf rôles du chantier en cours (P-20260819-0001)
+    // auraient tous été refusés sans qu'une ligne de registre puisse y changer quoi que ce soit.
+    //
+    // ⚠️ LE SENS DU REFUS NE BOUGE PAS D'UN CRAN : `pair_de_chantier` doit être un `true`
+    // EXPLICITE, et seul le représentant le déclare aujourd'hui. Ce qui change est le LIEU de la
+    // décision, jamais son résultat — un de-harcodage qui élargirait une permission au passage
+    // serait un changement de comportement déguisé en rangement.
+    //
+    // ⚠️ ET UN RÔLE NON ÉTABLI NE SE PRÉSENTE PAS AU REGISTRE. `roleDuLieu` rend `null` pour un
+    // répertoire qui n'est le lieu de personne — c'est le cas le plus fréquent de ce refus — et
+    // `pairDeChantier(null)` LÈVERAIT (le registre refuse de décider sur un rôle inconnu). Un
+    // refus doit rester un refus, jamais devenir un plantage du veilleur.
+    if (!role || !pairDeChantier(role)) {
+      // Le refus NOMME qui aurait le droit, et il le lit au registre. ⚠️ Le repli couvre le
+      // registre où PLUS PERSONNE ne le déclare : « Seul un  posé par… » se lirait comme un
+      // message tronqué et enverrait chercher un bogue d'affichage là où il y a une décision.
+      const admis = rolesConnus().filter(pairDeChantier).map((n) => roleDe(n).libelle);
       return {
         ok: false,
         erreur:
           `« ${nom} » n'est pas un gestionnaire client : son lieu de travail n'en porte pas le métier — la ` +
-          `ligne n'est PAS ouverte. Seul un représentant posé par « ligne-directe representant » partage la ` +
-          `ligne d'un chantier ; y attacher quelqu'un d'autre lui livrerait ce qui ne le regarde pas.`,
+          `ligne n'est PAS ouverte. ` +
+          (admis.length
+            ? `Seul un ${admis.join(' ou un ')} posé par « ligne-directe representant » partage la ` +
+              `ligne d'un chantier ; y attacher quelqu'un d'autre lui livrerait ce qui ne le regarde pas.`
+            : `Aucun rôle du registre ne partage la ligne d'un chantier (« pair_de_chantier » n'est déclaré ` +
+              `nulle part dans « ligne-directe/src/roles.js ») — ce n'est pas cet agent qui est en cause.`),
       };
     }
     return { ok: true, pair: { role, nom, pane: a.pane_id, herdr_socket: a.herdr_socket || null } };
@@ -1033,6 +1142,14 @@ export class Veilleur {
           : `plus aucun agent ne travaille dans ce pane`,
       };
     }
+    // ⚠️ CE `'orchestrateur'` EST LE SEPTIÈME SITE, ET IL EST NOMMÉ PLUTÔT QUE CORRIGÉ
+    // (T-20260826-0076, point 6). Il désigne le PORTEUR de la ligne — pas le pair — et le
+    // registre des lignes n'inscrit NULLE PART son rôle : il n'y a rien à lire. Le déduire
+    // serait pire que le littéral. Mesuré : `--au-gestionnaire` est accepté sur toute ligne
+    // INTERNE, donc un gestionnaire pourrait en attacher un sur sa ligne du dirigeant — sa
+    // parole serait alors annoncée « de l'orchestrateur du chantier », ce qu'elle n'est pas.
+    // Le fermer demande d'inscrire le rôle du porteur à l'ouverture, donc de toucher au
+    // registre des lignes et à ce qui le lit : c'est un lot, pas un de-harcodage.
     const cadre = cadrerPourPair({
       chantier: ligne.chantier,
       texte,
@@ -1841,6 +1958,15 @@ export class Veilleur {
       lireEcran: (p) => herdr.ecranDe(p.pane_id, p.herdr_socket),
       etatDuMandat: (mandat) => etatDuMandat(mandat, { appeler: acces }),
       nomsConnus,
+      // ⚠️ SANS CETTE LIGNE, LE REGISTRE DIT « non mesurée » — honnêtement, mais sans jamais
+      // mordre. `ETALONNAGE_DU_LECTEUR` existe pour qu'un « rien en vol » devenu faux se relie
+      // à un changement de version de Claude Code ; il ne peut le faire que si quelqu'un mesure
+      // la version RÉELLE. C'est ici, et seulement ici, que le dispositif touche le système :
+      // `travailEnVol` reste pure, la sonde est résolue UNE fois par tour et non une fois par
+      // pane. Coût mesuré le 2026-08-25 : 0,03 s par tour, contre une borne de recensement de
+      // 30 s dont 16,1 s étaient déjà consommées — un pour mille de la marge.
+      versionCourante: () =>
+        execFileSync(OUTILS_VERSION.claude, ['--version'], { encoding: 'utf8', timeout: 5000 }),
       journaliser,
     });
   }
@@ -1937,6 +2063,32 @@ export class Veilleur {
       });
   }
 
+  /**
+   * UNE RECONNEXION N'EST PAS UNE PANNE — et le journal ne le disait pas.
+   *
+   * 🔴 MESURÉ SUR LE JOURNAL DU POSTE (T-20260825-0101, 217 occurrences depuis le 5 août).
+   * Comptées en bloc, elles ressemblaient à une boucle. Séparées selon qu'elles suivent la
+   * précédente de plus ou de moins d'une minute, elles se rangent en DEUX RÉGIMES, et un
+   * seul est un défaut :
+   *
+   *   ISOLÉES — 2 à 8 par jour, tous les jours, quoi qu'il arrive. Les horodatages du
+   *   2026-08-26 (veilleur né à 00:49:15Z) : 05:49:26, 10:49:42, 15:49:54. TOUTES LES
+   *   5 HEURES PILE, à partir de la naissance. C'est le rafraîchissement périodique de
+   *   Slack Socket Mode : le protocole ferme, le client rouvre. RIEN À CORRIGER.
+   *
+   *   EN RAFALE — 5 à 7 en moins d'une minute. Elles n'apparaissent QUE les jours où
+   *   plusieurs veilleurs connectés coexistent : 53 le 11/08, 11 le 24/08, 12 le 25/08,
+   *   et ZÉRO le 26/08, premier jour à veilleur unique. Deux clients Socket Mode sur la
+   *   même app se coupent mutuellement — c'est le défaut, et il se répare en amont, dans
+   *   l'unicité (voir `placeTenue` et `occupantsDeLaPlace`, client.js), jamais ici.
+   *
+   * ⚠️ Ce n'est pas une preuve : l'établir demanderait de faire coexister deux veilleurs
+   * CONNECTÉS À SLACK, ce qui est un geste de production. La corrélation joue dans les deux
+   * sens (elle apparaît avec la coexistence, elle disparaît sans), et c'est tout.
+   *
+   * C'est écrit ici pour qu'un régime normal ne soit pas re-diagnostiqué comme une panne —
+   * il l'a déjà été une fois, et le compte en bloc est ce qui l'a permis.
+   */
   reconnecter(raison) {
     if (this.arrete) return;
     journaliser(`reconnexion dans ${Math.round(this.attente / 1000)}s — ${raison}`);

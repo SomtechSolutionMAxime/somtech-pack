@@ -42,6 +42,7 @@ import {
   texteDeLigne,
   raccourcisPour,
   RACCOURCIS,
+  RACCOURCI_VITAL,
 } from '../src/tui-vue-du-parc.js';
 import { decoderTouche, decoderTouches, texteDeProgression, servirLaVue, mettreEnFocus } from '../src/tui-boucle.js';
 import { unPaneDAgent } from './aide/formes-reelles.js';
@@ -611,6 +612,82 @@ test('une vue MESURÉE mais VIDE ouvre bien l’écran — la garde ne doit pas 
   assert.match(ecrit, /VUE DU PARC/, 'et il porte son en-tête');
 });
 
+test('SANS TTY, L’ÉCRAN SE DESSINE QUAND MÊME — le repli de `dessiner`, jumeau de celui de la progression', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LE JUMEAU DU DÉFAUT D'À CÔTÉ, ET IL EST TOMBÉ AU TOUR SUIVANT.
+  //
+  // `dessiner()` se replie sur `sortie.columns || 100`, `avecProgression` sur `|| Infinity`. Le
+  // code explique longuement pourquoi les deux DIFFÈRENT et met en garde de ne pas les
+  // « harmoniser ». Un banc garde le repli de la progression depuis le tour précédent ; CELUI-CI
+  // n'était gardé par rien.
+  //
+  // ⚠️ MESURÉ : remplacer `100` par `1` laisse la SUITE ENTIÈRE verte — 1164 pass, 0 fail. Les
+  // quatre appels réels à `boucleDuTui` passent tous un `columns` explicite ; aucun ne fait
+  // jamais tomber `dessiner()` sur son repli.
+  //
+  // ⚠️ ET LA MUTATION POUVAIT ROUGIR — ce n'est pas une mesure vide. Mesuré sur le rendu : à 1
+  // colonne l'écran rend « … » et rien d'autre ; à 100, la barre entière. Le chemin n'est
+  // simplement jamais emprunté.
+  //
+  // ⚠️ CE CHEMIN EST RÉEL : `sortie.columns` est absent chaque fois que la sortie n'est pas un
+  // terminal — redirection vers un fichier, pipe, exécution sans pty. L'incident d'origine a
+  // justement été trouvé hors d'un usage synthétique.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const vue = await laVueDuParc({ recensement: { quand: 'T', agents: [] } });
+  const { boucleDuTui } = await import('../src/tui-boucle.js');
+
+  for (const sansTty of [{}, { columns: undefined, rows: undefined }, { columns: 0, rows: 0 }]) {
+    let ecrit = '';
+    const { code } = await boucleDuTui({
+      lireLaVue: async () => vue,
+      sortie: { write: (s) => (ecrit += s), ...sansTty },
+      entree: { [Symbol.asyncIterator]: async function* () {} },
+    });
+
+    assert.equal(code, 0, `sans TTY (${JSON.stringify(sansTty)}), la boucle refuse au lieu de dessiner`);
+
+    // ═══ ① L'ÉCRAN S'OUVRE ET PORTE SON EN-TÊTE — donc `dessiner` a bien tourné.
+    assert.match(ecrit, /VUE DU PARC/, `sans TTY (${JSON.stringify(sansTty)}), l’écran ne porte pas son en-tête`);
+
+    // ═══ ② ET IL EST LISIBLE. C'est ce que le repli existe pour tenir : sans terminal on doit
+    // « quand même DESSINER quelque chose », dit le code. Un repli à 1 colonne rendrait un écran
+    // réduit à des points de suspension — le lecteur d'un journal n'aurait rien.
+    //
+    // ⚠️ LA BORNE SE DÉRIVE, elle ne s'écrit pas en chiffre : l'écran doit être au moins assez
+    // large pour porter la barre de raccourcis ENTIÈRE, sinon le repli ne tient pas sa promesse.
+    const lignes = ecrit.split('\r\n');
+    const barre = lignes[lignes.length - 1] ?? '';
+    assert.ok(
+      barre.includes(RACCOURCI_VITAL),
+      `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne porte même pas « ${RACCOURCI_VITAL} » : ` +
+        `${JSON.stringify(barre.slice(-60))} — le repli a été rétréci et un journal ne reçoit plus rien de lisible`
+    );
+    // ═══ ③ ET LE REPLI DE HAUTEUR TIENT SA MAGNITUDE, PAS SEULEMENT SON EXISTENCE.
+    //
+    // 🔴 CETTE ASSERTION EXIGEAIT `> 2`, ET C'ÉTAIT LE JUMEAU VERTICAL DU DÉFAUT D'À CÔTÉ.
+    // Mesuré : `rows || 30` remplacé par 3, 5 ou 10 — AUCUN rouge sur la suite entière. Le seuil
+    // réellement gardé était « ≥ 3 », pas 30 : un facteur DIX entre ce que la prose affirme
+    // (« un écran de 100×30 est un défaut raisonnable ») et ce qu'un banc pouvait détecter.
+    //
+    // À 3 lignes, `hauteurCorps = max(1, 3 - 2)` vaut 1 : le lecteur d'un journal reçoit UNE
+    // ligne d'arbre au lieu de 28, en silence. La moitié horizontale du couple était gardée par
+    // l'assertion d'en-tête ; la verticale ne l'était pas.
+    //
+    // ⚠️ ON PINCE LA MAGNITUDE PAR CE QUE L'ÉCRAN DOIT PORTER, pas par un chiffre : le repli
+    // doit laisser au CORPS de quoi montrer plusieurs lignes d'arbre — sinon il ne tient pas sa
+    // promesse de « dessiner quelque chose » d'utile. La borne se dérive des deux bandeaux
+    // (titre + pied) que `rendreEcran` retranche toujours.
+    const BANDEAUX = 2;
+    const CORPS_MINIMAL = 10;
+    assert.ok(
+      lignes.length - BANDEAUX >= CORPS_MINIMAL,
+      `sans TTY (${JSON.stringify(sansTty)}), l’écran de repli ne laisse que ` +
+        `${lignes.length - BANDEAUX} ligne(s) d’arbre entre ses deux bandeaux — le repli de HAUTEUR ` +
+        `a été rétréci, et un journal ne reçoit plus qu’un fragment du parc`
+    );
+  }
+});
+
 test('« --tui » ouvre l’écran, et son ABSENCE rend le texte — le défaut protège les lecteurs sans terminal', async () => {
   const vue = { registre: { mesure: 'lu' }, orchestrateurs: [], horsHierarchie: [], resume: 'r', regle: 'g' };
   let ecrit = '';
@@ -920,24 +997,110 @@ test('après un « r » sur une vue RÉTRÉCIE, le curseur reste dans la liste �
   assert.ok(!('pane' in surVide.effet), 'et ne rend aucun identifiant');
 });
 
-test('la barre de raccourcis se rétracte sans jamais perdre « q quitter » — et reste la maquette à pleine largeur', () => {
+test('LA BARRE SE RÉTRACTE, ET SOUS LE SEUIL C’EST LE RENDU QUI TRANCHE — décision `00a7b645`', () => {
   // 🔴 TROUVÉ EN EXERÇANT LE TUI DANS UN VRAI PTY, où la fenêtre faisait 100 colonnes. La barre
   // en fait 109 : bornée, elle coupait par la DROITE — donc le PREMIER raccourci sacrifié était
-  // `q quitter`, le seul dont on a besoin quand on ne sait plus quoi faire. Le lecteur se
-  // retrouvait dans un plein écran dont l'aide ne disait plus la sortie.
+  // `q quitter`, le seul dont on a besoin quand on ne sait plus quoi faire.
   //
-  // ⚠️ ON N'A PAS RÉORDONNÉ LA BARRE : son ordre est celui de la maquette que le dirigeant a
-  // validée, et elle fait foi. Ce qui change est la DÉGRADATION sous sa largeur.
+  // ⚠️ CE BANC A ÉTÉ AMENDÉ SUR LA DÉCISION `00a7b645`, ET IL FAUT DIRE POURQUOI. Il exigeait
+  // « q quitter » à TOUTE largeur, jusqu’à 1 colonne — sur la CHAÎNE. Or à 1 colonne aucun
+  // rendu ne peut la montrer : ce qu’il gardait alors, c’était une propriété que le lecteur ne
+  // voyait jamais. Pire, c’est cette exigence-là qui a forcé la barre à déborder du pane, et
+  // un débordement ne « dépasse » pas : il WRAPPE et FAIT DÉFILER. Mesuré au VT100 avant B —
+  // à 3×1 le lecteur voyait `'ter'`, à 8×2 le TITRE avait disparu.
+  //
+  // LA FORME QUI TIENT, ET C’EST CELLE DE L’ARBITRAGE :
+  //   • au-dessus du seuil, la sortie ne se sacrifie JAMAIS ;
+  //   • sous le seuil, elle n’est montrable par AUCUN rendu — l’exiger serait exiger un faux.
+  //
+  // ⚠️ LE SEUIL NE S’ÉCRIT PAS EN CHIFFRE : il se DÉRIVE du raccourci vital lui-même. Écrire
+  // « 9 » ici, c’est laisser le banc vert le jour où le mot change.
   assert.equal(raccourcisPour(200), RACCOURCIS, 'à pleine largeur, c’est EXACTEMENT la maquette');
   assert.match(RACCOURCIS, /^↑↓ naviguer {2}→← plier {2}\/ chercher/, 'et l’ordre de la maquette est intact');
 
-  for (const largeur of [110, 100, 80, 60, 40, 20, 10, 1]) {
+  const SEUIL = [...RACCOURCI_VITAL].length;
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 LA BRANCHE « SOUS LE SEUIL » ÉTAIT UNE TAUTOLOGIE, ET C'ÉTAIT MON CONTRÔLE POSITIF.
+  //
+  // Elle découpait sa valeur dans l'objet qu'elle jugeait :
+  //
+  //     const vu = [...barre].slice(0, largeur).join('');
+  //
+  // Puis elle assertait sur `vu` que sa longueur tient dans `largeur` (vrai : c'est un slice de
+  // cette longueur), et que `barre` commence par `vu` (vrai : `vu` en est le début). Aucune ne
+  // pouvait échouer, quoi que `raccourcisPour` produise — Y COMPRIS RIEN.
+  //
+  // ⚠️ MESURÉ : en vidant la barre (borne de retrait `> 1` → `> 0`), elle rend la chaîne VIDE à
+  // 3, 5 et 8 colonnes. `rien-ne-deborde-du-pane.test.js` l'attrape ; CE BANC survivait. Deux
+  // instruments, le même défaut injecté, deux verdicts opposés.
+  //
+  // ⚠️ ET C'ÉTAIT LE CONTRÔLE QUE J'AVAIS ÉCRIT POUR QUE CETTE BRANCHE NE SOIT PAS UNE DISPENSE
+  // MUETTE. Je m'en suis prémuni en écrivant une dispense qui A L'AIR DE MESURER — pire que la
+  // muette, parce qu'elle se donne pour tenue.
+  //
+  // ⚠️ LE COÛT RÉEL EST UNE FAUSSE REDONDANCE : un lecteur voit le rendu sous le seuil gardé à
+  // DEUX endroits ; un seul instrument le garde. Deux gardes dont une est morte sont plus
+  // dangereuses qu'une seule — la seconde justifie de ne pas remplacer la première.
+  //
+  // LA FORME QUI TIENT : la valeur vient de l'AUTRE BOUT DE LA CHAÎNE — `rendreEcran`, qui
+  // compose et borne le pied — au lieu d'être découpée dans ce qu'on mesure.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const vueVide = { registre: { mesure: 'lu' }, orchestrateurs: [] };
+  const pieceRendue = (largeur) =>
+    rendreEcran({ vue: vueVide, etat: etatInitial(), lignes: [], largeur, hauteur: 4 }).at(-1).texte;
+
+  for (const largeur of [110, 100, 80, 60, 40, 20, 10, SEUIL, SEUIL - 1, 3, 1]) {
     const barre = raccourcisPour(largeur);
-    assert.ok(barre.includes('q quitter'), `à ${largeur} colonnes, « q quitter » a DISPARU : « ${barre} »`);
-    // ⚠️ ON N'EXIGE PAS QU'ELLE TIENNE À 1 COLONNE — c'est impossible, et le prétendre serait
-    // faux. On exige qu'elle ne tienne JAMAIS au prix de la sortie.
-    if (largeur >= 20) {
-      assert.ok(barre.length <= largeur, `à ${largeur} colonnes, la barre en fait ${barre.length}`);
+    // ═══ CE QUE LE LECTEUR VOIT VRAIMENT — rendu par `rendreEcran`, pas découpé dans `barre`.
+    const vu = pieceRendue(largeur);
+
+    if (largeur >= SEUIL) {
+      assert.ok(
+        vu.includes(RACCOURCI_VITAL),
+        `à ${largeur} colonnes, « ${RACCOURCI_VITAL} » TIENDRAIT et n’est pas à l’écran : « ${vu} »`
+      );
+      assert.ok(
+        [...barre].length <= largeur,
+        `à ${largeur} colonnes, la barre en fait ${[...barre].length} — elle wrappe, donc elle fait DÉFILER`
+      );
+    } else {
+      // ═══ CONTRÔLE POSITIF DE L'IMPOSSIBILITÉ — refait sur des valeurs INDÉPENDANTES.
+      //
+      // ⚠️ CELLE-CI PEUT ÊTRE FAUSSE, et c'est ce qui la distingue de celle qu'elle remplace :
+      // le raccourci vital ne rentre pas dans cette largeur. On le mesure sur le mot lui-même,
+      // pas sur ce que la barre en a fait.
+      assert.ok(
+        [...RACCOURCI_VITAL].length > largeur,
+        `à ${largeur} colonnes, « ${RACCOURCI_VITAL} » TIENDRAIT — cette branche n’aurait pas dû s’appliquer`
+      );
+
+      // ⚠️ ET L'ÉCRAN MONTRE QUAND MÊME QUELQUE CHOSE. C'est exactement ce que la tautologie ne
+      // gardait pas : une barre VIDE satisfaisait ses trois assertions.
+      assert.ok(
+        vu.trim().length > 0,
+        `à ${largeur} colonnes, le pied est VIDE à l’écran — sous le seuil B dit TRONQUER, ` +
+          'jamais effacer, et le lecteur n’a plus rien du tout'
+      );
+
+      // ⚠️ ET CE QU'IL MONTRE VIENT DE LA BARRE — on ne fabrique rien pour combler. La
+      // comparaison porte sur DEUX objets calculés séparément : le pied rendu et la barre
+      // composée. Si l'un dérive de l'autre, ce banc redevient une tautologie.
+      //
+      // ⚠️ ON RETIRE LA MARQUE DE TRONCATURE AVANT DE COMPARER — `borner` remplace le dernier
+      // caractère par un point de suspension, donc le pied rendu (« q quitt… ») n'est PAS un
+      // préfixe littéral de la barre (« q quitter »). Mon premier jet l'exigeait quand même et
+      // a rougi ; c'est le rouge qui l'a dit, pas ma relecture.
+      const sansMarque = vu.trimEnd().replace(/…$/, '');
+      assert.ok(
+        // ⚠️ ET ON N'EXIGE PAS QUE `sansMarque` SOIT NON VIDE : à 1 colonne le pied rend « … »
+        // et rien d'autre — il ne RESTE que la marque. C'est le cas limite, pas un défaut, et
+        // le prétendre serait exiger un faux. Ce qui garde ce cas-là est l'assertion du dessus :
+        // le pied n'est jamais vide.
+        barre.startsWith(sansMarque),
+        `à ${largeur} colonnes, le pied rendu (« ${vu.trimEnd()} ») n’est pas un début de la barre ` +
+          `composée (« ${barre} ») — l’écran montre autre chose que ce que la barre a décidé`
+      );
     }
   }
 

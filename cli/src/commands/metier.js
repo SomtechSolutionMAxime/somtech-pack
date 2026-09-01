@@ -99,6 +99,43 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
   process.stdout.write(rapport(r, role) + '\n');
   if (!r.ok) { process.stderr.write("⛔ rendu refusé — rien n'a été écrit.\n"); return 1; }
 
+  /**
+   * LE DOSSIER DE GABARITS DU RÔLE — et son absence est un REFUS, plus une réussite muette.
+   *
+   * ⚠️ CE QUE ÇA FERME (T-20260826-0076). `distribuerAuGabarit` rendait 0 en silence quand
+   * `.claude/templates/<rôle>/` n'existait pas, et cette fonction rendait 0 par-dessus :
+   * `pack metier rendre` sur un rôle NEUF annonçait « ✅ N artefacts écrits » sans avoir rien
+   * distribué. Le rendu existait sans atteindre personne — le défaut même que la distribution
+   * a été écrite pour fermer, revenu par la porte du rôle qui n'a pas encore de gabarit.
+   *
+   * C'est le cas de CHACUN des rôles arbitrés à son premier rendu, pas une hypothèse.
+   *
+   * ⚠️ ON REFUSE PLUTÔT QUE DE CRÉER LE DOSSIER, et la distinction est mesurée. Un gabarit
+   * porte quatre fichiers (`GABARITS`, ligne-directe/src/lieu-agent.js) : `CLAUDE.md`,
+   * `CONTEXTE.md`, `.mcp.json` et `.claude/settings.json`. Le rendu n'en produit que deux — il
+   * ne produit JAMAIS de `CONTEXTE.md` (I6), qui appartient au dépôt. Créer le dossier ici
+   * fabriquerait donc un gabarit INCOMPLET, que la pose refuserait plus tard pour
+   * « gabarits_absents », loin d'ici et sans lien visible avec ce geste. Refuser tôt en NOMMANT
+   * ce qui manque coûte une commande à relancer ; créer à moitié coûte une enquête.
+   *
+   * ⚠️ ET LE REFUS VAUT AUSSI POUR `verifier`, dans le même geste. Il portait le même
+   * `if (existsSync(gabarit))` : sans ça, il annoncerait « ✅ conforme » sur un rôle dont
+   * `rendre` refuse de s'occuper — alors que le contrat écrit de ce gate est « verifier vert
+   * doit impliquer que rendre ne changerait rien ». Corriger un seul des deux côtés briserait
+   * ce contrat dans le sens le plus trompeur.
+   */
+  const gabarit = join(cwd, '.claude', 'templates', role);
+  if (!existsSync(gabarit)) {
+    process.stderr.write(
+      `⛔ le rôle « ${role} » n'a pas de dossier de gabarits : ${gabarit}\n` +
+      `   Le rendu n'atteindrait personne — il serait écrit et distribué à rien.\n` +
+      `   Geste : créer ${join('.claude', 'templates', role)}/ avec les quatre fichiers d'un\n` +
+      `   gabarit (CLAUDE.md, CONTEXTE.md, .mcp.json, .claude/settings.json), puis relancer.\n` +
+      `   CLAUDE.md et .claude/settings.json seront REMPLACÉS par ce rendu ; CONTEXTE.md ne\n` +
+      `   sera jamais touché (I6).\n`);
+    return 1;
+  }
+
   const base = join(cwd, 'metier', role, 'rendu');
 
   if (sous === 'verifier') {
@@ -110,9 +147,11 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
       ...Object.keys(attendu).filter((k) => actuel[k] !== attendu[k]).map((k) => `${k} : périmé ou absent`),
       ...Object.keys(actuel).filter((k) => !(k in attendu)).map((k) => `${k} : orphelin, plus produit par le classement`),
     ];
-    // le gabarit distribué doit lui aussi correspondre au rendu
-    const gabarit = join(cwd, '.claude', 'templates', role);
-    if (existsSync(gabarit)) {
+    // Le gabarit distribué doit lui aussi correspondre au rendu. Plus de
+    // « if (existsSync(gabarit)) » ici : son absence est déjà un refus, plus haut. Le garder
+    // rendrait tout ce bloc conditionnel à une condition qui ne peut plus être fausse — une
+    // branche que le réel n'emprunte jamais, donc une garde qu'on croit avoir.
+    {
       const socle = (attendu['L0.md'] || '') + (attendu['L1.md'] || '');
       const lu = (f) => (existsSync(join(gabarit, f)) ? readFileSync(join(gabarit, f), 'utf8') : null);
       if (lu('CLAUDE.md') !== socle) ecarts.push('.claude/templates/' + role + '/CLAUDE.md : périmé face au rendu');
@@ -177,10 +216,23 @@ export function runMetier(argv, { cwd = process.cwd() } = {}) {
  * Le socle (L0 + L1) devient le `CLAUDE.md` du rôle ; les chapitres et le fichier
  * de droits suivent. Ce qui n'est plus produit est retiré du gabarit aussi —
  * un chapitre orphelin resterait distribué à jamais.
+ *
+ * ⚠️ LÈVE SUR UN DOSSIER ABSENT, ET NE REND PLUS 0 EN SILENCE (T-20260826-0076). C'est une
+ * garde de PROFONDEUR : `runMetier` refuse déjà bien avant d'arriver ici, donc le chemin normal
+ * ne l'atteint pas. Elle existe pour le jour où quelqu'un appellera cette fonction sans ce
+ * contrôle — sans elle, le `mkdirSync(dirname(cible), { recursive: true })` juste dessous
+ * CRÉERAIT le dossier et y déposerait deux fichiers sur quatre. Un gabarit à moitié posé se lit
+ * comme un gabarit, et ne se découvre qu'à la pose d'un lieu, ailleurs, plus tard.
+ *
+ * Exportée POUR ÊTRE ÉPROUVÉE : une garde qu'aucun essai ne peut atteindre n'est pas une garde.
  */
-function distribuerAuGabarit(cwd, role, artefacts) {
+export function distribuerAuGabarit(cwd, role, artefacts) {
   const gabarit = join(cwd, '.claude', 'templates', role);
-  if (!existsSync(gabarit)) return 0;
+  if (!existsSync(gabarit)) {
+    throw new Error(
+      `distribuerAuGabarit : « ${gabarit} » n'existe pas. Le contrôle de runMetier a été ` +
+      'contourné — distribuer ici créerait un gabarit incomplet (deux fichiers sur quatre).');
+  }
 
   const socle = (artefacts['L0.md'] || '') + (artefacts['L1.md'] || '');
   const aPoser = { 'CLAUDE.md': socle };

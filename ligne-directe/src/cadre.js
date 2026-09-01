@@ -17,7 +17,7 @@
 // consigne. Un client demande ; il n'ordonne pas. Le cadre le dit désormais, et le mot
 // « dirigeant » n'apparaît nulle part quand ce n'est pas lui qui parle.
 
-import { libellePluriel } from './roles.js';
+import { libellePluriel, libelleDePair, tientUneLigneCliente } from './roles.js';
 
 /** Chemin de la commande tel qu'un agent doit l'invoquer, quelle que soit son origine. */
 export const COMMANDE = 'node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js"';
@@ -114,6 +114,37 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
 }
 
 /**
+ * COMMENT LE PAIR QUI PARLE EST ANNONCÉ — et jamais sous le nom d'un autre rôle.
+ *
+ * Le registre porte la formule (`libelle_de_pair`) ; ce repli couvre le rôle qu'on ne connaît
+ * pas du tout. Il ne l'attribue à personne : « de ton pair sur ce chantier » est vrai de tout
+ * porteur de cette ligne, et c'est la seule chose qu'on sache encore de lui.
+ */
+function nommerLePair(deRole) {
+  try {
+    return libelleDePair(deRole);
+  } catch {
+    return 'de ton pair sur ce chantier';
+  }
+}
+
+/**
+ * LE DESTINATAIRE A-T-IL UN CLIENT AU BOUT D'UNE DE SES LIGNES ?
+ *
+ * ⚠️ LE REPLI DIT L'AVERTISSEMENT PLUTÔT QUE DE LE TAIRE, et c'est l'inverse du repli d'à côté.
+ * Les deux erreurs ne coûtent pas la même chose : avertir un orchestrateur que rien ne descend
+ * au client lui fait lire une phrase qui ne le concerne pas ; ne PAS avertir celui qui a un
+ * client lui fait relayer nos rouages internes à ce client. On penche du côté qui ne fuit pas.
+ */
+function aUnClientAuBout(versRole) {
+  try {
+    return tientUneLigneCliente(versRole);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * La parole d'un PAIR sur la ligne d'un chantier — l'orchestrateur et son gestionnaire client.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════
@@ -142,9 +173,25 @@ export function cadrerPourAgent({ chantier, texte, canal, nature = 'interne', au
  */
 export function cadrerPourPair({ chantier, texte, canal, deRole, deNom, versRole }) {
   const ou = canal ? ` (#${canal})` : '';
-  const qui = deRole === 'representant' ? 'du gestionnaire client' : 'de l’orchestrateur du chantier';
+  // ⚠️ LES DEUX DÉCISIONS DE CETTE FONCTION VIENNENT DU REGISTRE, PLUS D'UNE COMPARAISON
+  // LITTÉRALE (T-20260826-0076, point 6). Elles étaient écrites `deRole === 'representant' ? … :
+  // …` et `versRole === 'representant'`, et elles n'ont PAS le même défaut :
+  //
+  //   • QUI PARLE — le ternaire ne connaissait que deux rôles, donc TOUT rôle qui n'était pas le
+  //     représentant était annoncé « de l'orchestrateur du chantier ». Une attribution fausse se
+  //     lit exactement comme une vraie, et celle-ci donne à une demande l'autorité de celui qui
+  //     mène le chantier — le contraire exact de ce que le point 2 de l'en-tête protège.
+  //   • QUI A UN CLIENT AU BOUT — l'avertissement sautait pour tout rôle qui n'était pas le
+  //     représentant, y compris un rôle client qu'on inscrirait demain. C'est le mode de panne
+  //     unique de ce lot (point 3 de l'en-tête), qui redevenait ouvert au premier rôle ajouté.
+  //
+  // ⚠️ ET AUCUN DES DEUX NE LÈVE SUR UN RÔLE INCONNU. Ce cadre est composé sur le chemin d'une
+  // remise déjà partie : une exception y perdrait le message définitivement, sans que personne
+  // ne l'apprenne — c'est le motif que `libellePluriel` documente juste à côté, et il vaut mot
+  // pour mot ici. On rend donc un cadre honnête plutôt qu'aucun cadre.
+  const qui = nommerLePair(deRole);
   const nomme = deNom ? ` ${deNom}` : '';
-  const versGestionnaire = versRole === 'representant';
+  const versGestionnaire = aUnClientAuBout(versRole);
   return [
     `[LIGNE DIRECTE — ${chantier}${ou}] Message ${qui}${nomme}, sur la ligne de ce chantier :`,
     '',

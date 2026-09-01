@@ -22,6 +22,7 @@ Le résultat, quand tout va bien :
     └── <nom>/
         ├── CLAUDE.md               ← le métier, copié du pack — généré, jamais édité à la main
         ├── CONTEXTE.md             ← ce qui est propre à ce dépôt — à la main, jamais écrasé
+        ├── RONDE.md                ← le briefing qu'il pose en `/loop` — à la main, jamais écrasé
         ├── .mcp.json               ← le ServiceDesk et Somcraft
         └── .claude/
             └── settings.json       ← ce qu'il peut : lire le dépôt, sa ligne, herdr, les deux
@@ -177,7 +178,7 @@ risque. Un des cinq n'en propose aucun, délibérément — remplacer une entré
 suppose de détruire celle qui est en place, et ce refus-là ne met pas ce geste dans ta bouche.
 
 **Elle est idempotente, et l'idempotence ne vaut que pour un lieu COMPLET.** Relancée sur un
-orchestrateur déjà posé — ses quatre fichiers présents — elle ne retouche à rien, le dit
+orchestrateur déjà posé — **tous les fichiers de son gabarit** présents — elle ne retouche à rien, le dit
 (`deja_installe`) et s'arrête là ; sur cette voie elle ne lit même pas le trousseau, il n'y a
 rien à vérifier pour ne rien faire.
 
@@ -195,7 +196,7 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 |---|---|---|
 | `nom_invalide` | Le nom donné n'est pas **un seul segment de chemin** : il traverse un répertoire (`/`, `\`, `..`), commence par un point ou un tiret, ou porte un caractère hors lettres/chiffres/tirets. La **casse est libre** — `D-20260813-0002` est un nom parfaitement valide | Renomme le chantier avec des lettres, des chiffres et des tirets. Rien n'a été créé : ce refus tombe **avant** tout accès au disque |
 | `lieu_ambigu` | Plusieurs lieux sous `.orchestrateur/` ne diffèrent **que par la casse** (`Chantier` et `chantier`), et aucun ne porte exactement le nom demandé. Rien ici ne peut dire lequel est le bon — en choisir un reviendrait à poser à côté d'un lieu vivant | Écarte celui qui ne sert plus (`mv .orchestrateur/<autre> .orchestrateur/<autre>.ecarte`), puis relance. Aucun troisième lieu n'a été créé |
-| `lieu_partiel` | `.orchestrateur/<nom>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .orchestrateur/<nom> .orchestrateur/<nom>.ecarte`), puis relance — elle ne complète jamais |
+| `lieu_partiel` | `.orchestrateur/<nom>/` existe mais il lui manque des fichiers. **Deux cas, et le geste n'est pas le même** : un **obligatoire** manque (`CLAUDE.md`, `CONTEXTE.md`, `.mcp.json`, `.claude/settings.json`) — la pose a été interrompue, il n'y a rien à sauver ; ou **tous les obligatoires sont là** et ce qui manque a été ajouté au gabarit depuis — le lieu est **vivant**, son `CONTEXTE.md` est rempli à la main | **Obligatoire manquant** : écarte ce reste (`mv .orchestrateur/<nom> .orchestrateur/<nom>.ecarte`), puis relance — cette commande ne complète jamais un lieu à demi posé. **Gabarit qui a grandi** : ⚠️ **n'écarte surtout pas** — ce geste emporterait le contexte rempli à la main, la seule chose ici que personne ne peut reconstituer. Mets le lieu **à jour** (`npx @somtech-solutions/pack agent maj <nom>`), qui y dépose ce qui manque sans toucher à ce qu'un humain y a écrit, puis relance |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du chantier |
 | `gabarit_perime` | Le gabarit que ce dépôt porte **n'est pas celui du pack installé sur ce poste** — comparé par **empreinte**, pas par numéro de version. Un orchestrateur posé là porterait un métier d'une autre époque, et il ne le saurait jamais : il ne lit que son lieu | Le refus **nomme les deux empreintes et les deux chemins**. Mets le pack à jour dans le dépôt du chantier (`npx @somtech-solutions/pack update`), puis relance. Rien n'a été créé |
 | `droits_non_versionnables` | Un motif d'exclusion du dépôt (`.gitignore` ou `.git/info/exclude`) empêche de verser `.claude/settings.json` — le lieu serait complet sur ce disque et **sans permissions bornées partout ailleurs** | Le refus nomme le motif et sa source. Lève l'exclusion : `git add -f <le fichier>` une fois posé, ou une négation `!.claude/settings.json` dans le fichier d'exclusion |
@@ -283,16 +284,30 @@ variables d'environnement, le ServiceDesk et Somcraft. Sans elles, il naîtra sa
 le découvrira en plein chantier — c'est exactement le silence que cette compétence existe pour
 éviter, et le taire ici le réintroduirait par un autre chemin.
 
-## Avant de le faire naître — son contexte
+## Avant de le faire naître — son contexte et sa ronde
 
-`CONTEXTE.md` est posé **avec ses chevrons** : ce qui reste entre `<…>` n'a pas encore été
-renseigné. Il porte ce que le métier ne peut pas savoir — **à qui il répond**, **qui est le
-gestionnaire client de ce projet**, et **sa portée** : le chantier dont il répond, et ce dont
-il ne s'occupe pas.
+**Deux fichiers du lieu sont posés AVEC leurs chevrons, et ce sont les deux que tu remplis** :
 
-**Remplis-le, ou fais-le remplir, avant la naissance.** Un orchestrateur qui trouve un chevron
-le dit plutôt que de deviner — mais un dépôt qui porte plus d'un orchestrateur n'a que cette
-portée écrite pour les empêcher de se marcher dessus, et elle ne se devine pas du tout.
+| `CONTEXTE.md` | ce que le métier ne peut pas savoir — **à qui il répond**, **qui est le gestionnaire client de ce projet**, et **sa portée** : le chantier dont il répond, et ce dont il ne s'occupe pas |
+| `RONDE.md` | **le briefing qu'il pose en `/loop` à sa naissance** — sa cadence, son chantier en une ligne, ses priorités, ce qu'il ne doit PAS attendre, où vit son état à jour |
+
+Ce qui reste entre `<…>` n'a pas encore été renseigné.
+
+> ⚠️ **`RONDE.md` n'est pas une note de confort : sans ronde, un orchestrateur ne se réveille
+> jamais — et rien ne le signale.** C'est le seul de ses outils dont l'absence est **muette** :
+> son sommeil ressemble trait pour trait à « rien à signaler ». Mesuré le 2026-08-26 sur le
+> parc : **dix-sept lieux vivants sur dix-huit** n'en portaient aucun.
+
+**Remplis-les, ou fais-les remplir, avant la naissance — la naissance les exige désormais.**
+Un lieu dont l'un des deux est resté mot pour mot le gabarit **fait refuser la naissance**, qui
+nomme les rubriques restées et n'ouvre aucun pane. Ce n'est pas une contrariété à contourner :
+un orchestrateur qui trouve un chevron le dit plutôt que de deviner, mais un dépôt qui porte
+plus d'un orchestrateur n'a que cette portée écrite pour les empêcher de se marcher dessus, et
+elle ne se devine pas du tout.
+
+> **Le refus se borne à ce que le gabarit a déposé** : un chevron de ta prose — un
+> `fly deploy -a <app>` dans une note — n'est jamais compté. Ce qui est reproché est ce qui est
+> resté **mot pour mot** ce que le pack avait écrit.
 
 ## L'y faire naître — et le rôle ne se laisse jamais deviner
 

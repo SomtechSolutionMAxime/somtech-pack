@@ -197,12 +197,35 @@ test('🔴 le refus rendu ne porte plus aucun outil d édition NU — sinon le h
   }
 });
 
-test('🔴 le refus rendu garde ce que la garde ne porte PAS — Task et NotebookEdit', () => {
+test('🔴 le refus rendu garde ce que la garde ne porte PAS — NotebookEdit, et Task n y est PLUS', () => {
+  // ⚠️ RÉ-ANCRÉ (D-20260826-0010, ABC 3.0.0). « Task » vivait ici, et il ne le peut plus :
+  // un `deny` sur l'outil nu refuse TOUT sous-agent, donc aussi les sous-agents d'ANALYSE
+  // (lecture seule) que GF-ORC-002 amendé rend à l'orchestrateur comme ses propres moyens.
+  // Le refus vit dans la garde « sous-agent » (hook PreToolUse sur Task) — et le fait mesuré
+  // qui commande la forme de ce contrôle est le même que pour l'écriture : sous un `deny`,
+  // le hook n'est JAMAIS appelé. Task de retour ici rendrait la garde muette en silence.
   const deny = JSON.parse(readFileSync(
     join(RACINE, '.claude', 'templates', 'orchestrateur', '.claude', 'settings.json'), 'utf8',
   )).permissions.deny;
-  assert.ok(deny.includes('Task'), 'sans lui, un orchestrateur ouvrirait des sous-agents (GF-ORC-002)');
+  assert.ok(!deny.includes('Task'),
+    '« Task » est revenu dans permissions.deny : le hook « sous-agent » ne serait plus jamais '
+      + 'appelé, et les sous-agents d analyse (GF-ORC-002, ABC 3.0.0) redeviendraient interdits');
   assert.ok(deny.includes('NotebookEdit'), 'la garde le refuse aussi, mais le refus de permission tient dès la naissance');
+});
+
+test('🔴 le hook « sous-agent » est DÉCLARÉ dans le settings rendu, et il vise Task', () => {
+  // Le miroir du contrôle du hook d écriture, pour le refus que « Task » portait : sans lui,
+  // le contrôle ci-dessus serait un désarmement — « Task absent des refus » est exactement ce
+  // qu on obtient en supprimant la garantie.
+  const st = JSON.parse(readFileSync(
+    join(RACINE, '.claude', 'templates', 'orchestrateur', '.claude', 'settings.json'), 'utf8',
+  ));
+  const h = (st.hooks?.PreToolUse || []).find((x) => x.hooks?.[0]?.command?.includes('gardes/sous-agent.js'));
+  assert.ok(h, 'aucun hook ne branche la garde « sous-agent » : plus rien ne refuserait un sous-agent de construction');
+  assert.match(h.matcher, /(^|\|)Task(\||$)/,
+    `le matcher « ${h.matcher} » ne vise pas Task — la garde ne serait jamais consultée`);
+  assert.match(h.hooks[0].command, /permissionDecision":"deny/,
+    'la commande doit refuser d elle-même quand la garde est introuvable sur le poste');
 });
 
 test('🔴 le hook d écriture est DÉCLARÉ dans le settings rendu, et il vise les outils d édition', () => {
@@ -559,7 +582,15 @@ const HOOKS_EPROUVES = [
   { sha: 'e52511a7320595f5', quoi: 'garde « terminal »', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
   { sha: '027326877c5f600d', quoi: 'garde « ligne-cliente »', pourquoi: 'matcher « Bash » — ne voit jamais un Write' },
   { sha: '5a11f09d4be1b385', quoi: 'garde « ecriture »', pourquoi: 'la garde de ce lot — éprouvée par les sections 1 à 11 ci-dessus' },
-  { sha: '006488b51d844b07', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 : se retire une fois la ligne ouverte' },
+  // ⚠️ EMPREINTE CHANGÉE PAR T-20260824-0020, et le rouge était VOULU : la commande de
+  // cette garde appelait la sienne par `exec node` et transmettait sa sortie telle quelle
+  // — elle cessait de refuser dès qu’elle cassait, pendait, bouclait, ou qu’un `npm
+  // notice` précédait son JSON. Elle capture, valide et ré-émet désormais un verdict
+  // canonique, et refuse à sa place quand il n’y en a pas.
+  // RÉ-ÉPROUVÉE, et pas seulement recalculée : `naissance-representant/tests/
+  // la-commande-garde-refuse-en-panne.test.js` ⑨ la joue face à un `Write` et mesure
+  // qu’elle transmet le `allow` de sa garde au lieu de refuser d’elle-même.
+  { sha: 'd21867526edaded7', quoi: 'garde « ouverture-ligne »', pourquoi: 'éprouvée en §9 (elle se retire une fois la ligne ouverte) et face à un Write par le banc des six modes de panne — T-20260824-0020' },
 ];
 
 test('🔴 tout hook du lieu qui PEUT voir un Write a été éprouvé — un voisin non éprouvé fait tomber ce lot en silence', () => {

@@ -24,6 +24,8 @@ Ce n'est pas une lecture de courtoisie. **C'est là que vivent les consignes aux
 
 Jamais par couche technique. Chaque epic porte son problème, son résultat attendu, son hors-scope, ses contraintes, ses critères de succès. Pose les `sequence_order` et `depends_on_ids`.
 
+**Et quand le chantier a des maquettes, chaque story user-facing porte un G/W/T « conforme à la maquette X ».** La maquette est un **critère d'acceptation opposable** — le contrat visuel du lot, pas une inspiration : la QA comparera le livré à la maquette **avant toute annonce de livraison** (voir R4). Motif payé : la première livraison de la vue du parc, non conforme aux maquettes fournies — parce qu'aucun G/W/T ne les nommait.
+
 **Ce qui ne bloque pas un epic ne doit pas y être accroché.** La dette découverte en le relisant va dans un epic de dette dédié, sinon le ServiceDesk affiche « en cours » pour un travail terminé.
 
 *Si ton chantier est une Livraison* — **tu n'as rien à découper : le périmètre t'est donné.** Ton travail est d'**inventorier et d'ordonner** :

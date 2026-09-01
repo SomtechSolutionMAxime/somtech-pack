@@ -22,6 +22,7 @@ Le résultat, quand tout va bien :
     └── <client>/
         ├── CLAUDE.md               ← le métier, copié du pack — généré, jamais édité à la main
         ├── CONTEXTE.md             ← ce qui est propre à ce client — à la main, jamais écrasé
+        ├── RONDE.md                ← le briefing qu'il pose en `/loop` — à la main, jamais écrasé
         ├── .mcp.json               ← le ServiceDesk SEUL — Somcraft en est exclu, délibérément
         └── .claude/
             └── settings.json       ← lecture du dépôt, sa ligne, le registre — rien d'autre
@@ -88,7 +89,7 @@ refusé. Sur un refus, le motif est aussi écrit en clair sur la sortie d'erreur
 nomme le geste qui débloque.
 
 **Elle est idempotente, et l'idempotence ne vaut que pour un lieu COMPLET.** Relancée sur un
-client déjà installé — ses quatre fichiers présents — elle ne retouche à rien, le dit
+client déjà installé — **tous les fichiers de son gabarit** présents — elle ne retouche à rien, le dit
 (`deja_installe`) et s'arrête là ; sur cette voie elle ne fait même pas l'aller-retour vers
 Slack, il n'y a rien à vérifier pour ne rien faire.
 
@@ -106,7 +107,7 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 |---|---|---|
 | `nom_invalide` | Le nom du client n'est pas **un seul segment de chemin** : il traverse un répertoire (`/`, `\`, `..`), commence par un point ou un tiret, ou porte un caractère hors lettres/chiffres/tirets. La **casse est libre** — `Charles-Olivier` est un nom parfaitement valide | Reprends un nom en lettres, chiffres et tirets. Rien n'a été créé : ce refus tombe **avant** tout accès au disque et tout appel réseau |
 | `lieu_ambigu` | Plusieurs lieux sous `.gestionnaire/` ne diffèrent **que par la casse** (`Francois` et `francois`), et aucun ne porte exactement le nom demandé. Rien ici ne peut dire lequel est le bon — en choisir un reviendrait à poser à côté d'un lieu vivant | Écarte celui qui ne sert plus (`mv .gestionnaire/<autre> .gestionnaire/<autre>.ecarte`), puis relance. Aucun troisième lieu n'a été créé |
-| `lieu_partiel` | `.gestionnaire/<client>/` existe mais lui manque des fichiers | Écarte ce reste (`mv .gestionnaire/<client> .gestionnaire/<client>.ecarte`), puis relance — elle ne complète jamais |
+| `lieu_partiel` | `.gestionnaire/<client>/` existe mais il lui manque des fichiers. **Deux cas, et le geste n'est pas le même** : un **obligatoire** manque (`CLAUDE.md`, `CONTEXTE.md`, `.mcp.json`, `.claude/settings.json`) — la pose a été interrompue, il n'y a rien à sauver ; ou **tous les obligatoires sont là** et ce qui manque a été ajouté au gabarit depuis — le lieu est **vivant**, son `CONTEXTE.md` est rempli à la main | **Obligatoire manquant** : écarte ce reste (`mv .gestionnaire/<client> .gestionnaire/<client>.ecarte`), puis relance — cette commande ne complète jamais un lieu à demi posé. **Gabarit qui a grandi** : ⚠️ **n'écarte surtout pas** — ce geste emporterait le contexte rempli à la main, la seule chose ici que personne ne peut reconstituer. Mets le lieu **à jour** (`npx @somtech-solutions/pack agent maj <client>`), qui y dépose ce qui manque sans toucher à ce qu'un humain y a écrit, puis relance |
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du client |
 | `gabarit_perime` | Le gabarit que ce dépôt porte **n'est pas celui du pack installé sur ce poste** — comparé par **empreinte**, pas par numéro de version. Un représentant posé là porterait un métier d'une autre époque, et il ne le saurait jamais : il ne lit que son lieu | Le refus **nomme les deux empreintes et les deux chemins**. Mets le pack à jour dans le dépôt du client (`npx @somtech-solutions/pack update`), puis relance. Rien n'a été créé |
 | `droits_non_versionnables` | Un motif d'exclusion du dépôt (`.gitignore` ou `.git/info/exclude`) empêche de verser `.claude/settings.json` — le lieu serait complet sur ce disque et **sans permissions bornées partout ailleurs** | Le refus nomme le motif et sa source. Lève l'exclusion : `git add -f <le fichier>` une fois posé, ou une négation `!.claude/settings.json` dans le fichier d'exclusion |
@@ -167,6 +168,23 @@ bloquant — le lieu est créé quand même — mais un représentant né sans a
 découvrira en pleine conversation si personne ne l'a prévenu à l'installation. C'est
 exactement le silence que cette compétence existe pour éviter, et le taire ici le
 réintroduirait par un autre chemin.
+
+## Avant de le faire naître — son contexte et sa ronde
+
+**Deux fichiers du lieu sont posés AVEC leurs chevrons, et ce sont les deux que tu remplis** :
+
+| `CONTEXTE.md` | ce que le métier ne peut pas savoir de ce client — son nom entre nous, le canal où on lui parle, son application au registre |
+| `RONDE.md` | **le briefing qu'il pose en `/loop` à sa naissance** — sa cadence, son client en une ligne, ce que chaque tour doit regarder en plus, et ce qu'il a promis à quelle échéance |
+
+> ⚠️ **Sans ronde, un représentant ne se réveille jamais — et personne ne s'en aperçoit.** Son
+> sommeil ressemble trait pour trait à « rien à signaler » : une ronde éteinte ne produit aucune
+> erreur. Mesuré le 2026-08-26 sur le parc : **un seul lieu vivant sur dix-huit** portait un
+> briefing de ronde, et son représentant l'avait écrit lui-même à la main.
+
+**Remplis-les, ou fais-les remplir, avant la naissance — la naissance les exige désormais.** Un
+lieu dont l'un des deux est resté mot pour mot le gabarit **fait refuser la naissance**, qui
+nomme les rubriques restées et n'ouvre aucun pane. Le refus se borne à ce que le gabarit a
+déposé : un chevron de ta prose n'est jamais compté.
 
 ## Ce que le représentant dira, une fois installé (non-régression EF-AGT-003 / RA-AGT-007)
 

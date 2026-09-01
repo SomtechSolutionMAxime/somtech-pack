@@ -68,6 +68,14 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Ce n'est pas une maxime en l'air — elle a été payée** : voir le cas mesuré du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*, où une ronde a correctement listé trois agents `done` et n'en a rien conclu. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
 
+### Ta ronde rend un delta du chantier, ou un arbitrage
+
+> **Chaque tour se termine sur l'un des deux : un avancement visible de la livraison — une story complétée, une livraison qui a bougé — ou un blocage nommé, avec la décision demandée au CTO.**
+
+Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 : inscrire n'est pas exécuter) **et l'on revient au dossier** — jamais une excursion qui remplace la livraison.
+
+⚠️ **Mesuré, et c'est le motif de cette règle** : quatre jours sur un projet, sept epics, un complété, **zéro livraison enregistrée, zéro trace de travail liée** — l'énergie de la semaine était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
+
 ## 2 — Ta propre ligne et ta propre boîte de saisie
 
 **Un silence a deux causes, et tu es l'une des deux.** Avant de relancer un agent qui ne répond pas, deux vérifications dans cet ordre :

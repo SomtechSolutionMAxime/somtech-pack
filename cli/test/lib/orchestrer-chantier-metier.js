@@ -272,15 +272,30 @@ export const CONTROLES = [
       const principe = skill.match(/^>\s+\*\*L'orchestrateur ne déploie que des chefs d'équipe.*$/m);
       assert.ok(principe, 'le principe « l\'orchestrateur ne déploie que des chefs d\'équipe » doit être posé en principe gouvernant');
       exigeImperatif(principe[0], 'le principe de déploiement');
+      // ⚠️ RÉ-ANCRÉ (D-20260826-0010, ABC 3.0.0) : le principe porte désormais son périmètre —
+      // le chef d'équipe est pour le travail qui produit un LIVRABLE, et les sous-agents
+      // d'analyse sont les propres moyens de l'orchestrateur (R2.6, R3.1). Le périmètre est
+      // gardé AVEC sa borne : « propres moyens » sans « ne portent jamais un lot » se relit
+      // comme « fais mener tes lots par tes sous-agents ».
+      assert.match(
+        principe[0], /pour le travail qui produit un livrable/i,
+        'le principe de déploiement doit porter son périmètre (ABC 3.0.0) — sans lui, il redevient l\'ancien interdit total',
+      );
+      assert.match(
+        principe[0], /ils ne portent jamais un lot/i,
+        'et la borne des sous-agents d\'analyse — sans elle, « propres moyens » rouvre le niveau',
+      );
 
       // 2. La table le tient : ouvrir autre chose est du côté des interdits.
       const table = tableNiveaux(skill);
       const iNiveau = colonneDe(table, H_NIVEAU, 'le niveau');
       const l = ligneDe(table, iNiveau, /orchestrat/i, 'de l\'orchestrateur');
       const jamais = l[colonneDe(table, H_JAMAIS, "ce qu'il ne fait jamais")];
+      // ⚠️ RÉ-ANCRÉ (D-20260826-0010) : la restriction porte sur les PANES — tout agent ouvert
+      // en pane est un chef d'équipe (R3.1) ; « aucun agent » est devenu faux par ordre.
       assert.match(
-        jamais, /n'ouvre aucun agent qui ne soit un chef d'équipe/i,
-        'l\'interdit d\'ouvrir autre chose qu\'un chef d\'équipe doit vivre dans la colonne des interdits'
+        jamais, /n'ouvre en pane que des chefs d'équipe/i,
+        'l\'interdit d\'ouvrir en pane autre chose qu\'un chef d\'équipe doit vivre dans la colonne des interdits'
       );
     },
   },
@@ -633,7 +648,21 @@ export const CONTROLES = [
         );
         // Une attribution s'écrit « à … » — un énoncé qui cesse d'attribuer a cessé
         // de rendre le geste, même s'il ne nomme pas l'orchestrateur pour autant.
-        assert.match(l[iQui], /^à\s+\S/i, `le geste « ${quoi} » n'attribue plus à personne (« ${l[iQui]} »)`);
+        // Une attribution s'écrit « à … ». Un geste peut aussi n'appartenir à PERSONNE — mais
+        // seulement quand la case DIT POURQUOI (l'outillage le fait à la place). Une case vide,
+        // ou un « personne » nu, a cessé de rendre le geste et reste refusée.
+        //
+        // 🔴 CE CRAN S'OUVRE PARCE QUE LE TEXTE A CHANGÉ SOUS LA GARDE, pas l'inverse
+        // (T-20260901-0027). `naitre` nomme désormais l'agent et le vérifie par le fait :
+        // redemander à un chef d'équipe de se nommer le ferait se renommer par-dessus, sa
+        // déclaration ne l'apparierait plus, et la garde de l'anonymat l'accuserait. Le geste
+        // « renommer » n'appartient donc réellement plus à personne — la garde le refusait au
+        // nom d'une prescription que le métier venait d'abolir. Une garde peut se périmer sans
+        // que personne n'y touche.
+        assert.match(
+          l[iQui], /^(à\s+\S|\**personne\**\s*[—-]\s*\S)/i,
+          `le geste « ${quoi} » n'attribue plus à personne (« ${l[iQui]} »)`
+        );
         exigeImperatif(l[iQui], `l'attribution du geste « ${quoi} »`);
       }
 
@@ -873,9 +902,10 @@ export const MUTATIONS = [
     quoi: 'l\'orchestrateur code — la fonction principale retournée',
     sur: 'skill',
     cible: 'orchestrateur-jamais-code',
+    // ⚠️ Ré-ancrée (D-20260826-0010) : la cellule porte la restriction sur les panes.
     muter: (t) => t.replace(
-      '| ne code pas, ne relit pas le code, n\'ouvre aucun agent qui ne soit un chef d\'équipe |',
-      '| ne relit pas le code, n\'ouvre aucun agent qui ne soit un chef d\'équipe |'
+      '| ne code pas, ne relit pas le code, n\'ouvre en pane que des chefs d\'équipe |',
+      '| ne relit pas le code, n\'ouvre en pane que des chefs d\'équipe |'
     ),
   },
 
@@ -895,8 +925,9 @@ export const MUTATIONS = [
     quoi: 'l\'orchestrateur peut ouvrir autre chose qu\'un chef d\'équipe',
     sur: 'skill',
     cible: 'orchestrateur-nouvre-que-des-chefs-equipe',
+    // ⚠️ Ré-ancrée (D-20260826-0010) : la cellule porte la restriction sur les panes.
     muter: (t) => t.replace(
-      ", n'ouvre aucun agent qui ne soit un chef d'équipe |",
+      ", n'ouvre en pane que des chefs d'équipe |",
       ' |'
     ),
   },
@@ -906,9 +937,30 @@ export const MUTATIONS = [
     quoi: 'le principe de déploiement s\'assouplit en recommandation — le mot-clé reste, le sens part',
     sur: 'skill',
     cible: 'orchestrateur-nouvre-que-des-chefs-equipe',
+    // ⚠️ Ré-ancrée (D-20260826-0010) : le principe porte le périmètre de l'ABC 3.0.0.
     muter: (t) => t.replace(
-      "> **L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents.**",
-      "> **L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents, sauf si ça presse.**"
+      'sont ses propres moyens, et ils ne portent jamais un lot.**',
+      'sont ses propres moyens, et ils ne portent jamais un lot, sauf si ça presse.**'
+    ),
+  },
+  {
+    id: 'le-principe-perd-son-perimetre',
+    quoi: 'le principe redevient l\'ancien interdit total — « ne déploie que des chefs d\'équipe » sans le périmètre du livrable ni les moyens d\'analyse',
+    sur: 'skill',
+    cible: 'orchestrateur-nouvre-que-des-chefs-equipe',
+    muter: (t) => t.replace(
+      "> **L'orchestrateur ne déploie que des chefs d'équipe pour le travail qui produit un livrable — ses sous-agents d'analyse (lecture seule, résultat au ServiceDesk) sont ses propres moyens, et ils ne portent jamais un lot.**",
+      "> **L'orchestrateur ne déploie que des chefs d'équipe qui gèrent des sous-agents.**"
+    ),
+  },
+  {
+    id: 'les-moyens-d-analyse-portent-des-lots',
+    quoi: 'la borne des sous-agents d\'analyse tombe du principe — « propres moyens » se relit comme « fais mener tes lots par tes sous-agents »',
+    sur: 'skill',
+    cible: 'orchestrateur-nouvre-que-des-chefs-equipe',
+    muter: (t) => t.replace(
+      'sont ses propres moyens, et ils ne portent jamais un lot.**',
+      'sont ses propres moyens.**'
     ),
   },
 
@@ -923,8 +975,8 @@ export const MUTATIONS = [
         "| Niveau | Qui | Ce qu'il fait | Ce qu'il ne fait **jamais** | Quand le justifier |\n|---|---|---|---|---|"
       )
       .replace(
-        "| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre aucun agent qui ne soit un chef d'équipe |",
-        "| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre aucun agent qui ne soit un chef d'équipe | toujours |"
+        "| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre en pane que des chefs d'équipe |",
+        "| **Orchestrateur** | toi (agent herdr) | cadre, découpe, arbitre, fusionne, tient le registre | ne code pas, ne relit pas le code, n'ouvre en pane que des chefs d'équipe | toujours |"
       )
       .replace(
         "| **Chef d'équipe** | tout agent herdr que tu ouvres | mène son unité de travail, la distribue à ses sous-agents, intègre, rend compte | n'ouvre aucun agent herdr |",

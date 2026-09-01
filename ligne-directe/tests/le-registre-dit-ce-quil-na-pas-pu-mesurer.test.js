@@ -280,7 +280,20 @@ test('« au repos » n’est pas « sans travail en vol » — et un écran illi
   assert.equal(vu.enVol, true);
   assert.equal(vu.shells, 1);
   assert.equal(vu.sousAgents, true);
-  assert.ok(vu.rendu, 'le rendu sur lequel ça a été mesuré voyage AVEC la mesure');
+  // ⚠️ CETTE LIGNE EXIGEAIT AUTREFOIS `vu.rendu`, ET ELLE ENCODAIT LE DÉFAUT (E-20260825-0006).
+  // Ce champ valait « Claude Code v2.1.235 (mesuré le 2026-08-19) » : une constante écrite en
+  // dur, rendue sous le mot « mesuré » et sous un objet qui déclare par ailleurs `mesure: 'lue'`
+  // — ce `lue` portant en vérité sur l'ÉCRAN. Le message de l'assertion le disait mot pour mot
+  // (« le rendu sur lequel ça a été MESURÉ »), et le poste tournait réellement sur 2.1.245.
+  // Sa FONCTION est conservée : ce sur quoi le lecteur d'écran a été étalonné doit voyager AVEC
+  // la mesure. Ce qui change, c'est qu'il se déclare désormais écrit, et non mesuré.
+  assert.ok(vu.etalonnage, 'l’étalonnage du lecteur d’écran voyage AVEC la mesure');
+  assert.equal(vu.etalonnage.mesure, 'constante', 'et il se déclare ÉCRIT, jamais mesuré');
+  assert.equal(
+    vu.versionDuPoste.mesure,
+    'non mesurée',
+    'aucune sonde n’est branchée ici : la version réelle du poste est inconnue, et ça se dit'
+  );
 
   // ⚠️ ET LE CŒUR DE LA RÈGLE : une lecture ratée se dit, elle ne se lit jamais « rien en vol ».
   const rate = travailEnVol(null);

@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 // naitre.js — la commande qui fait naître une session dans le lieu d'un agent.
 //
-//   gestionnaire-naitre <nom> [--workspace <espace herdr>] [--role representant|orchestrateur]
+//   gestionnaire-naitre <nom> [--workspace <espace herdr>] [--role <un rôle du registre | chef-equipe>]
 //                             [--depot <chemin>]
 //
 // ⚠️ `--workspace` EST FACULTATIF, et c'est le défaut que ce lot a fermé : sans lui, la
 // naissance ouvre elle-même son espace herdr. L'écrire sans crochets envoyait le lecteur en
 // chercher un qui n'a pas à exister.
+//
+// ⚠️ LES RÔLES NE SONT PLUS ÉNUMÉRÉS ICI, ET L'AIDE LES COMPOSE (T-20260826-0076, point 6).
+// Elle annonçait « representant|orchestrateur » en dur : elle aurait menti dès le troisième rôle
+// inscrit au registre — et les neuf du chantier en cours (P-20260819-0001) arrivent. Une aide
+// qui ne nomme pas un rôle utilisable est indiscernable, pour qui la lit, d'un rôle refusé.
+//
+// 🔴 ET ELLE ÉNUMÈRE LES DEUX TABLES DU REGISTRE, pas seulement celle des rôles qui ont un lieu.
+// Un chef d'équipe n'a pas de lieu : il vit dans `ROLES_SANS_LIEU`, que `rolesConnus()` ne rend
+// pas. Composer l'aide sans elle rouvrirait, pour LUI seul, le défaut exact que la composition
+// ferme — un rôle utilisable que l'aide ne nomme pas.
 //
 // Elle ne pose jamais le lieu (E-20260807-0002 pour le représentant, E-20260813-0002 pour
 // l'orchestrateur) : elle le vérifie, y repose le garde d'ouverture (à chaque appel —
@@ -47,6 +57,7 @@ import {
   repertoireDeLaSession,
   cheminLieu,
   LieuAbsent,
+  avisSurLeLieuNonRenseigne,
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
@@ -55,9 +66,13 @@ import { sessionVisee, espaceDeLaSession } from '../src/session.js';
 import { verserLeLieu, exigerUnDepotGit, VersementImpossible, branchesQuiPortent } from '../src/versement.js';
 import { expositionAlaNaissance, ATTENTE_NAISSANCE_MS } from '../src/naissance.js';
 import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-directe/src/ecran.js';
-import { preparerLieuOrchestrateur } from '../../ligne-directe/src/orchestrateur.js';
+// ⚠️ LE GÉNÉRIQUE, ET SON VÉRIFICATEUR PASSÉ EXPLICITEMENT — voir la note au point de pose.
+import { verifierLigneOuvrable } from '../../ligne-directe/src/orchestrateur.js';
+import { verifierLieuRenseigne } from '../../ligne-directe/src/lieu-renseigne.js';
+import { gabaritsDir, preparerLieu } from '../../ligne-directe/src/lieu-agent.js';
 import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
 import { chargerRegistre } from '../../ligne-directe/src/registre.js';
+import { role as roleDe, rolesConnus, rolesSansLieu, poseAutomatique, poseManuelle } from '../../ligne-directe/src/roles.js';
 import {
   ROLE_CHEF_EQUIPE,
   estChefDEquipe,
@@ -108,7 +123,7 @@ const DELAI_MS = Number(process.env.NAISSANCE_DELAI_MS || 2000);
 function usage(code) {
   process.stderr.write(
     'gestionnaire-naitre <nom> [--workspace <espace herdr>] [--session <session herdr>]\n' +
-      '                         [--role representant|orchestrateur|chef-equipe] [--depot <chemin>]\n' +
+      `                         [--role ${[...rolesConnus(), ...rolesSansLieu()].join('|')}] [--depot <chemin>]\n` +
       '                         [--coordonnateur <nom>] [--base <ref>] [--horodatage <AAAAMMJJ-HHMMSS>]\n' +
       '                         [--amorce <fichier> | --amorce-texte "…"]\n' +
       '                         [--modele <alias>] [--mode <mode de permission>] [--sans-poser]\n' +
@@ -231,6 +246,28 @@ process.on('exit', (code) => {
     if (!defait.ok) process.stderr.write(`⚠️  ${defait.message}\n`);
   }
 });
+
+/**
+ * « de représentant », « d'orchestrateur » — le rôle sans article, et avec l'élision.
+ *
+ * ⚠️ CES DEUX AIDES EXISTENT PARCE QUE LE LIBELLÉ VIENT DÉSORMAIS DU REGISTRE. Les phrases
+ * portaient le rôle EN DUR (« les lieux de représentant », « le lieu de l'orchestrateur ») :
+ * il n'y avait rien à accorder. En les composant, on hérite du problème que `lieu-agent.js`
+ * a déjà nommé — un `le ${libelle}` naïf produit « le orchestrateur ». Ces messages sont lus
+ * par un humain puis recopiés dans un ticket ; on ne les laisse pas partir en français
+ * approximatif.
+ *
+ * ⚠️ ET ELLES NE COUVRENT QUE L'ÉLISION, PAS LE GENRE. Les libellés du registre sont
+ * masculins aujourd'hui ; un rôle féminin (« la conseillère ») rendrait « de conseillère »,
+ * juste, et « du conseillère », faux. Le jour où le registre en porte un, c'est LUI qui devra
+ * dire son article — une règle d'accord tenue par du code se trompe au premier cas qu'elle
+ * n'a pas prévu, et le registre le dit déjà à propos de `libelle_pluriel`.
+ */
+const commenceParUneVoyelle = (libelle) => /^[aeiouyàâäéèêëîïôöùûü]/i.test(libelle);
+const deRole = (libelle) => (commenceParUneVoyelle(libelle) ? `d’${libelle}` : `de ${libelle}`);
+
+/** « du représentant », « de l'orchestrateur » — le rôle avec son article défini. */
+const duRole = (libelle) => (commenceParUneVoyelle(libelle) ? `de l’${libelle}` : `du ${libelle}`);
 
 /** Deux chemins désignent-ils le même répertoire ? (`/tmp` → `/private/tmp` sur macOS). */
 function memeRepertoire(a, b) {
@@ -408,10 +445,10 @@ async function main() {
   const bapteme = nomDeLAgentQuiNait({
     role,
     // ⚠️ `null` POUR UN CHEF D'ÉQUIPE, ET LE CALCULER SERAIT UNE ERREUR : `cheminLieu` passe par
-    // la table des rôles et jetterait `RoleInconnu`. `nomDeLAgentQuiNait` n'en a de toute façon
-    // pas l'usage ici — sa première branche (« un rôle qui n'est pas orchestrateur ») rend le
-    // code du mandat abaissé sans jamais regarder le lieu. C'est de là que vient le nom d'un chef
-    // d'équipe : le code de son mandat, jamais une rivière (elle est réservée aux orchestrateurs).
+    // la table des rôles QUI ONT UN LIEU et jetterait `RoleInconnu`. `nomDeLAgentQuiNait` n'en a
+    // de toute façon pas l'usage ici — le registre répond « code » pour ce rôle, et cette réponse
+    // ne regarde jamais le lieu. C'est de là que vient le nom d'un chef d'équipe : le code de son
+    // mandat, jamais une rivière (elle est réservée aux orchestrateurs).
     lieu: chefEquipe ? null : cheminLieu(REPO_ROOT, nom, role),
     code: nom,
     propose: nomAgentPropose,
@@ -511,19 +548,38 @@ async function main() {
   // de versement (T-20260814-0139) exigerait un commit pour chacun.
   if (!chefEquipe) {
     if (!existsSync(commandes.lieu)) {
-      if (role !== 'orchestrateur') {
+      const r = roleDe(role);
+      if (!poseAutomatique(role)) {
+        const garde = poseManuelle(role);
         process.stderr.write(
-          `aucun lieu de ${role} pour « ${nom} » dans ${REPO_ROOT} — et cette commande ne pose pas ` +
-            `les lieux de représentant : ils se branchent sur un canal que le client voit, et leur ` +
-            `pose garde sa revue.\n` +
-            `  Le geste qui lève le blocage : la compétence /gestionnaire-client, qui demande le canal ` +
-            `et le dirigeant que la pose exige.\n`
+          `aucun lieu ${deRole(r.libelle)} pour « ${nom} » dans ${REPO_ROOT} — et cette commande ne pose pas ` +
+            `les lieux ${deRole(r.libelle)} : ${garde.motif}.\n` +
+            `  Le geste qui lève le blocage : ${garde.geste}.\n`
         );
         process.exit(1);
       }
       let pose;
       try {
-        pose = await preparerLieuOrchestrateur({ depot: REPO_ROOT, nom });
+        // ⚠️ `verifierLigne` EST PASSÉ EXPLICITEMENT, ET L'OUBLIER N'AURAIT RIEN FAIT PLANTER.
+        //
+        // `preparerLieuOrchestrateur` injectait `verifierLigneOuvrable` PAR DÉFAUT ; le générique
+        // `preparerLieu`, lui, n'a aucun défaut pour ce paramètre. MESURÉ le 2026-08-26 en
+        // l'appelant sans lui : son filet attrape le `verifierLigne is not a function` et rend un
+        // refus `verification_impossible` parfaitement formé — « on ne sait pas si la ligne
+        // pouvait être ouverte », aucune conclusion, aucun geste proposé. La pose serait devenue
+        // impossible pour TOUS les rôles, l'orchestrateur compris, derrière un refus irréprochable
+        // qui n'aurait désigné personne. C'est pour ça qu'on le PASSE plutôt que d'hériter d'un
+        // défaut, et qu'on l'a mesuré plutôt que supposé.
+        //
+        // ⚠️ CE QUE CE CHOIX NE COUVRE PAS, ET QUI SE TRANCHERA AU RÔLE QUI L'EXIGERA.
+        // `verifierLigneOuvrable` mesure la capacité du POSTE à ouvrir une ligne (les deux jetons
+        // du trousseau). C'est la bonne question pour un rôle dont la ligne est INTERNE — il la
+        // crée lui-même. Ce serait la mauvaise pour un rôle à pose automatique dont la ligne
+        // serait CLIENTE : là, ce qui se mesure est la joignabilité d'un canal qui existe déjà.
+        // Aucun rôle du registre n'est dans ce cas aujourd'hui (le seul à ligne cliente est le
+        // représentant, dont la pose garde sa revue). Le jour où il y en a un, c'est le registre
+        // qui devra dire quelle vérification s'applique — pas cette ligne.
+        pose = await preparerLieu({ depot: REPO_ROOT, role, nom, verifierLigne: verifierLigneOuvrable });
       } catch (err) {
         process.stderr.write(`la pose du lieu a échoué : ${err.message}\n`);
         process.exit(1);
@@ -533,7 +589,7 @@ async function main() {
         // relaie SON message : le réécrire ici ferait diverger deux textes qui décrivent le même
         // refus, et c'est comme ça qu'on se retrouve avec un conseil qui ne marche plus.
         process.stderr.write(
-          `le lieu de l’orchestrateur « ${nom} » n’a pas pu être posé (${pose.refus?.motif ?? 'motif inconnu'}) :\n` +
+          `le lieu ${duRole(r.libelle)} « ${nom} » n’a pas pu être posé (${pose.refus?.motif ?? 'motif inconnu'}) :\n` +
             `  ${pose.refus?.message ?? JSON.stringify(pose.refus)}\n`
         );
         process.exit(1);
@@ -548,6 +604,49 @@ async function main() {
       if (pose.metier_verifie === false && pose.metier_non_verifie) {
         process.stderr.write(`${pose.metier_non_verifie}\n`);
       }
+    }
+
+    // ═══ CE LIEU A-T-IL ÉTÉ RENSEIGNÉ ? — ICI, avant qu'un seul pane existe (T-20260826-0043).
+    //
+    // La pose dépose `CONTEXTE.md` et `RONDE.md` AVEC leurs chevrons, délibérément : ils portent
+    // ce que le métier ne peut pas savoir — à qui l'agent répond, sa portée, ce que sa ronde doit
+    // regarder. La compétence dit « remplis-les avant la naissance » ; rien ne le faisait
+    // respecter, et personne ne lisait leur CONTENU.
+    //
+    // ⚠️ CE QUE ÇA A COÛTÉ, MESURÉ SUR LE PARC LE 2026-08-26 : cinq lieux vivants sur dix-huit
+    // portent un `CONTEXTE.md` resté au gabarit intégral. Aucun ne dit à qui son agent répond.
+    // La pose avait rendu `ok`, la naissance avait réussi — le mode de panne est parfaitement
+    // silencieux, et l'agent le découvre en plein chantier, ou ne le découvre jamais.
+    //
+    // ⚠️ ON REFUSE, ON N'AVERTIT PAS, et c'est la différence avec l'exposition de branche juste
+    // en dessous. Un lieu exposé reste utilisable ; un lieu qui ne dit pas à qui son agent répond
+    // ne l'est pas — le cycle arbitré par le CTO exige un lieu COMPLET avant chaque naissance,
+    // et un avertissement de plus dans un flot d'avertissements ne se lit pas.
+    //
+    // ⚠️ ET IL TOMBE ICI, avant le versement et avant le pane : rien n'a encore été créé, donc
+    // rien n'est à défaire. Un refus qui laisse un pane derrière lui est doublement trompeur.
+    //
+    // ⚠️ ET IL NE CONCERNE QUE LES RÔLES QUI ONT UN LIEU — il est DANS la garde `!chefEquipe`
+    // pour la même raison que la pose : un chef d'équipe n'a pas de `CONTEXTE.md` à renseigner,
+    // et `gabaritsDir` n'aurait aucun gabarit à lui opposer.
+    const renseigne = verifierLieuRenseigne({
+      gabaritDir: gabaritsDir(REPO_ROOT, role),
+      racine: commandes.lieu,
+    });
+    if (renseigne.renseigne === false) {
+      // ⚠️ CE QUE LA COMMANDE AJOUTE, ET QUE LA GARDE NE PEUT PAS SAVOIR (relevé en passe de fond).
+      //
+      // Sur le chemin d'AUTO-POSE, le lieu vient d'être posé QUELQUES LIGNES PLUS HAUT : ses
+      // fichiers sont, par construction, restés mot pour mot le gabarit — personne n'a encore eu
+      // le temps de les remplir. Le refus est juste, mais il ne doit pas laisser croire que rien
+      // n'existe : un répertoire entier vient d'être créé, et il n'est pas versé.
+      //
+      // C'est le seul chemin par lequel un orchestrateur naît sans qu'un humain touche un écran.
+      // Un refus qui s'y trompe de diagnostic y est plus coûteux qu'ailleurs.
+      process.stderr.write(
+        avisSurLeLieuNonRenseigne({ message: renseigne.message, poseFaite, lieu: commandes.lieu }),
+      );
+      process.exit(1);
     }
 
     // ═══ VERSER LE LIEU — le second des gestes qu'un humain faisait à la main.

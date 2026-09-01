@@ -10,7 +10,75 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ROLES = ['orchestrateur', 'gestionnaire-client'];
+
+/**
+ * LE DÉNOMINATEUR DE CE FICHIER — MESURÉ SUR LE DISQUE, PLUS ÉCRIT À LA MAIN (T-20260826-0076).
+ *
+ * Il valait `['orchestrateur', 'gestionnaire-client']`, en toutes lettres. Une garde dont le
+ * dénominateur est écrit à la main mesure ce qu'on a pensé à y mettre, jamais ce qui existe :
+ * c'est le motif « zéro survivante sur un sous-ensemble », et il a été MESURÉ ici même le
+ * 2026-08-26. Un troisième rôle déposé sous `metier/developpeur/`, avec un `CLAUDE.md` de
+ * gabarit remplacé par du texte écrit à la main ET son fichier de droits SUPPRIMÉ, laissait
+ * les 17 contrôles de ce fichier au vert. Le rôle n'était dans la liste, donc rien ne le
+ * regardait — un agent posé dessus serait né sans aucun refus.
+ *
+ * ⚠️ POURQUOI `metier/*` ET NON `.claude/templates/*` — les deux ont été mesurées, elles ne
+ * rendent pas la même chose :
+ *
+ *   • `metier/*`            → gestionnaire-client, orchestrateur          (2)
+ *   • `.claude/templates/*` → bootstrap, gestionnaire-client, orchestrateur (3, + le fichier
+ *                             USER_CLAUDE_MD.md)
+ *
+ * `bootstrap` est un gabarit de sources de vérité, pas un rôle d'agent : il n'a ni classement
+ * ni rendu. L'énumérer forcerait une liste d'exceptions — et une liste d'exceptions se désarme
+ * par un geste qui ressemble à de l'entretien. `metier/*` est l'énumération qui coïncide avec
+ * le SUJET de ce fichier : « le gabarit distribué EST le rendu » ne se dit que d'un rôle qui a
+ * un rendu.
+ *
+ * ⚠️ AUCUN FILTRE, ET C'EST DÉLIBÉRÉ. On prend TOUS les sous-dossiers de `metier/`, sans
+ * exiger de `classement.json` pour entrer — un filtre qui se resserre est un dénominateur qui
+ * rétrécit en silence. Ce que chaque rôle doit porter est vérifié PAR UN CONTRÔLE À PART, qui
+ * NOMME celui à qui il manque quelque chose (voir juste dessous).
+ */
+function rolesDuMetier(racine) {
+  const base = join(racine, 'metier');
+  if (!existsSync(base)) return { roles: [], raison: `« ${base} » n’existe pas` };
+  const roles = readdirSync(base, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  return { roles, raison: roles.length ? null : `« ${base} » ne porte aucun sous-dossier de rôle` };
+}
+
+const { roles: ROLES, raison: RIEN_TROUVE } = rolesDuMetier(RACINE);
+
+test('🔴 le dénominateur de ce fichier est MESURÉ, il n’est pas vide, et chaque rôle est complet', () => {
+  // ⚠️ SANS CE CONTRÔLE, LA GARDE SE DÉSARME TOUTE SEULE. Les contrôles ci-dessous vivent dans
+  // une boucle `for (const role of ROLES)` : si l’énumération rend une liste VIDE — répertoire
+  // déplacé, renommé, filtre resserré — la boucle n’enregistre AUCUN test et la suite passe au
+  // vert en n’ayant rien mesuré. « Un test qui attend RIEN ne peut pas distinguer *rien trouvé*
+  // de *rien cherché* » (feed du 2026-08-25). Celui-ci fait la différence, et il rougit du côté
+  // de « rien cherché ».
+  assert.equal(RIEN_TROUVE, null,
+    `l’énumération des rôles n’a rien rendu : ${RIEN_TROUVE}. Tous les contrôles de ce fichier `
+    + 'sont alors muets — ils ne sont pas verts, ils n’existent pas.');
+  assert.ok(ROLES.length > 0, 'aucun rôle énuméré — voir le message ci-dessus');
+
+  // Le filtre est LARGE à l’entrée ; c’est ici qu’on exige, en NOMMANT, ce qu’un rôle doit
+  // porter. Un rôle incomplet doit rougir d’un message qui dit quoi faire — pas disparaître du
+  // dénominateur, ce qui reviendrait à cesser de le garder au moment où il en a le plus besoin.
+  const incomplets = [];
+  for (const role of ROLES) {
+    const dit = (quoi) => incomplets.push(`${role} : ${quoi}`);
+    if (!existsSync(join(RACINE, 'metier', role, 'classement.json'))) dit('pas de metier/<rôle>/classement.json');
+    if (!existsSync(join(RACINE, 'metier', role, 'rendu'))) dit('pas de metier/<rôle>/rendu/ — lancer « pack metier rendre --role ' + role + ' »');
+    if (!existsSync(join(RACINE, '.claude', 'templates', role))) dit('pas de .claude/templates/<rôle>/ — le rendu ne serait distribué à personne');
+  }
+  assert.deepEqual(incomplets, [],
+    'un rôle de metier/ n’a pas de quoi être gardé :\n  ' + incomplets.join('\n  '));
+
+  console.log(`  → dénominateur mesuré depuis metier/ : ${ROLES.join(', ')}`);
+});
 
 for (const role of ROLES) {
   const gabarit = join(RACINE, '.claude', 'templates', role);
@@ -123,6 +191,97 @@ test('DISTRIBUTION — CONTEXTE.md du gabarit n est JAMAIS touché (I6)', () => 
   const d = projetAvecGabarit();
   runMetier(['metier', 'rendre', '--role', 'r'], { cwd: d });
   assert.equal(readFileSync(join(d, '.claude/templates/r/CONTEXTE.md'), 'utf8'), 'CE QUI EST PROPRE AU DÉPÔT\n');
+  rmSync(d, { recursive: true, force: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔴 UN RÔLE SANS DOSSIER DE GABARITS — la réussite silencieuse (T-20260826-0076)
+//
+// `distribuerAuGabarit` rendait 0 EN SILENCE quand `.claude/templates/<rôle>/`
+// n'existait pas, et `runMetier` rendait 0 par-dessus. Conséquence : `pack metier
+// rendre` sur un rôle NEUF — celui qu'on vient d'inscrire, dont le classement est
+// écrit mais dont le gabarit n'a pas encore été créé — annonçait « ✅ N artefacts
+// écrits » sans avoir distribué quoi que ce soit. C'est la famille « un vert qui ne
+// touche pas ce qu'il éprouve » : le geste réussit, son effet n'atteint personne.
+//
+// Le mode de panne n'est pas théorique : c'est exactement ce que rencontre chacun
+// des neuf rôles arbitrés à son premier rendu.
+//
+// ⚠️ ET LE REFUS ARRIVE AVANT TOUTE ÉCRITURE, pas après. Refuser une fois le rendu
+// écrit laisserait `metier/<rôle>/rendu/` posé et le gabarit vide : un demi-geste,
+// dont l'état sur le disque ne se distingue pas d'un rendu réussi puis abîmé. Le
+// dépôt tranche déjà dans ce sens juste au-dessus — « un rendu REFUSÉ ne distribue
+// rien ».
+//
+// ⚠️ « CODE NON NUL » NE PROUVE RIEN ICI, et ce fichier a déjà payé la leçon
+// (metier-commande.test.js : « une valeur absurde finit par lever une erreur de
+// chemin qui sort aussi non nul »). On exige donc le code 1 — le refus métier, pas
+// le 2 d'usage — ET un message qui NOMME le dossier manquant.
+
+/** Ce que la commande a écrit sur stderr, sans le laisser polluer le rapport de test. */
+function enEcoutantStderr(faire) {
+  const vrai = process.stderr.write.bind(process.stderr);
+  let vu = '';
+  process.stderr.write = (chunk) => { vu += String(chunk); return true; };
+  try { return { code: faire(), stderr: vu }; } finally { process.stderr.write = vrai; }
+}
+
+test('🔴 DISTRIBUTION — un rôle sans dossier de gabarits est REFUSÉ, pas réussi en silence', () => {
+  const d = projetAvecGabarit();
+  rmSync(join(d, '.claude/templates/r'), { recursive: true, force: true });
+
+  const { code, stderr } = enEcoutantStderr(() => runMetier(['metier', 'rendre', '--role', 'r'], { cwd: d }));
+
+  assert.equal(code, 1,
+    'un rendu que personne ne recevra doit être REFUSÉ (code 1, refus métier) — il rendait 0, '
+    + 'et annonçait « artefacts écrits » sans avoir rien distribué');
+  assert.ok(stderr.includes('.claude/templates/r'),
+    `le refus doit NOMMER le dossier qui manque, sinon il n'est pas actionnable — obtenu : ${JSON.stringify(stderr)}`);
+  rmSync(d, { recursive: true, force: true });
+});
+
+test('🔴 DISTRIBUTION — ce refus arrive AVANT d écrire : le rendu n est pas laissé à moitié posé', () => {
+  const d = projetAvecGabarit();
+  rmSync(join(d, '.claude/templates/r'), { recursive: true, force: true });
+  enEcoutantStderr(() => runMetier(['metier', 'rendre', '--role', 'r'], { cwd: d }));
+  assert.ok(!existsSync(join(d, 'metier/r/rendu')),
+    'un refus après écriture laisse un rendu posé que rien ne distribue — l état sur le disque '
+    + 'se lit alors comme un rendu réussi');
+  rmSync(d, { recursive: true, force: true });
+});
+
+test('🔴 `verifier` REFUSE aussi un rôle sans gabarit — sinon il serait vert là où `rendre` refuse', () => {
+  // ⚠️ LE SYMÉTRIQUE, ET IL N EST PAS DÉCORATIF. `verifier` porte le MÊME
+  // « if (existsSync(gabarit)) » : sans ce contrôle, il annoncerait « ✅ conforme »
+  // sur un rôle dont `rendre` refuse de s occuper. Le contrat écrit de ce gate est
+  // « verifier vert doit impliquer que rendre ne changerait rien » — corriger un
+  // seul des deux côtés le briserait dans le sens le plus trompeur.
+  const d = projetAvecGabarit();
+  runMetier(['metier', 'rendre', '--role', 'r'], { cwd: d });        // rendu frais, gabarit à jour
+  assert.equal(runMetier(['metier', 'verifier', '--role', 'r'], { cwd: d }), 0, 'témoin : conforme tant que le gabarit est là');
+
+  rmSync(join(d, '.claude/templates/r'), { recursive: true, force: true });
+  const { code, stderr } = enEcoutantStderr(() => runMetier(['metier', 'verifier', '--role', 'r'], { cwd: d }));
+  assert.equal(code, 1, '`verifier` déclarait « conforme » un rôle dont le rendu n atteint personne');
+  assert.ok(stderr.includes('.claude/templates/r'), `le refus doit nommer le dossier — obtenu : ${JSON.stringify(stderr)}`);
+  rmSync(d, { recursive: true, force: true });
+});
+
+test('🔴 la garde de PROFONDEUR de distribuerAuGabarit lève, elle ne rend pas 0', async () => {
+  // ⚠️ ELLE N EST PAS ATTEIGNABLE PAR LE CHEMIN NORMAL — `runMetier` refuse bien avant. On
+  // l appelle donc DIRECTEMENT, sinon on aurait écrit une garde que rien ne peut éprouver, et
+  // « désarmer entièrement distribuerAuGabarit laissait tout au vert » est déjà arrivé ici
+  // (mutation du 2026-08-20, en tête de ce bloc).
+  const { distribuerAuGabarit } = await import('../src/commands/metier.js');
+  const d = mkdtempSync(join(tmpdir(), 'sans-gabarit-'));
+  assert.throws(
+    () => distribuerAuGabarit(d, 'r', { 'L0.md': 'x', 'L1.md': 'y' }),
+    /n'existe pas/,
+    'sur un dossier absent elle rendait 0 en silence — l appelant lisait « rien à distribuer » '
+    + 'là où il fallait lire « je n ai rien pu distribuer »');
+  assert.ok(!existsSync(join(d, '.claude/templates/r')),
+    'elle ne doit surtout pas CRÉER le dossier : deux fichiers sur quatre font un gabarit '
+    + 'incomplet, qui ne se découvre qu à la pose d un lieu, ailleurs et plus tard');
   rmSync(d, { recursive: true, force: true });
 });
 
