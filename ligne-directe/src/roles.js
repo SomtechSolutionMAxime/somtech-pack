@@ -276,13 +276,43 @@ export function role(nom) {
  * ⚠️ ET ELLE RESTE UNE LIGNE, PAS UN MODULE — la promesse de l'en-tête tient dans les deux
  * tables. Ce qui s'y déclare est le strict minimum de ce qu'on peut savoir d'un rôle sans lieu.
  */
-const ROLES_SANS_LIEU = {
-  'chef-equipe': {
-    libelle: "chef d’équipe",
-    /** Il porte le CODE DE SON MANDAT, jamais une rivière — c'est ce qui le rattache à son ticket. */
-    bapteme: 'code',
-  },
-};
+const ROLES_SANS_LIEU = Object.freeze(
+  Object.assign(Object.create(null), {
+    'chef-equipe': Object.freeze({
+      libelle: "chef d’équipe",
+      /** Il porte le CODE DE SON MANDAT, jamais une rivière — c'est ce qui le rattache à son ticket. */
+      bapteme: 'code',
+    }),
+  })
+);
+// 🔴 GELÉE ET SANS PROTOTYPE — ET CE N'EST PAS DE LA CEINTURE-BRETELLES, C'EST LA SEULE FORME
+// QUI TIENT. Trois passes de revue successives ont ajouté une entrée à cette table sans faire
+// rougir la garde, chaque fois par un mécanisme que la garde précédente ne regardait pas :
+//
+//   ① un CHAMP non énumérable        — `Object.keys` ne le voyait pas, l'indexation si ;
+//   ② une ENTRÉE non énumérable      — la même lame, un cran plus haut ;
+//   ③ une entrée héritée du PROTOTYPE — `Reflect.ownKeys` ne voit pas l'héritage,
+//                                       `ROLES_SANS_LIEU[nom]` le voit parfaitement.
+//
+// ⚠️ ET IL EN RESTAIT (`Proxy`, un getter, `__proto__` par assignation). Courir après le
+// mécanisme suivant, c'est tenir une liste d'exceptions qu'on complète — et celle qu'on
+// ajoutera dans six mois n'y sera pas. `Object.freeze` refuse TOUT ajout quel qu'en soit le
+// mécanisme ; `Object.create(null)` supprime la chaîne de prototype par laquelle une entrée
+// pouvait entrer sans être une clé propre. On ne garde plus les chemins : on retire l'objet de
+// la classe des choses auxquelles on peut ajouter quoi que ce soit.
+//
+// ⚠️ CE QUE ÇA NE FERME PAS, ET QUI EST DIT PLUTÔT QUE TU : éditer CE fichier reste possible.
+// C'est voulu — un registre s'amende. Ce qui est fermé, c'est l'ajout SILENCIEUX depuis un
+// autre module, celui que personne ne voit passer en revue.
+
+/** Le verrou est-il en place ? Rendu pour que le banc l'éprouve, jamais pour décider. */
+export function tableSansLieuVerrouillee() {
+  return {
+    gelee: Object.isFrozen(ROLES_SANS_LIEU),
+    sansPrototype: Object.getPrototypeOf(ROLES_SANS_LIEU) === null,
+    entreesGelees: Reflect.ownKeys(ROLES_SANS_LIEU).every((k) => Object.isFrozen(ROLES_SANS_LIEU[k])),
+  };
+}
 
 /** Les noms de rôles connus — pour les commandes qui les énumèrent, jamais pour décider. */
 export function rolesConnus() {

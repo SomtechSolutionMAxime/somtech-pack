@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { role as roleDe, rolesConnus, rolesSansLieu, roleSansLieu, clesBrutesDesRolesSansLieu, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
+import { role as roleDe, rolesConnus, rolesSansLieu, roleSansLieu, clesBrutesDesRolesSansLieu, tableSansLieuVerrouillee, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
 import { nomDeLAgentQuiNait, estUneRiviere } from '../src/nom-de-riviere.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -360,7 +360,25 @@ test('🔴 `roleSansLieu` NE DÉCIDE NULLE PART EN PRODUCTION — le banc que le
   // rendrait vrai un banc qu'un renommage désarme. On liste les fichiers de PRODUCTION et on
   // refuse l'IMPORT — la seule façon d'atteindre la fonction depuis un autre module.
   const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const PRODUCTION = ['ligne-directe/src', 'naissance-representant/src', 'naissance-representant/bin', 'cli/src'];
+  // 🔴 LA POPULATION SE DÉRIVE DU DÉPÔT, ELLE NE S'ÉNUMÈRE PLUS — et c'est un défaut mesuré.
+  // La liste en dur nommait quatre répertoires et en OUBLIAIT deux qui existent : `ligne-directe/bin`
+  // et `cli/bin`, deux points d'entrée CLI réels. Un import posé dans `ligne-directe/bin/` décidait
+  // pour de bon sans qu'aucun essai ne bouge. Une liste de chemins écrite à la main est périmée dès
+  // qu'un répertoire naît, et personne ne s'en aperçoit — c'est la même famille que la population
+  // d'un balayage qu'on demande au manifeste plutôt qu'à une liste (T-20260825-0013).
+  //
+  // ⚠️ `payload/` est ÉCARTÉ à dessein : c'est la copie distribuée du pack, pas la source.
+  const RACINES = readdirSync(RACINE, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+    .flatMap((e) => ['src', 'bin'].map((sd) => join(RACINE, e.name, sd)))
+    .filter((d) => { try { return statSync(d).isDirectory(); } catch { return false; } });
+
+  // ⚠️ CONTRÔLE DE L'INSTRUMENT : si la dérivation rend moins de répertoires que la liste en dur
+  // qu'elle remplace, c'est elle qui est cassée — et le banc rendrait vert sans avoir rien lu.
+  assert.ok(
+    RACINES.length >= 4,
+    `la dérivation n'a trouvé que ${RACINES.length} répertoire(s) de production — l'instrument est cassé, pas le lot`
+  );
 
   const fichiers = [];
   const balayer = (dir) => {
@@ -372,7 +390,7 @@ test('🔴 `roleSansLieu` NE DÉCIDE NULLE PART EN PRODUCTION — le banc que le
       else if (e.endsWith('.js')) fichiers.push(chemin);
     }
   };
-  for (const d of PRODUCTION) balayer(join(RACINE, d));
+  for (const d of RACINES) balayer(d);
 
   // ⚠️ CONTRÔLE DE L'INSTRUMENT : un balayage qui ne trouve rien rendrait ce banc vert pour
   // la mauvaise raison. On exige d'avoir vraiment lu du code de production.
@@ -380,13 +398,42 @@ test('🔴 `roleSansLieu` NE DÉCIDE NULLE PART EN PRODUCTION — le banc que le
 
   const coupables = fichiers.filter((f) => {
     if (f.endsWith(`${'/'}roles.js`)) return false; // sa propre définition
+    if (f.includes(`${'/'}payload${'/'}`)) return false; // copie distribuée, pas la source
     const src = readFileSync(f, 'utf8');
-    return /import\s*\{[^}]*\broleSansLieu\b[^}]*\}\s*from/.test(src)
-        || /\bclesBrutesDesRolesSansLieu\b/.test(src);
+    // 🔴 TROIS FORMES, PARCE QU'UNE SEULE SE CONTOURNE — mesuré, pas supposé. La version
+    // précédente ne cherchait que `import { roleSansLieu } from` : un
+    // `import * as roles from '…/roles.js'` puis `roles.roleSansLieu(…)` passait dessous,
+    // DANS un répertoire pourtant balayé, et décidait pour de bon.
+    //
+    //   ① l'import nommé — la forme directe ;
+    //   ② l'import NAMESPACE de `roles.js` — il donne accès à TOUT ce que le module exporte,
+    //     y compris ce qu'on ajoutera demain, donc on le refuse en bloc en production ;
+    //   ③ le nom des accesseurs réservés, où qu'il apparaisse — attrape l'import dynamique
+    //     (`await import(…)`) et la déstructuration différée.
+    return /import\s*\{[^}]*\b(roleSansLieu|clesBrutesDesRolesSansLieu|tableSansLieuVerrouillee)\b[^}]*\}\s*from/.test(src)
+        || /import\s+\*\s+as\s+\w+\s+from\s+['"][^'"]*roles\.js['"]/.test(src)
+        || /\b(roleSansLieu|clesBrutesDesRolesSansLieu|tableSansLieuVerrouillee)\b/.test(src);
   });
   assert.deepEqual(
     coupables.map((f) => f.slice(RACINE.length)), [],
     `ces fichiers de PRODUCTION importent un accesseur réservé aux bancs — ils contourneraient ` +
       `\`role()\`, la seule porte qui doit décider d'un rôle`
   );
+});
+
+test('🔴 LA TABLE SANS LIEU EST GELÉE ET SANS PROTOTYPE — on ne garde plus les chemins, on ferme l’objet', () => {
+  // 🔴 CE BANC EXISTE PARCE QUE TROIS GARDES SUCCESSIVES ONT ÉTÉ CONTOURNÉES, chacune par un
+  // mécanisme que la précédente ne regardait pas : un CHAMP non énumérable (`Object.keys` aveugle),
+  // une ENTRÉE non énumérable (même lame plus haut), puis une entrée héritée du PROTOTYPE
+  // (`Reflect.ownKeys` ne voit pas l'héritage, l'indexation si). À chaque fois la garde changeait
+  // d'instrument sans changer de FORME — elle énumérait, et il restait une façon de ne pas être énuméré.
+  //
+  // ⚠️ CE BANC NE GARDE DONC PAS UN CHEMIN DE PLUS. Il garde que l'objet est HORS de la classe des
+  // choses auxquelles on peut ajouter quoi que ce soit : gelé (aucun ajout, quel qu'en soit le
+  // mécanisme) et sans prototype (aucune entrée ne peut entrer sans être une clé propre). Un `Proxy`
+  // ou un getter, qu'on n'a pas eu à énumérer, tombent avec le reste.
+  const v = tableSansLieuVerrouillee();
+  assert.equal(v.gelee, true, 'la table n’est plus gelée — un module tiers peut y ajouter une entrée, et la garde qui énumère ne la verra pas forcément');
+  assert.equal(v.sansPrototype, true, 'la table a retrouvé un prototype — une entrée héritée décide comme une entrée propre, sans être une clé propre');
+  assert.equal(v.entreesGelees, true, 'une entrée n’est plus gelée — un champ (`dossier`, `pose_automatique`) peut y être ajouté depuis un autre module');
 });
