@@ -7,6 +7,19 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-01
 
+*Ticket `T-20260825-0012`, epic `E-20260825-0002`. **Le recensement classe les rôles depuis la déclaration** — un chef d'équipe vivant, déclaré par l'outillage de naissance, n'est plus rendu « rôle non établi ».*
+
+### Ajoute
+
+- **`ligne-directe/src/declaration-des-agents.js`** — apparie une déclaration de naissance à un agent vivant, borné par l'espace de travail (jamais par le nom seul).
+- **Le recensement lit le registre de déclaration** (`ligne-directe/src/recensement.js`, `veilleur.js`) et rend, pour tout agent déclaré, son rôle, son mandat et son coordonnateur. Un agent sans déclaration reste « rôle non établi » ; un agent déclaré dont le nom n'a pas pu être mesuré est rendu « refusée », jamais confondu avec l'absence.
+
+### Technique
+
+- Fusionnée avec `main` après le squash-merge d'une PR voisine (`T-20260827-0037`) qui a fermé la précédente PR de ce ticket sans le vouloir (base de branche supprimée) — rouverte depuis la même tête, sans perte de travail.
+
+## [Non-versionne] - 2026-09-01
+
 *Epic `E-20260825-0002`. **Un agent né par l'outillage déclare son rôle** — un chef d'équipe (`pack agent naitre --role chef-equipe`) inscrit son mandat et son coordonnateur dans le même geste, sans lieu versionné, et un agent né hors dispositif et identifiable par aucune source est nommé, plutôt que refusé en silence.*
 
 ### Ajoute
