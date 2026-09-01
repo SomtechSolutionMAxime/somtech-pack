@@ -290,13 +290,25 @@ test('VÉRIFICATION — deux naissances du même client posent un garde OCTET PO
 
 // ═══════════════════════════════ les commandes herdr — construites, jamais exécutées ici
 
-test('commandesNaissance exige --workspace, sans deviner un défaut', () => {
-  assert.throws(() => commandesNaissance('/repo', 'acme', {}), /--workspace/);
+// ⚠️ L'EXIGENCE A SUIVI SON OBJET, ELLE N'A PAS DISPARU (D-20260825-0002). L'espace herdr naît
+// désormais DANS la naissance, après ses refus — donc bien après la construction de ces
+// commandes. `tabCreate` est devenu une fonction de l'espace, et c'est elle qui refuse d'en
+// composer un sans espace, toujours avant qu'un pane existe.
+test('un onglet ne se compose PAS sans espace — l’exigence tient, à l’endroit où l’espace sert', () => {
+  assert.throws(() => commandesNaissance('/repo', 'acme', {}).tabCreate(), /--workspace/);
+  assert.throws(() => commandesNaissance('/repo', 'acme', { workspace: 'w1' }).tabCreate(''), /--workspace/);
+});
+
+test('l’espace peut être donné AU MOMENT DE PARTIR — c’est ce qui permet de l’ouvrir après les refus', () => {
+  const c = commandesNaissance('/repo', 'acme', {});
+  assert.deepEqual(c.tabCreate('wTARD'), [
+    'tab', 'create', '--workspace', 'wTARD', '--cwd', '/repo/.gestionnaire/acme', '--label', 'acme', '--no-focus',
+  ]);
 });
 
 test('commandesNaissance construit des tableaux d’arguments herdr — AUCUN shell, comme herdr.js', () => {
   const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
-  assert.deepEqual(c.tabCreate, [
+  assert.deepEqual(c.tabCreate(), [
     'tab', 'create', '--workspace', 'w1', '--cwd', '/repo/.gestionnaire/acme', '--label', 'acme', '--no-focus',
   ]);
   assert.deepEqual(c.interroger('w1:p1'), ['agent', 'get', 'w1:p1']);
@@ -307,10 +319,10 @@ test('commandesNaissance construit des tableaux d’arguments herdr — AUCUN sh
 // lieu. Le `cd` de `pane run` ne suffit pas — une ligne écrite dans un shell qui n'est pas
 // encore prêt est perdue en entier. Le lieu doit être posé à la CRÉATION du pane.
 test('le pane naît DANS le lieu — `--cwd` à la création, pas seulement un `cd` écrit ensuite', () => {
-  const c = commandesNaissance('/repo', 'acme', { workspace: 'w1' });
-  const i = c.tabCreate.indexOf('--cwd');
+  const argv = commandesNaissance('/repo', 'acme', { workspace: 'w1' }).tabCreate();
+  const i = argv.indexOf('--cwd');
   assert.notEqual(i, -1, '`tab create` doit porter --cwd : sans lui, la session naît n’importe où');
-  assert.equal(c.tabCreate[i + 1], '/repo/.gestionnaire/acme');
+  assert.equal(argv[i + 1], '/repo/.gestionnaire/acme');
 });
 
 // ═══════════ T-20260816-0038 — `agent start` REMPLACE `pane run` + l'attente + `agent rename`

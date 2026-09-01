@@ -95,8 +95,16 @@ Ce n'est pas une optimisation, c'est une correction d'un piège :
 **Le lanceur de session ne relaie pas le modèle** — il refuse les drapeaux qu'il ne connaît pas, `--model` compris. Il faut donc **décomposer son geste** : faire naître le worktree, puis lancer l'agent dedans avec son modèle.
 
 ```bash
-TS=$(date +%Y%m%d-%H%M%S)
-herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS && claude --model opus"
+NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
+  --role chef-equipe \
+  --depot <repo-principal> \
+  --coordonnateur <ton-nom-d-agent>)
+# ⚠️ `jq -e` — PAS `jq -r .pane` seul : le pane est rendu à l'identique sur un succès et sur un
+# refus qui laisse un agent vivant. Sans lui tu brieffes un agent que le geste a refusé — soit
+# sa déclaration a échoué (la garde le prendra, il n'est déclaré nulle part), soit elle est
+# écrite mais son amorce n'a pas été prise : celui-là, la garde le croit régulier, et il attend.
+P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
+  || { printf '%s' "$NAISSANCE" | jq -r '"REFUS — \(.cause) · pane \(.pane) · vivant \(.vivant)"'; }
 ```
 
 C'est la seule voie qui tienne à la fois la règle d'or n°11 — le worktree naît **avant** l'agent — et la déclaration explicite du modèle. Le worktree se retire ensuite à la main (§4f), le lanceur ne le connaissant pas.
@@ -131,7 +139,7 @@ Ce ne sont pas des interdits de plus : ce sont des **symptômes**. Quand tu te s
 
 | Le geste | À qui il appartient | Ce qu'il révèle, et ce qu'on corrige à la source |
 |---|---|---|
-| **Renommer** un agent | à lui-même | Son brief ne lui a pas dit son nom. Écris-le dedans — *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* — comme tu t'es nommé toi-même (§1). Toi, tu **vérifies** qu'il l'a fait ; lire n'est pas exécuter |
+| **Renommer** un agent | **personne — le geste l'a nommé** | `pack agent naitre` le nomme du code de son mandat et **vérifie par le fait** ; il referme le pane si le nom n'est pas porté. Ne le lui redemande pas dans son brief : il se renommerait par-dessus, son nom cesserait d'apparier sa déclaration, et la garde le prendrait pour un agent né hors dispositif |
 | **Débloquer** une permission | à la veille, jamais à ta main | Deux causes : l'agent est né sur le mauvais modèle (voir la déclaration du modèle), ou personne n'a posé la veille de déblocage à sa naissance. Répare la naissance, pas l'instance |
 | **Corriger** un script qui échoue chez lui | à lui | Tu es en train de déboguer — c'est de l'exécution, la plus coûteuse qui soit en contexte. Renvoie-lui le constat, pas le correctif |
 | **Relancer** un processus mort | à lui | Un agent qui ne se relève pas seul est un agent dont le but ne dit pas quand il a fini (§4c-bis), ou dont le brief ne dit pas quoi faire en cas d'échec |
@@ -342,7 +350,7 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 
 **a. Écrire le brief au registre.** Jamais dans le terminal — un retour à la ligne soumet le prompt et coupe le message en deux — et **jamais dans un fichier** : si tu es né d'un lieu posé, écrire t'est refusé par tes droits, et un brief déposé dans un worktree disparaît avec lui. Il va donc là où vit déjà l'unité de travail : la **description de l'epic** (`epics` action `update`), ou le **ticket** quand le lot n'a pas d'epic (`tickets` action `add_comment`). Il y survit à ta session, celui qui reprendra le lit, et la filiation de §4b-bis s'écrit au même endroit. Le brief contient :
 
-- qui il est (l'epic, le chantier parent, son coordonnateur) — **et le nom qu'il porte**, qu'il se donnera lui-même en naissant : *« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »* ;
+- qui il est (l'epic, le chantier parent, son coordonnateur). ⚠️ **Pas son nom** : le geste l'a déjà nommé et vérifié — le lui redemander le ferait se renommer par-dessus, et la garde le prendrait pour un agent né hors dispositif ;
 - **qu'il est chef d'équipe** : il distribue à ses propres sous-agents ce qui se distribue, il intègre, et il rend compte **une seule fois, en synthèse** — sauf ce qui appelle un arbitrage, qui remonte immédiatement ;
 - **ce qu'il doit lire lui-même** — chemins git, id d'epic, wireframes. *Une référence, jamais un contenu* : il ira le chercher avec son propre contexte, pas le tien ;
 - les contraintes non négociables, avec **le test qui doit les prouver** ;
@@ -357,27 +365,28 @@ Pour chaque epic (si orchestrateur) ou chaque lot (si chef d'équipe) dans l'ord
 **b. Faire naître le chef d'équipe — le worktree avant lui, le modèle avec lui.**
 
 ```bash
-# Le libellé porte le code, puis 2 à 4 mots sur ce que l'agent FABRIQUE (§1-ter).
-P=$(herdr tab create --workspace <ws> --label "e-20260727-0010 lecteur du journal" --no-focus \
-    | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['root_pane']['pane_id'])")
+# Un seul geste : il crée le worktree AVANT l'agent (règle d'or n°11), ouvre l'onglet dedans,
+# lance la session en DÉCLARANT son modèle et son mode, NOMME l'agent du code de son mandat,
+# vérifie par le fait qu'il porte ce nom et tourne dans son espace, puis INSCRIT sa naissance
+# — rôle, mandat, coordonnateur, worktree, pane, session — hors du dépôt, et remplit
+# `assigned_agent` sur le mandat au registre. Un refus défait tout — sauf un agent né.
+NAISSANCE=$(npx @somtech-solutions/pack agent naitre e-20260727-0010 \
+  --role chef-equipe \
+  --depot <repo-principal> \
+  --coordonnateur <ton-nom-d-agent>)
 
-# Le worktree naît AVANT l'agent (règle d'or n°11), et le modèle se déclare AU lancement.
-TS=$(date +%Y%m%d-%H%M%S)
-herdr pane run "$P" "cd <repo-principal> && git worktree add ~/worktrees/<repo>/$TS -b wt/$TS origin/main && cd ~/worktrees/<repo>/$TS && claude --model opus"
-
-# Attendre que l'agent soit réellement détecté, plutôt que de parier sur un délai.
-for _ in $(seq 1 30); do
-  herdr agent get "$P" 2>/dev/null | jq -e '.result != null and .error == null' >/dev/null && break
-  sleep 2
-done
-
-# Poser la veille de déblocage, pour ne jamais avoir à débloquer toi-même.
-scripts/orchestration/veille-deblocage.sh "$P" e-20260727-0010 &
+# Le pane est dans sa sortie JSON : tout ce qui suit — brief, /goal, wait, close — le vise.
+# ⚠️ `jq -e`, jamais `jq -r .pane` seul : le pane sort à l'identique d'un succès et d'un refus
+# qui laisse un agent vivant. Sans `select(.ok)`, tu brieffes un agent que le geste a refusé —
+# soit sa déclaration a échoué (la garde le prendra, il n'est déclaré nulle part), soit elle est
+# écrite mais son amorce n'a pas été prise : celui-là, la garde le croit régulier, et il attend.
+P=$(printf '%s' "$NAISSANCE" | jq -e -r 'select(.ok) | .pane') \
+  || { printf '%s' "$NAISSANCE" | jq -r '"REFUS — \(.cause) · pane \(.pane) · vivant \(.vivant)"'; }
 ```
 
-**Pourquoi ce geste est décomposé** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Voir la section sur la déclaration du modèle.
+**Pourquoi le modèle est un argument du geste** : le lanceur de session refuse les drapeaux qu'il ne connaît pas — `--model` compris —, et un `claude` sans argument naît en Haiku. Ouvrir un chef d'équipe sans déclarer son modèle, c'est le condamner à s'arrêter à chaque permission. Le geste porte donc le modèle lui-même, au lieu de te laisser le composer. Voir la section sur la déclaration du modèle.
 
-**Le nom, c'est lui qui se le donne** : son brief le lui dit (*« tu portes le nom `e-20260727-0010`, nomme-toi en naissant »*), et c'est à lui de faire le geste — pas à toi (voir « Ce que tu ne fais pas de tes mains »). Toi, tu **vérifies** :
+**Le nom, c'est le geste qui le donne** : `pack agent naitre` nomme l'agent du code de son mandat, puis **vérifie par le fait** et referme le pane si le nom n'est pas porté. ⚠️ **Ne le lui redemande pas dans son brief** : il se renommerait par-dessus, son nom cesserait d'apparier sa déclaration, et la garde le prendrait pour un agent né hors dispositif. Toi, tu **vérifies** :
 
 ```bash
 herdr agent get "$P" | jq -e '.result.agent.name == "e-20260727-0010"' \
@@ -385,6 +394,14 @@ herdr agent get "$P" | jq -e '.result.agent.name == "e-20260727-0010"' \
 ```
 
 **Vérifie par le fait, jamais par le mot.** Un `grep -q '"result"'` accepte une réponse `{"error": "...", "result": null}` parce que le mot y est présent. `jq -e` vérifie ce qui est vrai : `result` non nul, pas d'erreur, et le nom effectivement porté. Un agent qui met plus longtemps que prévu à démarrer reste anonyme, et sans cette vérification tu ne t'en apercevras qu'au moment où tu as besoin de lui parler.
+
+**Pose sa veille de déblocage, dans la foulée de sa naissance.** C'est l'étape que cette séquence ne portait pas, alors que le tableau des gestes plus haut reproche déjà de ne pas l'avoir posée : « personne n'a posé la veille de déblocage à sa naissance ». Un agent sans veille s'arrête à la première permission, et c'est toi qui deviens sa boucle d'événements.
+
+```bash
+scripts/orchestration/veille-deblocage.sh "$P" e-20260727-0010 &   # en arrière-plan, dès la naissance
+```
+
+Ce qu'elle garantit — et ce qu'il ne faut jamais relâcher — est décrit à la section « La veille de déblocage ».
 
 Même prudence pour la suite : après avoir livré le brief, relis son pane (`herdr pane read "$P"`) pour confirmer qu'il l'a bien reçu. Une session qui s'ouvre sur un dossier neuf peut poser une question avant d'accepter le premier message — auquel cas ton brief a servi de réponse à cette question, et non de brief.
 
@@ -403,7 +420,7 @@ Où l'écrire — les surfaces qui existent réellement :
 
 Ce que la ligne doit porter : le nom de l'agent tel que herdr le porte (en minuscules), son pane, son worktree, et le moment. **Le worktree est `foreground_cwd`, pas `cwd`** : le pane a démarré dans le dépôt principal, donc `cwd` y reste pendant que `foreground_cwd` suit l'agent dans son worktree. Les deux champs sont déjà dans le `herdr agent get "$P"` que tu viens de lancer.
 
-**Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Ce qui dépend d'un geste manuel se troue au premier oubli — c'est précisément pourquoi, partout ailleurs, on fait journaliser l'outil et jamais l'agent. Elle tiendra jusqu'à ce que la naissance d'un agent soit elle-même outillée, et que l'outil enregistre la filiation sans avoir à te la demander. Note au passage que ça ne viendra pas gratuitement pour la façon de faire décrite ici : ouvrir un agent par `tab create` puis `pane run` n'est pas un point d'instrumentation — il faudra que le geste passe par la commande de démarrage d'agent pour qu'un outil ait quelque chose à observer.
+**Et l'outil l'inscrit désormais à ta place.** `pack agent naitre` dépose la déclaration de naissance — rôle, mandat, coordonnateur, pane, espace de travail, moment — dans le registre hors dépôt, et remplit `assigned_agent` sur le mandat dans le même geste. Ce que tu écris ici ne remplace donc plus rien : c'est ton fil de conduite à toi, lisible par un humain. Ce qui fait foi est ce que le geste a inscrit, parce que ce qui dépend d'une main se troue au premier oubli.
 
 **c. Livrer le brief par référence — et vérifier qu'il a été PRIS, pas seulement envoyé.**
 
@@ -521,8 +538,8 @@ git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}.. 2>/dev/null
 herdr pane close "$P"
 
 # 4. retirer le worktree et sa branche-socle
-#    Tu l'as créé toi-même avec `git worktree add` (§4b) : c'est donc `git` qui le retire.
-#    Le teardown du lanceur de session ne connaît pas les worktrees qu'il n'a pas ouverts.
+#    C'est `pack agent naitre` qui l'a ouvert (§4b), pas le lanceur de session : le teardown
+#    de ce dernier ne connaît pas les worktrees qu'il n'a pas ouverts, donc `git` le retire.
 git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>   # --force si des restes traînent
 git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune

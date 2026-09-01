@@ -463,7 +463,12 @@ test('L’AIDE DE `naitre` NOMME TOUS LES RÔLES DU REGISTRE — mesurée sur un
   assert.equal(r.status, 1, `l’aide doit sortir en 1 : ${r.stderr || r.stdout}`);
   assert.match(
     r.stderr,
-    /\[--role [a-z|]*\bconseiller\b[a-z|]*\]/,
+    // ⚠️ LE TIRET EST DANS LA CLASSE, ET SON ABSENCE ÉTAIT UN DÉFAUT DE L'INSTRUMENT, pas de
+    // l'aide (fusion du 2026-09-01). `[a-z|]*` ne franchit pas un tiret : le jour où l'aide a
+    // annoncé un rôle SANS LIEU — `chef-equipe` —, elle nommait bel et bien `conseiller`, et ce
+    // banc rougissait quand même. Un rouge qui accuse la mesure au lieu de l'objet coûte le
+    // temps qu'on met à croire l'objet fautif.
+    /\[--role [a-z|-]*\bconseiller\b[a-z|-]*\]/,
     'l’aide n’annonce pas le troisième rôle : elle porte sa liste en dur, et elle MENT à qui la lit',
   );
 });

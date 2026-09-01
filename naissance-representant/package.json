@@ -8,7 +8,8 @@
     "gestionnaire-naitre": "bin/naitre.js",
     "gestionnaire-livrer": "bin/livrer.js",
     "orchestrateur-rendez-vous": "bin/rendez-vous.js",
-    "gestionnaire-etat-boite": "bin/etat-boite.js"
+    "gestionnaire-etat-boite": "bin/etat-boite.js",
+    "garde-des-naissances": "bin/garde-des-naissances.js"
   },
   "scripts": {
     "test": "node --test"

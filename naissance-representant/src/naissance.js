@@ -696,24 +696,62 @@ export const ATTENTE_NAISSANCE_MS = 120000;
 export function commandesNaissance(
   repoRoot,
   quiVientAuMonde,
-  { workspace, role = 'representant', modele = MODELE_PAR_DEFAUT, mode = MODE_PAR_DEFAUT, nomAgent = null } = {}
+  {
+    workspace,
+    role = 'representant',
+    modele = MODELE_PAR_DEFAUT,
+    mode = MODE_PAR_DEFAUT,
+    nomAgent = null,
+    /**
+     * LE RÉPERTOIRE OÙ LA SESSION NAÎT, quand il ne se déduit PAS du rôle (D-20260825-0002).
+     *
+     * ⚠️ IL EXISTE POUR LE SEUL RÔLE QUI N'A PAS DE LIEU — le chef d'équipe, qui naît dans un
+     * worktree jetable plutôt que dans un dossier versionné. Sans lui, il faudrait un second
+     * constructeur de commandes herdr à côté de celui-ci, et ce dépôt a déjà payé ce qu'il en
+     * coûte : deux jeux de commandes pour un seul service divergent, et le second à diverger
+     * est celui qu'on ne relit pas.
+     *
+     * ⚠️ ET LE DONNER VAUT DÉCLARATION « CE RÔLE N'A PAS DE LIEU ». Sans lui, le rôle doit être
+     * dans la table de `roles.js`, et un rôle inventé échoue ici — avant qu'un pane existe.
+     */
+    lieu = null,
+  } = {}
 ) {
-  if (!workspace) {
-    throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
-  }
-  roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
-  const lieu = cheminLieu(repoRoot, quiVientAuMonde, role);
+  if (lieu === null) roleDe(role); // un rôle inconnu échoue AVANT qu'un pane soit ouvert
+  const repertoireDeNaissance = lieu ?? cheminLieu(repoRoot, quiVientAuMonde, role);
   // ⚠️ LE NOM PASSE PAR `nomAgentHerdr` DANS LES DEUX CAS, et c'est ce qui garde la règle en un
   // seul endroit : une rivière qui ne serait pas nommable par herdr doit échouer ICI, avant
   // qu'un pane existe, exactement comme un nom de lieu trop long échouait déjà.
   const nom = nomAgentHerdr(nomAgent ?? quiVientAuMonde);
   return {
-    lieu,
+    lieu: repertoireDeNaissance,
     nom,
     role,
     modele,
     mode,
-    tabCreate: ['tab', 'create', '--workspace', workspace, '--cwd', lieu, '--label', quiVientAuMonde, '--no-focus'],
+    /**
+     * L'ONGLET — UNE FONCTION DE L'ESPACE, ET PLUS UN TABLEAU TOUT FAIT (D-20260825-0002).
+     *
+     * 🔴 CE QUE CE CHANGEMENT PERMET, ET IL N'EST PAS COSMÉTIQUE. L'espace herdr était créé par
+     * la PORTE D'ENTRÉE, avant même que la naissance démarre : tous ses refus — mandat invalide,
+     * base introuvable, espace de travail occupé, nom que herdr refuse — le laissaient derrière
+     * eux, orphelin, pendant que le refus écrivait « rien n'a été créé ». L'espace naît donc
+     * maintenant DANS la naissance, après ses refus ; mais ces commandes-ci se construisent bien
+     * plus tôt (c'est là qu'un rôle inconnu et un nom innommable doivent échouer, avant qu'un
+     * pane existe). Les deux instants ne coïncident plus : l'onglet reçoit son espace au moment
+     * de partir.
+     *
+     * ⚠️ ET L'EXIGENCE N'A PAS DISPARU, ELLE A SUIVI SON OBJET. Elle vivait en tête de
+     * `commandesNaissance` (« --workspace est requis ») ; elle vit ici, là où l'espace sert
+     * réellement. Un onglet sans espace continue d'échouer AVANT qu'un pane existe — c'est la
+     * même garantie, posée à l'endroit où la valeur est enfin connue.
+     */
+    tabCreate: (espace = workspace) => {
+      if (!espace) {
+        throw new Error('--workspace est requis : l’espace de travail herdr où faire naître la session');
+      }
+      return ['tab', 'create', '--workspace', espace, '--cwd', repertoireDeNaissance, '--label', quiVientAuMonde, '--no-focus'];
+    },
     /**
      * ⚠️ `agent start` REMPLACE `pane run` + la boucle d'attente (T-20260816-0038).
      *

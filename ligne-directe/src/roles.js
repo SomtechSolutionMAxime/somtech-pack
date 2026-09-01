@@ -258,9 +258,143 @@ export function role(nom) {
   return r;
 }
 
+/**
+ * LES RÔLES QUI EXISTENT SANS AVOIR DE LIEU — et pourquoi ils ne sont pas dans `ROLES`.
+ *
+ * 🔴 CE CRAN NAÎT D'UNE FUSION, ET DE DEUX RÈGLES JUSTES DONT LA JOINTURE NE L'ÉTAIT PAS
+ * (2026-09-01). D'un côté, `baptemeDuRole` LÈVE sur un rôle absent de la table — délibéré :
+ * « nommer est permis, décider sur un rôle inconnu ne l'est pas ». De l'autre, un chef d'équipe
+ * est un rôle parfaitement CONNU du dépôt, qui n'a simplement pas de lieu : pas de dossier
+ * versionné, pas de gabarit, pas d'entêtes. L'inscrire dans `ROLES` a été mesuré et refusé —
+ * une entrée sans `entetes` fait tomber `roleDuLieuOuRefus` sur `Object.entries(undefined)`, et
+ * une entrée AVEC un `dossier` ferait balayer par le registre des lieux qui n'existent pas.
+ *
+ * ⚠️ « INCONNU » ET « SANS LIEU » NE SONT PAS LE MÊME FAIT, et les confondre coûtait 32 essais
+ * d'un coup, dans deux fichiers que git n'avait aucune raison de marquer en conflit. Cette table
+ * dit le second sans toucher au premier : un rôle inventé lève toujours.
+ *
+ * ⚠️ ET ELLE RESTE UNE LIGNE, PAS UN MODULE — la promesse de l'en-tête tient dans les deux
+ * tables. Ce qui s'y déclare est le strict minimum de ce qu'on peut savoir d'un rôle sans lieu.
+ */
+const ROLES_SANS_LIEU = Object.freeze(
+  Object.assign(Object.create(null), {
+    'chef-equipe': Object.freeze({
+      libelle: "chef d’équipe",
+      /** Il porte le CODE DE SON MANDAT, jamais une rivière — c'est ce qui le rattache à son ticket. */
+      bapteme: 'code',
+    }),
+  })
+);
+// 🔴 GELÉE ET SANS PROTOTYPE — ET CE N'EST PAS DE LA CEINTURE-BRETELLES, C'EST LA SEULE FORME
+// QUI TIENT. Trois passes de revue successives ont ajouté une entrée à cette table sans faire
+// rougir la garde, chaque fois par un mécanisme que la garde précédente ne regardait pas :
+//
+//   ① un CHAMP non énumérable        — `Object.keys` ne le voyait pas, l'indexation si ;
+//   ② une ENTRÉE non énumérable      — la même lame, un cran plus haut ;
+//   ③ une entrée héritée du PROTOTYPE — `Reflect.ownKeys` ne voit pas l'héritage,
+//                                       `ROLES_SANS_LIEU[nom]` le voit parfaitement.
+//
+// ⚠️ ET IL EN RESTAIT (`Proxy`, un getter, `__proto__` par assignation). Courir après le
+// mécanisme suivant, c'est tenir une liste d'exceptions qu'on complète — et celle qu'on
+// ajoutera dans six mois n'y sera pas. `Object.freeze` refuse TOUT ajout quel qu'en soit le
+// mécanisme ; `Object.create(null)` supprime la chaîne de prototype par laquelle une entrée
+// pouvait entrer sans être une clé propre. On ne garde plus les chemins : on retire l'objet de
+// la classe des choses auxquelles on peut ajouter quoi que ce soit.
+//
+// ⚠️ CE QUE ÇA NE FERME PAS, ET QUI EST DIT PLUTÔT QUE TU : éditer CE fichier reste possible.
+// C'est voulu — un registre s'amende. Ce qui est fermé, c'est l'ajout SILENCIEUX depuis un
+// autre module, celui que personne ne voit passer en revue.
+
+/**
+ * Le verrou est-il en place ? Rendu pour que le banc l'éprouve, jamais pour décider.
+ *
+ * 🔴 `inventeUneEntree` EST LE SEUL DES QUATRE QUI ÉPROUVE UN EFFET — les trois autres attestent
+ * une FORME, et une forme se simule. Mesuré : un `Proxy` autour de la table gelée rend
+ * `isFrozen: true`, `getPrototypeOf: null` et les mêmes `ownKeys`, pendant que son trap `get`
+ * fabrique une entrée pour n'importe quelle clé absente. Les trois attestations disaient vrai
+ * sur ce qu'elles regardaient et mentaient sur ce que la production LIT — `baptemeDuRole`
+ * accède par indexation, donc par le trap.
+ *
+ * ⚠️ C'EST LA MÊME LEÇON QUE LE GEL, ENCORE UN CRAN PLUS LOIN. Garder les mécanismes d'ajout a
+ * échoué trois fois ; fermer l'objet a échoué une quatrième, parce qu'un Proxy n'ajoute rien —
+ * il RÉPOND. On cesse donc de décrire la table : on lui demande ce qu'elle ne contient pas, et
+ * une table saine ne répond rien. Un mécanisme qu'on n'a pas eu à nommer tombe avec.
+ */
+export function tableSansLieuVerrouillee() {
+  // 🔴 LA CLÉ N'EST PLUS FIXE — ELLE EST TIRÉE AU HASARD À CHAQUE APPEL, ET C'EST LE POINT.
+  // Une passe de fond a trouvé qu'un `Proxy` peut répondre honnêtement à un ENSEMBLE connu de
+  // noms (ceux que le banc interroge) et n'inventer que pour tout le reste : la garde testait
+  // des VALEURS, pas une PROPRIÉTÉ. Aucune liste, si longue soit-elle, ne ferme ce trou — elle
+  // ne fait que déplacer la frontière. Une clé imprévisible au moment où le module se charge ne
+  // peut pas être anticipée par un ensemble figé écrit dans le code qui triche.
+  const CLE_IMPREDICTIBLE = `__aucun-role-ne-porte-ce-nom-${Math.random().toString(36).slice(2)}__`;
+  return {
+    gelee: Object.isFrozen(ROLES_SANS_LIEU),
+    sansPrototype: Object.getPrototypeOf(ROLES_SANS_LIEU) === null,
+    entreesGelees: Reflect.ownKeys(ROLES_SANS_LIEU).every((k) => Object.isFrozen(ROLES_SANS_LIEU[k])),
+    inventeUneEntree: ROLES_SANS_LIEU[CLE_IMPREDICTIBLE] !== undefined,
+  };
+}
+
 /** Les noms de rôles connus — pour les commandes qui les énumèrent, jamais pour décider. */
 export function rolesConnus() {
   return Object.keys(ROLES);
+}
+
+/**
+ * Les rôles connus QUI N'ONT PAS DE LIEU. Séparés de `rolesConnus()` à dessein : tout ce qui
+ * lit un lieu (le registre, le garde de naissance, la pose) ne doit JAMAIS les voir passer.
+ * Seul ce qui ÉNUMÈRE les rôles utilisables — une aide en ligne — a besoin des deux.
+ */
+export function rolesSansLieu() {
+  return Object.keys(ROLES_SANS_LIEU);
+}
+
+/**
+ * L'entrée d'un rôle SANS LIEU, ou `undefined`. Elle existe pour que le banc puisse éprouver
+ * la FORME de ce qui est inscrit ici — pas seulement les noms.
+ *
+ * ⚠️ ELLE NE LÈVE PAS, ET C'EST VOULU : `role()` reste la seule porte qui décide. Celle-ci
+ * ne sert qu'à REGARDER, jamais à trancher — un appelant qui déciderait sur son retour
+ * contournerait la porte.
+ *
+ * 🔴 ET CETTE PHRASE EST TENUE PAR UN BANC, PLUS PAR UNE PROMESSE. La version précédente de ce
+ * commentaire disait « le banc `qui-garde-le-gardien` de ce fichier le dirait » — CE BANC
+ * N'EXISTAIT PAS. Une passe de fond l'a mesuré : elle a importé cette fonction dans
+ * `bin/naitre.js`, lui a fait DÉCIDER une branche, et les 2 085 essais du dépôt sont restés
+ * VERTS. Un commentaire qui promet une garde absente est pire que pas de commentaire : il
+ * arrête la personne qui allait vérifier. Le banc s'appelle « `roleSansLieu` NE DÉCIDE NULLE
+ * PART EN PRODUCTION » et vit dans `tests/le-registre-decide-de-la-pose-et-du-bapteme.test.js`.
+ */
+export function roleSansLieu(nom) {
+  return ROLES_SANS_LIEU[nom];
+}
+
+/**
+ * LES CLÉS BRUTES DE LA TABLE — `Reflect.ownKeys`, jamais `Object.keys`. Réservé aux bancs.
+ *
+ * 🔴 POURQUOI CETTE FONCTION EXISTE : UN TROU MESURÉ. `rolesSansLieu()` rend `Object.keys()`,
+ * qui NE VOIT PAS une propriété non énumérable — alors que `baptemeDuRole` lit la table par
+ * INDEXATION (`ROLES_SANS_LIEU[nom]`), qui la voit parfaitement. Une entrée posée par
+ * `Object.defineProperty(…, { enumerable: false })` aurait donc eu TOUTE l'autorité de la
+ * table en restant invisible à la garde qui l'épingle.
+ *
+ * ⚠️ LA MÊME LAME COUPE UN CRAN PLUS BAS : un CHAMP non énumérable ajouté à une entrée
+ * (`dossier`, `pose_automatique`) se lit en production (`entree.dossier`, `'dossier' in entree`)
+ * et échappait au filtre des champs permis. Mesuré : `Object.keys` rendait `[libelle, bapteme]`
+ * pendant que `entree.dossier` valait `.chef-equipe`.
+ *
+ * ⚠️ ON NE CHANGE PAS `rolesSansLieu()` POUR AUTANT : `Object.keys` y est la bonne sémantique
+ * de production — on énumère ce qui est DÉCLARÉ. C'est le BANC qui doit regarder plus loin que
+ * la production, pas la production qui doit regarder comme le banc.
+ */
+export function clesBrutesDesRolesSansLieu() {
+  return {
+    table: Reflect.ownKeys(ROLES_SANS_LIEU),
+    entrees: Object.fromEntries(
+      Reflect.ownKeys(ROLES_SANS_LIEU).map((k) => [k, Reflect.ownKeys(ROLES_SANS_LIEU[k])])
+    ),
+  };
 }
 
 /**
@@ -335,8 +469,17 @@ export function poseManuelle(nom) {
   };
 }
 
-/** Comment ce rôle est NOMMÉ à sa naissance — `riviere` ou `code`. Voir le repli au registre. */
+/**
+ * Comment ce rôle est NOMMÉ à sa naissance — `riviere` ou `code`. Voir le repli au registre.
+ *
+ * ⚠️ UN RÔLE SANS LIEU RÉPOND AUSSI, et c'est la seule chose que cette fonction sait de lui.
+ * Sans ça, `nomDeLAgentQuiNait` levait sur un chef d'équipe — un rôle que le dépôt connaît
+ * parfaitement — au motif qu'il n'est pas dans la table des rôles QUI ONT UN LIEU. Un rôle
+ * réellement inventé, lui, lève toujours : `role()` reste la seule porte.
+ */
 export function baptemeDuRole(nom) {
+  const sansLieu = ROLES_SANS_LIEU[nom];
+  if (sansLieu) return sansLieu.bapteme === 'riviere' ? 'riviere' : 'code';
   return role(nom).bapteme === 'riviere' ? 'riviere' : 'code';
 }
 

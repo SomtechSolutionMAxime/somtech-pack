@@ -244,3 +244,64 @@ test('un lieu SANS « .nom-agent » n’est pas un lieu illisible — l’absenc
   assert.equal(lu.nom, null);
   assert.equal(lu.illisible, undefined, 'ENOENT est une absence, pas une mesure manquée');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 🔴 L'AIDE EN LIGNE DIT POUR QUEL RÔLE `--nom-agent` AGIT — elle le taisait
+//
+// `nomDeLAgentQuiNait` rend `code.toLowerCase()` pour tout rôle ≠ orchestrateur, AVANT même de
+// regarder `propose`. L'option est donc SANS EFFET sur `representant` et `chef-equipe` — deux
+// rôles sur trois — pendant que l'aide de `pack agent naitre` la documentait sans réserve.
+//
+// ⚠️ C'EST LE TEXTE QUI MENT, PAS LE CODE. Un chef d'équipe DOIT porter le code de son mandat :
+// c'est ce qui le rattache à son ticket. On garde donc le comportement et on corrige la phrase
+// — et on APPARIE les deux ici, sans quoi elles rederivent l'une de l'autre en silence.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('🔴 `--nom-agent` EST INERTE HORS ORCHESTRATEUR — et l’aide en ligne le DIT', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join, resolve } = await import('node:path');
+  const ici = dirname(fileURLToPath(import.meta.url));
+
+  // ── LE COMPORTEMENT, mesuré : le nom proposé est IGNORÉ, le code du mandat gagne.
+  for (const role of ['representant', 'chef-equipe']) {
+    const r = nomDeLAgentQuiNait({ role, code: 'T-20260825-0013', propose: 'bonaventure' });
+    assert.equal(
+      r.nom, 't-20260825-0013',
+      `« ${role} » : si un nom proposé passe un jour, cette garde doit tomber AVEC l’aide en ligne`
+    );
+  }
+  // ── LE CONTRÔLE POSITIF : pour l’orchestrateur, il agit. Sans lui, la boucle ci-dessus
+  //    serait verte le jour où l’option cesserait d’agir pour TOUT LE MONDE.
+  const orch = nomDeLAgentQuiNait({ role: 'orchestrateur', code: 'T-20260825-0013', propose: 'bonaventure' });
+  assert.equal(orch.nom, 'bonaventure');
+
+  // ── LE TEXTE, apparié au comportement.
+  const aide = readFileSync(resolve(ici, '..', '..', 'cli', 'src', 'commands', 'agent.js'), 'utf8');
+  const bloc = aide.slice(aide.indexOf('--nom-agent <nom>'));
+  const reserve = bloc.slice(0, bloc.indexOf('\n\n'));
+  assert.match(
+    reserve, /ORCHESTRATEUR SEULEMENT/,
+    'l’aide documente `--nom-agent` sans dire qu’elle est sans effet pour deux rôles sur trois'
+  );
+  assert.match(reserve, /SANS EFFET/);
+  assert.match(reserve, /chef-equipe/);
+
+  const usage = readFileSync(
+    resolve(ici, '..', '..', 'naissance-representant', 'bin', 'naitre.js'), 'utf8'
+  );
+  assert.match(
+    usage, /\[--nom-agent <nom> — orchestrateur SEULEMENT\]/,
+    'la ligne d’usage du binaire promet encore l’option pour tous les rôles'
+  );
+  // ── ⑤ : `--workspace` est FACULTATIF. Le rendre obligatoire dans l’usage envoie chercher un
+  //    espace herdr qui n’a pas à exister — c’est le défaut que ce lot a fermé dans le CODE.
+  assert.match(
+    usage, /gestionnaire-naitre <nom> \[--workspace <espace herdr>\]/,
+    'l’aide en ligne présente `--workspace` comme obligatoire, alors qu’il ne l’est plus'
+  );
+  assert.equal(
+    /gestionnaire-naitre <nom> --workspace/.test(usage), false,
+    'une forme sans crochets subsiste dans le fichier'
+  );
+});

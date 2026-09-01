@@ -610,6 +610,129 @@ for t in T-20260819-0095 T-20260819-0097 T-20260819-0103 T-20260819-0105 \
 done
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑫ LE GESTE PRESCRIT LIT LE SIGNAL DE SUCCÈS          (D-20260825-0002)
+#
+# `pack agent naitre` rend le pane À L'IDENTIQUE sur un succès et sur un refus
+# qui laisse un agent vivant, et `$( )` n'expose pas le code de sortie. Un
+# orchestrateur qui suivait la consigne à la lettre enchaînait donc brief, /goal
+# et veille sur un agent dont la déclaration n'avait pas pu s'écrire — sans
+# jamais l'apprendre, et sans que la garde des naissances le rattrape : il EST
+# déclaré.
+#
+# Le correctif (db41dec9) a fait lire `ok` au geste prescrit. Il n'était gardé
+# par RIEN : mesuré, 23 occurrences de `select(.ok)` dans 11 fichiers, TOUS des
+# textes, ZÉRO dans un banc, un script ou une CI. Réécrire le chapitre — ce que
+# ce lot a fait deux fois, et ce que `/orchestrateur` fait à chaque pose —
+# pouvait le supprimer sans qu'une seule assertion rougisse.
+#
+# ⚠️ CETTE GARDE PORTE LA FONCTION, PAS LA CHAÎNE. Elle n'exige nulle part
+# `select(.ok)` : ce qu'elle exige, ce sont les DEUX choses sans lesquelles le
+# geste ne peut pas échouer — le drapeau `-e` (sans lui jq sort 0 sur `null`, et
+# le `||` ne part jamais) et une consultation de `ok` dans le programme jq.
+# `jq -e -r 'select(.ok).pane'`, `jq -e -r 'select(.ok) | .pane'` et
+# `jq -er 'if .ok then .pane else empty end'` passent toutes les trois — les deux
+# premières sont d'ailleurs vivantes dans le dépôt, dans deux textes différents.
+#
+# 🔴 ET LA FAMILLE S'ÉNUMÈRE PAR UN FAIT QUE LA MUTATION NE PEUT PAS EFFACER.
+# Cette garde a d'abord cherché les textes qui « parlent de jq et du pane » — et
+# une mutation lui a survécu : retirer la ligne de lecture retirait le dernier
+# `jq` du fichier, donc le faisait SORTIR de la famille. La population rétrécissait
+# au lieu d'accuser. C'est exactement la forme que ce même lot vient de fermer sur
+# la garde des naissances (un agent qui sort du dénominateur au lieu d'être jugé).
+#
+# Le fait qui reste, lui, est celui qui CRÉE le risque : **une naissance capturée
+# dans une variable** (`NAISSANCE=$(…)`). À partir de là, le texte va lire quelque
+# chose dans cette sortie — et c'est cette lecture-là qui doit consulter `ok`.
+# Retirer la lecture ne retire pas la capture : le texte reste dans la famille et
+# se fait accuser d'avoir capturé une naissance sans jamais la vérifier.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑫ le geste prescrit LIT le signal de succès — D-20260825-0002"
+
+FAMILLE=()
+while IFS= read -r __f; do
+  [ -n "$__f" ] && FAMILLE+=("$__f")
+done <<EOF
+$(cd "$RACINE" && git ls-files '*.md' | while IFS= read -r f; do
+  grep -q 'NAISSANCE=\$(' "$f" 2>/dev/null && printf '%s\n' "$f"
+done)
+EOF
+
+# ── LES DEUX TEXTES STRUCTURELS. Ils ne peuvent pas cesser de prescrire le geste
+#    sans que ce soit une régression : l'un est la SOURCE du métier (d'où
+#    descendent les 9 autres), l'autre la compétence que lit un orchestrateur qui
+#    n'a pas encore de lieu. Sans cette assertion-ci, vider la famille rendrait
+#    toutes les négatives ci-dessous vertes — « une garde qu'on peut désarmer
+#    sans rougir ».
+for __structurel in \
+  'metier/orchestrateur/chapitres/chefs-equipe.md' \
+  '.claude/skills/orchestrer-chantier/SKILL.md'
+do
+  __vu=0
+  for __f in "${FAMILLE[@]}"; do [ "$__f" = "$__structurel" ] && __vu=1; done
+  if [ "$__vu" -eq 1 ]; then
+    ok "« $__structurel » prescrit bien la naissance d'un chef d'équipe et en capture la sortie"
+  else
+    ko "« $__structurel » ne capture plus la sortie d'une naissance : la famille a perdu un texte STRUCTUREL"
+  fi
+done
+
+if [ "${#FAMILLE[@]}" -ge 2 ]; then
+  ok "la famille du geste compte ${#FAMILLE[@]} texte(s) — énumérée par sa fonction, pas par une liste de chemins"
+else
+  ko "la famille du geste est vide ou incomplète (${#FAMILLE[@]}) — les contrôles suivants n'éprouveraient rien"
+fi
+
+lectures=0
+sans_e=0
+sans_ok=0
+non_verifiees=0
+for __f in "${FAMILLE[@]}"; do
+  __naissances="$(cd "$RACINE" && grep -c 'NAISSANCE=\$(' "$__f")"
+  __lues=0
+  while IFS= read -r corps; do
+    [ -n "$corps" ] || continue
+    __lues=$((__lues+1))
+    lectures=$((lectures+1))
+    __vu="${corps#"${corps%%[![:space:]]*}"}"
+    # Ce qui sépare `jq` de son programme : ses drapeaux.
+    drapeaux="$(printf '%s' "$corps" | sed -n "s/.*jq\([^']*\)'.*/\1/p")"
+    # Le programme jq lui-même, entre apostrophes.
+    programme="$(printf '%s' "$corps" | sed -n "s/.*jq[^']*'\([^']*\)'.*/\1/p")"
+    # `-e` fait sortir jq en non-zéro sur `false`/`null` : SANS LUI le `||` ne
+    # part jamais, et la vérification prescrite ne peut pas échouer. La forme
+    # combinée (`-er`) compte autant que la forme séparée.
+    printf '%s' "$drapeaux" | grep -qE '(^| )-[a-zA-Z]*e' || {
+      sans_e=$((sans_e+1))
+      ko "$__f : « $__vu » — jq sans « -e » : il sort 0 sur un refus, le repli ne part jamais"
+    }
+    printf '%s' "$programme" | grep -q 'ok' || {
+      sans_ok=$((sans_ok+1))
+      ko "$__f : « $__vu » — le programme jq ne consulte pas « ok » : le pane sort à l'identique d'un succès et d'un refus"
+    }
+  done <<EOF
+$(cd "$RACINE" && grep -h '=\$(' "$__f" | grep 'jq' | grep 'NAISSANCE' | grep -v '^[[:space:]]*#')
+EOF
+
+  # 🔴 PAR FICHIER, ET CONTRE SON PROPRE NOMBRE DE NAISSANCES — jamais contre une
+  # somme. Un total agrégé se laisse compenser : « 11 lectures pour 11 textes »
+  # reste vrai quand un texte en perd une et qu'un autre en gagne une.
+  if [ "$__lues" -lt "$__naissances" ]; then
+    non_verifiees=$((non_verifiees+1))
+    ko "$__f : $__naissances naissance(s) capturée(s), $__lues lecture(s) vérifiée(s) — une sortie capturée que rien ne consulte"
+  fi
+done
+
+if [ "$non_verifiees" -eq 0 ]; then
+  ok "$lectures lecture(s) de naissance sur ${#FAMILLE[@]} texte(s) — chacun en vérifie autant qu'il en capture"
+fi
+if [ "$sans_e" -eq 0 ]; then
+  ok "toutes les lectures portent « -e » — le refus prescrit peut réellement échouer"
+fi
+if [ "$sans_ok" -eq 0 ]; then
+  ok "toutes les lectures consultent « ok » — aucune ne brieffe un agent que le geste a refusé"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
@@ -775,7 +898,27 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #
 # ⚠️ LA MARGE RESTE À 0 — la taille est celle MESURÉE du rendu final, pas un
 #    chiffre rond : une marge gratuite désarmerait le gate (mot de l'arbitrage).
-BASELINE=151037
+# ⚠️ RE-BASELINE DU 2026-09-01 — 151 037 → 151 875, ARBITRÉE, PAS RELEVÉE.
+#
+#   Arbitrage rendu par `temiscouata`, orchestrateur `P-20260822-0001`, sur la
+#   fusion de `E-20260825-0002` (T-20260827-0037). Recopié dans son intention :
+#   « OUI, re-baseline à 151875, exactement, aucune marge — c'est moi qui te
+#     l'accorde, pas toi qui la relèves, et c'est toute la différence que le banc
+#     protège. »
+#
+# ⚠️ CE QUI A ÉTÉ RENDU AVANT D'OBTENIR LE CHIFFRE, parce que l'arithmétique seule
+# ne prouve pas que la croissance MÉRITE d'exister :
+#   • socle commun 148 240 · `main` 151 037 · le lot 149 078 · la fusion 151 875
+#     = 148 240 + 2 797 (main) + 838 (le lot). Pas un octet de plus que les deux
+#     croissances légitimes : la fusion n'ajoute rien, elle additionne ;
+#   • UN SEUL fichier diffère de `main` — `chefs-equipe.md`. Les onze autres sont
+#     identiques à l'octet ;
+#   • et il RETIRE plus de lignes qu'il n'en ajoute (19 contre 26) : les 838
+#     octets sont de la prose qui remplace une séquence bash plus longue.
+#
+# La borne reste donc ce qu'elle était : la taille FINALE et EXACTE, marge nulle.
+# Le prochain lot devra revenir demander — c'est le comportement voulu.
+BASELINE=151875
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

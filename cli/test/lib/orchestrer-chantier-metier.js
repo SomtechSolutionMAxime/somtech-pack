@@ -648,7 +648,21 @@ export const CONTROLES = [
         );
         // Une attribution s'écrit « à … » — un énoncé qui cesse d'attribuer a cessé
         // de rendre le geste, même s'il ne nomme pas l'orchestrateur pour autant.
-        assert.match(l[iQui], /^à\s+\S/i, `le geste « ${quoi} » n'attribue plus à personne (« ${l[iQui]} »)`);
+        // Une attribution s'écrit « à … ». Un geste peut aussi n'appartenir à PERSONNE — mais
+        // seulement quand la case DIT POURQUOI (l'outillage le fait à la place). Une case vide,
+        // ou un « personne » nu, a cessé de rendre le geste et reste refusée.
+        //
+        // 🔴 CE CRAN S'OUVRE PARCE QUE LE TEXTE A CHANGÉ SOUS LA GARDE, pas l'inverse
+        // (T-20260901-0027). `naitre` nomme désormais l'agent et le vérifie par le fait :
+        // redemander à un chef d'équipe de se nommer le ferait se renommer par-dessus, sa
+        // déclaration ne l'apparierait plus, et la garde de l'anonymat l'accuserait. Le geste
+        // « renommer » n'appartient donc réellement plus à personne — la garde le refusait au
+        // nom d'une prescription que le métier venait d'abolir. Une garde peut se périmer sans
+        // que personne n'y touche.
+        assert.match(
+          l[iQui], /^(à\s+\S|\**personne\**\s*[—-]\s*\S)/i,
+          `le geste « ${quoi} » n'attribue plus à personne (« ${l[iQui]} »)`
+        );
         exigeImperatif(l[iQui], `l'attribution du geste « ${quoi} »`);
       }
 

@@ -58,17 +58,37 @@ somtech-pack agent ou-naitre [chemin…] [--role <rôle>] [--json]
 
 Options :
   --depot <chemin>        le dépôt du chantier (obligatoire)
-  --role <role>           orchestrateur (défaut) | representant
-  --workspace <id>        un espace herdr existant ; sans lui, elle en crée un
+  --role <role>           orchestrateur (défaut) | representant | chef-equipe
+  --workspace <id>        un espace herdr existant ; sans lui, la naissance en ouvre un
+                          elle-même, APRÈS ses refus — qui défont tout, sauf un agent né
   --session <nom>         la session herdr visée, quand le poste en porte plusieurs
   --modele <alias>        le modèle déclaré au lancement (défaut : opus)
   --mode <mode>           le mode de permission déclaré (défaut : acceptEdits)
   --amorce <fichier>      le brief à livrer dès la naissance
   --amorce-texte "…"      le même, en clair
-  --nom-agent <nom>       le nom que l'agent portera, quand il diffère du code du mandat.
-                          SANS LUI, un orchestrateur reçoit une rivière ; c'est le cas normal,
-                          et le seul qui ne dépende de personne. Le LIEU garde toujours le code
-                          du mandat — seul le nom d'agent change.
+  --nom-agent <nom>       ORCHESTRATEUR SEULEMENT. Le nom que l'agent portera, quand il
+                          diffère du code du mandat. SANS LUI, un orchestrateur reçoit une
+                          rivière ; c'est le cas normal, et le seul qui ne dépende de personne.
+                          Le LIEU garde toujours le code du mandat — seul le nom d'agent change.
+                          Sur --role representant et --role chef-equipe, l'option est SANS EFFET
+                          et le nom reste le code du mandat : un chef d'équipe doit le porter,
+                          c'est ce qui le rattache à son ticket.
+
+Un CHEF D'ÉQUIPE (--role chef-equipe) — le rôle qui n'a PAS de lieu :
+  Il reçoit son propre WORKTREE — ~/worktrees/<dépôt>/<horodatage>, sur une branche-socle
+  wt/<horodatage> tirée de origin/main — et RIEN d'autre : aucun dossier posé, aucun gabarit,
+  aucun commit dans le dépôt du chantier. Son nom est le code de son mandat (jamais une
+  rivière : elle est réservée aux orchestrateurs), et sa naissance est INSCRITE — qui il est,
+  pour quel mandat, qui l'a ouvert, où il travaille.
+
+  ⚠️ « worktree » et non « espace de travail » : ce dernier désigne déjà l'espace HERDR, celui
+  de --workspace. Les deux existent pour un chef d'équipe, et ce ne sont pas les mêmes.
+
+  --coordonnateur <nom>   qui l'ouvre. C'est l'attache que rien d'autre ne porte : la structure
+                          du chantier est au registre, l'ID de traçabilité est dans les branches,
+                          mais le lien « cet agent, ce coordonnateur » disparaît avec le pane.
+  --base <ref>            d'où part son worktree (défaut : origin/main)
+  --horodatage <ts>       ce qui nomme son worktree et sa branche (défaut : l'instant présent)
 `;
 
 const ICI = dirname(fileURLToPath(import.meta.url)); // cli/src/commands
@@ -113,49 +133,64 @@ export function cheminDeLaNaissance({ source = null } = {}) {
   return chemin;
 }
 
-function herdr(args) {
-  const sortie = execFileSync('herdr', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  return JSON.parse(sortie);
-}
-
 /**
- * L'ESPACE DE TRAVAIL, créé s'il manque — le geste n°3 du décompte, retiré des mains humaines.
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 CE QUE CETTE PORTE N'OUVRE PLUS — ET POURQUOI (défaut ①, D-20260825-0002)
+ * ═══════════════════════════════════════════════════════════════════════════════════════
  *
- * ⚠️ ON N'EN CRÉE UN QUE SI AUCUN N'EST DONNÉ. Réutiliser un espace nommé reste le cas normal
- * quand quelqu'un sait où il veut que l'agent apparaisse ; en fabriquer un d'office lui
- * retirerait ce choix, et ferait proliférer les espaces à chaque relance.
+ * Elle appelait `herdr workspace create` ICI, avant de lancer la naissance. Mesuré sur la ligne
+ * exacte que le métier prescrit, sans `--workspace` :
+ *
+ *     pack agent naitre revue-pr180 --role chef-equipe --depot <d> --coordonnateur moi
+ *       → herdr workspace create --cwd <d> --label revue-pr180 --no-focus      (ici)
+ *       → « Rien n'a été créé : ni espace de travail, ni onglet, ni agent. »   (la naissance, code 1)
+ *
+ * L'espace herdr restait, orphelin, et le refus mentait. Ce n'était pas propre à ce refus-là :
+ * TOUS ceux du chemin chef d'équipe — mandat invalide, `--base` introuvable, espace de travail
+ * occupé, nom que herdr refuse, session ambiguë — tombent après le lancement. Deux textes
+ * opposables promettaient l'inverse (« avant le moindre appel à herdr », « un refus ne laisse
+ * rien derrière lui ») : un texte qui promettait ce que le code ne faisait pas.
+ *
+ * ⚠️ POURQUOI DÉPLACER PLUTÔT QUE DÉFAIRE. Défaire après coup laisse la phrase « rien n'a été
+ * créé » fausse à l'instant où on la lit, et dépend d'un second appel herdr qui peut lui-même
+ * échouer. Ouvrir l'espace APRÈS les refus rend la promesse vraie par construction. (Le défaire
+ * existe quand même, dans la naissance, pour les échecs qui surviennent APRÈS l'ouverture — ce
+ * que l'ordre seul ne peut pas couvrir.)
+ *
+ * ⚠️ ET CE N'EST PAS QU'UN DÉPLACEMENT. Cet appel-ci partait vers `herdr` NU, c'est-à-dire vers
+ * la session par défaut — donc vers rien depuis un terminal ordinaire. La naissance, elle,
+ * RÉSOUT sa session avant d'ouvrir : l'espace naît sur la bonne, et le refus d'appartenance
+ * qu'on pouvait déclencher soi-même disparaît avec.
+ *
+ * ⚠️ CE QUE LA PORTE GARDE : ne rien inventer. Un `--workspace` qu'on n'a pas donné n'est pas
+ * relayé, sans quoi la naissance ne saurait jamais qu'il manque.
  */
-export function espaceDeTravail({ depot, code, workspace }) {
-  if (workspace) return { id: workspace, cree: false };
-  let reponse;
-  try {
-    reponse = herdr(['workspace', 'create', '--cwd', resolve(depot), '--label', code, '--no-focus']);
-  } catch (err) {
-    throw new Error(
-      `herdr n’a pas pu ouvrir d’espace de travail : ${String(err.stderr || err.message).trim()}\n` +
-        `  Le geste qui lève le blocage : vérifie que herdr tourne (\`herdr status\`), ou passe un ` +
-        `espace existant avec \`--workspace\`.`
-    );
-  }
-  const id = reponse?.result?.root_pane?.workspace_id || reponse?.result?.workspace?.workspace_id;
-  if (!id) {
-    throw new Error(
-      `herdr a ouvert un espace sans en dire l’identifiant : ${JSON.stringify(reponse)} — ` +
-        `on ne devine pas où l’agent naîtrait.`
-    );
-  }
-  return { id, cree: true };
-}
 
 /** Les arguments qu'on relaie à la naissance, dans l'ordre qu'elle attend. */
-export function argumentsDeNaissance(code, { depot, workspace, role, session, modele, mode, amorce, amorceTexte, nomAgent }) {
-  const a = [code, '--workspace', workspace, '--depot', resolve(depot), '--role', role || 'orchestrateur'];
+export function argumentsDeNaissance(
+  code,
+  { depot, workspace, role, session, modele, mode, amorce, amorceTexte, nomAgent, coordonnateur, base, horodatage }
+) {
+  const a = [code, '--depot', resolve(depot), '--role', role || 'orchestrateur'];
+  // ⚠️ UN ESPACE QU'ON N'A PAS DONNÉ NE S'INVENTE PAS. Le relayer d'office — même vide — ferait
+  // croire à la naissance qu'un espace lui a été désigné ; elle chercherait à en vérifier
+  // l'appartenance au lieu d'en ouvrir un, après ses refus. C'est l'absence du drapeau qui lui
+  // dit « à toi de l'ouvrir, et au bon moment ».
+  if (workspace) a.push('--workspace', workspace);
   if (session) a.push('--session', session);
   if (modele) a.push('--modele', modele);
   if (mode) a.push('--mode', mode);
   if (amorce) a.push('--amorce', amorce);
   if (amorceTexte) a.push('--amorce-texte', amorceTexte);
   if (nomAgent) a.push('--nom-agent', nomAgent);
+  // ⚠️ RELAYÉS, PAS INTERPRÉTÉS — et surtout pas conditionnés au rôle. Cette porte ne connaît
+  // pas la table des rôles et n'a pas à la connaître : filtrer ici sur « chef-equipe » ferait
+  // vivre la règle à DEUX endroits, et le second à diverger serait celui-ci, qui ne rougit
+  // nulle part. La naissance, elle, sait quoi en faire — et ce qu'elle n'attend pas, elle
+  // l'ignore, comme tous les autres drapeaux depuis toujours.
+  if (coordonnateur) a.push('--coordonnateur', coordonnateur);
+  if (base) a.push('--base', base);
+  if (horodatage) a.push('--horodatage', horodatage);
   return a;
 }
 
@@ -208,10 +243,8 @@ export async function cmdAgent(argv, { lancer = spawnSync } = {}) {
   }
 
   let naitre;
-  let espace;
   try {
     naitre = cheminDeLaNaissance({ source: opt('--source') });
-    espace = espaceDeTravail({ depot, code, workspace: opt('--workspace') });
   } catch (err) {
     console.error(`✗ ${err.message}`);
     return 1;
@@ -219,7 +252,7 @@ export async function cmdAgent(argv, { lancer = spawnSync } = {}) {
 
   const args = argumentsDeNaissance(code, {
     depot,
-    workspace: espace.id,
+    workspace: opt('--workspace'),
     role: opt('--role'),
     session: opt('--session'),
     modele: opt('--modele'),
@@ -227,6 +260,9 @@ export async function cmdAgent(argv, { lancer = spawnSync } = {}) {
     amorce: opt('--amorce'),
     amorceTexte: opt('--amorce-texte'),
     nomAgent: opt('--nom-agent'),
+    coordonnateur: opt('--coordonnateur'),
+    base: opt('--base'),
+    horodatage: opt('--horodatage'),
   });
 
   const r = lancer(process.execPath, [naitre, ...args], { stdio: 'inherit' });

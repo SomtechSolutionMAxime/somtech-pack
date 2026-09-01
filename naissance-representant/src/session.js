@@ -33,16 +33,24 @@
 // figé se déphaserait au premier ajout. On lit donc ce qui est là, à chaque appel.
 
 import { sessionsDuPoste } from './destinataire.js';
+import { identiteDeSession } from './declaration.js';
 
 /**
  * Le nom d'une session, lu là où herdr le pose : `…/sessions/<nom>/herdr.sock`.
  *
  * Rendu `null` sur toute autre forme — un socket désigné à la main par `HERDR_SOCKET_PATH`
  * peut vivre ailleurs, et lui inventer un nom serait pire que de n'en donner aucun.
+ *
+ * ⚠️ LE FORMAT N'EST PLUS ÉCRIT ICI. C'est `identiteDeSession` qui le porte, dans le module qui
+ * DÉFINIT le champ `session_herdr` d'une déclaration — parce que c'est ce que ce nom-ci finit
+ * par remplir, et que deux lectures du même format dans deux fichiers est exactement la
+ * divergence que ce lot ferme. Ce qui reste ici est le seul écart de contrat : cette
+ * fonction-ci prend un SOCKET, donc une chaîne sans séparateur n'est pas un nom de session à
+ * ses yeux — c'est une entrée qui n'a pas la forme attendue.
  */
 export function nomDeSession(socket) {
-  const trouve = String(socket ?? '').match(/[/\\]sessions[/\\]([^/\\]+)[/\\][^/\\]+$/);
-  return trouve ? trouve[1] : null;
+  const brut = String(socket ?? '');
+  return /[/\\]/.test(brut) ? identiteDeSession(brut) : null;
 }
 
 /** Ce qu'on montre à l'humain : les noms qu'il peut donner à `--session`. */

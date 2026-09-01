@@ -29,11 +29,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { role as roleDe, rolesConnus, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
+import { role as roleDe, rolesConnus, rolesSansLieu, roleSansLieu, clesBrutesDesRolesSansLieu, tableSansLieuVerrouillee, poseAutomatique, poseManuelle, baptemeDuRole, RoleInconnu } from '../src/roles.js';
 import { nomDeLAgentQuiNait, estUneRiviere } from '../src/nom-de-riviere.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -250,4 +251,259 @@ test('UN RÔLE INCONNU NE SE FAIT PLUS NOMMER EN SILENCE', () => {
     RoleInconnu,
     'un rôle inconnu était rangé avec « pas orchestrateur » et repartait avec son code',
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA SECONDE TABLE DU REGISTRE — `ROLES_SANS_LIEU`, ET QUI LA GARDE (2026-09-01)
+//
+// 🔴 CE QUE CES ESSAIS FERMENT, ET COMMENT LE TROU A ÉTÉ MESURÉ. `ROLES_SANS_LIEU` est née à
+// la fusion de `E-20260825-0002` : un chef d'équipe est un rôle CONNU qui n'a pas de lieu, et
+// qui ne peut pas entrer dans `ROLES` (une entrée sans `entetes` fait tomber
+// `roleDuLieuOuRefus` sur `Object.entries(undefined)`). Elle décide de `baptemeDuRole` et
+// nourrit l'aide en ligne : elle a donc L'AUTORITÉ d'une table du registre.
+//
+// ⚠️ ELLE N'EN AVAIT PAS LA GARDE, et les deux moitiés n'étaient PAS symétriques. Mesuré par
+// mutation, contrôle négatif vert (0 · 0), les trois suites :
+//
+//   • RETIRER `chef-equipe` de la table   →  33 rouges. La table EST lue, elle EST vivante.
+//   • AJOUTER un rôle bidon à la table    →   0 rouge. Personne ne regarde.
+//   • AJOUTER le même rôle bidon à `ROLES` → 162 rouges. La PREMIÈRE table, elle, est gardée.
+//
+// Une seconde porte, la même autorité que la première, et aucune de sa garde. Le trou n'est
+// pas « la table est fausse » : c'est que sa moitié « ce qu'on ne doit PAS y ajouter » n'était
+// gardée par rien, à côté d'une moitié « ce qui doit y être » qui l'était.
+//
+// ⚠️ ET CE N'EST PAS UNE LISTE D'EXCEPTIONS QU'ON ÉLARGIT. Le troisième essai ci-dessous est
+// celui qui mord vraiment : une entrée sans lieu n'a le droit de déclarer QUE `libelle` et
+// `bapteme`. Elle ne peut donc pas se doter d'un `dossier` en douce et devenir un `ROLES`
+// fantôme — le registre se mettrait à balayer des lieux qui n'existent pas. Épingler les noms
+// se contourne en éditant l'épingle ; épingler la FORME oblige à dire ce qu'on veut faire.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('LA TABLE DES RÔLES SANS LIEU EST ÉPINGLÉE — l’y ajouter est un arbitrage, pas de l’entretien', () => {
+  assert.deepEqual(
+    rolesSansLieu().sort(), ['chef-equipe'],
+    'un rôle a été ajouté ou retiré de `ROLES_SANS_LIEU` — cette table dit qui échappe à la ' +
+      'table des lieux, et son contenu est une décision, pas une commodité de passage'
+  );
+});
+
+test('AUCUN RÔLE N’EST DANS LES DEUX TABLES À LA FOIS — sinon la question « a-t-il un lieu ? » a deux réponses', () => {
+  const deuxFois = rolesSansLieu().filter((nom) => rolesConnus().includes(nom));
+  assert.deepEqual(
+    deuxFois, [],
+    `« ${deuxFois.join(', ')} » est déclaré dans ROLES et dans ROLES_SANS_LIEU — selon la ` +
+      `fonction interrogée, il aurait un lieu ou n’en aurait pas, et rien ne dirait laquelle a raison`
+  );
+});
+
+test('🔴 UNE ENTRÉE SANS LIEU NE DÉCLARE QUE `libelle` ET `bapteme` — elle ne devient pas un `ROLES` fantôme', () => {
+  // Le champ qui compte est `dossier` : l'ajouter ici ferait balayer par le registre des lieux
+  // qui n'existent pas. Mais on n'énumère pas les champs INTERDITS — une liste d'interdits
+  // s'oublie au premier champ neuf. On énumère les champs PERMIS, et tout le reste tombe.
+  const PERMIS = ['libelle', 'bapteme'];
+  for (const nom of rolesSansLieu()) {
+    const entree = roleSansLieu(nom);
+    assert.ok(entree, `« ${nom} » est énuméré mais son entrée est introuvable`);
+    // 🔴 `Reflect.ownKeys` ET PAS `Object.keys` — la garde était aveugle, et c'est mesuré.
+    // `Object.defineProperty(entree, 'dossier', { enumerable: false })` posait un champ que
+    // la production lit parfaitement (`entree.dossier`, `'dossier' in entree`) et que
+    // `Object.keys` ne rendait pas : le « ROLES fantôme » que cet essai prétend interdire
+    // passait sous lui, 0 rouge sur 2 085 essais. Une garde qui énumère doit énumérer comme
+    // celui qui LIT, jamais comme celui qui DÉCLARE.
+    const interdits = Reflect.ownKeys(entree).map(String).filter((c) => !PERMIS.includes(c));
+    assert.deepEqual(
+      interdits, [],
+      `« ${nom} » déclare ${interdits.map((c) => `\`${c}\``).join(', ')} — un rôle SANS lieu qui ` +
+        `porte les clés d'un rôle QUI EN A UN est la moitié d'une entrée de \`ROLES\`, et le ` +
+        `registre la traitera comme telle sans que personne l'ait décidé`
+    );
+    assert.ok(
+      typeof entree.libelle === 'string' && entree.libelle.length > 0,
+      `« ${nom} » n'a pas de libellé lisible`
+    );
+    assert.ok(
+      ['riviere', 'code'].includes(entree.bapteme),
+      `« ${nom} » ne dit pas comment il est nommé à sa naissance (\`bapteme\` = ${JSON.stringify(entree.bapteme)}) — ` +
+        `sans quoi il retombe sur un repli que personne n'a choisi pour lui, exactement comme un rôle de \`ROLES\``
+    );
+  }
+});
+
+test('🔴 LA TABLE ELLE-MÊME N’A AUCUNE ENTRÉE CACHÉE — les clés BRUTES, pas les énumérables', () => {
+  // Un cran au-dessus du champ caché : une ENTRÉE posée non énumérable aurait toute
+  // l'autorité de la table — `baptemeDuRole` lit par indexation, qui la voit — en restant
+  // invisible à `rolesSansLieu()`, donc à l'épingle qui la garde.
+  const brut = clesBrutesDesRolesSansLieu();
+  assert.deepEqual(
+    brut.table.map(String).sort(), ['chef-equipe'],
+    `la table porte des clés que \`rolesSansLieu()\` ne rend pas (brut : ${brut.table.map(String).join(', ')}) — ` +
+      `une entrée cachée décide autant qu'une entrée déclarée, et aucune épingle ne la voit`
+  );
+  for (const [nom, cles] of Object.entries(brut.entrees)) {
+    assert.deepEqual(
+      cles.map(String).sort(), ['bapteme', 'libelle'],
+      `« ${nom} » porte des champs bruts que l'énumération ne rend pas : ${cles.map(String).join(', ')}`
+    );
+  }
+});
+
+test('🔴 `roleSansLieu` NE DÉCIDE NULLE PART EN PRODUCTION — le banc que le commentaire promettait', () => {
+  // 🔴 CE BANC N'EXISTAIT PAS, ET LE COMMENTAIRE DE `roleSansLieu` AFFIRMAIT LE CONTRAIRE.
+  // Mesuré par une passe de fond : elle a importé la fonction dans `bin/naitre.js`, lui a fait
+  // décider une branche, et les 2 085 essais du dépôt sont restés VERTS. Une garantie écrite
+  // au-delà de ce qui est mesuré arrête la personne qui allait vérifier — c'est le mode
+  // d'erreur le plus cher de ce dépôt, et il venait d'être commis dans le geste qui en fermait
+  // un autre.
+  //
+  // ⚠️ ON GARDE L'APPEL, PAS LE MOT. Chercher la chaîne « roleSansLieu » dans les sources
+  // rendrait vrai un banc qu'un renommage désarme. On liste les fichiers de PRODUCTION et on
+  // refuse l'IMPORT — la seule façon d'atteindre la fonction depuis un autre module.
+  const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  // 🔴 LA POPULATION SE DÉRIVE DU DÉPÔT, ELLE NE S'ÉNUMÈRE PLUS — et c'est un défaut mesuré.
+  // La liste en dur nommait quatre répertoires et en OUBLIAIT deux qui existent : `ligne-directe/bin`
+  // et `cli/bin`, deux points d'entrée CLI réels. Un import posé dans `ligne-directe/bin/` décidait
+  // pour de bon sans qu'aucun essai ne bouge. Une liste de chemins écrite à la main est périmée dès
+  // qu'un répertoire naît, et personne ne s'en aperçoit — c'est la même famille que la population
+  // d'un balayage qu'on demande au manifeste plutôt qu'à une liste (T-20260825-0013).
+  //
+  // ⚠️ `payload/` est ÉCARTÉ à dessein : c'est la copie distribuée du pack, pas la source.
+  // 🔴 ET ON NE DÉRIVE PLUS `*/src` ET `*/bin` NON PLUS : MESURÉ, ÇA LAISSAIT UN TROU. Un import
+  // réel posé dans `scripts/` — un répertoire de production sans `src/` ni `bin/` — restait vert.
+  // Une convention de nommage est une liste en dur déguisée : elle décrit les répertoires qui
+  // existaient le jour où on l'a écrite. On balaye donc TOUT le dépôt, et on ÉCARTE nommément
+  // ce qui n'est pas de la production — la liste d'exclusions est courte, visible, et chacune
+  // porte sa raison, là où la liste d'inclusions était longue et muette.
+  const HORS_PRODUCTION = new Set(['node_modules', 'tests', 'test', 'payload', 'coverage', 'docs']);
+  const RACINES = [RACINE];
+
+  // ⚠️ CONTRÔLE DE L'INSTRUMENT : si la dérivation rend moins de répertoires que la liste en dur
+  // qu'elle remplace, c'est elle qui est cassée — et le banc rendrait vert sans avoir rien lu.
+
+
+  const fichiers = [];
+  const balayer = (dir) => {
+    let entrees;
+    try { entrees = readdirSync(dir); } catch { return; }
+    for (const e of entrees) {
+      if (e.startsWith('.') || HORS_PRODUCTION.has(e)) continue;
+      const chemin = join(dir, e);
+      let st;
+      try { st = statSync(chemin); } catch { continue; }
+      if (st.isDirectory()) balayer(chemin);
+      else if (e.endsWith('.js') || e.endsWith('.mjs')) fichiers.push(chemin);
+    }
+  };
+  for (const d of RACINES) balayer(d);
+
+  // ⚠️ CONTRÔLE DE L'INSTRUMENT : un balayage qui ne trouve rien rendrait ce banc vert pour
+  // la mauvaise raison. On exige d'avoir vraiment lu du code de production.
+  // ⚠️ CONTRÔLE DE L'INSTRUMENT : un balayage qui ne trouve rien rendrait ce banc vert pour la
+  // mauvaise raison — il ne verrait aucun coupable parce qu'il n'aurait rien lu.
+  //
+  // 🔴 LE SEUIL EST ANCRÉ SUR UNE MESURE, PAS SUR UN CHIFFRE ROND. Première tentative : 150,
+  // choisi au jugé — le banc a rougi en trouvant 126, et le rouge accusait le lot alors que
+  // l'instrument seul était en cause. Mesuré le 2026-09-01 : l'ancienne dérivation
+  // (`*/src` + `*/bin`) atteignait **102** fichiers ; le balayage complet en atteint **126**,
+  // les 24 de plus venant de `gardes/` (9), `herdr-plugins/` (5) et de racines de paquets
+  // (`scripts/`, `cli/`, `naissance-representant/`, `ligne-directe/`) — tous du code de
+  // production réel, aucun n'était balayé.
+  //
+  // Le plancher est donc **102**, la borne de ce qu'on remplace : en descendre serait avoir
+  // RÉTRÉCI la population en croyant l'élargir, et c'est ce qu'il faut voir. On ne fixe pas le
+  // plancher à 126 : le compte de fichiers d'un dépôt vivant bouge, et une borne qui rougit à
+  // chaque fichier supprimé cesse d'être lue.
+  assert.ok(
+    fichiers.length >= 102,
+    `le balayage n'a trouvé que ${fichiers.length} fichier(s), moins que les 102 de la dérivation ` +
+      `qu'il remplace — l'instrument a rétréci, ce n'est pas le lot qui est en cause`
+  );
+
+  const coupables = fichiers.filter((f) => {
+    if (f.endsWith(`${'/'}roles.js`)) return false; // sa propre définition
+    if (f.includes(`${'/'}payload${'/'}`)) return false; // copie distribuée, pas la source
+    const src = readFileSync(f, 'utf8');
+    // 🔴 TROIS FORMES, PARCE QU'UNE SEULE SE CONTOURNE — mesuré, pas supposé. La version
+    // précédente ne cherchait que `import { roleSansLieu } from` : un
+    // `import * as roles from '…/roles.js'` puis `roles.roleSansLieu(…)` passait dessous,
+    // DANS un répertoire pourtant balayé, et décidait pour de bon.
+    //
+    //   ① l'import nommé — la forme directe ;
+    //   ② l'import NAMESPACE de `roles.js` — il donne accès à TOUT ce que le module exporte,
+    //     y compris ce qu'on ajoutera demain, donc on le refuse en bloc en production ;
+    //   ③ le nom des accesseurs réservés, où qu'il apparaisse — attrape l'import dynamique
+    //     (`await import(…)`) et la déstructuration différée.
+    return /import\s*\{[^}]*\b(roleSansLieu|clesBrutesDesRolesSansLieu|tableSansLieuVerrouillee)\b[^}]*\}\s*from/.test(src)
+        || /import\s+\*\s+as\s+\w+\s+from\s+['"][^'"]*roles\.js['"]/.test(src)
+        || /\b(roleSansLieu|clesBrutesDesRolesSansLieu|tableSansLieuVerrouillee)\b/.test(src);
+  });
+  assert.deepEqual(
+    coupables.map((f) => f.slice(RACINE.length)), [],
+    `ces fichiers de PRODUCTION importent un accesseur réservé aux bancs — ils contourneraient ` +
+      `\`role()\`, la seule porte qui doit décider d'un rôle`
+  );
+});
+
+test('🔴 LA TABLE SANS LIEU EST GELÉE ET SANS PROTOTYPE — on ne garde plus les chemins, on ferme l’objet', () => {
+  // 🔴 CE BANC EXISTE PARCE QUE TROIS GARDES SUCCESSIVES ONT ÉTÉ CONTOURNÉES, chacune par un
+  // mécanisme que la précédente ne regardait pas : un CHAMP non énumérable (`Object.keys` aveugle),
+  // une ENTRÉE non énumérable (même lame plus haut), puis une entrée héritée du PROTOTYPE
+  // (`Reflect.ownKeys` ne voit pas l'héritage, l'indexation si). À chaque fois la garde changeait
+  // d'instrument sans changer de FORME — elle énumérait, et il restait une façon de ne pas être énuméré.
+  //
+  // ⚠️ CE BANC NE GARDE DONC PAS UN CHEMIN DE PLUS. Il garde que l'objet est HORS de la classe des
+  // choses auxquelles on peut ajouter quoi que ce soit : gelé (aucun ajout, quel qu'en soit le
+  // mécanisme) et sans prototype (aucune entrée ne peut entrer sans être une clé propre). Un `Proxy`
+  // ou un getter, qu'on n'a pas eu à énumérer, tombent avec le reste.
+  const v = tableSansLieuVerrouillee();
+  assert.equal(v.gelee, true, 'la table n’est plus gelée — un module tiers peut y ajouter une entrée, et la garde qui énumère ne la verra pas forcément');
+  assert.equal(v.sansPrototype, true, 'la table a retrouvé un prototype — une entrée héritée décide comme une entrée propre, sans être une clé propre');
+  assert.equal(v.entreesGelees, true, 'une entrée n’est plus gelée — un champ (`dossier`, `pose_automatique`) peut y être ajouté depuis un autre module');
+  assert.equal(v.inventeUneEntree, false, 'la table RÉPOND à une clé qu’elle ne contient pas — elle invente');
+
+  // 🔴 ET LA MÊME QUESTION POSÉE PAR LA PORTE DE PRODUCTION, PAS PAR L'ATTESTATION DU MODULE.
+  //
+  // Les quatre lignes ci-dessus viennent de `roles.js` : c'est un oracle qui vit chez celui
+  // qu'il juge. Un `Proxy` posé autour de la table le trompait ENTIÈREMENT — `isFrozen: true`,
+  // prototype nul, mêmes `ownKeys` — pendant que `baptemeDuRole('fantome')` rendait `'code'`
+  // au lieu de lever. Les trois attestations disaient vrai sur ce qu'elles regardaient.
+  //
+  // ⚠️ ON INTERROGE DONC LA CHAÎNE RÉELLE. `baptemeDuRole` est ce que la production appelle ;
+  // s'il répond sur un rôle qui n'existe pas, la table invente — quel que soit le mécanisme,
+  // et quoi que le module atteste de lui-même. Une seconde écriture de la même vérité, prise
+  // à l'autre bout.
+  // 🔴 DES NOMS TIRÉS AU HASARD, PAS UNE LISTE ÉCRITE DANS CE FICHIER — REJET d'une passe de
+  // fond. Trois littéraux fixes (`'__aucun-role-ne-porte-ce-nom__'`, `'zorglub'`,
+  // `'chef-equipe-bis'`) sont RESTÉS LISIBLES par quiconque triche : un `Proxy` dont le trap
+  // répond honnêtement à ces trois-là précisément, et invente pour tout le reste, traversait
+  // la suite ENTIÈRE (1226/1226) sans rougir. La garde testait des VALEURS que le code trichant
+  // pouvait lire, pas une PROPRIÉTÉ qu'il ne peut pas anticiper.
+  //
+  // ⚠️ ET UNE LISTE PLUS LONGUE NE FERME RIEN — elle déplace juste la frontière d'un cran, et
+  // le prochain contournement l'apprend par cœur comme celui-ci a appris les trois premiers
+  // noms. La clé n'est donc plus ÉCRITE : elle est GÉNÉRÉE, à l'exécution, imprévisible au
+  // moment où le module trichant se charge — rien dans le dépôt ne peut la connaître d'avance.
+  const nomsAleatoires = Array.from(
+    { length: 8 },
+    () => `__genere-${Math.random().toString(36).slice(2)}-${Date.now()}__`
+  );
+  for (const invente of nomsAleatoires) {
+    assert.throws(
+      () => baptemeDuRole(invente),
+      RoleInconnu,
+      `\`baptemeDuRole('${invente}')\` a RÉPONDU sur un nom généré au hasard, qu'aucune source ` +
+        `de ce dépôt n'a pu prévoir — la porte de production invente`
+    );
+  }
+
+  // ⚠️ ET LES TROIS ANCIENS NOMS RESTENT ÉPROUVÉS — retirer un cas qu'on a fait rougir une fois
+  // n'est pas un ménage, c'est un recul. Ils vivent maintenant à côté du hasard, pas à sa place.
+  for (const invente of ['__aucun-role-ne-porte-ce-nom__', 'zorglub', 'chef-equipe-bis']) {
+    assert.throws(
+      () => baptemeDuRole(invente),
+      RoleInconnu,
+      `\`baptemeDuRole('${invente}')\` a RÉPONDU sur un rôle qui n'existe dans aucune des deux ` +
+        `tables — la porte de production reçoit une entrée que personne n'a inscrite`
+    );
+  }
 });

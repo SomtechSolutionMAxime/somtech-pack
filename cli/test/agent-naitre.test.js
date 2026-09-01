@@ -7,13 +7,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  cmdAgent, cheminDeLaNaissance, racineDeLaNaissance, argumentsDeNaissance, espaceDeTravail, AIDE_AGENT,
+  cmdAgent, cheminDeLaNaissance, racineDeLaNaissance, argumentsDeNaissance, AIDE_AGENT,
 } from '../src/commands/agent.js';
 
 /** La racine de ce dépôt — cli/test → cli → racine. */
@@ -135,15 +135,24 @@ test('les options de la naissance sont relayées telles quelles — la porte ne 
   });
   assert.deepEqual(a, [
     'p-20260815-0002',
-    '--workspace', 'w7',
     '--depot', resolve('/depot'),
     '--role', 'orchestrateur',
+    // ⚠️ L'ESPACE EST DÉSORMAIS EN FIN DE LIGNE, ET IL EST CONDITIONNEL (D-20260825-0002) : la
+    // porte n'en ouvre plus, et n'en invente pas. C'est son absence qui dit à la naissance
+    // « ouvre-le toi-même, après tes refus ».
+    '--workspace', 'w7',
     '--session', 'somtech',
     '--modele', 'sonnet',
     '--mode', 'acceptEdits',
     '--amorce-texte', 'commence par lire le registre',
     '--nom-agent', 'bonaventure',
   ]);
+});
+
+test('🔴 sans espace donné, AUCUN `--workspace` ne part — c’est l’absence qui porte le message', () => {
+  const a = argumentsDeNaissance('p-20260815-0002', { depot: '/depot', role: 'chef-equipe' });
+  assert.ok(!a.includes('--workspace'), `un espace inventé : ${a.join(' ')}`);
+  assert.ok(!a.includes(undefined), 'et surtout pas un `undefined` relayé, qui vaudrait « il y en a un »');
 });
 
 test('le rôle par défaut est ORCHESTRATEUR, à l’inverse de la commande sous-jacente', () => {
@@ -195,11 +204,86 @@ test('un lanceur qui meurt sans code de sortie compte comme un ÉCHEC, jamais co
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// 3-bis — 🔴 CE QUE LA PORTE NE DOIT PAS CRÉER AVANT QUE LA NAISSANCE AIT REFUSÉ (défaut ①)
+//
+// 🔴 CE QUE LA REVUE A MESURÉ, sur la ligne EXACTE que les textes prescrivent — sans `--workspace` :
+//
+//     pack agent naitre revue-pr180 --role chef-equipe --depot <d> --coordonnateur moi
+//
+// La porte appelait `herdr workspace create --cwd <d> --label revue-pr180 --no-focus`, PUIS
+// lançait la naissance, qui refusait le mandat en écrivant « Rien n'a été créé : ni espace de
+// travail, ni onglet, ni agent. » L'espace herdr restait, orphelin — et le message mentait.
+// Vaut pour TOUS les refus du chemin : mandat invalide, `--base` introuvable, espace occupé, nom
+// refusé par herdr, session ambiguë. Ils tombent tous après le lancement.
+//
+// ⚠️ POURQUOI AUCUN BANC NE L'A VU : le seul essai bout-en-bout de ce chemin passait
+// `--workspace w7`, ce qui COURT-CIRCUITE l'appel non gardé. Le banc éprouvait une population
+// qui n'était pas celle que les textes prescrivent — le motif même que ce lot ferme ailleurs.
+//
+// LA CORRECTION : la création DESCEND dans la naissance, qui l'ouvre après tous ses refus et
+// sait la défaire quand un échec survient ensuite. La porte, elle, n'ouvre plus rien.
+
+/** Un faux `herdr` en tête de PATH — il journalise, et ne crée rien nulle part. */
+async function avecFauxHerdr(faire) {
+  const d = mkdtempSync(join(tmpdir(), 'agent-naitre-herdr-'));
+  const journal = join(d, 'appels.jsonl');
+  writeFileSync(journal, '');
+  writeFileSync(
+    join(d, 'herdr'),
+    `#!/usr/bin/env node
+const fs = require('fs');
+fs.appendFileSync(${JSON.stringify(journal)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+process.stdout.write(JSON.stringify({ result: { type: 'workspace_created', workspace: { workspace_id: 'wCREE' }, root_pane: { pane_id: 'wCREE:p1', workspace_id: 'wCREE' } } }));
+`
+  );
+  chmodSync(join(d, 'herdr'), 0o755);
+  const avant = process.env.PATH;
+  process.env.PATH = `${d}:${avant}`;
+  try {
+    return await faire(() => readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse));
+  } finally {
+    process.env.PATH = avant;
+    rmSync(d, { recursive: true, force: true });
+  }
+}
+
+test('🔴 sans --workspace, la PORTE n’ouvre aucun espace herdr — c’est la naissance qui le fait, après ses refus', async () =>
+  avecFauxHerdr(async (appels) => {
+    const d = payload(bac());
+    const { lancer } = lanceurFactice(1); // la naissance REFUSE le mandat « revue-pr180 »
+    const s = silence();
+    const code = await cmdAgent(
+      ['naitre', 'revue-pr180', '--depot', d, '--source', d, '--role', 'chef-equipe', '--coordonnateur', 'moi'],
+      { lancer }
+    );
+    s.rendre();
+
+    assert.equal(code, 1, 'le refus de la naissance est relayé');
+    assert.deepEqual(
+      appels(),
+      [],
+      'la porte ne parle PAS à herdr : un espace créé ici survivrait au refus, et le refus dit « rien n’a été créé »'
+    );
+    rmSync(d, { recursive: true, force: true });
+  }));
+
+test('et elle ne relaie pas un --workspace que personne n’a donné — la naissance doit voir qu’il manque', async () =>
+  avecFauxHerdr(async () => {
+    const d = payload(bac());
+    const { lancer, appels } = lanceurFactice(0);
+    const s = silence();
+    await cmdAgent(['naitre', 'e-20260825-0002', '--depot', d, '--source', d, '--role', 'chef-equipe'], { lancer });
+    s.rendre();
+    assert.ok(!appels[0].args.includes('--workspace'), `--workspace inventé : ${appels[0].args.join(' ')}`);
+    rmSync(d, { recursive: true, force: true });
+  }));
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // 4 — L'ESPACE DE TRAVAIL
 
-test('un espace donné est réutilisé — on n’en fabrique pas un à chaque relance', () => {
-  const r = espaceDeTravail({ depot: '/d', code: 'j-1', workspace: 'w26' });
-  assert.deepEqual(r, { id: 'w26', cree: false });
+test('un espace donné est RELAYÉ tel quel — on n’en fabrique pas un à chaque relance', () => {
+  const a = argumentsDeNaissance('j-1', { depot: '/d', workspace: 'w26' });
+  assert.equal(a[a.indexOf('--workspace') + 1], 'w26');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -235,4 +319,71 @@ test('un --source explicite reste souverain — il sert aux essais et aux cas to
   const d = payload(bac());
   assert.equal(cheminDeLaNaissance({ source: d }), join(resolve(d), 'naissance-representant', 'bin', 'naitre.js'));
   rmSync(d, { recursive: true, force: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 6 — LE CHEF D'ÉQUIPE PASSE LA PORTE (D-20260825-0002)
+//
+// ⚠️ CE QUE CES ESSAIS FERMENT. La porte RELAIE les options plutôt que de les redéclarer, et
+// c'est sa qualité — mais un drapeau qu'elle ne relaie PAS est perdu en silence : la naissance
+// reçoit alors une commande valide, à laquelle il manque justement ce que l'appelant a demandé.
+// C'est le défaut mesuré sur `--nom-agent` (E-20260818-0017), relayé et éprouvé par personne.
+
+test('le rôle chef-equipe passe la porte tel quel — elle ne connaît pas la table des rôles, et n’a pas à la connaître', () => {
+  const a = argumentsDeNaissance('e-20260825-0002', { depot: '/d', workspace: 'w1', role: 'chef-equipe' });
+  assert.equal(a[a.indexOf('--role') + 1], 'chef-equipe');
+});
+
+test('les trois options du chef d’équipe sont RELAYÉES — coordonnateur, base, horodatage', () => {
+  const a = argumentsDeNaissance('e-20260825-0002', {
+    depot: '/depot',
+    workspace: 'w7',
+    role: 'chef-equipe',
+    coordonnateur: 'matapedia',
+    base: 'origin/staging',
+    horodatage: '20260825-083616',
+  });
+  assert.equal(a[a.indexOf('--coordonnateur') + 1], 'matapedia', 'sans lui, la filiation n’est inscrite qu’à moitié');
+  assert.equal(a[a.indexOf('--base') + 1], 'origin/staging');
+  assert.equal(a[a.indexOf('--horodatage') + 1], '20260825-083616');
+});
+
+test('et elles ne s’inventent pas — non demandées, elles n’apparaissent pas', () => {
+  const a = argumentsDeNaissance('e-1', { depot: '/d', workspace: 'w1', role: 'chef-equipe' });
+  for (const absente of ['--coordonnateur', '--base', '--horodatage']) {
+    assert.ok(!a.includes(absente), `${absente} ne doit pas apparaître quand personne ne l’a demandée`);
+  }
+});
+
+test('la ligne de commande réelle les fait arriver jusqu’à la naissance — pas seulement le constructeur', async () => {
+  const d = payload(bac());
+  const { lancer, appels } = lanceurFactice(0);
+  const s = silence();
+  await cmdAgent(
+    [
+      'naitre', 'e-20260825-0002',
+      '--depot', d, '--workspace', 'w7', '--source', d,
+      '--role', 'chef-equipe',
+      '--coordonnateur', 'matapedia',
+      '--base', 'origin/staging',
+      '--horodatage', '20260825-083616',
+    ],
+    { lancer }
+  );
+  s.rendre();
+  const args = appels[0].args;
+  assert.equal(args[args.indexOf('--role') + 1], 'chef-equipe');
+  assert.equal(args[args.indexOf('--coordonnateur') + 1], 'matapedia');
+  assert.equal(args[args.indexOf('--base') + 1], 'origin/staging');
+  assert.equal(args[args.indexOf('--horodatage') + 1], '20260825-083616');
+  rmSync(d, { recursive: true, force: true });
+});
+
+// ⚠️ L'AIDE EST LE SEUL ENDROIT OÙ UN OPÉRATEUR APPREND QU'UN RÔLE EXISTE. Un rôle joignable et
+// non documenté est un rôle que personne n'emploie — et le geste continue d'être fait à la main,
+// ce qui est très exactement ce que ce lot ferme.
+test('l’aide nomme le rôle chef-equipe et ce qui le distingue — un espace de travail, aucun lieu', () => {
+  assert.match(AIDE_AGENT, /chef-equipe/, 'le rôle doit être nommé là où l’opérateur lit');
+  assert.match(AIDE_AGENT, /--coordonnateur/, 'et l’option qui porte la filiation');
+  assert.match(AIDE_AGENT, /worktree|espace de travail/i, 'et ce qu’il reçoit à la place d’un lieu');
 });
