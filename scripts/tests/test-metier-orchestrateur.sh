@@ -898,7 +898,27 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #
 # ⚠️ LA MARGE RESTE À 0 — la taille est celle MESURÉE du rendu final, pas un
 #    chiffre rond : une marge gratuite désarmerait le gate (mot de l'arbitrage).
-BASELINE=151037
+# ⚠️ RE-BASELINE DU 2026-09-01 — 151 037 → 151 875, ARBITRÉE, PAS RELEVÉE.
+#
+#   Arbitrage rendu par `temiscouata`, orchestrateur `P-20260822-0001`, sur la
+#   fusion de `E-20260825-0002` (T-20260827-0037). Recopié dans son intention :
+#   « OUI, re-baseline à 151875, exactement, aucune marge — c'est moi qui te
+#     l'accorde, pas toi qui la relèves, et c'est toute la différence que le banc
+#     protège. »
+#
+# ⚠️ CE QUI A ÉTÉ RENDU AVANT D'OBTENIR LE CHIFFRE, parce que l'arithmétique seule
+# ne prouve pas que la croissance MÉRITE d'exister :
+#   • socle commun 148 240 · `main` 151 037 · le lot 149 078 · la fusion 151 875
+#     = 148 240 + 2 797 (main) + 838 (le lot). Pas un octet de plus que les deux
+#     croissances légitimes : la fusion n'ajoute rien, elle additionne ;
+#   • UN SEUL fichier diffère de `main` — `chefs-equipe.md`. Les onze autres sont
+#     identiques à l'octet ;
+#   • et il RETIRE plus de lignes qu'il n'en ajoute (19 contre 26) : les 838
+#     octets sont de la prose qui remplace une séquence bash plus longue.
+#
+# La borne reste donc ce qu'elle était : la taille FINALE et EXACTE, marge nulle.
+# Le prochain lot devra revenir demander — c'est le comportement voulu.
+BASELINE=151875
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
