@@ -215,10 +215,20 @@ export async function lignesAuPaneDisparu(ouvertes, { etatDuPane, panesDeLaSessi
           // un successeur, sous peine de rouvrir une ligne sur l'homonyme d'un autre client. Un
           // candidat SANS `herdr_socket` reste accepté — c'est un enrichissement, pas une
           // exigence, et les objets déjà en usage ne le portent pas tous.
+          //
+          // 🔴 ET `null` N'EST PAS `undefined` — UNE PASSE DE FOND SUIVANTE L'A MONTRÉ.
+          // `porteursDeLigne` normalise une session inconnue en `null` (`ligne.herdr_socket ||
+          // null`), donc un porteur SANS session connue porte `socket: null`. La garde
+          // précédente acceptait alors un candidat dont `herdr_socket` valait EXPLICITEMENT
+          // `null` par la seule égalité `null === null` — deux « je ne sais pas » pris pour une
+          // preuve de même session. On n'accepte donc une correspondance PAR SOCKET que si le
+          // porteur a une session RÉELLEMENT CONNUE (`porteur.socket != null`) ; sinon, seul un
+          // candidat qui ne porte AUCUN `herdr_socket` (`undefined`, l'absence pure) reste admis.
           const trouve = (vivants || []).find(
             (p) =>
               p.pane_id !== porteur.pane &&
-              (p.herdr_socket === undefined || p.herdr_socket === porteur.socket) &&
+              (p.herdr_socket === undefined ||
+                (porteur.socket != null && p.herdr_socket === porteur.socket)) &&
               memeEspaceDeTravail(p.foreground_cwd || p.cwd || null, ligne.worktree)
           );
           if (trouve) successeur = trouve.pane_id;

@@ -215,6 +215,34 @@ test('UN SUCCESSEUR SANS SESSION PRÉCISÉE RESTE ACCEPTÉ — rétrocompatible 
   assert.equal(m[0].successeur, 'w8X:pZ');
 });
 
+test('🔴 DEUX SESSIONS INCONNUES NE SONT PAS LA MÊME SESSION — `null === null` n’est pas une preuve', async () => {
+  // ⚠️ CE BANC EXISTE PARCE QU'UNE PASSE DE FOND A MONTRÉ LE TROU LAISSÉ PAR LE CORRECTIF
+  // PRÉCÉDENT. `porteursDeLigne` normalise une session inconnue en `null`
+  // (`ligne.herdr_socket || null`, `registre.js`) — donc un porteur dont on ne connaît PAS la
+  // session porte `socket: null`. La garde de session acceptait alors un candidat dont
+  // `herdr_socket` vaut EXPLICITEMENT `null` par la seule égalité `null === null` : deux
+  // « je ne sais pas » qui se sont égalés par accident, pas une preuve de même session.
+  //
+  // ⚠️ SANS RAPPORT AVEC LE CAS RÉTROCOMPATIBLE. Un candidat qui NE PORTE PAS `herdr_socket`
+  // du tout (`undefined`) reste accepté — c'est un champ absent, pas une valeur qui prétend
+  // dire quelque chose. `null`, lui, est une réponse explicite qui ne doit pas compter comme
+  // une correspondance quand l'autre côté est LUI AUSSI incertain.
+  const l = ligne({ herdr_socket: null });
+  const m = await lignesAuPaneDisparu([l], {
+    etatDuPane: async (pane, socket) => {
+      assert.equal(socket, null, 'le porteur, sans session connue, interroge bien avec null');
+      return 'disparu';
+    },
+    panesDeLaSession: async (socket) => {
+      assert.equal(socket, null);
+      return [{ pane_id: 'w1:pZ', foreground_cwd: '/chantiers/chantier-x', herdr_socket: null }];
+    },
+  });
+  assert.equal(m[0].etat, 'disparu', 'deux sessions inconnues ne prouvent rien — le geste reste proposé');
+  assert.equal(m[0].successeur, null);
+  assert.match(m[0].geste, /ligne-directe fermer --a/);
+});
+
 // ═════════════════ 4. L'AVIS — comme `avisDHygiene`, jamais silencieux sur une muette
 
 test('L’AVIS DISTINGUE LES TROIS ÉTATS DANS SON TEXTE', () => {
