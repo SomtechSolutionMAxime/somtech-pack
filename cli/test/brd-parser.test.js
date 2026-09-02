@@ -95,6 +95,192 @@ for (const name of CROSS) {
   });
 }
 
+// ── Élargissement de la norme à la pratique réelle (T-20260725-0001 / D-20260726-0001) ──
+// Deux domaines à 4 lettres existent (PRES, GRPH) et 23 exigences citent un D-/P- dans
+// « Réalisé par ». Le parser doit les accepter — sans relâcher les bornes ni la cohérence.
+
+test('domaine 4 lettres — les exigences ressortent avec le bon domaine (§5 et §6)', () => {
+  const parsed = parseBrd(readInput('valid-four-letter-domain'));
+  assert.deepStrictEqual(parsed.requirements.ef.map((r) => r.domaine), ['CLI', 'GRPH', 'GRPH']);
+  assert.deepStrictEqual(parsed.requirements.ra.map((r) => r.domaine), ['CLI', 'GRPH']);
+  assert.deepStrictEqual(parsed.out_of_scope.map((r) => r.domaine), ['GRPH']);
+  assert.equal(parsed.requirements.ef[1].id, 'EF-GRPH-001');
+  assert.equal(parsed.out_of_scope[0].id, 'HS-GRPH-001');
+});
+
+test('Réalisé par — accepte T-, D- et P-, y compris en liste mixte', () => {
+  const parsed = parseBrd(readInput('valid-four-letter-domain'));
+  const byId = Object.fromEntries(parsed.requirements.ef.map((r) => [r.id, r]));
+  assert.deepStrictEqual(byId['EF-CLI-001'].realise_par, ['T-20260601-0009']);
+  assert.deepStrictEqual(byId['EF-GRPH-001'].realise_par, ['D-20260711-0001']);
+  assert.deepStrictEqual(byId['EF-GRPH-002'].realise_par, ['P-20260711-0001', 'T-20260713-0004']);
+});
+
+/** Construit un BRD minimal (EA + changelog) autour d'une ligne EA, pour isoler la regex d'ID. */
+function brdWithEaId(id) {
+  return [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    `| ${id} | Énoncé | in_force | M | Sponsor |`, '',
+    '## 7. Changelog', '',
+    '| Version | Date | Demande / Projet | Sponsor validant | Mode | Résumé du changement |',
+    '|---------|------|------------------|------------------|------|----------------------|',
+    '| 1.0.0 | 2026-07-26 | D-20260726-0001 | Somtech | manuel | init |',
+  ].join('\n');
+}
+
+test('bornes du code de domaine — 3 et 4 lettres passent, 2 et 5 sont rejetées', () => {
+  assert.doesNotThrow(() => parseBrd(brdWithEaId('EA-GBL-001')));
+  assert.doesNotThrow(() => parseBrd(brdWithEaId('EA-GRPH-001')));
+  for (const bad of ['EA-GB-001', 'EA-GLOBL-001']) {
+    assert.throws(() => parseBrd(brdWithEaId(bad)), (e) => e instanceof BRDParseError && /invalide/.test(e.message),
+      `'${bad}' aurait dû être rejeté`);
+  }
+});
+
+test('heading de domaine §5 à 5 lettres — rejeté bruyamment, en pointant le heading', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Graphe (code: GRAPHE)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-GRAPHE-001 | Fx | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError
+    && /[Hh]eading de domaine/.test(e.message) && e.lineNo === 9);
+});
+
+// Régression : un heading de domaine que le parser ne reconnaît PAS faisait disparaître sa table
+// entière en silence (exit 0, aucun warning). Cas réel : `(codes: CON / SAL)` au pluriel dans
+// /architecture/business-requirements/BRD-memoire-client.md → 2 hors-scope in_force évaporés.
+// Un hors-scope in_force sert à refuser du travail : le perdre en silence fait proposer du
+// hors-scope. Le parser doit échouer bruyamment plutôt que de rendre un résultat amputé.
+test('régression — un heading §6 non reconnu ne fait plus disparaître sa table en silence', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 6. Hors-scope (HS)', '',
+    '### 6.1 Domaine — Clients (code: CLI)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CLI-001 | Visible | Scope v1 | accepted | v2.0 |', '',
+    '### 6.2 Domaine — Consolidation / Saillance (codes: CON / SAL)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CON-001 | Perdu avant le fix | Scope v1 | accepted | v2.0 |',
+    '| HS-SAL-001 | Perdu avant le fix | Scope v1 | accepted | v2.0 |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError
+    && /[Hh]eading de domaine/.test(e.message) && e.lineNo === 15);
+});
+
+// Second mode de défaillance du même fallthrough, plus insidieux : en §5, `currentDomain5` gardait
+// la valeur du domaine PRÉCÉDENT, donc les EF/RA du domaine non reconnu étaient rattachées au
+// mauvais domaine — et checkDomainCoherence ne rattrapait rien, puisque le segment central de l'ID
+// matchait ce domaine précédent. Exit 0, données fausses plutôt que manquantes.
+test('régression — un heading §5 non reconnu ne rattache plus ses EF au domaine précédent', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Présentation (code: PRES)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-PRES-001 | Vraie EF du domaine PRES | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |', '',
+    '### 5.2 Domaine — Consolidation / Saillance (codes: CON / SAL)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-PRES-002 | Rattachée à tort à PRES avant le fix | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError
+    && /[Hh]eading de domaine/.test(e.message) && e.lineNo === 17);
+});
+
+test('régression — le heading §6 non reconnu est bien ce qui perdait les lignes (sanity du cas nominal)', () => {
+  // Même document, heading corrigé au singulier : les 3 hors-scope doivent tous ressortir.
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 6. Hors-scope (HS)', '',
+    '### 6.1 Domaine — Clients (code: CLI)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CLI-001 | Visible | Scope v1 | accepted | v2.0 |', '',
+    '### 6.2 Domaine — Consolidation (code: CON)', '',
+    '| ID | Énoncé | Justification | Statut | Re-considéré quand |',
+    '|----|--------|---------------|--------|---------------------|',
+    '| HS-CON-001 | Visible | Scope v1 | accepted | v2.0 |', '',
+    '## 7. Changelog', '',
+    '| Version | Date | Demande / Projet | Sponsor validant | Mode | Résumé du changement |',
+    '|---------|------|------------------|------------------|------|----------------------|',
+    '| 1.0.0 | 2026-07-26 | D-20260726-0001 | Somtech | manuel | init |',
+  ].join('\n');
+  const parsed = parseBrd(md);
+  assert.deepStrictEqual(parsed.out_of_scope.map((r) => r.id), ['HS-CLI-001', 'HS-CON-001']);
+});
+
+test('cohérence domaine↔ID — tient aussi sur les codes à 4 lettres', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Graphe (code: GRPH)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-PRES-001 | EF du mauvais domaine | in_force | M | EA-GBL-001 |  | t.spec.ts | PO |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError && /incohérent avec le domaine/.test(e.message));
+});
+
+test('Réalisé par — un epic E- reste rejeté (l\'élargissement ne relâche pas tout)', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Clients (code: CLI)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-CLI-001 | Fx | in_force | M | EA-GBL-001 | E-20260529-0007 | t.spec.ts | PO |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError && /Réalisé par/.test(e.message));
+});
+
+test('Réalisé par — le padding reste strict (D-2026071-0001 rejeté)', () => {
+  const md = [
+    '## 4. Exigences d\'affaires (EA)', '',
+    '| ID | Énoncé | Statut | Priorité | Owner |',
+    '|----|--------|--------|----------|-------|',
+    '| EA-GBL-001 | Enjeu | in_force | M | Sponsor |', '',
+    '## 5. Domaines', '',
+    '### 5.1 Domaine — Clients (code: CLI)', '',
+    '#### Exigences fonctionnelles', '',
+    '| ID | Description | Statut | Priorité | Couvre | Réalisé par | Testé par | Owner |',
+    '|----|-------------|--------|----------|--------|-------------|-----------|-------|',
+    '| EF-CLI-001 | Fx | in_force | M | EA-GBL-001 | D-2026071-0001 | t.spec.ts | PO |',
+  ].join('\n');
+  assert.throws(() => parseBrd(md), (e) => e instanceof BRDParseError && /Réalisé par/.test(e.message));
+});
+
 test('md_block_id — chaque exigence porte le block_id du tableau qui la contient', () => {
   const md = [
     '<!-- bid:heading-4 -->',
