@@ -50,6 +50,14 @@
 // `T-20260816-0003` a déjà payée vingt essais rouges, en rendant des lignes injoignables au nom
 // d'une absence de donnée.
 
+import { porteursDeLigne } from './registre.js';
+// ⚠️ LA MÊME JOINTURE D'ESPACE QUE `declaration-des-agents.js`, PAS UNE SECONDE ÉCRITURE — elle
+// résout les liens symboliques des deux côtés (`/tmp` contre `/private/tmp` sur macOS) et fait
+// du séparateur, jamais du préfixe, la frontière d'un espace. Une expression réécrite ici
+// divergerait au premier correctif appliqué d'un seul côté, et ferait manquer un successeur
+// né exactement sur la machine qui a mesuré ce défaut (T-20260826-0068).
+import { memeEspaceDeTravail } from '../../naissance-representant/src/garde-des-naissances.js';
+
 /**
  * Le geste qui referme une ligne — avec sa CONDITION, parce qu'elle décide s'il marche.
  *
@@ -131,6 +139,122 @@ export function avisDHygiene(mortes) {
     `${mortes.length} ligne(s) ouverte(s) pointent vers un chantier qui n'existe plus. Elles ` +
     `attendent le prochain occupant de leur pane, avec un canal ouvert pour un autre client :\n` +
     `${lignes.join('\n')}\n` +
+    `Rien n'a été fermé — refermer une ligne à tort ferait taire un canal client.`
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE SYMÉTRIQUE, UN ÉTAGE PLUS HAUT — LE CHANTIER EXISTE, LE PANE N'Y EST PLUS (T-20260826-0068)
+//
+// `lignesAuChantierDisparu` ci-dessus détecte un worktree absent du disque. Six lignes réelles
+// montrent une panne voisine mais distincte : le chantier existe encore, le terminal qui le
+// portait n'est plus dans sa session. Trois états, jamais deux : « présent », « disparu », et
+// « muette » (la session ne répond pas — on n'a rien constaté, on ne conclut rien).
+//
+// ⚠️ ET UN PANE DISPARU N'EST PAS UN AGENT MORT. Le pane change d'identifiant à la renaissance
+// (mesuré : `w8X:p2` → `w8X:pZ`, sur un successeur né dans le même espace de travail). Avant de
+// proposer le geste de fermeture, on mesure donc si un AUTRE pane vivant de la même session
+// porte désormais le MÊME espace — et si oui, on NOMME ce pane, on NE PROPOSE PAS de fermer.
+// Refermer une ligne dont l'agent est vivant ailleurs le couperait du dirigeant.
+
+/**
+ * Les lignes ouvertes dont le PANE a disparu — le chantier existe, le terminal non.
+ *
+ * `etatDuPane` et `panesDeLaSession` sont INJECTÉS, même contrat que `chantierExiste` plus
+ * haut : ce module rend un jugement, il ne va pas interroger herdr lui-même.
+ *
+ *   • `etatDuPane(pane, socket)` → `'present'` ou `'disparu'` ; une levée est lue comme une
+ *     session MUETTE — on n'a rien constaté du tout, distinct d'un pane constaté absent.
+ *   • `panesDeLaSession(socket)` → les panes vivants de cette session (forme `herdr pane
+ *     list`) ; n'est appelée QUE pour chercher un successeur, jamais pour l'état lui-même.
+ *
+ * Chaque PORTEUR (`porteursDeLigne`) est mesuré séparément, dans SA session — la même raison
+ * que `porteursDeLigne` documente : un porteur sans socket connu n'est jamais rattaché à celui
+ * d'un autre.
+ */
+export async function lignesAuPaneDisparu(ouvertes, { etatDuPane, panesDeLaSession } = {}) {
+  if (typeof etatDuPane !== 'function') return [];
+  const resultats = [];
+  for (const ligne of ouvertes || []) {
+    for (const porteur of porteursDeLigne(ligne)) {
+      let etat;
+      try {
+        etat = await etatDuPane(porteur.pane, porteur.socket);
+      } catch {
+        etat = 'muette';
+      }
+      if (etat === 'present') continue;
+      if (etat !== 'disparu' && etat !== 'muette') continue; // état inconnu : on ne conclut rien
+
+      const base = {
+        chantier: ligne.chantier ?? null,
+        canal_nom: ligne.canal_nom ?? null,
+        pane: porteur.pane,
+        worktree: ligne.worktree ?? null,
+      };
+
+      if (etat === 'muette') {
+        // ⚠️ AUCUN GESTE SUR UNE MUETTE : on n'a rien constaté, proposer une fermeture serait
+        // conclure sur une panne de mesure — exactement le défaut que `panes()`/`vivant()`
+        // existent pour fermer un étage plus bas.
+        resultats.push({ ...base, etat: 'muette', successeur: null, geste: null });
+        continue;
+      }
+
+      // etat === 'disparu' : le pane est constaté absent. Cherche un successeur AVANT de
+      // proposer quoi que ce soit — la cause se mesure avant que le geste se pose.
+      let successeur = null;
+      if (ligne.worktree && typeof panesDeLaSession === 'function') {
+        try {
+          const vivants = await panesDeLaSession(porteur.socket);
+          const trouve = (vivants || []).find(
+            (p) =>
+              p.pane_id !== porteur.pane &&
+              memeEspaceDeTravail(p.foreground_cwd || p.cwd || null, ligne.worktree)
+          );
+          if (trouve) successeur = trouve.pane_id;
+        } catch {
+          // La mesure du successeur a échoué : on ne le sait pas, on ne l'affirme pas — mais
+          // ça ne fait PAS retomber « disparu » en « muette » : le pane, lui, EST constaté
+          // absent, et c'est une mesure distincte de celle du successeur.
+        }
+      }
+
+      resultats.push({
+        ...base,
+        etat: successeur ? 'disparu_renaissance_probable' : 'disparu',
+        successeur,
+        geste: successeur ? null : gesteDeFermeture({ chantier: ligne.chantier, pane: porteur.pane, herdr_socket: porteur.socket }),
+      });
+    }
+  }
+  return resultats;
+}
+
+/**
+ * Ce qu'on écrit à un humain — les trois états, jamais confondus dans le texte non plus.
+ *
+ * Rend `null` quand il n'y a rien à dire, même règle qu'`avisDHygiene` : un avis qui parle
+ * pour ne rien dire finit par n'être plus lu.
+ */
+export function avisDesPanesDisparus(constats) {
+  if (!constats?.length) return null;
+  const lignes = constats.map((c) => {
+    if (c.etat === 'muette') {
+      return `  • « ${c.chantier} » (#${c.canal_nom}), pane « ${c.pane} » — session MUETTE : rien n'a pu être constaté, aucune conclusion.`;
+    }
+    if (c.etat === 'disparu_renaissance_probable') {
+      return (
+        `  • « ${c.chantier} » (#${c.canal_nom}), pane « ${c.pane} » — disparu, mais un successeur ` +
+        `probable vit désormais sur « ${c.successeur} » (même espace de travail). Rien n'est fermé : ` +
+        `vérifier que la ligne doit être reprise sur ce nouveau pane plutôt que refermée.`
+      );
+    }
+    return `  • « ${c.chantier} » (#${c.canal_nom}), pane « ${c.pane} » — disparu : ${c.worktree}\n    → ${c.geste}`;
+  });
+  return (
+    `${constats.length} ligne(s) ouverte(s) désignent un pane qui n'existe plus (ou une session ` +
+    `qui ne répond pas) :\n${lignes.join('\n')}\n` +
     `Rien n'a été fermé — refermer une ligne à tort ferait taire un canal client.`
   );
 }
