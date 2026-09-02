@@ -178,6 +178,43 @@ test('LES DEUX PORTEURS D’UNE LIGNE PARTAGÉE SONT MESURÉS SÉPARÉMENT, CHAC
   assert.equal(m[0].pane, 'w5:p3');
 });
 
+test('🔴 UN SUCCESSEUR NOMMÉ D’UNE AUTRE SESSION N’EST PAS RETENU — un pane n’est unique que dans sa session', async () => {
+  // ⚠️ CE BANC EXISTE PARCE QU'UNE PASSE DE FOND A MONTRÉ LE TROU : `panesDeLaSession(socket)`
+  // est CENSÉE rendre les panes de LA session demandée — mais rien ne le garantissait si son
+  // câblage aval se trompait de session (le même défaut que `panes()`/`agents()` existent pour
+  // fermer dans `herdr.js` : « un identifiant de pane n'est unique QUE dans sa session »). Un
+  // prédicat bogué qui renvoie un pane de la BONNE forme d'espace mais d'une AUTRE session ne
+  // doit jamais être pris pour un successeur — sans quoi une ligne disparue pour de bon resterait
+  // ouverte parce qu'un homonyme d'un autre client occupe, par coïncidence, le même chemin.
+  const m = await lignesAuPaneDisparu([ligne()], {
+    etatDuPane: etat({ '/s/session.sock w8X:p2': 'disparu' }),
+    panesDeLaSession: panesVus({
+      '/s/session.sock': [
+        // Même espace de travail, mais une AUTRE session : ce n'est PAS le même successeur.
+        { pane_id: 'w8X:pZ', foreground_cwd: '/chantiers/chantier-x', herdr_socket: '/s/autre-client.sock' },
+      ],
+    }),
+  });
+  assert.equal(m[0].etat, 'disparu', 'un pane d’une autre session n’est pas un successeur — le geste reste proposé');
+  assert.equal(m[0].successeur, null);
+  assert.match(m[0].geste, /ligne-directe fermer --a/);
+});
+
+test('UN SUCCESSEUR SANS SESSION PRÉCISÉE RESTE ACCEPTÉ — rétrocompatible avec un `panesDeLaSession` qui n’en porte pas', async () => {
+  // Les objets déjà en usage (et les tests existants) ne portent pas toujours `herdr_socket` sur
+  // chaque pane rendu par `panesDeLaSession` — ce champ est un ENRICHISSEMENT, pas une exigence.
+  // Un successeur sans session précisée n'est donc PAS rejeté d'office : seule une session
+  // EXPLICITEMENT différente écarte le candidat.
+  const m = await lignesAuPaneDisparu([ligne()], {
+    etatDuPane: etat({ '/s/session.sock w8X:p2': 'disparu' }),
+    panesDeLaSession: panesVus({
+      '/s/session.sock': [{ pane_id: 'w8X:pZ', foreground_cwd: '/chantiers/chantier-x' }],
+    }),
+  });
+  assert.equal(m[0].etat, 'disparu_renaissance_probable');
+  assert.equal(m[0].successeur, 'w8X:pZ');
+});
+
 // ═════════════════ 4. L'AVIS — comme `avisDHygiene`, jamais silencieux sur une muette
 
 test('L’AVIS DISTINGUE LES TROIS ÉTATS DANS SON TEXTE', () => {

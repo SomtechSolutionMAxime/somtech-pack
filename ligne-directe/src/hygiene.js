@@ -207,9 +207,18 @@ export async function lignesAuPaneDisparu(ouvertes, { etatDuPane, panesDeLaSessi
       if (ligne.worktree && typeof panesDeLaSession === 'function') {
         try {
           const vivants = await panesDeLaSession(porteur.socket);
+          // 🔴 UN PANE N'EST UNIQUE QUE DANS SA SESSION (même principe que `porteursDeLigne` et
+          // que `panes()`/`agents()` dans `herdr.js`). `panesDeLaSession(socket)` est CENSÉE
+          // rendre les panes DE cette session — mais rien ne le garantit si son câblage aval se
+          // trompe. Relevé en passe de fond : un candidat de la BONNE forme d'espace mais d'une
+          // AUTRE session (`herdr_socket` explicite et différent) ne doit jamais être pris pour
+          // un successeur, sous peine de rouvrir une ligne sur l'homonyme d'un autre client. Un
+          // candidat SANS `herdr_socket` reste accepté — c'est un enrichissement, pas une
+          // exigence, et les objets déjà en usage ne le portent pas tous.
           const trouve = (vivants || []).find(
             (p) =>
               p.pane_id !== porteur.pane &&
+              (p.herdr_socket === undefined || p.herdr_socket === porteur.socket) &&
               memeEspaceDeTravail(p.foreground_cwd || p.cwd || null, ligne.worktree)
           );
           if (trouve) successeur = trouve.pane_id;
