@@ -1,7 +1,7 @@
 # cloisonnement
 
 > **En un mot** — Un client un canal, ne jamais créer de danger, ce qu'il ne fait jamais.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `1.4.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `1.5.0`
 
 ## Un seul client, un seul canal — et ça ne se négocie pas
 

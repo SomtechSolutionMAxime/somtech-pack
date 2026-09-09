@@ -1867,6 +1867,56 @@ export const CONTROLES = [
       }
     },
   },
+  {
+    id: 'ton-court-et-mis-en-forme',
+    quoi: 'le ton vers le client prescrit la forme puis la brièveté, en tête de ses consignes et à l’impératif — et la forme nomme ses instruments',
+    verifier({ metier }) {
+      // D-20260909-0012 / T-20260909-0111 — consigne du dirigeant du 2026-09-09 : « ils doivent
+      // répondre avec moins de mots au client et SURTOUT mettre leur réponse en forme ». Le ton
+      // disait sobre, sans outillage, une question à la fois — rien sur la longueur ni sur la
+      // forme, et les réponses sortaient en blocs. La forme passe en premier : c'est le « surtout ».
+      const s = sectionDe(metier, /^Le ton$/i, 'sur le ton');
+      const puces = pucesDe(s.corps).map((p, i) => {
+        const m = /^-\s+\*\*([^*]+)\*\*\s*(.*)$/.exec(p);
+        return { rang: i + 1, libelle: m ? m[1].trim() : null, enonce: m ? m[2] : p, cle: m ? m[1].trim() : null };
+      });
+      assert.ok(puces.length >= 6, `le ton doit énumérer au moins six consignes (${puces.length})`);
+      for (const p of puces) assert.ok(p.libelle, `la consigne ${p.rang} du ton n’a pas de libellé en gras — son rang serait illisible`);
+
+      const forme = rangUnique(puces, /en forme/i, 'la mise en forme');
+      const court = rangUnique(puces, /moins de mots/i, 'la brièveté');
+      assert.equal(forme.rang, 1, `la mise en forme porte le rang ${forme.rang} au lieu de 1 — c’est le « surtout » du dirigeant`);
+      assert.equal(court.rang, 2, `la brièveté porte le rang ${court.rang} au lieu de 2 — juste après la forme`);
+
+      // LE RANG NE SUFFIT PAS : une consigne garde sa place et cesse d'obliger en une incise.
+      exigeImperatif(forme.enonce, 'la mise en forme des réponses au client');
+      exigeImperatif(court.enonce, 'la brièveté des réponses au client');
+      for (const p of [forme, court]) {
+        assert.ok(!RENVERSEMENT.test(p.enonce), `« ${p.libelle} » est renversée sans perdre un mot : « ${p.enonce} »`);
+      }
+
+      // LA FORME SE PRESCRIT PAR SES INSTRUMENTS, pas par le mot « forme » : une consigne qui dit
+      // « mets en forme » sans dire comment laisse un bloc de texte passer pour de la forme.
+      const INSTRUMENTS = [/paragraphes? courts?/i, /points? de forme/i, /une idée par ligne/i];
+      const nommes = INSTRUMENTS.filter((r) => r.test(forme.enonce)).length;
+      assert.ok(
+        nommes >= 2,
+        `la mise en forme ne nomme que ${nommes} de ses ${INSTRUMENTS.length} instruments (paragraphes courts, points de forme, une idée par ligne)`,
+      );
+
+      // ET LA BRIÈVETÉ BORNE : elle dit où une réponse s'arrête, pas seulement qu'elle est courte ;
+      // et elle garde la porte du détail ouverte à la demande du client — la concision est un
+      // défaut, jamais un plafond (RA-GCL-011 le dit vers le dirigeant ; ici c'est vers le client).
+      assert.match(
+        court.enonce, /rien de plus/i,
+        'la brièveté doit dire où elle s’arrête — ce que le client doit savoir, et rien de plus',
+      );
+      assert.match(
+        court.enonce, /en entier/i,
+        'la brièveté doit garder la porte du détail ouverte — ce que le client demande en détail se donne en entier',
+      );
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -2687,6 +2737,51 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       '⚠️ **Aucune couche ne borne « lecture seule » au-delà de cet héritage** : la borne « ne parle sur aucun canal » tient à ton métier, pas à une garde du lieu — `[non gardé]`.',
       '✅ **La borne « lecture seule » est garantie par ton lieu.**',
+    ),
+  },
+  // ── D-20260909-0012 : le ton vers le client — court et mis en forme (ABC 1.5.0)
+  {
+    id: 'la-forme-devient-un-conseil',
+    quoi: 'la mise en forme garde son rang mais cesse d’obliger — « si possible »',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '- **Mis en forme, toujours.** Des paragraphes courts,',
+      '- **Mis en forme, toujours.** Si possible, des paragraphes courts,',
+    ),
+  },
+  {
+    id: 'la-brievete-disparait',
+    quoi: 'la consigne de brièveté est retirée — le ton redevient ce qu’il était avant le 2026-09-09',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => t.replace(/^- \*\*Moins de mots\.\*\*.*\n/m, ''),
+  },
+  {
+    id: 'la-forme-passe-en-dernier',
+    quoi: 'la mise en forme est reléguée après « reformule » — le « surtout » du dirigeant devient une note de bas de liste',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => permuter(t, '- **Mis en forme, toujours.**', '- **Reformule, toujours.**'),
+  },
+  {
+    id: 'la-forme-sans-ses-instruments',
+    quoi: 'la consigne dit « mets en forme » sans dire comment — un bloc de texte passe pour de la forme',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^(- \*\*Mis en forme, toujours\.\*\*).*$/m,
+      '$1 Soigne la présentation de ce que tu écris.',
+    ),
+  },
+  {
+    id: 'la-brievete-devient-un-plafond',
+    quoi: 'la brièveté perd sa porte du détail — le client qui demande une explication n’a plus droit qu’au résumé',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      /^(- \*\*Moins de mots\.\*\*).*$/m,
+      '$1 Une réponse dit ce que le client doit savoir, et rien de plus — même quand il demande le détail, tu résumes.',
     ),
   },
 ];

@@ -1,7 +1,7 @@
 # joignabilite
 
 > **En un mot** — Ouvrir ses deux lignes, sa ronde, relever un canal — et ne parler qu'après.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `1.4.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `1.5.0`
 
 > **Répond de** RA-GCL-001 · RA-GCL-002 · RA-GCL-003 · RA-GCL-004 · RA-GCL-005 · RA-GCL-010 · RA-GCL-015
 
