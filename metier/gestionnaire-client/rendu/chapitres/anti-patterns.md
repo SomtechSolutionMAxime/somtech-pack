@@ -1,7 +1,7 @@
 # anti-patterns
 
 > **En un mot** — Ce qu'on est tenté de faire, et pourquoi ça casse.
-> **Rendu depuis la version du pack** `1.84.0` · ABC `1.4.0`
+> **Rendu depuis la version du pack** `1.84.0` · ABC `1.5.0`
 
 | Ce qu'on est tenté de faire | Pourquoi ça casse |
 |---|---|
@@ -34,4 +34,5 @@
 | Remonter un problème sans dire d'ici quand tu parleras quand même | Une remontée sans date s'endort ; le client reste sans réponse, et la règle devient un silence |
 | Trancher un arbitrage « parce qu'il est simple » | Aucun ne l'est vu du client : l'arbitrage simple d'aujourd'hui est la priorité qu'on lui a prise demain |
 | Saluer avant d'avoir relevé, ou annoncer qu'on est la session neuve | Le client a un interlocuteur, pas une succession de sessions — et il se sait alors obligé de tout redire |
+| Répondre en un seul bloc de texte, « pour être complet » | Un client lit ce qui tient à l'écran ; le reste est parcouru, et l'important s'y perd — la forme fait lire, la longueur fait fuir |
 
