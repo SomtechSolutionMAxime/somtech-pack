@@ -364,7 +364,7 @@ export function enteteDe(texte) {
  * rougit sur du texte parfaitement impératif est pire qu'absente : on la « corrige » en la
  * retirant. On écrit donc `d['’]`, les deux apostrophes réelles.
  */
-export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|évite(?:r)? (?:de\b|que\b|d['’])|en évitant|essa(?:ie|ye) (?:de\b|d['’])|\btente (?:de\b|d['’])|fais en sorte (?:de\b|d['’])|\befforce-toi\b/i;
+export const PERMISSIF = /\btu peux\b|\bfacultati|\boptionnel|\bpas obligatoire\b|\bsi (?:tu le souhaites|ça presse|celui-ci presse)\b|\bau besoin\b|\bde préférence\b|\bsauf\b|à moins que\b|\bsi tu (?:en )?as le temps\b|\bsi le temps le permet\b|\bsi possible\b|\bdans la mesure du possible\b|à ta discrétion\b|\bpas (?:strictement )?(?:nécessaire|indispensable|essentiel)\b|\bgénéralement\b|\bhabituellement\b|\bd['’]ordinaire\b|évite(?:r)? (?:de\b|que\b|d['’])|en évitant|essa(?:ie|ye) (?:de\b|d['’])|\btente (?:de\b|d['’])|fais en sorte (?:de\b|d['’])|\befforce-toi\b/i;
 
 /** Exige qu'un énoncé oblige, plutôt qu'il ne recommande. */
 export function exigeImperatif(enonce, quoi) {
@@ -1894,6 +1894,15 @@ export const CONTROLES = [
       for (const p of [forme, court]) {
         assert.ok(!RENVERSEMENT.test(p.enonce), `« ${p.libelle} » est renversée sans perdre un mot : « ${p.enonce} »`);
       }
+      // ET LA JUSTIFICATION NE SE RETOURNE PAS NON PLUS. Trouvé par la revue du lot : « un bloc de
+      // texte compact reste lisible si le fond est bon », ajouté en clôture de la puce, laissait
+      // les instruments intacts et tous les contrôles verts — la consigne était dite, puis excusée.
+      // Liste fermée, chaque entrée vérifiée absente du texte légitime (même règle que RENVERSEMENT).
+      const EXCUSE = /reste lisible|suffit (?:bien|largement|amplement)?\s*(?:si|quand|pour)|si le fond est bon|passe (?:quand même|aussi bien)|n['’]est pas (?:un problème|grave|gênant)/i;
+      for (const p of [forme, court]) {
+        const m = p.enonce.match(EXCUSE);
+        assert.ok(!m, `« ${p.libelle} » se donne une excuse (« ${m && m[0]} ») qui vide la consigne : « ${p.enonce} »`);
+      }
 
       // LA FORME SE PRESCRIT PAR SES INSTRUMENTS, pas par le mot « forme » : une consigne qui dit
       // « mets en forme » sans dire comment laisse un bloc de texte passer pour de la forme.
@@ -2782,6 +2791,23 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       /^(- \*\*Moins de mots\.\*\*).*$/m,
       '$1 Une réponse dit ce que le client doit savoir, et rien de plus — même quand il demande le détail, tu résumes.',
+    ),
+  },
+  {
+    id: 'revue-la-brievete-devient-generale',
+    quoi: 'le libellé s’adoucit d’un mot hors liste — « Moins de mots, généralement. » (survivante de la revue du 2026-09-09)',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => t.replace('- **Moins de mots.** Une réponse dit', '- **Moins de mots.** Généralement, une réponse dit'),
+  },
+  {
+    id: 'revue-la-forme-s-excuse-en-cloture',
+    quoi: 'la puce garde ses instruments et se termine par une excuse qui la vide — « un bloc compact reste lisible si le fond est bon » (survivante de la revue du 2026-09-09)',
+    cible: 'ton-court-et-mis-en-forme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "et ce qu'il portait d'important est perdu.",
+      "et ce qu'il portait d'important est perdu. Cela dit, un bloc de texte compact reste lisible si le fond est bon.",
     ),
   },
 ];
