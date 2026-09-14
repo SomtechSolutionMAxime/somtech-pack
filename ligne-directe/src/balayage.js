@@ -46,6 +46,7 @@ import {
   ECRANS_LUS_DE_FRONT,
   fenetreDImmobilite,
   avisDeBoiteBloquee,
+  motDeLIssue,
 } from './delivrance.js';
 
 /**
@@ -384,13 +385,19 @@ export async function unTourDeBalayage({
     if (!resultat?.soumis) {
       const cause = resultat?.cause || 'sans-cause';
       compter(cause);
+      // ⚠️ LA CAUSE BRUTE NE SUFFIT PAS (T-20260818-0070) : ce chemin est le SEUL qui atteint
+      // `plus-autorise`, et c'est ici qu'une issue sans mot restait invisible. Le mot vient de
+      // la table tenue auprès du geste ; une cause inconnue y est dite inconnue, jamais tue.
+      const mot = motDeLIssue(resultat, { forme: 'court', immobiliteMs: fenetreMs });
       refus.push({
         pane: d.pane,
         nom: d.nom,
         cause,
+        mot,
         tours: d.tours,
         detail: resultat?.resume || resultat?.texteVu || resultat?.texteDisparu || null,
       });
+      journaliser(`balayage — NON DÉLIVRÉ ${d.pane}${d.nom ? ` (${d.nom})` : ''} [${cause}] : ${mot}`);
       continue;
     }
 

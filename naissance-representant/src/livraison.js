@@ -678,7 +678,7 @@ export {
   fenetreDImmobilite,
   delivrerLaBoite,
 } from '../../ligne-directe/src/delivrance.js';
-import { delivrerLaBoite, fenetreDImmobilite } from '../../ligne-directe/src/delivrance.js';
+import { delivrerLaBoite, fenetreDImmobilite, motDeLIssue } from '../../ligne-directe/src/delivrance.js';
 
 /**
  * Ce qu'on ajoute au refus quand la délivrance n'a pas abouti — DES MOTS, jamais un verdict.
@@ -689,55 +689,14 @@ import { delivrerLaBoite, fenetreDImmobilite } from '../../ligne-directe/src/del
  * retenter le même geste à l'aveugle.
  */
 export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
-  // ⚠️ UNE ATTENTE NULLE NE SE CHIFFRE PAS (T-20260818-0076). Devant un COLLAGE, la fenêtre vaut
-  // zéro — il n'y a personne derrière le clavier, donc rien à observer. Écrire « après 0 s
-  // d'immobilité » raconte une attente qui n'a pas eu lieu, et fait passer pour une négligence
-  // ce qui est une décision. Même racine que la durée arrondie de `avisDeBoiteBloquee`.
-  const attenteEuLieu = Number(immobiliteMs) > 0;
-  const attente = `${Math.round(immobiliteMs / 1000)} s`;
-  if (delivrance.cause === 'choix') {
-    return (
-      '⚠️ Je n’ai RIEN soumis : ce que porte cette boîte ressemble à un **dialogue de choix**, ' +
-      'pas à un message en souffrance. La touche d’envoi y confirmerait une action que personne ' +
-      'ne m’a demandé d’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane'
-    );
-  }
-  if (delivrance.cause === 'dialogue') {
-    return (
-      '⚠️ Je n’ai RIEN soumis : l’écran de cette session porte un **dialogue qui attend un ' +
-      'choix**, affiché au-dessus de sa boîte. La touche d’envoi y confirmerait l’option ' +
-      'surlignée — une action que personne ne m’a demandé d’approuver, et qui ne se défait pas. ' +
-      `Quelqu’un doit répondre à ce dialogue devant ce pane${delivrance.resume ? `. Voici ce que j’ai vu :\n${delivrance.resume}` : ''}`
-    );
-  }
-  if (delivrance.cause === 'ecran') {
-    return (
-      `⚠️ Je n’ai RIEN soumis : la session est devant un écran${delivrance.quoi ? ` — ${delivrance.quoi}` : ' que je ne reconnais pas'}` +
-      `${delivrance.resume ? `. Voici ce que j’ai vu :\n${delivrance.resume}` : ''}`
-    );
-  }
-  if (delivrance.cause === 'bouge') {
-    return (
-      `⚠️ ${attenteEuLieu ? `J’ai attendu ${attente} et le texte A BOUGÉ` : 'LE TEXTE A BOUGÉ'} entre mes deux lectures : quelqu’un est ` +
-      'devant ce pane en train d’écrire. Je n’y touche pas — soumettre la phrase inachevée de ' +
-      'quelqu’un est irréversible. Renvoie dans un moment'
-    );
-  }
-  if (delivrance.cause === 'illisible') {
-    return (
-      '⚠️ La boîte est devenue illisible pendant que j’attendais : je n’ai RIEN soumis — on ne ' +
-      'soumet pas un texte qu’on n’a pas vu'
-    );
-  }
-  return (
-    `⚠️ J’ai tenté de le soumettre pour son auteur — la touche d’envoi seule, sans écrire un ` +
-    `caractère — ${
-      attenteEuLieu
-        ? `après ${attente} d’immobilité`
-        : 'sans attendre, le texte y étant arrivé collé, d’un seul coup'
-    } : SANS EFFET, la boîte est restée pleine. Un ` +
-    'écran de confirmation la recouvre peut-être : va regarder ce pane toi-même'
-  );
+  // ⚠️ LES MOTS VIVENT AUPRÈS DU GESTE, PLUS ICI (T-20260818-0070). Cette fonction portait cinq
+  // branches puis un catch-all qui affirmait « SANS EFFET, la boîte est restée pleine » pour
+  // TOUTE autre issue — faux pour `plus-autorise`, arrivée après elle. Une issue sans mot rend
+  // désormais « issue de délivrance inconnue », jamais la phrase d'une autre.
+  //
+  // La règle de T-20260818-0076 — une attente nulle ne se chiffre pas — est portée par les mots
+  // eux-mêmes, qui reçoivent la fenêtre.
+  return motDeLIssue(delivrance, { forme: 'long', immobiliteMs });
 }
 
 /**
