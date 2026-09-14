@@ -146,6 +146,25 @@ Le veilleur répond donc, **dans le registre de langage client**, à tout messag
 
 La nature du canal est demandée à Slack (`conversations.info`, portées déjà exigées) **une fois par canal**, puis retenue en mémoire.
 
+**Pour que l'agent retrouve SON canal**, il le vise par son identifiant — jamais par son titre :
+
+```bash
+$LD ouvrir acme --nature client --titre "Espace Acme" --canal C0123ABCD
+```
+
+`--canal` ne dérive **aucun** nom du titre et ne crée **aucun** canal (T-20260908-0057). Sans lui, un registre perdu faisait retomber le nom dérivé du titre sur un **homonyme** — et `creerCanal` reprend un homonyme sans rien dire : un représentant s'est ainsi retrouvé posé sur un canal étranger. Le canal visé doit exister, être visible du robot, non archivé, et de la confidentialité de la nature demandée (privé pour `client`) ; sinon le geste est refusé. Si une ligne ouverte porte déjà ce canal, c'est une **reprise** (`"reprise": true`, pane et copie de travail rafraîchis). `--jetable` y est refusé : refermer archiverait un canal qui existait avant la ligne.
+
+## Un chantier déjà ouvert ailleurs — refus nommé, jamais un second canal en silence
+
+L'identité d'une ligne est le couple chantier + **ancre** : le lieu de rôle de l'agent (`.orchestrateur/<code>`, `.gestionnaire/<client>`) s'il en a un, sinon le chemin de sa copie de travail tel quel. Deux copies de travail ordinaires font donc deux clés — c'est voulu, deux agents ordinaires du même chantier ne doivent pas se confondre.
+
+Mais le geste qui en découlait était muet : un agent sans lieu de rôle qui redemandait son chantier depuis une autre copie obtenait un canal `-2`, `ok:true`, et deux lignes ouvertes au registre (T-20260818-0026). Désormais, quand aucune ligne ne répond à la clé **et** qu'une ligne ouverte du même chantier (casse ignorée) existe sous une autre ancre, `ouvrir` **refuse** — code non nul, **aucun canal créé** — en nommant le canal existant (nom et identifiant) et les deux sorties :
+
+- c'est ta ligne → `ouvrir <chantier> --canal <id>` la reprend ;
+- tu veux **volontairement** une seconde ligne → ajoute `--distincte` (un avertissement dit alors combien de lignes le chantier porte).
+
+**Deux lieux de rôle distincts ne sont pas concernés** : ce sont deux agents par construction, et plusieurs représentants partagent légitimement le chantier `dirigeant`. Le refus ne tombe que si l'une au moins des deux ancres est un simple chemin.
+
 ## Ce que les pièces déposées laissent sur le poste
 
 Une pièce recueillie est écrite dans `~/.somtech/ligne-directe/pieces/<canal>/`, en **0700 pour le dossier, 0600 pour le fichier** : seul le compte du poste peut la lire.

@@ -11,7 +11,10 @@
 // de le reproduire) et la commande les appelle. Les déplacer sans les réexporter aurait fait
 // exactement ce que ce lot cherche à éviter : casser un mécanisme éprouvé en le rangeant.
 
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { trouverCanal, estMembreDuCanal, trouverMembre } from './slack.js';
+import { verifierLieuRenseigne } from './lieu-renseigne.js';
 import { lireJeton, SERVICE_ROBOT, JetonIllisible, JetonVide } from './trousseau.js';
 import { verifierLigneOuvrable } from './orchestrateur.js';
 import {
@@ -54,7 +57,22 @@ export function retirerCeQuiAEteCommence(depotClient, client) {
  */
 export async function verifierCanalJoignable(jetonRobot, nomCanal) {
   const canal = await trouverCanal(jetonRobot, nomCanal);
-  if (!canal) return { joignable: false, motif: 'absent', canal: nomCanal };
+  // ⚠️ « ABSENT » EST CE QUE LE ROBOT VOIT, PAS CE QUI EST (T-20260806-0197). Mesuré en
+  // production : Slack ne rend à un jeton de robot aucun canal privé dont il n'est pas membre.
+  // Un canal privé du client où personne ne l'a encore invité — le cas le plus ordinaire — se
+  // voit donc exactement comme un canal inexistant, et le refus envoyait le faire CRÉER.
+  // On ne peut pas départager : le verdict porte les deux causes et les deux gestes, en faits.
+  // Le motif reste `absent` — c'est la clé que les appelants lisent, et elle dit vrai du point
+  // de vue du robot.
+  if (!canal) {
+    return {
+      joignable: false,
+      motif: 'absent',
+      canal: nomCanal,
+      causes: ['absent', 'prive_sans_robot'],
+      gestes: ['corriger_ou_faire_creer', 'invitation_humaine'],
+    };
+  }
 
   const membre = await estMembreDuCanal(jetonRobot, canal);
   if (!membre) return { joignable: false, motif: 'non_membre', canal: nomCanal, id: canal.id };
@@ -243,9 +261,26 @@ export async function verifierLignesDuRepresentant({
  */
 export function messageDeRefus(joignabilite) {
   if (joignabilite.motif === 'absent') {
+    // LE TEXTE SE CONSTRUIT DEPUIS LES GESTES DU VERDICT, pas en dur : un geste retiré du verdict
+    // disparaît du texte, et les deux ne peuvent pas diverger en silence (T-20260806-0197). Un
+    // verdict qui n'en porte pas — un appelant d'avant — reçoit les deux, parce qu'un canal
+    // introuvable par le robot peut toujours être un canal privé où il n'est pas invité.
+    const gestes = joignabilite.gestes ?? ['corriger_ou_faire_creer', 'invitation_humaine'];
+    const c = joignabilite.canal;
+    const phrases = [];
+    if (gestes.includes('corriger_ou_faire_creer')) {
+      phrases.push(`s'il n'existe pas, vérifie le nom, ou fais-le créer par un humain`);
+    }
+    if (gestes.includes('invitation_humaine')) {
+      phrases.push(
+        `s'il existe en canal privé, notre robot n'y a pas été invité — Slack ne lui montre aucun canal ` +
+          `privé dont il n'est pas membre : fais-le inviter à la main dans Slack ("/invite" depuis le canal)`
+      );
+    }
+    if (!phrases.length) return `le canal « ${c} » est introuvable par notre robot, et ce verdict ne porte aucun geste.`;
     return (
-      `le canal « ${joignabilite.canal} » est introuvable — vérifie le nom, ou fais-le créer ` +
-      `par un humain, puis relance.`
+      `le canal « ${c} » est introuvable par notre robot — ${phrases.length > 1 ? 'deux causes possibles, indiscernables de son côté : ' : ''}` +
+      `${phrases.join(' ; ')}, puis relance.`
     );
   }
   if (joignabilite.motif === 'non_membre') {
@@ -268,11 +303,14 @@ export function messageDeRefus(joignabilite) {
  * @param {object} p
  * @param {string} p.depotClient        racine du dépôt du client (celui qui reçoit le lieu)
  * @param {string} p.client             nom du client — dossier sous `.gestionnaire/`
- * @param {string} p.canal              nom du canal, pour le message de refus uniquement
+ * @param {string} p.canal              nom du canal — message de refus, et inscrit (sans croisillon)
+ *                                      dans CONTEXTE.md quand la pose le crée
+ * @param {string} [p.titre]            titre de la ligne — inscrit s'il est fourni ; son absence est
+ *                                      nommée dans `avertissements`
  * @param {() => Promise<{joignable: boolean, motif?: string}>} p.verifierJoignabilite
  */
-export async function preparerLieuRepresentant({ depotClient, client, canal, verifierJoignabilite, verifierVersionnable }) {
-  return preparerLieu({
+export async function preparerLieuRepresentant({ depotClient, client, canal, titre, verifierJoignabilite, verifierVersionnable }) {
+  const r = await preparerLieu({
     depot: depotClient,
     role: 'representant',
     nom: client,
@@ -294,4 +332,99 @@ export async function preparerLieuRepresentant({ depotClient, client, canal, ver
       return { ...j, portee: 'canal', canal, message: messageDeRefus({ ...j, canal }) };
     },
   });
+
+  // ═══ CE QUE LA POSE TIENT, ELLE L'INSCRIT (T-20260809-0024) — et seulement quand elle CRÉE.
+  //
+  // Le défaut mesuré : la pose recevait le canal, le prouvait joignable contre Slack, puis le
+  // jetait. Le `CONTEXTE.md` posé restait le gabarit à l'octet, et la naissance le refusait
+  // ensuite pour une rubrique que la commande avait eue entre les mains.
+  //
+  // ⚠️ `r.cree` ET RIEN D'AUTRE. Un lieu déjà là (`deja_installe`) ou partiel n'est jamais
+  // réécrit : `CONTEXTE.md` appartient à qui l'a rempli (RA-REL-014), et seule la pose qui vient
+  // de le déposer sait qu'il n'y a encore rien de personne dedans.
+  if (!r.ok || !r.cree) return r;
+
+  const chemin = join(r.racine, 'CONTEXTE.md');
+  const tenu = [
+    { libelle: 'Le client', valeur: client },
+    { libelle: 'Le canal où tu lui parles', valeur: String(canal ?? '').replace(/^#+/, '') },
+  ];
+  if (typeof titre === 'string' && titre.trim()) tenu.push({ libelle: 'Le titre de ta ligne', valeur: titre });
+
+  const avertissements = [...(r.avertissements ?? [])];
+  try {
+    const { texte, introuvables } = inscrireRubriques(readFileSync(chemin, 'utf8'), tenu);
+    writeFileSync(chemin, texte);
+    // Une rubrique que le gabarit ne porte plus ne s'invente pas — mais elle se DIT : sinon la
+    // valeur tenue serait jetée en silence, le défaut même que ce bloc ferme.
+    for (const libelle of introuvables) {
+      avertissements.push(
+        `${chemin} : la rubrique « ${libelle} » est introuvable au gabarit — la valeur tenue par la pose ` +
+          `n'a pas pu y être inscrite. Écris-la à la main.`
+      );
+    }
+  } catch (err) {
+    // La promesse de la pose vaut pour ce geste-ci : un lieu à demi écrit ne survit pas.
+    retirerCeQuiAEteCommence(depotClient, client);
+    return {
+      ok: false,
+      cree: false,
+      role: r.role,
+      nom: r.nom,
+      refus: {
+        motif: 'ecriture_interrompue',
+        racine: r.racine,
+        message:
+          `l'inscription de ce que la pose tient dans « ${chemin} » s'est interrompue (${err.message}) — ` +
+          `le lieu qui venait d'être posé a été retiré, rien ne subsiste. Corrige la cause, puis relance.`,
+      },
+    };
+  }
+
+  // ═══ CE QUI MANQUE AVANT QU'IL PUISSE NAÎTRE — mesuré par la MÊME garde que la naissance.
+  //
+  // Le rendu disait `avertissements: []` sur un lieu que la naissance allait refuser. On
+  // n'écrit pas un second jugement : on appelle celui de la naissance (`lieu-renseigne.js`),
+  // sur le lieu posé. Une mesure impossible (`verifie: false`) ne dit rien — même règle que là-bas.
+  const verdict = verifierLieuRenseigne({ gabaritDir: etatSource(depotClient).source, racine: r.racine });
+  if (verdict.renseigne === false) {
+    const lignes = [`${r.racine} : ce lieu ne peut pas encore naître — la naissance refusera tant que ceci n'est pas renseigné :`];
+    const sansTitre = !tenu.some((x) => x.libelle === 'Le titre de ta ligne');
+    for (const m of verdict.manquant) {
+      if (m.vide) { lignes.push(`  ${m.fichier} — vide.`); continue; }
+      lignes.push(`  ${m.fichier} — ${m.rubriques.length} rubrique(s) :`);
+      for (const rub of m.rubriques) lignes.push(`      ${rub}`);
+    }
+    if (sansTitre) {
+      lignes.push(`  Le titre de la ligne n'a pas été fourni : relance une pose neuve avec --titre, ou écris-le dans CONTEXTE.md.`);
+    }
+    avertissements.push(lignes.join('\n'));
+  }
+
+  return { ...r, avertissements };
+}
+
+/**
+ * Inscrit chaque valeur à la place du chevron de SA rubrique — la ligne de tableau dont la
+ * première cellule porte le libellé. Rien d'autre du texte ne bouge.
+ *
+ * ⚠️ ON ANCRE SUR LE LIBELLÉ, PAS SUR LE TEXTE DU CHEVRON. Le chevron est une consigne qui se
+ * reformule ; le libellé est ce que le représentant lit. Un libellé introuvable est RENDU, jamais
+ * deviné.
+ *
+ * La valeur est aplatie pour tenir dans une cellule : fin de ligne → espace, `|` échappé, accent
+ * grave remplacé — sinon elle casserait le tableau ou le code qui l'entoure.
+ */
+function inscrireRubriques(texte, tenu) {
+  const lignes = texte.split('\n');
+  const introuvables = [];
+  for (const { libelle, valeur } of tenu) {
+    const i = lignes.findIndex(
+      (l) => l.startsWith('|') && l.split('|')[1]?.replace(/\*/g, '').trim() === libelle && /<[^<>\n]+>/.test(l)
+    );
+    if (i < 0) { introuvables.push(libelle); continue; }
+    const propre = String(valeur).replace(/[\r\n]+/g, ' ').replace(/`/g, "'").replace(/\|/g, '\\|').trim();
+    lignes[i] = lignes[i].replace(/<[^<>\n]+>/, () => propre);
+  }
+  return { texte: lignes.join('\n'), introuvables };
 }

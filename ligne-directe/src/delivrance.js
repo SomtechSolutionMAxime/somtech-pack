@@ -402,6 +402,150 @@ export async function delivrerLaBoite({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// LES ISSUES DU GESTE, COMME VALEUR — et le mot de chacune, À CÔTÉ (T-20260818-0070).
+//
+// ⚠️ LA LISTE VIVAIT EN COMMENTAIRE, CHEZ UN APPELANT. Chaque appelant décidait donc seul
+// quelles issues existaient : un `switch` dont le `default` rendait une chaîne vide dans
+// `herdr.js`, un catch-all qui affirmait « SANS EFFET, la boîte est restée pleine » dans
+// `livraison.js` — faux pour `plus-autorise`, arrivée après eux. Quatre fois en deux jours, une
+// moitié câblée et l'autre non ; et le défaut restait inerte tant que l'issue neuve n'était
+// atteignable que par un troisième chemin.
+//
+// Désormais : l'ensemble des issues est UNE VALEUR, le mot de chaque issue vit ICI, et une
+// garde mécanique (`tests/chaque-issue-de-delivrance-a-son-mot.test.js`) rougit si
+// `delivrerLaBoite` rend une cause absente de la valeur, si une issue n'a pas de mot, ou si un
+// appelant en perd un. Les appelants habillent ce mot de leur contexte ; ils ne décident plus
+// quelles issues existent.
+
+/** L'ensemble EXACT des `cause` que `delivrerLaBoite` peut rendre. */
+export const ISSUES_DE_DELIVRANCE = Object.freeze([
+  'choix',
+  'ecran',
+  'dialogue',
+  'illisible',
+  'vide-cause-inconnue',
+  'bouge',
+  'plus-autorise',
+  'soumis',
+  'sans-effet',
+]);
+
+const secondes = (ms) => `${Math.round(Number(ms) / 1000)} s`;
+const attenteEuLieu = (ms) => Number(ms) > 0;
+const vuSurLEcran = (d) => (d?.resume ? `. Voici ce que j’ai vu :\n${d.resume}` : '');
+
+/**
+ * Pour CHAQUE issue, deux formes du même fait :
+ *   • `court` — une proposition qui COMPLÈTE un refus déjà rédigé (« … je n’ai pas pu l’en
+ *               sortir : <court> ») ;
+ *   • `long`  — un paragraphe autonome, ajouté sous un refus d'origine rendu intact.
+ * Chacune reçoit `{ delivrance, immobiliteMs }`. Aucune ne dit le fait d'une autre issue.
+ */
+export const MOTS_DE_DELIVRANCE = Object.freeze({
+  choix: Object.freeze({
+    court: () =>
+      'le texte coincé ressemble à un dialogue de choix, et la touche d’envoi y confirmerait une action au lieu de soumettre un texte',
+    long: () =>
+      '⚠️ Je n’ai RIEN soumis : ce que porte cette boîte ressemble à un **dialogue de choix**, ' +
+      'pas à un message en souffrance. La touche d’envoi y confirmerait une action que personne ' +
+      'ne m’a demandé d’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane',
+  }),
+  dialogue: Object.freeze({
+    court: () =>
+      'l’écran porte un DIALOGUE qui attend un choix, et la touche d’envoi y confirmerait une action au lieu de soumettre un texte',
+    long: ({ delivrance }) =>
+      '⚠️ Je n’ai RIEN soumis : l’écran de cette session porte un **dialogue qui attend un ' +
+      'choix**, affiché au-dessus de sa boîte. La touche d’envoi y confirmerait l’option ' +
+      'surlignée — une action que personne ne m’a demandé d’approuver, et qui ne se défait pas. ' +
+      `Quelqu’un doit répondre à ce dialogue devant ce pane${vuSurLEcran(delivrance)}`,
+  }),
+  // ⚠️ UN ÉCRAN NON PRÊT N'EST PAS UN DIALOGUE. `herdr.js` le rangeait avec `choix` et
+  // `dialogue`, et affirmait donc un dialogue que personne n'avait identifié.
+  ecran: Object.freeze({
+    court: ({ delivrance }) =>
+      `la session est devant un écran${delivrance?.quoi ? ` — ${delivrance.quoi}` : ' que je ne reconnais pas'}, ` +
+      'pas devant une boîte de saisie prête, et je n’y soumets rien',
+    long: ({ delivrance }) =>
+      `⚠️ Je n’ai RIEN soumis : la session est devant un écran${delivrance?.quoi ? ` — ${delivrance.quoi}` : ' que je ne reconnais pas'}` +
+      vuSurLEcran(delivrance),
+  }),
+  illisible: Object.freeze({
+    court: () => 'la boîte est devenue illisible pendant que je l’observais, et je ne soumets pas ce que je ne vois pas',
+    long: () =>
+      '⚠️ La boîte est devenue illisible pendant que j’attendais : je n’ai RIEN soumis — on ne ' +
+      'soumet pas un texte qu’on n’a pas vu',
+  }),
+  'vide-cause-inconnue': Object.freeze({
+    court: () =>
+      'la boîte s’est vidée sans que je sache comment — soumise par son auteur, ou effacée — et je n’ai rien soumis',
+    long: () =>
+      '⚠️ Je n’ai RIEN soumis : la boîte s’est vidée pendant que j’attendais, sans que je sache ' +
+      'comment — son auteur l’a peut-être soumise, ou le texte a disparu sans l’être. Va regarder ' +
+      'ce pane si ce texte comptait',
+  }),
+  bouge: Object.freeze({
+    court: () =>
+      'le texte a BOUGÉ pendant que je l’observais — quelqu’un est en train d’écrire là, et je ne soumets pas une phrase inachevée à sa place',
+    long: ({ immobiliteMs }) =>
+      `⚠️ ${attenteEuLieu(immobiliteMs) ? `J’ai attendu ${secondes(immobiliteMs)} et le texte A BOUGÉ` : 'LE TEXTE A BOUGÉ'} entre mes deux lectures : quelqu’un est ` +
+      'devant ce pane en train d’écrire. Je n’y touche pas — soumettre la phrase inachevée de ' +
+      'quelqu’un est irréversible. Renvoie dans un moment',
+  }),
+  'plus-autorise': Object.freeze({
+    court: () =>
+      'au dernier regard avant la touche, je n’étais PLUS AUTORISÉ à toucher ce pane (il a pu être réservé entre-temps), et je n’ai rien soumis',
+    long: () =>
+      '⚠️ Je n’ai RIEN soumis : au dernier regard avant la touche d’envoi, je n’étais PLUS ' +
+      'AUTORISÉ à toucher ce pane — il a pu être réservé pendant que j’attendais. Attends que ' +
+      'cette réservation tombe avant de renvoyer',
+  }),
+  soumis: Object.freeze({
+    court: () => 'la touche d’envoi est partie et la boîte s’est vidée : le texte coincé a été soumis pour son auteur',
+    long: () =>
+      '⚠️ La touche d’envoi est partie, seule, sans écrire un caractère, et la boîte s’est vidée : ' +
+      'le texte coincé a été soumis pour son auteur',
+  }),
+  'sans-effet': Object.freeze({
+    court: () => 'la touche d’envoi est partie, SANS EFFET : la boîte est restée pleine',
+    long: ({ immobiliteMs }) =>
+      `⚠️ J’ai tenté de le soumettre pour son auteur — la touche d’envoi seule, sans écrire un ` +
+      `caractère — ${
+        attenteEuLieu(immobiliteMs)
+          ? `après ${secondes(immobiliteMs)} d’immobilité`
+          : 'sans attendre, le texte y étant arrivé collé, d’un seul coup'
+      } : SANS EFFET, la boîte est restée pleine. Un ` +
+      'écran de confirmation la recouvre peut-être : va regarder ce pane toi-même',
+  }),
+});
+
+/**
+ * LE MOT D'UNE ISSUE — jamais celui d'une autre, jamais le silence.
+ *
+ * Une cause hors de `ISSUES_DE_DELIVRANCE`, ou sans mot, rend un texte qui le DIT (« issue de
+ * délivrance inconnue ») : c'est un défaut de ce module, et le cacher sous la phrase d'une
+ * autre issue est exactement ce que le catch-all d'avant faisait.
+ *
+ * @param delivrance ce que `delivrerLaBoite` a rendu
+ * @param forme      `'court'` ou `'long'` (voir `MOTS_DE_DELIVRANCE`)
+ */
+export function motDeLIssue(delivrance, { forme = 'long', immobiliteMs = 0 } = {}) {
+  if (forme !== 'court' && forme !== 'long') {
+    throw new TypeError(`motDeLIssue : forme « ${forme} » inconnue — 'court' ou 'long'`);
+  }
+  const cause = delivrance?.cause;
+  const mots = ISSUES_DE_DELIVRANCE.includes(cause) && Object.hasOwn(MOTS_DE_DELIVRANCE, cause)
+    ? MOTS_DE_DELIVRANCE[cause]
+    : null;
+  if (!mots || typeof mots[forme] !== 'function') {
+    const inconnu =
+      `issue de délivrance inconnue « ${cause} » : je ne sais pas ce qui s’est passé devant cette ` +
+      'boîte — va regarder ce pane';
+    return forme === 'court' ? inconnu : `⚠️ ${inconnu}`;
+  }
+  return mots[forme]({ delivrance, immobiliteMs });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // LES MOTS QUI ACCOMPAGNENT LE GESTE — et ils descendent ICI pour la même raison que lui.
 //
 // ⚠️ RELEVÉ EN PASSE DE REVUE DE FOND, BLOQUANT, ET LE REJET ÉTAIT JUSTE (T-20260818-0049).

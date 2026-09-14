@@ -327,6 +327,44 @@ export class InvitationRequise extends RefusDefinitif {
      * devient détectable.
      */
     this.geste = 'invitation_humaine';
+    /** Le robot voit-il ce canal ? Vrai ici : on connaît son identifiant. */
+    this.visible = true;
+  }
+}
+
+/**
+ * Le nom est pris, mais par un canal que notre robot NE VOIT PAS (T-20260806-0197).
+ *
+ * MESURÉ EN PRODUCTION SLACK : `conversations.list` et `conversations.info` ne rendent pas à un
+ * jeton de robot les canaux privés dont il n'est pas membre. Un `name_taken` suivi d'une
+ * recherche vide désigne donc presque sûrement un canal PRIVÉ où personne n'a invité le robot —
+ * le cas le plus ordinaire d'un canal client neuf. Ce chemin laissait remonter `name_taken`
+ * BRUT : aucun geste nommé, rien que l'appelant sache relayer.
+ *
+ * C'est une `InvitationRequise` — même geste, même impossibilité de le faire par du code — à
+ * ceci près qu'on ne connaît PAS l'identifiant du canal, et que le refus ne prétend pas le
+ * connaître. « Presque sûrement » est dit, pas maquillé : le robot ne peut rien vérifier d'un
+ * canal qu'il ne voit pas.
+ */
+export class CanalInvisible extends InvitationRequise {
+  constructor(nom, prive) {
+    super(nom, null);
+    this.name = 'CanalInvisible';
+    this.id = null;
+    this.visible = false;
+    this.demandee = Boolean(prive);
+    // On demandait un canal PUBLIC : un canal invisible au robot est privé, et l'y inviter ne
+    // mènerait qu'au refus de confidentialité. Le geste utile est alors un autre nom.
+    this.geste = prive ? 'invitation_humaine' : 'autre_nom';
+    this.message =
+      `le nom #${nom} est déjà pris, par un canal que notre robot ne voit pas. Slack ne montre à un ` +
+      `robot aucun canal privé dont il n'est pas membre : c'est donc presque sûrement un canal PRIVÉ ` +
+      `où il n'a pas été invité. ` +
+      (prive
+        ? `Si c'est le bon canal, fais-y inviter le robot à la main dans Slack (« /invite » depuis ` +
+          `#${nom}), puis recommence ; sinon, donne un --titre qui mène à un autre nom.`
+        : `On demandait un canal public : même invité, ce canal privé serait refusé. Donne un ` +
+          `--titre qui mène à un autre nom.`);
   }
 }
 
@@ -346,7 +384,9 @@ export async function creerCanal(jetonRobot, nom, prive = false) {
   } catch (err) {
     if (err.code !== 'name_taken') throw err;
     const existant = await trouverCanal(jetonRobot, nom);
-    if (!existant) throw err;
+    // Le nom est pris et la liste ne le rend pas : Slack cache au robot les canaux privés dont
+    // il n'est pas membre. Remonter `name_taken` brut laissait l'appelant sans geste.
+    if (!existant) throw new CanalInvisible(nom, prive);
     // AVANT de désarchiver et de rejoindre : on ne s'installe pas dans un canal qu'on va
     // refuser. Le nom vient du titre du chantier — un titre portant le nom d'un client
     // tombe très naturellement sur un canal déjà existant à ce nom.

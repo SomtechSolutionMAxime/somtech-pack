@@ -23,6 +23,7 @@ import { contenuBoite, laPriseEstConstatee } from './boite.js';
 // sur l'immobilité. Une seconde copie n'hériterait jamais des corrections de la première.
 import {
   delivrerLaBoite,
+  motDeLIssue,
   avisDeBoiteBloquee,
   avisDeBoiteVidee,
   FENETRE_LIGNE_DU_DIRIGEANT_MS,
@@ -135,22 +136,14 @@ async function herdrStrict(args, socket) {
  *
  * Sans eux, le lecteur voit « boîte encore pleine » et retente le même geste à l'aveugle. Ce
  * qui bloque n'est pas la même chose selon la cause, et le geste qui le lève non plus.
+ *
+ * ⚠️ LES MOTS NE VIVENT PLUS ICI (T-20260818-0070). Ce `switch` décidait seul quelles issues
+ * existaient, et son `default` rendait une chaîne vide : `plus-autorise` y était MUETTE, et
+ * `ecran` y affirmait un dialogue. Les issues et leurs mots vivent auprès du geste, dans
+ * `delivrance.js` ; ce chemin n'y ajoute que sa ponctuation.
  */
-function motDuRefusDeDelivrance(delivrance) {
-  switch (delivrance?.cause) {
-    case 'choix':
-    case 'dialogue':
-    case 'ecran':
-      return ' : ce que je vois ressemble à un DIALOGUE qui attend un choix, et la touche d’envoi y confirmerait une action au lieu de soumettre un texte';
-    case 'bouge':
-      return ' : le texte a BOUGÉ pendant que je l’observais — quelqu’un est en train d’écrire là, et je ne soumets pas une phrase inachevée à sa place';
-    case 'sans-effet':
-      return ' : la touche d’envoi est partie et la boîte est restée pleine';
-    case 'illisible':
-      return ' : je n’ai plus su lire l’écran';
-    default:
-      return '';
-  }
+export function motDuRefusDeDelivrance(delivrance) {
+  return ` : ${motDeLIssue(delivrance, { forme: 'court' })}`;
 }
 
 /**
@@ -261,8 +254,14 @@ export async function remettre(pane, texte, { socket } = {}) {
   // Mesuré le 2026-08-17 : devant « Do you want to proceed? ❯ 1. Yes », un texte ordinaire
   // envoyé par `agent prompt` a FAIT EXÉCUTER la commande proposée. Il n'a pas été reçu comme
   // un message : il a servi de CONFIRMATION. Ce refus-là est fondé, et son geste a un objet.
+  //
+  // ⚠️ LE REFUS PORTE SA NATURE EN VALEUR (`ecran`), PAS SEULEMENT EN MOTS (T-20260818-0067).
+  // Le veilleur ne relaie plus ce texte au dirigeant — il ne peut pas « aller voir l'écran »
+  // depuis son téléphone : il GARDE le message et le relance. Pour décider de garder, il lui
+  // faut savoir que le refus vient de l'écran, et laquelle des deux branches a mordu — un fait
+  // qu'on ne relit pas dans une phrase. Le texte, lui, reste celui des appelants terminal.
   if (ecranAttendUnChoix(avant.ecran)) {
-    throw new RemiseEchouee(
+    throw Object.assign(new RemiseEchouee(
       pane,
       `${pane} est devant un écran qui attend un choix, pas un message — ` +
         `${
@@ -272,7 +271,7 @@ export async function remettre(pane, texte, { socket } = {}) {
         `Y écrire ne livrerait pas ta parole : ça CONFIRMERAIT l'action affichée (mesuré). Je m'abstiens. ` +
         `Le geste : va voir l'écran (« herdr agent focus ${pane} »), réponds au dialogue toi-même, ` +
         `puis renvoie ton message.`
-    );
+    ), { ecran: 'dialogue' });
   }
 
   // ② L'ÉCRAN N'EST PAS RECONNU — et là, on dit exactement ça, sans rien y ajouter.
@@ -282,7 +281,7 @@ export async function remettre(pane, texte, { socket } = {}) {
   // geste sur l'écran lui-même — on ne sait pas ce qu'il y a dessus, donc on ne sait pas ce
   // qui le lève. Aller le regarder est le seul conseil qu'on ait vérifié.
   if (avant.ecran && !etatAvant.pretARecevoir) {
-    throw new RemiseEchouee(
+    throw Object.assign(new RemiseEchouee(
       pane,
       `je ne reconnais pas l’écran de ${pane} — je m’arrête plutôt que de tenter ma chance, ` +
         `car y écrire par-dessus ce que je n’ai pas su lire collerait deux textes en un seul message. ` +
@@ -290,7 +289,7 @@ export async function remettre(pane, texte, { socket } = {}) {
         `Voici ce que j’ai vu :\n${etatAvant.resume || String(avant.ecran).slice(-400)}\n` +
         `Le geste : va voir l’écran (« herdr agent focus ${pane} ») — ou bien le format a changé ` +
         `et c’est un défaut à inscrire, ou bien il y a bien quelque chose dessus. Puis renvoie ton message.`
-    );
+    ), { ecran: 'inconnu' });
   }
 
   // ═══ 2. ET ON REFUSE SI LA BOÎTE N'EST PAS VIDE — le défaut fondateur de ce lot.

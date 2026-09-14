@@ -53,7 +53,7 @@ import {
 // choix » à tort. En écrire une seconde ici aurait rejoué « une porte sur deux » dans le
 // correctif écrit pour la fermer : la copie n'hérite jamais des corrections de l'autre.
 import { etatDeLEcran, ecranAttendUnChoix, resumeDeLEcran } from '../../ligne-directe/src/ecran.js';
-import { budgetPourUneAttente } from './appel-herdr.js';
+import { budgetPourUneAttente, MARGE_APPEL_MS } from './appel-herdr.js';
 // LA PREUVE D'ACTIVITÉ QUI PEUT RÉELLEMENT SURVENIR (T-20260821-0009) — le témoin sur lequel ce
 // module jugeait ses livraisons était mort ; celui-ci est mesuré vivant sur ce poste.
 import {
@@ -678,7 +678,7 @@ export {
   fenetreDImmobilite,
   delivrerLaBoite,
 } from '../../ligne-directe/src/delivrance.js';
-import { delivrerLaBoite, fenetreDImmobilite } from '../../ligne-directe/src/delivrance.js';
+import { delivrerLaBoite, fenetreDImmobilite, motDeLIssue } from '../../ligne-directe/src/delivrance.js';
 
 /**
  * Ce qu'on ajoute au refus quand la délivrance n'a pas abouti — DES MOTS, jamais un verdict.
@@ -689,55 +689,14 @@ import { delivrerLaBoite, fenetreDImmobilite } from '../../ligne-directe/src/del
  * retenter le même geste à l'aveugle.
  */
 export function motDeLaDelivrance(delivrance, { immobiliteMs = 0 } = {}) {
-  // ⚠️ UNE ATTENTE NULLE NE SE CHIFFRE PAS (T-20260818-0076). Devant un COLLAGE, la fenêtre vaut
-  // zéro — il n'y a personne derrière le clavier, donc rien à observer. Écrire « après 0 s
-  // d'immobilité » raconte une attente qui n'a pas eu lieu, et fait passer pour une négligence
-  // ce qui est une décision. Même racine que la durée arrondie de `avisDeBoiteBloquee`.
-  const attenteEuLieu = Number(immobiliteMs) > 0;
-  const attente = `${Math.round(immobiliteMs / 1000)} s`;
-  if (delivrance.cause === 'choix') {
-    return (
-      '⚠️ Je n’ai RIEN soumis : ce que porte cette boîte ressemble à un **dialogue de choix**, ' +
-      'pas à un message en souffrance. La touche d’envoi y confirmerait une action que personne ' +
-      'ne m’a demandé d’approuver. Quelqu’un doit répondre à ce dialogue devant ce pane'
-    );
-  }
-  if (delivrance.cause === 'dialogue') {
-    return (
-      '⚠️ Je n’ai RIEN soumis : l’écran de cette session porte un **dialogue qui attend un ' +
-      'choix**, affiché au-dessus de sa boîte. La touche d’envoi y confirmerait l’option ' +
-      'surlignée — une action que personne ne m’a demandé d’approuver, et qui ne se défait pas. ' +
-      `Quelqu’un doit répondre à ce dialogue devant ce pane${delivrance.resume ? `. Voici ce que j’ai vu :\n${delivrance.resume}` : ''}`
-    );
-  }
-  if (delivrance.cause === 'ecran') {
-    return (
-      `⚠️ Je n’ai RIEN soumis : la session est devant un écran${delivrance.quoi ? ` — ${delivrance.quoi}` : ' que je ne reconnais pas'}` +
-      `${delivrance.resume ? `. Voici ce que j’ai vu :\n${delivrance.resume}` : ''}`
-    );
-  }
-  if (delivrance.cause === 'bouge') {
-    return (
-      `⚠️ ${attenteEuLieu ? `J’ai attendu ${attente} et le texte A BOUGÉ` : 'LE TEXTE A BOUGÉ'} entre mes deux lectures : quelqu’un est ` +
-      'devant ce pane en train d’écrire. Je n’y touche pas — soumettre la phrase inachevée de ' +
-      'quelqu’un est irréversible. Renvoie dans un moment'
-    );
-  }
-  if (delivrance.cause === 'illisible') {
-    return (
-      '⚠️ La boîte est devenue illisible pendant que j’attendais : je n’ai RIEN soumis — on ne ' +
-      'soumet pas un texte qu’on n’a pas vu'
-    );
-  }
-  return (
-    `⚠️ J’ai tenté de le soumettre pour son auteur — la touche d’envoi seule, sans écrire un ` +
-    `caractère — ${
-      attenteEuLieu
-        ? `après ${attente} d’immobilité`
-        : 'sans attendre, le texte y étant arrivé collé, d’un seul coup'
-    } : SANS EFFET, la boîte est restée pleine. Un ` +
-    'écran de confirmation la recouvre peut-être : va regarder ce pane toi-même'
-  );
+  // ⚠️ LES MOTS VIVENT AUPRÈS DU GESTE, PLUS ICI (T-20260818-0070). Cette fonction portait cinq
+  // branches puis un catch-all qui affirmait « SANS EFFET, la boîte est restée pleine » pour
+  // TOUTE autre issue — faux pour `plus-autorise`, arrivée après elle. Une issue sans mot rend
+  // désormais « issue de délivrance inconnue », jamais la phrase d'une autre.
+  //
+  // La règle de T-20260818-0076 — une attente nulle ne se chiffre pas — est portée par les mots
+  // eux-mêmes, qui reçoivent la fenêtre.
+  return motDeLIssue(delivrance, { forme: 'long', immobiliteMs });
 }
 
 /**
@@ -795,7 +754,146 @@ function etatVuDeLaBoite(ecran) {
   return { etat: vu.etat, texte: vu.texte, suggestion: vu.suggestion };
 }
 
-export async function livrerBrief({
+/**
+ * LE BUDGET TOTAL D'UNE LIVRAISON — et pourquoi le plafond par appel ne suffisait pas
+ * (T-20260818-0003).
+ *
+ * Le plafond de 81eb674 (`DELAI_APPEL_MS`, 60 s, `appel-herdr.js`) borne CHAQUE appel herdr, jamais
+ * leur NOMBRE. Le chemin « brief écrit, jamais pris » en enchaîne 66 : un herdr lent mais vivant,
+ * qui rend la main à 59 s à chaque fois, faisait attendre l'appelant 65,9 minutes (mesuré sur
+ * doubles, horloge simulée) sans qu'aucun plafond ne sonne — chacun était respecté. C'est
+ * « attendre au lieu d'échouer bruyamment », exactement.
+ *
+ * ⚠️ CINQ MINUTES, ET POURQUOI. Le cas nominal le plus lent mesuré (boîte occupée, herdr
+ * réactif) prend 62 s ; l'amorce de naissance, avec ses 30 essais espacés de 2 s sur trois
+ * boucles, en prend environ trois sur un herdr réactif. Cinq minutes laissent donc toute leur
+ * place aux chemins qui aboutissent, et coupent ce qui ne peut plus aboutir : au-delà, on ne
+ * livre plus, on attend un outil qui ne répond pas. Réglable comme le plafond d'appel —
+ * `LIVRAISON_BUDGET_MS` dans l'environnement, `budgetMs` en option.
+ */
+export const BUDGET_LIVRAISON_MS = Number(process.env.LIVRAISON_BUDGET_MS || 300000);
+
+/** La cause d'un refus rendu parce que le budget total est tombé — jamais un obstacle vu. */
+export const CAUSE_BUDGET_EPUISE = 'budget-epuise';
+
+class BudgetEpuise extends Error {}
+
+/**
+ * Livrer SOUS UN BUDGET TOTAL — la porte publique.
+ *
+ * ⚠️ LE BUDGET SE VÉRIFIE AVANT CHAQUE GESTE COÛTEUX, PAS À LA SORTIE DES BOUCLES. Les trois
+ * injections (`appelHerdr`, `lireEcran`, `dormir`) passent par une garde qui refuse de partir
+ * quand le temps est écoulé : elle couvre donc chaque itération de chaque boucle — celles d'ici,
+ * et celle de `delivrerLaBoite`, qui vit ailleurs et n'a pas à être réécrite pour autant.
+ *
+ * ⚠️ ET UN APPEL NE DÉBORDE PAS DU BUDGET. Le délai qu'on lui laisse est ramené à ce qui reste ;
+ * sans quoi un appel parti à une milliseconde de la fin ajoutait encore un plafond entier. Hors
+ * de la dernière minute, rien ne change : l'appel garde le délai qu'il avait.
+ *
+ * ⚠️ CE QUI A ÉTÉ TENTÉ SORT DANS LE REFUS. Le budget peut tomber APRÈS que le brief a été écrit,
+ * ou après qu'une touche d'envoi est partie : taire ces gestes ferait renvoyer un brief collé au
+ * premier, ou presser une seconde touche à l'aveugle.
+ */
+export async function livrerBrief(options) {
+  const {
+    appelHerdr,
+    lireEcran,
+    dormir,
+    pane,
+    budgetMs = BUDGET_LIVRAISON_MS,
+    maintenant = () => Date.now(),
+  } = options;
+  const debut = maintenant();
+  const lectures = commandesLivraison(pane, options.texte, { parLePane: options.parLePane });
+  const gestes = [];
+  let appels = 0;
+  let statutVu = null;
+  let ecranVu = null;
+
+  const restant = () => budgetMs - (maintenant() - debut);
+  const garder = () => {
+    if (restant() <= 0) throw new BudgetEpuise();
+  };
+  // Le plafond d'un appel ordinaire, lu là où il est défini : `budgetPourUneAttente` rend
+  // `max(plancher, attente + marge)`, donc une attente de `-marge` rend le plancher lui-même.
+  const plafondOrdinaire = budgetPourUneAttente(-MARGE_APPEL_MS);
+  // ⚠️ UN APPEL COUPÉ PAR LE BUDGET NE TÉMOIGNE DE RIEN. Son délai a été ramené à ce qui restait ;
+  // s'il rend quand le budget est tombé, ce qu'il rend est l'effet de la coupe (un écran `null`,
+  // un refus d'outil), pas un état du destinataire. Le laisser passer ferait conclure « boîte
+  // illisible » là où c'est notre propre budget qui a tranché — mesuré sur le binaire à la
+  // première écriture de cette garde.
+  const borner = (vers) => {
+    const plafond = vers?.delaiMs ?? plafondOrdinaire;
+    const reste = restant();
+    return reste < plafond ? { vers: { ...vers, delaiMs: Math.max(1, reste) }, coupe: true } : { vers, coupe: false };
+  };
+  const memeVerbe = (cmd, modele) => cmd[0] === modele[0] && cmd[1] === modele[1];
+
+  const sousBudget = {
+    appelHerdr: async (cmd, vers) => {
+      garder();
+      appels += 1;
+      if (memeVerbe(cmd, lectures.livrer)) gestes.push('livrer');
+      if (memeVerbe(cmd, lectures.soumettre)) gestes.push('soumettre');
+      const b = borner(vers);
+      const r = await appelHerdr(cmd, b.vers);
+      if (b.coupe) garder();
+      if (memeVerbe(cmd, lectures.interroger)) statutVu = statutRendu(r?.reponse) ?? statutVu;
+      return r;
+    },
+    lireEcran: async (cmd, vers) => {
+      garder();
+      appels += 1;
+      const b = borner(vers);
+      const e = await lireEcran(cmd, b.vers);
+      if (b.coupe) garder();
+      ecranVu = e;
+      return e;
+    },
+    dormir: async (ms) => {
+      garder();
+      await dormir(Math.max(0, Math.min(ms, restant())));
+    },
+  };
+
+  try {
+    return await livrerSousBudget({ ...options, ...sousBudget });
+  } catch (err) {
+    if (!(err instanceof BudgetEpuise)) throw err;
+    const ecrit = gestes.includes('livrer');
+    const soumis = gestes.includes('soumettre');
+    return {
+      ok: false,
+      cause: CAUSE_BUDGET_EPUISE,
+      statut: statutVu,
+      repare: false,
+      causeRepare: CAUSE_BUDGET_EPUISE,
+      attendu: false,
+      delivre: false,
+      causeDelivre: CAUSE_BUDGET_EPUISE,
+      activite: { avant: ACTIVITE.INDETERMINEE, apres: ACTIVITE.INDETERMINEE },
+      boite: ecranVu === null ? null : etatVuDeLaBoite(ecranVu),
+      gestes,
+      appels,
+      message:
+        `budget de livraison épuisé sur ${pane} — ${Math.round(budgetMs / 1000)} s écoulées sans ` +
+        `verdict, ${appels} appel(s) herdr tenté(s), dernier statut vu « ${statutVu ?? '—'} ». ` +
+        'herdr répond trop lentement pour qu’une livraison se prouve : j’arrête plutôt que ' +
+        'd’attendre. RIEN n’est confirmé livré.' +
+        (ecrit
+          ? '\n⚠️ ET LE brief A ÉTÉ ÉCRIT dans la boîte de ce pane avant que le budget tombe : il y ' +
+            'est peut-être encore. Ne le renvoie pas sans avoir regardé ce pane — deux envois ' +
+            'se colleraient en un seul message.'
+          : '\nLe brief n’a PAS été écrit : la boîte n’a pas reçu un caractère de moi.') +
+        (soumis
+          ? '\n⚠️ ET UNE touche d’envoi EST DÉJÀ PARTIE vers ce pane pendant la tentative : une ' +
+            'action irréversible y a eu lieu. Va le regarder avant d’en presser une autre.'
+          : ''),
+    };
+  }
+}
+
+async function livrerSousBudget({
   pane,
   texte,
   appelHerdr,

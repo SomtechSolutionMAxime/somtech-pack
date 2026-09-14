@@ -44,9 +44,13 @@ const ATTENDU = {
   // (`rmSync` du lieu + `rmdirSync` du dossier de rôle, sans `recursive` — c'est le noyau qui
   // arbitre s'il reste un voisin).
   'lieu-agent.js': 5,
-  // Aucune : ce module ne fait que la joignabilité d'un canal. Toute écriture qui
-  // apparaîtrait ici serait une seconde porte vers le disque, hors des trois gardes.
-  'representant.js': 0,
+  // UNE, et une seule (T-20260809-0024) : le `writeFileSync` qui inscrit dans CONTEXTE.md ce
+  // que la pose tient (client, canal, titre). Il n'est atteint qu'APRÈS `preparerLieu`, et
+  // seulement quand elle rend `cree: true` — donc derrière les trois gardes, sur un fichier que
+  // la pose vient elle-même de déposer, jamais sur un lieu existant (RA-REL-014). Un échec
+  // retire le lieu par `retirerCeQuiAEteCommence` (lieu-agent.js), pas par une écriture d'ici.
+  // Toute AUTRE écriture qui apparaîtrait dans ce module serait une seconde porte vers le disque.
+  'representant.js': 1,
   // Aucune, pour la même raison : il ne mesure que la capacité du poste à ouvrir une ligne.
   'orchestrateur.js': 0,
   // Aucune : c'est une table de rôles.

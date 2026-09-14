@@ -210,6 +210,21 @@ export function sauverRegistre(registre, chemin = CHEMIN_REGISTRE) {
 export function ancreDeLigne(worktree) {
   const chemin = String(worktree ?? '').trim();
   if (!chemin) return '';
+  return lieuDeRole(chemin) ?? chemin;
+}
+
+/**
+ * LE LIEU DE RÔLE QUE PORTE CE CHEMIN — ou `null` s'il n'en porte aucun (T-20260818-0026).
+ *
+ * ⚠️ POURQUOI `ancreDeLigne` NE SUFFIT PAS À LE DIRE. Elle rend le chemin TEL QUEL quand il n'y
+ * a pas de lieu, et un chemin relatif `.orchestrateur/d-1` est rendu identique à lui-même qu'il
+ * soit un lieu ou non : comparer l'ancre au chemin donnerait une réponse fausse exactement là.
+ * La question « est-ce un lieu ? » a donc sa réponse à elle, et `ancreDeLigne` la consomme —
+ * un seul endroit où les dossiers de rôle se reconnaissent.
+ */
+export function lieuDeRole(worktree) {
+  const chemin = String(worktree ?? '').trim();
+  if (!chemin) return null;
   const segments = chemin.split('/');
   const dossiers = dossiersDesLieux();
   // On cherche depuis la FIN : c'est le lieu le plus profond qui porte l'agent. Et il faut un
@@ -219,7 +234,26 @@ export function ancreDeLigne(worktree) {
       return `${segments[i]}/${segments[i + 1]}`.toLowerCase();
     }
   }
-  return chemin;
+  return null;
+}
+
+/**
+ * LES LIGNES OUVERTES D'UN CHANTIER QUI POURRAIENT ÊTRE CELLE DE CET AGENT SANS PORTER SA CLÉ
+ * (T-20260818-0026).
+ *
+ * Appelée quand AUCUNE ligne ne répond à la clé. Une ligne ouverte du même chantier (casse
+ * ignorée, comme la clé) sous une autre ancre est alors un doublon POSSIBLE — sauf si les deux
+ * ancres sont des LIEUX DE RÔLE : deux lieux distincts sont deux agents distincts, par
+ * construction (trois représentants partagent légitimement le chantier « dirigeant »).
+ * Dès qu'une des deux ancres est un simple chemin, rien ne permet de dire si c'est le même agent
+ * renaissant ailleurs ou un autre : on ne tranche pas à sa place.
+ */
+export function doublonsPossibles(registre, chantier, worktree) {
+  const c = String(chantier).toLowerCase();
+  const lieuIci = lieuDeRole(worktree);
+  return lignesOuvertes(registre).filter(
+    (l) => String(l.chantier).toLowerCase() === c && !(lieuIci && lieuDeRole(l.worktree))
+  );
 }
 
 /** Clé d'identité d'une ligne : le couple chantier + lieu de l'agent (voir `ancreDeLigne`). */

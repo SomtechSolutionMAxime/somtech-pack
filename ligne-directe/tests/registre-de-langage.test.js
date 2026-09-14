@@ -310,6 +310,12 @@ test('NON-RÉGRESSION — les réponses internes sont identiques MOT POUR MOT au
     piece_type_refuse:
       "Le message est bien remis, mais une pièce jointe n'est pas d'un type recevable (jpeg, png, gif, webp, pdf, markdown) : elle n'a pas été recueillie.",
     piece_non_recuperee: `Le message est bien remis, mais je n'ai pas pu récupérer une pièce jointe : ${ERREUR_TECHNIQUE}.`,
+    // Les causes d'attente (T-20260818-0067) sont neuves : leur texte est figé ici à leur livraison.
+    mise_en_attente: `L'agent de ${CODE_CHANTIER} est devant un écran que je ne reconnais pas — je n'y ai identifié aucun dialogue, mais je n'écris pas par-dessus ce que je n'ai pas su lire. Ton message est gardé : je le remettrai tout seul dès que l'écran se libère — tu n'as rien à renvoyer. Je te dirai ici quand il sera parti. Pour le retirer d'ici là, réponds « annule » dans le fil de ton message.`,
+    attente_pleine: `L'écran de l'agent de ${CODE_CHANTIER} ne se libère toujours pas, et d'autres messages attendent déjà pour lui : je ne garde pas celui-ci. Il n'a été remis à personne — il reste lisible ci-dessus ; renvoie-le quand je t'aurai annoncé le départ des précédents.`,
+    remis_apres_attente: `L'écran de l'agent de ${CODE_CHANTIER} s'est libéré : ton message gardé a été écrit chez lui, mais je n'ai pas pu constater qu'il l'a pris.`,
+    attente_expiree: `Ton message gardé pour l'agent de ${CODE_CHANTIER} n'a pas pu lui être remis : je cesse de le garder. Le voici, pour qu'il ne soit pas perdu :\n> `,
+    attente_annulee: `C'est retiré : ton message en attente ne sera pas remis à l'agent de ${CODE_CHANTIER}.`,
   };
 
   for (const [cause, texte] of Object.entries(attendu)) {

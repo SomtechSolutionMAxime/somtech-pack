@@ -123,7 +123,9 @@ test('UN CANAL PRIVÉ ARCHIVÉ SE RETROUVE — sans quoi la reprise d’une lign
     {
       canaux: [
         { id: 'C_PUB', name: 'general', is_private: false },
-        { id: 'C_CLI', name: 'd-acme', is_private: true, is_archived: true },
+        // Le robot en est MEMBRE : un canal privé sans lui est invisible à son jeton, en production
+        // comme dans le double (T-20260806-0197). Ce test éprouve l'encodage, pas l'invisibilité.
+        { id: 'C_CLI', name: 'd-acme', is_private: true, is_archived: true, membres: ['UMOI'] },
       ],
     },
     async () => {
@@ -135,7 +137,14 @@ test('UN CANAL PRIVÉ ARCHIVÉ SE RETROUVE — sans quoi la reprise d’une lign
 });
 
 test('la recherche de canal pagine jusqu’au bout — le 1001ᵉ canal existe aussi', async () => {
-  const canaux = Array.from({ length: 1200 }, (_, i) => ({ id: `C${i}`, name: `canal-${i}`, is_private: i % 2 === 0 }));
+  // Le robot est membre des privés : sans lui, Slack ne les rend pas (T-20260806-0197), et la
+  // liste n'aurait plus 1200 canaux à paginer.
+  const canaux = Array.from({ length: 1200 }, (_, i) => ({
+    id: `C${i}`,
+    name: `canal-${i}`,
+    is_private: i % 2 === 0,
+    membres: i % 2 === 0 ? ['UMOI'] : [],
+  }));
   await avecSlack({ canaux }, async (monde) => {
     assert.equal((await trouverCanal('jeton', 'canal-1150'))?.id, 'C1150');
     const pages = monde.appels.filter((a) => a.methode === 'conversations.list');

@@ -170,6 +170,13 @@ test('la pose ne normalise pas : « Charles-Olivier » pose « Charles-Olivier �
   );
   // Et le lieu est un VRAI lieu, pas un dossier au bon nom : les quatre gabarits y sont.
   for (const f of GABARITS) {
+    // CONTEXTE.md reçoit ce que la pose tient (T-20260809-0024) — gardé par
+    // `la-pose-inscrit-ce-quelle-tient.test.js` ; ici, sa présence suffit.
+    if (f === 'CONTEXTE.md') {
+      assert.ok(readFileSync(join(depot, '.gestionnaire', 'Charles-Olivier', f), 'utf8').includes('Charles-Olivier'),
+        'la casse tapée doit être aussi celle inscrite dans CONTEXTE.md');
+      continue;
+    }
     assert.equal(
       readFileSync(join(depot, '.gestionnaire', 'Charles-Olivier', f), 'utf8'),
       readFileSync(join(GABARIT_SOURCE, f), 'utf8'),

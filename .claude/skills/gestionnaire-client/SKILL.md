@@ -11,7 +11,7 @@ sans rien redécouvrir. Cette compétence ne devient **jamais** ce représentant
 prépare son adresse, une fois, puis s'arrête.
 
 ```
-/gestionnaire-client <client> --canal <le canal privé de ce client> --dirigeant <son courriel>
+/gestionnaire-client <client> --canal <le canal privé de ce client> --dirigeant <son courriel> [--titre "<le nom de sa ligne>"]
 ```
 
 Le résultat, quand tout va bien :
@@ -80,8 +80,15 @@ disque local ne coûte aucun aller-retour vers Slack.
 LD="node $HOME/.somtech/ligne-directe/bin/ligne-directe.js"
 
 $LD representant <client> --canal <le canal privé, sans le croisillon> \
-                          --dirigeant <le courriel du dirigeant> [--depot <chemin>]
+                          --dirigeant <le courriel du dirigeant> \
+                          [--titre "<le nom sous lequel le client verra la ligne>"] [--depot <chemin>]
 ```
+
+**Ce qu'elle tient, elle l'inscrit — à la création seulement** (`T-20260809-0024`). Quand elle
+CRÉE le lieu, elle écrit dans `CONTEXTE.md` le client, le canal (sans croisillon) et le titre
+si `--titre` est donné, chacun à sa rubrique ; tout le reste du fichier reste le gabarit, à
+l'octet. **Sur un lieu qui existait déjà, elle n'écrit rien** — `CONTEXTE.md` appartient à qui
+l'a rempli (RA-REL-014). `--titre` est facultatif : sans lui, le rendu le réclame.
 
 La commande rend un objet JSON et son code de sortie le résume : `0` si le lieu existe
 désormais **en entier** (qu'elle vienne de le créer ou qu'il y était déjà), `1` si elle a
@@ -111,7 +118,7 @@ Le refus porte un motif, et le geste qui le lève n'est pas le même selon leque
 | `gabarits_absents` | Ce dépôt n'a pas la version du pack qui porte les gabarits | `npx @somtech-solutions/pack update` dans le dépôt du client |
 | `gabarit_perime` | Le gabarit que ce dépôt porte **n'est pas celui du pack installé sur ce poste** — comparé par **empreinte**, pas par numéro de version. Un représentant posé là porterait un métier d'une autre époque, et il ne le saurait jamais : il ne lit que son lieu | Le refus **nomme les deux empreintes et les deux chemins**. Mets le pack à jour dans le dépôt du client (`npx @somtech-solutions/pack update`), puis relance. Rien n'a été créé |
 | `droits_non_versionnables` | Un motif d'exclusion du dépôt (`.gitignore` ou `.git/info/exclude`) empêche de verser `.claude/settings.json` — le lieu serait complet sur ce disque et **sans permissions bornées partout ailleurs** | Le refus nomme le motif et sa source. Lève l'exclusion : `git add -f <le fichier>` une fois posé, ou une négation `!.claude/settings.json` dans le fichier d'exclusion |
-| `absent` | Aucun canal de ce nom n'existe | Vérifie l'orthographe, ou fais créer le canal |
+| `absent` | Le robot ne **voit** aucun canal de ce nom : soit il n'existe pas, soit c'est un canal privé où le robot n'a pas été invité — Slack ne lui montre aucun canal privé dont il n'est pas membre, les deux sont indiscernables de son côté (`causes` porte les deux) | Vérifie l'orthographe ; si le canal existe, fais-y **inviter** le robot par un humain (`/invite`) ; sinon fais-le créer. **Ne fais pas créer un canal avant d'avoir vérifié qu'il n'existe pas en privé** |
 | `non_membre` | Le canal existe, le robot n'y est pas | Fais-le **inviter** par un humain (`/invite` depuis le canal) |
 | `dirigeant_inconnu` | Aucun membre de l'espace ne répond à ce courriel | Corrige le courriel, puis relance. **Ne touche ni au canal, ni au trousseau** : les deux ont été vérifiés et vont bien |
 | `dirigeant_non_designe` | Le lieu était posé, le poste n'a pas pu retenir qui est le dirigeant | Le lieu **a été retiré**, rien ne subsiste. Corrige la cause que le message nomme, relance |
@@ -162,8 +169,11 @@ fusionne jamais elle-même.
 > Concrètement : **un lieu posé et non versé fera refuser l'ouverture de sa session**, qui est
 > un autre lot. Verse avant de passer la main.
 
-**Si la commande a rendu un avertissement** (`avertissements`, le plus souvent : aucun
-fichier d'environnement à la racine du dépôt), **dis-le** avant de continuer. Ce n'est pas
+**Si la commande a rendu un avertissement** (`avertissements` : aucun fichier d'environnement
+à la racine du dépôt, ou — sur toute pose neuve — **ce qui reste à renseigner avant que le
+représentant puisse naître**, rubrique par rubrique, titre compris s'il n'a pas été fourni),
+**dis-le** avant de continuer. L'avertissement de renseignement est produit par la **même
+garde** que la naissance : ce qu'il nomme est exactement ce qu'elle refusera. Ce n'est pas
 bloquant — le lieu est créé quand même — mais un représentant né sans accès au registre le
 découvrira en pleine conversation si personne ne l'a prévenu à l'installation. C'est
 exactement le silence que cette compétence existe pour éviter, et le taire ici le
@@ -173,7 +183,7 @@ réintroduirait par un autre chemin.
 
 **Deux fichiers du lieu sont posés AVEC leurs chevrons, et ce sont les deux que tu remplis** :
 
-| `CONTEXTE.md` | ce que le métier ne peut pas savoir de ce client — son nom entre nous, le canal où on lui parle, son application au registre |
+| `CONTEXTE.md` | ce que le métier ne peut pas savoir de ce client — son nom entre nous, le canal où on lui parle, le titre de sa ligne, son application au registre. **Le client, le canal et le titre (si `--titre`) y sont déjà inscrits par la pose** ; le reste est à toi |
 | `RONDE.md` | **le briefing qu'il pose en `/loop` à sa naissance** — sa cadence, son client en une ligne, ce que chaque tour doit regarder en plus, et ce qu'il a promis à quelle échéance |
 
 > ⚠️ **Sans ronde, un représentant ne se réveille jamais — et personne ne s'en aperçoit.** Son
