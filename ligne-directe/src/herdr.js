@@ -254,8 +254,14 @@ export async function remettre(pane, texte, { socket } = {}) {
   // Mesuré le 2026-08-17 : devant « Do you want to proceed? ❯ 1. Yes », un texte ordinaire
   // envoyé par `agent prompt` a FAIT EXÉCUTER la commande proposée. Il n'a pas été reçu comme
   // un message : il a servi de CONFIRMATION. Ce refus-là est fondé, et son geste a un objet.
+  //
+  // ⚠️ LE REFUS PORTE SA NATURE EN VALEUR (`ecran`), PAS SEULEMENT EN MOTS (T-20260818-0067).
+  // Le veilleur ne relaie plus ce texte au dirigeant — il ne peut pas « aller voir l'écran »
+  // depuis son téléphone : il GARDE le message et le relance. Pour décider de garder, il lui
+  // faut savoir que le refus vient de l'écran, et laquelle des deux branches a mordu — un fait
+  // qu'on ne relit pas dans une phrase. Le texte, lui, reste celui des appelants terminal.
   if (ecranAttendUnChoix(avant.ecran)) {
-    throw new RemiseEchouee(
+    throw Object.assign(new RemiseEchouee(
       pane,
       `${pane} est devant un écran qui attend un choix, pas un message — ` +
         `${
@@ -265,7 +271,7 @@ export async function remettre(pane, texte, { socket } = {}) {
         `Y écrire ne livrerait pas ta parole : ça CONFIRMERAIT l'action affichée (mesuré). Je m'abstiens. ` +
         `Le geste : va voir l'écran (« herdr agent focus ${pane} »), réponds au dialogue toi-même, ` +
         `puis renvoie ton message.`
-    );
+    ), { ecran: 'dialogue' });
   }
 
   // ② L'ÉCRAN N'EST PAS RECONNU — et là, on dit exactement ça, sans rien y ajouter.
@@ -275,7 +281,7 @@ export async function remettre(pane, texte, { socket } = {}) {
   // geste sur l'écran lui-même — on ne sait pas ce qu'il y a dessus, donc on ne sait pas ce
   // qui le lève. Aller le regarder est le seul conseil qu'on ait vérifié.
   if (avant.ecran && !etatAvant.pretARecevoir) {
-    throw new RemiseEchouee(
+    throw Object.assign(new RemiseEchouee(
       pane,
       `je ne reconnais pas l’écran de ${pane} — je m’arrête plutôt que de tenter ma chance, ` +
         `car y écrire par-dessus ce que je n’ai pas su lire collerait deux textes en un seul message. ` +
@@ -283,7 +289,7 @@ export async function remettre(pane, texte, { socket } = {}) {
         `Voici ce que j’ai vu :\n${etatAvant.resume || String(avant.ecran).slice(-400)}\n` +
         `Le geste : va voir l’écran (« herdr agent focus ${pane} ») — ou bien le format a changé ` +
         `et c’est un défaut à inscrire, ou bien il y a bien quelque chose dessus. Puis renvoie ton message.`
-    );
+    ), { ecran: 'inconnu' });
   }
 
   // ═══ 2. ET ON REFUSE SI LA BOÎTE N'EST PAS VIDE — le défaut fondateur de ce lot.

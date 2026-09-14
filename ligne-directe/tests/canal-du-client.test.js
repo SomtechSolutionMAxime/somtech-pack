@@ -20,7 +20,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-let Veilleur, sauverRegistre, chargerRegistre, lignesOuvertes, CAUSES, CAUSES_DE_NON_REMISE, CAUSES_DE_PIECE, reponse;
+let Veilleur, sauverRegistre, chargerRegistre, lignesOuvertes, CAUSES, CAUSES_DE_NON_REMISE, CAUSES_DE_PIECE, CAUSES_D_ATTENTE, reponse;
 let racine;
 
 before(async () => {
@@ -28,7 +28,7 @@ before(async () => {
   process.env.LIGNE_DIRECTE_RACINE = racine;
   ({ Veilleur } = await import('../src/veilleur.js'));
   ({ sauverRegistre, chargerRegistre, lignesOuvertes } = await import('../src/registre.js'));
-  ({ CAUSES, CAUSES_DE_NON_REMISE, CAUSES_DE_PIECE, reponse } = await import('../src/langage.js'));
+  ({ CAUSES, CAUSES_DE_NON_REMISE, CAUSES_DE_PIECE, CAUSES_D_ATTENTE, reponse } = await import('../src/langage.js'));
 });
 
 beforeEach(() => sauverRegistre({ version: 1, lignes: [] }));
@@ -481,9 +481,9 @@ test('CLIENT — une pièce qui n’a pas suivi dit L’INVERSE : le message, lu
   // qui l'on parle d'un fichier qui n'est pas passé, sans lui dire que son message l'est,
   // conclut qu'il a tout perdu et recommence — ou pire, repart par courriel.
   //
-  // Les deux familles couvrent ensemble TOUTES les causes déclarées : une cause ajoutée demain
-  // tombe forcément dans l'une ou dans l'autre, et se fait donc balayer par l'un des deux tests.
-  assert.deepEqual([...CAUSES].sort(), [...CAUSES_DE_NON_REMISE, ...CAUSES_DE_PIECE].sort());
+  // Les trois familles couvrent ensemble TOUTES les causes déclarées : une cause ajoutée demain
+  // tombe forcément dans l'une d'elles, et se fait donc balayer par l'un des trois tests.
+  assert.deepEqual([...CAUSES].sort(), [...CAUSES_DE_NON_REMISE, ...CAUSES_DE_PIECE, ...CAUSES_D_ATTENTE].sort());
 
   for (const cause of CAUSES_DE_PIECE) {
     const texte = reponse(cause, 'client', {});
@@ -492,6 +492,22 @@ test('CLIENT — une pièce qui n’a pas suivi dit L’INVERSE : le message, lu
       !/pas été transmis|pas pu être transmis/.test(texte),
       `« ${cause} » laisse croire que le message n’est pas passé : ${texte}`
     );
+  }
+});
+
+test('CLIENT — un message GARDÉ dit qu’il est gardé, et un message qu’on cesse de garder dit qu’il n’est pas passé (T-20260818-0067)', async () => {
+  // La troisième famille est la plus exposée au mensonge par omission : « gardé » rassure, et un
+  // client rassuré ne renvoie pas. Chaque cause d'attente dit donc exactement l'état du message.
+  const garde = reponse('mise_en_attente', 'client', {});
+  assert.match(garde, /bien parvenu/, `la mise en attente doit dire que le message est arrivé : ${garde}`);
+  assert.match(garde, /gardons/, `la mise en attente doit dire qu’il est gardé : ${garde}`);
+  assert.ok(!/pas été transmis|pas pu être transmis/.test(garde), `la mise en attente laisse croire à une perte : ${garde}`);
+  for (const cause of ['attente_pleine', 'attente_expiree']) {
+    const texte = reponse(cause, 'client', {});
+    assert.match(texte, /pas été transmis|pas pu être transmis/, `« ${cause} » ne dit pas que le message n’est pas passé : ${texte}`);
+  }
+  for (const texte of CAUSES_D_ATTENTE.map((c) => reponse(c, 'client', {}))) {
+    assert.ok(!/herdr/i.test(texte), `une réponse au client nomme un outil de terminal : ${texte}`);
   }
 });
 

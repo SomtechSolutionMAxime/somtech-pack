@@ -57,8 +57,43 @@ export const CAUSES_DE_NON_REMISE = [
  */
 export const CAUSES_DE_PIECE = ['piece_trop_lourde', 'piece_type_refuse', 'piece_non_recuperee'];
 
-/** Toutes les situations où le veilleur prend la parole — l'union des deux familles. */
-export const CAUSES = [...CAUSES_DE_NON_REMISE, ...CAUSES_DE_PIECE];
+/**
+ * Les causes de l'ATTENTE — un message que l'écran du destinataire empêchait de remettre, et
+ * que le veilleur GARDE au lieu de le rendre à son auteur (T-20260818-0067).
+ *
+ * ⚠️ UNE TROISIÈME FAMILLE, ET ELLE NE SE RANGE DANS AUCUNE DES DEUX AUTRES. « Gardé » n'est ni
+ * « pas passé » (il partira tout seul) ni « bien remis » (il ne l'est pas encore). La ranger chez
+ * les non-remises ferait croire à son auteur qu'il doit renvoyer ; chez les remises, qu'il a été
+ * lu. C'est l'erreur exacte que le défaut commettait : « renvoie ton message », à quelqu'un qui
+ * ne peut pas.
+ *
+ * ⚠️ AUCUNE N'EMPLOIE UN MOT DE TERMINAL. Le dirigeant est au téléphone : lui prescrire une
+ * commande herdr, c'est le laisser « pris ». Ce qu'on lui offre se fait DEPUIS SLACK — attendre
+ * sans rien refaire, ou répondre « annule » dans le fil de son message.
+ */
+export const CAUSES_D_ATTENTE = [
+  'mise_en_attente',
+  'attente_pleine',
+  'remis_apres_attente',
+  'attente_expiree',
+  'attente_annulee',
+];
+
+/** Toutes les situations où le veilleur prend la parole — l'union des trois familles. */
+export const CAUSES = [...CAUSES_DE_NON_REMISE, ...CAUSES_DE_PIECE, ...CAUSES_D_ATTENTE];
+
+/** Un texte recopié en citation Slack, ligne par ligne — pour qu'il se relise tel qu'il a été écrit. */
+const enCitation = (texte) =>
+  String(texte ?? '')
+    .split('\n')
+    .map((l) => `> ${l}`)
+    .join('\n');
+
+/** Ce qu'on sait de l'écran — nommé tel qu'on l'a établi, jamais plus (T-20260821-0026). */
+const ecranVuInterne = (chantier, ecran) =>
+  ecran === 'dialogue'
+    ? `L'agent de ${chantier} est devant un écran qui attend un choix (un dialogue) : y écrire confirmerait l'action affichée, donc je n'y touche pas.`
+    : `L'agent de ${chantier} est devant un écran que je ne reconnais pas — je n'y ai identifié aucun dialogue, mais je n'écris pas par-dessus ce que je n'ai pas su lire.`;
 
 /**
  * Le registre INTERNE — mot pour mot ce que le dirigeant lit depuis la mise en service.
@@ -95,6 +130,24 @@ const INTERNE = {
     `(jpeg, png, gif, webp, pdf, markdown) : elle n'a pas été recueillie.`,
   piece_non_recuperee: ({ erreur }) =>
     `Le message est bien remis, mais je n'ai pas pu récupérer une pièce jointe${erreur ? ` : ${erreur}` : ''}.`,
+  mise_en_attente: ({ chantier, ecran }) =>
+    `${ecranVuInterne(chantier, ecran)} ` +
+    `Ton message est gardé : je le remettrai tout seul dès que l'écran se libère — tu n'as rien à renvoyer. ` +
+    `Je te dirai ici quand il sera parti. Pour le retirer d'ici là, réponds « annule » dans le fil de ton message.`,
+  attente_pleine: ({ chantier, max }) =>
+    `L'écran de l'agent de ${chantier} ne se libère toujours pas, et ${max ? `${max} messages` : "d'autres messages"} attendent déjà pour lui : ` +
+    `je ne garde pas celui-ci. Il n'a été remis à personne — il reste lisible ci-dessus ; ` +
+    `renvoie-le quand je t'aurai annoncé le départ des précédents.`,
+  remis_apres_attente: ({ chantier, pris }) =>
+    pris
+      ? `L'écran de l'agent de ${chantier} s'est libéré : ton message gardé lui a été remis, et il l'a pris.`
+      : `L'écran de l'agent de ${chantier} s'est libéré : ton message gardé a été écrit chez lui, ` +
+        `mais je n'ai pas pu constater qu'il l'a pris.`,
+  attente_expiree: ({ chantier, heures, texte }) =>
+    `Ton message gardé pour l'agent de ${chantier} n'a pas pu lui être remis${heures ? ` en ${heures} h` : ''} : je cesse de le garder. ` +
+    `Le voici, pour qu'il ne soit pas perdu :\n${enCitation(texte)}`,
+  attente_annulee: ({ chantier }) =>
+    `C'est retiré : ton message en attente ne sera pas remis à l'agent de ${chantier}.`,
 };
 
 /**
@@ -152,6 +205,20 @@ const CLIENT = {
   piece_non_recuperee: () =>
     'Votre message nous est bien parvenu, mais nous n’avons pas pu récupérer le fichier joint. ' +
     'Renvoyez-le si vous voulez qu’on le voie.',
+  // L'ATTENTE, CÔTÉ CLIENT : on ne lui décrit pas l'écran de notre session — c'est notre rouage.
+  // On lui dit ce qui compte pour lui : son message est gardé, il partira, il n'a rien à refaire.
+  mise_en_attente: () =>
+    'Votre message nous est bien parvenu, mais votre interlocuteur ne peut pas le recevoir à l’instant. ' +
+    'Nous le gardons et le lui transmettrons dès que possible — vous n’avez rien à renvoyer. ' +
+    'Pour le retirer d’ici là, répondez « annule » dans le fil de votre message.',
+  attente_pleine: () =>
+    'Votre interlocuteur ne peut pas recevoir de message à l’instant, et plusieurs attendent déjà : ' +
+    'celui-ci n’a pas été transmis. Renvoyez-le un peu plus tard.',
+  remis_apres_attente: () => 'Votre message mis de côté vient d’être transmis à votre interlocuteur.',
+  attente_expiree: () =>
+    'Votre message mis de côté n’a pas pu être transmis à temps à votre interlocuteur, et nous ne le gardons plus. ' +
+    'Il reste lisible ci-dessus : renvoyez-le si c’est toujours d’actualité.',
+  attente_annulee: () => 'C’est retiré : votre message mis de côté ne sera pas transmis.',
 };
 
 const REGISTRES = { interne: INTERNE, client: CLIENT };

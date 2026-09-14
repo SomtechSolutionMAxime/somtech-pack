@@ -112,6 +112,17 @@ const RECONNEXION_MAX = 60_000;
 /** Cadence du chien de garde : à quelle fréquence on vérifie qu'on écoute VRAIMENT. */
 const SURVEILLANCE = 30_000;
 
+/**
+ * LES BORNES DES MESSAGES GARDÉS (T-20260818-0067) — un message qu'un écran de choix empêchait
+ * de remettre attend au plus un jour, et un pane n'en garde pas plus de vingt.
+ *
+ * ⚠️ AU-DELÀ, ON LE DIT, ON N'ABANDONNE JAMAIS EN SILENCE : l'expiré est recopié à son auteur,
+ * le refusé faute de place lui est annoncé comme non remis. Une file qui perdrait des messages
+ * sans le dire recréerait le défaut qu'elle ferme, en pire — son auteur croirait avoir été gardé.
+ */
+export const ATTENTE_DUREE_MAX_MS = 24 * 60 * 60 * 1000;
+export const ATTENTE_MAX_PAR_PANE = 20;
+
 function maintenant() {
   return new Date().toISOString();
 }
@@ -242,6 +253,11 @@ export class Veilleur {
     this.surArret = surArret || null;
     this.attente = RECONNEXION_MIN;
     this.arrete = false;
+    // Les messages qu'un écran de choix empêchait de remettre, par pane, dans l'ordre d'arrivée
+    // (T-20260818-0067). ⚠️ EN MÉMOIRE SEULEMENT : un redémarrage du veilleur les perd, sans
+    // prévenir leur auteur. C'est une limite connue et nommée, pas une garantie.
+    this.messagesGardes = new Map();
+    this.relancesEnCours = new Set();
   }
 
   /**
@@ -1993,6 +2009,11 @@ export class Veilleur {
       this.balayageEnCours = true;
       this.unTour()
         .catch((err) => journaliser(`balayage — le tour a échoué : ${err?.message || err}`))
+        // ⚠️ LA RELANCE DES MESSAGES GARDÉS PREND LA MÊME RONDE (T-20260818-0067). Pas de
+        // minuteur de plus : un second intervalle serait un second réglage invisible depuis
+        // celui qu'on annonce, et un second minuteur à éteindre à l'arrêt.
+        .then(() => this.relancerLesAttentes())
+        .catch((err) => journaliser(`relance des messages gardés — la passe a échoué : ${err?.message || err}`))
         .finally(() => {
           this.balayageEnCours = false;
         });
@@ -2480,6 +2501,16 @@ export class Veilleur {
       return;
     }
 
+    // « annule » DANS LE FIL D'UN MESSAGE GARDÉ LE RETIRE (T-20260818-0067) — le seul geste
+    // offert au dirigeant sur un message en attente, et il se fait depuis Slack. Il ne vaut QUE
+    // dans le fil d'un message réellement gardé : ailleurs, « annule » reste une parole comme
+    // une autre et suit le chemin ordinaire — on ne devine pas à quoi il s'adresse.
+    if (ev.thread_ts && ev.thread_ts !== ev.ts && /^annule[.!]?$/i.test(texte) && this.retirerUnMessageGarde(ligne, ev.thread_ts)) {
+      journaliser(`message gardé retiré par son auteur — #${ligne.canal_nom} (${ev.thread_ts})`);
+      await this.repondreEnPropre(ligne, 'attente_annulee');
+      return;
+    }
+
     // RIEN À REMETTRE N'EST PAS UNE RAISON DE SE TAIRE. Un texte vide sortait d'ici sans un
     // mot ; l'auteur croyait avoir été entendu et attendait une réponse qui ne viendrait
     // jamais. Le contrôle arrive APRÈS l'autorisation, volontairement : dire à un intrus que
@@ -2519,27 +2550,42 @@ export class Veilleur {
     // serait écrire pour personne, en prenant le risque pour rien.
     const { pieces, refus } = await this.recueillirPieces(ligne, fichiers);
 
+    // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
+    // dans son terminal, et son interlocuteur conclut que rien n'est arrivé.
+    //
+    // Le cadre suit la NATURE de la ligne : sur une ligne cliente, il nomme l'auteur réel
+    // et rappelle à l'agent que ces mots sont une demande, pas une consigne du dirigeant.
+    //
+    // ⚠️ IL EST CALCULÉ UNE FOIS, AVANT LA REMISE (T-20260818-0067) : c'est CE texte-là qu'un
+    // message gardé relivrera — tel quel, sans être recadré ni fusionné avec un autre.
+    const cadre = cadrerPourAgent({
+      chantier: ligne.chantier,
+      texte,
+      canal: ligne.canal_nom,
+      nature: natureDe(ligne),
+      auteur: await this.nomDeLAuteur(ligne, ev.user),
+      pieces,
+      piecesManquantes: refus.length,
+      modifie: Boolean(ev.modifie),
+    });
+    const garde = { canal_id: ligne.canal_id, texte: cadre, texteBrut: texte, ts: ev.ts, auteur: ev.user, refus, depuis: Date.now() };
+
+    // ⚠️ D'AUTRES MESSAGES ATTENDENT DÉJÀ SUR CETTE LIGNE : L'ORDRE D'ABORD. Remettre le neuf
+    // directement le ferait arriver AVANT ceux que son auteur a écrits plus tôt — un « non,
+    // finalement » lu avant la question. On relance donc la file ; s'il en reste, le neuf
+    // prend sa place derrière, et il partira avec eux.
+    if (this.messagesGardesDe(ligne.canal_id).length) {
+      await this.relancerUneLigne(ligne.canal_id);
+      const restants = this.messagesGardesDe(ligne.canal_id);
+      if (restants.length) {
+        await this.garderLeMessage(ligne, { ...garde, ecran: restants[restants.length - 1].ecran });
+        return;
+      }
+    }
+
     let remise;
     try {
-      // On remet la parole CADRÉE, jamais brute : un agent qui reçoit un message nu répond
-      // dans son terminal, et son interlocuteur conclut que rien n'est arrivé.
-      //
-      // Le cadre suit la NATURE de la ligne : sur une ligne cliente, il nomme l'auteur réel
-      // et rappelle à l'agent que ces mots sont une demande, pas une consigne du dirigeant.
-      remise = await this.herdr.remettre(
-        ligne.pane,
-        cadrerPourAgent({
-          chantier: ligne.chantier,
-          texte,
-          canal: ligne.canal_nom,
-          nature: natureDe(ligne),
-          auteur: await this.nomDeLAuteur(ligne, ev.user),
-          pieces,
-          piecesManquantes: refus.length,
-          modifie: Boolean(ev.modifie),
-        }),
-        { socket: ligne.herdr_socket }
-      );
+      remise = await this.herdr.remettre(ligne.pane, cadre, { socket: ligne.herdr_socket });
       journaliser(`remis — #${ligne.canal_nom} → ${ligne.pane} (${texte.length} car., ${pieces.length} pièce(s))`);
 
       // ═══ LE CROCHET, ET SEULEMENT SI L'AGENT A PRIS (T-20260815-0011).
@@ -2561,6 +2607,21 @@ export class Veilleur {
         journaliser(`crochet NON posé — #${ligne.canal_nom} → ${ligne.pane} : la prise n'a pas été constatée`);
       }
     } catch (err) {
+      // ═══ UN ÉCRAN DE CHOIX N'EST PLUS UNE IMPASSE POUR LE DIRIGEANT (T-20260818-0067).
+      //
+      // Mesuré le 2026-09-14 : devant un dialogue, il recevait « va voir l'écran (« herdr agent
+      // focus … »), réponds au dialogue toi-même, puis renvoie ton message » — un geste de
+      // terminal adressé à quelqu'un qui est au téléphone, et son texte perdu. On GARDE donc le
+      // message et on le relance ; on lui dit qu'il n'a rien à refaire.
+      //
+      // ⚠️ L'ABSTENTION NE BOUGE PAS D'UN OCTET : `remettre` a refusé AVANT d'écrire, et la
+      // relance repassera par ce même `remettre`, donc par la même garde. Seule la PAROLE
+      // adressée au dirigeant change — les appelants terminal gardent le refus et son geste.
+      if (err?.ecran === 'dialogue' || err?.ecran === 'inconnu') {
+        journaliser(`gardé — #${ligne.canal_nom} → ${ligne.pane} : écran ${err.ecran}, relance à la prochaine ronde`);
+        await this.garderLeMessage(ligne, { ...garde, ecran: err.ecran });
+        return;
+      }
       await this.repondreEnPropre(ligne, 'echec_remise', { erreur: err.message });
       journaliser(`ÉCHEC de remise — #${ligne.canal_nom} → ${ligne.pane} : ${err.message}`);
       return;
@@ -2575,12 +2636,142 @@ export class Veilleur {
     // Chaque cause est nommée à son propre point d'appel, en toutes lettres. C'est plus long
     // qu'une boucle, et c'est voulu : la garde structurelle qui empêche une phrase interne de
     // partir chez un client lit les points d'appel, pas les variables qui les traversent.
+    //
+    // ⚠️ ELLES VIVENT DANS UNE MÉTHODE DEPUIS T-20260818-0067, parce qu'un message gardé les doit
+    // AUSSI — mais à SA remise, pas à sa mise en attente : « le message est bien remis, mais… »
+    // dit avant qu'il le soit serait faux. Une seule écriture pour les deux chemins.
+    await this.direCeQuiNaPasSuivi(ligne, refus);
+  }
+
+  /** Les pièces qui n'ont pas suivi un message REMIS — une phrase par raison (RA-REL-010). */
+  async direCeQuiNaPasSuivi(ligne, refus = []) {
     const causes = new Set(refus.map((r) => r.cause));
     if (causes.has('piece_trop_lourde')) await this.repondreEnPropre(ligne, 'piece_trop_lourde');
     if (causes.has('piece_type_refuse')) await this.repondreEnPropre(ligne, 'piece_type_refuse');
     if (causes.has('piece_non_recuperee')) {
       const detail = refus.find((r) => r.cause === 'piece_non_recuperee');
       await this.repondreEnPropre(ligne, 'piece_non_recuperee', { erreur: detail?.detail });
+    }
+  }
+
+  // ———————————————————————————————————————— les messages gardés devant un écran de choix
+
+  /**
+   * LES MESSAGES GARDÉS (T-20260818-0067) — la parole du dirigeant qu'un écran de choix
+   * empêchait de remettre, et qu'on ne lui rend plus comme une impasse.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════════════════
+   * CE QUE CE MÉCANISME EST, ET CE QU'IL N'EST PAS
+   *
+   * Il GARDE et il RELANCE. Il ne franchit rien : aucune garde d'écran n'est écrite ici. La
+   * relance rappelle `this.herdr.remettre`, qui relit l'écran et refuse de nouveau tant qu'un
+   * dialogue ou un écran inconnu est là — une seconde copie de la garde n'hériterait pas des
+   * corrections de la première, et c'est le motif « une porte sur deux » que ce dépôt a payé.
+   *
+   * ⚠️ PAR LIGNE, PAS PAR PANE : la ligne est ce que le dirigeant voit, et un successeur qui
+   * reprend la ligne sur un autre pane doit recevoir ce qui l'attendait. La remise vise donc le
+   * pane que porte la ligne AU MOMENT de la relance, jamais celui du refus.
+   *
+   * ⚠️ EN MÉMOIRE SEULEMENT — [limite connue] : un redémarrage du veilleur perd la file sans
+   * rien dire à personne. Le texte reste lisible dans le canal Slack, mais son auteur, qui a lu
+   * « gardé », n'apprendra pas qu'il ne l'est plus.
+   */
+  messagesGardesDe(canalId) {
+    return this.messagesGardes.get(canalId) || [];
+  }
+
+  async garderLeMessage(ligne, garde) {
+    const file = this.messagesGardesDe(ligne.canal_id);
+    if (file.length >= ATTENTE_MAX_PAR_PANE) {
+      journaliser(`NON gardé — #${ligne.canal_nom} : ${file.length} messages attendent déjà`);
+      await this.repondreEnPropre(ligne, 'attente_pleine', { max: ATTENTE_MAX_PAR_PANE });
+      return false;
+    }
+    file.push(garde);
+    this.messagesGardes.set(ligne.canal_id, file);
+    await this.repondreEnPropre(ligne, 'mise_en_attente', { ecran: garde.ecran });
+    return true;
+  }
+
+  /** Retire le message gardé désigné par l'horodatage Slack de son fil. Rend `true` s'il y était. */
+  retirerUnMessageGarde(ligne, ts) {
+    const file = this.messagesGardesDe(ligne.canal_id);
+    const i = file.findIndex((g) => g.ts === ts);
+    if (i < 0) return false;
+    file.splice(i, 1);
+    if (!file.length) this.messagesGardes.delete(ligne.canal_id);
+    return true;
+  }
+
+  /**
+   * UNE PASSE DE RELANCE — portée par la ronde du balayeur, et appelable seule.
+   *
+   * @param maintenantMs l'horloge, injectée : l'expiration d'un jour s'éprouve sans attendre un jour.
+   */
+  async relancerLesAttentes(maintenantMs = Date.now()) {
+    if (this.arrete) return;
+    for (const canalId of [...this.messagesGardes.keys()]) {
+      await this.relancerUneLigne(canalId, maintenantMs);
+    }
+  }
+
+  /**
+   * Relance la file d'UNE ligne, dans l'ordre, UN message à la fois — et s'arrête au premier
+   * qui ne passe pas : le suivant ne double jamais celui qui attend.
+   *
+   * ⚠️ TOUJOURS BLOQUÉ → RIEN. Ni écriture (la garde de `remettre` a refusé avant d'écrire), ni
+   * parole : le dirigeant sait déjà que son message est gardé, le lui redire chaque minute
+   * rendrait la ligne illisible — et une ligne qu'on cesse de lire perd le message suivant.
+   */
+  async relancerUneLigne(canalId, maintenantMs = Date.now()) {
+    if (this.relancesEnCours.has(canalId)) return;
+    this.relancesEnCours.add(canalId);
+    const file = this.messagesGardesDe(canalId);
+    try {
+      while (file.length) {
+        const garde = file[0];
+        const ligne = ligneParCanal(this.registre, canalId);
+        if (!ligne) {
+          journaliser(`messages gardés abandonnés — canal ${canalId} sans ligne au registre (${file.length})`);
+          file.length = 0;
+          break;
+        }
+        if (ligne.close_le) {
+          file.length = 0;
+          await this.repondreEnPropre(ligne, 'ligne_close');
+          break;
+        }
+        // L'EXPIRATION AVANT LA REMISE : un ordre vieux d'un jour, livré sans que son auteur le
+        // sache encore d'actualité, serait un ordre que personne n'a redonné. On le lui rend.
+        if (maintenantMs - garde.depuis > ATTENTE_DUREE_MAX_MS) {
+          file.shift();
+          journaliser(`message gardé expiré — #${ligne.canal_nom} : recopié à son auteur`);
+          await this.repondreEnPropre(ligne, 'attente_expiree', {
+            texte: garde.texteBrut,
+            heures: Math.round(ATTENTE_DUREE_MAX_MS / 3_600_000),
+          });
+          continue;
+        }
+        let remise;
+        try {
+          remise = await this.herdr.remettre(ligne.pane, garde.texte, { socket: ligne.herdr_socket });
+        } catch (err) {
+          if (err?.ecran) garde.ecran = err.ecran;
+          journaliser(`toujours gardé — #${ligne.canal_nom} → ${ligne.pane} : ${String(err?.message || err).split('\n')[0]}`);
+          break;
+        }
+        file.shift();
+        journaliser(`message gardé remis — #${ligne.canal_nom} → ${ligne.pane}`);
+        if (remise?.pris && garde.ts) {
+          const pose = await this.slack.poserCrochet(this.jetons.robot, ligne.canal_id, garde.ts);
+          if (!pose) journaliser(`crochet non posé — #${ligne.canal_nom} (le message gardé est bien arrivé)`);
+        }
+        await this.repondreEnPropre(ligne, 'remis_apres_attente', { pris: Boolean(remise?.pris) });
+        await this.direCeQuiNaPasSuivi(ligne, garde.refus);
+      }
+    } finally {
+      if (!file.length && this.messagesGardes.get(canalId) === file) this.messagesGardes.delete(canalId);
+      this.relancesEnCours.delete(canalId);
     }
   }
 
