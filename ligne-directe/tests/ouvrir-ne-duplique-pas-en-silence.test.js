@@ -346,6 +346,20 @@ test('--canal NE CHANGE PAS LA CONFIDENTIALITÉ D’UN CANAL — un public ne po
   });
 });
 
+test('--canal NE CHANGE PAS LA CONFIDENTIALITÉ D’UN CANAL — un privé ne porte pas une ligne interne', async () => {
+  // L'AUTRE MOITIÉ DE LA MÊME GARDE, éprouvée à part : une garde réduite au seul sens
+  // « public refusé au client » laissait toute la suite verte (revue de fond, passe 2). Le canal
+  // privé d'un client ne doit pas devenir, par --canal, la ligne interne d'un chantier.
+  const prive = { id: 'CPRIV', name: 'client-acme', is_private: true, membres: [UMOI] };
+  await avecPoste({ canaux: [prive] }, async ({ monde, ld }) => {
+    const r = await ld(['ouvrir', 'j-9', '--au-dirigeant', '--canal', 'CPRIV'], { pane: 'w1:p1', wt: WT_A });
+    assert.notEqual(r.code, 0, r.stdout);
+    assert.match(r.stderr, /est privé/, 'le refus nomme la confidentialité — pas une panne d’à côté');
+    assert.equal(ouvertes().length, 0);
+    assert.equal(creations(monde), 0);
+  });
+});
+
 test('--canal SUR UN CANAL ARCHIVÉ EST REFUSÉ — personne n’y écrirait', async () => {
   const archive = { id: 'CARCH', name: 'vieux', is_private: false, is_archived: true, membres: [UMOI, UDIR] };
   await avecPoste({ canaux: [archive] }, async ({ ld }) => {
