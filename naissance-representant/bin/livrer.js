@@ -150,6 +150,11 @@ async function main() {
         delivre: Boolean(resultat.delivre),
         causeDelivre: resultat.causeDelivre,
         boite: resultat.boite ?? null,
+        // `cause` et `gestes` — POURQUOI ON REND LA MAIN, ET CE QUI A DÉJÀ ÉTÉ POSÉ (T-20260818-0003).
+        // Un budget épuisé n'est pas un obstacle vu : sans le champ, l'appelant ne lirait qu'une
+        // prose à trier par mots, et ne saurait pas qu'un brief a peut-être déjà été écrit.
+        cause: resultat.cause ?? null,
+        gestes: resultat.gestes ?? [],
       })}\n`
     );
     process.exit(1);
