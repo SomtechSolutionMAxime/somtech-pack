@@ -291,13 +291,25 @@ test('UNE REPRISE ORDINAIRE N’AVERTIT DE RIEN — l’avis ne se déclenche qu
 test('DEUX COPIES DE TRAVAIL SANS LIEU D’AGENT RESTENT DEUX LIGNES — le remède naïf est écarté', async () => {
   // Le ticket le dit : confondre deux agents ordinaires du même chantier produirait un routage
   // croisé. Un chemin qui ne porte AUCUN lieu de rôle reste donc distinctif de bout en bout.
+  //
+  // ⚠️ DEPUIS T-20260818-0026, LA SÉPARATION SE DEMANDE. Sans option, la seconde ouverture est
+  // REFUSÉE sans rien créer — on ne sait pas si c'est le même agent renaissant ailleurs — et le
+  // refus nomme les deux sorties. La séparation, elle, n'est ni retirée ni affaiblie : les deux
+  // clés restent distinctes, et `--distincte` ouvre la seconde ligne exactement comme avant.
   await avecPoste({}, async ({ monde, ld }) => {
     const a = await ld(['ouvrir', 'j-9', '--titre', 'Chantier neuf', '--au-dirigeant'], {
       pane: 'w1:p1',
       wt: '/Users/x/worktrees/pack/20260801-000000',
     });
     assert.equal(a.code, 0, a.stderr);
-    const b = await ld(['ouvrir', 'j-9', '--titre', 'Chantier neuf', '--au-dirigeant'], {
+    const sansOption = await ld(['ouvrir', 'j-9', '--titre', 'Chantier neuf', '--au-dirigeant'], {
+      pane: 'w2:p7',
+      wt: '/Users/x/worktrees/pack/20260802-000000',
+    });
+    assert.notEqual(sansOption.code, 0, 'sans --distincte, la seconde ligne n’est pas ouverte en silence');
+    assert.equal(monde.canaux.length, 1, 'et le refus n’a créé AUCUN canal');
+    assert.equal(chargerRegistre().lignes.filter((l) => !l.close_le).length, 1);
+    const b = await ld(['ouvrir', 'j-9', '--titre', 'Chantier neuf', '--au-dirigeant', '--distincte'], {
       pane: 'w2:p7',
       wt: '/Users/x/worktrees/pack/20260802-000000',
     });

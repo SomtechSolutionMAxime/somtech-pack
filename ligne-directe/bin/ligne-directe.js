@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 // ligne-directe — la commande que tape un agent.
 //
-//   ligne-directe ouvrir <chantier> [--sujet "..."] [--inviter courriel]
+//   ligne-directe ouvrir <chantier> [--titre "..."] [--sujet "..."] [--inviter courriel]
+//                        [--nature client] [--jetable] [--au-dirigeant] [--au-gestionnaire <nom>]
+//                        [--canal <canal_id>] [--distincte]
+//                        --canal : vise un canal EXISTANT (reprise si une ligne le porte), sans
+//                                  jamais dériver son nom du titre ni créer de canal.
+//                        Si le chantier a déjà une ligne ouverte sous une autre ancre (et que
+//                        les deux ne sont pas deux lieux de rôle distincts), le geste est REFUSÉ
+//                        sans rien créer : --canal <id> pour la reprendre, --distincte pour
+//                        ouvrir volontairement une seconde ligne.
 //   ligne-directe dire "..."
 //   ligne-directe demander "..."
 //   ligne-directe fermer [--bilan "..."] [--sans-archiver]
@@ -70,6 +78,24 @@ function usage(code = 0) {
                                                            la ligne n'est alors PAS ouverte.
                                                            S'utilise aussi a la REPRISE, pour accueillir
                                                            un gestionnaire sur une ligne deja ouverte.
+                    [--canal <canal_id>]                   VISE UN CANAL EXISTANT par son identifiant :
+                                                           aucun nom n'est derive du titre, aucun canal
+                                                           n'est cree. Si une ligne ouverte porte deja
+                                                           ce canal, c'est une REPRISE (pane et copie de
+                                                           travail rafraichis). Refuse sur un canal
+                                                           introuvable, archive, ou de confidentialite
+                                                           contraire a la nature. C'est aussi le moyen
+                                                           de retrouver son canal quand le registre
+                                                           local est perdu.
+                    [--distincte]                          Si ce chantier porte DEJA une ligne ouverte
+                                                           sous une autre ancre, ouvrir est REFUSE et
+                                                           rien n'est cree — sauf entre deux lieux de
+                                                           role distincts (.orchestrateur/...,
+                                                           .gestionnaire/...), qui restent deux lignes.
+                                                           Le refus nomme le canal existant et ses deux
+                                                           sorties : --canal <id> pour le reprendre, ou
+                                                           --distincte pour ouvrir VOLONTAIREMENT une
+                                                           seconde ligne.
   dire "texte" [--a <ligne>]                               rapporte un jalon
   demander "texte" [--a <ligne>]                           sollicite un arbitrage
   fermer [--bilan "texte"] [--sans-archiver] [--a <ligne>] referme la ligne
@@ -286,6 +312,12 @@ if (geste === 'relever') {
       // les deux sens. C'est une VALEUR, pas un drapeau — le nom d'agent est ce qui permet au
       // veilleur de le retrouver chez herdr, et un nom qu'on ne trouve pas est un REFUS.
       au_gestionnaire: option(args, '--au-gestionnaire'),
+      // `--canal <id>` VISE UN CANAL EXISTANT (T-20260908-0057) : le veilleur ne dérive aucun nom
+      // du titre et n'appelle jamais la création. Transmis tel quel ; c'est le veilleur qui vérifie.
+      canal_id: option(args, '--canal'),
+      // `--distincte` : seconde ligne VOULUE sur un chantier déjà ouvert ailleurs (T-20260818-0026).
+      // Lu par `optionDonnee`, jamais par `includes` : `--titre "--distincte"` ne le porte pas.
+      distincte: optionDonnee(args, '--distincte').presente,
     })
   );
 } else if (geste === 'dire' || geste === 'demander') {

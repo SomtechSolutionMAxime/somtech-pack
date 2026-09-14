@@ -108,7 +108,14 @@ test('DEUX WORKTREES DU MÊME CHANTIER obtiennent DEUX canaux — vérifié sur 
   const v = veilleur({ slack: s, herdr: { async agents() { return []; } } });
 
   const a = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w1:p1', worktree: '/w/a' });
-  const b = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w2:p2', worktree: '/w/b' });
+  // Depuis T-20260818-0026, sans option la seconde ouverture est REFUSÉE sans rien créer ; la
+  // séparation se demande par `distincte`, et c'est elle que ce banc éprouve.
+  const refus = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w2:p2', worktree: '/w/b' });
+  assert.equal(refus.ok, false, 'sans distincte, pas de second canal en silence');
+  assert.equal(refus.motif, 'ligne_deja_ouverte_ailleurs');
+  assert.equal(s.crees.length, 1, 'le refus n’a créé aucun canal');
+  assert.equal(lignesOuvertes(chargerRegistre()).length, 1);
+  const b = await v.ouvrir({ invites: ['UDIR'], chantier: 'D-20260805-0004', pane: 'w2:p2', worktree: '/w/b', distincte: true });
 
   assert.equal(a.ok && b.ok, true);
   assert.notEqual(a.canal, b.canal, 'deux copies de travail du même dépôt ne doivent pas partager un canal');

@@ -59,6 +59,7 @@ import {
   lignesOuvertes,
   ligneParCanal,
   ligneOuverteParCle,
+  doublonsPossibles,
   nomsPris,
   cleDeLigne,
   inscrireLigne,
@@ -498,6 +499,12 @@ export class Veilleur {
     au_dirigeant: auDirigeant = false,
     au_gestionnaire: auGestionnaire = null,
     herdr_socket: herdrSocket = null,
+    // `--canal <id>` : la ligne vise CE canal, qui existe déjà (T-20260908-0057). Aucun nom n'est
+    // dérivé du titre, `creerCanal` n'est jamais appelé.
+    canal_id: canalVise = null,
+    // `--distincte` : ouvrir VOLONTAIREMENT une seconde ligne sur un chantier qui en porte déjà
+    // une sous une autre ancre (T-20260818-0026). Sans lui, ce cas est refusé.
+    distincte = false,
   }) {
     if (!chantier) return { ok: false, erreur: 'chantier requis' };
     if (!pane) return { ok: false, erreur: 'pane requis' };
@@ -577,7 +584,42 @@ export class Veilleur {
       pair = r.pair;
     }
 
-    const deja = ligneOuverteParCle(this.registre, chantier, worktree);
+    let deja = ligneOuverteParCle(this.registre, chantier, worktree);
+
+    // ═══ `--canal <id>` — LE CANAL EST NOMMÉ, PAS DEVINÉ (T-20260908-0057).
+    //
+    // Si une ligne ouverte porte déjà ce canal, c'est une REPRISE : on passe par la branche de
+    // reprise ci-dessous, avec toutes ses gardes, et la ligne suit le pane et la copie de travail
+    // de celui qui la reprend. C'est la sortie que le refus de doublon nomme.
+    const canalCible = String(canalVise ?? '').trim() || null;
+    if (canalCible) {
+      const porteuse = lignesOuvertes(this.registre).find((l) => l.canal_id === canalCible) || null;
+      if (porteuse && String(porteuse.chantier).toLowerCase() !== String(chantier).toLowerCase()) {
+        // Un canal ne porte qu'une ligne. Rattacher le chantier X à la ligne du chantier Y ferait
+        // parler un agent dans le canal d'un autre chantier — le routage croisé qu'on combat.
+        return {
+          ok: false,
+          motif: 'canal_dune_autre_ligne',
+          erreur:
+            `#${porteuse.canal_nom} (${canalCible}) porte déjà la ligne ouverte de « ${porteuse.chantier} » — ` +
+            `un canal ne porte qu'une ligne, « ${chantier} » ne s'y ouvre pas. Aucun canal n'a été créé.`,
+        };
+      }
+      if (deja && deja.canal_id !== canalCible) {
+        // Ta ligne existe déjà, sur un autre canal : suivre `--canal` laisserait deux lignes à la
+        // même clé, et la sélection par clé rendrait l'une ou l'autre selon l'ordre du registre.
+        return {
+          ok: false,
+          motif: 'ligne_deja_sur_un_autre_canal',
+          erreur:
+            `ta ligne de « ${deja.chantier} » est déjà ouverte sur #${deja.canal_nom} (${deja.canal_id}) — ` +
+            `« --canal ${canalCible} » viserait un second canal. Referme-la d'abord si c'est voulu. ` +
+            `Aucun canal n'a été créé.`,
+        };
+      }
+      if (porteuse) deja = porteuse;
+    }
+
     if (deja) {
       // ⚠️ LA REPRISE EST LA BRANCHE QUI A MENTI CINQ FOIS. Ce qui suit — la garde de ligne
       // muette et la preuve par les membres — vaut ICI AUTANT QU'À LA CRÉATION, et c'est
@@ -685,11 +727,74 @@ export class Veilleur {
     // le voit dans sa barre latérale à longueur de journée. Le repli qui rend service en
     // interne est exactement ce qu'on refuse ici — et il est irréparable, Slack ne renomme
     // pas un canal sans que tout le monde le remarque. On refuse, plutôt.
+    // ═══ AUCUNE LIGNE PAR LA CLÉ — MAIS PEUT-ÊTRE LA MÊME LIGNE SOUS UNE AUTRE ANCRE
+    // (T-20260818-0026).
+    //
+    // Mesuré au banc après T-20260827-0033 : un agent SANS lieu de rôle, ligne ouverte sur X
+    // depuis la copie A, redemande X depuis la copie B. Les deux chemins sont deux clés, donc
+    // aucune reprise ; `nomsPris` voyait le nom retenu par la première ligne et fabriquait un
+    // `-2`, créé en silence, `ok:true`, deux lignes ouvertes au registre. Personne ne l'avait
+    // demandé et rien ne le disait.
+    //
+    // ⚠️ ON NE REPREND PAS D'OFFICE : le repli « chemin tel quel » est VOULU, deux agents
+    // ordinaires du même chantier doivent pouvoir rester distincts. Et on ne crée pas d'office
+    // non plus. On REFUSE, avant toute création, en nommant le canal existant et les deux sorties
+    // — c'est l'appelant qui sait s'il est le même agent.
+    //
+    // ⚠️ DEUX LIEUX DE RÔLE DISTINCTS NE SONT PAS UN DOUBLON : ce sont deux agents par
+    // construction, et trois représentants partagent légitimement « dirigeant » (voir
+    // `doublonsPossibles`).
+    if (!distincte) {
+      const doublons = doublonsPossibles(this.registre, chantier, worktree);
+      if (doublons.length) {
+        const [premiere] = doublons;
+        const liste = doublons
+          .map((l) => `#${l.canal_nom} (${l.canal_id}), portée par ${l.pane || 'un pane inconnu'} depuis ${l.worktree || 'une copie de travail inconnue'}`)
+          .join(' ; ');
+        journaliser(`ouverture refusée — ${chantier} : ${doublons.length} ligne(s) déjà ouverte(s) sous une autre ancre`);
+        return {
+          ok: false,
+          cree: false,
+          motif: 'ligne_deja_ouverte_ailleurs',
+          existante: { chantier: premiere.chantier, canal: premiere.canal_nom, canal_id: premiere.canal_id, pane: premiere.pane, worktree: premiere.worktree || null },
+          existantes: doublons.map((l) => ({ chantier: l.chantier, canal: l.canal_nom, canal_id: l.canal_id, pane: l.pane, worktree: l.worktree || null })),
+          erreur:
+            `« ${chantier} » a déjà ${doublons.length > 1 ? `${doublons.length} lignes ouvertes — AMBIGU` : 'une ligne ouverte'} : ${liste}. ` +
+            `La ligne n'est pas ouverte et AUCUN canal n'a été créé : rien ne dit si c'est la tienne renaissant ` +
+            `ailleurs ou celle d'un autre agent.\n` +
+            `  • c'est ta ligne, reprends-la :  ligne-directe ouvrir ${chantier} --canal ${premiere.canal_id}\n` +
+            `  • tu veux VOLONTAIREMENT une seconde ligne sur ce chantier :  ajoute --distincte`,
+        };
+      }
+    } else {
+      const deja2 = doublonsPossibles(this.registre, chantier, worktree);
+      if (deja2.length) {
+        avertissementsAvant.push(
+          `« ${chantier} » portera ${deja2.length + 1} lignes ouvertes (--distincte) — ` +
+            `${deja2.map((l) => `#${l.canal_nom} (${l.canal_id})`).join(', ')} reste(nt) ouverte(s) à côté.`
+        );
+      }
+    }
+
+    // `--jetable` SUR UN CANAL QU'ON N'A PAS CRÉÉ : refermer la ligne l'archiverait, et un canal
+    // archivé ne se rouvre pas avec notre jeton. On ne signe pas la destruction d'un canal qui
+    // existait avant nous.
+    if (canalCible && jetable === true) {
+      return {
+        ok: false,
+        erreur:
+          `--jetable avec --canal ${canalCible} est refusé : refermer la ligne archiverait un canal qui existait ` +
+          `avant elle, et notre robot ne sait pas le désarchiver. Ouvre sans --jetable.`,
+      };
+    }
+
     const muette = refusLigneMuette(natureVoulue, invitesEffectifs, chantier);
     if (muette) return muette;
 
     const titreUtile = String(titre ?? '').trim();
-    if (natureVoulue === 'client' && !titreUtile) {
+    // Avec `--canal`, le titre ne nomme plus le canal : la ligne signe alors du nom du canal, que
+    // le client voit déjà. L'exigence ne tient que là où le code du chantier deviendrait le nom.
+    if (natureVoulue === 'client' && !titreUtile && !canalCible) {
       return {
         ok: false,
         erreur:
@@ -698,19 +803,23 @@ export class Veilleur {
       };
     }
 
-    // `saufCle` : sa propre ligne close ne lui fait pas concurrence — sans quoi refermer puis
-    // rouvrir le même chantier repartirait sur un « -2 » (T-20260814-0085, relevé en revue).
-    const pris = nomsPris(this.registre, { saufCle: cleDeLigne(chantier, worktree) });
-    // Le NOM vient du titre. En interne, le CODE part dans le sujet du canal — il reste donc
-    // lisible d'un coup d'œil sans encombrer le nom.
-    const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));
     const visage = visageDe(chantier);
 
     // LA CONFIDENTIALITÉ SE JOUE ICI : Slack fixe la nature d'un canal à sa création et ne
     // la change plus jamais. Un canal client né public le reste.
     const privePrevu = natureVoulue === 'client';
     let canal;
-    try {
+    if (canalCible) {
+      const vise = await this.canalVise(canalCible, privePrevu, natureVoulue, chantier);
+      if (!vise.ok) return vise;
+      canal = vise.canal;
+    } else try {
+      // `saufCle` : sa propre ligne close ne lui fait pas concurrence — sans quoi refermer puis
+      // rouvrir le même chantier repartirait sur un « -2 » (T-20260814-0085, relevé en revue).
+      const pris = nomsPris(this.registre, { saufCle: cleDeLigne(chantier, worktree) });
+      // Le NOM vient du titre. En interne, le CODE part dans le sujet du canal — il reste donc
+      // lisible d'un coup d'œil sans encombrer le nom.
+      const nom = nomDeCanal(libelleDeCanal(chantier, titre), (n) => pris.has(n));
       canal = await this.slack.creerCanal(this.jetons.robot, nom, privePrevu);
     } catch (err) {
       // Le nom vient du TITRE du chantier. Une ligne client titrée du nom de son client
@@ -742,7 +851,7 @@ export class Veilleur {
         ok: false,
         erreur:
           `#${canal.nom} est le canal commun, celui qui porte les consignes du dirigeant à TOUS les agents : ` +
-          `aucune ligne ne s'y ouvre. Donne un autre titre à ce chantier.`,
+          `aucune ligne ne s'y ouvre. ${canalCible ? 'Vise un autre canal.' : 'Donne un autre titre à ce chantier.'}`,
       };
     }
 
@@ -772,7 +881,9 @@ export class Veilleur {
     // pas de sujet à dire, on n'en pose aucun plutôt que d'y mettre le code par défaut.
     const sujetComplet =
       natureVoulue === 'client' ? String(sujet ?? '').trim() : [chantier, sujet].filter(Boolean).join(' — ');
-    if (sujetComplet) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetComplet);
+    // Un canal VISÉ existait avant nous : on n'écrase son sujet que si on nous en donne un.
+    const sujetAPoser = canalCible && !String(sujet ?? '').trim() ? '' : sujetComplet;
+    if (sujetAPoser) await this.slack.definirSujet(this.jetons.robot, canal.id, sujetAPoser);
 
     // LA MÊME PREUVE QU'À LA REPRISE, PAR LE MÊME CHEMIN — et c'est le point. Deux appels
     // d'invitation écrits séparément, c'est deux portes, et l'histoire de ce dépôt dit qu'une
@@ -815,7 +926,7 @@ export class Veilleur {
       // Le nom sous lequel la ligne se présente dans son canal — voir `libelleDeLigne`.
       // Inscrit à l'ouverture, jamais recalculé : le titre peut changer (`renommer`), et
       // c'est ce geste-là qui le met à jour, en même temps que le nom du canal.
-      libelle: natureVoulue === 'client' ? titreUtile : chantier,
+      libelle: natureVoulue === 'client' ? titreUtile || canal.nom : chantier,
       // Qui a le droit de piloter l'agent par cette ligne.
       //
       // Sur une ligne INTERNE, le canal est public : sans cette liste, n'importe quel
@@ -849,6 +960,58 @@ export class Veilleur {
       canal_reutilise: canal.reutilise,
       ...(pair ? { pair: { role: pair.role, nom: pair.nom, pane: pair.pane } } : {}),
     };
+  }
+
+  /**
+   * LE CANAL QU'UN `ouvrir --canal <id>` VISE — vérifié, jamais créé (T-20260908-0057).
+   *
+   * ⚠️ AUCUN NOM N'EST DÉRIVÉ ICI, ET `creerCanal` N'EST PAS APPELÉ. C'est tout l'objet : quand
+   * l'état local est perdu, dériver le nom du titre retombait sur un homonyme — un représentant
+   * posé sur un canal étranger. Ce qu'on rend porte le nom RÉEL du canal, lu chez Slack.
+   *
+   * Les mêmes gardes que la reprise d'un homonyme dans `creerCanal`, et pour la même raison :
+   * confidentialité égale à la nature, pas d'archivé, et on ne rejoint que si on n'y est pas.
+   */
+  async canalVise(canalId, privePrevu, nature, chantier) {
+    let info;
+    try {
+      info = await this.slack.infoCanal(this.jetons.robot, canalId);
+    } catch (err) {
+      const introuvable = err.code === 'channel_not_found';
+      journaliser(`ouverture refusée — ${chantier} : --canal ${canalId} illisible (${err.code || err.message})`);
+      return {
+        ok: false,
+        erreur: introuvable
+          ? `aucun canal ${canalId} visible de notre robot — la ligne n'est pas ouverte, et aucun canal n'a été créé ` +
+            `à sa place. Vérifie l'identifiant ; un canal PRIVÉ ne se voit que de l'intérieur : fais-y inviter le robot.`
+          : `le canal ${canalId} n'a pas pu être lu (${err.code || err.message}) — la ligne n'est pas ouverte.`,
+      };
+    }
+    if (info.archive) {
+      return {
+        ok: false,
+        erreur:
+          `#${info.nom} (${canalId}) est archivé — personne ne peut plus y écrire. Désarchive-le dans Slack ` +
+          `(un compte humain le peut, pas notre robot) ou vise un autre canal. La ligne n'est pas ouverte.`,
+      };
+    }
+    if (Boolean(info.prive) !== privePrevu) {
+      return {
+        ok: false,
+        erreur:
+          `#${info.nom} (${canalId}) est ${info.prive ? 'privé' : 'public'}, et une ligne ${nature} en exige un ` +
+          `${privePrevu ? 'privé' : 'public'} — un canal ne change pas de confidentialité. La ligne n'est pas ouverte.`,
+      };
+    }
+    if (!info.membre) {
+      try {
+        await this.slack.rejoindreCanal(this.jetons.robot, canalId, { nom: info.nom });
+      } catch (err) {
+        if (err.reessayable === false) return { ok: false, erreur: err.message };
+        throw err;
+      }
+    }
+    return { ok: true, canal: { id: canalId, nom: info.nom, prive: Boolean(info.prive), reutilise: true } };
   }
 
   /**
