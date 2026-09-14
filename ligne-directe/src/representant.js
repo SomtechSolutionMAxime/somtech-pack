@@ -54,7 +54,22 @@ export function retirerCeQuiAEteCommence(depotClient, client) {
  */
 export async function verifierCanalJoignable(jetonRobot, nomCanal) {
   const canal = await trouverCanal(jetonRobot, nomCanal);
-  if (!canal) return { joignable: false, motif: 'absent', canal: nomCanal };
+  // ⚠️ « ABSENT » EST CE QUE LE ROBOT VOIT, PAS CE QUI EST (T-20260806-0197). Mesuré en
+  // production : Slack ne rend à un jeton de robot aucun canal privé dont il n'est pas membre.
+  // Un canal privé du client où personne ne l'a encore invité — le cas le plus ordinaire — se
+  // voit donc exactement comme un canal inexistant, et le refus envoyait le faire CRÉER.
+  // On ne peut pas départager : le verdict porte les deux causes et les deux gestes, en faits.
+  // Le motif reste `absent` — c'est la clé que les appelants lisent, et elle dit vrai du point
+  // de vue du robot.
+  if (!canal) {
+    return {
+      joignable: false,
+      motif: 'absent',
+      canal: nomCanal,
+      causes: ['absent', 'prive_sans_robot'],
+      gestes: ['corriger_ou_faire_creer', 'invitation_humaine'],
+    };
+  }
 
   const membre = await estMembreDuCanal(jetonRobot, canal);
   if (!membre) return { joignable: false, motif: 'non_membre', canal: nomCanal, id: canal.id };
@@ -243,9 +258,26 @@ export async function verifierLignesDuRepresentant({
  */
 export function messageDeRefus(joignabilite) {
   if (joignabilite.motif === 'absent') {
+    // LE TEXTE SE CONSTRUIT DEPUIS LES GESTES DU VERDICT, pas en dur : un geste retiré du verdict
+    // disparaît du texte, et les deux ne peuvent pas diverger en silence (T-20260806-0197). Un
+    // verdict qui n'en porte pas — un appelant d'avant — reçoit les deux, parce qu'un canal
+    // introuvable par le robot peut toujours être un canal privé où il n'est pas invité.
+    const gestes = joignabilite.gestes ?? ['corriger_ou_faire_creer', 'invitation_humaine'];
+    const c = joignabilite.canal;
+    const phrases = [];
+    if (gestes.includes('corriger_ou_faire_creer')) {
+      phrases.push(`s'il n'existe pas, vérifie le nom, ou fais-le créer par un humain`);
+    }
+    if (gestes.includes('invitation_humaine')) {
+      phrases.push(
+        `s'il existe en canal privé, notre robot n'y a pas été invité — Slack ne lui montre aucun canal ` +
+          `privé dont il n'est pas membre : fais-le inviter à la main dans Slack ("/invite" depuis le canal)`
+      );
+    }
+    if (!phrases.length) return `le canal « ${c} » est introuvable par notre robot, et ce verdict ne porte aucun geste.`;
     return (
-      `le canal « ${joignabilite.canal} » est introuvable — vérifie le nom, ou fais-le créer ` +
-      `par un humain, puis relance.`
+      `le canal « ${c} » est introuvable par notre robot — ${phrases.length > 1 ? 'deux causes possibles, indiscernables de son côté : ' : ''}` +
+      `${phrases.join(' ; ')}, puis relance.`
     );
   }
   if (joignabilite.motif === 'non_membre') {

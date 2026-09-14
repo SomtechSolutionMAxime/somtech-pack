@@ -165,6 +165,19 @@ export function fauxSlack({
    */
   const commeSlack = (canal) => ({ ...canal, is_member: canal.membres.includes(robot) });
 
+  /**
+   * UN CANAL PRIVÉ N'EXISTE, POUR NOTRE ROBOT, QUE S'IL EN EST MEMBRE (T-20260806-0197).
+   *
+   * MESURÉ en production Slack : `conversations.list` ne rend pas à un jeton de robot les canaux
+   * privés dont il n'est pas membre, et `conversations.info` répond `channel_not_found` sur eux.
+   * Ce double les rendait quand même — il filtrait sur `is_private` et sur `types`, jamais sur
+   * l'appartenance, alors qu'il portait déjà les membres. SEPTIÈME FOIS QU'IL SE MONTRE PLUS
+   * PERMISSIF QUE LE SERVICE : un code qui retrouvait « le canal privé sans le robot » par la
+   * liste était vert ici et ne le retrouvait jamais en production, où il tombait sur `null` et
+   * sur un conseil faux (« vérifie le nom, fais-le créer ») pour un canal qui existe.
+   */
+  const visiblePourLeRobot = (canal) => !canal.is_private || canal.membres.includes(robot);
+
   let precedent;
 
   const servir = async (url, init = {}) => {
@@ -259,7 +272,10 @@ export function fauxSlack({
         const depart = Number(args.cursor || 0);
 
         const visibles = monde.canaux.filter(
-          (c) => (c.is_private ? inclutPrive : inclutPublic) && !(excluteArchives && c.is_archived)
+          (c) =>
+            (c.is_private ? inclutPrive : inclutPublic) &&
+            !(excluteArchives && c.is_archived) &&
+            visiblePourLeRobot(c)
         );
         const page = visibles.slice(depart, depart + limite).map(commeSlack);
         const suite = depart + limite < visibles.length ? String(depart + limite) : '';
@@ -404,7 +420,10 @@ export function fauxSlack({
       case 'conversations.info': {
         if (!args.channel) return echec('invalid_arguments', { detail: 'missing required field: channel' });
         const canal = monde.canaux.find((c) => c.id === args.channel);
-        return canal ? reponse({ ok: true, channel: commeSlack(canal) }) : echec('channel_not_found');
+        // Même règle que la liste : un canal privé sans le robot répond comme un canal inexistant.
+        return canal && visiblePourLeRobot(canal)
+          ? reponse({ ok: true, channel: commeSlack(canal) })
+          : echec('channel_not_found');
       }
 
       case 'users.info': {

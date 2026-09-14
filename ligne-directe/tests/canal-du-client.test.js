@@ -374,7 +374,9 @@ test('un canal archivé ne se rattrape PAS : le refus le dit, et rien n’est te
   const { creerCanal, CanalArchive } = await import('../src/slack.js');
 
   const monde = fauxSlack({
-    canaux: [{ id: 'C_arch', name: 'acme', is_private: true, is_archived: true, membres: [] }],
+    // Le robot en était membre avant l'archivage : un canal privé sans lui ne serait même pas
+    // visible à son jeton (T-20260806-0197), et l'archivage ne serait jamais constaté.
+    canaux: [{ id: 'C_arch', name: 'acme', is_private: true, is_archived: true, membres: ['UMOI'] }],
   }).installer();
   try {
     const echec = await creerCanal('jeton-robot', 'acme', true).then(

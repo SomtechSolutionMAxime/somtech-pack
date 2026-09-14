@@ -28,9 +28,12 @@ test('joignable : canal absent du tout — motif « absent »', async () => {
   }
 });
 
-test('joignable : canal privé existant, robot PAS membre — motif « non_membre »', async () => {
+// ⚠️ CE CAS ÉTAIT POSÉ SUR UN CANAL PRIVÉ, ET LE VRAI SLACK NE PEUT PAS LE PRODUIRE : un canal
+// privé dont le robot n'est pas membre est INVISIBLE à son jeton (T-20260806-0197). Seul un canal
+// public se voit sans y être. Le cas privé vit dans `un-canal-prive-sans-le-robot.test.js`.
+test('joignable : canal public existant, robot PAS membre — motif « non_membre »', async () => {
   const monde = fauxSlack({
-    canaux: [{ id: 'C1', name: 'client-x', is_private: true, membres: ['UAUTRE'] }],
+    canaux: [{ id: 'C1', name: 'client-x', is_private: false, membres: ['UAUTRE'] }],
     robot: 'UMOI',
   });
   monde.installer();
