@@ -13,7 +13,10 @@
 //   ligne-directe dire "..."
 //   ligne-directe demander "..."
 //   ligne-directe fermer [--bilan "..."] [--sans-archiver]
-//   ligne-directe representant <client> --canal <canal> [--depot <chemin>]
+//   ligne-directe representant <client> --canal <canal> --dirigeant <courriel> [--titre "..."] [--depot <chemin>]
+//                        pose le lieu ; à la création, inscrit dans CONTEXTE.md le client, le
+//                        canal (sans croisillon) et le titre s'il est fourni — jamais sur un lieu
+//                        existant (RA-REL-014). Le rendu nomme ce qui reste à renseigner.
 //   ligne-directe orchestrateur <nom> [--depot <chemin>]
 //   ligne-directe etat
 //   ligne-directe veilleur          (démarre le veilleur au premier plan, pour l'observer)
@@ -125,14 +128,22 @@ function usage(code = 0) {
                                                            fois. Son adresse ne quitte jamais le
                                                            poste : les agents demandent « le
                                                            dirigeant », jamais son courriel.
-  representant <client> --canal <canal> --dirigeant <courriel> [--depot <chemin>]
+  representant <client> --canal <canal> --dirigeant <courriel> [--titre "..."] [--depot <chemin>]
                                                            prepare le lieu d'un representant
                                                            dans <chemin> (defaut : le repertoire
                                                            courant) — refuse tout net et NE CREE
                                                            RIEN si <canal> n'est pas joignable,
                                                            si le poste ne peut pas ouvrir de
                                                            ligne, ou si <courriel> ne designe
-                                                           personne dans l'espace
+                                                           personne dans l'espace.
+                                                           A la CREATION seulement, inscrit dans
+                                                           CONTEXTE.md le client, le canal (sans
+                                                           croisillon) et --titre s'il est donne
+                                                           (le nom sous lequel le client verra la
+                                                           ligne). Un lieu existant n'est jamais
+                                                           reecrit. Le rendu (avertissements) nomme
+                                                           ce qui reste a renseigner avant que le
+                                                           representant puisse naitre.
   orchestrateur <nom> [--depot <chemin>]                   prepare le lieu d'un orchestrateur,
                                                            nomme, dans <chemin> — refuse tout net
                                                            et NE CREE RIEN si le poste ne peut pas
@@ -410,10 +421,14 @@ if (geste === 'relever') {
   const courrielDirigeant = option(args, '--dirigeant');
   if (!client || !canal || !courrielDirigeant) usage(1);
   const depotClient = option(args, '--depot') || process.cwd();
+  // `--titre` EST FACULTATIF (T-20260809-0024) : fourni, la pose l'inscrit dans CONTEXTE.md ;
+  // absent, le rendu le NOMME parmi ce qui reste à renseigner — jamais un silence.
+  const titre = option(args, '--titre');
   const r = await preparerLieuRepresentant({
     depotClient,
     client,
     canal,
+    titre,
     // La lecture du jeton passe DANS la vérification, jamais dans son argument : lue ici, son
     // échec traversait toute la pose sans produire le moindre JSON de contrat, et déversait
     // sur stderr un message qui proposait d'écraser un secret (T-20260813-0054).

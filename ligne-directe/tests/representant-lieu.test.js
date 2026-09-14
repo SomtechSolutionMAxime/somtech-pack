@@ -97,6 +97,10 @@ test('création : canal joignable — les quatre fichiers naissent, identiques a
   }
 
   for (const fichier of GABARITS) {
+    // ⚠️ CONTEXTE.md EXCEPTÉ, ET SEULEMENT LUI (T-20260809-0024) : à la création, la pose y
+    // inscrit ce qu'elle tient — client, canal, titre. Ce qu'elle y écrit, et que tout le reste
+    // y demeure à l'octet, est gardé par `la-pose-inscrit-ce-quelle-tient.test.js`.
+    if (fichier === 'CONTEXTE.md') continue;
     assert.equal(
       readFileSync(join(racine, fichier), 'utf8'),
       readFileSync(join(GABARIT_SOURCE, fichier), 'utf8'),
@@ -220,10 +224,18 @@ async function avecEnvironnement(valeurs, f) {
 /** Les variables du gabarit, toutes retirées de l'environnement du processus. */
 const AUCUNE = () => Object.fromEntries(RECLAMEES.map((v) => [v, undefined]));
 
-const poser = (depot) =>
-  preparerLieuRepresentant({
+/**
+ * Les avertissements DU REGISTRE seuls. Depuis T-20260809-0024, une pose neuve nomme aussi ce
+ * qui reste à renseigner avant la naissance — un fait d'une autre nature, gardé ailleurs
+ * (`la-pose-inscrit-ce-quelle-tient.test.js`). On l'écarte par sa marque, et lui seul : les
+ * comptes qui suivent restent ceux du registre.
+ */
+const duRegistre = (r) => ({ ...r, avertissements: r.avertissements.filter((a) => !a.includes('ne peut pas encore naître')) });
+
+const poser = async (depot) =>
+  duRegistre(await preparerLieuRepresentant({
     depotClient: depot, client: 'client-x', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
-  });
+  }));
 
 test('le gabarit du représentant réclame au moins une variable — sinon toute cette section ne prouve rien', () => {
   assert.ok(RECLAMEES.length > 0, 'aucun ${…} dans le .mcp.json du gabarit : les cas qui suivent seraient vides');
@@ -324,11 +336,13 @@ test('l’avertissement ne laisse JAMAIS fuir une valeur — seulement des noms'
   // c'est lui qu'on fouille. Un test sans avertissement ne prouverait aucune non-fuite.
   writeFileSync(join(depot, '.env'), `AUTRE_CHOSE=${TEMOIN}\n`);
 
-  const r = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, TEMOIN + '-env'])), () =>
+  const brut = await avecEnvironnement(Object.fromEntries(RECLAMEES.map((v) => [v, TEMOIN + '-env'])), () =>
     preparerLieuRepresentant({
       depotClient: depot, client: 'client-y', canal: 'client-x', verifierJoignabilite: JOIGNABLE,
     })
   );
+  assert.ok(!brut.avertissements.join('\n').includes(TEMOIN), 'une valeur d’environnement a fui dans un avertissement');
+  const r = duRegistre(brut);
   // Ici tout est résolu : rien à dire. On refait le tour avec RIEN de résolu, pour avoir un
   // avertissement réel à fouiller.
   assert.deepEqual(r.avertissements, []);

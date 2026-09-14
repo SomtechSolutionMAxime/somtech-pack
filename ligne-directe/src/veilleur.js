@@ -1511,7 +1511,24 @@ export class Veilleur {
     }
 
     const trouve = await this.slack.trouverCanal(this.jetons.robot, canal);
-    if (!trouve) return { ok: false, erreur: `aucun canal #${canal} dans cet espace`, motif: 'absent' };
+    // ⚠️ « INTROUVABLE » N'EST PAS « INEXISTANT » (voisin de T-20260806-0197). Slack ne montre au
+    // robot aucun canal privé dont il n'est pas membre : le refus affirmait « aucun canal dans cet
+    // espace » et envoyait créer un canal qui existe. On porte les deux causes et les deux gestes,
+    // sous la forme de `verifierCanalJoignable` — un essai compare les deux, pour qu'elles ne
+    // divergent pas. `motif` reste `absent` : c'est ce que le robot voit, et la clé des appelants.
+    if (!trouve) {
+      return {
+        ok: false,
+        motif: 'absent',
+        causes: ['absent', 'prive_sans_robot'],
+        gestes: ['corriger_ou_faire_creer', 'invitation_humaine'],
+        erreur:
+          `aucun canal #${canal} n'est visible par notre robot dans cet espace — deux causes possibles, indiscernables de son côté : ` +
+          `s'il n'existe pas, vérifie le nom, ou fais-le créer par un humain ; s'il existe en canal privé, ` +
+          `notre robot n'y a pas été invité (Slack ne lui montre aucun canal privé dont il n'est pas membre) : ` +
+          `fais-le inviter à la main ("/invite" depuis le canal), puis relance.`,
+      };
+    }
 
     // UN CANAL ARCHIVÉ EST EN LECTURE SEULE, ET IL RESTE DANS LA LISTE. `trouverCanal`
     // interroge Slack avec `exclude_archived: false` — c'est voulu ailleurs, pour pouvoir DIRE
