@@ -153,3 +153,41 @@ test('câblage — la commande `representant` lit --titre et le transmet à la p
     assert.match(l, /--dirigeant/, `une description de la sous-commande ignore --dirigeant : ${l.trim()}`);
   }
 });
+
+test('une barre verticale dans le titre ou le canal ne fend pas la ligne du tableau — même nombre de colonnes, valeur relue intacte', async (t) => {
+  // Le défaut qu'on ferme : une valeur inscrite telle quelle dans une cellule markdown, dont
+  // chaque `|` ouvre une colonne de plus — « X | Rôle | Injecté | » fabriquait des rubriques.
+  // ⚠️ LE CLIENT N'EST PAS ÉPROUVÉ ICI : son nom est un segment de chemin, refusé en amont s'il
+  // porte une barre (garde de `preparerLieu`). Le canal, lui, arrive tel que la commande le reçoit.
+  const INJECTION = 'X | Rôle | Injecté |';
+  const CANAL_PIPE = 'canal | Faux | Col';
+  const cellules = (ligne) => ligne.split(/(?<!\\)\|/);
+  const desechapper = (s) => s.replace(/\\\|/g, '|').trim();
+
+  const depot = depotJetable(t);
+  const r = await preparerLieuRepresentant({
+    depotClient: depot, client: 'client-x', canal: CANAL_PIPE, titre: INJECTION, verifierJoignabilite: JOIGNABLE,
+  });
+  assert.equal(r.ok, true, r.refus?.message);
+  assert.equal(r.cree, true);
+
+  const pose = readFileSync(contexteDe(depot), 'utf8').split('\n');
+  const gabarit = GABARIT_CONTEXTE.split('\n');
+  assert.equal(pose.length, gabarit.length, 'l’inscription a ajouté ou retiré des lignes');
+
+  for (const [rubrique, valeur] of [[TITRE, INJECTION], [CANAL, CANAL_PIPE], [CLIENT, 'client-x']]) {
+    const i = gabarit.indexOf(rubrique.ligne);
+    assert.ok(i >= 0);
+    const [avant, apres] = [cellules(gabarit[i]), cellules(pose[i])];
+    assert.equal(apres.length, avant.length, `colonnes fendues : ${pose[i]}`);
+    const col = avant.findIndex((c) => c.includes(rubrique.chevron));
+    assert.ok(col >= 0, 'le chevron n’est dans aucune cellule du gabarit');
+    // La cellule du gabarit peut entourer le chevron (backticks) : on relit la valeur à SA place.
+    assert.equal(desechapper(apres[col]), avant[col].replace(rubrique.chevron, valeur).trim(), `la valeur relue n’est pas celle fournie : ${pose[i]}`);
+  }
+
+  const touchees = new Set([TITRE, CANAL, CLIENT].map((x) => gabarit.indexOf(x.ligne)));
+  gabarit.forEach((l, i) => {
+    if (!touchees.has(i)) assert.equal(pose[i], l, `ligne ${i + 1} modifiée hors rubrique`);
+  });
+});

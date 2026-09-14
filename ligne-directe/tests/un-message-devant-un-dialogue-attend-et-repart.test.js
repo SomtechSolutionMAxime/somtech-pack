@@ -42,7 +42,7 @@ const TS2 = '1757870001.000200';
 const TS3 = '1757870002.000300';
 
 let bac, etat, pathOriginal, racineOriginale, maisonOriginale;
-let Veilleur, sauverRegistre, herdrReel, reponse, ATTENTE_DUREE_MAX_MS;
+let Veilleur, sauverRegistre, herdrReel, reponse, ATTENTE_DUREE_MAX_MS, ATTENTE_MAX_PAR_PANE;
 let compteur = 0;
 
 /**
@@ -113,7 +113,7 @@ before(async () => {
   process.env.HOME = bac;
   process.env.PATH = `${poserLeFauxHerdr()}:${pathOriginal}`;
   delete process.env.HERDR_SOCKET_PATH;
-  ({ Veilleur, ATTENTE_DUREE_MAX_MS } = await import('../src/veilleur.js'));
+  ({ Veilleur, ATTENTE_DUREE_MAX_MS, ATTENTE_MAX_PAR_PANE } = await import('../src/veilleur.js'));
   ({ sauverRegistre } = await import('../src/registre.js'));
   ({ reponse } = await import('../src/langage.js'));
   herdrReel = await import('../src/herdr.js');
@@ -298,6 +298,47 @@ test('(e-bis) UN MESSAGE NEUF NE DOUBLE PAS CEUX QUI ATTENDENT — l’ordre tie
   assert.equal(r.length, 2, JSON.stringify(r));
   assert.ok(r[0].includes('ANCIEN'), `l’ancien part d’abord : ${JSON.stringify(r)}`);
   assert.ok(r[1].includes('NEUF'));
+});
+
+// ═════════════════ (e-ter) LA BORNE : AU-DELÀ, REFUSÉ ET DIT — JAMAIS GARDÉ EN SILENCE
+
+test('(e-ter) FILE À LA BORNE — le message de trop est REFUSÉ et dit, rien n’est écrit, et seuls les gardés partent, dans l’ordre', async () => {
+  montrer(DIALOGUE_ACTIF);
+  const { monde, v } = await monter();
+  const MAX = ATTENTE_MAX_PAR_PANE;
+  assert.ok(Number.isInteger(MAX) && MAX > 0, `borne inexploitable : ${MAX}`);
+  // Horodatages distincts et connus du faux Slack : chaque remise pourra poser son crochet.
+  const tsDe = (i) => `1757871000.${String(i).padStart(6, '0')}`;
+  monde.horodatagesConnus = Array.from({ length: MAX + 1 }, (_, i) => tsDe(i));
+
+  for (let i = 0; i < MAX; i += 1) await v.remettreAuChantier(parole(`GARDE-${String(i).padStart(3, '0')}-fin`, tsDe(i)));
+  assert.equal(v.messagesGardesDe('C1').length, MAX, 'la file est pleine à la borne, pas avant');
+  assert.equal(textes(monde).length, MAX, 'chacun des gardés a eu son annonce');
+
+  await v.remettreAuChantier(parole('REFUSE-de-trop', tsDe(MAX)));
+
+  const dits = textes(monde);
+  assert.equal(dits.length, MAX + 1, `une réponse de plus, une seule : ${JSON.stringify(dits.slice(MAX))}`);
+  assert.equal(
+    dits[MAX],
+    reponse('attente_pleine', 'interne', { chantier: LIGNE.chantier, max: MAX }),
+    'le message de trop reçoit la réponse attente_pleine — pas « gardé »'
+  );
+  assert.doesNotMatch(dits[MAX], /herdr/i);
+  assert.deepEqual(gestesQuiEcrivent(), [], 'ABSTENTION : ni les gardés ni le refusé ne sont écrits devant le dialogue');
+  assert.equal(v.messagesGardesDe('C1').length, MAX, 'la file reste À la borne : le refusé n’y est pas entré');
+  assert.ok(!v.messagesGardesDe('C1').some((g) => g.ts === tsDe(MAX)), 'le refusé n’est pas dans la file');
+
+  montrer(BOITE_VIDE);
+  await v.relancerLesAttentes();
+
+  const r = recus();
+  assert.equal(r.length, MAX, `seuls les ${MAX} gardés sont remis : ${r.length} remises`);
+  for (let i = 0; i < MAX; i += 1) {
+    assert.ok(r[i].includes(`GARDE-${String(i).padStart(3, '0')}-fin`), `remise ${i} hors d’ordre : ${r[i]}`);
+  }
+  assert.ok(!r.some((x) => x.includes('REFUSE-de-trop')), 'le message refusé n’est jamais remis');
+  assert.equal(v.messagesGardesDe('C1').length, 0, 'la file est vidée');
 });
 
 // ═════════════════ (f) ÉCRAN NON RECONNU : MÊME TRAITEMENT, SANS INVENTER DE DIALOGUE
