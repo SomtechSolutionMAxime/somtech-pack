@@ -290,3 +290,117 @@ test('🔴 UN ENREGISTREMENT SANS CODE LISIBLE COMPTE QUAND MÊME — sinon on c
     }
   );
 });
+
+// ─── LA DESTINATION PEUT MENTIR — troisième rejet de la même passe, sur la même recommandation
+
+test('🔴 UN TOTAL MENTEUR NE FAIT PAS TOURNER LA BOUCLE SANS FIN', async () => {
+  // 🔴 TROISIÈME REJET DE LA PASSE PORTAIL, SUR LA MÊME RECOMMANDATION QU'ELLE M'AVAIT FAITE DEUX
+  // FOIS. Elle demandait une borne dure INDÉPENDANTE du contenu ; j'ai répondu deux fois par une
+  // borne tirée du contenu — « on ne pagine que vers une destination connue ». Elle ferme le cas
+  // « pas de destination ». Elle ne ferme PAS le cas « DESTINATION QUI MENT » : une source qui
+  // annonce un total énorme, ignore `offset` et rend des codes inédits à chaque page ne
+  // déclenche ni le repli sans-total, ni les deux gardes de contenu. Reproduit par le reviewer :
+  // `heap out of memory`, exit 134 — le même mode d'échec qu'au premier tour.
+  //
+  // ⚠️ CE QUE J'AI APPRIS ET QUI VAUT PLUS QUE LE CORRECTIF : j'avais une objection juste — une
+  // borne inventée est un nombre choisi par celui dont on éprouve les angles morts — et elle m'a
+  // servi DEUX FOIS à ne poser aucune borne. **Une objection juste peut protéger un trou, et
+  // elle le protège d'autant mieux qu'elle est juste.**
+  //
+  // ✅ LA BORNE QUI N'EST PAS INVENTÉE : le total annoncé IMPLIQUE un nombre de pages. Au-delà,
+  // ce n'est plus une lecture longue, c'est une destination qui ment — et on le dit. Le chiffre
+  // est dérivé de la réponse, pas choisi par moi.
+  let pages = 0;
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    pages += 1;
+    if (pages > 600) throw new Error('LA BOUCLE NE S’ARRÊTE PAS : plus de 600 pages demandées');
+    return enveloppe({
+      data: Array.from({ length: 100 }, (_, i) => ({ id: `u${pages}-${i}`, project_id: `P-2026${String(pages).padStart(2, '0')}${String(i).padStart(2, '0')}-0001`, status: 'x' })),
+      total: 999999999,
+      limit: 100,
+    });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  await assert.rejects(
+    () => acces('projects', 'P-20269999-9999'),
+    (err) => {
+      assert.doesNotMatch(err.message, /NE S’ARRÊTE PAS/, 'la boucle doit s’arrêter d’elle-même, pas par le refus du double');
+      assert.match(err.message, /INCOMPL|PLAFONN|ANNONC/i, `et déclarer que la lecture n’a pas abouti : ${err.message}`);
+      return true;
+    }
+  );
+  assert.ok(pages <= 501, `bornée par le filet dur : ${pages} pages demandées`);
+});
+
+test('🔴 UNE PAGE COURTE SANS TOTAL EST UN DOUTE AUSSI — pas seulement une page pleine', async () => {
+  // 🔴 SECOND DÉFAUT DU MÊME REJET, et le reviewer a pris soin de dire qu'il n'est PAS une
+  // régression de ce lot : l'asymétrie existait avant la pagination (`tronque` ne se posait que
+  // sur une page pleine). Elle survit à toutes les versions, et c'est sa question qui l'a sortie.
+  //
+  // LE CAS : une source dégradée rend 3 enregistrements alors que sa limite en permettrait 200,
+  // sans annoncer de total, sans erreur HTTP. Rien ne distinguait « il n'y en a que 3 » de « je
+  // n'en ai reçu que 3 ». Sans total, on ne sait JAMAIS si on a tout lu — pleine ou courte.
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    return enveloppe({ data: [{ id: 'a', project_id: 'P-20260001-0001', status: 'x' }, { id: 'b', project_id: 'P-20260002-0001', status: 'x' }, { id: 'c', project_id: 'P-20260003-0001', status: 'x' }] });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  await assert.rejects(
+    () => acces('projects', 'P-20269999-9999'),
+    (err) => {
+      assert.match(err.message, /PLAFONN|sans total|destination/i, `une lecture sans destination est un doute, même courte : ${err.message}`);
+      return true;
+    }
+  );
+});
+
+test('LE COMPTE DE LA BOUCLE COMPTE AUSSI DES UNIQUES — angle mort de la suite, pas du lecteur', async () => {
+  // ⚠️ RÉSERVE D'UNE PASSE DE FOND, et elle visait MA SUITE, pas le code. Muter la variable
+  // intermédiaire de la boucle (`const vus = compteDesUniques()`) ne faisait rougir personne :
+  // aucune entrée adverse n'atteignait cette comparaison-là. Le seul cas « enregistrement sans
+  // code » sortait plus tôt par la règle de la page courte.
+  //
+  // ⚠️ ET C'EST EXACTEMENT LA FORME QUE CE LOT PAIE EN BOUCLE : le code est juste, la garde ne
+  // l'atteint pas. Un chemin correct que rien ne traverse se casse un jour en silence.
+  //
+  // L'ENTRÉE QUI L'ATTEINT : des pages PLEINES dont une moitié d'enregistrements n'a pas de code
+  // lisible. Le compte d'identités avance de 4 par page, le compte des codes de 2 seulement —
+  // les deux divergent, et c'est la condition d'arrêt de la boucle qui en dépend.
+  let page = 0;
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    page += 1;
+    if (page > 20) throw new Error('LA BOUCLE NE S’ARRÊTE PAS');
+    const base = (page - 1) * 4;
+    return enveloppe({
+      data: [
+        { id: `u${base}`, project_id: `P-2026${String(base).padStart(4, '0')}-0001`, status: 'x' },
+        { id: `u${base + 1}`, project_id: 'brouillon', status: 'x' },
+        { id: `u${base + 2}`, project_id: null, status: 'x' },
+        { id: `u${base + 3}`, project_id: `P-2026${String(base + 3).padStart(4, '0')}-0001`, status: 'x' },
+      ],
+      total: 8,
+      limit: 4,
+    });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  await assert.rejects(
+    () => acces('projects', 'P-20269999-9999'),
+    (err) => {
+      // 8 enregistrements uniques sur 8 annoncés : la lecture est COMPLÈTE. Un compte fondé sur
+      // les seuls codes indexés en verrait 4 sur 8, donc lirait indéfiniment et crierait à
+      // l'incomplétude sur une lecture entière.
+      assert.match(err.message, /8 projects lus sur 8 annonc/, `la boucle doit compter des uniques : ${err.message}`);
+      assert.doesNotMatch(err.message, /INCOMPL/, `et ne pas crier sur une lecture complète : ${err.message}`);
+      return true;
+    }
+  );
+  assert.equal(page, 2, `deux pages suffisent pour atteindre les 8 annoncés — ${page} demandée(s)`);
+});

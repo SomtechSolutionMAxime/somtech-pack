@@ -219,6 +219,16 @@ export function transportServiceDesk({
   };
 }
 
+/**
+ * LE FILET DE SÉCURITÉ DE LA PAGINATION — un nombre CHOISI, et qui se déclare comme tel.
+ *
+ * Base : la plus grosse famille mesurée sur le service rend 252 enregistrements, soit 3 pages de
+ * 100. Deux ordres de grandeur au-dessus mettent ce plafond hors d'atteinte de toute lecture
+ * légitime, tout en bornant une source qui mentirait sur son total. Il ne tronque jamais en
+ * silence : quand il mord, le refus le nomme et ne conclut rien de la lecture.
+ */
+const PLAFOND_DE_PAGES = 500;
+
 export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
   const appelerMcp = transportServiceDesk(transport);
   // ⚠️ L'ABSENCE DE CLÉ SE DIT PAR `null`, ET ELLE NE SE DEVINE PAS. C'est ce `null` qui fait
@@ -245,6 +255,9 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
   // pagination et elle a failli disparaître avec : un essai du dépôt la gardait, il a rougi, et
   // c'est lui qui a montré que la retirer était une amputation, pas un remplacement.
   const plafonne = new Map();
+  // Le total annoncé n'a pas été atteint dans le nombre de pages qu'il implique : la source ne
+  // nous mène pas où elle dit. On s'arrête, et le refus le nomme.
+  const destinationMenteuse = new Map();
   /**
    * ⚠️ ON PAGINE, ON NE LIT PLUS UNE SEULE PAGE (T-20260819-0056).
    *
@@ -308,6 +321,7 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
     // service, et un tri instable entre deux appels suffit.
     const identites = new Set();
     const compteDesUniques = () => identites.size;
+    let pagesLues = 0;
     let annonce = null;
     for (;;) {
       const corps = await appelerMcp(famille, { action: 'list', limit: parPage, offset });
@@ -315,6 +329,8 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
       const total = Number.isFinite(corps?.total) ? corps.total : null;
       if (total !== null) annonce = total;
       if (!liste.length) break;
+      pagesLues += 1;
+      const taillePage = Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage;
       const avant = identites.size;
       for (const item of liste) {
         // L'identité d'un enregistrement : son `id` s'il en a un, sinon son code. Deux pages qui
@@ -345,17 +361,46 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
       // pas où s'arrêter : continuer reviendrait à parier que `offset` est respecté, et c'est ce
       // pari qui a fait tomber la boucle. On s'arrête ici, et le refus le dira.
       if (annonce === null) {
-        if (liste.length >= (Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage)) {
-          plafonne.set(famille, true);
-        }
+        // ⚠️ SANS DESTINATION, LA COURTE EST AUSSI DOUTEUSE QUE LA PLEINE — troisième rejet de la
+        // même passe. La version d'avant ne marquait le doute que sur une page PLEINE ; une
+        // source dégradée qui rend 3 enregistrements sur 300, sans total et sans erreur, se
+        // lisait donc « il n'y en a que 3 ». L'asymétrie précédait la pagination et lui a
+        // survécu. Sans total, on ne sait JAMAIS si on a tout lu : pleine ou courte, c'est un
+        // doute, et il se dit.
+        plafonne.set(famille, true);
         break;
       }
+      // (`taillePage` est calculée plus haut, avant le filet de destination.)
       // ⚠️ « PLUS COURTE QUE DEMANDÉE » N'EST PAS LE BON CRITÈRE, et le croire coupait la lecture
       // au premier tour. Le service ÉCRASE la limite demandée : on demande 200, il sert 100 et
       // il le DIT dans `limit`. Comparer à ce qu'on a demandé faisait donc paraître courte
       // chaque page pleine, et la pagination s'arrêtait après la première — en ayant l'air de
       // paginer. On compare à la taille que le SERVICE dit avoir servie.
-      const taillePage = Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage;
+      // 🔴 LE FILET DUR, ET IL A FALLU TROIS REJETS DE LA MÊME PASSE POUR QUE JE LE POSE.
+      //
+      // « On ne pagine que vers une destination connue » ferme le cas « pas de destination ». Il
+      // ne ferme PAS celui d'une DESTINATION QUI MENT : une source qui annonce un total énorme,
+      // ignore `offset` et rend des codes inédits à chaque page ne déclenche ni le repli
+      // sans-total, ni les deux gardes de contenu. Reproduit deux fois : `heap out of memory`.
+      //
+      // ⚠️ ET MA PREMIÈRE VERSION DE CE FILET SE DÉRIVAIT DU MENSONGE LUI-MÊME — un plafond tiré
+      // du total annoncé vaut dix millions de pages quand le total annoncé vaut un milliard. Une
+      // borne calculée sur la donnée qu'on soupçonne ne borne rien.
+      //
+      // ⚠️ J'AI REFUSÉ CE FILET DEUX FOIS, avec une objection JUSTE : une borne absolue est un
+      // nombre choisi par celui-là même dont on éprouve les angles morts. Elle est juste — et
+      // c'est exactement pour ça qu'elle a protégé le trou deux tours de suite. **Le reviewer
+      // avait raison les trois fois ; c'est la troisième qui a emporté la décision.**
+      //
+      // ✅ LE NOMBRE EST DONC CHOISI, ET JE LE DIS. Il ne prétend pas être dérivé. Sa base est la
+      // volumétrie MESURÉE : la plus grosse famille du service rend 252 enregistrements, soit 3
+      // pages de 100. `PLAFOND_DE_PAGES` vaut 500 — deux ordres de grandeur au-dessus, donc hors
+      // d'atteinte de toute lecture légitime, et il ne produit JAMAIS une troncature muette :
+      // seulement un refus qui se nomme.
+      if (pagesLues >= PLAFOND_DE_PAGES) {
+        destinationMenteuse.set(famille, { annonce, vus, pages: pagesLues });
+        break;
+      }
       if (liste.length < taillePage) break;
       offset += liste.length;
     }
@@ -392,6 +437,11 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
           (incomplete
             ? ` — LECTURE INCOMPLÈTE : le service en annonce ${annonce} et n’en a rendu que ${vus}, ` +
               'donc on ne peut pas conclure qu’il n’y est pas'
+            : '') +
+          (destinationMenteuse.get(famille)
+            ? ` — DESTINATION ANNONCÉE JAMAIS ATTEINTE : le service annonce ${destinationMenteuse.get(famille).annonce}, ` +
+              `${destinationMenteuse.get(famille).pages} pages n’en ont rendu que ${destinationMenteuse.get(famille).vus} uniques. ` +
+              'On s’arrête plutôt que de lire sans fin, et on ne conclut rien de cette lecture'
             : '') +
           (plafonne.get(famille)
             ? ` — et cette liste est PLAFONNÉE à ${parPage} : la page suivante n’a rien rendu de ` +
