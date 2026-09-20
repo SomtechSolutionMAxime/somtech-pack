@@ -7,6 +7,33 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0011` — **deuxième des trois** : `T-20260819-0056`. Un orchestrateur dont le chantier est **clos** continuait de recevoir ses rondes. ⚠️ Le risque n'est pas le gaspillage : c'est la **collision** — deux orchestrateurs qui soumettent des boîtes en parallèle sur les mêmes panes, sans se voir.*
+
+### Corrige
+
+- **🔴 Le défaut était VIVANT, et il avait un nom.** Sur les 13 orchestrateurs que la ronde réveillait le 2026-09-20, **`portneuf`** tournait dans `.orchestrateur/d-20260819-0002` — une demande que le ServiceDesk rend `delivered`. Il recevait ses rondes ce soir-là. Ce n'est pas le ticket d'août récité : c'est la mesure du jour.
+- **Un mandat clos ne se réveille plus**, et l'écarté est **nommé** dans le compte rendu comme dans le journal — *un agent écarté en silence est indiscernable d'un agent absent.*
+- **`clos` n'est JAMAIS faux par défaut.** Un mandat qu'on n'a pas pu mesurer **réveille quand même**, et le doute est **dit**. *Réveiller un agent clos coûte du bruit ; ne pas réveiller un agent vivant le laisse muet, et personne ne le débloque.*
+- **RIEN n'est mémorisé** : l'état est relu à chaque passage, donc un mandat **rouvert** redevient réveillé tout seul. *Une solution qui ne gère que la fermeture laisserait un agent rouvert hors des rondes — le défaut symétrique, et plus silencieux.*
+- **Le lecteur du ServiceDesk PAGINE.** Mesuré : `list` annonce `total: 252`, plafonne ses pages à 100, et **écrase en silence** toute limite au-delà. *Le service était honnête — chaque réponse porte son `total` à côté de ses données ; c'est le lecteur qui ne l'écoutait pas.* Deux des trois « non mesurée » étaient un **doute évitable**, et se lisent désormais.
+
+### Eprouve
+
+- **AUCUN second lecteur n'a été écrit.** `etatDuMandat` et `lieuDeRoleDansLeChemin` existaient et le recensement s'en servait : la ronde les **importe**. *Deux copies d'un critère ne se jugent pas sur « sont-elles justes » mais sur « rendent-elles le même verdict sur les mêmes entrées ».* Mesuré **avant** d'écrire une ligne, sur les 13 orchestrateurs réels : **accord 13/13**. Une mutation qui remet une seconde copie fait rougir.
+- **21 mutations, 0 survivante** à la tête finale — dont le câblage, le doute traité comme une fermeture, la mémorisation de l'état, et le double d'essais rendu **plus indulgent que le réel**.
+- **🔴 Trois REJETS d'une même passe, sur la même recommandation refusée deux fois.** La boucle de pagination pouvait encore ne pas s'arrêter : une source qui ignore `offset` **en produisant du neuf**, puis une qui **ment sur son total**. ⚠️ *L'objection qui m'a fait refuser le filet était **juste** — « une borne absolue est un nombre choisi par celui-là même dont on éprouve les angles morts » — et c'est **exactement pour ça** qu'elle a protégé le trou deux tours de suite.* `PLAFOND_DE_PAGES = 500` est **choisi, et le code le dit** ; ce qui compte n'est pas qu'il soit choisi, c'est qu'il **échoue proprement** : il ne prétend jamais avoir tout lu.
+- **Un défaut trouvé sur une ENTRÉE ADVERSE, pas sur une mutation** : le compteur comparait des **éléments reçus** à un total d'enregistrements **uniques**. Deux pages qui se chevauchent — plausible, ce lecteur tourne pendant que treize orchestrateurs écrivent — atteignaient le total **sans tout lire**, et le refus se déclarait alors **exhaustif**.
+
+### Technique
+
+- **⚠️ Cinq textes de ce lot mentaient déjà.** Ils citaient « le ServiceDesk plafonne à 100 sur 252 » — un fait que **la pagination de ce même lot** avait rendu faux deux commits plus tôt. *Une correction posée dans un paquet sans repasser mettre à jour ce qu'elle motivait dans l'autre.* Et **rien ne pouvait les faire rougir** : aucune assertion n'en dépendait.
+- **La règle qui en sort, et elle vaut plus que les corrections** : *un compte au **présent** est la forme qui ment ; une mesure **datée** ne ment pas, elle vieillit.* Un seul des quatre comptes du lot était sain — celui qui portait sa date. Les autres pointent désormais vers la source unique au lieu d'en recopier les chiffres : **un pointeur ne peut pas mentir sur une valeur, puisqu'il n'en porte pas.**
+- Quatre défauts d'**instrument** corrigés, chacun sorti par sa propre survivante : une garde dont l'échec était une **pendaison** de 60 s au lieu d'un rouge ; une **fausse survivante** née de doubles trop uniformes ; **deux expressions** du même compte, dont casser l'une laissait l'autre juste ; et un seuil de banc **deviné** au lieu d'être mesuré.
+- Dettes inscrites plutôt que traitées à la va-vite : **`T-20260920-0126`** (une borne comptée en itérations n'engage rien sur le temps réel) et **`T-20260920-0141`** (le lecteur ne connaît pas l'échéance de son appelant — *le plafond borne la mémoire, pas le temps*).
+
+
+## [Non-versionne] - 2026-09-20
+
 *Livraison `J-20260814-0002`, epic `E-20260920-0011` — **premier des trois** : `T-20260819-0036`. Une session qui vient de naître était accusée de **n'avoir jamais existé**, une seconde après avoir été créée. ⚠️ Le registre `herdr` ne se taisait pas : **il répondait, et il répondait faux** — et le refus qu'on en tirait se trompait **trois fois en trois phrases**.*
 
 ### Corrige
