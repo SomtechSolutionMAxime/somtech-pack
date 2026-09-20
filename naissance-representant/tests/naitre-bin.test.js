@@ -2962,16 +2962,41 @@ test('🔴 LA NAISSANCE N’ACCUSE PAS SA PROPRE SESSION DE N’AVOIR JAMAIS EXI
     const r = lancerNaitre(client, { amorce: 'ton brief', essais: '12' });
 
     const sortie = `${r.stdout}${r.stderr}`;
+    const tous = appelsJournalises(journal);
+
+    // ⚠️ CETTE ASSERTION-CI ÉTAIT UNE CONTRE-ÉPREUVE VIDE, et c'est une passe de revue qui l'a
+    // prise en défaut — pas mes propres mutations. L'essai n'exigeait que l'absence du texte
+    // faux et le départ de l'amorce. Or avec `inscriptionPendant: 3` et `essais: 12`, la boucle
+    // de relance interne de `livrerBrief` finit par passer QUEL QUE SOIT le message : le texte
+    // faux ne sort que si la livraison ÉCHOUE au bout du budget. L'essai restait donc VERT sous
+    // la régression COMPLÈTE — condition de sortie remise au seul nom ET drapeau retiré — alors
+    // que son titre affirme garder exactement ça.
+    //
+    // ⚠️ LE DISCRIMINANT A ÉTÉ MESURÉ, PAS DEVINÉ. Séquence d'appels réelle, même scénario :
+    //   avec le correctif  : … agent read · get×6 · [agent read · agent prompt]      ← 1 tentative
+    //   sous régression    : … agent read · get·get · read·get·read·get·read·get·[read·prompt]  ← 4
+    // La boucle de naissance qui attend fait aboutir la livraison DU PREMIER COUP ; sans elle,
+    // la livraison se heurte au statut et paie des reprises. C'est ça que le correctif achète,
+    // et c'est la seule chose qui sépare les deux versions sur ce scénario.
+    const apresBoucle = tous.slice(tous.findIndex((x) => x[0] === 'agent' && x[1] === 'read') + 1);
+    const finBoucle = apresBoucle.findIndex((x) => !(x[0] === 'agent' && x[1] === 'get'));
+    const livraison = apresBoucle.slice(finBoucle);
+    const tentatives = livraison.slice(0, livraison.findIndex((x) => x[0] === 'agent' && x[1] === 'prompt'))
+      .filter((x) => x[0] === 'agent' && x[1] === 'read').length;
+
     assert.doesNotMatch(
       sortie,
       /jamais été inscrit/i,
       `la naissance affirme que le pane n’a JAMAIS été inscrit, alors qu’elle vient de l’inscrire : ${sortie}`
     );
-    // ⚠️ ET ON EXIGE QUE L'AMORCE PARTE POUR DE VRAI. Sans cette moitié, l'essai passerait
-    // aussi si la naissance échouait AVANT d'essayer de livrer — un vert obtenu en ne
-    // traversant pas le chemin qu'il nomme.
-    const amorces = appelsJournalises(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
+    const amorces = tous.filter((a) => a[0] === 'agent' && a[1] === 'prompt');
     assert.equal(amorces.length >= 1, true, `l’amorce doit être livrée : ${sortie}`);
+    assert.equal(
+      tentatives,
+      1,
+      `l’amorce doit aboutir DU PREMIER COUP : ${tentatives} tentative(s) de livraison, donc la ` +
+        `naissance n’a pas attendu la fin de l’inscription et fait payer des reprises à sa propre session`
+    );
     assert.equal(r.code, 0, `et la naissance aboutir : ${sortie}`);
   }));
 
