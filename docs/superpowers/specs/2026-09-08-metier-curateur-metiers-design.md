@@ -199,7 +199,17 @@ export const ROLES_GARDES = new Set(['orchestrateur']);
 
 Le fil qui l'appelle dans `settings.json` **refuse par défaut** quand la garde ne rend aucun verdict — délibérément (« un garde absent ne vaut jamais un garde permissif »). Un rôle absent de cet ensemble se voit donc **tout refuser**, y compris l'analyse en lecture seule dont son tour dépend. Il naîtrait détecté, nommé, au bon endroit, et incapable de faire son travail — sans qu'aucune erreur ne le dise avant le premier tour.
 
+> 🔴 **CORRECTION DU 2026-09-20 — ce paragraphe décrit le mauvais mode de panne, et c'est l'inverse qui se produit.** Mesuré sur `main` le jour de la fusion : les trois fils `gardes/{ecriture,sous-agent,terminal}.js` ne situent pas le rôle, ils lisent `process.env.SOMTECH_ROLE || 'orchestrateur'` — et **rien dans le dépôt ne pose `SOMTECH_ROLE`**. Le rôle transmis est donc **toujours** la chaîne `'orchestrateur'`, qui **est** dans `ROLES_GARDES`.
+>
+> **Un curateur ne naîtrait donc pas infirme : il naîtrait GARDÉ COMME UN ORCHESTRATEUR** — sur-permissionné sous une identité qui n'est pas la sienne. `ROLES_GARDES` ne mord jamais, et inscrire `curateur` dans les listes sans corriger les fils reviendrait à **garder un cas qui ne se produit pas**.
+>
+> Le danger est réel, mais il est **permissif, pas restrictif** — et un défaut permissif ne se signale par aucune panne. L'inventaire du plan (`../plans/2026-09-09-metier-curateur-metiers.md`, point 1) porte la mesure et le correctif : les fils situent le rôle **au lieu** avant que le rôle soit inscrit.
+>
+> **Ce paragraphe est conservé tel qu'il a été écrit** : il montre ce qu'une lecture du code sans exécution fait conclure. Il ne fait pas foi — la mesure du plan, si.
+
 ⚠️ **Question ouverte à trancher par la mesure, pas par la lecture** : l'outil `Workflow` passe-t-il par le matcher `Task` ? S'il a son propre chemin, il faudra soit l'ajouter aux droits accordés, soit lui donner sa propre garde. **À mesurer sur un lieu posé avant de déclarer le métier vivant** — c'est exactement la forme de défaut que ce dépôt paie le plus cher : une fonction inerte derrière une pose verte.
+
+> ⚠️ **À ne pas confondre avec un rôle voisin déjà nommé ailleurs** : `.claude/commands/agent-brief.md` annonce un `ing-curateur-agent-briefs` — « curateur des ABC », à créer. **Ce n'est pas la même fonction.** Celui-là entretient les ABC eux-mêmes ; `curateur-metiers` consolide des leçons de terrain en amendements des métiers déjà rendus. Deux rôles distincts sur le même mot — à trancher au nommage avant la naissance.
 
 ## 10 — Ce qui garantit que ça tient
 
