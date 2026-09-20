@@ -73,11 +73,17 @@ must git_local add -A
 must git_local commit -qm "socle"
 must git_local branch -M main
 must git_local push -q -u origin main
+# Le HEAD du dépôt nu suit `init.defaultBranch`, qui vaut `master` quand rien
+# ne le configure — le poste de l'auteur le met à `main`, le runner CI non.
+# Sans ce recalage, le clone ci-dessous atterrit sur une branche non née et
+# `git tag` échoue sur « Failed to resolve HEAD ». Mesuré : vert en local,
+# rouge en CI.
+must git -C "$ORIGIN" symbolic-ref HEAD refs/heads/main
 must git_local tag v1.1.0
 must git_local push -q origin v1.1.0
 
 # Un SECOND dépôt pousse des tags plus récents : le clone ne les connaît pas.
-must git clone -q "$ORIGIN" "$AUTRE"
+must git clone -q -b main "$ORIGIN" "$AUTRE"
 must git_autre tag v1.2.0
 must git_autre tag v1.9.0
 must git_autre push -q origin v1.2.0 v1.9.0
@@ -317,7 +323,11 @@ ecart="$(cd "$VIDE" && md_ecart_tags)"
 
 echo "== Q — md_rafraichir_origine rapatrie bien les TAGS =="
 NEUF="${WORK}/neuf"
-must git clone -q --no-tags "$ORIGIN" "$NEUF"
+must git clone -q -b main "$ORIGIN" "$NEUF"
+# `--no-tags` ne se comporte pas pareil selon la version de git : on retire les
+# tags nous-mêmes, pour que « le clone n'a aucun tag » soit un FAIT du banc et
+# non une propriété de la machine.
+for t in $(git -C "$NEUF" tag -l); do must git -C "$NEUF" tag -d "$t"; done
 avant="$(cd "$NEUF" && md_dernier_tag_local)"
 # C'est LE scénario du ticket : un dépôt frais, aucun tag en local, le distant
 # en porte. L'écart doit le DIRE — pas annoncer « à jour ».
@@ -326,7 +336,7 @@ ecart="$(cd "$NEUF" && md_ecart_tags)"
   || ko "attendu 'LOCAL-EN-RETARD - v2.3.4', obtenu '$ecart'"
 (cd "$NEUF" && md_rafraichir_origine) && ok "fetch réussi (rc=0)" || ko "md_rafraichir_origine a échoué sur un distant joignable"
 apres="$(cd "$NEUF" && md_dernier_tag_local)"
-[ -z "$avant" ] && ok "clone --no-tags : aucun tag avant" || ko "SCÉNARIO INOPÉRANT : le clone portait déjà '$avant'"
+[ -z "$avant" ] && ok "clone sans tag : aucun tag avant" || ko "SCÉNARIO INOPÉRANT : le clone portait déjà '$avant'"
 [ "$apres" = "v2.3.4" ] && ok "après rafraîchissement : v2.3.4 en local" \
   || ko "attendu v2.3.4 après fetch, obtenu '$apres' — les tags ne sont pas rapatriés"
 
