@@ -26,8 +26,12 @@
 //     projet était au-delà de la première page d'un lecteur qui n'en lisait qu'une ; depuis
 //     qu'il PAGINE, ils se lisent. **Cette phrase a menti : elle a survécu à la correction du
 //     mécanisme qu'elle invoquait, dans le lot même qui l'a corrigé — et rien ne pouvait la
-//     faire rougir, puisque aucune assertion ne dépend de ces deux codes.** Il ne reste donc
-//     qu'UN cas « non mesurée » sur les 13.
+//     faire rougir, puisque aucune assertion ne dépend de ces deux codes.**
+//
+// ⚠️ ET LA CORRECTION DE CETTE PHRASE A ELLE-MÊME PORTÉ UN COMPTE NON DATÉ — « il ne reste donc
+// qu'UN cas sur les 13 » — que j'ai affirmé avoir retiré partout alors qu'il vivait encore ici.
+// Relevé par une passe de fond. **Le compte au présent est la forme qui se périme ; seule la
+// mesure DATÉE en tête de ce bloc reste vraie, parce qu'elle ne prétend rien sur aujourd'hui.**
 // Dans les trois cas : **on RÉVEILLE, et on DIT qu'on n'a pas pu mesurer.** Taire un « je ne
 // sais pas » en le rangeant du côté « rien à signaler » est le défaut que tout ce jalon combat ;
 // et ne pas réveiller sur une mesure ratée couperait un orchestrateur vivant en silence.

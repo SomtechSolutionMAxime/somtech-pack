@@ -345,13 +345,14 @@ ${r.declencheur}
  * le défaut symétrique, et plus silencieux. On relit à chaque passage ; il n'y a rien à
  * désinscrire, donc rien à oublier de réinscrire.
  *
- * ⚠️ `clos` N'EST JAMAIS FAUX PAR DÉFAUT. Trois des treize rendent « non mesurée » : un lieu
- * dont le nom n'a pas la forme d'un code (`j-20260814-0001-bis`), et deux projets que le
- * ServiceDesk ne rendait pas, faute de pagination. ⚠️ CE MÉCANISME VIT DANS
- * `ligne-directe/src/mandat.js` et NULLE PART AILLEURS — on n'en recopie plus les chiffres ici,
- * parce que la copie qui s'y trouvait a menti dès que l'original a changé. Reste aujourd'hui le
- * cas d'un lieu dont le nom n'a pas la forme d'un code. Dans ce cas on RÉVEILLE, et on DIT qu'on
- * n'a pas pu mesurer. Se taire couperait un
+ * ⚠️ `clos` N'EST JAMAIS FAUX PAR DÉFAUT. Un lieu dont le nom n'a pas la forme d'un code rend
+ * « non mesurée » — et un projet que le lecteur n'atteignait pas le rendait aussi, avant qu'il
+ * pagine. ⚠️ AUCUN COMPTE AU PRÉSENT ICI. Ce paragraphe en portait un (« trois des treize »)
+ * qui se CONTREDISAIT trois lignes plus bas, dans le même bloc, où le texte n'en comptait déjà
+ * plus qu'un : la correction avait été posée sans retirer l'agrégat qu'elle démentait. Le
+ * mécanisme vit dans `ligne-directe/src/mandat.js` et nulle part ailleurs ; la population
+ * mesurée vit dans une mesure DATÉE, jamais dans un compte au présent. Dans ce cas on RÉVEILLE,
+ * et on DIT qu'on n'a pas pu mesurer. Se taire couperait un
  * orchestrateur vivant sur une mesure ratée ; ranger le doute du côté « rien à signaler » est
  * le motif même de ce jalon.
  *

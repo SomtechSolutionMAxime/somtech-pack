@@ -376,9 +376,12 @@ async function tenirLeRendezVous(nom, debut) {
   }));
   // ⚠️ `clos !== true`, PAS `clos === false`. Un mandat qu'on n'a pas pu mesurer rend `null`, et
   // il doit RESTER réveillé : ne pas réveiller sur une mesure ratée couperait un orchestrateur
-  // vivant en silence. Trois des treize sont dans ce cas — un lieu hors forme de code, et deux
-  // projets que le lecteur ne savait pas atteindre. ⚠️ VOIR `ligne-directe/src/mandat.js` pour
-  // ce que la pagination change et jusqu'où elle lit : on ne recopie plus ses chiffres ici.
+  // vivant en silence. ⚠️ AUCUN COMPTE AU PRÉSENT ICI, ET C'EST LE POINT : « trois des treize »
+  // était vrai le 2026-09-20 AVANT la pagination, et cette phrase a survécu à sa propre
+  // correction. Un compte non daté redevient faux sans prévenir. La seule population qui reste
+  // vraie est celle qu'une mesure DATÉE porte — voir l'en-tête de
+  // `tests/un-mandat-clos-ne-se-reveille-plus.test.js`. Le mécanisme, lui, vit dans
+  // `ligne-directe/src/mandat.js` et nulle part ailleurs.
   const vivants = avecMandat.filter((o) => !closPourDeVrai(o));
   // ⚠️ ET LE DOUTE SE DIT. Un agent réveillé sur un mandat non mesuré n'est pas un agent dont on
   // sait le mandat ouvert : ranger les deux ensemble ferait lire « tout va bien » sur ce qu'on
