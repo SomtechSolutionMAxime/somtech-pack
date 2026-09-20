@@ -348,6 +348,7 @@ async function tenirLeRendezVous(nom, debut) {
     // défaut d'origine, dans sa valeur par défaut.
     famille: FAMILLES.SONDE_MUETTE,
     activite: null,
+    enregistrementEnCours: Boolean(o.enregistrementEnCours),
   }));
   let restants = comptes;
   while (restants.length > 0) {
@@ -356,7 +357,18 @@ async function tenirLeRendezVous(nom, debut) {
       // livrerait un, les deux textes collés.
       // Le socket de SA session : un pane ne se joint pas depuis une autre. Sans lui, on
       // remplacerait « ne réveiller personne » par « en réveiller un et croire avoir fait le tour ».
-      const livre = await livrerBrief({ pane: c.pane, socket: c.socket, texte: r.rappel, appelHerdr, lireEcran, dormir });
+      // ⚠️ `enregistrementEnCours` — voir `orchestrateursVivants`. Sans ce passage, un
+      // orchestrateur qui vient de naître reçoit le refus qui affirme qu'il n'a JAMAIS été
+      // inscrit, à l'instant même où le registre le rend.
+      const livre = await livrerBrief({
+        pane: c.pane,
+        socket: c.socket,
+        texte: r.rappel,
+        enregistrementEnCours: c.enregistrementEnCours,
+        appelHerdr,
+        lireEcran,
+        dormir,
+      });
       c.livre = livre.ok;
       c.motif = livre.ok ? null : livre.message;
       // ⚠️ LA FAMILLE EST POSÉE ICI, SUR LE RÉSULTAT QU'ON VIENT D'OBTENIR (T-20260821-0011) —

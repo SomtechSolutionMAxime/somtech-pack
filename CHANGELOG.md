@@ -7,6 +7,30 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0011` — **premier des trois** : `T-20260819-0036`. Une session qui vient de naître était accusée de **n'avoir jamais existé**, une seconde après avoir été créée. ⚠️ Le registre `herdr` ne se taisait pas : **il répondait, et il répondait faux** — et le refus qu'on en tirait se trompait **trois fois en trois phrases**.*
+
+### Corrige
+
+- **Il y a TROIS états au registre, le code n'en connaissait que DEUX.** Entre « le registre ignore ce pane » et « le registre le connaît », une session qui naît y répond avec le statut `unknown`. Mesuré **trois fois** par sonde en lecture seule sur des naissances réelles, sur **deux chemins** : `pane run "claude"` → 3,5 s et 3,3 s ; `herdr agent start` → 3,7 s. Dans cette fenêtre, `livrer.js` refusait en affirmant « ce pane n'a **jamais** été inscrit », « **attendre ne changera rien** », et conseillait de désigner par le pane — **la voie que le refus venait de fermer lui-même**, puisque c'est justement parce que le registre a *répondu* que le repli par le pane n'a pas joué.
+- **L'attente est désormais BORNÉE et DITE.** `gestionnaire-livrer` attend la fin de l'inscription, l'annonce à chaque tour avec le temps écoulé, et rend à la borne un refus marqué `BORNE ATTEINTE` qui **chiffre ce qu'il a attendu** — sans jamais écrire une ligne dans la boîte du destinataire. ⚠️ La borne n'a **pas** été rabaissée sur les trois mesures : *une borne se pose avant le résultat, et la rétrécir pour qu'elle épouse les données qu'on vient d'obtenir revient à la poser après.*
+- **Cherché par son NOM pendant la fenêtre**, le refus dit qu'une inscription est en cours et **nomme les panes concernés**, au lieu du verdict catégorique qui envoyait chercher une faute de frappe.
+- **🔴 La naissance n'accuse plus sa propre session.** `livrerBrief` a **TROIS** appelants de production, pas deux — `livrer.js`, la ronde, et **`naitre.js`** —, et le lot n'en avait câblé que deux. La boucle « VÉRIFIER PAR LE FAIT » sortait sur le seul **nom** ; or par `herdr agent start` le nom est porté dès t+1,2 s alors que le statut reste `unknown` jusqu'à t+4,9 s. Elle sortait donc **en pleine fenêtre**. Elle attend maintenant aussi la fin de l'inscription — et sa **condition d'échec n'a pas bougé d'un caractère**, de sorte qu'attendre ne peut pas transformer en échec une naissance qui réussissait.
+
+### Eprouve
+
+- **Le bruit de la garde a été mesuré AVANT de la poser** : sur les 66 agents que le registre rendait, **zéro** en `unknown`. Et le discriminant n'est **pas** l'absence de nom — **31 des 66 n'en ont pas**, et la mesure par `agent start` montre un agent qui porte son nom pendant toute la fenêtre.
+- **31 mutations en 6 vagues**, chacune prouvée non vide et jouée sur la suite entière. **Huit survivantes**, toutes fermées — et c'est ce qu'elles ont révélé qui compte : la correction vivait d'abord sur **un chemin qu'aucun appelant de production ne traversait**, et une ligne s'est avérée **du code mort ingardable**, retirée plutôt que gardée sans garde.
+- **Trois défauts d'INSTRUMENT corrigés**, chacun sorti par sa survivante : un banc aveugle à `stderr` concluait « il ne le dit pas » sur une sortie qu'il n'avait jamais lue ; un compte de relevés incluait ceux d'un autre appelant — *le nombre était vrai, l'unité fausse* ; et le double de la naissance rendait `idle` dès le premier appel, **plus indulgent que le réel**, de sorte que la fenêtre mesurée n'existait dans aucun essai.
+- **⚠️ Un essai qui NOMMAIT le défaut dans son titre ne le voyait pas** — vert sous la régression complète. Relevé par la passe de fond, pas par l'auteur. Resserré sur un discriminant **mesuré** dans la séquence d'appels réelle : avec le correctif la livraison aboutit **du premier coup**, sans lui elle paie **quatre** reprises.
+
+### Technique
+
+- Le prédicat du troisième état est **importé** par ses trois appelants, jamais recopié — *deux définitions du même fait divergent, c'est mécanique.*
+- Dette inscrite plutôt que corrigée à la va-vite : `T-20260920-0126` — une borne comptée en itérations n'engage rien sur le temps réel, l'appel en cours pouvant la dépasser. Le défaut est **partagé par toutes les boucles** qui composent un polling avec `appelHerdr` ; le traiter ici aurait retouché une phrase pendant qu'une demi-douzaine de boucles sœurs gardent le même angle mort.
+
+
+## [Non-versionne] - 2026-09-20
+
 *Livraison `J-20260814-0002`, epic `E-20260920-0004` — **dernier des trois** : `T-20260816-0020`. Rien dans `~/.somtech/` ne portait la version installée. Un orchestrateur a cité « six versions publiées, zéro installée » toute une soirée — **un chiffre fabriqué, qui a servi d'argument dans trois décisions**. ⚠️ Le défaut n'était pas cette erreur : c'est que **rien ne permettait de la contredire**.*
 
 ### Ajoute

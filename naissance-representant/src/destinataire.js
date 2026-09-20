@@ -51,6 +51,41 @@ export function estUnPane(cible) {
 }
 
 /**
+ * LE STATUT QUE PORTE UN AGENT DONT L'INSCRIPTION N'EST PAS FINIE (T-20260819-0036).
+ *
+ * ⚠️ IL Y A TROIS ÉTATS, ET CE MODULE N'EN CONNAISSAIT QUE DEUX. Mesuré le 2026-09-20 par sonde
+ * en lecture seule sur une naissance réelle de ce poste :
+ *
+ *   t+0.0s   `agent get` -> agent_not_found   `pane get` -> unknown   ← le registre ne sait rien
+ *   t+2.3s   `agent get` -> ok, statut `unknown`                      ← INSCRIT, pas fini
+ *   t+5.8s   `agent get` -> ok, statut `idle`                         ← inscription terminée
+ *
+ * Entre « le registre ignore ce pane » — replié depuis T-20260820-0022 — et « le registre le
+ * connaît », il existe une fenêtre où le registre RÉPOND en disant `unknown`. Elle a été mesurée
+ * TROIS FOIS le 2026-09-20, par sonde en lecture seule, sur DEUX chemins de naissance :
+ * 3,5 s · 3,3 s (`pane run "claude"`) et 3,7 s (`herdr agent start`).
+ *
+ * ⚠️ L'occurrence vécue de `w26:p46` avançait « ~30 s ». SON AUTEUR A RETIRÉ CE CHIFFRE : c'était
+ * un `sleep 8` suivi d'un seul relevé — une estimation présentée comme une mesure. Elle ne compte
+ * donc pas dans la population, et ce qu'on en sait est seulement « quelque part sous la
+ * trentaine de secondes ».
+ *
+ * ⚠️ LE BRUIT DE CE DISCRIMINANT A ÉTÉ MESURÉ AVANT D'ÊTRE POSÉ. Sur les 66 agents que
+ * `agent list` rendait pour ce poste au même moment : `done: 30`, `idle: 30`, `working: 5`,
+ * `blocked: 1` — ZÉRO `unknown`. Il ne se déclenche donc sur aucun agent établi.
+ *
+ * ⚠️ ET CE N'EST PAS « SANS NOM ». 31 des 66 n'ont pas de nom : un agent jamais renommé en est
+ * dépourvu toute sa vie. Prendre l'absence de nom pour la signature ferait de la moitié du poste
+ * des agents « en cours d'inscription », pour toujours.
+ */
+export const STATUT_ENREGISTREMENT_EN_COURS = 'unknown';
+
+/** Cet agent, tel que le registre le rend, a-t-il une inscription encore en cours ? */
+export function enregistrementEnCours(agent) {
+  return agent?.agent_status === STATUT_ENREGISTREMENT_EN_COURS;
+}
+
+/**
  * Les sessions à interroger.
  *
  * `HERDR_SESSIONS_ESSAIS` n'existe que pour les essais : le vrai balayage lit les sockets
@@ -101,6 +136,10 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
 
   const trouves = [];
   const sessionsMuettes = [];
+  // ⚠️ RELEVÉES PENDANT LE MÊME BALAYAGE, PAS DANS UN SECOND (T-20260819-0036). Un agent dont
+  // l'inscription se termine entre deux balayages ferait dire au refus le contraire de ce que la
+  // recherche a vu — deux mesures sur deux instants, un verdict sur le mélange des deux.
+  const inscriptionsEnCours = [];
   for (const socket of sessionsDuPoste()) {
     const r = await appel(['agent', 'list'], { socket });
     if (!r.ok) {
@@ -109,8 +148,17 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
     }
     const agents = r.reponse?.result?.agents || [];
     for (const a of agents) {
+      if (enregistrementEnCours(a) && a.pane_id) inscriptionsEnCours.push({ pane: a.pane_id, socket });
       if (a.pane_id === vise || a.name === vise) {
-        trouves.push({ pane: a.pane_id, socket, nom: a.name || null, statut: a.agent_status || null });
+        trouves.push({
+          pane: a.pane_id,
+          socket,
+          nom: a.name || null,
+          statut: a.agent_status || null,
+          // ⚠️ CE DRAPEAU DOIT REMONTER JUSQU'AU BINAIRE. Sans lui, l'appelant ne peut ni attendre
+          // ni le dire : il ne voit qu'un statut `unknown` qu'il prendra pour un agent parti.
+          enregistrementEnCours: enregistrementEnCours(a),
+        });
       }
     }
   }
@@ -230,6 +278,30 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
         'Vérifie l’identifiant sur le poste (`herdr pane list`) — et souviens-toi qu’un ' +
         'identifiant de pane est INTERNE à sa session : celui que tu as lu ailleurs ne désigne ' +
         'peut-être rien ici. Le NOM de l’agent, lui, est unique sur le poste.',
+    };
+  }
+
+  // ⚠️ CHERCHÉ PAR SON NOM PENDANT LA FENÊTRE D'INSCRIPTION (T-20260819-0036). Un agent dont
+  // l'inscription n'est pas finie n'a PAS ENCORE DE NOM : aucun `a.name === vise` ne peut
+  // correspondre, et le refus tombait sur « aucun agent vivant ne porte ce nom » — mot pour mot
+  // celui d'un nom qui n'a jamais existé. Les deux envoient chercher une faute de frappe ; un
+  // seul des deux la mérite.
+  //
+  // ⚠️ ON NE DEVINE PAS QUE C'EST LUI, ET C'EST DÉLIBÉRÉ. Livrer à l'unique agent en cours
+  // d'inscription serait un tirage au sort déguisé en déduction — la garde d'homonymie, quelques
+  // lignes plus haut, existe pour refuser exactement ce raisonnement-là. On refuse, mais on dit
+  // CE QU'ON A VU : c'est ce qui sépare « pas encore » de « jamais ».
+  if (inscriptionsEnCours.length) {
+    const ou = inscriptionsEnCours.map((i) => i.pane).join(', ');
+    const pluriel = inscriptionsEnCours.length > 1 ? 's' : '';
+    return {
+      ok: false,
+      message:
+        `aucun agent ne porte encore le nom « ${vise} » — mais ${inscriptionsEnCours.length} session${pluriel} ` +
+        `est en cours d’inscription au registre (${ou}) et ne porte donc pas encore de nom. ` +
+        'Ce n’est pas une absence : c’est une attente, mesurée autour de 3,5 s après la ' +
+        'naissance. Rien n’a été envoyé — redemande dans quelques secondes, ou désigne-le par ' +
+        'son PANE, qui est joignable tout de suite.',
     };
   }
 
