@@ -106,6 +106,8 @@ Le texte distingue-t-il les deux ? Voici comment les identifier :
 
 Si une mutation ne fait pas rougir, tu as trouvé un faux témoin. Signale-le dans le verdict.
 
+⚠️ **TROIS EST UN PLANCHER, PAS UNE PREUVE.** *Des mutations qui tuent TOUTES ne prouvent rien : elles n'éprouvent que ce que les assertions couvraient déjà.* **Zéro survivante sur un SOUS-ENSEMBLE ne dit rien de la population** — si tes trois tuent, continue. *Mesuré le 2026-09-20 sur le banc du minuteur (`T-20260920-0013`) : les quatre premières mutations tuaient toutes ; huit rouges de plus sont sortis après ~25 mutations, dont un bypass du chemin nominal qui dormait sous 1353 bancs verts.*
+
 ---
 
 ## Format du verdict
