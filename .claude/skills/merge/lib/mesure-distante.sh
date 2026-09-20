@@ -53,8 +53,29 @@ md_max_semver() {
   '
 }
 
+# LA définition d'un numéro de version, écrite UNE fois. `md_semver_filtre`
+# filtre un flux, `md_semver_valide` juge une valeur — les deux s'appuient sur
+# le même motif ancré. Une seconde écriture de la règle serait un second
+# endroit où elle peut diverger.
+# ⚠️ Zéros de tête INTERDITS. `v01.02.03` et `v1.2.3` se lisent comme le même
+# numéro et sont deux refs DIFFÉRENTES : l'une pourrait être libre pendant que
+# l'autre est prise — deux lots réclamant le même numéro sous deux
+# orthographes, c'est-à-dire T-20260815-0013 par une autre porte. Mesuré avant
+# de resserrer : aucun des 144 tags du serveur ne porte de zéro de tête.
+MD_SEMVER_MOTIF='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
 md_semver_filtre() {
-  grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true
+  grep -E "$MD_SEMVER_MOTIF" || true
+}
+
+# Vrai (0) si <valeur> est un numéro de version. Ancré des DEUX côtés.
+# ⚠️ Surtout pas un `case … in v[0-9]*.[0-9]*.[0-9]*)` : en shell, `[0-9]*`
+# veut dire « un chiffre puis N'IMPORTE QUOI ». Mesuré le 2026-09-20 :
+# `v1.2.3.4`, `v1.2.3abc`, `v01.02.03`, `v1a.2.3` passaient tous — et surtout
+# `v1.9*.0`, dont l'étoile est un GLOB que `ls-remote` interprète : le refus
+# nommait alors un tag inexistant avec le sha d'un autre.
+md_semver_valide() {
+  printf '%s\n' "${1:-}" | grep -qE "$MD_SEMVER_MOTIF"
 }
 
 # --- Tags DISTANTS — interroge le serveur, ne lit rien du dépôt local -------
@@ -151,6 +172,74 @@ md_prochaine_version() {
   printf 'PROCHAINE v%s.%s.%s DISTANT %s LOCAL %s ECART %s\n' \
     "$maj" "$min" "$pat" "${d:--}" "${l:--}" "$ecart"
 }
+
+# --- Le numéro visé est-il encore LIBRE sur le serveur ? -------------------
+# T-20260815-0013 : le 2026-08-15, deux lots parallèles ont préparé `v1.53.0`.
+# Le second a mergé avec le même numéro. Calculer la prochaine version sur le
+# distant ne suffit PAS à l'empêcher : entre le calcul et la pose du tag, un
+# autre lot peut avoir pris le numéro. Ce qu'il faut est un REFUS au moment de
+# poser, qui NOMME le tag déjà là.
+#
+# ⚠️ QUATRE états, et il est vital de ne pas les confondre — un « libre » rendu
+# par erreur est précisément ce qui republie un numéro pris :
+#   LIBRE <version>            rc=0  le serveur ne porte pas ce tag
+#   PRIS <version> <sha>       rc=1  il le porte — REFUSER, recalculer
+#   REFUS serveur-injoignable  rc=2  on NE SAIT PAS → traiter comme un refus,
+#                                    jamais comme un libre. « Libre » et « je
+#                                    n'ai pas pu regarder » se ressemblent, et
+#                                    c'est la ressemblance qui coûte.
+#   REFUS version-malformee    rc=3  la question elle-même est invalide — on ne
+#   REFUS version-non-fournie        devine pas ce qui était voulu.
+md_version_libre() {
+  local version="${1:-}" remote="${2:-origin}" out rc ligne
+
+  if [ -z "$version" ]; then
+    echo "REFUS version-non-fournie"; return 3
+  fi
+  if ! md_semver_valide "$version"; then
+    echo "REFUS version-malformee ${version}"; return 3
+  fi
+
+  # `ls-remote` interroge le SERVEUR : un dépôt local qui n'a pas fetché dirait
+  # « libre » d'un tag qui existe depuis une heure.
+  #
+  # ⚠️ `2>&1` est VOULU : sur le chemin d'échec, c'est ce qui donne un
+  # diagnostic utile. Sur le chemin de succès, il fait entrer des lignes qui ne
+  # sont pas des refs — un « Warning: Permanently added… » de ssh, un message de
+  # credential helper. Ce qui protège n'est donc PAS la séparation des flux,
+  # c'est le filtre sur la ref exacte, plus bas. *Une séparation de stderr a été
+  # écrite ici puis retirée : les deux se recouvraient, et celle-ci ne pouvait
+  # plus rougir — une protection qu'aucune épreuve ne peut juger n'en est pas
+  # une.*
+  out="$(git ls-remote --tags "$remote" "refs/tags/${version}" 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf 'md_version_libre: %s injoignable — %s\n' "$remote" "$out" >&2
+    echo "REFUS serveur-injoignable"
+    return 2
+  fi
+
+  # Avec un refspec EXACT, `ls-remote` ne rend ni la déréférence `^{}` d'un tag
+  # annoté, ni les refs dont le nom commence pareil (`refs/tags/v7.7.7` ne
+  # ramène pas `v7.7.70`) — mesuré, pas supposé (scénarios V-ter, V-quater).
+  # On n'en déduit PAS qu'on peut prendre la première ligne venue : on retient
+  # la ligne qui porte EXACTEMENT la ref demandée. Une sortie inattendue du
+  # serveur ne doit pas pouvoir se faire passer pour un sha.
+  ligne="$(printf '%s\n' "$out" | awk -v r="refs/tags/${version}" '$2 == r { print $1; exit }')"
+  if [ -n "$ligne" ]; then
+    echo "PRIS ${version} ${ligne}"
+    return 1
+  fi
+
+  echo "LIBRE ${version}"
+  return 0
+}
+
+# ⚠️ PAS de boucle qui chercherait « le prochain numéro libre ». Le calcul part
+# du plus grand tag du serveur : un numéro pris est, par construction, le plus
+# grand — donc le calcul suivant l'enjambe déjà. Une boucle de repli aurait un
+# corps que rien ne pourrait atteindre, donc que rien ne pourrait faire rougir.
+# Ce que le ticket demande est un REFUS, pas un verrou : « celui qui perd la
+# course recalcule et repart ».
 
 # --- Rafraîchir origin, explicitement et bruyamment ------------------------
 # `md_statut_branche` décide sur `origin/main`, une ref de SUIVI : elle ne vaut

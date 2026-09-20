@@ -342,16 +342,48 @@ Certains projets (ex: SomCraft, ServiceDesk) deploient via des workflows GitHub 
 3. Par defaut, proposer un bump **patch**. Si le merge inclut des changements
    majeurs (BREAKING, nouveau feature important), proposer minor/major.
 
+### Verifier que le numero est encore LIBRE
+
+> 🔴 **Calculer sur le distant ne suffit PAS.** Entre le calcul et la pose du
+> tag, **un autre lot peut avoir pris le numero** — c'est arrive le 2026-08-15
+> sur `v1.53.0`, deux lots ont prepare la meme version (`T-20260815-0013`).
+> Ce qu'il faut est un **REFUS au moment de poser**, qui nomme le tag deja la.
+
+1. Verifier la disponibilite **cote serveur** :
+   ```bash
+   md_version_libre v1.100.1
+   # LIBRE v1.100.1                 rc=0 → on peut taguer
+   # PRIS v1.100.1 <sha>            rc=1 → REFUSER, recalculer, repartir
+   # REFUS serveur-injoignable      rc=2 → NE PAS TAGUER
+   # REFUS version-malformee <v>    rc=3 → NE PAS TAGUER, corriger le numero
+   ```
+2. **`PRIS` : ne pas taguer.** Relancer `md_prochaine_version` — le calcul repart
+   du plus grand tag du serveur, donc il enjambe le numero perdu. Celui qui perd
+   la course recalcule et repart ; il n'y a **pas de verrou**, et il n'en faut pas.
+3. 🔴 **`REFUS serveur-injoignable` : ne pas taguer non plus.** « Libre » et « je
+   n'ai pas pu regarder » se ressemblent, et c'est la ressemblance qui republie un
+   numero deja pris. Un silence n'est jamais un feu vert.
+4. **`REFUS version-malformee` : ne pas taguer.** La question elle-meme est
+   invalide — on ne devine pas ce qui etait voulu. Un numero qui porte un `*`
+   serait interprete par le serveur comme un **motif**, et le refus nommerait
+   alors un tag qui n'existe pas.
+
+> ⚠️ **Cette verification-ci sert le RECAPITULATIF, pas la pose du tag.** Entre
+> elle et `git tag`, il y a une **attente humaine de duree non bornee** — et
+> c'est exactement la fenetre du 2026-08-15. La verification qui protege
+> vraiment est celle de la section **Execution**, rejouee juste avant `git tag`.
+
 ### Confirmation
 
 Afficher un recapitulatif et **DEMANDER OBLIGATOIREMENT CONFIRMATION**. Le
 recapitulatif **nomme l'objet de chaque mesure** — `DISTANT` fait foi, `LOCAL`
-est la pour montrer l'ecart :
+est la pour montrer l'ecart, et la disponibilite du numero vise est **verifiee** :
 ```
 Dernier tag DISTANT (git ls-remote) : v1.100.0    ← fait foi
 Dernier tag LOCAL   (git tag)       : v1.99.0
 Ecart                               : LOCAL-EN-RETARD
 Prochaine version suggeree          : v1.100.1 (patch)
+Disponibilite du numero             : LIBRE v1.100.1    ← verifiee sur le serveur
 Workflows declenches                : Publish Docker Image, Publish Packages
 On tag v1.100.1 ?
 ```
@@ -363,11 +395,31 @@ L'utilisateur peut :
 
 ### Execution
 
-Apres confirmation :
+> 🔴 **Rejouer la verification MAINTENANT, sur le numero reellement retenu.**
+> Celle du recapitulatif date d'avant la confirmation : entre les deux, l'humain
+> a pu reflechir une minute ou une heure, et **un autre lot a pu poser le tag**.
+> C'est la fenetre que `T-20260815-0013` decrit. Et si l'utilisateur a **propose
+> un autre numero** (« non, v0.7.0 »), ce numero-la **n'a jamais ete verifie**.
+
+Apres confirmation, dans cet ordre, sans rien intercaler. 🔴 **Le bloc se
+source LUI-MEME** : la Confirmation ci-dessus est un ARRET reel pour attendre
+l'humain, et le shell ne survit pas a cet arret. Un bloc qui compterait sur un
+`source` fait avant la Confirmation echouerait en `command not found` — a chaque
+fois, pas seulement en cas de course, et le message parlerait de disponibilite
+alors que la fonction est simplement absente.
 ```bash
+source .claude/skills/merge/lib/mesure-distante.sh
+md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
 git tag <version>
 git push origin <version>
 ```
+
+- **rc != 0 : on ne tague pas.** `PRIS` → recalculer et reprendre au
+  recapitulatif ; `REFUS` (serveur injoignable ou numero malforme) → s'arreter et
+  le dire. La PR reste mergee, le tag pourra etre pose plus tard.
+- Le `git push origin <version>` echouerait de toute facon sur un tag deja
+  distant — mais **un echec de push n'est pas un refus** : il arrive apres la
+  pose locale, son message ne nomme pas le lot concurrent, et il invite a forcer.
 
 Puis verifier que les workflows sont bien queued :
 ```bash

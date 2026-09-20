@@ -209,7 +209,7 @@ echo "== Seconde ronde — ce que la première n'atteignait pas =="
 # On ne les a pas gardés — on les a retirés.
 
 essai 'le filtre semver est retiré : une pré-version passe devant' <<'PY'
-s = s.replace("  grep -E '^v[0-9]+\\.[0-9]+\\.[0-9]+$' || true", "  cat")
+s = s.replace('  grep -E "$MD_SEMVER_MOTIF" || true', "  cat")
 PY
 
 essai 'le cas « aucun tag nulle part » disparaît' <<'PY'
@@ -432,6 +432,125 @@ else
   ko "FAUX POSITIF — changer la forme de la liste fait rougir la garde : $(grep -m1 '❌' "${WORK}/numerote.log")"
 fi
 
+echo "== T-20260815-0013 — le refus d'un numéro déjà pris =="
+
+essai 'un serveur injoignable est annoncé LIBRE' <<'PY'
+s = s.replace("""    echo "REFUS serveur-injoignable"
+    return 2""",
+"""    echo "LIBRE ${version}"
+    return 0""")
+PY
+
+essai 'un numéro PRIS est annoncé libre' <<'PY'
+s = s.replace("""  if [ -n "$ligne" ]; then
+    echo "PRIS ${version} ${ligne}"
+    return 1
+  fi""", "")
+PY
+
+essai 'le refus ne nomme plus le tag en cause' <<'PY'
+s = s.replace('echo "PRIS ${version} ${ligne}"', 'echo "PRIS"')
+PY
+
+essai 'le refus ne donne plus le sha du tag existant' <<'PY'
+s = s.replace('echo "PRIS ${version} ${ligne}"', 'echo "PRIS ${version}"')
+PY
+
+# ⚠️ Une mutation « recherche par préfixe » a été écrite ici, puis RETIRÉE :
+# elle survivait, parce que le refspec exact de `ls-remote` écarte déjà les
+# préfixes et les déréférences. Le second filtre qu'elle abîmait était une
+# ligne que rien ne pouvait faire rougir — on l'a retirée de la lib plutôt que
+# de garder une mutation qui ne prouvait rien. Le fait est mesuré dans le banc
+# (scénarios V-ter et V-quater), pas supposé.
+
+essai 'la version malformée est acceptée au lieu d_être refusée' <<'PY'
+s = s.replace("""  if ! md_semver_valide "$version"; then
+    echo "REFUS version-malformee ${version}"; return 3
+  fi""", "")
+PY
+
+essai 'la disponibilité se lit sur les tags LOCAUX' <<'PY'
+s = s.replace("""  out="$(git ls-remote --tags "$remote" "refs/tags/${version}" 2>&1)"; rc=$?""",
+              """  out="$(git tag --list "${version}" 2>&1 | sed 's#^#sha\\trefs/tags/#')"; rc=$?""")
+PY
+
+echo "== Les trois défauts de la revue de fond sur 0013 =="
+
+essai 'la validation du format redevient un GLOB permissif' <<'PY'
+s = s.replace("""  if ! md_semver_valide "$version"; then
+    echo "REFUS version-malformee ${version}"; return 3
+  fi""",
+"""  case "$version" in
+    v[0-9]*.[0-9]*.[0-9]*) : ;;
+    *) echo "REFUS version-malformee ${version}"; return 3 ;;
+  esac""")
+PY
+
+essai 'le motif de version accepte les zéros de tête' <<'PY'
+s = s.replace("MD_SEMVER_MOTIF='^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'",
+              "MD_SEMVER_MOTIF='^v[0-9]+\\.[0-9]+\\.[0-9]+$'")
+PY
+
+# ⚠️ Une mutation « stderr refusionné sur le chemin de succès » a été écrite
+# ici, puis RETIRÉE avec la séparation qu'elle éprouvait : elle SURVIVAIT,
+# parce que le filtre sur la ref exacte écarte déjà toute ligne qui n'est pas
+# la ref demandée. Les deux protections se recouvraient ; on garde celle qui
+# peut rougir, et le scénario W-ter l'éprouve avec un relais qui écrit sur
+# stderr en réussissant.
+
+essai 'la première ligne venue est prise pour un sha' <<'PY'
+s = s.replace("""  ligne="$(printf '%s\\n' "$out" | awk -v r="refs/tags/${version}" '$2 == r { print $1; exit }')\"""",
+              """  ligne="$(printf '%s\\n' "$out" | awk 'NF { print $1; exit }')\"""")
+PY
+
+essai_skill "le bloc qui pose le tag ne rejoue plus la vérification" <<'PY'
+s = s.replace("""md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
+git tag <version>""", "git tag <version>")
+PY
+
+essai_skill "l_appel devient NU : présent, mais il n_arrête plus rien" <<'PY'
+# Retrait CHIRURGICAL du seul enforcement : l'appel reste, son code de retour
+# part à la poubelle, et `git tag` s'exécute quand même. Une garde qui cherche
+# la PRÉSENCE du nom reste verte sur ce code — c'est ce qu'a trouvé la revue.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'md_version_libre "<version>"')
+PY
+
+essai_skill "le gate devient `|| true` : l_operateur est la, il n_arrete rien" <<'PY'
+# Shell parfaitement ordinaire — « je supprime cette erreur pour ne pas
+# planter le script ». L'opérateur `||` est présent, et `git tag` s'exécute
+# quand même sur PRIS. Une garde qui cherche l'OPÉRATEUR reste verte.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'md_version_libre "<version>" || true')
+PY
+
+essai_skill "le gate est INVERSE : && sur le cas de succes seulement" <<'PY'
+# Le `&&` ne gouverne que le succès : sur PRIS ou REFUS, le script tombe
+# droit dans `git tag` sans jamais s'arrêter.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'md_version_libre "<version>" && echo "numero libre, on continue"')
+PY
+
+essai_skill "le gate vient APRES la pose du tag" <<'PY'
+# Le gate existe, gouverne, et arrive quand le tag est déjà posé.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'git tag <version>\nmd_version_libre "<version>" || { echo "trop tard"; exit 1; }')
+PY
+
+essai_skill "le bloc qui tague ne se source plus lui-meme" <<'PY'
+# Le défaut que le banc ARRANGEAIT : la Confirmation est un arrêt réel, le
+# shell ne lui survit pas, et un bloc qui compte sur un `source` fait plus haut
+# échoue en `command not found` — à chaque fois, avec un message qui parle de
+# disponibilité alors que la fonction est absente.
+s = s.replace(
+    'source .claude/skills/merge/lib/mesure-distante.sh\nmd_version_libre "<version>" ||',
+    'md_version_libre "<version>" ||')
+PY
+
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
 # Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
 # tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
@@ -477,6 +596,15 @@ else
   ok "plancher et CHANGELOG abaissés ensemble → suite rouge (la garde mesure le compte JOUÉ)"
 fi
 
+# La vérification est écrite à DEUX endroits du skill — le récapitulatif et le
+# bloc qui tague. En retirer un seul laisse l'autre : c'est les deux qu'on
+# retire, sinon la mutation survit sans qu'aucune garde soit en défaut.
+essai_skill "l'étape 8 ne vérifie plus NULLE PART la disponibilité du numéro" <<'PY'
+s = s.replace("   md_version_libre v1.100.1", "   echo 'on suppose que le numero est libre'")
+s = s.replace("""md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
+""", "")
+PY
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 # Un motif qui ne correspond à rien : une mutation sans effet rend zéro rouge,
 # exactement comme une garde qui tient. Si `applique` l'acceptait, tout ce
@@ -506,7 +634,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=49
+PLANCHER=65
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
