@@ -234,25 +234,34 @@ Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. 
      | grep -E '^(feat/|fix/|improvement/|chore/|proto/)'
    ```
 
-2. **Pour chaque branche candidate, detecter si elle est deja sur main** :
+2. **Rafraichir origin AVANT de decider** — la ref de decision est `origin/main`,
+   une ref de SUIVI : elle ne vaut que ce que vaut le dernier fetch.
    ```bash
-   # Une branche est consideree mergee si tous ses changements sont deja sur main
-   if git diff --quiet "$(git merge-base main "$branch")" "$branch" -- 2>/dev/null; then
-     # Pas de changements specifiques a cette branche → safe a supprimer
-     STATUS="merged"
-   else
-     # Changements non encore sur main → garder par defaut
-     STATUS="unmerged"
-   fi
+   source .claude/skills/merge/lib/mesure-distante.sh
+   md_rafraichir_origine || { echo "Fetch impossible — NE RIEN SUPPRIMER"; exit 1; }
    ```
 
-3. **Detecter les branches attachees a un worktree lie** (ne jamais les supprimer ici) :
+3. **Pour chaque branche candidate, detecter si elle est deja sur `origin/main`** :
+   ```bash
+   STATUS="$(md_statut_branche "$branch")"   # MERGED | UNMERGED | INDETERMINE <raison>
+   ```
+   > 🔴 **La reference de decision est `origin/main`, PAS `main` local.** Une branche
+   > dont les changements ne sont que sur le `main` local n'est **pas** publiee : la
+   > supprimer (`git branch -D` **et** `git push origin --delete`) perd le travail.
+   >
+   > 🔴 **`INDETERMINE` n'est PAS « mergee ».** Toute panne de mesure — ref absente,
+   > branche absente, `git` en echec — rend `INDETERMINE`, et une branche
+   > `INDETERMINE` **ne se supprime jamais**. C'est le correctif de `T-20260820-0097` :
+   > l'ancienne version avalait l'erreur avec `2>/dev/null`, et une sortie vide se
+   > lisait « aucune difference » donc « safe a supprimer ».
+
+4. **Detecter les branches attachees a un worktree lie** (ne jamais les supprimer ici) :
    ```bash
    source .claude/skills/merge/lib/worktree-aware-delete.sh
    # pour chaque branche : si mwt_plan_delete "$branch" commence par DEFER → la garder
    ```
 
-4. **Afficher le tableau** des branches avec leur statut :
+5. **Afficher le tableau** des branches avec leur statut :
    ```
    Branches locales detectees :
 
@@ -262,14 +271,15 @@ Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. 
    | fix/jwt-es256                | il y a 5 jours | merged    | Recommande  |
    | feat/work-in-progress        | il y a 1 heure | unmerged  | A garder    |
    | feat/session-en-cours        | il y a 1 heure | worktree  | A garder    |
+   | feat/mesure-impossible       | il y a 3 jours | INDETERMINE | A garder  |
    ```
 
-5. **Demander a l'utilisateur** :
+6. **Demander a l'utilisateur** :
    ```
    Supprimer les branches mergees (locale + remote) ? (oui / non / une par une)
    ```
 
-6. **Selon la reponse** :
+7. **Selon la reponse** :
    - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :
      ```bash
      git branch -D "$branch"
@@ -279,11 +289,14 @@ Le workflow `/pousse-staging` squash-merge les branches `feat/*`, `fix/*`, etc. 
    - **`non`** : skipper et passer a l'Etape 8.
    - **`une par une`** : pour chaque branche `merged`, demander individuellement.
 
-7. **Pour les branches `unmerged`** : ne jamais les supprimer automatiquement. Informer l'utilisateur qu'elles contiennent des changements pas encore sur main.
+8. **Pour les branches `unmerged`** : ne jamais les supprimer automatiquement. Informer l'utilisateur qu'elles contiennent des changements **pas encore sur `origin/main`** — donc pas encore publies.
 
-8. **Pour les branches `worktree`** : ne jamais les supprimer ici (un worktree lié y est attaché). Indiquer `claude-swt-done <timestamp>` pour les retirer proprement.
+   **Pour les branches `INDETERMINE`** : idem, et **dire la raison**. Une mesure qui
+   n'a pas pu se faire n'autorise aucune suppression.
 
-9. **Afficher le recap** :
+9. **Pour les branches `worktree`** : ne jamais les supprimer ici (un worktree lié y est attaché). Indiquer `claude-swt-done <timestamp>` pour les retirer proprement.
+
+10. **Afficher le recap** :
    ```
    Branches supprimees : feat/billing-anthropic-keys, fix/jwt-es256
    Branches conservees : feat/work-in-progress (changements non merges), feat/session-en-cours (worktree lié)
@@ -310,21 +323,37 @@ Certains projets (ex: SomCraft, ServiceDesk) deploient via des workflows GitHub 
 
 ### Calcul de la prochaine version
 
-1. Recuperer le dernier tag :
+> 🔴 **Le dernier tag se lit sur le SERVEUR, jamais dans le depot local.**
+> `git tag --sort=-v:refname | head -1` rend les tags que **ce depot connait** —
+> un depot qui n'a pas fetche depuis une heure rend le tag d'il y a une heure,
+> **sans le dire**, et `/merge` propose alors un numero **deja pris**
+> (`T-20260820-0097`). `git ls-remote` interroge le serveur a chaque appel :
+> aucun fetch prealable, aucun cache qui puisse retarder.
+
+1. Calculer la prochaine version **sur les tags distants** :
    ```bash
-   git tag --sort=-v:refname | head -1
+   source .claude/skills/merge/lib/mesure-distante.sh
+   md_prochaine_version patch          # ou minor / major
+   # → PROCHAINE v1.100.1 DISTANT v1.100.0 LOCAL v1.99.0 ECART LOCAL-EN-RETARD
    ```
-2. Par defaut, proposer un bump **patch** (ex: `v0.6.3` → `v0.6.4`).
-3. Si le merge inclut des changements majeurs (BREAKING, nouveau feature important), proposer aussi les options minor/major.
+2. **Si la commande rend `REFUS distant-injoignable` (rc=2) : NE PAS TAGUER.**
+   Aucun numero n'est propose, et c'est voulu — se replier sur les tags locaux
+   est precisement ce qui republie un numero deja pris.
+3. Par defaut, proposer un bump **patch**. Si le merge inclut des changements
+   majeurs (BREAKING, nouveau feature important), proposer minor/major.
 
 ### Confirmation
 
-Afficher un recapitulatif et **DEMANDER OBLIGATOIREMENT CONFIRMATION** :
+Afficher un recapitulatif et **DEMANDER OBLIGATOIREMENT CONFIRMATION**. Le
+recapitulatif **nomme l'objet de chaque mesure** — `DISTANT` fait foi, `LOCAL`
+est la pour montrer l'ecart :
 ```
-Dernier tag : v0.6.3
-Prochaine version suggeree : v0.6.4 (patch)
-Workflows declenches : Publish Docker Image, Publish Packages
-On tag v0.6.4 ?
+Dernier tag DISTANT (git ls-remote) : v1.100.0    ← fait foi
+Dernier tag LOCAL   (git tag)       : v1.99.0
+Ecart                               : LOCAL-EN-RETARD
+Prochaine version suggeree          : v1.100.1 (patch)
+Workflows declenches                : Publish Docker Image, Publish Packages
+On tag v1.100.1 ?
 ```
 
 L'utilisateur peut :

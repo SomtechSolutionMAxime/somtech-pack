@@ -191,7 +191,7 @@ test('I5 — un artefact ne peut pas viser le lieu d un curateur', () => {
 - [ ] **Step 3 : écrire `metier/curateur-metiers/classement.json`** — transcription **item par item** de l'ABC 1.1.0, même forme que `metier/gestionnaire-client/classement.json` :
   - `identite` : le bloc « Identité » de l'ABC, tel quel (≤ 150 tokens).
   - `preambule` : le bloc « Préambule » de l'ABC, précédé des deux lignes `> **\`CLAUDE.md\` — ce fichier — est écrit par le pack…` / `> **\`CONTEXTE.md\`**…` (copier de gestionnaire-client).
-  - `chapitres` : `reflexes`, `anti-patterns`, `ronde-de-consolidation`, `amendement-abc` — `abrege` et `version_pack: "<prochain tag>"` (lire `git tag --sort=-v:refname | head -1` et incrémenter la mineure).
+  - `chapitres` : `reflexes`, `anti-patterns`, `ronde-de-consolidation`, `amendement-abc` — `abrege` et `version_pack: "<prochain tag>"` (lire le dernier tag **côté serveur** — `source .claude/skills/merge/lib/mesure-distante.sh && md_dernier_tag_distant` — et incrémenter la mineure ; `git tag` en local retarde sans le dire, cf. `T-20260820-0097`).
   - `items` : `RA-MET-001..007` (`nature: "regle"`, `couche`, `enonce`, `enonce_socle`, `chapitre`, `cardinale` pour 002/001) ; `GF-MET-001..006` (`nature: "garde-fou"`) avec :
     - `GF-MET-001` : `couche: "capacite-absente"` — aucun droit `mcp__somcraft__write_document`/`update_block` (le rendu n'exige pas de champ ; le mécanisme est l'absence dans `droits`).
     - `GF-MET-002` : `couche: "refus-de-permission"`, `refus: ["Edit","Write","NotebookEdit"]`.

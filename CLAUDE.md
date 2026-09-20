@@ -105,7 +105,9 @@ Scope par défaut : `.claude,docs,scripts,README.md`. Les release notes génér�
 
 ### Versioning
 
-Chaque installation crée `.somtech-pack/version.json` dans le projet cible, permettant de détecter la version installée et les mises à jour disponibles. **La version du pack se lit sur le tag git** — `git tag --sort=-v:refname | head -1` — qui en est la source unique.
+Chaque installation crée `.somtech-pack/version.json` dans le projet cible, permettant de détecter la version installée et les mises à jour disponibles. **La version du pack se lit sur le tag git** — qui en est la source unique.
+
+> 🔴 **Le tag se lit sur le SERVEUR, pas dans le dépôt local.** `git tag` rend les tags que **ce dépôt connaît** : un dépôt qui n'a pas fetché rend le tag d'il y a une heure, **sans le dire**, et on republie alors un numéro déjà pris (`T-20260820-0097`). La commande juste est `git ls-remote --tags origin`, qui interroge le serveur à chaque appel, ou à défaut un `git fetch --tags` **explicite** avant de lire. Le pack l'expose : `source .claude/skills/merge/lib/mesure-distante.sh && md_dernier_tag_distant`.
 
 > ⚠️ **Les fichiers `VERSION` et `pack.json` du dépôt ne portent PAS la version publiée, et c'est voulu.** Au publish, `.github/workflows/publish.yml` les aligne sur le tag *dans le paquet*, sans jamais recommiter — le paquet publié porte donc la bonne version, le dépôt garde la dernière valeur commitée. Mesuré le 2026-08-19 : `VERSION` sur `main` disait `1.64.0` pendant que le tag et le paquet publié étaient à `1.75.0`. Lire `VERSION` dans le dépôt rend la version d'un paquet qui n'existe pas.
 
