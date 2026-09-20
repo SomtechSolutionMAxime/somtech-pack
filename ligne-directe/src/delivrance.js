@@ -321,6 +321,11 @@ export async function delivrerLaBoite({
   essais = 10,
   delaiMs = 500,
   encoreAutorise,
+  // ⚠️ LA SONDE EST INJECTÉE, COMME TOUT LE RESTE ICI — cette fonction ne touche aucun
+  // processus enfant. Elle rend le SUJET DU DERNIER TOUR de l'agent (`tokens.quota_topic` de
+  // `herdr agent get`), ou rien. Un appelant qui n'en passe pas garde EXACTEMENT son
+  // comportement d'avant : le verdict est alors `sonde-aveugle`, et l'avis part.
+  lireSujetDuDernierTour,
 }) {
   // ON LAISSE AU TEXTE LE TEMPS DE BOUGER. C'est toute la garde : un brouillon vivant bouge,
   // un message coincé ne bouge pas. Sans cette attente, on ne distinguerait pas les deux.
@@ -328,6 +333,25 @@ export async function delivrerLaBoite({
   // Attendre puis presser Entrée sur un dialogue serait le pire des deux mondes : le temps perdu
   // ET l'action approuvée.
   if (ressembleAUnChoix(texteCoince)) return { ok: false, cause: 'choix', soumis: false };
+
+  // ⚠️ LE SUJET SE LIT AVANT L'ATTENTE, PAS APRÈS. C'est l'écart entre les deux lectures qui
+  // porte la mesure ; en lire un seul ne dirait rien. Et une sonde qui tombe ne doit jamais
+  // faire tomber la délivrance avec elle — le balayage porte aussi la livraison des boîtes
+  // oubliées et la relance des messages gardés.
+  let sondeEnPanne = false;
+  const interrogerLaSonde = async () => {
+    if (typeof lireSujetDuDernierTour !== 'function') {
+      sondeEnPanne = true;
+      return null;
+    }
+    try {
+      return await lireSujetDuDernierTour();
+    } catch {
+      sondeEnPanne = true;
+      return null;
+    }
+  };
+  const sujetAvant = await interrogerLaSonde();
 
   await dormir(immobiliteMs);
 
@@ -369,7 +393,25 @@ export async function delivrerLaBoite({
   // Refuser ici refuserait à tort la quasi-totalité du trafic — une garde qui crie à tort se
   // fait retirer, et elle emporte ce qu'elle gardait. On rend donc `ok`, et on rend AUSSI ce
   // qu'on avait vu : c'est ce qui rend la perte réparable au lieu de la rendre muette.
-  if (apres === '') return { ok: true, cause: 'vide-cause-inconnue', soumis: false, texteDisparu: texteCoince };
+  if (apres === '') {
+    // ⚠️ ON REND LE VERDICT, ON NE CHANGE NI LA CAUSE NI `ok` (T-20260920-0125). La cause
+    // nomme toujours CE QU'ON A VU — une boîte vide — et `ok` reste vrai : la boîte est libre,
+    // écrire n'y collera rien. Ce qui s'ajoute est ce qu'on SAIT D'AILLEURS, et il s'ajoute en
+    // champ nommé pour que l'appelant puisse s'en servir sans avoir à le redéduire.
+    const sujetApres = await interrogerLaSonde();
+    const verdict = verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu: texteCoince, sondeEnPanne });
+    return {
+      ok: true,
+      cause: 'vide-cause-inconnue',
+      soumis: false,
+      texteDisparu: texteCoince,
+      // ⚠️ TROIS ÉTATS, PAS DEUX. `aucune-soumission` et `sonde-aveugle` produisent le même
+      // avis ; les confondre dans un booléen rendrait la cécité de la sonde INVISIBLE, alors
+      // que c'est elle qui décide si ce correctif ferme quelque chose en vrai.
+      verdictDeSoumission: verdict,
+      soumissionEtablie: verdict === VERDICTS_DE_SOUMISSION.ETABLIE,
+    };
+  }
   if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
   // Et une seconde fois sur ce qu'on relit : le contenu a pu devenir un dialogue entre-temps.
   if (ressembleAUnChoix(apres)) return { ok: false, cause: 'choix', soumis: false };
@@ -416,6 +458,123 @@ export async function delivrerLaBoite({
 // `delivrerLaBoite` rend une cause absente de la valeur, si une issue n'a pas de mot, ou si un
 // appelant en perd un. Les appelants habillent ce mot de leur contexte ; ils ne décident plus
 // quelles issues existent.
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * DISTINGUER « VIDÉE PARCE QUE SOUMISE » DE « VIDÉE SANS SOUMISSION » (T-20260920-0125)
+ *
+ * 🔬 CE QUI SUIT EST MESURÉ, PAS DÉDUIT — et le commentaire d'avant ne l'était pas. Il disait
+ * « deux causes possibles, et je ne peux pas les distinguer ». Il avait raison de ce qu'il
+ * voyait — l'ÉCRAN ne les distingue pas — et tort de ce qu'il concluait : la distinction ne
+ * vit pas sur l'écran, elle vit sur l'AGENT.
+ *
+ * Mesuré le 2026-09-20 sur un pane herdr jetable, agent `claude` neuf :
+ *
+ *   • boîte vue PLEINE puis vidée par `ctrl+u`  → `tokens.quota_topic` : `null` → `null` ;
+ *   • boîte vue PLEINE puis vidée par `enter`   → `null` → `"BANC CAS A reponds juste OK"` ;
+ *   • second tour, sujet déjà rempli            → il CHANGE encore, vers le nouveau texte.
+ *
+ * `quota_topic` de `herdr agent get` porte **le texte du dernier tour soumis**. C'est le seul
+ * des trois candidats éprouvés qui porte l'IDENTITÉ de ce qui est parti : `agent_status` passe
+ * bien à `working`, mais il retombe à `done` en ~3 s — manquable — et `state_change_seq` bouge
+ * pour d'autres raisons que la soumission.
+ *
+ * ⚠️ IL EST TRONQUÉ, ET LA COMPARAISON EST DONC UN PRÉFIXE. Calibré sur le banc : 144
+ * caractères envoyés, 78 rendus — 77 puis `…` (U+2026). Une égalité stricte rendrait la garde
+ * morte sur tout texte un peu long, c'est-à-dire sur la quasi-totalité de ce qui bloque
+ * vraiment une boîte.
+ *
+ * ⚠️ ET LES DEUX CHEMINS N'ONT PAS LE MÊME CRITÈRE, parce qu'ils ne savent pas la même chose.
+ *
+ * Sur un ESPACE RÉSERVÉ, on n'a JAMAIS lu le texte — on a lu `[Pasted text #6]`. Mesuré sur
+ * une session réelle dont le brief était arrivé collé : `quota_topic` y portait le texte RÉEL
+ * du collage, que l'écran n'avait jamais montré. Exiger un préfixe là fermerait la garde sur
+ * le chemin même où elle est attendue. Le critère s'y réduit donc au CHANGEMENT du sujet.
+ *
+ * Ce critère est PLUS FAIBLE, et il faut savoir de combien : il confond « vidée parce que CE
+ * texte a été soumis » avec « vidée sans soumission, pendant que l'agent soumettait AUTRE
+ * chose ». La fenêtre d'exposition est la seule chose qui rend cette confusion possible, et
+ * elle a été mesurée : sur le chemin espace réservé `fenetreDImmobilite` rend **0**, et les
+ * deux lectures de la sonde encadrent une relecture d'écran — **~18 ms** mesurées sur le poste
+ * (médianes : `agent get` 6 ms, `agent read` 5 ms). Ce n'est PAS la cadence du balayage
+ * (`CADENCE_DU_BALAYAGE_MS`, 60 s), qui sépare deux TOURS et non deux lectures. Il faudrait
+ * qu'un autre texte parte dans ces 18 ms précises. Sur le chemin texte lisible, la fenêtre
+ * vaut `FENETRE_DU_BALAYAGE_MS` (10 s) — et là c'est le préfixe qui tranche, pas la fenêtre.
+ *
+ * ⚠️ TROIS ÉTATS, JAMAIS DEUX — et c'est une exigence de revue, à raison.
+ *
+ * « Le sujet n'a pas changé » et « je n'ai pas pu lire le sujet » produisent le MÊME avis, et
+ * ce serait une faute de les confondre dans le même mot : un essai qui couvre l'ABSENCE de
+ * soumission reste parfaitement vert pendant que la sonde est AVEUGLE, et personne ne saurait
+ * jamais qu'elle l'est. Le verdict les NOMME séparément, et `sonde-aveugle` est ce que le
+ * veilleur peut compter pour savoir si ce correctif ferme quoi que ce soit en vrai.
+ *
+ * ⚠️ ET LE REPLI EST BRUYANT. Tout ce qui n'est pas une soumission ÉTABLIE laisse partir
+ * l'avis — le comportement d'aujourd'hui. On se trompe du côté de l'avertissement, jamais du
+ * silence : un texte perdu sans témoin est le défaut que tout ce chemin existe pour fermer
+ * (T-20260817-0090, un ordre du CTO perdu, sauvé par un tiers qui l'avait lu à l'écran).
+ */
+export const VERDICTS_DE_SOUMISSION = Object.freeze({
+  /** Le sujet du dernier tour est devenu ce qui a disparu : c'est son auteur qui l'a soumis. */
+  ETABLIE: 'soumission-etablie',
+  /** Le sujet n'a pas bougé, ou il a bougé vers autre chose : rien ne dit que ce texte est parti. */
+  AUCUNE: 'aucune-soumission',
+  /** On n'a pas pu lire le sujet. On ne conclut pas d'une absence de mesure. */
+  SONDE_AVEUGLE: 'sonde-aveugle',
+});
+
+/** Ce que `quota_topic` ajoute quand il tronque — retiré avant toute comparaison de préfixe. */
+const MARQUE_DE_TRONCATURE = '…';
+
+const sujetLu = (v) => {
+  const t = String(v ?? '').trim();
+  return t === '' ? null : t;
+};
+
+/**
+ * Le verdict, et rien d'autre : une fonction pure, sans I/O, qui NOMME ce qu'on sait.
+ *
+ * `sondeEnPanne` est vrai quand la lecture du sujet a JETÉ — un cas qu'aucune valeur ne peut
+ * représenter, et qui ne doit surtout pas se confondre avec « le sujet est vide ».
+ */
+export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sondeEnPanne = false } = {}) {
+  if (sondeEnPanne) return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
+
+  const apres = sujetLu(sujetApres);
+  // ⚠️ RIEN À LIRE APRÈS N'EST PAS « RIEN N'A ÉTÉ SOUMIS ». Une soumission remplit toujours le
+  // sujet (mesuré : 3 tours sur 3, présent à +1 s et +5 s). Un sujet vide APRÈS veut donc dire
+  // qu'on n'a pas su lire, pas qu'il ne s'est rien passé.
+  if (apres === null) return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
+
+  const avant = sujetLu(sujetAvant);
+  // Un sujet ABSENT avant et présent après est un changement parfaitement lisible — c'est même
+  // le cas mesuré sur un agent neuf, qui n'avait encore rien soumis.
+  if (avant !== null && avant === apres) return VERDICTS_DE_SOUMISSION.AUCUNE;
+
+  // ⚠️ L'ESPACE RÉSERVÉ N'EST PAS COMPARABLE : ce qu'on avait lu n'est pas le texte.
+  if (estUnEspaceReserve(texteDisparu)) return VERDICTS_DE_SOUMISSION.ETABLIE;
+
+  const disparu = String(texteDisparu ?? '').trim();
+  if (disparu === '') return VERDICTS_DE_SOUMISSION.AUCUNE;
+
+  const noyau = apres.endsWith(MARQUE_DE_TRONCATURE) ? apres.slice(0, -MARQUE_DE_TRONCATURE.length) : apres;
+  if (noyau === '') return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
+
+  // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré : sur un texte de
+  // onze lignes, `quota_topic` portait « ligne 1 … ». On compare donc au début du texte, une
+  // fois ses blancs internes normalisés — un retour à la ligne ne doit pas casser la garde.
+  const aplati = (t) => t.replace(/\s+/g, ' ').trim();
+  return aplati(disparu).startsWith(aplati(noyau))
+    ? VERDICTS_DE_SOUMISSION.ETABLIE
+    : // Le sujet a changé, mais vers AUTRE chose : l'agent a soumis un autre texte, et celui-ci
+      // a bien pu disparaître sans être soumis. L'avis reste dû.
+      VERDICTS_DE_SOUMISSION.AUCUNE;
+}
+
+/** Le même fait, en booléen, pour les appelants qui n'ont pas à connaître les trois états. */
+export function soumissionEtablie(args) {
+  return verdictDeSoumission(args) === VERDICTS_DE_SOUMISSION.ETABLIE;
+}
 
 /** L'ensemble EXACT des `cause` que `delivrerLaBoite` peut rendre. */
 export const ISSUES_DE_DELIVRANCE = Object.freeze([
@@ -674,7 +833,28 @@ export function avisDeBoiteBloquee({ texteLibere = '', immobiliteMs = 0, suite =
  * PENSER à lire — c'est déjà le défaut de `attendu`, et ce chantier a mesuré neuf fois qu'une
  * discipline écrite ne mord pas. Collé au message livré, le destinataire ne peut pas ne pas le voir.
  */
-export function avisDeBoiteVidee({ texteDisparu = '' } = {}) {
+export function avisDeBoiteVidee({ texteDisparu = '', soumissionEtablie = false, env = process.env } = {}) {
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // LES DEUX GARDES SONT ICI, EN AMONT — UNE SEULE PORTE POUR LES DEUX CHEMINS
+  //
+  // ⚠️ ET C'EST DÉLIBÉRÉ, PAS COMMODE. Ce message existe à DEUX endroits plus bas — le chemin
+  // ESPACE RÉSERVÉ et le chemin TEXTE LISIBLE. Ce dépôt a payé dix fois « une porte sur deux »,
+  // dont deux fois DANS le correctif écrit pour la fermer. Une garde posée sur chacun des deux
+  // retours serait deux gardes à maintenir, et la prochaine main n'en corrigerait qu'une.
+  // Placée avant la bifurcation, il n'y a rien à rater.
+  //
+  // ⚠️ ON REND `null`, PAS UNE CHAÎNE VIDE. Les appelants collent cet avis en tête du message
+  // livré ; une chaîne vide y laisserait deux sauts de ligne orphelins et, surtout, passerait
+  // les tests de vérité d'un `if`. `null` force l'appelant à dire ce qu'il fait du cas.
+
+  // ① Son auteur vient de le soumettre — établi par la sonde, jamais supposé (T-20260920-0125).
+  if (soumissionEtablie) return null;
+
+  // ② L'interrupteur du poste, sur le modèle de `LIGNE_DIRECTE_VERBEUX` — la seule autre
+  // variable que ce module lise. Il éteint cet avis-là, et rien d'autre : ni le balayage, ni la
+  // délivrance, ni l'avis de boîte BLOQUÉE, qui annonce un geste qu'on a réellement posé.
+  if (env?.LIGNE_DIRECTE_SANS_AVIS_BOITE_VIDEE) return null;
+
   // LE TEXTE EN ENTIER, JAMAIS TRONQUÉ — c'est le seul point qui rend la perte réparable. Le
   // 2026-08-17, un ordre du CTO n'a survécu que parce qu'un tiers l'avait lu à l'écran avant
   // d'envoyer : sans le texte ici, il n'y a rien à recopier.

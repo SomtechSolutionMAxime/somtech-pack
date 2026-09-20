@@ -552,6 +552,33 @@ function statutRendu(reponse) {
   return r?.agent?.agent_status ?? r?.pane?.agent_status ?? null;
 }
 
+/**
+ * Le SUJET DU DERNIER TOUR soumis, rendu par `agent get` OU par `pane get` (T-20260920-0125).
+ *
+ * ⚠️ MÊME JOINTURE QUE `statutRendu`, ET ELLE A ÉTÉ MESURÉE AVANT D'ÊTRE ÉCRITE. Les deux
+ * verbes ne rangent pas leur réponse au même endroit, et le repli par pane fait passer les
+ * sessions invisibles par le second. Vérifié le 2026-09-20 sur un pane réel : `herdr pane get`
+ * expose bien `result.pane.tokens.quota_topic`, avec la même valeur que `agent get`. Lire la
+ * seule forme `agent` aurait rendu la sonde AVEUGLE sur tout le chemin de repli — c'est-à-dire
+ * précisément sur les sessions les plus difficiles à joindre — sans que rien ne le dise.
+ *
+ * ⚠️ `null` VEUT DIRE « JE N'AI PAS SU LIRE », jamais « rien n'a été soumis ». La chaîne vide
+ * est ramenée à `null` pour que les deux ne puissent pas se confondre en aval.
+ *
+ * ⚠️ ET CETTE NORMALISATION-LÀ EST UN SECOND FILET, PAS UNE GARDE — mesuré, et dit ici pour
+ * qu'on ne la prenne pas pour ce qu'elle n'est pas. La muter (rendre `''` au lieu de `null`)
+ * ne fait rougir aucun essai, parce que `sujetLu`, dans `verdictDeSoumission`, ramène déjà le
+ * vide à `null`. Elle existe pour que le CONTRAT de cette fonction — « une chaîne non vide, ou
+ * rien » — tienne tout seul, en miroir de `sujetDuDernierTour` (`ligne-directe/src/herdr.js`),
+ * qui porte le même contrat et qui, elle, est éprouvée à son niveau. Une main qui la retirerait
+ * en la croyant morte déplacerait la sémantique du vide dans un module qui n'en sait rien.
+ */
+function sujetDuDernierTourRendu(reponse) {
+  const r = reponse?.result;
+  const sujet = r?.agent?.tokens?.quota_topic ?? r?.pane?.tokens?.quota_topic ?? null;
+  return typeof sujet === 'string' && sujet.trim() !== '' ? sujet : null;
+}
+
 export function commandesLivraison(pane, texte, { parLePane = false } = {}) {
   if (!pane) throw new Error('le pane de la session à briefer est requis');
   if (!String(texte ?? '').trim()) throw new Error('un brief vide n’est pas un brief');
@@ -1006,6 +1033,25 @@ async function livrerSousBudget({
       immobiliteMs: fenetreMs,
       essais,
       delaiMs,
+      // ⚠️ LA SONDE DE SOUMISSION, ET ELLE PASSE PAR LE MÊME `appelHerdr` QUE TOUT LE RESTE
+      // (T-20260920-0125). `lectures.interroger` est DÉJÀ `agent get` (ou `pane get` sur le
+      // repli) : on ne crée pas un second transport, on lit le champ qui manquait.
+      // `delivrerLaBoite` l'appelle avant et après ; c'est `verdictDeSoumission` qui tranche.
+      lireSujetDuDernierTour: async () => {
+        try {
+          // ⚠️ `.reponse`, PAS L'OBJET ENTIER — `appelHerdr` rend `{ ok, reponse }`, et c'est
+          // `reponse` qui porte le `result`. La première écriture passait l'enveloppe : le
+          // sujet sortait `null` à tous les coups, donc verdict `sonde-aveugle`, donc l'avis
+          // partait quand même. Vert sur la fonction pure, mort sur le chemin réel — attrapé
+          // par l'essai de bout en bout de l'appelant, pas par la relecture.
+          const { reponse } = await appelHerdr(lectures.interroger, vers);
+          return sujetDuDernierTourRendu(reponse);
+        } catch {
+          // Une sonde qui tombe ne fait pas tomber la livraison : on n'a pas su lire, et le
+          // verdict sera `sonde-aveugle` — donc l'avis partira, comme avant ce lot.
+          return null;
+        }
+      },
     });
     if (delivrance.ok) {
       // ⚠️ ON REGARDE À NOUVEAU, ON NE DÉDUIT PAS. La délivrance a pu mettre le destinataire au
@@ -1082,7 +1128,16 @@ async function livrerSousBudget({
   if (delivrance?.soumis) {
     texteALivrer = `${avisDeBoiteBloquee({ texteLibere: delivrance.texte, immobiliteMs: fenetreMs })}\n\n${texte}`;
   } else if (delivrance?.texteDisparu) {
-    texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
+    // ⚠️ ET CET AVIS NE PART PLUS QUAND SON AUTEUR VIENT DE SOUMETTRE (T-20260920-0125) —
+    // `avisDeBoiteVidee` rend alors `null`. La MÊME garde est posée sur l'appelant frère
+    // (`ligne-directe/src/herdr.js`) dans le même geste : ce module et lui ont déjà payé
+    // quatre « moitiés posées d'un côté » sur ce chemin précis, on n'en ajoute pas une
+    // cinquième. Le texte disparu, lui, continue de remonter en champ dans tous les cas.
+    const avis = avisDeBoiteVidee({
+      texteDisparu: delivrance.texteDisparu,
+      soumissionEtablie: delivrance.soumissionEtablie,
+    });
+    if (avis) texteALivrer = `${avis}\n\n${texte}`;
   }
 
   const commandes = commandesLivraison(pane, texteALivrer, { parLePane });
