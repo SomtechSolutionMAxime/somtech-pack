@@ -50,6 +50,15 @@ function fauxServiceDeskPagine(total, { plafond = 100, journal = [] } = {}) {
     fetcher: async (_url, init) => {
       const args = JSON.parse(init.body).params.arguments;
       journal.push({ action: args.action, limit: args.limit, offset: args.offset ?? 0 });
+      // ⚠️ LE DOUBLE REFUSE DE SERVIR UNE BOUCLE SANS FIN, ET C'EST LA MOITIÉ QUI MANQUAIT.
+      // Mesuré : retirer une condition d'arrêt du lecteur ne faisait pas ROUGIR la suite — elle
+      // PENDAIT, 60 s, sans un mot, jusqu'au plafond du lanceur. « Rien n'a échoué » et « rien
+      // n'a tourné » rendent alors le même silence, et la garde qui tenait la borne était
+      // indiscernable d'un banc cassé. Un double qui compte ses pages transforme la pendaison en
+      // rouge NOMMÉ. Le seuil est large : 25 pages pour au plus 3 attendues.
+      if (journal.filter((a) => a.action === 'list').length > 25) {
+        throw new Error('LA BOUCLE NE S’ARRÊTE PAS : plus de 25 pages demandées au double');
+      }
       if (args.action === 'get') return enveloppe({ erreur: 'get par code non servi' });
       const limit = Math.min(args.limit ?? 50, plafond);
       const offset = args.offset ?? 0;
@@ -201,9 +210,14 @@ test('🔴 DES PAGES QUI SE CHEVAUCHENT NE FONT PAS PASSER UNE LECTURE PARTIELLE
   // mesuré » comme avant, mais désormais présenté comme une recherche EXHAUSTIVE, sans trace
   // pour dire que la lecture a pu être trompée. C'est un faux témoin pour qui lit le journal.
   const tous = Array.from({ length: 200 }, (_, i) => ({ project_id: `P-2026${String(i).padStart(4, '0')}-0001`, status: 'x' }));
+  let pagesVues = 0;
   const fetcher = async (_url, init) => {
     const args = JSON.parse(init.body).params.arguments;
     if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    // ⚠️ CE DOUBLE AUSSI REFUSE DE SERVIR UNE BOUCLE SANS FIN — voir `fauxServiceDeskPagine`.
+    // Une garde dont l'échec est une PENDAISON ressemble à un banc cassé, pas à un défaut.
+    pagesVues += 1;
+    if (pagesVues > 25) throw new Error('LA BOUCLE NE S’ARRÊTE PAS : plus de 25 pages demandées');
     const offset = args.offset ?? 0;
     // Le tri a bougé entre les deux appels : la page 2 recouvre la moitié de la page 1.
     const debut = offset === 0 ? 0 : 50;
@@ -233,6 +247,45 @@ test('ET UNE PAGINATION SANS CHEVAUCHEMENT NE CRIE TOUJOURS PAS — la garde ne 
     () => acces('projects', 'P-20269999-9999'),
     (err) => {
       assert.doesNotMatch(err.message, /INCOMPL|PLAFONN/, `lecture propre : aucun doute à déclarer — ${err.message}`);
+      return true;
+    }
+  );
+});
+
+
+test('🔴 UN ENREGISTREMENT SANS CODE LISIBLE COMPTE QUAND MÊME — sinon on crie à l’incomplétude à tort', async () => {
+  // ⚠️ FAUSSE SURVIVANTE DEVENUE VRAIE GARDE. Une mutation remplaçait le compteur d'identités
+  // uniques par le compte des CODES indexés — et elle survivait, parce que dans tous mes doubles
+  // chaque enregistrement portait un code lisible : les deux comptes étaient égaux, la mutation
+  // ne changeait rien. C'est une mutation INOPÉRANTE lue comme une garde qui tient.
+  //
+  // LE CAS OÙ ILS DIFFÈRENT EST RÉEL : le lecteur n'indexe QUE les enregistrements dont le code
+  // a la forme canonique. Un service qui en rend d'autres — un brouillon sans code, un
+  // enregistrement d'un autre format — ferait alors `par.size < total` pour toujours, donc
+  // « LECTURE INCOMPLÈTE » sur une lecture parfaitement complète. Une garde qui crie à chaque
+  // fois cesse d'être lue, et c'est ainsi qu'elle meurt.
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    if ((args.offset ?? 0) > 0) return enveloppe({ data: [], total: 4, limit: 100 });
+    return enveloppe({
+      data: [
+        { id: 'u1', project_id: 'P-20260001-0001', status: 'x' },
+        { id: 'u2', project_id: 'brouillon-sans-code', status: 'x' },
+        { id: 'u3', project_id: null, status: 'x' },
+        { id: 'u4', project_id: 'P-20260002-0001', status: 'x' },
+      ],
+      total: 4,
+      limit: 100,
+    });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  await assert.rejects(
+    () => acces('projects', 'P-20269999-9999'),
+    (err) => {
+      assert.match(err.message, /4 projects lus sur 4 annonc/, `les 4 enregistrements comptent, pas seulement les 2 codés : ${err.message}`);
+      assert.doesNotMatch(err.message, /INCOMPL/, `lecture complète : crier ici tuerait la garde à l’usage — ${err.message}`);
       return true;
     }
   );

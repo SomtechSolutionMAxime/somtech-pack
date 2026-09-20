@@ -307,6 +307,7 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
     // théorique ici — ce lecteur tourne pendant que treize orchestrateurs écrivent sur le même
     // service, et un tri instable entre deux appels suffit.
     const identites = new Set();
+    const compteDesUniques = () => identites.size;
     let annonce = null;
     for (;;) {
       const corps = await appelerMcp(famille, { action: 'list', limit: parPage, offset });
@@ -323,7 +324,12 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
         if (identite !== undefined && identite !== null) identites.add(identite);
         if (typeof code === 'string' && CODE_LISIBLE.test(code)) par.set(code, item);
       }
-      const vus = identites.size;
+      // ⚠️ UNE SEULE EXPRESSION DE CE COMPTE, ET C'EST UNE MUTATION QUI L'A EXIGÉ. Il en existait
+      // deux — cette variable locale, et celle inscrite pour le compte rendu quelques lignes plus
+      // bas. Remplacer l'une par le compte des CODES indexés survivait à toute la suite : l'autre
+      // portait encore la bonne valeur, et le message restait juste. Deux expressions du même
+      // fait, c'est une qu'on peut casser sans que rien ne bronche.
+      const vus = compteDesUniques();
       // Une page qui n'apporte aucun code nouveau ne peut pas faire avancer la lecture : soit la
       // source ignore `offset` et nous resert la même, soit il n'y a plus rien de neuf derrière.
       // ⚠️ ET LES DEUX CAUSES NE SE VALENT PAS. Si la page était PLEINE, on ne s'est pas arrêté
@@ -354,7 +360,7 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
       offset += liste.length;
     }
     index.set(famille, par);
-    lus.set(famille, identites.size);
+    lus.set(famille, compteDesUniques());
     annonces.set(famille, annonce);
     return par;
   };
