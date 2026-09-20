@@ -209,7 +209,7 @@ echo "== Seconde ronde — ce que la première n'atteignait pas =="
 # On ne les a pas gardés — on les a retirés.
 
 essai 'le filtre semver est retiré : une pré-version passe devant' <<'PY'
-s = s.replace("  grep -E '^v[0-9]+\\.[0-9]+\\.[0-9]+$' || true", "  cat")
+s = s.replace('  grep -E "$MD_SEMVER_MOTIF" || true', "  cat")
 PY
 
 essai 'le cas « aucun tag nulle part » disparaît' <<'PY'
@@ -435,8 +435,7 @@ fi
 echo "== T-20260815-0013 — le refus d'un numéro déjà pris =="
 
 essai 'un serveur injoignable est annoncé LIBRE' <<'PY'
-s = s.replace("""    printf 'md_version_libre: %s injoignable — %s\\n' "$remote" "$out" >&2
-    echo "REFUS serveur-injoignable"
+s = s.replace("""    echo "REFUS serveur-injoignable"
     return 2""",
 """    echo "LIBRE ${version}"
     return 0""")
@@ -465,13 +464,48 @@ PY
 # (scénarios V-ter et V-quater), pas supposé.
 
 essai 'la version malformée est acceptée au lieu d_être refusée' <<'PY'
-s = s.replace("""    *) echo "REFUS version-malformee ${version}"; return 3 ;;""",
-              """    *) : ;;""")
+s = s.replace("""  if ! md_semver_valide "$version"; then
+    echo "REFUS version-malformee ${version}"; return 3
+  fi""", "")
 PY
 
 essai 'la disponibilité se lit sur les tags LOCAUX' <<'PY'
 s = s.replace("""  out="$(git ls-remote --tags "$remote" "refs/tags/${version}" 2>&1)"; rc=$?""",
               """  out="$(git tag --list "${version}" 2>&1 | sed 's#^#sha\\trefs/tags/#')"; rc=$?""")
+PY
+
+echo "== Les trois défauts de la revue de fond sur 0013 =="
+
+essai 'la validation du format redevient un GLOB permissif' <<'PY'
+s = s.replace("""  if ! md_semver_valide "$version"; then
+    echo "REFUS version-malformee ${version}"; return 3
+  fi""",
+"""  case "$version" in
+    v[0-9]*.[0-9]*.[0-9]*) : ;;
+    *) echo "REFUS version-malformee ${version}"; return 3 ;;
+  esac""")
+PY
+
+essai 'le motif de version accepte les zéros de tête' <<'PY'
+s = s.replace("MD_SEMVER_MOTIF='^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'",
+              "MD_SEMVER_MOTIF='^v[0-9]+\\.[0-9]+\\.[0-9]+$'")
+PY
+
+# ⚠️ Une mutation « stderr refusionné sur le chemin de succès » a été écrite
+# ici, puis RETIRÉE avec la séparation qu'elle éprouvait : elle SURVIVAIT,
+# parce que le filtre sur la ref exacte écarte déjà toute ligne qui n'est pas
+# la ref demandée. Les deux protections se recouvraient ; on garde celle qui
+# peut rougir, et le scénario W-ter l'éprouve avec un relais qui écrit sur
+# stderr en réussissant.
+
+essai 'la première ligne venue est prise pour un sha' <<'PY'
+s = s.replace("""  ligne="$(printf '%s\\n' "$out" | awk -v r="refs/tags/${version}" '$2 == r { print $1; exit }')\"""",
+              """  ligne="$(printf '%s\\n' "$out" | awk 'NF { print $1; exit }')\"""")
+PY
+
+essai_skill "le bloc qui pose le tag ne rejoue plus la vérification" <<'PY'
+s = s.replace("""md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
+git tag <version>""", "git tag <version>")
 PY
 
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
@@ -519,8 +553,13 @@ else
   ok "plancher et CHANGELOG abaissés ensemble → suite rouge (la garde mesure le compte JOUÉ)"
 fi
 
-essai_skill "l'étape 8 ne vérifie plus la disponibilité du numéro" <<'PY'
+# La vérification est écrite à DEUX endroits du skill — le récapitulatif et le
+# bloc qui tague. En retirer un seul laisse l'autre : c'est les deux qu'on
+# retire, sinon la mutation survit sans qu'aucune garde soit en défaut.
+essai_skill "l'étape 8 ne vérifie plus NULLE PART la disponibilité du numéro" <<'PY'
 s = s.replace("   md_version_libre v1.100.1", "   echo 'on suppose que le numero est libre'")
+s = s.replace("""md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
+""", "")
 PY
 
 echo "== Z — l'instrument refuse une épreuve VIDE =="
@@ -552,7 +591,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=56
+PLANCHER=60
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

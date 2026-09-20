@@ -468,12 +468,76 @@ sortie="$(md_prochaine_version patch 2>/dev/null)"; rc=$?
 git_local remote set-url origin "$ORIGIN"
 
 echo "== W-bis — une version malformée est refusée, pas devinée =="
-for mauvaise in "" "1.2.3" "v1.2" "vX.Y.Z" "latest"; do
+# ⚠️ `case "$v" in v[0-9]*.[0-9]*.[0-9]*)` n'est PAS une expression régulière :
+# en shell, `[0-9]*` veut dire « un chiffre puis n'importe quoi ». La liste
+# ci-dessous contient donc les formes qui passaient sous ce glob — dont la plus
+# coûteuse, `v1.9*.0`, dont l'étoile est un motif que `ls-remote` interprète :
+# le refus nommait un tag INEXISTANT avec le sha d'un autre.
+for mauvaise in "" "1.2.3" "v1.2" "vX.Y.Z" "latest" "v1.2.3.4" "v1.2.3abc" "v1a.2.3" "v01.02.03" "refs/tags/v1.2.3" "v1.2.3-rc1"; do
   sortie="$(md_version_libre "$mauvaise")"; rc=$?
   { [ "$rc" -eq 3 ] && case "$sortie" in REFUS*) true ;; *) false ;; esac; } \
     && ok "« ${mauvaise:-<vide>} » → $sortie (rc=3)" \
     || ko "attendu un REFUS rc=3 pour « ${mauvaise:-<vide>} », obtenu '$sortie' rc=$rc"
 done
+
+# Le cas qui coûte le plus : un GLOB. Il ne doit jamais rendre PRIS — un refus
+# qui nomme un tag inexistant est pire qu'une absence de refus.
+must git_autre tag v3.95.0
+must git_autre tag v3.99.0
+must git_autre push -q origin v3.95.0 v3.99.0
+sortie="$(md_version_libre 'v3.9*.0')"; rc=$?
+[ "$rc" -eq 3 ] && ok "un numéro contenant un glob → rc=3" \
+  || ko "rc attendu 3 pour 'v3.9*.0', obtenu $rc"
+case "$sortie" in
+  PRIS*) ko "le glob rend « $sortie » — le refus NOMME un tag qui n'existe pas, avec le sha d'un autre" ;;
+  *) ok "le glob ne rend pas PRIS : $sortie" ;;
+esac
+# Et les deux vrais tags, eux, sont bien vus comme pris chacun pour soi.
+[ "$(md_version_libre v3.95.0 | awk '{print $1, $2}')" = "PRIS v3.95.0" ] \
+  && ok "v3.95.0 est vu comme pris" || ko "v3.95.0 devrait être pris"
+[ "$(md_version_libre v3.96.0)" = "LIBRE v3.96.0" ] \
+  && ok "et v3.96.0, voisin des deux, reste libre" || ko "v3.96.0 devrait être libre"
+
+echo "== W-ter — une sortie inattendue du serveur ne devient pas un sha =="
+# Deux pannes fabriquées par un relais placé devant le vrai `git` : l'une écrit
+# sur stderr en réussissant, l'autre rend une ligne qui n'est pas une ref. Ni
+# l'une ni l'autre ne doit être lue comme un sha — c'est ce que la fusion
+# `2>&1` et « prendre la première ligne » produisaient.
+GIT_REEL2="$(command -v git)"
+FAUX2="${WORK}/faux-git-2"; mkdir -p "$FAUX2"
+
+cat > "${FAUX2}/git" <<RELAIS
+#!/usr/bin/env bash
+if [ "\${1:-}" = "ls-remote" ]; then
+  echo "Warning: Permanently added the host to the list of known hosts." >&2
+  exec "${GIT_REEL2}" "\$@"
+fi
+exec "${GIT_REEL2}" "\$@"
+RELAIS
+chmod +x "${FAUX2}/git"
+sortie="$(PATH="${FAUX2}:$PATH" md_version_libre v88.88.88 2>/dev/null)"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$sortie" = "LIBRE v88.88.88" ]; } \
+  && ok "un avertissement sur stderr ne pollue pas la réponse : $sortie" \
+  || ko "attendu 'LIBRE v88.88.88' rc=0, obtenu '$sortie' rc=$rc — stderr fusionné dans la sortie ?"
+
+cat > "${FAUX2}/git" <<RELAIS
+#!/usr/bin/env bash
+if [ "\${1:-}" = "ls-remote" ]; then
+  echo "bruit-inattendu du serveur"
+  exit 0
+fi
+exec "${GIT_REEL2}" "\$@"
+RELAIS
+chmod +x "${FAUX2}/git"
+sortie="$(PATH="${FAUX2}:$PATH" md_version_libre v88.88.88 2>/dev/null)"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$sortie" = "LIBRE v88.88.88" ]; } \
+  && ok "une ligne qui n'est pas une ref est ignorée : $sortie" \
+  || ko "attendu 'LIBRE v88.88.88' rc=0, obtenu '$sortie' rc=$rc — une ligne quelconque lue comme un sha ?"
+case "$sortie" in
+  *bruit-inattendu*) ko "le bruit du serveur ressort dans la réponse" ;;
+  *) ok "et le bruit ne ressort nulle part dans la réponse" ;;
+esac
+rm -f "${FAUX2}/git"
 
 echo "== X — la COURSE : le numéro calculé est pris entre-temps =="
 # Le scénario exact de T-20260815-0013, joué dans l'ordre où il s'est produit :
@@ -647,6 +711,26 @@ else
   fi
 fi
 
+# ⚠️ La vérification de disponibilité doit vivre DANS le bloc qui tague, pas
+# seulement dans le récapitulatif : entre les deux il y a une attente humaine
+# de durée non bornée, et c'est exactement la fenêtre de T-20260815-0013.
+bloc_du_tag="$(awk '
+  /^[ \t]*```bash[ \t]*$/ { dedans = 1; bloc = ""; next }
+  /^[ \t]*```/             { if (dedans && bloc ~ /git tag /) { print bloc; trouve = 1; exit }
+                              dedans = 0; next }
+  dedans                    { sub(/#.*/, ""); bloc = bloc $0 "\n" }
+  END { if (!trouve) print "__AUCUN_BLOC_DE_TAG__" }
+' "$SKILL")"
+
+if [ "$bloc_du_tag" = "__AUCUN_BLOC_DE_TAG__" ]; then
+  ko "aucun bloc bash du skill ne pose de tag — cette garde ne porte plus"
+else
+  ok "le skill porte un bloc bash qui pose le tag"
+  printf '%s' "$bloc_du_tag" | grep -q 'md_version_libre' \
+    && ok "et ce bloc rejoue md_version_libre AVANT de taguer" \
+    || ko "le bloc qui pose le tag ne vérifie pas la disponibilité — la fenêtre de T-20260815-0013 reste ouverte"
+fi
+
 # Le chemin qui SUPPRIME ne compare plus à \`main\` local.
 if grep -qE 'git merge-base main ' "$SKILL"; then
   ko "l'étape 7.5 compare encore à \`main\` LOCAL"
@@ -719,7 +803,7 @@ echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=100
+PLANCHER=115
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

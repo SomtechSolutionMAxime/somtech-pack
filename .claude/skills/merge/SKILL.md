@@ -349,12 +349,13 @@ Certains projets (ex: SomCraft, ServiceDesk) deploient via des workflows GitHub 
 > sur `v1.53.0`, deux lots ont prepare la meme version (`T-20260815-0013`).
 > Ce qu'il faut est un **REFUS au moment de poser**, qui nomme le tag deja la.
 
-1. Juste avant de taguer, verifier la disponibilite **cote serveur** :
+1. Verifier la disponibilite **cote serveur** :
    ```bash
    md_version_libre v1.100.1
    # LIBRE v1.100.1                 rc=0 → on peut taguer
    # PRIS v1.100.1 <sha>            rc=1 → REFUSER, recalculer, repartir
    # REFUS serveur-injoignable      rc=2 → NE PAS TAGUER
+   # REFUS version-malformee <v>    rc=3 → NE PAS TAGUER, corriger le numero
    ```
 2. **`PRIS` : ne pas taguer.** Relancer `md_prochaine_version` — le calcul repart
    du plus grand tag du serveur, donc il enjambe le numero perdu. Celui qui perd
@@ -362,6 +363,15 @@ Certains projets (ex: SomCraft, ServiceDesk) deploient via des workflows GitHub 
 3. 🔴 **`REFUS serveur-injoignable` : ne pas taguer non plus.** « Libre » et « je
    n'ai pas pu regarder » se ressemblent, et c'est la ressemblance qui republie un
    numero deja pris. Un silence n'est jamais un feu vert.
+4. **`REFUS version-malformee` : ne pas taguer.** La question elle-meme est
+   invalide — on ne devine pas ce qui etait voulu. Un numero qui porte un `*`
+   serait interprete par le serveur comme un **motif**, et le refus nommerait
+   alors un tag qui n'existe pas.
+
+> ⚠️ **Cette verification-ci sert le RECAPITULATIF, pas la pose du tag.** Entre
+> elle et `git tag`, il y a une **attente humaine de duree non bornee** — et
+> c'est exactement la fenetre du 2026-08-15. La verification qui protege
+> vraiment est celle de la section **Execution**, rejouee juste avant `git tag`.
 
 ### Confirmation
 
@@ -385,11 +395,25 @@ L'utilisateur peut :
 
 ### Execution
 
-Apres confirmation :
+> 🔴 **Rejouer la verification MAINTENANT, sur le numero reellement retenu.**
+> Celle du recapitulatif date d'avant la confirmation : entre les deux, l'humain
+> a pu reflechir une minute ou une heure, et **un autre lot a pu poser le tag**.
+> C'est la fenetre que `T-20260815-0013` decrit. Et si l'utilisateur a **propose
+> un autre numero** (« non, v0.7.0 »), ce numero-la **n'a jamais ete verifie**.
+
+Apres confirmation, dans cet ordre, sans rien intercaler :
 ```bash
+md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
 git tag <version>
 git push origin <version>
 ```
+
+- **rc != 0 : on ne tague pas.** `PRIS` → recalculer et reprendre au
+  recapitulatif ; `REFUS` (serveur injoignable ou numero malforme) → s'arreter et
+  le dire. La PR reste mergee, le tag pourra etre pose plus tard.
+- Le `git push origin <version>` echouerait de toute facon sur un tag deja
+  distant — mais **un echec de push n'est pas un refus** : il arrive apres la
+  pose locale, son message ne nomme pas le lot concurrent, et il invite a forcer.
 
 Puis verifier que les workflows sont bien queued :
 ```bash
