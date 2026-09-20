@@ -399,6 +399,39 @@ s = s.replace("   - **`oui`** : pour chaque branche `merged` **(jamais une branc
               "   - **`oui`** : pour chaque branche listee **(jamais une branche `worktree`)**, executer :")
 PY
 
+essai_skill 'la liste est numérotée ET la puce réelle est débridée, avec un leurre plus haut' <<'PY'
+# Le bypass exact relevé par la revue de fond : changer la FORME de la liste
+# faisait sortir le scan de la section, et il retombait sur une puce sans
+# rapport — qu'il suffisait de faire mentionner `merged` pour tout valider.
+s = s.replace("   - **`non`** : skipper et passer a l'Etape 8.",
+              "   - **`non`** : skipper (rappel : seules les branches `merged` de 7.5 sont visees) et passer a l'Etape 8.")
+s = s.replace("   - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :",
+              "   1. **`oui`** : pour chaque branche listee **(jamais une branche `worktree`)**, executer :")
+PY
+
+echo "== Une liste NUMÉROTÉE au sens inchangé ne doit PAS faire rougir =="
+# L'autre moitié du même défaut : la garde rougissait à tort dès que la forme
+# de la liste changeait, sur un texte dont le fond était intact.
+N=$((N+1))
+NUMEROTE="${WORK}/skill-numerote.md"
+python3 - "$SKILL_SRC" "$NUMEROTE" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src, encoding="utf-8").read(); before = s
+s = s.replace("   - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :",
+              "   1. **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :", 1)
+if s == before:
+    print("MUTATION-INOPERANTE", file=sys.stderr); sys.exit(2)
+open(dst, "w", encoding="utf-8").write(s)
+PY
+if [ $? -ne 0 ]; then
+  ko "MUTATION INOPÉRANTE — la liste n'a pas pu être numérotée"
+elif MERGE_SKILL_SRC="$NUMEROTE" bash "$SUITE" >"${WORK}/numerote.log" 2>&1; then
+  ok "liste numérotée, fond inchangé → suite VERTE (aucun faux positif)"
+else
+  ko "FAUX POSITIF — changer la forme de la liste fait rougir la garde : $(grep -m1 '❌' "${WORK}/numerote.log")"
+fi
+
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
 # Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
 # tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
@@ -473,7 +506,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=47
+PLANCHER=49
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

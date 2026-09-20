@@ -481,18 +481,34 @@ fi
 # rougit à tort dès qu'on insère une explication légitime entre la puce et le
 # bloc. On remonte à la PUCE qui gouverne ce bloc — la dernière puce `- **…**`
 # avant lui — et c'est ELLE qui doit borner le geste.
+# ⚠️ Deux pièges déjà payés ici, et c'est le MÊME : la recherche ne doit pas
+# s'échapper de la section. Une version antérieure retenait « la dernière puce
+# `- **` vue, où qu'elle soit » : réécrire la liste en liste NUMÉROTÉE la
+# faisait retomber sur une puce sans rapport, plus haut dans le document —
+# rouge à tort sur un texte sûr, et verte à tort sur un texte débridé si cette
+# puce lointaine disait `merged` par hasard.
+#   · on accepte TOUTE forme d'item de liste : `-`, `*`, ou `1.` ;
+#   · on OUBLIE l'item courant à chaque titre — la recherche ne traverse pas
+#     une frontière de section.
+# ⚠️ Ce que cette garde ne couvre PAS, et on le dit plutôt que de le taire :
+# un item-leurre inséré ENTRE l'item réel et le bloc deviendrait l'item le plus
+# proche. Fermer ce cas demanderait de lire la structure de la liste, pas sa
+# dernière ligne.
 puce_gouvernante="$(awk '
-  /^[[:space:]]*- \*\*/          { puce = $0 }
-  /^[[:space:]]+git branch -D/   { print puce; trouve = 1; exit }
+  /^[[:space:]]*#/                              { puce = "" }
+  /^[[:space:]]*([-*]|[0-9]+\.)[[:space:]]/    { puce = $0 }
+  /^[[:space:]]+git branch -D/ {
+    print (puce == "" ? "__AUCUNE_PUCE__" : puce); trouve = 1; exit
+  }
   END { if (!trouve) print "__AUCUN_GESTE__" }
 ' "$SKILL")"
 
 if [ "$puce_gouvernante" = "__AUCUN_GESTE__" ]; then
   ko "aucun \`git branch -D\` exécutable dans le skill — l'étape 7.5 a changé de forme, cette garde ne porte plus"
-elif [ -z "$puce_gouvernante" ]; then
-  ko "le geste destructif n'est gouverné par AUCUNE puce — rien ne dit sur quelles branches il porte"
+elif [ "$puce_gouvernante" = "__AUCUNE_PUCE__" ] || [ -z "$puce_gouvernante" ]; then
+  ko "le geste destructif n'est gouverné par AUCUN item de liste dans sa section — rien ne dit sur quelles branches il porte"
 else
-  ok "le geste destructif est gouverné par une puce"
+  ok "le geste destructif est gouverné par un item de liste de sa section"
   if printf '%s' "$puce_gouvernante" | grep -qE '`merged`'; then
     ok "cette puce le borne aux branches \`merged\`"
   else
