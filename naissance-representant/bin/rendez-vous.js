@@ -374,7 +374,7 @@ async function tenirLeRendezVous(nom, debut) {
   // il doit RESTER réveillé : ne pas réveiller sur une mesure ratée couperait un orchestrateur
   // vivant en silence. Trois des treize sont dans ce cas — un lieu hors forme de code, et deux
   // projets que le ServiceDesk n'a pas rendus, sa liste étant plafonnée à 100 sur 252.
-  const vivants = avecMandat;
+  const vivants = avecMandat.filter((o) => !closPourDeVrai(o));
   // ⚠️ ET LE DOUTE SE DIT. Un agent réveillé sur un mandat non mesuré n'est pas un agent dont on
   // sait le mandat ouvert : ranger les deux ensemble ferait lire « tout va bien » sur ce qu'on
   // ignore — le motif que tout ce jalon combat.
