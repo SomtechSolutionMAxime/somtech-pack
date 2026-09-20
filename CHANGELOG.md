@@ -7,6 +7,33 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, demande `D-20260920-0002` — `T-20260920-0125`. **L'avis de perte partait sur la soumission du dirigeant lui-même**, des dizaines de fois par jour, pendant que le cas qu'il existe pour signaler s'est produit **3 fois en 46 jours**. ⚠️ La fonction disait ne pas pouvoir distinguer les deux causes — **elle avait raison de ce qu'elle voyait et tort de ce qu'elle concluait** : la distinction ne vit pas sur l'écran, elle vit sur l'agent.*
+
+### Corrige
+
+- **L'avis de boîte vidée ne part plus quand c'est son auteur qui vient de soumettre** (`T-20260920-0125`). Le veilleur avertissait « TA BOÎTE DE SAISIE PORTAIT UN TEXTE, ET ELLE S'EST VIDÉE » à chaque fois que le dirigeant soumettait son propre texte — le cas **majoritaire**. La fonction portait son aveu en commentaire : *« deux causes possibles, et je ne peux pas les distinguer »*. ⚠️ **Le commentaire avait raison de ce qu'il voyait et tort de ce qu'il concluait** : la distinction ne vit pas sur l'écran, elle vit sur l'agent. Mesuré sur un banc réel — `tokens.quota_topic` de `herdr agent get` porte le texte du **dernier tour soumis** : inchangé quand la boîte se vide sans soumission, il prend le texte dès qu'on appuie sur Entrée.
+
+### Ajoute
+
+- **Un verdict à TROIS états, jamais deux** — `soumission-etablie`, `aucune-soumission`, **`sonde-aveugle`**. Les deux derniers laissent partir l'avis, et les confondre rendrait la cécité de la sonde **invisible** : un essai qui couvre « rien n'a été soumis » reste parfaitement vert pendant que la mesure est morte.
+- **`LIGNE_DIRECTE_SANS_AVIS_BOITE_VIDEE`**, sur le modèle de `LIGNE_DIRECTE_VERBEUX`. 🔴 **Interrupteur de dernier recours, pas réglage de confort** : il éteint **tout** l'avis, y compris le cas d'un texte réellement perdu — et c'est écrit là où on l'armera.
+- **Le pari qu'on ne peut pas fermer est rendu COMPTABLE** (`etablieSurUnPrefixeTronque`). Deux textes partageant leurs 77 premiers points de code et différant ensuite sont indiscernables *par construction* — la troncature est en amont de nous. On ne détecte pas ce cas ; on compte les fois où on le **risque**. ⚠️ **Aucun lecteur n'est branché** : suivi en `T-20260920-0137`, qui admet « personne ne le lira » comme réponse — et exige alors le retrait du champ.
+
+### Éprouve
+
+- **Les DEUX chemins de l'avis et les DEUX appelants**, garde posée **en amont** de la bifurcation : une seule porte, rien à rater. *Ce dépôt a payé dix fois « une porte sur deux », dont deux fois dans le correctif écrit pour la fermer.*
+- **44 mutations, 41 tuées** ; les 3 survivantes sont des redondances dont l'inobservabilité est **mesurée** et documentée sur place. Le banc est versé en pièce de `T-20260920-0140` — *un banc qui meurt avec sa session ne garde rien, et rend invérifiable tout compte qu'on en tire.*
+- ⚠️ **Le banc a trouvé ce que trois relectures n'avaient pas vu** : la sonde lisait l'**enveloppe** au lieu de `.reponse` — verte sur la fonction pure, **morte sur le chemin réel**.
+- **Les essais sont rangés avec le code qu'ils éprouvent.** Mesuré : sonde débranchée dans `ligne-directe/src/herdr.js`, la suite du module rendait **1352/1352, zéro échec**, pendant que celle d'à côté en rendait deux rouges. *Un essai dans la mauvaise suite ne garde pas le module qu'il prétend garder, et la CI du module était verte sur du code non couvert.* Portée restante suivie en `T-20260920-0154`.
+
+### Technique
+
+- **Trois rejets de revue, trois corrections, et chacun a trouvé plus grave que le précédent** : ① le verdict ne couvrait que le texte qui **rétrécit**, ratant le cas le plus courant — l'auteur **complète sa phrase** avant Entrée ; ② une garde emportée par un patch voisin, si bien qu'un sujet réduit à `…` concluait sur n'importe quoi — *zéro essai rouge sur 36* ; ③ la longueur comptée en unités UTF-16, où un emoji compte double, sur un dépôt qui en écrit partout.
+- **La troncature se compte en POINTS DE CODE**, mesuré contre l'hypothèse des octets : 404 octets envoyés rendaient 154 octets et **77 points de code**. Le seuil est nommé, pas deviné.
+- ⚠️ **Le veilleur est un démon** : il porte le code chargé à son démarrage. Le correctif est installé sur le disque et pris par `livrer.js` immédiatement ; **le balayage l'appliquera à sa prochaine relance**. L'attente est sans risque — le comportement d'ici là est celui d'avant.
+
+## [Non-versionne] - 2026-09-20
+
 *Livraison `J-20260814-0002`, epic `E-20260920-0011` — **deuxième des trois** : `T-20260819-0056`. Un orchestrateur dont le chantier est **clos** continuait de recevoir ses rondes. ⚠️ Le risque n'est pas le gaspillage : c'est la **collision** — deux orchestrateurs qui soumettent des boîtes en parallèle sur les mêmes panes, sans se voir.*
 
 ### Corrige

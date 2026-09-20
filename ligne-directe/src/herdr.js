@@ -186,6 +186,11 @@ export async function delivrerLaBoiteDuPane(pane, { socket, texteCoince, immobil
       }
     },
     lireEcran: async () => ecranDe(pane, socket),
+    // ⚠️ LA SONDE QUI DISTINGUE « VIDÉE PARCE QUE SOUMISE » DE « VIDÉE SANS SOUMISSION »
+    // (T-20260920-0125). `tokens.quota_topic` porte le texte du dernier tour soumis — mesuré,
+    // pas supposé. On ne l'interprète pas ici : `delivrerLaBoite` la lit avant et après, et
+    // `verdictDeSoumission` tranche. Ce qu'on fournit, c'est la lecture, et rien de plus.
+    lireSujetDuDernierTour: async () => sujetDuDernierTour(pane, socket),
     dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
     // Zéro pour un texte COLLÉ — il est par construction déjà envoyé, il n'y a rien à observer.
     // La fenêtre ne sert qu'au texte tapé. `delivrerLaBoite` relit dans les deux cas avant de
@@ -434,8 +439,17 @@ export async function remettre(pane, texte, { socket } = {}) {
     // ⚠️ ET CE N'EST PAS LE MÊME AVIS QUE L'AUTRE, délibérément : là-bas le texte A ÉTÉ soumis
     // et on peut dire d'aller le relire ; ici ON N'A RIEN SOUMIS, il n'est nulle part en aval,
     // et promettre par symétrie qu'on le retrouvera enverrait chercher ce qui n'existe pas.
+    //
+    // ⚠️ ET DEPUIS T-20260920-0125, CET AVIS NE PART PLUS QUAND SON AUTEUR VIENT DE SOUMETTRE.
+    // `avisDeBoiteVidee` rend `null` dans ce cas — et le cas majoritaire, c'est celui-là. Ce
+    // qui est gardé n'est pas le CHEMIN (le texte disparu remonte toujours en champ), c'est le
+    // MOT : on cesse d'avertir d'une perte à quelqu'un qui vient d'appuyer sur Entrée.
     else if (delivrance.texteDisparu) {
-      texteALivrer = `${avisDeBoiteVidee({ texteDisparu: delivrance.texteDisparu })}\n\n${texte}`;
+      const avis = avisDeBoiteVidee({
+        texteDisparu: delivrance.texteDisparu,
+        soumissionEtablie: delivrance.soumissionEtablie,
+      });
+      if (avis) texteALivrer = `${avis}\n\n${texte}`;
     }
 
     // ═══ ON REGARDE À NOUVEAU. ON NE DÉDUIT PAS. (T-20260818-0049)
@@ -702,6 +716,40 @@ export async function ecranDe(pane, socket) {
     });
     return stdout;
   } catch {
+    return null;
+  }
+}
+
+/**
+ * LE SUJET DU DERNIER TOUR SOUMIS À UN AGENT — la sonde qui distingue une boîte vidée PAR une
+ * soumission d'une boîte vidée sans soumission (T-20260920-0125).
+ *
+ * 🔬 MESURÉ LE 2026-09-20, sur un pane herdr jetable et un agent `claude` neuf :
+ * `tokens.quota_topic` de `herdr agent get` vaut `null` tant que rien n'a été soumis, prend le
+ * texte du tour dès qu'on appuie sur Entrée, et CHANGE à chaque tour suivant. Vidé par `ctrl+u`
+ * sans soumission, il ne bouge pas. Il est tronqué à 77 caractères suivis de `…`.
+ *
+ * ⚠️ ELLE NE JETTE JAMAIS, ET ELLE NE MENT PAS NON PLUS. `null` veut dire « je n'ai pas su
+ * lire » — pas « rien n'a été soumis ». C'est `verdictDeSoumission` qui nomme la différence,
+ * et le veilleur peut la compter : une sonde aveugle laisse partir l'avis, donc une sonde
+ * aveugle SOUVENT serait un correctif qui ne ferme rien, en silence.
+ *
+ * ⚠️ MESURÉ SUR LE PARC : sur les 61 agents du poste, `herdr agent get` n'a échoué 0 fois
+ * (médiane 6 ms). `quota_topic` était absent sur 33 d'entre eux — mais ce chiffre-là répond à
+ * une autre question que la nôtre : ce sont des agents au repos, dont 24 `idle` n'ayant rien
+ * soumis. Dans LA fenêtre qui nous concerne — juste après une soumission — il était présent 3
+ * fois sur 3, à +1 s comme à +5 s.
+ */
+export async function sujetDuDernierTour(pane, socket) {
+  try {
+    const { stdout } = await lancer(OUTILS.herdr, ['agent', 'get', pane], {
+      ...(socket ? { env: { ...process.env, HERDR_SOCKET_PATH: socket } } : {}),
+    });
+    const sujet = JSON.parse(stdout)?.result?.agent?.tokens?.quota_topic;
+    return typeof sujet === 'string' && sujet.trim() !== '' ? sujet : null;
+  } catch {
+    // Pane disparu, herdr injoignable, sortie qui n'est pas du JSON : tout cela est la MÊME
+    // chose pour l'appelant — on n'a pas su lire, et on ne conclura donc rien.
     return null;
   }
 }
