@@ -7,6 +7,35 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Demande `D-20260920-0001`, epic `E-20260920-0003`. **Vague 2B — les huit règles de « éprouver une garde ».** Toutes portent sur la même fonction, toutes naissent d'un défaut mesuré les 19 et 20/09 chez **trois chefs d'équipe différents**. Le fil qui les relie est écrit dans le chapitre : **chacune est un silence qui se lit comme un succès** — aucune ne produit d'erreur, toutes produisent un résultat plausible, et c'est pourquoi elles se trouvent en éprouvant AUTRE CHOSE, jamais en cherchant.*
+
+### Ajoute
+
+- **`faire-appliquer.md` — un retrait qui fait rougir une garde est une amputation, pas un remplacement.** Avant de retirer un bloc jugé caduc, **jouer les bancs**. Sur trois blocs jugés caducs, deux l'étaient ; le troisième était gardé nommément — et c'était le seul des trois qu'aucune relecture n'aurait distingué des deux autres. ⚠️ L'inverse ne vaut pas : **vert ne veut pas dire caduc**.
+- **`faire-appliquer.md` — une garde peut être verte par ACCIDENT DE FORMULATION.** Elle ne rougira pas le jour où elle cesse de garder : elle restera verte en ne gardant plus rien. Le geste qui les sépare : **muter précisément ce que la garde prétend garder, dans la section visée seulement — déplacer la valeur, pas abîmer le chemin**. On en croyait deux intentionnelles sur cinq ; il y en avait zéro.
+- **`faire-appliquer.md` — des mutations qui tuent TOUTES ne prouvent rien.** Elles n'éprouvent que ce que les assertions couvraient déjà : **zéro survivante sur un sous-ensemble ne dit rien de la population**. Quatre premières mutations toutes tuées ; huit rouges de plus après ~25 mutations, dont un bypass du chemin nominal qui dormait sous **1353 bancs verts**.
+- **`faire-appliquer.md` — un essai VIDE se lit exactement comme une garde qui tient.** Une mutation qui ne mute rien et une garde qui résiste produisent le **même** résultat : zéro rouge. Le banc de mutation doit **refuser** une mutation sans effet — on corrige l'instrument, jamais le cas.
+- **`faire-appliquer.md` — un banc qui s'INTERROMPT ne dit rien de ce qu'il gardait.** Une suite qui meurt tôt ressemble trait pour trait à une suite qui passe : **rendre le nombre d'assertions JOUÉES**, pas seulement le nombre d'échecs. Un tableau vide sous `set -u` en bash 3.2 a produit **78 assertions muettes, aucune rouge**.
+- **`faire-appliquer.md` — le joint qui permet d'éprouver peut soustraire à l'épreuve.** Toute couture d'injection crée un chemin par défaut que plus rien ne traverse pendant les essais : **le banc éprouve le double, la production utilise l'original**. « Le vrai minuteur cassé » est sorti après **11 bancs verts**.
+- **`faire-appliquer.md` — une garde juste peut vivre sur un chemin que le NOUVEL APPELANT ne traverse pas.** Elle ne rougit pas : elle n'est jamais atteinte. Mesurer **où** vit la garde dont on croit hériter — dans la fonction, ou chez son appelant actuel. Un appel nu supprimait la branche d'une demande de fusion déjà ouverte.
+- **`faire-appliquer.md` — deux gardes justes, chacune bornée à sa section, ne gardent pas leur ACCORD.** Réécrire le fait fait rougir l'une et laisse l'autre verte sur l'ancienne formulation : ce n'est aucune des deux qui est en défaut, **c'est leur accord que rien ne mesure** (`T-20260920-0051`).
+- **Neuf gardes (⑮), chacune bornée à sa section**, les huit règles exigeant aussi la date de leur occurrence. **La garde du fil ne l'exige pas**, et c'est mesuré : sa section contient les huit dates, donc l'exiger la laisserait verte tant qu'une seule subsiste — la règle 2 commise dans le bloc qui la prescrit.
+
+### Corrige
+
+- **La règle 3 atteint les deux documents que les reviewers reçoivent réellement** (`orchestrer-chantier/SKILL.md`, `BRIEF-REVUE.md`). Trouvé par la passe de fond, contre l'auteur : le lot retirait « deux ou trois mutations de son cru » de la source et laissait le **même fait intact** là où il mord — c'est-à-dire sa propre règle 8, commise par le lot qui l'inscrit. ⚠️ **Le correctif recommandé par la revue a été mesuré, pas appliqué** : retirer le compte fait rougir `brief-exige-des-mutations-du-cru`, où « trois » est gardé nommément — amputation, pas remplacement. Forme retenue, qui ne rougit rien : **le compte reste, et on précise que trois est un plancher, pas une preuve**.
+
+### Éprouve
+
+- **35 contre-épreuves, une à la fois**, en déplaçant la valeur gardée, **sous un instrument qui refuse une mutation sans effet** — la règle 4 appliquée au lot qui l'écrit. **0 survivante, 0 inopérante.** Elles ont trouvé une garde non discriminante de l'auteur — le motif « zéro rouge » apparaissait **deux fois** dans sa section —, corrigée avant le premier verdict.
+- **Re-baseline 165 374 → 171 024, marge 0**, accordée d'avance par `batiscan` le 2026-09-20, écrite avec sa décomposition et sa clause de non-droit. Passage de remplacement fait **avant** de demander : un retrait retenu (−37), **un candidat de −745 écarté parce que le jouer faisait rougir deux gardes**.
+
+### Dette inscrite, non fermée
+
+- **`T-20260920-0055` — les huit règles n'atteignent pas le reviewer.** Elles s'adressent à celui qui éprouve une garde, et ce n'est pas l'orchestrateur : un sous-agent de revue ne reçoit pas une ligne de ce métier, il reçoit `BRIEF-REVUE.md`. **Déclencheur nommé** : dès qu'un sous-agent de revue est lancé sur un lot qui pose des gardes. ⚠️ La cible est `BRIEF-REVUE.md`, **pas `chefs-equipe.md`** — un renvoi posé dans un chapitre que le reviewer ne lit jamais referait la faute du mauvais lecteur un lot plus loin.
+
+## [Non-versionne] - 2026-09-20
+
 *Demande `D-20260920-0001`, epic `E-20260920-0002`. **Vague 2A — les sept règles que la nuit du 19 au 20/09 a payées.** Toutes portent sur la conduite d'un orchestrateur envers ses chefs d'équipe, toutes naissent d'un défaut mesuré chez un orchestrateur qui connaissait déjà son métier : une heure de blocage d'un chef, deux gardes disparues, quinze travaux libres arrêtés par deux arbitrages.*
 
 ### Ajoute

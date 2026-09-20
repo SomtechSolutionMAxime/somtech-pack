@@ -951,6 +951,17 @@ porte "Si rien n'avance, repars du backlog" \
 # règle 2 appliquée à ce bloc — une garde qui exige une date présente deux fois
 # dans sa section ne rougit pas quand on déplace l'une des deux.
 # ═══════════════════════════════════════════════════════════════════════════
+#
+# 🔴 DETTE À DÉCLENCHEUR NOMMÉ — `T-20260920-0055`, inscrite et NON fermée.
+# Ces huit règles s'adressent à CELUI QUI ÉPROUVE UNE GARDE — et ce n'est pas
+# l'orchestrateur, c'est le REVIEWER. Or un sous-agent de revue ne reçoit pas
+# une ligne de ce métier : il reçoit `.claude/skills/orchestrer-chantier/
+# BRIEF-REVUE.md`. Les huit sont donc au bon SUJET et absentes du lieu du GESTE.
+# DÉCLENCHEUR : dès qu'un sous-agent de revue est lancé sur un lot qui pose des
+# gardes. ⚠️ La cible est BRIEF-REVUE.md, PAS `chefs-equipe.md` — un renvoi
+# posé dans un chapitre que le reviewer ne lit jamais refait la faute du mauvais
+# lecteur un lot plus loin. Arbitrage de `batiscan`, 2026-09-20.
+# ═══════════════════════════════════════════════════════════════════════════
 echo "⑮ les huit règles de la vague 2B sont prescrites — D-20260920-0001"
 
 # ⚠️ LA GARDE DU FIL N'EST PAS UNE NEUVIÈME RÈGLE, et elle n'exige PAS de date :
