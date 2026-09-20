@@ -126,3 +126,114 @@ test('UNE LECTURE COMPLÈTE NE CRIE PAS À L’INCOMPLÉTUDE — la garde ne par
     }
   );
 });
+
+// ───────────────── LA BORNE QUI MANQUAIT — trouvée par une passe de revue, pas par l'auteur
+
+test('🔴 UNE SOURCE QUI IGNORE `offset` EN PRODUISANT DU NEUF NE FAIT PAS TOURNER LA BOUCLE SANS FIN', async () => {
+  // 🔴 REJET D'UNE PASSE PORTAIL, et il était fondé. Les deux gardes de CONTENU posées au
+  // premier jet — « page vide » et « page qui n'apporte aucun code neuf » — ferment le cas d'une
+  // source qui RESERT la même page. Elles ne ferment PAS celui d'une source qui ignore `offset`
+  // tout en rendant des codes inédits à chaque tour : rien ne borne alors le nombre de tours.
+  // Reproduit par le reviewer : `heap out of memory`, process tué, 256 Mo de plafond.
+  //
+  // ⚠️ ET L'AUTEUR AVAIT ÉCARTÉ LA BORNE DURE PAR UN RAISONNEMENT QUI SONNAIT JUSTE : « un compte
+  // de pages maximal aurait été un nombre choisi par celui-là même dont on éprouve les angles
+  // morts ». C'est vrai d'une borne inventée ; ça ne justifiait pas de n'en poser aucune.
+  //
+  // ✅ LA BORNE QUI N'EST PAS INVENTÉE : **on ne pagine que vers une destination connue.** Sans
+  // `total` annoncé, on ne sait pas où s'arrêter — donc on ne fait pas semblant de paginer : on
+  // lit UNE page et on dit que la lecture est peut-être plafonnée. C'est exactement ce que
+  // faisait la version d'avant, et cette moitié-là avait raison.
+  let pages = 0;
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    pages += 1;
+    if (pages > 50) throw new Error('la boucle ne s’arrête pas : plus de 50 pages demandées');
+    // Chaque page ignore `offset` ET rend des codes NEUFS — et n'annonce JAMAIS de total.
+    return enveloppe({
+      data: Array.from({ length: 100 }, (_, i) => ({ project_id: `P-2026${String(pages).padStart(2, '0')}${String(i).padStart(2, '0')}-0001`, status: 'x' })),
+      limit: 100,
+    });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  await assert.rejects(() => acces('projects', 'P-20269999-9999'), /ne figure pas/);
+  assert.equal(pages, 1, `sans total annoncé, on lit UNE page et on le dit — ${pages} demandée(s)`);
+});
+
+test('ET CETTE LECTURE-LÀ SE DÉCLARE PLAFONNÉE — un doute tu est un doute perdu', async () => {
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    return enveloppe({ data: Array.from({ length: 100 }, (_, i) => ({ project_id: `P-20260${String(i).padStart(3, '0')}-0001`, status: 'x' })), limit: 100 });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  await assert.rejects(() => acces('projects', 'P-20269999-9999'), /PLAFONN/);
+});
+
+test('UN SERVICE QUI ANNONCE SON TOTAL EST BIEN PAGINÉ — la borne ne bride pas le cas nominal', async () => {
+  // ⚠️ LE SECOND CHIFFRE DE LA BORNE. Une borne qui fermerait aussi le cas nominal rendrait la
+  // pagination inopérante sur exactement la population qu'elle vise — et le lot entier avec.
+  const faux = fauxServiceDeskPagine(252);
+  const acces = accesServiceDesk({ cle: 'k', fetcher: faux.fetcher });
+
+  const vu = await acces('projects', 'P-20260251-0001');
+  assert.equal(vu.status, 'in_progress', 'le dernier des 252 reste atteint');
+});
+
+// ───── LE COMPTEUR QUI MENT — deux pages qui se chevauchent atteignent le total sans tout lire
+
+test('🔴 DES PAGES QUI SE CHEVAUCHENT NE FONT PAS PASSER UNE LECTURE PARTIELLE POUR COMPLÈTE', async () => {
+  // 🔴 TROUVÉ PAR UNE PASSE DE FOND, sur une sonde qu'elle a écrite — pas par une mutation du
+  // code, par une ENTRÉE ADVERSE. La condition d'arrêt comparait `vus`, un compteur BRUT
+  // d'éléments reçus, au total annoncé d'enregistrements UNIQUES. Deux pages qui se recouvrent
+  // font donc atteindre le total sans que tout ait été lu.
+  //
+  // ⚠️ ET LE CAS N'EST PAS THÉORIQUE ICI : ce lecteur tourne PENDANT que treize orchestrateurs
+  // vivants écrivent sur le même ServiceDesk. Un tri instable entre deux appels suffit.
+  //
+  // ⚠️ CE QUE LE DÉFAUT NE FAIT PAS, et il faut le dire pour ne pas le surévaluer : il ne peut
+  // pas transformer un mandat ouvert en mandat clos. `etatDuMandat` rend « non mesurée » sur
+  // toute exception du lecteur, jamais `clos: true`. Le réveil ne s'arrête donc pas à tort.
+  // CE QU'IL FAIT : il annule discrètement l'objectif du correctif — le mandat reste « non
+  // mesuré » comme avant, mais désormais présenté comme une recherche EXHAUSTIVE, sans trace
+  // pour dire que la lecture a pu être trompée. C'est un faux témoin pour qui lit le journal.
+  const tous = Array.from({ length: 200 }, (_, i) => ({ project_id: `P-2026${String(i).padStart(4, '0')}-0001`, status: 'x' }));
+  const fetcher = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    const offset = args.offset ?? 0;
+    // Le tri a bougé entre les deux appels : la page 2 recouvre la moitié de la page 1.
+    const debut = offset === 0 ? 0 : 50;
+    return enveloppe({ data: tous.slice(debut, debut + 100), total: 200, limit: 100 });
+  };
+  const acces = accesServiceDesk({ cle: 'k', fetcher });
+
+  // `P-20260160-0001` est dans le segment 150-199, que ces deux pages n'ont JAMAIS servi.
+  await assert.rejects(
+    () => acces('projects', 'P-20260160-0001'),
+    (err) => {
+      assert.match(
+        err.message,
+        /INCOMPL|PLAFONN/,
+        `la lecture n’a pas tout vu et doit le dire — elle affirme au contraire l’exhaustivité : ${err.message}`
+      );
+      return true;
+    }
+  );
+});
+
+test('ET UNE PAGINATION SANS CHEVAUCHEMENT NE CRIE TOUJOURS PAS — la garde ne parle pas dans le vide', async () => {
+  const faux = fauxServiceDeskPagine(252);
+  const acces = accesServiceDesk({ cle: 'k', fetcher: faux.fetcher });
+
+  await assert.rejects(
+    () => acces('projects', 'P-20269999-9999'),
+    (err) => {
+      assert.doesNotMatch(err.message, /INCOMPL|PLAFONN/, `lecture propre : aucun doute à déclarer — ${err.message}`);
+      return true;
+    }
+  );
+});

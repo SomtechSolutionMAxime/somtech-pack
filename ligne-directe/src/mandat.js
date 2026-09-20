@@ -273,21 +273,40 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
    * 73 s. **Le commentaire affirmait une propriété que son auteur n'avait pas éprouvée**, ce qui
    * est le défaut dominant de ce dépôt, commis dans le lot qui le cite.
    *
-   * ⚠️ LA BORNE QUI TIENT NE COMPTE PAS LES TOURS, ELLE REGARDE CE QUE LA PAGE APPORTE. Deux
-   * conditions, chacune fondée sur le CONTENU :
-   *   • une page plus courte que demandée est la dernière — un service qui pagine le dit ainsi ;
-   *   • **une page qui n'apporte AUCUN code nouveau met fin à la lecture**, quelle que soit sa
-   *     taille. C'est celle-là qui ferme le cas de l'offset ignoré : la deuxième page est
-   *     identique à la première, donc elle n'ajoute rien, donc on s'arrête.
-   * Un compte de pages maximal aurait marché aussi, et il aurait été un nombre choisi par
-   * celui-là même dont on éprouve les angles morts.
+   * 🔴 ET LA PREMIÈRE BORNE ÉTAIT INCOMPLÈTE — REJET D'UNE PASSE PORTAIL, fondé. Elle reposait
+   * sur deux conditions de CONTENU : une page vide, et une page qui n'apporte aucun code nouveau.
+   * Elles ferment le cas d'une source qui RESERT la même page. Elles ne ferment PAS celui d'une
+   * source qui ignore `offset` **en rendant des codes inédits à chaque tour** — le reviewer l'a
+   * reproduit : `heap out of memory`, process tué.
+   *
+   * ⚠️ ET L'AUTEUR AVAIT ÉCARTÉ LA BORNE DURE PAR UN RAISONNEMENT QUI SONNAIT JUSTE : « un compte
+   * de pages maximal aurait été un nombre choisi par celui-là même dont on éprouve les angles
+   * morts ». C'est vrai d'une borne INVENTÉE. Ça ne justifiait pas de n'en poser AUCUNE — et cette
+   * phrase a servi à ne pas poser celle qui manquait. Une objection juste peut protéger un trou.
+   *
+   * ✅ LA BORNE QUI N'EST PAS INVENTÉE : **ON NE PAGINE QUE VERS UNE DESTINATION CONNUE.** Sans
+   * `total` annoncé, on ne sait pas où s'arrêter — alors on ne fait pas semblant de paginer : on
+   * lit UNE page, et on DIT que la lecture est peut-être plafonnée. C'est exactement ce que
+   * faisait la version d'avant la pagination, et cette moitié-là avait raison. Le service mesuré,
+   * lui, annonce son total dans chaque réponse : le cas nominal n'est pas bridé.
+   *
+   * Les deux conditions de contenu RESTENT, en plus, pour le cas où un total annoncé ne serait
+   * jamais atteignable :
+   *   • une page plus courte que ce que le SERVICE dit avoir servi est la dernière ;
+   *   • une page qui n'apporte aucun code nouveau met fin à la lecture.
    */
   const indexer = async (famille) => {
     if (index.has(famille)) return index.get(famille);
     const champ = CHAMP_DU_CODE[famille];
     const par = new Map();
     let offset = 0;
-    let vus = 0;
+    // ⚠️ ON COMPTE DES ENREGISTREMENTS UNIQUES, PAS DES ÉLÉMENTS REÇUS (trouvé par une passe de
+    // fond, sur une entrée adverse). Le premier jet comparait un compteur BRUT au total annoncé
+    // d'enregistrements uniques : deux pages qui se CHEVAUCHENT atteignaient donc le total sans
+    // que tout ait été lu, et le refus se déclarait exhaustif. Le chevauchement n'est pas
+    // théorique ici — ce lecteur tourne pendant que treize orchestrateurs écrivent sur le même
+    // service, et un tri instable entre deux appels suffit.
+    const identites = new Set();
     let annonce = null;
     for (;;) {
       const corps = await appelerMcp(famille, { action: 'list', limit: parPage, offset });
@@ -295,23 +314,36 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
       const total = Number.isFinite(corps?.total) ? corps.total : null;
       if (total !== null) annonce = total;
       if (!liste.length) break;
-      const avant = par.size;
-      vus += liste.length;
+      const avant = identites.size;
       for (const item of liste) {
+        // L'identité d'un enregistrement : son `id` s'il en a un, sinon son code. Deux pages qui
+        // resservent le même enregistrement ne le comptent alors qu'une fois.
         const code = item?.[champ];
+        const identite = item?.id ?? code ?? JSON.stringify(item);
+        if (identite !== undefined && identite !== null) identites.add(identite);
         if (typeof code === 'string' && CODE_LISIBLE.test(code)) par.set(code, item);
       }
+      const vus = identites.size;
       // Une page qui n'apporte aucun code nouveau ne peut pas faire avancer la lecture : soit la
       // source ignore `offset` et nous resert la même, soit il n'y a plus rien de neuf derrière.
       // ⚠️ ET LES DEUX CAUSES NE SE VALENT PAS. Si la page était PLEINE, on ne s'est pas arrêté
       // parce qu'on avait tout lu — on s'est arrêté parce que la source ne nous donne pas la
       // suite. C'est un doute, et il se dit.
-      if (par.size === avant) {
+      if (identites.size === avant) {
         const pleine = Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage;
         if (liste.length >= pleine) plafonne.set(famille, true);
         break;
       }
       if (annonce !== null && vus >= annonce) break;
+      // ⚠️ SANS DESTINATION, PAS DE SECOND TOUR. Une source qui n'annonce aucun total ne nous dit
+      // pas où s'arrêter : continuer reviendrait à parier que `offset` est respecté, et c'est ce
+      // pari qui a fait tomber la boucle. On s'arrête ici, et le refus le dira.
+      if (annonce === null) {
+        if (liste.length >= (Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage)) {
+          plafonne.set(famille, true);
+        }
+        break;
+      }
       // ⚠️ « PLUS COURTE QUE DEMANDÉE » N'EST PAS LE BON CRITÈRE, et le croire coupait la lecture
       // au premier tour. Le service ÉCRASE la limite demandée : on demande 200, il sert 100 et
       // il le DIT dans `limit`. Comparer à ce qu'on a demandé faisait donc paraître courte
@@ -322,7 +354,7 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
       offset += liste.length;
     }
     index.set(famille, par);
-    lus.set(famille, vus);
+    lus.set(famille, identites.size);
     annonces.set(famille, annonce);
     return par;
   };
