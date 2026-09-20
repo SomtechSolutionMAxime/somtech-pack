@@ -385,6 +385,20 @@ else
   ok "le skill ne prescrit plus la lecture des tags LOCAUX pour le numéro"
 fi
 
+# Le même fait vit AUSSI dans le CLAUDE.md du dépôt, que toute session lit.
+# Une garde bornée au skill le laisserait prescrire l'ancien geste.
+CLAUDE_MD="${MERGE_CLAUDE_MD_SRC:-${ROOT}/CLAUDE.md}"
+if grep -qE 'git tag --sort=-v:refname \| head -1' "$CLAUDE_MD"; then
+  ko "CLAUDE.md prescrit encore la lecture des tags LOCAUX comme source de la version"
+else
+  ok "CLAUDE.md ne prescrit plus la lecture des tags LOCAUX"
+fi
+if grep -q 'ls-remote' "$CLAUDE_MD"; then
+  ok "CLAUDE.md nomme la mesure distante"
+else
+  ko "CLAUDE.md ne dit pas où se lit le tag qui fait foi"
+fi
+
 # Le chemin qui SUPPRIME ne compare plus à \`main\` local.
 if grep -qE 'git merge-base main ' "$SKILL"; then
   ko "l'étape 7.5 compare encore à \`main\` LOCAL"
@@ -396,7 +410,7 @@ echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=52
+PLANCHER=54
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

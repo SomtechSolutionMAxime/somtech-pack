@@ -30,6 +30,7 @@ ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LIB_SRC="${ROOT}/.claude/skills/merge/lib/mesure-distante.sh"
 SUITE="${SCRIPT_DIR}/test-merge-mesure-distante.sh"
 SKILL_SRC="${ROOT}/.claude/skills/merge/SKILL.md"
+CLAUDE_SRC="${ROOT}/CLAUDE.md"
 
 WORK="$(mktemp -d)"; PASS=0; FAIL=0; N=0
 trap 'rm -rf "$WORK"' EXIT
@@ -83,6 +84,22 @@ essai_skill() {
     return
   fi
   if MERGE_SKILL_SRC="$M" bash "$SUITE" >"${WORK}/sout${N}" 2>&1; then
+    ko "MUTANT SURVIVANT — ${label} : la suite reste VERTE, la garde ne tient pas ça"
+  else
+    ok "${label} → suite rouge"
+  fi
+}
+
+# essai_claude <libellé> — même instrument, appliqué au CLAUDE.md du dépôt.
+essai_claude() {
+  local label="$1" M C
+  N=$((N+1)); M="${WORK}/c${N}.md"; C="${WORK}/cc${N}.py"
+  cat > "$C"
+  if ! applique "$CLAUDE_SRC" "$M" "$C" 2>"${WORK}/cerr${N}"; then
+    ko "MUTATION INOPÉRANTE — ${label} : le motif ne correspond à aucun texte du CLAUDE.md (l'épreuve n'a PAS eu lieu)"
+    return
+  fi
+  if MERGE_CLAUDE_MD_SRC="$M" bash "$SUITE" >"${WORK}/cout${N}" 2>&1; then
     ko "MUTANT SURVIVANT — ${label} : la suite reste VERTE, la garde ne tient pas ça"
   else
     ok "${label} → suite rouge"
@@ -248,6 +265,16 @@ s = s.replace('md_prochaine_version patch          # ou minor / major',
               'md_prochaine_version_inventee patch')
 PY
 
+essai_claude 'le CLAUDE.md du dépôt represcrit la lecture des tags LOCAUX' <<'PY'
+s = s.replace("**La version du pack se lit sur le tag git** — qui en est la source unique.",
+              "**La version du pack se lit sur le tag git** — `git tag --sort=-v:refname | head -1` — qui en est la source unique.")
+PY
+
+essai_claude 'le CLAUDE.md ne dit plus où se lit le tag qui fait foi' <<'PY'
+s = s.replace("La commande juste est `git ls-remote --tags origin`, qui interroge le serveur à chaque appel, ou à défaut un `git fetch --tags` **explicite** avant de lire.",
+              "Fetche avant de lire.")
+PY
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 # Un motif qui ne correspond à rien : une mutation sans effet rend zéro rouge,
 # exactement comme une garde qui tient. Si `applique` l'acceptait, tout ce
@@ -265,7 +292,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=28
+PLANCHER=30
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
