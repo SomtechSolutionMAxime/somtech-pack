@@ -246,6 +246,15 @@ s = s.replace("    const out = exec('npm', ['view', PKG, 'version', `--registry=
               "    const out = exec('echo', ['9.9.9'], {")
 PY
 
+essai commands/version-poste-cmd.js 'le garde-fou de la couture devient truthy (un stub vide part sur le vrai registre)' <<'PY'
+s = s.replace("  if (stub !== undefined) return", "  if (stub) return")
+PY
+
+essai commands/version-poste-cmd.js 'la couture prend le pas même quand aucun stub n_est posé' <<'PY'
+s = s.replace("  if (stub !== undefined) return /^\\d+\\.\\d+\\.\\d+/.test(stub) ? stub : null;",
+              "  return /^\\d+\\.\\d+\\.\\d+/.test(String(stub)) ? stub : null;")
+PY
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 cp -R "${ROOT}/cli/src" "${WORK}/vide-src"
 cat > "${WORK}/vide.py" <<'PY'
@@ -289,7 +298,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=28
+PLANCHER=30
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

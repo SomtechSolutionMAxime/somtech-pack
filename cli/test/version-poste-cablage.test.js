@@ -202,3 +202,33 @@ test('interrogerRegistre — une sortie qui n’est pas un semver ne devient pas
 test('interrogerRegistre — un npm qui échoue rend null, et n’explose pas', () => {
   assert.equal(interrogerRegistre({ exec: () => { throw new Error('ENOENT'); } }), null);
 });
+
+test('interrogerRegistre — un stub PRÉSENT, même vide, ne tombe JAMAIS sur le chemin réel', () => {
+  // ⚠️ LE GARDE-FOU DE LA COUTURE, et il ne se juge pas sur la valeur rendue.
+  // Écrire `if (stub)` au lieu de `if (stub !== undefined)` rend la chaîne vide
+  // *falsy* — le code part alors interroger le VRAI registre. Une assertion sur le
+  // seul résultat ne le verrait pas : le `catch` générique avale l'exception et
+  // rend `null` quand même. C'est l'APPEL qu'il faut mesurer, pas son retour.
+  //
+  // Sans ce cas, le banc tenait par un hasard d'environnement : le `$HOME` factice
+  // prive `npm` de l'auth du poste, donc l'appel réel échouait *pour une autre
+  // raison que celle voulue*. Sur un runner où l'auth passerait, le même test
+  // deviendrait faux — un vert qui dépend de la machine n'est pas un vert.
+  process.env.SOMTECH_PACK_REGISTRE = '';
+  let appele = false;
+  try {
+    const r = interrogerRegistre({ exec: () => { appele = true; return '9.9.9'; } });
+    assert.equal(appele, false, 'un stub présent — même vide — ne doit JAMAIS déclencher le chemin réel');
+    assert.equal(r, null, 'et un stub non-semver ne devient pas une version');
+  } finally { delete process.env.SOMTECH_PACK_REGISTRE; }
+});
+
+test('interrogerRegistre — stub ABSENT : le chemin réel EST emprunté', () => {
+  // Le symétrique, sans lequel la garde ci-dessus pourrait être satisfaite en ne
+  // prenant jamais le chemin réel du tout.
+  delete process.env.SOMTECH_PACK_REGISTRE;
+  let appele = false;
+  const r = interrogerRegistre({ exec: () => { appele = true; return '3.2.1'; } });
+  assert.equal(appele, true, 'sans stub, c’est le vrai appel qui décide');
+  assert.equal(r, '3.2.1');
+});
