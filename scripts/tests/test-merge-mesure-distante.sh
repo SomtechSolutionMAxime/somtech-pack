@@ -490,10 +490,18 @@ fi
 #   · on accepte TOUTE forme d'item de liste : `-`, `*`, ou `1.` ;
 #   · on OUBLIE l'item courant à chaque titre — la recherche ne traverse pas
 #     une frontière de section.
-# ⚠️ Ce que cette garde ne couvre PAS, et on le dit plutôt que de le taire :
-# un item-leurre inséré ENTRE l'item réel et le bloc deviendrait l'item le plus
-# proche. Fermer ce cas demanderait de lire la structure de la liste, pas sa
-# dernière ligne.
+# ⚠️ Ce que cette garde ne couvre PAS, et on le dit plutôt que de le taire.
+# Un item-leurre inséré ENTRE l'item réel et le bloc devient l'item le plus
+# proche. Mesuré — le trou est réel DANS LES DEUX SENS :
+#   · un sous-item anodin ajouté juste avant le bloc fait rougir À TORT ;
+#   · un sous-item qui mentionne `merged` pendant que l'item réel est débridé
+#     rend la garde VERTE sur un geste réellement non borné.
+# Il reste ouvert par arbitrage, pas par oubli : l'exploiter demande DEUX
+# conditions simultanées et non naturelles, là où le trou fermé ce tour
+# s'ouvrait par une seule reformulation ordinaire. Le fermer demanderait de
+# lire la PROFONDEUR d'indentation — un vrai parseur de structure — pour un
+# document interne que personne n'a intérêt à contourner. Prochain incrément
+# si le motif revient sur un autre document.
 puce_gouvernante="$(awk '
   /^[[:space:]]*#/                              { puce = "" }
   /^[[:space:]]*([-*]|[0-9]+\.)[[:space:]]/    { puce = $0 }
