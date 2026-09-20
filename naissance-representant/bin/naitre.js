@@ -60,6 +60,10 @@ import {
   avisSurLeLieuNonRenseigne,
 } from '../src/naissance.js';
 import { livrerBrief } from '../src/livraison.js';
+// ⚠️ LE MÊME PRÉDICAT QUE `destinataire.js` ET QUE LA RONDE, IMPORTÉ — jamais recopié. Le
+// troisième appelant de `livrerBrief` doit reconnaître la fenêtre d'inscription comme les deux
+// autres ; deux définitions du même fait divergent, c'est mécanique, et ce dépôt l'a déjà payé.
+import { enregistrementEnCours } from '../src/destinataire.js';
 import { approuverLieu, ConfigIllisible } from '../src/approbation.js';
 import { appelHerdr, lireEcran, budgetPourUneAttente } from '../src/appel-herdr.js';
 import { sessionVisee, espaceDeLaSession } from '../src/session.js';
@@ -961,14 +965,30 @@ async function main() {
   // VÉRIFIER PAR LE FAIT, jamais par le mot : le nom qu'il porte et le répertoire où il
   // tourne, relus depuis herdr. Le renommage peut mettre un instant à se refléter, d'où la
   // relecture bornée — mais elle ne pardonne rien : ce qui n'est pas vrai à la fin échoue.
+  //
+  // ⚠️ ET ELLE N'ATTEND PLUS SEULEMENT LE NOM (T-20260819-0036, trouvé par une passe de revue de
+  // fond CONTRE le lot qui prétendait fermer ce défaut).
+  //
+  // Mesuré le 2026-09-20 par sonde en lecture seule sur une naissance par `herdr agent start` —
+  // le mécanisme exact de ce binaire : le NOM est porté dès t+1,2 s, et le statut ne devient
+  // `idle` qu'à t+4,9 s. Une boucle qui sort sur le seul nom sortait donc EN PLEINE FENÊTRE
+  // D'INSCRIPTION, et l'amorce livrée juste après (`livrerBrief`, plus bas — le TROISIÈME
+  // appelant, celui qu'on n'avait pas vu) recevait le refus qui affirme « ce pane n'a JAMAIS été
+  // inscrit… attendre ne changera rien » : sur un agent inscrit une seconde plus tôt par l'appel
+  // qui venait de le créer.
+  //
+  // ⚠️ ATTENDRE NE PEUT PAS FAIRE ÉCHOUER UNE NAISSANCE QUI RÉUSSISSAIT, et c'est la garde de
+  // cette garde. La condition de SORTIE s'est resserrée ; la condition d'ÉCHEC, quinze lignes
+  // plus bas, n'a pas bougé d'un caractère — elle porte toujours sur le seul nom. Le jour où une
+  // version de herdr ne quitterait jamais `unknown`, la boucle patiente puis PASSE, et c'est le
+  // drapeau, pas l'abandon, qui porte l'information jusqu'au message.
   let final = lancement.reponse;
   for (let i = 0; i < ESSAIS; i += 1) {
     const etat = await appelHerdr(commandes.interroger(paneId), { socket });
-    if (etat.ok && agentPorteLeNom(etat.reponse, commandes.nom)) {
-      final = etat.reponse;
+    if (etat.ok) final = etat.reponse;
+    if (etat.ok && agentPorteLeNom(etat.reponse, commandes.nom) && !enregistrementEnCours(etat.reponse?.result?.agent)) {
       break;
     }
-    if (etat.ok) final = etat.reponse;
     await dormir(DELAI_MS);
   }
   if (!agentPorteLeNom(final, commandes.nom)) {
@@ -1109,6 +1129,11 @@ async function main() {
     const livre = await livrerBrief({
       pane: paneId,
       texte: amorce,
+      // ⚠️ LE TROISIÈME APPELANT DE `livrerBrief` (T-20260819-0036). Sans cette ligne, une amorce
+      // livrée pendant la fenêtre d'inscription reçoit le diagnostic FAUX que tout ce lot ferme
+      // ailleurs. La valeur vient du DERNIER relevé de la boucle ci-dessus — c'est la mesure la
+      // plus fraîche qu'on ait, et la seule qu'on puisse honnêtement porter jusqu'ici.
+      enregistrementEnCours: enregistrementEnCours(final?.result?.agent),
       appelHerdr,
       lireEcran,
       dormir,

@@ -1115,3 +1115,185 @@ process.exit(0);
   // détruit du contexte. Un avis qui crie sans détromper serait le défaut sous un autre nom.
   assert.match(r.stderr, /PAS mort|ne sont PAS mortes|pas morte/i, 'l’avis doit détromper, pas seulement alerter');
 });
+
+// ───── LE TROISIÈME ÉTAT DU REGISTRE, BOUT EN BOUT DANS LA RONDE (T-20260819-0036)
+
+/**
+ * Un faux herdr où l'orchestrateur est EN COURS D'INSCRIPTION — statut `unknown`, sans nom.
+ *
+ * ⚠️ C'EST L'ÉTAT MESURÉ D'UNE SESSION QUI VIENT DE NAÎTRE, pas un cas inventé. Sonde en
+ * lecture seule du 2026-09-20 sur une naissance réelle : le registre RÉPOND `unknown` de
+ * t+2,3 s à t+5,8 s, puis bascule à `idle`. Une ronde qui passe dans cette fenêtre tombe
+ * dessus, et c'est exactement ce qui arrive à un orchestrateur qu'on vient de poser.
+ *
+ * La boîte est vue VIDE et la remise aboutirait : si la ronde refuse, ce n'est pas la boîte.
+ */
+function fauxHerdrQuiSInscritEncore(pane, lieu) {
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, agent_status: 'unknown',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 3 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: args[2], agent_status: 'unknown', revision: 3 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') {
+  process.stdout.write(['sortie', '──────────', '\\u276f ', '──────────'].join('\\n'));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('🔴 LA RONDE NE DIT PAS « JAMAIS INSCRIT » À UN ORCHESTRATEUR QUI VIENT DE NAÎTRE — bout en bout', () => {
+  // ⚠️ CETTE GARDE EXISTE PARCE QUE DEUX MUTATIONS ONT SURVÉCU (M16, M17). `livrerBrief` a
+  // DEUX appelants de production — `bin/livrer.js` et cette ronde — et seule la moitié était
+  // gardée. Remplacer le drapeau par `false` ici ne faisait rougir AUCUN des 878 essais : la
+  // ronde servait de nouveau « ce pane n'a JAMAIS été inscrit » à un agent que le registre
+  // venait de rendre. C'est « un fait redit à deux endroits, corrigé à un seul », sur le lot
+  // qui le nomme.
+  //
+  // ⚠️ ET ELLE SE PREND SUR LE MOTIF, PAS SUR LE VERDICT. La ronde ne livre pas dans cette
+  // fenêtre — c'est voulu — donc « non livré » serait vrai avec ET sans le correctif. Ce qui
+  // distingue les deux est CE QUE LE MOTIF DIT.
+  const lieu = lieuDOrchestrateur('qui-naît');
+  fauxHerdrQuiSInscritEncore('w9:pN', lieu);
+
+  const r = lancerRonde(['/s/a.sock']);
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.equal(dit.orchestrateurs, 1, 'il est bien vu — le registre le rend');
+  const motif = dit.comptes[0].motif ?? '';
+  assert.doesNotMatch(
+    motif,
+    /jamais/i,
+    `le motif affirme « jamais inscrit » sur un agent que le registre vient de rendre : ${motif}`
+  );
+  assert.match(
+    motif,
+    /EN COURS D’INSCRIPTION/i,
+    `le motif doit nommer le troisième état, sinon la ronde envoie chercher une faute de frappe : ${motif}`
+  );
+});
+
+// ═══ LE CÂBLAGE : LA RONDE NE RÉVEILLE PLUS UN MANDAT CLOS (T-20260819-0056)
+
+/** Un faux herdr avec DEUX orchestrateurs vivants, dans deux lieux distincts. */
+function fauxHerdrDeuxOrchestrateurs(lieuClos, lieuOuvert, journal) {
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(journal)}, args.join(' ') + '\\n');
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: 'w9:pC', name: 'ferme', agent_status: 'idle', foreground_cwd: ${JSON.stringify(lieuClos)}, revision: 7 },
+    { pane_id: 'w9:pO', name: 'ouvert', agent_status: 'idle', foreground_cwd: ${JSON.stringify(lieuOuvert)}, revision: 7 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: { pane_id: args[2], agent_status: 'idle', revision: 7 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') {
+  process.stdout.write(['sortie', '──────────', '\\u276f ', '──────────'].join('\\n'));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('🔴 LA RONDE NE LIVRE RIEN À UN MANDAT CLOS, ET ELLE LE NOMME — bout en bout', () => {
+  // ⚠️ SANS CET ESSAI, LE MODULE SAURAIT RECONNAÎTRE UN MANDAT CLOS ET LA RONDE RÉVEILLERAIT
+  // QUAND MÊME. C'est la survivante que ce dépôt a payée cinq fois sur le lot précédent : la
+  // recherche savait trouver, le module savait basculer, et personne ne vérifiait que les deux
+  // se parlaient.
+  //
+  // ⚠️ ET ELLE SE PREND SUR LA LIVRAISON, PAS SUR UN CHAMP DU RENDU. Un rendu qui NOMME le
+  // mandat clos tout en lui écrivant quand même serait vert sur un contrôle de champ. Ce qui
+  // décide, c'est qu'AUCUN `agent prompt` ne parte vers son pane.
+  const lieuClos = lieuDOrchestrateur('d-20260819-0002');
+  const lieuOuvert = lieuDOrchestrateur('p-20260920-0001');
+  const journal = join(bac, 'appels-mandat.log');
+  writeFileSync(journal, '');
+  fauxHerdrDeuxOrchestrateurs(lieuClos, lieuOuvert, journal);
+
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_ECHEANCE_MS: '120000',
+    // Le lecteur d'état est remplacé par un double : le vrai parle au ServiceDesk, et un essai
+    // qui l'appellerait dépendrait d'un service distant pour rendre son verdict.
+    RENDEZ_VOUS_ETAT_MANDAT_ESSAIS: JSON.stringify({ 'd-20260819-0002': 'clos', 'p-20260920-0001': 'ouvert' }),
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+  const appels = readFileSync(journal, 'utf8').split('\n').filter(Boolean);
+
+  const ecrits = appels.filter((a) => a.startsWith('agent prompt'));
+  assert.equal(
+    ecrits.some((a) => a.includes('w9:pC')),
+    false,
+    `rien ne doit partir vers le mandat clos — parti : ${JSON.stringify(ecrits)}`
+  );
+  assert.equal(
+    ecrits.some((a) => a.includes('w9:pO')),
+    true,
+    `et le mandat ouvert doit être réveillé — sinon la ronde ne réveille plus personne : ${r.stdout}`
+  );
+  // ⚠️ ET IL EST NOMMÉ. Un agent écarté en silence est indiscernable d'un agent absent — c'est
+  // très exactement le défaut de la famille de ce lot.
+  assert.match(
+    r.stdout,
+    /d-20260819-0002/,
+    `le compte rendu doit NOMMER le mandat clos qu’il a écarté : ${r.stdout}`
+  );
+  assert.equal(dit.orchestrateurs, 1, 'un seul reste dans la population réveillée');
+});
+
+test('UN MANDAT QU’ON N’A PAS PU MESURER EST RÉVEILLÉ QUAND MÊME — et le compte rendu le dit', () => {
+  // ⚠️ LE DÉFAUT PAR DÉFAUT EST « JE NE SAIS PAS », JAMAIS « RIEN À VOIR ICI ». Trois des treize
+  // orchestrateurs réels sont dans ce cas le 2026-09-20 — dont deux parce que la liste du
+  // ServiceDesk n'était pas paginée — ⚠️ voir `ligne-directe/src/mandat.js` : ses chiffres ne se
+  // recopient plus ici. Ne pas les réveiller couperait des orchestrateurs
+  // vivants sur une mesure ratée.
+  const lieuFlou = lieuDOrchestrateur('j-20260814-0001-bis');
+  const lieuOuvert = lieuDOrchestrateur('p-20260920-0001');
+  const journal = join(bac, 'appels-flou.log');
+  writeFileSync(journal, '');
+  fauxHerdrDeuxOrchestrateurs(lieuFlou, lieuOuvert, journal);
+
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_ECHEANCE_MS: '120000',
+    RENDEZ_VOUS_ETAT_MANDAT_ESSAIS: JSON.stringify({ 'p-20260920-0001': 'ouvert' }),
+  });
+  const appels = readFileSync(journal, 'utf8').split('\n').filter(Boolean);
+  const ecrits = appels.filter((a) => a.startsWith('agent prompt'));
+
+  assert.equal(ecrits.some((a) => a.includes('w9:pC')), true, `un mandat non mesuré se réveille : ${r.stdout}`);
+
+  // ⚠️ ON EXIGE LE CHAMP STRUCTURÉ, PAS UN MOT DANS LA PROSE. Une garde qui cherche « non
+  // mesuré » dans la sortie casse à la première reformulation, et elle casse EN SILENCE : le
+  // doute cesserait d'être signalé sans qu'un seul essai bronche. Le rendu est ce qu'une ronde
+  // laisse derrière elle ; c'est lui qui doit porter le doute.
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.equal(
+    (dit.mandats_non_mesures ?? []).length,
+    1,
+    `le rendu doit porter le mandat non mesuré — un doute tu est un doute perdu : ${r.stdout}`
+  );
+  assert.equal(dit.mandats_non_mesures[0].mandat, 'j-20260814-0001-bis', 'et le nommer');
+  assert.match(dit.mandats_non_mesures[0].raison ?? '', /.+/, 'avec sa cause, jamais un doute nu');
+  // ⚠️ ET IL NE SE RANGE PAS PARMI LES MANDATS CLOS : les deux appellent des conduites opposées.
+  assert.equal(dit.mandats_clos, undefined, 'un doute n’est pas une fermeture');
+  assert.match(r.stderr, /mesur/i, 'et l’humain qui lit le journal le voit aussi');
+});

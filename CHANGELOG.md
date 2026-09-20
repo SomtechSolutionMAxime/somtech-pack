@@ -34,6 +34,57 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0011` — **deuxième des trois** : `T-20260819-0056`. Un orchestrateur dont le chantier est **clos** continuait de recevoir ses rondes. ⚠️ Le risque n'est pas le gaspillage : c'est la **collision** — deux orchestrateurs qui soumettent des boîtes en parallèle sur les mêmes panes, sans se voir.*
+
+### Corrige
+
+- **🔴 Le défaut était VIVANT, et il avait un nom.** Sur les 13 orchestrateurs que la ronde réveillait le 2026-09-20, **`portneuf`** tournait dans `.orchestrateur/d-20260819-0002` — une demande que le ServiceDesk rend `delivered`. Il recevait ses rondes ce soir-là. Ce n'est pas le ticket d'août récité : c'est la mesure du jour.
+- **Un mandat clos ne se réveille plus**, et l'écarté est **nommé** dans le compte rendu comme dans le journal — *un agent écarté en silence est indiscernable d'un agent absent.*
+- **`clos` n'est JAMAIS faux par défaut.** Un mandat qu'on n'a pas pu mesurer **réveille quand même**, et le doute est **dit**. *Réveiller un agent clos coûte du bruit ; ne pas réveiller un agent vivant le laisse muet, et personne ne le débloque.*
+- **RIEN n'est mémorisé** : l'état est relu à chaque passage, donc un mandat **rouvert** redevient réveillé tout seul. *Une solution qui ne gère que la fermeture laisserait un agent rouvert hors des rondes — le défaut symétrique, et plus silencieux.*
+- **Le lecteur du ServiceDesk PAGINE.** Mesuré : `list` annonce `total: 252`, plafonne ses pages à 100, et **écrase en silence** toute limite au-delà. *Le service était honnête — chaque réponse porte son `total` à côté de ses données ; c'est le lecteur qui ne l'écoutait pas.* Deux des trois « non mesurée » étaient un **doute évitable**, et se lisent désormais.
+
+### Eprouve
+
+- **AUCUN second lecteur n'a été écrit.** `etatDuMandat` et `lieuDeRoleDansLeChemin` existaient et le recensement s'en servait : la ronde les **importe**. *Deux copies d'un critère ne se jugent pas sur « sont-elles justes » mais sur « rendent-elles le même verdict sur les mêmes entrées ».* Mesuré **avant** d'écrire une ligne, sur les 13 orchestrateurs réels : **accord 13/13**. Une mutation qui remet une seconde copie fait rougir.
+- **21 mutations, 0 survivante** à la tête finale — dont le câblage, le doute traité comme une fermeture, la mémorisation de l'état, et le double d'essais rendu **plus indulgent que le réel**.
+- **🔴 Trois REJETS d'une même passe, sur la même recommandation refusée deux fois.** La boucle de pagination pouvait encore ne pas s'arrêter : une source qui ignore `offset` **en produisant du neuf**, puis une qui **ment sur son total**. ⚠️ *L'objection qui m'a fait refuser le filet était **juste** — « une borne absolue est un nombre choisi par celui-là même dont on éprouve les angles morts » — et c'est **exactement pour ça** qu'elle a protégé le trou deux tours de suite.* `PLAFOND_DE_PAGES = 500` est **choisi, et le code le dit** ; ce qui compte n'est pas qu'il soit choisi, c'est qu'il **échoue proprement** : il ne prétend jamais avoir tout lu.
+- **Un défaut trouvé sur une ENTRÉE ADVERSE, pas sur une mutation** : le compteur comparait des **éléments reçus** à un total d'enregistrements **uniques**. Deux pages qui se chevauchent — plausible, ce lecteur tourne pendant que treize orchestrateurs écrivent — atteignaient le total **sans tout lire**, et le refus se déclarait alors **exhaustif**.
+
+### Technique
+
+- **⚠️ Cinq textes de ce lot mentaient déjà.** Ils citaient « le ServiceDesk plafonne à 100 sur 252 » — un fait que **la pagination de ce même lot** avait rendu faux deux commits plus tôt. *Une correction posée dans un paquet sans repasser mettre à jour ce qu'elle motivait dans l'autre.* Et **rien ne pouvait les faire rougir** : aucune assertion n'en dépendait.
+- **La règle qui en sort, et elle vaut plus que les corrections** : *un compte au **présent** est la forme qui ment ; une mesure **datée** ne ment pas, elle vieillit.* Un seul des quatre comptes du lot était sain — celui qui portait sa date. Les autres pointent désormais vers la source unique au lieu d'en recopier les chiffres : **un pointeur ne peut pas mentir sur une valeur, puisqu'il n'en porte pas.**
+- Quatre défauts d'**instrument** corrigés, chacun sorti par sa propre survivante : une garde dont l'échec était une **pendaison** de 60 s au lieu d'un rouge ; une **fausse survivante** née de doubles trop uniformes ; **deux expressions** du même compte, dont casser l'une laissait l'autre juste ; et un seuil de banc **deviné** au lieu d'être mesuré.
+- Dettes inscrites plutôt que traitées à la va-vite : **`T-20260920-0126`** (une borne comptée en itérations n'engage rien sur le temps réel) et **`T-20260920-0141`** (le lecteur ne connaît pas l'échéance de son appelant — *le plafond borne la mémoire, pas le temps*).
+
+
+## [Non-versionne] - 2026-09-20
+
+*Livraison `J-20260814-0002`, epic `E-20260920-0011` — **premier des trois** : `T-20260819-0036`. Une session qui vient de naître était accusée de **n'avoir jamais existé**, une seconde après avoir été créée. ⚠️ Le registre `herdr` ne se taisait pas : **il répondait, et il répondait faux** — et le refus qu'on en tirait se trompait **trois fois en trois phrases**.*
+
+### Corrige
+
+- **Il y a TROIS états au registre, le code n'en connaissait que DEUX.** Entre « le registre ignore ce pane » et « le registre le connaît », une session qui naît y répond avec le statut `unknown`. Mesuré **trois fois** par sonde en lecture seule sur des naissances réelles, sur **deux chemins** : `pane run "claude"` → 3,5 s et 3,3 s ; `herdr agent start` → 3,7 s. Dans cette fenêtre, `livrer.js` refusait en affirmant « ce pane n'a **jamais** été inscrit », « **attendre ne changera rien** », et conseillait de désigner par le pane — **la voie que le refus venait de fermer lui-même**, puisque c'est justement parce que le registre a *répondu* que le repli par le pane n'a pas joué.
+- **L'attente est désormais BORNÉE et DITE.** `gestionnaire-livrer` attend la fin de l'inscription, l'annonce à chaque tour avec le temps écoulé, et rend à la borne un refus marqué `BORNE ATTEINTE` qui **chiffre ce qu'il a attendu** — sans jamais écrire une ligne dans la boîte du destinataire. ⚠️ La borne n'a **pas** été rabaissée sur les trois mesures : *une borne se pose avant le résultat, et la rétrécir pour qu'elle épouse les données qu'on vient d'obtenir revient à la poser après.*
+- **Cherché par son NOM pendant la fenêtre**, le refus dit qu'une inscription est en cours et **nomme les panes concernés**, au lieu du verdict catégorique qui envoyait chercher une faute de frappe.
+- **🔴 La naissance n'accuse plus sa propre session.** `livrerBrief` a **TROIS** appelants de production, pas deux — `livrer.js`, la ronde, et **`naitre.js`** —, et le lot n'en avait câblé que deux. La boucle « VÉRIFIER PAR LE FAIT » sortait sur le seul **nom** ; or par `herdr agent start` le nom est porté dès t+1,2 s alors que le statut reste `unknown` jusqu'à t+4,9 s. Elle sortait donc **en pleine fenêtre**. Elle attend maintenant aussi la fin de l'inscription — et sa **condition d'échec n'a pas bougé d'un caractère**, de sorte qu'attendre ne peut pas transformer en échec une naissance qui réussissait.
+
+### Eprouve
+
+- **Le bruit de la garde a été mesuré AVANT de la poser** : sur les 66 agents que le registre rendait, **zéro** en `unknown`. Et le discriminant n'est **pas** l'absence de nom — **31 des 66 n'en ont pas**, et la mesure par `agent start` montre un agent qui porte son nom pendant toute la fenêtre.
+- **31 mutations en 6 vagues**, chacune prouvée non vide et jouée sur la suite entière. **Huit survivantes**, toutes fermées — et c'est ce qu'elles ont révélé qui compte : la correction vivait d'abord sur **un chemin qu'aucun appelant de production ne traversait**, et une ligne s'est avérée **du code mort ingardable**, retirée plutôt que gardée sans garde.
+- **Trois défauts d'INSTRUMENT corrigés**, chacun sorti par sa survivante : un banc aveugle à `stderr` concluait « il ne le dit pas » sur une sortie qu'il n'avait jamais lue ; un compte de relevés incluait ceux d'un autre appelant — *le nombre était vrai, l'unité fausse* ; et le double de la naissance rendait `idle` dès le premier appel, **plus indulgent que le réel**, de sorte que la fenêtre mesurée n'existait dans aucun essai.
+- **⚠️ Un essai qui NOMMAIT le défaut dans son titre ne le voyait pas** — vert sous la régression complète. Relevé par la passe de fond, pas par l'auteur. Resserré sur un discriminant **mesuré** dans la séquence d'appels réelle : avec le correctif la livraison aboutit **du premier coup**, sans lui elle paie **quatre** reprises.
+
+### Technique
+
+- Le prédicat du troisième état est **importé** par ses trois appelants, jamais recopié — *deux définitions du même fait divergent, c'est mécanique.*
+- Dette inscrite plutôt que corrigée à la va-vite : `T-20260920-0126` — une borne comptée en itérations n'engage rien sur le temps réel, l'appel en cours pouvant la dépasser. Le défaut est **partagé par toutes les boucles** qui composent un polling avec `appelHerdr` ; le traiter ici aurait retouché une phrase pendant qu'une demi-douzaine de boucles sœurs gardent le même angle mort.
+
+
+## [Non-versionne] - 2026-09-20
+
 *Livraison `J-20260814-0002`, epic `E-20260920-0004` — **dernier des trois** : `T-20260816-0020`. Rien dans `~/.somtech/` ne portait la version installée. Un orchestrateur a cité « six versions publiées, zéro installée » toute une soirée — **un chiffre fabriqué, qui a servi d'argument dans trois décisions**. ⚠️ Le défaut n'était pas cette erreur : c'est que **rien ne permettait de la contredire**.*
 
 ### Ajoute

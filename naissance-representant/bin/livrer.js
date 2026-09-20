@@ -40,6 +40,44 @@ import { livrerBrief, FENETRE_ENTRE_AGENTS_MS } from '../src/livraison.js';
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { trouverDestinataire } from '../src/destinataire.js';
 
+// ⚠️ LA BORNE DE L'ATTENTE D'INSCRIPTION, ET ELLE EST POSÉE AVANT LE RÉSULTAT (T-20260819-0036).
+//
+// Une session qui vient de naître est INSCRITE AU REGISTRE AVANT DE L'ÊTRE COMPLÈTEMENT : elle y
+// répond avec le statut `unknown` puis bascule à `idle`.
+//
+// ⚠️ LA POPULATION, EXACTEMENT, ET ELLE A ÉTÉ CORRIGÉE EN BAISSE AVANT D'ÊTRE ÉLARGIE. La
+// première rédaction disait « 1,5 fois la plus grande de DEUX mesures ». L'une des deux n'en
+// était pas une : le ~30 s de l'occurrence vécue de `w26:p46` venait d'un `sleep 8` suivi d'un
+// seul relevé — une ESTIMATION à la main, présentée comme un chiffre, et c'est son auteur qui
+// l'a retirée. La borne reposait donc sur UNE mesure et UNE approximation.
+//
+// TROIS MESURES RÉELLES ONT ÉTÉ PRISES LE 2026-09-20, par sonde en lecture seule à la seconde,
+// sur DEUX chemins de naissance distincts :
+//
+//   `herdr pane run … "claude"`   →  fenêtre 2,3 s → 5,8 s   (3,5 s)
+//   `herdr pane run … "claude"`   →  fenêtre 2,5 s → 5,8 s   (3,3 s)
+//   `herdr agent start …`         →  fenêtre 1,2 s → 4,9 s   (3,7 s)
+//
+// 45 000 ms vaut donc ~12 fois la plus grande MESURE. Le chiffre n'a pas été rabaissé sur ces
+// trois-là, et c'est délibéré : une borne se pose AVANT le résultat, et la rétrécir pour qu'elle
+// épouse les données qu'on vient d'obtenir revient à la poser après. Elle couvre en outre la
+// dizaine de secondes que l'estimation suggérait sans la prouver. Une borne trop large ne coûte
+// qu'un refus retardé dans un cas pathologique ; une borne trop courte refuse à tort.
+//
+// ⚠️ ET LA TROISIÈME MESURE APPORTE UN FAIT QUE LES DEUX AUTRES NE DONNAIENT PAS : née par
+// `herdr agent start`, la session PORTE DÉJÀ SON NOM pendant toute la fenêtre. Le discriminant
+// ne peut donc pas être l'absence de nom — c'est `unknown`, et c'est maintenant mesuré sur les
+// deux chemins, plus seulement argumenté.
+//
+// Si la fenêtre se révélait plus longue ailleurs, la borne MORD ET LE DIT — ce qu'un refus
+// faisait déjà, en mentant sur la cause.
+//
+// ⚠️ ET ELLE EXISTE PARCE QU'UNE ATTENTE NON BORNÉE EST UNE PENDAISON. Le dispositif a déjà payé
+// ce mode de panne sur la ronde : « une ronde qui pend n'en rate pas une, elle les ANNULE
+// TOUTES ». Une attente sans borne ici ferait la même chose à son appelant, en silence.
+const ENREGISTREMENT_BORNE_MS = Number(process.env.ENREGISTREMENT_BORNE_MS || 45000);
+const ENREGISTREMENT_PAS_MS = Number(process.env.ENREGISTREMENT_PAS_MS || 1000);
+
 const ESSAIS = Number(process.env.LIVRAISON_ESSAIS || 15);
 const DELAI_MS = Number(process.env.LIVRAISON_DELAI_MS || 2000);
 const ATTENTE_MS = Number(process.env.LIVRAISON_ATTENTE_MS || 20000);
@@ -101,11 +139,60 @@ async function main() {
   }
 
   // OÙ VIT LE DESTINATAIRE — sa session, et son pane si on l'a désigné par son nom.
-  const ou = await trouverDestinataire(cible);
+  let ou = await trouverDestinataire(cible);
   if (!ou.ok) {
     process.stderr.write(`${ou.message}\n`);
     process.exit(1);
   }
+
+  // ⚠️ L'ATTENTE DE FIN D'INSCRIPTION — BORNÉE, ET DITE (T-20260819-0036).
+  //
+  // C'EST ICI QUE LE CÂBLAGE SE FAIT, ET C'EST ICI QU'IL MANQUAIT. `trouverDestinataire` sait
+  // désormais reconnaître le troisième état ; sans ces lignes, ce drapeau serait rendu et jamais
+  // consulté — exactement la survivante que ce même binaire a déjà payée sur `parLePane`
+  // (`tests/livrer-malgre-le-registre.test.js`, survivante M7 : le module savait basculer ses
+  // verbes, la recherche savait trouver le pane, et personne ne vérifiait que les deux se
+  // parlaient). Une garde qui remonte une information que personne ne lit ne garde rien.
+  //
+  // ⚠️ ET ELLE PARLE. Une attente muette et une commande figée produisent le même silence — le
+  // motif que tout ce jalon combat. Chaque tour le dit, avec le temps écoulé et la borne.
+  if (ou.enregistrementEnCours) {
+    const debut = Date.now();
+    while (ou.ok && ou.enregistrementEnCours && Date.now() - debut < ENREGISTREMENT_BORNE_MS) {
+      const ecoule = Math.round((Date.now() - debut) / 1000);
+      process.stderr.write(
+        `« ${cible} » est EN COURS D’INSCRIPTION au registre herdr (statut « unknown ») — ` +
+          `j’attends la fin, ${ecoule} s écoulées, borne ${ENREGISTREMENT_BORNE_MS} ms.\n`
+      );
+      await dormir(ENREGISTREMENT_PAS_MS);
+      ou = await trouverDestinataire(cible);
+    }
+    if (!ou.ok) {
+      // L'agent a disparu pendant l'attente — son refus à lui est plus précis que le nôtre.
+      process.stderr.write(`${ou.message}\n`);
+      process.exit(1);
+    }
+    if (ou.enregistrementEnCours) {
+      // ⚠️ ON NE LIVRE PAS À L'AVEUGLE À LA BORNE. Pendant l'inscription, la famille `agent …`
+      // n'est pas prouvée servie, et le témoin de prise (`briefEstPris`) repose dessus : livrer
+      // ici rendrait un verdict qu'on ne sait pas lire. Le refus, lui, dit ce qu'il a vu et
+      // combien de temps il a regardé — c'est ce qui manquait.
+      // ⚠️ « BORNE ATTEINTE » N'APPARTIENT QU'À CE REFUS, et ce n'est pas décoratif. L'annonce
+      // de la boucle ci-dessus porte déjà le chiffre de la borne : une garde qui cherchait
+      // seulement ce chiffre dans la sortie se contentait de l'annonce, et DEUX mutations ont
+      // survécu là-dessous — dont « la borne ne mord plus, on livre à l'aveugle ». Un refus qui
+      // ne porte aucun mot à lui n'est pas gardable.
+      process.stderr.write(
+        `BORNE ATTEINTE — « ${cible} » est resté EN COURS D’INSCRIPTION au registre pendant toute ` +
+          `la borne de ${ENREGISTREMENT_BORNE_MS} ms (statut « unknown », jamais passé à « idle »). Rien n’a ` +
+          'été écrit. Ce n’est pas « ce pane n’existe pas » : le registre le connaît. Va voir son ' +
+          `écran (\`herdr pane read ${ou.pane}\`) — une inscription qui ne finit pas est un ` +
+          'défaut de herdr, pas une faute de frappe.\n'
+      );
+      process.exit(1);
+    }
+  }
+
   const pane = ou.pane;
 
   const resultat = await livrerBrief({
@@ -116,6 +203,13 @@ async function main() {
     // là où le registre n'avait personne, et `agent read`/`agent prompt` lui sont fermés.
     // Sans cette ligne, la recherche aboutirait et la remise échouerait au dernier mètre.
     parLePane: Boolean(ou.parLePane),
+    // ⚠️ ON NE PASSE PAS `enregistrementEnCours` ICI, ET C'EST MESURÉ, PAS OUBLIÉ. La boucle
+    // ci-dessus ne rend la main que quand le drapeau est retombé — ce qui reste possible est
+    // une bascule entre le dernier relevé et cette ligne, que RIEN ne peut éprouver. Le passer
+    // quand même était du code mort : une mutation le remplaçant par `false` a survécu à la
+    // suite entière (M14). On ne garde pas une ligne dont on ne sait pas écrire la garde ; on
+    // la garde LÀ OÙ ELLE EST ATTEIGNABLE — chez le second appelant, la ronde, qui n'attend
+    // pas (`bin/rendez-vous.js`, gardé bout en bout).
     pairOccupe: !enAttente,
     // ⚠️ LA DÉLIVRANCE NE VAUT QUE POUR UN AGENT DÉJÀ NÉ. `--en-attente` est la garde du brief
     // de naissance : la session attend, et sa boîte ne devrait rien porter. Si elle porte

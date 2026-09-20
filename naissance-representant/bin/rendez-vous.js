@@ -26,7 +26,58 @@ import { livrerBrief } from '../src/livraison.js';
 // LE TRI DES NON-LIVRAISONS (T-20260821-0011) — 107 blocages réels étaient noyés dans 231
 // lignes qui se lisaient toutes pareil.
 import { FAMILLES, ceQuiBloque, comptesParFamille, familleDeNonLivraison } from '../src/familles-de-non-livraison.js';
-import { rendezVous, orchestrateursDuPoste, cheminPlist, construirePlist, poserPlafond, RENDEZ_VOUS } from '../src/rendez-vous.js';
+import {
+  rendezVous,
+  orchestrateursDuPoste,
+  avecLetatDuMandat,
+  cheminPlist,
+  construirePlist,
+  poserPlafond,
+  RENDEZ_VOUS,
+} from '../src/rendez-vous.js';
+// ⚠️ LE LECTEUR D'ÉTAT DE MANDAT EXISTE DÉJÀ, ET LE RECENSEMENT S'EN SERT (T-20260819-0056).
+// On l'importe ; on n'en écrit pas un second. L'accord des deux verdicts a été mesuré sur les
+// 13 orchestrateurs réels du poste avant d'écrire une ligne : 13 sur 13.
+import { etatDuMandat, accesServiceDesk } from '../../ligne-directe/src/mandat.js';
+
+/**
+ * LE LECTEUR D'ÉTAT DE MANDAT — le vrai parle au ServiceDesk, et il n'est construit qu'ici.
+ *
+ * ⚠️ `RENDEZ_VOUS_ETAT_MANDAT_ESSAIS` N'EXISTE QUE POUR LES ESSAIS, et c'est la même porte que
+ * `HERDR_SESSIONS_ESSAIS` dans `destinataire.js`, pour la même raison : un essai qui appellerait
+ * le vrai service ferait dépendre son verdict d'un réseau et d'une clé. Il rendrait vert le jour
+ * où la clé manque — « aucun accès » se lit alors comme « rien à écarter », et la garde serait
+ * verte en ne gardant plus rien.
+ *
+ * ⚠️ ET LE DOUBLE N'EST PAS PLUS INDULGENT QUE LE RÉEL : un mandat absent de la table rend
+ * « non mesurée », exactement comme le vrai lecteur devant un code qu'il ne trouve pas — ce qui
+ * l'est encore pour certains d'entre eux. ⚠️ LE MÉCANISME ET SES CHIFFRES VIVENT
+ * À UN SEUL ENDROIT — `ligne-directe/src/mandat.js`, section pagination d'`accesServiceDesk`.
+ * Cette phrase en portait une copie, et cette copie a MENTI : elle a survécu à la correction du
+ * mécanisme qu'elle invoquait, dans le lot qui l'a corrigé. Un pointeur ne peut pas mentir sur
+ * une valeur, puisqu'il n'en porte pas.
+ * Un double qui rendrait « ouvert » par défaut cacherait précisément le cas qui décide.
+ */
+function lecteurDEtatDeMandat() {
+  const force = process.env.RENDEZ_VOUS_ETAT_MANDAT_ESSAIS;
+  if (force !== undefined) {
+    let table = {};
+    try {
+      table = JSON.parse(force);
+    } catch {
+      table = {};
+    }
+    return async (mandat) => {
+      const dit = table[mandat];
+      if (dit === 'clos') return { mesure: 'lue', clos: true, statut: 'clos' };
+      if (dit === 'ouvert') return { mesure: 'lue', clos: false, statut: 'in_progress' };
+      return { mesure: 'non mesurée', clos: null, raison: `« ${mandat} » n’est pas dans la table de l’essai` };
+    };
+  }
+  const acces = accesServiceDesk({});
+  return (mandat) => etatDuMandat(mandat, { appeler: acces });
+}
+
 import { appelHerdr, lireEcran } from '../src/appel-herdr.js';
 import { verdictDeVigie, LECTURES_MINIMALES } from '../src/vigie.js';
 // LA PREUVE D'ACTIVITÉ QUI PEUT RÉELLEMENT SURVENIR (T-20260821-0009) — la vigie s'y branche
@@ -305,7 +356,53 @@ async function tenirLeRendezVous(nom, debut) {
   // session ne charge aucun profil de shell : sans balayage, ce réveil ne joignait AUCUNE
   // session, et un orchestrateur vivant a passé sa vie sans en recevoir un seul.
   const balayage = await orchestrateursDuPoste({ appel: appelHerdr });
-  const vivants = balayage.orchestrateurs;
+
+  // ⚠️ UN MANDAT CLOS NE SE RÉVEILLE PLUS (T-20260819-0056). Mesuré le 2026-09-20 : sur les 13
+  // orchestrateurs vivants de ce poste, `portneuf` tournait sur une demande `delivered` — donc
+  // close — et recevait ses rondes. Le risque n'est pas le gaspillage, c'est la COLLISION :
+  // deux orchestrateurs qui soumettent des boîtes en parallèle sur les mêmes panes.
+  //
+  // ⚠️ ON NE STOCKE RIEN : l'état est relu à chaque passage. Un mandat ROUVERT redevient donc
+  // réveillé tout seul — `batiscan` a été fermé le 19 août puis rouvert le 20, et le service
+  // n'a rien su des deux. Une solution qui ne gère que la fermeture laisserait un agent rouvert
+  // hors des rondes, et ce défaut-là serait plus silencieux.
+  const avecMandat = await avecLetatDuMandat(balayage.orchestrateurs, { lireLetat: lecteurDEtatDeMandat() });
+  const closPourDeVrai = (m) => m?.chantier?.clos === true;
+  const ecartes = avecMandat.filter(closPourDeVrai).map((o) => ({
+    pane: o.pane,
+    agent: o.nom,
+    mandat: o.chantier.mandat,
+    statut: o.chantier.statut ?? null,
+  }));
+  // ⚠️ `clos !== true`, PAS `clos === false`. Un mandat qu'on n'a pas pu mesurer rend `null`, et
+  // il doit RESTER réveillé : ne pas réveiller sur une mesure ratée couperait un orchestrateur
+  // vivant en silence. ⚠️ AUCUN COMPTE AU PRÉSENT ICI, ET C'EST LE POINT : « trois des treize »
+  // était vrai le 2026-09-20 AVANT la pagination, et cette phrase a survécu à sa propre
+  // correction. Un compte non daté redevient faux sans prévenir. La seule population qui reste
+  // vraie est celle qu'une mesure DATÉE porte — voir l'en-tête de
+  // `tests/un-mandat-clos-ne-se-reveille-plus.test.js`. Le mécanisme, lui, vit dans
+  // `ligne-directe/src/mandat.js` et nulle part ailleurs.
+  const vivants = avecMandat.filter((o) => !closPourDeVrai(o));
+  // ⚠️ ET LE DOUTE SE DIT. Un agent réveillé sur un mandat non mesuré n'est pas un agent dont on
+  // sait le mandat ouvert : ranger les deux ensemble ferait lire « tout va bien » sur ce qu'on
+  // ignore — le motif que tout ce jalon combat.
+  const nonMesures = vivants
+    .filter((o) => o.chantier?.mesure !== 'lue')
+    .map((o) => ({ pane: o.pane, agent: o.nom, mandat: o.chantier?.mandat ?? null, raison: o.chantier?.raison ?? null }));
+
+  if (ecartes.length) {
+    process.stderr.write(
+      `${r.etiquette} : ${ecartes.length} orchestrateur(s) NON réveillé(s) — leur mandat est CLOS :\n` +
+        ecartes.map((e) => `  ${e.pane} « ${e.agent ?? '—'} » — ${e.mandat} (${e.statut ?? 'clos'})\n`).join('')
+    );
+  }
+  if (nonMesures.length) {
+    process.stderr.write(
+      `${r.etiquette} : ${nonMesures.length} orchestrateur(s) réveillé(s) SANS que leur mandat ait pu être mesuré —\n` +
+        `  on réveille par défaut : se taire couperait un agent vivant sur une mesure ratée.\n` +
+        nonMesures.map((e) => `  ${e.pane} « ${e.agent ?? '—'} » — ${e.mandat ?? 'aucun mandat'} : ${e.raison ?? '—'}\n`).join('')
+    );
+  }
 
   // ⚠️ UN RÉVEIL QUI NE JOINT PERSONNE DOIT DIRE POURQUOI — les trois silences n'ont pas la
   // même cause, et les confondre est ce qui a laissé le défaut vivre des jours dans le
@@ -348,6 +445,7 @@ async function tenirLeRendezVous(nom, debut) {
     // défaut d'origine, dans sa valeur par défaut.
     famille: FAMILLES.SONDE_MUETTE,
     activite: null,
+    enregistrementEnCours: Boolean(o.enregistrementEnCours),
   }));
   let restants = comptes;
   while (restants.length > 0) {
@@ -356,7 +454,18 @@ async function tenirLeRendezVous(nom, debut) {
       // livrerait un, les deux textes collés.
       // Le socket de SA session : un pane ne se joint pas depuis une autre. Sans lui, on
       // remplacerait « ne réveiller personne » par « en réveiller un et croire avoir fait le tour ».
-      const livre = await livrerBrief({ pane: c.pane, socket: c.socket, texte: r.rappel, appelHerdr, lireEcran, dormir });
+      // ⚠️ `enregistrementEnCours` — voir `orchestrateursVivants`. Sans ce passage, un
+      // orchestrateur qui vient de naître reçoit le refus qui affirme qu'il n'a JAMAIS été
+      // inscrit, à l'instant même où le registre le rend.
+      const livre = await livrerBrief({
+        pane: c.pane,
+        socket: c.socket,
+        texte: r.rappel,
+        enregistrementEnCours: c.enregistrementEnCours,
+        appelHerdr,
+        lireEcran,
+        dormir,
+      });
       c.livre = livre.ok;
       c.motif = livre.ok ? null : livre.message;
       // ⚠️ LA FAMILLE EST POSÉE ICI, SUR LE RÉSULTAT QU'ON VIENT D'OBTENIR (T-20260821-0011) —
@@ -487,7 +596,7 @@ async function tenirLeRendezVous(nom, debut) {
     );
   }
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(ecartes.length ? { mandats_clos: ecartes } : {}), ...(nonMesures.length ? { mandats_non_mesures: nonMesures } : {}), ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
   noterLePassage(nom, manques.length === 0 ? 'abouti' : 'partiel', debut, {
     orchestrateurs: comptes.length,
