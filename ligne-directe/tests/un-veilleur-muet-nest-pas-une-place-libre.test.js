@@ -473,3 +473,47 @@ for (const decideur of DECIDEURS) {
     assert.deepEqual(annules, [planifies[0]], 'le minuteur n’est annulé qu’UNE fois, même après les échos tardifs');
   });
 }
+
+test('LE RÉGLAGE PAR DÉFAUT DE LA SONDE EST GARDÉ, LUI AUSSI — deux secondes, et personne ne les surveillait', { timeout: 5000 }, async () => {
+  // 🔴 UNE SURVIVANTE D'UNE AUTRE FAMILLE, TROUVÉE À LA QUATRIÈME PASSE (T-20260920-0013).
+  // Tout ce que ce fichier éprouve du minuteur passe une borne EXPLICITE — soixante
+  // millisecondes, partout. Les appels réels qui n'en passent pas tranchent par `connect` ou
+  // `error` sur un vrai socket, presque instantanément : le chiffre du défaut n'influence
+  // donc jamais un verdict observé.
+  // Mutation qui l'a révélé : porter le défaut de 2 000 ms à 20 000 000 ms — cinq heures
+  // et demie. **Les 1355 bancs du module restaient verts.**
+  //
+  // > Les trois passes précédentes demandaient « QUI décide ». Celle-ci demande « AVEC QUEL
+  // > RÉGLAGE » — et c'est une question que le balayage des branches ne pose pas.
+  //
+  // Ce que ça coûterait : ce minuteur est le filet qui empêche `placeTenue` de PENDRE quand
+  // ni la prise ni l'erreur ne viennent. Un défaut qui dériverait en silence laisserait ce
+  // filet inopérant pendant des heures — c'est-à-dire l'exact défaut que ce lot a été
+  // ouvert pour rendre éprouvable.
+  //
+  // ⚠️ ON PASSE `brancher` ET `planifier`, JAMAIS `borne` : c'est ce qui rend le défaut
+  // observable sans le remplacer. Le banc lit le délai que la sonde a choisi seule.
+  //
+  // ⚠️ ET UN TROU DE NOMMAGE, SIGNALÉ PLUTÔT QUE CORRIGÉ ICI : ce 2 000 est un littéral
+  // anonyme, alors que `BORNE_PAR_DEFAUT` existe dans le même fichier — et vaut 30 000, pour
+  // un autre geste. Deux « bornes par défaut » dans un même module, dont une seule porte un
+  // nom : le renommage touche la production et n'est pas de ce lot, mais la garde ci-dessous
+  // fait qu'une dérive se verra.
+  const planifies = [];
+  const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
+    brancher: () => {
+      const enVol = setTimeout(() => {}, 60_000);
+      return { on() {}, destroy() { clearTimeout(enVol); } };
+    },
+    planifier: (fn, delai) => {
+      const jeton = { fn, delai, unref() {} };
+      planifies.push(jeton);
+      return jeton;
+    },
+    annuler: () => {},
+  });
+
+  assert.equal(planifies[0].delai, 2000, 'la sonde arme son minuteur à deux secondes quand on ne lui dit rien — un défaut qui dérive laisse le filet inopérant sans qu’aucun banc ne rougisse');
+  planifies[0].fn();
+  assert.equal(await promesse, true, 'et ce défaut-là tranche bien du côté prudent');
+});
