@@ -366,6 +366,25 @@ async function tenirLeRendezVous(nom, debut) {
   // réveillé tout seul — `batiscan` a été fermé le 19 août puis rouvert le 20, et le service
   // n'a rien su des deux. Une solution qui ne gère que la fermeture laisserait un agent rouvert
   // hors des rondes, et ce défaut-là serait plus silencieux.
+  // ⚠️ UN NOM EN DOUBLE FAIT ROUGIR QUELQUE CHOSE (T-20260818-0036). Deux panes ont porté
+  // `charles-olivier` sur le lieu d'un client servi : l'adressage se fait par le NOM, donc deux
+  // porteurs c'est un message chez le mauvais destinataire — et là, le destinataire était le
+  // représentant d'un client, dont le canal est le canal du client.
+  //
+  // ⚠️ CE QU'ON NE PRÉTEND PAS FERMER : que `herdr agent rename` refuse un nom déjà pris. C'est
+  // SON code, pas le nôtre (règle d'or n°7). La ronde ne peut pas empêcher le doublon ; elle
+  // peut refuser de le laisser passer inaperçu, et c'est tout ce qu'on promet.
+  const doublons = balayage.nomsEnDouble ?? [];
+  if (doublons.length) {
+    process.stderr.write(
+      `${r.etiquette} : ${doublons.length} nom(s) porté(s) par PLUS D'UN agent vivant — l'adressage ` +
+        `entre agents se fait par le nom, donc un message peut partir chez le mauvais :\n` +
+        doublons
+          .map((d) => `  « ${d.nom} » — ${d.porteurs.map((p) => `${p.pane} (${p.socket})`).join(', ')}\n`)
+          .join('')
+    );
+  }
+
   const avecMandat = await avecLetatDuMandat(balayage.orchestrateurs, { lireLetat: lecteurDEtatDeMandat() });
   const closPourDeVrai = (m) => m?.chantier?.clos === true;
   const ecartes = avecMandat.filter(closPourDeVrai).map((o) => ({
@@ -596,7 +615,7 @@ async function tenirLeRendezVous(nom, debut) {
     );
   }
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(ecartes.length ? { mandats_clos: ecartes } : {}), ...(nonMesures.length ? { mandats_non_mesures: nonMesures } : {}), ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(doublons.length ? { noms_en_double: doublons } : {}), ...(ecartes.length ? { mandats_clos: ecartes } : {}), ...(nonMesures.length ? { mandats_non_mesures: nonMesures } : {}), ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
   noterLePassage(nom, manques.length === 0 ? 'abouti' : 'partiel', debut, {
     orchestrateurs: comptes.length,

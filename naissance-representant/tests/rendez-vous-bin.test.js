@@ -1297,3 +1297,84 @@ test('UN MANDAT QU’ON N’A PAS PU MESURER EST RÉVEILLÉ QUAND MÊME — et l
   assert.equal(dit.mandats_clos, undefined, 'un doute n’est pas une fermeture');
   assert.match(r.stderr, /mesur/i, 'et l’humain qui lit le journal le voit aussi');
 });
+
+// ═══ UN NOM EN DOUBLE FAIT ROUGIR QUELQUE CHOSE (T-20260818-0036)
+
+/** Un faux herdr où DEUX panes portent le même nom, dans deux sessions distinctes. */
+function fauxHerdrAvecUnDoublon(lieu, journal) {
+  const script = `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(journal)}, args.join(' ') + '\\n');
+const socket = process.env.HERDR_SOCKET_PATH || '';
+if (args[0] === 'agent' && args[1] === 'list') {
+  // ⚠️ LES DEUX PORTEURS NE SONT PAS DANS LA MÊME SESSION — c'est la forme de l'incident, et
+  // c'est elle qu'un relevé fait depuis une seule session ne verrait jamais.
+  const ici = socket.includes('b.sock')
+    ? [{ pane_id: 'w9:pB', name: 'Charles-Olivier', agent_status: 'idle', foreground_cwd: '/ailleurs', revision: 7 }]
+    : [{ pane_id: 'w9:pA', name: 'charles-olivier', agent_status: 'idle', foreground_cwd: '/ailleurs', revision: 7 },
+       { pane_id: 'w9:pO', name: 'orch', agent_status: 'idle', foreground_cwd: ${JSON.stringify(lieu)}, revision: 7 }];
+  process.stdout.write(JSON.stringify({ result: { agents: ici } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: { pane_id: args[2], agent_status: 'idle', revision: 7 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') {
+  process.stdout.write(['sortie', '──────────', '\\u276f ', '──────────'].join('\\n'));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('🔴 UN NOM PORTÉ PAR DEUX AGENTS VIVANTS EST SIGNALÉ PAR LA RONDE — bout en bout', () => {
+  // ⚠️ L'INCIDENT : deux panes ont porté `charles-olivier` sur le lieu d'un client servi.
+  // L'adressage se fait par le NOM — deux porteurs, c'est un message chez le mauvais
+  // destinataire, et là le destinataire était le représentant d'un client.
+  //
+  // ⚠️ CE QUE CETTE GARDE NE PRÉTEND PAS FERMER : que `herdr agent rename` refuse un nom déjà
+  // pris. C'est SON code, pas le nôtre (règle d'or n°7). La ronde ne peut pas empêcher le
+  // doublon ; elle peut refuser de le laisser passer inaperçu — et c'est tout ce qu'on promet.
+  const lieu = lieuDOrchestrateur('p-20260920-0001');
+  const journal = join(bac, 'appels-doublon.log');
+  writeFileSync(journal, '');
+  fauxHerdrAvecUnDoublon(lieu, journal);
+
+  const r = lancerRonde(['/s/a.sock', '/s/b.sock'], {
+    RENDEZ_VOUS_ECHEANCE_MS: '120000',
+    RENDEZ_VOUS_ETAT_MANDAT_ESSAIS: JSON.stringify({ 'p-20260920-0001': 'ouvert' }),
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.ok(dit.noms_en_double, `le rendu doit porter les doublons : ${r.stdout}`);
+  assert.equal(dit.noms_en_double.length, 1, 'un seul nom est en double');
+  assert.match(dit.noms_en_double[0].nom, /charles-olivier/i, 'et il est NOMMÉ');
+  // ⚠️ NOMMER LE NOM NE SUFFIT PAS : sans les porteurs, on cherche partout.
+  assert.equal(dit.noms_en_double[0].porteurs.length, 2, 'avec ses deux porteurs');
+  // ⚠️ ET L'HUMAIN QUI LIT LE JOURNAL DOIT LE VOIR — un rendu JSON que personne n'ouvre ne
+  // signale rien.
+  assert.match(r.stderr, /charles-olivier/i, `le journal doit le crier aussi : ${r.stderr}`);
+  // La ronde continue son travail : signaler n'est pas s'arrêter.
+  assert.equal(dit.orchestrateurs, 1, 'et elle réveille quand même l’orchestrateur légitime');
+});
+
+test('AUCUN DOUBLON : LA RONDE NE DIT RIEN — une garde qui crie tous les jours cesse d’être lue', () => {
+  const lieu = lieuDOrchestrateur('p-20260920-0002');
+  const journal = join(bac, 'appels-sans-doublon.log');
+  writeFileSync(journal, '');
+  fauxHerdrQuiLivreEtCompte('w9:pS', lieu, journal);
+
+  const r = lancerRonde(['/s/a.sock'], {
+    RENDEZ_VOUS_ECHEANCE_MS: '120000',
+    RENDEZ_VOUS_ETAT_MANDAT_ESSAIS: JSON.stringify({ 'p-20260920-0002': 'ouvert' }),
+  });
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.equal(dit.noms_en_double, undefined, 'pas de doublon : le rendu n’en parle pas');
+  assert.doesNotMatch(r.stderr, /en double/i, 'et le journal reste muet là-dessus');
+});
