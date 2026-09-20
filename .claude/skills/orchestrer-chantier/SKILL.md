@@ -515,7 +515,7 @@ La revue passe par **deux sous-agents**, **jamais** par un agent herdr :
 Le brief de revue (voir section dédiée ci-après) prescrit à chaque sous-agent :
 
 - **reproduire** les défauts plutôt que de les déduire ;
-- **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit. Un test qui reste vert après mutation est un faux témoin, et c'est ce qui laisse passer les vrais défauts ;
+- **muter le code lui-même** — au moins trois mutations de son cru — et vérifier que la suite rougit. Un test qui reste vert après mutation est un faux témoin, et c'est ce qui laisse passer les vrais défauts. ⚠️ **Trois est un PLANCHER, pas une preuve** : *des mutations qui tuent toutes n'éprouvent que ce que les assertions couvraient déjà* — **zéro survivante sur un SOUS-ENSEMBLE ne dit rien de la population** (`2026-09-20`, `T-20260920-0013`) ;
 - **trancher les désaccords par la mesure**, pas par l'autorité ;
 - rendre un verdict franc, sans équivoque.
 

@@ -875,6 +875,45 @@ export const CONTROLES = [
       );
     },
   },
+
+  {
+    id: 'trois-mutations-est-un-plancher',
+    quoi: 'les deux textes disent que le compte de mutations est un PLANCHER, pas une preuve',
+    verifier({ skill, brief }) {
+      // ⚠️ POURQUOI CE CONTRÔLE EXISTE, et il a été mesuré manquant.
+      //
+      // Le brief PRESCRIT un compte de mutations, et ce compte est gardé nommément
+      // (`brief-exige-des-mutations-du-cru`) : on ne peut pas le baisser sans rougir.
+      // Mais un compte fixé d'avance n'éprouve que ce que les assertions couvraient
+      // déjà — « zéro survivante sur un SOUS-ENSEMBLE ne dit rien de la population »
+      // (D-20260920-0001, règle 3, occurrence `T-20260920-0013` : quatre premières
+      // mutations toutes tuées, puis HUIT rouges après ~25, dont un bypass du chemin
+      // nominal qui dormait sous 1353 bancs verts).
+      //
+      // La précision qui ferme ça a été ajoutée aux DEUX textes — et la revue de fond
+      // a mesuré qu'on pouvait l'en retirer INTÉGRALEMENT sans qu'un seul banc rougisse.
+      // C'est la règle 1 du même lot retournée contre lui : un retrait futur ne se
+      // serait distingué d'un remplacement par rien. Le voici gardé.
+      //
+      // ⚠️ ET IL PORTE SUR LES DEUX FICHIERS DANS LA MÊME ASSERTION, délibérément :
+      // c'est la règle 8 (« deux gardes justes, chacune bornée à sa section, ne gardent
+      // pas leur ACCORD »). Deux contrôles séparés laisseraient l'un vert pendant qu'on
+      // retire la phrase de l'autre.
+      for (const [nom, texte] of [['SKILL.md', skill], ['BRIEF-REVUE.md', brief]]) {
+        assert.match(
+          texte, /PLANCHER, PAS UNE PREUVE|PLANCHER\*\*, pas une preuve/i,
+          `${nom} ne dit plus que le compte de mutations est un PLANCHER : ` +
+            'un reviewer dont les trois mutations tuent toutes conclura qu\'il a éprouvé ' +
+            'quelque chose, et il n\'aura éprouvé que ce que les assertions couvraient déjà'
+        );
+        assert.match(
+          texte, /sous-ensemble ne dit rien de la population/i,
+          `${nom} ne porte plus la raison : zéro survivante sur un SOUS-ENSEMBLE ne dit ` +
+            'rien de la population'
+        );
+      }
+    },
+  },
 ];
 
 // ═════════════════════════════════════════ les mutations
@@ -886,6 +925,34 @@ export const CONTROLES = [
 // qui n'a rien à voir, et le harnais compterait une prise imaginaire.
 
 export const MUTATIONS = [
+  {
+    id: 'le-plancher-disparait-du-skill',
+    quoi: 'le SKILL ne dit plus que trois mutations sont un plancher',
+    sur: 'skill',
+    cible: 'trois-mutations-est-un-plancher',
+    muter: (t) => t.split('\n').filter((l) => !/PLANCHER/.test(l)).join('\n'),
+  },
+
+  {
+    id: 'le-plancher-disparait-du-brief',
+    quoi: 'le BRIEF ne dit plus que trois mutations sont un plancher',
+    sur: 'brief',
+    cible: 'trois-mutations-est-un-plancher',
+    muter: (t) => t.split('\n').filter((l) => !/PLANCHER/.test(l)).join('\n'),
+  },
+
+  {
+    // La raison seule, sans le mot « plancher » : le texte garde son injonction et
+    // perd ce qui la fonde. Un reviewer lirait « continue » sans savoir pourquoi.
+    id: 'le-plancher-perd-sa-raison',
+    quoi: 'le brief garde le mot PLANCHER et perd la raison qui le fonde',
+    sur: 'brief',
+    cible: 'trois-mutations-est-un-plancher',
+    muter: (t) => t.replace(
+      'ne dit rien de la population', 'ne dit rien de grand-chose'
+    ),
+  },
+
   {
     id: 'envoi-nu-reintroduit',
     quoi: 'un bloc de commande réenseigne `herdr agent prompt` pour rendre compte',
