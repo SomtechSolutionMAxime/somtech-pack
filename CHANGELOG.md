@@ -7,6 +7,32 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Demande `D-20260920-0001`, epic `E-20260920-0002`. **Vague 2A — les sept règles que la nuit du 19 au 20/09 a payées.** Toutes portent sur la conduite d'un orchestrateur envers ses chefs d'équipe, toutes naissent d'un défaut mesuré chez un orchestrateur qui connaissait déjà son métier : une heure de blocage d'un chef, deux gardes disparues, quinze travaux libres arrêtés par deux arbitrages.*
+
+### Ajoute
+
+- **`chefs-equipe.md` — toute consigne qui déclenche une action nomme son sujet.** *« Tes trois questions montent au dirigeant »* porte deux ordres opposés — *« je les monte »* et *« pose-les »* — et rien dedans ne dit **qui** monte. Le sujet se nomme même quand il est évident, parce que ce qui est évident est ce qu'on ne vérifie pas. Vaut pour le brief, pour chaque livraison de message et pour chaque arbitrage rendu.
+- **`chefs-equipe.md` — un `/goal` différé se repose au premier retour au repos.** Différer est juste (un but posé vers un agent occupé s'affame), mais *« à poser plus tard »* n'est pas un but posé — et son absence n'est pas neutre.
+- **`chefs-equipe.md` — la veille déduit la fin d'un mandat de l'absence de but affiché.** Motif `agent-termine`. **Un agent sans but n'a pas fini : il n'a pas de but** — les deux sont indistinguables à l'écran, et l'un des deux fait disparaître la garde.
+- **`chefs-equipe.md` — devant un dialogue de choix ouvert par un chef, on annule ; on ne répond pas.** Répondre, même en choisissant l'option « par défaut » qu'on a soi-même rédigée, tranche à la place de celui à qui la question appartient. Et la livraison de messages **refuse** d'écrire à un agent bloqué : un dialogue ouvert rend une session injoignable même pour son coordonnateur.
+- **`faire-appliquer.md` — le corollaire des trois listes.** *« Sur la tête finale »* se lit *« de ce qu'ils couvrent »* : ce qui est ajouté après la revue doit être **couvert** par les verdicts, pas les faire rejouer — sinon l'entrée de ce changelog, que l'outil impose après la revue, les périme à chaque fois, indéfiniment.
+- **`mise-en-production.md` — le même corollaire rappelé là où le geste se pose.** Seul défaut trouvé par la revue de fond, contre l'auteur : le corollaire vivait dans le chapitre de la revue pendant que l'énoncé strict qu'il assouplit vivait seul dans celui du merge. **Le lecteur du geste ne traverse pas le chapitre du sujet, dans n'importe quel ordre de chapitres.**
+- **`reflexes.md` — la question du cadre se pose aussi aux cadres qu'on produit.** Une paire de critères n'échoue pas devant un troisième objet : elle le range de force dans l'une des deux cases, et celui qui la reçoit de son coordonnateur la prend pour exhaustive.
+- **`rondes.md` — « est-ce que j'attends quelqu'un ? » se lit par chantier, jamais en bloc.** On est bloqué sur un front et libre sur l'autre ; un arbitrage qui dort sur un chantier n'arrête pas les autres.
+
+### Corrige
+
+- **Le banc du métier ne s'interrompt plus au lieu de rougir.** `"${TAB[@]}"` sur un tableau vide est une variable non liée en bash 3.2 sous `set -u` : retirer une section suffisait à tuer la série après le premier contrôle — **78 assertions muettes, aucune rouge**. Trouvé en jouant une contre-épreuve, pas par l'usage. *Une suite qui meurt tôt ressemble trait pour trait à une suite qui passe.*
+
+### Technique
+
+- **Huit gardes** (bloc ⑭), chacune bornée à sa section et exigeant l'**occurrence datée** de sa règle — vérifié discriminant par intention et non par accident : une seule occurrence de la date par section visée. **25 contre-épreuves jouées une mutation à la fois**, section supprimée · date déplacée · motif de fond déplacé, sans une survivante. Le banc de mutation dénonce désormais l'**essai vide** — une mutation qui ne correspond à aucun texte rend « zéro rouge », exactement comme une garde qui tient.
+- Seuil de taille du métier re-baseliné à **165 374 caractères, marge nulle**, avec sa décomposition par chapitre, le nom de qui l'a accordé et la clause qu'il ne crée aucun droit pour le suivant. Le passage de remplacement a été fait **avant** la demande et rend **zéro retrait** : les sept règles sont sept mécanismes neufs, aucune ne remplace une prescription déjà présente dans son chapitre.
+- Dette inscrite : `T-20260920-0051` — le corollaire est désormais écrit à deux endroits et **rien ne garde leur accord** ; les deux gardes sont justes, c'est leur jointure qui n'est gardée par personne.
+
+
+## [Non-versionne] - 2026-09-20
+
 *Demande `D-20260920-0001`, epic `E-20260920-0001`. **Le métier de l'orchestrateur descend les cinq changements vécus du 15 au 19/09** — un orchestrateur qui naît du gabarit merge désormais son lot sans demander un go que le dirigeant a cessé de vouloir donner, et refuse de merger si une condition manque.*
 
 ### Ajoute
