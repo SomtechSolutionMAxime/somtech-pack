@@ -500,4 +500,21 @@ test('UNE PRISE QUI SE CONNECTE EST REFERMÉE, ELLE AUSSI — sinon chaque sonda
   assert.equal(await promesse, true, 'une prise qui aboutit dit que la place est tenue');
   assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte SUR LE CHEMIN NOMINAL aussi — sinon chaque sondage abandonne un socket');
   assert.deepEqual(annules, [planifies[0]], 'le minuteur est annulé sur le chemin nominal AUSSI — sinon il reste armé après chaque sondage réussi');
+
+  // 🔴 ET L'ÉCHO TARDIF, SUR CE CHEMIN AUSSI — LE TROU SYMÉTRIQUE DU PRÉCÉDENT.
+  // Son jumeau éprouve l'idempotence quand c'est LE MINUTEUR qui décide en premier. Ici
+  // c'est la CONNEXION qui décide — et c'est le cas le plus fréquent en production, une
+  // place tenue étant la normale, pas l'exception. La mutation qui l'a révélé : rendre la
+  // garde d'idempotence inopérante UNIQUEMENT quand le premier verdict vient de `connect`.
+  // Les 1354 restaient verts.
+  // Ce qui peut réellement arriver ensuite : un `error` tardif du socket — une connexion
+  // coupée juste après avoir abouti — ou un minuteur qu'on aurait mal annulé ailleurs.
+  // Aucun des deux ne doit renverser un verdict déjà rendu, ni refermer deux fois.
+  //
+  // > Fermer un trou sur un chemin laisse l'autre chemin ouvert sur la même dimension.
+  ecouteurs.get('error')?.();
+  planifies[0].fn();
+  assert.equal(await promesse, true, 'un écho tardif — socket coupé après coup, ou minuteur mal annulé — ne renverse pas un verdict déjà rendu');
+  assert.equal(ferme, 1, 'la prise n’est refermée qu’UNE fois sur le chemin nominal non plus');
+  assert.deepEqual(annules, [planifies[0]], 'le minuteur n’est annulé qu’UNE fois sur le chemin nominal non plus');
 });
