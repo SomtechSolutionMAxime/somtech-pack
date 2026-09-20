@@ -161,6 +161,19 @@ function installerFauxHerdr(scenario = {}) {
     espaces: ['w9'],
     demarrage: null,
     busyPendant: 0,
+    // ⚠️ `inscriptionPendant` — COMBIEN DE PREMIERS `agent get` RENDENT `agent_status:
+    // 'unknown'` (T-20260819-0036). Sans ce réglage, ce double était PLUS INDULGENT QUE LE
+    // RÉEL : il rendait `idle` dès le premier appel, donc la fenêtre d'inscription mesurée sur
+    // ce poste n'existait dans aucun essai de naissance.
+    //
+    // MESURÉ le 2026-09-20, sonde en lecture seule sur une naissance par `herdr agent start` —
+    // le mécanisme exact qu'emploie `bin/naitre.js` :
+    //   t+0.0s  agent_not_found
+    //   t+1.2s  statut `unknown`, ET LE NOM EST DÉJÀ LÀ
+    //   t+4.9s  statut `idle`
+    // C'est le nom présent dès le début qui rend ce cas dangereux ici : la boucle de
+    // vérification de `bin/naitre.js` sort sur le NOM, donc elle sortait EN PLEINE FENÊTRE.
+    inscriptionPendant: 0,
     ecran: 'pret',
     repertoire: null,
     nomPorte: null,
@@ -287,12 +300,16 @@ if (cmd === 'agent read') {
 
 if (cmd === 'agent get') {
   const ne = passes.find((a) => a[0] === 'agent' && a[1] === 'start');
+  // La fenêtre d'inscription : les \`inscriptionPendant\` premiers relevés rendent \`unknown\`,
+  // avec le nom DÉJÀ porté — c'est la forme mesurée sur \`herdr agent start\`.
+  const relevesFaits = passes.filter((a) => a[0] === 'agent' && a[1] === 'get').length;
+  const encoreEnInscription = relevesFaits <= (sc.inscriptionPendant || 0);
   sortir({
     result: {
       type: 'agent_info',
       agent: {
         pane_id: args[2],
-        agent_status: 'idle',
+        agent_status: encoreEnInscription ? 'unknown' : 'idle',
         name: sc.nomPorte || (ne ? ne[2] : null),
         cwd: sc.repertoire,
         foreground_cwd: sc.repertoire,
@@ -2920,3 +2937,103 @@ test('L’AVIS RELAIE LE REFUS TEL QUEL — il ne le reformule jamais', () => {
     );
   }
 });
+
+// ═══ LE TROISIÈME APPELANT DE `livrerBrief` — LA NAISSANCE ELLE-MÊME (T-20260819-0036)
+//
+// 🔴 TROUVÉ PAR UNE PASSE DE REVUE DE FOND, contre le lot qui prétendait fermer ce défaut.
+// `livrerBrief` a TROIS appelants de production, pas deux : `bin/livrer.js`, la ronde de
+// `bin/rendez-vous.js` — les deux câblés — et CE binaire, qui ne l'était pas. Le commentaire
+// du lot disait en toutes lettres « la ronde est LE SECOND appelant » ; il n'y avait de
+// troisième nulle part, ni dans le code, ni dans les essais.
+//
+// ⚠️ ET C'EST LE LIEU LE PLUS LITTÉRAL DU TICKET : « une session qui vient de naître ».
+//
+// Ce qui rend le cas atteignable ici, c'est la mesure du 2026-09-20 sur `herdr agent start` —
+// le mécanisme exact de ce binaire : le NOM est porté dès t+1,2 s, le statut ne devient `idle`
+// qu'à t+4,9 s. Or la boucle « VÉRIFIER PAR LE FAIT » ne teste QUE le nom. Elle sortait donc
+// EN PLEINE FENÊTRE, et l'amorce livrée juste après recevait le message que tout ce lot ferme
+// ailleurs : « ce pane n'a JAMAIS été inscrit… attendre ne changera rien » — sur un agent
+// inscrit une seconde plus tôt par l'appel qui venait de le créer.
+
+test('🔴 LA NAISSANCE N’ACCUSE PAS SA PROPRE SESSION DE N’AVOIR JAMAIS EXISTÉ', () =>
+  avecLieu((client, lieu) => {
+    // Trois premiers relevés en `unknown`, nom déjà porté — la forme mesurée sur `agent start`.
+    const journal = installerFauxHerdr({ inscriptionPendant: 3, repertoire: lieu });
+    const r = lancerNaitre(client, { amorce: 'ton brief', essais: '12' });
+
+    const sortie = `${r.stdout}${r.stderr}`;
+    assert.doesNotMatch(
+      sortie,
+      /jamais été inscrit/i,
+      `la naissance affirme que le pane n’a JAMAIS été inscrit, alors qu’elle vient de l’inscrire : ${sortie}`
+    );
+    // ⚠️ ET ON EXIGE QUE L'AMORCE PARTE POUR DE VRAI. Sans cette moitié, l'essai passerait
+    // aussi si la naissance échouait AVANT d'essayer de livrer — un vert obtenu en ne
+    // traversant pas le chemin qu'il nomme.
+    const amorces = appelsJournalises(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
+    assert.equal(amorces.length >= 1, true, `l’amorce doit être livrée : ${sortie}`);
+    assert.equal(r.code, 0, `et la naissance aboutir : ${sortie}`);
+  }));
+
+test('LA BOUCLE DE NAISSANCE ATTEND QUE L’INSCRIPTION SOIT FINIE — pas seulement que le nom soit là', () =>
+  avecLieu((client, lieu) => {
+    // ⚠️ CE QUE CET ESSAI GARDE, ET QUI N'EST PAS LE MESSAGE : que la boucle REGARDE le statut.
+    // Corriger le seul texte laisserait la naissance livrer son amorce à une session dont
+    // l'inscription n'est pas finie — le diagnostic serait juste, la livraison resterait faite
+    // dans un état qu'on ne sait pas lire.
+    const journal = installerFauxHerdr({ inscriptionPendant: 3, repertoire: lieu });
+    lancerNaitre(client, { amorce: 'ton brief', essais: '12' });
+
+    // ⚠️ ON NE COMPTE QUE LES RELEVÉS DE LA BOUCLE, ET LA PREMIÈRE RÉDACTION COMPTAIT CEUX DES
+    // AUTRES. Elle prenait TOUS les `agent get` du journal — or `livrerBrief` en fait aussi,
+    // pour son propre compte. Une mutation qui faisait ressortir la boucle sur le seul nom a
+    // donc SURVÉCU : un seul relevé de boucle, plus ceux de la livraison, et le total dépassait
+    // quand même le seuil. Le nombre était vrai, l'unité était fausse.
+    //
+    // LA FRONTIÈRE, MESURÉE sur ce même double, pas supposée. L'ordre réel des appels est :
+    //   workspace list · tab create · agent start · agent read ·
+    //   [ agent get × N  ← LA BOUCLE, et elle seule ] ·
+    //   agent read · agent prompt · …   ← la livraison commence ici
+    // La boucle est donc la SÉRIE ININTERROMPUE de `agent get` qui suit le premier `agent read`.
+    const tous = appelsJournalises(journal);
+    const apresEcran = tous.slice(tous.findIndex((a) => a[0] === 'agent' && a[1] === 'read') + 1);
+    let relevesDeLaBoucle = 0;
+    for (const a of apresEcran) {
+      if (a[0] === 'agent' && a[1] === 'get') relevesDeLaBoucle += 1;
+      else break;
+    }
+    assert.ok(
+      relevesDeLaBoucle >= 4,
+      `la boucle doit redemander tant que le statut est « unknown » — ${relevesDeLaBoucle} relevé(s) de boucle ` +
+        `(sur ${tous.filter((a) => a[0] === 'agent' && a[1] === 'get').length} \`agent get\` en tout, dont ceux de la livraison)`
+    );
+  }));
+
+test('UNE INSCRIPTION QUI NE FINIT JAMAIS NE FAIT PAS ÉCHOUER UNE NAISSANCE QUI RÉUSSISSAIT', () =>
+  avecLieu((client, lieu) => {
+    // ⚠️ LA GARDE DE LA GARDE, ET SA PREMIÈRE RÉDACTION ÉTAIT FAUSSE. Elle exigeait que
+    // l'amorce parte quand même. MESURÉ sur la tête d'avant le correctif (e5d4a96) avec ce
+    // même double : elle ne partait PAS — `amorcee: false`, la livraison refusait déjà sur le
+    // statut. Une assertion qui réclame ce qui n'a jamais eu lieu ne garde pas un acquis :
+    // elle demande une feature, sous le nom d'une non-régression.
+    //
+    // CE QUI EST VRAIMENT EN JEU quand une version de herdr ne quitterait jamais `unknown` :
+    // ① la boucle NE DOIT PAS transformer le refus en ÉCHEC DE NAISSANCE — la session reste
+    // née et vivante, seule l'amorce manque ; ② le diagnostic servi doit être le VRAI. Avant le
+    // correctif, le second était faux mot pour mot : « ce pane n'a jamais été inscrit… attendre
+    // ne changera rien », sur un pane que le registre venait de rendre.
+    const journal = installerFauxHerdr({ inscriptionPendant: 9999, repertoire: lieu });
+    const r = lancerNaitre(client, { amorce: 'ton brief', essais: '3' });
+
+    const sortie = `${r.stdout}${r.stderr}`;
+    assert.doesNotMatch(sortie, /jamais été inscrit/i, `le diagnostic doit rester juste : ${sortie}`);
+    assert.match(sortie, /EN COURS D’INSCRIPTION/i, `et nommer l’état réel : ${sortie}`);
+    // La session est née et vivante — c'est ce que « ne pas faire échouer » veut dire ici.
+    const rendu = JSON.parse(r.stdout.trim().split('\n').find((l) => l.startsWith('{')));
+    assert.equal(rendu.vivant, true, `la session reste née et vivante : ${sortie}`);
+    assert.equal(rendu.pane, 'w9:p1', 'et elle a bien son pane');
+    // ⚠️ ET ON N'A PAS ÉCRIT DANS SA BOÎTE. Refuser puis écrire quand même serait le pire des
+    // deux mondes : le diagnostic juste ET le geste qu'il déconseille.
+    const amorces = appelsJournalises(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
+    assert.equal(amorces.length, 0, `rien ne doit être écrit tant que l’inscription n’est pas finie : ${sortie}`);
+  }));
