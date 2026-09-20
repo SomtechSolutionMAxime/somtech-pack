@@ -517,6 +517,30 @@ s = s.replace(
     'md_version_libre "<version>"')
 PY
 
+essai_skill "le gate devient `|| true` : l_operateur est la, il n_arrete rien" <<'PY'
+# Shell parfaitement ordinaire — « je supprime cette erreur pour ne pas
+# planter le script ». L'opérateur `||` est présent, et `git tag` s'exécute
+# quand même sur PRIS. Une garde qui cherche l'OPÉRATEUR reste verte.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'md_version_libre "<version>" || true')
+PY
+
+essai_skill "le gate est INVERSE : && sur le cas de succes seulement" <<'PY'
+# Le `&&` ne gouverne que le succès : sur PRIS ou REFUS, le script tombe
+# droit dans `git tag` sans jamais s'arrêter.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'md_version_libre "<version>" && echo "numero libre, on continue"')
+PY
+
+essai_skill "le gate vient APRES la pose du tag" <<'PY'
+# Le gate existe, gouverne, et arrive quand le tag est déjà posé.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'git tag <version>\nmd_version_libre "<version>" || { echo "trop tard"; exit 1; }')
+PY
+
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
 # Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
 # tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
@@ -600,7 +624,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=61
+PLANCHER=64
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

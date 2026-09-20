@@ -730,24 +730,65 @@ else
     && ok "et ce bloc rejoue md_version_libre AVANT de taguer" \
     || ko "le bloc qui pose le tag ne vérifie pas la disponibilité — la fenêtre de T-20260815-0013 reste ouverte"
 
-  # ⚠️ PRÉSENT n'est pas GOUVERNANT. Un appel NU — `md_version_libre "<v>"`
-  # suivi de `git tag` sans rien qui arrête l'exécution — satisfait un `grep`
-  # et ne protège rien : le code de retour part à la poubelle et le tag se pose
-  # quand même. C'est le motif 1 du brief, appliqué à cette garde-ci.
-  ligne_gate="$(printf '%s\n' "$bloc_du_tag" \
-    | grep -nE 'md_version_libre[^#]*(\|\||&&|; *then)|^[[:space:]]*if[[:space:]].*md_version_libre' \
-    | head -1 | cut -d: -f1)"
-  ligne_tag="$(printf '%s\n' "$bloc_du_tag" | grep -nE '^[[:space:]]*git tag ' | head -1 | cut -d: -f1)"
+  # ⚠️ PRÉSENT n'est pas GOUVERNANT — et une forme shell n'est pas un fait.
+  # Deux étapes ont été payées ici :
+  #   ① chercher le NOM de la fonction : un appel nu (code de retour jeté)
+  #     satisfaisait le `grep` et laissait `git tag` se poser ;
+  #   ② chercher un OPÉRATEUR (`||`, `&&`, `if`) : `|| true` et
+  #     `&& echo "on continue"` sont du shell ordinaire, ils portent
+  #     l'opérateur et ne gouvernent rien — tandis qu'un gate légitime écrit
+  #     en `case "$rc"` était rejeté à tort.
+  # Gouverner est une propriété D'EXÉCUTION ; aucune expression régulière ne la
+  # tranche. On EXÉCUTE donc le bloc, contre un `git` fabriqué, et on regarde si
+  # `git tag` est atteint. Le texte du skill rejoint ainsi la même famille que
+  # la lib : quelque chose qu'on fait tourner, pas qu'on devine.
+  bloc_brut="$(awk '
+    /^[ \t]*```bash[ \t]*$/ { dedans = 1; bloc = ""; next }
+    /^[ \t]*```/             { if (dedans && bloc ~ /git tag /) { printf "%s", bloc; trouve = 1; exit }
+                                dedans = 0; next }
+    dedans                    { bloc = bloc $0 "\n" }
+  ' "$SKILL")"
 
-  if [ -z "$ligne_tag" ]; then
-    ko "le bloc retenu ne contient pas de ligne \`git tag\` exécutable"
-  elif [ -z "$ligne_gate" ]; then
-    ko "md_version_libre est APPELÉ mais son code de retour n'arrête rien — un appel nu laisse le tag se poser sur un numéro pris"
+  jouer_bloc() {  # jouer_bloc <LIBRE|PRIS|REFUS> ; écho OUI si `git tag` a été atteint
+    local cas="$1" d
+    d="$(mktemp -d)"
+    cat > "${d}/git" <<RELAIS
+#!/usr/bin/env bash
+case "\${1:-}" in
+  ls-remote)
+    case "${cas}" in
+      PRIS)  printf '%s\\t%s\\n' deadbeefdeadbeefdeadbeefdeadbeefdeadbeef refs/tags/v1.2.3 ;;
+      REFUS) echo "fatal: injoignable" >&2; exit 128 ;;
+      *)     : ;;
+    esac
+    exit 0 ;;
+  tag)  : > "${d}/TAG-POSE"; exit 0 ;;
+  push) : > "${d}/PUSH-FAIT"; exit 0 ;;
+esac
+exit 0
+RELAIS
+    chmod +x "${d}/git"
+    {
+      echo "source \"${LIB}\""
+      printf '%s' "$bloc_brut" | sed 's/<version>/v1.2.3/g'
+    } > "${d}/bloc.sh"
+    PATH="${d}:$PATH" bash "${d}/bloc.sh" >/dev/null 2>&1
+    if [ -f "${d}/TAG-POSE" ]; then echo OUI; else echo NON; fi
+    rm -rf "$d"
+  }
+
+  if [ -z "$bloc_brut" ]; then
+    ko "aucun bloc bash du skill ne pose de tag — cette garde ne porte plus"
   else
-    ok "l'appel est GOUVERNANT (son code de retour arrête l'exécution)"
-    [ "$ligne_gate" -lt "$ligne_tag" ] \
-      && ok "et il gouverne AVANT la pose du tag (ligne ${ligne_gate} < ${ligne_tag})" \
-      || ko "la vérification gouvernante vient APRÈS \`git tag\` (ligne ${ligne_gate} > ${ligne_tag}) — elle ne protège rien"
+    [ "$(jouer_bloc LIBRE)" = "OUI" ] \
+      && ok "numéro LIBRE : le bloc exécuté pose bien le tag (le chemin nominal marche)" \
+      || ko "numéro LIBRE : le bloc ne pose PAS le tag — le gate refuse le cas nominal"
+    [ "$(jouer_bloc PRIS)" = "NON" ] \
+      && ok "numéro PRIS : le bloc exécuté n'atteint JAMAIS \`git tag\`" \
+      || ko "numéro PRIS : le bloc pose le tag quand même — le gate ne gouverne rien"
+    [ "$(jouer_bloc REFUS)" = "NON" ] \
+      && ok "serveur injoignable : le bloc exécuté n'atteint JAMAIS \`git tag\`" \
+      || ko "serveur injoignable : le bloc pose le tag quand même — un silence vaut feu vert"
   fi
 fi
 
@@ -823,7 +864,7 @@ echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=117
+PLANCHER=118
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
