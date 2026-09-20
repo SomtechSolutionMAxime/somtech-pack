@@ -53,18 +53,22 @@ let Veilleur, passerLaMain, placeTenue;
 //
 // Dire « elle n'a pas encore tranché » demandait jusqu'ici d'attendre un délai et de
 // constater qu'il s'était écoulé — c'est-à-dire de mesurer la machine. Ici on ne mesure
-// rien : on fait COURIR la promesse contre une promesse déjà résolue. L'ordre des
-// microtâches est déterministe, il ne dépend ni de la charge ni du runner. Si la promesse
-// avait déjà tranché, son résultat gagne la course ; si elle attend, c'est le témoin qui
-// gagne.
+// rien : on laisse passer UN TOUR DE BOUCLE, puis on fait courir la promesse contre un
+// témoin déjà résolu. L'ordre des microtâches est déterministe.
 //
-// ⚠️ LES TOURS À VIDE NE SONT PAS UNE ATTENTE DÉGUISÉE. Ils laissent s'écouler les
-// microtâches déjà en file — un `.then()` interne, un `await` d'un tour précédent — pour
-// que la course lise un état stabilisé et non un état en train de se faire. Aucun `setTimeout`,
-// aucune durée : quel que soit le runner, le nombre de tours est le même.
+// ⚠️ LE TOUR DE BOUCLE N'EST PAS UNE ATTENTE, ET LE COMPTER SERAIT UN DÉFAUT.
+// La première écriture de cette sonde vidait « seize tours de microtâche ». Une revue
+// adversariale l'a prise en défaut : une promesse qui tranche au DIX-SEPTIÈME tour était
+// déclarée « en attente » à tort, et ça restait faux jusqu'à cent tours. Un seuil choisi
+// à la main sur une file qu'on ne contrôle pas est le même défaut que la borne de 60 ms,
+// déplacé du temps vers un compte.
+// `setImmediate` n'a pas ce problème : Node draine la file de microtâches ENTIÈREMENT entre
+// deux phases de la boucle. Une chaîne de promesses, longue de dix ou de mille maillons,
+// est donc résolue avant que ce rappel-ci s'exécute — sans qu'aucun nombre soit à choisir,
+// et sans qu'aucune durée soit à attendre.
 const TEMOIN_EN_ATTENTE = Symbol('en attente');
 async function etatDe(promesse) {
-  for (let i = 0; i < 16; i += 1) await Promise.resolve();
+  await new Promise((r) => setImmediate(r));
   const gagnant = await Promise.race([promesse, Promise.resolve(TEMOIN_EN_ATTENTE)]);
   return gagnant === TEMOIN_EN_ATTENTE ? 'en attente' : 'tranchée';
 }
@@ -351,10 +355,16 @@ test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, elle rend « 
   // pas, et aurait fait accuser le code. Un double doit être conforme au service qu'il
   // remplace, y compris sur ce qu'il RETIENT.
   let ferme = 0;
+  // Le double CAPTURE ses écouteurs au lieu de les jeter : rien ne viendra d'eux de
+  // lui-même — la prise ne conclut jamais — mais le banc peut les tirer APRÈS le minuteur
+  // pour éprouver que la sonde ne tranche pas deux fois.
+  const ecouteurs = new Map();
   const priseQuiNeConclutJamais = () => {
     const enVol = setTimeout(() => {}, 60_000); // ce qu'un socket en vol retient
     return {
-      on() {}, // ni « connect », ni « error » : rien ne viendra jamais de ce côté-là
+      on(evenement, rappel) {
+        ecouteurs.set(evenement, rappel);
+      },
       destroy() {
         ferme += 1;
         clearTimeout(enVol);
@@ -368,7 +378,11 @@ test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, elle rend « 
   const planifies = [];
   const annules = [];
   const planifier = (fn, delai) => {
-    const jeton = { fn, delai, unref() {} };
+    // `unref` se COMPTE ici, il ne se subit pas : un minuteur qu'on oublie de détacher
+    // retient la boucle, et ce fichier porte déjà la facture d'un tel oubli ailleurs
+    // (`ligne-directe etat` passé de 62 ms à 3062 ms). Sans cette assertion, retirer
+    // `unref` ne faisait rougir aucun des 1353 bancs du module.
+    const jeton = { fn, delai, detaches: 0, unref() { jeton.detaches += 1; } };
     planifies.push(jeton);
     return jeton;
   };
@@ -401,4 +415,59 @@ test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, elle rend « 
   assert.equal(verdict, true, 'un doute non résolu doit pencher du côté « la place est tenue », jamais du côté qui ouvre la porte à un double');
   assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte, même quand c’est le minuteur qui tranche');
   assert.deepEqual(annules, [planifies[0]], 'la sonde annule le minuteur qu’elle a armé — celui-là, et une fois');
+
+  // 5. LE MINUTEUR A ÉTÉ DÉTACHÉ DE LA BOUCLE. Un minuteur qu'on oublie de détacher tient
+  // le processus en vie jusqu'à son terme. Ce fichier porte déjà la facture d'un tel oubli
+  // ailleurs : `ligne-directe etat` était passé de 62 ms à 3062 ms. Sans cette ligne,
+  // retirer `unref` ne faisait rougir aucun des 1353 bancs du module.
+  assert.equal(planifies[0].detaches, 1, 'le minuteur est détaché de la boucle — sinon il retient le processus jusqu’à son terme');
+
+  // 6. 🔴 CE QUI A TRANCHÉ UNE FOIS NE TRANCHE PAS DEUX. On tire maintenant les écouteurs
+  // que la vraie prise aurait pu déclencher APRÈS le minuteur — un socket qui se connecte
+  // enfin, ou qui échoue, alors que le verdict est déjà rendu. Rien ne doit bouger : ni le
+  // verdict, ni le nombre de prises refermées, ni le nombre de minuteurs annulés.
+  // Sans ceci, la garde d'idempotence de la sonde existait dans le code sans qu'aucun banc
+  // ne l'éprouve : la retirer laissait les 1353 verts.
+  ecouteurs.get('connect')?.();
+  ecouteurs.get('error')?.();
+  assert.equal(await promesse, true, 'un écho tardif de la prise ne renverse pas un verdict déjà rendu');
+  assert.equal(ferme, 1, 'la prise n’est refermée qu’UNE fois, même si ses écouteurs parlent après le minuteur');
+  assert.deepEqual(annules, [planifies[0]], 'le minuteur n’est annulé qu’UNE fois');
+});
+
+test('UNE PRISE QUI SE CONNECTE EST REFERMÉE, ELLE AUSSI — sinon chaque sondage laisse un socket derrière lui', { timeout: 5000 }, async () => {
+  // 🔴 CE BANC FERME UN TROU QU'UNE REVUE ADVERSARIALE A TROUVÉ, ET IL NE PARLE PLUS DU
+  // MINUTEUR (T-20260920-0013). Tout ce que ce fichier éprouvait de la fermeture de la
+  // prise portait sur le chemin du MINUTEUR. Le chemin NOMINAL — la connexion réussit —
+  // n'était couvert par aucun des 1353 bancs du module.
+  //
+  // La mutation qui le révèle : résoudre directement sur `connect` au lieu de passer par
+  // `trancher`. Les 1353 restaient VERTS. En production, `flux.destroy()` n'aurait plus
+  // jamais été appelé sur une connexion réussie — et `placeTenue` est sondée en boucle,
+  // jusqu'à vingt fois par relève. Un socket abandonné à chaque sondage, sans un rouge.
+  //
+  // > Une fuite ne se signale pas : elle s'accumule. Et ce qui n'est éprouvé sur aucun
+  // > chemin nominal finit par y dériver.
+  let ferme = 0;
+  const ecouteurs = new Map();
+  const priseQuiSeConnecte = () => ({
+    on(evenement, rappel) {
+      ecouteurs.set(evenement, rappel);
+    },
+    destroy() {
+      ferme += 1;
+    },
+  });
+
+  const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
+    borne: 60,
+    brancher: priseQuiSeConnecte,
+    planifier: (fn, delai) => ({ fn, delai, unref() {} }),
+    annuler: () => {},
+  });
+
+  ecouteurs.get('connect')();
+
+  assert.equal(await promesse, true, 'une prise qui aboutit dit que la place est tenue');
+  assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte SUR LE CHEMIN NOMINAL aussi — sinon chaque sondage abandonne un socket');
 });
