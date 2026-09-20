@@ -347,9 +347,11 @@ ${r.declencheur}
  *
  * ⚠️ `clos` N'EST JAMAIS FAUX PAR DÉFAUT. Trois des treize rendent « non mesurée » : un lieu
  * dont le nom n'a pas la forme d'un code (`j-20260814-0001-bis`), et deux projets que le
- * ServiceDesk ne rendait pas, faute de pagination — ⚠️ CES DEUX-LÀ SE LISENT DEPUIS que le
- * lecteur pagine, et il n'en reste QU'UN : `j-20260814-0001-bis`, dont le nom n'a pas la forme
- * d'un code. Dans ce cas on RÉVEILLE, et on DIT qu'on n'a pas pu mesurer. Se taire couperait un
+ * ServiceDesk ne rendait pas, faute de pagination. ⚠️ CE MÉCANISME VIT DANS
+ * `ligne-directe/src/mandat.js` et NULLE PART AILLEURS — on n'en recopie plus les chiffres ici,
+ * parce que la copie qui s'y trouvait a menti dès que l'original a changé. Reste aujourd'hui le
+ * cas d'un lieu dont le nom n'a pas la forme d'un code. Dans ce cas on RÉVEILLE, et on DIT qu'on
+ * n'a pas pu mesurer. Se taire couperait un
  * orchestrateur vivant sur une mesure ratée ; ranger le doute du côté « rien à signaler » est
  * le motif même de ce jalon.
  *

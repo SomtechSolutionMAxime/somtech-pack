@@ -51,9 +51,11 @@ import { etatDuMandat, accesServiceDesk } from '../../ligne-directe/src/mandat.j
  *
  * ⚠️ ET LE DOUBLE N'EST PAS PLUS INDULGENT QUE LE RÉEL : un mandat absent de la table rend
  * « non mesurée », exactement comme le vrai lecteur devant un code qu'il ne trouve pas — ce qui
- * était le cas de 2 des 13 orchestrateurs réels avant que le lecteur PAGINE — leur projet était
- * au-delà de la première page. Depuis, ils se lisent. ⚠️ CETTE PHRASE A MENTI : elle a survécu à
- * la correction du mécanisme qu'elle invoquait, dans le lot qui l'a corrigé.
+ * l'est encore pour certains d'entre eux. ⚠️ LE MÉCANISME ET SES CHIFFRES VIVENT
+ * À UN SEUL ENDROIT — `ligne-directe/src/mandat.js`, section pagination d'`accesServiceDesk`.
+ * Cette phrase en portait une copie, et cette copie a MENTI : elle a survécu à la correction du
+ * mécanisme qu'elle invoquait, dans le lot qui l'a corrigé. Un pointeur ne peut pas mentir sur
+ * une valeur, puisqu'il n'en porte pas.
  * Un double qui rendrait « ouvert » par défaut cacherait précisément le cas qui décide.
  */
 function lecteurDEtatDeMandat() {
@@ -375,9 +377,8 @@ async function tenirLeRendezVous(nom, debut) {
   // ⚠️ `clos !== true`, PAS `clos === false`. Un mandat qu'on n'a pas pu mesurer rend `null`, et
   // il doit RESTER réveillé : ne pas réveiller sur une mesure ratée couperait un orchestrateur
   // vivant en silence. Trois des treize sont dans ce cas — un lieu hors forme de code, et deux
-  // projets que le ServiceDesk ne rendait pas, sa liste n'étant pas paginée. ⚠️ CES DEUX-LÀ SE
-  // LISENT DEPUIS : il ne reste QU'UN cas « non mesurée » sur les 13 — un lieu dont le nom n'a
-  // pas la forme d'un code.
+  // projets que le lecteur ne savait pas atteindre. ⚠️ VOIR `ligne-directe/src/mandat.js` pour
+  // ce que la pagination change et jusqu'où elle lit : on ne recopie plus ses chiffres ici.
   const vivants = avecMandat.filter((o) => !closPourDeVrai(o));
   // ⚠️ ET LE DOUTE SE DIT. Un agent réveillé sur un mandat non mesuré n'est pas un agent dont on
   // sait le mandat ouvert : ranger les deux ensemble ferait lire « tout va bien » sur ce qu'on

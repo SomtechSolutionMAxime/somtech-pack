@@ -171,6 +171,48 @@ test('🔴 UNE SOURCE QUI IGNORE `offset` EN PRODUISANT DU NEUF NE FAIT PAS TOUR
   assert.equal(pages, 1, `sans total annoncé, on lit UNE page et on le dit — ${pages} demandée(s)`);
 });
 
+test('CHAQUE CAS DE PLAFOND PORTE SA PROPRE CAUSE — le signal ne suffit pas, la raison doit être vraie', async () => {
+  // ⚠️ ANGLE MORT RELEVÉ PAR LA PASSE PORTAIL, qui ne l'élevait pas en rejet. Inverser la
+  // condition qui choisit entre les deux justifications laissait les treize essais VERTS :
+  // aucun n'exerçait le TEXTE, seulement le signal générique `PLAFONN`. Le message disait vrai
+  // — prouvé par deux sondes — et rien ne le protégeait de le cesser.
+  //
+  // C'est la forme que ce lot paie en boucle : un chemin correct que rien ne traverse. Et elle
+  // mord ici deux fois plus fort, parce que l'objet du lot EST le refus qui explique faux.
+  const sansTotal = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    return enveloppe({ data: [{ id: 'a', project_id: 'P-20260001-0001', status: 'x' }] });
+  };
+  await assert.rejects(
+    () => accesServiceDesk({ cle: 'k', fetcher: sansTotal })('projects', 'P-20269999-9999'),
+    (err) => {
+      assert.match(err.message, /AUCUN total/, `sans total, la cause est l’absence de destination : ${err.message}`);
+      assert.doesNotMatch(err.message, /rien rendu de neuf/, `et surtout pas la cause de l’autre cas : ${err.message}`);
+      return true;
+    }
+  );
+
+  // Total connu, page PLEINE resservie à l'identique : la cause est l'absence de nouveauté.
+  const memePagePleine = async (_url, init) => {
+    const args = JSON.parse(init.body).params.arguments;
+    if (args.action === 'get') return enveloppe({ erreur: 'non servi' });
+    return enveloppe({
+      data: Array.from({ length: 4 }, (_, i) => ({ id: `u${i}`, project_id: `P-2026000${i}-0001`, status: 'x' })),
+      total: 99,
+      limit: 4,
+    });
+  };
+  await assert.rejects(
+    () => accesServiceDesk({ cle: 'k', fetcher: memePagePleine })('projects', 'P-20269999-9999'),
+    (err) => {
+      assert.match(err.message, /rien rendu de neuf/, `page pleine répétée : c’est ça, la cause : ${err.message}`);
+      assert.doesNotMatch(err.message, /AUCUN total/, `le total EST annoncé ici — dire le contraire serait faux : ${err.message}`);
+      return true;
+    }
+  );
+});
+
 test('ET CETTE LECTURE-LÀ SE DÉCLARE PLAFONNÉE — un doute tu est un doute perdu', async () => {
   const fetcher = async (_url, init) => {
     const args = JSON.parse(init.body).params.arguments;
