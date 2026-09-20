@@ -733,6 +733,107 @@ if [ "$sans_ok" -eq 0 ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑬ LES CINQ CHANGEMENTS DE LA VAGUE 1 SONT PRESCRITS — D-20260920-0001
+#
+# POSÉ PARCE QUE LA REVUE DE FOND DU LOT QUI LES A ÉCRITS L'A MESURÉ : elle a
+# VIDÉ chacun des cinq blocs, l'un après l'autre, et le banc est resté 66/66
+# VERT à chaque fois. Le seul filet était le plafond de taille ⑩ — et un
+# PLAFOND est aveugle par construction à tout ce qu'on RETIRE. Cinq règles de
+# métier neuves ne tenaient à rien.
+#
+# CHAQUE CONTRÔLE CHERCHE LE GESTE DANS SA SECTION, jamais dans le texte
+# entier : une règle écrite ailleurs que là où le geste se pose ne gouverne
+# personne, et un `grep` global rendrait vert un bloc déplacé au mauvais
+# chapitre.
+#
+# ⚠️ CHAQUE CONTRÔLE GARDE AUSSI L'OCCURRENCE DATÉE DE SON CHANGEMENT, et cette
+# ligne-ci a été ajoutée parce que la première version ne la gardait qu'à
+# MOITIÉ : les gestes 1 et 5 exigeaient une date par accident de formulation,
+# les gestes 2, 3 et 4 n'en exigeaient aucune. On pouvait donc retirer
+# l'occurrence de trois changements sur cinq sans qu'un seul contrôle rougisse
+# — et retomber sur des règles sans le fait qui les a payées, ce que le lot
+# venait précisément de fermer pour les deux autres. **La moitié fermée était
+# celle où ça se voyait.**
+#
+# ⚠️ CE QUE CES CONTRÔLES NE SAVENT PAS FAIRE, et il faut le savoir pour ne pas
+# s'y fier plus qu'ils ne valent : ils tiennent l'EXISTENCE d'un geste, pas sa
+# JUSTESSE. Une phrase réécrite en gardant ses mots-clés passerait. Le cas
+# `pousser-qa-avant-merge` de `cli/test/fixtures/orchestrateur-reformulations.json`
+# est le mécanisme qui garde une FORMULATION ; celui-ci garde une PRESCRIPTION.
+# Les deux sont nécessaires, aucun ne remplace l'autre.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑬ les cinq changements de la vague 1 sont prescrits — D-20260920-0001"
+
+# porte <titre-de-section> <étiquette> <motif>… — chaque motif doit se trouver
+# DANS le corps de la section nommée. Une section disparue est un échec NOMMÉ,
+# jamais un silence : sans ce cas, renommer le titre désarmerait le contrôle
+# sans rien faire rougir.
+porte() {
+  local titre="$1"; shift
+  local etiquette="$1"; shift
+  local corps manquants=0 m
+  corps="$(section "$titre")"
+  if [ -z "$corps" ]; then
+    ko "$etiquette — la section « $titre » a disparu du métier"
+    return
+  fi
+  for m in "$@"; do
+    if ! printf '%s\n' "$corps" | grep -qF -- "$m"; then
+      manquants=$((manquants+1))
+      ko "$etiquette — « $m » absent de « $titre »"
+    fi
+  done
+  [ "$manquants" -eq 0 ] && ok "$etiquette"
+}
+
+porte "Qui clique" \
+  "1 — la délégation du clic de fusion dit QUI clique, et ce qu'elle ne lève pas" \
+  "2026-09-15" \
+  "orchestrateur ou le chef qui fusionne" \
+  "ne lève AUCUNE condition"
+
+porte "Et commence par mesurer l'ÂGE de ce réceptacle" \
+  "2 — l'âge du réceptacle d'amélioration est un geste, pas une vigilance" \
+  "epics get" \
+  "48 h" \
+  "présumée morte" \
+  "2026-09-19"
+
+porte "La cinquième question" \
+  "3 — la veille du corpus pose sa cinquième question à un tiers" \
+  "Qu'est-ce qui a changé dans la façon de travailler des orchestrateurs" \
+  "vide qui se lit comme une stabilité" \
+  "2026-09-19"
+
+porte "Tes réflexes" \
+  "4 — l'asymétrie du fait rapporté est écrite sous le biais d'autorité apparente" \
+  "RETIRER une consigne" \
+  "AJOUTE une contrainte" \
+  "2026-09-19"
+
+porte "Ce qu'un rapport de revue doit porter" \
+  "5 — un rapport de revue porte ses trois listes" \
+  "REGARDÉ" \
+  "ÉPROUVÉ" \
+  "PAS PU être atteint" \
+  "le doute se tranche vers le bas" \
+  "2026-09-19"
+
+# ⚠️ L'ATTRIBUTION DU CINQUIÈME EST GARDÉE À PART, et c'est le seul contrôle de
+# ce bloc qui porte sur QUI a dit quelque chose. Cette forme vient de deux
+# pairs — `ristigouche` le 2026-09-01, amendée avec `chaudiere` le 02/09 — et
+# NON du dirigeant. Un gabarit qui la lui attribuerait fabriquerait un ordre
+# que personne n'a donné : c'est le premier biais nommé par le métier lui-même,
+# et il est d'autant plus facile à commettre ici que tout le reste du lot
+# descend, lui, d'une décision du dirigeant.
+porte "Ce qu'un rapport de revue doit porter" \
+  "5 — et elle est attribuée aux deux pairs, jamais au dirigeant" \
+  "ristigouche" \
+  "chaudiere" \
+  "2026-09-01" \
+  "n'est pas un ordre du dirigeant"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
@@ -918,7 +1019,71 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #
 # La borne reste donc ce qu'elle était : la taille FINALE et EXACTE, marge nulle.
 # Le prochain lot devra revenir demander — c'est le comportement voulu.
-BASELINE=151875
+#
+# ── RE-BASELINE DU 2026-09-20 — D-20260920-0001 / E-20260920-0001 ─────────────
+#
+# 151 875 → 160 695 caractères (+8 820), MARGE TOUJOURS 0.
+#
+#   ACCORDÉE PAR `batiscan`, orchestrateur de `J-20260814-0002`, le 2026-09-20,
+#   sur la ligne de `e-20260920-0001`. Ce n'est pas le lot qui l'a relevée.
+#   Ce qu'il a d'abord REFUSÉ, et qui borne ce qu'on peut faire la prochaine fois :
+#   « Retirer les occurrences datées et les coûts contredit l'arbitrage du 19/08
+#     et produit exactement des règles qui se font enjamber — une règle sans le
+#     fait qui l'a payée ne tient pas. Les mesures restent, ce n'est pas
+#     négociable. » Et, avant d'accorder le chiffre : « Tu m'as donné une
+#     ventilation par fichier, c'est de l'arithmétique, pas une justification.
+#     Chapitre par chapitre, pour chaque bloc que tu ajoutes, nomme ce qu'il rend
+#     caduc dans le même chapitre et retire-le. Cherche le remplacement, pas la
+#     coupe. »
+#
+# LES QUATRE CONDITIONS, UNE PAR UNE :
+#
+# ① LE GESTE PRESCRIT — cinq gestes qu'un orchestrateur ne peut pas poser sans
+#    eux : QUI clique une fusion et à quelles conditions (`mise-en-production`) ·
+#    `epics get <son-epic>` et le seuil de 48 h qui présume la boucle
+#    d'amélioration morte (`rondes` §5) · la cinquième question de la veille du
+#    corpus, posée à un tiers (`rondes` §8) · mesurer à sa source AVANT de
+#    l'inscrire un fait qui RETIRERAIT une consigne (`reflexes`) · les trois
+#    listes obligatoires d'un rapport de revue (`faire-appliquer`).
+#
+# ② LE DÉFAUT MESURÉ, AVEC SON RÉFÉRENT — `D-20260920-0001` : le gabarit figé
+#    depuis le 2026-09-01 pendant que le métier changeait, mesuré sur les quatre
+#    sources opposables (aucun STD, aucun ADR, zéro publication au feed du 12 au
+#    19/09). Conséquence chiffrable : tout orchestrateur né du gabarit demandait
+#    un go que le dirigeant avait cessé de vouloir donner depuis le 15/09.
+#    `E-20260818-0007` : 32 jours de réceptacle d'amélioration mort, trois écarts
+#    rouges sur huit, tous des contrôles périodiques.
+#
+# ③ LE LOT A COUPÉ SA PART, ET LE DIT CHIFFRÉ — première mesure +10 013.
+#    Deux passages, dans cet ordre : coupe des redites de la citation des
+#    permissions et du récit de découverte (−1 235), puis PASSAGE DE REMPLACEMENT
+#    exigé par l'arbitrage (−731 net) — « rendre un verdict franc » rendu caduc
+#    par les trois listes qui disent ce qu'un rapport porte, et le renvoi de
+#    `continuite` qui recopiait la règle de `rondes` §5 au lieu d'y renvoyer.
+#    Reste +8 820, dont 980 pour la seule citation opposable des permissions du
+#    poste — qui ne se résume pas, c'est la source, et 773 pour l'occurrence
+#    datée du cinquième changement, ajoutée APRÈS le relèvement sur demande de
+#    la revue de fond : elle manquait, et une règle sans le fait qui l'a payée
+#    se fait enjamber (même arbitrage que le refus de couper les mesures).
+#
+#    ⚠️ UN TROISIÈME RETRAIT A ÉTÉ ANNULÉ, ET C'EST LE BANC QUI L'A DIT. « Mais la
+#    QA passe AVANT le merge — le merge n'est qu'un constat » avait été retirée
+#    comme rendue caduque par les conditions de fusion. Elle est gardée nommément
+#    par `cli/test/fixtures/orchestrateur-reformulations.json`, cas
+#    `pousser-qa-avant-merge` : le retrait a fait rougir `cli-tests`, en CI et en
+#    local. Elle est rendue au texte (+64). **Un retrait qui fait rougir une garde
+#    n'est pas un remplacement** — et c'est le seul des trois qu'aucune relecture
+#    n'aurait distingué des deux autres.
+#
+# ④ LE LIEU A ÉTÉ CONTESTÉ — le gabarit et non le `SKILL.md` (un orchestrateur
+#    ne le lit pas, arbitrage `T-20260816-0015`), et non le lieu d'un orchestrateur
+#    vivant : corriger un lieu vivant ne corrige personne d'autre, le gabarit
+#    descend à tous.
+#
+# ⚠️ LA MARGE RESTE À 0, et ce relèvement ne crée aucun droit pour le suivant.
+#    Le prochain ajout se refuse par défaut, et le passage de remplacement — pas
+#    la seule coupe — est ce qu'on lui demande d'abord.
+BASELINE=160695
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
