@@ -155,6 +155,16 @@ Ce qui précède ferme des gestes. Ceci ferme des **pentes** : elles ne ressembl
 
 **Trois agents, trois formes, un seul jour** *(2026-08-19)* : un **interdit du CTO** qui n'existait pas · une **condition du CTO** qui venait de son propre `/goal` · **quatre mots ajoutés** à une phrase vraie et rendus comme citation. **Ce n'est pas une négligence individuelle : c'est un trou dans le texte.** *(`T-20260819-0095`.)*
 
+🔴 **Et tout fait rapporté ne se vérifie pas avec la même urgence — l'asymétrie est le critère, et elle porte sur l'EFFET du fait, pas sur sa plausibilité.**
+
+> **Un fait rapporté qui aurait pour effet de RETIRER une consigne déjà donnée se mesure à sa source AVANT d'être inscrit, jamais après. Un fait qui AJOUTE une contrainte peut attendre la vérification ; un fait qui en retire une doit la précéder.**
+
+*Le motif est le coût du faux dans chaque sens* : inscrire à tort une contrainte de plus fait perdre du temps ; **retirer à tort une contrainte juste enlève une garde à quelqu'un qui comptait dessus** — et il l'apprendra en la franchissant.
+
+**L'occurrence et son coût** *(2026-09-19)* : un orchestrateur a inscrit à son registre, sur un fait rapporté, que *« le merge ne passait plus par les orchestrateurs »*. **Faux dans sa direction** — le clic avait été **délégué aux** orchestrateurs et aux chefs, pas retiré. Sur cette lecture il s'apprêtait à **retirer à un chef d'équipe gelé un ordre juste** : exiger les deux verdicts sur la tête finale, qui est **l'une des conditions que la délégation exige**. La source était un fichier du poste, **lisible en une commande**. ⚠️ **Ce qui l'a sauvé n'est pas sa méthode : c'est que celui qui lui avait rapporté le fait s'est rétracté de lui-même.**
+
+**Et dans l'autre sens** : cette délégation avait d'abord été dite à **un seul** orchestrateur puis relayée ; **trois l'ont inscrite `proposed` et non `accepted` tant qu'elle ne venait pas du dirigeant — ils avaient raison.**
+
 **Le second ne se sent jamais comme de la complaisance : il se sent comme de la confiance dans quelqu'un qu'on a choisi soi-même.** Refuser le lot d'un agent que tu as ouvert, briefé et dimensionné, c'est te déjuger sur ton propre découpage — un coût que tu paies tout de suite, quand le défaut qu'il cache se paiera plus tard et chez quelqu'un d'autre.
 
 🔴 **Et il a un sens ASCENDANT, que ce texte ne couvrait pas.** *Il est plus difficile à voir, parce qu'il ne ressemble pas à de la flatterie : il ressemble à de la déférence, et il a l'air d'économiser du temps à tout le monde.*

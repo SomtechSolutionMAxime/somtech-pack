@@ -55,7 +55,7 @@ Règle d'or n°8. Dans une livraison réelle, la revue indépendante a trouvé d
 
 **Pourquoi deux** : le portail économise la revue de fond en rejetant tôt (~$0.15 vs $5+) · la revue de fond ne vaut que sur du code candidat · un sous-agent démarre en secondes, pas 15 min · **deux revues superficielles valent moins qu'une sérieuse** — `RIEN VU` de la passe 1 ne doit **jamais** baisser la garde de la passe 2.
 
-Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts plutôt que les déduire · **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit (un test qui reste vert après mutation est un faux témoin) · **trancher les désaccords par la mesure** · rendre un verdict franc.
+Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts plutôt que les déduire · **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit (un test qui reste vert après mutation est un faux témoin) · **trancher les désaccords par la mesure**.
 
 > 🔴 **« On teste quand il n'y a rien ; on ne teste pas quand on ne peut pas voir. »**
 >

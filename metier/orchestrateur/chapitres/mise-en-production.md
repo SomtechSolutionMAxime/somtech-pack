@@ -54,9 +54,23 @@ Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur
 
 ## Merger et fermer les statuts dans le même geste
 
+### Qui clique — c'est toi, et tu n'attends plus le go
+
+🔴 **Le clic final t'a été délégué le 2026-09-15 : conditions réunies, c'est l'orchestrateur ou le chef qui fusionne** — pas le dirigeant, et sans attendre son go. Le texte opposable vit dans les permissions du poste (`~/.claude/settings.json`), **recopié, pas résumé** :
+
+> « Fusion d'une branche de livraison vers le tronc (gh pr merge, git merge) et fermeture du lot, par un orchestrateur ou un chef, quand TOUTES les conditions de livraison sont deja reunies : revue independante faite, QA passee avec ses reserves ecrites, verifications portees sur le SHA reel, sas de staging libre et verrou respecte. Le dirigeant a delegue le clic final le 2026-09-15 : attendre son go une fois les conditions reunies ne protege rien et arrete le chantier pendant des heures. Ce qui reste interdit et n'est PAS couvert : sauter la revue ou la QA, forcer un tronc protege, pousser sur staging quand le sas est occupe par une autre livraison, et tout geste de production hors livraison normale — ecriture directe en base, deploiement manuel, montee d'image. »
+
+**Chaque condition se prouve, elle ne se déclare pas** : les **deux verdicts** écrits sur la tête FINALE, jamais intermédiaire · le rapport de QA **avec ses réserves écrites** — une réserve tue est une condition manquante · la chaîne lue sur le **commit qu'on fusionne**, pas sur celui qu'on croit fusionner · l'**écart `origin/main..origin/staging` mesuré**, pas seulement le verrou interrogé *(voir Le sas, plus haut)*.
+
+⚠️ **L'erreur symétrique coûterait plus cher que celle qu'on corrige : la délégation ne lève AUCUNE condition.** Elle remplace **l'attente du go une fois les conditions réunies**, rien d'autre. Une condition qui manque interdit toujours le merge — **même si ton coordonnateur te demande de fusionner**. *Ce qui a changé, c'est qui clique, jamais ce qu'il faut avoir avant.*
+
+**L'occurrence et son coût** — **2026-09-15**, devant un lot entièrement fait et vérifié : *« vous avez tout fait le travail, je ne sais même pas de quoi tu parles, mais je dois dire go ??? ça n'a pas rapport »*. **Le coût est le silence qui suit : des heures d'arrêt sur une approbation qui ne protège rien** — le seul à pouvoir dire si les conditions sont réunies est celui qui les a réunies.
+
+### Le merge ferme les statuts dans le même geste
+
 Règle d'or n°13. Toutes les stories que le merge ferme passent `completed` **immédiatement**.
 
-> ⚠️ **Mais la QA passe AVANT le merge — le merge n'est qu'un constat.** L'ordre est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed` (STD-030). **`ready_to_deploy` n'est pas décoratif** : il dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte. Merger d'abord et fermer ensuite fait de la règle d'or n°5 une intention.
+> ⚠️ **L'ordre est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed`** (STD-030). **`ready_to_deploy` n'est pas décoratif** : il dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte.
 
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, **mais une file** — et sa durée est la **somme** des passages, pas celle du plus long. Dimensionne la date là-dessus, et **dis-le tôt si elle ne tient pas**.
 

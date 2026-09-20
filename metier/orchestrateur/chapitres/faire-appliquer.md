@@ -48,7 +48,7 @@ Règle d'or n°8. Dans une livraison réelle, la revue indépendante a trouvé d
 
 **Pourquoi deux** : le portail économise la revue de fond en rejetant tôt (~$0.15 vs $5+) · la revue de fond ne vaut que sur du code candidat · un sous-agent démarre en secondes, pas 15 min · **deux revues superficielles valent moins qu'une sérieuse** — `RIEN VU` de la passe 1 ne doit **jamais** baisser la garde de la passe 2.
 
-Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts plutôt que les déduire · **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit (un test qui reste vert après mutation est un faux témoin) · **trancher les désaccords par la mesure** · rendre un verdict franc.
+Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts plutôt que les déduire · **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit (un test qui reste vert après mutation est un faux témoin) · **trancher les désaccords par la mesure**.
 
 > 🔴 **« On teste quand il n'y a rien ; on ne teste pas quand on ne peut pas voir. »**
 >
@@ -65,6 +65,23 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 > **« Un banc qui diverge se tait, pendant qu'un worktree périmé se voit au moins quand on regarde deux fois. Le mien s'est fait prendre par une revue, pas par la suite : les 413 essais étaient verts des deux côtés. »**
 
 *Une copie amputée de deux formules sur six laissait passer un leurre, **sans qu'un seul essai rougisse**.* **Une suite ne peut pas détecter qu'elle a cessé de couvrir quelque chose.** *(`T-20260819-0097`.)*
+
+### Ce qu'un rapport de revue doit porter — trois listes, et elles sont obligatoires
+
+**Un rapport qui ne porte que la liste des trous trouvés ne dit pas ce qu'il a regardé** — et il perd toute sa valeur au premier rebase.
+
+> **Origine, et elle n'est pas celle qu'on croit** : cette forme a été posée par **`ristigouche` le 2026-09-01**, après que **`chaudiere`** lui a fait voir le trou, puis **amendée avec `chaudiere` le 2026-09-02**. **Ce n'est pas un ordre du dirigeant** — l'inscrire comme tel fabriquerait un ordre que personne n'a donné *(premier biais de `reflexes.md`)*.
+
+**Exige les trois dans le brief de revue** :
+
+1. **Ce qui a été REGARDÉ**, et à quel niveau : **lu en contexte** ou **relu contre le ticket**. Trois règles sur cette liste :
+   - **le doute se tranche vers le bas** — survolé, jamais relu ;
+   - **le compte des deux niveaux se rend EN TÊTE du rapport** ;
+   - **la liste se collecte au fil de la lecture, jamais reconstruite à la fin.**
+2. **Ce qui a été ÉPROUVÉ** : les mutations jouées, **fichier par fichier**.
+3. **Ce qui n'a PAS PU être atteint**, avec la cause.
+
+**Le motif, et c'est lui qui rend la première liste indispensable** : après un rebase, **un verdict de revue ne périme pas automatiquement — il périme si le delta touche ce qui a été relu contre le ticket**. Sans la première liste, ce calcul est impossible, **donc re-validation par défaut**. C'est ce qui transforme une revue en quelque chose qui **garde** sa valeur au lieu de la perdre au premier rebase.
 
 **Un reviewer ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
 

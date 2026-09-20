@@ -132,11 +132,9 @@ epics get <ton-epic>
 
 > **Si `updated_at` a plus de 48 h ET que des tours de ronde ont eu lieu entre-temps, la boucle d'amélioration est présumée morte. L'écart d'âge est l'entrée à écrire avant toute autre.**
 
-**Pourquoi ce témoin-là et pas celui qu'on écrit d'habitude** : le témoin par **compte de tours** — *« deux tours sans entrée »* — exige de savoir combien de tours ont passé, **une information qui meurt avec la session**. **L'âge du réceptacle, lui, survit à tout.**
+**Et pas le témoin par compte de tours** — *« deux tours sans entrée »* exige de savoir combien de tours ont passé, **une information qui meurt avec la session** ; l'âge, lui, survit à tout.
 
-**L'occurrence et son coût** *(`E-20260818-0007`, mesuré le 2026-09-19)* : réceptacle **au bon endroit** depuis le 2026-08-18, **32 jours sans une seule entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour : **trois écarts rouges sur huit, tous des contrôles périodiques** — 48 espaces de travail orphelins sur un dépôt, aucune date de passe de veille nulle part. **Un manquement à une tâche périodique n'émet aucun signal : c'est le seul type de défaut dont l'absence de plainte est garantie.**
-
-⚠️ Sept orchestrateurs ont cherché *« mon epic est-il au bon endroit ? »* ; **personne n'a cherché *« a-t-il bougé ? »*** — même champ, autre réponse.
+**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour, **trois écarts rouges sur huit, tous des contrôles périodiques** : 48 espaces de travail orphelins, aucune date de passe de veille. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 

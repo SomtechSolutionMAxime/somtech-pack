@@ -918,7 +918,60 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #
 # La borne reste donc ce qu'elle était : la taille FINALE et EXACTE, marge nulle.
 # Le prochain lot devra revenir demander — c'est le comportement voulu.
-BASELINE=151875
+#
+# ── RE-BASELINE DU 2026-09-20 — D-20260920-0001 / E-20260920-0001 ─────────────
+#
+# 151 875 → 159 858 caractères (+7 983), MARGE TOUJOURS 0.
+#
+#   ACCORDÉE PAR `batiscan`, orchestrateur de `J-20260814-0002`, le 2026-09-20,
+#   sur la ligne de `e-20260920-0001`. Ce n'est pas le lot qui l'a relevée.
+#   Ce qu'il a d'abord REFUSÉ, et qui borne ce qu'on peut faire la prochaine fois :
+#   « Retirer les occurrences datées et les coûts contredit l'arbitrage du 19/08
+#     et produit exactement des règles qui se font enjamber — une règle sans le
+#     fait qui l'a payée ne tient pas. Les mesures restent, ce n'est pas
+#     négociable. » Et, avant d'accorder le chiffre : « Tu m'as donné une
+#     ventilation par fichier, c'est de l'arithmétique, pas une justification.
+#     Chapitre par chapitre, pour chaque bloc que tu ajoutes, nomme ce qu'il rend
+#     caduc dans le même chapitre et retire-le. Cherche le remplacement, pas la
+#     coupe. »
+#
+# LES QUATRE CONDITIONS, UNE PAR UNE :
+#
+# ① LE GESTE PRESCRIT — cinq gestes qu'un orchestrateur ne peut pas poser sans
+#    eux : QUI clique une fusion et à quelles conditions (`mise-en-production`) ·
+#    `epics get <son-epic>` et le seuil de 48 h qui présume la boucle
+#    d'amélioration morte (`rondes` §5) · la cinquième question de la veille du
+#    corpus, posée à un tiers (`rondes` §8) · mesurer à sa source AVANT de
+#    l'inscrire un fait qui RETIRERAIT une consigne (`reflexes`) · les trois
+#    listes obligatoires d'un rapport de revue (`faire-appliquer`).
+#
+# ② LE DÉFAUT MESURÉ, AVEC SON RÉFÉRENT — `D-20260920-0001` : le gabarit figé
+#    depuis le 2026-09-01 pendant que le métier changeait, mesuré sur les quatre
+#    sources opposables (aucun STD, aucun ADR, zéro publication au feed du 12 au
+#    19/09). Conséquence chiffrable : tout orchestrateur né du gabarit demandait
+#    un go que le dirigeant avait cessé de vouloir donner depuis le 15/09.
+#    `E-20260818-0007` : 32 jours de réceptacle d'amélioration mort, trois écarts
+#    rouges sur huit, tous des contrôles périodiques.
+#
+# ③ LE LOT A COUPÉ SA PART, ET LE DIT CHIFFRÉ — première mesure +10 013.
+#    Deux passages, dans cet ordre : coupe des redites de la citation des
+#    permissions et du récit de découverte (−1 235), puis PASSAGE DE REMPLACEMENT
+#    exigé par l'arbitrage (−795) — l'avertissement « la QA passe avant le merge »
+#    rendu caduc par les conditions de fusion qui l'exigent nommément, « rendre un
+#    verdict franc » rendu caduc par les trois listes qui disent ce qu'un rapport
+#    porte, et le renvoi de `continuite` qui recopiait la règle de `rondes` §5 au
+#    lieu d'y renvoyer. Reste +7 983, dont 980 pour la seule citation opposable
+#    des permissions du poste — qui ne se résume pas, c'est la source.
+#
+# ④ LE LIEU A ÉTÉ CONTESTÉ — le gabarit et non le `SKILL.md` (un orchestrateur
+#    ne le lit pas, arbitrage `T-20260816-0015`), et non le lieu d'un orchestrateur
+#    vivant : corriger un lieu vivant ne corrige personne d'autre, le gabarit
+#    descend à tous.
+#
+# ⚠️ LA MARGE RESTE À 0, et ce relèvement ne crée aucun droit pour le suivant.
+#    Le prochain ajout se refuse par défaut, et le passage de remplacement — pas
+#    la seule coupe — est ce qu'on lui demande d'abord.
+BASELINE=159858
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

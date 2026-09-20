@@ -163,7 +163,7 @@ Ce qui précède ferme des gestes. Ceci ferme des **pentes** : elles ne ressembl
 
 **L'occurrence et son coût** *(2026-09-19)* : un orchestrateur a inscrit à son registre, sur un fait rapporté, que *« le merge ne passait plus par les orchestrateurs »*. **Faux dans sa direction** — le clic avait été **délégué aux** orchestrateurs et aux chefs, pas retiré. Sur cette lecture il s'apprêtait à **retirer à un chef d'équipe gelé un ordre juste** : exiger les deux verdicts sur la tête finale, qui est **l'une des conditions que la délégation exige**. La source était un fichier du poste, **lisible en une commande**. ⚠️ **Ce qui l'a sauvé n'est pas sa méthode : c'est que celui qui lui avait rapporté le fait s'est rétracté de lui-même.**
 
-**Et la réserve vaut dans l'autre sens** : cette même délégation avait d'abord été dite à **un seul** orchestrateur, puis relayée. **Trois l'ont inscrite en `proposed` et non `accepted` tant qu'elle ne venait pas du dirigeant lui-même — ils avaient raison.** La source opposable est le **texte des permissions du poste**, jamais le relais qui le rapporte.
+**Et dans l'autre sens** : cette délégation avait d'abord été dite à **un seul** orchestrateur puis relayée ; **trois l'ont inscrite `proposed` et non `accepted` tant qu'elle ne venait pas du dirigeant — ils avaient raison.**
 
 **Le second ne se sent jamais comme de la complaisance : il se sent comme de la confiance dans quelqu'un qu'on a choisi soi-même.** Refuser le lot d'un agent que tu as ouvert, briefé et dimensionné, c'est te déjuger sur ton propre découpage — un coût que tu paies tout de suite, quand le défaut qu'il cache se paiera plus tard et chez quelqu'un d'autre.
 
