@@ -1376,5 +1376,23 @@ test('AUCUN DOUBLON : LA RONDE NE DIT RIEN — une garde qui crie tous les jours
   const dit = JSON.parse(r.stdout.trim().split('\n').pop());
 
   assert.equal(dit.noms_en_double, undefined, 'pas de doublon : le rendu n’en parle pas');
-  assert.doesNotMatch(r.stderr, /en double/i, 'et le journal reste muet là-dessus');
+
+  // 🔴 CETTE ASSERTION VISAIT UN TEXTE QUI N'EXISTE NULLE PART. Elle cherchait « en double »
+  // dans le journal — or le message écrit « nom(s) porté(s) par PLUS D'UN agent vivant », et
+  // « en double » n'apparaît PAS UNE FOIS dans `bin/rendez-vous.js`. Un regex qui ne correspond
+  // à rien de ce que le code écrit ne peut jamais rougir : il passe sur les deux chemins, le
+  // silencieux comme le bavard.
+  //
+  // ⚠️ CE QU'ELLE LAISSAIT PASSER, PROUVÉ PAR MUTATION D'UNE PASSE PORTAIL : remplacer
+  // `if (doublons.length)` par `if (true)` fait crier la ronde À CHAQUE PASSAGE sur un poste
+  // sans aucun doublon — et toute la suite reste verte. C'est exactement le mode de mort que
+  // le code se donne pour règle trois lignes plus haut : *une garde qui crie tous les jours
+  // cesse d'être lue.* Le test censé le garder ne le touchait pas.
+  //
+  // On assertionne désormais sur LA PHRASE QUE LE CODE ÉCRIT, relevée dans le fichier.
+  assert.doesNotMatch(
+    r.stderr,
+    /porté\(s\) par PLUS D'UN agent/i,
+    `aucun doublon : le journal ne doit pas en parler — ${r.stderr}`
+  );
 });
