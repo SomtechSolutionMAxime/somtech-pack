@@ -14,8 +14,15 @@
 //
 // ⚠️ IL Y A DONC **TROIS** ÉTATS, ET LE CODE N'EN CONNAISSAIT QUE DEUX. Entre « le registre
 // ignore ce pane » (replié depuis T-20260820-0022) et « le registre le connaît », il existe une
-// fenêtre où le registre RÉPOND en disant `unknown`. Mesurée 3,5 s ici ; ~30 s dans
-// l'occurrence vécue le même jour sur `w26:p46`, qui s'est « résolue seule ».
+// fenêtre où le registre RÉPOND en disant `unknown`. Mesurée TROIS FOIS le 2026-09-20 sur DEUX
+// chemins de naissance : 3,5 s · 3,3 s (`pane run "claude"`) et 3,7 s (`herdr agent start`).
+//
+// ⚠️ Le « ~30 s » de l'occurrence vécue de `w26:p46` a été RETIRÉ par son auteur : un `sleep 8`
+// suivi d'un seul relevé, donc une estimation, pas une mesure. Elle ne compte pas.
+//
+// ⚠️ ET LA TROISIÈME MESURE TRANCHE CE QUE LES DEUX AUTRES LAISSAIENT OUVERT : née par
+// `herdr agent start`, la session PORTE DÉJÀ SON NOM pendant toute la fenêtre. Le discriminant
+// ne peut donc pas être l'absence de nom — c'est mesuré sur les deux chemins, plus argumenté.
 //
 // 🔴 CE QUE LE CODE FAISAIT DANS CETTE FENÊTRE. `trouverDestinataire` trouve l'agent au
 // registre, donc `parLePane` vaut FAUX, donc `statutExplicable` vaut FAUX, donc `causeObstacle`

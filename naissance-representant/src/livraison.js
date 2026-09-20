@@ -479,7 +479,7 @@ export function obstacleAvantLivraison(
       if (enregistrementEnCours) {
         return (
           `le registre herdr connaît${ou || ' ce pane'}, mais il est ENCORE EN COURS D’INSCRIPTION ` +
-          '— statut « unknown ». C’est une ATTENTE, pas une absence : mesurée de 3 à 30 secondes ' +
+          '— statut « unknown ». C’est une ATTENTE, pas une absence : mesurée autour de 3,5 s ' +
           'après la naissance, puis le statut devient « idle ». Rien n’a été écrit. Redemande ' +
           'dans quelques secondes — `gestionnaire-livrer` attend cette fin d’inscription tout ' +
           'seul, dans une borne qu’il annonce.'

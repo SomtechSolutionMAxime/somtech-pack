@@ -61,9 +61,14 @@ export function estUnPane(cible) {
  *   t+5.8s   `agent get` -> ok, statut `idle`                         ← inscription terminée
  *
  * Entre « le registre ignore ce pane » — replié depuis T-20260820-0022 — et « le registre le
- * connaît », il existe une fenêtre où le registre RÉPOND en disant `unknown`. Elle a duré 3,5 s
- * dans la sonde, et ~30 s dans l'occurrence vécue le même jour sur `w26:p46`, qui s'est
- * « résolue seule » sans que rien ne dise qu'il fallait attendre.
+ * connaît », il existe une fenêtre où le registre RÉPOND en disant `unknown`. Elle a été mesurée
+ * TROIS FOIS le 2026-09-20, par sonde en lecture seule, sur DEUX chemins de naissance :
+ * 3,5 s · 3,3 s (`pane run "claude"`) et 3,7 s (`herdr agent start`).
+ *
+ * ⚠️ L'occurrence vécue de `w26:p46` avançait « ~30 s ». SON AUTEUR A RETIRÉ CE CHIFFRE : c'était
+ * un `sleep 8` suivi d'un seul relevé — une estimation présentée comme une mesure. Elle ne compte
+ * donc pas dans la population, et ce qu'on en sait est seulement « quelque part sous la
+ * trentaine de secondes ».
  *
  * ⚠️ LE BRUIT DE CE DISCRIMINANT A ÉTÉ MESURÉ AVANT D'ÊTRE POSÉ. Sur les 66 agents que
  * `agent list` rendait pour ce poste au même moment : `done: 30`, `idle: 30`, `working: 5`,
@@ -294,7 +299,7 @@ export async function trouverDestinataire(cible, { appel = appelHerdr } = {}) {
       message:
         `aucun agent ne porte encore le nom « ${vise} » — mais ${inscriptionsEnCours.length} session${pluriel} ` +
         `est en cours d’inscription au registre (${ou}) et ne porte donc pas encore de nom. ` +
-        'Ce n’est pas une absence : c’est une attente, mesurée de 3 à 30 secondes après la ' +
+        'Ce n’est pas une absence : c’est une attente, mesurée autour de 3,5 s après la ' +
         'naissance. Rien n’a été envoyé — redemande dans quelques secondes, ou désigne-le par ' +
         'son PANE, qui est joignable tout de suite.',
     };

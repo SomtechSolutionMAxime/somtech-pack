@@ -43,14 +43,34 @@ import { trouverDestinataire } from '../src/destinataire.js';
 // ⚠️ LA BORNE DE L'ATTENTE D'INSCRIPTION, ET ELLE EST POSÉE AVANT LE RÉSULTAT (T-20260819-0036).
 //
 // Une session qui vient de naître est INSCRITE AU REGISTRE AVANT DE L'ÊTRE COMPLÈTEMENT : elle y
-// répond avec le statut `unknown`, sans nom, puis bascule à `idle`. Mesuré le 2026-09-20 par
-// sonde en lecture seule sur une naissance réelle : 3,5 s. Mesuré le même jour dans
-// l'occurrence vécue de `w26:p46` : ~30 s, « résolue seule ».
+// répond avec le statut `unknown` puis bascule à `idle`.
 //
-// 45 000 ms = 1,5 fois la plus grande des DEUX seules mesures dont on dispose. Ce n'est pas un
-// chiffre confortable choisi après coup : c'est une marge sur une population de deux, et elle est
-// dite comme telle. Si la fenêtre se révélait plus longue, la borne MORD ET LE DIT — ce qu'un
-// refus faisait déjà, en mentant sur la cause.
+// ⚠️ LA POPULATION, EXACTEMENT, ET ELLE A ÉTÉ CORRIGÉE EN BAISSE AVANT D'ÊTRE ÉLARGIE. La
+// première rédaction disait « 1,5 fois la plus grande de DEUX mesures ». L'une des deux n'en
+// était pas une : le ~30 s de l'occurrence vécue de `w26:p46` venait d'un `sleep 8` suivi d'un
+// seul relevé — une ESTIMATION à la main, présentée comme un chiffre, et c'est son auteur qui
+// l'a retirée. La borne reposait donc sur UNE mesure et UNE approximation.
+//
+// TROIS MESURES RÉELLES ONT ÉTÉ PRISES LE 2026-09-20, par sonde en lecture seule à la seconde,
+// sur DEUX chemins de naissance distincts :
+//
+//   `herdr pane run … "claude"`   →  fenêtre 2,3 s → 5,8 s   (3,5 s)
+//   `herdr pane run … "claude"`   →  fenêtre 2,5 s → 5,8 s   (3,3 s)
+//   `herdr agent start …`         →  fenêtre 1,2 s → 4,9 s   (3,7 s)
+//
+// 45 000 ms vaut donc ~12 fois la plus grande MESURE. Le chiffre n'a pas été rabaissé sur ces
+// trois-là, et c'est délibéré : une borne se pose AVANT le résultat, et la rétrécir pour qu'elle
+// épouse les données qu'on vient d'obtenir revient à la poser après. Elle couvre en outre la
+// dizaine de secondes que l'estimation suggérait sans la prouver. Une borne trop large ne coûte
+// qu'un refus retardé dans un cas pathologique ; une borne trop courte refuse à tort.
+//
+// ⚠️ ET LA TROISIÈME MESURE APPORTE UN FAIT QUE LES DEUX AUTRES NE DONNAIENT PAS : née par
+// `herdr agent start`, la session PORTE DÉJÀ SON NOM pendant toute la fenêtre. Le discriminant
+// ne peut donc pas être l'absence de nom — c'est `unknown`, et c'est maintenant mesuré sur les
+// deux chemins, plus seulement argumenté.
+//
+// Si la fenêtre se révélait plus longue ailleurs, la borne MORD ET LE DIT — ce qu'un refus
+// faisait déjà, en mentant sur la cause.
 //
 // ⚠️ ET ELLE EXISTE PARCE QU'UNE ATTENTE NON BORNÉE EST UNE PENDAISON. Le dispositif a déjà payé
 // ce mode de panne sur la ronde : « une ronde qui pend n'en rate pas une, elle les ANNULE
