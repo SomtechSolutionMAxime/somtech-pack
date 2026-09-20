@@ -929,6 +929,96 @@ porte "Si rien n'avance, repars du backlog" \
   "2026-09-20"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑮ LES HUIT RÈGLES DE LA VAGUE 2B SONT PRESCRITES — D-20260920-0001
+#
+# Elles portent toutes sur UNE SEULE fonction : ÉPROUVER UNE GARDE. Mesurées
+# les 19 et 20 septembre chez TROIS chefs d'équipe différents, inscrites au
+# registre `E-20260818-0007` avec leur occurrence et leur coût — reprises, pas
+# réinventées.
+#
+# ⚠️ POURQUOI CE BLOC EST LE PLUS EXPOSÉ DE CE BANC. Les huit défauts qu'il
+# garde ont ceci de commun qu'AUCUN NE PRODUIT D'ERREUR : ils produisent un
+# résultat plausible, et ce résultat est exactement celui qu'on espérait. Un
+# contrôle écrit contre eux peut donc être vert pour la même raison qu'eux.
+# C'est pourquoi chacun est BORNÉ À SA SECTION et exige la DATE de son
+# occurrence — et pourquoi les contre-épreuves de ce lot ont été jouées UNE À
+# LA FOIS, en DÉPLAÇANT la valeur gardée plutôt qu'en abîmant le chemin, sous
+# un instrument qui REFUSE une mutation sans effet (règle 4, appliquée au lot
+# qui l'écrit).
+#
+# ⚠️ LA DATE EST DISCRIMINANTE PAR INTENTION, PAS PAR ACCIDENT : chacune des
+# huit sections visées ne porte QU'UNE occurrence de « 2026-09-20 ». C'est la
+# règle 2 appliquée à ce bloc — une garde qui exige une date présente deux fois
+# dans sa section ne rougit pas quand on déplace l'une des deux.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑮ les huit règles de la vague 2B sont prescrites — D-20260920-0001"
+
+# ⚠️ LA GARDE DU FIL N'EST PAS UNE NEUVIÈME RÈGLE, et elle n'exige PAS de date :
+# elle est bornée au CHAPEAU, qui contient les huit sous-sections — donc leurs
+# huit dates. Exiger « 2026-09-20 » ici serait vert tant qu'UNE SEULE des huit
+# subsiste : une garde verte par accident de formulation, c'est-à-dire la règle
+# 2 commise dans le bloc qui la prescrit.
+porte "Éprouver une garde — huit silences qui se lisent comme des succès" \
+  "le fil : un silence qui se lit comme un succès" \
+  "SILENCE qui se lit comme un SUCCÈS" \
+  "en éprouvant AUTRE CHOSE — jamais en cherchant" \
+  "trois chefs d'équipe différents"
+
+porte "Un retrait qui fait rougir une garde est une amputation" \
+  "1 — un retrait qui fait rougir est une amputation, pas un remplacement" \
+  "joue les bancs" \
+  "pousser-qa-avant-merge" \
+  "vert ne veut pas dire caduc" \
+  "2026-09-20"
+
+porte "Une garde peut être verte par ACCIDENT DE FORMULATION" \
+  "2 — une garde verte par accident ne rougira pas en cessant de garder" \
+  "déplacer la VALEUR, pas abîmer le chemin" \
+  "il y en avait ZÉRO" \
+  "2026-09-20"
+
+porte "Des mutations qui tuent TOUTES ne prouvent rien" \
+  "3 — zéro survivante sur un sous-ensemble ne dit rien de la population" \
+  "ne dit rien de la population" \
+  "1353 bancs verts" \
+  "2026-09-20"
+
+# ⚠️ LE MOTIF DE COÛT N'EST PAS « zéro rouge », et le choix est mesuré : cette
+# suite apparaît DEUX fois dans la section (l'énoncé et l'occurrence), donc en
+# déplacer une laisse la garde VERTE sur l'autre. C'est la règle 2 commise dans
+# le bloc qui la prescrit — trouvée par la contre-épreuve de ce lot, pas par
+# une relecture.
+porte "Un essai VIDE se lit exactement comme une garde qui tient" \
+  "4 — le banc de mutation refuse une mutation sans effet" \
+  "REFUSER une mutation sans effet" \
+  "une épreuve qui n'avait pas eu lieu" \
+  "2026-09-20"
+
+porte "Un banc qui S'INTERROMPT ne dit rien de ce qu'il gardait" \
+  "5 — un banc rend le nombre d'assertions JOUÉES, pas seulement les échecs" \
+  "assertions JOUÉES" \
+  "78 assertions muettes" \
+  "2026-09-20"
+
+porte "Le joint qui permet d'éprouver peut SOUSTRAIRE à l'épreuve" \
+  "6 — le banc éprouve le double, la production utilise l'original" \
+  "le banc éprouve le double, la production utilise l'original" \
+  "11 bancs verts" \
+  "2026-09-20"
+
+porte "Une garde juste, sur un chemin que le NOUVEL APPELANT ne traverse pas" \
+  "7 — mesurer OÙ vit la garde dont on croit hériter" \
+  "dans la fonction, ou chez son appelant actuel" \
+  "SUPPRIMAIT la branche d'une demande de fusion déjà ouverte" \
+  "2026-09-20"
+
+porte "Deux gardes justes, chacune bornée à sa section, ne gardent pas leur ACCORD" \
+  "8 — deux gardes justes ne gardent pas leur accord" \
+  "c'est leur accord que rien ne mesure" \
+  "T-20260920-0051" \
+  "2026-09-20"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
@@ -1215,7 +1305,38 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0 : le
 # prochain ajout se refuse par défaut, et c'est le passage de remplacement —
 # pas la coupe — qu'on lui demandera d'abord.
-BASELINE=165374
+# ── RE-BASELINE DU 2026-09-20 (3ᵉ) — D-20260920-0001 / E-20260920-0003 ────────
+#
+#   ACCORDÉE D'AVANCE par `batiscan` le 2026-09-20, dans le brief de ce lot,
+#   recopiée : « Si l'écart net reste positif : re-baseline à la taille finale
+#   EXACTE, marge zéro. »
+#
+# 165 374 → 171 024. MARGE ZÉRO, comme les deux précédentes.
+#
+# DÉCOMPOSITION, mesurée par chapitre — un SEUL chapitre bouge :
+#   faire-appliquer  +5 650  les huit règles de « ÉPROUVER UNE GARDE », mesurées
+#                            les 19 et 20/09 chez TROIS chefs différents, plus le
+#                            fil qui les relie (14 430 → 20 080 caractères).
+#                            Retrait compris : −37, « deux ou trois mutations de
+#                            son cru » (voir ci-dessous).
+#
+# LE PASSAGE DE REMPLACEMENT A ÉTÉ FAIT AVANT DE DEMANDER, et la règle 1 de ce
+# lot lui a été appliquée À LUI-MÊME : les bancs ont été JOUÉS après chaque
+# retrait candidat, pas seulement relus.
+#   · RETENU — « — deux ou trois mutations de son cru — » (−37) : la règle 3
+#     remplace cette prescription, elle ne l'ampute pas. Un compte de mutations
+#     fixé d'avance EST le sous-ensemble dont la règle 3 dit qu'il ne prouve
+#     rien. Retrait joué : 80/80, aucune garde rougie.
+#   · ÉCARTÉ — le bloc « Cas de la sonde DUPLIQUÉE » (−745), candidat plausible
+#     parce que la règle 8 porte aussi sur deux copies. Retrait joué : DEUX
+#     gardes rouges (⑬ « deux copies d'un critère peuvent diverger » et la
+#     traçabilité de `T-20260819-0097`). C'est une AMPUTATION, pas un
+#     remplacement — et rien à l'œil ne le distinguait du premier.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0 : le
+# prochain ajout se refuse par défaut, et c'est le passage de remplacement —
+# bancs JOUÉS, pas relus — qu'on lui demandera d'abord.
+BASELINE=171024
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

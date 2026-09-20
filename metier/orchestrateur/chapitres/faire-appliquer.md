@@ -48,7 +48,7 @@ Règle d'or n°8. Dans une livraison réelle, la revue indépendante a trouvé d
 
 **Pourquoi deux** : le portail économise la revue de fond en rejetant tôt (~$0.15 vs $5+) · la revue de fond ne vaut que sur du code candidat · un sous-agent démarre en secondes, pas 15 min · **deux revues superficielles valent moins qu'une sérieuse** — `RIEN VU` de la passe 1 ne doit **jamais** baisser la garde de la passe 2.
 
-Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts plutôt que les déduire · **muter le code lui-même** — deux ou trois mutations de son cru — et vérifier que la suite rougit (un test qui reste vert après mutation est un faux témoin) · **trancher les désaccords par la mesure**.
+Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts plutôt que les déduire · **muter le code lui-même** et vérifier que la suite rougit (un test qui reste vert après mutation est un faux témoin) · **trancher les désaccords par la mesure**.
 
 > 🔴 **« On teste quand il n'y a rien ; on ne teste pas quand on ne peut pas voir. »**
 >
@@ -88,6 +88,62 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 🔴 **LE COROLLAIRE, ET SANS LUI LA PREMIÈRE LISTE NE SERT À RIEN** : *« sur la tête finale »* se lit **« de ce qu'ils COUVRENT »**. Ce qui est ajouté après la revue doit être **couvert** par les verdicts, **pas les faire rejouer**. **Sinon l'entrée CHANGELOG — que l'outil impose APRÈS la revue — périme les deux verdicts à chaque fois, indéfiniment**, et aucune tête n'est jamais revue en entier. *Occurrence : 2026-09-20, verdicts tenus pour périmés **trois fois** sur un même lot.*
 
 **Un reviewer ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
+
+## Éprouver une garde — huit silences qui se lisent comme des succès
+
+> 🔴 **Chacune des huit qui suivent est un SILENCE qui se lit comme un SUCCÈS.** *Aucune ne produit d'erreur ; toutes produisent un résultat plausible.* **C'est pourquoi elles se trouvent en éprouvant AUTRE CHOSE — jamais en cherchant.**
+
+Mesurées les 19 et 20 septembre chez **trois chefs d'équipe différents**, toutes sur le même geste. **Tu les portes dans le brief de revue et dans celui du lot ; aucune ne se déduit du bon sens.**
+
+### Un retrait qui fait rougir une garde est une amputation
+
+**Avant de retirer un bloc jugé caduc, joue les bancs.** *Un retrait qui fait rougir n'est pas un remplacement : c'est une amputation, et la garde est le seul instrument qui le dise.* ⚠️ **L'inverse ne vaut pas : vert ne veut pas dire caduc.**
+
+*Occurrence, `2026-09-20` : au passage de remplacement d'un lot, trois blocs sont jugés caducs. **Deux l'étaient. Le troisième** — « la QA passe AVANT le merge » — **est gardé nommément** par `cli/test/fixtures/orchestrateur-reformulations.json`, cas `pousser-qa-avant-merge` ; la suite a rougi en CI et en local.* **Coût : c'était le seul des trois qu'aucune relecture n'aurait distingué des deux autres. Une garde les sépare ; un jugement, non.**
+
+### Une garde peut être verte par ACCIDENT DE FORMULATION
+
+Une garde qui tient la bonne chose sans que l'auteur l'ait choisi **ne rougira pas le jour où elle cesse de garder : elle restera verte en ne gardant plus rien**, avec exactement le même visage.
+
+**Le geste qui les sépare : muter PRÉCISÉMENT ce que la garde prétend garder, dans la section visée seulement — déplacer la VALEUR, pas abîmer le chemin.** *Une mutation qui abîme le chemin rougit toujours et ne prouve rien ; une mutation qui déplace la seule valeur gardée rougit si et seulement si la garde la tient vraiment.* **Le bornage à la section est ce qui rend la mutation discriminante.**
+
+*Occurrence, `2026-09-20`, têtes `f70198b` → `df9ffee` : six gardes posées sur cinq changements, deux exigeaient une date.* **Coût : on en croyait deux intentionnelles sur cinq — il y en avait ZÉRO.**
+
+### Des mutations qui tuent TOUTES ne prouvent rien
+
+Elles n'éprouvent que ce que les assertions couvraient déjà. **Zéro survivante sur un SOUS-ENSEMBLE ne dit rien de la population.** *Un compte de mutations fixé d'avance — « deux ou trois de son cru » — est ce sous-ensemble, choisi par celui-là même dont on éprouve les angles morts.*
+
+*Occurrence, `2026-09-20`, banc du minuteur (`T-20260920-0013`) : les quatre premières mutations tuaient toutes.* **Coût : huit rouges de plus sont sortis après ~25 mutations et six passes — dont un bypass du CHEMIN NOMINAL qui dormait sous 1353 bancs verts, une borne par défaut portée à cinq heures et demie, et un `unref` non gardé.**
+
+### Un essai VIDE se lit exactement comme une garde qui tient
+
+**Une mutation qui ne mute rien et une garde qui résiste produisent le MÊME résultat : zéro rouge.** *Le banc de mutation doit REFUSER une mutation sans effet — on corrige l'instrument, jamais le cas.*
+
+*Occurrence, `2026-09-20` : une mutation dont le motif ne correspondait à aucun texte du fichier a rendu zéro rouge.* **Coût : un verdict « la garde tient » sur une épreuve qui n'avait pas eu lieu.**
+
+### Un banc qui S'INTERROMPT ne dit rien de ce qu'il gardait
+
+**Une suite qui meurt tôt ressemble trait pour trait à une suite qui passe** : les deux rendent « aucun échec », et rien ne distingue *« rien n'a échoué »* de *« rien n'a tourné »*. **Un banc rend le NOMBRE d'assertions JOUÉES, pas seulement le nombre d'échecs ; un compte qui baisse sans qu'un test ait été retiré est une interruption, pas un succès.**
+
+*Occurrence, `2026-09-20` : un tableau vide sous `set -u` en bash 3.2 est une variable non liée — la série mourait après le premier contrôle.* **Coût : 78 assertions muettes, AUCUNE rouge.**
+
+### Le joint qui permet d'éprouver peut SOUSTRAIRE à l'épreuve
+
+**Toute couture d'injection crée un chemin par défaut que plus rien ne traverse pendant les essais : le banc éprouve le double, la production utilise l'original.** *Le geste : éprouver le DÉFAUT lui-même — casser la valeur par défaut, pas seulement l'injectée.*
+
+*Occurrence, `2026-09-20` : « en rendant le minuteur observable, j'avais rendu le VRAI minuteur inobservable ».* **Coût : « `planifier` par défaut cassé, plus aucun filet » est sorti après 11 bancs verts.**
+
+### Une garde juste, sur un chemin que le NOUVEL APPELANT ne traverse pas
+
+**Elle ne rougit pas : elle n'est jamais atteinte.** *Avant de réutiliser une fonction, mesure OÙ vit la garde dont tu crois hériter — dans la fonction, ou chez son appelant actuel. Le second cas ne se voit pas en lisant la fonction.*
+
+*Occurrence, `2026-09-20` : `pf_build_and_pr` ne porte que le rollback ; l'idempotence vivait dans `pf_auto_pr`, son appelant.* **Coût : un appel nu, au deuxième passage, SUPPRIMAIT la branche d'une demande de fusion déjà ouverte.**
+
+### Deux gardes justes, chacune bornée à sa section, ne gardent pas leur ACCORD
+
+**Réécrire le fait fait rougir l'UNE et laisse l'AUTRE verte sur l'ancienne formulation.** *Ce n'est aucune des deux qui est en défaut : c'est leur accord que rien ne mesure.* **Dès qu'un fait vit à deux endroits, la dette porte un DÉCLENCHEUR nommé — « dès que ce fait est retouché » — et une dette à déclencheur n'est pas une dette oubliée.**
+
+*Occurrence, `2026-09-20`, `T-20260920-0051` : le corollaire des trois listes vit dans le chapitre de la revue ET dans le renvoi à l'endroit du geste, gardé des deux côtés.* **Coût : c'est « un fait redit à plusieurs endroits dont un seul est corrigé » revenu sur le lot qui venait de le fermer ailleurs.**
 
 ## Exiger ce qu'un lot montre, jamais ce qu'il conclut
 
