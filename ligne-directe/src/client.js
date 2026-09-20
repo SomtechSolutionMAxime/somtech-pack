@@ -223,7 +223,25 @@ const dodo = (ms) => new Promise((r) => setTimeout(r, ms));
  * pend ne rougit jamais. Le banc exige donc les deux faits : qu'elle RENDE, et qu'elle rende
  * « tenue » — le doute ne doit jamais pencher du côté qui autorise un second veilleur.
  */
-export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000, brancher = connect } = {}) {
+export function placeTenue(
+  cheminSocket = CHEMIN_SOCKET,
+  { borne = 2000, brancher = connect, planifier = setTimeout, annuler = clearTimeout } = {},
+) {
+  // ⚠️ `planifier`/`annuler` EXISTENT POUR LA MÊME RAISON QUE `brancher` — une raison déjà
+  // écrite ici, mais jamais appliquée AU MINUTEUR LUI-MÊME (T-20260920-0013).
+  // Le joint du transport ferme l'issue de la prise, ce qui rend la branche du minuteur
+  // ATTEIGNABLE. Mais prouver ensuite que c'est bien LUI qui a tranché demandait de comparer
+  // une durée mesurée à la borne — et une durée mesure la machine.
+  // MESURÉ : `rendu en 59 ms pour une borne de 60 ms`, rouge QUATRE fois sur TROIS lots, dont
+  // deux fois sur un lot qui ne touchait que des fichiers markdown — aucun chemin ne mène de
+  // là à un minuteur. À chaque fois : vert au rejeu du même job, sans rien changer. Le rouge
+  // accusait le code et parlait du runner ; et celui qui le payait n'était jamais celui qui
+  // pouvait le corriger.
+  // Avec ce joint, le banc n'attend plus : il OBSERVE qu'un minuteur a été planifié avec la
+  // borne, que la promesse reste EN ATTENTE tant qu'il n'est pas déclenché, et que c'est SON
+  // déclenchement qui tranche. Aucune horloge dans l'épreuve.
+  // ⚠️ ÉLARGIR LA BORNE AURAIT ÉTÉ LE PIÈGE : vert, et toujours en train de mesurer la machine,
+  // seulement plus lentement. Une garde qu'on stabilise en la rendant aveugle ne garde plus rien.
   // ⚠️ `brancher` EXISTE POUR QUE LA BRANCHE DU MINUTEUR SOIT ÉPROUVABLE, et pour rien
   // d'autre — le vrai transport est le défaut, et c'est lui que prennent tous les appels du
   // dépôt. Même raison que `reveiller` dans `passerLaMain` : sans joint, le seul moyen
@@ -240,7 +258,7 @@ export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000, branche
     const trancher = (verdict) => {
       if (rendu) return;
       rendu = true;
-      clearTimeout(minuteur);
+      annuler(minuteur);
       try {
         flux.destroy();
       } catch {
@@ -249,8 +267,8 @@ export function placeTenue(cheminSocket = CHEMIN_SOCKET, { borne = 2000, branche
       resolve(verdict);
     };
     const flux = brancher(cheminSocket);
-    const minuteur = setTimeout(() => trancher(true), borne);
-    minuteur.unref?.();
+    const minuteur = planifier(() => trancher(true), borne);
+    minuteur?.unref?.();
     flux.on('connect', () => trancher(true));
     flux.on('error', () => trancher(false));
   });

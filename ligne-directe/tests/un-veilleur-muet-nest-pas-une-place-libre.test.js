@@ -49,6 +49,26 @@ import { spawn } from 'node:child_process';
 import { aucunGesteQuiDetruit } from './aide/gestes-qui-detruisent.js';
 
 let Veilleur, passerLaMain, placeTenue;
+// ÉTAT D'UNE PROMESSE, SANS JAMAIS REGARDER L'HORLOGE (T-20260920-0013).
+//
+// Dire « elle n'a pas encore tranché » demandait jusqu'ici d'attendre un délai et de
+// constater qu'il s'était écoulé — c'est-à-dire de mesurer la machine. Ici on ne mesure
+// rien : on fait COURIR la promesse contre une promesse déjà résolue. L'ordre des
+// microtâches est déterministe, il ne dépend ni de la charge ni du runner. Si la promesse
+// avait déjà tranché, son résultat gagne la course ; si elle attend, c'est le témoin qui
+// gagne.
+//
+// ⚠️ LES TOURS À VIDE NE SONT PAS UNE ATTENTE DÉGUISÉE. Ils laissent s'écouler les
+// microtâches déjà en file — un `.then()` interne, un `await` d'un tour précédent — pour
+// que la course lise un état stabilisé et non un état en train de se faire. Aucun `setTimeout`,
+// aucune durée : quel que soit le runner, le nombre de tours est le même.
+const TEMOIN_EN_ATTENTE = Symbol('en attente');
+async function etatDe(promesse) {
+  for (let i = 0; i < 16; i += 1) await Promise.resolve();
+  const gagnant = await Promise.race([promesse, Promise.resolve(TEMOIN_EN_ATTENTE)]);
+  return gagnant === TEMOIN_EN_ATTENTE ? 'en attente' : 'tranchée';
+}
+
 let racine;
 let compteur = 0;
 
@@ -296,26 +316,40 @@ test('QUAND LE COMPTE EST IMPOSSIBLE, LA RELÈVE LE DIT — elle n’invente ni 
   }
 });
 
-test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, et elle rend « tenue »', { timeout: 5000 }, async () => {
+test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, elle rend « tenue », et c’est LE MINUTEUR qui a tranché', { timeout: 5000 }, async () => {
   // ⚠️ CE BANC FERME UNE ISSUE, IL NE REJOUE PAS LA CHAÎNE. Substituer le TEMPS ne marche
   // pas : mesuré, la prise tranche 30 fois sur 30 avant le minuteur, même réglé à zéro — un
   // banc qui baisserait la borne serait vert sans jamais toucher la branche qu'il prétend
-  // éprouver. On substitue donc UN point nommé, le transport de la prise, et la seule issue
-  // restante devient le minuteur.
+  // éprouver. On substitue donc DEUX points nommés — le transport de la prise, et le
+  // minuteur — et la seule issue restante devient celle qu'on observe.
   //
-  // ⚠️ ET C'EST LE SEUL BANC DE CE FICHIER QUI SUBSTITUE QUOI QUE CE SOIT À LA PRISE. Les six
-  // autres passent par le vrai `connect` — vérifié par mutation : remplacer le transport par
-  // DÉFAUT par cette même prise muette les fait rougir.
+  // 🔴 CE BANC NE MESURE PLUS AUCUNE DURÉE, ET C'EST TOUT SON OBJET (T-20260920-0013).
+  // Il comparait `Date.now()` à la borne pour prouver que le verdict venait du minuteur :
+  // `rendu en 59 ms pour une borne de 60 ms`. Une milliseconde de dérive sur un runner
+  // chargé, et il rougissait. QUATRE fois sur TROIS lots — dont deux fois sur un lot qui ne
+  // touchait que des fichiers markdown, où aucun chemin ne mène à un minuteur. Vert au rejeu
+  // du même job à chaque fois, sans rien changer.
+  //
+  // > Une garde qui COMPTE mesure la machine autant que le code, et son rouge accuse le
+  // > code en parlant du runner.
+  //
+  // ⚠️ ÉLARGIR LA BORNE (60 → 200 ms) AURAIT ÉTÉ LE PIÈGE : vert, et toujours en train de
+  // mesurer la machine, seulement plus lentement. Le discriminant n'est donc plus un temps,
+  // c'est UN APPEL : le minuteur est injecté, le banc observe qu'il a été planifié avec la
+  // borne, que la promesse reste EN ATTENTE tant que personne ne le déclenche, et que c'est
+  // son déclenchement — le sien, provoqué à la main — qui tranche.
+  //
+  // ⚠️ ET LE MINUTEUR NE PEUT PAS ÊTRE SUPPRIMÉ POUR AUTANT : sans lui, si ni la prise ni
+  // l'erreur ne surviennent, la promesse ne se résout jamais — `placeTenue` PEND, et
+  // `passerLaMain` avec elle. Une étape qui pend ne rougit jamais ; c'est la borne de ce
+  // banc (`timeout`) qui transforme cette attente-là en échec visible.
   // ⚠️ CE DOUBLE RETIENT LA BOUCLE, ET C'EST OBLIGATOIRE POUR QU'IL SOIT CONFORME.
-  // 🔴 MESURÉ EN CI, PAS SUR LE POSTE : sans ce minuteur, ce banc rendait
-  // `cancelledByParent` — « Promise resolution is still pending but the event loop has
-  // already resolved » — en 0,96 ms au lieu des 60 attendues. Le poste ne pouvait pas le
-  // montrer : d'autres bancs y tenaient la boucle debout.
-  // La cause n'était PAS dans `placeTenue` : le minuteur y est `unref`, donc il ne retient
-  // rien, et c'est le VRAI socket en vol qui tient la boucle le temps de la prise. Un double
-  // sans aucun handle ne tient rien — il fabriquait donc une situation que la production ne
-  // connaît pas, et aurait fait accuser le code. Un double doit être conforme au service
-  // qu'il remplace, y compris sur ce qu'il retient.
+  // Mesuré en CI : sans rien qui la retienne, ce banc rendait `cancelledByParent` — « Promise
+  // resolution is still pending but the event loop has already resolved ». La cause n'était
+  // PAS dans `placeTenue` : c'est le VRAI socket en vol qui tient la boucle le temps de la
+  // prise. Un double sans aucun handle fabriquait une situation que la production ne connaît
+  // pas, et aurait fait accuser le code. Un double doit être conforme au service qu'il
+  // remplace, y compris sur ce qu'il RETIENT.
   let ferme = 0;
   const priseQuiNeConclutJamais = () => {
     const enVol = setTimeout(() => {}, 60_000); // ce qu'un socket en vol retient
@@ -328,16 +362,43 @@ test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, et elle rend 
     };
   };
 
-  const debut = Date.now();
-  const verdict = await placeTenue(join(racine, 'peu-importe.sock'), { borne: 60, brancher: priseQuiNeConclutJamais });
-  const ecoule = Date.now() - debut;
+  // Le faux minuteur N'ARME RIEN : il note ce qu'on lui a demandé et attend qu'on le
+  // déclenche. Tant que le banc ne tire pas lui-même, aucune horloge ne peut trancher à sa
+  // place — c'est ce qui rend l'observation exacte plutôt que probable.
+  const planifies = [];
+  const annules = [];
+  const planifier = (fn, delai) => {
+    const jeton = { fn, delai, unref() {} };
+    planifies.push(jeton);
+    return jeton;
+  };
+  const annuler = (jeton) => annules.push(jeton);
 
-  // 1. ELLE REND. Sans le minuteur, la promesse ne se résoudrait jamais : `placeTenue`
-  // pendrait, et `passerLaMain` avec elle. Une étape qui pend ne rougit jamais — c'est la
-  // borne de ce banc (`timeout`) qui transforme cette attente-là en échec visible.
-  // 2. ELLE REND « TENUE ». Le doute penche du côté prudent : « je n'ai pas pu savoir » ne
-  // doit JAMAIS autoriser un second veilleur à effacer le socket d'un vivant.
+  const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
+    borne: 60,
+    brancher: priseQuiNeConclutJamais,
+    planifier,
+    annuler,
+  });
+
+  // 1. UN MINUTEUR A ÉTÉ ARMÉ, ET AVEC LA BORNE DEMANDÉE. Sans lui, il ne resterait aucune
+  // issue : la prise ne conclut jamais.
+  assert.equal(planifies.length, 1, 'la sonde arme UN minuteur — sans lui, une prise qui ne conclut jamais la fait pendre');
+  assert.equal(planifies[0].delai, 60, 'le minuteur est armé avec la borne reçue, pas avec une valeur de son cru');
+
+  // 2. 🔴 LE DISCRIMINANT, ET IL NE REGARDE AUCUNE HORLOGE. Tant que personne n'a déclenché
+  // le minuteur, la promesse DOIT être en attente. Si un raccourci tranchait à sa place, elle
+  // serait déjà résolue ici — et ce banc rougirait sur cette ligne. C'est la contre-épreuve
+  // exigée par T-20260920-0013, et elle ne dépend pas de la charge du runner.
+  assert.equal(await etatDe(promesse), 'en attente', 'le verdict doit venir DU MINUTEUR : tant qu’il n’est pas déclenché, rien ne doit avoir tranché');
+
+  // 3. ON TIRE LE MINUTEUR NOUS-MÊME. Ce qui suit est donc imputable à lui seul.
+  planifies[0].fn();
+  const verdict = await promesse;
+
+  // 4. ELLE REND, ET ELLE REND « TENUE ». Le doute penche du côté prudent : « je n'ai pas pu
+  // savoir » ne doit JAMAIS autoriser un second veilleur à effacer le socket d'un vivant.
   assert.equal(verdict, true, 'un doute non résolu doit pencher du côté « la place est tenue », jamais du côté qui ouvre la porte à un double');
-  assert.ok(ecoule >= 60, `le verdict doit venir DU MINUTEUR, pas d'un raccourci — rendu en ${ecoule} ms pour une borne de 60 ms`);
   assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte, même quand c’est le minuteur qui tranche');
+  assert.deepEqual(annules, [planifies[0]], 'la sonde annule le minuteur qu’elle a armé — celui-là, et une fois');
 });
