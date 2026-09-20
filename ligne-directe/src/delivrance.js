@@ -417,9 +417,14 @@ export async function delivrerLaBoite({
       verdictDeSoumission: verdict,
       soumissionEtablie: verdict === VERDICTS_DE_SOUMISSION.ETABLIE,
       // ⚠️ LE PARI, RENDU COMPTABLE. Vrai quand on a conclu sur un sujet TRONQUÉ : on n'a vu
-      // que 77 caractères, et deux textes qui les partagent sans partager la suite sont
+      // que 77 points de code, et deux textes qui les partagent sans partager la suite sont
       // indiscernables. On ne peut pas fermer ce cas ; on peut compter les fois où on le
       // risque, et voir ce compte monter le jour où les messages gabarités se multiplient.
+      //
+      // 🔴 AUCUN LECTEUR N'EST BRANCHÉ SUR CE CHAMP — suivi en **T-20260920-0137**. Le lire
+      // dans le code et en conclure que le sujet est surveillé serait une erreur ; c'est la
+      // raison d'être de ce ticket, qui admet « personne ne le lira » comme réponse et exige
+      // alors le retrait du champ.
       soumissionEtablieSurPrefixeTronque: etablieSurUnPrefixeTronque({
         sujetAvant,
         sujetApres,
@@ -742,8 +747,17 @@ export function soumissionEtablie(args) {
  * en série. Lire « 0 sur 870 » dans trois mois comme une propriété du système serait une faute
  * de lecture, et c'est pour ça que ce compteur existe avant que le cas n'arrive.
  *
- * Ce prédicat est rendu en champ par `delivrerLaBoite` ; **le comptage lui-même reste à
- * brancher côté veilleur** — ce lot ne touche pas au porteur.
+ * 🔴 PERSONNE NE LIT ENCORE CE CHIFFRE — ET C'EST SUIVI EN T-20260920-0137.
+ *
+ * Ce prédicat est rendu en champ par `delivrerLaBoite`, mais **le comptage lui-même n'est pas
+ * branché** : ce lot n'avait pas le droit de toucher au porteur (le balayage porte aussi la
+ * livraison des boîtes oubliées et la relance des messages gardés).
+ *
+ * **N'en conclus donc pas que le sujet est surveillé.** Tant que `T-20260920-0137` n'est pas
+ * traité, ceci est de la télémétrie sans lecteur — un champ que personne ne lit ne compte
+ * rien. Ce ticket porte la question qui décide : **qui lit ce chiffre, et quand ?** — et il
+ * admet « personne » comme réponse, auquel cas ce prédicat doit être RETIRÉ plutôt que laissé
+ * à ressembler à une garde.
  */
 export function etablieSurUnPrefixeTronque({ sujetAvant, sujetApres, texteDisparu, sondeEnPanne = false } = {}) {
   if (verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sondeEnPanne }) !== VERDICTS_DE_SOUMISSION.ETABLIE) {
