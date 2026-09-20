@@ -746,6 +746,15 @@ fi
 # personne, et un `grep` global rendrait vert un bloc déplacé au mauvais
 # chapitre.
 #
+# ⚠️ CHAQUE CONTRÔLE GARDE AUSSI L'OCCURRENCE DATÉE DE SON CHANGEMENT, et cette
+# ligne-ci a été ajoutée parce que la première version ne la gardait qu'à
+# MOITIÉ : les gestes 1 et 5 exigeaient une date par accident de formulation,
+# les gestes 2, 3 et 4 n'en exigeaient aucune. On pouvait donc retirer
+# l'occurrence de trois changements sur cinq sans qu'un seul contrôle rougisse
+# — et retomber sur des règles sans le fait qui les a payées, ce que le lot
+# venait précisément de fermer pour les deux autres. **La moitié fermée était
+# celle où ça se voyait.**
+#
 # ⚠️ CE QUE CES CONTRÔLES NE SAVENT PAS FAIRE, et il faut le savoir pour ne pas
 # s'y fier plus qu'ils ne valent : ils tiennent l'EXISTENCE d'un geste, pas sa
 # JUSTESSE. Une phrase réécrite en gardant ses mots-clés passerait. Le cas
@@ -787,17 +796,20 @@ porte "Et commence par mesurer l'ÂGE de ce réceptacle" \
   "2 — l'âge du réceptacle d'amélioration est un geste, pas une vigilance" \
   "epics get" \
   "48 h" \
-  "présumée morte"
+  "présumée morte" \
+  "2026-09-19"
 
 porte "La cinquième question" \
   "3 — la veille du corpus pose sa cinquième question à un tiers" \
   "Qu'est-ce qui a changé dans la façon de travailler des orchestrateurs" \
-  "vide qui se lit comme une stabilité"
+  "vide qui se lit comme une stabilité" \
+  "2026-09-19"
 
 porte "Tes réflexes" \
   "4 — l'asymétrie du fait rapporté est écrite sous le biais d'autorité apparente" \
   "RETIRER une consigne" \
-  "AJOUTE une contrainte"
+  "AJOUTE une contrainte" \
+  "2026-09-19"
 
 porte "Ce qu'un rapport de revue doit porter" \
   "5 — un rapport de revue porte ses trois listes" \
