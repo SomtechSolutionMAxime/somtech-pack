@@ -54,6 +54,11 @@ import { homedir } from 'node:os';
 
 import { roleDuLieu } from './lieu.js';
 import { sessionsDuPoste, enregistrementEnCours } from './destinataire.js';
+// ⚠️ LE RÉSOLVEUR DE MANDAT EST CELUI DU RECENSEMENT, IMPORTÉ, JAMAIS RECOPIÉ (T-20260819-0056).
+// Deux copies d'un même critère ne se jugent pas sur « sont-elles justes » mais sur
+// « rendent-elles le MÊME verdict sur les mêmes entrées ». Mesuré le 2026-09-20 sur les 13
+// orchestrateurs réels du poste, verdict `clos` comparé un à un : ACCORD 13/13.
+import { lieuDeRoleDansLeChemin } from '../../ligne-directe/src/recensement.js';
 
 /** Les deux rendez-vous, et rien d'autre — la liste est fermée parce que le métier l'est. */
 export const RENDEZ_VOUS = {
@@ -316,4 +321,66 @@ ${r.declencheur}
 </dict>
 </plist>
 `;
+}
+
+/**
+ * L'ÉTAT DU MANDAT DE CHAQUE ORCHESTRATEUR VIVANT — pour que la ronde cesse de réveiller un
+ * agent dont le chantier est CLOS (T-20260819-0056).
+ *
+ * ═════════════════════════════════════════════════════════════════════════════════════
+ * LE DÉFAUT, ET IL EST VIVANT — mesuré le 2026-09-20, pas repris du ticket
+ *
+ * La ronde réveille tout orchestrateur dont le LIEU porte le métier. Rien ne lui disait qu'un
+ * mandat est terminé. Sur les 13 orchestrateurs que ce poste porte aujourd'hui, l'un d'eux —
+ * `portneuf`, lieu `.orchestrateur/d-20260819-0002` — tourne sur une demande que le ServiceDesk
+ * rend `delivered`, donc CLOSE. Il recevait ses rondes.
+ *
+ * ⚠️ LE RISQUE N'EST PAS LE GASPILLAGE, C'EST LA COLLISION : deux orchestrateurs qui soumettent
+ * des boîtes en parallèle sur les mêmes panes, sans se voir. Ce que ce jalon combat, fabriqué
+ * non par un bug mais par un réveil qui ignore une passation.
+ *
+ * ⚠️ RIEN N'EST MÉMORISÉ, ET C'EST LA MOITIÉ QU'ON OUBLIE. Un mandat change d'état PLUSIEURS
+ * fois : `batiscan` a été fermé le 19 août, puis ROUVERT le 20, et le service n'a rien su des
+ * deux. Une solution qui ne gère que la fermeture laisserait un agent rouvert hors des rondes —
+ * le défaut symétrique, et plus silencieux. On relit à chaque passage ; il n'y a rien à
+ * désinscrire, donc rien à oublier de réinscrire.
+ *
+ * ⚠️ `clos` N'EST JAMAIS FAUX PAR DÉFAUT. Trois des treize rendent « non mesurée » : un lieu
+ * dont le nom n'a pas la forme d'un code (`j-20260814-0001-bis`), et deux projets que le
+ * ServiceDesk n'a pas rendus parce que sa liste est plafonnée à 100 sur 252 — il le dit dans sa
+ * raison. Dans ces cas on RÉVEILLE, et on DIT qu'on n'a pas pu mesurer. Se taire couperait un
+ * orchestrateur vivant sur une mesure ratée ; ranger le doute du côté « rien à signaler » est
+ * le motif même de ce jalon.
+ *
+ * @param {Array} orchestrateurs  ce que rend `orchestrateursVivants` / `orchestrateursDuPoste`
+ * @param {{lireLetat: (mandat: string) => Promise<object>}} p  le lecteur d'état — INJECTÉ, et
+ *   c'est `etatDuMandat` en production. Aucun appel réseau n'est écrit ici.
+ * @returns {Promise<Array>} les mêmes, chacun avec `chantier: {mesure, clos, …}`
+ */
+export async function avecLetatDuMandat(orchestrateurs, { lireLetat } = {}) {
+  const rendus = [];
+  for (const o of orchestrateurs ?? []) {
+    const trouve = lieuDeRoleDansLeChemin(o?.repertoire);
+    const mandat = trouve?.mandat ?? null;
+    if (!mandat) {
+      // ⚠️ ON N'INVENTE PAS UN MANDAT POUR POUVOIR LE LIRE, et surtout on ne le déclare pas
+      // clos : il serait coupé pour rien. « Je n'ai pas de quoi mesurer » n'est pas « c'est
+      // fermé », et les deux appellent des conduites opposées.
+      rendus.push({
+        ...o,
+        chantier: {
+          mesure: 'non mesurée',
+          clos: null,
+          raison: 'aucun lieu de rôle dans son chemin : il n’y a pas de mandat à lire',
+        },
+      });
+      continue;
+    }
+    if (typeof lireLetat !== 'function') {
+      rendus.push({ ...o, chantier: { mesure: 'non mesurée', clos: null, raison: 'aucun lecteur d’état de mandat ne m’a été donné', mandat } });
+      continue;
+    }
+    rendus.push({ ...o, chantier: { ...(await lireLetat(mandat)), mandat } });
+  }
+  return rendus;
 }
