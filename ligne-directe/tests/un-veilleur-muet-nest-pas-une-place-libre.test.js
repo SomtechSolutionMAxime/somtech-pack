@@ -66,9 +66,24 @@ let Veilleur, passerLaMain, placeTenue;
 // deux phases de la boucle. Une chaîne de promesses, longue de dix ou de mille maillons,
 // est donc résolue avant que ce rappel-ci s'exécute — sans qu'aucun nombre soit à choisir,
 // et sans qu'aucune durée soit à attendre.
+//
+// ⚠️ ET DEUX PHASES, PAS UNE. `setImmediate` seul laissait échapper une promesse résolue
+// par un `setTimeout` — la phase `check` passe avant la phase `timers`, et l'instrument la
+// déclarait « en attente » à tort, de façon reproductible. Ça ne trompait aucun banc d'ici,
+// où le minuteur est simulé ; mais `placeTenue` reçoit `setTimeout` PAR DÉFAUT en production,
+// donc l'instrument aurait menti le jour où quelqu'un l'aurait pointé sur un vrai appel.
+// Le `0` n'est pas une durée qu'on attend : c'est le passage par la phase des minuteurs.
+//
+// 🔴 CE QUE CETTE SONDE NE VOIT PAS, ET IL FAUT LE DIRE ICI PLUTÔT QUE DE LE DÉCOUVRIR :
+// une résolution qui demande DEUX sauts de boucle imbriqués (un `setTimeout` dans un
+// `setTimeout`) est encore rendue « en attente ». Ce n'est pas un défaut de comptage — c'est
+// la borne assumée de l'instrument : il répond « rien n'a tranché au tour suivant », pas
+// « rien ne tranchera jamais ». Pour ce que ce banc éprouve, où le raccourci qu'on cherche
+// tranche SYNCHRONEMENT, c'est exactement ce qu'il faut.
 const TEMOIN_EN_ATTENTE = Symbol('en attente');
 async function etatDe(promesse) {
-  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setTimeout(r, 0)); // phase des minuteurs
+  await new Promise((r) => setImmediate(r)); // phase des rappels immédiats
   const gagnant = await Promise.race([promesse, Promise.resolve(TEMOIN_EN_ATTENTE)]);
   return gagnant === TEMOIN_EN_ATTENTE ? 'en attente' : 'tranchée';
 }
@@ -459,15 +474,30 @@ test('UNE PRISE QUI SE CONNECTE EST REFERMÉE, ELLE AUSSI — sinon chaque sonda
     },
   });
 
+  // ⚠️ CE BANC TRACE SON `annuler`, ET C'EST UNE LEÇON PAYÉE DEUX FOIS. Sa première
+  // écriture passait un `annuler: () => {}` qui n'observait rien — il était donc plus
+  // FAIBLE que le banc qu'il vient compléter, sur la dimension que celui-là gardait déjà.
+  // La mutation qui l'a révélé : n'annuler le minuteur QUE sur le chemin du minuteur,
+  // jamais sur celui de la connexion. Les 1354 restaient verts, et en production un vrai
+  // minuteur serait resté armé après CHAQUE sondage réussi — c'est-à-dire sur le chemin
+  // le plus fréquent, pas sur l'exception.
+  const planifies = [];
+  const annules = [];
+
   const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
     borne: 60,
     brancher: priseQuiSeConnecte,
-    planifier: (fn, delai) => ({ fn, delai, unref() {} }),
-    annuler: () => {},
+    planifier: (fn, delai) => {
+      const jeton = { fn, delai, detaches: 0, unref() { jeton.detaches += 1; } };
+      planifies.push(jeton);
+      return jeton;
+    },
+    annuler: (jeton) => annules.push(jeton),
   });
 
   ecouteurs.get('connect')();
 
   assert.equal(await promesse, true, 'une prise qui aboutit dit que la place est tenue');
   assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte SUR LE CHEMIN NOMINAL aussi — sinon chaque sondage abandonne un socket');
+  assert.deepEqual(annules, [planifies[0]], 'le minuteur est annulé sur le chemin nominal AUSSI — sinon il reste armé après chaque sondage réussi');
 });
