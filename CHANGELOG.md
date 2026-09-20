@@ -7,6 +7,22 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0004` — **« fusionné n'est pas publié, publié n'est pas installé ».** Trois tickets ouverts depuis août, tous dans la zone publication et version, tous des **silences qui se lisent comme des succès**. Premier traité : `T-20260820-0097`, le seul des trois qui produit un geste FAUX plutôt qu'une information manquante.*
+
+### Corrige
+
+- **`/merge` — les mesures qui DÉCIDENT portent désormais sur le distant** (`T-20260820-0097`). Deux étapes lisaient une référence LOCALE sans jamais le dire : l'étape 8 calculait la prochaine version sur `git tag --sort=-v:refname | head -1` — le dernier tag que *ce dépôt* connaît, donc un numéro **déjà pris** dès que le dépôt n'a pas fetché ; l'étape 7.5 décidait d'une **suppression de branche** (`git branch -D` **et** `git push origin --delete`) en comparant à `main` **local**, avec l'erreur avalée par `2>/dev/null`. Le défaut ne mord que quand local et distant divergent — c'est pourquoi personne ne l'avait vu en deux ans.
+- **Nouvelle lib `.claude/skills/merge/lib/mesure-distante.sh`**, sourcée par le skill : `md_prochaine_version` calcule sur `git ls-remote` et **REFUSE** (rc=2) quand le serveur est injoignable — **aucun repli sur les tags locaux**, c'est précisément le repli qui republierait un numéro pris ; `md_ecart_tags` **dit toujours** l'écart, y compris nul ; `md_statut_branche` décide sur `origin/main` et rend `INDETERMINE` (rc=3) sur **toute** panne de mesure — et `INDETERMINE` n'est **jamais** « mergée » ; `md_rafraichir_origine` échoue franchement.
+- **Le récapitulatif de tag nomme l'objet de chaque mesure** — `DISTANT` fait foi, `LOCAL` est là pour montrer l'écart. Un agent qui applique le skill à la lettre ne peut plus confondre les deux.
+
+### Éprouve
+
+- **`scripts/tests/test-merge-mesure-distante.sh` — 52 assertions, dans la CI** (les bancs de `.claude/skills/merge/tests/` n'y tournent pas). Chaque scénario est construit pour **diverger** : un dépôt dont le local et le distant concordent ne peut rien prouver.
+- **`scripts/tests/test-mutations-merge-mesure-distante.sh` — 28 assertions, 23 défauts réintroduits, 0 survivante**, dont l'**accord skill ↔ lib**. L'instrument **refuse une mutation sans effet** et le prouve sur lui-même. La première ronde tuait 13 sur 13 ; une seconde ronde, non fixée d'avance, a rendu **dix survivantes** — neuf closes, et la dixième a révélé l'inverse : deux nettoyages que **rien ne pouvait faire rougir**, donc retirés plutôt que gardés.
+- **Deux rouges de la CI, verts chez l'auteur**, corrigés à la racine : le montage du banc avalait ses erreurs (17 assertions accusaient la lib) ; et le HEAD d'un dépôt nu suit `init.defaultBranch`, `main` sur le poste, `master` sur le runner.
+
+## [Non-versionne] - 2026-09-20
+
 *Demande `D-20260920-0001`, epic `E-20260920-0003`. **Vague 2B — les huit règles de « éprouver une garde ».** Toutes portent sur la même fonction, toutes naissent d'un défaut mesuré les 19 et 20/09 chez **trois chefs d'équipe différents**. Le fil qui les relie est écrit dans le chapitre : **chacune est un silence qui se lit comme un succès** — aucune ne produit d'erreur, toutes produisent un résultat plausible, et c'est pourquoi elles se trouvent en éprouvant AUTRE CHOSE, jamais en cherchant.*
 
 ### Ajoute
