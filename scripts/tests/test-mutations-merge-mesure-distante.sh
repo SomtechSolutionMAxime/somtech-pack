@@ -302,6 +302,67 @@ s = s.replace("La commande juste est `git ls-remote --tags origin`, qui interrog
               "La commande juste est `git tag | head -1`, qui interroge le serveur à chaque appel,")
 PY
 
+echo "== Les trois survivantes de la revue de fond =="
+
+essai 'DISTANT et LOCAL portent la valeur de l_autre (étiquettes permutées)' <<'PY'
+s = s.replace('"$maj" "$min" "$pat" "${d:--}" "${l:--}" "$ecart"',
+              '"$maj" "$min" "$pat" "${l:--}" "${d:--}" "$ecart"')
+PY
+
+# ⚠️ L'interdiction est écrite à DEUX endroits du skill (l'avertissement de
+# l'étape 3 et la consigne de l'étape 8). Retirer l'un des deux laisse la règle
+# énoncée — ce n'est pas un défaut. Le défaut, c'est qu'elle ne soit plus
+# écrite NULLE PART : c'est donc les deux qu'on retire.
+essai_skill "le skill ne dit plus NULLE PART qu'INDETERMINE interdit la suppression" <<'PY'
+s = s.replace("""   **Pour les branches `INDETERMINE`** : idem, et **dire la raison**. Une mesure qui
+   n'a pas pu se faire n'autorise aucune suppression.""", "")
+s = s.replace("`INDETERMINE` **ne se supprime jamais**", "`INDETERMINE` se traite comme les autres")
+PY
+
+essai_skill 'le geste destructif porte sur TOUTE branche listée, plus seulement `merged`' <<'PY'
+s = s.replace("   - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :",
+              "   - **`oui`** : pour chaque branche listee **(jamais une branche `worktree`)**, executer :")
+PY
+
+essai_skill 'le skill ne nomme plus du tout INDETERMINE' <<'PY'
+import re
+s = s.replace("INDETERMINE", "INDETERMINÉ_AUTRE_CHOSE")
+PY
+
+echo "== Le chiffre annoncé rouille-t-il en silence ? =="
+N=$((N+1))
+FAUX_CHLOG="${WORK}/changelog-rouille.md"
+python3 - "${ROOT}/CHANGELOG.md" "$FAUX_CHLOG" <<'PY'
+import sys, re
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src, encoding="utf-8").read()
+before = s
+s = re.sub(r'(test-merge-mesure-distante\.sh` — )\d+( assertions)', r'\g<1>7\g<2>', s, count=1)
+if s == before:
+    print("MUTATION-INOPERANTE", file=sys.stderr); sys.exit(2)
+open(dst, "w", encoding="utf-8").write(s)
+PY
+if [ $? -ne 0 ]; then
+  ko "MUTATION INOPÉRANTE — le chiffre annoncé n'a pas pu être déplacé dans le CHANGELOG"
+else
+  # La suite lit le CHANGELOG du dépôt : on la joue depuis une COPIE du dépôt
+  # dont seul le CHANGELOG diffère, pour ne rien écrire ici.
+  FAUX_ROOT="${WORK}/faux-root"
+  mkdir -p "${FAUX_ROOT}/scripts/tests" "${FAUX_ROOT}/.claude/skills/merge/lib"
+  cp "${ROOT}/CHANGELOG.md" "${FAUX_ROOT}/CHANGELOG.md.orig" 2>/dev/null || true
+  cp "$FAUX_CHLOG" "${FAUX_ROOT}/CHANGELOG.md"
+  cp "${ROOT}/scripts/tests/test-merge-mesure-distante.sh" "${FAUX_ROOT}/scripts/tests/"
+  cp "${ROOT}/scripts/tests/test-mutations-merge-mesure-distante.sh" "${FAUX_ROOT}/scripts/tests/"
+  cp "${ROOT}/CLAUDE.md" "${FAUX_ROOT}/CLAUDE.md"
+  cp -R "${ROOT}/.claude/skills/merge" "${FAUX_ROOT}/.claude/skills/"
+  (cd "${FAUX_ROOT}" && git init -q . && git add -A >/dev/null 2>&1 && git -c user.email=t@t.io -c user.name=t commit -qm x >/dev/null 2>&1)
+  if bash "${FAUX_ROOT}/scripts/tests/test-merge-mesure-distante.sh" >"${WORK}/chlog.log" 2>&1; then
+    ko "MUTANT SURVIVANT — un chiffre de couverture rouillé dans le CHANGELOG ne fait rien rougir"
+  else
+    ok "un chiffre de couverture rouillé → suite rouge"
+  fi
+fi
+
 echo "== La garde de famille mord-elle ? =="
 # Prouve que le balayage du dépôt accuse un fichier qui prescrirait la lecture
 # locale. Aucun fichier n'est écrit : on ajoute un nom à la liste examinée.
@@ -329,7 +390,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=36
+PLANCHER=41
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

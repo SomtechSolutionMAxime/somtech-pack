@@ -117,6 +117,15 @@ suggere="$(printf '%s' "$out" | awk '{print $2}')"
 [ "$suggere" != "v1.1.1" ] && ok "ce n'est PAS v1.1.1, le numéro local" \
   || ko "v1.1.1 proposé : le défaut T-20260820-0097 est toujours là"
 
+# ⚠️ Nommer n'est pas dire. Une sortie qui porte les quatre étiquettes peut les
+# porter dans le DÉSORDRE — DISTANT annonçant la valeur LOCALE et l'inverse —
+# et le récapitulatif du skill (« DISTANT fait foi, LOCAL montre l'écart »)
+# serait inversé sans qu'aucune assertion ne bouge. C'est ici, et nulle part
+# ailleurs, que la ligne discrimine : le local et le distant DIFFÈRENT.
+attendu="PROCHAINE v1.9.1 DISTANT v1.9.0 LOCAL v1.1.0 ECART LOCAL-EN-RETARD"
+[ "$out" = "$attendu" ] && ok "chaque étiquette porte SA valeur : $out" \
+  || ko "ligne attendue « ${attendu} », obtenue « ${out} » — étiquettes et valeurs désaccordées ?"
+
 echo "== D — le tri est numérique, pas lexicographique =="
 must git_autre tag v1.100.0
 must git_autre push -q origin v1.100.0
@@ -430,6 +439,39 @@ else
   ko "CLAUDE.md ne dit pas où se lit le tag qui fait foi"
 fi
 
+# Ce que le skill prescrit de FAIRE du statut est le cœur du correctif : la lib
+# peut rendre INDETERMINE à la perfection, si le texte autorise à supprimer
+# quand même, le défaut est intact. Ces assertions portent sur la prescription.
+if grep -q 'INDETERMINE' "$SKILL"; then
+  ok "le skill nomme le statut INDETERMINE"
+else
+  ko "le skill ne nomme pas INDETERMINE — le texte ignore le statut que la lib rend"
+fi
+if grep -qE 'INDETERMINE.{0,200}(ne se supprime jamais|n.autorise aucune suppression)' "$SKILL" \
+   || grep -qE '(ne se supprime jamais|n.autorise aucune suppression)' "$SKILL"; then
+  ok "le skill interdit explicitement de supprimer une branche INDETERMINE"
+else
+  ko "le skill ne dit nulle part qu'une mesure impossible n'autorise aucune suppression"
+fi
+
+# Le geste destructif ne doit porter QUE sur les branches mergées. La
+# reformulation « pour chaque branche listée » rouvre le défaut d'origine.
+# La première occurrence de `git branch -D` est dans un AVERTISSEMENT en prose ;
+# celle qui compte est la ligne INDENTÉE d'un bloc bash, celle qui s'exécute.
+gestes_destructifs="$(grep -nE '^[[:space:]]+git branch -D' "$SKILL" | head -1 | cut -d: -f1)"
+if [ -n "$gestes_destructifs" ]; then
+  ok "le skill porte un geste destructif à l'étape 7.5 (ligne ${gestes_destructifs})"
+  debut=$(( gestes_destructifs > 8 ? gestes_destructifs - 8 : 1 ))
+  contexte="$(sed -n "${debut},${gestes_destructifs}p" "$SKILL")"
+  if printf '%s' "$contexte" | grep -qE 'chaque branche `merged`'; then
+    ok "il est borné aux branches \`merged\` dans les lignes qui le précèdent"
+  else
+    ko "le geste destructif n'est plus borné aux branches \`merged\` — unmerged et INDETERMINE deviendraient supprimables"
+  fi
+else
+  ko "aucun \`git branch -D\` trouvé dans le skill — l'étape 7.5 a changé de forme, cette garde ne porte plus"
+fi
+
 # Le chemin qui SUPPRIME ne compare plus à \`main\` local.
 if grep -qE 'git merge-base main ' "$SKILL"; then
   ko "l'étape 7.5 compare encore à \`main\` LOCAL"
@@ -472,11 +514,29 @@ done
 [ -z "$rouillees" ] && ok "chaque tolérance porte encore le motif qu'elle dénonce" \
   || ko "tolérances rouillées (le motif n'y est plus) :${rouillees}"
 
+echo "== T — les chiffres annoncés ne sont pas rouillés =="
+# Un chiffre de couverture se lit comme frais alors qu'il date d'avant six
+# scénarios. Le CHANGELOG sert de preuve de couverture : il doit porter les
+# planchers réels, et c'est vérifiable.
+CHLOG="${ROOT}/CHANGELOG.md"
+plancher_suite="$(grep -m1 '^PLANCHER=' "${ROOT}/scripts/tests/test-merge-mesure-distante.sh" | cut -d= -f2)"
+plancher_mut="$(grep -m1 '^PLANCHER=' "${ROOT}/scripts/tests/test-mutations-merge-mesure-distante.sh" | cut -d= -f2)"
+if grep -qF "test-merge-mesure-distante.sh\` — ${plancher_suite} assertions" "$CHLOG"; then
+  ok "le CHANGELOG annonce ${plancher_suite} assertions pour la suite, comme son plancher"
+else
+  ko "le CHANGELOG n'annonce pas ${plancher_suite} assertions pour la suite — chiffre rouillé"
+fi
+if grep -qF "test-mutations-merge-mesure-distante.sh\` — ${plancher_mut} assertions" "$CHLOG"; then
+  ok "le CHANGELOG annonce ${plancher_mut} assertions pour la contre-épreuve, comme son plancher"
+else
+  ko "le CHANGELOG n'annonce pas ${plancher_mut} assertions pour la contre-épreuve — chiffre rouillé"
+fi
+
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=61
+PLANCHER=68
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
