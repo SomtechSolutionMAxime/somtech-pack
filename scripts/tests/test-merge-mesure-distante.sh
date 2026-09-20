@@ -371,6 +371,23 @@ out="$(md_prochaine_version farfelu)"; rc=$?
   && ok "bump inconnu → $out (rc=4)" \
   || ko "attendu REFUS bump-inconnu rc=4, obtenu '$out' rc=$rc"
 
+echo "== U — le comparateur de versions ne déborde pas sur le champ voisin =="
+# Une clé pondérée (`maj*1000000 + min*1000 + pat`) rend le BON résultat sur
+# tous les tags usuels et un résultat FAUX dès qu'un composant atteint sa base.
+# Aucun scénario de ce banc n'approchait cette borne — le défaut y dormait.
+comparer() { printf '%s\n%s\n' "$1" "$2" | md_max_semver; }
+verifier_max() {  # verifier_max <a> <b> <attendu>
+  local got; got="$(comparer "$1" "$2")"
+  [ "$got" = "$3" ] && ok "max($1, $2) = $3" \
+    || ko "max($1, $2) attendu $3, obtenu '$got' — la comparaison déborde sur le champ voisin ?"
+}
+verifier_max v1.0.1000 v1.1.0   v1.1.0
+verifier_max v1.1000.0 v2.0.0   v2.0.0
+verifier_max v0.999.999 v1.0.0  v1.0.0
+verifier_max v1.9.0    v1.100.0 v1.100.0
+verifier_max v2.3.4    v2.3.5   v2.3.5
+verifier_max v10.0.0   v9.99.99 v10.0.0
+
 echo "== R — le skill et la lib s'accordent =="
 # Le fait « la mesure qui décide porte sur le distant » vit à DEUX endroits :
 # la lib, et le texte du skill que les agents appliquent. Deux gardes bornées
@@ -456,20 +473,31 @@ fi
 
 # Le geste destructif ne doit porter QUE sur les branches mergées. La
 # reformulation « pour chaque branche listée » rouvre le défaut d'origine.
-# La première occurrence de `git branch -D` est dans un AVERTISSEMENT en prose ;
-# celle qui compte est la ligne INDENTÉE d'un bloc bash, celle qui s'exécute.
-gestes_destructifs="$(grep -nE '^[[:space:]]+git branch -D' "$SKILL" | head -1 | cut -d: -f1)"
-if [ -n "$gestes_destructifs" ]; then
-  ok "le skill porte un geste destructif à l'étape 7.5 (ligne ${gestes_destructifs})"
-  debut=$(( gestes_destructifs > 8 ? gestes_destructifs - 8 : 1 ))
-  contexte="$(sed -n "${debut},${gestes_destructifs}p" "$SKILL")"
-  if printf '%s' "$contexte" | grep -qE 'chaque branche `merged`'; then
-    ok "il est borné aux branches \`merged\` dans les lignes qui le précèdent"
-  else
-    ko "le geste destructif n'est plus borné aux branches \`merged\` — unmerged et INDETERMINE deviendraient supprimables"
-  fi
+#
+# ⚠️ La première occurrence de `git branch -D` est dans un AVERTISSEMENT en
+# prose ; celle qui compte est la ligne INDENTÉE d'un bloc bash, celle qui
+# s'exécute. Et on ne cherche PAS la mention `merged` dans un VOISINAGE de N
+# lignes : un voisinage se satisfait d'une phrase-leurre placée n'importe où, et
+# rougit à tort dès qu'on insère une explication légitime entre la puce et le
+# bloc. On remonte à la PUCE qui gouverne ce bloc — la dernière puce `- **…**`
+# avant lui — et c'est ELLE qui doit borner le geste.
+puce_gouvernante="$(awk '
+  /^[[:space:]]*- \*\*/          { puce = $0 }
+  /^[[:space:]]+git branch -D/   { print puce; trouve = 1; exit }
+  END { if (!trouve) print "__AUCUN_GESTE__" }
+' "$SKILL")"
+
+if [ "$puce_gouvernante" = "__AUCUN_GESTE__" ]; then
+  ko "aucun \`git branch -D\` exécutable dans le skill — l'étape 7.5 a changé de forme, cette garde ne porte plus"
+elif [ -z "$puce_gouvernante" ]; then
+  ko "le geste destructif n'est gouverné par AUCUNE puce — rien ne dit sur quelles branches il porte"
 else
-  ko "aucun \`git branch -D\` trouvé dans le skill — l'étape 7.5 a changé de forme, cette garde ne porte plus"
+  ok "le geste destructif est gouverné par une puce"
+  if printf '%s' "$puce_gouvernante" | grep -qE '`merged`'; then
+    ok "cette puce le borne aux branches \`merged\`"
+  else
+    ko "la puce qui gouverne le geste destructif ne le borne pas aux \`merged\` : « $(printf '%s' "$puce_gouvernante" | cut -c1-90) » — unmerged et INDETERMINE deviendraient supprimables"
+  fi
 fi
 
 # Le chemin qui SUPPRIME ne compare plus à \`main\` local.
@@ -514,29 +542,31 @@ done
 [ -z "$rouillees" ] && ok "chaque tolérance porte encore le motif qu'elle dénonce" \
   || ko "tolérances rouillées (le motif n'y est plus) :${rouillees}"
 
-echo "== T — les chiffres annoncés ne sont pas rouillés =="
+echo "== T — le chiffre annoncé est celui qui est JOUÉ =="
 # Un chiffre de couverture se lit comme frais alors qu'il date d'avant six
 # scénarios. Le CHANGELOG sert de preuve de couverture : il doit porter les
 # planchers réels, et c'est vérifiable.
+# ⚠️ On compare au compte RÉELLEMENT JOUÉ, pas au `PLANCHER` : le plancher est
+# une valeur entretenue À LA MAIN, donc un voisin de la chose à mesurer.
+# Baisser le plancher ET le chiffre du CHANGELOG ensemble ne retire aucune
+# assertion et rend cette garde verte sur un CHANGELOG qui ment. C'est
+# exactement « le contrôle interroge l'étiquette au lieu de l'objet ».
+# `total` inclut l'assertion qui suit, pour que le compte annoncé soit celui
+# que la dernière ligne du banc imprimera.
 CHLOG="${ROOT}/CHANGELOG.md"
-plancher_suite="$(grep -m1 '^PLANCHER=' "${ROOT}/scripts/tests/test-merge-mesure-distante.sh" | cut -d= -f2)"
-plancher_mut="$(grep -m1 '^PLANCHER=' "${ROOT}/scripts/tests/test-mutations-merge-mesure-distante.sh" | cut -d= -f2)"
-if grep -qF "test-merge-mesure-distante.sh\` — ${plancher_suite} assertions" "$CHLOG"; then
-  ok "le CHANGELOG annonce ${plancher_suite} assertions pour la suite, comme son plancher"
+total=$(( PASS + FAIL + 1 ))
+if grep -qF "test-merge-mesure-distante.sh\` — ${total} assertions" "$CHLOG"; then
+  ok "le CHANGELOG annonce ${total} assertions pour la suite, soit le compte réellement joué"
 else
-  ko "le CHANGELOG n'annonce pas ${plancher_suite} assertions pour la suite — chiffre rouillé"
-fi
-if grep -qF "test-mutations-merge-mesure-distante.sh\` — ${plancher_mut} assertions" "$CHLOG"; then
-  ok "le CHANGELOG annonce ${plancher_mut} assertions pour la contre-épreuve, comme son plancher"
-else
-  ko "le CHANGELOG n'annonce pas ${plancher_mut} assertions pour la contre-épreuve — chiffre rouillé"
+  annonce="$(grep -oE 'test-merge-mesure-distante\.sh` — [0-9]+ assertions' "$CHLOG" | grep -oE '[0-9]+' | head -1)"
+  ko "le CHANGELOG annonce « ${annonce:-aucun} » assertions pour la suite ; ${total} sont jouées — chiffre rouillé"
 fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=68
+PLANCHER=73
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

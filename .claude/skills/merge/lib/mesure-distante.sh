@@ -32,11 +32,23 @@
 # ============================================================
 
 # --- Sélection du plus grand tag vX.Y.Z lu sur stdin (vide si aucun) --------
-# Tri par clé numérique et non lexicographique : `sort` mettrait v1.9.0 après
-# v1.100.0, et `sort -V` n'est pas garanti sur le BSD sort de macOS.
+# Comparaison CHAMP PAR CHAMP, et non lexicographique : `sort` mettrait v1.9.0
+# après v1.100.0, et `sort -V` n'est pas garanti sur le BSD sort de macOS.
+#
+# ⚠️ Et surtout PAS une clé pondérée du type `maj*1000000 + min*1000 + pat` :
+# elle déborde sur le champ voisin dès qu'un composant atteint sa base. Mesuré
+# le 2026-09-20 : `v1.0.1000` battait `v1.1.0`, et `v1.1000.0` battait `v2.0.0`
+# — les deux clés valaient exactement le même nombre. Une borne de ce genre est
+# un silence qui se lit comme un succès : elle rend un tag plausible, jamais une
+# erreur, et aucun dépôt n'en approche… jusqu'au jour où l'un le fait.
 md_max_semver() {
   awk -F'[v.]' '
-    { k = $2 * 1000000 + $3 * 1000 + $4; if (tag == "" || k > best) { best = k; tag = $0 } }
+    {
+      M = $2 + 0; m = $3 + 0; p = $4 + 0
+      if (tag == "" || M > bM || (M == bM && (m > bm || (m == bm && p > bp)))) {
+        bM = M; bm = m; bp = p; tag = $0
+      }
+    }
     END { if (tag != "") print tag }
   '
 }

@@ -147,8 +147,11 @@ PY
 echo "== Le tri qui ment =="
 
 essai 'md_max_semver compare les tags comme du TEXTE (v1.9.0 > v1.100.0)' <<'PY'
-s = s.replace('{ k = $2 * 1000000 + $3 * 1000 + $4; if (tag == "" || k > best) { best = k; tag = $0 } }',
-              '{ if (tag == "" || $0 > tag) { tag = $0 } }')
+s = s.replace("""      M = $2 + 0; m = $3 + 0; p = $4 + 0
+      if (tag == "" || M > bM || (M == bM && (m > bm || (m == bm && p > bp)))) {
+        bM = M; bm = m; bp = p; tag = $0
+      }""",
+"""      if (tag == "" || $0 > tag) { tag = $0 }""")
 PY
 
 echo "== L'étape 7.5 : décider sur la ref LOCALE =="
@@ -373,6 +376,74 @@ else
   ok "un fichier hors liste portant le motif → suite rouge"
 fi
 
+echo "== Les défauts de la seconde revue de fond =="
+
+essai 'md_max_semver revient à une clé pondérée qui déborde' <<'PY'
+s = s.replace("""      M = $2 + 0; m = $3 + 0; p = $4 + 0
+      if (tag == "" || M > bM || (M == bM && (m > bm || (m == bm && p > bp)))) {
+        bM = M; bm = m; bp = p; tag = $0
+      }""",
+"""      k = $2 * 1000000 + $3 * 1000 + $4
+      if (tag == "" || k > best) { best = k; tag = $0 }""")
+PY
+
+essai_skill 'une phrase-leurre porte `merged` pendant que la vraie puce ne le porte plus' <<'PY'
+s = s.replace("7. **Selon la reponse** :",
+              "7. **Selon la reponse** — rappel : on ne supprime que ce qui est `merged` :")
+s = s.replace("   - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :",
+              "   - **`oui`** : pour chaque branche listee **(jamais une branche `worktree`)**, executer :")
+PY
+
+essai_skill 'la puce qui gouverne le geste destructif ne le borne plus' <<'PY'
+s = s.replace("   - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :",
+              "   - **`oui`** : pour chaque branche listee **(jamais une branche `worktree`)**, executer :")
+PY
+
+echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
+# Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
+# tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
+# doit rester VERTE. Un faux positif coûte une correction inutile et use la
+# confiance dans le banc.
+N=$((N+1))
+LEGITIME="${WORK}/skill-legitime.md"
+python3 - "$SKILL_SRC" "$LEGITIME" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src, encoding="utf-8").read()
+before = s
+ancre = "   - **`oui`** : pour chaque branche `merged` **(jamais une branche `worktree`)**, executer :\n"
+ajout = ancre + "".join("     > Precision %d : ceci est une explication legitime, sans effet sur le fond.\n" % i for i in range(1, 8))
+s = s.replace(ancre, ajout, 1)
+if s == before:
+    print("MUTATION-INOPERANTE", file=sys.stderr); sys.exit(2)
+open(dst, "w", encoding="utf-8").write(s)
+PY
+if [ $? -ne 0 ]; then
+  ko "MUTATION INOPÉRANTE — l'extension légitime n'a pas pu être insérée"
+elif MERGE_SKILL_SRC="$LEGITIME" bash "$SUITE" >"${WORK}/legitime.log" 2>&1; then
+  ok "sept lignes d'explication entre la puce et le bloc → suite VERTE (aucun faux positif)"
+else
+  ko "FAUX POSITIF — une extension légitime du texte fait rougir la garde : $(grep -m1 '❌' "${WORK}/legitime.log")"
+fi
+
+echo "== Le plancher peut-il mentir avec le CHANGELOG ? =="
+# Le défaut relevé : baisser PLANCHER **et** le chiffre du CHANGELOG ensemble
+# ne retire aucune assertion et rendait la garde verte sur un CHANGELOG faux.
+N=$((N+1))
+MENTEUR="${WORK}/menteur"
+mkdir -p "${MENTEUR}/scripts/tests" "${MENTEUR}/.claude/skills"
+cp "${ROOT}/CLAUDE.md" "${MENTEUR}/CLAUDE.md"
+cp -R "${ROOT}/.claude/skills/merge" "${MENTEUR}/.claude/skills/"
+cp "${ROOT}/scripts/tests/test-mutations-merge-mesure-distante.sh" "${MENTEUR}/scripts/tests/"
+sed 's/^PLANCHER=[0-9]*$/PLANCHER=50/' "$SUITE" > "${MENTEUR}/scripts/tests/test-merge-mesure-distante.sh"
+sed -E 's/(test-merge-mesure-distante\.sh` — )[0-9]+( assertions)/\150\2/' "${ROOT}/CHANGELOG.md" > "${MENTEUR}/CHANGELOG.md"
+(cd "$MENTEUR" && git init -q . && git add -A >/dev/null 2>&1 && git -c user.email=t@t.io -c user.name=t commit -qm x >/dev/null 2>&1)
+if bash "${MENTEUR}/scripts/tests/test-merge-mesure-distante.sh" >"${WORK}/menteur.log" 2>&1; then
+  ko "MUTANT SURVIVANT — plancher et CHANGELOG abaissés ENSEMBLE restent verts : la garde interroge le plancher, pas le compte joué"
+else
+  ok "plancher et CHANGELOG abaissés ensemble → suite rouge (la garde mesure le compte JOUÉ)"
+fi
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 # Un motif qui ne correspond à rien : une mutation sans effet rend zéro rouge,
 # exactement comme une garde qui tient. Si `applique` l'acceptait, tout ce
@@ -388,9 +459,21 @@ else
   ko "mutation sans effet rejetée, mais sans le dire : '$(cat "${WORK}/vide.err")'"
 fi
 
+echo "== Le chiffre annoncé pour CETTE contre-épreuve =="
+# Chaque banc garde SON propre chiffre, contre SON compte réellement joué —
+# jamais contre son plancher, qui est une valeur entretenue à la main et donc
+# un voisin de la chose à mesurer.
+total=$(( PASS + FAIL + 1 ))
+if grep -qF "test-mutations-merge-mesure-distante.sh\` — ${total} assertions" "${ROOT}/CHANGELOG.md"; then
+  ok "le CHANGELOG annonce ${total} assertions pour la contre-épreuve, soit le compte réellement joué"
+else
+  annonce="$(grep -oE 'test-mutations-merge-mesure-distante\.sh` — [0-9]+ assertions' "${ROOT}/CHANGELOG.md" | grep -oE '[0-9]+' | head -1)"
+  ko "le CHANGELOG annonce « ${annonce:-aucun} » assertions pour la contre-épreuve ; ${total} sont jouées — chiffre rouillé"
+fi
+
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=41
+PLANCHER=47
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
