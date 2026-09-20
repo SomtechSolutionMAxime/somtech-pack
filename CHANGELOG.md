@@ -7,6 +7,24 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0004` — **dernier des trois** : `T-20260816-0020`. Rien dans `~/.somtech/` ne portait la version installée. Un orchestrateur a cité « six versions publiées, zéro installée » toute une soirée — **un chiffre fabriqué, qui a servi d'argument dans trois décisions**. ⚠️ Le défaut n'était pas cette erreur : c'est que **rien ne permettait de la contredire**.*
+
+### Ajoute
+
+- **`pack version` — la commande qui rend les DEUX moitiés.** La version installée **sur ce poste**, et l'**écart** avec le registre : c'est la question qu'on pose vraiment, *suis-je à jour ?* Trois interdits, chacun gardé : ① un poste jamais installé **le dit** (`AUCUNE INSTALLATION POSTE`, rc=2) et ne se voit **jamais** attribuer un numéro — *un numéro plausible se cite, une absence se cherche* ; ② un écart qu'on n'a pas pu mesurer rend **`INDÉTERMINÉ`** (rc=3), **jamais « à jour »** ; ③ une valeur de **cache dit son ÂGE** — mesuré le 2026-08-20, le cache servait un « dernier publié » vieux de 24 h et de sept versions sans que rien ne l'annonce.
+- **`pack setup` écrit enfin le marqueur du poste** (`~/.somtech/.somtech-pack/version.json`) — même geste, même endroit conceptuel que l'installation projet, qui le faisait depuis toujours. Le numéro écrit est celui du **paquet en cours d'exécution**, jamais le `VERSION` du dépôt, qui est un vestige sans autorité.
+- **Les verrous de mise à jour périmés sont ramassés, et NOMMÉS avec leur âge.** Ils s'accumulaient : 2 le 15 août, 4 le 20 août, **4 encore le 20 septembre dont un de 67 jours**. *Un verrou orphelin est une mise à jour qui refusera de partir un jour sans dire pourquoi.* Un ramassage muet reconduirait le défaut sous une autre forme : la commande les liste et donne le geste qui les lève.
+- **⚠️ `pack version` n'est pas `--version`**, et le texte d'aide le dit : `--version` rend la version du **paquet en cours d'exécution**, celui que `npx` vient de chercher — elle répondrait un numéro même sur un poste vierge. *C'est exactement le « numéro qui ressemble à à jour » que la preuve attendue interdit.*
+
+### Éprouve
+
+- **Mesuré sur le poste avant d'écrire une ligne** : zéro porteur de version, **quatre** verrous périmés (67 j, 61 j, 32 j, 25 j), et un cache annonçant `1.99.2` quand le registre publie `1.100.0`. Le ticket se reproduit à l'identique treize mois après son ouverture.
+- **`cli/test/version-poste.test.js` — 13 cas**, dont un **aller-retour réel** : ce que `setup` écrit, la commande le relit.
+- **`scripts/tests/test-mutations-version-poste.sh` — 21 assertions, 20 défauts réintroduits, 0 survivante**, dans la CI. L'instrument **refuse une mutation sans effet** et le prouve sur lui-même.
+- **Deux survivantes trouvées et closes** : la branche « on n'a pas su comparer » n'était **jamais atteinte** depuis la commande (les deux valeurs y sont déjà validées) — elle se juge donc sur l'appel direct ; et un cache corrompu rendait `INDETERMINE` **par l'autre bout**, si bien que l'assertion ne discriminait pas : c'est la **source** retenue qui tranche.
+
+## [Non-versionne] - 2026-09-20
+
 *Livraison `J-20260814-0002`, epic `E-20260920-0004` — **deuxième des trois** : `T-20260815-0013`. Le 2026-08-15, **deux lots parallèles ont préparé `v1.53.0`** ; le second a mergé avec le même numéro. Rien ne refusait un numéro déjà pris.*
 
 ### Ajoute

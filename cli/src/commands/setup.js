@@ -13,6 +13,9 @@ import { installPosteModules } from '../posteonly.js';
 import { installPosteBin } from '../postebin.js';
 import { installGlobalVersionHook, installGraphifyShareHook, installGlobalRegistreHook } from '../userhooks.js';
 import { cheminDuMiroir, rafraichirMiroirMarketplace } from '../miroir-marketplace.js';
+import { ecrireVersionPoste, ramasserVerrous } from '../version-poste-ecrire.js';
+import { readManifest } from '../modules.js';
+import { cliVersion as pkgVersion } from './shared.js';
 
 /** True si un binaire est sur le PATH (best-effort, jamais fatal). */
 function hasBinary(name) {
@@ -333,6 +336,30 @@ export async function cmdSetup(flags) {
       console.log(`  référence de la garde de fraîcheur → ${m.chemin} : ${m.message}`);
     } else {
       console.log(`  ⚠️  référence de la garde de fraîcheur non rattrapée : ${m.message}`);
+    }
+  }
+
+  // ── LA MOITIÉ QUI MANQUAIT — T-20260816-0020 ────────────────────────
+  // L'installation PROJET écrivait son marqueur de version ; l'installation POSTE
+  // n'écrivait rien. Personne ne pouvait donc lire ce qu'un poste porte — et un
+  // chiffre invérifiable ne se corrige jamais tout seul : il circule.
+  {
+    let contenu = null;
+    try { contenu = readManifest(payloadRoot).version ?? null; } catch { contenu = null; }
+    if (flags.dryRun) {
+      console.log(`  version du poste → ${join(destDir, '.somtech-pack', 'version.json')} [dry-run]`);
+    } else {
+      const chemin = ecrireVersionPoste(destDir, { version: pkgVersion(), contenu });
+      console.log(`  version du poste → ${chemin} (${pkgVersion()})`);
+    }
+    // Les verrous orphelins : une mise à jour qui refusera de partir un jour sans
+    // dire pourquoi. On les ramasse, et on DIT lesquels — un ramassage muet
+    // reconduirait le défaut sous une autre forme.
+    const v = ramasserVerrous(destDir, { dryRun: flags.dryRun });
+    if (flags.dryRun && v.candidats.length) {
+      console.log(`  verrous périmés → ${v.candidats.length} à ramasser [dry-run]`);
+    } else if (v.retires.length) {
+      console.log(`  verrous périmés ramassés : ${v.retires.map((x) => x.nom).join(', ')}`);
     }
   }
 
