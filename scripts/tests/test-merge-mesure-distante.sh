@@ -768,11 +768,17 @@ esac
 exit 0
 RELAIS
     chmod +x "${d}/git"
-    {
-      echo "source \"${LIB}\""
-      printf '%s' "$bloc_brut" | sed 's/<version>/v1.2.3/g'
-    } > "${d}/bloc.sh"
-    PATH="${d}:$PATH" bash "${d}/bloc.sh" >/dev/null 2>&1
+    # ⚠️ VERBATIM. Une version antérieure de ce banc ajoutait
+    # `source "${LIB}"` en tête — et CORRIGEAIT ainsi, en silence, ce que le
+    # texte réel ne faisait pas : le bloc n'exécutait ce `source` nulle part, et
+    # `md_version_libre` était introuvable dans le shell frais qui suit la
+    # Confirmation. Le joint qui permettait d'éprouver soustrayait le défaut à
+    # l'épreuve. On ne met plus rien devant ; seul `<version>` est substitué,
+    # parce que c'est un espace réservé et non du code.
+    printf '%s' "$bloc_brut" | sed 's/<version>/v1.2.3/g' > "${d}/bloc.sh"
+    # Joue depuis la racine du dépôt : c'est de là que l'agent lance /merge, et
+    # le `source` du bloc porte un chemin relatif.
+    ( cd "$ROOT" && PATH="${d}:$PATH" bash "${d}/bloc.sh" ) >/dev/null 2>&1
     if [ -f "${d}/TAG-POSE" ]; then echo OUI; else echo NON; fi
     rm -rf "$d"
   }

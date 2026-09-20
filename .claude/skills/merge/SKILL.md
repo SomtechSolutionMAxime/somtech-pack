@@ -401,8 +401,14 @@ L'utilisateur peut :
 > C'est la fenetre que `T-20260815-0013` decrit. Et si l'utilisateur a **propose
 > un autre numero** (« non, v0.7.0 »), ce numero-la **n'a jamais ete verifie**.
 
-Apres confirmation, dans cet ordre, sans rien intercaler :
+Apres confirmation, dans cet ordre, sans rien intercaler. 🔴 **Le bloc se
+source LUI-MEME** : la Confirmation ci-dessus est un ARRET reel pour attendre
+l'humain, et le shell ne survit pas a cet arret. Un bloc qui compterait sur un
+`source` fait avant la Confirmation echouerait en `command not found` — a chaque
+fois, pas seulement en cas de course, et le message parlerait de disponibilite
+alors que la fonction est simplement absente.
 ```bash
+source .claude/skills/merge/lib/mesure-distante.sh
 md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
 git tag <version>
 git push origin <version>

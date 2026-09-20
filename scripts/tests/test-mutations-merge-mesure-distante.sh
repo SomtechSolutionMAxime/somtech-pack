@@ -541,6 +541,16 @@ s = s.replace(
     'git tag <version>\nmd_version_libre "<version>" || { echo "trop tard"; exit 1; }')
 PY
 
+essai_skill "le bloc qui tague ne se source plus lui-meme" <<'PY'
+# Le défaut que le banc ARRANGEAIT : la Confirmation est un arrêt réel, le
+# shell ne lui survit pas, et un bloc qui compte sur un `source` fait plus haut
+# échoue en `command not found` — à chaque fois, avec un message qui parle de
+# disponibilité alors que la fonction est absente.
+s = s.replace(
+    'source .claude/skills/merge/lib/mesure-distante.sh\nmd_version_libre "<version>" ||',
+    'md_version_libre "<version>" ||')
+PY
+
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
 # Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
 # tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
@@ -624,7 +634,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=64
+PLANCHER=65
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
