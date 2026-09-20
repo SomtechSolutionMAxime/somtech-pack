@@ -62,6 +62,8 @@ Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur
 
 **Chaque condition se prouve, elle ne se déclare pas** : les **deux verdicts** écrits sur la tête FINALE, jamais intermédiaire · le rapport de QA **avec ses réserves écrites** — une réserve tue est une condition manquante · la chaîne lue sur le **commit qu'on fusionne**, pas sur celui qu'on croit fusionner · l'**écart `origin/main..origin/staging` mesuré**, pas seulement le verrou interrogé *(voir Le sas, plus haut)*.
 
+⚠️ **« Sur la tête FINALE » se lit « de ce qu'ils COUVRENT ».** Ce qui est ajouté **après** la revue — l'entrée CHANGELOG que l'outil impose APRÈS elle — doit être **couvert** par les verdicts, **pas les faire rejouer** : sinon tu te bloques en boucle et aucune tête n'est jamais revue. *Précision, occurrence et coût : R4, « Ce qu'un rapport de revue doit porter » — 2026-09-20.*
+
 ⚠️ **L'erreur symétrique coûterait plus cher que celle qu'on corrige : la délégation ne lève AUCUNE condition.** Elle remplace **l'attente du go une fois les conditions réunies**, rien d'autre. Une condition qui manque interdit toujours le merge — **même si ton coordonnateur te demande de fusionner**. *Ce qui a changé, c'est qui clique, jamais ce qu'il faut avoir avant.*
 
 **L'occurrence et son coût** — **2026-09-15**, devant un lot entièrement fait et vérifié : *« vous avez tout fait le travail, je ne sais même pas de quoi tu parles, mais je dois dire go ??? ça n'a pas rapport »*. **Le coût est le silence qui suit : des heures d'arrêt sur une approbation qui ne protège rien** — le seul à pouvoir dire si les conditions sont réunies est celui qui les a réunies.
