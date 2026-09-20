@@ -9,8 +9,15 @@
 
 const SENTINEL = '\x00BRD_ESCAPED_PIPE\x00';
 
-const ID_REGEX = /^(EA|EF|RA|HS)-[A-Z]{3}-\d{3}$/;
-const TICKET_REGEX = /^T-\d{8}-\d{4}$/;
+// Code de domaine : 3 OU 4 lettres. La pratique a créé des domaines à 4 lettres (PRES, GRPH),
+// chacun par une livraison validée — on élargit la norme plutôt que de renommer (T-20260725-0001).
+const ID_REGEX = /^(EA|EF|RA|HS)-[A-Z]{3,4}-\d{3}$/;
+// « Réalisé par » accepte une story (T-), mais aussi une demande (D-) ou un projet (P-) :
+// une exigence peut être réalisée par un chantier entier, pas seulement par une story.
+// L'epic (E-) reste volontairement exclu : c'est le seul cas pour lequel le gabarit BRD prescrit
+// une alternative explicite — « lister les stories enfants individuellement » — et aucun BRD ne
+// l'a contredit en pratique. On élargit sur ce qui est constaté, pas au-delà.
+const REALISE_PAR_REGEX = /^[TDP]-\d{8}-\d{4}$/;
 const SEMVER_REGEX = /^\d+\.\d+\.\d+$/;
 const LIST_SEP_REGEX = /^[^,]+(, [^,]+)+$/;
 const ANY_HEADING_REGEX = /^#{1,6}\s+/;
@@ -18,11 +25,16 @@ const TABLE_SEPARATOR_REGEX = /^\|(\s*:?-+:?\s*\|)+\s*$/;
 const BID_REGEX = /^<!--\s*bid:([A-Za-z0-9_-]+)\s*-->\s*$/;
 
 const RE_SECTION_EA = /^##\s+4\.\s*Exigences d'affaires/;
-const RE_SECTION_DOMAIN_5 = /^###\s+5\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3})\)/;
+const RE_SECTION_DOMAIN_5 = /^###\s+5\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3,4})\)/;
 const RE_SECTION_EF = /^####\s+Exigences fonctionnelles\s*$/;
 const RE_SECTION_RA = /^####\s+Règles d'affaires\s*$/;
-const RE_SECTION_DOMAIN_6 = /^###\s+6\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3})\)/;
+const RE_SECTION_DOMAIN_6 = /^###\s+6\.\d+\s+Domaine\s+—.*\(code:\s*([A-Z]{3,4})\)/;
 const RE_SECTION_CHANGELOG = /^##\s+7\.\s*Changelog/;
+// Filet : un heading qui se présente comme un domaine §5/§6 mais dont le `(code: XXX)` n'est pas
+// reconnu tombait à travers la boucle en silence — §6 perdait sa table HS entière (exit 0, sans
+// warning), §5 rattachait ses EF/RA au domaine PRÉCÉDENT. On échoue bruyamment plutôt que de
+// rendre un BRD amputé : un hors-scope in_force qui disparaît fait proposer du hors-scope.
+const RE_SECTION_DOMAIN_ANY = /^###\s+[56]\.\d+\s+Domaine\s+—/;
 
 const STATUS = new Set(['draft', 'proposed', 'accepted', 'in_force', 'superseded', 'deprecated']);
 const PRIORITY = new Set(['M', 'S', 'C', 'W']);
@@ -85,12 +97,12 @@ function parseListCell(col, value, lineNo) {
   for (const item of items) {
     if (item === '') throw new BRDParseError(lineNo, `Élément vide dans la liste ${col} : '${value}'.`);
     if (col === 'Réalisé par') {
-      if (!TICKET_REGEX.test(item)) {
-        throw new BRDParseError(lineNo, `Référence '${item}' invalide dans Réalisé par (regex tickets attendue : ^T-\\d{8}-\\d{4}$).`);
+      if (!REALISE_PAR_REGEX.test(item)) {
+        throw new BRDParseError(lineNo, `Référence '${item}' invalide dans Réalisé par (regex attendue : ^[TDP]-\\d{8}-\\d{4}$ — story, demande ou projet).`);
       }
     } else if (col === 'Couvre' || col === 'Encadre') {
       if (!ID_REGEX.test(item)) {
-        throw new BRDParseError(lineNo, `Référence '${item}' invalide dans ${col} (regex ID attendue : ^(EA|EF|RA|HS)-[A-Z]{3}-\\d{3}$).`);
+        throw new BRDParseError(lineNo, `Référence '${item}' invalide dans ${col} (regex ID attendue : ^(EA|EF|RA|HS)-[A-Z]{3,4}-\\d{3}$).`);
       }
     }
     // 'Testé par' : chemins libres, pas de regex de format.
@@ -102,7 +114,7 @@ function parseListCell(col, value, lineNo) {
 function parseCell(col, value, lineNo) {
   if (col === 'ID') {
     if (!ID_REGEX.test(value)) {
-      throw new BRDParseError(lineNo, `ID '${value}' invalide (regex attendue : ^(EA|EF|RA|HS)-[A-Z]{3}-\\d{3}$).`);
+      throw new BRDParseError(lineNo, `ID '${value}' invalide (regex attendue : ^(EA|EF|RA|HS)-[A-Z]{3,4}-\\d{3}$).`);
     }
     return value;
   }
@@ -281,6 +293,12 @@ export function parseBrd(mdText) {
       tagBlock(rows, h);
       result.out_of_scope.push(...rows);
       i = endIdx + 1; continue;
+    }
+
+    // Ni §5 ni §6 n'a matché alors que la ligne se présente comme un heading de domaine :
+    // son `(code: XXX)` est absent ou mal formé (ex. `(codes: CON / SAL)` au pluriel).
+    if (RE_SECTION_DOMAIN_ANY.test(line)) {
+      throw new BRDParseError(i + 1, `Heading de domaine non reconnu : '${line.trim()}'. Attendu un unique code de 3 ou 4 lettres majuscules, sous la forme '(code: XXX)'.`);
     }
 
     if (RE_SECTION_CHANGELOG.test(line)) {

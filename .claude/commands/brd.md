@@ -312,7 +312,7 @@ Amende **une exigence** directement dans le BRD.md via édition ciblée d'un blo
 **Mode grain module** : si `<module>` est fourni, l'édition opère **strictement** sur le BRD module-level (pas de fallback). Si le module n'a pas de BRD module-level (`brd_document_id` NULL), STOP — ne jamais éditer accidentellement le BRD app-level voisin. Suggérer `/brd new <app>/<module>` d'abord.
 
 1. **Parser le slug** : split sur `/` si présent → grain `application` ou `module`.
-2. **Valider les flags** : `--id` (matche `^(EA|EF|RA|HS)-[A-Z]{3}-\d{3}$`) et `--patch` (JSON objet) requis.
+2. **Valider les flags** : `--id` (matche `^(EA|EF|RA|HS)-[A-Z]{3,4}-\d{3}$` — code de domaine de 3 ou 4 lettres) et `--patch` (JSON objet) requis.
 3. Résoudre `application_id` et `somcraft_workspace_id`. **Si grain module** : résoudre aussi `module_id`.
 4. **Lire le pointer SD** :
    - Grain application : `get_brd_pointer(application_id)`.
