@@ -83,6 +83,8 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 **Le motif, et c'est lui qui rend la première liste indispensable** : après un rebase, **un verdict de revue ne périme pas automatiquement — il périme si le delta touche ce qui a été relu contre le ticket**. Sans la première liste, ce calcul est impossible, **donc re-validation par défaut**. C'est ce qui transforme une revue en quelque chose qui **garde** sa valeur au lieu de la perdre au premier rebase.
 
+**L'occurrence et son coût — et c'est le seul de ces changements dont l'occurrence a été payée par le lot qui l'écrit.** La nuit du **2026-09-19 au 20**, un orchestrateur vérifie une tête en entier à **02 h 55** et la rend comme vérifiée ; à **03 h 10** la tête a changé ; à **03 h 15** il **rejoue la vérification complète**, faute de pouvoir calculer ce qui y survivait. Une troisième a suivi le même soir. **Coût : deux vérifications complètes rejouées dans la même soirée, sur des deltas qui ne touchaient chaque fois qu'une fraction de ce qui avait été regardé.** *Le contrefactuel est exact : avec la première liste, le delta d'une tête à l'autre ne touchait que **deux objets** — un chapitre et une ligne de seuil —, et c'est eux seuls qu'il aurait fallu rejouer.*
+
 **Un reviewer ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
 
 ## Exiger ce qu'un lot montre, jamais ce qu'il conclut
