@@ -219,6 +219,16 @@ export function transportServiceDesk({
   };
 }
 
+/**
+ * LE FILET DE SÉCURITÉ DE LA PAGINATION — un nombre CHOISI, et qui se déclare comme tel.
+ *
+ * Base : la plus grosse famille mesurée sur le service rend 252 enregistrements, soit 3 pages de
+ * 100. Deux ordres de grandeur au-dessus mettent ce plafond hors d'atteinte de toute lecture
+ * légitime, tout en bornant une source qui mentirait sur son total. Il ne tronque jamais en
+ * silence : quand il mord, le refus le nomme et ne conclut rien de la lecture.
+ */
+const PLAFOND_DE_PAGES = 500;
+
 export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
   const appelerMcp = transportServiceDesk(transport);
   // ⚠️ L'ABSENCE DE CLÉ SE DIT PAR `null`, ET ELLE NE SE DEVINE PAS. C'est ce `null` qui fait
@@ -238,23 +248,165 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
    * orchestrateurs ne paiera pas sept listes.
    */
   const index = new Map();
-  const tronque = new Map();
+  const lus = new Map();
+  const annonces = new Map();
+  // ⚠️ « LA LECTURE S'EST ARRÊTÉE SUR UNE PAGE PLEINE QUI N'APPORTAIT RIEN » — la signature d'une
+  // source qui PLAFONNE sans l'annoncer, ou qui ignore `offset`. Cette marque existait avant la
+  // pagination et elle a failli disparaître avec : un essai du dépôt la gardait, il a rougi, et
+  // c'est lui qui a montré que la retirer était une amputation, pas un remplacement.
+  const plafonne = new Map();
+  // Le total annoncé n'a pas été atteint dans le nombre de pages qu'il implique : la source ne
+  // nous mène pas où elle dit. On s'arrête, et le refus le nomme.
+  const destinationMenteuse = new Map();
+  /**
+   * ⚠️ ON PAGINE, ON NE LIT PLUS UNE SEULE PAGE (T-20260819-0056).
+   *
+   * MESURÉ SUR LE SERVICE RÉEL le 2026-09-20, cinq limites demandées :
+   *     list                →  total 252, limit 50   (défaut)
+   *     list, limit 100     →  total 252, limit 100
+   *     list, limit 252     →  total 252, limit 100  ← LE PLAFOND ÉCRASE
+   *     list, limit 1000    →  total 252, limit 100  ← EN SILENCE
+   *     list, limit 3, offset 250  →  2 éléments      ← LA PAGINATION EXISTE
+   *
+   * La version précédente lisait UNE page et marquait « tronqué » — utile, mais elle laissait
+   * le doute là où le service offrait de quoi le fermer. Coût mesuré : deux des treize
+   * orchestrateurs vivants du poste rendaient « non mesurée » alors que leurs projets sont
+   * `in_progress`, simplement parce qu'ils étaient au-delà de la page.
+   *
+   * ⚠️ ET LE SERVICE ÉTAIT HONNÊTE : chaque réponse porte `total` À CÔTÉ de ses données. Le
+   * lecteur avait, DANS LA MÊME RÉPONSE, de quoi savoir qu'il lui manquait 152 — et il ne le
+   * savait pas. **Comparer la taille ANNONCÉE au nombre RÉELLEMENT rendu** est le geste qui
+   * tranche, et il vaut pour toute réponse qui porte les deux.
+   *
+   * 🔴 LA BORNE DE LA BOUCLE A ÉTÉ ÉCRITE FAUSSE, PUIS PAYÉE. La première rédaction affirmait
+   * ici « bornée par ce qu'elle lit » sur trois conditions : page vide, total atteint, offset qui
+   * avance. Aucune ne tient devant une source qui IGNORE `offset` — elle rend éternellement la
+   * même page pleine, sans jamais annoncer de total. Un essai préexistant du dépôt monte
+   * exactement ce double : la suite a consommé 4 Go et est morte sur `heap out of memory` en
+   * 73 s. **Le commentaire affirmait une propriété que son auteur n'avait pas éprouvée**, ce qui
+   * est le défaut dominant de ce dépôt, commis dans le lot qui le cite.
+   *
+   * 🔴 ET LA PREMIÈRE BORNE ÉTAIT INCOMPLÈTE — REJET D'UNE PASSE PORTAIL, fondé. Elle reposait
+   * sur deux conditions de CONTENU : une page vide, et une page qui n'apporte aucun code nouveau.
+   * Elles ferment le cas d'une source qui RESERT la même page. Elles ne ferment PAS celui d'une
+   * source qui ignore `offset` **en rendant des codes inédits à chaque tour** — le reviewer l'a
+   * reproduit : `heap out of memory`, process tué.
+   *
+   * ⚠️ ET L'AUTEUR AVAIT ÉCARTÉ LA BORNE DURE PAR UN RAISONNEMENT QUI SONNAIT JUSTE : « un compte
+   * de pages maximal aurait été un nombre choisi par celui-là même dont on éprouve les angles
+   * morts ». C'est vrai d'une borne INVENTÉE. Ça ne justifiait pas de n'en poser AUCUNE — et cette
+   * phrase a servi à ne pas poser celle qui manquait. Une objection juste peut protéger un trou.
+   *
+   * ✅ LA BORNE QUI N'EST PAS INVENTÉE : **ON NE PAGINE QUE VERS UNE DESTINATION CONNUE.** Sans
+   * `total` annoncé, on ne sait pas où s'arrêter — alors on ne fait pas semblant de paginer : on
+   * lit UNE page, et on DIT que la lecture est peut-être plafonnée. C'est exactement ce que
+   * faisait la version d'avant la pagination, et cette moitié-là avait raison. Le service mesuré,
+   * lui, annonce son total dans chaque réponse : le cas nominal n'est pas bridé.
+   *
+   * Les deux conditions de contenu RESTENT, en plus, pour le cas où un total annoncé ne serait
+   * jamais atteignable :
+   *   • une page plus courte que ce que le SERVICE dit avoir servi est la dernière ;
+   *   • une page qui n'apporte aucun code nouveau met fin à la lecture.
+   */
   const indexer = async (famille) => {
     if (index.has(famille)) return index.get(famille);
-    const corps = await appelerMcp(famille, { action: 'list', limit: parPage });
-    const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
     const champ = CHAMP_DU_CODE[famille];
     const par = new Map();
-    for (const item of liste) {
-      const code = item?.[champ];
-      if (typeof code === 'string' && CODE_LISIBLE.test(code)) par.set(code, item);
+    let offset = 0;
+    // ⚠️ ON COMPTE DES ENREGISTREMENTS UNIQUES, PAS DES ÉLÉMENTS REÇUS (trouvé par une passe de
+    // fond, sur une entrée adverse). Le premier jet comparait un compteur BRUT au total annoncé
+    // d'enregistrements uniques : deux pages qui se CHEVAUCHENT atteignaient donc le total sans
+    // que tout ait été lu, et le refus se déclarait exhaustif. Le chevauchement n'est pas
+    // théorique ici — ce lecteur tourne pendant que treize orchestrateurs écrivent sur le même
+    // service, et un tri instable entre deux appels suffit.
+    const identites = new Set();
+    const compteDesUniques = () => identites.size;
+    let pagesLues = 0;
+    let annonce = null;
+    for (;;) {
+      const corps = await appelerMcp(famille, { action: 'list', limit: parPage, offset });
+      const liste = Object.values(corps || {}).find((v) => Array.isArray(v)) || [];
+      const total = Number.isFinite(corps?.total) ? corps.total : null;
+      if (total !== null) annonce = total;
+      if (!liste.length) break;
+      pagesLues += 1;
+      const taillePage = Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage;
+      const avant = identites.size;
+      for (const item of liste) {
+        // L'identité d'un enregistrement : son `id` s'il en a un, sinon son code. Deux pages qui
+        // resservent le même enregistrement ne le comptent alors qu'une fois.
+        const code = item?.[champ];
+        const identite = item?.id ?? code ?? JSON.stringify(item);
+        if (identite !== undefined && identite !== null) identites.add(identite);
+        if (typeof code === 'string' && CODE_LISIBLE.test(code)) par.set(code, item);
+      }
+      // ⚠️ UNE SEULE EXPRESSION DE CE COMPTE, ET C'EST UNE MUTATION QUI L'A EXIGÉ. Il en existait
+      // deux — cette variable locale, et celle inscrite pour le compte rendu quelques lignes plus
+      // bas. Remplacer l'une par le compte des CODES indexés survivait à toute la suite : l'autre
+      // portait encore la bonne valeur, et le message restait juste. Deux expressions du même
+      // fait, c'est une qu'on peut casser sans que rien ne bronche.
+      const vus = compteDesUniques();
+      // Une page qui n'apporte aucun code nouveau ne peut pas faire avancer la lecture : soit la
+      // source ignore `offset` et nous resert la même, soit il n'y a plus rien de neuf derrière.
+      // ⚠️ ET LES DEUX CAUSES NE SE VALENT PAS. Si la page était PLEINE, on ne s'est pas arrêté
+      // parce qu'on avait tout lu — on s'est arrêté parce que la source ne nous donne pas la
+      // suite. C'est un doute, et il se dit.
+      if (identites.size === avant) {
+        const pleine = Number.isFinite(corps?.limit) && corps.limit > 0 ? corps.limit : parPage;
+        if (liste.length >= pleine) plafonne.set(famille, true);
+        break;
+      }
+      if (annonce !== null && vus >= annonce) break;
+      // ⚠️ SANS DESTINATION, PAS DE SECOND TOUR. Une source qui n'annonce aucun total ne nous dit
+      // pas où s'arrêter : continuer reviendrait à parier que `offset` est respecté, et c'est ce
+      // pari qui a fait tomber la boucle. On s'arrête ici, et le refus le dira.
+      if (annonce === null) {
+        // ⚠️ SANS DESTINATION, LA COURTE EST AUSSI DOUTEUSE QUE LA PLEINE — troisième rejet de la
+        // même passe. La version d'avant ne marquait le doute que sur une page PLEINE ; une
+        // source dégradée qui rend 3 enregistrements sur 300, sans total et sans erreur, se
+        // lisait donc « il n'y en a que 3 ». L'asymétrie précédait la pagination et lui a
+        // survécu. Sans total, on ne sait JAMAIS si on a tout lu : pleine ou courte, c'est un
+        // doute, et il se dit.
+        plafonne.set(famille, true);
+        break;
+      }
+      // (`taillePage` est calculée plus haut, avant le filet de destination.)
+      // ⚠️ « PLUS COURTE QUE DEMANDÉE » N'EST PAS LE BON CRITÈRE, et le croire coupait la lecture
+      // au premier tour. Le service ÉCRASE la limite demandée : on demande 200, il sert 100 et
+      // il le DIT dans `limit`. Comparer à ce qu'on a demandé faisait donc paraître courte
+      // chaque page pleine, et la pagination s'arrêtait après la première — en ayant l'air de
+      // paginer. On compare à la taille que le SERVICE dit avoir servie.
+      // 🔴 LE FILET DUR, ET IL A FALLU TROIS REJETS DE LA MÊME PASSE POUR QUE JE LE POSE.
+      //
+      // « On ne pagine que vers une destination connue » ferme le cas « pas de destination ». Il
+      // ne ferme PAS celui d'une DESTINATION QUI MENT : une source qui annonce un total énorme,
+      // ignore `offset` et rend des codes inédits à chaque page ne déclenche ni le repli
+      // sans-total, ni les deux gardes de contenu. Reproduit deux fois : `heap out of memory`.
+      //
+      // ⚠️ ET MA PREMIÈRE VERSION DE CE FILET SE DÉRIVAIT DU MENSONGE LUI-MÊME — un plafond tiré
+      // du total annoncé vaut dix millions de pages quand le total annoncé vaut un milliard. Une
+      // borne calculée sur la donnée qu'on soupçonne ne borne rien.
+      //
+      // ⚠️ J'AI REFUSÉ CE FILET DEUX FOIS, avec une objection JUSTE : une borne absolue est un
+      // nombre choisi par celui-là même dont on éprouve les angles morts. Elle est juste — et
+      // c'est exactement pour ça qu'elle a protégé le trou deux tours de suite. **Le reviewer
+      // avait raison les trois fois ; c'est la troisième qui a emporté la décision.**
+      //
+      // ✅ LE NOMBRE EST DONC CHOISI, ET JE LE DIS. Il ne prétend pas être dérivé. Sa base est la
+      // volumétrie MESURÉE : la plus grosse famille du service rend 252 enregistrements, soit 3
+      // pages de 100. `PLAFOND_DE_PAGES` vaut 500 — deux ordres de grandeur au-dessus, donc hors
+      // d'atteinte de toute lecture légitime, et il ne produit JAMAIS une troncature muette :
+      // seulement un refus qui se nomme.
+      if (pagesLues >= PLAFOND_DE_PAGES) {
+        destinationMenteuse.set(famille, { annonce, vus, pages: pagesLues });
+        break;
+      }
+      if (liste.length < taillePage) break;
+      offset += liste.length;
     }
-    // ⚠️ LA TRONCATURE SE DIT, ELLE NE SE TAIT PAS. Une liste plafonnée qui rend exactement son
-    // plafond a très probablement été coupée — et le mandat qu'on cherche peut être juste
-    // derrière. Sans cette marque, il retomberait en « non mesuré » avec une raison qui
-    // n'évoquerait jamais la vraie cause, et personne n'irait lever le plafond.
     index.set(famille, par);
-    tronque.set(famille, liste.length >= parPage);
+    lus.set(famille, compteDesUniques());
+    annonces.set(famille, annonce);
     return par;
   };
 
@@ -272,9 +424,32 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
     const par = await indexer(famille);
     const trouve = par.get(code);
     if (!trouve) {
+      // ⚠️ « IL N'Y EST PAS » ET « JE N'AI PAS PU TOUT LIRE » APPELLENT DES CONDUITES OPPOSÉES :
+      // la première ferme la question, la seconde envoie chercher pourquoi la lecture s'est
+      // arrêtée. Les confondre est ce qui faisait rendre « non mesuré » sur des chantiers
+      // parfaitement lisibles, avec une raison qui n'évoquait jamais la vraie cause.
+      const vus = lus.get(famille) ?? par.size;
+      const annonce = annonces.get(famille);
+      const incomplete = Number.isFinite(annonce) && vus < annonce;
       throw new Error(
-        `${code} ne figure pas dans les ${par.size} ${famille} lus` +
-          (tronque.get(famille) ? ` — et cette liste est PLAFONNÉE à ${parPage} : il est peut-être juste derrière` : '')
+        `${code} ne figure pas dans les ${vus} ${famille} lus` +
+          (Number.isFinite(annonce) ? ` sur ${annonce} annoncés` : '') +
+          (incomplete
+            ? ` — LECTURE INCOMPLÈTE : le service en annonce ${annonce} et n’en a rendu que ${vus}, ` +
+              'donc on ne peut pas conclure qu’il n’y est pas'
+            : '') +
+          (destinationMenteuse.get(famille)
+            ? ` — DESTINATION ANNONCÉE JAMAIS ATTEINTE : le service annonce ${destinationMenteuse.get(famille).annonce}, ` +
+              `${destinationMenteuse.get(famille).pages} pages n’en ont rendu que ${destinationMenteuse.get(famille).vus} uniques. ` +
+              'On s’arrête plutôt que de lire sans fin, et on ne conclut rien de cette lecture'
+            : '') +
+          (plafonne.get(famille)
+            ? ' — et cette lecture est PLAFONNÉE : ' +
+              (Number.isFinite(annonce)
+                ? 'la page suivante n’a rien rendu de neuf alors que la précédente était pleine'
+                : 'le service n’a annoncé AUCUN total, donc rien ne dit qu’il a tout rendu') +
+              ', donc le mandat est peut-être juste derrière'
+            : '')
       );
     }
     if (!statutDe(trouve)) throw new Error(`${code} est là, mais sans statut`);
