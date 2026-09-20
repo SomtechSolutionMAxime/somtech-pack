@@ -5,6 +5,23 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-09-20
+
+*Demande `D-20260920-0001`, epic `E-20260920-0001`. **Le métier de l'orchestrateur descend les cinq changements vécus du 15 au 19/09** — un orchestrateur qui naît du gabarit merge désormais son lot sans demander un go que le dirigeant a cessé de vouloir donner, et refuse de merger si une condition manque.*
+
+### Ajoute
+
+- **`mise-en-production.md` — qui clique.** Le clic de fusion a été délégué aux orchestrateurs et aux chefs le 2026-09-15 : conditions réunies, ils fusionnent sans attendre le go du dirigeant. Le texte opposable des permissions du poste est **recopié, pas résumé**, les interdits restent nommés, et la clause qui évite l'erreur symétrique est explicite — **la délégation ne lève aucune condition**, elle remplace l'attente du go, rien d'autre.
+- **`rondes.md` §5 + renvoi dans `continuite.md` — l'âge du réceptacle d'amélioration.** `epics get <son-epic>` : au-delà de 48 h alors que des tours ont eu lieu, la boucle est présumée morte et l'écart d'âge est l'entrée à écrire avant toute autre. Le compte de tours meurt avec la session ; l'âge du réceptacle survit.
+- **`rondes.md` §8 — la cinquième question de la veille du corpus.** Les quatre sources opposables ne portent pas le métier vécu : sans une question posée à un tiers, la veille rend un vide qui se lit comme une stabilité.
+- **`reflexes.md` — l'asymétrie du fait rapporté.** Un fait qui aurait pour effet de **retirer** une consigne se mesure à sa source avant d'être inscrit ; un fait qui **ajoute** une contrainte peut attendre la vérification.
+- **`faire-appliquer.md` — les trois listes obligatoires d'un rapport de revue** (ce qui a été regardé et à quel niveau, ce qui a été éprouvé, ce qui n'a pas pu être atteint). Posée par `ristigouche` le 2026-09-01 et amendée avec `chaudiere` le 02/09 — **pas un ordre du dirigeant**. Elle rend calculable ce qu'un rebase périme dans un verdict de revue.
+
+### Technique
+
+- **Une garde par changement** dans `scripts/tests/test-metier-orchestrateur.sh` (bloc ⑬), chacune bornée à sa section — un motif cherché dans le texte entier rendrait vert un bloc déplacé au mauvais chapitre. Chaque garde tient aussi l'**occurrence datée** de son changement, et une garde dédiée interdit d'attribuer les trois listes au dirigeant.
+- Seuil de taille du métier re-baseliné à **160 695 caractères, marge nulle** — relèvement arbitré, avec sa décomposition et le nom de qui l'a accordé dans le commentaire du banc. Le prochain ajout se refuse par défaut.
+
 ## [Non-versionne] - 2026-09-01
 
 *Ticket `T-20260825-0012`, epic `E-20260825-0002`. **Le recensement classe les rôles depuis la déclaration** — un chef d'équipe vivant, déclaré par l'outillage de naissance, n'est plus rendu « rôle non établi ».*
