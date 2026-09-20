@@ -544,7 +544,7 @@ test('LE VRAI MINUTEUR TRANCHE POUR DE BON — sans lui, il n’y a plus de file
   // passage — le défaut lui-même est gardé par le banc juste au-dessus.
   //
   // ⚠️ ET COMMENT CE ROUGE-LÀ SE PRÉSENTE, PARCE QUE ÇA PEUT TROMPER : sous la mutation, le
-  // relevé rend `fail 0` et `cancelled 1` — un banc qui n'abéutit pas est compté annulé, pas
+  // relevé rend `fail 0` et `cancelled 1` — un banc qui n'aboutit pas est compté annulé, pas
   // échoué. **Le code de sortie est bien 1**, donc la chaîne rougit ; mesuré, pas supposé.
   // Mais quelqu'un qui lirait la seule ligne `fail 0` conclurait que tout va bien.
   let ferme = 0;
