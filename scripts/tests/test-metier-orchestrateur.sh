@@ -904,6 +904,24 @@ porte "Tes réflexes" \
   "son lot · le dépôt · **le poste**" \
   "2026-09-20"
 
+# ⚠️ LA HUITIÈME GARDE N'EST PAS UNE HUITIÈME RÈGLE : c'est la règle 4 gardée À
+# L'ENDROIT DU GESTE. Trouvé par la passe de fond du lot, contre son auteur :
+# le corollaire vivait dans le chapitre de la REVUE, pendant que l'énoncé strict
+# qu'il assouplit — « les deux verdicts sur la tête FINALE » — vivait seul dans
+# le chapitre du MERGE. La défense de l'auteur — « l'ordre des chapitres met la
+# revue avant le merge » — était fausse DEUX FOIS : l'ordre réel est celui de
+# `classement.json` et non l'ordre alphabétique qu'il avait mesuré (un artefact
+# du glob de ce banc, pas du produit) ; et surtout le métier se consulte PAR
+# SUJET depuis l'index du socle, jamais d'un trait. Le lecteur qu'il fallait
+# sauver — le chef qui ouvre le chapitre du merge trois jours plus tard — est
+# précisément celui qu'aucun ordre de lecture n'atteint.
+porte "Qui clique" \
+  "4bis — le corollaire est rappelé LÀ OÙ LE GESTE SE POSE" \
+  "de ce qu'ils COUVRENT" \
+  "CHANGELOG" \
+  "pas les faire rejouer" \
+  "2026-09-20"
+
 porte "Si rien n'avance, repars du backlog" \
   "7 — j'attends quelqu'un se lit PAR CHANTIER, jamais en bloc" \
   "PAR CHANTIER, jamais en bloc" \
@@ -1162,7 +1180,7 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #    la seule coupe — est ce qu'on lui demande d'abord.
 # ── RE-BASELINE DU 2026-09-20 (2ᵉ) — D-20260920-0001 / E-20260920-0002 ────────
 #
-# 160 695 → 164 992 caractères (+4 297), MARGE TOUJOURS 0.
+# 160 695 → 165 374 caractères (+4 679), MARGE TOUJOURS 0.
 #
 # ACCORDÉE D'AVANCE par `batiscan`, orchestrateur de `J-20260814-0002`, le
 # 2026-09-20, dans le brief du lot : « si l'écart net reste positif après le
@@ -1177,6 +1195,9 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #                           cadres qu'on produit soi-même)
 #   faire-appliquer   +485  règle 4 (le corollaire des trois listes)
 #   rondes            +398  règle 7 (« j'attends quelqu'un » se lit par chantier)
+#   mise-en-production +382  le RENVOI de la règle 4 à l'endroit du geste — ajouté
+#                           sur le seul défaut qu'ait trouvé la passe de fond,
+#                           contre l'auteur (voir la garde 4bis)
 #
 # LE PASSAGE DE REMPLACEMENT A ÉTÉ FAIT AVANT DE DEMANDER, et il rend ZÉRO
 # retrait — c'est un résultat, pas un renoncement. Les sept règles sont sept
@@ -1194,7 +1215,7 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0 : le
 # prochain ajout se refuse par défaut, et c'est le passage de remplacement —
 # pas la coupe — qu'on lui demandera d'abord.
-BASELINE=164992
+BASELINE=165374
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
