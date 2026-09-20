@@ -53,7 +53,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { roleDuLieu } from './lieu.js';
-import { sessionsDuPoste } from './destinataire.js';
+import { sessionsDuPoste, enregistrementEnCours } from './destinataire.js';
 
 /** Les deux rendez-vous, et rien d'autre — la liste est fermée parce que le métier l'est. */
 export const RENDEZ_VOUS = {
@@ -142,7 +142,17 @@ export function orchestrateursVivants(reponse, { estUnLieu = roleDuLieu } = {}) 
   if (!Array.isArray(agents)) return [];
   return agents
     .filter((a) => a?.pane_id)
-    .map((a) => ({ pane: a.pane_id, nom: a.name || null, repertoire: a.foreground_cwd || a.cwd || null }))
+    // ⚠️ `enregistrementEnCours` — LE MÊME TROISIÈME ÉTAT QUE `destinataire.js` (T-20260819-0036),
+    // et il remonte ICI parce que la ronde est LE SECOND APPELANT de `livrerBrief`. Corriger le
+    // seul `bin/livrer.js` laissait la ronde servir le texte faux — « ce pane n'a JAMAIS été
+    // inscrit » — à tout orchestrateur né dans les secondes précédentes. Un fait redit à deux
+    // endroits et corrigé à un seul est le défaut que ce dépôt paie le plus souvent.
+    .map((a) => ({
+      pane: a.pane_id,
+      nom: a.name || null,
+      repertoire: a.foreground_cwd || a.cwd || null,
+      enregistrementEnCours: enregistrementEnCours(a),
+    }))
     .filter((a) => a.repertoire && estUnLieu(a.repertoire) === 'orchestrateur');
 }
 

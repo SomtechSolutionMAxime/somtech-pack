@@ -1115,3 +1115,72 @@ process.exit(0);
   // détruit du contexte. Un avis qui crie sans détromper serait le défaut sous un autre nom.
   assert.match(r.stderr, /PAS mort|ne sont PAS mortes|pas morte/i, 'l’avis doit détromper, pas seulement alerter');
 });
+
+// ───── LE TROISIÈME ÉTAT DU REGISTRE, BOUT EN BOUT DANS LA RONDE (T-20260819-0036)
+
+/**
+ * Un faux herdr où l'orchestrateur est EN COURS D'INSCRIPTION — statut `unknown`, sans nom.
+ *
+ * ⚠️ C'EST L'ÉTAT MESURÉ D'UNE SESSION QUI VIENT DE NAÎTRE, pas un cas inventé. Sonde en
+ * lecture seule du 2026-09-20 sur une naissance réelle : le registre RÉPOND `unknown` de
+ * t+2,3 s à t+5,8 s, puis bascule à `idle`. Une ronde qui passe dans cette fenêtre tombe
+ * dessus, et c'est exactement ce qui arrive à un orchestrateur qu'on vient de poser.
+ *
+ * La boîte est vue VIDE et la remise aboutirait : si la ronde refuse, ce n'est pas la boîte.
+ */
+function fauxHerdrQuiSInscritEncore(pane, lieu) {
+  const script = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'agent' && args[1] === 'list') {
+  process.stdout.write(JSON.stringify({ result: { agents: [
+    { pane_id: ${JSON.stringify(pane)}, agent_status: 'unknown',
+      foreground_cwd: ${JSON.stringify(lieu)}, revision: 3 },
+  ] } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'get') {
+  process.stdout.write(JSON.stringify({ result: { agent: {
+    pane_id: args[2], agent_status: 'unknown', revision: 3 } } }));
+  process.exit(0);
+}
+if (args[0] === 'agent' && args[1] === 'read') {
+  process.stdout.write(['sortie', '──────────', '\\u276f ', '──────────'].join('\\n'));
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: { ok: true } }));
+process.exit(0);
+`;
+  writeFileSync(join(bac, 'herdr'), script);
+  chmodSync(join(bac, 'herdr'), 0o755);
+}
+
+test('🔴 LA RONDE NE DIT PAS « JAMAIS INSCRIT » À UN ORCHESTRATEUR QUI VIENT DE NAÎTRE — bout en bout', () => {
+  // ⚠️ CETTE GARDE EXISTE PARCE QUE DEUX MUTATIONS ONT SURVÉCU (M16, M17). `livrerBrief` a
+  // DEUX appelants de production — `bin/livrer.js` et cette ronde — et seule la moitié était
+  // gardée. Remplacer le drapeau par `false` ici ne faisait rougir AUCUN des 878 essais : la
+  // ronde servait de nouveau « ce pane n'a JAMAIS été inscrit » à un agent que le registre
+  // venait de rendre. C'est « un fait redit à deux endroits, corrigé à un seul », sur le lot
+  // qui le nomme.
+  //
+  // ⚠️ ET ELLE SE PREND SUR LE MOTIF, PAS SUR LE VERDICT. La ronde ne livre pas dans cette
+  // fenêtre — c'est voulu — donc « non livré » serait vrai avec ET sans le correctif. Ce qui
+  // distingue les deux est CE QUE LE MOTIF DIT.
+  const lieu = lieuDOrchestrateur('qui-naît');
+  fauxHerdrQuiSInscritEncore('w9:pN', lieu);
+
+  const r = lancerRonde(['/s/a.sock']);
+  const dit = JSON.parse(r.stdout.trim().split('\n').pop());
+
+  assert.equal(dit.orchestrateurs, 1, 'il est bien vu — le registre le rend');
+  const motif = dit.comptes[0].motif ?? '';
+  assert.doesNotMatch(
+    motif,
+    /jamais/i,
+    `le motif affirme « jamais inscrit » sur un agent que le registre vient de rendre : ${motif}`
+  );
+  assert.match(
+    motif,
+    /EN COURS D’INSCRIPTION/i,
+    `le motif doit nommer le troisième état, sinon la ronde envoie chercher une faute de frappe : ${motif}`
+  );
+});

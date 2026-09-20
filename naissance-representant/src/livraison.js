@@ -425,7 +425,11 @@ export function causeObstacle(terminal, statut, { pairOccupe = false, parLePane 
   return null;
 }
 
-export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, pane = null, parLePane = false } = {}) {
+export function obstacleAvantLivraison(
+  terminal,
+  statut,
+  { pairOccupe = false, pane = null, parLePane = false, enregistrementEnCours = false } = {}
+) {
   // Le geste, écrit avec le pane RÉEL — ou tu, si on ne le connaît pas.
   const ou = pane ? ` « ${pane} »` : '';
   // ⚠️ LA COMMANDE CONSEILLÉE EST CELLE QUE CE MODULE UTILISE LUI-MÊME — relevé en revue de
@@ -459,6 +463,28 @@ export function obstacleAvantLivraison(terminal, statut, { pairOccupe = false, p
     // envoyait attendre un retour à « idle » qui ne viendra pas. Un refus qui nomme la mauvaise
     // cause envoie chercher au mauvais endroit — c'est le motif de tout ce chantier.
     if (statut === 'unknown') {
+      // ⚠️ DEUX `unknown` QUI NE VEULENT PAS DIRE LA MÊME CHOSE (T-20260819-0036). Le texte
+      // ci-dessous — « JAMAIS inscrit », « attendre ne changera rien » — était servi aux DEUX,
+      // et il est FAUX pour l'un des deux. Mesuré le 2026-09-20 par sonde sur une naissance
+      // réelle : entre t+2,3 s et t+5,8 s, l'agent EST au registre, avec le statut `unknown`,
+      // parce que son inscription n'est pas finie. Lui dire « jamais inscrit » contredit ce
+      // qu'on vient de lire dans `agent list` ; lui dire « attendre ne changera rien » est le
+      // contraire exact de la seule chose à faire. Et son conseil — « désigne-le par son PANE »
+      // — RENVOYAIT VERS LA VOIE QUE LE REFUS VENAIT DE FERMER LUI-MÊME : c'est justement parce
+      // que le registre a RÉPONDU que le repli par le pane n'a pas joué.
+      //
+      // ⚠️ ET LA CORRECTION NE REMPLACE PAS UN FAUX PAR UN AUTRE. Hors fenêtre, « jamais
+      // inscrit » reste la vérité mesurée (T-20260820-0022, 15 panes invisibles sur 98), et son
+      // conseil reste le bon. Les deux textes coexistent, chacun sur son état.
+      if (enregistrementEnCours) {
+        return (
+          `le registre herdr connaît${ou || ' ce pane'}, mais il est ENCORE EN COURS D’INSCRIPTION ` +
+          '— statut « unknown ». C’est une ATTENTE, pas une absence : mesurée de 3 à 30 secondes ' +
+          'après la naissance, puis le statut devient « idle ». Rien n’a été écrit. Redemande ' +
+          'dans quelques secondes — `gestionnaire-livrer` attend cette fin d’inscription tout ' +
+          'seul, dans une borne qu’il annonce.'
+        );
+      }
       return (
         `le registre herdr ne voit aucun agent dans${ou || ' ce pane'} — statut « unknown ». ` +
         'Ce pane n’a jamais été inscrit au registre : il n’y a donc aucun retour à « idle » à ' +
@@ -917,6 +943,16 @@ async function livrerSousBudget({
   // n'avait personne. Il ne change AUCUNE garde : la boîte est lue avant d'écrire, et un
   // texte qui s'y trouve fait refuser, exactement comme sur le chemin nominal.
   parLePane = false,
+  // ⚠️ `enregistrementEnCours` — LE TROISIÈME ÉTAT, ET IL DOIT TRAVERSER (T-20260819-0036).
+  //
+  // 🔴 UNE MUTATION L'A EXIGÉ. Sans cette ligne, le message juste écrit dans
+  // `obstacleAvantLivraison` vivait sur un chemin QU'AUCUN APPELANT DE PRODUCTION NE TRAVERSE :
+  // seul un essai passant l'option à la main l'atteignait. C'est la septième des huit règles
+  // d'« éprouver une garde » — *une garde juste, sur un chemin que le nouvel appelant ne
+  // traverse pas* —, et elle a été commise dans le lot qui la cite. La survivante qui l'a
+  // révélée : retirer le refus de borne de `bin/livrer.js` laissait la livraison repartir, et
+  // le refus qui tombait alors disait de nouveau « ce pane n'a JAMAIS été inscrit ».
+  enregistrementEnCours = false,
   // ⚠️ LE TEMPS LAISSÉ AU TEXTE COINCÉ POUR BOUGER avant qu'on le tienne pour immobile
   // (T-20260816-0114). `0` désarme la délivrance entièrement — et c'est le cas du BRIEF DE
   // NAISSANCE : une session qui vient de naître attend, et une boîte qui porterait déjà
@@ -973,7 +1009,7 @@ async function livrerSousBudget({
     // ce qu'ils étaient : un blocage nommé sans geste pour le lever. C'est le seul appelant
     // réel de cette fonction ; l'oublier ici rendrait toute la sortie muette en production
     // pendant que les essais unitaires resteraient verts.
-    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane, parLePane });
+    obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane, parLePane, enregistrementEnCours });
     if (!obstacle) break;
     if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
   }
@@ -1014,7 +1050,7 @@ async function livrerSousBudget({
       const etatApres = await appelHerdr(lectures.interroger, vers);
       statutAvant = statutRendu(etatApres.reponse);
       ecranAvant = await lireEcran(lectures.lireEcran, vers);
-      obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane, parLePane });
+      obstacle = obstacleAvantLivraison(ecranAvant, statutAvant, { pairOccupe, pane, parLePane, enregistrementEnCours });
       // ⚠️ UN REFUS QUI TAIT UN GESTE DÉJÀ POSÉ EST UN REFUS QUI MENT PAR OMISSION (relevé en
       // revue de fond). Si la boîte se rebloque entre la délivrance et l'écriture, le lecteur
       // voit « boîte pas vide » — et ignore qu'une touche d'envoi est DÉJÀ partie vers ce pane,
