@@ -191,7 +191,7 @@ Quatre lignes, pas un journal : **ce qui a été consolidé** · **les amendemen
 
 **a) La doc de `/orchestrateur` est périmée sur les sous-agents.** Elle affirme encore : « ce qu'il ne peut PAS : écrire un fichier, ouvrir un sous-agent — refusé, pas seulement non autorisé ». C'est faux depuis `D-20260826-0010` : `Task` a quitté `permissions.deny`, et la garde `sous-agent` laisse passer les types dont l'outillage exclut l'écriture (`Explore`, `Plan`) en refusant tous les autres. À corriger dans ce lot.
 
-**b) Et c'est le piège qui ferait naître le curateur infirme.** Cette garde ne décide que pour les rôles qu'elle connaît :
+**b) Et c'est le piège qui ferait naître le curateur MAL GARDÉ.** *(L'amorce disait « infirme » — c'est l'inverse qui se produit ; voir la correction en fin de sous-section.)* Cette garde ne décide que pour les rôles qu'elle connaît :
 
 ```js
 export const ROLES_GARDES = new Set(['orchestrateur']);
@@ -199,9 +199,9 @@ export const ROLES_GARDES = new Set(['orchestrateur']);
 
 Le fil qui l'appelle dans `settings.json` **refuse par défaut** quand la garde ne rend aucun verdict — délibérément (« un garde absent ne vaut jamais un garde permissif »). Un rôle absent de cet ensemble se voit donc **tout refuser**, y compris l'analyse en lecture seule dont son tour dépend. Il naîtrait détecté, nommé, au bon endroit, et incapable de faire son travail — sans qu'aucune erreur ne le dise avant le premier tour.
 
-> 🔴 **CORRECTION DU 2026-09-20 — ce paragraphe décrit le mauvais mode de panne, et c'est l'inverse qui se produit.** Mesuré sur `main` le jour de la fusion : les trois fils `gardes/{ecriture,sous-agent,terminal}.js` ne situent pas le rôle, ils lisent `process.env.SOMTECH_ROLE || 'orchestrateur'` — et **rien dans le dépôt ne pose `SOMTECH_ROLE`**. Le rôle transmis est donc **toujours** la chaîne `'orchestrateur'`, qui **est** dans `ROLES_GARDES`.
+> 🔴 **CORRECTION DU 2026-09-20 — ce paragraphe décrit le mauvais mode de panne, et c'est l'inverse qui se produit.** Mesuré sur `main` le jour de la fusion : les trois fils `gardes/{ecriture,sous-agent,terminal}.js` ne situent pas le rôle, ils lisent `process.env.SOMTECH_ROLE || 'orchestrateur'` — et **rien dans le dépôt ne pose `SOMTECH_ROLE`**. Le rôle transmis est donc **toujours** la chaîne `'orchestrateur'`, qui **est** dans l'ensemble des rôles connus de chaque fil — `ROLES_GARDES` pour `ecriture.js` et `sous-agent.js`, `ROLES_CONNUS` pour `terminal.js`, **où `ROLES_GARDES` n'existe plus** (renommé par `T-20260826-0079`). Trois fils, deux noms, **un seul et même mode de panne**.
 >
-> **Un curateur ne naîtrait donc pas infirme : il naîtrait GARDÉ COMME UN ORCHESTRATEUR** — sur-permissionné sous une identité qui n'est pas la sienne. `ROLES_GARDES` ne mord jamais, et inscrire `curateur` dans les listes sans corriger les fils reviendrait à **garder un cas qui ne se produit pas**.
+> **Un curateur ne naîtrait donc pas infirme : il naîtrait GARDÉ COMME UN ORCHESTRATEUR** — sur-permissionné sous une identité qui n'est pas la sienne. ces ensembles ne mordent jamais, et inscrire `curateur` dans les listes sans corriger les fils reviendrait à **garder un cas qui ne se produit pas**.
 >
 > Le danger est réel, mais il est **permissif, pas restrictif** — et un défaut permissif ne se signale par aucune panne. L'inventaire du plan (`../plans/2026-09-09-metier-curateur-metiers.md`, point 1) porte la mesure et le correctif : les fils situent le rôle **au lieu** avant que le rôle soit inscrit.
 >
