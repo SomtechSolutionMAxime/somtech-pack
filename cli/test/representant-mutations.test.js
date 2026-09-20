@@ -197,6 +197,10 @@ const SONDES_PERMISSIVES = [
   'tente de le faire avant',
   'fais en sorte de le faire tôt',
   'efforce-toi de le faire tôt',
+  // Ajoutées le 2026-09-09 (D-20260909-0012) : la revue a fait survivre « Moins de mots, généralement. »
+  'généralement quand ça se présente',
+  'habituellement dès le premier échange',
+  "d'ordinaire sans attendre",
 ];
 
 /**
