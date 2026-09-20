@@ -16,8 +16,18 @@ import {
 const PKG = '@somtech-solutions/pack';
 const REGISTRY = 'https://npm.pkg.github.com';
 
-/** Interroge le registre. Rend la version publiée, ou null si on n'a pas pu regarder. */
+/**
+ * Interroge le registre. Rend la version publiée, ou null si on n'a pas pu regarder.
+ *
+ * ⚠️ `SOMTECH_PACK_REGISTRE` n'est PAS un repli : c'est un point d'injection pour
+ * les bancs, qui ne doit jamais soustraire le chemin réel à l'épreuve. Le chemin
+ * par défaut — `npm view` — reste celui de tous les appels, et il est éprouvé à
+ * part avec un `exec` injecté. Un banc qui n'éprouverait QUE la couture laisserait
+ * le vrai appel sans garde ; c'est ce qui a coûté un tour entier sur T-20260815-0013.
+ */
 export function interrogerRegistre({ exec = execFileSync } = {}) {
+  const stub = process.env.SOMTECH_PACK_REGISTRE;
+  if (stub !== undefined) return /^\d+\.\d+\.\d+/.test(stub) ? stub : null;
   try {
     const out = exec('npm', ['view', PKG, 'version', `--registry=${REGISTRY}`], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 20000,

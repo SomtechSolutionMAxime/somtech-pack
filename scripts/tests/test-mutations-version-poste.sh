@@ -22,6 +22,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SUITE="${ROOT}/cli/test/version-poste.test.js"
+SUITE_CABLAGE="${ROOT}/cli/test/version-poste-cablage.test.js"
 
 WORK="$(mktemp -d)"; PASS=0; FAIL=0; N=0
 trap 'rm -rf "$WORK"' EXIT
@@ -37,10 +38,16 @@ fi
 # jouer <dossier-src> — rend 0 si la suite passe contre CES sources.
 jouer() {
   local src="$1"
+  # LES DEUX bancs : celui des calculs ET celui du CHEMIN RÉEL. Une revue de fond
+  # a montré que les calculs pouvaient être justes et le câblage silencieusement
+  # contourné — vider la route `case 'version'`, inverser deux champs dans l'appel
+  # de `setup.js` — sans qu'aucune garde ne bronche. C'est pourquoi `cli.js` et
+  # `commands/setup.js` sont maintenant dans la portée de ce banc.
   SOMTECH_VERSION_POSTE_SRC="${src}/version-poste.js" \
   SOMTECH_VERSION_CMD_SRC="${src}/commands/version-poste-cmd.js" \
   SOMTECH_VERSION_ECRIRE_SRC="${src}/version-poste-ecrire.js" \
-    node --test "$SUITE" >/dev/null 2>&1
+  SOMTECH_CLI_SRC="${src}/cli.js" \
+    node --test "$SUITE" "$SUITE_CABLAGE" >/dev/null 2>&1
 }
 
 # essai <fichier-relatif-à-src> <libellé>   (le python de mutation est lu sur STDIN)
@@ -199,6 +206,46 @@ essai version-poste-ecrire.js 'le marqueur ne dit plus qu_il est de portée post
 s = s.replace("    portee: 'poste',\n", "")
 PY
 
+echo "== LE CÂBLAGE — l'endroit où les calculs sont branchés =="
+
+essai cli.js 'la route `version` ne fait plus rien et rend 0' <<'PY'
+s = s.replace("      case 'version': return cmdVersionPoste(flags);",
+              "      case 'version': return 0;")
+PY
+
+essai cli.js 'la route `version` disparaît (commande inconnue)' <<'PY'
+s = s.replace("      case 'version': return cmdVersionPoste(flags);", "")
+PY
+
+essai commands/setup.js 'setup n_écrit plus le marqueur du poste' <<'PY'
+s = s.replace("      const chemin = ecrireVersionPoste(destDir, { version: pkgVersion(), contenu });",
+              "      const chemin = 'rien';")
+PY
+
+essai commands/setup.js 'le marqueur porte la version du CONTENU au lieu de celle du PAQUET' <<'PY'
+s = s.replace("ecrireVersionPoste(destDir, { version: pkgVersion(), contenu })",
+              "ecrireVersionPoste(destDir, { version: contenu, contenu: pkgVersion() })")
+PY
+
+essai commands/setup.js 'setup ne ramasse plus les verrous périmés' <<'PY'
+s = s.replace("    const v = ramasserVerrous(destDir, { dryRun: flags.dryRun });",
+              "    const v = { retires: [], candidats: [] };")
+PY
+
+essai commands/version-poste-cmd.js 'le registre n_est plus jamais consulté' <<'PY'
+s = s.replace("  const registre = deps.registre !== undefined ? deps.registre : interrogerRegistre(deps);",
+              "  const registre = null;")
+PY
+
+essai commands/version-poste-cmd.js 'interrogerRegistre accepte une sortie qui n_est pas un semver' <<'PY'
+s = s.replace("    return /^\\d+\\.\\d+\\.\\d+/.test(v) ? v : null;", "    return v;")
+PY
+
+essai commands/version-poste-cmd.js 'interrogerRegistre n_interroge plus npm mais autre chose' <<'PY'
+s = s.replace("    const out = exec('npm', ['view', PKG, 'version', `--registry=${REGISTRY}`], {",
+              "    const out = exec('echo', ['9.9.9'], {")
+PY
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 cp -R "${ROOT}/cli/src" "${WORK}/vide-src"
 cat > "${WORK}/vide.py" <<'PY'
@@ -225,9 +272,24 @@ else
   ko "mutation sans effet rejetée, mais sans le dire : '$(cat "${WORK}/vide.err")'"
 fi
 
+echo "== Le chiffre annoncé au CHANGELOG =="
+# Un chiffre de couverture rouillé se lit comme frais. On le compare au compte
+# RÉELLEMENT JOUÉ — jamais à `PLANCHER`, qui est une valeur entretenue à la main
+# et donc un voisin de la chose à mesurer.
+total=$(( PASS + FAIL + 1 ))
+annonces="$(grep -oE 'test-mutations-version-poste\.sh` — [0-9]+ assertions' "${ROOT}/CHANGELOG.md" | grep -oE '[0-9]+ assertions' | grep -oE '[0-9]+')"
+if [ -z "$annonces" ]; then
+  ko "le CHANGELOG n'annonce aucun compte d'assertions pour cette contre-épreuve"
+else
+  fausses=""
+  for n in $annonces; do [ "$n" = "$total" ] || fausses="${fausses} ${n}"; done
+  [ -z "$fausses" ] && ok "le CHANGELOG annonce ${total} assertions, soit le compte réellement joué" \
+    || ko "le CHANGELOG annonce${fausses} assertion(s) ; ${total} sont jouées — chiffre rouillé"
+fi
+
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=20
+PLANCHER=28
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
