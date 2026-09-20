@@ -729,6 +729,26 @@ else
   printf '%s' "$bloc_du_tag" | grep -q 'md_version_libre' \
     && ok "et ce bloc rejoue md_version_libre AVANT de taguer" \
     || ko "le bloc qui pose le tag ne vérifie pas la disponibilité — la fenêtre de T-20260815-0013 reste ouverte"
+
+  # ⚠️ PRÉSENT n'est pas GOUVERNANT. Un appel NU — `md_version_libre "<v>"`
+  # suivi de `git tag` sans rien qui arrête l'exécution — satisfait un `grep`
+  # et ne protège rien : le code de retour part à la poubelle et le tag se pose
+  # quand même. C'est le motif 1 du brief, appliqué à cette garde-ci.
+  ligne_gate="$(printf '%s\n' "$bloc_du_tag" \
+    | grep -nE 'md_version_libre[^#]*(\|\||&&|; *then)|^[[:space:]]*if[[:space:]].*md_version_libre' \
+    | head -1 | cut -d: -f1)"
+  ligne_tag="$(printf '%s\n' "$bloc_du_tag" | grep -nE '^[[:space:]]*git tag ' | head -1 | cut -d: -f1)"
+
+  if [ -z "$ligne_tag" ]; then
+    ko "le bloc retenu ne contient pas de ligne \`git tag\` exécutable"
+  elif [ -z "$ligne_gate" ]; then
+    ko "md_version_libre est APPELÉ mais son code de retour n'arrête rien — un appel nu laisse le tag se poser sur un numéro pris"
+  else
+    ok "l'appel est GOUVERNANT (son code de retour arrête l'exécution)"
+    [ "$ligne_gate" -lt "$ligne_tag" ] \
+      && ok "et il gouverne AVANT la pose du tag (ligne ${ligne_gate} < ${ligne_tag})" \
+      || ko "la vérification gouvernante vient APRÈS \`git tag\` (ligne ${ligne_gate} > ${ligne_tag}) — elle ne protège rien"
+  fi
 fi
 
 # Le chemin qui SUPPRIME ne compare plus à \`main\` local.
@@ -803,7 +823,7 @@ echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=115
+PLANCHER=117
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

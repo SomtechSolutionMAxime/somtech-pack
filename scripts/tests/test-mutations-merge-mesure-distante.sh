@@ -508,6 +508,15 @@ s = s.replace("""md_version_libre "<version>" || { echo "Numero indisponible ou 
 git tag <version>""", "git tag <version>")
 PY
 
+essai_skill "l_appel devient NU : présent, mais il n_arrête plus rien" <<'PY'
+# Retrait CHIRURGICAL du seul enforcement : l'appel reste, son code de retour
+# part à la poubelle, et `git tag` s'exécute quand même. Une garde qui cherche
+# la PRÉSENCE du nom reste verte sur ce code — c'est ce qu'a trouvé la revue.
+s = s.replace(
+    'md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }',
+    'md_version_libre "<version>"')
+PY
+
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
 # Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
 # tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
@@ -591,7 +600,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=60
+PLANCHER=61
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
