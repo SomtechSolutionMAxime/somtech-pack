@@ -517,3 +517,49 @@ test('LE RÉGLAGE PAR DÉFAUT DE LA SONDE EST GARDÉ, LUI AUSSI — deux seconde
   planifies[0].fn();
   assert.equal(await promesse, true, 'et ce défaut-là tranche bien du côté prudent');
 });
+
+test('LE VRAI MINUTEUR TRANCHE POUR DE BON — sans lui, il n’y a plus de filet du tout', { timeout: 5000 }, async () => {
+  // 🔴 LA DERNIÈRE SURVIVANTE, ET LA PLUS SÉVÈRE (T-20260920-0013).
+  // Tout ce que ce fichier éprouve du minuteur passe un `planifier` SIMULÉ — c'est ce qui
+  // permet d'observer l'appel au lieu de mesurer une durée, et c'est tout l'objet du lot.
+  // Mais du coup, le `planifier` PAR DÉFAUT n'était éprouvé par rien.
+  // Mutation : `planifier = () => ({})` — il ne programme plus jamais rien. **11 bancs sur
+  // 11 restaient verts.**
+  //
+  // > On avait rendu le minuteur observable, et rendu du même coup le VRAI minuteur
+  // > inobservable. Le joint qui permet d'éprouver une chose peut la soustraire à l'épreuve.
+  //
+  // Et ce n'est pas « le filet est trop lâche », comme pour la borne : c'est **plus de filet
+  // du tout**. Si un vrai socket ne conclut jamais — le cas d'origine de ce ticket — rien ne
+  // referme la promesse : `placeTenue` pend, et `passerLaMain` avec elle. Une étape qui pend
+  // ne rougit jamais.
+  //
+  // ⚠️ CE BANC ATTEND UN VRAI DÉLAI, MAIS IL N'EN MESURE AUCUN — ET LA DIFFÉRENCE EST TOUT
+  // CE QUI SÉPARE CE LOT DE L'ANCIEN BANC. Il ne compare rien à une borne : il demande
+  // seulement que la promesse FINISSE par trancher. Si le minuteur par défaut est cassé, elle
+  // ne tranche jamais, et c'est la borne du test (`timeout`) qui rend l'attente visible — un
+  // échec franc, pas un écart d'une milliseconde. Aucune charge de runner ne peut le rendre
+  // rouge à tort : sur une machine lente, on attend simplement un peu plus longtemps.
+  // La borne de 30 ms est explicite pour ne pas payer les deux secondes du défaut à chaque
+  // passage — le défaut lui-même est gardé par le banc juste au-dessus.
+  //
+  // ⚠️ ET COMMENT CE ROUGE-LÀ SE PRÉSENTE, PARCE QUE ÇA PEUT TROMPER : sous la mutation, le
+  // relevé rend `fail 0` et `cancelled 1` — un banc qui n'abéutit pas est compté annulé, pas
+  // échoué. **Le code de sortie est bien 1**, donc la chaîne rougit ; mesuré, pas supposé.
+  // Mais quelqu'un qui lirait la seule ligne `fail 0` conclurait que tout va bien.
+  let ferme = 0;
+  const priseQuiNeConclutJamais = () => {
+    const enVol = setTimeout(() => {}, 60_000);
+    return { on() {}, destroy() { ferme += 1; clearTimeout(enVol); } };
+  };
+
+  // ⚠️ NI `planifier` NI `annuler` ICI : ce sont les VRAIS `setTimeout`/`clearTimeout` qu'on
+  // éprouve, et c'est le seul banc du fichier qui les laisse au défaut.
+  const verdict = await placeTenue(join(racine, 'peu-importe.sock'), {
+    borne: 30,
+    brancher: priseQuiNeConclutJamais,
+  });
+
+  assert.equal(verdict, true, 'le vrai minuteur tranche, et du côté prudent — sans lui, la sonde pend et rien ne le dit');
+  assert.equal(ferme, 1, 'et il referme la prise en tranchant, comme le fait son double');
+});
