@@ -46,7 +46,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { delivrerLaBoite, avisDeBoiteVidee } from '../src/livraison.js';
-import { soumissionEtablie, verdictDeSoumission, VERDICTS_DE_SOUMISSION } from '../../ligne-directe/src/delivrance.js';
+import {
+  soumissionEtablie,
+  verdictDeSoumission,
+  etablieSurUnPrefixeTronque,
+  VERDICTS_DE_SOUMISSION,
+} from '../../ligne-directe/src/delivrance.js';
 
 // ⚠️ LE DOUBLE D'ÉCRAN EST REPRIS DE `une-boite-videe-ne-se-tait-pas.test.js`, AU CARACTÈRE
 // PRÈS — pas réécrit. Un double qui s'écarte du service qu'il imite ne prouve rien.
@@ -264,6 +269,95 @@ test('⚠️ message en masse (c) — même préambule, QUEUES DIFFÉRENTES : fa
     VERDICTS_DE_SOUMISSION.ETABLIE,
     'documenté comme résidu accepté — si ce cas devient réel, le signal doit changer, pas le seuil',
   );
+
+  // ⚠️ ET CET ESSAI-LÀ FIGE, IL NE SURVEILLE PAS — il faut le dire, parce que les deux se
+  // ressemblent et qu'un essai qui documente ne se déclenche jamais. Il rougira si QUELQU'UN
+  // CHANGE LE CODE, jamais si le cas apparaît en production. La surveillance, elle, est le
+  // prédicat ci-dessous : il ne détecte pas (c) — c'est impossible — il compte les fois où on
+  // le RISQUE, c'est-à-dire chaque conclusion prise sur un sujet tronqué.
+  assert.equal(
+    etablieSurUnPrefixeTronque({
+      sujetAvant: 'un tout autre tour',
+      sujetApres: `${autreQueue.slice(0, 77)}…`,
+      texteDisparu: avecQueue,
+    }),
+    true,
+    'ce pari-là doit être comptable — c’est tout ce qu’on peut faire d’un cas qu’on ne peut pas voir',
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE PARI RENDU COMPTABLE — ce qu'on ne peut pas fermer, on le compte
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('le pari ne se compte QUE sur un sujet tronqué — un sujet entier ne cache rien', () => {
+  // Sur un sujet entier, on a vu tout ce qui est parti : il n'y a pas de queue invisible.
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'avant', sujetApres: TEXTE, texteDisparu: TEXTE }),
+    false,
+  );
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: null, sujetApres: LONG_TRONQUE, texteDisparu: LONG }),
+    true,
+  );
+});
+
+test('le pari ne se compte pas quand aucune soumission n’est établie', () => {
+  // Compter un pari qu'on n'a pas pris gonflerait le chiffre et le rendrait illisible — c'est
+  // la façon la plus simple de tuer un compteur : lui faire compter autre chose.
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: LONG_TRONQUE, sujetApres: LONG_TRONQUE, texteDisparu: LONG }),
+    false,
+    'sujet inchangé : aucune conclusion, donc aucun pari',
+  );
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'avant', sujetApres: null, texteDisparu: TEXTE }),
+    false,
+    'sonde aveugle : aucune conclusion, donc aucun pari',
+  );
+});
+
+test('le pari ne se compte pas sur un ESPACE RÉSERVÉ — son incertitude est d’une autre nature', () => {
+  // Là-bas on ne conclut pas sur un préfixe du tout, mais sur le changement seul. Mélanger les
+  // deux incertitudes dans un seul compteur le rendrait impossible à interpréter.
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'avant', sujetApres: `${LONG.slice(0, 77)}…`, texteDisparu: REPLI }),
+    false,
+  );
+});
+
+test('⚠️ `delivrerLaBoite` REND le pari en champ — sinon personne ne pourra jamais le compter', async () => {
+  const r = await delivrerLaBoite({
+    texteCoince: LONG,
+    commandes: { lireEcran: ['agent', 'read', 'w1:p1'], soumettre: ['agent', 'send-keys', 'w1:p1', 'Enter'] },
+    appelHerdr: async () => ({ ok: true }),
+    lireEcran: async () => BOITE_VIDE,
+    dormir: async () => {},
+    immobiliteMs: 1,
+    lireSujetDuDernierTour: (() => {
+      let n = 0;
+      return async () => (n++ === 0 ? 'un tour d’avant' : LONG_TRONQUE);
+    })(),
+  });
+  assert.equal(r.soumissionEtablie, true);
+  assert.equal(r.soumissionEtablieSurPrefixeTronque, true, 'le champ doit sortir, pas mourir dans la fonction');
+});
+
+test('`delivrerLaBoite` ne compte PAS un pari quand le sujet est entier', async () => {
+  const r = await delivrerLaBoite({
+    texteCoince: TEXTE,
+    commandes: { lireEcran: ['agent', 'read', 'w1:p1'], soumettre: ['agent', 'send-keys', 'w1:p1', 'Enter'] },
+    appelHerdr: async () => ({ ok: true }),
+    lireEcran: async () => BOITE_VIDE,
+    dormir: async () => {},
+    immobiliteMs: 1,
+    lireSujetDuDernierTour: (() => {
+      let n = 0;
+      return async () => (n++ === 0 ? 'un tour d’avant' : TEXTE);
+    })(),
+  });
+  assert.equal(r.soumissionEtablie, true);
+  assert.equal(r.soumissionEtablieSurPrefixeTronque, false);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

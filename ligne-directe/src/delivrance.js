@@ -416,6 +416,16 @@ export async function delivrerLaBoite({
       // que c'est elle qui décide si ce correctif ferme quelque chose en vrai.
       verdictDeSoumission: verdict,
       soumissionEtablie: verdict === VERDICTS_DE_SOUMISSION.ETABLIE,
+      // ⚠️ LE PARI, RENDU COMPTABLE. Vrai quand on a conclu sur un sujet TRONQUÉ : on n'a vu
+      // que 77 caractères, et deux textes qui les partagent sans partager la suite sont
+      // indiscernables. On ne peut pas fermer ce cas ; on peut compter les fois où on le
+      // risque, et voir ce compte monter le jour où les messages gabarités se multiplient.
+      soumissionEtablieSurPrefixeTronque: etablieSurUnPrefixeTronque({
+        sujetAvant,
+        sujetApres,
+        texteDisparu: texteCoince,
+        sondeEnPanne,
+      }),
     };
   }
   if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
@@ -580,9 +590,7 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
 
   const tronque = apres.endsWith(MARQUE_DE_TRONCATURE);
   const noyau = tronque ? apres.slice(0, -MARQUE_DE_TRONCATURE.length) : apres;
-  if (noyau === '') return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
-
-  // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré : sur un texte de
+    // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré : sur un texte de
   // onze lignes, `quota_topic` portait « ligne 1 … ». On compare donc au début du texte, une
   // fois ses blancs internes normalisés — un retour à la ligne ne doit pas casser la garde.
   const aplati = (t) => t.replace(/\s+/g, ' ').trim();
@@ -629,6 +637,13 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
   // texte parte précisément pendant que celui-ci disparaît sans être soumis. **[non établi]**
   // qu'il se produise ; on n'a pas de mesure de fréquence, et on ne pose pas de longueur
   // minimale, qui serait une borne inventée plutôt que mesurée.
+  //
+  // ⚠️ ET LE ZÉRO MESURÉ EST UN ZÉRO D'AUJOURD'HUI. Sur les 870 paires du parc, aucune paire
+  // « même préambule, queues différentes » — les 62 collisions étaient toutes des doublons
+  // exacts. Mais ce motif est celui des messages GABARITÉS, et D-20260920-0003 prévoit de
+  // transformer les gestes récurrents en skills, donc d'en produire en série. **Ce chiffre va
+  // monter.** Le lire plus tard comme une propriété du système serait une faute de lecture ;
+  // `etablieSurUnPrefixeTronque` existe pour qu'on le voie monter avant d'en payer le prix.
   return vu.startsWith(parti) || parti.startsWith(vu)
     ? VERDICTS_DE_SOUMISSION.ETABLIE
     : // Le sujet a changé, mais vers AUTRE chose, sans parenté : l'agent a soumis un autre
@@ -639,6 +654,39 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
 /** Le même fait, en booléen, pour les appelants qui n'ont pas à connaître les trois états. */
 export function soumissionEtablie(args) {
   return verdictDeSoumission(args) === VERDICTS_DE_SOUMISSION.ETABLIE;
+}
+
+/**
+ * ⚠️ LE PARI QU'ON PREND, RENDU COMPTABLE — parce qu'on ne peut pas le fermer.
+ *
+ * Il reste un faux positif que ce signal ne saura JAMAIS exclure : deux textes qui partagent
+ * leurs 77 premiers caractères et DIFFÈRENT ensuite. `quota_topic` étant coupé à 77, la
+ * différence est hors de notre vue par construction — ce n'est pas un défaut d'implémentation,
+ * c'est une limite du signal. Le texte perdu est alors la queue du premier, et l'avis est tu.
+ *
+ * ⚠️ ON NE PEUT PAS DÉTECTER CE CAS, MAIS ON PEUT COMPTER LES FOIS OÙ ON LE RISQUE. Chaque
+ * conclusion `soumission-etablie` prise sur un sujet TRONQUÉ est un pari ; celles prises sur un
+ * sujet entier n'en sont pas — on y voit le texte en entier. Ce prédicat sépare les deux.
+ *
+ * ⚠️ ET LE RISQUE VA MONTER, CE N'EST PAS UNE CONSTANTE. Mesuré le 2026-09-20 : zéro occurrence
+ * de « préambule partagé, queues différentes » sur les 870 paires du parc — **mais c'est le
+ * trafic d'aujourd'hui**. Le motif est exactement ce que produisent les messages GABARITÉS, et
+ * D-20260920-0003 prévoit de transformer les gestes récurrents en skills, donc d'en fabriquer
+ * en série. Lire « 0 sur 870 » dans trois mois comme une propriété du système serait une faute
+ * de lecture, et c'est pour ça que ce compteur existe avant que le cas n'arrive.
+ *
+ * Ce prédicat est rendu en champ par `delivrerLaBoite` ; **le comptage lui-même reste à
+ * brancher côté veilleur** — ce lot ne touche pas au porteur.
+ */
+export function etablieSurUnPrefixeTronque({ sujetAvant, sujetApres, texteDisparu, sondeEnPanne = false } = {}) {
+  if (verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sondeEnPanne }) !== VERDICTS_DE_SOUMISSION.ETABLIE) {
+    return false;
+  }
+  // Un espace réservé ne conclut pas sur un préfixe du tout — son critère est le changement
+  // seul, et son incertitude est déjà dite ailleurs. Le pari nommé ici est celui de la
+  // troncature, et de lui seul.
+  if (estUnEspaceReserve(texteDisparu)) return false;
+  return String(sujetApres ?? '').trim().endsWith(MARQUE_DE_TRONCATURE);
 }
 
 /** L'ensemble EXACT des `cause` que `delivrerLaBoite` peut rendre. */
