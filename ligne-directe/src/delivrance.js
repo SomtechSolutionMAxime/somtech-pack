@@ -651,9 +651,15 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
   // le jour où la définition de `tronque` changera — ce qui est exactement ce qui vient
   // d'arriver, dans l'autre sens.
   if (noyau === '') return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
-    // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré : sur un texte de
-  // onze lignes, `quota_topic` portait « ligne 1 … ». On compare donc au début du texte, une
-  // fois ses blancs internes normalisés — un retour à la ligne ne doit pas casser la garde.
+    // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré sur le banc : un texte
+  // de onze lignes soumis d'un coup rendait `quota_topic = "ligne 1 du texte colle du banc
+  // cas C"` — la PREMIÈRE LIGNE SEULE, **sans marque de troncature**, parce qu'elle tenait
+  // sous les 77 points de code. On compare donc au début du texte, une fois ses blancs
+  // internes normalisés — un retour à la ligne ne doit pas casser la garde.
+  //
+  // (La formulation précédente abrégeait en « ligne 1 … », ce qui laissait croire à une marque
+  // littérale et a conduit une passe de revue à soupçonner un défaut qui n'existe pas. Une
+  // glose qui abrège une mesure finit par se lire comme la mesure.)
   const aplati = (t) => t.replace(/\s+/g, ' ').trim();
   const vu = aplati(disparu);
   const parti = aplati(noyau);
@@ -1031,6 +1037,20 @@ export function avisDeBoiteVidee({ texteDisparu = '', soumissionEtablie = false,
   // ② L'interrupteur du poste, sur le modèle de `LIGNE_DIRECTE_VERBEUX` — la seule autre
   // variable que ce module lise. Il éteint cet avis-là, et rien d'autre : ni le balayage, ni la
   // délivrance, ni l'avis de boîte BLOQUÉE, qui annonce un geste qu'on a réellement posé.
+  //
+  // 🔴 CE QU'IL ÉTEINT AUSSI, ET IL FAUT LE DIRE AVANT DE L'ARMER (relevé en quatrième passe
+  // de revue de fond). Il n'éteint pas « l'avis quand l'auteur vient de soumettre » : il éteint
+  // **TOUT l'avis de boîte vidée**, y compris le cas pour lequel ce chemin existe — un texte
+  // qui a disparu SANS être soumis, et dont personne n'apprendra jamais la perte
+  // (T-20260817-0090, l'ordre du CTO sauvé parce qu'un tiers l'avait lu à l'écran).
+  //
+  // C'est un interrupteur de dernier recours, pas un réglage de confort. Armé, il rend le
+  // filet anti-perte muet. La garde ① ci-dessus, elle, ne tait que ce qui est établi ; c'est
+  // elle qu'on veut au quotidien, et non celui-ci.
+  //
+  // ⚠️ IL EST NÉANMOINS DANS LE LOT PARCE QUE LE BRIEF LE DEMANDE — le « B » de « A + B ».
+  // La passe de revue l'a signalé comme hors périmètre : elle avait tort sur le fait, et
+  // raison sur ce que cet interrupteur coûte. Les deux valent d'être écrits.
   if (env?.LIGNE_DIRECTE_SANS_AVIS_BOITE_VIDEE) return null;
 
   // LE TEXTE EN ENTIER, JAMAIS TRONQUÉ — c'est le seul point qui rend la perte réparable. Le
