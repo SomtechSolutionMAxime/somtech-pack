@@ -830,6 +830,7 @@ porte "Ce qu'un rapport de revue doit porter" \
   "5 — et elle est attribuée aux deux pairs, jamais au dirigeant" \
   "ristigouche" \
   "chaudiere" \
+  "2026-09-01" \
   "n'est pas un ordre du dirigeant"
 
 # ═══════════════════════════════════════════════════════════════════════════
