@@ -134,9 +134,9 @@ epics get <ton-epic>
 
 **Pourquoi ce témoin-là et pas celui qu'on écrit d'habitude** : le témoin par **compte de tours** — *« deux tours sans entrée »* — exige de savoir combien de tours ont passé, **une information qui meurt avec la session**. **L'âge du réceptacle, lui, survit à tout.**
 
-**L'occurrence, et son coût** *(`batiscan`, mesuré le 2026-09-19, `E-20260818-0007`)* : réceptacle **au bon endroit** depuis le 2026-08-18, **32 jours sans une seule entrée** — et la ronde n'a repris que parce que le CTO l'a réclamée, **exactement le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour, la grille des écarts en rendait **trois rouges sur huit, et les trois étaient des contrôles périodiques** : 55 espaces de travail sur un seul dépôt dont **48 orphelins**, le plus ancien vieux de deux mois, et **aucune date de passe de veille inscrite nulle part**. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+**L'occurrence et son coût** *(`E-20260818-0007`, mesuré le 2026-09-19)* : réceptacle **au bon endroit** depuis le 2026-08-18, **32 jours sans une seule entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour : **trois écarts rouges sur huit, tous des contrôles périodiques** — 48 espaces de travail orphelins sur un dépôt, aucune date de passe de veille nulle part. **Un manquement à une tâche périodique n'émet aucun signal : c'est le seul type de défaut dont l'absence de plainte est garantie.**
 
-⚠️ **Sept orchestrateurs ont cherché *« mon epic est-il au bon endroit ? »*. Personne n'a cherché *« mon epic a-t-il bougé ? »*** — la même requête, le même champ, et une réponse toute différente.
+⚠️ Sept orchestrateurs ont cherché *« mon epic est-il au bon endroit ? »* ; **personne n'a cherché *« a-t-il bougé ? »*** — même champ, autre réponse.
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
@@ -170,9 +170,9 @@ Standards et ADR neufs ou amendés, compétences ajoutées, consignes du feed. *
 
 **Sans elle, la veille rend un vide qui se lit comme une stabilité.**
 
-**L'occurrence, et son coût** *(passe de `batiscan` du 2026-09-19, mesurée par `michel`)* : sur la fenêtre du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé — le corpus vécu, si**, et il vivait dans des `CONTEXTE.md` et des consignes de session, c'est-à-dire dans des supports qui ne descendent à personne. **Coût : un orchestrateur qui relit son corpus pour se mettre à jour conclut, à juste titre et faussement, que rien n'a changé.**
+**L'occurrence et son coût** *(passe du 2026-09-19)* : du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé ; le corpus vécu, si** — et il vivait dans des `CONTEXTE.md` et des consignes de session, des supports qui ne descendent à personne. **Coût : celui qui relit son corpus pour se mettre à jour conclut, à juste titre et faussement, que rien n'a changé.**
 
-⚠️ **Et ce que la cinquième question rapporte n'est pas opposable pour autant — c'est une PISTE, pas une source.** Un fait vécu se mesure à sa source avant d'être inscrit, et d'autant plus vite qu'il retirerait une consigne *(voir l'asymétrie du fait rapporté, dans `reflexes.md`)*. **Sur cette même passe, un des faits rapportés était faux dans sa direction.**
+⚠️ **Ce qu'elle rapporte est une PISTE, pas une source** : un fait vécu se mesure à sa source avant d'être inscrit, et d'autant plus vite qu'il retirerait une consigne *(`reflexes.md`, l'asymétrie du fait rapporté)*. **Sur cette même passe, un des faits rapportés était faux dans sa direction.**
 
 ## Ta ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au ServiceDesk
 

@@ -67,20 +67,11 @@ Le texte est opposable, il vit dans les permissions du poste (`~/.claude/setting
 
 > « Fusion d'une branche de livraison vers le tronc (gh pr merge, git merge) et fermeture du lot, par un orchestrateur ou un chef, quand TOUTES les conditions de livraison sont deja reunies : revue independante faite, QA passee avec ses reserves ecrites, verifications portees sur le SHA reel, sas de staging libre et verrou respecte. Le dirigeant a delegue le clic final le 2026-09-15 : attendre son go une fois les conditions reunies ne protege rien et arrete le chantier pendant des heures. Ce qui reste interdit et n'est PAS couvert : sauter la revue ou la QA, forcer un tronc protege, pousser sur staging quand le sas est occupe par une autre livraison, et tout geste de production hors livraison normale — ecriture directe en base, deploiement manuel, montee d'image. »
 
-**Les quatre conditions, et elles se vérifient une par une** :
+**Chaque condition se prouve, elle ne se déclare pas** : les **deux verdicts** écrits sur la tête FINALE, jamais intermédiaire · le rapport de QA **avec ses réserves écrites** — une réserve tue est une condition manquante · la chaîne lue sur le **commit qu'on fusionne**, pas sur celui qu'on croit fusionner · l'**écart `origin/main..origin/staging` mesuré**, pas seulement le verrou interrogé *(voir Le sas, plus haut)*.
 
-| Condition | Ce qui la prouve |
-|---|---|
-| **Revue indépendante faite** | les verdicts des deux passes, **écrits sur la tête FINALE** — pas sur une tête intermédiaire |
-| **QA passée** | le rapport, **avec ses réserves écrites** — une réserve tue est une condition manquante |
-| **Vérifications sur le SHA réel** | l'état de la chaîne lu sur le commit qu'on fusionne, jamais sur celui qu'on croit fusionner |
-| **Sas libre et verrou respecté** | l'écart `origin/main..origin/staging` mesuré, **et pas seulement le verrou interrogé** *(voir Le sas, plus haut)* |
+⚠️ **L'erreur symétrique coûterait plus cher que celle qu'on corrige : la délégation ne lève AUCUNE condition.** Elle remplace **l'attente du go une fois les conditions réunies**, rien d'autre. Une condition qui manque interdit toujours le merge — **même si ton coordonnateur te demande de fusionner**. *Ce qui a changé, c'est qui clique, jamais ce qu'il faut avoir avant.*
 
-**Ce qui reste interdit, et que la délégation ne couvre pas** : sauter la revue ou la QA · forcer un tronc protégé · pousser sur staging quand le sas est occupé par une autre livraison · tout geste de production hors livraison normale — écriture directe en base, déploiement manuel, montée d'image.
-
-⚠️ **Et l'erreur symétrique, qui est celle qui coûterait le plus cher : la délégation ne lève AUCUNE condition.** Elle remplace **l'attente du go une fois les conditions réunies**, rien d'autre. Une condition qui manque interdit toujours le merge — **et elle l'interdit même si ton coordonnateur te demande de fusionner**. *Ce qui a changé, c'est qui clique, jamais ce qu'il faut avoir avant de cliquer.*
-
-**L'occurrence, et son coût.** Le **2026-09-15**, devant un lot dont tout le travail était fait et vérifié, le dirigeant : *« vous avez tout fait le travail, je ne sais même pas de quoi tu parles, mais je dois dire go ??? ça n'a pas rapport »*. **Le coût est celui du silence qui suit : le chantier s'arrête pendant des heures sur une approbation qui ne protège rien** — le seul à pouvoir dire si les conditions sont réunies est celui qui les a réunies.
+**L'occurrence et son coût** — **2026-09-15**, devant un lot entièrement fait et vérifié : *« vous avez tout fait le travail, je ne sais même pas de quoi tu parles, mais je dois dire go ??? ça n'a pas rapport »*. **Le coût est le silence qui suit : des heures d'arrêt sur une approbation qui ne protège rien** — le seul à pouvoir dire si les conditions sont réunies est celui qui les a réunies.
 
 ### Le merge ferme les statuts dans le même geste
 
