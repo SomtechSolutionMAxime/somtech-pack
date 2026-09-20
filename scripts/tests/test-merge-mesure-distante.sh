@@ -388,6 +388,129 @@ verifier_max v1.9.0    v1.100.0 v1.100.0
 verifier_max v2.3.4    v2.3.5   v2.3.5
 verifier_max v10.0.0   v9.99.99 v10.0.0
 
+echo "== V — un numéro déjà pris est REFUSÉ, en le nommant =="
+# T-20260815-0013 : le 2026-08-15, deux lots parallèles ont préparé `v1.53.0`.
+# Calculer sur le distant ne suffit pas — entre le calcul et la pose du tag, un
+# autre lot peut prendre le numéro. Ce qui manquait est un REFUS au moment de
+# poser. On rejoue ici le scénario du ticket : deux préparations visant le même
+# numéro, la seconde doit refuser en NOMMANT le tag qui existe déjà.
+git_local fetch -q --tags origin
+
+pris="$(md_dernier_tag_distant)"
+sha_attendu="$(git ls-remote --tags origin "refs/tags/${pris}" | awk '{print $1; exit}')"
+sortie="$(md_version_libre "$pris")"; rc=$?
+lu_verbe="$(printf '%s' "$sortie" | awk '{print $1}')"
+lu_version="$(printf '%s' "$sortie" | awk '{print $2}')"
+lu_sha="$(printf '%s' "$sortie" | awk '{print $3}')"
+[ "$rc" -eq 1 ] && ok "numéro pris → rc=1" || ko "rc attendu 1 pour un numéro pris, obtenu $rc"
+[ "$lu_verbe" = "PRIS" ] && ok "le refus se nomme PRIS" || ko "attendu PRIS, obtenu '$sortie'"
+[ "$lu_version" = "$pris" ] && ok "le refus NOMME le tag en cause : ${lu_version}" \
+  || ko "le refus ne nomme pas le tag : '$sortie'"
+{ [ -n "$sha_attendu" ] && [ "$lu_sha" = "$sha_attendu" ]; } \
+  && ok "et il donne le sha réel du tag existant" \
+  || ko "sha attendu '${sha_attendu}', obtenu '${lu_sha}'"
+
+echo "== V-bis — le cas nominal passe sans bruit =="
+sortie="$(md_version_libre v98.76.54)"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$sortie" = "LIBRE v98.76.54" ]; } \
+  && ok "numéro libre → $sortie (rc=0)" \
+  || ko "attendu 'LIBRE v98.76.54' rc=0, obtenu '$sortie' rc=$rc"
+
+echo "== V-ter — LIBRE ne se confond pas avec un PRÉFIXE =="
+# `v7.7.70` existe ; demander `v7.7.7` doit rendre LIBRE. Une recherche par
+# préfixe ou par sous-chaîne dirait PRIS, et ferait sauter un numéro valide.
+must git_autre tag v7.7.70
+must git_autre push -q origin v7.7.70
+sortie="$(md_version_libre v7.7.7)"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$sortie" = "LIBRE v7.7.7" ]; } \
+  && ok "v7.7.70 existe, v7.7.7 reste LIBRE — pas de correspondance par préfixe" \
+  || ko "attendu 'LIBRE v7.7.7' rc=0, obtenu '$sortie' rc=$rc — correspondance par préfixe ?"
+sortie="$(md_version_libre v7.7.70)"
+[ "$(printf '%s' "$sortie" | awk '{print $1}')" = "PRIS" ] \
+  && ok "et v7.7.70 est bien vu comme pris" || ko "attendu PRIS pour v7.7.70, obtenu '$sortie'"
+
+echo "== V-quater — un tag ANNOTÉ pris est vu comme pris =="
+must git_autre tag -a v6.5.4 -m annote
+must git_autre push -q origin v6.5.4
+sortie="$(md_version_libre v6.5.4)"; rc=$?
+{ [ "$rc" -eq 1 ] && [ "$(printf '%s' "$sortie" | awk '{print $1, $2}')" = "PRIS v6.5.4" ]; } \
+  && ok "tag annoté → $sortie" \
+  || ko "attendu 'PRIS v6.5.4 <sha>' rc=1, obtenu '$sortie' rc=$rc"
+
+# ⚠️ Ce que ce cas établit, et qui n'était pas évident : avec un refspec EXACT,
+# `ls-remote` ne rend PAS la déréférence `^{}` de l'objet-tag. C'est mesuré ici
+# plutôt que supposé — c'est ce qui autorise la lib à prendre la première ligne
+# sans second filtre.
+lignes="$(git ls-remote --tags origin 'refs/tags/v6.5.4' | grep -c .)"
+[ "$lignes" = "1" ] && ok "un refspec exact rend UNE ligne, même pour un tag annoté" \
+  || ko "attendu 1 ligne pour 'refs/tags/v6.5.4', obtenu ${lignes} — la déréférence remonte"
+lu="$(printf '%s' "$sortie" | awk '{print $3}')"
+attendu_sha="$(git ls-remote --tags origin 'refs/tags/v6.5.4' | awk '{print $1; exit}')"
+[ "$lu" = "$attendu_sha" ] && ok "et le sha rendu est celui que le serveur donne" \
+  || ko "sha attendu ${attendu_sha}, obtenu ${lu}"
+
+echo "== W — serveur injoignable : REFUS, JAMAIS « libre » =="
+# ⚠️ Le discriminant de tout ce scénario. « Libre » et « je n'ai pas pu
+# regarder » se ressemblent — et c'est la ressemblance qui republie un numéro.
+git_local remote set-url origin "${WORK}/nexiste-pas.git"
+sortie="$(md_version_libre v1.2.3 2>/dev/null)"; rc=$?
+[ "$rc" -eq 2 ] && ok "serveur injoignable → rc=2" || ko "rc attendu 2, obtenu $rc"
+[ "$sortie" = "REFUS serveur-injoignable" ] && ok "sortie : $sortie" \
+  || ko "attendu 'REFUS serveur-injoignable', obtenu '$sortie'"
+case "$sortie" in
+  *LIBRE*) ko "un serveur injoignable est annoncé LIBRE — c'est le défaut de T-20260815-0013" ;;
+  *) ok "aucune trace de « LIBRE » quand on n'a pas pu regarder" ;;
+esac
+sortie="$(md_prochaine_version patch 2>/dev/null)"; rc=$?
+{ [ "$rc" -eq 2 ] && case "$sortie" in REFUS*injoignable*) true ;; *) false ;; esac; } \
+  && ok "le calcul de version refuse aussi, et nomme l'injoignabilité (rc=2)" \
+  || ko "attendu un REFUS nommant l'injoignabilité rc=2, obtenu '$sortie' rc=$rc"
+git_local remote set-url origin "$ORIGIN"
+
+echo "== W-bis — une version malformée est refusée, pas devinée =="
+for mauvaise in "" "1.2.3" "v1.2" "vX.Y.Z" "latest"; do
+  sortie="$(md_version_libre "$mauvaise")"; rc=$?
+  { [ "$rc" -eq 3 ] && case "$sortie" in REFUS*) true ;; *) false ;; esac; } \
+    && ok "« ${mauvaise:-<vide>} » → $sortie (rc=3)" \
+    || ko "attendu un REFUS rc=3 pour « ${mauvaise:-<vide>} », obtenu '$sortie' rc=$rc"
+done
+
+echo "== X — la COURSE : le numéro calculé est pris entre-temps =="
+# Le scénario exact de T-20260815-0013, joué dans l'ordre où il s'est produit :
+#   ① un lot calcule son numéro sur le serveur — il est libre à cet instant ;
+#   ② un AUTRE lot pose ce numéro ;
+#   ③ le premier s'apprête à taguer.
+# Sans refus, il tague un numéro pris. Avec, il refuse en le NOMMANT — et c'est
+# exactement le geste qu'un humain a fait à la main le 2026-08-15.
+propose="$(md_prochaine_version patch | awk '{print $2}')"
+sortie="$(md_version_libre "$propose")"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$sortie" = "LIBRE ${propose}" ]; } \
+  && ok "① ${propose} est libre au moment du calcul" \
+  || ko "SCÉNARIO INOPÉRANT : ${propose} n'est pas libre au départ ('$sortie')"
+
+must git_autre tag "$propose"
+must git_autre push -q origin "$propose"
+ok "② un autre lot vient de poser ${propose}"
+
+sortie="$(md_version_libre "$propose")"; rc=$?
+[ "$rc" -eq 1 ] && ok "③ le même appel rend maintenant rc=1" \
+  || ko "rc attendu 1 après que l'autre lot a pris le numéro, obtenu $rc"
+case "$sortie" in
+  "PRIS ${propose} "*) ok "③ et il REFUSE en nommant le tag : $sortie" ;;
+  *) ko "attendu 'PRIS ${propose} <sha>', obtenu '$sortie'" ;;
+esac
+case "$sortie" in
+  *LIBRE*) ko "le numéro pris est encore annoncé libre — le défaut est intact" ;;
+  *) ok "aucune trace de « LIBRE » sur un numéro pris" ;;
+esac
+
+# Et le recalcul enjambe le numéro perdu, sans verrou ni boucle.
+suivant="$(md_prochaine_version patch | awk '{print $2}')"
+[ "$suivant" != "$propose" ] && ok "le recalcul propose ${suivant}, pas ${propose}" \
+  || ko "le recalcul repropose ${propose} — le perdant rejouerait la collision"
+{ [ "$(md_version_libre "$suivant")" = "LIBRE ${suivant}" ]; } \
+  && ok "et ${suivant} est libre" || ko "${suivant} n'est pas libre"
+
 echo "== R — le skill et la lib s'accordent =="
 # Le fait « la mesure qui décide porte sur le distant » vit à DEUX endroits :
 # la lib, et le texte du skill que les agents appliquent. Deux gardes bornées
@@ -416,7 +539,7 @@ corps_executable "$SKILL" > "$EXEC"
 [ -s "$EXEC" ] && ok "le skill porte des blocs bash exécutables ($(grep -c . "$EXEC") lignes)" \
   || ko "aucun bloc bash exécutable dans le skill — l'accord ne porte plus sur rien"
 
-for fn in md_prochaine_version md_statut_branche md_rafraichir_origine; do
+for fn in md_prochaine_version md_statut_branche md_rafraichir_origine md_version_libre; do
   if grep -qE "(^|[^a-z_])${fn}([^a-z_]|$)" "$EXEC"; then
     ok "le skill APPELLE ${fn} (hors commentaire, dans un bloc bash)"
   else
@@ -430,7 +553,7 @@ for fn in $(grep -oE 'md_[a-z_]+' "$SKILL" | sort -u); do
   citees=$((citees + 1))
   grep -qE "^${fn}\(\) \{" "$LIB_REELLE" || manquantes="${manquantes} ${fn}"
 done
-[ "$citees" -ge 3 ] && ok "le skill cite ${citees} fonctions de la lib" \
+[ "$citees" -ge 4 ] && ok "le skill cite ${citees} fonctions de la lib" \
   || ko "le skill ne cite que ${citees} fonction(s) — l'accord skill/lib ne porte plus sur rien"
 [ -z "$manquantes" ] && ok "toutes les fonctions citées par le skill existent dans la lib" \
   || ko "le skill appelle des fonctions absentes de la lib :${manquantes}"
@@ -579,18 +702,24 @@ echo "== T — le chiffre annoncé est celui qui est JOUÉ =="
 # que la dernière ligne du banc imprimera.
 CHLOG="${ROOT}/CHANGELOG.md"
 total=$(( PASS + FAIL + 1 ))
-if grep -qF "test-merge-mesure-distante.sh\` — ${total} assertions" "$CHLOG"; then
-  ok "le CHANGELOG annonce ${total} assertions pour la suite, soit le compte réellement joué"
+# ⚠️ TOUTES les mentions, pas la première qui concorde : un `grep -q` trouve
+# celle qui tombe juste et laisse rouiller les autres. Le fait vit à chaque
+# endroit où il est écrit.
+annonces="$(grep -oE 'test-merge-mesure-distante\.sh` — [0-9]+ assertions' "$CHLOG" | grep -oE '[0-9]+ assertions' | grep -oE '[0-9]+')"
+if [ -z "$annonces" ]; then
+  ko "le CHANGELOG n'annonce aucun compte d'assertions pour la suite"
 else
-  annonce="$(grep -oE 'test-merge-mesure-distante\.sh` — [0-9]+ assertions' "$CHLOG" | grep -oE '[0-9]+' | head -1)"
-  ko "le CHANGELOG annonce « ${annonce:-aucun} » assertions pour la suite ; ${total} sont jouées — chiffre rouillé"
+  fausses=""
+  for n in $annonces; do [ "$n" = "$total" ] || fausses="${fausses} ${n}"; done
+  [ -z "$fausses" ] && ok "les $(printf '%s\n' "$annonces" | grep -c .) mention(s) du CHANGELOG annoncent ${total} assertions, soit le compte réellement joué" \
+    || ko "le CHANGELOG annonce${fausses} assertion(s) pour la suite ; ${total} sont jouées — chiffre rouillé"
 fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=73
+PLANCHER=100
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

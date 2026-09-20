@@ -7,6 +7,23 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0004` — **deuxième des trois** : `T-20260815-0013`. Le 2026-08-15, **deux lots parallèles ont préparé `v1.53.0`** ; le second a mergé avec le même numéro. Rien ne refusait un numéro déjà pris.*
+
+### Ajoute
+
+- **`md_version_libre <version>` — le refus que le ticket demandait, au moment de poser.** Calculer la prochaine version sur le serveur **ne suffit pas** : entre le calcul et la pose du tag, un autre lot peut prendre le numéro. La fonction interroge `git ls-remote --tags origin refs/tags/<version>` et rend **trois états qu'il est vital de ne pas confondre** : `LIBRE` (rc=0), `PRIS <version> <sha>` (rc=1 — le refus **nomme** le tag et donne son sha), et 🔴 `REFUS serveur-injoignable` (rc=2). *« Libre » et « je n'ai pas pu regarder » se ressemblent — et c'est la ressemblance qui republie un numéro pris.* Une version malformée est **refusée**, jamais devinée (rc=3).
+- **`/merge` étape 8 vérifie la disponibilité avant de taguer**, et le récapitulatif l'affiche. `PRIS` ⇒ recalculer ; `REFUS` ⇒ ne pas taguer. **Pas de verrou** : celui qui perd la course recalcule et repart — le geste qu'un humain a fait à la main le 2026-08-15.
+
+### Éprouve
+
+- **Le scénario du ticket est rejoué dans l'ordre où il s'est produit** : ① le numéro est libre au calcul, ② un autre lot le pose, ③ le même appel refuse en le nommant — et le recalcul l'enjambe. **La correspondance par préfixe est écartée** (`v7.7.70` existe, `v7.7.7` reste libre : une recherche par sous-chaîne ferait sauter un numéro valide), et un **tag annoté** est vu comme pris.
+- **98 assertions de garde, 57 de contre-épreuve.** Parmi les mutations : un serveur injoignable annoncé `LIBRE`, un numéro pris annoncé libre, un refus qui ne nomme plus le tag, une recherche par préfixe, la disponibilité lue sur les **tags locaux**.
+- ⚠️ **Une boucle « chercher le prochain numéro libre » a été écrite puis RETIRÉE** : le calcul partant du plus grand tag du serveur, un numéro pris est par construction le plus grand — son corps était **inatteignable**, donc impossible à faire rougir. *Garder un cas qui ne se produit pas, c'est écrire une garde qu'aucune épreuve ne peut juger.*
+- ⚠️ **Un second filtre en `awk` a été écrit puis RETIRÉ, et sa mutation avec lui.** Il était censé écarter la déréférence `^{}` d'un tag annoté et les noms qui commencent pareil. **Mesuré** : avec un refspec **exact**, `ls-remote` ne rend ni l'une ni les autres — `refs/tags/v7.7.7` ne ramène pas `v7.7.70`, et un tag annoté ne rend **qu'une ligne**. Le filtre ne pouvait donc rougir pour aucune raison. *Deuxième fois sur ce lot qu'une ligne « au cas où » se révèle ingardable ; on la retire et on écrit le fait mesuré à sa place.*
+- **La garde des chiffres annoncés porte maintenant sur TOUTES les mentions**, plus sur la première qui concorde : un `grep -q` trouve celle qui tombe juste et laisse rouiller les autres.
+
+## [Non-versionne] - 2026-09-20
+
 *Livraison `J-20260814-0002`, epic `E-20260920-0004` — **« fusionné n'est pas publié, publié n'est pas installé ».** Trois tickets ouverts depuis août, tous dans la zone publication et version, tous des **silences qui se lisent comme des succès**. Premier traité : `T-20260820-0097`, le seul des trois qui produit un geste FAUX plutôt qu'une information manquante.*
 
 ### Corrige
@@ -25,8 +42,8 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 - **La passe portail a rendu `REJET`, et elle avait raison deux fois.** ① L'accord skill ↔ lib était **textuel, pas fonctionnel** : il vérifiait l'absence de l'ancien geste et l'existence des fonctions citées — une assertion **vacue**, qu'un skill ne citant plus aucune fonction satisfait. Remplacer l'appel par `echo "v1.0.0"` laissait la suite verte. Il exige maintenant, **positivement**, que les trois fonctions qui décident soient appelées nommément. ② Le fait vivait à un **quatrième** endroit non corrigé — `docs/superpowers/plans/2026-09-09-metier-curateur-metiers.md`, qui prescrivait encore la lecture locale pour calculer la prochaine version du pack.
 - **Second `REJET` du portail, fondé lui aussi : les deux gardes se laissaient satisfaire à côté.** ① « le skill appelle la fonction » était vrai d'un nom en **commentaire** ou en prose — le skill entier pouvait devenir décoratif. La garde n'examine plus que les **blocs ```bash, commentaires retirés**. ② Le balayage ne connaissait qu'une **formulation** du geste : `git tag | head -1` passait dessous. Il porte maintenant sur la **famille** (`git tag … | head/tail/sort`, `git describe --tags`) — mesuré avant d'élargir : zéro nouveau fichier touché.
 - **La garde porte désormais sur la FAMILLE, pas sur chaque document.** Un balayage des fichiers suivis refuse le motif partout, sauf dans les quelques fichiers qui le **citent pour le dénoncer** — et **une tolérance qui ne porte plus le motif est signalée comme rouillée**, pour qu'une liste d'exceptions ne puisse pas s'élargir en silence. Elle a mordu dès sa première exécution.
-- **`scripts/tests/test-merge-mesure-distante.sh` — 73 assertions, dans la CI** (les bancs de `.claude/skills/merge/tests/` n'y tournent pas). Chaque scénario est construit pour **diverger** : un dépôt dont le local et le distant concordent ne peut rien prouver.
-- **`scripts/tests/test-mutations-merge-mesure-distante.sh` — 49 assertions, 39 défauts réintroduits, 0 survivante**, dont l'**accord skill ↔ lib**. L'instrument **refuse une mutation sans effet** et le prouve sur lui-même. La première ronde tuait 13 sur 13 ; une seconde ronde, non fixée d'avance, a rendu **dix survivantes** — neuf closes, et la dixième a révélé l'inverse : deux nettoyages que **rien ne pouvait faire rougir**, donc retirés plutôt que gardés.
+- **`scripts/tests/test-merge-mesure-distante.sh` — 100 assertions, dans la CI** (les bancs de `.claude/skills/merge/tests/` n'y tournent pas). Chaque scénario est construit pour **diverger** : un dépôt dont le local et le distant concordent ne peut rien prouver.
+- **`scripts/tests/test-mutations-merge-mesure-distante.sh` — 56 assertions, 39 défauts réintroduits, 0 survivante**, dont l'**accord skill ↔ lib**. L'instrument **refuse une mutation sans effet** et le prouve sur lui-même. La première ronde tuait 13 sur 13 ; une seconde ronde, non fixée d'avance, a rendu **dix survivantes** — neuf closes, et la dixième a révélé l'inverse : deux nettoyages que **rien ne pouvait faire rougir**, donc retirés plutôt que gardés.
 - **Deux rouges de la CI, verts chez l'auteur**, corrigés à la racine : le montage du banc avalait ses erreurs (17 assertions accusaient la lib) ; et le HEAD d'un dépôt nu suit `init.defaultBranch`, `main` sur le poste, `master` sur le runner.
 
 ## [Non-versionne] - 2026-09-20

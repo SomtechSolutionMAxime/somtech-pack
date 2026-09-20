@@ -152,6 +152,63 @@ md_prochaine_version() {
     "$maj" "$min" "$pat" "${d:--}" "${l:--}" "$ecart"
 }
 
+# --- Le numéro visé est-il encore LIBRE sur le serveur ? -------------------
+# T-20260815-0013 : le 2026-08-15, deux lots parallèles ont préparé `v1.53.0`.
+# Le second a mergé avec le même numéro. Calculer la prochaine version sur le
+# distant ne suffit PAS à l'empêcher : entre le calcul et la pose du tag, un
+# autre lot peut avoir pris le numéro. Ce qu'il faut est un REFUS au moment de
+# poser, qui NOMME le tag déjà là.
+#
+# ⚠️ Trois états, et il est vital de ne pas les confondre — un « libre » rendu
+# par erreur est précisément ce qui republie un numéro pris :
+#   LIBRE <version>            rc=0  le serveur ne porte pas ce tag
+#   PRIS <version> <sha>       rc=1  il le porte — REFUSER, recalculer
+#   REFUS serveur-injoignable  rc=2  on NE SAIT PAS → traiter comme un refus,
+#                                    jamais comme un libre. « Libre » et « je
+#                                    n'ai pas pu regarder » se ressemblent, et
+#                                    c'est la ressemblance qui coûte.
+md_version_libre() {
+  local version="${1:-}" remote="${2:-origin}" out rc ligne
+
+  if [ -z "$version" ]; then
+    echo "REFUS version-non-fournie"; return 3
+  fi
+  case "$version" in
+    v[0-9]*.[0-9]*.[0-9]*) : ;;
+    *) echo "REFUS version-malformee ${version}"; return 3 ;;
+  esac
+
+  # `ls-remote` interroge le SERVEUR : un dépôt local qui n'a pas fetché dirait
+  # « libre » d'un tag qui existe depuis une heure.
+  out="$(git ls-remote --tags "$remote" "refs/tags/${version}" 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf 'md_version_libre: %s injoignable — %s\n' "$remote" "$out" >&2
+    echo "REFUS serveur-injoignable"
+    return 2
+  fi
+
+  # Mesuré : avec un refspec EXACT, `ls-remote` ne rend ni la déréférence
+  # `^{}` d'un tag annoté, ni les refs dont le nom commence pareil
+  # (`refs/tags/v7.7.7` ne ramène pas `v7.7.70`). Un second filtre en awk
+  # serait donc une ligne que rien ne pourrait faire rougir — on ne l'écrit
+  # pas, et on dit pourquoi plutôt que de la garder « au cas où ».
+  ligne="$(printf '%s\n' "$out" | awk 'NF { print $1; exit }')"
+  if [ -n "$ligne" ]; then
+    echo "PRIS ${version} ${ligne}"
+    return 1
+  fi
+
+  echo "LIBRE ${version}"
+  return 0
+}
+
+# ⚠️ PAS de boucle qui chercherait « le prochain numéro libre ». Le calcul part
+# du plus grand tag du serveur : un numéro pris est, par construction, le plus
+# grand — donc le calcul suivant l'enjambe déjà. Une boucle de repli aurait un
+# corps que rien ne pourrait atteindre, donc que rien ne pourrait faire rougir.
+# Ce que le ticket demande est un REFUS, pas un verrou : « celui qui perd la
+# course recalcule et repart ».
+
 # --- Rafraîchir origin, explicitement et bruyamment ------------------------
 # `md_statut_branche` décide sur `origin/main`, une ref de SUIVI : elle ne vaut
 # que ce que vaut le dernier fetch. Cette fonction est le « fetch d'abord,

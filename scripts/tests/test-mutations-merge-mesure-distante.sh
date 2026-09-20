@@ -432,6 +432,48 @@ else
   ko "FAUX POSITIF — changer la forme de la liste fait rougir la garde : $(grep -m1 '❌' "${WORK}/numerote.log")"
 fi
 
+echo "== T-20260815-0013 — le refus d'un numéro déjà pris =="
+
+essai 'un serveur injoignable est annoncé LIBRE' <<'PY'
+s = s.replace("""    printf 'md_version_libre: %s injoignable — %s\\n' "$remote" "$out" >&2
+    echo "REFUS serveur-injoignable"
+    return 2""",
+"""    echo "LIBRE ${version}"
+    return 0""")
+PY
+
+essai 'un numéro PRIS est annoncé libre' <<'PY'
+s = s.replace("""  if [ -n "$ligne" ]; then
+    echo "PRIS ${version} ${ligne}"
+    return 1
+  fi""", "")
+PY
+
+essai 'le refus ne nomme plus le tag en cause' <<'PY'
+s = s.replace('echo "PRIS ${version} ${ligne}"', 'echo "PRIS"')
+PY
+
+essai 'le refus ne donne plus le sha du tag existant' <<'PY'
+s = s.replace('echo "PRIS ${version} ${ligne}"', 'echo "PRIS ${version}"')
+PY
+
+# ⚠️ Une mutation « recherche par préfixe » a été écrite ici, puis RETIRÉE :
+# elle survivait, parce que le refspec exact de `ls-remote` écarte déjà les
+# préfixes et les déréférences. Le second filtre qu'elle abîmait était une
+# ligne que rien ne pouvait faire rougir — on l'a retirée de la lib plutôt que
+# de garder une mutation qui ne prouvait rien. Le fait est mesuré dans le banc
+# (scénarios V-ter et V-quater), pas supposé.
+
+essai 'la version malformée est acceptée au lieu d_être refusée' <<'PY'
+s = s.replace("""    *) echo "REFUS version-malformee ${version}"; return 3 ;;""",
+              """    *) : ;;""")
+PY
+
+essai 'la disponibilité se lit sur les tags LOCAUX' <<'PY'
+s = s.replace("""  out="$(git ls-remote --tags "$remote" "refs/tags/${version}" 2>&1)"; rc=$?""",
+              """  out="$(git tag --list "${version}" 2>&1 | sed 's#^#sha\\trefs/tags/#')"; rc=$?""")
+PY
+
 echo "== Une extension LÉGITIME du texte ne doit PAS faire rougir =="
 # Symétrique d'une garde positionnelle : elle se contourne ET elle refuse à
 # tort. Ici on éloigne la puce du bloc sans rien changer au fond — la suite
@@ -477,6 +519,10 @@ else
   ok "plancher et CHANGELOG abaissés ensemble → suite rouge (la garde mesure le compte JOUÉ)"
 fi
 
+essai_skill "l'étape 8 ne vérifie plus la disponibilité du numéro" <<'PY'
+s = s.replace("   md_version_libre v1.100.1", "   echo 'on suppose que le numero est libre'")
+PY
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 # Un motif qui ne correspond à rien : une mutation sans effet rend zéro rouge,
 # exactement comme une garde qui tient. Si `applique` l'acceptait, tout ce
@@ -506,7 +552,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=49
+PLANCHER=56
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

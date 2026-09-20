@@ -342,16 +342,38 @@ Certains projets (ex: SomCraft, ServiceDesk) deploient via des workflows GitHub 
 3. Par defaut, proposer un bump **patch**. Si le merge inclut des changements
    majeurs (BREAKING, nouveau feature important), proposer minor/major.
 
+### Verifier que le numero est encore LIBRE
+
+> 🔴 **Calculer sur le distant ne suffit PAS.** Entre le calcul et la pose du
+> tag, **un autre lot peut avoir pris le numero** — c'est arrive le 2026-08-15
+> sur `v1.53.0`, deux lots ont prepare la meme version (`T-20260815-0013`).
+> Ce qu'il faut est un **REFUS au moment de poser**, qui nomme le tag deja la.
+
+1. Juste avant de taguer, verifier la disponibilite **cote serveur** :
+   ```bash
+   md_version_libre v1.100.1
+   # LIBRE v1.100.1                 rc=0 → on peut taguer
+   # PRIS v1.100.1 <sha>            rc=1 → REFUSER, recalculer, repartir
+   # REFUS serveur-injoignable      rc=2 → NE PAS TAGUER
+   ```
+2. **`PRIS` : ne pas taguer.** Relancer `md_prochaine_version` — le calcul repart
+   du plus grand tag du serveur, donc il enjambe le numero perdu. Celui qui perd
+   la course recalcule et repart ; il n'y a **pas de verrou**, et il n'en faut pas.
+3. 🔴 **`REFUS serveur-injoignable` : ne pas taguer non plus.** « Libre » et « je
+   n'ai pas pu regarder » se ressemblent, et c'est la ressemblance qui republie un
+   numero deja pris. Un silence n'est jamais un feu vert.
+
 ### Confirmation
 
 Afficher un recapitulatif et **DEMANDER OBLIGATOIREMENT CONFIRMATION**. Le
 recapitulatif **nomme l'objet de chaque mesure** — `DISTANT` fait foi, `LOCAL`
-est la pour montrer l'ecart :
+est la pour montrer l'ecart, et la disponibilite du numero vise est **verifiee** :
 ```
 Dernier tag DISTANT (git ls-remote) : v1.100.0    ← fait foi
 Dernier tag LOCAL   (git tag)       : v1.99.0
 Ecart                               : LOCAL-EN-RETARD
 Prochaine version suggeree          : v1.100.1 (patch)
+Disponibilite du numero             : LIBRE v1.100.1    ← verifiee sur le serveur
 Workflows declenches                : Publish Docker Image, Publish Packages
 On tag v1.100.1 ?
 ```
