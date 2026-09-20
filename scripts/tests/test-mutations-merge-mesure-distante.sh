@@ -275,6 +275,25 @@ s = s.replace("La commande juste est `git ls-remote --tags origin`, qui interrog
               "Fetche avant de lire.")
 PY
 
+essai_skill "l'étape 8 n'appelle plus la mesure distante mais un numéro en dur" <<'PY'
+s = s.replace("   md_prochaine_version patch          # ou minor / major",
+              '   echo "v1.0.0"')
+PY
+
+essai_skill "l'étape 7.5 n'appelle plus md_statut_branche" <<'PY'
+s = s.replace('STATUS="$(md_statut_branche "$branch")"', 'STATUS="merged"')
+PY
+
+echo "== La garde de famille mord-elle ? =="
+# Prouve que le balayage du dépôt accuse un fichier qui prescrirait la lecture
+# locale. Aucun fichier n'est écrit : on ajoute un nom à la liste examinée.
+N=$((N+1))
+if MERGE_FAUX_INTRUS="docs/un-fichier-qui-prescrirait-la-lecture-locale.md" bash "$SUITE" >"${WORK}/intrus.log" 2>&1; then
+  ko "MUTANT SURVIVANT — un fichier hors liste portant le motif ne fait pas rougir le balayage"
+else
+  ok "un fichier hors liste portant le motif → suite rouge"
+fi
+
 echo "== Z — l'instrument refuse une épreuve VIDE =="
 # Un motif qui ne correspond à rien : une mutation sans effet rend zéro rouge,
 # exactement comme une garde qui tient. Si `applique` l'acceptait, tout ce
@@ -292,7 +311,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=30
+PLANCHER=33
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

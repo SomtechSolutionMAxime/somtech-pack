@@ -371,10 +371,26 @@ LIB_REELLE="${ROOT}/.claude/skills/merge/lib/mesure-distante.sh"
 [ -f "$SKILL" ] && ok "le skill /merge est là" || ko "SKILL.md introuvable : $SKILL"
 
 # Toute fonction md_* citée par le skill doit exister dans la lib.
+# ⚠️ Cette assertion seule est VACUE : un skill qui ne cite plus AUCUNE
+# fonction la satisfait (ensemble vide). Elle est donc précédée d'une
+# assertion POSITIVE : le skill doit appeler nommément chacune des trois
+# fonctions qui décident. « Présence n'est pas absence du contraire. »
+for fn in md_prochaine_version md_statut_branche md_rafraichir_origine; do
+  if grep -qE "(^|[^a-z_])${fn}([^a-z_]|$)" "$SKILL"; then
+    ok "le skill appelle ${fn}"
+  else
+    ko "le skill n'appelle plus ${fn} — la mesure qui décide a été remplacée par autre chose"
+  fi
+done
+
 manquantes=""
+citees=0
 for fn in $(grep -oE 'md_[a-z_]+' "$SKILL" | sort -u); do
+  citees=$((citees + 1))
   grep -qE "^${fn}\(\) \{" "$LIB_REELLE" || manquantes="${manquantes} ${fn}"
 done
+[ "$citees" -ge 3 ] && ok "le skill cite ${citees} fonctions de la lib" \
+  || ko "le skill ne cite que ${citees} fonction(s) — l'accord skill/lib ne porte plus sur rien"
 [ -z "$manquantes" ] && ok "toutes les fonctions citées par le skill existent dans la lib" \
   || ko "le skill appelle des fonctions absentes de la lib :${manquantes}"
 
@@ -406,11 +422,43 @@ else
   ok "l'étape 7.5 ne compare plus à \`main\` local"
 fi
 
+echo "== S — plus aucun fichier du dépôt ne PRESCRIT la lecture locale =="
+# Garder chaque document un à un fait une liste d'exceptions qui se désarme
+# elle-même. On garde la FAMILLE : aucun fichier suivi ne porte le motif, sauf
+# les quelques-uns qui le CITENT pour le dénoncer — et chaque exception doit
+# encore porter le motif, sinon elle a rouillé et on le dit.
+MOTIF='git tag --sort=-v:refname'
+TOLERES="CHANGELOG.md
+.claude/skills/merge/lib/mesure-distante.sh
+.claude/skills/merge/SKILL.md
+scripts/tests/test-merge-mesure-distante.sh
+scripts/tests/test-mutations-merge-mesure-distante.sh"
+
+# MERGE_FAUX_INTRUS n'AJOUTE qu'un nom à la liste examinée : le chemin par
+# défaut reste celui que jouent tous les lancements normaux. Il sert à prouver
+# que cette assertion mord, sans écrire dans le dépôt.
+intrus=""
+for f in $(cd "$ROOT" && git grep -l -F "$MOTIF" -- . 2>/dev/null; printf '%s\n' "${MERGE_FAUX_INTRUS:-}"); do
+  [ -n "$f" ] || continue
+  printf '%s\n' "$TOLERES" | grep -qxF "$f" || intrus="${intrus} ${f}"
+done
+[ -z "$intrus" ] && ok "aucun fichier hors liste ne porte le motif de lecture locale" \
+  || ko "ces fichiers prescrivent encore la lecture LOCALE :${intrus}"
+
+# Une tolérance qui ne porte plus le motif est une exception rouillée : elle
+# élargit la porte sans que rien ne le dise.
+rouillees=""
+for f in $(printf '%s\n' "$TOLERES"); do
+  (cd "$ROOT" && grep -qF "$MOTIF" "$f" 2>/dev/null) || rouillees="${rouillees} ${f}"
+done
+[ -z "$rouillees" ] && ok "chaque tolérance porte encore le motif qu'elle dénonce" \
+  || ko "tolérances rouillées (le motif n'y est plus) :${rouillees}"
+
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=54
+PLANCHER=60
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
