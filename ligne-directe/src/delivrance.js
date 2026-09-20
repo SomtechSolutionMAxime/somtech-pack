@@ -564,8 +564,26 @@ const MARQUE_DE_TRONCATURE = '…';
  * suivre… » sont des textes ENTIERS. Les prendre pour des troncatures leur applique la
  * direction stricte et rate à nouveau le cas « l'auteur a complété sa phrase » — le défaut
  * même que ce lot a corrigé au tour précédent, rouvert sur un sous-cas.
+ *
+ * 🔬 ET ELLE SE COMPTE EN POINTS DE CODE, PAS EN UNITÉS UTF-16 (relevé en troisième passe,
+ * reproduit). Mesuré sur un banc réel, trois encodages soumis à un agent neuf :
+ *
+ *   • ASCII   — 154 runes envoyées → noyau de 77 runes (77 unités, 77 octets) ;
+ *   • accents — 204 runes / 404 OCTETS envoyés → noyau de 77 runes (154 octets) ;
+ *   • emoji   — rendu de 50 runes, sans marque de troncature.
+ *
+ * Le second cas écarte l'hypothèse d'une coupure en OCTETS : 154 octets rendus sur 404, pas
+ * 77. herdr coupe à 77 **points de code**, puis ajoute la marque.
+ *
+ * ⚠️ `String.length` compte des unités UTF-16, et un emoji en vaut DEUX. Un sujet de 50 runes
+ * truffé d'emoji a donc un `.length` de 90 : au-dessus du seuil, alors que herdr ne l'a jamais
+ * tronqué. Il passait pour une coupure, et le cas « l'auteur a complété » était raté à nouveau
+ * — sur un dépôt qui écrit `🔴`, `⚠️`, `✅` partout. On compte donc comme herdr compte.
  */
 const LONGUEUR_DU_SUJET_TRONQUE = 78;
+
+/** La longueur telle que herdr la compte : en points de code, jamais en unités UTF-16. */
+const enPointsDeCode = (texte) => [...String(texte ?? '')].length;
 
 const sujetLu = (v) => {
   const t = String(v ?? '').trim();
@@ -604,7 +622,7 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
   if (disparu === '') return VERDICTS_DE_SOUMISSION.AUCUNE;
 
   // ⚠️ LA MARQUE **ET** LA LONGUEUR — l'une sans l'autre prend la ponctuation pour une coupure.
-  const tronque = apres.endsWith(MARQUE_DE_TRONCATURE) && apres.length >= LONGUEUR_DU_SUJET_TRONQUE;
+  const tronque = apres.endsWith(MARQUE_DE_TRONCATURE) && enPointsDeCode(apres) >= LONGUEUR_DU_SUJET_TRONQUE;
   // ⚠️ LE `.trim()` ICI EST REDONDANT AVEC `aplati`, et c'est mesuré : le retirer ne fait
   // rougir aucun essai, parce que `aplati` trime déjà les deux côtés avant de comparer. Il
   // reste pour que `noyau` respecte son propre contrat — « le texte, sans la marque » — sans
@@ -733,7 +751,7 @@ export function etablieSurUnPrefixeTronque({ sujetAvant, sujetApres, texteDispar
   // du même mot dans un fichier sont deux occasions de diverger, et le compteur compterait
   // alors des paris que le verdict n'a pas pris.
   const sujet = String(sujetApres ?? '').trim();
-  return sujet.endsWith(MARQUE_DE_TRONCATURE) && sujet.length >= LONGUEUR_DU_SUJET_TRONQUE;
+  return sujet.endsWith(MARQUE_DE_TRONCATURE) && enPointsDeCode(sujet) >= LONGUEUR_DU_SUJET_TRONQUE;
 }
 
 /** L'ensemble EXACT des `cause` que `delivrerLaBoite` peut rendre. */

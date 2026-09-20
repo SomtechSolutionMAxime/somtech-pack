@@ -1,5 +1,18 @@
 // L'AVIS DE BOÎTE VIDÉE NE PART PLUS QUAND SON AUTEUR VIENT DE SOUMETTRE (T-20260920-0125).
 //
+// ⚠️ POURQUOI CE FICHIER VIT DANS `ligne-directe/tests/` ET PAS AILLEURS (T-20260920-0125).
+//
+// Il a d'abord été écrit dans `naissance-representant/tests/`, parce que c'est de là que
+// venaient les doubles d'écran qu'il réutilise. Le code qu'il éprouve, lui, vit dans
+// `ligne-directe/src/`. Les deux modules ont chacun leur `npm test` et chacun leur job de CI.
+//
+// Conséquence MESURÉE : en débranchant la sonde dans `ligne-directe/src/herdr.js`, la suite
+// `ligne-directe` rendait **1352/1352, zéro échec**, pendant que `naissance-representant` en
+// rendait deux rouges. L'essai mordait — depuis la mauvaise suite. Celui qui travaille dans
+// `ligne-directe` et lance sa suite avait du vert sur un module qu'il venait de casser.
+//
+// Un essai se range avec le CODE QU'IL ÉPROUVE, pas avec les doubles qu'il emprunte.
+////
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // LA MESURE QUI COMMANDE CE FICHIER, FAITE LE 2026-09-20 SUR UN BANC RÉEL
 //
@@ -45,13 +58,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { delivrerLaBoite, avisDeBoiteVidee } from '../src/livraison.js';
+import { delivrerLaBoite, avisDeBoiteVidee } from '../src/delivrance.js';
 import {
   soumissionEtablie,
   verdictDeSoumission,
   etablieSurUnPrefixeTronque,
   VERDICTS_DE_SOUMISSION,
-} from '../../ligne-directe/src/delivrance.js';
+} from '../src/delivrance.js';
 
 // ⚠️ LE DOUBLE D'ÉCRAN EST REPRIS DE `une-boite-videe-ne-se-tait-pas.test.js`, AU CARACTÈRE
 // PRÈS — pas réécrit. Un double qui s'écarte du service qu'il imite ne prouve rien.
@@ -308,6 +321,25 @@ test('⚠️ le noyau est TRIMÉ — un blanc avant la marque ne doit pas casser
   );
 });
 
+test('⚠️ le COMPTEUR compte lui aussi en POINTS DE CODE — sinon les deux définitions divergent', () => {
+  // Survivante du banc, refermée ici : le compteur mesurait en unités UTF-16 pendant que le
+  // verdict mesurait en points de code. Sur un sujet plein d'emoji, le verdict disait « texte
+  // entier » et le compteur disait « pari de troncature » — il aurait compté des paris que
+  // personne n'a pris, et le premier chiffre qu'on en aurait tiré aurait été faux.
+  const sujet = `${'🔴'.repeat(40)} on verra…`;
+  assert.ok(sujet.length >= 78 && [...sujet].length < 78, 'le cas n’a de sens que si les deux comptes divergent');
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'un tour tout à fait autre', sujetApres: sujet, texteDisparu: `${'🔴'.repeat(40)} on` }),
+    false,
+    'ce n’est pas une troncature, donc aucun pari n’est pris',
+  );
+  // Témoin positif : une vraie troncature, elle, compte bien.
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'autre', sujetApres: LONG_TRONQUE, texteDisparu: LONG }),
+    true,
+  );
+});
+
 test('⚠️ le COMPTEUR suit la MÊME définition de « tronqué » que le verdict', () => {
   // Survivante du banc : le compteur gardait « finit par la marque », sans longueur. Il
   // comptait donc comme pari un « on verra… » que le verdict traite comme un texte entier.
@@ -322,6 +354,55 @@ test('⚠️ le COMPTEUR suit la MÊME définition de « tronqué » que le verd
     etablieSurUnPrefixeTronque({ sujetAvant: 'autre', sujetApres: LONG_TRONQUE, texteDisparu: LONG }),
     true,
     'témoin positif : une vraie troncature compte bien comme pari',
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ LA LONGUEUR SE COMPTE EN POINTS DE CODE, PAS EN UNITÉS UTF-16
+//
+// Relevé en troisième passe de revue de fond, reproduit. `.length` en JavaScript compte des
+// unités UTF-16 : un emoji en vaut DEUX. Un texte de 50 runes truffé d'emoji a donc un
+// `.length` de 90 — au-dessus du seuil — alors que herdr ne l'a jamais tronqué. Il était pris
+// pour une coupure, sa direction devenait stricte, et le cas « l'auteur a complété sa phrase »
+// était raté à nouveau. Ce dépôt écrit `🔴`, `⚠️`, `✅` partout : ce n'est pas un cas exotique.
+//
+// 🔬 MESURÉ SUR UN BANC RÉEL LE 2026-09-20, trois encodages soumis à un agent neuf :
+//
+//   • ASCII    — 154 runes envoyées → noyau de **77 runes** (77 unités, 77 octets) ;
+//   • accents  — 204 runes / 404 OCTETS envoyés → noyau de **77 runes** (154 octets) ;
+//   • emoji    — rendu de 50 runes, **sans marque de troncature**.
+//
+// Le second cas tranche une hypothèse de la revue : herdr ne tronque **pas en octets** (154
+// octets rendus sur 404 envoyés, pas 77). Il tronque en **points de code**, à 77, puis ajoute
+// la marque. C'est donc en points de code qu'il faut compter — `[...texte].length`.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('⚠️ un sujet plein d’emoji n’est PAS une troncature — `.length` compte double, pas herdr', () => {
+  const sujet = `${'🔴'.repeat(40)} on verra…`;
+  assert.ok(sujet.length >= 78, 'en unités UTF-16 il dépasse le seuil…');
+  assert.ok([...sujet].length < 78, '…mais en points de code il est bien en deçà');
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'un tour tout à fait autre', sujetApres: sujet, texteDisparu: `${'🔴'.repeat(40)} on` }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+    'l’auteur a complété puis ponctué : c’est bien lui qui a soumis',
+  );
+});
+
+test('un sujet ACCENTUÉ de 77 points de code plus la marque EST une troncature', () => {
+  // 404 octets envoyés rendaient 154 octets : la coupure n'est pas en octets. Un sujet
+  // accentué de 77 runes est donc une vraie troncature, et garde sa direction stricte.
+  const noyau = 'éàèùçôîâ'.repeat(9) + 'éàèù'; // 76 runes
+  const sujet = `${noyau}x…`;
+  assert.equal([...sujet].length, 78);
+  assert.ok(Buffer.byteLength(sujet, 'utf8') > 78, 'et il pèse bien plus de 78 octets');
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'autre', sujetApres: sujet, texteDisparu: `${noyau}x et la suite` }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'autre', sujetApres: sujet, texteDisparu: 'éàè' }),
+    VERDICTS_DE_SOUMISSION.AUCUNE,
+    'direction stricte : un texte disparu plus court ne peut pas être ce qui est parti',
   );
 });
 

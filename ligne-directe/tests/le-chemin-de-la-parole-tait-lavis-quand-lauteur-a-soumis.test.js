@@ -1,5 +1,18 @@
 // LES DEUX APPELANTS, PAS UN (T-20260920-0125).
 //
+// ⚠️ POURQUOI CE FICHIER VIT DANS `ligne-directe/tests/` ET PAS AILLEURS (T-20260920-0125).
+//
+// Il a d'abord été écrit dans `naissance-representant/tests/`, parce que c'est de là que
+// venaient les doubles d'écran qu'il réutilise. Le code qu'il éprouve, lui, vit dans
+// `ligne-directe/src/`. Les deux modules ont chacun leur `npm test` et chacun leur job de CI.
+//
+// Conséquence MESURÉE : en débranchant la sonde dans `ligne-directe/src/herdr.js`, la suite
+// `ligne-directe` rendait **1352/1352, zéro échec**, pendant que `naissance-representant` en
+// rendait deux rouges. L'essai mordait — depuis la mauvaise suite. Celui qui travaille dans
+// `ligne-directe` et lance sa suite avait du vert sur un module qu'il venait de casser.
+//
+// Un essai se range avec le CODE QU'IL ÉPROUVE, pas avec les doubles qu'il emprunte.
+////
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // POURQUOI CE FICHIER EXISTE, ET IL A ÉTÉ MESURÉ AVANT D'ÊTRE ÉCRIT
 //
@@ -27,7 +40,7 @@ import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { livrerBrief } from '../src/livraison.js';
+import { livrerBrief } from '../../naissance-representant/src/livraison.js';
 
 const TEXTE_DISPARU = 'fais le orchestrator-state et le correctif de la ligne';
 const MON_MESSAGE = 'mon message';
@@ -234,7 +247,7 @@ after(() => {
 // Ces deux essais l'éprouvent là où elle vit.
 
 test('la sonde rend `null`, jamais une chaîne vide — le vide et l’absence ne se confondent pas', async () => {
-  const { sujetDuDernierTour } = await import('../../ligne-directe/src/herdr.js');
+  const { sujetDuDernierTour } = await import('../src/herdr.js');
   writeFileSync(join(bac, 'herdr'), `#!/usr/bin/env node
 process.stdout.write(JSON.stringify({ result: { agent: { tokens: { quota_topic: '   ' } } } }));`);
   chmodSync(join(bac, 'herdr'), 0o755);
@@ -242,7 +255,7 @@ process.stdout.write(JSON.stringify({ result: { agent: { tokens: { quota_topic: 
 });
 
 test('la sonde n’emporte personne quand herdr tombe — elle rend `null`, elle ne jette pas', async () => {
-  const { sujetDuDernierTour } = await import('../../ligne-directe/src/herdr.js');
+  const { sujetDuDernierTour } = await import('../src/herdr.js');
   // herdr sort en erreur, comme sur un pane disparu.
   writeFileSync(join(bac, 'herdr'), '#!/bin/sh\nexit 7\n');
   chmodSync(join(bac, 'herdr'), 0o755);
@@ -255,7 +268,7 @@ test('la sonde n’emporte personne quand herdr tombe — elle rend `null`, elle
 });
 
 test('herdr.js — le sujet devient le texte disparu : AUCUN avis dans ce qui est livré', async () => {
-  const { remettre } = await import('../../ligne-directe/src/herdr.js');
+  const { remettre } = await import('../src/herdr.js');
   const journal = fauxHerdr({ sujetApres: TEXTE_DISPARU });
   await remettre('w1:p1', MON_MESSAGE).catch(() => {});
   const livre = texteLivre(journal);
@@ -264,7 +277,7 @@ test('herdr.js — le sujet devient le texte disparu : AUCUN avis dans ce qui es
 });
 
 test('herdr.js — le sujet ne bouge pas : l’avis part, avec le texte entier', async () => {
-  const { remettre } = await import('../../ligne-directe/src/herdr.js');
+  const { remettre } = await import('../src/herdr.js');
   const journal = fauxHerdr({ sujetApres: SUJET_DAVANT });
   await remettre('w1:p1', MON_MESSAGE).catch(() => {});
   const livre = texteLivre(journal);
@@ -273,14 +286,14 @@ test('herdr.js — le sujet ne bouge pas : l’avis part, avec le texte entier',
 });
 
 test('herdr.js — sonde AVEUGLE : l’avis part, comme avant ce lot', async () => {
-  const { remettre } = await import('../../ligne-directe/src/herdr.js');
+  const { remettre } = await import('../src/herdr.js');
   const journal = fauxHerdr({ sujetApres: null });
   await remettre('w1:p1', MON_MESSAGE).catch(() => {});
   assert.ok(texteLivre(journal).includes(OUVERTURE_DE_LAVIS), 'on ne conclut pas d’une absence de mesure');
 });
 
 test('⚠️ herdr.js — la sonde PORTE le résultat : branchée et aveugle DIVERGENT', async () => {
-  const { remettre } = await import('../../ligne-directe/src/herdr.js');
+  const { remettre } = await import('../src/herdr.js');
   const jVue = fauxHerdr({ sujetApres: TEXTE_DISPARU });
   await remettre('w1:p1', MON_MESSAGE).catch(() => {});
   const vue = texteLivre(jVue);
