@@ -347,8 +347,9 @@ ${r.declencheur}
  *
  * ⚠️ `clos` N'EST JAMAIS FAUX PAR DÉFAUT. Trois des treize rendent « non mesurée » : un lieu
  * dont le nom n'a pas la forme d'un code (`j-20260814-0001-bis`), et deux projets que le
- * ServiceDesk n'a pas rendus parce que sa liste est plafonnée à 100 sur 252 — il le dit dans sa
- * raison. Dans ces cas on RÉVEILLE, et on DIT qu'on n'a pas pu mesurer. Se taire couperait un
+ * ServiceDesk ne rendait pas, faute de pagination — ⚠️ CES DEUX-LÀ SE LISENT DEPUIS que le
+ * lecteur pagine, et il n'en reste QU'UN : `j-20260814-0001-bis`, dont le nom n'a pas la forme
+ * d'un code. Dans ce cas on RÉVEILLE, et on DIT qu'on n'a pas pu mesurer. Se taire couperait un
  * orchestrateur vivant sur une mesure ratée ; ranger le doute du côté « rien à signaler » est
  * le motif même de ce jalon.
  *

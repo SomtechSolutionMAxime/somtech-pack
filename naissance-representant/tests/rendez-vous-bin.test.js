@@ -1263,7 +1263,8 @@ test('🔴 LA RONDE NE LIVRE RIEN À UN MANDAT CLOS, ET ELLE LE NOMME — bout e
 test('UN MANDAT QU’ON N’A PAS PU MESURER EST RÉVEILLÉ QUAND MÊME — et le compte rendu le dit', () => {
   // ⚠️ LE DÉFAUT PAR DÉFAUT EST « JE NE SAIS PAS », JAMAIS « RIEN À VOIR ICI ». Trois des treize
   // orchestrateurs réels sont dans ce cas le 2026-09-20 — dont deux parce que la liste du
-  // ServiceDesk est plafonnée à 100 sur 252. Ne pas les réveiller couperait des orchestrateurs
+  // ServiceDesk n'était pas paginée — ⚠️ ces deux-là se lisent depuis, il n'en reste qu'UN. Ne
+  // pas les réveiller couperait des orchestrateurs
   // vivants sur une mesure ratée.
   const lieuFlou = lieuDOrchestrateur('j-20260814-0001-bis');
   const lieuOuvert = lieuDOrchestrateur('p-20260920-0001');

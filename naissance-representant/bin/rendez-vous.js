@@ -51,7 +51,9 @@ import { etatDuMandat, accesServiceDesk } from '../../ligne-directe/src/mandat.j
  *
  * ⚠️ ET LE DOUBLE N'EST PAS PLUS INDULGENT QUE LE RÉEL : un mandat absent de la table rend
  * « non mesurée », exactement comme le vrai lecteur devant un code qu'il ne trouve pas — ce qui
- * est le cas de 2 des 13 orchestrateurs réels, le ServiceDesk plafonnant sa liste à 100 sur 252.
+ * était le cas de 2 des 13 orchestrateurs réels avant que le lecteur PAGINE — leur projet était
+ * au-delà de la première page. Depuis, ils se lisent. ⚠️ CETTE PHRASE A MENTI : elle a survécu à
+ * la correction du mécanisme qu'elle invoquait, dans le lot qui l'a corrigé.
  * Un double qui rendrait « ouvert » par défaut cacherait précisément le cas qui décide.
  */
 function lecteurDEtatDeMandat() {
@@ -373,7 +375,9 @@ async function tenirLeRendezVous(nom, debut) {
   // ⚠️ `clos !== true`, PAS `clos === false`. Un mandat qu'on n'a pas pu mesurer rend `null`, et
   // il doit RESTER réveillé : ne pas réveiller sur une mesure ratée couperait un orchestrateur
   // vivant en silence. Trois des treize sont dans ce cas — un lieu hors forme de code, et deux
-  // projets que le ServiceDesk n'a pas rendus, sa liste étant plafonnée à 100 sur 252.
+  // projets que le ServiceDesk ne rendait pas, sa liste n'étant pas paginée. ⚠️ CES DEUX-LÀ SE
+  // LISENT DEPUIS : il ne reste QU'UN cas « non mesurée » sur les 13 — un lieu dont le nom n'a
+  // pas la forme d'un code.
   const vivants = avecMandat.filter((o) => !closPourDeVrai(o));
   // ⚠️ ET LE DOUTE SE DIT. Un agent réveillé sur un mandat non mesuré n'est pas un agent dont on
   // sait le mandat ouvert : ranger les deux ensemble ferait lire « tout va bien » sur ce qu'on

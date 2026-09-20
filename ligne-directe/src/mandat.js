@@ -444,8 +444,11 @@ export function accesServiceDesk({ parPage = 200, ...transport } = {}) {
               'On s’arrête plutôt que de lire sans fin, et on ne conclut rien de cette lecture'
             : '') +
           (plafonne.get(famille)
-            ? ` — et cette liste est PLAFONNÉE à ${parPage} : la page suivante n’a rien rendu de ` +
-              'neuf alors que la précédente était pleine, donc le mandat est peut-être juste derrière'
+            ? ' — et cette lecture est PLAFONNÉE : ' +
+              (Number.isFinite(annonce)
+                ? 'la page suivante n’a rien rendu de neuf alors que la précédente était pleine'
+                : 'le service n’a annoncé AUCUN total, donc rien ne dit qu’il a tout rendu') +
+              ', donc le mandat est peut-être juste derrière'
             : '')
       );
     }
