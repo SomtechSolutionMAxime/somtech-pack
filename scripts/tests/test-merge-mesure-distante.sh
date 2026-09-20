@@ -43,31 +43,44 @@ ko() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# Un montage de banc qui avale ses erreurs a exactement le défaut que ce banc
+# garde : une commande en échec passerait pour un succès, et les assertions
+# suivantes accuseraient la lib. `must` fait échouer le banc là où ça se casse.
+must() {
+  local out rc
+  out="$("$@" 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "❌ MONTAGE DU BANC EN ÉCHEC (rc=${rc}) : $*"
+    echo "   $out"
+    echo "Assertions JOUÉES : 0 — le banc n'a pas pu être monté"
+    exit 1
+  fi
+}
+
 # Un dépôt jetable, sans configuration de poste ni signature.
 git_local() { git -C "$CLONE" -c user.email=t@t.io -c user.name=t -c commit.gpgsign=false "$@"; }
+git_autre() { git -C "$AUTRE" -c user.email=t@t.io -c user.name=t -c commit.gpgsign=false "$@"; }
 
 ORIGIN="${WORK}/origin.git"
 CLONE="${WORK}/clone"
 AUTRE="${WORK}/autre"
 
-git init -q --bare "$ORIGIN"
-git init -q "$CLONE"
-git_local remote add origin "$ORIGIN"
+must git init -q --bare "$ORIGIN"
+must git init -q "$CLONE"
+must git_local remote add origin "$ORIGIN"
 echo un > "${CLONE}/f.txt"
-git_local add -A
-git_local commit -qm "socle"
-git_local branch -M main
-git_local push -q -u origin main
-git_local tag v1.1.0
-git_local push -q origin v1.1.0
+must git_local add -A
+must git_local commit -qm "socle"
+must git_local branch -M main
+must git_local push -q -u origin main
+must git_local tag v1.1.0
+must git_local push -q origin v1.1.0
 
-# Un SECOND dépôt pousse un tag plus récent : le clone ne le connaît pas.
-git clone -q "$ORIGIN" "$AUTRE"
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag v1.2.0
-git -C "$AUTRE" push -q origin v1.2.0
-# ... et un tag dont le tri LEXICOGRAPHIQUE mentirait.
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag v1.9.0
-git -C "$AUTRE" push -q origin v1.9.0
+# Un SECOND dépôt pousse des tags plus récents : le clone ne les connaît pas.
+must git clone -q "$ORIGIN" "$AUTRE"
+must git_autre tag v1.2.0
+must git_autre tag v1.9.0
+must git_autre push -q origin v1.2.0 v1.9.0
 
 cd "$CLONE" || exit 1
 
@@ -99,8 +112,8 @@ suggere="$(printf '%s' "$out" | awk '{print $2}')"
   || ko "v1.1.1 proposé : le défaut T-20260820-0097 est toujours là"
 
 echo "== D — le tri est numérique, pas lexicographique =="
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag v1.100.0
-git -C "$AUTRE" push -q origin v1.100.0
+must git_autre tag v1.100.0
+must git_autre push -q origin v1.100.0
 dis="$(md_dernier_tag_distant)"
 [ "$dis" = "v1.100.0" ] && ok "v1.100.0 > v1.9.0" \
   || ko "attendu v1.100.0, obtenu '$dis' — tri lexicographique ?"
@@ -233,12 +246,12 @@ for mot in PROCHAINE DISTANT LOCAL ECART; do
 done
 
 echo "== M — les tags qui ne sont pas des versions sont écartés =="
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag latest 2>/dev/null
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag release-2026 2>/dev/null
+must git_autre tag latest
+must git_autre tag release-2026
 # Une pré-version : celle-ci PASSERAIT devant si le filtre ne l'écartait pas,
 # et /merge proposerait v9.9.10 en croyant publier un patch.
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag v9.9.9-rc1 2>/dev/null
-git -C "$AUTRE" push -q origin latest release-2026 v9.9.9-rc1
+must git_autre tag v9.9.9-rc1
+must git_autre push -q origin latest release-2026 v9.9.9-rc1
 dis="$(md_dernier_tag_distant)"
 [ "$dis" = "v1.100.0" ] && ok "\`latest\`, \`release-2026\` et \`v9.9.9-rc1\` écartés, v1.100.0 tient" \
   || ko "attendu v1.100.0, obtenu '$dis' — un tag non-versionné a été retenu"
@@ -250,8 +263,8 @@ out="$(md_prochaine_version patch)"
 # Un tag ANNOTÉ fait rendre DEUX lignes à `git ls-remote` : la ref et sa
 # déréférence `^{}`. Sans le nettoyage et le dédoublonnage, le même tag
 # apparaît deux fois dans la liste.
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag -a v1.50.0 -m annote
-git -C "$AUTRE" push -q origin v1.50.0
+must git_autre tag -a v1.50.0 -m annote
+must git_autre push -q origin v1.50.0
 liste="$(md_tags_distants)"
 n_total="$(printf '%s\n' "$liste" | grep -c .)"
 n_uniq="$(printf '%s\n' "$liste" | sort -u | grep -c .)"
@@ -261,8 +274,8 @@ printf '%s\n' "$liste" | grep -qx 'v1.50.0' && ok "le tag annoté v1.50.0 est bi
   || ko "le tag annoté v1.50.0 est absent de la liste distante"
 
 echo "== N — les bumps remettent à zéro ce qu'ils doivent =="
-git -C "$AUTRE" -c user.email=t@t.io -c user.name=t tag v2.3.4
-git -C "$AUTRE" push -q origin v2.3.4
+must git_autre tag v2.3.4
+must git_autre push -q origin v2.3.4
 [ "$(md_prochaine_version patch | awk '{print $2}')" = "v2.3.5" ] && ok "patch : v2.3.4 → v2.3.5" \
   || ko "patch attendu v2.3.5, obtenu '$(md_prochaine_version patch)'"
 [ "$(md_prochaine_version minor | awk '{print $2}')" = "v2.4.0" ] && ok "minor : v2.3.4 → v2.4.0 (patch remis à 0)" \
@@ -272,8 +285,8 @@ git -C "$AUTRE" push -q origin v2.3.4
 
 echo "== O — un distant SANS tag : v0.0.1, et l'écart le dit =="
 VIERGE="${WORK}/vierge.git"
-git init -q --bare "$VIERGE"
-git_local remote add vierge "$VIERGE"
+must git init -q --bare "$VIERGE"
+must git_local remote add vierge "$VIERGE"
 out="$(md_prochaine_version patch vierge)"; rc=$?
 { [ "$rc" -eq 0 ] && [ "$(printf '%s' "$out" | awk '{print $2}')" = "v0.0.1" ]; } \
   && ok "aucun tag distant → v0.0.1" \
@@ -304,7 +317,7 @@ ecart="$(cd "$VIDE" && md_ecart_tags)"
 
 echo "== Q — md_rafraichir_origine rapatrie bien les TAGS =="
 NEUF="${WORK}/neuf"
-git clone -q --no-tags "$ORIGIN" "$NEUF"
+must git clone -q --no-tags "$ORIGIN" "$NEUF"
 avant="$(cd "$NEUF" && md_dernier_tag_local)"
 # C'est LE scénario du ticket : un dépôt frais, aucun tag en local, le distant
 # en porte. L'écart doit le DIRE — pas annoncer « à jour ».
