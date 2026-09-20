@@ -40,7 +40,7 @@ const reponse = (agents) => ({ result: { agents } });
 test('UN NOM PORTÉ PAR DEUX AGENTS VIVANTS EST RELEVÉ, ET IL EST NOMMÉ', async () => {
   const { nomsEnDouble } = await import('../src/rendez-vous.js');
 
-  const vus = nomsEnDouble([
+  const { doublons: vus, muettes } = nomsEnDouble([
     { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1', name: 'charles-olivier' }, { pane_id: 'w1:p2', name: 'batiscan' }]) },
     { socket: '/s/b.sock', reponse: reponse([{ pane_id: 'w9:p7', name: 'charles-olivier' }]) },
   ]);
@@ -68,13 +68,13 @@ test('LE DOUBLON SE VOIT À TRAVERS LES SESSIONS — un compte sur UNE session n
   const memeSession = nomsEnDouble([
     { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1', name: 'x' }]) },
   ]);
-  assert.equal(memeSession.length, 0, 'un seul porteur : rien à signaler');
+  assert.equal(memeSession.doublons.length, 0, 'un seul porteur : rien à signaler');
 
   const deuxSessions = nomsEnDouble([
     { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1', name: 'x' }]) },
     { socket: '/s/b.sock', reponse: reponse([{ pane_id: 'w2:p1', name: 'x' }]) },
   ]);
-  assert.equal(deuxSessions.length, 1, 'le même nom dans deux sessions EST un doublon');
+  assert.equal(deuxSessions.doublons.length, 1, 'le même nom dans deux sessions EST un doublon');
 });
 
 test('UN AGENT SANS NOM N’EST PAS UN DOUBLON — 31 des 66 du poste n’en ont pas', async () => {
@@ -83,10 +83,41 @@ test('UN AGENT SANS NOM N’EST PAS UN DOUBLON — 31 des 66 du poste n’en ont
   // ⚠️ MESURÉ LE 2026-09-20 : 31 agents sur 66 n'ont pas de nom. Les compter ensemble ferait
   // un « doublon » de la moitié du poste, tous les jours — et une garde qui crie tous les jours
   // cesse d'être lue. C'est ainsi qu'elle meurt.
-  const vus = nomsEnDouble([
+  const { doublons: vus, muettes } = nomsEnDouble([
     { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1' }, { pane_id: 'w1:p2', name: null }, { pane_id: 'w1:p3', name: '' }]) },
   ]);
   assert.equal(vus.length, 0, 'l’absence de nom n’est pas un nom partagé');
+});
+
+test('🔴 LA RÉSERVE SURVIT À LA SÉRIALISATION — sinon elle ne voyage QUE dans la mémoire', async () => {
+  const { nomsEnDouble } = await import('../src/rendez-vous.js');
+
+  // 🔴 TROUVÉ PAR UNE PASSE DE FOND, et c'est la garantie centrale de cette fonction qui était
+  // rompue. Le commentaire promettait DEUX FOIS que « le nombre de muettes voyage AVEC le
+  // résultat ». Le mécanisme était `doubles.muettes = muettes` — une propriété posée sur un
+  // TABLEAU. Or `JSON.stringify` n'inclut jamais les propriétés non indicielles d'un tableau :
+  //
+  //     const a = [1, 2]; a.muettes = 5;
+  //     JSON.stringify({ n: a })   →   {"n":[1,2]}      ← la réserve a disparu
+  //
+  // Et c'est PRÉCISÉMENT le canal par lequel l'humain lit ce résultat : la ronde le passe à
+  // `JSON.stringify`. La réserve ne voyageait donc que dans la mémoire du processus.
+  //
+  // ⚠️ ET MON ESSAI PRÉCÉDENT NE POUVAIT PAS LE VOIR : il lisait `vus.muettes` sur l'objet EN
+  // MÉMOIRE, jamais à travers la sérialisation réelle. Une contre-épreuve qui prouve la
+  // fonction, pas le canal par lequel on la lit — un banc plus indulgent que le réel.
+  const { doublons: vus, muettes } = nomsEnDouble([
+    { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1', name: 'x' }]) },
+    { socket: '/s/b.sock', muette: true },
+  ]);
+
+  const rendu = JSON.parse(JSON.stringify({ noms_en_double: { doublons: vus, muettes } }));
+  assert.notEqual(
+    rendu.noms_en_double?.muettes,
+    undefined,
+    'la réserve doit franchir le JSON — c’est par là que l’humain lit le résultat'
+  );
+  assert.equal(rendu.noms_en_double.muettes, 1, 'et porter le bon compte');
 });
 
 test('UNE SESSION MUETTE NE FAIT PAS CONCLURE « AUCUN DOUBLON » — elle se dit', async () => {
@@ -95,7 +126,7 @@ test('UNE SESSION MUETTE NE FAIT PAS CONCLURE « AUCUN DOUBLON » — elle se di
   // ⚠️ RELEVÉ PAR BATISCAN EN AOÛT, ET C'EST LA MOITIÉ QU'ON OUBLIE : un compte de noms fait sur
   // une population INCOMPLÈTE rend un zéro qui ressemble trait pour trait à un vrai zéro. Un
   // agent qu'on n'a pas vu peut porter un nom déjà pris, et rien ne le montrerait.
-  const vus = nomsEnDouble([
+  const { doublons: vus, muettes } = nomsEnDouble([
     { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1', name: 'x' }]) },
     { socket: '/s/b.sock', muette: true },
   ]);
@@ -103,7 +134,7 @@ test('UNE SESSION MUETTE NE FAIT PAS CONCLURE « AUCUN DOUBLON » — elle se di
   assert.equal(Array.isArray(vus), true);
   assert.equal(vus.length, 0, 'rien de mesurable n’est en double');
   // La liste porte sa propre réserve : ce qu'elle n'a pas pu lire.
-  assert.equal(vus.muettes, 1, 'et elle DIT qu’une session ne lui a pas répondu');
+  assert.equal(muettes, 1, 'et elle DIT qu’une session ne lui a pas répondu');
 });
 
 test('LA CASSE NE FABRIQUE PAS DEUX AGENTS — `Charles-Olivier` et `charles-olivier` sont le même nom', async () => {
@@ -112,10 +143,36 @@ test('LA CASSE NE FABRIQUE PAS DEUX AGENTS — `Charles-Olivier` et `charles-oli
   // ⚠️ L'INCIDENT PORTE LES DEUX GRAPHIES : l'agent s'appelait `charles-olivier`, son lieu
   // `.gestionnaire/Charles-Olivier`. `herdr agent rename` compare déjà sans tenir compte de la
   // casse (`agentPorteLeNom`), et un relevé qui la distinguerait manquerait le doublon réel.
-  const vus = nomsEnDouble([
+  const { doublons: vus, muettes } = nomsEnDouble([
     { socket: '/s/a.sock', reponse: reponse([{ pane_id: 'w1:p1', name: 'Charles-Olivier' }]) },
     { socket: '/s/b.sock', reponse: reponse([{ pane_id: 'w9:p7', name: 'charles-olivier' }]) },
   ]);
 
   assert.equal(vus.length, 1, 'deux graphies du même nom sont UN doublon, pas deux agents');
+});
+
+test('LE BALAYAGE REND TOUJOURS LE RELEVÉ — c’est le contrat sur lequel la ronde s’appuie', async () => {
+  // ⚠️ CETTE GARDE EXISTE PARCE QU'UNE MUTATION A SURVÉCU, et elle dit quelque chose d'exact
+  // sur ce que je peux et ne peux pas garder.
+  //
+  // `bin/rendez-vous.js` LÈVE si le balayage ne rend pas ce relevé, plutôt que d'écrire
+  // `?? []` — parce qu'un repli du langage fabriquerait un zéro indiscernable d'un zéro mesuré
+  // (T-20260920-0160, un défaut que j'ai commis ce soir même). Mais ce `throw` garde un cas
+  // qu'AUCUN appelant de production ne produit : `orchestrateursDuPoste` rend toujours le champ.
+  // Le retirer laisse donc la suite verte, et c'est honnête de le dire plutôt que de fabriquer
+  // une entrée qui n'existe pas.
+  //
+  // CE QUI EST GARDABLE, ET C'EST CELA QUI COMPTE : le CONTRAT du balayage. Si un jour il cesse
+  // de rendre ce relevé, c'est ICI que ça rougit — avant que le `throw` de la ronde ait à servir.
+  const { orchestrateursDuPoste } = await import('../src/rendez-vous.js');
+
+  const b = await orchestrateursDuPoste({
+    sessions: ['/s/a.sock'],
+    appel: async () => ({ ok: true, reponse: { result: { agents: [{ pane_id: 'w1:p1', name: 'x' }] } } }),
+    estUnLieu: () => null,
+  });
+
+  assert.notEqual(b.nomsEnDouble, undefined, 'le balayage doit TOUJOURS rendre son relevé de noms');
+  assert.equal(Array.isArray(b.nomsEnDouble.doublons), true, 'avec sa liste de doublons');
+  assert.equal(typeof b.nomsEnDouble.muettes, 'number', 'et sa réserve — ce qu’il n’a pas pu lire');
 });

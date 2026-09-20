@@ -1352,10 +1352,14 @@ test('🔴 UN NOM PORTÉ PAR DEUX AGENTS VIVANTS EST SIGNALÉ PAR LA RONDE — b
   const dit = JSON.parse(r.stdout.trim().split('\n').pop());
 
   assert.ok(dit.noms_en_double, `le rendu doit porter les doublons : ${r.stdout}`);
-  assert.equal(dit.noms_en_double.length, 1, 'un seul nom est en double');
-  assert.match(dit.noms_en_double[0].nom, /charles-olivier/i, 'et il est NOMMÉ');
+  assert.equal(dit.noms_en_double.doublons.length, 1, 'un seul nom est en double');
+  assert.match(dit.noms_en_double.doublons[0].nom, /charles-olivier/i, 'et il est NOMMÉ');
   // ⚠️ NOMMER LE NOM NE SUFFIT PAS : sans les porteurs, on cherche partout.
-  assert.equal(dit.noms_en_double[0].porteurs.length, 2, 'avec ses deux porteurs');
+  assert.equal(dit.noms_en_double.doublons[0].porteurs.length, 2, 'avec ses deux porteurs');
+  // ⚠️ ET LA RÉSERVE FRANCHIT LE JSON — c'est le canal réel par lequel un humain lit ce rendu.
+  // Une propriété posée sur un tableau n'y survivait pas : la garantie ne voyageait qu'en
+  // mémoire.
+  assert.equal(typeof dit.noms_en_double.muettes, 'number', `la réserve doit franchir le JSON : ${r.stdout}`);
   // ⚠️ ET L'HUMAIN QUI LIT LE JOURNAL DOIT LE VOIR — un rendu JSON que personne n'ouvre ne
   // signale rien.
   assert.match(r.stderr, /charles-olivier/i, `le journal doit le crier aussi : ${r.stderr}`);

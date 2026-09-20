@@ -424,8 +424,8 @@ export async function avecLetatDuMandat(orchestrateurs, { lireLetat } = {}) {
  * doublon » : le compte porte alors sur moins que le poste, et un agent qu'on n'a pas vu peut
  * porter un nom déjà pris. Le nombre de muettes voyage avec le résultat.
  *
- * MESURÉ LE 2026-09-20, avant d'écrire : 16 sessions dont 11 MUETTES — des sockets morts du
- * 7 juillet au 22 août, pas des sessions vivantes manquées —, 80 agents vus, 39 noms distincts,
+ * MESURÉ LE 2026-09-20 À 22 H 30 UTC, avant d'écrire : 16 sessions dont 11 MUETTES — des sockets
+ * morts du 7 juillet au 22 août, pas des sessions vivantes manquées —, 80 agents vus, 39 distincts,
  * ZÉRO doublon. Le défaut n'était pas actif ce jour-là ; sa cause l'était.
  *
  * @param {Array<{socket: string, reponse?: object, muette?: boolean}>} lectures  le balayage
@@ -440,9 +440,15 @@ export function nomsEnDouble(lectures) {
       continue;
     }
     for (const a of l.reponse?.result?.agents ?? []) {
-      // ⚠️ UN AGENT SANS NOM N'EST PAS UN HOMONYME. Mesuré : 31 des 66 agents du poste n'en ont
-      // pas — les compter ensemble ferait un « doublon » de la moitié du poste, tous les jours,
-      // et une garde qui crie tous les jours cesse d'être lue. C'est ainsi qu'elle meurt.
+      // ⚠️ UN AGENT SANS NOM N'EST PAS UN HOMONYME. Mesuré LE 2026-09-20 : 31 des 66 agents que
+      // le registre rendait À CE MOMENT-LÀ n'en avaient pas — les compter ensemble ferait un
+      // « doublon » de la moitié du poste, tous les jours, et une garde qui crie tous les jours
+      // cesse d'être lue. C'est ainsi qu'elle meurt.
+      //
+      // ⚠️ CE 66 ET LE 80 DU BLOC AU-DESSUS SONT DEUX RELEVÉS DIFFÉRENTS DU MÊME JOUR, pris à
+      // quelques heures d'écart — le poste ouvre et ferme des sessions au fil de la journée.
+      // Relevé par une passe de fond : lu tel quel, le bloc se contredisait sur combien d'agents
+      // tournaient « ce jour-là ». Deux mesures datées du même jour ne sont pas la même mesure.
       const nom = typeof a?.name === 'string' ? a.name.trim() : '';
       if (!nom) continue;
       // ⚠️ LA CASSE NE FABRIQUE PAS DEUX AGENTS. L'incident porte les deux graphies —
@@ -455,8 +461,18 @@ export function nomsEnDouble(lectures) {
     }
   }
   const doubles = [...parNom.values()].filter((v) => v.porteurs.length > 1);
-  // La réserve voyage AVEC le résultat : un appelant qui ne lirait que la longueur verrait un
-  // zéro sans savoir sur quelle population il porte.
-  doubles.muettes = muettes;
-  return doubles;
+  // ⚠️ LA RÉSERVE EST UNE VRAIE DONNÉE, PAS UNE PROPRIÉTÉ POSÉE SUR UN TABLEAU — et la première
+  // rédaction faisait l'inverse. `doubles.muettes = muettes` tenait en mémoire et **disparaissait
+  // à la sérialisation** : `JSON.stringify` n'inclut jamais les propriétés non indicielles d'un
+  // tableau. Or c'est exactement le canal par lequel l'humain lit ce résultat — la ronde le
+  // passe à `JSON.stringify`. La garantie écrite DEUX FOIS dans ce commentaire ne franchissait
+  // donc pas le premier `JSON.stringify`.
+  //
+  // ⚠️ ET L'ESSAI QUI LA GARDAIT NE POUVAIT PAS LE VOIR : il lisait la propriété sur l'objet EN
+  // MÉMOIRE. Une contre-épreuve qui prouve la fonction, pas le canal par lequel on la lit.
+  // Relevé par une passe de fond ; le banc éprouve maintenant la sérialisation elle-même.
+  //
+  // `doublons` porte les noms partagés ; `muettes` porte ce qu'on N'A PAS PU LIRE. Un appelant
+  // qui ne regarderait que la liste verrait un vide sans savoir sur quelle population il porte.
+  return { doublons: doubles, muettes };
 }
