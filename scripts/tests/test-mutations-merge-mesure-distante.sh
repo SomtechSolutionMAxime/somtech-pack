@@ -284,6 +284,24 @@ essai_skill "l'étape 7.5 n'appelle plus md_statut_branche" <<'PY'
 s = s.replace('STATUS="$(md_statut_branche "$branch")"', 'STATUS="merged"')
 PY
 
+essai_skill 'les appels du skill deviennent des COMMENTAIRES' <<'PY'
+s = s.replace("   md_prochaine_version patch          # ou minor / major",
+              '   # md_prochaine_version patch\n   echo "v1.0.0"')
+s = s.replace('   STATUS="$(md_statut_branche "$branch")"',
+              '   # md_statut_branche\n   STATUS="merged"')
+s = s.replace('   md_rafraichir_origine || { echo "Fetch impossible — NE RIEN SUPPRIMER"; exit 1; }',
+              '   # md_rafraichir_origine')
+PY
+
+essai_skill 'les blocs bash du skill disparaissent' <<'PY'
+s = s.replace("```bash", "```text")
+PY
+
+essai_claude 'le CLAUDE.md represcrit le geste sous une AUTRE formulation' <<'PY'
+s = s.replace("La commande juste est `git ls-remote --tags origin`, qui interroge le serveur à chaque appel,",
+              "La commande juste est `git tag | head -1`, qui interroge le serveur à chaque appel,")
+PY
+
 echo "== La garde de famille mord-elle ? =="
 # Prouve que le balayage du dépôt accuse un fichier qui prescrirait la lecture
 # locale. Aucun fichier n'est écrit : on ajoute un nom à la liste examinée.
@@ -311,7 +329,7 @@ fi
 
 echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
-PLANCHER=33
+PLANCHER=36
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1

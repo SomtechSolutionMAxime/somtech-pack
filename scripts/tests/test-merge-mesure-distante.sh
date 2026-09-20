@@ -375,11 +375,26 @@ LIB_REELLE="${ROOT}/.claude/skills/merge/lib/mesure-distante.sh"
 # fonction la satisfait (ensemble vide). Elle est donc précédée d'une
 # assertion POSITIVE : le skill doit appeler nommément chacune des trois
 # fonctions qui décident. « Présence n'est pas absence du contraire. »
+# ⚠️ Et « nommée » ne suffit pas : un nom en COMMENTAIRE, ou en prose hors
+# d'un bloc de code, satisfait un grep et n'exécute rien. On ne cherche donc
+# que dans les blocs ```bash du skill, commentaires retirés.
+corps_executable() {
+  awk '
+    /^[ \t]*```bash[ \t]*$/ { dedans = 1; next }
+    /^[ \t]*```/            { dedans = 0; next }
+    dedans                   { sub(/#.*/, ""); print }
+  ' "$1"
+}
+EXEC="${WORK}/skill-executable.sh"
+corps_executable "$SKILL" > "$EXEC"
+[ -s "$EXEC" ] && ok "le skill porte des blocs bash exécutables ($(grep -c . "$EXEC") lignes)" \
+  || ko "aucun bloc bash exécutable dans le skill — l'accord ne porte plus sur rien"
+
 for fn in md_prochaine_version md_statut_branche md_rafraichir_origine; do
-  if grep -qE "(^|[^a-z_])${fn}([^a-z_]|$)" "$SKILL"; then
-    ok "le skill appelle ${fn}"
+  if grep -qE "(^|[^a-z_])${fn}([^a-z_]|$)" "$EXEC"; then
+    ok "le skill APPELLE ${fn} (hors commentaire, dans un bloc bash)"
   else
-    ko "le skill n'appelle plus ${fn} — la mesure qui décide a été remplacée par autre chose"
+    ko "le skill n'appelle plus ${fn} dans un bloc exécutable — nommé en commentaire ou en prose ne compte pas"
   fi
 done
 
@@ -427,7 +442,10 @@ echo "== S — plus aucun fichier du dépôt ne PRESCRIT la lecture locale =="
 # elle-même. On garde la FAMILLE : aucun fichier suivi ne porte le motif, sauf
 # les quelques-uns qui le CITENT pour le dénoncer — et chaque exception doit
 # encore porter le motif, sinon elle a rouillé et on le dit.
-MOTIF='git tag --sort=-v:refname'
+# Le motif est une FAMILLE, pas une chaîne : `git tag | head -1`,
+# `git tag --sort=… | head`, `git describe --tags` font le même geste faux.
+# Une garde qui ne connaît qu'une formulation se contourne en la réécrivant.
+MOTIF='git describe --tags|git tag[^`]{0,60}\| *(head|tail|sort)'
 TOLERES="CHANGELOG.md
 .claude/skills/merge/lib/mesure-distante.sh
 .claude/skills/merge/SKILL.md
@@ -438,7 +456,7 @@ scripts/tests/test-mutations-merge-mesure-distante.sh"
 # défaut reste celui que jouent tous les lancements normaux. Il sert à prouver
 # que cette assertion mord, sans écrire dans le dépôt.
 intrus=""
-for f in $(cd "$ROOT" && git grep -l -F "$MOTIF" -- . 2>/dev/null; printf '%s\n' "${MERGE_FAUX_INTRUS:-}"); do
+for f in $(cd "$ROOT" && git grep -lE "$MOTIF" -- . 2>/dev/null; printf '%s\n' "${MERGE_FAUX_INTRUS:-}"); do
   [ -n "$f" ] || continue
   printf '%s\n' "$TOLERES" | grep -qxF "$f" || intrus="${intrus} ${f}"
 done
@@ -449,7 +467,7 @@ done
 # élargit la porte sans que rien ne le dise.
 rouillees=""
 for f in $(printf '%s\n' "$TOLERES"); do
-  (cd "$ROOT" && grep -qF "$MOTIF" "$f" 2>/dev/null) || rouillees="${rouillees} ${f}"
+  (cd "$ROOT" && grep -qE "$MOTIF" "$f" 2>/dev/null) || rouillees="${rouillees} ${f}"
 done
 [ -z "$rouillees" ] && ok "chaque tolérance porte encore le motif qu'elle dénonce" \
   || ko "tolérances rouillées (le motif n'y est plus) :${rouillees}"
@@ -458,7 +476,7 @@ echo "----------------------------------------"
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 # Un compte d'assertions qui BAISSE sans qu'un cas ait été retiré est une
 # interruption, pas un succès (vague 2B). Le plancher est explicite.
-PLANCHER=60
+PLANCHER=61
 if [ "$((PASS + FAIL))" -lt "$PLANCHER" ]; then
   echo "❌ SUITE INTERROMPUE : $((PASS + FAIL)) assertions jouées, plancher ${PLANCHER}"
   exit 1
