@@ -335,186 +335,141 @@ test('QUAND LE COMPTE EST IMPOSSIBLE, LA RELÈVE LE DIT — elle n’invente ni 
   }
 });
 
-test('UNE PRISE QUI NE CONCLUT JAMAIS : la sonde REND quand même, elle rend « tenue », et c’est LE MINUTEUR qui a tranché', { timeout: 5000 }, async () => {
-  // ⚠️ CE BANC FERME UNE ISSUE, IL NE REJOUE PAS LA CHAÎNE. Substituer le TEMPS ne marche
-  // pas : mesuré, la prise tranche 30 fois sur 30 avant le minuteur, même réglé à zéro — un
-  // banc qui baisserait la borne serait vert sans jamais toucher la branche qu'il prétend
-  // éprouver. On substitue donc DEUX points nommés — le transport de la prise, et le
-  // minuteur — et la seule issue restante devient celle qu'on observe.
-  //
-  // 🔴 CE BANC NE MESURE PLUS AUCUNE DURÉE, ET C'EST TOUT SON OBJET (T-20260920-0013).
-  // Il comparait `Date.now()` à la borne pour prouver que le verdict venait du minuteur :
-  // `rendu en 59 ms pour une borne de 60 ms`. Une milliseconde de dérive sur un runner
-  // chargé, et il rougissait. QUATRE fois sur TROIS lots — dont deux fois sur un lot qui ne
-  // touchait que des fichiers markdown, où aucun chemin ne mène à un minuteur. Vert au rejeu
-  // du même job à chaque fois, sans rien changer.
-  //
-  // > Une garde qui COMPTE mesure la machine autant que le code, et son rouge accuse le
-  // > code en parlant du runner.
-  //
-  // ⚠️ ÉLARGIR LA BORNE (60 → 200 ms) AURAIT ÉTÉ LE PIÈGE : vert, et toujours en train de
-  // mesurer la machine, seulement plus lentement. Le discriminant n'est donc plus un temps,
-  // c'est UN APPEL : le minuteur est injecté, le banc observe qu'il a été planifié avec la
-  // borne, que la promesse reste EN ATTENTE tant que personne ne le déclenche, et que c'est
-  // son déclenchement — le sien, provoqué à la main — qui tranche.
-  //
-  // ⚠️ ET LE MINUTEUR NE PEUT PAS ÊTRE SUPPRIMÉ POUR AUTANT : sans lui, si ni la prise ni
-  // l'erreur ne surviennent, la promesse ne se résout jamais — `placeTenue` PEND, et
-  // `passerLaMain` avec elle. Une étape qui pend ne rougit jamais ; c'est la borne de ce
-  // banc (`timeout`) qui transforme cette attente-là en échec visible.
-  // ⚠️ CE DOUBLE RETIENT LA BOUCLE, ET C'EST OBLIGATOIRE POUR QU'IL SOIT CONFORME.
-  // Mesuré en CI : sans rien qui la retienne, ce banc rendait `cancelledByParent` — « Promise
-  // resolution is still pending but the event loop has already resolved ». La cause n'était
-  // PAS dans `placeTenue` : c'est le VRAI socket en vol qui tient la boucle le temps de la
-  // prise. Un double sans aucun handle fabriquait une situation que la production ne connaît
-  // pas, et aurait fait accuser le code. Un double doit être conforme au service qu'il
-  // remplace, y compris sur ce qu'il RETIENT.
-  let ferme = 0;
-  // Le double CAPTURE ses écouteurs au lieu de les jeter : rien ne viendra d'eux de
-  // lui-même — la prise ne conclut jamais — mais le banc peut les tirer APRÈS le minuteur
-  // pour éprouver que la sonde ne tranche pas deux fois.
-  const ecouteurs = new Map();
-  const priseQuiNeConclutJamais = () => {
-    const enVol = setTimeout(() => {}, 60_000); // ce qu'un socket en vol retient
-    return {
-      on(evenement, rappel) {
-        ecouteurs.set(evenement, rappel);
-      },
-      destroy() {
-        ferme += 1;
-        clearTimeout(enVol);
-      },
+// LES TROIS BRANCHES QUI PEUVENT TRANCHER EN PREMIER — BALAYÉES, PAS ÉNUMÉRÉES À LA MAIN.
+//
+// 🔴 CE BLOC A REMPLACÉ DEUX BANCS QUASI JUMEAUX, ET LA RAISON MÉRITE D'ÊTRE ÉCRITE ICI
+// (T-20260920-0013). Trois passes de revue adversariale ont rendu trois survivantes. Après
+// coup, les trois posaient LA MÊME QUESTION : « pour cette branche-ci qui décide en premier,
+// un écho tardif des autres est-il neutralisé ? » Chaque correctif fermait une branche et
+// laissait les autres, parce qu'il était écrit à la main, pour le cas qu'on venait de voir.
+//
+// > Trois fois la même famille de défaut, ce n'est plus un oubli de rigueur : c'est qu'on
+// > énumère à la main une combinatoire qu'on pourrait balayer.
+//
+// `placeTenue` a EXACTEMENT trois façons de trancher : le minuteur, la connexion, l'erreur.
+// C'est fermé, et ça se balaie. Une quatrième variante de la même famille ne peut plus
+// exister — s'il en apparaît une, elle viendra d'ailleurs, et ce sera une information.
+//
+// Chaque tour du balayage : on arme, on vérifie que RIEN n'a tranché tant qu'on n'a rien
+// déclenché, on déclenche LA branche du tour, on vérifie son verdict, puis on tire les DEUX
+// AUTRES comme échos tardifs et on réaffirme que rien n'a bougé.
+const DECIDEURS = [
+  {
+    nom: 'LE MINUTEUR',
+    canal: 'minuteur',
+    verdict: true,
+    // C'est le cas d'origine du ticket : une prise qui ne conclut jamais. Sans le minuteur,
+    // la promesse ne se résoudrait pas — `placeTenue` PEND, et `passerLaMain` avec elle.
+    // Une étape qui pend ne rougit jamais ; c'est la borne de ce banc qui la rend visible.
+    pourquoi: 'un doute non résolu penche du côté « la place est tenue », jamais du côté qui ouvre la porte à un double',
+  },
+  {
+    nom: 'LA CONNEXION',
+    canal: 'connect',
+    verdict: true,
+    // Le cas NOMINAL, et le plus fréquent : une place tenue est la normale, pas l'exception.
+    pourquoi: 'une prise qui aboutit dit que la place est tenue',
+  },
+  {
+    nom: "L'ERREUR",
+    canal: 'error',
+    verdict: false,
+    // Le poste sans veilleur du tout : rien n'écoute à cette adresse. L'erreur de connexion
+    // locale est quasi instantanée — le minuteur réel est donc encore armé quand elle arrive.
+    pourquoi: 'une prise refusée dit que la place est libre — c’est le seul verdict qui autorise à prendre le socket',
+  },
+];
+
+for (const decideur of DECIDEURS) {
+  test(`QUI TRANCHE EN PREMIER TRANCHE SEUL — ${decideur.nom} décide, et les échos tardifs ne renversent rien`, { timeout: 5000 }, async () => {
+    // ⚠️ CE BANC NE MESURE AUCUNE DURÉE, ET C'EST TOUT SON OBJET.
+    // Il comparait `Date.now()` à la borne pour prouver que le verdict venait du minuteur :
+    // `rendu en 59 ms pour une borne de 60 ms`. Une milliseconde de dérive sur un runner
+    // chargé, et il rougissait — QUATRE fois sur TROIS lots, dont deux fois sur un lot qui
+    // ne touchait que des fichiers markdown. Vert au rejeu du même job à chaque fois.
+    //
+    // > Une garde qui COMPTE mesure la machine autant que le code, et son rouge accuse le
+    // > code en parlant du runner.
+    //
+    // ⚠️ ÉLARGIR LA BORNE (60 → 200 ms) AURAIT ÉTÉ LE PIÈGE : vert, et toujours en train de
+    // mesurer la machine, seulement plus lentement. Le discriminant n'est donc plus un temps,
+    // c'est UN APPEL — le minuteur est injecté, et le banc observe.
+    //
+    // ⚠️ CE DOUBLE RETIENT LA BOUCLE, ET C'EST OBLIGATOIRE POUR QU'IL SOIT CONFORME.
+    // Mesuré en CI : sans rien qui la retienne, ce banc rendait `cancelledByParent` — « Promise
+    // resolution is still pending but the event loop has already resolved ». La cause n'était
+    // PAS dans `placeTenue` : c'est le VRAI socket en vol qui tient la boucle le temps de la
+    // prise. Un double sans aucun handle fabriquait une situation que la production ne connaît
+    // pas, et aurait fait accuser le code.
+    let ferme = 0;
+    const ecouteurs = new Map();
+    const priseQuiNeDecideDeRien = () => {
+      const enVol = setTimeout(() => {}, 60_000); // ce qu'un socket en vol retient
+      return {
+        // Le double CAPTURE ses écouteurs au lieu de les jeter : rien ne vient d'eux de
+        // lui-même, et le banc choisit lequel tirer, quand.
+        on(evenement, rappel) {
+          ecouteurs.set(evenement, rappel);
+        },
+        destroy() {
+          ferme += 1;
+          clearTimeout(enVol);
+        },
+      };
     };
-  };
 
-  // Le faux minuteur N'ARME RIEN : il note ce qu'on lui a demandé et attend qu'on le
-  // déclenche. Tant que le banc ne tire pas lui-même, aucune horloge ne peut trancher à sa
-  // place — c'est ce qui rend l'observation exacte plutôt que probable.
-  const planifies = [];
-  const annules = [];
-  const planifier = (fn, delai) => {
-    // `unref` se COMPTE ici, il ne se subit pas : un minuteur qu'on oublie de détacher
-    // retient la boucle, et ce fichier porte déjà la facture d'un tel oubli ailleurs
-    // (`ligne-directe etat` passé de 62 ms à 3062 ms). Sans cette assertion, retirer
-    // `unref` ne faisait rougir aucun des 1353 bancs du module.
-    const jeton = { fn, delai, detaches: 0, unref() { jeton.detaches += 1; } };
-    planifies.push(jeton);
-    return jeton;
-  };
-  const annuler = (jeton) => annules.push(jeton);
-
-  const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
-    borne: 60,
-    brancher: priseQuiNeConclutJamais,
-    planifier,
-    annuler,
-  });
-
-  // 1. UN MINUTEUR A ÉTÉ ARMÉ, ET AVEC LA BORNE DEMANDÉE. Sans lui, il ne resterait aucune
-  // issue : la prise ne conclut jamais.
-  assert.equal(planifies.length, 1, 'la sonde arme UN minuteur — sans lui, une prise qui ne conclut jamais la fait pendre');
-  assert.equal(planifies[0].delai, 60, 'le minuteur est armé avec la borne reçue, pas avec une valeur de son cru');
-
-  // 2. 🔴 LE DISCRIMINANT, ET IL NE REGARDE AUCUNE HORLOGE. Tant que personne n'a déclenché
-  // le minuteur, la promesse DOIT être en attente. Si un raccourci tranchait à sa place, elle
-  // serait déjà résolue ici — et ce banc rougirait sur cette ligne. C'est la contre-épreuve
-  // exigée par T-20260920-0013, et elle ne dépend pas de la charge du runner.
-  assert.equal(await etatDe(promesse), 'en attente', 'le verdict doit venir DU MINUTEUR : tant qu’il n’est pas déclenché, rien ne doit avoir tranché');
-
-  // 3. ON TIRE LE MINUTEUR NOUS-MÊME. Ce qui suit est donc imputable à lui seul.
-  planifies[0].fn();
-  const verdict = await promesse;
-
-  // 4. ELLE REND, ET ELLE REND « TENUE ». Le doute penche du côté prudent : « je n'ai pas pu
-  // savoir » ne doit JAMAIS autoriser un second veilleur à effacer le socket d'un vivant.
-  assert.equal(verdict, true, 'un doute non résolu doit pencher du côté « la place est tenue », jamais du côté qui ouvre la porte à un double');
-  assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte, même quand c’est le minuteur qui tranche');
-  assert.deepEqual(annules, [planifies[0]], 'la sonde annule le minuteur qu’elle a armé — celui-là, et une fois');
-
-  // 5. LE MINUTEUR A ÉTÉ DÉTACHÉ DE LA BOUCLE. Un minuteur qu'on oublie de détacher tient
-  // le processus en vie jusqu'à son terme. Ce fichier porte déjà la facture d'un tel oubli
-  // ailleurs : `ligne-directe etat` était passé de 62 ms à 3062 ms. Sans cette ligne,
-  // retirer `unref` ne faisait rougir aucun des 1353 bancs du module.
-  assert.equal(planifies[0].detaches, 1, 'le minuteur est détaché de la boucle — sinon il retient le processus jusqu’à son terme');
-
-  // 6. 🔴 CE QUI A TRANCHÉ UNE FOIS NE TRANCHE PAS DEUX. On tire maintenant les écouteurs
-  // que la vraie prise aurait pu déclencher APRÈS le minuteur — un socket qui se connecte
-  // enfin, ou qui échoue, alors que le verdict est déjà rendu. Rien ne doit bouger : ni le
-  // verdict, ni le nombre de prises refermées, ni le nombre de minuteurs annulés.
-  // Sans ceci, la garde d'idempotence de la sonde existait dans le code sans qu'aucun banc
-  // ne l'éprouve : la retirer laissait les 1353 verts.
-  ecouteurs.get('connect')?.();
-  ecouteurs.get('error')?.();
-  assert.equal(await promesse, true, 'un écho tardif de la prise ne renverse pas un verdict déjà rendu');
-  assert.equal(ferme, 1, 'la prise n’est refermée qu’UNE fois, même si ses écouteurs parlent après le minuteur');
-  assert.deepEqual(annules, [planifies[0]], 'le minuteur n’est annulé qu’UNE fois');
-});
-
-test('UNE PRISE QUI SE CONNECTE EST REFERMÉE, ELLE AUSSI — sinon chaque sondage laisse un socket derrière lui', { timeout: 5000 }, async () => {
-  // 🔴 CE BANC FERME UN TROU QU'UNE REVUE ADVERSARIALE A TROUVÉ, ET IL NE PARLE PLUS DU
-  // MINUTEUR (T-20260920-0013). Tout ce que ce fichier éprouvait de la fermeture de la
-  // prise portait sur le chemin du MINUTEUR. Le chemin NOMINAL — la connexion réussit —
-  // n'était couvert par aucun des 1353 bancs du module.
-  //
-  // La mutation qui le révèle : résoudre directement sur `connect` au lieu de passer par
-  // `trancher`. Les 1353 restaient VERTS. En production, `flux.destroy()` n'aurait plus
-  // jamais été appelé sur une connexion réussie — et `placeTenue` est sondée en boucle,
-  // jusqu'à vingt fois par relève. Un socket abandonné à chaque sondage, sans un rouge.
-  //
-  // > Une fuite ne se signale pas : elle s'accumule. Et ce qui n'est éprouvé sur aucun
-  // > chemin nominal finit par y dériver.
-  let ferme = 0;
-  const ecouteurs = new Map();
-  const priseQuiSeConnecte = () => ({
-    on(evenement, rappel) {
-      ecouteurs.set(evenement, rappel);
-    },
-    destroy() {
-      ferme += 1;
-    },
-  });
-
-  // ⚠️ CE BANC TRACE SON `annuler`, ET C'EST UNE LEÇON PAYÉE DEUX FOIS. Sa première
-  // écriture passait un `annuler: () => {}` qui n'observait rien — il était donc plus
-  // FAIBLE que le banc qu'il vient compléter, sur la dimension que celui-là gardait déjà.
-  // La mutation qui l'a révélé : n'annuler le minuteur QUE sur le chemin du minuteur,
-  // jamais sur celui de la connexion. Les 1354 restaient verts, et en production un vrai
-  // minuteur serait resté armé après CHAQUE sondage réussi — c'est-à-dire sur le chemin
-  // le plus fréquent, pas sur l'exception.
-  const planifies = [];
-  const annules = [];
-
-  const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
-    borne: 60,
-    brancher: priseQuiSeConnecte,
-    planifier: (fn, delai) => {
+    // Le faux minuteur N'ARME RIEN : il note ce qu'on lui a demandé et attend qu'on le
+    // déclenche. Aucune horloge ne peut trancher à la place du banc.
+    // `unref` se COMPTE ici, il ne se subit pas : un minuteur qu'on oublie de détacher retient
+    // la boucle, et ce fichier porte déjà la facture d'un tel oubli ailleurs (`ligne-directe
+    // etat` passé de 62 ms à 3062 ms).
+    const planifies = [];
+    const annules = [];
+    const planifier = (fn, delai) => {
       const jeton = { fn, delai, detaches: 0, unref() { jeton.detaches += 1; } };
       planifies.push(jeton);
       return jeton;
-    },
-    annuler: (jeton) => annules.push(jeton),
+    };
+    const annuler = (jeton) => annules.push(jeton);
+
+    const promesse = placeTenue(join(racine, 'peu-importe.sock'), {
+      borne: 60,
+      brancher: priseQuiNeDecideDeRien,
+      planifier,
+      annuler,
+    });
+
+    // 1. UN MINUTEUR A ÉTÉ ARMÉ, AVEC LA BORNE DEMANDÉE — sur les trois branches, parce
+    // qu'on ne sait pas encore laquelle tranchera.
+    assert.equal(planifies.length, 1, 'la sonde arme UN minuteur — sans lui, une prise qui ne conclut jamais la fait pendre');
+    assert.equal(planifies[0].delai, 60, 'le minuteur est armé avec la borne reçue, pas avec une valeur de son cru');
+
+    // 2. 🔴 LE DISCRIMINANT, ET IL NE REGARDE AUCUNE HORLOGE. Tant qu'on n'a rien déclenché,
+    // la promesse DOIT être en attente. Un raccourci qui trancherait tout seul serait déjà
+    // résolu ici — et ce banc rougirait sur cette ligne, jamais sur une durée.
+    assert.equal(await etatDe(promesse), 'en attente', 'aucun verdict ne doit tomber avant qu’une des trois branches ait parlé');
+
+    // 3. ON TIRE LA BRANCHE DU TOUR. Ce qui suit lui est donc imputable, à elle seule.
+    if (decideur.canal === 'minuteur') planifies[0].fn();
+    else ecouteurs.get(decideur.canal)();
+
+    assert.equal(await promesse, decideur.verdict, decideur.pourquoi);
+    assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte, quelle que soit la branche qui a tranché');
+    assert.deepEqual(annules, [planifies[0]], 'la sonde annule le minuteur qu’elle a armé — celui-là, et une fois');
+    assert.equal(planifies[0].detaches, 1, 'le minuteur est détaché de la boucle — sinon il retient le processus jusqu’à son terme');
+
+    // 4. 🔴 LES ÉCHOS TARDIFS DES DEUX AUTRES BRANCHES. Un socket qui se connecte enfin, une
+    // erreur qui arrive après coup, un minuteur mal annulé : rien de tout cela ne doit
+    // renverser un verdict rendu, ni refermer la prise deux fois, ni annuler deux minuteurs.
+    // C'est ce balayage qui ferme la famille de défauts — auparavant chaque branche était
+    // écrite à la main, et il en manquait toujours une.
+    for (const autre of DECIDEURS.filter((d) => d.canal !== decideur.canal)) {
+      if (autre.canal === 'minuteur') planifies[0].fn();
+      else ecouteurs.get(autre.canal)();
+    }
+
+    assert.equal(await promesse, decideur.verdict, 'un écho tardif d’une autre branche ne renverse pas un verdict déjà rendu');
+    assert.equal(ferme, 1, 'la prise n’est refermée qu’UNE fois, même si les autres branches parlent après coup');
+    assert.deepEqual(annules, [planifies[0]], 'le minuteur n’est annulé qu’UNE fois, même après les échos tardifs');
   });
-
-  ecouteurs.get('connect')();
-
-  assert.equal(await promesse, true, 'une prise qui aboutit dit que la place est tenue');
-  assert.equal(ferme, 1, 'la sonde referme la prise qu’elle a ouverte SUR LE CHEMIN NOMINAL aussi — sinon chaque sondage abandonne un socket');
-  assert.deepEqual(annules, [planifies[0]], 'le minuteur est annulé sur le chemin nominal AUSSI — sinon il reste armé après chaque sondage réussi');
-
-  // 🔴 ET L'ÉCHO TARDIF, SUR CE CHEMIN AUSSI — LE TROU SYMÉTRIQUE DU PRÉCÉDENT.
-  // Son jumeau éprouve l'idempotence quand c'est LE MINUTEUR qui décide en premier. Ici
-  // c'est la CONNEXION qui décide — et c'est le cas le plus fréquent en production, une
-  // place tenue étant la normale, pas l'exception. La mutation qui l'a révélé : rendre la
-  // garde d'idempotence inopérante UNIQUEMENT quand le premier verdict vient de `connect`.
-  // Les 1354 restaient verts.
-  // Ce qui peut réellement arriver ensuite : un `error` tardif du socket — une connexion
-  // coupée juste après avoir abouti — ou un minuteur qu'on aurait mal annulé ailleurs.
-  // Aucun des deux ne doit renverser un verdict déjà rendu, ni refermer deux fois.
-  //
-  // > Fermer un trou sur un chemin laisse l'autre chemin ouvert sur la même dimension.
-  ecouteurs.get('error')?.();
-  planifies[0].fn();
-  assert.equal(await promesse, true, 'un écho tardif — socket coupé après coup, ou minuteur mal annulé — ne renverse pas un verdict déjà rendu');
-  assert.equal(ferme, 1, 'la prise n’est refermée qu’UNE fois sur le chemin nominal non plus');
-  assert.deepEqual(annules, [planifies[0]], 'le minuteur n’est annulé qu’UNE fois sur le chemin nominal non plus');
-});
+}
