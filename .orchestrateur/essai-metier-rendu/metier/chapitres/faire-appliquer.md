@@ -92,6 +92,8 @@ Le brief de revue prescrit à chaque sous-agent : **reproduire** les défauts pl
 
 **L'occurrence et son coût — et c'est le seul de ces changements dont l'occurrence a été payée par le lot qui l'écrit.** La nuit du **2026-09-19 au 20**, un orchestrateur vérifie une tête en entier à **02 h 55** et la rend comme vérifiée ; à **03 h 10** la tête a changé ; à **03 h 15** il **rejoue la vérification complète**, faute de pouvoir calculer ce qui y survivait. Une troisième a suivi le même soir. **Coût : deux vérifications complètes rejouées dans la même soirée, sur des deltas qui ne touchaient chaque fois qu'une fraction de ce qui avait été regardé.** *Le contrefactuel est exact : avec la première liste, le delta d'une tête à l'autre ne touchait que **deux objets** — un chapitre et une ligne de seuil —, et c'est eux seuls qu'il aurait fallu rejouer.*
 
+🔴 **LE COROLLAIRE, ET SANS LUI LA PREMIÈRE LISTE NE SERT À RIEN** : *« sur la tête finale »* se lit **« de ce qu'ils COUVRENT »**. Ce qui est ajouté après la revue doit être **couvert** par les verdicts, **pas les faire rejouer**. **Sinon l'entrée CHANGELOG — que l'outil impose APRÈS la revue — périme les deux verdicts à chaque fois, indéfiniment**, et aucune tête n'est jamais revue en entier. *Occurrence : 2026-09-20, verdicts tenus pour périmés **trois fois** sur un même lot.*
+
 **Un reviewer ne corrige pas** — sinon il perd l'indépendance qui fait sa valeur.
 
 ## Exiger ce qu'un lot montre, jamais ce qu'il conclut

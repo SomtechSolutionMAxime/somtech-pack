@@ -97,6 +97,16 @@ Le brief contient :
 
 ⚠️ **Ne verse pas ton contexte dans le brief.** L'agent reçoit ce que tu sais, pas ce dont il a besoin — et il paie pour le lire.
 
+## Toute consigne qui déclenche une action NOMME SON SUJET
+
+Une phrase **grammaticalement juste** peut être **opérationnellement ambiguë** : *« tes trois questions montent au dirigeant maintenant »* porte deux ordres opposés — *« je les monte, tu n'as rien à faire »* et *« pose-les toi-même »* — et rien dedans ne dit **QUI** monte.
+
+**L'occurrence et son coût** *(2026-09-20, `t-20260920-0027`)* : le chef a lu le second. **UNE HEURE de blocage sur un dialogue qui ne pouvait atteindre personne** — *il n'a aucun canal vers le dirigeant, et le dirigeant ne regarde pas son pane.*
+
+> **Le sujet se nomme même quand il t'est évident — parce que ce qui t'est évident est précisément ce que tu ne vérifieras pas.**
+
+**Vaut pour le brief, pour chaque `livrer.js` et pour chaque arbitrage rendu** : partout où ta phrase déclenche un geste chez quelqu'un d'autre.
+
 ## Faire naître — l'espace de travail avant l'agent, le modèle avec lui
 
 ```bash
@@ -160,6 +170,8 @@ Formule-le comme un **état atteint**, pas comme une liste de tâches. Ce qui do
 >
 > **Relis son écran après chaque `pane run`** (`herdr pane read "$P"`) et vérifie que le geste a été **pris**, pas seulement envoyé. Le texte exige cette preuve pour `livrer.js` ; **il n'y a aucune raison qu'elle s'arrête là.**
 
+🔴 **ET UN `/goal` DIFFÉRÉ SE REPOSE AU PREMIER RETOUR AU REPOS.** Différer est juste — un `pane run` vers un agent occupé s'affame —, mais *« à poser plus tard »* **n'est pas un but posé**, et **son absence n'est pas neutre : elle est LUE par ta veille comme une fin de mandat** (voir *Poser la veille de déblocage*). *Occurrence : 2026-09-20, sur les DEUX chefs de la nuit — différé pour la bonne raison, jamais reposé.*
+
 ### 🔴 Un texte GRISÉ n'est pas un texte saisi — `herdr pane read` ne les distingue PAS
 
 **Avant de conclure qu'une boîte contient quelque chose, mesure son ÉTAT** — la commande ne pose aucun geste, elle se tape sur le pane d'un autre :
@@ -190,6 +202,14 @@ Un `/goal` posé **ne s'efface pas** quand tu arbitres autrement en conversation
 
 **Un agent qui reçoit deux ordres contradictoires ne peut pas trancher ; il ne peut que remonter.** **Sinon tu fabriques la contradiction que tu reprocheras ensuite à l'agent de mal relayer.** *(`T-20260819-0095`.)*
 
+## Devant un dialogue de choix ouvert par ton chef — tu ANNULES
+
+**Tu ne réponds pas, même en choisissant l'option « par défaut » que tu as toi-même rédigée** : répondre tranche **à la place de celui à qui la question appartient**. *Annuler libère sans décider.*
+
+⚠️ **Et `livrer.js` REFUSE d'écrire à un agent `blocked`** : un dialogue ouvert rend une session **injoignable même pour son coordonnateur** — tu ne peux ni la débloquer par le texte, ni lui dire pourquoi.
+
+*Occurrence : 2026-09-20 — répondre aurait tranché à la place du dirigeant deux questions qu'on venait de lui poser.*
+
 ## Poser la veille de déblocage
 
 Un agent herdr s'arrête sur les demandes de permission de son environnement. Sans rien, il attend qu'un humain passe ; avec toi qui le débloques, **tu deviens sa boucle d'événements**.
@@ -202,6 +222,12 @@ scripts/orchestration/veille-deblocage.sh --list                    # pane, agen
 ⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue** — deux fois, pendant que celles d'un autre orchestrateur survivaient. *Même script, même poste, même journée : seule la façon de les lancer différait.* `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
 
 **Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés, chacun avec son code de sortie. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre ; l'ancienne valeur (~66 min) était plus courte que la plupart des lots.
+
+> 🔴 **ELLE DÉDUIT LA FIN D'UN MANDAT DE L'ABSENCE DE BUT AFFICHÉ.** Motif au journal : `agent-termine — l'agent a fini (confirmé sur deux relevés, aucun but actif à l'écran)`. **Un agent sans but n'a pas fini : il n'a pas de but** — les deux sont indistinguables à l'écran, et **l'un des deux fait disparaître la garde**.
+>
+> *Occurrence : 2026-09-20, motif `agent-termine` **DEUX FOIS sur le même chef en une nuit**. Coût : deux disparitions de garde, dont une pendant l'heure de blocage ci-dessus.*
+>
+> **C'est pour ça qu'un `/goal` différé se repose : le but n'est pas qu'un aiguillon, c'est le signe vital que lit ta veille.**
 
 Trois garanties qu'il ne faut jamais relâcher :
 

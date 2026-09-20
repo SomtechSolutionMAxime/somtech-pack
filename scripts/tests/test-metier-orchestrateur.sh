@@ -109,7 +109,13 @@ fi
 
 pose_sans_detach=0
 pose_avec_esperluette=0
-for ligne in "${POSES[@]}"; do
+# ⚠️ EXPANSION GARDÉE — `"${TAB[@]}"` sur un tableau VIDE est une variable non
+# liée en bash 3.2 (celui de macOS) sous `set -u` : le banc AVORTE au lieu de
+# rougir, et tout ce qui suit devient inmesurable. Mesuré le 2026-09-20 en
+# jouant une contre-épreuve de la vague 2A : retirer la section de la veille
+# tuait la série entière après le premier contrôle — 78 assertions muettes,
+# aucune d'elles rouge. Un banc qui s'interrompt ne dit rien de ce qu'il gardait.
+for ligne in ${POSES[@]+"${POSES[@]}"}; do
   corps="${ligne#*:}"
   case "$corps" in
     *--detach*) ;;
@@ -160,7 +166,7 @@ fi
 echo "⑧ la veille se pose après le brief — T-20260818-0109"
 
 lig_brief="$(grep -n 'livrer\.js' "$METIER" | grep -- '--en-attente' | head -1 | cut -d: -f1)"
-lig_pose="$(printf '%s\n' "${POSES[@]}" | head -1 | cut -d: -f1)"
+lig_pose="$(printf '%s\n' ${POSES[@]+"${POSES[@]}"} | head -1 | cut -d: -f1)"
 
 if [ -n "$lig_brief" ] && [ -n "$lig_pose" ]; then
   if [ "$lig_pose" -gt "$lig_brief" ]; then
@@ -668,7 +674,7 @@ for __structurel in \
   '.claude/skills/orchestrer-chantier/SKILL.md'
 do
   __vu=0
-  for __f in "${FAMILLE[@]}"; do [ "$__f" = "$__structurel" ] && __vu=1; done
+  for __f in ${FAMILLE[@]+"${FAMILLE[@]}"}; do [ "$__f" = "$__structurel" ] && __vu=1; done
   if [ "$__vu" -eq 1 ]; then
     ok "« $__structurel » prescrit bien la naissance d'un chef d'équipe et en capture la sortie"
   else
@@ -686,7 +692,7 @@ lectures=0
 sans_e=0
 sans_ok=0
 non_verifiees=0
-for __f in "${FAMILLE[@]}"; do
+for __f in ${FAMILLE[@]+"${FAMILLE[@]}"}; do
   __naissances="$(cd "$RACINE" && grep -c 'NAISSANCE=\$(' "$__f")"
   __lues=0
   while IFS= read -r corps; do

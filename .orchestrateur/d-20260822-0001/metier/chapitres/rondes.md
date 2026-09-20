@@ -118,6 +118,8 @@ Quand aucun lot n'avance, tu prends la suite **dans le backlog, au grain de la D
 
 ⚠️ **Ne relance pas pour relancer.** Un orchestrateur **qui attend un arbitrage n'est pas à l'arrêt, il est bloqué** — et démarrer un lot de plus **disperse au lieu d'avancer**. **Le discriminant est « est-ce que j'attends quelqu'un ? », jamais « est-ce que quelqu'un travaille ? ».**
 
+🔴 **Et ce discriminant se lit PAR CHANTIER, jamais en bloc : tu es bloqué sur un front et LIBRE sur l'autre.** Un arbitrage qui dort sur un chantier n'arrête pas les autres. **Occurrence : 2026-09-20, DEUX fois en une nuit** — quinze travaux libres arrêtés parce que **deux** attendaient un arbitrage. **Coût : un tour perdu la première fois, quatre comptes rendus faux au dirigeant la seconde.**
+
 ## 5 — L'amélioration continue de ton métier
 
 Relève les zones d'amélioration de l'orchestrateur et inscris-les dans un **epic à ton nom** sous la demande-ServiceDesk prévue.
