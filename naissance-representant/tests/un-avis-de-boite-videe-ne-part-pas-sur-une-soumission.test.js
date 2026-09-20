@@ -87,6 +87,235 @@ test('la comparaison est un PRÉFIXE, jamais une égalité — `quota_topic` tro
   );
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ LE TEXTE PEUT AUSSI GRANDIR ENTRE LES DEUX LECTURES — et c'est le cas le PLUS COURANT
+//
+// Relevé en passe de revue de fond, bloquant, et le rejet était juste. La première version de
+// ce verdict n'admettait qu'une seule direction : le sujet rendu devait être un PRÉFIXE du
+// texte disparu. Cela couvre la TRONCATURE — le texte rétrécit parce que `quota_topic` coupe
+// à 77 caractères — et rien d'autre.
+//
+// Or la boîte se vide parce que quelqu'un revient à son clavier. Ce qu'il fait alors, le plus
+// souvent, c'est FINIR SA PHRASE avant d'appuyer sur Entrée. Le texte figé à la première
+// observation est alors un préfixe de ce qui est parti, et non l'inverse :
+//
+//   observé  : « fais le orchestrator-state »
+//   soumis   : « fais le orchestrator-state et le correctif de la ligne »
+//
+// L'ancienne règle rendait `aucune-soumission` — donc l'avis partait, donc le dirigeant était
+// averti d'une perte sur le texte qu'il venait lui-même de soumettre. **C'est exactement le
+// défaut que ce lot existe pour fermer, laissé ouvert sur son chemin le plus probable.**
+//
+// ⚠️ ET LE CAS N'EST PAS RATTRAPÉ AILLEURS : si le texte avait changé SANS être soumis,
+// `delivrerLaBoite` rendrait `bouge` et on ne serait pas ici. On n'arrive dans cette branche
+// que parce que la boîte a été vue VIDE.
+//
+// La règle porte donc désormais sur la RELATION, pas sur une direction choisie d'avance.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('⚠️ l’auteur a COMPLÉTÉ sa phrase avant de soumettre — le sujet est plus long, et c’est bien lui', () => {
+  assert.equal(
+    verdictDeSoumission({
+      sujetAvant: 'un tour d’avant',
+      sujetApres: 'fais le orchestrator-state et le correctif de la ligne',
+      texteDisparu: 'fais le orchestrator-state',
+    }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+});
+
+test('l’auteur a EFFACÉ la fin avant de soumettre — le sujet est plus court, non tronqué', () => {
+  // La symétrie de l'autre : il raccourcit au lieu d'allonger. Rien ne distingue ce cas du
+  // précédent quant à ce qu'on sait — dans les deux, ce qui est parti est ce qu'on avait vu.
+  assert.equal(
+    verdictDeSoumission({
+      sujetAvant: 'un tour d’avant',
+      sujetApres: 'fais le orchestrator-state',
+      texteDisparu: 'fais le orchestrator-state et le correctif de la ligne',
+    }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+});
+
+// ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR ONZE — et rien ne le gardait.
+//
+// Mesuré sur le banc du 2026-09-20 : un texte de onze lignes soumis d'un coup rendait
+// `quota_topic` = « ligne 1 du texte colle du banc cas C ». Le sujet ne porte QUE la première
+// ligne. Sans normalisation des blancs, le texte disparu contient des retours à la ligne que
+// le sujet n'a pas, `startsWith` échoue, et la garde est morte sur tout texte multi-ligne —
+// c'est-à-dire sur la plupart de ce qui bloque vraiment une boîte.
+//
+// La mutation qui retire l'aplatissement SURVIVAIT jusqu'à cet essai.
+
+test('⚠️ un texte disparu MULTI-LIGNE — le sujet n’en porte que la première, et ça suffit', () => {
+  const MULTI = ['ligne 1 du texte collé', 'ligne 2 du texte collé', 'ligne 3 du texte collé'].join('\n');
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'un tour d’avant', sujetApres: 'ligne 1 du texte collé', texteDisparu: MULTI }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+});
+
+test('⚠️ et les blancs multiples ne cassent pas la garde non plus', () => {
+  // Un écran rend parfois deux espaces là où il y en avait un, ou un saut de ligne au milieu
+  // d'une phrase repliée. Ce sont les mêmes caractères pour un lecteur, ils doivent l'être ici.
+  assert.equal(
+    verdictDeSoumission({
+      sujetAvant: 'un tour d’avant',
+      sujetApres: 'fais le orchestrator-state',
+      texteDisparu: 'fais   le\n orchestrator-state et le correctif',
+    }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+});
+
+test('un sujet NON tronqué sans aucune parenté avec le texte disparu ne prouve rien', () => {
+  // La règle élargie ne doit pas devenir « tout changement vaut soumission » — ce serait le
+  // critère du chemin espace réservé appliqué là où on a de quoi faire mieux.
+  assert.equal(
+    verdictDeSoumission({
+      sujetAvant: 'un tour d’avant',
+      sujetApres: 'un message qui ne ressemble à rien de ce qu’on avait vu',
+      texteDisparu: TEXTE,
+    }),
+    VERDICTS_DE_SOUMISSION.AUCUNE,
+  );
+});
+
+test('⚠️ un sujet TRONQUÉ garde la direction stricte — il est coupé, il ne peut pas être plus long', () => {
+  // On ne relâche QUE le cas non tronqué. Un sujet qui finit par `…` est une vue partielle :
+  // exiger qu'il préfixe le texte disparu reste la seule lecture juste, et l'inverse (le texte
+  // disparu préfixant un sujet coupé) n'aurait aucun sens.
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: null, sujetApres: LONG_TRONQUE, texteDisparu: LONG }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: null, sujetApres: LONG_TRONQUE, texteDisparu: 'ABCDEFGHIJ' }),
+    VERDICTS_DE_SOUMISSION.AUCUNE,
+    'un texte disparu plus court qu’un sujet TRONQUÉ ne peut pas être ce qui a été soumis',
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ LE MESSAGE DIFFUSÉ EN MASSE — le faux positif que la mesure a fait apparaître
+//
+// Soulevé par le coordonnateur APRÈS que la mesure de collision eut écarté sa crainte
+// initiale : ce n'est pas la brièveté qui fait collisionner nos textes, ce sont les messages
+// IDENTIQUES envoyés à plusieurs agents (la ronde, un ordre de fermeture). Mesuré sur le
+// parc : 11 des 30 sujets réels sont des doublons exacts d'un autre, et 100 % des collisions
+// au-delà de 40 caractères sont des sujets identiques sur toute leur longueur visible.
+//
+// Le scénario : la boîte porte la ronde #1, NON soumise. L'agent soumet la ronde #2, qui est
+// le même texte. `quota_topic` correspond alors au texte disparu, et le verdict conclut à une
+// soumission — alors que la ronde #1 a bien été PERDUE.
+//
+// Trois cas, et ils ne valent pas la même chose. Ces essais les FIGENT, y compris ceux qu'on
+// accepte : un comportement accepté sans essai est un comportement qu'on croira un jour avoir
+// été oublié.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+const RONDE = "C'est l'heure de ta ronde. Fais le tour de tes agents ouverts et rends-moi l'état.";
+
+test('message en masse (a) — le tour précédent était DÉJÀ ce texte : l’avis part, la perte est dite', () => {
+  // COUVERT, et c'est le garde-fou d'égalité qui le couvre : le sujet n'a pas bougé, donc rien
+  // ne dit que ce qui a disparu est parti.
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: RONDE, sujetApres: RONDE, texteDisparu: RONDE }),
+    VERDICTS_DE_SOUMISSION.AUCUNE,
+  );
+});
+
+test('⚠️ message en masse (b) — texte identique, tour précédent différent : faux positif ACCEPTÉ', () => {
+  // NON COUVERT, et assumé. Le verdict conclut à une soumission alors que la ronde #1 a été
+  // perdue. **Mais ce qui est perdu est le MÊME TEXTE que ce qui est parti** : l'avis existe
+  // pour rendre la perte réparable (« recopie-le depuis ici »), et il n'y a rien à recopier —
+  // le destinataire a reçu ce texte, au caractère près. Taire l'avis ne coûte donc rien ici.
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'un tout autre tour', sujetApres: RONDE, texteDisparu: RONDE }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+});
+
+test('⚠️ message en masse (c) — même préambule, QUEUES DIFFÉRENTES : faux positif avec perte RÉELLE', () => {
+  // NON COUVERT, non fermable avec ce signal, et c'est le résidu sérieux de ce lot.
+  //
+  // Deux textes partagent leurs 77 premiers caractères et diffèrent après. `quota_topic` est
+  // coupé à 77 : **on ne peut pas voir la différence**, par construction. Ce qui est perdu est
+  // la queue du premier texte, et l'avis est tu.
+  //
+  // ⚠️ POURQUOI ON L'ACCEPTE, ET CE N'EST PAS UN HAUSSEMENT D'ÉPAULES :
+  //   • non observé — 0 occurrence sur les 870 paires du parc réel : les collisions mesurées
+  //     étaient TOUTES des doublons exacts, jamais des préambules partagés à queue différente ;
+  //   • non fermable — aucune longueur de préfixe n'y change rien, la troncature est en amont
+  //     de nous ; il faudrait un autre signal que `quota_topic` ;
+  //   • borné par la fenêtre — il faut que l'autre texte parte dans les dizaines de
+  //     millisecondes où celui-ci disparaît sans être soumis.
+  //
+  // Si ce cas se produit un jour, c'est ICI qu'il faudra revenir, et l'essai le dit.
+  const commun = RONDE;
+  const avecQueue = `${commun} Et ajoute la liste des trois bloqués.`;
+  const autreQueue = `${commun} Rien de plus.`;
+  assert.equal(
+    verdictDeSoumission({
+      sujetAvant: 'un tout autre tour',
+      sujetApres: `${autreQueue.slice(0, 77)}…`,
+      texteDisparu: avecQueue,
+    }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+    'documenté comme résidu accepté — si ce cas devient réel, le signal doit changer, pas le seuil',
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ LA PANNE ASYMÉTRIQUE — une lecture jette, l'autre réussit
+//
+// Relevé en passe de fond : le seul essai de panne faisait jeter LES DEUX appels, donc il ne
+// pouvait pas distinguer « le drapeau de panne a été posé » de « la lecture d'après est vide ».
+// Une mutation qui supprimait la pose du drapeau restait verte.
+//
+// Le cas qui compte est celui où l'appel AVANT jette et l'appel APRÈS réussit : sans le
+// drapeau, on comparerait un `sujetAvant` inexistant à un `sujetApres` bien réel, on y lirait
+// un CHANGEMENT, et on TAIRAIT l'avis sur une mesure dont la moitié n'a jamais eu lieu.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('⚠️ la lecture AVANT jette, celle d’APRÈS réussit — on ne conclut pas sur une demi-mesure', async () => {
+  let n = 0;
+  const r = await delivrerLaBoite({
+    texteCoince: TEXTE,
+    commandes: { lireEcran: ['agent', 'read', 'w1:p1'], soumettre: ['agent', 'send-keys', 'w1:p1', 'Enter'] },
+    appelHerdr: async () => ({ ok: true }),
+    lireEcran: async () => BOITE_VIDE,
+    dormir: async () => {},
+    immobiliteMs: 1,
+    lireSujetDuDernierTour: async () => {
+      if (n++ === 0) throw new Error('herdr injoignable au premier appel');
+      return TEXTE;
+    },
+  });
+  assert.equal(r.verdictDeSoumission, 'sonde-aveugle', 'la panne de la première lecture l’emporte');
+  assert.equal(r.soumissionEtablie, false, 'et l’avis part — on n’a pas mesuré ce qu’on prétend avoir mesuré');
+  assert.equal(r.ok, true);
+  assert.equal(r.texteDisparu, TEXTE);
+});
+
+test('⚠️ la lecture APRÈS jette, celle d’AVANT a réussi — même verdict, même repli', async () => {
+  let n = 0;
+  const r = await delivrerLaBoite({
+    texteCoince: TEXTE,
+    commandes: { lireEcran: ['agent', 'read', 'w1:p1'], soumettre: ['agent', 'send-keys', 'w1:p1', 'Enter'] },
+    appelHerdr: async () => ({ ok: true }),
+    lireEcran: async () => BOITE_VIDE,
+    dormir: async () => {},
+    immobiliteMs: 1,
+    lireSujetDuDernierTour: async () => {
+      if (n++ === 0) return 'un tour d’avant';
+      throw new Error('herdr injoignable au second appel');
+    },
+  });
+  assert.equal(r.verdictDeSoumission, 'sonde-aveugle');
+  assert.equal(r.soumissionEtablie, false);
+});
+
 test('⚠️ le verdict est FAUX quand la sonde est AVEUGLE — on ne conclut pas d’une absence', () => {
   // Le repli est le comportement d'aujourd'hui : l'avis part. Se tromper du côté de
   // l'avertissement, jamais du silence — un danger permissif ne se signale pas tout seul.

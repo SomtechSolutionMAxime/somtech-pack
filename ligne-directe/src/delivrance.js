@@ -340,6 +340,12 @@ export async function delivrerLaBoite({
   // oubliées et la relance des messages gardés.
   let sondeEnPanne = false;
   const interrogerLaSonde = async () => {
+    // ⚠️ SECOND FILET, PAS GARDE — et c'est mesuré. Poser le drapeau ici ne change aucun
+    // comportement observable : sans sonde, les deux lectures rendent `null`, et
+    // `verdictDeSoumission` conclut déjà `sonde-aveugle` sur `apres === null`. La mutation qui
+    // le retire ne fait rougir personne. Il reste parce qu'il dit la VÉRITÉ de l'état — « je
+    // n'ai pas de sonde » est une cécité, pas un silence du destinataire — et parce qu'un
+    // futur repli qui rendrait autre chose que `null` s'appuierait dessus.
     if (typeof lireSujetDuDernierTour !== 'function') {
       sondeEnPanne = true;
       return null;
@@ -559,7 +565,12 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
   const avant = sujetLu(sujetAvant);
   // Un sujet ABSENT avant et présent après est un changement parfaitement lisible — c'est même
   // le cas mesuré sur un agent neuf, qui n'avait encore rien soumis.
-  if (avant !== null && avant === apres) return VERDICTS_DE_SOUMISSION.AUCUNE;
+  // ⚠️ PAS DE `avant !== null` ICI, ET C'EST MESURÉ : `apres` est déjà garanti non nul deux
+  // lignes plus haut, donc `avant === apres` ne peut être vrai que si `avant` l'est aussi. Le
+  // garde-fou était une condition MORTE — le retirer ne faisait rougir aucun essai, relevé en
+  // passe de fond. Une condition qu'on ne peut pas désarmer en rougissant n'est pas une garde,
+  // c'est du bruit qui fait croire qu'un cas est traité.
+  if (avant === apres) return VERDICTS_DE_SOUMISSION.AUCUNE;
 
   // ⚠️ L'ESPACE RÉSERVÉ N'EST PAS COMPARABLE : ce qu'on avait lu n'est pas le texte.
   if (estUnEspaceReserve(texteDisparu)) return VERDICTS_DE_SOUMISSION.ETABLIE;
@@ -567,17 +578,61 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
   const disparu = String(texteDisparu ?? '').trim();
   if (disparu === '') return VERDICTS_DE_SOUMISSION.AUCUNE;
 
-  const noyau = apres.endsWith(MARQUE_DE_TRONCATURE) ? apres.slice(0, -MARQUE_DE_TRONCATURE.length) : apres;
+  const tronque = apres.endsWith(MARQUE_DE_TRONCATURE);
+  const noyau = tronque ? apres.slice(0, -MARQUE_DE_TRONCATURE.length) : apres;
   if (noyau === '') return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
 
   // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré : sur un texte de
   // onze lignes, `quota_topic` portait « ligne 1 … ». On compare donc au début du texte, une
   // fois ses blancs internes normalisés — un retour à la ligne ne doit pas casser la garde.
   const aplati = (t) => t.replace(/\s+/g, ' ').trim();
-  return aplati(disparu).startsWith(aplati(noyau))
+  const vu = aplati(disparu);
+  const parti = aplati(noyau);
+
+  // ⚠️ UN SUJET TRONQUÉ EST UNE VUE PARTIELLE — une seule direction a un sens. Il a été coupé
+  // à 77 caractères : il ne peut pas être plus long que ce qui est parti, et le texte disparu
+  // doit donc commencer par lui. L'inverse ne voudrait rien dire.
+  if (tronque) {
+    return vu.startsWith(parti) ? VERDICTS_DE_SOUMISSION.ETABLIE : VERDICTS_DE_SOUMISSION.AUCUNE;
+  }
+
+  // ⚠️ UN SUJET ENTIER SE COMPARE DANS LES DEUX SENS, ET C'EST LE CŒUR DU DÉFAUT QUE CE LOT
+  // EXISTE POUR FERMER (relevé en passe de fond, bloquant, et le rejet était juste).
+  //
+  // La première version n'admettait que `vu.startsWith(parti)` — le texte RÉTRÉCIT. Ça ne
+  // couvre que la troncature. Or ce qui vide une boîte, c'est quelqu'un qui revient à son
+  // clavier, et ce qu'il fait alors, le plus souvent, c'est FINIR SA PHRASE avant d'appuyer
+  // sur Entrée. Le texte figé à la première observation est alors un préfixe de ce qui est
+  // parti, pas l'inverse :
+  //
+  //   observé : « fais le orchestrator-state »
+  //   soumis  : « fais le orchestrator-state et le correctif de la ligne »
+  //
+  // La règle d'origine rendait `aucune-soumission` là-dessus : l'avis partait, et le dirigeant
+  // était averti d'une perte sur le texte qu'il venait lui-même de soumettre. Le défaut visé
+  // par ce lot restait donc ouvert **sur son chemin le plus probable** — vert partout, mort là
+  // où ça compte. Aucun essai ne construisait ce cas ; c'est une passe fraîche qui l'a vu.
+  //
+  // ⚠️ ET CE CAS N'EST PAS RATTRAPÉ AILLEURS : si le texte avait changé SANS être soumis,
+  // `delivrerLaBoite` rendrait `bouge` et on ne serait jamais ici. On n'atteint cette branche
+  // que parce que la boîte a été vue VIDE.
+  //
+  // On compare donc la RELATION, pas une direction choisie d'avance : l'un des deux commence
+  // par l'autre. Le texte a grandi (complété), rétréci (effacé), ou n'a pas bougé — dans les
+  // trois cas, ce qui est parti est ce qu'on avait vu.
+  //
+  // ⚠️ CE QUE ÇA COÛTE, ET ON NE LE CACHE PAS. Élargir élargit aussi la collision : deux textes
+  // SANS RAPPORT qui partagent leur début — un préambule conventionnel, une bannière — seraient
+  // lus comme le même. Le risque était déjà là dans le sens troncature ; il ne grandit ici que
+  // pour les textes disparus COURTS, qui préfixent plus facilement autre chose. Il reste borné
+  // par la fenêtre, qui se compte en dizaines de millisecondes : il faudrait que cet autre
+  // texte parte précisément pendant que celui-ci disparaît sans être soumis. **[non établi]**
+  // qu'il se produise ; on n'a pas de mesure de fréquence, et on ne pose pas de longueur
+  // minimale, qui serait une borne inventée plutôt que mesurée.
+  return vu.startsWith(parti) || parti.startsWith(vu)
     ? VERDICTS_DE_SOUMISSION.ETABLIE
-    : // Le sujet a changé, mais vers AUTRE chose : l'agent a soumis un autre texte, et celui-ci
-      // a bien pu disparaître sans être soumis. L'avis reste dû.
+    : // Le sujet a changé, mais vers AUTRE chose, sans parenté : l'agent a soumis un autre
+      // texte, et celui-ci a bien pu disparaître sans être soumis. L'avis reste dû.
       VERDICTS_DE_SOUMISSION.AUCUNE;
 }
 
