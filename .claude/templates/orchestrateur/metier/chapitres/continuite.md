@@ -62,6 +62,8 @@ Ta ronde ramasse des choses de natures différentes, et **elles ne vont pas au m
 
 **Et repose ta ronde** — elle ne survit pas à ta mort.
 
+⚠️ **Et c'est précisément pour ça que le témoin de ta boucle d'amélioration se lit sur l'ÂGE de son réceptacle, jamais sur un compte de tours** : `epics get <ton-epic>` en reprenant — au-delà de **48 h** alors que des tours ont eu lieu, elle est présumée morte, **et l'écart d'âge est l'entrée à écrire avant toute autre** *(R5.5)*. **Le compte de tours meurt avec la session ; l'âge du réceptacle te survit.**
+
 **Un orchestrateur qui agit sur un souvenir contredit le ServiceDesk sans le savoir — et c'est le ServiceDesk qui a raison.**
 
 ## Relis ta ligne depuis le début du chantier

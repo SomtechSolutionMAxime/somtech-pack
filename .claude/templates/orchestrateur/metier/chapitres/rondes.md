@@ -122,6 +122,22 @@ Quand aucun lot n'avance, tu prends la suite **dans le backlog, au grain de la D
 
 Relève les zones d'amélioration de l'orchestrateur et inscris-les dans un **epic à ton nom** sous la demande-ServiceDesk prévue.
 
+### Et commence par mesurer l'ÂGE de ce réceptacle — avant toute autre entrée
+
+**Un réceptacle au bon endroit n'est pas un réceptacle vivant**, et les deux ne se distinguent par aucun signal : une boucle d'amélioration morte ne produit pas d'erreur, elle produit du silence.
+
+```
+epics get <ton-epic>
+```
+
+> **Si `updated_at` a plus de 48 h ET que des tours de ronde ont eu lieu entre-temps, la boucle d'amélioration est présumée morte. L'écart d'âge est l'entrée à écrire avant toute autre.**
+
+**Pourquoi ce témoin-là et pas celui qu'on écrit d'habitude** : le témoin par **compte de tours** — *« deux tours sans entrée »* — exige de savoir combien de tours ont passé, **une information qui meurt avec la session**. **L'âge du réceptacle, lui, survit à tout.**
+
+**L'occurrence, et son coût** *(`batiscan`, mesuré le 2026-09-19, `E-20260818-0007`)* : réceptacle **au bon endroit** depuis le 2026-08-18, **32 jours sans une seule entrée** — et la ronde n'a repris que parce que le CTO l'a réclamée, **exactement le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour, la grille des écarts en rendait **trois rouges sur huit, et les trois étaient des contrôles périodiques** : 55 espaces de travail sur un seul dépôt dont **48 orphelins**, le plus ancien vieux de deux mois, et **aucune date de passe de veille inscrite nulle part**. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+
+⚠️ **Sept orchestrateurs ont cherché *« mon epic est-il au bon endroit ? »*. Personne n'a cherché *« mon epic a-t-il bougé ? »*** — la même requête, le même champ, et une réponse toute différente.
+
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
 Quatre lignes, pas un journal : **où en est le chantier** · **ce qui tourne**, quels agents sur quoi · **ce qui est bloqué**, et par quoi · **ce qui attend une décision de lui**, nommément.
@@ -143,6 +159,20 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 ## 8 — Ce qui a changé dans le corpus
 
 Standards et ADR neufs ou amendés, compétences ajoutées, consignes du feed. **Inscris-le, avec la date de ta passe.** C'est le mécanisme qui rend R4 vraie : **une connaissance qu'aucun geste ne rafraîchit périme en silence.**
+
+### La cinquième question — celle qui n'a pas de source opposable
+
+⚠️ **Les quatre sources ci-dessus ne portent pas le métier VÉCU.** Une passe qui s'y arrête peut rendre « rien n'a bougé » pendant que la façon de travailler des orchestrateurs a changé sur trois points.
+
+**Alors pose-la, à un tiers** :
+
+> **« Qu'est-ce qui a changé dans la façon de travailler des orchestrateurs et qui n'est écrit dans aucune des quatre ? »**
+
+**Sans elle, la veille rend un vide qui se lit comme une stabilité.**
+
+**L'occurrence, et son coût** *(passe de `batiscan` du 2026-09-19, mesurée par `michel`)* : sur la fenêtre du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé — le corpus vécu, si**, et il vivait dans des `CONTEXTE.md` et des consignes de session, c'est-à-dire dans des supports qui ne descendent à personne. **Coût : un orchestrateur qui relit son corpus pour se mettre à jour conclut, à juste titre et faussement, que rien n'a changé.**
+
+⚠️ **Et ce que la cinquième question rapporte n'est pas opposable pour autant — c'est une PISTE, pas une source.** Un fait vécu se mesure à sa source avant d'être inscrit, et d'autant plus vite qu'il retirerait une consigne *(voir l'asymétrie du fait rapporté, dans `reflexes.md`)*. **Sur cette même passe, un des faits rapportés était faux dans sa direction.**
 
 ## Ta ronde ne se termine pas tant que ce qu'elle a trouvé n'est pas au ServiceDesk
 

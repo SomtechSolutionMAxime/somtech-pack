@@ -59,6 +59,31 @@ Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur
 
 ## Merger et fermer les statuts dans le même geste
 
+### Qui clique — c'est toi, et tu n'attends plus le go
+
+🔴 **Le clic final t'a été délégué le 2026-09-15.** Une fois **toutes** les conditions de livraison réunies, **c'est l'orchestrateur ou le chef d'équipe qui fusionne** — pas le dirigeant, et sans attendre son go.
+
+Le texte est opposable, il vit dans les permissions du poste (`~/.claude/settings.json`). **Recopié, pas résumé** :
+
+> « Fusion d'une branche de livraison vers le tronc (gh pr merge, git merge) et fermeture du lot, par un orchestrateur ou un chef, quand TOUTES les conditions de livraison sont deja reunies : revue independante faite, QA passee avec ses reserves ecrites, verifications portees sur le SHA reel, sas de staging libre et verrou respecte. Le dirigeant a delegue le clic final le 2026-09-15 : attendre son go une fois les conditions reunies ne protege rien et arrete le chantier pendant des heures. Ce qui reste interdit et n'est PAS couvert : sauter la revue ou la QA, forcer un tronc protege, pousser sur staging quand le sas est occupe par une autre livraison, et tout geste de production hors livraison normale — ecriture directe en base, deploiement manuel, montee d'image. »
+
+**Les quatre conditions, et elles se vérifient une par une** :
+
+| Condition | Ce qui la prouve |
+|---|---|
+| **Revue indépendante faite** | les verdicts des deux passes, **écrits sur la tête FINALE** — pas sur une tête intermédiaire |
+| **QA passée** | le rapport, **avec ses réserves écrites** — une réserve tue est une condition manquante |
+| **Vérifications sur le SHA réel** | l'état de la chaîne lu sur le commit qu'on fusionne, jamais sur celui qu'on croit fusionner |
+| **Sas libre et verrou respecté** | l'écart `origin/main..origin/staging` mesuré, **et pas seulement le verrou interrogé** *(voir Le sas, plus haut)* |
+
+**Ce qui reste interdit, et que la délégation ne couvre pas** : sauter la revue ou la QA · forcer un tronc protégé · pousser sur staging quand le sas est occupé par une autre livraison · tout geste de production hors livraison normale — écriture directe en base, déploiement manuel, montée d'image.
+
+⚠️ **Et l'erreur symétrique, qui est celle qui coûterait le plus cher : la délégation ne lève AUCUNE condition.** Elle remplace **l'attente du go une fois les conditions réunies**, rien d'autre. Une condition qui manque interdit toujours le merge — **et elle l'interdit même si ton coordonnateur te demande de fusionner**. *Ce qui a changé, c'est qui clique, jamais ce qu'il faut avoir avant de cliquer.*
+
+**L'occurrence, et son coût.** Le **2026-09-15**, devant un lot dont tout le travail était fait et vérifié, le dirigeant : *« vous avez tout fait le travail, je ne sais même pas de quoi tu parles, mais je dois dire go ??? ça n'a pas rapport »*. **Le coût est celui du silence qui suit : le chantier s'arrête pendant des heures sur une approbation qui ne protège rien** — le seul à pouvoir dire si les conditions sont réunies est celui qui les a réunies.
+
+### Le merge ferme les statuts dans le même geste
+
 Règle d'or n°13. Toutes les stories que le merge ferme passent `completed` **immédiatement**.
 
 > ⚠️ **Mais la QA passe AVANT le merge — le merge n'est qu'un constat.** L'ordre est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed` (STD-030). **`ready_to_deploy` n'est pas décoratif** : il dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte. Merger d'abord et fermer ensuite fait de la règle d'or n°5 une intention.
