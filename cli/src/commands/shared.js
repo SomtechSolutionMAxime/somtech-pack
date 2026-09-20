@@ -8,7 +8,7 @@ import { collectFiles, applyFiles } from '../engine.js';
 const HERE = dirname(fileURLToPath(import.meta.url)); // cli/src/commands
 
 /** Version du package CLI (= version npm publiée, alignée sur le tag au publish). */
-function cliVersion() {
+export function cliVersion() {
   try {
     return JSON.parse(readFileSync(resolve(HERE, '..', '..', 'package.json'), 'utf8')).version;
   } catch {

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { cmdInit } from './commands/init.js';
 import { cmdUpdate } from './commands/update.js';
 import { cmdSetup } from './commands/setup.js';
+import { cmdVersionPoste } from './commands/version-poste-cmd.js';
 import { cmdBrd } from './commands/brd.js';
 import { cmdArchi, isArchiCommand } from './commands/archi.js';
 import { cmdAgent } from './commands/agent.js';
@@ -112,6 +113,12 @@ Commandes :
            Re-jouable = mise à jour. Préserve skills, workflows et commandes perso
            hors-pack ; un fichier du pack divergent CONVERGE vers la version du pack
            (backup .somtech.bak auto), les symlinks sont épargnés
+  version  Rend la version du pack INSTALLÉE SUR CE POSTE et l'écart avec le registre.
+           Un poste jamais installé le DIT (rc=2) ; un écart qu'on n'a pas pu mesurer
+           rend INDÉTERMINÉ (rc=3), jamais « à jour » ; en retard rend rc=1.
+           Signale aussi les verrous de mise à jour périmés, avec leur âge.
+           ⚠️  À ne pas confondre avec \`--version\` : celui-là rend la version du
+           paquet en cours d'exécution, et répond même sur un poste vierge.
   metier   Rend le métier d'un rôle depuis son classement, et REFUSE plutôt que de
            rendre un métier qui ne tient pas (STD-047) :
              metier rendre   --role <rôle>   produit L0, L1 et les chapitres L2
@@ -231,6 +238,11 @@ export async function run(argv) {
       case 'init': return await cmdInit(flags);
       case 'update': return await cmdUpdate(flags);
       case 'setup': return await cmdSetup(flags);
+      // `version` rend ce qui est installé SUR LE POSTE, et l'écart avec le
+      // registre — à ne pas confondre avec `--version`, qui rend la version du
+      // paquet EN COURS D'EXÉCUTION (celui que `npx` vient de chercher) et qui
+      // rendrait un numéro même sur un poste jamais installé. T-20260816-0020.
+      case 'version': return cmdVersionPoste(flags);
       case 'brd': return await cmdBrd(positionals, flags);
       default: {
         // ═══ « <rôle>-update » SE RÉSOUT AU REGISTRE, IL NE S'ÉNUMÈRE PLUS.
