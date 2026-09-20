@@ -75,7 +75,7 @@ Sur `DECISION=DIRE`, exécute la ligne `COMMANDE=` telle qu'elle est rendue. Sur
 
 Règle d'or n°13. Toutes les stories que le merge ferme passent `completed` **immédiatement**.
 
-> ⚠️ **L'ordre est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed`** (STD-030). **`ready_to_deploy` n'est pas décoratif** : il dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte.
+> ⚠️ **Mais la QA passe AVANT le merge — le merge n'est qu'un constat.** L'ordre est `in_progress → [QA passe] → ready_to_deploy → [/merge] → completed` (STD-030). **`ready_to_deploy` n'est pas décoratif** : il dit que **le scénario a été rejoué**, pas seulement que la chaîne est verte.
 
 *Si ton chantier est une Livraison* — **c'est ici que se joue ton calendrier.** Staging est un sas à une seule livraison (règle d'or n°14) et on ne bundle jamais (n°4) : chaque lot traverse **un par un**. Un jalon de vingt tickets n'est donc pas vingt travaux parallèles qui convergent, **mais une file** — et sa durée est la **somme** des passages, pas celle du plus long. Dimensionne la date là-dessus, et **dis-le tôt si elle ne tient pas**.
 

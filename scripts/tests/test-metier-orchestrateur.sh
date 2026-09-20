@@ -921,7 +921,7 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #
 # ── RE-BASELINE DU 2026-09-20 — D-20260920-0001 / E-20260920-0001 ─────────────
 #
-# 151 875 → 159 858 caractères (+7 983), MARGE TOUJOURS 0.
+# 151 875 → 159 922 caractères (+8 047), MARGE TOUJOURS 0.
 #
 #   ACCORDÉE PAR `batiscan`, orchestrateur de `J-20260814-0002`, le 2026-09-20,
 #   sur la ligne de `e-20260920-0001`. Ce n'est pas le lot qui l'a relevée.
@@ -956,12 +956,20 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ③ LE LOT A COUPÉ SA PART, ET LE DIT CHIFFRÉ — première mesure +10 013.
 #    Deux passages, dans cet ordre : coupe des redites de la citation des
 #    permissions et du récit de découverte (−1 235), puis PASSAGE DE REMPLACEMENT
-#    exigé par l'arbitrage (−795) — l'avertissement « la QA passe avant le merge »
-#    rendu caduc par les conditions de fusion qui l'exigent nommément, « rendre un
-#    verdict franc » rendu caduc par les trois listes qui disent ce qu'un rapport
-#    porte, et le renvoi de `continuite` qui recopiait la règle de `rondes` §5 au
-#    lieu d'y renvoyer. Reste +7 983, dont 980 pour la seule citation opposable
-#    des permissions du poste — qui ne se résume pas, c'est la source.
+#    exigé par l'arbitrage (−731 net) — « rendre un verdict franc » rendu caduc
+#    par les trois listes qui disent ce qu'un rapport porte, et le renvoi de
+#    `continuite` qui recopiait la règle de `rondes` §5 au lieu d'y renvoyer.
+#    Reste +8 047, dont 980 pour la seule citation opposable des permissions du
+#    poste — qui ne se résume pas, c'est la source.
+#
+#    ⚠️ UN TROISIÈME RETRAIT A ÉTÉ ANNULÉ, ET C'EST LE BANC QUI L'A DIT. « Mais la
+#    QA passe AVANT le merge — le merge n'est qu'un constat » avait été retirée
+#    comme rendue caduque par les conditions de fusion. Elle est gardée nommément
+#    par `cli/test/fixtures/orchestrateur-reformulations.json`, cas
+#    `pousser-qa-avant-merge` : le retrait a fait rougir `cli-tests`, en CI et en
+#    local. Elle est rendue au texte (+64). **Un retrait qui fait rougir une garde
+#    n'est pas un remplacement** — et c'est le seul des trois qu'aucune relecture
+#    n'aurait distingué des deux autres.
 #
 # ④ LE LIEU A ÉTÉ CONTESTÉ — le gabarit et non le `SKILL.md` (un orchestrateur
 #    ne le lit pas, arbitrage `T-20260816-0015`), et non le lieu d'un orchestrateur
@@ -971,7 +979,7 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ⚠️ LA MARGE RESTE À 0, et ce relèvement ne crée aucun droit pour le suivant.
 #    Le prochain ajout se refuse par défaut, et le passage de remplacement — pas
 #    la seule coupe — est ce qu'on lui demande d'abord.
-BASELINE=159858
+BASELINE=159922
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
