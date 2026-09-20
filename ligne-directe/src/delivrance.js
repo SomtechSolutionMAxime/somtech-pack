@@ -552,6 +552,21 @@ export const VERDICTS_DE_SOUMISSION = Object.freeze({
 /** Ce que `quota_topic` ajoute quand il tronque — retiré avant toute comparaison de préfixe. */
 const MARQUE_DE_TRONCATURE = '…';
 
+/**
+ * LA LONGUEUR D'UN SUJET VRAIMENT TRONQUÉ — 77 caractères, puis la marque.
+ *
+ * 🔬 MESURÉ DEUX FOIS. Sur le banc : 144 caractères envoyés, 78 rendus. Sur le parc : les 21
+ * sujets de 78 caractères finissent TOUS par la marque, et aucun des 9 sujets plus courts n'y
+ * finit — correspondance parfaite sur 30 relevés.
+ *
+ * ⚠️ ELLE EXISTE PARCE QUE « FINIT PAR … » N'EST PAS « A ÉTÉ TRONQUÉ » (relevé en seconde
+ * passe de revue, reproduit). Le français écrit des points de suspension : « on verra… », « à
+ * suivre… » sont des textes ENTIERS. Les prendre pour des troncatures leur applique la
+ * direction stricte et rate à nouveau le cas « l'auteur a complété sa phrase » — le défaut
+ * même que ce lot a corrigé au tour précédent, rouvert sur un sous-cas.
+ */
+const LONGUEUR_DU_SUJET_TRONQUE = 78;
+
 const sujetLu = (v) => {
   const t = String(v ?? '').trim();
   return t === '' ? null : t;
@@ -588,8 +603,36 @@ export function verdictDeSoumission({ sujetAvant, sujetApres, texteDisparu, sond
   const disparu = String(texteDisparu ?? '').trim();
   if (disparu === '') return VERDICTS_DE_SOUMISSION.AUCUNE;
 
-  const tronque = apres.endsWith(MARQUE_DE_TRONCATURE);
-  const noyau = tronque ? apres.slice(0, -MARQUE_DE_TRONCATURE.length) : apres;
+  // ⚠️ LA MARQUE **ET** LA LONGUEUR — l'une sans l'autre prend la ponctuation pour une coupure.
+  const tronque = apres.endsWith(MARQUE_DE_TRONCATURE) && apres.length >= LONGUEUR_DU_SUJET_TRONQUE;
+  // ⚠️ LE `.trim()` ICI EST REDONDANT AVEC `aplati`, et c'est mesuré : le retirer ne fait
+  // rougir aucun essai, parce que `aplati` trime déjà les deux côtés avant de comparer. Il
+  // reste pour que `noyau` respecte son propre contrat — « le texte, sans la marque » — sans
+  // dépendre de ce qu'une autre fonction fera de lui deux lignes plus bas.
+  const noyau = (tronque ? apres.slice(0, -MARQUE_DE_TRONCATURE.length) : apres).trim();
+
+  // ⚠️ UN NOYAU VIDE NE PROUVE RIEN, ET CETTE GARDE A DÉJÀ ÉTÉ PERDUE UNE FOIS.
+  //
+  // Elle existait, puis le patch qui a ajouté `etablieSurUnPrefixeTronque` l'a emportée au
+  // passage — trouvée en seconde passe de revue, reproduite, et aucun des 36 essais du module
+  // ne l'avait vue partir. Sans elle, un sujet réduit à `…` donne un noyau vide, et
+  // `startsWith('')` est vrai pour n'importe quoi : tout texte disparu « prouve » alors une
+  // soumission dont on ne sait strictement rien, et l'avis est TU. C'est le dégât de référence
+  // de tout ce chemin — un texte perdu sans témoin (T-20260817-0090).
+  //
+  // ⚠️ ET CE QUI FERME VRAIMENT LE TROU EST LE SEUIL DE LONGUEUR CI-DESSUS, PAS CETTE LIGNE.
+  //
+  // Mesuré avec témoin positif, sur 147 sujets candidats (blancs, tabulations, espaces
+  // insécables, espaces de largeur nulle, marques répétées, longueurs de 0 à 200) : le noyau
+  // vide est atteint **0 fois** depuis que `tronque` exige la longueur, et **63 fois** avec
+  // l'ancienne définition. Le sujet étant trimé en amont, un sujet de blancs n'atteint jamais
+  // la longueur d'une troncature.
+  //
+  // Cette ligne est donc un FILET, pas une garde : aucun essai ne peut plus la faire rougir,
+  // et il ne faut pas croire qu'elle protège de quoi que ce soit aujourd'hui. Elle reste pour
+  // le jour où la définition de `tronque` changera — ce qui est exactement ce qui vient
+  // d'arriver, dans l'autre sens.
+  if (noyau === '') return VERDICTS_DE_SOUMISSION.SONDE_AVEUGLE;
     // ⚠️ LE SUJET EST UNE LIGNE, LE TEXTE PEUT EN AVOIR PLUSIEURS. Mesuré : sur un texte de
   // onze lignes, `quota_topic` portait « ligne 1 … ». On compare donc au début du texte, une
   // fois ses blancs internes normalisés — un retour à la ligne ne doit pas casser la garde.
@@ -686,7 +729,11 @@ export function etablieSurUnPrefixeTronque({ sujetAvant, sujetApres, texteDispar
   // seul, et son incertitude est déjà dite ailleurs. Le pari nommé ici est celui de la
   // troncature, et de lui seul.
   if (estUnEspaceReserve(texteDisparu)) return false;
-  return String(sujetApres ?? '').trim().endsWith(MARQUE_DE_TRONCATURE);
+  // ⚠️ LA MÊME DÉFINITION DE « TRONQUÉ » QUE LE VERDICT, marque ET longueur. Deux définitions
+  // du même mot dans un fichier sont deux occasions de diverger, et le compteur compterait
+  // alors des paris que le verdict n'a pas pris.
+  const sujet = String(sujetApres ?? '').trim();
+  return sujet.endsWith(MARQUE_DE_TRONCATURE) && sujet.length >= LONGUEUR_DU_SUJET_TRONQUE;
 }
 
 /** L'ensemble EXACT des `cause` que `delivrerLaBoite` peut rendre. */

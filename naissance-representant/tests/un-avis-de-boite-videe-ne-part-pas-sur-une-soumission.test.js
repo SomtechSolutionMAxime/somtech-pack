@@ -186,6 +186,155 @@ test('un sujet NON tronqué sans aucune parenté avec le texte disparu ne prouve
   );
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ UN SUJET QUI NE PORTE QUE LA MARQUE — la garde que j'ai RETIRÉE sans le voir
+//
+// Relevé en seconde passe de revue de fond, CRITIQUE, et reproduit à l'exécution. La garde
+// `if (noyau === '') return SONDE_AVEUGLE` existait au commit précédent ; le patch qui ajoute
+// le compteur l'a emportée au passage. Aucun des 36 essais du fichier ne l'a vue partir.
+//
+// Sans elle, un sujet réduit à `…` donne un noyau VIDE, et `vu.startsWith('')` est vrai pour
+// n'importe quoi : tout texte disparu « prouve » alors une soumission dont on ne sait
+// strictement rien. L'avis est tu — le dégât de référence de tout ce chemin (T-20260817-0090,
+// un ordre du CTO perdu sans témoin), rouvert avec zéro essai rouge.
+//
+// ⚠️ ET MON PROPRE CONTRÔLE ÉTAIT FAUX : j'ai d'abord cru la revue en erreur, parce que mon
+// `grep "noyau === ''"` passait par le shell, qui mangeait les quotes — la sonde rendait zéro
+// sur tous les commits, y compris ceux qui portaient la garde. C'est un témoin positif
+// (chercher `SONDE_AVEUGLE`, que je savais présent) qui a montré que la sonde était morte.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+// ⚠️ CE QUI COMPTE ICI EST QUE L'AVIS PARTE, pas le nom de l'état. Mes deux premières
+// assertions exigeaient `sonde-aveugle` par mimétisme avec l'ancienne garde ; avec la
+// définition mesurée de « tronqué », un `…` court n'est plus une troncature du tout et le cas
+// sort par `aucune-soumission`. Les deux états laissent partir l'avis — c'est le comportement
+// à garder, et exiger le mauvais nom aurait fait rougir un code juste.
+
+test('⚠️ un sujet réduit à la SEULE marque ne prouve RIEN — et l’avis PART', () => {
+  const v = verdictDeSoumission({ sujetAvant: 'un tour tout à fait autre', sujetApres: '…', texteDisparu: TEXTE });
+  assert.notEqual(v, VERDICTS_DE_SOUMISSION.ETABLIE, 'conclure là-dessus tairait l’avis sur une mesure inexistante');
+  assert.ok(
+    avisDeBoiteVidee({ texteDisparu: TEXTE, soumissionEtablie: v === VERDICTS_DE_SOUMISSION.ETABLIE }),
+    'le dégât de référence : un texte perdu sans témoin',
+  );
+});
+
+test('⚠️ AUCUN sujet ne peut plus produire un noyau vide — le vrai remède au défaut critique', () => {
+  // ⚠️ CE QUI FERME LE DÉFAUT N'EST PAS LA GARDE `noyau === ''`, C'EST LE SEUIL DE LONGUEUR.
+  //
+  // J'ai d'abord écrit un essai qui construisait « 77 blancs puis la marque » pour éprouver la
+  // garde restaurée. Il ne peut pas : le sujet est trimé en amont, donc un sujet de blancs
+  // n'atteint jamais la longueur d'une troncature. La garde est devenue INATTEIGNABLE — un
+  // essai qui ne peut pas construire son cas est un essai décoratif, et je ne le garde pas.
+  //
+  // 🔬 MESURÉ, avec témoin positif : sur 147 sujets candidats — blancs, tabulations, espaces
+  // insécables, espaces de largeur nulle, marques répétées, longueurs de 0 à 200 — le noyau
+  // vide est atteint **0 fois** avec le seuil, et **63 fois** avec l'ancienne définition
+  // (« finit par la marque », sans longueur). C'est le seuil qui ferme le trou ; la garde ne
+  // reste qu'en filet si cette définition change un jour.
+  //
+  // Ce que cet essai garde, lui, est ATTEIGNABLE : qu'aucun sujet ne conclue sur rien.
+  const MARQUE = '…';
+  const candidats = [];
+  for (const n of [0, 1, 76, 77, 78, 79, 200]) {
+    for (const c of [' ', '\t', '\n', 'a', MARQUE, '\u00a0', '\u200b']) {
+      candidats.push(c.repeat(n) + MARQUE, c.repeat(n), MARQUE + c.repeat(n));
+    }
+  }
+  const concluants = candidats.filter(
+    (sujetApres) =>
+      verdictDeSoumission({ sujetAvant: 'un tour tout à fait autre', sujetApres, texteDisparu: TEXTE }) ===
+      VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+  assert.deepEqual(concluants, [], 'aucun sujet dégénéré ne doit prouver une soumission');
+
+  // ⚠️ ET LE TÉMOIN POSITIF DANS L'ESSAI LUI-MÊME : un sujet qui DOIT conclure conclut bien.
+  // Sans lui, ce zéro pourrait venir d'un verdict cassé qui ne conclut plus jamais rien.
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'un tour tout à fait autre', sujetApres: TEXTE, texteDisparu: TEXTE }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+    'si ce témoin tombe, le zéro ci-dessus ne mesure plus rien',
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ « FINIT PAR … » N'EST PAS « A ÉTÉ TRONQUÉ » — et le français écrit des points de suspension
+//
+// Relevé en seconde passe, majeur, reproduit. `tronque` se décidait sur le seul dernier
+// caractère. Or « on verra… », « à suivre… » sont des textes ENTIERS que leur auteur a écrits
+// ainsi. Les traiter comme tronqués leur applique la direction stricte, et rate à nouveau le
+// cas « l'auteur a complété sa phrase » — le défaut même que le premier tour avait fermé.
+//
+// 🔬 LE DISCRIMINANT EST MESURÉ, PAS CHOISI : sur les 30 sujets réels du parc, la
+// correspondance est parfaite — les 21 sujets de 78 caractères finissent TOUS par `…`, et
+// aucun des 9 sujets plus courts n'y finit. `quota_topic` tronque à 77 puis ajoute la marque :
+// une vraie troncature fait donc 78. Un « … » sur un texte plus court est de la ponctuation.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+test('⚠️ un sujet COURT finissant par « … » est de la ponctuation, pas une troncature', () => {
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'un tour tout à fait autre', sujetApres: 'on verra bien…', texteDisparu: 'on verra' }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+    'l’auteur a complété sa phrase et l’a ponctuée — c’est bien lui qui a soumis',
+  );
+});
+
+test('⚠️ LA MARQUE est exigée autant que la longueur — un sujet long SANS marque est entier', () => {
+  // Survivante du banc : retirer `endsWith(MARQUE)` laissait tout sujet d'au moins 78
+  // caractères passer pour tronqué, donc soumis à la direction stricte. Un texte entier de
+  // cette taille verrait alors son cas « l'auteur a complété » raté à nouveau.
+  const long78 = 'z'.repeat(70) + ' la suite';
+  assert.ok(long78.length >= 78 && !long78.endsWith('…'));
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'un tour tout à fait autre', sujetApres: long78, texteDisparu: 'z'.repeat(70) }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+    'sans marque, c’est un texte entier : les deux sens valent',
+  );
+});
+
+test('⚠️ le noyau est TRIMÉ — un blanc avant la marque ne doit pas casser la comparaison', () => {
+  // Survivante du banc : sans le trim, le noyau garde l'espace qui précédait la marque et
+  // aucun texte disparu ne commence par « … ». `quota_topic` coupe à l'aveugle, en plein mot
+  // comme en plein blanc : le cas n'a rien d'exotique.
+  const avecBlanc = `${'k'.repeat(76)} …`;
+  assert.equal(avecBlanc.length, 78);
+  assert.equal(
+    verdictDeSoumission({
+      sujetAvant: 'un tour tout à fait autre',
+      sujetApres: avecBlanc,
+      texteDisparu: `${'k'.repeat(76)} et la suite du texte`,
+    }),
+    VERDICTS_DE_SOUMISSION.ETABLIE,
+  );
+});
+
+test('⚠️ le COMPTEUR suit la MÊME définition de « tronqué » que le verdict', () => {
+  // Survivante du banc : le compteur gardait « finit par la marque », sans longueur. Il
+  // comptait donc comme pari un « on verra… » que le verdict traite comme un texte entier.
+  // Deux définitions du même mot dans un fichier sont deux occasions de diverger, et un
+  // compteur qui compte autre chose que ce qu'il annonce est un compteur mort-né.
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'un tour tout à fait autre', sujetApres: 'on verra bien…', texteDisparu: 'on verra' }),
+    false,
+    'ponctuation, pas troncature : aucun pari n’est pris ici',
+  );
+  assert.equal(
+    etablieSurUnPrefixeTronque({ sujetAvant: 'autre', sujetApres: LONG_TRONQUE, texteDisparu: LONG }),
+    true,
+    'témoin positif : une vraie troncature compte bien comme pari',
+  );
+});
+
+test('un sujet de 78 caractères finissant par « … » EST une troncature — direction stricte', () => {
+  // La longueur mesurée, et elle seule, fait la différence entre les deux cas précédents.
+  assert.equal(LONG_TRONQUE.length, 78, 'la calibration du banc : 77 caractères plus la marque');
+  assert.equal(
+    verdictDeSoumission({ sujetAvant: 'autre', sujetApres: LONG_TRONQUE, texteDisparu: 'ABCDEFGHIJ' }),
+    VERDICTS_DE_SOUMISSION.AUCUNE,
+    'un texte disparu plus court qu’un sujet vraiment tronqué ne peut pas être ce qui est parti',
+  );
+});
+
 test('⚠️ un sujet TRONQUÉ garde la direction stricte — il est coupé, il ne peut pas être plus long', () => {
   // On ne relâche QUE le cas non tronqué. Un sujet qui finit par `…` est une vue partielle :
   // exiger qu'il préfixe le texte disparu reste la seule lecture juste, et l'inverse (le texte
