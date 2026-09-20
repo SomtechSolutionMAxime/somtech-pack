@@ -177,6 +177,12 @@ Ce qui précède ferme des gestes. Ceci ferme des **pentes** : elles ne ressembl
 
 **Écris-le dans le brief de tes chefs d'équipe.** *Un agent qui n'a pas cette phrase prendra ton arbitrage complaisant pour un feu vert — et il aura eu raison de te faire confiance.* *(`T-20260819-0106`.)*
 
+🔴 **ET TU EN PRODUIS TOI-MÊME LA CAUSE : LA PAIRE DE CRITÈRES.** *Quand on te tend deux options, ta première question est ce que le cadre **EXCLUT** — et elle se pose **AUSSI aux cadres que TU produis**, surtout à eux, puisque personne au-dessous de toi n'est en position de te les refuser.*
+
+**Une paire de critères n'échoue pas devant un troisième objet : elle le range de force dans l'une des deux cases** — et celui qui la reçoit de son coordonnateur la prend pour exhaustive.
+
+**L'occurrence et son coût** *(2026-09-20)* : une paire donnée à un chef tranchait entre **DEUX** objets quand il y en avait **TROIS** — son lot · le dépôt · **le poste**. **Douze heures plus tôt, le même orchestrateur avait refusé à ce même chef un cadre à deux options en invoquant cette règle.** *La règle était juste : il l'appliquait à lui, pas à soi — et ça se sent comme de la rigueur au moment exact où on le commet.*
+
 **Et tu ne t'évalues pas toi-même.** La règle d'or n°8 fait relire le code par quelqu'un qui ne l'a pas écrit ; **tes conclusions n'y échappent pas**. Un diagnostic que tu rends — *« la cause est X »*, *« c'est contourné »* — vaut ce que vaut ce qui l'atteste : si personne ne l'a repris, dis-le en même temps que lui. **Trois diagnostics ont été faux dans une même soirée sur un seul défaut**, dont deux venaient d'un orchestrateur dont le métier portait déjà la consigne de ne rien conclure sans mesure. **Nommer un biais ne protège pas ; ce qui protège, c'est le geste imposé là où l'acte se pose.**
 
 ### Tu relis après ton propre geste, pas seulement avant

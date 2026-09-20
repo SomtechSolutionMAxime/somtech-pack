@@ -834,6 +834,77 @@ porte "Ce qu'un rapport de revue doit porter" \
   "n'est pas un ordre du dirigeant"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑭ LES SEPT RÈGLES DE LA VAGUE 2A SONT PRESCRITES — D-20260920-0001
+#
+# Elles viennent toutes de la nuit du 2026-09-19 au 20, chez UN orchestrateur
+# qui connaissait déjà son métier. Coût mesuré, inscrit au registre
+# `E-20260818-0007` : UNE HEURE de blocage d'un chef · DEUX gardes disparues ·
+# QUINZE travaux libres arrêtés par DEUX arbitrages · QUATRE comptes rendus
+# faux au dirigeant.
+#
+# CE BLOC REPREND LA FORME DE ⑬ ET SES DEUX LEÇONS, qui ont été payées :
+#   · BORNÉ À LA SECTION — un `grep` global rendrait vert un bloc déplacé au
+#     mauvais chapitre, et une règle écrite ailleurs que là où le geste se pose
+#     ne gouverne personne ;
+#   · CHAQUE CONTRÔLE EXIGE LA DATE DE SON OCCURRENCE, par INTENTION et non par
+#     accident de formulation — sur la vague 1, deux gardes sur cinq gardaient
+#     l'occurrence sans que l'auteur l'ait choisi, et une garde verte par
+#     coïncidence ne rougit pas le jour où elle cesse de garder.
+#
+# ⚠️ CE QU'ILS NE SAVENT PAS FAIRE : ils tiennent l'EXISTENCE d'une
+# prescription à son endroit, pas sa JUSTESSE. Le plafond ⑩ est aveugle à tout
+# RETRAIT ; ces contrôles sont le filet qui manquait. Aucun ne remplace l'autre.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑭ les sept règles de la vague 2A sont prescrites — D-20260920-0001"
+
+porte "Toute consigne qui déclenche une action NOMME SON SUJET" \
+  "1 — une consigne qui déclenche nomme QUI agit" \
+  "opérationnellement ambiguë" \
+  "rien dedans ne dit **QUI** monte" \
+  "UNE HEURE de blocage" \
+  "2026-09-20"
+
+porte "Poser son but" \
+  "2 — un /goal différé se repose au premier retour au repos" \
+  "DIFFÉRÉ SE REPOSE AU PREMIER RETOUR AU REPOS" \
+  "n'est pas un but posé" \
+  "LUE par ta veille comme une fin de mandat" \
+  "2026-09-20"
+
+porte "Poser la veille de déblocage" \
+  "3 — la veille déduit la fin d'un mandat de l'absence de but" \
+  "agent-termine" \
+  "Un agent sans but n'a pas fini : il n'a pas de but" \
+  "fait disparaître la garde" \
+  "2026-09-20"
+
+porte "Ce qu'un rapport de revue doit porter" \
+  "4 — le corollaire : la tête finale se lit de ce qu'ils COUVRENT" \
+  "de ce qu'ils COUVRENT" \
+  "CHANGELOG" \
+  "pas les faire rejouer" \
+  "2026-09-20"
+
+porte "Devant un dialogue de choix ouvert par ton chef" \
+  "5 — devant un dialogue de choix, on annule, on ne répond pas" \
+  "Annuler libère sans décider" \
+  "injoignable même pour son coordonnateur" \
+  "2026-09-20"
+
+porte "Tes réflexes" \
+  "6 — la question du cadre se pose AUSSI aux cadres qu'on produit" \
+  "AUSSI aux cadres que TU produis" \
+  "range de force dans l'une des deux cases" \
+  "son lot · le dépôt · **le poste**" \
+  "2026-09-20"
+
+porte "Si rien n'avance, repars du backlog" \
+  "7 — j'attends quelqu'un se lit PAR CHANTIER, jamais en bloc" \
+  "PAR CHANTIER, jamais en bloc" \
+  "quinze travaux libres" \
+  "2026-09-20"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
@@ -1083,7 +1154,41 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ⚠️ LA MARGE RESTE À 0, et ce relèvement ne crée aucun droit pour le suivant.
 #    Le prochain ajout se refuse par défaut, et le passage de remplacement — pas
 #    la seule coupe — est ce qu'on lui demande d'abord.
-BASELINE=160695
+# ── RE-BASELINE DU 2026-09-20 (2ᵉ) — D-20260920-0001 / E-20260920-0002 ────────
+#
+# 160 695 → 164 992 caractères (+4 297), MARGE TOUJOURS 0.
+#
+# ACCORDÉE D'AVANCE par `batiscan`, orchestrateur de `J-20260814-0002`, le
+# 2026-09-20, dans le brief du lot : « si l'écart net reste positif après le
+# passage de remplacement, la re-baseline à la taille finale EXACTE, marge
+# zéro, est accordée d'avance ».
+#
+# DÉCOMPOSITION, mesurée par chapitre :
+#   chefs-equipe    +2 505  règles 1, 2, 3 et 5 (sujet nommé · /goal différé ·
+#                           la veille déduit la fin d'un mandat · on annule un
+#                           dialogue de choix au lieu d'y répondre)
+#   reflexes          +909  règle 6 (la question du cadre se pose aussi aux
+#                           cadres qu'on produit soi-même)
+#   faire-appliquer   +485  règle 4 (le corollaire des trois listes)
+#   rondes            +398  règle 7 (« j'attends quelqu'un » se lit par chantier)
+#
+# LE PASSAGE DE REMPLACEMENT A ÉTÉ FAIT AVANT DE DEMANDER, et il rend ZÉRO
+# retrait — c'est un résultat, pas un renoncement. Les sept règles sont sept
+# mécanismes NEUFS : aucune ne remplace une prescription déjà présente dans son
+# chapitre. Deux candidats ont été examinés et écartés :
+#   · `faire-appliquer`, le calcul de péremption au rebase — non gardé, donc
+#     retirable SANS faire rougir, mais complémentaire du corollaire et non
+#     doublé par lui : l'un porte sur le DELTA d'un rebase, l'autre sur ce qui
+#     est AJOUTÉ après la revue. Le retirer serait passé au vert en amputant.
+#     ⚠️ VERT NE VEUT PAS DIRE CADUC : la garde dit qu'un retrait est une
+#     amputation, elle ne dit jamais qu'il est un remplacement.
+#   · `chefs-equipe`, la redite de « premier palier » — doublon PRÉEXISTANT au
+#     lot, donc une coupe et non un remplacement.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0 : le
+# prochain ajout se refuse par défaut, et c'est le passage de remplacement —
+# pas la coupe — qu'on lui demandera d'abord.
+BASELINE=164992
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
