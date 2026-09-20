@@ -322,6 +322,10 @@ ecart="$(cd "$VIDE" && md_ecart_tags)"
   || ko "attendu 'AUCUN-TAG - -', obtenu '$ecart'"
 
 echo "== Q — md_rafraichir_origine rapatrie bien les TAGS =="
+# Un tag posé sur un commit HORS de `main` : un `git fetch` nu ne le rapatrie
+# pas (il ne suit que les tags atteignables depuis ce qu'il fetche), `--tags`
+# si. C'est ce qui rend cette assertion discriminante au lieu de verte par
+# accident.
 NEUF="${WORK}/neuf"
 must git clone -q -b main "$ORIGIN" "$NEUF"
 # `--no-tags` ne se comporte pas pareil selon la version de git : on retire les
@@ -334,11 +338,23 @@ avant="$(cd "$NEUF" && md_dernier_tag_local)"
 ecart="$(cd "$NEUF" && md_ecart_tags)"
 [ "$ecart" = "LOCAL-EN-RETARD - v2.3.4" ] && ok "clone sans tag → $ecart" \
   || ko "attendu 'LOCAL-EN-RETARD - v2.3.4', obtenu '$ecart'"
+
+# Un tag posé APRÈS ce clone, sur un commit HORS de `main` : un `git fetch` nu
+# ne le rapatrie pas — il ne suit que les tags atteignables depuis ce qu'il
+# télécharge, et rien ne l'amène ici. `--tags` si. C'est ce qui rend
+# l'assertion suivante discriminante au lieu de verte par accident.
+must git_autre checkout -q -b cote
+echo hors > "${AUTRE}/h.txt"
+must git_autre add -A
+must git_autre commit -qm "commit hors main"
+must git_autre tag v5.0.0
+must git_autre push -q origin v5.0.0
+must git_autre checkout -q main
 (cd "$NEUF" && md_rafraichir_origine) && ok "fetch réussi (rc=0)" || ko "md_rafraichir_origine a échoué sur un distant joignable"
 apres="$(cd "$NEUF" && md_dernier_tag_local)"
 [ -z "$avant" ] && ok "clone sans tag : aucun tag avant" || ko "SCÉNARIO INOPÉRANT : le clone portait déjà '$avant'"
-[ "$apres" = "v2.3.4" ] && ok "après rafraîchissement : v2.3.4 en local" \
-  || ko "attendu v2.3.4 après fetch, obtenu '$apres' — les tags ne sont pas rapatriés"
+[ "$apres" = "v5.0.0" ] && ok "après rafraîchissement : v5.0.0 en local (tag HORS main)" \
+  || ko "attendu v5.0.0 après fetch, obtenu '$apres' — un tag hors \`main\` n'est pas rapatrié"
 
 echo "== J — bump inconnu refusé =="
 out="$(md_prochaine_version farfelu)"; rc=$?
