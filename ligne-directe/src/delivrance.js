@@ -495,10 +495,20 @@ export async function delivrerLaBoite({
  * texte a été soumis » avec « vidée sans soumission, pendant que l'agent soumettait AUTRE
  * chose ». La fenêtre d'exposition est la seule chose qui rend cette confusion possible, et
  * elle a été mesurée : sur le chemin espace réservé `fenetreDImmobilite` rend **0**, et les
- * deux lectures de la sonde encadrent une relecture d'écran — **~18 ms** mesurées sur le poste
- * (médianes : `agent get` 6 ms, `agent read` 5 ms). Ce n'est PAS la cadence du balayage
- * (`CADENCE_DU_BALAYAGE_MS`, 60 s), qui sépare deux TOURS et non deux lectures. Il faudrait
- * qu'un autre texte parte dans ces 18 ms précises. Sur le chemin texte lisible, la fenêtre
+ * deux lectures de la sonde encadrent une relecture d'écran. Chronométrée d'un bloc, 40 relevés
+ * sur DEUX postes : médiane 15 ms / max 22 ms sur l'un, médiane 22 ms / **max 95 ms** sur
+ * l'autre, chargé de trois chefs d'équipe et de leurs veilles.
+ *
+ * ⚠️ CE N'EST PAS UNE CONSTANTE DU CODE, C'EST LA MESURE D'UNE MACHINE À UN MOMENT — et le
+ * second poste le prouve mieux que le premier, parce qu'il est pire. La borne citable est donc
+ * **~100 ms au pire connu**, contre `CADENCE_DU_BALAYAGE_MS` (60 s) : **deux ordres de grandeur
+ * au moins** (1 pour 631 sur le poste chargé). Écrire « trois ordres de grandeur » ne survivrait
+ * pas à la prochaine machine ; écrire un chiffre unique n'y survivrait pas non plus.
+ *
+ * ⚠️ ET LA CADENCE N'EST PAS CETTE FENÊTRE : `CADENCE_DU_BALAYAGE_MS` sépare deux TOURS du
+ * balayeur, jamais deux lectures de la sonde. Confondre les deux constantes est ce qui faisait
+ * croire à une fenêtre de 60 s, donc à un faux positif plausible. Il faudrait qu'un autre texte
+ * parte dans ces quelques dizaines de millisecondes. Sur le chemin texte lisible, la fenêtre
  * vaut `FENETRE_DU_BALAYAGE_MS` (10 s) — et là c'est le préfixe qui tranche, pas la fenêtre.
  *
  * ⚠️ TROIS ÉTATS, JAMAIS DEUX — et c'est une exigence de revue, à raison.
