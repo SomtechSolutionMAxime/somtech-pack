@@ -251,6 +251,19 @@ export async function cmdSetup(flags) {
         );
       }
     }
+
+    // LA MISE À JOUR NE REND JAMAIS UN SUCCÈS MUET (T-20260818-0035) — et le geste vit dans
+    // `releve-veilleur.js`, injectable, parce que ses deux garanties (ne rien vérifier en
+    // `--dry-run` ; ne jamais faire tomber `setup`) n'étaient tenues par aucun essai tant
+    // qu'elles vivaient ici, au milieu d'une commande qu'on ne peut pas faire casser à volonté.
+    const { verifierFraicheurDuVeilleur } = await import('../releve-veilleur.js');
+    await verifierFraicheurDuVeilleur({
+      destDir,
+      modules: p.modules,
+      dryRun: flags.dryRun,
+      importer: (chemin) => import(chemin),
+      log: (m) => console.log(`  ${m}`),
+    });
   }
 
   if (doSwt) {

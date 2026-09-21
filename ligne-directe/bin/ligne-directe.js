@@ -553,6 +553,22 @@ if (geste === 'relever') {
 } else if (geste === 'etat') {
   const etat = await parler({ geste: 'etat' });
   process.stdout.write(`${JSON.stringify(etat, null, 2)}\n`);
+  // L'ÉCART DE CODE SE NOMME SUR STDERR, JAMAIS SEULEMENT DANS LE JSON (T-20260818-0035) :
+  // le JSON sert un script, stderr sert l'humain qui vient de taper la commande — et c'est
+  // lui qui doit voir passer l'avertissement sans avoir à parser une sortie. Le code de
+  // sortie NE CHANGE PAS : un veilleur périmé répond quand même, ce n'est pas un échec de
+  // la commande.
+  const code = etat?.code;
+  if (code?.perime === true) {
+    process.stderr.write(`⚠️  ${code.motif} — relève-le : ligne-directe relever\n`);
+  } else if (code?.perime === null) {
+    // `code.motif` porte déjà « impossible de comparer … » (voir `ecartDeCode`) : on ne
+    // recompose rien ici, sous peine d'un second texte qui dérive du premier.
+    process.stderr.write(`⚠️  ${code.motif}\n`);
+  }
+  if (code?.ephemere) {
+    process.stderr.write(`⚠️  le veilleur s'exécute depuis un chemin éphémère (${code.chemin})\n`);
+  }
 } else if (geste === 'vue') {
   // ⚠️ DEUX RENDUS, ET LE TEXTE EST LE DÉFAUT — parce que c'est le dirigeant qui lit. Toute la
   // garde de HS-VUE-002 se joue sur la LIGNE rendue, pas sur le champ JSON : « NON ÉTABLI » y

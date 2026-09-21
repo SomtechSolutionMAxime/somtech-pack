@@ -7,6 +7,41 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-21
 
+*Lot « Veilleur et gardes », livraison `J-20260814-0002` — tickets `T-20260914-0004` et `T-20260818-0035`. Deux défauts de la même famille : un dispositif qui **ne distingue pas** deux situations opposées, et un autre qui **ne dit pas** ce qu'il sert. Aucun tag, aucune installation dans ce lot — voir « Ce que ce lot ne ferme pas ».*
+
+### Ajoute
+
+- **La garde d'ouverture de ligne distingue quatre états au lieu d'un.** Quand le veilleur tombait, elle refusait **tout** — Grep, `tail`, `date` — avec « ta ligne n'a jamais été ouverte » : un agent bloqué ne pouvait même pas lire le journal pour comprendre *pourquoi*. Mesuré : ~24 h de paralysie les 13-14/09, un engagement manqué.
+  - **veilleur en panne** (cause *mesurée* : `VEILLEUR_MUET`, `VEILLEUR_LENT`, `VEILLEUR_NE_DEMARRE_PAS`, `ECONNREFUSED`, `ENOENT` du socket) → **lecture pure et diagnostic passent** (Read, Grep, Glob, un Bash de lecture pure, le journal, `ligne-directe etat|relever|service etat`, lire et commenter au ServiceDesk) ; **tout ce qui écrit reste refusé**.
+  - **état local perdu** (une ligne de ce lieu existe, sur un autre pane) → le refus envoie **rejouer l'ouverture**, qui reprend le canal existant, au lieu d'annoncer un manque qui n'existe pas.
+  - **ligne jamais ouverte** → **strictement inchangé**.
+  - **cause inconnue** → polarité de refus intégrale d'avant. On n'élargit rien sur une exception qu'on n'a pas su classer.
+- **Le veilleur dit quel code il sert, et d'où** : `ping` et `etat` portent l'empreinte de son code, la date du dernier changement, le chemin d'où il s'exécute et son heure de démarrage. Un chemin sous un dossier temporaire est marqué **éphémère** — c'est un avertissement, pas une adresse.
+- **`pack setup` relève le veilleur ou dit qu'il faut le relever** — jamais un succès muet — et **confirme la relève par une seconde mesure**, jamais par l'issue de l'appel : « relevé **mais** il sert X et non Y » est une sortie possible.
+
+### Corrige
+
+- **L'écart entre le code servi et le code installé est nommé, avec les deux empreintes**, et **remesuré à chaque `etat`** — jamais un cache. Le chien de garde le signale **une fois** au journal ; rien ne s'arrête tout seul, un veilleur qui se suiciderait au milieu d'une remise serait pire que périmé.
+- **Une mesure ratée n'est jamais « à jour »** : dossier illisible, identité sans empreinte → « impossible de comparer », avec le motif.
+- **Un `ENOENT` n'est pas l'autre** : un binaire introuvable (`herdr` hors du PATH) porte le même code qu'un socket absent et doit être classé à l'**opposé** — sinon le refus attribue au veilleur une panne qui n'est pas la sienne et envoie chercher au mauvais endroit.
+- **Le refus en panne annonçait une action ServiceDesk permise sur cinq** : la promesse et le comportement avaient divergé, dans le sens qui fait *renoncer* un agent à un geste qui lui est permis. Le message dérive désormais des listes du produit.
+- **Le geste `service` était classé « diagnostic » en entier** alors que `installer` et `retirer` posent ou retirent un service du poste — une écriture, pour tout le parc. Seul `service etat` passe.
+
+### Technique
+
+- **Rien n'a touché le poste** : ni `~/.somtech`, ni le veilleur partagé, ni le vrai `$HOME`. Une **garde de bac à sable** (`cli/test/lib/bac-a-sable.js`) fait rougir tout essai qui écrirait hors du sien — ajoutée après qu'un essai de ce lot a réellement réécrit le `.zshenv` du poste (restauré et vérifié par le fait). Elle prend son repère sur le compte du système, jamais sur `$HOME`, qui est ce qu'on sandboxe.
+- **Quatre tours de revue** (portail + fond), verdicts écrits sur la PR. Chaque défaut est fermé par un banc dont la **mutation a été rejouée rouge** puis restaurée. Trois fois, ce qui a cassé n'était pas le défaut d'origine mais ce qui avait été écrit **pour le fermer**.
+- Un filtre `.somtech.bak` de `empreinteDuCode` était **inatteignable** — mesuré 0 sur 0 sur l'installation réelle, le pack sauvegardant sous `<fichier>.somtech.bak`. Retiré : un filtre qu'aucun cas n'exerce se lit comme une garantie et n'en est pas une.
+
+### ⚠️ Ce que ce lot NE ferme PAS, et le dit
+
+- **Ne pas installer ce lot tant que les correctifs du balayeur ne sont pas versionnés** (`D-20260921-0003`). Il ajoute la **relève automatique** du veilleur : avant lui, une installation écrasait un correctif local mais le veilleur continuait de servir l'ancien code jusqu'à une relève manuelle ; après lui, l'écrasement et la relève se font **dans le même geste**. Le délai qui protégeait accidentellement le poste disparaît — c'est voulu, et c'est précisément ce qui rend l'installation dangereuse aujourd'hui. **Aucun tag n'est posé dans ce lot.**
+- **Tout est éprouvé par injection** : le chemin par défaut réel — un veilleur qui naît et calcule son empreinte depuis son propre dossier, sans rien d'injecté — n'est exercé nulle part, et le chien de garde n'est mesuré qu'à cadence accélérée, jamais sur un cycle long avec relève concurrente.
+- « Vivant mais lent » : le code existe et est éprouvé côté garde, mais **le comportement réel** d'un veilleur qui répond au ping et bloque sur `etat` n'est pas mesuré ici.
+- Trouvé en chemin, **non corrigé ici** : `T-20260921-0045` — un contrôle du CLI dont le verdict dépend de la machine, parce qu'il passe l'environnement du poste au shell qu'il lance.
+
+## [Non-versionne] - 2026-09-21
+
 *Ticket `T-20260920-0132`, livraison `J-20260814-0002` — « on enlève le récit, on garde le déclencheur ». Écrit `enonce_socle` (court, quand/alors) pour les 37 items de nature `regle` du classement de l'orchestrateur (`metier/orchestrateur/classement.json`) qui n'en avaient pas encore, et classe chacun `discipline_assumee` ou `dette_dispositif` (`triage_dispositif`). Ce lot livre une SOURCE — vérifié par exécution, le pipeline de rendu ne lit pas encore `enonce_socle` pour la nature `regle` ; suite ouverte : `T-20260921-0028`.*
 
 ### Ajoute

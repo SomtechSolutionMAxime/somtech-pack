@@ -16,11 +16,21 @@
 import { createServer } from 'node:net';
 import { existsSync, unlinkSync, chmodSync, mkdirSync, appendFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { lireJetons } from './trousseau.js';
 import { enEssais, transportRemplace, refuser } from './cloison.js';
 import * as slack from './slack.js';
 import { execFileSync } from 'node:child_process';
+import { identiteDuCode, empreinteDuCode, ecartDeCode } from './identite-du-code.js';
+
+/**
+ * LE DOSSIER DE CE MODULE — la référence pour « quel code ce veilleur sert-il ? »
+ * (T-20260818-0035). Même patron que `ICI` dans `client.js` : résolu à l'exécution, jamais
+ * figé en dur, pour que la mesure porte sur le VRAI dossier d'où ce processus tourne — dont
+ * le cas mesuré où il s'agissait d'un dossier temporaire de npx ou de banc.
+ */
+const ICI = dirname(fileURLToPath(import.meta.url));
 
 /**
  * ⚠️ LE NOM DE L'OUTIL, PAS UN CHEMIN. Résolu par le PATH du veilleur, comme `herdr` l'est
@@ -125,6 +135,31 @@ export const ATTENTE_MAX_PAR_PANE = 20;
 
 function maintenant() {
   return new Date().toISOString();
+}
+
+/**
+ * LE MESSAGE DE DÉMARRAGE — UN SEUL POINT DE VÉRITÉ ENTRE `demarrer()` ET LES BANCS
+ * (T-20260818-0035).
+ *
+ * Extrait en fonction pure et exportée pour que la forme exacte de ce que le veilleur écrit
+ * au premier instant de sa vie soit ÉPROUVABLE sans faire naître un vrai veilleur — chose
+ * hors de portée d'un banc sous cloison, puisque `demarrer()` lit le trousseau et parle à
+ * Slack. Un texte reconstitué à côté, dans un fichier de test, dériverait sans qu'aucune
+ * mutation ne le révèle ; celui-ci est CELUI que `demarrer()` journalise, mot pour mot.
+ */
+export function messageDemarrage({ equipe, ouvertes, code }) {
+  const lignes = [
+    `veilleur démarré — espace ${equipe}, ${ouvertes} ligne(s) ouverte(s), ` +
+      `code ${code.empreinte} (du ${code.date}) depuis ${code.chemin}`,
+  ];
+  // UN CHEMIN ÉPHÉMÈRE EST UN AVERTISSEMENT, PAS UNE ADRESSE — mesuré : un veilleur né sous
+  // un dossier temporaire de npx ou de banc est voué à disparaître avec lui. Le dire au
+  // premier instant, pas seulement au geste `etat`, c'est ce qui permet de le repérer dans
+  // le journal sans avoir eu à l'interroger.
+  if (code.ephemere) {
+    lignes.push(`⚠️ chemin éphémère — le veilleur s'exécute depuis ${code.chemin}, un dossier temporaire`);
+  }
+  return lignes;
 }
 
 export function journaliser(message, chemin = CHEMIN_JOURNAL) {
@@ -232,10 +267,26 @@ export function lesDeclarationsDuPoste({ lire = lireLesDeclarations } = {}) {
 }
 
 export class Veilleur {
-  constructor({ jetons, identite, cheminSocket = CHEMIN_SOCKET, slack: slackInjecte, herdr: herdrInjecte, surArret } = {}) {
+  constructor({
+    jetons,
+    identite,
+    cheminSocket = CHEMIN_SOCKET,
+    slack: slackInjecte,
+    herdr: herdrInjecte,
+    surArret,
+    // QUEL CODE CE VEILLEUR SERT-IL, ET D'OÙ (T-20260818-0035) — mesuré UNE FOIS, à la
+    // construction, jamais recalculé tout seul : c'est justement l'écart entre ce qui a été
+    // mesuré alors et ce que le disque porte MAINTENANT qui nomme un veilleur périmé.
+    // `code` REMPLACE le calcul (identité déjà prête, cas des essais) ; `dossierSrc` en
+    // change seulement la SOURCE (utile pour mesurer un dossier de code JETABLE sous essais,
+    // jamais le vrai `ligne-directe/src` du dépôt).
+    code,
+    dossierSrc,
+  } = {}) {
     this.jetons = jetons;
     this.identite = identite;
     this.cheminSocket = cheminSocket;
+    this.code = code || identiteDuCode({ dossierSrc: dossierSrc || ICI });
     // Slack et herdr sont injectables : les cas de rupture (ligne close, agent disparu,
     // veilleur qui reprend du service) ne se prouvent pas autrement — on ne va pas tuer un
     // vrai agent et attendre qu'un dirigeant écrive pour vérifier qu'on lui répond.
@@ -332,7 +383,9 @@ export class Veilleur {
     v.balayer();
     v.recenser();
     await v.reconcilier();
-    journaliser(`veilleur démarré — espace ${identite.equipe}, ${lignesOuvertes(v.registre).length} ligne(s) ouverte(s)`);
+    for (const ligne of messageDemarrage({ equipe: identite.equipe, ouvertes: lignesOuvertes(v.registre).length, code: v.code })) {
+      journaliser(ligne);
+    }
     // ⚠️ UNE GARDE QUI NE PEUT PLUS JUGER LE DIT (T-20260818-0046). Sans identifiant d'espace
     // comparable, le cloisonnement s'abstient sur l'ORGANISATION — un externe arrivé par Slack
     // Connect ne serait plus vu. Le critère de l'invité, lui, tient toujours. C'est écrit ici
@@ -494,7 +547,18 @@ export class Veilleur {
         // trousseau et d'interroger Slack. Un second veilleur y lisait « place libre »,
         // retirait le socket et s'installait : DEUX écoutes, chaque message remis en
         // double. Un ping répond la PRÉSENCE, jamais la disponibilité.
-        return { ok: true, veilleur: 'vivant', espace: this.identite?.equipe ?? null, pret: Boolean(this.identite) };
+        // `code` — L'IDENTITÉ DU CODE SERVI, AJOUTÉE SANS RIEN RETIRER (T-20260818-0035) :
+        // c'est ce qui permet à un appelant (la relève du poste, `ligne-directe etat`) de
+        // savoir CE QUE sert ce veilleur sans attendre la borne, plus coûteuse, du geste
+        // `etat`. Un ping reste un test de PRÉSENCE, pas de fraîcheur : l'écart lui-même
+        // (`perime`) ne se calcule qu'au geste `etat`, qui compare au disque du moment.
+        return {
+          ok: true,
+          veilleur: 'vivant',
+          espace: this.identite?.equipe ?? null,
+          pret: Boolean(this.identite),
+          code: this.code,
+        };
       default:
         return { ok: false, erreur: `geste inconnu : ${geste}` };
     }
@@ -1906,12 +1970,24 @@ export class Veilleur {
     // l'opérateur chercherait pourquoi ses consignes ne partent plus sur le seul canal qu'il
     // avait posé. C'est le silence exact que ce dispositif existe pour supprimer.
     const orphelin = canalCommunSansRole(this.registre);
+    // LE DISQUE EST REMESURÉ À CHAQUE APPEL, JAMAIS MIS EN CACHE (T-20260818-0035). On
+    // mesure, on ne présume pas — et c'est bon marché : de l'ordre de la quarantaine de
+    // fichiers `.js` de `src/`. Un `perime` calculé une fois à la construction resservirait
+    // pour toujours la même réponse, même après qu'une mise à jour a changé le disque sous
+    // ce veilleur — l'exact succès muet que ce lot ferme.
+    const surDisque = empreinteDuCode(this.code.chemin);
+    const { perime, motif } = ecartDeCode(this.code, surDisque);
     return {
       ok: true,
       espace: this.identite.equipe,
       connecte: this.ws?.readyState === CONNEXION_OUVERTE,
       ouvertes,
       communs,
+      // QUEL CODE CE VEILLEUR SERT, ET L'ÉCART AVEC CE QUI EST SUR DISQUE MAINTENANT
+      // (T-20260818-0035) : `sur_disque` est la mesure fraîche, `perime`/`motif` NOMMENT
+      // l'écart avec les DEUX identités quand il y en a un — jamais un « à jour » par défaut
+      // quand la mesure a échoué (`perime` vaut alors `null`, voir `ecartDeCode`).
+      code: { ...this.code, sur_disque: surDisque, perime, motif },
       sans_role: orphelin
         ? {
             canal: orphelin.canal_nom,
@@ -1947,10 +2023,29 @@ export class Veilleur {
     this.chienDeGarde = setInterval(() => {
       if (this.arrete) return;
       const etat = this.ws?.readyState;
-      if (etat === CONNEXION_OUVERTE || etat === CONNEXION_EN_COURS) return;
-      journaliser(`chien de garde : plus d'écoute (état ${etat ?? 'aucun'}) — on rétablit`);
-      this.attente = RECONNEXION_MIN;
-      this.connecterSlack();
+      if (etat !== CONNEXION_OUVERTE && etat !== CONNEXION_EN_COURS) {
+        journaliser(`chien de garde : plus d'écoute (état ${etat ?? 'aucun'}) — on rétablit`);
+        this.attente = RECONNEXION_MIN;
+        this.connecterSlack();
+      }
+
+      // LE CODE PÉRIMÉ SE SIGNALE UNE FOIS, PAS À CHAQUE TOUR (T-20260818-0035). Sans le
+      // drapeau `perimeSignale`, chaque tour (30 s par défaut) réécrirait la même ligne au
+      // journal et noierait le reste sous une redite. ⚠️ RIEN NE S'ARRÊTE TOUT SEUL : un
+      // veilleur qui se suicide au milieu d'une remise serait pire qu'un veilleur périmé —
+      // ce chien de garde nomme le défaut, il ne le corrige pas lui-même.
+      if (!this.perimeSignale) {
+        const surDisque = empreinteDuCode(this.code.chemin);
+        const ecart = ecartDeCode(this.code, surDisque);
+        if (ecart.perime === true) {
+          this.perimeSignale = true;
+          journaliser(
+            `le code sur disque a changé — ce veilleur sert du code périmé ` +
+              `(empreinte ${this.code.empreinte}, code du ${this.code.date}) ; le poste a ` +
+              `${surDisque.empreinte} (code du ${surDisque.date}). Relève : ligne-directe relever`
+          );
+        }
+      }
     }, cadence);
     this.chienDeGarde.unref?.();
     return this.chienDeGarde;
